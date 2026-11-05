@@ -17,6 +17,7 @@
 !applications/fleet/web/shared/account-permissions.js
 !shared/web/shared-assets.json
 !shared/web/tokens.css
+!shared/web/app-shell.css
 !shared/web/components.css
 !shared/web/component-controls.css
 !shared/web/theme.js

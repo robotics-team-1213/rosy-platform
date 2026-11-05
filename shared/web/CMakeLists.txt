@@ -9,6 +9,7 @@ install(FILES
   tokens.css
   components.css
   stage-strip.css
+  readout-strip.css
   template.html
   template.css
   app-shell.css

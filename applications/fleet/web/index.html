@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#101214">
+  <meta name="theme-color" content="#111113">
   <title>Rosy Fleet</title>
   <link rel="icon" type="image/svg+xml" href="/common/icons/console.svg">
   <link rel="stylesheet" href="/common/tokens.css">
@@ -112,8 +112,9 @@
   </section>
 
   <div class="assistant-layout">
-  <main id="fleet-main" tabindex="-1">
-    <div class="console-primary">
+  <!-- D-978: 관제 두 칸은 공용 틀 watch(2:1). 좁은 칸에서는 공용 기본 순서대로 지금 상태(now)가 먼저다(D-201 예외 먼저). -->
+  <main id="fleet-main" class="ui-stage-grid" data-layout="watch" tabindex="-1">
+    <div class="console-primary" data-pane="stage">
     <section class="panel work-overview" id="work-overview" aria-labelledby="work-heading" hidden>
       <div class="map-head">
         <h2 id="work-heading">작업</h2><span class="spacer"></span>
@@ -277,7 +278,7 @@
       </details>
     </section>
     </div>
-    <aside class="console-secondary" aria-label="현재 상태와 대응">
+    <aside class="console-secondary" data-pane="now" aria-label="현재 상태와 대응">
       <!-- ADR-1000: Warning / Critical State Queues (MON-002). D-493 — 오른쪽 열 맨 위. -->
       <section class="panel queues-panel" aria-labelledby="queues-heading">
         <h2 id="queues-heading" class="sr-only">주의 및 개입 요망</h2>

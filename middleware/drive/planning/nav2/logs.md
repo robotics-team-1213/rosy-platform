@@ -279,3 +279,21 @@
 - 변경: 실제 전역 plugin·원본 full application/reset/retire와 fixture 정리/TF 동기화의 revision별 실패·진단·최종 검증을 [validation](../../../../docs/validation/station-native-map-static-2026-10-17/result.md)에 기록했다.
 - 증거: 83db3b1da4 승인 AI 시험 PC에서 같은 SHA interfaces/native navigation 생성·compile/link, 실제 gtest grid6+AMCL10+static14=30 PASS/0 FAIL/0 ERROR/0 SKIP, 설치 AMCL 초기 graph/정상 종료 별도 PASS, exit0. source-sha/exit-code/세 XML을 직접 확인했다. source00945893a5 guard207 PASS/1 FAIL/0 SKIP/NEW1은 기존 branch exception ancestry 한 건이다.
 - gate 변화: LOCAL GO는 검증한 native slice로 갱신한다. SOURCE HOLD(CORE 연결·운영 failed-config 정리·FULL CI·branch guard), ROS-SIM/ARTIFACT/DEVICE HOLD·FIELD PARKED를 유지한다. 현장 담당자는 나중에 확인 가능하며 전체 목표 ACTIVE다.
+## 2026-11-04 · uncommitted · fix(nav2): RPP 후진 허용
+
+- 변경: `params/nav2_params.yaml` `FollowPath.allow_reversing` false → true. 뒤 목표를 제자리 회전 없이 후진 주행으로 해결한다. CORE/Device 프로파일 상한(`profile_limits`, CommandManager 클립)은 그대로 적용된다. MAP 260905 RPP 시험 프로파일은 검토된 전진 전용 동작이므로 `prepare_sim_params.py`가 base 값과 무관하게 시험 출력에서 `allow_reversing=false`로 고정한다(기존 base 단정은 제거).
+- 증거: 실물 geg6에서 후방 15cm 목표가 회전·STUCK 없이 후진하는지 확인 예정(착지 후 별도 기록). 시험 묶음은 착지 pre-push로 실행.
+- gate 변화: 없음.
+- CE: 해당 없음 — 설정 기본값 변경.
+## 2026-11-04 · uncommitted · docs(validation): 후진 허용 실물 수용 기록
+
+- 변경: [nav2-reversing-goal-2026-11-04](../../../docs/validation/nav2-reversing-goal-2026-11-04/result.md) — allow_reversing=true의 geg6 실측(후방 15cm 목표 yaw 유지 → SUCCEEDED, 순수 후진 0.069 m, LiDAR 후방거리 −0.078 m와 오차 9 mm). 목표 yaw+π는 rotate_to_heading 회전을 먼저 일으키므로 후진 이동에는 yaw 유지가 필요함을 함께 기록.
+- 증거: 위 검증 기록 본문(odom·map-pose·LiDAR 교차).
+- gate 변화: 없음.
+- CE: 해당 없음 — 측정 기록.
+## 2026-11-04 · uncommitted · fix(nav2): 이름공간 노드에 닿는 파라미터 섹션 키와 standalone 실행
+
+- 변경: `write_prefixed_nav2_params`가 최상위 섹션 키도 `/{ns}/{node}`로 쓴다. bare `slam_toolbox:` 섹션은 이름공간 노드(`/rosy_42/slam_toolbox`)에 조용히 무시되어 노드가 기본값(`/scan`, `odom`)으로 살았다(2026-11-03 문서 벤치 우회의 원인). `hardware.launch.py`는 `use_composition`을 False로 바꾼다 — 이 Jazzy 빌드에서 load_composable_node 항목은 건너뛰기거나 이름공간을 잃고, device에서 검증된 경로는 standalone이다(2026-11-03 벤치 전 노드 active).
+- 증거: geg6 실측(2026-11-04) — FQN 섹션(`/rosy_42/slam_probe:`)의 `--params-file`가 raw 실행 노드에 값 적용(`scan_topic=/rosy_42/scan` 구독 확인), bare 섹션은 미적용. 착지 시험 묶음에 새 가드 2개(섹션 FQN 단정, composition False 단정)를 변이 증명과 함께 추가.
+- gate 변화: 없음.
+- CE: 기존 교훈 갱신 대상 — [native-hardware-mode-profile-and-canonical-runtime-env-2026-11-03.md](../../../docs/solutions/deployment/native-hardware-mode-profile-and-canonical-runtime-env-2026-11-03.md)의 벤치 우회가 제품 수정으로 해소되는 항목.

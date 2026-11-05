@@ -14072,6 +14072,11 @@ osy-d395-s1d\`.
 - gate 변화: 없음. 세 번째부터는 차례가 시험 폴더를 직접 돈다.
 - CE: 해당 없음 — D-970 1항 상한의 구멍을 메운 것.
 
+## 2026-11-03 · uncommitted · docs(adr): D-972 후진 도킹 위치 근거는 LiDAR V 표지, 레일 안 조향 없음
+- 변경: 새 ADR D-972(Proposed, D-950 Decision 3 후속)와 ADR Log 행.
+- 근거: 연구 `dock_sim.py` 벽 마찰 결과(바퀴 옆면 잠김 μ > 0.16, 롤러 레일 곧게 44 ~ 45/47, 레일 안 조향 12 ~ 27/47), 충전소가 스캔면 아래라 LiDAR에 안 보임.
+- gate 변화: 없음. Safety-Review·실물 수용 전.
+- 예약: D-972(adr_reserve).
 
 ## 2026-11-03 · uncommitted · docs(control-terms): 관제 용어 층 분리, 헤더는 관제 단위 이름 (D-974)
 - 변경: D-974 — Rosy Fleet은 제품 이름, 통합관제 R·셀 관제 CELL-x는 단위, PC는 물리 이름(OMX 노트북). D-968 1항 대체. `/api/fleet/state`의 `fleet`에 관제 단위 설정이 있을 때 `unit`·`root`(API v1.358), 헤더가 "통합관제 R"/"CELL-A"를 보인다. `fleet_name`은 페어링·lease 신원으로 그대로. 팔레타이징 준비 화면 표시 문구 "Cell" → "팔레트 적재"(경로·id 그대로, 노출은 기존 `CELL_TRANSFER` 규칙). CONCEPTS·관제 단위 배치표 갱신.
@@ -14120,6 +14125,7 @@ osy-d395-s1d\`.
 - 증거: PR #17 필수 검사(unittest·product-web 3.10/3.12, review-gate) 통과 뒤 merge commit 4d80908e82.
 - gate 변화: 없음.
 - CE: 해당 없음.
+
 ## 2026-11-04 · uncommitted · docs(plans): 로봇 간 맵 위치 공유(peer pose sharing) 설계
 - 변경: `docs/plans/2026-11-04-peer-pose-sharing-design.md` 신규 — 탑뷰(천장 카메라) 부재 시 로봇이 CORE↔CORE beacon(1 Hz, peer-pairing D-456 세션)으로 맵 위치를 교환하고, World MapPoseTracker(D-494 3)가 `source: peer` sighting을 최하위 우선순위 앵커로 받아 Fleet `arbitrated_pose`가 유지되는 설계. 권한은 Fleet 중앙 그대로(D-517/541), D-33 도메인 분리·D-2 단일 발행자 무변경. 실행 계획·ADR은 구현 승인 후 별도
 - 증거: 설계 문서만 추가(코드 변경 없음). `rosy_harness.py lint` 통과 확인. 계약 시험(`test_network_topology_contracts.py`, `test_harness_contracts.py`)은 원격 미실시 — 착지 전 실행 필요
@@ -14144,3 +14150,34 @@ osy-d395-s1d\`.
 - 증거: 11-04 06:48~08:57 ui-landing-merge-repair delta 사전 시험이 작업 256개 중 253개를 현장 PC에서 직렬로 131분 실행(timing 줄 집계), 같은 시각 AI PC 23코어 여유. 원격 `test_work_queue_upgrade.py`·`test_remote_pytest.py` 외 165 통과, `test_land_isolation.py`·`test_publish_evidence.py` 79 통과.
 - gate 변화: 없음
 - CE: 해당 없음 — 원인과 기준은 docstring·회귀 시험·D-889 추가 31에 있다.
+
+## 2026-11-04 · uncommitted · 조립식 배 v11 MuJoCo 쌍둥이, 손목 카메라 B, D-956 Isaac 결과
+- 변경: `ship_v11.py`·`ship_v11_scene.py`(v11 화물칸 · 컨테이너 v2 · 집게 v2.1 · 카메라 틀 B), `ship_stack_sequence.py --stage v11 --shard --resume`, `palletizing_gripper.WRIST_CAMERA_B`, Isaac 손목 카메라 사례·팀 link5 모양(`assets/omx_wrist_camera_b`), 시연 내보내기 손목 화면.
+- 증거: 검증 기록 Step 6 — v11 1층 1 mm까지 1/192 미착석, 위층은 콘 4개라 약 2.3 mm, 다시 놓기(이상화) 3 mm까지 64/64. D-956 Isaac seed 42는 다시 놓아도 HOLD(48dcb6a4, 3b55bb62).
+- gate 변화: 없음. MuJoCo 후보이며 v11 Isaac 형상 전.
+- CE: 새 교훈 — `docs/solutions/logic-errors/mujoco-version-split-laptop-passes-lab-throws-seated-box-2026-11-04.md` (MuJoCo 3.3.7 box-box, remote_pytest가 MuJoCo 시험을 건너뜀).
+
+## 2026-11-04 · uncommitted · test(D-762): 격리 cell 문서 미리보기 부하 결함 3회 근거
+- 변경: `test/flaky_quarantine.txt`에 `applications/fleet/test/test_sample_browser.py::test_cell_document_preview_admission_and_terminal_read` 한 줄 추가. 2026-11-04 하루 3회(sha ff82336996, 6a299d39cf, 86d7abd782) 병렬 브라우저 청크에서 실패·단독 재실행 통과(rosy-flaky-candidates.txt). 실패 내용은 5 s 안에 `#recipe-revision` 글자가 바뀌지 않는 부하 타임아웃이라 제품 결함이 아니다.
+- 증거: 세 LOAD-FLAKY 기록과 단독 통과 로그(각 `alone-pre-*.txt`). 이 id가 explicit FULL 착지를 막아 게시(D-868)도 막고 있어 격리가 D-762 증거 규칙의 정해진 해법이다.
+- gate 변화: 없음
+- CE: 해당 없음 — 격리 규칙대로 근거·해제 조건을 줄에 남겼다.
+
+## 2026-11-04 · uncommitted · docs(D-871): 학습센터 타이머 미활용 발견·활성화 개정
+- 변경: D-871에 2026-11-04 현장 점검 절 추가. 모델 PC `rosy-learning-center-update.timer`가 `disabled`+`inactive`였던 것을 `enable --now`로 복구하고, 사용자 유닛 타이머 감사 규칙(`systemctl --user list-timers`, `timers.target.wants/`)을 남겼다.
+- 증거: 모델 PC에서 타이머 enabled+active 확인, 1회 실행으로 게이트 통과·`idle`(`center_not_running`, 설계 동작) 확인. 로봇·현장 PC·OMX·AI PC 전 표면 타이머 실측은 작업 기록 `Rosy/docs/workspace-records/2026-11-04/auto-update-audit.md`.
+- gate 변화: 없음
+- CE: 해당 없음 — 운영 조치이며 함정은 D-871 개정과 작업 기록에 남겼다.
+
+## 2026-11-04 · uncommitted · docs(deployment): 후진 목표 운영자 메모
+
+- 변경: `pinky-native-mapping-recovery.md`에 2026-11-04 메모 — 후진 목표는 목표 yaw를 현재 유지로 보내야 하고 yaw+π는 rotate_to_heading 회전을 먼저 일으킨다는 geg6 실측 규칙. [nav2-reversing-goal-2026-11-04](../../validation/nav2-reversing-goal-2026-11-04/result.md)로 연결.
+- 증거: 위 검증 기록. 이번 착지는 게시용 정본 FULL 근거 생성을 겸한다(pr-pipeline 「로컬 FULL 근거와 게시 SHA」).
+- gate 변화: 없음.
+- CE: 해당 없음 — 운영 문서.
+
+## 2026-11-04 · uncommitted · fix(deploy): calibration 분리 경로를 서명 모델 코드 아카이브에 포함
+- 변경: `model_code_layout.SPLIT_CODE_PREFIXES`에 `middleware/perception/calibration/`을 추가해 필수 소스 목록과 아카이브 입력을 맞췄다.
+- 증거: 변경 전 원격 `test_committed_review_archive_starts_without_checkout_imports`가 누락된 perception·Drive 의존성으로 실패했다. 변경 커밋의 `test_model_pc_autoupdate.py`·`test_model_review_release.py` 원격 검증 결과는 작업 인계에 남긴다.
+- gate 변화: 없음
+- CE: 해당 없음 — 원인과 재발 검사는 소스 목록과 기존 실제 Git 아카이브 부팅 시험에 드러난다.

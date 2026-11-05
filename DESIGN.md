@@ -2,29 +2,32 @@
 name: ROSY
 description: 로봇·플릿 관제 웹 표면의 시각 체계 — 차분한 지능에 은은한 따뜻함
 colors:
-  ground: "#101214"
-  ground-deep: "#08090b"
-  ground-raise: "#191b1d"
-  ground-soft: "#1d1f21"
-  ground-card: "#2b2d30"
-  ground-card-2: "#35383c"
+  ground: "#111113"
+  ground-deep: "#0c0d0f"
+  ground-raise: "#18191b"
+  ground-soft: "#212225"
+  ground-card: "#272a2d"
+  ground-card-2: "#2e3135"
   ink: "#eeeeef"
-  ink-quiet: "#9499a0"
+  ink-quiet: "#b0b4ba"
   ink-on-crit: "#eeeeef"
-  status-crit: "#c40921"
-  status-warn: "#feb432"
-  status-good: "#12bb81"
-  series-primary: "#49affd"
-  series-secondary: "#0777bb"
-  series-goal: "#12bb81"
-  robot-1: "#b6ddfe"
-  robot-2: "#24a6fd"
-  robot-3: "#0774b6"
-  raster-unknown: "#111213"
-  raster-free: "#1f2123"
-  raster-uncertain: "#45484d"
-  raster-occupied: "#d7d7d8"
-  brand-rose: "#f697e7"
+  status-crit: "#b54548"
+  status-warn: "#ffc53d"
+  status-good: "#3dd68c"
+  series-primary: "#58a6ff"
+  series-secondary: "#2870bd"
+  series-goal: "#3dd68c"
+  robot-1: "#bddafe"
+  robot-2: "#63abfe"
+  robot-3: "#2f76c4"
+  app-line-learning: "#0eb39e"
+  app-line-fleet: "#9eb1ff"
+  app-line-robot: "#b1a9ff"
+  raster-unknown: "#0c0d0f"
+  raster-free: "#18191b"
+  raster-uncertain: "#43484e"
+  raster-occupied: "#b0b4ba"
+  brand-rose: "#e796f3"
   shadow-base: "#000000"
 typography:
   display:
@@ -211,7 +214,7 @@ D-280 다섯 원칙은 시각에서 이렇게 묶인다.
 5. **현대성은 정교한 품질로.** 닫힌 척도(글자 6단, 간격 6단, 모서리 4종)만 쓴다. 장식 움직임은 없다([D-220](docs/adr/D-220-stillness-contract-zero-motion-budget.md)).
 
 **Key Characteristics:**
-- 무채색 바탕(H 258, C ≤ 0.012) 위 한 가족 글꼴, 숫자만 등폭
+- 차가운 무채색 바탕(Radix slate, C ≤ 0.010) 위 한 가족 글꼴, 숫자만 등폭
 - 색은 네 의미 집합(ground·status·series·brand)에서만, 서로 섞지 않는다
 - 정상에는 색이 없다 — 정상은 `ink`다
 - 주 명령은 초록이 아니라 가장 대비가 큰 중립(ink 채움)이다
@@ -252,7 +255,7 @@ Fleet 앱 바의 오른쪽은 연결·알림·나·정지 순서다. 연결은 `
 
 변경자는 원시 색 금지, 역할 우선, 테마 키·대비·native parity 시험을 원격으로 실행한다. 새 역할은 ADR·사용처·시험을 같은 커밋에 넣는다. G1 시험 통과와 G2 화면 검증, G3 사용자 작업 검토를 구분해 기록한다. 모든 표면의 G2/G3가 없으면 제품 전체 디자인 완료로 선언하지 않는다.
 
-색은 뜻의 예산이다. 한 화면에서 색이 적을수록 색이 뜻하는 바가 강하다. 의미 집합은 [D-82](docs/adr/D-82-oklch.md)가, 대비 바닥은 [D-202](docs/adr/D-202-danger-is-a-fill-alarm-text-contrast-contract.md)·[D-214](docs/adr/D-214-text-contrast-floor.md)가 정한다. 값은 OKLCH에서 생성했다.
+색은 뜻의 예산이다. 한 화면에서 색이 적을수록 색이 뜻하는 바가 강하다. 의미 집합은 [D-82](docs/adr/D-82-oklch.md)가, 대비 바닥은 [D-202](docs/adr/D-202-danger-is-a-fill-alarm-text-contrast-contract.md)·[D-214](docs/adr/D-214-text-contrast-floor.md)가 정한다. 값은 실제 제품 색 체계(Radix Colors·GitHub Primer)의 단계에서 골라 팔레트 게이트로 걸렀다([D-976](docs/adr/D-976-palette-from-product-scales-and-dense-tool-targets.md)). 같은 색이 넓은 면을 칠하지 않는다 — 끝난 진행·정상 칸은 중립이고 색은 지금 도는 것과 주의가 필요한 것에만 간다.
 
 ### Primary
 - **ROSY 장미(Rosy Rose)** (`brand-rose`): 워드마크와 현재 선택된 역할 메뉴(위치 표식)에만 쓴다 — D-277 원문의 두 자리다. 상태·포커스·데이터 계열·인터랙션에 쓰지 않고, 조작 상태는 `--focus-ring`이다. 옅은 바탕은 파생 `--brand-rose-wash`다.
@@ -275,7 +278,7 @@ Fleet 앱 바의 오른쪽은 연결·알림·나·정지 순서다. 연결은 `
 
 ### 세 층 토큰
 
-1. **팔레트** — 테마마다 바뀌는 유일한 값. 키 목록은 닫혀 있다(위 frontmatter 24개). 원시 색은 이 블록에만 있다.
+1. **팔레트** — 테마마다 바뀌는 유일한 값. 키 목록은 닫혀 있다(위 frontmatter 27개). 원시 색은 이 블록에만 있다.
 2. **파생** — 팔레트만 참조한다. 선(`--line-*`), 장막(`--scrim*`), 세척(`--status-crit-a07` 등)은 `color-mix(in oklab, var(--팔레트) N%, transparent | var(--ground…))`다. 원시 색 리터럴이 있으면 시험이 막는다.
 3. **역할** — 부품이 읽는 이름: `--surface-*`, `--button-*`, `--field-*`, `--flag-*`, `--focus-ring`, `--gauge-*`, `--nominal*`. 표면 CSS는 팔레트보다 역할을 먼저 쓴다.
 
@@ -413,6 +416,8 @@ D-741(Accepted)이 정한, 모든 웹 표면이 같이 쓸 자리다. Rosy Fleet
 
 **공통 조작 법칙.** 비상 정지를 포함한 모든 버튼은 종류에 관계없이 48px·라벨 글자·좌우 여백을 공유한다. 폭은 라벨 길이로 정하고 아이콘 전용은 같은 누름 면의 정사각형이다. 크기는 최소값이므로 긴 문구·비활성 사유는 늘어날 수 있다. 버튼의 의미는 채움과 상태, 아이콘과 보이는 동사로 구분한다. 위험 조작의 크기 예외나 화면별 작은 버튼을 만들지 않는다.
 
+**도구 단계(D-976, D-629 개정).** 넓은 화면(64rem 이상)의 마우스 작업 면에서만 도구 막대·표 행 동작의 아이콘 단추는 `--target-tool` 36px, 표·목록 행은 `--row-dense` 34px를 쓸 수 있다. 아이콘 단독 도구에는 `aria-label`이 있다. 주 동작·비상 정지·되돌릴 수 없는 조작·폼 입력은 48px 그대로이고, 64rem 미만에서는 소비 시트가 `--target-secondary`로 되돌린다.
+
 ### 관제의 정보 위계와 배치 이유
 
 알림은 공통 머리의 조회 버튼에서 오른쪽 알림 창으로 들어간다. 현재 개입 요약과 최근 관제 메시지는 이 창구에 모으고, 상세 사건 증거는 `기록·근거`에 둔다. 읽음은 브라우저의 미확인 표시만 바꾸며 개입 해소·승인·정지 해제를 뜻하지 않는다. 반복 폴링은 새 알림이 아니다. 현재 개입과 비상 정지는 알림 창 밖에 유지한다([D-632](docs/adr/D-632-fleet-notification-inbox.md)).
@@ -516,8 +521,9 @@ D-741(Accepted)이 정한, 모든 웹 표면이 같이 쓸 자리다. Rosy Fleet
 
 ### 단계 스트립 — `<ol class="ui-stage-track">` · `.ui-stage`
 - 절차(`procedure` 문법)가 몇 번째 단계인지 한 줄로 말한다. JS가 없다: `<ol class="ui-stage-track">` 안에 `<li class="ui-stage" data-state="done|now|blocked|todo">순번이 붙은 라벨</li>`을 두고, 지금 단계에 `aria-current="step"`을 단다.
-- 표식은 `--size-stage-mark` 원이고 순번은 `--mono`다. 긴 절차는 줄바꿈해 흐르며 한 단계의 라벨만 `overflow-wrap: anywhere`로 접힌다.
-- 상태는 `ui-tag`와 같은 어휘다. `done`은 지난 단계(조용한 글자, `--surface-raised` 채움 — 빈 테인 `todo`와 라이트에서도 구분된다), `now`는 지금(가장 밝은 중립 글자와 그 잉크로 채운 표식 — 정상은 색이 아니다, D-82), `blocked`는 주의 글자·테(`--status-warn`), `todo`는 남은 단계(빈 테). `data-state`가 없으면 `todo`다.
+- 모양은 노선이다([D-975](docs/adr/D-975-line-map-stage-track-and-app-lines.md)): 단계는 번호 역(`--size-stage-mark` 원, 순번 `--mono`)이고 역 사이를 `--size-stage-line` 굵기의 선이 잇는다. 단계는 같은 폭을 나눠 쓰고 라벨은 어절에서 줄바꿈한다. 30rem 미만에서는 세로 노선으로 접는다.
+- 노선 색은 `data-line="learning|fleet|robot"`이 고른다(`--app-line-*`, 없으면 중립 `--border-strong`). 앱 정체성이지 상태가 아니며 지난 역의 테와 지난 구간에만 칠한다. 남은 구간은 `--border-default`다. 노선 팔레트는 단계 스트립 밖에서 쓰지 않는다(`test_palette_gates.py`).
+- 상태는 `ui-tag`와 같은 어휘다. `done`은 지난 단계(노선 색 테), `now`는 지금(가장 밝은 중립 글자와 그 잉크로 채운 표식, 바깥에 노선 색 고리 — 정상은 색이 아니다, D-82), `blocked`는 주의 글자·테(`--status-warn`), `todo`는 남은 단계(중립 테). `data-state`가 없으면 `todo`다.
 - 지금 단계의 뜻은 색 하나가 아니라 `aria-current`, 순번, 채움 셋이 함께 나른다.
 - 규칙은 `/common/stage-strip.css`에 산다 — `components.css`는 D-766 한도(942줄)에서 동결됐으므로 쓰는 화면은 `components.css` 뒤에 이 시트를 링크한다.
 
@@ -528,19 +534,22 @@ D-741(Accepted)이 정한, 모든 웹 표면이 같이 쓸 자리다. Rosy Fleet
 - **`ui-actions`**: 버튼 줄. 줄바꿈하고, 좁은 칸에서 한 열로 늘어난다.
 - **`.ui-form` / `.ui-field-label`**: 네이티브 폼의 필드 묶음. 좁은 칸에서 한 열.
 - **`.ui-readout`**: `dl` 이름–값 두 열. 값은 등폭. 좁은 칸에서 한 열.
+- **`.ui-readout[data-form="strip"]`** (`/common/readout-strip.css`): 화면 머리의 핵심 수치 띠. 항목은 `<div><dt>이름</dt><dd>값</dd><dd data-note>근거</dd></div>`. 한 상자를 1px 선으로 나누고 아이콘·색 면을 쓰지 않는다. 값이 주의일 때만 상태색. 좁은 칸에서 두 열. 수치는 서버가 준 값만 — 화면이 셈을 지어내지 않는다.
 - **`.ui-readback`**: 쓰기 뒤 되읽기 결과 묶음.
 
 ### 조합 어휘
-표면마다 다른 이름으로 다시 만들던 묶음을 한 이름으로 부른다. 새 부품이나 화면별 사본을 만들기 전에 이 표를 먼저 본다. 표에 없는 묶음이 두 표면에 필요해지면 구현을 옮긴 뒤 이 표에 한 줄을 더한다. 이름은 `test_content_vocabulary.py`가 지킨다.
+표면마다 다른 이름으로 다시 만들던 묶음을 한 이름으로 부른다. 새 부품이나 화면별 사본을 만들기 전에 이 표를 먼저 본다. 표에 없는 묶음이 두 표면에 필요해지면 구현을 옮긴 뒤 이 표에 한 줄을 더한다. 이름은 `test_content_vocabulary.py`가 지킨다. 화면 머리 두 줄(절차 단계·수치 띠)과 세 칸 틀 줄의 "지금 쓰는 곳"은 HTML 경로이고, 같은 시험이 실제로 그 부품을 쓰는 페이지와 대조한다. 값은 서버 응답만 보이고 노선·띠 모듈은 쓰기 요청을 보내지 않는다([D-978](docs/adr/D-978-screen-heads-show-server-answers-and-one-composition-table.md)).
 
 | 개념 | 정본 이름 | 지금 쓰는 곳 |
 | --- | --- | --- |
 | 측정 행(이름–값) | `.ui-readout` · `.ui-readback` | 로봇 카드, Fleet 상세, 견본 |
 | 작업 목록 행 | `.ui-task-row` · `taskRow()` | 로봇 작업, Fleet 작업 선택 |
-| 절차 단계 | `.ui-stage-track` · `.ui-stage` | 견본 — 표면 채택 전 |
+| 절차 단계 | `.ui-stage-track` · `.ui-stage` | `applications/fleet/web/installation/install.html` · `applications/fleet/web/cell/cell.html` · `middleware/robot_ui/robot/styleguide.html` |
+| 화면 머리 수치 띠 | `.ui-readout[data-form="strip"]` | `applications/fleet/web/work/policy.html` · `applications/fleet/web/cell/cell.html` · `middleware/robot_ui/robot/styleguide.html` · `middleware/robot_ui/robot/panels/host/system.js` |
 | 증거 블록 | `<ui-evidence>` · `<ui-empty>` | 로봇 카드, Fleet 큐 |
 | 절차 작업 열 | `.ui-sidebar` | 설치·정비, Fleet 작업 선택 |
 | 매체 칸 | `.ui-pane[data-pane]` | 로봇 셸, 감지·카메라 |
+| 세 칸 틀 | `.ui-stage-grid` | `applications/fleet/web/index.html` · `middleware/robot_ui/robot/styleguide.html` · `shared/web/template.html` |
 
 ### 상단바 — `<ui-topbar>` (D-466)
 - 자리는 셋이다. `brand`(장미색 워드마크 + 조용한 부제), `cluster`(화면 전환·상태·조용한 도구), `estop`(오른쪽 끝 비상 정지). cluster 안의 순서는 표면이 정하고, 바깥 자리는 더 만들지 않는다.

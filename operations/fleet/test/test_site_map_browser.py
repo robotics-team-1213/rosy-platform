@@ -497,7 +497,7 @@ def test_recording_target_survives_refresh_and_names_offline_or_removed_robots(p
         {'state', 'power_health', 'motor_health', 'map', 'swarm_state', 'navigation_path', 'events'}]
 
 
-@pytest.mark.parametrize("width,height", [(1440, 1000), (390, 844), (320, 568)])
+@pytest.mark.parametrize("width,height", [(1920, 1080), (1440, 1000), (390, 844), (320, 568)])
 def test_view_edit_activate_and_preview_a_trip(page_site, width, height):
     from playwright.sync_api import expect
 
@@ -512,7 +512,8 @@ def test_view_edit_activate_and_preview_a_trip(page_site, width, height):
     expect(page.locator("#user-role")).to_have_attribute("title", "bob · operator")
     expect(page.locator("#token-access")).not_to_have_attribute("open", "")
     # D-540 2: below 90rem the reconnect summary sits in the header fold behind 설정.
-    expect(page.locator("#topbar-more")).to_be_visible()
+    if width <= 1440:
+        expect(page.locator("#topbar-more")).to_be_visible()
     expect(page.locator("#map-status")).to_contain_text("활성 지도 v1")
     expect(page.locator("#site-map-svg [data-place]")).to_have_count(4)
     expect(page.locator("#site-map-svg .arrow")).to_have_count(8)  # 4 one-way + 2 two-way edges
@@ -572,10 +573,13 @@ def test_view_edit_activate_and_preview_a_trip(page_site, width, height):
         expect(page.locator("#trip-summary")).to_contain_text("실행하지 않음")
 
 
-@pytest.mark.parametrize("width,height", [(1440, 1000), (390, 844), (320, 568)])
-def test_site_map_fits_declared_widths(page_site, width, height):
+@pytest.mark.parametrize("width,height", [(1920, 1080), (1520, 900), (1519, 900),
+                                         (1440, 1000), (390, 844), (320, 568)])
+@pytest.mark.parametrize("theme", ["dark", "light"])
+def test_site_map_fits_declared_widths(page_site, width, height, theme):
     page, _, _ = page_site
     page.set_viewport_size({"width": width, "height": height})
+    page.evaluate("theme => document.documentElement.setAttribute('data-theme', theme)", theme)
     open_token_access(page)
     page.locator("#console-token").fill("operator-token")
     page.locator("#token-save").click()
@@ -588,6 +592,8 @@ def test_site_map_fits_declared_widths(page_site, width, height):
       label: document.querySelector('#site-map-svg .label').getBoundingClientRect().height,
       mapWindow: document.querySelector('.map-viewport').clientWidth,
       mapContent: document.querySelector('.map-viewport').scrollWidth,
+      mapBounds: document.querySelector('.map-viewport').getBoundingClientRect().toJSON(),
+      inspector: document.querySelector('.map-inspector').getBoundingClientRect().toJSON(),
       header: document.querySelector('ui-topbar').getBoundingClientRect().height,
       edit: document.querySelector('[aria-labelledby=edit-heading]').getBoundingClientRect().width,
       trip: document.querySelector('[aria-labelledby=trip-heading]').getBoundingClientRect().width,
@@ -606,18 +612,25 @@ def test_site_map_fits_declared_widths(page_site, width, height):
     assert sizes["overflow"] <= 0, sizes
     assert all(need <= has + 1 for _id, need, has in sizes["selects"]), sizes
     assert sizes["label"] >= 12, sizes
+    if width >= 1520:
+        assert sizes["inspector"]["left"] >= sizes["mapBounds"]["right"], sizes
+        assert abs(sizes["inspector"]["top"] - sizes["mapBounds"]["top"]) <= 1, sizes
+    else:
+        assert sizes["inspector"]["top"] >= sizes["mapBounds"]["bottom"], sizes
     if width < 1024:
         assert sizes["mapWindow"] <= width and sizes["mapContent"] > sizes["mapWindow"], sizes
     if width < 480:
         assert sizes["header"] <= height * 0.2, sizes  # D-540 2: identity folds behind 설정
     assert sizes["edit"] == sizes["trip"] == 0, sizes  # D-926 3: the first screen is the map alone
     assert sizes["stop"] <= width, sizes
+    if output := os.environ.get("ROSY_SHOT_DIR"):
+        page.screenshot(path=str(Path(output) / f"site-map-inspector-{theme}-{width}x{height}.png"), full_page=True)
 
 
 # The wide layout stands from a 60rem body: a 1296px shell. 1349 is a 1366 laptop window with a classic scrollbar.
-@pytest.mark.parametrize("width,height,panels,fields", [(360, 740, 1, 1), (1024, 768, 1, 1), (1100, 800, 1, 1),
-                                                       (1349, 768, 1, 3), (1366, 768, 1, 3)])
-def test_site_map_body_keeps_usable_columns_beside_the_sub_nav(page_site, width, height, panels, fields):
+@pytest.mark.parametrize("width,height,panels", [(360, 740, 1), (1024, 768, 1), (1100, 800, 1),
+                                                       (1349, 768, 1), (1366, 768, 1)])
+def test_site_map_body_keeps_usable_columns_beside_the_sub_nav(page_site, width, height, panels):
     """D-741 2: the rail and the sub-nav take 304px. The body picks its columns from its own width: one panel column
     and one-column forms until the body has 60rem, then two and three. There is no sideways overflow, no control
     past the window or with cut text, no multi-column cell under 9rem (what these forms had at the sheet's own
@@ -645,8 +658,8 @@ def test_site_map_body_keeps_usable_columns_beside_the_sub_nav(page_site, width,
         assert top["unreachable"] == [] and end["unreachable"] == [], (top, end)
     assert top["cut"] == [] and top["outside"] == [] and end["outside"] == [], (top, end)
     columns = {grid["name"]: grid["columns"] for grid in top["grids"]}
-    assert columns == {"map-workflow": panels, "place-form": fields,  # D-926 3: other screens' forms are hidden
-                       "actions draft-actions": 1 if width < 480 else 3}, top["grids"]
+    assert columns == {"map-workflow": panels, "place-form": 1,  # D-926 3: other screens' forms are hidden
+                       "actions draft-actions": 1}, top["grids"]
     assert all(grid["narrowest"] >= 144 for grid in top["grids"] if grid["columns"] > 1), top["grids"]
     assert label >= 12, label
 

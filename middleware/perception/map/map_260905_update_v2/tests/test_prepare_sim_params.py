@@ -75,6 +75,11 @@ class PrepareTests(unittest.TestCase):
         self.assertEqual(m.get(out,m.C+('FollowPath',)),m.get(self.base,m.C+('FollowPath',)))
         self.assertEqual(m.get(out,m.C+('progress_checker',)),m.get(self.base,m.C+('progress_checker',)))
 
+    def test_rpp_trial_stays_forward_only_even_when_base_allows_reversing(self):
+        m.put(self.base,m.C+('FollowPath','allow_reversing'),True)
+        out,_=m.prepare(self.base,self.map,True)
+        self.assertIs(m.get(out,m.C+('FollowPath','allow_reversing')),False)
+
     def test_base_is_unchanged(self):
         before=copy.deepcopy(self.base)
         m.prepare(self.base,self.map,True,True)

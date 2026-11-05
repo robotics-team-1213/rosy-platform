@@ -41,7 +41,10 @@
     <div id="account-content" hidden>
       <p>변경은 즉시 적용되며 대상 계정의 기존 로그인 세션이 종료됩니다. 마지막 관리자는 정지하거나 관리 권한을 제거할 수 없습니다.</p>
       <ui-button id="account-reload" kind="quiet">현재 상태 다시 조회</ui-button>
-      <ul id="account-list" aria-label="등록 계정"></ul>
+      <div class="ui-table-scroll" role="region" aria-label="등록 계정 표" tabindex="0">
+        <table class="ui-data-table" aria-label="등록 계정"><thead><tr><th scope="col">로그인 ID</th><th scope="col">사용자 식별</th><th scope="col">기본 역할</th><th scope="col">상태</th><th scope="col"><span class="sr-only">편집</span></th></tr></thead>
+          <tbody id="account-list"></tbody></table>
+      </div>
       <ui-button id="account-new" kind="quiet">새 계정</ui-button>
       <h2 id="account-heading">새 계정</h2>
       <form id="account-form" class="password-login-form">

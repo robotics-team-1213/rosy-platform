@@ -9,6 +9,7 @@ D-153 회차2 — 게임 호스트 G2 캡처 수단. CORE `/dashboard` 자산을
 from __future__ import annotations
 
 import sys
+import os
 from pathlib import Path
 
 import pytest
@@ -215,7 +216,10 @@ def test_match_board_renders_published_play_state():
             assert "필수 마커·공 관측 미완료" in page.locator("#stair1").inner_text()
             assert page.locator("#markers li.on").count() == 4
             assert not errors, f"페이지 오류: {errors}"
-            save_temp_screenshot(page, "games_board_play.png")
+            # The shared helper prefixes TEMP unless the output name is absolute.
+            shot = (Path(os.environ.get('ROSY_SHOT_DIR') or os.environ.get('TEMP', '/tmp')) / 'games_board_play.png').resolve()
+            shot.parent.mkdir(parents=True, exist_ok=True)
+            save_temp_screenshot(page, str(shot))
             browser.close()
     finally:
         server.close()
@@ -263,7 +267,9 @@ def test_match_board_names_server_judged_delay():
             assert "마지막 생성 3.0초 전" in announcement.inner_text()
             assert page.evaluate("window.__announcementChanges") == []
             assert not errors
-            save_temp_screenshot(page, "games_board_delayed.png")
+            shot = (Path(os.environ.get('ROSY_SHOT_DIR') or os.environ.get('TEMP', '/tmp')) / 'games_board_delayed.png').resolve()
+            shot.parent.mkdir(parents=True, exist_ok=True)
+            save_temp_screenshot(page, str(shot))
             browser.close()
     finally:
         server.close()

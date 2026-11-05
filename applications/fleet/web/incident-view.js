@@ -36,12 +36,15 @@ function incidentRow(key, openReports) {
   const side = document.createElement("div"), seat = el("incident-judgment");
   side.className = "incident-row";
   side.dataset.reportKey = key;
+  let userOpening = false;
+  summary.addEventListener("click", () => { userOpening = !detail.open; });
   // One fold at a time, closed here in script: the seat must never hold another incident than the open fold.
   const place = event => {
     if (!detail.open) return side.remove();
     for (const other of document.querySelectorAll(".incident-row > details[open]")) if (other !== detail) other.open = false;
     if (seat.firstChild !== side) seat.replaceChildren(side);
-    if (event) seat.scrollIntoView({block: "nearest"});
+    // Restoring .open on refresh also queues a toggle; only a reader opening the fold should scroll.
+    if (event && userOpening) { userOpening = false; seat.scrollIntoView({block: "nearest"}); }
   };
   detail.addEventListener("toggle", place);
   place();
