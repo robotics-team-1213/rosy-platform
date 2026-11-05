@@ -14234,3 +14234,9 @@ osy-d395-s1d\`.
 - 증거: 제품42188e5096의 실제 지연 회귀12 pass/0 skip/NEW0. 확장192 pass/1 fail은 당시 결과로 유지하고, 소비자a4a0251917의 준비/동시 측정4 pass/0 skip/NEW0로 해당 NEW1을 별도 해소했다. 기준값4개와 제품은 유지했다. 기록 후보2821506a0a의 size-range7커밋·harness lint0오류, 독립 scoped 승인 확인.
 - gate 변화: 관련 검증·독립 리뷰 완료, 공식 AUTO/FULL·로컬 main 대기. GitHub·배포·실물/모델 품질 수용은 별도.
 - CE: 해당 없음 — 원인과 보장 조건은 generation/잠금 코드·지연 응답/준비 상태 회귀에 남는다.
+
+## 2026-11-05 · uncommitted · 캡처 지문 목록의 정본 checksum 형식
+- 변경: 캡처1656개 목록을 기존 scanner가 지원하는 sha256sum 형식의 captures.sha256으로 이름만 바꾸고 참조 링크2개를 갱신했다. 목록의 바이트·해시·파일명은 그대로다.
+- 증거: ec1의 공식014641은 FULL 전에 .txt의 공개 SHA256을 high-entropy-token으로 분류해 STOP했다. 기존 secret_scan_syntax의 .sha256 계약을 사용하며 검사기·면제 목록·공개 provenance 설정은 고치지 않는다. 파일명 열과 자격 증명 검사는 유지한다.
+- gate 변화: 크기87·안전87·새 SHA 문서149·독립 소스 동등성은 이미 통과. checksum 이름과 링크 수정 후 기존 비밀 경계/문서 검증 및 기본 공식 AUTO/FULL을 다시 수행한다.
+- CE: 해당 없음 — 정본 scanner의 기존 checksum 분기/시험과 본 기록에 형식 조건이 드러난다.

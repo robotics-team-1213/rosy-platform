@@ -44,7 +44,7 @@
 
 ## 표면 카드와 상태 셀
 
-[30개 표면 카드](surfaces.md), [구현 판단·오판 시 비용](rulings.md), [원본 SHA256 목록](captures-sha256.txt)을 함께 읽는다. 목록에는 실패 이력도 보존한다. learning-depth-eab는433 passed/35 failed의 이전 관측이며 최신 승인 근거가 아니다. 최종42c97133c1의413 PNG·24 JSON·JUnit2개는 별도 묶음이다.
+[30개 표면 카드](surfaces.md), [구현 판단·오판 시 비용](rulings.md), [원본 SHA256 목록](captures.sha256)을 함께 읽는다. 목록에는 실패 이력도 보존한다. learning-depth-eab는433 passed/35 failed의 이전 관측이며 최신 승인 근거가 아니다. 최종42c97133c1의413 PNG·24 JSON·JUnit2개는 별도 묶음이다.
 
 최종 카드에는 질문, 선언 뷰포트, 적용 가능한 fresh/delayed/disconnected/unavailable·빈 목록·최초 기동·오류/거부·SAFE_STOP·불가역 확인 셀, 원본 캡처 경로/해시, G1·G3·착지를 기록한다. 적용 불가 셀은 입력/상태 계약의 근거를 적고 임의 성공 셀을 만들지 않는다. 캡처 원본은 validation 규칙에 따라 Git에서 제외하고 보존 경로·해시 manifest로 결속한다.
 

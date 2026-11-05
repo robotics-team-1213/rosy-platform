@@ -14,7 +14,7 @@
 
 Account/login/profile는 rosy_account/web_assets.py의 계정 표면이며 CORE 센서/안전 값을 받지 않는다. 작업 공간은 workspaces.js의 선택 목록이다. 이들의 telemetry 네 상태·SAFE_STOP은 N/A이며 실제 인증/조회/저장 실패와 대기는 평가한다. camera/evaluate/VLM/tasks/SIM 폼도 현재 API의 요청 상태를 쓰며 센서 evidence TTL 계약을 새로 만들지 않는다. 늦은 HTTP 응답과 오래된 센서 판정은 다르다. 불가역 확인은 현재 존재하는 동작에만 적용한다.
 
-공통 완료 조건은 현재 G1, 적용 상태 전체 G2, G3 여덟 항 및 D-926, 최종 소스의 main ancestry다. 아래의 ‘관찰 범위 위반 없음’은 전체 GO가 아니다. 원본 경로는 작업 공간 `docs/workspace-records/2026-11-05/ui-map/`, 파일 지문은 [captures-sha256.txt](captures-sha256.txt)를 따른다. 단계 완료는 서버 원천이 있을 때만 표시하며 선택·현재 위치를 승인으로 바꾸지 않는다.
+공통 완료 조건은 현재 G1, 적용 상태 전체 G2, G3 여덟 항 및 D-926, 최종 소스의 main ancestry다. 아래의 ‘관찰 범위 위반 없음’은 전체 GO가 아니다. 원본 경로는 작업 공간 `docs/workspace-records/2026-11-05/ui-map/`, 파일 지문은 [captures.sha256](captures.sha256)를 따른다. 단계 완료는 서버 원천이 있을 때만 표시하며 선택·현재 위치를 승인으로 바꾸지 않는다.
 
 ## Fleet·Account
 
