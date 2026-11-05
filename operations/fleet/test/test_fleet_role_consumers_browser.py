@@ -12,6 +12,63 @@ pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason="opt-in Chro
 SIZES = [(1920, 1080), (1366, 768), (390, 844), (320, 568)]
 
 
+@pytest.mark.parametrize('width,height', [(1366,768),(390,844),(320,568)])
+@pytest.mark.parametrize('theme', ['dark','light'])
+def test_same_hierarchy_links_and_task_tabs_share_rendered_subnav(tmp_path, width, height, theme):
+    from playwright.sync_api import expect
+    api = _api()
+    writes = []
+    with _fleet(tmp_path, console_token='registry-only', development_sessions=DevelopmentSessions()) as (browser, origin):
+        page = _signed_in_page(browser, origin)
+        page.set_viewport_size(dict(width=width,height=height))
+        def serve(route):
+            path = urlparse(route.request.url).path
+            if route.request.method == 'GET' and path in api:
+                route.fulfill(json=api[path])
+            elif route.request.method != 'GET' and '/auth/' not in path:
+                writes.append(path)
+                route.fulfill(status=409,json={'detail':'hierarchy fixture: no writes'})
+            else:
+                route.continue_()
+        page.route('**/api/**',serve)
+        rendered = []
+        for path in ['/console/site-map','/console/install']:
+            page.goto(origin+path)
+            expect(page.locator('#user-role')).to_have_text('운영자',timeout=15000)
+            page.evaluate('theme=>document.documentElement.dataset.theme=theme',theme)
+            if path.endswith('site-map'):
+                selected = page.get_by_role('link',name='지도 보기',exact=True)
+                expect(selected).to_have_attribute('href','#map-heading')
+                expect(selected).to_have_attribute('aria-current',re.compile('^(page|step)$'))
+            else:
+                selected = page.get_by_role('tab',name='장비 찾기',exact=True)
+                expect(selected).to_have_attribute('aria-selected','true')
+            expect(selected).to_be_visible()
+            selected.focus()
+            page.keyboard.press('Tab')
+            page.keyboard.press('Shift+Tab')
+            expect(selected).to_be_focused()
+            rendered.append(selected.evaluate("""node=>{const s=getComputedStyle(node);return Object.fromEntries([
+              'display','alignItems','justifyContent','textAlign','paddingTop','paddingRight','paddingBottom','paddingLeft',
+              'minHeight','fontSize','fontWeight','lineHeight','borderRadius','borderTopWidth','backgroundColor','color','appearance',
+              'outlineStyle','outlineWidth','outlineColor','outlineOffset'].map(key=>[key,s[key]]));}"""))
+            assert rendered[-1]['outlineStyle'] != 'none'
+            assert float(rendered[-1]['outlineWidth'].removesuffix('px')) > 0
+            if path.endswith('install'):
+                assert rendered[0] == rendered[1], (width,theme,rendered)
+                assert selected.evaluate('node=>node.tagName') == 'BUTTON'
+                expect(selected).to_have_attribute('type','button')
+                assert page.get_by_role('combobox',name='작업 선택',exact=True).count() == 0
+                panel = page.locator('#'+selected.get_attribute('aria-controls'))
+                expect(panel).to_be_visible()
+                expect(panel).to_have_attribute('role','tabpanel')
+                expect(panel).to_have_attribute('aria-labelledby',selected.get_attribute('id'))
+                expect(page.get_by_role('tablist',name='작업 선택')).to_have_attribute('aria-orientation','vertical' if width>=1024 else 'horizontal')
+            assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
+        assert not writes
+        page.close()
+
+
 def _assert_control(control):
     from playwright.sync_api import expect
     # Roster refresh replaces controls; locator assertions re-resolve the live element.

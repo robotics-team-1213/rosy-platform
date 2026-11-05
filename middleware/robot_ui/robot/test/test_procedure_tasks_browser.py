@@ -90,6 +90,25 @@ def page():
         thread.join(timeout=2)
 
 
+def test_task_navigation_keeps_tab_semantics_while_container_resizes(page):
+    page.get_by_role('textbox',name='작업 초안',exact=True).fill('resize retained draft')
+    for width in [1366,390,320,1366]:
+        page.set_viewport_size({'width':width,'height':844})
+        rail = page.get_by_role('tablist',name='작업 선택')
+        expect(rail).to_be_visible()
+        expect(rail).to_have_attribute('aria-orientation','vertical' if width>=1024 else 'horizontal')
+        first = rail.get_by_role('tab',name='첫 작업',exact=True)
+        assert first.evaluate('node=>node.tagName') == 'BUTTON'
+        expect(first).to_have_attribute('type','button')
+        first.focus()
+        page.keyboard.press('ArrowRight')
+        expect(rail.get_by_role('tab',name='다음 작업',exact=True)).to_be_focused()
+        page.keyboard.press('Home')
+        expect(first).to_be_focused()
+        expect(page.get_by_role('textbox',name='작업 초안',exact=True)).to_have_value('resize retained draft')
+        assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
+
+
 def test_selection_retains_all_panels_drafts_and_failure_isolation(page):
     assert page.get_by_role('tab').count() == 3
     assert page.get_by_role('tabpanel').count() == 1

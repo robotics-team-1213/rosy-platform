@@ -16,7 +16,7 @@ import review_masks
 pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason='requires explicit Chromium browser run')
 
 
-@pytest.mark.parametrize('width,theme', [(1366,'dark'),(1366,'light'),(390,'dark'),(390,'light')])
+@pytest.mark.parametrize('width,theme', [(1366,'dark'),(1366,'light'),(390,'dark'),(390,'light'),(320,'dark'),(320,'light')])
 def test_home_routes_and_keyboard_section_navigation(browser_workspace,width,theme):
     page,_,expect=browser_workspace
     base=page.url.split('?')[0].rstrip('/')
@@ -29,6 +29,10 @@ def test_home_routes_and_keyboard_section_navigation(browser_workspace,width,the
     expect(routes.get_by_role('link',name='SIM 실험 열기')).to_have_attribute('href','/learning/sim')
     expect(routes.get_by_role('link',name='VLM 판단 검수 열기')).to_have_attribute('href','/learning/vlm')
     navigation=page.get_by_role('navigation',name='학습센터 작업 이동',exact=True)
+    assert navigation.evaluate("node=>node.parentElement.classList.contains('ui-subnav') && node.parentElement.parentElement.classList.contains('ui-app-body')")
+    menu_box, main_box = navigation.bounding_box(), page.locator('.ui-app-main').bounding_box()
+    assert menu_box['x']+menu_box['width'] <= main_box['x']+1 if width>=1024 else menu_box['y']+menu_box['height'] <= main_box['y']+1
+    assert main_box['y'] < page.viewport_size['height']
     for name,target in [('인식 자료·학습','pipeline'),('검수 대기','review-section'),
                         ('실행·평가 결과','learning-results'),('저장·계정','storage-section'),
                         ('작업 선택','learning-start')]:
@@ -42,6 +46,11 @@ def test_home_routes_and_keyboard_section_navigation(browser_workspace,width,the
             if other!=target:
                 expect(page.locator('#'+other)).to_be_hidden()
         expect(link).to_have_attribute('aria-current','location')
+        paint = link.evaluate("""node=>{const s=getComputedStyle(node),other=node.closest('nav').querySelector('a:not([aria-current])');
+          return {alignment:s.textAlign,selected:s.backgroundColor,other:getComputedStyle(other).backgroundColor};}""")
+        assert paint['alignment'] == 'start' and paint['selected'] != paint['other'], paint
+        expect(navigation).to_have_class(re.compile(r'\bui-subnav-nav\b'))
+        expect(link).to_have_class(re.compile(r'\bui-subnav-item\b'))
         if output:=os.getenv('ROSY_UIUX_SCREENSHOT_DIR'):
             capture=Path(output)/f'learning-home-{target}-{theme}-{width}.png'
             capture.parent.mkdir(parents=True,exist_ok=True)
