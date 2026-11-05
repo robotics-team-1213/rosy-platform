@@ -457,3 +457,9 @@
 - 변경: 객체·픽셀의 다음 검수 대기 조회 전에 기존 편집 잠금을 적용하고, 두 조회 응답을 현재 사진·세대와 대조한다. 녹화·시연 학습은 선택 변경 때 이전 응답을 버리고 최신 선택의 조회를 이어 간다. 녹화 선택 직후 이전 세션의 행동 버튼도 즉시 비활성화한다. 승인·사람 정답·출처·권한·같은 생성 요청 재확인 규칙은 유지한다.
 - 증거: 원격 Chromium cb52a1a3db에서 실제 응답을 보류한 12개 회귀가 실패했고, 제품 42188e5096에서 모두 통과했다(0 skipped, NEW0). 연결된 전체 파일·권한·편집·이동·크기 검사 193개는 192 통과/1 실패였다. 그 실패는 재진입 직후 여러 시점의 좌표를 읽던 시험이었으며, 준비 완료 뒤 한 DOM 시점에서 같은 기준을 검사하도록 바꾼 a4a0251917의 전체 결정 매개변수 4개가 통과했다(NEW0). 최초 NEW1은 이전 실행 기록에 그대로 보존한다.
 - gate 변화: 합성 자료의 SOURCE/LOCAL 브라우저 동작 근거다. 지연 상태의 새 캡처는 만들지 않았고, 기존 정상 배치 화면의 G2 근거와 구분한다. 실제 녹화·학습·장치·현장 수용이나 최종 저장소 FULL gate를 입증하지 않는다. 명령·각 SHA·제외한 잘못된 시험과 로그는 작업 SDD의 learning-depth-report.md에 남겼다.
+
+## 2026-11-05 · a27e97c186 · uiux: Learning 홈 하위 메뉴를 정본 subnav 자리에 배치
+
+- 변경: 기존5개 home hash 링크가 공용 subnav seat·선택·초점 표현을 소비한다. 본문 안 별도 메뉴 layout을 제거하고 같은 hash 재활성화 click은 옮긴 자리에서도 기존 화면 초점을 복원한다. IDs/hash/back/forward/query·retained DOM·common refresh·권한·사람 정답·학습 입력은 보존한다. 다른 하위 화면 흐름은 변경하지 않았다.
+- 증거: f8cb261e26의 home3폭×2테마 RED 뒤0de561052a의13개 공용 렌더/의미 회귀가 PASS/0 skipped/NEW0. 1a390c9d40 caller317개는315 PASS/NEW2이며 Learning pipeline/stages/state-consistency/data-recovery·review viewport/pixel workspace의 실제 phone 본문/사진 크기 예산·문맥·보존 상태 검사에 실패가 없다. 두 Fleet 실패는a27e97c186의 관련 전체파일36 PASS/NEW0으로 별도 폐쇄했다. review_shell.py --check도 통과해 기존 복사 범위 일치를 확인했다.
+- gate 변화: 합성 자료 SOURCE/LOCAL과 독립 G3의 source1a 화면 근거다. home focus는65/66이며 storage dark320의 content focus1셀을 제외했다. 실학습·모델 승격·설치본·장치·현장 수용이나 공식 FULL을 입증하지 않는다. CE: 해당 없음 — 공용 계약·회귀 시험에서 원인과 보존 조건을 복원한다.

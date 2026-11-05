@@ -1438,3 +1438,9 @@
 - 변경: host.operations의 기존 원본 조회 표에만 고정 배치와 행 제목 열 너비를 지정했다. 공통 표 CSS·조회값·캡션·스크롤 영역·작업 순서·권한은 유지했다. 새 화면·명령·상태·접힘 영역은 없다.
 - 증거: 6563dac55f의 원격 RED에서 1366px 행 제목 내용 폭이 44.30px로 56px 기준에 못 미쳤다(NEW1). df46d9a2f4의 기존 두 캡처 함수 2개와 전체 호스트·역할·나머지 흐름·문구·설치·공통 컨트롤·크기 범위 171개가 각각 통과했다(0 skipped, NEW0). 같은 원본에서 새 5PNG·4JSON·JUnit을 보존했고 모든 원격/로컬 해시가 일치한다. 제목 최소 내용 폭은 1366/390/320px 화면에서 각각 398.39/129.59/101.59px로 동일한 56px 기준을 충족한다.
 - gate 변화: 실제 FastAPI·Chromium의 SOURCE/LOCAL 회귀와 새 G2 화면 근거다. 부모 검토자가 R9 G3를 별도 재검토하며 최종 저장소 AUTO/FULL·설치본·장치·현장 수용은 이 기록으로 입증하지 않는다. 전체 명령·SHA·폭·해시는 외부 작업 기록 review-reports/host-header-r9-report.md에 보존한다.
+
+## 2026-11-05 · a27e97c186 · uiux: Robot 절차 메뉴의 공용 subnav 소비
+
+- 변경: 공용 chooser native tab이 같은 subnav 규칙을 소비하도록 Robot shell의 중복 chooser padding을 없애고 styleguide 견본을 같은 container에 두었다. 메뉴의 panel identity·retained input·방향키·중단·권한·소스 신선도는 유지한다. 기존 R9 긴 호스트 표 값·행 제목 너비 기준도 바꾸지 않았다.
+- 증거: f8cb261e26의 실제 container resize RED와0de561052a의13개 렌더·의미 회귀 PASS/0 skipped/NEW0. 1a390c9d40에서 procedure/role/action-groups/remaining-workflows와 공용·Fleet·Learning caller를 포함한317개 중315 PASS/NEW2였으며 두 Fleet consumer 실패는 a27e97c186의 해당 전체파일36 PASS/NEW0으로 닫았다. 독립 G3가1a의30PNG 직접검토·83PNG 해시를 대조했다. setup 직접 사진은 default dark390/320의2셀이고 device는3폭×2테마6셀이다.
+- gate 변화: Task10 SOURCE/LOCAL 회귀와 제한된 source-bound 화면 증거다. setup 전체 사진 행렬·공식 FULL·착지·설치본·실장치/현장 수용으로 확대하지 않는다. 역할 시험1498줄로 기존1500 기준 안이며 모든 기존 guard/geometry 단언을 유지했다. CE: 해당 없음.

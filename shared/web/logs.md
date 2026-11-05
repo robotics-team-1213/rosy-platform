@@ -1198,3 +1198,9 @@
 - 변경: lineDecisionChain의 표시 문구만 한국어로 정리하고 실제 line-follow API/복구 producer의 응답·단계·원인·파생 사유를 대조했다. 알 수 없는 값은 진단 확인 안내로 남긴다. 분류 조건·severity·명령·정지 계약은 유지한다. 원본은 Robot 카메라의 기존 진단 깊이에 보존하며 읽기 실패 시 비운다.
 - 검증: 0f8368eabb의 관련7개 전체 시험 파일170 passed/0 skipped/NEW0. 독립 리뷰가 현행 복구 값의 누락을 찾아90496c23e0에서 RED1개를 재현했고4c8a3858e0의 line-decision/panel-copy 전체27 passed/0 skipped/NEW0, 같은 검토자의 scoped 재검토 ADDRESSED·spec/quality 승인이다. 서로 다른 SHA의 결과를 합산하지 않는다.
 - Gate: 이동 없음. source-bound LOCAL 화면 수집·최종 통합/착지는 별도 기록을 따른다. CE: 해당 없음 — producer 대조와 회귀 시험으로 판단을 복원한다.
+
+## 2026-11-05 · a27e97c186 · uiux: 동등 하위 화면 메뉴를 공용 subnav로 통일
+
+- 변경: task chooser의 별도 segment·모바일 select를 기존 subnav native tab으로 바꾸고 링크와 같은 배치·선택·초점 규칙을 소비한다. Fleet의 22–64rem wrap을 공용 owner로 옮겼다. beforeSelect timeout·거절·취소·busy·pause/resume·retained DOM·키보드·권한 검사는 유지한다. container ResizeObserver는 ARIA 방향만 맞추며 해제한다. 실제 입력 segment 의미는 그대로다.
+- 증거: f8cb261e26의 production 비교·resize·Learning 홈 RED13 후 0de561052a에서13 PASS/0 skipped/NEW0. 정적10파일128 PASS/NEW1은 정확22rem query consumer를 보완한9d5278e6ce의 관련3파일36 PASS/NEW0으로 닫았다. 1a390c9d40의19-target caller317개는315 PASS/NEW2였으며 실제 안내·계정 overlay 사용자 경로를 보완한 a27e97c186의 두 전체파일36 PASS/0 skipped/NEW0으로 두 실패를 닫았다. 제품/캡처 hook은1a 이후 동일하다. 각 실행을 한 SHA의 전체 PASS로 합산하지 않는다.
+- gate 변화: SOURCE/LOCAL 공용 렌더·의미·consumer 회귀 근거다. 독립 G3는1a의30PNG 직접검토·83PNG 해시 대조로 Task10 범위 PASS이며 setup 직접검토2셀과device6셀을 구분한다. 최종 G1/docs·공식 FULL·착지·설치본·장치 수용은 별도다. CE: 해당 없음 — 원인·해결은 공용 계약과 실제 회귀에 남는다.
