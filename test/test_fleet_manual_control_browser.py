@@ -24,7 +24,7 @@ def _api():
     }
 
 
-@pytest.mark.parametrize("ending", ["release", "blur", "selection", "timeout"])
+@pytest.mark.parametrize("ending", ["release", "blur", "selection", "timeout", "keyboard", "cancel", "hidden", "pagehide"])
 def test_selected_robot_hold_ends_with_zero(console_url, ending):
     from playwright.sync_api import expect, sync_playwright
 
@@ -42,7 +42,11 @@ def test_selected_robot_hold_ends_with_zero(console_url, ending):
         button = page.locator('[data-manual-direction="forward"]')
         expect(button).to_be_enabled()
         button.hover()
-        page.mouse.down()
+        if ending == "keyboard":
+            button.focus()
+            page.keyboard.down("Space")
+        else:
+            page.mouse.down()
         page.wait_for_function("() => document.querySelector('[data-manual-direction=forward]').getAttribute('aria-pressed') === 'true'")
         page.wait_for_timeout(250)
         assert any(row == {"do": "move", "robot": "rosy_45", "linear": 0.03, "angular": 0} for row in sent)
@@ -52,6 +56,14 @@ def test_selected_robot_hold_ends_with_zero(console_url, ending):
             page.evaluate("window.dispatchEvent(new Event('blur'))")
         elif ending == "selection":
             page.locator("#robot-choice").select_option("rosy_46")
+        elif ending == "keyboard":
+            page.keyboard.up("Space")
+        elif ending == "cancel":
+            button.dispatch_event("pointercancel")
+        elif ending == "hidden":
+            page.evaluate("Object.defineProperty(document, 'hidden', {get: () => true}); document.dispatchEvent(new Event('visibilitychange'))")
+        elif ending == "pagehide":
+            page.evaluate("window.dispatchEvent(new PageTransitionEvent('pagehide', {persisted: true}))")
         else:
             page.wait_for_timeout(2100)
         expect(button).to_have_attribute("aria-pressed", "false")
@@ -60,6 +72,31 @@ def test_selected_robot_hold_ends_with_zero(console_url, ending):
         assert all(row["robot"] == "rosy_45" for row in sent)
         assert all(abs(row["linear"]) <= 0.03 and abs(row["angular"]) <= 0.10 for row in sent)
         page.mouse.up()
+        assert not errors
+        browser.close()
+
+
+def test_rejected_zero_stays_visible_after_polling(console_url):
+    from playwright.sync_api import expect, sync_playwright
+
+    with sync_playwright() as playwright:
+        browser, page, errors = _open_console(playwright, _api())
+
+        def move(route):
+            row = route.request.post_data_json
+            route.fulfill(status=200, json={"accepted": bool(row["linear"] or row["angular"])})
+
+        page.route("**/api/fleet/do", move)
+        page.goto(console_url, wait_until="load")
+        _open_cards(page, "rosy_45")
+        button = page.locator('[data-manual-direction="forward"]')
+        expect(button).to_be_enabled()
+        button.hover()
+        page.mouse.down()
+        page.wait_for_timeout(250)
+        page.mouse.up()
+        page.wait_for_timeout(500)
+        expect(page.locator("[data-manual-reason]")).to_contain_text("정지 명령 전달 실패")
         assert not errors
         browser.close()
 
