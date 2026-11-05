@@ -97,6 +97,14 @@ sudo -n python3 -B /opt/rosy/native-runtime/mapping_approval.py approve \
 파일 해시와 `systemd-analyze verify`를 읽어 확인한다. 봉인 도구가 릴리스
 payload에만 들어갔다고 unit이 갱신된 것으로 취급하지 않는다.
 
+옛 frozen OS의 `rosy-os-update.service`가 `Wants=rosy-io.service`를 포함하면
+업데이트 없음 점검도 I/O를 시작해 항법을 중지시킨다. 감독 시험 전에 frozen 제어기의
+`status`에서 pending 없음과 업데이트 service 비실행을 확인하고, 기존 타이머 활성 상태를
+기록한 뒤 시험 동안 타이머만 정지한다. 진행 중인 업데이트를 중단하지 않는다.
+시험 종료 시 항법 정지·최종 0·원래 runtime 복귀를 먼저 확인하고, 원래 활성 상태였던
+타이머를 다시 시작한다. 이는 임시 복구다. 영구 수정의 frozen OS 배포 경계와
+회귀 근거는 [해결 기록](../solutions/deployment/os-update-poll-starts-conflicting-io-2026-11-05.md)을 따른다.
+
 ## 4. G5: 짧은 바닥 맵핑
 
 확보된 구역에서 실제 크기와
