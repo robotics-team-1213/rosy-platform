@@ -4,10 +4,10 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "rosy-integration-robot-omx"
-version = "0.1.1"
+version = "0.1.2"
 description = "OMX LeRobot robot, CORE arm client and preflight entry points"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = ["rosy-contracts-learning>=0.1.16,<0.2"]
 
 [project.scripts]
 rosy-omx-record = "lerobot_robot_rosy_omx:record"

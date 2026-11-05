@@ -11,7 +11,7 @@ import pytest
 
 def assets_module():
     path = (Path(__file__).resolve().parents[1] /
-            'integrations/robots/omx/src/rosy/integrations/robots/omx/policy_assets.py')
+            'contracts/learning/src/rosy/contracts/learning/policy_assets.py')
     assert path.is_file(), 'portable policy assets loader is required'
     spec = importlib.util.spec_from_file_location('policy_assets_under_test', path)
     module = importlib.util.module_from_spec(spec)

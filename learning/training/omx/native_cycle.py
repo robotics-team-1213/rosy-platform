@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # experiment_dataset s
 import native_review as native
 from experiment_dataset import dataset_lease
 import smolvla_training
-from rosy.integrations.robots.omx.policy_assets import loading_overrides
+from rosy.contracts.learning.policy_assets import loading_overrides
 
 
 def validate_split(root):

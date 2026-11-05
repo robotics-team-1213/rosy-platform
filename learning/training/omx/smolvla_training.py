@@ -4,8 +4,8 @@ from pathlib import Path
 import shutil
 import sys
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3]/'integrations/robots/omx/src'))
-from rosy.integrations.robots.omx import policy_assets as assets
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]/'contracts/learning/src'))
+from rosy.contracts.learning import policy_assets as assets
 
 
 def _write(path, value):

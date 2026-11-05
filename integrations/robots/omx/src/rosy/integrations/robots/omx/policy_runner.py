@@ -13,7 +13,7 @@ from pathlib import Path
 import statistics
 import time
 
-from .policy_assets import loading_overrides
+from rosy.contracts.learning.policy_assets import loading_overrides
 
 #: Policy types the runner may load for execution (D-854 §1). Adding one needs an ADR revision and adapter tests.
 ALLOWED_POLICY_TYPES = frozenset({'act'})

@@ -1,4 +1,4 @@
-"""Verify portable SmolVLA metadata before LeRobot loads a model or tokenizer."""
+"""ROS/SDK-free portable SmolVLA asset validation and local loading references."""
 import hashlib
 import json
 from pathlib import Path
