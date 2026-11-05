@@ -482,3 +482,34 @@ def test_pixel_result_read_rechecks_dirty_state_after_held_mask_response(tmp_pat
         finally:
             for route in held:
                 route.fulfill(json=review_masks.get(store, 0))
+
+
+def test_unsaved_pixel_candidate_preview_blocks_completion_and_shortcut(tmp_path):
+    import base64
+    import numpy as np
+    import review_masks
+
+    backend = lambda *_: {'mask': base64.b64encode(review_masks.encode(np.zeros((24, 32), np.uint8))).decode()}
+    with ai_browser(tmp_path, backend) as (page, store, jobs, expect):
+        before = review_masks.get(store, 0)
+        pixels = review_masks.pixels(store, before).copy()
+        assert np.any(pixels != 255) and np.any(pixels == 255)
+        page.goto(page.url.split('?')[0] + 'pixels?frame=0', wait_until='networkidle')
+        expect(page.locator('#review-ai-pixel_draft')).to_be_enabled()
+        page.locator('#review-ai-pixel_draft').click()
+        expect(page.locator('#pixel-preview-candidate')).to_have_attribute('aria-pressed', 'true', timeout=15000)
+        expect(page.locator('#pixel-save')).to_be_enabled()
+        expect(page.locator('#pixel-discard')).to_be_enabled()
+        generated = jobs.status(0)['jobs'][0]
+        assert generated['action'] == 'pixel_draft' and generated['state'] == 'succeeded'
+        expect(page.locator('#pixel-candidates')).to_have_value(generated['result']['candidate_sha256'])
+        assert review_masks.get(store, 0)['version'] == before['version']
+        assert np.array_equal(review_masks.pixels(store, review_masks.get(store, 0)), pixels)
+        expect(page.locator('#pixel-approve')).to_be_disabled()
+        page.locator('#pixel-canvas').focus()
+        page.keyboard.press('a')
+        expect(page.locator('#pixel-preview-candidate')).to_have_attribute('aria-pressed', 'true')
+        expect(page.locator('#pixel-save')).to_be_enabled()
+        assert review_masks.get(store, 0)['version'] == before['version']
+        assert review_masks.get(store, 0)['status'] == 'pending'
+        assert np.array_equal(review_masks.pixels(store, review_masks.get(store, 0)), pixels)
