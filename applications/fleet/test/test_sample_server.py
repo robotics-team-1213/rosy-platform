@@ -78,6 +78,17 @@ def test_sample_starts_without_backend_and_never_creates_upstream():
     assert 'sample ready' in result.stdout
 
 
+@pytest.mark.parametrize('focus', ['', '/model', '/ai'])
+def test_learning_preview_names_unconfigured_hosts_without_template_slots(http_host, focus):
+    response = http_host.static_response('/console/learning' + focus)
+    assert response.status == (503 if focus else 200)
+    body = response.body.decode('utf-8')
+    assert '{{' not in body
+    assert '미등록' in body
+    assert f'data-host-focus="{focus.removeprefix("/")}"' in body
+    assert 'Fleet 작업으로 돌아가기' in body
+
+
 def test_sample_profile_reads_report_absent_storage_without_hiding_unknown_requests():
     engine = load_engine()
     headers = {'Authorization': 'Bearer sample-operator'}

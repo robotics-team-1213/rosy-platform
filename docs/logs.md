@@ -14163,3 +14163,28 @@ osy-d395-s1d\`.
 - 증거: test_account_admin_browser에 역할 전환 검사 추가. 기존 계정에서 역할을 바꾸면 확인 후에만 권한을 교체(독립 리뷰 지적).
 - gate 변화: 없음.
 - CE: 해당 없음 — 화면 동작 추가.
+
+## 2026-11-04 · uncommitted · test(D-762): 격리 cell 문서 미리보기 부하 결함 3회 근거
+- 변경: `test/flaky_quarantine.txt`에 `applications/fleet/test/test_sample_browser.py::test_cell_document_preview_admission_and_terminal_read` 한 줄 추가. 2026-11-04 하루 3회(sha ff82336996, 6a299d39cf, 86d7abd782) 병렬 브라우저 청크에서 실패·단독 재실행 통과(rosy-flaky-candidates.txt). 실패 내용은 5 s 안에 `#recipe-revision` 글자가 바뀌지 않는 부하 타임아웃이라 제품 결함이 아니다.
+- 증거: 세 LOAD-FLAKY 기록과 단독 통과 로그(각 `alone-pre-*.txt`). 이 id가 explicit FULL 착지를 막아 게시(D-868)도 막고 있어 격리가 D-762 증거 규칙의 정해진 해법이다.
+- gate 변화: 없음
+- CE: 해당 없음 — 격리 규칙대로 근거·해제 조건을 줄에 남겼다.
+
+## 2026-11-04 · uncommitted · docs(D-871): 학습센터 타이머 미활용 발견·활성화 개정
+- 변경: D-871에 2026-11-04 현장 점검 절 추가. 모델 PC `rosy-learning-center-update.timer`가 `disabled`+`inactive`였던 것을 `enable --now`로 복구하고, 사용자 유닛 타이머 감사 규칙(`systemctl --user list-timers`, `timers.target.wants/`)을 남겼다.
+- 증거: 모델 PC에서 타이머 enabled+active 확인, 1회 실행으로 게이트 통과·`idle`(`center_not_running`, 설계 동작) 확인. 로봇·현장 PC·OMX·AI PC 전 표면 타이머 실측은 작업 기록 `Rosy/docs/workspace-records/2026-11-04/auto-update-audit.md`.
+- gate 변화: 없음
+- CE: 해당 없음 — 운영 조치이며 함정은 D-871 개정과 작업 기록에 남겼다.
+
+## 2026-11-04 · uncommitted · docs(deployment): 후진 목표 운영자 메모
+
+- 변경: `pinky-native-mapping-recovery.md`에 2026-11-04 메모 — 후진 목표는 목표 yaw를 현재 유지로 보내야 하고 yaw+π는 rotate_to_heading 회전을 먼저 일으킨다는 geg6 실측 규칙. [nav2-reversing-goal-2026-11-04](../../validation/nav2-reversing-goal-2026-11-04/result.md)로 연결.
+- 증거: 위 검증 기록. 이번 착지는 게시용 정본 FULL 근거 생성을 겸한다(pr-pipeline 「로컬 FULL 근거와 게시 SHA」).
+- gate 변화: 없음.
+- CE: 해당 없음 — 운영 문서.
+
+## 2026-11-04 · uncommitted · fix(deploy): calibration 분리 경로를 서명 모델 코드 아카이브에 포함
+- 변경: `model_code_layout.SPLIT_CODE_PREFIXES`에 `middleware/perception/calibration/`을 추가해 필수 소스 목록과 아카이브 입력을 맞췄다.
+- 증거: 변경 전 원격 `test_committed_review_archive_starts_without_checkout_imports`가 누락된 perception·Drive 의존성으로 실패했다. 변경 커밋의 `test_model_pc_autoupdate.py`·`test_model_review_release.py` 원격 검증 결과는 작업 인계에 남긴다.
+- gate 변화: 없음
+- CE: 해당 없음 — 원인과 재발 검사는 소스 목록과 기존 실제 Git 아카이브 부팅 시험에 드러난다.

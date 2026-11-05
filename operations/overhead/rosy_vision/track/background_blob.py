@@ -73,7 +73,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from rosy_vision.track import geometry, robot_mask
+from rosy_vision.track import body_split, geometry, robot_mask
 from rosy_vision.track.model import (
     FOOTPRINT_MAX_M, FOOTPRINT_MIN_M, LEARNING_FRAMES, LEARNING_MIN_S, MAX_DETECTIONS,
     ROBOT_TOP_HEIGHT_M, ROTATION_RADIUS_M, SCENE_CHANGE_FRACTION,
@@ -458,21 +458,15 @@ class BackgroundBlobDetector:
             dark = cv2.morphologyEx(dark, cv2.MORPH_OPEN, _OPEN_KERNEL)
             dark = cv2.bitwise_and(cv2.morphologyEx(dark, cv2.MORPH_CLOSE, _CLOSE_KERNEL), mask)
             count, labels, stats, centroids = cv2.connectedComponentsWithStats(dark, connectivity=8)
+            count, labels, stats, centroids = body_split.split_rejected(  # robots parked side by side
+                count, labels, stats, centroids, lambda *row: self._baked_shape_ok(*row, work_to_map, camera))
             height, width = dark.shape
             floor = (mask > 0) & (dark == 0)
             for label in range(1, count):
-                pixels = int(stats[label, cv2.CC_STAT_AREA])
-                detection = self._measure(pixels, centroids[label], work_to_map, camera)
-                if detection is None:
+                if not self._baked_shape_ok(labels, stats, centroids, label, work_to_map, camera):
                     continue
                 left, top, w, h = (int(stats[label, i]) for i in range(4))
-                points = cv2.findNonZero((labels[top:top + h, left:left + w] == label).astype(np.uint8))
-                short, long = sorted(cv2.minAreaRect(points)[1])
-                hull = cv2.convexHull(points)
-                # Hull of pixel centres plus half its perimeter and one: about its pixel count.
-                hull_px = cv2.contourArea(hull) + cv2.arcLength(hull, True) / 2 + 1
-                if long + 1 > BAKED_MAX_ASPECT * (short + 1) or pixels < BAKED_MIN_SOLIDITY * hull_px:
-                    continue
+                detection = self._measure(int(stats[label, cv2.CC_STAT_AREA]), centroids[label], work_to_map, camera)
                 pad = 3 * GHOST_MARGIN_PX  # room for the ring
                 y0, x0 = max(0, top - pad), max(0, left - pad)
                 y1, x1 = min(height, top + h + pad), min(width, left + w + pad)
@@ -485,6 +479,11 @@ class BackgroundBlobDetector:
                 self._suspects.append([(y0, y1, x0, x1), blob, zone, guess, refs, 0])
             if self._suspects:
                 logger.info("baked robot suspects count=%d", len(self._suspects))
+
+    def _baked_shape_ok(self, labels, stats, centroids, label, work_to_map, camera) -> bool:  # D-547 tests
+        pixels = int(stats[label, cv2.CC_STAT_AREA])
+        return (pixels > 0 and self._measure(pixels, centroids[label], work_to_map, camera) is not None
+                and body_split.compact(labels, stats, label, BAKED_MAX_ASPECT, BAKED_MIN_SOLIDITY))
 
     def _floor_refs(self, background: np.ndarray, ring: np.ndarray) -> np.ndarray:
         """Floor colours: the track median and the ring's commonest background colours."""

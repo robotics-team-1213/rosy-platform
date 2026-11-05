@@ -102,10 +102,16 @@ function edit(row = null) {
 async function load() {
   rows = await request(endpoint); $('account-list').replaceChildren();
   for (const row of rows) {
-    const item = document.createElement('li'), button = document.createElement('ui-button');
+    const item = document.createElement('tr'), button = document.createElement('ui-button');
     button.setAttribute('kind', 'quiet'); button.setAttribute('type', 'button');
-    button.textContent = `${row.login} · ${row.enabled ? '사용 중' : '정지됨'}`;
-    button.addEventListener('click', () => edit(row)); item.append(button); $('account-list').append(item);
+    button.textContent = '편집'; button.setAttribute('aria-label', `${row.login} 편집`);
+    button.addEventListener('click', () => edit(row));
+    const tag = document.createElement('ui-tag'); tag.setAttribute('status', row.enabled ? 'neutral' : 'warn');
+    tag.textContent = row.enabled ? '사용 중' : '정지됨';
+    for (const value of [row.login, row.principal_id || '—', row.role || '—', tag, button]) {
+      const cell = document.createElement('td'); cell.append(value); item.append(cell);
+    }
+    $('account-list').append(item);
   }
   $('account-content').hidden = false; $('account-login').hidden = true; edit();
 }

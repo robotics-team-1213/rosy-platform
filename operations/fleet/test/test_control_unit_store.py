@@ -150,3 +150,31 @@ def test_missing_approval_identity_cannot_match_an_unapproved_row(tmp_path, acto
                           admission=store.task_admission("R", "job-1", actor_id=actor_id))
     assert tasks.get_task("unapproved-task") is None
     assert store.get("R", "job-1")["local_task_id"] is None
+
+
+def test_relay_finds_a_delegation_by_its_projected_arm_mission(tmp_path):
+    store = open_store(tmp_path / "unit.db", unit_id="R")
+    store.create("R", "arm-1", {"target_unit": "A"}, owner_unit="A", config_revision="v1")
+    store.project("R", "arm-1", owner_unit="A", owner_revision=1, status="QUEUED",
+                  result={"job": {"mission_id": "physical-1"}})
+    assert store.by_result_mission("R", "physical-1")["delegation_id"] == "arm-1"
+    for origin, mission in [("R", "physical-2"), ("X", "physical-1")]:
+        with pytest.raises(KeyError):
+            store.by_result_mission(origin, mission)
+
+
+def test_cancel_reason_is_kept_once_and_an_older_journal_gains_the_column(tmp_path):
+    import sqlite3
+    path = tmp_path / "old.db"
+    with sqlite3.connect(path) as connection:
+        connection.execute("CREATE TABLE fleet_control_delegations (origin_id TEXT NOT NULL, delegation_id TEXT NOT NULL,"
+                           " request_json TEXT NOT NULL, owner_unit TEXT NOT NULL, config_revision TEXT NOT NULL,"
+                           " status TEXT NOT NULL, revision INTEGER NOT NULL, owner_revision INTEGER NOT NULL DEFAULT 0,"
+                           " local_actor TEXT, local_task_id TEXT, cancel_requested INTEGER NOT NULL DEFAULT 0,"
+                           " result_json TEXT NOT NULL DEFAULT '{}', updated_at TEXT NOT NULL,"
+                           " PRIMARY KEY(origin_id, delegation_id))")
+    store = open_store(path, unit_id="A")
+    store.create("R", "job-1", {"target_unit": "A"}, owner_unit="A", config_revision="v1")
+    assert store.get("R", "job-1")["cancel_reason"] is None
+    assert store.request_cancel("R", "job-1", "plan changed")["cancel_reason"] == "plan changed"
+    assert store.request_cancel("R", "job-1", "later")["cancel_reason"] == "plan changed"

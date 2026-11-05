@@ -1393,7 +1393,8 @@ def test_console_navigation_stage_local_captures(tmp_path):
                 assert "주행 목표를 막았습니다" in page.locator("#map-action-reason").inner_text()
                 assert page.locator('[data-map-click="goal"]').get_attribute("reason") == "위치 추정 확인 후 가능"
                 assert page.evaluate(blue_pixels) == 0
-                overview = page.locator('[data-panel="console.overview"] .ui-readout')
+                # D-978 머리 수치 띠(dl[data-form="strip"])와 구분해 근거 요약 dl만 잡는다.
+                overview = page.locator('[data-panel="console.overview"] .ui-readout:not([data-form="strip"])')
                 overview_navigation = overview.locator('dt', has_text='내비게이션').locator('+ dd')
                 overview_pose = overview.locator('dt', has_text='현재 위치').locator('+ dd')
                 page.wait_for_function("""() => document.querySelector('[data-panel="console.overview"] .ui-readout')?.textContent.includes('위치 확인 필요')""")
