@@ -463,3 +463,10 @@
 - 변경: 기존5개 home hash 링크가 공용 subnav seat·선택·초점 표현을 소비한다. 본문 안 별도 메뉴 layout을 제거하고 같은 hash 재활성화 click은 옮긴 자리에서도 기존 화면 초점을 복원한다. IDs/hash/back/forward/query·retained DOM·common refresh·권한·사람 정답·학습 입력은 보존한다. 다른 하위 화면 흐름은 변경하지 않았다.
 - 증거: f8cb261e26의 home3폭×2테마 RED 뒤0de561052a의13개 공용 렌더/의미 회귀가 PASS/0 skipped/NEW0. 1a390c9d40 caller317개는315 PASS/NEW2이며 Learning pipeline/stages/state-consistency/data-recovery·review viewport/pixel workspace의 실제 phone 본문/사진 크기 예산·문맥·보존 상태 검사에 실패가 없다. 두 Fleet 실패는a27e97c186의 관련 전체파일36 PASS/NEW0으로 별도 폐쇄했다. review_shell.py --check도 통과해 기존 복사 범위 일치를 확인했다.
 - gate 변화: 합성 자료 SOURCE/LOCAL과 독립 G3의 source1a 화면 근거다. home focus는65/66이며 storage dark320의 content focus1셀을 제외했다. 실학습·모델 승격·설치본·장치·현장 수용이나 공식 FULL을 입증하지 않는다. CE: 해당 없음 — 공용 계약·회귀 시험에서 원인과 보존 조건을 복원한다.
+
+## 2026-11-05 · b955085656 · docs(learning): 메뉴 여백9소비처와 캡처 가드의 검증 범위
+
+- 변경: Home뿐 아니라 catalog/camera/workspaces/record/workflow/tasks/sim/public-learning의 기존 공용 메뉴가 같은 outer inset을 소비한다는 후속 근거를 추가 기록한다. 기존 review-kinds 사진/제목 규칙과 권한·상태·학습 데이터는 그대로다.
+- 증거: 이전72의2PASS/4FAIL(outer0/0 대 inset8)→107의6PASS, 별도107의98PASS/NEW0과02의 제품 alias를 구분했다. a9d의14PASS/130원본은 유지하고, 새 optional capture의 no-nav timeout RED1 뒤 b955의 원래16경로 전체PASS/0skip/NEW0·JUnit실패/오류0을 확인했다. 추가203원본 digest는 모두 일치한다.
+- 한계:7개 no-nav 경로는 원래 본문PASS이며 추가capture만 N/A다. SIM320 current item right351.453125 대 nav right320은 일부 잘림이며 focusVisible=true를 온전한 노출로 오인하지 않는다. 키보드/resize 자동 노출은 미검증이다. source1a의 기존153개 및 다른SHA 실행을 새 전체PASS로 합산하지 않는다.
+- gate 변화: scoped source/화면 증거와 문서 결속이다. 별도3caa148PASS는 공식 착지 대기이고 UI 최종 G1/FULL·main·실학습·승격·실물/현장 수용은 미완료다. CE: 해당 없음 — 공용 여백·정확한 가드·원래route 회귀가 판단 근거를 보존한다.

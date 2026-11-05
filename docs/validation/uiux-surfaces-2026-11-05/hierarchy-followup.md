@@ -68,3 +68,40 @@ Account의 `account-page.js`는 계정 행/편집 대상을, `profile-page.js`�
 - 마지막2건은 실제 생산자와 사용자 동작을 검증하는 시험으로 닫았다. 잘못되면 실제가림을 숨길 수 있어 열린overlay·Escape·초점·정상click과기존guard를 함께 검사했다.
 
 CE: 해당 없음 — 공용 소유권·기존 헤더 정책·실제 코드/회귀·본 검증 기록으로 판단을 재구성할 수 있다. GitHub 게시·서비스 배포·현장/실물·모델 품질 수용은 이 UI 후속의 실행 범위 밖이다.
+
+## 후속: Learning 메뉴 바깥 여백과 캡처 가드
+
+아래는 여백 보완 이후의 별도 소스 증거다. 위153개 원본·당시 실행·감사4카드·시각 수용 범위는 그대로 보존한다. 원본을 새 후보 전체 PASS로 다시 표시하지 않는다.
+
+최종 소스 검토에서 Learning `app.css`의 옛 좁은 `.ui-subnav-nav{padding-block:0}`가 공용 `--inset-rail`을 덮는 Minor를 확인했다. 홈6개 기존 사례에 메뉴 **컨테이너**의 computed paddingTop/Bottom과 공용 토큰 비교를 추가했다. 휴대폰4개는 실제0px/0px 대8px로 실패했고 desktop2개는 통과했다. 해당 override·설명2행과 공용 owner로 이동한 뒤 남은 console의 stale22rem registry2행만 제거했다. 별도 Home 덧칠·새 allowance·권한·동작 변경은 없다. `.review-kinds`의 사진·제목·키보드 순서 규칙은 보존했다.
+
+실제 여백 소비자는 `/learning`, `/catalog`, `/learning/camera`, `/learning/workspaces`, `/learning/record`, `/learning/tasks`(workflow), `/learning/tasks/manage`(tasks), `/learning/sim`, `/learning/public`의9개다. 최초4카드 통일 작업과 이 후속의 기존 Learning 메뉴 소비 범위를 구분한다.
+
+| 실제 실행 소스 | 범위 | 결과와 한계 |
+| --- | --- | --- |
+| commit 72cb483bd523a92ff68e165b9b514e1c371f8939 | Home 기존6개 RED | desktop2PASS/phone4FAIL/0skip/NEW4,23초 |
+| commit 107217dd8b0c2af6e034d5a6c01d6c68eee8be65 | 동일6개 GREEN | 6PASS/0skip/NEW0,22초 |
+| commit 107217dd8b0c2af6e034d5a6c01d6c68eee8be65 | Learning context·기존사진/첫화면예산·responsive registry7대상 | 98PASS/0skip/NEW0,214초. 이전 후보에서 이미 admission된 실행이며 새 후보의 전체 통과로 바꾸지 않음 |
+| commit a9d0f95a6918d30953ad65743f097b18b5a2578f | Home6개와 실제 다른8메뉴 route의 선택적 캡처 | 14PASS/0skip/NEW0,31.37초. 원본 run/receipt/classifier 근거이며 JUnit은 요청되지 않음 |
+| commit a9d0f95a6918d30953ad65743f097b18b5a2578f | 캡처 env를 켠 원래 no-nav `/` 사례 RED | 1FAIL/0skip/NEW1,32.32초. 새 optional block이 없는 nav를 조회해 timeout |
+| commit b95508565644877ac8aae619360b4bcd8c9a4c09 | 가드 한 줄 수정 후 원래 current-path16경로 전체 | 16PASS/0FAIL/0error/0skip/NEW0. 원본 JUnit16 testcase와 runner/classifier0 직접 대조 |
+
+정상 후보 재구성에서 기존 RED는 commit df972a49f00c0a9da908ad7c04dbb143becc5e90, 제품 보완은 commit 02e319a92942a083f569958006e13a359dd8c406으로 replay했다. 이전 RED와 새 RED의 해당 시험 diff는0이며, 이전 GREEN107과 새02의 Learning web·공용 app-shell/task-chooser/surfaces 제품 diff도0이다. commit a9d0f95a6918d30953ad65743f097b18b5a2578f의 같은 제품 blob도107과 동일하다. Account peer 변경은 별도 출처로 보존했으며 여백 수정으로 세지 않는다. 서로 다른 SHA의 별도 실행을 이 표에 합산하지 않는다.
+
+### 추가 원본과 해시
+
+작업공간 `ui-map/learning-padding-final-a9d/`에68PNG+62JSON **130개**, `ui-map/padding-hook-guard-green-b955/`에36PNG+36JSON+원본JUnit **73개**를 보존한다. 두 폴더의 `command.json`, `receipt.json`, `remote-original-sha256.json`, `source-host-binding.json`, `runner.txt`, `run/run-1.txt`, `classification.txt`가 실제 argv·소스·호스트 역할·결과를 결속한다. 첫 실행은 모델 PC, 후속16경로는 AI PC의 정상 원격 admission이며 현장 장치 실행은 없다.
+
+[추가 표준 SHA256 목록](learning-padding.sha256)은 같은 작업공간 `ui-map/` 기준 **203개 고유 경로**다. 두 remote-original manifest의130+73개, receipt의 모든 PNG digest, 실제 원본을 다시 대조해 누락·중복·해시 불일치0을 확인했다. digest는 원본 파일 바이트 기준이며 PNG/JSON/JUnit의 줄바꿈을 정규화하지 않는다. checksum 목록 텍스트 자체만 LF·마지막 개행의 Git blob 기준으로 다룬다. 목록 LF 바이트의 SHA256은 `dca7a07cf0953c1c08d9b633fb3a65e4becf6d808408659e165c1fc8ab8cd4ed`다. 기존 [153행 목록](hierarchy.sha256)은 바꾸지 않았다.
+
+첫 캡처의62 computed행 중52개 narrow쌍은9메뉴의 실제390/320 두 테마이며 outer padding8px/8px와 computed inset8px가 일치한다. desktop Home10행은12px/16px로 별도다. Home 높이는900, 다른 narrow variant는390×844/320×568이며 같은 높이로 가정하지 않는다. `/learning/public`의 currentCount0은 실제 상태로 남기고 첫 항목의 초점을 선택 상태로 지어내지 않았다. 독립 G3는 이 여백 Minor를 ADDRESSED로 판단했으며, 마지막 가드 scoped 재검토도 새Critical/Important/Minor0이다.
+
+### 원래 경로와 시각 수용의 한계
+
+새 capture block은 실제 nav가 있을 때만 실행한다. 원래16개 route/본문 단언은 한 줄도 빼지 않았다. `/`, `/pixels`, `/learning/omx`, `/learning/vlm`, `/learning/evaluate`, `/classes`, `/learning/imitate`의7경로는 **기존 본문 시험 PASS, 추가 nav capture N/A**이며 pytest skip이 아니다. 새 메뉴·선택·가짜 사진은 만들지 않았다. `guard-body-byteproof.json`은 정확한 가드 한 줄 치환 외 원래 시험 파일이 byte 단위로 같음을 확인하고 `product-ui.diff`는 비어 있다.
+
+SIM320의 두 테마에서 실제 현재 항목은 x272.671875–351.453125px, nav는 x0–320px로 오른쪽31.453125px가 가로 영역 밖이다. 두 캡처 소스 모두 같은 사각형이며 focus/focusVisible=true는 항목 전체가 보인다는 뜻이 아니다. 320의 공용 가로 스크롤 배치에서 발생한 관측으로, 세로 여백 수정이 원인이라는 증거는 없다. 키보드/resize 때 현재 항목이 자동으로 완전히 드러나는지는 **미검증**이다. 별도 확인에는 키보드 선택·좁아지는 resize 전후의 current item/nav 사각형과 scrollLeft를 같은 시점에서 비교해야 한다. 자동 노출이 안 되면 사용자가 가로 이동해야 할 수 있으며 이번 기록은 해결됐다고 주장하지 않는다.
+
+별도 로그 무결성 선행 작업 commit 3caa67b6c324df635189e9af2d094907ee412554는148PASS/0skip/NEW0와 독립 검토 근거가 있지만 공식 착지 대기다. 이는 UI 최종 G1/FULL 통과가 아니다. **현행 UI 후보의 최종 G1·공식 FULL·실제 main 반영은 아직 완료되지 않았다.** 추가 metadata를 포함한 최종 소스에서 controller가 이 gate를 확인한다. 제품·시험 재실행·Git stage/commit/merge는 이번 문서 마무리 작업에서 하지 않았다.
+
+CE: 해당 없음 — 공용 여백 계약, 정확한 optional guard, 원본 route 회귀와 소스별 증거로 원인과 보존 조건을 재구성할 수 있다.

@@ -14264,3 +14264,11 @@ osy-d395-s1d\`.
 - 변경: hierarchy-followup의 목록 자체 지문은 Git blob(LF 정규화) 기준이라고 명시했다. Windows checkout 줄바꿈과 원본153개 digest를 섞지 않는다. 목록과 제품·시험·원본은 바꾸지 않았다.
 - 증거: 실제 Git blob(LF 정규화) 바이트의 SHA256을 대조했으며 원본153개 digest는 그대로 보존했다.
 - gate 변화: 최종 metadata G1/문서·비밀 guard 및 공식 AUTO/FULL을 같은 최종 소스로 진행한다. CE: 해당 없음 — Git 텍스트 정규화와 기존 표준 checksum 형식으로 설명된다.
+
+## 2026-11-05 · b955085656 · docs(ui): Learning 여백 후속과 최종 캡처 가드 증거 결속
+
+- 변경: hierarchy-followup에 여백 RED/GREEN·정상 replay의 제품 alias·후속 캡처와 optional guard를 append하고203행 learning-padding.sha256 및 같은 검증 폴더 README의 후속 링크를 추가했다. 기존153개/당시G3·Account 불변 로그와 다른 소스의 실행 기록은 보존했다.
+- 증거: 원래107의6개 GREEN/98개 관련 회귀는 별도다. a9d의14PASS/130원본과 b955의16PASS/73원본은 각각0skip/NEW0이며 마지막 원본JUnit16 testcase의 실패·오류·skip0을 직접 확인했다. 여백 Minor와 후속 guard Important의 독립 재검토는 ADDRESSED/새지적0이다.
+- 검증: remote-original manifest와 실제 원본203개 및 receipt PNG digest를 재대조해 unique203/누락0/불일치0, checksum LF/마지막개행을 확인했다. 제품107→02와 RED72→df97의 해당 blob diff0도 직접 확인했다. 이번 문서 작업에서 제품·시험·Git 이력을 변경하지 않았다.
+- 한계: no-nav7경로는 원래 본문PASS/추가capture N/A이며 pytest skip0이다. SIM320 현재 항목의 오른쪽31.453125px 잘림과 키보드/resize 자동 노출 미검증을 명시했다. focusVisible을 전체항목 가시성으로 세지 않는다.
+- gate 변화: 소스별 scoped 증거와 문서 결속이다. 별도 로그 무결성 선행3caa의148PASS는 공식 착지 대기이며 현행 UI 최종 G1/FULL·main·배포·실물 수용은 미완료다. CE: 해당 없음 — 공용 계약·정확한 가드·기존회귀와 원본으로 판단을 복원한다.

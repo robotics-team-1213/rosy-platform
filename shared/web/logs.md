@@ -1204,3 +1204,10 @@
 - 변경: task chooser의 별도 segment·모바일 select를 기존 subnav native tab으로 바꾸고 링크와 같은 배치·선택·초점 규칙을 소비한다. Fleet의 22–64rem wrap을 공용 owner로 옮겼다. beforeSelect timeout·거절·취소·busy·pause/resume·retained DOM·키보드·권한 검사는 유지한다. container ResizeObserver는 ARIA 방향만 맞추며 해제한다. 실제 입력 segment 의미는 그대로다.
 - 증거: f8cb261e26의 production 비교·resize·Learning 홈 RED13 후 0de561052a에서13 PASS/0 skipped/NEW0. 정적10파일128 PASS/NEW1은 정확22rem query consumer를 보완한9d5278e6ce의 관련3파일36 PASS/NEW0으로 닫았다. 1a390c9d40의19-target caller317개는315 PASS/NEW2였으며 실제 안내·계정 overlay 사용자 경로를 보완한 a27e97c186의 두 전체파일36 PASS/0 skipped/NEW0으로 두 실패를 닫았다. 제품/캡처 hook은1a 이후 동일하다. 각 실행을 한 SHA의 전체 PASS로 합산하지 않는다.
 - gate 변화: SOURCE/LOCAL 공용 렌더·의미·consumer 회귀 근거다. 독립 G3는1a의30PNG 직접검토·83PNG 해시 대조로 Task10 범위 PASS이며 setup 직접검토2셀과device6셀을 구분한다. 최종 G1/docs·공식 FULL·착지·설치본·장치 수용은 별도다. CE: 해당 없음 — 원인·해결은 공용 계약과 실제 회귀에 남는다.
+
+## 2026-11-05 · b955085656 · docs(ui): Learning 공용 메뉴 바깥 여백의 후속 증거
+
+- 변경: 기존 좁은 Learning 여백 덧칠과 stale console22rem registry 제거를 정상 replay한02의 근거를 추가 기록한다. 공용 inset·22rem wrap과 폼/상태/위험 의미는 바꾸지 않았고 이전153개 증거는 당시 소스로 유지한다.
+- 증거: 이전107의6개 GREEN/98개 관련 회귀와 새02 제품 blob은 별도 alias로 대조했다. a9d14PASS/130원본 및 b95516PASS/73원본은 각각0skip/NEW0이며203개 고유 원본을 직접 재해시해 일치했다. 좁은9메뉴의 outer8px/8px와 computed inset8px, 마지막 원본JUnit16/실패·오류·skip0을 확인했다.
+- 한계: 실제 SIM320 current 항목의 일부 잘림과 자동 노출 미검증을 남긴다.7개 no-nav 경로는 기존 단언PASS/추가capture N/A다. 제품·시험을 이번 문서 작업에서 실행하거나 변경하지 않았다.
+- gate 변화: source-bound 문서 결속이며 UI 최종 G1/FULL·main 반영은 아직 미완료다. 별도148PASS 로그 무결성 선행 작업도 공식 착지 대기다. CE: 해당 없음 — 기존 공용 계약·가드·회귀에서 판단을 복원한다.
