@@ -30,6 +30,10 @@ def test_home_routes_and_keyboard_section_navigation(browser_workspace,width,the
     expect(routes.get_by_role('link',name='VLM 판단 검수 열기')).to_have_attribute('href','/learning/vlm')
     navigation=page.get_by_role('navigation',name='학습센터 작업 이동',exact=True)
     assert navigation.evaluate("node=>node.parentElement.classList.contains('ui-subnav') && node.parentElement.parentElement.classList.contains('ui-app-body')")
+    if width < 1024:
+        padding=navigation.evaluate("""node=>{const s=getComputedStyle(node);return {
+          top:s.paddingTop,bottom:s.paddingBottom,inset:s.getPropertyValue('--inset-rail').trim()};}""")
+        assert padding['top'] == padding['bottom'] == padding['inset'], padding
     menu_box, main_box = navigation.bounding_box(), page.locator('.ui-app-main').bounding_box()
     assert menu_box['x']+menu_box['width'] <= main_box['x']+1 if width>=1024 else menu_box['y']+menu_box['height'] <= main_box['y']+1
     assert main_box['y'] < page.viewport_size['height']
@@ -65,7 +69,9 @@ def test_home_routes_and_keyboard_section_navigation(browser_workspace,width,the
               return {paint:Object.fromEntries(['display','alignItems','justifyContent','textAlign','paddingTop','paddingRight','paddingBottom','paddingLeft',
                 'minHeight','fontSize','fontWeight','lineHeight','borderRadius','borderTopWidth','backgroundColor','color','appearance',
                 'outlineStyle','outlineWidth','outlineColor','outlineOffset'].map(key=>[key,s[key]])),item:node.getBoundingClientRect().toJSON(),
-                nav:nav.getBoundingClientRect().toJSON(),gap:getComputedStyle(nav).gap,current:node.getAttribute('aria-current'),
+                nav:nav.getBoundingClientRect().toJSON(),gap:getComputedStyle(nav).gap,
+                navPadding:{top:getComputedStyle(nav).paddingTop,bottom:getComputedStyle(nav).paddingBottom,
+                  inset:getComputedStyle(nav).getPropertyValue('--inset-rail').trim()},current:node.getAttribute('aria-current'),
                 focus:document.activeElement===node,focusVisible:node.matches(':focus-visible'),overflow:document.documentElement.scrollWidth-innerWidth};}""")
             page.screenshot(path=str(capture))
             capture.with_suffix('.json').write_text(json.dumps(dict(viewport=page.viewport_size,theme=theme,
