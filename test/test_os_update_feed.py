@@ -72,6 +72,16 @@ def test_signed_catalogue_stages_exact_readonly_bundle_using_committed_os_order(
     assert len(hub.requests) > requests  # Cached staging never authorizes the later arm.
 
 
+def test_no_update_poll_preserves_os_state_without_runtime_commands(feed):
+    m, _, host, root, state, journal, _, _ = feed
+    before = journal.read_bytes()
+    calls = []
+    result = m.Feed(root, host=host).poll(run=lambda *args, **kwargs: calls.append(args))
+    assert result == {"outcome": "no-update"}
+    assert journal.read_bytes() == before and state.read_state(root)["pending"] is None
+    assert calls == []
+
+
 @pytest.mark.parametrize("fault", ["metadata_signature", "rollout_signature", "withdrawn", "failed", "size", "digest", "disabled", "url"])
 def test_untrusted_or_ineligible_release_cannot_reach_install(feed, monkeypatch, fault):
     m, hub, host, root, state, journal, private, directory = feed
