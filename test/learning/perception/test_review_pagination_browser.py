@@ -78,9 +78,9 @@ def test_next_pending_locks_editing_until_both_lookups_finish(browser_workspace,
             expect(page.locator('#boxes .box-row')).to_have_count(2)
             assert len(store.get(int(expected_frame))['review']['boxes']) == 2
     finally:
+        while delayed:
+            delayed.pop().fulfill(status=503, json={'error': 'test cleanup'})
         page.unroute('**/api/workspace?*', hold)
-        for route in delayed:
-            route.fulfill(status=503, json={'error': 'test cleanup'})
 
 
 @pytest.mark.parametrize('path,strip,next_button,title', [

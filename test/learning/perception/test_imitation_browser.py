@@ -53,7 +53,8 @@ def test_study_selection_rejects_late_response_and_refreshes_latest(imitation_pa
     page, study, state, url, expect = imitation_page
     other = dict(study, id='b4590f02-c958-459d-a64a-c8ea5d183c98', name='Other study')
     state['studies'] = [study, other]
-    page.route('**/center/lerobot-study/' + other['id'], lambda route: route.fulfill(json=other))
+    latest = []
+    page.route('**/center/lerobot-study/' + other['id'], lambda route: latest.append(route))
     page.goto(url + '?study=' + STUDY + '&panel=inspect', wait_until='networkidle')
     expect(page.locator('#study-name')).to_have_value(study['name'])
     delayed = []
@@ -66,7 +67,15 @@ def test_study_selection_rejects_late_response_and_refreshes_latest(imitation_pa
     else:
         page.locator('#study-select').select_option(other['id'])
     assert len(delayed) == 1
-    delayed.pop().fulfill(json=study)
+    if target == 'new':
+        delayed.pop().fulfill(json=study)
+    else:
+        with page.expect_request('**/center/lerobot-study/' + other['id']):
+            delayed.pop().fulfill(json=study)
+        expect(page.locator('#split-save')).to_be_disabled()
+        expect(page.locator('#train-start')).to_be_disabled()
+        assert len(latest) == 1
+        latest.pop().fulfill(json=other)
     expect(page.locator('#imitate-refresh')).to_be_enabled()
     if target == 'new':
         expect(page.locator('#study-select')).to_have_value('')
@@ -79,8 +88,8 @@ def test_study_selection_rejects_late_response_and_refreshes_latest(imitation_pa
         page.locator('[data-episode="8"]').select_option('validation')
         posts = []
         page.route('**/center/lerobot-split', lambda route: (posts.append(route.request.post_data_json), route.fulfill(json=other)))
-        page.locator('#split-save').click()
-        expect(page.locator('#split-save')).to_be_enabled()
+        with page.expect_request('**/center/lerobot-split'):
+            page.locator('#split-save').click()
         assert posts[0]['study_id'] == other['id']
 
 

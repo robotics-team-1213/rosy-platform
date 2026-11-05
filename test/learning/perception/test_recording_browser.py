@@ -60,7 +60,8 @@ def test_recording_selection_rejects_late_session_and_refreshes_latest(recording
     page, snapshot, session, url, expect = recording_page
     other = dict(session, id='b5a810e4-6fb6-4ce7-af8c-3d93c600baec', name='Other capture')
     snapshot['sessions'] = [session, other]
-    page.route('**/recording/session/' + other['id'], lambda route: route.fulfill(json=other))
+    latest = []
+    page.route('**/recording/session/' + other['id'], lambda route: latest.append(route))
     page.goto(url + '?session=' + SESSION, wait_until='networkidle')
     expect(page.locator('#record-name')).to_have_value(session['name'])
     delayed = []
@@ -73,7 +74,14 @@ def test_recording_selection_rejects_late_session_and_refreshes_latest(recording
     else:
         page.locator('#record-session').select_option(other['id'])
     assert len(delayed) == 1
-    delayed.pop().fulfill(json=session)
+    if target == 'new':
+        delayed.pop().fulfill(json=session)
+    else:
+        with page.expect_request('**/recording/session/' + other['id']):
+            delayed.pop().fulfill(json=session)
+        expect(page.locator('#episode-start')).to_be_disabled()
+        assert len(latest) == 1
+        latest.pop().fulfill(json=other)
     expect(page.locator('#record-refresh')).to_be_enabled()
     if target == 'new':
         expect(page.locator('#record-session')).to_have_value('')
