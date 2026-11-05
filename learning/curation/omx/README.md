@@ -148,6 +148,28 @@ final test는 학습·eval 지표 계산에서 제외한다. 모델은 예시의
 train/eval의 관절 layout이 같아야 하며 결과의 `joint_names`와 MAE 배열은 해당 6/12관절 순서다.
 실물 과제 성공률은 `null`로 유지한다. 결과는 offline-only이며 장치 실행·승격·업로드를 하지 않는다.
 
+### 검수 자료로 SmolVLA 미세 조정
+
+ACT가 기본이다. SmolVLA는 이미 설치된 로컬 기반 정책과 VLM metadata를 명시해 같은 검수·분할 경로로 실행한다.
+실행 Python에는 LeRobot 0.4.4와 SmolVLA의 `transformers`·tokenizers·huggingface-hub·safetensors·accelerate가 필요하다.
+ACT용 공용 CPU 환경에 의존성이 없으면 그 환경을 수정하지 말고 별도 SmolVLA SDK 환경을 사용한다.
+누락된 패키지는 데이터 읽기나 모델 복사 전에 거부하며 실제 패키지 버전은 environment.json과 cycle receipt에 남긴다.
+cycle receipt는 학습 진입점·SmolVLA snapshot 도구·공용 자산 검증기의 코드 SHA-256도 결속하고 실행 중 변경을 거부한다.
+
+```text
+python learning/curation/omx/collection_pipeline.py train <prepared-directory> --decisions <human-decisions.json> --out <new-run> --policy smolvla --base-model <local-smolvla-checkpoint> --vlm-assets <local-vlm-snapshot> --device cpu --steps 100 --batch-size 1
+```
+
+이미 봉인한 분할은 `native_cycle.py run --splits <splits> --out <new-run>`에 같은 policy/base/vlm 옵션을 전달한다.
+기반 정책의 weights/config/전후처리와 VLM의 config/tokenizer/processor metadata를 새 run에 snapshot하고 hash를 결속한다.
+외부 모델 다운로드·Hub 업로드는 하지 않는다. 기반 정책의 과거 카메라·관절 feature와 관절 정규화는 학습 자료의 feature·train 통계로 교체한다.
+영상 mean/std는 저장한 학습 설정의 `dataset.use_imagenet_stats`를 따른다. LeRobot 0.4.4의 기본값은 true여서 고정 ImageNet 값을 사용한다. 원본 `meta/stats.json`의 영상 평균과 다르다는 이유만으로 누출로 판단하지 않는다.
+실제 SDK 통합 회귀 `test/test_omx_smolvla_native_cycle.py`는 저장된 전후처리를 새 프로세스에서 stats override 없이 읽고, 같은 학습 설정으로 공식 dataset factory가 산출한 유효 train 통계와 비교한다. 이 시험은 사용하지 않는 index/timestamp를 제외하고 scalar 표본 수의 `()`/`(1,)` 저장 차이는 값이 정확히 같을 때만 허용하며, 관절 vector의 shape·순서·값과 held-out 통계 혼입을 거절함을 확인한다.
+완료 모델에는 VLM metadata와 검증 manifest를 포함하고 새 프로세스에서 재적재한다. 파일 이동 뒤에도 이 bundle로 적재하며 누락·변조는 거부한다.
+`cycle-receipt.json`의 `policy_type`은 `smolvla`, revision은 `smolvla-...`다. ACT의 기존 revision 형식은 보존한다.
+Learning 화면의 ACT/SAC 선택에 SmolVLA가 추가된 것은 아니며 이 경로는 명시적인 오프라인 CLI다.
+오프라인 MAE·합성 연결 시험은 집기 성공률·승격·실물 실행 승인이 아니다. 모델 종류의 실행 허용 목록과 단위 변환·owner 가드는 그대로 적용된다.
+
 ## 학습과 저장된 모델 확인
 
 `learning/training/omx/native-act.example.json`의 dataset을 생성된 `train/`에 연결한다.

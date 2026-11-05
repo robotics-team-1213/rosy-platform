@@ -194,6 +194,7 @@ def test_lerobot_adapter_runs_a_saved_act_checkpoint(tmp_path):
 import json, sys
 from pathlib import Path
 sys.path.insert(0, str(Path(sys.argv[1])/'integrations/robots/omx/src'))
+sys.path.insert(0, str(Path(sys.argv[1])/'contracts/learning/src'))
 import torch
 from lerobot.configs.types import FeatureType, PolicyFeature
 from lerobot.policies.act.configuration_act import ACTConfig
