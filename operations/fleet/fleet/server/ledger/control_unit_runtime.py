@@ -5,7 +5,7 @@ import ssl
 from pathlib import Path
 from hashlib import sha256
 from types import MappingProxyType
-from urllib.parse import urlsplit
+from urllib.parse import quote, urlsplit
 
 import httpx
 import yaml
@@ -133,16 +133,38 @@ class ControlUnitPeers:
             _identifier(parts[0])
             _identifier(parts[1], limit=128)
             suffix = "/delegations/" + path + ("/cancel" if method == "POST" else "")
+        return (await self._send(unit_id, method, "/api/fleet/control-unit" + suffix, body, limit))[1]
+
+    async def arm_job(self, unit_id, method, origin, delegation_id, tail, body=None):
+        """D-965 relay: a delegated ARM job's evidence or rechecks, through the child's control-unit API.
+
+        Returns (status, body) so the child's 404/409 reach the app unchanged; the child resolves the job.
+        """
+        self.config.topology.child(self.config.unit_id, unit_id)
+        parts = tail.split("/")
+        if not (method == "GET" and tail == "physical-evidence" or method == "POST" and tail == "rechecks"
+                or method == "GET" and len(parts) == 2 and parts[0] == "rechecks"):
+            raise ValueError("INVALID_CONTROL_UNIT_PEER_PATH")
+        origin, delegation_id = _identifier(origin), _identifier(delegation_id, limit=128)
+        if len(parts) == 2:  # a recheck key is any trimmed control-free reference, so it travels encoded
+            if not parts[1] or any(ord(c) < 32 or ord(c) == 127 for c in parts[1]) or len(parts[1]) > 160:
+                raise ValueError("INVALID_CONTROL_UNIT_PEER_PATH")
+            tail = "rechecks/" + quote(parts[1], safe="")
+        return await self._send(unit_id, method, f"/api/fleet/control-unit/delegations/{origin}/{delegation_id}/arm/{tail}",
+                                body, 131_072, raise_status=False)
+
+    async def _send(self, unit_id, method, path, body, limit, *, raise_status=True):
         payload = None if body is None else json.dumps(body, allow_nan=False).encode("utf-8")
         if payload is not None and len(payload) > 131_072:
             raise ValueError("CONTROL_UNIT_PEER_REQUEST_TOO_LARGE")
         peer = self.config.peers[unit_id]
         async with asyncio.timeout(3.0):
-            async with self.http.stream(method, peer.url + "/api/fleet/control-unit" + suffix,
+            async with self.http.stream(method, peer.url + path,
                                         headers={"Authorization": "Bearer " + peer.token,
                                                  "Content-Type": "application/json", "Accept-Encoding": "identity"},
                                         content=payload, follow_redirects=False, timeout=3.0) as response:
-                response.raise_for_status()
+                if raise_status or response.status_code >= 500:
+                    response.raise_for_status()
                 if response.headers.get("Content-Encoding", "").strip().lower() not in {"", "identity"}:
                     raise ValueError("CONTROL_UNIT_PEER_ENCODING_NOT_ALLOWED")
                 data = bytearray()
@@ -153,7 +175,7 @@ class ControlUnitPeers:
                 value = json.loads(data)
                 if not isinstance(value, dict):
                     raise ValueError("INVALID_CONTROL_UNIT_PEER_RESPONSE")
-                return value
+                return response.status_code, value
 
 
 def install_control_unit(app, path, *, tasks, console, principals, named_logins,

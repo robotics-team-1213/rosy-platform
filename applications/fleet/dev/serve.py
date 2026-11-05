@@ -35,7 +35,7 @@ def main(argv=None):
     if args.check:
         assert len(ASSETS['pages']) == 8
         assert not any(name.split('.')[0] in ('fleet', 'rclpy') for name in sys.modules)
-        print('sample ready: 8 pages; no Fleet or ROS imports')
+        print('sample ready: 8 pages; Learning previews; no Fleet or ROS imports')
         return
     with make_server(provider, origin) as server:
         if args.mode == 'connected':

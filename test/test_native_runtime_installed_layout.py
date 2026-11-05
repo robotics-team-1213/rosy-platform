@@ -239,12 +239,12 @@ def test_payload_ships_the_mode_profiles_the_hardware_launch_falls_back_to():
     """native payload 가 모드별 프로파일 오버레이를 싣는지 (2026-11-03 문서 Next).
 
     launch 기본값(navigation.profile_source)은 /etc/rosy/profile.yaml 이 없으면
-    /opt/rosy/current/deploy/robot/config/profile.<mode>.yaml 로 내려간다. 이 파일이
+    /opt/rosy/current/deploy/robot/native/config/profile.<mode>.yaml 로 내려간다. 이 파일이
     payload 에 없으면 새 기기의 hardware 모드는 여전히 손 설치가 필요하다.
     """
     build = PAYLOAD_BUILDER.read_text(encoding="utf-8")
     for mode in ("core", "motor", "hardware"):
         assert (
             f'cp "$ROBOT_CONFIG_SOURCE/profile.{mode}.yaml" '
-            f'"$RELEASE_ROOT/deploy/robot/config/profile.{mode}.yaml"' in build
+            f'"$RELEASE_ROOT/deploy/robot/native/config/profile.{mode}.yaml"' in build
         ), mode

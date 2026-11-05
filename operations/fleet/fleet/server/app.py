@@ -34,6 +34,7 @@ from fleet.server.goal_evidence_service import GoalEvidenceService
 from fleet.server.goal_evidence_store import GoalEvidenceStore
 from fleet.server.local_action_transport import UnixLocalActionTransport
 from fleet.server.arm_transfer_preflight_routes import install_arm_transfer_preflight_routes
+from fleet.server.execution_profile_routes import install_execution_profile_routes
 from fleet.server.arm_transfer_job_routes import install_arm_transfer_job_routes
 from fleet.server.mission_storage import configure_mission_storage
 from fleet.server.simulation_pose_binding import validate_simulation_pose_binding
@@ -333,18 +334,15 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     app.state.web_common = Path(web_common) if web_common is not None else None
     app.state.task_service = task_service
     app.state.mission_service = mission_service
-    app.state.cell_job_store = cell_job_store
-    app.state.cell_job_compiler = cell_job_compiler
+    app.state.cell_job_store, app.state.cell_job_compiler = cell_job_store, cell_job_compiler
     app.state.goal_evidence_service = goal_evidence_service
     app.state.mission_progress = mission_progress
-    app.state.mission_model_turn_store = mission_model_turn_store
-    app.state.mission_model_turn_scheduler = mission_model_turn_scheduler
+    app.state.mission_model_turn_store, app.state.mission_model_turn_scheduler = mission_model_turn_store, mission_model_turn_scheduler
     app.state.mission_model_turn_worker = mission_model_turn_worker
     app.state.post_action_observation_source = post_action_observation_source
     app.state.mission_dispatcher = mission_dispatcher
     app.state.cell_job_dispatcher = cell_job_dispatcher
-    app.state.cell_goal_evidence_service = cell_goal_evidence_service
-    app.state.deployment_profile = deployment_profile
+    app.state.cell_goal_evidence_service, app.state.deployment_profile = cell_goal_evidence_service, deployment_profile
     app.state.proposal_store = proposal_store
     app.state.omx_instances, app.state.omx_stop_transport = configured_omx, stop_transport
     app.state.localization_service = localization_service
@@ -439,15 +437,17 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
             return principal
         return authorize(request, request.headers.get("Authorization"))
     operator_guard = [Depends(require_operator)]
-    install_arm_transfer_preflight_routes(
-        app, instances=configured_omx, deployment_profile=deployment_profile,
+    install_arm_transfer_preflight_routes(app, instances=configured_omx, deployment_profile=deployment_profile,
         transport=action_transport, socket_root=omx_socket_root, require_proposer=require_proposer)
+    install_execution_profile_routes(app, deployment_profile=deployment_profile, instances=configured_omx,
+        grant_revisions=omx_cell_grant_revisions, transport=action_transport, require_viewer=require_viewer,
+        workcell_observations=workcell_observations, arm_transfer_observer=arm_transfer_observer)  # v1.361
     install_arm_transfer_job_routes(policy_admission_core=policy_admission_core,  # D-938
         app=app, installation=arm_transfer_installation, deployment_profile=deployment_profile,
         task_store=task_service.store if mission_configured else None, transport=action_transport,
         socket_root=omx_socket_root, require_proposer=require_proposer, require_viewer=require_viewer,
         require_named_operator=require_named_operator, observer=arm_transfer_observer, console=console,
-        principals=principals, other_tokens=other_tokens, other_services=(sightings, policy_evidence),
+        grant_revisions=omx_cell_grant_revisions, principals=principals, other_tokens=other_tokens, other_services=(sightings, policy_evidence),
         registries=(cell_goal_registry, goal_evidence_service.registry if goal_evidence_service is not None else None))
 
     from fleet.server.peer_routes import install_peer_catalogue

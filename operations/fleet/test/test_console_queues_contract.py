@@ -56,7 +56,11 @@ def test_the_queues_panel_heads_the_rail():
     styles = (WEB / "shared" / "styles.css").read_text(encoding="utf-8")
     shell = CONSOLE.read_text(encoding="utf-8")
     assert "main { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);" in styles
-    assert ".console-primary { grid-column: 1; }" in styles
+    # D-978: 두 칸은 공용 틀 watch(2:1)가 자리 이름으로 놓는다 — 지도는 stage, 큐 열은 now.
+    page = (WEB / "index.html").read_text(encoding="utf-8")
+    assert '<main id="fleet-main" class="ui-stage-grid" data-layout="watch"' in page
+    assert '<div class="console-primary" data-pane="stage">' in page
+    assert '<aside class="console-secondary" data-pane="now"' in page
     assert "const layoutPanels = [document.querySelector('.queues-panel')," in shell
     assert "const MAP_PANEL = 2;" in shell  # D-892: queue, status summary, map.
 
