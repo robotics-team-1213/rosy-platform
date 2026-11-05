@@ -14157,6 +14157,13 @@ osy-d395-s1d\`.
 - gate 변화: 없음. MuJoCo 후보이며 v11 Isaac 형상 전.
 - CE: 새 교훈 — `docs/solutions/logic-errors/mujoco-version-split-laptop-passes-lab-throws-seated-box-2026-11-04.md` (MuJoCo 3.3.7 box-box, remote_pytest가 MuJoCo 시험을 건너뜀).
 
+## 2026-11-04 · uncommitted · feat(accounts): 계정 화면의 역할 선택이 권한 묶음을 채움 (D-955 화면 보완)
+- 변경: 계정 화면의 "기본 역할 표시"를 "역할"(조회자·운영자·관리자)로 바꾸고, 고르면 자원별 권한 편집기가 그 역할 묶음으로 바뀐다(`roleGrants`: 조회자=조회만, 운영자=`teamGrants`, 관리자=Vault 외 모든 capability, Vault는 은퇴라 손으로만). 새 계정은 운영자로 시작. "팀원 기본 권한으로 채우기" 단추는 운영자 선택으로 대체. 헤더의 `policy-admin` 표기를 "관리자"로.
+- 서버 변경 없음: 저장·검증은 여전히 grant만 본다(D-757·D-955 원칙 유지). 마지막 계정 관리자 보호도 그대로.
+- 증거: test_account_admin_browser에 역할 전환 검사 추가. 기존 계정에서 역할을 바꾸면 확인 후에만 권한을 교체(독립 리뷰 지적).
+- gate 변화: 없음.
+- CE: 해당 없음 — 화면 동작 추가.
+
 ## 2026-11-04 · uncommitted · test(D-762): 격리 cell 문서 미리보기 부하 결함 3회 근거
 - 변경: `test/flaky_quarantine.txt`에 `applications/fleet/test/test_sample_browser.py::test_cell_document_preview_admission_and_terminal_read` 한 줄 추가. 2026-11-04 하루 3회(sha ff82336996, 6a299d39cf, 86d7abd782) 병렬 브라우저 청크에서 실패·단독 재실행 통과(rosy-flaky-candidates.txt). 실패 내용은 5 s 안에 `#recipe-revision` 글자가 바뀌지 않는 부하 타임아웃이라 제품 결함이 아니다.
 - 증거: 세 LOAD-FLAKY 기록과 단독 통과 로그(각 `alone-pre-*.txt`). 이 id가 explicit FULL 착지를 막아 게시(D-868)도 막고 있어 격리가 D-762 증거 규칙의 정해진 해법이다.
