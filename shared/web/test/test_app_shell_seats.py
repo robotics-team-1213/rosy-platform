@@ -62,7 +62,9 @@ def test_sheet_answers_its_container_not_the_viewport():
     css = SHEET.read_text(encoding="utf-8")
     assert "@media" not in css, "공용 자리는 칸에 반응한다(D-359 §6.3)"
     conditions = set(re.findall(r"@container \(([^)]+)\)", css))
-    assert conditions == {"width < 64rem", "width < 48rem"}
+    assert conditions == {"width < 64rem", "width < 48rem", "width >= 22rem"}
+    assert re.search(r'@container \(width >= 22rem\) and \(width < 64rem\)\s*\{\s*'
+                     r'\.ui-subnav-nav \{ flex-wrap: wrap; overflow-x: visible; \}\s*\}', css), 'only shared narrow navigation wraps at the additional boundary'
     assert css.count("container-type: inline-size") == 2, "셸과 본문 둘만 칸이다"
 
 
