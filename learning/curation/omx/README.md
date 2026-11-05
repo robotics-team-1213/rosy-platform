@@ -151,6 +151,9 @@ train/eval의 관절 layout이 같아야 하며 결과의 `joint_names`와 MAE �
 ### 검수 자료로 SmolVLA 미세 조정
 
 ACT가 기본이다. SmolVLA는 이미 설치된 로컬 기반 정책과 VLM metadata를 명시해 같은 검수·분할 경로로 실행한다.
+실행 Python에는 LeRobot 0.4.4와 SmolVLA의 `transformers`·tokenizers·huggingface-hub·safetensors·accelerate가 필요하다.
+ACT용 공용 CPU 환경에 의존성이 없으면 그 환경을 수정하지 말고 별도 SmolVLA SDK 환경을 사용한다.
+누락된 패키지는 데이터 읽기나 모델 복사 전에 거부하며 실제 패키지 버전은 environment.json과 cycle receipt에 남긴다.
 
 ```text
 python learning/curation/omx/collection_pipeline.py train <prepared-directory> --decisions <human-decisions.json> --out <new-run> --policy smolvla --base-model <local-smolvla-checkpoint> --vlm-assets <local-vlm-snapshot> --device cpu --steps 100 --batch-size 1

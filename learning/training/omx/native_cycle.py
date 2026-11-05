@@ -83,6 +83,21 @@ def policy_options(policy_type, base_model=None, vlm_assets=None):
     raise ValueError('SmolVLA policy requires local base and VLM metadata; ACT policy uses neither')
 
 
+def training_environment(policy_type):
+    names = ['lerobot', 'torch', 'torchvision', 'av', 'datasets']
+    if policy_type == 'smolvla':
+        names += ['transformers', 'tokenizers', 'huggingface-hub', 'safetensors', 'accelerate']
+    try:
+        packages = {name: importlib.metadata.version(name) for name in names}
+    except importlib.metadata.PackageNotFoundError as exc:
+        if policy_type == 'smolvla':
+            raise ValueError(f'use an isolated SmolVLA SDK with the missing package: {exc.name}') from exc
+        raise
+    if policy_type == 'smolvla' and packages['lerobot'] != '0.4.4':
+        raise ValueError('the isolated SmolVLA SDK must use LeRobot 0.4.4')
+    return dict(python=sys.version, packages=packages)
+
+
 def _invoke(command, output, environment, timeout, *, lease_fd=None):
     with output.open('x', encoding='utf-8') as log:
         result = subprocess.run(command, stdout=log, stderr=subprocess.STDOUT,
@@ -172,6 +187,7 @@ def _run_cycle(splits, output, *, steps, batch_size, device, timeout, lease_fd,
     policy_options(policy_type, base_model, vlm_assets)
     receipt = validate_split(splits)
     receipt_hash = hashlib.sha256((splits / 'split-receipt.json').read_bytes()).hexdigest()
+    runtime = training_environment(policy_type)
     # Verify actual train/eval readers before starting any training process. Final test remains sealed.
     for name in ('train', 'eval'):
         data = native.load_dataset(splits / name, receipt['source']['repo_id'] + '_' + name)
@@ -192,9 +208,7 @@ def _run_cycle(splits, output, *, steps, batch_size, device, timeout, lease_fd,
         config.update(output_dir=str(output / 'trainer'), steps=steps, save_freq=steps,
                       batch_size=min(batch_size, train_info['total_frames']), log_freq=1)
         native.write_json(output / 'train-config.json', config)
-        native.write_json(output / 'environment.json', dict(
-            python=sys.version, packages={name: importlib.metadata.version(name)
-                                         for name in ('lerobot', 'torch', 'torchvision', 'av', 'datasets')}))
+        native.write_json(output / 'environment.json', runtime)
         _invoke([sys.executable, '-m', 'lerobot.scripts.lerobot_train',
                  f'--config_path={output / "train-config.json"}'],
                 output / 'train.log', environment, timeout, lease_fd=lease_fd)
@@ -214,7 +228,7 @@ def _run_cycle(splits, output, *, steps, batch_size, device, timeout, lease_fd,
             raise ValueError('split inputs or model bytes changed during training/evaluation')
         if prepared is not None and smolvla_training.input_files(output/'inputs') != prepared['input_files']:
             raise ValueError('snapshotted model inputs changed during training/evaluation')
-        result = dict(offline_only=True, source_mode=receipt['source']['source_mode'],
+        result = dict(offline_only=True, source_mode=receipt['source']['source_mode'], training_environment=runtime,
                       split_receipt_sha256=receipt_hash, split_files=receipt['outputs'], artifact_files=before,
                       policy_revision=policy_revision(before, policy_type=policy_type), policy_type=policy_type,
                       rig_revision=receipt['source']['rig_revision'],
