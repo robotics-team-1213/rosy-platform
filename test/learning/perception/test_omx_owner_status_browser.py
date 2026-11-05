@@ -3,6 +3,7 @@ import threading
 import os
 from pathlib import Path
 from types import SimpleNamespace
+from urllib.parse import urljoin
 
 import pytest
 from browser_harness import browser_tests_enabled, free_port
@@ -398,6 +399,8 @@ def test_every_learning_rail_destination_renders_content(empty_learning_center):
             assert links == ['/learning', '/catalog', '/', '/learning/tasks', '/learning/evaluate']
 
             def opened(selector, href):
+                destination = urljoin(page.url, href)
+                expected = destination + ('?panel=upload' if href=='/learning/imitate' else '')
                 page.locator(selector).click()
                 page.wait_for_load_state('load')  # the SIM page keeps polling, so the network never idles
                 playwright.expect(page.locator('main')).to_be_visible()
@@ -406,19 +409,20 @@ def test_every_learning_rail_destination_renders_content(empty_learning_center):
                 if href=='/':
                     playwright.expect(page.locator('#empty-review h2')).not_to_have_text('검수 내용을 확인하는 중')
                 assert len(page.locator('main').inner_text().strip()) > 40
-                expected=empty_learning_center+href+('?panel=upload' if href=='/learning/imitate' else '')
                 assert page.url == expected
+                return destination.removeprefix(empty_learning_center)
             reached = set()
             for href in links:
                 opened(f'.ui-rail-nav a[href="{href}"]', href)
                 # The two editors carry the 정답 pages in their title row (.review-kinds), the others in the sub-menu.
                 for sub in page.locator('.ui-subnav-nav a, .ui-app-main > .review-kinds a').evaluate_all(hrefs):
                     opened(f'.ui-rail-nav a[href="{href}"]', href)
-                    opened(f'.ui-subnav-nav a[href="{sub}"], .ui-app-main > .review-kinds a[href="{sub}"]', sub)
-                    reached.add(sub)
+                    reached.add(opened(f'.ui-subnav-nav a[href="{sub}"], .ui-app-main > .review-kinds a[href="{sub}"]', sub))
             assert reached == {'/catalog', '/learning/camera', '/', '/pixels', '/learning/omx', '/learning/vlm',
                                '/learning/tasks', '/learning/tasks/manage', '/learning/imitate',
-                               '/learning#pipeline', '/learning/sim', '/learning/workspaces'}
+                               '/learning#pipeline', '/learning/sim', '/learning/workspaces',
+                               '/learning#learning-start', '/learning#review-section',
+                               '/learning#learning-results', '/learning#storage-section'}
             assert not errors
         finally:
             browser.close()
