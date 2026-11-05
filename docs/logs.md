@@ -14228,3 +14228,9 @@ osy-d395-s1d\`.
 - 증거: 제품42c97133c1에서 관련440개·홈25개·공통 G1241개가 각각0 skip/NEW0. 최종 독립 Learning G3는12표면·여덟 항 PASS,439개 파일 해시 불일치0. R3/R4/R6/R8은 각 독립 task review와 실제 상태 캡처로 결속했다. 이후 시험 query 보완36개 통과,6478fe9b27까지 제품 동일.
 - gate 변화: 최종 전 브랜치 리뷰·공식 AUTO/FULL·main 착지는 대기. 실물·모델 품질·운영 배포 수용은 별도.
 - CE: 해당 없음 — 기존 인코딩/실제 산출물 fixture 교훈을 적용했고 이번 보장 조건은 코드와 행동 회귀에 남는다.
+
+## 2026-11-05 · uncommitted · 화면 지도 최종 비동기 경합 해소 근거
+- 변경: validation/uiux-surfaces-2026-11-05/final-closure.md에30카드의 통합 조건·실행 소스·최종 독립 재검토를 결속했다. 두 Important는 단일 수정 wave에서 모두 ADDRESSED, 새 차단 사항 없음이다.
+- 증거: 제품42188e5096의 실제 지연 회귀12 pass/0 skip/NEW0. 확장192 pass/1 fail은 당시 결과로 유지하고, 소비자a4a0251917의 준비/동시 측정4 pass/0 skip/NEW0로 해당 NEW1을 별도 해소했다. 기준값4개와 제품은 유지했다. 기록 후보2821506a0a의 size-range7커밋·harness lint0오류, 독립 scoped 승인 확인.
+- gate 변화: 관련 검증·독립 리뷰 완료, 공식 AUTO/FULL·로컬 main 대기. GitHub·배포·실물/모델 품질 수용은 별도.
+- CE: 해당 없음 — 원인과 보장 조건은 generation/잠금 코드·지연 응답/준비 상태 회귀에 남는다.

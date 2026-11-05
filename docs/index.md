@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
+- 2026-11-05 · uncommitted · 화면 지도 최종 비동기 경합 해소 근거
 - 2026-11-05 · uncommitted · 화면 지도 UI·UX 최종 후보 근거 결속
 - 2026-11-04 · uncommitted · fix(deploy): calibration 분리 경로를 서명 모델 코드 아카이브에 포함
 - 2026-11-04 · uncommitted · docs(deployment): 후진 목표 운영자 메모
 - 2026-11-04 · uncommitted · docs(D-871): 학습센터 타이머 미활용 발견·활성화 개정
-- 2026-11-04 · uncommitted · test(D-762): 격리 cell 문서 미리보기 부하 결함 3회 근거
