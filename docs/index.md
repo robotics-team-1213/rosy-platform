@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
+- 2026-11-05 · uncommitted · 완료 감사의 장치 항목명 가독성 차단 해소
 - 2026-11-05 · uncommitted · 캡처 지문 목록의 정본 checksum 형식
 - 2026-11-05 · uncommitted · 화면 지도 최종 비동기 경합 해소 근거
 - 2026-11-05 · uncommitted · 화면 지도 UI·UX 최종 후보 근거 결속
 - 2026-11-04 · uncommitted · fix(deploy): calibration 분리 경로를 서명 모델 코드 아카이브에 포함
-- 2026-11-04 · uncommitted · docs(deployment): 후진 목표 운영자 메모

@@ -14240,3 +14240,9 @@ osy-d395-s1d\`.
 - 증거: ec1의 공식014641은 FULL 전에 .txt의 공개 SHA256을 high-entropy-token으로 분류해 STOP했다. 기존 secret_scan_syntax의 .sha256 계약을 사용하며 검사기·면제 목록·공개 provenance 설정은 고치지 않는다. 파일명 열과 자격 증명 검사는 유지한다.
 - gate 변화: 크기87·안전87·새 SHA 문서149·독립 소스 동등성은 이미 통과. checksum 이름과 링크 수정 후 기존 비밀 경계/문서 검증 및 기본 공식 AUTO/FULL을 다시 수행한다.
 - CE: 해당 없음 — 정본 scanner의 기존 checksum 분기/시험과 본 기록에 형식 조건이 드러난다.
+
+## 2026-11-05 · uncommitted · 완료 감사의 장치 항목명 가독성 차단 해소
+- 변경: validation/uiux-surfaces-2026-11-05/readback-header-followup.md와 표준 sha256 manifest에 실제 긴 값 P2/RED·Robot 전용 열 배치·새5장·폭 측정·scoped G3·부분 gate 취소를 결속했다.
+- 증거: df46d9a2f4의 capture2개/넓은171개는 각각0skip/NEW0,320/390 항목폭101.59/129.59px. 독립 검토자가 새5장과2CSS규칙을 보고 P2 ADDRESSED/새 문제0으로 승인했다. metadata0cc의 전체92 size/safety와lint0오류를 확인했다.
+- gate 변화: UI 차단 사항은 해소됐으며 최신 G1에 실제styleguide route/dialog 계약을 포함해 재실행하고 새 source의 기본 공식 AUTO/FULL·main을 확인한다. 취소015709의 부분 결과는 FULL로 세지 않는다.
+- CE: 해당 없음 — 기존 디자인 요구와 실제 폭/화면 회귀에 원인·보장을 남겼다.
