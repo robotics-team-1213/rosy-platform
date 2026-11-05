@@ -1007,3 +1007,10 @@
 - gate 변화: SOURCE 회귀 검증; ARTIFACT/DEVICE/FIELD 수용 근거로 사용하지 않음. 최종 재조립 SHA 원격 회귀와 FULL은 별도.
 - 결정: API v1.363; 기존 CORE 최종 명령·모드 owner 유지.
 - 교훈: CE 해당 없음 — 최종 코드·회귀 시험·API 계약으로 판단 근거를 재현할 수 있음.
+
+## 2026-11-06 · uncommitted · fix(fleet): 수동 전환 버튼의 공용 kind 명시
+- 변경: 보존된 manual7977을 현행 main2b6aac73e2에 정상 병합하고 새 수동 모드 버튼에 kind=quiet를 명시했다. 기존 로그 양쪽과 현재 지도 frame 필터·motor readiness 기본값을 보존했다. 권한·guard·API·공용 시험은 바꾸지 않았다.
+- 증거: 병합00c3772680의 test_every_button_names_its_kind 원격 RED1failed(manual-control.js23); 수정1aa7e69117은 AI PC에서 공용 컨트롤·CORE/Fleet/Task/channel·공용 Node 회귀278passed/skip0, 실제 Chromium 수동 조종18passed/skip0. scratch pinky-manual-kind-{red,green,browser}/run-1.txt; known NEW0.
+- gate 변화: SOURCE 회귀 확인; canonical FULL194811의 NEW는 수정했으나 새 정식 FULL 결과와 실제 장치 수용은 별도다.
+- 결정: 기존 공용 quiet 버튼을 사용하며 검사 예외나 기본 kind 추론을 추가하지 않는다.
+- 교훈: CE 해당 없음 — 기존 공용 kind 계약과 한 줄 수정이 원인·해결을 직접 설명한다.
