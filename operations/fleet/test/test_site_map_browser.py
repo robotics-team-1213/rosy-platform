@@ -23,6 +23,21 @@ pytestmark = pytest.mark.skipif(not browser_tests_enabled(),
 ROOT = Path(__file__).resolve().parents[3]
 
 
+def test_show_screen_waits_for_deferred_hashchange(page_site):
+    from playwright.sync_api import expect
+
+    page, _, _ = page_site
+    expect(page.locator('.ui-subnav-nav a[href="#map-heading"]')).to_have_attribute('aria-current', 'page')
+    # Replay the interval after the URL changes but before its queued screen handler runs.
+    page.evaluate('''() => {
+        history.replaceState(null, '', '#edit-heading');
+        setTimeout(() => dispatchEvent(new HashChangeEvent('hashchange')), 1000);
+    }''')
+    show_screen(page, 'edit-heading')
+    assert page.locator('.ui-subnav-nav a[href="#edit-heading"]').get_attribute('aria-current') == 'page'
+    assert page.locator('#edit-heading').is_visible()
+
+
 @pytest.mark.parametrize('width', [1440, 390])
 @pytest.mark.parametrize('page_site', [False], indirect=True)
 def test_mapless_survey_elements_persist_and_stay_out_of_operations(page_site, width):
