@@ -157,7 +157,9 @@ def generate_launch_description():
             "navigation_backend",
             default_value=os.environ.get("ROSY_NAVIGATION_BACKEND", "localization"),
         ),
-        DeclareLaunchArgument("enable_battery", default_value="false"),
+        # rosy-navigation Conflicts= rosy-io, so this graph is the only battery
+        # reader while it runs; without it CORE power_health has no evidence.
+        DeclareLaunchArgument("enable_battery", default_value="true"),
         DeclareLaunchArgument("enable_lidar", default_value="true"),
         DeclareLaunchArgument("enable_line_follow", default_value="false"),
         # D-395 P2-3: off on the device until the candidate search is measured on
