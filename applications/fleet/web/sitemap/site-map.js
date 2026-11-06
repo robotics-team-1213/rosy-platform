@@ -105,8 +105,8 @@ function render() {
     for (const points of teach.lines()) el('polyline', {class: 'teach', points: line(points)}, svg);
   for (const [index, place] of map.places.entries()) {
     const [px, py] = view.toPx(place.x, place.y);
-    const dot = el('circle', {cx: px, cy: py, r: 9, 'data-place': place.id,
-      class: `place ${place.kind}${state.selected?.place === place.id ? ' selected' : ''}`}, svg);
+    const dot = el('circle', {cx: px, cy: py, r: 9, 'data-place': place.id, tabindex: 0, role: 'button',
+      'aria-label': `장소 ${place.name} 선택`, class: `place ${place.kind}${state.selected?.place === place.id ? ' selected' : ''}`}, svg);
     el('title', {}, dot).textContent = `${place.name} (${PLACE_KIND_LABEL[place.kind] || place.kind})`;
     if (place.kind === 'start') {
       el('polygon', {class: 'start-heading', points: '26,0 12,-7 12,7',
@@ -155,6 +155,7 @@ function drawRobots() {
     }
   }
   const toPoint = (x, y) => { const [px, py] = state.view.toPx(x, y); return {x: px, y: py}; };
+  const placed = [];
   for (const {row, p, r, ring, alert, tip} of guideMarks(state.guide, toPoint)) {
     const g = el('g', {class: `robot ${tint(row.robot_id)} ${row.pose.state.toLowerCase()}${row.online ? '' : ' offline'}`,
       'data-robot': row.robot_id, ...(alert ? {'data-alert': alert} : {})}, layer);
@@ -170,6 +171,11 @@ function drawRobots() {
     const half = label.getComputedTextLength() / 2 + 4;  // keep the whole label on the map
     label.setAttribute('x', Math.min(Math.max(p.x, half), W - half));
     if (p.y - ring - 6 < 16) label.setAttribute('y', p.y + ring + 16);
+    // Simple pass (shortcut: down only, 4 tries; a dense cluster can still overlap): step off an earlier label.
+    const hit = (a, b) => a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+    for (let tries = 0; tries < 4 && placed.some(o => hit(label.getBBox(), o)); tries++)
+      label.setAttribute('y', Number(label.getAttribute('y')) + label.getBBox().height + 2);
+    placed.push(label.getBBox());
   }
 }
 
@@ -568,6 +574,15 @@ const screens = bindScreens({nav: document.querySelector('.ui-subnav-nav'), home
 // The map legend promises that picking a place or lane on the view screen opens it for editing.
 $('site-map-svg').addEventListener('click', event => {
   if (screens.current() === 'map-heading' && event.target.closest('[data-place], [data-edge], [data-crosswalk]')) location.hash = '#edit-heading';
+});
+// Keyboard: a focused place dot acts like a click (Enter or Space); the redraw drops focus, so put it back.
+$('site-map-svg').addEventListener('keydown', event => {
+  const dot = event.target.closest?.('[data-place]');
+  if (!dot || !['Enter', ' '].includes(event.key)) return;
+  event.preventDefault();
+  const id = dot.dataset.place;
+  dot.dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true}));
+  $('site-map-svg').querySelector(`[data-place="${CSS.escape(id)}"]`)?.focus();
 });
 $('console-token').addEventListener('keydown', event => { if (event.key === 'Enter') $('token-save').click(); });
 

@@ -468,7 +468,10 @@ function renderLayout() {
     point.setAttribute('width', width); point.setAttribute('height', height);
     point.setAttribute('transform', `rotate(${-step.target.yaw * 180 / Math.PI} ${x} ${y})`);
     const label = document.createElementNS(ns, 'text'); label.setAttribute('x', x); label.setAttribute('y', y); label.setAttribute('text-anchor', 'middle');
-    label.textContent = `${ordinal + 1} · ${step.pallet} · ${step.layer + 1}층`;
+    label.setAttribute('dominant-baseline', 'central');
+    const full = `${ordinal + 1} · ${step.pallet} · ${step.layer + 1}층`;
+    label.textContent = width < full.length * 7 ? String(ordinal + 1) : full;  // a block narrower than its label shows the order number only
+    if (label.textContent !== full) { const title = document.createElementNS(ns, 'title'); title.textContent = full; label.append(title); }
     return [point, label];
   }));
 }
