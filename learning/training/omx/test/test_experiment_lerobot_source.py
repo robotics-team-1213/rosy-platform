@@ -10,6 +10,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import experiment_lerobot_source as source
 import experiment_lerobot_worker as worker
+import experiment_robot_adapters as robots
 
 
 def test_video_headers_are_checked_without_decoding(tmp_path,monkeypatch):
@@ -61,19 +62,31 @@ def test_disjoint_noncontiguous_split_with_empty_validation():
             source.validate_split(bad, inspection)
 
 
+def adapter_info(robot, size, names=None):
+    vector = dict(dtype='float32', shape=[size], names=names)
+    return dict(codebase_version='v3.0', fps=30, robot_type=robot, total_episodes=4, total_frames=20,
+        data_path=source.DATA_PATH, features={'observation.state': vector, 'action': vector,
+            'observation.images.top': dict(dtype='image', shape=[32,48,3])})
+
+
 def test_only_omx_ai_has_an_adapter():
-    def info(robot, size, names=None):
-        vector = dict(dtype='float32', shape=[size], names=names)
-        return dict(codebase_version='v3.0', fps=30, robot_type=robot, total_episodes=4, total_frames=20,
-            data_path=source.DATA_PATH, features={'observation.state': vector, 'action': vector,
-                'observation.images.top': dict(dtype='image', shape=[32,48,3])})
     joints = [f'{joint}.pos' for joint in ('shoulder_pan','shoulder_lift','elbow_flex','wrist_flex','wrist_roll','gripper')]
-    assert source.check_info(info('omx_follower', 6, joints))
-    assert source.check_info(info('bi_omx_follower', 12, [f'arm_{arm}.{name}' for arm in 'ab' for name in joints]))
-    for bad in (info('so100', 6), info(None, 6), info('omx_follower', 7), info('bi_omx_follower', 6),
-                info('omx_follower', 6, ['a','b','c','d','e','f'])):
+    robots.check(adapter_info('omx_follower', 6, joints))
+    robots.check(adapter_info('omx_follower', 6))
+    robots.check(adapter_info('bi_omx_follower', 12, [f'arm_{arm}.{name}' for arm in 'ab' for name in joints]))
+    for bad in (adapter_info('so100', 6), adapter_info(None, 6), adapter_info('omx_follower', 7),
+                adapter_info('bi_omx_follower', 6), adapter_info('omx_follower', 6, ['a','b','c','d','e','f'])):
         with pytest.raises(ValueError):
-            source.check_info(bad)
+            robots.check(bad)
+
+
+def test_a_new_study_needs_an_adapter_but_an_earlier_result_stays_verifiable(monkeypatch, tmp_path):
+    other = adapter_info('so100', 6)
+    assert source.check_info(other) == other
+    monkeypatch.setattr(source, 'verify_files', lambda *_: None)
+    monkeypatch.setattr(source, 'read_json', lambda *_, **__: other)
+    with pytest.raises(ValueError, match='no adapter'):
+        source.inspect(tmp_path, [])
 
 
 def test_metadata_is_bounded():

@@ -127,6 +127,9 @@ def check_info(info):
         raise ValueError('complete LeRobot v3, 1..240 fps, 2..1000 episodes, <=200000 frames required')
     if (info.get('data_path') != DATA_PATH or info.get('video_path') not in (None, VIDEO_PATH)):
         raise ValueError('canonical local v3 data/video path templates required')
+    robot = info.get('robot_type')
+    if robot is not None and (not isinstance(robot, str) or len(robot) > 256):
+        raise ValueError('bounded robot type required')
     features = info.get('features', {})
     if not isinstance(features, dict):
         raise ValueError('feature metadata required')
@@ -157,7 +160,6 @@ def check_info(info):
             raise ValueError('video camera requires canonical video path template')
     if pixels > 16000000:
         raise ValueError('camera pixels exceed 16M')
-    robots.check(info)
     return info
 
 
@@ -299,6 +301,7 @@ def inspect(root, files):
     root = Path(root)
     verify_files(root, files)
     info = check_info(read_json(root/'meta/info.json'))
+    robots.check(info)  # here, not in check_info: results of earlier runs must stay verifiable
     raw_check(root, info, files)
     data, episodes = reader(root), []
     cameras = [dict(key=k, shape=v['shape'], dtype=v['dtype']) for k, v in sorted(info['features'].items())
