@@ -105,7 +105,7 @@ builtins.__import__ = no_ros
 sys.argv = [sys.argv[1], "--sim-only"]
 runpy.run_path(sys.argv[0], run_name="__main__")
 '''
-    env = {**os.environ, 'ROS_DOMAIN_ID': '80', 'ROS_LOCALHOST_ONLY': '1',
+    env = {**os.environ, 'ROS_DOMAIN_ID': '20', 'ROS_LOCALHOST_ONLY': '1',
            'GZ_PARTITION': 'd426-test', 'ROSY_RUNTIME_MODE': 'core'}
     result = subprocess.run([sys.executable, '-I', '-c', code, str(SCRIPT)],
                             env=env, capture_output=True, text=True, encoding='utf-8', timeout=15)
@@ -160,7 +160,7 @@ def ros_boundary(monkeypatch):
     monkeypatch.setitem(sys.modules, 'rclpy.clock', clock)
     monkeypatch.setitem(sys.modules, 'geometry_msgs', SimpleNamespace())
     monkeypatch.setitem(sys.modules, 'geometry_msgs.msg', SimpleNamespace(Twist=Twist))
-    for name, value in {'ROS_DOMAIN_ID': '80', 'GZ_PARTITION': 'd426-test',
+    for name, value in {'ROS_DOMAIN_ID': '20', 'GZ_PARTITION': 'd426-test',
                         'ROS_LOCALHOST_ONLY': '1', 'ROSY_RUNTIME_MODE': 'core'}.items():
         monkeypatch.setenv(name, value)
     evidence['spin'] = lambda: None
@@ -189,7 +189,7 @@ def test_runtime_invalid_commands_zero_and_timer_is_steady(ros_boundary, monkeyp
 
 
 @pytest.mark.parametrize('setting,value', [
-    ('ROS_DOMAIN_ID', '40'), ('ROS_DOMAIN_ID', '79'), ('ROS_DOMAIN_ID', '100'),
+    ('ROS_DOMAIN_ID', '19'), ('ROS_DOMAIN_ID', '30'), ('ROS_DOMAIN_ID', '41'), ('ROS_DOMAIN_ID', '80'), ('ROS_DOMAIN_ID', '99'),
     ('ROS_DOMAIN_ID', '120'), ('ROS_DOMAIN_ID', '172'), ('ROS_DOMAIN_ID', '199'),
     ('ROS_LOCALHOST_ONLY', '0'),
     ('GZ_PARTITION', ''), ('ROSY_RUNTIME_MODE', 'hardware'),
