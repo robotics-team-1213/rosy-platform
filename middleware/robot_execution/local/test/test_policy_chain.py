@@ -17,6 +17,21 @@ from rosy.execution.local.policy_lease import FleetLeaseConsumer, LeaseScope
 from rosy.execution.local.policy_chain import SimPolicyChain
 
 
+def test_policy_diagnostics_only_emit_types_status_and_numeric_timings():
+    from types import SimpleNamespace
+    from policy_chain_fixtures import failure_diagnostics
+    marker = 'never-log-private-material'
+    inner = RuntimeError(marker)
+    inner.response = SimpleNamespace(status_code=403, text=marker, request=marker)
+    error = PermissionError(marker)
+    error.__context__ = inner
+    report = failure_diagnostics(error, [{'elapsed_s': .2, 'error': inner, 'request': marker}],
+        [{'elapsed_s': .01, 'status': 403, 'path': marker, 'token': marker, 'session': marker}])
+    assert report['exception_types'] == [{'type': 'PermissionError'}, {'type': 'RuntimeError', 'status': 403}]
+    assert report['server_timing'] == [{'elapsed_s': .01, 'status': 403}]
+    assert marker not in json.dumps(report)
+
+
 def test_worker_renews_before_round_trip_cost_exhausts_current_lease():
     from types import SimpleNamespace
     clock, completed, waits = [.34], [], []
