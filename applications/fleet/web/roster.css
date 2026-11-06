@@ -101,6 +101,10 @@
 #robot-workspace { min-width: 0; margin-top: var(--space-3); }
 .manual-control { margin-top: var(--space-3); }
 .manual-control [data-manual-direction] { touch-action: none; }
+.manual-control [data-manual-pose] { margin: var(--space-2) 0; font-size: var(--text-label); color: var(--text-secondary); overflow-wrap: anywhere; }
+/* 방향 넷은 언제나 2×2다. 폭에 맡기면 1366에서 3+1로 갈린다. */
+.manual-control .robot-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.manual-control [data-manual-mode] { grid-column: 1 / -1; }
 .trip-mode { display: grid; gap: var(--space-2); }
 
 .robot-summary { border-bottom: 1px solid var(--border-subtle); }

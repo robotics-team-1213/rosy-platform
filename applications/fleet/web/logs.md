@@ -1056,3 +1056,8 @@
 - metadata: PNG 실제 checksum과 현재 manifest 일치, 문서의 Git commit 문맥을 독립 확인한 근거에 따라 root 승인 exact historical commit/path/rule 2건만 비밀정보 baseline에 추가했다. 기존183건의 순서·내용·schema·reviewer와 Git raw prefix를 보존해 중복 없이185건이며 scanner·provenance·ignore·정책은 바꾸지 않았다. 이 자료는 비밀키가 아닌 실제 screenshot/Git metadata다. source18effdc1b9 원격 publish/secret/provenance 기존 회귀59통과·skip0·NEW/known/flaky0, scratch pinky-uiux-metadata-guards/run-1.txt. 정본 origin647부터 해당 source까지264개 commit의 추가 줄 검사에서 미검토 hit0이다. baseline 증분 독립 검토 미해결 finding 없음.
 - gate 변화: bounded SOURCE 회귀다. main a413에는 exact land record가 없으므로 최신 main이나 이번 통합의 FULL qualification을 주장하지 않는다. old004000과 모든 STOP을 보존하며, metadata 자격 확인과 최종 승인 뒤 새 source의 canonical FULL이 필요하다. 새 착지·게시·서명·기체·서비스 동작은 수행하지 않았다.
 - 교훈: CE 해당 없음 — 두 명시적 충돌의 보존 규칙이 최종 코드·API·기존 회귀와 source별 증거에 직접 남는다.
+
+## 2026-11-06 · uncommitted · uiux(fleet): 수동 조종 패널의 위치 근거와 막힌 이유
+- 변경: 조종 패널에 지도 위치·출처·위치 관측 상태·상태 나이 한 줄을 항상 보인다. 상태 시각 없음과 오래됨을 나누고 위치·속도 각각의 근거를 말한다. 2초 한도 정지를 손 뗌과 구분해 안내한다. 버튼 사유는 DESIGN 규칙대로 "위 사유"로 줄이고, 방향 넷은 2×2로 작업 카드 위에 둔다. 정지 경로와 차단 판단은 바꾸지 않았다. 2026-11-06 UI/UX 전수 조사 F2~F5.
+- 증거: test_fleet_manual_control_browser.py에 구분 문구·근거 줄·1366 첫 화면 2×2·2초 안내 단정 추가. 원격 결과는 착지 기록을 따른다.
+- gate 변화: SOURCE 회귀. 실제 기체·현장 관제 수용은 별도다. CE: 해당 없음 — 코드와 회귀가 판단을 보존한다.

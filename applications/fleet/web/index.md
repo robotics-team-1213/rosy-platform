@@ -32,8 +32,8 @@
 
 ## 최근 기록
 
+- 2026-11-06 · uncommitted · uiux(fleet): 수동 조종 패널의 위치 근거와 막힌 이유
 - 2026-11-06 · uncommitted · merge(fleet): 최신 UIUX와 수동 관제의 확인·권한 연결 보존
 - 2026-11-06 · uncommitted · merge(fleet): 관제 수동 조작과 검증 후속 변경의 최종 통합
 - 2026-11-06 · uncommitted · fix(fleet): 수동 관제 API 설명의 동시 삽입 충돌 조정
 - 2026-11-06 · uncommitted · fix(fleet): 수동 전환 버튼의 공용 kind 명시
-- 2026-11-06 · uncommitted · feat(fleet): 관제 수동 모드 전환

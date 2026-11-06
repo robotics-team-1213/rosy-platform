@@ -311,7 +311,8 @@ const roster = createRoster({ scope: pageScope, el, view, log, call, render,
 const manualControl = createManualControl({scope: pageScope, view, call: fleetClient,
   confirmedAction, refreshState,
   namedReason: () => auth.locked ? "관제에 다시 접속하세요." : auth.role !== "operator" ? OPERATOR_REASON : namedReason()});
-el("robot-workspace").after(manualControl.root);
+// Above the assignment card: the selected robot's drive stays on the first screen.
+document.querySelector(".workspace-heading").before(manualControl.root);
 if (el("robot-choice")) pageScope.listen(el("robot-choice"), "change", () => {
   roster.openCard(el("robot-choice").value || null);
   render();
