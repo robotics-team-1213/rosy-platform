@@ -39,7 +39,9 @@ import cell_calibration as cal  # noqa: E402
 import cell_decisions as cd  # noqa: E402
 import cell_objects  # noqa: E402
 import cell_params as prm  # noqa: E402
+import cell_jaw_axis  # noqa: E402
 import cell_pivot  # noqa: E402
+import cell_scene_guard  # noqa: E402
 import cell_place_fit  # noqa: E402
 import cell_site_track  # noqa: E402
 import cell_diagnose  # noqa: E402
@@ -136,6 +138,12 @@ class Guarded:
         return self.cell.frame(camera)
 
 
+def grasp_depth(config: dict, site: str) -> float:
+    """How far under the object's top this site grips. A site whose grip the arm cannot reach at the default states
+    its own (`grasp_depth_m`): the same grip height then also sets the release height, so the box lands flat."""
+    return config["sites"][site].get("grasp_depth_m", prm.get(config.get("params"), "auto.grasp_depth_m", 0.015))
+
+
 def surface_z(config: dict, site: str) -> float:
     """The site's surface height (m), which every auto-pick site must state: the grasp height is computed from
     it (catalogue top height - grasp depth), never taken from the site's `z`, which is the taught cube grasp
@@ -143,7 +151,7 @@ def surface_z(config: dict, site: str) -> float:
     s = config["sites"][site]
     if "surface_z" not in s:
         raise SystemExit(f"site {site!r}: auto pick needs `surface_z` (the surface height in metres)")
-    depth = prm.get(config.get("params"), "auto.grasp_depth_m", 0.015)
+    depth = grasp_depth(config, site)
     if "z" in s and s["z"] < s["surface_z"] + depth - 1e-9:
         raise SystemExit(f"site {site!r}: z {s['z']} is below surface_z {s['surface_z']} + grasp depth {depth}")
     return s["surface_z"]
@@ -238,7 +246,7 @@ def plan_pick(config: dict, site: str, dest_site: str, place_xy, o: dict, entry:
               yaw: float | None = None, place_yaw: float | None = None):
     """Library for one candidate: grasp 15 mm below the top, approach 40 mm above it (else 20), the yaw and its
     180 degree twin tried in turn. Returns (library path, pick, place, approach_m, yaw) or an error string."""
-    height = entry["top_height_mm"] / 1000 - prm.get(config.get("params"), "auto.grasp_depth_m", 0.015)
+    height = entry["top_height_mm"] / 1000 - grasp_depth(config, site)
     x, y = (o["raw_m"][0] - bias_mm[0] / 1000, o["raw_m"][1] - bias_mm[1] / 1000)
     yaw0, error = (grasp_yaw(config, site, o, entry, offset) if yaw is None else yaw), "no plan"
     for approach in (config["plan"]["approach_m"], prm.get(config.get("params"), "auto.approach_near_m", 0.020)):
@@ -320,7 +328,10 @@ def choose(cell, config, calibration, site, dest_site, place_xy, roi, objects, m
         if not square:
             choices.offer(CLOSING, prm.get(p, "auto.closing_theory_deg"), "theory: closes along tool y = yaw + 90")
             choices.offer(CLOSING, prm.get(p, "auto.closing_alt_deg"), "alternative: closes along tool x")
-        offset = None if square else choices.best(CLOSING)
+        offset, why = (None, None) if square else cell_jaw_axis.offset_for(config, entry, choices.best(CLOSING))
+        if why:
+            refused.append({"centre_mm": o["centre_mm"], "object": o["object"], "why": why})
+            continue
         yaw = None
         if square:  # a square closes either way: take the yaw whose finger sides are clear, else refuse
             closing = prm.get(p, "auto.closing_theory_deg")
@@ -501,7 +512,9 @@ def run_auto(cell, config, calibration, calibration_path, catalog, roi, source, 
                 close_episode(cell, episode, False, f"held: {held['reason']}")
                 cell_attempts.record(config, calibration, source, dest, attempt, tried, t0, choices)
                 return {**out, "result": f"held: {held['reason']}"}
-            wrist, capture, pinch, feel = cell_hooks.pick_hooks(same, gate, target, cp.write_library, source, dest_site, cd.emit, calibration)
+            guard = cell_scene_guard.hook(guarded, config, guarded.frame("top"), roi, predicted_pixel(config, calibration, source, (0.0, 0.0)),
+                                          predicted_pixel(config, calibration, source, o["raw_m"]))
+            wrist, capture, pinch, feel = cell_hooks.pick_hooks(same, gate, target, cp.write_library, source, dest_site, cd.emit, calibration, guard)
             moved = transfer_folded(gate, target["library"], wrist=wrist, after_place=capture,
                                     pinch=pinch, feel=feel, sequence=sequence)
             tried["envelope"] = gate.assessment
@@ -546,14 +559,14 @@ def run_auto(cell, config, calibration, calibration_path, catalog, roi, source, 
                 return {**out, "result": f"stopped: holding after a stop at {moved['at']}"}  # the surface to re-observe
             if moved["result"] not in ("empty", "contact"):  # a fault, a refusal or a misplaced object: a person looks
                 if moved["result"] in ("fault", "refused"):
-                    cell.act("park")
+                    cp.fold(cell, sleep)
                 return {**out, "result": f"stopped: {moved['result']}"}
     except Aborted as stop:
         close_episode(cell, episode, False, f"aborted: {stop}")
         return {**out, "result": f"aborted: {stop}"}
     except Exception:  # never stop with the arm extended
         if guarded is not None:
-            cell.act("park")
+            cp.fold(cell, sleep)
         close_episode(cell, episode, False, "pipeline exception")
         raise
     return {**out, "result": f"stopped: {attempts} attempts"}
@@ -575,7 +588,7 @@ def main(argv=None):
     if dark:  # nothing is seen in the dark: no observe, no motion
         print(json.dumps({"from": args.source, "to": args.dest, "result": "refused", "error": "; ".join(dark)}, indent=1))
         return 1
-    result = run_auto(cell, config, cal.load(calibration_path), calibration_path, cell_objects.load_catalog(args.catalog),
+    result = run_auto(cell, config, cell_pivot.with_site_maps(config, cal.load(calibration_path)), calibration_path, cell_objects.load_catalog(args.catalog),
                       args.roi, args.source, args.dest, work, cell_choices.Choices(work / "choices.json"), args.dry_run)
     print(json.dumps(result, indent=1, default=str))
     return 0 if result["result"] in ("placed", "planned") else 1
