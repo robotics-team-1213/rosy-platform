@@ -47,7 +47,9 @@ def _stem(name):
 
 
 def test_apps_do_not_redeclare_shared_types():
-    shared = {name for path in SHARED.rglob('*.kt') for name in DECLARATION.findall(path.read_text(encoding='utf-8'))}
+    # A private helper such as AccountSession's Profile is not a shared type an app could redeclare.
+    public = re.compile(DECLARATION.pattern.replace('private|', ''), re.M)
+    shared = {name for path in SHARED.rglob('*.kt') for name in public.findall(path.read_text(encoding='utf-8'))}
     assert {'PeerProof', 'PeerTls', 'AndroidPeerIdentity', 'AccountSession', 'AccountConfig'} <= shared
     stems = {_stem(name) for name in shared}
     found = [f'{path.relative_to(ROOT)}: {declared}'
