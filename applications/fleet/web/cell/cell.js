@@ -167,8 +167,9 @@ async function action(fn) {
       ? '이 계정에는 팔레트 적재 작업 권한이 없습니다. 운영자 토큰을 확인하고 다시 접속하세요.'
       : error.code === 'CELL_APP_UNCONFIGURED'
         ? '팔레트 적재 작업을 사용할 수 없습니다. 사이트 설치 담당자에게 팔레트 적재 서비스 구성을 확인해 달라고 요청하세요.'
+        : error instanceof SyntaxError ? '문서가 올바른 JSON이 아닙니다. 형식을 확인한 뒤 다시 저장하세요.'
         : error.message;
-    if (error.status === 401 || error.status === 403) $('notice').scrollIntoView({block: 'center'});
+  if (error.status === 401 || error.status === 403) $('notice').scrollIntoView({block: 'center'});
   }
   finally {
     busy = false; refreshControls();
