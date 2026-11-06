@@ -4654,3 +4654,8 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: 원격 시험은 커밋 뒤 실행.
 - gate 변화: 없음 — 기체 수용 전이다.
 - CE: 미해결 — 실물 수용 뒤 교훈을 기록한다.
+## 2026-11-07 · uncommitted · feat(navigation): 모터·정지 파일이 같으면 항법 승인을 이어받는다 (D-986)
+- 변경: `mapping_approval.py`가 승인 때 서명된 `SHA256SUMS`의 지문을 표식에 저장하고, `check`가 현재 릴리스 지문과 같을 때만 다른 릴리스의 승인을 인정한다. 지문이 없거나 다르면 거절하고 봉인 원본은 매번 다시 검증한다.
+- 증거: 원격 시험 `test/test_native_mapping_approval.py`·`test/test_image_layer_sync.py` exit 0. b8xy의 실제 릴리스에서 004·005 지문 일치, 10/29와 불일치(읽기 전용 측정, 제외 목록 추가 전 기준).
+- gate 변화: 없음 — 기체 수용 전이다.
+- CE: 해당 없음 — 새 기능이며 해결한 장애가 없다.
