@@ -300,6 +300,7 @@ def usb_tree(tmp_path, monkeypatch, board_root="4-4"):
     tty = tmp_path / "sys/class/tty/ttyUSB0/device"
     tty.parent.mkdir(parents=True)
     tty.symlink_to(board, target_is_directory=True)
+    (dev / "ttyUSB0").touch()
     (dev / "serial/by-id" / DEV).symlink_to(dev / "ttyUSB0")
 
     def redirect(path):

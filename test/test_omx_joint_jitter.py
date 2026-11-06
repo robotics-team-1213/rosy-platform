@@ -79,8 +79,8 @@ def test_replay_pairs_a_trace_with_its_health_log_and_reports_flagged_and_envelo
              "motors": [motor(j, 60 * (-1) ** k if j == "elbow_flex" else 0) for j in jj.MOTORS]} for k in range(16)]
     rows.append({"event": "fault", "fault": "stale"})
     (tmp_path / "motor-health-1.jsonl").write_text("\n".join(json.dumps(r) for r in rows) + "\n{cut")
-    (tmp_path / "trace-1.jsonl").write_text("\n".join(json.dumps(r) for r in trace(4, 4.0, 0.6)))
-    arms = jitter_replay.replay([tmp_path / "trace-1.jsonl"], [tmp_path / "motor-health-1.jsonl"])
+    (tmp_path / "trace-arm_a-1.jsonl").write_text("\n".join(json.dumps(r) for r in trace(4, 4.0, 0.6)))
+    arms = jitter_replay.replay([tmp_path / "trace-arm_a-1.jsonl"], [tmp_path / "motor-health-1.jsonl"])
     arm = arms["arm_a"]
     assert arm["trace_h"] > 0 and len(arm["faults"]) == 1
     assert {f["joint"] for f in arm["flagged"]} == {"elbow_flex"} and len(arm["flagged"]) == 3

@@ -32,8 +32,8 @@
 
 ## 최근 기록
 
+- 2026-11-06 · uncommitted · fix(fleet): 사건 facts의 미지 JSON 형태에서도 본문과 해제 입력 유지
 - 2026-11-06 · uncommitted · fix(fleet): 표시 지도와 다른 좌표계의 궤적 숨김
 - 2026-11-06 · uncommitted · fix(fleet): viewer 주기 갱신 잠금의 실제 RED/GREEN 후속
 - 2026-11-06 · a9210f10f9 · 선택 로봇 홀드 조종과 모바일 상태 우선 배치
 - 2026-11-05 · a27e97c186 · uiux: 설치 작업 메뉴와 지도 하위 메뉴의 같은 표현
-- 2026-11-04 · uncommitted · 계정 관리 목록을 공용 표로
