@@ -9,7 +9,7 @@ def source(relative):
 
 
 def test_camera_node_has_tunable_fail_closed_homography_contract():
-    node = source('nodes/camera_detect_node.py')
+    node = source('sensor_nodes/camera_detect_node.py')
     config = source('config/camera.yaml')
 
     for token in (
@@ -33,8 +33,8 @@ def test_camera_node_has_tunable_fail_closed_homography_contract():
 
 
 def test_web_only_relays_bounded_enable_disable_and_renders_node_checks():
-    node = source('nodes/web_node.py')
-    http = source('nodes/web_http.py')
+    node = source('robot_web/web_node.py')
+    http = source('robot_web/web_http.py')
     page = ''.join(source('web/' + name) for name in (
         'diagnostic.html', 'diagnostic-core.js', 'diagnostic-map.js', 'diagnostic-input.js'))
 
@@ -53,7 +53,7 @@ def test_web_only_relays_bounded_enable_disable_and_renders_node_checks():
 def test_camera_node_offers_nominal_ground_and_lidar_region_range_off_by_default():
     """D-423: opt-in NOMINAL plane + LiDAR region range; the device default stays unranged."""
     # The region-range methods live in the node's mixin (camera_region_range.py).
-    node = source('nodes/camera_detect_node.py') + source('nodes/camera_region_range.py')
+    node = source('sensor_nodes/camera_detect_node.py') + source('sensor_nodes/camera_region_range.py')
     config = source('config/camera.yaml')
     for token in ('nominal_camera_profile_path', 'allow_nominal_ground', 'region_lidar_range',
                   'region_lidar_max_age_s', 'region_lidar_tolerance_m', 'region_lidar_tolerance_ratio',
