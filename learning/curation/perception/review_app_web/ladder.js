@@ -129,8 +129,8 @@ $('ladder-start-form').addEventListener('submit',event=>{
   work(async()=>{
     await api('start',{episodes:Number($('ladder-episodes').value),eval_episodes:Number($('ladder-eval').value),
       steps:Number($('ladder-steps').value),lr:Number($('ladder-lr').value),parent:$('ladder-parent').value||null});
-    notice('ladder-notice','라운드를 시작했습니다. 새로고침하면 진행을 볼 수 있습니다.');
     await refresh();
+    notice('ladder-notice','라운드를 시작했습니다. 새로고침하면 진행을 볼 수 있습니다.');
   });
 });
 work(async()=>{
