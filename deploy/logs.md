@@ -4607,3 +4607,10 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: 모델 PC test-only985add1704에서 추가7건 RED/기존16pass, 수정721399d3e1에서 전체23pass/skip0/NEW0을 확인했다(env35327e86830df3ba/freeze906d7aca580f620b). 독립 검토 지적 없음이다. 실제 임시 symlink topology와 가짜 전원·서비스 경계만 사용했으며 실물 조작은 하지 않았다.
 - gate 변화: 없음 — 실제 USB 전원 복구·장치·현장 수용은 미확인이다.
 - CE: 기존 교훈 갱신 — `docs/solutions/runtime-errors/omx-camera-usb-reenumerated-no-frames-port-power-cycle-2026-11-05.md`의 초기 보호 범위를 정정했다. 물리 공유 전원 범위는 두 USB root에 걸치므로 현재 팔 잠금만으로 다른 팔을 보호할 수 없다. 문서 claim·frontmatter 검사 통과이며 일반 USB 용어는 CONCEPTS에 추가하지 않았다.
+
+## 2026-11-06 · uncommitted · fix(learning): UI별 수동 릴리스 고정 보호
+
+- 변경: 각 review root에 private manual hold와 영속 exclusive lock을 둔다. 자동 확인·설치와 수동 설치·보호 설정/해제를 직렬화하며 명시한 service와 hold ID가 일치할 때만 해제한다. 손상·symlink·권한 불일치 보호는 자동 전환을 거부하고, 설치 실패·rollback·timer 재시작은 보호를 지우지 않는다. 기존 설치/복구 본문은 보존하고 D446 accepted state·floor·다른 UI 설정은 변경하지 않는다.
+- 증거: initial e7cd05d22a의7RED/5pass, ec8d212421의 경합1RED, d927216133의 빈 ID1RED/나머지13pass를 확인했다. 빈 unhold 옵션이 설치로 들어가던 독립검토 P2를 수정한 ea7a904f30은 auto/installer/model-code 관련3파일261pass/skip0/NEW0이다(env35327e86830df3ba/freeze906d7aca580f620b). source와 원본 hash는 운영자 receipt에 결속한다. 최종 고정 head 독립검토와 정본 착지는 별도다.
+- gate 변화: 없음 — 실제 helper 설치·두 UI hold·다음 자연 timer 실행과 데이터 보존 수용은 미실행이다. 구형 helper 실행의 자연 종료와 새 helper의 보호 결과를 확인해야 UI를 전환하며, 전체 writer 중지·유휴·일관 백업은 계속 필요하다.
+- CE: 기존 교훈 갱신 — `docs/solutions/deployment/learning-center-upgrade-needs-the-identical-unit-first-2026-10-23.md`에 공유 floor와 UI별 보호의 차이 및 실제 installed helper 결속을 추가했다. frontmatter·mechanical claims0flags, 일반 잠금/고정 용어는 CONCEPTS에 추가하지 않았다. 실물·운영 수용으로 확대하지 않는다.

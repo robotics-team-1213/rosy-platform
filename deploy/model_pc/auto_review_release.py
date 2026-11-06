@@ -9,7 +9,8 @@ import sys
 import tempfile
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from install_review_release import APP, WEB, SERVICE, install, validate_service
+from install_review_release import (APP, WEB, SERVICE, _install_locked as install,
+                                    read_manual_hold, review_update_lock, validate_service)
 
 if os.name == "posix":
     import fcntl
@@ -28,6 +29,17 @@ def apply(model_root: Path, review_root: Path, state_dir: Path, python: Path,
 
 def apply_locked(model_root: Path, review_root: Path, state_dir: Path, python: Path,
                  host: str, port: int, unit: Path, minimum_sequence: int, service: str = SERVICE) -> str:
+    validate_service(service)
+    with review_update_lock(review_root) as review_root:
+        held = read_manual_hold(review_root, service)
+        if held is not None:
+            return f"manual hold: {service} {held['hold_id']}"
+        return _apply_locked(model_root, review_root, state_dir, python,
+                             host, port, unit, minimum_sequence, service)
+
+
+def _apply_locked(model_root: Path, review_root: Path, state_dir: Path, python: Path,
+                  host: str, port: int, unit: Path, minimum_sequence: int, service: str) -> str:
     validate_service(service)
     state = json.loads((model_root / "state.json").read_text(encoding="utf-8"))
     sequence = state["sequence"]
