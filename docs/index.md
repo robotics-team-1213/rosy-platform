@@ -357,4 +357,4 @@
 - 2026-11-07 · uncommitted · fix(omx): 두 팔 세계의 접촉 모델, 손목 간격 검증, rehandle 계획 교체
 - 2026-11-07 · uncommitted · feat(omx): 두 팔 셀 MuJoCo 세계, 작업 정의, 검증기와 교사
 - 2026-11-07 · fc074c6198 · feat(omx): OMX 학습 사다리 핵심
-- 2026-11-06 · 159e9eadf6 · refactor(learning): OMX-AI 전용으로 정리, SO-100 공개 학습 제거와 로봇 어댑터
+- 2026-11-07 · uncommitted · feat(sim): 공통 층 조 v2.1 옵션
