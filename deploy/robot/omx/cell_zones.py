@@ -41,9 +41,17 @@ class Zones:
         self.peer = config.get("zone_peer")
         self.params, self.calibration, self.clock, self.sleep = config.get("params"), calibration, clock, sleep
         self.dir = Path(lock_dir or Path.home() / "rosy-omx").expanduser().resolve()
-        self.incidents = Path(incidents or config.get("incidents_dir", "incidents"))
+        explicit = incidents or config.get("incidents_dir")  # None: omx_incident's hold directory
+        self.incidents = Path(explicit) if explicit else None
         self.held = {}  # lock name -> fd, all released on leave()
         self.owner, self.session_id = None, None
+
+    def _peer_held(self):
+        if self.incidents is not None:
+            return (self.incidents / f"HOLD-{self.peer}.json").exists()
+        import omx_incident
+
+        return omx_incident.hold_file(self.peer) is not None
 
     def bind(self, owner, session_id):
         if (not valid_owner(owner) or not isinstance(session_id, str)
@@ -99,7 +107,7 @@ class Zones:
         if zone is None:
             return False, f"no {self.site} map for this arm: its zone is unknown"
         if zone == "middle":
-            if self.peer and (self.incidents / f"HOLD-{self.peer}.json").exists():
+            if self.peer and self._peer_held():
                 return False, "peer HOLD: middle clearance unknown; recover the peer under guarded supervision first"
             return ((True, "middle") if self._claim("middle") else
                     (False, "the other arm holds the middle; its guarded owner must park before recovery"))

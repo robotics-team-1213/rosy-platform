@@ -48,20 +48,32 @@ def bits(code: int) -> list[str]:
     return [name for bit, name in HW_BITS.items() if code & bit]
 
 
-def hold_path(arm: str) -> Path:
+def incidents_dir() -> Path:
+    """The one place holds and the outbox live (under the cell's lock root, not the recording directory)."""
     from joint_tune import lock_root
 
-    return lock_root() / "incidents" / f"HOLD-{arm}.json"
+    return lock_root() / "incidents"
+
+
+def hold_path(arm: str) -> Path:
+    return incidents_dir() / f"HOLD-{arm}.json"
+
+
+def hold_file(arm: str) -> Path | None:
+    """The hold file of `arm` that exists: here, else one an older version left in the working directory."""
+    return next((p for p in (hold_path(arm), INCIDENTS / f"HOLD-{arm}.json") if p.is_file()), None)
 
 
 def outbox(arm: str) -> list[Path]:
-    return sorted((INCIDENTS / "outbox").glob(f"{arm}-*.json"))
+    """Unsent reports: this cell's outbox plus any an older version left in the working directory."""
+    return sorted(incidents_dir().joinpath("outbox").glob(f"{arm}-*.json")) + sorted(
+        (INCIDENTS / "outbox").glob(f"{arm}-*.json"))
 
 
 def held(arm: str) -> str | None:
     """Why the next session of `arm` must not start according to the local copy of the hold, or None."""
-    path = hold_path(arm)
-    return json.loads(path.read_text())["reason"] if path.is_file() else None
+    path = hold_file(arm)
+    return json.loads(path.read_text())["reason"] if path else None
 
 
 def keep_hold(arm: str, reason: str, incident_ids=(), source="local") -> None:
@@ -119,7 +131,8 @@ def refuse_if_held(arm: str | None, link=None) -> None:
         keep_hold(arm, answer.reason or "arm incident not cleared", answer.incident_ids, "fleet")
         raise SystemExit(f"{arm} held for a person: {answer.reason} (clear it in the Fleet console)")
     if answer is not None and sent:
-        hold_path(arm).unlink(missing_ok=True)  # only Fleet's "not held", with nothing unsent, lifts a hold
+        for gone in (hold_path(arm), INCIDENTS / f"HOLD-{arm}.json"):
+            gone.unlink(missing_ok=True)  # only Fleet's "not held", with nothing unsent, lifts a hold
         return
     reason = held(arm) or ("an incident report could not be sent to Fleet" if outbox(arm) else None)
     if reason:
@@ -259,8 +272,8 @@ def handle(session_path: Path, arm: str, act=None, decisions=Path("decisions.jso
             print(f"incident report not built: {type(exc).__name__}: {str(exc)[:120]}")
             report = None
         if report is not None:
-            (INCIDENTS / "outbox").mkdir(parents=True, exist_ok=True)
-            (INCIDENTS / "outbox" / f"{arm}-{sid}.json").write_text(report.model_dump_json())
+            (incidents_dir() / "outbox").mkdir(parents=True, exist_ok=True)
+            (incidents_dir() / "outbox" / f"{arm}-{sid}.json").write_text(report.model_dump_json())
             incident["reported"] = bool(link) and send(arm, link)
     (folder / "incident.json").write_text(json.dumps(incident, indent=1, default=str))
     return {"incident": True, "folder": str(folder), **incident}

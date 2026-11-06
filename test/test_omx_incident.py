@@ -289,3 +289,45 @@ def test_a_guard_stop_that_ended_the_session_is_an_incident(tmp_path, monkeypatc
             "fault": "session ended: ValueError: wrist_roll: following error >5 motor degrees"}
     out = oi.handle(session(tmp_path, latched=False, windup=False, status=[stop]), "arm_b")
     assert out["incident"] and out["decision"]["hold"] and "wrist_roll" in out["decision"]["reason"]
+
+
+def test_an_unsent_report_follows_the_arm_to_another_recording_directory(tmp_path, monkeypatch):
+    first, second = tmp_path / "first", tmp_path / "second"
+    first.mkdir()
+    second.mkdir()
+    monkeypatch.chdir(first)
+    link = Link()
+    link.down = True
+    oi.handle(session(first), "arm_b", link=link)
+    monkeypatch.chdir(second)
+    assert len(oi.outbox("arm_b")) == 1
+    link.down = False
+    with pytest.raises(SystemExit, match="held for a person"):
+        oi.refuse_if_held("arm_b", link)  # Fleet is told of the incident before it can answer "not held"
+    assert [r.session_id for r in link.posted] == [SID] and not oi.outbox("arm_b")
+
+
+def test_a_hold_and_an_outbox_left_in_the_working_directory_by_an_older_version_still_count(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "incidents/outbox").mkdir(parents=True)
+    (tmp_path / "incidents/HOLD-arm_b.json").write_text(json.dumps({"reason": "old hold"}))
+    old = tmp_path / "incidents/outbox/arm_b-old.json"
+    old.write_text("{}")
+    assert oi.held("arm_b") == "old hold" and oi.hold_file("arm_b") == Path("incidents/HOLD-arm_b.json")
+    assert old.resolve() in [p.resolve() for p in oi.outbox("arm_b")]
+    with pytest.raises(SystemExit, match="old hold"):
+        oi.refuse_if_held("arm_b")
+
+
+def test_hold_consumers_read_the_hold_where_the_incident_pipeline_writes_it(tmp_path, monkeypatch):
+    import cell_upkeep
+    import cell_zones
+
+    here = tmp_path / "elsewhere"
+    here.mkdir()
+    monkeypatch.chdir(here)
+    oi.keep_hold("arm_a", "elbow overload")
+    assert cell_upkeep.check_hold("arm_a")["status"] == "fail"
+    assert cell_upkeep.check_hold("arm_b")["status"] == "ok"
+    z = cell_zones.Zones({"zone_side": "left", "zone_peer": "arm_a", "zone_map_site": "pallet"}, {})
+    assert z.incidents is None and z._peer_held()
