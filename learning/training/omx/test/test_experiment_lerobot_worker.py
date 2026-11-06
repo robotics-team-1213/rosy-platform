@@ -104,16 +104,17 @@ def test_the_recipe_reaches_the_config_only_when_named_and_the_model_must_match(
     write_json(output/'source-request.json',tuned)
     for name in ('train-config.json','source-request.json'):
         result['evidence_files'][name] = hashlib.sha256((output/name).read_bytes()).hexdigest()
-    write_json(output/'result.json',result)
     model = output/'trainer/checkpoints/last/pretrained_model'
     config = json.loads((model/'config.json').read_text())
-    write_json(model/'config.json',dict(config,chunk_size=20,optimizer_lr=1e-3))
-    result['artifact_files'] = source.hashes(model)
-    with pytest.raises(ValueError,match='optimizer_lr'):
-        worker.check_result(output,result,tuned)
-    write_json(model/'config.json',dict(config,chunk_size=20,optimizer_lr=1e-4))
-    result['artifact_files'] = source.hashes(model)
-    worker.check_result(output,result,tuned)
+    for lr,accepted in ((1e-3,False),(1e-4,True)):
+        write_json(model/'config.json',dict(config,chunk_size=20,optimizer_lr=lr))
+        result['artifact_files'] = source.hashes(model)
+        write_json(output/'result.json',result)
+        if accepted:
+            assert worker.check_result(output,result,tuned) == result
+        else:
+            with pytest.raises(ValueError,match='optimizer_lr'):
+                worker.check_result(output,result,tuned)
 
 
 def test_closed_model_archive_redacts_host_paths_and_tracks_exported_hashes(tmp_path):
