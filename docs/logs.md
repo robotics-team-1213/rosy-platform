@@ -14301,3 +14301,10 @@ osy-d395-s1d\`.
 - 증거: source e8f0568a4a 원격 AI PC landing/GC/queue 기존226개와 선행 OMX38개, 총264통과·skip0·NEW/known/flaky0; scratch land-help-integration-green/run-1.txt. Git 없는 fixture의 실제 도움말 CLI와 mutation 경로 거절 회귀를 포함한다. 고정 source 독립 병합 검토 미해결 finding 없음.
 - gate 변화: SOURCE 통합 회귀 확인이다. 영향 선택 FULL은 유지하며 새 canonical 제출은 게시 담당의 조율을 기다린다. 실행 중인 관제·사건·metadata snapshot을 취소하거나 수정하지 않았다.
 - CE: 해당 없음 — 기존 도움말 수정·회귀가 원인과 재발 경계를 직접 보존하며 이번 변경은 정상 통합이다.
+
+## 2026-11-06 · uncommitted · test(tools): 최신 main 도움말 통합과 원자 티켓 fixture
+
+- 변경: main commit 54eb4097fe와 검증된 도움말·fixture commit 3f25978b30을 충돌 없이 병합했다. 도움말 제품 코드는 준비 commit 0966ab490e와 같다. 가짜 lander의 반복 티켓 쓰기만 정본 대기열처럼 같은 디렉터리의 임시 파일과 os.replace로 원자 발행한다. branch·PID·상태·중복 실행 단언과 시간 제한은 유지했다.
+- 증거: 앞선 통합 commit 3384fc6cb3의 원격 async/GC/queue 회귀는 110통과·NEW1이었다. 티켓 첫 관측 뒤 재조회에서 빈 목록을 읽어 IndexError가 발생했다. main commit cfb8b288d7의 단독 회귀는 1통과여서 main 재현으로 주장하지 않는다. fixture 수정 commit 3f25978b30과 최신 main 통합 commit 645e3d6699는 각각 같은 3파일 회귀가 AI PC에서 111통과·skip/NEW/known/flaky0이었다. 최신 로그는 land-help-canonical-main-20261106/run-1.txt이며 앞선 실패·baseline·수정 로그도 별도로 보존했다. 독립 병합 및 fixture 증분 검토에서 미해결 finding은 없었다.
+- gate 변화: SOURCE 관련 회귀이며 canonical FULL·게시·실물 수용은 별도다. 기존 운영 작업이나 착지 작업은 바꾸지 않았다.
+- CE: 해당 없음 — 정본 대기열 계약과 수정된 fixture가 원인 및 재발 경계를 직접 보존한다.

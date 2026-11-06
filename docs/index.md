@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
+- 2026-11-06 · uncommitted · test(tools): 최신 main 도움말 통합과 원자 티켓 fixture
 - 2026-11-06 · uncommitted · fix(tools): 보존된 도움말 수정을 현재 main과 통합
 - 2026-11-06 · uncommitted · fix(tools): 도움말 요청의 착지 snapshot 생성 차단
 - 2026-11-06 · uncommitted · fix(release): 큰 변경의 완전 inventory와 실제 소비자 분류
 - 2026-11-06 · uncommitted · feat(release): 단일 coordinator의 닫힌 OS engineering 게시
-- 2026-11-06 · uncommitted · fix(release): 자동 게시의 v2 번호와 SSH pin 경로를 보존
