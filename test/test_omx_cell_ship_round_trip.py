@@ -260,7 +260,7 @@ def test_the_jaw_axis_tool_refuses_without_a_person_and_hands_load_config_a_path
     with pytest.raises(SystemExit, match="D-911"):
         cell_jaw_axis.main(["--config", "x.json", "--site", "s", "--point", "0,0", "--yaw", "-40"])
     config = {"calibration_path": str(tmp_path / "cal.json"), "io": str(tmp_path), "cameras": {}, "work_dir": str(tmp_path), "sites": {}}
-    (tmp_path / "cal.json").write_text(json.dumps({"schema": "x", "sites": {}}))
+    (tmp_path / "cal.json").write_text(json.dumps({"schema": "rosy.omx-cell-calibration.v1", "sites": {}}))
     path = tmp_path / "cell.json"
     path.write_text("{}")
     monkeypatch.setattr(cell_auto_setup,
