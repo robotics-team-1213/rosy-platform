@@ -573,15 +573,15 @@ def main() -> None:
     protection.add_argument('--hold', action='store_true', help='hold automatic updates until explicitly released')
     protection.add_argument('--unhold', metavar='HOLD_ID', help='resume automatic updates for this exact hold ID')
     args = parser.parse_args()
-    if args.unhold and args.release:
+    if args.unhold is not None and args.release:
         parser.error('--unhold cannot install a release')
-    if not args.release and not (args.hold or args.unhold):
+    if not args.release and not (args.hold or args.unhold is not None):
         parser.error('release, --hold or --unhold is required')
     if args.release and (args.host is None or args.port is None):
         parser.error('installing a release requires --host and --port')
     unit = Path.home() / ".config/systemd/user" / args.service
     try:
-        if args.unhold:
+        if args.unhold is not None:
             unhold(args.root, args.service, args.unhold)
             print(f'automatic review updates enabled: {args.service}')
             return
