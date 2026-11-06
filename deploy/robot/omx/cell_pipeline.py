@@ -26,7 +26,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cell_calibration as cal  # noqa: E402
-from cell_pipeline_io import FifoCell, case, write_library, write_receipt  # noqa: E402
+from cell_pipeline_io import FifoCell, case, fold, write_library, write_receipt  # noqa: E402
 from cell_envelope import SEQUENCE  # noqa: E402
 import cell_choices  # noqa: E402
 from cell_observe import (  # noqa: E402
