@@ -63,8 +63,6 @@ roles:
     rosy-test-storage.timer: {run: timer, channel: copy, template: "rosy-ops:deploy/lab-host-storage/rosy-test-storage.timer", doc: "rosy-ops:docs/lab-host-storage.md"}
   ai:
     pinky-backend.service: {run: "off", channel: external, note: "Pinky stack from ~/.local/bin, outside this repository; stopped and disabled 2026-10-26 (user approval): its SQLite WAL wrote ~1.8 MB/s nonstop during test I/O contention", doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
-    pinky-rosbridge-d12.service: {run: "off", channel: external, doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
-    pinky-rosbridge-d13.service: {run: "off", channel: external, doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
     rosy-v13-ai-gpu-restore-20261106.service: {run: "off", channel: retired, note: "one approved GPU window, ended 2026-11-06", doc: docs/adr/D-958-lab-compute-ledger-one-admission-gpu-slot-pausable-services.md}
     rosy-v13-ai-gpu-restore-20261106.timer: {run: "off", channel: retired, doc: docs/adr/D-958-lab-compute-ledger-one-admission-gpu-slot-pausable-services.md}
     pinky-frontend.service: {run: active, channel: external, doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
