@@ -100,11 +100,11 @@ export function mount(root, ctx) {
   dock.addEventListener("click", () => {
     const id = select.value;
     if (!id) return;
-    run(dock, "/api/v1/docking/dock", {dock: id}, `${id} 도크로 주행할까요? 주변 안전을 확인하세요.`, `${id} 도킹 요청을 보내는 중입니다.`, `${id} 도킹 요청을 CORE가 받았습니다.`);
+    run(dock, "/api/v1/docking/dock", {dock: id}, `${id} 도크로 주행할까요? 주변 안전을 확인하세요.`, `${id} 도킹 요청을 보내는 중입니다.`, `${id} 도킹 요청을 로봇이 받았습니다.`);
   });
   select.addEventListener("change", enableActions);
-  undock.addEventListener("click", () => run(undock, "/api/v1/docking/undock", null, "언도크할까요?", "언도크 요청을 보내는 중입니다.", "언도크 요청을 CORE가 받았습니다."));
-  cancel.addEventListener("click", () => run(cancel, "/api/v1/docking/cancel", null, "도킹을 취소할까요?", "도킹 취소 요청을 보내는 중입니다.", "도킹 취소 요청을 CORE가 받았습니다."));
+  undock.addEventListener("click", () => run(undock, "/api/v1/docking/undock", null, "언도크할까요?", "언도크 요청을 보내는 중입니다.", "언도크 요청을 로봇이 받았습니다."));
+  cancel.addEventListener("click", () => run(cancel, "/api/v1/docking/cancel", null, "도킹을 취소할까요?", "도킹 취소 요청을 보내는 중입니다.", "도킹 취소 요청을 로봇이 받았습니다."));
   return {
     beforeHide() {
       if (pendingCommands > 0) return {message: "도킹 요청이 처리 중입니다. 상태 확인 뒤 조작 그룹을 바꾸세요."};
