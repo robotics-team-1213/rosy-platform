@@ -1,3 +1,4 @@
+import {confirmIrreversible} from '/common/ui.js';
 import {clearStorageSetup,loadStorageSetup,storageSetupDirty} from '/storage-settings.js';
 const $=id=>document.getElementById(id);
 const bytes=value=>value==null?'미확인':`${(value/1024**3).toLocaleString('ko-KR',{maximumFractionDigits:3})} GiB`;
@@ -19,7 +20,8 @@ export function clearStorage(){
 }
 export async function loadStorage(request){
   if(busy)return;
-  if(storageSetupDirty()&&!confirm('저장하지 않은 설정이 있습니다. 입력을 버리고 저장 현황을 다시 불러올까요?'))return;
+  if(storageSetupDirty()&&!await confirmIrreversible({message:'저장하지 않은 설정이 있습니다. 입력을 버리고 저장 현황을 다시 불러올까요?',action:'입력 버리기',opener:$('storage-refresh')}))return;
+  if(busy)return;
   send=request;busy=true;$('storage-refresh').disabled=true;$('storage-error').hidden=true;
   clearStorage();
   const current=epoch;

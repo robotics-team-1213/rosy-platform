@@ -475,3 +475,8 @@
 - 변경: 정상main병합의 producer/consumer·권한·사람정답·draft/generation보존, 편집중AI feedback과지연후보분리, await뒤편집상태재검사, 미저장preview의완료/shortcut차단을 후속검증문서에 결속했다. optionalG2는 시험capture hook3파일만56추가/1삭제하며제품변경0이다. 기존모든로그본문과153/203목록은 보존한다.
 - 증거: 실제merge RED의selector오류1개를제품회귀와분리했고 정정RED1→AI경합GREEN2, preview완료enabled RED1→guard보완을기록했다. commit 7893474ba454ef1a8f33a0ee13a18c30232cd338의browser385/backend408/Node8, source0111메뉴14·9route51소비처alias, commit 10d7133e66b44153b5e65cf4fa7e8205d3adc087의Pixel24는각별도근거다. Pixel은후보6/class Enter12/workspace2/resize2/opinion2이며0skip/NEW0·106원본을확인했다. 후보6개의overflow0·사람mask/version불변·완료disabled와viewport밖control한계를보존했고메뉴130+Pixel106의새236원본은재해시일치/경로중복0이다.
 - gate 변화: Pixel독립G3는실제10d새27PNG/106전수재해시/8기준PASS·새차단0이며실제canvas초점과geometry.focused를구분했다. 좁은control동시viewport가시성/scrollinteraction은미검증이다. 선행main3caa의공식39개NEW0·로컬착지와22raw skip/cache한계는별도다. UI최종G1·공식AUTO/FULL·main·실학습·모델승격·배포·실물/현장수용은대기다. CE: 해당 없음 — 실제코드·회귀·원본과 docs/validation/uiux-surfaces-2026-11-05/main-merge-followup.md로판단을재구성한다.
+
+## 2026-11-06 · uncommitted · uiux(learning): 파괴·대체 확인을 공용 확인 창으로
+- 변경: 객체(원본·모델 초안 적용)·픽셀(전체 채우기·남은 영역 채우기 3종·초안 적용·병합)·계정 연결 해제·저장 설정 다시 불러오기의 native confirm 8곳을 공용 confirmIrreversible(취소 기본 초점, 행동 이름 버튼)로 바꿨다. 문구·가드는 유지하고 평가 작업공간 가드와 busy는 확인 뒤 다시 본다. 픽셀 승인 사유(#pixel-approval-hint)를 완료 버튼 바로 아래로 옮겼다. 2026-11-06 UI/UX 전수 조사 P1.
+- 증거: 브라우저 시험의 native dialog 수락을 공용 확인 창 클릭 helper로 바꾸고, 명령 검색 경로에 취소 기본 초점·취소 시 version 0 단정을 추가했다. 원격 결과는 착지 기록을 따른다.
+- gate 변화: SOURCE 회귀. 실검수자 G3·배포 수용은 별도다. CE: 해당 없음 — 공용 부품 재사용이며 코드와 회귀가 판단을 보존한다.

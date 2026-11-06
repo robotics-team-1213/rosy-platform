@@ -41,6 +41,9 @@ let loggingOut = false;
 function showControls() {
   halt.hidden = !canOperate;
   halt.disabled = !canOperate;
+  // The Space shortcut only works with operate rights; say so instead of promising it.
+  document.getElementById('halt-hint').hidden = !canOperate;
+  document.getElementById('halt-denied').hidden = canOperate;
 }
 const session = createAccountSession({
   current: () => account,

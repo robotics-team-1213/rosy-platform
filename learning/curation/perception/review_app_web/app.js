@@ -3,7 +3,7 @@ import {reviewContext} from '/review-context.js';
 import {accountFetch} from '/account-session.js';
 import {showVersions,resetVersions} from '/versions.js';
 import {showAI,resetAI,updateAI,candidateOrigin} from '/ai-jobs.js';
-import { cssColor, canvasFont, clearPalette, actionIcon } from '/common/ui.js';
+import { cssColor, canvasFont, clearPalette, actionIcon, confirmIrreversible } from '/common/ui.js';
 import { drawnBox, dragBox, hitBox, boxHandles } from '/box-geometry.mjs';
 import { showHistory, resetHistory } from '/history.js';
 import {reviewViewport} from '/viewport.js';
@@ -386,12 +386,12 @@ function edit(change) {
 $('complete').onchange=enable;
 $('approve').onclick=()=> {if ($('complete').checked) mutate('approve',{complete_frame_review:true});};
 $('exclude').onclick=()=>mutate('exclude'); $('reopen').onclick=()=>mutate('reopen');
-$('candidates').onclick=()=> {if (window.confirm('현재 수정 라벨을 원본 초안으로 바꾸고 재검수하시겠습니까?')) mutate('candidates');};
+$('candidates').onclick=async()=> {if (await confirmIrreversible({message:'현재 수정 라벨을 원본 초안으로 바꾸고 재검수하시겠습니까?',action:'초안으로 바꾸기',opener:$('candidates')})) mutate('candidates');};
 $('source-preview').onclick=()=>{draftPreview=draftPreview==='source'?null:'source';draftStatus();paint();};
 $('model-preview').onclick=()=>{draftPreview=draftPreview==='model'?null:'model';draftStatus();paint();};
 $('model-draft-select').onchange=()=>{draftPreview='model';draftStatus();paint();};
-$('model-candidates').onclick=()=>{const draft=modelDrafts[Number($('model-draft-select').value)];
-  if(draft&&window.confirm(`현재 박스를 ${candidateOrigin(draft.origin)} 초안 ${draft.boxes.length}개로 바꾸고 재검수하시겠습니까?`))
+$('model-candidates').onclick=async()=>{const draft=modelDrafts[Number($('model-draft-select').value)];
+  if(draft&&await confirmIrreversible({message:`현재 박스를 ${candidateOrigin(draft.origin)} 초안 ${draft.boxes.length}개로 바꾸고 재검수하시겠습니까?`,action:'초안으로 바꾸기',opener:$('model-candidates')}))
     mutate('apply_object_draft',{draft_sha256:draft.sha256});};
 $('draw').onclick=()=> {drawing=!drawing; $('draw').setAttribute('aria-pressed',String(drawing));};
 $('add').onclick=()=>edit(boxes=>boxes.push({label:null,bbox_xyxy:[0,0,Math.min(40,frame.source.width),Math.min(40,frame.source.height)]}));

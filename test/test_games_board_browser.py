@@ -140,6 +140,7 @@ def test_account_login_scope_stop_and_revocation_in_real_browser(tmp_path):
             page.goto(origin)
             page.locator('#account-login').wait_for(state='visible')
             assert page.locator('#halt').is_hidden()
+            assert page.locator('#halt-hint').is_hidden() and page.locator('#halt-denied').is_visible()
             stop = "async () => (await fetch('/stop', {method:'POST'})).status"
             assert page.evaluate(stop) == 403 and not board.stop
             page.locator('#account-login').click()
@@ -155,6 +156,7 @@ def test_account_login_scope_stop_and_revocation_in_real_browser(tmp_path):
             state.update(active=True, operate=True)
             page.locator('#account-login').click()
             page.locator('#halt').wait_for(state='visible')
+            assert page.locator('#halt-hint').is_visible() and page.locator('#halt-denied').is_hidden()
             state['display_name'] = 'Updated Player'
             expect(page.locator('[data-account-profile]')).to_contain_text('Updated Player', timeout=15000)
             page.locator('#halt').click()
