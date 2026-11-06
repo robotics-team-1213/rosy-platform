@@ -56,7 +56,8 @@ export function createManualControl({scope, view, call, namedReason, confirmedAc
     if (!scope.capture().current() || document.hidden) return "화면을 다시 열고 상태를 확인하세요.";
     if (view.stateUnavailable) return "관제 상태를 확인할 수 없습니다.";
     if (!robot?.online) return "로봇 연결을 확인하세요.";
-    if (robot.state?.safety?.estop !== false) return "비상정지 상태를 확인하고 해제하세요.";
+    if (robot.state?.safety?.estop === true) return "비상정지 상태를 확인하고 해제하세요.";
+    if (robot.state?.safety?.estop !== false) return "정지 상태를 확인할 수 없습니다. 연결을 확인하세요.";
     if (view.dispatchControl?.dispatch_enabled !== true || !Number.isSafeInteger(view.dispatchControl.generation))
       return "관제 발행 상태를 확인하고 정지 래치를 해제하세요.";
     if (active && active.generation !== view.dispatchControl.generation) return "발행 상태가 바뀌어 조종을 중단했습니다.";

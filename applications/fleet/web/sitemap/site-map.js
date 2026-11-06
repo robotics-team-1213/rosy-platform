@@ -434,6 +434,8 @@ $('site-map-svg').addEventListener('click', event => {
   }
   const target = event.target.closest('[data-place], [data-edge], [data-crosswalk]');
   if (!target) return;
+  // The map is where the operator picks a destination; the list follows the click.
+  if (target.dataset.place && $('map-source').value === 'active') { $('trip-place').value = target.dataset.place; clearPlan(); }
   select(target.dataset.place ? {place: target.dataset.place}
     : target.dataset.crosswalk ? {crosswalk: target.dataset.crosswalk} : {edge: target.dataset.edge});
   syncButtons();
