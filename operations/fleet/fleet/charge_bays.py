@@ -21,6 +21,7 @@ LEAVE_PERCENT = 80.0
 AT_BAY_M = 0.08       # a robot this close to a charge place is in that bay
 RISE_V = 0.05         # filtered pack voltage rise that says the USB is connected
 RISE_WINDOW_S = 20.0
+LEAVE_CONFIRM_S = 3.0  # trusted poses outside every bay for this long end a visit (one stray pose does not)
 SETTLE_S = 30.0       # in a bay this long without a rise: the USB did not connect
 
 
@@ -54,13 +55,16 @@ class _Visit:
     connected_at: Optional[float] = None
     #: Since when nothing confirms where the robot is (offline, or no LOCALIZED pose); None while confirmed.
     lost_at: Optional[float] = None
-    blind_s: float = 0.0   # unobserved time, never counted as charging
+    blind_s: float = 0.0   # unobserved time after the connection, never counted as charging
+    away_since: Optional[float] = None   # first of the unbroken trusted poses outside every bay
 
 
 class ChargeBays:
     """Bay visits and the plan. ``rate_pct_per_min`` stays None until a charge is measured.
 
-    A visit ends only when the robot is seen outside every bay with a trusted pose (or in another bay).
+    A visit ends only when the robot is seen outside every bay with a trusted pose for ``LEAVE_CONFIRM_S``
+    (or in another bay). With a visit unknown to this process (a Fleet restart) the plan cannot say a
+    bay is free while any robot without a visit is offline or unlocated: those bays read ``unknown``.
     Losing the pose or the link keeps the visit and shows the bay ``unknown``, never ``free``: a dead
     robot may still be in it. Fleet has no operator clear for a stale visit yet (follow-up).
     """
@@ -79,17 +83,23 @@ class ChargeBays:
         for r in robots:
             visit = self._visits.get(r.robot_id)
             if not r.online or r.pose is None:   # no evidence of where it is: keep the visit, mark it unknown
-                if visit is not None and visit.lost_at is None:
-                    visit.lost_at = now
+                if visit is not None:
+                    visit.lost_at = now if visit.lost_at is None else visit.lost_at
+                    visit.away_since = None
                 continue
             bay = _bay_at(r.pose, bays)
             if bay is None:
-                self._visits.pop(r.robot_id, None)   # seen elsewhere with a trusted pose
+                if visit is not None:   # seen elsewhere with a trusted pose: it must stay there a moment
+                    visit.away_since = now if visit.away_since is None else visit.away_since
+                    if now - visit.away_since >= LEAVE_CONFIRM_S:
+                        del self._visits[r.robot_id]
                 continue
             if visit is None or visit.bay != bay.id:
                 visit = self._visits[r.robot_id] = _Visit(bay.id, now, r.percent, [])
+            visit.away_since = None
             if visit.lost_at is not None:
-                visit.blind_s += now - visit.lost_at
+                if visit.connected_at is not None:   # every blind spell with a connection lies after it
+                    visit.blind_s += now - visit.lost_at
                 visit.lost_at = None
             if r.voltage is not None and math.isfinite(r.voltage):
                 visit.volts = [(t, v) for t, v in visit.volts if now - t <= RISE_WINDOW_S] + [(now, r.voltage)]
@@ -99,6 +109,8 @@ class ChargeBays:
     def plan(self, robots: Iterable[RobotView], bays: list[Bay]) -> dict:
         robots = sorted(robots, key=lambda r: (r.percent is None, r.percent or 0.0, r.robot_id))
         held = {v.bay: rid for rid, v in self._visits.items()}
+        # a robot with no visit that is offline or unlocated may be sitting in any bay (e.g. after a restart)
+        blind = any(not r.online or r.pose is None for r in robots if r.robot_id not in self._visits)
         rows, actions = [], []
         for r in robots:
             visit = self._visits.get(r.robot_id)
@@ -112,15 +124,16 @@ class ChargeBays:
                 free = next((b.id for b in bays if b.id not in held), None)
                 if r.on_trip:
                     actions.append({"robot_id": r.robot_id, "action": "after_trip", "reason": "low_battery"})
-                elif free is None:
-                    actions.append({"robot_id": r.robot_id, "action": "wait", "reason": "no_free_bay"})
+                elif free is None or blind:
+                    actions.append({"robot_id": r.robot_id, "action": "wait",
+                                    "reason": "no_free_bay" if free is None else "bay_unknown"})
                 else:
                     held[free] = r.robot_id
                     actions.append({"robot_id": r.robot_id, "action": "go", "bay": free, "reason": "low_battery"})
         for b in bays:
             rid = held.get(b.id)
             visit = self._visits.get(rid) if rid else None
-            state = "free" if rid is None else ("planned" if visit is None else
+            state = ("unknown" if blind else "free") if rid is None else ("planned" if visit is None else
                                                  "unknown" if visit.lost_at is not None else
                                                  "charging" if visit.connected_at is not None else "arrived")
             rows.append({"bay": b.id, "x": b.x, "y": b.y, "state": state, "robot_id": rid})

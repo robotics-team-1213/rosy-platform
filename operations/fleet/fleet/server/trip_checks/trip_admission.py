@@ -77,6 +77,9 @@ def start_check(graph, segments: list, x: float, y: float, yaw, tol_deg: float) 
 
 #: CORE ``BatteryLevel`` values a start may see; critical, deep and anything unknown refuse.
 BATTERY_START_LEVELS = ("ok", "warning")
+#: Refusals that may be one missed read, and how many reads a start makes.
+BATTERY_TRANSIENT = ("unreadable", "evidence_old")
+BATTERY_TRIES = 3
 
 
 def cached_battery(state):
@@ -84,16 +87,17 @@ def cached_battery(state):
     <= 5 s old) and its age; None when there is no display or no good read (fail closed)."""
     async def read(robot_id: str):
         display = getattr(state, "power_health_display", None)  # installed with the console routes
-        health = await display.shown(robot_id, wait_s=2.0) if display is not None else None
+        health = await display.shown(robot_id, wait_s=2.0, await_pending=True) if display is not None else None
         return None if health is None else {"battery": health.get("battery"), "age_s": display.age(robot_id)}
     return read
 
 
-def battery_refusal(reading, *, charge_return: bool = False):
+def battery_refusal(reading):
     """Why a trip may not start on this battery reading, or None. ``reading``: ``{"battery", "age_s"}``, the
     CORE ``power_health`` battery block and the age of Fleet's cached copy. Fresh means what the console's
     ``powerHealthView`` means: evidence ``fresh`` and sample age + cache age within ``stale_after_s`` (cache
-    age at most 5 s). A charge-return start (the way to a charger) is not refused for a critical level."""
+    age at most 5 s). ``ok`` and ``warning`` pass; ``critical``, ``deep`` and unknown levels refuse. This
+    proves the evidence is fresh, not that the pack is charged (a charger's voltage reads 100 %)."""
     battery = (reading or {}).get("battery")
     age = (reading or {}).get("age_s")
     if not isinstance(battery, dict):
@@ -108,21 +112,30 @@ def battery_refusal(reading, *, charge_return: bool = False):
     percent = battery.get("percent")
     if not (num(percent) and 0 <= percent <= 100):
         return "percent_unreadable"
-    if battery.get("level") not in BATTERY_START_LEVELS and not charge_return:
+    if battery.get("level") not in BATTERY_START_LEVELS:
         return f"level_{battery.get('level')}"
     return None
 
 
 class TripAdmission:
     async def _check_battery(self, robot_id):
-        """A start needs fresh battery evidence at a non-critical level; else 422 TRIP_BATTERY_UNCONFIRMED."""
-        try:
-            reading = await self._call(self._battery(robot_id)) if self._battery is not None else None
-        except Exception:  # noqa: BLE001 - an unreadable battery is an unconfirmed one
-            reading = None
+        """A start needs fresh battery evidence at a non-critical level; else 422 TRIP_BATTERY_UNCONFIRMED.
+        A charge return (the way to a charger) is not checked: a robot with a dead ADC must still go and charge.
+        A momentary miss (``unreadable``, ``evidence_old``) is read again up to BATTERY_TRIES times, one period
+        apart, so a mission step does not HOLD a robot mid-mission on a single missed read; robot-reported
+        stale, missing or low evidence is final."""
         job = self.lease.jobs.get(robot_id)
-        why = ("no_source" if self._battery is None else battery_refusal(
-            reading, charge_return=job is not None and job.view.get("owner_kind") == "charge_session"))
+        if job is not None and job.view.get("owner_kind") == "charge_session":
+            return
+        for attempt in range(BATTERY_TRIES):
+            try:
+                reading = await self._call(self._battery(robot_id)) if self._battery is not None else None
+            except Exception:  # noqa: BLE001 - an unreadable battery is an unconfirmed one
+                reading = None
+            why = "no_source" if self._battery is None else battery_refusal(reading)
+            if why not in BATTERY_TRANSIENT or attempt == BATTERY_TRIES - 1:
+                break
+            await asyncio.sleep(self.config.period_s)
         if why is not None:
             raise TripError(422, "TRIP_BATTERY_UNCONFIRMED", {"reason": why})
 

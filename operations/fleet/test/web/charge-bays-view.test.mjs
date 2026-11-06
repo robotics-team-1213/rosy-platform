@@ -36,7 +36,14 @@ test('an estimate wins over the arrival percent, and unknown codes are shown as 
 test('a bay whose robot lost its pose reads as unknown, never as empty', () => {
   const rows = chargeBayRows({ bays: [{ bay: 'C1', state: 'unknown', robot_id: 'rosy_45' }],
     actions: [{ robot_id: 'rosy_45', action: 'stay', bay: 'C1', reason: 'pose_unknown' }] });
-  assert.equal(rows.bays[0].text, '위치 확인 불가 · 사용 중으로 봄 · rosy_45');
+  assert.equal(rows.bays[0].text, '확인 불가 · 비어 있다고 볼 수 없음 · rosy_45');
   assert.equal(rows.bays[0].status, 'warn');
-  assert.equal(rows.actions[0].text, '칸에 머무름 · 로봇 위치를 확인할 수 없음 · 직접 확인 필요');
+  assert.equal(rows.actions[0].text, '칸에 머무름 · 로봇 위치를 확인할 수 없음 · 칸을 직접 확인');
+});
+
+test('an empty bay that cannot be called free says so', () => {
+  const rows = chargeBayRows({ bays: [{ bay: 'C2', state: 'unknown', robot_id: null }],
+    actions: [{ robot_id: 'low', action: 'wait', reason: 'bay_unknown' }] });
+  assert.equal(rows.bays[0].text, '확인 불가 · 비어 있다고 볼 수 없음');
+  assert.match(rows.actions[0].text, /칸이 비었는지 확인 불가/);
 });

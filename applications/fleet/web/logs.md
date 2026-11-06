@@ -1056,3 +1056,8 @@
 - 변경: `trip-display.js`에 `TRIP_BATTERY_UNCONFIRMED` 한국어 문구, `charge-bays-view.js`에 칸 상태 `unknown`과 이유 `pose_unknown` 문구. node 시험 `charge-bays-view`·`trip-path`에 단언 추가.
 - 증거: node 단언 추가(문구 두 곳), 원격 실행 기록 참조.
 - gate 변화: 없음. 브라우저 시험 결과는 원격 실행 기록 참조.
+
+## 2026-11-07 · uncommitted · fix(fleet-ui): 칸 확인 불가 문구
+- 변경: 칸 상태 `unknown`은 "확인 불가 · 비어 있다고 볼 수 없음", 이유 `bay_unknown` 문구 추가.
+- 증거: node `charge-bays-view` 단언 추가, 원격 실행 기록 참조.
+- gate 변화: 없음.

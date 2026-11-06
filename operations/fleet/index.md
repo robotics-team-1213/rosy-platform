@@ -105,8 +105,8 @@
 
 ## 최근 기록
 
+- 2026-11-07 · uncommitted · fix(fleet): 독립 검토 반영 — 충전 복귀·재시도·읽기 대기·칸 dwell/unknown
 - 2026-11-07 · uncommitted · fix(fleet): 운행 시작 배터리 확인 · 충전 칸 점유 유지
 - 2026-11-06 · uncommitted · feat(fleet): 관제 수동 모드 전환
 - 2026-11-05 · uncommitted · test(fleet): 팔 승인 HTTP 계약 시험의 논리 시계 통일
 - 2026-11-05 · uncommitted · test(fleet): 지도 화면 전환 대기와 초기 모듈 로드 복구
-- 2026-11-03 · uncommitted · feat(fleet): D-971 OMX 팔 사건 원장·AI PC 설명·운영자 해제
