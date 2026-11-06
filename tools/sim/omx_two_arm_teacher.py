@@ -215,6 +215,7 @@ def main(argv=None):
     p.add_argument("task", choices=["stack", "rehandle"])
     p.add_argument("--out", default=".")
     p.add_argument("--video", action="store_true")
+    p.add_argument("--video-skip", type=int, default=1, help="write every Nth frame (a short version); the file is named TASK-short.mp4")
     p.add_argument("--seed", type=int, default=0, help="0 = nominal belt pose, else a seeded pose inside the infeed tolerance")
     p.add_argument("--cone", default="elliptic", choices=["elliptic", "pyramidal"], help="MuJoCo friction cone (sensitivity: resting boxes creep in yaw with elliptic)")
     p.add_argument("--drop-upper", type=float, default=tasks.RELEASE_DROP_UPPER, help="release height over a lower container, m")
@@ -240,12 +241,17 @@ def main(argv=None):
     writer = None
     if a.video:
         import av
-        container = av.open(str(out / f"{a.task}.mp4"), "w")
+        container = av.open(str(out / f"{a.task}{'-short' if a.video_skip > 1 else ''}.mp4"), "w")
         stream = container.add_stream("h264", rate=FPS)
         stream.width, stream.height, stream.pix_fmt = 1280, 480, "yuv420p"
         from PIL import Image, ImageDraw
 
+        count = [0]
+
         def writer(data, label):
+            count[0] += 1
+            if count[0] % a.video_skip:
+                return
             image = np.hstack([world.render(data, "top"), world.render(data, "overview")])
             frame = Image.fromarray(image)
             ImageDraw.Draw(frame).text((8, 8), f"{a.task} {label}", fill=(255, 255, 0))

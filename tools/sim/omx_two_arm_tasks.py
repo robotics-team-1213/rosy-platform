@@ -20,7 +20,7 @@ HOLD_BELOW_TCP = .00201  # the held container centre sits 2.01 mm under the TCP 
 CARRY_CLEAR = .035       # container bottom clears the highest seated container by 5 mm: centre 30 mm up plus 5
 ARM_RADIUS, ARM_MARGIN = .03, .005  # capsule stand-in for a link; MuJoCo contacts are the real check
 RELEASE_DROP = .005     # fixture stack_release_clearance_m; layer 0 rests on studs (floor enforced) and the temp lanes have a funnel
-RELEASE_DROP_UPPER = .001  # onto a container: measured 5 mm gave 3.2 deg of yaw, 2 mm 1.0 deg, 1 mm placed s1 to s6 (teacher sensitivity)
+RELEASE_DROP_UPPER = RELEASE_DROP  # onto a container too (a lower drop was only needed while single-contact deck meshes made boxes creep; see omx_two_arm_world)
 LINK_MARGIN = .004      # link3 and link4 (the wrist) must clear every standing container by this much; MuJoCo: failures sat at -3 to -6 mm, passes at +8 mm or more
 CAPACITY = 3             # lanes per temporary plate (3 x 1 each)
 
