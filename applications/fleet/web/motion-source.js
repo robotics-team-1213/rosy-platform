@@ -4,7 +4,7 @@
 import { staleAgeS } from "./state-age.js";
 
 const MOVING_LINEAR_MS = 0.01, MOVING_ANGULAR_RS = 0.02;
-const LAB = { unknown: "이동 출처 확인 불가", idle: "정지 · 대기" };
+const LAB = { unknown: "출처 확인 불가", idle: "정지 · 대기" };
 
 /** True/false when CORE's fresh velocity says so; null when not provable (no state, stale, or evidence not fresh). */
 export function movingNow(state, stale) {
@@ -39,7 +39,7 @@ export function motionSource(robot, view, nowMs = Date.now()) {
     return make("dock", dock === "DOCKING" ? "도킹 동작 (충전 복귀)" : "도크에서 나오는 중", "nav", "CORE 도킹 상태");
   if (state.swarm?.active) return make("formation", "대형 주행", "nav", "CORE 군집 상태가 켜져 있습니다");
   if (robot.goal) return make("fleet_goal", "관제 목표 이동", "nav", "Fleet이 낸 목표가 살아 있습니다");
-  if (moving === null) return make("unknown", `${LAB.unknown} · 속도 근거 없음`, "warn", "신선한 속도 근거가 없어 움직임을 판단할 수 없습니다");
+  if (moving === null) return make("unknown", LAB.unknown, "warn", "신선한 속도 근거가 없어 움직임을 판단할 수 없습니다");
   const lane = state.line_follow?.mode;
   const laneOn = lane === "CAMERA_LINE" || lane === "IR_LINE";
   if (state.mode === "MANUAL")

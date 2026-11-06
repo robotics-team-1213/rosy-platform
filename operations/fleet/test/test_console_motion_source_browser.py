@@ -50,7 +50,7 @@ def test_card_names_the_motion_source_and_flags_the_unowned_mover(site):  # noqa
             expect(chip("rosy_07")).to_have_text("정지 · 대기")
             expect(chip("rosy_03")).to_have_text("원인 불명 이동")
             expect(chip("rosy_04")).to_have_text("수동 모드 · 조종 주체 확인 불가")
-            expect(chip("rosy_05")).to_contain_text("이동 출처 확인 불가 · 상태")
+            expect(chip("rosy_05")).to_contain_text("출처 확인 불가 · 상태")
             expect(chip("rosy_05")).to_contain_text("초 전 값")
             expect(chip("rosy_06")).to_have_text("도킹 동작 (충전 복귀)")
             summary = lambda rid: page.locator(f'article.robot-summary[data-robot-id="{rid}"]')  # noqa: E731
