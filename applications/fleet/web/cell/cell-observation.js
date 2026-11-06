@@ -316,8 +316,12 @@ export function createCellObservation({request, root, credential = () => ''}) {
         }
         for (const entry of cameras.values()) if (performance.now() >= entry.expires) staleCamera(entry);
       }, 100);
-      life.onDispose(() => { clearInterval(poll); clearInterval(expiry); });
+      // a background tab stops pulling observations and JPEGs; showing it again refreshes at once
+      const wake = () => { if (!document.hidden) void refresh(); };
+      document.addEventListener('visibilitychange', wake);
+      life.onDispose(() => { clearInterval(poll); clearInterval(expiry); document.removeEventListener('visibilitychange', wake); });
     }
+    if (document.hidden) return;
     const scope = life;
     pending = true;
     const observedAt = performance.now();

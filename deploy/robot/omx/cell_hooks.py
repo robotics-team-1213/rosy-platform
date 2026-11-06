@@ -24,7 +24,8 @@ import cell_wrist
 import cell_wrist_ref
 
 
-def pick_hooks(config: dict, cell, target: dict, write_library, source: str, dest_site: str, emit=None, calibration=None):
+def pick_hooks(config: dict, cell, target: dict, write_library, source: str, dest_site: str, emit=None, calibration=None,
+               guard=None):
     """(hover hook chain, after-place reference capture, after-descent pinch check, empty-grasp feel search) for one
     pick; None where off.
     `config` carries the pick's own plan values (jaw opening): the gap between the open pads comes from it."""
@@ -35,7 +36,7 @@ def pick_hooks(config: dict, cell, target: dict, write_library, source: str, des
              cell_fingers.finger_hook(config, cell, target, write_library, gap),
              cell_wrist.hook(config, cell, target, write_library, emit)]
     # a look with no room to open the jaws is skipped only when one of these still measures the position
-    wrist = cell_reach.chain(cell_reach.hook(config, cell, target, write_library),
+    wrist = cell_reach.chain(guard, cell_reach.hook(config, cell, target, write_library),
                              cell_look.hook(config, cell, target, write_library, calibration, source,
                                             fallback=any(h is not None for h in later)), *later)
     capture = None

@@ -10,6 +10,10 @@ from fleet.hub.hub import SiteHub
 
 logger = logging.getLogger("hub.server")
 
+# The agent sends HELLO as soon as the socket opens; a socket that says nothing is
+# not a robot and must not hold a session open until TCP gives up.
+HELLO_TIMEOUT_S = 10.0
+
 
 def fan_out_events(project, wake: Optional[asyncio.Event]):
     """Keep task projection results and wake the resolver on lane-stuck events."""
@@ -34,7 +38,8 @@ async def send_reply(websocket, reply: Envelope) -> bool:
 
 
 def install_hub_routes(app: FastAPI, hub: SiteHub,
-                       hub_token: Optional[str] = None) -> FastAPI:
+                       hub_token: Optional[str] = None,
+                       hello_timeout_s: float = HELLO_TIMEOUT_S) -> FastAPI:
     """기존 사이트 FastAPI 앱에 Hub의 registry와 CORE Agent 경로를 붙인다.
 
     `/registry`는 console Bearer token을 공유한다. `/ws/robots`는 연결 후
@@ -57,9 +62,19 @@ def install_hub_routes(app: FastAPI, hub: SiteHub,
         async def send(reply: Envelope) -> bool:
             return await send_reply(websocket, reply)
 
+        first = True
         try:
             while True:
-                text = await websocket.receive_text()
+                if first:
+                    try:
+                        text = await asyncio.wait_for(websocket.receive_text(), hello_timeout_s)
+                    except asyncio.TimeoutError:
+                        logger.warning("robot socket sent nothing for %.0f s; closing", hello_timeout_s)
+                        await websocket.close(code=4408)
+                        break
+                    first = False
+                else:
+                    text = await websocket.receive_text()
                 try:
                     payload = json.loads(text)
                     env = Envelope.model_validate(payload)

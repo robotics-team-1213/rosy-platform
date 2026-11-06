@@ -152,6 +152,26 @@ python3 ~/rosy-ml/bin/install_review_release.py <release-id> \
 
 같은 DNS 이름의 서로 다른 HTTPS 포트에서 중앙 Account 프로젝트를 열 수 있다. 세션·Account PKCE·HF OAuth 쿠키는 신뢰 설정의 프로젝트와 공개 origin별 이름을 쓴다. 기존 고정 이름의 중앙 앱 쿠키는 읽지 않으므로 전환 후 한 번 다시 로그인한다. 중앙 Account를 사용하지 않는 기존 모드는 쿠키 이름을 유지한다. 상세 계약은 [Account protocol](../../docs/reference/rosy-account-protocol.md#앱-수신-세션)을 따른다.
 
+### 수동 릴리스의 UI별 자동 전환 고정
+
+수동 UI를 명시 해제 전까지 유지하려면 같은 검토된 공개 commit의 `auto_review_release.py`와 `install_review_release.py`를 함께 설치하고, 해당 UI root에 보호를 설정한다. 구형 auto helper는 보호 파일을 읽지 않는다. 이 명령은 UI나 DB를 전환하지 않으며 출력한 hold ID를 운영 기록에 보관한다.
+
+```bash
+python3 ~/rosy-ml/bin/install_review_release.py \
+  --root <review-root> --service <review-service> --hold
+```
+
+이후 수동 설치 명령에도 `--hold`를 붙일 수 있다. 같은 보호가 있으면 ID를 유지한다. `manual-hold.json`과 `review-update.lock`은 root의 `releases/` 밖에 남으며, 자동 설치·수동 설치·보호 설정/해제가 같은 UI별 잠금을 사용한다. 손상되거나 권한·service가 맞지 않는 보호 파일은 자동 전환을 거부한다. 설치 실패·복구·타이머 재시작도 보호를 해제하지 않는다. 다른 UI root와 D-446 accepted state·sequence floor는 변경하지 않는다.
+
+명시적으로 자동 전환을 다시 허용할 때만 정확한 root·service·hold ID로 해제한다. 다음 타이머 실행부터 기존 accepted release가 다시 활성화될 수 있다.
+
+```bash
+python3 ~/rosy-ml/bin/install_review_release.py \
+  --root <review-root> --service <review-service> --unhold <hold-id>
+```
+
+보호는 새 AI·학습·내보내기·사람 편집 요청을 막지 않는다. 실제 수동 전환 전에는 모든 writer의 새 요청을 멈추고 기존 작업의 자연 종료·일관 백업을 확인한다. 설치 후에는 두 helper의 실제 파일 hash와 다음 updater 실행의 `manual hold:` 결과, `current` 유지, 다른 UI·원래 타이머 설정의 보존을 따로 검증한다.
+
 ## 학습 센터 자동 업데이트 (D-871)
 
 `install_learning_center.py`로 설치한 `rosy-learning-center.service`(모델 PC 8769, AI PC 8770)를 30분마다 확인한다. 바뀌는 조건은 세 가지다. CI를 통과한 main이어야 하고, 센터가 켜져 있어야 하며, 센터 작업이 없어야 한다. 이때 [2026-10-23 절차](../../docs/solutions/deployment/learning-center-upgrade-needs-the-identical-unit-first-2026-10-23.md)를 `rosy-learning-center-update.timer`가 그대로 수행한다.

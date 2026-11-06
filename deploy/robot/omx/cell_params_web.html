@@ -1,0 +1,290 @@
+<!doctype html>
+<html lang="ko">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>셀 파라미터</title>
+<style>
+:root {
+  color-scheme: dark;
+  --ground: #111113; --raise: #18191b; --soft: #212225; --card: #272a2d;
+  --ink: #eeeeef; --quiet: #b0b4ba; --line: #43484e;
+  --crit: #b54548; --warn: #ffc53d; --good: #3dd68c; --focus: #58a6ff;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI", Roboto, "Malgun Gothic", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  --mono: ui-monospace, "SF Mono", "Cascadia Mono", Consolas, "Roboto Mono", "DejaVu Sans Mono", "Noto Sans Mono", monospace;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--ground); color: var(--ink); font: 500 1rem/1.4 var(--sans); padding-bottom: 9rem; }
+header { position: sticky; top: 0; z-index: 2; background: var(--ground); border-bottom: 1px solid var(--line); padding: .75rem 1rem; }
+h1 { font-size: 1.25rem; font-weight: 700; margin: 0; }
+.bar { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .75rem; margin-top: .5rem; }
+.title { display: flex; flex-wrap: wrap; align-items: baseline; gap: .25rem .75rem; }
+.quiet { color: var(--quiet); font-size: .875rem; }
+#sha { min-width: 0; overflow-wrap: anywhere; }
+.mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+input, select, button { font: inherit; color: var(--ink); min-height: 44px; }
+input[type=search], select, input[type=text] { background: var(--raise); border: 1px solid var(--line); border-radius: 6px; padding: 0 .625rem; }
+input[type=search] { flex: 1 1 12rem; min-width: 0; }
+label.check { display: inline-flex; align-items: center; gap: .375rem; min-height: 44px; font-size: .875rem; }
+label.check input { width: 1.125rem; height: 1.125rem; min-height: 0; accent-color: var(--focus); }
+button { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 0 .875rem; cursor: pointer; }
+button:hover:not(:disabled) { background: var(--soft); }
+button:disabled { cursor: not-allowed; color: var(--quiet); border-style: dashed; }
+button.primary:not(:disabled) { background: var(--focus); border-color: var(--focus); color: #0c0d0f; font-weight: 700; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+main { padding: .5rem 1rem; max-width: 76rem; margin: 0 auto; }
+.banner { margin: .5rem 0 0; padding: .5rem .75rem; border-radius: 6px; border: 1px solid var(--warn); color: var(--warn); }
+.banner.error { border-color: var(--crit); color: var(--ink); background: var(--crit); }
+details.group { border-bottom: 1px solid var(--line); }
+details.group > summary { display: flex; align-items: center; gap: .625rem; min-height: 48px; cursor: pointer; font-weight: 700; }
+details.group > summary .tag { font-weight: 600; font-size: .8125rem; color: var(--quiet); }
+.dirty-count { color: var(--warn); }
+.row { display: grid; grid-template-columns: minmax(12rem, 1.3fr) 13rem 8rem minmax(0, 2fr); gap: .25rem .875rem; align-items: center; padding: .375rem 0; border-top: 1px solid var(--soft); }
+.row .name { font-family: var(--mono); font-size: .9375rem; overflow-wrap: anywhere; }
+.row.dirty .name::before { content: "● "; color: var(--warn); }
+.row .note { font-size: .8125rem; color: var(--quiet); overflow-wrap: anywhere; }
+.stepper { display: grid; grid-template-columns: 44px 1fr 44px; gap: 2px; }
+.stepper button { padding: 0; font-size: 1.25rem; }
+.stepper input { width: 100%; min-width: 0; text-align: center; background: var(--raise); border: 1px solid var(--line); border-radius: 6px; font-family: var(--mono); font-variant-numeric: tabular-nums; font-weight: 650; }
+.stepper input:invalid { border-color: var(--crit); }
+.stepper input[type=number] { -moz-appearance: textfield; appearance: textfield; }
+.stepper input::-webkit-inner-spin-button { display: none; }
+.fixed { font-family: var(--mono); font-weight: 650; }
+.lock { font-size: .8125rem; color: var(--quiet); }
+.range { position: relative; height: 4px; background: var(--card); border-radius: 2px; margin-top: .375rem; }
+.range i { position: absolute; top: -3px; width: 2px; height: 10px; background: var(--quiet); }
+.range b { position: absolute; top: -4px; width: 4px; height: 12px; margin-left: -1px; border-radius: 1px; background: var(--focus); }
+.badge { display: inline-block; padding: 0 .375rem; border: 1px solid var(--line); border-radius: 4px; font-size: .75rem; color: var(--quiet); margin-right: .375rem; }
+.badge.measured { color: var(--good); border-color: var(--good); }
+.footer { position: fixed; inset: auto 0 0 0; z-index: 2; background: var(--raise); border-top: 1px solid var(--line); padding: .625rem 1rem; }
+.footer .inner { max-width: 76rem; margin: 0 auto; }
+.footer input[type=text] { flex: 1 1 14rem; min-width: 0; }
+.diff { margin: 0 0 .5rem; padding: 0; list-style: none; max-height: 8rem; overflow: auto; font-family: var(--mono); font-size: .875rem; }
+.history { margin-top: 1rem; }
+.servo-wrap { overflow-x: auto; margin-bottom: 1rem; }
+.servo { border-collapse: collapse; font-size: .875rem; }
+.servo caption { text-align: left; font-weight: 700; padding: .25rem 0; overflow-wrap: anywhere; }
+.servo th, .servo td { border-bottom: 1px solid var(--line); padding: .375rem .625rem; text-align: left; vertical-align: top; white-space: nowrap; }
+.servo td small { display: block; color: var(--quiet); }
+.history li { margin-bottom: .25rem; font-size: .875rem; color: var(--quiet); overflow-wrap: anywhere; }
+@media (max-width: 760px) {
+  .row { grid-template-columns: 1fr; padding: .625rem 0; }
+  .stepper { max-width: 18rem; }
+  .help { display: none; }
+}
+</style>
+<header>
+  <div class="title"><h1>셀 파라미터</h1><span id="sha" class="quiet mono"></span></div>
+  <div class="bar">
+    <select id="file" aria-label="값 파일"></select>
+    <input id="search" type="search" placeholder="이름·근거 검색" aria-label="검색">
+    <label class="check"><input id="only-changed" type="checkbox">바꾼 값만</label>
+    <label class="check"><input id="only-custom" type="checkbox">기본값과 다른 값만</label>
+    <label class="check"><input id="hide-locked" type="checkbox">잠긴 값 숨기기</label>
+  </div>
+  <p id="banner" class="banner" hidden role="status"></p>
+</header>
+<main id="groups"></main>
+<main id="servo-box" hidden><details class="history" id="servo-details" open><summary>서보 값 (읽기 전용)</summary>
+  <p class="quiet">record_session 기준. 모델 → 현장 caps → 로봇 프로필 순서로 덮어쓰며, 표시는 마지막으로 정한 층입니다. 로봇 층은 세션에 --operating-profile을 줄 때만 적용됩니다. 지금 파일 내용이므로 이미 실행 중인 세션이 읽은 값과 다를 수 있습니다. 값은 해당 파일에서 고칩니다.</p>
+  <div id="servo"></div></details></main>
+<main><details class="history"><summary>최근 저장 기록</summary><ul id="history"></ul></details></main>
+<div class="footer">
+  <div class="inner">
+    <ul id="diff" class="diff" aria-label="바뀐 값"></ul>
+    <div class="bar" style="margin-top:0">
+      <span id="count" class="quiet" role="status"></span>
+      <input id="note" type="text" maxlength="300" placeholder="변경 근거 (예: 11-06 바닥 그림자로 물체가 합쳐짐)" aria-label="변경 근거">
+      <button id="revert" type="button">되돌리기</button>
+      <button id="save" type="button" class="primary">저장</button>
+    </div>
+    <p class="quiet help" style="margin:.25rem 0 0">저장한 값은 다음 실행부터 적용됩니다. 값 옆의 파란 표시는 지금 값, 회색 표시는 기본값입니다. Shift를 누르고 −/＋를 누르면 10칸씩 움직입니다.</p>
+  </div>
+</div>
+<script>
+const GROUPS = {objects: '물체 인식', track: '물체 추적', preflight: '시작 전 점검', pivot: '위치 보정(피벗)', look: '위 카메라 정렬', wrist: '손목 카메라 정렬', pinch: '집기 전 확인', reach: '접근 보정', diagnose: '실패 진단', auto: '자동 집기', runner: '실행기', safety: '안전', windup: '끼임·과부하', upkeep: '유지 점검', jitter: '떨림 감지', loadcheck: '하중 예측', corridor: '두 팔 통로', zone: '구역', push: '밀기', place: '내려놓기', feel: '더듬기', align: '정렬 여유', calibrate: '보정 점검', gripper: '집게', grasp: '집기', scale: '저울'};
+const SOURCES = {measured: '측정', taught: '교시', theory: '이론', tuned: '튜닝', default: '기본'};
+const $ = id => document.getElementById(id);
+let data = null, current = null, draft = {}, open = new Set(), saving = false;
+
+function el(tag, props = {}, ...children) {
+  const node = Object.assign(document.createElement(tag), props);
+  node.append(...children);
+  return node;
+}
+// One press is about 5 % of the value (1 % of the range at zero), on a 1-2-5 grid: 150 px moves by 10, 0.8 by 0.05.
+function stepOf(row, value) {
+  const raw = Math.abs(value) * 0.05 || (row.high - row.low) * 0.01;
+  const size = 10 ** Math.floor(Math.log10(raw)), ratio = raw / size;
+  const step = (ratio < 1.5 ? 1 : ratio < 3.5 ? 2 : ratio < 7.5 ? 5 : 10) * size;
+  return row.integer ? Math.max(1, Math.round(step)) : step;
+}
+function decimals(step) { return step >= 1 ? 0 : Math.ceil(-Math.log10(step) - 1e-9); }
+function valueOf(row) { return row.name in draft ? draft[row.name] : row.value; }
+function valid(row, value) {
+  return Number.isFinite(value) && value >= row.low && value <= row.high && (!row.integer || Number.isInteger(value));
+}
+function setValue(row, value) {
+  if (value === row.value) delete draft[row.name]; else draft[row.name] = value;
+  refreshFooter();
+}
+function bump(row, direction, big) {
+  const base = valueOf(row), unit = stepOf(row, base), step = unit * (big ? 10 : 1);
+  const places = Math.max(decimals(unit), (String(base).split('.')[1] || '').length);
+  const next = Number(Math.min(row.high, Math.max(row.low, base + direction * step)).toFixed(places));
+  setValue(row, next);
+  render();
+  document.querySelector(`[data-step="${row.name}:${direction}"]`)?.focus();
+}
+function percent(row, value) { return ((value - row.low) / (row.high - row.low) * 100).toFixed(1) + '%'; }
+function rowNode(row) {
+  const value = valueOf(row), dirty = row.name in draft;
+  const name = el('div', {className: 'name', textContent: row.name});
+  let control;
+  if (row.locked) {
+    control = el('div', {}, el('span', {className: 'fixed', textContent: String(row.value)}), el('div', {className: 'lock', textContent: '잠김 · ' + row.locked}));
+  } else {
+    const input = el('input', {type: 'number', value: String(value), min: row.low, max: row.high, step: 'any', required: true, inputMode: 'decimal'});
+    input.setAttribute('aria-label', row.name + ' 값');
+    input.onchange = () => {
+      const parsed = Number(input.value);
+      if (input.value !== '' && valid(row, parsed)) { setValue(row, parsed); render(); }
+      else { input.setCustomValidity(`${row.low}~${row.high} 범위의 ${row.integer ? '정수' : '숫자'}만 넣을 수 있습니다.`); input.reportValidity(); input.setCustomValidity(''); input.value = String(valueOf(row)); }
+    };
+    const minus = el('button', {type: 'button', textContent: '−', disabled: value <= row.low, onclick: e => bump(row, -1, e.shiftKey)});
+    const plus = el('button', {type: 'button', textContent: '＋', disabled: value >= row.high, onclick: e => bump(row, 1, e.shiftKey)});
+    minus.setAttribute('aria-label', row.name + ' 줄이기'); plus.setAttribute('aria-label', row.name + ' 늘리기');
+    minus.dataset.step = row.name + ':-1'; plus.dataset.step = row.name + ':1';
+    control = el('div', {className: 'stepper'}, minus, input, plus);
+  }
+  const scale = el('div', {className: 'range'}, el('i', {style: `left:${percent(row, row.default)}`}), el('b', {style: `left:${percent(row, value)}`}));
+  const limits = el('div', {}, el('div', {className: 'quiet mono', textContent: `${row.low}~${row.high} ${row.unit}`}), scale);
+  const badge = el('span', {className: 'badge ' + row.source, textContent: SOURCES[row.source] || row.source});
+  const note = el('div', {className: 'note'}, badge, row.value !== row.default ? `기본 ${row.default} · ` : '', row.evidence || '파일에 없음, 기본값 사용');
+  return el('div', {className: 'row' + (dirty ? ' dirty' : '')}, name, control, limits, note);
+}
+function matches(row) {
+  const word = $('search').value.trim().toLowerCase();
+  if (word && !`${row.name} ${row.evidence} ${GROUPS[row.group] || ''}`.toLowerCase().includes(word)) return false;
+  if ($('only-changed').checked && !(row.name in draft)) return false;
+  if ($('only-custom').checked && row.value === row.default && !(row.name in draft)) return false;
+  return !($('hide-locked').checked && row.locked);
+}
+function render() {
+  if (!current || current.error) { $('groups').replaceChildren(); refreshFooter(); return; }
+  const filtered = $('search').value.trim() || $('only-changed').checked || $('only-custom').checked;
+  const by = new Map();
+  for (const row of current.rows) by.set(row.group, [...(by.get(row.group) || []), row]);
+  // editable groups first: the ones a person came here to change
+  const order = [...by].sort(([, a], [, b]) => a.every(r => r.locked) - b.every(r => r.locked));
+  const nodes = [];
+  for (const [group, rows] of order) {
+    const shown = rows.filter(matches);
+    if (!shown.length) continue;
+    const dirty = rows.filter(r => r.name in draft).length, editable = rows.filter(r => !r.locked).length;
+    const summary = el('summary', {}, GROUPS[group] || group, el('span', {className: 'tag mono', textContent: group}),
+      el('span', {className: 'tag', textContent: editable ? `${rows.length}개 중 ${editable}개 조절` : `${rows.length}개 잠김`}),
+      dirty ? el('span', {className: 'tag dirty-count', textContent: `바꿈 ${dirty}`}) : '');
+    const box = el('details', {className: 'group', open: filtered || open.has(group) || dirty > 0}, summary, ...shown.map(rowNode));
+    if (!filtered) box.ontoggle = () => { if (box.open) open.add(group); else open.delete(group); };
+    nodes.push(box);
+  }
+  $('groups').replaceChildren(...nodes);
+  if (!nodes.length) $('groups').append(el('p', {className: 'quiet', textContent: '조건에 맞는 값이 없습니다.'}));
+  refreshFooter();
+}
+function refreshFooter() {
+  const names = Object.keys(draft);
+  $('diff').replaceChildren(...names.map(name => {
+    const row = current.rows.find(r => r.name === name);
+    return el('li', {textContent: `${name}  ${row.value} → ${draft[name]} ${row.unit}`});
+  }));
+  const blocked = saving ? '저장 중' : data?.busy ? '세션 실행 중이라 저장할 수 없음' : !names.length ? '' : !$('note').value.trim() ? '근거를 적어야 저장할 수 있음' : '';
+  $('count').textContent = (names.length ? `바뀐 값 ${names.length}개` : '바뀐 값 없음') + (blocked ? ` · ${blocked}` : '');
+  $('save').disabled = !names.length || Boolean(blocked);
+  $('revert').disabled = !names.length || saving;
+  document.body.style.paddingBottom = document.querySelector('.footer').offsetHeight + 16 + 'px';
+}
+function banner(text, error) {
+  $('banner').hidden = !text; $('banner').textContent = text || ''; $('banner').classList.toggle('error', Boolean(error));
+}
+function showFile() {
+  const files = data.files;
+  current = files.find(f => f.name === $('file').value) || files[0];
+  $('file').value = current.name;
+  $('sha').textContent = current.error ? '' : `${current.path} · params_sha ${current.params_sha}`;
+  $('history').replaceChildren(...(current.history || []).map(row => el('li', {textContent: `${row.at} ${row.before_sha} → ${row.after_sha}: ${row.changes.map(c => `${c.name} ${c.from}→${c.to}`).join(', ')} (${row.note})`})));
+  if (!current.history?.length) $('history').append(el('li', {textContent: '화면에서 저장한 기록이 없습니다.'}));
+  if (current.error) banner(current.error, true); else statusBanner();
+  render();
+}
+function statusBanner() { banner(data.busy ? '세션이 실행 중입니다. 값은 볼 수 있지만, 끝날 때까지 저장되지 않습니다.' : ''); }
+async function call(path, body) {
+  const response = await fetch(path, body ? {method: 'POST', headers: {'Content-Type': 'application/json', 'X-Cell-Params': '1'}, body: JSON.stringify(body)} : {});
+  const value = await response.json();
+  if (!response.ok) throw new Error(value.error || `요청 실패 ${response.status}`);
+  return value;
+}
+async function load() {
+  data = await call('/params.json');
+  const chosen = $('file').value;
+  $('file').replaceChildren(...data.files.map(f => el('option', {value: f.name, textContent: f.name})));
+  if (chosen) $('file').value = chosen;
+  showFile();
+}
+const SERVO_KEYS = {p: 'P', i: 'I', acc: '가속', vel: '속도', pwm: 'PWM', current: '전류'};
+const LAYERS = {model: '모델', site: '현장', robot: '로봇'};
+function servoCell(entry) {
+  if (!entry) return el('td', {className: 'quiet', textContent: '-'});
+  const hidden = Object.entries(entry.hidden).map(([layer, value]) => `${LAYERS[layer]} ${value} 덮음`).join(', ');
+  return el('td', {}, el('span', {className: 'mono', textContent: `${entry.value} `}), el('span', {className: 'badge', textContent: LAYERS[entry.from]}), ...(hidden ? [el('small', {textContent: hidden})] : []));
+}
+async function loadServo() {
+  const tables = await call('/servo.json');
+  $('servo-box').hidden = !tables.length;
+  $('servo').replaceChildren(...tables.map(table => table.error ? el('p', {className: 'banner error', textContent: `${table.name}: ${table.error}`}) : el('div', {className: 'servo-wrap'}, el('table', {className: 'servo'},
+    el('caption', {textContent: `${table.name} · ${table.path}${table.profile ? ` · ${table.profile}` : ''}`}),
+    el('thead', {}, el('tr', {}, ...['모터', ...Object.values(SERVO_KEYS)].map(text => el('th', {scope: 'col', textContent: text})))),
+    el('tbody', {}, ...table.motors.map(motor => el('tr', {}, el('th', {scope: 'row', textContent: `${motor.id} ${motor.joint}`}), ...Object.keys(SERVO_KEYS).map(key => servoCell(motor.values[key])))))))));
+}
+async function poll() {
+  if (saving || document.hidden) return;
+  try {
+    const next = await call('/params.json');
+    const before = current, moved = lost || next.busy !== data.busy;
+    lost = false;
+    data.busy = next.busy;
+    const fresh = next.files.find(f => f.name === before?.name);
+    if (fresh && fresh.file_sha !== before.file_sha) {
+      if (Object.keys(draft).length) { banner('파일이 다른 곳에서 바뀌었습니다. 되돌리기를 누르면 새 값을 불러옵니다.', true); return refreshFooter(); }
+      data = next; return showFile();
+    }
+    if (!current.error && (moved || !$('banner').classList.contains('error'))) statusBanner();
+    refreshFooter();
+  } catch { lost = true; banner('셀 PC 페이지와 연결이 끊겼습니다.', true); }
+}
+let lost = false;
+$('file').onchange = () => {
+  if (Object.keys(draft).length && !confirm('바꾼 값을 버리고 다른 파일을 열까요?')) { $('file').value = current.name; return; }
+  draft = {}; $('note').value = ''; showFile();
+};
+for (const id of ['search', 'only-changed', 'only-custom', 'hide-locked']) $(id).oninput = render;
+$('note').oninput = refreshFooter;
+$('revert').onclick = async () => { draft = {}; $('note').value = ''; banner(''); await load(); };
+$('save').onclick = async () => {
+  saving = true; refreshFooter();
+  try {
+    const saved = await call('/save', {file: current.name, base_sha: current.file_sha, changes: draft, note: $('note').value});
+    draft = {}; $('note').value = '';
+    await load().catch(() => {});  // the save happened; the next poll reloads the page
+    banner(`저장했습니다. params_sha ${saved.params_sha}, 다음 실행부터 적용됩니다.`);
+  } catch (error) { banner(error.message, true); }
+  saving = false; refreshFooter();
+};
+addEventListener('beforeunload', event => { if (Object.keys(draft).length) event.preventDefault(); });
+load().catch(error => banner(error.message, true));
+const refreshServo = () => loadServo().catch(error => { $('servo-box').hidden = false; $('servo').replaceChildren(el('p', {className: 'banner error', textContent: error.message})); });
+refreshServo();
+setInterval(poll, 5000);
+setInterval(() => { if (!document.hidden) refreshServo(); }, 30000);
+</script>
+</html>

@@ -90,7 +90,7 @@ eval "$BENCH_CMD"
 
 # NAME MEM_GB CPUS MINUTES BENCH_CMD [bench args]. Isolated per run: own GZ_PARTITION, loopback-only
 # discovery and a random ROS_DOMAIN_ID in 1-19: inside the Linux-safe 0-101 and clear of 0 (default),
-# 20-79 (tools/run_fleet_sim.sh, OMX 30/31/75-77), 41+ (robots, 40 + N) and 80-99 (fleet_gazebo).
+# 20-29 (fleet_gazebo), OMX 30/31, 32-40 (tools/run_fleet_sim.sh) and 41-101 (robots, 40 + N).
 # This shell stays alive as the job lock's pid and cleans up when it ends, whatever ended it (a lost
 # laptop: at the wall limit at the latest): it stops only this run's scope, frees the lock and drops
 # build, install and tmp (the run's tokens). Logs and the checkout stay for the laptop to fetch and remove.

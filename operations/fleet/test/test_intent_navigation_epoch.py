@@ -25,7 +25,7 @@ def exercise(entry, supplied):
     console = SimpleNamespace(goal=goal)
     tasks = SimpleNamespace(submit_navigation=submit) if entry in {"step_task", "task_branch"} else None
     execution = IntentExecution(console, tasks, lambda *args, **kwargs: effects.append("fanout"),
-                                lambda *args, **kwargs: effects.append("cancel"))
+                                lambda *args, **kwargs: effects.append("cancel"), robot_busy=lambda robot: None)
     call, = interpret({"do": "navigate", "robot": "robot", "x": 1.0, "y": 2.0, **supplied})
     principal = SimpleNamespace(principal_id="operator")
     if entry == "robot_call":

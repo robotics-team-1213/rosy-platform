@@ -30,6 +30,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cell_calibration as cal  # noqa: E402
 import cell_params as prm  # noqa: E402
 import cell_pivot  # noqa: E402
+from cell_pipeline_io import fold  # noqa: E402
 
 MAP_POINTS = [[-0.12, 0.17], [-0.10, 0.19], [-0.08, 0.17], [-0.06, 0.19], [-0.04, 0.17], [-0.10, 0.15], [-0.06, 0.15],
               [-0.02, 0.19], [0.02, 0.19], [0.066, 0.195], [0.06, 0.18], [0.04, 0.17]]  # the 2026-10-28 remap grid
@@ -80,7 +81,7 @@ def check(config: dict, calibration: dict, targets: list, frame, params=None) ->
     else:
         out["camera_moved"] = False
         out["no_reference"] = True
-    bias = cell_pivot.load_bias(cell_pivot.bias_path(config["calibration_path"]))
+    bias = cell_pivot.load_bias(cell_pivot.bias_path(config["calibration_path"]), params)
     for site, xy in targets:
         # the pick uses a region within pivot.bias_reach_mm, but an accurate pick needs one this close: 44 mm away the
         # floor estimate was 8-10 mm off and every descent met the box (2026-10-29)
@@ -132,7 +133,7 @@ def remap(cell, config: dict, points: list, work: Path, log=print) -> dict:
         failed = next((c for c in (f"load {lib}", "goto above_pick") if not cell.act(c).get("ok")), None)
         if failed:
             # folded after a refused move: fit the marks so far (arm_b 2026-11-05: 8 marks lost to a roll stall at -13)
-            if not cell.act("park").get("ok"):
+            if not fold(cell).get("ok"):
                 raise SystemExit(f"remap stopped at {failed} for {[x, y]} and the park failed")
             log({"point": [x, y], "stopped": failed})
             break
@@ -248,8 +249,8 @@ def self_calibrate(cell, config, calibration, calibration_path, site, target_xy,
                                         calibration, site, work, sleep, log)
     if result["result"] != "calibrated":
         return bias_data, f"pivot: {result['result']}"
-    cell_pivot.save_bias(cell_pivot.bias_path(calibration_path), result["bias"])
-    return cell_pivot.load_bias(cell_pivot.bias_path(calibration_path)), None
+    cell_pivot.save_bias(cell_pivot.bias_path(calibration_path), result["bias"], p)
+    return cell_pivot.load_bias(cell_pivot.bias_path(calibration_path), p), None
 
 
 def learn_bias(config: dict, calibration_path, site: str, place_xy, verify: dict) -> dict | None:
@@ -261,11 +262,16 @@ def learn_bias(config: dict, calibration_path, site: str, place_xy, verify: dict
     if not prm.get(p, "auto.bias_from_place") or not verify.get("found") or "seen_bias_mm" not in verify:
         return None
     seen, used = verify["seen_bias_mm"], verify["used_bias_mm"]
+    try:
+        for value in (seen, used):
+            cell_pivot.validate_bias({"point_m": place_xy, "bias_mm": value}, p)
+    except ValueError:
+        return None
     if math.dist(seen, used) > prm.get(p, "auto.bias_learn_max_mm"):
         return None
     region = {"site": site, "point_m": list(place_xy), "bias_mm": seen, "measured": time.strftime("%Y-%m-%d"),
               "source": "place-and-look: the arm set the box here and the top camera saw it"}
-    cell_pivot.save_bias(cell_pivot.bias_path(calibration_path), region)
+    cell_pivot.save_bias(cell_pivot.bias_path(calibration_path), region, p)
     return region
 
 
@@ -332,7 +338,7 @@ def main(argv=None):
             result = cell_pivot.pivot_calibrate(cell, config, point, pivot_near_yaws(config, site),
                                                 calibration, site, work, time.sleep, lambda row: None)
             if result["result"] == "calibrated":
-                cell_pivot.save_bias(cell_pivot.bias_path(cal_path), result["bias"])
+                cell_pivot.save_bias(cell_pivot.bias_path(cal_path), result["bias"], config.get("params"))
             done.append({step: result["result"], "at": point, "bias": result.get("bias", {}).get("bias_mm")})
         elif step.startswith("surface"):
             import cell_surface

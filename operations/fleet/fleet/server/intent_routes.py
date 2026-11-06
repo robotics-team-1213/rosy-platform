@@ -22,8 +22,8 @@ from fleet.swarm.transport import RobotApiError
 
 
 def install_intent_routes(app, *, console, task_service, require_operator, require_named_operator,
-                          operator_guard, local_stop_fanout, cancel_pending) -> None:
-    execution = IntentExecution(console, task_service, local_stop_fanout, cancel_pending)
+                          operator_guard, local_stop_fanout, cancel_pending, robot_busy) -> None:
+    execution = IntentExecution(console, task_service, local_stop_fanout, cancel_pending, robot_busy=robot_busy)
     app.state.intent_execution = execution
 
     @app.post(
