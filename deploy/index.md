@@ -78,8 +78,8 @@
 
 ## 최근 기록
 
+- 2026-11-06 · uncommitted · fix(omx): 저장된 보정 상한과 안전 코드 지문 결속
 - 2026-11-06 · uncommitted · chore(release): 후속 UIUX 수용 기록의 정확한 Git metadata 등록
 - 2026-11-06 · uncommitted · fix(learning): UI별 수동 릴리스 고정 보호
 - 2026-11-06 · uncommitted · fix(omx): USB peer 보호와 중단 복원
 - 2026-11-06 · uncommitted · docs(omx): hold 회귀 skip 의존성 정정
-- 2026-11-06 · uncommitted · fix(omx): 빈 집게 현재 위치 유지 전용 commissioning

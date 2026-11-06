@@ -91,7 +91,7 @@ def next_step(cell, config, calibration, calibration_path, catalog, roi, source,
     mask = cell_objects.foreground(cell.frame("top"), roi, params=p, surface_px=site.get("surface_px"),
                                    surface_lab=site.get("surface_lab"))
     to_px = lambda q: predicted_pixel(config, calibration, push_site, q)  # noqa: E731
-    bias = cell_pivot.load_bias(cell_pivot.bias_path(calibration_path))
+    bias = cell_pivot.load_bias(cell_pivot.bias_path(calibration_path), p)
     for o in long_packed:
         region = cell_pivot.bias_at(bias, push_site, o["raw_m"], params=p)
         if region and region.get("rms_mm") is not None:

@@ -4621,3 +4621,10 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: root의 독립 Git 문맥 검토로 승인된 정확한 두 triple이다. JSON187건·중복0, 기존185건의 내용·순서·schema·reviewer와 Git raw prefix 일치를 확인했다. source96f98d556e 원격 AI PC 기존 publish/secret/provenance/PSK/scanner 회귀59통과·skip0·NEW/known/flaky0; scratch pinky-metadata-followup-guards/run-1.txt. 정본 origin647부터 해당 source까지269개 commit 추가 줄 스캔은 미검토 hit0이며 독립 고정 source 증분 검토 미해결 finding 없음이다.
 - gate 변화: metadata와 소유 진행 기록뿐이다. 실행 중인 FULL021718은 취소·재시작·대체하지 않고 이번 topic의 새 FULL도 제출하지 않는다. 기존 candidate의 FULL 증거와 이 후속 metadata의 source 검증·공개 자격은 별개다.
 - CE: 해당 없음 — 실제 Git metadata에 대한 exact historical triple 후속 등록이며 기존 scanner 계약과 검증이 범위를 직접 보존한다.
+
+## 2026-11-06 · uncommitted · fix(omx): 저장된 보정 상한과 안전 코드 지문 결속
+
+- 변경: 새 pivot 측정에만 있던 보정 상한을 저장 파일·메모리 region·직접 pick 계획·학습 저장에도 적용한다. 현재 params의 같은 상한과 두 축 finite 검사를 공통으로 사용하며 잘못된 기존 보정은 0으로 대체하지 않고 거부한다. D-911 코드 지문에 실제 scene guard·jaw axis·hook 조립·pivot·calibration 코드를 포함해 변경 전 검토를 재사용할 수 없게 한다.
+- 증거: 기존 29.6 mm 보정의 소비 경로와 지문 누락을 두 읽기 전용 검토에서 확인했다. 저장/메모리/계획/학습 거부, 25 mm 경계와 현재 설정, 파일 바이트 변경에 따른 runtime/task 지문 및 기존 review 거부 회귀시험을 추가했다. 원격 시험은 아직 실행하지 않았으며 커밋 source에 결속해 확인한다.
+- gate 변화: 없음 — 코드 보강이며 기존 D-911·commissioning·세션·토크·물리 상한을 완화하지 않는다. 실물 동작·운영 설치는 하지 않았다.
+- CE: 미해결 — 새 회귀시험과 독립 검토 결과 확인 전 해결 교훈은 작성하지 않는다. 기존 안전 교훈을 먼저 읽었으며 이 검증 이후 기록 필요성을 다시 판단한다.
