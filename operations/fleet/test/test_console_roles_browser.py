@@ -17,7 +17,7 @@ import pytest
 import uvicorn
 from browser_harness import browser_tests_enabled, launch_options, safe_listener
 
-from fakes import FakeRelay, FakeRobot
+from fakes import FakeRelay, FakeRobot, fresh_power_health
 from fleet.server.app import create_app
 from fleet.server.console import FleetConsole
 from fleet.server.site_map_store import SiteMapStore
@@ -65,6 +65,8 @@ def fleet_site(tmp_path):
             "robot_id": robot_id, "mode": "IDLE", "navigation": "IDLE", "map_id": "m1",
             "pose": {"x": x, "y": y, "yaw": yaw}, "safety": {"estop": False},
             "localization": {"state": "LOCALIZED", "pose_frame": "map"}, "line_follow": {"mode": "OFF", "state": "OFF"}})
+    for robot in robots.values():  # deliberate: convoy trips start only on fresh battery evidence
+        robot.power_health_value = fresh_power_health()
     console = FleetConsole([RobotEndpoint(r, f"http://127.0.0.1:81{i}0", "t") for i, r in enumerate(IDS)],
                            list(robots.values()),
                            relay_factory=lambda leader, followers, **kw: FakeRelay(leader, followers))
