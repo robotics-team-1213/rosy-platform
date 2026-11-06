@@ -1,6 +1,6 @@
 import { createHoldTicker } from "/common/hold-ticker.js";
 import { EVIDENCE_LABEL } from "/common/core_ui_logic.js";
-import { sitePoseText } from "./localization-badge.js";
+import { robotPoseText, sitePoseText } from "./localization-badge.js";
 import { staleAgeS } from "./state-age.js";
 
 const COMMANDS = [
@@ -182,7 +182,7 @@ export function createManualControl({scope, view, call, namedReason, confirmedAc
     const guideRow = (view.guide?.robots || []).find(row => row.robot_id === view.focusRobot);
     const age = robot && Number.isFinite(robot.state_age_s)
       ? `상태 ${Math.round(robot.state_age_s + Math.max(0, Date.now() - (view.receivedAtMs ?? Date.now())) / 1000)}초 전` : "상태 시각 없음";
-    pose.textContent = robot ? [sitePoseText(guideRow) || "지도 위치 근거 없음", `위치 관측 ${evidenceWord(robot, "pose")}`, age].join(" · ") : "";
+    pose.textContent = robot ? [sitePoseText(guideRow) || `위치 ${robotPoseText(robot.state, robot.localization)}`, `위치 관측 ${evidenceWord(robot, "pose")}`, age].join(" · ") : "";
     if (!active && !stopping) reason.textContent = [failure, why].filter(Boolean).join(" · ") || notice || "누르는 동안만 이동 · 최대 2초 · 전후진 0.03m/s · 회전 0.10rad/s";
   }
   scope.interval(update, 100);

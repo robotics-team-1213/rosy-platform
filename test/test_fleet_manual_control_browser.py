@@ -327,6 +327,7 @@ def test_two_second_limit_says_why_and_the_pad_is_a_first_screen_square(console_
         forward = page.locator('[data-manual-direction="forward"]')
         expect(forward).to_be_enabled()
         expect(page.locator("[data-manual-pose]")).to_contain_text("위치 관측 최신")
+        expect(page.locator("[data-manual-pose]")).to_contain_text("0.00, 0.00")
         rects = page.locator("[data-manual-direction]").evaluate_all("nodes => nodes.map(n => n.getBoundingClientRect().toJSON())")
         assert {round(rect["width"]) for rect in rects} == {round(rects[0]["width"])}, rects
         assert len({round(rect["y"]) for rect in rects}) == 2, rects  # 2×2, never 3+1
