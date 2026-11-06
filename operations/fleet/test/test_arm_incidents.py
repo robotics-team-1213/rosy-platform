@@ -1,4 +1,5 @@
 """D-971: OMX arm incidents. The control PC reports with its arm token, the AI PC explains, a named operator clears."""
+import asyncio
 import base64
 from hashlib import sha256
 import hashlib
@@ -248,3 +249,26 @@ def test_many_console_tabs_cost_one_database_read_and_never_read_the_jpegs():
     reads.clear(); clock[0] = 5.0  # the backstop re-reads even without a write
     store.snapshot("arm_b")
     assert reads
+
+
+def test_incident_store_work_never_runs_on_the_event_loop(client, monkeypatch):
+    """The same loop answers every robot's heartbeat; a slow frame write must not hold it."""
+    on_loop = []
+    def watched(name, original):
+        def call(self, *args):
+            try:
+                asyncio.get_running_loop()
+                on_loop.append(name)
+            except RuntimeError:
+                pass
+            return original(self, *args)
+        return call
+    for name in ("report", "accepted", "clear", "hold", "explain"):
+        monkeypatch.setattr(ArmIncidentStore, name, watched(name, getattr(ArmIncidentStore, name)))
+    incident_id = post(client).json()["incident_id"]
+    assert client.post(f"{PATH}/arms/arm_b/incidents/{incident_id}/clear", json={"note": "checked the jaws"},
+                       headers=bearer("operator-token")).json()["held"] is False
+    second = post(client, report(session="7f1c2a3e-1b2d-4e5f-8a9b-0c1d2e3f4a5b")).json()["incident_id"]
+    reply = client.post(f"{PATH}/arms/arm_b/incidents/{second}/explanation", json={"seen": "A box in the jaws.", "suspected_cause": "Overload.", "model": "m:1"},
+                        headers=bearer("ai-token"))
+    assert reply.status_code == 200 and on_loop == []

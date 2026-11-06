@@ -109,9 +109,6 @@ def launch(center, db, request_id, request, row, stamp):
     db.commit()
     env = dict(os.environ, OMP_NUM_THREADS='2', MKL_NUM_THREADS='2', OPENBLAS_NUM_THREADS='2',
                HF_HUB_OFFLINE='1', TOKENIZERS_PARALLELISM='false')
-    if row['execution_mode'] == 'public_train':
-        from experiment_public_train import public_environment
-        env = public_environment()
     if row['execution_mode'] in ('lerobot_inspect', 'lerobot_train'):
         from experiment_lerobot_worker import offline_environment
         env = offline_environment(root/'output')
@@ -119,7 +116,6 @@ def launch(center, db, request_id, request, row, stamp):
     try:
         with (root / 'worker.log').open('wb') as log:
             worker = {'online_experience': 'experiment_online.py',
-                      'public_train': 'experiment_public_train.py',
                       'lerobot_inspect': 'experiment_lerobot_worker.py',
                       'lerobot_train': 'experiment_lerobot_worker.py',
                       'native_export': 'experiment_export.py',

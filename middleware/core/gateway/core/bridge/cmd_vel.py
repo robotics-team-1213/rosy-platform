@@ -298,3 +298,44 @@ def _cmd_vel_cycle(command, power, send, readiness, warn, *, trial_guard,
         if time.monotonic() - _gate_fault_warned_at >= GATE_FAULT_WARN_PERIOD_S:
             _gate_fault_warned_at = time.monotonic()
             warn(f"cmd_vel motion readiness failed: {gate_fault}")
+
+
+class CycleGapWatch:
+    """Count late starts of the 50 Hz cycle; CORE runs callbacks one at a time, so a slow one delays it.
+
+    The cycle path only reads the clock and adds numbers. Logging can block, and the next cycle would
+    wait for it (SAF-002 above), so the report belongs to a slower timer that wraps with ``reporting``.
+    """
+
+    def __init__(self, cycle: Callable[[], None], *, limit_s: float = 0.1,
+                 clock: Callable[[], float] = time.monotonic) -> None:
+        self._cycle, self._limit_s, self._clock = cycle, limit_s, clock
+        self._last = self._reported = None
+        self._late, self._worst = 0, 0.0
+
+    def __call__(self) -> None:
+        try:
+            now = self._clock()
+            if self._last is not None and now - self._last >= self._limit_s:
+                self._late, self._worst = self._late + 1, max(self._worst, now - self._last)
+            self._last = now
+        except Exception:
+            pass
+        self._cycle()
+
+    def reporting(self, tick: Callable[[], None], warn: Callable[[str], None],
+                  every_s: float = 5.0) -> Callable[[], None]:
+        """``tick``, then at most one report per ``every_s``. A failed report still waits it out."""
+        def run() -> None:
+            try:
+                tick()
+            finally:
+                try:
+                    now = self._clock()
+                    if self._late and (self._reported is None or now - self._reported >= every_s):
+                        message = f"cmd_vel cycle started late {self._late} time(s), worst gap {self._worst:.3f} s"
+                        self._reported, self._late, self._worst = now, 0, 0.0
+                        warn(message)
+                except Exception:
+                    pass
+        return run

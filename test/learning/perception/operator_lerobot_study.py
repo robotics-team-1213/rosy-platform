@@ -30,13 +30,13 @@ def test_real_uploaded_study_completes_the_learning_pipeline():
             page.goto(base+'/learning/imitate',wait_until='networkidle')
             expect(page.locator('#study-summary')).to_contain_text('새 작업',timeout=60000)
             listing=page.evaluate('async path=>(await fetch(path)).json()',api+'/lerobot-studies')
-            studies=[s for s in listing['studies'] if s['name']=='Uploaded SO100 acceptance']
+            studies=[s for s in listing['studies'] if s['name']=='Uploaded OMX acceptance']
             assert len(studies)<=1
             if studies:
                 page.locator('#study-select').select_option(studies[0]['id'])
-                expect(page.locator('#study-summary')).to_contain_text('Uploaded SO100 acceptance')
+                expect(page.locator('#study-summary')).to_contain_text('Uploaded OMX acceptance')
             else:
-                page.locator('#study-name').fill('Uploaded SO100 acceptance')
+                page.locator('#study-name').fill('Uploaded OMX acceptance')
                 page.locator('#source-folder').set_input_files(str(source))
                 expect(page.locator('#upload-start')).to_be_enabled(timeout=180000)
                 page.locator('#upload-start').click()

@@ -155,6 +155,22 @@ def test_status_main_collects_an_independent_production_host(monkeypatch):
     assert targets == ['site@h', 'arm@h']
 
 
+def test_images_outside_the_role_or_piling_up_are_reported():
+    host = status.parse('\n'.join(['image rosy-site-fleet aaa', 'image rosy-site-fleet bbb', 'image <none> <none>',
+                                   'image rosy-rollback-fleet workcell', 'image rosy-site-vision a',
+                                   'image rosy-site-vision b', 'image rosy-site-vision c', 'image rosy-site-vision d']),
+                        NOW, 6.0)
+    found = status.audit_images({'rosy-site-fleet', 'rosy-site-vision'}, host)
+    assert [(verdict, repository) for verdict, repository, _ in found] == [
+        ('UNDECLARED', 'rosy-rollback-fleet'), ('DRIFT', 'rosy-site-vision')]
+
+
+def test_manifest_declares_images_per_role_and_a_host_with_no_docker_passes():
+    assert 'rosy-site-fleet' in status.declared_images({'site', 'omx'})
+    assert 'rosy-site-fleet' not in status.declared_images({'model'})
+    assert status.audit_images(set(), status.parse('gate open', NOW, 6.0)) == []
+
+
 def observed(**files):
     host = dict(files={}, instances={}, copies={}, paths={})
     for name, record in files.items():

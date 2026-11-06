@@ -17,7 +17,7 @@ from typing import Awaitable, Callable, Optional
 
 from fleet.server.background_workers import (
     _mission_model_turn_worker_loop, _task_dispatch_loop, goal_evidence_expiry_loop,
-    charge_bays_loop, goal_lease_renew_loop, lane_compliance_loop, proposal_expiry_loop,
+    charge_bays_loop, event_loop_lag_loop, goal_lease_renew_loop, lane_compliance_loop, proposal_expiry_loop,
     start_notification_worker)
 from fleet.server.control_unit_observation_runtime import start_control_unit_tasks
 from fleet.server.dispatch_workers import mission_dispatch_loop, mission_feedback_schedule_loop
@@ -136,6 +136,7 @@ FLEET_LOOP_NAMES = (
     "job-trips", "task-dispatch", "proposal-expiry", "mission-dispatch",
     "cell-job-dispatch", "goal-evidence-expiry", "mission-feedback-schedule",
     "mission-model-turn", "control-unit-journal", "control-unit-information", "charge-bays",
+    "event-loop-lag",
 )
 
 
@@ -176,6 +177,7 @@ def start_fleet_loops(app, console, *, supervisor, task_service=None, start_task
                          if localization_service is not None else None)
     calibration_drift_task = (supervisor.supervised("calibration-drift", calibration_drift_watch.run())
                               if calibration_drift_watch is not None else None)
+    lag_task = supervisor.supervised("event-loop-lag", event_loop_lag_loop(log))
     trip_task = supervisor.supervised("trip-runner", app.state.trip_runner.run())  # D-494 5
     charge_task = (supervisor.supervised("charge-runtime", app.state.charge_runtime.run())
                    if app.state.charge_runtime is not None else None)
@@ -222,6 +224,6 @@ def start_fleet_loops(app, console, *, supervisor, task_service=None, start_task
                                           trip_task, identity_task, lane_task, tether_task,
                                           lease_task, path_task, calibration_drift_task,
                                           notification_task, job_task, charge_task,
-                                          physical_worker, bays_task, *control_tasks)
+                                          physical_worker, bays_task, lag_task, *control_tasks)
                         if task is not None]
     return supervisor, notification_http, background_tasks
