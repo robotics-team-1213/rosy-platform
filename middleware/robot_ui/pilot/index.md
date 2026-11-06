@@ -35,7 +35,7 @@
 
 ## 최근 기록
 
-- 2026-11-06 · uncommitted · uiux(pilot): 보정 잠금 사유와 오래된 관절 값 문구
+- 2026-11-06 · uncommitted · uiux(pilot): 보정 잠금 사유
 - 2026-11-06 · uncommitted · test(pilot): 비상 정지 해제 확인 전후의 상태 변경을 분리
 - 2026-11-02 · uncommitted · D-961 웹 제품 통합
 - 2026-11-02 · uncommitted · sr-only 재정의 제거

@@ -203,7 +203,7 @@ export function mountArm(root, target, driver) {
           if (disposed) return;
         }
       } else {
-        setStatus(state.ready ? (state.joint_age_ms > STALE_MS ? "조작 가능 · 관절 값 오래됨" : "조작 가능")
+        setStatus(state.ready ? "조작 가능"
           : state.owner_state === "active" ? "명령 진행 중" : `조작 보류 · ${state.owner_state}`);
       }
       $("[data-sim-readback]").textContent = JSON.stringify({sequence: state.state_sequence,
