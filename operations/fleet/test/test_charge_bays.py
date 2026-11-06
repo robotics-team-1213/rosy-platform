@@ -63,6 +63,36 @@ def test_leaving_the_bay_forgets_the_visit():
     assert bays.plan([robot("a", 70.0, (0.5, -0.2))], BAYS)["bays"][0]["state"] == "free"
 
 
+def test_losing_pose_or_link_never_frees_the_bay_it_shows_unknown_and_offers_it_to_nobody():
+    at_c1 = (BAYS[0].x, BAYS[0].y)
+    for lost in (robot("a", 14.0, None), robot("a", 14.0, at_c1, online=False), None):   # None: left the roster
+        bays = ChargeBays()
+        bays.observe(0.0, [robot("a", 14.0, at_c1, volts=7.40)], BAYS)
+        fleet = [lost] if lost else []
+        bays.observe(5.0, fleet, BAYS)
+        low = robot("low", 9.0)
+        plan = bays.plan([*fleet, low], BAYS)
+        assert (plan["bays"][0]["state"], plan["bays"][0]["robot_id"]) == ("unknown", "a")
+        assert actions(plan)["low"]["bay"] == "C2"                       # never the unknown bay
+        if lost:
+            assert actions(plan)["a"] == {"robot_id": "a", "bay": "C1", "arrived_percent": 14.0, "in_bay_s": 5.0,
+                                          "action": "stay", "reason": "pose_unknown"}
+
+
+def test_a_trusted_pose_elsewhere_frees_the_bay_and_the_same_bay_again_keeps_the_visit_without_blind_time():
+    at_c1 = (BAYS[0].x, BAYS[0].y)
+    bays = ChargeBays(rate_pct_per_min=2.0)
+    bays.observe(0.0, [robot("a", 14.0, at_c1, volts=7.40)], BAYS)
+    bays.observe(10.0, [robot("a", 14.0, at_c1, volts=7.50)], BAYS)          # connected at 10 s
+    bays.observe(20.0, [robot("a", 14.0, None)], BAYS)                        # pose lost: unknown, still connected
+    assert bays._visits["a"].connected_at == 10.0
+    bays.observe(620.0, [robot("a", 14.0, at_c1, volts=7.50)], BAYS)          # seen again after 600 s blind
+    row = actions(bays.plan([robot("a", 14.0, at_c1)], BAYS))["a"]
+    assert row["connected_s"] == 20.0 and row["estimated_percent"] == 14.0 + 2.0 * 20.0 / 60.0
+    bays.observe(621.0, [robot("a", 70.0, (0.5, -0.2))], BAYS)
+    assert bays.plan([robot("a", 70.0, (0.5, -0.2))], BAYS)["bays"][0]["state"] == "free"
+
+
 def test_the_route_shows_the_active_maps_bays_and_never_dispatches():
     from fastapi.testclient import TestClient
     from fakes import FakeRobot
