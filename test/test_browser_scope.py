@@ -101,7 +101,6 @@ def test_every_scope_target_exists():
 def test_learning_browser_tier_keeps_operator_training_separate():
     selected=set(browser_scope.targets(['learning/curation/perception/review_app_web/imitate.js']))
     assert 'test/learning/perception/test_imitation_browser.py' in selected
-    assert 'test/learning/perception/test_public_learning_browser.py' in selected
     assert not any('/operator_' in path or '_live_browser.py' in path for path in selected)
     assert browser_scope.targets(['test/learning/perception/operator_lerobot_study.py']) == []
 

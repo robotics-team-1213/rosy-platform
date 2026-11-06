@@ -8,6 +8,7 @@ from pathlib import Path, PurePosixPath
 import re
 
 from experiment_io import read_json
+import experiment_robot_adapters as robots
 
 REPO = 'rosy-upload/local-demonstrations'
 TOTAL_BYTES = 2 * 1024**3
@@ -126,9 +127,6 @@ def check_info(info):
         raise ValueError('complete LeRobot v3, 1..240 fps, 2..1000 episodes, <=200000 frames required')
     if (info.get('data_path') != DATA_PATH or info.get('video_path') not in (None, VIDEO_PATH)):
         raise ValueError('canonical local v3 data/video path templates required')
-    robot = info.get('robot_type')
-    if robot is not None and (not isinstance(robot, str) or len(robot) > 256):
-        raise ValueError('bounded robot type required')
     features = info.get('features', {})
     if not isinstance(features, dict):
         raise ValueError('feature metadata required')
@@ -159,6 +157,7 @@ def check_info(info):
             raise ValueError('video camera requires canonical video path template')
     if pixels > 16000000:
         raise ValueError('camera pixels exceed 16M')
+    robots.check(info)
     return info
 
 
