@@ -193,6 +193,16 @@ def rear_dock_scan(services, sample, *, received_at: float) -> None:
         return
 
 
+def _scan_lag_s(sample) -> float:
+    """Seconds the scan waited between its stamp and this callback (queue + transport); 0 if unprovable.
+
+    Obstacle freshness counts from the stamp, not from arrival, so a queued old scan is not 'just seen'."""
+    stamp, now = sample.get("source_stamp_ns"), sample.get("source_now_ns")
+    if type(stamp) is not int or type(now) is not int or stamp <= 0:
+        return 0.0
+    return max(0.0, (now - stamp) / 1e9)
+
+
 def front_clearance(services, sample, *, received_at: float) -> None:
     """D-344 §11: LiDAR 를 차선 추종 정지 판정에 넘긴다 — path 는 점, sector 는 정면 최소 거리.
 
@@ -203,6 +213,8 @@ def front_clearance(services, sample, *, received_at: float) -> None:
     if mission is not None:
         mission.observe_scan(sample)
     line = services.line_follow
+    lag = _scan_lag_s(sample)
+    seen_at = received_at - lag
     config = line.config
     path = config.obstacle_mode == "path"
     try:
@@ -223,7 +235,7 @@ def front_clearance(services, sample, *, received_at: float) -> None:
                 points = tuple((x, y) for x, y in points if not inside_body(
                     x + config.body_lidar_x_m, y, config.body_front_x_m, config.body_rear_x_m,
                     config.body_half_width_m, config.body_rotation_radius_m, strict=True))
-            line.observe_body_points(points, range_min=_range_min(sample), received_at=received_at)
+            line.observe_body_points(points, range_min=_range_min(sample), received_at=seen_at)
         if line.wants_return_scan:
             from core_common.robot_body import RobotBody
             try:
@@ -243,14 +255,14 @@ def front_clearance(services, sample, *, received_at: float) -> None:
                 source_stamp_ns=None if evidence is None else evidence[2],
                 received_at=received_at)
         if path:
-            line.observe_scan_points(points, received_at=received_at)
+            line.observe_scan_points(points, received_at=received_at, lag_s=lag)
             return
         distance = _front_clearance(
             sample, forward_deg=config.lidar_forward_deg,
             half_angle_deg=config.obstacle_half_angle_deg, self_mask=config.lidar_self_mask)
     except (AttributeError, KeyError, TypeError, ValueError):
         return
-    line.observe_clearance(distance, received_at=received_at)
+    line.observe_clearance(distance, received_at=seen_at)
 
 
 def detection_evidence(services, raw: str) -> None:

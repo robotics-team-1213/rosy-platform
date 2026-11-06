@@ -8,6 +8,7 @@ from pathlib import Path, PurePosixPath
 import re
 
 from experiment_io import read_json
+import experiment_robot_adapters as robots
 
 REPO = 'rosy-upload/local-demonstrations'
 TOTAL_BYTES = 2 * 1024**3
@@ -300,6 +301,7 @@ def inspect(root, files):
     root = Path(root)
     verify_files(root, files)
     info = check_info(read_json(root/'meta/info.json'))
+    robots.check(info)  # here, not in check_info: results of earlier runs must stay verifiable
     raw_check(root, info, files)
     data, episodes = reader(root), []
     cameras = [dict(key=k, shape=v['shape'], dtype=v['dtype']) for k, v in sorted(info['features'].items())

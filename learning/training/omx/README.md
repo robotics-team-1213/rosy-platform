@@ -313,4 +313,4 @@ Learning 홈의 ‘자료 올리고 모방학습’(`/learning/imitate`)에서 *
 
 HF 게시 안내는 기존 계정 화면으로 연결한다. 이 웹 흐름은 HF에 자동 게시하지 않으며 로봇 적용·승격도 실행하지 않는다. 오프라인 오차는 실물 성공률이 아니다. 실제 업로드·학습·재적재·ZIP 검증은 [검증 기록](../../../docs/validation/lerobot-upload-imitation-2026-10-29/result.md)을 본다.
 
-실제 자료/서비스가 필요한 운영자 수용 시험은 일반 브라우저 tier와 분리해 명시적으로 실행한다. `test/learning/perception/operator_lerobot_study.py`는 `ROSY_RUN_UPLOADED_STUDY=1`, `ROSY_UPLOADED_STUDY_SOURCE`, `ROSY_UPLOADED_STUDY_EVIDENCE`를 요구한다. 기존 공개 연구 수용은 `operator_public_learning.py`와 `ROSY_RUN_PUBLIC_STUDY=1`을 사용한다. 두 파일 모두 공식 `tools/remote/remote_pytest.py --log-dir <외부 로그> -- ROSY_RUN_BROWSER_TESTS=1 ... <운영자 시험 파일>`로 실행한다. 일반 UI 회귀는 독립된 작업 폴더/서버를 생성하는 `test_imitation_browser.py`, `test_public_learning_browser.py`이며 전체 브라우저 검증에서 빠지지 않는다.
+실제 자료/서비스가 필요한 운영자 수용 시험은 일반 브라우저 tier와 분리해 명시적으로 실행한다. `test/learning/perception/operator_lerobot_study.py`는 `ROSY_RUN_UPLOADED_STUDY=1`, `ROSY_UPLOADED_STUDY_SOURCE`, `ROSY_UPLOADED_STUDY_EVIDENCE`를 요구한다. 공식 `tools/remote/remote_pytest.py --log-dir <외부 로그> -- ROSY_RUN_BROWSER_TESTS=1 ... <운영자 시험 파일>`로 실행한다. 일반 UI 회귀는 독립된 작업 폴더/서버를 생성하는 `test_imitation_browser.py`이며 전체 브라우저 검증에서 빠지지 않는다.

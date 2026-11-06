@@ -49,7 +49,7 @@ async def goal_evidence_expiry_loop(service, logger) -> None:
     """Apply registered grace deadlines without enabling Action dispatch."""
     while True:
         try:
-            service.hold_expired_without_evidence()
+            await asyncio.to_thread(service.hold_expired_without_evidence)
         except (OSError, ValueError):
             logger.exception("goal evidence grace reconciliation failed")
         await asyncio.sleep(1.0)
@@ -99,6 +99,16 @@ def attempt_open(store, task_id: str, attempt_id: str) -> bool:
             and task.get("status") in OPEN_ATTEMPT_STATUSES)
 
 
+async def event_loop_lag_loop(logger, *, period_s: float = 0.25, warn_s: float = 0.5, clock=time.monotonic) -> None:
+    """Log how late the loop woke up: a robot's 2 s heartbeat deadline is lost here first."""
+    while True:
+        started = clock()
+        await asyncio.sleep(period_s)
+        lag = clock() - started - period_s
+        if lag >= warn_s:
+            logger.warning("fleet event loop lag %.3f s", lag)
+
+
 async def _task_dispatch_loop(console: FleetConsole, task_service: FleetTaskService,
                               drive_cancel: DriveCancelFence, supervisor=None,
                               clock=time.monotonic) -> None:
@@ -112,7 +122,8 @@ async def _task_dispatch_loop(console: FleetConsole, task_service: FleetTaskServ
     while True:
         dispatched = None
         try:
-            task_service.scheduler.expire_queued()
+            # BEGIN IMMEDIATE can wait 5 s for the write lock: never on the loop that answers heartbeats
+            await asyncio.to_thread(task_service.scheduler.expire_queued)
             from fleet.server.channel.execution.outcomes.reconcile import reconcile_tasks
             await reconcile_tasks(task_service, console)
             snapshot = await console.snapshot()

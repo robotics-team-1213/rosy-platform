@@ -10,6 +10,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import experiment_lerobot_source as source
 import experiment_lerobot_worker as worker
+import experiment_robot_adapters as robots
 
 
 def test_video_headers_are_checked_without_decoding(tmp_path,monkeypatch):
@@ -61,11 +62,38 @@ def test_disjoint_noncontiguous_split_with_empty_validation():
             source.validate_split(bad, inspection)
 
 
-def test_metadata_dimensions_do_not_assume_so100():
-    info = dict(codebase_version='v3.0', fps=20, robot_type='custom', total_episodes=4,
+def adapter_info(robot, size, names=None):
+    vector = dict(dtype='float32', shape=[size], names=names)
+    return dict(codebase_version='v3.0', fps=30, robot_type=robot, total_episodes=4, total_frames=20,
+        data_path=source.DATA_PATH, features={'observation.state': vector, 'action': vector,
+            'observation.images.top': dict(dtype='image', shape=[32,48,3])})
+
+
+def test_only_omx_ai_has_an_adapter():
+    joints = [f'{joint}.pos' for joint in ('shoulder_pan','shoulder_lift','elbow_flex','wrist_flex','wrist_roll','gripper')]
+    robots.check(adapter_info('omx_follower', 6, joints))
+    robots.check(adapter_info('omx_follower', 6))
+    robots.check(adapter_info('bi_omx_follower', 12, [f'arm_{arm}.{name}' for arm in 'ab' for name in joints]))
+    for bad in (adapter_info('so100', 6), adapter_info(None, 6), adapter_info('omx_follower', 7),
+                adapter_info('bi_omx_follower', 6), adapter_info('omx_follower', 6, ['a','b','c','d','e','f'])):
+        with pytest.raises(ValueError):
+            robots.check(bad)
+
+
+def test_a_new_study_needs_an_adapter_but_an_earlier_result_stays_verifiable(monkeypatch, tmp_path):
+    other = adapter_info('so100', 6)
+    assert source.check_info(other) == other
+    monkeypatch.setattr(source, 'verify_files', lambda *_: None)
+    monkeypatch.setattr(source, 'read_json', lambda *_, **__: other)
+    with pytest.raises(ValueError, match='no adapter'):
+        source.inspect(tmp_path, [])
+
+
+def test_metadata_is_bounded():
+    info = dict(codebase_version='v3.0', fps=20, robot_type='omx_follower', total_episodes=4,
         total_frames=20, data_path='data/chunk-{chunk_index:03d}/file-{file_index:03d}.parquet',
-        features={'observation.state': dict(dtype='float32', shape=[7], names=None),
-                  'action': dict(dtype='float32', shape=[5], names=['a','b','c','d','e']),
+        features={'observation.state': dict(dtype='float32', shape=[6], names=None),
+                  'action': dict(dtype='float32', shape=[6], names=None),
                   'observation.images.front': dict(dtype='image', shape=[32,48,3])})
     assert source.check_info(info) == info
     for key, value in [('fps', True), ('data_path', '../{file_index}.parquet'),

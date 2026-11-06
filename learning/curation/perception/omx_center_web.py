@@ -23,11 +23,6 @@ def get(handler, path, center, workspace=None):
             raise ValueError('이 작업대에 모방학습 실행기가 연결되지 않았습니다.')
         handler.send(center.studies.get(study[1]))
         return True
-    if path == PREFIX + '/public-source':
-        if center is None:
-            raise ValueError('이 작업대에 학습 실행기가 연결되지 않았습니다.')
-        handler.send(center.public_source())
-        return True
     owner = re.fullmatch(PREFIX + r'/owner-status/([A-Za-z0-9_][A-Za-z0-9_.-]{0,63})', path)
     if owner:
         if center is None:
@@ -89,9 +84,6 @@ def post(handler, path, body, center, workspace=None, accounts=None):
         return True
     if path == PREFIX + '/profile':
         handler.send(center.profiles.save(body, getattr(handler, 'learning_principal', None)))
-        return True
-    if path == PREFIX + '/public-run':
-        handler.send(center.start_public(body))
         return True
     if path == PREFIX + '/native-run':
         prepared = _registered(workspace, body.get('prepared_id'))
