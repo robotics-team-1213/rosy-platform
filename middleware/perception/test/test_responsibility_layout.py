@@ -14,8 +14,8 @@ import xml.etree.ElementTree as ET
 PACKAGE = Path(__file__).resolve().parents[1]
 MIDDLEWARE = PACKAGE.parent
 SOURCE_MODULES = {
-    "nodes/sensor_provider.py": "control.sensor_provider",
-    "nodes/camera_detect_node.py": "control.camera_detect_node",
+    "sensor_nodes/sensor_provider.py": "control.sensor_provider",
+    "sensor_nodes/camera_detect_node.py": "control.camera_detect_node",
     "localization/loc_assist.py": "control.loc_assist",
     "localization/loc_assist_node.py": "control.loc_assist_node",
     "localization/localization_node.py": "control.localization_node",

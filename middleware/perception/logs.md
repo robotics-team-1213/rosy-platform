@@ -1850,3 +1850,11 @@
 - 증거: 공식 FULL의 파일 단독 재시험에서 기존 경로 오류 1건을 재현했고 main의 같은 검사는 통과했다. 변경 전 커밋 범위의 크기 검사 5개는 통과했다.
 - gate 변화: 없음
 - CE: 해당 없음 — 소스 이동에 따른 시험 경로 정정이며 계약 검사는 그대로다.
+
+## 2026-11-07 · uncommitted · refactor(control): 노드 20개를 calibration·observers·robot_web·sensor_nodes 홀더로 순수 이동 (D-766 #109)
+
+- 변경: `nodes/`의 보정 노드 3개를 `calibration/`, 관측 노드 5개를 `observers/`, `web_*` 5개를 `robot_web/`, 카메라·IR·센서 제공 7개를 `sensor_nodes/`로 옮기고 CONTROL_ROOTS·서명 아카이브 prefix·size_units에 등록했다. 임포트 신원(`control.*` 평면)·엔트리포인트·런치는 그대로다. `control` 단위가 10,000줄 아래로 내려가 size_ratchet 행을 지웠다.
+- 증거: 원격 시험과 FULL 착지 기록을 이 변경의 근거로 삼는다.
+- 재발 방지: 새 홀더가 `SPLIT_CODE_PREFIXES`에서 빠지면 실패하는 시험을 `test/test_model_review_release.py`에 추가했다.
+- gate 변화: 없음. 소스 배치만 바뀜. 로봇 이미지 빌드와 실물 기동은 미실행이다.
+- CE: 해당 없음.
