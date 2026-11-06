@@ -466,7 +466,7 @@ export function createFieldMap(options) {
         body: JSON.stringify({ x: world.x, y: world.y, yaw }),
       });
       if (listenerController.signal.aborted || !owner.current()) return;
-      setAction?.(`${label} ${world.x.toFixed(2)}, ${world.y.toFixed(2)} 요청을 CORE가 받았습니다. 실제 적용 상태는 로봇 readback으로 확인하세요.`);
+      setAction?.(`${label} ${world.x.toFixed(2)}, ${world.y.toFixed(2)} 요청을 로봇이 받았습니다. 실제 적용 상태는 로봇 readback으로 확인하세요.`);
       if (!locating) {
         window.dispatchEvent(new CustomEvent("rosy:goal", { detail: { x: world.x, y: world.y } }));
         // D-396: 목표를 지도에도 기억한다 — paint() 에서 마커로 그린다.

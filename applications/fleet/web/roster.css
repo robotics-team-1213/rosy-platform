@@ -59,9 +59,8 @@
   .facts { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-3); align-items: baseline; }
   .facts div { flex: 0 1 auto; min-width: 0; }
   .facts div[data-fact="pose"] { flex: 1 1 140px; }
-  .facts div[data-fact="yaw"] { flex: 0 1 80px; }
-  .facts div[data-fact="battery"] { flex: 0 1 70px; }
-  .facts div[data-fact="safety"] { flex: 0 1 60px; }
+  /* 값 크기대로 차지한다. 고정 폭이면 "비상 정지" 칩이 카드 밖으로 잘린다. 모자라면 줄을 바꾼다. */
+  .facts div:is([data-fact="yaw"], [data-fact="battery"], [data-fact="safety"]) { flex: 0 0 auto; }
 }
 .facts span { font-family: var(--mono); font-size: var(--text-micro); letter-spacing: var(--track-label); color: var(--text-secondary); }
 /* D-457 — 측정 라벨 아이콘은 라벨 척도(label 단계)를 따른다. 값(1.125rem)과 같으면 무겁다. */
@@ -79,8 +78,10 @@
 @media (width < 64rem) {
   .context-panel > .panel[aria-labelledby="roster-heading"] { display: flex; flex-direction: column; }
   .robot-list-details { order: 1; }
-  .workspace-heading, #robot-workspace-empty, #robot-workspace, .manual-control { order: 2; }
-  .panel:has(#robot-workspace > article) > .robot-list-details { order: 3; }
+  .workspace-heading, #robot-workspace-empty, #robot-workspace { order: 2; }
+  /* 전화에서는 선택한 로봇의 상태가 먼저다. 조종은 그 아래, 넓은 단에서만 카드 위다. */
+  .manual-control { order: 3; }
+  .panel:has(#robot-workspace > article) > .robot-list-details { order: 4; }
   .roster-block { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .roster-block > h2 { grid-column: 1 / -1; }
   .roster-block > .dispatch-control:is(:not([data-state]), [data-state="absent"]) { grid-column: 1; grid-row: 2; justify-content: flex-start; }
@@ -102,6 +103,10 @@
 #robot-workspace { min-width: 0; margin-top: var(--space-3); }
 .manual-control { margin-top: var(--space-3); }
 .manual-control [data-manual-direction] { touch-action: none; }
+.manual-control [data-manual-pose] { margin: var(--space-2) 0; font-size: var(--text-label); color: var(--text-secondary); overflow-wrap: anywhere; }
+/* 방향 넷은 언제나 2×2다. 폭에 맡기면 1366에서 3+1로 갈린다. */
+.manual-control .robot-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.manual-control [data-manual-mode] { grid-column: 1 / -1; }
 .trip-mode { display: grid; gap: var(--space-2); }
 
 .robot-summary { border-bottom: 1px solid var(--border-subtle); }

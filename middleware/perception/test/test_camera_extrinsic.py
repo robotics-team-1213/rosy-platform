@@ -259,7 +259,7 @@ class DeclaredParameterTest(unittest.TestCase):
     def test_mixin_parameters_are_declared_by_startup_calibration_node(self):
         import ast
         import inspect
-        node_source = (Path(__file__).parents[1] / 'nodes/startup_calibration_node.py').read_text(encoding='utf-8')
+        node_source = (Path(__file__).parents[1] / 'calibration/startup_calibration_node.py').read_text(encoding='utf-8')
         declared = {node.args[0].value for node in ast.walk(ast.parse(node_source))
                     if isinstance(node, ast.Call) and getattr(node.func, 'attr', '') == 'declare_parameter'
                     and node.args and isinstance(node.args[0], ast.Constant)}

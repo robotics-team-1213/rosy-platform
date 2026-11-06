@@ -206,15 +206,12 @@ def test_release_hold_clears_it(device, host, hub):
 
 
 @pytest.mark.parametrize("marker", ["hardware.approved", "navigation.approved"])
-def test_sealed_approval_for_the_current_release_holds(device, host, hub, marker):
-    write_json(device / "etc/rosy/approvals" / marker, {"release_id": CURRENT})
+@pytest.mark.parametrize("release", [CURRENT, "2026.09.30-001"])
+def test_a_release_bound_approval_does_not_hold_the_update(device, host, hub, marker, release):
+    # D-985: the approval lapses on the new release and a person approves again.
+    write_json(device / "etc/rosy/approvals" / marker, {"release_id": release})
     report = updater(host, hub).eligibility()
-    assert report["held"] is True and report["eligible"] is False
-
-
-def test_approval_for_another_release_does_not_hold(device, host, hub):
-    write_json(device / "etc/rosy/approvals/hardware.approved", {"release_id": "2026.09.30-001"})
-    assert updater(host, hub).eligibility()["eligible"] is True
+    assert report["held"] is False and report["eligible"] is True
 
 
 def test_claim_held_by_another_party_is_ineligible(device, host, hub, keys):
@@ -292,30 +289,6 @@ def test_run_busy_writes_nothing(device, host, hub, keys):
     assert hub.requests == []
 
 
-@pytest.mark.parametrize("content", [b"{not json", b"[1, 2]", b"x" * (70 * 1024), b'{"release_id": 5}'],
-                         ids=["corrupt", "not-object", "oversize", "bad-id"])
-def test_an_unreadable_approval_marker_holds(device, host, hub, content):
-    # M6
-    path = device / "etc/rosy/approvals/hardware.approved"
-    path.parent.mkdir(parents=True)
-    path.write_bytes(content)
-    report = updater(host, hub).eligibility()
-    assert report["held"] is True and report["eligible"] is False
-
-
-def test_a_symlinked_approval_marker_holds(device, host, hub, tmp_path):
-    # M6
-    target = tmp_path / "elsewhere.json"
-    target.write_text(json.dumps({"release_id": "2026.09.30-001"}), encoding="utf-8")
-    link = device / "etc/rosy/approvals/navigation.approved"
-    link.parent.mkdir(parents=True)
-    try:
-        os.symlink(target, link)
-    except OSError:
-        pytest.skip("this host cannot create symlinks")
-    assert updater(host, hub).eligibility()["held"] is True
-
-
 @pytest.mark.parametrize("changes,eligible", [
     ({"docking_state": "UNDOCKED"}, True),
     ({"docking_state": "DOCKED"}, True),
@@ -361,7 +334,7 @@ def test_a_refused_precheck_is_ineligible_not_a_failure(device, host, hub, keys)
     (lambda device, host, up: None, 0),
     (lambda device, host, up: up.hold("agent", "G5", 1), 3),
     (lambda device, host, up: write_json(device / "etc/rosy/approvals/hardware.approved",
-                                         {"release_id": CURRENT}), 3),
+                                         {"release_id": CURRENT}), 0),
     (lambda device, host, up: (setattr(host, "inputs_changes", {"velocity_linear": 0.3}),
                                host.write_inputs()), 3),
     (lambda device, host, up: _stale_inputs(device, host), 3),

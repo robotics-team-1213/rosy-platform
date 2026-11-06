@@ -12,9 +12,10 @@ Runs from rosy-auto-update.timer as root. One ``run``:
    script, ``native_release.py verify``) even when the robot is busy; current
    is never moved by staging;
 4. applies only when the rollout lets this host (canary, or ``canary_ok`` and
-   the wave delay passed) and the robot is eligible: no hold, no sealed
-   approval for the current release, CORE idle and still in two samples 10 s
-   apart, battery >= 40 % or charging, no live /run/rosy-claim;
+   the wave delay passed) and the robot is eligible: no hold, CORE idle and
+   still in two samples 10 s apart, battery >= 40 % or charging, no live
+   /run/rosy-claim. A release-bound navigation approval does not hold the robot:
+   it stops being valid on the new release and a person approves again;
 5. applies under the claim: activate, the core-release check, the new
    release's sync-image-layer.py, restarts, then health (CORE ready, core/io/
    camera active from the new release, no failed rosy-* unit, held 60 s);

@@ -550,6 +550,9 @@ def test_view_edit_activate_and_preview_a_trip(page_site, width, height):
     if output := os.environ.get("ROSY_SHOT_DIR"):
         page.screenshot(path=str(Path(output) / f"site-map-fresh-{width}x{height}.png"), full_page=True)
 
+    # A place clicked on the map becomes the destination; the list follows it.
+    page.locator('[data-place="SE"]').click()
+    expect(page.locator("#trip-place")).to_have_value("SE")
     show_screen(page, "trip-heading")
     page.select_option("#trip-place", "NW")
     page.locator("#trip-plan").click()

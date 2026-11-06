@@ -11,6 +11,7 @@ from review_app import make_server
 from test_learning_accounts import accounts, sign_in as account_session  # noqa: F401 — shared real encrypted account fixture
 from test_learning_collaboration import request
 from test_learning_imports import SHA, Transport
+from browser_harness import confirm_irreversible
 from test_review_app import open_store
 
 
@@ -427,8 +428,8 @@ def test_named_multi_account_import_logout_real_browser(tmp_path, monkeypatch, a
                 assert 'hf_browser_' not in json.dumps(job)
                 assert 'hf_browser_' not in page.evaluate('JSON.stringify(localStorage)')
                 assert 'hf_browser_' not in page.evaluate('JSON.stringify(sessionStorage)')
-                page.once('dialog', lambda dialog: dialog.accept())
                 page.locator('#connections article', has_text='account-a').get_by_role('button', name='연결 해제').click()
+                confirm_irreversible(page)
                 expect(page.locator('#connections')).not_to_contain_text('account-a')
                 old_session = next(item['value'] for item in page.context.cookies()
                                    if item['name'] == 'rosy_learning_session')
