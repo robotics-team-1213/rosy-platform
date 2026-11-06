@@ -33,6 +33,8 @@ async def _site_call(console, call) -> dict:
 async def _robot_call(console, call) -> dict:
     _reject_navigation_epoch(call)
     robot = call.robot
+    if call.verb == "manual":
+        return await console._client(robot)._post(call.path, {"mode": "MANUAL"})
     if call.verb == "navigate":
         if call.body.get("x") is None or call.body.get("y") is None:
             raise HubError("WAYPOINT_STAYS_ON_ROBOT", "name a point, or tell the robot itself")
@@ -49,9 +51,10 @@ async def _robot_call(console, call) -> dict:
 
 
 class IntentExecution:
-    def __init__(self, console, task_service, local_stop_fanout, cancel_pending):
+    def __init__(self, console, task_service, local_stop_fanout, cancel_pending, *, robot_busy):
         self.console, self.task_service = console, task_service
         self.local_stop_fanout, self.cancel_pending = local_stop_fanout, cancel_pending
+        self.robot_busy = robot_busy
 
     def resources(self,call):
         if call.robot:return [call.robot]
@@ -62,7 +65,25 @@ class IntentExecution:
     async def step(self, call, principal, idempotency_key, index, *, admission=None, owner_id=None):
         _reject_navigation_epoch(call)
         from fleet.swarm.dispatch_guard import dispatch_guard
+        zero = call.verb == 'move' and not any(call.body.get(key, 0) for key in ('linear', 'angular'))
+        direct = call.verb == 'manual' or call.verb == 'move' and not zero
+        generation = None
         def resources_available():
+            nonlocal generation
+            if zero:
+                return
+            if direct:
+                if not call.robot:
+                    raise HubError('ROBOT_REQUIRED', call.verb)
+                self.console._client(call.robot)
+                if self.task_service is None:
+                    raise HubError('COMMAND_REJECTED', 'direct control requires dispatch storage')
+                control = self.task_service.store.dispatch_control()
+                if not control['dispatch_enabled'] or generation is not None and control['generation'] != generation:
+                    raise HubError('COMMAND_REJECTED', 'dispatch is closed or generation changed')
+                generation = control['generation']
+                if self.task_service.store.unfinished_task_ids(call.robot) or self.robot_busy(call.robot):
+                    raise HubError('COMMAND_REJECTED', 'unfinished work holds the robot')
             if self.task_service is None or call.verb in STOP_VERBS or call.verb=='navigate':return
             robots=self.resources(call)
             for robot in robots:
