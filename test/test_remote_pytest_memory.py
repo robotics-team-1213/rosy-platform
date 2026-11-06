@@ -6,6 +6,7 @@ import json
 import shutil
 import subprocess
 import sys
+import tracemalloc
 from pathlib import Path
 
 import pytest
@@ -137,3 +138,25 @@ def test_job_lock_takes_the_reservation_and_memory_max_the_cap(tmp_path, words, 
     assert f"MemoryMax={mem} " in (home / "scope").read_text()
     bad = _sh(rj.START, env, "r", "d", "", "1", "60", rj.JOB, "ROSY_JOB_RESERVE_GB=3.5", "x.py")
     assert bad.returncode == 0 and _poll_until_done(env, "1") == 2
+
+
+def test_reading_the_history_does_not_hold_the_file_in_memory(tmp_path):
+    """A FULL landing reads it from every invocation at once: 130 MB each took a laptop to 13.8 GB."""
+    history, inv = tmp_path / mh.FILE, ["some/test.py"]
+    other = json.dumps({"key": "other", "peak_mib": 1, "pad": "x" * 1000}) + "
+"
+    history.write_text(other * 20_000 + "torn{
+" + json.dumps({"key": mh.key(inv), "peak_mib": 7}) + "
+", encoding="utf-8")
+    tracemalloc.start()
+    try:
+        rows = mh._rows(history, inv)
+        peak = tracemalloc.get_traced_memory()[1]
+    finally:
+        tracemalloc.stop()
+    assert [row["peak_mib"] for row in rows] == [7]
+    assert peak < history.stat().st_size / 4
+
+
+def test_missing_history_has_no_rows(tmp_path):
+    assert mh._rows(None, ["x"]) == [] and mh._rows(tmp_path / "absent", ["x"]) == []
