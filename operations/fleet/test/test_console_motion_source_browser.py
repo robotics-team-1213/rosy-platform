@@ -31,21 +31,23 @@ def test_card_names_the_motion_source_and_flags_the_unowned_mover(site):  # noqa
     robots = [
         _moving("rosy_01", 0.1, "NAVIGATION", trip_lease={"lease_id": "l", "trip_id": "t", "holder": "fleet",
                                                            "operator_name": "kim", "since": "x", "expires_in_s": 9}),
-        _moving("rosy_02"),
+        _moving("rosy_02"),  # the shared API fixture holds an open Fleet trip for it
         _moving("rosy_03", 0.05),
         _moving("rosy_04", 0.0, "MANUAL"),
         stale,
         _moving("rosy_06", 0.0, docking={"state": "DOCKING"}),
+        _moving("rosy_07"),
     ]
     api = copy.deepcopy(API)
-    api["/api/fleet/state"] = {"fleet": {"name": "site", "online": 6, "total": 6}, "ts": 0.0, "robots": robots}
+    api["/api/fleet/state"] = {"fleet": {"name": "site", "online": 7, "total": 7}, "ts": 0.0, "robots": robots}
     with sync_playwright() as playwright:
         browser, page, errors = _open(playwright, site, api, [])
         try:
             def chip(robot_id):
                 return page.locator(f'article.robot-summary[data-robot-id="{robot_id}"] [data-motion-source]')
             expect(chip("rosy_01")).to_have_text("배차 운행 · kim")
-            expect(chip("rosy_02")).to_have_text("정지 · 대기")
+            expect(chip("rosy_02")).to_have_text("배차 운행")
+            expect(chip("rosy_07")).to_have_text("정지 · 대기")
             expect(chip("rosy_03")).to_have_text("원인 불명 이동")
             expect(chip("rosy_04")).to_have_text("수동 모드 · 조종 주체 확인 불가")
             expect(chip("rosy_05")).to_contain_text("이동 출처 확인 불가 · 상태")
