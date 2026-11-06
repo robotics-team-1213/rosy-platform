@@ -141,13 +141,11 @@ def test_job_lock_takes_the_reservation_and_memory_max_the_cap(tmp_path, words, 
 
 
 def test_reading_the_history_does_not_hold_the_file_in_memory(tmp_path):
-    """A FULL landing reads it from every invocation at once: 130 MB each took a laptop to 13.8 GB."""
+    """A landing reads it from every invocation at once; a whole-file read cost about 130 MB each."""
     history, inv = tmp_path / mh.FILE, ["some/test.py"]
-    other = json.dumps({"key": "other", "peak_mib": 1, "pad": "x" * 1000}) + "
-"
-    history.write_text(other * 20_000 + "torn{
-" + json.dumps({"key": mh.key(inv), "peak_mib": 7}) + "
-", encoding="utf-8")
+    other = json.dumps({"key": "other", "peak_mib": 1, "pad": "x" * 1000})
+    wanted = json.dumps({"key": mh.key(inv), "peak_mib": 7})
+    history.write_text("\n".join([other] * 20_000 + ["torn{", wanted, ""]), encoding="utf-8")
     tracemalloc.start()
     try:
         rows = mh._rows(history, inv)
