@@ -1,10 +1,13 @@
 """D-941 5/7: charge bay plan - who goes to which bay, USB connection by voltage rise, leaving by estimate."""
-from fleet.charge_bays import AT_BAY_M, SETTLE_S, Bay, ChargeBays, RobotView
+from fleet.charge_bays import AT_BAY_M, LEAVE_CONFIRM_S, SETTLE_S, Bay, ChargeBays, RobotView
 
 BAYS = [Bay("C1", -0.414, 0.47), Bay("C2", -0.190, 0.47), Bay("C3", 0.032, 0.47)]
 
 
-def robot(rid, percent, pose=None, *, volts=None, online=True, on_trip=False):
+OUT = (0.5, -0.2)   # localized, outside every bay
+
+
+def robot(rid, percent, pose=OUT, *, volts=None, online=True, on_trip=False):
     return RobotView(rid, online, percent, volts, pose, on_trip)
 
 
@@ -59,8 +62,10 @@ def test_leaving_uses_the_arrival_percent_and_the_measured_rate_not_the_charger_
 def test_leaving_the_bay_forgets_the_visit():
     bays = ChargeBays()
     bays.observe(0.0, [robot("a", 14.0, (BAYS[0].x, BAYS[0].y), volts=7.4)], BAYS)
-    bays.observe(1.0, [robot("a", 70.0, (0.5, -0.2))], BAYS)
-    assert bays.plan([robot("a", 70.0, (0.5, -0.2))], BAYS)["bays"][0]["state"] == "free"
+    bays.observe(1.0, [robot("a", 70.0, OUT)], BAYS)
+    assert bays.plan([robot("a", 70.0, OUT)], BAYS)["bays"][0]["state"] == "arrived"   # one reading is not leaving
+    bays.observe(1.0 + LEAVE_CONFIRM_S, [robot("a", 70.0, OUT)], BAYS)
+    assert bays.plan([robot("a", 70.0, OUT)], BAYS)["bays"][0]["state"] == "free"
 
 
 def test_losing_pose_or_link_never_frees_the_bay_it_shows_unknown_and_offers_it_to_nobody():
@@ -89,8 +94,46 @@ def test_a_trusted_pose_elsewhere_frees_the_bay_and_the_same_bay_again_keeps_the
     bays.observe(620.0, [robot("a", 14.0, at_c1, volts=7.50)], BAYS)          # seen again after 600 s blind
     row = actions(bays.plan([robot("a", 14.0, at_c1)], BAYS))["a"]
     assert row["connected_s"] == 10.0 and row["estimated_percent"] == round(14.0 + 2.0 * 10.0 / 60.0, 1)
-    bays.observe(621.0, [robot("a", 70.0, (0.5, -0.2))], BAYS)
-    assert bays.plan([robot("a", 70.0, (0.5, -0.2))], BAYS)["bays"][0]["state"] == "free"
+    bays.observe(621.0, [robot("a", 70.0, OUT)], BAYS)
+    bays.observe(621.0 + LEAVE_CONFIRM_S, [robot("a", 70.0, OUT)], BAYS)
+    assert bays.plan([robot("a", 70.0, OUT)], BAYS)["bays"][0]["state"] == "free"
+
+
+def test_a_single_stray_pose_beyond_the_bay_does_not_end_the_visit_or_the_connection():
+    at_c1 = (BAYS[0].x, BAYS[0].y)
+    bays = ChargeBays()
+    bays.observe(0.0, [robot("a", 14.0, at_c1, volts=7.40)], BAYS)
+    bays.observe(10.0, [robot("a", 14.0, at_c1, volts=7.50)], BAYS)
+    bays.observe(11.0, [robot("a", 14.0, OUT)], BAYS)                 # one glitch
+    bays.observe(12.0, [robot("a", 14.0, at_c1, volts=7.50)], BAYS)   # back: the dwell restarts
+    bays.observe(12.0 + LEAVE_CONFIRM_S - 1, [robot("a", 14.0, OUT)], BAYS)
+    assert bays._visits["a"].connected_at == 10.0
+    assert bays.plan([robot("a", 14.0, at_c1)], BAYS)["bays"][0]["state"] == "charging"
+
+
+def test_blind_time_before_the_connection_is_not_subtracted_from_the_charge_time():
+    at_c1 = (BAYS[0].x, BAYS[0].y)
+    bays = ChargeBays(rate_pct_per_min=2.0)
+    bays.observe(0.0, [robot("a", 14.0, at_c1, volts=7.40)], BAYS)
+    bays.observe(10.0, [robot("a", 14.0, None)], BAYS)                 # blind 10..100 s, before any connection
+    bays.observe(100.0, [robot("a", 14.0, at_c1, volts=7.40)], BAYS)
+    bays.observe(101.0, [robot("a", 14.0, at_c1, volts=7.50)], BAYS)   # connected at 101 s
+    bays.observe(161.0, [robot("a", 14.0, at_c1, volts=7.50)], BAYS)
+    assert actions(bays.plan([robot("a", 14.0, at_c1)], BAYS))["a"]["connected_s"] == 60.0
+
+
+def test_a_bay_nobody_is_known_to_hold_reads_unknown_while_any_robot_is_offline_or_unlocated():
+    """After a Fleet restart the visits are gone: an offline robot may still sit in a bay."""
+    bays = ChargeBays()
+    fleet = [robot("ok", 60.0), robot("dead", 50.0, None, online=False), robot("low", 9.0)]
+    bays.observe(0.0, fleet, BAYS)
+    plan = bays.plan(fleet, BAYS)
+    assert [r["state"] for r in plan["bays"]] == ["unknown"] * 3
+    assert actions(plan)["low"] == {"robot_id": "low", "action": "wait", "reason": "bay_unknown"}
+    fleet = [robot("ok", 60.0), robot("low", 9.0)]                     # the dead one left the roster
+    plan = bays.plan(fleet, BAYS)
+    assert [r["state"] for r in plan["bays"]] == ["planned", "free", "free"]
+    assert actions(plan)["low"]["action"] == "go"
 
 
 def test_the_route_shows_the_active_maps_bays_and_never_dispatches():
@@ -117,7 +160,7 @@ def test_the_route_shows_the_active_maps_bays_and_never_dispatches():
     draft = store.save_draft(site, expected_revision=None, principal_id="op")
     store.activate(expected_revision=draft["revision"], principal_id="op", route_active=False)
     body = client.get("/api/fleet/charge-bays", headers=auth).json()
-    assert body["dispatch"] is False and [(b["bay"], b["state"]) for b in body["bays"]] == [("C1", "free")]
+    assert body["dispatch"] is False and [(b["bay"], b["state"]) for b in body["bays"]] == [("C1", "unknown")]
     assert client.get("/api/fleet/charge-bays").status_code == 401
 
     import asyncio

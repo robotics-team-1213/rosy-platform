@@ -35,13 +35,8 @@ def test_battery_refusal_reasons(value, why):
     assert battery_refusal(value) == why
 
 
-def test_a_charge_return_may_start_critical_but_not_unconfirmed():
-    assert battery_refusal(reading(level="critical", percent=8.0), charge_return=True) is None
-    assert battery_refusal(reading(evidence="stale"), charge_return=True) == "evidence_stale"
-
-
-def _ready():
-    runner, store, ports = _setup()
+def _ready(**config):
+    runner, store, ports = _setup(**config)
     _plan(store, ports, "ring_s:fwd", 0.1, "NW")
     ports.core.mode = "CAMERA_LINE"
     return runner, store, ports
@@ -55,7 +50,7 @@ def _refused(runner):
 
 
 def test_start_is_refused_when_the_battery_is_stale_missing_critical_or_unreadable():
-    runner, store, ports = _ready()
+    runner, store, ports = _ready(period_s=0.01)
     async def stale(_):
         return reading(evidence="stale", percent=100.0)
     async def critical(_):
@@ -80,14 +75,40 @@ def test_a_fresh_battery_still_starts_and_a_pose_fault_is_still_the_pose_code():
     assert run(runner.start("p1", "bob"))["trip_id"] == "p1"
 
 
-def test_a_charge_session_job_is_not_refused_for_a_critical_level_only():
-    runner, store, ports = _ready()
-    async def critical(_):
-        return reading(level="critical", percent=8.0)
-    runner._battery = critical
-    runner.lease.jobs["rosy_60"] = SimpleNamespace(view={"owner_kind": "charge_session"})
-    assert runner.lease.jobs["rosy_60"].view["owner_kind"] == "charge_session"
-    run(runner._check_battery("rosy_60"))
-    runner.lease.jobs["rosy_60"] = SimpleNamespace(view={"owner_kind": "mission"})
+def test_a_charge_return_start_skips_the_battery_check_but_a_mission_step_does_not():
+    runner, store, ports = _ready(period_s=0.01)
+    async def stale(_):
+        return reading(evidence="stale", percent=100.0)
+    for source in (stale, None):      # a dead ADC (rosy_45) must still be able to go and charge
+        runner._battery = source
+        runner.lease.jobs["rosy_60"] = SimpleNamespace(view={"owner_kind": "charge_session"})
+        run(runner._check_battery("rosy_60"))
+        runner.lease.jobs["rosy_60"] = SimpleNamespace(view={"owner_kind": "mission"})
+        with pytest.raises(TripError):
+            run(runner._check_battery("rosy_60"))
+
+
+def test_a_transient_miss_is_retried_briefly_but_a_stale_robot_is_not():
+    runner, store, ports = _ready(period_s=0.01)
+    seen = []
+    async def flaky(_):
+        seen.append(1)
+        return None if len(seen) < 3 else reading()
+    runner._battery = flaky
+    run(runner._check_battery("rosy_60"))                       # two misses, then a fresh read
+    assert len(seen) == 3
+    seen.clear()
+    async def stale(_):
+        seen.append(1)
+        return reading(evidence="stale")
+    runner._battery = stale
     with pytest.raises(TripError):
         run(runner._check_battery("rosy_60"))
+    assert len(seen) == 1                                       # robot-reported stale evidence is no transient miss
+    seen.clear()
+    async def never(_):
+        seen.append(1)
+        return None
+    runner._battery = never
+    err = pytest.raises(TripError, lambda: run(runner._check_battery("rosy_60"))).value
+    assert err.detail == {"reason": "unreadable"} and len(seen) == 3   # bounded
