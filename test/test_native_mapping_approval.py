@@ -383,6 +383,31 @@ def test_a_release_adding_an_unreviewed_package_needs_a_new_measurement(tmp_path
         approval.check(root)
 
 
+def test_a_new_os_image_needs_a_new_measurement(tmp_path):
+    approval = _module()
+    root = _device(tmp_path)
+    image = root / "etc/rosy/os-factory-release.json"
+    image.write_text('{"checksums_sha256": "1", "release_id": "2026.10.29-001"}', encoding="ascii")
+    bundle, evidence = _automatic_candidate(tmp_path)
+    approval.approve(root, bundle, evidence)
+    current = root / "opt/rosy/current"
+    (current / "install/.rosy-release").write_text(NEXT_RELEASE, encoding="ascii")
+    (current / "source-revision.txt").write_text(NEXT_REVISION, encoding="ascii")
+    env = root / "etc/rosy/runtime.env"
+    env.write_text(env.read_text(encoding="ascii").replace("MODE=motor", "MODE=hardware"), encoding="ascii")
+    assert approval.check(root)["measured_release_id"] == RELEASE
+    image.write_text('{"checksums_sha256": "2", "release_id": "2026.11.05-174"}', encoding="ascii")
+    with pytest.raises(ValueError, match="differs from the active release"):
+        approval.check(root)
+
+
+def test_an_empty_checksum_list_fails_closed(tmp_path):
+    approval = _module()
+    root = _approved_then_updated(tmp_path, approval, "")
+    with pytest.raises(ValueError, match="empty"):
+        approval.check(root)
+
+
 def test_a_marker_sealed_before_the_fingerprint_never_carries(tmp_path):
     approval = _module()
     root = _approved_then_updated(tmp_path, approval, _sums())
@@ -446,15 +471,28 @@ def test_a_broken_checksum_list_fails_closed(tmp_path):
         approval.check(root)
 
 
+@pytest.mark.parametrize("line", ["import fleet", "from omx_adapter.x import y", "import os, fleet", "import os as o, games",
+                                  'importlib.import_module("fleet.server")', 'Node(package="rosy_vision", executable="x")'])
+def test_the_guard_recognizes_each_way_of_reaching_a_left_out_package(line):
+    # The pattern below must go red for these, or the guard proves nothing.
+    source = Path(__file__).read_text(encoding="utf-8")
+    pattern = source.split('imports = re.compile(', 1)[1].split(', re.MULTILINE)', 1)[0]
+    names = "|".join(_module().NOT_ON_PINKY) + r"|rosy\.execution\.local"
+    assert re.search(eval(pattern, {"names": names}), line, re.MULTILINE)
+
+
 def test_packages_left_out_of_the_fingerprint_stay_out_of_motion_code():
     # What makes NOT_ON_PINKY safe: nothing that can move the robot imports these or starts them.
     approval = _module()
     # rosy.execution.local is arm policy code that imports omx_adapter: reaching it would reach the arm tree.
     names = "|".join(approval.NOT_ON_PINKY) + r"|rosy\.execution\.local"
-    imports = re.compile(rf"^\s*(?:from|import)\s+(?:{names})(?:\.|\s|$)", re.MULTILINE)
+    imports = re.compile(rf"^\s*(?:from\s+(?:{names})(?:\.|\s)|import\s+(?:[\w.]+(?:\s+as\s+\w+)?\s*,\s*)*(?:{names})\b)"
+                         rf"|import_module\(\s*[\"'](?:{names})\b|package\s*=\s*[\"'](?:{names})[\"']", re.MULTILINE)
     offenders = []
     for folder in ("middleware/core", "middleware/devices/pinky", "middleware/drive", "middleware/perception",
-                   "contracts", "integrations/robots"):
+                   "middleware/media", "middleware/robot_ui", "middleware/skills", "middleware/drivers", "shared",
+                   "contracts", "integrations/robots", "integrations/perception",
+                   "operations/site_execution", "operations/account", "deploy/robot/pinky_pro/native"):
         for path in (ROOT / folder).rglob("*.py") if (ROOT / folder).is_dir() else ():
             if "test" in path.relative_to(ROOT).parts or path.name.startswith("test_"):
                 continue

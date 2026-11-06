@@ -300,8 +300,13 @@ def validate_candidate(root, bundle, evidence_dir, *, carried=False):
 
 
 def motion_fingerprint(root):
-    """Digest of the active release's signed file hashes outside the reviewed exclusions."""
-    lines = []
+    """Digest of the active release's signed file hashes outside the reviewed exclusions.
+
+    The image brings nav2, debs and system Python, which the release does not list, so its
+    identity counts too: a new OS needs a new measurement.
+    """
+    image = Path(root) / "etc/rosy/os-factory-release.json"
+    lines = [f"os-image {_sha256(image.read_bytes()) if image.is_file() else 'none'}"]
     for line in (Path(root) / "opt/rosy/current/SHA256SUMS").read_text(encoding="utf-8").splitlines():
         match = SUMS_LINE.fullmatch(line.strip())
         if match is None:
@@ -310,7 +315,7 @@ def motion_fingerprint(root):
         if (name not in FINGERPRINT_IDENTITY and not name.startswith(FINGERPRINT_PREFIXES)
                 and not name.endswith(".md") and NOT_ON_PINKY_PATH.match(name) is None):
             lines.append(f"{digest} {name}")
-    if not lines:
+    if len(lines) == 1:
         raise ValueError("release checksum list is empty")
     return _sha256("\n".join(sorted(lines)).encode("utf-8"))
 
