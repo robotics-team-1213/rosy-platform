@@ -157,8 +157,14 @@ def install_account_receiver(app, *, config):
     async def callback(request: Request):
         if set(request.query_params) != {'code', 'state'} or len(request.query_params.multi_items()) != 2:
             raise HTTPException(401, detail={'code': 'INVALID_CALLBACK'}, headers=NO_STORE)
-        cookie, target = await invoke(client.finish, request.cookies.get(FLOW_COOKIE, ''),
-                                     request.query_params['state'], request.query_params['code'])
+        try:
+            cookie, target = await invoke(client.finish, request.cookies.get(FLOW_COOKIE, ''),
+                                         request.query_params['state'], request.query_params['code'])
+        except HTTPException:
+            # A person gets the console and its login link, not a JSON dead end. No session is set either way.
+            if 'text/html' in request.headers.get('accept', ''):
+                return RedirectResponse('/console', status_code=303, headers=NO_STORE)
+            raise
         response = RedirectResponse(target, status_code=303, headers=NO_STORE)
         response.delete_cookie(FLOW_COOKIE, secure=True, httponly=True, samesite='lax')
         response.set_cookie(COOKIE, cookie, secure=True, httponly=True, samesite='lax', max_age=2592000)

@@ -32,8 +32,8 @@
 
 ## 최근 기록
 
+- 2026-11-07 · uncommitted · uiux(fleet): 정책 화면 머리 로그인이 정책 화면으로 돌아온다
 - 2026-11-07 · uncommitted · uiux(fleet): 작업·기록을 열 때 관제 화면이 먼저 보이지 않는다
 - 2026-11-07 · uncommitted · uiux(fleet): 계정 화면을 다녀와도 메뉴에 다시 들어가지 않는다
 - 2026-11-07 · uncommitted · uiux(fleet): 로봇 표찰이 장소 이름도 피한다
 - 2026-11-06 · uncommitted · uiux(fleet): 지도 연결 실패 안내, 지도 장소 키보드, 로봇 이름표, Cell 블록 이름표
-- 2026-11-06 · uncommitted · uiux: 관제 용어·연결 문구 통일, 단독 링크 누름면

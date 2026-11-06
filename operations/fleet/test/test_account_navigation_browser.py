@@ -96,6 +96,12 @@ def test_area_is_chosen_before_the_console_modules_and_never_hides_the_page(acco
     expect(page.locator('#fleet-main')).to_have_css('visibility', 'visible', timeout=5000)
 
 
+def test_policy_header_login_returns_to_policy(account_page):
+    page, origin = account_page
+    page.goto(origin + '/console/policy')
+    expect(page.locator('#fleet-login')).to_have_attribute('href', '/console/login?return=%2Fconsole%2Fpolicy')
+
+
 def test_accounts_refusal_does_not_loop_through_a_valid_login(account_page):
     page, origin = account_page
     page.goto(origin + '/console/login')

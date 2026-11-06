@@ -174,6 +174,14 @@ def test_receiver_rejects_callback_parameter_pollution_and_open_returns(receiver
     assert client.get('/api/fleet/auth/callback?code=x&code=y&state=z').status_code == 401
 
 
+def test_receiver_sends_a_person_back_to_the_console_when_the_login_flow_expired(receiver):
+    client = receiver[0]
+    assert client.get('/api/fleet/auth/callback?code=x&state=z').status_code == 401
+    page = client.get('/api/fleet/auth/callback?code=x&state=z', headers={'Accept': 'text/html'}, follow_redirects=False)
+    assert page.status_code == 303 and page.headers['location'] == '/console'
+    assert COOKIE not in page.cookies
+
+
 @pytest.mark.parametrize('target', [
     '/console?view=work&show=new',
     '/console?view=records&show=log&inbox=1',

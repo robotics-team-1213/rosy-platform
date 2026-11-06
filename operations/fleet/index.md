@@ -105,8 +105,8 @@
 
 ## 최근 기록
 
+- 2026-11-07 · uncommitted · 로그인 콜백 실패가 JSON 막다른 길이 아니다
 - 2026-11-07 · uncommitted · 로그인 복귀가 설치·보정 하위 화면을 유지
 - 2026-11-06 · uncommitted · uiux: 물체 카탈로그 미지정 안내를 한글로
 - 2026-11-06 · uncommitted · feat(fleet): 관제 수동 모드 전환
 - 2026-11-05 · uncommitted · test(fleet): 팔 승인 HTTP 계약 시험의 논리 시계 통일
-- 2026-11-05 · uncommitted · test(fleet): 지도 화면 전환 대기와 초기 모듈 로드 복구
