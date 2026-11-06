@@ -152,12 +152,14 @@ export function showFleet(fleet, robots = null) {
 export function watchFleet(request, {every = 5000, interval = setInterval} = {}) {
   request("/api/fleet/auth/connection").then(showConnection).catch(() => {});
   async function read() {
+    if (globalThis.document?.hidden) return;  // a background tab does not keep reading /api/fleet/state
     let state;
     try { state = await request("/api/fleet/state"); } catch (error) { return noteLink(error); }
     noteLink();
     try { showFleet(state.fleet, state.robots); } catch { /* a paint error after an answer is not a lost link */ }
   }
   read();
+  globalThis.document?.addEventListener?.("visibilitychange", read);  // back in view: read now, not after up to 5 s
   return interval(read, every);
 }
 
