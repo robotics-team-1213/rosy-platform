@@ -44,6 +44,21 @@ HEX_40 = re.compile(r"[0-9a-f]{40}\Z")
 HEX_64 = re.compile(r"[0-9a-f]{64}\Z")
 RELEASE_ID = re.compile(r"[0-9]{4}\.[0-9]{2}\.[0-9]{2}-[0-9]{3}\Z")
 EVIDENCE_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]*\.json\Z")
+# D-986 motion fingerprint: every signed release file counts unless named here, so a new
+# package needs a new measurement until someone reviews it. Web files stay in: the hold
+# button's release is part of the measured stop.
+# deb-packages.txt lists the build runner, not the robot; ros-packages.txt stays in.
+FINGERPRINT_IDENTITY = frozenset({"manifest.json", "SHA256SUMS", "SHA256SUMS.sig", "deb-packages.txt",
+                                  "source-revision.txt", "install/.rosy-release"})
+# Headers do not run. sllidar_ros2's pinned source built to different bytes between
+# identical inputs (004 and 005 on b8xy, 2026-11-07), and it does not command a motor.
+FINGERPRINT_PREFIXES = ("install/include/", "install/lib/sllidar_ros2/")
+# Payload packages no Pinky unit starts; test_native_mapping_approval pins that motion code imports none.
+NOT_ON_PINKY = ("fleet", "rosy_vision", "rosy_cell", "rosy_situation", "rosy_discord", "games",
+                "gz_sim", "isaac_sim", "rasptank_metal", "omx", "omx_adapter")
+NOT_ON_PINKY_PATH = re.compile(r"install/(?:share|lib)/(?:python[0-9.]+/(?:site|dist)-packages/)?(?:%s)(?:/|-[^/]*-info/)"
+                               % "|".join(NOT_ON_PINKY))
+SUMS_LINE = re.compile(r"([0-9a-f]{64}) [ *](.+)\Z")
 
 
 def _object(value, fields, label):
@@ -220,8 +235,11 @@ def _validate_trial(raw, direction, cause):
     return latency
 
 
-def validate_candidate(root, bundle, evidence_dir):
-    """Verify a native G4 bundle against the current device and raw files."""
+def validate_candidate(root, bundle, evidence_dir, *, carried=False):
+    """Verify a native G4 bundle against the current device and raw files.
+
+    carried: check() proved the active release keeps the measured motion fingerprint.
+    """
     schema = bundle.get("schema_version") if isinstance(bundle, dict) else None
     common_fields = (
         "schema_version", "robot_number", "release_id", "source_revision",
@@ -236,7 +254,7 @@ def validate_candidate(root, bundle, evidence_dir):
     device = _device_identity(root)
     if type(bundle["robot_number"]) is not int:
         raise ValueError("G4 bundle schema or robot number is invalid")
-    for name in ("robot_number", "release_id", "source_revision"):
+    for name in ("robot_number",) if carried else ("robot_number", "release_id", "source_revision"):
         if bundle[name] != device[name]:
             raise ValueError(f"G4 {name} differs from the active release")
     if device["runtime_mode"] not in ("motor", "hardware"):
@@ -279,6 +297,27 @@ def validate_candidate(root, bundle, evidence_dir):
         digests.add(trial["sha256"])
         seen.add(key)
     return {"ready": True, "trials": len(seen), "release_id": device["release_id"]}
+
+
+def motion_fingerprint(root):
+    """Digest of the active release's signed file hashes outside the reviewed exclusions.
+
+    The image brings nav2, debs and system Python, which the release does not list, so its
+    identity counts too: a new OS needs a new measurement.
+    """
+    image = Path(root) / "etc/rosy/os-factory-release.json"
+    lines = [f"os-image {_sha256(image.read_bytes()) if image.is_file() else 'none'}"]
+    for line in (Path(root) / "opt/rosy/current/SHA256SUMS").read_text(encoding="utf-8").splitlines():
+        match = SUMS_LINE.fullmatch(line.strip())
+        if match is None:
+            raise ValueError("release checksum list is invalid")
+        digest, name = match.groups()
+        if (name not in FINGERPRINT_IDENTITY and not name.startswith(FINGERPRINT_PREFIXES)
+                and not name.endswith(".md") and NOT_ON_PINKY_PATH.match(name) is None):
+            lines.append(f"{digest} {name}")
+    if len(lines) == 1:
+        raise ValueError("release checksum list is empty")
+    return _sha256("\n".join(sorted(lines)).encode("utf-8"))
 
 
 def _atomic_write(path, content, *, group_id=None):
@@ -339,6 +378,7 @@ def approve(root, bundle, evidence_dir, *, reviewer=None):
         "source_revision": bundle["source_revision"],
         "bundle_sha256": _sha256(bundle_bytes),
         "approved_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "motion_fingerprint": motion_fingerprint(root),
     }
     if bundle["schema_version"] == 1:
         common["reviewer"] = reviewer
@@ -366,6 +406,7 @@ def check(root=Path("/"), *, runtime_mode=None):
     bundle_bytes = bundle_path.read_bytes()
     bundle = _read_json(bundle_path)
     review = None
+    carried = False
     for kind in ("hardware", "navigation"):
         path = approvals / f"{kind}.approved"
         if path.is_symlink() or not path.is_file() or path.stat().st_size == 0:
@@ -374,16 +415,26 @@ def check(root=Path("/"), *, runtime_mode=None):
             "schema_version", "kind", "robot_number", "release_id",
             "source_revision", "bundle_sha256", "approved_at",
         )
-        marker = _object(_read_json(path), (*marker_fields, "reviewer")
+        marker = _read_json(path)
+        # Markers sealed before D-986 have no fingerprint and can never carry.
+        fingerprint = marker.pop("motion_fingerprint", None) if isinstance(marker, dict) else None
+        marker = _object(marker, (*marker_fields, "reviewer")
                          if bundle.get("schema_version") == 1 else (*marker_fields, "operator"),
                          f"{kind} approval")
         if marker["schema_version"] != bundle.get("schema_version") or marker["kind"] != kind:
             raise ValueError(f"{kind} approval is invalid")
         if marker["bundle_sha256"] != _sha256(bundle_bytes):
             raise ValueError(f"{kind} approval bundle digest differs")
-        for name in ("robot_number", "release_id", "source_revision"):
+        if marker["robot_number"] != device["robot_number"]:
+            raise ValueError(f"{kind} approval robot_number differs from the active release")
+        for name in ("release_id", "source_revision"):
+            if marker[name] != bundle.get(name):
+                raise ValueError(f"{kind} approval {name} differs from its bundle")
             if marker[name] != device[name]:
-                raise ValueError(f"{kind} approval {name} differs from the active release")
+                # Measured on another release: only the same signed motion files keep it.
+                if not fingerprint or fingerprint != motion_fingerprint(root):
+                    raise ValueError(f"{kind} approval {name} differs from the active release")
+                carried = True
         identity = "reviewer" if bundle["schema_version"] == 1 else "operator"
         _text(marker[identity], identity)
         if identity == "operator" and marker[identity] != bundle["operator"]:
@@ -393,7 +444,9 @@ def check(root=Path("/"), *, runtime_mode=None):
         if review is not None and marker_review != review:
             raise ValueError("hardware and navigation approvals require the same review")
         review = marker_review
-    result = validate_candidate(root, bundle, approvals / "g4-evidence")
+    result = validate_candidate(root, bundle, approvals / "g4-evidence", carried=carried)
+    if carried:
+        result = {**result, "measured_release_id": bundle["release_id"], "release_id": device["release_id"]}
     return result
 
 
