@@ -165,7 +165,9 @@ export function createMapPolling({ scope, el, view, auth, call, camera, draw, la
       showSiteMap();
       return;
     }
-    if (auth.locked || (!mapGate.due() && !view.stateUnavailable)) return;
+    // Fleet unreachable: say so now, not after a slow NO_MAP retry.
+    if (view.stateUnavailable) mapGate.reset();
+    if (auth.locked || !mapGate.due()) return;
     let mapFailure = "retry";
     try {
       // The same answer as Fleet's NO_MAP, without a request that can only 404.

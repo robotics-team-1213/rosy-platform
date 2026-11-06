@@ -151,7 +151,7 @@ function drawGraph(packet, links, map) {
       class: 'edge' + (evidence(link) !== 'fresh' ? ' old' : link.failure_stage !== 'none' ? ' problem' : '')})); }
   for (const [id, point] of points) { const node = map.get(id); if (!node) continue;
     const group = svg('g', {}); group.append(svg('title', {}, node.label + ' · ' + id), svg('rect', {x: point.x, y: point.y, width: 190, height: 52, rx: 4}),
-      svg('text', {x: point.x + 10, y: point.y + 21}, Array.from(node.label).slice(0, 18).join('')),
+      svg('text', {x: point.x + 10, y: point.y + 21}, Array.from(node.label).length > 18 ? Array.from(node.label).slice(0, 17).join('') + '…' : node.label),
       svg('text', {x: point.x + 10, y: point.y + 40, class: 'detail'}, (KIND[node.kind] || '항목') + ' · ' + healthText(node))); graph.append(group); }
   $('graph-note').textContent = `그림 ${chosen.length}개 경로 · 연결 목록 ${Math.min(links.length, 100)} / ${links.length}개. 검색으로 범위를 좁히세요. 원천 판정의 신선도는 목록에서 확인할 수 있습니다.`;
 }
