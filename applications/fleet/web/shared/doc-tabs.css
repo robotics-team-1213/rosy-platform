@@ -33,6 +33,3 @@
   /* app-shell이 좁은 뷰포트에서 지우는 머리글을 Fleet 좌석에서는 유지한다 — 단계 구분(Cell 적재 단계·AI 판단)이 사라지지 않게. */
   .fleet-body > .ui-subnav .ui-subnav-head { display: block; }
 }
-
-/* styles.css의 main 두 칸은 관제 문서용이다. 설치는 넓은 단이 아니면 한 칸이다(전화에서 171px로 눌리던 작업 칸). */
-@media (width < 64rem) { #install-main { grid-template-columns: minmax(0, 1fr); } }
