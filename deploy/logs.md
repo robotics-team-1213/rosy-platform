@@ -4628,3 +4628,10 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: 공식 원격 시험 `test/test_omx_cell_params_web.py`·`test/test_omx_cell_params.py` 74 pass, skip 0(실제 `session_lock` flock 포함). 로컬 Chromium에서 조절·세션 표시·저장 흐름을 확인했고 콘솔 오류는 0건이다. 독립 검토가 찾은 이득·틈 값 잠금 누락, 폴링의 잠금 충돌, 확인과 교체 사이 경합을 고쳤다.
 - gate 변화: 없음 — 실제 셀 PC에서 페이지를 띄운 수용은 아직 하지 않았다.
 - CE: 해당 없음 — 새 기능이며 해결한 장애가 없다.
+
+## 2026-11-06 · dc3b677978 · feat(omx): 셀 페이지에 서보 값과 정한 층 표시
+
+- 변경: `session_caps.servo_layers`와 `cell_params_web.py --caps/--profile`을 추가했다. 팔마다 모터별 P·I·가속·속도·PWM·전류의 최종값, 그 값을 정한 층(모델·현장·로봇), 덮인 값을 읽기 전용 표로 보여 준다. 세션이 거절할 파일은 그 이유를 표시한다. 값을 고치는 경로는 없다.
+- 증거: 원격 시험 `test/test_omx_cell_params_web.py`·`test/test_omx_cell_params.py`·`test/test_omx_session_caps_layers.py` 89 pass, skip 0. 표의 값이 `load_caps` 결과와 같은지 시험으로 고정했다. 셀 PC에 임시로 띄운 페이지를 터널과 Chromium으로 봤다: 실제 caps 2개와 로봇 프로필 1개, 콘솔 오류 0건, 폰 폭 넘침 없음. 임시 파일과 서버는 지웠고 원본 파일은 바뀌지 않았다.
+- gate 변화: 없음 — 셀 PC에 상설 설치하지 않았고 실제 값 파일 저장도 하지 않았다.
+- CE: 해당 없음 — 새 기능이며 해결한 장애가 없다.

@@ -7,7 +7,8 @@
 Every parameter is listed; vision thresholds and tolerances can be changed, guards and motion values cannot
 (lock_reason). A save validates with cell_params, replaces the file atomically and appends the previous entries to
 <file>.history.jsonl. It is refused while a session runs: a run's processes read the file at different moments, and
-its attempt rows would then name values it did not use. New values apply from the next run.
+its attempt rows would then name values it did not use. New values apply from the next run. Run it as the user that
+runs the sessions, with the same ROSY_OMX_HOME: the lock it checks is printed at start.
 
 `--caps arm_b=caps.json [--profile arm_b=robot-profile.json]` also shows, read-only, each follower motor's servo values
 and the layer that set them, as `record_session --caps --operating-profile` would use them (session_caps.servo_layers).
@@ -87,7 +88,8 @@ def cell_hold():
     """Hold the cell exclusively while a save reads and replaces the file: no session starts between the check and the
     write, and a second page cannot overwrite this one."""
     # shortcut: a session starting in these milliseconds exits and must be restarted; a person pressed save, so it is
-    # rare and visible. If it ever matters, make session_lock wait briefly for this hold.
+    # rare and visible. A whole-cell session ending in the same milliseconds keeps test jobs held off until the busy
+    # marker expires (joint_tune.hold_test_jobs). If either ever matters, make those wait briefly for this hold.
     import fcntl
 
     from joint_tune import lock_root
@@ -289,7 +291,10 @@ def main(argv=None):
             parser.error(f"{path}: {exc}")
     server = make_server(ParamFiles(files), args.port,
                          servo={name: (path, profiles.get(name)) for name, path in caps.items()})
-    print(f"cell params: http://127.0.0.1:{server.server_port}", flush=True)
+    from joint_tune import lock_root
+
+    # A page with another HOME or ROSY_OMX_HOME would watch a different lock and save during a session.
+    print(f"cell params: http://127.0.0.1:{server.server_port}, session lock {lock_root() / 'session.lock'}", flush=True)
     server.serve_forever()
 
 
