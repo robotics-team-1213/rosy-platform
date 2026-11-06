@@ -1,0 +1,9 @@
+.ladder-rounds{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,20rem),1fr));gap:var(--space-3)}
+.ladder-card{min-width:0;padding:var(--space-3);border:1px solid var(--border);border-radius:var(--radius-2,6px)}
+.ladder-card h3{margin:0;overflow-wrap:anywhere}.ladder-card p{margin:var(--space-1) 0;overflow-wrap:anywhere}
+.ladder-stage{display:grid;gap:2px;margin-block-start:var(--space-2);padding-inline-start:var(--space-2);border-inline-start:3px solid var(--border)}
+.ladder-stage small{color:var(--text-secondary);overflow-wrap:anywhere}
+.ladder-stage[data-status=passed]{border-inline-start-style:solid}.ladder-stage[data-status=failed],.ladder-stage[data-status=blocked]{border-inline-start-style:double}
+.ladder-stage[data-status=not_run],.ladder-stage[data-status=pending]{border-inline-start-style:dashed}
+.ladder-note{padding:var(--space-2);border:1px dashed var(--border);font-weight:600}
+.ladder-best{font-weight:600}

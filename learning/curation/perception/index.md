@@ -27,8 +27,8 @@
 
 ## 최근 기록
 
+- 2026-11-07 · uncommitted · feat(learning): 학습 사다리 화면 (/learning/ladder)
 - 2026-11-06 · uncommitted · uiux(learning): 도구 모드 글자, 안내 하나, 새 학습 과제 단추, 진행 중 단계 줄, 실패·거절 다음 행동
 - 2026-11-06 · uncommitted · uiux: 클래스 관리 ui-button, 네트워크·5xx 실패 문구
 - 2026-11-06 · uncommitted · uiux(learning): 실패 이유 표시와 실패·거절 구분
 - 2026-11-06 · uncommitted · uiux(learning): 객체 저장이 서버에 닿기 전 이탈 경고
-- 2026-11-06 · uncommitted · uiux(learning): 파괴·대체 확인을 공용 확인 창으로

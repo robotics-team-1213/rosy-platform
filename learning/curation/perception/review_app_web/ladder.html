@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="ko" data-theme="dark"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Rosy Learning — 학습 사다리</title><link rel="stylesheet" href="/common/tokens.css"><script src="/common/theme.js"></script>
+<link rel="stylesheet" href="/common/components.css"><link rel="stylesheet" href="/common/component-controls.css"><link rel="stylesheet" href="/common/app-shell.css"><link rel="stylesheet" href="/app.css">
+<link rel="stylesheet" href="/ladder.css"><script type="module" src="/ladder.js"></script></head><body><a class="skip-link" href="#ladder-main">학습 사다리로 이동</a>
+<ui-shell grammar="procedure" class="ui-app-shell"><!-- review:header:start -->
+<ui-topbar role="banner"><ui-brand href="/learning" aria-label="Rosy Learning"><b>Learning</b></ui-brand><span data-spacer></span><a data-kind="quiet" class="ui-action-link" data-action-icon="account" data-learning-account-entry href="/accounts" title="로그인·계정">로그인·계정</a>
+<ui-button kind="quiet" data-theme-cycle="" data-icon-only="" type="button" aria-label="테마 변경" data-action-icon="theme-dark"></ui-button></ui-topbar>
+<!-- review:header:end -->
+<div class="ui-app-body"><div class="ui-rail"><nav class="ui-rail-nav workspace-tabs" aria-label="학습 화면"><!-- review:rail:start -->
+<a class="ui-rail-item" data-action-icon="list" href="/learning" aria-label="홈">홈</a><a class="ui-rail-item" data-action-icon="folder" href="/catalog" aria-label="자료 등록">자료</a><a class="ui-rail-item" data-action-icon="pencil" href="/" aria-label="정답 달기">정답</a><a class="ui-rail-item" data-action-icon="robot" href="/learning/tasks" aria-label="학습 실행" aria-current="true">학습</a><a class="ui-rail-item" data-action-icon="check" href="/learning/evaluate" aria-label="평가·승격">평가·승격</a>
+<!-- review:rail:end --></nav></div><div class="ui-subnav"><nav class="ui-subnav-nav" aria-label="학습 하위 메뉴"><span class="ui-subnav-head">학습</span><a class="ui-subnav-item" href="/learning/tasks">학습 과제</a><a class="ui-subnav-item" href="/learning/tasks/manage">전문가 설정</a><a class="ui-subnav-item" href="/learning#pipeline">인식 학습</a><a class="ui-subnav-item" href="/learning/sim">SIM 실험</a><a class="ui-subnav-item" href="/learning/ladder" aria-current="page">학습 사다리</a></nav></div>
+<div class="ui-app-main"><div class="ui-pathbar"><nav class="ui-crumbs" aria-label="현재 위치"><a href="/learning">Learning</a><span aria-hidden="true">/</span></nav><h1>학습 사다리</h1><span class="ui-crumbs" id="learning-tool-path"></span></div><main id="ladder-main" class="learning-main ui-task-page" tabindex="-1">
+<p>라운드마다 데이터를 모으고, 학습하고, 시뮬레이션에서 평가합니다. 여기 숫자는 시뮬레이션 근거이며 실제 팔이 성공했다는 뜻이 아닙니다(D-947).</p>
+<ui-status id="ladder-notice" state="ready" role="status">사다리 연결을 확인하는 중입니다.</ui-status><ui-status id="ladder-error" state="error" role="alert" hidden></ui-status>
+<section class="learning-section" aria-labelledby="ladder-rounds-title"><div class="ui-workspace-bar"><h2 id="ladder-rounds-title">1 · 라운드 목록</h2><ui-button id="ladder-refresh" data-action-icon="refresh" kind="quiet">새로고침</ui-button></div>
+<p class="quiet">최근 라운드가 위에 있습니다. 단계마다 그 단계가 말할 수 있는 범위와, 막히거나 실행하지 않은 이유를 함께 보여 줍니다.</p><div id="ladder-rounds" class="ladder-rounds" aria-live="polite"></div></section>
+<section class="learning-section" aria-labelledby="ladder-detail-title"><h2 id="ladder-detail-title">2 · 라운드 상세</h2><div id="ladder-detail" aria-live="polite"><p class="quiet">라운드를 선택하세요.</p></div></section>
+<section class="learning-section" aria-labelledby="ladder-decide-title"><h2 id="ladder-decide-title">3 · 사람의 판단</h2>
+<p class="quiet">「기준으로 바꾸기」는 이 라운드를 앞으로의 비교 기준으로 삼는다는 기록일 뿐입니다. 장치에 적용하거나 정식으로 인정하는 절차가 아닙니다. MuJoCo 단계를 통과한 라운드만 판단할 수 있습니다.</p>
+<form id="ladder-decision" class="ui-form learning-form"><label class="ui-field-label">선택한 라운드 <output id="ladder-decide-round" class="ui-field">없음</output></label>
+<label class="ui-field-label">판단 <select id="ladder-verdict" class="ui-field"><option value="replace">기준으로 바꾸기</option><option value="keep">지금 기준 유지</option></select></label>
+<label class="ui-field-label">한 줄 근거 (필수) <input id="ladder-note" class="ui-field" type="text" maxlength="200" required></label>
+<div class="ui-workspace-bar"><ui-button id="ladder-decide" data-action-icon="check" kind="primary" type="submit" disabled>판단 기록</ui-button></div></form>
+<p id="ladder-decided" class="quiet" role="status"></p></section>
+<section class="learning-section" aria-labelledby="ladder-start-title"><h2 id="ladder-start-title">4 · 새 라운드 시작</h2>
+<p id="ladder-start-state" class="quiet" role="status"></p>
+<form id="ladder-start-form" class="ui-form learning-form"><label class="ui-field-label">수집 에피소드 수 (1~1000) <input id="ladder-episodes" class="ui-field" type="number" min="1" max="1000" step="1" value="60" required></label>
+<label class="ui-field-label">평가 에피소드 수 (1~500) <input id="ladder-eval" class="ui-field" type="number" min="1" max="500" step="1" value="50" required></label>
+<label class="ui-field-label">학습 단계 수 (1~1000000) <input id="ladder-steps" class="ui-field" type="number" min="1" max="1000000" step="1" value="20000" required></label>
+<label class="ui-field-label">학습률 (1e-7~1e-2) <input id="ladder-lr" class="ui-field" type="number" min="0.0000001" max="0.01" step="any" value="0.00001" required></label>
+<label class="ui-field-label">이어받을 라운드 <select id="ladder-parent" class="ui-field"><option value="">없음 (처음부터)</option></select></label>
+<div class="ui-workspace-bar"><ui-button id="ladder-start" data-action-icon="next" kind="primary" type="submit" disabled>라운드 시작</ui-button></div></form></section>
+</main></div></div></ui-shell></body></html>
