@@ -1,4 +1,4 @@
-"""D-757 resource grants and Ed25519 access JWTs; no network or role inheritance."""
+"""D-757 resource grants, Ed25519 access JWTs and the shared Origin check; no network or role inheritance."""
 from __future__ import annotations
 
 import time
