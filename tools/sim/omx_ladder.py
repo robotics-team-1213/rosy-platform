@@ -177,8 +177,15 @@ def run_round(args) -> int:
     stage = row["stages"]["mujoco"]
     stage.update(status="passed", eval=evaluation, finished_at=datetime.now().astimezone().isoformat(timespec="seconds"),
                  artifacts=[dict(name=name, path=f"artifacts/{name}", kind="image") for name in result["artifacts"]])
-    best = read_round(root, parent)["stages"]["mujoco"]["eval"] if parent else None
-    row["comparison"] = dict(against=parent, result=compare(evaluation, best))
+    best = None
+    if parent:
+        # The same seeds for both: an old score came from easier or harder seeds and would not compare.
+        model = root / "rounds" / parent / "train/checkpoints/last/pretrained_model"
+        subprocess.run([args.python, sim, "--cell", args.cell, "evaluate", "--model", str(model), "--episodes", str(args.eval_episodes),
+                        "--seed-base", str(base), "--out", str(run / "eval-parent.json"), "--artifacts", str(run / "artifacts-parent")],
+                       env=environment, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        best = summarise(json.loads((run / "eval-parent.json").read_text(encoding="utf-8"))["rows"], base)
+    row["comparison"] = dict(against=parent, same_seeds=bool(parent), parent_eval=best, result=compare(evaluation, best))
     write_round(root, row)
     print(json.dumps(dict(round_id=row["round_id"], eval=evaluation, comparison=row["comparison"]), ensure_ascii=False))
     return 0
