@@ -235,6 +235,7 @@ function connectAI(){
   });
 }
 async function select(index) {
+  saveOpen=false;
   const serial = ++loadSerial;
   cancelGesture(); selected=null; coordinatePreview=null; undo=null;
   $('empty-review').hidden=true;$('review-content').hidden=false;
@@ -352,13 +353,16 @@ function quickClasses() {
   }
   enable();
 }
+// A save in flight or just failed may not be on the server yet; leaving would lose it silently.
+let saveOpen=false;
+addEventListener('beforeunload',event=>{if(saveOpen)event.preventDefault();});
 async function mutate(action, extras={}, restoring=false) {
   if (busy || !ready || conflicted || forbidden) return;
-  busy=true; error(); $('complete').checked=false; $('save-status').textContent='서버에 저장 중…'; enable();
+  saveOpen=true; busy=true; error(); $('complete').checked=false; $('save-status').textContent='서버에 저장 중…'; enable();
   const id=frame.index,decidedOrdinal=frameOrdinal(workspace,frame.index);
   const previous=structuredClone(frame.review.boxes);
   try {
-    const saved=await request(`/api/frames/${id}`,{version:frame.version,action,...extras});
+    const saved=await request(`/api/frames/${id}`,{version:frame.version,action,...extras});saveOpen=false;
     workspace.counts[frame.status]--;workspace.counts[saved.status]++;
     workspace.frames[workspace.frames.findIndex(f=>f.index===id)]=saved; frame=structuredClone(saved);
     $('export-result').textContent=$('export-result').textContent.replace(/^이번 준비 결과 · /,'이전 준비 결과 · 현재 결정을 반영하려면 다시 준비하세요. ');
