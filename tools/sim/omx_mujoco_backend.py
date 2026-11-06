@@ -36,13 +36,14 @@ GRIP_SOLREF, GRIP_SOLIMP = [.002, 1], [.95, .99, .001, .5, 2]
 def mjcf_urdf(urdf, mesh_root, gripper='omx-f'):
     """The URDF as MuJoCo's parser takes it: no gazebo/ros2_control blocks, meshes under mesh_root.
 
-    Vendor meshes are bare names in the one share dir. The jaw v2.1 URDF names two packages that share the
-    meshes/omx_f layout (the follower meshes are byte-identical), so each path keeps its package folder and mesh_root is
-    the vendored assets tree with the meshes/omx_f subpaths kept.
+    Vendor meshes are bare names in the one share dir. The jaw v2.1 URDF names every mesh under its own package,
+    but only the jaws are vendored there; the follower meshes live in open_manipulator_description. mesh_root is
+    the vendored assets tree and each path is resolved to the package that holds the file.
     """
     urdf = re.sub(r'<(gazebo|ros2_control)\b.*?</\1>', '', urdf, flags=re.S)
     if gripper == 'palletizing-v2.1':
-        urdf = re.sub(r'package://(open_manipulator_description|omx_f_palletizing_description)/', r'/', urdf)
+        urdf = re.sub(r'package://[a-z_]+/meshes/omx_f/palletizing_', 'omx_f_palletizing_description/meshes/omx_f/palletizing_', urdf)
+        urdf = re.sub(r'package://[a-z_]+/meshes/omx_f/', 'open_manipulator_description/meshes/omx_f/', urdf)
         strippath = 'false'
     else:
         urdf = re.sub(r'package://open_manipulator_description/meshes/omx_f/', '', urdf)
