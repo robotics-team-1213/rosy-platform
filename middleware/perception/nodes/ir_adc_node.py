@@ -26,11 +26,7 @@ class _ADCReader:
     def read_channels(self) -> list[int]:
         import fcntl
 
-        # D-192 bus ownership: the MCU keeps one register pointer, and
-        # rosylib.Battery (bringup battery_publisher) reads channel 4 of the
-        # same MCU from another process. Every Rosy reader holds an exclusive
-        # flock on its /dev/i2c-1 descriptor for the whole pointer-write,
-        # settle, read sequence.
+        # D-192: one flock spans pointer-write, settle and read (rosylib.Battery shares the MCU).
         values = []
         fcntl.flock(self._fd, fcntl.LOCK_EX)
         try:
@@ -53,6 +49,7 @@ class IRADCNode(Node):
         self.declare_parameter('address', 0x08)
         self.declare_parameter('rate_hz', 20.0)
         self._reader = None
+        self._failures, self._retry_at = 0, 0.0
         self._publisher = self.create_publisher(UInt16MultiArray, 'ir_sensor/range', 10)
         rate = max(1.0, float(self.get_parameter('rate_hz').value))
         self.create_timer(1.0 / rate, self._tick)
@@ -73,7 +70,7 @@ class IRADCNode(Node):
             return False
 
     def _tick(self) -> None:
-        if not self._connect():
+        if time.monotonic() < self._retry_at or not self._connect():
             return
         try:
             sample = self._reader.read_channels()
@@ -85,7 +82,10 @@ class IRADCNode(Node):
             except OSError:
                 pass
             self._reader = None
+            self._failures += 1  # a hung bus costs ~1 s a try under the flock: retry gap 0, 2, 6 ... 30 s
+            self._retry_at = time.monotonic() + min(30.0, 2.0 ** self._failures - 2)
             return
+        self._failures = 0
         self._publisher.publish(UInt16MultiArray(data=sample))
 
     def destroy_node(self):
