@@ -50,10 +50,10 @@
   .ui-rail-nav { flex-direction: row; overflow-x: auto; }
   .ui-rail-item { flex: none; flex-direction: column; align-self: auto; white-space: nowrap; inline-size: var(--size-rail-item); min-block-size: var(--target-secondary); padding: 0; font-size: var(--text-micro); }
   .ui-subnav-nav { flex-direction: row; overflow-x: auto; padding: var(--inset-rail); }
-  /* Scroll hint: ui-wiring.js marks the side that still has hidden items; the edge fades toward it. */
-  .ui-rail-nav[data-more~="end"], .ui-subnav-nav[data-more~="end"] { mask-image: linear-gradient(to right, #000 calc(100% - 2rem), transparent); }
-  .ui-rail-nav[data-more~="start"], .ui-subnav-nav[data-more~="start"] { mask-image: linear-gradient(to left, #000 calc(100% - 2rem), transparent); }
-  .ui-rail-nav[data-more="start end"], .ui-subnav-nav[data-more="start end"] { mask-image: linear-gradient(to right, transparent, #000 2rem, #000 calc(100% - 2rem), transparent); }
+  /* Scroll hint: ui-wiring.js marks the side that still has hidden items; a solid edge says more is there (no gradients, concept 16). */
+  .ui-rail-nav[data-more~="end"], .ui-subnav-nav[data-more~="end"] { box-shadow: inset calc(0px - var(--focus-ring-width)) 0 0 var(--border-default); }
+  .ui-rail-nav[data-more~="start"], .ui-subnav-nav[data-more~="start"] { box-shadow: inset var(--focus-ring-width) 0 0 var(--border-default); }
+  .ui-rail-nav[data-more="start end"], .ui-subnav-nav[data-more="start end"] { box-shadow: inset var(--focus-ring-width) 0 0 var(--border-default), inset calc(0px - var(--focus-ring-width)) 0 0 var(--border-default); }
   .ui-subnav-head { display: none; }
   .ui-stage-grid[data-layout="sense"] { grid-template-columns: minmax(0, 1fr) var(--context-track); grid-template-rows: auto; align-content: start; grid-template-areas: "stage now" "cam now" "sense sense"; }
 }
