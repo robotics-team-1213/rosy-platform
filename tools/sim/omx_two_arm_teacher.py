@@ -102,10 +102,9 @@ class Teacher:
         g_open, g_to = jaw.angle_for_gap(OPEN_GAP[sa["kind"]]), jaw.angle_for_gap(OPEN_GAP[sb["kind"]])
         g_hold = jaw.angle_for_gap(HOLD_GAP)
         q = self.q_now(data, arm)
-        first = np.array([*wps[0][1], wps[0][2]])
-        ok, q_app, err = ik_arm.reach(q, first, wps[0][3])
+        ok, q_app, _, note = tasks.solve_chain(ik_arm, wps, q)
         if not ok:
-            return dict(row, result="unreachable", reason=f"{arm} approach {err * 1000:.1f} mm short")
+            return dict(row, result="unreachable", reason=f"{arm} cannot do the step tool-down inside the limits: {note}")
         self.move(data, arm, np.append(q[:5], g_open), np.append(q_app[:5], g_open), 2.5, step["id"], idle)
         q, off, worst, prev, held = q_app, None, 0., wps[0], {}
         for name, xy, z, yaw, grip in wps[1:]:

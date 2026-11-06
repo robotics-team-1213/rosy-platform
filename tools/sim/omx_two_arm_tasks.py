@@ -65,22 +65,42 @@ def clearance(moving, idle_pose, q_path, idle):
     return min(float(np.linalg.norm(points(moving, q)[:, None] - fixed[None], axis=2).min()) for q in q_path)
 
 
+def solve_chain(arm, wps, q0, samples=12):
+    """Walk the waypoints with continuous IK (warm start, as the teacher moves): the jaw closes the same way turned 180 deg, so joint5 has two
+    branches and a path that needs joint5 past its limit on one branch is tried on the other. Returns (ok, approach q, joint path, note)."""
+    note = "no branch converged"
+    for j5 in (q0[4], -1.5, 0., 1.5):
+        seed = np.array(q0, float)
+        seed[4] = j5
+        first = np.array([*wps[0][1], wps[0][2]])
+        ok, q, err = arm.reach(seed, first, wps[0][3])
+        if not ok:
+            note = f"approach {err * 1000:.1f} mm short at x {first[0]:.3f} y {first[1]:.3f} z {first[2]:.3f}"
+            continue
+        approach, path, last, yaw_last, failed = q, [q.copy()], first, wps[0][3], None
+        for name, xy, z, yaw, _ in wps[1:]:
+            target = np.array([*xy, z])
+            for s in np.linspace(0, 1, samples + 1)[1:]:
+                q, e_pos, e_rot = arm.ik(q, last + (target - last) * s, yaw_last + (yaw - yaw_last) * s, 40)
+                if e_pos > 1e-3 or e_rot > .03:
+                    failed = f"{name} {e_pos * 1000:.1f} mm / {e_rot:.2f} rad off at x {xy[0]:.3f} y {xy[1]:.3f} z {z:.3f}"
+                    break
+                path.append(q.copy())
+            if failed:
+                break
+            last, yaw_last = target, yaw
+        if not failed:
+            return True, approach, path, None
+        note = failed
+    return False, None, [], note
+
+
 def check_reach(layout, step, here, arm):
-    """Walk the step's waypoints with the arm's IK, sampling 6 points per leg. Returns (problems, joint path, first-failure note)."""
-    q, path, problems, last = arm.home.copy(), [], [], None
-    for name, xy, z, yaw, _ in waypoints(layout, step, here):
-        target = np.array([*xy, z])
-        legs = [last + (target - last) * t for t in np.linspace(0, 1, 7)[1:]] if last is not None else [target]
-        for k, point in enumerate(legs):
-            yaw_k = yaw if last is None else None
-            ok, q_new, err = arm.reach(q, point, yaw)
-            if not ok:
-                return [f"{step['id']}: {arm.name} cannot reach {name} at x {point[0]:.3f} y {point[1]:.3f} z {point[2]:.3f} "
-                        f"({err * 1000:.1f} mm short, tool-down inside the plan's joint limits)"], path, name
-            q, yaw_k = q_new, None
-            path.append(q.copy())
-        last = target
-    return problems, path, None
+    """Reach of one step with the step's arm inside the plan's joint limits. Returns (problems, joint path, approach q)."""
+    ok, approach, path, note = solve_chain(arm, waypoints(layout, step, here), arm.home)
+    if not ok:
+        return [f"{step['id']}: {arm.name} cannot reach it tool-down inside the plan's joint limits: {note}"], [], None
+    return [], path, approach
 
 
 def validate(layout, task, data=None):

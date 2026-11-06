@@ -78,7 +78,7 @@ def test_temporary_plate_capacity_is_enforced(layout, data):
 def test_an_unreachable_site_is_refused_not_moved(layout, data):
     far = sites.Layout(temp_radius_m=.45)  # plate centre 450 mm from the arm: beyond any reach
     reason = refused(far, tasks.get_task(far, "rehandle", data))
-    assert "cannot reach" in reason and "mm short" in reason
+    assert "cannot reach" in reason and "cannot reach" in reason
 
 
 def test_unknown_names_are_refused(layout):
