@@ -334,6 +334,8 @@ class StreamService : LifecycleService() {
                     activeLink.status.map { it.state to it.wanted }.distinctUntilChanged()
                         .collect { (linkState, wanted) ->
                             legacyJob?.cancel()
+                            // shortcut: runs only when the Vision link returns, enough while Vision is up; a Wi-Fi callback if it is not.
+                            if (linkState == LinkState.STREAMING) WirelessDebugging.keepOn(applicationContext)
                             if (linkState == LinkState.STREAMING && wanted == null) {
                                 legacyJob = launch {
                                     delay(CaptureGate.LEGACY_GRACE_MS)
