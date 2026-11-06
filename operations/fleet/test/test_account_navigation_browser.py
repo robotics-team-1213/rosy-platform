@@ -107,7 +107,7 @@ def test_accounts_refusal_does_not_loop_through_a_valid_login(account_page):
     page.goto(origin + '/console/login')
     _credentials(page)
     page.locator('[data-login=submit]').click()
-    expect(page.locator('#user-role')).to_be_visible()
+    expect(page.locator('#user-role')).to_have_attribute('title', 'alice · operator')
     def viewer(route):
         response = route.fetch()
         route.fulfill(response=response, json={**response.json(), 'role': 'viewer', 'grants': []})
