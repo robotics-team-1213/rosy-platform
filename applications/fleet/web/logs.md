@@ -1027,3 +1027,9 @@
 - gate 변화: SOURCE 회귀 확인; old canonical212723 STOP은 보존하고 재개하지 않는다. 새 canonical FULL·공개·장치 수용은 별도다.
 - 결정: 양쪽 설명을 버전 순서363/358/357로 두고 API gateway bump363의 already 확인을 기록한다. 충돌 밖 기존 main의 incident 등록·trail frame·motor 변경을 보존했다.
 - 교훈: CE 해당 없음 — 일반 문서 삽입 충돌이며 최종 병합과 API alignment 회귀가 조정 근거를 보존한다.
+
+## 2026-11-06 · uncommitted · merge(fleet): 관제 수동 조작과 검증 후속 변경의 최종 통합
+- 변경: main54eb4097fe에 보존 manual d8014fe6cf와 help2524644483을 정상 병합했다. 제품 파일은 각 검토 부모와 바이트가 같다. web logs/index 충돌은 사건 기록과 수동 조작 기록을 모두 보존해 해결했다. 기존 own API v1.363 예약·header·runtime pin을 유지하며 새 동작·권한·guard 변경은 없다.
+- 증거: 통합 source5ca1d6b599의 독립 병합 검토 미해결 finding 없음. manual1f97d2d2c9·ce2670e864·6e047a8c77·df224da2ac·54eb4097fe·2524644483 ancestry를 포함하고, 거절된 ca805b8d2c·af7dec1229는 제외했다. 부모별 scoped 원격 결과는 기존 각 source 기록에 결속된 증거로 유지하며 최종 통합 FULL 통과로 바꾸어 주장하지 않는다.
+- gate 변화: 정본 구조·안전·크기·비밀정보 검사 후 새 canonical FULL에 제출한다. old224244는 clean FULL 증거 부재로 STOP된 상태를 보존하며 재개하지 않는다. 실행 중인 도움말003134 및 다른 작업은 유지한다. 공개·서명·배포·Account cutover·실물 수용은 별도다.
+- 교훈: CE 해당 없음 — 검토 부모의 정상 통합이며 기록과 실제 ancestry·파일 일치 검사로 보존 범위를 확인할 수 있다.
