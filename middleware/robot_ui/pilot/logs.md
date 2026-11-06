@@ -1133,3 +1133,8 @@
 - 증거: source53471755b2 원격 AI PC Chromium lobby39통과·정본 guards321통과·skip0·NEW/known/flaky0; scratch pilot-release-race-{green,guards}/run-1.txt. 실제 safety 조회 기록은 before에서 battery_policy 1회, after에서 api→battery_policy 2회이며 양쪽 release POST와 teleop/mode 요청은0이다. 고정 source 독립 읽기 검토 미해결 finding 없음.
 - Gate: SOURCE/관련 원격 회귀 확인이며 최종 main 착지는 게시 담당과 조율한다. 실행 중인 canonical의 중단·재시작, 운영 로그인·기체·서비스 동작은 수행하지 않았다.
 - CE: 해당 없음 — 최초 조회와 확인 후 재조회의 순서 및 기대 안전 반응이 최종 시험과 기존 제품 코드에 직접 드러나며 별도 숨은 환경·복구 조건이 없다.
+
+## 2026-11-06 · uncommitted · uiux(pilot): 보정 잠금 사유와 오래된 관절 값 문구
+- 변경: 남의 보정으로 잠긴 주행 조작 버튼이 "위 사유"로 배너를 가리킨다. 관절 값이 500 ms보다 오래되면 상태 줄이 "조작 가능 · 관절 값 오래됨"이라고 말한다. 조작 허용·차단 판단은 바꾸지 않았다.
+- 증거: test_pilot_browser.py 보정 잠금 시험에 사유 단정 추가. 오래된 관절 값 문구는 조사 때 화면으로 재현한 조건의 문구 변경이며 전용 시험은 없다.
+- gate 변화: SOURCE 회귀. 실제 운전자·장치 수용은 별도다. CE: 해당 없음 — 코드와 회귀가 판단을 보존한다.

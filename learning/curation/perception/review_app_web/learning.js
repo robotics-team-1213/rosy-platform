@@ -58,7 +58,7 @@ function renderDomains() {
 function setBusy(value) {
   busy=value;
   for(const button of document.querySelectorAll('ui-button')) {
-    if(button.closest('#storage-section'))continue; // Storage owns its permission and consent controls.
+    if(button.closest('#storage-section,ui-topbar'))continue; // Storage owns its controls; the app bar stays usable on errors.
     button.reason=value?'결과를 확인하는 중입니다':!workspace&&button.id!=='refresh'?'작업 결과를 다시 확인한 뒤 사용하세요.':'';
     button.disabled=value||(!workspace&&button.id!=='refresh');
   }
@@ -193,7 +193,7 @@ function summary(item) {
   if(reports.some(row=>row.status==='invalid')) return {label:'읽기 실패',attention:true};
   if(reports.some(row=>row.declared?.verdict==='HOLD'||row.declared?.promotion?.startsWith('HOLD'))) return {label:'적용 보류',attention:true};
   if(item.path!==workspace.control?.out_path&&reports.some(row=>row.status==='changed')&&!reports.some(row=>row.declared?.status==='held')) return {label:'결과 변경',attention:true};
-  if(reports.some(row=>['reject','rejected','failed'].includes(row.declared?.verdict)||['failed','rejected'].includes(row.declared?.outcome)||['failed','rejected'].includes(row.declared?.status)||row.steps?.some(step=>['failed','rejected'].includes(step.status)))) return {label:'실패·거절 확인',attention:true};
+  if(reports.some(row=>['reject','rejected','failed'].includes(row.declared?.verdict)||['failed','rejected'].includes(row.declared?.outcome)||['failed','rejected'].includes(row.declared?.status)||row.steps?.some(step=>['failed','rejected'].includes(step.status)))) return {label:reports.some(row=>[row.declared?.verdict,row.declared?.outcome,row.declared?.status].includes('failed')||row.steps?.some(step=>step.status==='failed'))?'실패 확인':'거절 확인',attention:true};
   if(reports.some(row=>row.declared?.status==='held')) return {label:states.held,attention:true};
   const status=reports.flatMap(row=>[row.declared?.outcome,row.declared?.status,row.declared?.verdict]).find(value=>states[value]);
   return {label:states[status]||'보고서 확인',attention:false};
@@ -253,7 +253,7 @@ function render() {
     for(const reason of new Set(item.reports.flatMap(report=>report.reasons||[]))) text(card,'p',reasons[reason]||reason,'job-reason');
     for(const report of item.reports) {
       for(const step of report.steps||[]) if(step.error) text(card,'p',`${step.name}: ${step.error}`,'job-reason');
-      if(report.error) text(card,'p',report.error,'job-reason');
+      if(report.declared?.error||report.error) text(card,'p',report.declared?.error||report.error,'job-reason');
     }
     const link=text(card,'a','단계·결과 파일 및 연결 관리','ui-action-link');link.dataset.kind='quiet';link.href='#job-'+encodeURIComponent(item.id);
     const details=text($('job-detail-content'),'section','');details.dataset.jobDetail=item.id;details.hidden=true;
@@ -261,6 +261,7 @@ function render() {
     for(const report of item.reports) {
       if(report.status==='missing'&&item.reports.some(row=>row.status!=='missing')) continue;
       text(details,'p',`${report.name} · ${labels[report.status]}`);
+      if(report.declared?.error||report.error) text(details,'p',report.declared?.error||report.error);
       for(const step of report.steps||[]) text(details,'p',`${step.name}: ${states[step.status]||step.status}${step.error?' · '+step.error:''}`);
     }
     text(details,'pre',JSON.stringify({path:item.path,version:item.version,reports:item.reports},null,2));
