@@ -167,7 +167,7 @@ def wrist_camera(cameras, name, link_path, spec):
     return cameras[name]
 
 
-WRIST_PARTS = ('link5_gripper', 'gripper_plate_F6', 'b16-u16-span-B-holder-assembly')  # assets/omx_wrist_camera_b
+WRIST_PARTS = ('link5_gripper', 'gripper_plate_F6', 'b16-u16-span-D-holder-assembly')  # assets/omx_wrist_camera_b
 
 
 def team_wrist_visual(stage, link5):
