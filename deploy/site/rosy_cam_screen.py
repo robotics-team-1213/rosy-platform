@@ -20,7 +20,7 @@ LIGHT_BUTTONS = {True: "촬영 조명 요청", False: "조명 요청 취소"}
 STREAM_BUTTONS = {True: "카메라 켜기", False: "카메라 끄기"}
 STREAM_ROUTE = "연결 기록 · 촬영 화면"
 ACTIONS = {"status", "wake", "light-status", "light-request", "light-cancel",
-           "stream-status", "stream-start", "stream-stop", "snapshot"}
+           "stream-status", "stream-start", "stream-stop", "snapshot", "auto-wake-setup"}
 
 
 class ScreenError(RuntimeError):
@@ -459,6 +459,12 @@ def execute(config, action, runner=subprocess.run, out=None):
     if action == "wake":
         command([config["adb_path"], "-s", target, "shell", "input", "keyevent", "KEYCODE_WAKEUP"], runner)
         return {"status": "wake_sent", "model": config["expected_model"]}
+    if action == "auto-wake-setup":
+        # D-981: only Rosy Cam's own two grants; they survive reboots and are lost when the app is uninstalled.
+        shell = [config["adb_path"], "-s", target, "shell"]
+        command([*shell, "pm", "grant", PACKAGE, "android.permission.WRITE_SECURE_SETTINGS"], runner)
+        command([*shell, "appops", "set", PACKAGE, "SYSTEM_ALERT_WINDOW", "allow"], runner)
+        return {"status": "auto_wake_ready", "model": config["expected_model"]}
     if action.startswith("light-"):
         return light_action(config, target, action, runner)
     if action.startswith("stream-"):

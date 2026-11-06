@@ -13,7 +13,8 @@ function node(tag,text,cls){const n=document.createElement(tag);if(text!=null)n.
 function error(message){$('imitate-error').hidden=!message;$('imitate-error').textContent=message||'';}
 function uuid(){const b=crypto.getRandomValues(new Uint8Array(16));b[6]=(b[6]&15)|64;b[8]=(b[8]&63)|128;const h=Array.from(b,v=>v.toString(16).padStart(2,'0')).join('');return `${h.slice(0,8)}-${h.slice(8,12)}-${h.slice(12,16)}-${h.slice(16,20)}-${h.slice(20)}`;}
 function storageKey(){return `rosy.imitation.pending:${project}:${studyId}`;}
-function readPending(){try{pending=JSON.parse(localStorage.getItem(storageKey())||'null');}catch{pending=null;}if(pending?.kind==='train'){for(const [id,key] of [['train-steps','steps'],['train-batch','batch_size'],['train-seed','seed']])$(id).value=pending.body[key];}}
+const TRAIN_FIELDS=[['train-steps','steps'],['train-batch','batch_size'],['train-seed','seed'],['train-lr','optimizer_lr'],['train-chunk','chunk_size']];
+function readPending(){try{pending=JSON.parse(localStorage.getItem(storageKey())||'null');}catch{pending=null;}if(pending?.kind==='train'){for(const [id,key] of TRAIN_FIELDS)if(key in pending.body)$(id).value=pending.body[key];}}
 function remember(value){localStorage.setItem(storageKey(),JSON.stringify(value));pending=value;}
 function forget(){localStorage.removeItem(storageKey());pending=null;}
 function setURL(){const u=new URL(location.href);if(studyId)u.searchParams.set('study',studyId);else u.searchParams.delete('study');history.replaceState(null,'',u);}
@@ -42,14 +43,14 @@ function availability(){
   disable('upload-start',basic||(!listing.configured?'자료 저장소 연결이 필요합니다.':'')||(!matched?'같은 원본 폴더를 선택하고 파일 확인을 마치세요.':study?.upload.locked?'검사한 원본은 잠겨 있습니다. 새 작업을 만드세요.':!study&&!$('study-name').value.trim()?'학습 작업 이름을 입력하세요.':pending&&!['create'].includes(pending.kind)?'이전 요청의 접수 여부를 먼저 확인하세요.':''));
   disable('inspect-start',basic||host||(pending?.kind==='inspect'?'':occupied)||(!uploaded?'자료 업로드를 마치세요.':study?.status==='inspecting'&&!pending?'원본 검사가 진행 중입니다.':study?.inspection?'검사를 마친 원본입니다.':''));
   disable('split-save',basic||occupied||splitProblem()||(pending&&pending.kind!=='split'?'이전 요청을 먼저 확인하세요.':''));
-  const invalid=['train-steps','train-batch','train-seed'].some(id=>!$(id).validity.valid);
+  const invalid=TRAIN_FIELDS.some(([id])=>!$(id).validity.valid);
   const trainReason=basic||host||(pending?.kind==='train'?'':occupied)||(!study?.inspection?'원본 검사를 마치세요.':!study.split||dirty?'확인·분할에서 분할을 저장하세요.':pending&&pending.kind!=='train'?'이전 요청의 접수 여부를 확인하세요.':invalid?'학습 설정의 허용 범위를 확인하세요.':'');
   $('train-reason').textContent=trainReason||'저장한 분할로 ACT CPU 학습을 시작할 수 있습니다.';disable('train-start',trainReason);
   $('train-start').textContent=pending?.kind==='train'?'같은 학습 요청 다시 확인':'ACT 학습 시작';
   $('inspect-start').textContent=pending?.kind==='inspect'?'같은 검사 요청 다시 확인':'원본 검사';
   $('split-save').textContent=pending?.kind==='split'?'같은 분할 요청 다시 확인':'분할 저장';
   $('upload-start').textContent=pending?.kind==='create'?'같은 자료 요청 이어가기':study?'자료 업로드 이어가기':'자료 올리기';
-  for(const id of ['train-steps','train-batch','train-seed'])$(id).disabled=working||pending?.kind==='train';
+  for(const [id] of TRAIN_FIELDS)$(id).disabled=working||pending?.kind==='train';
   for(const input of $('episode-rows').querySelectorAll('select'))input.disabled=working||!!pending;
   $('source-folder').disabled=working;$('study-select').disabled=working;$('study-new').disabled=working;
   const current=listing.active_run||(study?.runs||[]).find(r=>active.has(r.status));
@@ -146,12 +147,12 @@ $('upload-start').onclick=async()=>{
 };
 $('inspect-start').onclick=async()=>{if($('inspect-start').disabled)return;try{await mutate('inspect','/lerobot-inspect',{study_id:studyId,request_id:uuid()});await refresh();}catch{}};
 $('split-save').onclick=async()=>{if($('split-save').disabled)return;try{const saved=await mutate('split','/lerobot-split',{study_id:studyId,source_revision:study.source_revision,...splitSelection(),request_id:uuid()});study=saved;dirty=false;splitSaved='';render();}catch{}};
-$('train-start').onclick=async()=>{if($('train-start').disabled)return;try{await mutate('train','/lerobot-run',{study_id:studyId,split_revision:study.split.revision,steps:Number($('train-steps').value),batch_size:Number($('train-batch').value),seed:Number($('train-seed').value),request_id:uuid()});panel('results');await refresh();}catch{}};
+$('train-start').onclick=async()=>{if($('train-start').disabled)return;try{await mutate('train','/lerobot-run',{study_id:studyId,split_revision:study.split.revision,steps:Number($('train-steps').value),batch_size:Number($('train-batch').value),seed:Number($('train-seed').value),optimizer_lr:Number($('train-lr').value),chunk_size:Number($('train-chunk').value),request_id:uuid()});panel('results');await refresh();}catch{}};
 $('active-stop').onclick=async()=>{if($('active-stop').disabled)return;const id=$('active-stop').dataset.run;$('active-stop').disabled=true;try{await request(API+'/stop',{id});$('action-status').textContent='중지를 요청했습니다. 현재 실행의 처리 결과를 확인하세요.';await refresh();}catch(exc){error(exc.message);}finally{availability();}};
 function reset(){resourceGeneration++;study=null;selected=[];manifest=[];matched=false;inspectionKey=null;splitSaved='';dirty=false;resultSignature='';selectionGeneration++;$('source-folder').value='';$('study-name').value='';$('upload-status').textContent='선택한 자료가 없습니다.';$('upload-progress').value=0;$('upload-excluded').replaceChildren();error('');readPending();setURL();render();}
 $('study-new').onclick=()=>{studyId='';reset();panel('upload');};
 $('study-select').onchange=async()=>{studyId=$('study-select').value;reset();await refresh();};
-$('study-name').oninput=availability;for(const id of ['train-steps','train-batch','train-seed'])$(id).oninput=availability;
+$('study-name').oninput=availability;for(const [id] of TRAIN_FIELDS)$(id).oninput=availability;
 $('imitate-refresh').onclick=refresh;
 addEventListener('popstate',()=>{const u=new URL(location.href),id=u.searchParams.get('study')||'';if(id!==studyId){studyId=id;reset();refresh();}panel(u.searchParams.get('panel'));});
 panel(new URL(location.href).searchParams.get('panel'));readPending();refresh();setInterval(()=>{if(!document.hidden&&!working)refresh();},5000);

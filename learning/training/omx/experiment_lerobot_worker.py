@@ -32,7 +32,7 @@ def check_request(request):
     if not isinstance(request, dict) or request.get('schema') not in (INSPECT, TRAIN):
         raise ValueError('uploaded LeRobot worker request schema required')
     expected = base if request['schema'] == INSPECT else base | {
-        'source_revision','inspection','split','steps','batch_size','seed'}
+        'source_revision','inspection','split','steps','batch_size','seed'} | ({'optimizer_lr','chunk_size'} & set(request))
     if set(request) != expected:
         raise ValueError('uploaded LeRobot worker fields differ')
     identifier(request['study_id'])
@@ -56,6 +56,7 @@ def check_request(request):
         for key, lower, upper in [('steps',1,100000),('batch_size',1,8),('seed',0,2147483647)]:
             if type(request[key]) is not int or not lower <= request[key] <= upper:
                 raise ValueError('training integer outside allowed range: '+key)
+        source.check_recipe(request)
     return request
 
 
@@ -73,6 +74,10 @@ def configuration(output, request):
     config.update(output_dir=str(output/'trainer'), job_name='uploaded-demonstration-act',
         seed=request['seed'], steps=request['steps'], save_freq=request['steps'], log_freq=1,
         batch_size=request['batch_size'])
+    if 'chunk_size' in request:
+        config['policy']['chunk_size'] = request['chunk_size']
+    if 'optimizer_lr' in request:  # ACT keeps the backbone's rate apart; one value here means the whole model
+        config['policy'].update(optimizer_lr=request['optimizer_lr'], optimizer_lr_backbone=request['optimizer_lr'])
     return config
 
 

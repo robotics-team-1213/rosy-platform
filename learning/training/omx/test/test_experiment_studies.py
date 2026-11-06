@@ -163,6 +163,12 @@ def test_inspection_completion_and_saved_split_bind_exact_source_before_train(tm
     assert worker['split']==saved['split'] and worker['source_revision']==current['source_revision']
     assert worker['inspection']['revision']==current['inspection']['revision']
     assert worker['compute_host']==trained['compute_host']=='ai'
+    assert 'optimizer_lr' not in worker and 'chunk_size' not in worker
+    tuned=dict(request,optimizer_lr=1e-4,chunk_size=20,request_id=str(uuid.uuid4()))
+    for bad,message in [(dict(tuned,optimizer_lr=1.0),'learning rate'),(dict(tuned,optimizer_lr=1),'learning rate'),
+            (dict(tuned,chunk_size=101),'chunk size'),(dict(tuned,chunk_size=2.0),'chunk size'),(dict(tuned,extra=1),'fixed')]:
+        with pytest.raises(ValueError,match=message):
+            studies.start(bad)
 
 
 def test_inspection_requires_server_host_even_with_ready_interpreter(tmp_path,monkeypatch):
