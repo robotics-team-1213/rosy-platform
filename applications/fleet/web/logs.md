@@ -1051,3 +1051,10 @@
 - metadata: PNG 실제 checksum과 현재 manifest 일치, 문서의 Git commit 문맥을 독립 확인한 근거에 따라 root 승인 exact historical commit/path/rule 2건만 비밀정보 baseline에 추가했다. 기존183건의 순서·내용·schema·reviewer와 Git raw prefix를 보존해 중복 없이185건이며 scanner·provenance·ignore·정책은 바꾸지 않았다. 이 자료는 비밀키가 아닌 실제 screenshot/Git metadata다. source18effdc1b9 원격 publish/secret/provenance 기존 회귀59통과·skip0·NEW/known/flaky0, scratch pinky-uiux-metadata-guards/run-1.txt. 정본 origin647부터 해당 source까지264개 commit의 추가 줄 검사에서 미검토 hit0이다. baseline 증분 독립 검토 미해결 finding 없음.
 - gate 변화: bounded SOURCE 회귀다. main a413에는 exact land record가 없으므로 최신 main이나 이번 통합의 FULL qualification을 주장하지 않는다. old004000과 모든 STOP을 보존하며, metadata 자격 확인과 최종 승인 뒤 새 source의 canonical FULL이 필요하다. 새 착지·게시·서명·기체·서비스 동작은 수행하지 않았다.
 - 교훈: CE 해당 없음 — 두 명시적 충돌의 보존 규칙이 최종 코드·API·기존 회귀와 source별 증거에 직접 남는다.
+
+## 2026-11-07 · 285714599b · uiux: 로봇 이동 출처 표시
+- 변경: 로봇 카드 사실 줄에 `motion-source.js`가 고른 이동 출처 칩을 더했다. 증명하는 사실만 이름을 붙인다: 이 화면의 조종 단추(`view.manualDriveRobot`), CORE 운행 임차·열린 운행, 비켜서기, 도킹 상태, 대형, 관제 목표, 보정. 수동 모드·목표 주행은 CORE 모드만으로 누가 시켰는지 알 수 없어 `확인 불가`로 쓴다. 오래된 상태·신선하지 않은 속도 근거는 `출처 확인 불가`이고, 출처 없이 움직이면(속도 0 초과) 예외 큐에 `원인 불명 이동`을 올린다. 계약·가드·권한 변경 없음.
+- 증거: Node motion-source 단위 9와 roster 연동 2 PASS(로컬). 원격 실제 Chromium(ROSY_RUN_BROWSER_TESTS=1) 신규 1·test_fleet_console_browser 포함 SKIPPED 0, 관련 브라우저 범위 FAILED 0(첫 실행의 로스터 높이 1건은 칩 문구를 줄여 해소). 로봇·현장 PC 주행 없음.
+- gate 변화: SOURCE/원격 브라우저 GO. 실제 로봇 주행, 로봇 화면 조종 구분, main 착지·push·CI·배포는 하지 않았다.
+- 남은 일: 로봇 화면(대시보드) 조종·충전 복귀 운행은 현재 데이터로 증명되지 않는다. CORE가 마지막 수락 teleop의 토큰 종류를 상태에 싣는 additive 필드가 필요하다.
+- 교훈: CE 해당 없음 — 표시 규칙은 코드와 시험에 직접 남는다.
