@@ -25,6 +25,7 @@ def test_policy_diagnostics_only_emit_types_status_and_numeric_timings():
     inner.response = SimpleNamespace(status_code=403, text=marker, request=marker)
     error = PermissionError(marker)
     error.__context__ = inner
+    error.__suppress_context__ = True
     report = failure_diagnostics(error, [{'elapsed_s': .2, 'error': inner, 'request': marker}],
         [{'elapsed_s': .01, 'status': 403, 'path': marker, 'token': marker, 'session': marker}])
     assert report['exception_types'] == [{'type': 'PermissionError'}, {'type': 'RuntimeError', 'status': 403}]
