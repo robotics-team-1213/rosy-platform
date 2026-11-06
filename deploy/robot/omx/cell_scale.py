@@ -94,6 +94,7 @@ def enrol(catalog_path: Path, object_id: str, mass_kg: float, reading: str, cond
     entry = next((o for o in catalog["objects"] if o["id"] == object_id), None)
     if entry is None:
         raise SystemExit(f"{object_id} is not in {catalog_path}: an unknown object is not enrolled")
+    entry.pop("mass_declared", None)  # a reading replaces a person's bound
     entry.update(mass_kg=mass_kg, mass_measured={"at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
                                                  "source": "cell_scale", "reading": reading})
     catalog_path.write_text(json.dumps(catalog, indent=1) + "\n", encoding="utf-8")
@@ -106,16 +107,41 @@ def enrol(catalog_path: Path, object_id: str, mass_kg: float, reading: str, cond
     return entry
 
 
+def declare(catalog_path: Path, object_id: str, kg: float, by: str) -> dict:
+    """A person's upper bound where no scale exists (D-935): kept apart from readings, never over one."""
+    catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
+    entry = next((o for o in catalog["objects"] if o["id"] == object_id), None)
+    if entry is None:
+        raise SystemExit(f"{object_id} is not in {catalog_path}: an unknown object is not declared")
+    if "mass_measured" in entry:
+        raise SystemExit(f"{object_id} was weighed: a declaration does not replace a reading")
+    if not 0 < kg < 1:
+        raise SystemExit(f"{kg} kg is not a plausible bound for a cell object")
+    entry.update(mass_kg=kg, mass_declared={"at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "by": by,
+                                            "source": "person-declared upper bound, not weighed"})
+    catalog_path.write_text(json.dumps(catalog, indent=1) + "\n", encoding="utf-8")
+    return entry
+
+
 def main(argv=None):
     import cv2
 
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("action", choices=("read", "enrol"))
-    ap.add_argument("--config", required=True, type=Path)
+    ap.add_argument("action", choices=("read", "enrol", "declare"))
+    ap.add_argument("--config", type=Path)
     ap.add_argument("--catalog", type=Path)
     ap.add_argument("--object")
     ap.add_argument("--conditions", type=Path, help="cell config whose operating_conditions take the mass")
+    ap.add_argument("--kg", type=float, help="declare: the person's upper bound")
+    ap.add_argument("--by", help="declare: who judged it")
     args = ap.parse_args(argv)
+    if args.action == "declare":
+        if not (args.catalog and args.object and args.kg and args.by):
+            ap.error("declare needs --catalog, --object, --kg and --by")
+        print(json.dumps({"ok": True, **declare(args.catalog, args.object, args.kg, args.by)}))
+        return 0
+    if not args.config:
+        ap.error(f"{args.action} needs --config")
     config = json.loads(args.config.read_text(encoding="utf-8"))
     spec, params = config["scale"], config.get("params")
     camera = config["cameras"][spec["camera"]]

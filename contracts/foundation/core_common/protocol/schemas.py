@@ -69,6 +69,10 @@ from .channel_requests import (  # noqa: F401
     ChannelWorkPrepareRequest, ChannelMissionPrepareRequest, ChannelCellPrepareRequest, ChannelWorkAdmitRequest,
     ChannelIncidentReference, ChannelIncidentClaimRequest,
 )
+from .arm_incidents import (  # noqa: F401 (D-971)
+    ArmIncidentFrame, ArmIncidentReport, ArmIncidentHold, ArmIncidentAccepted, ArmIncidentExplanation,
+    ArmIncidentClear,
+)
 
 import enum
 import json

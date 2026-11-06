@@ -1125,3 +1125,11 @@
 - 변경: 본문 건너뛰기가 main 포커스로 이어지도록 tabindex를 추가하고 앱바 banner를 명시했다. focal·영상·운전·정지 배치와 hold-to-drive는 유지한다.
 - 증거: 06cc93b377 RED에서 main 포커스 실패 재현; d58538d018 GREEN에서 태블릿 viewport 회귀 통과. 실물 주행 수용을 대신하지 않는다.
 - Gate: 전체 회차 검증 중이며 운영 배포·DEVICE/FIELD를 주장하지 않는다. CE: 완료 전 판단; 최종 코드·회귀·ADR 외의 비명시 지식이 있는지 확인한다.
+
+## 2026-11-06 · uncommitted · test(pilot): 비상 정지 해제 확인 전후의 상태 변경을 분리
+
+- 변경: 제품 코드는 유지하고 lobby 시험의 provider 변경 시점을 고정했다. 기존 stale 검사는 대화상자가 보인 뒤 상태를 바꿔 확인 후 재조회를 검증한다. 별도 stale_before 검사는 클릭 전부터 새 상태를 제공해 최초 조회의 보류·대화상자 없음·POST 없음·주행 비활성·motion 요청 없음을 검증한다. 취소·정상 해제·서버 거절 검사와 권한·안전 가드는 그대로다.
+- 원인: 클릭 뒤 async 최초 safety 조회가 끝나기 전에 fixture가 battery 자료 없는 battery_policy로 바뀌면 releaseContext가 정상적으로 보류한다. 이전 시험은 이 안전한 경로에서도 생기지 않은 대화상자를 클릭하려 했다. canonical224244의 source d8014fe6cf run-pre-65에서 해당 stale 1실패/나머지165통과와 같은 source의 단독1통과를 실제 RED 자료로 보존했다.
+- 증거: source53471755b2 원격 AI PC Chromium lobby39통과·정본 guards321통과·skip0·NEW/known/flaky0; scratch pilot-release-race-{green,guards}/run-1.txt. 실제 safety 조회 기록은 before에서 battery_policy 1회, after에서 api→battery_policy 2회이며 양쪽 release POST와 teleop/mode 요청은0이다. 고정 source 독립 읽기 검토 미해결 finding 없음.
+- Gate: SOURCE/관련 원격 회귀 확인이며 최종 main 착지는 게시 담당과 조율한다. 실행 중인 canonical의 중단·재시작, 운영 로그인·기체·서비스 동작은 수행하지 않았다.
+- CE: 해당 없음 — 최초 조회와 확인 후 재조회의 순서 및 기대 안전 반응이 최종 시험과 기존 제품 코드에 직접 드러나며 별도 숨은 환경·복구 조건이 없다.

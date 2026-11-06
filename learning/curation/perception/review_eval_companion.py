@@ -250,6 +250,8 @@ def _capture_mcap_companions(eval_folders, companion_files, *, read_bytes):
                     and approval['mask_decision'] == 'approved' and approval['object_decision'] != 'excluded'
                     and row.get('approval_sha256') == sha(encoded(approval['pixel_approval'])),
                     'frame approval differs')
+            require(row.get('sam_assistance', []) == approval.get('sam_assistance', []),
+                    'SAM assistance differs from frozen authority')
             require(row['identity'] not in identities, 'duplicate MCAP frame identity')
             identities.add(row['identity'])
             image_raw, mask_raw = eval_files[row['image']], eval_files[row['mask']]

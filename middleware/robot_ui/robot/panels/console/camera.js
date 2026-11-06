@@ -100,7 +100,7 @@ export function mount(root, ctx) {
   facts.append(el("dt", "", "소스"), source, el("dt", "", "해상도"), resolution,
     el("dt", "", "프레임 나이"), age, el("dt", "", "촬영 시각"), captured);
   const legend = el("details", "surface-camera-legend");
-  legend.append(el("summary", "", "차선·객체 표시 읽는 법"));
+  legend.append(el("summary", "", "차선·객체 표시 읽는 법 · 상태 진단"));
   for (const text of [
     "LEFT LANE · RIGHT LANE: 추종에 선택한 왼쪽·오른쪽 경계. UNSEEN은 선택한 경계가 없음.",
     "DRIVABLE: 초록은 조향에 쓴 주행 가능 영역, 어둡게 한 곳은 제외 영역, 분홍 점과 호는 조향 목표, EXIT는 고른 출구. 이때 차선·영역 표시는 조향에 쓰지 않아 숨김. FOLLOW PATH(기존 차선 방식): 따라갈 목표 방향이며 주행 궤적이 아님.",
@@ -108,8 +108,10 @@ export function mount(root, ctx) {
     "REGION UNCLASSIFIED · DARK: 바닥 색과 다른 미분류 영역이며 벽·차선 페인트도 포함될 수 있음. 장애물 종류를 알아본 결과가 아님. DET는 객체 모델 검출. NEAR는 가까운 중앙 경로 영역에 걸침. 0.42m L은 카메라 앞 거리(L LiDAR, G 바닥 평면 추정). unranged는 거리 미확인.",
     "TAG: 영상에서 식별한 표식 번호. PRED STOP은 도로 예측 표시 중단. 결정 사슬: 1 인식·2 조향은 영상 아래, 3 CORE 관문·4 막힘·5 Fleet은 영상 바로 밑 목록(빨강 멈춤, 노랑 제한, 초록 통과). 첫 줄 STOPPED BY가 지금 멈춘 이유.",
   ]) legend.append(el("p", "", text));
+  const chainDiagnostic = el("pre", "", "아직 차선 추종 상태를 받지 못했습니다.");
+  legend.classList.add("ui-log-view"); legend.append(chainDiagnostic);
   const chain = el("div", "surface-camera-chain"); chain.setAttribute("aria-label", "멈춘 이유 결정 사슬"); chain.setAttribute("aria-live", "polite");
-  ctx.store?.poll("/api/v1/line-follow", 1_000, (data) => { const view = lineDecisionChain(data); chain.replaceChildren(...[view.headline, ...view.rows].map((row) => { const item = el("ui-status", "", row.layer ? `${row.layer}: ${row.text}` : row.text); item.setAttribute("state", row.level); return item; })); }, () => chain.replaceChildren(el("ui-status", "", "차선 추종 상태를 읽지 못해 3–5줄 없음")));
+  ctx.store?.poll("/api/v1/line-follow", 1_000, (data) => { const view = lineDecisionChain(data); chainDiagnostic.textContent = view.diagnostic; chain.replaceChildren(...[view.headline, ...view.rows].map((row) => { const item = el("ui-status", "", row.layer ? `${row.layer}: ${row.text}` : row.text); item.setAttribute("state", row.level); return item; })); }, () => { chainDiagnostic.textContent = "차선 추종 상태를 읽지 못했습니다."; chain.replaceChildren(el("ui-status", "", "차선 추종 상태를 읽지 못해 3–5줄 없음")); });
   root.append(head, stage, chain, status, qualityIndicator, primaryActions, tools, legend, captureStatus, library, facts);
   const elements = {"vision-stage": stage, "vision-frame": frame, "vision-empty": empty,
     "vision-status": status, "vision-source": source, "vision-resolution": resolution,

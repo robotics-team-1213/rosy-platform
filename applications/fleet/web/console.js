@@ -309,7 +309,8 @@ const roster = createRoster({ scope: pageScope, el, view, log, call, render,
   streamEvidence: mapView.streamEvidence, isOperator: () => auth.role === "operator", namedReason, confirmedAction,
   onSelectionChanged: () => { clearPinStart(); } });
 const manualControl = createManualControl({scope: pageScope, view, call: fleetClient,
-  namedReason: () => auth.locked ? "관제에 다시 접속하세요." : namedReason()});
+  confirmedAction, refreshState,
+  namedReason: () => auth.locked ? "관제에 다시 접속하세요." : auth.role !== "operator" ? OPERATOR_REASON : namedReason()});
 el("robot-workspace").after(manualControl.root);
 if (el("robot-choice")) pageScope.listen(el("robot-choice"), "change", () => {
   roster.openCard(el("robot-choice").value || null);

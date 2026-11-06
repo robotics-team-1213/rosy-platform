@@ -27,7 +27,9 @@ def test_sidebar_track_is_the_procedure_column():
     assert "--sidebar-track" not in fleet and "install-tasks" not in fleet
     assert "minmax(13rem, 18rem)" not in shell
     assert "minmax(12rem, .22fr)" not in fleet
-    assert 'rail.className = "ui-task-rail ui-sidebar"' in CHOOSER.read_text(encoding="utf-8")
+    chooser = CHOOSER.read_text(encoding="utf-8")
+    assert 'rail.className = "ui-subnav-nav"' in chooser
+    assert 'tab.className = "ui-subnav-item"' in chooser and 'tab.type = "button"' in chooser
 
 
 def test_header_keeps_one_recipe_of_named_areas():

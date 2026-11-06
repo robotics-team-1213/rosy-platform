@@ -3,6 +3,8 @@ from contextlib import contextmanager, ExitStack
 from functools import partial
 from hashlib import sha256
 import json
+import math
+import os
 from pathlib import Path
 import secrets
 import select
@@ -31,6 +33,63 @@ from fleet.server.mission_store import MissionStore
 from fleet.server.proposal_store import ProposalStore
 from fleet.server.task_service import FleetTaskService
 from fleet.server.task_store import FleetTaskStore
+
+
+def exception_types(error):
+    rows, seen = [], set()
+    while isinstance(error, BaseException) and id(error) not in seen:
+        seen.add(id(error))
+        row = {'type': type(error).__name__}
+        status = getattr(getattr(error, 'response', None), 'status_code', getattr(error, 'code', None))
+        if type(status) is int and 100 <= status <= 599:
+            row['status'] = status
+        rows.append(row)
+        error = error.__cause__ or error.__context__  # include context suppressed by `from None`
+    return rows
+
+
+def failure_diagnostics(error, exchanges, timings):
+    def numeric(row):
+        result = {k: row[k] for k in ('started_s', 'elapsed_s', 'cpu_s', 'response_start_s', 'status')
+                  if type(row.get(k)) in (int, float) and math.isfinite(row[k])}
+        for key in ('closed_before', 'closed_after'):
+            if type(row.get(key)) is bool:
+                result[key] = row[key]
+        if isinstance(row.get('error'), BaseException):
+            result['exception_types'] = exception_types(row['error'])
+        return result
+    return {'exception_types': exception_types(error),
+            'client_http': [numeric(row) for row in exchanges],
+            'server_timing': [numeric(row) for row in timings if isinstance(row, dict)]}
+
+
+def public_provenance(db):
+    modules = {}
+    for name in ('rosy.execution.local.policy_lease', 'rosy.execution.local.policy_chain',
+                 'fleet.server.app', 'httpx', 'uvicorn'):
+        path = getattr(sys.modules.get(name), '__file__', None)
+        if path:
+            modules[name] = sha256(Path(path).read_bytes()).hexdigest()
+    target = db.resolve()
+    mounts = [line.split() for line in Path('/proc/mounts').read_text().splitlines()]
+    matched = [(len(row[1]), row[2]) for row in mounts if len(row) > 2
+               and target.is_relative_to(Path(row[1]))]
+    filesystem = max(matched)[1] if matched else ''
+    return {'module_sha256': modules, 'storage': 'tmpfs' if filesystem in ('tmpfs', 'ramfs')
+            else 'disk' if filesystem else 'unknown'}
+
+
+class MeasuredPolicyHttp(FleetPolicyHttp):
+    def __call__(self, *args, **kwargs):
+        row = {'started_s': time.monotonic(), 'closed_before': self._closed}
+        try:
+            return super().__call__(*args, **kwargs)
+        except Exception as error:
+            row['error'] = error
+            raise
+        finally:
+            row.update(elapsed_s=time.monotonic()-row['started_s'], closed_after=self._closed)
+            self.exchanges.append(row)
 
 
 class HttpServer:
@@ -106,6 +165,7 @@ def _fleet_app(db, users, workcell_id, instance_id, timings):
 
 @contextmanager
 def _fleet_server(db, users, workcell_id, instance_id):
+    exchanges, failure = [], None
     child = subprocess.Popen([sys.executable,'-u',str(Path(__file__).resolve())],
         stdin=subprocess.PIPE,stdout=subprocess.PIPE,text=True)
     def close():
@@ -122,10 +182,26 @@ def _fleet_server(db, users, workcell_id, instance_id):
             workcell_id=workcell_id,instance_id=instance_id))+'\n')
         child.stdin.flush()
         assert select.select([child.stdout],[],[],15)[0], 'Fleet process preparation timeout'
-        server = SimpleNamespace(url=json.loads(child.stdout.readline())['url'],close=close)
+        server = SimpleNamespace(url=json.loads(child.stdout.readline())['url'],close=close, exchanges=exchanges)
         yield server
+    except Exception as error:
+        failure = error
+        raise
     finally:
         close()
+        if failure is not None or os.environ.get('ROSY_POLICY_DIAGNOSTICS') == '1':
+            try:
+                timings = json.loads(db.with_name('server-timing.json').read_text())
+                report = failure_diagnostics(failure, exchanges, timings)
+                report.update(public_provenance(db))
+                text = 'POLICY_FIXTURE_DIAGNOSTICS ' + json.dumps(report, allow_nan=False)
+                if failure is not None:
+                    failure.add_note(text)
+                else:
+                    print(text, flush=True)
+            except Exception as diagnostic_error:
+                if failure is not None:
+                    failure.add_note('policy diagnostic unavailable: ' + type(diagnostic_error).__name__)
 
 
 @contextmanager
@@ -145,7 +221,8 @@ def approved_fleet(tmp_path, *, workcell_id, instance_id, policy_revision,
             path.touch(mode=0o600, exist_ok=False)
             path.write_text(token)
             if name == 'sim-device':
-                clients[name] = connections.enter_context(FleetPolicyHttp(server.url, path, loopback_sim=True))
+                clients[name] = connections.enter_context(MeasuredPolicyHttp(server.url, path, loopback_sim=True))
+                clients[name].exchanges = server.exchanges
             else:
                 # Approval preparation precedes execution; the device's 0.2s transport budget is unchanged.
                 client = connections.enter_context(httpx.Client(base_url=server.url, timeout=2,

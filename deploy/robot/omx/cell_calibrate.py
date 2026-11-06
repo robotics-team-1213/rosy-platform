@@ -30,6 +30,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cell_calibration as cal  # noqa: E402
 import cell_params as prm  # noqa: E402
 import cell_pivot  # noqa: E402
+from cell_pipeline_io import fold  # noqa: E402
 
 MAP_POINTS = [[-0.12, 0.17], [-0.10, 0.19], [-0.08, 0.17], [-0.06, 0.19], [-0.04, 0.17], [-0.10, 0.15], [-0.06, 0.15],
               [-0.02, 0.19], [0.02, 0.19], [0.066, 0.195], [0.06, 0.18], [0.04, 0.17]]  # the 2026-10-28 remap grid
@@ -58,7 +59,7 @@ def clear_point(near_xy, mask, roi, inside, to_px, radius_px: int = 36, max_mm: 
 
 def stale(check: dict) -> list:
     """The steps a check result asks for, in dependency order (a moved camera makes every bias and region stale)."""
-    if check.get("camera_moved"):
+    if check.get("camera_moved") or check.get("missing_map"):  # an arm new to the cell has no map yet (arm_a, 2026-11-03)
         return ["remap", "regions"] + [f"pivot-near {t}" for t in check.get("targets", [])]
     steps = [f"pivot-near {t}" for t in check.get("missing_bias", [])]
     steps += [f"surface {s}" for s in check.get("missing_surface", [])]
@@ -80,16 +81,23 @@ def check(config: dict, calibration: dict, targets: list, frame, params=None) ->
     else:
         out["camera_moved"] = False
         out["no_reference"] = True
-    bias = cell_pivot.load_bias(cell_pivot.bias_path(config["calibration_path"]))
+    bias = cell_pivot.load_bias(cell_pivot.bias_path(config["calibration_path"]), params)
     for site, xy in targets:
         # the pick uses a region within pivot.bias_reach_mm, but an accurate pick needs one this close: 44 mm away the
         # floor estimate was 8-10 mm off and every descent met the box (2026-10-29)
         if not cell_pivot.bias_at(bias, site, xy, reach_mm=prm.get(params, "calibrate.bias_near_mm"), params=params):
             out["missing_bias"].append(f"{site}:{xy[0]},{xy[1]}")
+    out["missing_map"] = [s for s in map_sites(config) if s not in calibration.get("sites", {})]
     for name, site in config["sites"].items():
         if "surface_z" not in site:
             out["missing_surface"].append(name)
     return out
+
+
+def map_agrees(record: dict, params=None) -> bool:
+    """Marks that disagree fit a map that misses by centimetres (arm_a 2026-11-04: leave-one-out max 52 mm over the
+    boxes): such a map is never saved."""
+    return record["loo_error_mm"]["max"] <= prm.get(params, "calibrate.max_loo_mm")
 
 
 def map_sites(config: dict) -> list:
@@ -98,24 +106,40 @@ def map_sites(config: dict) -> list:
     return config.get("calibrate", {}).get("map_sites") or [s for s in ("floor", "pinky", "belt") if s in config["sites"]]
 
 
+def predicted(marks: list, point) -> list | None:
+    """Where the jaws over `point` should show, from an affine fit of three or more (pixel, arm) marks not on one line;
+    else None."""
+    arm = np.array([[a[0], a[1], 1.0] for _, a in marks])
+    if len(marks) < 3 or np.linalg.matrix_rank(arm, tol=1e-3) < 3:  # a line of marks fixes no x (arm_a 2026-11-04)
+        return None
+    coef, *_ = np.linalg.lstsq(arm, np.array([m for m, _ in marks], float), rcond=None)
+    return [round(float(v), 1) for v in np.array([point[0], point[1], 1.0]) @ coef]
+
+
 def remap(cell, config: dict, points: list, work: Path, log=print) -> dict:
     """Hover the empty jaws at each point (z_view), mark them, fit the map; None marks are skipped."""
     import cell_pipeline as cp
 
     z_view, yaw, marks = config["coarse"]["z_view"], config["sites"][map_sites(config)[0]]["yaw_deg"], []
-    for i, (x, y) in enumerate(points):
+    # least stretched first, then only blobs near where the marks so far put the jaws: opening the jaws of a stretched
+    # arm shakes its link and the largest changed blob is not the jaws (arm_a's first pallet remap, 2026-11-04)
+    for i, (x, y) in enumerate(sorted(points, key=lambda q: math.hypot(*q))):
         view = {"x": x, "y": y, "z": round(z_view - config["plan"]["approach_m"], 4), "yaw_deg": yaw}
         try:
             lib = cp.write_library(config, view, view, work / f"remap-{i}.json")
         except SystemExit as exc:
             log({"point": [x, y], "skipped": str(exc)[:100]})
             continue
-        for command in (f"load {lib}", "goto above_pick"):
-            if not cell.act(command).get("ok"):
-                cell.act("park")
-                raise SystemExit(f"remap stopped at {command} for {[x, y]}")
-        mark = cell_pivot.mark_jaws(cell, config)
-        log({"point": [x, y], "mark": mark})
+        failed = next((c for c in (f"load {lib}", "goto above_pick") if not cell.act(c).get("ok")), None)
+        if failed:
+            # folded after a refused move: fit the marks so far (arm_b 2026-11-05: 8 marks lost to a roll stall at -13)
+            if not fold(cell).get("ok"):
+                raise SystemExit(f"remap stopped at {failed} for {[x, y]} and the park failed")
+            log({"point": [x, y], "stopped": failed})
+            break
+        near = predicted(marks, (x, y))
+        mark = cell_pivot.mark_jaws(cell, config, near=near and ([near], prm.get(config.get("params"), "pivot.follow_px")))
+        log({"point": [x, y], "mark": mark, "near": near})
         if mark:
             marks.append((mark, (x, y)))
     cell.act("park")
@@ -225,8 +249,8 @@ def self_calibrate(cell, config, calibration, calibration_path, site, target_xy,
                                         calibration, site, work, sleep, log)
     if result["result"] != "calibrated":
         return bias_data, f"pivot: {result['result']}"
-    cell_pivot.save_bias(cell_pivot.bias_path(calibration_path), result["bias"])
-    return cell_pivot.load_bias(cell_pivot.bias_path(calibration_path)), None
+    cell_pivot.save_bias(cell_pivot.bias_path(calibration_path), result["bias"], p)
+    return cell_pivot.load_bias(cell_pivot.bias_path(calibration_path), p), None
 
 
 def learn_bias(config: dict, calibration_path, site: str, place_xy, verify: dict) -> dict | None:
@@ -238,11 +262,16 @@ def learn_bias(config: dict, calibration_path, site: str, place_xy, verify: dict
     if not prm.get(p, "auto.bias_from_place") or not verify.get("found") or "seen_bias_mm" not in verify:
         return None
     seen, used = verify["seen_bias_mm"], verify["used_bias_mm"]
+    try:
+        for value in (seen, used):
+            cell_pivot.validate_bias({"point_m": place_xy, "bias_mm": value}, p)
+    except ValueError:
+        return None
     if math.dist(seen, used) > prm.get(p, "auto.bias_learn_max_mm"):
         return None
     region = {"site": site, "point_m": list(place_xy), "bias_mm": seen, "measured": time.strftime("%Y-%m-%d"),
               "source": "place-and-look: the arm set the box here and the top camera saw it"}
-    cell_pivot.save_bias(cell_pivot.bias_path(calibration_path), region)
+    cell_pivot.save_bias(cell_pivot.bias_path(calibration_path), region, p)
     return region
 
 
@@ -266,7 +295,7 @@ def main(argv=None):
     config["params"] = prm.load(config.get("params_path"))["values"]
     config["plan"] = json.loads(Path(config["plan_path"]).expanduser().read_text())
     cal_path = Path(config["calibration_path"]).expanduser()
-    calibration = json.loads(cal_path.read_text())
+    calibration = json.loads(cal_path.read_text()) if cal_path.exists() else {"schema": cal.SCHEMA, "sites": {}}
     targets = [(t.split(":")[0], tuple(float(v) for v in t.split(":")[1].split(","))) for t in args.targets]
     cell = cp.FifoCell(Path(config["io"]).expanduser(), config["cameras"])
     work = Path(config["work_dir"]).expanduser() / "calibrate"
@@ -284,12 +313,16 @@ def main(argv=None):
         if step == "remap":
             ref_path = Path(config["preflight"]["reference_top"]).expanduser()
             record = remap(cell, config, config.get("calibrate", {}).get("map_points", MAP_POINTS), work)
+            if not map_agrees(record, config["params"]):
+                done.append({"remap": record["loo_error_mm"], "refused": "marks disagree; map not saved"})
+                break
             current = cell.frame("top")
             for site in map_sites(config):
                 calibration["sites"][site] = dict(record, note="remap by cell_calibrate")
             cal_path.write_text(json.dumps(calibration))
             cell_pivot.bias_path(cal_path).write_text(json.dumps({"schema": cell_pivot.SCHEMA, "regions": []}))
-            move_regions(config, cv2.imread(str(ref_path), cv2.IMREAD_GRAYSCALE), cv2.cvtColor(current, cv2.COLOR_BGR2GRAY))
+            if ref_path.exists():  # a new arm's regions were drawn on the current view: nothing to carry
+                move_regions(config, cv2.imread(str(ref_path), cv2.IMREAD_GRAYSCALE), cv2.cvtColor(current, cv2.COLOR_BGR2GRAY))
             cv2.imwrite(str(ref_path), current)
             done.append({"remap": record["loo_error_mm"]})
         elif step == "regions":
@@ -305,7 +338,7 @@ def main(argv=None):
             result = cell_pivot.pivot_calibrate(cell, config, point, pivot_near_yaws(config, site),
                                                 calibration, site, work, time.sleep, lambda row: None)
             if result["result"] == "calibrated":
-                cell_pivot.save_bias(cell_pivot.bias_path(cal_path), result["bias"])
+                cell_pivot.save_bias(cell_pivot.bias_path(cal_path), result["bias"], config.get("params"))
             done.append({step: result["result"], "at": point, "bias": result.get("bias", {}).get("bias_mm")})
         elif step.startswith("surface"):
             import cell_surface

@@ -44,6 +44,7 @@ from rosy_situation.snapshot_assessment import snapshot_assessments
 
 __version__ = "0.3.0"
 PERIOD_S, HEARTBEAT_S = 1.0, 2.0
+ARM_POLL_S = 15.0     # D-971: how often the AI PC asks Fleet for arm incidents without an explanation
 TIMEOUT_S = 4.0       # /api/fleet/state is a shared cached gather; a cold gather can still take ~2 s
 MAX_BATCH, MAX_POSTS_PER_S, QUEUE = 32, 2, 256
 KEEP_DAYS = 7
@@ -127,7 +128,8 @@ class Fleet:
 class Situation:
     def __init__(self, fleet, state_dir: Path, owner_mode_file: Path, *,
                  clock: Callable[[], float] = time.monotonic, wall: Callable[[], float] = time.time,
-                 analyzers: Callable[[dict], list] = analyze, commit: Optional[str] = None, vlm=None, executor=None) -> None:
+                 analyzers: Callable[[dict], list] = analyze, commit: Optional[str] = None, vlm=None, executor=None,
+                 arm_incidents=None) -> None:
         self.fleet, self.state_dir, self.owner_mode_file = fleet, Path(state_dir), Path(owner_mode_file)
         self.clock, self.wall, self.analyzers, self.commit = clock, wall, analyzers, commit
         self.queue: deque = deque(maxlen=QUEUE)        # oldest dropped first (D-577 4)
@@ -153,6 +155,9 @@ class Situation:
         self._case_boundary: dict[str, object] = {}
         self._case_attempts: dict[str, tuple] = {}
         self._profile_retry_at = 0.0
+        self.arm_incidents = arm_incidents      # D-971: off unless the AI PC owner configures it
+        self._arm_task = None
+        self._arm_next = 0.0
 
     def owner_mode(self) -> str:
         try:
@@ -265,6 +270,7 @@ class Situation:
         started = self.clock()
         mode = self.owner_mode()
         self._ai(mode)
+        self._arms(mode)
         self._heartbeat(mode)
         if mode == "owner_busy":
             return PERIOD_S
@@ -322,6 +328,22 @@ class Situation:
             return
         if self._case_task is None:
             self._case_task = self._executor.submit(self._ai_cycle)
+
+    def _arms(self, mode: str) -> None:
+        """D-971: poll Fleet for arm incidents to explain, off the main loop; a failure is logged and never blocks."""
+        if self.arm_incidents is None or mode != "available":
+            return
+        if self._arm_task is not None:
+            if not self._arm_task.done():
+                return
+            try:
+                self._arm_task.result()
+            except Exception as exc:  # noqa: BLE001 - an unreachable model or Fleet must not stop the service
+                _LOG.warning("arm incident explanation failed: %s", type(exc).__name__)
+            self._arm_task = None
+        if self.clock() >= self._arm_next:
+            self._arm_next = self.clock() + ARM_POLL_S
+            self._arm_task = self._executor.submit(self.arm_incidents.cycle, lambda: self.owner_mode() == "available")
 
     def _ai_cycle(self) -> None:
         problems = self.fleet.call("/api/fleet/ai/problems").get("problems") or []
@@ -382,8 +404,12 @@ def main() -> None:
     from rosy_situation.analyzers import Analyzer
     from rosy_situation.vlm import Vlm
 
-    service = Situation(Fleet(os.environ["FLEET_URL"], token, os.path.expanduser(ca) if ca else None), state, owner,
-                        analyzers=Analyzer(), commit=build_commit(), vlm=Vlm())
+    fleet, vlm = Fleet(os.environ["FLEET_URL"], token, os.path.expanduser(ca) if ca else None), Vlm()
+    arms = None
+    if os.environ.get("ROSY_ARM_INCIDENTS") == "1":     # D-971: explain OMX arm incidents (explanation only)
+        from rosy_situation.arm_incidents import ArmIncidentExplainer
+        arms = ArmIncidentExplainer(fleet, vlm, clock=time.monotonic)
+    service = Situation(fleet, state, owner, analyzers=Analyzer(), commit=build_commit(), vlm=vlm, arm_incidents=arms)
     while True:
         time.sleep(service.step())
 

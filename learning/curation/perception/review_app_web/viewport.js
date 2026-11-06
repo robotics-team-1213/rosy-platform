@@ -1,7 +1,7 @@
 import {actionIcon} from '/common/ui.js';
 
 // The canvas bitmap stays at source resolution. Only its displayed size changes.
-export function reviewViewport(stage, canvas, viewBar, canChange=()=>true) {
+export function reviewViewport(stage, canvas, viewBar, canChange=()=>true, fitHeight=()=>Infinity) {
   const controls=document.createElement('div');
   controls.className='review-viewport-controls';
   controls.setAttribute('role','group');
@@ -28,8 +28,9 @@ export function reviewViewport(stage, canvas, viewBar, canChange=()=>true) {
   function size(){
     const style=getComputedStyle(stage);
     const padding=parseFloat(style.paddingLeft)+parseFloat(style.paddingRight);
-    const fitHeight=parseFloat(style.maxHeight)-parseFloat(style.paddingTop)-parseFloat(style.paddingBottom)-parseFloat(style.borderTopWidth)-parseFloat(style.borderBottomWidth);
-    const base=Math.min(768,Math.max(1,stage.clientWidth-padding),Number.isFinite(fitHeight)?Math.max(1,fitHeight)*canvas.width/canvas.height:Infinity);
+    const stageFitHeight=parseFloat(style.maxHeight)-parseFloat(style.paddingTop)-parseFloat(style.paddingBottom)-parseFloat(style.borderTopWidth)-parseFloat(style.borderBottomWidth);
+    const ratio=canvas.width/Math.max(1,canvas.height);
+    const base=Math.min(768,Math.max(1,stage.clientWidth-padding),Math.max(1,fitHeight())*ratio,Number.isFinite(stageFitHeight)?Math.max(1,stageFitHeight)*ratio:Infinity);
     const oldWidth=canvas.getBoundingClientRect().width||base;
     const centerX=(stage.scrollLeft+stage.clientWidth/2)/oldWidth;
     const centerY=(stage.scrollTop+stage.clientHeight/2)/(canvas.getBoundingClientRect().height||1);
@@ -62,4 +63,5 @@ export function reviewViewport(stage, canvas, viewBar, canChange=()=>true) {
   });
   new ResizeObserver(size).observe(stage);
   size();
+  return size;
 }

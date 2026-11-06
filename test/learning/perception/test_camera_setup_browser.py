@@ -45,6 +45,8 @@ def test_camera_page_checks_a_photo_against_the_reference(tmp_path, width, heigh
                 expect(page.locator('#fingerprint')).to_have_value(K['camera_info_sha256'])
 
                 page.set_input_files('#check-photo', str(home))
+                expect(page.locator('#check-photo-filename')).to_have_text(home.name)
+                expect(page.locator('.file-picker').filter(has=page.locator('#check-photo')).locator('.file-picker-button')).to_have_text('파일 선택')
                 page.locator('#check-form ui-button[type=submit]').click()
                 expect(page.locator('#verdict')).to_contain_text('맞음', timeout=15000)
                 expect(page.locator('#verdict')).to_have_attribute('state', 'ready')

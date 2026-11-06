@@ -362,7 +362,7 @@ def parse_args(argv=None):
     p.add_argument("--check", action="store_true", help="print the layout checks and exit (no ROS)")
     p.add_argument("--ws", default=str(Path(__file__).resolve().parents[2]))
     p.add_argument("--partition", default="rosy_d395e")
-    p.add_argument("--domain", type=int, default=99)
+    p.add_argument("--domain", type=int, default=29)
     p.add_argument("--api-port", type=int, default=18940)
     p.add_argument("--fleet-port", type=int, default=18995)
     p.add_argument("--localize-timeout", type=float, default=150.0, help="sim s")

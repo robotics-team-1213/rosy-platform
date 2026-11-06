@@ -114,18 +114,19 @@ the same steps; `record_session --arm` runs it at the end of every session.
 1. It collects session.json, the runner status rows, the fault records and frames, and the health log.
 2. It decides by measurement, the judge seat's rule. A reboot is offered only for an overload or voltage latch, with
    every motor at torque 0 and the arm folded at home. Any physical sign holds the arm for a person.
-3. It writes a `stage: incident` decision row and `incidents/<stamp>-<arm>/agenda.md`.
+3. It writes a `stage: incident` decision row and a local copy `incidents/<stamp>-<arm>/incident.json`.
 4. It runs the allowed reboot.
-5. It writes `incidents/HOLD-<arm>.json`, which refuses the next session until
-   `omx_incident.py clear --by --note` records who checked the arm.
+5. It reports the incident to Fleet (D-971): measured facts, the decision, the reboot result and up to two frames.
+   Fleet keeps the ledger and holds the arm until a named operator clears it in the Fleet console; the control PC
+   asks Fleet before every session. Unsent reports wait in `incidents/outbox/`, and a Fleet that cannot be reached
+   refuses a session only when a local hold exists (`incidents/HOLD-<arm>.json`, lifted only by Fleet's answer).
 
-The decision model (`ROSY_DECISION_MODEL`, an Ollama URL) only explains the fault frames. It never chooses an
-action. On the 13:27 frames, qwen3-vl:8b saw "an orange block wedged between the jaws and the platform, the elbow
-blocked". It called arm_b the "right" arm, which shows its left/right cannot be trusted.
+The AI PC's vision model (not the control PC) explains the frames from Fleet and the explanation is shown beside the
+incident. It never chooses an action. On the 13:27 frames, qwen3-vl:8b saw "an orange block wedged between the jaws
+and the platform, the elbow blocked". It called arm_b the "right" arm, which shows its left/right cannot be trusted.
 
 Replayed on the real 13:27 `session.json`, the pipeline reached the same decision as the hand diagnosis:
-reboot_latched, then hold for a person. The field PC has no key to the AI PC's model, so on the field the pipeline
-runs measurement-only.
+reboot_latched, then hold for a person. The field PC has no key to the AI PC's model; D-971 moved that call to the AI PC.
 
 ## Next time
 

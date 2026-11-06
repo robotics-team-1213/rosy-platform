@@ -10,6 +10,7 @@ import yaml
 
 import build
 import class_sets
+import review_sam_assistance
 
 
 def sha(data):
@@ -322,13 +323,31 @@ def sample_selection(store, index, review, body):
     tolerance = body.get('tolerance', 'auto')
     if tolerance != 'auto' and (type(tolerance) is not int or not 0 <= tolerance <= 100):
         raise ValueError('bounded flood tolerance required')
-    raw = store.image(index).read_bytes()
-    photo = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_COLOR)
-    if photo is None or (photo.shape[1], photo.shape[0]) != (review['width'], review['height']):
-        raise ValueError('source image dimensions differ')
-    region, tolerance = sampled_region_photo(photo, seeds, tolerance)
+    if 'selection_sha256' in body:
+        digest = body['selection_sha256']
+        if not isinstance(digest, str) or body['label'] == 255:
+            raise ValueError('indexed selection requires a draft SHA and a non-ignore class')
+        raw = draft_image(store, index, digest)
+        with store.connect() as db:
+            kind = db.execute("SELECT value FROM metadata WHERE key='workspace_kind'").fetchone()
+            if kind and kind[0] == 'evaluation':
+                if not review_sam_assistance.reference(db, index, digest, body['label'], seeds,
+                        store.get(index)['source']['image_sha256'], review['classes']['sha256']):
+                    raise ValueError('evaluation selection requires recorded human SAM points')
+        region = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_UNCHANGED) == body['label']
+        tolerance = 0
+    else:
+        raw = store.image(index).read_bytes()
+        photo = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_COLOR)
+        if photo is None or (photo.shape[1], photo.shape[0]) != (review['width'], review['height']):
+            raise ValueError('source image dimensions differ')
+        region, tolerance = sampled_region_photo(photo, seeds, tolerance)
     if preserve:
-        region &= pixels(store, review) == 255
+        editable = pixels(store, review).copy()
+        # Explicit points admit their original-label components; other known labels stay protected.
+        for x, y in seeds:
+            cv2.floodFill(editable, None, (x, y), 255, flags=4)
+        region &= editable == 255
     return region, tolerance
 
 
@@ -520,6 +539,11 @@ def update(store, index, body, conflict, *, actor=None):
         if actor:
             previous['actor'] = actor
         previous['saved_version'] = version
+        if action == 'sample' and body.get('selection_sha256') and region.any():
+            assistance = review_sam_assistance.reference(db, index, body['selection_sha256'], value, body['seeds'],
+                                                       frame['source']['image_sha256'], binding['sha256'])
+            if assistance:
+                previous['sam_assistance'] = dict(assistance, applied_version=version, applied_mask_sha256=digest)
         if action == 'undo':
             previous['restored_version'] = prior['version']
         db.execute('INSERT INTO pixel_events(frame,version,action,review) VALUES (?,?,?,?)',

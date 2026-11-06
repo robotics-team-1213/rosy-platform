@@ -43,7 +43,7 @@ function jobReasonLabel(reason) {
 const stored = sessionStorage.getItem('rosy-console-token') || '';
 $('console-token').value = stored;
 const request = createFleetClient({credential: () => $('console-token').value, origin: location.origin});
-const observations = createCellObservation({request, root: $('workcell-observations')});
+const observations = createCellObservation({request, root: $('workcell-observations'), credential: () => $('console-token').value});
 const catalog = createObjectCatalog({request, $});
 createCellLine({root: $('cell-line'), $});
 createPlanFigures({root: $('plan-figures'), $});

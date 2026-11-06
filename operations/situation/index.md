@@ -27,4 +27,5 @@
 
 ## 최근 기록
 
+- 2026-11-03 · uncommitted · feat(situation): D-971 AI PC가 팔 사건을 설명한다
 - 2026-10-28 · uncommitted · harness 모듈 등록

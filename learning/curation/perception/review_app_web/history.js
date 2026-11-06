@@ -17,7 +17,6 @@ function overview() {
     const title=document.getElementById('pixel-title') || document.getElementById('frame-title');
     title.after(node);
     const link=document.createElement('a');link.href='#review-history-events';link.textContent='검수 이력 보기';link.className='review-history-link';
-    link.onclick=()=>{const details=document.querySelector('.review-history');details.open=true;document.getElementById('review-history-events').focus();};
     node.after(link);document.getElementById('review-history-events').tabIndex=-1;
   }
   return node;
@@ -31,23 +30,37 @@ export function resetHistory(message='검수 주체와 이력을 불러오는 �
 
 export function feedbackPresentation(value) {
   const checks={not_requested:'AI 확인 요청 전',queued:'AI 확인 대기',running:'AI 확인 실행 중',failed:'AI 확인 실패',cancelled:'AI 확인 취소됨',stale:'입력 변경 · AI 재확인 필요',succeeded:'AI 확인 완료'};
-  const check=value.check,checkTitle=checks[check?.state]||'AI 확인 상태 확인 필요';
-  const basis=typeof check?.version==='number'?`저장된 픽셀 v${check.version} 기준`:'저장된 마스크 기준';
-  const checkNote=`${checkTitle} · ${basis}${check?.error?' · '+check.error:''}`;
-  const nextStep=['queued','running'].includes(check?.state)?'새 의견이 저장되면 이곳에 표시됩니다.':
-    ['failed','cancelled','stale'].includes(check?.state)?'AI 마스크 확인 실행으로 다시 요청하세요.':
-    check?.state==='not_requested'&&!['invalid_report','unreadable'].includes(value.reason)?'AI 마스크 확인 실행을 눌러 의견을 요청하세요.':
-    'AI 실행 상태 다시 조회로 상태를 확인하고 AI 마스크 확인 실행으로 다시 요청하세요.';
-  if(!value.available)return {state:['failed','stale','cancelled'].includes(check?.state)||['invalid_report','unreadable'].includes(value.reason)?'warning':'pending',
-    title:check?.state==='succeeded'||['invalid_report','unreadable'].includes(value.reason)?'AI 의견을 읽을 수 없습니다':checkTitle,
-    note:`${checkNote} · ${nextStep} 현재 라벨은 바뀌지 않습니다.`};
+  const check=value.check||{state:'not_requested'},checkTitle=checks[check.state]||'AI 확인 상태 미확인';
+  const basis=Number.isInteger(check.version)?`저장된 픽셀 v${check.version} 기준`:'저장된 마스크 기준';
+  const checkNote=`${checkTitle} · ${basis}${typeof check.error==='string'&&check.error?' · '+check.error:''}`;
+  const details=[`의견 모델: ${value.model||check.model||'미기록'} · 버전 ${value.model_digest||'미기록'}`,checkNote,
+    check.job_id?`최근 확인 작업: ${check.job_id} · 갱신 ${check.updated_at||'미기록'}`:'',
+    value.job_id?`의견 작업: ${value.job_id} · 요청자 ${value.requested_by||'미기록'} · 생성 ${value.created_at||'미기록'}`:'',
+    Number.isInteger(value.mask_version)?`의견 기준: 저장된 픽셀 v${value.mask_version}`:'',
+    value.feedback?.note?`저장된 의견: ${value.feedback.note}`:'',value.reason?`조회 상태: ${value.reason}`:'',
+    '의견 조회는 재실행이나 라벨 적용이 아닙니다.'].filter(Boolean).join('\n');
+  if(value.reason==='policy_blocked')return {state:'pending',title:'고정 평가 · AI 의견 표시 안 함',note:'원본을 보고 직접 판단하세요. 사람이 찍은 점의 SAM 경계 보조만 사용할 수 있습니다.',details};
+  if(value.available&&(!value.feedback||!Number.isSafeInteger(value.unknown_pixels)||value.unknown_pixels<0))value={...value,available:false,reason:'invalid_report'};
+  if(!value.available){
+    const broken=['invalid_report','unreadable'].includes(value.reason),active=['queued','running'].includes(check.state);
+    const title=value.reason==='unreadable'?'AI 의견 기록을 읽을 수 없습니다':value.reason==='invalid_report'?'AI 의견 형식 확인 필요':check.state==='succeeded'?'저장된 AI 의견 없음':checkTitle;
+    const next=active?'새 의견이 저장되면 이곳에 자동 표시됩니다.':broken?'기록을 다시 조회하고, 문제가 계속되면 관리자에게 점검을 요청하세요.':
+      check.state==='succeeded'?'저장된 의견을 다시 조회하고, 없으면 현재 사진 AI 검사로 새 의견을 요청하세요.':'현재 사진 AI 검사로 새 의견을 요청하세요.';
+    const reason=active?checkTitle:broken?'저장 의견 확인 불가':check.state==='succeeded'?'실행은 끝났지만 저장 의견 없음':checkTitle;
+    return {state:broken||['failed','cancelled','stale','succeeded'].includes(check.state)?'warning':'pending',title,note:`${basis} · ${reason}. ${next}`,details};
+  }
+  if(['queued','running','failed','cancelled','stale'].includes(check.state)){
+    const pending=['queued','running'].includes(check.state);
+    return {state:pending?'pending':'warning',title:checkTitle,
+      note:`${basis} · ${pending?'새 AI 의견을 기다리는 중입니다.':'새 AI 의견은 등록되지 않았습니다.'} 기존 의견은 상세에서 확인하세요.`,details};
+  }
   const labels={concern:'검토할 문제 있음',no_obvious_concern:'뚜렷한 문제를 찾지 못함',uncertain:'AI 판단 보류',abstain:'AI 응답 없음'};
   const issues={missed_visible_road:'보이는 주행 영역 누락',drivable_outside_lane:'차선 밖 주행 영역',obstacle_as_drivable:'장애물을 주행 영역으로 표시',uncertain_visibility:'시야 불확실',none:'특정 문제 지적 없음'};
-  const model=`검사 AI: ${value.model || '미기록'} · 버전 ${value.model_digest || '미기록'}${typeof value.mask_version==='number'?' · 저장된 픽셀 v'+value.mask_version+' 기준':''} · ${checkNote}`;
-  if(!value.current)return {state:'warning',title:'이전 마스크의 AI 의견 · 재검사 필요',note:`${model} · 현재 마스크와 일치하지 않습니다. 이전 의견: ${value.feedback.note || '없음'}`};
+  const opinionBasis=Number.isInteger(value.mask_version)?`저장된 픽셀 v${value.mask_version} 기준`:'저장된 마스크 기준';
+  if(!value.current)return {state:'warning',title:'이전 마스크의 AI 의견 · 재검사 필요',note:`${opinionBasis}의 이전 의견이며 현재 마스크와 일치하지 않습니다. 현재 사진 AI 검사로 다시 요청하세요.`,details};
   return {state:value.review_blocked || value.feedback.verdict!=='no_obvious_concern'?'warning':'ready',
     title:labels[value.feedback.verdict] || 'AI 상태 확인 필요',
-    note:`${issues[value.feedback.issue] || '문제 종류 미기록'} · ${value.feedback.note || '추가 설명 없음'} · ${model} · 현재 마스크와 일치 · 미검수 ${value.unknown_pixels.toLocaleString()}픽셀`};
+    note:`${value.feedback.note||issues[value.feedback.issue]||'추가 설명 없음'} · ${opinionBasis} · 미검수 ${value.unknown_pixels.toLocaleString()}픽셀. 원본과 함께 확인하세요.`,details};
 }
 
 export function showHistory(value) {

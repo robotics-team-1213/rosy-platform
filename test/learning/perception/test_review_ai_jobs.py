@@ -5,6 +5,7 @@ import json
 import sys
 import threading
 from contextlib import nullcontext
+from pathlib import Path
 from types import ModuleType, SimpleNamespace
 
 import cv2
@@ -39,6 +40,205 @@ def finished(jobs, frame=0):
     jobs.thread.join(timeout=5)
     assert not jobs.thread.is_alive()
     return jobs.status(frame)['jobs'][0]
+
+
+def test_sam_points_publish_bound_candidate_without_editing_review(tmp_path):
+    store = workspace(tmp_path)
+    before = review_masks.get(store, 0)
+    human = review_masks.pixels(store, before)
+    proposal = np.full(human.shape, 255, np.uint8)
+    proposal[:, 1] = 0
+    snapshots = []
+    def backend(snapshot, cancel):
+        snapshots.append(snapshot)
+        return {'mask': base64.b64encode(review_masks.encode(proposal)).decode()}
+    jobs = Jobs(store, backend=backend)
+    try:
+        assert jobs.status(0)['actions']['sam_points']['available']
+        jobs.create(0, 'sam_points', 1, 'human-a', prompt={'label': 0, 'points': [[1, 2]]})
+        done = finished(jobs)
+        assert done['state'] == 'succeeded'
+        assert done['model'] == 'sam3' and done['points'] == [[1, 2]] and done['label'] == 0
+        assert snapshots[0]['sam_prompt'] == {'label': 0, 'points': [[1, 2]]}
+        assert done['result']['selected_pixels'] == 24
+        assert done['result']['selection_sha256'] == done['result']['candidate_sha256']
+        current = review_masks.get(store, 0)
+        assert current['version'] == before['version'] and current['status'] == 'pending'
+        assert np.array_equal(review_masks.pixels(store, current), human)
+        assert current['draft_candidates'][0]['sha256'] == done['result']['candidate_sha256']
+        origin = json.loads(current['draft_candidates'][0]['origin'])
+        assert origin['action'] == 'sam_points' and origin['job_id'] == done['id']
+        assert origin['sam_prompt'] == {'label': 0, 'points': [[1, 2]]}
+        assert origin['requested_by'] == 'human-a'
+        assert 'sam_checkpoint_sha256' in origin
+    finally:
+        jobs.close()
+
+
+def test_sam_points_reactivate_withdrawn_same_sha_after_managed_class_revision(tmp_path):
+    import review_classes
+    from review_store import Conflict
+    from test_review_classes import request as class_request
+    store = workspace(tmp_path)
+    proposal = np.full((24, 32), 255, np.uint8)
+    proposal[:, 1] = 0
+    jobs = Jobs(store, backend=lambda *_: {'mask': base64.b64encode(review_masks.encode(proposal)).decode()})
+    try:
+        jobs.create(0, 'sam_points', 1, 'human-a', prompt={'label': 0, 'points': [[1, 2]]})
+        first = finished(jobs)
+        assert first['state'] == 'succeeded'
+        digest = first['result']['selection_sha256']
+        rows = json.loads(json.dumps(review_masks.served_classes(store)['classes']))
+        rows[0]['color'] = [91, 92, 93]
+        review_classes.revise(store, class_request(store, 'pixel', rows, 0), 'admin', Conflict)
+        assert not review_masks.get(store, 0)['draft_candidates']
+        with pytest.raises(ValueError, match='unavailable'):
+            review_masks.draft_image(store, 0, digest)
+        version = review_masks.get(store, 0)['version']
+        jobs.create(0, 'sam_points', version, 'human-b', prompt={'label': 0, 'points': [[1, 3]]})
+        second = finished(jobs)
+        assert second['state'] == 'succeeded' and second['classes_sha256'] != first['classes_sha256']
+        assert second['result']['selection_sha256'] == digest
+        candidates = review_masks.get(store, 0)['draft_candidates']
+        assert len(candidates) == 1 and json.loads(candidates[0]['origin'])['job_id'] == second['id']
+        assert np.array_equal(cv2.imdecode(np.frombuffer(review_masks.draft_image(store, 0, digest), np.uint8),
+                                          cv2.IMREAD_UNCHANGED), proposal)
+        assert review_masks.get(store, 0)['version'] == version
+    finally:
+        jobs.close()
+
+
+@pytest.mark.parametrize('prompt', [None, {}, {'label': 255, 'points': [[1, 2]]},
+    {'label': 0, 'points': []}, {'label': 0, 'points': [[1, 2]] * 17},
+    {'label': 0, 'points': [[32, 2]]}, {'label': 0, 'points': [[1, -1]]},
+    {'label': 0, 'points': [[True, 2]]}, {'label': 0, 'points': [[1.5, 2]]},
+    {'label': 0, 'points': [[1, 2]], 'extra': True}])
+def test_sam_points_validate_prompt_before_starting_worker(tmp_path, prompt):
+    store = workspace(tmp_path)
+    called = []
+    jobs = Jobs(store, backend=lambda *_: called.append(True))
+    try:
+        with pytest.raises(ValueError):
+            jobs.create(0, 'sam_points', 1, 'human-a', prompt=prompt)
+        assert not called and not jobs.status(0)['jobs']
+    finally:
+        jobs.close()
+
+
+def test_sam_only_configuration_does_not_require_qwen_model(tmp_path):
+    store = workspace(tmp_path)
+    with store.connect() as db:
+        workspace_id = db.execute("SELECT value FROM metadata WHERE key='workspace_id'").fetchone()[0]
+    checkpoint = tmp_path / 'sam.pt'
+    checkpoint.write_bytes(b'fixture checkpoint')
+    config = tmp_path / 'review-ai.json'
+    config.write_text(json.dumps({'workspace_id': workspace_id, 'python': sys.executable,
+        'sam_checkpoint': str(checkpoint), 'sam_checkpoint_sha256': hashlib.sha256(checkpoint.read_bytes()).hexdigest()}))
+    jobs = Jobs(store, config)
+    try:
+        actions = jobs.status(0)['actions']
+        assert actions['sam_points']['available']
+        assert not actions['pixel_draft']['available'] and actions['pixel_draft']['reason']
+        assert not actions['object_draft']['available']
+    finally:
+        jobs.close()
+
+
+def test_fixed_eval_allows_only_explicit_human_sam_points(tmp_path):
+    store = workspace(tmp_path)
+    with store.connect() as db:
+        db.execute("INSERT OR REPLACE INTO metadata VALUES ('workspace_kind','evaluation')")
+    jobs = Jobs(store, backend=lambda *_: {})
+    try:
+        actions = jobs.status(0)['actions']
+        assert actions['sam_points']['available']
+        for action in ('object_draft', 'pixel_draft', 'mask_check'):
+            assert not actions[action]['available'] and actions[action]['reason']
+            with pytest.raises(ValueError):
+                jobs.create(0, action, 1, 'human-a')
+        assert not jobs.status(0)['jobs']
+    finally:
+        jobs.close()
+
+
+def test_fixed_eval_repeated_sam_region_retains_each_human_prompt_provenance(tmp_path):
+    store = workspace(tmp_path)
+    with store.connect() as db:
+        db.execute("INSERT OR REPLACE INTO metadata VALUES ('workspace_kind','evaluation')")
+    proposal = np.full((24, 32), 255, np.uint8)
+    proposal[:, 1] = 0
+    jobs = Jobs(store, backend=lambda *_: {'mask': base64.b64encode(review_masks.encode(proposal)).decode()})
+    jobs.config['sam_checkpoint_sha256'] = 'e' * 64
+    completed = []
+    try:
+        for actor, points in [('human-a', [[1, 2]]), ('human-b', [[1, 3]])]:
+            jobs.create(0, 'sam_points', 1, actor, prompt={'label': 0, 'points': points})
+            done = finished(jobs)
+            assert done['state'] == 'succeeded'
+            completed.append(done)
+        digest = completed[0]['result']['selection_sha256']
+        assert completed[1]['result']['selection_sha256'] == digest
+        candidates = review_masks.get(store, 0)['draft_candidates']
+        assert len(candidates) == 1
+        assert json.loads(candidates[0]['origin'])['job_id'] == completed[0]['id']
+        for job in completed:
+            _, count, tolerance = review_masks.preview(store, 0, {'version': 1, 'label': job['label'],
+                'seeds': job['points'], 'selection_sha256': digest, 'preserve_existing': True}, ValueError)
+            assert count == 24 and tolerance == 0
+        current = review_masks.get(store, 0)
+        assert current['version'] == 1 and current['status'] == 'pending'
+        assert np.all(review_masks.pixels(store, current)[:, 1] == 255)
+    finally:
+        jobs.close()
+
+
+def test_sam_points_worker_uses_human_clicks_without_qwen(tmp_path, monkeypatch):
+    import review_ai_worker as worker
+    store = workspace(tmp_path)
+    jobs = Jobs(store, backend=lambda *_: {})
+    checkpoint = tmp_path / 'sam.pt'
+    checkpoint.write_bytes(b'pinned fixture checkpoint')
+    monkeypatch.setattr(worker.feedback, '_get_json', lambda *_: pytest.fail('SAM points must not call Qwen'))
+    monkeypatch.setattr(worker.completion, 'ask', lambda *_: pytest.fail('human points must reach SAM directly'))
+    torch = ModuleType('torch')
+    torch.inference_mode = nullcontext
+    torch.tensor = lambda value, dtype=None: np.asarray(value, dtype=dtype)
+    torch.ones = lambda size, dtype=None: np.ones(size, dtype=dtype)
+    torch.float32, torch.int32 = np.float32, np.int32
+    calls = []
+    class Prediction:
+        def __getitem__(self, key): return self
+        def cpu(self): return self
+        def numpy(self):
+            selected = np.zeros((24, 32), dtype=float)
+            selected[:, 1:3] = 1
+            return selected
+    class Tracker:
+        def init_state(self, **kwargs):
+            assert [path.name for path in Path(kwargs['video_path']).iterdir()] == ['00000.jpg']
+            return 'single-frame'
+        def add_new_points_or_box(self, **kwargs):
+            calls.append(kwargs)
+            return None, None, None, Prediction()
+    builder = ModuleType('sam3.model_builder')
+    builder.build_sam3_video_model = lambda **kwargs: SimpleNamespace(tracker=Tracker(), detector=SimpleNamespace(backbone=object()))
+    monkeypatch.setitem(sys.modules, 'torch', torch)
+    monkeypatch.setitem(sys.modules, 'sam3', ModuleType('sam3'))
+    monkeypatch.setitem(sys.modules, 'sam3.model_builder', builder)
+    try:
+        snapshot = jobs._snapshot(0, 'sam_points', 1)
+        snapshot['sam_prompt'] = {'label': 0, 'points': [[1, 2], [3, 4]]}
+        result = worker.execute(snapshot, {'sam_checkpoint': str(checkpoint),
+            'sam_checkpoint_sha256': hashlib.sha256(checkpoint.read_bytes()).hexdigest()}, tmp_path)
+        mask = cv2.imdecode(np.frombuffer(base64.b64decode(result['mask']), np.uint8), cv2.IMREAD_UNCHANGED)
+        assert np.all(mask[:, 0] == 255) and np.all(mask[:, 1:3] == 0) and np.all(mask[:, 3:] == 255)
+        assert result['selected_pixels'] == 48
+        assert len(calls) == 1 and calls[0]['frame_idx'] == 0
+        np.testing.assert_allclose(calls[0]['points'], [[1/32, 2/24], [3/32, 4/24]])
+        assert calls[0]['labels'].tolist() == [1, 1]
+        assert not (tmp_path / 'single-frame').exists()
+    finally:
+        jobs.close()
 
 
 def test_missing_configuration_disables_actions(tmp_path):

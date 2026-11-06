@@ -10,8 +10,77 @@ from review_app import make_server
 from test_review_app import open_store
 from test_review_cycle import CLASSES
 import review_masks
+from test_review_flow_browser import browser_workspace
 
 pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason='requires explicit Chromium browser run')
+
+
+@pytest.mark.parametrize('pixel', [False, True])
+@pytest.mark.parametrize('lookup', ['after', 'around'])
+@pytest.mark.parametrize('failed', [False, True])
+def test_next_pending_locks_editing_until_both_lookups_finish(browser_workspace, pixel, lookup, failed):
+    page, store, expect = browser_workspace
+    base = page.url.split('?')[0].rstrip('/')
+    store.update(1, {'version': store.get(1)['version'], 'action': 'reopen'})
+    if pixel:
+        review_masks.bind_classes(store, CLASSES)
+        page.goto(base + '/pixels?frame=0', wait_until='networkidle')
+        page.locator('#pixel-class').select_option('4')
+        page.locator('#pixel-brush-tool').click()
+    else:
+        page.goto(base + '/?frame=0', wait_until='networkidle')
+        page.locator('#reopen').click()
+    prefix = 'pixel-' if pixel else ''
+    canvas = page.locator('#pixel-canvas' if pixel else '#canvas')
+    edit = page.locator('#pixel-brush-tool' if pixel else '#add')
+    expect(edit).to_be_enabled()
+    delayed = []
+    def hold(route):
+        query = parse_qs(urlparse(route.request.url).query)
+        if lookup in query:
+            delayed.append(route)
+        else:
+            route.continue_()
+    page.route('**/api/workspace?*', hold)
+    try:
+        with page.expect_request(lambda request: lookup in parse_qs(urlparse(request.url).query)):
+            page.locator('#' + prefix + 'next-pending').click()
+        expect(edit).to_be_disabled()
+        expect(page.locator('#pixel-next' if pixel else '#next-frame')).to_be_disabled()
+        canvas.click(position={'x': 15, 'y': 15})
+        if pixel:
+            expect(page.locator('#pixel-save')).to_be_disabled()
+            assert review_masks.get(store, 0)['version'] == 0
+        else:
+            assert len(store.get(0)['review']['boxes']) == 1
+        assert len(delayed) == 1
+        if failed:
+            delayed.pop().fulfill(status=503, json={'error': 'held lookup failed'})
+            expect(page.locator('#pixel-error' if pixel else '#error')).to_contain_text('검수 서비스를 사용할 수 없습니다')
+        else:
+            route = delayed.pop()
+            route.fulfill(response=route.fetch())
+        expect(edit).to_be_enabled()
+        expect(canvas).to_be_focused()
+        expected_frame = '0' if failed else '1'
+        assert parse_qs(urlparse(page.url).query)['frame'] == [expected_frame]
+        if pixel:
+            canvas.click(position={'x': 20, 'y': 20})
+            expect(page.locator('#pixel-save')).to_be_enabled()
+            expect(page.locator('#pixel-next-pending')).to_be_disabled()
+            page.locator('#pixel-save').click()
+            expect(page.locator('#pixel-status')).to_contain_text('v1')
+            assert review_masks.get(store, int(expected_frame))['version'] == 1
+            if not failed:
+                assert review_masks.get(store, 0)['version'] == 0
+        else:
+            page.locator('#add').click()
+            expect(page.locator('#boxes .box-row')).to_have_count(2)
+            assert len(store.get(int(expected_frame))['review']['boxes']) == 2
+    finally:
+        while delayed:
+            delayed.pop().fulfill(status=503, json={'error': 'test cleanup'})
+        page.unroute('**/api/workspace?*', hold)
 
 
 @pytest.mark.parametrize('path,strip,next_button,title', [
@@ -43,6 +112,8 @@ def test_review_page_bounds_and_deep_link(tmp_path, path, strip, next_button, ti
             errors = []
             page.on('pageerror', lambda error: errors.append(str(error)))
             page.goto(f'http://127.0.0.1:{server.server_port}{path}?frame={first_id + 59 * stride}', wait_until='domcontentloaded')
+            if path == '/pixels':
+                page.locator('.review-tool-nav a[href="#pixel-display-options"]').click()
             playwright.expect(page.locator(title)).to_have_text('사진 60' + (' 픽셀 검수' if path == '/pixels' else ''))
             playwright.expect(page.locator(f'{strip} [data-index="{first_id + 59 * stride}"]')).to_contain_text('사진 60')
             playwright.expect(page.locator(next_button)).to_be_enabled()
@@ -79,6 +150,7 @@ def test_review_page_bounds_and_deep_link(tmp_path, path, strip, next_button, ti
             assert parse_qs(urlparse(page.url).query)['frame'] == [str(first_id + 60 * stride)]
             if path == '/pixels':
                 playwright.expect(page.locator('#pixel-frame option:checked')).to_contain_text('사진 51')
+                page.locator('.review-tool-nav a[href="#pixel-review"]').click()
                 page.locator('#pixel-exclude').click()
                 playwright.expect(page.locator('#pixel-decision')).to_contain_text('사진 51 픽셀 제외')
                 playwright.expect(page.locator('#pixel-decision')).to_contain_text('다음 검수 대기 사진 51')

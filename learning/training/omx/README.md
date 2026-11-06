@@ -1,5 +1,19 @@
 # OMX ACT 오프라인 학습 연구
 
+## 저장한 텔레옵 검수에서 ACT 학습·평가까지
+
+`/learning/omx`의 **저장한 검수로 ACT 학습·독립 평가**는 등록된 native intake에서 직접 학습한다. 원본의 관절·카메라·정규화 단위를 유지하며 NPZ 변환용 프로필 입력은 필요하지 않다.
+
+1. 수집 담당자가 서로 독립된 봉인 수집 세션을 `collection_pipeline.py prepare-native <session-a> <session-b> --out <new-prepared> --repo-id <local/id>`로 준비한다. 자동 교사는 기존 안내의 rig/calibration revision도 지정한다. 원본 폴더를 임의 LeRobot 데이터로 간주하거나 누락된 세션 계보를 추정하지 않는다.
+2. 기존 자료 연결 절차로 준비 폴더를 OMX 자료로 등록한다. 프로젝트 계정의 일반 사용자에게 서버 임의 경로 등록 권한을 추가하지 않는다.
+3. 영상을 확인하고 전체 시연 검수 또는 파지 구간 검수를 저장한다. 성공·독립 train/eval 분할이 필요하며 미판정·실패·개입은 기존 규칙대로 제외한다.
+4. 위에서 등록 시연을 선택한 뒤 사용할 **저장 검수**와 학습 단계·배치 크기를 선택한다. 미저장 편집은 사용하지 않는다.
+5. **검수 분할·ACT 학습·평가 시작**을 누른다. 기존 학습 작업 목록에서 진행·중단·재접속 상태와 결과를 확인하고 완료 후 ZIP을 내려받는다. 이 ZIP은 native 모델 설정·weights·전처리/후처리기, 독립 평가와 source/split/cycle 근거를 포함한다. NPZ 학습 ZIP과 파일 배치가 다르다.
+
+호스트 검수 앱 내부의 `POST /api/learning/omx/center/native-run`은 `{prepared_id, review_id, steps, batch_size, request_id}` 또는 `review_id` 대신 `segment_version`을 받는다. 등록된 서버 자료와 정확한 저장 버전만 사용하며 기존 token/origin·프로젝트 manage 권한을 따른다. CPU, steps 1..100000, batch_size 1..64이고 request_id는 canonical UUID다. 동일 요청 재시도는 같은 작업을 반환한다. 고정된 worker 요청은 최대 16 MiB다. CORE/Fleet의 외부 명령 API와 정책 활성화 권한은 추가하지 않는다.
+
+원본과 검수 바이트가 달라지면 실행을 거절한다. 중단한 학습은 완료로 표시하지 않으며 새 요청으로 다시 시작한다. 새 실물 녹화, 사람의 성공 판정, 온라인 actor와 실물 배포는 이 오프라인 작업이 수행하지 않는다. [실제 수치 학습·브라우저 검증 기록](../../../docs/validation/teleop-act-pipeline-2026-10-28/result.md)을 함께 확인한다.
+
 기존 Learning 앱의 `/learning/omx`에 데이터 폴더 업로드와 ACT/SAC 오프라인 학습 실행·중단·진행·결과·모델 다운로드가 추가되었다. `experiment_center.py`는 별도 호스트 설정으로만 활성화한다. 실제 로봇이 새 경험을 공급하는 온라인 HIL-SERL 연결은 아직 없다. 합성 스모크의 수치 결과를 집기 성공률로 사용하지 않는다.
 
 입력 폴더는 `dataset.json` (`rosy.omx.experiment-dataset/1`)과 해시가 선언된 평면 `.npz` 파일로 구성한다. 프로필은 `experiment_profile.py`, 배열과 세션/원본 분할은 `experiment_dataset.py`에서 검증한다. 팔 수·카메라 수·배치가 입력 프로필에 포함되며 정책 카메라는 모델에 명시적으로 64×64로 축소한다. 카메라의 실제 시각 동기화·교정·장치 접근은 이 파일 형식 검증과 별도다.
@@ -274,9 +288,29 @@ HTTP 응답 identity/schema를 확인하고 실제 상태가 없으면 unavailab
 
 ## 학습 결과를 L0 정책으로 등록 (D-793)
 
+LeRobot 폴더를 직접 올리는 오프라인 작업은 아래 ‘업로드 자료 모방학습’을 사용한다.
+
 `native_cycle.py`의 `cycle-receipt.json`에는 `policy_revision`(모델 파일 목록의 해시), `rig_revision`, `calibration_revision`이 남는다. `register_policy.py`는 이 영수증으로 Fleet에 L0 제안을 올린다. 근거는 영수증의 SHA-256이다. L0은 실행 권한이 아니며 관리자가 `/console/policy`에서 결정한다.
 
 ```bash
 python learning/training/omx/register_policy.py --cycle <run> --fleet https://<site>:8443 --workcell <id> --dry-run
 ROSY_FLEET_TOKEN=<policy-admin token> python learning/training/omx/register_policy.py --cycle <run> --fleet https://<site>:8443 --workcell <id> --confirm
 ```
+
+## 업로드 자료 모방학습
+
+Learning 홈의 ‘자료 올리고 모방학습’(`/learning/imitate`)에서 **자료 올리기 → 확인·분할 → ACT 학습 → 평가·모델**을 진행한다. 기존 직접 조종 녹화 준비·native 검수 과제는 `/learning/tasks`에서 연다.
+
+1. LeRobot v3 폴더를 선택한다. 파일 SHA-256을 먼저 계산하고 서버가 저장한 위치부터 256 KiB씩 이어 올린다. 새로고침 후 같은 폴더를 다시 선택하면 파일 목록·크기·해시가 일치할 때 이어간다. `.cache`, `.git`, `.gitattributes`, `.DS_Store`는 제외한다. 압축 해제나 임의 파일·서버 경로 입력은 지원하지 않는다.
+2. ‘원본 검사’로 원본 해시·Parquet·이미지/영상 헤더·공식 reader를 확인한다. 검사 시작 후 원본은 잠긴다. 실패·중지 시 같은 잠긴 자료를 재검사하거나 새 작업을 만든다.
+3. 에피소드마다 학습·검증·평가·제외를 선택해 **분할 저장**을 누른다. 학습·평가는 각각 한 에피소드 이상이며 검증은 생략할 수 있다. 분할 제안은 저장 전까지 학습에 사용하지 않는다. 에피소드 간 수집 세션 독립성·단위는 자료만으로 보증하지 않는다.
+4. ACT CPU 학습을 시작한다. 원래 fps·상태/행동 이름과 값을 유지하고 카메라만 RGB 128×128로 파생한다. 정규화와 평균 행동 기준선은 학습 에피소드만 사용한다. 다른 실행이 있으면 시작을 막고 현재 실행 중지는 어느 탭에서도 제공한다.
+5. 새 프로세스에서 모델·전후처리기를 다시 읽고 각 검증/평가 에피소드의 앞 최대 128개 연속 프레임을 평가한다. 에피소드마다 정책을 초기화한다. 완료 ZIP에는 모델·설정·출처·분할·평가와 내보낸 바이트의 해시 목록이 들어간다. 원본, 파생본, 모델, 근거의 연결을 확인한 실행만 완료·다운로드할 수 있다.
+
+현재 범위는 고정 LeRobot 0.4.4의 ACT이다. v3, 2~1,000 에피소드, 최대 200,000프레임·2 GiB·10,000파일·파일당 512 MiB, float32 상태 1~128·행동 1~64차원, RGB image/video 카메라 1~8개, 정수 1~240fps를 받는다. 선언된 상태·행동 차원은 달라도 된다. 작업 폴더와 HF 캐시를 격리하고 네트워크 다운로드·환경의 HF 자격 전달을 막는다. 단일 차원 스칼라 저장은 선언된 벡터 축으로 복원한 뒤 공식 ACT에 전달한다. 학습 중 재개 체크포인트와 다른 정책/RL 실행기는 이 화면의 범위에 포함하지 않는다.
+
+서버는 기존 Center 설정의 신뢰 호스트(`model`/`ai`), 프로젝트 바인딩, ACT 실행기를 요구한다. 업로드 저장은 실행기 준비 전에도 가능하다. HTTP는 기존 계정 view/manage 권한과 CSRF 경계를 사용한다. `/api/learning/omx/center` 아래 GET `lerobot-studies`, `lerobot-study/<id>`, POST `lerobot-study`, `lerobot-upload`, `lerobot-inspect`, `lerobot-split`, `lerobot-run`이 이 흐름을 제공하며 중지·artifact는 기존 경로를 재사용한다.
+
+HF 게시 안내는 기존 계정 화면으로 연결한다. 이 웹 흐름은 HF에 자동 게시하지 않으며 로봇 적용·승격도 실행하지 않는다. 오프라인 오차는 실물 성공률이 아니다. 실제 업로드·학습·재적재·ZIP 검증은 [검증 기록](../../../docs/validation/lerobot-upload-imitation-2026-10-29/result.md)을 본다.
+
+실제 자료/서비스가 필요한 운영자 수용 시험은 일반 브라우저 tier와 분리해 명시적으로 실행한다. `test/learning/perception/operator_lerobot_study.py`는 `ROSY_RUN_UPLOADED_STUDY=1`, `ROSY_UPLOADED_STUDY_SOURCE`, `ROSY_UPLOADED_STUDY_EVIDENCE`를 요구한다. 기존 공개 연구 수용은 `operator_public_learning.py`와 `ROSY_RUN_PUBLIC_STUDY=1`을 사용한다. 두 파일 모두 공식 `tools/remote/remote_pytest.py --log-dir <외부 로그> -- ROSY_RUN_BROWSER_TESTS=1 ... <운영자 시험 파일>`로 실행한다. 일반 UI 회귀는 독립된 작업 폴더/서버를 생성하는 `test_imitation_browser.py`, `test_public_learning_browser.py`이며 전체 브라우저 검증에서 빠지지 않는다.

@@ -5286,6 +5286,13 @@
 - 미해결: 기존 일반 app custom lifespan은 legacy ARM policy startup hook을 호출하지 않는다. 정책 시험은 등록된 start/stop 컴포넌트를 명시 실행한 근거이며 운영 자동승인 실행을 입증하지 않는다.
 - CE: 미해결 — lifecycle 연결은 별도 작업으로 남겼다. 이번 가드 수정의 원인과 재발 방지는 코드·회귀 시험에 직접 남는다.
 
+## 2026-11-03 · uncommitted · feat(fleet): D-971 OMX 팔 사건 원장·AI PC 설명·운영자 해제
+
+- 변경: `recognition/arm_incidents.py`의 `ArmIncidentStore`(공유 Fleet SQLite, open→explained→cleared, 같은 `(source, session)` 재보고는 같은 사건)와 라우트: 팔 토큰 보고·보류 조회, 이름 있는 운영자 해제(확인 내용 필수, 삭제 없음), 사진 조회(viewer), AI PC 전용 설명 없는 사건 목록·설명 저장. 작업 셀 관측 스냅샷 팔마다 `incidents`. `site_auth.py`가 ai_observer의 설명 POST 한 경로만 더 허용한다. API v1.357.
+- 증거: `operations/fleet/test/test_arm_incidents.py`(계약·저장소·인증·본문 한도)와 `test_ai_facts.py` 원격 통과.
+- gate 변화: 없음. 실물 수용은 하지 않았다.
+- CE: 해당 없음 — 새 기능이며 결정은 D-971에 있다.
+
 ## 2026-11-05 · uncommitted · test(fleet): 지도 화면 전환 대기와 초기 모듈 로드 복구
 
 - 변경: site-map 브라우저 helper가 활성 subnav와 보이는 heading을 확인한 뒤 레이아웃을 측정한다. 초기 document/script 요청의 정확한 Chromium ERR_NETWORK_CHANGED에만 탐색 1회 재시도를 적용하고 기존 데이터·권한·BODY_FIT assertion은 유지한다.
@@ -5299,3 +5306,10 @@
 - gate 변화: 없음. 286524aef8 원격 API/store/observer 회귀66건이 skip0/NEW0으로 통과했고 독립 검토가 승인했다. 원래 CI 실패의 내부 거절 분기와 별도로 시험의 시계 의존성만 제거한다.
 - 증거: 게시 CI에서 승인 HTTP 200 기대가 409로 실패했고, 같은 원본 커밋의 원격 단독 모듈 18건은 skip0/NEW0으로 통과했다. 원래 CI 응답에는 내부 거절 분기가 없어 500ms 경과를 원인으로 확정하지 않는다. 이번 변경은 계약 시험의 불필요한 실제 시계 의존성을 제거한다. 변경 후 계약 및 기존 stale/future/역행 시계 거절 시험은 별도 검증한다.
 - CE: 미해결 — 원래 CI의 거절 분기는 확인되지 않았다. 해결 교훈으로 등록하지 않는다.
+
+## 2026-11-06 · uncommitted · feat(fleet): 관제 수동 모드 전환
+- 변경: manual/nonzero move의 dispatch generation·미완료 Task·claim·순수 trip/engaged 재검사; terminal zero 전달 보존
+- 증거: 원격 AI PC 16028faad6 backend 231 passed/skip0; c7ce250026 Chromium 17 passed/skip0. 신규 backend RED 29 failed/7 passed, UI RED6 failed/11 passed 후 구현. 로그는 외부 scratch pinky-manual-{red,backend-green,ui-red,ui-green}/run-1.txt.
+- gate 변화: SOURCE 회귀 검증; ARTIFACT/DEVICE/FIELD 수용 근거로 사용하지 않음. 최종 재조립 SHA 원격 회귀와 FULL은 별도.
+- 결정: API v1.363; 기존 CORE 최종 명령·모드 owner 유지.
+- 교훈: CE 해당 없음 — 최종 코드·회귀 시험·API 계약으로 판단 근거를 재현할 수 있음.

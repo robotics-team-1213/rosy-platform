@@ -987,9 +987,67 @@
 - 증거: 샘플 서버 1440·390 두 테마 렌더(처음 렌더에서 390에 "ope rato r"처럼 단어가 끊겨 칸 줄바꿈을 막음). 관리 브라우저 시험의 버튼 이름 선택자를 새 접근 이름으로 맞춤.
 - gate 변화: SOURCE 로컬 GO. 원격 브라우저는 커밋 후.
 
+## 2026-11-05 · a27e97c186 · uiux: 설치 작업 메뉴와 지도 하위 메뉴의 같은 표현
+
+- 변경: 설치 chooser가 공용 subnav native tab을 소비하며 Fleet 전용 chooser padding·compact select·wrap 덧칠을 제거했다. 실제 입력·권한·위험 행동·장치 명령은 변경하지 않았다. 삭제된 select의 직접 시험 caller를 실제 탭 클릭으로 맞췄다.
+- 증거: production Fleet map/install의3폭×2테마에서21개 computed 속성·native tab/link 의미·키보드 초점을 대조한6개를 포함해0de561052a의13개 회귀 PASS/NEW0. 1a390c9d40의 넓은 caller315 PASS/NEW2 뒤 a27e97c186의 start-point/workflows 두 전체파일36 PASS/0 skipped/NEW0. 옛 관제 안내 selector는 실제 지도옵션 안4개 권한 문구와 가시성을 검사하고,401 후 열린 계정 overlay는 Escape로 닫으며 탭 초점 보존과 aria-expanded=false를 확인한다. 기존 role lock·draft·stop·복구 단언을 유지했다.
+- gate 변화: source-bound SOURCE/LOCAL 증거이며 서로 다른 SHA의 실행을 합산하지 않는다. 제품과 캡처 hook은1a 이후 동일하고 독립 G3 Task10 PASS다. 공식 FULL·착지·실설치·현장 수용은 후속이다. CE: 해당 없음 — 실제 사용자 경로와 공용 contract 시험이 판단을 보존한다.
+
 ## 2026-11-06 · a9210f10f9 · 선택 로봇 홀드 조종과 모바일 상태 우선 배치
 
 - 변경: `manual-control.js`를 Console 소유 자산으로 등록하고 기존 인증된 Fleet move intent에 연결했다. 한 번에 한 요청만 보내고 버튼 해제·선택 변경·창 이탈·페이지 종료·상태 상실 때 원래 기체로0을 보낸다. 비동기 이동 요청이 늦게 끝나도 마지막0이 뒤따른다. 정지 거절은 화면에 남긴다. 모바일의 기존 작업면 order에 패드를 맞춰 로봇 상태가 조종보다 먼저 보이게 했다.
 - 증거: RED 후 source `7e81c40e5d`의 원격 affected는8806 PASS/847 SKIP, 별도 실제 Chromium 신규11개는 SKIP0이다. 앞선 기존 관제·세션·수명 포함138개도 원격 PASS/SKIP0이다. 착지 중 기존 모바일4개가 선택 상태를844px 아래로 미는 실제 NEW를 잡았고, source `a9210f10f9`의 순서 수정 후 해당4개와 신규11개 모두 원격 PASS/SKIP0이다. 독립 계약 검토에 수정 필요 사항이 없었고 로컬 main `68fe84b488`에 착지했다. 게시용 canonical FULL은 별도 진행한다.
 - 범위: 브라우저 회귀는 mocked Fleet 응답에서 실제 DOM·입력 수명·요청을 검사한다. HTTP 시험은 실제 Fleet route에서 fake robot transport로 이동과0 전달을 검사한다. 이 결과를 배포된 패드의 실물 수용으로 세지 않는다. 현장의42·45·46은 기존 실제 Fleet API 경로에서 케이블을 유지한 작은 구동·raw 정지를 확인했으며 새 패드 배포나 차체 이동의 독립 현장 확인과는 별도다.
 - gate 변화: 이 변경의 SOURCE/관련 원격 회귀 GO, 로컬 착지 확인. GitHub 게시·서명 사이트 배포·배포 UI 실물 조작·자동 위치·지도 도착 검증은 미완료다. 기존 전체 모듈의 ARTIFACT/DEVICE/FIELD gate를 올리지 않는다.
+
+## 2026-11-06 · uncommitted · fix(fleet): viewer 주기 갱신 잠금의 실제 RED/GREEN 후속
+- 변경: 정상 병합5fe 뒤 commit c48929874d84ec05f6f60c1dab6be680d4e18787의 manual reason closure 한 줄과 범위 안내 한 문단을 후속 문서에 결속한다. 서버 권한·CORE·원래 8종료 조건·기존 단언은 보존했다.
+- 증거: b7cb viewer가 250ms 뒤 enabled인 실제 RED 1 FAIL/NEW 1→동일 시험 blob의 c489 6전체파일 160 PASS/0 skip/NEW-known-flaky 0, 492.06초/runner 499·의존성 경고 2다. 새 viewer와 기존 8ending이 실제 PASS이며 독립 코드/실행 GO를 확인했다. pointer/Tab skip/Space 현재 focus 범위이고 disabled 직접 주입·active 역할 전환·실제 서버403·물리 정지는 미검증이다. docs/validation/uiux-surfaces-2026-11-05/completion-followup-2026-11-06.md에 원본 지문·정확 6파일·source/run을 남겼다.
+- gate 변화: frozen151711의 actual prepared D2는 진행 중이며 c489 160을 그 FULL에 합산하지 않는다. 최종 G1·공식 FULL·실제 main·배포·현장 수용은 별도다. progress/last_verified는 넓히지 않았다. CE: 해당 없음 — closure와 250ms 회귀가 원인·보호 조건을 직접 설명한다.
+
+## 2026-11-06 · uncommitted · fix(fleet): 표시 지도와 다른 좌표계의 궤적 숨김
+- 변경: trail-view가 격자 map_id 또는 현재 활성 도로 map_id와 양 끝점이 명시적으로 일치하는 구간만 그린다. 좌표계 경계·누락 ID는 연결하지 않는다. 기록 수집·다른 소비자·테더·권한·API는 유지한다.
+- 증거: 9eb08222ec 원격 site test host Chromium 시작점 전체·공용 Node 시험·path_history 22 passed/skip0; scratch fleet-trail-green/run-1.txt. 수정 전 실제 site/grid는 각각6개 선분을 그려 기대2개보다 많았고 Node frame 시험도 RED였다.
+- gate 변화: SOURCE 회귀 확인. 실제 지도 보정·로봇 위치·장치 주행 수용 근거는 아님.
+- 결정: 기존 map_id를 그리기 직전에 검증하며 임의 좌표 변환이나 기록 삭제를 추가하지 않는다.
+- 교훈: CE 해당 없음 — 필터와 grid/site·누락 ID·frame 경계 회귀가 판단 근거를 직접 보존한다.
+
+## 2026-11-06 · uncommitted · fix(fleet): 사건 facts의 미지 JSON 형태에서도 본문과 해제 입력 유지
+- 변경: D-971 facts는 BoundedJson이므로 알려진 측정 형태만 기존 문구로 표시한다. flagged 객체·문자열·null 행, 미지 latch/bits, 비정상 folded/windup 형태와 빈 측정에 남은 미지 자료는 원본 JSON 텍스트로 보존한다. 정상 runner의 error/fault null은 기존 측정 문구를 유지한다. 권한·CSRF·해제 요청·사건 상태 처리는 변경하지 않았다.
+- 증거: RED5ef2b034c4 실제 Chromium 사건 회귀2실패/정상1통과에서 flagged.map TypeError와 본문·해제 버튼 누락을 재현했다. source4ddb9eef8b 원격 workcell/motor-health Chromium28통과·공용 controls/계약/기존 incident API/Node/API pin61통과, skip0·NEW/known/flaky0; scratch incident-facts-{red,final-green,contracts}/run-1.txt. 미지 facts의 markup은 텍스트로만 보이고, 메모 없는 해제 거절과 메모 후 원래 해제 흐름도 확인했다.
+- gate 변화: SOURCE/관련 원격 회귀 확인이다. 최종 통합 착지는 게시 담당과 조율하며 공개 배포·운영 로그인·기체·서비스 수용 근거로 확대하지 않는다.
+- 교훈: CE 해당 없음 — BoundedJson 계약과 실제 렌더·해제 회귀가 원인과 방어 경계를 직접 보존하며 별도 숨은 복구 조건이 없다.
+
+## 2026-11-06 · uncommitted · feat(fleet): 관제 수동 모드 전환
+- 변경: 선택 기체의 수동 전환 확인과 fresh mode readback; 발행 차단 시 기존 hold를 terminal zero로 종료
+- 증거: 원격 AI PC 16028faad6 backend 231 passed/skip0; c7ce250026 Chromium 17 passed/skip0. 신규 backend RED 29 failed/7 passed, UI RED6 failed/11 passed 후 구현. 로그는 외부 scratch pinky-manual-{red,backend-green,ui-red,ui-green}/run-1.txt.
+- gate 변화: SOURCE 회귀 검증; ARTIFACT/DEVICE/FIELD 수용 근거로 사용하지 않음. 최종 재조립 SHA 원격 회귀와 FULL은 별도.
+- 결정: API v1.363; 기존 CORE 최종 명령·모드 owner 유지.
+- 교훈: CE 해당 없음 — 최종 코드·회귀 시험·API 계약으로 판단 근거를 재현할 수 있음.
+
+## 2026-11-06 · uncommitted · fix(fleet): 수동 전환 버튼의 공용 kind 명시
+- 변경: 보존된 manual7977을 현행 main2b6aac73e2에 정상 병합하고 새 수동 모드 버튼에 kind=quiet를 명시했다. 기존 로그 양쪽과 현재 지도 frame 필터·motor readiness 기본값을 보존했다. 권한·guard·API·공용 시험은 바꾸지 않았다.
+- 증거: 병합00c3772680의 test_every_button_names_its_kind 원격 RED1failed(manual-control.js23); 수정1aa7e69117은 AI PC에서 공용 컨트롤·CORE/Fleet/Task/channel·공용 Node 회귀278passed/skip0, 실제 Chromium 수동 조종18passed/skip0. scratch pinky-manual-kind-{red,green,browser}/run-1.txt; known NEW0.
+- gate 변화: SOURCE 회귀 확인; canonical FULL194811의 NEW는 수정했으나 새 정식 FULL 결과와 실제 장치 수용은 별도다.
+- 결정: 기존 공용 quiet 버튼을 사용하며 검사 예외나 기본 kind 추론을 추가하지 않는다.
+- 교훈: CE 해당 없음 — 기존 공용 kind 계약과 한 줄 수정이 원인·해결을 직접 설명한다.
+
+## 2026-11-06 · uncommitted · fix(fleet): 수동 관제 API 설명의 동시 삽입 충돌 조정
+- 변경: 보존 source ad2de3ea05를 main1fd024ee90에 정상 병합했다. API Reference의 수동 의도 v1.363과 기존 Fleet unit v1.358·OMX incident v1.357 설명을 모두 보존했다. 기존 v1.363 예약·header·runtime pin을 유지하며 새 번호·계약 의미·guard 변경은 없다.
+- 증거: sourcecb4d0d403a 원격 AI PC 공용 control/API/CORE/Fleet/Task/channel/OMX incident/Node 286passed/skip0, 실제 수동 조종 Chromium18passed/skip0; scratch pinky-manual-api-{green,browser}/run-1.txt. 독립 source 검토 미해결 finding 없음.
+- gate 변화: SOURCE 회귀 확인; old canonical212723 STOP은 보존하고 재개하지 않는다. 새 canonical FULL·공개·장치 수용은 별도다.
+- 결정: 양쪽 설명을 버전 순서363/358/357로 두고 API gateway bump363의 already 확인을 기록한다. 충돌 밖 기존 main의 incident 등록·trail frame·motor 변경을 보존했다.
+- 교훈: CE 해당 없음 — 일반 문서 삽입 충돌이며 최종 병합과 API alignment 회귀가 조정 근거를 보존한다.
+
+## 2026-11-06 · uncommitted · merge(fleet): 관제 수동 조작과 검증 후속 변경의 최종 통합
+- 변경: main54eb4097fe에 보존 manual d8014fe6cf와 help2524644483을 정상 병합했다. 제품 파일은 각 검토 부모와 바이트가 같다. web logs/index 충돌은 사건 기록과 수동 조작 기록을 모두 보존해 해결했다. 기존 own API v1.363 예약·header·runtime pin을 유지하며 새 동작·권한·guard 변경은 없다.
+- 증거: 통합 source5ca1d6b599의 독립 병합 검토 미해결 finding 없음. manual1f97d2d2c9·ce2670e864·6e047a8c77·df224da2ac·54eb4097fe·2524644483 ancestry를 포함하고, 거절된 ca805b8d2c·af7dec1229는 제외했다. 부모별 scoped 원격 결과는 기존 각 source 기록에 결속된 증거로 유지하며 최종 통합 FULL 통과로 바꾸어 주장하지 않는다.
+- gate 변화: 정본 구조·안전·크기·비밀정보 검사 후 새 canonical FULL에 제출한다. old224244는 clean FULL 증거 부재로 STOP된 상태를 보존하며 재개하지 않는다. 실행 중인 도움말003134 및 다른 작업은 유지한다. 공개·서명·배포·Account cutover·실물 수용은 별도다.
+- 교훈: CE 해당 없음 — 검토 부모의 정상 통합이며 기록과 실제 ancestry·파일 일치 검사로 보존 범위를 확인할 수 있다.
+
+## 2026-11-06 · uncommitted · merge(fleet): 최신 UIUX와 수동 관제의 확인·권한 연결 보존
+- 변경: main a4139efa7e와 보존 source0212ae977f를 정상 병합했다. console은 최신 main 전체에 confirmedAction/refreshState 주입만 더해 viewer의 운영자 권한 차단을 유지한다. API는 기존 예약363과 main의 Learning360/SAM 설명, 기존358/357 본문을 모두 보존했다. generated web index는 양쪽 진행 기록에서 재생성했다. 수동 grammar·CORE/Fleet 실행·hold/rearm/terminal-zero/source 의미와 다른 최신 UIUX 파일은 각 소유 부모를 보존한다.
+- 증거: sourceabbd692cc1 원격 AI PC 실제 Chromium 수동19개+viewer/login/shared-token/confirmation-generation4개 총23통과, CORE/Fleet manual·API pin·확인 계약·공용 control·feature matrix·Node86통과. skip0·NEW/known/flaky0; scratch pinky-uiux-merge-{browser,contracts}/run-1.txt. 독립 고정 source 병합 검토 미해결 finding 없음. API363/360/358/357 각 본문과 BOM, 최신 console+주입의 파일 일치도 확인했다.
+- metadata: PNG 실제 checksum과 현재 manifest 일치, 문서의 Git commit 문맥을 독립 확인한 근거에 따라 root 승인 exact historical commit/path/rule 2건만 비밀정보 baseline에 추가했다. 기존183건의 순서·내용·schema·reviewer와 Git raw prefix를 보존해 중복 없이185건이며 scanner·provenance·ignore·정책은 바꾸지 않았다. 이 자료는 비밀키가 아닌 실제 screenshot/Git metadata다. source18effdc1b9 원격 publish/secret/provenance 기존 회귀59통과·skip0·NEW/known/flaky0, scratch pinky-uiux-metadata-guards/run-1.txt. 정본 origin647부터 해당 source까지264개 commit의 추가 줄 검사에서 미검토 hit0이다. baseline 증분 독립 검토 미해결 finding 없음.
+- gate 변화: bounded SOURCE 회귀다. main a413에는 exact land record가 없으므로 최신 main이나 이번 통합의 FULL qualification을 주장하지 않는다. old004000과 모든 STOP을 보존하며, metadata 자격 확인과 최종 승인 뒤 새 source의 canonical FULL이 필요하다. 새 착지·게시·서명·기체·서비스 동작은 수행하지 않았다.
+- 교훈: CE 해당 없음 — 두 명시적 충돌의 보존 규칙이 최종 코드·API·기존 회귀와 source별 증거에 직접 남는다.

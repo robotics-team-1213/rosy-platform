@@ -20,7 +20,7 @@ import vision_review_drafts
 import vlm_mask_feedback
 
 
-ACTIONS = ('object_draft', 'pixel_draft', 'mask_check')
+ACTIONS = ('object_draft', 'pixel_draft', 'mask_check', 'sam_points')
 ACTIVE = ('queued', 'running')
 
 
@@ -64,15 +64,17 @@ class Jobs:
                 config = json.loads(Path(config_file).read_text(encoding='utf-8'))
                 if (config['workspace_id'] != self._metadata()['workspace_id']
                         or not Path(config['python']).is_absolute() or not Path(config['python']).is_file()
-                        or not re.fullmatch(r'(?:sha256:)?[a-f0-9]{64}', config['model_digest'])):
+                        or 'model_digest' in config and not re.fullmatch(r'(?:sha256:)?[a-f0-9]{64}', config['model_digest'])):
                     raise ValueError('invalid worker configuration')
-                self.config = {key: config[key] for key in ('workspace_id', 'python', 'model_digest')}
+                self.config = {key: config[key] for key in ('workspace_id', 'python', 'model_digest') if key in config}
                 if config.get('sam_checkpoint'):
                     if (not Path(config['sam_checkpoint']).is_absolute()
                             or not Path(config['sam_checkpoint']).is_file()
                             or not re.fullmatch('[a-f0-9]{64}', config['sam_checkpoint_sha256'])):
                         raise ValueError('invalid checkpoint configuration')
                     self.config.update({key: config[key] for key in ('sam_checkpoint', 'sam_checkpoint_sha256')})
+                if not self.config.get('model_digest') and not self.config.get('sam_checkpoint'):
+                    raise ValueError('model configuration required')
             except (OSError, ValueError, KeyError, TypeError):
                 self.config = None
                 self.reason = 'AI 실행 설정의 작업공간·인터프리터·모델 식별 정보를 확인하세요.'
@@ -90,9 +92,15 @@ class Jobs:
     def status(self, index):
         frame = self.store.get(index)
         mask = review_masks.get(self.store, index)
+        evaluation = self._metadata().get('workspace_kind') == 'evaluation'
         actions = {}
         for action in ACTIONS:
             reason = '' if self.config and self.lease else self.reason
+            if not reason and action != 'sam_points':
+                if evaluation:
+                    reason = '고정 평가에서는 사람이 찍은 점의 SAM 경계 보조만 허용합니다.'
+                elif not self.config.get('model_digest'):
+                    reason = 'Qwen 모델 식별 정보가 설정되지 않았습니다.'
             if not reason and frame['status'] == 'excluded':
                 reason = '제외한 사진은 AI 작업을 실행할 수 없습니다.'
             if not reason and action == 'object_draft':
@@ -100,7 +108,14 @@ class Jobs:
                     reason = '객체 재검수를 시작한 뒤 초안을 요청하세요.'
                 elif self.store.object_classes() != vision_review_drafts.CLASSES:
                     reason = '이 모델은 obstacle을 포함한 7개 객체 클래스로 새로 만든 작업공간에서 사용할 수 있습니다.'
-            if not reason and action != 'object_draft':
+            if not reason and action == 'sam_points':
+                if not mask['classes']:
+                    reason = '픽셀 클래스 설정이 필요합니다.'
+                elif mask['status'] != 'pending':
+                    reason = '픽셀 재검수를 시작한 뒤 SAM 점 선택을 요청하세요.'
+                elif not self.backend and 'sam_checkpoint' not in self.config:
+                    reason = 'SAM 체크포인트 설정이 필요합니다.'
+            if not reason and action in ('pixel_draft', 'mask_check'):
                 if not mask['classes'] or not any(c['name'] == 'drivable' for c in mask['classes']['classes']):
                     reason = '드라이버블 픽셀 클래스 설정이 필요합니다.'
                 elif mask['status'] == 'excluded':
@@ -124,7 +139,8 @@ class Jobs:
             jobs = [json.loads(row[0]) for row in db.execute(
                 'SELECT document FROM review_ai_jobs WHERE frame=? ORDER BY rowid DESC LIMIT 30', (index,))]
         return {'available': any(item['available'] for item in actions.values()),
-                'reason': '' if self.config else self.reason, 'actions': actions, 'jobs': jobs}
+                'reason': '' if self.config else self.reason, 'actions': actions, 'jobs': jobs,
+                'busy': bool(self.thread and self.thread.is_alive())}
 
     def _snapshot(self, index, action, version):
         frame = self.store.get(index)
@@ -153,7 +169,7 @@ class Jobs:
             raise ValueError('검수 버전이 바뀌었습니다. 사진을 다시 불러오세요.')
         return snapshot
 
-    def create(self, index, action, version, actor, *, authorize=None):
+    def create(self, index, action, version, actor, *, authorize=None, prompt=None):
         if (action not in ACTIONS or type(version) is not int or version < 0
                 or not isinstance(actor, str) or not 1 <= len(actor) <= 256):
             raise ValueError('invalid AI request')
@@ -166,13 +182,28 @@ class Jobs:
             if self.thread and self.thread.is_alive():
                 raise ValueError('다른 AI 작업이 실행 중입니다. 완료하거나 중지한 뒤 요청하세요.')
             snapshot = self._snapshot(index, action, version)
+            if action == 'sam_points':
+                labels = {row['index'] for row in snapshot['binding']['classes']}
+                if (not isinstance(prompt, dict) or set(prompt) != {'label', 'points'}
+                        or type(prompt['label']) is not int or prompt['label'] == 255 or prompt['label'] not in labels
+                        or not isinstance(prompt['points'], list) or not 1 <= len(prompt['points']) <= 16
+                        or any(not isinstance(point, list) or len(point) != 2
+                               or any(type(value) is not int for value in point)
+                               or not 0 <= point[0] < snapshot['width'] or not 0 <= point[1] < snapshot['height']
+                               for point in prompt['points'])):
+                    raise ValueError('registered SAM label and 1..16 original-image points required')
+                snapshot['sam_prompt'] = {'label': prompt['label'], 'points': [point[:] for point in prompt['points']]}
+            elif prompt is not None:
+                raise ValueError('points are only supported for SAM')
             job = {'id': uuid.uuid4().hex, 'frame': index, 'action': action, 'version': version,
-                   'state': 'queued', 'actor': actor, 'model': vision_review_drafts.MODEL,
-                   'model_digest': self.config['model_digest'], 'image_sha256': snapshot['image_sha256'],
+                   'state': 'queued', 'actor': actor, 'model': 'sam3' if action == 'sam_points' else vision_review_drafts.MODEL,
+                   'model_digest': self.config.get('sam_checkpoint_sha256') if action == 'sam_points' else self.config['model_digest'], 'image_sha256': snapshot['image_sha256'],
                    'workspace_id': self.config['workspace_id'], 'mask_sha256': snapshot.get('mask_sha256'),
                    'classes_sha256': (snapshot.get('binding') or {}).get('sha256'),
-                   'sam_checkpoint_sha256': self.config.get('sam_checkpoint_sha256') if action == 'pixel_draft' else None,
+                   'sam_checkpoint_sha256': self.config.get('sam_checkpoint_sha256') if action in ('pixel_draft', 'sam_points') else None,
                    'created_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()), 'error': None, 'result': None}
+            if action == 'sam_points':
+                job.update(snapshot['sam_prompt'])
             self.stop = threading.Event()
             with self.store.connect() as db:
                 db.execute('BEGIN IMMEDIATE')
@@ -221,6 +252,8 @@ class Jobs:
             with self.store.lock, self.store.connect() as db:
                 db.execute('BEGIN IMMEDIATE')
                 current = self._snapshot(job['frame'], job['action'], None)
+                if 'sam_prompt' in snapshot:
+                    current['sam_prompt'] = snapshot['sam_prompt']
                 if self.stop.is_set():
                     job['state'] = 'cancelled'
                     saved = db.execute('SELECT document FROM review_ai_jobs WHERE id=?', (job['id'],)).fetchone()
@@ -247,7 +280,9 @@ class Jobs:
         if not isinstance(result, dict):
             raise ValueError('invalid worker output')
         origin = json.dumps({'job_id': job['id'], 'requested_by': job['actor'], 'model': job['model'],
-                             'model_digest': job['model_digest']}, ensure_ascii=False)
+                             'model_digest': job['model_digest'], 'action': job['action'],
+                             'sam_prompt': snapshot.get('sam_prompt'),
+                             'sam_checkpoint_sha256': job.get('sam_checkpoint_sha256')}, ensure_ascii=False)
         if job['action'] == 'object_draft':
             boxes = result['boxes']
             if not isinstance(boxes, list) or len(boxes) > 30:
@@ -261,12 +296,24 @@ class Jobs:
             db.execute('DELETE FROM object_draft_quarantine WHERE frame=? AND sha256=?', (job['frame'], digest))
             return {'candidate_sha256': digest, 'boxes': len(boxes)}
         human = cv2.imdecode(np.frombuffer(base64.b64decode(snapshot['mask']), np.uint8), cv2.IMREAD_UNCHANGED)
-        if job['action'] == 'pixel_draft':
+        if job['action'] in ('pixel_draft', 'sam_points'):
             if not isinstance(result.get('mask'), str) or len(result['mask']) > 48 * 1024 * 1024:
                 raise ValueError('bounded mask required')
             raw = base64.b64decode(result['mask'], validate=True)
             raw = review_masks.from_indexed(raw, snapshot['width'], snapshot['height'], snapshot['binding'])
             proposal = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_UNCHANGED)
+            if job['action'] == 'sam_points':
+                if np.any((proposal != 255) & (proposal != job['label'])):
+                    raise ValueError('SAM selection contains another class')
+                selected = int(np.count_nonzero(proposal != 255))
+                if not selected:
+                    return {'selected_pixels': 0}
+                path, digest = review_masks.freeze(self.store, raw)
+                db.execute('INSERT INTO pixel_drafts(frame,sha256,path,catalog_sha256,origin) VALUES (?,?,?,?,?) '
+                           'ON CONFLICT(frame,sha256) DO UPDATE SET path=excluded.path,catalog_sha256=excluded.catalog_sha256,'
+                           'origin=excluded.origin,withdrawn=0 WHERE pixel_drafts.withdrawn=1',
+                           (job['frame'], digest, path, hashlib.sha256(job['id'].encode()).hexdigest(), origin))
+                return {'candidate_sha256': digest, 'selection_sha256': digest, 'selected_pixels': selected}
             if not np.array_equal(proposal[human != 255], human[human != 255]):
                 raise ValueError('human labels changed')
             review_masks.require_inside_lane_boundaries(proposal, snapshot['binding'])

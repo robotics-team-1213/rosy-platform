@@ -91,7 +91,10 @@ function enable() {
   const unclassified = frame?.review.boxes.some(box => box.label == null);
   const invalidCoordinates = !!$('boxes').querySelector('[aria-invalid="true"]');
   const step = !ready ? 0 : frame.status!=='pending' ? 3 : !frame.review.boxes.length && (modelDrafts.length || sourceCandidates().length) ? 1 : unclassified ? 2 : 3;
-  [...$('object-flow').children].forEach((item,index)=>{if(index===step)item.setAttribute('aria-current','step');else item.removeAttribute('aria-current');});
+  [...$('object-flow').children].forEach((item,index)=>{
+    item.dataset.state=index===step?'now':'todo'; // Current work location is not proof that earlier review actions were completed.
+    if(index===step)item.setAttribute('aria-current','step');else item.removeAttribute('aria-current');
+  });
   $('approve').disabled = locked || !$('complete').checked || frame?.status === 'excluded' || unclassified || invalidCoordinates;
   const reason = forbidden ? '검수 권한이 없습니다. 최신 내용을 다시 불러오세요.' : !ready ? '사진을 불러온 뒤 승인할 수 있습니다.' : busy ? '저장을 마친 뒤 승인할 수 있습니다.' : conflicted ? '최신 내용을 불러온 뒤 다시 확인하세요.' : frame?.status === 'excluded' ? '제외 사진은 재검수로 돌려야 합니다.' : unclassified ? '클래스가 없는 박스가 있습니다. 모든 박스의 클래스를 지정하세요.' : invalidCoordinates ? '박스 좌표 오류를 수정한 뒤 승인하세요.' : !$('complete').checked ? '사진 전체 확인에 체크하세요.' : '';
   $('object-approval-hint').textContent = reason;
@@ -287,8 +290,8 @@ function renderBoxes() {
   $('boxes').replaceChildren(); $('empty').hidden = !!frame.review.boxes.length;
   $('empty').textContent = '현재 박스 0개 · 사진 전체에서 필요한 박스를 그리세요. 객체가 없으면 전체 확인 후 승인하세요.';
   frame.review.boxes.forEach((box,i) => {
-    const row=document.createElement('details'); row.className='box-row';row.open=selected===i||(selected===null&&i===0);
-    const heading=document.createElement('summary');heading.textContent=`박스 ${i+1} · ${names[box.label??'']||'클래스 선택 필요'}`;
+    const row=document.createElement('section'); row.className='box-row';
+    const heading=document.createElement('h3');heading.textContent=`박스 ${i+1} · ${names[box.label??'']||'클래스 선택 필요'}`;
     heading.onclick=()=> {selected=i;paint();enable();};row.append(heading);
     const top=document.createElement('div'); top.className='box-top';
     const number=document.createElement('span'); number.className='box-number'; number.textContent=`#${i+1}`; top.append(number);
@@ -469,7 +472,7 @@ document.addEventListener('keydown',event=> {
   // stays explicit (D-461): A only clicks an enabled 승인, never ticks 사진 전체 확인.
   // Physical keys (event.code) so a Korean IME layout still works; checkboxes keep working.
   if(event.target?.matches?.(TEXT_ENTRY) || event.isComposing || event.ctrlKey || event.metaKey || event.altKey || event.repeat || busy || gesture) return;
-  if(event.key==='?' || event.code==='Slash' && event.shiftKey) {event.preventDefault();$('object-keys').open=!$('object-keys').open;return;}
+  if(event.key==='?' || event.code==='Slash' && event.shiftKey) {event.preventDefault();location.hash=location.hash==='#object-keys'?'#object-review':'#object-keys';return;}
   const key=shortcut(event);
   if(key==='v'&&ready){event.preventDefault();setView(!detailView);return;}
   if(key==='c' && !$('complete').disabled) {event.preventDefault();$('complete').click();return;}
@@ -509,13 +512,16 @@ $('show-all').onclick=()=> {if(loadFailed){load();return;}if(!Object.values(work
 $('prev-frame').onclick=()=> {const visible=visibleFrames(),index=visible.findIndex(item=>item.index===frame.index);if(index>0) select(visible[index-1].index);else load(undefined,{offset:workspace.page.offset-workspace.page.limit,last:1});};
 $('next-frame').onclick=()=> {const visible=visibleFrames(),index=visible.findIndex(item=>item.index===frame.index);if(index<visible.length-1) select(visible[index+1].index);else load(undefined,{offset:workspace.page.offset+workspace.page.limit});};
 async function nextPending(index) {
+  const ticket=loadSerial;
   const page=await request(workspacePage('object','pending',{after:index}));
+  if(ticket!==loadSerial||frame?.index!==index)return;
   if(!page.frames.length){workspace.counts=page.counts;workspace.pixel_counts=page.pixel_counts;return;}
   const next=page.frames.find(row=>row.index===page.page.target)||page.frames[0];
   const current=await request(workspacePage('object',$('filter').value,{around:next.index}));
+  if(ticket!==loadSerial||frame?.index!==index)return;
   workspace={...workspace,...current};return next;
 }
-$('next-pending').onclick=async()=> {try {$('filter').value='pending';const next=await nextPending(frame.index);if(next) {select(next.index);}}catch(e){error(e.message);}};
+$('next-pending').onclick=async()=> {if($('next-pending').disabled)return;const previous=$('filter').value,ticket=loadSerial;busy=true;error();enable();try {$('filter').value='pending';const next=await nextPending(frame.index);if(next)await select(next.index);else if(ticket===loadSerial)$('filter').value=previous;}catch(e){if(ticket===loadSerial){$('filter').value=previous;error(e.message);}}finally{busy=false;enable();if(ready)canvas.focus({preventScroll:true});}};
 $('reload').onclick=async()=> {if(!busy) await load(frame?.index);};
 document.addEventListener('rosy:theme',()=>{paint();});
 function receipt(value, historical=false) {
@@ -535,7 +541,7 @@ async function load(index, pageOptions={}) {
   try {workspace=await request(workspacePage('object',new URLSearchParams(location.search).get('filter')||'all',{around:pageOptions.offset===undefined?(index??new URLSearchParams(location.search).get('frame')):undefined,...Object.fromEntries(Object.entries(pageOptions).filter(([key])=>key!=='last'))})); loading=false; loadFailed=false; conflicted=false; forbidden=false; error();$('show-all').hidden=false;
     modeBadge.textContent=workspace.workspace_kind==='evaluation'?'고정 평가 · 학습에서 제외':'학습 후보 · 승인 후 수용 확인';
     modeBadge.setAttribute('state',workspace.workspace_kind==='evaluation'?'warning':'pending');
-    document.querySelector('#review-content > .preparation').hidden=workspace.workspace_kind==='evaluation';
+    document.querySelector('#review-content .preparation').hidden=workspace.workspace_kind==='evaluation';
     const classes=workspace.object_class_set.classes;
     // An ordered list, not object keys: integer-like names would jump ahead of the others.
     classOptions=[['','클래스 선택 필요'],...classes.map(c=>[c.name,c.display])]; names=Object.fromEntries(classOptions);
@@ -556,3 +562,28 @@ async function load(index, pageOptions={}) {
   } catch(e) {loading=false;loadFailed=true;workspace=undefined;frame=undefined;ready=false;listKey='';$('frames').replaceChildren();$('counts').textContent='상태를 확인할 수 없습니다.';$('filter').parentElement.hidden=true;$('empty-frames').textContent='사진 목록을 불러오지 못했습니다.';$('empty-frames').hidden=false;$('review-content').hidden=true;$('empty-review').hidden=false;$('empty-review').querySelector('h2').textContent=forbidden?'검수 권한이 없습니다':e.status>=500?'검수 서비스를 사용할 수 없습니다':'검수 내용을 불러오지 못했습니다';$('empty-review').querySelector('p').textContent=forbidden?'이 작업대의 접근 권한을 확인한 뒤 다시 불러오세요.':e.status>=500?'서비스가 복구되면 다시 불러오세요.':'연결을 확인하고 다시 시도하세요.';$('show-all').hidden=false;$('show-all').textContent='다시 불러오기';enable();} finally {clearInterval(timer);}
 }
 enable();load();
+
+for(const node of document.querySelectorAll('.label-inspector > :not([data-review-tool])')){
+ const view=document.createElement('div');view.dataset.reviewTool='review';node.before(view);view.append(node);
+}
+const reviewWorkspace=document.createElement('div');reviewWorkspace.dataset.reviewWorkspace='';
+const reviewLayout=document.querySelector('.review-layout');reviewLayout.before(reviewWorkspace);reviewWorkspace.append(reviewLayout);
+function showReviewTool(focus=false){
+  const requested=document.getElementById(location.hash.slice(1));
+  const tool=requested?.closest('[data-review-tool]')?.dataset.reviewTool||'review';
+  reviewWorkspace.hidden=tool==='preparation';
+  for(const section of document.querySelectorAll('[data-review-tool]'))section.hidden=section.dataset.reviewTool!==tool;
+  const links=[...document.querySelectorAll('.review-tool-nav a')];
+  const link=links.find(node=>node.hash===location.hash)||links.find(node=>document.getElementById(node.hash.slice(1))?.closest('[data-review-tool]')?.dataset.reviewTool===tool)||links[0];
+  for(const node of links){if(node===link)node.setAttribute('aria-current','location');else node.removeAttribute('aria-current');}
+  document.getElementById('learning-tool-path').textContent=' / '+link.textContent;
+  if(focus){const target=requested||document.getElementById('canvas');if(target){if(target.tabIndex<0)target.tabIndex=-1;target.focus({preventScroll:true});target.scrollIntoView({block:'nearest'});}}
+}
+window.addEventListener('hashchange',()=>showReviewTool(true));
+document.addEventListener('review-tool-open',event=>{
+ const section=event.detail.closest('[data-review-tool]');
+ const id=section?(section.id||section.querySelector('[id]')?.id):event.detail.closest('[data-review-workspace]')?'object-review':null;
+ if(id){history.pushState(null,'','#'+id);showReviewTool();}
+});
+document.querySelector('.review-tool-nav').addEventListener('click',event=>{const link=event.target.closest('a');if(link?.hash===location.hash)showReviewTool(true);});
+showReviewTool();

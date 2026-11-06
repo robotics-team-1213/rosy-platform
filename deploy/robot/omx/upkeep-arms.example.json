@@ -1,0 +1,4 @@
+{
+  "arm_a": {"cell": "cell-arm-a-stack.json", "record": "record-config.json", "chunks": "chunks-topdown-guard-arma-closed49-20261103.json"},
+  "arm_b": {"cell": "cell-arm-b-stack.json", "record": "record-config-arm-b.json", "chunks": "chunks-topdown-guard-armb-v21.json"}
+}

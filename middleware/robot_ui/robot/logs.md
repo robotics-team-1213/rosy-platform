@@ -1425,3 +1425,22 @@
 - 변경: 설치·정비의 「시스템 및 기능 상태」 머리에 공용 수치 띠(CPU·메모리·저장소·온도). 이미 10초마다 읽는 `/api/v1/system/runtime` 응답 값만 옮기고 주의 판정은 서버(`runtimeGap`·위험 목록)에 그대로 둔다. 응답 실패 시 띠를 숨긴다. `surface.html`이 `/common/readout-strip.css`를 싣고, `DESIGN.md` 「조합 어휘」 수치 띠 줄에 `panels/host/system.js`를 더했다(대조 시험이 JS로 만든 띠도 본다).
 - 증거: 로컬 G2 캡처(`test_role_g2_browser.py` device) 1366·390 렌더 — 고정 데이터에 있는 저장소 85.73%만 값, 나머지 "—", 390에서 두 열. 로봇 비브라우저 시험 93 PASS.
 - gate 변화: SOURCE 로컬 GO. 원격 브라우저는 커밋 후.
+
+## 2026-11-05 · 22935ec44f · 장치 읽기 표와 운용 문구
+
+- 변경: host.operations의 네트워크·릴리스·커미셔닝 읽기값을 공용 native 표로 노출했다. 조작을 긴 표보다 먼저 유지하고 기존 거부/실패 정리·복원을 보존한다. 실제 역할 셸에 component-controls.css를 연결해 standalone fixture만 통과하던 로딩 누락을 닫았다. 운용 카메라는 표시 문구만 평문으로 바꾸고 원본 진단·실패 시 비움은 유지한다.
+- 검증: 장치 실제 역할 셸·전체 role matrix·직접 소비자22935ec44f에서171 passed/0 skipped/NEW0. 새138 PNG와60셀을 회수했고 문서 넘침0/page errors0이다. 독립 scoped 소스/시각 검토는 표 수정 여덟 항을 승인했다. 카메라의 관련7파일170개(0f8368eabb), 현재 producer 어휘 보완 후27개(4c8a3858e0)도 각각 NEW0·독립 재검토 승인이다.
+- Gate: 기존 실물/현장 판정 이동 없음. 위 증거는 고정 fixture LOCAL이며 정지 응답·실물 조작·배포 수용이 아니다. 최종 G1/G2/G3·통합·착지는 docs/validation/uiux-surfaces-2026-11-05에서 결속한다. CE: 해당 없음 — 원인과 방지 조건은 실제 역할 셸 회귀 및 producer 값 시험에 드러난다.
+
+
+## 2026-11-05 · df46d9a2f4 · fix(robot): 긴 호스트 조회값 옆 행 제목 너비 확보
+
+- 변경: host.operations의 기존 원본 조회 표에만 고정 배치와 행 제목 열 너비를 지정했다. 공통 표 CSS·조회값·캡션·스크롤 영역·작업 순서·권한은 유지했다. 새 화면·명령·상태·접힘 영역은 없다.
+- 증거: 6563dac55f의 원격 RED에서 1366px 행 제목 내용 폭이 44.30px로 56px 기준에 못 미쳤다(NEW1). df46d9a2f4의 기존 두 캡처 함수 2개와 전체 호스트·역할·나머지 흐름·문구·설치·공통 컨트롤·크기 범위 171개가 각각 통과했다(0 skipped, NEW0). 같은 원본에서 새 5PNG·4JSON·JUnit을 보존했고 모든 원격/로컬 해시가 일치한다. 제목 최소 내용 폭은 1366/390/320px 화면에서 각각 398.39/129.59/101.59px로 동일한 56px 기준을 충족한다.
+- gate 변화: 실제 FastAPI·Chromium의 SOURCE/LOCAL 회귀와 새 G2 화면 근거다. 부모 검토자가 R9 G3를 별도 재검토하며 최종 저장소 AUTO/FULL·설치본·장치·현장 수용은 이 기록으로 입증하지 않는다. 전체 명령·SHA·폭·해시는 외부 작업 기록 review-reports/host-header-r9-report.md에 보존한다.
+
+## 2026-11-05 · a27e97c186 · uiux: Robot 절차 메뉴의 공용 subnav 소비
+
+- 변경: 공용 chooser native tab이 같은 subnav 규칙을 소비하도록 Robot shell의 중복 chooser padding을 없애고 styleguide 견본을 같은 container에 두었다. 메뉴의 panel identity·retained input·방향키·중단·권한·소스 신선도는 유지한다. 기존 R9 긴 호스트 표 값·행 제목 너비 기준도 바꾸지 않았다.
+- 증거: f8cb261e26의 실제 container resize RED와0de561052a의13개 렌더·의미 회귀 PASS/0 skipped/NEW0. 1a390c9d40에서 procedure/role/action-groups/remaining-workflows와 공용·Fleet·Learning caller를 포함한317개 중315 PASS/NEW2였으며 두 Fleet consumer 실패는 a27e97c186의 해당 전체파일36 PASS/NEW0으로 닫았다. 독립 G3가1a의30PNG 직접검토·83PNG 해시를 대조했다. setup 직접 사진은 default dark390/320의2셀이고 device는3폭×2테마6셀이다.
+- gate 변화: Task10 SOURCE/LOCAL 회귀와 제한된 source-bound 화면 증거다. setup 전체 사진 행렬·공식 FULL·착지·설치본·실장치/현장 수용으로 확대하지 않는다. 역할 시험1498줄로 기존1500 기준 안이며 모든 기존 guard/geometry 단언을 유지했다. CE: 해당 없음.

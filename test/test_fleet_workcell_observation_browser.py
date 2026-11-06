@@ -2,6 +2,7 @@
 from io import BytesIO
 import base64
 import json
+import re
 import os
 from pathlib import Path
 import threading
@@ -42,7 +43,7 @@ def cell_url():
 
 def observation_feed(page):
     from PIL import Image
-    state = SimpleNamespace(freeze_b=None, sequence=0, stall=False, held=[], failed_assets=[])
+    state = SimpleNamespace(freeze_b=None, sequence=0, stall=False, held=[], failed_assets=[], incidents=[], cleared=[])
     page.on("response", lambda response: state.failed_assets.append(f"{response.status} {response.url}")
             if response.request.resource_type in ("script", "stylesheet") and not response.ok else None)
     encoded = BytesIO()
@@ -58,7 +59,8 @@ def observation_feed(page):
             arms.append({"source_id": f"feedback_{side}", "arm_id": f"arm_{side}", "label": f"팔 {side}",
                          "units": "encoder_rad", "fresh": age <= 2, "epoch": side * 32,
                          "sequence": state.sequence, "captured_at": now - age, "source_age_s": age,
-                         "receipt_age_s": age, "positions": {"joint1": position} if age <= 2 else None})
+                         "receipt_age_s": age, "positions": {"joint1": position} if age <= 2 else None,
+                         "incidents": state.incidents if side == "b" else []})
         return {"read_only": True, "physical_acceptance": False, "workcells": [{
             "workcell_id": "example", "label": "예시 작업 셀", "arms": arms, "cameras": [
                 {"source_id": "top", "label": "공용 상단", "role": "overhead", "arm_id": None},
@@ -72,6 +74,13 @@ def observation_feed(page):
                 state.held.append(route)
                 return
             return route.fulfill(json=snapshot())
+        if path.endswith("/incidents/" + "a" * 32 + "/frames/top"):  # D-971
+            assert route.request.headers.get("authorization") == "Bearer viewer-token"
+            return route.fulfill(content_type="image/jpeg", body=jpeg)
+        if path.endswith("/incidents/" + "a" * 32 + "/clear"):
+            state.cleared.append(route.request.post_data_json)
+            state.incidents[0].update(state="cleared", cleared={"by": "op-7", "at": time.time(), "note": state.cleared[-1]["note"]})
+            return route.fulfill(json={"held": False, "incident_ids": [], "reason": None})
         if path == "/api/fleet/vision/lease":
             source = route.request.post_data_json["source_id"]
             assert route.request.headers.get("authorization") == "Bearer viewer-token"
@@ -137,6 +146,31 @@ def test_cell_displays_two_arms_three_cameras_and_expires_each_disconnected_sour
         browser.close()
 
 
+def test_hidden_cell_tab_stops_pulling_and_resumes_when_shown(cell_url):
+    from playwright.sync_api import expect, sync_playwright
+    visibility = """hidden => {
+        Object.defineProperty(document, 'hidden', {configurable: true, value: hidden});
+        document.dispatchEvent(new Event('visibilitychange'));
+    }"""
+    with sync_playwright() as playwright:
+        browser, page, errors = open_page(playwright, 390, 844, url=cell_url)
+        state, _ = observation_feed(page)
+        page.goto(cell_url)
+        arm = page.locator('#workcell-observations [data-arm-source="feedback_a"] pre')
+        expect(arm).to_contain_text("0.25")
+        page.evaluate(visibility, True)
+        page.wait_for_timeout(700)  # answers already in flight when the tab was hidden
+        settled = state.sequence
+        page.wait_for_timeout(1500)  # three 500 ms polls, each with three camera frames, if the guard failed
+        assert state.sequence == settled
+        page.evaluate(visibility, False)
+        page.wait_for_timeout(700)  # wake or the next poll; this does not tell the two apart
+        assert state.sequence > settled
+        assert not errors, errors
+        page.unroute_all(behavior="ignoreErrors")
+        browser.close()
+
+
 def test_cell_logout_clears_observations_and_ignores_late_responses(cell_url):
     from playwright.sync_api import expect, sync_playwright
     with sync_playwright() as playwright:
@@ -163,6 +197,103 @@ def test_cell_logout_clears_observations_and_ignores_late_responses(cell_url):
         expect(root.locator("[data-arm-source]")).to_have_count(0)
         expect(root.locator("img")).to_have_count(0)
         assert not errors
+        page.unroute_all(behavior="ignoreErrors")
+        browser.close()
+
+
+@pytest.mark.parametrize("width,height", [(390, 844), (1440, 900)])
+@pytest.mark.parametrize("unfamiliar_facts", [False, True])
+def test_cell_shows_an_arm_incident_with_frames_and_an_explanation_and_clears_it_only_with_a_note(cell_url, width, height, unfamiliar_facts):
+    from playwright.sync_api import expect, sync_playwright
+    with sync_playwright() as playwright:
+        browser, page, errors = open_page(playwright, width, height, url=cell_url)
+        state, _ = observation_feed(page)
+        state.incidents.append({
+            "incident_id": "a" * 32, "source_id": "feedback_b", "session_id": "s", "state": "explained",
+            "reported_at": time.time(), "facts": {"latched": {"13": {"hw_error": 32, "bits": ["overload"]}}, "folded": True,
+                                                  "torque_after": {"13": 0}, "windup_hits": [{}],
+                                                  "flagged": [{"command": "home", "error": "blocked", "fault": None}]},
+            "decision": {"hold": True, "reason": "latched ID 13 overload"}, "recovery": {"rebooted": [13]},
+            "frames": [{"role": "top", "sha256": "0" * 64, "bytes": 100}],
+            "explanation": {"seen": "A box between the jaws <b>x</b>", "suspected_cause": "The box blocked home.",
+                            "model": "qwen3-vl:8b", "explained_at": 1.0, "note": "explanation only"}, "cleared": None})
+        if unfamiliar_facts:
+            state.incidents[0]["facts"] = {"flagged": {}, "latched": {"13": None}, "detail": "<b>measurement</b>"}
+        page.goto(cell_url)
+        assert not state.failed_assets, state.failed_assets
+        card = page.locator('[data-arm-source="feedback_b"]')
+        expect(card.locator("summary").filter(has_text="보류 중 1건")).to_be_visible()
+        expect(card.get_by_text("설명일 뿐")).to_be_visible()
+        if unfamiliar_facts:
+            expect(card.get_by_text(json.dumps(state.incidents[0]["facts"], separators=(",", ":")))).to_be_visible()
+            assert card.locator("b").count() == 0
+        else:
+            expect(card.get_by_text("ID 13 오류 32 (overload)", exact=False)).to_be_visible()
+            expect(card.get_by_text("실행기: home blocked", exact=False)).to_be_visible()
+        expect(card.get_by_text("<b>x</b>", exact=False)).to_be_visible()  # text, never markup
+        expect(card.locator("li img")).to_have_attribute("src", re.compile("^blob:"))
+        expect(page.locator('[data-arm-source="feedback_a"]').get_by_text("팔 사건 없음")).to_be_visible()
+        if os.environ.get("ROSY_UIUX_SCREENSHOT_DIR"):
+            from browser_harness import save_temp_screenshot
+            page.wait_for_function("img => img.complete && img.naturalWidth > 0",
+                                   arg=card.locator("li img").element_handle())
+            shape = "unfamiliar" if unfamiliar_facts else "measured"
+            name = f"cell-incident-explained-held-{shape}-{width}x{height}"
+            metrics = card.evaluate("""card => {
+                const list = card.querySelector('.cell-incident-history'), details = list.parentElement;
+                const rect = node => node.getBoundingClientRect().toJSON();
+                return {viewport: {width: innerWidth, height: innerHeight},
+                    theme: document.documentElement.dataset.theme, resolvedTheme: window.RosyTheme?.resolved(),
+                    overflow: document.documentElement.scrollWidth - innerWidth,
+                    scroll: {x: scrollX, y: scrollY}, activeElement: document.activeElement?.id,
+                    card: rect(card), incident: rect(details), open: details.open,
+                    summary: details.querySelector('summary').textContent, text: list.textContent,
+                    frames: [...list.querySelectorAll('img')].map(img => ({rect: rect(img),
+                        blob: img.src.startsWith('blob:'), complete: img.complete,
+                        width: img.naturalWidth, height: img.naturalHeight}))};
+            }""")
+            viewport = save_temp_screenshot(page, f"{name}-viewport.png")
+            full = save_temp_screenshot(page, f"{name}-full.png", full_page=True)
+            metrics.update(state=state.incidents[0]["state"], held=state.incidents[0]["decision"]["hold"],
+                           cleared_requests=len(state.cleared), facts_variant=shape, facts=state.incidents[0]["facts"],
+                           filenames=[viewport.name, full.name])
+            viewport.with_name(f"{name}.json").write_text(json.dumps(metrics, ensure_ascii=False, indent=2), encoding="utf-8")
+        card.get_by_text("확인했습니다 · 해제").click()
+        expect(card.get_by_text("확인한 내용을 적어야 해제할 수 있습니다.")).to_be_visible()
+        assert state.cleared == []
+        card.get_by_label("확인한 내용").fill("box removed from the jaws")
+        card.get_by_text("확인했습니다 · 해제").click()
+        expect(card.get_by_text("해제: op-7", exact=False)).to_be_visible()
+        assert state.cleared == [{"note": "box removed from the jaws"}]
+        expect(card.locator("summary").filter(has_text="모두 해제됨")).to_be_visible()
+        assert not errors, errors
+        page.unroute_all(behavior="ignoreErrors")
+        browser.close()
+
+
+def test_incident_lines_accept_bounded_json_without_assuming_measurement_shapes(cell_url):
+    from playwright.sync_api import sync_playwright
+    facts = [
+        {"flagged": {}}, {"flagged": "runner"}, {"flagged": [None]},
+        {"latched": {"13": None}}, {"latched": {"13": {"bits": {}}}},
+        {"latched": "unknown"}, {"latched": [None]}, {"windup_hits": "unknown"},
+        {"folded": "unknown"}, {"detail": "<b>measurement</b>"},
+        {"flagged": [{"command": {"toString": {}}}]},
+        {"latched": {"13": {"hw_error": {"toString": {}}, "bits": []}}},
+        {"latched": {"13": {"hw_error": 32, "bits": [None]}}},
+        {"flagged": [], "detail": "evidence"}, {"flagged": None}, {"latched": None},
+    ]
+    with sync_playwright() as playwright:
+        browser, page, errors = open_page(playwright, 390, 844, url=cell_url)
+        observation_feed(page)
+        page.goto(cell_url)
+        lines = page.evaluate("""async facts => {
+            const {incidentLines} = await import('/console/assets/cell-observation.js');
+            return facts.map(facts => incidentLines({facts, decision: {reason: 'held'}}));
+        }""", facts)
+        for value, rendered in zip(facts, lines, strict=True):
+            assert rendered == ["held", json.dumps(value, separators=(",", ":"))]
+        assert not errors, errors
         page.unroute_all(behavior="ignoreErrors")
         browser.close()
 

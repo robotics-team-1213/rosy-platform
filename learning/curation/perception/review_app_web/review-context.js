@@ -7,7 +7,14 @@ export function reviewContext(anchor) {
   for(const [text,select] of [['작업공간',workspace],['자료 폴더',folder]]) {
     const label=document.createElement('label');label.textContent=text+' ';label.append(select);bar.append(label);
   }
-  const manage=document.createElement('a');manage.textContent='클래스 관리';bar.append(scope,manage);anchor.after(bar);
+  const manage=document.createElement('a');manage.textContent='클래스 관리';
+  const pixel=location.pathname==='/pixels';let container=bar,summary=null,total=null;
+  if(pixel){
+    container=document.createElement('details');container.className='pixel-review-context';container.setAttribute('aria-label','검수 작업 범위');container.hidden=true;
+    summary=document.createElement('summary');const text=document.createElement('span');text.className='pixel-context-summary';total=document.createElement('span');
+    text.append(scope,total);summary.append(text);bar.removeAttribute('aria-label');bar.hidden=false;bar.append(manage);container.append(summary,bar);
+    document.querySelector('.ui-pathbar').append(container);
+  }else{bar.append(scope,manage);anchor.after(bar);}
   let context,signature;
   const option=(select,value,label)=>{const item=document.createElement('option');item.value=value;item.textContent=label;select.append(item);};
   workspace.onchange=()=>{
@@ -27,7 +34,7 @@ export function reviewContext(anchor) {
     location.assign(url);
   };
   return (value,locked=false)=>{
-    context=value;bar.hidden=!context;
+    context=value;container.hidden=!context;
     if(!context)return;
     const next=JSON.stringify(context);
     if(signature!==next) {
@@ -42,8 +49,9 @@ export function reviewContext(anchor) {
       else if(context.default_scope||context.source_session){option(folder,'','현재 지정 범위');folder.value='';}
       else folder.value='all';
       const selected=folder.selectedOptions[0]?.textContent || '현재 지정 범위';
-      scope.textContent=`${context.workspace.label} · ${selected} · ${context.total}장${context.source_session?' · 세션 한정':''}`;
+      scope.textContent=`${context.workspace.label} · ${selected}${pixel?'':` · ${context.total}장`}${context.source_session?' · 세션 한정':''}`;
       scope.title=`프로젝트 ${context.workspace.id || '현재 서버'}`;
+      if(pixel){total.textContent=` · ${context.total}장`;summary.title=scope.textContent+total.textContent;}
       const target=new URL('/classes',location.origin);target.searchParams.set('kind',location.pathname==='/pixels'?'pixel':'object');
       if(context.folder_id)target.searchParams.set('folder_id',context.folder_id);
       manage.href=target.pathname+target.search;

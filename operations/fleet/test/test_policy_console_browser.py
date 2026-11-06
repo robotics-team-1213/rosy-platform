@@ -23,6 +23,23 @@ from test_password_session import TYPED as PASSWORD  # noqa: E402  shared fixtur
 REV = dict(rig_revision="rig-1", calibration_revision="cal-1")
 
 
+def _capture(page, state, **details):
+    import json
+    import os
+    from pathlib import Path
+    if not (output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR') or os.getenv('ROSY_SHOT_DIR')):
+        return
+    root = Path(output).expanduser()
+    root.mkdir(parents=True, exist_ok=True)
+    viewport = page.viewport_size
+    theme = page.evaluate('document.documentElement.dataset.theme || "default"')
+    name = f'{state}-{theme}-{viewport["width"]}x{viewport["height"]}'
+    page.screenshot(path=str(root / f'{name}.png'), full_page=True)
+    (root / f'{name}.json').write_text(json.dumps(
+        dict(state=state, viewport=viewport, theme=theme, filename=f'{name}.png', **details),
+        ensure_ascii=False, indent=2), encoding='utf-8')
+
+
 class Transport:
     def owner_state(self, *, workcell_id, instance_id):
         return {"version": 1, "status": 200, "workcell_id": workcell_id, "instance_id": instance_id,
@@ -90,8 +107,18 @@ def test_two_people_approve_and_anyone_can_lock(tmp_path, size):
 
                 bob, bob_errors = _login(browser, origin, "bob", size)
                 bob.locator("#policy-proposals tr", has_text="3단계 · 입회 시험").locator("ui-button", has_text="승인…").click()
+                expect(bob.locator('dialog.ui-confirm')).to_be_visible()
+                _capture(bob, 'policy-proposal-approval-confirm')
+                bob.locator('dialog.ui-confirm ui-button[kind="quiet"]').click()
+                expect(bob.locator('dialog.ui-confirm')).not_to_be_visible()
+                expect(bob.locator("#policy-stages")).not_to_contain_text("3단계 · 입회 시험")
+                approve = bob.locator("#policy-proposals tr", has_text="3단계 · 입회 시험").locator("ui-button", has_text="승인…")
+                expect(approve).to_be_enabled()
+                _capture(bob, 'policy-proposal-approval-cancelled')
+                approve.click()
                 _confirm(bob)
                 expect(bob.locator("#policy-stages")).to_contain_text("3단계 · 입회 시험")
+                _capture(bob, 'policy-proposal-approved')
                 bob.locator("#policy-window-kind").select_option("supervised")
                 bob.locator("#policy-window-scope").fill("strawberry pick")
                 bob.locator("#policy-window-request").click()
@@ -99,9 +126,11 @@ def test_two_people_approve_and_anyone_can_lock(tmp_path, size):
 
                 alice.reload()
                 alice.locator("#policy-windows li", has_text="승인 대기").locator("ui-button", has_text="승인…").click()
+                _capture(alice, 'policy-window-approval-confirm')
                 _confirm(alice)
                 expect(verdict).to_contain_text("입회 시험 승인 창")
 
+                _capture(alice, 'policy-window-approved')
                 carol, carol_errors = _login(browser, origin, "carol", size)
                 expect(carol.locator("#policy-window-request")).to_be_disabled()
                 carol.locator("#policy-incident-text").fill("gripper hit the bowl")

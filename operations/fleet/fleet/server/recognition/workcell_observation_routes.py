@@ -16,12 +16,18 @@ def assert_workcell_observation_credentials_isolated(service, *, console, princi
         raise ValueError("Workcell observation credential must differ from every other site credential")
 
 
-def install_workcell_observation_routes(app, service, require_viewer, require_named_operator=None, task_service=None):
+def install_workcell_observation_routes(app, service, require_viewer, require_named_operator=None, task_service=None,
+                                       authorize=None):
+    incidents = None
     if service is not None and require_named_operator is not None:  # D-963
         from fleet.server.usb_camera_decisions import UsbCameraStore, install_usb_camera_routes
         install_usb_camera_routes(app, service=service, require_viewer=require_viewer,
                                   require_named_operator=require_named_operator,
                                   store=UsbCameraStore(task_service and task_service.store.path))
+        from fleet.server.arm_incidents import ArmIncidentStore, install_arm_incident_routes  # D-971
+        incidents = ArmIncidentStore(task_service and task_service.store.path)
+        install_arm_incident_routes(app, service=service, store=incidents, require_viewer=require_viewer,
+                                    require_named_operator=require_named_operator, authorize=authorize)
 
     def available():
         if service is None:
@@ -31,7 +37,12 @@ def install_workcell_observation_routes(app, service, require_viewer, require_na
     @app.get("/api/fleet/workcell-observations", tags=["workcell-observations"])
     def observations(response: Response, _principal=Depends(require_viewer)):
         response.headers["Cache-Control"] = "no-store"
-        return available().snapshot()
+        snapshot = available().snapshot()
+        if incidents is not None:
+            for cell in snapshot["workcells"]:
+                for arm in cell["arms"]:
+                    arm["incidents"] = incidents.snapshot(arm["source_id"])
+        return snapshot
 
     @app.post("/api/fleet/workcell-observations/arms/{source_id}", status_code=202,
               tags=["workcell-observations"])

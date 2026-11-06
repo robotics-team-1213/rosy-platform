@@ -21,7 +21,50 @@ def _api():
         "/api/fleet/state": {"fleet": {"name": "site", "online": 2, "total": 2}, "robots": robots},
         "/api/fleet/map": MAP_GRID,
         "/api/fleet/formation": {"active": False, "state": "IDLE"},
+        "/api/fleet/dispatch-control": {"dispatch_enabled": True, "generation": 7,
+                                        "queued_tasks": 0, "unresolved_actions": 0},
     }
+
+
+def test_viewer_manual_controls_stay_locked_and_send_no_move(console_url):
+    from playwright.sync_api import expect, sync_playwright
+
+    api, sent = _api(), []
+    api["/api/fleet/session"] = {"principal_id": "test-viewer", "role": "viewer"}
+    with sync_playwright() as playwright:
+        browser, page, errors = _open_console(playwright, api)
+        try:
+            def move(route):
+                sent.append(route.request.post_data_json)
+                route.fulfill(status=403, json={"detail": "operator required"})
+
+            page.route("**/api/fleet/do", move)
+            page.goto(console_url, wait_until="load")
+            expect(page.locator("#user-role")).to_contain_text("보기 전용")
+            _open_cards(page, "rosy_45")
+            page.wait_for_timeout(250)
+            controls = page.locator("[data-manual-direction]")
+            expect(controls).to_have_count(4)
+            for button in controls.all():
+                expect(button).to_be_disabled()
+                expect(button).to_have_attribute("reason", "운영자 권한이 필요합니다")
+            expect(page.locator("[data-manual-reason]")).to_contain_text("운영자 권한이 필요합니다")
+            button = page.locator('[data-manual-direction="forward"]')
+            button.hover()
+            page.mouse.down()
+            page.wait_for_timeout(250)
+            page.mouse.up()
+            page.keyboard.press("Tab")
+            for control in controls.all():
+                expect(control).not_to_be_focused()
+            page.keyboard.down("Space")
+            page.wait_for_timeout(250)
+            page.keyboard.up("Space")
+            expect(button).to_have_attribute("aria-pressed", "false")
+            assert sent == []
+            assert not errors
+        finally:
+            browser.close()
 
 
 @pytest.mark.parametrize("ending", ["release", "blur", "selection", "timeout", "keyboard", "cancel", "hidden", "pagehide"])
@@ -155,4 +198,98 @@ def test_stale_or_stopped_robot_cannot_be_driven(console_url):
         expect(button).to_be_disabled()
         expect(page.locator("[data-manual-reason]")).to_contain_text("비상정지")
         assert not errors
+        browser.close()
+
+
+def test_manual_mode_is_confirmed_for_one_robot_and_waits_for_readback(console_url):
+    from playwright.sync_api import expect, sync_playwright
+
+    api, sent = _api(), []
+    api["/api/fleet/state"]["robots"][0]["state"]["mode"] = "IDLE"
+    with sync_playwright() as playwright:
+        browser, page, errors = _open_console(playwright, api)
+        def request(route):
+            sent.append(route.request.post_data_json)
+            route.fulfill(status=200, json={"accepted": True})
+        page.route("**/api/fleet/do", request)
+        page.goto(console_url, wait_until="load")
+        _open_cards(page, "rosy_45")
+        switch = page.locator('[data-manual-mode]')
+        expect(switch).to_be_enabled()
+        switch.click()
+        assert sent == []
+        page.locator('dialog.ui-confirm ui-button[kind=irreversible]').click()
+        page.wait_for_timeout(150)
+        assert sent == [{"do": "manual", "robot": "rosy_45"}]
+        expect(page.locator('[data-manual-direction=forward]')).to_be_disabled()
+        api["/api/fleet/state"]["robots"][0]["state"]["mode"] = "MANUAL"
+        expect(page.locator('[data-manual-direction=forward]')).to_be_enabled()
+        assert not errors
+        browser.close()
+
+
+@pytest.mark.parametrize("changed", ["selection", "generation", "stale", "estop"])
+def test_manual_confirmation_rechecks_target_and_safety(console_url, changed):
+    from playwright.sync_api import expect, sync_playwright
+
+    api, sent = _api(), []
+    api["/api/fleet/state"]["robots"][0]["state"]["mode"] = "IDLE"
+    with sync_playwright() as playwright:
+        browser, page, errors = _open_console(playwright, api)
+        page.route("**/api/fleet/do", lambda route: (sent.append(route.request.post_data_json),
+                   route.fulfill(status=200, json={"accepted": True})))
+        page.goto(console_url, wait_until="load")
+        _open_cards(page, "rosy_45")
+        page.locator('[data-manual-mode]').click()
+        dialog = page.locator('dialog.ui-confirm')
+        expect(dialog).to_have_count(1)
+        if changed == "selection":
+            page.locator('#robot-choice').select_option('rosy_46')
+            expect(dialog).to_have_count(0)
+        else:
+            if changed == "generation":
+                api['/api/fleet/dispatch-control']['generation'] = 8
+                page.wait_for_function('document.querySelector("#dispatch-control-detail").textContent.includes("8")')
+            elif changed == "stale":
+                api['/api/fleet/state']['robots'][0]['state_age_s'] = 20
+                expect(page.locator('[data-manual-mode]')).to_be_disabled()
+            else:
+                api['/api/fleet/state']['robots'][0]['state']['safety']['estop'] = True
+                expect(page.locator('[data-manual-mode]')).to_be_disabled()
+            dialog.locator('ui-button[kind=irreversible]').click()
+        page.wait_for_timeout(150)
+        assert sent == []
+        assert not errors
+        browser.close()
+
+
+@pytest.mark.parametrize("changed", ["closed", "generation"])
+def test_dispatch_change_stops_hold_with_terminal_zero(console_url, changed):
+    from playwright.sync_api import expect, sync_playwright
+
+    api, sent = _api(), []
+    with sync_playwright() as playwright:
+        browser, page, errors = _open_console(playwright, api)
+        page.route("**/api/fleet/do", lambda route: (sent.append(route.request.post_data_json),
+                   route.fulfill(status=200, json={"accepted": True})))
+        page.goto(console_url, wait_until="load")
+        _open_cards(page, "rosy_45")
+        button = page.locator('[data-manual-direction=forward]')
+        expect(button).to_be_enabled()
+        button.hover()
+        page.mouse.down()
+        page.wait_for_timeout(250)
+        if changed == "closed":
+            api['/api/fleet/dispatch-control']['dispatch_enabled'] = False
+            expect(button).to_be_disabled()
+        else:
+            api['/api/fleet/dispatch-control']['generation'] = 8
+            page.wait_for_function('document.querySelector("#dispatch-control-detail").textContent.includes("8")')
+        page.wait_for_timeout(150)
+        assert sent[-1] == {"do": "move", "robot": "rosy_45", "linear": 0, "angular": 0}
+        count = len(sent)
+        page.wait_for_timeout(250)
+        assert len(sent) == count
+        assert not errors
+        page.mouse.up()
         browser.close()

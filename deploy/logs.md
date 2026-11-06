@@ -4547,6 +4547,13 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - gate 변화: 없음. UI FULL 준비 근거는 별도 보존했고, 이 수정의 착지와 최신 main 통합 검증 후 게시한다.
 - CE: 해당 없음 — 누락된 dry-run 분기와 회귀 조건이 코드·시험에 직접 남는다. 운영 전환은 별도 미완료다.
 
+## 2026-11-03 · uncommitted · feat(omx): D-971 제어 PC는 팔 사건을 Fleet에 보고한다
+
+- 변경: `omx_incident.py`가 모델 호출·`agenda.md`·로컬 `clear`를 없애고 사건을 Fleet에 보고한다(`workcell_observation_bridge.ArmIncidentLink`). 세션 전 보내지 못한 보고를 다시 보내고 Fleet에 보류를 묻는다. Fleet에 닿지 않으면 로컬 보류가 있을 때만 막고, Fleet이 보류 아님을 답하고 보내지 못한 보고가 없을 때만 푼다.
+- 증거: `test/test_omx_incident.py`, `test/test_omx_workcell_observation_bridge.py` 원격 통과. 현장 PC에는 배포하지 않았다.
+- gate 변화: 없음.
+- CE: 해당 없음 — 원인 해결 교훈은 기존 문서(2026-11-03 팔꿈치 과부하)에 갱신했다.
+
 ## 2026-11-04 · uncommitted · fix(deploy): native payload가 모드별 프로파일 오버레이를 싣는다
 
 - 변경: `image/build-native-payload.sh`가 `deploy/robot/pinky_pro/config/profile.{core,motor,hardware}.yaml`을 release 트리 `deploy/robot/config/`로 복사한다. `hardware.launch.py`의 프로파일 기본값(navigation/profile_source, 같은 날 착지)이 `/etc/rosy/profile.yaml`이 없는 기기에서 이 파일로 내려간다. 지금까지 native 기기의 hardware 모드는 손 설치 전까지 `cannot read Device profile`로 시작 실패였다(2026-11-03 문서 증상1).
@@ -4593,3 +4600,38 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: `test/test_omx_record_session.py::test_episodes_with_an_untouched_leader_are_flagged_after_recording`의 두 인자 경우와 sourceb8920ff0e6의 원본208passed/2skipped·NEW0, 새 hold19개 실제PASS를 독립 검토했다. 실제 설치 대상 source2986d9b8ee는 정본 배포 시험112passed/skip0·NEW0과 archive974경로 readback도 통과했다. 장치 동작은 아직 수행하지 않았다.
 - gate 변화: 없음 — 소프트웨어 전달과 실물 감독·학습 모델의 작업 수용은 별개다.
 - CE: 해당 없음 — 기존 증거의 설명을 바로잡는 사실 정정이다.
+
+## 2026-11-06 · uncommitted · fix(omx): USB peer 보호와 중단 복원
+
+- 변경: 카메라 USB 복구에서 primary·peer 양쪽 root의 OpenRB를 검사하고 경로 경계를 구분한다. 사라진 sysfs chain은 유한하게 종료하며, 이미 비활성인 포트는 변경하지 않는다. 부분 차단·대기 중 예외에는 전체 포트 복원을 시도하고 첫 복원 실패 뒤에도 나머지를 시도한 후 오류를 전파한다. 팔 동작·토크·incident 권한은 바꾸지 않는다.
+- 증거: 모델 PC test-only985add1704에서 추가7건 RED/기존16pass, 수정721399d3e1에서 전체23pass/skip0/NEW0을 확인했다(env35327e86830df3ba/freeze906d7aca580f620b). 독립 검토 지적 없음이다. 실제 임시 symlink topology와 가짜 전원·서비스 경계만 사용했으며 실물 조작은 하지 않았다.
+- gate 변화: 없음 — 실제 USB 전원 복구·장치·현장 수용은 미확인이다.
+- CE: 기존 교훈 갱신 — `docs/solutions/runtime-errors/omx-camera-usb-reenumerated-no-frames-port-power-cycle-2026-11-05.md`의 초기 보호 범위를 정정했다. 물리 공유 전원 범위는 두 USB root에 걸치므로 현재 팔 잠금만으로 다른 팔을 보호할 수 없다. 문서 claim·frontmatter 검사 통과이며 일반 USB 용어는 CONCEPTS에 추가하지 않았다.
+
+## 2026-11-06 · uncommitted · fix(learning): UI별 수동 릴리스 고정 보호
+
+- 변경: 각 review root에 private manual hold와 영속 exclusive lock을 둔다. 자동 확인·설치와 수동 설치·보호 설정/해제를 직렬화하며 명시한 service와 hold ID가 일치할 때만 해제한다. 손상·symlink·권한 불일치 보호는 자동 전환을 거부하고, 설치 실패·rollback·timer 재시작은 보호를 지우지 않는다. 기존 설치/복구 본문은 보존하고 D446 accepted state·floor·다른 UI 설정은 변경하지 않는다.
+- 증거: initial e7cd05d22a의7RED/5pass, ec8d212421의 경합1RED, d927216133의 빈 ID1RED/나머지13pass를 확인했다. 빈 unhold 옵션이 설치로 들어가던 독립검토 P2를 수정한 ea7a904f30은 auto/installer/model-code 관련3파일261pass/skip0/NEW0이다(env35327e86830df3ba/freeze906d7aca580f620b). source와 원본 hash는 운영자 receipt에 결속한다. 최종 고정 head 독립검토와 정본 착지는 별도다.
+- gate 변화: 없음 — 실제 helper 설치·두 UI hold·다음 자연 timer 실행과 데이터 보존 수용은 미실행이다. 구형 helper 실행의 자연 종료와 새 helper의 보호 결과를 확인해야 UI를 전환하며, 전체 writer 중지·유휴·일관 백업은 계속 필요하다.
+- CE: 기존 교훈 갱신 — `docs/solutions/deployment/learning-center-upgrade-needs-the-identical-unit-first-2026-10-23.md`에 공유 floor와 UI별 보호의 차이 및 실제 installed helper 결속을 추가했다. frontmatter·mechanical claims0flags, 일반 잠금/고정 용어는 CONCEPTS에 추가하지 않았다. 실물·운영 수용으로 확대하지 않는다.
+
+## 2026-11-06 · uncommitted · chore(release): 후속 UIUX 수용 기록의 정확한 Git metadata 등록
+
+- 변경: latest main f4ccde20ac에서 실행 중인 canonical의 고정 candidate4056b14cd9를 정상 fast-forward로 보존한 별도 topic이다. root 독립 검증으로 실제 Git commit 문맥임을 확인한 historical commit a28d7ea74b의 docs 두 경로에 대해서만 high-entropy-token baseline 2건을 추가했다. 기존185건의 내용·순서·schema·reviewer를 보존하며 scanner·ignore·provenance·정책은 바꾸지 않았다.
+- 증거: root의 독립 Git 문맥 검토로 승인된 정확한 두 triple이다. JSON187건·중복0, 기존185건의 내용·순서·schema·reviewer와 Git raw prefix 일치를 확인했다. source96f98d556e 원격 AI PC 기존 publish/secret/provenance/PSK/scanner 회귀59통과·skip0·NEW/known/flaky0; scratch pinky-metadata-followup-guards/run-1.txt. 정본 origin647부터 해당 source까지269개 commit 추가 줄 스캔은 미검토 hit0이며 독립 고정 source 증분 검토 미해결 finding 없음이다.
+- gate 변화: metadata와 소유 진행 기록뿐이다. 실행 중인 FULL021718은 취소·재시작·대체하지 않고 이번 topic의 새 FULL도 제출하지 않는다. 기존 candidate의 FULL 증거와 이 후속 metadata의 source 검증·공개 자격은 별개다.
+- CE: 해당 없음 — 실제 Git metadata에 대한 exact historical triple 후속 등록이며 기존 scanner 계약과 검증이 범위를 직접 보존한다.
+
+## 2026-11-06 · uncommitted · fix(omx): 저장된 보정 상한과 안전 코드 지문 결속
+
+- 변경: 새 pivot 측정에만 있던 보정 상한을 저장 파일·메모리 region·직접 pick 계획·학습 저장에도 적용한다. 현재 params의 같은 상한과 두 축 finite 검사를 공통으로 사용하며 잘못된 기존 보정은 0으로 대체하지 않고 거부한다. D-911 코드 지문에 실제 scene guard·jaw axis·hook 조립·pivot·calibration 코드를 포함해 변경 전 검토를 재사용할 수 없게 한다.
+- 증거: 기존 29.6 mm 보정의 소비 경로와 지문 누락을 두 읽기 전용 검토에서 확인했다. 저장/메모리/계획/학습 거부, 25 mm 경계와 현재 설정, 파일 바이트 변경에 따른 runtime/task 지문 및 기존 review 거부 회귀시험을 추가했다. 원격 시험은 아직 실행하지 않았으며 커밋 source에 결속해 확인한다.
+- gate 변화: 없음 — 코드 보강이며 기존 D-911·commissioning·세션·토크·물리 상한을 완화하지 않는다. 실물 동작·운영 설치는 하지 않았다.
+- CE: 미해결 — 새 회귀시험과 독립 검토 결과 확인 전 해결 교훈은 작성하지 않는다. 기존 안전 교훈을 먼저 읽었으며 이 검증 이후 기록 필요성을 다시 판단한다.
+
+## 2026-11-06 · 3c3698df3b · feat(omx): 셀 임계값을 보고 조절하는 로컬 페이지
+
+- 변경: `deploy/robot/omx/cell_params_web.py`·`.html` 추가. 셀 PC 127.0.0.1:8772에서 `rosy.omx-cell-params.v1` 값 174개를 범위·출처·근거와 함께 보여 준다. 비전 임계값과 허용 오차 46개만 조절할 수 있고, 안전·동작 묶음, 이득, 틈 값, 새 묶음·단위는 허용 목록 방식으로 잠근다. 저장은 근거가 필수이고 `cell_params`로 검증한 뒤 이전 항목을 `<file>.history.jsonl`에 남기고 원자적으로 교체한다. 세션 중이거나 파일이 바뀌었으면 거절하고, 새 값은 다음 실행부터 적용된다.
+- 증거: 공식 원격 시험 `test/test_omx_cell_params_web.py`·`test/test_omx_cell_params.py` 74 pass, skip 0(실제 `session_lock` flock 포함). 로컬 Chromium에서 조절·세션 표시·저장 흐름을 확인했고 콘솔 오류는 0건이다. 독립 검토가 찾은 이득·틈 값 잠금 누락, 폴링의 잠금 충돌, 확인과 교체 사이 경합을 고쳤다.
+- gate 변화: 없음 — 실제 셀 PC에서 페이지를 띄운 수용은 아직 하지 않았다.
+- CE: 해당 없음 — 새 기능이며 해결한 장애가 없다.

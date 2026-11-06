@@ -19,6 +19,7 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from pathlib import Path
@@ -201,7 +202,9 @@ def _prepare(land, wt: Path, branch: str, args, python: str, qdir: Path | None, 
             full_slot(qdir, ticket, changed=lambda: relaunch(land, qdir, ticket))
         else:
             land_queue.set_status(ticket, "preparing", tier="")
-    logdir, began = land.tmp_dir(branch), time.monotonic()
+    # Cache log hashes outlive this preparation; later preparations must keep its raw bytes intact.
+    logdir = Path(tempfile.mkdtemp(prefix=f"prepare-{candidate[:10]}-", dir=land.tmp_dir(branch)))
+    began = time.monotonic()
     guard_args = land.argparse.Namespace(**{**vars(args), "no_cache": True}) if explicit else args
     # The guard round (with land_isolation's alone runs: here only) beside the selection, not before it: on
     # 2026-10-27 it took 150-870 s and every pretest waited for it while holding one of MAX_PREPARING slots.

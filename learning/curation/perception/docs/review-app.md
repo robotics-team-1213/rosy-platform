@@ -44,6 +44,7 @@ Python 3.10 이상과 기존 receiver 의존성 `numpy`, `opencv-python`이 필�
 `POST /api/catalog/upload`는 `{name,data,folder?}`(base64 JPEG/PNG, JSON 본문 최대 12 MiB),
 `POST /api/catalog/folder`는 `{id}`만 받는다. 두 경로는 import 권한만 요구하며 정답 승인 권한을 만들지 않는다.
 `GET /api/catalog`의 `folders`는 `{id,label}` 목록이며 서버 경로를 노출하지 않는다.
+로컬 팔·카메라 시연의 구성·녹화·변환·학습 자료 전달은 [로컬 시연 녹화 안내](learning-recording.md)를 따른다.
 
 첫 실행은 저장소 루트에서 한다. `--images`는 source JSONL의 상대 image 경로가 시작하는 디렉터리다. 아래 경로는 자신의 저장 위치로 바꾼다. 실험실 PC의 일회성 상태·로그·증거는 X 드라이브에 둔다.
 
@@ -125,6 +126,14 @@ Windows PowerShell 5의 기본 `>`는 UTF-16을 쓸 수 있어 위처럼 UTF-8 �
 | 평가·승격 | `/learning/evaluate`: 지금 있는 평가 근거를 읽기 전용으로 모은다(학습 흐름의 평가 단계, VLM 모델 대 확정 정답, 최근 SIM 실험 10개의 상태·단계·과제 성공·판정과 그 run을 여는 `/learning/sim?run=<run_id>` 링크, 화면을 열 때마다 실험 목록을 한 번 읽는다). 승격 승인·배포는 Fleet에서 사람이 한다(D-793). `승격 요청`은 아래 「승격 요청 묶음」 |
 
 로그인·계정과 Hugging Face 가져오기는 메뉴가 아니라 상단 막대의 「로그인·계정」 `/accounts`에 있다. 수집·저장 공간은 아직 홈의 구역이다. 로봇암 화면(`/learning/omx`)은 시범 검수 밖에 학습·비교 구역도 품지만 한 화면이라 정답 단계에 둔다. 인식 학습은 별도 화면 없이 홈의 학습 흐름 구역으로 간다.
+
+홈의 작업 선택은 로봇 동작 학습(시연 학습 과제), 시각 인식(자료 등록·객체/픽셀 검수), SIM 실험,
+VLM 판단 검수를 목적별로 구분한다. 직접 조종 시연의 녹화 준비·검수·학습 과제를 첫 경로로 두며,
+공개 SO100 시연과 OMX 전문가 도구는 보조 경로다. 지원 방법 이름이 실물 녹화나 실행 가용성을 뜻하지 않는다.
+현재 상태와 검수·기존 결과·저장 설정은 기존 홈에 유지한다. 위의 「학습센터 작업 이동」은
+`#learning-start`, `#pipeline`, `#review-section`, `#learning-results`, `#storage-section`으로 이동하고
+키보드 초점을 대상에 전달한다. 별도 탭 상태나 자동 새로고침을 만들지 않는다. 자료 등록·SIM·VLM·평가
+화면의 경로 줄에는 같은 「학습센터 작업 선택」 링크가 있으며 홈의 작업 선택으로 돌아온다.
 
 **승격 요청 묶음(D-874).** `GET /api/learning/promotion-requests`(`view`)는 등록된 인식 학습 결과(`perception`)마다 요청 가능 여부와 거절 이유, 지금까지 봉인한 요청을 준다. `POST`(`manage`, CSRF, 본문은 `{"id": <결과 id>}`만)는 `promotion_request.build`가 그 폴더의 `intake_report.json`(통과·파일 해시)·`model_manifest.json`·평가셋·학습 데이터셋을 디스크에서 다시 확인한 뒤 `rosy.learning.promotion-request/1` 묶음을 `<state>/promotion-requests/<sha256>.json`에 한 번만 쓴다. 평가셋과 보고의 채점 출처가 모두 `human_reviewed_eval`이어야 하고, LiDAR·궤적 자동 라벨(build.py 평가셋)이나 HF 사진이 한 장이라도 있으면 거절한다. 평가셋은 `--learning-control` 학습 설정의 데이터셋 저장소 `evalsets/` 아래에 있는 `review_eval_bootstrap` 공개본이어야 하고, 그 학습 기록(`state.json`)에서 같은 모델의 `ready` 행 `eval_set`과 content_sha가 같아야 한다. GET은 크기·mtime이 같은 파일의 해시를 다시 계산하지 않고, POST는 모두 다시 해시한다. 같은 모델의 같은 요청은 처음 해시를 돌려준다. 묶음은 `state: requested`뿐이며 승인·단계·권한 키를 쓰면 거절한다. Fleet에서 승인권자가 이 해시로 제안을 만든다. Learning은 Fleet을 부르지 않는다.
 
@@ -210,6 +219,11 @@ Perception 단계 job, Pinky 원본 검증·행동 비교, OMX ACT, 영역 검�
 `POST /api/mask-preview/<index>`는 현재 mask version·class·seeds·tolerance를 검증하고
 indexed PNG(base64), 선택 픽셀 수, 실제 허용치를 반환한다. 적용은 기존
 `POST /api/masks/<index>`의 `sample` 동작으로 재계산하며 version 충돌을 거부한다.
+`preserve_existing: true`이면 직접 찍은 저장 라벨의 4방향 연결 영역과 미검수만 선택할 수 있다.
+다른 클래스와 떨어진 같은 클래스 영역은 보호한다. 생략은 기존 동작(false)이다.
+SAM 작업의 `selection_sha256`를 보내면 색상 선택 대신 검증된 원시 후보의 선택 클래스 영역을
+사용한다. preview와 sample은 같은 규칙을 쓰며, SAM 후보의 255는 영역 밖 표시이므로 지우기
+라벨로 사용할 수 없다. 브러시 지우기와 색상 지우기는 기존대로 사용할 수 있다.
 브러시·지우기·전체 채움·한 번 되돌리기도 제공하며 수정 후 pending이다. 색 범례는 공용 UI 토큰이고 데이터의 클래스 RGB는
 classes.yaml을 그대로 보존한다. crosswalk5(role ignore)와 미검수255는 별개다.
 객체 제외 사진은 픽셀 수정을 막고 mask export에서도 제외한다. 고정 평가 중첩은 승인하지 않는다.
@@ -475,8 +489,8 @@ root는 id, label, role(raw/derived/cache/pending), 절대 path를 가진다. hi
 # AI 실행과 저장 버전 조회 (D-764)
 
 객체/픽셀 화면의 **AI 초안과 확인**에서 저장된 사진 revision으로 새 초안을 요청한다.
-실행 상태와 요청자·모델이 표시되며 완료 후 **AI 결과 목록 조회**로 후보 또는 참고 의견을
-불러온다. 조회·실행은 라벨 적용이나 승인이 아니다. 미저장 획·선택 영역은 먼저 저장하거나
+실행 상태와 요청자·모델이 표시된다. 픽셀 화면은 새 작업이 끝나면 후보 또는 참고 의견을
+자동 갱신한다. 미저장 편집 중에는 갱신을 보류한다. 조회·실행은 라벨 적용이나 승인이 아니다. 미저장 획·선택 영역은 먼저 저장하거나
 버린 뒤 요청한다. 실패 후 같은 실행 버튼으로 현재 revision의 새 작업을 만들 수 있다.
 **이 AI 작업 취소**는 결과 등록을 막고 worker를 중지한다. 이미 모델 서버가 받은 연산은
 종료될 때까지 남을 수 있다. 새 기능은 Tab 또는 Ctrl+K 기능 검색으로 접근한다.
@@ -500,7 +514,7 @@ root는 id, label, role(raw/derived/cache/pending), 절대 path를 가진다. hi
 }
 ```
 
-SAM 두 필드는 픽셀 보완에만 필요하다. Qwen 모델 이름과 loopback endpoint는 기존 adapter의
+SAM 두 필드는 픽셀 보완과 SAM 점 선택에 필요하다. Qwen 모델 이름과 loopback endpoint는 기존 adapter의
 고정값을 사용한다. digest가 다르면 결과를 등록하지 않는다. 임의 명령·모델 URL·Python 경로를
 웹에서 입력할 수 없다. 작업공간마다 실행 하나만 허용하며 서버 재시작 시 미완료 작업은 실패로
 기록한다. 구버전 release로 돌아갈 때 설치 도구는 지원하지 않는 AI 옵션을 제거한다.
@@ -515,6 +529,58 @@ SAM 두 필드는 픽셀 보완에만 필요하다. Qwen 모델 이름과 loopba
 `test_review_ai_http.py`, `test_review_versions.py`, `test_review_ai_browser.py`다.
 pytest는 canonical 원격 실행기로 실행한다. 브라우저 시험은 ROSY_RUN_BROWSER_TESTS=1이
 필요하다. 모의 모델 연결 시험은 실제 GPU 모델 실행이나 정답 기반 정확도를 증명하지 않는다.
+
+사람이 점으로 영역을 지정할 때는 점 도구의 「영역 찾기」를 SAM으로 바꾸고 최대 16개 점을
+찍은 뒤 「SAM 영역 찾기」를 누른다. 단일 사진만 모델에 보내며 영역 미리보기를 확인한 뒤
+적용한다. 상태·취소는 자동 초안 영역에서 확인한다. SAM 전용 설정은 checkpoint와 SHA,
+workspace_id, Python을 요구하며 Qwen model_digest 없이도 설정할 수 있다. 명시한 Qwen digest가
+잘못되면 설정을 거부한다. 설정·패키지·GPU·추론 실패는 해당 이유로 표시하며 색상 선택을
+SAM으로 표시하지 않는다. 색상 점 선택은 기존 최대 32개를 유지한다.
+
+등록된 AI 픽셀 초안은 사진을 열 때 주 캔버스에 기본 표시한다. 기존 저장 라벨을 보존하며
+표시만으로 저장하지 않는다. 브러시 수정 후 저장하면 미검수에 대한 AI 보완과 직접 수정이
+같이 저장된다. 후보 전체 교체는 별도 확인 동작이며, 저장 후에도 사진 전체 확인과 승인은
+사람이 수행한다.
+
+편집 권한이 있고 전체가 미검수인 현재 사진에 사용할 초안이 없으면 AI 초안을 자동 요청한다.
+모델이 사용 중이면 기다리며, 같은 입력의 기존 작업이나 실패가 있으면 반복 요청하지 않는다.
+제외 사진·사람이 일부 칠한 사진·고정 평가는 자동 생성하지 않는다. 생성 실패와 빈 결과는
+현재 사진의 상태에 표시하며 명시 실행으로 재시도한다. 자동 생성은 저장·승인을 수행하지 않는다.
+
+AI 의견은 저장된 마스크 버전을 기준으로 표시한다. 보고서에 현재 사진이 없는 경우는
+`not_requested` 또는 작업 후 `no_report`이며, 읽기 실패(`unreadable`)나 구조 오류(`invalid_report`)와
+구분한다. 이전 의견이 있어도 새 검사의 대기·실행·실패 상태를 먼저 보여준다. 모델·입력 해시와
+이전 의견은 펼쳐 확인한다. 새 검사는 「현재 사진 AI 검사」로 요청하고 「저장 의견 새로고침」은 조회만 한다.
+
+적용한 SAM 선택의 작업·요청자·점·모델·입력 해시는 검수 이력과 고정 평가 출처에 보존한다.
+평가 manifest의 `sam_assistance`는 기록된 적용 목록이며, 빈 목록이 과거 자료의 수동 작성 증명은 아니다.
+이후 관리 클래스가 개정되면 당시 클래스 해시를 바꾸지 않고 `class_history`의 고정 원본과
+불변 클래스 계보를 검증한다. 클래스 개정으로 과거 SAM 사용 기록이 지워지지 않는다.
+## 공개 시연으로 학습 파이프라인 확인
+
+`/learning/public`은 공개 SO100 시연의 출처·분할 확인, ACT 실행, 진행·중지,
+관절별 오프라인 MAE와 학습 평균 기준 비교, 검증된 모델 ZIP 내려받기를 제공한다.
+실제 녹화가 없는 팀이 학습 흐름을 확인하는 별도 연구 경로다. SO100의 원래 관절 이름과
+state/action 값을 유지하며 OMX 시연이나 자체 로봇의 학습 성공으로 표시하지 않는다.
+
+Center를 연결하면 `GET /api/learning/omx/center/public-source`가 고정 공개 저장소
+`lerobot/svla_so100_pickplace`의 revision·Apache-2.0·실제 v3.0 metadata를 확인한다.
+`POST …/public-run`은 UUID `request_id`, 정확한 `repo_id`·`revision`,
+`steps=1..100000`, `batch_size=1..8`, 명시적 `confirmed_source=true`만 받는다.
+기존 manage·CSRF 검사, 소유 프로세스·단일 실행·중지·멱등 재시도를 공유한다.
+서버 경로·자격 증명·임의 저장소·코드는 받지 않는다. 공개 다운로드는 익명이며
+고정 tree의 파일 경로·크기·해시를 검사한다. 웹 요청에 CLI의 HF 로그인을 사용하지 않는다.
+
+기본 학습은 첫 10개 완전한 에피소드의 RGB 영상을 128×128 PNG로 변환하고,
+0..7 학습·8 검증·9 평가로 나눈다. 정규화에는 학습 자료만 쓴다. 기본 ACT CPU 설정은
+1,000단계·batch 4이며, 별도 프로세스에서 공식 모델·전후처리기를 다시 읽어 각 보류
+에피소드의 앞 128개 연속 프레임을 비교한다. 단위와 수집 세션의 독립성은 미확인이다.
+이 경로에는 물리 성공률·정책 적용·승격·장치 실행이 없다.
+
+Hugging Face 반영은 별도 운영자 작업이다. 화면의 ZIP 다운로드만으로 게시되지 않는다.
+게시 전 원본/파생 자료·모델·평가 해시를 대조하고, 내부 절대 경로를 담은 선택형
+`train_config.json`은 게시 사본에서 제외한다. 가중치·전후처리 상태는 원래 해시를 유지한다.
+모델과 전후처리기는 같은 Hub commit의 snapshot을 내려받아 함께 재로딩한다.
 
 ## 로봇 학습센터의 OMX 어댑터
 
@@ -577,14 +643,25 @@ SIM 실험의 셀 모델 대장·사람 할 일은 저장소의 `learning/envs/i
 
 ## 공통 로봇·과제 학습 (D-840)
 
-`/learning/tasks`는 학습 대상 등록 → 과제·참여 구성 → 자료·방법·실행 → 결과를 연결한다.
+`/learning/tasks`는 과제를 선택한 뒤 준비 → 직접 조종·녹화 → 검수 → 학습 → 결과를 따라간다.
+로봇·과제 등록은 `/learning/tasks/manage`, 장치 구성과 자료 검수는 기존 전문 화면으로 연결한다.
+준비·녹화·검수·학습·결과 탭 중 하나를 표시하며 선택한 탭은 URL에 보존한다. 방향키·Home·End로도
+전환할 수 있다. 모든 탭 위의 **작업할 시연**에서 대상을 선택한다. 시연이 여러 개면 검수 대상을
+자동으로 고르지 않는다. 진행 중인 과제를 다시 열면 결과 탭의 상태·중지 제어를 먼저 보여준다.
+결과는 시연 준비·오프라인 검증·실물 적용 상태 카드와 실행별 평가·모델로 나눈다.
 등록은 기존 device ID에 대한 학습 참조이며 실제 장치 연결·보정·실행 권한을 만들지 않는다.
+
+로봇은 owner가 이미 아는 목록에서 고른다. 서버는 선택적 `--fleet-owner-config PRIVATE.json`(`url`, `token_file`, 선택 `ca_file`)으로 Fleet의 `GET /api/v1/fleet/robots`(로봇 명단)와 `GET /api/fleet/device-profiles`(OMX 팔 등 장치 정보)를 Viewer 토큰으로 읽기만 한다. 브라우저는 Fleet에 직접 가지 않는다. `GET /api/learning/robot-candidates`가 두 목록을 device ID로 합쳐 미설정·권한 거절·연결 실패·형식 오류를 구분해 돌려준다. `POST /api/learning/robots`에 `{request_id, owner:"fleet", device_id}`를 보내면 서버가 Fleet을 다시 읽어 이름·종류·모델을 채우고 `owner`(출처·확인 시각)를 기록한다. 브라우저가 보낸 이름·종류는 받지 않는다. `device_verified=false`는 그대로이며 Fleet 원장에는 쓰지 않는다(D-840). 목록에 없는 시뮬·미등록 로봇은 접힌 직접 입력으로 등록하고 화면에 'Fleet 미확인'으로 표시한다. `test_owner_robots.py`가 지킨다.
 여러 종류를 등록할 수 있고, 현재 실행 어댑터는 OMX다. 미지원 종류는 준비 사유를 표시한다.
 리더·게임패드, 여러 팔·카메라의 설정은 기존 OMX 프로필 화면에서 준비한다.
 
 | 경로 | 계약 |
 |---|---|
-| GET `/api/learning/tasks` | 현재 프로젝트의 robots/tasks, 저장 프로필, 자료, 작업, 실행기 가용 상태, 서버 `host_id`, CSRF token, `sim_contexts`, `sim_configured`, `physical_learning_verified=false`. |
+| GET `/api/learning/tasks` | 현재 프로젝트의 robots/tasks, 저장 프로필, 자료, 작업, 실행기 가용 상태, 서버 `host_id`, CSRF token, `sim_contexts`, `sim_configured`, `physical_learning_verified=false`. `workflows`는 과제별 단계·다음 행동·완료 근거, `capabilities`는 방법별 준비 요건이다. native 요약은 캐시이며 `native_inputs_checked_at`은 마지막 검사 ISO 시각이다. |
+| GET `/api/learning/tasks/native-inputs` | 등록된 native 원본·저장 검수의 무결성을 다시 확인하고 요약 캐시를 갱신한다. 첫 진입·명시적 새로고침에서만 호출한다. 주기적인 과제 조회는 영상을 다시 해시하지 않는다. |
+| POST `/api/learning/tasks/native-input` | `task_id`, `prepared_id`, `source_revision`, `request_id` UUID. 현재 원본·전체 프로필을 검증하고 서버 작성자로 불변 연결을 저장한다. NPZ 자료 ID를 만들지 않는다. |
+| GET `/api/learning/tasks/recording-card?task_id=<UUID>` | 녹화 준비서에 필요한 입력과 `preparation_only` 상태를 반환한다. 장치 실행은 없다. |
+| POST `/api/learning/tasks/recording-card` | `task_id`, `record={root_prefix,episode_time_s,reset_time_s,num_episodes}`에서 기존 OMX owner의 `rosy.omx-task-card.v1` JSON을 만든다. 양의 시간·정수 시연 수·POSIX 절대 경로를 검증한다. `device_execution=false`, `requires_owner_preflight=true`다. |
 | POST `/api/learning/robots` | `request_id` UUID, `name`, `kind`, `model_revision`, `device_id`. 불변 학습 대상이며 `device_verified=false`. |
 | POST `/api/learning/tasks` | `request_id`, `name`, `objective`, `success`, `failure`, `reset`, `mode`, `adapter`, 순서 있는 `participants=[{robot_id,component_id,role}]`. OMX에는 서버가 읽을 `profile_id`가 필요하다. |
 | GET `/api/learning/tasks/export?id=<UUID>` | 같은 프로젝트 안에서 전달할 과제·참여 로봇·프로필 메타데이터. 단일 identity만 허용한다. |
@@ -627,6 +704,24 @@ worker request, run, 평가 결과에 같은 과제 snapshot을 남긴다. 완�
 코드 전환 전에는 새 실행·추가 경험 게시를 중단하고 활성 학습 작업을 끝내거나 중지한다.
 공식 설치기는 활성 작업·손상된 학습 상태를 사전 검사하며, 이 검사가 동시 요청에 대한
 배포 잠금을 대신하지는 않는다. 구버전 rollback 중에는 과제 결속 지속 작업을 재개하지 않는다.
+
+native 시연은 원본 revision 하나를 한 과제에 연결한다. 재시도는 작성자와 요청 내용을 함께
+검사하며, 기존 자료를 붙인 기록은 `historical_native_attachment`다. 과제별로 새로 녹화했다는
+증거로 세지 않는다. 연결한 원본이 없어지거나 revision이 달라지면 확인 필요로 남긴다.
+native 연결이 있는 과제의 메타데이터 내보내기는 현재 거절한다. 연결을 누락한 전달은 하지 않는다.
+
+`/api/learning/omx/center/native-run`에도 `task_id`와 `compute_host`를 함께 넣는다. admission은 캐시를
+사용하지 않고 원본·저장 검수·프로필·과제·호스트를 다시 검증한다. 현재 native 실행은 독립 모드의
+6관절 한 팔 또는 순서가 고정된 `arm_a`/`arm_b` 12관절 구성을 지원한다. 카메라와 관절 이름·단위가
+실제 자료와 일치해야 한다. worker 요청·실행·평가·모델 ZIP은 동일한 `learning_task`를 보존한다.
+과제 없는 과거 실행은 새 과제에 자동 귀속하지 않는다.
+
+기본 방법은 ACT 모방학습이며 실행 기준은 고정 LeRobot 0.4.4다. 저장 경험 HIL-SERL 경로와
+실시간 HIL, VLA, 시뮬레이션 학습의 요구 조건·미연결 사유를 구분한다. 방법 이름이 보인다는
+이유로 실행 가능으로 표시하지 않는다. `completion`의 녹화·검수·학습·오프라인 평가·실물 평가·적용
+승인은 서로 다른 증거다. 합성 자료의 수치 평가와 새 프로세스 모델 재로딩은 실물 성공률이 아니다.
+실물 조종 전송은 아직 이 웹 흐름에 연결되지 않았다. 녹화 준비서는 보정·포트·카메라·프레임 속도를
+추측하지 않으며, 현장 담당자가 기존 OMX owner의 선언된 장치 설정과 사전 검사를 적용해야 한다.
 
 ## VLM 판단 (D-853 Proposed)
 

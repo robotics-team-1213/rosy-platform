@@ -38,10 +38,38 @@ def test_committed_review_archive_starts_without_checkout_imports(tmp_path):
                     '--output', str(archive), 'HEAD', *m.CODE_PREFIXES], check=True)
     source = tmp_path / 'source'
     m.unpack(archive, source)
+    spec = importlib.util.spec_from_file_location('archived_review_static', source / 'learning/curation/perception/review_static.py')
+    static = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(static)
+    from types import SimpleNamespace
+    served = []
+    handler = SimpleNamespace(send=lambda data, **kwargs: served.append((data, kwargs['mime'])))
+    for name, mime in [('file-picker.css', 'text/css'), ('file-picker.js', 'text/javascript')]:
+        canonical = SCRIPT.parents[2] / 'applications/fleet/web/shared' / name
+        assert static.get(handler, '/' + name)
+        assert served[-1] == (canonical.read_bytes(), mime + '; charset=utf-8')
+    assert not static.get(handler, '/file-picker-unknown.js')
+    assert not static.get(handler, '/file-picker.js/../../AGENTS.md')
     result = subprocess.run(m.bootstrap_command(sys.executable, source,
         source / 'learning/curation/perception/review_app.py', ['--help']),
         cwd=tmp_path, capture_output=True, text=True, timeout=30)
     assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.parametrize('name', ['applications/fleet/web/shared/file-picker.css', 'applications/fleet/web/shared/file-picker.js'])
+def test_missing_learning_file_picker_asset_is_rejected(tmp_path, name):
+    m = module()
+    archive = tmp_path / 'missing-picker.tar'
+    with tarfile.open(archive, 'w') as tar:
+        for valid in (*m.LEARNING_REQUIRED, 'middleware/perception/control/__init__.py', 'contracts/foundation/core_common/__init__.py'):
+            if valid == name:
+                continue
+            raw = b"print('ok')\n"
+            info = tarfile.TarInfo(valid)
+            info.size = len(raw)
+            tar.addfile(info, io.BytesIO(raw))
+    with pytest.raises(ValueError):
+        m.unpack(archive, tmp_path / 'output')
 
 
 @pytest.mark.parametrize('name', ['storage_pool.py', 'storage_jobs.py', 'storage_files.py', 'storage_web.py', 'storage_hub.py',
@@ -213,6 +241,7 @@ def test_model_archive_refuses_undeclared_control_holders(tmp_path, keys, path):
     "learning/curation/perception/camera_setup_web.py",
     "learning/curation/perception/learning_tasks.py",
     "learning/curation/perception/learning_tasks_web.py",
+    "learning/curation/perception/owner_robots.py",
     "learning/curation/perception/review_app_web/tasks.html",
     "learning/curation/perception/review_app_web/tasks.js",
     "learning/curation/perception/review_app_web/omx.html",

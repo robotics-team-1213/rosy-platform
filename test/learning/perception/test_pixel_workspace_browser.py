@@ -1,4 +1,5 @@
-"""Pixel workspace layout and explicit one-click completion on isolated labels."""
+"""Pixel workspace layout and explicit background fill, confirmation and approval."""
+import json
 import os
 from pathlib import Path
 
@@ -24,7 +25,7 @@ def test_pixel_workspace_layout_has_one_photo_navigation_and_unclipped_tools(bro
     open_pixels(page, store, expect)
     page.evaluate('theme => RosyTheme.set(theme)', theme)
     expect(page.locator('#pixel-complete, #pixel-background')).to_have_count(0)
-    expect(page.locator('#pixel-approve')).to_have_text('완료')
+    expect(page.locator('#pixel-approve')).to_contain_text('완료')
     expect(page.locator('#pixel-keys')).to_contain_text('A 완료')
     expect(page.locator('#pixel-keys')).not_to_contain_text('C 전체 확인')
     expect(page.locator('#pixel-keys')).not_to_contain_text('B 배경 확인')
@@ -32,8 +33,7 @@ def test_pixel_workspace_layout_has_one_photo_navigation_and_unclipped_tools(bro
     expect(page.locator('#pixel-photo-navigation #pixel-prev')).to_have_count(1)
     expect(page.locator('#pixel-photo-navigation #pixel-next')).to_have_count(1)
     expect(page.locator('#pixel-photo-navigation #pixel-undo')).to_have_count(0)
-    expect(page.locator('#pixel-photo-list #pixel-page-controls')).to_be_visible()
-    expect(page.locator('.pixel-editor-column > #pixel-photo-list')).to_have_count(1)
+    expect(page.locator('#pixel-photo-list #pixel-page-controls')).to_have_count(1)
     for width in (390, 800, 1440, 2048):
         page.set_viewport_size({'width': width, 'height': 1080 if width == 2048 else 900 if width == 1440 else 844})
         page.reload(wait_until='networkidle')
@@ -41,13 +41,13 @@ def test_pixel_workspace_layout_has_one_photo_navigation_and_unclipped_tools(bro
         page.evaluate('() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))')
         geometry = page.evaluate('''() => {
           const rect = selector => document.querySelector(selector).getBoundingClientRect().toJSON();
-          const tools = document.querySelector('.pixel-quick-tools');
+          const tools = document.querySelector('#pixel-tool-rail');
           return {width: innerWidth, pageWidth: document.documentElement.scrollWidth,
-            tools: rect('.pixel-quick-tools'), column: rect('.pixel-editor-column'),
-            photo: rect('.pixel-photo-surface'), canvas: rect('#pixel-canvas'), decision: rect('.pixel-review-column'),
+            tools: rect('#pixel-tool-rail'), options: rect('#pixel-tool-options'), column: rect('.pixel-editor-column'),
+            canvas: rect('#pixel-canvas'), decision: rect('.pixel-review-column'),
             nav: rect('#pixel-photo-navigation'), prev: rect('#pixel-prev'),
             title: rect('#pixel-title'), next: rect('#pixel-next'), list: rect('#pixel-photo-list'),
-            details: rect('.pixel-photo-details'), focused: rect('#pixel-class'), height: innerHeight,
+            layout: rect('.pixel-layout'), focused: rect('#pixel-class'), height: innerHeight,
             overflow: getComputedStyle(tools).overflowY, maxHeight: getComputedStyle(tools).maxHeight,
             clientHeight: tools.clientHeight, scrollHeight: tools.scrollHeight};
         }''')
@@ -56,31 +56,30 @@ def test_pixel_workspace_layout_has_one_photo_navigation_and_unclipped_tools(bro
             target.mkdir(parents=True, exist_ok=True)
             page.screenshot(path=str(target / f'pixel-workspace-{theme}-{width}-viewport.png'))
             page.screenshot(path=str(target / f'pixel-workspace-{theme}-{width}.png'), full_page=True)
+            (target / f'pixel-workspace-{theme}-{width}.json').write_text(json.dumps(dict(
+                state='pixel workspace layout',theme=theme,renderedTheme=page.locator('html').get_attribute('data-theme'),
+                viewport=page.viewport_size,selected_class=page.locator('#pixel-class').input_value(),
+                activeElement=page.evaluate('document.activeElement?.id'),geometry=geometry,
+                filenames=[f'pixel-workspace-{theme}-{width}-viewport.png',f'pixel-workspace-{theme}-{width}.png']),
+                ensure_ascii=False,indent=2),encoding='utf-8')
         assert geometry['pageWidth'] <= width
         assert geometry['overflow'] == 'visible' and geometry['maxHeight'] == 'none'
         assert geometry['scrollHeight'] <= geometry['clientHeight'] + 1
-        assert geometry['prev']['right'] <= geometry['title']['left'] + 1
-        assert geometry['title']['right'] <= geometry['next']['left'] + 1
-        assert geometry['list']['top'] >= geometry['details']['bottom'] - 1
-        assert abs(geometry['list']['left'] - geometry['photo']['left']) <= 1
-        assert abs(geometry['list']['right'] - geometry['photo']['right']) <= 1
-        if width < 1024:
-            assert geometry['decision']['top'] >= geometry['column']['bottom'] - 1
+        assert geometry['prev']['right'] <= geometry['next']['left'] + 1
+        assert geometry['title']['bottom'] <= geometry['canvas']['top']
+        assert geometry['options']['bottom'] <= geometry['canvas']['top'] + 1
+        assert not page.locator('#pixel-photo-list').evaluate('node => node.open')
         if width >= 1024:
             assert geometry['decision']['left'] >= geometry['column']['right']
-            assert geometry['tools']['right'] <= geometry['photo']['left']
-            assert geometry['photo']['right'] <= geometry['decision']['left']
-            assert geometry['canvas']['top'] <= 260
+            assert geometry['tools']['right'] <= geometry['canvas']['left']
+            assert geometry['canvas']['right'] <= geometry['decision']['left']
+            assert geometry['canvas']['top'] <= 400  # Navigation and selected-tool settings precede the photo.
             assert geometry['canvas']['height'] >= 400
             assert geometry['canvas']['bottom'] <= geometry['height'] - 16
-        elif width >= 640:
-            assert geometry['tools']['right'] <= geometry['photo']['left']
-            assert geometry['canvas']['top'] < 320
-            assert geometry['decision']['top'] >= geometry['tools']['bottom'] - 1
         else:
-            assert geometry['photo']['bottom'] <= geometry['tools']['top'] + 1
+            assert geometry['tools']['bottom'] <= geometry['canvas']['top'] + 1
+            assert geometry['decision']['top'] >= geometry['canvas']['bottom'] - 1
             assert geometry['canvas']['height'] >= 200
-            expect(page.locator('#pixel-advanced-tools')).not_to_have_attribute('open', '')
         page.locator('#pixel-class').focus()
         expect(page.locator('#pixel-class')).to_be_focused()
         page.evaluate('() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))')
@@ -104,8 +103,9 @@ def test_context_fill_preserves_undo_and_one_complete_click_approves_then_advanc
     page, store, expect = browser_workspace
     page.set_viewport_size({'width': width, 'height': 844})
     before = partial_workspace(page, store, expect)
-    context = page.locator('#pixel-result-note + #pixel-resolve-unknown')
+    context = page.locator('#pixel-resolve-unknown')
     expect(context).to_be_visible()
+    expect(context.locator('#pixel-resolve-background')).to_be_visible()
     expect(context.locator('#pixel-resolve-background')).to_have_text('남은 767픽셀 배경으로 채우기')
     page.locator('#pixel-canvas').click(position={'x': 10, 'y': 10})
     expect(context.locator('#pixel-resolve-background')).to_be_disabled()
@@ -122,6 +122,7 @@ def test_context_fill_preserves_undo_and_one_complete_click_approves_then_advanc
     page.locator('#pixel-undo').click()
     expect(page.locator('#pixel-status')).to_contain_text('v3')
     assert np.array_equal(review_masks.pixels(store, review_masks.get(store, 0)), before)
+    expect(page.locator('#pixel-approve')).to_be_enabled()
     requests = []
     page.on('request', lambda request: requests.append(request.post_data_json)
             if request.method == 'POST' and request.url.endswith('/api/masks/0') else None)
@@ -154,6 +155,7 @@ def test_completion_fill_failure_does_not_send_approval(browser_workspace):
             route.continue_()
 
     page.route('**/api/masks/0', fail_fill)
+    expect(page.locator('#pixel-resolve-unknown')).to_be_visible()
     page.locator('#pixel-approve').click()
     expect(page.locator('#pixel-error')).to_be_visible()
     assert [body['action'] for body in requests] == ['fill_unknown']

@@ -174,13 +174,15 @@ function render() {
   }
 }
 
+let refreshing = false;
 async function refresh() {
-  if (!workcell()) return;
+  if (!workcell() || refreshing) return;  // a slow answer must not stack 2 s polls on top of each other
+  refreshing = true;
   try { state = await request(base()); render(); }
   catch (error) {
     $('policy-content').hidden = true;
     $('policy-verdict').textContent = errorText(error); $('policy-verdict').setAttribute('state', 'unavailable');
-  }
+  } finally { refreshing = false; }
 }
 
 $('policy-incident-report').addEventListener('click', async () => {
@@ -229,7 +231,8 @@ async function start() {
       $('policy-verdict').setAttribute('state', 'empty'); return;
     }
     await refresh();
-    setInterval(refresh, 2000);
+    setInterval(() => { if (!document.hidden) refresh(); }, 2000);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
   } catch (error) {
     $('policy-verdict').textContent = errorText(error); $('policy-verdict').setAttribute('state', 'unavailable');
     $('policy-login').hidden = error.status !== 401;

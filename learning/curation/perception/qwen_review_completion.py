@@ -169,8 +169,7 @@ def segment(tracker, state_dir, photo, seeds, torch):
                                async_loading_frames=False)
     h, w = photo.shape[:2]
     masks = {}
-    for name, obj_id in (('background', 1), ('drivable', 2)):
-        chosen = seeds[name]
+    for obj_id, (name, chosen) in enumerate(seeds.items(), 1):
         if not chosen:
             continue
         _, _, _, prediction = tracker.add_new_points_or_box(

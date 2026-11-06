@@ -27,6 +27,12 @@ def test_folder_selection_reloads_scoped_frames_and_clears_stale_navigation(brow
     page.goto(base + path + '?frame=2', wait_until='networkidle')
     expect(page.locator(title)).to_contain_text('사진 2')
     expect(page.locator('[aria-label="검수 작업 범위"]')).to_contain_text('첫 자료 · 2장')
+    if path == '/pixels':
+        expect(page.locator('.pixel-review-context')).to_have_js_property('open', False)
+        expect(page.locator('.pixel-review-context > summary')).to_contain_text('첫 자료')
+        expect(page.locator('.pixel-review-context > summary')).to_contain_text('2장')
+        page.locator('.pixel-review-context > summary').click()
+        expect(page.locator('#review-folder')).to_be_visible()
     page.locator('#review-folder').select_option('second')
     expect(page.locator(title)).to_contain_text('사진 1')
     expect(page.locator('[aria-label="검수 작업 범위"]')).to_contain_text('다음 자료 · 1장')

@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="ko" data-theme="dark">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Rosy Learning — 공개 데이터 연구</title><link rel="stylesheet" href="/common/tokens.css"><script src="/common/theme.js"></script>
+<link rel="stylesheet" href="/common/components.css"><link rel="stylesheet" href="/common/component-controls.css"><link rel="stylesheet" href="/common/app-shell.css"><link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/public-learning.css">
+<script type="module" src="/public-learning.js"></script></head>
+<body><a class="skip-link" href="#public-main">공개 데이터 연구로 이동</a>
+<ui-shell grammar="procedure" class="ui-app-shell"><!-- review:header:start -->
+<ui-topbar role="banner"><ui-brand href="/learning" aria-label="Rosy Learning"><b>Learning</b></ui-brand><span data-spacer></span><a data-kind="quiet" class="ui-action-link" data-action-icon="account" data-learning-account-entry href="/accounts" title="로그인·계정">로그인·계정</a>
+<ui-button kind="quiet" data-theme-cycle="" data-icon-only="" type="button" aria-label="테마 변경" data-action-icon="theme-dark"></ui-button></ui-topbar>
+<!-- review:header:end -->
+<div class="ui-app-body"><div class="ui-rail"><nav class="ui-rail-nav" aria-label="학습 화면"><!-- review:rail:start -->
+<a class="ui-rail-item" data-action-icon="list" href="/learning" aria-label="홈">홈</a><a class="ui-rail-item" data-action-icon="folder" href="/catalog" aria-label="자료 등록">자료</a><a class="ui-rail-item" data-action-icon="pencil" href="/" aria-label="정답 달기">정답</a><a class="ui-rail-item" data-action-icon="robot" href="/learning/tasks" aria-label="학습 실행" aria-current="true">학습</a><a class="ui-rail-item" data-action-icon="check" href="/learning/evaluate" aria-label="평가·승격">평가·승격</a>
+<!-- review:rail:end --></nav></div>
+<div class="ui-subnav"><nav class="ui-subnav-nav" aria-label="공개 데이터 연구 도구"><span class="ui-subnav-head">공개 데이터 연구</span><a class="ui-subnav-item" href="#public-source">출처·분할 확인</a><a class="ui-subnav-item" href="#public-train">학습 실행</a><a class="ui-subnav-item" href="#public-results">진행·결과</a><a class="ui-subnav-item" href="/learning">학습센터 홈</a></nav></div>
+<div class="ui-app-main"><div class="ui-pathbar"><nav class="ui-crumbs" aria-label="현재 위치"><a href="/learning">Learning</a><span aria-hidden="true">/</span></nav><h1>공개 데이터 연구</h1><span class="ui-crumbs" id="learning-tool-path"></span><span data-spacer></span><ui-button id="public-refresh" kind="quiet" data-action-icon="refresh">다시 확인</ui-button></div>
+<main id="public-main" class="learning-main" tabindex="-1">
+<p class="public-lede">공개 SO100 시연으로 ACT를 학습하고, 남겨 둔 에피소드의 오차를 비교합니다.</p>
+<p class="public-note">SO100 원본 데이터입니다. OMX 시연이나 우리 로봇의 동작 검증으로 사용할 수 없습니다. 이 화면의 학습은 로봇에 적용되지 않습니다.</p>
+<ui-status id="public-error" state="error" role="alert" hidden></ui-status>
+<section id="public-source" class="public-section" aria-labelledby="public-source-title"><h2 id="public-source-title">출처·분할 확인</h2>
+<p id="public-source-status" role="status">공개 자료의 사용 가능 여부를 확인하는 중입니다.</p><dl id="public-source-facts" class="public-facts"></dl>
+<p class="public-note">상단·손목 카메라와 원본 main_* 관절 6개의 순서를 유지합니다. 관절의 물리 단위는 확인되지 않았습니다.</p>
+<p class="public-note">에피소드만 나눈 연구용 분할입니다. 서로 다른 수집 세션의 독립성은 확인되지 않았습니다.</p>
+<details><summary>원본 버전·이용 조건</summary><p><a class="workspace-link" href="https://huggingface.co/datasets/lerobot/svla_so100_pickplace/tree/728583b5eaf9e739a7f119e2def466fa1d552402" target="_blank" rel="noopener noreferrer">Hugging Face 원본 자료 열기</a></p><p id="public-revision" class="public-identifier"></p><p>Apache-2.0의 이용·재배포 조건과 출처 표시를 확인하세요. 파생 자료와 모델을 게시할 때 원본 버전과 연구 범위를 함께 기록해야 합니다.</p></details>
+<label class="ui-check public-confirm"><input id="public-confirm" class="ui-field" type="checkbox" aria-describedby="public-confirm-help"><span>원본·Apache-2.0 이용 조건과 에피소드 분할의 한계를 확인했습니다.</span></label><p id="public-confirm-help" class="public-note">이 확인은 시연 품질의 사람 검수나 실물 성능 승인이 아닙니다.</p></section>
+<section id="public-train" class="public-section" aria-labelledby="public-train-title"><h2 id="public-train-title">학습 실행</h2><p>첫 10개 에피소드로 현재 학습 호스트의 CPU에서 실행합니다.</p>
+<details><summary>학습 설정 보기</summary><dl id="public-recipe" class="public-facts"></dl><p class="public-note">이 연구의 고정 설정입니다. LeRobot 0.4.4 · ACT · RGB 영상 128 × 128</p></details>
+<p id="public-start-reason" role="status">출처 확인을 마친 뒤 시작할 수 있습니다.</p><ui-button id="public-start" kind="primary" disabled reason="출처 확인이 필요합니다.">공개 시연으로 학습 시작</ui-button><p id="public-submit-status" role="status"></p></section>
+<section id="public-results" class="public-section" aria-labelledby="public-results-title"><h2 id="public-results-title">진행·결과</h2><p id="public-runs-status" role="status">학습 기록을 확인하는 중입니다.</p><ui-empty id="public-empty" hidden>공개 데이터 학습 기록이 없습니다. 출처와 분할을 확인하고 첫 학습을 시작하세요.</ui-empty><div id="public-runs"></div>
+<details><summary>데이터·모델 게시 안내</summary><p>게시 작업은 운영자가 별도 CLI에서 사용자 인증과 저장소 공개 범위를 확인한 뒤 수행합니다. 이 화면은 Hugging Face로 자료나 모델을 올리지 않습니다.</p><p>내려받은 실행 기록에서 원본 버전, 사용한 에피소드, 파생 자료 해시와 평가 결과를 확인하세요. 게시 설명에는 물리 단위 미확인, 에피소드 단위 분할, 실물 성능 미검증을 함께 적으세요.</p></details></section>
+</main></div></div></ui-shell></body></html>

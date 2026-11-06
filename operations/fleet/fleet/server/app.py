@@ -414,8 +414,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                                  development_sessions=development_sessions, account_client_config=account_client_config,
                                  trust_forwarded=lan_camera_proxy)
     read_guard = [Depends(require_viewer)]
-    from fleet.server.workcell_observation_routes import install_workcell_observation_routes
-    install_workcell_observation_routes(app, workcell_observations, require_viewer, require_named_operator, task_service)
+    from fleet.server.workcell_observation_routes import install_workcell_observation_routes as install_observations
+    install_observations(app, workcell_observations, require_viewer, require_named_operator, task_service, authorize)
 
     def require_camera_viewer(request: Request) -> SitePrincipal:
         # Enable only behind the site proxy; its other routes strip client copies.
@@ -762,6 +762,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         proposal_resolve=proposal_resolve, cell_prepare=cell_prepare, mission_admit=mission_admit, cell_service_id=cell_app_service_id)
     install_intent_routes(app, console=console, task_service=task_service, require_operator=require_operator,
                           require_named_operator=require_named_operator,
+                          robot_busy=lambda robot: 'trip' if trip_runner.robot_busy(robot) else engaged(console, robot),
                           operator_guard=operator_guard,
                           local_stop_fanout=partial(
                               fanout_local_omx_stops, configured_omx, stop_transport, targets=stop_targets),
@@ -770,7 +771,6 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     from .channel.conversation.runtime import install_conversation_routes
     install_conversation_routes(app, conversation_config, channel_model_config, site_maps,
                                 task_service, require_operator, read_guard)
-
     from .assistant.runtime import install_assistant
     install_assistant(app, assistant_config, task_service=task_service,
                       require_named_operator=require_named_operator, authorize=authorize)

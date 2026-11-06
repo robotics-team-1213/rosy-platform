@@ -9,6 +9,7 @@ from pathlib import Path
 import yaml
 
 import review_masks
+import review_sam_assistance
 
 
 def encoded(value):
@@ -84,6 +85,8 @@ def snapshot(store):
         meta = dict(db.execute('SELECT key,value FROM metadata').fetchall())
         frames = [store.decoded(r) for r in db.execute('SELECT * FROM frames ORDER BY id')]
         masks = {r['frame']: dict(r) for r in db.execute('SELECT * FROM masks')}
+        assistance = review_sam_assistance.capture(db, masks, store.state,
+            json.loads(meta['pixel_classes'])['sha256'] if meta.get('pixel_classes') else None)
         representations = {}
         for r in db.execute('SELECT * FROM representations ORDER BY frame,image_sha256'):
             representations.setdefault(r['frame'], []).append(json.loads(r['provenance']))
@@ -117,6 +120,9 @@ def snapshot(store):
                          'background_reviewed': bool(mask.get('background', 0)),
                          'pixel_approval': approval,
                          'map_revision': source.get('map_revision'), 'map_pose': source.get('map_pose')})
+            if frame['index'] in assistance:
+                rows[-1]['sam_assistance'] = review_sam_assistance.validate(
+                    assistance[frame['index']], rows[-1], (binding or {}).get('sha256'))
     value = {'schema': 'rosy.pinky-review-decisions/1', 'workspace_id': workspace,
              'generation': int(meta['generation']), 'frames': rows,
              'pixel_classes_sha256': (binding or {}).get('sha256'),
@@ -288,6 +294,8 @@ def validate_authority(current):
                 raise ValueError('invalid source metadata')
         if row.get('map_pose') is not None and not isinstance(row['map_pose'], dict):
             raise ValueError('invalid map pose')
+        if 'sam_assistance' in row:
+            review_sam_assistance.validate(row['sam_assistance'], row, current['pixel_classes_sha256'])
         if row['mask_decision'] == 'approved':
             expected = {'image_sha256': row['image_sha256'], 'mask_sha256': row['mask_sha256'],
                         'mask_version': row['mask_version'], 'width': row['width'], 'height': row['height'],

@@ -41,15 +41,21 @@ function renderGrants(profile) {
   const grants = profile.grants;
   $('profile-grants').hidden = !Array.isArray(grants);
   $('profile-grant-list').replaceChildren();
+  $('profile-grant-raw').textContent = '';
   if (!Array.isArray(grants)) return;
+  $('profile-grant-raw').textContent = grants.map(grant => `${grant.resource} · ${grant.capabilities.join(', ')}`).join('\n');
   for (const grant of grants) {
-    const item = document.createElement('li');
-    const labels = CAPABILITIES[grant.resource.split(':')[0]] || {};
-    item.textContent = `${grant.resource} · ${grant.capabilities.map(code => labels[code] || code).join(', ')}`;
+    const item = document.createElement('div');
+    item.className = 'ui-task-row'; item.setAttribute('role', 'listitem');
+    const [kind, ...parts] = grant.resource.split(':'); const name = parts.join(':');
+    const labels = CAPABILITIES[kind] || {};
+    const resource = {site: `현장 ${name}`, robot: name === '*' ? '모든 로봇' : `로봇 ${name}`,
+      project: name === '*' ? '모든 학습 프로젝트' : `학습 프로젝트 ${name}`}[kind] || '기타 권한';
+    item.textContent = `${resource} · ${grant.capabilities.map(code => labels[code] || '해석되지 않은 권한').join(', ')}`;
     $('profile-grant-list').append(item);
   }
   if (!grants.length) {
-    const item = document.createElement('li'); item.textContent = '부여된 서비스 권한 없음';
+    const item = document.createElement('div'); item.className = 'ui-task-row'; item.setAttribute('role', 'listitem'); item.textContent = '부여된 서비스 권한 없음';
     $('profile-grant-list').append(item);
   }
 }
@@ -68,6 +74,7 @@ async function load(expected = null) {
 function failure(error) {
   $('profile-grants').hidden = true;
   $('profile-grant-list').replaceChildren();
+  $('profile-grant-raw').textContent = '';
   if (error.code === 'PROFILE_ACCOUNT_CHANGED') {
     for (const id of ['profile-current', 'profile-new', 'profile-confirm']) $(id).value = '';
     $('profile-content').hidden = true;

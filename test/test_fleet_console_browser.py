@@ -2324,7 +2324,7 @@ def test_camera_rectification_direct_manipulation(console_url):
         assert lease_payloads[-1]["rectification"]["corners"][1][1] > 0.2
         assert not errors
         page.reload(wait_until="networkidle")
-        page.get_by_role("combobox", name="작업 선택").select_option('calibration')
+        page.get_by_role("tab", name="카메라 설치·보정", exact=True).click()
         page.get_by_text("왜곡 및 사각 보정", exact=True).click()
         assert page.get_by_label("오른쪽 위 X (%)").input_value() == preserved_x
         browser.close()

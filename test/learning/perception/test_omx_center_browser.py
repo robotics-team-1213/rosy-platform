@@ -11,6 +11,23 @@ from review_app import ReviewStore, make_server
 pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason='requires explicit Chromium run')
 
 
+def _capture(page, state, **details):
+    import json
+    import os
+    from pathlib import Path
+    if not (output := os.getenv('ROSY_UIUX_SCREENSHOT_DIR') or os.getenv('ROSY_SHOT_DIR')):
+        return
+    root = Path(output).expanduser()
+    root.mkdir(parents=True, exist_ok=True)
+    viewport = page.viewport_size
+    theme = page.evaluate('document.documentElement.dataset.theme || "default"')
+    name = f'{state}-{theme}-{viewport["width"]}x{viewport["height"]}'
+    page.screenshot(path=str(root / f'{name}.png'), full_page=True)
+    (root / f'{name}.json').write_text(json.dumps(
+        dict(state=state, viewport=viewport, theme=theme, filename=f'{name}.png', **details),
+        ensure_ascii=False, indent=2), encoding='utf-8')
+
+
 def test_native_review_preview_explicit_confirmation_retry_and_stale_reload(tmp_path):
     import io
     import json
@@ -83,9 +100,12 @@ def test_native_review_preview_explicit_confirmation_retry_and_stale_reload(tmp_
                 page.locator('[data-episode="0"] [data-field="split"]').select_option('train')
                 page.locator('[data-episode="0"] [data-field="reason"]').fill('observed first attempt')
                 page.locator('#reviewer').fill('Local Reviewer')
+                _capture(page, 'omx-review-awaiting-confirmation')
                 page.locator('#review-confirmed').check()
+                _capture(page, 'omx-review-explicitly-confirmed')
                 page.locator('#review-save').click()
                 expect(page.locator('#review-status')).to_contain_text('reply lost')
+                _capture(page, 'omx-review-retry-needed')
                 page.locator('#review-save').click()
                 expect(page.locator('#review-status')).to_contain_text(saved_id)
                 assert posts[0] == posts[1]
@@ -94,6 +114,7 @@ def test_native_review_preview_explicit_confirmation_retry_and_stale_reload(tmp_
                 assert posts[0]['decisions'][1]['split'] == 'exclude'
                 uuid.UUID(posts[0]['request_id'])
                 expect(page.locator('#review-identity')).to_contain_text('local_unverified')
+                _capture(page, 'omx-review-saved')
                 page.locator('[data-episode="0"] [data-field="reason"]').fill('new unsaved reason')
                 page.get_by_role('button', name='다시 확인', exact=True).click()
                 expect(page.locator('[data-episode="0"] [data-field="reason"]')).to_have_value('new unsaved reason')
@@ -101,8 +122,16 @@ def test_native_review_preview_explicit_confirmation_retry_and_stale_reload(tmp_
                 page.locator('#review-save').click()
                 expect(page.locator('#review-status')).to_contain_text('stale source revision')
                 expect(page.locator('#review-save')).to_be_disabled()
+                _capture(page, 'omx-review-stale')
                 departures = []
-                page.once('dialog', lambda dialog: (departures.append(dialog.type), dialog.accept()))
+                native_dialogs = []
+                def accept_departure(dialog):
+                    departures.append(dialog.type)
+                    native_dialogs.append(dict(type=dialog.type, message=dialog.message,
+                                               default_value=dialog.default_value, action='accept'))
+                    dialog.accept()
+
+                page.once('dialog', accept_departure)
                 page.reload(wait_until='networkidle')
                 assert departures == ['beforeunload']
                 page.locator('#review-open').click()
@@ -111,6 +140,7 @@ def test_native_review_preview_explicit_confirmation_retry_and_stale_reload(tmp_
                 expect(page.locator('#export-saved-review')).to_be_enabled()
                 page.locator('#export-saved-review').check()
                 expect(page.locator('#export-review-status')).to_contain_text(saved_id)
+                _capture(page, 'omx-review-reloaded', native_dialogs=native_dialogs)
                 assert frames
             finally:
                 browser.close()

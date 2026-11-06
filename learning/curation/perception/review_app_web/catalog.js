@@ -32,11 +32,12 @@ async function uploadImages(){
     const result=await request('/api/catalog/upload',{name:file.name,folder,data:await fileData(file)});added+=result.added;duplicates+=result.duplicate_representations;done++;
   }$('upload-status').setAttribute('state','ready');$('upload-status').textContent=`업로드 완료 ${done}장 · 새 사진 ${added}장 · 이미 등록됨 ${duplicates}장. 정답 메뉴에서 검수하세요.`;
   selectedImages=[];$('image-files').value='';$('image-directory').value='';$('upload-files').replaceChildren();$('upload-selection').textContent='선택한 사진이 없습니다.';
+  $('image-files-filename').textContent=$('image-directory-filename').textContent='선택한 파일 없음';
   }catch(error){selectedImages=files.slice(done);$('upload-status').setAttribute('state','error');$('upload-status').textContent=`완료 ${done}/${files.length}장 · ${error.message} 완료된 사진은 보존됩니다. 남은 사진은 다시 업로드할 수 있습니다.`;}
   finally{busy=false;controls();}
 }
 $('image-files').onchange=selectImages;$('image-directory').onchange=selectImages;$('image-upload').onclick=uploadImages;
-$('upload-clear').onclick=()=>{selectedImages=[];$('image-files').value='';$('image-directory').value='';$('upload-files').replaceChildren();$('upload-selection').textContent='선택한 사진이 없습니다.';controls();};
+$('upload-clear').onclick=()=>{selectedImages=[];$('image-files').value='';$('image-directory').value='';$('image-files-filename').textContent=$('image-directory-filename').textContent='선택한 파일 없음';$('upload-files').replaceChildren();$('upload-selection').textContent='선택한 사진이 없습니다.';controls();};
 $('folder-import').onclick=()=>perform('folder','/api/catalog/folder',{id:$('source-folder').value},value=>{$('result').setAttribute('state','ready');show('result',`새 사진 ${value.added}장 · 이미 등록됨 ${value.duplicate_representations}장 · 픽셀 검수 대기 ${value.pixel_reviews_pending}장. 정답 메뉴에서 검수하세요.`);});
 function el(tag,cls,text){const node=document.createElement(tag);if(cls)node.className=cls;if(text)node.textContent=text;return node;}
 function hfState(state,text){$('hf-load').setAttribute('state',state);$('hf-load').setAttribute('role',state==='error'?'alert':'status');$('hf-load').textContent=text;}

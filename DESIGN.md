@@ -381,7 +381,7 @@ D-741(Accepted)이 정한, 모든 웹 표면이 같이 쓸 자리다. Rosy Fleet
 |---|---|---|
 | 자리 순서 | 앱 바 → 레일 → 하위 탐색 → 경로 줄 → 본문 → 오른쪽 칸. 비움은 아래부터 | `shared/web/test/test_layout_canon.py` |
 | 제목 하나 | 문서의 h1은 경로 줄의 문서 제목 하나. 현재 화면은 경로 줄 strong + 하위 탐색 표식 | 〃 |
-| 표식 어휘 | `aria-current`는 표준 토큰 셋 — 문서·화면 `page`, 문서 안 단계 `step`, 현 화면을 담은 상위 단계 `true`(학습 검수). 탭 작업 공간은 `aria-selected` | 〃 |
+| 표식 어휘 | `aria-current`는 표준 토큰을 쓴다 — 문서·화면 `page`, 문서 안 단계 `step`, 문서 안 현재 위치 `location`, 현 화면을 담은 상위 단계 `true`(학습 검수). 탭 작업 공간은 `aria-selected` | 〃 |
 | 머리 조작 | 머리 줄의 조작은 공용 아이콘 단추. 테마 단추는 D-668 계정 접힘 안(2026-11-01 재확인) | `test_fleet_header.py` |
 | 흰 채움 하나 | 구획마다 primary 하나(D-926 7). 새 구획은 `ui-section` 네 역할 | D-926 보강 |
 | 붕괴 두 사다리 | 셸 64rem, 본문 48·30rem. 그 밖은 `surfaces.yaml` 허가 | `test_responsive_tiers.py` |
@@ -479,9 +479,10 @@ D-741(Accepted)이 정한, 모든 웹 표면이 같이 쓸 자리다. Rosy Fleet
 기존 공간 문법을 유지한다.
 
 [`task-chooser.js`](shared/web/task-chooser.js)와
-[`task-chooser.css`](shared/web/task-chooser.css)는 기존 segment/field/status를 조합한다.
-큰 창은 세로 작업 목록, 64rem 미만은 네이티브 선택이다. 현재 작업과 선택은 중립 표현을 쓰며
-현재 역할의 장미색 위치 표식(D-277)과 구별한다. 새 팔레트나 간격 척도를 추가하지 않는다.
+[`task-chooser.css`](shared/web/task-chooser.css)는 공용 하위 탐색과 status를 조합한다.
+같은 위계의 화면 링크와 작업 탭은 `.ui-subnav-nav`·`.ui-subnav-item`의 정렬·치수·선택·초점을 공유한다.
+링크는 주소로 이동하고 native button 탭은 mounted 패널을 전환한다. 좁은 배치는 같은 컨테이너 질의가 소유하며 별도 선택기로 바꾸지 않는다.
+현재 위치(`aria-current`)와 선택된 탭(`aria-selected`)은 같은 장미색 위치 표식을 쓴다. 실제 폼의 segment·권한·상태·위험 동작은 바꾸지 않는다.
 모든 허용 작업은 mounted 상태로 입력·결과를 유지한다. 표면이 manifest, 권한, 요청과
 `beforeHide`/polling을 소유하고 공용 선택기는 표현·초점·전환 잠금만 소유한다. 전환·종료
 거절이나 시간 초과 뒤에는 현재 작업을 유지한다. 정지는 작업 선택 영역 밖에서 계속 접근한다.
@@ -544,12 +545,12 @@ D-741(Accepted)이 정한, 모든 웹 표면이 같이 쓸 자리다. Rosy Fleet
 | --- | --- | --- |
 | 측정 행(이름–값) | `.ui-readout` · `.ui-readback` | 로봇 카드, Fleet 상세, 견본 |
 | 작업 목록 행 | `.ui-task-row` · `taskRow()` | 로봇 작업, Fleet 작업 선택 |
-| 절차 단계 | `.ui-stage-track` · `.ui-stage` | `applications/fleet/web/installation/install.html` · `applications/fleet/web/cell/cell.html` · `middleware/robot_ui/robot/styleguide.html` |
+| 절차 단계 | `.ui-stage-track` · `.ui-stage` | `applications/fleet/web/installation/install.html` · `applications/fleet/web/cell/cell.html` · `middleware/robot_ui/robot/styleguide.html` · `learning/curation/perception/review_app_web/learning.html` · `learning/curation/perception/review_app_web/index.html` · `learning/curation/perception/review_app_web/pixels.html` · `learning/curation/perception/review_app_web/omx.html` · `learning/curation/perception/review_app_web/vlm.html` |
 | 화면 머리 수치 띠 | `.ui-readout[data-form="strip"]` | `applications/fleet/web/work/policy.html` · `applications/fleet/web/cell/cell.html` · `middleware/robot_ui/robot/styleguide.html` · `middleware/robot_ui/robot/panels/host/system.js` |
 | 증거 블록 | `<ui-evidence>` · `<ui-empty>` | 로봇 카드, Fleet 큐 |
 | 절차 작업 열 | `.ui-sidebar` | 설치·정비, Fleet 작업 선택 |
 | 매체 칸 | `.ui-pane[data-pane]` | 로봇 셸, 감지·카메라 |
-| 세 칸 틀 | `.ui-stage-grid` | `applications/fleet/web/index.html` · `middleware/robot_ui/robot/styleguide.html` · `shared/web/template.html` |
+| 세 칸 틀 | `.ui-stage-grid` | `applications/fleet/web/index.html` · `learning/curation/perception/review_app_web/evaluate.html` · `middleware/robot_ui/robot/styleguide.html` · `shared/web/template.html` |
 
 ### 상단바 — `<ui-topbar>` (D-466)
 - 자리는 셋이다. `brand`(장미색 워드마크 + 조용한 부제), `cluster`(화면 전환·상태·조용한 도구), `estop`(오른쪽 끝 비상 정지). cluster 안의 순서는 표면이 정하고, 바깥 자리는 더 만들지 않는다.

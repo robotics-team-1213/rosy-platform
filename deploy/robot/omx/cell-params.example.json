@@ -253,6 +253,48 @@
    "source": "measured",
    "evidence": "the runner's EMPTY_MARGIN: empty jaws close to within 2 units of their target (grasp holding verdict)"
   },
+  "upkeep.jaw_gap": {
+   "value": 1.0,
+   "unit": "gripper",
+   "source": "measured",
+   "evidence": "2026-11-04 arm_a: library closed value 46.6, jaws stopped at 48.84 at PWM -150 (2.2 units short); empty jaws close to within windup.jaw_gap 2.0 of a reachable target, so a still, loaded gripper more than 1.0 short of its command means the target lies beyond the jaws' stop"
+  },
+  "jitter.hold_std": {
+   "value": 0.4,
+   "unit": "joint_unit",
+   "source": "measured",
+   "evidence": "jitter_replay.py over every real log on the field PC, 2026-11-03 (traces: arm_a only, 3.58 h of 10-27, 30 Hz, 2 s windows; health: arm_a 33.3 h, arm_b 5.3 h): hold windows (command still): present-around-command std p99.9 0.05, largest 0.28 (arm_a wrist_roll after the arm was handled, 0.6 crossings/s, lag 2.8) and 0.18 (shoulder_lift, same episode); 0.4 = 1.4x the largest and 8x p99.9, about 0.57 units (6 encoder counts) of swing; no real shaking episode exists in the logs, so this is a margin over normal, not a measured shake"
+  },
+  "jitter.hold_flips_hz": {
+   "value": 3.0,
+   "unit": "hz",
+   "source": "measured",
+   "evidence": "jitter_replay.py over every real log on the field PC, 2026-11-03 (traces: arm_a only, 3.58 h of 10-27, 30 Hz, 2 s windows; health: arm_a 33.3 h, arm_b 5.3 h): hold crossings/s of the 0.5 s-detrended present-sent: p99.9 0, largest 1.0 (shoulder_lift, a slow 1 Hz swing while handled); 3.0 means a sustained 1.5 Hz+ swing across the 0.2-unit deadband; both gates must hold"
+  },
+  "jitter.move_std": {
+   "value": 0.3,
+   "unit": "joint_unit",
+   "source": "measured",
+   "evidence": "jitter_replay.py over every real log on the field PC, 2026-11-03 (traces: arm_a only, 3.58 h of 10-27, 30 Hz, 2 s windows; health: arm_a 33.3 h, arm_b 5.3 h): moving windows: std p99.9 0.14, largest 0.15 (shoulder_lift park, lag 2.3); 18 windows with lag >= the strain test's 2.2 never exceeded std 0.28 / 0.64 crossings/s; 0.3 = 2x the largest"
+  },
+  "jitter.move_flips_hz": {
+   "value": 4.0,
+   "unit": "hz",
+   "source": "measured",
+   "evidence": "jitter_replay.py over every real log on the field PC, 2026-11-03 (traces: arm_a only, 3.58 h of 10-27, 30 Hz, 2 s windows; health: arm_a 33.3 h, arm_b 5.3 h): moving windows crossings/s: p99.9 1.5, largest 2.5 (shoulder_lift) and 2.0 (elbow goto above_3, wrist_flex park); 4.0 is 1.6x the largest, a sustained 2 Hz+ ripple"
+  },
+  "jitter.pwm_std": {
+   "value": 25,
+   "unit": "pwm",
+   "source": "measured",
+   "evidence": "jitter_replay.py over every real log on the field PC, 2026-11-03 (traces: arm_a only, 3.58 h of 10-27, 30 Hz, 2 s windows; health: arm_a 33.3 h, arm_b 5.3 h): 4 s standstill windows at ~4 Hz (aliases above 2 Hz): PWM std p99.9 at most 20.5 (arm_b elbow), 0 hits of both gates on any non-gripper joint over 39 h; the single-window maxima of 51-57 are motion onsets at command-still (flips only 0.28-0.57/s); the gripper is excluded because it dithers holding a box (std up to 29, 2.8 flips/s)"
+  },
+  "jitter.pwm_flips_hz": {
+   "value": 1.2,
+   "unit": "hz",
+   "source": "measured",
+   "evidence": "jitter_replay.py over every real log on the field PC, 2026-11-03 (traces: arm_a only, 3.58 h of 10-27, 30 Hz, 2 s windows; health: arm_a 33.3 h, arm_b 5.3 h): PWM sign changes/s about the window mean, non-gripper joints: largest 0.57 in 39 h (a 4 s window can show at most 4); 1.2 is 2x the largest"
+  },
   "loadcheck.risky_share": {
    "value": 0.5,
    "unit": "ratio",
@@ -636,6 +678,36 @@
    "unit": "px",
    "source": "tuned",
    "evidence": "2026-10-29: the re-mounted top camera moved 20-45 px (every map stale); a still camera matches its reference within ~1 px"
+  },
+  "zone.split_px": {
+   "value": 367.0,
+   "unit": "px",
+   "source": "measured",
+   "evidence": "2026-11-04 top view (D435, 640 px wide): the pallet spans x 265-470 px, its centre column 367 px; arm_b stands left of it, arm_a right"
+  },
+  "zone.middle_px": {
+   "value": 110.0,
+   "unit": "px",
+   "source": "theory",
+   "evidence": "2026-11-04: jaws opened to grip_open 62 span about 131 mm (65 mm each side of the target) and a map misses up to 14 mm; 79 mm at ~1.4 px/mm is 110 px, so nearly the whole pallet is middle and the arms take it in turns. Narrow it once the jaws open less"
+  },
+  "zone.wait_s": {
+   "value": 120.0,
+   "unit": "s",
+   "source": "default",
+   "evidence": "2026-11-04 default: a folded carry (pick, home, place, home) took 1-2 min on arm_b"
+  },
+  "zone.takeover": {
+   "value": 1,
+   "unit": "flag",
+   "source": "default",
+   "evidence": "2026-11-04 safety correction: accepted for configuration compatibility only; neither value enables peer-side takeover. HOLD and an idle session do not prove physical clearance."
+  },
+  "calibrate.max_loo_mm": {
+   "value": 15.0,
+   "unit": "mm",
+   "source": "measured",
+   "evidence": "leave-one-out max of kept maps: arm_b pallet 5.2 mm (2026-11-03), floor 13.6 mm (2026-10-30); arm_a's first pallet remap over the boxes was 52.3 mm (mean 26.8) and its marks contradicted each other (2026-11-04)"
   },
   "calibrate.bias_near_mm": {
    "value": 30.0,
