@@ -17,5 +17,7 @@
   const currentScreen = document.querySelector('.ui-subnav a[aria-current="page"]') ?? currentArea;
   screenLabel.hidden = false;
   screenLabel.textContent = (currentScreen?.textContent ?? "").trim();
-  document.documentElement.dataset.areaPending = "";  // console.js clears it once the panels are in place.
+  // console.js clears it once the panels are in place; the timer shows the page if console.js never runs.
+  document.documentElement.dataset.areaPending = "";
+  setTimeout(() => delete document.documentElement.dataset.areaPending, 2000);
 })();

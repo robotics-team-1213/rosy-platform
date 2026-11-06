@@ -92,7 +92,7 @@ def test_area_is_chosen_before_the_console_modules_and_never_hides_the_page(acco
     expect(page.locator('.ui-subnav[data-area=work]')).to_be_visible()
     expect(page.locator('#console-screen')).to_have_text('승인 대기')
     expect(page.locator('#estop')).to_be_visible()
-    # console.js never ran, so the CSS alone must bring the panels back.
+    # console.js never ran, so area-first's own timer must bring the panels back.
     expect(page.locator('#fleet-main')).to_have_css('visibility', 'visible', timeout=5000)
 
 
