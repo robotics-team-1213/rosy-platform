@@ -15,7 +15,7 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
-from fakes import FakeRobot, fresh_battery
+from fakes import FakeRobot, fresh_battery, fresh_power_health
 from fleet.hub.hub import HubError
 from fleet.routing.execute import plan_body
 from fleet.routing.trip import PlanRequest, plan_trip
@@ -1089,6 +1089,7 @@ def test_http_robot_client_line_follow_junction_hits_the_core_path():
 
 def _app(tmp_path, ports):
     robot = FakeRobot("rosy_60")
+    robot.power_health_value = fresh_power_health()  # deliberate: the start gate needs fresh battery evidence
     console = FleetConsole([RobotEndpoint("rosy_60", "http://127.0.0.1:8080", "t")], [robot])
     tasks = FleetTaskService(FleetTaskStore(tmp_path / "tasks.sqlite"), robot_ids={"rosy_60"})
     store = SiteMapStore(tmp_path / "tasks.sqlite")
