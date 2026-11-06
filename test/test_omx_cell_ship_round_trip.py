@@ -15,6 +15,7 @@ OMX = Path(__file__).parents[1] / "deploy/robot/omx"
 sys.path.insert(0, str(OMX))
 try:
     import cell_auto_pick as auto
+    import cell_auto_setup
     import cell_jaw_axis
     import cell_objects
     import cell_pipeline_io as cio
@@ -129,6 +130,61 @@ def test_map_from_a_site_without_a_map_is_refused():
         cell_pivot.with_site_maps({"sites": {"strip": {"map_from": "pallet"}}}, {"sites": {}})
 
 
+@pytest.mark.parametrize("bias", [[29.6, 0.0], [float("nan"), 0.0], [0.0, float("inf")], [True, 0.0], [1.0]])
+def test_invalid_saved_and_in_memory_bias_is_refused_instead_of_using_zero(tmp_path, bias):
+    region = {"site": "ship", "point_m": [0.12, 0.015], "bias_mm": bias}
+    data = {"schema": cell_pivot.SCHEMA, "regions": [region]}
+    path = tmp_path / "map.bias.json"
+    path.write_text(json.dumps(data))
+    original = path.read_bytes()
+    with pytest.raises(ValueError, match="bias refused"):
+        cell_pivot.load_bias(path)
+    with pytest.raises(ValueError, match="bias refused"):
+        cell_pivot.bias_at(data, "ship", OBJECT["raw_m"])
+    with pytest.raises(ValueError, match="bias refused"):
+        auto.self_calibrate(None, {}, {}, tmp_path / "map.json", "ship", OBJECT["raw_m"], [], tmp_path,
+                            data, None, None)
+    with pytest.raises(ValueError, match="bias refused"):
+        cell_pivot.save_bias(path, region)
+    assert path.read_bytes() == original
+
+
+def test_bias_boundary_and_the_active_bound_apply_to_read_write_and_lookup(tmp_path):
+    path = tmp_path / "map.bias.json"
+    region = {"site": "ship", "point_m": OBJECT["raw_m"], "bias_mm": [15.0, 20.0]}
+    cell_pivot.save_bias(path, region)
+    assert cell_pivot.bias_at(cell_pivot.load_bias(path), "ship", OBJECT["raw_m"]) == region
+    tight = {"pivot.max_bias_mm": 24.9}
+    with pytest.raises(ValueError, match="pivot.max_bias_mm"):
+        cell_pivot.load_bias(path, tight)
+    region["bias_mm"] = [29.6, 0.0]
+    measured = {"pivot.max_bias_mm": 30.0}
+    cell_pivot.save_bias(path, region, measured)
+    assert cell_pivot.bias_at(cell_pivot.load_bias(path, measured), "ship", OBJECT["raw_m"], params=measured) == region
+
+
+def test_invalid_bias_cannot_reach_the_pick_coordinate_planner(tmp_path, monkeypatch):
+    monkeypatch.setattr(auto.cp, "write_library", lambda *a: pytest.fail("invalid bias reached the planner"))
+    with pytest.raises(ValueError, match="pivot.max_bias_mm"):
+        auto.plan_pick({}, "ship", "table", (0.0, 0.0), OBJECT, ENTRY, 0, (29.6, 0.0), tmp_path)
+    assert not list(tmp_path.iterdir())
+
+
+@pytest.mark.parametrize("seen", [[29.6, 0.0], [float("nan"), 0.0]])
+def test_a_nearby_place_does_not_teach_an_invalid_absolute_bias(tmp_path, seen):
+    path = tmp_path / "map.json"
+    # Both pass the old distance-only rule against the last 24 mm correction.
+    verify = {"found": True, "seen_bias_mm": seen, "used_bias_mm": [24.0, 0.0]}
+    assert auto.learn_bias({}, path, "ship", OBJECT["raw_m"], verify) is None
+    assert not cell_pivot.bias_path(path).exists()
+
+
+def test_nonfinite_region_position_cannot_hide_a_bias_from_lookup():
+    data = {"regions": [{"site": "ship", "point_m": [float("nan"), 0.0], "bias_mm": [1.0, 0.0]}]}
+    with pytest.raises(ValueError, match="point_m"):
+        cell_pivot.bias_at(data, "ship", OBJECT["raw_m"])
+
+
 def test_a_shallow_grip_stated_by_the_site_sets_both_the_pick_and_the_release_height(tmp_path, monkeypatch):
     config = {"plan": {"approach_m": 0.04}, "params": WIDE,
               "sites": {"ship": {"surface_z": -0.0167, "yaw_deg": 0.0, "grasp_depth_m": 0.0083},
@@ -157,7 +213,7 @@ def view():
 ROI, BASE_PX, TARGET_PX = (285, 185, 425, 420), (200, 230), (315, 250)
 
 
-def test_a_box_pushed_outside_the_arms_corridor_stops_the_hover():
+def test_a_box_pushed_past_the_target_stops_the_hover():
     pushed = view()
     cv2.rectangle(pushed, (380, 200), (410, 300), (170, 170, 170), -1)  # the far box left its place
     cv2.rectangle(pushed, (415, 200), (424, 300), (30, 90, 220), -1)
@@ -165,7 +221,7 @@ def test_a_box_pushed_outside_the_arms_corridor_stops_the_hover():
     assert answer["verdict"] == "refuse" and answer["moved"] and "scene changed" in answer["why"]
 
 
-def test_the_arm_in_its_corridor_and_a_brightness_shift_pass():
+def test_the_arm_short_of_the_target_side_and_a_brightness_shift_pass():
     frame = np.clip(view().astype(int) + 25, 0, 255).astype(np.uint8)
     cv2.circle(frame, TARGET_PX, 60, (20, 20, 20), -1)  # the wrist over the target
     cv2.line(frame, BASE_PX, TARGET_PX, (20, 20, 20), 40)  # the link
@@ -173,7 +229,7 @@ def test_the_arm_in_its_corridor_and_a_brightness_shift_pass():
     assert answer["verdict"] == "pass" and answer["total_mm"] == 0.0
 
 
-def test_a_guard_without_a_corridor_does_not_let_the_carry_go_on():
+def test_a_guard_without_a_base_pixel_does_not_let_the_carry_go_on():
     cell = types.SimpleNamespace(frame=lambda name: pytest.fail("nothing to compare"))
     assert cell_scene_guard.hook(cell, {}, view(), ROI, None, TARGET_PX)()["verdict"] == "refuse"
 
@@ -253,3 +309,81 @@ def test_an_implausible_or_unknown_declaration_is_refused(catalog, kg):
         cell_scale.declare(catalog, ENTRY["id"], kg, "user")
     with pytest.raises(SystemExit, match="unknown object"):
         cell_scale.declare(catalog, "nothing", 0.016, "user")
+
+
+def test_the_jaw_axis_tool_refuses_without_a_person_and_hands_load_config_a_path(tmp_path, monkeypatch):
+    with pytest.raises(SystemExit, match="D-911"):
+        cell_jaw_axis.main(["--config", "x.json", "--site", "s", "--point", "0,0", "--yaw", "-40"])
+    config = {"calibration_path": str(tmp_path / "cal.json"), "io": str(tmp_path), "cameras": {}, "work_dir": str(tmp_path), "sites": {}}
+    (tmp_path / "cal.json").write_text(json.dumps({"schema": "rosy.omx-cell-calibration.v1", "sites": {}}))
+    path = tmp_path / "cell.json"
+    path.write_text("{}")
+    monkeypatch.setattr(cell_auto_setup,
+                        "load_config", lambda p: (p.read_text(), config)[1])
+    monkeypatch.setattr(cell_jaw_axis, "measure", lambda *a, **k: {"result": "measured"})
+    argv = ["--config", str(path), "--site", "s", "--point", "0.07,-0.06", "--yaw", "-40", "-80", "--commissioning", "--person-at-switch"]
+    assert cell_jaw_axis.main(argv) == 0
+
+
+class Jaws:
+    """A runner with jaws that open along tool yaw + `true_offset`, seen from above with arm mm = image px."""
+
+    def __init__(self, true_offset):
+        self.true_offset, self.grip, self.yaw, self.commands = true_offset, 50.0, 0.0, []
+
+    def act(self, command):
+        self.commands.append(command)
+        if command.startswith("load "):
+            self.yaw = json.loads(Path(command.split(" ", 1)[1]).read_text())["yaw"]
+        if command.startswith("grip "):
+            self.grip = float(command.split()[1])
+        return {"ok": True, "state": [self.yaw, 0, 0, 0, 0, self.grip]}
+
+    def frame(self, camera):
+        img = np.full((480, 640, 3), 200, np.uint8)
+        u, gap = np.radians(self.yaw + self.true_offset), 10 + 3 * (self.grip - 50)
+        for side in (-1, 1):
+            cv2.circle(img, (int(320 + side * gap * np.cos(u)), int(240 + side * gap * np.sin(u))), 9, (20, 20, 20), -1)
+        return img
+
+
+@pytest.mark.parametrize("true_offset", [90.0, 0.0])
+def test_measure_finds_the_real_axis_at_every_yaw_and_folds(tmp_path, monkeypatch, true_offset):
+    def write(config, pick, place, path):
+        path.write_text(json.dumps({"yaw": pick["yaw_deg"]}))
+        return path
+
+    monkeypatch.setattr(auto.cp, "write_library", write)
+    monkeypatch.setattr(cell_pivot, "joints_tcp", lambda state: (0.1, 0.0, 0.1, state[0]))
+    monkeypatch.setattr(cell_pivot, "mark_pixel", lambda *a: (320, 240))
+    monkeypatch.setattr(cell_pivot, "mark_to_arm", lambda record, config, site, p, z: (p[0] / 1000, p[1] / 1000))
+    cell = Jaws(true_offset)
+    config = {"plan": {"approach_m": 0.04, "grip_open": 62.0}, "coarse": {"z_view": 0.1}, "sites": {"s": {"z": 0.1}}}
+    result = cell_jaw_axis.measure(cell, config, {"sites": {"s": {"homography": []}}}, "s", (0.1, 0.0), [-90.0, -75.0], tmp_path,
+                                   lambda s: None, lambda row: None)
+    assert result["result"] == "measured", result
+    assert abs(cell_jaw_axis.wrap90(result["closing_axis_offset_deg"] - true_offset)) < 6
+    assert cell.commands[-1] == "park"
+
+
+def test_measure_stops_and_folds_when_the_arm_refuses_to_go():
+    class Refuses(Jaws):
+        def act(self, command):
+            status = super().act(command)
+            return {"ok": False, "contact": True} if command == "goto above_pick" else status
+
+    def write(config, pick, place, path):
+        path.write_text(json.dumps({"yaw": pick["yaw_deg"]}))
+        return path
+
+    cell, pause = Refuses(90.0), []
+    original, auto.cp.write_library = auto.cp.write_library, write
+    try:
+        config = {"plan": {"approach_m": 0.04}, "coarse": {"z_view": 0.1}, "sites": {"s": {"z": 0.1}}}
+        import tempfile
+        with tempfile.TemporaryDirectory() as folder:
+            result = cell_jaw_axis.measure(cell, config, {"sites": {"s": {"homography": []}}}, "s", (0.1, 0.0), [-90.0], Path(folder), pause.append)
+    finally:
+        auto.cp.write_library = original
+    assert result["result"] == "not agreed" and result["rows"] == [{"yaw": -90.0, "stopped": "goto above_pick"}]
+    assert cell.commands[-1] == "park"

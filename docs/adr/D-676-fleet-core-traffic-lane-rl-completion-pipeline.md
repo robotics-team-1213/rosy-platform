@@ -67,6 +67,10 @@ Isaac ordered 경로는 두 도로를 reverse 방향으로 지나 합법적인 N
 
 실제 두 대 Gazebo 정지 센서 시험에서 기존 D-426 예약 범위 120..199의 domain 172가 CORE의 0..101 검증에 거절됐다. 검증용 예약·run_spec·sim 전용 watchdog 범위를 80..99로 수정하고 기존 일반 sim 난수 범위는 20..79로 분리한다. 기존 manifest를 새 범위로 몰래 재해석하지 않고 새 run을 예약한다. localhost DDS·partition·신원·포트/domain 충돌 검사를 유지한다. 실제 로봇의 40+N과 수치상 겹칠 수 있으므로 범위 자체를 장치 격리 증거로 쓰지 않는다. CORE 안전 범위와 FOREIGN_NAMESPACE 진단은 변경하지 않는다. 예약 값의 CORE/launch 수용 및 watchdog 경계·만료 시험을 함께 수행한다. 이 수정과 정지 센서 확인은 Fleet 통행권·주행·RL 완주를 증명하지 않는다.
 
+### Addendum 2026-11-06 — 시뮬 domain을 로봇 범위 아래로 분리
+
+Fleet 통신 점검에서 실물 로봇 domain(40+N, N은 1..61이라 41..101)이 검증 시뮬 80..99와 겹침을 확인했다. localhost 격리가 한 군데라도 깨지면 시뮬과 실물이 같은 domain에 묶인다. 사용자 결정으로 검증 시뮬(allocator·run_spec·sim 전용 watchdog·native SIM binding)은 20..29, `tools/run_fleet_sim.sh` 난수는 32..40으로 옮긴다. 범용 `remote_sim.py` 1..19와 OMX 30/31은 그대로다. CORE의 0..101 검증 안에 들어야 하므로 로봇 범위 위로는 옮기지 않는다. 80..99로 만든 기존 run은 새 범위로 재해석하지 않고 새 run을 예약한다. 이 변경은 격리를 대신하지 않으며 D-795의 localhost 규칙은 그대로다. 겹침은 `test/test_fleet_gazebo_run_contracts.py`가 막는다.
+
 ### Addendum 2026-10-12 — 공유 바닥 시각 자산 재현
 
 R23 실제 카메라와 소스 비교에서 Isaac의 단색 바닥과 Gazebo training-curved world의 카펫 재질 차이를 확인했다. 기존 학습 모델 pin은 동일하다. Isaac은 같은 world의 카펫 18개·기준 사각형 4개·도킹 표식 1개의 pose·크기·색상과 기존 PNG를 읽어 시각 plane을 생성한다. 검증되지 않은 parent 회전, 비정상 geometry·pose, 맵 밖이나 누락된 텍스처는 렌더 전에 거절한다. 기존 벽 collision·페인트·주의 표식 생성과 CORE·camera admission·무효 관측 학습 제외는 유지한다.

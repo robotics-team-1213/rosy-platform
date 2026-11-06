@@ -27,7 +27,7 @@ def _setup(transform=(0., 0., 0.)):
     binding = m.NativeGazeboBinding(
         run_id='owned-run-1', epoch=1, world='map_v2_fleet', map_id='map_v2_fleet',
         map_revision=1, source_revision='a' * 40, world_sha256='b' * 64,
-        graph_sha256='c' * 64, urdf_sha256='d' * 64, domain_id=89,
+        graph_sha256='c' * 64, urdf_sha256='d' * 64, domain_id=25,
         partition='owned-partition-1', map_from_world=transform,
         robots=(m.NativeRobotBinding('rosy_02', 'rosy_02', 'rosy_02/odom'),))
     core = {'robot_id': 'rosy_02', 'odom_pose': dict(x=1., y=2., yaw=.3, stamp=1000.)}
@@ -122,7 +122,7 @@ def test_declared_world_to_map_transform_is_applied():
 @pytest.mark.parametrize('field,value', [
     ('run_id', 'foreign'), ('epoch', 2), ('world', 'foreign'), ('map_id', 'other'),
     ('map_revision', 2), ('source_revision', 'e' * 40), ('world_sha256', 'e' * 64),
-    ('graph_sha256', 'e' * 64), ('urdf_sha256', 'e' * 64), ('domain_id', 90),
+    ('graph_sha256', 'e' * 64), ('urdf_sha256', 'e' * 64), ('domain_id', 26),
     ('partition', 'foreign'), ('map_from_world', (1., 0., 0.)),
 ])
 def test_foreign_binding_latches_unknown(field, value):

@@ -246,6 +246,7 @@ def plan_pick(config: dict, site: str, dest_site: str, place_xy, o: dict, entry:
               yaw: float | None = None, place_yaw: float | None = None):
     """Library for one candidate: grasp 15 mm below the top, approach 40 mm above it (else 20), the yaw and its
     180 degree twin tried in turn. Returns (library path, pick, place, approach_m, yaw) or an error string."""
+    cell_pivot.validate_bias({"point_m": o["raw_m"], "bias_mm": bias_mm}, config.get("params"))
     height = entry["top_height_mm"] / 1000 - grasp_depth(config, site)
     x, y = (o["raw_m"][0] - bias_mm[0] / 1000, o["raw_m"][1] - bias_mm[1] / 1000)
     yaw0, error = (grasp_yaw(config, site, o, entry, offset) if yaw is None else yaw), "no plan"
@@ -435,7 +436,7 @@ def run_auto(cell, config, calibration, calibration_path, catalog, roi, source, 
     guarded = None if dry_run else Guarded(cell, config)
     if guarded is not None and not cell.act("state").get("ok"):
         return {"result": "refused", "error": "start record_session.py --chunks first: no chunk_runner answers"}
-    bias_data = cell_pivot.load_bias(cell_pivot.bias_path(calibration_path))
+    bias_data = cell_pivot.load_bias(cell_pivot.bias_path(calibration_path), config.get("params"))
     episode, failed_yaws, dest_view = None, [], None
     if droi is not None and dest_site != source:  # what is already on the destination (cell_place_fit)
         _, dmask, _, derr = observe(cell, config, calibration, dest_site, droi, catalog)
