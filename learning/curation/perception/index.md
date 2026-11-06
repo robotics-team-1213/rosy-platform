@@ -27,8 +27,8 @@
 
 ## 최근 기록
 
+- 2026-11-06 · uncommitted · uiux(learning): 실패 이유 표시와 실패·거절 구분
+- 2026-11-06 · uncommitted · uiux(learning): 객체 저장이 서버에 닿기 전 이탈 경고
+- 2026-11-06 · uncommitted · uiux(learning): 파괴·대체 확인을 공용 확인 창으로
 - 2026-11-05 · uncommitted · docs(learning): main 병합 뒤 AI 권한 가드와 Pixel 캡처 검증 결속
 - 2026-11-05 · b955085656 · docs(learning): 메뉴 여백9소비처와 캡처 가드의 검증 범위
-- 2026-11-05 · a27e97c186 · uiux: Learning 홈 하위 메뉴를 정본 subnav 자리에 배치
-- 2026-11-05 · a4a0251917 · fix(learning): 지연 응답 중 검수·선택 상태 보호
-- 2026-11-03 · f987a0b10e · 상태 일관성 브라우저 시험의 실제 대기 지점

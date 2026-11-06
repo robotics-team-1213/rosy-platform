@@ -47,7 +47,7 @@ def test_viewer_manual_controls_stay_locked_and_send_no_move(console_url):
             expect(controls).to_have_count(4)
             for button in controls.all():
                 expect(button).to_be_disabled()
-                expect(button).to_have_attribute("reason", "운영자 권한이 필요합니다")
+                expect(button).to_have_attribute("reason", "위 사유")
             expect(page.locator("[data-manual-reason]")).to_contain_text("운영자 권한이 필요합니다")
             button = page.locator('[data-manual-direction="forward"]')
             button.hover()
@@ -292,4 +292,69 @@ def test_dispatch_change_stops_hold_with_terminal_zero(console_url, changed):
         assert len(sent) == count
         assert not errors
         page.mouse.up()
+        browser.close()
+
+
+def test_panel_separates_missing_from_old_and_names_the_stale_evidence(console_url):
+    from playwright.sync_api import expect, sync_playwright
+
+    api = _api()
+    robots = api["/api/fleet/state"]["robots"]
+    del robots[0]["state_age_s"]
+    robots[1]["state"]["evidence"]["pose"] = {"evidence": "delayed"}
+    with sync_playwright() as playwright:
+        browser, page, errors = _open_console(playwright, api)
+        page.goto(console_url, wait_until="load")
+        _open_cards(page, "rosy_45")
+        reason = page.locator("[data-manual-reason]")
+        expect(reason).to_contain_text("시각을 받지 못했습니다")
+        _open_cards(page, "rosy_46")
+        expect(reason).to_contain_text("위치 지연 · 최신 관측을 기다립니다")
+        expect(page.locator("[data-manual-pose]")).to_contain_text("위치 관측 지연")
+        expect(page.locator('[data-manual-direction="forward"]')).to_have_attribute("reason", "위 사유")
+        assert not errors
+        browser.close()
+
+
+def test_two_second_limit_says_why_and_the_pad_is_a_first_screen_square(console_url):
+    from playwright.sync_api import expect, sync_playwright
+
+    with sync_playwright() as playwright:
+        browser, page, errors = _open_console(playwright, _api())
+        page.set_viewport_size({"width": 1366, "height": 768})
+        page.goto(console_url, wait_until="load")
+        _open_cards(page, "rosy_45")
+        forward = page.locator('[data-manual-direction="forward"]')
+        expect(forward).to_be_enabled()
+        expect(page.locator("[data-manual-pose]")).to_contain_text("위치 관측 최신")
+        expect(page.locator("[data-manual-pose]")).to_contain_text("0.00, 0.00")
+        rects = page.locator("[data-manual-direction]").evaluate_all("nodes => nodes.map(n => n.getBoundingClientRect().toJSON())")
+        assert {round(rect["width"]) for rect in rects} == {round(rects[0]["width"])}, rects
+        assert len({round(rect["y"]) for rect in rects}) == 2, rects  # 2×2, never 3+1
+        assert max(rect["bottom"] for rect in rects) <= 768, rects
+        page.route("**/api/fleet/do", lambda route: route.fulfill(json={"accepted": True}))
+        forward.hover()
+        page.mouse.down()
+        expect(page.locator("[data-manual-reason]")).to_contain_text("2초 한도로 멈췄습니다", timeout=5000)
+        page.mouse.up()
+        assert not errors
+        browser.close()
+
+
+def test_unknown_stop_state_is_not_called_an_engaged_emergency_stop(console_url):
+    from playwright.sync_api import expect, sync_playwright
+
+    api = _api()
+    robots = api["/api/fleet/state"]["robots"]
+    robots[0]["state"]["safety"] = None
+    robots[1]["state"]["safety"]["estop"] = True
+    with sync_playwright() as playwright:
+        browser, page, errors = _open_console(playwright, api)
+        page.goto(console_url, wait_until="load")
+        _open_cards(page, "rosy_45")
+        reason = page.locator("[data-manual-reason]")
+        expect(reason).to_contain_text("정지 상태를 확인할 수 없습니다")
+        _open_cards(page, "rosy_46")
+        expect(reason).to_contain_text("비상정지 상태를 확인하고 해제하세요")
+        assert not errors
         browser.close()

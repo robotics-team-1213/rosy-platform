@@ -142,7 +142,7 @@ function drawGraph(packet, links, map) {
   const counts = new Map(), points = new Map(); let width = 640, height = 180;
   for (const id of ids) { const level = levels.get(id) ?? 1, index = counts.get(level) || 0; counts.set(level, index + 1);
     const point = {x: 20 + level * 240, y: 24 + index * 84}; points.set(id, point); width = Math.max(width, point.x + 220); height = Math.max(height, point.y + 84); }
-  const graph = $('graph'); graph.replaceChildren(); graph.setAttribute('viewBox', `0 0 ${width} ${height}`);
+  const graph = $('graph'); graph.replaceChildren(); graph.setAttribute('viewBox', `0 0 ${width} ${height}`); graph.setAttribute('width', width); graph.setAttribute('height', height);
   for (const link of chosen) { const a = points.get(link.source_id), b = points.get(link.target_id); if (!a || !b) continue;
     graph.append(svg('path', {d: `M${a.x + 190},${a.y + 24} C${a.x + 220},${a.y + 24} ${b.x - 30},${b.y + 24} ${b.x},${b.y + 24}`,
       class: 'edge' + (evidence(link) !== 'fresh' ? ' old' : link.failure_stage !== 'none' ? ' problem' : '')})); }

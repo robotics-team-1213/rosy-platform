@@ -166,7 +166,7 @@ export function mountDrive(root, {onExit, profile: given, unsupported = []} = {}
     }
     element.controls.toggleAttribute("data-locked", lock);
     element.controls.setAttribute("aria-disabled", String(lock));
-    for (const button of element.controls.querySelectorAll("ui-button")) button.disabled = lock;
+    for (const button of element.controls.querySelectorAll("ui-button")) { button.disabled = lock; if (lock) button.setAttribute("reason", "위 사유"); else button.removeAttribute("reason"); }
   }
 
   // --- 상태 채널: /ws/state(auth 첫 프레임) + REST teleop -------------------

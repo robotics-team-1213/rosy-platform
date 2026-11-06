@@ -386,6 +386,8 @@ def test_shared_readback_section_preserves_heading_gap_at_mobile_width():
               display: getComputedStyle(section).display,
               gap: getComputedStyle(section).rowGap,
               titleMargin: getComputedStyle(section.querySelector('h3')).marginBlockStart,
+              titleSize: getComputedStyle(section.querySelector('h3')).fontSize,
+              titleWeight: getComputedStyle(section.querySelector('h3')).fontWeight,
             })""")
             page.close()
         browser.close()
@@ -394,6 +396,8 @@ def test_shared_readback_section_preserves_heading_gap_at_mobile_width():
     assert results[1440]["display"] == "grid"
     assert results[1440]["gap"] != "normal"
     assert results[1440]["titleMargin"] == "0px"
+    # 카드 안 소제목은 닫힌 글자 단계다. 브라우저 기본 h3(18.72px)면 카드 제목보다 커진다.
+    assert (results[1440]["titleSize"], results[1440]["titleWeight"]) == ("14px", "600")
     assert results[390]["overflow"] == 0
     assert results[390]["width"] <= 390
     assert results[390]["minWidth"] == "0px"
@@ -432,3 +436,31 @@ def test_map_evidence_labels_wrap_inside_their_slot_without_hiding_stop():
             assert result['overflow'] <= 0 and result['stageFits'] and result['labelsFit'] and result['stopVisible'], (width, result)
             page.close()
         browser.close()
+
+
+@pytest.mark.parametrize("width", (390, 320))
+def test_mode_control_is_one_equal_row_and_the_current_mode_is_not_dimmed(width):
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        page = _page(browser, width, 844)
+        page.locator("#surface-main").evaluate("""node => { node.innerHTML = `
+          <ui-actions class='surface-actions mode-actions'>
+            <ui-button kind='segment' disabled aria-pressed='true'>수동</ui-button>
+            <ui-button kind='segment' disabled aria-pressed='false'>대기</ui-button>
+            <ui-button kind='segment' aria-pressed='false'>내비게이션</ui-button>
+          </ui-actions>`; }""")
+        result = page.evaluate("""() => {
+          const buttons = [...document.querySelectorAll('.mode-actions ui-button')];
+          return {overflow: document.documentElement.scrollWidth - innerWidth,
+            rects: buttons.map(node => node.getBoundingClientRect().toJSON()),
+            opacity: buttons.map(node => getComputedStyle(node).opacity)};
+        }""")
+        browser.close()
+
+    rects = result["rects"]
+    assert result["overflow"] == 0
+    assert {round(rect["y"]) for rect in rects} == {round(rects[0]["y"])}, rects
+    assert max(rect["width"] for rect in rects) - min(rect["width"] for rect in rects) <= 1, rects
+    assert all(rect["right"] <= width for rect in rects), rects
+    # 지금 값(눌림)은 또렷하고, 사유 없이 꺼진 칸만 흐리다.
+    assert float(result["opacity"][0]) == 1 and float(result["opacity"][1]) < 1, result["opacity"]

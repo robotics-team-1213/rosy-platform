@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from browser_harness import browser_tests_enabled
+from browser_harness import browser_tests_enabled, confirm_irreversible
 from review_app import Conflict
 import review_masks
 from test_review_flow_browser import browser_workspace
@@ -112,8 +112,8 @@ def test_context_fill_preserves_undo_and_one_complete_click_approves_then_advanc
     expect(page.locator('#pixel-approve')).to_be_disabled()
     page.locator('#pixel-sample-clear').click()
     expect(page.locator('#pixel-approve')).to_be_enabled()
-    page.once('dialog', lambda dialog: dialog.accept())
     context.locator('#pixel-resolve-background').click()
+    confirm_irreversible(page)
     expect(page.locator('#pixel-status')).to_contain_text('v2')
     expect(page.locator('#pixel-approve')).to_be_focused()
     assert review_masks.get(store, 0)['status'] == 'pending'
