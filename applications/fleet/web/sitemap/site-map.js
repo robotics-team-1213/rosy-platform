@@ -112,7 +112,8 @@ function render() {
       el('polygon', {class: 'start-heading', points: '26,0 12,-7 12,7',
         transform: `translate(${px} ${py}) rotate(${view.rotateDeg(place.yaw)})`}, svg);
     }
-    el('text', {x: px + 12, y: py - 10, class: 'label'}, svg).textContent = index + 1;
+    // Name, not just an ordinal: the map is where the operator picks a destination, and touch has no <title>.
+    el('text', {x: px + 12, y: py - 10, class: 'label'}, svg).textContent = `${index + 1} ${place.name.length > 8 ? `${place.name.slice(0, 8)}…` : place.name}`;
   }
   drawFacilities(svg, map, view);
   if (survey.points().length) el('polyline', {points: line(survey.points()), class: 'teach'}, svg);
@@ -287,7 +288,7 @@ async function load() {
   catch { calibrations = []; }
   updatePlaneSources();
   $('trip-place').replaceChildren(...(state.active?.map.places || [])
-    .map(place => new Option(`${place.name} (${place.id})`, place.id)));
+    .map((place, index) => new Option(`${index + 1} ${place.name}${place.name === place.id ? '' : ` (${place.id})`}`, place.id)));
   $('trip-robot').replaceChildren(...robots.map(robot => {
     const safety = robot.state?.safety?.estop;
     const stateLabel = !robot.online ? '연결 끊김' : safety === true ? '비상 정지'
@@ -305,7 +306,11 @@ async function load() {
 }
 
 async function guarded(work) {
-  try { await work(); } catch (error) { notice(siteMapErrorText(error)); }
+  try { await work(); } catch (error) {
+    // Reconnecting would discard the edit, so a failed action must not say so; the save button can be far from #notice.
+    notice(error.status >= 500 ? '요청을 처리하지 못했습니다 · 화면의 편집은 그대로입니다. 잠시 뒤 다시 시도하세요' : siteMapErrorText(error));
+    $('notice').scrollIntoView({block: 'center'});
+  }
   syncButtons();
 }
 

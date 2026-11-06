@@ -108,7 +108,7 @@ async function load() {
     button.addEventListener('click', () => edit(row));
     const tag = document.createElement('ui-tag'); tag.setAttribute('status', row.enabled ? 'neutral' : 'warn');
     tag.textContent = row.enabled ? '사용 중' : '정지됨';
-    for (const value of [row.login, row.principal_id || '—', row.role || '—', tag, button]) {
+    for (const value of [row.login, row.principal_id || '—', [...$('account-role').options].find(option => option.value === row.role)?.textContent || row.role || '—', tag, button]) {
       const cell = document.createElement('td'); cell.append(value); item.append(cell);
     }
     $('account-list').append(item);
