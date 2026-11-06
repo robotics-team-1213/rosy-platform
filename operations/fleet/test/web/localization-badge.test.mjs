@@ -88,7 +88,7 @@ test("the card's position chip speaks what places the robot, and a missing CORE 
   const guide = (pose) => ({ robot_id: "rosy_01", pose });
   // Fleet's site map pose first, even when CORE reports nothing (lane following without Nav2).
   assert.deepEqual(positionTag(legacy, guide({ x: 0.69, y: -0.44, state: "LOCALIZED", source: "sighting" })),
-    { text: "지도 위치 확정 · 카메라", cls: "", title: "Fleet map pose: LOCALIZED · sighting" });
+    { text: "지도 위치 확정 · 카메라", cls: "", title: "Fleet 지도 위치: 확정 · 카메라" });
   assert.equal(positionTag(row(), guide({ x: 1, y: 2, state: "DEGRADED", source: "bridged" })).text, "지도 위치 추정 · odom 이음");
   // No Fleet pose: CORE's own state when CORE reports one.
   assert.deepEqual(positionTag(row(), guide(null)), localizationTag(row()));

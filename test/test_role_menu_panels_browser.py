@@ -190,7 +190,7 @@ def test_setup_localization_preserves_pending_pose_and_slam_actions_during_capab
         start.dispatch_event("click")
         assert slam_buttons.evaluate_all("nodes => nodes.every(node => node.disabled)")
         assert slam_status.inner_text() == pending_slam_feedback
-        assert "초기 위치 설정 요청을 CORE가 받았습니다" in pose_status.inner_text()
+        assert "초기 위치 설정 요청을 로봇이 받았습니다" in pose_status.inner_text()
         assert page.evaluate("window.__calls") == [
             {"path": "/api/v1/localization/initialpose", "method": "POST"},
             {"path": "/api/v1/slam/start", "method": "POST"},
@@ -257,7 +257,7 @@ def test_console_line_follow_readback_failure_and_action_feedback_are_independen
         assert "OFF" not in panel.locator("ui-status").first.inner_text()
         assert "IR_LINE" not in action.inner_text() and "적외선 센서" in action.inner_text()
         assert action.inner_text() != pending_feedback
-        assert "CORE" in action.inner_text()
+        assert "로봇이 받았습니다" in action.inner_text()
         assert page.evaluate("window.__calls") == [{
             "path":"/api/v1/line-follow/mode","method":"PUT","body":{"mode":"IR_LINE"},
         }]
@@ -314,7 +314,7 @@ def test_console_docking_locks_pending_commands_and_preserves_selected_dock():
         page.wait_for_function("previous => [...document.querySelectorAll('ui-status[role=status]')].at(-1)?.textContent !== previous", arg=pending)
         assert not panel.locator("select").is_disabled()
         success = action.inner_text()
-        assert "CORE" in success
+        assert "로봇이 받았습니다" in success
         page.evaluate("window.__callbacks['/api/v1/docking/status'].onError(new Error('fixture docking status unavailable'))")
         assert "fixture docking status unavailable" in panel.locator("ui-status").first.inner_text()
         assert "UNDOCKED" not in panel.locator("dl").inner_text()
@@ -555,10 +555,10 @@ def test_console_mode_feedback_survives_state_and_capability_polling():
         assert status.nth(2).inner_text() == pending_feedback
         assert "대기" in status.nth(0).inner_text()
         page.evaluate("window.__resolveMode({accepted:true})")
-        page.wait_for_function("document.querySelectorAll('main > ui-status')[2]?.textContent.includes('CORE가 받았습니다')")
+        page.wait_for_function("document.querySelectorAll('main > ui-status')[2]?.textContent.includes('로봇이 받았습니다')")
         accepted_feedback = status.nth(2).inner_text()
         assert "대기" in status.nth(0).inner_text()
-        assert "CORE가 받았습니다" in accepted_feedback
+        assert "로봇이 받았습니다" in accepted_feedback
         page.evaluate("window.__callbacks['/api/v1/robot/state'].onData({mode:'MANUAL'})")
         page.evaluate("window.__callbacks['/api/v1/system/capabilities'].onError(new Error('fixture navigation unavailable'))")
         assert "수동" in status.nth(0).inner_text()
@@ -1360,14 +1360,14 @@ def test_console_map_readiness_freshness_and_action_feedback_are_independent():
         page.locator("canvas").press("Enter")
         page.locator("dialog.ui-confirm ui-button[kind=irreversible]").click()
         page.wait_for_function("window.__calls.some(call=>call.method==='POST')")
-        page.wait_for_function("[...document.querySelectorAll('#map-test-panel ui-status[role=status]')].at(-1)?.textContent.includes('CORE')")
+        page.wait_for_function("[...document.querySelectorAll('#map-test-panel ui-status[role=status]')].at(-1)?.textContent.includes('로봇이 받았습니다')")
         accepted = action.inner_text()
         page.evaluate("window.__intervals[10000]()")
         page.wait_for_timeout(50)
         assert action.inner_text() == accepted
 
         page.evaluate("window.__failPost(true); window.__intervals[10000]()")
-        page.wait_for_function("[...document.querySelectorAll('#map-test-panel ui-status[role=status]')].at(-1)?.textContent.includes('CORE')")
+        page.wait_for_function("[...document.querySelectorAll('#map-test-panel ui-status[role=status]')].at(-1)?.textContent.includes('로봇이 받았습니다')")
         page.locator('[data-map-click="goal"]').click()
         page.locator("canvas").press("Enter")
         page.locator("dialog.ui-confirm ui-button[kind=irreversible]").click()

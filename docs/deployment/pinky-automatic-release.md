@@ -49,13 +49,18 @@ CI 성공 후에만 ABI 검사·서명을 진행한다. main 이외 artifact와 
 publisher만 서명된 wave를 연다. 게시 직후 canary가 자동 설치를 시작할 수 있으므로
 운영 창 없이 예약 작업을 활성화하지 않는다. hold·보정·idle·정상 상태·롤백 가드는 유지한다.
 
-`delivery_held`는 `reason`을 읽는다. frozen OS 파일·서비스는 `os-image`이며 아래
-engineering 게시 opt-in이 없으면 대기한다. 이를 payload로 바꾸거나 BUILD GO를 우회하지 않는다.
+로봇에 관련된 변경은 이미지·미분류 경로가 섞여도 payload로 나가고, 꺼진 기체는 배달을
+막지 않는다([D-985](../adr/D-985-pinky-always-self-updates-to-latest-payload.md)). canary는 게시 때 적용 가능한
+기체로 고르며 없으면 `waiting_idle_canary`로 기다린다. 30분 안에 시작하지 않은 canary는 철회하지
+않고 `canary_not_started` 뒤 다른 유휴 기체로 바꾼다. 시작했을 수 있는 canary의 시한 초과와 롤백·거절은 철회한다.
+
+`delivery_held`는 비교 기준을 읽지 못했을 때만 남는다. `reason`을 읽는다.
 기존 거래 재개는 같은 source·tar digest·canary의 서명된 rollout 일치부터 검사한다.
 `canary_ok=false`, 실패·철회 또는 장치 대기를 성공으로 기록하지 않는다.
 
 ## OS engineering 게시
 
+OS 게시는 payload 전달이 끝난 같은 source에서, 마지막 OS Release 이후 frozen OS 입력이 바뀌었을 때 시작한다(D-985).
 OS 게시를 승인한 운영자는 private JSON에 `os_engineering: true`와
 `os_cms_private_key`를 추가한다. 후자는 기존 운영 PC의 CMS 개인키 **절대 경로**이며
 키나 private JSON을 저장소·GitHub runner에 복사하지 않는다. Ed25519 키는 기존

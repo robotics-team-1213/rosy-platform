@@ -102,3 +102,38 @@ def test_the_lock_is_released_when_the_bus_fails(reader, monkeypatch):
     with pytest.raises(OSError):
         adc.read_channels()
     assert calls[-1] == ("unlock", 5) and not state["locked"]
+
+
+def test_a_hung_bus_backs_off_instead_of_reopening_every_tick(reader, monkeypatch):
+    _adc, _calls, _state = reader
+    mod = sys.modules["control.ir_adc_node"]
+    opens = []
+
+    class Dead:
+        def __init__(self, *_):
+            opens.append(1)
+
+        def read_channels(self):
+            raise OSError(110, "Connection timed out")
+
+        def close(self):
+            pass
+
+    now = [0.0]
+    monkeypatch.setattr(mod, "_ADCReader", Dead)
+    monkeypatch.setattr(mod.time, "monotonic", lambda: now[0])
+    node = object.__new__(mod.IRADCNode)
+    node._reader, node._failures, node._retry_at = None, 0, 0.0
+    node.get_parameter = lambda _n: type("P", (), {"value": "8"})()
+    node.get_logger = lambda: type("L", (), {
+        "warning": staticmethod(lambda *a, **k: None), "info": staticmethod(lambda *a: None)})()
+
+    node._tick()
+    node._tick()                      # first failure reopens at once, second one backs off 2 s
+    assert len(opens) == 2
+    for _ in range(20):
+        node._tick()
+    assert len(opens) == 2
+    now[0] = 2.0
+    node._tick()
+    assert len(opens) == 3

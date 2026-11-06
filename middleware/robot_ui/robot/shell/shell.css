@@ -233,8 +233,8 @@ body:is([data-surface="setup"], [data-surface="device"]) .procedure-panel {
   #surface-switch .ui-rail-item:focus-visible { outline-offset: calc(0px - var(--focus-ring-width)); }
   #shell-estop { padding-inline: var(--space-3); }
   .surface-main { gap: var(--space-4); }
-  .surface-actions:is(.map-click-actions, .map-layer-actions) { flex-direction: row; width: 100%; }
-  .surface-actions:is(.map-click-actions, .map-layer-actions) > ui-button { flex: 1; width: auto; min-width: 0; padding-inline: var(--inset-button); }
+  .surface-actions:is(.map-click-actions, .map-layer-actions, .mode-actions) { flex-direction: row; width: 100%; }
+  .surface-actions:is(.map-click-actions, .map-layer-actions, .mode-actions) > ui-button { flex: 1; width: auto; min-width: 0; padding-inline: var(--inset-button); }
 }
 
 @media (width < 23rem) {

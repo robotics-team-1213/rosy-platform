@@ -165,7 +165,8 @@ def advance(c, sha, ci, reason=None):
         workflow = c.api("actions/workflows/" + WORKFLOW)
         if type(workflow.get("id")) is not int or workflow["id"] <= 0:
             raise ValueError("OS build workflow has no numeric identity")
-        baseline = {key: c.state[key] for key in ("deployed_sha", "delivery_base_sha", "payload_tarball") if key in c.state}
+        baseline = {key: c.state[key] for key in ("deployed_sha", "delivery_base_sha", "payload_tarball", "os_published_sha")
+                    if key in c.state}
         if c.state:
             c.audit("previous_transaction")
         c.state = {}

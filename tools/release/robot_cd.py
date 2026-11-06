@@ -30,6 +30,7 @@ ROOT = Path(__file__).resolve().parents[2]
 SHA = re.compile(r"[0-9a-f]{40}")
 MAX_STATE_DIR = 64
 RELEASE = re.compile(r"(?:payload-(?:reserved-|v2-)?)?(\d{4}\.\d{2}\.\d{2})-(\d{3})")
+ELIGIBILITY_COMMAND = "sudo -n python3 -I -B /opt/rosy/native-runtime/rosy_auto_update.py eligibility --json"
 
 
 def approved_run(run, *, sha, repo_id, workflow_id, event):
@@ -203,6 +204,34 @@ class Coordinator:
             argv = argv[:1] + ["-J", self.config["ssh_jump"]] + argv[1:]
         return prepare.run_ssh(argv)
 
+    def online_robots(self):
+        """{robot: current release} for those answering; a powered-off robot must not stop delivery."""
+        import prepare_payload_release as prepare
+        local = Path(os.environ["LOCALAPPDATA"])
+        online = {}
+        for robot in self.config["robots"]:
+            code, out, _ = self.ssh(prepare.ssh_argv(robot, local, "readlink -f /opt/rosy/current"))
+            if not code:
+                online[robot] = out.strip().rsplit("/", 1)[-1]
+        if not online:
+            raise RuntimeError("no configured robot answers; release allocation refused")
+        return online
+
+    def pick_canary(self, excluding=None):
+        """The configured canary if it could apply now, else the first robot that could; None waits."""
+        import prepare_payload_release as prepare
+        local = Path(os.environ["LOCALAPPDATA"])
+        for robot in sorted(self.config["robots"], key=lambda name: name != self.config["canary"]):
+            if robot == excluding:
+                continue
+            code, out, _ = self.ssh(prepare.ssh_argv(robot, local, ELIGIBILITY_COMMAND))
+            try:
+                if not code and json.loads(out.splitlines()[-1]).get("eligible") is True:
+                    return robot
+            except (ValueError, IndexError, AttributeError):
+                continue
+        return None
+
     def source_changes(self, base, head):
         if not SHA.fullmatch(base) or not SHA.fullmatch(head):
             raise ValueError("delivery source identity is not a full commit")
@@ -234,13 +263,25 @@ class Coordinator:
             paths.append(item["filename"])
             if item.get("previous_filename"):
                 paths.append(item["previous_filename"])
+        route = self.impact_policy().delivery_policy(paths)
+        return route, f"trusted policy selected {route} from {len(files)} changed paths"
+
+    @staticmethod
+    def impact_policy():
         path = ROOT / "deploy/robot/pinky_pro/release/artifact_impact.py"
         spec = importlib.util.spec_from_file_location("cd_artifact_impact", path)
         policy = importlib.util.module_from_spec(spec)
         sys.modules[spec.name] = policy
         spec.loader.exec_module(policy)
-        route = policy.delivery_policy(paths)
-        return route, f"trusted policy selected {route} from {len(files)} changed paths"
+        return policy
+
+    def os_publication_due(self, head):
+        """The payload for head is delivered and frozen OS inputs changed since the last OS release."""
+        base = self.state.get("os_published_sha")
+        if self.config.get("os_engineering") is not True or self.state.get("phase") != "done" or not base or base == head:
+            return False
+        files = self.source_changes(base, head) or []
+        return self.impact_policy().os_image_changed([item["filename"] for item in files])
 
     def delta_sources(self, base, head):
         files = self.source_changes(base, head)
@@ -278,22 +319,21 @@ class Coordinator:
             if ci == "failed":
                 return self.audit("ci_failed")
             if self.state.get("sha") == sha and not self.baseline_initialized:
+                if self.os_publication_due(sha):
+                    # Main was read before CI; independently prove this exact
+                    # candidate is still on main before reserving an immutable tag.
+                    if self.api(f"compare/{sha}...main")["status"] not in ("ahead", "identical"):
+                        raise ValueError("OS candidate is no longer on main")
+                    from robot_cd_os import advance
+                    return advance(self, sha, ci, "frozen OS inputs changed since the last OS release")
                 return self.audit(self.state["phase"])
             policy, reason = self.delivery_plan(sha)
             self.baseline_initialized = False
-            if policy == "os-image" and self.config.get("os_engineering") is True:
-                # Main was read before CI; independently prove this exact
-                # candidate is still on main before reserving an immutable tag.
-                if self.api(f"compare/{sha}...main")["status"] not in ("ahead", "identical"):
-                    raise ValueError("OS candidate is no longer on main")
-                from robot_cd_os import advance
-                return advance(self, sha, ci, reason)
-            if policy in ("none", "os-image", "review"):
+            if policy in ("none", "review"):
                 comparison_base = self.state.get("delivery_base_sha") or self.state.get("deployed_sha")
                 self.save(sha=sha, phase="done" if policy == "none" else "failed",
                           delivery_base_sha=sha if policy == "none" else comparison_base,
-                          delivery_policy=policy, reason=reason + (
-                              "; OS publication requires separate approval" if policy == "os-image" else ""))
+                          delivery_policy=policy, reason=reason)
                 return self.audit("no_robot_changes" if policy == "none" else "delivery_held")
             # Completed signed rollouts are not recreated; unfinished ones need
             # their existing rollout watcher, not a second release with the same SHA.
@@ -305,13 +345,7 @@ class Coordinator:
                         return self.audit("existing_rollout")
             refs = self.api("git/matching-refs/tags/payload-")
             names = [r["ref"].removeprefix("refs/tags/") for r in refs]
-            import prepare_payload_release as prepare
-            local = Path(os.environ["LOCALAPPDATA"])
-            for robot in self.config["robots"]:
-                code, out, _ = self.ssh(prepare.ssh_argv(robot, local, "readlink -f /opt/rosy/current"))
-                if code:
-                    raise RuntimeError("robot version unavailable; release allocation refused")
-                names.append(out.strip().rsplit("/", 1)[-1])
+            names += self.online_robots().values()
             release_id = next_release_id(datetime.now(timezone.utc).strftime("%Y.%m.%d"), names)
             # GitHub's atomic ref creation reserves the ID across signing PCs.
             self.gh("api", "--method", "POST", f"repos/{self.repo}/git/refs",
@@ -322,8 +356,8 @@ class Coordinator:
             if (previous is None and self.state.get("phase") == "done"
                     and self.state.get("work_dir") and self.state.get("release_id")):
                 previous = str(Path(self.state["work_dir"]) / f"{self.state['release_id']}.tar.gz")
-            baseline = {key: self.state[key] for key in ("deployed_sha", "delivery_base_sha", "payload_tarball")
-                        if key in self.state}
+            baseline = {key: self.state[key] for key in ("deployed_sha", "delivery_base_sha", "payload_tarball",
+                                                         "os_published_sha") if key in self.state}
             self.state = {}  # attempt budget, canary and PID belong to one release only
             self.save(sha=sha, release_id=release_id, phase="dispatching",
                       dispatched_at=datetime.now(timezone.utc).isoformat(),
@@ -373,7 +407,7 @@ class Coordinator:
                     verify_source(unsigned, sha)
                     args = ["--artifact-dir", str(work), "--out-dir", str(work), "--release-id", release_id,
                             "--repo", self.repo, "--key-name", self.config["key_name"]]
-                    for robot in self.config["robots"]:
+                    for robot in self.online_robots():
                         args += ["--robot", robot]
                     if prepare.main(args, ssh_runner=self.ssh):
                         raise RuntimeError("payload preparation refused; preserve work folder for review")
@@ -411,12 +445,13 @@ class Coordinator:
             signed = work / f"{release_id}.tar.gz"
             if hashlib.sha256(signed.read_bytes()).hexdigest() != self.state["tarball_sha256"]:
                 raise ValueError("signed payload changed after preparation")
-            args = ["--tarball", str(signed), "--canary", self.config["canary"], "--repo", self.repo,
-                    "--key-name", self.config["key_name"], "--canary-timeout-min", "30",
-                    "--evidence-dir", str(self.folder / "rollouts")]
-            for robot in self.config["robots"]:
-                if robot != self.config["canary"]:
-                    args += ["--robot", robot]
+            # A transaction from before canary_host was recorded keeps the configured canary it signed.
+            host = self.state.get("canary_host") or (self.config["canary"] if "canary_name" in self.state else None)
+            if host is None:
+                host = self.pick_canary()
+                if host is None:
+                    return self.audit("waiting_idle_canary")
+                self.save(canary_host=host)
             local = Path(os.environ["LOCALAPPDATA"])
             publisher = publish.Publisher(
                 release_id=release_id, repo=self.repo, work_dir=work / f"publish-{release_id}",
@@ -428,7 +463,7 @@ class Coordinator:
                 ssh=self.ssh, now=lambda: datetime.now(timezone.utc),
                 monotonic=time.monotonic, sleep=time.sleep)
             if "canary_name" not in self.state:
-                self.save(canary_name=publisher.hostname(self.config["canary"]))
+                self.save(canary_name=publisher.hostname(host))
             lock = publisher.work_dir / ".lock"
             if lock.exists():
                 pid = int(lock.read_text(encoding="ascii").strip())
@@ -442,6 +477,18 @@ class Coordinator:
                 if remote["withdrawn"]:
                     self.save(phase="failed", reason="signed rollout withdrawn")
                     return self.audit("withdrawn")
+                if self.state.get("canary_not_started") and (other := self.pick_canary(excluding=host)):
+                    # Only a robot that never started is replaced; one that may have is withdrawn by the publisher.
+                    publisher.upload({**remote, "canary": [publisher.hostname(other)]})
+                    host = other
+                    self.save(canary_host=other, canary_name=publisher.hostname(other), canary_not_started=False)
+            args = ["--tarball", str(signed), "--canary", host, "--repo", self.repo,
+                    "--key-name", self.config["key_name"], "--canary-timeout-min", "30",
+                    "--evidence-dir", str(self.folder / "rollouts")]
+            for robot in self.config["robots"]:
+                if robot != host:
+                    args += ["--robot", robot]
+            if existing:
                 args += ["--resume"]
             self.save(publisher_pid=os.getpid())
             delta = ((Path(self.state["delta_path"]), self.state["delta_binding"])
@@ -453,6 +500,9 @@ class Coordinator:
                 self.save(phase="done", reason="rollout approved", payload_tarball=str(signed),
                           deployed_sha=sha, delivery_base_sha=sha)
                 return self.audit("done")
+            if result == publish.CANARY_NOT_STARTED:
+                self.save(canary_not_started=True)
+                return self.audit("canary_not_started")
             # A transport failure must not masquerade as policy rejection. Keep
             # this transaction pending; the next tick verifies its remote signed
             # rollout before resuming. A withdrawn rollout becomes terminal above.

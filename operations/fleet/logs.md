@@ -5313,3 +5313,8 @@
 - gate 변화: SOURCE 회귀 검증; ARTIFACT/DEVICE/FIELD 수용 근거로 사용하지 않음. 최종 재조립 SHA 원격 회귀와 FULL은 별도.
 - 결정: API v1.363; 기존 CORE 최종 명령·모드 owner 유지.
 - 교훈: CE 해당 없음 — 최종 코드·회귀 시험·API 계약으로 판단 근거를 재현할 수 있음.
+
+## 2026-11-06 · uncommitted · uiux: 물체 카탈로그 미지정 안내를 한글로
+- 변경: 환경 변수 이름 대신 설치 담당자에게 요청할 것을 말한다. 코드는 그대로. test_doc_tabs·test_cell_app_browser의 제목 고정을 새 제목으로 갱신.
+- 증거: agent-browser 로컬 렌더(1920·390·320 화면 확인). 원격 회귀는 착지 기록을 따른다.
+- gate 변화: SOURCE 변경. 실기기·Android 수용은 별도다. CE: 해당 없음 — 코드와 회귀가 판단을 보존한다.
