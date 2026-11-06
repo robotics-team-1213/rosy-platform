@@ -44,7 +44,7 @@ def test_hold_is_durable_before_recovery_callback_can_fail(tmp_path, monkeypatch
         oi.refuse_if_held("arm_b")
 
 
-def test_cli_cannot_clear_a_hold_while_the_arm_session_is_owned(tmp_path, monkeypatch):
+def test_cli_handle_refuses_while_the_arm_session_is_owned(tmp_path, monkeypatch):
     import joint_tune
 
     monkeypatch.chdir(tmp_path)
@@ -55,7 +55,7 @@ def test_cli_cannot_clear_a_hold_while_the_arm_session_is_owned(tmp_path, monkey
 
     monkeypatch.setattr(joint_tune, "session_lock", busy)
     with pytest.raises(SystemExit, match="another OMX session"):
-        oi.main(["clear", "--arm", "arm_b", "--by", "operator", "--note", "inspected"])
+        oi.main(["handle", "--session", str(tmp_path / "session.json"), "--arm", "arm_b"])
     assert oi.held("arm_b")
 
 
