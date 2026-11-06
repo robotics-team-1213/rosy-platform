@@ -14429,3 +14429,10 @@ osy-d395-s1d\`.
 - 증거: 공식 원격 시험으로 학습 원본·작업자·연구·서버·구조·브라우저 시험 통과. 첫 수정에서 어댑터를 `check_info`에 넣자 저장 결과 재검증이 실패해 `inspect`로 옮겼다. 실제 OMX 데이터 묶음(AI PC·셀 PC, 한 팔 28개·두 팔 1개)이 어댑터 규격에 맞음을 확인했다. AI PC·모델 PC의 공개 학습 검증 자료와 AI PC의 SO-100 캐시는 삭제했다.
 - gate 변화: 없음 — 배포된 화면은 게시와 갱신 전까지 그대로다. 저장된 공개 학습 실행 기록이 운영 DB에 있는지는 확인하지 못했다.
 - CE: 해당 없음 — 사용자 지시에 따른 기능 제거와 구조 변경이다.
+
+## 2026-11-07 · uncommitted · feat(sim): 공통 층 조 v2.1 옵션
+
+- 변경: D-877 공통 층이 조 v2.1 모델(D-947)로도 돌게 옵션을 더했다. `omx_topic_backend.py --gripper palletizing-v2.1`은 벤더 xacro 대신 저장소의 `omx_f_palletizing.urdf`를 쓰고, 그 URDF에 없는 ros2_control 블록은 벤더 xacro 출력에서 가져와 넣는다(관절 이름이 같으므로 하드웨어 교체·gpio 제거·is_async도 그대로 적용). `omx_mujoco_backend.py --gripper palletizing-v2.1`은 메시 경로를 두 패키지(`open_manipulator_description`, `omx_f_palletizing_description`)에서 모두 풀고(`learning/envs/isaac/assets`, `meshes/omx_f` 아래 하위 경로 유지), 손가락 충돌은 `palletizing_gripper.pad_box` 패드 박스로 바꾼다(`ship_release_scene.add_jaw`와 같은 collider). `run_omx_backend_conformance.sh`는 `OMX_GRIPPER=palletizing-v2.1`로 같은 옵션을 넘기며 Isaac 어댑터는 아직 이 옵션을 받지 않아 거부한다. 기본 `omx-f` 동작은 바꾸지 않았다.
+- 증거: 원격 pytest `test/test_omx_sim_backends.py` 7 통과·skip 0(모델 PC, run-1.txt, known_failures 0 new). 새 시험은 v2.1 URDF에 ros2_control이 들어가는지, 메시 16개가 모두 저장소 assets에서 풀리는지(두 패키지), 패드 박스가 Isaac 것과 같은 함수인지, 벤더 모드 출력(맨 이름 + `strippath="true"`)이 그대로인지를 본다. 실제 적합성 실행(`run_omx_backend_conformance.sh`)은 하지 않았다.
+- gate 변화: 없음 — ROS 포함 실행은 시험 PC·시뮬 호스트에서 확인할 몫이고 이 변경은 옵션 추가다.
+- CE: 해당 없음 — 새 옵션이며 해결한 장애가 없다.
