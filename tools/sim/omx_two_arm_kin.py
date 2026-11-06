@@ -106,7 +106,33 @@ class Arm:
             return False, *self.ik(q, pos, yaw, 200)[:2]
         return True, best[0], best[1]
 
+    def link_poses(self, q):
+        """(R, p) of link1..link5 in the world (the frame after each joint, where the link meshes sit)."""
+        R, p, out = self.R0, self.base.copy(), []
+        for (origin, axis), angle in zip(self.chain, q[:5]):
+            p = p + R @ origin
+            R = R @ _rot(axis, angle)
+            out.append((R.copy(), p.copy()))
+        return out
+
     def segments(self, q):
         """Capsule axes of the arm in the world, base to TCP: a coarse stand-in for the links, for the arm-arm clearance check."""
         points, tcp, _ = self.frames(q)
         return [self.base, *points, tcp]
+
+
+MESH_DIRS = (ROOT / "learning/envs/isaac/assets/open_manipulator_description/meshes/omx_f", ROOT / "learning/envs/isaac/assets/omx_f_palletizing_description/meshes/omx_f")
+_POINTS = {}
+
+
+def link_points(link, every=25, urdf=URDF):
+    """Mesh vertices (m, link frame) of link2..link5 from the URDF's meshes, thinned: binary STL read with numpy only."""
+    if link not in _POINTS:
+        root = ET.parse(urdf).getroot()
+        name = next(l for l in root.iter("link") if l.get("name") == link).find("collision/geometry/mesh").get("filename").rsplit("/", 1)[-1]
+        path = next(d / name for d in MESH_DIRS if (d / name).exists())
+        raw = np.fromfile(path, dtype=np.uint8)
+        count = int(np.frombuffer(raw[80:84], dtype="<u4")[0])
+        tri = np.frombuffer(raw[84:84 + 50 * count].tobytes(), dtype=np.dtype([("n", "<f4", 3), ("v", "<f4", (3, 3)), ("a", "<u2")]))
+        _POINTS[link] = np.unique(tri["v"].reshape(-1, 3)[::every].astype(float) * .001, axis=0)
+    return _POINTS[link]

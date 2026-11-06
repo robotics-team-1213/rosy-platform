@@ -38,11 +38,12 @@ def judge_pose(world, data, cid, site, limits):
 
 
 class Teacher:
-    def __init__(self, world, data_file=None, frame_hook=None):
-        self.world, self.layout = world, world.layout
+    def __init__(self, world, data_file=None, frame_hook=None, drop=tasks.RELEASE_DROP, drop_upper=tasks.RELEASE_DROP_UPPER, seed=0):
+        self.rng, self.seed, self.branch, self.carried = np.random.default_rng(seed), seed, "best", None
+        self.world, self.layout, self.drop, self.drop_upper = world, world.layout, drop, drop_upper
         self.limits = (data_file or tasks.load())["judge"]
         self.hook = frame_hook or (lambda data, label: None)
-        self.contacts, self.phase, self.first, self.tilt, self.n, self.held_tilt = None, "", {}, 0., 0, 0.
+        self.contacts, self.phase, self.first, self.tilt, self.n, self.held_tilt = dict(arm_arm=set(), arm_other=set(), pad_neighbour=set()), "", {}, 0., 0, 0.
 
     def frame(self, data, targets, label):
         self.n += 1
@@ -90,7 +91,9 @@ class Teacher:
         self.contacts, self.carried, self.first = dict(arm_arm=set(), arm_other=set(), pad_neighbour=set()), c, {}
         idle = {o: np.append(L.sim_arms[o].home[:5], L.sim_arms[o].home[5]) for o in L.arms if o != arm}
         if step["from"] == "belt":
-            w.put(data, c, "belt")
+            f = L.fixture  # the belt pick pose varies inside the fixture's infeed tolerance; seed 0 is the nominal pose
+            j = (0., 0., 0.) if self.seed == 0 else (*self.rng.uniform(-1, 1, 2) * f["infeed_jitter_xy_m"], float(self.rng.uniform(-1, 1)) * f["infeed_yaw_jitter_rad"])
+            w.put(data, c, "belt", jitter=j)
             for _ in range(8):
                 self.frame(data, {arm: self.q_now(data, arm), **idle}, step["id"])
         pos0, yaw0, _ = w.pose(data, c)
@@ -98,11 +101,11 @@ class Teacher:
         if np.linalg.norm(pos0[:2] - sa["xy"]) > .03:
             return dict(row, result="blocked", reason=f"{c} is {np.linalg.norm(pos0[:2] - sa['xy']) * 1000:.0f} mm from {step['from']}")
         before = {o: w.pose(data, o) for o, _ in L.containers() if o != c}
-        wps = tasks.waypoints(L, step, here, pick=(pos0[:2], yaw0))
+        wps = tasks.waypoints(L, step, here, pick=(pos0[:2], yaw0), drop=self.drop, drop_upper=self.drop_upper)
         g_open, g_to = jaw.angle_for_gap(OPEN_GAP[sa["kind"]]), jaw.angle_for_gap(OPEN_GAP[sb["kind"]])
         g_hold = jaw.angle_for_gap(HOLD_GAP)
         q = self.q_now(data, arm)
-        ok, q_app, _, note = tasks.solve_chain(ik_arm, wps, q)
+        ok, q_app, _, note = tasks.solve_chain(ik_arm, wps, q, roll_floor=L.roll_floor, branch=self.branch)
         if not ok:
             return dict(row, result="unreachable", reason=f"{arm} cannot do the step tool-down inside the limits: {note}")
         self.move(data, arm, np.append(q[:5], g_open), np.append(q_app[:5], g_open), 2.5, step["id"], idle)
@@ -142,8 +145,9 @@ class Teacher:
         for o, (p, yw, tl) in before.items():
             p2, yw2, tl2 = w.pose(data, o)
             d = float(np.linalg.norm(p2 - p)) * 1000
-            if d > self.limits["neighbour_mm"] or abs(tl2 - tl) > self.limits["neighbour_tilt_deg"]:
-                moved.append(f"{o} {d:.1f} mm")
+            dyaw = abs(math.degrees(tasks.wrap_pi(yw2 - yw)))
+            if d > self.limits["neighbour_mm"] or abs(tl2 - tl) > self.limits["neighbour_tilt_deg"] or dyaw > self.limits["neighbour_yaw_deg"]:
+                moved.append(f"{o} {d:.1f} mm {dyaw:.1f} deg")
         arm_hits = sorted(f"{a}~{b}" for a, b in self.contacts["arm_other"])
         crash = sorted("~".join(p) for p in self.contacts["arm_arm"])
         ok = pose["ok"] and not moved and not crash and not arm_hits
@@ -157,23 +161,33 @@ class Teacher:
         R = arm.frames(qs)[2]
         return -(R @ off) - np.array([0, 0, tasks.HOLD_BELOW_TCP])
 
-    def run_task(self, task, isolated=False):
+    def fresh(self, here):
+        """A world at rest with the containers of `here` on their sites and every other container parked."""
         w, L = self.world, self.layout
         data = w.reset()
-        here = dict(task.get("start", {}))
         for cid, site in here.items():
-            w.put(data, cid, site)
-        self.contacts, self.carried = dict(arm_arm=set(), arm_other=set(), pad_neighbour=set()), None
-        for _ in range(FPS * 2):
+            # seeds above 0 vary the start placement inside the stud-lane clearance (0.4 mm per side): +-0.3 mm, +-0.5 deg
+            j = (0., 0., 0.) if self.seed == 0 or site == "belt" else (*self.rng.uniform(-1, 1, 2) * .0003, float(self.rng.uniform(-1, 1)) * math.radians(.5))
+            w.put(data, cid, site, jitter=j)
+        for _ in range(FPS):
             self.frame(data, {a: L.sim_arms[a].home for a in L.arms}, "settle")
+        return data
+
+    def run_single(self, here, step, branch="best"):
+        """One step from a given nominal state (feasibility matrix); branch "other" grips with the jaw turned 180 deg."""
+        self.branch = branch
+        self.contacts, self.carried = dict(arm_arm=set(), arm_other=set(), pad_neighbour=set()), None
+        return self.run_step(self.fresh(here), step, {k: v for k, v in here.items() if k != step["container"]})
+
+    def run_task(self, task, isolated=False):
+        w, L = self.world, self.layout
+        here = dict(task.get("start", {}))
+        self.contacts, self.carried = dict(arm_arm=set(), arm_other=set(), pad_neighbour=set()), None
+        data = self.fresh(here)
         rows = []
         for step in task["steps"]:
             if isolated and rows:  # every step starts from the nominal plan state, so one failure does not spoil the next
-                data = w.reset()
-                for cid, site in here.items():
-                    w.put(data, cid, site)
-                for _ in range(FPS):
-                    self.frame(data, {a: L.sim_arms[a].home for a in L.arms}, "settle")
+                data = self.fresh(here)
             row = self.run_step(data, step, {k: v for k, v in here.items() if k != step["container"]})
             rows.append(row)
             print(json.dumps(row), flush=True)
@@ -201,6 +215,9 @@ def main(argv=None):
     p.add_argument("task", choices=["stack", "rehandle"])
     p.add_argument("--out", default=".")
     p.add_argument("--video", action="store_true")
+    p.add_argument("--seed", type=int, default=0, help="0 = nominal belt pose, else a seeded pose inside the infeed tolerance")
+    p.add_argument("--cone", default="elliptic", choices=["elliptic", "pyramidal"], help="MuJoCo friction cone (sensitivity: resting boxes creep in yaw with elliptic)")
+    p.add_argument("--drop-upper", type=float, default=tasks.RELEASE_DROP_UPPER, help="release height over a lower container, m")
     p.add_argument("--isolated", action="store_true", help="reset to the nominal plan state before every step (per-step truth without cascades)")
     p.add_argument("--choice", action="append", help="key=value override of omx_two_arm_sites.CHOICES (named parameters)")
     a = p.parse_args(argv)
@@ -217,7 +234,7 @@ def main(argv=None):
         print(json.dumps(records))
         return 0
     import omx_two_arm_world as world_mod
-    world = world_mod.World(layout)
+    world = world_mod.World(layout, cone=a.cone)
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     writer = None
@@ -233,15 +250,15 @@ def main(argv=None):
             frame = Image.fromarray(image)
             ImageDraw.Draw(frame).text((8, 8), f"{a.task} {label}", fill=(255, 255, 0))
             container.mux(stream.encode(av.VideoFrame.from_ndarray(np.asarray(frame), format="rgb24")))
-    teacher = Teacher(world, frame_hook=writer)
+    teacher = Teacher(world, frame_hook=writer, seed=a.seed, drop_upper=a.drop_upper)
     result = teacher.run_task(task, a.isolated)
     if writer:
         container.mux(stream.encode(None))
         container.close()
     roll = {r["step"]: r["roll_below_floor"] for r in records}
-    result.update(choices=layout.choices, roll_below_floor_steps=[s for s, v in roll.items() if v],
+    result.update(choices=layout.choices, cone=a.cone, seed=a.seed, drop_m=[teacher.drop, teacher.drop_upper], roll_below_floor_steps=[s for s, v in roll.items() if v],
                   note="geometry only (D-947): contact numbers are not results; one arm moves at a time; true container pose, no perception")
-    (out / f"{a.task}{'-isolated' if a.isolated else ''}.json").write_text(json.dumps(result, indent=1, default=str), encoding="utf-8")
+    (out / f"{a.task}{'-isolated' if a.isolated else ''}-{a.cone}-seed{a.seed}.json").write_text(json.dumps(result, indent=1, default=str), encoding="utf-8")
     print(f"{a.task}: steps pass {result['steps_pass']}/{result['steps']}, final poses ok {result['final_ok']}/{result['final_total']}, completed {result['completed']}")
     return 0 if result["completed"] else 1
 

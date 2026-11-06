@@ -11,6 +11,7 @@ from pathlib import Path
 
 import numpy as np
 
+import omx_two_arm_kin as kin
 import omx_two_arm_sites as sites_mod
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -18,6 +19,9 @@ TASK_FILE = ROOT / "deploy/robot/omx/sim/two_arm_tasks.json"
 HOLD_BELOW_TCP = .00201  # the held container centre sits 2.01 mm under the TCP (Isaac hold check)
 CARRY_CLEAR = .035       # container bottom clears the highest seated container by 5 mm: centre 30 mm up plus 5
 ARM_RADIUS, ARM_MARGIN = .03, .005  # capsule stand-in for a link; MuJoCo contacts are the real check
+RELEASE_DROP = .005     # fixture stack_release_clearance_m; layer 0 rests on studs (floor enforced) and the temp lanes have a funnel
+RELEASE_DROP_UPPER = .001  # onto a container: measured 5 mm gave 3.2 deg of yaw, 2 mm 1.0 deg, 1 mm placed s1 to s6 (teacher sensitivity)
+LINK_MARGIN = .004      # link3 and link4 (the wrist) must clear every standing container by this much; MuJoCo: failures sat at -3 to -6 mm, passes at +8 mm or more
 CAPACITY = 3             # lanes per temporary plate (3 x 1 each)
 
 
@@ -43,13 +47,13 @@ def carry_z(layout, here, a, b):
     return max([layout.sites[a]["z"], layout.sites[b]["z"], *tops]) + CARRY_CLEAR + HOLD_BELOW_TCP
 
 
-def waypoints(layout, step, here, pick=None):
+def waypoints(layout, step, here, pick=None, drop=RELEASE_DROP, drop_upper=RELEASE_DROP_UPPER):
     """Teacher path of one step as (name, xy, z, yaw, grip): approach, grasp, lift, carry, lower, release, retreat. grip is open/hold."""
     a, b = dict(layout.sites[step["from"]]), layout.sites[step["to"]]
     if pick:  # the container's true pose at pick time (teacher with ground truth, no perception)
         a["xy"], a["yaw"] = pick
     z_up = carry_z(layout, here, step["from"], step["to"])
-    za, zb = layout.hold_z(step["from"]), layout.hold_z(step["to"]) + (.005 if b["kind"] != "belt" else 0)  # release 5 mm up (stack_release_clearance_m)
+    za, zb = layout.hold_z(step["from"]), layout.hold_z(step["to"]) + (0 if b["kind"] == "belt" else drop_upper if b.get("layer", 0) > 0 else drop)  # released this far above its seat: 5 mm on studs and temp lanes, less on a lower container (a drop onto a container spins it)
     ya, yb = a["yaw"], a["yaw"] + wrap_pi(b["yaw"] - a["yaw"])
     return [("approach", a["xy"], z_up, ya, "open"), ("grasp", a["xy"], za, ya, "open"), ("close", a["xy"], za, ya, "hold"),
             ("lift", a["xy"], z_up, ya, "hold"), ("carry", b["xy"], z_up, yb, "hold"), ("lower", b["xy"], zb, yb, "hold"),
@@ -65,11 +69,12 @@ def clearance(moving, idle_pose, q_path, idle):
     return min(float(np.linalg.norm(points(moving, q)[:, None] - fixed[None], axis=2).min()) for q in q_path)
 
 
-def solve_chain(arm, wps, q0, samples=12):
-    """Walk the waypoints with continuous IK (warm start, as the teacher moves): the jaw closes the same way turned 180 deg, so joint5 has two
-    branches and a path that needs joint5 past its limit on one branch is tried on the other. Returns (ok, approach q, joint path, note)."""
-    note = "no branch converged"
-    for j5 in (q0[4], -1.5, 0., 1.5):
+def solve_chain(arm, wps, q0, samples=12, roll_floor=None, branch="best"):
+    """Walk the waypoints with continuous IK (warm start, as the teacher moves). The jaw closes the same way turned 180 deg, so joint5 has
+    two branches: seeds on both are tried and the branch whose joint5 stays highest above roll_floor wins (a path needing joint5 past its
+    limit on one branch is solved on the other). branch="other" takes the second-best branch (the jaw turned 180 deg), for the feasibility matrix. Returns (ok, approach q, joint path, note)."""
+    note, found = "no branch converged", []
+    for j5 in (q0[4], -1.5, -.4, 0., .8, 1.5, 1.9):
         seed = np.array(q0, float)
         seed[4] = j5
         first = np.array([*wps[0][1], wps[0][2]])
@@ -89,15 +94,40 @@ def solve_chain(arm, wps, q0, samples=12):
             if failed:
                 break
             last, yaw_last = target, yaw
-        if not failed:
-            return True, approach, path, None
-        note = failed
-    return False, None, [], note
+        if failed:
+            note = failed
+            continue
+        found.append((min(float(p[4]) for p in path), approach, path))
+        found = [f for k, f in enumerate(found) if all(abs(f[1][4] - g[1][4]) > .3 for g in found[:k])]  # one entry per distinct branch
+        if branch == "best" and roll_floor is not None and found[-1][0] >= roll_floor:
+            break
+    found.sort(key=lambda f: -f[0])
+    pick = 0 if branch == "best" else 1
+    return (True, found[pick][1], found[pick][2], None) if len(found) > pick else (False, None, [], note if not found else "no second branch")
+
+
+def link_clearance(layout, arm, path, here):
+    """Smallest distance (m) from the link3 and link4 meshes along the joint path to any container standing on a site in `here`
+    (container name -> site): vertex samples of the real URDF meshes against the 90 x 30 x 30 mm boxes. Negative means inside."""
+    boxes = [(np.array([*layout.sites[s]["xy"], layout.sites[s]["z"]]), layout.sites[s]["yaw"]) for s in here.values() if s != "belt"]
+    points = {n: kin.link_points(n) for n in ("link3", "link4")}
+    best = 1e9
+    for q in path:
+        for i, name in ((2, "link3"), (3, "link4")):
+            R, p = arm.link_poses(q)[i]
+            world = points[name] @ R.T + p
+            for c, yaw in boxes:
+                d = world - c
+                cs, sn = math.cos(-yaw), math.sin(-yaw)
+                local = np.stack([cs * d[:, 0] - sn * d[:, 1], sn * d[:, 0] + cs * d[:, 1], d[:, 2]], 1)
+                q_ = np.abs(local) - np.array([.045, .015, .015])
+                best = min(best, float((np.linalg.norm(np.maximum(q_, 0), axis=1) + np.minimum(q_.max(1), 0)).min()))
+    return best
 
 
 def check_reach(layout, step, here, arm):
     """Reach of one step with the step's arm inside the plan's joint limits. Returns (problems, joint path, approach q)."""
-    ok, approach, path, note = solve_chain(arm, waypoints(layout, step, here), arm.home)
+    ok, approach, path, note = solve_chain(arm, waypoints(layout, step, here), arm.home, roll_floor=layout.roll_floor)
     if not ok:
         return [f"{step['id']}: {arm.name} cannot reach it tool-down inside the plan's joint limits: {note}"], [], None
     return [], path, approach
@@ -136,17 +166,21 @@ def validate(layout, task, data=None):
             problems.append(f"{sid}: the belt end is a source, not a target")
         if sb["kind"] == "temp" and sum(1 for s in occupied if layout.sites[s].get("plate") == sb["plate"]) + (a not in occupied) > CAPACITY:
             problems.append(f"{sid}: temporary plate {sb['plate']} would hold more than {CAPACITY}")
-        if not bad and not problems:
+        if not bad:
             here_after = {k: v for k, v in here.items() if k != c}
             solved = layout.arms[arm]
             reach_problems, path, _ = check_reach(layout, step, here_after, solved)
             problems += reach_problems
+            wrist = link_clearance(layout, solved, path, here_after) if path else None
+            if wrist is not None and wrist < LINK_MARGIN:
+                problems.append(f"{sid}: {arm}'s wrist (link3/4) comes within {wrist * 1000:.0f} mm of a standing container (needs {LINK_MARGIN * 1000:.0f} mm): "
+                                "it would hit the neighbouring column; take the neighbour away first or use the other arm")
             other = next(n for n in layout.arms if n != arm)
             gap = clearance(solved, home_pose[other], path, layout.arms[other]) if path else None
             if gap is not None and gap < 2 * ARM_RADIUS + ARM_MARGIN:
                 problems.append(f"{sid}: {arm} passes {gap * 1000:.0f} mm from {other} parked at home (needs {1000 * (2 * ARM_RADIUS + ARM_MARGIN):.0f})")
             roll = min((float(q[4]) for q in path), default=0.)
-            records.append(dict(step=sid, arm=arm, joints_ok=not reach_problems, min_roll_rad=round(roll, 3), roll_below_floor=roll < layout.roll_floor, min_arm_gap_mm=None if gap is None else round(gap * 1000, 1)))
+            records.append(dict(step=sid, arm=arm, joints_ok=not reach_problems, min_roll_rad=round(roll, 3), roll_below_floor=roll < layout.roll_floor, min_arm_gap_mm=None if gap is None else round(gap * 1000, 1), min_wrist_gap_mm=None if wrist is None or wrist > 1 else round(wrist * 1000, 1)))
         here[c] = b
     plates = {}
     for s in here.values():

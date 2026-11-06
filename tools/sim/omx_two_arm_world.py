@@ -51,9 +51,10 @@ def camera_axes(eye, focus, up):
 
 
 class World:
-    def __init__(self, layout=None, wrist=None, **choices):
+    def __init__(self, layout=None, wrist=None, cone="elliptic", **choices):
         self.layout = layout or sites.Layout(**choices)
         self.wrist = wrist or self.layout.choices["wrist_camera"]
+        self.cone = cone
         self.meshes = tempfile.TemporaryDirectory()
         self.pairs = {}
         spec = self._spec()
@@ -92,7 +93,8 @@ class World:
         L, c = self.layout, self.layout.choices
         spec = mujoco.MjSpec.from_string(self._urdf())
         spec.option.timestep = .0005
-        spec.option.cone, spec.option.impratio = mujoco.mjtCone.mjCONE_ELLIPTIC, 10
+        spec.option.enableflags |= mujoco.mjtEnableBit.mjENBL_MULTICCD  # a convex mesh against a box gives ONE contact point otherwise: boxes on the deck rocked and crept
+        spec.option.cone, spec.option.impratio = (mujoco.mjtCone.mjCONE_PYRAMIDAL if self.cone == "pyramidal" else mujoco.mjtCone.mjCONE_ELLIPTIC), 10
         spec.visual.global_.offwidth, spec.visual.global_.offheight = 1280, 960
         spec.default.geom.solref, spec.default.geom.solimp = [.002, 1], [.95, .99, .001, .5, 2]
         world, box = spec.worldbody, mujoco.mjtGeom.mjGEOM_BOX
@@ -210,13 +212,15 @@ class World:
         mujoco.mj_forward(self.model, data)
         return data
 
-    def put(self, data, cid, site, parked=0, lift=.0005):
+    def put(self, data, cid, site, parked=0, lift=None, jitter=(0., 0., 0.)):
         """Teleport a container onto a site (or park it off the cell) at rest."""
         if site is None:
             pose = [-1.4, 1.0 + .1 * parked, .016, 1, 0, 0, 0]
         else:
             s = self.layout.sites[site]
-            pose = [*s["xy"], s["z"] + lift, math.cos(s["yaw"] / 2), 0, 0, math.sin(s["yaw"] / 2)]
+            lift = .0005 + .001 * s.get("layer", 0) if lift is None else lift  # a stack dropped in at once must not start in exact contact (it was ejected)
+            yaw = s["yaw"] + jitter[2]
+            pose = [s["xy"][0] + jitter[0], s["xy"][1] + jitter[1], s["z"] + lift, math.cos(yaw / 2), 0, 0, math.sin(yaw / 2)]
         data.qpos[self.box_q[cid]:self.box_q[cid] + 7] = pose
         data.qvel[self.box_v[cid]:self.box_v[cid] + 6] = 0
 

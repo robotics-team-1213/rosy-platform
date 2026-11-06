@@ -44,6 +44,9 @@ def test_stack_follows_the_fixture_plan_order_and_arms(layout, data):
 def test_rehandle_uses_both_arms_and_temp_space_within_capacity(layout, data):
     steps = data["tasks"]["rehandle"]["steps"]
     assert {s["arm"] for s in steps} == {"arm_a", "arm_b"}
+    for s in steps:  # an outer column is rehandled by the arm on the other side (the near arm's wrist hits the middle column)
+        row = (s["from"] if s["from"].startswith("ship") else s["to"])[6]
+        assert s["arm"] == ("arm_b" if row == "0" else "arm_a")
     held = {}
     for s in steps:
         held[s["container"]] = s["to"]
@@ -54,10 +57,47 @@ def test_rehandle_uses_both_arms_and_temp_space_within_capacity(layout, data):
 
 def test_a_container_is_never_taken_from_under_another(layout, data):
     task = copy.deepcopy(tasks.get_task(layout, "rehandle", data))
-    task["steps"] = [s for s in task["steps"] if s["id"] != "a1"]  # bar-8 stays on top of bar-5
-    task["steps"].insert(0, dict(id="x", container="bar-2", **{"from": "ship-r0-l0"}, to="tmp-a-1", arm="arm_a"))
+    task["steps"] = [dict(id="x", container="bar-2", **{"from": "ship-r0-l0"}, to="tmp-b-1", arm="arm_b")]  # bar-5 and bar-8 still lie on it
     reason = refused(layout, task)
     assert "taken from under" in reason and "ship-r0-l1" in reason
+
+
+def bad_near_arm_plan(layout, data):
+    """The first rehandle plan: arm_a takes bar-2 (bottom of the near column r0) while the middle column stands. MuJoCo: link4 hit bar-7."""
+    task = copy.deepcopy(tasks.get_task(layout, "rehandle", data))
+    task["steps"] = [dict(id="a1", container="bar-8", **{"from": "ship-r0-l2"}, to="tmp-a-1", arm="arm_a"),
+                     dict(id="a2", container="bar-5", **{"from": "ship-r0-l1"}, to="tmp-a-2", arm="arm_a"),
+                     dict(id="a3", container="bar-2", **{"from": "ship-r0-l0"}, to="tmp-a-3", arm="arm_a")]
+    return task
+
+
+def test_a_wrist_that_would_hit_a_standing_column_is_refused(layout, data):
+    reason = refused(layout, bad_near_arm_plan(layout, data))
+    assert "a3:" in reason and "wrist" in reason and "neighbouring column" in reason
+    assert "a1:" not in reason and "a2:" not in reason  # the layer 1 and 2 steps of the same plan are fine
+
+
+def test_the_same_container_taken_by_the_far_arm_is_accepted(layout, data):
+    task = bad_near_arm_plan(layout, data)
+    task["steps"] = [dict(s, arm="arm_b", to=s["to"].replace("tmp-a", "tmp-b")) for s in task["steps"]]
+    records = tasks.validate(layout, task)
+    assert records[2]["min_wrist_gap_mm"] >= tasks.LINK_MARGIN * 1000  # bar-2 by arm_b: MuJoCo isolated run passed
+
+
+def test_wrist_clearance_matches_the_mujoco_matrix_at_layer_0(layout, data):
+    """arm_a/bar-2, arm_b/bar-3 and the middle bottom bar-1 collided in MuJoCo (link4 -3 to -6 mm); the others cleared by 8 mm or more."""
+    cases = {("bar-2", "arm_a"): False, ("bar-2", "arm_b"): True, ("bar-3", "arm_b"): False, ("bar-3", "arm_a"): True, ("bar-1", "arm_a"): False, ("bar-1", "arm_b"): False}
+    full = {c: s for c, s, _ in layout.plan_order()}
+    for (c, arm), clear in cases.items():
+        row = full[c].split("-")[1]
+        above = {n for n, s in full.items() if s.startswith(f"ship-{row}-l") and int(s[-1]) > 0}
+        task = dict(name="m", start={k: v for k, v in full.items() if k not in above},
+                    steps=[dict(id="x", container=c, **{"from": full[c]}, to=f"tmp-{arm[-1]}-2", arm=arm)])
+        try:
+            gap = tasks.validate(layout, task)[0]["min_wrist_gap_mm"]
+            assert clear, f"{c} by {arm} should be refused (MuJoCo collided), gap {gap}"
+        except tasks.PlanRefused as e:
+            assert not clear and "wrist" in str(e)
 
 
 def test_a_target_needs_a_support_and_must_be_free(layout, data):
