@@ -176,6 +176,9 @@ def _check(output, result, request):
                 or model_config.get('input_features',{}).get('observation.state',{}).get('shape') != inspection['state']['shape']
                 or model_config.get('output_features',{}).get('action',{}).get('shape') != inspection['action']['shape']):
             raise ValueError('trained ACT model dimensions differ from inspected layout')
+        for key in ('chunk_size', 'optimizer_lr'):
+            if key in request and model_config.get(key) != request[key]:
+                raise ValueError('trained ACT model recipe differs: '+key)
         evaluation = load(output,'evaluation.json')
         if evaluation != result.get('evaluation'):
             raise ValueError('evaluation bytes differ from result')

@@ -14415,3 +14415,10 @@ osy-d395-s1d\`.
 - 증거: 공식004227의 실제 commit a4139efa7eff6fc780f8889a6dbc4475afd5adb7 landed/main_move:true·main SHA·reflog·제출 소스 ancestry 일치. Native132와 별도 동일 소스 Learning10파일69PASS/skip0의 합집합142는 독립 검토 GO다. 원래30 G1 직접 실행은689PASS/skip0·NEW/known/flaky0이며 각각 원본 hash와 source/env/실행 receipt를 보존했다. 마지막 native 라운드321PASS와 기존 재사용은 별도 출처로 유지한다.
 - gate 변화: UI 제품의 실제 로컬 AUTO main 수용이다. 준비 record tier:null을 게시용 qualifying FULL로 승격하지 않으며 이 문서의 착지·공개 게시·배포·실물 수용은 별도 확인한다.
 - CE: 미해결 — canonical main ROOT가 후보 전용 브라우저 파일을 놓치는 일반 선택 결함은 진단만 기록했다. 이번 후보의 누락은 명시적 opt-in 실제 실행으로 보충했으며 도구 수정이나 해결 교훈으로 바꾸지 않는다.
+
+## 2026-11-06 · 03b9bd7470 · feat(learning): 학습 실행에서 학습률과 행동 묶음 길이 선택
+
+- 변경: 업로드 데모 학습 요청에 선택 항목 `optimizer_lr`(1e-6~1e-3)와 `chunk_size`(1~100)를 더하고 학습 화면에 두 칸을 추가했다. 학습률은 ACT 백본까지 모델 전체에 같은 값으로 적용한다. 값이 없는 요청은 기존 설정을 그대로 쓰므로 저장된 실행 기록과 이미 열린 화면은 그대로 동작한다. 산출물 검사는 학습 설정과 모델 `config.json`의 값이 요청과 같은지 대조한다.
+- 증거: 공식 원격 시험 작업자·원본·연구 시험과 Chromium 학습 화면 시험 통과, skip 0. 시험 환경에 LeRobot이 없어 AI PC의 `omx-lerobot-0.4.4`에서 ACT 한 단계를 따로 돌렸다: 학습률 두 그룹 1e-4, 저장한 `config.json`에 `chunk_size` 20과 `optimizer_lr` 1e-4, 다시 불러와 행동 출력까지 확인했다. 실제 데이터로 끝까지 학습한 실행은 아니다.
+- gate 변화: 없음 — 실제 업로드 데이터로 값을 바꾼 학습과 모델 PC 배포는 아직 하지 않았다.
+- CE: 해당 없음 — 새 기능이며 해결한 장애가 없다.

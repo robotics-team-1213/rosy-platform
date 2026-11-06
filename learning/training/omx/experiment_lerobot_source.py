@@ -91,6 +91,14 @@ def verify_files(root, files):
     return manifest_revision(files)
 
 
+def check_recipe(values):
+    """The optional ACT recipe values; a run that names neither keeps the shipped recipe."""
+    if 'optimizer_lr' in values and (type(values['optimizer_lr']) is not float or not 1e-6 <= values['optimizer_lr'] <= 1e-3):
+        raise ValueError('study learning rate outside allowed range')
+    if 'chunk_size' in values and (type(values['chunk_size']) is not int or not 1 <= values['chunk_size'] <= 100):
+        raise ValueError('study chunk size outside allowed range')
+
+
 def validate_split(selection, inspection):
     keys = {'train', 'validation', 'eval'}
     if not isinstance(selection, dict) or set(selection) != keys:

@@ -83,6 +83,40 @@ def completed(tmp_path):
     return output,result,request
 
 
+def test_a_stored_request_without_the_recipe_still_checks(tmp_path):
+    output,result,request = completed(tmp_path)
+    assert 'optimizer_lr' not in request and worker.check_request(request) == request
+    assert worker.check_result(output,result,request) == result
+
+
+def test_the_recipe_reaches_the_config_only_when_named_and_the_model_must_match(tmp_path):
+    output,result,request = completed(tmp_path)
+    shipped = worker.configuration(output,request)['policy']
+    assert shipped['chunk_size'] == 4 and 'optimizer_lr' not in shipped
+    tuned = dict(request,optimizer_lr=1e-4,chunk_size=20)
+    policy = worker.configuration(output,tuned)['policy']
+    assert policy['chunk_size'] == 20 and policy['optimizer_lr'] == policy['optimizer_lr_backbone'] == 1e-4
+    assert worker.check_request(tuned) == tuned
+    for bad in (dict(tuned,optimizer_lr=1.0),dict(tuned,chunk_size=0),dict(tuned,other=1)):
+        with pytest.raises(ValueError):
+            worker.check_request(bad)
+    write_json(output/'train-config.json',worker.configuration(output,tuned))
+    write_json(output/'source-request.json',tuned)
+    for name in ('train-config.json','source-request.json'):
+        result['evidence_files'][name] = hashlib.sha256((output/name).read_bytes()).hexdigest()
+    model = output/'trainer/checkpoints/last/pretrained_model'
+    config = json.loads((model/'config.json').read_text())
+    for lr,accepted in ((1e-3,False),(1e-4,True)):
+        write_json(model/'config.json',dict(config,chunk_size=20,optimizer_lr=lr))
+        result['artifact_files'] = source.hashes(model)
+        write_json(output/'result.json',result)
+        if accepted:
+            assert worker.check_result(output,result,tuned) == result
+        else:
+            with pytest.raises(ValueError,match='optimizer_lr'):
+                worker.check_result(output,result,tuned)
+
+
 def test_closed_model_archive_redacts_host_paths_and_tracks_exported_hashes(tmp_path):
     output,result,request = completed(tmp_path)
     assert worker.check_result(output,result,request) == result
