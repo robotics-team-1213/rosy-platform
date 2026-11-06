@@ -55,3 +55,19 @@ def test_the_io_unit_runs_the_battery_reader():
     unit = IO_UNIT.read_text(encoding="utf-8")
     assert "enable_battery:=true" in unit
     assert "DeviceAllow=/dev/i2c-1 rw" in unit
+
+
+NAV_UNIT = IO_UNIT.with_name("rosy-navigation.service")
+
+
+def test_the_navigation_graph_publishes_battery_evidence_without_rosy_io():
+    """rosy-io is stopped while navigation runs (Conflicts=), so navigation's own
+    graph must run the one battery_publisher or CORE power_health is blind."""
+    code = _code(HARDWARE_LAUNCH)
+    assert 'DeclareLaunchArgument("enable_battery", default_value="true")' in code
+    assert '"enable_battery": LaunchConfiguration("enable_battery")' in code
+    nav = NAV_UNIT.read_text(encoding="utf-8")
+    assert "Conflicts=rosy-io.service" in nav
+    assert "enable_battery:=false" not in nav
+    # one owner: the two units that start the bringup graph exclude each other
+    assert "Conflicts=rosy-navigation.service" in IO_UNIT.read_text(encoding="utf-8")
