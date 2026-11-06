@@ -229,7 +229,7 @@ def test_many_console_tabs_cost_one_database_read_and_never_read_the_jpegs():
     """Each tab polls the list every 500 ms: 20 tabs must not mean 20 database reads, and none may load a frame blob."""
     clock = [0.0]
     store = ArmIncidentStore(monotonic=lambda: clock[0])
-    big = b"\xff\xd8" + b"x" * 200_000 + b"\xff\xd9"
+    big = b"\xff\xd8" + b"x" * 199_000 + b"\xff\xd9"
     frame = {"role": "top", "sha256": hashlib.sha256(big).hexdigest(), "jpeg_b64": base64.b64encode(big).decode()}
     store.report(ArmIncidentReport.model_validate(report(frames=(), source="arm_b") | {"frames": [frame]}))
     reads = []
