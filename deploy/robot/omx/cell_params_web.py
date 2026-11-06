@@ -7,7 +7,11 @@
 Every parameter is listed; vision thresholds and tolerances can be changed, guards and motion values cannot
 (lock_reason). A save validates with cell_params, replaces the file atomically and appends the previous entries to
 <file>.history.jsonl. It is refused while a session runs: a run's processes read the file at different moments, and
-its attempt rows would then name values it did not use. New values apply from the next run.
+its attempt rows would then name values it did not use. New values apply from the next run. Run it as the user that
+runs the sessions, with the same ROSY_OMX_HOME: the lock it checks is printed at start.
+
+`--caps arm_b=caps.json [--profile arm_b=robot-profile.json]` also shows, read-only, each follower motor's servo values
+and the layer that set them, as `record_session --caps --operating-profile` would use them (session_caps.servo_layers).
 """
 from __future__ import annotations
 
@@ -84,7 +88,8 @@ def cell_hold():
     """Hold the cell exclusively while a save reads and replaces the file: no session starts between the check and the
     write, and a second page cannot overwrite this one."""
     # shortcut: a session starting in these milliseconds exits and must be restarted; a person pressed save, so it is
-    # rare and visible. If it ever matters, make session_lock wait briefly for this hold.
+    # rare and visible. A whole-cell session ending in the same milliseconds keeps test jobs held off until the busy
+    # marker expires (joint_tune.hold_test_jobs). If either ever matters, make those wait briefly for this hold.
     import fcntl
 
     from joint_tune import lock_root
@@ -191,7 +196,22 @@ class ParamFiles:
             raise
 
 
-def make_server(files: ParamFiles, port: int, host: str = "127.0.0.1"):
+def servo_table(name: str, caps: Path, profile: Path | None = None) -> dict:
+    """One arm's servo values for the page; a file a session would refuse shows its reason instead."""
+    try:
+        import guarded_native
+        import session_caps
+
+        layers = session_caps.servo_layers(caps, model=session_caps.model_tuning(),
+                                           robot=session_caps.robot_tuning(profile))
+    except (OSError, ValueError, KeyError, TypeError, AttributeError, SystemExit) as exc:
+        return {"name": name, "error": f"{caps.name}: {exc}"}
+    return {"name": name, "path": str(caps), "profile": str(profile) if profile else None,
+            "motors": [{"id": motor, "joint": joint, "values": layers[motor]}
+                       for motor, joint in zip(layers, guarded_native.NAMES)]}
+
+
+def make_server(files: ParamFiles, port: int, host: str = "127.0.0.1", servo: dict | None = None):
     class Handler(BaseHTTPRequestHandler):
         def reply(self, code, value, kind="application/json"):
             body = value if isinstance(value, bytes) else json.dumps(value, ensure_ascii=False).encode()
@@ -216,6 +236,8 @@ def make_server(files: ParamFiles, port: int, host: str = "127.0.0.1"):
                 return self.reply(200, PAGE.read_bytes(), "text/html; charset=utf-8")
             if self.path == "/params.json":
                 return self.reply(200, files.snapshot())
+            if self.path == "/servo.json":
+                return self.reply(200, [servo_table(name, *paths) for name, paths in (servo or {}).items()])
             self.reply(404, {"error": "not found"})
 
         def do_POST(self):
@@ -253,18 +275,26 @@ def parse_file(text: str) -> tuple:
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--file", type=parse_file, action="append", required=True, metavar="NAME=PATH")
+    parser.add_argument("--caps", type=parse_file, action="append", default=[], metavar="NAME=PATH")
+    parser.add_argument("--profile", type=parse_file, action="append", default=[], metavar="NAME=PATH")
     parser.add_argument("--port", type=int, default=8772)
     args = parser.parse_args(argv)
-    files = dict(args.file)
-    if len(files) != len(args.file):
-        parser.error("--file names must differ")
+    files, caps, profiles = dict(args.file), dict(args.caps), dict(args.profile)
+    if len(files) != len(args.file) or len(caps) != len(args.caps) or len(profiles) != len(args.profile):
+        parser.error("--file, --caps and --profile names must differ")
+    if not set(profiles) <= set(caps):
+        parser.error("--profile needs a --caps of the same name")
     for path in files.values():
         try:
             prm.load(path)
         except (OSError, ValueError) as exc:
             parser.error(f"{path}: {exc}")
-    server = make_server(ParamFiles(files), args.port)
-    print(f"cell params: http://127.0.0.1:{server.server_port}", flush=True)
+    server = make_server(ParamFiles(files), args.port,
+                         servo={name: (path, profiles.get(name)) for name, path in caps.items()})
+    from joint_tune import lock_root
+
+    # A page with another HOME or ROSY_OMX_HOME would watch a different lock and save during a session.
+    print(f"cell params: http://127.0.0.1:{server.server_port}, session lock {lock_root() / 'session.lock'}", flush=True)
     server.serve_forever()
 
 

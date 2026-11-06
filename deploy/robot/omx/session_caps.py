@@ -50,6 +50,21 @@ def robot_tuning(profile) -> dict:
     return load_tuning(load(profile)["servo"], "operating profile servo")
 
 
+def servo_layers(path: Path, *, model=None, robot=None) -> dict:
+    """{motor: {key: {"value", "from", "hidden": {layer: value}}}}: which layer sets each value load_caps returns."""
+    load_caps(path, model=model, robot=robot)  # refuses what a session would refuse
+    site = {int(k): v for k, v in json.loads(path.read_text(encoding="utf-8")).items()}
+    model, robot = model or {}, robot or {}
+    table = {}
+    for motor in sorted(FOLLOWER):
+        layers = (("model", model.get(motor, {})), ("site", site[motor]), ("robot", robot.get(motor, {})))
+        table[motor] = {}
+        for key in {key for _, values in layers for key in values}:
+            named = [(layer, values[key]) for layer, values in layers if key in values]
+            table[motor][key] = {"value": named[-1][1], "from": named[-1][0], "hidden": dict(named[:-1])}
+    return table
+
+
 def load_caps(path: Path, *, model=None, robot=None) -> dict:
     """The site caps file, over the model's tuning and under the robot's (motor and key at a time)."""
     raw = json.loads(path.read_text(encoding="utf-8"))
