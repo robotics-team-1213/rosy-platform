@@ -264,6 +264,8 @@ body[data-pilot-screen="arm"] ui-topbar [data-gate-state] { display: none; }
 
 /* 센서 값 표: 각도·범위 막대·시작 자세까지 남은 각도. 원본 JSON은 접어 둔다. */
 .arm-sensors { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-2); min-width: 0; }
+.arm-status-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.arm-status-row > p { margin: 0; }
 .arm-sensors-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); }
 .arm-chip { font-size: var(--text-label); padding: 0 var(--space-2); border-radius: var(--radius-flag); border: 1px solid var(--border-subtle); }
 .arm-chip[data-state="fresh"] { border-color: var(--status-good); color: var(--status-good); }
@@ -361,6 +363,9 @@ body[data-pilot-screen="arm"] ui-topbar [data-gate-state] { display: none; }
   html:not([data-pilot-shell="android"]) body[data-pilot-screen="connect"] :is(ui-brand small, #pilot-notice) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   body[data-pilot-screen="arm"] .pilot-main { max-width: 120rem; }
   [data-screen="arm"] { max-width: 120rem; }
+  /* 넓은 화면: 종료 카드는 자기 칸에 머문다(보이는 동안 아래에 붙는다) — 센서 표와 다른 기록 칸을 덮지 않는다. */
+  [data-screen="arm"][data-recording] { padding-bottom: var(--space-3); }
+  [data-screen="arm"][data-recording] [data-sim-step="stop"] { position: sticky; inset: auto auto var(--space-3); max-width: none; margin-inline: 0; }
   .arm-console {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     grid-template-areas: "view controls" "view actions" "record record";
