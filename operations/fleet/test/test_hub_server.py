@@ -198,3 +198,15 @@ def test_send_reply_never_sends_into_a_closed_socket():
     assert asyncio.run(send_reply(gone, reply)) is False
     live = Socket(WebSocketState.CONNECTED)
     assert asyncio.run(send_reply(live, reply)) is True and live.sent[0]["type"] == "heartbeat"
+
+
+def test_silent_socket_is_closed_after_the_hello_deadline():
+    from fastapi import FastAPI
+    from fleet.hub.server import install_hub_routes
+    hub = SiteHub([_ep("rosy_01")])
+    client = TestClient(install_hub_routes(FastAPI(), hub, hello_timeout_s=0.2))
+    with client.websocket_connect("/ws/robots") as ws:
+        with pytest.raises(WebSocketDisconnect) as closed:
+            ws.receive_json()
+    assert closed.value.code == 4408
+    assert hub.registry.online_ids() == []

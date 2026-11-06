@@ -95,7 +95,7 @@ class NativeGazeboMapPosePort:
                              ('graph_sha256', 64), ('urdf_sha256', 64)):
             if not re.fullmatch('[0-9a-f]{' + str(length) + '}', getattr(binding, name)):
                 raise ValueError(f'invalid native SIM {name}')
-        if (type(binding.domain_id) is not int or not 80 <= binding.domain_id <= 99
+        if (type(binding.domain_id) is not int or not 20 <= binding.domain_id <= 29
                 or type(binding.epoch) is not int or binding.epoch < 1
                 or type(binding.map_revision) is not int or binding.map_revision < 1
                 or not _pose(binding.map_from_world)

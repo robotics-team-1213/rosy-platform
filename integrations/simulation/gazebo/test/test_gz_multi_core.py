@@ -230,7 +230,7 @@ def test_two_camera_launch_isolates_observers_and_preview_per_robot(monkeypatch,
     run_spec = tmp_path / 'run-spec.yaml'
     run_spec.write_text(yaml.safe_dump(dict(run_id='law-test', core_config_dir=str(tmp_path),
         fleet_manifest='robots.yaml', hub_url='http://127.0.0.1', gz_partition='law-test',
-        ros_domain_id=89, robots=reservations)), encoding='utf-8')
+        ros_domain_id=25, robots=reservations)), encoding='utf-8')
     context.launch_configurations['run_spec'] = str(run_spec)
     for action in tuple(actions):
         if isinstance(action, OpaqueFunction):
@@ -416,7 +416,7 @@ def test_validation_domain_is_delivered_before_all_participants(tmp_path):
     from launch.actions import SetEnvironmentVariable, IncludeLaunchDescription
     spec = {"run_id": "d426-test", "core_config_dir": str(tmp_path),
             "fleet_manifest": str(tmp_path / "robots.yaml"), "hub_url": "http://127.0.0.1:32001",
-            "gz_partition": "d426-test", "ros_domain_id": 80,
+            "gz_partition": "d426-test", "ros_domain_id": 20,
             "robots": [{"namespace": "rosy_01", "api_port": 31001}]}
     (tmp_path / "core_rosy_01.yaml").write_text(yaml.safe_dump({
         "robot": {"id": "rosy_01"}, "network": {"api_host": "127.0.0.1", "api_port": 31001}}),

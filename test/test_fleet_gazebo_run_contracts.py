@@ -54,10 +54,10 @@ def test_launch_spec_requires_valid_domain_and_matching_robot_namespaces(tmp_pat
     parts = _parts()
     spec = {"run_id": "d426-unit", "core_config_dir": str(tmp_path),
             "fleet_manifest": str(tmp_path / "robots.yaml"), "hub_url": "http://127.0.0.1:32001",
-            "gz_partition": "d426-unit", "ros_domain_id": 80,
+            "gz_partition": "d426-unit", "ros_domain_id": 20,
             "robots": [{"namespace": "rosy_01", "api_port": 31001}]}
     path = tmp_path / "run_spec.yaml"
-    for domain in (None, True, "80", 79, 100, 120, 172, 199):
+    for domain in (None, True, "20", 19, 30, 41, 80, 99, 120, 199):
         path.write_text(yaml.safe_dump({**spec, "ros_domain_id": domain}), encoding="utf-8")
         with pytest.raises(RuntimeError, match="domain"):
             parts.load_run_spec(str(path))
@@ -90,7 +90,7 @@ def test_reserved_domain_is_accepted_by_core_and_launch(tmp_path, monkeypatch, s
     from core.system.ros_graph import parse_domain_id
 
     reservation = Reservations.derive(f"d426-domain-{seed}", robots=2, started_at=0.)
-    assert 80 <= reservation.ros_domain_id <= 99
+    assert 20 <= reservation.ros_domain_id <= 29
     assert parse_domain_id(reservation.ros_domain_id) == reservation.ros_domain_id
     spec = {"run_id": reservation.run_id, "core_config_dir": str(tmp_path),
             "fleet_manifest": str(tmp_path / "robots.yaml"), "hub_url": reservation.hub_url,
@@ -109,7 +109,7 @@ def test_runner_refuses_existing_domain_reservation_before_writing(tmp_path):
         run_cli.check_reservations(tmp_path, old)
 
 
-@pytest.mark.parametrize("field,value", [("ros_domain_id", "80"), ("robots", True),
+@pytest.mark.parametrize("field,value", [("ros_domain_id", "20"), ("robots", True),
                                          ("api_ports", []), ("namespaces", ["other_01"])])
 def test_runner_refuses_corrupted_recorded_reservations(tmp_path, field, value):
     path = write_manifest(tmp_path / "old", _reservations(), versions={}, hashes={}, argv=[])
@@ -315,3 +315,16 @@ def test_cli_generates_matching_overlays_and_manifest(tmp_path, capsys):
                           "--run-id", "d426-gen", "--world", str(world), "--map", str(map_yaml),
                           "--profile", str(profile)])
     assert rerun == 2
+
+
+def test_sim_domains_stay_below_every_real_robot_domain():
+    """D-676 addendum 2026-11-06: robots hold 41..101, so a discovery leak must not reach one."""
+    import re
+    from preflight import DOMAIN_RANGE
+
+    first_robot_domain = 40 + 1
+    assert DOMAIN_RANGE[1] < first_robot_domain
+    script = (TOOLS.parents[2] / "tools/run_fleet_sim.sh").read_text(encoding="utf-8")
+    span, low = map(int, re.search(r"ROS_DOMAIN_ID=\$\(\( \(RANDOM % (\d+)\) \+ (\d+) \)\)", script).groups())
+    assert low + span - 1 < first_robot_domain
+    assert not {30, 31} & set(range(low, low + span))  # OMX compose domains

@@ -146,6 +146,31 @@ def test_cell_displays_two_arms_three_cameras_and_expires_each_disconnected_sour
         browser.close()
 
 
+def test_hidden_cell_tab_stops_pulling_and_resumes_when_shown(cell_url):
+    from playwright.sync_api import expect, sync_playwright
+    visibility = """hidden => {
+        Object.defineProperty(document, 'hidden', {configurable: true, value: hidden});
+        document.dispatchEvent(new Event('visibilitychange'));
+    }"""
+    with sync_playwright() as playwright:
+        browser, page, errors = open_page(playwright, 390, 844, url=cell_url)
+        state, _ = observation_feed(page)
+        page.goto(cell_url)
+        arm = page.locator('#workcell-observations [data-arm-source="feedback_a"] pre')
+        expect(arm).to_contain_text("0.25")
+        page.evaluate(visibility, True)
+        page.wait_for_timeout(700)  # answers already in flight when the tab was hidden
+        settled = state.sequence
+        page.wait_for_timeout(1500)  # three 500 ms polls, each with three camera frames, if the guard failed
+        assert state.sequence == settled
+        page.evaluate(visibility, False)
+        page.wait_for_timeout(700)  # wake or the next poll; this does not tell the two apart
+        assert state.sequence > settled
+        assert not errors, errors
+        page.unroute_all(behavior="ignoreErrors")
+        browser.close()
+
+
 def test_cell_logout_clears_observations_and_ignores_late_responses(cell_url):
     from playwright.sync_api import expect, sync_playwright
     with sync_playwright() as playwright:
