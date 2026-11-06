@@ -15,6 +15,9 @@ const nextActions={perception:'보고서 상태와 단계별 근거를 확인하
   policy:'산출물 파일과 승격 증거를 정책 원장에서 확인하세요.',
   isaac:'환경과 과제 설정이 맞는지 독립 시뮬레이션에서 확인하세요.',
   segmentation:'픽셀 검수 결과를 확인하세요. 객체 박스 승인과 별개입니다.'};
+// 실패와 거절은 다음 행동이 다르다: 실패는 실행 오류를 고치고, 거절은 품질 기준에 맞게 자료·설정을 바꾼다.
+const stateActions={'실패 확인':'실행이 실패했습니다. 아래 실패한 단계와 이유를 확인하고 원인을 고친 뒤 다시 실행하세요.',
+  '거절 확인':'품질 기준을 넘지 못해 거절됐습니다. 자료나 설정을 바꿔 다시 학습하세요. 로봇에는 적용되지 않았습니다.'};
 const reasons={does_not_beat_constant_target_baseline:'오프라인 평가가 상수 목표 기준을 넘지 못했습니다.',no_approved_masks:'아직 사람이 승인한 픽셀 마스크가 없습니다.',
   'work busy: GPU compute job':'다른 GPU 작업이 끝나면 자동으로 다시 확인합니다.',
   'work busy: GPU utilization':'GPU 사용 중입니다. 자동으로 다시 확인합니다.'};
@@ -228,7 +231,7 @@ function render() {
     const status=summary(item),kind=workspace.workflows.find(row=>row.id===item.kind);
     const candidate=item.reports.some(row=>row.declared?.schema==='rosy.pidnet-candidate-evaluation/1');
     const card=taskRow({title:item.name,subtitle:kind.name,status:status.label,attention:status.attention,
-      description:candidate?'독립 시험 결과를 확인하세요. 로봇 적용은 별도 검증이 필요합니다.':nextActions[item.kind]||item.next});
+      description:candidate?'독립 시험 결과를 확인하세요. 로봇 적용은 별도 검증이 필요합니다.':stateActions[status.label]||nextActions[item.kind]||item.next});
     card.dataset.job=item.id;
     text(card,'p','','ui-task-meta').dataset.reportAge='';
     for(const report of item.reports) {
