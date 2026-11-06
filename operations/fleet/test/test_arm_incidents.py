@@ -1,4 +1,5 @@
 """D-971: OMX arm incidents. The control PC reports with its arm token, the AI PC explains, a named operator clears."""
+import asyncio
 import base64
 from hashlib import sha256
 import hashlib
@@ -223,3 +224,51 @@ def test_frames_are_served_to_viewers_only_for_a_known_role(client):
     assert shown.status_code == 200 and shown.headers["content-type"] == "image/jpeg" and shown.content[:2] == b"\xff\xd8"
     assert client.get(url.replace("top", "back"), headers=bearer("viewer-token")).status_code == 404
     assert client.get(url.replace("arm_b", "arm_a"), headers=bearer("viewer-token")).status_code == 404
+
+
+def test_many_console_tabs_cost_one_database_read_and_never_read_the_jpegs():
+    """Each tab polls the list every 500 ms: 20 tabs must not mean 20 database reads, and none may load a frame blob."""
+    clock = [0.0]
+    store = ArmIncidentStore(monotonic=lambda: clock[0])
+    big = b"\xff\xd8" + b"x" * 199_000 + b"\xff\xd9"
+    frame = {"role": "top", "sha256": hashlib.sha256(big).hexdigest(), "jpeg_b64": base64.b64encode(big).decode()}
+    store.report(ArmIncidentReport.model_validate(report(frames=(), source="arm_b") | {"frames": [frame]}))
+    reads = []
+    store._db.set_trace_callback(lambda sql: reads.append(sql) if sql.lstrip().upper().startswith("SELECT") else None)
+
+    first = store.snapshot("arm_b")
+    one_tab = len(reads)
+    for _ in range(19):
+        assert store.snapshot("arm_b") == first
+    assert len(reads) == one_tab and one_tab > 0  # 20 tabs read what 1 tab reads
+    assert first[0]["frames"] == [{"role": "top", "sha256": frame["sha256"], "bytes": len(big)}]
+    assert not any("jpeg FROM" in sql or ", jpeg" in sql for sql in reads)
+
+    store.clear("arm_b", first[0]["incident_id"], "checked", "op-7")  # a write shows at once
+    assert store.snapshot("arm_b")[0]["state"] == "cleared"
+    reads.clear(); clock[0] = 5.0  # the backstop re-reads even without a write
+    store.snapshot("arm_b")
+    assert reads
+
+
+def test_incident_store_work_never_runs_on_the_event_loop(client, monkeypatch):
+    """The same loop answers every robot's heartbeat; a slow frame write must not hold it."""
+    on_loop = []
+    def watched(name, original):
+        def call(self, *args):
+            try:
+                asyncio.get_running_loop()
+                on_loop.append(name)
+            except RuntimeError:
+                pass
+            return original(self, *args)
+        return call
+    for name in ("report", "accepted", "clear", "hold", "explain"):
+        monkeypatch.setattr(ArmIncidentStore, name, watched(name, getattr(ArmIncidentStore, name)))
+    incident_id = post(client).json()["incident_id"]
+    assert client.post(f"{PATH}/arms/arm_b/incidents/{incident_id}/clear", json={"note": "checked the jaws"},
+                       headers=bearer("operator-token")).json()["held"] is False
+    second = post(client, report(session="7f1c2a3e-1b2d-4e5f-8a9b-0c1d2e3f4a5b")).json()["incident_id"]
+    reply = client.post(f"{PATH}/arms/arm_b/incidents/{second}/explanation", json={"seen": "A box in the jaws.", "suspected_cause": "Overload.", "model": "m:1"},
+                        headers=bearer("ai-token"))
+    assert reply.status_code == 200 and on_loop == []
