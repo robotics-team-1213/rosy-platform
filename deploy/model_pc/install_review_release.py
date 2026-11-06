@@ -6,7 +6,7 @@ Run as the same user that owns rosy-review-v13.service. See README.md.
 from __future__ import annotations
 
 import argparse
-from contextlib import closing
+from contextlib import closing, contextmanager
 import hashlib
 import ipaddress
 import json
@@ -16,10 +16,15 @@ import shutil
 import sqlite3
 import stat
 import subprocess
+import tempfile
 import time
 import urllib.error
 import urllib.request
+import uuid
 from pathlib import Path
+
+if os.name == 'posix':
+    import fcntl
 
 
 SERVICE = "rosy-review-v13.service"
@@ -283,8 +288,101 @@ def check_learning_idle(config: Path) -> None:
         raise ValueError('learning center state could not be verified') from exc
 
 
+@contextmanager
+def review_update_lock(root: Path):
+    if os.name != 'posix':
+        raise ValueError('review release updates require POSIX locking')
+    root = root.expanduser().resolve()
+    root.mkdir(parents=True, exist_ok=True)
+    descriptor = os.open(root / 'review-update.lock', os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+    with os.fdopen(descriptor, 'r+b') as lock:
+        info = os.fstat(lock.fileno())
+        if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or info.st_mode & 0o077:
+            raise ValueError('review update lock must be a private owned regular file')
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        yield root
+
+
+def read_manual_hold(root: Path, service: str) -> dict | None:
+    validate_service(service)
+    marker = root / 'manual-hold.json'
+    try:
+        descriptor = os.open(marker, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except FileNotFoundError:
+        if marker.is_symlink():
+            raise ValueError('manual hold must not be a symlink')
+        return None
+    with os.fdopen(descriptor, 'r', encoding='utf-8') as stream:
+        info = os.fstat(stream.fileno())
+        if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid()
+                or info.st_mode & 0o077 or info.st_size > 4096):
+            raise ValueError('manual hold must be a small private owned regular file')
+        value = json.loads(stream.read(4097))
+    if (not isinstance(value, dict) or set(value) != {'schema', 'service', 'hold_id'}
+            or value['schema'] != 'rosy.review.manual-hold/1' or value['service'] != service
+            or not isinstance(value['hold_id'], str) or not re.fullmatch('[0-9a-f]{32}', value['hold_id'])):
+        raise ValueError('manual hold does not match this review service')
+    return value
+
+
+def _hold_locked(root: Path, service: str) -> str:
+    existing = read_manual_hold(root, service)
+    if existing is not None:
+        return existing['hold_id']
+    value = {'schema': 'rosy.review.manual-hold/1', 'service': service, 'hold_id': uuid.uuid4().hex}
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', dir=root,
+                                         prefix='.manual-hold-', delete=False) as stream:
+            temporary = Path(stream.name)
+            json.dump(value, stream)
+            stream.write('\n')
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, root / 'manual-hold.json')
+        _sync_hold_directory(root)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+    return value['hold_id']
+
+
+def _sync_hold_directory(root: Path) -> None:
+    descriptor = os.open(root, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
+def hold(root: Path, service: str = SERVICE) -> str:
+    validate_service(service)
+    with review_update_lock(root) as root:
+        return _hold_locked(root, service)
+
+
+def unhold(root: Path, service: str, hold_id: str) -> None:
+    validate_service(service)
+    with review_update_lock(root) as root:
+        value = read_manual_hold(root, service)
+        if value is None or value['hold_id'] != hold_id:
+            raise ValueError('manual hold ID does not match; automatic updates remain held')
+        (root / 'manual-hold.json').unlink()
+        _sync_hold_directory(root)
+
+
 def install(source: Path | None, release: str, root: Path, state: Path | None,
-            python: Path | None, host: str, port: int, unit: Path, service: str = SERVICE) -> Path:
+            python: Path | None, host: str, port: int, unit: Path, service: str = SERVICE,
+            *, hold: bool = False) -> Path:
+    validate_service(service)
+    with review_update_lock(root) as root:
+        if hold:
+            _hold_locked(root, service)
+        return _install_locked(source, release, root, state, python, host, port, unit, service)
+
+
+def _install_locked(source: Path | None, release: str, root: Path, state: Path | None,
+                    python: Path | None, host: str, port: int, unit: Path, service: str = SERVICE) -> Path:
     validate_service(service)
     if not re.fullmatch(r"[A-Za-z0-9._-]+", release) or release in (".", ".."):
         raise ValueError("release must be one safe path component")
@@ -463,19 +561,35 @@ def install(source: Path | None, release: str, root: Path, state: Path | None,
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("release", help="release name; omit --source to reactivate a prior release")
+    parser.add_argument("release", nargs='?', help="release name; omit --source to reactivate a prior release")
     parser.add_argument("--source", type=Path)
     parser.add_argument("--state", type=Path)
     parser.add_argument("--python", type=Path)
-    parser.add_argument("--host", required=True)
-    parser.add_argument("--port", type=int, required=True)
+    parser.add_argument("--host")
+    parser.add_argument("--port", type=int)
     parser.add_argument("--root", type=Path, default=Path.home() / "rosy-ml/review-v13-code")
     parser.add_argument("--service", type=validate_service, default=SERVICE)
+    protection = parser.add_mutually_exclusive_group()
+    protection.add_argument('--hold', action='store_true', help='hold automatic updates until explicitly released')
+    protection.add_argument('--unhold', metavar='HOLD_ID', help='resume automatic updates for this exact hold ID')
     args = parser.parse_args()
+    if args.unhold is not None and args.release:
+        parser.error('--unhold cannot install a release')
+    if not args.release and not (args.hold or args.unhold is not None):
+        parser.error('release, --hold or --unhold is required')
+    if args.release and (args.host is None or args.port is None):
+        parser.error('installing a release requires --host and --port')
     unit = Path.home() / ".config/systemd/user" / args.service
     try:
+        if args.unhold is not None:
+            unhold(args.root, args.service, args.unhold)
+            print(f'automatic review updates enabled: {args.service}')
+            return
+        if not args.release:
+            print(f'manual hold: {args.service} {hold(args.root, args.service)}')
+            return
         release = install(args.source, args.release, args.root, args.state, args.python,
-                          args.host, args.port, unit, args.service)
+                          args.host, args.port, unit, args.service, hold=args.hold)
     except (OSError, ValueError, RuntimeError, subprocess.CalledProcessError) as exc:
         parser.exit(1, f"review release failed: {exc}\n")
     print(f"active review release: {release}")
