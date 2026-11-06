@@ -12,6 +12,6 @@
 <label>검수 종류 <select id="kind" class="ui-field"><option value="object">객체</option><option value="pixel">픽셀</option></select></label>
 <p>기존 클래스는 표시 이름과 색상만 수정할 수 있습니다. 기존 번호·정본 이름·역할·의미는 유지됩니다. 새 클래스는 사용하지 않은 번호로 추가합니다.</p>
 <p>클래스 추가나 픽셀 색상 변경 후에는 다른 탭의 미저장 작업도 최신 클래스와 검수 버전을 다시 불러와야 합니다. 제외·검수 대기 상태는 유지됩니다.</p>
-<form id="form"><div id="rows"></div><button id="add" type="button">클래스 추가</button><p id="impact" role="status"></p>
-<label class="ui-check"><input id="confirm" class="ui-field" type="checkbox">이 작업공간 전체의 변경 범위와 재검수 대상을 확인했습니다.</label><p><button id="apply" type="submit" disabled>클래스 개정 적용</button> <button id="reload" type="button">다시 불러오기</button></p></form>
+<form id="form"><div id="rows"></div><ui-button id="add" kind="quiet" type="button">클래스 추가</ui-button><p id="impact" role="status"></p>
+<label class="ui-check"><input id="confirm" class="ui-field" type="checkbox">이 작업공간 전체의 변경 범위와 재검수 대상을 확인했습니다.</label><p><ui-button id="apply" kind="primary" type="submit" disabled>클래스 개정 적용</ui-button> <ui-button id="reload" kind="quiet" type="button">다시 불러오기</ui-button></p></form>
 <p id="result" role="status"></p><p id="error" role="alert"></p></main></div></div></ui-shell></body></html>
