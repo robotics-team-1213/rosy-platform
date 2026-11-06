@@ -156,6 +156,7 @@ def test_lost_train_reply_reuses_identity_after_reload_and_stop_is_global(imitat
     page.locator('#train-start').click()
     expect(page.locator('#active-run')).to_contain_text('ACT')
     assert posts[0] == posts[1]
+    assert posts[0]['optimizer_lr'] == 0.00001 and posts[0]['chunk_size'] == 4
     page.locator('#tab-upload').click()
     expect(page.locator('#active-stop')).to_be_visible()
     page.locator('#active-stop').click()

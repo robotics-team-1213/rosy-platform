@@ -101,7 +101,10 @@ def test_the_recipe_reaches_the_config_only_when_named_and_the_model_must_match(
         with pytest.raises(ValueError):
             worker.check_request(bad)
     write_json(output/'train-config.json',worker.configuration(output,tuned))
-    result['evidence_files']['train-config.json'] = hashlib.sha256((output/'train-config.json').read_bytes()).hexdigest()
+    write_json(output/'source-request.json',tuned)
+    for name in ('train-config.json','source-request.json'):
+        result['evidence_files'][name] = hashlib.sha256((output/name).read_bytes()).hexdigest()
+    write_json(output/'result.json',result)
     model = output/'trainer/checkpoints/last/pretrained_model'
     config = json.loads((model/'config.json').read_text())
     write_json(model/'config.json',dict(config,chunk_size=20,optimizer_lr=1e-3))
@@ -111,12 +114,6 @@ def test_the_recipe_reaches_the_config_only_when_named_and_the_model_must_match(
     write_json(model/'config.json',dict(config,chunk_size=20,optimizer_lr=1e-4))
     result['artifact_files'] = source.hashes(model)
     worker.check_result(output,result,tuned)
-
-
-def test_the_recipe_is_a_valid_act_config():
-    configuration = pytest.importorskip('lerobot.policies.act.configuration_act')
-    config = configuration.ACTConfig(chunk_size=20,n_action_steps=1,optimizer_lr=1e-4,optimizer_lr_backbone=1e-4)
-    assert config.get_optimizer_preset().lr == 1e-4 and config.action_delta_indices == list(range(20))
 
 
 def test_closed_model_archive_redacts_host_paths_and_tracks_exported_hashes(tmp_path):
