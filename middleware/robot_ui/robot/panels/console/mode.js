@@ -18,7 +18,7 @@ export function mount(root, ctx) {
   modeStatus.setAttribute("state", "pending"); capabilityStatus.setAttribute("state", "pending"); actionStatus.setAttribute("state", "ready");
   actionStatus.setAttribute("role", "status");
   actionStatus.setAttribute("aria-live", "polite");
-  const controls = el("ui-actions", "surface-actions");
+  const controls = el("ui-actions", "surface-actions mode-actions");
   const buttons = new Map();
   for (const mode of MODES) {
     const button = el("ui-button", "", mode.label); button.setAttribute("kind", "segment"); button.type = "button";
@@ -78,7 +78,7 @@ export function mount(root, ctx) {
       window.dispatchEvent(new Event("rosy:stop-motion"));
       try {
         await ctx.api("/api/v1/mode", {method: "POST", body: JSON.stringify({mode: mode.id})});
-        if (!disposed) { actionStatus.setAttribute("state", "ready"); setStatus(actionStatus, `${mode.label} 모드 요청을 CORE가 받았습니다. 현재 모드는 위에서 다시 확인하세요.`); }
+        if (!disposed) { actionStatus.setAttribute("state", "ready"); setStatus(actionStatus, `${mode.label} 모드 요청을 로봇이 받았습니다. 현재 모드는 위에서 다시 확인하세요.`); }
       } catch (error) { if (!disposed) { actionStatus.setAttribute("state", "error"); setStatus(actionStatus, `모드 변경 실패: ${error.message}`); } }
       finally { if (!disposed) { pending = false; update(); } }
     });
