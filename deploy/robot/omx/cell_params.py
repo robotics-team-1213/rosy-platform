@@ -44,7 +44,7 @@ DEFAULTS = {
     "track.roi_pad_px": (8, "px", 0, 100), "preflight.target_mean": (140.0, "grey", 30, 230), "preflight.mean_band": (15.0, "grey", 5, 100),
     "preflight.max_exposure": (33000, "v4l2", 80, 100000), "preflight.exposure_steps": (4, "count", 1, 10), "preflight.settle_s": (1.0, "s", 0.1, 5),
     "gripper.gap_mm_per_unit": (10.4, "mm", 3, 30),
-    "scene.diff": (45, "gray", 5, 255), "scene.min_area_px": (350, "px", 20, 100000), "scene.arm_radius_px": (75, "px", 10, 300),
+    "scene.diff": (45, "gray", 5, 255), "scene.min_area_px": (350, "px", 20, 100000), "scene.beyond_px": (60, "px", 10, 300),
     "pivot.max_bias_mm": (25.0, "mm", 1, 200),
     "gripper.held_30mm": (52.3, "gripper", 45, 60), "gripper.open_max": (56.0, "gripper", 50, 70),
     "reach.enabled": (1, "flag", 0, 1), "reach.tol_mm": (2.0, "mm", 0.5, 10), "reach.max_iter": (2, "count", 0, 5),

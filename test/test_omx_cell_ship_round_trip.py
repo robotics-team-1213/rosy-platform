@@ -213,7 +213,7 @@ def view():
 ROI, BASE_PX, TARGET_PX = (285, 185, 425, 420), (200, 230), (315, 250)
 
 
-def test_a_box_pushed_outside_the_arms_corridor_stops_the_hover():
+def test_a_box_pushed_past_the_target_stops_the_hover():
     pushed = view()
     cv2.rectangle(pushed, (380, 200), (410, 300), (170, 170, 170), -1)  # the far box left its place
     cv2.rectangle(pushed, (415, 200), (424, 300), (30, 90, 220), -1)
@@ -221,7 +221,7 @@ def test_a_box_pushed_outside_the_arms_corridor_stops_the_hover():
     assert answer["verdict"] == "refuse" and answer["moved"] and "scene changed" in answer["why"]
 
 
-def test_the_arm_in_its_corridor_and_a_brightness_shift_pass():
+def test_the_arm_short_of_the_target_side_and_a_brightness_shift_pass():
     frame = np.clip(view().astype(int) + 25, 0, 255).astype(np.uint8)
     cv2.circle(frame, TARGET_PX, 60, (20, 20, 20), -1)  # the wrist over the target
     cv2.line(frame, BASE_PX, TARGET_PX, (20, 20, 20), 40)  # the link
@@ -229,7 +229,7 @@ def test_the_arm_in_its_corridor_and_a_brightness_shift_pass():
     assert answer["verdict"] == "pass" and answer["total_mm"] == 0.0
 
 
-def test_a_guard_without_a_corridor_does_not_let_the_carry_go_on():
+def test_a_guard_without_a_base_pixel_does_not_let_the_carry_go_on():
     cell = types.SimpleNamespace(frame=lambda name: pytest.fail("nothing to compare"))
     assert cell_scene_guard.hook(cell, {}, view(), ROI, None, TARGET_PX)()["verdict"] == "refuse"
 
