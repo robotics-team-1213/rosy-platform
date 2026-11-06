@@ -3,6 +3,7 @@
 OPEN -> (EXPLAINED) -> CLEARED, in the shared Fleet SQLite DB. An arm with an incident that is not CLEARED is held: the
 control PC asks before a session and does not start one. A hold is not a command and not a Cell Job claim (D-779).
 The explanation is stored and shown, never acted on. Nothing is deleted."""
+import asyncio
 import base64
 import json
 import re
@@ -186,7 +187,9 @@ def install_arm_incident_routes(app, *, service, store, require_viewer, require_
             raise HTTPException(422, detail={"code": "INVALID_ARM_INCIDENT"}) from None
         if parsed.source_id != source_id:
             raise HTTPException(422, detail={"code": "INVALID_ARM_INCIDENT"})
-        return store.accepted(source_id, store.report(parsed)).model_dump()
+        # a blocked loop holds every robot's heartbeat reply: store waits run off the loop
+        accepted = await asyncio.to_thread(lambda: store.accepted(source_id, store.report(parsed)))
+        return accepted.model_dump()
 
     @app.get(base + "/arms/{source_id}/hold", tags=["workcell-observations"])
     def hold(source_id: str, response: Response,
@@ -204,12 +207,12 @@ def install_arm_incident_routes(app, *, service, store, require_viewer, require_
         except ValidationError:
             raise HTTPException(422, detail={"code": "INVALID_ARM_INCIDENT_CLEAR"}) from None
         try:
-            store.clear(source_id, incident_id, note.note, principal.principal_id)
+            await asyncio.to_thread(store.clear, source_id, incident_id, note.note, principal.principal_id)
         except KeyError:
             raise HTTPException(404, detail={"code": "ARM_INCIDENT_UNKNOWN"}) from None
         except ValueError:
             raise HTTPException(409, detail={"code": "ARM_INCIDENT_ALREADY_CLEARED"}) from None
-        return store.hold(source_id).model_dump()
+        return (await asyncio.to_thread(store.hold, source_id)).model_dump()
 
     @app.get(base + "/arms/{source_id}/incidents/{incident_id}/frames/{role}", tags=["workcell-observations"])
     def frame(source_id: str, incident_id: str, role: str, _principal=Depends(require_viewer)):
@@ -240,7 +243,7 @@ def install_arm_incident_routes(app, *, service, store, require_viewer, require_
         except ValidationError:
             raise HTTPException(422, detail={"code": "INVALID_ARM_INCIDENT_EXPLANATION"}) from None
         try:
-            store.explain(source_id, incident_id, parsed)
+            await asyncio.to_thread(store.explain, source_id, incident_id, parsed)
         except KeyError:
             raise HTTPException(404, detail={"code": "ARM_INCIDENT_UNKNOWN"}) from None
         except ValueError:
