@@ -4615,6 +4615,13 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - gate 변화: 없음 — 실제 helper 설치·두 UI hold·다음 자연 timer 실행과 데이터 보존 수용은 미실행이다. 구형 helper 실행의 자연 종료와 새 helper의 보호 결과를 확인해야 UI를 전환하며, 전체 writer 중지·유휴·일관 백업은 계속 필요하다.
 - CE: 기존 교훈 갱신 — `docs/solutions/deployment/learning-center-upgrade-needs-the-identical-unit-first-2026-10-23.md`에 공유 floor와 UI별 보호의 차이 및 실제 installed helper 결속을 추가했다. frontmatter·mechanical claims0flags, 일반 잠금/고정 용어는 CONCEPTS에 추가하지 않았다. 실물·운영 수용으로 확대하지 않는다.
 
+## 2026-11-06 · uncommitted · chore(release): 후속 UIUX 수용 기록의 정확한 Git metadata 등록
+
+- 변경: latest main f4ccde20ac에서 실행 중인 canonical의 고정 candidate4056b14cd9를 정상 fast-forward로 보존한 별도 topic이다. root 독립 검증으로 실제 Git commit 문맥임을 확인한 historical commit a28d7ea74b의 docs 두 경로에 대해서만 high-entropy-token baseline 2건을 추가했다. 기존185건의 내용·순서·schema·reviewer를 보존하며 scanner·ignore·provenance·정책은 바꾸지 않았다.
+- 증거: root의 독립 Git 문맥 검토로 승인된 정확한 두 triple이다. JSON187건·중복0, 기존185건의 내용·순서·schema·reviewer와 Git raw prefix 일치를 확인했다. source96f98d556e 원격 AI PC 기존 publish/secret/provenance/PSK/scanner 회귀59통과·skip0·NEW/known/flaky0; scratch pinky-metadata-followup-guards/run-1.txt. 정본 origin647부터 해당 source까지269개 commit 추가 줄 스캔은 미검토 hit0이며 독립 고정 source 증분 검토 미해결 finding 없음이다.
+- gate 변화: metadata와 소유 진행 기록뿐이다. 실행 중인 FULL021718은 취소·재시작·대체하지 않고 이번 topic의 새 FULL도 제출하지 않는다. 기존 candidate의 FULL 증거와 이 후속 metadata의 source 검증·공개 자격은 별개다.
+- CE: 해당 없음 — 실제 Git metadata에 대한 exact historical triple 후속 등록이며 기존 scanner 계약과 검증이 범위를 직접 보존한다.
+
 ## 2026-11-06 · uncommitted · fix(omx): 저장된 보정 상한과 안전 코드 지문 결속
 
 - 변경: 새 pivot 측정에만 있던 보정 상한을 저장 파일·메모리 region·직접 pick 계획·학습 저장에도 적용한다. 현재 params의 같은 상한과 두 축 finite 검사를 공통으로 사용하며 잘못된 기존 보정은 0으로 대체하지 않고 거부한다. D-911 코드 지문에 실제 scene guard·jaw axis·hook 조립·pivot·calibration 코드를 포함해 변경 전 검토를 재사용할 수 없게 한다.

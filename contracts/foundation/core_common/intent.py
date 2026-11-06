@@ -51,6 +51,7 @@ _VERBS: dict[str, _Verb] = {
     "cancel": _Verb("robot", "POST", "/api/v1/navigation/cancel", None, frozenset()),
     "stop": _Verb("robot", "POST", "/api/v1/safety/stop", None, frozenset()),
     "move": _Verb("robot", "POST", "/api/v1/teleop", "MOVE", frozenset({"linear", "angular"})),
+    "manual": _Verb("robot", "POST", "/api/v1/mode", None, frozenset()),
     "follow": _Verb("robot", "POST", "/api/v1/swarm/follow", "FOLLOW",
                     frozenset({"target_robot_id", "distance", "lateral", "max_speed",
                                "stream_timeout_ms", "source"})),
