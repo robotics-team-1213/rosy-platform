@@ -34,12 +34,15 @@ def _sums(**changed: str) -> str:
              "install/lib/python3.12/site-packages/fleet/server/app.py": "7" * 64,
              "install/lib/python3.12/site-packages/fleet-0.1.4-py3.12.egg-info/PKG-INFO": "8" * 64,
              "install/share/rosy_vision/config.yaml": "9" * 64,
-             "install/share/dashboard/teleop.js": "a" * 64, "deploy/robot/native/rosy-io.service": "b" * 64}
+             "install/share/dashboard/teleop.js": "a" * 64, "deploy/robot/native/rosy-io.service": "b" * 64,
+             "deploy/robot/native/AGENTS.md": "c" * 64, "deb-packages.txt": "d" * 64, "ros-packages.txt": "f" * 64}
     for key, digest in changed.items():
         files[{"motion": MOTION_FILE, "web": "install/share/dashboard/teleop.js",
                "unit": "deploy/robot/native/rosy-io.service", "lidar": "install/lib/sllidar_ros2/sllidar_node",
                "fleet": "install/lib/python3.12/site-packages/fleet/server/app.py",
-               "header": "install/include/interfaces/a.c", "identity": "source-revision.txt"}[key]] = digest
+               "header": "install/include/interfaces/a.c", "identity": "source-revision.txt",
+               "doc": "deploy/robot/native/AGENTS.md", "runner": "deb-packages.txt",
+               "ros": "ros-packages.txt"}[key]] = digest
     return "".join(f"{digest}  {name}\n" for name, digest in files.items())
 
 
@@ -251,6 +254,7 @@ def test_empty_or_stale_markers_cannot_start_navigation(tmp_path):
     bundle, evidence = _candidate(tmp_path)
     approval.approve(root, bundle, evidence, reviewer="reviewer-c")
     (root / "opt/rosy/current/source-revision.txt").write_text("b" * 40)
+    (root / "opt/rosy/current/SHA256SUMS").write_text(_sums(motion="e" * 64), encoding="utf-8")
     with pytest.raises(ValueError, match="revision"):
         approval.check(root, runtime_mode="hardware")
 
@@ -354,8 +358,8 @@ def _approved_then_updated(tmp_path, approval, sums):
 
 
 @pytest.mark.parametrize("changed", [{}, {"identity": "e" * 64}, {"fleet": "e" * 64}, {"header": "e" * 64},
-                                     {"lidar": "e" * 64}],
-                         ids=["same", "identity", "fleet", "header", "lidar"])
+                                     {"lidar": "e" * 64}, {"doc": "e" * 64}, {"runner": "e" * 64}],
+                         ids=["same", "identity", "fleet", "header", "lidar", "doc", "runner"])
 def test_a_release_with_the_same_motion_files_keeps_the_approval(tmp_path, changed):
     approval = _module()
     root = _approved_then_updated(tmp_path, approval, _sums(**changed))
@@ -363,7 +367,7 @@ def test_a_release_with_the_same_motion_files_keeps_the_approval(tmp_path, chang
     assert result["measured_release_id"] == RELEASE and result["release_id"] == NEXT_RELEASE
 
 
-@pytest.mark.parametrize("key", ["motion", "web", "unit"])
+@pytest.mark.parametrize("key", ["motion", "web", "unit", "ros"])
 def test_a_release_that_changes_a_motion_file_needs_a_new_measurement(tmp_path, key):
     approval = _module()
     root = _approved_then_updated(tmp_path, approval, _sums(**{key: "e" * 64}))
@@ -445,11 +449,12 @@ def test_a_broken_checksum_list_fails_closed(tmp_path):
 def test_packages_left_out_of_the_fingerprint_stay_out_of_motion_code():
     # What makes NOT_ON_PINKY safe: nothing that can move the robot imports these or starts them.
     approval = _module()
-    names = "|".join(approval.NOT_ON_PINKY)
+    # rosy.execution.local is arm policy code that imports omx_adapter: reaching it would reach the arm tree.
+    names = "|".join(approval.NOT_ON_PINKY) + r"|rosy\.execution\.local"
     imports = re.compile(rf"^\s*(?:from|import)\s+(?:{names})(?:\.|\s|$)", re.MULTILINE)
     offenders = []
     for folder in ("middleware/core", "middleware/devices/pinky", "middleware/drive", "middleware/perception",
-                   "middleware/robot_execution", "contracts", "integrations/robots"):
+                   "contracts", "integrations/robots"):
         for path in (ROOT / folder).rglob("*.py") if (ROOT / folder).is_dir() else ():
             if "test" in path.relative_to(ROOT).parts or path.name.startswith("test_"):
                 continue

@@ -47,7 +47,8 @@ EVIDENCE_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]*\.json\Z")
 # D-986 motion fingerprint: every signed release file counts unless named here, so a new
 # package needs a new measurement until someone reviews it. Web files stay in: the hold
 # button's release is part of the measured stop.
-FINGERPRINT_IDENTITY = frozenset({"manifest.json", "SHA256SUMS", "SHA256SUMS.sig",
+# deb-packages.txt lists the build runner, not the robot; ros-packages.txt stays in.
+FINGERPRINT_IDENTITY = frozenset({"manifest.json", "SHA256SUMS", "SHA256SUMS.sig", "deb-packages.txt",
                                   "source-revision.txt", "install/.rosy-release"})
 # Headers do not run. sllidar_ros2's pinned source built to different bytes between
 # identical inputs (004 and 005 on b8xy, 2026-11-07), and it does not command a motor.
@@ -307,7 +308,7 @@ def motion_fingerprint(root):
             raise ValueError("release checksum list is invalid")
         digest, name = match.groups()
         if (name not in FINGERPRINT_IDENTITY and not name.startswith(FINGERPRINT_PREFIXES)
-                and NOT_ON_PINKY_PATH.match(name) is None):
+                and not name.endswith(".md") and NOT_ON_PINKY_PATH.match(name) is None):
             lines.append(f"{digest} {name}")
     if not lines:
         raise ValueError("release checksum list is empty")
