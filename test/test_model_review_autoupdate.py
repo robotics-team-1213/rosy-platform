@@ -5,6 +5,8 @@ import json
 import os
 from pathlib import Path
 import sys
+from concurrent.futures import ThreadPoolExecutor
+from threading import Event, current_thread
 
 import pytest
 
@@ -215,3 +217,46 @@ def test_failed_manual_install_keeps_hold(tmp_path):
     metadata = json.loads((review / 'manual-hold.json').read_text())
     assert metadata['service'] == module.SERVICE
     assert (review / 'current').resolve().name == 'manual-new'
+
+
+@pytest.mark.skipif(os.name == 'nt', reason='requires POSIX symlinks and flock')
+def test_manual_hold_waits_for_inflight_automatic_install(tmp_path, monkeypatch):
+    _, review, args = _manual_review(tmp_path)
+    installer = sys.modules['install_review_release']
+    entered, attempted, release, installed = Event(), Event(), Event(), Event()
+    real_flock = module.fcntl.flock
+
+    def observed_flock(file, operation):
+        manual = current_thread().name == 'manual-hold'
+        if manual:
+            attempted.set()
+        real_flock(file, operation)
+        if manual:
+            assert installed.is_set(), 'hold acquired before the automatic switch completed'
+
+    def activate(_source, name, root, *_args):
+        entered.set()
+        assert release.wait(15)
+        (root / 'current').unlink()
+        (root / 'current').symlink_to(root / 'releases' / name, target_is_directory=True)
+        installed.set()
+
+    def hold():
+        current_thread().name = 'manual-hold'
+        return installer.hold(review, module.SERVICE)
+
+    monkeypatch.setattr(module.fcntl, 'flock', observed_flock)
+    monkeypatch.setattr(module, 'install', activate)
+    with ThreadPoolExecutor(max_workers=2) as workers:
+        automatic = workers.submit(module.apply, *args)
+        try:
+            assert entered.wait(15)
+            manual = workers.submit(hold)
+            assert attempted.wait(15), 'hold must use the same review lock as the updater'
+        finally:
+            release.set()
+        assert automatic.result(timeout=15).startswith('activated:')
+        hold_id = manual.result(timeout=15)
+    assert json.loads((review / 'manual-hold.json').read_text())['hold_id'] == hold_id
+    assert (review / 'current').resolve().name == 'model-code-45-aaaaaaaaaaaa'
+    assert module.apply(*args).startswith('manual hold:')
