@@ -339,3 +339,22 @@ def test_two_second_limit_says_why_and_the_pad_is_a_first_screen_square(console_
         page.mouse.up()
         assert not errors
         browser.close()
+
+
+def test_unknown_stop_state_is_not_called_an_engaged_emergency_stop(console_url):
+    from playwright.sync_api import expect, sync_playwright
+
+    api = _api()
+    robots = api["/api/fleet/state"]["robots"]
+    robots[0]["state"]["safety"] = None
+    robots[1]["state"]["safety"]["estop"] = True
+    with sync_playwright() as playwright:
+        browser, page, errors = _open_console(playwright, api)
+        page.goto(console_url, wait_until="load")
+        _open_cards(page, "rosy_45")
+        reason = page.locator("[data-manual-reason]")
+        expect(reason).to_contain_text("정지 상태를 확인할 수 없습니다")
+        _open_cards(page, "rosy_46")
+        expect(reason).to_contain_text("비상정지 상태를 확인하고 해제하세요")
+        assert not errors
+        browser.close()
