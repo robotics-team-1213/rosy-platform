@@ -157,7 +157,7 @@ class Teacher:
         R = arm.frames(qs)[2]
         return -(R @ off) - np.array([0, 0, tasks.HOLD_BELOW_TCP])
 
-    def run_task(self, task):
+    def run_task(self, task, isolated=False):
         w, L = self.world, self.layout
         data = w.reset()
         here = dict(task.get("start", {}))
@@ -168,6 +168,12 @@ class Teacher:
             self.frame(data, {a: L.sim_arms[a].home for a in L.arms}, "settle")
         rows = []
         for step in task["steps"]:
+            if isolated and rows:  # every step starts from the nominal plan state, so one failure does not spoil the next
+                data = w.reset()
+                for cid, site in here.items():
+                    w.put(data, cid, site)
+                for _ in range(FPS):
+                    self.frame(data, {a: L.sim_arms[a].home for a in L.arms}, "settle")
             row = self.run_step(data, step, {k: v for k, v in here.items() if k != step["container"]})
             rows.append(row)
             print(json.dumps(row), flush=True)
@@ -195,6 +201,7 @@ def main(argv=None):
     p.add_argument("task", choices=["stack", "rehandle"])
     p.add_argument("--out", default=".")
     p.add_argument("--video", action="store_true")
+    p.add_argument("--isolated", action="store_true", help="reset to the nominal plan state before every step (per-step truth without cascades)")
     p.add_argument("--choice", action="append", help="key=value override of omx_two_arm_sites.CHOICES (named parameters)")
     a = p.parse_args(argv)
     choices = parse_choices(a.choice)
@@ -227,14 +234,14 @@ def main(argv=None):
             ImageDraw.Draw(frame).text((8, 8), f"{a.task} {label}", fill=(255, 255, 0))
             container.mux(stream.encode(av.VideoFrame.from_ndarray(np.asarray(frame), format="rgb24")))
     teacher = Teacher(world, frame_hook=writer)
-    result = teacher.run_task(task)
+    result = teacher.run_task(task, a.isolated)
     if writer:
         container.mux(stream.encode(None))
         container.close()
     roll = {r["step"]: r["roll_below_floor"] for r in records}
     result.update(choices=layout.choices, roll_below_floor_steps=[s for s, v in roll.items() if v],
                   note="geometry only (D-947): contact numbers are not results; one arm moves at a time; true container pose, no perception")
-    (out / f"{a.task}.json").write_text(json.dumps(result, indent=1, default=str), encoding="utf-8")
+    (out / f"{a.task}{'-isolated' if a.isolated else ''}.json").write_text(json.dumps(result, indent=1, default=str), encoding="utf-8")
     print(f"{a.task}: steps pass {result['steps_pass']}/{result['steps']}, final poses ok {result['final_ok']}/{result['final_total']}, completed {result['completed']}")
     return 0 if result["completed"] else 1
 
