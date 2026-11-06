@@ -4614,3 +4614,10 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: initial e7cd05d22a의7RED/5pass, ec8d212421의 경합1RED, d927216133의 빈 ID1RED/나머지13pass를 확인했다. 빈 unhold 옵션이 설치로 들어가던 독립검토 P2를 수정한 ea7a904f30은 auto/installer/model-code 관련3파일261pass/skip0/NEW0이다(env35327e86830df3ba/freeze906d7aca580f620b). source와 원본 hash는 운영자 receipt에 결속한다. 최종 고정 head 독립검토와 정본 착지는 별도다.
 - gate 변화: 없음 — 실제 helper 설치·두 UI hold·다음 자연 timer 실행과 데이터 보존 수용은 미실행이다. 구형 helper 실행의 자연 종료와 새 helper의 보호 결과를 확인해야 UI를 전환하며, 전체 writer 중지·유휴·일관 백업은 계속 필요하다.
 - CE: 기존 교훈 갱신 — `docs/solutions/deployment/learning-center-upgrade-needs-the-identical-unit-first-2026-10-23.md`에 공유 floor와 UI별 보호의 차이 및 실제 installed helper 결속을 추가했다. frontmatter·mechanical claims0flags, 일반 잠금/고정 용어는 CONCEPTS에 추가하지 않았다. 실물·운영 수용으로 확대하지 않는다.
+
+## 2026-11-06 · 3c3698df3b · feat(omx): 셀 임계값을 보고 조절하는 로컬 페이지
+
+- 변경: `deploy/robot/omx/cell_params_web.py`·`.html` 추가. 셀 PC 127.0.0.1:8772에서 `rosy.omx-cell-params.v1` 값 174개를 범위·출처·근거와 함께 보여 준다. 비전 임계값과 허용 오차 46개만 조절할 수 있고, 안전·동작 묶음, 이득, 틈 값, 새 묶음·단위는 허용 목록 방식으로 잠근다. 저장은 근거가 필수이고 `cell_params`로 검증한 뒤 이전 항목을 `<file>.history.jsonl`에 남기고 원자적으로 교체한다. 세션 중이거나 파일이 바뀌었으면 거절하고, 새 값은 다음 실행부터 적용된다.
+- 증거: 공식 원격 시험 `test/test_omx_cell_params_web.py`·`test/test_omx_cell_params.py` 74 pass, skip 0(실제 `session_lock` flock 포함). 로컬 Chromium에서 조절·세션 표시·저장 흐름을 확인했고 콘솔 오류는 0건이다. 독립 검토가 찾은 이득·틈 값 잠금 누락, 폴링의 잠금 충돌, 확인과 교체 사이 경합을 고쳤다.
+- gate 변화: 없음 — 실제 셀 PC에서 페이지를 띄운 수용은 아직 하지 않았다.
+- CE: 해당 없음 — 새 기능이며 해결한 장애가 없다.
