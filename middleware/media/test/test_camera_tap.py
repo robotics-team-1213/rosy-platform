@@ -11,7 +11,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 REPO = ROOT.parents[1]
 sys.path.insert(0, str(ROOT / 'src'))
-NODE = REPO / 'middleware/perception/nodes/camera_detect_node.py'
+NODE = REPO / 'middleware/perception/sensor_nodes/camera_detect_node.py'
 
 
 def module():

@@ -6,6 +6,7 @@ import hashlib
 import importlib.util
 import json
 from pathlib import Path
+import re
 
 import pytest
 
@@ -23,6 +24,28 @@ def _module():
     return module
 
 
+MOTION_FILE = "install/lib/python3.12/site-packages/core/drive/stop.py"
+
+
+def _sums(**changed: str) -> str:
+    files = {MOTION_FILE: "1" * 64, "source-revision.txt": "2" * 64, "install/.rosy-release": "3" * 64,
+             "manifest.json": "4" * 64, "install/include/interfaces/a.c": "5" * 64,
+             "install/lib/sllidar_ros2/sllidar_node": "6" * 64,
+             "install/lib/python3.12/site-packages/fleet/server/app.py": "7" * 64,
+             "install/lib/python3.12/site-packages/fleet-0.1.4-py3.12.egg-info/PKG-INFO": "8" * 64,
+             "install/share/rosy_vision/config.yaml": "9" * 64,
+             "install/share/dashboard/teleop.js": "a" * 64, "deploy/robot/native/rosy-io.service": "b" * 64,
+             "deploy/robot/native/AGENTS.md": "c" * 64, "deb-packages.txt": "d" * 64, "ros-packages.txt": "f" * 64}
+    for key, digest in changed.items():
+        files[{"motion": MOTION_FILE, "web": "install/share/dashboard/teleop.js",
+               "unit": "deploy/robot/native/rosy-io.service", "lidar": "install/lib/sllidar_ros2/sllidar_node",
+               "fleet": "install/lib/python3.12/site-packages/fleet/server/app.py",
+               "header": "install/include/interfaces/a.c", "identity": "source-revision.txt",
+               "doc": "deploy/robot/native/AGENTS.md", "runner": "deb-packages.txt",
+               "ros": "ros-packages.txt"}[key]] = digest
+    return "".join(f"{digest}  {name}\n" for name, digest in files.items())
+
+
 def _device(tmp_path: Path, *, mode: str = "motor") -> Path:
     root = tmp_path / "device"
     release = root / "opt/rosy/current"
@@ -30,6 +53,7 @@ def _device(tmp_path: Path, *, mode: str = "motor") -> Path:
     (release / "source-revision.txt").write_text(REVISION, encoding="ascii")
     (release / "install").mkdir()
     (release / "install/.rosy-release").write_text(RELEASE, encoding="ascii")
+    (release / "SHA256SUMS").write_text(_sums(), encoding="utf-8")
     config = root / "etc/rosy"
     config.mkdir(parents=True)
     (config / "runtime.env").write_text(
@@ -230,6 +254,7 @@ def test_empty_or_stale_markers_cannot_start_navigation(tmp_path):
     bundle, evidence = _candidate(tmp_path)
     approval.approve(root, bundle, evidence, reviewer="reviewer-c")
     (root / "opt/rosy/current/source-revision.txt").write_text("b" * 40)
+    (root / "opt/rosy/current/SHA256SUMS").write_text(_sums(motion="e" * 64), encoding="utf-8")
     with pytest.raises(ValueError, match="revision"):
         approval.check(root, runtime_mode="hardware")
 
@@ -313,3 +338,177 @@ def test_native_payload_and_systemd_share_the_same_guard():
     assert "mapping_approval.py" in unit
     assert "ExecCondition=" in unit
     assert "install-native-runtime.sh" in builder
+
+
+NEXT_RELEASE, NEXT_REVISION = "2026.09.28-019", "b" * 40
+
+
+def _approved_then_updated(tmp_path, approval, sums):
+    """Measured and sealed on RELEASE, then the robot moved to NEXT_RELEASE in hardware mode."""
+    root = _device(tmp_path)
+    bundle, evidence = _automatic_candidate(tmp_path)
+    approval.approve(root, bundle, evidence)
+    current = root / "opt/rosy/current"
+    (current / "install/.rosy-release").write_text(NEXT_RELEASE, encoding="ascii")
+    (current / "source-revision.txt").write_text(NEXT_REVISION, encoding="ascii")
+    (current / "SHA256SUMS").write_text(sums, encoding="utf-8")
+    env = root / "etc/rosy/runtime.env"
+    env.write_text(env.read_text(encoding="ascii").replace("MODE=motor", "MODE=hardware"), encoding="ascii")
+    return root
+
+
+@pytest.mark.parametrize("changed", [{}, {"identity": "e" * 64}, {"fleet": "e" * 64}, {"header": "e" * 64},
+                                     {"lidar": "e" * 64}, {"doc": "e" * 64}, {"runner": "e" * 64}],
+                         ids=["same", "identity", "fleet", "header", "lidar", "doc", "runner"])
+def test_a_release_with_the_same_motion_files_keeps_the_approval(tmp_path, changed):
+    approval = _module()
+    root = _approved_then_updated(tmp_path, approval, _sums(**changed))
+    result = approval.check(root)
+    assert result["measured_release_id"] == RELEASE and result["release_id"] == NEXT_RELEASE
+
+
+@pytest.mark.parametrize("key", ["motion", "web", "unit", "ros"])
+def test_a_release_that_changes_a_motion_file_needs_a_new_measurement(tmp_path, key):
+    approval = _module()
+    root = _approved_then_updated(tmp_path, approval, _sums(**{key: "e" * 64}))
+    with pytest.raises(ValueError, match="differs from the active release"):
+        approval.check(root)
+
+
+def test_a_release_adding_an_unreviewed_package_needs_a_new_measurement(tmp_path):
+    approval = _module()
+    extra = f"{'e' * 64}  install/lib/python3.12/site-packages/new_driver/node.py\n"
+    root = _approved_then_updated(tmp_path, approval, _sums() + extra)
+    with pytest.raises(ValueError, match="differs from the active release"):
+        approval.check(root)
+
+
+def test_a_new_os_image_needs_a_new_measurement(tmp_path):
+    approval = _module()
+    root = _device(tmp_path)
+    image = root / "etc/rosy/os-factory-release.json"
+    image.write_text('{"checksums_sha256": "1", "release_id": "2026.10.29-001"}', encoding="ascii")
+    bundle, evidence = _automatic_candidate(tmp_path)
+    approval.approve(root, bundle, evidence)
+    current = root / "opt/rosy/current"
+    (current / "install/.rosy-release").write_text(NEXT_RELEASE, encoding="ascii")
+    (current / "source-revision.txt").write_text(NEXT_REVISION, encoding="ascii")
+    env = root / "etc/rosy/runtime.env"
+    env.write_text(env.read_text(encoding="ascii").replace("MODE=motor", "MODE=hardware"), encoding="ascii")
+    assert approval.check(root)["measured_release_id"] == RELEASE
+    image.write_text('{"checksums_sha256": "2", "release_id": "2026.11.05-174"}', encoding="ascii")
+    with pytest.raises(ValueError, match="differs from the active release"):
+        approval.check(root)
+
+
+def test_an_empty_checksum_list_fails_closed(tmp_path):
+    approval = _module()
+    root = _approved_then_updated(tmp_path, approval, "")
+    with pytest.raises(ValueError, match="empty"):
+        approval.check(root)
+
+
+def test_a_marker_sealed_before_the_fingerprint_never_carries(tmp_path):
+    approval = _module()
+    root = _approved_then_updated(tmp_path, approval, _sums())
+    for kind in ("hardware", "navigation"):
+        path = root / f"etc/rosy/approvals/{kind}.approved"
+        marker = json.loads(path.read_text(encoding="utf-8"))
+        marker.pop("motion_fingerprint")
+        path.write_text(json.dumps(marker), encoding="utf-8")
+    with pytest.raises(ValueError, match="differs from the active release"):
+        approval.check(root)
+
+
+def test_a_marker_sealed_before_the_fingerprint_still_passes_on_its_own_release(tmp_path):
+    approval = _module()
+    root = _device(tmp_path)
+    bundle, evidence = _automatic_candidate(tmp_path)
+    approval.approve(root, bundle, evidence)
+    for kind in ("hardware", "navigation"):
+        path = root / f"etc/rosy/approvals/{kind}.approved"
+        marker = json.loads(path.read_text(encoding="utf-8"))
+        marker.pop("motion_fingerprint")
+        path.write_text(json.dumps(marker), encoding="utf-8")
+    env = root / "etc/rosy/runtime.env"
+    env.write_text(env.read_text(encoding="ascii").replace("MODE=motor", "MODE=hardware"), encoding="ascii")
+    assert approval.check(root)["ready"] is True
+
+
+def test_carrying_still_rechecks_the_raw_evidence(tmp_path):
+    approval = _module()
+    root = _approved_then_updated(tmp_path, approval, _sums())
+    sealed = root / "etc/rosy/approvals/g4-evidence/forward-button_release.json"
+    sealed.write_text(sealed.read_text(encoding="utf-8") + " ", encoding="utf-8")
+    with pytest.raises(ValueError):
+        approval.check(root)
+
+
+def test_carrying_never_crosses_robots(tmp_path):
+    approval = _module()
+    root = _approved_then_updated(tmp_path, approval, _sums())
+    env = root / "etc/rosy/runtime.env"
+    env.write_text(env.read_text(encoding="ascii").replace("NUMBER=19", "NUMBER=20"), encoding="ascii")
+    with pytest.raises(ValueError, match="robot_number"):
+        approval.check(root)
+
+
+def test_a_marker_cannot_name_a_release_other_than_its_bundle(tmp_path):
+    approval = _module()
+    root = _approved_then_updated(tmp_path, approval, _sums())
+    path = root / "etc/rosy/approvals/navigation.approved"
+    marker = json.loads(path.read_text(encoding="utf-8"))
+    marker["release_id"] = NEXT_RELEASE
+    path.write_text(json.dumps(marker), encoding="utf-8")
+    with pytest.raises(ValueError, match="differs from its bundle"):
+        approval.check(root)
+
+
+def test_a_broken_checksum_list_fails_closed(tmp_path):
+    approval = _module()
+    root = _approved_then_updated(tmp_path, approval, "not a checksum line\n")
+    with pytest.raises(ValueError, match="invalid"):
+        approval.check(root)
+
+
+def _reaches_left_out_package(approval):
+    # rosy.execution.local is arm policy code that imports omx_adapter: reaching it would reach the arm tree.
+    names = "|".join(approval.NOT_ON_PINKY) + r"|rosy\.execution\.local"
+    return re.compile(rf"^\s*(?:from\s+(?:{names})(?:\.|\s)|import\s+(?:[\w.]+(?:\s+as\s+\w+)?\s*,\s*)*(?:{names})\b)"
+                      rf"|import_module\(\s*[\"'](?:{names})\b|package\s*=\s*[\"'](?:{names})[\"']", re.MULTILINE)
+
+
+@pytest.mark.parametrize("line", ["import fleet", "from omx_adapter.x import y", "import os, fleet", "import os as o, games",
+                                  'importlib.import_module("fleet.server")', 'Node(package="rosy_vision", executable="x")',
+                                  "from rosy.execution.local.omx_policy import x"])
+def test_the_guard_recognizes_each_way_of_reaching_a_left_out_package(line):
+    assert _reaches_left_out_package(_module()).search(line)
+
+
+@pytest.mark.parametrize("line", ["import fleet_agent", "from core_features.fleet_agent import x", "import os",
+                                  'Node(package="core", executable="x")'])
+def test_the_guard_leaves_other_packages_alone(line):
+    assert _reaches_left_out_package(_module()).search(line) is None
+
+
+def test_packages_left_out_of_the_fingerprint_stay_out_of_motion_code():
+    # What makes NOT_ON_PINKY safe: nothing that can move the robot imports these or starts them.
+    approval = _module()
+    imports = _reaches_left_out_package(approval)
+    names = "|".join(approval.NOT_ON_PINKY)
+    offenders = []
+    for folder in ("middleware/core", "middleware/devices/pinky", "middleware/drive", "middleware/perception",
+                   "middleware/media", "middleware/robot_ui", "middleware/skills", "middleware/drivers", "shared",
+                   "contracts", "integrations/robots", "integrations/perception",
+                   "operations/site_execution", "operations/account", "deploy/robot/pinky_pro/native"):
+        for path in (ROOT / folder).rglob("*.py") if (ROOT / folder).is_dir() else ():
+            if "test" in path.relative_to(ROOT).parts or path.name.startswith("test_"):
+                continue
+            if imports.search(path.read_text(encoding="utf-8", errors="replace")):
+                offenders.append(path.relative_to(ROOT).as_posix())
+    assert offenders == []
+    launched = re.compile(rf"(?:ros2 run|ros2 launch|/lib/)\s*(?:{names})\b|install/lib/(?:{names})/")
+    units = ROOT / "deploy/robot/pinky_pro/native"
+    started = [path.name for path in units.iterdir()
+               if path.suffix in (".service", ".target") and launched.search(path.read_text(encoding="utf-8"))]
+    assert started == []

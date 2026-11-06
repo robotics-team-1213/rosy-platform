@@ -661,8 +661,8 @@ PROGRAM_SOURCES = {
     "rosy-camera-healthy.service": ["deploy/robot/pinky_pro/native/camera-boot-guard.py"],
     "rosy-camera.service": ["deploy/robot/pinky_pro/native/camera-boot-guard.py",
                             "middleware/perception/launch/camera_preview.launch.py",
-                            "middleware/perception/nodes/camera_detect_node.py",
-                            "middleware/perception/nodes/road_observer_node.py",
+                            "middleware/perception/sensor_nodes/camera_detect_node.py",
+                            "middleware/perception/observers/road_observer_node.py",
                             # D-344 §12: the IR calibration overlay the launch validates.
                             "middleware/perception/sensors/line_observation/ir_overlay.py",
                             # D-411: the Pilot recorder and its session state machine.
@@ -1269,7 +1269,7 @@ def test_core_program_scan_follows_imports_into_the_control_package():
     assert "imported-by:middleware/core/gateway:control:middleware/perception" in PROGRAM_SOURCES["rosy-core.service"]
     resolved = {path.relative_to(ROOT).as_posix()
                 for path in _imported_modules("middleware/core/gateway/test", "control", "middleware/perception")}
-    assert "middleware/perception/nodes/sensor_provider.py" in resolved
+    assert "middleware/perception/sensor_nodes/sensor_provider.py" in resolved
     assert "middleware/perception/calibration/calibration_storage.py" in resolved
 
 
