@@ -68,6 +68,8 @@ def test_standalone_existing_cookie_and_initial_password_resume_registered_app(s
                 expect(page.locator('#login-back')).to_be_hidden()
                 page.goto(origin + '/console/accounts')
                 expect(page).to_have_title('Rosy Account — 계정 관리')
+                expect(page.locator('ui-brand a')).to_have_attribute('href', '/console/profile')
+                expect(page.get_by_role('link', name='관제로 돌아가기')).to_have_count(0)
                 page.locator('#account-login').click()
                 expect(page.get_by_role('heading', name='Rosy Account 로그인', exact=True)).to_be_visible()
                 expect(page.locator('#login-back')).to_be_hidden()

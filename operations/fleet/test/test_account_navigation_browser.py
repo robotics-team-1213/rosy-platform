@@ -72,16 +72,14 @@ def test_fleet_navigation_and_profile_return_preserve_selected_subtab(account_pa
     page.locator(f'.ui-subnav a[href="{target}"]').click()
     expect(page.locator('#user-role')).to_have_text('운영자')
     page.locator('#topbar-more').click()
-    page.locator('#fleet-profile').click()
-    expect(page.locator('#profile-id')).to_have_text('alice')
-    capture(page, f'profile-{account_backend}.png')
-    page.locator('#profile-back').click()
+    with page.expect_popup() as opened:
+        page.locator('#fleet-profile').click()
+    profile = opened.value
+    expect(profile.locator('#profile-id')).to_have_text('alice')
+    capture(profile, f'profile-{account_backend}.png')
+    profile.close()
     expect(page).to_have_url(origin + target)
     expect(page.locator('#work-new')).to_be_visible()
-    page.go_back()
-    expect(page.locator('#profile-id')).to_have_text('alice')
-    page.go_forward()
-    expect(page).to_have_url(origin + target)
     assert not errors, errors
 
 

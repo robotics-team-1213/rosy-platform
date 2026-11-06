@@ -21,6 +21,10 @@ DESTINATIONS = ('/console', '/console/cell', '/console/site-map', '/console/inst
                 '/console/profile', '/console/accounts')
 
 
+ANCHORS = {'/console/site-map': {'teach-heading'},
+           '/console/install': {'robots', 'device-profiles', 'cameras', 'calibration', 'hosts'}}
+
+
 def fleet_return_allowed(target):
     if (not isinstance(target, str) or len(target) > 4096 or '\\' in target
             or any(ord(char) < 32 or ord(char) == 127 for char in target)):
@@ -36,7 +40,7 @@ def fleet_return_allowed(target):
     allowed = ({'view', 'show', 'inbox', 'arm_transfer', 'robot'} if url.path == '/console' else
                {'robot'} if url.path == '/console/site-map' else set())
     if (len(query) != len(pairs) or set(query) - allowed
-            or url.fragment and (url.path != '/console/site-map' or url.fragment != 'teach-heading')):
+            or url.fragment and url.fragment not in ANCHORS.get(url.path, ())):
         return False
     if 'view' in query and query['view'] not in {'work', 'records'}:
         return False

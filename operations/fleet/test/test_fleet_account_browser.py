@@ -146,14 +146,10 @@ def test_profile_entry_preserves_work_context_and_verifies_own_name(account_page
     expect(page.locator('#fleet-profile')).to_be_visible()
     writes = []
     page.context.on('request', lambda req: writes.append(req.url) if req.method in ('POST', 'PATCH') else None)
-    if path in ('/console/site-map', '/console/cell'):
-        with page.expect_popup() as popup:
-            page.locator('#fleet-profile').click()
-        profile = popup.value
-        expect(page).to_have_url(origin + path)
-    else:
+    with page.expect_popup() as popup:
         page.locator('#fleet-profile').click()
-        profile = page
+    profile = popup.value
+    expect(page).to_have_url(origin + path)
     expect(profile.locator('#profile-id')).to_have_text('alice')
     expect(profile.locator('#profile-role')).to_have_text('운영자')
     if account_backend == 'managed':
