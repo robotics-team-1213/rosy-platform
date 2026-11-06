@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
+- 2026-11-06 · 159e9eadf6 · refactor(learning): OMX-AI 전용으로 정리, SO-100 공개 학습 제거와 로봇 어댑터
 - 2026-11-06 · 03b9bd7470 · feat(learning): 학습 실행에서 학습률과 행동 묶음 길이 선택
 - 2026-11-06 · uncommitted · docs(uiux): 실제 로컬 main 수용과 최종 검증 출처 기록
 - 2026-11-06 · uncommitted · test(tools): 최신 main 도움말 통합과 원자 티켓 fixture
 - 2026-11-06 · uncommitted · fix(tools): 보존된 도움말 수정을 현재 main과 통합
-- 2026-11-06 · uncommitted · fix(tools): 도움말 요청의 착지 snapshot 생성 차단
