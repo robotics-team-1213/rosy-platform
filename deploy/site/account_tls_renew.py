@@ -101,29 +101,6 @@ with tempfile.TemporaryDirectory(prefix='.tls-renew-', dir=root) as tmp:
 '''
 
 
-def reload_vault_proxy():
-    result = subprocess.run(['docker', 'inspect', 'rosy-vault-proxy-1'],
-                            capture_output=True, text=True, timeout=15)
-    if result.returncode:
-        if 'No such object' in result.stderr or 'No such container' in result.stderr:
-            return False
-        raise RuntimeError('cannot inspect the Vault TLS consumer')
-    labels = json.loads(result.stdout)[0]['Config'].get('Labels', {})
-    if (labels.get('com.docker.compose.project') != 'rosy-vault'
-            or labels.get('com.docker.compose.service') != 'proxy'):
-        raise RuntimeError('unexpected Vault TLS consumer identity')
-    compose = Path.home() / 'rosy-vault/current/deploy/compose.yaml'
-    env = Path.home() / '.config/rosy/vault/compose.env'
-    if not compose.is_file() or not env.is_file() or env.is_symlink():
-        raise RuntimeError('Vault TLS consumer deployment files unavailable')
-    # Recreate remounts atomically replaced TLS leaf files; restart alone can retain old inodes.
-    subprocess.run(['docker', 'compose', '--env-file', str(env), '-p', 'rosy-vault',
-                    '-f', str(compose), 'up', '-d', '--no-deps', '--force-recreate',
-                    '--pull', 'never', '--no-build', 'proxy'],
-                   check=True, capture_output=True, timeout=60)
-    return True
-
-
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--certs', type=Path, required=True)
@@ -155,21 +132,12 @@ def main():
     receipt = json.loads(result.stdout)
     pending = root / '.tls-reload-pending'
     if pending.exists():
-        failures = []
         try:
             subprocess.run(['docker', 'exec', '--user', '10001:10001', 'rosy-site-proxy-1',
                             'caddy', 'reload', '--force', '--config', '/etc/caddy/Caddyfile', '--adapter', 'caddyfile'],
                            check=True, capture_output=True, timeout=30)
-        except Exception:
-            failures.append('Account')
-        try:
-            receipt['vault_proxy_recreated'] = reload_vault_proxy()
-            if not receipt['vault_proxy_recreated']:
-                raise RuntimeError('Vault TLS consumer unavailable')
-        except Exception:
-            failures.append('Vault')
-        if failures:
-            raise RuntimeError('TLS consumer reload pending: ' + ', '.join(failures))
+        except Exception as error:
+            raise RuntimeError('TLS consumer reload pending: Account') from error
         pending.unlink()
     print(json.dumps(receipt))
 

@@ -3,6 +3,7 @@
 OPEN -> (EXPLAINED) -> CLEARED, in the shared Fleet SQLite DB. An arm with an incident that is not CLEARED is held: the
 control PC asks before a session and does not start one. A hold is not a command and not a Cell Job claim (D-779).
 The explanation is stored and shown, never acted on. Nothing is deleted."""
+import asyncio
 import base64
 import json
 import re
@@ -21,14 +22,16 @@ from core_common.protocol.arm_incidents import (
 from fleet.server.camera_peer_routes import body as bounded_json
 from fleet.server.sqlite_policy import configure_connection, enable_wal
 
+LISTED_MAX_AGE_S = 2.0  # backstop only; this store's own writes drop the shared list at once
 SHOWN_CLEARED = 20  # cleared incidents stay in history; the snapshot shows this many per arm
 CONTROL = re.compile(r"[\x00-\x1f\x7f]")
 ROLES = ("top", "side")
 
 
 class ArmIncidentStore:
-    def __init__(self, path=None, *, wall=time.time):
-        self._wall, self._lock = wall, threading.Lock()
+    def __init__(self, path=None, *, wall=time.time, monotonic=time.monotonic):
+        self._wall, self._lock, self._monotonic = wall, threading.Lock(), monotonic
+        self._listed: dict = {}  # source_id -> (monotonic time, list); see snapshot()
         self._db = configure_connection(sqlite3.connect(str(path) if path else ":memory:", check_same_thread=False))
         if path:
             enable_wal(self._db)
@@ -45,6 +48,7 @@ class ArmIncidentStore:
     def report(self, report: ArmIncidentReport) -> str:
         """Store one report; the same (source, session) again is the same incident and changes nothing."""
         with self._lock, self._db:
+            self._listed.clear()
             row = self._db.execute("SELECT incident_id FROM arm_incidents WHERE source_id=? AND session_id=?",
                                    (report.source_id, report.session_id)).fetchone()
             if row:
@@ -80,6 +84,7 @@ class ArmIncidentStore:
     def clear(self, source_id, incident_id, note, principal_id) -> None:
         """KeyError: no such incident for this arm. ValueError: already cleared (the first record stands)."""
         with self._lock, self._db:
+            self._listed.clear()
             row = self._db.execute("SELECT cleared_at FROM arm_incidents WHERE incident_id=? AND source_id=?",
                                    (incident_id, source_id)).fetchone()
             if row is None:
@@ -92,6 +97,7 @@ class ArmIncidentStore:
     def explain(self, source_id, incident_id, explanation: ArmIncidentExplanation) -> None:
         """KeyError: no such incident. ValueError: already explained or cleared (the first explanation stands)."""
         with self._lock, self._db:
+            self._listed.clear()
             row = self._db.execute("SELECT explained_at, cleared_at FROM arm_incidents WHERE incident_id=? "
                                    "AND source_id=?", (incident_id, source_id)).fetchone()
             if row is None:
@@ -118,8 +124,10 @@ class ArmIncidentStore:
     def _view(self, row, with_bytes):
         (incident_id, source_id, session_id, reported_at, facts, decision, recovery, seen, cause, model, explained_at,
          cleared_by, cleared_at, note) = row
-        frames = self._db.execute("SELECT role, sha256, jpeg FROM arm_incident_frames WHERE incident_id=? "
-                                  "ORDER BY role DESC", (incident_id,)).fetchall()
+        # the list only needs each frame's size: never read the JPEG blob (up to 200 kB) for it
+        frames = self._db.execute(f"SELECT role, sha256, {'jpeg' if with_bytes else 'length(jpeg)'} "
+                                  "FROM arm_incident_frames WHERE incident_id=? ORDER BY role DESC",
+                                  (incident_id,)).fetchall()
         out = {"incident_id": incident_id, "source_id": source_id, "session_id": session_id,
                "state": "cleared" if cleared_at is not None else "explained" if explained_at is not None else "open",
                "reported_at": reported_at, "facts": json.loads(facts), "decision": json.loads(decision),
@@ -129,7 +137,7 @@ class ArmIncidentStore:
                    "note": "explanation only; it does not decide or move anything"},
                "cleared": None if cleared_at is None else {"by": cleared_by, "at": cleared_at, "note": note}}
         out["frames"] = [({"role": r, "sha256": h, "jpeg_b64": base64.b64encode(j).decode()} if with_bytes
-                          else {"role": r, "sha256": h, "bytes": len(j)}) for r, h, j in frames]
+                          else {"role": r, "sha256": h, "bytes": j}) for r, h, j in frames]
         return out
 
     def unexplained(self, limit=8) -> list:
@@ -139,11 +147,19 @@ class ArmIncidentStore:
             return [self._view(r, True) for r in rows]
 
     def snapshot(self, source_id) -> list:
-        """The console's list: every uncleared incident, then the latest cleared ones. No frame bytes."""
+        """The console's list: every uncleared incident, then the latest cleared ones. No frame bytes.
+
+        Every open console tab asks for this each 500 ms, so it is read once and shared until this store
+        writes or ``LISTED_MAX_AGE_S`` passes. Callers must not modify the returned list."""
         with self._lock:
+            now, hit = self._monotonic(), self._listed.get(source_id)
+            if hit is not None and now - hit[0] < LISTED_MAX_AGE_S:
+                return hit[1]
             rows = (self._rows("source_id=? AND cleared_at IS NULL", (source_id,))
                     + self._rows("source_id=? AND cleared_at IS NOT NULL", (source_id,), SHOWN_CLEARED))
-            return [self._view(r, False) for r in rows]
+            listed = [self._view(r, False) for r in rows]
+            self._listed[source_id] = (now, listed)
+            return listed
 
 
 def install_arm_incident_routes(app, *, service, store, require_viewer, require_named_operator, authorize=None):
@@ -171,7 +187,9 @@ def install_arm_incident_routes(app, *, service, store, require_viewer, require_
             raise HTTPException(422, detail={"code": "INVALID_ARM_INCIDENT"}) from None
         if parsed.source_id != source_id:
             raise HTTPException(422, detail={"code": "INVALID_ARM_INCIDENT"})
-        return store.accepted(source_id, store.report(parsed)).model_dump()
+        # a blocked loop holds every robot's heartbeat reply: store waits run off the loop
+        accepted = await asyncio.to_thread(lambda: store.accepted(source_id, store.report(parsed)))
+        return accepted.model_dump()
 
     @app.get(base + "/arms/{source_id}/hold", tags=["workcell-observations"])
     def hold(source_id: str, response: Response,
@@ -189,12 +207,12 @@ def install_arm_incident_routes(app, *, service, store, require_viewer, require_
         except ValidationError:
             raise HTTPException(422, detail={"code": "INVALID_ARM_INCIDENT_CLEAR"}) from None
         try:
-            store.clear(source_id, incident_id, note.note, principal.principal_id)
+            await asyncio.to_thread(store.clear, source_id, incident_id, note.note, principal.principal_id)
         except KeyError:
             raise HTTPException(404, detail={"code": "ARM_INCIDENT_UNKNOWN"}) from None
         except ValueError:
             raise HTTPException(409, detail={"code": "ARM_INCIDENT_ALREADY_CLEARED"}) from None
-        return store.hold(source_id).model_dump()
+        return (await asyncio.to_thread(store.hold, source_id)).model_dump()
 
     @app.get(base + "/arms/{source_id}/incidents/{incident_id}/frames/{role}", tags=["workcell-observations"])
     def frame(source_id: str, incident_id: str, role: str, _principal=Depends(require_viewer)):
@@ -225,7 +243,7 @@ def install_arm_incident_routes(app, *, service, store, require_viewer, require_
         except ValidationError:
             raise HTTPException(422, detail={"code": "INVALID_ARM_INCIDENT_EXPLANATION"}) from None
         try:
-            store.explain(source_id, incident_id, parsed)
+            await asyncio.to_thread(store.explain, source_id, incident_id, parsed)
         except KeyError:
             raise HTTPException(404, detail={"code": "ARM_INCIDENT_UNKNOWN"}) from None
         except ValueError:

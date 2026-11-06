@@ -211,7 +211,7 @@ def test_bridge_feeds_points_in_path_mode_and_distance_in_sector_mode():
             wants_crosswalk_scan=False,
             observe_body_points=lambda points, range_min, received_at: calls.append(
                 ("body", len(points))),
-            observe_scan_points=lambda points, received_at: calls.append(("points", len(points))),
+            observe_scan_points=lambda points, received_at, lag_s=0.0: calls.append(("points", len(points))),
             observe_clearance=lambda distance, received_at: calls.append(("distance", distance)))
         return SimpleNamespace(line_follow=line, loc_mission=None)
 

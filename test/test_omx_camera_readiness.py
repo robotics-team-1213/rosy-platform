@@ -259,7 +259,8 @@ def test_service_has_independent_restore_for_the_same_state_directory():
     assert 'ROSY_ROS_SETUP' not in view['Service']['ExecStart']
     assert 'FASTDDS' not in view['Service']['ExecStart']
     assert 'rosy-omx-camera@top.service' in view['Unit']['After']
-    assert 'rosy-omx-camera@front.service' in view['Unit']['After']
+    assert 'rosy-omx-camera@arm_a_wrist.service' in view['Unit']['After']
+    assert 'rosy-omx-camera@front.service' not in view['Unit']['Wants']
 
 
 def _producer_world(runtime, monkeypatch, owners_by_call):
