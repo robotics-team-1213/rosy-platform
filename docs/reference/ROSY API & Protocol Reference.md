@@ -5,9 +5,16 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.361
+**Version:** v1.363
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.363 관제의 고정 수동 모드 의도
+
+- robot 범위 `manual`은 인자가 없는 의도이며 기존 `POST /api/v1/mode`의 고정 `{"mode":"MANUAL"}`로 실행한다. `mode` 등 호출자 인자는 허용하지 않는다. CORE `/api/v1/do`의 로봇 생략은 기존처럼 현재 기체를 뜻하며, Fleet `/api/fleet/do`에는 대상 robot이 필요하다.
+- Fleet의 `manual`과 0이 아닌 `move`는 이름 있는 운영자와 열린 발행 제어, 같은 dispatch generation, 미완료 task 및 다른 resource/trip/goal/queued/formation 소유권을 요청 입구와 로봇 전송 직전에 확인한다. 닫힌 발행 제어·바뀐 generation·다른 소유 작업은 `COMMAND_REJECTED`로 거절한다. 지도·충전 정책의 admission을 상대 직접 조작의 소유권 검사로 대신하지 않는다.
+- 두 축이 0인 `move`는 인증·감사는 그대로 유지하고 위 발행/작업 소유권 차단을 우회하여 정지를 전달한다. `move` 전체를 무인 정지 예외로 바꾸지 않는다.
+- 수동 전환은 기존 CORE mode owner가 담당한다. Fleet 정지 래치나 CORE EStop을 해제하거나 teleop capability를 강제로 허용하지 않는다. 관제는 현재 선택·사람 신원·확인 창 수명을 확인하고 고정한 한 기체로만 요청한다. 전송 ACK와 실제 fresh mode·위치·정지 수용은 별도다.
 
 ### v1.360 Learning 점 선택 수정과 SAM 영역 후보
 
@@ -4583,6 +4590,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 | 버전 | 일자 | 내용 |
 |---|---|---|
 | v1.362 | 2026-11-04 | Additive: D-977 `device_trial` opens the neutral `arm-transfers` jobs for exactly one arm (owner identity: `device: true`, matching `commissioning_revision`); `production` stays closed. New `operator_attested` record: `POST/GET .../jobs/{mission_id}/operator-attestations` (named operator distinct from proposer and approver, single-use, 45 s validity, `goal_confirmed: false`). The owner still refuses goals. |
+| v1.363 | 2026-11-06 | Additive: bodyless robot `manual`을 기존 CORE mode owner로 실행. Fleet 직접 조작의 dispatch/작업 소유권 재검사와 인증된 terminal zero 전달을 명시. |
 | v1.361 | 2026-11-04 | Additive: `GET /api/fleet/execution-profile`(D-979) — 앱이 읽는 읽기 전용 실행 프로필(`arm_execution` physical/simulated/closed, 등록·인증된 생산자 목록, `checked_at`). viewer·service 읽기, 쓰기 없음, 증명되지 않으면 closed. |
 | v1.360 | 2026-11-04 | Learning SAM 점 선택·보호 규칙·적용 출처, 현재 사진 AI 자동 초안과 검사 상태·의견 없음 구분. 기존 라벨과 별도 승인 경계 유지 |
 | v1.359 | 2026-11-04 | Additive: peer pose sharing(탑뷰 부재 대비) — `GET /api/v1/peers`, `POST /api/v1/peers/beacon`(부여 `PEER_SHARE`, operator 이상), `StateSnapshot.peers`(기능이 꺼져 있으면 null). 설계 docs/plans/2026-11-04-peer-pose-sharing-design.md |
