@@ -4694,3 +4694,10 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: 원격 시험 `test/test_robot_cd.py`·`test_robot_cd_os.py`·`test_native_delta_delivery.py`·`test_publish_payload_release.py`·`test_rosy_auto_update_eligibility.py`·`test_rosy_auto_update_resume.py`·`test_pinky_release_impact.py`·`test_os_signer_snapshot.py` 전부 통과, exit 0. 실물 수용은 게시 뒤 별도.
 - gate 변화: 없음 — 기체 수용 전이다.
 - CE: 미해결 — 실물 수용 뒤 교훈을 기록한다.
+
+## 2026-11-07 · uncommitted · fix(omx): 사고 hold와 미전송 보고를 고정 위치로 통일
+
+- 변경: hold와 outbox를 `ROSY_OMX_HOME/incidents` 아래로 모으고, `cell_upkeep.check_hold`와 `cell_zones`의 상대 팔 확인이 같은 위치를 보게 했다. 작업 디렉터리의 옛 hold와 outbox도 계속 인정한다. 해제 조건은 그대로 Fleet의 "held 아님"과 미전송 없음이다.
+- 증거: `test_omx_incident`, `test_omx_record_session`, `test_omx_cell_upkeep`, `test_omx_cell_zones`, `test_omx_cell_pipeline` 원격 실행 NEW 0. 독립 검토 통과.
+- gate 변화: 없음. 실물 제어 PC의 `ROSY_OMX_HOME` 값과 실물 동작은 확인하지 않았다.
+- CE: 해당 없음.
