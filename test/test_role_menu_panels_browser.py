@@ -314,7 +314,7 @@ def test_console_docking_locks_pending_commands_and_preserves_selected_dock():
         page.wait_for_function("previous => [...document.querySelectorAll('ui-status[role=status]')].at(-1)?.textContent !== previous", arg=pending)
         assert not panel.locator("select").is_disabled()
         success = action.inner_text()
-        assert "CORE" in success
+        assert "로봇이 받았습니다" in success
         page.evaluate("window.__callbacks['/api/v1/docking/status'].onError(new Error('fixture docking status unavailable'))")
         assert "fixture docking status unavailable" in panel.locator("ui-status").first.inner_text()
         assert "UNDOCKED" not in panel.locator("dl").inner_text()

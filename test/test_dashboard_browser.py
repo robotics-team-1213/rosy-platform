@@ -1606,7 +1606,7 @@ def test_core_only_viewer_sees_the_truth_and_probes_nothing_forbidden():
         assert page.locator('#capability-list [data-cause="runtime"]').count() == 5
         assert page.locator('[data-teleop="forward"]').is_disabled()
         # 4. hero and banner agree: no source, and the reason is CORE-only
-        assert "CORE-only" in page.locator("#safety-source").inner_text()
+        assert "하드웨어 런타임 꺼짐" in page.locator("#safety-source").inner_text()
         triage_text = page.locator("#triage").inner_text()
         assert "수신 끊김" not in triage_text
         assert "출처는 있는데" not in triage_text

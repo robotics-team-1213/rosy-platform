@@ -363,9 +363,8 @@ body[data-pilot-screen="arm"] ui-topbar [data-gate-state] { display: none; }
   html:not([data-pilot-shell="android"]) body[data-pilot-screen="connect"] :is(ui-brand small, #pilot-notice) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   body[data-pilot-screen="arm"] .pilot-main { max-width: 120rem; }
   [data-screen="arm"] { max-width: 120rem; }
-  /* 넓은 화면: 종료 카드는 자기 칸에 머문다(보이는 동안 아래에 붙는다) — 센서 표와 다른 기록 칸을 덮지 않는다. */
-  [data-screen="arm"][data-recording] { padding-bottom: var(--space-3); }
-  [data-screen="arm"][data-recording] [data-sim-step="stop"] { position: sticky; inset: auto auto var(--space-3); max-width: none; margin-inline: 0; }
+  /* 넓은 화면: 종료 카드는 늘 화면 안에 두되 오른쪽 아래로 붙여 가운데 센서 표와 기록 칸을 덜 덮는다. */
+  [data-screen="arm"][data-recording] [data-sim-step="stop"] { margin-inline: auto 0; inset-inline-end: var(--space-3); max-width: 32rem; }
   .arm-console {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     grid-template-areas: "view controls" "view actions" "record record";

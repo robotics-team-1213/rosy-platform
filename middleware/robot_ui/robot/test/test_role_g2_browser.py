@@ -895,7 +895,7 @@ def test_console_line_follow_and_docking_feedback_full_shell_captures(tmp_path):
               action: [...document.querySelectorAll('[data-panel="console.line_follow"] > ui-status[role="status"]')].at(-1)?.textContent || '',
             })""")
             assert line_measured["overflowX"] == 0 and line_measured["eStopVisible"]
-            assert "서버가 요청을 처리하지 못했습니다" in line_measured["readback"] and "CORE" in line_measured["action"]
+            assert "서버가 요청을 처리하지 못했습니다" in line_measured["readback"] and "로봇이 받았습니다" in line_measured["action"]
             records.append({"surface":"line_follow", "viewport":f"{width}x{height}",
                             "image":line_filename, "posts":list(posts), "errors":list(errors), **line_measured})
 
@@ -921,7 +921,7 @@ def test_console_line_follow_and_docking_feedback_full_shell_captures(tmp_path):
               dockAction: [...document.querySelectorAll('[data-panel="console.docking"] ui-status[role="status"]')].at(-1)?.textContent || '',
             })""")
             assert measured["overflowX"] == 0 and measured["eStopVisible"] and errors == [], measured
-            assert "도킹 컨트롤러가 준비되지 않았습니다" in measured["dockReadback"] and "CORE" in measured["dockAction"]
+            assert "도킹 컨트롤러가 준비되지 않았습니다" in measured["dockReadback"] and "로봇이 받았습니다" in measured["dockAction"]
             records.append({"surface":"docking", "viewport": f"{width}x{height}", "image": filename,
                             "posts": list(posts), "errors": list(errors), **measured})
             context.close()
