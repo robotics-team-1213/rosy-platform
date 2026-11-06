@@ -452,7 +452,8 @@ def starting_lander(repo, tmp_path):
         f"while not Path({str(stop)!r}).exists():\n"
         f" if Path({str(admit)!r}).exists():\n"
         f"  q = Path({str(qdir)!r}); q.mkdir(exist_ok=True)\n"
-        f"  (q/'0001-1.json').write_text(json.dumps(dict(pid=os.getpid(),branch={snap!r},status='pending')))\n"
+        f"  pending = q/'0001-1.tmp'; pending.write_text(json.dumps(dict(pid=os.getpid(),branch={snap!r},status='pending')))\n"
+        "  os.replace(pending, q/'0001-1.json')\n"
         " time.sleep(.02)\n"
         "raise SystemExit(7)\n", encoding="utf-8")
     processes = []
