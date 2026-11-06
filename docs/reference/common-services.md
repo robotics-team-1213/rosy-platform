@@ -25,7 +25,7 @@ Account의 로그인·프로필·관리 화면 소스는 `applications/fleet/web
 |---|---|---|---|---|
 | Foundation | `contracts/foundation` | 공유 계약, Account 클라이언트, 설정 불러오기 | 업무 절차, 산출물 저장 정책 | D-18, D-841 |
 | 웹 공용 | `shared/web` | 디자인·컨트롤·통신 도구, 브라우저 세션 도구 | 사용자 업무, 전역 인증 상태 | D-939 |
-| Android 공용 | `shared/android` | 피어 승인 | 앱별 운전 세션, 카메라 자격 | D-939 |
+| Android 공용 | `shared/android` | 피어 승인, Account 세션 | 앱별 운전 세션, 카메라 자격 | D-939, D-987 |
 
 ## 공통 서비스가 아닌 현장 서비스
 

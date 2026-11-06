@@ -1,4 +1,4 @@
-package io.github.livsbittt.rosy.cam.account
+package io.github.livsbittt.rosy.account
 
 import android.app.Activity
 import android.content.Context
