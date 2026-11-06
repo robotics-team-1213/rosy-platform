@@ -22,9 +22,25 @@ def write_library(config: dict, pick: dict, place: dict, path: Path) -> Path:
     from grasp_planner import Planner
 
     library = Planner(dict(config["plan"], pick=pick, place=place, keep_out=config.get("keep_out"))).library()
+    # arm_b's wrist roll holds at 9.89 in free air (2026-11-06): refuse the plan here, so every caller tries its next yaw
+    for name, low in (config.get("joint_min") or {}).items():
+        column = library["names"].index(name)
+        lowest = min(row[column] for chunk in library["chunks"].values() for row in chunk)
+        if lowest < low:
+            raise SystemExit(f"{name} target {lowest:.1f} is under this arm's joint_min {low}")
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps({k: v for k, v in library.items() if v is not None}))
     return path
+
+
+def fold(cell, sleep=time.sleep, wait_s: float = 2.0) -> dict:
+    """Park; once more after a pause when the first one held on a contact: a joint still strained from the stop that
+    called this holds the fold's first ticks too, and the same park settled once it rested (arm_b 2026-11-06)."""
+    status = cell.act("park")
+    if status.get("ok") or not status.get("contact"):
+        return status
+    sleep(wait_s)
+    return cell.act("park")
 
 
 class FifoCell:
