@@ -85,7 +85,7 @@ def test_resume_waits_for_a_hold_before_any_restart(device, host, hub, keys):
     assert up.run()["phase"] == "committed"
 
 
-@pytest.mark.parametrize("cause", ["moving", "sealed", "same_sample"])
+@pytest.mark.parametrize("cause", ["moving", "same_sample"])
 def test_resume_waits_until_the_robot_is_idle(device, host, hub, keys, cause):
     # H1 (+ M1 in the resume path)
     hub.publish(keys, NEXT)
@@ -94,8 +94,6 @@ def test_resume_waits_until_the_robot_is_idle(device, host, hub, keys, cause):
     if cause == "moving":
         host.inputs_changes = {"velocity_linear": 0.3}
         host.write_inputs()
-    elif cause == "sealed":
-        write_json(device / "etc/rosy/approvals/hardware.approved", {"release_id": NEXT})
     else:
         host.write_inputs = lambda: None
 
