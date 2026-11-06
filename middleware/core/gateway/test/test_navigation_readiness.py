@@ -179,6 +179,8 @@ def _runtime_config(mode, backend="localization"):
 def test_motor_profile_accepts_manual_api_without_navigation_components(core_client):
     client, services = core_client(config_overrides=_runtime_config("motor"))
     services.state.set_velocity(0.0, 0.0)
+    # A slow runner spent the real lease window on the requests below (merge group 2026-11-06).
+    services.readiness._monotonic = lambda: 10.0
     services.readiness.observe("motor_adapter", True, lease=True)
     assert services.readiness.required_components == ("motor_adapter",)
     assert services.readiness.required and services.readiness.is_ready()
