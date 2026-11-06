@@ -17,7 +17,7 @@ import pytest
 import uvicorn
 from browser_harness import browser_tests_enabled, launch_options, safe_listener
 
-from fakes import FakeRelay, FakeRobot, fresh_power_health
+from fakes import FakeRelay, FakeRobot, fresh_power_health
 from fleet.server.app import create_app
 from fleet.server.console import FleetConsole
 from fleet.server.site_map_store import SiteMapStore
