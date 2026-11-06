@@ -471,23 +471,31 @@ def test_a_broken_checksum_list_fails_closed(tmp_path):
         approval.check(root)
 
 
+def _reaches_left_out_package(approval):
+    # rosy.execution.local is arm policy code that imports omx_adapter: reaching it would reach the arm tree.
+    names = "|".join(approval.NOT_ON_PINKY) + r"|rosy\.execution\.local"
+    return re.compile(rf"^\s*(?:from\s+(?:{names})(?:\.|\s)|import\s+(?:[\w.]+(?:\s+as\s+\w+)?\s*,\s*)*(?:{names})\b)"
+                      rf"|import_module\(\s*[\"'](?:{names})\b|package\s*=\s*[\"'](?:{names})[\"']", re.MULTILINE)
+
+
 @pytest.mark.parametrize("line", ["import fleet", "from omx_adapter.x import y", "import os, fleet", "import os as o, games",
-                                  'importlib.import_module("fleet.server")', 'Node(package="rosy_vision", executable="x")'])
+                                  'importlib.import_module("fleet.server")', 'Node(package="rosy_vision", executable="x")',
+                                  "from rosy.execution.local.omx_policy import x"])
 def test_the_guard_recognizes_each_way_of_reaching_a_left_out_package(line):
-    # The pattern below must go red for these, or the guard proves nothing.
-    source = Path(__file__).read_text(encoding="utf-8")
-    pattern = source.split('imports = re.compile(', 1)[1].split(', re.MULTILINE)', 1)[0]
-    names = "|".join(_module().NOT_ON_PINKY) + r"|rosy\.execution\.local"
-    assert re.search(eval(pattern, {"names": names}), line, re.MULTILINE)
+    assert _reaches_left_out_package(_module()).search(line)
+
+
+@pytest.mark.parametrize("line", ["import fleet_agent", "from core_features.fleet_agent import x", "import os",
+                                  'Node(package="core", executable="x")'])
+def test_the_guard_leaves_other_packages_alone(line):
+    assert _reaches_left_out_package(_module()).search(line) is None
 
 
 def test_packages_left_out_of_the_fingerprint_stay_out_of_motion_code():
     # What makes NOT_ON_PINKY safe: nothing that can move the robot imports these or starts them.
     approval = _module()
-    # rosy.execution.local is arm policy code that imports omx_adapter: reaching it would reach the arm tree.
-    names = "|".join(approval.NOT_ON_PINKY) + r"|rosy\.execution\.local"
-    imports = re.compile(rf"^\s*(?:from\s+(?:{names})(?:\.|\s)|import\s+(?:[\w.]+(?:\s+as\s+\w+)?\s*,\s*)*(?:{names})\b)"
-                         rf"|import_module\(\s*[\"'](?:{names})\b|package\s*=\s*[\"'](?:{names})[\"']", re.MULTILINE)
+    imports = _reaches_left_out_package(approval)
+    names = "|".join(approval.NOT_ON_PINKY)
     offenders = []
     for folder in ("middleware/core", "middleware/devices/pinky", "middleware/drive", "middleware/perception",
                    "middleware/media", "middleware/robot_ui", "middleware/skills", "middleware/drivers", "shared",
