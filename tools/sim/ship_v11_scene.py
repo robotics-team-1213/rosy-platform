@@ -1,8 +1,8 @@
-"""MuJoCo scene of the v11 snap-together ship hold with team container v2, the v2.1 jaw and the wrist camera B holder.
+"""MuJoCo scene of the v11 snap-together ship hold with team container v2, the v2.1 jaw and the printed wrist camera holder.
 
 Geometry: learning/envs/isaac/ship_v11.py (pocket walls, 45 degree pins, container sockets and top cones as convex pieces).
 Jaw, contacts and release drive: ship_release_scene (same as the stud-plate twin). The camera holder is
-palletizing_gripper.WRIST_CAMERA_B (rated b16-u16-span-B): a box proxy whose lowest point sits where the design puts the
+palletizing_gripper.WRIST_CAMERA_B (printed b16-u16-span-D): a box proxy whose lowest point sits where the design puts the
 holder's (36.6 mm above the TCP in the top-down pose), plus a camera at the lens pose Isaac uses. Candidates for Isaac
 only (D-947 section 1).
 """
