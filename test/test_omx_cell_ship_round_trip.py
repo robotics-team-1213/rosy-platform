@@ -29,6 +29,7 @@ ROLL = "wrist_roll.pos"
 ENTRY = {"id": "container-v2-3", "length_mm": 90, "width_mm": 30, "top_height_mm": 32.4,
          "grasp": {"jaw_axis_deg_from_long": 0}}
 OBJECT = {"raw_m": [0.12, 0.015], "long_axis_deg": 89.0}
+WIDE = {"gripper.open_max": 62.0}  # the default 56 refuses a 90 mm gap
 
 
 def planner_with_roll(monkeypatch, roll):
@@ -53,7 +54,7 @@ def test_a_plan_above_joint_min_and_an_arm_without_one_are_written(tmp_path, mon
 
 
 def test_plan_pick_takes_the_yaw_twin_when_the_first_yaw_breaks_joint_min(tmp_path, monkeypatch):
-    config = {"plan": {"approach_m": 0.04},
+    config = {"plan": {"approach_m": 0.04}, "params": WIDE,
               "sites": {"ship": {"surface_z": -0.0167, "yaw_deg": 0.0}, "table": {"surface_z": -0.0197, "yaw_deg": -90.0}}}
     tried = []
 
@@ -129,7 +130,7 @@ def test_map_from_a_site_without_a_map_is_refused():
 
 
 def test_a_shallow_grip_stated_by_the_site_sets_both_the_pick_and_the_release_height(tmp_path, monkeypatch):
-    config = {"plan": {"approach_m": 0.04},
+    config = {"plan": {"approach_m": 0.04}, "params": WIDE,
               "sites": {"ship": {"surface_z": -0.0167, "yaw_deg": 0.0, "grasp_depth_m": 0.0083},
                         "table": {"surface_z": -0.0197, "yaw_deg": -90.0, "place_dz": 0.002}}}
     monkeypatch.setattr(auto.cp, "write_library", lambda cfg, pick, place, path: path)
@@ -139,7 +140,7 @@ def test_a_shallow_grip_stated_by_the_site_sets_both_the_pick_and_the_release_he
 
 
 def test_a_site_without_its_own_depth_keeps_the_default_grip(tmp_path, monkeypatch):
-    config = {"plan": {"approach_m": 0.04}, "sites": {"s": {"surface_z": -0.01, "yaw_deg": 0.0}}}
+    config = {"plan": {"approach_m": 0.04}, "params": WIDE, "sites": {"s": {"surface_z": -0.01, "yaw_deg": 0.0}}}
     monkeypatch.setattr(auto.cp, "write_library", lambda cfg, pick, place, path: path)
     _, pick, *_ = auto.plan_pick(config, "s", "s", (0.1, 0.0), OBJECT, ENTRY, 0, (0, 0), tmp_path)
     assert pick["z"] == pytest.approx(-0.01 + 0.0324 - 0.015)
