@@ -15,6 +15,9 @@
 }
 .pilot-drive[data-drive-layout="side"] [data-drive-pedals] ui-button,
 .pilot-drive[data-drive-layout="side"] [data-drive-pivots] ui-button { min-width: 0; width: 100%; }
+/* The pedals are the main hold targets beside the 13rem stick: 1.5x the primary target, so thumb and stick read as one weight. */
+.pilot-drive[data-drive-layout="side"] [data-drive-pedals] ui-button,
+.pilot-drive[data-drive-layout="side"] [data-drive-pivots] ui-button { min-height: calc(var(--target-primary) * 1.5); }
 .pilot-drive[data-drive-layout="side"] [data-drive-presets] { flex-wrap: nowrap; width: 100%; }
 .pilot-drive[data-drive-layout="side"] [data-drive-presets] > ui-text { display: none; }
 .pilot-drive[data-drive-layout="side"] [data-drive-presets] ui-actions { flex: 3 1 0; }
