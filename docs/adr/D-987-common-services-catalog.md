@@ -24,7 +24,10 @@ Account, Monitoring, Media는 각자 ADR과 소유 패키지가 있지만 이들
 5. **이 결정은 폴더를 옮기지 않는다.** 소스 경로·패키지·이미지·서비스 이름과 D-936의 Monitoring 동반 배치를 유지한다. 폴더를 옮기려면 서명 이미지와 배포 영향을 적은 별도 ADR을 쓴다.
 6. **사람 자격과 기계 자격을 합치지 않는다.** Account는 사람 신원·권한·세션을 소유한다. 기계·장치·서비스 자격과 미디어 위임은 D-807대로 기존 owner에 남는다. 공통 토큰과 범용 자격 저장소를 만들지 않으며, 각 앱은 자기 자원의 허용 여부를 자기 서버에서 판단한다.
 7. **이름이 같아도 의미가 다르면 합치지 않는다.** `same_origin`은 `Origin`을 `Host`와 비교하는 판과 등록된 callback origin과 비교하는 판이 있다. 전자는 Fleet과 Account가 함께 쓰므로 foundation으로 옮기고 동작을 유지한다. 후자는 각 수신부에 둔다. 두 판 중 하나로 통일하려면 별도 결정이 필요하다.
-8. **둘 이상의 앱이 쓰는 클라이언트 코드는 D-939 위치로 옮긴다.** Android 계정 세션은 Cam에서 `shared/android/account`로 옮기고, 기존 Keystore 별칭과 저장소 이름을 유지해 로그인 상태를 보존한다. 브라우저 세션은 `shared/web`의 공용 도구가 경로와 저장 키를 인자로 받게 하고, 앱 고유의 오류 처리와 작성 중 내용 보존은 앱에 남긴다.
+8. **Android 계정 세션은 D-939 위치로 옮긴다.** Cam에서 `shared/android/account`로 옮기고, 기존 Keystore 별칭과 저장소 이름을 유지해 로그인 상태를 보존한다.
+9. **브라우저 세션은 세 갈래를 유지한다.** Robot·Pilot·Games는 `shared/web/account-session.js`를 쓴다. Learning과 Fleet은 같은 파일로 합치지 않는다. 합치면 옵션만 늘고 다음 동작을 바꿀 위험이 있다.
+   - Learning은 세션 응답의 `account_session`으로 신원을 비교하고, 401을 로그아웃으로 처리하며, 요청을 보낼 때마다 신원을 다시 확인해 다른 사람이 이어받은 탭에 작성 중 내용을 저장하지 않는다. 공용 도구는 `account_id`·`session_family`·`revision`으로 비교하고, 실패 응답을 확인 불가로 처리하며, 주기적으로만 확인한다.
+   - Fleet의 신원 기록은 로그인 화면과 계정 관리 화면의 흐름 안에 있고 Fleet 전용 인증 경로를 쓴다.
 
 ### 기존 결정과의 관계
 
@@ -38,7 +41,7 @@ Account, Monitoring, Media는 각자 ADR과 소유 패키지가 있지만 이들
 | D-841 | 새 전역 utils 패키지를 만들지 않는다. CORE·Fleet proof helper 복제와 동일성 검사를 유지한다. |
 | D-876 · D-936 | Monitoring의 독립 소유와 Fleet 이미지 동반 배치를 유지한다. |
 | D-789 · D-801 | Media의 위임 경계를 유지한다. 카탈로그 등재는 배포 활성화가 아니다. |
-| D-939 | Android 공용 위치 규칙을 계정 세션에 적용한다. 빌드 때 Cam 원본을 복사하는 다른 파일의 처리는 이 결정에 넣지 않는다. |
+| D-939 | Android 공용 위치 규칙을 계정 세션에 적용한다. 빌드 때 Cam 원본을 복사하는 다른 파일의 처리는 이 결정에 넣지 않는다. D-939 Decision 5의 웹 규칙은 같은 로직에 적용되며, Learning·Fleet의 세션은 Decision 9의 이유로 같은 로직이 아니다. |
 | D-955 | 단계 계획을 바꾸지 않는다. 결정 1의 "Fleet의 Account 원장"은 뒤에 수용된 D-962의 독립 Account 원장으로 읽는다. |
 
 ### Consequences
@@ -46,5 +49,6 @@ Account, Monitoring, Media는 각자 ADR과 소유 패키지가 있지만 이들
 - 새 현장 서비스를 넣는 변경은 분류를 함께 적어야 구조 시험을 통과한다.
 - 카탈로그의 등재는 구현·배포·현장 수용의 증거가 아니다.
 - 각 서버의 로그인 처리(Fleet, CORE, Games, Learning, 레거시 937)는 HTTP 기반이 달라 이 결정으로 합치지 않는다.
+- Fleet의 `site_auth`는 `rosy_account.principal`과 `rosy_account.site_users`를 계속 import한다. Account가 Fleet을 import하지 않는 방향은 시험으로 고정되어 있고, 반대 방향의 정리는 이 결정에 넣지 않는다.
 - Fleet 내장 Account 구성(`--account-config`)과 `vault.*` 권한은 남긴다. 제거는 현장 수용과 원장 확인 뒤 별도로 정한다.
 - Harbor의 Rosy 로그인 연동은 D-955의 후속 단계에 남는다.
