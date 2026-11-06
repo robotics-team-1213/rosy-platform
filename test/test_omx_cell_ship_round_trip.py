@@ -130,6 +130,61 @@ def test_map_from_a_site_without_a_map_is_refused():
         cell_pivot.with_site_maps({"sites": {"strip": {"map_from": "pallet"}}}, {"sites": {}})
 
 
+@pytest.mark.parametrize("bias", [[29.6, 0.0], [float("nan"), 0.0], [0.0, float("inf")], [True, 0.0], [1.0]])
+def test_invalid_saved_and_in_memory_bias_is_refused_instead_of_using_zero(tmp_path, bias):
+    region = {"site": "ship", "point_m": [0.12, 0.015], "bias_mm": bias}
+    data = {"schema": cell_pivot.SCHEMA, "regions": [region]}
+    path = tmp_path / "map.bias.json"
+    path.write_text(json.dumps(data))
+    original = path.read_bytes()
+    with pytest.raises(ValueError, match="bias refused"):
+        cell_pivot.load_bias(path)
+    with pytest.raises(ValueError, match="bias refused"):
+        cell_pivot.bias_at(data, "ship", OBJECT["raw_m"])
+    with pytest.raises(ValueError, match="bias refused"):
+        auto.self_calibrate(None, {}, {}, tmp_path / "map.json", "ship", OBJECT["raw_m"], [], tmp_path,
+                            data, None, None)
+    with pytest.raises(ValueError, match="bias refused"):
+        cell_pivot.save_bias(path, region)
+    assert path.read_bytes() == original
+
+
+def test_bias_boundary_and_the_active_bound_apply_to_read_write_and_lookup(tmp_path):
+    path = tmp_path / "map.bias.json"
+    region = {"site": "ship", "point_m": OBJECT["raw_m"], "bias_mm": [15.0, 20.0]}
+    cell_pivot.save_bias(path, region)
+    assert cell_pivot.bias_at(cell_pivot.load_bias(path), "ship", OBJECT["raw_m"]) == region
+    tight = {"pivot.max_bias_mm": 24.9}
+    with pytest.raises(ValueError, match="pivot.max_bias_mm"):
+        cell_pivot.load_bias(path, tight)
+    region["bias_mm"] = [29.6, 0.0]
+    measured = {"pivot.max_bias_mm": 30.0}
+    cell_pivot.save_bias(path, region, measured)
+    assert cell_pivot.bias_at(cell_pivot.load_bias(path, measured), "ship", OBJECT["raw_m"], params=measured) == region
+
+
+def test_invalid_bias_cannot_reach_the_pick_coordinate_planner(tmp_path, monkeypatch):
+    monkeypatch.setattr(auto.cp, "write_library", lambda *a: pytest.fail("invalid bias reached the planner"))
+    with pytest.raises(ValueError, match="pivot.max_bias_mm"):
+        auto.plan_pick({}, "ship", "table", (0.0, 0.0), OBJECT, ENTRY, 0, (29.6, 0.0), tmp_path)
+    assert not list(tmp_path.iterdir())
+
+
+@pytest.mark.parametrize("seen", [[29.6, 0.0], [float("nan"), 0.0]])
+def test_a_nearby_place_does_not_teach_an_invalid_absolute_bias(tmp_path, seen):
+    path = tmp_path / "map.json"
+    # Both pass the old distance-only rule against the last 24 mm correction.
+    verify = {"found": True, "seen_bias_mm": seen, "used_bias_mm": [24.0, 0.0]}
+    assert auto.learn_bias({}, path, "ship", OBJECT["raw_m"], verify) is None
+    assert not cell_pivot.bias_path(path).exists()
+
+
+def test_nonfinite_region_position_cannot_hide_a_bias_from_lookup():
+    data = {"regions": [{"site": "ship", "point_m": [float("nan"), 0.0], "bias_mm": [1.0, 0.0]}]}
+    with pytest.raises(ValueError, match="point_m"):
+        cell_pivot.bias_at(data, "ship", OBJECT["raw_m"])
+
+
 def test_a_shallow_grip_stated_by_the_site_sets_both_the_pick_and_the_release_height(tmp_path, monkeypatch):
     config = {"plan": {"approach_m": 0.04}, "params": WIDE,
               "sites": {"ship": {"surface_z": -0.0167, "yaw_deg": 0.0, "grasp_depth_m": 0.0083},

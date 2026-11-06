@@ -229,8 +229,10 @@ def pivot_calibrate(cell, config: dict, point, yaws, calibration: dict, site: st
             prm.get(params, "pivot.radius_lo_mm") <= radius * 1000 <= prm.get(params, "pivot.radius_hi_mm")):
         return {"result": f"circle refused: radius {bias['radius_mm']} mm, rms {bias['rms_mm']} mm", "bias": bias}
     # 2026-11-06: 29.6 mm passed the circle test, the target moved 3 cm over a packed ship and nothing questioned it
-    if math.hypot(*bias["bias_mm"]) > prm.get(params, "pivot.max_bias_mm"):
-        return {"result": f"bias refused: {bias['bias_mm']} mm is past pivot.max_bias_mm", "bias": bias}
+    try:
+        validate_bias(bias, params)
+    except ValueError as exc:
+        return {"result": str(exc), "bias": bias}
     return {"result": "calibrated", "bias": bias}
 
 
@@ -238,17 +240,33 @@ def bias_path(calibration_path) -> Path:
     return Path(calibration_path).with_suffix(".bias.json")
 
 
-def load_bias(path) -> dict:
+def validate_bias(region: dict, params=None) -> None:
+    for key in ("point_m", "bias_mm"):
+        values = region.get(key)
+        if (not isinstance(values, (list, tuple)) or len(values) != 2
+                or any(type(v) not in (int, float) or not math.isfinite(v) for v in values)):
+            raise ValueError(f"bias refused: {key} must have two finite coordinates")
+    limit = prm.get(params, "pivot.max_bias_mm")
+    if type(limit) not in (int, float) or not math.isfinite(limit) or limit <= 0:
+        raise ValueError("bias refused: pivot.max_bias_mm must be finite and positive")
+    if math.hypot(*region["bias_mm"]) > limit:
+        raise ValueError("bias refused: magnitude is past pivot.max_bias_mm")
+
+
+def load_bias(path, params=None) -> dict:
     path = Path(path)
     data = json.loads(path.read_text()) if path.exists() else {"schema": SCHEMA, "regions": []}
     if data.get("schema") != SCHEMA:
         raise SystemExit(f"{path}: not a {SCHEMA} file")
+    for region in data["regions"]:
+        validate_bias(region, params)
     return data
 
 
-def save_bias(path, bias: dict) -> None:
+def save_bias(path, bias: dict, params=None) -> None:
     """Keep one region per site and place: a new one within 10 mm replaces the older."""
-    data = load_bias(path)
+    validate_bias(bias, params)
+    data = load_bias(path, params)
     data["regions"] = [r for r in data["regions"] if r["site"] != bias["site"]
                        or math.dist(r["point_m"], bias["point_m"]) > 0.010] + [bias]
     tmp = Path(path).with_suffix(".tmp")
@@ -259,5 +277,7 @@ def save_bias(path, bias: dict) -> None:
 def bias_at(data: dict, site: str, point_m, reach_mm: float | None = None, params=None):
     """The nearest region's bias (dx, dy mm) within reach of the point, else None."""
     reach_mm = prm.get(params, "pivot.bias_reach_mm", BIAS_REACH_MM) if reach_mm is None else reach_mm
+    for region in data["regions"]:
+        validate_bias(region, params)
     near = [r for r in data["regions"] if r["site"] == site and 1000 * math.dist(r["point_m"], point_m) <= reach_mm]
     return min(near, key=lambda r: math.dist(r["point_m"], point_m), default=None)
