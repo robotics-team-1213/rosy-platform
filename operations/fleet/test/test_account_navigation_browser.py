@@ -119,6 +119,26 @@ def test_accounts_refusal_does_not_loop_through_a_valid_login(account_page):
     assert '/console/login' in page.url
 
 
+def test_install_tasks_go_back_to_the_previous_task(account_page):
+    page, origin = account_page
+    page.goto(origin + '/console/install')
+    first = page.locator('#install-chooser [role=tab]').first
+    expect(first).to_have_attribute('aria-selected', 'true')
+    page.get_by_role('tab', name='카메라 연결 승인').click()
+    expect(page).to_have_url(origin + '/console/install#cameras')
+    page.get_by_role('tab', name='호스트 서비스').click()
+    expect(page).to_have_url(origin + '/console/install#hosts')
+    page.go_back()
+    expect(page.get_by_role('tab', name='카메라 연결 승인')).to_have_attribute('aria-selected', 'true')
+    expect(page).to_have_url(origin + '/console/install#cameras')
+    page.go_back()
+    expect(first).to_have_attribute('aria-selected', 'true')
+    expect(page).to_have_url(origin + '/console/install')
+    page.go_forward()
+    expect(page.get_by_role('tab', name='카메라 연결 승인')).to_have_attribute('aria-selected', 'true')
+    expect(page).to_have_url(origin + '/console/install#cameras')
+
+
 def test_new_work_explains_missing_kinds_without_redirecting(account_page):
     page, origin = account_page
     page.goto(origin + '/console/login')
