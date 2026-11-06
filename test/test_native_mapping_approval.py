@@ -6,6 +6,7 @@ import hashlib
 import importlib.util
 import json
 from pathlib import Path
+import re
 
 import pytest
 
@@ -23,6 +24,25 @@ def _module():
     return module
 
 
+MOTION_FILE = "install/lib/python3.12/site-packages/core/drive/stop.py"
+
+
+def _sums(**changed: str) -> str:
+    files = {MOTION_FILE: "1" * 64, "source-revision.txt": "2" * 64, "install/.rosy-release": "3" * 64,
+             "manifest.json": "4" * 64, "install/include/interfaces/a.c": "5" * 64,
+             "install/lib/sllidar_ros2/sllidar_node": "6" * 64,
+             "install/lib/python3.12/site-packages/fleet/server/app.py": "7" * 64,
+             "install/lib/python3.12/site-packages/fleet-0.1.4-py3.12.egg-info/PKG-INFO": "8" * 64,
+             "install/share/rosy_vision/config.yaml": "9" * 64,
+             "install/share/dashboard/teleop.js": "a" * 64, "deploy/robot/native/rosy-io.service": "b" * 64}
+    for key, digest in changed.items():
+        files[{"motion": MOTION_FILE, "web": "install/share/dashboard/teleop.js",
+               "unit": "deploy/robot/native/rosy-io.service", "lidar": "install/lib/sllidar_ros2/sllidar_node",
+               "fleet": "install/lib/python3.12/site-packages/fleet/server/app.py",
+               "header": "install/include/interfaces/a.c", "identity": "source-revision.txt"}[key]] = digest
+    return "".join(f"{digest}  {name}\n" for name, digest in files.items())
+
+
 def _device(tmp_path: Path, *, mode: str = "motor") -> Path:
     root = tmp_path / "device"
     release = root / "opt/rosy/current"
@@ -30,6 +50,7 @@ def _device(tmp_path: Path, *, mode: str = "motor") -> Path:
     (release / "source-revision.txt").write_text(REVISION, encoding="ascii")
     (release / "install").mkdir()
     (release / "install/.rosy-release").write_text(RELEASE, encoding="ascii")
+    (release / "SHA256SUMS").write_text(_sums(), encoding="utf-8")
     config = root / "etc/rosy"
     config.mkdir(parents=True)
     (config / "runtime.env").write_text(
@@ -313,3 +334,130 @@ def test_native_payload_and_systemd_share_the_same_guard():
     assert "mapping_approval.py" in unit
     assert "ExecCondition=" in unit
     assert "install-native-runtime.sh" in builder
+
+
+NEXT_RELEASE, NEXT_REVISION = "2026.09.28-019", "b" * 40
+
+
+def _approved_then_updated(tmp_path, approval, sums):
+    """Measured and sealed on RELEASE, then the robot moved to NEXT_RELEASE in hardware mode."""
+    root = _device(tmp_path)
+    bundle, evidence = _automatic_candidate(tmp_path)
+    approval.approve(root, bundle, evidence)
+    current = root / "opt/rosy/current"
+    (current / "install/.rosy-release").write_text(NEXT_RELEASE, encoding="ascii")
+    (current / "source-revision.txt").write_text(NEXT_REVISION, encoding="ascii")
+    (current / "SHA256SUMS").write_text(sums, encoding="utf-8")
+    env = root / "etc/rosy/runtime.env"
+    env.write_text(env.read_text(encoding="ascii").replace("MODE=motor", "MODE=hardware"), encoding="ascii")
+    return root
+
+
+@pytest.mark.parametrize("changed", [{}, {"identity": "e" * 64}, {"fleet": "e" * 64}, {"header": "e" * 64},
+                                     {"lidar": "e" * 64}],
+                         ids=["same", "identity", "fleet", "header", "lidar"])
+def test_a_release_with_the_same_motion_files_keeps_the_approval(tmp_path, changed):
+    approval = _module()
+    root = _approved_then_updated(tmp_path, approval, _sums(**changed))
+    result = approval.check(root)
+    assert result["measured_release_id"] == RELEASE and result["release_id"] == NEXT_RELEASE
+
+
+@pytest.mark.parametrize("key", ["motion", "web", "unit"])
+def test_a_release_that_changes_a_motion_file_needs_a_new_measurement(tmp_path, key):
+    approval = _module()
+    root = _approved_then_updated(tmp_path, approval, _sums(**{key: "e" * 64}))
+    with pytest.raises(ValueError, match="differs from the active release"):
+        approval.check(root)
+
+
+def test_a_release_adding_an_unreviewed_package_needs_a_new_measurement(tmp_path):
+    approval = _module()
+    extra = f"{'e' * 64}  install/lib/python3.12/site-packages/new_driver/node.py\n"
+    root = _approved_then_updated(tmp_path, approval, _sums() + extra)
+    with pytest.raises(ValueError, match="differs from the active release"):
+        approval.check(root)
+
+
+def test_a_marker_sealed_before_the_fingerprint_never_carries(tmp_path):
+    approval = _module()
+    root = _approved_then_updated(tmp_path, approval, _sums())
+    for kind in ("hardware", "navigation"):
+        path = root / f"etc/rosy/approvals/{kind}.approved"
+        marker = json.loads(path.read_text(encoding="utf-8"))
+        marker.pop("motion_fingerprint")
+        path.write_text(json.dumps(marker), encoding="utf-8")
+    with pytest.raises(ValueError, match="differs from the active release"):
+        approval.check(root)
+
+
+def test_a_marker_sealed_before_the_fingerprint_still_passes_on_its_own_release(tmp_path):
+    approval = _module()
+    root = _device(tmp_path)
+    bundle, evidence = _automatic_candidate(tmp_path)
+    approval.approve(root, bundle, evidence)
+    for kind in ("hardware", "navigation"):
+        path = root / f"etc/rosy/approvals/{kind}.approved"
+        marker = json.loads(path.read_text(encoding="utf-8"))
+        marker.pop("motion_fingerprint")
+        path.write_text(json.dumps(marker), encoding="utf-8")
+    env = root / "etc/rosy/runtime.env"
+    env.write_text(env.read_text(encoding="ascii").replace("MODE=motor", "MODE=hardware"), encoding="ascii")
+    assert approval.check(root)["ready"] is True
+
+
+def test_carrying_still_rechecks_the_raw_evidence(tmp_path):
+    approval = _module()
+    root = _approved_then_updated(tmp_path, approval, _sums())
+    sealed = root / "etc/rosy/approvals/g4-evidence/forward-button_release.json"
+    sealed.write_text(sealed.read_text(encoding="utf-8") + " ", encoding="utf-8")
+    with pytest.raises(ValueError):
+        approval.check(root)
+
+
+def test_carrying_never_crosses_robots(tmp_path):
+    approval = _module()
+    root = _approved_then_updated(tmp_path, approval, _sums())
+    env = root / "etc/rosy/runtime.env"
+    env.write_text(env.read_text(encoding="ascii").replace("NUMBER=19", "NUMBER=20"), encoding="ascii")
+    with pytest.raises(ValueError, match="robot_number"):
+        approval.check(root)
+
+
+def test_a_marker_cannot_name_a_release_other_than_its_bundle(tmp_path):
+    approval = _module()
+    root = _approved_then_updated(tmp_path, approval, _sums())
+    path = root / "etc/rosy/approvals/navigation.approved"
+    marker = json.loads(path.read_text(encoding="utf-8"))
+    marker["release_id"] = NEXT_RELEASE
+    path.write_text(json.dumps(marker), encoding="utf-8")
+    with pytest.raises(ValueError, match="differs from its bundle"):
+        approval.check(root)
+
+
+def test_a_broken_checksum_list_fails_closed(tmp_path):
+    approval = _module()
+    root = _approved_then_updated(tmp_path, approval, "not a checksum line\n")
+    with pytest.raises(ValueError, match="invalid"):
+        approval.check(root)
+
+
+def test_packages_left_out_of_the_fingerprint_stay_out_of_motion_code():
+    # What makes NOT_ON_PINKY safe: nothing that can move the robot imports these or starts them.
+    approval = _module()
+    names = "|".join(approval.NOT_ON_PINKY)
+    imports = re.compile(rf"^\s*(?:from|import)\s+(?:{names})(?:\.|\s|$)", re.MULTILINE)
+    offenders = []
+    for folder in ("middleware/core", "middleware/devices/pinky", "middleware/drive", "middleware/perception",
+                   "middleware/robot_execution", "contracts", "integrations/robots"):
+        for path in (ROOT / folder).rglob("*.py") if (ROOT / folder).is_dir() else ():
+            if "test" in path.relative_to(ROOT).parts or path.name.startswith("test_"):
+                continue
+            if imports.search(path.read_text(encoding="utf-8", errors="replace")):
+                offenders.append(path.relative_to(ROOT).as_posix())
+    assert offenders == []
+    launched = re.compile(rf"(?:ros2 run|ros2 launch|/lib/)\s*(?:{names})\b|install/lib/(?:{names})/")
+    units = ROOT / "deploy/robot/pinky_pro/native"
+    started = [path.name for path in units.iterdir()
+               if path.suffix in (".service", ".target") and launched.search(path.read_text(encoding="utf-8"))]
+    assert started == []
