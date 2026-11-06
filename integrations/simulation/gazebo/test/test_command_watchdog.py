@@ -126,7 +126,7 @@ def test_invalid_clock_or_expiry_never_passes(last, now, expiry):
 def ros_boundary(monkeypatch):
     """Execute actual entrypoint callbacks with synthetic ROS ports, never DDS."""
     evidence = {'published': [], 'publisher_topics': [], 'timer': None,
-                'namespace': '/rosy_01', 'domain': 80, 'remap': None}
+                'namespace': '/rosy_01', 'domain': 20, 'remap': None}
 
     class Twist:
         def __init__(self):
@@ -206,7 +206,7 @@ def test_runtime_scope_fails_before_command_publisher(ros_boundary, monkeypatch,
     assert not evidence['publisher_topics'] and not evidence['published']
 
 
-@pytest.mark.parametrize('domain', [80, 99])
+@pytest.mark.parametrize('domain', [20, 29])
 def test_runtime_valid_planar_command_then_monotonic_expiry(ros_boundary, monkeypatch, domain):
     evidence, Twist = ros_boundary
     evidence['domain'] = domain

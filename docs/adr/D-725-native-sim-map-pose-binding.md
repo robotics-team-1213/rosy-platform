@@ -62,4 +62,6 @@ drivable v2 Gazebo 한 바퀴(`feat/v2-sim-lap`, r21–r32)에서 3항의 "stale
 
 확인: `test/test_native_gazebo_map_pose.py` — 늦은 시계는 UNKNOWN 뒤 새 sample로 회복, 시계 역행은 run 동안 고정, 간격 뒤 정지 sample은 수용·간격을 건넌 점프는 고정, odom 없는 시작 snapshot은 대기, 첫 위치 전 시계 멈춤은 재기준, CORE 읽기 실패는 snapshot 만료까지 유지. SIM 결과는 주행 일지에 적는다.
 
+2026-11-06: binding의 domain 범위는 D-676 같은 날 addendum에 따라 20..29다.
+
 **Related:** D-494, D-511, D-517, D-541, D-676, D-427, D-429, D-430.

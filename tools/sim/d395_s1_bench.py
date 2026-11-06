@@ -510,7 +510,7 @@ def main(argv=None):
     p.add_argument("--phases", default="", help="comma list after power-on: d (pickup), c (mirror)")
     p.add_argument("--ws", default=str(Path(__file__).resolve().parents[2]))
     p.add_argument("--partition", default="rosy_d395")
-    p.add_argument("--domain", type=int, default=93)
+    p.add_argument("--domain", type=int, default=23)
     p.add_argument("--api-port", type=int, default=18930)
     p.add_argument("--fleet-port", type=int, default=18990)
     p.add_argument("--localize-timeout", type=float, default=240.0)

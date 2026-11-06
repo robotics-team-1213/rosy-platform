@@ -6,7 +6,7 @@
 
 Runs on a sim host (never the laptop, D-584) with ROS Jazzy and a colcon install of gz_sim sourced
 and CORE's pins plus the Fleet pins CORE lacks importable (remote_sim.py DEPS does all three).
-The run owns its ROS domain (80-99), CORE/console ports and Gazebo partition (fleet_gazebo
+The run owns its ROS domain (20-29), CORE/console ports and Gazebo partition (fleet_gazebo
 Reservations, D-426) and a ~/rosy-jobs lock unless remote_sim already holds one. It launches
 map_v2_fleet_multi_real (two camera robots, two COREs) with the regulated SIM CORE/Fleet settings
 of the D-763 checks (line authority, trip lease), starts Fleet with the D-725 native Gazebo pose,
@@ -295,7 +295,7 @@ def drive(fleet, operator, spawns, places, requests, budget_s, log, core=None):
 
 def run(args):
     sys.path.insert(0, str(REPO / 'tools/validation/fleet_gazebo'))
-    from preflight import Reservations  # D-426 run reservations: domain 80-99, API/console ports
+    from preflight import Reservations  # D-426 run reservations: domain 20-29, API/console ports
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=False)
     partition = os.environ.get('GZ_PARTITION') or f'trips-{secrets.token_hex(3)}'
