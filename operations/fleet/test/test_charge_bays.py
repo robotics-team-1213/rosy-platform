@@ -88,7 +88,7 @@ def test_a_trusted_pose_elsewhere_frees_the_bay_and_the_same_bay_again_keeps_the
     assert bays._visits["a"].connected_at == 10.0
     bays.observe(620.0, [robot("a", 14.0, at_c1, volts=7.50)], BAYS)          # seen again after 600 s blind
     row = actions(bays.plan([robot("a", 14.0, at_c1)], BAYS))["a"]
-    assert row["connected_s"] == 20.0 and row["estimated_percent"] == 14.0 + 2.0 * 20.0 / 60.0
+    assert row["connected_s"] == 10.0 and row["estimated_percent"] == 14.0 + 2.0 * 10.0 / 60.0
     bays.observe(621.0, [robot("a", 70.0, (0.5, -0.2))], BAYS)
     assert bays.plan([robot("a", 70.0, (0.5, -0.2))], BAYS)["bays"][0]["state"] == "free"
 

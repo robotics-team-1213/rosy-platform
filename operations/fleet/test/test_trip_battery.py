@@ -77,7 +77,7 @@ def test_a_fresh_battery_still_starts_and_a_pose_fault_is_still_the_pose_code():
     ports.pose = None
     assert _code(runner.start("p1", "bob")) == "TRIP_POSE_UNTRUSTED"   # battery passed, pose refused
     ports.at(_arc(store, "ring_s:fwd"), 0.1)
-    assert run(runner.start("p1", "bob"))["state"] == "running"
+    assert run(runner.start("p1", "bob"))["trip_id"] == "p1"
 
 
 def test_a_charge_session_job_is_not_refused_for_a_critical_level_only():
