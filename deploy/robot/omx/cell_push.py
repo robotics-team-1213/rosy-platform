@@ -213,7 +213,7 @@ def main(argv=None):
     gap = prm.get(params, "push.gap_mm") + back
     start, end, d = geometry(a, direction, args.half_mm, args.mm, gap)
     mask = cell_objects.foreground(img, args.roi, params=params, surface_px=site.get("surface_px"), surface_lab=site.get("surface_lab"))
-    region = cell_pivot.bias_at(cell_pivot.load_bias(cell_pivot.bias_path(calibration_path)), args.site, a.tolist(),
+    region = cell_pivot.bias_at(cell_pivot.load_bias(cell_pivot.bias_path(calibration_path), params), args.site, a.tolist(),
                                 params=params)
     # jaw face + what the arm may still miss by: a pivot measured here leaves its circle's rms, else the map's worst
     # leave-one-out error (2026-11-01: 21.2 + 11.9 mm reached the next column of a packed row, 4 mm away)
