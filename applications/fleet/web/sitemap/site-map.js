@@ -245,7 +245,7 @@ function syncButtons() {
 
 // D-540 4: one read line and the robot layer; operating a trip is the 관제 card's (D-540 3).
 async function pollRobots() {
-  if (state.loadState === 'ready') {
+  if (state.loadState === 'ready' && !document.hidden) {  // a background tab does not keep reading trips and guide
     try {
       state.open = (await request('/api/fleet/trips')).open || [];
       status('trip-run', state.open.length ? `이 지도로 운행 중 · ${state.open.map(trip => tripStatusText(trip, state.active?.map)).join(' / ')}`
