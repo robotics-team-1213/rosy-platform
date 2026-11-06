@@ -5,6 +5,8 @@ import json
 import os
 from pathlib import Path
 import sys
+from concurrent.futures import ThreadPoolExecutor
+from threading import Event, current_thread
 
 import pytest
 
@@ -100,3 +102,179 @@ def test_the_learning_center_v12_and_eval_reviews_follow_the_same_accepted_relea
         assert line.startswith('ExecStart=-/usr/bin/python3') and f'%h/rosy-ml/{root} ' in line
         assert f'--port {port} ' in line and f'--service {service} ' in line
         assert '--python ${REVIEW_PYTHON}' in line and '--minimum-sequence ${MINIMUM_SEQUENCE}' in line
+
+
+def _manual_review(tmp_path):
+    root = tmp_path / 'model'
+    root.mkdir()
+    (root / 'work.lock').touch()
+    commit = 'a' * 40
+    signed = root / 'releases' / f'45-{commit}'
+    signed.mkdir(parents=True)
+    (root / 'current').symlink_to(signed, target_is_directory=True)
+    (root / 'state.json').write_text(json.dumps({
+        'sequence': 45, 'source_commit': commit, 'result': 'idle'}))
+    review = tmp_path / 'review'
+    manual = review / 'releases' / 'manual-new'
+    manual.mkdir(parents=True)
+    (review / 'current').symlink_to(manual, target_is_directory=True)
+    (review / 'releases' / f'model-code-45-{commit[:12]}').mkdir()
+    return root, review, (root, review, tmp_path / 'state', tmp_path / 'python',
+        '127.0.0.1', 8774, tmp_path / 'unit', 44)
+
+
+def _write_hold(review, service=module.SERVICE):
+    marker = review / 'manual-hold.json'
+    marker.write_text(json.dumps({'schema': 'rosy.review.manual-hold/1',
+        'service': service, 'hold_id': 'b' * 32}))
+    marker.chmod(0o600)
+    return marker
+
+
+@pytest.mark.skipif(os.name == 'nt', reason='requires POSIX symlinks and flock')
+def test_manual_hold_blocks_old_accepted_release_and_other_ui_still_updates(tmp_path, monkeypatch):
+    root, review, args = _manual_review(tmp_path)
+    _write_hold(review)
+    before = (root / 'state.json').read_bytes()
+    calls = []
+    monkeypatch.setattr(module, 'install', lambda *a: calls.append(a))
+    assert module.apply(*args).startswith('manual hold:')
+    assert module.apply_locked(*args).startswith('manual hold:')
+    assert calls == []
+    assert (review / 'current').resolve().name == 'manual-new'
+    assert (root / 'state.json').read_bytes() == before
+
+    other = tmp_path / 'other-review'
+    other.mkdir()
+    (other / 'releases').symlink_to(review / 'releases', target_is_directory=True)
+    (other / 'current').symlink_to(review / 'current', target_is_directory=True)
+    other_args = (root, other, *args[2:])
+    assert module.apply(*other_args).startswith('activated:')
+    assert len(calls) == 1 and calls[0][2] == other
+
+
+@pytest.mark.skipif(os.name == 'nt', reason='requires POSIX symlinks and flock')
+@pytest.mark.parametrize('damage', ['json', 'symlink', 'public', 'service'])
+def test_invalid_manual_hold_never_activates(tmp_path, monkeypatch, damage):
+    _, review, args = _manual_review(tmp_path)
+    marker = _write_hold(review)
+    if damage == 'json':
+        marker.write_text('{')
+    elif damage == 'symlink':
+        destination = review / 'hold-target'
+        marker.rename(destination)
+        marker.symlink_to(destination)
+    elif damage == 'public':
+        marker.chmod(0o644)
+    else:
+        _write_hold(review, 'rosy-edge-review.service')
+    calls = []
+    monkeypatch.setattr(module, 'install', lambda *a: calls.append(a))
+    with pytest.raises((OSError, ValueError)):
+        module.apply(*args)
+    assert calls == []
+    assert (review / 'current').resolve().name == 'manual-new'
+
+
+@pytest.mark.skipif(os.name == 'nt', reason='requires POSIX symlinks and flock')
+def test_hold_cli_requires_matching_id_to_resume_automatic_updates(tmp_path, monkeypatch):
+    _, review, args = _manual_review(tmp_path)
+    installer = sys.modules['install_review_release']
+
+    def cli(*flags):
+        monkeypatch.setattr(sys, 'argv', ['install_review_release.py',
+            '--root', str(review), '--service', module.SERVICE, *flags])
+        installer.main()
+
+    cli('--hold')
+    marker = review / 'manual-hold.json'
+    metadata = json.loads(marker.read_text())
+    assert metadata['schema'] == 'rosy.review.manual-hold/1'
+    assert metadata['service'] == module.SERVICE
+    hold_id = metadata['hold_id']
+    assert len(hold_id) == 32 and int(hold_id, 16) >= 0
+    assert marker.stat().st_mode & 0o077 == 0
+    cli('--hold')
+    assert json.loads(marker.read_text()) == metadata
+    with pytest.raises(SystemExit) as refused:
+        cli('--unhold', 'wrong-id')
+    assert refused.value.code == 1 and marker.exists()
+    cli('--unhold', hold_id)
+    assert not marker.exists()
+    calls = []
+    monkeypatch.setattr(module, 'install', lambda *a: calls.append(a))
+    assert module.apply(*args).startswith('activated:')
+    assert len(calls) == 1
+
+
+@pytest.mark.skipif(os.name == 'nt', reason='requires POSIX symlinks and flock')
+def test_failed_manual_install_keeps_hold(tmp_path):
+    _, review, args = _manual_review(tmp_path)
+    installer = sys.modules['install_review_release']
+    with pytest.raises(ValueError, match='existing service unit is missing'):
+        installer.install(None, 'manual-next', review, None, None,
+            '127.0.0.1', 8774, args[6], hold=True)
+    metadata = json.loads((review / 'manual-hold.json').read_text())
+    assert metadata['service'] == module.SERVICE
+    assert (review / 'current').resolve().name == 'manual-new'
+
+
+@pytest.mark.skipif(os.name == 'nt', reason='requires POSIX symlinks and flock')
+def test_manual_hold_waits_for_inflight_automatic_install(tmp_path, monkeypatch):
+    _, review, args = _manual_review(tmp_path)
+    installer = sys.modules['install_review_release']
+    entered, attempted, release, installed = Event(), Event(), Event(), Event()
+    real_flock = module.fcntl.flock
+
+    def observed_flock(file, operation):
+        manual = current_thread().name == 'manual-hold'
+        if manual:
+            attempted.set()
+        real_flock(file, operation)
+        if manual:
+            assert installed.is_set(), 'hold acquired before the automatic switch completed'
+
+    def activate(_source, name, root, *_args):
+        entered.set()
+        assert release.wait(15)
+        (root / 'current').unlink()
+        (root / 'current').symlink_to(root / 'releases' / name, target_is_directory=True)
+        installed.set()
+
+    def hold():
+        current_thread().name = 'manual-hold'
+        return installer.hold(review, module.SERVICE)
+
+    monkeypatch.setattr(module.fcntl, 'flock', observed_flock)
+    monkeypatch.setattr(module, 'install', activate)
+    with ThreadPoolExecutor(max_workers=2) as workers:
+        automatic = workers.submit(module.apply, *args)
+        try:
+            assert entered.wait(15)
+            manual = workers.submit(hold)
+            assert attempted.wait(15), 'hold must use the same review lock as the updater'
+        finally:
+            release.set()
+        assert automatic.result(timeout=15).startswith('activated:')
+        hold_id = manual.result(timeout=15)
+    assert json.loads((review / 'manual-hold.json').read_text())['hold_id'] == hold_id
+    assert (review / 'current').resolve().name == 'model-code-45-aaaaaaaaaaaa'
+    assert module.apply(*args).startswith('manual hold:')
+
+
+@pytest.mark.skipif(os.name == 'nt', reason='requires POSIX symlinks and flock')
+def test_empty_unhold_id_with_release_never_installs(tmp_path, monkeypatch):
+    _, review, args = _manual_review(tmp_path)
+    installer = sys.modules['install_review_release']
+    _write_hold(review)
+    entered = []
+    monkeypatch.setattr(installer, 'install', lambda *a, **kw: entered.append(a) or review)
+    monkeypatch.setattr(sys, 'argv', ['install_review_release.py', 'manual-next',
+        '--root', str(review), '--service', module.SERVICE, '--unhold', '',
+        '--host', '127.0.0.1', '--port', '8774'])
+    with pytest.raises(SystemExit) as refused:
+        installer.main()
+    assert refused.value.code == 2
+    assert entered == []
+    assert (review / 'current').resolve().name == 'manual-new'
+    assert (review / 'manual-hold.json').exists()

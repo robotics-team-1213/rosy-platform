@@ -1,7 +1,7 @@
 ---
 title: Upgrading the model-PC Learning Center in place needs the new commit's exact unit written first
 date: 2026-10-23
-last_updated: 2026-11-05
+last_updated: 2026-11-06
 category: deployment
 module: deploy/model_pc/install_learning_center.py (rosy-learning-center.service), deploy/model_pc/install_review_release.py
 problem_type: deployment_error
@@ -35,7 +35,7 @@ applies_when: "moving the running rosy-learning-center.service to a new commit w
 Do not create new state roots to get past the refusal. A new root would start an empty center and lose the registered datasets, jobs and profiles.
 
 ## Evidence
-Model PC, 2026-10-23: the center moved from `0cf9282aa3` to `c643281c44` (PR #154). The first attempt failed, and the restore came back on `0cf9282aa3` with HTTP 200. The second attempt with steps 4–5 returned `INSTALLED`, `active`, `source/c643281c4493` and HTTP 200, with no journal errors.
+Model PC, 2026-10-23: the center moved from its previous installation to `c643281c44` (PR #154). The first attempt failed, and the restore returned the previous installation with HTTP 200. The second attempt with steps 4–5 returned `INSTALLED`, `active`, `source/c643281c4493` and HTTP 200, with no journal errors.
 
 ## Installing an accepted D-446 model-code release with `install_review_release.py`
 The protected Learning center's review app is installed from an accepted D-446 model-code release, not from a Git clone. Two direct sources are refused:
@@ -52,7 +52,7 @@ Procedure that worked:
 
 Evidence: protected Learning center, 2026-10-24, sequence 32. The installer exited 1 on the release folder (symlink), 1 on the copy inside `--root` (not separate), then 0 on the sibling copy outside `--root`.
 
-### A manual hotfix must also advance the review updater's accepted-sequence floor
+### Earlier manual hotfix recovery using the accepted-sequence floor
 
 On 2026-11-03 a verified hotfix activated successfully on both review services, then the periodic review updater reactivated an older accepted signed release. Immediate HTTP readiness and a matching `current` link had not proved the hotfix would remain active. The updater's environment still allowed that older sequence.
 
@@ -65,6 +65,20 @@ Verification: the old accepted source matched its Git ancestor across 812 instal
 Prevention: for manual hotfixes, include automatic update eligibility and a later activation check in acceptance evidence; an immediate successful restart is insufficient. Restore the backed-up environment only when returning to the corresponding signed release policy, without overwriting newer review labels.
 
 The source rule is also stated in `deploy/model_pc/README.md` beside the project install command.
+
+### Keep individual review UIs pinned without changing the shared floor
+
+Integration status: the per-UI hold implementation has passed the software checks below on its topic branch; canonical landing, publication and operational installation remain pending.
+
+The earlier floor recovery changed the shared updater policy. When only two review UIs must keep a manual source while the other UIs continue following accepted releases, changing that floor or stopping the shared timer affects more than the requested scope. The accepted model-code state is not the authority for an individual UI's manual hold.
+
+Use the review root's `manual-hold.json` through `install_review_release.py --root <review-root> --service <review-service> --hold`, or add `--hold` to its manual installation command. The private marker stays outside the runtime releases directory and binds the service to a hold ID. Repeated hold keeps that ID. Installation failure, rollback and timer restart do not clear it. Only `--unhold <hold-id>` for that root/service resumes automatic activation; the existing accepted source can then become active again. Empty IDs must be treated as a supplied invalid option, not as absence of `--unhold`.
+
+`work.lock` is shared by the review updater, so it does not serialize two UI updates or a manual hold. Both automatic hold-check/installation and manual installation/hold/unhold now use the same per-root exclusive `review-update.lock`. Automatic updates acquire the existing model shared lock first and call the installer's internal locked implementation without acquiring the UI lock again. A malformed, symlinked, non-private or mismatched hold refuses automatic installation.
+
+Bind both installed helpers, `auto_review_release.py` and `install_review_release.py`, to the reviewed public source. A running old helper may already have loaded code that ignores holds: wait for that execution to finish naturally, then require a new natural timer execution to report both expected hold IDs and leave both `current` links unchanged before switching the manual UI. Leave other UI roots and global timer/floor/state settings unchanged. Rolling back only to an old helper would discard the protection. Hold does not fence AI jobs, exports or human edits; the final idle check, writer fence and consistent data backup still precede an actual UI restart.
+
+Software verification on 2026-11-06: initial hold regressions failed 7 cases with 5 existing passes; the deterministic in-flight installation/hold regression failed separately; an empty-ID regression failed while the other 13 cases passed. The pending implementation then passed all 261 cases across `test_model_review_autoupdate.py`, `test_model_review_release.py` and `test_model_pc_autoupdate.py`, with zero skips and zero new failures. This verifies the software boundary and existing installer recovery, not installation of these helpers, protected timer execution or acceptance of the two operational UIs; those remain separate deployment evidence.
 
 ### Things the signed release does not carry (2026-10-24/25, sequences 33–35)
 
