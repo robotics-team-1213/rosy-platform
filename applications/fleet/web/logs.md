@@ -1017,3 +1017,8 @@
 - 증거: RED5ef2b034c4 실제 Chromium 사건 회귀2실패/정상1통과에서 flagged.map TypeError와 본문·해제 버튼 누락을 재현했다. source4ddb9eef8b 원격 workcell/motor-health Chromium28통과·공용 controls/계약/기존 incident API/Node/API pin61통과, skip0·NEW/known/flaky0; scratch incident-facts-{red,final-green,contracts}/run-1.txt. 미지 facts의 markup은 텍스트로만 보이고, 메모 없는 해제 거절과 메모 후 원래 해제 흐름도 확인했다.
 - gate 변화: SOURCE/관련 원격 회귀 확인이다. 최종 통합 착지는 게시 담당과 조율하며 공개 배포·운영 로그인·기체·서비스 수용 근거로 확대하지 않는다.
 - 교훈: CE 해당 없음 — BoundedJson 계약과 실제 렌더·해제 회귀가 원인과 방어 경계를 직접 보존하며 별도 숨은 복구 조건이 없다.
+
+## 2026-11-06 · uncommitted · uiux(fleet): 비상 정지 칩이 카드 밖으로 잘리던 문제
+- 변경: 넓은 칸의 방향·배터리·안전 값이 고정 폭(60~80px) 대신 값 크기를 쓰고, 모자라면 줄을 바꾼다. 2026-11-06 UI/UX 전수 조사 P2, 1920 캡처로 잘림 확인.
+- 증거: test/test_fleet_roster_facts_browser.py가 카드 오른쪽 경계 안을 단언한다. 원격 RED/GREEN은 착지 기록을 따른다.
+- gate 변화: SOURCE 회귀. 실제 사이트 PC·장치 수용은 별도다. CE: 해당 없음 — 코드와 회귀가 판단을 보존한다.

@@ -18,7 +18,7 @@ export function mount(root, ctx) {
   modeStatus.setAttribute("state", "pending"); capabilityStatus.setAttribute("state", "pending"); actionStatus.setAttribute("state", "ready");
   actionStatus.setAttribute("role", "status");
   actionStatus.setAttribute("aria-live", "polite");
-  const controls = el("ui-actions", "surface-actions");
+  const controls = el("ui-actions", "surface-actions mode-actions");
   const buttons = new Map();
   for (const mode of MODES) {
     const button = el("ui-button", "", mode.label); button.setAttribute("kind", "segment"); button.type = "button";
