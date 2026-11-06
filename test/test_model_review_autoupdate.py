@@ -260,3 +260,21 @@ def test_manual_hold_waits_for_inflight_automatic_install(tmp_path, monkeypatch)
     assert json.loads((review / 'manual-hold.json').read_text())['hold_id'] == hold_id
     assert (review / 'current').resolve().name == 'model-code-45-aaaaaaaaaaaa'
     assert module.apply(*args).startswith('manual hold:')
+
+
+@pytest.mark.skipif(os.name == 'nt', reason='requires POSIX symlinks and flock')
+def test_empty_unhold_id_with_release_never_installs(tmp_path, monkeypatch):
+    _, review, args = _manual_review(tmp_path)
+    installer = sys.modules['install_review_release']
+    _write_hold(review)
+    entered = []
+    monkeypatch.setattr(installer, 'install', lambda *a, **kw: entered.append(a) or review)
+    monkeypatch.setattr(sys, 'argv', ['install_review_release.py', 'manual-next',
+        '--root', str(review), '--service', module.SERVICE, '--unhold', '',
+        '--host', '127.0.0.1', '--port', '8774'])
+    with pytest.raises(SystemExit) as refused:
+        installer.main()
+    assert refused.value.code == 2
+    assert entered == []
+    assert (review / 'current').resolve().name == 'manual-new'
+    assert (review / 'manual-hold.json').exists()
