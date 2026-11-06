@@ -1044,3 +1044,10 @@
 - 증거: 통합 source5ca1d6b599의 독립 병합 검토 미해결 finding 없음. manual1f97d2d2c9·ce2670e864·6e047a8c77·df224da2ac·54eb4097fe·2524644483 ancestry를 포함하고, 거절된 ca805b8d2c·af7dec1229는 제외했다. 부모별 scoped 원격 결과는 기존 각 source 기록에 결속된 증거로 유지하며 최종 통합 FULL 통과로 바꾸어 주장하지 않는다.
 - gate 변화: 정본 구조·안전·크기·비밀정보 검사 후 새 canonical FULL에 제출한다. old224244는 clean FULL 증거 부재로 STOP된 상태를 보존하며 재개하지 않는다. 실행 중인 도움말003134 및 다른 작업은 유지한다. 공개·서명·배포·Account cutover·실물 수용은 별도다.
 - 교훈: CE 해당 없음 — 검토 부모의 정상 통합이며 기록과 실제 ancestry·파일 일치 검사로 보존 범위를 확인할 수 있다.
+
+## 2026-11-06 · uncommitted · merge(fleet): 최신 UIUX와 수동 관제의 확인·권한 연결 보존
+- 변경: main a4139efa7e와 보존 source0212ae977f를 정상 병합했다. console은 최신 main 전체에 confirmedAction/refreshState 주입만 더해 viewer의 운영자 권한 차단을 유지한다. API는 기존 예약363과 main의 Learning360/SAM 설명, 기존358/357 본문을 모두 보존했다. generated web index는 양쪽 진행 기록에서 재생성했다. 수동 grammar·CORE/Fleet 실행·hold/rearm/terminal-zero/source 의미와 다른 최신 UIUX 파일은 각 소유 부모를 보존한다.
+- 증거: sourceabbd692cc1 원격 AI PC 실제 Chromium 수동19개+viewer/login/shared-token/confirmation-generation4개 총23통과, CORE/Fleet manual·API pin·확인 계약·공용 control·feature matrix·Node86통과. skip0·NEW/known/flaky0; scratch pinky-uiux-merge-{browser,contracts}/run-1.txt. 독립 고정 source 병합 검토 미해결 finding 없음. API363/360/358/357 각 본문과 BOM, 최신 console+주입의 파일 일치도 확인했다.
+- metadata: PNG 실제 checksum과 현재 manifest 일치, 문서의 Git commit 문맥을 독립 확인한 근거에 따라 root 승인 exact historical commit/path/rule 2건만 비밀정보 baseline에 추가했다. 기존183건의 순서·내용·schema·reviewer와 Git raw prefix를 보존해 중복 없이185건이며 scanner·provenance·ignore·정책은 바꾸지 않았다. 이 자료는 비밀키가 아닌 실제 screenshot/Git metadata다. source18effdc1b9 원격 publish/secret/provenance 기존 회귀59통과·skip0·NEW/known/flaky0, scratch pinky-uiux-metadata-guards/run-1.txt. 정본 origin647부터 해당 source까지264개 commit의 추가 줄 검사에서 미검토 hit0이다. baseline 증분 독립 검토 미해결 finding 없음.
+- gate 변화: bounded SOURCE 회귀다. main a413에는 exact land record가 없으므로 최신 main이나 이번 통합의 FULL qualification을 주장하지 않는다. old004000과 모든 STOP을 보존하며, metadata 자격 확인과 최종 승인 뒤 새 source의 canonical FULL이 필요하다. 새 착지·게시·서명·기체·서비스 동작은 수행하지 않았다.
+- 교훈: CE 해당 없음 — 두 명시적 충돌의 보존 규칙이 최종 코드·API·기존 회귀와 source별 증거에 직접 남는다.
