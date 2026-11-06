@@ -146,7 +146,7 @@ def run_round(args) -> int:
     parent = args.parent or best_round(root)
     seeds_from_parent = read_round(root, parent)["stages"]["mujoco"]["eval"]["failed_seeds"] if parent else []
     recipe = dict(RECIPE, steps=args.steps, optimizer_lr=args.lr)
-    sha = subprocess.run(["git", "-C", str(ROOT), "rev-parse", "HEAD"], capture_output=True, text=True, check=True).stdout.strip()
+    sha = args.source_sha or subprocess.run(["git", "-C", str(ROOT), "rev-parse", "HEAD"], capture_output=True, text=True, check=True).stdout.strip()
     row = new_round(root, parent, cell, sha, recipe, len(seeds_from_parent), args.episodes + len(seeds_from_parent))
     path = write_round(root, row)
     run, sim = path.parent, str(Path(__file__).with_name("omx_cell_sim.py"))
@@ -193,6 +193,7 @@ def main(argv=None) -> int:
     one.add_argument("--python", default=sys.executable)
     one.add_argument("--lerobot-train", required=True)
     one.add_argument("--parent")
+    one.add_argument("--source-sha", help="the commit this copy came from, when the folder has no Git")
     one.add_argument("--episodes", type=int, default=60)
     one.add_argument("--eval-episodes", type=int, default=50)
     one.add_argument("--steps", type=int, default=RECIPE["steps"])

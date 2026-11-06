@@ -12,6 +12,7 @@ CELL holds the site's values (deploy/robot/omx/sim/ladder-cell.example.json show
 Geometry here decides reach, order and collisions. Contact and vision numbers do not carry to the real arm (D-947).
 """
 import argparse
+import contextlib
 import json
 import math
 import os
@@ -315,6 +316,54 @@ def evaluate(cell, path, count, seed_base, out, artifacts):
     return 0
 
 
+def video(cell, seeds, out, model=None):
+    """An mp4 of top and wrist views, one episode per seed: the teacher, or a trained ACT model when given."""
+    import av
+    policy = None
+    if model:
+        import torch
+        from lerobot.policies.act.modeling_act import ACTPolicy
+        from lerobot.policies.factory import make_pre_post_processors
+        policy = ACTPolicy.from_pretrained(model, local_files_only=True).to("cuda" if torch.cuda.is_available() else "cpu").eval()
+        pre, post = make_pre_post_processors(policy.config, pretrained_path=str(model))
+        device = next(policy.parameters()).device
+    container = av.open(str(out), "w")
+    stream = container.add_stream("h264", rate=FPS)
+    stream.width, stream.height, stream.pix_fmt = SHAPE[1] * 2, SHAPE[0], "yuv420p"
+    rows = []
+
+    def frame(data):
+        image = av.VideoFrame.from_ndarray(np.hstack(cell.views(data)), format="rgb24")
+        container.mux(stream.encode(image))
+
+    for seed in seeds:
+        data, xy, yaw = cell.reset(seed, EVAL_XY, EVAL_YAW)
+        peak = 0.0
+        if policy is not None:
+            policy.reset()
+        with torch.inference_mode() if policy is not None else contextlib.nullcontext():
+            for _ in cell.teacher(data, xy, yaw) if policy is None else range(round(16 * FPS)):
+                if policy is None:
+                    target = _
+                else:
+                    top, wrist = cell.views(data)
+                    batch = {"observation.state": torch.from_numpy(data.qpos[cell.qadr].astype(np.float32))[None].to(device),
+                             "observation.images.top": (torch.from_numpy(top).permute(2, 0, 1)[None].float() / 255).to(device),
+                             "observation.images.wrist": (torch.from_numpy(wrist).permute(2, 0, 1)[None].float() / 255).to(device),
+                             "task": [TASK]}
+                    target = post(policy.select_action(pre(batch))).cpu().numpy()[0]
+                frame(data)
+                cell.advance(data, target)
+                peak = max(peak, float(data.body("box").xpos[2]))
+        for _ in range(FPS):  # hold the last frame a second to show where the box ended
+            frame(data)
+        rows.append(dict(seed=seed, **cell.judge(data, peak)))
+        print(json.dumps(rows[-1]), flush=True)
+    container.mux(stream.encode(None))
+    container.close()
+    return 0
+
+
 def compare(cell, state_path, out):
     """Top, side and wrist at 640x480 for a real joint state, to lay over the real frames."""
     from PIL import Image
@@ -349,6 +398,10 @@ def main(argv=None):
     one.add_argument("--seed-base", type=int, required=True)
     one.add_argument("--out", required=True)
     one.add_argument("--artifacts", required=True)
+    one = commands.add_parser("video")
+    one.add_argument("--seeds", required=True)
+    one.add_argument("--out", required=True)
+    one.add_argument("--model")
     one = commands.add_parser("compare")
     one.add_argument("state")
     one.add_argument("--out", required=True)
@@ -360,6 +413,8 @@ def main(argv=None):
         return collect(cell, args.episodes, [int(s) for s in args.extra_seeds.split(",") if s], args.out)
     if args.command == "evaluate":
         return evaluate(cell, args.model, args.episodes, args.seed_base, args.out, args.artifacts)
+    if args.command == "video":
+        return video(cell, [int(s) for s in args.seeds.split(",")], args.out, args.model)
     return compare(cell, args.state, args.out)
 
 
