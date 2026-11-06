@@ -332,6 +332,7 @@ def test_two_second_limit_says_why_and_the_pad_is_a_first_screen_square(console_
         assert {round(rect["width"]) for rect in rects} == {round(rects[0]["width"])}, rects
         assert len({round(rect["y"]) for rect in rects}) == 2, rects  # 2×2, never 3+1
         assert max(rect["bottom"] for rect in rects) <= 768, rects
+        page.route("**/api/fleet/do", lambda route: route.fulfill(json={"accepted": True}))
         forward.hover()
         page.mouse.down()
         expect(page.locator("[data-manual-reason]")).to_contain_text("2초 한도로 멈췄습니다", timeout=5000)
