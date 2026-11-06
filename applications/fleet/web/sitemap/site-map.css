@@ -12,7 +12,7 @@ main { word-break: keep-all; overflow-wrap: break-word; }
 .plane-tools summary:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
 .plane-tools-body { display: grid; gap: var(--space-3); padding-block: var(--space-2); }
 .form { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3); }
-label.inline { display: inline-flex; flex: none; max-width: 100%; align-items: center; gap: var(--space-2); }
+label.inline { display: inline-flex; flex: none; flex-wrap: wrap; max-width: 100%; align-items: center; gap: var(--space-2); }
 ui-head:has(label.inline) { flex-wrap: wrap; align-items: center; }
 .ui-field:not([type="checkbox"], label.inline > *) { width: 100%; }  /* components.css caps fields at 100%; an inline label's select keeps its own width */
 a:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
