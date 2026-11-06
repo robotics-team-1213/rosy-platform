@@ -72,6 +72,8 @@ export function paintProfile(root, profile, {elapsedS = 0, unavailable = false, 
   const link = node('a', '프로필·주의사항 편집');
   const deviceId = profile?.device_id || editDeviceId;
   link.href = `/console/install${deviceId ? '?profile=' + encodeURIComponent(deviceId) : ''}#device-profiles`;
+  link.className = 'ui-action-link';
+  link.dataset.kind = 'quiet';
   root.append(link);
 }
 

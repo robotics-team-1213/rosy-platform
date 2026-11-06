@@ -47,6 +47,8 @@ export function createRobotAppActions(robotId, peers, nodeWithText) {
   const recording = nodeWithText('a', '', '지도 기록');
   recording.href = `/console/site-map?robot=${encodeURIComponent(robotId)}#teach-heading`;
   recording.dataset.mapRecording = '';
+  recording.className = 'ui-action-link';
+  recording.dataset.kind = 'quiet';
   context.append(recording);
   return context;
 }

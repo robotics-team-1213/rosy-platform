@@ -352,7 +352,7 @@ def test_gather_failure_names_itself_on_the_pill(console_url):
         page.goto(console_url, wait_until="networkidle")
         page.wait_for_function(
             "() => document.getElementById('online-pill')?.textContent"
-            " === 'Fleet 서버 없음'"
+            " === 'Fleet 연결 끊김'"
         )
         assert page.locator("#online-pill").get_attribute("status") == "crit"
         assert "Fleet 상태를 확인할 수 없습니다" in page.inner_text("#roster")
@@ -460,7 +460,7 @@ def test_gather_loss_removes_last_known_robot_position(console_url, width, heigh
         _open_cards(page)
         page.wait_for_function("() => document.querySelector('#robot-workspace article')?.textContent.includes('1.00')")
         api["/api/fleet/state"] = (500, {"detail": "gather failed"})
-        page.wait_for_function("() => document.querySelector('#online-pill')?.textContent === 'Fleet 서버 없음'"
+        page.wait_for_function("() => document.querySelector('#online-pill')?.textContent === 'Fleet 연결 끊김'"
                                " && document.querySelector('#robot-workspace article')?.textContent.includes('상태 확인 불가')")
         assert not errors
         assert "1.00" not in page.inner_text("#robot-workspace")

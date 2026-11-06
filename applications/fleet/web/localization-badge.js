@@ -72,10 +72,10 @@ export function positionTag(loc, guideRow) {
     const words = [SITE_POSE_STATE[pose.state] || pose.state, SITE_POSE_SOURCE[pose.source] || pose.source]
       .filter(Boolean).join(" · ");
     return { text: words ? `지도 위치 ${words}` : "지도 위치", cls: pose.state === "LOCALIZED" ? "" : "warn",
-      title: `Fleet map pose: ${pose.state} · ${pose.source}` };
+      title: `Fleet 지도 위치: ${words || "상태 없음"}` };
   }
   if (loc) return localizationTag(loc);
   if (!loc && !guideRow) return null;  // offline or no evidence at all: the card says offline already
   return { text: "지도 위치 없음", cls: "",
-    title: loc?.legacy ? "Fleet map pose: none · CORE localization: null" : "Fleet map pose: none" };
+    title: loc?.legacy ? "Fleet 지도 위치 없음 · 로봇 자체 위치 정보도 없음" : "Fleet 지도 위치 없음" };
 }

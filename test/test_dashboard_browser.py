@@ -1602,15 +1602,15 @@ def test_core_only_viewer_sees_the_truth_and_probes_nothing_forbidden():
         assert page.locator("#robot-name").inner_text() == "rosy-pinky-e4us"
         # 3. motion is withheld and says why, without alarm colour
         capabilities = page.locator("#capability-list").inner_text()
-        assert "하드웨어 런타임 꺼짐 (CORE-only)" in capabilities
+        assert "하드웨어 런타임 꺼짐" in capabilities
         assert page.locator('#capability-list [data-cause="runtime"]').count() == 5
         assert page.locator('[data-teleop="forward"]').is_disabled()
         # 4. hero and banner agree: no source, and the reason is CORE-only
-        assert "CORE-only" in page.locator("#safety-source").inner_text()
+        assert "하드웨어 런타임 꺼짐" in page.locator("#safety-source").inner_text()
         triage_text = page.locator("#triage").inner_text()
         assert "수신 끊김" not in triage_text
         assert "출처는 있는데" not in triage_text
-        assert page.locator("#triage-title").inner_text() == "하드웨어 런타임 꺼짐 (CORE-only)"
+        assert page.locator("#triage-title").inner_text() == "하드웨어 런타임 꺼짐"
         assert page.locator("#triage").get_attribute("data-category") == "observation"
         warm = page.evaluate(WARM_SCAN)
         assert set(warm) <= {"ui-button#emergency-stop.stop-button"}, (
@@ -1879,7 +1879,7 @@ def test_api_estop_does_not_claim_a_motor_power_cut():
         assert page.locator("#safety-source").inner_text() == "API 비상정지 (operator)"
         # The runtime reason comes first and SAFE_STOP is still shown.
         capabilities = page.locator("#capability-list").inner_text()
-        assert "하드웨어 런타임 꺼짐 (CORE-only) · 정지 상태" in capabilities
+        assert "하드웨어 런타임 꺼짐 · 정지 상태" in capabilities
         browser.close()
 
 

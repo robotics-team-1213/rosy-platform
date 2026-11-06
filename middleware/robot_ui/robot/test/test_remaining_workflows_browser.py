@@ -167,7 +167,7 @@ def test_localization_results_have_independent_owners(panel):
     page.get_by_role('button', name='맵핑 시작', exact=True).click()
     dialog = page.locator('dialog.ui-confirm')
     if dialog.count(): dialog.locator('ui-button[kind=irreversible]').click()
-    page.get_by_text('맵핑 시작 요청을 CORE가 받았습니다.', exact=True).wait_for()
+    page.get_by_text('맵핑 시작 요청을 로봇이 받았습니다.', exact=True).wait_for()
     assert page.get_by_text('초기 위치 요청을 완료하지 못했습니다: pose rejected', exact=True).is_visible()
 
 

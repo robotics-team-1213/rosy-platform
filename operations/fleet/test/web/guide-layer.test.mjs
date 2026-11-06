@@ -42,7 +42,7 @@ test('view turn rotates positions and heading clockwise on screen', () => {
 test('chip text names the robot and its uncertainty', () => {
   assert.equal(poseLabel(GUIDE.robots[0]), 'rosy_01 · ±0.05 m');
   assert.equal(poseLabel(GUIDE.robots[1]), 'rosy_02 · 위치 모름');
-  assert.equal(poseLabel(GUIDE.robots[2]), 'rosy_03 · ±0.20 m · 추정');
+  assert.equal(poseLabel(GUIDE.robots[2]), 'rosy_03 · ±0.20 m · 추정 · 연결 끊김');
   // D-593: an operator pin says so, with its anchor age
   assert.equal(poseLabel({robot_id: 'rosy_40', pose: {u_m: 0.12, state: 'LOCALIZED', anchor_source: 'operator_pin', anchor_age_s: 3.6}}),
     'rosy_40 · ±0.12 m · 운영자 핀 4 s');
@@ -57,4 +57,10 @@ test('fitView keeps robot rings inside the view at every turn', () => {
       assert.ok(px - rpx >= 23.9 && px + rpx <= 776.1 && py - rpx >= 23.9 && py + rpx <= 456.1, `${turn} ${x},${y}`);
     }
   }
+});
+
+test('an offline robot says so in its label', () => {
+  assert.match(poseLabel({robot_id: 'rosy_1', online: false, pose: {u_m: 0.02, state: 'LOCALIZED'}}), /연결 끊김/);
+  assert.match(poseLabel({robot_id: 'rosy_1', online: false}), /위치 모름 · 연결 끊김/);
+  assert.doesNotMatch(poseLabel({robot_id: 'rosy_1', online: true, pose: {u_m: 0.02, state: 'LOCALIZED'}}), /연결 끊김/);
 });
