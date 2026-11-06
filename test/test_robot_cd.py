@@ -47,6 +47,13 @@ def test_release_ids_include_reservations_and_device_versions():
         "payload-reserved-2026.10.05-045", "2026.10.05-044"]) == "2026.10.06-046"
 
 
+def test_feature_release_ids_share_the_existing_sequence():
+    assert module().next_release_id("2026.11.06", [
+        "payload-v2-2026.11.05-165", "payload-reserved-2026.11.05-164",
+        "payload-2026.10.10-163", "2026.11.05-004",
+    ]) == "2026.11.06-166"
+
+
 def artifact(path, sha=SHA, link=False):
     with tarfile.open(path, "w:gz") as bundle:
         for name, content in [("source-revision.txt", sha + "\n"),
@@ -554,14 +561,72 @@ def test_finished_build_waits_for_ci_before_signing(tmp_path):
     assert json.loads((tmp_path / "state.json").read_text())["phase"] == "preparing"
 
 
-def test_older_release_than_a_published_one_is_never_signed(tmp_path):
+@pytest.mark.parametrize("prefix", ["payload-", "payload-v2-"])
+def test_older_release_than_a_published_one_is_never_signed(tmp_path, prefix):
     tool = module()
     tool.write_json(tmp_path / "state.json", {"sha": SHA, "phase": "preparing", "release_id": "2026.10.05-045"})
     coordinator = tool.Coordinator({**CONFIG, "state_dir": tmp_path},
                                    gh=github_for([run()], tags=["payload-reserved-2026.10.06-050",
-                                                                "payload-2026.10.08-054"]))
+                                                                f"{prefix}2026.10.08-054"]))
     assert coordinator.tick() == "superseded"
     assert json.loads((tmp_path / "state.json").read_text())["phase"] == "failed"
+
+
+def test_explicit_host_pin_is_used_by_abi_and_publisher_ssh(tmp_path, monkeypatch):
+    tool = module()
+    monkeypatch.syspath_prepend(str(ROOT / "tools/release"))
+    import prepare_payload_release as prepare
+    import publish_payload_release as publish
+    pins = tmp_path / "verified_known_hosts"
+    pins.write_text("public host pins\n")
+    calls = []
+    monkeypatch.setattr(prepare, "run_ssh", lambda argv: (calls.append(argv) or (0, "ok", "")))
+    coordinator = tool.Coordinator({**CONFIG, "state_dir": tmp_path / "state",
+                                   "ssh_known_hosts": str(pins), "ssh_jump": "approved-jump"})
+    coordinator.ssh(prepare.ssh_argv("robot-a", tmp_path))
+    publisher = publish.Publisher(
+        release_id="2026.11.06-166", repo="team/robots", work_dir=tmp_path / "publish",
+        key_name="release-key", private_key=tmp_path / "key", public_key=tmp_path / "public",
+        local_appdata=tmp_path, evidence_dir=tmp_path, gh=None, ssh=coordinator.ssh,
+        now=None, monotonic=None, sleep=None)
+    publisher.ssh("robot-a", "hostname")
+    assert len(calls) == 2
+    for argv in calls:
+        assert [a for a in argv if a.startswith("UserKnownHostsFile=")] == [f"UserKnownHostsFile={pins}"]
+        assert "StrictHostKeyChecking=yes" in argv
+        assert "BatchMode=yes" in argv
+        assert argv[1:3] == ["-J", "approved-jump"]
+        assert argv[-2] == "rosy@robot-a"
+
+
+@pytest.mark.parametrize("kind", ["relative", "missing", "directory", "whitespace", "quote"])
+def test_config_refuses_unusable_explicit_host_pin(tmp_path, monkeypatch, kind):
+    tool = module()
+    monkeypatch.setattr(tool, "MAX_STATE_DIR", 4096)
+    monkeypatch.setattr(tool, "verify_snapshot", lambda _: None)
+    pins = tmp_path / {"whitespace": "bad pins", "quote": "bad'pins"}.get(kind, "pins")
+    if kind == "directory":
+        pins.mkdir()
+    elif kind != "missing":
+        pins.write_text("public pins")
+    configured = "relative-pins" if kind == "relative" else str(pins)
+    path = tmp_path / "config.json"
+    tool.write_json(path, {**CONFIG, "state_dir": str(tmp_path), "trusted_root": str(ROOT),
+                          "ssh_known_hosts": configured})
+    with pytest.raises(ValueError, match="ssh_known_hosts"):
+        tool.load_config(path)
+
+
+def test_config_accepts_explicit_public_host_pin(tmp_path, monkeypatch):
+    tool = module()
+    monkeypatch.setattr(tool, "MAX_STATE_DIR", 4096)
+    monkeypatch.setattr(tool, "verify_snapshot", lambda _: None)
+    pins = tmp_path / "pins"
+    pins.write_text("public pins")
+    path = tmp_path / "config.json"
+    tool.write_json(path, {**CONFIG, "state_dir": str(tmp_path), "trusted_root": str(ROOT),
+                          "ssh_known_hosts": str(pins)})
+    assert tool.load_config(path)["ssh_known_hosts"] == str(pins)
 
 
 def test_preparation_refusal_ends_after_three_ticks(tmp_path, monkeypatch):
@@ -619,3 +684,155 @@ def test_state_dir_too_long_for_payload_paths_is_refused(tmp_path):
     path.write_text(json.dumps(config), encoding="utf-8")
     with pytest.raises(ValueError, match="MAX_PATH"):
         tool.load_config(path)
+
+
+LATEST, DELIVERED = "ef" * 20, "cd" * 20
+
+
+def _delivery(tmp_path, monkeypatch, paths, ssh):
+    """A coordinator with a delivered baseline, one new main and the given changed paths."""
+    tool = module()
+    monkeypatch.syspath_prepend(str(ROOT / "tools/release"))
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "operator"))
+    tool.write_json(tmp_path / "state.json", {"sha": DELIVERED, "phase": "done", "deployed_sha": DELIVERED,
+                                              "delivery_base_sha": DELIVERED})
+    dispatches = []
+
+    def github(*args):
+        if args[0] == "workflow":
+            dispatches.append(args)
+            return ""
+        if "--method" in args:
+            return "{}"
+        path = args[1]
+        if path.endswith("git/ref/heads/main"):
+            return json.dumps({"object": {"sha": LATEST}})
+        if "compare/" in path:
+            return json.dumps({"status": "ahead", "files": [{"filename": p, "status": "modified"} for p in paths]})
+        if "/runs?" in path:
+            return json.dumps({"workflow_runs": [run(head_sha=LATEST)]})
+        if "releases?" in path or "matching-refs" in path:
+            return "[]"
+        return json.dumps({"id": 9})
+
+    config = {"repo": "team/robots", "repo_id": 7, "state_dir": tmp_path,
+              "robots": ["robot-on", "robot-off"], "canary": "robot-on", "key_name": "release-key"}
+    coordinator = tool.Coordinator(config, gh=github)
+    monkeypatch.setattr(coordinator, "ssh", ssh)
+    return coordinator, dispatches
+
+
+def _only_robot_on(argv):
+    return (255, "", "no route") if "rosy@robot-off" in argv else (0, "/opt/rosy/releases/2026.10.05-043\n", "")
+
+
+@pytest.mark.parametrize("paths", [
+    ["deploy/robot/pinky_pro/image/customize-rootfs.sh"], ["unowned/file"],
+    ["deploy/robot/pinky_pro/native/rosy-os-update.service", "tools/validation/x.py", "operations/pkg/node.py"]])
+def test_image_or_unclassified_paths_and_a_powered_off_robot_do_not_stop_delivery(tmp_path, monkeypatch, paths):
+    # D-985: each of these held every later release (2026-11-07: 15 image and 2 unclassified paths of 2,429).
+    coordinator, dispatches = _delivery(tmp_path, monkeypatch, paths, _only_robot_on)
+    assert coordinator.tick() == "build_dispatched"
+    assert coordinator.state["delivery_policy"] == "full-payload"
+    assert coordinator.state["release_id"].endswith("-044") and len(dispatches) == 1
+    assert coordinator.state["deployed_sha"] == DELIVERED  # not delivered yet
+
+
+def test_no_robot_answering_refuses_allocation(tmp_path, monkeypatch):
+    coordinator, dispatches = _delivery(tmp_path, monkeypatch, ["operations/pkg/node.py"], lambda argv: (255, "", "down"))
+    with pytest.raises(RuntimeError, match="no configured robot"):
+        coordinator.tick()
+    assert dispatches == []
+
+
+def _publishing(tmp_path, monkeypatch, state, ssh, result):
+    """Phase publishing with a real coordinator; the publisher's process and uploads are recorded."""
+    tool = module()
+    monkeypatch.syspath_prepend(str(ROOT / "tools/release"))
+    import publish_payload_release as publish
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "local"))
+    work = tmp_path / "attempt-1"
+    work.mkdir()
+    signed = work / "2026.10.06-046.tar.gz"
+    artifact(signed)
+    digest = hashlib.sha256(signed.read_bytes()).hexdigest()
+    tool.write_json(tmp_path / "state.json", {"sha": SHA, "phase": "publishing", "release_id": "2026.10.06-046",
+                                              "work_dir": str(work), "tarball_sha256": digest, **state})
+    remote = {"release_id": "2026.10.06-046", "source_revision": SHA, "tarball_sha256": digest,
+              "canary": ["robot-a"], "withdrawn": False}
+    calls, uploads = [], []
+    monkeypatch.setattr(publish.Publisher, "existing_tag", lambda self: "payload-v2-2026.10.06-046" if "canary_name" in state else None)
+    monkeypatch.setattr(publish.Publisher, "download", lambda self: (remote, b"verified"))
+    monkeypatch.setattr(publish.Publisher, "hostname", lambda self, host: host)
+    monkeypatch.setattr(publish.Publisher, "upload", lambda self, rollout: uploads.append(rollout))
+    monkeypatch.setattr(publish, "main", lambda args, **kwargs: calls.append(args) or result)
+
+    def github(*args):
+        path = args[1]
+        if "git/ref/heads/main" in path:
+            return json.dumps({"object": {"sha": SHA}})
+        if "compare/" in path:
+            return json.dumps({"status": "identical"})
+        if "/runs?" in path:
+            return json.dumps({"workflow_runs": [run()]})
+        return json.dumps({"id": 9})
+
+    config = {"repo": "team/robots", "repo_id": 7, "state_dir": tmp_path,
+              "robots": ["robot-a", "robot-b"], "canary": "robot-a", "key_name": "release-key"}
+    coordinator = tool.Coordinator(config, gh=github)
+    monkeypatch.setattr(coordinator, "ssh", ssh)
+    return coordinator, calls, uploads
+
+
+def _eligible(*robots):
+    def ssh(argv):
+        eligible = any(f"rosy@{robot}" in argv for robot in robots)
+        return 0, f'noise\n{{"eligible": {json.dumps(eligible)}}}\n', ""
+    return ssh
+
+
+def test_a_new_rollout_names_the_robot_that_can_apply_now(tmp_path, monkeypatch):
+    coordinator, calls, _ = _publishing(tmp_path, monkeypatch, {}, _eligible("robot-b"), 1)
+    assert coordinator.tick() == "rollout_pending"
+    assert calls[0][calls[0].index("--canary") + 1] == "robot-b" and "--resume" not in calls[0]
+    assert calls[0][calls[0].index("--robot") + 1] == "robot-a"
+    assert coordinator.state["canary_host"] == "robot-b" and coordinator.state["canary_name"] == "robot-b"
+
+
+def test_the_configured_canary_goes_first_when_it_can_apply(tmp_path, monkeypatch):
+    coordinator, calls, _ = _publishing(tmp_path, monkeypatch, {}, _eligible("robot-a", "robot-b"), 1)
+    coordinator.tick()
+    assert calls[0][calls[0].index("--canary") + 1] == "robot-a"
+
+
+@pytest.mark.parametrize("ssh", [_eligible(), lambda argv: (255, "", "down"), lambda argv: (0, "not json", ""),
+                                 lambda argv: (0, "", "")], ids=["busy", "off", "garbage", "empty"])
+def test_no_robot_able_to_apply_waits_without_publishing(tmp_path, monkeypatch, ssh):
+    coordinator, calls, _ = _publishing(tmp_path, monkeypatch, {}, ssh, 0)
+    assert coordinator.tick() == "waiting_idle_canary"
+    assert calls == [] and coordinator.state["phase"] == "publishing"
+
+
+def test_a_canary_that_never_started_keeps_the_transaction_pending(tmp_path, monkeypatch):
+    state = {"canary_host": "robot-a", "canary_name": "robot-a"}
+    coordinator, _, uploads = _publishing(tmp_path, monkeypatch, state, _eligible("robot-b"), 4)
+    assert coordinator.tick() == "canary_not_started"
+    assert coordinator.state["canary_not_started"] is True and coordinator.state["phase"] == "publishing"
+    assert uploads == []
+
+
+def test_the_next_tick_moves_the_rollout_to_an_idle_robot(tmp_path, monkeypatch):
+    state = {"canary_host": "robot-a", "canary_name": "robot-a", "canary_not_started": True}
+    coordinator, calls, uploads = _publishing(tmp_path, monkeypatch, state, _eligible("robot-b"), 1)
+    assert coordinator.tick() == "rollout_pending"
+    assert [rollout["canary"] for rollout in uploads] == [["robot-b"]]
+    assert uploads[0]["withdrawn"] is False
+    assert calls[0][calls[0].index("--canary") + 1] == "robot-b" and "--resume" in calls[0]
+    assert coordinator.state["canary_name"] == "robot-b" and coordinator.state["canary_not_started"] is False
+
+
+def test_with_nobody_else_idle_the_rollout_keeps_its_canary(tmp_path, monkeypatch):
+    state = {"canary_host": "robot-a", "canary_name": "robot-a", "canary_not_started": True}
+    coordinator, calls, uploads = _publishing(tmp_path, monkeypatch, state, _eligible(), 1)
+    coordinator.tick()
+    assert uploads == [] and calls[0][calls[0].index("--canary") + 1] == "robot-a"

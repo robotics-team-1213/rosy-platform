@@ -33,3 +33,10 @@
 - 워크플로는 `https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x<지문>`에서 HTTPS로 키를 받아 `gpg --dearmor`로 `/etc/apt/keyrings/ros-snapshots-archive-keyring.gpg`에 둔다. `gpg --show-keys --with-colons`의 주 키 지문이 락 값과 정확히 같지 않으면 job을 실패시킨다.
 - 신뢰 범위는 스냅샷 stanza(`/etc/apt/sources.list.d/ros2-snapshots.sources`)의 `Signed-By:` 하나다. 라이브 `ros2.sources`는 지운다. apt-key, `trusted.gpg.d`, `trusted=yes`, allow-insecure는 쓰지 않고 apt 서명 검증은 켜 둔다. `test/test_native_payload_workflow.py`가 이것을 고정한다.
 - 키 만료(2027-06-01) 전에 ROS가 키를 연장하거나 바꾸면 문서 지문과 대조한 뒤 락 값을 고친다.
+
+### 부록 2026-11-05 — 스냅샷 날짜 재선정: 2026-10-05
+
+- 기체 이미지가 2026.10.29(`os-pinky-pro-2026.10.29`)로 다시 구워진 뒤 Decision 4의 대조 절차를 재적용했다. b8xy(rosy_46)에 설치된 `ros-jazzy-*` 318개는 `snapshots.ros.org/jazzy/2026-10-05` arm64 `Packages`와 **318/318 정확히 일치**한다. 기존 핀 `2026-09-11`과는 211개가 달랐고, 이것이 릴리스 2026.11.03-002의 ABI 검사 실패(314개 중 211개 불일치, 2026-11-05)와 같은 집합이다.
+- 커밋 5197ea53bf가 `ros.apt_snapshot_url`을 2026-10-05로 올렸다. 재선정은 이미지 빌드와 같은 커밋이 아니라 기체 재이미징 뒤에 이뤄졌다(Decision 4의 글자에서 벗어남). 대조는 문서의 `deb-packages.txt`가 아니라 살아 있는 기체의 `dpkg-query` 목록으로 했다.
+- 스냅샷 저장소는 매일 스냅샷을 만들지 않는다(2026-10-28·10-29는 존재하지 않고, 그무렵 최신은 2026-10-05). 다음 재선정은 "그날 찍힌 스냅샷"이 아니라 "기체 이미지의 ros-jazzy 세트와 대조해 전부 일치하는 날짜"를 골라야 한다.
+- 새 핀으로 만든 payload 빌드 41988562801(릴리스 2026.11.05-001, 브랜치 빌드)은 b8xy ABI 검사를 통과했다(314개 공유 패키지 일치). 채널 게시는 `publish_payload_release.py`가 `source-ref.txt == main`만 허용하므로 main 공개 뒤 main 빌드로 다시 만든다.

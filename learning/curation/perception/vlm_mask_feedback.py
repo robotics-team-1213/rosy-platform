@@ -139,40 +139,70 @@ def analyze(state, ask, model_digest, limit=None):
 def read_current_feedback(state, index):
     state = Path(state).resolve()
     path = state / "vlm-feedback.json"
+    check = {'state': 'not_requested'}
+    def unavailable(reason):
+        return {'available': False, 'reason': reason, 'check': check}
     try:
         with sqlite3.connect(f"file:{state / 'reviews.sqlite3'}?mode=ro", uri=True) as db:
+            metadata = dict(db.execute('SELECT key,value FROM metadata'))
+            if metadata.get('workspace_kind') == 'evaluation':
+                return unavailable('policy_blocked')
             exists = db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='review_ai_feedback'").fetchone()
-            row = db.execute('SELECT report FROM review_ai_feedback WHERE frame=?', (index,)).fetchone() if exists else None
-        if row:
-            report = json.loads(row[0])
+            stored = db.execute('SELECT report FROM review_ai_feedback WHERE frame=?', (index,)).fetchone() if exists else None
+            jobs = db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='review_ai_jobs'").fetchone()
+            job = db.execute("SELECT document FROM review_ai_jobs WHERE frame=? AND json_extract(document,'$.action')='mask_check' ORDER BY rowid DESC LIMIT 1", (index,)).fetchone() if jobs else None
+            if job:
+                value = json.loads(job[0])
+                if not isinstance(value, dict) or value.get('state') not in ('queued', 'running', 'failed', 'cancelled', 'stale', 'succeeded'):
+                    return unavailable('invalid_report')
+                check = {key: value.get(key) for key in ('state', 'version', 'error', 'model', 'updated_at')}
+                check['job_id'] = value['id']
+            row = db.execute('SELECT f.id,f.source,m.status,m.path,m.sha256 FROM frames f '
+                             'JOIN masks m ON m.frame=f.id WHERE f.id=?', (index,)).fetchone()
+        if stored:
+            report = json.loads(stored[0])
         elif path.is_file():
             report = json.loads(path.read_text(encoding="utf-8"))
         else:
-            return {"available": False}
-        metadata, rows = _snapshot(state)
-        row = next(row for row in rows if row[0] == index)
-        item = next(item for item in report["frames"] if item["frame"] == index)
-        if (report["schema"] != "rosy.v13-vlm-feedback/1" or report["advisory_only"] is not True
-                or report["training_admission"] is not False
-                or report["workspace_id"] != metadata["workspace_id"]):
-            return {"available": False}
+            return unavailable('not_requested' if check['state'] == 'not_requested' else 'no_report')
+        if (not isinstance(report, dict) or report.get('schema') != 'rosy.v13-vlm-feedback/1'
+                or report.get('advisory_only') is not True or report.get('training_admission') is not False
+                or report.get('workspace_id') != metadata['workspace_id']
+                or not isinstance(report.get('model'), str) or not isinstance(report.get('model_digest'), str)
+                or 'generation' not in report
+                or not isinstance(report.get('frames'), list)
+                or any(not isinstance(item, dict) or type(item.get('frame')) is not int for item in report['frames'])):
+            return unavailable('invalid_report')
+        item = next((item for item in report['frames'] if item['frame'] == index), None)
+        if item is None:
+            return unavailable('not_requested' if check['state'] == 'not_requested' else 'no_report')
+        if row is None:
+            return unavailable('invalid_report')
+        source = json.loads(row[1])
         feedback = item["feedback"]
-        if (feedback["verdict"] not in ("concern", "no_obvious_concern", "uncertain", "abstain")
+        if (not isinstance(feedback, dict) or set(feedback) != {'verdict', 'issue', 'note'}
+                or feedback["verdict"] not in ("concern", "no_obvious_concern", "uncertain", "abstain")
                 or feedback["issue"] not in ISSUES or not isinstance(feedback["note"], str)
-                or len(feedback["note"]) > 200):
-            return {"available": False}
+                or len(feedback["note"]) > 200
+                or type(item.get('unknown_pixels')) is not int
+                or not 0 <= item['unknown_pixels'] <= source['width'] * source['height']
+                or type(item.get('review_blocked')) is not bool):
+            return unavailable('invalid_report')
         current = (report.get("review_binding") == feedback_binding(json.loads(metadata["pixel_classes"])) and
-                   item["image_sha256"] == json.loads(row[1])["image_sha256"] and
+                   item["image_sha256"] == source["image_sha256"] and
                    item["mask_sha256"] == row[4])
         return {"available": True, "current": current, "advisory_only": True,
+                'check': check, 'mask_version': item.get('mask_version'),
                 "workspace_changed": report["generation"] != metadata["generation"],
                 "model": report["model"], "model_digest": report["model_digest"],
                 "job_id": report.get("job_id"), "requested_by": report.get("requested_by"),
                 "created_at": report.get("created_at"),
                 "feedback": feedback, "unknown_pixels": item["unknown_pixels"],
                 "review_blocked": item["review_blocked"]}
-    except (KeyError, ValueError, TypeError, StopIteration, OSError, sqlite3.Error):
-        return {"available": False}
+    except (json.JSONDecodeError, OSError, sqlite3.Error):
+        return unavailable('unreadable')
+    except (KeyError, ValueError, TypeError):
+        return unavailable('invalid_report')
 
 
 def publish_feedback(state, report):

@@ -96,10 +96,7 @@ def test_approve_confirm_read_revoke_and_discard_old_source_response(console_url
             page.wait_for_function("document.querySelector('#install-chooser .ui-task-chooser')", timeout=5000)
         except Exception as exc:
             pytest.fail(f'install mount failed: {errors}; static failures={static_failures}; {exc}')
-        if width < 700:
-            page.get_by_role('combobox', name='작업 선택').select_option('calibration')
-        else:
-            page.get_by_role('tab', name='카메라 설치·보정').click()
+        page.get_by_role('tab', name='카메라 설치·보정').click()
         page.locator('#vision-source').select_option('ceiling_north')
         page.locator('#measured-bundle').set_input_files({'name': 'bundle.json', 'mimeType': 'application/json',
                                                         'buffer': json.dumps(bundle).encode()})
@@ -146,19 +143,13 @@ def test_approve_confirm_read_revoke_and_discard_old_source_response(console_url
             pass  # The scheduled read refreshes the visible image.
         expect(page.locator('#measured-read')).to_be_disabled()
         assert state['pending_frames']
-        if width < 700:
-            page.get_by_role('combobox', name='작업 선택').select_option('hosts')
-        else:
-            page.get_by_role('tab', name='호스트 서비스').click()
+        page.get_by_role('tab', name='호스트 서비스').click()
         state['hold_frame'] = False
         for pending, headers in state['pending_frames']:
             pending.fulfill(status=200, content_type='image/jpeg', headers=headers, body=image.getvalue())
         page.wait_for_timeout(100)  # Allow the held response's async continuation to run.
         assert page.locator('#measured-image').evaluate('(image) => image.hidden && !image.hasAttribute("src")')
-        if width < 700:
-            page.get_by_role('combobox', name='작업 선택').select_option('calibration')
-        else:
-            page.get_by_role('tab', name='카메라 설치·보정').click()
+        page.get_by_role('tab', name='카메라 설치·보정').click()
         state['hold'] = True
         with page.expect_request('**/measured-status'):
             pass

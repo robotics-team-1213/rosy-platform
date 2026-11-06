@@ -40,7 +40,8 @@ class ActionApi:
                  recovery_api: Any | None = None,
                  identity: Mapping[str, Any] | None = None,
                  coordinator_api: Any | None = None,
-                 transfer_preflight_api: Any | None = None) -> None:
+                 transfer_preflight_api: Any | None = None,
+                 live_identity: Any | None = None) -> None:
         self.runner = runner
         self.stop_api = stop_api
         self.recovery_api = recovery_api
@@ -50,6 +51,8 @@ class ActionApi:
         # Read-only owner identity (D-390 §5): the simulation composition reports simulation=True;
         # an owner without one answers UNKNOWN_OPERATION, so Fleet never opens dispatch to it.
         self.identity = dict(identity) if identity is not None else None
+        # D-797 3: fields read at every GetOwnerIdentity (the commissioning revision can change while running).
+        self.live_identity = live_identity
 
     @staticmethod
     def _encode(document: Mapping[str, Any]) -> bytes:
@@ -154,7 +157,8 @@ class ActionApi:
             if operation == "GetOwnerIdentity" and self.identity is not None:
                 if set(request) != {"version", "operation"}:
                     raise ValueError("GetOwnerIdentity contains unsupported fields")
-                return {"version": version, "status": 200, "identity": dict(self.identity)}
+                live = dict(self.live_identity()) if self.live_identity is not None else {}
+                return {"version": version, "status": 200, "identity": {**live, **self.identity}}  # static fields win
             if operation in {"GetOwnerState", "RecoverOwner"}:
                 if self.recovery_api is None:
                     return self._error("RECOVERY_API_NOT_CONFIGURED",

@@ -282,17 +282,22 @@ def test_emergency_release_requires_admin_and_live_safety(tablet_page, role, liv
 
 
 @pytest.mark.skipif(not browser_tests_enabled(), reason="browser opt-in")
-@pytest.mark.parametrize("outcome", ["released", "stale", "refused"])
+@pytest.mark.parametrize("outcome", ["released", "stale", "stale_before", "refused"])
 def test_emergency_release_confirms_rechecks_and_never_starts_motion(tablet_page, outcome):
     base_url, page, errors = tablet_page
     state = {"mode": "EMERGENCY", "safety": {"estop": True},
              "velocity": {"linear": 0, "angular": 0},
              "evidence": {"safety": {"evidence": "delayed"}}}
     safety = {"estop": True, "source": "api"}
+    safety_reads = []
     requests = []
     page.add_init_script("sessionStorage.setItem('rosy.pilot.token', 'devadmintoken')")
     page.route("**/api/v1/robot/state", lambda route: route.fulfill(json=state))
-    page.route("**/api/v1/safety/state", lambda route: route.fulfill(json=safety))
+    def safety_state(route):
+        safety_reads.append(safety["source"])
+        route.fulfill(json=safety)
+
+    page.route("**/api/v1/safety/state", safety_state)
 
     def release(route):
         requests.append(route.request.method)
@@ -311,17 +316,29 @@ def test_emergency_release_confirms_rechecks_and_never_starts_motion(tablet_page
     page.locator("[data-estop-release]").click()
     page.get_by_role("dialog").get_by_text("취소", exact=True).click()
     assert requests == []
-    page.locator("[data-estop-release]").click()
-    if outcome == "stale":
+    reads_before = len(safety_reads)
+    if outcome == "stale_before":
         safety["source"] = "battery_policy"
-    page.get_by_role("dialog").get_by_text("비상 정지 해제", exact=True).click()
+    page.locator("[data-estop-release]").click()
+    if outcome == "stale_before":
+        playwright_sync.expect(page.locator("#pilot-notice")).to_contain_text("해제 보류")
+        playwright_sync.expect(page.get_by_role("dialog")).to_have_count(0)
+    else:
+        dialog = page.get_by_role("dialog")
+        playwright_sync.expect(dialog).to_be_visible()
+        if outcome == "stale":
+            safety["source"] = "battery_policy"
+        dialog.get_by_text("비상 정지 해제", exact=True).click()
     if outcome == "released":
         playwright_sync.expect(page.locator("[data-drive-enter]")).to_be_enabled()
         assert requests == ["POST"]
     else:
         playwright_sync.expect(page.locator("#pilot-notice")).to_contain_text("해제")
         assert page.locator("[data-drive-enter]").evaluate("el => el.disabled")
-        assert requests == ([] if outcome == "stale" else ["POST"])
+        assert requests == ([] if outcome in ("stale", "stale_before") else ["POST"])
+    if outcome in ("stale", "stale_before"):
+        assert safety_reads[reads_before:] == (["battery_policy"] if outcome == "stale_before"
+                                             else ["api", "battery_policy"])
     assert motion == []
     assert errors == [], errors
 

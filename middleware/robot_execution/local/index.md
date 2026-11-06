@@ -27,4 +27,6 @@
 
 ## 최근 기록
 
+- 2026-11-06 · uncommitted · test(execution): 최초 lease 실패 보존과 HOST timing 진단
+- 2026-11-05 · 348778e549 · fix(learning): 공용 학습 계약 wheel pin 정합
 - 2026-10-27 · uncommitted · refactor(harness): register execution_local as a control wheel module

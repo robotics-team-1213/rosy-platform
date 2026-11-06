@@ -15,8 +15,8 @@
 .cell-camera-wall .cell-observation-card.focused { cursor: zoom-out; }
 .cell-camera-wall .cell-observation-card.focused img { max-height: 70vh; }
 .cell-camera-wall .cell-observation-card:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
-.cell-fault-history { display: grid; gap: var(--space-2); margin: 0; padding-inline-start: var(--space-4); }
-.cell-fault-history p { margin: 0; overflow-wrap: anywhere; }
+.cell-fault-history, .cell-incident-history { display: grid; gap: var(--space-2); margin: 0; padding-inline-start: var(--space-4); }
+.cell-fault-history p, .cell-incident-history p { margin: 0; overflow-wrap: anywhere; }
 .cell-fault-frames { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr)); gap: var(--space-2); }
 .documents { display: grid; gap: var(--space-4); }
 #saved:not([hidden]) { display: grid; gap: var(--space-2); max-width: 40rem; margin: 0; padding: 0; list-style: none; }

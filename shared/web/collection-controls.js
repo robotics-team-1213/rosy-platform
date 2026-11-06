@@ -56,6 +56,8 @@ export function createDataTable({id, columns, onOpen, onSelection = () => {}, on
       tr.setAttribute("aria-selected", String(activeId === item.id));
       const choose = input(`${id}-${item.id}`, `${item.label} 선택`, "checkbox");
       choose.control.dataset.select = item.id; choose.control.checked = selected.has(item.id);
+      // The name is already in its own column; keep the label for assistive tech only.
+      choose.element.firstChild.replaceWith(node("span", `${item.label} 선택`, "sr-only"));
       choose.control.addEventListener("change", () => {
         if (choose.control.checked) selected.add(item.id); else selected.delete(item.id);
         onSelection(new Set(selected));

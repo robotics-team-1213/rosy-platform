@@ -64,7 +64,7 @@ def fixture(tmp_path,text='40번 로봇을 A로 보내줘',proposal=None,*,extra
     def cancel_pending(robot=None,*,actor_id):
         canceled.extend(service.cancel_queued_for_robot(robot,actor_id=actor_id) if robot else service.cancel_all_queued(actor_id=actor_id))
     console=SimpleNamespace(robot_ids=['rosy_40',*extra_robots],_client=lambda robot:client,trip_busy=lambda robot:False,cancel=console_cancel)
-    execution=IntentExecution(console,service,lambda *_args,**_kwargs:{},cancel_pending)
+    execution=IntentExecution(console,service,lambda *_args,**_kwargs:{},cancel_pending,robot_busy=lambda robot:None)
     worker=ExecutionWorker(journal,execution)
     return SimpleNamespace(journal=journal,jobs=jobs,service=service,store=store,worker=worker,raw=raw,
         accounts=accounts,receipt=receipt,question=question,env=env,clock=clock,scope=scope,admitted=admitted,

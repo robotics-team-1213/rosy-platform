@@ -31,8 +31,10 @@ def test_request_button_follows_server_qualification(tmp_path, width):
         expect(page.locator('#promote-request')).to_be_enabled()
         expect(page.locator('#promote-candidate option')).to_have_count(1)
         page.locator('#promote-request').click()
-        expect(page.locator('#promote-result')).to_contain_text('Fleet에서 승인권자가 이 해시로 제안을 만든다(D-793)')
-        sha = page.locator('#promote-result').inner_text().split()[2]
+        expect(page.locator('#promote-result')).to_contain_text('Fleet에서 승인권자가 이 요청을 확인하고 승격 제안을 만듭니다')
+        expect(page.locator('#promote-request-hash')).to_be_hidden()
+        page.locator('#promotion-diagnostics > summary').click()
+        sha = page.locator('#promote-request-hash').inner_text()
         assert len(sha) == 64 and (store.state / 'promotion-requests' / f'{sha}.json').is_file()
         expect(page.locator('#promote-requests li')).to_contain_text(sha)
         assert page.locator('#promote-request').bounding_box()['height'] >= 44

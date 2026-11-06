@@ -331,3 +331,72 @@ def test_tampered_transfer_dataset_group_is_rejected_before_writes(store, tmp_pa
     with pytest.raises(ValueError):
         clean.import_task(package, ACTOR)
     assert clean.snapshot() == {'robots': [], 'tasks': [], 'sim_contexts': []}
+
+
+def test_native_binding_is_explicit_durable_actor_bound_and_full_ordered_layout(store, tmp_path):
+    body, profile = task_fixture(store, 'independent')
+    task = store.task(body, ACTOR, profile)
+    args = (task['id'], '1' * 32, 'a' * 64, profile['revision'], ['arm_a', 'arm_b'])
+    with pytest.raises(ValueError):
+        store.resolve_native(*args, 'model')
+    request_id = uid()
+    binding = store.bind_native(*args, ACTOR, request_id=request_id)
+    assert binding['prepared_id'] == args[1] and binding['source_revision'] == args[2]
+    assert binding['task_revision'] == task['revision']
+    assert binding['profile_revision'] == profile['revision']
+    assert 'dataset_id' not in binding
+    assert binding['created_by'] == {'kind': 'authenticated', 'id': 'alice'}
+    assert store.bind_native(*args, ACTOR, request_id=request_id) == binding
+    with pytest.raises(ValueError):
+        store.bind_native(*args, {'user_id': 'bob'}, request_id=request_id)
+    reopened = Tasks(tmp_path / 'review.sqlite', 'project-a')
+    assert reopened.native_bindings(task['id']) == reopened.native_bindings() == [binding]
+    resolved = reopened.resolve_native(*args, 'ai')
+    assert resolved['component_ids'] == ['arm_a', 'arm_b']
+    assert resolved['participants'] == body['participants']
+    assert resolved['compute_host'] == 'ai'
+    with pytest.raises(ValueError, match='native'):
+        reopened.export_task(task['id'])
+
+
+@pytest.mark.parametrize('fault', ['prepared', 'source', 'profile', 'order', 'subset', 'host'])
+def test_native_binding_rejects_identity_ownership_profile_order_and_host_changes(store, fault):
+    body, profile = task_fixture(store, 'independent')
+    task = store.task(body, ACTOR, profile)
+    args = [task['id'], '1' * 32, 'a' * 64, profile['revision'], ['arm_a', 'arm_b']]
+    store.bind_native(*args, ACTOR, request_id=uid())
+    if fault in ('prepared', 'source'):
+        other = store.task(dict(body, request_id=uid()), ACTOR, profile)
+        args[0] = other['id']
+        args[2 if fault == 'prepared' else 1] = 'b' * (64 if fault == 'prepared' else 32)
+    elif fault == 'profile':
+        args[3] = 'b' * 64
+    elif fault == 'order':
+        args[4].reverse()
+    elif fault == 'subset':
+        args[4] = ['arm_a']
+    if fault == 'host':
+        with pytest.raises(ValueError):
+            store.resolve_native(*args, 'untrusted')
+    else:
+        with pytest.raises(ValueError):
+            store.bind_native(*args, ACTOR, request_id=uid())
+    assert len(store.native_bindings()) == 1
+
+
+@pytest.mark.parametrize('column,value', [('prepared_id', '2'*32),
+    ('source_revision', 'b'*64), ('request_id', '00000000-0000-0000-0000-000000000002')])
+def test_native_binding_refuses_corrupted_indexed_ownership_columns(store, column, value):
+    body, profile = task_fixture(store, 'independent')
+    task = store.task(body, ACTOR, profile)
+    args = (task['id'], '1'*32, 'a'*64, profile['revision'], ['arm_a', 'arm_b'])
+    request_id = uid()
+    store.bind_native(*args, ACTOR, request_id=request_id)
+    with store._db() as db:
+        db.execute(f'UPDATE learning_task_native_inputs SET {column}=?', (value,))
+    with pytest.raises(ValueError, match='indexed identity'):
+        store.native_bindings()
+    with pytest.raises(ValueError, match='indexed identity'):
+        store.resolve_native(*args, 'model')
+    with pytest.raises(ValueError, match='indexed identity'):
+        store.bind_native(*args, ACTOR, request_id=request_id)

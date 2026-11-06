@@ -52,7 +52,8 @@ export function mountArm(root, target, driver) {
       <p>시뮬레이션 전용 · 실제 로봇과 연결되지 않습니다.</p></header>
     <div data-sim-pair><label>화면에 표시된 페어링 코드 <input class="ui-field" data-sim-code autocomplete="off"></label>
       <ui-button kind="primary" type="button" data-sim-connect>연결</ui-button></div>
-    <p data-sim-status role="status" aria-live="polite">연결 대기</p>
+    <div class="arm-status-row"><p data-sim-status role="status" aria-live="polite">연결 대기</p>
+      <span class="arm-chip" data-sim-sensor-age data-state="stale">수신 대기</span></div>
     <div class="arm-console" data-sim-controls hidden>
       <section class="arm-view" aria-label="작업 공간">
         <figure class="arm-camera" ${target.recording ? "" : "hidden"}>
@@ -60,8 +61,7 @@ export function mountArm(root, target, driver) {
           <figcaption data-sim-camera-status role="status">영상 확인 중</figcaption>
         </figure>
         <section class="arm-sensors" aria-labelledby="arm-sensors-head">
-          <div class="arm-sensors-head"><h3 id="arm-sensors-head">센서 값</h3>
-            <span class="arm-chip" data-sim-sensor-age data-state="stale">수신 대기</span></div>
+          <div class="arm-sensors-head"><h3 id="arm-sensors-head">센서 값</h3></div>
           <div class="ui-table-scroll"><table class="arm-sensor-table">
             <thead><tr><th scope="col">관절</th><th scope="col">현재 각도</th><th scope="col">움직일 수 있는 범위 안 위치</th><th scope="col">시작 자세까지</th></tr></thead>
             <tbody data-sim-sensors></tbody></table></div>

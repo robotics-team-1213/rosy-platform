@@ -307,6 +307,29 @@ def runner_context(envelope):
     return lambda **kwargs: envelope.runtime_context({"id": "fixture-arm"}, bus, 30, **kwargs)
 
 
+@pytest.mark.parametrize("name", ["cell_scene_guard.py", "cell_jaw_axis.py", "cell_hooks.py", "cell_pivot.py", "cell_calibrate.py"])
+def test_changed_guard_or_measurement_code_invalidates_runtime_and_task_review(
+        tmp_path, task, envelope, runner_context, monkeypatch, name):
+    before_runtime = runner_context()["sha256"]
+    task[3]["operating_context"]["sha256"] = before_runtime
+    approve(tmp_path, envelope, task)
+    before = envelope.assess(*task, now=100.01)
+    assert before["allowed"]
+    read_bytes = Path.read_bytes
+
+    def changed(path):
+        raw = read_bytes(path)
+        return raw + b"\n# changed guard or measurement\n" if path == (OMX / name).resolve() else raw
+
+    monkeypatch.setattr(Path, "read_bytes", changed)
+    after_runtime = runner_context()["sha256"]
+    assert after_runtime != before_runtime
+    task[3]["operating_context"]["sha256"] = after_runtime
+    after = envelope.assess(*task, now=100.01)
+    assert after["client_code_sha256"] != before["client_code_sha256"]
+    assert after["task_sha256"] != before["task_sha256"] and not after["allowed"]
+
+
 @pytest.mark.parametrize("name,value", [("runner.pace_lag", 1.7), ("runner.contact_ticks", 3),
                                        ("runner.contact_loaded_max", 2.1)])
 def test_changed_runner_params_cannot_reuse_a_review(tmp_path, task, envelope, runner_context, name, value):

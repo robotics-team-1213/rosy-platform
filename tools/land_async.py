@@ -353,6 +353,9 @@ def orphans(cwd: Path, hours: float = 24, now: float | None = None) -> list[str]
 
 
 def main(argv: list[str]) -> int:
+    if any(arg in ("-h", "--help") for arg in argv):
+        print(__doc__)
+        return 0
     if argv[:1] == ["orphans"]:
         names = orphans(Path.cwd())
         print("\n".join(f"[land-async] orphan {n}" for n in names) or "[land-async] no orphaned landings")

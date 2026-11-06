@@ -1666,6 +1666,7 @@
       ],
       "consumers": [
         "applications/fleet/web/console-goal.js",
+        "applications/fleet/web/manual-control.js",
         "applications/fleet/web/console-refresh.js",
         "applications/fleet/web/console.js",
         "applications/fleet/web/devices/enrollment.js",
@@ -1691,6 +1692,14 @@
           "resolution": "literal-or-template",
           "request_ids": [
             "POST:/api/fleet/robots/{robot_id}/goal"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/manual-control.js",
+          "expression": "/api/fleet/do",
+          "resolution": "literal; confirmed fixed manual mode, guarded named move and terminal zero for the selected robot",
+          "request_ids": [
+            "POST:/api/fleet/do"
           ]
         },
         {
@@ -2079,6 +2088,19 @@
           ],
           "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
           "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/robots/{robot_id}/cancel"
+        },
+        {
+          "id": "POST:/api/fleet/do",
+          "method": "POST",
+          "path": "/api/fleet/do",
+          "handler": "fleet_do",
+          "implementation": "operations/fleet/fleet/server/intent_routes.py",
+          "contract_tests": [
+            "operations/fleet/test/test_server_app.py",
+            "operations/fleet/test/test_intent_manual_fleet.py"
+          ],
+          "expected_statuses": [200, 400, 403, 409],
+          "status": "verified"
         },
         {
           "id": "POST:/api/fleet/robots/{robot_id}/goal",

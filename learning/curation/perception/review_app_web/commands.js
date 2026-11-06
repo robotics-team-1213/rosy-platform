@@ -24,6 +24,7 @@ const disabled=el=>el.matches(':disabled,[disabled],[aria-disabled="true"]');
 function reachable(el){
   if(!el.isConnected||dialog.contains(el)||el===trigger)return false;
   for(let node=el;node&&node!==document.body;node=node.parentElement){
+    if(node.hasAttribute('data-review-tool')||node.hasAttribute('data-review-workspace'))continue;
     if(node.hidden||getComputedStyle(node).display==='none'||getComputedStyle(node).visibility==='hidden')return false;
   }
   return true;
@@ -39,13 +40,14 @@ function name(el){
   return (el.querySelector('.ui-icon-label')?.textContent||el.textContent).trim();
 }
 function inventory(){
-  return [...document.querySelectorAll('ui-button,button,a[href],input:not([type=hidden]),select,textarea,summary,canvas[tabindex],section[aria-labelledby]')]
+  return [...document.querySelectorAll('ui-button,button,a[href],input:not([type=hidden]),select,textarea,summary,canvas[tabindex],section[aria-labelledby],[data-review-tool] > section[aria-label]')]
     .filter(reachable).map(el=>({el,label:name(el)})).filter(row=>row.label)
     .sort((a,b)=>Number(!!a.el.closest('#frames,#pixel-frames'))-Number(!!b.el.closest('#frames,#pixel-frames')));
 }
 function execute({el}){
   if(!reachable(el)||disabled(el)){render();count.textContent='현재 실행할 수 없는 기능입니다. 상태와 비활성 이유를 확인하세요.';return;}
   closeCommands?.('selected');
+  document.dispatchEvent(new CustomEvent('review-tool-open',{detail:el}));
   for(let parent=el.parentElement;parent;parent=parent.parentElement)if(parent.tagName==='DETAILS'&&parent.firstElementChild!==el)parent.open=true;
   if(el.matches('section'))el.tabIndex=-1;
   el.scrollIntoView({block:'nearest'});el.focus({preventScroll:true});
@@ -87,5 +89,5 @@ document.addEventListener('keydown',event=>{
   const binding=bindings.find(([code])=>event.code===code);
   if(!binding||(event.code==='KeyS')!==!!(event.ctrlKey||event.metaKey))return;
   const el=binding[2].map(id=>document.getElementById(id)).find(node=>node&&reachable(node));
-  if(el){event.preventDefault();event.stopImmediatePropagation();if(!disabled(el))el.click();}
+  if(el){event.preventDefault();event.stopImmediatePropagation();if(!disabled(el)){document.dispatchEvent(new CustomEvent('review-tool-open',{detail:el}));el.click();}}
 },true);

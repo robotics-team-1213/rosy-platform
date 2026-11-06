@@ -146,9 +146,9 @@ jobs:
           grep -o '^[A-Za-z0-9._-]*==[^ ]*' deploy/robot/pinky_pro/image/device-python-requirements.txt > /tmp/rosy-runtime-constraints.txt
           pip3 install --no-cache-dir --break-system-packages -c /tmp/rosy-runtime-constraints.txt \
             flake8 httpx pyyaml jsonschema ext4 playwright
-          # Account authority imports oauthlib at module top; installed-package and boundary
+          # Account authority imports oauthlib and joserfc at module top; installed-package and boundary
           # tests start their own python3 (-I or a replaced PYTHONPATH), so it must be system-wide.
-          pip3 install --no-cache-dir --break-system-packages --no-deps oauthlib==4.0.0
+          pip3 install --no-cache-dir --break-system-packages --no-deps oauthlib==4.0.0 joserfc==1.7.5
           # Browser modules import the SDK during collection, even with browser tests disabled.
           # Chromium stays scoped to the browser verification step below.
 
@@ -249,7 +249,7 @@ jobs:
             contracts/foundation contracts/skill contracts/motion contracts/learning operations/account operations/world operations/monitoring middleware/skills/api middleware/skills/manipulation operations/site_execution middleware/robot_execution/local operations/processes/palletizing integrations/robots/omx middleware/devices/omx/agent applications/fleet/gateway
           pip3 install --break-system-packages --no-cache-dir --no-index \
             --find-links "$wheelhouse" \
-            core_common==0.0.2 rosy-contracts-skill==0.1.0 rosy-contracts-motion==0.1.0 rosy-contracts-learning==0.1.15 rosy-account==0.1.0 rosy-world==0.1.1 rosy-monitoring==0.1.0 rosy-skill-api==0.1.0 rosy-skill-manipulation==0.1.0 rosy-execution==0.1.2 rosy-execution-local==0.1.7 rosy-palletizing==0.1.2 rosy-integration-robot-omx==0.1.1 rosy-app-agent==0.1.3 rosy-app-gateway==0.1.2
+            core_common==0.0.2 rosy-contracts-skill==0.1.0 rosy-contracts-motion==0.1.0 rosy-contracts-learning==0.1.16 rosy-account==0.1.0 rosy-world==0.1.1 rosy-monitoring==0.1.0 rosy-skill-api==0.1.0 rosy-skill-manipulation==0.1.0 rosy-execution==0.1.2 rosy-execution-local==0.1.7 rosy-palletizing==0.1.2 rosy-integration-robot-omx==0.1.2 rosy-app-agent==0.1.3 rosy-app-gateway==0.1.2
 
       - name: Build (colcon)
         if: matrix.kind == 'smoke' || matrix.ros == 'overlay'

@@ -27,8 +27,8 @@
 
 ## 최근 기록
 
-- 2026-11-03 · f987a0b10e · 상태 일관성 브라우저 시험의 실제 대기 지점
-- 2026-11-02 · c1af0160f4 · Web unification follow-up
-- 2026-11-02 · uncommitted · D-961 웹 제품 통합
-- 2026-11-02 · uncommitted · 권한 거부 문구 통일·행간 토큰
-- 2026-11-02 · uncommitted · 로봇암 검수 프레임 이미지의 style 속성 제거 (CSP)
+- 2026-11-06 · uncommitted · uiux(learning): 도구 모드 글자, 안내 하나, 새 학습 과제 단추, 진행 중 단계 줄, 실패·거절 다음 행동
+- 2026-11-06 · uncommitted · uiux: 클래스 관리 ui-button, 네트워크·5xx 실패 문구
+- 2026-11-06 · uncommitted · uiux(learning): 실패 이유 표시와 실패·거절 구분
+- 2026-11-06 · uncommitted · uiux(learning): 객체 저장이 서버에 닿기 전 이탈 경고
+- 2026-11-06 · uncommitted · uiux(learning): 파괴·대체 확인을 공용 확인 창으로

@@ -38,8 +38,8 @@
 
 ## 최근 기록
 
-- 2026-11-02 · uncommitted · D-961 웹 제품 통합
-- 2026-11-02 · uncommitted · 가상 신호 등 역할 토큰
-- 2026-11-02 · uncommitted · skip-link 재정의 제거
-- 2026-11-02 · uncommitted · noscript 안내 (D-945 마무리)
-- 2026-11-02 · uncommitted · D-945 이행 완료 선언 — 대시보드 두 상태 셸 h1 규칙으로 준수
+- 2026-11-06 · uncommitted · uiux(robot): 운용자 글에서 CORE 대신 로봇
+- 2026-11-06 · uncommitted · uiux(robot): 모드 선택 한 줄과 호스트 소제목 단계
+- 2026-11-05 · a27e97c186 · uiux: Robot 절차 메뉴의 공용 subnav 소비
+- 2026-11-05 · df46d9a2f4 · fix(robot): 긴 호스트 조회값 옆 행 제목 너비 확보
+- 2026-11-05 · 22935ec44f · 장치 읽기 표와 운용 문구

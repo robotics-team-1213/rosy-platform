@@ -40,3 +40,36 @@ document.addEventListener("keydown", event => {
   event.preventDefault();
   if (!button.disabled) field.form.requestSubmit();
 });
+
+// A narrow sub-navigation scrolls sideways; centre the current item so the scroll does not hide where the user is.
+// Sideways only: the page never scrolls, and a nav that fits is left alone.
+const NAV = ".ui-rail-nav, .ui-subnav-nav";
+const CURRENT = '[aria-current], [aria-selected="true"]';
+function revealCurrent(root) {
+  const nav = root.closest?.(NAV) ?? null;
+  const navs = nav ? [nav] : root.querySelectorAll?.(NAV) ?? [];
+  for (const each of navs) {
+    const item = each.matches(CURRENT) ? null : each.querySelector(CURRENT);
+    if (!item || each.scrollWidth <= each.clientWidth) continue;
+    const gap = item.getBoundingClientRect().left - each.getBoundingClientRect().left;
+    each.scrollLeft += gap - (each.clientWidth - item.offsetWidth) / 2;
+  }
+}
+new MutationObserver(records => {
+  for (const record of records) {
+    if (record.type === "attributes") revealCurrent(record.target);
+    else for (const added of record.addedNodes) if (added.nodeType === 1) revealCurrent(added);
+  }
+}).observe(document, {subtree: true, childList: true, attributeFilter: ["aria-current", "aria-selected"]});
+revealCurrent(document);
+
+// Say which sides of a sideways-scrolling nav still hide items, so the CSS can fade that edge.
+function markMore(nav) {
+  const more = [nav.scrollLeft > 1 && "start", nav.scrollLeft + nav.clientWidth < nav.scrollWidth - 1 && "end"].filter(Boolean).join(" ");
+  if (more) nav.setAttribute("data-more", more); else nav.removeAttribute("data-more");
+}
+const markAll = () => document.querySelectorAll(NAV).forEach(markMore);
+document.addEventListener("scroll", event => { if (event.target instanceof Element && event.target.matches(NAV)) markMore(event.target); }, {capture: true, passive: true});
+window.addEventListener("resize", markAll);
+new MutationObserver(markAll).observe(document, {subtree: true, childList: true});
+markAll();

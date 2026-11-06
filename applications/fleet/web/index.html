@@ -112,8 +112,9 @@
   </section>
 
   <div class="assistant-layout">
-  <main id="fleet-main" tabindex="-1">
-    <div class="console-primary">
+  <!-- D-978: 관제 두 칸은 공용 틀 watch(2:1). 좁은 칸에서는 공용 기본 순서대로 지금 상태(now)가 먼저다(D-201 예외 먼저). -->
+  <main id="fleet-main" class="ui-stage-grid" data-layout="watch" tabindex="-1">
+    <div class="console-primary" data-pane="stage">
     <section class="panel work-overview" id="work-overview" aria-labelledby="work-heading" hidden>
       <div class="map-head">
         <h2 id="work-heading">작업</h2><span class="spacer"></span>
@@ -201,21 +202,22 @@
       <details id="map-options" class="map-options">
         <summary class="ui-disclosure-row">지도 표시·경로 옵션</summary>
         <div class="map-options-content">
-        <a href="/console/site-map#profile-heading">지도 설정</a>
+        <a class="ui-action-link" data-kind="quiet" href="/console/site-map#profile-heading">지도 설정</a>
         <span class="hint" id="map-display-status" role="status">공유 map 좌표 · m</span>
         <span class="hint layer-hint" id="map-layer-hint" role="status" hidden></span>
         <!-- D-517 10 — 교통 층 하나. Fleet 블록 표가 있을 때만 보인다. 표시 선호라 권한과 무관하다. -->
         <ui-button kind="quiet" id="traffic-toggle" type="button" aria-pressed="true" aria-controls="map-canvas" hidden>교통 켬</ui-button>
         <!-- D-594 — Fleet 이 기록한 지나온 길. 범위와 로봇은 표시 선호라 권한과 무관하다(trail-view.js). -->
-        <details class="trail-control" id="trail-control">
-          <summary class="ui-disclosure-row">지나온 길</summary>
+        <fieldset class="trail-control" id="trail-control">
+          <legend>지나온 길</legend>
           <div class="trail-panel">
             <label>범위 <select class="ui-field" id="trail-range"><option value="120">최근 2분</option><option value="600">최근 10분</option><option value="trip">이번 운행</option></select></label>
             <div class="trail-robots" id="trail-robots" role="group" aria-label="경로를 보일 로봇"></div>
             <p class="hint">실선 위치 확정 · 파선 추정 · 점선 천장 카메라만</p>
           </div>
-        </details>
+        </fieldset>
         <ui-tag id="map-tag" status="neutral">맵 대기</ui-tag>
+        <p id="fleet-scope-note" class="hint">이 화면은 Rosy Fleet 사이트 관제입니다. 위에서 내려다본 천장 카메라와 지도로 여러 로봇을 보고, 선택한 로봇을 누르는 동안만 저속으로 조종할 수 있습니다. 로봇 한 대의 전방 카메라·수동 조작·비상정지는 그 로봇의 Rosy Robot 화면에서도 사용할 수 있으며, 로봇의 비상정지는 관제 PC가 꺼져도 유지됩니다. 여기서는 목표·취소·정지 같은 원자 액션과 저속 조종 명령을 보내며, 바퀴 속도는 로봇 안에서만 만들어지고 최종 주행·안전 판단은 로봇의 CORE가 맡습니다.</p>
         </div>
       </details>
       <div class="map-board">
@@ -271,13 +273,10 @@
         <span id="legend-traffic" hidden><i class="sw traffic-occupied"></i>블록 점유 <i class="sw traffic-granted"></i>허가 <i class="sw traffic-unknown"></i>위치 불명</span>
       </div>
       <p class="hint" id="hint" aria-live="polite" title="로봇 카드의 목표 지정을 누른 뒤 지도를 찍으면 그 로봇에게만 목표가 갑니다" hidden></p>
-      <details class="note">
-        <summary class="ui-disclosure-row">관제 범위 안내</summary>
-        <p>이 화면은 Rosy Fleet 사이트 관제입니다. 위에서 내려다본 천장 카메라와 지도로 여러 로봇을 봅니다. 로봇 한 대의 전방 카메라·수동 조작·비상정지는 그 로봇의 Rosy Robot 화면에 있고, 관제 PC가 꺼져도 살아 있습니다. 여기서는 목표·취소·정지 같은 원자 액션을 내리며 바퀴 속도는 로봇 안에서만 만들어집니다.</p>
-      </details>
+
     </section>
     </div>
-    <aside class="console-secondary" aria-label="현재 상태와 대응">
+    <aside class="console-secondary" data-pane="now" aria-label="현재 상태와 대응">
       <!-- ADR-1000: Warning / Critical State Queues (MON-002). D-493 — 오른쪽 열 맨 위. -->
       <section class="panel queues-panel" aria-labelledby="queues-heading">
         <h2 id="queues-heading" class="sr-only">주의 및 개입 요망</h2>

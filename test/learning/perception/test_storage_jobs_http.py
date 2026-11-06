@@ -141,6 +141,11 @@ def test_storage_browser_cancel_and_existing_commit_recovery(tmp_path, jobs_setu
                 page.context.add_cookies([dict(name='rosy_learning_session', value=session, url=url)])
                 page.goto(url + '/learning', wait_until='networkidle')
                 expect = playwright.expect
+                storage_link = page.get_by_role('navigation', name='학습센터 작업 이동').locator('a[href="#storage-section"]')
+                storage_link.click()
+                expect(page).to_have_url(url + '/learning#storage-section')
+                expect(page.locator('#storage-section')).to_be_visible()
+                expect(storage_link).to_have_attribute('aria-current', 'location')
                 for attempt in (0, 1):
                     page.locator('#storage-artifact').fill('run-one')
                     page.get_by_role('button', name='보관 작업 등록', exact=True).click()
@@ -175,6 +180,11 @@ def test_storage_browser_capacity_archive_reclaim_restore(tmp_path, jobs_setup, 
                 page.context.add_cookies([dict(name='rosy_learning_session', value=session, url=url)])
                 page.goto(url + '/learning', wait_until='networkidle')
                 expect = playwright.expect
+                storage_link = page.get_by_role('navigation', name='학습센터 작업 이동').locator('a[href="#storage-section"]')
+                storage_link.click()
+                expect(page).to_have_url(url + '/learning#storage-section')
+                expect(page.locator('#storage-section')).to_be_visible()
+                expect(storage_link).to_have_attribute('aria-current', 'location')
                 expect(page.locator('#storage-targets')).to_contain_text('first')
                 expect(page.locator('#storage-targets')).to_contain_text('second')
                 page.locator('#storage-source').select_option('raw')

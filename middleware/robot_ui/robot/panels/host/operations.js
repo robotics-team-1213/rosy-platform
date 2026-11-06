@@ -44,11 +44,17 @@ function card(title, path, interval, ctx, describe, summarize) {
   const wrap = el("section", "ui-readback");
   wrap.append(el("h3", "", title));
   const headline = el("p", "host-card-headline", "원본 상태 확인 중");
-  const body = el("dl", "ui-readout");
+  const table = el("table", "ui-data-table");
+  table.append(el("caption", "", `${title} 원본 조회값`));
+  const body = el("tbody");
+  table.append(body);
   const status = el("ui-status", "", "상태를 불러오는 중입니다.");
   status.setAttribute("state", "pending");
-  const readout = el("details", "surface-disclosure host-card-readout");
-  readout.append(el("summary", "", `${title} 전체 상태 보기`), body);
+  const readout = el("div", "ui-table-scroll");
+  readout.setAttribute("role", "region");
+  readout.setAttribute("aria-label", `${title} 원본 조회값 스크롤`);
+  readout.tabIndex = 0;
+  readout.append(table);
   const detail = el("details", "surface-disclosure");
   detail.append(el("summary", "", "응답 세부 정보"));
   const detailText = el("p", "surface-message");
@@ -62,10 +68,17 @@ function card(title, path, interval, ctx, describe, summarize) {
   wrap.append(headline, status, readout, detail, recovery);
   let currentData = {};
   let onUpdate = () => {};
+  function appendRow(label, value) {
+    const row = el("tr");
+    const header = el("th", "", label); header.scope = "row";
+    row.append(header, el("td", "", value == null || value === "" ? "—" : String(value)));
+    body.append(row);
+  }
   function clearReadout() {
     currentData = {};
     headline.textContent = "현재 값을 확인할 수 없습니다.";
-    body.replaceChildren(el("dt", "", "상태"), el("dd", "", "확인할 수 없음"));
+    body.replaceChildren();
+    appendRow("상태", "확인할 수 없음");
   }
   const stop = ctx.store.poll(path, interval, (payload) => {
     body.replaceChildren();
@@ -96,7 +109,7 @@ function card(title, path, interval, ctx, describe, summarize) {
     recoveryText.textContent = payload?.recovery || "";
     recovery.hidden = !payload?.recovery;
     for (const [label, value] of describe(data)) {
-      body.append(el("dt", "", label), el("dd", "", value == null || value === "" ? "—" : String(value)));
+      appendRow(label, value);
     }
     status.textContent = evidence === "delayed"
       ? payload.evidence.age_s == null ? "지연 · 원본 조회 시각 정보 없음. 새 조회를 기다리세요."

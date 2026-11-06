@@ -32,6 +32,8 @@ FLEET = FLEET_SAMPLE + [
     "test/test_motor_health_ui_browser.py",
     "test/test_fleet_workcell_observation_browser.py",
     "test/test_fleet_console_browser.py",
+    "test/test_fleet_manual_control_browser.py",
+    "test/test_fleet_roster_facts_browser.py",
     "test/test_console_lifetime_browser.py",
     "test/test_console_session_browser.py",
     "test/test_fleet_workflows_browser.py",
@@ -70,16 +72,29 @@ REVIEW = [
     "test/learning/perception/*_browser.py",
     "test/learning/perception/test_storage_inventory_http.py",
     "test/learning/perception/test_review_app_smoke.py",
+    "test/learning/perception/test_review_ai_browser.py",
+    "test/learning/perception/test_review_viewport_browser.py",
+    "test/learning/perception/test_pixel_workspace_browser.py",
+    "test/learning/perception/test_review_upload_browser.py",
+    "test/learning/perception/test_review_classes_browser.py",
+    "test/learning/perception/test_review_context_browser.py",
+    "test/learning/perception/test_review_pagination_browser.py",
 ]
 OMX_LEARNING = ["test/learning/perception/test_omx_" + name + "_browser.py" for name in
-                ("center", "profiles", "review_playback", "arm_scope", "owner_status", "segments", "camera_reference")]
+                ("center", "profiles", "profile_drafts", "journey", "review_playback", "arm_scope", "owner_status", "segments", "camera_reference")]
 CAMERA = ["test/learning/perception/test_camera_setup_browser.py"]
 SIM = ["test/learning/perception/test_sim_browser.py"]
 PIPELINE = ["test/learning/perception/test_learning_pipeline_browser.py"]
 ACCOUNTS = ["test/learning/perception/test_learning_accounts_browser.py",
             "test/learning/perception/test_learning_auth_surface_browser.py"]
 TASKS = ["test/learning/perception/test_learning_tasks_browser.py",
-         "test/learning/perception/test_learning_task_recovery_browser.py"]
+         "test/learning/perception/test_learning_task_recovery_browser.py",
+         "test/learning/perception/test_learning_task_context_browser.py",
+         "test/learning/perception/test_learning_owner_robots_browser.py",
+         "test/learning/perception/test_learning_workflow_browser.py",
+         "test/learning/perception/test_learning_workflow_pipeline_browser.py",
+         "test/learning/perception/test_imitation_browser.py",
+]
 STAGES = ["test/learning/perception/test_learning_stages_browser.py", "test/learning/perception/test_vlm_judge_browser.py",
           "test/learning/perception/test_promotion_request_browser.py"]
 # These HTTP suites also contain opt-in Chromium flows; filename discovery alone misses them.
@@ -100,18 +115,19 @@ SCOPE: dict[str, list[str]] = {
     "applications/fleet/test/": FLEET,
     "operations/fleet/fleet/server/": FLEET,
     "applications/fleet/web/": FLEET,
-    "middleware/robot_ui/robot/": ROBOT,
+    "middleware/robot_ui/robot/": ROBOT + ["middleware/core/api/test/test_d283_console_browser.py"],
     "middleware/core/api/": API_WEB,
     "middleware/robot_ui/pilot/": PILOT,
     "middleware/devices/omx/adapter/": OMX_PILOT,
     "operations/apps/games/": GAMES,
     "learning/curation/perception/": REVIEW,
     "learning/curation/perception/review_app.py": LEARNING,
+    "learning/curation/perception/review_static.py": LEARNING,
     "learning/curation/perception/review_app_web/app.css": LEARNING,
     "learning/curation/perception/review_app_web/commands.js": LEARNING,
     "learning/curation/perception/review_app_web/account-session.js": LEARNING,
     **{f"learning/curation/perception/review_app_web/{name}": OMX_LEARNING + STORAGE for name in
-       ("omx.html", "omx.js", "omx-profiles.js", "omx-review.js", "omx-export.js")},
+       ("omx.html", "omx.js", "omx-journey.js", "omx-profiles.js", "omx-review.js", "omx-export.js")},
     # Their rail and sub-menu are walked by the OMX owner-status and stage browser tests.
     **{f"learning/curation/perception/review_app_web/{name}": OMX_LEARNING + STAGES for name in
        ("catalog.html", "camera.html")},
@@ -124,7 +140,10 @@ SCOPE: dict[str, list[str]] = {
         "storage_web.py", "storage_source.py", "storage_setup.py", "storage_prepare.py", "storage_omx.py",
         "review_app_web/storage.js", "review_app_web/storage-settings.js")},
     **{f"learning/curation/perception/{name}": TASKS for name in
-       ("learning_tasks.py", "learning_tasks_web.py", "review_app_web/tasks.html", "review_app_web/tasks.js")},
+       ("owner_robots.py", "learning_tasks.py", "learning_tasks_web.py", "learning_native_inputs.py", "learning_native_catalog.py",
+        "learning_workflow.py", "learning_recording_card.py", "review_app_web/tasks.html", "review_app_web/tasks.js",
+        "review_app_web/workflow.html", "review_app_web/workflow.js", "review_app_web/workflow.css",
+        "review_app_web/imitate.html", "review_app_web/imitate.js", "review_app_web/imitate.css")},
     **{f"learning/curation/perception/{name}": CAMERA for name in
        ("camera_setup.py", "camera_setup_web.py", "review_app_web/camera.html", "review_app_web/camera.js")},
     "contracts/learning/src/rosy/contracts/learning/camera_setup.py": CAMERA,

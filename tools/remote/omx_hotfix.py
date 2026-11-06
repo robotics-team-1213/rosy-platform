@@ -30,7 +30,9 @@ ROOT = Path(__file__).resolve().parents[2]
 HOST_ENV = "OMX_HOTFIX_HOST"
 # contracts/foundation: the cell scripts import core_common (D-966 control parameters), and the site env puts
 # <tree>/contracts/foundation on PYTHONPATH like the omx_autoupdate tree
-PATHS = ("deploy/robot", "middleware/devices/omx/adapter", "contracts/foundation")
+# rosy_vision: omx_incident's Fleet link imports the observation bridge, which needs it (D-971); without it every
+# session's incident stayed local ("No module named 'rosy_vision'", 2026-11-04)
+PATHS = ("deploy/robot", "middleware/devices/omx/adapter", "contracts/foundation", "operations/overhead/rosy_vision")
 LINK = "omx-tools-current"
 SHA_FILE = "omx-hotfix-sha"
 SSH = ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", "-o", "ServerAliveInterval=15"]

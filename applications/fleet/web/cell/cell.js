@@ -43,7 +43,7 @@ function jobReasonLabel(reason) {
 const stored = sessionStorage.getItem('rosy-console-token') || '';
 $('console-token').value = stored;
 const request = createFleetClient({credential: () => $('console-token').value, origin: location.origin});
-const observations = createCellObservation({request, root: $('workcell-observations')});
+const observations = createCellObservation({request, root: $('workcell-observations'), credential: () => $('console-token').value});
 const catalog = createObjectCatalog({request, $});
 createCellLine({root: $('cell-line'), $});
 createPlanFigures({root: $('plan-figures'), $});
@@ -105,6 +105,8 @@ function clearSession() {
   $('saved-status').setAttribute('state', 'unavailable');
   $('saved-status').textContent = '접속하면 저장된 문서를 확인할 수 있습니다.';
 }
+const scopeFilled = () => $('workcell').value.trim() && $('instance').value.trim();
+for (const id of ['workcell', 'instance']) $(id).addEventListener('input', () => refreshControls());
 function refreshControls() {
   for (const field of document.querySelectorAll('input, textarea, select')) {
     field.disabled = busy;
@@ -133,10 +135,10 @@ function refreshControls() {
     const jobAllowed = !needsJob || (job && job.mission_id === $('mission-id').value &&
       (id === 'admit' ? job.status === 'PROPOSED' : id === 'cancel' ? ['READY', 'ACTION_SUCCEEDED', 'HOLD'].includes(job.status) && job.reason !== 'CANCELLED_BY_OPERATOR' : job.status === 'HOLD' && job.reason !== 'CANCELLED_BY_OPERATOR'));
     const allowed = role === 'operator' && !busy && jobAllowed && !sheetBlocked &&
-      (id !== 'propose' || (previewRefs !== null && (!channelRequested || (channelReceipt && channelReview?.state !== 'LINKED'))));
+      (id !== 'propose' || (scopeFilled() && previewRefs !== null && (!channelRequested || (channelReceipt && channelReview?.state !== 'LINKED'))));
     let reason = '';
     if (!allowed) {
-      reason = '저장 후 미리보기 필요';
+      reason = id === 'propose' && !scopeFilled() ? '작업 셀 ID와 실행 인스턴스 ID를 입력하세요' : '저장 후 미리보기 필요';
       if (needsJob && !jobAllowed) reason = job?.mission_id === $('mission-id').value
         ? `현재 작업 상태에서는 ${jobActionLabels[id]}할 수 없습니다` : '작업 상태를 먼저 확인하세요';
       if (sheetBlocked) reason = '작업자 간지 삽입 확인 대기';
@@ -165,8 +167,9 @@ async function action(fn) {
       ? '이 계정에는 팔레트 적재 작업 권한이 없습니다. 운영자 토큰을 확인하고 다시 접속하세요.'
       : error.code === 'CELL_APP_UNCONFIGURED'
         ? '팔레트 적재 작업을 사용할 수 없습니다. 사이트 설치 담당자에게 팔레트 적재 서비스 구성을 확인해 달라고 요청하세요.'
+        : error instanceof SyntaxError ? '문서가 올바른 JSON이 아닙니다. 형식을 확인한 뒤 다시 저장하세요.'
         : error.message;
-    if (error.status === 401 || error.status === 403) $('notice').scrollIntoView({block: 'center'});
+  if (error.status === 401 || error.status === 403) $('notice').scrollIntoView({block: 'center'});
   }
   finally {
     busy = false; refreshControls();
@@ -465,8 +468,11 @@ function renderLayout() {
     point.setAttribute('x', x - width / 2); point.setAttribute('y', y - height / 2);
     point.setAttribute('width', width); point.setAttribute('height', height);
     point.setAttribute('transform', `rotate(${-step.target.yaw * 180 / Math.PI} ${x} ${y})`);
-    const label = document.createElementNS(ns, 'text'); label.setAttribute('x', x + 8); label.setAttribute('y', y);
-    label.textContent = `${ordinal + 1} · ${step.pallet} · ${step.layer + 1}층`;
+    const label = document.createElementNS(ns, 'text'); label.setAttribute('x', x); label.setAttribute('y', y); label.setAttribute('text-anchor', 'middle');
+    label.setAttribute('dominant-baseline', 'central');
+    const full = `${ordinal + 1} · ${step.pallet} · ${step.layer + 1}층`;
+    label.textContent = width < full.length * 7 ? String(ordinal + 1) : full;  // a block narrower than its label shows the order number only
+    if (label.textContent !== full) { const title = document.createElementNS(ns, 'title'); title.textContent = full; label.append(title); }
     return [point, label];
   }));
 }

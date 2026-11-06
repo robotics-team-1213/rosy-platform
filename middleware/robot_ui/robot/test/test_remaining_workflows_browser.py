@@ -167,7 +167,7 @@ def test_localization_results_have_independent_owners(panel):
     page.get_by_role('button', name='맵핑 시작', exact=True).click()
     dialog = page.locator('dialog.ui-confirm')
     if dialog.count(): dialog.locator('ui-button[kind=irreversible]').click()
-    page.get_by_text('맵핑 시작 요청을 CORE가 받았습니다.', exact=True).wait_for()
+    page.get_by_text('맵핑 시작 요청을 로봇이 받았습니다.', exact=True).wait_for()
     assert page.get_by_text('초기 위치 요청을 완료하지 못했습니다: pose rejected', exact=True).is_visible()
 
 
@@ -186,8 +186,8 @@ def test_host_terminal_result_survives_outage_and_missing_hold_is_unknown(panel)
     page.evaluate("__callbacks['/api/v1/host/network'].onError(new Error('offline'))")
     assert page.get_by_text('네트워크 모드 전환을 요청했습니다.',exact=True).is_visible()
     card=page.locator('section').filter(has=page.get_by_role('heading',name='커미셔닝',exact=True))
-    card.locator('summary').filter(has_text='전체 상태').click()
-    assert card.locator('dt').filter(has_text='배터리').locator('+ dd').inner_text() == '확인 전'
+    assert card.get_by_role('table', name='커미셔닝 원본 조회값', exact=True).is_visible()
+    assert card.get_by_role('rowheader', name='배터리', exact=True).locator('+ td').inner_text() == '확인 전'
 
 
 def test_token_delete_rechecks_current_identity_after_confirmation(panel):

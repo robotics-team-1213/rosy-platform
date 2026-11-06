@@ -610,7 +610,8 @@ def test_a_whole_surface_in_view_is_not_a_finger_obstacle_but_a_box_is():
 
 def test_the_jaws_open_just_past_the_object_not_wide():
     assert auto.jaw_open_for(30) == pytest.approx(52.3 + 16 / 10.4, abs=0.01)  # 30 mm + 8 mm each side: ~53.8
-    assert auto.jaw_open_for(200) == 56.0  # never past the measured safe opening
+    with pytest.raises(SystemExit, match="past gripper.open_max"):  # never past the measured safe opening, and
+        auto.jaw_open_for(200)                                       # never clamped short onto the object either
     assert auto.jaw_open_for(0) >= 52.8
 
 
@@ -795,3 +796,37 @@ def test_after_a_contact_the_gate_still_lets_the_arm_retreat_and_park_but_nothin
         assert cell.commands[-1] == verb  # sent in the Gate's checked form (the fake asserts its session)
     cell.session = "replacement-session"  # another owner: recovery is not this gate's to send
     assert gate.act("park") == {"ok": False, "error": "held: session_changed"}
+
+
+def test_jaws_closing_along_a_box_open_for_its_length_not_its_width():
+    """2026-11-04: three 3-cells side by side leave no room beside them, so the jaws take one by its free ends; sized
+    by the 30 mm width they would come down on the 90 mm box."""
+    across_short = {"width_mm": 30, "length_mm": 90, "grasp": {"jaw_axis_deg_from_long": 90}}
+    by_the_ends = {"width_mm": 30, "length_mm": 90, "grasp": {"jaw_axis_deg_from_long": 0}}
+    assert auto.across(across_short) == 30 and auto.across(by_the_ends) == 90
+    with pytest.raises(SystemExit, match="past gripper.open_max"):  # never clamped onto the box
+        auto.jaw_open_for(auto.across(by_the_ends))
+    wide = {**auto.prm.load()["values"], "gripper.open_max": 62.0}
+    assert auto.jaw_open_for(auto.across(by_the_ends), wide) > auto.jaw_open_for(auto.across(across_short), wide) + 5
+
+
+def test_a_box_held_by_its_ends_is_grasped_at_its_middle_never_shifted_toward_an_end():
+    """2026-11-04 dry run: the end shift moved the pick 50 mm along the box, so one finger would land on it."""
+    by_the_ends = {"width_mm": 30, "length_mm": 90, "grasp": {"jaw_axis_deg_from_long": 0}}
+    o = {"raw_m": [0.20, -0.03], "long_axis_deg": 90.0}
+    assert auto.reachable_ends(o, by_the_ends) == []
+    assert len(auto.reachable_ends(o, dict(by_the_ends, grasp={"jaw_axis_deg_from_long": 90}))) == 2
+
+
+def test_a_box_held_by_its_ends_needs_room_past_its_ends_not_beside_it():
+    """2026-11-04: three 3-cells 2 mm apart side by side; beside there is no room, past both ends there is."""
+    mask = np.zeros((200, 200), np.uint8)
+    px = lambda p: (100 + p[0] * 1000, 100 + (p[1] - 0.1) * 1000)  # noqa: E731  1 px per mm
+    box = {"raw_m": [0.0, 0.1], "width_mm": 30, "length_mm": 90, "long_axis_deg": 0.0, "object": "container-3"}
+    mask[85:116, 55:146] = 255   # the box, along x
+    mask[53:83, 55:146] = 255    # neighbours 2 mm beside it on both sides, same length
+    mask[118:148, 55:146] = 255
+    assert auto.finger_room(mask, (0, 0, 200, 200), px, box)["margin_mm"] is None  # across its width: blocked
+    wide = {**auto.prm.load()["values"], "gripper.open_max": 62.0}  # the field's arm_b: opens ~131 mm
+    assert auto.finger_room(mask, (0, 0, 200, 200), px, box, box["long_axis_deg"], wide)["margin_mm"] is not None
+    assert auto.finger_room(mask, (0, 0, 200, 200), px, box, box["long_axis_deg"])["margin_mm"] is None  # 68 mm < 90

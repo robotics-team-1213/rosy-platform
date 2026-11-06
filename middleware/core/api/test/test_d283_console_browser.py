@@ -261,10 +261,7 @@ def test_real_core_procedure_surfaces_do_not_overlap(tmp_path, surface, width, h
         page.goto(f"http://rosy.test/{surface}")
         page.wait_for_function("() => document.querySelectorAll('ui-section[data-panel]').length > 0")
         if surface == "setup":
-            if width < 480:
-                page.get_by_role("combobox", name="작업 선택", exact=True).select_option("setup.traffic_policy")
-            else:
-                page.get_by_role("tab", name="교통 정책 준비", exact=True).click()
+            page.get_by_role("tab", name="교통 정책 준비", exact=True).click()
             page.locator('[data-panel="setup.traffic_policy"]').wait_for(state="visible")
             page.wait_for_function("""() => {
               const panel = document.querySelector('[data-panel="setup.traffic_policy"]');

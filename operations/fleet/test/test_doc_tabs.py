@@ -121,7 +121,7 @@ def test_every_area_document_heads_the_workspace_with_one_pathbar():
     docs = {"index.html": ("사이트 관제", '<strong id="console-screen" hidden></strong>'),
             "install.html": ("설치·보정", '<strong id="install-screen">장비 찾기</strong>'),
             "site-map.html": ("현장 지도", '<strong id="site-map-screen">지도 보기</strong>'),
-            "cell.html": ("팔레타이징 작업 준비", '<strong id="cell-screen">저장된 문서</strong>'),
+            "cell.html": ("팔레트 적재 작업 준비", '<strong id="cell-screen">저장된 문서</strong>'),
             "policy.html": ("학습 정책 승인", "<strong>학습</strong>")}
     for name, (title, screen) in docs.items():
         page = re.sub(r'<!--.*?-->', '', _page(name).read_text(encoding="utf-8"), flags=re.S)

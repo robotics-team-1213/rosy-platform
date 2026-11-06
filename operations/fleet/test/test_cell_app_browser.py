@@ -387,7 +387,7 @@ def test_cell_explains_work_and_unconfigured_service(browser_site):
     from playwright.sync_api import expect
 
     page, _, _ = browser_site
-    expect(page.get_by_role("heading", level=1)).to_have_text("팔레타이징 작업 준비")
+    expect(page.get_by_role("heading", level=1)).to_have_text("팔레트 적재 작업 준비")
     expect(page.locator("#cell-purpose")).to_contain_text("레시피와 작업대 설정으로 적재 계획")
     expect(page.locator("#cell-purpose")).to_contain_text("승인·진행")
     page.route("**/api/fleet/cell-app/documents", lambda route: route.fulfill(
@@ -896,3 +896,14 @@ def test_saved_structured_controls_stay_locked_until_list_read_finishes(browser_
     expect(page.locator("#saved li")).to_have_count(2)
     expect(page.locator("#saved-status")).to_have_attribute("state", "ready")
     expect(page.locator("#saved-status")).to_contain_text("문서 목록을 마지막으로 받은 시각")
+
+
+def test_cell_calibration_copy_keeps_print_and_weight_requirements_without_adr_codes(browser_site):
+    page, _, _ = browser_site
+    copy = page.locator('ui-text').all_text_contents()
+    marker = next(text for text in copy if '50 mm' in text)
+    weight = next(text for text in copy if '운반 무게 상한' in text)
+    assert '100%(맞춤 없이)' in marker and '팔마다 마커 번호가 다릅니다' in marker
+    assert '흰 테두리는 남깁니다' in marker and 'D-933' not in marker
+    assert '팔을 뻗었을 때의 힘 여유' in weight and '잰 무게가 없는 물체는 운반하지 않습니다' in weight
+    assert 'D-911' not in weight and 'D-935' not in weight

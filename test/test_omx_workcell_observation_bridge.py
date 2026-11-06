@@ -388,3 +388,43 @@ def test_a_failing_usb_report_is_logged_and_retried_without_stopping_the_loop(mo
     monkeypatch.setattr(bridge.usb_camera_report, "cycle", cycle)
     bridge.run_usb_reports(stop, None, "example", interval=0)
     assert calls == ["example", "example"]
+
+
+def test_arm_incident_report_and_hold_use_the_arms_own_source_route_and_token(monkeypatch):
+    from core_common.protocol.arm_incidents import ArmIncidentReport
+    seen = []
+    hold = {"held": True, "incident_ids": ["a" * 32], "reason": "1 open arm incident(s): overload"}
+
+    class Response:
+        status = 200
+        def __enter__(self): return self
+        def __exit__(self, *args): pass
+        def read(self, *args):
+            return json.dumps({"incident_id": "a" * 32, "hold": hold} if seen[-1].method == "POST" else hold).encode()
+
+    monkeypatch.setattr(bridge, "build_opener", lambda *handlers: SimpleNamespace(
+        open=lambda request, timeout: seen.append(request) or Response()))
+    context = ssl.create_default_context()
+    report = ArmIncidentReport(source_id="arm_feedback", session_id="6f1c2a3e-1b2d-4e5f-8a9b-0c1d2e3f4a5b",
+                               facts={"folded": True}, decision={"hold": True})
+    assert bridge.post_arm_incident("https://fleet.example", "arm_feedback", "arm-secret", report,
+                                    context=context).hold.held
+    assert bridge.get_arm_hold("https://fleet.example", "arm_feedback", "arm-secret", context=context).incident_ids == ["a" * 32]
+    base = "https://fleet.example/api/fleet/workcell-observations/arms/arm_feedback"
+    assert [r.full_url for r in seen] == [base + "/incidents", base + "/hold"]
+    assert all({k.lower(): v for k, v in r.header_items()}["x-workcell-observation-token"] == "arm-secret" for r in seen)
+
+
+def test_the_incident_link_is_built_from_the_manifest_and_a_fingerprint_matched_arm_token(manifest, tmp_path):
+    path = tmp_path / "m.yaml"
+    path.write_text(yaml.safe_dump(manifest.model_dump(mode="json", by_alias=True)))
+    env = {"ROSY_WORKCELL_OBSERVATIONS": str(path), "ROSY_OBSERVATION_WORKCELL": "example",
+           "ROSY_OBSERVATION_FLEET_URL": "https://fleet.example", "EXAMPLE_ARM": "arm-secret"}
+    link = bridge.ArmIncidentLink.from_environment("arm_a", env)
+    assert (link.source_id, link.token, link.fleet_url) == ("arm_feedback", "arm-secret", "https://fleet.example")
+    assert bridge.ArmIncidentLink.from_environment("arm_a", {}) is None  # not configured: offline rule applies
+    for bad in ({**env, "EXAMPLE_ARM": "other"}, {**env, "EXAMPLE_ARM": ""}):
+        with pytest.raises(ValueError, match="credential"):
+            bridge.ArmIncidentLink.from_environment("arm_a", bad)
+    with pytest.raises(ValueError, match="credential"):
+        bridge.ArmIncidentLink.from_environment("arm_z", env)

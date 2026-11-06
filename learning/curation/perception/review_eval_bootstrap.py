@@ -212,6 +212,7 @@ def publish(store_root, state_dir, name, scratch, *, target='pixels'):
                            'mask_version': row['mask_version'],
                            'approval_sha256': review_evidence.sha(review_evidence.encoded(approval)),
                            'reviewed_unknown_count': approval.get('reviewed_unknown_count', 0),
+                            'sam_assistance': row.get('sam_assistance', []),
                            'mcap': source['mcap']})
             sources[session] = {'session': session, 'capture_group': source['capture_group'],
                                 'source_kind': 'mcap', 'metadata_sha256': source['mcap']['metadata_sha256'],

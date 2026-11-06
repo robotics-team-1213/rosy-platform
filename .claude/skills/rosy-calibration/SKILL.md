@@ -25,7 +25,8 @@ a tool. If a step lacks a tool, add it to the engine (`deploy/robot/omx/cell_*`)
    depth↔colour alignment, each surface's height over the table and each arm's plate (its FK zero).
    - FK height of a surface = (surface mm − plate mm) / 1000.
    - Alignment: scene edges, not object masks alone. Objects in one row leave the alignment loose.
-3. **Camera model** (D-933): needs the printed markers (`cell_print_sheets`, slot 1 = ids 35-49, slot 2 = 50-64).
+3. **Camera model** (D-933/D-954): use Fleet Cell's printed markers. Get slot IDs from
+   `operations/fleet/fleet/server/cell/cell_print_sheets.py:arm_ids`, matching `cell_frame.slot_ids` and the cell's `markers.slot`.
    `cell_frame.py learn` with gripper-marker views at FK points (supervised), then `cell_frame.py check`.
    - Do not locate the jaws from depth or from an open/close colour difference. Both failed on this cell
      (2026-11-01: LOO 62-355 px from depth; 1 of 4 and 6 of 10 colour marks over the dark belt and pallet).

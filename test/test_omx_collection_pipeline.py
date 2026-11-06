@@ -42,7 +42,9 @@ def test_unknown_default_decisions_cannot_create_training_output(module, prepare
     assert not (tmp_path/'run').exists()
 
 
-def test_reviewed_training_orchestrates_existing_helpers_and_binds_receipts(module, prepared, tmp_path, monkeypatch):
+@pytest.mark.parametrize('policy_type', ['act', 'smolvla'])
+def test_reviewed_training_orchestrates_existing_helpers_and_binds_receipts(module, prepared, tmp_path, monkeypatch,
+                                                                          policy_type):
     root, report = prepared
     decisions = copy.deepcopy(report['episodes'])
     for decision, split in zip(decisions, ('train', 'eval', 'test')):
@@ -57,19 +59,33 @@ def test_reviewed_training_orchestrates_existing_helpers_and_binds_receipts(modu
         (output/'split-receipt.json').write_text(json.dumps({'source': actual, 'decisions': reviewed}))
     def run(splits, output, **kwargs):
         assert calls == ['split'] and splits == tmp_path/'run/splits'
-        assert kwargs == dict(steps=2, batch_size=1, device='cpu')
+        expected = dict(steps=2, batch_size=1, device='cpu')
+        if policy_type == 'smolvla':
+            expected.update(policy_type='smolvla', base_model=tmp_path/'base', vlm_assets=tmp_path/'vlm')
+        assert kwargs == expected
         calls.append('train')
         output.mkdir()
         (output/'cycle-receipt.json').write_text(json.dumps({'offline_only': True}))
         return {'offline_only': True}
     monkeypatch.setattr(module.native, 'split_reviewed', split)
     monkeypatch.setattr(module.cycle, 'run_cycle', run)
-    result = module.train(root, labels, tmp_path/'run', steps=2, batch_size=1)
+    options = (dict(policy_type='smolvla', base_model=tmp_path/'base', vlm_assets=tmp_path/'vlm')
+               if policy_type == 'smolvla' else {})
+    result = module.train(root, labels, tmp_path/'run', steps=2, batch_size=1, **options)
     assert calls == ['split', 'train']
     assert result['prepared_files']['intake-receipt.json']
     assert result['decisions_sha256'] and result['split_receipt_sha256'] and result['cycle_receipt_sha256']
     assert result['device_execution'] is False and result['uploaded'] is False
     assert json.loads((tmp_path/'run/pipeline-receipt.json').read_text()) == result
+
+
+@pytest.mark.parametrize('options', [dict(policy_type='unknown'), dict(policy_type='smolvla'),
+                                    dict(policy_type='act', base_model='base')])
+def test_invalid_policy_selection_cannot_create_collection_training_output(module, prepared, tmp_path, options):
+    root, _ = prepared
+    with pytest.raises(ValueError, match='policy'):
+        module.train(root, root/'decisions.json', tmp_path/'run', **options)
+    assert not (tmp_path/'run').exists()
 
 
 def test_prepare_returns_explicit_review_paths_and_structured_next_argv(module, tmp_path, monkeypatch):

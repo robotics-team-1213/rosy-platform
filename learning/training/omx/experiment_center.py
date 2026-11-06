@@ -22,6 +22,7 @@ from experiment_scope import select_dataset
 from experiment_reviews import Reviews
 from experiment_profiles import Profiles
 from experiment_owner_status import OwnerStatus
+from experiment_studies import Studies
 from experiment_hub import Hub
 
 
@@ -77,6 +78,7 @@ class Center:
             self.methods[method] = {'available': available, 'devices': ['cpu', 'cuda'] if cuda and method == 'act' else ['cpu'],
                 'execution_mode': 'offline_replay',
                 'reason': None if available else 'Pinned LeRobot 0.4.4 Linux learner environment unavailable'}
+        self.studies = Studies(self)
 
     def connect(self):
         return sqlite3.connect(self.db, timeout=10)
@@ -137,7 +139,19 @@ class Center:
                 elif row.get('execution_mode') == 'online_experience':
                     row.update(status='interrupted', error='Continuous learner exited; completed versions are preserved')
                 elif result.exists() and code in (0, None):
-                    row.update(status='succeeded', result=read_json(result))
+                    study_mode = row.get('execution_mode') in ('lerobot_inspect', 'lerobot_train')
+                    if study_mode:
+                        try:
+                            row.update(status='succeeded', result=read_json(result, max_bytes=32*1024**2))
+                            self.studies.check_run(row, root, row['result'])
+                        except (ValueError, OSError, KeyError, TypeError):
+                            row.pop('result', None)
+                            row.update(status='failed', error='Uploaded study evidence validation failed; inspect the owned worker log')
+                    else:
+                        row.update(status='succeeded', result=read_json(result))
+                    if (row.get('execution_mode') == 'native_train'
+                            and row['result'].get('learning_task') != row.get('learning_task')):
+                        row.update(status='failed', error='Native worker task lineage differs from owned run')
                     if row.get('execution_mode') == 'native_export':
                         try:
                             row['result']['dataset_id'] = self.catalog.exported(db, row, root / 'output')
@@ -271,6 +285,10 @@ class Center:
     def review(self, prepared):
         return self.reviews.describe(prepared)
 
+    def start_native(self, body, prepared, segments=None):
+        from experiment_native_train import start
+        return start(self, body, prepared, segments)
+
     def save_review(self, body, prepared, actor=None):
         return self.reviews.save(body, prepared, actor)
 
@@ -324,12 +342,19 @@ class Center:
             self._refresh(db)
             found = db.execute('SELECT document FROM runs WHERE id=?', (rid,)).fetchone()
             row = json.loads(found[0]) if found else {}
-            if row.get('execution_mode') == 'native_export':
+            if row.get('execution_mode') in ('native_export', 'lerobot_inspect'):
                 raise ValueError('exported dataset is not a model learning artifact')
             online = row.get('execution_mode') == 'online_experience'
             if row.get('status') != 'succeeded' and not online:
                 raise ValueError('completed learning run required')
             root = self.root / 'runs' / rid / 'output'
+            if row.get('execution_mode') == 'lerobot_train':
+                from experiment_lerobot_worker import archive
+                request = self.studies.check_run(row, root.parent, row['result'])
+                return archive(root, row['result'], request)
+            if row.get('execution_mode') == 'native_train':
+                from experiment_native_train import archive
+                return archive(root, row['result'], learning_task=row.get('learning_task'))
             if online:
                 root = version_root(root, row)
                 row['result'] = read_json(root / 'result.json')

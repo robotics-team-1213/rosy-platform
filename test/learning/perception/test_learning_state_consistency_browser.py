@@ -159,13 +159,19 @@ def test_promotion_error_and_receipt_describe_the_latest_attempt(workspace):
     assert state['posts'] == 1
     state['post_status'] = 200
     button.click()
-    expect(receipt).to_contain_text('e' * 64)
+    expect(receipt).to_contain_text('Fleet에서 승인권자가')
+    identity = page.locator('#promote-request-hash')
+    expect(identity).to_have_text('e' * 64)
+    expect(identity).to_be_hidden()
+    page.locator('#promotion-diagnostics > summary').click()
+    expect(identity).to_be_visible()
     expect(error).to_be_hidden()
     expect(button).to_be_enabled()
     state['post_status'] = 503
     button.click()
     expect(error).to_contain_text('fixture save rejected')
     expect(receipt).to_be_hidden()
+    expect(identity).to_have_text('')
     assert state['posts'] == 3
 
 

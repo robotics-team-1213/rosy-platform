@@ -28,13 +28,44 @@ const staleCamera = entry => {
   entry.status.setAttribute('state', 'unavailable');
 };
 
-export function createCellObservation({request, root}) {
+const BASE = '/api/fleet/workcell-observations';
+const STATE_LABEL = {open: '열림 · 사람 확인 필요', explained: '열림 · AI 설명 있음', cleared: '해제됨'};
+const when = seconds => new Date(seconds * 1000).toLocaleString('ko-KR');
+
+// D-971: what the control PC measured, as plain lines (text only, never markup)
+export const incidentLines = incident => {
+  const {facts = {}, decision = {}, recovery = null} = incident;
+  const record = value => value !== null && typeof value === 'object' && !Array.isArray(value);
+  const latched = facts.latched === undefined ? {} : facts.latched, flagged = facts.flagged === undefined ? [] : facts.flagged;
+  const measured = ['latched', 'flagged', 'folded', 'torque_after', 'windup_hits'].some(key => key in facts)
+    && record(latched) && Object.values(latched).every(latch => record(latch)
+      && typeof latch.hw_error === 'number'
+      && (latch.bits === undefined || (Array.isArray(latch.bits) && latch.bits.every(bit => typeof bit === 'string'))))
+    && Array.isArray(flagged) && flagged.every(row => record(row) && typeof row.command === 'string'
+      && ['error', 'fault'].every(key => row[key] == null || typeof row[key] === 'string'))
+    && (facts.folded === undefined || typeof facts.folded === 'boolean')
+    && (facts.windup_hits === undefined || Array.isArray(facts.windup_hits));
+  const measurements = measured ? [
+    Object.entries(facts.latched || {}).map(([id, latch]) => `ID ${id} 오류 ${latch.hw_error} (${(latch.bits || []).join('/')})`).join(', '),
+    facts.folded === undefined ? '' : `홈 접힘 ${facts.folded ? '예' : '아니오'} · 종료 후 토크 ${JSON.stringify(facts.torque_after || {})}`,
+    (facts.windup_hits || []).length ? `출력 상승 감지 ${facts.windup_hits.length}건` : '',
+    (facts.flagged || []).map(row => `실행기: ${row.command} ${row.error || row.fault || ''}`).join(' · '),
+  ].filter(Boolean) : [];
+  return [
+    typeof decision.reason === 'string' ? decision.reason : JSON.stringify(decision.reason),
+    ...(measurements.length ? measurements : [Object.keys(facts).length ? JSON.stringify(facts) : '']),
+    recovery ? `장치 안전 재부팅: ${JSON.stringify(recovery).slice(0, 300)}` : '',
+  ].filter(Boolean);
+};
+
+export function createCellObservation({request, root, credential = () => ''}) {
   const empty = element('ui-empty', '접속하면 작업 셀의 실제 관측을 확인할 수 있습니다.');
   let life = null, pending = false, layout = '', disposed = false;
   let profiles = null;
   const arms = new Map(), cameras = new Map();
   // camera frames this browser held when a guard stop arrived, by session; the field PC keeps its own copies
   const faultFrames = new Map();
+  const incidentFrames = new Map();  // D-971: blob URL of each incident frame, fetched once
   let seenFaults = null;
   root.replaceChildren(empty);
   function paintHealth(entry) {
@@ -48,6 +79,8 @@ export function createCellObservation({request, root}) {
     for (const entry of cameras.values()) if (entry.url) URL.revokeObjectURL(entry.url);
     for (const frames of faultFrames.values()) for (const frame of frames) URL.revokeObjectURL(frame.url);
     faultFrames.clear(); seenFaults = null;
+    for (const url of incidentFrames.values()) URL.revokeObjectURL(url);
+    incidentFrames.clear();
     arms.clear(); cameras.clear(); layout = '';
     empty.hidden = false; root.replaceChildren(empty);
   }
@@ -77,11 +110,14 @@ export function createCellObservation({request, root}) {
         const history = element('details'), historySummary = element('summary'), historyList = element('ol');
         historySummary.className = 'ui-disclosure-row'; historySummary.textContent = '고장 이력 없음';
         historyList.className = 'cell-fault-history'; history.append(historySummary, historyList);
+        const incidents = element('details'), incidentsSummary = element('summary'), incidentsList = element('ol');
+        incidentsSummary.className = 'ui-disclosure-row'; incidentsSummary.textContent = '팔 사건 없음';
+        incidentsList.className = 'cell-incident-history'; incidents.append(incidentsSummary, incidentsList);
         const entry = {status, values, expires: 0, health: createMotorHealthState(), healthDetails, healthSummary, healthView,
-          history, historySummary, historyList, faults: ''};
+          history, historySummary, historyList, faults: '', incidents, incidentsSummary, incidentsList, incidentKey: ''};
         healthDetails.addEventListener('toggle', () => paintHealth(entry));
         paintHealth(entry); staleArm(entry); arms.set(arm.source_id, entry);
-        card.append(element('h4', arm.label), healthDetails, history, element('ui-text', '엔코더 각도 · rad'), status, values); grid.append(card);
+        card.append(element('h4', arm.label), healthDetails, incidents, history, element('ui-text', '엔코더 각도 · rad'), status, values); grid.append(card);
         card.append(profiles.detail('arm', arm.source_id, {owner_id: arm.arm_id, sha256: arm.binding_sha256}));
       }
       const rank = camera => ({overhead: 0, side: 1}[camera.role] ?? 2) + (camera.stream === 'depth' ? 0.5 : 0);
@@ -132,6 +168,8 @@ export function createCellObservation({request, root}) {
         signal: AbortSignal.any([scope.signal, AbortSignal.timeout(1500)]),
       });
       if (!current()) return;
+      // Tabs of one user share Vision's per-source frame budget; the 100 ms expiry timer ages out the image we keep.
+      if (response.status === 429) return;
       const badge = frameBadge({ok: response.ok, status: response.status,
         ageMs: response.headers.get('X-Frame-Age-Ms'), frameState: response.headers.get('X-Frame-State'), rectified: false});
       const age = Number(response.headers.get('X-Frame-Age-Ms'));
@@ -198,6 +236,75 @@ export function createCellObservation({request, root}) {
     }));
   }
 
+  async function incidentFrame(source, incident, frame, image, scope) {
+    const key = `${incident.incident_id}:${frame.role}`;
+    if (!incidentFrames.has(key)) {
+      try {
+        const token = credential();
+        const response = await fetch(`${BASE}/arms/${encodeURIComponent(source)}/incidents/${incident.incident_id}/frames/${frame.role}`, {
+          cache: 'no-store', credentials: 'same-origin', headers: token ? {Authorization: `Bearer ${token}`} : {}, signal: scope.signal});
+        if (!response.ok || life !== scope) return;
+        incidentFrames.set(key, URL.createObjectURL(await response.blob()));
+      } catch { return; }
+    }
+    image.src = incidentFrames.get(key);
+  }
+
+  async function clearIncident(source, incident, note, button, message) {
+    const text = note.value.trim();
+    if (!text) { message.textContent = '확인한 내용을 적어야 해제할 수 있습니다.'; return; }
+    button.disabled = true;
+    try {
+      await request(`${BASE}/arms/${encodeURIComponent(source)}/incidents/${incident.incident_id}/clear`, {
+        method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({note: text}), timeoutMs: 3000});
+      message.textContent = '해제했습니다.';
+      const entry = arms.get(source); if (entry) entry.incidentKey = '';
+      void refresh();
+    } catch (error) {
+      message.textContent = error.status === 403 ? '이름 있는 운영자만 해제할 수 있습니다.'
+        : error.status === 409 ? '이미 해제된 사건입니다.' : '해제하지 못했습니다. 다시 시도하세요.';
+      button.disabled = false;
+    }
+  }
+
+  function paintIncidents(source, entry, incidents, scope) {
+    const key = JSON.stringify(incidents.map(i => [i.incident_id, i.state]));
+    if (key === entry.incidentKey) return;
+    entry.incidentKey = key;
+    const held = incidents.filter(i => i.state !== 'cleared');
+    entry.incidentsSummary.textContent = incidents.length
+      ? `팔 사건 ${incidents.length}건 · ${held.length ? `보류 중 ${held.length}건 (세션 시작 불가)` : '모두 해제됨'}` : '팔 사건 없음';
+    if (held.length) entry.incidents.open = true;
+    entry.incidentsList.replaceChildren(...incidents.map(incident => {
+      const item = element('li');
+      item.append(element('strong', `${STATE_LABEL[incident.state] || incident.state} · ${when(incident.reported_at)}`),
+        ...incidentLines(incident).map(line => element('p', line)));
+      if (incident.frames.length) {
+        const figure = element('div'); figure.className = 'cell-fault-frames';
+        for (const frame of incident.frames) {
+          const image = element('img'); image.alt = `${frame.role === 'top' ? '상단' : '측면'} 카메라 · 고장 순간`;
+          figure.append(image); void incidentFrame(source, incident, frame, image, scope);
+        }
+        item.append(figure);
+      }
+      if (incident.explanation) {
+        item.append(element('ui-text', `AI 설명 (설명일 뿐, 판단이나 동작이 아닙니다 · ${incident.explanation.model})`),
+          element('p', `본 것: ${incident.explanation.seen}`), element('p', `추정 원인: ${incident.explanation.suspected_cause}`));
+      }
+      if (incident.cleared) {
+        item.append(element('p', `해제: ${incident.cleared.by} · ${when(incident.cleared.at)} · ${incident.cleared.note}`));
+      } else {
+        const note = element('input'); note.className = 'ui-field'; note.maxLength = 400;
+        note.setAttribute('aria-label', '확인한 내용'); note.placeholder = '팔과 집게를 확인한 내용 (필수)';
+        const button = element('ui-button', '확인했습니다 · 해제'); button.setAttribute('type', 'button');
+        const message = element('ui-text');
+        button.addEventListener('click', () => clearIncident(source, incident, note, button, message));
+        item.append(note, button, message);
+      }
+      return item;
+    }));
+  }
+
   async function refresh() {
     if (disposed || pending) return;
     if (!life) {
@@ -211,8 +318,12 @@ export function createCellObservation({request, root}) {
         }
         for (const entry of cameras.values()) if (performance.now() >= entry.expires) staleCamera(entry);
       }, 100);
-      life.onDispose(() => { clearInterval(poll); clearInterval(expiry); });
+      // a background tab stops pulling observations and JPEGs; showing it again refreshes at once
+      const wake = () => { if (!document.hidden) void refresh(); };
+      document.addEventListener('visibilitychange', wake);
+      life.onDispose(() => { clearInterval(poll); clearInterval(expiry); document.removeEventListener('visibilitychange', wake); });
     }
+    if (document.hidden) return;
     const scope = life;
     pending = true;
     const observedAt = performance.now();
@@ -238,6 +349,7 @@ export function createCellObservation({request, root}) {
         entry.health.accept(arm.motor_health, {requestedAtMs, receivedAtMs: Date.now()});
         paintHealth(entry);
         paintFaults(entry, arm.faults || []);
+        paintIncidents(arm.source_id, entry, arm.incidents || [], scope);
         const age = Math.max(0, arm.source_age_s, arm.receipt_age_s);
         entry.expires = arm.fresh && Number.isFinite(age) ? observedAt + (2 - age) * 1000 : 0;
         if (!arm.positions || performance.now() >= entry.expires) { staleArm(entry); continue; }

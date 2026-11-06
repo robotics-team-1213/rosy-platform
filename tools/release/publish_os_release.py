@@ -17,6 +17,8 @@ import stat
 import subprocess
 import sys
 import tempfile
+import re
+import uuid
 
 ROOT = Path(__file__).resolve().parents[2]
 for relative in ("deploy/robot/pinky_pro/release", "deploy/robot/pinky_pro/native"):
@@ -88,8 +90,13 @@ def _split_bundle(source, assets, expected_sha256):
     return records
 
 
-def publish(directory, public_key, *, release_id, source_revision, apply=False, gh=None):
-    """Validate and capture inputs, optionally publish an inert engineering prerelease."""
+def publish(directory, public_key, *, release_id, source_revision, apply=False, gh=None,
+            publication_only=False, transaction=None, journal=None):
+    """Publish verified assets; only an explicitly closed rollout is publication-only.
+
+    A supplied durable transaction owns one draft by nonce and numeric ID. The
+    journal callback must persist each checkpoint before GitHub is mutated.
+    """
     directory = Path(directory).absolute()
     for parent in (*reversed(directory.parents), directory):
         _plain(parent, directory=True)
@@ -134,6 +141,8 @@ def publish(directory, public_key, *, release_id, source_revision, apply=False, 
             raise ValueError("OS release or source differs from the operator's expected identity")
         if policy["canary_ok"] or policy["withdrawn"]:
             raise ValueError("OS engineering publication requires an initial unpromoted rollout")
+        if publication_only and policy["canary"]:
+            raise ValueError("OS publication-only rollout must authorize no canary")
         bundle = metadata["bundle"]
         assets = bundle_assets(bundle)
         names = {*SIDECARS, bundle["filename"]}
@@ -158,47 +167,118 @@ def publish(directory, public_key, *, release_id, source_revision, apply=False, 
                 raise ValueError("OS publication received invalid tag references")
             return [row for row in refs if row.get("ref") == "refs/tags/" + tag]
 
-        if tag_refs() or any(row.get("tag_name") == tag for row in releases()):
-            raise ValueError("OS release or tag already exists; refusing overwrite")
-        created = api("releases", "--method", "POST", "-f", "tag_name=" + tag,
-            "-f", "target_commitish=" + source_revision, "-f", "name=" + tag,
-            "-f", "body=Engineering OS prerelease. Ed25519 asset binding checked; CMS/verity checks belong to signing and consumer.",
-            "-F", "draft=true", "-F", "prerelease=true")
-        identity = created.get("id") if isinstance(created, dict) else None
-        if type(identity) is not int or identity < 1:
-            raise ValueError("OS draft creation did not return a numeric release identity")
+        resumable = transaction is not None
+        checkpoint = dict(transaction) if resumable else {"nonce": uuid.uuid4().hex}
+        if (not isinstance(checkpoint.get("nonce"), str) or not re.fullmatch("[0-9a-f]{32}", checkpoint["nonce"])
+                or resumable and not callable(journal)):
+            raise ValueError("OS publication resume requires a durable nonce journal")
+        bindings = dict(tag=tag, source_revision=source_revision, assets=expected)
+        if any(key in checkpoint and checkpoint[key] != value for key, value in bindings.items()):
+            raise ValueError("OS publication assets or source changed since the durable checkpoint")
+        checkpoint.update(bindings)
 
-        def validate_draft(remote):
+        def record(**values):
+            checkpoint.update(values)
+            if resumable:
+                journal(dict(checkpoint))
+
+        # This includes every transport-part hash and the nonce before draft POST.
+        record()
+        marker = "<!-- rosy-os-publication:" + checkpoint["nonce"] + " -->"
+        existing = [row for row in releases() if row.get("tag_name") == tag]
+        if len(existing) > 1 or not resumable and (existing or tag_refs()):
+            raise ValueError("OS release or tag already exists; refusing overwrite")
+        identity = checkpoint.get("release_id")
+        if identity is not None and (type(identity) is not int or identity < 1):
+            raise ValueError("OS resume has an invalid numeric release identity")
+
+        def validate(remote, *, draft=None):
             if (not isinstance(remote, dict) or type(remote.get("id")) is not int or remote["id"] != identity
                     or remote.get("tag_name") != tag or remote.get("target_commitish") != source_revision
-                    or remote.get("draft") is not True or remote.get("prerelease") is not True):
+                    or type(remote.get("draft")) is not bool or remote.get("prerelease") is not True
+                    or draft is not None and remote["draft"] is not draft
+                    or marker not in remote.get("body", "")):
                 raise ValueError("OS draft identity, source or publication state differs")
 
-        validate_draft(created)
+        if identity is not None:
+            remote = api("releases/" + str(identity))
+            validate(remote)
+        elif existing:
+            remote = existing[0]
+            identity = remote.get("id")
+            if type(identity) is not int or identity < 1:
+                raise ValueError("OS existing draft has no numeric identity")
+            validate(remote)
+            record(release_id=identity)
+        else:
+            if tag_refs():
+                raise ValueError("OS tag exists without an owned release; refusing adoption")
+            remote = api("releases", "--method", "POST", "-f", "tag_name=" + tag,
+                "-f", "target_commitish=" + source_revision, "-f", "name=" + tag,
+                "-f", "body=Engineering OS prerelease. CMS/verity checks belong to signing and consumer.\n" + marker,
+                "-F", "draft=true", "-F", "prerelease=true")
+            identity = remote.get("id") if isinstance(remote, dict) else None
+            if type(identity) is not int or identity < 1:
+                raise ValueError("OS draft creation did not return a numeric release identity")
+            validate(remote, draft=True)
+            record(release_id=identity)
         endpoint = "releases/" + str(identity)
-        for name in sorted(names):
-            # Fix the upload host and numeric identity; never follow an API-supplied URL or re-resolve a tag.
-            command("api", f"https://uploads.github.com/repos/{REPO}/{endpoint}/assets?name={name}",
-                "--hostname", "github.com", "--method", "POST", "--input", str(staged / name),
-                "-H", "Content-Type: application/octet-stream", "-H", "Content-Length: " + str(expected[name]["size"]))
+
+        def checked_assets(remote, *, complete):
+            items = remote.get("assets", [])
+            if (not isinstance(items, list) or any(not isinstance(item, dict) or not isinstance(item.get("name"), str) for item in items)
+                    or len({item["name"] for item in items}) != len(items)
+                    or not {item["name"] for item in items} <= names
+                    or complete and {item["name"] for item in items} != names):
+                raise ValueError("OS draft assets differ from the exact signed set")
+            for item in items:
+                record = expected[item["name"]]
+                if type(item.get("size")) is not int or item["size"] != record["size"] or item.get("digest") != record["digest"]:
+                    raise ValueError("OS draft asset size or SHA256 is absent or differs")
+            return {item["name"]: item for item in items}
+
         remote = api(endpoint)
-        validate_draft(remote)
-        assets = remote.get("assets")
-        if (not isinstance(assets, list) or len(assets) != len(names)
-                or any(not isinstance(item, dict) or not isinstance(item.get("name"), str) for item in assets)
-                or {item.get("name") for item in assets} != names):
-            raise ValueError("OS draft assets differ from the exact signed set")
-        for item in assets:
-            record = expected[item["name"]]
-            if type(item.get("size")) is not int or item["size"] != record["size"] or item.get("digest") != record["digest"]:
-                raise ValueError("OS draft asset size or SHA256 is absent or differs")
+        validate(remote)
+        present = checked_assets(remote, complete=not remote["draft"])
+        if remote["draft"]:
+            for name in sorted(names - present.keys()):
+                # Never clobber: partial matching uploads can resume, foreign bytes cannot.
+                command("api", f"https://uploads.github.com/repos/{REPO}/{endpoint}/assets?name={name}",
+                    "--hostname", "github.com", "--method", "POST", "--input", str(staged / name),
+                    "-H", "Content-Type: application/octet-stream", "-H", "Content-Length: " + str(expected[name]["size"]))
+        remote = api(endpoint)
+        validate(remote)
+        checked_assets(remote, complete=True)
         # GitHub may defer creating a draft's tag until publication.
         for ref in tag_refs():
             obj = ref.get("object", {})
             if not isinstance(obj, dict) or obj.get("type") != "commit" or obj.get("sha") != source_revision:
                 raise ValueError("OS draft tag no longer points to the signed source")
-        api(endpoint, "--method", "PATCH", "-F", "draft=false", "-F", "prerelease=true")
-        return dict(result, applied=True)
+        if remote["draft"]:
+            api(endpoint, "--method", "PATCH", "-F", "draft=false", "-F", "prerelease=true")
+        # A successful PATCH response is insufficient (it can be lost or stale).
+        final = api(endpoint)
+        validate(final, draft=False)
+        assets = checked_assets(final, complete=True)
+        refs = tag_refs()
+        if len(refs) != 1 or refs[0].get("object", {}).get("type") != "commit" or refs[0]["object"].get("sha") != source_revision:
+            raise ValueError("OS public tag does not resolve to the signed source")
+        readback = {}
+        for name in SIDECARS:
+            asset_id = assets[name].get("id")
+            if type(asset_id) is not int or asset_id < 1:
+                raise ValueError("OS public sidecar lacks a numeric asset identity")
+            raw = command("api", f"repos/{REPO}/releases/assets/{asset_id}", "--hostname", "github.com",
+                          "-H", "Accept: application/octet-stream").encode("utf-8")
+            if len(raw) != expected[name]["size"] or "sha256:" + hashlib.sha256(raw).hexdigest() != expected[name]["digest"]:
+                raise ValueError("OS public sidecar bytes differ from the signed checkpoint")
+            readback[name] = raw
+        verified = verify_metadata(readback["os-update.json"], readback["os-update.json.sig"].decode("ascii").strip(), work / "authority.pem")
+        closed = verify_rollout(readback["os-rollout.json"], readback["os-rollout.json.sig"].decode("ascii").strip(), work / "authority.pem", verified)
+        if publication_only and (closed["canary"] or closed["canary_ok"] or closed["withdrawn"]):
+            raise ValueError("OS public rollout authorizes a device")
+        record(published=True)
+        return dict(result, applied=True, github_release_id=checkpoint["release_id"])
 
 
 def main(argv=None):

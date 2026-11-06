@@ -362,6 +362,29 @@ def test_do_rejects_mistyped_motion_values_before_robot_dispatch():
     assert not robot.calls
 
 
+def test_named_manual_move_forwards_drive_and_terminal_zero(tmp_path):
+    class DrivingRobot(FakeRobot):
+        async def _post(self, path, body):
+            self.calls.append((path, body))
+            return {"accepted": True}
+
+    robot = DrivingRobot("rosy_01")
+    client = _named_client(tmp_path, robot)
+    store = client.app.state.task_service.store
+    store.rearm_dispatch(expected_generation=store.dispatch_control()["generation"], actor_id="bob")
+    for linear in (0.02, 0.0):
+        response = client.post("/api/fleet/do", json={
+            "do": "move", "robot": "rosy_01", "linear": linear, "angular": 0.0,
+        })
+        assert response.status_code == 200, response.text
+        assert response.json()["accepted"] is True
+        assert response.json()["steps"][0]["path"] == "/api/v1/teleop"
+    assert robot.calls == [
+        ("/api/v1/teleop", {"linear": 0.02, "angular": 0.0}),
+        ("/api/v1/teleop", {"linear": 0.0, "angular": 0.0}),
+    ]
+
+
 def test_state_lists_the_roster():
     client = _client(FakeRobot("rosy_01", state={"robot_id": "rosy_01", "mode": "IDLE"}),
                      FakeRobot("rosy_02", state={"robot_id": "rosy_02", "mode": "NAVIGATION"}))

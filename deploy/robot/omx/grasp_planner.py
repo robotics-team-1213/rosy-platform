@@ -19,6 +19,7 @@ import argparse
 from dataclasses import replace
 import json
 import math
+import os
 import sys
 from pathlib import Path
 
@@ -52,11 +53,24 @@ def norm_to_rad(norm: float, lo: float = 0, hi: float = 4095) -> float:
 
 
 def load_kinematics(root: Path | None):
+    """The OMX-F kinematics; ROSY_OMX_TCP_X_M replaces the stock TCP (link5 x 0.09193) for another jaw.
+    arm_b's v2.1 jaws end at 0.0740 (STL); on 2026-11-03 closed jaws over a box top went to stock-FK 12.4 mm
+    without touching the 20 mm top, so the stock TCP put the real tips about 18 mm above every planned height."""
     root = root or Path(__file__).resolve().parents[3] / "middleware/devices/omx/adapter"
     sys.path.insert(0, str(root))
     from omx_adapter.kinematics import IkLimits, OmxKinematics, TopDownPose
 
-    return OmxKinematics.load(root / "config/omx_f_kinematics.yaml"), IkLimits, TopDownPose
+    path, tcp = root / "config/omx_f_kinematics.yaml", os.environ.get("ROSY_OMX_TCP_X_M")
+    if not tcp:
+        return OmxKinematics.load(path), IkLimits, TopDownPose
+    tcp = float(tcp)
+    if not (math.isfinite(tcp) and 0.05 <= tcp <= 0.12):
+        raise SystemExit(f"ROSY_OMX_TCP_X_M {tcp} outside the OMX-F jaw range 0.05..0.12")
+    import yaml
+
+    document = yaml.safe_load(path.read_text(encoding="utf-8"))
+    next(j for j in document["joints"] if j["name"] == "end_effector_joint")["origin"]["xyz"][0] = tcp
+    return OmxKinematics(document), IkLimits, TopDownPose
 
 
 class Planner:

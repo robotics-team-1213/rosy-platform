@@ -64,6 +64,11 @@ def test_storage_browser_inventory_preflight_and_failure(tmp_path, accounts, wid
                 page.goto(url + '/learning', wait_until='networkidle')
                 page.evaluate('(theme) => document.documentElement.dataset.theme = theme', theme)
                 expect = playwright.expect
+                storage_link = page.get_by_role('navigation', name='학습센터 작업 이동').locator('a[href="#storage-section"]')
+                storage_link.click()
+                expect(page).to_have_url(url + '/learning#storage-section')
+                expect(page.locator('#storage-section')).to_be_visible()
+                expect(storage_link).to_have_attribute('aria-current', 'location')
                 expect(page.locator('#storage-roots')).to_contain_text('Incoming media')
                 expect(page.locator('#storage-roots')).to_contain_text('파일 1개')
                 expect(page.locator('#storage-roots')).to_contain_text('예상 잔여 미확인')

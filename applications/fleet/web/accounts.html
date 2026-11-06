@@ -41,7 +41,10 @@
     <div id="account-content" hidden>
       <p>변경은 즉시 적용되며 대상 계정의 기존 로그인 세션이 종료됩니다. 마지막 관리자는 정지하거나 관리 권한을 제거할 수 없습니다.</p>
       <ui-button id="account-reload" kind="quiet">현재 상태 다시 조회</ui-button>
-      <ul id="account-list" aria-label="등록 계정"></ul>
+      <div class="ui-table-scroll" role="region" aria-label="등록 계정 표" tabindex="0">
+        <table class="ui-data-table" aria-label="등록 계정"><thead><tr><th scope="col">로그인 ID</th><th scope="col">사용자 식별</th><th scope="col">기본 역할</th><th scope="col">상태</th><th scope="col"><span class="sr-only">편집</span></th></tr></thead>
+          <tbody id="account-list"></tbody></table>
+      </div>
       <ui-button id="account-new" kind="quiet">새 계정</ui-button>
       <h2 id="account-heading">새 계정</h2>
       <form id="account-form" class="password-login-form">
@@ -49,9 +52,9 @@
         <input id="account-name" class="ui-field password-login-field" autocomplete="off" required maxlength="96">
         <label for="account-principal">사용자 식별 이름</label>
         <input id="account-principal" class="ui-field password-login-field" autocomplete="off" required maxlength="96">
-        <label for="account-role">기본 역할 표시</label>
-        <select id="account-role" class="ui-field"><option value="viewer">조회자</option><option value="operator">운영자</option><option value="policy-admin">정책 관리자</option></select>
-        <p>실제 접근은 아래 자원별 권한으로 결정됩니다. 역할 이름만으로 권한이 추가되지 않습니다.</p>
+        <label for="account-role">역할</label>
+        <select id="account-role" class="ui-field"><option value="viewer">조회자</option><option value="operator">운영자</option><option value="policy-admin">관리자</option></select>
+        <p>역할을 고르면 아래 자원별 권한이 그 역할의 묶음으로 바뀝니다. 조회자는 조회만, 운영자는 팀원 기본 권한, 관리자는 계정·정책·카메라·로봇 관리와 학습 승인·게시까지 모든 권한입니다. 저장되는 것은 아래 권한이며, 역할을 고른 뒤 자원별로 더 조정할 수 있습니다.</p>
         <label class="ui-check"><input id="account-enabled" class="ui-field" type="checkbox" checked> 계정 사용</label>
         <div id="account-initial-password">
           <label for="account-password">임시 비밀번호 · 사용자가 첫 로그인에서 변경</label>
@@ -61,7 +64,6 @@
         <p>조작 권한과 조회 권한은 별개입니다. 필요한 조회 권한도 함께 선택하세요. 식별자 <code>*</code>는 모든 로봇 또는 모든 프로젝트입니다.</p>
         <p>팀원 기본 권한에는 모든 핑키의 조회·주행·카메라 확인 등 일반 운용 기능이 포함됩니다. 계정·기체 관리 권한은 별도로 부여합니다.</p>
         <div id="account-grants"></div>
-        <ui-button id="account-team-grants" kind="quiet" type="button">팀원 기본 권한으로 채우기</ui-button>
         <ui-button id="account-add-grant" kind="quiet" type="button">자원 추가</ui-button>
         <ui-button id="account-save" kind="primary" type="button">계정 저장</ui-button>
       </form>

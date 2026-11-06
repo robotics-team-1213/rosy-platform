@@ -11,6 +11,9 @@ end and skips restoration. EEPROM is written with torque OFF only. Support loade
 OFF can let them fall, and low output limits alone do not establish a safe physical operating envelope.
 
 Per joint:
+- `hold` is gripper-only at the resting caps, with no EEPROM writes or gain changes. It seeds the
+  current position and monitors only the hold, without a subsequent move/sweep or torque-ON camera I/O.
+  After confirmed torque OFF it restores the prior profiles, goal current and goal position.
 - 16 gripper (XL330, mode 5 current-based position): the goal current caps the force, so `sweep`
   may push to the mechanical ends; an end counts only when the motor stalled near the goal current.
 - 14-15 wrist (XL330, mode 4) and 11-13 (XL430, mode 4; 11-13 carry the arm's weight): only the
@@ -271,7 +274,8 @@ class Run:
             raise RuntimeError(f"{name} readback {after} != {value}")
         return before
 
-    def settle(self, label: str, *, timeout=6.0, still=0.75, grace=1.5, origin=None, sag=None) -> dict:
+    def settle(self, label: str, *, timeout=6.0, still=0.75, grace=1.5, origin=None, sag=None,
+               capture=True) -> dict:
         """Until the position has not changed for `still` s. A stall in the first `grace` s is not an
         end: an integrator wound up at the previous end needs time to unwind. With `sag`, any drift
         beyond `sag` ticks from `origin` stops the run."""
@@ -298,7 +302,8 @@ class Run:
             if s["present_pos"] != last or s["moving"]:
                 last, since = s["present_pos"], now
             elif now - since >= still and now - begun >= grace:
-                self.grab(label)
+                if capture:
+                    self.grab(label)
                 after = self.state()
                 if (after["torque"] != 1 or after["hw_error"] or after["moving"]
                         or after["present_pos"] != s["present_pos"]):
@@ -315,12 +320,12 @@ class Run:
         model, mode = self.bus.read("model"), self.bus.read("mode")
         drive_mode = self.bus.read("drive_mode")
         self.log(step="before", motor=self.motor, model=model, mode=mode, **before)
-        self.grab("before")
         if ((model, mode) != TUNABLE[self.motor] or before["torque"] != 0 or before["hw_error"] != 0):
             raise SystemExit(f"precondition failed: motor {self.motor} must be {TUNABLE[self.motor]} "
                              f"(model, mode), torque OFF, no hardware error")
         if drive_mode & 0x0C:
             raise SystemExit("drive mode must use velocity profiles without automatic torque enable")
+        self.grab("before")
 
         def target_for(start):
             if args.command != "move":
@@ -353,12 +358,16 @@ class Run:
                 for name in limits:
                     if found[name] != BASELINE[name]:
                         self.set(name, BASELINE[name])
-            for name, value in (("pwm_limit", args.pwm),
-                                ("current_limit", args.current_limit if self.xl330 else None),
-                                ("p_gain", args.p_gain), ("i_gain", args.i_gain)):
-                if value is not None:
-                    restore[name] = BASELINE[name] if name in BASELINE else self.bus.read(name)
-                    self.set(name, value)
+            if args.command == "hold":
+                restore.update({name: self.bus.read(name) for name in (
+                    "profile_acc", "profile_vel", "goal_current", "goal_pos")})
+            else:
+                for name, value in (("pwm_limit", args.pwm),
+                                    ("current_limit", args.current_limit if self.xl330 else None),
+                                    ("p_gain", args.p_gain), ("i_gain", args.i_gain)):
+                    if value is not None:
+                        restore[name] = BASELINE[name] if name in BASELINE else self.bus.read(name)
+                        self.set(name, value)
             self.set("profile_acc", 1 if leader_wrist else args.acceleration)
             self.set("profile_vel", 1 if leader_wrist else args.velocity)
             if self.motor == GRIPPER:
@@ -373,8 +382,12 @@ class Run:
             target = target_for(start)
             self.set("goal_pos", start)
             self.set("torque", 1)
-            self.settle("hold", timeout=args.hold + 1.0, still=args.hold, grace=0, origin=start, sag=args.sag)
-            if args.command == "move":
+            held = self.settle("hold", timeout=args.hold + 1.0, still=args.hold, grace=0,
+                               origin=start, sag=args.sag, capture=args.command != "hold")
+            if args.command == "hold":
+                result = {"motor": self.motor, "target": start, "reached": held["present_pos"],
+                          "error_ticks": start - held["present_pos"], "load": held["present_load"]}
+            elif args.command == "move":
                 self.set("goal_pos", target)
                 end = self.settle("move")
                 result = {"motor": self.motor, "target": target, "reached": end["present_pos"],
@@ -416,7 +429,6 @@ class Run:
                 if attempt == 4:
                     failures.append(f"torque OFF: {exc}")
                 self.sleep(0.5)
-        self.grab("after")
         for name, value in (restore.items() if torque_off else ()):
             try:
                 self.set(name, value)
@@ -425,6 +437,7 @@ class Run:
         if failures:
             self.log(step="unsafe_end", motor=self.motor, failures=failures)
             raise RuntimeError(f"motor {self.motor} did not end safely: {failures}")
+        self.grab("after")
 
 
 def parse(argv=None):
@@ -432,7 +445,7 @@ def parse(argv=None):
     parser.add_argument("--device", required=True)
     parser.add_argument("--id", type=int, default=GRIPPER, choices=sorted(TUNABLE))
     parser.add_argument("--viewer", default="http://127.0.0.1:8767", help="local camera viewer ('' to skip frames)")
-    parser.add_argument("command", choices=("move", "sweep"))
+    parser.add_argument("command", choices=("hold", "move", "sweep"))
     parser.add_argument("--to", type=int)
     parser.add_argument("--delta", type=int)
     parser.add_argument("--pwm", type=int, default=BASELINE["pwm_limit"])
@@ -460,6 +473,12 @@ def parse(argv=None):
         parser.error("--hold 0..5 s, --sag 1..100, --max-delta 1..400")
     if args.command == "sweep" and args.id != GRIPPER:
         parser.error("sweep pushes to mechanical ends: gripper (16) only")
+    if args.command == "hold" and (
+            args.id != GRIPPER or args.to is not None or args.delta is not None
+            or args.pwm != BASELINE["pwm_limit"] or args.current_limit != BASELINE["current_limit"]
+            or args.p_gain is not None or args.i_gain is not None
+            or args.velocity != 1 or args.acceleration != 1):
+        parser.error("hold requires gripper (16), baseline caps, 1/1 profiles and no target or gain changes")
     if args.command == "move":
         if (args.to is None) == (args.delta is None):
             parser.error("move needs exactly one of --to / --delta")

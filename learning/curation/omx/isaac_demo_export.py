@@ -2,7 +2,8 @@
 
 One container is one episode. State and action are both arms, arm_a (fixture arm 0) then arm_b, six joints each in the real
 arm's units: body joints by grasp_planner.rad_to_norm (normalized_-100_100) and the gripper as the pad gap over 40 mm x 100
-(ASSUMED until the real gripper's 0-100 is measured against the jaw gap). Images are the real top and side views, resized.
+(ASSUMED until the real gripper's 0-100 is measured against the jaw gap). Images are the real top and side views, resized,
+plus each arm's wrist camera (arm_a_wrist, arm_b_wrist) when the runs recorded them (wrist-demo cases).
 A run's episodes stay in one split (session = parent = run directory name).
 
   python isaac_demo_export.py OUT RUN_DIR [RUN_DIR ...] [--every 2] [--size 64 48] [--eval-runs 1]
@@ -23,10 +24,27 @@ from demo_units import OPEN_GAP_M, gap_m, rad_to_norm, to_units as arm_units  # 
 
 JOINTS = ['shoulder_pan.pos', 'shoulder_lift.pos', 'elbow_flex.pos', 'wrist_flex.pos', 'wrist_roll.pos', 'gripper.pos']
 CAMERAS = ('top', 'side')
+WRIST = ('arm_a_wrist', 'arm_b_wrist')
 TASK = 'stack three-cell containers on the ship plate with arm_a and arm_b'  # the policy's task text (act_policy_server)
 
 
-def episodes(run, every, size):
+def cameras(runs):
+    """The views every run recorded: top and side, plus both wrist cameras when all runs have them (never a mix)."""
+    wrist = {all((run/f'demo-{camera}.mp4').exists() for camera in WRIST) for run in runs}
+    if len(wrist) > 1:
+        raise ValueError('some runs recorded the wrist cameras and some did not; export them separately')
+    return CAMERAS+(WRIST if wrist.pop() else ())
+
+
+def _camera_entry(camera, size):
+    wrist = camera in WRIST
+    return dict(id=camera, input_key='observation.images.'+camera, arm_id=camera[:-len('_wrist')] if wrist else None,
+                role='front' if wrist else camera,  # D-794: writers still name the wrist camera 'front'
+                source_identity='isaac-real-'+camera, placement='wrist' if wrist else 'fixed',
+                shape=[3, size[1], size[0]], purposes=['policy', 'record'])
+
+
+def episodes(run, every, size, views=CAMERAS):
     """(item, state, action, {camera: images}) per container in one run directory, frames subsampled by `every`."""
     rows = [json.loads(line) for line in (run/'demo.jsonl').read_text(encoding='utf-8').splitlines()]
     keep = {}
@@ -36,7 +54,7 @@ def episodes(run, every, size):
     keep = {item: index[::every] for item, index in keep.items()}
     wanted = {i for index in keep.values() for i in index}
     frames = {}
-    for camera in CAMERAS:
+    for camera in views:
         video, images, i = cv2.VideoCapture(str(run/f'demo-{camera}.mp4')), {}, 0
         while True:
             ok, bgr = video.read()
@@ -51,25 +69,24 @@ def episodes(run, every, size):
     for item, index in sorted(keep.items()):
         yield (item, np.array([arm_units(rows[i]['state']) for i in index], np.float32),
                np.array([arm_units(rows[i]['action']) for i in index], np.float32),
-               {camera: np.stack([frames[camera][i] for i in index]).astype(np.uint8) for camera in CAMERAS})
+               {camera: np.stack([frames[camera][i] for i in index]).astype(np.uint8) for camera in views})
 
 
 def export(out, runs, *, every=2, size=(64, 48), eval_runs=1):
     out.mkdir(parents=True)
+    views = cameras(runs)
     profile = dict(schema='rosy.omx.learning-profile/1', name='omx-two-arm-container-stack', mode='independent',
                    task=TASK,
                    arms=[dict(id=arm, joint_names=JOINTS[:], units='normalized_-100_100') for arm in ('arm_a', 'arm_b')],
-                   cameras=[dict(id=camera, input_key='observation.images.'+camera, arm_id=None, role=camera,
-                                 source_identity='isaac-real-'+camera, placement='fixed', shape=[3, size[1], size[0]],
-                                 purposes=['policy', 'record']) for camera in CAMERAS])
+                   cameras=[_camera_entry(camera, size) for camera in views])
     document = dict(schema='rosy.omx.experiment-dataset/1', profile=profile, source='scripted_teacher', episodes=[])
     for k, run in enumerate(runs):
         split = 'eval' if k >= len(runs)-eval_runs else 'train'
-        for item, state, action, images in episodes(run, every, size):
+        for item, state, action, images in episodes(run, every, size, views):
             name = f'{run.name}-{item}.npz'
             with (out/name).open('xb') as stream:
                 np.savez_compressed(stream, **{'observation.state': state, 'action': action},
-                                    **{'observation.images.'+camera: images[camera] for camera in CAMERAS})
+                                    **{'observation.images.'+camera: images[camera] for camera in views})
             document['episodes'].append(dict(id=f'{run.name}-{item}', session_id=run.name, parent_id=run.name, split=split,
                                              file=name, sha256=hashlib.sha256((out/name).read_bytes()).hexdigest()))
     (out/'dataset.json').write_text(json.dumps(document, indent=1), encoding='utf-8')
@@ -81,17 +98,18 @@ def export_lerobot(out, runs, *, every=1, size=(320, 240), repo_id='rosy/omx-two
     """The same episodes as a LeRobot 0.4.4 dataset (bi_omx_follower) for the official ACT trainer; read back by count."""
     from lerobot.datasets.lerobot_dataset import LeRobotDataset
     names = [f'{arm}.{joint}' for arm in ('arm_a', 'arm_b') for joint in JOINTS]
+    views = cameras(runs)
     features = {key: {'dtype': 'float32', 'shape': (12,), 'names': names} for key in ('observation.state', 'action')}
     features.update({'observation.images.'+camera: {'dtype': 'video', 'shape': (3, size[1], size[0]),
-                                                   'names': ['channels', 'height', 'width']} for camera in CAMERAS})
+                                                   'names': ['channels', 'height', 'width']} for camera in views})
     dataset = LeRobotDataset.create(repo_id=repo_id, fps=10//every, features=features, root=out, robot_type='bi_omx_follower',
                                     use_videos=True, video_backend='pyav', vcodec='h264', batch_encoding_size=1)
     task, count = TASK, 0
     for run in runs:
-        for _, state, action, images in episodes(run, every, size):
+        for _, state, action, images in episodes(run, every, size, views):
             for i in range(len(state)):
                 dataset.add_frame({'observation.state': state[i], 'action': action[i], 'task': task,
-                                   **{'observation.images.'+c: images[c][i].transpose(1, 2, 0) for c in CAMERAS}})
+                                   **{'observation.images.'+c: images[c][i].transpose(1, 2, 0) for c in views}})
             dataset.save_episode(parallel_encoding=False)
             count += 1
     dataset.finalize()

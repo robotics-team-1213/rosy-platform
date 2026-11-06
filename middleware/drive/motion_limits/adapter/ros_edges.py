@@ -50,8 +50,26 @@ class RosEdges:
         """Message edge for the ROS-free safety mixins (D-171)."""
         publisher.publish(Bool(data=value))
 
+    def publish_heard(self, publisher, message):
+        """Publish unless no subscriber is matched. Callers never use this for stop inputs.
+
+        A subscriber gets values from the first tick after DDS matches it; matching has no deadline,
+        as when publishing every tick. Any failure of the count publishes.
+        """
+        try:
+            if publisher.get_subscription_count() == 0:
+                return
+        except Exception:
+            pass
+        publisher.publish(message)
+
     def publish_float(self, publisher, value):
-        """Message edge for the ROS-free safety mixins (D-171)."""
+        """Message edge for the ROS-free scale mixin (D-171); same skip as publish_heard."""
+        try:
+            if publisher.get_subscription_count() == 0:
+                return
+        except Exception:
+            pass
         publisher.publish(Float32(data=value))
 
     def age(self, stamp):

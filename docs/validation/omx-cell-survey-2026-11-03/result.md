@@ -170,6 +170,69 @@ Same whole-stack sequence (`ship_stack_sequence.py`), order (1, 0, 2), opening 3
   - Isaac checks "release 2 mm + seat check + 1 re-place" at 0.4 to 0.6 mm.
   - On the real cell, the seat measurement method decides it: wrist camera, touch, or both.
 
+## Step 6: Isaac answer to step 5, and the snap-together ship v11 (2026-11-04)
+
+### Seat check + re-place in Isaac (stud plate, seed 42)
+
+| Case | Run | Result |
+|---|---|---|
+| 0.6 mm across, release 2 mm, no seat check | 2cd8968c | 1/9: box 0 never settles |
+| 0.6 mm, seat check + 1 re-place | 48dcb6a4 | box 0: 1.07 mm high, 4.27 deg -> after re-place 1.45 mm, 5.85 deg -> HOLD |
+| 0.8 mm, no seat check | c79373ba | 1/9: box 0 has no stable window |
+| 0.8 mm, seat check + 1 re-place | 3b55bb62 | box 0: 1.11 mm, 4.41 deg -> after re-place 1.45 mm, 5.83 deg -> HOLD |
+
+- Isaac does not reproduce step 5. Box 0 rests with one long side on a stud, and the re-place makes it worse.
+- Likely cause (not yet confirmed): MuJoCo's re-place returned the box level in the jaw; Isaac regrasps the tilted box
+  and releases it tilted. The tilt after the regrasp was not recorded.
+- Not pursued on the stud plate: the v11 ship below has no stud to ride on.
+
+### MuJoCo twin of the v11 ship hold with container v2 (896 cases)
+
+`tools/sim/ship_v11_scene.py`, geometry `learning/envs/isaac/ship_v11.py`:
+
+- The hold has three rows 38 mm apart and pockets 0.8/0.6 mm wider than the box. Each pocket has a 0.6 mm vertical wall,
+  then a slope that catches +-3.5/3.3 mm.
+- 12 pins per slot: 45 degree cones on the pocket floor.
+- Container v2: 12 bottom sockets (0.3 mm radial gap on a pin) and 4 top cones at the ends; stacking height 32.4 mm.
+- The v2.1 jaw and the wrist camera holder B (box proxy) are on the floating jaw.
+- Cases: `ship_stack_sequence.py run --stage v11`: release error 0.5-3.5 mm per axis, yaw 0.25/1 deg, friction 0.5/1.0,
+  release 2/5 mm, re-place 0/1, 8 seeds.
+
+| Release error per axis | All 9 seated, no re-place | All 9 seated, seat check + 1 re-place |
+|---|---|---|
+| 0.5 mm | 60/64 | 64/64 |
+| 1.0 mm | 34/64 | 64/64 |
+| 1.5 mm | 5/64 | 64/64 |
+| 2.0 mm | 5/64 | 64/64 |
+| 2.5 mm | 0/64 | 64/64 |
+| 3.0 mm | 0/64 | 64/64 |
+| 3.5 mm | 0/64 | 60/64 |
+
+- The deck layer holds: unseated layer-0 boxes are 0/192 at 0.5 mm and 1/192 at 1 mm, and 28/192 at 2 mm.
+- The upper layers fail. Their only guide is the 4 top cones, which catch about 2.3 mm (socket mouth r 2.8 less cone tip
+  r 0.5). A missed box sits flat on the cone tips, 2.0 mm high and 2.3-3.5 mm off.
+- The "disturbed an earlier box by more than 0.3 mm" rule fails some stacks where everything is seated: an upper box
+  landing shifts the one below within its pin play. The 0.3 mm limit came from the stud plate and needs a v11 value.
+- Friction and release height change little with a re-place (222/224 seated at either friction).
+- The camera holder touched a box only at 3.5 mm error (6 of 128 cases). It was then 4.3 mm lower than the rated holder
+  B 16/16.
+- MuJoCo 3.3.7 (lab PCs) threw a seated top-layer box off a lid at rest when the pieces were boxes; the scene builds
+  them as convex meshes (seeds 1 and 2 error-free stacks seat, same speed).
+- Limits:
+  - The re-place is idealised as in step 5, and Isaac just showed that this idealisation does not hold on the stud plate.
+  - MuJoCo picks candidates only (D-947 1).
+
+### Wrist camera B in the Isaac demonstrations
+
+- Case `nominal-palletizing-v21-ship-surveyed-bases-wrist-demo` records `arm_a_wrist` and `arm_b_wrist` (640x360) next to
+  top and side, from `palletizing_gripper.WRIST_CAMERA_B`. That is the rated holder `b16-u16-span-B`: lens
+  (33.8, 0, 51.1) mm on link5, axis 30.4 deg below the jaw axis.
+- The stock link5 mesh carries the ROBOTIS camera frame F9 2.6 mm from the lens and covered a third of the image (run
+  f3c208d1). The case draws the team link5 (gripper body, plate F6, holder B) instead (`assets/omx_wrist_camera_b`).
+  With it, both jaw tips, the container and the plate are visible (run a5e03df9).
+- Four views at 300 kbps reached 237 MB of the 256 MiB run limit; they are now recorded at 180 kbps.
+- The image orientation (up toward the wrist) is ASSUMED until compared with a real wrist frame.
+
 ## Next
 
 1. Run the D-947 MuJoCo sweep with the surveyed bases as a second candidate next to the CAD ones; adopt them in

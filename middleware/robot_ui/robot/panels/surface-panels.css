@@ -1,5 +1,7 @@
 ﻿.surface-message { overflow-wrap: anywhere; }
 .host-system-overview { display: grid; gap: var(--space-2); }
+/* 카드 안 소제목은 카드 제목보다 작다. 브라우저 기본 h3(18.72px)는 닫힌 글자 단계 밖이다. */
+.ui-readback > h3 { font-size: var(--text-label); font-weight: var(--weight-label); }
 .host-system-overview ui-status { overflow-wrap: anywhere; }
 .host-system-detail > summary { padding-block: var(--space-2); }
 .host-system-detail[open] > .ui-readback { margin-top: var(--space-4); }
@@ -8,7 +10,8 @@
   font: var(--weight-emphasis) var(--text-label)/var(--leading-copy) var(--body);
   overflow-wrap: anywhere;
 }
-.host-card-readout[open] > .ui-readout { margin-top: var(--space-2); }
+[data-panel="host.operations"] .ui-data-table { table-layout: fixed; }
+[data-panel="host.operations"] .ui-data-table th { width: 40%; }
 .surface-disclosure { min-width: 0; }
 .surface-disclosure summary {
   display: flex;

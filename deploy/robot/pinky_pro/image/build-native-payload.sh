@@ -165,6 +165,15 @@ python3 -m pip download --require-hashes --no-deps --only-binary=:all: \
 bash "$SCRIPT_DIR/install-receiver-crypto.sh" "$CRYPTO_REQUIREMENTS" "$CRYPTO_WHEELS" "$RELEASE_ROOT"
 
 "$NATIVE_RUNTIME_SOURCE/install-native-runtime.sh" "$RELEASE_ROOT/deploy/robot/native"
+# D-4 native profile wiring: compose bind-mounts these mode overlays over
+# /etc/rosy/profile.yaml; the payload ships them so hardware.launch.py can pick
+# profile.${ROSY_RUNTIME_MODE}.yaml on a fresh device without a hand install
+# (2026-11-03 solution doc, symptom 1). The copies come after the installer:
+# install-native-runtime.sh refuses a destination that already exists.
+mkdir -p "$RELEASE_ROOT/deploy/robot/native/config"
+cp "$ROBOT_CONFIG_SOURCE/profile.core.yaml" "$RELEASE_ROOT/deploy/robot/native/config/profile.core.yaml"
+cp "$ROBOT_CONFIG_SOURCE/profile.motor.yaml" "$RELEASE_ROOT/deploy/robot/native/config/profile.motor.yaml"
+cp "$ROBOT_CONFIG_SOURCE/profile.hardware.yaml" "$RELEASE_ROOT/deploy/robot/native/config/profile.hardware.yaml"
 
 # Stage the immutable image-owned bootstrap tools separately from the
 # switchable release.  Recovery cannot live below /opt/rosy/current because

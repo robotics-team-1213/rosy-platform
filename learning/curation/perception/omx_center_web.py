@@ -13,6 +13,16 @@ def _registered(workspace, prepared_id):
 
 
 def get(handler, path, center, workspace=None):
+    if path == PREFIX + '/lerobot-studies':
+        handler.send(center.studies.snapshot() if center else dict(configured=False, host_id=None,
+            methods={}, studies=[], busy=False, active_run=None))
+        return True
+    study = re.fullmatch(PREFIX + r'/lerobot-study/([0-9a-f-]{36})', path)
+    if study:
+        if center is None:
+            raise ValueError('이 작업대에 모방학습 실행기가 연결되지 않았습니다.')
+        handler.send(center.studies.get(study[1]))
+        return True
     owner = re.fullmatch(PREFIX + r'/owner-status/([A-Za-z0-9_][A-Za-z0-9_.-]{0,63})', path)
     if owner:
         if center is None:
@@ -64,8 +74,26 @@ def post(handler, path, body, center, workspace=None, accounts=None):
         return False
     if center is None:
         raise ValueError('이 작업대에 OMX 학습 실행기가 연결되지 않았습니다.')
+    if path == PREFIX + '/lerobot-study':
+        handler.send(center.studies.create(body, getattr(handler, 'learning_principal', None)))
+        return True
+    study_action = {PREFIX+'/lerobot-upload':'upload', PREFIX+'/lerobot-inspect':'inspect',
+                    PREFIX+'/lerobot-split':'split', PREFIX+'/lerobot-run':'start'}.get(path)
+    if study_action:
+        handler.send(getattr(center.studies, study_action)(body))
+        return True
     if path == PREFIX + '/profile':
         handler.send(center.profiles.save(body, getattr(handler, 'learning_principal', None)))
+        return True
+    if path == PREFIX + '/native-run':
+        prepared = _registered(workspace, body.get('prepared_id'))
+        segments = None
+        if 'segment_version' in body:
+            if type(body['segment_version']) is not int or not 1 <= body['segment_version'] <= 1000000000:
+                raise ValueError('positive saved segment version required')
+            from omx_web import latest
+            segments = latest(workspace, prepared['id'], body['segment_version'])
+        handler.send(center.start_native(body, prepared, segments))
         return True
     if path in (PREFIX + '/export', PREFIX + '/review'):
         prepared = _registered(workspace, body.get('prepared_id'))

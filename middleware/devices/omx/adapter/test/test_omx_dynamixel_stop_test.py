@@ -5,7 +5,6 @@ import json
 import math
 import socket
 import threading
-import time
 
 import pytest
 
@@ -29,21 +28,52 @@ class Clock:
     for it, so the arm moves exactly one cycle per period of fake time."""
 
     def __init__(self):
-        self.t, self._lock = 0.0, threading.Lock()
+        self.t, self._condition = 0.0, threading.Condition()
+        self._target, self._running = None, False
 
     def __call__(self):
-        with self._lock:
+        with self._condition:
             return self.t
 
+    def start(self, motion):
+        with self._condition:
+            self._target, self._running = None, True
+
+        def run():
+            try:
+                motion()
+            finally:
+                with self._condition:
+                    self._running = False
+                    self._condition.notify_all()
+
+        threading.Thread(target=run, daemon=True).start()
+        with self._condition:
+            assert self._condition.wait_for(
+                lambda: self._target is not None or not self._running, timeout=5
+            ), 'motion did not reach its first virtual wait'
+
     def sleep(self, seconds):
-        with self._lock:
-            self.t += seconds
-        time.sleep(0.002)  # let the motion thread catch up
+        with self._condition:
+            end = self.t + seconds
+            while self._running and self._target <= end + 1e-9:
+                self.t = min(self._target, end)
+                self._target = None
+                self._condition.notify_all()
+                # A sample follows the due motion cycle, even if its thread is descheduled.
+                assert self._condition.wait_for(
+                    lambda: self._target is not None or not self._running, timeout=5
+                ), 'motion did not finish its virtual cycle'
+            self.t = end
 
     def wait(self, seconds):
-        target = self() + seconds - 1e-9
-        while self() < target:
-            time.sleep(0.0001)
+        with self._condition:
+            target = self.t + seconds
+            self._target = target
+            self._condition.notify_all()
+            assert self._condition.wait_for(
+                lambda: self.t + 1e-9 >= target, timeout=5
+            ), 'sampling did not advance the virtual clock'
 
 
 class CoastBus(FakeBus):
@@ -81,7 +111,7 @@ def _ready(bus, *, rec=MEASURING, store=None, clock=None):
     port = DynamixelPort(bus, device="/dev/serial/by-id/usb-FAKE-ARM-0", config=_config(),
                          store=store or FakeStore(rec), planner=lambda g: [{"pose": [0.1, 0, 0, 0, 0]}],
                          stop_fence=fence, sleep=clock.wait if clock else (lambda s: None),
-                         claims=_BusClaims(), **({} if clock else {"start": lambda fn: fn()}))
+                         claims=_BusClaims(), start=clock.start if clock else (lambda fn: fn()))
     fence.person_rearm(8)
     port.rearm(authority_epoch=2, dispatch_generation=8)
     return port, fence
@@ -92,6 +122,39 @@ def _run(coast_rad_s, coast_s, **kwargs):
     port, _ = _ready(CoastBus(clock, coast_rad_s=coast_rad_s, coast_s=coast_s), clock=clock)
     return port, run_stop_test(port, authority_epoch=2, dispatch_generation=8,
                                clock=clock, sleep=clock.sleep, **kwargs)
+
+
+def test_fake_clock_does_not_sample_a_cycle_while_motion_is_descheduled():
+    clock = Clock()
+    port, _ = _ready(FakeBus(), clock=clock)
+    waiting, descheduled, release, sampled = (threading.Event() for _ in range(4))
+    wait = port.sleep
+
+    def delayed_motion(seconds):
+        waiting.set()
+        wait(seconds)
+        descheduled.set()
+        assert release.wait(5), 'test did not release the paused motion cycle'
+
+    port.sleep = delayed_motion
+    sampler = threading.Thread(target=lambda: (clock.sleep(0.02), sampled.set()), daemon=True)
+    try:
+        assert port.submit_stop_test([[0.1, 0, 0, 0, 0]], authority_epoch=2,
+                                     dispatch_generation=8, max_speed_rad_s=0.2).accepted
+        assert waiting.wait(5), 'motion did not reach its first virtual wait'
+        sampler.start()
+        assert descheduled.wait(5), 'motion did not reach the controlled pause'
+        assert not sampled.wait(0.05), 'sampling overtook an unfinished motion cycle'
+        release.set()
+        sampler.join(5)
+        assert sampled.is_set()
+    finally:
+        release.set()
+        port.stop()
+        if sampler.ident is not None:
+            sampler.join(5)
+        clock.sleep(0.02)
+        port.close()
 
 
 def test_quick_stop_passes_v016_and_is_recorded_bound_to_the_config():

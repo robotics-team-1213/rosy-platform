@@ -1,4 +1,4 @@
-"""Propose a finished offline ACT cycle as an L0 policy on Fleet (D-793).
+"""Propose a finished offline policy cycle as an L0 policy on Fleet (D-793).
 
 L0 grants no execution: it only records that this exact model exists, bound to its cycle
 receipt hash, rig and calibration revisions. A policy administrator still decides the proposal on
@@ -34,9 +34,14 @@ def proposal(cycle_dir):
     for key in ('policy_revision', 'rig_revision', 'calibration_revision'):
         if not isinstance(receipt.get(key), str) or not _ID.fullmatch(receipt[key]):
             raise ValueError(f'cycle receipt has no valid {key}; rerun the cycle with this tool version')
+    policy_type = receipt.get('policy_type', 'act')
+    if policy_type not in ('act', 'smolvla') or ('policy_type' in receipt
+            and not receipt['policy_revision'].startswith(policy_type+'-')):
+        raise ValueError('cycle policy type differs from its declared revision')
     evaluation = receipt.get('evaluation') or {}
     mae = evaluation.get('mae', evaluation.get('eval_mae'))
-    note = (f"ACT offline cycle, source {receipt.get('source_mode')}, split {receipt.get('split_receipt_sha256', '')[:12]}"
+    label = 'ACT' if policy_type == 'act' else 'SmolVLA'
+    note = (f"{label} offline cycle, source {receipt.get('source_mode')}, split {receipt.get('split_receipt_sha256', '')[:12]}"
             + (f", eval MAE {mae}" if isinstance(mae, (int, float)) else ''))
     return dict(operator_confirmed=True, policy_revision=receipt['policy_revision'], to_stage='L0',
                 rig_revision=receipt['rig_revision'], calibration_revision=receipt['calibration_revision'],

@@ -2,7 +2,7 @@ import {accountFetch} from '/account-session.js';
 import '/common/ui.js';
 import '/commands.js';
 const $=id=>document.getElementById(id);
-let token,busy=false,loading=false,loaded=false,importsReady=false;
+let token,busy=false,loading=false,loaded=false,importsReady=false,selectedImages=[];
 const importStates={queued:'대기',running:'가져오는 중',failed:'실패',interrupted:'중단됨',cancelled:'취소됨',blocked:'접근 차단',rights_hold:'이용 권한 확인 필요'};
 function show(id,value){$(id).textContent=value;$(id).hidden=!value;}
 function controls(){
@@ -11,11 +11,34 @@ function controls(){
   for(const id of ['catalog-path','catalog-classes','cad-path'])$(id).disabled=blocked;
   for(const id of ['catalog-retry','hf-retry']){$(id).disabled=busy||loading;$(id).reason=reason;}
   for(const button of $('hf-imports').querySelectorAll('[data-hf-send]')){button.disabled=blocked||!importsReady;button.reason=reason||(!importsReady?'가져오기 목록을 다시 확인하세요.':'');}
+  for(const id of ['image-files','image-directory','source-folder'])$(id).disabled=blocked;
+  $('image-upload').disabled=blocked||!selectedImages.length;$('image-upload').reason=reason||(!selectedImages.length?'사진을 먼저 선택하세요.':'');
+  $('upload-clear').disabled=busy||!selectedImages.length;
+  $('folder-import').disabled=blocked||!$('source-folder').value;$('folder-import').reason=reason;
 }
 async function request(path,body){const response=await accountFetch(path,body?{method:'POST',headers:{'Content-Type':'application/json','X-Pinky-Token':token},body:JSON.stringify(body)}:{});if(response.status>=500){const error=new Error('자료 등록 서비스를 사용할 수 없습니다. 잠시 후 다시 시도하세요.');error.status=response.status;throw error;}const value=await response.json();if(!response.ok){if([401,403].includes(response.status))token=undefined;throw new Error(response.status===403?'이 작업대의 자료 등록 권한이 없습니다.':response.status===401?'로그인 상태를 확인할 수 없습니다. 로그인·계정에서 연결을 확인하세요.':value.error||'요청 실패');}return value;}
 function map(value){if(!value)return;$('map-status').setAttribute('state','warning');$('map-status').textContent=`${value.map_id} · CAD/그래프 파일 출처 확인됨 · 영상 투영 미검증`;$('map-details').textContent=JSON.stringify(value,null,2);}
 async function perform(id,path,body,done){if(busy||loading||!token)return;const opener=document.activeElement;busy=true;show('catalog-error','');controls();try{await done(await request(path,body),opener);}catch(error){show('catalog-error',error.message+(token?' · 원본 자료와 검증 경로를 확인하세요.':' · 다시 확인으로 권한을 새로 읽으세요.'));$('catalog-error').scrollIntoView({block:'center'});if(!token){$('catalog-load').hidden=false;$('catalog-load').setAttribute('state','error');$('catalog-load').textContent='자료 등록 권한을 확인할 수 없습니다.';$('catalog-retry').hidden=false;}}finally{busy=false;controls();}}
 function register(event){event.preventDefault();if(loading||!token||!$('import-form').reportValidity())return;perform('import','/api/import',{path:$('catalog-path').value,classes:$('catalog-classes').value.trim()||undefined},value=>{$('result').setAttribute('state','ready');show('result',`새 사진 ${value.added}장 · 중복 표현 ${value.duplicate_representations}개 · 새 픽셀 검수 대기 ${value.pixel_reviews_pending}장. 기존 승인·제외는 유지됩니다.`);});}
+function selectImages(event){selectedImages=[...event.target.files].filter(file=>/\.(jpe?g|png)$/i.test(file.name));$('upload-selection').textContent=`선택한 사진 ${selectedImages.length}장`;$('upload-files').replaceChildren(...selectedImages.slice(0,20).map(file=>el('li','',file.webkitRelativePath||file.name)));if(selectedImages.length>20)$('upload-files').append(el('li','',`외 ${selectedImages.length-20}장`));controls();}
+function fileData(file){return new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result.split(',')[1]);reader.onerror=()=>reject(new Error(`${file.name}: 파일을 읽을 수 없습니다.`));reader.readAsDataURL(file);});}
+async function uploadImages(){
+  if(busy||loading||!token||!selectedImages.length)return;
+  const files=[...selectedImages];let done=0,added=0,duplicates=0;busy=true;controls();show('catalog-error','');
+  try{for(const file of files){
+    $('upload-status').setAttribute('state','pending');$('upload-status').textContent=`${done+1}/${files.length} · ${file.name} 전송 중 · 완료 ${done}장`;
+    if(file.size>8*1024*1024)throw new Error(`${file.name}: 한 장당 최대 8 MiB입니다.`);
+    const folder=file.webkitRelativePath?.split('/').slice(0,-1).join('/')||'';
+    const result=await request('/api/catalog/upload',{name:file.name,folder,data:await fileData(file)});added+=result.added;duplicates+=result.duplicate_representations;done++;
+  }$('upload-status').setAttribute('state','ready');$('upload-status').textContent=`업로드 완료 ${done}장 · 새 사진 ${added}장 · 이미 등록됨 ${duplicates}장. 정답 메뉴에서 검수하세요.`;
+  selectedImages=[];$('image-files').value='';$('image-directory').value='';$('upload-files').replaceChildren();$('upload-selection').textContent='선택한 사진이 없습니다.';
+  $('image-files-filename').textContent=$('image-directory-filename').textContent='선택한 파일 없음';
+  }catch(error){selectedImages=files.slice(done);$('upload-status').setAttribute('state','error');$('upload-status').textContent=`완료 ${done}/${files.length}장 · ${error.message} 완료된 사진은 보존됩니다. 남은 사진은 다시 업로드할 수 있습니다.`;}
+  finally{busy=false;controls();}
+}
+$('image-files').onchange=selectImages;$('image-directory').onchange=selectImages;$('image-upload').onclick=uploadImages;
+$('upload-clear').onclick=()=>{selectedImages=[];$('image-files').value='';$('image-directory').value='';$('image-files-filename').textContent=$('image-directory-filename').textContent='선택한 파일 없음';$('upload-files').replaceChildren();$('upload-selection').textContent='선택한 사진이 없습니다.';controls();};
+$('folder-import').onclick=()=>perform('folder','/api/catalog/folder',{id:$('source-folder').value},value=>{$('result').setAttribute('state','ready');show('result',`새 사진 ${value.added}장 · 이미 등록됨 ${value.duplicate_representations}장 · 픽셀 검수 대기 ${value.pixel_reviews_pending}장. 정답 메뉴에서 검수하세요.`);});
 function el(tag,cls,text){const node=document.createElement(tag);if(cls)node.className=cls;if(text)node.textContent=text;return node;}
 function hfState(state,text){$('hf-load').setAttribute('state',state);$('hf-load').setAttribute('role',state==='error'?'alert':'status');$('hf-load').textContent=text;}
 function hfJobs(jobs,focusJob){
@@ -43,7 +66,7 @@ function registerMap(event){event.preventDefault();if(loading||!token||!$('cad-f
 $('import-form').onsubmit=register;$('import').onclick=register;$('cad-form').onsubmit=registerMap;$('cad').onclick=registerMap;
 async function load(){if(loading||busy)return;loading=true;token=undefined;importsReady=false;controls();$('catalog-load').hidden=false;$('catalog-load').setAttribute('state','pending');$('catalog-load').textContent='자료 등록 권한과 현재 연결을 확인하는 중입니다.';$('catalog-retry').hidden=true;$('map-status').setAttribute('state','pending');$('map-status').textContent='지도 참조 확인 중입니다.';$('map-details').textContent='';if(!$('hf-section').hidden)hfState('pending','가져오기 목록을 확인하는 중입니다.');
   const started=performance.now();const timer=setInterval(()=>{const seconds=Math.floor((performance.now()-started)/1000);if(loading&&seconds>=3)$('catalog-load').textContent=`서버 응답 대기 ${seconds}초 · 자료 등록 권한과 현재 연결을 확인하고 있습니다.`;},1000);
-  try{const value=await request('/api/catalog');token=value.token;if(!loaded){$('catalog-path').value=value.catalog||'';$('cad-path').value=value.cad_catalog||'';loaded=true;}$('map-status').setAttribute('state','empty');$('map-status').textContent='아직 연결한 지도 참조가 없습니다.';map(value.map_reference);$('catalog-load').hidden=true;if(value.imports)await loadImports();else{$('hf-section').hidden=true;$('hf-imports').replaceChildren();}}
+  try{const value=await request('/api/catalog');token=value.token;$('import-form').hidden=value.local_import===false;$('catalog-classes-help').hidden=value.local_import===false;$('source-folder').replaceChildren(...(value.folders||[]).map(folder=>{const option=el('option','',folder.label);option.value=folder.id;return option;}));$('folder-section').hidden=!(value.folders||[]).length;if(!loaded){$('catalog-path').value=value.catalog||'';$('cad-path').value=value.cad_catalog||'';loaded=true;}$('map-status').setAttribute('state','empty');$('map-status').textContent='아직 연결한 지도 참조가 없습니다.';map(value.map_reference);$('catalog-load').hidden=true;if(value.imports)await loadImports();else{$('hf-section').hidden=true;$('hf-imports').replaceChildren();}}
   catch(error){$('catalog-load').setAttribute('state','error');$('catalog-load').textContent=error.status>=500?error.message:error.message+' 접근 권한과 연결을 확인한 뒤 다시 확인하세요.';$('map-status').setAttribute('state','error');$('map-status').textContent='지도 참조를 확인할 수 없습니다.';$('catalog-retry').hidden=false;if(!$('hf-section').hidden)hfState('error','가져오기 목록과 권한을 다시 확인하세요. 아래는 마지막 확인 결과입니다.');}
   finally{clearInterval(timer);loading=false;controls();}}
 $('catalog-retry').onclick=load;

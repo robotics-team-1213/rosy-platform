@@ -3,6 +3,16 @@
   "scope": "One observed response per route from a passing HTTP test. Success selected where observed; refusal-only receipts do not prove successful configuration or device behavior.",
   "reports": [
     {
+      "source_revision": "16028faad6154d25061d33aec8a0e9a647e592f8",
+      "result": "231 passed, 0 skipped; includes named fixed MANUAL forwarding, startup/owner/generation rejection and terminal zero through actual Fleet HTTP and synthetic robot transport. CORE mode owner and channel/Task regressions included; no physical movement or device acceptance.",
+      "pytest_root": "."
+    },
+    {
+      "source_revision": "c6025ea57207b74c2fba25434f04e684741b6b6a",
+      "result": "5 passed, skip 0; includes named move and terminal-zero HTTP forwarding through the existing Fleet intent/resource boundary. In-process HTTP with a synthetic robot transport; physical movement and stopping are separate evidence.",
+      "pytest_root": "."
+    },
+    {
       "source_revision": "e5911e84f3ff9a2c9f9d5fe739848ff1b2c75857",
       "result": "5 passed; USB camera listing and operator decision HTTP routes (D-963), in-process with real SQLite; no device evidence",
       "pytest_root": "."
@@ -74,6 +84,14 @@
     }
   ],
   "requests": {
+    "POST:/api/fleet/do": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_intent_manual_fleet.py",
+        "test_named_manual_forwards_only_the_fixed_mode_body"
+      ],
+      "source_revision": "16028faad6154d25061d33aec8a0e9a647e592f8"
+    },
     "GET:/api/fleet/workcell-observations/usb-devices": {
       "status": 200,
       "test": [
@@ -1660,17 +1678,26 @@
     },
     "GET:/api/fleet/arm-transfers/jobs/{mission_id}/recovery": {
       "status": 200,
-      "test": ["operations/fleet/test/test_transfer_recovery_api.py", "test_http_recovery_preserves_failure_and_reserves_only_one_child"],
+      "test": [
+        "operations/fleet/test/test_transfer_recovery_api.py",
+        "test_http_recovery_preserves_failure_and_reserves_only_one_child"
+      ],
       "source_revision": "61f1e0f1695eb376f4512ec3a5a257897cd46afb"
     },
     "POST:/api/fleet/arm-transfers/jobs/{mission_id}/recovery": {
       "status": 200,
-      "test": ["operations/fleet/test/test_transfer_recovery_api.py", "test_http_recovery_preserves_failure_and_reserves_only_one_child"],
+      "test": [
+        "operations/fleet/test/test_transfer_recovery_api.py",
+        "test_http_recovery_preserves_failure_and_reserves_only_one_child"
+      ],
       "source_revision": "61f1e0f1695eb376f4512ec3a5a257897cd46afb"
     },
     "POST:/api/fleet/arm-transfers/jobs/{mission_id}/recovery/{request_id}/approve": {
       "status": 200,
-      "test": ["operations/fleet/test/test_transfer_recovery_api.py", "test_http_recovery_preserves_failure_and_reserves_only_one_child"],
+      "test": [
+        "operations/fleet/test/test_transfer_recovery_api.py",
+        "test_http_recovery_preserves_failure_and_reserves_only_one_child"
+      ],
       "source_revision": "61f1e0f1695eb376f4512ec3a5a257897cd46afb"
     },
     "POST:/api/fleet/arm-transfers/jobs/{mission_id}/admit": {

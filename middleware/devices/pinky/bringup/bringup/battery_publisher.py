@@ -1,3 +1,5 @@
+import time
+
 import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Float32
@@ -6,7 +8,12 @@ from rosylib import Battery
 
 
 class BatteryPublisher(Node):
-    def __init__(self, battery_factory=Battery):
+    # A hung bus times out ~1 s per transaction (kernel i2c_designware) while
+    # holding the D-192 flock. After the first failure reopen after 10 s, 20 s ...
+    # up to this cap, so a dead MCU is probed rarely and the lock stays free.
+    MAX_BACKOFF_S = 60.0
+
+    def __init__(self, battery_factory=Battery, clock=time.monotonic):
         super().__init__('battery_publisher')
 
         # D-192 review: the bus may be missing at start (no /dev/i2c-1 yet, or
@@ -14,6 +21,9 @@ class BatteryPublisher(Node):
         # its timers; until then it publishes nothing (fail-closed).
         self._battery_factory = battery_factory
         self.battery = None
+        self._clock = clock
+        self._read_failures = 0
+        self._retry_at = 0.0
 
         self.percentage_publisher = self.create_publisher(
             Float32,
@@ -35,6 +45,8 @@ class BatteryPublisher(Node):
     def _ensure_battery(self):
         if self.battery is not None:
             return True
+        if self._clock() < self._retry_at:
+            return False
         try:
             self.battery = self._battery_factory()
         except OSError as exc:
@@ -50,7 +62,9 @@ class BatteryPublisher(Node):
         if not self._ensure_battery():
             return None
         try:
-            return float(getattr(self.battery, method)())
+            value = float(getattr(self.battery, method)())
+            self._read_failures = 0
+            return value
         except OSError as exc:
             self.get_logger().warning(
                 f'battery ADC read failed: {exc}', throttle_duration_sec=10.0)
@@ -59,6 +73,11 @@ class BatteryPublisher(Node):
             except OSError:
                 pass
             self.battery = None
+            self._read_failures += 1
+            if self._read_failures > 1:
+                delay = min(self.MAX_BACKOFF_S,
+                            self.timer_period * 2 ** (self._read_failures - 1))
+                self._retry_at = self._clock() + delay
             return None
 
     # Fail-closed (sensor_adc pattern): a failed bus transaction publishes

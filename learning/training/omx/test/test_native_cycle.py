@@ -54,6 +54,44 @@ def test_split_bytes_and_review_groups_are_bound_before_training(module, splits)
         module.validate_split(root)
 
 
+def test_smolvla_revision_cannot_be_mistaken_for_act(module):
+    files = {'model.safetensors': 'a'*64, 'config.json': 'b'*64}
+    assert module.policy_revision(files, policy_type='smolvla').startswith('smolvla-')
+    assert module.policy_revision(files, policy_type='smolvla') != module.policy_revision(files)
+    with pytest.raises(ValueError):
+        module.policy_revision(files, policy_type='unknown')
+
+
+def test_smolvla_missing_optional_sdk_is_reported_before_data_or_model_copy(module, monkeypatch):
+    def version(name):
+        if name == 'transformers':
+            raise module.importlib.metadata.PackageNotFoundError(name)
+        return '0.4.4' if name == 'lerobot' else 'synthetic-version'
+    monkeypatch.setattr(module.importlib.metadata, 'version', version)
+    with pytest.raises(ValueError, match='isolated SmolVLA.*transformers'):
+        module.training_environment('smolvla')
+
+
+def test_act_environment_does_not_require_optional_vla_packages(module, monkeypatch):
+    def version(name):
+        assert name != 'transformers'
+        return 'synthetic-version'
+    monkeypatch.setattr(module.importlib.metadata, 'version', version)
+    assert 'transformers' not in module.training_environment('act')['packages']
+
+
+def test_cycle_code_identity_changes_when_execution_source_changes(module, tmp_path, monkeypatch):
+    path = tmp_path/'native_cycle.py'
+    path.write_text('synthetic execution source revision one')
+    monkeypatch.setattr(module, '__file__', str(path))
+    before = module.code_files()
+    assert set(before) == {'native_cycle.py', 'smolvla_training.py', 'policy_assets.py'}
+    path.write_text('synthetic execution source revision two')
+    after = module.code_files()
+    assert before['native_cycle.py'] != after['native_cycle.py']
+    assert before['policy_assets.py'] == after['policy_assets.py']
+
+
 @pytest.mark.parametrize('fault', ['unknown_source', 'unreviewed', 'missing_hash', 'split_ids', 'cycle'])
 def test_invalid_split_receipts_cannot_start_trainer(module, splits, fault):
     root, receipt = splits

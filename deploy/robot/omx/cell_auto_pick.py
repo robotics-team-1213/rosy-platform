@@ -39,7 +39,9 @@ import cell_calibration as cal  # noqa: E402
 import cell_decisions as cd  # noqa: E402
 import cell_objects  # noqa: E402
 import cell_params as prm  # noqa: E402
+import cell_jaw_axis  # noqa: E402
 import cell_pivot  # noqa: E402
+import cell_scene_guard  # noqa: E402
 import cell_place_fit  # noqa: E402
 import cell_site_track  # noqa: E402
 import cell_diagnose  # noqa: E402
@@ -136,6 +138,12 @@ class Guarded:
         return self.cell.frame(camera)
 
 
+def grasp_depth(config: dict, site: str) -> float:
+    """How far under the object's top this site grips. A site whose grip the arm cannot reach at the default states
+    its own (`grasp_depth_m`): the same grip height then also sets the release height, so the box lands flat."""
+    return config["sites"][site].get("grasp_depth_m", prm.get(config.get("params"), "auto.grasp_depth_m", 0.015))
+
+
 def surface_z(config: dict, site: str) -> float:
     """The site's surface height (m), which every auto-pick site must state: the grasp height is computed from
     it (catalogue top height - grasp depth), never taken from the site's `z`, which is the taught cube grasp
@@ -143,7 +151,7 @@ def surface_z(config: dict, site: str) -> float:
     s = config["sites"][site]
     if "surface_z" not in s:
         raise SystemExit(f"site {site!r}: auto pick needs `surface_z` (the surface height in metres)")
-    depth = prm.get(config.get("params"), "auto.grasp_depth_m", 0.015)
+    depth = grasp_depth(config, site)
     if "z" in s and s["z"] < s["surface_z"] + depth - 1e-9:
         raise SystemExit(f"site {site!r}: z {s['z']} is below surface_z {s['surface_z']} + grasp depth {depth}")
     return s["surface_z"]
@@ -204,6 +212,12 @@ def grasp_yaw(config: dict, site: str, o: dict, entry: dict, offset) -> float:
     return round(base + (yaw - base + 90) % 180 - 90, 1)
 
 
+def across(entry: dict) -> float:
+    """The object's size between the jaws: its width when they close across the long axis (jaw_axis_deg_from_long 90),
+    its length when they close along it (0): a 90 mm 3-cell held by its ends needs a 90 mm gap, not 30 (2026-11-04)."""
+    return entry["width_mm"] if entry.get("grasp", {}).get("jaw_axis_deg_from_long", 90) % 180 == 90 else entry["length_mm"]
+
+
 def jaw_open_for(width_mm: float, params=None, margin_mm: float | None = None) -> float:
     """The jaw value whose finger gap is the object width plus a margin each side. Measured 2026-10-29 from the wrist
     view: about 10.4 mm of gap per unit, 30 mm held at 52.3. Opening to 62 put the fingers ~40 mm out, onto the 2-cells
@@ -211,15 +225,17 @@ def jaw_open_for(width_mm: float, params=None, margin_mm: float | None = None) -
     g = lambda name: prm.get(params, name)  # noqa: E731
     margin = g("auto.jaw_margin_mm") if margin_mm is None else margin_mm  # less where a neighbour is near (finger_room)
     value = g("gripper.held_30mm") + (width_mm + 2 * margin - 30.0) / g("gripper.gap_mm_per_unit")
-    return round(min(max(value, g("gripper.held_30mm") + 0.5), g("gripper.open_max")), 2)
+    if value > g("gripper.open_max"):  # clamped, the fingers would come down on the object (2026-11-04)
+        raise SystemExit(f"a {width_mm:.0f} mm object needs the jaws at {value:.1f}, past gripper.open_max {g('gripper.open_max')}")
+    return round(max(value, g("gripper.held_30mm") + 0.5), 2)
 
 
 def reachable_ends(o: dict, entry: dict, params=None) -> list:
     """Grasp points shifted along a long box's axis, toward the arm's base first: grasp.end_frac of the way from
     the middle to where the jaws would reach the box's end. A square box has none."""
     reach = prm.get(params, "grasp.end_frac") * (entry["length_mm"] - entry["width_mm"]) / 2000
-    if reach <= 0 or "grasp_shift_mm" in o:  # an end is not shifted again
-        return []
+    if reach <= 0 or "grasp_shift_mm" in o or across(entry) == entry["length_mm"]:
+        return []  # an end is not shifted again; jaws holding a box by its ends must straddle it, centred (2026-11-04)
     u = math.radians(o["long_axis_deg"])
     ends = [dict(o, raw_m=[o["raw_m"][0] + k * reach * math.cos(u), o["raw_m"][1] + k * reach * math.sin(u)],
                  grasp_shift_mm=round(1000 * k * reach, 1)) for k in (1, -1)]
@@ -230,7 +246,8 @@ def plan_pick(config: dict, site: str, dest_site: str, place_xy, o: dict, entry:
               yaw: float | None = None, place_yaw: float | None = None):
     """Library for one candidate: grasp 15 mm below the top, approach 40 mm above it (else 20), the yaw and its
     180 degree twin tried in turn. Returns (library path, pick, place, approach_m, yaw) or an error string."""
-    height = entry["top_height_mm"] / 1000 - prm.get(config.get("params"), "auto.grasp_depth_m", 0.015)
+    cell_pivot.validate_bias({"point_m": o["raw_m"], "bias_mm": bias_mm}, config.get("params"))
+    height = entry["top_height_mm"] / 1000 - grasp_depth(config, site)
     x, y = (o["raw_m"][0] - bias_mm[0] / 1000, o["raw_m"][1] - bias_mm[1] / 1000)
     yaw0, error = (grasp_yaw(config, site, o, entry, offset) if yaw is None else yaw), "no plan"
     for approach in (config["plan"]["approach_m"], prm.get(config.get("params"), "auto.approach_near_m", 0.020)):
@@ -241,7 +258,7 @@ def plan_pick(config: dict, site: str, dest_site: str, place_xy, o: dict, entry:
                      "z": round(surface_z(config, dest_site) + height + s.get("place_dz", 0.0), 4),
                      "yaw_deg": s["yaw_deg"] if place_yaw is None else place_yaw}
             try:
-                jaws = jaw_open_for(entry["width_mm"], config.get("params"), o.get("jaw_margin_mm"))
+                jaws = jaw_open_for(across(entry), config.get("params"), o.get("jaw_margin_mm"))
                 # one file per object: two boxes on the floor planned into one name, and the arm went to the other one (2026-10-29)
                 lib = cp.write_library(dict(config, plan=dict(config["plan"], approach_m=approach, grip_open=jaws)), pick,
                                        place, work / f"auto-{site}-{offset}-{round(1000 * o['raw_m'][0])}_{round(1000 * o['raw_m'][1])}.json")
@@ -295,7 +312,10 @@ def choose(cell, config, calibration, site, dest_site, place_xy, roi, objects, m
         elif px is None or not (roi[0] + 12 <= px[0] <= roi[2] - 12 and roi[1] + 12 <= px[1] <= roi[3] - 12):
             why = "not inside the camera view"
         elif not square_entry(entries, o):
-            room = finger_room(mask, roi, pixel_fn, o, None, p)
+            entry = entries[o["object"]]
+            # held by its ends the fingers go past the ends, not beside it: measure the room there (2026-11-04)
+            ends = o["long_axis_deg"] if across(entry) == entry["length_mm"] else None
+            room = finger_room(mask, roi, pixel_fn, o, ends, p)
             if room["margin_mm"] is None:  # a long box packed beside another may have room near one end (2026-11-01)
                 o, room = next(((e, r) for e in reachable_ends(o, entries[o["object"]], p)
                                 if (r := finger_room(mask, roi, pixel_fn, e, None, p))["margin_mm"] is not None), (o, room))
@@ -309,7 +329,10 @@ def choose(cell, config, calibration, site, dest_site, place_xy, roi, objects, m
         if not square:
             choices.offer(CLOSING, prm.get(p, "auto.closing_theory_deg"), "theory: closes along tool y = yaw + 90")
             choices.offer(CLOSING, prm.get(p, "auto.closing_alt_deg"), "alternative: closes along tool x")
-        offset = None if square else choices.best(CLOSING)
+        offset, why = (None, None) if square else cell_jaw_axis.offset_for(config, entry, choices.best(CLOSING))
+        if why:
+            refused.append({"centre_mm": o["centre_mm"], "object": o["object"], "why": why})
+            continue
         yaw = None
         if square:  # a square closes either way: take the yaw whose finger sides are clear, else refuse
             closing = prm.get(p, "auto.closing_theory_deg")
@@ -413,7 +436,7 @@ def run_auto(cell, config, calibration, calibration_path, catalog, roi, source, 
     guarded = None if dry_run else Guarded(cell, config)
     if guarded is not None and not cell.act("state").get("ok"):
         return {"result": "refused", "error": "start record_session.py --chunks first: no chunk_runner answers"}
-    bias_data = cell_pivot.load_bias(cell_pivot.bias_path(calibration_path))
+    bias_data = cell_pivot.load_bias(cell_pivot.bias_path(calibration_path), config.get("params"))
     episode, failed_yaws, dest_view = None, [], None
     if droi is not None and dest_site != source:  # what is already on the destination (cell_place_fit)
         _, dmask, _, derr = observe(cell, config, calibration, dest_site, droi, catalog)
@@ -490,7 +513,9 @@ def run_auto(cell, config, calibration, calibration_path, catalog, roi, source, 
                 close_episode(cell, episode, False, f"held: {held['reason']}")
                 cell_attempts.record(config, calibration, source, dest, attempt, tried, t0, choices)
                 return {**out, "result": f"held: {held['reason']}"}
-            wrist, capture, pinch, feel = cell_hooks.pick_hooks(same, gate, target, cp.write_library, source, dest_site, cd.emit, calibration)
+            guard = cell_scene_guard.hook(guarded, config, guarded.frame("top"), roi, predicted_pixel(config, calibration, source, (0.0, 0.0)),
+                                          predicted_pixel(config, calibration, source, o["raw_m"]))
+            wrist, capture, pinch, feel = cell_hooks.pick_hooks(same, gate, target, cp.write_library, source, dest_site, cd.emit, calibration, guard)
             moved = transfer_folded(gate, target["library"], wrist=wrist, after_place=capture,
                                     pinch=pinch, feel=feel, sequence=sequence)
             tried["envelope"] = gate.assessment
@@ -535,14 +560,14 @@ def run_auto(cell, config, calibration, calibration_path, catalog, roi, source, 
                 return {**out, "result": f"stopped: holding after a stop at {moved['at']}"}  # the surface to re-observe
             if moved["result"] not in ("empty", "contact"):  # a fault, a refusal or a misplaced object: a person looks
                 if moved["result"] in ("fault", "refused"):
-                    cell.act("park")
+                    cp.fold(cell, sleep)
                 return {**out, "result": f"stopped: {moved['result']}"}
     except Aborted as stop:
         close_episode(cell, episode, False, f"aborted: {stop}")
         return {**out, "result": f"aborted: {stop}"}
     except Exception:  # never stop with the arm extended
         if guarded is not None:
-            cell.act("park")
+            cp.fold(cell, sleep)
         close_episode(cell, episode, False, "pipeline exception")
         raise
     return {**out, "result": f"stopped: {attempts} attempts"}
@@ -564,7 +589,7 @@ def main(argv=None):
     if dark:  # nothing is seen in the dark: no observe, no motion
         print(json.dumps({"from": args.source, "to": args.dest, "result": "refused", "error": "; ".join(dark)}, indent=1))
         return 1
-    result = run_auto(cell, config, cal.load(calibration_path), calibration_path, cell_objects.load_catalog(args.catalog),
+    result = run_auto(cell, config, cell_pivot.with_site_maps(config, cal.load(calibration_path)), calibration_path, cell_objects.load_catalog(args.catalog),
                       args.roi, args.source, args.dest, work, cell_choices.Choices(work / "choices.json"), args.dry_run)
     print(json.dumps(result, indent=1, default=str))
     return 0 if result["result"] in ("placed", "planned") else 1

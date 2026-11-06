@@ -97,7 +97,7 @@
   <ui-status id="estop-feedback" hidden></ui-status>
 
   <!-- D-926 2 — 경로 줄: 문서 제목과 현재 단계를 본문 머리에도 보인다(subnav-screens.js). -->
-  <div class="ui-pathbar"><h1>팔레타이징 작업 준비</h1><strong id="cell-screen">저장된 문서</strong></div>
+  <div class="ui-pathbar"><h1>팔레트 적재 작업 준비</h1><strong id="cell-screen">저장된 문서</strong></div>
   <ol id="cell-line" class="ui-stage-track" data-line="fleet" aria-label="작업 준비 진행"></ol>
 
   <main id="cell-main" class="fleet-task-page ui-task-page" tabindex="-1">
@@ -112,14 +112,14 @@
     </ui-section>
     <ui-section aria-labelledby="print-heading">
       <ui-head><h2 class="ui-section-heading" id="print-heading">보정 인쇄물</h2></ui-head>
-      <ui-text>실제 크기 PDF입니다. 100%(맞춤 없이)로 인쇄하고 종이의 50 mm 막대를 자로 확인하세요. 팔마다 마커 번호가 다릅니다(D-933). 팔 번호를 골라 그 팔의 그리퍼 · 받침대 · 면 마커를 한 장으로 받습니다. 마커는 둘레의 얇은 실선대로 정확히 자르고 흰 테두리는 남깁니다.</ui-text>
+      <ui-text>실제 크기 PDF입니다. 100%(맞춤 없이)로 인쇄하고 종이의 50 mm 막대를 자로 확인하세요. 팔마다 마커 번호가 다릅니다. 팔 번호를 골라 그 팔의 그리퍼 · 받침대 · 면 마커를 한 장으로 받습니다. 마커는 둘레의 얇은 실선대로 정확히 자르고 흰 테두리는 남깁니다.</ui-text>
       <label for="print-arm">팔 번호</label><select class="ui-field" id="print-arm" aria-label="마커를 인쇄할 팔 번호"><option value="1">팔 1 (마커 50~64)</option><option value="2">팔 2 (마커 65~79)</option><option value="3">팔 3 (마커 80~94)</option></select>
       <div class="actions"><ui-button id="print-arm-markers" kind="quiet">팔 마커 PDF</ui-button><ui-button id="print-charuco" kind="quiet">ChArUco 보정판 PDF</ui-button><ui-button id="print-checkerboard" kind="quiet">체커보드 PDF</ui-button></div>
       <ui-text id="print-status" role="status" aria-live="polite"></ui-text>
     </ui-section>
     <ui-section aria-labelledby="catalog-heading">
       <ui-head><h2 class="ui-section-heading" id="catalog-heading">물체 카탈로그</h2></ui-head>
-      <ui-text>무게는 운반 무게 상한(D-911·D-935), 팔을 뻗었을 때의 힘 여유, 처짐과 놓는 높이, 학습 기록의 기준입니다. 잰 무게가 없는 물체는 운반하지 않습니다.</ui-text>
+      <ui-text>무게는 운반 무게 상한, 팔을 뻗었을 때의 힘 여유, 처짐과 놓는 높이, 학습 기록의 기준입니다. 잰 무게가 없는 물체는 운반하지 않습니다.</ui-text>
       <div class="ui-table-scroll" role="region" aria-labelledby="catalog-heading" tabindex="0"><table id="catalog-table" class="ui-data-table" aria-label="물체 카탈로그" hidden><thead><tr><th scope="col">물체</th><th scope="col">크기 mm</th><th scope="col">빈 무게</th><th scope="col">잰 시각·출처</th><th scope="col">운반</th></tr></thead><tbody id="catalog-rows"></tbody></table></div>
       <ui-text id="catalog-status" role="status" aria-live="polite">접속하면 물체 카탈로그를 확인할 수 있습니다.</ui-text>
     </ui-section>

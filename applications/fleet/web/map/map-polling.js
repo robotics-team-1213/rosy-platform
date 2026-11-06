@@ -165,10 +165,14 @@ export function createMapPolling({ scope, el, view, auth, call, camera, draw, la
       showSiteMap();
       return;
     }
+    // Fleet unreachable: say so now, not after a slow NO_MAP retry.
+    if (view.stateUnavailable) mapGate.reset();
     if (auth.locked || !mapGate.due()) return;
     let mapFailure = "retry";
     try {
       // The same answer as Fleet's NO_MAP, without a request that can only 404.
+      // Fleet itself unreachable: say so (the stale robot list must not blame the robots) instead of asking.
+      if (view.stateUnavailable) throw new Error("FLEET_UNREACHABLE");
       if (noRobotServesGrid(view.robots)) throw Object.assign(new Error("NO_MAP"), { status: 404, code: "NO_MAP" });
       const grid = await call("/api/fleet/map");
       life.check();
@@ -202,9 +206,12 @@ export function createMapPolling({ scope, el, view, auth, call, camera, draw, la
       } else if (mapFailure === "absent") {
         el("map-empty-title").textContent = "지도 미설정";
         el("map-empty-detail").textContent = "이 Fleet에는 현장 지도 기능이 없습니다.";
+      } else if (view.stateUnavailable || err.status === undefined) {
+        el("map-empty-title").textContent = "Fleet에 연결할 수 없습니다";
+        el("map-empty-detail").textContent = "연결이 돌아오면 지도를 자동으로 다시 표시합니다. 계속되면 관제 PC의 Fleet 서비스를 확인하세요.";
       } else {
         el("map-empty-title").textContent = "지도를 확인할 수 없습니다";
-        el("map-empty-detail").textContent = "Fleet 지도 연결과 등록 로봇 상태를 확인하세요.";
+        el("map-empty-detail").textContent = "Fleet이 지도를 주지 못했습니다. 잠시 뒤 다시 표시하며, 계속되면 등록 로봇 상태를 확인하세요.";
       }
       el("map-empty").hidden = false;
       syncLegend("none");

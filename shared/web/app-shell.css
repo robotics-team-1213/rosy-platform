@@ -15,9 +15,11 @@
 .ui-subnav { min-width: 0; background: var(--surface-chrome); border-inline-end: 1px solid var(--border-default); }
 .ui-subnav-nav { display: flex; flex-direction: column; gap: var(--gap-rail); padding: var(--inset-subnav); }
 .ui-subnav-head { padding: var(--inset-button); color: var(--text-secondary); font: var(--weight-label) var(--text-micro)/var(--leading-control) var(--body); }
-.ui-subnav-item { flex: none; display: flex; align-items: center; min-block-size: var(--target-secondary); padding: var(--inset-button); border-radius: var(--radius-button); color: var(--text-secondary); font: var(--weight-label) var(--text-label)/var(--leading-control) var(--body); text-decoration: none; white-space: nowrap; }
+.ui-subnav-item { flex: none; display: flex; align-items: center; justify-content: flex-start; min-block-size: var(--target-secondary); padding: var(--inset-button); border: 0; border-radius: var(--radius-button); appearance: none; background: transparent; color: var(--text-secondary); font: var(--weight-label) var(--text-label)/var(--leading-control) var(--body); text-align: start; text-decoration: none; white-space: nowrap; cursor: pointer; }
 /* D-926 3 — 'step'는 같은 문서 안 현재 단계다. 'page'와 같은 자리 표식을 쓴다(빈칸 무표식은 아니한다). */
-.ui-subnav-item[aria-current="page"], .ui-subnav-item[aria-current="step"] { background: var(--brand-rose-wash); color: var(--text-primary); }
+.ui-subnav-item[aria-current="page"], .ui-subnav-item[aria-current="step"], .ui-subnav-item[aria-current="location"], .ui-subnav-item[aria-selected="true"] { background: var(--brand-rose-wash); color: var(--text-primary); }
+.ui-subnav-item:disabled { cursor: not-allowed; opacity: var(--disabled-opacity); }
+.ui-subnav-item:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
 
 .ui-app-main { min-width: 0; display: flex; flex-direction: column; container-type: inline-size; }
 .ui-pathbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--gap-pathbar); min-block-size: var(--pathbar-height); padding: var(--inset-pathbar); border-block-end: 1px solid var(--border-default); }
@@ -48,6 +50,10 @@
   .ui-rail-nav { flex-direction: row; overflow-x: auto; }
   .ui-rail-item { flex: none; flex-direction: column; align-self: auto; white-space: nowrap; inline-size: var(--size-rail-item); min-block-size: var(--target-secondary); padding: 0; font-size: var(--text-micro); }
   .ui-subnav-nav { flex-direction: row; overflow-x: auto; padding: var(--inset-rail); }
+  /* Scroll hint: ui-wiring.js marks the side that still has hidden items; a solid edge says more is there (no gradients, concept 16). */
+  .ui-rail-nav[data-more~="end"], .ui-subnav-nav[data-more~="end"] { box-shadow: inset calc(0px - var(--focus-ring-width)) 0 0 var(--border-default); }
+  .ui-rail-nav[data-more~="start"], .ui-subnav-nav[data-more~="start"] { box-shadow: inset var(--focus-ring-width) 0 0 var(--border-default); }
+  .ui-rail-nav[data-more="start end"], .ui-subnav-nav[data-more="start end"] { box-shadow: inset var(--focus-ring-width) 0 0 var(--border-default), inset calc(0px - var(--focus-ring-width)) 0 0 var(--border-default); }
   .ui-subnav-head { display: none; }
   .ui-stage-grid[data-layout="sense"] { grid-template-columns: minmax(0, 1fr) var(--context-track); grid-template-rows: auto; align-content: start; grid-template-areas: "stage now" "cam now" "sense sense"; }
 }
@@ -58,4 +64,8 @@
   .ui-stage-grid[data-layout="solo"] { grid-template-areas: "stage"; }
   .ui-stage-grid[data-layout="sense"] { grid-template-columns: minmax(0, 1fr); grid-template-areas: "cam" "now" "stage" "sense"; }
   .ui-pane[data-pane="now"], .ui-pane[data-pane="more"], .ui-pane[data-pane="sense"] { border-inline: 0; border-block-end: 1px solid var(--border-default); }
+}
+
+@container (width >= 22rem) and (width < 64rem) {
+  .ui-subnav-nav { flex-wrap: wrap; overflow-x: visible; }
 }

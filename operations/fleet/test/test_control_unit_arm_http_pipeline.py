@@ -118,7 +118,7 @@ def test_app_cancel_before_admit_withdraws_the_cell_proposal_for_good(tmp_path, 
             canceled = await network.post(JOBS + "/" + job["mission_id"] + "/cancel", headers=HARBOR,
                                           json={"reason": "plan changed"})
             assert canceled.status_code == 200, canceled.text
-            assert (canceled.json()["job"]["status"], canceled.json()["job"]["reason"]) == ("HOLD", "control-unit-cancel")
+            assert (canceled.json()["job"]["status"], canceled.json()["job"]["reason"]) == ("HOLD", "plan changed")
             assert nodes["R"].store.list()[0]["status"] == "CANCELED"
             with pytest.raises(MissionConflict):
                 admit(store, store.peek(job["mission_id"]), control)

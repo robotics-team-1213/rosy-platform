@@ -195,3 +195,16 @@ def test_travel_no_pulled_in_transit_can_keep_inside_is_refused():
                 keep_out={"x_max_m": 0.20})
     with pytest.raises(SystemExit, match="no pulled-in transit"):
         m.Planner(plan).library()
+
+
+def test_a_jaw_tcp_from_the_environment_moves_the_tip_and_a_wild_one_is_refused(monkeypatch):
+    """arm_b's v2.1 jaws end 18 mm short of the stock TCP (2026-11-03 box-top touch, STL 0.0740)."""
+    q = [0.0, -0.3, 0.4, 1.2, 0.0]  # wrist pitched down
+    stock = m.load_kinematics(None)[0].fk(q)
+    monkeypatch.setenv("ROSY_OMX_TCP_X_M", "0.0740")
+    short = m.load_kinematics(None)[0].fk(q)
+    shift = math.dist((stock.x, stock.y, stock.z), (short.x, short.y, short.z))
+    assert abs(shift - (0.09193 - 0.0740)) < 1e-6
+    monkeypatch.setenv("ROSY_OMX_TCP_X_M", "0.3")
+    with pytest.raises(SystemExit, match="jaw range"):
+        m.load_kinematics(None)

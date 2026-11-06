@@ -7,14 +7,14 @@ const labels={import:'자료 가져오기',additional_import:'추가 자료',sav
 function element(tag,text){const node=document.createElement(tag);if(tag==='ui-button')node.setAttribute('kind','quiet');if(text)node.textContent=text;return node;}
 function panel(){
   let node=document.getElementById('review-versions');
-  if(!node){node=element('details');node.id='review-versions';node.className='review-history';node.append(element('summary','전체 이력 · 이전 버전 비교'));document.querySelector('.review-history').after(node);}
+  if(!node){node=element('section');node.id='review-versions';node.className='review-history';const title=element('h3','전체 이력 · 이전 버전 비교');title.id='review-versions-title';node.setAttribute('aria-labelledby',title.id);node.append(title);document.querySelector('#pixel-evidence,#object-evidence').after(node);}
   return node;
 }
 export function resetVersions(){generation++;const node=document.getElementById('review-versions');if(node)node.remove();}
 async function read(url){const response=await accountFetch(url);if(!response.ok)throw new Error('버전 정보를 불러오지 못했습니다.');return response.json();}
 export function showVersions(lane,index){
   resetVersions();const ticket=generation,node=panel(),note=element('p','이전 버전은 읽기 전용입니다. 현재 편집 내용과 승인은 바뀌지 않습니다.'),list=element('ul'),preview=element('section'),more=element('ui-button','이력 불러오기'),message=element('p');
-  message.setAttribute('role','status');preview.setAttribute('aria-label','선택한 이전 버전');node.append(note,list,more,message,preview);let before=null,loaded=false,selection=0;
+  message.setAttribute('role','status');preview.setAttribute('aria-label','선택한 이전 버전');node.append(note,list,more,message,preview);let before=null,selection=0;
   async function select(number){
     const request=++selection;preview.replaceChildren(element('p','버전 불러오는 중…'));
     try{
@@ -39,9 +39,9 @@ export function showVersions(lane,index){
       const value=await read(`/api/review-history/${lane}/${index}${before===null?'':`?before=${before}`}`);
       if(ticket!==generation)return;
       for(const event of value.events){const item=element('li'),button=element('ui-button',`v${event.version} · ${labels[event.action]||event.action} · ${actorName(event.actor)} · ${event.ts} UTC`);button.onclick=()=>select(event.version);item.append(button);list.append(item);}
-      before=value.next_before;loaded=true;more.hidden=before===null;more.textContent='이전 이력 더 보기';message.textContent=list.children.length?'버전을 선택하면 저장된 결과를 조회합니다.':'아직 저장된 이력이 없습니다.';
+      before=value.next_before;more.hidden=before===null;more.textContent='이전 이력 더 보기';message.textContent=list.children.length?'버전을 선택하면 저장된 결과를 조회합니다.':'아직 저장된 이력이 없습니다.';
     }catch(error){if(ticket===generation)message.textContent=error.message;}
     finally{if(ticket===generation)more.disabled=false;}
   }
-  more.onclick=load;node.ontoggle=()=>{if(node.open&&!loaded&&!more.disabled)load();};
+  more.onclick=load;
 }

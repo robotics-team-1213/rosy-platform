@@ -3,6 +3,7 @@ import threading
 import os
 from pathlib import Path
 from types import SimpleNamespace
+from urllib.parse import urljoin
 
 import pytest
 from browser_harness import browser_tests_enabled, free_port
@@ -22,6 +23,8 @@ def capture(page, name, selector=None):
 def empty_learning_center(tmp_path):
     center = SimpleNamespace(bind_workspace=lambda project: None,
         profiles=SimpleNamespace(list=lambda: []),
+        studies=SimpleNamespace(snapshot=lambda: {'configured': False, 'host_id': None,
+            'methods': {}, 'studies': [], 'busy': False, 'active_run': None}),
         snapshot=lambda: {'datasets': [], 'runs': [], 'methods': {},
             'owner_status': {'configured': False, 'targets': []}})
     server = make_server(ReviewStore(tmp_path/'review', empty_training=True),
@@ -34,6 +37,29 @@ def empty_learning_center(tmp_path):
         server.shutdown()
         server.server_close()
         thread.join(timeout=5)
+
+
+def test_omx_profile_task_is_plain_and_uses_served_korean_picker(empty_learning_center):
+    playwright = pytest.importorskip('playwright.sync_api')
+    with playwright.sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page(viewport={'width': 390, 'height': 844})
+        page.goto(empty_learning_center + '/learning/omx#profile-panel', wait_until='networkidle')
+        expect = playwright.expect
+        assert page.locator('#profile-panel').evaluate("n => n.tagName === 'SECTION'")
+        assert page.locator('details details').count() == 0
+        assert page.locator('details:visible').count() < 3
+        expect(page.locator('.ui-pathbar')).to_contain_text('Learning')
+        expect(page.locator('.ui-pathbar')).to_contain_text('과제·팔·카메라')
+        for asset in ['/file-picker.css', '/file-picker.js']:
+            assert page.request.get(empty_learning_center + asset).status == 200
+        picker = page.locator('.file-picker').filter(has=page.locator('#profile-bench'))
+        expect(picker.locator('.file-picker-button')).to_contain_text('선택')
+        page.locator('#profile-bench').set_input_files({'name': 'inventory.json', 'mimeType': 'application/json', 'buffer': b'{}'})
+        expect(page.locator('#profile-bench-status')).to_contain_text('작업대 장치 목록(inventory.json) 파일이 아닙니다')
+        expect(picker.locator('[data-file-name]')).to_have_text('선택한 파일 없음')
+        assert page.locator('#profile-bench').evaluate('n=>n.files.length') == 0
+        browser.close()
 
 
 @pytest.mark.parametrize('width', [320, 1440])
@@ -66,6 +92,7 @@ def test_view_toggle_changes_only_view_and_retains_history_context(empty_learnin
             page = browser.new_page()
             expect = playwright.expect
             page.goto(empty_learning_center+'/learning/omx?source=fixed-context#dataset-section', wait_until='networkidle')
+            page.locator('.omx-stage-intro > details > summary').click()
             page.locator('#workflow-view').click()
             assert page.evaluate('new URL(location.href).searchParams.get("source")') == 'fixed-context'
             expect(page.locator('#train-section')).to_be_visible()
@@ -193,13 +220,14 @@ def test_purposeful_workspace_keeps_goal_and_explains_one_next_action(empty_lear
             expect = playwright.expect
             page.goto(empty_learning_center+'/learning/omx', wait_until='networkidle')
             expect(page.locator('#journey-goal')).to_contain_text('아직 선택하지 않았습니다')
-            expect(page.locator('#journey-next')).to_have_attribute('href', '#profile-panel')
+            expect(page.locator('#journey-next')).to_have_attribute('href', empty_learning_center+'/learning/tasks/manage#run-title')
             expect(page.locator('#journey-reason')).to_contain_text('같은 과제')
             expect(page.locator('#stage-question')).to_contain_text('무엇을 성공')
             expect(page.locator('#profile-panel')).to_be_visible()
             expect(page.locator('#train-section')).to_be_hidden()
             page.locator('#profile-task').fill('블록을 집고 유지 · 낙하 실패 · 트레이 복원')
             page.locator('#profile-add-arm').click()
+            page.locator('.omx-stage-intro > details > summary').click()
             page.locator('#workflow-view').click()
             expect(page.locator('#train-section')).to_be_visible()
             expect(page.locator('#profile-task')).to_have_value('블록을 집고 유지 · 낙하 실패 · 트레이 복원')
@@ -222,6 +250,9 @@ def test_purposeful_workspace_keeps_goal_and_explains_one_next_action(empty_lear
             page.locator('#omx-sections a[href="#profile-panel"]').click()
             expect(page.locator('#profile-task')).to_have_value('블록을 집고 유지 · 낙하 실패 · 트레이 복원')
             assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+            page.locator('#journey-next').click()
+            expect(page).to_have_url(empty_learning_center+'/learning/tasks/manage#run-title')
+            expect(page.locator('#run-title')).to_be_visible()
         finally:
             browser.close()
 
@@ -262,7 +293,8 @@ def test_next_action_uses_matching_evidence_and_clears_readiness_on_failure(empt
 
 
 @pytest.mark.parametrize('width', [1440, 390])
-def test_learning_cards_and_submenus_open_real_sections_and_restore_task(empty_learning_center, width):
+@pytest.mark.parametrize('theme', ['dark', 'light'])
+def test_learning_cards_and_submenus_open_real_sections_and_restore_task(empty_learning_center, width, theme):
     playwright = pytest.importorskip('playwright.sync_api')
     with playwright.sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
@@ -271,10 +303,19 @@ def test_learning_cards_and_submenus_open_real_sections_and_restore_task(empty_l
             errors = []
             page.on('pageerror', lambda error: errors.append(str(error)))
             expect = playwright.expect
+            page.add_init_script(f"localStorage.setItem('rosy.theme', {theme!r})")
             page.goto(empty_learning_center+'/learning', wait_until='networkidle')
-            expect(page.locator('#learning-start')).to_contain_text('成功'.replace('成功', '성공률'))
-            page.locator('#learning-start a[href="/learning/omx#profile-panel"]').click()
-            expect(page.locator('#profile-panel')).to_have_attribute('open', '')
+            expect(page.locator('html')).to_have_attribute('data-theme', theme)
+            expect(page.locator('#learning-start-title')).to_have_text('어떤 작업을 하시겠어요?')
+            expect(page.locator('#learning-start .learning-routes h3')).to_have_text(
+                ['로봇 동작 학습', '시각 인식 학습', '시뮬레이션 실험', 'VLM 판단 검수'])
+            page.locator('#learning-start a[href="#expert-tools"]').click()
+            page.locator('#expert-tools a[href="/learning/omx#profile-panel"]').click()
+            expect(page.locator('#omx-sections')).to_have_class('ui-stage-track')
+            expect(page.locator('#omx-sections')).to_have_attribute('data-line', 'learning')
+            expect(page.locator('#omx-sections > .ui-stage')).to_have_count(7)
+            expect(page.locator('#omx-sections [data-state="done"]')).to_have_count(0)
+            expect(page.locator('#profile-panel')).to_be_visible()
             expect(page.locator('#profile-task')).to_be_focused()
             for button in ['profile-new', 'profile-add-arm', 'profile-add-camera']:
                 assert page.locator('#'+button).bounding_box()['height'] >= 40
@@ -285,6 +326,7 @@ def test_learning_cards_and_submenus_open_real_sections_and_restore_task(empty_l
                 expect(page.locator('#'+target)).to_be_visible()
                 expect(page.locator('#profile-panel')).to_be_hidden()
                 expect(link).to_have_attribute('aria-current', 'location')
+                expect(link.locator('..')).to_have_attribute('data-state', 'now')
                 assert page.url.endswith('#'+target)
             page.locator('#omx-sections a[href="#profile-panel"]').click()
             expect(page.locator('#profile-task')).to_have_value('블록 집기 · 2초 유지 · 낙하 실패 · 트레이 복원')
@@ -293,10 +335,13 @@ def test_learning_cards_and_submenus_open_real_sections_and_restore_task(empty_l
             page.go_forward()
             expect(page.locator('#profile-task')).to_be_focused()
             page.reload(wait_until='networkidle')
-            expect(page.locator('#profile-panel')).to_have_attribute('open', '')
+            expect(page.locator('#profile-panel')).to_be_visible()
             expect(page.locator('#profile-task')).to_be_focused()
             assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
             assert not errors
+            page.evaluate('document.activeElement.blur(); window.scrollTo(0, 0)')
+            capture(page, f'omx-common-stations-{theme}-{width}.png')
+            capture(page, f'omx-common-stations-track-{theme}-{width}.png', '#omx-sections')
         finally:
             browser.close()
 
@@ -319,10 +364,12 @@ def test_empty_learning_choices_keep_explanation_and_account_return_path(empty_l
             expect(page.locator('#empty-prepared')).to_be_visible()
             expect(page.locator('#empty-datasets')).to_be_visible()
             page.locator('#empty-prepared a').click()
-            expect(page.locator('#connection-panel')).to_have_attribute('open', '')
+            expect(page.locator('#connection-panel')).to_be_visible()
+            expect(page.locator('#learning-start')).to_be_hidden()
             expect(page.locator('#kind')).to_have_value('omx')
             expect(page.locator('#name')).to_be_focused()
             page.goto(empty_learning_center+'/learning/omx', wait_until='networkidle')
+            page.locator('#learning-entry-heading').click()
             page.locator('#learning-account-link').click()
             expect(page.locator('#account-setup')).to_be_visible()
             expect(page.locator('#login-panel')).to_be_visible()
@@ -332,7 +379,7 @@ def test_empty_learning_choices_keep_explanation_and_account_return_path(empty_l
             expect(page.locator('#account-retry')).to_be_enabled()
             expect(page.locator('#account-setup')).to_contain_text('Hugging Face')
             page.locator('#account-setup a[href="/learning/omx#profile-panel"]').click()
-            expect(page.locator('#profile-panel')).to_have_attribute('open', '')
+            expect(page.locator('#profile-panel')).to_be_visible()
         finally:
             browser.close()
 
@@ -352,6 +399,8 @@ def test_every_learning_rail_destination_renders_content(empty_learning_center):
             assert links == ['/learning', '/catalog', '/', '/learning/tasks', '/learning/evaluate']
 
             def opened(selector, href):
+                destination = urljoin(page.url, href)
+                expected = destination + ('?panel=upload' if href=='/learning/imitate' else '')
                 page.locator(selector).click()
                 page.wait_for_load_state('load')  # the SIM page keeps polling, so the network never idles
                 playwright.expect(page.locator('main')).to_be_visible()
@@ -360,17 +409,20 @@ def test_every_learning_rail_destination_renders_content(empty_learning_center):
                 if href=='/':
                     playwright.expect(page.locator('#empty-review h2')).not_to_have_text('검수 내용을 확인하는 중')
                 assert len(page.locator('main').inner_text().strip()) > 40
-                assert page.url == empty_learning_center+href
+                assert page.url == expected
+                return destination.removeprefix(empty_learning_center)
             reached = set()
             for href in links:
                 opened(f'.ui-rail-nav a[href="{href}"]', href)
                 # The two editors carry the 정답 pages in their title row (.review-kinds), the others in the sub-menu.
-                for sub in page.locator('.ui-subnav-nav a, .review-kinds a').evaluate_all(hrefs):
+                for sub in page.locator('.ui-subnav-nav a, .ui-app-main > .review-kinds a').evaluate_all(hrefs):
                     opened(f'.ui-rail-nav a[href="{href}"]', href)
-                    opened(f':is(.ui-subnav-nav, .review-kinds) a[href="{sub}"]', sub)
-                    reached.add(sub)
+                    reached.add(opened(f'.ui-subnav-nav a[href="{sub}"], .ui-app-main > .review-kinds a[href="{sub}"]', sub))
             assert reached == {'/catalog', '/learning/camera', '/', '/pixels', '/learning/omx', '/learning/vlm',
-                               '/learning/tasks', '/learning#pipeline', '/learning/sim', '/learning/workspaces'}
+                               '/learning/tasks', '/learning/tasks/manage', '/learning/imitate',
+                               '/learning#pipeline', '/learning/sim', '/learning/workspaces',
+                               '/learning#learning-start', '/learning#review-section',
+                               '/learning#learning-results', '/learning#storage-section'}
             assert not errors
         finally:
             browser.close()
@@ -405,8 +457,9 @@ def test_owner_observation_is_separate_from_control_and_failure_clears_previous_
                 expect = playwright.expect
                 expect(page.locator('#learning-account-link')).to_have_attribute('href', '/accounts')
                 expect(page.locator('#learning-account-state')).to_contain_text('계정 서버 연결 준비 중')
+                page.locator('#learning-entry-heading').click()
                 page.locator('#learning-task-link').click()
-                expect(page.locator('#profile-panel')).to_have_attribute('open', '')
+                expect(page.locator('#profile-panel')).to_be_visible()
                 expect(page.locator('#profile-task')).to_be_focused()
                 expect(page.locator('#owner-target')).to_have_value('cell')
                 expect(page.locator('#owner-status')).to_contain_text('보류')

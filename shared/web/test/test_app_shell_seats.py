@@ -62,7 +62,9 @@ def test_sheet_answers_its_container_not_the_viewport():
     css = SHEET.read_text(encoding="utf-8")
     assert "@media" not in css, "공용 자리는 칸에 반응한다(D-359 §6.3)"
     conditions = set(re.findall(r"@container \(([^)]+)\)", css))
-    assert conditions == {"width < 64rem", "width < 48rem"}
+    assert conditions == {"width < 64rem", "width < 48rem", "width >= 22rem"}
+    assert re.search(r'@container \(width >= 22rem\) and \(width < 64rem\)\s*\{\s*'
+                     r'\.ui-subnav-nav \{ flex-wrap: wrap; overflow-x: visible; \}\s*\}', css), 'only shared narrow navigation wraps at the additional boundary'
     assert css.count("container-type: inline-size") == 2, "셸과 본문 둘만 칸이다"
 
 
@@ -100,15 +102,15 @@ def test_review_documents_share_the_app_bar_and_the_screen_rail():
     stages = [('list', '/learning', '홈', '홈'), ('folder', '/catalog', '자료 등록', '자료'),
               ('pencil', '/', '정답 달기', '정답'), ('robot', '/learning/tasks', '학습 실행', '학습'),
               ('check', '/learning/evaluate', '평가·승격', '평가·승격')]
-    subs = {'/learning': None, '/catalog': ['/catalog', '/learning/camera', '/learning/workspaces'],
+    subs = {'/learning': ['#learning-start', '#pipeline', '#review-section', '#learning-results', '#storage-section'], '/catalog': ['/catalog', '/learning/camera', '/learning/workspaces'],
             '/': ['/', '/pixels', '/learning/omx', '/learning/vlm'],
-            '/learning/tasks': ['/learning/tasks', '/learning#pipeline', '/learning/sim'], '/learning/evaluate': None}
+            '/learning/tasks': ['/learning/tasks', '/learning/tasks/manage', '/learning#pipeline', '/learning/sim'], '/learning/evaluate': None}
     rails = set()
     for name, stage, here in [('learning.html', '/learning', None), ('index.html', '/', '/'),
                               ('pixels.html', '/', '/pixels'), ('omx.html', '/', '/learning/omx'),
                               ('vlm.html', '/', '/learning/vlm'), ('catalog.html', '/catalog', '/catalog'),
                               ('camera.html', '/catalog', '/learning/camera'),
-                              ('workspaces.html', '/catalog', '/learning/workspaces'), ('tasks.html', '/learning/tasks', '/learning/tasks'),
+                              ('workspaces.html', '/catalog', '/learning/workspaces'), ('tasks.html', '/learning/tasks', '/learning/tasks/manage'),
                               ('sim.html', '/learning/tasks', '/learning/sim'), ('evaluate.html', '/learning/evaluate', None)]:
         html = (web / name).read_text(encoding='utf-8')
         assert html.index('/common/components.css') < html.index('/common/app-shell.css') < html.index('/app.css')
@@ -132,7 +134,12 @@ def test_review_documents_share_the_app_bar_and_the_screen_rail():
         assert [(href, current) for _, href, _, current, _ in items if current] == [
             (stage, 'page' if here in (None, stage) else 'true')], name
         assert all(short in full for _, _, full, _, short in items), 'the stored label is part of the accessible name'
-        sub = (re.search(r'<div class="ui-pathbar"><h1>[^<]+</h1>(?:<span data-spacer></span><ui-button [^>]*>[^<]*</ui-button>)?</div>'
+        pathbar = (r'<div class="ui-pathbar"><nav class="ui-crumbs" aria-label="현재 위치">'
+                   r'<a href="/learning">Learning</a><span aria-hidden="true">/</span></nav>'
+                   r'<h1>[^<]+</h1><span class="ui-crumbs" id="learning-tool-path"></span>')
+        sub = (re.search(r'</nav></div>\s*<div class="ui-subnav"><nav class="ui-subnav-nav learning-home-nav" aria-label="학습센터 작업 이동">(.*?)</nav></div>', body, re.S) if name == 'learning.html' else
+               re.search(pathbar + r'(?:<span data-spacer></span>'
+                         r'(?:<ui-button [^>]*>[^<]*</ui-button>|<a class="workspace-link" href="/learning#learning-start">학습센터 작업 선택</a>))?</div>'
                          r'<nav class="review-kinds" aria-label="정답 하위 메뉴">(.*?)</nav>', body, re.S) if merged else
                re.search(r'</nav></div><div class="ui-subnav"><nav class="ui-subnav-nav" aria-label="[^"]+ 하위 메뉴">'
                          r'<span class="ui-subnav-head">[^<]+</span>(.*?)</nav></div>', body, re.S))
@@ -141,8 +148,8 @@ def test_review_documents_share_the_app_bar_and_the_screen_rail():
         if sub:
             links = re.findall(r'<a class="ui-subnav-item" href="([^"]+)"( aria-current="page")?[^>]*>[^<]+</a>', sub.group(1))
             assert [href for href, _ in links] == subs[stage], name
-            assert [href for href, current in links if current] == [here], name
-        assert re.search(r'<div class="ui-app-main"><div class="ui-pathbar"><h1>[^<]+</h1>', body)
+            assert [href for href, current in links if current] == ([] if name == 'learning.html' else [here]), name
+        assert re.search(r'<div class="ui-app-main">' + pathbar, body), name
         assert not merged or '<div class="ui-subnav">' not in body, name
         assert html.count('<h1') == 1
         rails.add(re.sub(r' aria-current="(?:page|true)"', '', rail))
