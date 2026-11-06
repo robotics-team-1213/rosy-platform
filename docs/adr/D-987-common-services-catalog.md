@@ -26,7 +26,7 @@ Account, Monitoring, Media는 각자 ADR과 소유 패키지가 있지만 이들
 7. **이름이 같아도 의미가 다르면 합치지 않는다.** `same_origin`은 `Origin`을 `Host`와 비교하는 판과 등록된 callback origin과 비교하는 판이 있다. 전자는 Fleet과 Account가 함께 쓰므로 foundation으로 옮기고 동작을 유지한다. 후자는 각 수신부에 둔다. 두 판 중 하나로 통일하려면 별도 결정이 필요하다.
 8. **Android 계정 세션은 D-939 위치로 옮긴다.** Cam에서 `shared/android/account`로 옮기고, 기존 Keystore 별칭과 저장소 이름을 유지해 로그인 상태를 보존한다.
 9. **브라우저 세션은 세 갈래를 유지한다.** Robot·Pilot·Games는 `shared/web/account-session.js`를 쓴다. Learning과 Fleet은 같은 파일로 합치지 않는다. 합치면 옵션만 늘고 다음 동작을 바꿀 위험이 있다.
-   - Learning은 세션 응답의 `account_session`으로 신원을 비교하고, 401을 로그아웃으로 처리하며, 요청을 보낼 때마다 신원을 다시 확인해 다른 사람이 이어받은 탭에 작성 중 내용을 저장하지 않는다. 공용 도구는 `account_id`·`session_family`·`revision`으로 비교하고, 실패 응답을 확인 불가로 처리하며, 주기적으로만 확인한다.
+   - Learning은 세션 응답의 `account_session`으로 신원을 비교하고, 5xx가 아닌 실패 응답을 세션 없음으로 보며, 요청의 응답을 받을 때마다 신원을 다시 확인해 바뀌었으면 응답과 작성 중 화면을 막는다. 공용 도구는 `account_id`·`session_family`·`revision`으로 비교하고, 실패 응답을 확인 불가로 처리하며, 주기적으로만 확인한다.
    - Fleet의 신원 기록은 로그인 화면과 계정 관리 화면의 흐름 안에 있고 Fleet 전용 인증 경로를 쓴다.
 
 ### 기존 결정과의 관계
