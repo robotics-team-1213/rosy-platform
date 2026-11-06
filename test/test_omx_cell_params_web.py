@@ -1,5 +1,6 @@
 """cell_params_web: guards and motion values stay locked, a save is validated and recorded, nothing is written while a
 session runs or after the file moved, and the page answers only on the local host."""
+import contextlib
 import http.client
 import json
 from pathlib import Path
@@ -28,8 +29,8 @@ def path(tmp_path):
     return file
 
 
-def files(path, busy=False):
-    return web.ParamFiles({"stack": path}, busy=lambda: busy)
+def files(path, hold=contextlib.nullcontext):
+    return web.ParamFiles({"stack": path}, busy=lambda: False, hold=hold)
 
 
 def save(store, path, **overrides):
@@ -43,7 +44,9 @@ def save(store, path, **overrides):
     "upkeep.jaw_gap", "jitter.pwm_std", "loadcheck.risky_share", "loadcheck.refuse_unknown", "corridor.half_width_mm",
     "corridor.clear_z_m", "zone.takeover", "push.speed_m_s", "push.height_m", "pivot.clear_above_m", "pivot.grip_closed",
     "gripper.held_30mm", "wrist.max_step_mm", "wrist.max_total_mm", "look.max_total_mm", "pinch.max_step_mm",
-    "reach.max_mm", "pinch.enabled", "wrist.enabled", "feel.step_mm", "place.margin_mm", "wrist.tip_to_top_mm"])
+    "reach.max_mm", "pinch.enabled", "wrist.enabled", "feel.step_mm", "place.margin_mm", "wrist.tip_to_top_mm",
+    "reach.gain", "wrist.servo_gain", "wrist.topmap_disagree_mm", "wrist.axis_tol_deg", "look.mark_err_mm",
+    "objects.split_gap_mm", "objects.split_stagger_mm", "pinch.min_gap_mm", "pinch.width_tol"])
 def test_guards_and_motion_values_are_locked(name):
     assert web.lock_reason(name)
 
@@ -56,7 +59,7 @@ def test_a_new_group_or_unit_is_locked_until_someone_decides(monkeypatch):
 
 def test_vision_thresholds_can_be_tuned():
     free = [name for name in prm.DEFAULTS if not web.lock_reason(name)]
-    assert {FREE, "objects.min_px", "wrist.tol_mm", "look.tol_mm", "reach.gain", "track.min_inliers"} <= set(free)
+    assert {FREE, "objects.min_px", "wrist.tol_mm", "look.tol_mm", "reach.tol_mm", "track.min_inliers"} <= set(free)
     assert all(prm.DEFAULTS[name][1] in web.VISION_UNITS for name in free)
 
 
@@ -93,14 +96,7 @@ def test_a_refused_save_writes_nothing(path, overrides, message):
     assert path.read_bytes() == before and not path.with_name("params.json.history.jsonl").exists()
 
 
-def test_a_save_is_refused_while_a_session_runs(path):
-    before = path.read_bytes()
-    with pytest.raises(web.Conflict, match="세션"):
-        save(files(path, busy=True), path)
-    assert path.read_bytes() == before
-
-
-def test_a_real_arm_session_lock_counts_as_busy(tmp_path, monkeypatch):
+def test_a_real_session_lock_is_seen_and_refuses_a_save(path, tmp_path, monkeypatch):
     pytest.importorskip("fcntl")
     monkeypatch.setenv("ROSY_OMX_HOME", str(tmp_path))
     monkeypatch.setenv("HOME", str(tmp_path))
@@ -109,12 +105,28 @@ def test_a_real_arm_session_lock_counts_as_busy(tmp_path, monkeypatch):
         import joint_tune
     finally:
         sys.path.remove(str(OMX))
+    store = files(path, hold=web.cell_hold)
+    sha = store.snapshot()["files"][0]["file_sha"]
+    before = path.read_bytes()
     assert web.session_busy() is False
     for arm in ("arm_a", None):
         held = joint_tune.session_lock(arm)
         assert web.session_busy() is True
+        with pytest.raises(web.Conflict, match="세션"):
+            store.save({"file": "stack", "base_sha": sha, "changes": {FREE: 30.0}, "note": "그림자"})
+        assert path.read_bytes() == before
         held.close()
         assert web.session_busy() is False
+    assert save(store, path)["params_sha"] == prm.load(path)["sha"]
+    joint_tune.session_lock(None).close()  # the save let go of the lock
+
+
+def test_a_torn_history_line_does_not_hide_the_values(path):
+    save(files(path), path)
+    with path.with_name("params.json.history.jsonl").open("a", encoding="utf-8") as history:
+        history.write('{"at": "torn')
+    table = files(path).snapshot()["files"][0]
+    assert "error" not in table and len(table["history"]) == 1
 
 
 def test_a_save_over_a_changed_file_is_refused(path):
@@ -163,6 +175,7 @@ def test_the_page_answers_only_on_the_local_host_and_a_post_needs_the_header(ser
     assert call(server, "POST", "/save", body, {"X-Cell-Params": "1", "Host": "evil.example"})[0] == 403
     assert call(server, "POST", "/save", body, {"X-Cell-Params": "1"})[0] == 409
     assert call(server, "POST", "/save", "[1]", {"X-Cell-Params": "1"})[0] == 400
+    assert call(server, "POST", "/save", "[" * 60000, {"X-Cell-Params": "1"})[0] == 400
 
 
 def test_the_page_loads_nothing_from_elsewhere_and_never_writes_file_text_as_markup(server):

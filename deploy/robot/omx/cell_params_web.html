@@ -227,18 +227,23 @@ async function poll() {
   if (saving || document.hidden) return;
   try {
     const next = await call('/params.json');
-    const before = current;
+    const before = current, moved = lost || next.busy !== data.busy;
+    lost = false;
     data.busy = next.busy;
     const fresh = next.files.find(f => f.name === before?.name);
     if (fresh && fresh.file_sha !== before.file_sha) {
       if (Object.keys(draft).length) { banner('파일이 다른 곳에서 바뀌었습니다. 되돌리기를 누르면 새 값을 불러옵니다.', true); return refreshFooter(); }
       data = next; return showFile();
     }
-    if (!$('banner').classList.contains('error')) statusBanner();
+    if (!current.error && (moved || !$('banner').classList.contains('error'))) statusBanner();
     refreshFooter();
-  } catch { banner('셀 PC 페이지와 연결이 끊겼습니다.', true); }
+  } catch { lost = true; banner('셀 PC 페이지와 연결이 끊겼습니다.', true); }
 }
-$('file').onchange = () => { draft = {}; $('note').value = ''; showFile(); };
+let lost = false;
+$('file').onchange = () => {
+  if (Object.keys(draft).length && !confirm('바꾼 값을 버리고 다른 파일을 열까요?')) { $('file').value = current.name; return; }
+  draft = {}; $('note').value = ''; showFile();
+};
 for (const id of ['search', 'only-changed', 'only-custom', 'hide-locked']) $(id).oninput = render;
 $('note').oninput = refreshFooter;
 $('revert').onclick = async () => { draft = {}; $('note').value = ''; banner(''); await load(); };
@@ -247,7 +252,7 @@ $('save').onclick = async () => {
   try {
     const saved = await call('/save', {file: current.name, base_sha: current.file_sha, changes: draft, note: $('note').value});
     draft = {}; $('note').value = '';
-    await load();
+    await load().catch(() => {});  // the save happened; the next poll reloads the page
     banner(`저장했습니다. params_sha ${saved.params_sha}, 다음 실행부터 적용됩니다.`);
   } catch (error) { banner(error.message, true); }
   saving = false; refreshFooter();

@@ -20,6 +20,7 @@ import sys
 import tempfile
 import threading
 import time
+from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -32,7 +33,10 @@ EDITABLE_GROUPS = {"objects", "track", "diagnose", "preflight", "pinch", "reach"
 VISION_UNITS = {"lab", "px", "gray", "grey", "ratio", "deg", "mm", "count", "s", "v4l2"}
 MOTION = {"wrist.probe_mm", "wrist.z_probe_mm", "wrist.servo_total_mm", "wrist.servo_iter", "wrist.cal_offset_mm",
           "wrist.tip_to_top_mm", "look.other_finger_deg", "look.other_finger_mm", "pivot.bias_reach_mm",
-          "pivot.over_top_mm", "pivot.over_clear_mm", "pivot.settle_limit_s", "pivot.settle_step_s"}
+          "pivot.over_top_mm", "pivot.over_clear_mm", "pivot.settle_limit_s", "pivot.settle_step_s",
+          # feedback gains, and the values that decide how near the jaws may come or whether a grasp goes ahead
+          "reach.gain", "wrist.servo_gain", "wrist.topmap_disagree_mm", "wrist.axis_tol_deg", "look.mark_err_mm",
+          "objects.split_gap_mm", "objects.split_stagger_mm", "pinch.min_gap_mm", "pinch.width_tol"}
 HISTORY_SHOWN = 8
 NOTE_MAX = 300
 
@@ -47,27 +51,24 @@ def lock_reason(name: str) -> str | None:
     if unit not in VISION_UNITS:
         return "높이·힘·관절 값"
     if "max_" in name or name in MOTION:
-        return "움직임 범위·치수 값"
+        return "움직임 범위·이득·틈 값"
     return None
 
 
 def session_busy() -> bool:
-    """True while any OMX session holds the cell lock (arm sessions hold it shared, so an exclusive try fails)."""
-    # shortcut: a session starting in the same instant as this probe sees the lock taken and must be restarted;
-    # the probe lasts microseconds. If that ever happens in practice, read /proc/locks instead of taking the lock.
-    import fcntl
-
+    """True while any OMX session holds the cell lock. Reads /proc/locks: the page polls this, and taking the lock
+    even briefly would make a session starting in that instant exit."""
     from joint_tune import lock_root
 
-    path = lock_root() / "session.lock"
-    if not path.exists():
+    try:
+        inode = (lock_root() / "session.lock").stat().st_ino
+    except FileNotFoundError:
         return False
-    with path.open("a") as handle:
-        try:
-            fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
-            return True
-    return False
+    try:
+        rows = Path("/proc/locks").read_text(encoding="ascii").splitlines()
+    except OSError:
+        return True  # unknown counts as busy: the page only refuses a save
+    return any(field.endswith(f":{inode}") for row in rows for field in row.split())
 
 
 def _digest(raw: bytes) -> str:
@@ -78,17 +79,42 @@ class Conflict(ValueError):
     """The file changed after the page read it, or a session holds the cell."""
 
 
+@contextmanager
+def cell_hold():
+    """Hold the cell exclusively while a save reads and replaces the file: no session starts between the check and the
+    write, and a second page cannot overwrite this one."""
+    # shortcut: a session starting in these milliseconds exits and must be restarted; a person pressed save, so it is
+    # rare and visible. If it ever matters, make session_lock wait briefly for this hold.
+    import fcntl
+
+    from joint_tune import lock_root
+
+    root = lock_root()
+    root.mkdir(parents=True, exist_ok=True)
+    with (root / "session.lock").open("a") as handle:
+        try:
+            fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            raise Conflict("세션이 실행 중이라 저장하지 않았습니다. 끝난 뒤 다시 저장하세요.") from None
+        yield
+
+
 class ParamFiles:
-    def __init__(self, files: dict, busy=session_busy):
+    def __init__(self, files: dict, busy=session_busy, hold=cell_hold):
         self.files = {name: Path(path).expanduser().resolve() for name, path in files.items()}
-        self.busy, self.lock = busy, threading.Lock()
+        self.busy, self.hold, self.lock = busy, hold, threading.Lock()
 
     def _history(self, path: Path) -> list:
         history = path.with_name(path.name + ".history.jsonl")
         if not history.exists():
             return []
-        lines = history.read_text(encoding="utf-8").splitlines()[-HISTORY_SHOWN:]
-        return [json.loads(line) for line in reversed(lines)]
+        rows = []
+        for line in reversed(history.read_text(encoding="utf-8").splitlines()[-HISTORY_SHOWN:]):
+            try:
+                rows.append(json.loads(line))
+            except ValueError:  # a line torn by a crash must not hide the values
+                continue
+        return rows
 
     def _one(self, name: str, path: Path) -> dict:
         try:
@@ -126,9 +152,7 @@ class ParamFiles:
             if lock_reason(key):
                 raise ValueError(f"{key}: 화면에서 바꿀 수 없습니다({lock_reason(key)}).")
         path = self.files[name]
-        with self.lock:
-            if self.busy():
-                raise Conflict("세션이 실행 중이라 저장하지 않았습니다. 끝난 뒤 다시 저장하세요.")
+        with self.lock, self.hold():
             raw = path.read_bytes()
             if _digest(raw) != body.get("base_sha"):
                 raise Conflict("파일이 그사이 바뀌었습니다. 다시 불러온 뒤 저장하세요.")
@@ -159,6 +183,8 @@ class ParamFiles:
             prm.load(temporary)
             with path.with_name(path.name + ".history.jsonl").open("a", encoding="utf-8") as history:
                 history.write(json.dumps(row, ensure_ascii=False) + "\n")
+                history.flush()
+                os.fsync(history.fileno())
             os.replace(temporary, path)
         except BaseException:
             Path(temporary).unlink(missing_ok=True)
@@ -208,7 +234,7 @@ def make_server(files: ParamFiles, port: int, host: str = "127.0.0.1"):
                 self.reply(200, files.save(body))
             except Conflict as exc:
                 self.reply(409, {"error": str(exc)})
-            except (ValueError, OSError, KeyError, TypeError) as exc:
+            except (ValueError, OSError, KeyError, TypeError, RecursionError) as exc:
                 self.reply(400, {"error": str(exc)})
 
         def log_message(self, *args):
