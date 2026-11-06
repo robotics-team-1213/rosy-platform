@@ -140,7 +140,14 @@ def new_round(root: Path, parent: str | None, cell: dict, source_sha: str, recip
                                        reason="단일 팔 Isaac 케이스가 아직 없습니다. v13 작업 뒤에 연결합니다.")))
 
 
+def require_gpu(python: str) -> None:
+    """lerobot-train silently falls back to CPU when the GPU is lost (40k steps became 13 h), so refuse first."""
+    if subprocess.run([python, "-c", "import sys, torch; sys.exit(not torch.cuda.is_available())"]).returncode:
+        raise SystemExit("no usable GPU for training; nothing started. Check nvidia-smi on this host.")
+
+
 def run_round(args) -> int:
+    require_gpu(args.python)
     root = Path(args.root)
     cell = json.loads(Path(args.cell).read_text(encoding="utf-8"))
     parent = args.parent or best_round(root)

@@ -14451,3 +14451,9 @@ osy-d395-s1d\`.
 - gate 변화: 없음 — 시뮬 기하 근거다(D-947). 접촉 수치는 결과가 아니다.
 - CE: 해당 없음 — 원인(단일 접촉)과 해결을 위 증거에 적었고 별도 교훈 문서는 만들지 않았다.
 
+## 2026-11-07 · uncommitted · fix(omx): 사다리가 GPU 없이 시작하지 않게 하고 MuJoCo 접촉 교훈을 기록
+
+- 변경: 모델 PC GPU가 버스에서 떨어지자 `lerobot-train`이 `--policy.device=cuda`를 받고도 CPU로 넘어가 4만 단계가 13시간짜리가 됐다. `omx_ladder.run_round`가 시작 전에 GPU를 확인하고 거절한다. 볼록 메시 위 상자가 접점 하나로 도는 현상은 `docs/solutions/logic-errors/mujoco-box-on-convex-mesh-creeps-one-contact-2026-11-07.md`에 남겼다.
+- 증거: `test/test_omx_ladder.py` 원격 실행(가짜 python이 실패를 돌려주면 회차 기록을 쓰기 전에 거절).
+- gate 변화: 없음.
+- CE: 새 교훈 기록 — 위 문서. 앞 항목의 「별도 교훈 없음」을 이 항목이 대신한다.

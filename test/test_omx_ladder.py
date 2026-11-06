@@ -46,6 +46,23 @@ def test_a_summary_names_the_failed_seeds_for_the_next_round():
     assert result["failed_seeds"] == [48, 49] and result["strict"]["placed"] == 48 and result["lifted"] == 50
 
 
+def test_a_round_refuses_to_start_without_a_gpu(tmp_path):
+    stub = tmp_path / "python"
+    for code, refused in ((1, True), (0, False)):
+        stub.write_text(f"#!/bin/sh\nexit {code}\n", encoding="utf-8")
+        stub.chmod(0o755)
+        if refused:
+            with pytest.raises(SystemExit, match="no usable GPU"):
+                ladder.require_gpu(str(stub))
+        else:
+            ladder.require_gpu(str(stub))
+    args = type("Args", (), dict(root=str(tmp_path / "root"), python=str(tmp_path / "python")))
+    stub.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
+    with pytest.raises(SystemExit, match="no usable GPU"):
+        ladder.run_round(args)  # before it reads the cell or writes a round
+    assert not (tmp_path / "root").exists()
+
+
 def test_every_round_evaluates_new_seeds(tmp_path):
     assert ladder.eval_seed_base(tmp_path) == 100000
     row = fresh(tmp_path)

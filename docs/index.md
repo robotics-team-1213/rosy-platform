@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
+- 2026-11-07 · uncommitted · fix(omx): 사다리가 GPU 없이 시작하지 않게 하고 MuJoCo 접촉 교훈을 기록
 - 2026-11-07 · uncommitted · fix(omx): 두 팔 세계의 접촉 모델, 손목 간격 검증, rehandle 계획 교체
 - 2026-11-07 · uncommitted · feat(omx): 두 팔 셀 MuJoCo 세계, 작업 정의, 검증기와 교사
 - 2026-11-07 · fc074c6198 · feat(omx): OMX 학습 사다리 핵심
 - 2026-11-06 · 159e9eadf6 · refactor(learning): OMX-AI 전용으로 정리, SO-100 공개 학습 제거와 로봇 어댑터
-- 2026-11-06 · 03b9bd7470 · feat(learning): 학습 실행에서 학습률과 행동 묶음 길이 선택
