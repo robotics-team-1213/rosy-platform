@@ -45,6 +45,8 @@ class Commands:
             out = "mWakefulness=Dozing\n"
         elif args[3:] == ["shell", "input", "keyevent", "KEYCODE_WAKEUP"]:
             out = ""
+        elif args[3:5] == ["shell", "pm"] or args[3:5] == ["shell", "appops"]:
+            out = ""
         else:
             raise AssertionError(args)
         return subprocess.CompletedProcess(args, 0, out, "")
@@ -64,6 +66,25 @@ def test_wake_targets_verified_phone_only():
     result = module.execute(CONFIG, "wake", runner)
     assert result["status"] == "wake_sent"
     assert runner.calls[-1] == [CONFIG["adb_path"], "-s", "phone:34567", "shell", "input", "keyevent", "KEYCODE_WAKEUP"]
+
+
+def test_auto_wake_setup_grants_only_rosy_cam_on_the_verified_phone():
+    module = load()
+    runner = Commands("phone:34567\tdevice\nother:34568\tdevice\n", {
+        "phone:34567": identity(), "other:34568": identity("OTHER", "Tablet")})
+    assert module.execute(CONFIG, "auto-wake-setup", runner)["status"] == "auto_wake_ready"
+    prefix = [CONFIG["adb_path"], "-s", "phone:34567", "shell"]
+    assert runner.calls[-2:] == [
+        [*prefix, "pm", "grant", module.PACKAGE, "android.permission.WRITE_SECURE_SETTINGS"],
+        [*prefix, "appops", "set", module.PACKAGE, "SYSTEM_ALERT_WINDOW", "allow"]]
+
+
+def test_auto_wake_setup_refuses_a_wrong_identity():
+    module = load()
+    runner = Commands("phone\tdevice\n", {"phone": identity(model="Wrong")})
+    with pytest.raises(module.ScreenError):
+        module.execute(CONFIG, "auto-wake-setup", runner)
+    assert not any("grant" in call or "appops" in call for call in runner.calls)
 
 
 @pytest.mark.parametrize("rows,identities", [
