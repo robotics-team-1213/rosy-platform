@@ -323,7 +323,7 @@ certificate folder (keys, `backups/`) is data and stays where it was prepared.
 `~/.config/rosy/account-tls.env` sets `ROSY_ACCOUNT_TLS_SOURCE` (the release script),
 `ROSY_ACCOUNT_TLS_CERTS` (that folder) and `ROSY_ACCOUNT_TLS_DOMAIN` (the approved
 hostname). tailscale issues a new pair only below 30 days of validity. A changed pair
-reloads the Account proxy and recreates the Vault proxy.
+reloads the Account proxy.
 
 On the existing `site_edge` network, the proxy also owns the approved Account
 hostname as a Docker DNS alias. Approved container clients on that network use
@@ -1075,16 +1075,15 @@ or login IDs are refused; it does not overwrite or reset an existing account.
 Validate before restarting Fleet; the process loads accounts at startup.
 Account provisioning does not bind a Discord identity or authorize a Bot.
 
-The host-side config-reload watcher that restarts Fleet when `site-users.yaml`
-changes is installed on the site host; its source is not part of this
-repository, and it restarts Fleet on any detected change. On 2026-10-07 a
+Fleet does not restart by itself when `site-users.yaml` changes. The host-side
+config-reload watcher that used to do so was removed on 2026-11-06. On 2026-10-07 a
 manually restored file was published with group `101` instead of `10001`, and
 the watcher fed the unreadable file straight into a roughly two-minute Fleet
 crash loop (`unable to load site user credentials`). Never edit or restore
-this file by hand — always use `site_users.py`. Gate every automatic restart
-on `python3 /opt/rosy/candidate/deploy/site/site_users.py validate <file>` (YAML shape, digest
+this file by hand — always use `site_users.py`. Before restarting Fleet, run
+`python3 /opt/rosy/candidate/deploy/site/site_users.py validate <file>` (YAML shape, digest
 formats, permission bits, owning group; a non-zero exit means keep Fleet on
-the last good file and log instead of restarting).
+the last good file).
 
 Generate independent high-entropy credentials with the approved secret
 manager: one user API bearer per named person, the CORE registry credential,

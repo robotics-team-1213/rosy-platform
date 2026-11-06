@@ -63,6 +63,10 @@ roles:
     rosy-test-storage.timer: {run: timer, channel: copy, template: "rosy-ops:deploy/lab-host-storage/rosy-test-storage.timer", doc: "rosy-ops:docs/lab-host-storage.md"}
   ai:
     pinky-backend.service: {run: "off", channel: external, note: "Pinky stack from ~/.local/bin, outside this repository; stopped and disabled 2026-10-26 (user approval): its SQLite WAL wrote ~1.8 MB/s nonstop during test I/O contention", doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
+    pinky-rosbridge-d12.service: {run: "off", channel: external, doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
+    pinky-rosbridge-d13.service: {run: "off", channel: external, doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
+    rosy-v13-ai-gpu-restore-20261106.service: {run: "off", channel: retired, note: "one approved GPU window, ended 2026-11-06", doc: docs/adr/D-958-lab-compute-ledger-one-admission-gpu-slot-pausable-services.md}
+    rosy-v13-ai-gpu-restore-20261106.timer: {run: "off", channel: retired, doc: docs/adr/D-958-lab-compute-ledger-one-admission-gpu-slot-pausable-services.md}
     pinky-frontend.service: {run: active, channel: external, doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
     pinky-r2-watch.service: {run: active, channel: external, doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
     pinky-v13-training.service: {run: oneshot, channel: external, doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
@@ -104,6 +108,10 @@ roles:
     rosy-omx-autoupdate.timer: {run: timer, channel: updater, template: deploy/robot/omx/rosy-omx-autoupdate.timer, doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
     rosy-omx-devices-autoupdate.service: {run: oneshot, channel: updater, template: deploy/robot/omx/rosy-omx-devices-autoupdate.service, doc: docs/adr/D-871-auto-update-every-host-service-and-update-view.md}
     rosy-omx-devices-autoupdate.timer: {run: timer, channel: updater, template: deploy/robot/omx/rosy-omx-devices-autoupdate.timer, doc: docs/adr/D-871-auto-update-every-host-service-and-update-view.md}
+    rosy-omx-cameras-bind.service: {run: oneshot, channel: autoupdate, source: ".local/share/rosy/omx-devices/current", doc: deploy/robot/omx/README.md}
+    rosy-omx-cameras-bind.timer: {run: timer, channel: autoupdate, doc: deploy/robot/omx/README.md}
+    rosy-omx-upkeep.service: {run: oneshot, channel: adhoc, source: "rosy-test/omx-record-prep-*", note: "cell_upkeep.py through a run-upkeep.sh copy; should move into omx-devices", doc: deploy/robot/omx/README.md}
+    rosy-omx-upkeep.timer: {run: timer, channel: adhoc, doc: deploy/robot/omx/README.md}
     rosy-omx-camera-readiness.service: {run: active, channel: autoupdate, template: deploy/robot/omx/rosy-omx-camera-readiness.service, source: ".local/share/rosy/omx-devices/current", doc: deploy/robot/omx/README.md}
     rosy-omx-camera-view.service: {run: active, channel: autoupdate, template: deploy/robot/omx/rosy-omx-camera-view.service, source: ".local/share/rosy/omx-devices/current", doc: deploy/robot/omx/README.md}
     rosy-omx-camera@.service: {run: active, instances: [top, arm_a_wrist], note: "front retired 2026-10-28: its by-path port is gone and arm S gripper camera is arm_a_wrist", channel: autoupdate, template: deploy/robot/omx/rosy-omx-camera@.service, source: ".local/share/rosy/omx-devices/current", doc: deploy/robot/omx/README.md}
