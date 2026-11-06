@@ -1,0 +1,172 @@
+"""cell_params_web: guards and motion values stay locked, a save is validated and recorded, nothing is written while a
+session runs or after the file moved, and the page answers only on the local host."""
+import http.client
+import json
+from pathlib import Path
+import sys
+import threading
+
+import pytest
+
+OMX = Path(__file__).parents[1] / "deploy/robot/omx"
+sys.path.insert(0, str(OMX))
+try:
+    import cell_params as prm
+    import cell_params_web as web
+finally:
+    sys.path.remove(str(OMX))
+
+FREE = "objects.chroma"
+
+
+@pytest.fixture
+def path(tmp_path):
+    file = tmp_path / "params.json"
+    file.write_text(json.dumps({"schema": prm.SCHEMA, "params": {
+        FREE: {"value": 25.0, "unit": "lab", "source": "measured", "evidence": "first look"},
+        "auto.temp_stop_c": {"value": 50, "unit": "C", "source": "measured", "evidence": "kept"}}}), encoding="utf-8")
+    return file
+
+
+def files(path, busy=False):
+    return web.ParamFiles({"stack": path}, busy=lambda: busy)
+
+
+def save(store, path, **overrides):
+    sha = store.snapshot()["files"][0].get("file_sha")
+    return store.save({"file": "stack", "base_sha": sha, "changes": {FREE: 30.0}, "note": "그림자", **overrides})
+
+
+@pytest.mark.parametrize("name", [
+    "auto.temp_stop_c", "auto.pwm_fraction", "auto.pwm_window_s", "auto.max_gross_kg", "auto.grasp_depth_m",
+    "safety.bus_watchdog_ms", "runner.contact_lag", "runner.contact_loaded_max", "windup.rest_pwm", "windup.jaw_pwm",
+    "upkeep.jaw_gap", "jitter.pwm_std", "loadcheck.risky_share", "loadcheck.refuse_unknown", "corridor.half_width_mm",
+    "corridor.clear_z_m", "zone.takeover", "push.speed_m_s", "push.height_m", "pivot.clear_above_m", "pivot.grip_closed",
+    "gripper.held_30mm", "wrist.max_step_mm", "wrist.max_total_mm", "look.max_total_mm", "pinch.max_step_mm",
+    "reach.max_mm", "pinch.enabled", "wrist.enabled", "feel.step_mm", "place.margin_mm", "wrist.tip_to_top_mm"])
+def test_guards_and_motion_values_are_locked(name):
+    assert web.lock_reason(name)
+
+
+def test_a_new_group_or_unit_is_locked_until_someone_decides(monkeypatch):
+    monkeypatch.setitem(prm.DEFAULTS, "newguard.limit", (1.0, "mm", 0, 2))
+    monkeypatch.setitem(prm.DEFAULTS, "objects.newunit", (1.0, "newton", 0, 2))
+    assert web.lock_reason("newguard.limit") and web.lock_reason("objects.newunit")
+
+
+def test_vision_thresholds_can_be_tuned():
+    free = [name for name in prm.DEFAULTS if not web.lock_reason(name)]
+    assert {FREE, "objects.min_px", "wrist.tol_mm", "look.tol_mm", "reach.gain", "track.min_inliers"} <= set(free)
+    assert all(prm.DEFAULTS[name][1] in web.VISION_UNITS for name in free)
+
+
+def test_every_parameter_is_listed_with_its_file_value_or_default(path):
+    rows = {row["name"]: row for row in files(path).snapshot()["files"][0]["rows"]}
+    assert set(rows) == set(prm.DEFAULTS)
+    assert rows[FREE]["source"] == "measured" and rows[FREE]["evidence"] == "first look" and not rows[FREE]["locked"]
+    assert rows["auto.temp_stop_c"]["value"] == 50 and rows["auto.temp_stop_c"]["locked"]
+    assert rows["objects.min_px"]["in_file"] is False and rows["objects.min_px"]["source"] == "default"
+
+
+def test_a_save_is_loadable_keeps_the_other_entries_and_records_what_it_replaced(path):
+    before = json.loads(path.read_text(encoding="utf-8"))["params"]
+    result = save(files(path), path)
+    after = json.loads(path.read_text(encoding="utf-8"))["params"]
+    assert prm.load(path)["values"][FREE] == 30.0 and result["params_sha"] == prm.load(path)["sha"]
+    assert after["auto.temp_stop_c"] == before["auto.temp_stop_c"]
+    assert after[FREE]["source"] == "tuned" and "25.0 -> 30.0: 그림자" in after[FREE]["evidence"]
+    row = json.loads(path.with_name("params.json.history.jsonl").read_text(encoding="utf-8").splitlines()[-1])
+    assert row["note"] == "그림자" and row["changes"] == [{"name": FREE, "from": 25.0, "to": 30.0, "before": before[FREE]}]
+    assert result["history"][0]["after_sha"] == result["file_sha"]
+    assert sorted(item.name for item in path.parent.iterdir()) == ["params.json", "params.json.history.jsonl"]
+
+
+@pytest.mark.parametrize("overrides,message", [
+    ({"changes": {"auto.temp_stop_c": 80}}, "바꿀 수 없습니다"), ({"changes": {"objects.nope": 1}}, "알 수 없는"),
+    ({"changes": {FREE: 500.0}}, "outside"), ({"changes": {FREE: "30"}}, "number"), ({"changes": {FREE: True}}, "number"),
+    ({"changes": {"objects.min_px": 150.5}}, "integer"), ({"changes": {}}, "바뀐 값"), ({"note": " "}, "근거"),
+    ({"note": "두\n줄"}, "근거"), ({"note": "x" * 301}, "근거"), ({"file": "other"}, "등록되지")])
+def test_a_refused_save_writes_nothing(path, overrides, message):
+    before = path.read_bytes()
+    with pytest.raises(ValueError, match=message):
+        save(files(path), path, **overrides)
+    assert path.read_bytes() == before and not path.with_name("params.json.history.jsonl").exists()
+
+
+def test_a_save_is_refused_while_a_session_runs(path):
+    before = path.read_bytes()
+    with pytest.raises(web.Conflict, match="세션"):
+        save(files(path, busy=True), path)
+    assert path.read_bytes() == before
+
+
+def test_a_real_arm_session_lock_counts_as_busy(tmp_path, monkeypatch):
+    pytest.importorskip("fcntl")
+    monkeypatch.setenv("ROSY_OMX_HOME", str(tmp_path))
+    monkeypatch.setenv("HOME", str(tmp_path))
+    sys.path.insert(0, str(OMX))
+    try:
+        import joint_tune
+    finally:
+        sys.path.remove(str(OMX))
+    assert web.session_busy() is False
+    for arm in ("arm_a", None):
+        held = joint_tune.session_lock(arm)
+        assert web.session_busy() is True
+        held.close()
+        assert web.session_busy() is False
+
+
+def test_a_save_over_a_changed_file_is_refused(path):
+    store = files(path)
+    sha = store.snapshot()["files"][0]["file_sha"]
+    document = json.loads(path.read_text(encoding="utf-8"))
+    document["params"][FREE]["value"] = 26.0
+    path.write_text(json.dumps(document), encoding="utf-8")
+    with pytest.raises(web.Conflict, match="바뀌었습니다"):
+        store.save({"file": "stack", "base_sha": sha, "changes": {FREE: 30.0}, "note": "늦음"})
+    assert prm.load(path)["values"][FREE] == 26.0
+
+
+def test_a_failed_validation_of_the_written_file_leaves_no_trace(path, monkeypatch):
+    before = path.read_bytes()
+    monkeypatch.setattr(web.prm, "load", lambda _: (_ for _ in ()).throw(ValueError("disk said no")))
+    with pytest.raises(ValueError):
+        web.ParamFiles._replace(path, b"{}", {"at": "now"})
+    assert path.read_bytes() == before and [item.name for item in path.parent.iterdir()] == ["params.json"]
+
+
+@pytest.fixture
+def server(path):
+    running = web.make_server(files(path), 0)
+    threading.Thread(target=running.serve_forever, daemon=True).start()
+    yield running
+    running.shutdown()
+    running.server_close()
+
+
+def call(server, method, target, body=None, headers=None):
+    client = http.client.HTTPConnection("127.0.0.1", server.server_port, timeout=10)
+    try:
+        client.request(method, target, body, {"Host": f"127.0.0.1:{server.server_port}", **(headers or {})})
+        response = client.getresponse()
+        return response.status, response.read(), response.getheaders()
+    finally:
+        client.close()
+
+
+def test_the_page_answers_only_on_the_local_host_and_a_post_needs_the_header(server, path):
+    assert call(server, "GET", "/")[0] == 200
+    assert call(server, "GET", "/params.json", headers={"Host": "evil.example"})[0] == 403
+    body = json.dumps({"file": "stack", "base_sha": "x", "changes": {FREE: 30.0}, "note": "n"})
+    assert call(server, "POST", "/save", body)[0] == 403
+    assert call(server, "POST", "/save", body, {"X-Cell-Params": "1", "Host": "evil.example"})[0] == 403
+    assert call(server, "POST", "/save", body, {"X-Cell-Params": "1"})[0] == 409
+    assert call(server, "POST", "/save", "[1]", {"X-Cell-Params": "1"})[0] == 400
+
+
+def test_the_page_loads_nothing_from_elsewhere_and_never_writes_file_text_as_markup(server):
+    status, page, headers = call(server, "GET", "/")
+    text = page.decode("utf-8")
+    assert status == 200 and "innerHTML" not in text and "http://" not in text and "https://" not in text
+    assert "frame-ancestors 'none'" in dict(headers)["Content-Security-Policy"]
