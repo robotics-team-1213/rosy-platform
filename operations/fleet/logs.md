@@ -5313,3 +5313,9 @@
 - gate 변화: SOURCE 회귀 검증; ARTIFACT/DEVICE/FIELD 수용 근거로 사용하지 않음. 최종 재조립 SHA 원격 회귀와 FULL은 별도.
 - 결정: API v1.363; 기존 CORE 최종 명령·모드 owner 유지.
 - 교훈: CE 해당 없음 — 최종 코드·회귀 시험·API 계약으로 판단 근거를 재현할 수 있음.
+
+## 2026-11-07 · uncommitted · fix(fleet): 배터리 근거 없음·멈춤 사유 분리
+- 변경: powerHealthView가 evidence missing은 "배터리 값 없음 — 배터리 센서 서비스 확인", stale은 "배터리 값 멈춤 — 센서 연결 확인"으로 나눔. 멈춤 경과 시간은 그룹 문구가 갈라지지 않도록 problem이 아닌 note로 두고 로스터 배터리 칸에만 표시. D-509 충전 확인(신선한 CORE 근거만) 유지.
+- 증거: node --test queue-inline+console-health 12 passed/skip0; 원격 Chromium(ROSY_RUN_BROWSER_TESTS=1) 176 passed/skip0 (be0e5095e7).
+- gate 변화: SOURCE 회귀 검증만; 실물·현장 수용 근거 아님.
+- 교훈: CE 해당 없음 — 문구 분리, 코드·시험으로 재현 가능.
