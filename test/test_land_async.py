@@ -21,6 +21,43 @@ _SPEC.loader.exec_module(tool)
 NOW = datetime(2026, 10, 28, 4, 40, 0, tzinfo=timezone.utc)
 
 
+@pytest.mark.parametrize("argv", [
+    ["-h"], ["--help"], ["--tests", "full", "--help"],
+    ["resume", "stopped-tree", "-h"], ["resume", "--help"],
+    ["orphans", "--resume", "--help"],
+    ["--supervise", "hidden-tree", "snapshot", "--help"],
+])
+def test_help_returns_before_any_landing_or_git_access(argv, monkeypatch, capsys):
+    def forbidden(*args, **kwargs):
+        pytest.fail("help accessed the landing pipeline")
+
+    for name in ("start", "resume", "supervise", "orphans", "detach", "git", "holder", "_queue"):
+        monkeypatch.setattr(tool, name, forbidden)
+    assert tool.main(argv) == 0
+    output = capsys.readouterr().out
+    assert "python tools/land_async.py" in output
+    assert "resume <tree-name>" in output
+
+
+@pytest.mark.parametrize("argv", [["-h"], ["--help"], ["resume", "missing", "--help"]])
+def test_help_script_works_outside_a_repository_without_writing(tmp_path, argv):
+    result = subprocess.run([sys.executable, "-I", str(ROOT / "tools" / "land_async.py"), *argv],
+                            cwd=tmp_path, capture_output=True, text=True, timeout=20)
+    assert result.returncode == 0, result.stderr
+    assert "python tools/land_async.py" in result.stdout
+    assert not result.stderr
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_help_text_inside_a_forwarded_value_is_not_a_help_request(monkeypatch):
+    argv = ["--tests", "test/example.py --help"]
+    calls = []
+    monkeypatch.setattr(tool, "start", lambda cwd, args, now, launch: (
+        calls.append(args) or ("snapshot", Path("log"))))
+    assert tool.main(argv) == 0
+    assert calls == [argv]
+
+
 def _git(cwd: Path, *args: str) -> str:
     return subprocess.run(["git", "-C", str(cwd), *args], check=True, capture_output=True, text=True).stdout.strip()
 
@@ -415,7 +452,8 @@ def starting_lander(repo, tmp_path):
         f"while not Path({str(stop)!r}).exists():\n"
         f" if Path({str(admit)!r}).exists():\n"
         f"  q = Path({str(qdir)!r}); q.mkdir(exist_ok=True)\n"
-        f"  (q/'0001-1.json').write_text(json.dumps(dict(pid=os.getpid(),branch={snap!r},status='pending')))\n"
+        f"  pending = q/'0001-1.tmp'; pending.write_text(json.dumps(dict(pid=os.getpid(),branch={snap!r},status='pending')))\n"
+        "  os.replace(pending, q/'0001-1.json')\n"
         " time.sleep(.02)\n"
         "raise SystemExit(7)\n", encoding="utf-8")
     processes = []

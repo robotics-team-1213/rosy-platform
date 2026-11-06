@@ -14286,3 +14286,18 @@ osy-d395-s1d\`.
 - 증거: helper RED4실패→75ca741ec4 원격108통과, mapping RED4실패/10통과→3832c3e788 원격122통과, 추가 operator guard exact 회귀 RED1실패→6dd3dcb9f5 원격123통과/skip0·NEW/known/flaky0이다. 실제 GitHub complete trees11946/12861의 변경2211paths는 같은 SHA의 complete local git와 정확히 일치했다. a613→통합6dd의2238paths는 OS15/native1236/none987/review0으로 os-image에 도달했다. 독립 소유 source·문서 검토는 지원되는 중요 문제를 찾지 못했다.
 - gate 변화: source와 읽기 전용 비교 검증이다. 설치 baseline 혼재와 기존004 publisher 소유를 별도 운영 기록에 보존했으며 baseline 진전·개인키 출력·프로세스 중단·새 빌드/게시/장치 활성화는 하지 않았다. 최종 통합 FULL과 실제 예약 설치는 별도다.
 - CE: 해당 없음. 완전 비교·소비자 분류·mixed baseline의 판단은 코드·실행 회귀·정본 운영 문서에 직접 남았다. 운영 설치와 자동 Release 수용은 아직 미해결이며 해결 교훈으로 앞당겨 기록하지 않는다.
+
+
+## 2026-11-06 · uncommitted · fix(tools): 도움말 요청의 착지 snapshot 생성 차단
+
+- 변경: land_async main의 첫 분기에서 정확한 -h/--help 토큰을 인식해 기존 모듈 usage를 출력하고 0으로 끝낸다. 기본 호출·forwarded 인자·resume·orphans·supervise의 도움말은 Git/queue/attach 전에 끝나며, --tests 값 문자열 안의 --help는 기존대로 전달한다.
+- 증거: RED b8237ae684 원격 새 회귀10실패/문자열 전달1통과. source3072f6f86a 원격 land_async/GC/land/queue 226통과·skip0, known-failures NEW/known/flaky0. 실제 CLI -h/--help/resume --help는 Git 없는 격리 fixture에서도 상태 파일을 쓰지 않았다. scratch land-help-{red,green}/run-1.txt. 독립 source 검토 미해결 finding 없음.
+- gate 변화: scoped source 회귀이며 영향 선택은 FULL이다. 사용자 지시에 따라 새 main 착지/FULL 제출은 대기한다. 기존 manual224244와 도움말 STOP224214·old212723 snapshot/기록을 보존했다.
+- CE: 해당 없음 — 반복된 부작용의 원인·정확 토큰 범위·변경 전 무부작용 보장은 최종 코드와 회귀로 직접 재현되며, 별도 환경 조건이나 복구 지식이 필요하지 않다.
+
+## 2026-11-06 · uncommitted · fix(tools): 보존된 도움말 수정을 현재 main과 통합
+
+- 변경: main ce2670e864에서 보존 source aab728fa56를 정상 병합했다. 도움말 첫 분기3줄과 기존 회귀는 aab와 바이트가 같으며 선행 main의 OMX 수정·기록을 보존했다. 정확한 -h/--help 토큰은 Git/착지 작업 전에 usage 출력/0 종료하며 --tests 값 문자열 안의 --help는 그대로 전달한다.
+- 증거: source e8f0568a4a 원격 AI PC landing/GC/queue 기존226개와 선행 OMX38개, 총264통과·skip0·NEW/known/flaky0; scratch land-help-integration-green/run-1.txt. Git 없는 fixture의 실제 도움말 CLI와 mutation 경로 거절 회귀를 포함한다. 고정 source 독립 병합 검토 미해결 finding 없음.
+- gate 변화: SOURCE 통합 회귀 확인이다. 영향 선택 FULL은 유지하며 새 canonical 제출은 게시 담당의 조율을 기다린다. 실행 중인 관제·사건·metadata snapshot을 취소하거나 수정하지 않았다.
+- CE: 해당 없음 — 기존 도움말 수정·회귀가 원인과 재발 경계를 직접 보존하며 이번 변경은 정상 통합이다.
