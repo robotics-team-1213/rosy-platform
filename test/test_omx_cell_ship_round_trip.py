@@ -109,7 +109,7 @@ def test_a_pivot_folds_again_when_the_stop_also_held_the_first_fold(tmp_path, mo
             return {"ok": True}
 
     monkeypatch.setitem(sys.modules, "cell_pipeline", types.SimpleNamespace(write_library=lambda c, a, b, path: path))
-    cell, config = Stalled(), {"plan": {"approach_m": 0.04}, "sites": {"s": {"z": 0.1}}}
+    cell, config = Stalled(), {"plan": {"approach_m": 0.04}, "sites": {"s": {"z": 0.1}}, "coarse": {"z": 0.1}}
     result = cell_pivot.pivot_calibrate(cell, config, (0.1, 0.0), [-40], {"sites": {"s": {"homography": [], "z_view": 0.1}}},
                                         "s", tmp_path, lambda s: None, lambda row: None)
     assert result["result"] == "stopped" and cell.commands[-2:] == ["park", "park"]
