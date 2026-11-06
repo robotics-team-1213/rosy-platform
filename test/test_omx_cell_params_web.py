@@ -148,6 +148,53 @@ def test_a_failed_validation_of_the_written_file_leaves_no_trace(path, monkeypat
     assert path.read_bytes() == before and [item.name for item in path.parent.iterdir()] == ["params.json"]
 
 
+SITE = {"11": {"pwm": 300}, "12": {"pwm": 600, "p": 1600}, "13": {"pwm": 600, "i": 30},
+        "14": {"pwm": 300, "current": 250}, "15": {"pwm": 300, "current": 250}, "16": {"pwm": 300, "current": 250}}
+
+
+def test_servo_layers_name_the_layer_that_load_caps_uses(tmp_path):
+    session_caps = pytest.importorskip("session_caps")
+    caps = tmp_path / "caps.json"
+    caps.write_text(json.dumps(SITE))
+    model, robot = {13: {"i": 50}, 14: {"i": 50}}, {14: {"i": 70, "p": 800}}
+    table = session_caps.servo_layers(caps, model=model, robot=robot)
+    assert table[13]["i"] == {"value": 30, "from": "site", "hidden": {"model": 50}}
+    assert table[14]["i"] == {"value": 70, "from": "robot", "hidden": {"model": 50}}
+    assert table[14]["p"] == {"value": 800, "from": "robot", "hidden": {}}
+    assert table[12]["p"] == {"value": 1600, "from": "site", "hidden": {}}
+    names = {"pwm": "pwm_limit", "current": "current_limit", "p": "p_gain", "i": "i_gain"}
+    effective = session_caps.load_caps(caps, model=model, robot=robot)
+    assert {motor: {names[key]: cell["value"] for key, cell in row.items()} for motor, row in table.items()} == effective
+
+
+def test_a_caps_file_a_session_would_refuse_shows_its_reason(tmp_path):
+    pytest.importorskip("session_caps")
+    caps = tmp_path / "caps.json"
+    caps.write_text(json.dumps({**SITE, "12": {"pwm": 5000}}))
+    assert "pwm" in web.servo_table("arm", caps)["error"]
+    assert "error" in web.servo_table("arm", tmp_path / "missing.json")
+
+
+def test_the_servo_view_is_read_only_and_local(path, tmp_path):
+    pytest.importorskip("session_caps")
+    caps = tmp_path / "caps.json"
+    caps.write_text(json.dumps(SITE))
+    before = caps.read_bytes()
+    running = web.make_server(files(path), 0, servo={"arm": (caps, None)})
+    threading.Thread(target=running.serve_forever, daemon=True).start()
+    try:
+        status, body, _ = call(running, "GET", "/servo.json")
+        table = json.loads(body)[0]
+        assert status == 200 and [row["joint"] for row in table["motors"]][2] == "elbow_flex"
+        assert table["motors"][2]["values"]["i"]["from"] == "site"
+        assert call(running, "GET", "/servo.json", headers={"Host": "evil.example"})[0] == 403
+        assert call(running, "POST", "/servo.json", "{}", {"X-Cell-Params": "1"})[0] == 404
+    finally:
+        running.shutdown()
+        running.server_close()
+    assert caps.read_bytes() == before
+
+
 @pytest.fixture
 def server(path):
     running = web.make_server(files(path), 0)

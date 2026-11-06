@@ -370,6 +370,8 @@ def test_named_manual_move_forwards_drive_and_terminal_zero(tmp_path):
 
     robot = DrivingRobot("rosy_01")
     client = _named_client(tmp_path, robot)
+    store = client.app.state.task_service.store
+    store.rearm_dispatch(expected_generation=store.dispatch_control()["generation"], actor_id="bob")
     for linear in (0.02, 0.0):
         response = client.post("/api/fleet/do", json={
             "do": "move", "robot": "rosy_01", "linear": linear, "angular": 0.0,
