@@ -38,7 +38,7 @@ export function groupRows(rows, min = 2) {
   return out;
 }
 
-/** "배터리 근거 확인 불가 — 센서/CORE 확인 · 9대 (rosy_001 · rosy_002 · rosy_003 외 6대)" */
+/** "배터리 값 멈춤 — 센서 연결 확인 · 9대 (rosy_001 · rosy_002 · rosy_003 외 6대)" */
 export function groupText(text, ids, shown = 3) {
   const few = ids.slice(0, shown).join(" · ");
   return `${text.replace(/^:\s*/, "")} · ${ids.length}대 (${few}${ids.length > shown ? ` 외 ${ids.length - shown}대` : ""})`;
