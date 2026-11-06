@@ -100,6 +100,7 @@ ALLOWED = Counter({
     ('system/host_files.py', 'getattr', 'snapshot', "'robot_id'"): 1,
     # C6-HOST-04: OPTIONAL_SERVICE.
     ('system/host_files.py', 'getattr', 'svc', '"calibration"'): 1,
+    ('system/host_files.py', 'getattr', 'svc', '"command"'): 1,  # C6-HOST-08
     # C6-HOST-06: OPTIONAL_SERVICE.
     ('system/host_files.py', 'getattr', 'svc', "'line_follow'"): 1,
     # C6-HOST-07: PLATFORM_GUARD.
