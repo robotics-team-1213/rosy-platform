@@ -17,6 +17,11 @@
 # known_drift: why the installed unit or copy may differ for now; reported as KNOWN, not a failure
 # gpu:      idle-yield (D-958: lends the GPU to experiments only while its role is idle; deploy/hosts/gpu_tenants.py) | keep
 schema: rosy.host-services/1
+# images: Docker repositories a role may keep (role and placement: Harbor ADR 0021, D-960). update_status reports any
+# other repository and more than three tags of one, so test and rollback builds do not pile up on a host again.
+images:
+  model: [harborlogi, ghcr.io/robotics-team-1213/harborlogi, nginx, ros, rosy-omx-g2, rosy-omx-pilot, rosy-omx-probe, rosy-omx-workstation]
+  site: [rosy-site-fleet, rosy-site-postgres, rosy-site-proxy, rosy-site-vision]
 roles:
   model:
     rosy-dataset-review-account.service: {run: active, channel: snapshot, source: "rosy-ml/legacy-review-account-code/releases/*", doc: docs/adr/D-809-legacy-learning-account-boundary.md}
@@ -95,10 +100,10 @@ roles:
     rosy-site-config-reload.service: {run: "off", channel: retired, doc: deploy/site/README.md}
     rosy-site-fleet-mdns.service: {run: "off", channel: retired, doc: deploy/site/README.md}
     rosy-site-overhead-mdns.service: {run: "off", channel: retired, doc: deploy/site/README.md}
-    rosy-user-fleet-advertise.service: {run: active, channel: snapshot, source: ".local/share/rosy/site-discovery", doc: deploy/site/README.md}
-    rosy-user-overhead-advertise.service: {run: active, channel: snapshot, source: ".local/share/rosy/site-discovery", doc: deploy/site/README.md}
-    rosy-user-mdns-bridge.service: {run: oneshot, channel: snapshot, source: ".local/share/rosy/site-discovery", doc: deploy/site/README.md}
-    rosy-user-mdns-bridge.timer: {run: timer, channel: snapshot, doc: deploy/site/README.md}
+    rosy-user-fleet-advertise.service: {run: "off", channel: retired, note: "system Avahi advertises fleet and overhead; the fallback refused to duplicate them and restarted every 15 s until 2026-11-06", doc: deploy/site/README.md}
+    rosy-user-overhead-advertise.service: {run: "off", channel: retired, doc: deploy/site/README.md}
+    rosy-user-mdns-bridge.service: {run: "off", channel: retired, doc: deploy/site/README.md}
+    rosy-user-mdns-bridge.timer: {run: "off", channel: retired, doc: deploy/site/README.md}
     rosy-test-storage.service: {run: oneshot, channel: copy, template: "rosy-ops:deploy/lab-host-storage/rosy-test-storage.service", copies: {rosy-test/maintenance/host_storage.py: "rosy-ops:tools/host_storage.py"}, doc: "rosy-ops:docs/lab-host-storage.md"}
     rosy-test-storage.timer: {run: timer, channel: copy, template: "rosy-ops:deploy/lab-host-storage/rosy-test-storage.timer", doc: "rosy-ops:docs/lab-host-storage.md"}
   omx:

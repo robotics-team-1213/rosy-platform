@@ -48,7 +48,7 @@ from core.bridge import (
     traffic_gate,
     translate,
 )
-from core.bridge.cmd_vel import cmd_vel_cycle
+from core.bridge.cmd_vel import CycleGapWatch, cmd_vel_cycle
 from core.bridge.docking_executor import BridgeDockingExecutor
 from core.bridge.goal_tracker import GoalTracker
 from core.bridge.route_context import RouteContextPublication
@@ -191,9 +191,9 @@ class RosBridge:
         # A managed device may be off if CORE restarted during STANDBY: unknown, so send once.
         self._device_applied: dict = dict.fromkeys(services.power.managed_devices())
 
-        self._cmd_timer = node.create_timer(1.0 / 50.0, self._publish_cmd_vel)
+        self._cmd_timer = node.create_timer(1.0 / 50.0, cmd_gap := CycleGapWatch(self._publish_cmd_vel))
         self._state_timer = node.create_timer(1.0 / self._state_hz, self._tick_state)
-        self._diag_timer = node.create_timer(1.0, self._tick_diagnostics)
+        self._diag_timer = node.create_timer(1.0, cmd_gap.reporting(self._tick_diagnostics, node.get_logger().warning))
         self._power_timer = node.create_timer(1.0 / 5.0, self._tick_power)
         # 20 Hz while a parking run moves (DockingManager.fast_tick), 5 Hz
         # otherwise: docking_mode.due() skips 3 in 4 calls.
