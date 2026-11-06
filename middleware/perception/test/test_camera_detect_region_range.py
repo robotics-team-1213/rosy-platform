@@ -77,7 +77,7 @@ def test_invalid_exposure_tick_keeps_raw_frame_and_evidence_fresh(node_module, m
         get_clock=lambda: types.SimpleNamespace(now=lambda: types.SimpleNamespace(nanoseconds=1_000_000_000)),
         _line_controls_stable=lambda: True,
         _publish_front=lambda frame, stamp: raw.append((frame, stamp)),
-        telemetry_pub=types.SimpleNamespace(publish=lambda _: None),
+        telemetry_pub=types.SimpleNamespace(publish=lambda _: None, get_subscription_count=lambda: 0),
         block_pub=types.SimpleNamespace(publish=lambda msg: holds.append(msg.data)),
         observation_pub=types.SimpleNamespace(publish=lambda msg: output.append(json.loads(msg.data))))
     node_module.CameraDetectNode.tick(node)
@@ -270,3 +270,41 @@ def test_no_relock_while_the_camera_is_not_frozen(node_module, monkeypatch):
     for _ in range(40):
         node_module.CameraDetectNode._watch_exposure(node, frame)
     assert node.restarts == 0
+
+
+@pytest.mark.parametrize('heard', [0, 1])
+def test_telemetry_and_debug_are_built_only_for_a_listener(node_module, monkeypatch, heard):
+    import numpy as np
+    from control.sensing.perception.camera_worker import (
+        CameraPreprocessProfile, CameraPreprocessWorker,
+    )
+    sent = []
+    monkeypatch.setattr(node_module, 'String', lambda **kw: types.SimpleNamespace(**kw))
+    monkeypatch.setattr(node_module, 'Bool', lambda **kw: types.SimpleNamespace(**kw))
+    monkeypatch.setattr(node_module, 'Float32', lambda **kw: types.SimpleNamespace(**kw))
+    monkeypatch.setattr(node_module, 'observation_payload', lambda *a, **k: {})
+    pixels = np.full((240, 320, 3), (30, 140, 40), dtype=np.uint8)
+
+    def pub(name):
+        return types.SimpleNamespace(publish=lambda m: sent.append(name),
+                                     get_subscription_count=lambda: heard)
+    res = {'side': 0.0, 'mid_obst': 0.0, 'regions': [], 'cols': [{'obst': 0.0}] * 3}
+    node = types.SimpleNamespace(
+        _cam=types.SimpleNamespace(capture_array=lambda _: pixels),
+        _worker=types.SimpleNamespace(process=lambda frame: types.SimpleNamespace(
+            pixels=pixels, result=res,
+            telemetry=types.SimpleNamespace(quality_valid=True, as_dict=lambda: {}))),
+        _frame_id=0, _maybe_lock=lambda: None, _watch_exposure=lambda _f: None,
+        _power_gate=types.SimpleNamespace(plan=lambda: 'run'), _power_held=lambda plan: plan != 'run',
+        get_clock=lambda: types.SimpleNamespace(now=lambda: types.SimpleNamespace(nanoseconds=1_000_000_000)),
+        get_logger=lambda: types.SimpleNamespace(warn=lambda *a, **k: None),
+        _line_controls_stable=lambda: False, _publish_front=lambda *a: None,
+        _policy=types.SimpleNamespace(update=lambda r: (False, False), ready=True),
+        _camera_ready_reported=True, _lidar_ranged=lambda regions, stamp: regions,
+        _ground_mode='nominal', _ground=None,
+        telemetry_pub=pub('telemetry'), dbg_pub=pub('debug'), block_pub=pub('block'),
+        cliff_pub=pub('cliff'), side_pub=pub('side'), observation_pub=pub('observation'))
+    node_module.CameraDetectNode.tick(node)
+    # Stop inputs and the observation are never gated on a subscriber.
+    assert {'block', 'cliff', 'side', 'observation'} <= set(sent)
+    assert ('telemetry' in sent) == ('debug' in sent) == bool(heard)

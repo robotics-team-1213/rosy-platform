@@ -168,6 +168,8 @@ export function createCellObservation({request, root, credential = () => ''}) {
         signal: AbortSignal.any([scope.signal, AbortSignal.timeout(1500)]),
       });
       if (!current()) return;
+      // Tabs of one user share Vision's per-source frame budget; the 100 ms expiry timer ages out the image we keep.
+      if (response.status === 429) return;
       const badge = frameBadge({ok: response.ok, status: response.status,
         ageMs: response.headers.get('X-Frame-Age-Ms'), frameState: response.headers.get('X-Frame-State'), rectified: false});
       const age = Number(response.headers.get('X-Frame-Age-Ms'));

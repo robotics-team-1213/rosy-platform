@@ -43,7 +43,7 @@ def cell_url():
 
 def observation_feed(page):
     from PIL import Image
-    state = SimpleNamespace(freeze_b=None, sequence=0, stall=False, held=[], failed_assets=[], incidents=[], cleared=[])
+    state = SimpleNamespace(freeze_b=None, sequence=0, stall=False, held=[], limited=set(), failed_assets=[], incidents=[], cleared=[])
     page.on("response", lambda response: state.failed_assets.append(f"{response.status} {response.url}")
             if response.request.resource_type in ("script", "stylesheet") and not response.ok else None)
     encoded = BytesIO()
@@ -101,6 +101,8 @@ def observation_feed(page):
         if state.stall:
             state.held.append(route)
             return
+        if any(f"/{source}/" in route.request.url for source in state.limited):
+            return route.fulfill(status=429, body="rate limited", headers={"Retry-After": "1"})
         if "/wrist_b/" in route.request.url and state.freeze_b:
             return route.fulfill(status=503, body="unavailable")
         state.sequence += 1
@@ -142,6 +144,27 @@ def test_cell_displays_two_arms_three_cameras_and_expires_each_disconnected_sour
         assert page.locator("iframe").count() == 0
         assert urlsplit(page.url).path == "/console/cell"
         assert not errors
+        page.unroute_all(behavior="ignoreErrors")
+        browser.close()
+
+
+def test_rate_limited_frame_keeps_the_fresh_image_until_it_expires(cell_url):
+    """Two tabs of one user share Vision's 0.2 s frame budget, so a 429 is normal."""
+    from playwright.sync_api import expect, sync_playwright
+    with sync_playwright() as playwright:
+        browser, page, errors = open_page(playwright, 390, 844, url=cell_url)
+        state, _ = observation_feed(page)
+        page.goto(cell_url)
+        card = page.locator('#workcell-observations [data-camera-source="wrist_a"]')
+        expect(card.locator("img")).to_be_visible()
+        state.limited.add("wrist_a")
+        page.wait_for_timeout(1000)  # two polls get 429 while the last frame is under 2 s old
+        expect(card.locator("img")).to_be_visible()
+        expect(card.locator("ui-status")).not_to_contain_text("최신 영상 없음")
+        expect(card.locator("img")).to_be_hidden(timeout=4000)  # expired is still stale
+        expect(card.locator("ui-status")).to_contain_text("최신 영상 없음")
+        state.limited.clear()
+        expect(card.locator("img")).to_be_visible(timeout=4000)
         page.unroute_all(behavior="ignoreErrors")
         browser.close()
 
