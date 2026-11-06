@@ -75,7 +75,57 @@ def start_check(graph, segments: list, x: float, y: float, yaw, tol_deg: float) 
             "off_lane_m": round(max(0.0, dist - arc.width_m / 2), 3)}
 
 
+#: CORE ``BatteryLevel`` values a start may see; critical, deep and anything unknown refuse.
+BATTERY_START_LEVELS = ("ok", "warning")
+
+
+def cached_battery(state):
+    """Start admission's battery source: the console's ``power_health`` cache (``state.power_health_display``,
+    <= 5 s old) and its age; None when there is no display or no good read (fail closed)."""
+    async def read(robot_id: str):
+        display = getattr(state, "power_health_display", None)  # installed with the console routes
+        health = await display.shown(robot_id, wait_s=2.0) if display is not None else None
+        return None if health is None else {"battery": health.get("battery"), "age_s": display.age(robot_id)}
+    return read
+
+
+def battery_refusal(reading, *, charge_return: bool = False):
+    """Why a trip may not start on this battery reading, or None. ``reading``: ``{"battery", "age_s"}``, the
+    CORE ``power_health`` battery block and the age of Fleet's cached copy. Fresh means what the console's
+    ``powerHealthView`` means: evidence ``fresh`` and sample age + cache age within ``stale_after_s`` (cache
+    age at most 5 s). A charge-return start (the way to a charger) is not refused for a critical level."""
+    battery = (reading or {}).get("battery")
+    age = (reading or {}).get("age_s")
+    if not isinstance(battery, dict):
+        return "unreadable"
+    num = lambda v: isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
+    sample, stale = battery.get("sample_age_s"), battery.get("stale_after_s")
+    if battery.get("evidence") != "fresh":
+        return f"evidence_{battery.get('evidence')}"
+    if not (num(age) and 0 <= age <= 5 and num(sample) and sample >= 0 and num(stale) and stale > 0
+            and sample + age <= stale):
+        return "evidence_old"
+    percent = battery.get("percent")
+    if not (num(percent) and 0 <= percent <= 100):
+        return "percent_unreadable"
+    if battery.get("level") not in BATTERY_START_LEVELS and not charge_return:
+        return f"level_{battery.get('level')}"
+    return None
+
+
 class TripAdmission:
+    async def _check_battery(self, robot_id):
+        """A start needs fresh battery evidence at a non-critical level; else 422 TRIP_BATTERY_UNCONFIRMED."""
+        try:
+            reading = await self._call(self._battery(robot_id)) if self._battery is not None else None
+        except Exception:  # noqa: BLE001 - an unreadable battery is an unconfirmed one
+            reading = None
+        job = self.lease.jobs.get(robot_id)
+        why = ("no_source" if self._battery is None else battery_refusal(
+            reading, charge_return=job is not None and job.view.get("owner_kind") == "charge_session"))
+        if why is not None:
+            raise TripError(422, "TRIP_BATTERY_UNCONFIRMED", {"reason": why})
+
     def _check_engaged(self, robot_id):
         engaged = self._engaged(robot_id)
         if engaged is not None:

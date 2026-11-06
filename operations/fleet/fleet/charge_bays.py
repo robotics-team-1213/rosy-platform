@@ -52,10 +52,18 @@ class _Visit:
     arrived_percent: Optional[float]
     volts: list[tuple[float, float]]
     connected_at: Optional[float] = None
+    #: Since when nothing confirms where the robot is (offline, or no LOCALIZED pose); None while confirmed.
+    lost_at: Optional[float] = None
+    blind_s: float = 0.0   # unobserved time, never counted as charging
 
 
 class ChargeBays:
-    """Bay visits and the plan. ``rate_pct_per_min`` stays None until a charge is measured."""
+    """Bay visits and the plan. ``rate_pct_per_min`` stays None until a charge is measured.
+
+    A visit ends only when the robot is seen outside every bay with a trusted pose (or in another bay).
+    Losing the pose or the link keeps the visit and shows the bay ``unknown``, never ``free``: a dead
+    robot may still be in it. Fleet has no operator clear for a stale visit yet (follow-up).
+    """
 
     def __init__(self, rate_pct_per_min: Optional[float] = None) -> None:
         self.rate = rate_pct_per_min
@@ -64,21 +72,29 @@ class ChargeBays:
 
     def observe(self, now: float, robots: Iterable[RobotView], bays: list[Bay]) -> None:
         self._now = now
-        seen = set()
+        robots = list(robots)
+        for robot_id, visit in self._visits.items():   # a robot Fleet no longer lists is unseen, not gone
+            if visit.lost_at is None and robot_id not in {r.robot_id for r in robots}:
+                visit.lost_at = now
         for r in robots:
+            visit = self._visits.get(r.robot_id)
+            if not r.online or r.pose is None:   # no evidence of where it is: keep the visit, mark it unknown
+                if visit is not None and visit.lost_at is None:
+                    visit.lost_at = now
+                continue
             bay = _bay_at(r.pose, bays)
             if bay is None:
+                self._visits.pop(r.robot_id, None)   # seen elsewhere with a trusted pose
                 continue
-            seen.add(r.robot_id)
-            visit = self._visits.get(r.robot_id)
             if visit is None or visit.bay != bay.id:
                 visit = self._visits[r.robot_id] = _Visit(bay.id, now, r.percent, [])
+            if visit.lost_at is not None:
+                visit.blind_s += now - visit.lost_at
+                visit.lost_at = None
             if r.voltage is not None and math.isfinite(r.voltage):
                 visit.volts = [(t, v) for t, v in visit.volts if now - t <= RISE_WINDOW_S] + [(now, r.voltage)]
                 if visit.connected_at is None and r.voltage - min(v for _, v in visit.volts) >= RISE_V:
                     visit.connected_at = now
-        for robot_id in set(self._visits) - seen:
-            del self._visits[robot_id]
 
     def plan(self, robots: Iterable[RobotView], bays: list[Bay]) -> dict:
         robots = sorted(robots, key=lambda r: (r.percent is None, r.percent or 0.0, r.robot_id))
@@ -105,6 +121,7 @@ class ChargeBays:
             rid = held.get(b.id)
             visit = self._visits.get(rid) if rid else None
             state = "free" if rid is None else ("planned" if visit is None else
+                                                 "unknown" if visit.lost_at is not None else
                                                  "charging" if visit.connected_at is not None else "arrived")
             rows.append({"bay": b.id, "x": b.x, "y": b.y, "state": state, "robot_id": rid})
         return {"thresholds": {"go_percent": GO_PERCENT, "leave_percent": LEAVE_PERCENT,
@@ -114,11 +131,13 @@ class ChargeBays:
     def _in_bay(self, robot_id: str, visit: _Visit) -> dict:
         row = {"robot_id": robot_id, "bay": visit.bay, "arrived_percent": visit.arrived_percent,
                "in_bay_s": round(self._now - visit.since, 1)}
+        if visit.lost_at is not None:
+            return {**row, "action": "stay", "reason": "pose_unknown"}
         if visit.connected_at is None:
             reseat = self._now - visit.since >= SETTLE_S
             return {**row, "action": "reseat" if reseat else "stay",
                     "reason": "usb_not_connected" if reseat else "connecting"}
-        connected_s = self._now - visit.connected_at
+        connected_s = max(0.0, self._now - visit.connected_at - visit.blind_s)
         row["connected_s"] = round(connected_s, 1)
         if self.rate is None or visit.arrived_percent is None:
             return {**row, "action": "stay", "reason": "charge_rate_not_measured"}

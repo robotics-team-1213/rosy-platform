@@ -14,6 +14,10 @@ from test_station_docking_api import station_api
 from test_station_camera_pipeline import pipeline_sources
 
 
+async def _fresh_battery(robot_id):  # deliberate fixture: fresh, non-critical evidence
+    return {'battery': {'evidence': 'fresh', 'sample_age_s': 0.0, 'stale_after_s': 5.0, 'level': 'ok', 'percent': 80.0}, 'age_s': 0.0}
+
+
 @pytest.mark.parametrize('change', ['refresh', 'moved', 'source', 'session', 'expired', 'motion', 'permit'])
 def test_navigation_read_revalidates_camera_refresh_without_reusing_old_ack(
         station_api, pipeline_sources, tmp_path, change):
@@ -299,7 +303,7 @@ def test_actual_trip_runner_and_http_owner_wait_for_measured_handover(station_ap
             result = await robot.cancel_goal(robot_id)
             svc.modes.transition(Mode.IDLE)
             return result
-        runner = TripRunner(store=plans, routing_config=plans.routing_config, caps=robot.caps_for,
+        runner = TripRunner(store=plans, routing_config=plans.routing_config, caps=robot.caps_for, battery=_fresh_battery,
             poses=robot, junction=robot, goal=goal, cancel_goal=halt, clock=lambda: now[0],
             config=TripConfig(), lease={'required': True, 'holder': 'station'})
         runner.lease._clock = lambda: now[0]

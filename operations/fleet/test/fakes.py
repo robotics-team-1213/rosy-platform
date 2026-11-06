@@ -360,3 +360,12 @@ class FakeRelay:
 
     def streams_ready(self) -> bool:
         return self.ready
+
+
+#: A deliberate fixture for trip tests: fresh, non-critical battery evidence (TRIP_BATTERY_UNCONFIRMED gate).
+FRESH_BATTERY = {"battery": {"evidence": "fresh", "sample_age_s": 0.0, "stale_after_s": 5.0, "level": "ok",
+                             "percent": 80.0}, "age_s": 0.0}
+
+
+async def fresh_battery(robot_id):
+    return {"battery": dict(FRESH_BATTERY["battery"]), "age_s": 0.0}

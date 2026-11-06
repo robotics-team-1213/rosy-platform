@@ -15,7 +15,7 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
-from fakes import FakeRobot
+from fakes import FakeRobot, fresh_battery
 from fleet.hub.hub import HubError
 from fleet.routing.execute import plan_body
 from fleet.routing.trip import PlanRequest, plan_trip
@@ -245,7 +245,7 @@ def _setup(site_map=None, caps=LANE, path=None, **config):
     ports = Ports(caps)
     store = SiteMapStore(path, clock=lambda: ports.now)
     store.import_if_empty(site_map or from_lane_graph(LANE_GRAPH), source="test")
-    runner = TripRunner(store=store, routing_config=store.routing_config, caps=ports.caps_for, poses=ports,
+    runner = TripRunner(store=store, routing_config=store.routing_config, caps=ports.caps_for, battery=fresh_battery, poses=ports,
                         junction=ports, goal=ports.goal, cancel_goal=ports.cancel_goal,
                         blocked=lambda: ports.blocked, clock=lambda: ports.now, config=TripConfig(**config))
     return runner, store, ports
