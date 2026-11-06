@@ -60,6 +60,11 @@ details.group > summary .tag { font-weight: 600; font-size: .8125rem; color: var
 .footer input[type=text] { flex: 1 1 14rem; min-width: 0; }
 .diff { margin: 0 0 .5rem; padding: 0; list-style: none; max-height: 8rem; overflow: auto; font-family: var(--mono); font-size: .875rem; }
 .history { margin-top: 1rem; }
+.servo-wrap { overflow-x: auto; margin-bottom: 1rem; }
+.servo { border-collapse: collapse; font-size: .875rem; }
+.servo caption { text-align: left; font-weight: 700; padding: .25rem 0; overflow-wrap: anywhere; }
+.servo th, .servo td { border-bottom: 1px solid var(--line); padding: .375rem .625rem; text-align: left; vertical-align: top; white-space: nowrap; }
+.servo td small { display: block; color: var(--quiet); }
 .history li { margin-bottom: .25rem; font-size: .875rem; color: var(--quiet); overflow-wrap: anywhere; }
 @media (max-width: 760px) {
   .row { grid-template-columns: 1fr; padding: .625rem 0; }
@@ -79,6 +84,9 @@ details.group > summary .tag { font-weight: 600; font-size: .8125rem; color: var
   <p id="banner" class="banner" hidden role="status"></p>
 </header>
 <main id="groups"></main>
+<main id="servo-box" hidden><details class="history" id="servo-details" open><summary>서보 값 (읽기 전용)</summary>
+  <p class="quiet">record_session 기준. 모델 → 현장 caps → 로봇 프로필 순서로 덮어쓰며, 표시는 마지막으로 정한 층입니다. 값은 해당 파일에서 고칩니다.</p>
+  <div id="servo"></div></details></main>
 <main><details class="history"><summary>최근 저장 기록</summary><ul id="history"></ul></details></main>
 <div class="footer">
   <div class="inner">
@@ -223,6 +231,21 @@ async function load() {
   if (chosen) $('file').value = chosen;
   showFile();
 }
+const SERVO_KEYS = {p: 'P', i: 'I', acc: '가속', vel: '속도', pwm: 'PWM', current: '전류'};
+const LAYERS = {model: '모델', site: '현장', robot: '로봇'};
+function servoCell(entry) {
+  if (!entry) return el('td', {className: 'quiet', textContent: '-'});
+  const hidden = Object.entries(entry.hidden).map(([layer, value]) => `${LAYERS[layer]} ${value} 덮음`).join(', ');
+  return el('td', {}, el('span', {className: 'mono', textContent: `${entry.value} `}), el('span', {className: 'badge', textContent: LAYERS[entry.from]}), ...(hidden ? [el('small', {textContent: hidden})] : []));
+}
+async function loadServo() {
+  const tables = await call('/servo.json');
+  $('servo-box').hidden = !tables.length;
+  $('servo').replaceChildren(...tables.map(table => table.error ? el('p', {className: 'banner error', textContent: `${table.name}: ${table.error}`}) : el('div', {className: 'servo-wrap'}, el('table', {className: 'servo'},
+    el('caption', {textContent: `${table.name} · ${table.path}${table.profile ? ` · ${table.profile}` : ''}`}),
+    el('thead', {}, el('tr', {}, ...['모터', ...Object.values(SERVO_KEYS)].map(text => el('th', {scope: 'col', textContent: text})))),
+    el('tbody', {}, ...table.motors.map(motor => el('tr', {}, el('th', {scope: 'row', textContent: `${motor.id} ${motor.joint}`}), ...Object.keys(SERVO_KEYS).map(key => servoCell(motor.values[key])))))))));
+}
 async function poll() {
   if (saving || document.hidden) return;
   try {
@@ -259,6 +282,9 @@ $('save').onclick = async () => {
 };
 addEventListener('beforeunload', event => { if (Object.keys(draft).length) event.preventDefault(); });
 load().catch(error => banner(error.message, true));
+const refreshServo = () => loadServo().catch(error => $('servo').replaceChildren(el('p', {className: 'banner error', textContent: error.message})));
+refreshServo();
 setInterval(poll, 5000);
+setInterval(() => { if (!document.hidden) refreshServo(); }, 30000);
 </script>
 </html>
