@@ -301,7 +301,7 @@ html[data-pilot-shell="android"] ui-topbar ui-brand { display: none; }
   backdrop-filter: blur(4px);
 }
 
-[data-drive-presets] {
+[data-drive-presets], [data-drive-modes] {
   display: flex;
   gap: var(--space-1);
   align-items: center;
@@ -309,6 +309,8 @@ html[data-pilot-shell="android"] ui-topbar ui-brand { display: none; }
   border-radius: var(--radius-button);
 }
 [data-drive-presets] ui-actions { flex-wrap: nowrap; gap: 0; }
+[data-drive-modes] { gap: 0; }
+[data-drive-modes] ui-button { flex: 1 1 0; min-width: 0; }
 [data-drive-presets] ui-button { min-width: 3rem; }
 [data-drive-presets] > ui-text { padding-inline: var(--space-2); }
 
