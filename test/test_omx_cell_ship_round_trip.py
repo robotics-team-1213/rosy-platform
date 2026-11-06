@@ -253,3 +253,15 @@ def test_an_implausible_or_unknown_declaration_is_refused(catalog, kg):
         cell_scale.declare(catalog, ENTRY["id"], kg, "user")
     with pytest.raises(SystemExit, match="unknown object"):
         cell_scale.declare(catalog, "nothing", 0.016, "user")
+
+
+def test_the_jaw_axis_tool_refuses_without_a_person_and_measures_from_its_command_line(tmp_path, monkeypatch):
+    with pytest.raises(SystemExit, match="D-911"):
+        cell_jaw_axis.main(["--config", "x.json", "--site", "s", "--point", "0,0", "--yaw", "-40"])
+    config = {"calibration_path": str(tmp_path / "cal.json"), "io": str(tmp_path), "cameras": {}, "work_dir": str(tmp_path), "sites": {}}
+    path = tmp_path / "cell.json"
+    path.write_text(json.dumps(config))
+    (tmp_path / "cal.json").write_text(json.dumps({"schema": "x", "sites": {}}))
+    monkeypatch.setattr(cell_jaw_axis, "measure", lambda *a, **k: {"result": "measured", "site": a[3], "point": a[4], "yaws": a[5]})
+    argv = ["--config", str(path), "--site", "s", "--point", "0.07,-0.06", "--yaw", "-40", "-80", "--commissioning", "--person-at-switch"]
+    assert cell_jaw_axis.main(argv) == 0

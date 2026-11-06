@@ -119,7 +119,7 @@ def main(argv=None) -> int:
     from cell_auto_setup import load_config
 
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--config", required=True)
+    ap.add_argument("--config", required=True, type=Path)
     ap.add_argument("--site", required=True)
     ap.add_argument("--point", required=True, help="x,y metres of a clear spot")
     ap.add_argument("--yaw", required=True, nargs="+", type=float)
