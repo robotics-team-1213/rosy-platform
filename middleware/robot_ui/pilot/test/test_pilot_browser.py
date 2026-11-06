@@ -1743,7 +1743,7 @@ def test_calibration_banner_locks_drive_for_other_tokens_and_keeps_estop(tablet_
         assert page.locator("[data-drive-fact=activity]").is_visible()
         page.wait_for_selector("[data-drive-controls][data-locked]")
         assert page.evaluate("""[...document.querySelectorAll('[data-drive-controls] ui-button')]
-                                .every((b) => b.disabled)""")
+                                .every((b) => b.disabled && b.getAttribute("reason") === "위 사유")""")
         estop = page.locator("ui-topbar ui-button[data-estop]")
         assert estop.is_visible() and not estop.evaluate("(b) => b.disabled")
         page.screenshot(path=str(shots / "pilot-calibration-locked.png"))

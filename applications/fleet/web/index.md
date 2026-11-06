@@ -33,7 +33,7 @@
 ## 최근 기록
 
 - 2026-11-07 · 285714599b · uiux: 로봇 이동 출처 표시
-- 2026-11-06 · uncommitted · merge(fleet): 최신 UIUX와 수동 관제의 확인·권한 연결 보존
-- 2026-11-06 · uncommitted · merge(fleet): 관제 수동 조작과 검증 후속 변경의 최종 통합
-- 2026-11-06 · uncommitted · fix(fleet): 수동 관제 API 설명의 동시 삽입 충돌 조정
-- 2026-11-06 · uncommitted · fix(fleet): 수동 전환 버튼의 공용 kind 명시
+- 2026-11-06 · uncommitted · uiux(fleet): 지도 연결 실패 안내, 지도 장소 키보드, 로봇 이름표, Cell 블록 이름표
+- 2026-11-06 · uncommitted · uiux: 관제 용어·연결 문구 통일, 단독 링크 누름면
+- 2026-11-06 · uncommitted · uiux(fleet): 지도 클릭 목적지와 정지 미확인 문구
+- 2026-11-06 · uncommitted · uiux(fleet): 지도 이름·설치 전화 폭·저장 실패 안내

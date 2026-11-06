@@ -1018,6 +1018,11 @@
 - gate 변화: SOURCE/관련 원격 회귀 확인이다. 최종 통합 착지는 게시 담당과 조율하며 공개 배포·운영 로그인·기체·서비스 수용 근거로 확대하지 않는다.
 - 교훈: CE 해당 없음 — BoundedJson 계약과 실제 렌더·해제 회귀가 원인과 방어 경계를 직접 보존하며 별도 숨은 복구 조건이 없다.
 
+## 2026-11-06 · uncommitted · uiux(fleet): 비상 정지 칩이 카드 밖으로 잘리던 문제
+- 변경: 넓은 칸의 방향·배터리·안전 값이 고정 폭(60~80px) 대신 값 크기를 쓰고, 모자라면 줄을 바꾼다. 2026-11-06 UI/UX 전수 조사 P2, 1920 캡처로 잘림 확인.
+- 증거: test/test_fleet_roster_facts_browser.py가 카드 오른쪽 경계 안을 단언한다. 원격 RED/GREEN은 착지 기록을 따른다.
+- gate 변화: SOURCE 회귀. 실제 사이트 PC·장치 수용은 별도다. CE: 해당 없음 — 코드와 회귀가 판단을 보존한다.
+
 ## 2026-11-06 · uncommitted · feat(fleet): 관제 수동 모드 전환
 - 변경: 선택 기체의 수동 전환 확인과 fresh mode readback; 발행 차단 시 기존 hold를 terminal zero로 종료
 - 증거: 원격 AI PC 16028faad6 backend 231 passed/skip0; c7ce250026 Chromium 17 passed/skip0. 신규 backend RED 29 failed/7 passed, UI RED6 failed/11 passed 후 구현. 로그는 외부 scratch pinky-manual-{red,backend-green,ui-red,ui-green}/run-1.txt.
@@ -1051,6 +1056,31 @@
 - metadata: PNG 실제 checksum과 현재 manifest 일치, 문서의 Git commit 문맥을 독립 확인한 근거에 따라 root 승인 exact historical commit/path/rule 2건만 비밀정보 baseline에 추가했다. 기존183건의 순서·내용·schema·reviewer와 Git raw prefix를 보존해 중복 없이185건이며 scanner·provenance·ignore·정책은 바꾸지 않았다. 이 자료는 비밀키가 아닌 실제 screenshot/Git metadata다. source18effdc1b9 원격 publish/secret/provenance 기존 회귀59통과·skip0·NEW/known/flaky0, scratch pinky-uiux-metadata-guards/run-1.txt. 정본 origin647부터 해당 source까지264개 commit의 추가 줄 검사에서 미검토 hit0이다. baseline 증분 독립 검토 미해결 finding 없음.
 - gate 변화: bounded SOURCE 회귀다. main a413에는 exact land record가 없으므로 최신 main이나 이번 통합의 FULL qualification을 주장하지 않는다. old004000과 모든 STOP을 보존하며, metadata 자격 확인과 최종 승인 뒤 새 source의 canonical FULL이 필요하다. 새 착지·게시·서명·기체·서비스 동작은 수행하지 않았다.
 - 교훈: CE 해당 없음 — 두 명시적 충돌의 보존 규칙이 최종 코드·API·기존 회귀와 source별 증거에 직접 남는다.
+
+## 2026-11-06 · uncommitted · uiux(fleet): 수동 조종 패널의 위치 근거와 막힌 이유
+- 변경: 조종 패널에 지도 위치·출처·위치 관측 상태·상태 나이 한 줄을 항상 보인다. 상태 시각 없음과 오래됨을 나누고 위치·속도 각각의 근거를 말한다. 2초 한도 정지를 손 뗌과 구분해 안내한다. 버튼 사유는 DESIGN 규칙대로 "위 사유"로 줄이고, 방향 넷은 2×2로 작업 카드 위에 둔다. 정지 경로와 차단 판단은 바꾸지 않았다. 2026-11-06 UI/UX 전수 조사 F2~F5.
+- 증거: test_fleet_manual_control_browser.py에 구분 문구·근거 줄·1366 첫 화면 2×2·2초 안내 단정 추가. 원격 결과는 착지 기록을 따른다.
+- gate 변화: SOURCE 회귀. 실제 기체·현장 관제 수용은 별도다. CE: 해당 없음 — 코드와 회귀가 판단을 보존한다.
+
+## 2026-11-06 · uncommitted · uiux(fleet): 지도 이름·설치 전화 폭·저장 실패 안내
+- 변경: 지도 장소에 번호와 이름을 함께 그리고 목적지 목록과 번호를 맞춘다. 전화 폭 설치 작업 칸을 한 칸으로 둔다(171px로 눌렸다). 지도 동작 실패 때 알림을 화면 안으로 옮기고 편집을 버리게 하는 "다시 접속" 대신 편집 유지를 말한다. 셀 작업 제안은 ID가 비면 사유와 함께 막는다(HTTP 422만 보였다). 오프라인 로봇 표찰에 연결 끊김을 쓴다. 계정 표의 역할을 한국어로 쓴다. 셀 배치 표찰을 칸 가운데에 둔다.
+- 증거: 실제 Fleet·agent-browser 관찰은 scratch uiux2/fleet와 착지 기록을 따른다. guide-layer.test.mjs에 표찰 단정 추가.
+- gate 변화: SOURCE 회귀. 현장 지도·실제 기체 수용은 별도다. CE: 해당 없음 — 코드와 회귀가 판단을 보존한다.
+
+## 2026-11-06 · uncommitted · uiux(fleet): 지도 클릭 목적지와 정지 미확인 문구
+- 변경: 활성 지도에서 장소를 누르면 경로 미리보기 목적지가 따라가고 이전 경로를 지운다(눌러도 목록 값으로 계산됐다). 수동 조종에서 정지 상태 미확인을 비상정지 활성과 다른 문장으로 말한다.
+- 증거: agent-browser 스냅샷 조작으로 재현하고 고친 뒤 같은 창에서 확인했다. test_site_map_browser.py, test_fleet_manual_control_browser.py에 단정 추가.
+- gate 변화: SOURCE 회귀. 실제 기체 경로 실행은 별도다. CE: 해당 없음 — 코드와 회귀가 판단을 보존한다.
+
+## 2026-11-06 · uncommitted · uiux: 관제 용어·연결 문구 통일, 단독 링크 누름면
+- 변경: Fleet 알약 'Fleet 연결 끊김', 위치 hover 한글, 지도 표시 라벨 중복 제거, 화면 방향이 초안에 저장됨을 라벨에, 팔레트 적재 작업 준비 제목, 지도 설정·프로필 편집·지도 기록 링크를 ui-action-link로. 설치 한 칸 규칙은 doc-tabs.css에서 설치만 쓰는 measured-calibration.css로 옮김.
+- 증거: agent-browser 로컬 렌더(1920·390·320 화면 확인). 원격 회귀는 착지 기록을 따른다.
+- gate 변화: SOURCE 변경. 실기기·Android 수용은 별도다. CE: 해당 없음 — 코드와 회귀가 판단을 보존한다.
+
+## 2026-11-06 · uncommitted · uiux(fleet): 지도 연결 실패 안내, 지도 장소 키보드, 로봇 이름표, Cell 블록 이름표
+- 변경: Fleet 상태를 읽지 못하면 현장 지도 빈 자리가 로봇 탓 대신 "Fleet에 연결할 수 없습니다"와 다음 할 일(자동 재시도, 계속되면 관제 PC의 Fleet 서비스 확인)을 말한다. 지도 화면의 장소 점이 Tab 초점과 Enter·Space 선택을 받고 로봇 이름표는 앞 이름표와 겹치면 아래로 비킨다(간단한 한 방향 보정). Cell 블록 이름표는 세로 가운데이며 칸보다 길면 순서 번호만 보인다. 정지·허용·차단 판단은 바꾸지 않았다.
+- 증거: agent-browser 로컬 Fleet 서버에서 서버를 내리고 지도 칸 글을 확인, 지도 화면 장소에서 Enter로 선택·초점 유지 확인. 로봇 이름표 겹침과 Cell 블록은 이 서버에 해당 자료가 없어 화면으로 보지 못했다.
+- gate 변화: SOURCE 변경. 실물·현장 수용은 별도다. CE: 해당 없음 — 코드와 회귀가 판단을 보존한다.
 
 ## 2026-11-07 · 285714599b · uiux: 로봇 이동 출처 표시
 - 변경: 로봇 카드 사실 줄에 `motion-source.js`가 고른 이동 출처 칩을 더했다. 증명하는 사실만 이름을 붙인다: 이 화면의 조종 단추(`view.manualDriveRobot`), CORE 운행 임차·열린 운행, 비켜서기, 도킹 상태, 대형, 관제 목표, 보정. 수동 모드·목표 주행은 CORE 모드만으로 누가 시켰는지 알 수 없어 `확인 불가`로 쓴다. 오래된 상태·신선하지 않은 속도 근거는 `출처 확인 불가`이고, 출처 없이 움직이면(속도 0 초과) 예외 큐에 `원인 불명 이동`을 올린다. 계약·가드·권한 변경 없음.

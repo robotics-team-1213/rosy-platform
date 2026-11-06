@@ -8,7 +8,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
-from browser_harness import browser_tests_enabled, free_port
+from browser_harness import browser_tests_enabled, confirm_irreversible, free_port
 
 import class_sets
 from test_review_app import fixture_inputs, open_store
@@ -318,9 +318,9 @@ def test_pixel_review_shows_unclassified_coverage(browser_workspace):
     assert (photo['x'] + photo['width'] <= coverage['x'] + 1 if page.viewport_size['width'] >= 1024 else photo['y'] + photo['height'] <= coverage['y'] <= photo['y'] + photo['height'] + 96)
     assert coverage['y'] < page.locator('#pixel-class').bounding_box()['y']
     page.locator('#pixel-class').select_option('0')
-    page.on('dialog', lambda dialog: dialog.accept())
     open_action_disclosure(page, '#pixel-fill')
     page.locator('#pixel-fill').click()
+    confirm_irreversible(page)
     expect(page.locator('#pixel-coverage')).to_contain_text('미검수 0픽셀')
 
 
@@ -350,8 +350,8 @@ def test_object_candidate_is_findable_and_empty_review_is_neutral(tmp_path):
         expect(page.locator('#candidate-source')).to_contain_text('원본 후보 1개')
         expect(page.locator('#source-preview')).to_have_attribute('aria-pressed', 'true')
         expect(page.locator('#candidates')).to_be_visible()
-        page.on('dialog', lambda dialog: dialog.accept())
         page.locator('#candidates').click()
+        confirm_irreversible(page)
         expect(page.locator('#boxes h3')).to_contain_text('박스 1')
         page.get_by_role('button', name='박스 1 삭제').click()
         expect(page.locator('#empty')).to_contain_text('객체가 없으면 전체 확인 후 승인하세요')
@@ -373,8 +373,8 @@ def test_model_object_draft_is_visible_before_apply(tmp_path):
         expect(page.locator('#model-preview')).to_have_attribute('aria-pressed', 'true')
         assert page.locator('#candidate-details').bounding_box()['y'] > page.locator('#canvas').bounding_box()['y']
         assert store.get(2)['review']['boxes'] == []
-        page.on('dialog', lambda dialog: dialog.accept())
         page.locator('#model-candidates').click()
+        confirm_irreversible(page)
         expect(page.locator('#candidate-source')).to_contain_text('모델 초안 적용됨 · 검수 대기')
         expect(page.locator('#model-preview')).to_have_attribute('aria-pressed', 'false')
         assert store.get(2)['review']['boxes'] == rows[0]['objects']
@@ -664,9 +664,9 @@ def test_object_to_pixel_review_keeps_photo_and_shows_decision(browser_workspace
     expect(page.locator('#pixel-title')).to_have_text('사진 2 픽셀 검수')
     expect(page.locator('#pixel-status')).to_contain_text('픽셀 검수 대기')
     page.locator('#pixel-class').select_option('0')
-    page.once('dialog', lambda dialog: dialog.accept())
     open_action_disclosure(page, '#pixel-fill')
     page.locator('#pixel-fill').click()
+    confirm_irreversible(page)
     expect(page.locator('#pixel-status')).to_contain_text('v1')
     page.locator('#pixel-approve').click()
     expect(page.locator('#pixel-title')).to_have_text('사진 1 픽셀 검수')

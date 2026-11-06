@@ -191,7 +191,7 @@ export function mount(root, ctx) {
       if (disposed) return;
       if (result && typeof result.mode === "string") { current = result; statusKnown = true; }
       actionStatus.setAttribute("state", "ready");
-      setStatus(actionStatus, mode === "OFF" ? "차선 추종 중지 요청을 CORE가 받았습니다. 현재 상태로 완료 여부를 확인하세요." : `${enumLabel(LINE_MODE_LABEL, mode)} 추종 시작 요청을 CORE가 받았습니다. 현재 상태로 시작 여부를 확인하세요.`);
+      setStatus(actionStatus, mode === "OFF" ? "차선 추종 중지 요청을 로봇이 받았습니다. 현재 상태로 완료 여부를 확인하세요." : `${enumLabel(LINE_MODE_LABEL, mode)} 추종 시작 요청을 로봇이 받았습니다. 현재 상태로 시작 여부를 확인하세요.`);
     } catch (error) { if (!disposed) { actionStatus.setAttribute("state", "error"); setStatus(actionStatus, `차선 추종 요청 실패: ${error.message}`); } }
     finally { if (!disposed) { pending = false; render(); } }
   }

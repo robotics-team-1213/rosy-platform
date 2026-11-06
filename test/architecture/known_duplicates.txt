@@ -39,7 +39,7 @@ contracts/motion/src/rosy/contracts/motion/characteristics.py middleware/devices
 contracts/learning/src/rosy/contracts/learning/inference.py learning/training/omx/act_inference.py|_vector  ① 후보 training이 contracts/learning 소비
 middleware/drive/behaviors/line_follow/arc/lane_arc.py middleware/drive/behaviors/line_follow/recovery/junction/turn.py operations/overhead/rosy_vision/station_observation.py|_wrap  ④ 각도 wrap 관습, 경계 거동 핀 후속
 middleware/drive/behaviors/localization/mission.py middleware/perception/front_camera/perception/route_camera.py tools/calibration/ceiling_marker_yaw.py|_wrap  ④ 각도 wrap 관습, 경계 거동 핀 후속
-learning/curation/perception/autolabel.py middleware/perception/nodes/road_state_node.py|_yaw  ④ yaw wrap 관습, 경계 거동 핀 후속
+learning/curation/perception/autolabel.py middleware/perception/observers/road_state_node.py|_yaw  ④ yaw wrap 관습, 경계 거동 핀 후속
 deploy/robot/pinky_pro/release/native_tls_provision.py learning/curation/perception/edge_review.py|digest  ③ 소형 해시 헬퍼
 deploy/ai_pc/deliberation_glm_receipt.py operations/decision/src/rosy/decision/conversation/codec.py operations/decision/src/rosy/decision/deliberation/contracts/billing.py operations/fleet/fleet/incidents/automation/operating/state.py|digest  ③ 소형 해시 헬퍼, AI PC 독립 스크립트 포함
 contracts/learning/src/rosy/contracts/learning/fleet_export.py middleware/devices/omx/adapter/omx_adapter/policy_parent.py|encoded  ③ 소형 헬퍼

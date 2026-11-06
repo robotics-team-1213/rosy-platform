@@ -79,7 +79,7 @@ export function mount(root, ctx) {
     try {
       await ctx.api("/api/v1/localization/initialpose", {method: "POST", body: JSON.stringify({x: values[0], y: values[1], yaw: values[2]})});
       if (disposed) return;
-      actionStatus.textContent = "초기 위치 설정 요청을 CORE가 받았습니다.";
+      actionStatus.textContent = "초기 위치 설정 요청을 로봇이 받았습니다.";
     } catch (error) { if (!disposed) actionStatus.textContent = `초기 위치 요청을 완료하지 못했습니다: ${error.message}`; }
     finally { posePending = false; if (!disposed) syncControls(); }
   });
@@ -99,9 +99,9 @@ export function mount(root, ctx) {
     } catch (error) { if (!disposed) slamStatus.textContent = `요청을 완료하지 못했습니다: ${error.message}`; }
     finally { slamPending = false; if (!disposed) syncControls(); }
   }
-  start.addEventListener("click", () => run(start, "/api/v1/slam/start", null, "맵핑을 시작할까요? 세션 중에는 목표 주행이 거부됩니다.", "맵핑 시작 요청을 보내는 중입니다.", "맵핑 시작 요청을 CORE가 받았습니다."));
-  stop.addEventListener("click", () => run(stop, "/api/v1/slam/stop", null, "맵핑을 중지할까요?", "맵핑 중지 요청을 보내는 중입니다.", "맵핑 중지 요청을 CORE가 받았습니다."));
-  save.addEventListener("click", () => run(save, "/api/v1/slam/save", {name: mapName.value.trim() || "rosy_map"}, "현재 맵을 저장할까요?", "맵 저장 요청을 보내는 중입니다.", "맵 저장 요청을 CORE가 받았습니다."));
+  start.addEventListener("click", () => run(start, "/api/v1/slam/start", null, "맵핑을 시작할까요? 세션 중에는 목표 주행이 거부됩니다.", "맵핑 시작 요청을 보내는 중입니다.", "맵핑 시작 요청을 로봇이 받았습니다."));
+  stop.addEventListener("click", () => run(stop, "/api/v1/slam/stop", null, "맵핑을 중지할까요?", "맵핑 중지 요청을 보내는 중입니다.", "맵핑 중지 요청을 로봇이 받았습니다."));
+  save.addEventListener("click", () => run(save, "/api/v1/slam/save", {name: mapName.value.trim() || "rosy_map"}, "현재 맵을 저장할까요?", "맵 저장 요청을 보내는 중입니다.", "맵 저장 요청을 로봇이 받았습니다."));
 
   return () => { disposed = true; lifetime.abort(); stopCaps(); };
 }

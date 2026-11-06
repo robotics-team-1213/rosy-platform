@@ -353,14 +353,13 @@ class UpdaterRecords:
         return problems
 
     def precheck(self) -> list[str]:
-        """What native_release runs right before it stops the runtime: hold, seal, one fresh sample."""
+        """What native_release runs right before it stops the runtime: hold, one fresh sample."""
         if problem := self._maintenance_problem():
             return [problem]
         reasons = []
         kind, detail = self._hold()
         if kind in {"active", "invalid"}:
             reasons.append(detail)
-        reasons += self._sealed(self.host.current_release())
         claim = rosy_claim.check(self.root, now=self.host.now())
         if claim is not None and claim.get("holder") != CLAIM_HOLDER:
             reasons.append(f"claim held by {claim.get('holder')}")
@@ -375,7 +374,6 @@ class UpdaterRecords:
         kind, detail = self._hold()
         if kind in {"active", "invalid"}:
             reasons.append(detail)
-        reasons += self._sealed(current)
         reasons += self._network_problems()
         held = bool(reasons)
         claim = rosy_claim.check(self.root, now=self.host.now())

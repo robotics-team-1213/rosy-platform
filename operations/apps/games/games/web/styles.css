@@ -275,7 +275,8 @@ ui-shell[grammar="focal"] ui-topbar {
   #halt { grid-column: 3; grid-row: 1; }
   .halt-note { justify-content: flex-start; }
 
-  .match-layout { grid-template-columns: minmax(0, 1fr); gap: var(--space-3); }
+  /* start: the leftover viewport height must not stretch the pitch row and open a gap above the panel. */
+  .match-layout { grid-template-columns: minmax(0, 1fr); align-content: start; gap: var(--space-3); }
   .field-details { padding: var(--space-3); }
   .field-details h2 { margin-bottom: var(--space-2); }
   .chips { margin-bottom: var(--space-3); }

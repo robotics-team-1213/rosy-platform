@@ -90,9 +90,12 @@ async function refresh() {
   } finally { if (state.job === job) state.job = null; }
 }
 function cell(...children) { const node = el('td'); node.append(...children); return node; }
+function healthText(item) {
+  return (HEALTH[item.reported_health] || HEALTH.UNKNOWN) + (evidence(item) === 'fresh' || !item.sampled_at ? '' : ' · 마지막 판정');
+}
 function healthNode(item) {
   const known = evidence(item) === 'fresh';
-  return el('span', (HEALTH[item.reported_health] || HEALTH.UNKNOWN) + (known || !item.sampled_at ? '' : ' · 마지막 판정'),
+  return el('span', healthText(item),
     known && item.reported_health === 'ERROR' ? 'danger' : known && item.reported_health === 'WARNING' ? 'caution' : '');
 }
 function render() {
@@ -142,14 +145,14 @@ function drawGraph(packet, links, map) {
   const counts = new Map(), points = new Map(); let width = 640, height = 180;
   for (const id of ids) { const level = levels.get(id) ?? 1, index = counts.get(level) || 0; counts.set(level, index + 1);
     const point = {x: 20 + level * 240, y: 24 + index * 84}; points.set(id, point); width = Math.max(width, point.x + 220); height = Math.max(height, point.y + 84); }
-  const graph = $('graph'); graph.replaceChildren(); graph.setAttribute('viewBox', `0 0 ${width} ${height}`);
+  const graph = $('graph'); graph.replaceChildren(); graph.setAttribute('viewBox', `0 0 ${width} ${height}`); graph.setAttribute('width', width); graph.setAttribute('height', height);
   for (const link of chosen) { const a = points.get(link.source_id), b = points.get(link.target_id); if (!a || !b) continue;
     graph.append(svg('path', {d: `M${a.x + 190},${a.y + 24} C${a.x + 220},${a.y + 24} ${b.x - 30},${b.y + 24} ${b.x},${b.y + 24}`,
       class: 'edge' + (evidence(link) !== 'fresh' ? ' old' : link.failure_stage !== 'none' ? ' problem' : '')})); }
   for (const [id, point] of points) { const node = map.get(id); if (!node) continue;
     const group = svg('g', {}); group.append(svg('title', {}, node.label + ' · ' + id), svg('rect', {x: point.x, y: point.y, width: 190, height: 52, rx: 4}),
-      svg('text', {x: point.x + 10, y: point.y + 21}, Array.from(node.label).slice(0, 18).join('')),
-      svg('text', {x: point.x + 10, y: point.y + 40, class: 'detail'}, (KIND[node.kind] || '항목') + ' · ' + node.origin_source.slice(0, 18))); graph.append(group); }
+      svg('text', {x: point.x + 10, y: point.y + 21}, Array.from(node.label).length > 18 ? Array.from(node.label).slice(0, 17).join('') + '…' : node.label),
+      svg('text', {x: point.x + 10, y: point.y + 40, class: 'detail'}, (KIND[node.kind] || '항목') + ' · ' + healthText(node))); graph.append(group); }
   $('graph-note').textContent = `그림 ${chosen.length}개 경로 · 연결 목록 ${Math.min(links.length, 100)} / ${links.length}개. 검색으로 범위를 좁히세요. 원천 판정의 신선도는 목록에서 확인할 수 있습니다.`;
 }
 async function loadHistory() {

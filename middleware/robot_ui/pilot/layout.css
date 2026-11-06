@@ -15,6 +15,9 @@
 }
 .pilot-drive[data-drive-layout="side"] [data-drive-pedals] ui-button,
 .pilot-drive[data-drive-layout="side"] [data-drive-pivots] ui-button { min-width: 0; width: 100%; }
+/* The pedals are the main hold targets beside the 13rem stick: 1.5x the primary target, so thumb and stick read as one weight. */
+.pilot-drive[data-drive-layout="side"] [data-drive-pedals] ui-button,
+.pilot-drive[data-drive-layout="side"] [data-drive-pivots] ui-button { min-height: calc(var(--target-primary) * 1.5); }
 .pilot-drive[data-drive-layout="side"] [data-drive-presets] { flex-wrap: nowrap; width: 100%; }
 .pilot-drive[data-drive-layout="side"] [data-drive-presets] > ui-text { display: none; }
 .pilot-drive[data-drive-layout="side"] [data-drive-presets] ui-actions { flex: 3 1 0; }
@@ -261,6 +264,8 @@ body[data-pilot-screen="arm"] ui-topbar [data-gate-state] { display: none; }
 
 /* 센서 값 표: 각도·범위 막대·시작 자세까지 남은 각도. 원본 JSON은 접어 둔다. */
 .arm-sensors { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-2); min-width: 0; }
+.arm-status-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.arm-status-row > p { margin: 0; }
 .arm-sensors-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); }
 .arm-chip { font-size: var(--text-label); padding: 0 var(--space-2); border-radius: var(--radius-flag); border: 1px solid var(--border-subtle); }
 .arm-chip[data-state="fresh"] { border-color: var(--status-good); color: var(--status-good); }
@@ -358,6 +363,8 @@ body[data-pilot-screen="arm"] ui-topbar [data-gate-state] { display: none; }
   html:not([data-pilot-shell="android"]) body[data-pilot-screen="connect"] :is(ui-brand small, #pilot-notice) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   body[data-pilot-screen="arm"] .pilot-main { max-width: 120rem; }
   [data-screen="arm"] { max-width: 120rem; }
+  /* 넓은 화면: 종료 카드는 늘 화면 안에 두되 오른쪽 아래로 붙여 가운데 센서 표와 기록 칸을 덜 덮는다. */
+  [data-screen="arm"][data-recording] [data-sim-step="stop"] { margin-inline: auto 0; inset-inline-end: var(--space-3); max-width: 32rem; }
   .arm-console {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     grid-template-areas: "view controls" "view actions" "record record";

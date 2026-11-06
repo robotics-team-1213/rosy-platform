@@ -1,4 +1,6 @@
 import { createHoldTicker } from "/common/hold-ticker.js";
+import { EVIDENCE_LABEL } from "/common/core_ui_logic.js";
+import { robotPoseText, sitePoseText } from "./localization-badge.js";
 import { staleAgeS } from "./state-age.js";
 
 const COMMANDS = [
@@ -6,12 +8,17 @@ const COMMANDS = [
   ["backward", "후진", -0.03, 0], ["right", "우회전", 0, -0.10],
 ];
 
+const evidenceWord = (robot, key) => EVIDENCE_LABEL[robot.state?.evidence?.[key]?.evidence] || EVIDENCE_LABEL.unavailable;
+
 export function createManualControl({scope, view, call, namedReason, confirmedAction, refreshState}) {
   const root = document.createElement("section");
   root.className = "manual-control";
   root.dataset.manualControl = "";
   root.hidden = true;
   const heading = document.createElement("ui-head");
+  // Not in the live region: its age text changes every second.
+  const pose = document.createElement("p");
+  pose.dataset.manualPose = "";
   const reason = document.createElement("ui-status");
   reason.id = "fleet-manual-reason";
   reason.dataset.manualReason = "";
@@ -39,9 +46,9 @@ export function createManualControl({scope, view, call, namedReason, confirmedAc
     actions.append(button);
     return {button, linear, angular};
   });
-  root.append(heading, reason, actions);
+  root.append(heading, pose, reason, actions);
   let active = null, pending = null, stopping = null, cancelTimeout = null;
-  let failure = "", modePending = false;
+  let failure = "", notice = "", modePending = false;
 
   function blocked(requireManual = true) {
     const robot = view.robots.find(row => row.robot_id === view.focusRobot);
@@ -49,18 +56,21 @@ export function createManualControl({scope, view, call, namedReason, confirmedAc
     if (!scope.capture().current() || document.hidden) return "화면을 다시 열고 상태를 확인하세요.";
     if (view.stateUnavailable) return "관제 상태를 확인할 수 없습니다.";
     if (!robot?.online) return "로봇 연결을 확인하세요.";
-    if (robot.state?.safety?.estop !== false) return "비상정지 상태를 확인하고 해제하세요.";
+    if (robot.state?.safety?.estop === true) return "비상정지 상태를 확인하고 해제하세요.";
+    if (robot.state?.safety?.estop !== false) return "정지 상태를 확인할 수 없습니다. 연결을 확인하세요.";
     if (view.dispatchControl?.dispatch_enabled !== true || !Number.isSafeInteger(view.dispatchControl.generation))
       return "관제 발행 상태를 확인하고 정지 래치를 해제하세요.";
     if (active && active.generation !== view.dispatchControl.generation) return "발행 상태가 바뀌어 조종을 중단했습니다.";
     if (robot.held || robot.calibration) return "로봇의 작업·점검 상태를 확인하세요.";
     if (robot.capabilities?.teleop !== true) return "이 로봇은 수동 조종을 지원하지 않습니다.";
     if (!["motor", "hardware"].includes(robot.capabilities?.runtime?.mode)) return "주행 장치가 준비되지 않았습니다.";
-    if (typeof robot.state_age_s !== "number" || !Number.isFinite(robot.state_age_s)
-        || staleAgeS(robot, view.receivedAtMs, Date.now()) !== null)
-      return "관제 상태가 오래됐거나 시각을 확인할 수 없습니다.";
-    if (!["pose", "velocity"].every(key => robot.state?.evidence?.[key]?.evidence === "fresh"))
-      return "최신 위치·속도 관측을 기다립니다.";
+    if (typeof robot.state_age_s !== "number" || !Number.isFinite(robot.state_age_s))
+      return "관제 상태의 시각을 받지 못했습니다. 연결을 확인하세요.";
+    if (staleAgeS(robot, view.receivedAtMs, Date.now()) !== null) return "관제 상태가 오래됐습니다. 새 상태를 기다리세요.";
+    const notFresh = [["pose", "위치"], ["velocity", "속도"]]
+      .filter(([key]) => robot.state?.evidence?.[key]?.evidence !== "fresh")
+      .map(([key, name]) => `${name} ${evidenceWord(robot, key)}`);
+    if (notFresh.length) return `${notFresh.join(" · ")} · 최신 관측을 기다립니다.`;
     if (robot.goal || robot.queued || (view.trafficTrips || []).some(row => row.robot_id === robot.robot_id)
         || robot.state?.swarm?.active) return "진행 중인 운행을 먼저 취소하세요.";
     if (stopping) return "정지 명령을 전달하는 중입니다.";
@@ -131,14 +141,14 @@ export function createManualControl({scope, view, call, namedReason, confirmedAc
   function start(command, event) {
     event.preventDefault();
     if (active || blocked()) return;
-    failure = "";
+    failure = ""; notice = "";
     active = {...command, robotId: view.focusRobot, generation: view.dispatchControl.generation};
     view.manualDriveRobot = active.robotId;  // motion-source.js: this console is the driver
     command.button.setAttribute("aria-pressed", "true");
     if (event.pointerId != null) {
       try { command.button.setPointerCapture(event.pointerId); } catch (_error) { /* Window release also stops. */ }
     }
-    cancelTimeout = scope.timeout(stop, 2000);
+    cancelTimeout = scope.timeout(() => { stop(); notice = "2초 한도로 멈췄습니다. 계속하려면 다시 누르세요."; }, 2000);
     ticker.start();
   }
 
@@ -162,15 +172,21 @@ export function createManualControl({scope, view, call, namedReason, confirmedAc
     mode.hidden = view.robots.find(row => row.robot_id === view.focusRobot)?.state?.mode === "MANUAL";
     const modeWhy = blocked(false);
     mode.disabled = Boolean(modeWhy);
-    if (modeWhy) mode.setAttribute("reason", modeWhy);
+    // One cause, said once in the status line above (DESIGN: 한 원인은 한 번 말한다).
+    if (modeWhy) mode.setAttribute("reason", "위 사유");
     else mode.removeAttribute("reason");
     const why = blocked();
     for (const {button} of buttons) {
       button.disabled = Boolean(why);
-      if (why) button.setAttribute("reason", why);
+      if (why) button.setAttribute("reason", "위 사유");
       else button.removeAttribute("reason");
     }
-    if (!active && !stopping) reason.textContent = failure || why || "누르는 동안만 이동 · 최대 2초 · 전후진 0.03m/s · 회전 0.10rad/s";
+    const robot = view.robots.find(row => row.robot_id === view.focusRobot);
+    const guideRow = (view.guide?.robots || []).find(row => row.robot_id === view.focusRobot);
+    const age = robot && Number.isFinite(robot.state_age_s)
+      ? `상태 ${Math.round(robot.state_age_s + Math.max(0, Date.now() - (view.receivedAtMs ?? Date.now())) / 1000)}초 전` : "상태 시각 없음";
+    pose.textContent = robot ? [sitePoseText(guideRow) || `위치 ${robotPoseText(robot.state, robot.localization)}`, `위치 관측 ${evidenceWord(robot, "pose")}`, age].join(" · ") : "";
+    if (!active && !stopping) reason.textContent = [failure, why].filter(Boolean).join(" · ") || notice || "누르는 동안만 이동 · 최대 2초 · 전후진 0.03m/s · 회전 0.10rad/s";
   }
   scope.interval(update, 100);
   return {root, update, stop};

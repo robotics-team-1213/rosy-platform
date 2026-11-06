@@ -259,7 +259,7 @@ stop.addEventListener("click", async () => {
     if (attempt !== generation) return;
     notice.setAttribute("state", "warning");
     notice.textContent = readback?.safety?.estop === true || readback?.mode === "SAFE_STOP"
-      ? "비상 정지 요청 접수 · CORE 정지 상태 확인. 물리 정지는 별도로 확인하세요."
+      ? "비상 정지 요청 접수 · 로봇 정지 상태 확인. 물리 정지는 별도로 확인하세요."
       : "비상 정지 요청 접수 · 상태 확인 불가. 실제 정지를 확인하세요.";
   } catch (error) {
     if (attempt !== generation) return;

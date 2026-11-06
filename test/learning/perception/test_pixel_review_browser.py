@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 
 import pytest
-from browser_harness import browser_tests_enabled
+from browser_harness import browser_tests_enabled, confirm_irreversible
 import numpy as np
 
 from test_review_flow_browser import browser_workspace, serve
@@ -227,8 +227,8 @@ def test_unknown_fill_selected_class_preserves_other_labels_and_undo(browser_wor
     expect(button).to_be_disabled()
     page.locator('#pixel-class').select_option('3')
     expect(button).to_be_enabled()
-    page.once('dialog', lambda dialog: dialog.accept())
     button.click()
+    confirm_irreversible(page)
     expect(page.locator('#pixel-status')).to_contain_text('v2')
     after = review_masks.pixels(store, review_masks.get(store, 0))
     assert after[2, 2] == 2 and np.all(after[before == 255] == 3)
@@ -271,8 +271,8 @@ def test_protected_point_selection_background_completion_and_visible_shortcuts(b
     finish = page.locator('#pixel-fill-unknown')
     expect(finish).to_have_text('나머지 배경으로 채우기')
     expect(finish).to_have_attribute('kind', 'quiet')
-    page.once('dialog', lambda dialog: dialog.accept())
     finish.click()
+    confirm_irreversible(page)
     expect(page.locator('#pixel-status')).to_contain_text('v4')
     after = review_masks.pixels(store, review_masks.get(store, 0))
     assert np.array_equal(after[before != 255], before[before != 255])
@@ -449,8 +449,10 @@ def test_command_search_preserves_fill_confirmation_and_reaches_ai_notes(browser
     page.locator('#pixel-class').select_option('1')
     page.keyboard.press('Control+k')
     page.get_by_role('textbox', name='기능 검색어').fill('선택 클래스로 전체 채우기')
-    page.once('dialog', lambda dialog: dialog.dismiss())
     page.keyboard.press('Enter')
+    expect(page.locator('dialog.ui-confirm')).to_be_visible()
+    assert page.evaluate("document.activeElement.closest('ui-button')?.textContent.trim()") == '취소'
+    confirm_irreversible(page, accept=False)
     assert review_masks.get(store, 0)['version'] == 0
     page.keyboard.press('Control+k')
     page.get_by_role('textbox', name='기능 검색어').fill('AI 참고 의견')
@@ -598,8 +600,8 @@ def test_new_draft_requires_explicit_apply_in_pixel_screen(browser_workspace):
     assert review_masks.get(store, 0)['version'] == 0
     page.locator('#pixel-preview-candidate').click()
     expect(button).to_be_enabled()
-    page.once('dialog', lambda dialog: dialog.accept())
     button.click()
+    confirm_irreversible(page)
     expect(page.locator('#pixel-status')).to_contain_text('v1')
     current = review_masks.get(store, 0)
     assert current['status'] == 'pending' and current['approval'] is None
@@ -836,9 +838,9 @@ def test_unknown_pixels_cannot_be_approved_and_explicit_fill_persists(browser_wo
     expect(page.locator('#pixel-approve')).to_be_disabled()
     expect(page.locator('#pixel-approval-hint')).to_contain_text('미검수')
     assert review_masks.get(store, 0)['version'] == 0
-    page.once('dialog', lambda dialog: dialog.accept())
     open_pixel_tool(page, '#pixel-fill')
     page.locator('#pixel-fill').click()
+    confirm_irreversible(page)
     expect(page.locator('#pixel-status')).to_contain_text('v1')
     page.locator('#pixel-approve').click()
     expect(page.locator('#pixel-status')).to_contain_text('픽셀 승인')
@@ -889,9 +891,9 @@ def test_pixel_decision_and_preparation_result_are_visible(browser_workspace, wi
     shot('excluded')
     page.locator('#pixel-reopen').click()
     expect(page.locator('#pixel-status')).to_contain_text('픽셀 검수 대기')
-    page.once('dialog', lambda dialog: dialog.accept())
     open_pixel_tool(page, '#pixel-fill')
     page.locator('#pixel-fill').click()
+    confirm_irreversible(page)
     expect(page.locator('#pixel-status')).to_contain_text('v3')
     page.locator('#pixel-approve').click()
     expect(page.locator('#pixel-status')).to_contain_text('픽셀 승인')
@@ -907,9 +909,9 @@ def test_pixel_decision_and_preparation_result_are_visible(browser_workspace, wi
 def test_pixel_decision_advances_to_next_editable_pending(browser_workspace):
     page, store, expect = browser_workspace
     open_pixels(page, store, expect)
-    page.once('dialog', lambda dialog: dialog.accept())
     open_pixel_tool(page, '#pixel-fill')
     page.locator('#pixel-fill').click()
+    confirm_irreversible(page)
     expect(page.locator('#pixel-status')).to_contain_text('v1')
     page.locator('#pixel-approve').click()
     # Photo 2 is object-excluded, so its pixels cannot be edited: stay on photo 1.
@@ -1026,9 +1028,9 @@ def test_stale_pixel_revision_and_excluded_frame_are_guarded(browser_workspace, 
     page.set_viewport_size({'width': width, 'height': 844})
     open_pixels(page, store, expect)
     newer = review_masks.update(store, 0, {'version':0, 'action':'fill', 'label':2}, ValueError)
-    page.once('dialog', lambda dialog: dialog.accept())
     expect(page.locator('#pixel-whole-frame-tools')).to_be_visible()
     page.locator('#pixel-fill').click()
+    confirm_irreversible(page)
     expect(page.locator('#pixel-error')).to_contain_text('다른 탭')
     expect(page.locator('#pixel-approve')).to_have_attribute('disabled', '')
     assert review_masks.get(store, 0) == newer
@@ -1158,8 +1160,8 @@ def test_pixel_thumbnails_and_unknown_background_draft(browser_workspace):
     thumbs.nth(0).click()
     expect(page.locator('#pixel-title')).to_have_text('사진 1 픽셀 검수')
     open_pixel_tool(page, '#pixel-fill-unknown')
-    page.once('dialog', lambda dialog: dialog.accept())
     page.locator('#pixel-fill-unknown').click()
+    confirm_irreversible(page)
     expect(page.locator('#pixel-status')).to_contain_text('v1')
     assert review_masks.get(store, 0)['status'] == 'pending'
     assert not np.any(review_masks.pixels(store, review_masks.get(store, 0)) == 255)
@@ -1218,9 +1220,9 @@ def test_pixel_legend_shows_default_korean_names(browser_workspace):
 def test_pixel_a_records_completion_and_x_only_on_pending(browser_workspace):
     page, store, expect = browser_workspace
     open_pixels(page, store, expect)
-    page.once('dialog', lambda dialog: dialog.accept())
     open_pixel_tool(page, '#pixel-fill')
     page.locator('#pixel-fill').click()
+    confirm_irreversible(page)
     expect(page.locator('#pixel-status')).to_contain_text('v1')
     page.keyboard.press('a')
     expect(page.locator('#pixel-status')).to_contain_text('픽셀 승인')

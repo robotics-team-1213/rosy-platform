@@ -290,7 +290,7 @@ export function buildControls(profile) {
   reverse.setAttribute("kind", "toggle");
   pedals.append(forward, reverse);
   left.append(tune);
-  const modes = el("ui-actions", null, {"aria-label": "운전 모드"});
+  const modes = el("ui-actions", null, {"aria-label": "운전 모드", "data-drive-modes": ""});
   const manual = el("ui-button", "수동", {type: "button", kind: "segment", "data-drive-manual": "", "aria-pressed": "true"});
   manual.setAttribute("kind", "segment");
   modes.append(manual);
