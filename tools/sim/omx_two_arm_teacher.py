@@ -21,6 +21,7 @@ import omx_two_arm_tasks as tasks  # noqa: E402
 import palletizing_gripper as jaw  # noqa: E402
 
 FPS = 15
+CARRY_SPEED = .05  # m/s; .08 let a 16 g container swing 10 deg in the jaws on the short reach to the near row
 OPEN_GAP = dict(belt=.042, ship=.033, temp=.033)  # 33 mm lets a pad stay inside the 6 mm gaps between rows (release_gap_m of the ship case)
 HOLD_GAP = .030 - jaw.SQUEEZE_M
 
@@ -41,13 +42,18 @@ class Teacher:
         self.world, self.layout = world, world.layout
         self.limits = (data_file or tasks.load())["judge"]
         self.hook = frame_hook or (lambda data, label: None)
-        self.contacts = None
+        self.contacts, self.phase, self.first, self.tilt, self.n, self.held_tilt = None, "", {}, 0., 0, 0.
 
     def frame(self, data, targets, label):
+        self.n += 1
         self.world.advance(data, targets)
         rep = self.world.contact_report(data, self.carried)
         for k, v in rep.items():
+            if v - self.contacts[k] and k != "pad_neighbour":
+                self.first.setdefault(k, f"{self.phase}@frame{self.n}")
             self.contacts[k] |= v
+        if self.carried and self.phase in ("lift", "carry", "lower"):
+            self.held_tilt = max(self.held_tilt, self.world.pose(data, self.carried)[2])
         self.hook(data, label)
 
     def q_now(self, data, arm):
@@ -69,8 +75,9 @@ class Teacher:
             pos, yaw = p_from + s * (p_to - p_from), yaw_from + s * (yaw_to - yaw_from)
             if shift is not None:
                 pos = pos + shift(pos, yaw, q)
-            q, err, _ = ik_arm.ik(q, pos, yaw, 30)
+            q, err, rot = ik_arm.ik(q, pos, yaw, 30)
             worst = max(worst, err)
+            self.tilt = max(self.tilt, rot)
             target = np.append(q[:5], grip)
             self.frame(data, {arm: target, **idle}, label)
         return q, worst
@@ -79,7 +86,8 @@ class Teacher:
         w, L = self.world, self.layout
         arm, c, ik_arm = step["arm"], step["container"], L.sim_arms[step["arm"]]
         sa, sb = L.sites[step["from"]], L.sites[step["to"]]
-        self.contacts, self.carried = dict(arm_arm=set(), arm_other=set(), pad_neighbour=set()), c
+        self.tilt = self.held_tilt = 0.
+        self.contacts, self.carried, self.first = dict(arm_arm=set(), arm_other=set(), pad_neighbour=set()), c, {}
         idle = {o: np.append(L.sim_arms[o].home[:5], L.sim_arms[o].home[5]) for o in L.arms if o != arm}
         if step["from"] == "belt":
             w.put(data, c, "belt")
@@ -99,14 +107,19 @@ class Teacher:
         if not ok:
             return dict(row, result="unreachable", reason=f"{arm} approach {err * 1000:.1f} mm short")
         self.move(data, arm, np.append(q[:5], g_open), np.append(q_app[:5], g_open), 2.5, step["id"], idle)
-        q, off, worst, prev = q_app, None, 0., wps[0]
+        q, off, worst, prev, held = q_app, None, 0., wps[0], {}
         for name, xy, z, yaw, grip in wps[1:]:
+            self.phase = name
             p_from, p_to = np.array([*prev[1], prev[2]]), np.array([*xy, z])
             yaw_from = prev[3]
             # once the container is held its offset in the jaw is known: aim the container centre, not the TCP
             shift = None if off is None or name in ("grasp", "close", "lift") else (lambda pos, yw, qq: self._hold_shift(ik_arm, off, qq, yw, pos))
-            seconds = 1.5 if name in ("grasp", "lower", "lift", "retreat") else max(1.2, float(np.linalg.norm(p_to - p_from)) / .08)
+            seconds = 1.5 if name in ("grasp", "lower", "lift", "retreat") else max(1.5, float(np.linalg.norm(p_to - p_from)) / CARRY_SPEED)
             if name in ("close", "release"):
+                if name == "release":
+                    held["yaw_before_release_deg"] = round(math.degrees(tasks.wrap_pi(w.pose(data, c)[1] - sb["yaw"])), 1)
+                if name == "close":
+                    held["yaw_before_close_deg"] = round(math.degrees(tasks.wrap_pi(w.pose(data, c)[1] - sb["yaw"])), 1)
                 a0, a1 = (g_open, g_hold) if name == "close" else (g_hold, g_to)
                 n = round(1.5 * FPS)
                 for i in range(1, n + 1):
@@ -114,6 +127,7 @@ class Teacher:
                 if name == "close":
                     tcp, R = w.tcp(data, arm)
                     off = R.T @ (w.pose(data, c)[0] - tcp)
+                    held["offset_in_jaw_mm"] = [round(float(v) * 1000, 1) for v in off]
                 if name == "release":
                     self.carried = None
             else:
@@ -134,8 +148,9 @@ class Teacher:
         arm_hits = sorted(f"{a}~{b}" for a, b in self.contacts["arm_other"])
         crash = sorted("~".join(p) for p in self.contacts["arm_arm"])
         ok = pose["ok"] and not moved and not crash and not arm_hits
-        return dict(row, result="pass" if ok else "fail", pose=pose, neighbours_disturbed=moved, arm_arm_contacts=crash,
-                    arm_link_contacts=arm_hits, pad_touched_neighbours=sorted(self.contacts["pad_neighbour"]), worst_ik_error_mm=round(worst * 1000, 2))
+        return dict(row, result="pass" if ok else "fail", pose=pose, held=held, neighbours_disturbed=moved, arm_arm_contacts=crash,
+                    arm_link_contacts=arm_hits, pad_touched_neighbours=sorted(self.contacts["pad_neighbour"]), worst_ik_error_mm=round(worst * 1000, 2),
+                    held_tilt_max_deg=round(self.held_tilt, 1), first_contact_phase=self.first)
 
     def _hold_shift(self, arm, off, q, yaw, pos):
         """TCP shift that puts the container centre (not the TCP) where the waypoint says: R @ held offset, nominal 2.01 mm under the TCP removed."""

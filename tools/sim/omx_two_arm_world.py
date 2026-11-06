@@ -91,7 +91,7 @@ class World:
     def _spec(self):
         L, c = self.layout, self.layout.choices
         spec = mujoco.MjSpec.from_string(self._urdf())
-        spec.option.timestep = .002
+        spec.option.timestep = .0005
         spec.option.cone, spec.option.impratio = mujoco.mjtCone.mjCONE_ELLIPTIC, 10
         spec.visual.global_.offwidth, spec.visual.global_.offheight = 1280, 960
         spec.default.geom.solref, spec.default.geom.solimp = [.002, 1], [.95, .99, .001, .5, 2]
@@ -108,9 +108,9 @@ class World:
         self._ship(spec)
         self._temp(spec)
         for k, (cid, _) in enumerate(L.containers()):
-            body = world.add_body(name=cid, pos=[.45, -.4 + .1 * k, .05])
+            body = world.add_body(name=cid, pos=[-1.4, 1.0 + .1 * k, .05])
             body.add_freejoint(name=cid)
-            body.add_geom(name=cid, type=box, size=[*(BOX / 2)], mass=.016, friction=[1, .005, .0001], rgba=[.85, .35, .08, 1])
+            body.add_geom(name=cid, type=box, size=[*(BOX / 2)], mass=.016, condim=4, friction=[1, .005, .0001], rgba=[.85, .35, .08, 1])
         for arm, p in PREFIX.items():
             for k, (finger, side) in enumerate((("link6", 1), ("link7", -1))):
                 for part in spec.body(p + finger).geoms:
@@ -213,7 +213,7 @@ class World:
     def put(self, data, cid, site, parked=0, lift=.0005):
         """Teleport a container onto a site (or park it off the cell) at rest."""
         if site is None:
-            pose = [.45, -.4 + .1 * parked, .016, 1, 0, 0, 0]
+            pose = [-1.4, 1.0 + .1 * parked, .016, 1, 0, 0, 0]
         else:
             s = self.layout.sites[site]
             pose = [*s["xy"], s["z"] + lift, math.cos(s["yaw"] / 2), 0, 0, math.sin(s["yaw"] / 2)]
