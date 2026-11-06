@@ -223,6 +223,7 @@ function enable(){updatePages(workspace?.page,busy||loading||!!stroke||draft.len
  $('pixel-fill-unknown').textContent='나머지 배경으로 채우기';
  $('pixel-fill-unknown').setAttribute('aria-label',ready&&unknownPixels?`나머지 배경으로 채우기 · 미검수 ${unknownPixels.toLocaleString()}픽셀`:'나머지 배경으로 채우기');
  for(const id of ['pixel-view-original','pixel-view-detail'])$(id).disabled=!ready||loading;
+ $('pixel-mode').textContent='선택한 도구: '+{sample:'점',brush:'브러시',polygon:'영역'}[tool];
  for(const [id,mode] of [['pixel-flood','sample'],['pixel-brush-tool','brush'],['pixel-polygon-tool','polygon']]){$(id).disabled=!labelReady||dirty||selection;$(id).setAttribute('aria-pressed',String(tool===mode));}
  $('pixel-preserve').disabled=!editable||dirty;
  for(const id of ['pixel-class','pixel-radius','pixel-tolerance-mode','pixel-tolerance'])$(id).disabled=!editable;

@@ -102,6 +102,7 @@ function enable() {
   $('exclude').disabled = locked || frame?.status === 'excluded';
   $('reopen').disabled = locked;
   $('draw').disabled = $('add').disabled = locked || frame?.status === 'excluded';
+  $('object-mode').textContent = `선택한 도구: ${drawing ? '박스 그리기' : '박스 선택·이동'}`;
   $('delete-selected').disabled = locked || frame?.status === 'excluded' || selected===null;
   for (const button of $('object-quick-classes').querySelectorAll('ui-button')) {
     button.disabled = locked || frame?.status === 'excluded' || selected===null;
@@ -397,7 +398,7 @@ $('model-draft-select').onchange=()=>{draftPreview='model';draftStatus();paint()
 $('model-candidates').onclick=async()=>{const draft=modelDrafts[Number($('model-draft-select').value)];
   if(draft&&await confirmIrreversible({message:`현재 박스를 ${candidateOrigin(draft.origin)} 초안 ${draft.boxes.length}개로 바꾸고 재검수하시겠습니까?`,action:'초안으로 바꾸기',opener:$('model-candidates')}))
     mutate('apply_object_draft',{draft_sha256:draft.sha256});};
-$('draw').onclick=()=> {drawing=!drawing; $('draw').setAttribute('aria-pressed',String(drawing));};
+$('draw').onclick=()=> {drawing=!drawing; $('draw').setAttribute('aria-pressed',String(drawing)); enable();};
 $('add').onclick=()=>edit(boxes=>boxes.push({label:null,bbox_xyxy:[0,0,Math.min(40,frame.source.width),Math.min(40,frame.source.height)]}));
 $('delete-selected').onclick=()=> {if(selected!==null) {const index=selected; selected=null;edit(boxes=>boxes.splice(index,1));}};
 $('undo').onclick=()=> {if(undo?.index===frame?.index&&!$('undo').disabled) {selected=null;mutate('save',{boxes:undo.boxes},true);}};

@@ -255,6 +255,10 @@ function render() {
       for(const step of report.steps||[]) if(step.error) text(card,'p',`${step.name}: ${step.error}`,'job-reason');
       if(report.declared?.error||report.error) text(card,'p',report.declared?.error||report.error,'job-reason');
     }
+    if(item.reports.some(report=>['running','reading','training'].includes(report.declared?.status))) {
+      const step=item.reports.flatMap(report=>report.steps||[]).find(row=>row.status==='running');
+      text(card,'p',`진행 중 · ${step?`지금 단계: ${step.name}`:'끝나면 결과가 이 카드에 나타납니다.'}`,'ui-task-meta');
+    }
     const link=text(card,'a','단계·결과 파일 및 연결 관리','ui-action-link');link.dataset.kind='quiet';link.href='#job-'+encodeURIComponent(item.id);
     const details=text($('job-detail-content'),'section','');details.dataset.jobDetail=item.id;details.hidden=true;
     text(details,'h3',item.name);
