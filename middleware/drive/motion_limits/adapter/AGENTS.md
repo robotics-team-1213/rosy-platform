@@ -19,9 +19,11 @@ The legacy safety velocity gate fuses lidar sectors, US, IR, IMU and camera, app
 | `hazard.py` | ESTOP/CLIFF/TILT/PICK detection: latched e-stop (`/estop`, `/estop/cmd`), `ir_looks_like_cliff` (4095-saturation ignore + hysteresis); on engage zeros commands and cross-publishes `/wander/cmd 'stop'` + `/calib/step 'abort'`
 | `gate.py` | The command gate: halt on obstacle/cliff/tilt/pickup/estop/stale>0.5 s, tilt-reverse creep, `cmd_linear_sign` flip, re-publishes last raw command every 20 ms |
 | `scale.py` | Narrow-map auto-cal: corridor width L+R → `map_range`/`open_max` HUD scaling |
-| `ros_edges.py` | `RosEdges`, SafetyNode's ROS edge (D-171): `now`/`age`, `stamp_time`, `lookup_base_from`, `lookup_odom_base`, `zero_twist`, `publish_text`/`publish_bool`/`publish_float`, `set_linear_sign_parameter` (split from `node.py`, D-766) |
+| `ros_edges.py` | `RosEdges`, SafetyNode's ROS edge (D-171): `now`/`age`, `stamp_time`, `lookup_base_from`, `lookup_odom_base`, `zero_twist`, `publish_text`/`publish_bool`/`publish_float`, `publish_heard`, `set_linear_sign_parameter` (split from `node.py`, D-766) |
 
 ## For AI Agents
+
+- `publish_heard` and `publish_float` skip the publish while `get_subscription_count()==0`. Only diagnostic/wander topics may use them. Stop inputs (`min_range`, `us_range`, `rear_range`, `cliff`, `blocked`, ...) publish every tick.
 
 ### Working In This Directory
 - SafetyNode is the sole final publisher only in the legacy comparison graph; wander/control publish semantic candidates. The OS target uses CommandManager/RosBridge instead. Do not enable both final publishers.

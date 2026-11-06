@@ -32,6 +32,43 @@ def test_refuses_a_missing_folder_or_a_non_dns_name_before_docker(tmp_path, monk
             module.main()
 
 
+def _renew_with_pending(module, tmp_path, monkeypatch, exec_result):
+    (tmp_path / '.tls-reload-pending').touch()
+    monkeypatch.setattr('sys.argv', ['x', '--certs', str(tmp_path), '--domain', 'site.example.net'])
+    monkeypatch.setattr(module, 'PRODUCTION', tmp_path / 'absent')
+    monkeypatch.setattr(module.subprocess, 'check_output', lambda *a, **k: '[{"Image": "sha256:x"}]')
+    commands = []
+
+    def run(command, **_):
+        commands.append(command)
+        if command[:2] == ['docker', 'exec']:
+            return exec_result(command)
+        return module.subprocess.CompletedProcess(command, 0, stdout='{}', stderr='')
+
+    monkeypatch.setattr(module.subprocess, 'run', run)
+    return commands
+
+
+def test_changed_pair_reloads_only_the_account_proxy(tmp_path, monkeypatch):
+    module = load()
+    commands = _renew_with_pending(module, tmp_path, monkeypatch, lambda command: None)
+    module.main()
+    assert not (tmp_path / '.tls-reload-pending').exists()
+    assert not any('vault' in part for command in commands for part in command)
+
+
+def test_failed_account_reload_keeps_the_pending_marker(tmp_path, monkeypatch):
+    module = load()
+
+    def fail(command):
+        raise module.subprocess.CalledProcessError(1, command)
+
+    _renew_with_pending(module, tmp_path, monkeypatch, fail)
+    with pytest.raises(RuntimeError, match='reload pending: Account'):
+        module.main()
+    assert (tmp_path / '.tls-reload-pending').exists()
+
+
 def test_unit_reads_code_folder_and_hostname_from_its_environment_file():
     unit = configparser.ConfigParser(interpolation=None)
     unit.read(ROOT / 'deploy/site/rosy-account-tls-renew.service')

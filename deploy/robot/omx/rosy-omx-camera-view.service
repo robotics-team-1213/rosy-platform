@@ -1,7 +1,7 @@
 [Unit]
 Description=ROSY OMX original-frame camera quality viewer (read only)
-Wants=rosy-omx-camera@top.service rosy-omx-camera@front.service
-After=rosy-omx-camera@top.service rosy-omx-camera@front.service
+Wants=rosy-omx-camera@top.service rosy-omx-camera@arm_a_wrist.service
+After=rosy-omx-camera@top.service rosy-omx-camera@arm_a_wrist.service
 
 [Service]
 Type=simple

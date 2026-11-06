@@ -29,6 +29,7 @@ WARN, which does not change the exit code.
 """
 from __future__ import annotations
 
+from collections import Counter
 import argparse
 from fnmatch import fnmatch
 import hashlib
@@ -90,6 +91,8 @@ done
 for c in "$@"; do
   if [ -f "$HOME/$c" ]; then echo "copy $c $(tr -d '\r' < "$HOME/$c" | sha256sum | cut -c1-64)"; else echo "copy $c missing"; fi
 done
+D=docker; docker images -q >/dev/null 2>&1 </dev/null || D='sudo -n docker'
+$D images --format 'image {{.Repository}} {{.Tag}}' </dev/null 2>/dev/null
 true
 '''
 HEALTHY = {'switched', 'up_to_date', 'idle', 'active'}
@@ -131,6 +134,8 @@ def parse(text: str, now: float, stale_hours: float) -> dict:
                 host['topology'] = report
             except ValueError:
                 host['topology'] = {'error': 'invalid workcell selection report'}
+        elif kind == 'image':
+            host.setdefault('images', []).append(rest.strip().split(' ')[0])
         elif kind == 'gate':
             host['gate'] = rest.strip()
         elif kind == 'failed':
@@ -281,6 +286,25 @@ def _code_path_matches(path: str, pattern: str) -> bool:
     return fnmatch(relative, pattern) or fnmatch(relative, pattern.rstrip('/') + '/*')
 
 
+def declared_images(host_roles: set[str], path: Path | None = None) -> set[str]:
+    import yaml
+    path = path or Path(__file__).resolve().parents[2] / 'deploy/hosts/services.yaml'
+    images = yaml.safe_load(path.read_text(encoding='utf-8')).get('images', {})
+    return {repository for role in host_roles for repository in images.get(role, [])}
+
+
+def audit_images(allowed: set[str], host: dict) -> list:
+    """Docker repositories a host keeps beyond its role's declaration; three tags cover current, previous and one more."""
+    findings = []
+    counts = Counter(repository for repository in host.get('images', []) if repository != '<none>')
+    for repository, tags in sorted(counts.items()):
+        if repository not in allowed:
+            findings.append(('UNDECLARED', repository, f'{tags} Docker image tag(s) outside deploy/hosts/services.yaml images'))
+        elif tags > 3:
+            findings.append(('DRIFT', repository, f'{tags} Docker image tags kept; three are enough'))
+    return findings
+
+
 def audit(declared: dict, host: dict, digest) -> list:
     """Compare one host's probe with its role's declaration; return (verdict, unit, detail) findings."""
     findings = []
@@ -425,7 +449,7 @@ def main() -> None:
         if target not in role_of:
             print('  (no role in private/lab-hosts.json; services.yaml not checked)')
             continue
-        findings = audit(declared, host, digest)
+        findings = audit(declared, host, digest) + audit_images(declared_images(role_of[target]), host)
         for verdict, unit, detail in findings:
             print(f'  {verdict:10} {unit}: {detail}')
         print(f'  {"+".join(sorted(role_of[target]))}: {len(declared)} declared units, '

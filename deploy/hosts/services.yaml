@@ -17,6 +17,11 @@
 # known_drift: why the installed unit or copy may differ for now; reported as KNOWN, not a failure
 # gpu:      idle-yield (D-958: lends the GPU to experiments only while its role is idle; deploy/hosts/gpu_tenants.py) | keep
 schema: rosy.host-services/1
+# images: Docker repositories a role may keep (role and placement: Harbor ADR 0021, D-960). update_status reports any
+# other repository and more than three tags of one, so test and rollback builds do not pile up on a host again.
+images:
+  model: [harborlogi, ghcr.io/robotics-team-1213/harborlogi, nginx, ros, rosy-omx-g2, rosy-omx-pilot, rosy-omx-probe, rosy-omx-workstation]
+  site: [rosy-site-fleet, rosy-site-postgres, rosy-site-proxy, rosy-site-vision]
 roles:
   model:
     rosy-dataset-review-account.service: {run: active, channel: snapshot, source: "rosy-ml/legacy-review-account-code/releases/*", doc: docs/adr/D-809-legacy-learning-account-boundary.md}
@@ -63,6 +68,8 @@ roles:
     rosy-test-storage.timer: {run: timer, channel: copy, template: "rosy-ops:deploy/lab-host-storage/rosy-test-storage.timer", doc: "rosy-ops:docs/lab-host-storage.md"}
   ai:
     pinky-backend.service: {run: "off", channel: external, note: "Pinky stack from ~/.local/bin, outside this repository; stopped and disabled 2026-10-26 (user approval): its SQLite WAL wrote ~1.8 MB/s nonstop during test I/O contention", doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
+    rosy-v13-ai-gpu-restore-20261106.service: {run: "off", channel: retired, note: "one approved GPU window, ended 2026-11-06", doc: docs/adr/D-958-lab-compute-ledger-one-admission-gpu-slot-pausable-services.md}
+    rosy-v13-ai-gpu-restore-20261106.timer: {run: "off", channel: retired, doc: docs/adr/D-958-lab-compute-ledger-one-admission-gpu-slot-pausable-services.md}
     pinky-frontend.service: {run: active, channel: external, doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
     pinky-r2-watch.service: {run: active, channel: external, doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
     pinky-v13-training.service: {run: oneshot, channel: external, doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
@@ -93,10 +100,10 @@ roles:
     rosy-site-config-reload.service: {run: "off", channel: retired, doc: deploy/site/README.md}
     rosy-site-fleet-mdns.service: {run: "off", channel: retired, doc: deploy/site/README.md}
     rosy-site-overhead-mdns.service: {run: "off", channel: retired, doc: deploy/site/README.md}
-    rosy-user-fleet-advertise.service: {run: active, channel: snapshot, source: ".local/share/rosy/site-discovery", doc: deploy/site/README.md}
-    rosy-user-overhead-advertise.service: {run: active, channel: snapshot, source: ".local/share/rosy/site-discovery", doc: deploy/site/README.md}
-    rosy-user-mdns-bridge.service: {run: oneshot, channel: snapshot, source: ".local/share/rosy/site-discovery", doc: deploy/site/README.md}
-    rosy-user-mdns-bridge.timer: {run: timer, channel: snapshot, doc: deploy/site/README.md}
+    rosy-user-fleet-advertise.service: {run: "off", channel: retired, note: "system Avahi advertises fleet and overhead; the fallback refused to duplicate them and restarted every 15 s until 2026-11-06", doc: deploy/site/README.md}
+    rosy-user-overhead-advertise.service: {run: "off", channel: retired, doc: deploy/site/README.md}
+    rosy-user-mdns-bridge.service: {run: "off", channel: retired, doc: deploy/site/README.md}
+    rosy-user-mdns-bridge.timer: {run: "off", channel: retired, doc: deploy/site/README.md}
     rosy-test-storage.service: {run: oneshot, channel: copy, template: "rosy-ops:deploy/lab-host-storage/rosy-test-storage.service", copies: {rosy-test/maintenance/host_storage.py: "rosy-ops:tools/host_storage.py"}, doc: "rosy-ops:docs/lab-host-storage.md"}
     rosy-test-storage.timer: {run: timer, channel: copy, template: "rosy-ops:deploy/lab-host-storage/rosy-test-storage.timer", doc: "rosy-ops:docs/lab-host-storage.md"}
   omx:
@@ -104,6 +111,10 @@ roles:
     rosy-omx-autoupdate.timer: {run: timer, channel: updater, template: deploy/robot/omx/rosy-omx-autoupdate.timer, doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
     rosy-omx-devices-autoupdate.service: {run: oneshot, channel: updater, template: deploy/robot/omx/rosy-omx-devices-autoupdate.service, doc: docs/adr/D-871-auto-update-every-host-service-and-update-view.md}
     rosy-omx-devices-autoupdate.timer: {run: timer, channel: updater, template: deploy/robot/omx/rosy-omx-devices-autoupdate.timer, doc: docs/adr/D-871-auto-update-every-host-service-and-update-view.md}
+    rosy-omx-cameras-bind.service: {run: oneshot, channel: autoupdate, source: ".local/share/rosy/omx-devices/current", doc: deploy/robot/omx/README.md}
+    rosy-omx-cameras-bind.timer: {run: timer, channel: autoupdate, doc: deploy/robot/omx/README.md}
+    rosy-omx-upkeep.service: {run: oneshot, channel: adhoc, source: "rosy-test/omx-record-prep-*", note: "cell_upkeep.py through a run-upkeep.sh copy; should move into omx-devices", doc: deploy/robot/omx/README.md}
+    rosy-omx-upkeep.timer: {run: timer, channel: adhoc, doc: deploy/robot/omx/README.md}
     rosy-omx-camera-readiness.service: {run: active, channel: autoupdate, template: deploy/robot/omx/rosy-omx-camera-readiness.service, source: ".local/share/rosy/omx-devices/current", doc: deploy/robot/omx/README.md}
     rosy-omx-camera-view.service: {run: active, channel: autoupdate, template: deploy/robot/omx/rosy-omx-camera-view.service, source: ".local/share/rosy/omx-devices/current", doc: deploy/robot/omx/README.md}
     rosy-omx-camera@.service: {run: active, instances: [top, arm_a_wrist], note: "front retired 2026-10-28: its by-path port is gone and arm S gripper camera is arm_a_wrist", channel: autoupdate, template: deploy/robot/omx/rosy-omx-camera@.service, source: ".local/share/rosy/omx-devices/current", doc: deploy/robot/omx/README.md}
