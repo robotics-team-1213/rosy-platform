@@ -78,8 +78,10 @@
 @media (width < 64rem) {
   .context-panel > .panel[aria-labelledby="roster-heading"] { display: flex; flex-direction: column; }
   .robot-list-details { order: 1; }
-  .workspace-heading, #robot-workspace-empty, #robot-workspace, .manual-control { order: 2; }
-  .panel:has(#robot-workspace > article) > .robot-list-details { order: 3; }
+  .workspace-heading, #robot-workspace-empty, #robot-workspace { order: 2; }
+  /* 전화에서는 선택한 로봇의 상태가 먼저다. 조종은 그 아래, 넓은 단에서만 카드 위다. */
+  .manual-control { order: 3; }
+  .panel:has(#robot-workspace > article) > .robot-list-details { order: 4; }
   .roster-block { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .roster-block > h2 { grid-column: 1 / -1; }
   .roster-block > .dispatch-control:is(:not([data-state]), [data-state="absent"]) { grid-column: 1; grid-row: 2; justify-content: flex-start; }
