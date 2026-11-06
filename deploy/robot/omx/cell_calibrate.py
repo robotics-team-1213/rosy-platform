@@ -30,6 +30,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cell_calibration as cal  # noqa: E402
 import cell_params as prm  # noqa: E402
 import cell_pivot  # noqa: E402
+from cell_pipeline_io import fold  # noqa: E402
 
 MAP_POINTS = [[-0.12, 0.17], [-0.10, 0.19], [-0.08, 0.17], [-0.06, 0.19], [-0.04, 0.17], [-0.10, 0.15], [-0.06, 0.15],
               [-0.02, 0.19], [0.02, 0.19], [0.066, 0.195], [0.06, 0.18], [0.04, 0.17]]  # the 2026-10-28 remap grid
@@ -132,7 +133,7 @@ def remap(cell, config: dict, points: list, work: Path, log=print) -> dict:
         failed = next((c for c in (f"load {lib}", "goto above_pick") if not cell.act(c).get("ok")), None)
         if failed:
             # folded after a refused move: fit the marks so far (arm_b 2026-11-05: 8 marks lost to a roll stall at -13)
-            if not cell.act("park").get("ok"):
+            if not fold(cell).get("ok"):
                 raise SystemExit(f"remap stopped at {failed} for {[x, y]} and the park failed")
             log({"point": [x, y], "stopped": failed})
             break

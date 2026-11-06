@@ -27,6 +27,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cell_attempts  # noqa: E402
 import cell_calibration as cal  # noqa: E402
 import cell_params as prm  # noqa: E402
+from cell_pipeline_io import fold  # noqa: E402
 
 SCHEMA = "rosy.omx-cell-bias.v1"
 STILL_PX, DIFF_PX, MIN_BLOB, MAX_BLOB, FOLLOW_PX, AGREE_PX = (
@@ -133,6 +134,17 @@ def map_record(calibration: dict, site: str) -> dict | None:
     return sites.get(record_key(site, "top")) or sites.get(f"{site}~coarse")
 
 
+def with_site_maps(config: dict, calibration: dict) -> dict:
+    """A site with `map_from` uses that site's map: one map is fitted per arm, whatever stands on the table today."""
+    sites = dict(calibration.get("sites", {}))
+    for name, site in config["sites"].items():
+        if "map_from" in site and name not in sites:
+            if site["map_from"] not in sites:
+                raise SystemExit(f"site {name!r}: map_from {site['map_from']!r} has no map")
+            sites[name] = sites[site["map_from"]]
+    return {**calibration, "sites": sites}
+
+
 def mark_to_arm(record: dict, config: dict, site: str, pixel, jaw_z: float):
     """The mark pixel (seen at the jaws' height) to the height the map was fitted at, then through the map."""
     fit_z = record.get("z_view", config["sites"][site]["z"])
@@ -198,7 +210,7 @@ def pivot_calibrate(cell, config: dict, point, yaws, calibration: dict, site: st
             marks.append(mark_to_arm(record, config, site, pixel, z))
             tcps.append((x, y, z, fk_yaw))
     finally:
-        cell.act("park")
+        fold(cell, sleep)
     if len(marks) < 4:
         return {"result": f"jaws marked at {len(marks)} yaws, need 4"}
     cx, cy, radius, rms = fit_circle(marks)
@@ -216,6 +228,9 @@ def pivot_calibrate(cell, config: dict, point, yaws, calibration: dict, site: st
     if rms * 1000 > prm.get(params, "pivot.max_rms_mm") or not (
             prm.get(params, "pivot.radius_lo_mm") <= radius * 1000 <= prm.get(params, "pivot.radius_hi_mm")):
         return {"result": f"circle refused: radius {bias['radius_mm']} mm, rms {bias['rms_mm']} mm", "bias": bias}
+    # 2026-11-06: 29.6 mm passed the circle test, the target moved 3 cm over a packed ship and nothing questioned it
+    if math.hypot(*bias["bias_mm"]) > prm.get(params, "pivot.max_bias_mm"):
+        return {"result": f"bias refused: {bias['bias_mm']} mm is past pivot.max_bias_mm", "bias": bias}
     return {"result": "calibrated", "bias": bias}
 
 
