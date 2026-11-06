@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends
 from core_api_web.api.deps import AuthContext, CoreServicesLike, get_services
 from core_api_web.api.errors import ApiError
 from core_api_web.api.v1.common import operator
-from core_api_web.api.v1.control import TeleopRequest, teleop
+from core_api_web.api.v1.control import ModeRequest, TeleopRequest, set_mode, teleop
 from core_api_web.api.v1.docking import DockCommand, docking_dock, docking_undock
 from core_api_web.api.v1.navigation import (
     GoalRequest,
@@ -43,6 +43,8 @@ def do_intent(body: dict, auth: AuthContext = Depends(operator),
 
 
 def _run(call, auth: AuthContext, svc: CoreServicesLike):
+    if call.verb == "manual":
+        return set_mode(ModeRequest(mode="MANUAL"), auth, svc)
     if call.verb == "navigate":
         return navigation_goal(GoalRequest(**call.body), auth, svc)
     if call.verb == "home":

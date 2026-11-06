@@ -1697,7 +1697,7 @@
         {
           "consumer": "applications/fleet/web/manual-control.js",
           "expression": "/api/fleet/do",
-          "resolution": "literal; named operator move intent and terminal zero for the selected robot",
+          "resolution": "literal; confirmed fixed manual mode, guarded named move and terminal zero for the selected robot",
           "request_ids": [
             "POST:/api/fleet/do"
           ]
@@ -2096,7 +2096,8 @@
           "handler": "fleet_do",
           "implementation": "operations/fleet/fleet/server/intent_routes.py",
           "contract_tests": [
-            "operations/fleet/test/test_server_app.py"
+            "operations/fleet/test/test_server_app.py",
+            "operations/fleet/test/test_intent_manual_fleet.py"
           ],
           "expected_statuses": [200, 400, 403, 409],
           "status": "verified"

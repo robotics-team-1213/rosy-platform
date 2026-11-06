@@ -1006,3 +1006,24 @@
 - 증거: RED5ef2b034c4 실제 Chromium 사건 회귀2실패/정상1통과에서 flagged.map TypeError와 본문·해제 버튼 누락을 재현했다. source4ddb9eef8b 원격 workcell/motor-health Chromium28통과·공용 controls/계약/기존 incident API/Node/API pin61통과, skip0·NEW/known/flaky0; scratch incident-facts-{red,final-green,contracts}/run-1.txt. 미지 facts의 markup은 텍스트로만 보이고, 메모 없는 해제 거절과 메모 후 원래 해제 흐름도 확인했다.
 - gate 변화: SOURCE/관련 원격 회귀 확인이다. 최종 통합 착지는 게시 담당과 조율하며 공개 배포·운영 로그인·기체·서비스 수용 근거로 확대하지 않는다.
 - 교훈: CE 해당 없음 — BoundedJson 계약과 실제 렌더·해제 회귀가 원인과 방어 경계를 직접 보존하며 별도 숨은 복구 조건이 없다.
+
+## 2026-11-06 · uncommitted · feat(fleet): 관제 수동 모드 전환
+- 변경: 선택 기체의 수동 전환 확인과 fresh mode readback; 발행 차단 시 기존 hold를 terminal zero로 종료
+- 증거: 원격 AI PC 16028faad6 backend 231 passed/skip0; c7ce250026 Chromium 17 passed/skip0. 신규 backend RED 29 failed/7 passed, UI RED6 failed/11 passed 후 구현. 로그는 외부 scratch pinky-manual-{red,backend-green,ui-red,ui-green}/run-1.txt.
+- gate 변화: SOURCE 회귀 검증; ARTIFACT/DEVICE/FIELD 수용 근거로 사용하지 않음. 최종 재조립 SHA 원격 회귀와 FULL은 별도.
+- 결정: API v1.363; 기존 CORE 최종 명령·모드 owner 유지.
+- 교훈: CE 해당 없음 — 최종 코드·회귀 시험·API 계약으로 판단 근거를 재현할 수 있음.
+
+## 2026-11-06 · uncommitted · fix(fleet): 수동 전환 버튼의 공용 kind 명시
+- 변경: 보존된 manual7977을 현행 main2b6aac73e2에 정상 병합하고 새 수동 모드 버튼에 kind=quiet를 명시했다. 기존 로그 양쪽과 현재 지도 frame 필터·motor readiness 기본값을 보존했다. 권한·guard·API·공용 시험은 바꾸지 않았다.
+- 증거: 병합00c3772680의 test_every_button_names_its_kind 원격 RED1failed(manual-control.js23); 수정1aa7e69117은 AI PC에서 공용 컨트롤·CORE/Fleet/Task/channel·공용 Node 회귀278passed/skip0, 실제 Chromium 수동 조종18passed/skip0. scratch pinky-manual-kind-{red,green,browser}/run-1.txt; known NEW0.
+- gate 변화: SOURCE 회귀 확인; canonical FULL194811의 NEW는 수정했으나 새 정식 FULL 결과와 실제 장치 수용은 별도다.
+- 결정: 기존 공용 quiet 버튼을 사용하며 검사 예외나 기본 kind 추론을 추가하지 않는다.
+- 교훈: CE 해당 없음 — 기존 공용 kind 계약과 한 줄 수정이 원인·해결을 직접 설명한다.
+
+## 2026-11-06 · uncommitted · fix(fleet): 수동 관제 API 설명의 동시 삽입 충돌 조정
+- 변경: 보존 source ad2de3ea05를 main1fd024ee90에 정상 병합했다. API Reference의 수동 의도 v1.363과 기존 Fleet unit v1.358·OMX incident v1.357 설명을 모두 보존했다. 기존 v1.363 예약·header·runtime pin을 유지하며 새 번호·계약 의미·guard 변경은 없다.
+- 증거: sourcecb4d0d403a 원격 AI PC 공용 control/API/CORE/Fleet/Task/channel/OMX incident/Node 286passed/skip0, 실제 수동 조종 Chromium18passed/skip0; scratch pinky-manual-api-{green,browser}/run-1.txt. 독립 source 검토 미해결 finding 없음.
+- gate 변화: SOURCE 회귀 확인; old canonical212723 STOP은 보존하고 재개하지 않는다. 새 canonical FULL·공개·장치 수용은 별도다.
+- 결정: 양쪽 설명을 버전 순서363/358/357로 두고 API gateway bump363의 already 확인을 기록한다. 충돌 밖 기존 main의 incident 등록·trail frame·motor 변경을 보존했다.
+- 교훈: CE 해당 없음 — 일반 문서 삽입 충돌이며 최종 병합과 API alignment 회귀가 조정 근거를 보존한다.

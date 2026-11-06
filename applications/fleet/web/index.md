@@ -32,8 +32,8 @@
 
 ## 최근 기록
 
+- 2026-11-06 · uncommitted · fix(fleet): 수동 관제 API 설명의 동시 삽입 충돌 조정
+- 2026-11-06 · uncommitted · fix(fleet): 수동 전환 버튼의 공용 kind 명시
+- 2026-11-06 · uncommitted · feat(fleet): 관제 수동 모드 전환
 - 2026-11-06 · uncommitted · fix(fleet): 사건 facts의 미지 JSON 형태에서도 본문과 해제 입력 유지
 - 2026-11-06 · uncommitted · fix(fleet): 표시 지도와 다른 좌표계의 궤적 숨김
-- 2026-11-06 · a9210f10f9 · 선택 로봇 홀드 조종과 모바일 상태 우선 배치
-- 2026-11-04 · uncommitted · 계정 관리 목록을 공용 표로
-- 2026-11-04 · uncommitted · 관제 두 칸을 공용 세 칸 틀로(D-978 첫 생산 적용)
