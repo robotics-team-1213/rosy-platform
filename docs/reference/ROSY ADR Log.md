@@ -10,6 +10,7 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-987 | 공통 서비스의 정의와 카탈로그. [전문](../adr/D-987-common-services-catalog.md) | Accepted (2026-11-07, 사용자 지시; 서비스 배포·현장 수용 별도) |
 | D-973 | 검수 작업공간의 명시적 관리자 클래스 개정. [전문](../adr/D-973-explicit-managed-review-class-revisions.md) | Accepted (2026-11-03, 사용자 요청; 실제 클래스 변경·재검수 수용 별도) |
 | D-977 | `device_trial`에서 승인된 ARM 이송(`arm-transfers`)을 단일 팔 하달로 잇는다 — 설계 초안(기명 현장 운영자 확인은 `operator_attested`로 구분) | 부분 Accepted(Fleet 쪽 개방), owner 목표 수락은 Proposed |
 | D-985 | 접속된 Pinky는 언제나 최신 payload로 스스로 올라간다: 봉인은 hold가 아니고, 이미지·미분류 경로와 꺼진 기체, 시작하지 않은 카나리가 배달을 멈추지 않으며 OS Release는 게시만 한다. [전문](../adr/D-985-pinky-always-self-updates-to-latest-payload.md) | Accepted (2026-11-07) |
