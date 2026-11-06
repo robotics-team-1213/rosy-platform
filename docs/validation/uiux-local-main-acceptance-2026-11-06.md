@@ -1,6 +1,6 @@
 # UI/UX 로컬 main 수용 — 2026-11-06
 
-아티팩트 `ER6vefvBnSjdAn3Pwx5iLW`를 기준으로 한30개 화면의 UI 변경은 로컬 main `a4139efa7eff6fc780f8889a6dbc4475afd5adb7`에 공식 AUTO 절차로 수용됐다. 실행 tree는 `1fdb6103e1bc074dd8118d11edad1a9601f87033`다. 이 문서는 수용된 제품 소스를 기록하며, 이 문서 자체의 이후 착지 SHA와 제품 소스를 혼동하지 않는다.
+아티팩트 `ER6vefvBnSjdAn3Pwx5iLW`를 기준으로 한30개 화면의 UI 변경은 로컬 main commit `a4139efa7eff6fc780f8889a6dbc4475afd5adb7`에 공식 AUTO 절차로 수용됐다. 실행 tree는 `1fdb6103e1bc074dd8118d11edad1a9601f87033`다. 이 문서는 수용된 제품 소스를 기록하며, 이 문서 자체의 이후 착지 SHA와 제품 소스를 혼동하지 않는다.
 
 ## 수용한 범위
 
@@ -10,7 +10,7 @@
 
 ## 실제 공식 착지
 
-- 제출 소스: `f865013a29026b1e36cc4d63c4b1d83568a84e54`. Native가 trusted main252와 정상 병합한 실제 시험·착지 소스는 위 a4139다. UI·API·Pixel 준비 상태·Cell 촬영 입력은 제출본과 동일하다는 독립 소스 검토를 마쳤다.
+- 제출 소스 commit: `f865013a29026b1e36cc4d63c4b1d83568a84e54`. Native가 trusted main252와 정상 병합한 실제 시험·착지 소스는 위 a4139다. UI·API·Pixel 준비 상태·Cell 촬영 입력은 제출본과 동일하다는 독립 소스 검토를 마쳤다.
 - 공식 브랜치: `land/uiux/record-restack-20261106004227`, 요청 명령 `python tools/land_async.py --tests auto`.
 - 2026-11-06 02:02 UTC 종료 관측에서 정확한 브랜치의 `landed`, `main_move: true`, 실제 main SHA와 reflog의 fast-forward가 일치했다. 제출 소스의 main ancestry도 exit0이다.
 - 네이티브 준비에서 새 producer19건(guard3+pre16), 마지막 라운드에서321PASS/87warnings의 새 producer1건을 보존했다. 마지막 라운드 재사용14건은 동일 tree13건과 기존 e669 소스1건이다. 준비의 재사용53건 역시 원래 e669 실행 출처를 유지한다. 재사용·추가 시험을 새 네이티브 실행으로 합산하지 않는다.

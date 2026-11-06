@@ -14412,6 +14412,6 @@ osy-d395-s1d\`.
 ## 2026-11-06 · uncommitted · docs(uiux): 실제 로컬 main 수용과 최종 검증 출처 기록
 
 - 변경: frozen UI 기록을 보존하고 새 날짜의 `validation/uiux-local-main-acceptance-2026-11-06.md`에 같은 위계 메뉴 통일·30화면 관찰 범위와 실제 수용 소스를 기록했다. 제품·권한·안전 코드 변경은 없다.
-- 증거: 공식004227의 실제 a4139efa7eff6fc780f8889a6dbc4475afd5adb7 landed/main_move:true·main SHA·reflog·제출 소스 ancestry 일치. Native132와 별도 동일 소스 Learning10파일69PASS/skip0의 합집합142는 독립 검토 GO다. 원래30 G1 직접 실행은689PASS/skip0·NEW/known/flaky0이며 각각 원본 hash와 source/env/실행 receipt를 보존했다. 마지막 native 라운드321PASS와 기존 재사용은 별도 출처로 유지한다.
+- 증거: 공식004227의 실제 commit a4139efa7eff6fc780f8889a6dbc4475afd5adb7 landed/main_move:true·main SHA·reflog·제출 소스 ancestry 일치. Native132와 별도 동일 소스 Learning10파일69PASS/skip0의 합집합142는 독립 검토 GO다. 원래30 G1 직접 실행은689PASS/skip0·NEW/known/flaky0이며 각각 원본 hash와 source/env/실행 receipt를 보존했다. 마지막 native 라운드321PASS와 기존 재사용은 별도 출처로 유지한다.
 - gate 변화: UI 제품의 실제 로컬 AUTO main 수용이다. 준비 record tier:null을 게시용 qualifying FULL로 승격하지 않으며 이 문서의 착지·공개 게시·배포·실물 수용은 별도 확인한다.
 - CE: 미해결 — canonical main ROOT가 후보 전용 브라우저 파일을 놓치는 일반 선택 결함은 진단만 기록했다. 이번 후보의 누락은 명시적 opt-in 실제 실행으로 보충했으며 도구 수정이나 해결 교훈으로 바꾸지 않는다.
