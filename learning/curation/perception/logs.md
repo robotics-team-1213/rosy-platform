@@ -490,3 +490,8 @@
 - 변경: 보고서 최상위 error가 결과 카드와 상세에 보인다. 기존에는 단계 오류만 보여 이유가 사라졌다. 실패와 품질 거절 라벨을 나누고, 접속 오류 때도 앱 바 버튼을 막지 않는다.
 - 증거: test_learning_pipeline_browser.py에 실패 이유·라벨 구분·403 앱 바 단정 추가. 화면 관찰은 scratch uiux2/other. 원격 결과는 착지 기록을 따른다.
 - gate 변화: SOURCE 회귀. 실검수자 G3는 별도다. CE: 해당 없음 — 코드와 회귀가 판단을 보존한다.
+
+## 2026-11-06 · uncommitted · uiux: 클래스 관리 ui-button, 네트워크·5xx 실패 문구
+- 변경: classes.html 기본 button 3개를 ui-button으로(제출 동작 유지). accountFetch가 연결 끊김·시간 초과·HTML 5xx를 '처리되지 않음/화면 유지/다시 시도' 문장으로 바꾼다.
+- 증거: agent-browser 로컬 렌더(1920·390·320 화면 확인). 원격 회귀는 착지 기록을 따른다.
+- gate 변화: SOURCE 변경. 실기기·Android 수용은 별도다. CE: 해당 없음 — 코드와 회귀가 판단을 보존한다.

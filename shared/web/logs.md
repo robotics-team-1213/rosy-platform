@@ -1216,3 +1216,8 @@
 - 변경: 사유 없는 비활성 흐림에서 aria-pressed/aria-selected=true를 뺐다. 현재 값이 "쓸 수 없음"처럼 읽히던 문제다. 토큰 추가 없음. 2026-11-06 UI/UX 전수 조사 P2.
 - 증거: robot test_surface_layout_browser.py가 눌린 칸 불투명도 1, 사유 없는 꺼진 칸은 흐림을 단언한다. 원격 RED/GREEN은 착지 기록을 따른다.
 - gate 변화: SOURCE 회귀. CE: 해당 없음 — 코드와 회귀가 판단을 보존한다.
+
+## 2026-11-06 · uncommitted · uiux: 공용 하위 내비 가장자리 흐림과 현재 항목 중앙 정렬
+- 변경: 좁은 폭에서 가로로 밀리는 .ui-rail-nav/.ui-subnav-nav가 가려진 쪽 가장자리를 흐리게 하고(ui-wiring.js가 data-more 표시), 현재 항목을 가로로만 중앙에 둔다. 토큰 추가 없음.
+- 증거: agent-browser 로컬 렌더(1920·390·320 화면 확인). 원격 회귀는 착지 기록을 따른다.
+- gate 변화: SOURCE 변경. 실기기·Android 수용은 별도다. CE: 해당 없음 — 코드와 회귀가 판단을 보존한다.

@@ -1071,3 +1071,8 @@
 - 변경: 활성 지도에서 장소를 누르면 경로 미리보기 목적지가 따라가고 이전 경로를 지운다(눌러도 목록 값으로 계산됐다). 수동 조종에서 정지 상태 미확인을 비상정지 활성과 다른 문장으로 말한다.
 - 증거: agent-browser 스냅샷 조작으로 재현하고 고친 뒤 같은 창에서 확인했다. test_site_map_browser.py, test_fleet_manual_control_browser.py에 단정 추가.
 - gate 변화: SOURCE 회귀. 실제 기체 경로 실행은 별도다. CE: 해당 없음 — 코드와 회귀가 판단을 보존한다.
+
+## 2026-11-06 · uncommitted · uiux: 관제 용어·연결 문구 통일, 단독 링크 누름면
+- 변경: Fleet 알약 'Fleet 연결 끊김', 위치 hover 한글, 지도 표시 라벨 중복 제거, 화면 방향이 초안에 저장됨을 라벨에, 팔레트 적재 작업 준비 제목, 지도 설정·프로필 편집·지도 기록 링크를 ui-action-link로. 설치 한 칸 규칙은 doc-tabs.css에서 설치만 쓰는 measured-calibration.css로 옮김.
+- 증거: agent-browser 로컬 렌더(1920·390·320 화면 확인). 원격 회귀는 착지 기록을 따른다.
+- gate 변화: SOURCE 변경. 실기기·Android 수용은 별도다. CE: 해당 없음 — 코드와 회귀가 판단을 보존한다.
