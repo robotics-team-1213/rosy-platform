@@ -223,3 +223,28 @@ def test_frames_are_served_to_viewers_only_for_a_known_role(client):
     assert shown.status_code == 200 and shown.headers["content-type"] == "image/jpeg" and shown.content[:2] == b"\xff\xd8"
     assert client.get(url.replace("top", "back"), headers=bearer("viewer-token")).status_code == 404
     assert client.get(url.replace("arm_b", "arm_a"), headers=bearer("viewer-token")).status_code == 404
+
+
+def test_many_console_tabs_cost_one_database_read_and_never_read_the_jpegs():
+    """Each tab polls the list every 500 ms: 20 tabs must not mean 20 database reads, and none may load a frame blob."""
+    clock = [0.0]
+    store = ArmIncidentStore(monotonic=lambda: clock[0])
+    big = b"\xff\xd8" + b"x" * 199_000 + b"\xff\xd9"
+    frame = {"role": "top", "sha256": hashlib.sha256(big).hexdigest(), "jpeg_b64": base64.b64encode(big).decode()}
+    store.report(ArmIncidentReport.model_validate(report(frames=(), source="arm_b") | {"frames": [frame]}))
+    reads = []
+    store._db.set_trace_callback(lambda sql: reads.append(sql) if sql.lstrip().upper().startswith("SELECT") else None)
+
+    first = store.snapshot("arm_b")
+    one_tab = len(reads)
+    for _ in range(19):
+        assert store.snapshot("arm_b") == first
+    assert len(reads) == one_tab and one_tab > 0  # 20 tabs read what 1 tab reads
+    assert first[0]["frames"] == [{"role": "top", "sha256": frame["sha256"], "bytes": len(big)}]
+    assert not any("jpeg FROM" in sql or ", jpeg" in sql for sql in reads)
+
+    store.clear("arm_b", first[0]["incident_id"], "checked", "op-7")  # a write shows at once
+    assert store.snapshot("arm_b")[0]["state"] == "cleared"
+    reads.clear(); clock[0] = 5.0  # the backstop re-reads even without a write
+    store.snapshot("arm_b")
+    assert reads
