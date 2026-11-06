@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """D-866 P2 MuJoCo backend adapter for the OMX-F: physics and top/front cameras on the shared layer's topics.
 
-It reads the URDF that omx_topic_backend.py wrote (vendor joints and meshes), adds position actuators, a floor,
+It reads the URDF that omx_topic_backend.py wrote (vendor or jaw v2.1 joints and meshes), adds position actuators, a floor,
 a fixed top camera and a wrist front camera, then publishes /clock, SIM_STATES and the camera images on simulation
 time and applies SIM_COMMANDS. It never serves the trajectory Action itself; the shared layer's
 joint_trajectory_controller does.
@@ -15,9 +15,11 @@ import sys
 import time
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]/'learning/envs/isaac'))
 from omx_topic_backend import SIM_COMMANDS, SIM_STATES  # noqa: E402
 from omx_backend_conformance import CAMERAS, JOINTS, OBJECTS  # noqa: E402
 from omx_cell_world import PAD_HALF_LENGTH, PAD_RADIUS, boxes, jaw_contact_point, quaternion  # noqa: E402
+from palletizing_gripper import pad_box  # noqa: E402
 
 TIMESTEP_S, STATE_PERIOD_S = .002, .01
 KP, DAMPING, ARMATURE = 40.0, .3, .01  # Position servo and joint damping; stable at 2 ms, not tuned to the real arm.
@@ -31,11 +33,21 @@ TOP_CAMERA_POS = (.12, 0.0, .65)  # Above the work area, looking down (cell top 
 GRIP_SOLREF, GRIP_SOLIMP = [.002, 1], [.95, .99, .001, .5, 2]
 
 
-def mjcf_urdf(urdf, mesh_root):
-    """The URDF as MuJoCo's parser takes it: no gazebo/ros2_control blocks, meshes from mesh_root."""
+def mjcf_urdf(urdf, mesh_root, gripper='omx-f'):
+    """The URDF as MuJoCo's parser takes it: no gazebo/ros2_control blocks, meshes under mesh_root.
+
+    Vendor meshes are bare names in the one share dir. The jaw v2.1 URDF names two packages that share the
+    meshes/omx_f layout (the follower meshes are byte-identical), so the package names drop and mesh_root is
+    the vendored assets tree with the meshes/omx_f subpaths kept.
+    """
     urdf = re.sub(r'<(gazebo|ros2_control)\b.*?</\1>', '', urdf, flags=re.S)
-    urdf = re.sub(r'package://open_manipulator_description/meshes/omx_f/', '', urdf)
-    head = (f'<mujoco><compiler meshdir="{mesh_root}" strippath="true" balanceinertia="true" '
+    if gripper == 'palletizing-v2.1':
+        urdf = re.sub(r'package://(?:open_manipulator_description|omx_f_palletizing_description)/', '', urdf)
+        strippath = 'false'
+    else:
+        urdf = re.sub(r'package://open_manipulator_description/meshes/omx_f/', '', urdf)
+        strippath = 'true'
+    head = (f'<mujoco><compiler meshdir="{mesh_root}" strippath="{strippath}" balanceinertia="true" '
             'discardvisual="false" fusestatic="false"/></mujoco>')
     return re.sub(r'(<robot\b[^>]*>)', r'\1'+head, urdf, count=1)
 
@@ -46,9 +58,9 @@ def adjacent_links(urdf):
     return [(parent, child) for parent, child in pairs if 'world' not in (parent, child)]
 
 
-def build(urdf, mesh_root, shape):
+def build(urdf, mesh_root, shape, gripper='omx-f'):
     import mujoco
-    spec = mujoco.MjSpec.from_string(mjcf_urdf(urdf, mesh_root))
+    spec = mujoco.MjSpec.from_string(mjcf_urdf(urdf, mesh_root, gripper))
     spec.option.timestep = TIMESTEP_S
     spec.option.cone, spec.option.impratio = mujoco.mjtCone.mjCONE_ELLIPTIC, 10
     spec.visual.global_.offwidth, spec.visual.global_.offheight = shape[1], shape[0]
@@ -63,13 +75,25 @@ def build(urdf, mesh_root, shape):
             body = world.add_body(name=box['name'], pos=box['pos'], quat=quaternion(box['rpy']))
             body.add_freejoint()
             body.add_geom(name=box['name'], mass=box['mass'], solref=GRIP_SOLREF, solimp=GRIP_SOLIMP, **geom)
-    x, y = jaw_contact_point()
+    # Jaw v2.1 collides each finger through its Isaac pad box (palletizing_gripper.pad_box, as
+    # ship_release_scene.add_jaw); the vendor jaw keeps the calibrated capsules. In both cases the mesh hulls
+    # span pivot to tip and overlap at every opening, so they never close on an item.
+    if gripper == 'palletizing-v2.1':
+        pads = [pad_box(side) for side in (1, -1)]
+    else:
+        x, y = jaw_contact_point()
     for finger, side in (('link6', 1), ('link7', -1)):
         for part in spec.body(finger).geoms:
             part.contype = part.conaffinity = 0
-        spec.body(finger).add_geom(type=mujoco.mjtGeom.mjGEOM_CAPSULE, size=[PAD_RADIUS, PAD_HALF_LENGTH, 0],
-                                   pos=[x, side*(y + PAD_RADIUS), 0], rgba=[0, 0, 0, 0],
-                                   solref=GRIP_SOLREF, solimp=GRIP_SOLIMP)
+        if gripper == 'palletizing-v2.1':
+            centre, size, angle = pads[0 if side > 0 else 1]
+            spec.body(finger).add_geom(type=mujoco.mjtGeom.mjGEOM_BOX, pos=list(centre), size=[s/2 for s in size],
+                                       quat=quaternion([0, 0, angle]), rgba=[0, 0, 0, 0],
+                                       solref=GRIP_SOLREF, solimp=GRIP_SOLIMP)
+        else:
+            spec.body(finger).add_geom(type=mujoco.mjtGeom.mjGEOM_CAPSULE, size=[PAD_RADIUS, PAD_HALF_LENGTH, 0],
+                                       pos=[x, side*(y + PAD_RADIUS), 0], rgba=[0, 0, 0, 0],
+                                       solref=GRIP_SOLREF, solimp=GRIP_SOLIMP)
     world.add_light(pos=[0, 0, 1.5], dir=[0, 0, -1], diffuse=[.8, .8, .8])
     world.add_camera(name='top', pos=list(TOP_CAMERA_POS), xyaxes=[0, -1, 0, 1, 0, 0], fovy=60)
     spec.body('link5').add_camera(name='front', pos=[.05, 0, .03], xyaxes=[0, -1, 0, 0, 0, 1], fovy=70)
@@ -100,6 +124,9 @@ def main():
     parser.add_argument('--real-time-factor', type=float, default=1.0)
     parser.add_argument('--initial', action='append', default=[], metavar='JOINT=RAD',
                         help='scene staging: start a joint (and its actuator target) here')
+    parser.add_argument('--gripper', default='omx-f', choices=['omx-f', 'palletizing-v2.1'],
+                        help="palletizing-v2.1 resolves the URDF's meshes from both vendored packages "
+                             'and collides the fingers through the Isaac pad boxes')
     args = parser.parse_args()
     shape = tuple(int(v) for v in args.shape.lower().split('x'))
     import mujoco
@@ -113,8 +140,9 @@ def main():
     from sensor_msgs.msg import Image, JointState
     from tf2_msgs.msg import TFMessage
 
-    mesh_root = Path(get_package_share_directory('open_manipulator_description'))/'meshes/omx_f'
-    model = build(args.urdf.read_text(), mesh_root, shape)
+    mesh_root = (Path(__file__).resolve().parents[2]/'learning/envs/isaac/assets' if args.gripper == 'palletizing-v2.1'
+                 else Path(get_package_share_directory('open_manipulator_description'))/'meshes/omx_f')
+    model = build(args.urdf.read_text(), mesh_root, shape, args.gripper)
     data = mujoco.MjData(model)
     renderers = {name: mujoco.Renderer(model, *shape) for name in CAMERAS}
     # Arm joints only; the movable work-scene boxes have free joints, which are not joint states.

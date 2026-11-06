@@ -4,7 +4,7 @@
 # sim
 
 **Parent context:** `../AGENTS.md`
-**Updated:** 2026-10-07
+**Updated:** 2026-11-07
 
 ## Purpose
 
@@ -20,6 +20,9 @@ Developer-side simulation helpers that compose several packages: ROS-free host s
 | `fleet_trips.py` | Committed two-robot Fleet + Gazebo lane trip bench (`remote_sim.py ... fleet_trips`, never this laptop): owns its D-426 reservations (domain 20-29, ports) and lock, launches `map_v2_fleet_multi_real` with the regulated SIM CORE/Fleet settings (line authority, trip lease, IR guard), runs Fleet with the D-725 `native_gazebo_map_pose` port, sends one coordinate lane trip per robot on a straight lane-graph stretch and exits 0 only when both arrive. `result.json` + logs in `--out`; tokens stay in a temp run root. Kills only processes carrying its `FLEET_TRIPS_RUN` mark. Test `test/test_fleet_trips.py` |
 | `native_gazebo_map_pose.py` | D-725 SIM-only Fleet pose port (actual Gazebo odom + /clock + CORE snapshots); built only by a developer SIM bootstrap such as `fleet_trips.py fleet` |
 | `run_sim_reach_pipeline.py` | OMX SIM reach loop on the sim host: teacher -> `docker cp` recordings -> batch export -> `act_job.py` (CPU, `--steps`) -> restart -> closed loop -> eval (the last two skipped when not landed); `--dry-run`, `--from-stage`. Test `test/test_sim_reach_pipeline.py` |
+| `omx_topic_backend.py` | D-877 shared OMX layer: vendor xacro on `topic_based_ros2_control` with the vendor controllers. `--gripper palletizing-v2.1` (jaw v2.1, D-947) runs the repo's `omx_f_palletizing.urdf` with the vendor ros2_control blocks grafted on; default `omx-f` is the vendor xacro unchanged. Test `test/test_omx_sim_backends.py` |
+| `omx_mujoco_backend.py` | D-877 MuJoCo adapter on the shared layer's topics. `--gripper palletizing-v2.1` resolves the URDF's meshes from both vendored packages (`learning/envs/isaac/assets`) and collides each finger through its Isaac pad box (`palletizing_gripper.pad_box`, as `ship_release_scene.add_jaw`); the vendor jaw keeps its calibrated capsules |
+| `run_omx_backend_conformance.sh` | D-866 P2 conformance driver: shared layer + one adapter + `omx_backend_conformance.py` (or `omx_grasp_probe.py` with `grasp`). `OMX_GRIPPER=palletizing-v2.1` passes the jaw option to the layer and the MuJoCo adapter; the Isaac adapter does not take it yet |
 | `d395_truth.py` | Judges a reported map pose against the Gazebo model pose; `test/test_d395_s1_truth.py` covers it |
 | `d395_s1_summary.py` | Markdown rows from `run.json` files of the bench |
 | `sim_verify.sh` | D-131 live check in one session: cleanup, start sim, T6 optional formation, leader drive, evidence collection (Korean comments) |
