@@ -4648,3 +4648,9 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: 원격 시험 `test/test_robot_cd.py`·`test_robot_cd_os.py`·`test_native_delta_delivery.py`·`test_publish_payload_release.py`·`test_rosy_auto_update_eligibility.py`·`test_rosy_auto_update_resume.py`·`test_pinky_release_impact.py`·`test_os_signer_snapshot.py` 전부 통과, exit 0. 실물 수용은 게시 뒤 별도.
 - gate 변화: 없음 — 기체 수용 전이다.
 - CE: 미해결 — 실물 수용 뒤 교훈을 기록한다.
+
+## 2026-11-07 · uncommitted · fix(update): 표시만 남은 MANUAL이 자동 갱신을 막지 않는다 (D-985 7항)
+- 변경: status-inputs에 `manual_quiet_s`(마지막 teleop 뒤 경과)를 더하고, payload 업데이터는 10분 넘게 명령이 없는 MANUAL을 유휴로 본다. 값이 없거나 이상하면 계속 막는다. OS 설치는 계속 IDLE을 요구한다.
+- 증거: 원격 시험은 커밋 뒤 실행.
+- gate 변화: 없음 — 기체 수용 전이다.
+- CE: 미해결 — 실물 수용 뒤 교훈을 기록한다.

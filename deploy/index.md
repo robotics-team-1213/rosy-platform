@@ -78,8 +78,8 @@
 
 ## 최근 기록
 
+- 2026-11-07 · uncommitted · fix(update): 표시만 남은 MANUAL이 자동 갱신을 막지 않는다 (D-985 7항)
 - 2026-11-07 · 6de988c4c4 · fix(release): 접속된 Pinky가 언제나 최신 payload로 올라간다 (D-985)
 - 2026-11-06 · dc3b677978 · feat(omx): 셀 페이지에 서보 값과 정한 층 표시
 - 2026-11-06 · 3c3698df3b · feat(omx): 셀 임계값을 보고 조절하는 로컬 페이지
 - 2026-11-06 · uncommitted · fix(omx): 저장된 보정 상한과 안전 코드 지문 결속
-- 2026-11-06 · uncommitted · chore(release): 후속 UIUX 수용 기록의 정확한 Git metadata 등록
