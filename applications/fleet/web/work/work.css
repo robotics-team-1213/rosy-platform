@@ -35,3 +35,7 @@
 .integrated-map text { fill: var(--text-primary); font-size: var(--text-label); font-family: var(--body); }
 #integrated-reconcile label { min-height: var(--target-secondary); display: flex; align-items: center; gap: var(--space-2); }
 #integrated-control .integrated-branches { padding-inline-start: var(--space-4); }
+
+/* The monitoring panels must not flash before the chosen area is laid out; the page shows itself if console.js never runs. */
+html[data-area-pending] #fleet-main { animation: area-pending 2s steps(1) both; }
+@keyframes area-pending { from { visibility: hidden; } to { visibility: visible; } }

@@ -83,6 +83,36 @@ def test_fleet_navigation_and_profile_return_preserve_selected_subtab(account_pa
     assert not errors, errors
 
 
+def test_area_is_chosen_before_the_console_modules_and_never_hides_the_page(account_page):
+    page, origin = account_page
+    page.route('**/console/assets/console.js', lambda route: route.abort())
+    page.goto(origin + '/console?view=work&show=pending', wait_until='commit')
+    expect(page.locator('.doc-tabs a[href="/console?view=work"]')).to_have_attribute('aria-current', 'page')
+    expect(page.locator('.doc-tabs a[href="/console"]')).not_to_have_attribute('aria-current', 'page')
+    expect(page.locator('.ui-subnav[data-area=work]')).to_be_visible()
+    expect(page.locator('#console-screen')).to_have_text('승인 대기')
+    expect(page.locator('#estop')).to_be_visible()
+    # console.js never ran, so the CSS alone must bring the panels back.
+    expect(page.locator('#fleet-main')).to_have_css('visibility', 'visible', timeout=5000)
+
+
+def test_accounts_refusal_does_not_loop_through_a_valid_login(account_page):
+    page, origin = account_page
+    page.goto(origin + '/console/login')
+    _credentials(page)
+    page.locator('[data-login=submit]').click()
+    expect(page.locator('#user-role')).to_be_visible()
+    def viewer(route):
+        response = route.fetch()
+        route.fulfill(response=response, json={**response.json(), 'role': 'viewer', 'grants': []})
+    page.route('**/api/fleet/auth/session', viewer)
+    page.goto(origin + '/console/accounts')
+    expect(page.locator('#account-login')).to_have_attribute('href', '/console/login?return=%2Fconsole%2Faccounts&error=access_denied')
+    page.locator('#account-login').click()
+    expect(page.locator('#login-recovery')).to_be_visible()
+    assert '/console/login' in page.url
+
+
 def test_new_work_explains_missing_kinds_without_redirecting(account_page):
     page, origin = account_page
     page.goto(origin + '/console/login')

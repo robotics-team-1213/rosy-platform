@@ -538,6 +538,10 @@
       "path": "shared/power-action.js",
       "media_type": "application/javascript"
     },
+    "area-first.js": {
+      "path": "shared/area-first.js",
+      "media_type": "application/javascript"
+    },
     "area-nav.js": {
       "path": "shared/area-nav.js",
       "media_type": "application/javascript"
