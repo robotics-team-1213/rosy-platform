@@ -83,21 +83,34 @@ def chain_setup(tmp_path, *, enabled=True, camera=True):
         if not enabled:
             yield options, fleet
         else:
-            for attempt in range(3):
-                try:
-                    chain = SimPolicyChain(**options)
-                    break
-                except PermissionError:
-                    # Setup only: the device's 0.2 s budget times out under a loaded test host and a failed
-                    # consumer closes for good; each retry gets a fresh one (Fleet issues a new lease).
-                    if attempt == 2:
-                        raise
-                    options['consumer'] = FleetLeaseConsumer(scope, request=fleet.device, monotonic=runtime.monotonic)
+            chain = SimPolicyChain(**options)
             try:
                 runtime._on_joint_state(joint_message(runtime))
                 yield chain, fleet, runtime, driver, clock
             finally:
                 chain.close()
+
+
+def test_setup_propagates_first_constructor_failure_without_reacquiring(tmp_path, monkeypatch):
+    failure = PermissionError('synthetic post-acquire binding failure')
+    calls = {'constructor': 0, 'acquire': 0}
+
+    def acquire(consumer):
+        calls['acquire'] += 1
+        return object()
+
+    def fail_after_acquire(**options):
+        calls['constructor'] += 1
+        options['consumer'].acquire()
+        raise failure
+
+    monkeypatch.setattr(FleetLeaseConsumer, 'acquire', acquire)
+    monkeypatch.setitem(globals(), 'SimPolicyChain', fail_after_acquire)
+    with pytest.raises(PermissionError) as raised:
+        with chain_setup(tmp_path):
+            pytest.fail('failed constructor must never yield a chain')
+    assert raised.value is failure
+    assert calls == {'constructor': 1, 'acquire': 1}
 
 
 def test_chain_defaults_disabled_without_issuing_a_lease(tmp_path):
