@@ -61,16 +61,17 @@ def test_too_large_residual_refused():
         raise AssertionError("expected refusal")
 
 
-def test_points_symmetric_about_centre_are_ambiguous():
-    pts = [(1, 1), (-1, -1), (1, -1), (-1, 1)]
+def test_points_clustered_about_centre_are_ambiguous():
+    # a gate looser than the cluster lets the 180-degree flip fit too: the points cannot fix the heading
+    pts = [(0.1, 0.1), (-0.1, -0.1), (0.1, -0.1), (-0.1, 0.1)]
     site = _site(pts, yaw=0.0, t=(0, 0))
     try:
-        sma.align(pts, site, 0.05)
+        sma.align(pts, site, 0.5)
     except sma.AlignError as exc:
         assert "AMBIGUOUS" in str(exc)
     else:
         raise AssertionError("expected refusal")
-    assert any("AMBIGUOUS" in n for n in sma.align(pts, site, 0.05, allow_ambiguous=True)[1])
+    assert any("AMBIGUOUS" in n for n in sma.align(pts, site, 0.5, allow_ambiguous=True)[1])
 
 
 def _write_rect_map(folder, w=40, h=60):
