@@ -259,6 +259,8 @@ class HostFileExchange:
                 "battery_warning_percent": _warning_percent(svc), "devices": devices,
                 "robot_mode": _robot_mode(snapshot), "nav_state": _nav_state(snapshot),
                 "swarm_role": _swarm_role(snapshot), **_idleness_inputs(snapshot),
+                "manual_quiet_s": (round(svc.command.manual_quiet_s, 1)
+                                   if getattr(svc, "command", None) is not None else None),
                 "calibration_active": (svc.calibration.current() is not None
                                        if getattr(svc, "calibration", None) is not None else None)}
 
