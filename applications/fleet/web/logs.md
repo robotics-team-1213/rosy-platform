@@ -938,6 +938,21 @@
 - 증거: 전체 페이지의 양 테마·1366/390 캡처에서 가로 넘침 없이도 무게가 여러 줄로 갈라진 것을 육안 확인했다. 텍스트 Range의 줄 수를 검사하는 회귀가 수정 전 06747e3b10에서 네 경우 모두 실패했다. 최종 원격 재검증과 캡처를 함께 확인한다.
 - gate 변화: 없음. CE: 전체 페이지·긴 값에서 읽힘을 확인해야 한다는 조건을 회귀 시험에 반영했다.
 
+## 2026-11-03 · 12aa681800 · USB 카메라 역할 승인에 쿠키 운영자 로그인 허용
+
+- 변경: USB 승인 패널의 Bearer 필수 표시 조건을 제거한다. 기명 운영자의 쿠키 로그인도 기존 same-origin 요청으로 목록을 읽고 확인 대화상자 뒤 승인한다. 운영자·잠금 검사, 서버 권한과 CSRF 검사는 유지한다.
+- 증거: `8316bbe1a9` 원격 Chromium RED는 legacy·managed 로그인 모두 패널 숨김에서 실패(NEW 2/known 0/flaky 0). 수정 소스 `12aa681800`에서 전체 계정 브라우저와 USB 결정 라우트 57 passed/0 skipped, known_failures NEW/known/flaky 0. 실제 테스트 서버·SQLite로 쿠키 로그인, 빈 저장 토큰, 외부 Origin 403, 확인 뒤 승인 200·쿠키 전송·Authorization 부재·저장 결과를 확인했다.
+- Gate: 호스트 브라우저·HTTP 검증이며 실제 USB 적용·장치·현장 수용은 수행하지 않았다.
+- CE: 해당 없음 — 기존 쿠키 로그인 교훈을 검토했고 원인·수정·재발 방지는 한 조건과 실제 브라우저 회귀로 복원 가능하다.
+
+
+## 2026-11-03 · d4e263f5fa · fix(console): explain fixed-unit registration refusal without consuming-code advice
+
+- Change: the existing messageFor path describes current fixed-roster registration as unavailable and confirms the code was not sent. The old manifest-edit/retry advice is removed from the legacy refusal explanation.
+- Evidence: native JavaScript syntax check exit0; the official remote console Node-unit wrapper passed1, skipped0, NEW/known/flaky0. Backend real-application refusal and preserved enrollment flows passed106 tests.
+- gate 변화: existing response rendering, transport and authorization remain in use. Qualified FULL/public CI and physical acceptance are separate.
+- CE: no additional lesson; existing error mapping and regression evidence explain the change.
+
 ## 2026-11-04 · uncommitted · 설치 화면 맨 위 설치 노선 (D-975 P3)
 
 - 변경: 설치·보정 화면 머리에 공용 단계 노선(`ui-stage-track`, Fleet 노선색)을 붙였다. 로봇 등록 → 카메라 승인 → 카메라 보정 → 시작점 네 역이며, 각 역은 기존 GET 응답(등록 로봇, 폐기되지 않은 카메라 자격, 보정, 유효한 시작점)으로만 완료를 그린다. 읽지 못한 역은 완료로 그리지 않고 "확인 못 함"으로 둔다. 역 링크는 기존 구획으로 이동만 하고 새 API·권한·명령은 없다. 기존 `install-step` 구획 상자는 그대로다.

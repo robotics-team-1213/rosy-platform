@@ -317,3 +317,18 @@ def test_takeover_is_a_parameter(tmp_path):
     z = cell_zones.Zones({"zone_side": "right", "zone_peer": "arm_b", "params": dict(PARAMS, **{"zone.takeover": 0})}, CAL,
                          lock_dir=tmp_path, incidents=tmp_path / "incidents")
     assert z.enter((0.30, 0.2))[0] is False
+
+
+def test_the_peer_hold_is_found_in_the_default_hold_directory(tmp_path, monkeypatch):
+    import omx_incident
+
+    monkeypatch.setenv("ROSY_OMX_HOME", str(tmp_path / "home"))
+    monkeypatch.chdir(tmp_path)
+    z = cell_zones.Zones({"zone_side": "left", "zone_peer": "arm_a", "params": PARAMS}, CAL, lock_dir=tmp_path,
+                         clock=lambda: 0.0, sleep=lambda s: None)
+    z.bind(owner("left"), "1" * 32)
+    assert z.enter((0.37, 0.2)) == (True, "middle")
+    z.leave()
+    omx_incident.keep_hold("arm_a", "elbow overload")
+    ok, why = z.enter((0.37, 0.2))
+    assert not ok and "peer HOLD" in why

@@ -5293,6 +5293,21 @@
 - gate 변화: 없음. 실물 수용은 하지 않았다.
 - CE: 해당 없음 — 새 기능이며 결정은 D-971에 있다.
 
+## 2026-11-03 · d4e263f5fa · fix(fleet): refuse fixed-unit enrollment before sending a robot code
+
+- Change: move the ownership refusal to enroll() immediately after credential availability, before normalization/discovery/HTTP/exchange. Current fixed-manifest mode reports a specific409; standalone registration, renewal, address movement, hub and release keep their existing paths. No live topology expansion is added.
+- Evidence: real create_app/control-unit fixtures for owned and foreign robot IDs reproduced two code_consumed failures at commit bdcba7bed8; commit d4e263f5fa passed106 enrollment/owner/API/release/hub tests, zero skips/NEW/known/flaky. The impossible manually-mutated ownership positive fixture was replaced. Independent review confirmed the only bind caller and startup-only immutable ownership writer.
+- gate 변화: roster/store preserved and no robot request is sent on the new refusal. Global availability and the845-line ratchet are preserved; no new schema field/version reservation.
+- CE: no additional lesson; the real application regression explains the invariant.
+
+
+## 2026-11-03 · 89d6d3ead1 · fix(fleet): isolate delegated ARM jobs and retain cancellation intent
+
+- Change: the cell deduplication key is bound to immutable origin and delegation identity under the existing parent service principal; projections keep the original app request key. READY work with no attempt is durably held on cancellation, and the shared preparation/submission gate checks persisted delegation cancellation inside the existing transaction. Claims remain held and stop confirmation is not fabricated.
+- Evidence: test-only commit 6cdba90b06 reproduced two failures with actual two-create_app HTTP fixtures and ARM storage. Independent exact-tree review is retained in commit 89d6d3ead1. Official remote GREEN for the HTTP pipeline, app wiring, delegation, preparation, submission, dispatcher, store and job API suites passed 113 tests with zero skipped/NEW/known/flaky. The retained artifact is feedback-arm-relay-isolation-green2-20261103/run-1.txt in the external temporary log root.
+- gate 변화: none. Parent identity, cell admission, auth/owner routes, terminal outcomes and confirmed-stop boundaries remain enforced. No robot/device actions were executed; qualified FULL/public CI are separate pending checks.
+- CE: no additional solution; the app-key collision and durable cancellation races are directly described by the production gates and real-store regressions.
+
 ## 2026-11-05 · uncommitted · test(fleet): 지도 화면 전환 대기와 초기 모듈 로드 복구
 
 - 변경: site-map 브라우저 helper가 활성 subnav와 보이는 heading을 확인한 뒤 레이아웃을 측정한다. 초기 document/script 요청의 정확한 Chromium ERR_NETWORK_CHANGED에만 탐색 1회 재시도를 적용하고 기존 데이터·권한·BODY_FIT assertion은 유지한다.

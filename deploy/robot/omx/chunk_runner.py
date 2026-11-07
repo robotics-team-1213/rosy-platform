@@ -534,7 +534,6 @@ def main(argv=None):
     library = load_library(args.library)
     config = json.loads(args.config.read_text(encoding="utf-8-sig"))
     params = prm.load(args.params)["values"]
-    check = load_predict.plan_check(args.load_model, config["robot"].get("port"), params, library)  # None: no model
     from cell_robot_profile import load as load_operating_profile
 
     profile = load_operating_profile(args.operating_profile, robot_config=config["robot"]) if args.operating_profile else None
@@ -564,6 +563,7 @@ def main(argv=None):
     motion = NativeJointMotion(robot.bus, None, teacher=True, monitor=MotorHealth())
     guarded = Guarded(robot, motion)
     try:
+        check = load_predict.plan_check(args.load_model, robot_cfg.get("port"), params, library, {j: robot.bus.read("PWM_Limit", j) for j in load_predict.BODY[1:]}) if args.load_model else None
         import bus_watchdog  # the motors stop by themselves if this PC goes silent (off unless the params set it)
 
         print(json.dumps({"bus_watchdog": bus_watchdog.arm(robot.bus, prm.get(params, "safety.bus_watchdog_ms"))}), flush=True)

@@ -2,10 +2,12 @@
 import hashlib
 import importlib.util
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
 import time
+from types import SimpleNamespace
 import uuid
 
 import pytest
@@ -448,6 +450,88 @@ def test_run_never_starts_inside_the_nightly_reboot_budget(tmp_path):
         isaac.run_experiment('omx-f-import', {'seed': 0}, SHA, tmp_path / 'run', remote, attempts=3,
                              sleep=lambda s: None, fetch=None)
     assert 'start' not in remote.calls
+
+
+@pytest.mark.parametrize('stdout,expected', [
+    (b'ROSY_REBOOT_NONE\n', None), (b'login notice\n7200\n', 7200), (b'-1\n', -1),
+])
+def test_reboot_reader_keeps_explicit_absence_and_numeric_replies(stdout, expected):
+    isaac = module()
+    reader = isaac.SSH.__new__(isaac.SSH)
+    reader.host = 'model'
+    reader.runner = SimpleNamespace(remote=lambda *a, **kw: SimpleNamespace(returncode=0, stdout=stdout))
+    assert reader.seconds_to_reboot() == expected
+
+
+@pytest.mark.parametrize('code,stdout', [(255, b''), (0, b''), (0, b'not-a-deadline\n')])
+def test_reboot_query_failure_never_means_no_timer(code, stdout):
+    isaac = module()
+    reader = isaac.SSH.__new__(isaac.SSH)
+    reader.host = 'model'
+    reader.runner = SimpleNamespace(remote=lambda *a, **kw: SimpleNamespace(returncode=code, stdout=stdout))
+    with pytest.raises(ConnectionError):
+        reader.seconds_to_reboot()
+
+
+@pytest.mark.parametrize('state,timer,next_value,expected', [
+    ('active', 'loaded', 'future', '0'), ('activating', 'not-found', '', '0'),
+    ('inactive', 'not-found', '', 'ROSY_REBOOT_NONE'), ('inactive', 'loaded', '', None),
+    ('inactive', 'loaded', 'future', '6000'), ('inactive', 'loaded', 'bad-date', None),
+    ('inactive', 'query-failed', 'future', None), ('query-failed', 'loaded', 'future', None),
+])
+def test_reboot_shell_distinguishes_pending_absent_and_unverifiable(state, timer, next_value, expected):
+    isaac, commands = module(), []
+    reader = isaac.SSH.__new__(isaac.SSH)
+    reader.host = 'model'
+
+    def capture(host, script, **kwargs):
+        assert kwargs['timeout'] == 50
+        commands.append(script)
+        return SimpleNamespace(returncode=0, stdout=b'ROSY_REBOOT_NONE\n')
+
+    reader.runner = SimpleNamespace(remote=capture)
+    reader.seconds_to_reboot()
+    stub = r'''
+systemctl() {
+ case "$*" in
+  *LoadState*rosy-nightly-reboot.service) echo loaded;;
+  *ActiveState*rosy-nightly-reboot.service)
+   [ "$FAKE_SERVICE" != query-failed ] || return 1; echo "$FAKE_SERVICE";;
+  *LoadState*rosy-nightly-reboot.timer)
+   [ "$FAKE_TIMER" != query-failed ] || return 1; echo "$FAKE_TIMER";;
+  *NextElapseUSecRealtime*) printf '%s\n' "$FAKE_NEXT";;
+  *) return 2;;
+ esac
+}
+date() {
+ if [ "$1" = -d ]; then [ "$FAKE_NEXT" != bad-date ] || return 1; echo 7000; else echo 1000; fi
+}
+'''
+    result = subprocess.run(['bash', '-c', stub + commands[0]], capture_output=True, text=True,
+                            env={**os.environ, 'FAKE_SERVICE': state, 'FAKE_TIMER': timer, 'FAKE_NEXT': next_value})
+    if expected is None:
+        assert result.returncode != 0
+    else:
+        assert result.returncode == 0 and result.stdout.split()[-1] == expected
+
+
+@pytest.mark.parametrize('code,stdout', [(255, b''), (0, b''), (0, b'not-a-deadline\n')])
+def test_reboot_reader_failure_retries_without_starting_or_writing_a_request(tmp_path, code, stdout):
+    isaac = module()
+    reader = isaac.SSH.__new__(isaac.SSH)
+    reader.host = 'model'
+    reader.runner = SimpleNamespace(remote=lambda *a, **kw: SimpleNamespace(returncode=code, stdout=stdout))
+
+    class QueryPipeline(Pipeline):
+        def seconds_to_reboot(self):
+            return reader.seconds_to_reboot()
+
+    remote, directory = QueryPipeline([True] * 3, ['SUCCEEDED']), tmp_path / 'run'
+    with pytest.raises(isaac.NotReady):
+        isaac.run_experiment('omx-f-import', {'seed': 0}, SHA, directory, remote, attempts=3,
+                             sleep=lambda s: None, fetch=lambda receipt, rem, dest: dest)
+    assert remote.calls == ['check'] * 3
+    assert not (directory / 'request.json').exists() and not (directory / 'receipt.json').exists()
 
 
 def test_run_stops_polling_on_unknown_and_on_too_many_lost_replies(tmp_path):

@@ -124,6 +124,7 @@ def test_cell_proposes_once_under_the_parent_service_and_r_sees_the_projection(t
     root = nodes["R"].store.get("R", "arm-1")
     assert root["owner_unit"] == "CELL-A" and root["local_task_id"] is None
     assert root["status"] == "QUEUED" and root["result"]["job"]["mission_id"] == "physical-1"
+    assert root["result"]["job"]["request_key"] == "harbor:move-1"
 
     jobs.set(status="GOAL_CONFIRMED", approved_by="operator-a", authority_epoch=1, dispatch_generation=1)
     jobs.receipts["physical-1"] = {"receipt_id": "r-1"}
