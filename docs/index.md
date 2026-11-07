@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
+- 2026-11-08 · uncommitted · docs(architecture): 공통 기능별 분리와 장애·복구 계약을 확정한다
+- 2026-11-08 · uncommitted · docs(architecture): Harbor와 공통 서비스의 책임을 저장소별로 연결한다
+- 2026-11-08 · uncommitted · docs(control): 현재 ARM 위임과 관제·owner·호스트 구조를 대조한다
+- 2026-11-08 · uncommitted · docs(control): N100 목표 호스트와 R·owner 책임을 구분한다
 - 2026-11-08 · uncommitted · test(learning): 학습 브라우저 여정 조건을 되돌린다
-- 2026-11-07 · uncommitted · fix(remote): 재부팅 경고 2분 동안 시험 PC가 새 작업을 받지 않는다
-- 2026-11-07 · uncommitted · docs(solutions): Pinky LiDAR 0°는 뒤쪽, odom은 이동 증거가 아니다
-- 2026-11-07 · uncommitted · fix(model-pc): GPU 유휴 전원 차단을 끈다
-- 2026-11-07 · uncommitted · test(learning): 학습 브라우저 여정도 고정 학습 환경을 명시할 때만 돈다
