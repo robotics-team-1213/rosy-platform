@@ -37,6 +37,10 @@ ROLLUP = re.compile(r"land/fix/land-rollup-\d{14}-\d{14}")
 NO_WINDOW = 0x08000000  # subprocess.CREATE_NO_WINDOW, named here so the module imports off Windows too
 QUEUE_FULL = "landing queue full"
 ROOM_WAIT_S = 3 * 3600  # a landing refused only by the queue cap waits this long for room, then stops as before
+# Laptop commit exhaustion ended four landings at once on 2026-11-06 with these as land.py's last line.
+RESOURCE_SHORTAGE = ("WinError 1450", "WinError 1455", "Out of memory", "MemoryError")
+RESOURCE_RETRIES = 3
+RESOURCE_WAIT_S = 300
 
 
 class Busy(SystemExit):
@@ -238,6 +242,7 @@ def supervise(tree: Path, snap: str, land_args: list[str], run=subprocess.call, 
 def _supervise(tree: Path, snap: str, land_args: list[str], run, room) -> int:
     path = tree.parent / (tree.name + ".log")
     deadline = time.monotonic() + ROOM_WAIT_S
+    shortages = 0
     while True:
         seen = path.stat().st_size if path.exists() else 0
         # land.py's own lines (the STOP reason) into the .log, appended: the inherited handle lost them (2026-10-28)
@@ -249,6 +254,12 @@ def _supervise(tree: Path, snap: str, land_args: list[str], run, room) -> int:
         # start() saw room, but another session took the last slot before land.py did (2026-10-31: twice in a row)
         output = path.read_bytes()[seen:].decode("utf-8", "replace").rstrip().splitlines()
         reason = output[-1] if output else ""
+        if code != 0 and shortages < RESOURCE_RETRIES and any(mark in reason for mark in RESOURCE_SHORTAGE):
+            shortages += 1
+            print(f"[land-async] {snap}: laptop out of resources ({reason}); land.py again in {RESOURCE_WAIT_S}s"
+                  f" ({shortages}/{RESOURCE_RETRIES})", flush=True)
+            time.sleep(RESOURCE_WAIT_S)
+            continue
         full = code != 0 and reason.startswith(f"[land] STOP: {QUEUE_FULL} (")
         if not (full and time.monotonic() < deadline and room(tree, deadline)
                 and time.monotonic() < deadline):
