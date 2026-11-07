@@ -56,8 +56,8 @@ def read(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depends(get_s
 
 @navigation_approval_router.post("/begin")
 def begin(auth: AuthContext = Depends(operator), svc: CoreServicesLike = Depends(get_services)):
-    _approver(auth)
     require_calibration_owner(svc, auth, "navigation approval")
+    _approver(auth)
     _require_unplugged(svc)
     if svc.modes.mode not in (Mode.IDLE, Mode.MANUAL) or not robot_still(svc):
         raise ApiError("MODE_CONFLICT", 409, "the robot must be stopped and out of navigation")
@@ -90,8 +90,8 @@ def navigation_start(auth: AuthContext = Depends(operator), svc: CoreServicesLik
 @navigation_approval_router.post("/trial/start")
 def trial_start(body: NavigationApprovalTrialRequest, auth: AuthContext = Depends(operator),
                 svc: CoreServicesLike = Depends(get_services)):
-    owner = _approver(auth)
     require_calibration_owner(svc, auth, "navigation approval trial")
+    owner = _approver(auth)
     _require_unplugged(svc)
     state = _host(svc, "navigation_approval.status")
     if state["phase"] != "MEASURING" or state["runtime_mode"] != "motor":

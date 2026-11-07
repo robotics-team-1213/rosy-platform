@@ -107,3 +107,24 @@ def test_rounds_run_out_at_a_person():
     results = iter(["stopped: misaligned", "stopped: placed"])
     out = rc.carry(lambda: CLEAN, lambda: {"result": next(results)}, lambda c, a: True, expected_px=lambda a: [], emit=lambda *a: None, rounds=2)
     assert out["result"] == "ask a person: 2 rounds"
+
+
+def test_no_retry_starts_from_an_arm_that_did_not_come_home():
+    results = iter(["stopped: misaligned", "placed"])
+    out = rc.carry(lambda: CLEAN, lambda: {"result": next(results)}, lambda c, a: True, expected_px=lambda a: [], emit=lambda *a: None, folded=lambda: False)
+    assert out["result"] == "ask a person: misaligned" and [r["action"] for r in out["rounds"]] == ["ask_person"]
+    results = iter(["placed"])
+    assert rc.carry(lambda: CLEAN, lambda: {"result": next(results)}, lambda c, a: True, expected_px=lambda a: [], emit=lambda *a: None,
+                    folded=lambda: False)["result"] == "placed"  # a placed box asks nothing more
+    home = [0.0, -60.0, 50.0, 50.0, 45.0]
+    assert rc.at_home([1.5, -60.0, 50.0, 50.0, 45.0, 90.0], home) and not rc.at_home([3.0, -60.0, 50.0, 50.0, 45.0, 0.0], home)
+    assert not rc.at_home(None, home)
+
+
+def test_a_contact_replans_only_once_the_pile_moved():
+    contact = "stopped: beside -> ask_person"
+    assert dg.attempt_cause(contact) == "contact" and dg.attempt_cause(contact, True) == "scene_moved"
+    assert dg.attempt_cause("stopped: pivot: stopped") == "calibrate" and dg.attempt_cause("stopped: pivot: stopped", True) == "calibrate"
+    assert dg.attempt_cause("stopped: no clear pivot point within reach") == "calibrate"  # no plan yet: a push has nothing to act on
+    for hard in ("stopped: holding after a stop at run lift_pick", "stopped: still holding", "stopped: fault"):
+        assert dg.attempt_cause(hard, True) != "scene_moved"
