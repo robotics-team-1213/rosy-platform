@@ -1370,15 +1370,15 @@
         "operations/fleet/test/test_person_requests.py",
         "test_a_request_without_a_robot_is_allowed_and_a_tool_can_poll_it_by_id"
       ],
-      "source_revision": "0000000000000000000000000000000000000000"
+      "source_revision": "18c323da673eb4c1c4d9e239ed7052f227550905"
     },
     "POST:/api/fleet/person-requests/{request_id}/answer": {
       "status": 200,
       "test": [
         "operations/fleet/test/test_person_requests.py",
-        "test_only_a_named_operator_answers_and_the_answer_is_final"
+        "test_a_failed_delivery_is_shown_as_not_delivered_not_as_delivered"
       ],
-      "source_revision": "0000000000000000000000000000000000000000"
+      "source_revision": "18c323da673eb4c1c4d9e239ed7052f227550905"
     },
     "GET:/api/fleet/charge-bays": {
       "status": 200,
