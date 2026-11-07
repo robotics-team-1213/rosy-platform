@@ -78,8 +78,8 @@
 
 ## 최근 기록
 
+- 2026-11-07 · uncommitted · fix(power): 네이티브 Pinky가 CORE의 deep 배터리 요청에 꺼진다 (D-27)
 - 2026-11-07 · uncommitted · feat(navigation): 모터·정지 파일이 같으면 항법 승인을 이어받는다 (D-986)
 - 2026-11-07 · uncommitted · fix(update): 표시만 남은 MANUAL이 자동 갱신을 막지 않는다 (D-985 7항)
 - 2026-11-07 · uncommitted · fix(omx): 사고 hold와 미전송 보고를 고정 위치로 통일
 - 2026-11-07 · 6de988c4c4 · fix(release): 접속된 Pinky가 언제나 최신 payload로 올라간다 (D-985)
-- 2026-11-06 · dc3b677978 · feat(omx): 셀 페이지에 서보 값과 정한 층 표시
