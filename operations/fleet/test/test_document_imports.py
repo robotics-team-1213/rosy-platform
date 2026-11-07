@@ -93,6 +93,7 @@ OWN = {
         "charge-bays-view.js",  # D-941: read-only charge bay plan
         "platoon-view.js",  # D-941: read-only loop gaps
         "state-age.js",
+        "motion-source.js",  # why a robot moves, from proving facts only
     },
     "install.js": {
         "device-profiles.js", "device-care.js",  # Metadata and care editing stay in Installation.

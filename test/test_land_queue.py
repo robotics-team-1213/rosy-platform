@@ -154,6 +154,30 @@ def test_an_urgent_ticket_prepares_without_waiting_behind_older_pending_ones(tmp
     assert json.loads(mine.read_text())["status"] == "preparing"
 
 
+def test_a_full_pretest_waiting_its_turn_holds_no_preparation_slot(tmp_path):
+    import land_prepare
+    running = [queue.take(tmp_path, f"feat/full{n}", status="preparing") for n in range(land_prepare.MAX_FULL)]
+    for ticket in running:
+        queue.set_status(ticket, "preparing", tier="full")
+    waiters = [queue.take(tmp_path, f"feat/wait{n}", status="preparing")
+               for n in range(land_prepare.MAX_PREPARING - land_prepare.MAX_FULL)]
+    first = waiters[0]
+
+    def nap(_):
+        assert json.loads(first.read_text())["full_wait"] is True
+        for other in waiters[1:]:
+            queue.set_status(other, "preparing", tier="full", full_wait=True)
+        small = queue.take(tmp_path, "feat/small")
+        land_prepare.slot(tmp_path, small, sleep=lambda s: pytest.fail("a waiting FULL pretest held the slot"))
+        assert json.loads(small.read_text())["status"] == "preparing"
+        small.unlink()
+        for ticket in running:
+            ticket.unlink()
+
+    land_prepare.full_slot(tmp_path, first, sleep=nap)
+    assert json.loads(first.read_text())["full_wait"] is False
+
+
 def test_who_is_ahead_shows_each_tickets_status(tmp_path):
     queue.take(tmp_path, "feat/full", status="preparing")
     mine = queue.take(tmp_path, "feat/mine")

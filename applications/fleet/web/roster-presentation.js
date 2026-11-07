@@ -7,6 +7,7 @@ import { staleAgeS } from "./state-age.js";
 import { powerHealthView } from "./power-health-view.js";
 import { cardTripLine } from "./card-trip.js";
 import { estopText } from "./motion-readiness.js";
+import { motionSource } from "./motion-source.js";
 
 const TAG_STATUS = { nav: "active", ok: "active", warn: "warn", crit: "crit" };
 
@@ -151,6 +152,11 @@ export function createRosterSummary({scope, view, openCard, render, attentionIte
     const role = formation?.leader === robot.robot_id ? "대형 리더"
       : formation && Object.hasOwn(formation.assignment || {}, robot.robot_id) ? "대형 팔로워" : "";
     if (role) facts.append(tag(role, "nav"));
+    const source = motionSource(robot, view);
+    const sourceTag = tag(source.text, source.cls);
+    sourceTag.dataset.motionSource = source.key;
+    sourceTag.title = source.title;
+    facts.append(sourceTag);
     node.append(facts);
     const lane = state.line_follow;
     const mode = lane?.mode === "CAMERA_LINE" || lane?.mode === "IR_LINE"

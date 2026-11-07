@@ -32,8 +32,8 @@
 
 ## 최근 기록
 
+- 2026-11-07 · 285714599b · uiux: 로봇 이동 출처 표시
+- 2026-11-07 · uncommitted · uiux(fleet): 규칙 판정 실패 문구를 평문으로
 - 2026-11-07 · 34867d3b61 · feat(fleet): 운행 카드 현장 규칙 판정 원격 시험 결과
 - 2026-11-07 · uncommitted · feat(fleet): 운행 카드의 현장 규칙 판정
 - 2026-11-06 · uncommitted · uiux(fleet): 지도 연결 실패 안내, 지도 장소 키보드, 로봇 이름표, Cell 블록 이름표
-- 2026-11-06 · uncommitted · uiux: 관제 용어·연결 문구 통일, 단독 링크 누름면
-- 2026-11-06 · uncommitted · uiux(fleet): 지도 클릭 목적지와 정지 미확인 문구

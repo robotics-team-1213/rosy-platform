@@ -105,8 +105,8 @@
 
 ## 최근 기록
 
+- 2026-11-07 · uncommitted · fix(fleet): 규칙 검토 지적 반영
 - 2026-11-07 · 34867d3b61 · feat(fleet): D-982 1·2단계 원격 시험 결과
 - 2026-11-07 · uncommitted · feat(fleet): 현장 운영 규칙 문서와 판정 API (D-982 1·2단계)
 - 2026-11-06 · uncommitted · uiux: 물체 카탈로그 미지정 안내를 한글로
 - 2026-11-06 · uncommitted · feat(fleet): 관제 수동 모드 전환
-- 2026-11-05 · uncommitted · test(fleet): 팔 승인 HTTP 계약 시험의 논리 시계 통일
