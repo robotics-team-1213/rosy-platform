@@ -107,6 +107,6 @@
 
 - 2026-11-07 · uncommitted · feat: PC 조치 목록을 실제 서비스에 맞추고 이력을 남긴다 (D-991)
 - 2026-11-07 · uncommitted · fix: 재부팅이 팔 세션을 끊지 않게 한다 (D-991)
+- 2026-11-07 · uncommitted · 로그인 콜백 실패가 JSON 막다른 길이 아니다
+- 2026-11-07 · uncommitted · 로그인 복귀가 설치·보정 하위 화면을 유지
 - 2026-11-07 · 7c042262fb · fix(fleet): a stale blip is read again before a trip is refused
-- 2026-11-07 · uncommitted · fix(fleet): 독립 검토 반영 — 충전 복귀·재시도·읽기 대기·칸 dwell/unknown
-- 2026-11-07 · uncommitted · fix(fleet): 운행 시작 배터리 확인 · 충전 칸 점유 유지

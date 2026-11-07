@@ -42,7 +42,8 @@ if (query.get('draft') === '1') {
 }
 const login = createPasswordLogin(document.getElementById('password-login'), {
   standalone: true, autoContinue: !failure,
-  onChange: authenticated => { if (authenticated) location.assign(back); },
+  // replace: a login page left in history would bounce Back straight forward again.
+  onChange: authenticated => { if (authenticated) location.replace(back); },
 });
 if (account) document.querySelector('[data-login=form]').setAttribute('aria-label', 'Rosy Account 로그인');
 if (failure) document.querySelector('[data-login=submit]').textContent = '다른 계정으로 로그인';

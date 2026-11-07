@@ -270,7 +270,7 @@ stop.addEventListener("click", async () => {
 
 window.addEventListener("pagehide", () => { generation++; clearTimeout(retryTimer); clearTimeout(expiryTimer); });
 await restoreAccount();
-if (session.account?.enabled && !session.account.authenticated) window.location.assign('/api/account/login?return=/dashboard');
+if (session.account?.enabled && !session.account.authenticated) window.location.replace('/api/account/login?return=' + encodeURIComponent(dashboardReturnTarget(window.location.search) ?? '/dashboard'));
 renderIdentity();
 if (session.authenticated) loadDestinations();
 else { setStatus(""); revealDevEntry(); }

@@ -787,6 +787,26 @@ def test_the_trace_gets_one_row_per_tick():
     r.run(lambda: [queue.pop(0)] if queue and not r.chunk else [])
     assert len(rows) == r.ticks
     assert rows[1]["chunk"] == "approach_pinky" and len(rows[1]["sent"]) == 6 and len(rows[1]["present"]) == 6
+    assert rows[1]["pwm"] == {}  # a robot with no guard sample
+
+
+def test_the_trace_keeps_the_guards_pwm_sample_even_as_numpy():
+    import io
+
+    import numpy as np
+
+    import cell_why
+
+    rows, status, clock, queue = [], [], [0.0], ["run approach_pinky", "stop"]
+    robot = Pressing(after=10**9)
+    robot.motion = type("Motion", (), {"effort_pwm": {"wrist_flex": np.int64(120)}})()
+    r = m.Runner(robot, library(), fps=30, status=status.append, clock=lambda: clock[0],
+                 sleep=lambda s: clock.__setitem__(0, clock[0] + 1 / 30))
+    file = io.StringIO()
+    write = cell_why.flushing_trace(file)
+    r.trace = lambda row: (rows.append(row), write(row))
+    r.run(lambda: [queue.pop(0)] if queue and not r.chunk else [])
+    assert rows[1]["pwm"] == {"wrist_flex": 120} and '"wrist_flex": 120' in file.getvalue().splitlines()[1]
 
 
 class Winding(Bus):

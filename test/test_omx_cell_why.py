@@ -99,3 +99,52 @@ def test_the_row_is_kept_and_the_past_reaches_the_prompt(tmp_path):
     w.explain("calibrate", "stopped: pivot", [], [], answers("camera_or_map"), path)
     w.explain("calibrate", "stopped: pivot", [], [], lambda p, i, s: seen.append(p) or {"hypothesis": "unknown", "reason": "", "missing": []}, path)
     assert "camera_or_map" in seen[0] and json.loads(path.read_text().splitlines()[0])["kind"] == "calibrate"
+
+
+def stop_of(sent_speed, present_speed, seconds, start=0.0):
+    """A lift that ended at about the same joint position whatever its speed, when the seconds are chosen for it."""
+    rows = lift(present_speed, sent_speed=sent_speed, seconds=seconds)
+    for row in rows:
+        row["sent"][1] += start
+        row["present"][1] += start
+    return rows
+
+
+STALL = "stopped: released after a stop at run lift_pick"
+FAST, SLOW = stop_of(3.0, 1.5, 1.45), stop_of(1.8, 1.2, 1.81)  # both end near wrist_flex 34.2
+
+
+def test_a_slower_retry_that_stops_at_the_same_place_excludes_speed(tmp_path):
+    path = tmp_path / "why.jsonl"
+    first = w.explain("lift_stall", STALL, FAST, [], None, path)
+    assert first["motion"]["verdict"] == "undetermined" and first["by"] == "nobody"
+    second = w.explain("lift_stall", STALL, SLOW, [], None, path)
+    assert second["hypothesis"] == "blocked" and second["by"] == "measurement" and "same place" in second["motion"]["why"]
+
+
+@pytest.mark.parametrize("name,retry,since", [
+    ("same speed: a stop repeats at the same place whatever its cause", FAST, 0.0),
+    ("faster", None, 0.0),
+    ("another plan", stop_of(1.8, 1.2, 1.81, start=5.0), 0.0),
+    ("slower and went further", stop_of(1.8, 1.2, 4.5), 0.0),
+    ("the earlier stop was another carry's", SLOW, 9e12),
+])
+def test_a_repeat_says_nothing_unless_it_really_is_slower_at_the_same_place(tmp_path, name, retry, since):
+    path = tmp_path / "why.jsonl"
+    if retry is None:  # the faster one second
+        w.explain("lift_stall", STALL, SLOW, [], None, path)
+        retry = FAST
+    else:
+        w.explain("lift_stall", STALL, FAST, [], None, path)
+    assert w.explain("lift_stall", STALL, retry, [], None, path, since=since)["motion"]["verdict"] == "undetermined", name
+
+
+def test_another_chunks_stop_is_no_repeat(tmp_path):
+    path = tmp_path / "why.jsonl"
+    w.explain("lift_stall", "stopped: released after a stop at run lift_place", [{**r, "chunk": "lift_place"} for r in FAST], [], None, path)
+    assert w.explain("lift_stall", STALL, SLOW, [], None, path)["motion"]["verdict"] == "undetermined"
+
+
+def test_a_stop_keeps_the_pwm_it_was_recorded_with():
+    rows = [{**r, "pwm": {"wrist_flex": 212}} for r in FAST]
+    assert w.read_motion(rows)["pwm_end"] == 212 and w.read_motion(FAST)["pwm_end"] is None

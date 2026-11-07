@@ -174,11 +174,20 @@ def test_receiver_rejects_callback_parameter_pollution_and_open_returns(receiver
     assert client.get('/api/fleet/auth/callback?code=x&code=y&state=z').status_code == 401
 
 
+def test_receiver_sends_a_person_back_to_the_console_when_the_login_flow_expired(receiver):
+    client = receiver[0]
+    assert client.get('/api/fleet/auth/callback?code=x&state=z').status_code == 401
+    page = client.get('/api/fleet/auth/callback?code=x&state=z', headers={'Accept': 'text/html'}, follow_redirects=False)
+    assert page.status_code == 303 and page.headers['location'] == '/console'
+    assert COOKIE not in page.cookies
+
+
 @pytest.mark.parametrize('target', [
     '/console?view=work&show=new',
     '/console?view=records&show=log&inbox=1',
     '/console?view=work&arm_transfer=job:one&robot=r1',
     '/console/site-map?robot=r1#teach-heading',
+    '/console/install#cameras',
 ])
 def test_receiver_pkce_preserves_known_document_query_and_anchor(receiver, target):
     client, _, authority, context, _ = receiver
@@ -196,7 +205,7 @@ def test_receiver_pkce_preserves_known_document_query_and_anchor(receiver, targe
     '/console?unknown=value', '/console?view=work&view=records', '/console?view=other',
     '/console?show=new', '/console?view=work&show=other', '/console?inbox=0',
     '/console?view=records&arm_transfer=job:one', '/console?view=work&arm_transfer=bad/one',
-    '/console?robot=' + 'x' * 129, '/console?robot=../../x', '/console/site-map#other',
+    '/console?robot=' + 'x' * 129, '/console?robot=../../x', '/console/site-map#other', '/console/install#other', '/console/install#hosts',
     '/console/install?view=work', '/api/fleet/auth/authorize?client_id=evil',
     '/console?view=work&arm_transfer=' + 'x' * 193, '/console?' + 'x' * 4096,
 ])

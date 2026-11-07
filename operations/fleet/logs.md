@@ -5356,6 +5356,16 @@
 - 결정: API v1.365 유지
 - 교훈: 없음
 
+## 2026-11-07 · uncommitted · 로그인 복귀가 설치·보정 하위 화면을 유지
+- 변경: fleet_return_allowed가 설치 문서의 알려진 다섯 화면 조각을 허용한다. 그 밖의 조각은 그대로 거절한다.
+- 증거: test_account_receiver.py 허용·거절 두 경우를 더했다. 원격 결과는 착지 기록을 따른다.
+- gate 변화: SOURCE 회귀. 현장 수용은 별도다.
+
+## 2026-11-07 · uncommitted · 로그인 콜백 실패가 JSON 막다른 길이 아니다
+- 변경: 흐름이 만료되거나 Account가 끊겨 콜백이 실패하면 브라우저는 /console로 돌아간다. API 호출은 그대로 401·503이고 어느 쪽도 세션을 만들지 않는다.
+- 증거: 실제 Account와 Fleet을 두 출처로 띄운 왕복에서 두 탭 로그인과 교환 중 장애가 JSON 화면에서 멈추는 것을 재현했다.
+- gate 변화: SOURCE 회귀. 현장 수용은 별도다.
+
 ## 2026-11-07 · uncommitted · fix: 재부팅이 팔 세션을 끊지 않게 한다 (D-991)
 - 변경: 화면 `reboot`는 도우미 `reboot-if-free`로 간다. `reboot-over-jobs` 추가, 종료 코드 6·7을 409 `ARM_SESSION_ACTIVE`·`HOST_JOBS_ACTIVE`로 옮긴다. 호스트 서비스 화면이 작업 중이면 다시 묻는다.
 - 증거: 원격 `test_host_control.py`·`test_host_guard.py`. 호스트 pytest이며 실제 재부팅·세션 수용은 아니다.
