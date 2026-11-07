@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Native lane-only Host Agent; peer uid is the installed dedicated CORE account."""
+"""Native Host Agent for lane perception and navigation approval; peer uid is the dedicated CORE account."""
 from pathlib import Path
 import grp
 import pwd
@@ -18,7 +18,10 @@ def main():
         sink.records.clear()  # live polling must not retain audit history in memory
 
     agent = HostAgent(SubprocessCommands(), allowed_profiles=(), allowed_units=(),
-                      allowed_commands=("lane_perception.status", "lane_perception.set"),
+                      allowed_commands=("lane_perception.status", "lane_perception.set",
+                                        "navigation_approval.status", "navigation_approval.begin",
+                                        "navigation_approval.cancel", "navigation_approval.seal",
+                                        "navigation_approval.start_navigation"),
                       audit=audit)
     serve_forever(agent, expected_uid=uid, group_gid=gid)
 

@@ -1344,3 +1344,10 @@
 - gate 변화: SOURCE 회귀 검증; ARTIFACT/DEVICE/FIELD 수용 근거로 사용하지 않음. 최종 재조립 SHA 원격 회귀와 FULL은 별도.
 - 결정: API v1.363; 기존 CORE 최종 명령·모드 owner 유지.
 - 교훈: CE 해당 없음 — 최종 코드·회귀 시험·API 계약으로 판단 근거를 재현할 수 있음.
+
+## 2026-11-07 · uncommitted · feat(navigation): 항법 재승인 REST (D-986)
+- 변경: `v1/navigation_approval.py`, `core_features/command/approval_trials.py`, API reference v1.367
+- 증거: 원격 시험. 장치 수용 없음
+- gate 변화: 없음
+- 결정: D-986 2항
+- 교훈: 없음

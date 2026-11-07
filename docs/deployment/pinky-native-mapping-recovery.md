@@ -68,8 +68,10 @@ API의 `accepted` 응답만으로 G4를 완료하지 않는다.
 ## 3. 승인과 네이티브 전환
 
 G4 레코드와 장치 readback, 서명 릴리스가 같은 장치/세대임을 확인한 뒤
-`motor` 모드에서 다음 명령으로 봉인한다. 이 도구는 주행을 명령하거나
-자료를 자동 채집하지 않는다.
+`motor` 모드에서 다음 명령으로 봉인한다. 이 도구 자체는 주행을 명령하거나
+자료를 채집하지 않는다. 채집과 봉인을 한 번에 하는 제품 경로는 로그인한 운영자의
+`/api/v1/navigation/approval` API와 작업 준비의 항법 재승인 카드다(D-986). 아래 명령은 그 경로를
+쓸 수 없을 때의 수동 절차다.
 
 ```bash
 sudo -n python3 -B /opt/rosy/native-runtime/mapping_approval.py approve \

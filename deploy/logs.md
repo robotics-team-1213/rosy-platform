@@ -4654,3 +4654,10 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: 원격 시험 `test/test_native_mapping_approval.py`·`test/test_image_layer_sync.py` exit 0. b8xy의 실제 릴리스에서 004·005 지문 일치, 10/29와 불일치(읽기 전용 측정, 제외 목록 추가 전 기준).
 - gate 변화: 없음 — 기체 수용 전이다.
 - CE: 해당 없음 — 새 기능이며 해결한 장애가 없다.
+
+## 2026-11-07 · uncommitted · feat(navigation): 로그인한 운영자가 API로 항법을 다시 승인한다 (D-986)
+- 변경: `native/navigation_approval_host.py`, Host Agent `navigation_approval.*`와 operator 등급, CORE `approval_trials.py`, `/api/v1/navigation/approval`, 작업 준비 카드
+- 증거: 원격 시험. 장치 수용 없음
+- gate 변화: 없음
+- 결정: D-986 2항
+- 교훈: 없음

@@ -554,6 +554,20 @@ from .ui_surface import (  # noqa: F401
 # administrator 전용 /api/v1/host/ssh/... 의 본문과 응답. CORE 는 이 모양을 검사한
 # 뒤 root rosy-ssh-access 에 넘기고, 그 도우미가 같은 규칙을 따로 다시 검사한다.
 
+class NavigationApprovalTrialRequest(BaseModel):
+    """D-986: which G4 trial to run. Speed is never the caller's to choose."""
+    model_config = ConfigDict(extra="forbid")
+    direction: Literal["forward", "reverse", "cw", "ccw"]
+    stop_cause: Literal["button_release", "command_loss"]
+    rear_confirmed: bool = False
+
+
+class NavigationApprovalSealRequest(BaseModel):
+    """D-986: the approver comes from the login, not from this body."""
+    model_config = ConfigDict(extra="forbid")
+    test_surface: Literal["floor", "lifted"]
+
+
 from .ssh import (  # noqa: F401
     SSH_LABEL_PATTERN, SSH_KEY_TYPES, SSH_TIME_PATTERN, SSH_MAX_KEYS,
     SshKeyAddRequest, SshKeyAdded, SshKeyInfo, SshKeyList, SshHostKeys,

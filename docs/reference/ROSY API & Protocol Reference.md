@@ -5,9 +5,21 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.363
+**Version:** v1.367
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.367 항법 재승인 REST (D-986)
+
+- `GET /api/v1/navigation/approval`(viewer)은 `phase`(IDLE·BEGINNING·MEASURING·SEALING·CANCELLING·FAILED), `reason`, `approval`(`valid`·`carried`·`measured_release_id`·`reason`), `needs_measurement`, `runtime_mode`, `trials`(필수 5개의 `state`: missing·valid·invalid), `trial`(진행 중과 직전 결과)을 돌려준다.
+- 다음 POST는 모두 operator다. Account 로그인은 `robot.operate`로 판정한다. 공용 개발 토큰은 403이다.
+  - `/begin`: 정지 상태에서 motor 측정으로 넘어간다. CORE가 다시 시작되므로 결과는 GET의 `phase`로 읽는다. 실패하면 이전 설정으로 돌아가 `FAILED`와 사유를 남긴다.
+  - `/trial/start`: `direction`, `stop_cause`, `rear_confirmed`. 속도는 받지 않는다. MANUAL로 전환하고, LiDAR 여유를 확인한다. 후진은 LiDAR가 못 보는 뒤쪽을 사람이 확인했다는 `rear_confirmed=true` 없이는 `REAR_CONFIRMATION_REQUIRED`로 거절한다. 없거나 오래된 스캔은 `CLEARANCE_UNKNOWN`, 여유 부족은 `CLEARANCE_TOO_SMALL`이다.
+  - `/trial/hold`: 시험을 시작한 사람이 누르는 동안 보낸다. 일반 teleop 경로로 고정 저속을 명령한다.
+  - `/trial/stop`: 버튼 해제. `command_loss` 시험은 이 호출 없이 hold를 끊는다. 이 시험에 stop을 보내면 기록 없이 중단한다.
+  - `/seal`: `test_surface`(floor·lifted). 승인자는 본문이 아니라 로그인의 `principal_ref`다. 다섯 시험이 모두 valid여야 하며 성공하면 hardware 모드로 돌아간다. 항법은 시작하지 않는다.
+  - `/navigation-start`: 유효한 봉인이 있을 때만 항법 서비스를 시작한다.
+  - `/cancel`: 진행 중 시험을 멈추고 이전 설정으로 돌아간다.
 
 ### v1.363 관제의 고정 수동 모드 의도
 
