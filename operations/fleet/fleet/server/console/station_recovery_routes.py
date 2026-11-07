@@ -8,6 +8,7 @@ of the request, so an approval never outlives the answer that justified it.
 from __future__ import annotations
 
 import logging
+import time
 from copy import deepcopy
 from typing import Awaitable, Callable, Optional
 
@@ -24,13 +25,32 @@ def _conflict(code: str, **detail) -> HTTPException:
     return HTTPException(409, detail={"code": code, **detail})
 
 
+class RobotRequests:
+    """Delivers an open person request to its robot through the roster's own authenticated client, and takes it
+    away again. These two calls are everything a person request may do to a robot."""
+
+    def __init__(self, clients, wall=time.time) -> None:
+        self._clients, self._wall = clients, wall
+
+    async def put(self, robot_id: str, record: dict) -> None:
+        await self._clients[robot_id].person_request_put({
+            "request_id": record["id"], "kind": record["kind"], "text": record["text"], "why": record["why"],
+            "ttl_s": max(1.0, min(3600.0, record["expires_at"] - self._wall()))})
+
+    async def clear(self, robot_id: str, request_id: str) -> None:
+        await self._clients[robot_id].person_request_clear(request_id)
+
+
 def install_person_requests(app, gathered, read_guard, require_named_operator, require_proposer) -> None:
     tasks = getattr(app.state, "task_service", None)
     store = PersonRequestStore(tasks.store.path if tasks is not None else None)
 
     async def known_robots() -> set:
         return {row["robot_id"] for row in (await gathered())["robots"]}
-    install_person_request_routes(app, store, read_guard, require_proposer, require_named_operator, known_robots)
+    console = getattr(app.state, "console", None)
+    robots = RobotRequests(console.clients) if console is not None else None
+    install_person_request_routes(app, store, read_guard, require_proposer, require_named_operator, known_robots,
+                                  robots)
 
 
 def _by_battery(row: dict) -> tuple:

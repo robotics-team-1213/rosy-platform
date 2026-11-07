@@ -168,3 +168,47 @@ def test_a_failed_delivery_is_shown_as_not_delivered_not_as_delivered():
 def test_without_a_robot_gateway_a_request_is_not_sent_and_says_so():
     client, _ = make()
     assert post(client).json()["delivery"]["state"] == "not_sent"
+
+
+# ---- delivery to the robot over the real client ---------------------------------------------
+
+def test_the_robot_client_puts_and_clears_only_the_request_holder_with_its_own_token():
+    import asyncio
+    import httpx
+    from fleet.server.station_recovery_routes import RobotRequests
+    from fleet.swarm.robots import RobotEndpoint
+    from fleet.swarm.transport import HttpRobotClient
+
+    seen = []
+
+    def handler(request: httpx.Request):
+        seen.append((request.method, request.url.path, request.headers["authorization"],
+                     request.content.decode() if request.content else ""))
+        return httpx.Response(200, json={"ok": True})
+
+    endpoint = RobotEndpoint("r1", "http://robot:8080", "fleet-token")
+    client = HttpRobotClient(endpoint, http=httpx.AsyncClient(transport=httpx.MockTransport(handler),
+                                                              base_url=endpoint.base_url))
+    gateway = RobotRequests({"r1": client}, wall=lambda: 100.0)
+    record = {"id": "a" * 32, "kind": "plug_charger", "text": "t", "why": "w", "expires_at": 160.0}
+    asyncio.run(gateway.put("r1", record))
+    asyncio.run(gateway.clear("r1", record["id"]))
+    assert [(m, p, a) for m, p, a, _ in seen] == [("PUT", "/api/v1/person-request", "Bearer fleet-token"),
+                                                  ("DELETE", f"/api/v1/person-request/{'a' * 32}", "Bearer fleet-token")]
+    import json
+    assert json.loads(seen[0][3]) == {"request_id": "a" * 32, "kind": "plug_charger", "text": "t", "why": "w",
+                                      "ttl_s": 60.0}
+    with pytest.raises(KeyError):   # a robot with no client is a failed delivery, not a delivered one
+        asyncio.run(gateway.put("ghost", record))
+
+
+def test_an_unreachable_robot_through_the_real_gateway_reads_not_delivered():
+    from fleet.server.station_recovery_routes import RobotRequests
+
+    class Down:
+        async def person_request_put(self, body):
+            raise ConnectionError("down")
+
+    client, _ = make(robots=RobotRequests({"r1": Down()}))
+    body = post(client).json()
+    assert body["delivery"]["state"] == "not_delivered" and body["state"] == "open"

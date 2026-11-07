@@ -50,3 +50,16 @@ DNC-006 자동 복귀는 Warning 20%이고 도크가 있을 때다. 도크가 �
 ## Verification
 
 SRS의 SAF-003, SAF-005, NAV-003, WPT-004, DNC-002, DNC-005, DNC-006과 D-28, D-419, D-502, D-688, 모드 전이표, `ROBOT_MODES`, `NavigationManager.home()`을 대조했다. 시험은 돌리지 않았다. 복귀 모드 값, 스냅샷 필드, 얼굴 줄은 없다.
+
+## Amendment 2026-11-07: station recovery requests and 사람 부탁 (API v1.372)
+
+Nothing above changes. This adds two things beside the return mode; neither moves a robot.
+
+**Station recovery request (slice S1, default off).** `fleet.station_recovery.enabled` (site config, default false) lets Fleet ask, for each online robot whose battery level is warning or lower with fresh evidence, whether a charge bay could take it (`fleet/station_recovery.py`, pure; bay choice reuses the charge-bay plan). The answer is a bay or one reason: `no_station`, `no_free_bay`, `position_unknown`, `already_stopped` (an e-stop is never released), `busy`, `another_returning`; stale or missing battery evidence answers `battery_evidence_missing`, never ok and never low. `GET /api/fleet/station-recovery` lists the answers (`disabled` while off); `POST /api/fleet/station-recovery/{robot_id}/approve` (named operator) records the approval and answers `started: false`. An approval whose current answer is not actionable is 409 with the reason; no reason can be overridden. Motion is S2.
+
+**사람 부탁 (person requests).** The system asks a person for a physical act and the person answers on the console. Fleet keeps the durable record (kinds `unplug_charger`, `plug_charger`, `move_robot`, `clear_area`, `other`; states `open`, `done`, `cannot`, `expired`, `withdrawn`); tools create it with an operator or the existing service credential, poll it by id, and the requester may withdraw it. A request with a robot also reaches that robot (CORE holds one, with its expiry; the dashboard shows a Korean card; the face draws a short English strip such as `UNPLUG CHARGER` and beeps with the existing `call` pattern on arrival and every 15 s). Delivery that fails reads `not_delivered`, not delivered.
+
+**Rule.** An answer is a person's statement only. It never starts motion, releases a stop or satisfies a safety check; tools still read the evidence. The only thing an answer sends to a robot is the removal of the request from its screen. Station recovery will reuse this for the arrival notice "충전기 연결 필요" (S3, not built).
+
+**Not done.** The answer buttons exist only on the Fleet console; the robot dashboard says "관제에서 답해 주세요". The state snapshot carries no `person_request` field because that needs the safety-tagged `core_features/state/manager.py`; the dashboard and Fleet read `GET /api/v1/person-request`. Requests without a robot appear in the API but not in the per-robot attention queue.
+
