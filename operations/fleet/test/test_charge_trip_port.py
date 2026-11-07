@@ -18,6 +18,7 @@ from fleet.server.trip_runner import TripRunner
 from fleet.server.trip_ports import TripConfig
 from test_charge_store import store
 from test_trip_runner import Ports, BOTH, _free_map
+from fakes import fresh_battery
 
 R = 'rosy_60'
 CAPS = {'controls': {'items': [dict(kind='base_velocity', trip_lease=True, trip_lease_job=True,
@@ -49,7 +50,7 @@ def _setup(tmp_path):
     robot = Robot()
     plans = SiteMapStore(None, clock=lambda: robot.now)
     plans.import_if_empty(_free_map(), source='SIM')
-    runner = TripRunner(store=plans, routing_config=plans.routing_config, caps=robot.caps_for, poses=robot,
+    runner = TripRunner(store=plans, routing_config=plans.routing_config, caps=robot.caps_for, battery=fresh_battery, poses=robot,
         junction=robot, goal=robot.goal, cancel_goal=robot.cancel_goal, clock=lambda: robot.now,
         config=TripConfig(), lease={'required': True, 'holder': 'station'})
     runner.lease._clock = lambda: robot.now

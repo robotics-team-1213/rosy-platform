@@ -75,6 +75,28 @@ def jaw_blobs(closed, opened, params=None) -> list:
     return blobs
 
 
+def jaw_centre(closed, opened, params=None) -> list:
+    """[(cx, cy, area)] of the midpoint of the jaws' two sides in the open-closed difference, or [] when both do not show.
+    Either side alone is about 30 mm from the TCP, and which one is largest flips: a map on one side and a pivot on the
+    other read 54 mm apart (arm_b 2026-11-06, free air: sides 75-80 px apart at z 0.14, one hidden over a dark box)."""
+    import cv2
+
+    mask = _changed_mask(closed, opened, prm.get(params, "pivot.diff_px", DIFF_PX))
+    merge = int(prm.get(params, "jaw_centre.merge_px"))
+    n, labels = cv2.connectedComponents(cv2.dilate(mask, np.ones((2 * merge + 1, 2 * merge + 1), np.uint8)))
+    sides = []
+    for i in range(1, n):
+        ys, xs = np.nonzero((labels == i) & (mask > 0))
+        if len(xs) >= prm.get(params, "jaw_centre.min_side_px"):
+            sides.append((float(xs.mean()), float(ys.mean()), len(xs)))
+    pairs = [(a, b) for k, a in enumerate(sides) for b in sides[k + 1:]
+             if prm.get(params, "jaw_centre.gap_lo_px") <= math.dist(a[:2], b[:2]) <= prm.get(params, "jaw_centre.gap_hi_px")]
+    if not pairs:
+        return []
+    a, b = max(pairs, key=lambda q: q[0][2] + q[1][2])
+    return [((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, a[2] + b[2])]
+
+
 def mark_open(config: dict) -> float:
     """The value the jaw mark opens the jaws to: the mark's own, never the pick's (a pick's 53.84 left no blob)."""
     return config.get("jaw_mark", {}).get("open", prm.get(config.get("params"), "pivot.grip_open", config.get("plan", {}).get("grip_open")))
@@ -99,7 +121,8 @@ def mark_jaws(cell, config: dict, sleep=time.sleep, clock=time.monotonic, max_ma
         # moved the jaws too little to leave a blob, and every look at the hover saw nothing (2026-10-29)
         if not cp.grip_to(cell, mark_open(config)):
             return None
-        blobs = jaw_blobs(closed, settled_frame(cell, sleep, clock, params=p), p)
+        now = settled_frame(cell, sleep, clock, params=p)
+        blobs = jaw_centre(closed, now, p) if mark_cfg.get("centre") else jaw_blobs(closed, now, p)
         if marks:
             blobs = [b for b in blobs if math.dist(b[:2], marks[-1]) <= follow]
             pick = min(blobs, key=lambda b: math.dist(b[:2], marks[-1]), default=None)
@@ -177,6 +200,30 @@ def joints_tcp(state):
     return fk.x, fk.y, fk.z, math.degrees(fk.yaw)
 
 
+def known_geometry_bias(marks, tcps, geometry: dict, site: str, record: dict, params=None) -> dict:
+    """The bias from marks over a narrow yaw arc, with the jaw mark's radius and phase from a full circle measured on
+    this arm. Where a stalling wrist leaves too few yaws for a circle (arm_b 2026-11-06), each mark still gives the
+    circle's centre; they must agree, so one wrong blob is refused and never averaged in."""
+    if len(marks) < 2:
+        return {"result": f"jaws marked at {len(marks)} yaws, need 2 with a known geometry"}
+    radius_m, phase = geometry["radius_mm"] / 1000, geometry["phase_deg"]
+    centres = [(m[0] - radius_m * math.cos(math.radians(t[3] + phase)), m[1] - radius_m * math.sin(math.radians(t[3] + phase)))
+               for m, t in zip(marks, tcps)]
+    centre = [float(v) for v in np.mean(centres, axis=0)]  # plain floats: validate_bias takes nothing else
+    spread = max(1000 * math.dist(c, centre) for c in centres)
+    tx, ty = (float(np.mean([t[i] for t in tcps])) for i in (0, 1))
+    bias = {"site": site, "point_m": [round(tx, 4), round(ty, 4)],
+            "bias_mm": [round(1000 * (centre[0] - tx), 1), round(1000 * (centre[1] - ty), 1)],
+            "radius_mm": geometry["radius_mm"], "phase_deg": phase, "rms_mm": round(spread, 1),
+            "yaws_fk_deg": [round(t[3], 1) for t in tcps], "n": len(marks), "geometry_from": geometry.get("measured"),
+            "map_sha": cell_attempts.digest(record), "measured": datetime.now(timezone.utc).isoformat(timespec="seconds")}
+    if spread > prm.get(params, "pivot.max_rms_mm"):
+        return {"result": f"marks disagree: {round(spread, 1)} mm from their centre", "bias": bias}
+    if math.hypot(*bias["bias_mm"]) > prm.get(params, "pivot.max_bias_mm"):
+        return {"result": f"bias refused: {bias['bias_mm']} mm is past pivot.max_bias_mm", "bias": bias}
+    return {"result": "calibrated", "bias": bias}
+
+
 def pivot_calibrate(cell, config: dict, point, yaws, calibration: dict, site: str, work: Path,
                     sleep=time.sleep, log=print) -> dict:
     """Hold the TCP at `point` (x, y metres) over a clear surface at each yaw, mark the jaws, fit the circle.
@@ -211,6 +258,9 @@ def pivot_calibrate(cell, config: dict, point, yaws, calibration: dict, site: st
             tcps.append((x, y, z, fk_yaw))
     finally:
         fold(cell, sleep)
+    geometry = config.get("pivot", {}).get("geometry")
+    if geometry is not None:
+        return known_geometry_bias(marks, tcps, geometry, site, record, config.get("params"))
     if len(marks) < 4:
         return {"result": f"jaws marked at {len(marks)} yaws, need 4"}
     cx, cy, radius, rms = fit_circle(marks)

@@ -23,6 +23,7 @@ from test_routing import demo_site
 from test_trip_authority import AUTH, AuthFleet
 from test_trip_lease import LeaseCore
 from test_trip_runner import _activate_again, run
+from fakes import fresh_battery
 
 #: a stage-2 CORE: shrink/seq, 5 s ttl, enforced under the lease
 NEW = dataclasses.replace(AUTH, trip_lease=True, line_follow_authority_shrink=True,
@@ -100,7 +101,7 @@ def _setup(caps, lease=True, config=TripConfig(), renew_lease=None):
     fleet = LinkFleet(tuple(caps), caps)
     store = SiteMapStore(None, clock=lambda: fleet.now)
     store.import_if_empty(demo_site(), source="test")
-    runner = TripRunner(store=store, routing_config=store.routing_config, caps=fleet.caps_for, poses=fleet,
+    runner = TripRunner(store=store, routing_config=store.routing_config, caps=fleet.caps_for, battery=fresh_battery, poses=fleet,
                         junction=fleet, goal=fleet.goal, cancel_goal=fleet.cancel_goal,
                         blocked=lambda: fleet.blocked, clock=lambda: fleet.now, config=config,
                         authority=True, lease={"required": lease}, renew_lease=renew_lease)

@@ -80,27 +80,25 @@ def contact_limits(start_lags: list, params=None) -> list:
     rise, top = prm.get(params, "runner.contact_rise"), prm.get(params, "runner.contact_loaded_max")
     return [max(base, min(s + rise, top)) for s in start_lags]
 CONTACT_CHUNKS = ("descend", "grasp", "release")
+
 # Pacing: a body joint PACE_LAG units (2.9 of the guard's 5 deg) behind the sent command holds the next frame
-# until it catches up: arm S's XL330 wrist grew 0.2 -> 5 deg at PWM 135-165 of 300 and the guard cut torque (12
-# sessions, 2026-10-25..27). A hold lasts only while the lag shrinks; where it stops (a wrist 2.08 units low over
-# the conveyor, 2026-10-28) it is the pose's droop (`pace_floor`) and frames go on until the lag grows PACE_RISE
-# past it. Contact chunks reach CONTACT_LAG first and keep their contact response.
+# until it catches up: arm S's XL330 wrist grew 0.2 -> 5 deg at PWM 135-165 of 300 and the guard cut torque (12 sessions,
+# 2026-10-25..27). A hold lasts only while the lag shrinks; where it stops it is the pose's droop (`pace_floor`) and
+# frames go on until the lag grows PACE_RISE past it. Contact chunks reach CONTACT_LAG first and keep their response.
 PACE_LAG, PACE_RISE, PACE_MAX_S = (prm.default(f"runner.{k}") for k in ("pace_lag", "pace_rise", "pace_max_s"))
 # Nobody sent a command for IDLE_PARK_S (a lost link, a crashed caller): fold home. IDLE_STOP_S more at home ends the
 # session, so record_session turns torque OFF instead of holding for hours (6 h on 2026-10-27/28). `state` holds.
-# A fold a hold stopped (a blocked joint) is tried once more after IDLE_RETRY_S; before 2026-11-03 it was retried
-# every IDLE_PARK_S for good, pushing a blocked joint with torque on. A second hold keeps the arm where it is.
+# A fold a hold stopped (a blocked joint) is tried once more after IDLE_RETRY_S; a second hold keeps the arm where it is.
 IDLE_PARK_S, IDLE_STOP_S, IDLE_RETRY_S = (prm.default(f"runner.idle_{k}_s") for k in ("park", "stop", "retry"))
-# Strain, in every other chunk (goto, park, lift), where normal travel lags up to ~2.6 units: hold when a
-# load-bearing joint lags STRAIN_LAG, its lag rose STRAIN_RISE over STRAIN_TICKS ticks and the guard's 5 Hz PWM is
-# at STRAIN_PWM of its cap. Real strains (2026-10-27): a lifting shoulder 2.4 -> 4.7 deg at PWM 263 -> 516 of 600
-# in 0.7 s, a wrist on the wall 2.6 -> 4.7 deg at 93 -> 165 of 300 (55-86 %); 0.35 held a normal park (44 %), and
-# 1.7 units held every rise out of the container reach (400-500 PWM builds only near 1.7-1.9). The guard brakes
-# at 10 deg/s^2 (v^2/20 = 0.65 deg on at RISE_SPEED 2), so 2.2 units (4.0 deg) still stops short of its 5.
+# Strain, in every other chunk (goto, park, lift), where normal travel lags up to ~2.6 units: hold when a load-bearing
+# joint lags STRAIN_LAG, its lag rose STRAIN_RISE over STRAIN_TICKS ticks and the guard's 5 Hz PWM is at STRAIN_PWM of its cap.
+# Real strains (2026-10-27): shoulder 2.4 -> 4.7 deg at 263 -> 516 of 600 in 0.7 s, a wrist on the wall at 55-86 %.
+# The guard brakes at 10 deg/s^2 (0.65 deg on at RISE_SPEED 2), so 2.2 units (4.0 deg) still stops short of its 5.
 STRAIN_LAG, STRAIN_RISE, STRAIN_TICKS, STRAIN_PWM = 2.2, 0.25, 6, 0.5
 # A blocked wrist roll pushes at low PWM (arm_a dead at 28 % of its cap, 4 times on 2026-11-01), so the PWM test
-# never fires; it travels within ~0.7 units, so a rising lag of ROLL_BLOCK_LAG (<= 2.7 deg) holds it first.
-ROLL_BLOCK_LAG, TEMP_STOP = 1.5, 65  # TEMP_STOP in degrees C; the motors' own limits are 70-72
+# never fires. Its travel lag saws up to ~1.6 going negative while it keeps moving (arm_b's "stalls" at -13 and 9.89,
+# 8 of 8, 2026-11-06), so a rising lag holds at ROLL_BLOCK_LAG only once ROLL_STILL_TICKS show it still, or at STRAIN_LAG.
+ROLL_BLOCK_LAG, ROLL_STILL, ROLL_STILL_TICKS, TEMP_STOP = 1.5, 0.3, 15, 65  # TEMP_STOP in deg C; motors' own limits 70-72
 # Stalled = at its cap, short of its target and still (the cap alone is normal: an elbow lifting out of home).
 PWM_STOP, PWM_STOP_S, STALL_GAP, STALL_MOVE = 285, 0.5, 4.0, 0.3
 MOTORS = [n.split(".")[0] for n in NAMES]
@@ -285,20 +283,23 @@ class Runner:
 
     def strained(self, sent, present):
         """(motor, lag, pwm, cap) of a load-bearing joint whose lag keeps rising while it pushes, or of a wrist roll
-        whose lag keeps rising past ROLL_BLOCK_LAG at any PWM; else None."""
+        that stopped moving with its lag rising past ROLL_BLOCK_LAG at any PWM; else None."""
         lags = [abs(present[i] - sent[n]) if n in sent else 0.0 for i, n in enumerate(NAMES[:5])]
-        self.trend = (self.trend + [lags])[-(STRAIN_TICKS + 1):]
+        self.trend = (self.trend + [[*lags, present[4]]])[-(ROLL_STILL_TICKS + 1):]
         if len(self.trend) <= STRAIN_TICKS:
             return None
         motion = getattr(self.robot, "motion", None)  # the guard's own PWM sample: no extra bus read
         pwm, limits = getattr(motion, "effort_pwm", None) or {}, getattr(motion, "pwm_limits", None) or {}
-        first, middle = self.trend[0], self.trend[STRAIN_TICKS // 2]
+        first, middle = self.trend[-STRAIN_TICKS - 1], self.trend[-STRAIN_TICKS // 2 - 1]
         for i, motor in enumerate(MOTORS[:4]):
             rising = first[i] < middle[i] < lags[i] and lags[i] - first[i] >= STRAIN_RISE
             pushing = motor not in pwm or motor not in limits or abs(pwm[motor]) >= STRAIN_PWM * limits[motor]
             if lags[i] >= STRAIN_LAG and rising and pushing:
                 return motor, lags[i], pwm.get(motor), limits.get(motor)
-        if first[4] < middle[4] < lags[4] and lags[4] >= ROLL_BLOCK_LAG and lags[4] - first[4] >= STRAIN_RISE:
+        path = [row[5] for row in self.trend]
+        still = len(path) > ROLL_STILL_TICKS and max(path) - min(path) < ROLL_STILL
+        if (first[4] < middle[4] < lags[4] and lags[4] >= ROLL_BLOCK_LAG and lags[4] - first[4] >= STRAIN_RISE
+                and (still or lags[4] >= STRAIN_LAG)):
             return MOTORS[4], lags[4], pwm.get(MOTORS[4]), limits.get(MOTORS[4])
         return None
 
@@ -324,7 +325,7 @@ class Runner:
             full = isinstance(sent, dict) and all(n in sent for n in NAMES)
             self.trace({"t": round(self.clock(), 4), "chunk": self.chunk, "target": [round(v, 3) for v in self.target],
                         "sent": [round(float(sent[n]), 3) for n in NAMES] if full else None,
-                        "present": [round(v, 3) for v in present]})
+                        "present": [round(v, 3) for v in present], "pwm": getattr(getattr(self.robot, "motion", None), "effort_pwm", None) or {}})
         self.recorder.tick(present, [sent.get(n, t) if isinstance(sent, dict) else t for n, t in zip(NAMES, self.target)])
         if isinstance(sent, dict):
             self.lag = max((abs(present[i] - sent[name]) for i, name in enumerate(NAMES[:5]) if name in sent),
@@ -578,10 +579,9 @@ def main(argv=None):
                                   operating_profile=profile, params=params)
         runner = Runner(guarded, library, fps=config["dataset"]["fps"], status=status, live=live,
                         operating_context=context, params=params, plan_check=check)
-        trace_path = os.environ.get("ROSY_CHUNK_TRACE")
-        trace_file = open(trace_path, "a") if trace_path else None  # buffered: no write call per tick
+        trace_file = open(path, "a") if (path := os.environ.get("ROSY_CHUNK_TRACE")) else None  # buffered: no write call per tick
         if trace_file:
-            runner.trace = lambda row: trace_file.write(json.dumps(row) + "\n")
+            runner.trace = __import__("cell_why").flushing_trace(trace_file)
         try:
             runner.run(lines)
         finally:

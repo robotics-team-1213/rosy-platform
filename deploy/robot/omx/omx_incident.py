@@ -42,6 +42,7 @@ HW_BITS = {1: "input voltage", 4: "overheating", 8: "motor encoder", 16: "electr
 REBOOTABLE = 1 | 32       # a latch the cause of which is load or supply, not heat or damage
 HOME_TOL = 3.0            # units: the runner's SETTLE_TOL
 INCIDENTS = Path("incidents")
+STILLS = INCIDENTS / "stills"  # <arm>-<camera>.jpg, kept by the carry at a stop no fault record covers (cell_hooks.lift_stall)
 
 
 def bits(code: int) -> list[str]:
@@ -159,7 +160,34 @@ def rows(path, since=0.0):
     return out
 
 
-def facts(session: dict, home=None) -> dict:
+def stop_reading(status: list) -> dict | None:
+    """What the 30 Hz trace says of the session's last contact stop: too fast or blocked (cell_why). 2026-11-07: an hour of guessing
+    with the answer on disk, and the explanation had no frames and no such fact."""
+    import os
+    import re
+
+    import cell_why
+
+    stops = [re.match(r"contact in (.+?):", str(r.get("error") or "")) for r in status]
+    stops = [m.group(1) for m in stops if m and m.group(1) != "park"]  # a fold refused on what it holds follows the real stop
+    path = os.environ.get("ROSY_CHUNK_TRACE")
+    if not stops or not path or not Path(path).is_file():
+        return None
+    try:
+        return {"chunk": stops[-1], **cell_why.read_motion(cell_why.last_run(cell_why.read_trace(path), stops[-1]))}
+    except (OSError, ValueError, KeyError, IndexError, TypeError) as exc:  # a damaged trace must not lose the report
+        return {"chunk": stops[-1], "verdict": "undetermined", "why": f"trace unreadable: {type(exc).__name__}"}
+
+
+def stills_of(arm: str | None, since: float) -> list:
+    """This session's stop frames, those the explanation's prompt names first (the report carries two)."""
+    if not arm or not STILLS.is_dir():
+        return []
+    kept = [p for p in STILLS.glob(f"{arm}-*.jpg") if p.stat().st_mtime >= since]
+    return [str(p) for p in sorted(kept, key=lambda p: (p.stem.rsplit("-", 1)[-1] not in ("top", "side"), p.name))][:2]
+
+
+def facts(session: dict, home=None, arm: str | None = None) -> dict:
     """Measured facts of one ended session (session.json as record_session writes it)."""
     chunks = session.get("chunks") or {}
     status = rows(Path(chunks["io"]) / "chunk-status.jsonl", session.get("started", 0)) if chunks.get("io") else []
@@ -179,8 +207,10 @@ def facts(session: dict, home=None) -> dict:
             "last_state": last, "flagged": [{k: r.get(k) for k in ("command", "error", "fault", "caught", "t")}
                                            for r in flagged][-5:],
             "windup_hits": [h for arm in replay.values() for h in arm["hits"]],
+            "stop_reading": stop_reading(status),
             "fault_records": [str(p) for p in kept],
-            "frames": [str(p.with_name(f"{p.stem}-{v}.jpg")) for p in kept[-1:] for v in ("top", "side")]}
+            "frames": ([str(p.with_name(f"{p.stem}-{v}.jpg")) for p in kept[-1:] for v in ("top", "side")]
+                       or stills_of(arm, session.get("started", 0)))}
 
 
 def decide(f: dict) -> dict:
@@ -243,7 +273,7 @@ def handle(session_path: Path, arm: str, act=None, decisions=Path("decisions.jso
     if home is None and (session.get("chunks") or {}).get("library"):
         library = json.loads(Path(session["chunks"]["library"]).read_text())
         home = (library.get("chunks", {}).get("home") or [None])[0]
-    f = facts(session, home)
+    f = facts(session, home, arm)
     d = decide(f)
     if not d["actions"] and not d["hold"] and d["reason"] == "no incident sign":
         return {"incident": False}

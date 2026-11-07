@@ -188,7 +188,7 @@ def main(argv=None):
     params = config["params"] = prm.load(config.get("params_path"))["values"]
     plan = json.loads(Path(config["plan_path"]).expanduser().read_text())
     calibration_path = Path(config["calibration_path"]).expanduser()
-    calibration = json.loads(calibration_path.read_text())
+    calibration = cell_pivot.with_site_maps(config, json.loads(calibration_path.read_text()))
     record = cell_pivot.map_record(calibration, args.site)
     camera, site = config["cameras"]["top"], config["sites"][args.site]
     height = prm.get(params, "push.height_m")

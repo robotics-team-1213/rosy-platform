@@ -173,10 +173,10 @@ def observe(cell, config: dict, calibration: dict, site: str, roi, catalog: list
     img = cell.frame("top")
     cd.see(keep(f"auto-{site}-top", img))
     poly, lab, obj = config["sites"][site].get("surface_px"), config["sites"][site].get("surface_lab"), config.get("objects") or {}
-    objects = cell_objects.detect(img, roi, record, config["cameras"]["top"], catalog, surface_z(config, site),
+    objects = cell_objects.detect(img, config["sites"][site].get("detect_roi", roi), record, config["cameras"]["top"], catalog, surface_z(config, site),
                                   config.get("params"), poly, lab, obj.get("hsv"))
     for o in objects:
-        o["raw_m"] = [o["centre_mm"][0] / 1000, o["centre_mm"][1] / 1000]
+        o["raw_m"] = [c / 1000 + d for c, d in zip(o["centre_mm"], config["sites"][site].get("grip_offset_m", (0.0, 0.0)))]  # a site may grip off centre
     # the finger-side mask is not clipped to the site polygon: a container on the next surface (the board beside the
     # floor) still meets an open finger (2026-10-29: the jaws came down on a 2-cell on the board, contact at z 0.040)
     near = cell_objects.foreground(img, roi, params=config.get("params"), surface_lab=lab)
@@ -329,6 +329,7 @@ def choose(cell, config, calibration, site, dest_site, place_xy, roi, objects, m
         if not square:
             choices.offer(CLOSING, prm.get(p, "auto.closing_theory_deg"), "theory: closes along tool y = yaw + 90")
             choices.offer(CLOSING, prm.get(p, "auto.closing_alt_deg"), "alternative: closes along tool x")
+        cell_jaw_axis.offer_measured(config, choices, CLOSING)
         offset, why = (None, None) if square else cell_jaw_axis.offset_for(config, entry, choices.best(CLOSING))
         if why:
             refused.append({"centre_mm": o["centre_mm"], "object": o["object"], "why": why})
@@ -517,7 +518,7 @@ def run_auto(cell, config, calibration, calibration_path, catalog, roi, source, 
                                           predicted_pixel(config, calibration, source, o["raw_m"]))
             wrist, capture, pinch, feel = cell_hooks.pick_hooks(same, gate, target, cp.write_library, source, dest_site, cd.emit, calibration, guard)
             moved = transfer_folded(gate, target["library"], wrist=wrist, after_place=capture,
-                                    pinch=pinch, feel=feel, sequence=sequence)
+                                    pinch=pinch, feel=feel, sequence=sequence, lift_stall=cell_hooks.lift_stall(cell, config, sleep))
             tried["envelope"] = gate.assessment
             tried["wrist"] = (moved.get("wrist") or next((s for s in moved["steps"] if s.get("command") == "wrist"), None)
                               or ("disabled or uncalibrated" if wrist is None else None))
@@ -556,8 +557,8 @@ def run_auto(cell, config, calibration, calibration_path, catalog, roi, source, 
             if moved["result"] == "placed" and tried["verify"]["inside"]:
                 return {**out, "result": "placed"}
             grasped = any(s.get("command") == "run grasp_pick" and s.get("holding") for s in moved["steps"])
-            if moved["result"] == "contact" and grasped:  # stopped while carrying: the box is in the jaws, not on
-                return {**out, "result": f"stopped: holding after a stop at {moved['at']}"}  # the surface to re-observe
+            if moved["result"] == "contact" and grasped:  # stopped while carrying: in the jaws unless released (cell_recovery goes on)
+                return {**out, "result": f"stopped: {'released' if moved.get('released') else 'holding'} after a stop at {moved['at']}"}
             if moved["result"] not in ("empty", "contact"):  # a fault, a refusal or a misplaced object: a person looks
                 if moved["result"] in ("fault", "refused"):
                     cp.fold(cell, sleep)
