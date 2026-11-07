@@ -101,6 +101,11 @@
 - 증거: 코드 검토와 원격 시험 test_monitoring_browser. agent-browser로는 조회 키가 있는 실제 수집기가 없어 보지 못했다.
 - gate 변화: SOURCE 변경. CE: 해당 없음 — 표시 문구 변경이다.
 
+## 2026-11-07 · uncommitted · uiux(monitoring): 브랜드를 눌러도 조회 키가 사라지지 않는다
+- 변경: 같은 페이지를 다시 읽던 브랜드 링크가 본문(#main)으로 옮겨 가게 했다. 공용 브랜드 링크는 유지한다.
+- 증거: 1366·390 폭에서 브랜드 클릭으로 입력한 조회 키와 세션이 사라지는 것을 재현했다.
+- gate 변화: SOURCE 회귀. 운영 수용은 별도다.
+
 ## 2026-11-07 · uncommitted · feat(monitoring): 사람 조회를 Rosy Account로 (D-990)
 
 - 변경: `account_config`가 있으면 로그인·세션·로그아웃 경로와 `monitoring.read` 판정을 제공한다. 화면은 Account 로그인을 먼저 보이고 조회 키를 비상용으로 접는다. 키 판정과 수집기 사이 조회는 그대로다.

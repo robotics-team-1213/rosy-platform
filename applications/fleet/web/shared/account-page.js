@@ -31,6 +31,8 @@ function fail(error) {
     $('account-setup').hidden = true; $('account-clients').replaceChildren();
     $('account-setup-state').textContent = '';
     $('account-content').hidden = true; $('account-login').hidden = false;
+    // Without this the login page sees a valid session and returns here at once, to the same refusal.
+    if (error.status === 403) $('account-login').href = '/console/login?return=%2Fconsole%2Faccounts&error=access_denied';
     $('account-grants').replaceChildren(); $('account-list').replaceChildren(); selected = null;
     status('로그인 계정 또는 관리 권한이 변경되었습니다. 다시 로그인한 뒤 확인하세요.', 'warning');
   } else if (error.status === 409) {

@@ -1,3 +1,4 @@
+const ANCHORS = {'/console/site-map': ['#teach-heading'], '/console/install': ['#robots', '#device-profiles', '#cameras', '#calibration', '#hosts']};
 const DOCUMENTS = new Set(['/console', '/console/install', '/console/site-map', '/console/cell', '/console/profile', '/console/accounts', '/console/policy']);
 
 // Login can only return to a Fleet document on this origin, never to credentials or another service.
@@ -31,7 +32,7 @@ export function loginReturn(value, origin) {
     if (['/console', '/console/site-map'].includes(url.pathname) && /^[a-zA-Z0-9_-]{1,128}$/.test(robot || '')) {
       query.set('robot', robot);
     }
-    const anchor = url.pathname === '/console/site-map' && url.hash === '#teach-heading' ? url.hash : '';
+    const anchor = ANCHORS[url.pathname]?.includes(url.hash) ? url.hash : '';
     return url.pathname + (query.size ? '?' + query : '') + anchor;
   } catch { return '/console'; }
 }

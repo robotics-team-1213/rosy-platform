@@ -15,6 +15,14 @@ from pathlib import Path
 
 import pytest
 
+try:
+    from playwright.sync_api import expect
+except ImportError:
+    pass
+else:
+    # 5 s default: 11-07 FULLs lost hours to UI waits missing it under load, each passing alone. A real failure still fails.
+    expect.set_options(timeout=15_000)
+
 _ADDED: dict[str, list[str]] = {}
 KEY = "rosy_syspath_added"
 

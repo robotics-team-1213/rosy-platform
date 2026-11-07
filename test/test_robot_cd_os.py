@@ -204,3 +204,15 @@ def test_os_publication_waits_for_its_own_reason(tmp_path, state, paths, config)
                          "os_engineering": True, **config}, gh=lambda *args: "")
     c.source_changes = lambda base, head: [{"filename": path} for path in paths]
     assert c.os_publication_due(SHA) is False
+
+
+def test_an_unchanged_source_is_compared_once(tmp_path):
+    from robot_cd import Coordinator as RealCoordinator, write_json
+    write_json(tmp_path / "state.json", {"sha": SHA, "phase": "done", "deployed_sha": SHA, "delivery_base_sha": SHA,
+                                         "os_published_sha": "b" * 40})
+    c = RealCoordinator({"repo": "robotics-team-1213/rosy-platform", "repo_id": 7, "state_dir": tmp_path,
+                         "os_engineering": True}, gh=lambda *args: "")
+    calls = []
+    c.source_changes = lambda base, head: calls.append(head) or [{"filename": "docs/a.md"}]
+    assert c.os_publication_due(SHA) is False and c.os_publication_due(SHA) is False
+    assert calls == [SHA]

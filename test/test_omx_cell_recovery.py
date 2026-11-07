@@ -64,6 +64,21 @@ def test_the_stall_hook_keeps_the_session_and_only_with_a_person_at_the_switch(m
     assert cell_hooks.lift_stall(raw, {}, None) is None
 
 
+def test_any_stop_keeps_one_frame_per_camera_and_a_dead_camera_does_not_stop_it(monkeypatch, tmp_path):
+    import cell_hooks
+    import omx_incident
+
+    class Cell:
+        def frame(self, camera):
+            if camera == "side":
+                raise OSError("unplugged")
+            return CLEAN
+
+    monkeypatch.setattr(omx_incident, "STILLS", tmp_path / "stills")
+    cell_hooks.stills(Cell(), {"arm_id": "arm_b", "cameras": {"top": {}, "side": {}, "wrist": {}}})()
+    assert sorted(p.name for p in (tmp_path / "stills").iterdir()) == ["arm_b-top.jpg", "arm_b-wrist.jpg"]
+
+
 def test_a_placed_box_ends_it():
     out, emitted = run(["placed"])
     assert out["result"] == "placed" and len(out["rounds"]) == 1 and emitted[0][0] == "recovery"
@@ -74,6 +89,17 @@ def test_a_lift_stall_pushes_then_picks_again():
     frames = [CLEAN, CLEAN, CLEAN, with_box(100, 100), with_box(100, 100), with_box(100, 100)]  # the push moved something
     out, _ = run(["stopped: released after a stop at run lift_pick", "placed"], frames, lambda c, a: pushes.append(c) or True)
     assert pushes == ["lift_stall"] and out["result"] == "placed" and [r["action"] for r in out["rounds"]] == ["push_clear", "done"]
+
+
+@pytest.mark.parametrize("by, first", [("model", "slow_down"), ("nobody", "slow_down"), ("measurement", "push_clear")])
+def test_only_a_measured_cause_reorders_the_table(by, first):
+    """cell_why reads a moving joint as undetermined, so a model's answer now fills the row more often: it must not steer."""
+    frames = iter([CLEAN, CLEAN, CLEAN, with_box(100, 100), with_box(100, 100), with_box(100, 100)])
+    results = iter(["stopped: released after a stop at run lift_pick", "placed"])
+    out = rc.carry(lambda: next(frames), lambda: {"result": next(results), "attempts": [{}]}, lambda c, a: True,
+                   expected_px=lambda a: [(100, 100)], emit=lambda *a: None, slow=lambda: True,
+                   explain=lambda cause, o: {"hypothesis": "blocked", "by": by})
+    assert [r["action"] for r in out["rounds"]] == [first, "done"]
 
 
 def test_a_push_the_camera_saw_change_nothing_stops_and_so_does_a_refused_push():
@@ -107,3 +133,24 @@ def test_rounds_run_out_at_a_person():
     results = iter(["stopped: misaligned", "stopped: placed"])
     out = rc.carry(lambda: CLEAN, lambda: {"result": next(results)}, lambda c, a: True, expected_px=lambda a: [], emit=lambda *a: None, rounds=2)
     assert out["result"] == "ask a person: 2 rounds"
+
+
+def test_no_retry_starts_from_an_arm_that_did_not_come_home():
+    results = iter(["stopped: misaligned", "placed"])
+    out = rc.carry(lambda: CLEAN, lambda: {"result": next(results)}, lambda c, a: True, expected_px=lambda a: [], emit=lambda *a: None, folded=lambda: False)
+    assert out["result"] == "ask a person: misaligned" and [r["action"] for r in out["rounds"]] == ["ask_person"]
+    results = iter(["placed"])
+    assert rc.carry(lambda: CLEAN, lambda: {"result": next(results)}, lambda c, a: True, expected_px=lambda a: [], emit=lambda *a: None,
+                    folded=lambda: False)["result"] == "placed"  # a placed box asks nothing more
+    home = [0.0, -60.0, 50.0, 50.0, 45.0]
+    assert rc.at_home([1.5, -60.0, 50.0, 50.0, 45.0, 90.0], home) and not rc.at_home([3.0, -60.0, 50.0, 50.0, 45.0, 0.0], home)
+    assert not rc.at_home(None, home)
+
+
+def test_a_contact_replans_only_once_the_pile_moved():
+    contact = "stopped: beside -> ask_person"
+    assert dg.attempt_cause(contact) == "contact" and dg.attempt_cause(contact, True) == "scene_moved"
+    assert dg.attempt_cause("stopped: pivot: stopped") == "calibrate" and dg.attempt_cause("stopped: pivot: stopped", True) == "calibrate"
+    assert dg.attempt_cause("stopped: no clear pivot point within reach") == "calibrate"  # no plan yet: a push has nothing to act on
+    for hard in ("stopped: holding after a stop at run lift_pick", "stopped: still holding", "stopped: fault"):
+        assert dg.attempt_cause(hard, True) != "scene_moved"
