@@ -1103,3 +1103,9 @@
 - gate 변화: SOURCE 변경. 시뮬·실물·현장 수용 없음; 문서가 없으면 동작 동일.
 - 결정: D-982 Proposed, API v1.368 additive.
 - 교훈: CE 해당 없음 — 최종 코드·시험·ADR이 판단을 보존한다.
+
+## 2026-11-07 · 34867d3b61 · feat(fleet): 운행 카드 현장 규칙 판정 원격 시험 결과
+- 변경: 없음(앞 항목의 시험 기록).
+- 증거: 원격 모델 PC 34867d3b61: operations/fleet·applications/fleet·design_scope_gates·test/architecture·harness_contracts·protocol_version_alignment 8828 passed, 5 skipped, known_failures 0 new/0 known/0 flaky; collect_alone(site_rules 두 파일) 2 passed, 1 skipped. 로그는 외부 scratch siterules/t3·t4/run-1.txt.
+- gate 변화: SOURCE 회귀 검증만. 시뮬·실물 수용 아님.
+- 교훈: CE 해당 없음.
