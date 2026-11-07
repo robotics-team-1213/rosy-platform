@@ -189,6 +189,8 @@ def test_manager_registers_and_stops_an_app_in_the_page(tmp_path):
                 page.locator("#client-redirects").fill("http://not-https.example.test/cb")
                 page.locator("#client-resources").fill("site:test-site")
                 page.locator("#client-id").press("Enter")
+                expect(page.locator("#client-id")).to_have_value("second")
+                page.locator("#client-add").click()
                 expect(page.locator("#account-status")).to_contain_text("입력값을 확인하세요")
                 expect(page.locator("#account-setup")).to_be_visible()
                 expect(page.locator("#client-id")).to_have_value("second")
