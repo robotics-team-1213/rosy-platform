@@ -505,3 +505,19 @@
 - 변경: 진행 중 결과 카드는 담당자 전달 대신 기다리라고 말한다. 320폭 픽셀 도구는 두 줄로 놓아 되돌리기 글자가 잘리지 않는다.
 - 증거: test_learning_pipeline_browser.py 단정 추가. 잘림은 실제 화면에서 버튼 66px로 측정했다. 원격 결과는 착지 기록을 따른다.
 - gate 변화: SOURCE 회귀. 실검수자 G3는 별도다. CE: 해당 없음 — 코드와 회귀가 판단을 보존한다.
+
+## 2026-11-07 · uncommitted · feat(learning): 사다리 화면에 양팔 태스크와 같은 위치 비교
+- 변경: 화면 5절이 `omx_ladder.py two-arm` 기록(rosy.omx-two-arm-run.v1)과 셀의 네 카메라(top·side·양 손목) 그림을 보여 주고, 관리 권한으로 정해진 태스크와 시드만 실행한다. 라운드에 기록된 부모 재평가가 있으면 다른 위치의 구간 비교 대신 그것을 쓴다. 부모를 평가할 수 없을 때 라운드가 실행 중에 묶이던 문제도 고쳤다.
+- 증거: 원격 시험 `test/test_omx_two_arm_tasks.py`, `test/test_omx_ladder.py`, `test/learning/perception/test_ladder_web.py` 47개 통과, 브라우저 `test_ladder_browser.py` 5개 통과. AI PC에서 네 카메라로 stack 9/9, rehandle 12/12(시드 3개).
+- gate 변화: SOURCE 변경. 정답 동작의 기하 검사이며 학습 모델이나 실물 근거가 아니다(D-947). CE: 해당 없음 — 시험이 판단을 보존한다.
+
+## 2026-11-07 · uncommitted · feat(learning): 학습 사다리 화면 (/learning/ladder)
+- 변경: `ladder_web.py`와 `ladder.html/js/css`가 OMX 사다리 라운드(rosy.omx-ladder-round.v1)를 목록·상세로 보이고, 사람의 기준 교체/유지 기록(`decisions.jsonl` 추가, `best.json` 사본)과 고정 인자 라운드 시작(`tools/sim/omx_ladder.py round`)을 맡는다. 판단자는 서버가 로그인 사용자에서 정하고, 시작은 manage 권한·CSRF·동시 1개 제한을 따른다. 설정은 `--ladder-config`(비공개 JSON: root, cell, python, lerobot_train)이며 없으면 「연결되지 않았습니다」. 학습 루프 SIM 줄의 학습 칸에 사다리 요약을 더했다. 라운드 결과는 시뮬레이션 근거이고 기준 교체는 비교 기록일 뿐 승인·승격·장치 적용이 아니다(D-793, D-857, D-947).
+- 증거: 아래 커밋 뒤 원격 시험 결과를 별도 줄로 덧붙인다.
+- gate 변화: SOURCE 변경. `omx_ladder.py` 본체와 실제 라운드 실행은 다른 작업이며 이 변경으로 입증하지 않는다. CE: 해당 없음.
+
+## 2026-11-07 · uncommitted · feat(learning): 사다리 화면에 양팔 학습 라운드와 영상
+
+- 변경: `/learning/ladder` 5절에 네 카메라·12관절 양팔 ACT 라운드 카드(단계별 통과, 작업 전체, 한 번도 통과 못 한 단계)와 평가 영상을 보여 준다. 기록은 화이트리스트로만 읽고 영상은 `two_arm_rounds`의 mp4만 내보낸다. 라운드는 작업 전체를 끝까지 마쳤을 때만 통과로 적는다.
+- 증거: AI PC 첫 라운드(630단계, 178,236프레임, 60,000스텝)는 새 시드 평가 63단계 중 0 통과, 집어 든 단계 1, 작업 전체 0/9·0/12였고 예전 표시는 이 라운드를 통과로 보였다. 같은 시드에서 평가 입력과 데이터셋은 상태·동작·목표 차이 0, 영상 평균 차이 2 미만이어서 입력 어긋남은 아니다. 원격 `test_ladder_web.py`, `test_ladder_browser.py`, `test_omx_two_arm_policy.py`와 레일 시험을 이 변경에서 돌렸다. 시뮬레이션 기하 근거이며 실물 근거가 아니다(D-947).
+- gate 변화: SOURCE 변경. 모델은 아직 시험을 통과하지 못했고 실물 경로도 없다(D-793). CE: 해당 없음 — 시험이 판단을 보존한다.

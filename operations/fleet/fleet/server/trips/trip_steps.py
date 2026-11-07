@@ -74,7 +74,7 @@ class TripSteps:
         if pose is None or pose.state != LOCALIZED:
             if getattr(pose, "source", None) == "native_gazebo_sim" and await self._link_wait(live, "pose_stale"):
                 return  # D-725 rev 1: a stale SIM pose is transient; D-760 4 waits on it, bounded by stall_s
-            await self._stop(live, "stopped", "pose", {"pose_state": pose.state if pose else None, **pose_diagnostics(pose)}, halt_free=False)
+            await self._stop(live, "stopped", "pose", {"pose_state": pose.state if pose else None, **pose_diagnostics(pose)}, halt_free=self._auto_locate_on(robot_id))  # D-989: no deadman reliance
             return
         try:
             if live.arc(live.view["segment_index"]).drive_mode == "lane":
@@ -234,7 +234,9 @@ class TripSteps:
         arc = None  # D-520 1: only to a lane_arc robot, and only with the map_id
         if action != STOP and (live.view["caps"] or {}).get("lane_arc") and (expect or {}).get("map_id"):
             # D-744 2: the map anchor only to a lane_arc_map_anchor robot, from this step's pose and its odom stamp
-            stamp = getattr(pose, "odom_stamp", None) if live.view["caps"].get("lane_arc_map_anchor") else None
+            # D-989: never from auto locate; the robot's own pose sent back as its arc anchor would confirm itself
+            stamp = (getattr(pose, "odom_stamp", None) if live.view["caps"].get("lane_arc_map_anchor")
+                     and getattr(pose, "anchor_source", None) != "auto_locate" else None)
             arc = exit_segment(live.graph, live.segments, index, fit_tol_m=self.config.arc_fit_tol_m,
                                outer_line_offset_m=self.config.arc_outer_line_offset_m,
                                map_pose=None if stamp is None else (pose.x, pose.y, pose.yaw, stamp))
@@ -242,7 +244,9 @@ class TripSteps:
         # D-520 1 (lap SIM 3): the lane-heading turn either way (the 5 cm lead tangent is 12-17 deg off at SW); with an exit_segment no advance_m (CORE starts the arc there)
         turn = round(turn_target(live.graph, live.segments, index), 1) if action in (LEFT, RIGHT) else None
         advance = advance_m(live.graph, live.segments, index) if turn is not None and arc is None else None
-        if turn is not None and expect and live.view["caps"].get("lane_turn_map_entry") and getattr(pose, "odom_stamp", None) is not None:
+        if (turn is not None and expect and live.view["caps"].get("lane_turn_map_entry")
+                and getattr(pose, "odom_stamp", None) is not None
+                and getattr(pose, "anchor_source", None) != "auto_locate"):   # D-989: see the arc anchor above
             expect = {**expect, "map_entry": {"yaw_rad": round(live.arc(index + 1).start_tangent, 4), "pose_yaw_rad": pose.yaw, "odom_stamp_s": pose.odom_stamp}}  # D-759 rev 1: the exit lane's map heading
         if not live.open:
             return

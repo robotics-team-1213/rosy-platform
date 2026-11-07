@@ -5365,3 +5365,14 @@
 - 변경: 흐름이 만료되거나 Account가 끊겨 콜백이 실패하면 브라우저는 /console로 돌아간다. API 호출은 그대로 401·503이고 어느 쪽도 세션을 만들지 않는다.
 - 증거: 실제 Account와 Fleet을 두 출처로 띄운 왕복에서 두 탭 로그인과 교환 중 장애가 JSON 화면에서 멈추는 것을 재현했다.
 - gate 변화: SOURCE 회귀. 현장 수용은 별도다.
+
+## 2026-11-07 · uncommitted · feat(fleet): LED·카메라·LiDAR 자동 위치 찾기 (D-989)
+- 변경: `localization/auto_locate.py`(순수 적합), `pose/auto_locate_service.py`(120초 세션), `GET`·`POST /api/fleet/auto-locate`, config `stream_wanted`. 관찰 전용. API v1.369.
+- 증거: 합성 입력 시험뿐이다. 실물·현장 수용 없음.
+- gate 변화: SOURCE. DEVICE/FIELD 수용 근거로 쓰지 않는다.
+- 결정: D-989 Proposed. 교훈: CE 미해결 — 실물 시험 전이다.
+
+## 2026-11-07 · uncommitted · feat(fleet): 자동 위치를 로봇별로 켜면 trip 앵커로 쓴다 (D-989 7항)
+- 변경: `fleet.map_pose.auto_locate_robots`(기본 빈 목록), `MapPoseTracker.add_auto_locate`/`drop_auto_locate`, 독립 근거 소비자 차단. 사용자 결정 "code it so auto-locate is used for driving too, and make it switchable on and off".
+- 증거: 합성 시험뿐. 정확도는 실물 전까지 재지 않았다.
+- gate 변화: SOURCE. 교훈: CE 미해결 — 실물 시험 전이다.

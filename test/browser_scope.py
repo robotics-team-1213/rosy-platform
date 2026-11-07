@@ -84,6 +84,7 @@ OMX_LEARNING = ["test/learning/perception/test_omx_" + name + "_browser.py" for 
                 ("center", "profiles", "profile_drafts", "journey", "review_playback", "arm_scope", "owner_status", "segments", "camera_reference")]
 CAMERA = ["test/learning/perception/test_camera_setup_browser.py"]
 SIM = ["test/learning/perception/test_sim_browser.py"]
+LADDER = ["test/learning/perception/test_ladder_browser.py"]
 PIPELINE = ["test/learning/perception/test_learning_pipeline_browser.py"]
 ACCOUNTS = ["test/learning/perception/test_learning_accounts_browser.py",
             "test/learning/perception/test_learning_auth_surface_browser.py"]
@@ -100,7 +101,7 @@ STAGES = ["test/learning/perception/test_learning_stages_browser.py", "test/lear
 # These HTTP suites also contain opt-in Chromium flows; filename discovery alone misses them.
 STORAGE = ["test/learning/perception/test_storage_" + name + "_http.py" for name in
            ("inventory", "jobs", "setup", "omx")]
-LEARNING = OMX_LEARNING + CAMERA + SIM + PIPELINE + ACCOUNTS + TASKS + STAGES + STORAGE
+LEARNING = OMX_LEARNING + CAMERA + SIM + LADDER + PIPELINE + ACCOUNTS + TASKS + STAGES + STORAGE
 GAZEBO = ["integrations/simulation/gazebo/test/test_lane_live_view_browser.py"]
 SHARED = ["shared/web/test/*_browser.py"]
 COMMISSIONING = ["test/test_omx_commissioning_view.py"]
@@ -149,9 +150,11 @@ SCOPE: dict[str, list[str]] = {
     "contracts/learning/src/rosy/contracts/learning/camera_setup.py": CAMERA,
     **{f"learning/curation/perception/{name}": SIM for name in
        ("sim_web.py", "review_app_web/sim.html", "review_app_web/sim.js")},
+    **{f"learning/curation/perception/{name}": LADDER for name in
+       ("ladder_web.py", "review_app_web/ladder.html", "review_app_web/ladder.js", "review_app_web/ladder.css")},
     **{f"learning/curation/perception/{name}": PIPELINE for name in
        ("learning_control.py", "learning_pipeline.py")},
-    **{f"learning/curation/perception/review_app_web/{name}": PIPELINE + OMX_LEARNING + SIM + ACCOUNTS + TASKS + STORAGE
+    **{f"learning/curation/perception/review_app_web/{name}": PIPELINE + OMX_LEARNING + SIM + LADDER + ACCOUNTS + TASKS + STORAGE
        for name in ("learning.html", "learning.js")},
     **{f"learning/curation/perception/{name}": STAGES for name in
        ("vlm_judge.py", "vlm_judge_report.py", "vlm_judge_web.py", "learning_domains.py", "promotion_request.py", "review_app_web/vlm.html", "review_app_web/vlm.js",
