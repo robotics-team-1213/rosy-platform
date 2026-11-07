@@ -74,7 +74,7 @@ class TripSteps:
         if pose is None or pose.state != LOCALIZED:
             if getattr(pose, "source", None) == "native_gazebo_sim" and await self._link_wait(live, "pose_stale"):
                 return  # D-725 rev 1: a stale SIM pose is transient; D-760 4 waits on it, bounded by stall_s
-            await self._stop(live, "stopped", "pose", {"pose_state": pose.state if pose else None, **pose_diagnostics(pose)}, halt_free=False)
+            await self._stop(live, "stopped", "pose", {"pose_state": pose.state if pose else None, **pose_diagnostics(pose)}, halt_free=self._auto_locate_on(robot_id))  # D-989: no deadman reliance
             return
         try:
             if live.arc(live.view["segment_index"]).drive_mode == "lane":

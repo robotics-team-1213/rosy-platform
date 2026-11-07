@@ -89,7 +89,7 @@ def test_a_camera_track_that_is_lost_stops_the_report():
     tracker.observe(end + 1, track(0, 0, state="UNKNOWN"), robot(0, 0), {})
     assert tracker.view(end + 2)["state"] == ALIGNED
     assert tracker.view(end + 30)["state"] == ALIGNED  # the camera session is over; two maps do not move
-    view = tracker.view(end + 901)
+    view = tracker.view(end + 91)
     assert (view["state"], view["reason"], view["transform"]) == (UNKNOWN, "EXPIRED", None)
 
 

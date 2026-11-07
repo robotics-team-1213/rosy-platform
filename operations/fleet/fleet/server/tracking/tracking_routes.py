@@ -160,6 +160,13 @@ def install_tracking_routes(app, *, tracking, require_operator, read_guard, oper
         _LOG.info("auto locate started: robots=%d principal_id=%s", len(watched), principal.principal_id)
         return result
 
+    @app.post("/api/fleet/auto-locate/{robot_id}/lift-block", tags=["tracking"])
+    async def auto_locate_lift_block(robot_id: str, principal: SitePrincipal = Depends(require_operator)) -> dict:
+        named(principal)
+        if not tracking.auto_locate.lift_block(robot_id, principal.principal_id):
+            raise HTTPException(status_code=409, detail={"code": "AUTO_LOCATE_NOT_ENABLED"})
+        return {"robot_id": robot_id, "anchor_blocked": False}
+
     @app.get("/api/fleet/tracking", dependencies=read_guard, tags=["tracking"])
     async def tracking_readback() -> dict:
         return tracking.snapshot()

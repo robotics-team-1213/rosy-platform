@@ -336,7 +336,7 @@ class TripRunner(TripAdmission, TripProgress, TripSteps, TripReplan):
             task = self._inflight.get(robot_id)
             if live.open and (task is None or task.done()):
                 self._inflight[robot_id] = asyncio.ensure_future(self._tick_robot(live))
-        self.traffic.watch(self._inflight, self.robot_busy, lambda r: self._call(self._poses.arbitrated_pose(r)))
+        self.traffic.watch(self._inflight, self.robot_busy, lambda r: self._call(self._driving_pose(r)))
         pending = [task for task in self._inflight.values() if not task.done()]
         if pending:
             await asyncio.wait(pending, timeout=self.config.period_s)
@@ -424,9 +424,17 @@ class TripRunner(TripAdmission, TripProgress, TripSteps, TripReplan):
                 self._refresh_warned_at = self._clock()
                 _LOG.warning("state refresh for %s failed (repeats muted 30 s)", robot_id, exc_info=True)
         try:
-            return await self._call(self._poses.arbitrated_pose(robot_id))
+            return await self._call(self._driving_pose(robot_id))
         except Exception:  # a pose that cannot be read is no pose
             _LOG.exception("map pose for %s failed", robot_id)  # falls through to None
+
+    def _driving_pose(self, robot_id: str):
+        """D-989 allowlist: the trip loop is the consumer that may drive on an auto-locate anchor."""
+        return getattr(self._poses, "driving_pose", self._poses.arbitrated_pose)(robot_id)
+
+    def _auto_locate_on(self, robot_id: str) -> bool:
+        check = getattr(self._poses, "auto_locate_enabled", None)
+        return check is not None and check(robot_id) is True
 
     def _lock_for(self, robot_id: str) -> asyncio.Lock:
         return self._locks.setdefault(robot_id, asyncio.Lock())

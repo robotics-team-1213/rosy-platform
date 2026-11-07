@@ -27,8 +27,11 @@ beyond `max_jump_m` / `max_jump_deg` reads DEGRADED. Sightings captured before t
 
 Auto locate (D-989, opt-in per robot, `MapPoseConfig.auto_locate_robots`): the caller feeds a robot's
 own map pose through a camera-fitted transform like a sighting. It never replaces a fresh sighting or
-pin; one that disagrees past `max_jump_m` / `max_jump_deg` with either blocks it until `allow_auto_locate`
-(a new locate session), and `drop_auto_locate` ends an auto-locate anchor at once: the pose is UNKNOWN.
+pin; one that disagrees past `max_jump_m` / `max_jump_deg` with either blocks it until a freshly confirmed
+sample agrees with a fresh independent anchor or an operator lifts the block, and `drop_auto_locate` ends
+an auto-locate anchor at once. Allowlist: `pose()` hides an auto-locate anchor (UNKNOWN) unless the caller
+asks with `auto_locate=True`. There `anchor_age_s` and `dead_reckon_m` count from the last camera
+confirmation, not the last sample, and a feed older than AUTO_FEED_MAX_S reads DEGRADED.
 
 Path and turn are summed per received sample (chord, |dyaw|), so they are lower bounds that
 depend on the odom rate; the trip loop refreshes odom at 2 Hz or faster (D-494 appendix).
@@ -53,6 +56,10 @@ SIGHTING, BRIDGED = "sighting", "bridged"
 OPERATOR_PIN = "operator_pin"
 #: D-989: the robot's map pose through the transform fitted to the camera's LED-confirmed track.
 AUTO_LOCATE = "auto_locate"
+#: D-989: an auto-locate feed older than this (its tick stalled or died) reads DEGRADED at read time.
+AUTO_FEED_MAX_S = 3.0
+#: D-989: a blocked robot's sample may lift its block only with a camera confirmation this fresh.
+AUTO_UNBLOCK_CAMERA_S = 2.0
 #: A sighting further ahead of `now` than this is refused (as the sighting ingest does).
 MAX_SIGHTING_FUTURE_S = 0.05
 #: D-494 3: consecutive consistent sightings that end a DEGRADED episode (and confirm a first anchor).
@@ -274,6 +281,8 @@ class MapPoseTracker:
         self._newest_sighting: Optional[float] = None
         self._newest_auto: Optional[float] = None
         self._auto_blocked = False
+        self._auto_camera_at: Optional[float] = None   # wall time of the last camera confirmation
+        self._auto_camera_odom: Optional[tuple[float, float]] = None   # odom (path, turn) at that time
         self._degraded = False
         self._consistent = 0
         self._refused = 0
@@ -312,7 +321,7 @@ class MapPoseTracker:
         """D-581: (map <- odom of the current anchor, newest odom pose, the anchor's captured_at,
         odom epoch); None unanchored. The epoch counts odom resets: a transform from another epoch
         belongs to an odom frame that no longer exists. Read beside `pose()` (may it be used)."""
-        if self._anchor is None or not self._odom:
+        if self._anchor is None or not self._odom or self._anchor.kind == AUTO_LOCATE:
             return None
         anchor = self._anchor
         return (compose(anchor.map_pose, relative(anchor.odom.pose, (0.0, 0.0, 0.0))),
@@ -395,29 +404,48 @@ class MapPoseTracker:
         return None
 
     def add_auto_locate(self, pose: Pose, at: float, now: float, map_id: Optional[str],
-                        active_map_id: Optional[str]) -> Optional[str]:
+                        active_map_id: Optional[str], camera_age_s: float) -> Optional[str]:
         """D-989: a transformed robot pose, bound to odom at `at`. None when taken, else why not.
 
         Kept apart from `_newest_sighting`: a sample must never make a later camera sighting look old."""
         if self.robot_id not in self.config.auto_locate_robots:
             return "DISABLED"
-        if self._auto_blocked:
-            return "INDEPENDENT_ANCHOR_DISAGREES"
-        if not _finite(*pose, at) or map_id is None or map_id != active_map_id:
+        if not _finite(*pose, at, camera_age_s) or camera_age_s < 0.0 or map_id is None or map_id != active_map_id:
             return "MAP_NOT_ACTIVE"
+        if self._auto_blocked and not self._agrees_with_independent(pose, now, camera_age_s):
+            return "INDEPENDENT_ANCHOR_DISAGREES"
+        self._auto_blocked = False
         age = now - at
         if age < -MAX_SIGHTING_FUTURE_S or age > self.config.sighting_lease_s:
             return "STALE_SAMPLE"
         if self._newest_auto is not None and at <= self._newest_auto:
             return "NOT_NEWER"
         self._newest_auto = at
+        camera_at = now - camera_age_s
+        if self._auto_camera_at is None or camera_at > self._auto_camera_at + 0.05:
+            self._auto_camera_at = camera_at
+            self._auto_camera_odom = (self._odom[-1].path_m, self._odom[-1].turn_rad) if self._odom else None
         self._pending.append(Sighting(self.robot_id, pose[0], pose[1], _wrap(pose[2]), at, None, map_id, AUTO_LOCATE))
         self._resolve(now)
         return None
 
+    def _agrees_with_independent(self, pose: Pose, now: float, camera_age_s: float) -> bool:
+        anchor = self._anchor
+        if (anchor is None or anchor.kind == AUTO_LOCATE or not self._odom or camera_age_s > AUTO_UNBLOCK_CAMERA_S
+                or not 0.0 <= now - anchor.captured_at <= self.config.max_anchor_age_s):
+            return False
+        predicted = compose(anchor.map_pose, relative(anchor.odom.pose, self._odom[-1].pose))
+        return (math.dist(predicted[:2], pose[:2]) <= self.config.max_jump_m
+                and abs(_wrap(predicted[2] - pose[2])) <= math.radians(self.config.max_jump_deg))
+
+    @property
+    def auto_blocked(self) -> bool:
+        return self._auto_blocked
+
     def drop_auto_locate(self) -> None:
         """D-989: the transform is gone. An auto-locate anchor ends now, not when its age runs out."""
         self._pending = deque((s for s in self._pending if s.kind != AUTO_LOCATE), maxlen=PENDING_SIGHTINGS)
+        self._auto_camera_at, self._auto_camera_odom = None, None
         if self._anchor is not None and self._anchor.kind == AUTO_LOCATE:
             self._anchor = None
             self._degraded, self._consistent = False, 0
@@ -425,14 +453,15 @@ class MapPoseTracker:
     def allow_auto_locate(self) -> None:
         self._auto_blocked = False
 
-    def pose(self, now: float, active_map_id: Optional[str] = None) -> MapPose:
+    def pose(self, now: float, active_map_id: Optional[str] = None, auto_locate: bool = False) -> MapPose:
         cfg = self.config
         self._resolve(now)
         diag = {"odom_refused": self._refused, "odom_refused_reason": self._refused_reason,
                 "sightings_filtered_map_id": self._filtered_map_id}
         latest = self._odom[-1] if self._odom else None
         anchor = self._anchor
-        if anchor is None or latest is None or now - latest.stamp > cfg.max_odom_age_s:
+        hidden = anchor is not None and anchor.kind == AUTO_LOCATE and not auto_locate
+        if hidden or anchor is None or latest is None or now - latest.stamp > cfg.max_odom_age_s:
             return MapPose(None, None, None, UNKNOWN, None, 0.0, None, **diag)
         anchor_age = max(0.0, now - anchor.captured_at)
         if latest.stamp <= anchor.odom.stamp:
@@ -443,14 +472,22 @@ class MapPoseTracker:
             source, age = BRIDGED, max(0.0, now - latest.stamp)
             bridged = latest.path_m - anchor.odom.path_m
             turned = latest.turn_rad - anchor.odom.turn_rad
-        degraded = (self._degraded or bridged > cfg.max_dead_reckon_m
+        feed_stale = False
+        if anchor.kind == AUTO_LOCATE:   # the sample is re-stamped each tick; the evidence is the camera's
+            feed_stale, anchor_age = anchor_age > AUTO_FEED_MAX_S, max(0.0, now - (self._auto_camera_at or 0.0))
+            if self._auto_camera_odom is not None:
+                bridged = max(bridged, latest.path_m - self._auto_camera_odom[0])
+                turned = max(turned, latest.turn_rad - self._auto_camera_odom[1])
+        degraded = (self._degraded or feed_stale or bridged > cfg.max_dead_reckon_m
                     or (active_map_id is not None and anchor.map_id != active_map_id)
-                    or turned > math.radians(cfg.max_bridge_turn_deg) or anchor_age > cfg.max_anchor_age_s)
+                    or turned > math.radians(cfg.max_bridge_turn_deg)
+                    or (anchor.kind != AUTO_LOCATE and anchor_age > cfg.max_anchor_age_s))
         return MapPose(x, y, yaw, DEGRADED if degraded else LOCALIZED, source, bridged, age,
                        anchor_age, anchor.map_id, odom_stamp=latest.stamp, anchor_source=anchor.kind,
                        bridge_turn_deg=math.degrees(turned), **diag)
 
     def _reset(self, since: float) -> None:
+        self._auto_camera_odom = None   # the odom frame ended; its path no longer compares
         self._epoch += 1
         self._odom.clear()
         self._anchor = None

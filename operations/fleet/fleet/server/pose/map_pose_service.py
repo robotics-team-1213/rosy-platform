@@ -121,7 +121,7 @@ class MapPoseService:
         return robot_id in self.config.auto_locate_robots
 
     def observe_auto_locate(self, robot_id: str, sample, reason: Optional[str] = None) -> Optional[str]:
-        """D-989: a site pose (x, y, yaw, at, map_id) for an enabled robot, or None to end its anchor.
+        """D-989: a site pose (x, y, yaw, at, map_id, camera_age_s) for an enabled robot, or None to end its anchor.
 
         Returns why the pose was not taken. The caller holds the transform; no identity is read here."""
         tracker = self._tracker(robot_id) if self.auto_locate_enabled(robot_id) else None
@@ -130,12 +130,25 @@ class MapPoseService:
         if sample is None:
             tracker.drop_auto_locate()
             return reason
-        return tracker.add_auto_locate(sample[:3], sample[3], self._wall(), sample[4], self.active_map_id())
+        return tracker.add_auto_locate(sample[:3], sample[3], self._wall(), sample[4], self.active_map_id(), sample[5])
 
-    def allow_auto_locate(self, robot_id: str) -> None:
+    def auto_locate_blocked(self, robot_id: str) -> bool:
         tracker = self._tracker(robot_id) if self.auto_locate_enabled(robot_id) else None
-        if tracker is not None:
-            tracker.allow_auto_locate()
+        return tracker is not None and tracker.auto_blocked
+
+    def allow_auto_locate(self, robot_id: str) -> bool:
+        """A named operator lifts a D-989 block. False for a robot that is not enabled."""
+        tracker = self._tracker(robot_id) if self.auto_locate_enabled(robot_id) else None
+        if tracker is None:
+            return False
+        tracker.allow_auto_locate()
+        return True
+
+    def driving_pose(self, robot_id: str) -> Optional[MapPose]:
+        """D-989 allowlist: `arbitrated_pose` plus an auto-locate anchor. Only the trip runner and the
+        readback route call this; every other consumer sees such a robot as UNKNOWN."""
+        tracker = self._tracker(robot_id)
+        return tracker.pose(self._wall(), self.active_map_id(), auto_locate=True) if tracker is not None else None
 
     def observe_state(self, robot_id: str, state: Optional[Mapping]) -> None:
         try:
@@ -302,7 +315,7 @@ def install_map_pose_routes(app, *, service: MapPoseService, read_guard) -> None
             await service.refresh(robot_id)
         except (HubError, RobotApiError, OSError, httpx.HTTPError, asyncio.TimeoutError):
             pass    # an unreachable robot reads its last odom, which goes UNKNOWN after 3 s
-        pose = service.arbitrated_pose(robot_id)
+        pose = service.driving_pose(robot_id)
         if pose is None:            # removed from the roster while the read was in flight
             raise unknown
         return {"robot_id": robot_id, **asdict(pose)}

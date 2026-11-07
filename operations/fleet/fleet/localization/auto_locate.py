@@ -39,8 +39,17 @@ MIN_STEP_M = 0.05
 MAX_PAIRS = 32
 #: Camera track older than this is not paired with the robot's current pose.
 PAIR_FRESH_S = 0.5
-#: After the last camera sample the transform is no longer reported. Provisional: map drift is unmeasured.
-VALID_S = 900.0
+#: After the last camera sample the transform is no longer reported. Provisional until measured.
+VALID_S = 90.0
+#: Driving use (D-989 7). Worst heading error of a rigid fit is about 2 * residual / baseline:
+#: 2 * 0.05 / 1.0 = 0.1 rad (5.7 deg). Position error at d from the samples is residual + d * 0.1,
+#: which stays within the 0.15 m map pose limit for d <= 1.0 m.
+DRIVE_MIN_SPAN_M = 1.0
+DRIVE_MAX_RESIDUAL_M = 0.05
+DRIVE_MAX_EXTRAPOLATION_M = 1.0
+#: One tick's change of the robot's map <- odom over this means SLAM restarted or relocalized (max_jump values).
+MAP_JUMP_M = MAX_DISAGREE_M
+MAP_JUMP_DEG = MAX_DISAGREE_DEG
 #: A peer's lidar return is on its near side, so its range reads short of the camera's centre distance.
 PEER_RANGE_TOL_M = 0.12
 #: Closer than this, camera error alone swings the bearing past the disagreement limit.
@@ -132,6 +141,15 @@ class AlignmentTracker:
         self._reason = "NO_SAMPLE"
         self._seen_at: Optional[float] = None
         self._objects_seen: Optional[tuple] = None
+        self._map_to_odom: Optional[tuple[float, float, float]] = None
+
+    @property
+    def source_id(self) -> Optional[str]:
+        return None if self._key is None else self._key[3]
+
+    def fail(self, reason: str) -> None:
+        """Latch DEGRADED: this robot's input could not be judged."""
+        self._degraded = reason
 
     def observe(self, now: float, track: Mapping, state: Optional[Mapping],
                 peers: Mapping[str, tuple[float, float]]) -> None:
@@ -237,16 +255,18 @@ class AlignmentTracker:
                        "residual_max_m": round(fit.residual_max_m, 4), "span_m": round(fit.span_m, 3),
                        "valid_left_s": round(VALID_S - (now - self._seen_at), 1)}
 
-    @property
-    def source_id(self) -> Optional[str]:
-        return None if self._key is None else self._key[3]
-
     def anchor_sample(self, now: float, state: Optional[Mapping],
                       revision: Optional[str]) -> tuple[Optional[tuple], Optional[str]]:
-        """((x, y, yaw, at, site_map_id), None) from this robot state, or (None, why not)."""
+        """((x, y, yaw, at, site_map_id, camera_age_s), None) from this robot state, or (None, why not)."""
         view = self.view(now)
         if view["state"] != ALIGNED:
             return None, view["reason"]
+        if view["evidence"] != "span":
+            return None, "OBSERVATION_ONLY_EVIDENCE"   # peer_heading: one sample and one lidar object
+        if self._fit.span_m < DRIVE_MIN_SPAN_M:
+            return None, "BASELINE_TOO_SHORT"
+        if self._fit.residual_max_m > DRIVE_MAX_RESIDUAL_M:
+            return None, "RESIDUAL_TOO_LARGE"
         if revision != view["calibration_revision"]:
             return None, "CALIBRATION_CHANGED"
         status, pose = trust.status_of(state), _robot_pose(state)
@@ -257,6 +277,17 @@ class AlignmentTracker:
         odom = odom_from_snapshot(state)
         if odom is None:
             return None, "ODOM_UNKNOWN"
+        turn = cues.wrap(pose[2] - odom.yaw)
+        c, s = math.cos(turn), math.sin(turn)
+        offset = (pose[0] - (c * odom.x - s * odom.y), pose[1] - (s * odom.x + c * odom.y), turn)
+        last, self._map_to_odom = self._map_to_odom, offset
         # shortcut: the snapshot's map pose and odom are not read atomically; D-984 fixes that in CORE when it lands.
+        # A restart that lands within the limit of the old origin is not visible here; the camera check is the backstop.
+        if last is not None and (math.dist(last[:2], offset[:2]) > MAP_JUMP_M
+                                 or abs(math.degrees(cues.wrap(last[2] - turn))) > MAP_JUMP_DEG):
+            self._degraded = "ROBOT_MAP_JUMP"
+            return None, self._degraded
+        if min(math.dist(slam, pose[:2]) for slam, _ in self._pairs) > DRIVE_MAX_EXTRAPOLATION_M:
+            return None, "OUTSIDE_SAMPLED_REGION"
         x, y = self._fit.site_xy(*pose[:2])
-        return (x, y, cues.wrap(pose[2] + self._fit.yaw), odom.stamp, view["site_map_id"]), None
+        return (x, y, cues.wrap(pose[2] + self._fit.yaw), odom.stamp, view["site_map_id"], view["age_s"]), None
