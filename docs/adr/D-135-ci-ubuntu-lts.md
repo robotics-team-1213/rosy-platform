@@ -19,3 +19,5 @@
 **References:** GitHub changelog 2026-09-17 (Ubuntu 26 GA + latest migration), actions/runner-images #14748, D-127 (단계 통합의 선례).
 
 ---
+
+**Addendum 2026-11-08:** 게이팅 러너가 26.04로 전환된 뒤 주간 리허설은 같은 러너에서 ci.yml FULL을 한 번 더 도는 일이 되어 예약을 뺐다. `ubuntu-26.04-rehearsal.yml`은 수동 실행만 남고, 다음 LTS 이동 때 `runs_on`을 바꿔 다시 쓴다.
