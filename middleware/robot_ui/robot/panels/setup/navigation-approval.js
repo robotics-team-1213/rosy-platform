@@ -14,6 +14,7 @@ const TRIALS = [
 const STATE_LABEL = {missing: "아직 안 함", valid: "통과", invalid: "다시 필요"};
 const SURFACE_LABEL = {floor: "바닥", lifted: "바퀴를 들어 올림"};
 
+function setOff(control, off, reason = "") { control.disabled = Boolean(off); if (off && reason) control.setAttribute("reason", reason); else control.removeAttribute("reason"); }
 function el(tag, cls, text) { const node = document.createElement(tag); if (cls) node.className = cls; if (text) node.textContent = text; return node; }
 
 export function mount(root, ctx) {
@@ -21,18 +22,21 @@ export function mount(root, ctx) {
   const summary = el("ui-status", "", "승인 상태를 불러오는 중입니다.");
   const action = el("ui-status"); action.setAttribute("role", "status"); action.setAttribute("aria-live", "polite");
   const controls = el("ui-actions", "surface-actions");
-  const begin = el("ui-button", "", "측정 시작"); const cancel = el("ui-button", "", "측정 취소");
-  const sealButton = el("ui-button", "", "봉인"); const navigate = el("ui-button", "", "항법 시작");
+  const begin = el("ui-button", "", "측정 시작"); begin.setAttribute("kind", "primary");
+  const cancel = el("ui-button", "", "측정 취소"); cancel.setAttribute("kind", "quiet");
+  const sealButton = el("ui-button", "", "봉인"); sealButton.setAttribute("kind", "primary");
+  const navigate = el("ui-button", "", "항법 시작"); navigate.setAttribute("kind", "primary");
   controls.append(begin, cancel, sealButton, navigate);
   const surfaceLabel = el("label", "", "시험 바닥(바닥이면 1초 넘게 눌러야 LiDAR로 실제 이동을 확인합니다) ");
-  const surface = el("select");
+  const surface = el("select", "ui-field");
   for (const [value, text] of [["floor", "바닥"], ["lifted", "바퀴를 들어 올림"]]) { const option = el("option", "", text); option.value = value; surface.append(option); }
   surfaceLabel.append(surface);
-  const blindLabel = el("label", "", " 로봇 뒤쪽이 비어 있음을 눈이나 카메라로 확인했습니다");
-  const blind = el("input"); blind.type = "checkbox"; blindLabel.prepend(blind);
+  const blindLabel = el("label", "ui-check", " 로봇 뒤쪽이 비어 있음을 눈이나 카메라로 확인했습니다");
+  const blind = el("input", "ui-field"); blind.type = "checkbox"; blindLabel.prepend(blind);
   const list = el("ul", "surface-list"); const buttons = [];
   for (const trial of TRIALS) {
-    const row = el("li"); const button = el("ui-button", "", `${trial.label}: 누르는 동안`); const state = el("span", "", " 확인 중");
+    const row = el("li"); const state = el("span", "", " 확인 중");
+    const button = el("ui-button", "", `${trial.label}: 누르는 동안`); button.setAttribute("kind", "primary");
     button.type = "button"; row.append(button, state); list.append(row); buttons.push({trial, button, state});
     button.addEventListener("pointerdown", (event) => { event.preventDefault(); void press(trial); });
     for (const name of ["pointerup", "pointercancel", "pointerleave"]) button.addEventListener(name, () => { if (trial.stop_cause === "button_release") void release(); });
@@ -95,12 +99,12 @@ export function mount(root, ctx) {
       const row = rows.find((candidate) => candidate.direction === item.trial.direction && candidate.stop_cause === item.trial.stop_cause);
       const measured = row?.test_surface ? ` (${SURFACE_LABEL[row.test_surface]})` : "";
       item.state.textContent = ` ${STATE_LABEL[row?.state] || "확인 중"}${measured}${row?.reason ? `: ${row.reason}` : ""}`;
-      item.button.disabled = phase !== "MEASURING";
+      setOff(item.button, phase !== "MEASURING", "측정 시작 뒤에 누를 수 있습니다.");
     }
-    begin.disabled = !["IDLE", "FAILED"].includes(phase);
-    cancel.disabled = !["MEASURING", "FAILED"].includes(phase);
-    sealButton.disabled = phase !== "MEASURING" || rows.some((row) => row.state !== "valid");
-    navigate.disabled = phase !== "IDLE" || !approval.valid;
+    setOff(begin, !["IDLE", "FAILED"].includes(phase), "측정 중이거나 상태를 확인하는 중입니다.");
+    setOff(cancel, !["MEASURING", "FAILED"].includes(phase), "취소할 측정이 없습니다.");
+    setOff(sealButton, phase !== "MEASURING" || rows.some((row) => row.state !== "valid"), "다섯 시험이 모두 통과해야 봉인할 수 있습니다.");
+    setOff(navigate, phase !== "IDLE" || !approval.valid, "유효한 승인이 있고 측정 중이 아닐 때 시작할 수 있습니다.");
   }, (error) => { summary.setAttribute("state", "error"); summary.textContent = `승인 상태를 읽지 못했습니다: ${error.message}`; });
   return () => { disposed = true; endHold(); stop(); window.removeEventListener("rosy:stop-motion", stopMotion); window.removeEventListener("blur", stopMotion); };
 }
