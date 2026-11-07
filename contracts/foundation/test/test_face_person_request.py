@@ -73,3 +73,13 @@ def test_a_recovery_or_caution_strip_keeps_its_place_above_the_ask():
     assert fs.screen_for(**READY, core=core)["strip"] == "Recovering: reversing"
     caution = read(caution=["dock_failed"])
     assert fs.screen_for(**READY, core=caution)["strip"] == "Docking failed: check the dock"
+
+def test_the_amber_lamp_covers_idle_and_ready_only_never_a_driving_lamp():
+    ready = read()
+    assert pr.present(state=rs.READY, core=ready, screen=fs.screen_for(**READY, core=ready)).lamp == "caution"
+    for mode, nav in (("NAVIGATION", "NAVIGATING"), ("MANUAL", "IDLE"), ("DOCKING", "IDLE")):
+        core = read(robot_mode=mode, nav_state=nav)
+        screen = fs.screen_for(**READY, core=core)
+        assert screen["strip"] == "UNPLUG CHARGER"   # the words still show
+        record = pr.present(state=rs.READY, robot_mode=mode, nav_state=nav, core=core, screen=screen)
+        assert record.lamp != "caution" and record.status_level == pr.OK, mode

@@ -94,3 +94,36 @@ def test_the_timer_unit():
     assert [ask.due("x", t) for t in (0, 1, 14.9, 15, 29, 30)] == [True, False, False, True, False, True]
     assert ask.due(None, 31) is False and ask.due("x", 32) is True   # gone, then it starts over
     assert ask.due("y", 33) is True   # a different request is news
+
+def test_urgent_battery_wins_the_panel_the_lamp_and_the_sound_over_an_open_request(tmp_path):
+    module, display, lamp, clock, gpio, _spawn = _recovering(tmp_path, person_request=ASK)
+    display._battery_due = 1e12   # no battery read in this test: the flag below stands for two readings at or under 10 %
+    display._urgent = True
+    display.step()
+    assert display.screen["kind"] == "sleep" and display.screen["backlight"] == 0 and display.screen["person"] is None
+    assert lamp.pattern != "caution"   # no amber request lamp over the dark panel
+    assert ("change", 1800) in gpio.events and ("change", module.BUZZER_CALL_HZ) not in gpio.events
+    for _ in range(5):
+        clock.now += 16
+        display.step()   # the urgent repeat is every 30 s; the request never adds its own call
+    assert ("change", module.BUZZER_CALL_HZ) not in gpio.events
+    display._urgent = False   # the pack recovered: the request shows and sounds again
+    clock.now += 1
+    display.step()
+    assert display.screen["person"] == ASK["id"] and ("change", module.BUZZER_CALL_HZ) in gpio.events
+
+
+def test_only_one_sound_pattern_per_loop_the_call_waits_for_a_quiet_tick(tmp_path):
+    _module, display, _lamp, clock, gpio, _spawn = _recovering(tmp_path, person_request=ASK)
+    display.step()
+    assert _beeps(gpio) == 1   # the ready chirp alone on this loop
+    clock.now += 1
+    display.step()
+    assert _beeps(gpio) == 1 + 2   # the call, on the next quiet loop
+
+
+def test_a_driving_lamp_is_not_made_amber_by_the_ask(tmp_path):
+    module, display, lamp, _clock, gpio, _spawn = _recovering(tmp_path, person_request=ASK, robot_mode="NAVIGATION",
+                                                              nav_state="NAVIGATING")
+    display.step()
+    assert display.screen["strip"] == "UNPLUG CHARGER" and lamp.pattern == "navigating"
