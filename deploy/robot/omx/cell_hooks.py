@@ -24,6 +24,40 @@ import cell_wrist
 import cell_wrist_ref
 
 
+def lift_stall(cell, config: dict, sleep):
+    """What a stop on the first lift does: let go and rise (cell_unwedge). Jogs leave the D-911 gate, so supervised only."""
+    if config.get("_commissioning") != {"person_at_switch": True}:
+        return None
+    import cv2
+
+    import cell_unwedge
+    import omx_incident
+
+    def stall(gate):
+        stills = Path(omx_incident.STILLS)  # the stop itself, before the arm hides it: the incident report carries them (D-971)
+        stills.mkdir(parents=True, exist_ok=True)
+        for camera in config["cameras"]:
+            try:
+                cv2.imwrite(str(stills / f"{config.get('arm_id', 'arm_s')}-{camera}.jpg"), cell.frame(camera))
+            except Exception:  # a missing frame must not stop the recovery
+                pass
+        a = gate.assessment
+        # an unchecked jog starts a new session, and the gate's fold after it would be refused with the arm out: same session, same
+        # library, past the gate's fault hold only because a person is at the switch
+        return cell_unwedge.release_and_rise(Checked(cell, a["session_id"], a["library_sha256"]), sleep=sleep)
+    return stall
+
+
+class Checked:
+    """A cell whose commands other than state name the session and library they belong to (chunk_runner's `checked`)."""
+
+    def __init__(self, cell, session_id: str, library_sha256: str):
+        self.cell, self.prefix = cell, f"checked {session_id} {library_sha256} "
+
+    def act(self, command: str) -> dict:
+        return self.cell.act(command if command == "state" else self.prefix + command)
+
+
 def pick_hooks(config: dict, cell, target: dict, write_library, source: str, dest_site: str, emit=None, calibration=None,
                guard=None):
     """(hover hook chain, after-place reference capture, after-descent pinch check, empty-grasp feel search) for one
