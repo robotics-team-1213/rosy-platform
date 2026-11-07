@@ -32,8 +32,8 @@
 
 ## 최근 기록
 
+- 2026-11-07 · uncommitted · uiux(account): 로그인 뒤 뒤로 가기가 로그인 화면으로 되튀지 않는다
 - 2026-11-07 · uncommitted · uiux(fleet): 설치 작업 탭에서 뒤로 가기가 앞 작업으로 돌아간다
 - 2026-11-07 · uncommitted · uiux(fleet): 정책 화면 머리 로그인이 정책 화면으로 돌아온다
 - 2026-11-07 · uncommitted · uiux(fleet): 작업·기록을 열 때 관제 화면이 먼저 보이지 않는다
 - 2026-11-07 · uncommitted · uiux(fleet): 계정 화면을 다녀와도 메뉴에 다시 들어가지 않는다
-- 2026-11-07 · uncommitted · uiux(fleet): 로봇 표찰이 장소 이름도 피한다
