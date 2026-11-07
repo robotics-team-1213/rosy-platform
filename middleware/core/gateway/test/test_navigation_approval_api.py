@@ -264,7 +264,7 @@ def test_something_closer_than_the_lidar_measures_refuses_that_direction(robot, 
 
 @pytest.mark.parametrize("direction", ["forward", "cw"])
 def test_a_band_inside_range_min_needs_a_person_in_every_direction(robot, direction):
-    # The real robot: C1 range_min 0.15 m, body front 0.059 m from the LiDAR (D-422).
+    # Recorded C1 scans report 0.05 m (D-424), inside the body; a scan reporting more must not read as clear.
     robot.scan.update(range_min=0.15)
     with pytest.raises(TrialRefused) as refused:
         require_clearance(robot.scan, BODY, direction, False, robot.now)

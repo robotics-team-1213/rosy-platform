@@ -66,7 +66,7 @@ def _closer_than_range_min(sample, forward_deg, centre_rad, range_min) -> bool:
 
 
 def _blind_m(config, direction: str, range_min: float) -> float:
-    """How far past the body the LiDAR cannot see in this direction (C1 reports range_min 0.15 m, D-422)."""
+    """How far past the body the LiDAR cannot see, from the scan's own range_min (recorded C1 scans: 0.05 m, D-424)."""
     if direction == "forward":
         return max(0.0, range_min - (config.body_front_x_m - config.body_lidar_x_m))
     if direction == "reverse":
