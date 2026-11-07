@@ -75,7 +75,7 @@
 
 ## 최근 기록
 
-- 2026-11-08 · dd105b2335 · fix(core): Nav2 무응답 목표 보고
+- 2026-11-08 · 6160ccf28e · fix(core): Nav2 무응답 목표 보고
 - 2026-11-06 · 051927f313 · fix(core): motor 커미셔닝 readiness profile
 - 2026-11-04 · uncommitted · feat(core): peers 관리자·beacon 송신 배선
 - 2026-11-03 · uncommitted · fix(bridge): rear_dock_scan reads services.docking directly (C6)

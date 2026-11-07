@@ -2112,7 +2112,7 @@ clpy.duration을 추가했다(bridge AGENTS의 두 파일 함께 갱신 규칙).
 - gate 변화: 소스 회귀 근거이며 배포·실물 G4/SLAM 수용은 미실행이다. 게시용 canonical FULL은 후속 전체 source에서 별도 조정한다.
 - CE: 기존 교훈 갱신 — `docs/solutions/deployment/native-hardware-mode-profile-and-canonical-runtime-env-2026-11-03.md`에 갱신 후 재커미셔닝 순환 의존과 복구 경계를 추가했다.
 
-## 2026-11-08 · dd105b2335 · fix(core): Nav2 무응답 목표 보고
+## 2026-11-08 · 6160ccf28e · fix(core): Nav2 무응답 목표 보고
 - 변경: `bridge/goal_tracker.py`의 `on_no_response`와 `GoalTracker.abandon`, `ros_bridge.send_native_goal`의 10초 타이머. `navigate_to_pose` 서버가 없을 때 목표가 이유 없이 PLANNING에 머물던 것을, native run은 `BACKEND_RESULT_UNKNOWN`(계약대로 실패로 바꾸지 않음)으로, run 없는 목표(도킹 staging)는 `NAV2_NO_RESPONSE` 실패로 보고한다. 늦게 온 수락은 취소한다.
 - 증거: `test_goal_tracker.py` 3개 추가, gateway 시험 원격 실행.
 - gate 변화: 없음. 실물 Nav2 부재 상황은 재현하지 않았다.
