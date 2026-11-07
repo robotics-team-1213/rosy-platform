@@ -68,6 +68,11 @@ def pipeline(tmp_path, core_client):
     fleet_socket.close(); robot_socket.close()
 
 
+@pytest.mark.parametrize('target, status', [('/console', 303), ('/setup', 303), ('/device', 303), ('/console/evil', 401)])
+def test_login_returns_only_to_known_robot_surfaces(pipeline, target, status):
+    assert pipeline[0].get('/api/account/login', params={'return': target}, follow_redirects=False).status_code == status
+
+
 def test_login_callback_refresh_revoke_and_core_scope(pipeline):
     core, fleet, sessions, login, receiver, clock = pipeline
     from fleet.server.password_session import COOKIE

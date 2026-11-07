@@ -52,6 +52,9 @@ def authenticate_account(connection, authorization=None):
     return account_context(claims)
 
 
+LOGIN_RETURNS = frozenset(('/pilot', '/dashboard', '/', '/console', '/setup', '/device'))
+
+
 def install_account_sessions(app):
     def receiver():
         value = getattr(app.state, 'account_client', None)
@@ -69,7 +72,8 @@ def install_account_sessions(app):
 
     @app.get('/api/account/login')
     async def login(request: Request):
-        flow, url = await invoke(receiver().start, request.query_params.get('return', '/dashboard'))
+        target = request.query_params.get('return', '/dashboard')
+        flow, url = await invoke(lambda: receiver().start(target, destination_allowed=LOGIN_RETURNS.__contains__))
         response = RedirectResponse(url, status_code=303, headers=NO_STORE)
         response.set_cookie(FLOW_COOKIE, flow, secure=True, httponly=True, samesite='lax', max_age=600)
         return response

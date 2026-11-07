@@ -30,5 +30,5 @@
 - 2026-11-07 · uncommitted · feat(learning): 사다리 화면에 양팔 학습 라운드와 영상
 - 2026-11-07 · uncommitted · feat(learning): 학습 사다리 화면 (/learning/ladder)
 - 2026-11-07 · uncommitted · feat(learning): 사다리 화면에 양팔 태스크와 같은 위치 비교
+- 2026-11-07 · uncommitted · uiux(learning): 진행 중 카드 안내와 320 픽셀 도구
 - 2026-11-06 · uncommitted · uiux(learning): 도구 모드 글자, 안내 하나, 새 학습 과제 단추, 진행 중 단계 줄, 실패·거절 다음 행동
-- 2026-11-06 · uncommitted · uiux: 클래스 관리 ui-button, 네트워크·5xx 실패 문구
