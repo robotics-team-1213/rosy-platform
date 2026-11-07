@@ -357,4 +357,4 @@
 - 2026-11-08 · uncommitted · docs(architecture): Harbor와 공통 서비스의 책임을 저장소별로 연결한다
 - 2026-11-08 · uncommitted · docs(control): 현재 ARM 위임과 관제·owner·호스트 구조를 대조한다
 - 2026-11-08 · uncommitted · docs(control): N100 목표 호스트와 R·owner 책임을 구분한다
-- 2026-11-07 · uncommitted · fix(remote): 호출의 -rA가 공통 꼬리에 덮이지 않는다
+- 2026-11-07 · uncommitted · fix(model-pc): GPU 유휴 전원 차단을 끈다
