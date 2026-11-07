@@ -94,11 +94,7 @@ class Teacher:
         self.contacts, self.carried, self.first = dict(arm_arm=set(), arm_other=set(), pad_neighbour=set()), c, {}
         idle = {o: np.append(L.sim_arms[o].home[:5], L.sim_arms[o].home[5]) for o in L.arms if o != arm}
         if step["from"] == "belt":
-            f = L.fixture  # the belt pick pose varies inside the fixture's infeed tolerance; seed 0 is the nominal pose
-            j = (0., 0., 0.) if self.seed == 0 else (*self.rng.uniform(-1, 1, 2) * f["infeed_jitter_xy_m"], float(self.rng.uniform(-1, 1)) * f["infeed_yaw_jitter_rad"])
-            w.put(data, c, "belt", jitter=j)
-            for _ in range(8):
-                self.frame(data, {arm: self.q_now(data, arm), **idle}, step["id"])
+            self.belt_in(data, step, idle)
         pos0, yaw0, _ = w.pose(data, c)
         row = dict(step=step["id"], container=c, arm=arm, source=step["from"], target=step["to"])
         if np.linalg.norm(pos0[:2] - sa["xy"]) > .03:
@@ -143,7 +139,20 @@ class Teacher:
         self.move(data, arm, np.append(q[:5], g_to), np.append(ik_arm.home[:5], g_to), 2.5, step["id"], idle)  # park
         for _ in range(round(.7 * FPS)):
             self.frame(data, {arm: np.append(ik_arm.home[:5], g_to), **idle}, step["id"])
-        pose = judge_pose(w, data, c, step["to"], self.limits)
+        return dict(self.verdict(data, step, row, before), held=held, worst_ik_error_mm=round(worst * 1000, 2))
+
+    def belt_in(self, data, step, idle):
+        """The next container arrives; the belt pick pose varies inside the fixture's infeed tolerance, seed 0 is the nominal pose."""
+        f, arm = self.layout.fixture, step["arm"]
+        j = (0., 0., 0.) if self.seed == 0 else (*self.rng.uniform(-1, 1, 2) * f["infeed_jitter_xy_m"], float(self.rng.uniform(-1, 1)) * f["infeed_yaw_jitter_rad"])
+        self.world.put(data, step["container"], "belt", jitter=j)
+        for _ in range(8):
+            self.frame(data, {arm: self.q_now(data, arm), **idle}, step["id"])
+
+    def verdict(self, data, step, row, before):
+        """The same judgement for the teacher and a learned policy: the container, its neighbours, and what the arms touched."""
+        w = self.world
+        pose = judge_pose(w, data, step["container"], step["to"], self.limits)
         moved = []
         for o, (p, yw, tl) in before.items():
             p2, yw2, tl2 = w.pose(data, o)
@@ -154,9 +163,8 @@ class Teacher:
         arm_hits = sorted(f"{a}~{b}" for a, b in self.contacts["arm_other"])
         crash = sorted("~".join(p) for p in self.contacts["arm_arm"])
         ok = pose["ok"] and not moved and not crash and not arm_hits
-        return dict(row, result="pass" if ok else "fail", pose=pose, held=held, neighbours_disturbed=moved, arm_arm_contacts=crash,
-                    arm_link_contacts=arm_hits, pad_touched_neighbours=sorted(self.contacts["pad_neighbour"]), worst_ik_error_mm=round(worst * 1000, 2),
-                    held_tilt_max_deg=round(self.held_tilt, 1), first_contact_phase=self.first)
+        return dict(row, result="pass" if ok else "fail", pose=pose, neighbours_disturbed=moved, arm_arm_contacts=crash, arm_link_contacts=arm_hits,
+                    pad_touched_neighbours=sorted(self.contacts["pad_neighbour"]), held_tilt_max_deg=round(self.held_tilt, 1), first_contact_phase=self.first)
 
     def _hold_shift(self, arm, off, q, yaw, pos):
         """TCP shift that puts the container centre (not the TCP) where the waypoint says: R @ held offset, nominal 2.01 mm under the TCP removed."""
