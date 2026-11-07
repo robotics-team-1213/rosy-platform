@@ -37,8 +37,7 @@ from fleet.server.trip_geometry import ODOM_DRIFT_PER_M, pose_view
 from fleet.server.trip_ports import TripConfig
 
 LOCALIZED = "LOCALIZED"
-#: D-517 3: blocks one robot holds at worst (occupancy 2 + one grant ahead on the demo blocks).
-HELD_PER_ROBOT = 3
+HELD_PER_ROBOT = blocks.HELD_PER_ROBOT
 #: Before its junction instruction goes out a robot asks for the block just past the place.
 PAST_PLACE_M = 0.05
 #: D-517 9 M3 (Safety-Review): the most a convoy member may reverse below the farthest point it reached,
@@ -100,6 +99,14 @@ class TrafficService(SignalService):
         self._jumped: dict[str, tuple[float, float, int]] = {}
         #: D-760 3: robot id -> metres it may still drive on an unconfirmed authority; a pin covers them too
         self.authority_reach = lambda _robot_id: 0.0
+
+    def _departure(self) -> tuple[float, int]:
+        """``(merge_max_wait_s, held_per_robot)``: the site rules document (D-982) when one is active, else today's."""
+        rules = getattr(self._store, "rules", None)
+        document = rules.active_rules() if rules is not None else None
+        if document is None:
+            return blocks.MERGE_MAX_WAIT_S, self._held
+        return document.departure.merge_max_wait_s, document.departure.blocks_per_robot
 
     # ---- the table ------------------------------------------------------------------------
 
@@ -270,7 +277,8 @@ class TrafficService(SignalService):
         robots = [self._robot(layout, active[2], live) for live in trips.values()]
         gaps = self._link(active[2], robots, trips)
         now = self._clock()
-        result = blocks.step(layout, robots, self._state, now, green=self._green())
+        result = blocks.step(layout, robots, self._state, now, green=self._green(),
+                             merge_max_wait_s=self._departure()[0])
         self._busy = result.busy
         self._occupancy = {plan.zone: signal_phase.zone_occupancy(self._state, robots, plan.zone, result.unplaced)
                            for plan in self._signals.values()}
@@ -373,7 +381,7 @@ class TrafficService(SignalService):
     # ---- start check ----------------------------------------------------------------------
 
     def _loop(self, layout, graph, lap_arcs) -> tuple[frozenset, int]:
-        return _edges(lap_arcs), blocks.loop_capacity(layout.route(graph, list(lap_arcs)), layout, self._held)
+        return _edges(lap_arcs), blocks.loop_capacity(layout.route(graph, list(lap_arcs)), layout, self._departure()[1])
 
     def loop_full(self, lap_arcs, lives: Iterable) -> Optional[dict]:
         """D-517 3: ``TRIP_LOOP_FULL`` detail when one more repeat trip on this loop breaks N·h ≤ S − 1.
@@ -389,7 +397,7 @@ class TrafficService(SignalService):
         robots = 1 + sum(1 for live in lives if live.open and live.repeat and _edges(live.lap_arcs) == edges)
         if robots <= capacity:
             return None
-        return {"robots": robots, "capacity": capacity, "held_per_robot": self._held}
+        return {"robots": robots, "capacity": capacity, "held_per_robot": self._departure()[1]}
 
     # ---- the read-only view ---------------------------------------------------------------
 

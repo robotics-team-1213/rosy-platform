@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Iterable, Optional
+from typing import Callable, Iterable, Optional
 
 GO_PERCENT = 15.0     # CORE critical 10 % + 5 % (user decision 2026-11-01)
 LEAVE_PERCENT = 80.0
@@ -40,6 +40,14 @@ class RobotView:
     voltage: Optional[float]
     pose: Optional[tuple[float, float]]   # map x, y; None when not localized
     on_trip: bool
+
+
+def thresholds_of(site_maps) -> tuple[float, float]:
+    """``(go, leave)`` percent: the active site rules document (D-982), else the constants above."""
+    rules = getattr(site_maps, "rules", None)
+    document = rules.active_rules() if rules is not None else None
+    return (GO_PERCENT, LEAVE_PERCENT) if document is None else (document.return_.go_percent,
+                                                                  document.return_.leave_percent)
 
 
 def bays_from_map(site_map) -> list[Bay]:
@@ -69,8 +77,10 @@ class ChargeBays:
     robot may still be in it. Fleet has no operator clear for a stale visit yet (follow-up).
     """
 
-    def __init__(self, rate_pct_per_min: Optional[float] = None) -> None:
+    def __init__(self, rate_pct_per_min: Optional[float] = None,
+                 thresholds: Callable[[], tuple[float, float]] = lambda: (GO_PERCENT, LEAVE_PERCENT)) -> None:
         self.rate = rate_pct_per_min
+        self.thresholds = thresholds
         self._visits: dict[str, _Visit] = {}
         self._now = 0.0
 
@@ -108,6 +118,7 @@ class ChargeBays:
 
     def plan(self, robots: Iterable[RobotView], bays: list[Bay]) -> dict:
         robots = sorted(robots, key=lambda r: (r.percent is None, r.percent or 0.0, r.robot_id))
+        go_percent, leave_percent = self.thresholds()
         held = {v.bay: rid for rid, v in self._visits.items()}
         # a robot with no visit that is offline or unlocated may be sitting in any bay (e.g. after a restart)
         blind = any(not r.online or r.pose is None for r in robots if r.robot_id not in self._visits)
@@ -115,12 +126,12 @@ class ChargeBays:
         for r in robots:
             visit = self._visits.get(r.robot_id)
             if visit is not None:
-                actions.append(self._in_bay(r.robot_id, visit))
+                actions.append(self._in_bay(r.robot_id, visit, leave_percent))
             elif not r.online:
                 continue
             elif r.percent is None:
                 actions.append({"robot_id": r.robot_id, "action": "wait", "reason": "battery_unknown"})
-            elif r.percent <= GO_PERCENT:
+            elif r.percent <= go_percent:
                 free = next((b.id for b in bays if b.id not in held), None)
                 if r.on_trip:
                     actions.append({"robot_id": r.robot_id, "action": "after_trip", "reason": "low_battery"})
@@ -137,11 +148,11 @@ class ChargeBays:
                                                  "unknown" if visit.lost_at is not None else
                                                  "charging" if visit.connected_at is not None else "arrived")
             rows.append({"bay": b.id, "x": b.x, "y": b.y, "state": state, "robot_id": rid})
-        return {"thresholds": {"go_percent": GO_PERCENT, "leave_percent": LEAVE_PERCENT,
+        return {"thresholds": {"go_percent": go_percent, "leave_percent": leave_percent,
                                "rate_pct_per_min": self.rate}, "bays": rows, "actions": actions,
                 "dispatch": False}
 
-    def _in_bay(self, robot_id: str, visit: _Visit) -> dict:
+    def _in_bay(self, robot_id: str, visit: _Visit, leave_percent: float) -> dict:
         row = {"robot_id": robot_id, "bay": visit.bay, "arrived_percent": visit.arrived_percent,
                "in_bay_s": round(self._now - visit.since, 1)}
         if visit.lost_at is not None:
@@ -156,8 +167,8 @@ class ChargeBays:
             return {**row, "action": "stay", "reason": "charge_rate_not_measured"}
         estimate = min(100.0, visit.arrived_percent + self.rate * connected_s / 60.0)
         row["estimated_percent"] = round(estimate, 1)
-        return {**row, "action": "leave" if estimate >= LEAVE_PERCENT else "stay",
-                "reason": "charged" if estimate >= LEAVE_PERCENT else "charging"}
+        return {**row, "action": "leave" if estimate >= leave_percent else "stay",
+                "reason": "charged" if estimate >= leave_percent else "charging"}
 
 
 def _bay_at(pose, bays: list[Bay]) -> Optional[Bay]:

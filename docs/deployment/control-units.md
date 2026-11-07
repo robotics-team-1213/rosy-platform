@@ -14,7 +14,7 @@
 | 중간 관제 A | 자기 직접 자원과 Task, A1을 포함한 subtree의 읽기·중계 | R에는 서브 관제이며 A1에는 통합관제다. 자기 정보와 A1의 출처를 유지해 반환하고 같은 권한·정지 원장 규칙을 적용한다 |
 | 대상 관제 A1 또는 B | 직접 장치 관측·기명 승인·Task admission/dispatch·기존 장치 정지 경로 | 정보 공유와 부모 정지 수신을 각각 허용한다. 결과를 직계 부모의 배정 범위로 반환하고 UNKNOWN 재시운전 확인은 자기 기명 운영자가 기록한다 |
 | 운영 화면 PC | 접속한 관제의 허용 범위 조회·기명 작업 요청·승인·취소 | 브라우저가 원장을 소유하지 않는다. R 화면 로그인으로 A1 승인 권한이 생기지 않는다. A1 승인은 A1 화면에서 해당 기명 자격으로 수행한다 |
-| 로봇 PC의 CORE / OMX owner | CORE는 최종 Base 명령·실행·안전, OMX는 기존 joint/action 책임 | 직접 소유 관제의 기존 장치 API 경로를 받는다. 상위 관제·모델 PC가 직접 최종 명령을 쓰지 않는다. 이번 관제 위임 구현은 유한 navigation 범위다 |
+| 로봇 PC의 CORE / OMX owner | CORE는 최종 Base 명령·실행·안전, OMX는 기존 joint/action 책임 | 직접 소유 관제의 기존 장치 API 경로를 받는다. 상위 관제·모델 PC가 직접 최종 명령을 쓰지 않는다. 유한 navigation과 셀 ARM 제안 위임을 구별하며 승인 경로는 아래 「팔 이송 위임」을 따른다 |
 | 모델 PC·AI PC·World | 각각 학습/평가, 승인 고정 버전 추론·후보, 현재 관측·상태 투영 | 관제 계층과 별개 역할이다. 모델 결과·관측은 작업 완료나 Fleet 원장 쓰기·장치 실행 권한을 만들지 않는다 |
 
 ### 현장 배치표
@@ -23,8 +23,10 @@
 
 | 단위 | 지금 호스트 | 목표 호스트 | 근거 |
 |---|---|---|---|
-| 통합관제 R | OMX 노트북(임시, 포트·DB·인증서 분리) | 상시 가동·저부하 전용 PC | D-960 5항 |
+| 통합관제 R | OMX 노트북(임시, 포트·DB·인증서 분리) | N100 미니 PC(16GB, Ubuntu Server 24.04 LTS amd64) | D-960 5항, [D-994](../adr/D-994-n100-integrated-control-host-and-owner-boundaries.md); 설치·이전·부하 수용 미수행 |
 | 셀 관제 CELL-A | OMX 노트북 | OMX 노트북(팔 local stop UDS가 같은 호스트) | D-960 1항 |
+
+N100 미니 PC는 물리 호스트이고 통합관제 R은 그곳에서 실행할 관제 단위다. R의 직접 소유 장치는 기존 Fleet→CORE 경로를 쓰고, 하위 셀의 승인·팔 실행은 해당 셀과 OMX owner에 남는다. Account·Monitoring·Harbor가 같은 호스트에 있어도 원장·자격·명령 권한을 합치지 않는다. 역할별 책임과 부하·장애 수용 조건은 [D-994](../adr/D-994-n100-integrated-control-host-and-owner-boundaries.md)를 따른다. 이 표의 현재 배치는 기존 기록이며 실물 이전 확인 전에는 목표 배치로 덮어쓰지 않는다.
 
 ## 네트워크 연결 구조
 
@@ -55,7 +57,7 @@ Base 장치는 각 관제의 robots 설정에 있는 CORE HTTP 경로를 사용�
 | 부모 → 직계 자식 | `GET /overview`, `GET /units/{unit_id}`, `GET /units/{unit_id}/map` | 자식이 명시 허용한 subtree만 조회한다. 요약과 선택 관제의 상세/지도를 나누고 소유 관제·map ID/version·신선도를 유지한다 |
 | 부모 → 직계 자식 | `POST /stop-inbox` | 명시 허용된 정지 요청의 최초 배정·expected fence를 전달한다. 관제별 접수/미전달/미확인 결과를 보존하며 sibling 범위를 보내지 않는다 |
 | 부모 → 직계 자식 | `GET /stops/{origin}/{identity}` | 그 자식에게 배정한 정지 기록만 읽는다. 응답 유실·재시작 뒤 조회가 정지를 다시 보내지 않는다 |
-| 대상 관제의 운영 브라우저 → 해당 관제 | `POST /delegations/{origin}/{identity}/approve` | 최신 revision과 기명 운영자로 로컬 승인. 부모/자식 service 자격은 호출 권한이 없다 |
+| 대상 관제의 운영 브라우저 → 해당 관제 | `POST /delegations/{origin}/{identity}/approve` | 주행 위임만 최신 revision과 기명 운영자로 로컬 승인. ARM은 이 경로가 거절하며 기존 셀 ARM admit을 쓴다. 부모/자식 service 자격은 호출 권한이 없다 |
 | 해당 관제의 운영 브라우저 → 해당 관제 | `POST /stops`, `GET /stops`, `POST /stops/{origin}/{identity}/reconcile` | 기명 운영자의 subtree 정지 요청, 사람 viewer의 최근 기록 조회, 기명 로컬 재시운전 확인을 구분한다. 서비스/AI 자격에는 전체 정지 이력 조회를 허용하지 않는다 |
 
 결과는 부모 요청의 응답으로 반환한다. navigation 위임 복구는 같은 inbox를 재전달해 대조하며 승인 확인에는 자식→부모 연결도 필요하다. 정보 collector는 별도 loop에서 직계 자식을 모으므로 순차 위임 복구에 묶이지 않는다. 정지의 polling·재시작은 저장한 배정의 GET만 사용하고 POST를 재생하지 않는다. 전송은 고정 origin·전체 요청3초·redirect 거절·환경 proxy 미사용·identity encoding이다. 응답은 128 KiB, 선택 지도는2 MiB까지다. 5초 stale 기준과3초 전송 상한은 물리 정지 시간 보장이 아니다.
@@ -118,6 +120,15 @@ CLI는 `--control-unit-config` 또는 환경 기본값 `ROSY_CONTROL_UNIT_CONFIG
 4. R은 A를 통해 A1의 원래 작업 결과를 읽는다. 같은 identity와 본문의 재전달은 새 Task를 만들지 않는다. 응답이 유실됐으면 identity를 바꾸지 않고 원장을 다시 확인한다.
 
 최근 위임 조회는 최대 100건, 미완료 복구 대상은 최대 256건이다. 완료 기록이 많아도 오래된 미완료 항목을 복구한다. 완료 이력의 보관·DB 유지보수는 기존 현장 journal 운영 절차를 따른다.
+
+## 팔 이송 위임
+
+팔 위임 wire·셀 job 결속·R 결과 투영은 현재 소스에 구현돼 있다([D-995](../adr/D-995-control-structure-authority-and-evidence-status.md)). D-965 본문의 “미구현”은 결정 당시 기록이며 현재 배포·실물 수용 상태를 대신하지 않는다.
+
+1. 외부 앱은 R의 기존 `POST /api/fleet/arm-transfers/jobs`로 workcell의 팔 이송을 제안한다. R relay가 manifest의 소유 셀을 찾아 control-unit inbox로 전달하고 셀의 기존 ARM job에 결속한다. request identity·취소·출처를 유지한다.
+2. ARM은 위 주행용 `/approve`로 승인하지 않는다(`CONTROL_UNIT_ARM_ADMIT_AT_CELL`). 해당 셀의 `POST /api/fleet/arm-transfers/jobs/{mission_id}/admit`이 현재 부모 증명·기명 운영자·제안자 자기 승인 거절과 기존 물리/admission 검사를 적용한다. simulation 정책 admission을 실물 자동 승인으로 확대하지 않는다.
+3. R은 셀 결과를 읽어 투영한다. job 투영·receipt와 별도의 physical-evidence·recheck 중계는 현재 직계 자식만 지원한다. 더 깊은 셀에서는 `ARM_TRANSFER_RELAY_DEPTH`로 거절하므로 일반 3수준 topology를 모든 ARM 경로의 지원 완료로 해석하지 않는다.
+4. 실제 R↔셀 TLS·기명 승인·장치 동작·정지·복구와 N100 배치는 별도 수용 대상이다. 호스트 HTTP 시험은 실제 팔이 움직였다는 증거가 아니다.
 
 ## 통합 정보와 하위 정지 요청
 

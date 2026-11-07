@@ -9,6 +9,7 @@ import {tripWaitText} from "/console/assets/trip-display.js";
 import { chooseConvoyLeader, estopText, motionCommandReason } from "./motion-readiness.js";
 import { robotMapPose } from "./localization-badge.js";
 import { endedTripText, openTrip, primaryButton, quietButton, setReason } from "./queues.js";
+import { ruleJudgeSection } from "./site-rules-judge.js";
 
 export { endedTripText, openTrip };
 
@@ -259,6 +260,7 @@ export function createCardTrip({ scope, el, view, call, log, render, isOperator,
       panel.className = "trip-mode"; panel.dataset.tripMode = mode;
       panel.hidden = mode !== (mine.kind || "route"); panel.append(...children); box.append(panel);
     }
+    box.append(ruleJudgeSection({ mine, robot, call, scope, render }));  // D-982: what the site rules say, not sent
     const loops = loopCapacityText(view.traffic);  // D-517 3: "고리 2/3대"
     if (loops) box.append(line("hint", loops));
     if (mine.note) {
