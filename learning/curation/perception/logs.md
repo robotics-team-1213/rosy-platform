@@ -501,6 +501,10 @@
 - 증거: agent-browser로 복사 상태 서버에서 390·320 객체·픽셀 화면 확인(가로 넘침 없음). 진행 중 카드와 실패·거절 문구는 해당 상태 자료가 없어 화면으로 보지 못했다. 320에서 되돌리기 단추가 오른쪽 끝에서 잘리는 것을 보았다(이전부터).
 - gate 변화: SOURCE 변경. CE: 해당 없음 — 코드와 회귀가 판단을 보존한다.
 
+## 2026-11-07 · uncommitted · feat(learning): 사다리 화면에 양팔 태스크와 같은 위치 비교
+- 변경: 화면 5절이 `omx_ladder.py two-arm` 기록(rosy.omx-two-arm-run.v1)을 보여 주고, 관리 권한으로 정해진 태스크와 시드만 실행한다. 라운드에 기록된 부모 재평가가 있으면 다른 위치의 구간 비교 대신 그것을 쓴다. 부모를 평가할 수 없을 때 라운드가 실행 중에 묶이던 문제도 고쳤다.
+- gate 변화: SOURCE 변경. 정답 동작의 기하 검사이며 학습 모델이나 실물 근거가 아니다(D-947). CE: 해당 없음 — 시험이 판단을 보존한다.
+
 ## 2026-11-07 · uncommitted · feat(learning): 학습 사다리 화면 (/learning/ladder)
 - 변경: `ladder_web.py`와 `ladder.html/js/css`가 OMX 사다리 라운드(rosy.omx-ladder-round.v1)를 목록·상세로 보이고, 사람의 기준 교체/유지 기록(`decisions.jsonl` 추가, `best.json` 사본)과 고정 인자 라운드 시작(`tools/sim/omx_ladder.py round`)을 맡는다. 판단자는 서버가 로그인 사용자에서 정하고, 시작은 manage 권한·CSRF·동시 1개 제한을 따른다. 설정은 `--ladder-config`(비공개 JSON: root, cell, python, lerobot_train)이며 없으면 「연결되지 않았습니다」. 학습 루프 SIM 줄의 학습 칸에 사다리 요약을 더했다. 라운드 결과는 시뮬레이션 근거이고 기준 교체는 비교 기록일 뿐 승인·승격·장치 적용이 아니다(D-793, D-857, D-947).
 - 증거: 아래 커밋 뒤 원격 시험 결과를 별도 줄로 덧붙인다.

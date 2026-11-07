@@ -31,4 +31,10 @@
 <label class="ui-field-label">학습률 (1e-7~1e-2) <input id="ladder-lr" class="ui-field" type="number" min="0.0000001" max="0.01" step="any" value="0.00001" required></label>
 <label class="ui-field-label">이어받을 라운드 <select id="ladder-parent" class="ui-field"><option value="">없음 (처음부터)</option></select></label>
 <div class="ui-workspace-bar"><ui-button id="ladder-start" data-action-icon="next" kind="primary" type="submit" disabled>라운드 시작</ui-button></div></form></section>
+<section class="learning-section" aria-labelledby="ladder-two-arm-title"><h2 id="ladder-two-arm-title">5 · 양팔 태스크</h2>
+<p class="quiet">정해 둔 정답 동작을 양팔 장면에서 그대로 돌려 본 기하 검사입니다. 학습 모델이 아닙니다. 한 번에 한 팔만 움직이고 컨테이너의 참값 위치를 쓰며, 실제 팔이 성공했다는 뜻이 아닙니다(D-947).</p>
+<div id="ladder-two-arm" class="ladder-rounds" aria-live="polite"></div>
+<form id="ladder-two-arm-form" class="ui-form learning-form"><label class="ui-field-label">태스크 <select id="ladder-two-arm-task" class="ui-field"><option value="stack">3×3×3 적층</option><option value="rehandle">임시 칸 재취급</option></select></label>
+<label class="ui-field-label">시드 (0은 놓인 위치 그대로, 1~1000은 허용 범위 안에서 흔듦) <input id="ladder-two-arm-seed" class="ui-field" type="number" min="0" max="1000" step="1" value="0" required></label>
+<div class="ui-workspace-bar"><ui-button id="ladder-two-arm-start" data-action-icon="next" kind="primary" type="submit" disabled>양팔 태스크 실행</ui-button></div></form></section>
 </main></div></div></ui-shell></body></html>

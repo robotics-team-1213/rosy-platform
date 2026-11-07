@@ -1,4 +1,5 @@
 """The 학습 사다리 screen in Chromium: see rounds, judge one, start another; simulation evidence only."""
+import json
 import os
 import threading
 from pathlib import Path
@@ -22,12 +23,21 @@ class Recorded(ladder_web.Ladder):
         self.started = body
         return True
 
+    def start_two_arm(self, body):
+        self.started_two_arm = body
+        return True
+
 
 def serve(tmp_path, *, configured=True):
     root = make_root(tmp_path, ROUNDS)
     bad = root / 'rounds' / '20261108T010000-dddddddd'
     bad.mkdir()
     (bad / 'round.json').write_text('{broken', encoding='utf-8')
+    run = root / 'two_arm' / OLD
+    run.mkdir(parents=True)
+    (run / 'run.json').write_text(json.dumps(dict(
+        schema=ladder_web.TWO_ARM_SCHEMA, run_id=OLD, task='rehandle', seed=0, status='failed', steps=12, steps_pass=11, final_ok=5, final_total=6,
+        roll_below_floor_steps=['a1'], failed_steps=[dict(step='r2', arm='arm_a', result='blocked', reason='too far')])), encoding='utf-8')
     ladder = Recorded(config(tmp_path, root)) if configured else None
     server = make_server(open_store(tmp_path), free_port(), accounts=Accounts(), ladder=ladder)
     threading.Thread(target=server.serve_forever, daemon=True).start()
@@ -65,11 +75,17 @@ def test_rounds_detail_decision_and_start(tmp_path, width, session):
                 expect(detail).to_contain_text('엄격 성공 12 / 50 (24.0%)')
                 expect(detail).to_contain_text('아직 비교 기준이 없습니다')
                 expect(detail.locator('img')).to_have_count(1)
+                two_arm = page.locator('#ladder-two-arm')
+                expect(two_arm).to_contain_text('임시 칸 재취급')
+                expect(two_arm).to_contain_text('단계 통과 11 / 12')
+                expect(two_arm).to_contain_text('실패 r2 (arm_a): too far')
+                expect(two_arm).to_contain_text('실물 손목 하한 아래로 가는 단계')
                 body = page.locator('main').inner_text()
                 assert '승인' not in body and '승격' not in body
                 if session == 'reader':
                     expect(page.locator('#ladder-decide')).to_be_disabled()
                     expect(page.locator('#ladder-start')).to_be_disabled()
+                    expect(page.locator('#ladder-two-arm-start')).to_be_disabled()
                 else:
                     expect(page.locator('#ladder-decide')).to_be_enabled()
                     page.locator('#ladder-note').fill('엄격 성공이 높다')
@@ -86,6 +102,11 @@ def test_rounds_detail_decision_and_start(tmp_path, width, session):
                     page.locator('#ladder-start').click()
                     expect(page.locator('#ladder-notice')).to_contain_text('라운드를 시작했습니다')
                     assert ladder.started == {'episodes': 60, 'eval_episodes': 50, 'steps': 300, 'lr': 1e-05, 'parent': None}
+                    page.locator('#ladder-two-arm-task').select_option('rehandle')
+                    page.locator('#ladder-two-arm-seed').fill('2')
+                    page.locator('#ladder-two-arm-start').click()
+                    expect(page.locator('#ladder-notice')).to_contain_text('양팔 태스크를 시작했습니다')
+                    assert ladder.started_two_arm == {'task': 'rehandle', 'seed': 2}
                 assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
                 assert errors == []
                 if shots:

@@ -1,11 +1,12 @@
 import {accountFetch} from '/account-session.js';
 import '/commands.js';
 const $=id=>document.getElementById(id);
-let token='', manager=false, busy=false, configured=false, running=false, selected=null, bestId=null;
+let token='', manager=false, busy=false, configured=false, running=false, twoArmRunning=false, selected=null, bestId=null;
 const STATUS={passed:'✓ 통과',failed:'✕ 실패',blocked:'⊘ 막힘',not_run:'– 실행 안 함',pending:'… 대기',running:'▶ 실행 중',unknown:'? 알 수 없음'};
 const STAGE={mujoco:'MuJoCo',gazebo:'Gazebo',isaac:'Isaac'};
 const COMPARE={better:'더 좋음 (평가 구간이 겹치지 않고 위쪽)',worse:'더 나쁨 (평가 구간이 겹치지 않고 아래쪽)',
   unclear:'차이 불명확 — 아직 정할 수 없습니다',current:'현재 비교 기준입니다'};
+const TWO_ARM={stack:'3×3×3 적층',rehandle:'임시 칸 재취급'};
 const SCENE={robot:'팔',jaw:'집게',wrist_camera:'손목 카메라',revision:'셀 개정'};
 const RECIPE={policy:'정책',steps:'학습 단계',batch_size:'묶음 크기',chunk_size:'청크',n_action_steps:'행동 단계',optimizer_lr:'학습률'};
 const DATA={episodes:'에피소드',from_failures:'실패에서 가져온 수'};
@@ -24,6 +25,7 @@ function controls(){
   const passed=selected?.stages?.mujoco?.status==='passed';
   $('ladder-decide').disabled=busy||!manager||!configured||!passed;
   $('ladder-start').disabled=busy||!manager||!configured||running;
+  $('ladder-two-arm-start').disabled=busy||!manager||!configured||twoArmRunning;
   $('ladder-decide-round').textContent=selected?.round_id||'없음';
   $('ladder-start-state').textContent=!configured?'학습 사다리가 연결되지 않았습니다. 라운드를 시작할 수 없습니다.':
     running?'다른 라운드가 실행 중입니다. 끝난 뒤 시작할 수 있습니다.':
@@ -42,6 +44,29 @@ function stageLine(name,stage){
   if(stage.status==='blocked'||stage.status==='not_run')line.append(el('small','이유: '+(stage.reason||'이유가 기록되지 않았습니다.')));
   return line;
 }
+function pairedLine(row){
+  const here=row.stages.mujoco.eval?.strict?.placed;
+  return el('p',`이전 라운드와 같은 위치 비교: ${here ?? '?'} 대 ${row.paired.placed ?? '?'} / ${row.paired.n ?? '?'} — ${COMPARE[row.paired.result]}`);
+}
+function twoArmCard(row){
+  const item=el('article',undefined,'ladder-card');
+  if(row.unreadable){item.append(el('h3',row.run_id),el('p','이 실행 기록을 읽을 수 없습니다.'));return item;}
+  const line=el('div',undefined,'ladder-stage');line.dataset.status=row.status;line.append(el('span',STATUS[row.status]||STATUS.unknown));
+  item.append(el('h3',`${TWO_ARM[row.task]||row.task} · 시드 ${row.seed ?? '?'}`),el('p',row.created_at||'시각 기록 없음','quiet'),line);
+  if(row.steps!=null)item.append(el('p',`단계 통과 ${row.steps_pass ?? '?'} / ${row.steps} · 최종 위치 ${row.final_ok ?? '?'} / ${row.final_total ?? '?'}`));
+  if(row.reason)item.append(el('p','이유: '+row.reason));
+  for(const step of row.failed_steps)item.append(el('p',`실패 ${step.step} (${step.arm}): ${step.reason||step.result}`));
+  if(row.roll_below_floor_steps.length)item.append(el('p','실물 손목 하한 아래로 가는 단계(실물에서 그대로 실행할 수 없음): '+row.roll_below_floor_steps.join(', ')));
+  return item;
+}
+async function refreshTwoArm(){
+  const data=await api('two-arm');
+  twoArmRunning=!!data.running;
+  const box=$('ladder-two-arm');
+  if(data.runs?.length)box.replaceChildren(...data.runs.map(twoArmCard));
+  else box.textContent=configured?'아직 양팔 태스크 실행 기록이 없습니다.':'학습 사다리가 연결되지 않았습니다.';
+  controls();
+}
 function card(row){
   const item=el('article',undefined,'ladder-card');
   if(row.unreadable){
@@ -55,6 +80,7 @@ function card(row){
     el('p','장면: '+pairs(SCENE,row.scene)),el('p','레시피: '+pairs(RECIPE,row.recipe)),el('p','데이터: '+pairs(DATA,row.data)));
   for(const name of Object.keys(STAGE))item.append(stageLine(name,row.stages[name]));
   if(row.comparison)item.append(el('p','기준과 비교: '+COMPARE[row.comparison]));
+  if(row.paired)item.append(pairedLine(row));
   if(row.round_id===bestId)item.append(el('p','★ 현재 비교 기준','ladder-best'));
   return item;
 }
@@ -101,6 +127,7 @@ function detail(data){
     el('h3','MuJoCo 평가'),evaluation(mujoco),
     el('h3','현재 기준과 비교'),
     data.best_round_id?compare:el('p','아직 비교 기준이 없습니다. 첫 판단이 기준이 됩니다.'),
+    ...(round.paired?[pairedLine(round)]:[]),
     ...(round.same_seeds===false?[el('p','평가 시드가 달라 숫자 비교가 거칠 수 있습니다. 같은 시드로 다시 평가한 값이 필요합니다.','quiet')]:[]),
     el('h3','Gazebo 계약 점검'),
     gazebo.contract?list([`백엔드 ${gazebo.contract.backend ?? '?'} · ${gazebo.contract.passed?'통과':'통과하지 못함'}`,
@@ -113,7 +140,15 @@ function detail(data){
   controls();
 }
 async function show(roundId){detail(await api('rounds/'+roundId));}
-$('ladder-refresh').addEventListener('click',()=>work(refresh));
+$('ladder-refresh').addEventListener('click',()=>work(async()=>{await refresh();await refreshTwoArm();}));
+$('ladder-two-arm-form').addEventListener('submit',event=>{
+  event.preventDefault();
+  work(async()=>{
+    await api('two-arm',{task:$('ladder-two-arm-task').value,seed:Number($('ladder-two-arm-seed').value)});
+    await refreshTwoArm();
+    notice('ladder-notice','양팔 태스크를 시작했습니다. 몇 분 뒤 새로고침하면 결과를 볼 수 있습니다.');
+  });
+});
 $('ladder-decision').addEventListener('submit',event=>{
   event.preventDefault();
   work(async()=>{
@@ -136,7 +171,7 @@ $('ladder-start-form').addEventListener('submit',event=>{
 work(async()=>{
   const session=await accountFetch('/api/accounts/session',{cache:'no-store'});
   if(session.ok){const account=await session.json();token=account.token;manager=account.capabilities.includes('manage');}
-  await refresh();
+  await refresh();await refreshTwoArm();
   const wanted=new URLSearchParams(location.search).get('round');
   if(/^[0-9]{8}T[0-9]{6}-[0-9a-f]{8}$/.test(wanted||''))await show(wanted);
 });

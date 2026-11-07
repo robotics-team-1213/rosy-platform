@@ -25,6 +25,8 @@ PAGES = {'/learning/ladder': ('ladder.html', 'text/html'), '/ladder.js': ('ladde
          '/ladder.css': ('ladder.css', 'text/css')}
 ROUND = '[0-9]{8}T[0-9]{6}-[0-9a-f]{8}'
 SCHEMA = 'rosy.omx-ladder-round.v1'
+TWO_ARM_SCHEMA = 'rosy.omx-two-arm-run.v1'
+TWO_ARM_TASKS = ('stack', 'rehandle')
 STATUSES = {'pending', 'running', 'passed', 'failed', 'blocked', 'not_run'}
 IMAGES = {'.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp'}
 PART = '[A-Za-z0-9_][A-Za-z0-9._-]{0,99}'
@@ -100,12 +102,48 @@ def stage(raw):
     return out
 
 
+def read_record(file):
+    """One record as a dict, or None when it is missing, linked, oversized or corrupt."""
+    try:
+        info = file.lstat()
+        if file.parent.is_symlink() or not stat.S_ISREG(info.st_mode) or info.st_size > 1 << 20:
+            return None
+        value = json.loads(file.read_text(encoding='utf-8'))
+        return value if isinstance(value, dict) else None
+    except (OSError, ValueError):
+        return None
+
+
+def paired(value):
+    """The round's own comparison on the parent's seeds, when it recorded one."""
+    record = value.get('comparison')
+    parent = record.get('parent_eval') if isinstance(record, dict) else None
+    if (not isinstance(parent, dict) or not isinstance(parent.get('strict'), dict) or record.get('same_seeds') is not True
+            or record.get('result') not in ('better', 'worse', 'unclear')):
+        return None
+    return {'against': scalar(record.get('against')), 'result': record['result'],
+            'placed': scalar(parent['strict'].get('placed')), 'n': scalar(parent.get('n'))}
+
+
+def two_arm_public(value):
+    failed = value.get('failed_steps')
+    roll = value.get('roll_below_floor_steps')
+    status = value.get('status')
+    row = {key: scalar(value.get(key)) for key in ('run_id', 'created_at', 'task', 'seed', 'source_sha', 'reason', 'steps', 'steps_pass',
+                                                   'final_ok', 'final_total', 'note')}
+    row.update(status=status if status in STATUSES else 'unknown',
+               failed_steps=[flat(item) for item in failed[:40] if isinstance(item, dict)] if isinstance(failed, list) else [],
+               roll_below_floor_steps=[scalar(item, 20) for item in roll[:40]] if isinstance(roll, list) else [])
+    return row
+
+
 def public(value):
     stages = value.get('stages') if isinstance(value.get('stages'), dict) else {}
     row = {'round_id': value['round_id'], 'created_at': scalar(value.get('created_at')),
            'parent_round_id': scalar(value.get('parent_round_id')), 'source_sha': scalar(value.get('source_sha'), 40)}
     row.update({key: flat(value.get(key)) for key in ('scene', 'recipe', 'data')})
     row['stages'] = {name: stage(stages.get(name)) for name in ('mujoco', 'gazebo', 'isaac')}
+    row['paired'] = paired(value)
     return row
 
 
@@ -116,21 +154,15 @@ class Ladder:
             raise ValueError('ladder configuration needs absolute root, cell, python and lerobot_train')
         self.root, self.cell, self.python, self.train = (Path(config[key]) for key in ('root', 'cell', 'python', 'lerobot_train'))
         self.process = None
+        self.two_arm_process = None  # shortcut: forgotten across an app restart, harmless because a run only writes its own folder
         self.lock = threading.Lock()
 
     def load(self, round_id):
         """Raw record of one round, or None when it is missing, linked, oversized or corrupt."""
         if not re.fullmatch(ROUND, round_id):
             return None
-        try:
-            directory = self.root / 'rounds' / round_id
-            info = (directory / 'round.json').lstat()
-            if directory.is_symlink() or not stat.S_ISREG(info.st_mode) or info.st_size > 1 << 20:
-                return None
-            value = json.loads((directory / 'round.json').read_text(encoding='utf-8'))
-            return value if value.get('schema') == SCHEMA and value.get('round_id') == round_id else None
-        except (OSError, ValueError, AttributeError):
-            return None
+        value = read_record(self.root / 'rounds' / round_id / 'round.json')
+        return value if value and value.get('schema') == SCHEMA and value.get('round_id') == round_id else None
 
     def ids(self):
         try:
@@ -188,8 +220,9 @@ class Ladder:
             return {'round_id': round_id, 'unreadable': True}
         row = public(value)
         if best is not None:
-            row['comparison'] = 'current' if best['round_id'] == round_id else verdict(row, best)
-            row['same_seeds'] = (row['stages']['mujoco'].get('eval') or {}).get('seed_base') == \
+            same = row['paired'] if row['paired'] and row['paired']['against'] == best['round_id'] else None
+            row['comparison'] = 'current' if best['round_id'] == round_id else same['result'] if same else verdict(row, best)
+            row['same_seeds'] = same is not None or (row['stages']['mujoco'].get('eval') or {}).get('seed_base') == \
                                 (best['stages']['mujoco'].get('eval') or {}).get('seed_base')
         return row
 
@@ -206,6 +239,41 @@ class Ladder:
     def summary(self):
         ids = self.ids()
         return {'rounds': len(ids), 'best': self.best(), 'running': self.running()}
+
+    def two_arm_running(self):
+        return bool(self.two_arm_process and self.two_arm_process.poll() is None)
+
+    def two_arm_runs(self):
+        try:
+            ids = sorted((p.name for p in (self.root / 'two_arm').iterdir() if re.fullmatch(ROUND, p.name)), reverse=True)
+        except OSError:
+            return []
+        rows = []
+        for run_id in ids[:SHOWN]:
+            value = read_record(self.root / 'two_arm' / run_id / 'run.json')
+            good = value and value.get('schema') == TWO_ARM_SCHEMA and value.get('run_id') == run_id
+            rows.append(two_arm_public(value) if good else {'run_id': run_id, 'unreadable': True})
+        return rows
+
+    def start_two_arm(self, body):
+        """Launch the fixed two-arm command; only a named task and a bounded seed reach it."""
+        if set(body) != {'task', 'seed'} or body['task'] not in TWO_ARM_TASKS or type(body['seed']) is not int or not 0 <= body['seed'] <= 1000:
+            raise ValueError('양팔 태스크 필드를 확인하세요.')
+        command = [str(self.python), str(ENTRY), 'two-arm', '--root', str(self.root), '--python', str(self.python),
+                   '--task', body['task'], '--seed', str(body['seed'])]
+        with self.lock:
+            if self.two_arm_running():
+                return False
+            self.two_arm_process = self.spawn(command, 'two-arm.log')
+        return True
+
+    def spawn(self, command, log_name):
+        env = {key: os.environ[key] for key in ('HOME', 'USER', 'LOGNAME') if key in os.environ}
+        env['PATH'] = '/usr/local/bin:/usr/bin:/bin'
+        self.root.mkdir(parents=True, exist_ok=True)
+        with open(self.root / log_name, 'wb') as log:
+            return subprocess.Popen(command, cwd=self.root, env=env, stdin=subprocess.DEVNULL,
+                                    stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
 
     def artifact(self, round_id, rel):
         """(bytes, media type) of one round image; nothing outside the round's artifacts folder, no links."""
@@ -270,14 +338,10 @@ class Ladder:
                    '--python', str(self.python), '--lerobot-train', str(self.train),
                    *(['--parent', parent] if parent else []), '--episodes', str(body['episodes']),
                    '--eval-episodes', str(body['eval_episodes']), '--steps', str(body['steps']), '--lr', repr(float(lr))]
-        env = {key: os.environ[key] for key in ('HOME', 'USER', 'LOGNAME') if key in os.environ}
-        env['PATH'] = '/usr/local/bin:/usr/bin:/bin'
         with self.lock:
             if self.running():
                 return False
-            with open(self.root / 'start.log', 'wb') as log:
-                self.process = subprocess.Popen(command, cwd=self.root, env=env, stdin=subprocess.DEVNULL,
-                                                stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
+            self.process = self.spawn(command, 'start.log')
         return True
 
 
@@ -301,6 +365,8 @@ def get(handler, path, ladder):
         handler.send({'configured': False, 'running': False, 'best_round_id': None, 'rounds': []})
     elif path == PREFIX + 'rounds':
         handler.send(ladder.snapshot())
+    elif path == PREFIX + 'two-arm':
+        handler.send({'running': ladder.two_arm_running(), 'runs': ladder.two_arm_runs()})
     elif match := re.fullmatch(PREFIX + 'rounds/(' + ROUND + ')', path):
         best = ladder.best_row()
         handler.send({'round': ladder.row(match[1], best), 'best_round_id': best and best['round_id'],
@@ -331,6 +397,11 @@ def post(handler, path, body, ladder, collaboration):
             handler.send({'started': True})
         else:
             handler.send({'error': '다른 라운드가 실행 중입니다. 끝난 뒤 시작하세요.'}, 409)
+    elif path == PREFIX + 'two-arm':
+        if ladder.start_two_arm(body):
+            handler.send({'started': True})
+        else:
+            handler.send({'error': '양팔 태스크가 이미 실행 중입니다. 끝난 뒤 시작하세요.'}, 409)
     else:
         handler.send({'error': '사다리 경로를 확인하세요.'}, 404)
     return True

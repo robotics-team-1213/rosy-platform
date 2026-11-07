@@ -47,6 +47,52 @@ def test_unconfigured_page_and_reads_say_so_and_writes_are_unavailable(tmp_path)
         assert request(base, '/api/learning/ladder/rounds')[0] == 401
 
 
+def two_arm_run(root, run_id, **fields):
+    folder = root / 'two_arm' / run_id
+    folder.mkdir(parents=True)
+    value = dict(schema=ladder_web.TWO_ARM_SCHEMA, run_id=run_id, task='stack', seed=0, status='passed', steps=9, steps_pass=9,
+                 final_ok=9, final_total=9, roll_below_floor_steps=['s1'], failed_steps=[], **fields)
+    (folder / 'run.json').write_text(json.dumps(value), encoding='utf-8')
+
+
+def test_two_arm_runs_are_read_through_a_whitelist_and_only_a_manager_starts_a_bounded_one(tmp_path, monkeypatch):
+    with running(tmp_path) as (base, root, ladder):
+        two_arm_run(root, OLD, private_path='/home/secret')
+        (root / 'two_arm' / NEW).mkdir()
+        (root / 'two_arm' / NEW / 'run.json').write_text('{broken', encoding='utf-8')
+        code, data = request(base, '/api/learning/ladder/two-arm', 'reader')
+        assert code == 200 and data['running'] is False and [row['run_id'] for row in data['runs']] == [NEW, OLD]
+        assert data['runs'][0] == {'run_id': NEW, 'unreadable': True}
+        assert data['runs'][1]['steps_pass'] == 9 and data['runs'][1]['roll_below_floor_steps'] == ['s1'] and 'private_path' not in data['runs'][1]
+        started = []
+        monkeypatch.setattr(ladder, 'spawn', lambda command, log: started.append(command) or type('P', (), dict(poll=lambda self: None))())
+        assert post(base, 'two-arm', {'task': 'stack', 'seed': 1}, session='reader')[0] == 403
+        for body in [{'task': 'stack'}, {'task': 'other', 'seed': 0}, {'task': ['stack'], 'seed': 0}, {'task': 'stack', 'seed': -1},
+                     {'task': 'stack', 'seed': 1001}, {'task': 'stack', 'seed': True}, {'task': 'stack', 'seed': 0, 'out': '/tmp'}]:
+            assert post(base, 'two-arm', body)[0] == 400, body
+        assert started == []
+        assert post(base, 'two-arm', {'task': 'rehandle', 'seed': 7})[0] == 200
+        assert started[0][-4:] == ['--task', 'rehandle', '--seed', '7'] and started[0][2] == 'two-arm'
+        assert post(base, 'two-arm', {'task': 'stack', 'seed': 0})[0] == 409, 'one at a time'
+        assert request(base, '/api/learning/ladder/two-arm', 'reader')[1]['running'] is True
+
+
+def test_a_recorded_same_seed_comparison_wins_over_intervals_from_different_seeds(tmp_path):
+    with running(tmp_path) as (base, root, _):
+        file = root / 'rounds' / MID / 'round.json'
+        record = json.loads(file.read_text(encoding='utf-8'))
+        record['comparison'] = dict(against=OLD, same_seeds=True, result='unclear', parent_eval=dict(n=50, strict=dict(placed=38)))
+        file.write_text(json.dumps(record), encoding='utf-8')
+        assert post(base, 'decision', {'round_id': OLD, 'verdict': 'replace', 'note': '기준'})[0] == 200
+        rows = {row['round_id']: row for row in request(base, '/api/learning/ladder/rounds', 'reader')[1]['rounds']}
+        assert rows[MID]['comparison'] == 'unclear' and rows[MID]['same_seeds'] is True, 'its intervals alone would say better'
+        assert rows[MID]['paired'] == dict(against=OLD, result='unclear', placed=38, n=50)
+        record['comparison']['same_seeds'] = False
+        file.write_text(json.dumps(record), encoding='utf-8')
+        rows = {row['round_id']: row for row in request(base, '/api/learning/ladder/rounds', 'reader')[1]['rounds']}
+        assert rows[MID]['paired'] is None and rows[MID]['comparison'] == 'better'
+
+
 def test_rounds_list_newest_first_and_a_corrupt_record_is_unreadable_not_fatal(tmp_path):
     with running(tmp_path) as (base, root, _):
         bad = '20261108T010000-dddddddd'

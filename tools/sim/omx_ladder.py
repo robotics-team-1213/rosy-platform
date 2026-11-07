@@ -6,6 +6,7 @@ ROS execution contract, Isaac contact and vision (D-947). A person replaces the 
 never does, and a replacement is a recorded comparison, not an approval or a promotion (D-793, D-857).
 
     python3 tools/sim/omx_ladder.py round --root R --cell cell.json --python P --lerobot-train T [--parent ID]
+    python3 tools/sim/omx_ladder.py two-arm --root R --python P --task stack|rehandle [--seed N]
 """
 from __future__ import annotations
 
@@ -23,6 +24,7 @@ import uuid
 
 ROOT = Path(__file__).resolve().parents[2]
 SCHEMA = "rosy.omx-ladder-round.v1"
+TWO_ARM_SCHEMA = "rosy.omx-two-arm-run.v1"
 ROUND_ID = re.compile(r"[0-9]{8}T[0-9]{6}-[0-9a-f]{8}")
 STATUSES = {"pending", "running", "passed", "failed", "blocked", "not_run"}
 # A fifth of the 36 mm stud pitch and a yaw that still seats between studs; 20 mm passed boxes lying across a stud row.
@@ -140,6 +142,18 @@ def new_round(root: Path, parent: str | None, cell: dict, source_sha: str, recip
                                        reason="단일 팔 Isaac 케이스가 아직 없습니다. v13 작업 뒤에 연결합니다.")))
 
 
+def parent_on_same_seeds(python: str, sim: str, cell: str, model: Path, episodes: int, base: int, run: Path, environment: dict) -> dict | None:
+    """The parent re-evaluated on this round's seeds; None when it cannot run (its checkpoint may be on another PC), which must not undo the round's own result."""
+    done = subprocess.run([python, sim, "--cell", cell, "evaluate", "--model", str(model), "--episodes", str(episodes),
+                           "--seed-base", str(base), "--out", str(run / "eval-parent.json"), "--artifacts", str(run / "artifacts-parent")],
+                          env=environment, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    return None if done.returncode else summarise(json.loads((run / "eval-parent.json").read_text(encoding="utf-8"))["rows"], base)
+
+
+def source_sha(args) -> str:
+    return args.source_sha or subprocess.run(["git", "-C", str(ROOT), "rev-parse", "HEAD"], capture_output=True, text=True, check=True).stdout.strip()
+
+
 def require_gpu(python: str) -> None:
     """lerobot-train silently falls back to CPU when the GPU is lost (40k steps became 13 h), so refuse first."""
     if subprocess.run([python, "-c", "import sys, torch; sys.exit(not torch.cuda.is_available())"]).returncode:
@@ -153,8 +167,7 @@ def run_round(args) -> int:
     parent = args.parent or best_round(root)
     seeds_from_parent = read_round(root, parent)["stages"]["mujoco"]["eval"]["failed_seeds"] if parent else []
     recipe = dict(RECIPE, steps=args.steps, optimizer_lr=args.lr)
-    sha = args.source_sha or subprocess.run(["git", "-C", str(ROOT), "rev-parse", "HEAD"], capture_output=True, text=True, check=True).stdout.strip()
-    row = new_round(root, parent, cell, sha, recipe, len(seeds_from_parent), args.episodes + len(seeds_from_parent))
+    row = new_round(root, parent, cell, source_sha(args), recipe, len(seeds_from_parent), args.episodes + len(seeds_from_parent))
     path = write_round(root, row)
     run, sim = path.parent, str(Path(__file__).with_name("omx_cell_sim.py"))
     environment = dict(os.environ, MUJOCO_GL="egl", PYTHONUNBUFFERED="1")
@@ -184,18 +197,39 @@ def run_round(args) -> int:
     stage = row["stages"]["mujoco"]
     stage.update(status="passed", eval=evaluation, finished_at=datetime.now().astimezone().isoformat(timespec="seconds"),
                  artifacts=[dict(name=name, path=f"artifacts/{name}", kind="image") for name in result["artifacts"]])
-    best = None
-    if parent:
-        # The same seeds for both: an old score came from easier or harder seeds and would not compare.
-        model = root / "rounds" / parent / "train/checkpoints/last/pretrained_model"
-        subprocess.run([args.python, sim, "--cell", args.cell, "evaluate", "--model", str(model), "--episodes", str(args.eval_episodes),
-                        "--seed-base", str(base), "--out", str(run / "eval-parent.json"), "--artifacts", str(run / "artifacts-parent")],
-                       env=environment, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        best = summarise(json.loads((run / "eval-parent.json").read_text(encoding="utf-8"))["rows"], base)
-    row["comparison"] = dict(against=parent, same_seeds=bool(parent), parent_eval=best, result=compare(evaluation, best))
+    # The same seeds for both: an old score came from easier or harder seeds and would not compare.
+    best = parent and parent_on_same_seeds(args.python, sim, args.cell, root / "rounds" / parent / "train/checkpoints/last/pretrained_model",
+                                           args.eval_episodes, base, run, environment)
+    row["comparison"] = dict(against=parent, same_seeds=bool(best), parent_eval=best, result="unclear" if parent and not best else compare(evaluation, best))
     write_round(root, row)
     print(json.dumps(dict(round_id=row["round_id"], eval=evaluation, comparison=row["comparison"]), ensure_ascii=False))
     return 0
+
+
+def run_two_arm(args) -> int:
+    """One scripted two-arm task as a record the screen can read: geometry of the plan (D-947), not a learned policy."""
+    run_id = new_round_id()
+    run = Path(args.root) / "two_arm" / run_id
+    run.mkdir(parents=True)
+    record = dict(schema=TWO_ARM_SCHEMA, run_id=run_id, task=args.task, seed=args.seed, source_sha=source_sha(args), status="running",
+                  created_at=datetime.now().astimezone().isoformat(timespec="seconds"))
+    file = run / "run.json"
+    file.write_text(json.dumps(record), encoding="utf-8")
+    teacher = str(Path(__file__).with_name("omx_two_arm_teacher.py"))
+    with (run / "run.log").open("w", encoding="utf-8") as log:
+        code = subprocess.run([args.python, teacher, "run", args.task, "--seed", str(args.seed), "--out", str(run)],
+                              env=dict(os.environ, MUJOCO_GL="egl", PYTHONUNBUFFERED="1"), stdout=log, stderr=subprocess.STDOUT).returncode
+    out = run / f"{args.task}-elliptic-seed{args.seed}.json"
+    if out.exists():
+        result = json.loads(out.read_text(encoding="utf-8"))
+        record.update({key: result[key] for key in ("steps", "steps_pass", "final_ok", "final_total", "roll_below_floor_steps", "note")})
+        record.update(status="passed" if result["completed"] else "failed",
+                      failed_steps=[dict(step=row["step"], arm=row["arm"], result=row["result"], reason=row.get("reason")) for row in result["rows"] if row["result"] != "pass"])
+    else:
+        record.update(status="failed", reason=f"종료 코드 {code}. run.log를 보세요.")
+    record["finished_at"] = datetime.now().astimezone().isoformat(timespec="seconds")
+    file.write_text(json.dumps(record, ensure_ascii=False), encoding="utf-8")
+    return 0 if record["status"] == "passed" else 1
 
 
 def main(argv=None) -> int:
@@ -212,8 +246,14 @@ def main(argv=None) -> int:
     one.add_argument("--eval-episodes", type=int, default=50)
     one.add_argument("--steps", type=int, default=RECIPE["steps"])
     one.add_argument("--lr", type=float, default=RECIPE["optimizer_lr"])
+    two = commands.add_parser("two-arm")
+    two.add_argument("--root", required=True)
+    two.add_argument("--python", default=sys.executable)
+    two.add_argument("--task", required=True, choices=["stack", "rehandle"])
+    two.add_argument("--seed", type=int, default=0)
+    two.add_argument("--source-sha", help="the commit this copy came from, when the folder has no Git")
     args = parser.parse_args(argv)
-    return run_round(args)
+    return run_round(args) if args.command == "round" else run_two_arm(args)
 
 
 if __name__ == "__main__":
