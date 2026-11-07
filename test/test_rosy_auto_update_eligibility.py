@@ -404,3 +404,30 @@ def test_release_hold_waits_for_no_run(device, host, hub, keys, capsys, monkeypa
     assert out["ok"] is False and "RUN_BUSY" in out["error"]
     assert (device / "var/lib/rosy/updates/hold.json").exists()
     assert state(device)["apply_errors"] == {NEXT: {"attempts": 3}}
+
+
+@pytest.mark.parametrize("quiet", [600.0, 86400.0])
+def test_manual_left_behind_with_no_recent_command_is_idle(device, host, hub, quiet):
+    # D-985: 11-07 b8xy and geg6 sat in MANUAL, stopped, with nobody driving, and never updated.
+    host.inputs_changes = {"robot_mode": "MANUAL", "manual_quiet_s": quiet}
+    host.write_inputs()
+    assert updater(host, hub).eligibility()["eligible"] is True
+
+
+@pytest.mark.parametrize("changes", [
+    {"robot_mode": "MANUAL", "manual_quiet_s": 599.9},  # an operator's pause
+    {"robot_mode": "MANUAL", "manual_quiet_s": None},
+    {"robot_mode": "MANUAL", "manual_quiet_s": True},
+    {"robot_mode": "MANUAL", "manual_quiet_s": float("nan")},
+    {"robot_mode": "MANUAL", "manual_quiet_s": "900"},
+    {"robot_mode": "MANUAL"},  # a CORE from before the input
+    {"robot_mode": "NAVIGATION", "manual_quiet_s": 900.0},
+    {"robot_mode": "DOCKING", "manual_quiet_s": 900.0},
+    {"robot_mode": "MANUAL", "manual_quiet_s": 900.0, "velocity_linear": 0.3},
+    {"robot_mode": "MANUAL", "manual_quiet_s": 900.0, "estop": True},
+    {"robot_mode": "MANUAL", "manual_quiet_s": 900.0, "nav_state": "NAVIGATING"},
+], ids=lambda c: ",".join(f"{k}={v}" for k, v in c.items()))
+def test_manual_stays_busy_unless_it_is_proven_left_behind(device, host, hub, changes):
+    host.inputs_changes = changes
+    host.write_inputs()
+    assert updater(host, hub).eligibility()["eligible"] is False

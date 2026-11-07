@@ -420,7 +420,7 @@ def test_every_learning_rail_destination_renders_content(empty_learning_center):
                     reached.add(opened(f'.ui-subnav-nav a[href="{sub}"], .ui-app-main > .review-kinds a[href="{sub}"]', sub))
             assert reached == {'/catalog', '/learning/camera', '/', '/pixels', '/learning/omx', '/learning/vlm',
                                '/learning/tasks', '/learning/tasks/manage', '/learning/imitate',
-                               '/learning#pipeline', '/learning/sim', '/learning/workspaces',
+                               '/learning#pipeline', '/learning/sim', '/learning/ladder', '/learning/workspaces',
                                '/learning#learning-start', '/learning#review-section',
                                '/learning#learning-results', '/learning#storage-section'}
             assert not errors

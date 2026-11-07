@@ -347,7 +347,7 @@ class UpdaterApply:
             self._save_state(state)
             self._finish(state, "applying", f"activating {release_id} (from {current})", release_id)
             # Re-review N1: native_release runs our precheck after its verify and right
-            # before it stops the runtime, so hold/seal/idleness are judged at that moment.
+            # before it stops the runtime, so hold and idleness are judged at that moment.
             precheck = f"python3 -B {shlex.quote(self._native('rosy_auto_update.py'))} --root " \
                        f"{shlex.quote(str(self.root))} precheck"
             activated = self.host.run(["env", f"ROSY_ACTIVATE_PRECHECK={precheck}", "bash",

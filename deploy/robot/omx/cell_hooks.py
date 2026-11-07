@@ -24,6 +24,60 @@ import cell_wrist
 import cell_wrist_ref
 
 
+def stills(cell, config: dict):
+    """At any guard stop, before the arm backs out and hides it: one frame per camera (top, side, the arm's wrist), kept as
+    <arm>-<camera>.jpg; the incident report carries them (D-971). 11-06/07: the descent contacts kept none, only a lift stall
+    did, and the frames taken after the fold could not tell contact from speed. With config `tip_view` and the stopped joints,
+    also <arm>-<camera>-tip.jpg: the crop around the jaw tip (cell_tip_view). Reads only."""
+    def keep(state=None):
+        import cv2
+
+        import omx_incident
+
+        folder, arm, frames = Path(omx_incident.STILLS), config.get("arm_id", "arm_s"), {}
+        folder.mkdir(parents=True, exist_ok=True)
+        for camera in config["cameras"]:
+            try:
+                frames[camera] = cell.frame(camera)
+                cv2.imwrite(str(folder / f"{arm}-{camera}.jpg"), frames[camera])
+            except Exception:  # a missing frame must not stop the recovery
+                pass
+        if config.get("tip_view") and state:
+            try:
+                import cell_tip_view
+
+                for camera, image in cell_tip_view.tip_crops(frames, cell_tip_view.fk_tip(state), config["tip_view"]).items():
+                    cv2.imwrite(str(folder / f"{arm}-{camera}-tip.jpg"), image)
+            except Exception:  # nor a crop
+                pass
+    return keep
+
+
+def lift_stall(cell, config: dict, sleep):
+    """What a stop on the first lift does: let go and rise (cell_unwedge). Jogs leave the D-911 gate, so supervised only."""
+    if config.get("_commissioning") != {"person_at_switch": True}:
+        return None
+    import cell_unwedge
+
+    def stall(gate):
+        stills(cell, config)((cell.act("state") or {}).get("state"))
+        a = gate.assessment
+        # an unchecked jog starts a new session, and the gate's fold after it would be refused with the arm out: same session, same
+        # library, past the gate's fault hold only because a person is at the switch
+        return cell_unwedge.release_and_rise(Checked(cell, a["session_id"], a["library_sha256"]), sleep=sleep)
+    return stall
+
+
+class Checked:
+    """A cell whose commands other than state name the session and library they belong to (chunk_runner's `checked`)."""
+
+    def __init__(self, cell, session_id: str, library_sha256: str):
+        self.cell, self.prefix = cell, f"checked {session_id} {library_sha256} "
+
+    def act(self, command: str) -> dict:
+        return self.cell.act(command if command == "state" else self.prefix + command)
+
+
 def pick_hooks(config: dict, cell, target: dict, write_library, source: str, dest_site: str, emit=None, calibration=None,
                guard=None):
     """(hover hook chain, after-place reference capture, after-descent pinch check, empty-grasp feel search) for one

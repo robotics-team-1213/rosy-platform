@@ -328,8 +328,9 @@ def test_the_status_inputs_carry_only_the_threshold_the_states_and_the_mode(tmp_
     written = json.loads((tmp_path / "run/rosy/status-inputs.json").read_text(encoding="utf-8"))
 
     assert set(written) == SCHEMA_1_KEYS | SCHEMA_2_KEYS | {
-        "calibration_active", "robot_id", "core_process_id", "line_follow_steering_law"}
+        "calibration_active", "robot_id", "core_process_id", "line_follow_steering_law", "manual_quiet_s"}
     assert written["calibration_active"] is None  # missing service is unknown, not idle
+    assert written["manual_quiet_s"] is None  # missing service is unknown, so MANUAL keeps holding the updater
     assert written["schema"] == 2
     assert written["battery_warning_percent"] == 25.0
     assert written["devices"] == [{"id": "camera", "state": "no_response", "product": True}]
@@ -698,3 +699,13 @@ def test_without_a_hand_over_the_record_carries_no_mode(tmp_path):
     facts = status.gather(tmp_path, lambda command: "active\n" if command[:2] == ["systemctl", "show"] else "")
 
     assert facts["robot_mode"] is None and facts["nav_state"] is None
+
+
+def test_status_inputs_report_how_long_since_an_operator(tmp_path):
+    svc = SimpleNamespace(host_files=HostFileExchange(), config=_m1_config(tmp_path),
+                          state=FakeState(80.0, 8.0, mode="MANUAL", nav="IDLE"),
+                          command=SimpleNamespace(manual_quiet_s=625.54),
+                          safety=SimpleNamespace(battery_policy=SimpleNamespace(warning_percent=20.0)))
+    svc.host_files.write_status_inputs(svc)
+    written = json.loads((tmp_path / "run/rosy/status-inputs.json").read_text(encoding="utf-8"))
+    assert written["manual_quiet_s"] == 625.5
