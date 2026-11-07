@@ -1,0 +1,12 @@
+[Unit]
+Description=Watch for CORE's low-battery shutdown request (D-27)
+# CORE (HOME=/var/lib/rosy/core) writes the request beside its other state.
+# PathChanged, not PathExists: a stale file left behind must not retrigger
+# the helper until systemd's trigger limit disables this watch.
+
+[Path]
+PathChanged=/var/lib/rosy/core/.rosy/battery-shutdown-request.json
+Unit=rosy-lowbatt-shutdown.service
+
+[Install]
+WantedBy=multi-user.target
