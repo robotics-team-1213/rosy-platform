@@ -250,6 +250,17 @@ export function createCellObservation({request, root, credential = () => ''}) {
     image.src = incidentFrames.get(key);
   }
 
+  // what stopped the arm, as cell_why names it, and how the person knows: a cause seen in pictures alone is weaker than a
+  // repeat (11-07: people, models and frame strips all misread contact; measurement and repeats decided)
+  const CAUSES = [['unknown', '원인: 판단 불가'], ['blocked', '막힘 (닿음)'], ['wrong_position', '위치가 어긋나 닿음'], ['snagged', '걸림'],
+    ['too_fast', '속도 초과'], ['no_room', '공간 부족으로 거부'], ['software_or_config', '코드·설정'], ['camera_or_map', '카메라·지도'], ['other', '기타']];
+  const BASES = [['unknown', '근거: 없음'], ['repeat', '같은 동작을 다시 해 봄'], ['measured', '측정값'], ['seen', '사진·눈으로']];
+  function choice(label, options) {
+    const select = element('select'); select.className = 'ui-field'; select.setAttribute('aria-label', label);
+    for (const [value, text] of options) { const option = element('option', text); option.value = value; select.append(option); }
+    return select;
+  }
+
   async function clearIncident(source, incident, note, button, message) {
     const text = note.value.trim();
     if (!text) { message.textContent = '확인한 내용을 적어야 해제할 수 있습니다.'; return; }
@@ -288,18 +299,24 @@ export function createCellObservation({request, root, credential = () => ''}) {
         item.append(figure);
       }
       if (incident.explanation) {
-        item.append(element('ui-text', `AI 설명 (설명일 뿐, 판단이나 동작이 아닙니다 · ${incident.explanation.model})`),
-          element('p', `본 것: ${incident.explanation.seen}`), element('p', `추정 원인: ${incident.explanation.suspected_cause}`));
+        const said = [element('ui-text', `AI 설명 (설명일 뿐, 판단이나 동작이 아닙니다 · ${incident.explanation.model})`),
+          element('p', `본 것: ${incident.explanation.seen}`), element('p', `추정 원인: ${incident.explanation.suspected_cause}`)];
+        // a person's cause is only worth scoring if it was picked before the model's was seen
+        if (incident.cleared) item.append(...said);
+        else { const box = element('details'); box.append(element('summary', 'AI 설명 보기 (원인을 고른 뒤에 여세요)'), ...said); item.append(box); }
       }
       if (incident.cleared) {
         item.append(element('p', `해제: ${incident.cleared.by} · ${when(incident.cleared.at)} · ${incident.cleared.note}`));
       } else {
-        const note = element('input'); note.className = 'ui-field'; note.maxLength = 400;
-        note.setAttribute('aria-label', '확인한 내용'); note.placeholder = '팔과 집게를 확인한 내용 (필수)';
+        // cause and basis ride at the head of the note ("cause: X; basis: Y; ...") until the clear step carries them as fields
+        const cause = choice('원인', CAUSES), basis = choice('근거', BASES);
+        const note = element('input'); note.className = 'ui-field'; note.maxLength = 340;
+        note.setAttribute('aria-label', '확인한 내용'); note.placeholder = '팔과 집게를 확인한 내용 (필수) · 같은 동작을 다시 해 봤다면 그 결과';
         const button = element('ui-button', '확인했습니다 · 해제'); button.setAttribute('type', 'button');
         const message = element('ui-text');
-        button.addEventListener('click', () => clearIncident(source, incident, note, button, message));
-        item.append(note, button, message);
+        button.addEventListener('click', () => clearIncident(source, incident,
+          {value: note.value.trim() && `cause: ${cause.value}; basis: ${basis.value}; ${note.value.trim()}`}, button, message));
+        item.append(cause, basis, note, button, message);
       }
       return item;
     }));

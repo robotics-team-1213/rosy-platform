@@ -246,6 +246,8 @@ def test_cell_shows_an_arm_incident_with_frames_and_an_explanation_and_clears_it
         assert not state.failed_assets, state.failed_assets
         card = page.locator('[data-arm-source="feedback_b"]')
         expect(card.locator("summary").filter(has_text="보류 중 1건")).to_be_visible()
+        expect(card.get_by_text("설명일 뿐")).to_be_hidden()  # the person picks a cause before reading the model's
+        card.locator("summary").filter(has_text="AI 설명 보기").click()
         expect(card.get_by_text("설명일 뿐")).to_be_visible()
         if unfamiliar_facts:
             expect(card.get_by_text(json.dumps(state.incidents[0]["facts"], separators=(",", ":")))).to_be_visible()
@@ -285,9 +287,12 @@ def test_cell_shows_an_arm_incident_with_frames_and_an_explanation_and_clears_it
         expect(card.get_by_text("확인한 내용을 적어야 해제할 수 있습니다.")).to_be_visible()
         assert state.cleared == []
         card.get_by_label("확인한 내용").fill("box removed from the jaws")
+        card.get_by_label("원인", exact=True).select_option("blocked")
+        card.get_by_label("근거", exact=True).select_option("repeat")
         card.get_by_text("확인했습니다 · 해제").click()
         expect(card.get_by_text("해제: op-7", exact=False)).to_be_visible()
-        assert state.cleared == [{"note": "box removed from the jaws"}]
+        # the cause and how the person knows it ride at the head of the note until the clear step carries them as fields
+        assert state.cleared == [{"note": "cause: blocked; basis: repeat; box removed from the jaws"}]
         expect(card.locator("summary").filter(has_text="모두 해제됨")).to_be_visible()
         assert not errors, errors
         page.unroute_all(behavior="ignoreErrors")
