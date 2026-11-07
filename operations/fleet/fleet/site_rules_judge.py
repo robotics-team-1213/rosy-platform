@@ -94,7 +94,8 @@ def judge_return(rules: SiteRules, state: Return) -> dict:
     bays = [Bay(name, 10.0 * index, 0.0) for index, name in enumerate(sorted(set(state.bays)))]
     at = {bay.id: (bay.x, bay.y) for bay in bays}
     standing = {robot: bay for bay, robot in state.occupied.items() if bay in at}
-    views = [RobotView(r.robot_id, r.online, r.percent, None, at.get(standing.get(r.robot_id)),
+    # a robot not standing in a bay is seen elsewhere (far from every bay); offline stays unlocated as live
+    views = [RobotView(r.robot_id, r.online, r.percent, None, at.get(standing.get(r.robot_id), (-10.0, 0.0)),
                        r.on_trip) for r in state.robots]
     plan = ChargeBays(thresholds=lambda: levels)
     plan.observe(0.0, views, bays)

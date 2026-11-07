@@ -21,7 +21,7 @@ export const RULE_KINDS = Object.freeze({
 const VERDICT = Object.freeze({ go: ["감", "active"], wait: ["대기", "warn"], refuse: ["거절됨", "crit"] });
 const REASON = Object.freeze({
   first_in_order: "내 차례", queued_behind: "앞선 로봇이 먼저", pose_unknown: "위치를 모름", unknown_robot: "알 수 없는 로봇",
-  low_battery: "배터리가 기준 이하", battery_unknown: "배터리를 모름", no_free_bay: "빈 충전 칸 없음", after_trip: "운행이 끝난 뒤",
+  low_battery: "배터리가 기준 이하", battery_unknown: "배터리를 모름", no_free_bay: "빈 충전 칸 없음", bay_unknown: "충전 칸 상태를 모름", after_trip: "운행이 끝난 뒤",
   not_needed: "충전 기준보다 높음", offline: "오프라인", connecting: "충전 연결 확인 중",
   invalid_formation: "만들 수 없는 대형", gap_below_site_min: "현장 최소 간격보다 좁음",
   speed_above_site_max: "현장 최고 속도보다 빠름", within_rules: "규칙 안",

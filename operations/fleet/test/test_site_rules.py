@@ -126,7 +126,7 @@ def test_a_document_changes_what_the_live_code_reads():
     activate(store, {"departure": {"merge_max_wait_s": 30, "blocks_per_robot": 4}, "return": {"go_percent": 25}})
     assert TrafficService(store)._departure() == (30.0, 4)
     assert thresholds_of(store) == (25.0, 80.0)
-    fleet = [RobotView("a", True, 20.0, None, None, False)]
+    fleet = [RobotView("a", True, 20.0, None, (5.0, 5.0), False)]  # located: no bay reads unknown
     bay = [Bay("C1", 0.0, 0.0)]
     plan = ChargeBays(thresholds=lambda: thresholds_of(store))
     assert plan.plan(fleet, bay)["thresholds"]["go_percent"] == 25.0
@@ -173,6 +173,7 @@ def test_return_judgement_is_the_charge_bay_plan():
     assert ask_return(rules, "a", 18, on_trip=True)["reason"] == "after_trip"
     assert ask_return(rules, "a", None)["reason"] == "battery_unknown"
     assert ask_return(rules, "a", 90)["verdict"] == "refuse"
+    assert ask_return(rules, "a", 18, occupied={"C2": "p"}, bays=("C1", "C2"))["detail"]["bay"] == "C1"
     assert ask_return(rules, "a", 18, bays=())["reason"] == "no_free_bay"
 
 
