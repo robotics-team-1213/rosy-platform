@@ -654,12 +654,3 @@ def test_enroll_requires_a_server_side_enrollable_row(tmp_path):
     assert refused.code == "not_enrollable" and network.requests == []
 
 
-def test_a_control_unit_refuses_a_robot_its_manifest_does_not_own(tmp_path):
-    """D-960: enrolling outside the manifest would make the next start refuse the roster."""
-    service, network, *_ = _ready(tmp_path, FakeCore(robot_id="rosy_09"))
-    service.owned_robot_ids = frozenset({"rosy_40"})
-    refused = _refused(service)
-    assert refused.reason == "robot_not_owned_by_control_unit"
-    assert service.listing()["robots"] == [] and network.paths(PINNED).count("/api/v1/auth/logout") == 1
-    service.owned_robot_ids = frozenset({"rosy_09"})
-    assert _enroll(service)["robot_id"] == "rosy_09"

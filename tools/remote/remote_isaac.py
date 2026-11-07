@@ -367,12 +367,36 @@ class SSH:
         self._invoke(HOLD, {'run_id': run_id, 'active': active})
 
     def seconds_to_reboot(self):
-        """Seconds until the host's rosy-nightly-reboot.timer fires, or None when it has none."""
-        result = self.runner.remote(self.host, 'r=$(systemctl show -P NextElapseUSecRealtime rosy-nightly-reboot.timer 2>/dev/null)'
-                                    ' && [ -n "$r" ] && echo $(( $(date -d "$r" +%s) - $(date +%s) ))', capture_output=True, timeout=50)
-        lines = result.stdout.decode(errors='replace').split() if result.returncode == 0 else []
-        text = lines[-1] if lines else ''
-        return int(text) if text.lstrip('-').isdigit() else None
+        """Seconds to nightly reboot; None only for verified timer absence."""
+        script = r'''service_load=$(systemctl show -P LoadState rosy-nightly-reboot.service 2>/dev/null) || exit 1
+case "$service_load" in loaded|not-found) ;; *) exit 1;; esac
+service_state=$(systemctl show -P ActiveState rosy-nightly-reboot.service 2>/dev/null) || exit 1
+case "$service_state" in
+ active|activating) echo 0; exit 0;;
+ inactive|failed) ;;
+ *) exit 1;;
+esac
+timer_load=$(systemctl show -P LoadState rosy-nightly-reboot.timer 2>/dev/null) || exit 1
+case "$timer_load" in
+ not-found) echo ROSY_REBOOT_NONE; exit 0;;
+ loaded) ;;
+ *) exit 1;;
+esac
+deadline=$(systemctl show -P NextElapseUSecRealtime rosy-nightly-reboot.timer 2>/dev/null) || exit 1
+[ -n "$deadline" ] || exit 1
+deadline=$(date -d "$deadline" +%s) || exit 1
+now=$(date +%s) || exit 1
+echo $((deadline - now))'''
+        result = self.runner.remote(self.host, script, capture_output=True, timeout=50)
+        if result.returncode:
+            raise ConnectionError('nightly reboot state cannot be verified')
+        words = result.stdout.decode(errors='replace').split()
+        if words and words[-1] == 'ROSY_REBOOT_NONE':
+            return None
+        try:
+            return int(words[-1])
+        except (IndexError, ValueError):
+            raise ConnectionError('nightly reboot state cannot be verified') from None
 
     def call(self, sha, payload):
         return self._invoke(BOOTSTRAP, {'sha': _sha(sha), 'payload': payload})

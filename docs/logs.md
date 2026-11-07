@@ -14125,6 +14125,42 @@ osy-d395-s1d\`.
 - gate 변화: 없음. 학습 결과·폐루프 평가·실물 수용 없음. 그리퍼 0~100 대응은 가정(패드 간격/40 mm).
 - CE: 해당 없음 — 새 기능이다.
 
+## 2026-11-03 · f81b8315d0 · docs: unwedge의 측정 기반 성공 조건과 검증 범위
+
+- 변경: 기존 unwedge 교훈의 clearance를 명령 횟수 대신 시작 측정값 대비 순변위로 정정하고, held-target 기준 HOME 한계·park 정착·측정 HOME 확인을 기록했다. 기존 21단계 현장 기록과 후속 호스트 회귀를 구분했다.
+- 증거: 1bd891afdf의 공식 원격 RED는 예상 실패 4건/통과 3건이었다. 독립 안전 검토된 f81b8315d0의 unwedge·pipeline 원격 회귀는 55 PASS/0 SKIP, NEW/known/flaky=0이었다. 교훈은 실제 코드의 SETTLE_TOL·readback 조건과 대조했다.
+- gate 변화: 기존 guard·torque·session 규칙을 유지한다. 수정 revision의 실물 수용에는 감독 시험이 필요하다. CE: 기존 교훈 갱신.
+
+## 2026-11-03 · uncommitted · docs: 측면 카메라 정량 검증 상태 정정
+
+- 변경: 동결된 cell survey 기록에 정정 절을 추가했다. 기존 측면 PnP 잔차로 렌더 오차를 제한할 수 있다는 서술과 양쪽 통과·완료 판정을 철회했다.
+- 증거: 기존 상단 측정 보고 1.13 px는 제안된 평균 3 px 기준을 만족한다. 측면 렌더 대 실물 정량 측정은 UNKNOWN이며 육안 비교와 구분한다. 추가 영상 측정·실물 동작은 수행하지 않았다.
+- gate 변화: 측면 정량 검증 대기. 중단된 run의 적재 수용은 주장하지 않는다. CE: 해당 없음 — 기존 증거의 주장 범위 정정.
+
+
+## 2026-11-03 · uncommitted · test(remote): verify profiles across each planned host worker
+
+- Change: explicitly pin independent host headroom in the dispatch fixture. Unmeasured hosts use one worker each; 4-core/4-GB hosts use two. Exact host/profile assertions cover every planned worker, with no production change.
+- Evidence: test-only `69b5622629` reproduced the whole-root failure deterministically (one expected failure and one pass). `270285542c` passed all 152 tests across remote_test_tools, remote_pytest and reboot admission, with zero skips/NEW/known/flaky. The prior source9752 whole-root run had one profile-fixture failure; its isolated retry passed, demonstrating uncontrolled shared state rather than missing profile propagation.
+- Gate: no quarantine or weakened evidence. The previous FULL was stopped and its 1855 browser passes plus clean 12-test G1 receipt remain audit evidence only; a new tree requires a fresh canonical FULL before publication. No new public CI or field acceptance claim.
+- CE: no additional lesson; the two resource cases and exact assertions explain the correction. Existing workflow/recovery lessons updated earlier remain applicable.
+
+
+## 2026-11-03 · bd44ee1305 · fix(isaac): keep unverified reboot state outside run admission
+
+- Change: keep one SSH request and its50-second limit, verify service state before timer absence, map active/activating to zero remaining seconds, and accept None only for an explicit successful timer not-found result. Failed/empty/malformed responses become ConnectionError and the existing bounded readiness loop ends in NotReady before a request/start.
+- Evidence: commit 830bc0db27 reproduced12 failures/6 passes using actual Bash branch stubs and the real reader-to-Pipeline path. Independently reviewed commit bd44ee1305 passed76 remote-Isaac/batch tests, zero skips/NEW/known/flaky. This verifies tooling; it is not a model evaluation or an actual simulator/device run.
+- gate 변화: the90-minute budget, GPU/launcher interfaces and physical motion authority are unchanged. Final combined canonical FULL/public CI remain pending.
+- CE: no additional lesson; explicit negative-path regressions cover this distinction.
+
+
+## 2026-11-03 · 7047306026 · docs(solutions): record recorder fixture import isolation evidence
+
+- Change: extend the existing shared-pytest-process import lesson with the reproduced recorder fixture failure: a loader temporary path disappears before fixture execution, while a neighboring test module can hide the missing import.
+- Evidence: same-commit official remote file-alone 71 passed/2 skipped; actual isolation gate 1 passed/1 empty-input skipped, complete:1. The original FULL child failure and verified own-run stop/log/cleanup receipts remain preserved externally.
+- gate 변화: none. No new testing policy or product behavior; the existing file-alone requirement applies to the execution fixture as well.
+- CE: existing lesson updated; no duplicate solution added.
+
 ## 2026-11-04 · uncommitted · docs(control-terms): D-974 착지 준비 — 안전 검토·크기·ADR Log 병합 정리
 - 변경: `console.py` 변경을 줄 수 증가 없이 다시 써(D-766) 독립 안전 검토 trailer와 함께 한 커밋으로 다시 만들었다(D-430 §5). main 병합에서 union으로 겹친 D-968·D-970 ADR Log 행을 하나씩 남겼다(D-970은 main의 최신 상태, D-968은 D-974 대체 표시). D-974 후속 작업 표와 Log 상태를 실제 상태로 갱신했다.
 - 증거: 원격 pytest(관제 단위·서버 앱·브라우저·API 버전) 통과, node 시험 19개 통과, 독립 안전 검토 PASS 2회, lint 0 error. Confluence 2-1 v15 반영. Harbor PR #17 필수 검사 통과, 병합은 팀 승인 대기.
@@ -14429,3 +14465,45 @@ osy-d395-s1d\`.
 - 증거: 공식 원격 시험으로 학습 원본·작업자·연구·서버·구조·브라우저 시험 통과. 첫 수정에서 어댑터를 `check_info`에 넣자 저장 결과 재검증이 실패해 `inspect`로 옮겼다. 실제 OMX 데이터 묶음(AI PC·셀 PC, 한 팔 28개·두 팔 1개)이 어댑터 규격에 맞음을 확인했다. AI PC·모델 PC의 공개 학습 검증 자료와 AI PC의 SO-100 캐시는 삭제했다.
 - gate 변화: 없음 — 배포된 화면은 게시와 갱신 전까지 그대로다. 저장된 공개 학습 실행 기록이 운영 DB에 있는지는 확인하지 못했다.
 - CE: 해당 없음 — 사용자 지시에 따른 기능 제거와 구조 변경이다.
+
+## 2026-11-07 · uncommitted · feat(sim): 공통 층 조 v2.1 옵션
+
+- 변경: D-877 공통 층이 조 v2.1 모델(D-947)로도 돌게 옵션을 더했다. `omx_topic_backend.py --gripper palletizing-v2.1`은 벤더 xacro 대신 저장소의 `omx_f_palletizing.urdf`를 쓰고, 그 URDF에 없는 ros2_control 블록은 벤더 xacro 출력에서 가져와 넣는다(관절 이름이 같으므로 하드웨어 교체·gpio 제거·is_async도 그대로 적용). `omx_mujoco_backend.py --gripper palletizing-v2.1`은 메시 경로를 두 패키지(`open_manipulator_description`, `omx_f_palletizing_description`)에서 모두 풀고(`learning/envs/isaac/assets`, `meshes/omx_f` 아래 하위 경로 유지), 손가락 충돌은 `palletizing_gripper.pad_box` 패드 박스로 바꾼다(`ship_release_scene.add_jaw`와 같은 collider). `run_omx_backend_conformance.sh`는 `OMX_GRIPPER=palletizing-v2.1`로 같은 옵션을 넘기며 Isaac 어댑터는 아직 이 옵션을 받지 않아 거부한다. 기본 `omx-f` 동작은 바꾸지 않았다.
+- 증거: 원격 pytest `test/test_omx_sim_backends.py` 7 통과·skip 0(모델 PC, run-1.txt, known_failures 0 new). 새 시험은 v2.1 URDF에 ros2_control이 들어가는지, 메시 16개가 모두 저장소 assets에서 풀리는지(두 패키지), 패드 박스가 Isaac 것과 같은 함수인지, 벤더 모드 출력(맨 이름 + `strippath="true"`)이 그대로인지를 본다. 실제 적합성 실행(`run_omx_backend_conformance.sh`)은 하지 않았다.
+- gate 변화: 없음 — ROS 포함 실행은 시험 PC·시뮬 호스트에서 확인할 몫이고 이 변경은 옵션 추가다.
+- CE: 해당 없음 — 새 옵션이며 해결한 장애가 없다.
+
+## 2026-11-07 · fc074c6198 · feat(omx): OMX 학습 사다리 핵심
+
+- 변경: `tools/sim/omx_cell_sim.py`(arm_b 실제 셀 MuJoCo 장면, 교사, 수집, 평가, 영상)와 `tools/sim/omx_ladder.py`(라운드 실행과 기록)를 추가했다. 판정은 위치 8 mm, 방향 8°, 높이 5 mm, 기울기 5°다. 평가 위치는 학습보다 넓고 라운드마다 새 시드를 쓰며, 부모 모델을 같은 시드로 다시 평가해 비교한다. 실패한 시드는 다음 라운드 시연이 된다. 교체는 사람이 Rosy Learning에서 기록한다.
+- 증거: `test/test_omx_ladder.py` 원격 통과. AI PC·모델 PC에서 교사 엄격 판정 3/3, 1/1. 관절 단위 오류(도 환산)를 `norm_to_rad`로 고쳤다.
+- gate 변화: 없음 — 시뮬 기하 근거다(D-947). 실물 실행 경로는 없고(D-793), 단위는 라디안이라 실제 데이터와 섞기 전에 변환이 필요하다.
+- CE: 해당 없음 — 새 기능이다.
+
+## 2026-11-07 · uncommitted · feat(omx): 두 팔 셀 MuJoCo 세계, 작업 정의, 검증기와 교사
+
+- 변경: `tools/sim/omx_two_arm_{world,sites,kin,tasks,teacher}.py`와 `deploy/robot/omx/sim/two_arm_tasks.json`을 추가했다. 두 팔(v2.1 조), 스터드 판, SCAD v7 임시 칸 판 둘, 벨트 끝, 실측 top·side 카메라를 한 좌표계에 둔다. 작업 `stack`(9개, fixture 순서·팔 배정)과 `rehandle`(두 열에서 맨 아래 컨테이너를 빼려고 위 것을 임시 칸으로 옮기고 새 순서로 복원, 12단계)은 데이터다. 검증기(MuJoCo 없음)는 순서·받침·임시 칸 용량·관절 한계 안 도달(관절 5 분기 연속 IK)·팔 간격을 확인하고 어기면 이유와 함께 거부한다. CAD·실측 선택은 `CHOICES`의 이름 있는 값이다(TCP는 팔마다, 기본 0.0740).
+- 증거: `test/test_omx_two_arm_tasks.py` 원격 14 passed, skip 0. AI PC MuJoCo 교사(팔 하나씩): `stack` 이어 달리기 5/9(s6에서 실패: 앞 단계의 3.2° 틀어짐·1 mm 어긋남 뒤 패드가 이웃 6 mm 틈에 걸림), 단계마다 공칭 상태에서 시작하면 9/9. `rehandle` 이어 달리기 2/12, 단계 단독 8/12(실패 a3·a4·b3·b4: 가운데 열이 3층일 때 바깥 열 맨 아래 칸에서 손목 link4가 이웃 열에 닿음). 도달 불가 단계 없음. TCP 0.0885 민감도는 검증기 판정 불변(조 끝 14.5 mm 더 길게; 시뮬 접촉은 재실행하지 않음). 손목 롤이 -18(정규화) 아래로 가는 단계가 표시된다(stack 6개, rehandle arm_a 6개).
+- gate 변화: 없음 — 시뮬 기하 근거다(D-947). 접촉·마찰 수치는 결과가 아니다.
+- CE: 해당 없음 — 새 기능이며 미해결 항목은 위 증거에 구분해 적었다.
+
+## 2026-11-07 · uncommitted · fix(omx): 두 팔 세계의 접촉 모델, 손목 간격 검증, rehandle 계획 교체
+
+- 변경: 판(메시)과 상자 사이가 접촉점 하나만 만들어 쌓은 상자가 요(yaw) 방향으로 기어 다니던 것을 `mjENBL_MULTICCD`로 고쳤다(정적 시험: 30초에 16°가 0°). 마찰·접촉 변수는 바꾸지 않았다. 검증기에 손목(link3·link4 메시) 간격 검사(`LINK_MARGIN` 4 mm)를 더했다. MuJoCo 전수표(`omx_two_arm_matrix.py`)로 가까운 팔이 맨 아래 칸을 뺄 때 손목이 가운데 열에 부딪힘(-3~-6 mm)을 확인하고, `rehandle`을 바깥 열마다 반대편 팔이 맡도록 바꿨다. 시드(벨트 집는 자세, 시작 배치)와 단계 단독 실행 옵션을 더했다.
+- 증거: `test/test_omx_two_arm_tasks.py` 원격 통과. AI PC MuJoCo 이어 달리기·단계 단독, 시드 0·1·2: `stack` 9/9, `rehandle` 12/12(최종 자세 6/6), 모두 같은 판정 한계. 이전: `stack` 이어 달리기 5/9, `rehandle` 2/12(단계 단독 8/12). 뒤집은 조 방향은 모든 쌍에서 관절 한계를 넘어 도달 불가. 손목 롤이 -18(정규화) 아래인 단계: stack arm_b 6개, rehandle arm_a 6개(바닥은 arm_b만 측정, arm_a는 가정).
+- gate 변화: 없음 — 시뮬 기하 근거다(D-947). 접촉 수치는 결과가 아니다.
+- CE: 해당 없음 — 원인(단일 접촉)과 해결을 위 증거에 적었고 별도 교훈 문서는 만들지 않았다.
+
+## 2026-11-07 · uncommitted · fix(omx): 사다리가 GPU 없이 시작하지 않게 하고 MuJoCo 접촉 교훈을 기록
+
+- 변경: 모델 PC GPU가 버스에서 떨어지자 `lerobot-train`이 `--policy.device=cuda`를 받고도 CPU로 넘어가 4만 단계가 13시간짜리가 됐다. `omx_ladder.run_round`가 시작 전에 GPU를 확인하고 거절한다. 볼록 메시 위 상자가 접점 하나로 도는 현상은 `docs/solutions/logic-errors/mujoco-box-on-convex-mesh-creeps-one-contact-2026-11-07.md`에 남겼다.
+- 증거: `test/test_omx_ladder.py` 원격 실행(가짜 python이 실패를 돌려주면 회차 기록을 쓰기 전에 거절).
+- gate 변화: 없음.
+- CE: 새 교훈 기록 — 위 문서. 앞 항목의 「별도 교훈 없음」을 이 항목이 대신한다.
+
+## 2026-11-07 · uncommitted · 공통 서비스 카탈로그와 D-987
+
+- 변경: 공통 서비스 정의와 카탈로그(D-987), 구조 시험을 더하고 Account 소유자·분류의 낡은 안내를 고쳤다. 소스 경로·배포는 바꾸지 않았다.
+- 증거: 카탈로그의 경로·Compose 서비스·결정을 `test/architecture/test_common_services.py`가 확인한다. 원격 결과는 착지 기록을 따른다.
+- gate 변화: 없음 — 카탈로그 등재는 배포·현장 수용의 증거가 아니다.
+- CE: 해당 없음 — 구조 정의이며 해결한 장애가 없다.

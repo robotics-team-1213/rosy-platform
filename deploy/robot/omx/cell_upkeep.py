@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """One upkeep pass over every arm of the OMX cell: what went wrong by hand on 2026-11-03/04, as checks.
 
-  cell_upkeep.py upkeep-arms.json [--fix] [--out upkeep] [--incidents incidents] [--since EPOCH]
+  cell_upkeep.py upkeep-arms.json [--fix] [--out upkeep] [--incidents DIR] [--since EPOCH]
 
 The manifest maps an arm name to {"cell": <cell config>, "record": <record config>, "chunks": <chunk library>}
-(paths relative to the manifest). Per arm, in this order: held (incidents/HOLD-<arm>.json), boards (record config
+(paths relative to the manifest). Per arm, in this order: held (HOLD-<arm>.json in omx_incident's incidents directory), boards (record config
 robot.port / teleop.port exist), bus ownership (no record_session.py for the arm, per-arm lock free), follower
 registers (torque 0, no hardware error, caps at the commissioning baseline), cameras (200 + JPEG, top light gate),
 jaw closed value against the latest motor-health log, the jaw opening against the newest session trace, the calibration map (read-only cell_calibrate.check), the
@@ -279,9 +279,15 @@ def usb_recover(role, io):
 
 # ---- checks ------------------------------------------------------------------------------------------------------
 
-def check_hold(arm, incidents):
-    path = Path(incidents) / f"HOLD-{arm}.json"
-    if not path.is_file():
+def check_hold(arm, incidents=None):
+    """`incidents` None: where omx_incident keeps holds (and any an older version left in the working directory)."""
+    if incidents is None:
+        import omx_incident
+
+        path = omx_incident.hold_file(arm)
+    else:
+        path = Path(incidents) / f"HOLD-{arm}.json"
+    if path is None or not path.is_file():
         return row("hold", "ok", "no hold")
     try:
         reason = json.loads(path.read_text())["reason"]
@@ -525,7 +531,7 @@ def upkeep_arm(arm, spec, fix, io, out_dir, incidents, stamp, since=None):
     return {"arm": arm, "stamp": stamp, "at": time.time(), "verdict": verdict, "fix": fix, "checks": checks}
 
 
-def run(arms: dict, fix: bool = False, *, io: Io | None = None, out_dir="upkeep", incidents="incidents", since=None,
+def run(arms: dict, fix: bool = False, *, io: Io | None = None, out_dir="upkeep", incidents=None, since=None,
         stamp=None) -> dict:
     """{arm: report}; each report is also written to <out_dir>/<stamp>-<arm>.json."""
     io, out_dir, reports = io or Io(), Path(out_dir), {}
@@ -552,7 +558,7 @@ def main(argv=None):
     ap.add_argument("manifest", type=Path)
     ap.add_argument("--fix", action="store_true", help="lower raised follower caps (torque 0 everywhere, bus free)")
     ap.add_argument("--out", default="upkeep")
-    ap.add_argument("--incidents", default="incidents")
+    ap.add_argument("--incidents", default=None, help="default: omx_incident's hold directory")
     ap.add_argument("--since", type=float, help="replay logs newer than this epoch (default: the previous report)")
     args = ap.parse_args(argv)
     arms = json.loads(args.manifest.read_text(encoding="utf-8"))

@@ -14,7 +14,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 CAMERA_APP = ROOT / "operations/site_ui/cam/app/src/main/java"
-CAMERA_ACCOUNT = CAMERA_APP / "io/github/livsbittt/rosy/cam/account"
+CAMERA_ACCOUNT = ROOT / "shared/android/account/io/github/livsbittt/rosy/account"  # D-987: compiled into Cam
 VISION = ROOT / "operations/overhead/rosy_vision"
 REGISTRY = ROOT / "shared/web/surfaces.yaml"
 
@@ -65,7 +65,7 @@ def _hits(root: Path, suffixes: tuple[str, ...], rules: dict[str, re.Pattern]) -
         for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
             for label, pattern in rules.items():
                 checked = (_camera_account_transport(path, line)
-                           if root == CAMERA_APP and label == "Fleet user API" else line)
+                           if root in (CAMERA_APP, CAMERA_ACCOUNT) and label == "Fleet user API" else line)
                 if pattern.search(checked):
                     found.append(f"{path.relative_to(ROOT).as_posix()}:{number}: {label}")
     return found
@@ -91,6 +91,7 @@ def owns_overlaps(rows: list[dict]) -> list[str]:
 def test_camera_app_has_no_robot_or_fleet_user_calls():
     assert CAMERA_APP.is_dir()
     assert _hits(CAMERA_APP, (".kt", ".java"), CAMERA_FORBIDDEN) == []
+    assert _hits(CAMERA_ACCOUNT, (".kt",), CAMERA_FORBIDDEN) == []
 
 
 def test_camera_account_transport_only_uses_registered_authority_endpoints():

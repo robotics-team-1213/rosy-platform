@@ -30,6 +30,7 @@ android {
     }
     // Shared Android sources (D-939): one copy for every ROSY app, never an app-local duplicate.
     sourceSets.getByName("main").java.srcDir("../../../../shared/android/peer")
+    sourceSets.getByName("main").java.srcDir("../../../../shared/android/account")
 
     buildFeatures {
         compose = true
@@ -108,4 +109,4 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 }
 
-apply(from = "../account-config.gradle")
+apply(from = "../../../../shared/android/account/account-config.gradle")

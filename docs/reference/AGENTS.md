@@ -29,6 +29,7 @@ Shared contracts: REST/WS/protocol, architecture decisions, and the Host Agent u
 | `perception-gaps.md` | GENERATED from `tools/harness/perception_gaps.yaml`. Do not hand-edit |
 | `ROSY Module Operational Acceptance Criteria.md` | ROSY-MODULE-ACCEPTANCE-001 — per-package operational GO criteria, evidence gates, and M01–M14 traceability |
 | `platform-folder-responsibilities.md` | Current semantic tree (D-625, D-626, D-627, D-628, D-630, D-637). Ownership stays in `tools/harness/platform_parts.yaml` |
+| `common-services.md` | 공통 서비스 정의와 소스·Compose·책임 경계 (D-987). `test/architecture/test_common_services.py`가 고정 |
 | `core-drive-responsibilities.md` | CORE, Drive, and Arm responsibility map (D-625 through D-630) |
 | `fleet-rulebook.md` | Fleet rule pipeline index (D-674, D-678). `FL-*` and `FR-*` are search ids, not API fields |
 | `application-contract-support.md` | 외부 업무 앱이 소비하는 Fleet HTTP 경로·권한·상태 의미와 정본·복구 책임 (D-836 W0) |
