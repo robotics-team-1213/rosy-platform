@@ -301,3 +301,37 @@ def test_http_owner_reply_must_bind_identity_revision_and_no_redirect(setup):
     assert sent == []
     assert service.journal.read('fleet', 'notice-1').state == 'PENDING'
     asyncio.run(http.aclose())
+
+
+@pytest.mark.parametrize('guard', ['fairness', 'expiry', 'destination'])
+def test_regressions_detect_mutated_guards(setup, monkeypatch, guard):
+    """Exercise the guards' regression assertions against real in-memory mutants."""
+    import inspect
+    import sys
+    from rosy.notifications import journal, service as module
+
+    instance = setup[0].journal if guard == 'fairness' else setup[0]
+    owner = journal if guard == 'fairness' else module
+    source = inspect.getsource(type(instance))
+    if guard == 'fairness':
+        mutated = source.replace('ORDER BY due, admitted, notification_id', 'ORDER BY admitted, notification_id')
+        regression = lambda: test_unconfirmed_old_notice_does_not_starve_later_valid_notice(setup)
+    elif guard == 'expiry':
+        block = ("            if self.clock() >= request.expires_at:\n"
+                 "                self.journal.finish(row, 'EXPIRED', self.clock())\n"
+                 "                return\n            state,")
+        mutated = source.replace(block, '            state,')
+        regression = lambda: test_expiry_is_rechecked_after_durable_attempt_recording(setup, monkeypatch)
+    else:
+        mutated = source.replace("or any(channel.kind != 'telegram' and channel.chat_id is not None for channel in channels.values())", '')
+        regression = lambda: test_ignored_chat_id_cannot_make_duplicate_webhook_cooldowns(setup)
+    assert mutated != source, 'mutation must actually change the guarded implementation'
+    namespace = dict(vars(owner))
+    exec(compile(mutated, '<notification-guard-mutation>', 'exec'), namespace)
+    variant = namespace[type(instance).__name__]
+    if guard == 'destination':
+        monkeypatch.setattr(sys.modules[__name__], 'DeliveryService', variant)
+    else:
+        instance.__class__ = variant
+    with pytest.raises((AssertionError, pytest.fail.Exception)):
+        regression()
