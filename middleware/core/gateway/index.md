@@ -75,8 +75,8 @@
 
 ## 최근 기록
 
+- 2026-11-08 · 6160ccf28e · fix(core): Nav2 무응답 목표 보고
 - 2026-11-06 · 051927f313 · fix(core): motor 커미셔닝 readiness profile
 - 2026-11-04 · uncommitted · feat(core): peers 관리자·beacon 송신 배선
 - 2026-11-03 · uncommitted · fix(bridge): rear_dock_scan reads services.docking directly (C6)
 - 2026-11-03 · uncommitted · feat(bridge): 후진 충전소 V 표지를 CORE 스캔에서 찾는다 (D-972)
-- 2026-11-03 · b70b380dae · 카메라 fixture의 HTTP·내비게이션 소비자 검증

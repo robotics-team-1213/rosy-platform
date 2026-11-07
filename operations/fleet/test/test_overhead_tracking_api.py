@@ -217,6 +217,20 @@ def test_relearn_is_an_operator_action(tmp_path, caplog):
                    for token in (SOURCE_TOKEN, OPERATOR_TOKEN, VIEWER_TOKEN))
 
 
+def test_auto_locate_is_an_operator_session_that_wakes_the_camera(tmp_path):
+    with _client(tmp_path) as client:
+        assert client.post("/api/fleet/auto-locate", headers=_auth(VIEWER_TOKEN)).status_code == 403
+        assert client.get("/api/fleet/auto-locate", headers=_auth(VIEWER_TOKEN)).json()["robots"] == []
+        config = client.get("/api/fleet/detections/config", headers=_auth(SOURCE_TOKEN)).json()
+        assert "stream_wanted" not in config
+        response = client.post("/api/fleet/auto-locate", headers=_auth(OPERATOR_TOKEN))
+        assert response.status_code == 200, response.text
+        assert response.json()["use"] == "observation-only"
+        assert {row["state"] for row in response.json()["robots"]} == {"UNKNOWN"}
+        config = client.get("/api/fleet/detections/config", headers=_auth(SOURCE_TOKEN)).json()
+        assert config["stream_wanted"] is True
+
+
 def test_tracking_routes_are_exactly_these_and_name_no_media(tmp_path):
     with _client(tmp_path) as client:
         paths = {route.path for route in client.app.routes if hasattr(route, "path")}
