@@ -18,7 +18,7 @@ export const RULE_KINDS = Object.freeze({
     ["spacing", "간격 m (기본: 규칙 값)", [null, 0.3, 0.4, 0.5, 0.6, 0.8, 1], null],
     ["speed", "속도 m/s (기본: 규칙 값)", [null, 0.05, 0.1, 0.15, 0.2], null]] },
 });
-const VERDICT = Object.freeze({ go: ["감", "active"], wait: ["대기", "warn"], refuse: ["거절", "crit"] });
+const VERDICT = Object.freeze({ go: ["감", "active"], wait: ["대기", "warn"], refuse: ["거절됨", "crit"] });
 const REASON = Object.freeze({
   first_in_order: "내 차례", queued_behind: "앞선 로봇이 먼저", pose_unknown: "위치를 모름", unknown_robot: "알 수 없는 로봇",
   low_battery: "배터리가 기준 이하", battery_unknown: "배터리를 모름", no_free_bay: "빈 충전 칸 없음", after_trip: "운행이 끝난 뒤",
@@ -117,6 +117,7 @@ export function ruleJudgeSection({ mine, robot, call, scope, render }) {
     }
   }));
   ask.disabled = rule.busy;
+  ask.setAttribute("reason", "판정 중");
   const out = document.createElement("p");
   out.className = "hint";
   out.setAttribute("role", "status");

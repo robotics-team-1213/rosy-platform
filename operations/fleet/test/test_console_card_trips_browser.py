@@ -752,7 +752,7 @@ def test_site_rules_judge_in_the_trip_form_asks_and_sends_nothing_to_a_robot(sit
         answer.update(verdict="refuse", reason="gap_below_site_min")
         form.locator('[data-rule-judge="rosy_02"]').click()
         _settle(page, posts, judge, count=2)
-        expect(form.locator("ui-tag").filter(has_text="거절 · 현장 최소 간격보다 좁음")).to_have_count(1)
+        expect(form.locator("ui-tag").filter(has_text="거절됨 · 현장 최소 간격보다 좁음")).to_have_count(1)
         assert all(path == judge for path, _ in posts) and not errors
         browser.close()
 
