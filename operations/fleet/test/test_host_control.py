@@ -1,10 +1,12 @@
 """D-524 Service Control. No network and no real shutdown."""
 
+import fcntl
 import json
 import os
 import re
 import shutil
 import subprocess
+import time
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -350,8 +352,7 @@ def _helper_copy(tmp_path, role):
         f'printf "USEC=%s\\nMODE=reboot\\n" "$(date +%s%N)" > {sched}; echo reboot >> {tmp_path}/calls\n')
     for name in ("systemctl", "logger", "systemd-run"):
         (stub / name).write_text(f'#!/bin/sh\necho "{name} $*" >> {tmp_path}/calls\n')
-    # Only the session probe (-n) can find a lock taken; the helper's own `flock 9` always gets it.
-    (stub / "flock").write_text(f'#!/bin/sh\n[ "$1" = -n ] && [ -e {tmp_path}/arm-held ] && exit 1\nexit 0\n')
+    (stub / "flock").write_text("#!/bin/sh\nexit 0\n")  # the helper's own `flock 9`; sessions use real locks
     for path in stub.iterdir():
         path.chmod(0o755)
     (tmp_path / "conf").mkdir(exist_ok=True)
@@ -386,12 +387,13 @@ def test_helper_refuses_a_second_reboot_and_cancels_only_its_own(tmp_path):
     assert (tmp_path / "calls").read_text().splitlines().count("cancel") == 1
 
 
-def _arm_session(tmp_path, held):
+def _arm_session(tmp_path, shared=False):
+    """A real lock in /proc/locks, the way joint_tune (exclusive) and per-arm sessions (shared) hold it."""
     lock = tmp_path / "home" / "op" / "rosy-omx" / "session.lock"
     lock.parent.mkdir(parents=True, exist_ok=True)
-    lock.touch()
-    marker = tmp_path / "arm-held"
-    marker.touch() if held else marker.unlink(missing_ok=True)
+    fd = os.open(lock, os.O_CREAT | os.O_RDWR)
+    fcntl.flock(fd, fcntl.LOCK_SH if shared else fcntl.LOCK_EX)
+    return fd
 
 
 def _job_lock(tmp_path, pid, kind="gpu"):
@@ -405,11 +407,15 @@ def test_no_reboot_path_cuts_an_arm_session(tmp_path):
     """2026-10-28: a reboot cut a chunk session mid-move and the arm dropped with torque off.
     Only the nightly timer looked at the lock; the button and the guard's ladder did not."""
     helper = _helper_copy(tmp_path, "site")
-    _arm_session(tmp_path, held=True)
+    session = _arm_session(tmp_path)
     assert helper("reboot") == 6
     assert helper("reboot-if-free") == 6
     assert not (tmp_path / "scheduled").exists()
-    _arm_session(tmp_path, held=False)
+    os.close(session)
+    session = _arm_session(tmp_path, shared=True)
+    assert helper("reboot") == 6
+    os.close(session)
+    assert (tmp_path / "home" / "op" / "rosy-omx" / "session.lock").exists()  # a finished session leaves its file
     assert helper("reboot") == 0
 
 
@@ -417,18 +423,20 @@ def test_no_reboot_path_cuts_an_arm_session(tmp_path):
 def test_a_session_started_during_the_delay_cancels_only_our_reboot(tmp_path):
     """The +10 min is a window of its own: the helper asks again just before it ends."""
     helper = _helper_copy(tmp_path, "site")
-    _arm_session(tmp_path, held=False)
     assert helper("reboot") == 0
     calls = (tmp_path / "calls").read_text()
     assert "systemd-run" in calls and "/usr/local/sbin/rosy-host-control recheck-reboot" in calls
     assert helper("recheck-reboot") == 0
     assert (tmp_path / "scheduled").exists()  # free: it goes ahead
-    _arm_session(tmp_path, held=True)
+    session = _arm_session(tmp_path)
     assert helper("recheck-reboot") == 0
+    os.close(session)
     assert not (tmp_path / "scheduled").exists()
     assert (tmp_path / "calls").read_text().splitlines().count("cancel") == 1
     (tmp_path / "scheduled").write_text("USEC=1\nMODE=reboot\n")  # someone else's reboot is not ours
+    session = _arm_session(tmp_path)
     assert helper("recheck-reboot") == 0
+    os.close(session)
     assert (tmp_path / "scheduled").exists()
 
 
@@ -457,15 +465,54 @@ def test_a_persons_reboot_stops_at_live_jobs_and_the_guard_does_not(tmp_path):
 
 
 @posix
-def test_dead_and_malformed_job_locks_do_not_block_and_are_not_evaluated(tmp_path):
+def test_dead_and_malformed_job_locks_do_not_block(tmp_path):
     helper = _helper_copy(tmp_path, "model")
     finished = subprocess.Popen(["true"])
     finished.wait()
     _job_lock(tmp_path, finished.pid)
     jobs = tmp_path / "home" / "op" / "rosy-jobs"
-    (jobs / "evil.lock").write_text(f"$(touch {tmp_path}/pwned) gpu 1 1\n")
+    for name, text in (("word", "abc gpu 1 1\n"), ("zero", "0 gpu 1 1\n"), ("init", "1 gpu 1 1\n"), ("huge", "9" * 40 + "\n")):
+        (jobs / f"{name}.lock").write_text(text)
     assert helper("reboot-if-free") == 0
-    assert not (tmp_path / "pwned").exists()
+
+
+@posix
+def test_a_job_lock_from_before_this_boot_does_not_block(tmp_path):
+    """Its pid may belong to something else by now."""
+    helper = _helper_copy(tmp_path, "model")
+    sleeper = subprocess.Popen(["sleep", "30"])
+    try:
+        _job_lock(tmp_path, sleeper.pid)
+        os.utime(tmp_path / "home" / "op" / "rosy-jobs" / f"train-{sleeper.pid}.lock", (1, 1))
+        assert helper("reboot-if-free") == 0
+    finally:
+        sleeper.kill()
+        sleeper.wait()
+
+
+@posix
+def test_a_users_file_cannot_hang_or_flood_the_root_helper(tmp_path):
+    """Root holding its own lock on a FIFO's open would also stop the re-check timer."""
+    helper = _helper_copy(tmp_path, "model")
+    home = tmp_path / "home" / "op"
+    (home / "rosy-omx").mkdir(parents=True)
+    (home / "rosy-jobs").mkdir()
+    os.mkfifo(home / "rosy-omx" / "session.lock")
+    os.mkfifo(home / "rosy-jobs" / "pipe.lock")
+    os.mkfifo(home / "rosy-jobs" / "busy")
+    (home / "rosy-jobs" / "zero.lock").symlink_to("/dev/zero")
+    assert helper("reboot-if-free") == 0  # the copy's run times out in 20 s if any of these hang
+
+
+@posix
+@pytest.mark.parametrize("delta, blocks", [(3600, True), (-3600, False)])
+def test_an_isaac_reservation_is_a_job_until_it_expires(tmp_path, delta, blocks):
+    """A supervised Isaac run holds only a .resv (remote_isaac.py), no lock."""
+    helper = _helper_copy(tmp_path, "model")
+    jobs = tmp_path / "home" / "op" / "rosy-jobs"
+    jobs.mkdir(parents=True)
+    (jobs / "isaac-run.resv").write_text(f"{int(time.time()) + delta} gpu 6 8\n")
+    assert helper("reboot-if-free") == (7 if blocks else 0)
 
 
 @posix
@@ -476,6 +523,17 @@ def test_a_busy_hold_blocks_a_persons_reboot_until_it_expires(tmp_path, delta, b
     jobs.mkdir(parents=True)
     (jobs / "busy").write_text(f"{int(time.time()) + delta} person 1\n")
     assert helper("reboot-if-free") == (7 if blocks else 0)
+
+
+@posix
+def test_a_bare_touch_busy_ends_with_the_boot(tmp_path):
+    helper = _helper_copy(tmp_path, "site")
+    busy = tmp_path / "home" / "op" / "rosy-jobs" / "busy"
+    busy.parent.mkdir(parents=True)
+    busy.touch()
+    assert helper("reboot-if-free") == 7
+    os.utime(busy, (1, 1))
+    assert helper("reboot-if-free") == 0
 
 
 @posix

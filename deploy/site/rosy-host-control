@@ -38,34 +38,49 @@ log() { logger -t rosy-host-control "role=$ROLE action=$ACTION unit=$UNIT by=${S
 refuse() { log "result=refused($1)"; echo "refused: $1" >&2; exit "${2:-2}"; }
 scheduled_usec() { sed -n 's/^USEC=//p' "$SCHEDULED" 2>/dev/null || true; }
 
-# The same lock the nightly reboot yields to (rosy-nightly-reboot.service).
+# The lock the nightly reboot yields to (rosy-nightly-reboot.service), read from /proc/locks. These
+# files are users': root never opens one, because a FIFO would hang this helper inside its own lock,
+# and a probing flock would make a session starting that instant fail (cell_params_web.session_busy).
 arm_session_held() {
-  local lock
+  local lock inode
+  [ -r /proc/locks ] || return 0  # unknown is not free
   for lock in "$HOME_ROOT"/*/rosy-omx/session.lock; do
-    [ -e "$lock" ] || continue
-    flock -n "$lock" true || return 0
+    inode=$(stat -L -c %i -- "$lock" 2>/dev/null) || continue
+    if grep -q ":$inode " /proc/locks; then return 0; fi
   done
   return 1
 }
 
-# Lock format: <pid> <class> <cores> <GB> (tools/remote/hold_gpu.sh, remote_job). The file is the
-# user's: nothing from it is evaluated, only a whole number reaches kill -0.
+# The first word of a user's job file, bounded: a regular file only, 64 bytes, 2 s if it is swapped.
+first_word() {
+  local text
+  [ -f "$1" ] && [ ! -L "$1" ] || return 1
+  text=$(timeout 2 head -c 64 -- "$1" 2>/dev/null) || return 1
+  printf '%s' "${text%%[[:space:]]*}"
+}
+
+# The same files host_probe.py counts: <pid> <class> <cores> <GB> locks, <expiry> <class> <cores> <GB>
+# reservations (a supervised Isaac run holds only one), and busy. Nothing read is evaluated.
 jobs_live() {
-  local file pid expiry boot now
-  for file in "$HOME_ROOT"/*/rosy-jobs/*.lock; do
-    [ -e "$file" ] || continue
-    pid=; read -r pid _ < "$file" || true
-    if [[ "$pid" =~ ^[0-9]+$ ]] && kill -0 "$pid" 2>/dev/null; then return 0; fi
-  done
+  local file word boot now
   now=$(date +%s)
   boot=$(awk '/^btime /{print $2}' /proc/stat)
+  for file in "$HOME_ROOT"/*/rosy-jobs/*.lock; do
+    word=$(first_word "$file") || continue
+    [[ "$word" =~ ^[1-9][0-9]{0,6}$ ]] && [ "$word" -gt 1 ] || continue
+    [ "$(stat -c %Y -- "$file")" -ge "$boot" ] || continue  # the pid is from before this boot
+    if kill -0 "$word" 2>/dev/null; then return 0; fi
+  done
+  for file in "$HOME_ROOT"/*/rosy-jobs/*.resv; do
+    word=$(first_word "$file") || continue
+    [[ "$word" =~ ^[0-9]{10,12}$ ]] && [ "$word" -gt "$now" ] && return 0
+  done
   for file in "$HOME_ROOT"/*/rosy-jobs/busy; do
-    [ -e "$file" ] || continue
-    expiry=; read -r expiry _ < "$file" || true
-    # "<expiry epoch> <owner> <pid>" or a bare touch, which ends with the boot (host_probe.py).
-    if [[ "$expiry" =~ ^[0-9]{10,}$ ]]; then
-      [ "$expiry" -le "$now" ] || return 0
-    elif [ "$(stat -c %Y "$file")" -ge "$boot" ]; then
+    word=$(first_word "$file") || continue
+    # "<expiry epoch> <owner> <pid>" or a bare touch, which ends with the boot.
+    if [[ "$word" =~ ^[0-9]{10,12}$ ]]; then
+      [ "$word" -le "$now" ] || return 0
+    elif [ "$(stat -c %Y -- "$file")" -ge "$boot" ]; then
       return 0
     fi
   done

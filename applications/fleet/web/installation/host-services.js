@@ -136,7 +136,7 @@ export function createHostServices({root, call, confirmIrreversible, onPaint}) {
 
   async function send(host, action, unit, message) {
     const confirmed = await confirmIrreversible({message, action: "실행"});
-    if (!confirmed) return;
+    if (!confirmed) return "declined";
     say("");
     try {
       const answer = await call("/api/fleet/hosts/" + encodeURIComponent(host) + "/control", {
@@ -147,7 +147,9 @@ export function createHostServices({root, call, confirmIrreversible, onPaint}) {
     } catch (error) {
       const code = error.detail?.code || error.code || "";
       if (code === "HOST_JOBS_ACTIVE") {
-        return send(host, "reboot-over-jobs", null, `${HOST_LABEL[host] || host}에서 학습이나 시험이 돌고 있습니다. 재부팅하면 그 작업이 끊깁니다. 그래도 10분 뒤에 재부팅합니까?`);
+        const answer = await send(host, "reboot-over-jobs", null, `${HOST_LABEL[host] || host}에서 학습이나 시험이 돌고 있습니다. 재부팅하면 그 작업이 끊깁니다. 그래도 10분 뒤에 재부팅합니까?`);
+        if (answer === "declined") say(`${HOST_LABEL[host] || host}에서 작업이 돌고 있어 재부팅하지 않았습니다.`, "error");
+        return;
       }
       if (code === "ARM_SESSION_ACTIVE") {
         say(`${HOST_LABEL[host] || host}에서 팔 세션이 돌고 있어 재부팅하지 않았습니다. 세션이 끝난 뒤 다시 요청하세요.`, "error");
