@@ -135,8 +135,9 @@ def create_app(config: dict[str, Any], services: CoreServicesLike) -> FastAPI:
     from core_common.protocol.account_client import load_account_client
     account_file = config.get('auth', {}).get('account_client_file')
     from .v1.account_receiver import load_provisioned
+    identity = getattr(services, 'identity', None)  # partial services (tests, tools) have no robot to link
     app.state.account_client = (load_account_client(account_file) if account_file
-                                else load_provisioned(services.identity.robot_id))
+                                else load_provisioned(identity.robot_id) if identity else None)
     if app.state.account_client and app.state.account_client.resource != 'robot:' + services.identity.robot_id:
         raise ValueError('Account resource does not match robot identity')
     install_account_sessions(app)
