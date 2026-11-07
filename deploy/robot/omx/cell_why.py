@@ -31,6 +31,12 @@ WINDOW_S, MIN_SPEED, BLOCKED_RATIO, MIN_RISE = 0.5, 0.3, 0.25, 0.3
 # a retry of one plan: same start, this much slower, and it stopped within SAME_STOP of the last stop.
 # Real pair: 2026-11-06 23:09 -> 23:27, start 0.2 apart, 3.52 -> 2.11 units/s, stop 1.2 apart, a contact by the side view. No opposite pair yet.
 SAME_START, SAME_STOP, SLOWER, NOT_FASTER = 1.0, 2.0, 0.85, 1.05
+# What a chunk lags with nothing in the way, measured: arm_b descend_pick over the bare table (air_descend, 2026-11-07 00:36)
+# lagged 0.64 with wrist_flex commanded up to 2.34 units/s; two finished pick descents that night 0.63 and 0.78. A stop at
+# no higher speed whose lag reached 1.8 times that (1.40; the guard stops at about 1.5) was held by something. Twice was the
+# first choice, but it is the stop limit itself: the 00:17 stops ended at 1.56. Faster than measured, or another chunk: no reading.
+FREE_LAG = {"descend_pick": {"joint": "wrist_flex", "peak_units_s": 2.34, "max_lag": 0.78}}
+FREE_MARGIN, FREE_SPEED_SLACK = 1.8, 1.02
 HYPOTHESES = {
     # not "kept moving but slower": that hands the answer to every moving-joint stop, contact included (11-07 comparison)
     "too_fast": "the command outran the joint; nothing was in the way. Check: the same move slower",
@@ -86,6 +92,14 @@ def read_motion(rows: list) -> dict:
     moved = f"{facts['joint']} moved {present:.2f} of {sent:.2f} units/s"
     if present < BLOCKED_RATIO * sent:
         return {**facts, "verdict": "blocked", "why": moved}
+    # the command's fastest stretch (5 ticks) over the whole chunk, the number the free baseline was measured at
+    facts["peak_units_s"] = round(max((abs(b["sent"][worst] - a["sent"][worst]) / (b["t"] - a["t"])
+                                       for a, b in zip(rows, rows[5:]) if b["t"] > a["t"]), default=0.0), 2)
+    free = FREE_LAG.get(rows[-1].get("chunk"))
+    if (free and free["joint"] == facts["joint"] and facts["peak_units_s"] <= FREE_SPEED_SLACK * free["peak_units_s"]
+            and facts["lag_end"] >= FREE_MARGIN * free["max_lag"]):
+        return {**facts, "verdict": "blocked",
+                "why": f"{moved}; with nothing in the way this chunk lagged at most {free['max_lag']} up to {free['peak_units_s']} units/s"}
     return {**facts, "verdict": "undetermined", "why": f"{moved}: contact and free motion both keep moving like this"}
 
 

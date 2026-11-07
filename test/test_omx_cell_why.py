@@ -33,6 +33,20 @@ def test_a_joint_that_kept_moving_is_not_called_too_fast(sent, present):
     assert row["verdict"] == "undetermined" and row["joint"] == "wrist_flex" and row["present_units_s"] == present
 
 
+def descent(present, sent_speed, chunk="descend_pick"):
+    return [{**r, "chunk": chunk} for r in lift(present, sent_speed=sent_speed)]
+
+
+@pytest.mark.parametrize("rows, verdict", [
+    (descent(1.25, 1.98), "blocked"),  # 11-07 00:17: the bare-table descent at this speed lagged 0.64, this one reached 1.6
+    (descent(1.71, 3.52), "undetermined"),  # 11-06 23:09: faster than any descent measured with nothing in the way
+    (descent(1.25, 1.98, chunk="descend_place"), "undetermined"),  # no baseline for the place descent
+    (descent(1.5, 1.98), "undetermined"),  # lag 1.2: under 1.8 times what a free descent lagged
+])
+def test_a_stop_is_read_against_the_same_chunk_with_nothing_in_the_way(rows, verdict):
+    assert w.read_motion(rows)["verdict"] == verdict
+
+
 def test_a_joint_that_nearly_stands_was_blocked():
     assert w.read_motion(lift(0.42, sent_speed=2.09))["verdict"] == "blocked"  # the slowed descent of 2026-11-06 23:30
 
