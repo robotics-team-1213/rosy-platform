@@ -58,6 +58,8 @@ class CommandManager:
         self._readiness = readiness
         # SAF-002: default 500 ms, configurable (safety.teleop_timeout_ms).
         self.watchdog = TeleopWatchdog(timeout_ms=teleop_timeout_ms)
+        # D-985: not the watchdog, whose clear resets it to 0.0 and would read as long idle.
+        self._operator_seen_at = time.monotonic()
         self._manual_twist: Optional[Twist] = None
         self._manual_mode_epoch = -1
         self.native = NativeReceipts()
@@ -119,6 +121,7 @@ class CommandManager:
                expected_boot_id: UUID | None = None,
                expected_owner_generation: int | None = None,
                receipt_sink=None) -> tuple[bool, str]:
+        self._operator_seen_at = time.monotonic()  # a refused command is still someone at the controls
         accepted, code, clipped = self._teleop_decision(
             linear, angular, source, correlation_id=correlation_id,
             expected_boot_id=expected_boot_id,
@@ -196,6 +199,11 @@ class CommandManager:
         if generation_error is not None:
             return False, generation_error, None
         return True, "", (linear, angular)
+
+    @property
+    def manual_quiet_s(self) -> float:
+        """Seconds since this process last saw an operator: start, a teleop attempt, entering MANUAL."""
+        return time.monotonic() - self._operator_seen_at
 
     @property
     def manual_active(self) -> bool:
@@ -341,6 +349,8 @@ class CommandManager:
         self._publish_native_terminal_notices()
 
     def _on_mode_change(self, old: Mode, new: Mode) -> None:
+        if new is Mode.MANUAL:
+            self._operator_seen_at = time.monotonic()
         session = None
         def clear() -> None:
             nonlocal session

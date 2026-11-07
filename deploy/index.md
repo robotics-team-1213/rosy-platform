@@ -81,5 +81,5 @@
 - 2026-11-07 · uncommitted · feat: 응답 없는 PC를 guard가 팀 채널로 알린다 (D-991)
 - 2026-11-07 · uncommitted · fix: 도우미가 재부팅 전에 팔 세션과 작업을 본다 (D-991)
 - 2026-11-07 · uncommitted · feat(navigation): 모터·정지 파일이 같으면 항법 승인을 이어받는다 (D-986)
+- 2026-11-07 · uncommitted · fix(update): 표시만 남은 MANUAL이 자동 갱신을 막지 않는다 (D-985 7항)
 - 2026-11-07 · uncommitted · fix(omx): 사고 hold와 미전송 보고를 고정 위치로 통일
-- 2026-11-07 · 6de988c4c4 · fix(release): 접속된 Pinky가 언제나 최신 payload로 올라간다 (D-985)

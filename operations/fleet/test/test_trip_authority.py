@@ -19,6 +19,7 @@ from fleet.server.trip_runner import TripRunner
 from test_lane_traffic import Fleet, _arc, _trip
 from test_routing import demo_site
 from test_trip_runner import LANE
+from fakes import fresh_battery
 
 AUTH = dataclasses.replace(LANE, line_follow_authority=True, line_follow_authority_required=True)
 
@@ -45,7 +46,7 @@ def _setup(caps, enabled=True, answer=None, config=TripConfig()):
     fleet = AuthFleet(tuple(caps), caps, answer)
     store = SiteMapStore(None, clock=lambda: fleet.now)
     store.import_if_empty(demo_site(), source="test")
-    runner = TripRunner(store=store, routing_config=store.routing_config, caps=fleet.caps_for, poses=fleet,
+    runner = TripRunner(store=store, routing_config=store.routing_config, caps=fleet.caps_for, battery=fresh_battery, poses=fleet,
                         junction=fleet, goal=fleet.goal, cancel_goal=fleet.cancel_goal,
                         blocked=lambda: fleet.blocked, clock=lambda: fleet.now, config=config,
                         authority=enabled)

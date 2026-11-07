@@ -19,6 +19,7 @@ from fleet.server.trip_ports import TripConfig
 from fleet.server.trip_runner import TripError, TripRunner
 from test_routing import demo_site
 from test_trip_runner import LANE, Ports, _activate_again, run
+from fakes import fresh_battery
 
 
 class Fleet:
@@ -70,7 +71,7 @@ def _setup(ids=("a", "b"), site=None, **config):
     fleet = Fleet(ids)
     store = SiteMapStore(None, clock=lambda: fleet.now)
     store.import_if_empty(site or demo_site(), source="test")
-    runner = TripRunner(store=store, routing_config=store.routing_config, caps=fleet.caps_for, poses=fleet,
+    runner = TripRunner(store=store, routing_config=store.routing_config, caps=fleet.caps_for, battery=fresh_battery, poses=fleet,
                         junction=fleet, goal=fleet.goal, cancel_goal=fleet.cancel_goal,
                         blocked=lambda: fleet.blocked, clock=lambda: fleet.now, config=TripConfig(**config))
     return runner, store, fleet
