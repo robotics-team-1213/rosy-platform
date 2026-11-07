@@ -22,6 +22,8 @@ HARDWARE = ('<hardware><plugin>topic_based_ros2_control/TopicBasedSystem</plugin
             f'<param name="joint_states_topic">{SIM_STATES}</param>'
             # Always send the command, so a held target keeps reaching the simulator.
             '<param name="trigger_joint_command_threshold">-1</param></hardware>')
+# Jaw v2.1 (D-947): geometry-only URDF; its joints are the vendor OMX-F ones under the same names.
+V21_URDF = Path(__file__).resolve().parents[2]/'learning/envs/isaac/assets/omx_f_palletizing_description/urdf/omx_f_palletizing.urdf'
 
 
 def with_topic_hardware(urdf):
@@ -49,24 +51,41 @@ def with_initial(urdf, initial):
     return urdf
 
 
-def description():
+def with_vendor_control(urdf, vendor):
+    """Jaw v2.1: graft the vendor xacro's ros2_control blocks onto the geometry-only palletizing URDF.
+
+    The joint names are the vendor's, so the vendor blocks (and the topic hardware swap below) apply as they are.
+    """
+    blocks = re.findall(r'<ros2_control\b.*?</ros2_control>', vendor, flags=re.S)
+    if not blocks:
+        raise ValueError('vendor description carries no ros2_control block')
+    if '</robot>' not in urdf:
+        raise ValueError('palletizing URDF does not close </robot>')
+    return with_topic_hardware(urdf.replace('</robot>', ''.join(blocks)+'</robot>'))
+
+
+def description(gripper='omx-f'):
     from ament_index_python.packages import get_package_share_directory
     xacro = Path(get_package_share_directory('open_manipulator_description'))/'urdf/omx_f/omx_f.urdf.xacro'
-    urdf = subprocess.run(['xacro', str(xacro), 'use_mock_hardware:=true', 'config_type:=omx_f_follower_ai'],
-                          check=True, capture_output=True, text=True).stdout
-    return with_topic_hardware(urdf)
+    vendor = subprocess.run(['xacro', str(xacro), 'use_mock_hardware:=true', 'config_type:=omx_f_follower_ai'],
+                            check=True, capture_output=True, text=True).stdout
+    if gripper == 'palletizing-v2.1':
+        return with_vendor_control(V21_URDF.read_text(encoding='utf-8'), vendor)
+    return with_topic_hardware(vendor)
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument('--out', type=Path, required=True)
     parser.add_argument('--initial', action='append', default=[], metavar='JOINT=RAD')
+    parser.add_argument('--gripper', default='omx-f', choices=['omx-f', 'palletizing-v2.1'],
+                        help="palletizing-v2.1 runs the repo's jaw v2.1 URDF with the vendor ros2_control blocks")
     args = parser.parse_args()
     from ament_index_python.packages import get_package_share_directory
     import yaml
     config = Path(get_package_share_directory('open_manipulator_bringup'))/'config/omx_f_follower_ai'
     args.out.mkdir(parents=True, exist_ok=True)
-    urdf = with_initial(description(), dict(item.split('=') for item in args.initial))
+    urdf = with_initial(description(args.gripper), dict(item.split('=') for item in args.initial))
     (args.out/'omx_f_topic.urdf').write_text(urdf)
     rsp = args.out/'robot_state_publisher.yaml'
     rsp.write_text(yaml.safe_dump({'robot_state_publisher': {'ros__parameters': {

@@ -34,6 +34,7 @@ SHARED = {
     "site-layer.js",  # metre grid lines used by the console map and the install plane
     "vision-view.js",
     "power-action.js",  # D-440 6: the robot card's sleep / wake button, out of roster.js
+    "area-first.js",
     "area-nav.js",  # D-741 6·7: the address view picks the area (rail and sub-nav state)
     "field-warp.js",
     "guide-layer.js",  # D-540 4: the site map draws the same /guide robot marks as the 관제 map
@@ -92,6 +93,7 @@ OWN = {
         "charge-bays-view.js",  # D-941: read-only charge bay plan
         "platoon-view.js",  # D-941: read-only loop gaps
         "state-age.js",
+        "motion-source.js",  # why a robot moves, from proving facts only
     },
     "install.js": {
         "device-profiles.js", "device-care.js",  # Metadata and care editing stay in Installation.

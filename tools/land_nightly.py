@@ -53,6 +53,9 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     main_sha = _main_sha()
     logdir = land_checks.tmp_dir(f"nightly-{main_sha[:10]}")
+    # Before the tier, so an id that fails tonight is recorded and not closed by its own rerun.
+    land_mainred.recheck(ROOT, main_sha, lambda invs, runs: remote_pytest.run(
+        invs, runs, main_sha, repo=ROOT, label="nightly"), logdir)
     logs = [logdir / f"nightly-{n}.txt" for n in range(len(invocations))]
     remote_pytest.run(invocations, logs, main_sha, repo=ROOT, label="nightly")
     known = {name: why for path in ("test/known_failures.txt", "test/flaky_quarantine.txt") if (ROOT / path).is_file()

@@ -92,6 +92,69 @@ def config(tmp_path):
     return path
 
 
+@pytest.fixture
+def main_session(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    monkeypatch.syspath_prepend(str(DIRECTORY))
+    import omx_incident
+
+    monkeypatch.chdir(tmp_path)
+    events = []
+    lock = SimpleNamespace(closed=False)
+
+    def acquire(arm):
+        events.append("locked")
+        return lock
+
+    def close():
+        lock.closed = True
+        events.append("closed")
+
+    lock.close = close
+    monkeypatch.setattr(m, "session_lock", acquire)
+    monkeypatch.setattr(m, "load_caps", lambda *a, **k: {})
+    monkeypatch.setattr(m, "model_tuning", lambda: {})
+    monkeypatch.setattr(m, "robot_tuning", lambda *a: {})
+    monkeypatch.setattr(m, "protect_signals", lambda: None)
+    monkeypatch.setattr(m, "Session", lambda **k: SimpleNamespace(
+        execute=lambda *a, **k: {"safe_end": True, "exit_code": 0}))
+    monkeypatch.setitem(sys.modules, "motor_health", SimpleNamespace(finish_snapshot=lambda *a, **k: None))
+    return config(tmp_path), lock, events, omx_incident
+
+
+@pytest.mark.parametrize("incident_error", [False, True])
+def test_incident_runs_before_session_lock_release(main_session, monkeypatch, incident_error):
+    path, lock, events, incident = main_session
+    monkeypatch.setattr(incident, "refuse_if_held", lambda arm: events.append("hold-checked"))
+
+    def after(*args):
+        events.append("incident-unlocked" if lock.closed else "incident-locked")
+        if incident_error:
+            raise RuntimeError("incident storage failed")
+        return {}
+
+    monkeypatch.setattr(incident, "after_session", after)
+    with pytest.raises(SystemExit) as result:
+        m.main(["--config", str(path), "--caps", "unused.json", "--arm", "arm_b", "--teleop-only"])
+    assert result.value.code == 0
+    assert events == ["locked", "hold-checked", "incident-locked", "closed"]
+    assert lock.closed
+
+
+def test_hold_refusal_releases_the_already_acquired_session_lock(main_session, monkeypatch):
+    path, lock, events, incident = main_session
+
+    def refuse(arm):
+        events.append("hold-checked")
+        raise SystemExit("arm held for a person")
+
+    monkeypatch.setattr(incident, "refuse_if_held", refuse)
+    with pytest.raises(SystemExit, match="held for a person"):
+        m.main(["--config", str(path), "--caps", "unused.json", "--arm", "arm_b", "--teleop-only"])
+    assert events == ["locked", "hold-checked", "closed"]
+    assert lock.closed
+
+
 def session(arm, leader, *, active=("rosy-omx-camera@top.service",), activating=(), run=lambda command: 0):
     calls = []
 

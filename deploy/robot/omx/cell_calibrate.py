@@ -18,6 +18,7 @@ a pivot beside a tall object was garbage. Here the same steps are code, in the o
 from __future__ import annotations
 
 import argparse
+import itertools
 import json
 import math
 import sys
@@ -116,11 +117,41 @@ def predicted(marks: list, point) -> list | None:
     return [round(float(v), 1) for v in np.array([point[0], point[1], 1.0]) @ coef]
 
 
+def consensus(marks: list, tol_px: float) -> list:
+    """The largest set of marks one affine map explains. At a fixed yaw the changed blob can be either side of the jaws,
+    each a constant offset from the other (arm_b 2026-11-06, yaw -90: two groups about 70 px apart): three marks mixing
+    them predicted the next jaws off the frame and every later mark was thrown away. Fewer than 3 marks: all of them."""
+    best, px = list(marks), np.array([m for m, _ in marks], float)
+    arm = np.array([[a[0], a[1], 1.0] for _, a in marks])
+    size = 0
+    for triple in itertools.combinations(range(len(marks)), 3):
+        if np.linalg.matrix_rank(arm[list(triple)], tol=1e-3) < 3:
+            continue
+        coef = np.linalg.solve(arm[list(triple)], px[list(triple)])
+        inliers = np.hypot(*(arm @ coef - px).T) <= tol_px
+        if inliers.sum() > size:
+            size, best = int(inliers.sum()), [m for m, keep in zip(marks, inliers) if keep]
+    return best
+
+
+def enough_agree(kept: int, seen: int) -> bool:
+    """Five marks fit a map, but a map the minority agrees on may be the jaws' wrong side (see consensus)."""
+    return kept >= 5 and kept * 2 > seen
+
+
 def remap(cell, config: dict, points: list, work: Path, log=print) -> dict:
     """Hover the empty jaws at each point (z_view), mark them, fit the map; None marks are skipped."""
+    import cv2
     import cell_pipeline as cp
+    import cell_scene_guard
 
     z_view, yaw, marks = config["coarse"]["z_view"], config["sites"][map_sites(config)[0]]["yaw_deg"], []
+    # 2026-11-06: a remap at z 0.10 over a pile left the boxes moved, no contact felt and no frame to say when. Folded before and
+    # after, the whole view compares; a moved scene saves no map (it may be why the marks disagree), and each point keeps a view
+    frames = work / "remap-frames" / time.strftime("%Y%m%d-%H%M%S")
+    frames.mkdir(parents=True, exist_ok=True)
+    before = cell.frame("top")
+    cv2.imwrite(str(frames / "before.jpg"), before)
     # least stretched first, then only blobs near where the marks so far put the jaws: opening the jaws of a stretched
     # arm shakes its link and the largest changed blob is not the jaws (arm_a's first pallet remap, 2026-11-04)
     for i, (x, y) in enumerate(sorted(points, key=lambda q: math.hypot(*q))):
@@ -137,15 +168,26 @@ def remap(cell, config: dict, points: list, work: Path, log=print) -> dict:
                 raise SystemExit(f"remap stopped at {failed} for {[x, y]} and the park failed")
             log({"point": [x, y], "stopped": failed})
             break
-        near = predicted(marks, (x, y))
+        kept = consensus(marks, prm.get(config.get("params"), "calibrate.consensus_px"))
+        cv2.imwrite(str(frames / f"{i:02d}.jpg"), cell.frame("top"))
+        near = predicted(kept, (x, y)) if len(kept) >= 4 else None  # any three marks fit themselves: that proves nothing
         mark = cell_pivot.mark_jaws(cell, config, near=near and ([near], prm.get(config.get("params"), "pivot.follow_px")))
         log({"point": [x, y], "mark": mark, "near": near})
         if mark:
             marks.append((mark, (x, y)))
     cell.act("park")
-    if len(marks) < 5:
-        raise SystemExit(f"remap: only {len(marks)} marks")
-    return {"homography": cal.fit(marks).round(9).tolist(), "z_view": z_view, "coarse": True,
+    after = cell.frame("top")
+    cv2.imwrite(str(frames / "after.jpg"), after)
+    moved = cell_scene_guard.scene_moved(before, after)
+    if moved:
+        raise SystemExit(f"remap: the scene changed during it, no map saved: {moved}; views in {frames}")
+    seen, marks = marks, consensus(marks, prm.get(config.get("params"), "calibrate.consensus_px"))
+    dropped = [{"pixel": list(p), "arm_m": list(a)} for p, a in seen if (p, a) not in marks]
+    if dropped:
+        log({"dropped_marks": dropped})
+    if not enough_agree(len(marks), len(seen)):
+        raise SystemExit(f"remap: only {len(marks)} marks agree of {len(seen)}")
+    return {"homography": cal.fit(marks).round(9).tolist(), "z_view": z_view, "coarse": True, "dropped_marks": dropped,
             "points": [{"pixel": list(p), "arm_m": list(a)} for p, a in marks], "loo_error_mm": cal.loo_error_mm(marks),
             "measured": time.strftime("%Y-%m-%dT%H:%M:%S")}
 

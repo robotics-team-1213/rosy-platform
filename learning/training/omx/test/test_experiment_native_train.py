@@ -409,3 +409,19 @@ def test_native_worker_rejects_task_snapshot_tampering_before_training(task_subm
         changed['learning_task'][field] = value
         with pytest.raises(ValueError):
             job.run(changed, tmp_path/field)
+
+
+@pytest.mark.parametrize('mode,arms,refused', [('independent', 2, True), ('cooperative', 2, False), ('independent', 1, False)])
+def test_a_two_arm_independent_task_does_not_silently_train_a_joint_model(monkeypatch, mode, arms, refused):
+    from types import SimpleNamespace
+    import experiment_native_train as train
+
+    monkeypatch.setattr(train, 'native_inputs_api', lambda: SimpleNamespace(check_binding=lambda binding, resolved: None))
+    monkeypatch.setattr(train.Reviews, 'source', staticmethod(lambda row: dict(source_revision='r', inspection={}, root='x')))
+    monkeypatch.setattr(train, 'validate_source_profile', lambda *a: (dict(mode=mode, arms=[{}] * arms), []))
+    binding = dict(prepared_id='p', source_revision='r', task=dict(profile=dict(profile={})))
+    if refused:
+        with pytest.raises(ValueError, match='independent two-arm'):
+            train.check_native_task(binding, dict(id='p'))
+    else:
+        assert train.check_native_task(binding, dict(id='p')) is binding

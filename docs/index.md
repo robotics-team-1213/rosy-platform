@@ -354,7 +354,7 @@
 ## 최근 기록
 
 - 2026-11-07 · uncommitted · fix(remote): 재부팅 경고 2분 동안 시험 PC가 새 작업을 받지 않는다
-- 2026-11-06 · 159e9eadf6 · refactor(learning): OMX-AI 전용으로 정리, SO-100 공개 학습 제거와 로봇 어댑터
-- 2026-11-06 · 03b9bd7470 · feat(learning): 학습 실행에서 학습률과 행동 묶음 길이 선택
-- 2026-11-06 · uncommitted · docs(uiux): 실제 로컬 main 수용과 최종 검증 출처 기록
-- 2026-11-06 · uncommitted · test(tools): 최신 main 도움말 통합과 원자 티켓 fixture
+- 2026-11-07 · uncommitted · fix(remote): 호출의 -rA가 공통 꼬리에 덮이지 않는다
+- 2026-11-07 · uncommitted · fix(land): FULL 대기가 준비 슬롯을 차지하지 않고 MAIN-RED가 닫힌다
+- 2026-11-07 · uncommitted · 공통 서비스 카탈로그와 D-987
+- 2026-11-07 · uncommitted · fix(omx): 사다리가 GPU 없이 시작하지 않게 하고 MuJoCo 접촉 교훈을 기록

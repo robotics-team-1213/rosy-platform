@@ -12,6 +12,7 @@ on:
       - ".github/workflows/android.yml"
       - "test/fixtures/protocol/**"
       - "shared/web/**"
+      - "shared/android/**"
   pull_request:
     paths:
       - "operations/site_ui/cam/**"
@@ -19,6 +20,7 @@ on:
       - ".github/workflows/android.yml"
       - "test/fixtures/protocol/**"
       - "shared/web/**"
+      - "shared/android/**"
 
 jobs:
   android-unit:

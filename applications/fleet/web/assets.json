@@ -286,6 +286,10 @@
       "path": "formation.js",
       "media_type": "application/javascript"
     },
+    "motion-source.js": {
+      "path": "motion-source.js",
+      "media_type": "application/javascript"
+    },
     "motion-readiness.js": {
       "path": "motion-readiness.js",
       "media_type": "application/javascript"
@@ -536,6 +540,10 @@
     },
     "power-action.js": {
       "path": "shared/power-action.js",
+      "media_type": "application/javascript"
+    },
+    "area-first.js": {
+      "path": "shared/area-first.js",
       "media_type": "application/javascript"
     },
     "area-nav.js": {

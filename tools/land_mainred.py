@@ -34,6 +34,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -44,6 +45,7 @@ SECTION = re.compile(r"^_{3,} (.+?) _{3,}$", re.M)
 LOCATION = re.compile(r"^(\S+\.py):(\d+): (\w[\w.]*)$", re.M)
 CARRIED: list[tuple[str, str, str, tuple[str, ...]]] = []  # (id, main, why, invocation): no land record while set
 PASSES: list[tuple[str, str]] = []  # (id, tested head) PASSED in a -rA run: closed after the fast-forward
+ALONE = re.compile(r"^tools/collect_alone\.py::test_runs_alone\[(.+)\]$")  # names a test file, not a test
 
 
 def _git(wt: Path, *args: str) -> subprocess.CompletedProcess:
@@ -222,6 +224,39 @@ def landed(wt: Path, sha: str, branch: str) -> list[str]:
     return sorted(first)
 
 
+def recheck(wt: Path, main_sha: str, run, logdir: Path) -> list[str]:
+    """Run each open id on ``main_sha`` alone; close the ones that pass there or whose test file is gone, and return
+    them. Only a landing's own selection closed an id before, so ids nothing selected stayed red for days after the
+    fix (2026-11-07: 11 open, the oldest from 10-28, some of deleted files). A failing or unreachable id stays open."""
+    opened = state(wt)
+
+    def settle(nodeid: str, why: str) -> None:
+        write(wt, "close", id=nodeid, sha=main_sha, why=why,
+              covers=[c["sha"] for c in opened[nodeid]["carries"] if _ancestor(wt, c["sha"], main_sha)])
+
+    jobs = []
+    closed = []
+    for nodeid, s in sorted(opened.items()):
+        alone = ALONE.match(nodeid)
+        file = alone[1] if alone else nodeid.split("::")[0]
+        if _git(wt, "cat-file", "-e", f"{main_sha}:{file}").returncode:
+            settle(nodeid, "test file gone")
+            closed.append(nodeid)
+        elif alone:
+            jobs.append((nodeid, [f"ROSY_ALONE_FILES={file}", "tools/collect_alone.py", "-rA"]))
+        else:
+            jobs.append((nodeid, [*s["env"], "-rA", nodeid]))
+    if jobs:
+        logs = [logdir / f"recheck-{n}.txt" for n in range(len(jobs))]
+        run([inv for _, inv in jobs], logs)
+        for (nodeid, _), log in zip(jobs, logs):
+            text = log.read_text(encoding="utf-8", errors="replace") if log.is_file() else ""
+            if re.search(rf"^PASSED {re.escape(nodeid)}\s*$", text, re.M):
+                settle(nodeid, "passed on main")
+                closed.append(nodeid)
+    return closed
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -229,10 +264,22 @@ def main(argv: list[str] | None = None) -> int:
     own.add_argument("id")
     own.add_argument("owner")
     sub.add_parser("status", help="open red ids")
+    sub.add_parser("recheck", help="run the open ids on main; close the ones that pass or whose test file is gone")
     args = parser.parse_args(argv)
     wt = Path.cwd()
     if args.cmd == "own":
         write(wt, "own", id=args.id, owner=args.owner)
+        return 0
+    if args.cmd == "recheck":
+        sys.path[:0] = [str(Path(__file__).resolve().parent / "remote")]
+        import remote_pytest  # only this command needs the lab PCs
+        sha = _git(wt, "rev-parse", "main").stdout.strip()
+        logdir = Path(tempfile.mkdtemp(prefix="rosy-mainred-recheck-"))
+        closed = recheck(wt, sha, lambda invs, logs: remote_pytest.run(invs, logs, sha, repo=wt, label="mainred-recheck"),
+                         logdir)
+        print(f"[main-red] closed {len(closed)}, open {len(state(wt))} (logs {logdir})")
+        for nodeid in closed:
+            print(f"CLOSED    {nodeid}")
         return 0
     for nodeid, s in sorted(state(wt).items()):
         print(f"{nodeid}  owner {s['owner'] or '-'}  carried {len(s['carries'])}  since "

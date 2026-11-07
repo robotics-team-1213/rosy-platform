@@ -106,6 +106,7 @@ SSH = ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5",
 # pyproject.toml (even one with no pytest section) became rootdir and FAILED ids lost their root.
 ROOTDIR = "--rootdir=."
 PYTEST_TAIL = ["-q", "-rfE", "-p", "no:cacheprovider", ROOTDIR, *known_failures.NO_ROS_LAUNCH_PLUGINS]
+
 # Leading words of an invocation that remote_job.JOB exports instead of passing to pytest.
 ENV_ARG = re.compile(r"^ROSY_[A-Z0-9_]*=")
 CI = ".github/workflows/ci.yml"
@@ -502,7 +503,7 @@ def one(host: str, name: str, k: int, inv: list[str], log: Path, job: list[str],
     print(f"[remote-pytest] {note}", flush=True)
     if retry is None:
         try:
-            code = remote_job.run(host, name, k, log, job, [*words, *inv, *extra, *PYTEST_TAIL], PYTEST_TIMEOUT, SSH, **stop)
+            code = remote_job.run(host, name, k, log, job, [*words, *inv, *extra, *xdist_plan.tail(inv, PYTEST_TAIL)], PYTEST_TIMEOUT, SSH, **stop)
         except remote_job.Lost as error:
             print(error, file=sys.stderr, flush=True)
             return remote_job.LOST_EXIT, str(error)

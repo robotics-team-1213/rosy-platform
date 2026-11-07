@@ -21,6 +21,10 @@ test('trip actions explain the selected robot map pose without treating an opera
   assert.doesNotMatch(tripErrorText('TRIP_POSE_UNTRUSTED', {pose_state: 'LOCALIZED'}), /LOCALIZED가 아닙니다/);
 });
 
+test('a battery refusal is plain Korean, not the raw code', () => {
+  assert.match(tripErrorText('TRIP_BATTERY_UNCONFIRMED', {reason: 'evidence_stale'}), /배터리.*출발할 수 없습니다/);
+});
+
 test('one lap uses a finite trip via a different stop and returns to its start', () => {
   const map = {places: [{id: 'W_mid', kind: 'stop'}, {id: 'E_mid', kind: 'stop'}]};
   assert.deepEqual(oneLapBody(map, 'W_mid', 'E_mid'),

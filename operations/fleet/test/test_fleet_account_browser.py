@@ -44,7 +44,7 @@ def test_app_login_depends_on_account_availability_not_fleet_mode(account_page, 
     expect(page.locator('#login-availability')).to_be_hidden()
     _credentials(page)
     page.locator('[data-login=submit]').click()
-    expect(page.get_by_role('heading', name='Application authorization')).to_be_visible()
+    expect(page.get_by_role('heading', name='Application authorization')).to_be_visible(timeout=AUTHORIZE_WAIT_MS)
     expect(page).to_have_url(origin + target)
     assert page.request.get(origin + '/api/fleet/auth/session').json()['principal_id'] == 'alice'
 
@@ -78,9 +78,13 @@ def test_denied_login_stays_visible_and_allows_another_account(account_page):
     page.locator('[data-login=login]').fill('bob')
     page.locator('[data-login=password]').fill('pw-1234')
     page.locator('[data-login=submit]').click()
-    expect(page.get_by_role('heading', name='Application authorization')).to_be_visible()
+    expect(page.get_by_role('heading', name='Application authorization')).to_be_visible(timeout=AUTHORIZE_WAIT_MS)
     assert len(authorizations) == 1 and authorizations[0] == origin + target
     assert page.request.get(origin + '/api/fleet/auth/session').json()['principal_id'] == 'bob'
+
+
+# A password hash plus redirects outlasted the 5 s default at load 40 on a test PC (2026-11-07 FULL).
+AUTHORIZE_WAIT_MS = 20000
 
 
 @pytest.fixture
@@ -91,10 +95,19 @@ def account_page(tmp_path, request, account_backend):
     tasks = FleetTaskService(FleetTaskStore(tmp_path / 'fleet.sqlite3'), robot_ids=console.robot_ids)
     initial = getattr(request, 'param', 'pw-1234')
     logins = {'alice': {'principal_id': 'alice', 'role': 'operator',
-                       'password_scrypt': hash_password('pw-1234' if initial == 'multi' else initial)}}
+                       'password_scrypt': hash_password('pw-1234' if initial in ('multi', 'usb') else initial)}}
     if initial == 'multi':
         logins['bob'] = {'principal_id': 'bob', 'role': 'viewer', 'password_scrypt': hash_password('pw-1234')}
+    observations = None
+    if initial == 'usb':
+        from core_common.protocol.workcell_observations import WorkcellObservationManifest
+        from fleet.server.workcell_observations import WorkcellObservations
+        from test_usb_camera_decisions import cell
+        manifest = WorkcellObservationManifest.model_validate({
+            'schema': 'rosy.workcell-observations/1', 'workcells': [cell('one', {'a': 'one-a'})]})
+        observations = WorkcellObservations(manifest, {'one_a': 'one-a'})
     app = create_app(console, task_service=tasks, site_users={}, site_logins=logins,
+        workcell_observations=observations,
         web_common=ROOT / 'shared' / 'web', start_task_dispatcher=False)
     if account_backend == 'managed':
         app.state.password_sessions.bootstrap_accounts('alice', 'test-site')
@@ -132,6 +145,38 @@ def _credentials(page):
     page.locator('[data-login=password]').fill('pw-1234')
 
 
+@pytest.mark.parametrize('account_page', ['usb'], indirect=True)
+def test_cookie_operator_can_approve_usb_camera_without_a_stored_token(account_page):
+    from playwright.sync_api import expect
+    from test_usb_camera_decisions import KEY, PATH, report
+
+    page, origin = account_page
+    assert page.request.post(origin + PATH + '/one/usb-devices', data=report(KEY),
+                             headers={'X-Workcell-Observation-Token': 'one-a'}).status == 200
+    page.goto(origin + '/console/login?return=%2Fconsole')
+    _credentials(page)
+    page.locator('[data-login=submit]').click()
+    expect(page).to_have_url(origin + '/console')
+    page.goto(origin + '/console/install#cameras')
+    expect(page.locator('#user-role')).to_have_attribute('title', 'alice · operator')
+    assert page.evaluate("sessionStorage.getItem('rosy-console-token')") in (None, '')
+    decision = origin + PATH + '/one/usb-devices/' + KEY + '/decision'
+    assert page.request.post(decision, data={'role': 'top'},
+                             headers={'Origin': 'https://foreign.test'}).status == 403
+    expect(page.locator('#usb-camera-panel')).to_be_visible()
+    page.locator('#usb-camera-list input').fill('top')
+    page.locator('#usb-camera-list ui-button').click()
+    with page.expect_response(decision) as approved:
+        page.locator('dialog[open] ui-button').filter(has_text='역할 승인').click()
+    assert approved.value.status == 200
+    headers = approved.value.request.all_headers()
+    assert 'authorization' not in headers
+    assert 'rosy_fleet_session=' in headers.get('cookie', '')
+    assert headers.get('origin') == origin
+    assert page.request.get(origin + PATH + '/usb-devices').json()['workcells'][0][
+        'candidates'][0]['decision']['role'] == 'top'
+
+
 @pytest.mark.parametrize('path', ['/console', '/console/install', '/console/site-map', '/console/cell'])
 def test_profile_entry_preserves_work_context_and_verifies_own_name(account_page, path, account_backend):
     from playwright.sync_api import expect
@@ -146,14 +191,10 @@ def test_profile_entry_preserves_work_context_and_verifies_own_name(account_page
     expect(page.locator('#fleet-profile')).to_be_visible()
     writes = []
     page.context.on('request', lambda req: writes.append(req.url) if req.method in ('POST', 'PATCH') else None)
-    if path in ('/console/site-map', '/console/cell'):
-        with page.expect_popup() as popup:
-            page.locator('#fleet-profile').click()
-        profile = popup.value
-        expect(page).to_have_url(origin + path)
-    else:
+    with page.expect_popup() as popup:
         page.locator('#fleet-profile').click()
-        profile = page
+    profile = popup.value
+    expect(page).to_have_url(origin + path)
     expect(profile.locator('#profile-id')).to_have_text('alice')
     expect(profile.locator('#profile-role')).to_have_text('운영자')
     if account_backend == 'managed':

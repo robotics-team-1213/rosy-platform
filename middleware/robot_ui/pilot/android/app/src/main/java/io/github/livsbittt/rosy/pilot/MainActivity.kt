@@ -1,7 +1,7 @@
 package io.github.livsbittt.rosy.pilot
 
 import io.github.livsbittt.rosy.peer.AndroidPeerIdentity
-import io.github.livsbittt.rosy.cam.account.AndroidAccount
+import io.github.livsbittt.rosy.account.AndroidAccount
 import android.app.Activity
 import android.app.AlertDialog
 import android.os.Bundle

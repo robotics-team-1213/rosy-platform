@@ -14,6 +14,7 @@ Kotlin sources that every ROSY Android app compiles in place (D-939). No Gradle 
 | Directory | Purpose |
 |-----------|---------|
 | `peer/` | Peer approval building blocks (D-456, D-483): `PeerProof` signatures, `PeerTls` first-contact CA pinning, `AndroidPeerIdentity` Keystore key per app |
+| `account/` | Rosy Account native session (D-757, D-987): `AccountSession`, `AndroidAccount` and `account-config.gradle`. The stored names `rosy-account-<scope>`, `rosy-account-aes` and `rosy-account/1:` keep existing logins; changing them signs everyone out |
 
 ## For AI Agents
 

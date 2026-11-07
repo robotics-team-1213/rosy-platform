@@ -159,6 +159,48 @@ def test_a_landing_refused_only_by_a_full_queue_waits_for_room(repo, room):
     assert (tree.parent / (tree.name + ".stopped")).exists() is not room
 
 
+@pytest.mark.parametrize("last_line,attempts,stopped", [
+    ("OSError: [WinError 1450] Insufficient system resources", 4, True),
+    ("fatal: Out of memory, malloc failed (tried to allocate 1884142 bytes)", 4, True),
+    ("[land] STOP: 1 new failure(s): test_x", 1, True),
+])
+def test_only_a_laptop_resource_shortage_reruns_land_and_only_a_few_times(repo, monkeypatch, last_line, attempts, stopped):
+    _, dev = repo
+    monkeypatch.setattr(tool, "RESOURCE_WAIT_S", 0)
+    snap, log = tool.start(dev, [], NOW, lambda *a: None)
+    tree = log.parent / log.name.removesuffix(".log")
+    runs = []
+
+    def fake_land(argv, cwd, stdout, stderr, **kw):
+        runs.append(argv)
+        stdout.write(last_line + "\n")
+        return 1
+
+    assert tool.supervise(tree, snap, [], run=fake_land) == 1
+    assert len(runs) == attempts
+    assert (tree.parent / (tree.name + ".stopped")).exists() is stopped
+
+
+def test_a_landing_recovers_after_a_resource_shortage(repo, monkeypatch):
+    main, dev = repo
+    monkeypatch.setattr(tool, "RESOURCE_WAIT_S", 0)
+    snap, log = tool.start(dev, [], NOW, lambda *a: None)
+    tree = log.parent / log.name.removesuffix(".log")
+    runs = []
+
+    def fake_land(argv, cwd, stdout, stderr, **kw):
+        runs.append(argv)
+        if len(runs) == 1:
+            stdout.write("MemoryError\n")
+            return 1
+        _git(main, "merge", "-q", "--ff-only", snap)
+        return 0
+
+    assert tool.supervise(tree, snap, [], run=fake_land) == 0
+    assert len(runs) == 2
+    assert not (tree.parent / (tree.name + ".stopped")).exists()
+
+
 def test_expired_room_deadline_refuses_even_a_free_queue(repo, monkeypatch):
     _, dev = repo
     monkeypatch.setattr(tool.time, "monotonic", lambda: 11)

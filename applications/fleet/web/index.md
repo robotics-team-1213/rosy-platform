@@ -32,8 +32,8 @@
 
 ## 최근 기록
 
-- 2026-11-06 · uncommitted · uiux(fleet): 지도 연결 실패 안내, 지도 장소 키보드, 로봇 이름표, Cell 블록 이름표
-- 2026-11-06 · uncommitted · uiux: 관제 용어·연결 문구 통일, 단독 링크 누름면
-- 2026-11-06 · uncommitted · uiux(fleet): 지도 클릭 목적지와 정지 미확인 문구
-- 2026-11-06 · uncommitted · uiux(fleet): 지도 이름·설치 전화 폭·저장 실패 안내
-- 2026-11-06 · uncommitted · uiux(fleet): 수동 조종 패널의 위치 근거와 막힌 이유
+- 2026-11-07 · uncommitted · fix(fleet-ui): 칸 확인 불가 문구
+- 2026-11-07 · uncommitted · fix(fleet-ui): 배터리 출발 거절 문구 · 충전 칸 위치 불명 표시
+- 2026-11-07 · 285714599b · uiux: 로봇 이동 출처 표시
+- 2026-11-07 · uncommitted · uiux(account): 로그인 뒤 뒤로 가기가 로그인 화면으로 되튀지 않는다
+- 2026-11-07 · uncommitted · uiux(fleet): 설치 작업 탭에서 뒤로 가기가 앞 작업으로 돌아간다

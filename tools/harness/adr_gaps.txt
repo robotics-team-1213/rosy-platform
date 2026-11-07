@@ -107,5 +107,4 @@ D-966 reserved in another in-flight branch (refs/adr/D-966), absent from this D-
 D-967 reserved in another in-flight branch (refs/adr/D-967), absent from this D-968 branch; remove when its ADR lands
 D-980 unused; the reservation tool counted an uncommitted draft and gave D-981
 D-982 reserved in another in-flight branch (refs/adr/D-982), absent from this D-985 branch; remove when its ADR lands
-D-983 reserved in another in-flight branch (refs/adr/D-983), absent from this D-985 branch; remove when its ADR lands
 D-984 reserved in another in-flight branch (refs/adr/D-984), absent from this D-985 branch; remove when its ADR lands
