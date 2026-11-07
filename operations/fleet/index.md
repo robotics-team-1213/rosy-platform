@@ -105,8 +105,8 @@
 
 ## 최근 기록
 
+- 2026-11-07 · 7c042262fb · fix(fleet): a stale blip is read again before a trip is refused
+- 2026-11-07 · uncommitted · fix(fleet): 독립 검토 반영 — 충전 복귀·재시도·읽기 대기·칸 dwell/unknown
+- 2026-11-07 · uncommitted · fix(fleet): 운행 시작 배터리 확인 · 충전 칸 점유 유지
 - 2026-11-07 · uncommitted · fix(fleet): 규칙 검토 지적 반영
 - 2026-11-07 · 34867d3b61 · feat(fleet): D-982 1·2단계 원격 시험 결과
-- 2026-11-07 · uncommitted · feat(fleet): 현장 운영 규칙 문서와 판정 API (D-982 1·2단계)
-- 2026-11-06 · uncommitted · uiux: 물체 카탈로그 미지정 안내를 한글로
-- 2026-11-06 · uncommitted · feat(fleet): 관제 수동 모드 전환

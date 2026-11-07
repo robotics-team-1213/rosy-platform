@@ -70,7 +70,7 @@ class CapabilityDisplay:
         if task is not None:
             task.cancel()
 
-    async def shown(self, robot_id, wait_s=0.05):
+    async def shown(self, robot_id, wait_s=0.05, await_pending=False):
         client = self.clients.get(robot_id)
         if self.identities.get(robot_id) is not client:
             self.invalidate(robot_id)
@@ -87,7 +87,8 @@ class CapabilityDisplay:
             # request that started the refresh: a slow robot does not add wait_s to every request.
             expired = (cached is None or cached[1] is not None and self.max_age_s is not None
                        and self.clock() - cached[0] > self.max_age_s)
-            await asyncio.wait({task}, timeout=wait_s if expired and started else 0)
+            # ``await_pending`` (trip start admission): also wait for a read another caller started.
+            await asyncio.wait({task}, timeout=wait_s if expired and (started or await_pending) else 0)
         return self._kept(robot_id, client)
 
     def _kept(self, robot_id, client):

@@ -15,6 +15,7 @@ from fleet.server.trip_ports import TripConfig
 from fleet.server.trip_runner import TripError, TripRunner
 from test_lane_traffic import START_N, Fleet, _s_of, _trip
 from test_routing import demo_site
+from fakes import fresh_battery
 
 RING = ("ring_n", "ring_s", "ring_e", "ring_w")
 
@@ -30,7 +31,7 @@ def _setup(capacity=1, plans=None):
     plans = plans if plans is not None else [SignalPlan("sig", "roundabout", tuple((a, 8.0) for a in entries))]
     traffic = TrafficService(store, TripConfig(), zones=zones, signals=plans, clock=lambda: fleet.now,
                              signal_clock=lambda: fleet.now)
-    runner = TripRunner(store=store, routing_config=store.routing_config, caps=fleet.caps_for, poses=fleet,
+    runner = TripRunner(store=store, routing_config=store.routing_config, caps=fleet.caps_for, battery=fresh_battery, poses=fleet,
                         junction=fleet, goal=fleet.goal, cancel_goal=fleet.cancel_goal, clock=lambda: fleet.now,
                         traffic=traffic)
     return runner, store, fleet, entries

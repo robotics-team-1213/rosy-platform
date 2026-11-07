@@ -56,6 +56,12 @@ def agreed_offset(rows: list, max_spread_deg: float = 15.0) -> float | None:
     return round(mean, 1) if all(abs(wrap90(o - mean)) <= max_spread_deg for o in offsets) else None
 
 
+def offer_measured(config: dict, choices, name: str) -> None:
+    """The measured axis goes on the ledger too: an outcome on a value never offered raises, after the arm has moved."""
+    if config.get("closing_axis_offset_deg") is not None:
+        choices.offer(name, config["closing_axis_offset_deg"], "measured in free air (cell_jaw_axis)")
+
+
 def offset_for(config: dict, entry: dict, ledger_best):
     """(closing offset, None) or (None, why): the measured fact first; only a grasp that opens past the box's length
     refuses to go on the ledger's word."""

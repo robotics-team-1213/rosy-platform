@@ -186,7 +186,7 @@ def install_console_routes(app, *, console, sightings, require_viewer,
     # path and keep the last good body up to that bound (a site read is <=0.4 s, a tunnel 5-12 s).
     power_display = app.state.power_health_display = CapabilityDisplay(
         console._clients, console._clock, read_method="power_health", schema=PowerHealthResponse,
-        refresh_s=1.0, max_age_s=5.0)
+        refresh_s=1.0, max_age_s=5.0, age_from_request=True)   # the age counts the read latency (slow links)
     motor_display = app.state.motor_health_display = CapabilityDisplay(
         console._clients, console._clock, read_method="motor_health", schema=MotorHealthResponse,
         refresh_s=1.0, age_from_request=True)

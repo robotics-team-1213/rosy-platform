@@ -1125,3 +1125,12 @@
 - 변경: 판정 중 꺼진 버튼에 이유를 달고, 결과 표시 `거절`을 `거절됨`으로 바꿔 되돌릴 수 없는 행동 문구와 구분한다.
 - 증거: FULL 착지에서 test_shared_controls·test_list_row_irreversible이 두 줄을 잡았다(단독 재실행에서도 실패).
 - gate 변화: SOURCE 회귀. 현장 수용은 별도다.
+## 2026-11-07 · uncommitted · fix(fleet-ui): 배터리 출발 거절 문구 · 충전 칸 위치 불명 표시
+- 변경: `trip-display.js`에 `TRIP_BATTERY_UNCONFIRMED` 한국어 문구, `charge-bays-view.js`에 칸 상태 `unknown`과 이유 `pose_unknown` 문구. node 시험 `charge-bays-view`·`trip-path`에 단언 추가.
+- 증거: node 단언 추가(문구 두 곳), 원격 실행 기록 참조.
+- gate 변화: 없음. 브라우저 시험 결과는 원격 실행 기록 참조.
+
+## 2026-11-07 · uncommitted · fix(fleet-ui): 칸 확인 불가 문구
+- 변경: 칸 상태 `unknown`은 "확인 불가 · 비어 있다고 볼 수 없음", 이유 `bay_unknown` 문구 추가.
+- 증거: node `charge-bays-view` 단언 추가, 원격 실행 기록 참조.
+- gate 변화: 없음.

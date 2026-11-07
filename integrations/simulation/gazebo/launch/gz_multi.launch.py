@@ -473,6 +473,8 @@ def _launch_setup(context):
                 with open(core_cfg, "w") as f:
                     yaml.safe_dump(_core_config(ns, api_port_base + i - 1), f)
             os.makedirs(core_home, exist_ok=True)
+            group_actions.append(Node(  # battery evidence like the Pinky battery node (Fleet trip start needs it)
+                package="gz_sim", executable="sim_battery.py", name="sim_battery", namespace=ns, output="screen"))
             group_actions.append(
                 Node(
                     package="core",

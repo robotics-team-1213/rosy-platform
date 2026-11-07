@@ -360,3 +360,25 @@ class FakeRelay:
 
     def streams_ready(self) -> bool:
         return self.ready
+
+
+#: A deliberate fixture for trip tests: fresh, non-critical battery evidence (TRIP_BATTERY_UNCONFIRMED gate).
+FRESH_BATTERY = {"battery": {"evidence": "fresh", "sample_age_s": 0.0, "stale_after_s": 5.0, "level": "ok",
+                             "percent": 80.0}, "age_s": 0.0}
+
+
+async def fresh_battery(robot_id):
+    return {"battery": dict(FRESH_BATTERY["battery"]), "age_s": 0.0}
+
+
+def fresh_power_health():
+    """A real, fresh CORE ``power_health`` body (non-critical battery) for tests that start trips through create_app."""
+    import time
+    from core_features.power.battery import BatteryConfig, BatteryMonitor
+    from core_features.power.manager import PowerConfig, PowerManager
+    battery = BatteryMonitor(BatteryConfig(), clock=time.monotonic)
+    battery.on_voltage(7.6)
+    power = PowerManager(PowerConfig())
+    return {"power": power.status().model_dump(mode="json"), "battery": battery.health(),
+            "policy": power.health(), "recommendation": "normal_idle_policy", "health": {}}
+

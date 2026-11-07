@@ -8,7 +8,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from fakes import FakeRobot
+from fakes import FakeRobot, fresh_battery
 from fleet.server.app import create_app
 from fleet.server.console import FleetConsole
 from fleet.server.console_view import trip_caps
@@ -95,7 +95,7 @@ def _setup(site_map=None, caps=LEASED, lease=None):
     ports = LeasePorts(caps)
     store = SiteMapStore(None, clock=lambda: ports.now)
     store.import_if_empty(site_map or from_lane_graph(LANE_GRAPH), source="test")
-    runner = TripRunner(store=store, routing_config=store.routing_config, caps=ports.caps_for, poses=ports,
+    runner = TripRunner(store=store, routing_config=store.routing_config, caps=ports.caps_for, battery=fresh_battery, poses=ports,
                         junction=ports, goal=ports.goal, cancel_goal=ports.cancel_goal,
                         blocked=lambda: ports.blocked, clock=lambda: ports.now, config=TripConfig(),
                         lease={"required": True, "holder": "site-a"} if lease is None else lease)
@@ -367,7 +367,7 @@ def test_the_next_lap_keeps_the_lease():
     store = SiteMapStore(None, clock=lambda: fleet.now)
     from test_routing import demo_site
     store.import_if_empty(demo_site(), source="test")
-    runner = TripRunner(store=store, routing_config=store.routing_config, caps=fleet.caps_for, poses=fleet,
+    runner = TripRunner(store=store, routing_config=store.routing_config, caps=fleet.caps_for, battery=fresh_battery, poses=fleet,
                         junction=fleet, goal=fleet.goal, cancel_goal=fleet.cancel_goal,
                         blocked=lambda: fleet.blocked, clock=lambda: fleet.now, lease={"required": True})
     lease_id = _lap_trip(runner, store, fleet, "a", "east:fwd", _s_of(store, "east:fwd", START_N))["lease"]["lease_id"]
