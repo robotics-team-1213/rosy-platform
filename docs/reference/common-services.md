@@ -43,7 +43,7 @@ Account의 로그인·프로필·관리 화면 소스는 `applications/fleet/web
 
 | 후보 | 확인한 구현과 처리 |
 |---|---|
-| 감사·기록의 비밀 필드 | `fleet/observe/events.py`와 `fleet/server/ledger/task_payloads.py`의 동일한 필드 이름 정규식만 `core_common.audit_fields.is_credential_field`로 추출했다. 재귀 범위·PEM 값 검사·오류·JSON 인코딩·보관은 각 owner에 남는다. 완전한 마스킹이나 새 사건 schema가 아니다 |
+| 감사·기록의 비밀 필드 | `fleet/observe/events.py`와 `fleet/server/ledger/task_payloads.py`의 동일한 필드 이름 정규식만 `core_common.audit_fields.is_credential_field`로 추출했다. 재귀 범위·PEM 값 검사·오류·JSON 인코딩·보관은 각 owner에 남는다. `learning/curation/pinky/fleet_observations.py`는 CLI에서 파일로 직접 실행되고 별도 설치 패키지가 아니며 foundation 경로를 설정하지 않으므로 자체 검사식을 유지한다. 완전한 마스킹이나 새 사건 schema가 아니다 |
 | Account·admission 감사 | `rosy_account/audit.py`는 HTTP 요청 메타데이터, `policy_admission_audit.py`는 정책 판정·scope revision을 기록한다. actor·correlation·revision 의미가 달라 사건 형식을 합치지 않았다 |
 | 백업·복원 | Account와 Fleet은 이미 `deploy/site/site_db.py`의 무결성·해시·결과 형식을 함께 쓴다. 검수의 `qwen_review_completion.py`는 병합 전 DB 사본과 mask 버전 receipt이고 Account `migration.py`는 자격 이관 검증이다. 같은 백업·복원 계약으로 합치지 않았다 |
 | 업데이트 | site updater는 candidate commit·switch journal·건강/rollback, Pinky `auto_update_records.py`는 release identity·hold·적용 결과를 소유한다. `tools/remote/update_status.py`는 설치 unit·이미지·파일 drift 조회다. 서로 다른 상태를 공통 updater나 성공 enum으로 바꾸지 않았다 |
