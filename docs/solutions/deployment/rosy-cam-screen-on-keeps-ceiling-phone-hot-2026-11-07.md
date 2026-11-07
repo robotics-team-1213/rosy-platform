@@ -26,10 +26,10 @@ applies_when: a ceiling Rosy Cam phone runs hot, pauses for heat, or its sensor 
 ```
 adb shell settings put global stay_on_while_plugged_in 0
 adb shell input keyevent 223
-adb shell settings put global protect_battery 1
+adb shell settings put global protect_battery 3
 ```
 
-`protect_battery=1`은 One UI 7에서 충전을 멈추게 했다. 되돌리기 값은 이 현장 기준 `stay_on`은 7, `protect_battery`는 3이었다. 구도를 맞출 때만 화면을 켠다.
+One UI 7의 `protect_battery`는 1이 기본(100%까지 충전, 95%에서 다시 충전), 3이 최대(80%에서 멈춤)다. `dumpsys battery`의 `mProtectBatteryMode`와 `mProtectionThreshold`로 확인한다. 1을 "켬"으로 읽고 바꾸면 100%로 붙어 있는다(2026-11-07 실측). 화면 되돌리기 값은 이 현장 기준 `stay_on` 7이다. 구도를 맞출 때만 화면을 켠다.
 
 멈춤 기준을 40°C로 낮추지 않는다. 경고만 배터리 40°C다. 표면 온도는 평소에 40°C 가까이 가므로, 낮추면 카메라가 자주 멈춰 위치 추정이 끊긴다.
 
@@ -46,7 +46,7 @@ adb shell settings put global protect_battery 1
 - 20분 뒤 값은 센서가 꺼진 상태다. 프레임을 계속 읽는 동안의 평형 온도는 재지 않았다.
 - 화면을 끈 채 프레임 요청: 첫 응답 404, 약 3초 뒤 200, 이후 약 2.9 fps, 장면 정상, 화면은 계속 꺼짐.
 - 요청이 멈추고 46~52초 뒤 센서가 닫혔다. D-691의 유지 시간 30초보다 길며 이유는 찾지 못했다.
-- `protect_battery=1` 뒤 상태 "충전 안 함", 전류 약 0. 80% 유지는 아직 확인하지 않았다.
+- `protect_battery=1`(기본 모드)로 바꾼 뒤 약 7시간 뒤 배터리 100%, `recharge_level` 95였다. 3으로 되돌리자 `mProtectBatteryMode: 3`, 기준 80이 됐다. 100%에서 80% 아래로 내려와 머무는지는 아직 확인하지 않았다.
 
 ## 복구 때 주의
 
