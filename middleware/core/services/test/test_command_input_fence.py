@@ -176,3 +176,59 @@ def test_late_native_close_cannot_cancel_a_new_manual_pulse(monkeypatch):
     assert command.native.current is replacement
     assert command.native.current.phase != "TERMINAL"
     assert command._manual_twist is candidate and candidate is not None
+
+
+class _Clock:
+    def __init__(self, monkeypatch):
+        import core_features.command.manager as module
+        self.now = 10_000.0  # a robot up for hours: the watchdog's cleared 0.0 would read as long idle
+        monkeypatch.setattr(module.time, "monotonic", lambda: self.now)
+
+
+def _manual_quiet(monkeypatch):
+    clock = _Clock(monkeypatch)
+    modes = ModeMachine()
+    command = CommandManager(SourceRegistry(), modes, SafetyManager(SpeedLimits(), BatteryPolicy()))
+    return clock, modes, command
+
+
+def test_quiet_time_starts_at_process_start(monkeypatch):
+    clock, _, command = _manual_quiet(monkeypatch)
+    assert command.manual_quiet_s == 0.0
+    clock.now += 601.0
+    assert command.manual_quiet_s == 601.0
+
+
+def test_entering_manual_counts_as_an_operator_before_any_command(monkeypatch):
+    # D-985 safety review: entering MANUAL clears input, and the watchdog's refresh(0.0) read as uptime.
+    clock, modes, command = _manual_quiet(monkeypatch)
+    clock.now += 7200.0
+    assert modes.transition(Mode.MANUAL)[0]
+    assert command.manual_quiet_s == 0.0
+
+
+def test_a_refused_teleop_still_counts_as_an_operator(monkeypatch):
+    clock, modes, command = _manual_quiet(monkeypatch)
+    assert modes.transition(Mode.MANUAL)[0]
+    clock.now += 7200.0
+    accepted, _ = command.teleop(float("nan"), 0.0)
+    assert accepted is False
+    assert command.manual_quiet_s == 0.0
+
+
+def test_a_stop_does_not_erase_the_operator(monkeypatch):
+    clock, modes, command = _manual_quiet(monkeypatch)
+    assert modes.transition(Mode.MANUAL)[0]
+    assert command.teleop(0.01, 0.0)[0]
+    clock.now += 5.0
+    command.clear_manual()
+    assert command.manual_quiet_s == 5.0
+
+
+def test_quiet_time_does_not_touch_the_stop_watchdog(monkeypatch):
+    clock, modes, command = _manual_quiet(monkeypatch)
+    assert modes.transition(Mode.MANUAL)[0]
+    assert command.teleop(0.01, 0.0)[0]
+    assert command.manual_active is True
+    assert command.manual_quiet_s == 0.0
+    assert command.manual_active is True

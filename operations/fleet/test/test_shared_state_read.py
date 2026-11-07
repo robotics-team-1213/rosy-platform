@@ -12,7 +12,7 @@ from pathlib import Path
 import httpx
 import pytest
 
-from fakes import FakeRobot
+from fakes import FakeRobot, fresh_battery
 from fleet.hub.hub import HubError
 from fleet.server.app import create_app
 from fleet.server.console import FleetConsole
@@ -214,7 +214,7 @@ def _shared_setup(caps, **config):
     fleet = SharedFleet(tuple(caps), caps)
     store = SiteMapStore(None, clock=lambda: fleet.now)
     store.import_if_empty(demo_site(), source="test")
-    runner = TripRunner(store=store, routing_config=store.routing_config, caps=fleet.caps_for, poses=fleet,
+    runner = TripRunner(store=store, routing_config=store.routing_config, caps=fleet.caps_for, battery=fresh_battery, poses=fleet,
                         junction=fleet, goal=fleet.goal, cancel_goal=fleet.cancel_goal,
                         blocked=lambda: fleet.blocked, clock=lambda: fleet.now, config=TripConfig(**config),
                         authority=True, lease={"required": True})

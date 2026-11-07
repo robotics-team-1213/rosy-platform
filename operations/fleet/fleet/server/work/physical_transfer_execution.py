@@ -39,6 +39,11 @@ class PhysicalTransferExecution:
         job = store._read(connection, mission_id)
         if job is None:
             raise KeyError(mission_id)
+        if connection.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='fleet_control_delegations'"
+                              ).fetchone() and connection.execute(
+                "SELECT 1 FROM fleet_control_delegations WHERE local_task_id=? AND cancel_requested=1",
+                (mission_id,)).fetchone():
+            raise MissionConflict("delegated arm work was canceled by its origin")
         request = PhysicalTransferRequest.model_validate(job["request"])
         if (job["status"] != "READY" or job["approved_by"] is None
                 or job["approved_by"] == job["proposal_principal_id"]

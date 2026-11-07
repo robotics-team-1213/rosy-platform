@@ -938,6 +938,21 @@
 - 증거: 전체 페이지의 양 테마·1366/390 캡처에서 가로 넘침 없이도 무게가 여러 줄로 갈라진 것을 육안 확인했다. 텍스트 Range의 줄 수를 검사하는 회귀가 수정 전 06747e3b10에서 네 경우 모두 실패했다. 최종 원격 재검증과 캡처를 함께 확인한다.
 - gate 변화: 없음. CE: 전체 페이지·긴 값에서 읽힘을 확인해야 한다는 조건을 회귀 시험에 반영했다.
 
+## 2026-11-03 · 12aa681800 · USB 카메라 역할 승인에 쿠키 운영자 로그인 허용
+
+- 변경: USB 승인 패널의 Bearer 필수 표시 조건을 제거한다. 기명 운영자의 쿠키 로그인도 기존 same-origin 요청으로 목록을 읽고 확인 대화상자 뒤 승인한다. 운영자·잠금 검사, 서버 권한과 CSRF 검사는 유지한다.
+- 증거: `8316bbe1a9` 원격 Chromium RED는 legacy·managed 로그인 모두 패널 숨김에서 실패(NEW 2/known 0/flaky 0). 수정 소스 `12aa681800`에서 전체 계정 브라우저와 USB 결정 라우트 57 passed/0 skipped, known_failures NEW/known/flaky 0. 실제 테스트 서버·SQLite로 쿠키 로그인, 빈 저장 토큰, 외부 Origin 403, 확인 뒤 승인 200·쿠키 전송·Authorization 부재·저장 결과를 확인했다.
+- Gate: 호스트 브라우저·HTTP 검증이며 실제 USB 적용·장치·현장 수용은 수행하지 않았다.
+- CE: 해당 없음 — 기존 쿠키 로그인 교훈을 검토했고 원인·수정·재발 방지는 한 조건과 실제 브라우저 회귀로 복원 가능하다.
+
+
+## 2026-11-03 · d4e263f5fa · fix(console): explain fixed-unit registration refusal without consuming-code advice
+
+- Change: the existing messageFor path describes current fixed-roster registration as unavailable and confirms the code was not sent. The old manifest-edit/retry advice is removed from the legacy refusal explanation.
+- Evidence: native JavaScript syntax check exit0; the official remote console Node-unit wrapper passed1, skipped0, NEW/known/flaky0. Backend real-application refusal and preserved enrollment flows passed106 tests.
+- gate 변화: existing response rendering, transport and authorization remain in use. Qualified FULL/public CI and physical acceptance are separate.
+- CE: no additional lesson; existing error mapping and regression evidence explain the change.
+
 ## 2026-11-04 · uncommitted · 설치 화면 맨 위 설치 노선 (D-975 P3)
 
 - 변경: 설치·보정 화면 머리에 공용 단계 노선(`ui-stage-track`, Fleet 노선색)을 붙였다. 로봇 등록 → 카메라 승인 → 카메라 보정 → 시작점 네 역이며, 각 역은 기존 GET 응답(등록 로봇, 폐기되지 않은 카메라 자격, 보정, 유효한 시작점)으로만 완료를 그린다. 읽지 못한 역은 완료로 그리지 않고 "확인 못 함"으로 둔다. 역 링크는 기존 구획으로 이동만 하고 새 API·권한·명령은 없다. 기존 `install-step` 구획 상자는 그대로다.
@@ -1081,3 +1096,20 @@
 - 변경: Fleet 상태를 읽지 못하면 현장 지도 빈 자리가 로봇 탓 대신 "Fleet에 연결할 수 없습니다"와 다음 할 일(자동 재시도, 계속되면 관제 PC의 Fleet 서비스 확인)을 말한다. 지도 화면의 장소 점이 Tab 초점과 Enter·Space 선택을 받고 로봇 이름표는 앞 이름표와 겹치면 아래로 비킨다(간단한 한 방향 보정). Cell 블록 이름표는 세로 가운데이며 칸보다 길면 순서 번호만 보인다. 정지·허용·차단 판단은 바꾸지 않았다.
 - 증거: agent-browser 로컬 Fleet 서버에서 서버를 내리고 지도 칸 글을 확인, 지도 화면 장소에서 Enter로 선택·초점 유지 확인. 로봇 이름표 겹침과 Cell 블록은 이 서버에 해당 자료가 없어 화면으로 보지 못했다.
 - gate 변화: SOURCE 변경. 실물·현장 수용은 별도다. CE: 해당 없음 — 코드와 회귀가 판단을 보존한다.
+
+## 2026-11-07 · 285714599b · uiux: 로봇 이동 출처 표시
+- 변경: 로봇 카드 사실 줄에 `motion-source.js`가 고른 이동 출처 칩을 더했다. 증명하는 사실만 이름을 붙인다: 이 화면의 조종 단추(`view.manualDriveRobot`), CORE 운행 임차·열린 운행, 비켜서기, 도킹 상태, 대형, 관제 목표, 보정. 수동 모드·목표 주행은 CORE 모드만으로 누가 시켰는지 알 수 없어 `확인 불가`로 쓴다. 오래된 상태·신선하지 않은 속도 근거는 `출처 확인 불가`이고, 출처 없이 움직이면(속도 0 초과) 예외 큐에 `원인 불명 이동`을 올린다. 계약·가드·권한 변경 없음.
+- 증거: Node motion-source 단위 9와 roster 연동 2 PASS(로컬). 원격 실제 Chromium(ROSY_RUN_BROWSER_TESTS=1) 신규 1·test_fleet_console_browser 포함 SKIPPED 0, 관련 브라우저 범위 FAILED 0(첫 실행의 로스터 높이 1건은 칩 문구를 줄여 해소). 로봇·현장 PC 주행 없음.
+- gate 변화: SOURCE/원격 브라우저 GO. 실제 로봇 주행, 로봇 화면 조종 구분, main 착지·push·CI·배포는 하지 않았다.
+- 남은 일: 로봇 화면(대시보드) 조종·충전 복귀 운행은 현재 데이터로 증명되지 않는다. CORE가 마지막 수락 teleop의 토큰 종류를 상태에 싣는 additive 필드가 필요하다.
+- 교훈: CE 해당 없음 — 표시 규칙은 코드와 시험에 직접 남는다.
+
+## 2026-11-07 · uncommitted · fix(fleet-ui): 배터리 출발 거절 문구 · 충전 칸 위치 불명 표시
+- 변경: `trip-display.js`에 `TRIP_BATTERY_UNCONFIRMED` 한국어 문구, `charge-bays-view.js`에 칸 상태 `unknown`과 이유 `pose_unknown` 문구. node 시험 `charge-bays-view`·`trip-path`에 단언 추가.
+- 증거: node 단언 추가(문구 두 곳), 원격 실행 기록 참조.
+- gate 변화: 없음. 브라우저 시험 결과는 원격 실행 기록 참조.
+
+## 2026-11-07 · uncommitted · fix(fleet-ui): 칸 확인 불가 문구
+- 변경: 칸 상태 `unknown`은 "확인 불가 · 비어 있다고 볼 수 없음", 이유 `bay_unknown` 문구 추가.
+- 증거: node `charge-bays-view` 단언 추가, 원격 실행 기록 참조.
+- gate 변화: 없음.

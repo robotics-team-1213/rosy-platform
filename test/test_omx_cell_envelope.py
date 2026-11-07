@@ -307,7 +307,8 @@ def runner_context(envelope):
     return lambda **kwargs: envelope.runtime_context({"id": "fixture-arm"}, bus, 30, **kwargs)
 
 
-@pytest.mark.parametrize("name", ["cell_scene_guard.py", "cell_jaw_axis.py", "cell_hooks.py", "cell_pivot.py", "cell_calibrate.py"])
+@pytest.mark.parametrize("name", ["cell_scene_guard.py", "cell_jaw_axis.py", "cell_hooks.py", "cell_pivot.py", "cell_calibrate.py",
+                                  "cell_finger_room.py", "cell_two_arm.py", "cell_coordinate.py"])
 def test_changed_guard_or_measurement_code_invalidates_runtime_and_task_review(
         tmp_path, task, envelope, runner_context, monkeypatch, name):
     before_runtime = runner_context()["sha256"]

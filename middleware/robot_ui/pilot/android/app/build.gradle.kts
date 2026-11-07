@@ -29,7 +29,7 @@ val nativePalette = tasks.register("generateNativePalette") {
 }
 val shared = tasks.register<Sync>("sharedContracts") {
     from("../../../../../operations/site_ui/cam/app/src/main/java")
-    include("**/account/*.kt", "**/settings/LinkPolicy.kt", "**/settings/DiscoveryBudget.kt", "**/settings/SiteLink.kt",
+    include("**/settings/LinkPolicy.kt", "**/settings/DiscoveryBudget.kt", "**/settings/SiteLink.kt",
         "**/settings/SiteLinkRecord.kt", "**/settings/PairingUri.kt", "**/settings/OverheadServiceRecord.kt",
         "**/pairing/Pairing.kt", "**/link/PinnedTrust.kt", "**/link/Protocol.kt",
         "**/health/DeviceHealth.kt", "**/health/ScreenPower.kt")
@@ -61,6 +61,7 @@ android {
     kotlinOptions { jvmTarget = "17" }
     sourceSets.getByName("main").java.srcDir(layout.buildDirectory.dir("generated/shared-contracts"))
     sourceSets.getByName("main").java.srcDir("../../../../../shared/android/peer")  // D-939 shared Android sources
+    sourceSets.getByName("main").java.srcDir("../../../../../shared/android/account")
     sourceSets.getByName("main").java.srcDir(layout.buildDirectory.dir("generated/pilot-palette"))
     sourceSets.getByName("main").assets.srcDir(layout.buildDirectory.dir("generated/pilot-assets"))
     sourceSets.getByName("main").res.srcDir(layout.buildDirectory.dir("generated/screen-resources"))
@@ -97,4 +98,4 @@ dependencies {
     testImplementation("com.squareup.okhttp3:okhttp-tls:4.12.0")
 }
 
-apply(from = "../../../../../operations/site_ui/cam/account-config.gradle")
+apply(from = "../../../../../shared/android/account/account-config.gradle")

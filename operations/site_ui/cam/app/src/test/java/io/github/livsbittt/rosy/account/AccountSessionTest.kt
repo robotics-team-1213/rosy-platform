@@ -1,4 +1,4 @@
-package io.github.livsbittt.rosy.cam.account
+package io.github.livsbittt.rosy.account
 
 import org.junit.Assert.*
 import org.junit.Test

@@ -110,3 +110,50 @@ def test_the_runner_refuses_a_risky_load_before_replacing_its_plan(model, tmp_pa
     runner.command(f"load {path}")  # a refused load is reported, the session goes on
     assert status[-1]["ok"] is False and "risky" in status[-1]["error"]
     assert "hold" not in runner.library["chunks"]  # the old plan stays
+
+
+@pytest.fixture
+def lower_session_caps(model, tmp_path):
+    import test_omx_chunk_runner as cr
+
+    fitted, poses = model
+    arm = fitted["arms"]["FF061D2D"]
+    safe, risky = calm(poses), hot(poses, 1)
+    scale = 200 / abs(lp.predict(arm, risky)["shoulder_lift"])
+    for joint, spec in arm["joints"].items():
+        spec["coef"] = [c * scale if joint == "shoulder_lift" else 0 for c in spec["coef"]]
+    caps = dict(CAPS, shoulder_lift=300)
+    libraries = [dict(cr.library(), fps=30, chunks={"hold": [pose] * 3, "home": [safe] * 3})
+                 for pose in (safe, risky)]
+    assert lp.check(fitted, PORT, libraries[0], caps=caps)["verdict"] == "ok"
+    historic = lp.check(fitted, PORT, libraries[1])["chunks"]["hold"]["joints"]["shoulder_lift"]
+    current = lp.check(fitted, PORT, libraries[1], caps=caps)["chunks"]["hold"]["joints"]["shoulder_lift"]
+    assert historic["share"] == 0.333 and current["share"] == 0.667
+    path = tmp_path / "load-model.json"
+    path.write_text(json.dumps(fitted))
+    return path, caps, libraries
+
+
+def test_startup_plan_check_refuses_against_the_current_session_cap(lower_session_caps, capsys):
+    path, caps, libraries = lower_session_caps
+    with pytest.raises(SystemExit, match="load check risky"):
+        lp.plan_check(path, PORT, None, libraries[1], caps=caps)
+    row = json.loads(capsys.readouterr().out.splitlines()[-1])
+    assert row["chunks"]["hold"]["worst"]["shoulder_lift"]["share"] == 0.667
+
+
+def test_later_load_uses_the_same_current_cap_check_and_keeps_the_previous_plan(lower_session_caps, tmp_path, capsys):
+    import test_omx_chunk_runner as cr
+
+    path, caps, (safe, risky) = lower_session_caps
+    check = lp.plan_check(path, PORT, None, safe, caps=caps)
+    robot, status = cr.Robot(), []
+    runner = cr.m.Runner(robot, safe, fps=30, status=status.append, plan_check=check)
+    runner.target = list(cr.HOME)
+    candidate = tmp_path / "risky-plan.json"
+    candidate.write_text(json.dumps(risky))
+    runner.command(f"load {candidate}")
+    assert status[-1]["ok"] is False and "load check risky" in status[-1]["error"]
+    assert runner.library is safe and not robot.sent
+    row = json.loads(capsys.readouterr().out.splitlines()[-1])
+    assert row["chunks"]["hold"]["worst"]["shoulder_lift"]["share"] == 0.667

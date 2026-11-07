@@ -88,7 +88,10 @@ def check_native_task(binding, prepared):
     if (binding['prepared_id'] != prepared['id']
             or binding['source_revision'] != source['source_revision']):
         raise ValueError('native learning task source association changed')
-    validate_source_profile(binding['task']['profile']['profile'], source['inspection'], source['root'])
+    profile, _ = validate_source_profile(binding['task']['profile']['profile'], source['inspection'], source['root'])
+    if profile['mode'] == 'independent' and len(profile['arms']) > 1:  # this path trains every recorded joint at once
+        raise ValueError('native training would learn one joint model for an independent two-arm task; '
+                         'export it and train each arm, or declare the task cooperative')
     return binding
 
 
