@@ -725,9 +725,8 @@ if ($AccountTrustFile) {
         Fail "AccountTrustFile is not valid JSON"
     }
 }
-elseif ($reprovision -and $reprovision.PSObject.Properties["personalization"] -and
-        $reprovision.personalization.PSObject.Properties["fleet"] -and
-        $reprovision.personalization.fleet.PSObject.Properties["account_trust"]) {
+elseif ($fleetSource -eq "reprovision" -and $reprovision.personalization.fleet.PSObject.Properties["account_trust"]) {
+    # Only with the same Fleet: another site's issuer would refuse every delivery there.
     $accountTrust = $reprovision.personalization.fleet.account_trust
 }
 if ($PlanPath -and $PlanOnly -and (Test-Path -LiteralPath $PlanPath)) {
@@ -1031,6 +1030,12 @@ if ($existingProvision -and (Test-Path -LiteralPath $existingProvision -PathType
 if ($reviewedPlan -and $planKeys -ccontains "prior_provision_sha256" -and
         [string]$reviewedPlan.prior_provision_sha256 -cne [string]$priorProvisionHash -and -not $ResumeAfterWrite) {
     Fail "the card's prior provisioning changed since the reviewed plan"
+}
+if ($accountTrust) {
+    # Before any erase: the same check would otherwise first run when the bundle is built on a wiped card.
+    $trustCheck = "import json, sys; sys.path.insert(0, sys.argv[1]); from personalization import validate_account_trust; validate_account_trust(json.loads(sys.stdin.buffer.read().decode('utf-8-sig')))"
+    $accountTrust | ConvertTo-Json -Compress | & $PythonExe -c $trustCheck $PSScriptRoot
+    if ($LASTEXITCODE -ne 0) { Fail "account trust must hold an HTTPS issuer without a trailing slash and SHA-256 key digests" }
 }
 $plan = [ordered]@{
     mode = $(if ($PlanOnly) { "PLAN_ONLY" } else { "WRITE" })

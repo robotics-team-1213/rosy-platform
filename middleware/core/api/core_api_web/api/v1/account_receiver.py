@@ -78,17 +78,6 @@ def _session_db(issuer: str, client_id: str) -> str:
     return f"account-sessions-{sha256(f'{issuer} {client_id}'.encode()).hexdigest()[:16]}.sqlite3"
 
 
-def _previous(path: Path) -> tuple[bytes | None, dict]:
-    if not path.exists():
-        return None, {}
-    raw = path.read_bytes()
-    try:
-        parsed = json.loads(raw)
-    except ValueError:  # a damaged file must not block the delivery that repairs it
-        return raw, {}
-    return raw, parsed if isinstance(parsed, dict) else {}
-
-
 def _remove_quietly(paths) -> None:
     """Leftovers only: the new settings already work, so a failed removal must not fail the delivery."""
     for stale in paths:
@@ -103,7 +92,7 @@ def _apply(body: AccountReceiverRequest, robot_id: str):
 
     pems = {kid: _public_pem(pem).decode("ascii") for kid, pem in body.public_keys.items()}
     path = account_receiver_path()
-    previous, old = _previous(path)
+    previous = path.read_bytes() if path.exists() else None
     database = _session_db(body.issuer, body.client_id)
     # Content-named, so a refused delivery can never leave the working settings pointing at new keys.
     names = {kid: f"account-key-{_digest(pem)[:16]}.pem" for kid, pem in pems.items()}
@@ -122,7 +111,7 @@ def _apply(body: AccountReceiverRequest, robot_id: str):
         if previous is None:
             path.unlink(missing_ok=True)
         else:
-            write_private(path, previous.decode("utf-8"))
+            write_private(path, previous.decode("utf-8", "replace"))  # a damaged file stays unusable, not fatal
         raise
     _remove_quietly(stale for stale in path.parent.glob("account-key-*.pem") if stale.name not in names.values())
     _remove_quietly(stale for stale in path.parent.glob("account-sessions-*")

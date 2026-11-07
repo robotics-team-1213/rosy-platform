@@ -142,7 +142,7 @@ To link robots at enrollment (D-992), put `link.json` (`issuer`, `registrar_toke
 public keys in the same directory, set `ROSY_ACCOUNT_LINK_CONFIG=/run/rosy-fleet-account/link.json`
 and give Account the key's digest as `registrar_token_sha256`. Each robot must pin the same
 values: pass `-AccountTrustFile` to `prepare-rosy-sd.ps1` with
-`{"issuer": "...", "public_key_sha256": ["<sha256sum of each public key file>"]}`, which a
+`{"issuer": "...", "public_key_sha256": ["<sha256sum of each LF-ended public key file>"]}`, which a
 reimage keeps. A robot already in service needs the same mapping as `auth.account_trust` in
 its CORE overlay and a CORE restart, or an administrator's delivery; a card from an image
 older than this field refuses a bundle that carries it.

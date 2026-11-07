@@ -196,6 +196,11 @@ def test_a_malformed_account_trust_is_refused(trust):
         _bundle(account_trust=trust)
 
 
+def test_the_card_script_checks_account_trust_before_anything_is_erased():
+    script = (ROOT / "deploy/robot/pinky_pro/sd/prepare-rosy-sd.ps1").read_text(encoding="utf-8")
+    assert script.index("validate_account_trust") < script.index("$plan = [ordered]@{") < script.index("Read-EraseConfirmation $")
+
+
 def test_receipt_omits_every_transient_secret():
     bundle = _bundle()
     receipt = create_provision_receipt(bundle)
