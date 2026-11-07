@@ -125,6 +125,57 @@ def test_a_lab_pc_offers_storage_cleaning_and_shows_its_headroom(console_url):
         browser.close()
 
 
+@pytest.mark.parametrize("confirm_second, code, sent, note", [
+    (True, "HOST_JOBS_ACTIVE", ["reboot", "reboot-over-jobs"], "reboot-over-jobs 접수"),
+    (False, "HOST_JOBS_ACTIVE", ["reboot"], ""),
+    (True, "ARM_SESSION_ACTIVE", ["reboot"], "팔 세션이 돌고 있어 재부팅하지 않았습니다"),
+])
+def test_a_reboot_asks_again_over_jobs_and_never_offers_to_pass_an_arm_session(console_url, confirm_second, code, sent, note):
+    # D-991: the helper refuses; the screen only relays it. An arm session has no second step.
+    from playwright.sync_api import sync_playwright, expect
+
+    body = {"hosts": [{"host": "model", "actions": ["reboot", "reboot-over-jobs", "cancel-reboot"], "units": []}], "guard": {}}
+    with sync_playwright() as p:
+        browser, page, errors = _open_console(p, API)
+        page.goto(console_url, wait_until="networkidle")
+        page.evaluate("""async ({body, code, confirmSecond}) => {
+            const {createHostServices} = await import('/console/assets/host-services.js');
+            const root = document.createElement('section');
+            root.id = 'reboot-test';
+            root.innerHTML = '<p id="host-services-status"></p><div id="host-services-report"></div>' +
+                '<div id="host-services-commands"></div><p id="host-services-note"></p>';
+            document.body.append(root);
+            window.rebootCalls = [];
+            window.rebootPrompts = [];
+            const view = createHostServices({root, call: async (url, options) => {
+                if (!options) return body;
+                window.rebootCalls.push(options.body.action);
+                if (options.body.action === 'reboot') throw Object.assign(new Error('refused'), {code});
+                return {code: 'ACCEPTED'};
+            }, confirmIrreversible: async prompt => {
+                window.rebootPrompts.push(prompt.message);
+                return window.rebootPrompts.length === 1 || confirmSecond;
+            }});
+            await view.refresh();
+        }""", {"body": body, "code": code, "confirmSecond": confirm_second})
+        root = page.locator("#reboot-test")
+        root.locator("#host-services-commands ui-button", has_text="10분 뒤 재부팅").click()
+        if code == "HOST_JOBS_ACTIVE":
+            page.wait_for_function("window.rebootPrompts.length === 2")
+        if note:
+            expect(root.locator("#host-services-note")).to_contain_text(note)
+        else:
+            page.wait_for_function("window.rebootCalls.length === 1")
+            expect(root.locator("#host-services-note")).to_be_hidden()
+        assert page.evaluate("window.rebootCalls") == sent
+        prompts = page.evaluate("window.rebootPrompts")
+        assert len(prompts) == (2 if code == "HOST_JOBS_ACTIVE" else 1)
+        if code == "HOST_JOBS_ACTIVE":
+            assert "그 작업이 끊깁니다" in prompts[1]
+        assert not errors
+        browser.close()
+
+
 def test_every_reported_pc_shows_its_update_channels_and_a_viewer_sees_only_the_summary(console_url):
     # D-871: a fourth PC (one control PC per OMX cell) and update rows; reasons only for operators
     from playwright.sync_api import sync_playwright, expect
