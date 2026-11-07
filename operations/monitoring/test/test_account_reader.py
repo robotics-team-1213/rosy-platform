@@ -39,6 +39,9 @@ class Receiver:
     def profile(self, _cookie):
         return None
 
+    def apps(self, _cookie):
+        return []
+
     def start(self, target):
         return 'flow', f'https://account.example.test/authorize?target={target}'
 

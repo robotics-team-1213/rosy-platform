@@ -43,6 +43,9 @@ class _LayoutAccount:
     def profile(self, _cookie):
         return None
 
+    def apps(self, _cookie):
+        return []
+
     def resolve(self, _cookie):
         from types import SimpleNamespace
         return SimpleNamespace(sub='layout-account', sid='family', rev=1, aud='site:one', grants=[], permits=lambda resource, capability:

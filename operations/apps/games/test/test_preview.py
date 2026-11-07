@@ -180,6 +180,8 @@ def test_stop_uses_exact_account_capability_and_origin():
         profile_url = 'https://account.test/console/profile'
         def profile(self, cookie):
             return {'account_id':'games-user','login':'player','display_name':'Player'}
+        def apps(self, cookie):
+            return []
         def resolve(self, cookie):
             return claims if cookie == 'valid' else None
         def retry_revocations(self): pass

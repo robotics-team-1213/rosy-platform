@@ -39,6 +39,9 @@ class AccountStub:
     def profile(self, _cookie):
         return None
 
+    def apps(self, _cookie):
+        return [{'client_id': 'fleet', 'label': '관제', 'home_url': 'https://site.example.test/console'}]
+
     def logout(self, cookie):
         self.capabilities = None
         self.logged_out.append(cookie)
@@ -323,7 +326,11 @@ def test_account_session_opens_the_screen_without_a_key(monitoring_backend, moni
     expect(workspace).to_be_visible()
     expect(page.locator('#login')).to_be_hidden()
     expect(status).to_contain_text('자료 수신')
+    apps = page.locator('[data-account-apps]')
+    apps.locator('summary').click()
+    expect(apps.get_by_role('link', name='관제')).to_have_attribute('href', 'https://site.example.test/console')
     page.wait_for_timeout(11000)  # one session poll must not overwrite the read status
+    expect(apps.get_by_role('link', name='관제')).to_be_visible()  # nor close the open menu
     expect(status).to_contain_text('자료 수신')
 
     page.locator('#logout').click()
