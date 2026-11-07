@@ -5,7 +5,7 @@ The file holds per-principal SHA-256 token digests (D-276) and password hashes
 provisioned out of band; this tool reads one from stdin only, never from argv,
 so it cannot leak through ``ps`` or shell history. Writes are atomic (temp file
 + ``os.replace``) and verified by re-parsing the published bytes with the same
-shape rules ``fleet.server.site_users.load_site_users`` enforces, so a file
+shape rules ``rosy_account.site_users.load_site_users`` enforces, so a file
 Fleet would reject is never left in place.
 """
 
@@ -61,7 +61,7 @@ class SiteUsersError(RuntimeError):
 def validate_users_document(document: object) -> list[dict[str, str]]:
     """Return normalized entries, or raise on the first D-276 shape violation.
 
-    The rules mirror ``fleet.server.site_users.load_site_users`` so this tool
+    The rules mirror ``rosy_account.site_users.load_site_users`` so this tool
     never publishes a file the Fleet container would reject at startup.
     """
     if not isinstance(document, Mapping) or set(document) != {"users"}:

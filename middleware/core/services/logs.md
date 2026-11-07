@@ -1856,6 +1856,12 @@
 - 결정: D-972
 - 교훈: 없음.
 
+## 2026-11-03 · 3568bce2a2 · 열 보호의 센서별 읽기 유실 유지
+
+- 변경: 위험을 발생시킨 같은 센서의 필수 읽기가 돌아올 때까지 각 reason의 위험 수준을 유지한다. 다른 모터의 정상 온도로 고온 모터의 보호를 해제하지 않으며, 이전 HOT이 해제된 뒤 다른 WARM source만 유실됐다면 WARM만 유지한다. 문턱·cap·모드·CORE 최종 명령 권한은 보존한다.
+- 증거: test-only RED `d49ad44213`의 공식 원격 결과는 예상 실패 7건/기존 통과 8건, NEW7/known0/flaky0이었다. 독립 Safety-Review가 승인한 tree `4639174988efe39734b09dcd2d39da1d12e6245c`와 production commit `3568bce2a2`의 tree가 같다. thermal·thermal_mode·core_logic·battery 원격 GREEN159건/skip0, NEW/known/flaky0을 확인했다.
+- gate 변화: SOURCE의 해당 회귀만 확인했다. 통합 FULL·공개 CI·설치 산출물·실물 수용은 별도다. CE: 해당 없음 — 최종 source별 상태와 회귀 시험이 판단과 해제 조건을 설명한다.
+
 ## 2026-11-04 · uncommitted · fix(docking): 후진 도크 DOCKED 이후 전압 1소스로 CHARGING 유지 (D-972)
 - 변경: 후진 도크는 도크 에이전트가 없어 `_tick_docked`가 충전을 확인하지 못하던 것을 `rear_phases`의 전압 1소스 확인으로 잇는다. DOCKED↔CHARGING 전이·`docking.charging`/`docking.charge_lost`·만춫 판정(`_check_full`)이 후진 도크에서도 돈다. 전압 단일 소스 확정은 D-350 Phase 1 규칙대로 배터리 인터록(`set_charging`, D-27)에 반영하지 않는다 — 상태·만춫 판정에만 쓴다.
 - 증거: `test_docking_rear.py` 회귀(도킹 후 CHARGING 확인, 인터록 미반영, 전압 하락 시 즉시 charge_lost). 원격 시험 결과는 커밋 본문에.

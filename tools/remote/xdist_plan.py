@@ -102,3 +102,9 @@ def plan(inv: list[str], headroom: dict | None, serial: list[str] | None = None)
         return alone, [], f"serial: {why or 'not enough headroom for 2 workers'}"
     note = f"xdist: {n} workers" + (f" (1/{share} of the host)" if share > 1 else "")
     return [f"ROSY_JOB_CORES={n}", *alone], ["-n", str(n), "--dist", "loadfile"], note
+
+
+def tail(inv: list[str], words: list[str]) -> list[str]:
+    """The last -r wins, so the common tail's -rfE silently dropped the PASSED lines of a -rA invocation (2026-11-07:
+    land_mainred closes on those lines, and in 10 days nothing closed an open id but a quarantine rerun)."""
+    return [word for word in words if word != "-rfE"] if "-rA" in inv else words

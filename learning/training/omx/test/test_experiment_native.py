@@ -11,6 +11,8 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import experiment_native as bridge
 from experiment_dataset import load_dataset
+from experiment_profile import policy_cameras
+from experiment_scope import select_dataset
 from test_native_cycle import module, splits  # Existing sealed-receipt fixture.
 
 
@@ -193,6 +195,33 @@ def test_two_arm_recording_converts_in_arm_a_then_arm_b_order(capture, tmp_path)
     assert episode.arrays['action'].shape == (4, 12)
     np.testing.assert_array_equal(episode.arrays['action'][1], readers['train'].rows[1]['action'])
     assert result['act_only'] and [arm['id'] for arm in data.profile['arms']] == ['arm_a', 'arm_b']
+
+
+def test_two_arm_recording_trains_one_joint_model_in_cooperative_mode(capture, tmp_path):
+    root, profile, readers = bimanual(capture)
+    profile['mode'] = 'cooperative'
+    bridge.convert_native(root, tmp_path / 'converted', profile=profile)
+    data = load_dataset(tmp_path / 'converted')
+    view, scope = select_dataset(data)
+    assert view is data and scope['arm_ids'] == ['arm_a', 'arm_b'] and scope['action_indices'] == list(range(12))
+    assert scope['camera_keys'] == policy_cameras(profile)  # every camera stays an input, none split off per arm
+    np.testing.assert_array_equal(view.split('train')[0].arrays['action'][1], readers['train'].rows[1]['action'])
+    with pytest.raises(ValueError, match='cooperative'):
+        select_dataset(data, 'arm_a')
+
+
+def test_the_same_two_arm_recording_still_splits_per_arm_when_independent(capture, tmp_path):
+    root, profile, readers = bimanual(capture)
+    bridge.convert_native(root, tmp_path / 'converted', profile=profile)
+    view, scope = select_dataset(load_dataset(tmp_path / 'converted'), 'arm_b')
+    assert scope['action_indices'] == list(range(6, 12))
+    np.testing.assert_array_equal(view.split('train')[0].arrays['action'][1], readers['train'].rows[1]['action'][6:])
+
+
+def test_a_single_arm_cannot_be_cooperative(capture, tmp_path):
+    root, _, profile, _ = capture
+    with pytest.raises(ValueError, match='native conversion'):
+        bridge.convert_native(root, tmp_path / 'converted', profile=dict(profile, mode='cooperative'))
 
 
 @pytest.mark.parametrize('fault', ['one_arm_profile', 'swapped_ids', 'renamed_ids'])

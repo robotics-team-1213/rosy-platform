@@ -3,9 +3,14 @@
 # remote_sim only (it sets OUT and an isolated ROS domain):
 #   remote_sim.py ... cmd -- "tools/sim/run_omx_backend_conformance.sh mujoco 240x320 5 [conformance|grasp]"
 # grasp runs omx_grasp_probe.py (the Isaac switch condition's grasp repeat) instead of the conformance check.
+# OMX_GRIPPER=palletizing-v2.1 runs the shared layer and the MuJoCo adapter on the jaw v2.1 URDF (default omx-f);
+# the Isaac adapter does not take the option yet.
 # Without OMX_CELL_OVERLAY it provisions the host first (provision_sim_host.sh; builds only what is missing).
 set -eo pipefail
-backend="$1" shape="$2" camera_hz="$3" check="${4:-conformance}"
+backend="$1" shape="$2" camera_hz="$3" check="${4:-conformance}" gripper="${OMX_GRIPPER:-omx-f}"
+if [[ $gripper != omx-f && $backend == isaac ]]; then
+  echo "OMX_GRIPPER=$gripper: the isaac adapter has no --gripper yet" >&2; exit 2
+fi
 source /opt/ros/jazzy/setup.bash
 [[ -n ${OMX_CELL_OVERLAY:-} ]] || eval "$("$(dirname "${BASH_SOURCE[0]}")/provision_sim_host.sh")"
 source "$OMX_CELL_OVERLAY/setup.bash"
@@ -15,13 +20,14 @@ export ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 pids=()
 trap 'kill "${pids[@]}" 2>/dev/null || true; wait 2>/dev/null || true' EXIT
-python3 "$here/omx_topic_backend.py" --out "$OUT/layer" >"$OUT/layer.log" 2>&1 &
+python3 "$here/omx_topic_backend.py" --out "$OUT/layer" --gripper "$gripper" >"$OUT/layer.log" 2>&1 &
 pids+=($!)
 until [[ -s "$OUT/layer/omx_f_topic.urdf" ]]; do sleep 0.5; done
 case "$backend" in
   mujoco)
     MUJOCO_GL=egl "${SIM_MUJOCO_PYTHON:-$HOME/rosy-test/venvs/sim-mujoco/bin/python}" "$here/omx_mujoco_backend.py" \
-      --urdf "$OUT/layer/omx_f_topic.urdf" --shape "$shape" --camera-hz "$camera_hz" >"$OUT/backend.log" 2>&1 &
+      --urdf "$OUT/layer/omx_f_topic.urdf" --shape "$shape" --camera-hz "$camera_hz" --gripper "$gripper" \
+      >"$OUT/backend.log" 2>&1 &
     pids+=($!) ;;
   isaac)
     # The SDK's Python and bundled Jazzy libraries must stay separate from the system ROS environment.

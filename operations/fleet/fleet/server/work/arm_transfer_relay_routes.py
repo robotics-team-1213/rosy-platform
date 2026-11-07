@@ -17,7 +17,7 @@ from core_common.protocol.arm_transfer_observations import ArmTransferCancelRequ
 from core_common.protocol.arm_transfer_recheck import ArmTransferRecheckCreate
 from core_common.protocol.control_units import ControlArmWorkRequest
 from fleet.swarm.transport import RobotApiError
-from .password_session import same_origin
+from core_common.protocol.account_access import same_origin
 
 
 def delegation_id(principal_id, request_key):

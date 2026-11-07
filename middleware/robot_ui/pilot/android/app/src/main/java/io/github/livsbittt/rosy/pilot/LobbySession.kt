@@ -33,7 +33,7 @@ class ScopedProfileConnection(private val profile: PilotProfile, override val ta
 class LobbySession(override val target: RobotTarget, override val secure: Boolean,
     val expiresAt: Instant, private val candidate: Candidate, private val store: CandidateStore, private val caPem: String? = null,
     val peerApproval: PeerRelationship? = null,
-    private val account: io.github.livsbittt.rosy.cam.account.AccountSession? = null) : PilotConnection {
+    private val account: io.github.livsbittt.rosy.account.AccountSession? = null) : PilotConnection {
     private val resource = "robot:${target.id}"
     private val accountIdentity = account?.identity(resource)
     override val managed get() = account != null
