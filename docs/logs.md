@@ -14534,3 +14534,9 @@ osy-d395-s1d\`.
 - 증거: 신규 전달 fake와 Fleet 알림 회귀는 커밋 SHA 원격 시험으로 확인한다. D-997 정본은 디스패처의 docs/r-n100-host 브랜치에 있다.
 - gate 변화: 없음. 배포·두 생산자 실제 HTTP 연결·발송 owner 교체·실제 채널 수용은 미실시다.
 - CE: 해당 없음 — 설계·검증 범위와 미수용 관문을 D-998에 기록했다.
+
+## 2026-11-08 · uncommitted · D-998 API 변경 이력 누락 수정
+- 변경: API v1.377 상세 설명·live 버전에 대응하는 변경 이력 표 행을 추가했다.
+- 증거: c1984461a8 원격 Foundation·프로토콜 회귀 1501 passed/1 NEW failed로 누락을 확인했다. test_changelog_has_a_row_for_the_live_version이 헤더와 표를 대조한다. 수정 커밋으로 같은 세 대상을 다시 원격 검증한다.
+- gate 변화: 없음. 문서 계약 정합성 수정이며 발송 owner 전환·현장 수용 근거가 아니다.
+- CE: 해당 없음 — 원인과 재발 방지가 기존 version alignment 시험에 명시돼 있다.

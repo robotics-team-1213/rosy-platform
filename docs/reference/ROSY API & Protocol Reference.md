@@ -4625,6 +4625,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 | 버전 | 일자 | 내용 |
 |---|---|---|
 | v1.362 | 2026-11-04 | Additive: D-977 `device_trial` opens the neutral `arm-transfers` jobs for exactly one arm (owner identity: `device: true`, matching `commissioning_revision`); `production` stays closed. New `operator_attested` record: `POST/GET .../jobs/{mission_id}/operator-attestations` (named operator distinct from proposer and approver, single-use, 45 s validity, `goal_confirmed: false`). The owner still refuses goals. |
+| v1.377 | 2026-11-08 | D-998 독립 알림 전달의 기계 범위별 접수·조회, 중복/충돌·owner 확인·유한 예산·UNKNOWN 계약. 기존 Fleet 발송 owner 전환·배포는 별도. |
 | v1.365 | 2026-11-07 | Fleet 운행 시작의 배터리 근거 확인(422 `TRIP_BATTERY_UNCONFIRMED`)과 충전 칸 `unknown` 상태. |
 | v1.363 | 2026-11-06 | Additive: bodyless robot `manual`을 기존 CORE mode owner로 실행. Fleet 직접 조작의 dispatch/작업 소유권 재검사와 인증된 terminal zero 전달을 명시. |
 | v1.361 | 2026-11-04 | Additive: `GET /api/fleet/execution-profile`(D-979) — 앱이 읽는 읽기 전용 실행 프로필(`arm_execution` physical/simulated/closed, 등록·인증된 생산자 목록, `checked_at`). viewer·service 읽기, 쓰기 없음, 증명되지 않으면 closed. |
