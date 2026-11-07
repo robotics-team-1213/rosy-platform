@@ -14430,6 +14430,41 @@ osy-d395-s1d\`.
 - gate 변화: 없음 — 배포된 화면은 게시와 갱신 전까지 그대로다. 저장된 공개 학습 실행 기록이 운영 DB에 있는지는 확인하지 못했다.
 - CE: 해당 없음 — 사용자 지시에 따른 기능 제거와 구조 변경이다.
 
+## 2026-11-07 · uncommitted · feat(sim): 공통 층 조 v2.1 옵션
+
+- 변경: D-877 공통 층이 조 v2.1 모델(D-947)로도 돌게 옵션을 더했다. `omx_topic_backend.py --gripper palletizing-v2.1`은 벤더 xacro 대신 저장소의 `omx_f_palletizing.urdf`를 쓰고, 그 URDF에 없는 ros2_control 블록은 벤더 xacro 출력에서 가져와 넣는다(관절 이름이 같으므로 하드웨어 교체·gpio 제거·is_async도 그대로 적용). `omx_mujoco_backend.py --gripper palletizing-v2.1`은 메시 경로를 두 패키지(`open_manipulator_description`, `omx_f_palletizing_description`)에서 모두 풀고(`learning/envs/isaac/assets`, `meshes/omx_f` 아래 하위 경로 유지), 손가락 충돌은 `palletizing_gripper.pad_box` 패드 박스로 바꾼다(`ship_release_scene.add_jaw`와 같은 collider). `run_omx_backend_conformance.sh`는 `OMX_GRIPPER=palletizing-v2.1`로 같은 옵션을 넘기며 Isaac 어댑터는 아직 이 옵션을 받지 않아 거부한다. 기본 `omx-f` 동작은 바꾸지 않았다.
+- 증거: 원격 pytest `test/test_omx_sim_backends.py` 7 통과·skip 0(모델 PC, run-1.txt, known_failures 0 new). 새 시험은 v2.1 URDF에 ros2_control이 들어가는지, 메시 16개가 모두 저장소 assets에서 풀리는지(두 패키지), 패드 박스가 Isaac 것과 같은 함수인지, 벤더 모드 출력(맨 이름 + `strippath="true"`)이 그대로인지를 본다. 실제 적합성 실행(`run_omx_backend_conformance.sh`)은 하지 않았다.
+- gate 변화: 없음 — ROS 포함 실행은 시험 PC·시뮬 호스트에서 확인할 몫이고 이 변경은 옵션 추가다.
+- CE: 해당 없음 — 새 옵션이며 해결한 장애가 없다.
+
+## 2026-11-07 · fc074c6198 · feat(omx): OMX 학습 사다리 핵심
+
+- 변경: `tools/sim/omx_cell_sim.py`(arm_b 실제 셀 MuJoCo 장면, 교사, 수집, 평가, 영상)와 `tools/sim/omx_ladder.py`(라운드 실행과 기록)를 추가했다. 판정은 위치 8 mm, 방향 8°, 높이 5 mm, 기울기 5°다. 평가 위치는 학습보다 넓고 라운드마다 새 시드를 쓰며, 부모 모델을 같은 시드로 다시 평가해 비교한다. 실패한 시드는 다음 라운드 시연이 된다. 교체는 사람이 Rosy Learning에서 기록한다.
+- 증거: `test/test_omx_ladder.py` 원격 통과. AI PC·모델 PC에서 교사 엄격 판정 3/3, 1/1. 관절 단위 오류(도 환산)를 `norm_to_rad`로 고쳤다.
+- gate 변화: 없음 — 시뮬 기하 근거다(D-947). 실물 실행 경로는 없고(D-793), 단위는 라디안이라 실제 데이터와 섞기 전에 변환이 필요하다.
+- CE: 해당 없음 — 새 기능이다.
+
+## 2026-11-07 · uncommitted · feat(omx): 두 팔 셀 MuJoCo 세계, 작업 정의, 검증기와 교사
+
+- 변경: `tools/sim/omx_two_arm_{world,sites,kin,tasks,teacher}.py`와 `deploy/robot/omx/sim/two_arm_tasks.json`을 추가했다. 두 팔(v2.1 조), 스터드 판, SCAD v7 임시 칸 판 둘, 벨트 끝, 실측 top·side 카메라를 한 좌표계에 둔다. 작업 `stack`(9개, fixture 순서·팔 배정)과 `rehandle`(두 열에서 맨 아래 컨테이너를 빼려고 위 것을 임시 칸으로 옮기고 새 순서로 복원, 12단계)은 데이터다. 검증기(MuJoCo 없음)는 순서·받침·임시 칸 용량·관절 한계 안 도달(관절 5 분기 연속 IK)·팔 간격을 확인하고 어기면 이유와 함께 거부한다. CAD·실측 선택은 `CHOICES`의 이름 있는 값이다(TCP는 팔마다, 기본 0.0740).
+- 증거: `test/test_omx_two_arm_tasks.py` 원격 14 passed, skip 0. AI PC MuJoCo 교사(팔 하나씩): `stack` 이어 달리기 5/9(s6에서 실패: 앞 단계의 3.2° 틀어짐·1 mm 어긋남 뒤 패드가 이웃 6 mm 틈에 걸림), 단계마다 공칭 상태에서 시작하면 9/9. `rehandle` 이어 달리기 2/12, 단계 단독 8/12(실패 a3·a4·b3·b4: 가운데 열이 3층일 때 바깥 열 맨 아래 칸에서 손목 link4가 이웃 열에 닿음). 도달 불가 단계 없음. TCP 0.0885 민감도는 검증기 판정 불변(조 끝 14.5 mm 더 길게; 시뮬 접촉은 재실행하지 않음). 손목 롤이 -18(정규화) 아래로 가는 단계가 표시된다(stack 6개, rehandle arm_a 6개).
+- gate 변화: 없음 — 시뮬 기하 근거다(D-947). 접촉·마찰 수치는 결과가 아니다.
+- CE: 해당 없음 — 새 기능이며 미해결 항목은 위 증거에 구분해 적었다.
+
+## 2026-11-07 · uncommitted · fix(omx): 두 팔 세계의 접촉 모델, 손목 간격 검증, rehandle 계획 교체
+
+- 변경: 판(메시)과 상자 사이가 접촉점 하나만 만들어 쌓은 상자가 요(yaw) 방향으로 기어 다니던 것을 `mjENBL_MULTICCD`로 고쳤다(정적 시험: 30초에 16°가 0°). 마찰·접촉 변수는 바꾸지 않았다. 검증기에 손목(link3·link4 메시) 간격 검사(`LINK_MARGIN` 4 mm)를 더했다. MuJoCo 전수표(`omx_two_arm_matrix.py`)로 가까운 팔이 맨 아래 칸을 뺄 때 손목이 가운데 열에 부딪힘(-3~-6 mm)을 확인하고, `rehandle`을 바깥 열마다 반대편 팔이 맡도록 바꿨다. 시드(벨트 집는 자세, 시작 배치)와 단계 단독 실행 옵션을 더했다.
+- 증거: `test/test_omx_two_arm_tasks.py` 원격 통과. AI PC MuJoCo 이어 달리기·단계 단독, 시드 0·1·2: `stack` 9/9, `rehandle` 12/12(최종 자세 6/6), 모두 같은 판정 한계. 이전: `stack` 이어 달리기 5/9, `rehandle` 2/12(단계 단독 8/12). 뒤집은 조 방향은 모든 쌍에서 관절 한계를 넘어 도달 불가. 손목 롤이 -18(정규화) 아래인 단계: stack arm_b 6개, rehandle arm_a 6개(바닥은 arm_b만 측정, arm_a는 가정).
+- gate 변화: 없음 — 시뮬 기하 근거다(D-947). 접촉 수치는 결과가 아니다.
+- CE: 해당 없음 — 원인(단일 접촉)과 해결을 위 증거에 적었고 별도 교훈 문서는 만들지 않았다.
+
+## 2026-11-07 · uncommitted · fix(omx): 사다리가 GPU 없이 시작하지 않게 하고 MuJoCo 접촉 교훈을 기록
+
+- 변경: 모델 PC GPU가 버스에서 떨어지자 `lerobot-train`이 `--policy.device=cuda`를 받고도 CPU로 넘어가 4만 단계가 13시간짜리가 됐다. `omx_ladder.run_round`가 시작 전에 GPU를 확인하고 거절한다. 볼록 메시 위 상자가 접점 하나로 도는 현상은 `docs/solutions/logic-errors/mujoco-box-on-convex-mesh-creeps-one-contact-2026-11-07.md`에 남겼다.
+- 증거: `test/test_omx_ladder.py` 원격 실행(가짜 python이 실패를 돌려주면 회차 기록을 쓰기 전에 거절).
+- gate 변화: 없음.
+- CE: 새 교훈 기록 — 위 문서. 앞 항목의 「별도 교훈 없음」을 이 항목이 대신한다.
+
 ## 2026-11-07 · uncommitted · 공통 서비스 카탈로그와 D-987
 
 - 변경: 공통 서비스 정의와 카탈로그(D-987), 구조 시험을 더하고 Account 소유자·분류의 낡은 안내를 고쳤다. 소스 경로·배포는 바꾸지 않았다.
