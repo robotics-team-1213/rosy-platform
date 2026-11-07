@@ -9,7 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, StrictInt, model_validator
 
 CAPABILITIES = {
     'site': frozenset({'accounts.manage', 'fleet.read', 'fleet.operate', 'fleet.policy',
-                       'camera.manage', 'games.operate', 'vault.read', 'vault.operate', 'vault.manage'}),
+                       'camera.manage', 'games.operate', 'monitoring.read', 'vault.read', 'vault.operate', 'vault.manage'}),
     'robot': frozenset({'robot.read', 'robot.operate', 'robot.admin'}),
     'project': frozenset({'learning.view', 'learning.edit', 'learning.approve',
                           'learning.manage', 'learning.import', 'learning.publish'}),

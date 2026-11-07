@@ -12,7 +12,8 @@
 | `GET /api/monitoring/v1/snapshot` | 허용된 사이트의 `MonitoringSnapshot` v1 |
 | `GET /api/monitoring/v1/sites/{site_id}/events?after=0&limit=100` | 해당 사이트의 상태 변경 이력. limit 1–200, 사이트별 단조 증가 sequence |
 
-비공개 조회는 등록된 reader의 `Authorization: Bearer …`가 필요하다.
+비공개 조회는 등록된 reader의 `Authorization: Bearer …` 또는 Rosy Account 세션이 필요하다([D-990](../adr/D-990-monitoring-account-receiver.md)). 헤더가 있으면 키로만 판정한다. Account 세션은 자기 사이트의 `monitoring.read`가 있어야 읽고, 없으면 403이다. Account에 닿지 못하면 503 `MONITORING_ACCOUNT`다.
+설정 `account_config`가 있을 때 `/api/monitoring/v1/account/{login,callback,session,logout}`를 제공하고, 없으면 session만 `enabled=false`로 답한다.
 snapshot의 반복 `site_id` query는 reader 범위의 부분집합만 허용한다.
 미지정이면 reader의 등록 범위 전체다. 권한 밖 사이트는 403이며 부분 성공하지 않는다.
 모든 응답은 `Cache-Control: no-store`다. 401은 인증 실패, 403은 범위 밖,

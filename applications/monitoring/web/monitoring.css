@@ -11,6 +11,7 @@ main > section { margin-bottom: 0; }
 .connection { display: flex; flex-wrap: wrap; gap: var(--space-5); align-items: start; padding-bottom: var(--space-5); border-bottom: 1px solid var(--border-default); }
 .connection > div { flex: 1 1 16rem; }
 .connection form { flex: 1 1 24rem; min-width: 0; }
+#account-login[hidden] { display: none; }
 .login-fields { display: flex; gap: var(--space-2); margin-top: var(--space-2); }
 .login-fields input { flex: 1; min-width: 0; }
 .toolbar { display: flex; flex-wrap: wrap; gap: var(--space-4); align-items: end; margin-bottom: var(--space-4); }

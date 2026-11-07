@@ -38,7 +38,11 @@ def main(argv=None):
             raise ValueError()
         store = MonitoringStore(state / 'monitoring.sqlite3', config.collector_id)
         collector = Collector(config, credentials, store)
-        app = create_app(collector, web_root=options.web_root)
+        account = None
+        if config.account_config:
+            from .account_routes import load_receiver
+            account = load_receiver(config.account_config, config.site_id)
+        app = create_app(collector, web_root=options.web_root, account=account)
     except Exception:
         if store is not None:
             store.close()

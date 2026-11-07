@@ -1,4 +1,5 @@
 import { EVIDENCE_LABEL, evidenceAgeText } from './common/core_ui_logic.js';
+import { createAccountSession } from './common/account-session.js';
 
 const $ = (id) => document.getElementById(id);
 const HEALTH = { OK: '정상', WARNING: '주의', ERROR: '오류', UNKNOWN: '판정 정보 없음' };
@@ -6,8 +7,9 @@ const KIND = { collector: '수집기', robot: '로봇', host: '호스트', fleet
 const STAGE = { none: '응답 확인', dns: '이름 해석', connect: '연결', tls: '인증서·TLS', auth: '인증 거절',
   http: 'HTTP 응답', protocol: '응답 형식·시각', timeout: '응답 시간 초과', source: '상태 파일', unknown: '단계 미확인' };
 const TRANSPORT = { http: 'HTTP', https: 'HTTPS', file: '상태 파일', unknown: '프로토콜 미확인' };
-const state = { key: null, epoch: 0, packet: null, scopes: null, site: '', job: null, requests: new Set(),
+const state = { key: null, account: null, epoch: 0, packet: null, scopes: null, site: '', job: null, requests: new Set(),
   received: 0, wall: 0, roundTrip: 0, stale: false, page: 0, history: [], cursor: 0, historyJob: null };
+const reading = () => state.key || state.account?.can_read;
 const finite = (value) => typeof value === 'number' && Number.isFinite(value) && value >= 0;
 const el = (tag, text, className) => { const node = document.createElement(tag); if (text !== undefined) node.textContent = text; if (className) node.className = className; return node; };
 const stamp = (value) => value && Number.isFinite(Date.parse(value)) ? new Date(value).toLocaleString('ko-KR') : '시각 정보 없음';
@@ -33,6 +35,17 @@ function clearRows() {
   $('summary').textContent = ''; $('received').textContent = '';
   state.history = []; state.cursor = 0;
 }
+function syncAccount() {
+  if (state.key) return;
+  const account = state.account, signedIn = !!account?.authenticated;
+  $('account-login').hidden = !account?.enabled || signedIn;
+  $('key-entry').open = !account?.enabled;
+  $('login').hidden = !!account?.can_read;
+  $('logout').disabled = !signedIn;
+  if (signedIn && account.can_read && state.packet) return;  // the 10-second session poll keeps the read status
+  if (signedIn) $('connection-status').textContent = account.can_read ? '자료 확인 중…' : '이 계정에는 Monitoring 조회 권한이 없습니다. 계정 관리자에게 요청하세요.';
+  else if (account?.enabled) $('connection-status').textContent = 'Rosy Account로 로그인하세요.';
+}
 function logout() {
   state.epoch += 1; abortReads(); state.key = null; state.packet = null; state.scopes = null; state.site = '';
   clearRows(); $('reader-key').value = ''; $('login').hidden = false; $('logout').disabled = true;
@@ -43,8 +56,8 @@ async function read(path, epoch) {
   const timer = setTimeout(() => controller.abort(), 5000);
   const started = performance.now(), wall = Date.now(), key = state.key;
   try {
-    const response = await fetch(path, {cache: 'no-store', credentials: 'omit', redirect: 'error', signal: controller.signal,
-      headers: {Authorization: 'Bearer ' + key}});
+    const response = await fetch(path, {cache: 'no-store', redirect: 'error', signal: controller.signal,
+      ...(key ? {credentials: 'omit', headers: {Authorization: 'Bearer ' + key}} : {credentials: 'same-origin'})});
     if (!response.ok) { const error = new Error('read unavailable'); error.status = response.status; throw error; }
     const body = await response.json();
     if (epoch !== state.epoch) throw new Error('obsolete response');
@@ -71,7 +84,7 @@ function setScopes(scopes) {
   state.site = scopes.length === 1 ? scopes[0] : ''; $('scope-select').value = state.site;
 }
 async function refresh() {
-  if (!state.key || state.job) return;
+  if (!reading() || state.job) return;
   const epoch = state.epoch, job = {}; state.job = job;
   try {
     const result = await read('/api/monitoring/v1/snapshot' + (state.site ? '?site_id=' + encodeURIComponent(state.site) : ''), epoch);
@@ -85,7 +98,7 @@ async function refresh() {
     render(); loadHistory();
   } catch (error) {
     if (epoch !== state.epoch) return;
-    if (error.status === 401) { logout(); $('connection-status').textContent = '조회 키를 확인하세요.'; }
+    if (error.status === 401) { const wasKey = state.key; logout(); if (!wasKey) state.account = null; syncAccount(); $('connection-status').textContent = wasKey ? '조회 키를 확인하세요.' : '다시 로그인하세요.'; }
     else { state.stale = true; $('connection-status').textContent = error.status === 403 ? '허용된 사이트를 확인하세요.' : '조회 연결 끊김 · 마지막 자료의 근거를 확인하세요.'; render(); }
   } finally { if (state.job === job) state.job = null; }
 }
@@ -156,7 +169,7 @@ function drawGraph(packet, links, map) {
   $('graph-note').textContent = `그림 ${chosen.length}개 경로 · 연결 목록 ${Math.min(links.length, 100)} / ${links.length}개. 검색으로 범위를 좁히세요. 원천 판정의 신선도는 목록에서 확인할 수 있습니다.`;
 }
 async function loadHistory() {
-  if (!state.key || !state.site || state.historyJob) return;
+  if (!reading() || !state.site || state.historyJob) return;
   const epoch = state.epoch, site = state.site, job = {}; state.historyJob = job;
   try {
     const result = await read(`/api/monitoring/v1/sites/${encodeURIComponent(site)}/events?after=${state.cursor}&limit=200`, epoch);
@@ -172,13 +185,24 @@ async function loadHistory() {
 }
 $('login').addEventListener('submit', (event) => { event.preventDefault(); const key = $('reader-key').value.trim(); logout();
   state.key = key; $('reader-key').value = ''; $('login').hidden = true; $('logout').disabled = false; $('connection-status').textContent = '조회 키 확인 중…'; refresh(); });
-$('logout').addEventListener('click', logout);
+const session = createAccountSession({base: '/api/monitoring/v1/account', current: () => state.account,
+  apply: (value) => { state.account = value; syncAccount(); if (!state.key && value.can_read) refresh(); },
+  changed: () => location.reload()});
+$('account-login').addEventListener('click', () => location.assign('/api/monitoring/v1/account/login'));
+$('logout').addEventListener('click', async () => {
+  const signedIn = !state.key && state.account?.authenticated;
+  logout();
+  if (signedIn) { session.invalidate(); state.account = {enabled: true, authenticated: false, can_read: false}; }
+  syncAccount();
+  if (signedIn) try { await session.logout(() => {}); } catch (error) { $('connection-status').textContent = error.message; }
+});
 $('scope-select').addEventListener('change', () => { state.epoch += 1; abortReads(); state.site = $('scope-select').value; state.packet = null; state.page = 0; clearRows(); refresh(); });
 $('search').addEventListener('input', () => { state.page = 0; render(); });
 $('refresh').addEventListener('click', refresh); $('history-next').addEventListener('click', loadHistory);
 $('previous').addEventListener('click', () => { state.page = Math.max(0, state.page - 1); render(); });
 $('next').addEventListener('click', () => { state.page += 1; render(); });
-const resume = () => { if (state.key) { state.stale = true; render(); refresh(); } };
+const resume = () => { if (reading()) { state.stale = true; render(); refresh(); } };
 document.addEventListener('visibilitychange', () => { if (document.hidden) { state.stale = true; render(); } else resume(); });
 window.addEventListener('pageshow', resume); window.addEventListener('focus', resume);
+session.restore();
 setInterval(refresh, 5000); setInterval(() => { if (state.packet) render(); }, 1000);

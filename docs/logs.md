@@ -14527,3 +14527,9 @@ osy-d395-s1d\`.
 - 변경: 앱 책임 문서에 Monitoring·Media 행과 Android·foundation 공유 기반을 더했다. 카탈로그에 `middleware/media`와 서비스별 인증 차이를 적었다. Kotlin 권한 사본과 Fleet 역할 묶음이 foundation 목록과 어긋나면 `test_common_services.py`가 실패한다.
 - 증거: 원격 시험과 변이 확인은 착지 기록을 따른다.
 - gate 변화: 없음. CE: 해당 없음 — 문서 정정과 검사 추가다.
+
+## 2026-11-07 · uncommitted · docs(adr): D-990 Monitoring Account 로그인
+
+- 변경: D-990과 Log 행을 더하고 Account 프로토콜의 site capability, Monitoring API, 카탈로그의 인증 설명을 고쳤다.
+- 증거: `rosy_harness.py lint`. 원격 결과는 착지 기록을 따른다.
+- gate 변화: 없음. CE: 해당 없음 — 결정 기록이다.
