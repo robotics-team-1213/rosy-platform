@@ -1,6 +1,6 @@
 ## D-991 PC 정비는 Fleet 안의 화면으로 나누고, 재부팅해도 되는지는 그 PC의 도우미가 판단한다
 
-**Status:** Accepted (2026-11-07, 사용자 결정: "monitoring에서 PC 유지보수도 가능하게", "바로 처리"). 결정 1·2·4·5·6(CLI)은 도우미·API·호스트 서비스 화면·`tools/remote/host_ops.py`로 구현했다. 접속 불가 알림도 guard에 구현했다. 결정 3의 화면은 따로 착지한다. 각 PC 재설치와 실물 확인은 하지 않았다.
+**Status:** Accepted (2026-11-07, 사용자 결정: "monitoring에서 PC 유지보수도 가능하게", "바로 처리"). 결정 1·2·4·5·6(CLI)은 도우미·API·호스트 서비스 화면·`tools/remote/host_ops.py`로 구현했다. 접속 불가 알림과 결정 3의 화면도 구현했다. 각 PC 재설치와 실물 확인은 하지 않았다.
 
 관계: [D-524](D-524-service-control.md)(Service Control, 재부팅 항목을 보충), [D-530](D-530-host-management-desired-state-and-guard.md)(guard 복구 단계), [D-876](D-876-rosy-monitoring-independent-site-and-aggregate.md)·[D-883](D-883-monitoring-host-resources-and-storage-clean.md)(Monitoring 읽기 전용, 조치는 D-524), [D-937](D-937-product-app-entry-grammar.md)(제품 입사 문법), D-988(로봇 유지보수 상태, Proposed, 착지 전), [D-871](D-871-auto-update-every-host-service-and-update-view.md)(중앙→현장→기기).
 

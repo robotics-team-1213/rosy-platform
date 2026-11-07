@@ -374,18 +374,21 @@ def test_hosts_route_attaches_guard_headroom_and_ignores_a_bad_drift_file(tmp_pa
     assert body["drift"] is None
 
 
-def test_install_task_shows_host_headroom_and_has_no_process_kill():
+def test_pc_maintenance_shows_host_headroom_and_has_no_process_kill():
     web = Path(__file__).resolve().parents[3] / 'applications/fleet/web'
-    page = (web / "installation" / "install.html").read_text(encoding="utf-8")
-    script = (web / "installation" / "host-services.js").read_text(encoding="utf-8")
-    install = (web / "installation" / "install.js").read_text(encoding="utf-8")
+    page = (web / "maintenance" / "maintenance.html").read_text(encoding="utf-8")
+    script = (web / "maintenance" / "host-services.js").read_text(encoding="utf-8")
+    entry = (web / "maintenance" / "maintenance-page.js").read_text(encoding="utf-8")
+    install = (web / "installation" / "install.html").read_text(encoding="utf-8")
     assets = json.loads((web / 'assets.json').read_text(encoding='utf-8'))['assets']
-    assert 'id="host-services"' in page and "호스트 서비스" in page
+    assert 'id="host-services"' in page and "<title>Rosy Fleet — PC 정비</title>" in page
+    assert 'id="host-services"' not in install and 'href="/console/maintenance"' in install
+    assert 'stop-unit' not in script
     assert "pkill" not in script and "kill" not in script
     assert "10분 뒤 재부팅" in script and "operator_confirmed: true" in script
     assert '.includes("clean-storage")' in script  # only hosts whose catalogue offers it get the button
-    assert 'id: "hosts"' in install and 'from "./host-services.js"' in install
-    assert assets['host-services.js']['path'] == 'installation/host-services.js'
+    assert "createHostServices" in entry
+    assert assets['host-services.js']['path'] == 'maintenance/host-services.js'
 
 
 def test_app_without_named_principals_never_reaches_a_helper(monkeypatch):

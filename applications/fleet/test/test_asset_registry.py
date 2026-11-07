@@ -25,7 +25,7 @@ def test_registry_preserves_pages_and_existing_aliases():
     registry = api["load_registry"](WEB)
     assert set(registry["pages"]) == {
         "/console", "/console/login", "/console/profile", "/console/accounts",
-        "/console/policy", "/console/cell", "/console/site-map", "/console/install",
+        "/console/policy", "/console/cell", "/console/site-map", "/console/install", "/console/maintenance",
     }
     assert {entry["path"] for entry in registry["pages"].values()} == {
         path.relative_to(WEB).as_posix() for path in WEB.rglob("*.html")

@@ -15,7 +15,6 @@ import { createMeasuredCalibrationView } from './measured-calibration-view.js';
 import { createStartPointView } from "./start-point-view.js";
 import { createInstallLine } from "./install-line.js";
 import { createTrackingRelearn } from "./tracking-relearn.js";
-import { createHostServices } from "./host-services.js";
 import { createDeviceProfiles } from "./device-profiles.js";
 import { createPollGate } from "/console/assets/poll-gate.js";
 import { createPeerPicker } from "./peer-picker.js";
@@ -121,12 +120,6 @@ async function call(path, options = {}) {
   }
 }
 
-const hostServices = createHostServices({
-  root: el("host-services"),
-  call,
-  confirmIrreversible,
-  onPaint: () => applyRole(),
-});
 const deviceCare = createDeviceCare({root: el('device-profiles'), scope: pageScope, call,
   identity: () => ({role: auth.role, principal_id: auth.principal})});
 deviceProfiles = createDeviceProfiles({root: el('device-profiles'), scope: pageScope, call, care: deviceCare,
@@ -139,7 +132,6 @@ const installTasks = [
   {id: "device-profiles", title: "장치 정보", panel: el("device-profiles")},
   {id: "cameras", title: "카메라 연결 승인", panel: el("camera-link")},
   {id: "calibration", title: "카메라 설치·보정", panel: el("camera-calibration")},
-  {id: "hosts", title: "호스트 서비스", panel: el("host-services")},
 ];
 const taskChooser = createTaskChooser({beforeSelect: from => {
   if (from === "calibration") visionView.pausePreview();
@@ -343,7 +335,6 @@ async function refreshAuthorization(renewed = false, credentialChange = false) {
       startPoints.refresh(),
       installLine.refresh(),
       relearn.refresh(),
-      hostServices.refresh(),
       deviceProfiles.refresh(),
     ]);
     life.check();
@@ -373,7 +364,6 @@ visionView.refreshSources();
 pageScope.interval(refreshDiscovery, MAP_MS);
 pageScope.interval(() => peerPicker.refresh(), MAP_MS);
 pageScope.interval(() => visionView.refreshFrame(), STATE_MS + 500);
-pageScope.interval(() => hostServices.refresh().catch(() => {}), 30000);
 pageScope.interval(() => installLine.refresh().catch(() => {}), 30000);
 pageScope.interval(() => {
   if (!auth.locked && taskChooser.selectedId === 'device-profiles') deviceProfiles.refresh();

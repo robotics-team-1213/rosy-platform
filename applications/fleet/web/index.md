@@ -32,8 +32,8 @@
 
 ## 최근 기록
 
+- 2026-11-07 · uncommitted · feat: 호스트 서비스를 PC 정비 문서로 나눈다 (D-991)
 - 2026-11-07 · 285714599b · uiux: 로봇 이동 출처 표시
 - 2026-11-06 · uncommitted · uiux(fleet): 지도 연결 실패 안내, 지도 장소 키보드, 로봇 이름표, Cell 블록 이름표
 - 2026-11-06 · uncommitted · uiux: 관제 용어·연결 문구 통일, 단독 링크 누름면
 - 2026-11-06 · uncommitted · uiux(fleet): 지도 클릭 목적지와 정지 미확인 문구
-- 2026-11-06 · uncommitted · uiux(fleet): 지도 이름·설치 전화 폭·저장 실패 안내

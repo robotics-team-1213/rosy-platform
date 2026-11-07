@@ -17,7 +17,7 @@ from fleet.server.site_auth import SitePrincipal
 COOKIE = 'rosy_fleet_account'
 FLOW_COOKIE = 'rosy_fleet_account_flow'
 NO_STORE = {'Cache-Control': 'no-store', 'Pragma': 'no-cache', 'Referrer-Policy': 'no-referrer'}
-DESTINATIONS = ('/console', '/console/cell', '/console/site-map', '/console/install', '/console/policy',
+DESTINATIONS = ('/console', '/console/cell', '/console/site-map', '/console/install', '/console/maintenance', '/console/policy',
                 '/console/profile', '/console/accounts')
 
 

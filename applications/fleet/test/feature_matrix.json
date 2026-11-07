@@ -4279,12 +4279,14 @@
       "id": "installation",
       "title": "설치·등록·발견",
       "entrypoints": [
-        "applications/fleet/web/installation/install.html"
+        "applications/fleet/web/installation/install.html",
+        "applications/fleet/web/maintenance/maintenance.html"
       ],
       "consumers": [
         "applications/fleet/web/devices/device-discovery.js",
         "applications/fleet/web/devices/enrollment.js",
-        "applications/fleet/web/installation/host-services.js",
+        "applications/fleet/web/maintenance/host-services.js",
+        "applications/fleet/web/maintenance/maintenance-page.js",
         "applications/fleet/web/installation/install-line.js",
         "applications/fleet/web/installation/install.js",
         "applications/fleet/web/installation/peer-picker.js"
@@ -4351,7 +4353,7 @@
           ]
         },
         {
-          "consumer": "applications/fleet/web/installation/host-services.js",
+          "consumer": "applications/fleet/web/maintenance/host-services.js",
           "expression": "/api/fleet/hosts/",
           "resolution": "literal-or-template",
           "request_ids": [
@@ -4359,7 +4361,7 @@
           ]
         },
         {
-          "consumer": "applications/fleet/web/installation/host-services.js",
+          "consumer": "applications/fleet/web/maintenance/host-services.js",
           "expression": "/api/fleet/hosts",
           "resolution": "literal-or-template",
           "request_ids": [
@@ -4400,7 +4402,7 @@
           ]
         },
         {
-          "consumer": "applications/fleet/web/installation/host-services.js",
+          "consumer": "applications/fleet/web/maintenance/host-services.js",
           "expression": "/api/fleet/updates",
           "resolution": "literal-or-template",
           "request_ids": [
