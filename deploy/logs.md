@@ -4707,3 +4707,9 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: 원격 시험 `test/test_native_mapping_approval.py`·`test/test_image_layer_sync.py` exit 0. b8xy의 실제 릴리스에서 004·005 지문 일치, 10/29와 불일치(읽기 전용 측정, 제외 목록 추가 전 기준).
 - gate 변화: 없음 — 기체 수용 전이다.
 - CE: 해당 없음 — 새 기능이며 해결한 장애가 없다.
+
+## 2026-11-07 · 178d616c75 · feat(face): at 10% or under the screen goes dark and the buzzer asks for a charger
+- 변경: `rosy-face`가 표본 두 번 연속 10% 이하이면 LCD를 끄고 30초마다 부저 세 번, 13% 초과로 복귀. 업데이트·종료 화면 예외.
+- 증거: `test/test_rosy_face_battery_urgent.py`. 실제 부저와 LCD는 새 릴리스 뒤 확인 전이다.
+- gate 변화: 없음
+- 교훈: CE 해당 없음 — 규칙은 D-502 Amendment와 회귀 시험에 있다.
