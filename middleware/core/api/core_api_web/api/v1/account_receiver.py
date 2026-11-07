@@ -109,12 +109,12 @@ def _apply(body: AccountReceiverRequest, robot_id: str):
     names = {kid: f"account-key-{_digest(pem)[:16]}.pem" for kid, pem in pems.items()}
     for kid, pem in pems.items():
         write_private(path.with_name(names[kid]), pem)
-    secret = path.with_name("account-session.key")
-    if not secret.exists():  # keep it: replacing it would sign out everyone logged in on this robot
-        write_private(secret, Fernet.generate_key().decode("ascii"))
+    session_key = path.with_name("account-session.key")
+    if not session_key.exists():  # keep it: replacing it would sign out everyone logged in on this robot
+        write_private(session_key, Fernet.generate_key().decode("ascii"))
     write_private(path, json.dumps({
         "issuer": body.issuer, "client_id": body.client_id, "resource": "robot:" + robot_id,
-        "callback": body.callback, "public_key_files": names, "encryption_key_file": secret.name,
+        "callback": body.callback, "public_key_files": names, "encryption_key_file": session_key.name,
         "session_db": database}))
     try:
         client = load_account_client(path)

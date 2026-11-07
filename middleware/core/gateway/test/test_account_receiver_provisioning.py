@@ -66,14 +66,14 @@ def test_delivery_applies_without_a_restart_and_forces_this_robot(robot):
 def test_the_secret_is_made_here_private_kept_and_never_returned(robot):
     https, _, seats, folder = robot
     first = https.put(ROUTE, json=_body(), headers=seats["admin"]).text
-    secret = folder / "account-session.key"
-    value = secret.read_bytes()
+    session_key = folder / "account-session.key"
+    value = session_key.read_bytes()
     assert value.decode("ascii") not in first
     if os.name == "posix":
-        assert stat.S_IMODE(secret.stat().st_mode) == 0o600
+        assert stat.S_IMODE(session_key.stat().st_mode) == 0o600
         assert stat.S_IMODE((folder / "account-receiver.json").stat().st_mode) == 0o600
     https.put(ROUTE, json=_body(client_id="robot-y"), headers=seats["admin"])
-    assert secret.read_bytes() == value, "replacing the key would sign out everyone on this robot"
+    assert session_key.read_bytes() == value, "replacing the key would sign out everyone on this robot"
     assert json.loads((folder / "account-receiver.json").read_text(encoding="utf-8"))["client_id"] == "robot-y"
 
 
