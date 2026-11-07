@@ -483,18 +483,29 @@ def test_canary_rollback_or_refusal_withdraws(tarball, keys, tmp_path, outcome):
     assert final["published_at"] == "2026-10-01T15:00:00Z"
 
 
-def test_canary_timeout_withdraws(tarball, keys, tmp_path):
+def test_a_canary_that_never_started_leaves_the_rollout_alone(tarball, keys, tmp_path):
+    # D-985: a held robot says nothing about the release; withdrawing it would cost the whole fleet.
     gh = FakeGh()
     ssh = FakeSsh(statuses=[status("held", candidate=RELEASE_ID)])
     clock = FakeClock()
 
-    assert _publish(tarball, keys, tmp_path, gh, ssh, "--canary-timeout-min", "10", clock=clock) != 0
+    assert _publish(tarball, keys, tmp_path, gh, ssh, "--canary-timeout-min", "10", clock=clock) == 4
 
     final = _verified(gh, keys)
-    assert final["withdrawn"] is True and final["canary_ok"] is False
-    assert "10 min" in final["reason"] and "held" in final["reason"]
+    assert final["withdrawn"] is False and final["canary_ok"] is False
     assert 600 <= clock.t <= 630
     assert len(ssh.status_polls()) == 1 + 21  # baseline, then the watch
+
+
+@pytest.mark.parametrize("phase", ["applying", "stuck", "error"])
+def test_a_canary_that_may_have_started_still_withdraws_at_the_timeout(tarball, keys, tmp_path, phase):
+    gh = FakeGh()
+    ssh = FakeSsh(statuses=[status(), status(phase, candidate=RELEASE_ID)])
+
+    assert _publish(tarball, keys, tmp_path, gh, ssh, "--canary-timeout-min", "1") == 3
+
+    final = _verified(gh, keys)
+    assert final["withdrawn"] is True and final["canary_ok"] is False and phase in final["reason"]
 
 
 @pytest.mark.parametrize("canary_status", [
@@ -514,8 +525,11 @@ def test_only_this_release_decides_the_canary(tarball, keys, tmp_path, canary_st
     _publish(tarball, keys, tmp_path, gh, FakeSsh(statuses=[canary_status]), "--canary-timeout-min", "1")
 
     final = _verified(gh, keys)
-    assert final["canary_ok"] is False and final["withdrawn"] is True
-    assert "did not commit within 1 min" in final["reason"]
+    assert final["canary_ok"] is False
+    if canary_status["phase"] == "idle":  # never started this release: left for another canary
+        assert final["withdrawn"] is False
+    else:
+        assert final["withdrawn"] is True and "did not commit within 1 min" in final["reason"]
 
 
 def test_after_canary_ok_the_other_robots_are_shown(tarball, keys, tmp_path, capsys):

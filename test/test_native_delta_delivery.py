@@ -102,28 +102,30 @@ def test_publisher_rejects_transport_changed_after_preparation(trees, tmp_path):
         producer.inspection.verify_transport_delta(full, delta, binding, key, tmp_path)
 
 
-@pytest.mark.parametrize("paths,wanted", [(["docs/a.md"], "none"),
-    (["deploy/robot/pinky_pro/image/customize-rootfs.sh"], "os-image"),
-    (["deploy/robot/pinky_pro/native/os_update_controller.py"], "os-image"),
-    (["deploy/robot/pinky_pro/native/os_update_transport.py"], "os-image"),
-    (["deploy/robot/pinky_pro/native/os_update_watchdog.py"], "os-image"),
-    (["deploy/robot/pinky_pro/native/rosy-os-update.service"], "os-image"),
-    (["deploy/robot/pinky_pro/release/public-keys/authority.pem"], "os-image"),
-    (["deploy/robot/pinky_pro/native/rosy-rauc-dbus.conf"], "os-image"),
-    (["unowned/a.py"], "review"), (["operations/setup.py"], "full-payload")])
-def test_delivery_policy_has_executable_vocabulary(paths, wanted):
+OS_IMAGE_PATHS = ["deploy/robot/pinky_pro/image/customize-rootfs.sh",
+                  "deploy/robot/pinky_pro/native/os_update_controller.py",
+                  "deploy/robot/pinky_pro/native/os_update_transport.py",
+                  "deploy/robot/pinky_pro/native/os_update_watchdog.py",
+                  "deploy/robot/pinky_pro/native/rosy-os-update.service",
+                  "deploy/robot/pinky_pro/release/public-keys/authority.pem",
+                  "deploy/robot/pinky_pro/native/rosy-rauc-dbus.conf"]
+
+
+@pytest.mark.parametrize("path", [*OS_IMAGE_PATHS, "unowned/a.py", "operations/setup.py"])
+def test_every_robot_relevant_change_ships_the_payload(path):
+    # D-985: holding here kept the base still, so one such path stopped every later release.
     impact = load("delivery_impact", "deploy/robot/pinky_pro/release/artifact_impact.py")
-    assert impact.delivery_policy(paths) == wanted
+    assert impact.delivery_policy([path]) == "full-payload"
+    assert impact.os_image_changed([path]) is (path in OS_IMAGE_PATHS)
 
 
-@pytest.mark.parametrize("paths,wanted", [(["docs/a.md"], "none"),
-    (["deploy/robot/pinky_pro/image/customize-rootfs.sh"], "os-image"),
-    (["deploy/robot/pinky_pro/native/os_update_controller.py"], "os-image"),
-    (["deploy/robot/pinky_pro/native/os_update_transport.py"], "os-image"),
-    (["deploy/robot/pinky_pro/native/os_update_watchdog.py"], "os-image"),
-    (["deploy/robot/pinky_pro/native/rosy-os-update.service"], "os-image"),
-    (["deploy/robot/pinky_pro/release/public-keys/authority.pem"], "os-image"),
-    (["unowned/file"], "review")])
+def test_host_only_changes_ship_nothing():
+    impact = load("delivery_impact", "deploy/robot/pinky_pro/release/artifact_impact.py")
+    assert impact.delivery_policy(["docs/a.md", "tools/release/robot_cd.py"]) == "none"
+    assert impact.os_image_changed(["docs/a.md"]) is False
+
+
+@pytest.mark.parametrize("paths,wanted", [(["docs/a.md"], "none")])
 def test_coordinator_policy_reaches_dispatch_gate(tmp_path, paths, wanted):
     cd = load("delivery_cd", "tools/release/robot_cd.py")
     calls = []

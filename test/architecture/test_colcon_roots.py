@@ -68,7 +68,7 @@ EXEMPT = {
         "D-877 builds one pinned upstream package (topic_based_ros2_control) in a user overlay; no repo roots",
     "tools/sim/build_omx_overlay.sh": "D-877 builds the pinned upstream OMX description + bringup in a user overlay",
     "contracts/foundation/core_common/profile.py": "error-message text",
-    "middleware/perception/nodes/web_node.py": "docstring",
+    "middleware/perception/robot_web/web_node.py": "docstring",
     "operations/fleet/package.xml": "XML comment",
     # Tests pin consumer text; none runs colcon or rosdep.
     "test/architecture/test_colcon_roots.py": "this test",

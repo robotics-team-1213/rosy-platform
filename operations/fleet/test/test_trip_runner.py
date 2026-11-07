@@ -1088,8 +1088,7 @@ def test_http_robot_client_line_follow_junction_hits_the_core_path():
 # ---- API --------------------------------------------------------------------------------------
 
 def _app(tmp_path, ports):
-    robot = FakeRobot("rosy_60")
-    robot.power_health_value = fresh_power_health()  # deliberate: the start gate needs fresh battery evidence
+    robot = FakeRobot("rosy_60"); robot.power_health_value = fresh_power_health()  # deliberate: start gate needs fresh battery
     console = FleetConsole([RobotEndpoint("rosy_60", "http://127.0.0.1:8080", "t")], [robot])
     tasks = FleetTaskService(FleetTaskStore(tmp_path / "tasks.sqlite"), robot_ids={"rosy_60"})
     store = SiteMapStore(tmp_path / "tasks.sqlite")

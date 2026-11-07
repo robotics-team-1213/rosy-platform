@@ -180,7 +180,7 @@ def test_map_interaction_controls_explain_and_enforce_the_operator_boundary():
     assert ".surface-link[hidden]" not in panel_styles  # components.css owns [hidden]
     assert 'ui-button[kind="segment"][aria-pressed="true"]' in shared_controls
     assert "#shell-estop { flex: none; white-space: nowrap; }" in shell
-    assert ".surface-actions:is(.map-click-actions, .map-layer-actions) > ui-button { flex: 1;" in shell
+    assert ".surface-actions:is(.map-click-actions, .map-layer-actions, .mode-actions) > ui-button { flex: 1;" in shell
 
 
 def test_every_module_the_shell_imports_is_installed_and_served():

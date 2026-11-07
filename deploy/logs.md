@@ -4642,3 +4642,15 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: 원격 시험 `test/test_omx_cell_params_web.py`·`test/test_omx_cell_params.py`·`test/test_omx_session_caps_layers.py` 89 pass, skip 0. 표의 값이 `load_caps` 결과와 같은지 시험으로 고정했다. 셀 PC에 임시로 띄운 페이지를 터널과 Chromium으로 봤다: 실제 caps 2개와 로봇 프로필 1개, 콘솔 오류 0건, 폰 폭 넘침 없음. 임시 파일과 서버는 지웠고 원본 파일은 바뀌지 않았다.
 - gate 변화: 없음 — 셀 PC에 상설 설치하지 않았고 실제 값 파일 저장도 하지 않았다.
 - CE: 해당 없음 — 새 기능이며 해결한 장애가 없다.
+
+## 2026-11-07 · 6de988c4c4 · fix(release): 접속된 Pinky가 언제나 최신 payload로 올라간다 (D-985)
+- 변경: 게시 경로가 이미지·미분류 경로와 꺼진 기체에 멈추지 않고, 카나리를 게시 때 고르며 시작하지 않은 카나리는 철회 대신 교체한다. 봉인은 payload 업데이터의 hold가 아니다. OS Release는 payload 뒤에 게시만 한다.
+- 증거: 원격 시험 `test/test_robot_cd.py`·`test_robot_cd_os.py`·`test_native_delta_delivery.py`·`test_publish_payload_release.py`·`test_rosy_auto_update_eligibility.py`·`test_rosy_auto_update_resume.py`·`test_pinky_release_impact.py`·`test_os_signer_snapshot.py` 전부 통과, exit 0. 실물 수용은 게시 뒤 별도.
+- gate 변화: 없음 — 기체 수용 전이다.
+- CE: 미해결 — 실물 수용 뒤 교훈을 기록한다.
+
+## 2026-11-07 · uncommitted · feat(navigation): 모터·정지 파일이 같으면 항법 승인을 이어받는다 (D-986)
+- 변경: `mapping_approval.py`가 승인 때 서명된 `SHA256SUMS`의 지문을 표식에 저장하고, `check`가 현재 릴리스 지문과 같을 때만 다른 릴리스의 승인을 인정한다. 지문이 없거나 다르면 거절하고 봉인 원본은 매번 다시 검증한다.
+- 증거: 원격 시험 `test/test_native_mapping_approval.py`·`test/test_image_layer_sync.py` exit 0. b8xy의 실제 릴리스에서 004·005 지문 일치, 10/29와 불일치(읽기 전용 측정, 제외 목록 추가 전 기준).
+- gate 변화: 없음 — 기체 수용 전이다.
+- CE: 해당 없음 — 새 기능이며 해결한 장애가 없다.

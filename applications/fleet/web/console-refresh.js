@@ -181,7 +181,7 @@ export function createConsoleRefresh({ pageScope, el, view, auth, call, fleetApi
       if (view.selected) disarmGoal("Fleet 상태를 확인할 수 없어 목표 지정 취소");
       render();
       const pill = el("online-pill");
-      pill.textContent = "Fleet 서버 없음";
+      pill.textContent = "Fleet 연결 끊김";
       pill.setAttribute("status", "crit");
     } finally {
       if (life.current()) statePollInFlight = false;

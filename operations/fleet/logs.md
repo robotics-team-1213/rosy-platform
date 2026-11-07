@@ -5314,6 +5314,11 @@
 - 결정: API v1.363; 기존 CORE 최종 명령·모드 owner 유지.
 - 교훈: CE 해당 없음 — 최종 코드·회귀 시험·API 계약으로 판단 근거를 재현할 수 있음.
 
+## 2026-11-06 · uncommitted · uiux: 물체 카탈로그 미지정 안내를 한글로
+- 변경: 환경 변수 이름 대신 설치 담당자에게 요청할 것을 말한다. 코드는 그대로. test_doc_tabs·test_cell_app_browser의 제목 고정을 새 제목으로 갱신.
+- 증거: agent-browser 로컬 렌더(1920·390·320 화면 확인). 원격 회귀는 착지 기록을 따른다.
+- gate 변화: SOURCE 변경. 실기기·Android 수용은 별도다. CE: 해당 없음 — 코드와 회귀가 판단을 보존한다.
+
 ## 2026-11-07 · uncommitted · fix(fleet): 운행 시작 배터리 확인 · 충전 칸 점유 유지
 - 변경: `TripRunner.start`가 `power_health.battery`가 fresh(표본 나이+캐시 나이 ≤ stale_after_s, 캐시 ≤ 5 s)이고 percent가 읽히며 level이 ok/warning일 때만 통과한다. 아니면 422 `TRIP_BATTERY_UNCONFIRMED`(근거 원천이 없어도 닫힘, 우회 기본값 없음). 충전 복귀 시작만 critical을 허용한다. `ChargeBays`는 오프라인·자세 상실·목록에서 사라진 로봇의 방문을 지우지 않고 칸을 `unknown`으로 보이며, 칸 밖에서 신뢰 자세로 보일 때만 방문을 끝낸다. 보이지 않던 시간은 충전 시간에서 뺀다.
 - 증거: 시험 먼저 RED(`test_trip_battery` import 실패, `test_charge_bays` 2 failed) 후 구현. 시험 fixture 14곳은 신선한 배터리를 명시 주입한다(`fakes.fresh_battery`). 결과는 원격 실행 기록 참조.

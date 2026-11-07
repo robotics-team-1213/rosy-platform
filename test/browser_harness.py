@@ -198,3 +198,11 @@ def save_temp_screenshot(page, name: str, **options) -> Path:
     page.screenshot(path=str(shot), **options)
     print(f"\nscreenshot: {shot}")
     return shot
+
+
+def confirm_irreversible(page, accept=True):
+    """공용 확인 창(dialog.ui-confirm)을 실행 또는 취소로 닫는다."""
+    dialog = page.locator('dialog.ui-confirm')
+    dialog.wait_for(state='visible')
+    dialog.locator('ui-button[kind="irreversible"]' if accept else 'ui-button:has-text("취소")').click()
+    dialog.wait_for(state='hidden')

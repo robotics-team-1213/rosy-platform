@@ -107,7 +107,7 @@ def install_cell_app_routes(app, *, mission_service, compiler, service_id, princ
         path = os.environ.get(ENV)
         try:
             if not path:
-                raise OSError(f"{ENV} is not set")
+                raise OSError("이 Fleet 서버에 물체 카탈로그 파일이 지정되어 있지 않습니다. 사이트 설치 담당자에게 지정을 요청하세요.")
             return view(path)
         except OSError as exc:
             raise HTTPException(503, detail={"code": "CELL_OBJECT_CATALOG_UNAVAILABLE", "message": str(exc)}) from exc

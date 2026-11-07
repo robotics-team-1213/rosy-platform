@@ -236,8 +236,10 @@ published here.
   and prints each phase. A commit of this id re-signs the rollout with `canary_ok=true`;
   the other robots apply after `published_at + wave_delay_s` (default 0 s, no extra wait).
   Use `--wave-delay-s <seconds>` when an observation delay is wanted. A rollback or
-  refusal of this id, or no commit within `--canary-timeout-min` (default 30), re-signs it
-  with `withdrawn=true` and exits non-zero. If the PC stops mid-watch, the others wait;
+  refusal of this id, or a timeout (`--canary-timeout-min`, default 30) after the canary may
+  have started, re-signs it with `withdrawn=true` and exits non-zero. A timeout before it
+  started (held, ineligible, waiting, idle) exits 4 and changes nothing; the coordinator then
+  moves the rollout to another idle robot (D-985). If the PC stops mid-watch, the others wait;
   rerun with `--release-id <id> --canary <ip> --resume` (Ctrl+C prints that command and the
   `--withdraw` one). Only one publish per release id runs at a time (`publish-<id>\.lock`
   in the work folder). Before its final upload the watch re-reads the rollout on GitHub:
@@ -249,7 +251,8 @@ published here.
   Robots still require idleness, no hold and adequate battery, and apply on their next updater run.
 - **Withdraw by hand:** `--release-id <id> --withdraw --reason "<why>"`. Robots that already
   applied it stay on it; roll them back with a newer release or `-Rollback`.
-- **Hold** a robot before a test, drive or seal, and release it after:
+- **Hold** a robot before a test, drive or seal, and release it after. A sealed approval no
+  longer holds by itself (D-985): the update lapses it and navigation needs a new approval.
   ```powershell
   deploy\robot\pinky_pro\rosy-update-hold.ps1 -Robot <ip> -Hold -Reason "G4 recording" -Hours 4
   deploy\robot\pinky_pro\rosy-update-hold.ps1 -Robot <ip> -Release

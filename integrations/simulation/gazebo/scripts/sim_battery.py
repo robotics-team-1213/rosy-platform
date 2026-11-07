@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Gazebo stand-in for the Pinky battery node (``battery/voltage``, std_msgs/Float32, 1 Hz).
+"""Gazebo stand-in for the robot battery node (``battery/voltage``, std_msgs/Float32, 1 Hz).
 
 Gazebo has no pack. Without this publisher a SIM CORE reports battery evidence ``missing`` and Fleet
 refuses every trip start (TRIP_BATTERY_UNCONFIRMED). The sim pack sits mid-curve and below the
