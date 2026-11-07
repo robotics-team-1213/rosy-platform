@@ -155,7 +155,7 @@ def test_a_sample_that_disagrees_with_a_sighting_is_not_taken_and_blocks():
     assert feed(tracker, 3, x=1.3) is None
     pose = tracker.pose(T0 + 3, "m")
     assert (pose.state, pose.anchor_source, pose.x) == (DEGRADED, "sighting", 1.0)
-    assert feed(tracker, 4) == "INDEPENDENT_ANCHOR_DISAGREES"
+    assert feed(tracker, 4, x=1.3) == "INDEPENDENT_ANCHOR_DISAGREES"
 
 
 def test_a_sample_that_disagrees_with_a_pin_blocks():
@@ -164,7 +164,7 @@ def test_a_sample_that_disagrees_with_a_pin_blocks():
     assert feed(tracker, 1, x=1.3) is None
     pose = tracker.pose(T0 + 1, "m")
     assert (pose.state, pose.anchor_source) == (DEGRADED, "operator_pin")
-    assert feed(tracker, 2) == "INDEPENDENT_ANCHOR_DISAGREES"
+    assert feed(tracker, 2, x=1.3) == "INDEPENDENT_ANCHOR_DISAGREES"
 
 
 def test_consumers_that_need_independent_evidence_refuse_it():
@@ -193,7 +193,7 @@ def test_anchor_age_counts_from_the_camera_not_the_sample():
         tracker.add_odom(OdomSample(0.0, 0.0, 0.0, T0 + t), T0 + t)
         assert tracker.add_auto_locate((1.0, 2.0, 0.0), T0 + t, T0 + t, "m", "m", float(t + 20)) is None
     pose = tracker.pose(T0 + 3, "m", auto_locate=True)
-    assert pose.anchor_age_s == pytest.approx(21.0, abs=1.1)  # a trip start's 2 s check refuses this
+    assert pose.anchor_age_s == pytest.approx(23.0, abs=0.1)  # camera at T0-20; a trip start's 2 s check refuses this
 
 
 def test_a_block_outlives_a_session_and_lifts_on_a_fresh_agreeing_sample():
@@ -300,7 +300,8 @@ def test_the_camera_stays_on_while_it_anchors_and_a_new_sample_renews_it():
         rig.tick()
     assert rig.locate.stream_wanted() is True
     rig.track = rig.camera(1.0, 0.3)
-    pose = rig.tick()
+    rig.tick()
+    pose = rig.tick()  # this tick's feeds share one odom stamp, so the sighting counts from the next
     assert pose.anchor_age_s < 2.0
 
 
