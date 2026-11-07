@@ -37,6 +37,13 @@ def _main_sha() -> str:
                           check=True).stdout.strip()
 
 
+def _green_marker() -> Path:
+    """Where the last main sha whose night ran with 0 NEW is kept (shared by every worktree)."""
+    common = subprocess.run(["git", "-C", str(ROOT), "rev-parse", "--path-format=absolute", "--git-common-dir"],
+                            capture_output=True, text=True, check=True).stdout.strip()
+    return Path(common) / "rosy-nightly-green"
+
+
 def plan() -> list[list[str]]:
     """The canonical FULL tier plus every registered browser suite (the explicit FULL a publish landing runs)."""
     full = _json("tools/harness/rosy_harness.py", "affected", "--base", "main", "--json", "--full")
@@ -56,6 +63,11 @@ def main(argv: list[str] | None = None) -> int:
     # Before the tier, so an id that fails tonight is recorded and not closed by its own rerun.
     land_mainred.recheck(ROOT, main_sha, lambda invs, runs: remote_pytest.run(
         invs, runs, main_sha, repo=ROOT, label="nightly"), logdir)
+    marker = _green_marker()
+    # 2026-11-08: a night with no new main commit re-ran the same complete tier for nothing.
+    if marker.is_file() and marker.read_text(encoding="utf-8").strip() == main_sha:
+        print(f"[nightly] {main_sha[:10]}: unchanged since the last green night, tier skipped", flush=True)
+        return 0
     logs = [logdir / f"nightly-{n}.txt" for n in range(len(invocations))]
     remote_pytest.run(invocations, logs, main_sha, repo=ROOT, label="nightly")
     known = {name: why for path in ("test/known_failures.txt", "test/flaky_quarantine.txt") if (ROOT / path).is_file()
@@ -70,6 +82,8 @@ def main(argv: list[str] | None = None) -> int:
     print(f"[nightly] {main_sha[:10]}: {len(invocations)} invocation(s), {len(new)} NEW", flush=True)
     for nodeid in new:
         print(f"NEW       {nodeid}")
+    if not new:
+        marker.write_text(main_sha + "\n", encoding="utf-8")
     return 1 if new else 0
 
 
