@@ -268,7 +268,7 @@ class World:
     def reset(self):
         data = mujoco.MjData(self.model)
         for arm in PREFIX:
-            home = self.layout.arms[arm].home
+            home = self.layout.arms[arm].wait
             data.qpos[self.q[arm]] = home
             data.qpos[self.mimic[arm]] = -home[5]
             data.ctrl[self.act[arm]] = home

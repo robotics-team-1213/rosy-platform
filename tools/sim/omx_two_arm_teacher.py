@@ -108,7 +108,7 @@ class Teacher:
     def run_step(self, data, step, here):
         """One step with the other arm holding home (sequential)."""
         L = self.layout
-        idle = {o: np.append(L.sim_arms[o].home[:5], L.sim_arms[o].home[5]) for o in L.arms if o != step["arm"]}
+        idle = {o: L.sim_arms[o].wait.copy() for o in L.arms if o != step["arm"]}
         gen = self.step_gen(data, step, here, self)
         try:
             while True:
@@ -167,9 +167,9 @@ class Teacher:
                 worst = max(worst, e)
             prev = (name, xy, z, yaw, grip)
         ctx.phase = "park"
-        yield from self.move_g(np.append(q[:5], g_to), np.append(ik_arm.home[:5], g_to), 2.5)
+        yield from self.move_g(np.append(q[:5], g_to), np.append(ik_arm.wait[:5], g_to), 2.5)
         for _ in range(round(.7 * FPS)):
-            yield np.append(ik_arm.home[:5], g_to)
+            yield np.append(ik_arm.wait[:5], g_to)
         return dict(self.verdict(data, step, row, before, ctx), held=held, worst_ik_error_mm=round(worst * 1000, 2))
 
     def belt_in_g(self, data, step):
@@ -184,12 +184,12 @@ class Teacher:
         """Both arms at once (D-778 L1). Each arm runs its own steps in the given order; a step starts when its `after` steps are done,
         its `after_pick` steps have lifted their container (the conveyor holds one) and its zones are free. It holds its pick zones until
         the carry ends (a carry from the conveyor to one side sweeps the middle: two arms met there, 2026-11-08) and its place zones
-        until it is done; an arm without a step holds its last pose (home after a park).
+        until it is done; an arm without a step holds its last pose (the wait pose after a park).
         Returns (rows, per-step start and end seconds, None or why it stopped)."""
         L = self.layout
         queue = {a: [s for s in task["steps"] if s["arm"] == a] for a in L.arms}
         status, held, running, rows, timing = {}, {}, {}, [], {}
-        last = {a: np.append(L.sim_arms[a].home[:5], L.sim_arms[a].home[5]) for a in L.arms}
+        last = {a: L.sim_arms[a].wait.copy() for a in L.arms}
         frames = 0
         while any(queue.values()) or running:
             for arm in L.arms:
@@ -274,7 +274,7 @@ class Teacher:
             j = (0., 0., 0.) if self.seed == 0 or site == "belt" else (*self.rng.uniform(-1, 1, 2) * .0003, float(self.rng.uniform(-1, 1)) * math.radians(.5))
             w.put(data, cid, site, jitter=j)
         for _ in range(FPS):
-            self.frame(data, {a: L.sim_arms[a].home for a in L.arms}, "settle")
+            self.frame(data, {a: L.sim_arms[a].wait for a in L.arms}, "settle")
         return data
 
     def off_stand(self, data, step, here):

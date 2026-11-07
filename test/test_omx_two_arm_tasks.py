@@ -235,3 +235,11 @@ def test_the_far_hold_is_out_of_reach_where_the_ship_lies(layout):
         for arm in sites.ARMS:
             task = dict(supply=["bar-1"], start={}, name="t", steps=[dict(id="x", container="bar-1", **{"from": "belt"}, to=f"ship-h2r{row}-l0", arm=arm)])
             assert "cannot reach" in refused(layout, task)
+
+
+def test_an_arm_waits_out_of_the_middle_band(layout):
+    """The folded home points the jaw at the middle (arm_a brushed arm_b's jaw at the stern stand); the side wait turns it to the belt end."""
+    for name, arm in layout.sim_arms.items():
+        assert all(abs(p[1]) > .1 for p in arm.segments(arm.wait))
+        assert any(abs(p[1]) < .125 for p in arm.segments(arm.home))  # what it replaces
+        assert arm.segments(arm.wait)[-1][0] > arm.base[0]  # the jaw toward the belt end

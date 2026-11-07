@@ -138,7 +138,7 @@ class Driver:
         teacher.contacts, teacher.carried, teacher.first = dict(arm_arm=set(), arm_other=set(), pad_neighbour=set()), c, {}
         if plan["from"] == "belt":
             home = self.layout.sim_arms
-            teacher.belt_in(data, plan, {o: home[o].home for o in self.layout.arms if o != arm})
+            teacher.belt_in(data, plan, {o: home[o].wait for o in self.layout.arms if o != arm})
         before = {o: world.pose(data, o) for o, _ in self.layout.containers() if o != c}
         start_z, peak = world.pose(data, c)[0][2], 0.
         goal = goal_vector(self.layout, plan, {k: v for k, v in here.items() if k != c})

@@ -139,7 +139,7 @@ def validate(layout, task, data=None):
     here = dict(task.get("start", {}))  # container -> site
     supply = set(task.get("supply", []))
     known = {c for c, _ in layout.containers()}
-    home_pose = {n: a.home for n, a in layout.arms.items()}
+    home_pose = {n: a.wait for n, a in layout.arms.items()}  # the other arm waits there
     for step in task["steps"]:
         sid, c, a, b, arm = step["id"], step["container"], step["from"], step["to"], step["arm"]
         bad = [f"{sid}: unknown {kind} {name!r}" for kind, name, ok in (

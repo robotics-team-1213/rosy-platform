@@ -30,7 +30,9 @@ CHOICES = dict(
     tcp_x_arm_b=.0740,       # URDF/STL v2.1 jaw (tip 74.1 mm from the pivot); a touch gave .0885 but that rests on an unchecked table height (OPEN, 14.5 mm FK offset)
     tcp_x_arm_a=.0740,       # same jaw, not confirmed on arm_a separately
     sim_tcp_x_m=.0740,       # the MuJoCo pads are the repo's v2.1 STL, whose TCP is .0740: the teacher grasps with this one (STL may not match the installed jaws)
-    roll_floor_norm=-18.)    # usable wrist roll floor in the norm unit (coordinator): a step whose joint5 goes below it is flagged
+    roll_floor_norm=-18.,    # usable wrist roll floor in the norm unit (coordinator): a step whose joint5 goes below it is flagged
+    wait_pose="side")        # where an arm waits between steps: "side" = home folded but turned to the belt end, out of the middle band
+                             # (D-983: the folded home points its jaw at the middle, and arm_a brushed arm_b's jaw at the stand); "home"
 # Lane centre (x, y) m and long-axis yaw deg, lanes numbered as printed on the plates. Dark pads in the surveyed top camera, back-projected to the plate top;
 # the pads measured 89 x 30 mm against the 90 x 30 container. tmp-a-3 lay under a container: from lanes 1 and 2, its visible end agrees within 0.1 deg.
 # The plates are loose: measure again when one moves.
@@ -57,6 +59,17 @@ STERN = dict(boxes=((0., 50., -65., 65., 6.), (0., 6.5, -65., 65., 11.), (43.5, 
 R08_TIERS = 3  # the cell stacks three high (user, 11-08); the slot map lists tiers 82 and 84, the third sits one container (32.4 mm) higher
 R08_STACK = tuple((f"bar-{3 * layer + k + 1}", f"ship-h1r{row}-l{layer}", arm) for layer in range(R08_TIERS)
                   for k, (row, arm) in enumerate(((1, "arm_b"), (0, "arm_a"), (2, "arm_b"))))
+
+
+def wait_pose(arm, kind):
+    """Joints an arm waits in: the folded home, or ("side") the same fold with joint1 turned a quarter so the jaw points at the belt end
+    (+x) and nothing of the arm stays in the middle band between the arms."""
+    if kind == "home":
+        return arm.home.copy()
+    turned = [arm.home.copy() for _ in (1, -1)]
+    for q, sign in zip(turned, (1, -1)):
+        q[0] += sign * math.pi / 2
+    return max(turned, key=lambda q: arm.segments(q)[-1][0])
 
 
 def ship_cell(layout, x_mm, y_mm, z_mm=0.):
@@ -154,7 +167,8 @@ class Layout:
         for k, name in enumerate(ARMS):
             z = self.table_z + .012 if c["base_z"] == "measured" else f["arm_bases_m"][k][2]
             for table, tcp in ((self.arms, c["tcp_x_" + name[-5:]]), (self.sim_arms, c["sim_tcp_x_m"])):
-                table[name] = kin.Arm(name, (*f["arm_bases_m"][k][:2], z), f["arm_base_yaws_rad"][k], tcp_x=tcp)
+                table[name] = arm = kin.Arm(name, (*f["arm_bases_m"][k][:2], z), f["arm_base_yaws_rad"][k], tcp_x=tcp)
+                arm.wait = wait_pose(arm, c["wait_pose"])
         belt_top = self.table_z - .055 if c["belt_height"] == "ruler" else f["pickup_center_m"][2] - .015
         self.belt_top = belt_top
         self.box = CONTAINER[c["ship_source"]]
