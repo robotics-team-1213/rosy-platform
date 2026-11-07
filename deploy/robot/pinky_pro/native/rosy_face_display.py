@@ -305,10 +305,12 @@ class FaceDisplay:
             return state
         if self._lamp is not None and self._lamp.pattern in ("emergency", "failed", "caution", "recovering", "bridging"):
             return None
-        table = self._table_screen  # what is really happening, also while the urgent battery darkens the panel
-        if table and (table["kind"] in ("stopped", "update", "shutdown")
-                      or table["row"] == "failed" or table.get("strip_tone") == "caution"):
-            return None  # Alarm outputs must never wait for a blocking bench test.
+        # What is really happening (also while the urgent battery darkens the panel) or what is drawn: either one
+        # saying stop, update, shutdown, failed or caution keeps the alarm outputs from waiting for a bench test.
+        for table in (self._table_screen, self.screen):
+            if table and (table["kind"] in ("stopped", "update", "shutdown")
+                          or table["row"] == "failed" or table.get("strip_tone") == "caution"):
+                return None
         if self._lamp is not None and self._light_session:
             self._lamp.show(None)
         self._tested = request["request_id"]
