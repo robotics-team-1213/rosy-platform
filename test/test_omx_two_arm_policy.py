@@ -39,3 +39,10 @@ def test_a_round_counts_steps_and_keeps_whole_runs_apart():
     assert score["per_step"] == {"stack/s1": 1, "stack/s2": 0}
     assert score["whole"] == [dict(task="stack", seed=1, total=9, passed=3, completed=False)]
     assert 0 < score["wilson_low"] < 1 / 3 < score["wilson_high"]
+
+
+def test_only_finished_tasks_make_a_round_pass():
+    """The first real round ran to the end with 0 of 63 steps and read as passed on the screen."""
+    assert policy.outcome(dict(whole=[dict(completed=True), dict(completed=True)])) == dict(status="passed")
+    for whole in ([dict(completed=True), dict(completed=False)], []):
+        assert policy.outcome(dict(whole=whole))["status"] == "failed"

@@ -208,6 +208,13 @@ def evaluate(args):
     return 0
 
 
+def outcome(score):
+    """A round that ran to the end has not passed: Rosy Learning shows this status, so only finished tasks earn it."""
+    if score["whole"] and all(run["completed"] for run in score["whole"]):
+        return dict(status="passed")
+    return dict(status="failed", reason="평가에서 작업을 끝까지 마치지 못했습니다.")
+
+
 def now():
     return datetime.now().astimezone().isoformat(timespec="seconds")
 
@@ -266,7 +273,8 @@ def run_round(args):
         write_record(run, record)
         return 1
     result = json.loads((run / "eval.json").read_text(encoding="utf-8"))
-    record.update(status="passed", stage="done", eval=summarise(result["rows"], result["whole"]), finished_at=now(), artifacts=sorted(path.name for path in (run / "artifacts").glob("*.mp4")))
+    score = summarise(result["rows"], result["whole"])
+    record.update(outcome(score), stage="done", eval=score, finished_at=now(), artifacts=sorted(path.name for path in (run / "artifacts").glob("*.mp4")))
     write_record(run, record)
     print(json.dumps(dict(round_id=round_id, eval=record["eval"]), ensure_ascii=False))
     return 0
