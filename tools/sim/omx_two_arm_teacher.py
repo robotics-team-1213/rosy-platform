@@ -26,6 +26,9 @@ OPEN_GAP = dict(belt=.042, ship=.033, temp=.033)  # 33 mm lets a pad stay inside
 HOLD_GAP = .030 - jaw.SQUEEZE_M
 
 
+RECORDED = ("top", "side", "a_wrist", "b_wrist")  # the cell's four cameras (D-960); the world's overview is not one of them
+
+
 def judge_pose(world, data, cid, site, limits):
     """Container against its target site: position, yaw (180 deg symmetric), height, tilt."""
     s = world.layout.sites[site]
@@ -195,6 +198,7 @@ class Teacher:
         final = {}
         for step in task["steps"]:
             final[step["container"]] = step["to"]
+        self.data = data  # the last state, for the record's pictures
         finals = {c: judge_pose(w, data, c, s, self.limits) for c, s in final.items()}
         passed = sum(r["result"] == "pass" for r in rows)
         return dict(task=task["name"], steps=len(rows), steps_pass=passed, final_ok=sum(f["ok"] for f in finals.values()), final_total=len(finals),
@@ -215,6 +219,7 @@ def main(argv=None):
     p.add_argument("task", choices=["stack", "rehandle"])
     p.add_argument("--out", default=".")
     p.add_argument("--video", action="store_true")
+    p.add_argument("--frames", help="folder for one last picture per real camera")
     p.add_argument("--video-skip", type=int, default=1, help="write every Nth frame (a short version); the file is named TASK-short.mp4")
     p.add_argument("--seed", type=int, default=0, help="0 = nominal belt pose, else a seeded pose inside the infeed tolerance")
     p.add_argument("--cone", default="elliptic", choices=["elliptic", "pyramidal"], help="MuJoCo friction cone (sensitivity: resting boxes creep in yaw with elliptic)")
@@ -243,7 +248,7 @@ def main(argv=None):
         import av
         container = av.open(str(out / f"{a.task}{'-short' if a.video_skip > 1 else ''}.mp4"), "w")
         stream = container.add_stream("h264", rate=FPS)
-        stream.width, stream.height, stream.pix_fmt = 1280, 480, "yuv420p"
+        stream.width, stream.height, stream.pix_fmt = 1280, 960, "yuv420p"
         from PIL import Image, ImageDraw
 
         count = [0]
@@ -252,12 +257,16 @@ def main(argv=None):
             count[0] += 1
             if count[0] % a.video_skip:
                 return
-            image = np.hstack([world.render(data, "top"), world.render(data, "overview")])
-            frame = Image.fromarray(image)
+            frame = Image.fromarray(np.vstack([np.hstack([world.render(data, view) for view in row]) for row in (RECORDED[:2], RECORDED[2:])]))
             ImageDraw.Draw(frame).text((8, 8), f"{a.task} {label}", fill=(255, 255, 0))
             container.mux(stream.encode(av.VideoFrame.from_ndarray(np.asarray(frame), format="rgb24")))
     teacher = Teacher(world, frame_hook=writer, seed=a.seed, drop_upper=a.drop_upper)
     result = teacher.run_task(task, a.isolated)
+    if a.frames:
+        from PIL import Image
+        Path(a.frames).mkdir(parents=True, exist_ok=True)
+        for view in RECORDED:
+            Image.fromarray(world.render(teacher.data, view)).save(Path(a.frames) / f"{view}.png")
     if writer:
         container.mux(stream.encode(None))
         container.close()

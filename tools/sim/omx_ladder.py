@@ -217,7 +217,7 @@ def run_two_arm(args) -> int:
     file.write_text(json.dumps(record), encoding="utf-8")
     teacher = str(Path(__file__).with_name("omx_two_arm_teacher.py"))
     with (run / "run.log").open("w", encoding="utf-8") as log:
-        code = subprocess.run([args.python, teacher, "run", args.task, "--seed", str(args.seed), "--out", str(run)],
+        code = subprocess.run([args.python, teacher, "run", args.task, "--seed", str(args.seed), "--out", str(run), "--video", "--frames", str(run / "artifacts")],
                               env=dict(os.environ, MUJOCO_GL="egl", PYTHONUNBUFFERED="1"), stdout=log, stderr=subprocess.STDOUT).returncode
     out = run / f"{args.task}-elliptic-seed{args.seed}.json"
     if out.exists():
@@ -227,6 +227,7 @@ def run_two_arm(args) -> int:
                       failed_steps=[dict(step=row["step"], arm=row["arm"], result=row["result"], reason=row.get("reason")) for row in result["rows"] if row["result"] != "pass"])
     else:
         record.update(status="failed", reason=f"종료 코드 {code}. run.log를 보세요.")
+    record["views"] = sorted(path.name for path in (run / "artifacts").glob("*.png"))
     record["finished_at"] = datetime.now().astimezone().isoformat(timespec="seconds")
     file.write_text(json.dumps(record, ensure_ascii=False), encoding="utf-8")
     return 0 if record["status"] == "passed" else 1

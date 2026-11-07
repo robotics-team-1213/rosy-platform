@@ -80,13 +80,13 @@ def test_a_two_arm_run_records_what_the_screen_needs(tmp_path, task, completed, 
     result = dict(steps=2, steps_pass=1, final_ok=1, final_total=2, completed=completed, roll_below_floor_steps=["s1"], note="geometry only",
                   rows=[dict(step="s1", arm="arm_b", result="pass"), dict(step="s2", arm="arm_a", result="blocked", reason="too far")])
     (tmp_path / "result.json").write_text(json.dumps(result), encoding="utf-8")
-    python = stub_python(tmp_path, f'cp {tmp_path}/result.json "$7/{task}-elliptic-seed3.json"')
+    python = stub_python(tmp_path, f'cp {tmp_path}/result.json "$7/{task}-elliptic-seed3.json"; [ "$8" = --video ] && [ "$9" = --frames ] && mkdir -p "$7/artifacts" && touch "$7/artifacts/top.png"')
     args = type("Args", (), dict(root=str(tmp_path / "root"), python=python, task=task, seed=3, source_sha="a" * 40))
     assert ladder.run_two_arm(args) == code
     record = json.loads(next((tmp_path / "root/two_arm").glob("*/run.json")).read_text(encoding="utf-8"))
     assert record["schema"] == ladder.TWO_ARM_SCHEMA and record["status"] == status and record["steps_pass"] == 1
     assert record["failed_steps"] == [dict(step="s2", arm="arm_a", result="blocked", reason="too far")]
-    assert record["roll_below_floor_steps"] == ["s1"]
+    assert record["roll_below_floor_steps"] == ["s1"] and record["views"] == ["top.png"]
 
 
 def test_a_two_arm_run_that_writes_nothing_says_why(tmp_path):

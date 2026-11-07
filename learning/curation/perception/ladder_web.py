@@ -128,10 +128,12 @@ def paired(value):
 def two_arm_public(value):
     failed = value.get('failed_steps')
     roll = value.get('roll_below_floor_steps')
+    views = value.get('views')
     status = value.get('status')
     row = {key: scalar(value.get(key)) for key in ('run_id', 'created_at', 'task', 'seed', 'source_sha', 'reason', 'steps', 'steps_pass',
                                                    'final_ok', 'final_total', 'note')}
     row.update(status=status if status in STATUSES else 'unknown',
+               views=[item for item in views[:8] if isinstance(item, str) and re.fullmatch(PART, item)] if isinstance(views, list) else [],
                failed_steps=[flat(item) for item in failed[:40] if isinstance(item, dict)] if isinstance(failed, list) else [],
                roll_below_floor_steps=[scalar(item, 20) for item in roll[:40]] if isinstance(roll, list) else [])
     return row
@@ -275,10 +277,10 @@ class Ladder:
             return subprocess.Popen(command, cwd=self.root, env=env, stdin=subprocess.DEVNULL,
                                     stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
 
-    def artifact(self, round_id, rel):
-        """(bytes, media type) of one round image; nothing outside the round's artifacts folder, no links."""
+    def artifact(self, round_id, rel, folder='rounds'):
+        """(bytes, media type) of one run's image; nothing outside its artifacts folder, no links."""
         suffix = Path(rel).suffix.lower()
-        base = self.root / 'rounds' / round_id / 'artifacts'
+        base = self.root / folder / round_id / 'artifacts'
         if suffix not in IMAGES:
             raise FileNotFoundError
         target = base
@@ -367,6 +369,12 @@ def get(handler, path, ladder):
         handler.send(ladder.snapshot())
     elif path == PREFIX + 'two-arm':
         handler.send({'running': ladder.two_arm_running(), 'runs': ladder.two_arm_runs()})
+    elif match := re.fullmatch(PREFIX + 'two-arm/(' + ROUND + ')/artifacts/(' + PART + ')', path):
+        try:
+            raw, mime = ladder.artifact(match[1], match[2], 'two_arm')
+            handler.send(raw, mime=mime)
+        except OSError:
+            handler.send({'error': '그림을 찾을 수 없습니다.'}, 404)
     elif match := re.fullmatch(PREFIX + 'rounds/(' + ROUND + ')', path):
         best = ladder.best_row()
         handler.send({'round': ladder.row(match[1], best), 'best_round_id': best and best['round_id'],

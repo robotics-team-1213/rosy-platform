@@ -184,3 +184,8 @@ def test_strict_pose_judge_names_each_limit(layout, data):
     assert at()["ok"] and at(dx=.002)["ok"]
     assert not at(dx=.005)["ok"] and not at(dz=.004)["ok"] and not at(yaw=math.radians(8))["ok"] and not at(tilt=6)["ok"]
     assert at(yaw=math.pi)["ok"]  # a container turned 180 deg sits the same
+
+
+def test_a_run_records_the_cell_s_four_cameras():
+    assert teacher.RECORDED == ("top", "side", "a_wrist", "b_wrist")  # D-960; the overview is not a camera the cell has
+    assert sites.CHOICES["wrist_camera"] == "stock", "a run without wrist cameras would not match the cell"

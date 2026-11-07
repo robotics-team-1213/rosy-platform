@@ -57,13 +57,17 @@ def two_arm_run(root, run_id, **fields):
 
 def test_two_arm_runs_are_read_through_a_whitelist_and_only_a_manager_starts_a_bounded_one(tmp_path, monkeypatch):
     with running(tmp_path) as (base, root, ladder):
-        two_arm_run(root, OLD, private_path='/home/secret')
+        two_arm_run(root, OLD, private_path='/home/secret', views=['top.png', '../evil.png'])
+        (root / 'two_arm' / OLD / 'artifacts').mkdir()
+        (root / 'two_arm' / OLD / 'artifacts' / 'top.png').write_bytes(PNG)
+        assert request(base, f'/api/learning/ladder/two-arm/{OLD}/artifacts/missing.png', 'reader')[0] == 404
         (root / 'two_arm' / NEW).mkdir()
         (root / 'two_arm' / NEW / 'run.json').write_text('{broken', encoding='utf-8')
         code, data = request(base, '/api/learning/ladder/two-arm', 'reader')
         assert code == 200 and data['running'] is False and [row['run_id'] for row in data['runs']] == [NEW, OLD]
         assert data['runs'][0] == {'run_id': NEW, 'unreadable': True}
         assert data['runs'][1]['steps_pass'] == 9 and data['runs'][1]['roll_below_floor_steps'] == ['s1'] and 'private_path' not in data['runs'][1]
+        assert data['runs'][1]['views'] == ['top.png']
         started = []
         monkeypatch.setattr(ladder, 'spawn', lambda command, log: started.append(command) or type('P', (), dict(poll=lambda self: None))())
         assert post(base, 'two-arm', {'task': 'stack', 'seed': 1}, session='reader')[0] == 403

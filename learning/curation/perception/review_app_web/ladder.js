@@ -7,6 +7,7 @@ const STAGE={mujoco:'MuJoCo',gazebo:'Gazebo',isaac:'Isaac'};
 const COMPARE={better:'더 좋음 (평가 구간이 겹치지 않고 위쪽)',worse:'더 나쁨 (평가 구간이 겹치지 않고 아래쪽)',
   unclear:'차이 불명확 — 아직 정할 수 없습니다',current:'현재 비교 기준입니다'};
 const TWO_ARM={stack:'3×3×3 적층',rehandle:'임시 칸 재취급'};
+const TWO_ARM_VIEW={'top.png':'위쪽 D435','side.png':'옆 Jieli','a_wrist.png':'손목 arm_a','b_wrist.png':'손목 arm_b'};
 const SCENE={robot:'팔',jaw:'집게',wrist_camera:'손목 카메라',revision:'셀 개정'};
 const RECIPE={policy:'정책',steps:'학습 단계',batch_size:'묶음 크기',chunk_size:'청크',n_action_steps:'행동 단계',optimizer_lr:'학습률'};
 const DATA={episodes:'에피소드',from_failures:'실패에서 가져온 수'};
@@ -57,6 +58,15 @@ function twoArmCard(row){
   if(row.reason)item.append(el('p','이유: '+row.reason));
   for(const step of row.failed_steps)item.append(el('p',`실패 ${step.step} (${step.arm}): ${step.reason||step.result}`));
   if(row.roll_below_floor_steps.length)item.append(el('p','실물 손목 하한 아래로 가는 단계(실물에서 그대로 실행할 수 없음): '+row.roll_below_floor_steps.join(', ')));
+  if(row.views.length){
+    const gallery=el('div',undefined,'omx-review-gallery');
+    for(const name of row.views){
+      const fig=el('figure'),img=el('img'),label=TWO_ARM_VIEW[name]||name;
+      img.loading='lazy';img.alt=`마지막 장면 · ${label}`;img.src=`/api/learning/ladder/two-arm/${row.run_id}/artifacts/${name}`;
+      fig.append(img,el('figcaption',label));gallery.append(fig);
+    }
+    item.append(gallery);
+  }
   return item;
 }
 async function refreshTwoArm(){
