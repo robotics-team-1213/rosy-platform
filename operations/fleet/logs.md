@@ -5333,3 +5333,9 @@
 - 변경: 환경 변수 이름 대신 설치 담당자에게 요청할 것을 말한다. 코드는 그대로. test_doc_tabs·test_cell_app_browser의 제목 고정을 새 제목으로 갱신.
 - 증거: agent-browser 로컬 렌더(1920·390·320 화면 확인). 원격 회귀는 착지 기록을 따른다.
 - gate 변화: SOURCE 변경. 실기기·Android 수용은 별도다. CE: 해당 없음 — 코드와 회귀가 판단을 보존한다.
+
+## 2026-11-07 · uncommitted · feat(fleet): LED·카메라·LiDAR 자동 위치 찾기 (D-989)
+- 변경: `localization/auto_locate.py`(순수 적합), `pose/auto_locate_service.py`(120초 세션), `GET`·`POST /api/fleet/auto-locate`, config `stream_wanted`. 관찰 전용. API v1.369.
+- 증거: 합성 입력 시험뿐이다. 실물·현장 수용 없음.
+- gate 변화: SOURCE. DEVICE/FIELD 수용 근거로 쓰지 않는다.
+- 결정: D-989 Proposed. 교훈: CE 미해결 — 실물 시험 전이다.

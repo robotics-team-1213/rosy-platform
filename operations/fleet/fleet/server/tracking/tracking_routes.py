@@ -95,6 +95,8 @@ def _http(exc: TrackingError | IdentityError) -> HTTPException:
 def install_tracking_routes(app, *, tracking, require_operator, read_guard, operator_guard,
                             require_named_operator=None, map_revision=None) -> None:
     measured = MeasuredCalibrationService(tracking, map_revision=map_revision)
+    from fleet.server.auto_locate_service import AutoLocateService
+    tracking.auto_locate = AutoLocateService(tracking)
     app.state.measured_calibration = measured
 
     def named(principal):
@@ -145,6 +147,18 @@ def install_tracking_routes(app, *, tracking, require_operator, read_guard, oper
         if tracking.identity is None:
             return {"use": "observation-only", "pending": None, "robots": []}
         return tracking.identity.snapshot()
+
+    @app.get("/api/fleet/auto-locate", dependencies=read_guard, tags=["tracking"])
+    async def auto_locate_readback() -> dict:
+        return tracking.auto_locate.snapshot()
+
+    @app.post("/api/fleet/auto-locate", tags=["tracking"])
+    async def auto_locate_start(principal: SitePrincipal = Depends(require_operator)) -> dict:
+        named(principal)
+        watched = sorted({rid for source in tracking.sources for rid in source.robot_ids})
+        result = tracking.auto_locate.start(watched)
+        _LOG.info("auto locate started: robots=%d principal_id=%s", len(watched), principal.principal_id)
+        return result
 
     @app.get("/api/fleet/tracking", dependencies=read_guard, tags=["tracking"])
     async def tracking_readback() -> dict:

@@ -75,7 +75,7 @@ async def _preview_response(self, path: str, authorization: str | None) -> Respo
     except VisionLeaseError:
         return _http_response(401, b"unauthorized\n")
     # A missing, stale, or rate-limited frame is still a request (D-691).
-    self._note_stream_request(source)
+    self.hold_stream(source)
     if view == "map-proposal" and self.map_paint is None:
         return _http_response(404, b"site map paint not configured\n")
     if view == "frame":

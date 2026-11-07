@@ -214,6 +214,8 @@ class IdentityService:
     async def tick(self) -> list[dict]:
         """D-596 2: ask every robot the trigger rules name (colours permitting); the started requests."""
         await self.poll_lamps()
+        if self.tracking is not None and self.tracking.auto_locate is not None:
+            await self.tracking.auto_locate.tick()  # D-989: this loop is its clock
         if not self.config.auto_request or self.tracking is None:
             return []
         now = self._clock()

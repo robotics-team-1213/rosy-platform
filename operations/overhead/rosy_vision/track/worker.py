@@ -194,6 +194,8 @@ class TrackWorker:
             self.ingest.report_calibration(self.camera.source_id,
                                            (self._config or {}).get("calibration"),
                                            self.camera.map_id)
+            if (self._config or {}).get("stream_wanted") is True:  # D-989: a bounded locate session only
+                self.ingest.hold_stream(self.camera.source_id)
             from rosy_vision.measured_preview import synchronize_preview
             await synchronize_preview(self)
 
