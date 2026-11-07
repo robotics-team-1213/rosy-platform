@@ -27,8 +27,8 @@
 
 ## 최근 기록
 
+- 2026-11-08 · uncommitted · feat(sim): Harbor 이동 목록의 팔 배정·일정과 한 팔/두 팔 비교
 - 2026-11-08 · uncommitted · feat(sim): 양팔 r08 적층을 3단으로, 집게는 흰색
 - 2026-11-08 · uncommitted · feat(sim): 양팔 시뮬을 정격 배 r08·컨테이너 v3·손목 D 틀로
 - 2026-11-07 · uncommitted · feat(learning): 사다리 화면에 양팔 학습 라운드와 영상
 - 2026-11-07 · uncommitted · feat(learning): 학습 사다리 화면 (/learning/ladder)
-- 2026-11-07 · uncommitted · feat(learning): 사다리 화면에 양팔 태스크와 같은 위치 비교
