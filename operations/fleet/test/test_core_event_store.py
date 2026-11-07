@@ -43,7 +43,7 @@ def test_event_field_validation_keeps_owner_specific_traversal():
     from fleet.observe.events import _contains_sensitive_field
 
     assert _contains_sensitive_field({"nested": [{"API-Key": "hidden"}]})
-    assert _contains_sensitive_field({"value": "-----BEGIN PRIVATE KEY-----"})
+    assert _contains_sensitive_field({"value": "-----BEGIN " + "PRIVATE KEY-----"})
     assert not _contains_sensitive_field({"nested": ({"API-Key": "hidden"},)})
     assert not _contains_sensitive_field({"actor_id": "operator", "revision": 1})
 

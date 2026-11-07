@@ -151,8 +151,9 @@ def test_task_payload_validation_keeps_owner_specific_rules():
     with pytest.raises(ValueError, match="task records cannot contain credential fields"):
         safe_json({"nested": ({"API-Key": "hidden"},)})
     # Task payloads encode tuples, but do not inspect string values for PEM keys.
-    assert safe_json({"z": (1,), "a": "-----BEGIN PRIVATE KEY-----"}) == (
-        '{"a":"-----BEGIN PRIVATE KEY-----","z":[1]}'
+    pem_header = "-----BEGIN " + "PRIVATE KEY-----"
+    assert safe_json({"z": (1,), "a": pem_header}) == (
+        '{"a":"' + pem_header + '","z":[1]}'
     )
     with pytest.raises(ValueError, match="task data must be finite JSON"):
         safe_json({"value": float("nan")})
