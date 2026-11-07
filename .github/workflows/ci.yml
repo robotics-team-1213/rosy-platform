@@ -8,10 +8,12 @@ on:
   # queue is turned on, stage 3). No `concurrency:` group: cancelling a queue or main push run hides
   # its failure, and a workflow-level group would also bind ubuntu-26.04-rehearsal.yml's call.
   merge_group:
-  # D-436: PR 은 affected 티어, main push·야간·수동 실행은 풀 티어를 GitHub 러너에서
+  # D-436: PR 은 affected 티어, main push·주간·수동 실행은 풀 티어를 GitHub 러너에서
   # 병렬 matrix 로 돈다. 로컬 PC 는 affected 티어와 pre-push 패스트 게이트만 돈다.
+  # 2026-11-08: 매일 밤 FULL 은 land.py FULL·land_nightly 가 이미 증명한 main 을 다시 돌아
+  # 주 1회로 줄였다. 남은 몫은 러너·이미지 변화 감지다.
   schedule:
-    - cron: "0 18 * * *"   # 03:00 KST nightly full run
+    - cron: "0 18 * * 0"   # 월 03:00 KST weekly full run
   workflow_dispatch:
   # ubuntu-26.04-rehearsal.yml 이 같은 절차를 다른 러너에서 재실행한다 (D-134).
   workflow_call:

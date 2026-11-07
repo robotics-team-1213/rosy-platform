@@ -81,6 +81,10 @@ class SiteMapStore:
         self._init_frames()
         self._cached: Optional[tuple[int, SiteMap, Graph, Painted]] = None
         self._publish()
+        from fleet.server.site_rules_store import SiteRulesStore  # imports SiteMapError from here
+        #: D-982 per-site operating rules: their own versions, the same database and audit rows.
+        self.rules = SiteRulesStore(self._db, self._lock, self.clock, self._event,
+                                    lambda: {p.id for p in self._cached[1].places} if self._cached else None)
 
     def close(self) -> None:
         with self._lock:
