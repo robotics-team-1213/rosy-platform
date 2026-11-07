@@ -1149,6 +1149,10 @@
 - 증거: agent-browser 2000×1200 전체 화면과 390 화면으로 가짜 서버(dev_server)에서 확인.
 - gate 변화: SOURCE 변경. 실기기 수용은 별도다. CE: 해당 없음 — 표시 배치 변경이다.
 
+## 2026-11-07 · uncommitted · uiux(pilot): 로그아웃 상태 뒤로 가기가 로그인에 갇히지 않는다
+- 변경: 접속 화면의 계정 로그인 이동이 기록을 대체한다.
+- 증거: 실제 Pilot 페이지와 모사 인증 서버에서 뒤로 가기 3번이 모두 로그인에 머무는 것을 재현했다.
+- gate 변화: SOURCE 회귀. 장치 수용은 별도다.
 ## 2026-11-07 · uncommitted · Account 세션을 shared/android에서 컴파일
 
 - 변경: Cam 소스를 복사하던 `**/account/*.kt`를 빼고 `shared/android/account`를 컴파일한다(D-987).

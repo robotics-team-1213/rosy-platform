@@ -196,18 +196,23 @@ CI(`.github/workflows/ci.yml`)는 `ros:jazzy-ros-base` 이미지에서 colcon �
 
 ## 관제 배치
 
-현장 Ubuntu PC가 Fleet·Vision·Caddy 서비스를 실행하고, 관제 PC는 HTTPS로 Fleet의
-`/console`을 여는 브라우저 단말이다. 두 역할은 한 물리 PC에 함께 놓을 수도 있다.
-Pinky의 화면과 최종 주행·정지 판단은 각 로봇의 CORE에 남는다. OMX-AI 작업대 제어는
-별도 로컬 인스턴스의 수용 절차가 필요하다. 관제 화면의 현재 표시 이름은
-`Rosy Fleet`이다(D-487). 현장 운영은 Fleet, 한 대 관리는 Robot, 직접 운전은
-Pilot이 맡는다. [앱별 작업과 책임](app-responsibilities.md)에서 API·정본·실행 권한과
-앱 간 이동 및 이행 조건을 확인한다. 자연어 명령과
-OMX 원격 작업은 아직 수용된 기능이 아니다.
+관제 단위는 자기 원장과 조정 범위이고, 실행 호스트는 그 인스턴스를 돌리는 물리 PC다.
+운영 브라우저는 HTTPS로 접속하는 클라이언트이며 같은 PC에 있어도 서버·원장 owner가 아니다.
+현재·목표 호스트는 [관제 단위 배치표](../deployment/control-units.md#현장-배치표) 한 곳에서 확인한다.
+R은 직접 소유 Pinky와 하위 셀을 구별하고, 셀은 기존 admission과 OMX local stop 경로를 유지한다.
+최종 Base 명령은 로봇 CORE, 팔 joint/action은 OMX owner가 맡는다.
 
-배치 결정은 [D-275](../adr/D-275-web-surface-and-video-runtime-ownership.md)와
-[D-290](../adr/D-290-rosy-platform-naming-and-site-intent-boundaries.md),
-현장 접속 절차는 [사이트 배포 설명](../../deploy/site/README.md)을 따른다.
+R의 ARM 제안 중계와 셀 job 결속은 구현돼 있지만 실제 호스트 연결·실물 동작 수용과는 별개다.
+주행 위임 승인과 셀 ARM admit 경로, ARM 증거·재검사의 직계 자식 제한은
+[관제 배포 안내](../deployment/control-units.md#팔-이송-위임)와
+[D-995](../adr/D-995-control-structure-authority-and-evidence-status.md)를 따른다.
+Account·Monitoring 등의 동거는 장치 실행 권한을 만들지 않는다([공통 서비스](common-services.md)).
+site Compose의 영상·DB 서비스까지 자동으로 N100 적합하다고 가정하지 않으며
+선택할 서비스 구성과 부하·복구를 실제 설치 전에 검증한다(D-994·D-995).
+
+Rosy Fleet은 프로그램·콘솔 이름이다. 앱별 사용자 작업·API·정본은
+[앱별 작업과 책임](app-responsibilities.md), 현장 접속은
+[사이트 배포 설명](../../deploy/site/README.md)을 따른다.
 
 ## Raspberry Pi 5 런타임
 

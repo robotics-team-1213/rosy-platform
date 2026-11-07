@@ -32,8 +32,8 @@
 
 ## 최근 기록
 
-- 2026-11-07 · uncommitted · feat(account-ui): 가입·권한 요청 화면 (D-993)
 - 2026-11-07 · uncommitted · fix(fleet-ui): 칸 확인 불가 문구
 - 2026-11-07 · uncommitted · fix(fleet-ui): 배터리 출발 거절 문구 · 충전 칸 위치 불명 표시
+- 2026-11-07 · uncommitted · uiux(fleet): 규칙 판정 버튼이 공용 화면 규칙을 지킨다
 - 2026-11-07 · 285714599b · uiux: 로봇 이동 출처 표시
-- 2026-11-06 · uncommitted · uiux(fleet): 지도 연결 실패 안내, 지도 장소 키보드, 로봇 이름표, Cell 블록 이름표
+- 2026-11-07 · uncommitted · uiux(fleet): 규칙 판정 실패 문구를 평문으로

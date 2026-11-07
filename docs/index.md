@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
-- 2026-11-07 · uncommitted · Account 가입·권한 요청 D-993
-- 2026-11-07 · uncommitted · fix(remote): 호출의 -rA가 공통 꼬리에 덮이지 않는다
-- 2026-11-07 · uncommitted · fix(land): FULL 대기가 준비 슬롯을 차지하지 않고 MAIN-RED가 닫힌다
-- 2026-11-07 · uncommitted · 공통 서비스 카탈로그와 D-987
-- 2026-11-07 · uncommitted · fix(omx): 사다리가 GPU 없이 시작하지 않게 하고 MuJoCo 접촉 교훈을 기록
+- 2026-11-08 · uncommitted · docs(architecture): 공통 기능별 분리와 장애·복구 계약을 확정한다
+- 2026-11-08 · uncommitted · docs(architecture): Harbor와 공통 서비스의 책임을 저장소별로 연결한다
+- 2026-11-08 · uncommitted · docs(control): 현재 ARM 위임과 관제·owner·호스트 구조를 대조한다
+- 2026-11-08 · uncommitted · docs(control): N100 목표 호스트와 R·owner 책임을 구분한다
+- 2026-11-08 · uncommitted · test(learning): 학습 브라우저 여정 조건을 되돌린다
