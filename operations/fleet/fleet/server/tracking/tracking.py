@@ -95,6 +95,7 @@ class TrackingService:
         self._states: dict[str, tuple[dict, float]] = {}
         #: D-472 IdentityService (set by the app): its challenge rides the config, bindings follow detections.
         self.identity = None
+        self.auto_locate = None  # D-989
         #: D-600 robot_id -> D-494 MapPose or None (set by the app), for the occupied regions.
         self.map_pose: Optional[Callable[[str], object]] = None
 
@@ -132,6 +133,8 @@ class TrackingService:
         if self.identity is not None:
             config["identity_challenge"] = self.identity.challenge_for(source.source_id)
             config["identity_challenges"] = self.identity.challenges_for(source.source_id)  # D-596
+        if self.auto_locate is not None and self.auto_locate.stream_wanted():
+            config["stream_wanted"] = True  # D-989: tracking wakes the camera only for a bounded session
         return config
 
     def accept(self, authorization: Optional[str], payload: OverheadDetectionsPayload) -> dict:

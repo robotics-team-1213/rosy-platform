@@ -57,3 +57,5 @@
 ### References
 
 [D-257](D-257-site-lane-map-and-overhead-sightings.md), [D-261](D-261-overhead-camera-app-skeleton.md), [D-360](D-360-overhead-field-auto-detection-proposal.md), [D-374](D-374-app-identity-follows-one-role-name.md), `src/runtime/sensing/map/map_v2_fleet/README.md`.
+
+**개정 (2026-11-07, D-989, 사용자 결정 "code it so auto-locate is used for driving too, and make it switchable on and off"):** 5항의 "주행에 쓰지 않는다"에 예외를 둔다. 운영자가 승인한 교정과 LED 확인 트랙으로 맞춘 변환은 로봇별로 켠 경우(`fleet.map_pose.auto_locate_robots`, 기본 꺼짐)에만 trip 지도 자세의 앵커가 된다. 페인트 제안 자체는 여전히 자동 적용하지 않는다. 정확도는 실물 시험 전까지 재지 않았다.

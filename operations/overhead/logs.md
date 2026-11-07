@@ -576,3 +576,9 @@
 - Change: config-sync tasks and per-source status loops were bare create_task calls, so a loop that died with an exception stayed dead until shutdown while the container healthcheck (/healthz) stayed green. New loops.py adds a self-contained LoopWatch (no Fleet import, vision stays ROS-free and distribution-independent): a loop that ends with an exception logs ERROR and is remembered; clean returns (camera disconnect, stop event) and cancels are forgotten as normal lifecycle. The ingest server watches its status loops and serves /readyz (503 naming the dead loops), cli's config-sync tasks join the same watch. /healthz is untouched.
 - Evidence: remote loops/ingest/cli/stream-demand suites green, known NEW 0. Mutation: never recording a death reddens both new tests (b7457078e9), revert green (6e0871b746).
 - Gate: unchanged. Host tests only; a deployed site vision showing /readyz 503 on an induced death is a separate field check.
+
+## 2026-11-07 · uncommitted · feat(vision): 위치 찾기 세션 동안 카메라를 깨운다 (D-989)
+
+- Change: Fleet config `stream_wanted: true` holds the D-691 stream like a preview read; tracking alone still never asks.
+- Evidence: worker test only. No field run.
+- Gate: SOURCE.

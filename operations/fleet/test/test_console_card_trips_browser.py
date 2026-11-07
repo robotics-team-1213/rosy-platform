@@ -728,3 +728,46 @@ def test_new_work_shows_only_kinds_that_run_and_the_move_form_fits(site):  # noq
         assert screens.locator('a[aria-current="page"]').all_inner_texts() == ["새 작업"]
         assert not errors
         browser.close()
+
+
+def test_site_rules_judge_in_the_trip_form_asks_and_sends_nothing_to_a_robot(site):
+    from playwright.sync_api import expect, sync_playwright
+
+    posts, judge = [], "/api/fleet/site-rules/judge"
+    answer = {"verdict": "go", "reason": "low_battery", "detail": {"bay": "칸1"}, "rules_source": "active",
+              "dispatch": False}
+    with sync_playwright() as playwright:
+        browser, page, errors = _open(playwright, site, API, posts, {judge: (200, answer)})
+        form = _open_form(page, "rosy_02")
+        form.locator('[data-rule-kind="rosy_02"]').select_option("formation")
+        form.get_by_label("팔로워 수").select_option("2")
+        form.get_by_label("간격 m (기본: 규칙 값)").select_option("0.5")
+        form.locator('[data-rule-judge="rosy_02"]').click()
+        _settle(page, posts, judge)
+        sent = json.loads(next(body for path, body in posts if path == judge))
+        assert sent == {"state": {"kind": "formation", "formation": "COLUMN", "followers": 2, "spacing": 0.5},
+                        "source": "active"}
+        expect(form.locator("ui-tag").filter(has_text="감 · 배터리가 기준 이하")).to_have_count(1)
+        expect(form).to_contain_text("보내지 않음")
+        answer.update(verdict="refuse", reason="gap_below_site_min")
+        form.locator('[data-rule-judge="rosy_02"]').click()
+        _settle(page, posts, judge, count=2)
+        expect(form.locator("ui-tag").filter(has_text="거절됨 · 현장 최소 간격보다 좁음")).to_have_count(1)
+        assert all(path == judge for path, _ in posts) and not errors
+        browser.close()
+
+
+def test_site_rules_judge_failure_is_plain_and_shows_no_verdict(site):
+    from playwright.sync_api import expect, sync_playwright
+
+    posts, judge = [], "/api/fleet/site-rules/judge"
+    with sync_playwright() as playwright:
+        browser, page, _errors = _open(playwright, site, API, posts, {judge: (503, {"detail": {"code": "BUSY"}})})
+        form = _open_form(page, "rosy_02")
+        form.locator('[data-rule-judge="rosy_02"]').click()
+        _settle(page, posts, judge)
+        expect(form).to_contain_text("판정을 받지 못했습니다")
+        expect(form).not_to_contain_text("BUSY")
+        expect(form.locator("ui-tag").filter(has_text="감 ·")).to_have_count(0)
+        browser.close()
+

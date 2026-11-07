@@ -374,6 +374,10 @@
       "path": "card-trip.js",
       "media_type": "application/javascript"
     },
+    "site-rules-judge.js": {
+      "path": "site-rules-judge.js",
+      "media_type": "application/javascript"
+    },
     "power-health-view.js": {
       "path": "power-health-view.js",
       "media_type": "application/javascript"
