@@ -12,7 +12,6 @@ A round is `<root>/two_arm_rounds/<id>/round.json` (rosy.omx-two-arm-round.v1). 
 import argparse
 from datetime import datetime
 import json
-import math
 import os
 from pathlib import Path
 import shutil
@@ -29,18 +28,22 @@ import omx_two_arm_teacher as teaching  # noqa: E402
 SCHEMA = "rosy.omx-two-arm-round.v1"
 SHAPE = (240, 320)
 TASKS = ("stack", "rehandle")
-GOAL_SCALE = 10.  # ACT leaves this input unnormalised; metres would make sites 36 mm apart look almost the same
 GOAL = "observation.environment_state"
 PROMPT = "carry the container of this plan step"
 TRAIN_SEED_BASE, EVAL_SEED_BASE = 1000, 200000  # the teacher never saw an evaluation seed
 
 
-def goal_vector(layout, step):
-    """Arm one-hot, then height-and-place of both sites; yaw as 2x angle because a container turned 180 deg is the same container."""
-    def place(name):
-        site = layout.sites[name]
-        return [*(GOAL_SCALE * np.array([*site["xy"], site["z"]])), math.sin(2 * site["yaw"]), math.cos(2 * site["yaw"])]
-    return np.array([step["arm"] == "arm_a", step["arm"] == "arm_b", *place(step["from"]), *place(step["to"])], dtype=np.float32)
+def goal_vector(layout, step, here):
+    """Arm one-hot, then the five joints that grasp at the source and lower onto the target, from the teacher's own IK on the nominal sites.
+    Round 1 gave site metres: sites 36 mm apart differed by 0.36 in an unnormalised input and the model came down 2 cm off."""
+    arm = layout.sim_arms[step["arm"]]
+    wps = tasks.waypoints(layout, step, here)
+    ok, _, path, note = tasks.solve_chain(arm, wps, arm.home, roll_floor=layout.roll_floor)
+    if not ok:
+        raise ValueError(f"{step['id']}: {note}")
+    per = (len(path) - 1) // (len(wps) - 1)
+    grasp, lower = path[per], path[5 * per]  # waypoints 1 and 5: grasp and lower
+    return np.array([step["arm"] == "arm_a", step["arm"] == "arm_b", *grasp[:5], *lower[:5]], dtype=np.float32)
 
 
 def observe(world, data):
@@ -68,7 +71,7 @@ class Recorder(teaching.Teacher):
         super().frame(data, targets, label)
 
     def run_step(self, data, step, here):
-        self.goal, self.count = goal_vector(self.layout, step), 0
+        self.goal, self.count = goal_vector(self.layout, step, here), 0
         row = super().run_step(data, step, here)
         self.goal = None
         if row["result"] == "pass" and not self.spoiled:
@@ -110,10 +113,13 @@ class Driver:
     def __init__(self, model, steps_file):
         import omx_two_arm_world as world_mod
         import torch
-        from lerobot.policies.act.modeling_act import ACTPolicy
+        from lerobot.policies.act.modeling_act import ACTPolicy, ACTTemporalEnsembler
         from lerobot.policies.factory import make_pre_post_processors
         self.torch = torch
         self.policy = ACTPolicy.from_pretrained(model, local_files_only=True).to("cuda" if torch.cuda.is_available() else "cpu").eval()
+        config = self.policy.config  # temporal ensembling: one new chunk each frame, averaged; round 1 without it drove a link into the container
+        config.temporal_ensemble_coeff, config.n_action_steps = .01, 1
+        self.policy.temporal_ensembler = ACTTemporalEnsembler(.01, config.chunk_size)
         self.pre, self.post = make_pre_post_processors(self.policy.config, pretrained_path=str(model))
         self.device = next(self.policy.parameters()).device
         self.layout = sites.Layout()
@@ -126,7 +132,7 @@ class Driver:
                  **{f"observation.images.{view}": (torch.from_numpy(image).permute(2, 0, 1)[None].float() / 255).to(device) for view, image in images.items()}}
         return self.post(self.policy.select_action(self.pre(batch))).cpu().numpy()[0]
 
-    def step(self, teacher, data, plan, sink=None):
+    def step(self, teacher, data, plan, here, sink=None):
         world, c, arm = self.world, plan["container"], plan["arm"]
         teacher.tilt = teacher.held_tilt = 0.
         teacher.contacts, teacher.carried, teacher.first = dict(arm_arm=set(), arm_other=set(), pad_neighbour=set()), c, {}
@@ -135,7 +141,7 @@ class Driver:
             teacher.belt_in(data, plan, {o: home[o].home for o in self.layout.arms if o != arm})
         before = {o: world.pose(data, o) for o, _ in self.layout.containers() if o != c}
         start_z, peak = world.pose(data, c)[0][2], 0.
-        goal = goal_vector(self.layout, plan)
+        goal = goal_vector(self.layout, plan, {k: v for k, v in here.items() if k != c})
         self.policy.reset()
         for _ in range(self.longest[plan["id"]] + 15):  # the teacher's time for this step and a second of grace, then the verdict
             state, images = observe(world, data)
@@ -155,7 +161,7 @@ class Driver:
         with self.torch.inference_mode():
             for plan in task["steps"]:
                 teacher = teaching.Teacher(self.world, seed=seed + len(rows))
-                rows.append(dict(self.step(teacher, teacher.fresh(here), plan), task=name, seed=seed))
+                rows.append(dict(self.step(teacher, teacher.fresh(here), plan, here), task=name, seed=seed))
                 print(json.dumps(rows[-1]), flush=True)
                 here[plan["container"]] = plan["to"]
         return rows
@@ -163,13 +169,14 @@ class Driver:
     def whole(self, name, seed, sink=None):
         """The task through to its first failed step."""
         task = tasks.get_task(self.layout, name)
-        teacher, done = teaching.Teacher(self.world, seed=seed), []
-        data = teacher.fresh(dict(task.get("start", {})))
+        teacher, done, here = teaching.Teacher(self.world, seed=seed), [], dict(task.get("start", {}))
+        data = teacher.fresh(here)
         with self.torch.inference_mode():
             for plan in task["steps"]:
-                done.append(self.step(teacher, data, plan, sink))
+                done.append(self.step(teacher, data, plan, here, sink))
                 if done[-1]["result"] != "pass":
                     break
+                here[plan["container"]] = plan["to"]
         passed = sum(row["result"] == "pass" for row in done)
         return dict(task=name, seed=seed, total=len(task["steps"]), passed=passed, completed=passed == len(task["steps"]), last=done[-1])
 
