@@ -18,6 +18,7 @@ from types import SimpleNamespace
 import pytest
 
 from core.bridge.battery_policy import apply_voltage
+from core_common.protocol.schemas import BatteryStatus
 from core_features.command.arbitration import Mode, ModeMachine
 from core_features.power.battery import BatteryLevel
 from core_features.safety.manager import BatteryPolicy, SafetyManager, SpeedLimits
@@ -281,7 +282,7 @@ def _real_services(percent=30.0, level=BatteryLevel.OK):
         state.set_estop(True, safety.estop_source)
         modes.transition(Mode.EMERGENCY)
     safety.estop_listeners.append(reflect_stop)
-    battery = SimpleNamespace(percent=percent, level=level, on_voltage=lambda v: None, status=lambda: "DISCHARGING")
+    battery = SimpleNamespace(percent=percent, level=level, on_voltage=lambda v: None, status=BatteryStatus)
     return SimpleNamespace(
         battery=battery, safety=safety, modes=modes, state=state, localization=None,
         power=SimpleNamespace(on_battery_alert=lambda lv: None),
