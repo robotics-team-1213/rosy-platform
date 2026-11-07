@@ -86,12 +86,13 @@ def entries(wt: Path) -> list[dict]:
     return found
 
 
-def record(wt: Path, commit: str, tree: str, env: str, inv: list[str], log: Path) -> None:
+def record(wt: Path, commit: str, tree: str, env: str, inv: list[str], log: Path, digest: str | None = "") -> None:
     target = path(wt)
-    try:
-        digest = hashlib.sha256(log.read_bytes()).hexdigest()
-    except OSError:
-        digest = None  # Missing historical logs can support cache reuse, never publication.
+    if digest == "":  # a copied row keeps its source's digest: an edited log then fails publication's check
+        try:
+            digest = hashlib.sha256(log.read_bytes()).hexdigest()
+        except OSError:
+            digest = None  # Missing historical logs can support cache reuse, never publication.
     line = json.dumps({"tree": tree, "commit": commit, "env": env, "argv": inv, "log": str(log),
                        "log_sha256": digest, "at": time.strftime("%Y-%m-%dT%H:%M:%S")})
     with open(target, "a", encoding="utf-8") as out:
@@ -249,11 +250,14 @@ def split(wt: Path, args, invocations: list[list[str]], head: str, python: str, 
         return [], invocations, keep
     # Dedicated timing rows prove publication, but must never replace a fresh execution.
     known = [e for e in entries(wt) if e["env"] == env and not affected_exclusive.dedicated(e["argv"])]
-    exact = {tuple(e["argv"]) for e in known if e["tree"] == tree}
+    exact = {tuple(e["argv"]): e for e in known if e["tree"] == tree}
     reused, todo = [], []
     for inv in invocations:
         if not affected_exclusive.dedicated(inv) and tuple(inv) in exact:
             reused.append(f"pytest {' '.join(inv)} reused: passed on this tree {tree[:10]} (env {env})")
+            source = exact[tuple(inv)]
+            if source["commit"] != head:  # same tree, env and argv: the same execution maps this commit too (D-970 3)
+                record(wt, head, tree, env, inv, Path(source["log"]), digest=source.get("log_sha256"))
         else:
             todo.append(inv)
     if todo and args.tests in ("auto", "full") and (wt / "tools/harness/affected_tests.py").is_file():

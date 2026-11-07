@@ -112,3 +112,15 @@ def test_explicit_full_landing_reuses_only_suites_the_delta_does_not_reach(repo,
     args = SimpleNamespace(tests="full", no_cache=False)
     lines, todo, _ = land_cache.split(local, args, [suite], head, sys.executable, select=None)
     assert (todo == []) is reused and any(land_cache.NARROW in line for line in lines) is reused
+
+
+def test_same_tree_reuse_maps_the_new_commit_to_the_source_log_and_digest(repo):
+    local, earlier = repo
+    row = next(e for e in land_cache.entries(local) if e["commit"] == earlier and e["argv"] == SUITE)
+    _git(local, "commit", "-q", "--allow-empty", "-m", "sync merge with an unchanged tree")
+    head = _git(local, "rev-parse", "HEAD")
+    lines, todo, _ = land_cache.split(local, SimpleNamespace(tests="full", no_cache=False), [SUITE], head,
+                                      sys.executable, select=None)
+    copied = [e for e in land_cache.entries(local) if e["commit"] == head and e["argv"] == SUITE]
+    assert todo == [] and len(copied) == 1
+    assert (copied[0]["log"], copied[0]["log_sha256"], copied[0]["tree"]) == (row["log"], row["log_sha256"], row["tree"])
