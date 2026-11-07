@@ -865,3 +865,9 @@
 - 변경: 2026-11-02 · a7f36cb999 · canonical CLI terminal 전달 시험은 SQLite 준비 중 fixture 관절 표본이 만료되면 submit 거절을 확인하지 않고 이후 goal KeyError로 실패했다. 이 시험에만 기존 seat-cleanup 시험과 같은 60초 표본 예산을 쓰고 LOCAL_ACCEPTED를 먼저 검사한다. 운영 신선도 한계·seat/admission·terminal 검사는 유지한다. 영상 fixture와 함께 원격 25 passed/exit0; 장치 수용·module gate 변화 없음. CE: 해당 없음 — fixture 범위와 선행 조건이 시험에 남는다.
 - 증거: committed SHA and remote results are recorded above; final consolidated receipts are retained in the unification validation record.
 - gate 변화: 없음. Source/browser checks do not establish deployment, ARM64, device or field acceptance.
+
+## 2026-11-06 · uncommitted · D-983 두 팔 타이밍 계산
+
+- 변경: `omx_adapter.coordination`(조정 다이어그램, barrier용 만남 지점)을 더했다.
+- 증거: `test/test_omx_coordination.py` 원격 통과, 저장된 라이브러리로 오프라인 계산.
+- gate 변화: 없음. 실물·시뮬레이션 동시 동작 수용이 아니다.

@@ -56,7 +56,7 @@ under the strain thresholds.
 ## Fix
 
 - `chunk_runner.ROLL_BLOCK_LAG` (1.5 units, ≤ 2.7°): a wrist roll whose lag keeps rising past it holds at any PWM.
-  Normal roll travel lag is about 0.7 units.
+  Normal roll travel lag is about 0.7 units. **Superseded 2026-11-06: see the correction below.**
   - `test_a_blocked_wrist_roll_holds_at_low_pwm_before_the_guard_drops_the_arm` replays the 23:19 shape.
   - `test_a_wrist_roll_travel_lag_is_not_a_block` guards against false holds.
 - The hold text lists the other joints' lags (`(lags: shoulder_pan 1.3, ...)`). A second joint lagging with the
@@ -73,6 +73,25 @@ under the strain thresholds.
   OFF away from home. Now a fold watches for strain, is home only when settled, and an idle fold a hold stopped is
   tried once more after `runner.idle_retry_s`; a second hold keeps the arm and reports `person_needed`
   (`test/test_omx_runner_idle_fold.py`).
+
+## Correction (2026-11-06): the fix above made false holds on arm_b
+
+`ROLL_BLOCK_LAG` assumed a roll travel lag of about 0.7 units. On arm_b it steps while going negative, and its lag saws up
+to about 1.6 and grows with the angle. The rule held it near -13, -15.7 and 9.89 in free air. Those holds were read as a
+stuck wrist or a taut cable for three days. A wrist floor (`joint_min`), narrowed pivot yaws and a cable-check request
+followed, and they blocked the remap and the grasp by the ends.
+
+- **Evidence:** all 8 recorded holds kept moving afterwards (0.7-1.4 units in the next 0.5 s) at PWM about 40 of 300.
+  Replaying the old rule over every trace stops at those same angles.
+- **Fix:** `ROLL_STILL`/`ROLL_STILL_TICKS`. A rising lag past `ROLL_BLOCK_LAG` holds only after 0.5 s of stillness, or at
+  `STRAIN_LAG` (4.0 deg, short of the guard's 5).
+- **On the arm (18:35, free air, closed jaws, one pose):** 20 -> 0 -> -13 passed with no hold. On the way to -30 the new rule
+  held near -20.9 (lag 2.1, PWM -63), and the joint still moved on to -21.81. That is not a wall either: the steps get
+  longer than 0.5 s there. Use about -18 as the floor at that pose. Why the lag grows with the angle is not known.
+- **Not shown:** that the new rule stops a real block in time on the arm. Only the tests cover it. The arm_a stops of
+  2026-11-01 were real (a container against the jaws, pan stalling with the roll).
+
+Before calling a joint stuck, plot present against sent after the hold. A joint that keeps moving was not stopped by anything.
 
 ## Next time
 
