@@ -1,6 +1,6 @@
 {
  "schema": "rosy.omx-two-arm-tasks.v1",
- "_note": "Sites are resolved by tools/sim/omx_two_arm_sites.py on the rated r08 ship (ship-h{hold}r{row}-l{tier} from its berth slot map; only hold 1 is in reach), tmp-{a|b}-{lane} on the temporary plates, belt = belt end. Steps run one arm at a time. Geometry only (D-947).",
+ "_note": "Sites are resolved by tools/sim/omx_two_arm_sites.py on the rated r08 ship (ship-h{hold}r{row}-l{tier} from its berth slot map; only hold 1 is in reach, three tiers), tmp-{a|b}-{lane} on the temporary plates, belt = belt end. Steps run one arm at a time. Geometry only (D-947).",
  "judge": {
   "xy_mm": 3.0,
   "yaw_deg": 4.0,
@@ -18,7 +18,10 @@
     "bar-3",
     "bar-4",
     "bar-5",
-    "bar-6"
+    "bar-6",
+    "bar-7",
+    "bar-8",
+    "bar-9"
    ],
    "start": {},
    "steps": [
@@ -63,6 +66,27 @@
      "from": "belt",
      "to": "ship-h1r2-l1",
      "arm": "arm_b"
+    },
+    {
+     "id": "s7",
+     "container": "bar-7",
+     "from": "belt",
+     "to": "ship-h1r1-l2",
+     "arm": "arm_b"
+    },
+    {
+     "id": "s8",
+     "container": "bar-8",
+     "from": "belt",
+     "to": "ship-h1r0-l2",
+     "arm": "arm_a"
+    },
+    {
+     "id": "s9",
+     "container": "bar-9",
+     "from": "belt",
+     "to": "ship-h1r2-l2",
+     "arm": "arm_b"
     }
    ]
   },
@@ -74,64 +98,95 @@
     "bar-3": "ship-h1r2-l0",
     "bar-4": "ship-h1r1-l1",
     "bar-5": "ship-h1r0-l1",
-    "bar-6": "ship-h1r2-l1"
+    "bar-6": "ship-h1r2-l1",
+    "bar-7": "ship-h1r1-l2",
+    "bar-8": "ship-h1r0-l2",
+    "bar-9": "ship-h1r2-l2"
    },
-   "_note": "Each outer row is rehandled by the arm on the OTHER side (on the stud plate the near arm's wrist hit the standing middle row in MuJoCo). Both containers of a row go to the temporary plate, and come back in the opposite order.",
+   "_note": "Each outer row is rehandled by the arm on the OTHER side (on the stud plate the near arm's wrist hit the standing middle row in MuJoCo). The three containers of a row go to the temporary plate and come back in a new order: bottom to top bar-6, bar-3, bar-9 (r2) and bar-5, bar-8, bar-2 (r0).",
    "steps": [
     {
      "id": "a1",
-     "container": "bar-6",
-     "from": "ship-h1r2-l1",
+     "container": "bar-9",
+     "from": "ship-h1r2-l2",
      "to": "tmp-a-1",
      "arm": "arm_a"
     },
     {
      "id": "a2",
-     "container": "bar-3",
-     "from": "ship-h1r2-l0",
+     "container": "bar-6",
+     "from": "ship-h1r2-l1",
      "to": "tmp-a-2",
      "arm": "arm_a"
     },
     {
      "id": "a3",
-     "container": "bar-6",
-     "from": "tmp-a-1",
-     "to": "ship-h1r2-l0",
+     "container": "bar-3",
+     "from": "ship-h1r2-l0",
+     "to": "tmp-a-3",
      "arm": "arm_a"
     },
     {
      "id": "a4",
-     "container": "bar-3",
+     "container": "bar-6",
      "from": "tmp-a-2",
+     "to": "ship-h1r2-l0",
+     "arm": "arm_a"
+    },
+    {
+     "id": "a5",
+     "container": "bar-3",
+     "from": "tmp-a-3",
      "to": "ship-h1r2-l1",
      "arm": "arm_a"
     },
     {
+     "id": "a6",
+     "container": "bar-9",
+     "from": "tmp-a-1",
+     "to": "ship-h1r2-l2",
+     "arm": "arm_a"
+    },
+    {
      "id": "b1",
-     "container": "bar-5",
-     "from": "ship-h1r0-l1",
+     "container": "bar-8",
+     "from": "ship-h1r0-l2",
      "to": "tmp-b-1",
      "arm": "arm_b"
     },
     {
      "id": "b2",
-     "container": "bar-2",
-     "from": "ship-h1r0-l0",
+     "container": "bar-5",
+     "from": "ship-h1r0-l1",
      "to": "tmp-b-2",
      "arm": "arm_b"
     },
     {
      "id": "b3",
-     "container": "bar-5",
-     "from": "tmp-b-1",
-     "to": "ship-h1r0-l0",
+     "container": "bar-2",
+     "from": "ship-h1r0-l0",
+     "to": "tmp-b-3",
      "arm": "arm_b"
     },
     {
      "id": "b4",
-     "container": "bar-2",
+     "container": "bar-5",
      "from": "tmp-b-2",
+     "to": "ship-h1r0-l0",
+     "arm": "arm_b"
+    },
+    {
+     "id": "b5",
+     "container": "bar-8",
+     "from": "tmp-b-1",
      "to": "ship-h1r0-l1",
+     "arm": "arm_b"
+    },
+    {
+     "id": "b6",
+     "container": "bar-2",
+     "from": "tmp-b-3",
+     "to": "ship-h1r0-l2",
      "arm": "arm_b"
     }
    ]

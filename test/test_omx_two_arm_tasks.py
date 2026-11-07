@@ -37,14 +37,14 @@ def refused(layout, task):
 
 
 def test_both_tasks_validate_with_all_steps(layout, data):
-    assert len(tasks.validate(layout, tasks.get_task(layout, "stack", data))) == 6
-    assert len(tasks.validate(layout, tasks.get_task(layout, "rehandle", data))) == 8
+    assert len(tasks.validate(layout, tasks.get_task(layout, "stack", data))) == 9
+    assert len(tasks.validate(layout, tasks.get_task(layout, "rehandle", data))) == 12
 
 
 def test_stack_follows_the_fixture_plan_order_and_arms(layout, data):
     steps = data["tasks"]["stack"]["steps"]
     assert [(s["container"], s["to"], s["arm"]) for s in steps] == layout.plan_order()
-    assert {s["from"] for s in steps} == {"belt"} and len({s["to"] for s in steps}) == 6
+    assert {s["from"] for s in steps} == {"belt"} and len({s["to"] for s in steps}) == 9
 
 
 def test_rehandle_uses_both_arms_and_temp_space_within_capacity(layout, data):
@@ -63,7 +63,7 @@ def test_rehandle_uses_both_arms_and_temp_space_within_capacity(layout, data):
 
 def test_a_container_is_never_taken_from_under_another(layout, data):
     task = copy.deepcopy(tasks.get_task(layout, "rehandle", data))
-    task["steps"] = [dict(id="x", container="bar-2", **{"from": "ship-h1r0-l0"}, to="tmp-b-1", arm="arm_b")]  # bar-5 still lies on it
+    task["steps"] = [dict(id="x", container="bar-2", **{"from": "ship-h1r0-l0"}, to="tmp-b-1", arm="arm_b")]  # bar-5 and bar-8 still lie on it
     reason = refused(layout, task)
     assert "taken from under" in reason and "ship-h1r0-l1" in reason
 
@@ -217,13 +217,13 @@ def test_a_run_records_the_cell_s_four_cameras():
 
 
 def test_the_r08_ship_sites_come_from_its_berth_slot_map(layout):
-    """Rated ship v15 on the berth kit: 1x3 sites are the mean of three 1x1 cells, bottoms 6 and 38.4 mm over the table, rows 38 mm apart."""
+    """Rated ship v15 on the berth kit: 1x3 sites are the mean of three 1x1 cells, rows 38 mm apart, three tiers 32.4 mm apart from 6 mm over the table."""
     ship = {n: s for n, s in layout.sites.items() if s["kind"] == "ship"}
-    assert len(ship) == 12 and layout.box == (.09, .02998, .0324)
+    assert len(ship) == 18 and layout.box == (.09, .02998, .0324)
     x0, y0 = layout.choices["ship_stern_x_m"], layout.choices["ship_centre_y_m"]
     for h, x in ((1, 99), (2, 197)):  # hold centres from the stern end
         for row, y in enumerate((38, 0, -38)):
-            for layer, bottom in enumerate((.006, .0384)):
+            for layer, bottom in enumerate((.006, .0384, .0708)):
                 s = ship[f"ship-h{h}r{row}-l{layer}"]
                 assert s["xy"] == pytest.approx((x0 - x / 1000, y0 - y / 1000)) and len(s["slots"]) == 3
                 assert s["z"] - layout.box[2] / 2 - layout.table_z == pytest.approx(bottom)

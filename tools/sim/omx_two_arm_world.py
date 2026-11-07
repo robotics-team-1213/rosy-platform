@@ -125,6 +125,7 @@ class World:
             for k, (finger, side) in enumerate((("link6", 1), ("link7", -1))):
                 for part in spec.body(p + finger).geoms:
                     part.contype = part.conaffinity = 0
+                    part.rgba = [.95, .95, .93, 1]  # the printed jaws are white (11-08), so the wrist cameras see their tips clearly
                 centre, size, angle = jaw.pad_box(side)
                 spec.body(p + finger).add_geom(name=f"{p}pad{k}", type=box, pos=centre, size=[s / 2 for s in size],
                                                quat=[math.cos(angle / 2), 0, 0, math.sin(angle / 2)], mass=.004, rgba=[0, 0, 0, 0])

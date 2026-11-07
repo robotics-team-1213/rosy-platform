@@ -48,9 +48,10 @@ HOLD = dict(starts=(50., 148.), length=98., centre=49., rows=(-38., 0., 38.), fl
 
 
 # Only hold 1 (next to the stern) is in reach with the stern at the table edge: hold 2 lies behind both arms, where no tool-down pose holds a
-# container along x (validator, stern x .155 to .215). So the stack is hold 1, 3 rows x 2 tiers, middle row first, in the stud plan's arm order.
-R08_STACK = (("bar-1", "ship-h1r1-l0", "arm_b"), ("bar-2", "ship-h1r0-l0", "arm_a"), ("bar-3", "ship-h1r2-l0", "arm_b"),
-             ("bar-4", "ship-h1r1-l1", "arm_b"), ("bar-5", "ship-h1r0-l1", "arm_a"), ("bar-6", "ship-h1r2-l1", "arm_b"))
+# container along x (validator, stern x .155 to .215). So the stack is hold 1, 3 rows x 3 tiers, middle row first, in the stud plan's arm order.
+R08_TIERS = 3  # the cell stacks three high (user, 11-08); the slot map lists tiers 82 and 84, the third sits one container (32.4 mm) higher
+R08_STACK = tuple((f"bar-{3 * layer + k + 1}", f"ship-h1r{row}-l{layer}", arm) for layer in range(R08_TIERS)
+                  for k, (row, arm) in enumerate(((1, "arm_b"), (0, "arm_a"), (2, "arm_b"))))
 
 
 def ship_cell(layout, x_mm, y_mm, z_mm=0.):
@@ -61,7 +62,7 @@ def ship_cell(layout, x_mm, y_mm, z_mm=0.):
 
 def r08_sites(layout):
     """1x3 sites of the berthed r08 ship from its slot map: one per hold, row and tier, the mean of the three 1x1 cells.
-    Rows are numbered by fixture y (r0 nearest arm_a, as the stud plate's rows); layer 0 and 1 are tiers 82 and 84."""
+    Rows are numbered by fixture y (r0 nearest arm_a, as the stud plate's rows); layer 0, 1, 2 are tiers 82, 84 and 86 (R08_TIERS)."""
     records = json.loads((SHIP_ASSETS / "slots.json").read_text(encoding="utf-8"))["tier_records"]
     cells = {}
     for r in records:
@@ -72,10 +73,13 @@ def r08_sites(layout):
     out = {}
     for (module, y, tier), group in cells.items():
         assert len(group) == 3, (module, y, tier)
-        h, row, layer = holds.index(module) + 1, rows.index(y), tiers.index(tier)
+        if tier != tiers[0]:
+            continue
+        h, row = holds.index(module) + 1, rows.index(y)
         x, cy, z = ship_cell(layout, sum(g["x_mm"] for g in group) / 3, y, group[0]["z_mm"])
-        out[f"ship-h{h}r{row}-l{layer}"] = dict(kind="ship", xy=(x, cy), z=z + layout.box[2] / 2, yaw=0., row=row, layer=layer, stack=f"h{h}r{row}",
-                                                slots=[g["id"] for g in group])
+        for layer in range(R08_TIERS):
+            out[f"ship-h{h}r{row}-l{layer}"] = dict(kind="ship", xy=(x, cy), z=z + layout.box[2] * (layer + .5), yaw=0., row=row, layer=layer,
+                                                    stack=f"h{h}r{row}", slots=[g["id"][:4] + str(tier + 2 * layer) for g in group])
     return out
 
 
