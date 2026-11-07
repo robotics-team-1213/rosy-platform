@@ -14,9 +14,13 @@ Rosy Fleet은 **현장 운영**, Rosy Robot은 **한 대 관리**, Rosy Pilot은
 | 표시 전용 | Face, `middleware/robot_ui/face` | 이름·표정·부팅·연결 상태 | 입력·운동 명령 없음 |
 | 관측 서비스 | Rosy Vision, `operations/overhead` | 프레임 수신·관측 생성·허가된 preview | 명령·현장 원장은 Fleet/장치 owner |
 | 공통 신원 | Rosy Account, `operations/account` (D-962) | 사람 신원·권한·세션·회수 | 장치 admission·조종 좌석·업무 승인과 구분 |
+| 상태 조회 | Rosy Monitoring, `applications/monitoring`(화면)·`operations/monitoring`(서비스) (D-876) | 상태 수집·집계·읽기 화면 | 제어·복구는 각 owner |
+| 영상 세션 서비스 | Media, `operations/site_ui/media` (D-789) | 영상 세션 권한·시청 요청·미디어 프로세스 관리 | 캡처·인코딩은 로봇 perception, 로봇 제어는 CORE |
 | 업무 도구 | Games 보드, `operations/apps/games` | 경기 상태와 경기별 입력 | 사이트 Mission과 최종 장치 명령은 별도 owner |
 | 개발 도구 | control diagnostic / lane live view | 현재 PARKED 진단 / 시뮬 관측 | 제품 운용 진입으로 확대하지 않음 |
-| 공유 기반 | `shared/web` | 디자인·컨트롤·통신 도구 | 사용자 업무·전역 인증 상태를 소유하지 않음 |
+| 공유 기반 | `shared/web`, `shared/android`, `contracts/foundation` | 디자인·컨트롤·통신 도구, Android 공용 코드, 공유 계약 | 사용자 업무·전역 인증 상태를 소유하지 않음 |
+
+공통 서비스의 구분과 경계, 현장 입구(`proxy`)는 [공통 서비스 카탈로그](common-services.md)를 본다.
 
 Fleet 내부 id·아이콘·URL의 `console`은 호환 식별자다. 표시 이름은 Rosy Fleet이다(D-487). Robot의 `/console`은 그 로봇의 운용 화면이다. Learning은 별도 런처/PWA 등록을 뜻하지 않는다. Pilot Android는 같은 조종 앱의 제공 방식이며 별도 실행 권한을 만들지 않는다.
 

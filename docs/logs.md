@@ -14521,3 +14521,9 @@ osy-d395-s1d\`.
 - 증거: 실제 `land_mainred.py recheck`에서 통과한 시험이 닫히지 않아 드러났다. 수정 뒤 열린 11개 중 9개가 main 통과로 닫히고, 삭제된 파일 1개가 닫히고, 실제 실패 1개(`test_cell_g2_ports.py` 단독 실행의 AF_UNIX 경로 길이)가 남았다.
 - gate 변화: 없음. 착지의 `close`가 이제 통과한 항목을 실제로 닫는다.
 - CE: 해당 없음 — 원인이 코드와 시험에 남는다.
+
+## 2026-11-07 · uncommitted · docs(common-services): Monitoring·Media 책임과 권한 사본 검사
+
+- 변경: 앱 책임 문서에 Monitoring·Media 행과 Android·foundation 공유 기반을 더했다. 카탈로그에 `middleware/media`와 서비스별 인증 차이를 적었다. Kotlin 권한 사본과 Fleet 역할 묶음이 foundation 목록과 어긋나면 `test_common_services.py`가 실패한다.
+- 증거: 원격 시험과 변이 확인은 착지 기록을 따른다.
+- gate 변화: 없음. CE: 해당 없음 — 문서 정정과 검사 추가다.
