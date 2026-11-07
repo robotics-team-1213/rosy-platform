@@ -16,6 +16,7 @@ symptoms:
   - "a commanded 111 deg odom turn was about 30 deg on the floor; a 1.5 s turn at 0.25 rad/s gave 3.4 deg"
   - "teleop went out at about 3 Hz, below the 300 ms watchdog, so the robot stopped between commands"
   - "MODE_CONFLICT answers were ignored for 10 minutes while the script kept commanding"
+  - "2026-11-07: a mapping script read Pinky Pro LiDAR 0 deg as forward; rosy_46 ran 100 s, odom 3.1 m, the map repeated one wall and the body did not move"
 tags: [field-safety, teleop, clearance, robot-body, rosy-cam, lidar-pose, watchdog, odometry, pinky]
 ---
 
@@ -42,6 +43,14 @@ During the D-491 field session on 2026-10-07 an agent drove rosy-pinky-9dfk from
 6. **Look before moving.** Check the robot camera and the overhead image for cables, hands and thin objects the LiDAR cannot see, and ask the people on site when something is attached to the robot.
 7. **Write robot files with an explicit encoding** (`encoding="ascii"` or `"utf-8"`) and validate them on the robot (`python3 -c 'import yaml; yaml.safe_load(...)'`) before restarting a service.
 8. **Return the robot to IDLE in a `finally`.** Every script left 9dfk in IDLE even when it was killed, and the guard refused motion without fresh evidence.
+
+## Update 2026-11-07: Pinky Pro LiDAR faces backwards, and odom is not motion
+
+On 2026-11-07 an agent wrote a new SLAM mapping script for rosy_46 (Pinky Pro) without reading this note. It took scan index 0 as the front. On Pinky Pro the LiDAR frame is turned 180 deg (tf yaw pi): 0 deg looks at the rear. The script judged "clear ahead" from the rear sector, drove into an obstacle and kept going for 100 s. Odometry reported 3.1 m. The SLAM map drew the same wall again and again. The robot had not moved.
+
+- Take the sector from the shared body model, not from scan indices: `PINKY_PRO.scan_view(scan)` and `translation_gap`/`can_rotate`. `PINKY_PRO_GEOMETRY` already carries `forward_deg: 180.0` from the URDF; pass `forward_deg` only with a measured mount value, never 0. Guidance 1 already asks for this.
+- Odometry counts wheel turns. A robot pushing on a wall, or held by a cable, keeps counting. Check progress with an independent sensor: the script now compares LiDAR ranges every 0.10 m of odom and stops (`body_not_moving`) when the scan changed less than 0.015 m.
+- The same day rosy_45 stopped twice at odom 0.307 m with that check. The cause (a charging cable pulling from the rear corner was suspected) was not confirmed, so the check did its job but did not explain the stop. Look at the robot before the next attempt.
 
 ## Why This Matters
 
