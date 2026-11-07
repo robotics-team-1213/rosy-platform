@@ -146,8 +146,10 @@ def read_motion(rows: list, free: dict | None = None) -> dict:
              "pwm_end": (rows[-1].get("pwm") or {}).get(JOINTS[worst]),
              # chunk_runner's 1 Hz health reading (load); no verdict from it yet: no contact has been recorded with it
              **_load(rows, worst)}
-    if sent < MIN_SPEED or facts["lag_end"] - facts["lag_start"] < MIN_RISE:
-        return {**facts, "verdict": "undetermined", "why": "the command was not moving, or the lag did not grow"}
+    # a run that did not end on lag is no stop to explain: a finished descent's last half second, its arm already at the
+    # target while the command eased in, read blocked, and a baseline would read its small lag too_fast
+    if sent < MIN_SPEED or facts["lag_end"] - facts["lag_start"] < MIN_RISE or facts["lag_end"] < STOP_LAG:
+        return {**facts, "verdict": "undetermined", "why": "the command was not moving, or the lag did not grow to a stop"}
     moved = f"{facts['joint']} moved {present:.2f} of {sent:.2f} units/s"
     if present < BLOCKED_RATIO * sent:
         return {**facts, "verdict": "blocked", "why": moved}
