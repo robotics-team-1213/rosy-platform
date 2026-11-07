@@ -15,6 +15,7 @@ import { createLineStuckPanel } from "./line-stuck.js";
 import { createDeviceWatch } from "./device-watch.js";
 import { createTripReplan } from "./trip-replan.js";
 import { createStationRecovery } from "./station-recovery.js";
+import { createPersonRequests } from "./person-request.js";
 import { createSignals } from "./signals.js";
 import { createChargeBaysView } from "./charge-bays-view.js";
 import { createPlatoonView } from "./platoon-view.js";
@@ -246,6 +247,7 @@ function render() {
   deviceWatch.render();
   tripReplan.render();
   stationRecovery.render();
+  personRequests.render();
 
   formation.fillLeaders();
   // Map labels always show for 최우선 robots (warn causes are often fleet-wide); the rest declutter.
@@ -350,6 +352,8 @@ const lineStuck = createLineStuckPanel({ scope: pageScope, view, call, log,
 const deviceWatch = createDeviceWatch({ scope: pageScope, el, view });
 const stationRecovery = createStationRecovery({ scope: pageScope, view, call, log,
   isOperator: () => auth.role === "operator", namedReason });
+const personRequests = createPersonRequests({ scope: pageScope, view, call, log,
+  isOperator: () => auth.role === "operator", namedReason });
 const tripReplan = createTripReplan({ scope: pageScope, view, call, log,
   isOperator: () => auth.role === "operator", namedReason,
   openCard: (robotId) => { roster.openCard(robotId); render(); } });
@@ -415,6 +419,7 @@ trackingView.refresh();
 chargeBays.refresh();
 platoon.refresh();
 stationRecovery.refresh();
+personRequests.refresh();
 pageScope.interval(() => { if (!auth.locked) formation.refreshFormation(); }, MAP_MS);
 pageScope.interval(refreshState, STATE_MS);
 pageScope.interval(() => { if (!auth.locked) workView.refresh(); }, MAP_MS);
@@ -425,7 +430,7 @@ pageScope.interval(refreshDiscovery, MAP_MS);
 pageScope.interval(refreshRobotApps, MAP_MS);
 pageScope.interval(() => mapView.refresh(), MAP_MS);
 pageScope.interval(() => chargeBays.refresh(), MAP_MS);
-pageScope.interval(() => { if (!auth.locked) stationRecovery.refresh(); }, MAP_MS);
+pageScope.interval(() => { if (!auth.locked) { stationRecovery.refresh(); personRequests.refresh(); } }, STATE_MS);
 pageScope.interval(() => platoon.refresh(), MAP_MS);
 pageScope.interval(() => mapView.refreshSightings(), STATE_MS);
 pageScope.interval(() => mapView.refreshTraffic(), STATE_MS);

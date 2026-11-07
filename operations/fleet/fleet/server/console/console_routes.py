@@ -154,7 +154,7 @@ class SharedGather:
 def install_console_routes(app, *, console, sightings, require_viewer,
                            read_guard, operator_guard, require_operator, require_named_operator,
                            site_lanes=None, answer_log_path=None, tracking=None,
-                           identity=None, station_recovery=False) -> None:
+                           identity=None, station_recovery=False, require_proposer=None) -> None:
     # D-407: open lane stucks, read from each gather. CORE's stuck block is the truth.
     board = app.state.line_stuck = LineStuckBoard(
         log=LineStuckAnswerLog(answer_log_path) if answer_log_path is not None else None)
@@ -271,7 +271,7 @@ def install_console_routes(app, *, console, sightings, require_viewer,
         if active is None:
             raise HTTPException(404, detail={"code": "NO_ACTIVE_MAP"})
         return {"map_version": active[0], **bay_plan.plan(robots, bays)}
-    install_station_recovery_routes(app, station_recovery, read_guard, require_named_operator, gathered, bay_inputs)
+    install_station_recovery_routes(app, station_recovery, (read_guard, require_named_operator, require_proposer), gathered, bay_inputs)
 
     # D-941 2: gaps on the active map's loop, shown only; the 20 Hz following loop belongs to CORE.
     platoon_geometry = PlatoonGeometry()

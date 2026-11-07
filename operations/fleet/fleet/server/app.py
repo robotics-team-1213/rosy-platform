@@ -540,7 +540,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                            require_operator=require_operator,
                            require_named_operator=require_named_operator,
                            answer_log_path=task_service.store.path if task_service else None,
-                           tracking=tracking, identity=identity, station_recovery=station_recovery)
+                           tracking=tracking, identity=identity, station_recovery=station_recovery, require_proposer=require_proposer)
     if app.state.line_stuck._log is not None:
         app.state.line_stuck._log.notifications.config = notification_config
     from fleet.stuck.ai_facts import install_ai_routes   # D-577 4: AI PC facts, shadow only

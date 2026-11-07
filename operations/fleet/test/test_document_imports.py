@@ -90,6 +90,7 @@ OWN = {
         "localization-badge.js",
         "power-health-view.js",
         "charge-bays-view.js",  # D-941: read-only charge bay plan
+        "person-request.js",  # D-721 Amendment: 사람 부탁 queue row
         "station-recovery.js",  # D-721 Amendment: station recovery request row
         "platoon-view.js",  # D-941: read-only loop gaps
         "state-age.js",

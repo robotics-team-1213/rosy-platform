@@ -11,6 +11,7 @@ import {routeAttention, trafficAttention} from "/console/assets/site-map-model.j
 import {tripEndText, tripWaitText} from "/console/assets/trip-display.js";
 import { guideAttention } from "/console/assets/guide-layer.js";
 import { recoveryHeadline } from "./station-recovery.js";
+import { personHeadline, requestsFor } from "./person-request.js";
 
 function nodeWithText(tagName, className = "", text) {
   const node = document.createElement(tagName);
@@ -192,6 +193,9 @@ export function createQueues({ scope, el, view, render, streamEvidence }) {
     // D-721 Amendment (S1): a low-battery robot's station recovery request; the row opens on its answer.
     const recovery = (view.stationRecovery?.requests || []).find((r) => r.robot_id === robot.robot_id);
     if (recoveryHeadline(recovery)) items.push({ severity: "warn", decision: "recovery", text: recoveryHeadline(recovery) });
+    // D-721 Amendment: 사람 부탁 — a person is asked for something physical; the row opens on the answer buttons.
+    for (const ask of requestsFor(view, robot.robot_id))
+      items.push({ severity: "warn", decision: "person", key: `${robot.robot_id}|person-${ask.id}`, text: personHeadline(ask) });
     if (robot.queued) items.push({ severity: "warn", text: ": 교통 대기" });
     if (robot.yielding) items.push({ severity: "warn", text: ": 양보 중" });
     if (staleS !== null) items.push({ severity: "warn", text: `: 상태 오래됨 — ${staleS}초 전 값` });
@@ -282,7 +286,7 @@ export function createQueues({ scope, el, view, render, streamEvidence }) {
     for (const r of view.stateUnavailable ? [] : view.robots) {
       for (const item of attentionItems(r)) {
         const list = item.severity === "crit" ? rows.crit : rows.warn;
-        const key = `${r.robot_id}|${item.decision || list.length}`;
+        const key = item.key || `${r.robot_id}|${item.decision || list.length}`;
         list.push({ ...item, robotId: r.robot_id, key });
       }
     }

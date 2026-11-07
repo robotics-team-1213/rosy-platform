@@ -158,7 +158,7 @@ def make_client(rows, *, enabled=True, pose=LOCALIZED, bays=BAYS):
     def authorize(request: Request):
         return {"operator": OPERATOR, "viewer": VIEWER}[request.headers.get("x-role", "operator")]
 
-    require_viewer, _, require_named, _ = build_role_guards(authorize, {"t": OPERATOR})
+    require_viewer, _, require_named, require_proposer = build_role_guards(authorize, {"t": OPERATOR})
 
     async def gathered():
         return {"robots": rows}
@@ -166,7 +166,8 @@ def make_client(rows, *, enabled=True, pose=LOCALIZED, bays=BAYS):
     async def bay_inputs():
         return (7, {}), views, bays
 
-    install_station_recovery_routes(app, enabled, [Depends(require_viewer)], require_named, gathered, bay_inputs)
+    install_station_recovery_routes(app, enabled, ([Depends(require_viewer)], require_named, require_proposer),
+                                    gathered, bay_inputs)
     return TestClient(app), recorder
 
 

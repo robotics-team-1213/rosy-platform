@@ -13,6 +13,8 @@ from typing import Awaitable, Callable, Optional
 
 from fastapi import Depends, HTTPException
 
+from fleet.server.console.person_request_routes import install_person_request_routes
+from fleet.server.console.person_request_store import PersonRequestStore
 from fleet.station_recovery import decide
 
 logger = logging.getLogger(__name__)
@@ -22,6 +24,15 @@ def _conflict(code: str, **detail) -> HTTPException:
     return HTTPException(409, detail={"code": code, **detail})
 
 
+def install_person_requests(app, gathered, read_guard, require_named_operator, require_proposer) -> None:
+    tasks = getattr(app.state, "task_service", None)
+    store = PersonRequestStore(tasks.store.path if tasks is not None else None)
+
+    async def known_robots() -> set:
+        return {row["robot_id"] for row in (await gathered())["robots"]}
+    install_person_request_routes(app, store, read_guard, require_proposer, require_named_operator, known_robots)
+
+
 def _by_battery(row: dict) -> tuple:
     """Lowest battery first, unknown last, so the neediest robot is offered a bay first."""
     percent = ((row.get("power_health") or {}).get("battery") or {}).get("percent")
@@ -29,13 +40,18 @@ def _by_battery(row: dict) -> tuple:
             row["robot_id"])
 
 
-def install_station_recovery_routes(app, enabled: bool, read_guard, require_named_operator,
+def install_station_recovery_routes(app, enabled: bool, guards: tuple,
                                     gathered: Callable[[], Awaitable[dict]],
                                     bay_inputs: Callable[[], Awaitable[tuple]]) -> None:
     """``enabled`` is ``fleet.station_recovery.enabled`` (default false); off, nothing is asked or approved.
 
+    ``guards`` is ``(read_guard, require_named_operator, require_proposer)``. The person request routes
+    (always on, they only note what a person is asked to do) are installed here too.
+
     The charge-bay plan, map pose service and site map event log are read from ``app.state`` when asked.
     """
+    read_guard, require_named_operator, require_proposer = guards
+    install_person_requests(app, gathered, read_guard, require_named_operator, require_proposer)
     map_pose = getattr(app.state, "map_pose", None)
     another_returning = lambda: False   # S1 starts no return; S2 reads the open recovery trips here
 

@@ -378,6 +378,10 @@
       "path": "power-health-view.js",
       "media_type": "application/javascript"
     },
+    "person-request.js": {
+      "path": "person-request.js",
+      "media_type": "application/javascript"
+    },
     "station-recovery.js": {
       "path": "station-recovery.js",
       "media_type": "application/javascript"
