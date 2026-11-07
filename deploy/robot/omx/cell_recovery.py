@@ -30,7 +30,7 @@ from cell_scene_guard import scene_moved
 
 NEAR_PX, ROUNDS = 60, 5  # about 1 mm per px in the 650 mm top view; a long box is 90 mm
 # what the trace measured -> what it asks for; a model's text never chooses (D-971)
-# shortcut: cell_why reads no too_fast until a free-motion baseline separates it from contact, so that entry waits for it
+# cell_why reads too_fast only where the same chunk ran on, as fast, lagging as much (its free-run baseline)
 PREFER = {"too_fast": "slow_down", "blocked": "push_clear"}
 SLOWER, SLOWEST = 0.7, 0.25  # lift_guard_frac: each slow_down, and its floor
 
@@ -63,11 +63,17 @@ def unsolved(choices) -> dict:
             for c in values if c["value"] == "ask_person" and c["tries"]}
 
 
-def carry(frame, pick, push, *, expected_px, emit=cd.emit, rounds: int = ROUNDS, choices=None, explain=None, slow=None) -> dict:
+def at_home(state, home: list, tolerance: float = 2.0) -> bool:
+    """The body joints are folded; the jaws do not count. No reading is not home."""
+    return bool(state) and max(abs(a - b) for a, b in zip(state[:5], home[:5])) <= tolerance
+
+
+def carry(frame, pick, push, *, expected_px, emit=cd.emit, rounds: int = ROUNDS, choices=None, explain=None, slow=None, folded=None) -> dict:
     """pick() -> run_auto's result; push(cause, attempt) -> whether it moved the arm; expected_px(attempt) -> pixels of the
     pick and the place; frame() -> the top view with the arm folded. An action earns its record from the next attempt: only a
     placed box counts as working, and `choices` then ranks the actions next time. explain(cause, out) -> cell_why's row: what it
-    measured orders the actions, and a cause unknown again goes to a person. slow() -> lowered the lift speed, or at the floor."""
+    measured orders the actions, and a cause unknown again goes to a person. slow() -> lowered the lift speed, or at the floor.
+    folded() -> the arm came home: a fold can fail after a stop, and no retry starts from there."""
     tried, rows, pending = {}, [], None
     try:
         for _ in range(rounds):
@@ -82,7 +88,7 @@ def carry(frame, pick, push, *, expected_px, emit=cd.emit, rounds: int = ROUNDS,
             why = explain(cause, out) if explain and cause != "placed" else {}
             can = ({"observe_again", "push_clear"} | ({"slow_down"} if slow else set())) - set(tried.setdefault(cause, []))
             action = "done" if cause == "placed" else options(cause, can, choices, PREFER.get(why.get("hypothesis")) if why.get("by") == "measurement" else None)[0]
-            if why.get("repeat_unknown"):
+            if why.get("repeat_unknown") or (folded and action != "done" and not folded()):
                 action = "ask_person"
             if action == "slow_down" and not slow():
                 learned(choices, cause, action, False, "the lift is at its slowest")
@@ -153,7 +159,9 @@ def main(argv=None) -> int:
     def explain(cause, out):  # measurement only: the control PC does not call a model; Fleet hands the incident to the AI PC (D-971)
         # shortcut: the newest trace in the working folder, as the session script writes it; upgrade if a run ever starts elsewhere
         traces = sorted(Path(".").glob(f"trace-{config.get('arm_id', 'arm_s')}-*.jsonl"), key=lambda p: p.stat().st_mtime)
-        return cell_why.explain(cause, out["result"], cell_why.read_trace(traces[-1]) if traces else [], [], None, why_path, since=started)
+        rows = cell_why.read_trace(traces[-1]) if traces else []
+        # the carry's finished runs join the baseline before the stop is read against it
+        return cell_why.explain(cause, out["result"], rows, [], None, why_path, since=started, free=cell_why.learn(rows, work / "free_lag.json"))
 
     def slow():
         slower = round(config["plan"].get("lift_guard_frac", 0.85) * SLOWER, 3)
@@ -162,7 +170,8 @@ def main(argv=None) -> int:
         config["plan"]["lift_guard_frac"] = slower
         return True
 
-    out = carry(lambda: cell.frame("top"), pick, push, expected_px=expected_px, choices=choices, explain=explain, slow=slow)
+    out = carry(lambda: cell.frame("top"), pick, push, expected_px=expected_px, choices=choices, explain=explain, slow=slow,
+                folded=lambda: at_home(cell.act("state").get("state"), config["plan"]["home"]))
     print(json.dumps({**out, "unsolved": unsolved(choices), "open_questions": cell_why.open_questions(why_path)}, indent=1, default=str))
     return 0 if out["result"] == "placed" else 1
 

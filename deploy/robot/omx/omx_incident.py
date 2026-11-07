@@ -42,7 +42,7 @@ HW_BITS = {1: "input voltage", 4: "overheating", 8: "motor encoder", 16: "electr
 REBOOTABLE = 1 | 32       # a latch the cause of which is load or supply, not heat or damage
 HOME_TOL = 3.0            # units: the runner's SETTLE_TOL
 INCIDENTS = Path("incidents")
-STILLS = INCIDENTS / "stills"  # <arm>-<camera>.jpg, kept by the carry at a stop no fault record covers (cell_hooks.lift_stall)
+STILLS = INCIDENTS / "stills"  # <arm>-<camera>.jpg, kept by the carry at a stop no fault record covers (cell_hooks.stills)
 
 
 def bits(code: int) -> list[str]:

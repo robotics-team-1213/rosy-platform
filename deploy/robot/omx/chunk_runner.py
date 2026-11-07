@@ -325,7 +325,7 @@ class Runner:
             full = isinstance(sent, dict) and all(n in sent for n in NAMES)
             self.trace({"t": round(self.clock(), 4), "chunk": self.chunk, "target": [round(v, 3) for v in self.target],
                         "sent": [round(float(sent[n]), 3) for n in NAMES] if full else None,
-                        "present": [round(v, 3) for v in present]})
+                        "present": [round(v, 3) for v in present], "pwm": getattr(getattr(self.robot, "motion", None), "effort_pwm", None) or {}})
         self.recorder.tick(present, [sent.get(n, t) if isinstance(sent, dict) else t for n, t in zip(NAMES, self.target)])
         if isinstance(sent, dict):
             self.lag = max((abs(present[i] - sent[name]) for i, name in enumerate(NAMES[:5]) if name in sent),
