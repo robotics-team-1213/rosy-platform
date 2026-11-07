@@ -22,7 +22,7 @@ import palletizing_gripper as jaw  # noqa: E402
 
 FPS = 15
 CARRY_SPEED = .05  # m/s; .08 let a 16 g container swing 10 deg in the jaws on the short reach to the near row
-OPEN_GAP = dict(belt=.042, ship=.033, temp=.033)  # 33 mm lets a pad stay inside the 6 mm gaps between rows (release_gap_m of the ship case)
+OPEN_GAP = dict(belt=.042, ship=.033, temp=.033, outbound=.033)  # 33 mm lets a pad stay inside the 6 mm gaps between rows (release_gap_m of the ship case); the stern bay mouth is 37 mm
 HOLD_GAP = .030 - jaw.SQUEEZE_M
 
 
@@ -224,7 +224,8 @@ def parse_choices(items):
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     p.add_argument("command", choices=["run", "validate"])
-    p.add_argument("task", choices=["stack", "rehandle"])
+    p.add_argument("task", choices=["stack", "rehandle", "plan"])
+    p.add_argument("--plan", help="with task 'plan': a JSON task (name, supply, start, steps), e.g. omx_two_arm_plan.py replay output")
     p.add_argument("--out", default=".")
     p.add_argument("--video", action="store_true")
     p.add_argument("--frames", help="folder for one last picture per real camera")
@@ -237,7 +238,7 @@ def main(argv=None):
     a = p.parse_args(argv)
     choices = parse_choices(a.choice)
     layout = sites.Layout(**choices)
-    task = tasks.get_task(layout, a.task)
+    task = json.loads(Path(a.plan).read_text(encoding="utf-8")) if a.task == "plan" else tasks.get_task(layout, a.task)
     try:
         records = tasks.validate(layout, task)
     except tasks.PlanRefused as e:

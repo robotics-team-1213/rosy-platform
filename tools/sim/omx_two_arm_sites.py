@@ -45,6 +45,11 @@ CONTAINER = {"fixture-studs": (.09, .03, .03), "r08-berth": (.09, .02998, .0324)
 # pocket centre, then a slope rising 4.4 over 2.7 to the deck at 8, ridge 0.5 wide between rows, deck to |y| 63, bulwark to z 11 out to 65 (mm).
 HOLD = dict(starts=(50., 148.), length=98., centre=49., rows=(-38., 0., 38.), floor=3., hw=15.7, hl=45.6, seat=.6, catch=2.7, rise=4.4, ridge=.5,
             deck=8., deck_y=63., bulwark=11., half_beam=65.)
+STERN_BAY = dict(x=25., floor=6.)  # r08 stern_bay centre x and its floor on the berth (pocket floor 3 + lift 3), mm
+# r08 stern around the empty bay, from the r08 README table (fender face x 0-5 at deck 8, bay mouth x 6.5-43.5 with floor 3, side rails
+# x 12-50 at 11) plus the 3 mm berth lift: boxes (x0, x1, y0, y1, z top) in ship mm; y0 = -y1 is one box across, else mirrored to both sides.
+STERN = dict(boxes=((0., 50., -65., 65., 6.), (0., 6.5, -65., 65., 11.), (43.5, 50., -65., 65., 11.), (6.5, 43.5, 45.6, 63., 11.),
+                    (12., 50., 63., 65., 14.)))
 
 
 # Only hold 1 (next to the stern) is in reach with the stern at the table edge: hold 2 lies behind both arms, where no tool-down pose holds a
@@ -80,6 +85,9 @@ def r08_sites(layout):
         for layer in range(R08_TIERS):
             out[f"ship-h{h}r{row}-l{layer}"] = dict(kind="ship", xy=(x, cy), z=z + layout.box[2] * (layer + .5), yaw=0., row=row, layer=layer,
                                                     stack=f"h{h}r{row}", slots=[g["id"][:4] + str(tier + 2 * layer) for g in group])
+    # The stern bay, kept low (no funnel tile, nothing standing in it), is the outbound stand: one 1x3 across the beam, both arms reach it.
+    x, cy, z = ship_cell(layout, STERN_BAY["x"], 0, STERN_BAY["floor"])
+    out["stand-1"] = dict(kind="outbound", xy=(x, cy), z=z + layout.box[2] / 2, yaw=math.pi / 2)
     return out
 
 

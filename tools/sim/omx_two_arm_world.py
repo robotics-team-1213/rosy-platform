@@ -190,17 +190,18 @@ class World:
             spec.worldbody.add_geom(name=f"stud{i}", type=mujoco.mjtGeom.mjGEOM_MESH, meshname="stud", pos=[x, y, top], rgba=[.08, .12, .3, 1])
 
     def _r08(self, spec):
-        """The berthed r08 ship: the printed meshes to see; to collide, convex hulls of the stern, bow, house and stern tiles, and per hold a
-        floor slab, the pocket walls of each row (seat and slope as measured, sites.HOLD), the outer deck and the bulwark. The pocket pins sit
-        inside the container's bottom grooves and are left out (shortcut: a container off its seat by more than the groove would not meet them)."""
+        """The berthed r08 ship: the printed meshes to see; to collide, convex hulls of the bow and house, boxes for the stern around its empty
+        bay (the outbound stand, sites.STERN), and per hold a floor slab, the pocket walls of each row (seat and slope as measured, sites.HOLD),
+        the outer deck and the bulwark. The pocket pins sit inside the container's bottom grooves and are left out (shortcut: a container off
+        its seat by more than the groove would not meet them)."""
         L, H, world = self.layout, sites.HOLD, spec.worldbody
         x0, y0, z0 = sites.ship_cell(L, 0, 0)
         turn = [0, 0, 0, 1]  # ship x runs to -x of the fixture frame
         mesh = mujoco.mjtGeom.mjGEOM_MESH
-        for name, rgba in (("hull", [.09, .15, .29, 1]), ("house", [.9, .94, .94, 1]), ("tiles", [.59, .8, .85, 1]), ("quay", [.88, .48, .16, 1])):
+        for name, rgba in (("hull", [.09, .15, .29, 1]), ("house", [.9, .94, .94, 1]), ("quay", [.88, .48, .16, 1])):
             spec.add_mesh(name=f"ship_{name}", file=self._asset(name), scale=[.001] * 3)
             world.add_geom(name=f"ship_{name}", type=mesh, meshname=f"ship_{name}", pos=[x0, y0, z0], quat=turn, contype=0, conaffinity=0, rgba=rgba)
-        for name in ("cx_stern", "cx_bow", "cx_house", "cx_tile0", "cx_tile1", "cx_tile2"):
+        for name in ("cx_bow", "cx_house"):
             spec.add_mesh(name=name, file=self._asset(name), scale=[.001] * 3)
             world.add_geom(name=name, type=mesh, meshname=name, pos=[x0, y0, z0], quat=turn, rgba=[0, 0, 0, 0])
         mm, floor = .001, H["floor"] + 3.  # the hull stands 3 mm up on the berth blocks
@@ -210,6 +211,10 @@ class World:
         spec.add_mesh(name="pocket_side", uservert=wall(section(H["hw"]), 2 * (H["hl"] + reach) * mm, True))
         spec.add_mesh(name="pocket_end", uservert=wall(section(H["hl"]), 2 * (H["hw"] + reach) * mm, False))
         box = mujoco.mjtGeom.mjGEOM_BOX
+        for k, (x0_, x1_, y0_, y1_, z1_) in enumerate(sites.STERN["boxes"]):  # stern floor, aft and fore deck, side decks, rails (ship mm, z from table)
+            for side in ((1,) if y0_ == -y1_ else (-1, 1)):
+                world.add_geom(name=f"stern{k}{'p' if side > 0 else 's'}", type=box, pos=sites.ship_cell(L, (x0_ + x1_) / 2, side * (y0_ + y1_) / 2, (3 + z1_) / 2),
+                               size=[(x1_ - x0_) / 2 * mm, (y1_ - y0_) / 2 * mm, (z1_ - 3) / 2 * mm], rgba=[0, 0, 0, 0])
         for h, start in enumerate(H["starts"], 1):
             cx = start + H["centre"]
             world.add_geom(name=f"hold{h}_floor", type=box, pos=sites.ship_cell(L, cx, 0, (3 + floor) / 2), size=[H["length"] / 2 * mm, H["half_beam"] * mm, H["floor"] / 2 * mm], rgba=[0, 0, 0, 0])
