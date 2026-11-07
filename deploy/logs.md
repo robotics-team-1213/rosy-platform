@@ -4724,3 +4724,9 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: `test/test_rosy_face_person.py`(긴급+요청, 한 루프 한 소리, 주행 램프).
 - gate 변화: SOURCE 변경. 로봇·장치 수용 없음.
 - 교훈: CE 해당 없음 — 최종 코드와 시험이 판단을 보존한다. 실물·운영 수용은 아니다.
+
+## 2026-11-07 · 44fb0c6315 · fix(face): 벤치 시험 보호는 표 화면과 그려진 화면 둘 다 본다
+- 변경: 배터리 병합이 `handle_test`를 `_table_screen`만 보게 해 `test_an_accepted_fleet_call_chirps_once…`가 깨졌다(`fix/battery-estop-auto-release` 끝에서도 같은 시험이 실패함을 원격으로 확인). 두 화면 중 하나라도 정지·업데이트·실패·주의면 시험을 기다리게 한다. 시험 기대는 바꾸지 않았다. Safety-Review: pending independent review.
+- 증거: 원격 robttt: test_rosy_face·test_rosy_face_person·test_rosy_face_battery_urgent 포함 299 passed·1 skipped.
+- gate 변화: SOURCE 변경. 로봇·장치 수용 없음.
+- 교훈: CE 해당 없음 — 최종 코드와 시험이 판단을 보존한다. 실물·운영 수용은 아니다.
