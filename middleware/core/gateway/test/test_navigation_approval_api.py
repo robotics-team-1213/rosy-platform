@@ -314,6 +314,45 @@ def test_a_scanner_covered_by_the_robot_itself_sees_nothing():
     assert refused.value.code == "CLEARANCE_UNKNOWN"
 
 
+ALL_DIRECTIONS = [("forward", FORWARD_BEAM), ("reverse", REAR_BEAM), ("cw", FORWARD_BEAM), ("ccw", FORWARD_BEAM)]
+
+
+def ranged(fill, beam, good):
+    ranges = [fill] * 720
+    for index in range(beam, beam + good):
+        ranges[index % 720] = 2.0
+    return {**real_scans()[0], "ranges": ranges}
+
+
+@pytest.mark.parametrize("direction,beam", ALL_DIRECTIONS)
+@pytest.mark.parametrize("good", [1, 5])
+@pytest.mark.parametrize("fill", [0.0, math.inf, math.nan, 0.03])
+def test_a_few_seeing_beams_among_no_returns_or_self_returns_refuse(direction, beam, good, fill):
+    with pytest.raises(TrialRefused) as refused:
+        require_clearance(ranged(fill, beam - good // 2, good), PINKY, direction, True, 100.0)
+    assert refused.value.code == "CLEARANCE_UNKNOWN"
+
+
+@pytest.mark.parametrize("direction,beam", ALL_DIRECTIONS)
+def test_a_scan_of_only_zero_or_inf_refuses(direction, beam):
+    for fill in (0.0, math.inf):
+        with pytest.raises(TrialRefused) as refused:
+            require_clearance(ranged(fill, beam, 0), PINKY, direction, True, 100.0)
+        assert refused.value.code == "CLEARANCE_UNKNOWN"
+
+
+@pytest.mark.parametrize("direction,sector_beams", [("forward", 180), ("reverse", 180), ("cw", 720)])
+def test_the_seeing_floor_counts_the_whole_sector_even_when_the_rest_is_the_body(direction, sector_beams):
+    # All other beams end on the body, so the ratio alone would pass with any few returns.
+    beam = REAR_BEAM if direction == "reverse" else FORWARD_BEAM
+    few = sector_beams // 4 - 2
+    with pytest.raises(TrialRefused) as refused:
+        require_clearance(ranged(0.03, beam - few // 2, few), PINKY, direction, True, 100.0)
+    assert refused.value.code == "CLEARANCE_UNKNOWN"
+    enough = sector_beams // 4 + 2
+    assert require_clearance(ranged(0.03, beam - enough // 2, enough), PINKY, direction, True, 100.0)
+
+
 def test_forward_asks_no_person_while_the_body_covers_the_minimum_range():
     assert require_clearance(real_scans()[0], PINKY, "forward", False, 100.0)
 

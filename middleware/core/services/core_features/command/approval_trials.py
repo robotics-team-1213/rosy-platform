@@ -35,6 +35,8 @@ SOURCE_MAX_AGE_S = 0.25
 RUN_MARGIN_M = 0.05
 TURN_MARGIN_M = 0.03
 MIN_SECTOR_RETURNS = 0.5
+# Of all the sector's beams, however many end on the body. Recorded C1 scans never fall below 0.44.
+MIN_SEEING_BEAMS = 0.25
 PAIRS = {("forward", "button_release"), ("reverse", "button_release"), ("cw", "button_release"),
          ("ccw", "button_release"), ("forward", "command_loss")}
 COMMANDS = {"forward": (1, 0), "reverse": (-1, 0), "cw": (0, -1), "ccw": (0, 1)}
@@ -55,19 +57,21 @@ def _sector_seen(sample, config, points, centre_rad: float, half_rad: float) -> 
     start = float(sample["angle_min"])
     step = (float(sample["angle_max"]) - start) / (len(ranges) - 1)
     forward = math.radians(float(config.lidar_forward_deg))
-    looking = 0
+    beams = looking = 0
     for index, value in enumerate(ranges):
         angle = start + index * step - forward
         if abs(math.atan2(math.sin(angle - centre_rad), math.cos(angle - centre_rad))) > half_rad:
             continue
+        beams += 1
         distance = float(value)
-        own = math.isfinite(distance) and (distance < low or inside_body(
+        # 0, inf and NaN are no return at all (robot_body): they stay unknown, never the robot.
+        own = math.isfinite(distance) and distance > 0.0 and (distance < low or inside_body(
             distance * math.cos(angle) + config.body_lidar_x_m, distance * math.sin(angle), config.body_front_x_m,
             config.body_rear_x_m, config.body_half_width_m, config.body_rotation_radius_m, strict=True))
         looking += not own
     outside = sum(abs(math.atan2(math.sin(math.atan2(y, x) - centre_rad), math.cos(math.atan2(y, x) - centre_rad))) <= half_rad
                   for x, y in points)
-    return outside > 0 and outside >= MIN_SECTOR_RETURNS * looking
+    return outside >= MIN_SEEING_BEAMS * beams and outside >= MIN_SECTOR_RETURNS * looking
 
 
 def require_clearance(sample, config, direction: str, blind_zone_confirmed: bool, wall_now: float) -> dict:
