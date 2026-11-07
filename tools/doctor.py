@@ -22,7 +22,6 @@ import json
 import os
 import subprocess
 import sys
-import tempfile
 import time
 from pathlib import Path
 
@@ -31,6 +30,7 @@ sys.path[:0] = [str(TOOLS), str(TOOLS / "remote")]
 
 import host_probe  # noqa: E402
 import lab_hosts  # noqa: E402
+import land_checks  # noqa: E402  (tmp_root)
 import land_events  # noqa: E402
 import land_isolation  # noqa: E402
 import land_mainred  # noqa: E402
@@ -119,8 +119,7 @@ def check_queue(repo: Path, now: float) -> list[tuple]:
         pid = info.get("pid")
         mine = [r for r in events if r.get("pid") == pid and r["t"] >= (info.get("start") or 0)]
         # land_checks.tmp_dir, without its mkdir: remote_pytest streams each invocation's log there
-        logs = Path(os.environ.get("ROSY_LAND_TMP") or Path(os.environ.get("ROSY_SCRATCH") or tempfile.gettempdir())
-                    / "rosy-land") / branch.replace("/", "-")
+        logs = land_checks.tmp_root() / branch.replace("/", "-")
         newest = max((p.stat().st_mtime for p in logs.glob("*.txt")), default=0.0) if logs.is_dir() else 0.0
         quiet = (now - max(now - age, newest, *(r["t"] for r in mine))) / 60
         prepares = sum(r["event"] == "prepared" for r in mine)

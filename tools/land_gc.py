@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -128,8 +129,11 @@ def plan(repo: Path, now: float, log_days: float, *, only: str | None = None) ->
             for newer, more in by_name.items():
                 if newer > name and source(more[0]) == src:
                     covers += [f"^refs/heads/{b}" for b in more]
-                    if (holder / newer).is_dir():
-                        covers.append("^" + git(holder / newer, "rev-parse", "HEAD"))
+                    try:
+                        if (holder / newer).is_dir():
+                            covers.append("^" + git(holder / newer, "rev-parse", "HEAD"))
+                    except subprocess.CalledProcessError:
+                        pass  # a leftover folder that is no worktree covers nothing
         left = git(repo, "rev-list", *heads, *covers).split() if heads else []
         unique = "0" if all(reproducible(repo, sha) for sha in left) else str(len(left))
         if unique != "0":
@@ -154,10 +158,18 @@ def plan(repo: Path, now: float, log_days: float, *, only: str | None = None) ->
                 out.append(("log", f"older than {log_days:g} days", None, [str(log)]))
                 out.states[(None, (str(log),))] = log.stat()
     scratch = land_checks.tmp_root()  # a landing's local logs, kept like its .log, then removed
-    for folder in (scratch.iterdir() if scratch.is_dir() else ()):
-        if not folder.is_dir() or folder.is_symlink() or (only is not None and folder.name != only):
+    # only the default root: a ROSY_LAND_TMP pointing at a shared folder is not ours to sweep
+    owned = scratch.name == "rosy-land" and scratch.is_dir()
+    # a kept snapshot's scratch holds the remote logs that explain its STOP
+    kept = {source(b).replace("/", "-") for refs_ in by_name.values() for b in refs_}
+    for folder in (scratch.iterdir() if owned else ()):
+        if (not folder.is_dir() or folder.is_symlink() or os.path.isjunction(folder)
+                or (only is not None and folder.name != only) or folder.name in kept):
             continue
-        newest = max((f.stat().st_mtime for f in folder.rglob("*")), default=folder.stat().st_mtime)
+        try:
+            newest = max((f.stat().st_mtime for f in folder.rglob("*")), default=folder.stat().st_mtime)
+        except OSError:  # a landing removing its own files meanwhile
+            continue
         if (not any(b.replace("/", "-") == folder.name for b in names)
                 and now - newest > log_days * 86400):
             out.append(("tmp", f"scratch older than {log_days:g} days", None, [str(folder)]))

@@ -20,7 +20,7 @@ OLD = time.time() - 30 * 86400
 @pytest.fixture(autouse=True)
 def scratch_root(tmp_path, monkeypatch):
     """plan() also sweeps landing scratch folders: never the test host's real one."""
-    monkeypatch.setenv("ROSY_LAND_TMP", str(tmp_path / "scratch"))
+    monkeypatch.setenv("ROSY_LAND_TMP", str(tmp_path / "rosy-land"))
 
 
 @contextmanager
@@ -298,9 +298,10 @@ def test_a_merge_git_reproduces_is_not_unique_but_a_hand_resolved_one_is(landing
 
 def test_old_landing_scratch_goes_but_a_live_or_recent_one_stays(landing, tmp_path, monkeypatch):
     repo, common, _, _ = landing
-    scratch = tmp_path / "scratch"
-    old, recent, live = (scratch / n for n in ("fix-old", "fix-recent", "feat-alive"))
-    for folder, age in ((old, OLD), (recent, time.time()), (live, OLD)):
+    scratch = tmp_path / "rosy-land"
+    # feat-protected: the fixture's kept snapshot, whose scratch explains its STOP
+    old, recent, live, kept = (scratch / n for n in ("fix-old", "fix-recent", "feat-alive", "feat-protected"))
+    for folder, age in ((old, OLD), (recent, time.time()), (live, OLD), (kept, OLD)):
         folder.mkdir(parents=True)
         (folder / "run-1.txt").write_text("x\n")
         os.utime(folder / "run-1.txt", (age, age))
@@ -310,4 +311,6 @@ def test_old_landing_scratch_goes_but_a_live_or_recent_one_stays(landing, tmp_pa
     rows = land_gc.plan(repo, time.time(), 7)
     assert [items for action, _, _, items in rows if action == "tmp"] == [[str(old)]]
     assert land_gc.apply(repo, rows) == []
-    assert not old.exists() and recent.exists() and live.exists()
+    assert not old.exists() and recent.exists() and live.exists() and kept.exists()
+    monkeypatch.setenv("ROSY_LAND_TMP", str(scratch.parent))  # a root not named rosy-land is never swept
+    assert not [row for row in land_gc.plan(repo, time.time(), 7) if row[0] == "tmp"]

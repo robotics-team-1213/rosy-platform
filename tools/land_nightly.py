@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -24,6 +25,8 @@ import known_failures  # noqa: E402
 import land_checks  # noqa: E402
 import land_mainred  # noqa: E402
 import remote_pytest  # noqa: E402
+
+SUMMARY = re.compile(r"(?m)^=*\s*\d+ (passed|failed|skipped|errors?|xfailed|xpassed)\b.* in [0-9.]+s\b")
 
 
 def _json(*command: str) -> list | dict:
@@ -82,7 +85,9 @@ def main(argv: list[str] | None = None) -> int:
     print(f"[nightly] {main_sha[:10]}: {len(invocations)} invocation(s), {len(new)} NEW", flush=True)
     for nodeid in new:
         print(f"NEW       {nodeid}")
-    if not new:
+    # a missing or cut log compares as 0 NEW: only a night whose every log reached pytest's summary is green
+    if not new and all(log.is_file() and SUMMARY.search(log.read_text(encoding="utf-8", errors="replace"))
+                       for log in logs):
         marker.write_text(main_sha + "\n", encoding="utf-8")
     return 1 if new else 0
 
