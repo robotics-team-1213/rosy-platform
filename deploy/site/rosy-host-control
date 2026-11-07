@@ -161,7 +161,7 @@ case "$ROLE:$ACTION:$UNIT" in
     owner=$(cat "$CONF/units-user" 2>/dev/null || true)
     [[ "$owner" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]] || refuse "units-user is not set"
     # systemd refuses `cat` over --machine ("Cannot remotely cat units."); LoadState works there.
-    [ "$(systemctl --user --machine="$owner@" show -p LoadState --value rosy-test-storage.service 2>/dev/null)" = loaded ] \
+    [ "$(timeout 20 systemctl --user --machine="$owner@" show -p LoadState --value rosy-test-storage.service 2>/dev/null)" = loaded ] \
       || refuse "no rosy-test-storage.service" 5
     timeout 20 systemctl --user --machine="$owner@" --no-block start rosy-test-storage.service
     ;;

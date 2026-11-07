@@ -143,7 +143,7 @@ def test_approve_confirm_read_revoke_and_discard_old_source_response(console_url
             pass  # The scheduled read refreshes the visible image.
         expect(page.locator('#measured-read')).to_be_disabled()
         assert state['pending_frames']
-        page.get_by_role('tab', name='호스트 서비스').click()
+        page.get_by_role('tab', name='장치 정보').click()
         state['hold_frame'] = False
         for pending, headers in state['pending_frames']:
             pending.fulfill(status=200, content_type='image/jpeg', headers=headers, body=image.getvalue())
