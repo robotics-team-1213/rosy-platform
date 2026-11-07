@@ -4708,7 +4708,7 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - gate 변화: 없음 — 기체 수용 전이다.
 - CE: 해당 없음 — 새 기능이며 해결한 장애가 없다.
 
-## 2026-11-07 — D-992 활성화 배선
+## 2026-11-07 · uncommitted · feat(account): D-992 활성화 배선
 
 - 변경: Fleet compose가 `ROSY_ACCOUNT_LINK_CONFIG`를 넘기고, SD 프로비저닝 묶음 `fleet.account_trust`(`prepare-rosy-sd.ps1 -AccountTrustFile`)가 첫 부팅에 CORE `auth.account_trust`로 들어간다. 재이미징은 영수증 값을 유지한다.
 - 증거: 원격 시험 `test/test_sd_personalization.py`·`test/test_first_boot_provisioning.py`·`test/test_site_account_deploy.py`.
