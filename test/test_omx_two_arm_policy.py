@@ -31,7 +31,7 @@ def test_every_plan_step_gets_its_own_goal():
 
 def test_a_container_turned_half_way_round_is_the_same_goal():
     layout = sites.Layout()
-    step = dict(arm="arm_a", to="tmp-a-1", **{"from": "belt"})
+    step = dict(id="a1", arm="arm_a", to="tmp-a-1", **{"from": "belt"})
     site = layout.sites["tmp-a-1"]
     before = policy.goal_vector(layout, step, {})
     layout.sites["tmp-a-1"] = dict(site, yaw=site["yaw"] + math.pi)
