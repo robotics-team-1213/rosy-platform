@@ -16,6 +16,13 @@ _SCHEMA = """CREATE TABLE IF NOT EXISTS fleet_trip_proposals (
 _OBJECT_REF = "ALTER TABLE fleet_trip_proposals ADD COLUMN object_ref TEXT"
 
 
+def request_body(candidates: list, steps: list, object_ref: str | None) -> dict:
+    """What ``request_digest`` hashes (with ``_json``): object_ref only when it is set, so a proposal without one
+    keeps the digest it always had and a replay with another object_ref under the same key is a conflict."""
+    body = {"candidates": candidates, "steps": steps}
+    return body if object_ref is None else {**body, "object_ref": object_ref}
+
+
 def proposal_document(row, body: dict) -> dict:
     """What ``proposal_digest`` hashes; the admission transaction (job_trip_rows) recomputes it from the same row."""
     document = {"proposal_id": row["proposal_id"], "principal_id": row["principal_id"],
@@ -40,7 +47,7 @@ class TripProposalStore:
         if not isinstance(body, dict) or set(body) != {"candidates", "steps"}:
             raise ValueError("trip proposal body is invalid")
         document = proposal_document(row, body)
-        if sha256(_json(body).encode()).hexdigest() != row["request_digest"]:
+        if sha256(_json(request_body(body["candidates"], body["steps"], row["object_ref"])).encode()).hexdigest()                 != row["request_digest"]:
             raise ValueError("trip proposal does not match its digest")
         if row["status"] == "ADMITTED":
             job = connection.execute("SELECT * FROM fleet_cell_jobs WHERE mission_id=?",
@@ -72,8 +79,8 @@ class TripProposalStore:
 
     def create(self, principal_id: str, request_key: str, candidates: list, steps: list,
                object_ref: str | None = None) -> dict:
-        body = {"candidates": candidates, "steps": steps}  # same bytes the candidate path digests
-        digest = sha256(_json(body).encode()).hexdigest()
+        body = {"candidates": candidates, "steps": steps}
+        digest = sha256(_json(request_body(candidates, steps, object_ref)).encode()).hexdigest()  # = candidate path
         with closing(self.store._connect()) as connection:
             connection.execute("BEGIN IMMEDIATE")
             prior = connection.execute("SELECT * FROM fleet_trip_proposals WHERE principal_id=? AND request_key=?",
@@ -85,7 +92,7 @@ class TripProposalStore:
                                     object_ref))
                 prior = connection.execute("SELECT * FROM fleet_trip_proposals WHERE principal_id=? AND request_key=?",
                                            (principal_id, request_key)).fetchone()
-            elif prior["request_digest"] != digest or prior["object_ref"] != object_ref:
+            elif prior["request_digest"] != digest:
                 raise MissionConflict("trip proposal key was reused with a different request")
             view = self._view(prior, connection)
             connection.commit()

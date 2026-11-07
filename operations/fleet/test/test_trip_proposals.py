@@ -19,7 +19,7 @@ from fleet.server.task_store import FleetTaskStore
 from fleet.swarm.robots import RobotEndpoint
 from test_job_trip_steps import Rig, R, TWO
 from fleet.server.trip_candidates import create_candidate_trip_job
-from fleet.server.trip_proposals import TripProposalStore
+from fleet.server.trip_proposals import TripProposalStore, request_body
 
 ROBOT = "rosy_01"
 PATH = "/api/fleet/trip-proposals"
@@ -49,7 +49,7 @@ def rig(tmp_path, monkeypatch):
 
     async def fake_create(jobs, candidates, steps, principal_id, request_key, **kwargs):
         made.append((candidates, steps, principal_id, request_key, kwargs))
-        digest = sha256(_json({"candidates": candidates, "steps": steps}).encode()).hexdigest()
+        digest = sha256(_json(request_body(candidates, steps, kwargs.get("object_ref"))).encode()).hexdigest()
         return await asyncio.to_thread(
             jobs.rows.create, "mission-1", candidates[0], principal_id, steps,
             request_key="trip-pool:" + request_key, request_digest=digest, approved_by=kwargs["approved_by"],
@@ -201,8 +201,10 @@ def test_object_ref_is_carried_opaquely_bound_by_the_digest_and_survives_admissi
     assert propose(rig, request_key="harbor/cargo").status_code == 409
     for bad in (" CNTR", "x" * 129, "a\u0001b", ""):
         assert propose(rig, request_key="harbor/bad", object_ref=bad).status_code == 422
-    same_body = propose(rig, request_key="harbor/cargo-b", object_ref="CNTR-0003").json()["proposal"]
-    assert same_body["request_digest"] == plain["request_digest"]  # the trip job's body digest is unchanged
+    # request_digest: sha256 of compact sorted-key JSON; object_ref joins it only when set (Harbor recomputes this)
+    canonical = '{"candidates":["rosy_01"],"object_ref":"CNTR-0001","steps":[{"to":"B","via":[]}]}'
+    assert proposal["request_digest"] == sha256(canonical.encode()).hexdigest()
+    assert plain["request_digest"] == sha256(b'{"candidates":["rosy_01"],"steps":[{"to":"B","via":[]}]}').hexdigest()
     admitted = client.post(PATH + "/" + proposal["proposal_id"] + "/admit", headers=headers("op1"),
                            json=args(rig, proposal))
     assert admitted.status_code == 200

@@ -30,7 +30,7 @@
    - 선언 대조: 읽은 번호를 태그 표로 바꾼 값이 이송에 선언된 `object_ref`와 다르면 `MISMATCH`로 HOLD한다.
    - 1칸 컨테이너는 지붕 12 mm, 2·3칸은 20 mm, 옆면 마커는 집게가 덮지 않는 면에 붙인다.
 5. **S load는 Fleet `ARM_TRANSFER` 작업이다 (D5).**
-   - `POST /api/fleet/trip-proposals`에 선택 필드 `object_ref`(≤128)를 더한다. ROSY는 해석하지 않는다(D-908의 "화물 ID 없음"을 이 불투명 참조 하나만 예외로 고친다).
+   - `POST /api/fleet/trip-proposals`에 선택 필드 `object_ref`(≤128)를 더한다. ROSY는 해석하지 않는다(D-908의 "화물 ID 없음"을 이 불투명 참조 하나만 예외로 고친다). 값이 있을 때만 `request_digest`(정렬 키·공백 없는 JSON의 sha256)에 `object_ref` 키로 들어간다. 그래서 값 없는 제안의 digest는 그대로이고, 같은 키로 다른 값을 보내면 충돌이다.
    - 이 필드가 있는 이송이 공급 장소에서 `GOAL_CONFIRMED`가 되면 Fleet이 S의 `ARM_TRANSFER`(Pinky → 컨베이어)를 스스로 **제안**한다. 제안자는 Fleet 내부 서비스 principal(`fleet-intake`)이고 요청 키는 이송 mission에서 만든다(재시작해도 하나).
    - ARM 요청의 `object_ref`는 설치 정책의 물체 프로필 그대로다. owner grant·receipt·증거가 그 값에 묶여 있기 때문이다. 이송의 `object_ref`는 같은 트랜잭션에서 `fleet_intake_bindings`(ARM mission → 선언값)에 붙어 따라가고, 항만 사건 생산자만 읽는다.
    - 실행은 기존대로 기명 승인(D-977)·인계 확인·D-911 가드를 거친다. 이 ADR은 승인·가드를 줄이지 않는다.

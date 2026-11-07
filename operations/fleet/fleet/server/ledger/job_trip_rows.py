@@ -17,7 +17,7 @@ from fleet.server.cell_job_store import CANCELLED_REASON, CellJobStore
 from fleet.server.dispatch_admission import release as release_claims, reserve as reserve_claims
 from fleet.server.mission_store import MissionConflict, _json, _now
 from fleet.server.trip_ports import TripError
-from fleet.server.trip_proposals import proposal_document
+from fleet.server.trip_proposals import proposal_document, request_body
 
 KIND = "TRIP"
 ACTIVE = ("READY", "RUNNING", "ACTION_SUCCEEDED")
@@ -114,7 +114,8 @@ class TripJobRows:
                     raise MissionConflict("trip proposal does not match this admission")
                 proposed = json.loads(proposal["body_json"])
                 document = proposal_document(proposal, proposed)
-                if (hashlib.sha256(_json(proposed).encode()).hexdigest() != proposal["request_digest"]
+                digested = request_body(proposed["candidates"], proposed["steps"], proposal["object_ref"])
+                if (hashlib.sha256(_json(digested).encode()).hexdigest() != proposal["request_digest"]
                         or hashlib.sha256(_json(document).encode()).hexdigest() != expected_proposal_digest
                         or robot_id not in proposed["candidates"] or steps != proposed["steps"]):
                     raise MissionConflict("trip proposal content changed")
