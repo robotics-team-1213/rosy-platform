@@ -560,7 +560,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         install_tracking_routes(app, tracking=tracking, require_operator=require_operator,
                                 read_guard=read_guard, operator_guard=operator_guard,
                                 require_named_operator=require_named_operator,
-                                map_revision=partial(active_map_revision, site_maps))
+                                map_revision=partial(active_map_revision, site_maps), map_pose=map_pose)
         from fleet.server.start_points import StartPointService
         from fleet.server.start_point_routes import install_start_point_routes
         install_start_point_routes(app, service=StartPointService(sources=tracking.sources,

@@ -88,8 +88,9 @@ def test_a_camera_track_that_is_lost_stops_the_report():
     end = walk(tracker, PATH)
     tracker.observe(end + 1, track(0, 0, state="UNKNOWN"), robot(0, 0), {})
     assert tracker.view(end + 2)["state"] == ALIGNED
-    view = tracker.view(end + 30)
-    assert (view["state"], view["reason"], view["transform"]) == (UNKNOWN, "STALE", None)
+    assert tracker.view(end + 30)["state"] == ALIGNED  # the camera session is over; two maps do not move
+    view = tracker.view(end + 901)
+    assert (view["state"], view["reason"], view["transform"]) == (UNKNOWN, "EXPIRED", None)
 
 
 def test_an_identity_swap_degrades_and_is_never_corrected():

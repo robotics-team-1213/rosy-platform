@@ -15,19 +15,22 @@ no continuation for ``track_lost_s`` (lost, occluded, merged), another detection
 or ``identity_ttl_s`` since confirmation.
 
 Use (addendum 3): ``confirmed_track_pose`` is a D-511 lane-compliance *input* and a console
-display. It is never a MapPoseService arbitrated pose, a trip input, an initialpose or a
-command (test_boundaries.py). Nothing here moves a robot.
+display. It is never directly a MapPoseService arbitrated pose, a trip input, an initialpose or a
+command (test_boundaries.py); D-989 fits a transform from it, for robots opted in. Nothing here moves a robot.
 """
 
 from __future__ import annotations
 
 import asyncio
+import logging
 import math
 import time
 from dataclasses import dataclass, field
 from typing import Any, Callable, Mapping, Optional
 
 from fleet.server.identity_triggers import AutoTriggers, caution
+
+logger = logging.getLogger("fleet.identity")
 
 LAMP_IDENTIFY_COLORS = ("blue", "amber")  # CORE LampIdentifyRequest.color values (D-472 4)
 
@@ -216,7 +219,10 @@ class IdentityService:
         await self.poll_lamps()
         if self.tracking is not None and self.tracking.auto_locate is not None:
             try:
+                try:
                 await self.tracking.auto_locate.tick()  # D-989: this loop is its clock
+            except Exception:  # never this loop's blink; an unfed anchor ages out at max_anchor_age_s
+                logger.exception("auto locate tick failed")
             except Exception:  # observation only: it must not stop lamp polling or the automatic requests
                 pass
         if not self.config.auto_request or self.tracking is None:

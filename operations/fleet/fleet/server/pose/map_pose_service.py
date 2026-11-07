@@ -117,6 +117,26 @@ class MapPoseService:
         if tracker is not None:
             tracker.add_sighting(sighting, self._wall(), self.active_map_id())
 
+    def auto_locate_enabled(self, robot_id: str) -> bool:
+        return robot_id in self.config.auto_locate_robots
+
+    def observe_auto_locate(self, robot_id: str, sample, reason: Optional[str] = None) -> Optional[str]:
+        """D-989: a site pose (x, y, yaw, at, map_id) for an enabled robot, or None to end its anchor.
+
+        Returns why the pose was not taken. The caller holds the transform; no identity is read here."""
+        tracker = self._tracker(robot_id) if self.auto_locate_enabled(robot_id) else None
+        if tracker is None:
+            return "DISABLED"
+        if sample is None:
+            tracker.drop_auto_locate()
+            return reason
+        return tracker.add_auto_locate(sample[:3], sample[3], self._wall(), sample[4], self.active_map_id())
+
+    def allow_auto_locate(self, robot_id: str) -> None:
+        tracker = self._tracker(robot_id) if self.auto_locate_enabled(robot_id) else None
+        if tracker is not None:
+            tracker.allow_auto_locate()
+
     def observe_state(self, robot_id: str, state: Optional[Mapping]) -> None:
         try:
             self._observe_state(robot_id, state)

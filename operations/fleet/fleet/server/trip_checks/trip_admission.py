@@ -15,7 +15,7 @@ from types import SimpleNamespace
 from core_common.protocol.line_authority import MAX_TTL_S as AUTHORITY_MAX_TTL_S
 from core_common.robot_body import nominal_body_for
 from fleet.routing.trip import ARRIVED_M
-from rosy.world.state.projections.map_pose import OPERATOR_PIN
+from rosy.world.state.projections.map_pose import AUTO_LOCATE, OPERATOR_PIN
 from fleet.routing.cost import wrap
 from fleet.routing.execute import arc_id, unsupported
 from fleet.server.trip_ports import MapPose, TripError
@@ -352,7 +352,9 @@ class TripAdmission:
         for _ in range(math.ceil(ALIGN_SIGHTING_S / self.config.period_s)):
             pose = await self.map_pose(robot_id)
             age = getattr(pose, "anchor_age_s", None)
-            if age is not None and self._clock() - age > done_at:
+            # D-989: the robot's own pose is not the independent sighting this wait is for
+            if (age is not None and getattr(pose, "anchor_source", None) != AUTO_LOCATE
+                    and self._clock() - age > done_at):
                 return {"delta_deg": delta_deg, "final_err_deg": status.get("final_err_deg")}
             await asyncio.sleep(self.config.period_s)
         raise TripError(422, "TRIP_POSE_UNTRUSTED", {"after_align": True, "delta_deg": delta_deg})

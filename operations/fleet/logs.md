@@ -5339,3 +5339,8 @@
 - 증거: 합성 입력 시험뿐이다. 실물·현장 수용 없음.
 - gate 변화: SOURCE. DEVICE/FIELD 수용 근거로 쓰지 않는다.
 - 결정: D-989 Proposed. 교훈: CE 미해결 — 실물 시험 전이다.
+
+## 2026-11-07 · uncommitted · feat(fleet): 자동 위치를 로봇별로 켜면 trip 앵커로 쓴다 (D-989 7항)
+- 변경: `fleet.map_pose.auto_locate_robots`(기본 빈 목록), `MapPoseTracker.add_auto_locate`/`drop_auto_locate`, 독립 근거 소비자 차단. 사용자 결정 "code it so auto-locate is used for driving too, and make it switchable on and off".
+- 증거: 합성 시험뿐. 정확도는 실물 전까지 재지 않았다.
+- gate 변화: SOURCE. 교훈: CE 미해결 — 실물 시험 전이다.

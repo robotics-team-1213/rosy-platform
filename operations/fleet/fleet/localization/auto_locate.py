@@ -12,7 +12,9 @@ A later sample that disagrees over MAX_DISAGREE_M / MAX_DISAGREE_DEG (the map po
 latches DEGRADED until the camera, either map or the session changes. Nothing is ever corrected
 silently: a swapped identity or a moved camera ends the fit. Missing or stale input reads UNKNOWN.
 
-Observation only: nothing here moves a robot, feeds map pose or trips, or changes a limit.
+The transform relates two fixed maps, so it outlives the camera session: ALIGNED lasts VALID_S after
+the last camera sample. Nothing here moves a robot or changes a limit. ``anchor_sample`` offers it to
+map pose, which takes it only for a robot in ``fleet.map_pose.auto_locate_robots`` (D-989).
 """
 
 from __future__ import annotations
@@ -21,6 +23,8 @@ import math
 from collections import deque
 from dataclasses import dataclass
 from typing import Mapping, Optional, Sequence
+
+from rosy.world.state.projections.map_pose import odom_from_snapshot
 
 from fleet.localization import cues, service_logic, trust
 
@@ -35,8 +39,8 @@ MIN_STEP_M = 0.05
 MAX_PAIRS = 32
 #: Camera track older than this is not paired with the robot's current pose.
 PAIR_FRESH_S = 0.5
-#: No usable sample for this long: the transform is no longer reported.
-FRESH_S = 10.0
+#: After the last camera sample the transform is no longer reported. Provisional: map drift is unmeasured.
+VALID_S = 900.0
 #: A peer's lidar return is on its near side, so its range reads short of the camera's centre distance.
 PEER_RANGE_TOL_M = 0.12
 #: Closer than this, camera error alone swings the bearing past the disagreement limit.
@@ -217,6 +221,7 @@ class AlignmentTracker:
         base = {"robot_id": self.robot_id, "use": "observation-only", "state": UNKNOWN, "reason": self._reason,
                 "robot_map_id": None, "site_map_id": None, "calibration_revision": None, "transform": None,
                 "evidence": None, "residual_max_m": None, "span_m": None, "pairs": len(self._pairs),
+                "valid_left_s": None,
                 "age_s": None if self._seen_at is None else round(now - self._seen_at, 3)}
         if self._key is not None:
             base.update(robot_map_id=self._key[0], site_map_id=self._key[1], calibration_revision=self._key[2])
@@ -224,9 +229,34 @@ class AlignmentTracker:
             return base | {"state": DEGRADED, "reason": self._degraded}
         if self._fit is None:
             return base
-        if self._seen_at is None or not 0.0 <= now - self._seen_at <= FRESH_S:
-            return base | {"reason": "STALE"}
+        if self._seen_at is None or not 0.0 <= now - self._seen_at <= VALID_S:
+            return base | {"reason": "EXPIRED"}
         fit = self._fit
         return base | {"state": ALIGNED, "reason": None, "evidence": fit.evidence,
                        "transform": {"yaw": round(fit.yaw, 4), "tx": round(fit.tx, 4), "ty": round(fit.ty, 4)},
-                       "residual_max_m": round(fit.residual_max_m, 4), "span_m": round(fit.span_m, 3)}
+                       "residual_max_m": round(fit.residual_max_m, 4), "span_m": round(fit.span_m, 3),
+                       "valid_left_s": round(VALID_S - (now - self._seen_at), 1)}
+
+    @property
+    def source_id(self) -> Optional[str]:
+        return None if self._key is None else self._key[3]
+
+    def anchor_sample(self, now: float, state: Optional[Mapping],
+                      revision: Optional[str]) -> tuple[Optional[tuple], Optional[str]]:
+        """((x, y, yaw, at, site_map_id), None) from this robot state, or (None, why not)."""
+        view = self.view(now)
+        if view["state"] != ALIGNED:
+            return None, view["reason"]
+        if revision != view["calibration_revision"]:
+            return None, "CALIBRATION_CHANGED"
+        status, pose = trust.status_of(state), _robot_pose(state)
+        if status is None or pose is None or status.state.value != "LOCALIZED" or status.pose_frame.value != "map":
+            return None, "ROBOT_NOT_LOCALIZED"
+        if (state or {}).get("map_id") != view["robot_map_id"]:
+            return None, "ROBOT_MAP_CHANGED"
+        odom = odom_from_snapshot(state)
+        if odom is None:
+            return None, "ODOM_UNKNOWN"
+        # shortcut: the snapshot's map pose and odom are not read atomically; D-984 fixes that in CORE when it lands.
+        x, y = self._fit.site_xy(*pose[:2])
+        return (x, y, cues.wrap(pose[2] + self._fit.yaw), odom.stamp, view["site_map_id"]), None
