@@ -14514,6 +14514,7 @@ osy-d395-s1d\`.
 - gate 변화: SOURCE 변경. 시뮬·실물·현장 수용 없음; 문서가 없으면 동작 동일.
 - 결정: D-982 Proposed, API v1.368 additive.
 - 교훈: CE 해당 없음 — 최종 코드·시험·ADR이 판단을 보존한다.
+
 ## 2026-11-07 · uncommitted · fix(land): FULL 대기가 준비 슬롯을 차지하지 않고 MAIN-RED가 닫힌다
 
 - 변경: FULL 차례를 기다리는 착지는 `full_wait`로 표시돼 준비 슬롯 수에서 빠진다. `land_mainred.py recheck`가 열린 항목을 main에서 하나씩 다시 돌려, 통과했거나 시험 파일이 사라진 항목을 닫는다. 야간 전체 시험은 시작할 때 이를 먼저 돌린다.
@@ -14532,6 +14533,13 @@ osy-d395-s1d\`.
 - 변경: `test_learning_workflow_pipeline_browser.py`에 다른 고정 학습 시험 4개와 같은 `ROSY_RUN_PINNED_LEARNING=1` 조건을 넣었다.
 - 증거: 21:42 FULL 착지가 환경이 없는 시험 PC에 이 시험이 배정돼 멈췄고, main에서도 같은 단언으로 실패해 MAIN-RED가 됐다. 다른 두 시험 PC에는 환경이 있다.
 - gate 변화: 없음. FULL에서 이 여정은 다른 고정 학습 시험처럼 명시 실행이 필요하다. CE: 해당 없음 — 기존 규칙에 맞춘 수정.
+
+## 2026-11-07 · uncommitted · fix(model-pc): GPU 유휴 전원 차단을 끈다
+
+- 변경: 모델 PC에 `72-rosy-gpu-awake.rules`를 더해 GPU의 `power/control`을 `on`으로 둔다(기존 `71-nvidia.rules`는 `auto`).
+- 증거: 11-07 03:35 GPU가 깨어나지 못해 `Xid 79`가 났고 05:00 재부팅 뒤 6시간 돌아오지 못했다. 재부팅 정지와의 인과는 증명되지 않았다. 규칙은 모델 PC에 직접 설치해 `power/control=on`을 확인했다.
+- gate 변화: 없음. 다음 재부팅 뒤 값 유지는 아직 확인 전이다.
+- CE: 미해결 — 멈춘 원인은 가설로 남고 기록은 작업 기록에 있다.
 
 ## 2026-11-08 · uncommitted · test(learning): 학습 브라우저 여정 조건을 되돌린다
 - 변경: 바로 앞 항목에서 `test_learning_workflow_pipeline_browser.py`에 넣은 `ROSY_RUN_PINNED_LEARNING=1` 조건을 뺐다. 시험은 main과 같다.

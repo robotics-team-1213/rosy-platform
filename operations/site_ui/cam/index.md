@@ -35,8 +35,8 @@
 
 ## 최근 기록
 
+- 2026-11-07 · uncommitted · docs(cam): 배터리 보호 값 정정
 - 2026-11-07 · uncommitted · 배터리 40°C 경고와 발열 멈춤 기록
 - 2026-11-07 · uncommitted · Account 세션을 shared/android로 이동
 - 2026-11-06 · uncommitted · 재부팅 뒤 링크 복귀와 무선 디버깅 유지(D-981)
 - 2026-10-31 · uncommitted · 피어 공통 소스로 이동(D-939)
-- 2026-10-29 · 5bd25af46e · LAN 목록의 비활성 사유와 초점

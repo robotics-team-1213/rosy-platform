@@ -5351,6 +5351,7 @@
 - 변경: 활성 지도가 없으면 장소를 적은 규칙 문서를 거절하고, 저장된 문서가 검증에 실패해도 Fleet은 옛 상수로 시작해 오류를 남긴다.
 - 증거: 독립 검토 지적. 회귀 시험을 더했고 원격 결과는 착지 기록을 따른다.
 - gate 변화: SOURCE 회귀. 실제 지도·현장 수용은 별도다. CE: 해당 없음 — 시험이 판단을 보존한다.
+
 ## 2026-11-07 · uncommitted · fix(fleet): 운행 시작 배터리 확인 · 충전 칸 점유 유지
 - 변경: `TripRunner.start`가 `power_health.battery`가 fresh(표본 나이+캐시 나이 ≤ stale_after_s, 캐시 ≤ 5 s)이고 percent가 읽히며 level이 ok/warning일 때만 통과한다. 아니면 422 `TRIP_BATTERY_UNCONFIRMED`(근거 원천이 없어도 닫힘, 우회 기본값 없음). 충전 복귀 시작만 critical을 허용한다. `ChargeBays`는 오프라인·자세 상실·목록에서 사라진 로봇의 방문을 지우지 않고 칸을 `unknown`으로 보이며, 칸 밖에서 신뢰 자세로 보일 때만 방문을 끝낸다. 보이지 않던 시간은 충전 시간에서 뺀다.
 - 증거: 시험 먼저 RED(`test_trip_battery` import 실패, `test_charge_bays` 2 failed) 후 구현. 시험 fixture 14곳은 신선한 배터리를 명시 주입한다(`fakes.fresh_battery`). 결과는 원격 실행 기록 참조.
@@ -5377,3 +5378,24 @@
 - 변경: 가정 상태에서 칸에 서 있지 않은 온라인 로봇에 칸 밖 위치를 준다. main의 점유 불명 규칙(위치 모르는 로봇이 있으면 `bay_unknown`)이 모든 판정을 대기로 바꾸던 것을 막고, 화면 사유 문구를 더했다.
 - 증거: main 병합 뒤 원격 시험에서 판정 시험 3건이 대기로 실패했다.
 - gate 변화: SOURCE 회귀. 현장 수용은 별도다. CE: 해당 없음.
+
+## 2026-11-07 · uncommitted · 로그인 복귀가 설치·보정 하위 화면을 유지
+- 변경: fleet_return_allowed가 설치 문서의 알려진 다섯 화면 조각을 허용한다. 그 밖의 조각은 그대로 거절한다.
+- 증거: test_account_receiver.py 허용·거절 두 경우를 더했다. 원격 결과는 착지 기록을 따른다.
+- gate 변화: SOURCE 회귀. 현장 수용은 별도다.
+
+## 2026-11-07 · uncommitted · 로그인 콜백 실패가 JSON 막다른 길이 아니다
+- 변경: 흐름이 만료되거나 Account가 끊겨 콜백이 실패하면 브라우저는 /console로 돌아간다. API 호출은 그대로 401·503이고 어느 쪽도 세션을 만들지 않는다.
+- 증거: 실제 Account와 Fleet을 두 출처로 띄운 왕복에서 두 탭 로그인과 교환 중 장애가 JSON 화면에서 멈추는 것을 재현했다.
+- gate 변화: SOURCE 회귀. 현장 수용은 별도다.
+
+## 2026-11-07 · uncommitted · feat(fleet): LED·카메라·LiDAR 자동 위치 찾기 (D-989)
+- 변경: `localization/auto_locate.py`(순수 적합), `pose/auto_locate_service.py`(120초 세션), `GET`·`POST /api/fleet/auto-locate`, config `stream_wanted`. 관찰 전용. API v1.369.
+- 증거: 합성 입력 시험뿐이다. 실물·현장 수용 없음.
+- gate 변화: SOURCE. DEVICE/FIELD 수용 근거로 쓰지 않는다.
+- 결정: D-989 Proposed. 교훈: CE 미해결 — 실물 시험 전이다.
+
+## 2026-11-07 · uncommitted · feat(fleet): 자동 위치를 로봇별로 켜면 trip 앵커로 쓴다 (D-989 7항)
+- 변경: `fleet.map_pose.auto_locate_robots`(기본 빈 목록), `MapPoseTracker.add_auto_locate`/`drop_auto_locate`, 독립 근거 소비자 차단. 사용자 결정 "code it so auto-locate is used for driving too, and make it switchable on and off".
+- 증거: 합성 시험뿐. 정확도는 실물 전까지 재지 않았다.
+- gate 변화: SOURCE. 교훈: CE 미해결 — 실물 시험 전이다.
