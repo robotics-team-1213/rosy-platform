@@ -149,6 +149,13 @@ class Planner:
             return [list(frame)] * n
         return [frame[:5] + [round(grip_from + (grip_to - grip_from) * k / n, 3)] for k in range(1, n + 1)]
 
+    def guard_pace(self, name):
+        """A fraction of the guard's pace from the plan file; above 1 would stream past what the guard allows."""
+        fraction = self.plan.get(name, 0.85)
+        if not 0 < fraction <= 1:
+            raise ValueError(f"{name} must be above 0 and at most 1, got {fraction}")
+        return fraction * GUARD_UNITS_PER_S
+
     def site(self, name, target, grip_in, grip_out, q5):
         """above (one frame, reached by goto) -> descend -> close/open -> lift."""
         p = self.plan
@@ -168,9 +175,11 @@ class Planner:
         # GUARD_UNITS_PER_S, so each chunk is slowed to that from where the previous one ended.
         # the vertical lines ease out of and into rest (the same IK path, a trapezoid speed); the jaws'
         # close/open keeps its own pace
-        down = [[round(v, 3) for v in f] for f in retime(down, self.fps, 0.85 * GUARD_UNITS_PER_S, start=pre)]
+        # `descend_guard_frac`: this retime, not descend_m_s, sets a descent's pace; the fastest joint tracks with lag at the cap
+        down = [[round(v, 3) for v in f] for f in retime(down, self.fps, self.guard_pace("descend_guard_frac"), start=pre)]
         act = [[round(v, 3) for v in f] for f in slow(act, self.fps, start=down[-1])]
-        up = [[round(v, 3) for v in f] for f in retime(up, self.fps, 0.85 * GUARD_UNITS_PER_S, start=act[-1])]
+        # `lift_guard_frac`: at 0.85 the wrist_flex fell 2.1 and 2.2 behind on the first cm of two held lifts (2026-11-07), at the strain limit
+        up = [[round(v, 3) for v in f] for f in retime(up, self.fps, self.guard_pace("lift_guard_frac"), start=act[-1])]
         return {f"above_{name}": [pre], f"descend_{name}": down, f"{verb}_{name}": act, f"lift_{name}": up}, q5
 
     def library(self):

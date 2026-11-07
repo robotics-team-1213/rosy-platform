@@ -24,15 +24,15 @@ def digest(value) -> str:
 
 
 def _code_digest() -> str:
-    from omx_adapter import chunk_library, motion_profile
+    from omx_adapter import chunk_library, coordination, motion_profile
 
     root = Path(__file__).resolve().parent
     files = {name: root / name for name in (
         "cell_envelope.py", "cell_robot_profile.py", "cell_params.py", "cell_pipeline.py", "cell_pipeline_io.py", "cell_attempts.py",
         "cell_auto_pick.py", "cell_transfer.py", "cell_hooks.py", "cell_scene_guard.py", "cell_jaw_axis.py",
-        "cell_pivot.py", "cell_calibrate.py",
+        "cell_pivot.py", "cell_calibrate.py", "cell_finger_room.py", "cell_two_arm.py", "cell_coordinate.py",
         "guarded_native.py", "chunk_runner.py", "grasp_planner.py", "motion_profile.py", "teach_trajectory.py")}
-    files.update({module.__name__: Path(module.__file__) for module in (chunk_library, motion_profile)})
+    files.update({module.__name__: Path(module.__file__) for module in (chunk_library, coordination, motion_profile)})
     return digest({name: hashlib.sha256(path.read_bytes().replace(b"\r\n", b"\n")).hexdigest()
                    for name, path in files.items()})
 

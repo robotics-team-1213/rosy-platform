@@ -12,6 +12,7 @@
 |---|---|---|
 | D-990 | Monitoring 화면의 Rosy Account 로그인. [전문](../adr/D-990-monitoring-account-receiver.md) | Accepted (2026-11-07, 사용자 지시; Account client 등록·배포·현장 수용 별도) |
 | D-992 | 장비 등록과 Rosy Account 연동. [전문](../adr/D-992-device-enrollment-account-link.md) | Accepted (2026-11-07, 사용자 지시; 현장 활성화·실물 수용 별도) |
+| D-983 | 두 팔의 동시 동작은 고정 경로의 타이밍을 계산해 D-780 barrier로 맞춘다. [전문](../adr/D-983-two-arm-timing-on-fixed-paths.md) | Proposed (2026-11-06, 사용자 지시; 계산 코어와 오프라인 평가만 구현, 실물·시뮬레이션 동시 동작 수용 아님) |
 | D-987 | 공통 서비스의 정의와 카탈로그. [전문](../adr/D-987-common-services-catalog.md) | Accepted (2026-11-07, 사용자 지시; 서비스 배포·현장 수용 별도) |
 | D-973 | 검수 작업공간의 명시적 관리자 클래스 개정. [전문](../adr/D-973-explicit-managed-review-class-revisions.md) | Accepted (2026-11-03, 사용자 요청; 실제 클래스 변경·재검수 수용 별도) |
 | D-977 | `device_trial`에서 승인된 ARM 이송(`arm-transfers`)을 단일 팔 하달로 잇는다 — 설계 초안(기명 현장 운영자 확인은 `operator_attested`로 구분) | 부분 Accepted(Fleet 쪽 개방), owner 목표 수락은 Proposed |
