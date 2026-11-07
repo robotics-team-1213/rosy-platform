@@ -13,7 +13,7 @@ Rosy Fleet은 **현장 운영**, Rosy Robot은 **한 대 관리**, Rosy Pilot은
 | 학습 센터 화면 | Rosy Learning, `learning/curation/perception/review_app_web` | 5단계 메뉴(홈·자료·정답·학습·평가·승격): 정답 달기·확인, 학습 실행 요청, 평가 결과, 승격 요청(D-857) | 학습·평가 실행은 각 pipeline owner, 승격 승인·배포·모델 활성화는 Fleet·사람·배포 owner |
 | 표시 전용 | Face, `middleware/robot_ui/face` | 이름·표정·부팅·연결 상태 | 입력·운동 명령 없음 |
 | 관측 서비스 | Rosy Vision, `operations/overhead` | 프레임 수신·관측 생성·허가된 preview | 명령·현장 원장은 Fleet/장치 owner |
-| 공통 신원 | Rosy Account, 기존 Fleet auth 배포 | 사람 신원·권한·세션·회수 | 장치 admission·조종 좌석·업무 승인과 구분 |
+| 공통 신원 | Rosy Account, `operations/account` (D-962) | 사람 신원·권한·세션·회수 | 장치 admission·조종 좌석·업무 승인과 구분 |
 | 업무 도구 | Games 보드, `operations/apps/games` | 경기 상태와 경기별 입력 | 사이트 Mission과 최종 장치 명령은 별도 owner |
 | 개발 도구 | control diagnostic / lane live view | 현재 PARKED 진단 / 시뮬 관측 | 제품 운용 진입으로 확대하지 않음 |
 | 공유 기반 | `shared/web` | 디자인·컨트롤·통신 도구 | 사용자 업무·전역 인증 상태를 소유하지 않음 |
@@ -35,7 +35,7 @@ Fleet 내부 id·아이콘·URL의 `console`은 호환 식별자다. 표시 이�
 | 현장 정지 / Fleet, 개별 정지 / Robot·Pilot | Fleet stop owner 및 `middleware/core/api/core_api_web/api/v1/safety.py` | Fleet 요청 결과와 로컬 안전 래치 / 각 장치 owner | 요청 접수·장치 래치·물리 정지를 별도로 표시. 취소와 e-stop을 합치지 않음 |
 | 카메라 송신 / Cam | Cam Android, `operations/overhead/rosy_vision` ingest | 프레임·관측 생산자 / 장치 명령 없음 | 송신·수신 상태. 현장 등록과 관측 신선도·보정은 별도 확인 |
 | 검수·승인·export / Learning | `learning/curation/perception/review_app.py`와 검수 handlers | 검수 state/SQLite·exports / 로봇 실행 없음 | 저장 revision·승인·export receipt. 데이터셋 수용·학습 실행·모델 활성화 증거로 대체하지 않음 |
-| 사용자·권한 관리 / Fleet 계정 | `operations/fleet/fleet/server/auth` | Account 원장·회수 revision / 장치 admission과 분리 | 현재 서버 권한·세션 결과. 각 앱은 대상별 권한을 다시 검사 |
+| 사용자·권한 관리 / Fleet 계정 화면 | `operations/account/rosy_account`, 화면 `applications/fleet/web/shared` | Account 원장·회수 revision / 장치 admission과 분리 | 현재 서버 권한·세션 결과. 각 앱은 대상별 권한을 다시 검사 |
 
 Fleet → Robot/Pilot은 등록된 장치 식별자에 결속된 주소만 사용한다. 발견된 주소, 로봇 표시 이름이나 포트 추정만으로 목적지를 만들지 않는다. 앱 전환에 토큰을 URL로 전달하지 않으며, 접근 자격은 기존 Account 흐름으로 처리한다. 승인된 주소라도 현재 닿는다는 보장은 아니므로 연결·권한 상태는 대상 앱에서 확인한다.
 
