@@ -132,7 +132,7 @@ def test_only_a_person_logged_in_with_an_account_answers_at_the_robot_and_it_mov
     _as_account(client)
     try:
         assert client.get(URL).json()["can_answer"] is True
-        assert client.post(f"{URL}/{ID_A}/answer", json={"answer": "start"}).status_code == 422
+        assert client.post(f"{URL}/{ID_A}/answer", json={"answer": "start"}).status_code == 400   # CORE maps a bad body to 400
         assert client.post(f"{URL}/{ID_B}/answer", json={"answer": "done"}).status_code == 409
         said = client.post(f"{URL}/{ID_A}/answer", json={"answer": "cannot"}).json()
         client.post(f"{URL}/{ID_A}/answer", json={"answer": "done"})   # the first answer stands
