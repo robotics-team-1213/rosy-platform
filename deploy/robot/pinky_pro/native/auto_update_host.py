@@ -68,6 +68,8 @@ MAX_STATUS_INPUTS_BYTES = 16 * 1024
 # CORE missed two writes; 12 s between samples always spans a new write.
 STATUS_INPUTS_FRESH_S = 25.0
 SAMPLE_GAP_S = 12.0
+# D-985: MANUAL stays set after the last command; this long without one is a label, not an operator.
+MANUAL_QUIET_S = 600.0
 REQUIRED_INPUTS = ("written_at", "robot_mode", "nav_state", "swarm_role", "velocity_linear",
                    "velocity_angular", "battery_percent", "battery_charging", "docking_state",
                    "line_follow_mode", "line_follow_state", "swarm_active", "estop", "activity_kind")

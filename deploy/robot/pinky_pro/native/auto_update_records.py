@@ -13,7 +13,7 @@ import re
 import rosy_claim
 from os_state_layout import StateError, policy_file
 from auto_update_host import (ANGULAR_EPS, API_BASE_URL, APPROVALS, BATTERY_MIN, CLAIM_HOLDER, DEFAULT_REPO,
-    DOCKING_IDLE, FACE_UNIT, _finite, HISTORY_MAX_BYTES, LINE_FOLLOW_IDLE, LINEAR_EPS, MAX_HOLD_HOURS,
+    DOCKING_IDLE, FACE_UNIT, _finite, HISTORY_MAX_BYTES, LINE_FOLLOW_IDLE, LINEAR_EPS, MANUAL_QUIET_S, MAX_HOLD_HOURS,
     MAX_STATUS_INPUTS_BYTES, NAV_IDLE, NOT_NULL_INPUTS, _number, parse_z, PHASES, _read_json, _reason_class, _fsync_parent,
     RELEASE_ID, REPO, REQUIRED_INPUTS, RETIRED_DISPLAY_UNIT, SAMPLE_GAP_S, STATUS_INPUTS,
     STATUS_INPUTS_FRESH_S, _tail, UPDATE_DISPLAY, UpdateError, _write_json, _z)
@@ -325,7 +325,9 @@ class UpdaterRecords:
         problems = []
         if data["swarm_role"] not in (None, "none"):
             problems.append(f"swarm role is {data['swarm_role']}")
-        if data["robot_mode"] != "IDLE":
+        quiet = data.get("manual_quiet_s")  # absent on an older CORE: MANUAL keeps holding
+        left_in_manual = data["robot_mode"] == "MANUAL" and _finite(quiet) and quiet >= MANUAL_QUIET_S
+        if data["robot_mode"] != "IDLE" and not left_in_manual:
             problems.append(f"robot mode is {data['robot_mode']}")
         if data["nav_state"] not in NAV_IDLE:
             problems.append(f"navigation is {data['nav_state']}")

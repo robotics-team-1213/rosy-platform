@@ -53,7 +53,8 @@ def attempt_cause(result: str, pile_moved: bool = False) -> str:
         return "placed"
     cause = next((c for prefix, c in ATTEMPT_CAUSES if result.startswith(prefix)),
                  "no_progress" if result.startswith("stopped: ") and result.endswith(" attempts") else "other")
-    return "scene_moved" if pile_moved and RECOVERY[cause] != ["ask_person"] else cause
+    # a contact's table is spent on this plan; only a pile that moved makes it stale (35 of 110 real attempts, none of them re-planned)
+    return "scene_moved" if pile_moved and (RECOVERY[cause] != ["ask_person"] or cause == "contact") else cause
 
 
 def diagnose(result: str, contact_z: float | None, surface_z: float | None, top_z: float | None,

@@ -327,7 +327,7 @@ class Publisher:
                     if outcome == "committed" and state.get("current_release") == self.release_id:
                         self.log("canary-phase", line, phase=phase)
                         return True, f"canary {name} committed {self.release_id}"
-                    if outcome in ("rolled_back", "refused"):
+                    if outcome in ("rolled_back", "refused", "image_required"):
                         self.log("canary-phase", line, phase=phase)
                         return False, f"canary {name} {outcome} {self.release_id}: {last.get('detail') or '-'}"
                 # "failed" is T2's verdict on a candidate; "error" is transient (network, activator
