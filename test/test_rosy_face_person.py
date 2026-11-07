@@ -62,7 +62,7 @@ def test_a_stop_or_a_missing_core_outranks_the_ask_and_stays_silent(tmp_path):
                                                               robot_mode="EMERGENCY")
     display.step()
     assert display.screen["kind"] == "stopped" and display.screen["person"] is None
-    assert _beeps(gpio) == 1 + 4   # the ready chirp and the e-stop alarm; no call pattern
+    assert _beeps(gpio) == 4   # the e-stop alarm only; no call pattern
     assert ("change", module.BUZZER_CALL_HZ) not in gpio.events
     _face_inputs(tmp_path, age=5.0, person_request=ASK)   # a dead CORE: the hand-over is stale
     clock.now += 20
