@@ -15,7 +15,7 @@ import httpx
 from fastapi import Depends, Header, HTTPException, Query, Request, Response
 from pydantic import ValidationError
 
-from core_common.protocol.port_events import PortEvent, PortEventLedgerPage, PortEventPage
+from core_common.protocol.port_events import IntakeReading, PortEvent, PortEventLedgerPage, PortEventPage
 from .port_event_store import PortEventConflict, PortEventStore
 
 PORT_EVENT_BODY_BYTES = 4096
@@ -91,10 +91,7 @@ def install_port_event_routes(app, observations, task_service, *, authorize, req
             raise HTTPException(503, detail={"code": "PORT_EVENTS_UNAVAILABLE"})
         return store
 
-    @app.post("/api/fleet/workcell-observations/{workcell_id}/port-events", tags=["workcell-observations"])
-    async def ingest(workcell_id: str, request: Request, response: Response,
-                     token: str | None = Header(None, alias="X-Workcell-Observation-Token")):
-        response.headers["Cache-Control"] = "no-store"
+    async def machine_body(workcell_id, request, token):
         if observations is None or not token:
             raise HTTPException(401, detail={"code": "WORKCELL_OBSERVATION_UNAUTHORIZED"})
         try:
@@ -106,6 +103,35 @@ def install_port_event_routes(app, observations, task_service, *, authorize, req
             if len(data) + len(chunk) > PORT_EVENT_BODY_BYTES:
                 raise HTTPException(413, detail={"code": "WORKCELL_OBSERVATION_TOO_LARGE"})
             data.extend(chunk)
+        return data
+
+    @app.post("/api/fleet/workcell-observations/{workcell_id}/intake-readings", tags=["workcell-observations"])
+    async def reading(workcell_id: str, request: Request, response: Response,
+                      token: str | None = Header(None, alias="X-Workcell-Observation-Token")):
+        """D-996 3: a tag id read at the conveyor end or the wrist; this Fleet turns it into port events."""
+        response.headers["Cache-Control"] = "no-store"
+        data = await machine_body(workcell_id, request, token)
+        try:
+            parsed = IntakeReading.model_validate_json(data)
+        except ValidationError:
+            raise HTTPException(422, detail={"code": "INVALID_INTAKE_READING"}) from None
+        intake, arms = getattr(app.state, "intake", None), getattr(app.state, "arm_transfer_job_store", None)
+        if store is None or intake is None or arms is None:
+            raise HTTPException(503, detail={"code": "INTAKE_READINGS_UNAVAILABLE"})
+        from .intake_readings import record
+        try:
+            seqs = await asyncio.to_thread(record, arms, store, intake, workcell_id, parsed)
+        except PortEventConflict:
+            raise HTTPException(409, detail={"code": "INTAKE_READING_CONFLICT"}) from None
+        except (OSError, sqlite3.Error):
+            raise HTTPException(503, detail={"code": "PORT_EVENTS_UNAVAILABLE"}) from None
+        return {"observation_ref": parsed.observation_ref, "seqs": seqs}
+
+    @app.post("/api/fleet/workcell-observations/{workcell_id}/port-events", tags=["workcell-observations"])
+    async def ingest(workcell_id: str, request: Request, response: Response,
+                     token: str | None = Header(None, alias="X-Workcell-Observation-Token")):
+        response.headers["Cache-Control"] = "no-store"
+        data = await machine_body(workcell_id, request, token)
         try:
             event = PortEvent.model_validate_json(data)
         except ValidationError:

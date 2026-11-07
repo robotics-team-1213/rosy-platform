@@ -100,9 +100,13 @@ def release_vehicles(trip_store, arm_store, port_store) -> list[int]:
 
 
 def validate_intake(intake, arm_store) -> None:
-    if not isinstance(intake, dict) or set(intake) != {"supply_place", "instance_id"} or not all(
-            isinstance(value, str) and value for value in intake.values()):
-        raise ValueError("intake needs exactly supply_place and instance_id")
+    names = ("supply_place", "instance_id", "intake_point")
+    if (not isinstance(intake, dict) or set(intake) - {*names, "container_tags"} or not all(
+            isinstance(intake.get(name), str) and intake[name] for name in names)):
+        raise ValueError("intake needs supply_place, instance_id, intake_point and optional container_tags")
+    tags = intake.get("container_tags", {})
+    if not isinstance(tags, dict) or not all(k.isdigit() and isinstance(v, str) and v for k, v in tags.items()):
+        raise ValueError("container_tags maps tag ids to object_refs (the site marker profile's table)")
     if arm_store is None or intake["instance_id"] not in {
             p.instance_id for p in arm_store.installation.policy.participants}:
         raise ValueError("intake instance_id is not an installed ARM transfer participant")
@@ -111,9 +115,12 @@ def validate_intake(intake, arm_store) -> None:
 async def intake_loop(trip_store, arm_store, intake, log, period_s: float = 2.0, port_store=None):
     while True:
         try:
-            await asyncio.to_thread(propose_arrived, trip_store, arm_store, **intake)
+            await asyncio.to_thread(propose_arrived, trip_store, arm_store, supply_place=intake["supply_place"],
+                                    instance_id=intake["instance_id"])
             if port_store is not None:
+                from .intake_readings import stored_due
                 await asyncio.to_thread(release_vehicles, trip_store, arm_store, port_store)
+                await asyncio.to_thread(stored_due, arm_store, port_store, intake)
         except asyncio.CancelledError:
             raise
         except Exception:  # a bad row must not stop later trips; the next pass retries

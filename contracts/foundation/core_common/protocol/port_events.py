@@ -74,3 +74,26 @@ class PortEventLedgerRow(BaseModel):
 class PortEventLedgerPage(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     rows: list[PortEventLedgerRow]
+
+
+class IntakeReading(BaseModel):
+    """D-996 2-3: what a cell PC read at one point. Only the tag id: the cell Fleet maps it to an object_ref and
+    compares it with what the trip declared, so the PC never holds the app's cargo codes."""
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    observation_ref: _Ref
+    point: Literal["conveyor_end", "wrist"]
+    state: Literal["read", "unreadable", "mismatch"]
+    tag: Annotated[int, Field(ge=0, le=999)] | None = None
+    #: wrist only: the A/B ARM_TRANSFER job placing this container; its target is the slot
+    arm_mission_id: ArmPhysicalRef | None = None
+    observed_at: AwareDatetime
+
+    @model_validator(mode="after")
+    def _shape(self):
+        if (self.state == "read") != (self.tag is not None):
+            raise ValueError("a tag is given exactly when the state is read")
+        if self.point == "conveyor_end" and self.arm_mission_id is not None:
+            raise ValueError("a conveyor-end reading names no arm job")
+        if self.observed_at.utcoffset().total_seconds() != 0:
+            raise ValueError("observed_at is UTC")
+        return self

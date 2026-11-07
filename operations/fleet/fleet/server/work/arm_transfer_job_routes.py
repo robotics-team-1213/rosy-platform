@@ -127,6 +127,7 @@ def install_arm_transfer_job_routes(app, *, installation, deployment_profile, ta
     if intake is not None:  # D-996 5: an arrived trip's object_ref becomes the supply arm's proposal
         from .intake_transfer import intake_loop, validate_intake
         validate_intake(intake, store)
+        app.state.intake = intake  # the readings route maps tags with it (port_event_routes)
 
         @app.on_event("startup")
         async def intake_start():

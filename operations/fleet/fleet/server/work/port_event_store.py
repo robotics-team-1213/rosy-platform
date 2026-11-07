@@ -56,6 +56,13 @@ class PortEventStore:
             connection.execute("COMMIT")
             return seq
 
+    def by_observation(self, source: str, observation_ref: str) -> list[int]:
+        """Seqs already recorded for one observation of one source (a reading is translated once)."""
+        with closing(self._connect()) as connection:
+            return [row[0] for row in connection.execute(
+                "SELECT seq FROM fleet_port_events WHERE source=? AND json_extract(event_json, '$.observation_ref')=? "
+                "ORDER BY seq", (source, observation_ref))]
+
     def after(self, seq: int, limit: int) -> list[dict]:
         """[{"seq", "event"}] after ``seq``, oldest first. A seq the ledger never handed out stays a gap to the reader."""
         with closing(self._connect()) as connection:
