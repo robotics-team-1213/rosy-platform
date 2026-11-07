@@ -307,13 +307,15 @@ def test_home_shows_top_level_failure_reason_and_separates_failed_from_rejected(
         return dict(id=name,name=name,kind=kind,path='/result/'+name,version=1,
                     reports=[dict(name='state.json',status='unchanged',declared=declared,steps=[],metrics=[],images=[])])
     payload['items']=[job('stopped',dict(status='failed',error='학습 데이터가 비어 있어 중단했습니다')),
-                      job('refused',dict(outcome='rejected'))]
+                      job('refused',dict(outcome='rejected')),
+                      job('busy',dict(status='running'))]
     page.route('**/api/learning',lambda route:route.fulfill(json=payload))
     page.goto(base+'/learning#learning-results',wait_until='networkidle')
     stopped=page.locator('#jobs [data-job="stopped"]')
     expect(stopped).to_contain_text('학습 데이터가 비어 있어 중단했습니다')
     expect(stopped).to_contain_text('실패 확인')
     expect(page.locator('#jobs [data-job="refused"]')).to_contain_text('거절 확인')
+    expect(page.locator('#jobs [data-job="busy"]')).to_contain_text('끝나기를 기다리세요')
 
 
 def test_home_app_bar_stays_usable_when_learning_is_forbidden(browser_workspace):

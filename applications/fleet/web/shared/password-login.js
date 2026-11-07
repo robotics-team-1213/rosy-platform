@@ -56,9 +56,9 @@ export function createPasswordLogin(host, {onChange = () => {}, standalone = fal
   }
   if (profile) {
     profile.href = '/console/profile?return=' + encodeURIComponent(loginReturn(location.href, location.origin));
-    if (['/console/site-map', '/console/cell'].includes(location.pathname)) {
-      profile.target = '_blank'; profile.rel = 'noopener'; profile.title = '새 탭에서 내 계정 · 편집 내용 보존';
-    }
+    // Account is usually another origin that cannot link back, so this tab stays where it is.
+    profile.target = accounts.target = '_blank'; profile.rel = accounts.rel = 'noopener';
+    profile.title = '새 탭에서 내 계정 · 이 화면은 그대로'; accounts.title = '새 탭에서 계정 관리 · 이 화면은 그대로';
   }
   if (link) link.href = loginHref(location);
   if (link && ['/console/site-map', '/console/cell'].includes(location.pathname)) {

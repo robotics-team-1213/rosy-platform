@@ -22,7 +22,7 @@ import numpy as np
 
 import class_sets, review_return
 from learning_workspace import Workspace, WORKFLOWS
-import review_evidence, review_ingest, review_masks, vlm_mask_feedback, camera_setup_web, omx_web, sim_web, vlm_judge_web
+import review_evidence, review_ingest, review_masks, vlm_mask_feedback, camera_setup_web, omx_web, sim_web, ladder_web, vlm_judge_web
 import review_classes, review_context, review_versions, omx_center_web, review_upload
 import learning_domains, learning_pipeline, promotion_request
 import review_static
@@ -80,7 +80,7 @@ def check_link(url):
     return url
 
 
-def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=None, oauth=None, imports=None, storage=None, storage_jobs=None, ai_jobs=None, repos=None, omx_center=None, sim_runs=None, vlm_eval_url=None, workspace_links=None, owners=None, recordings=None, recording_config=None):
+def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=None, oauth=None, imports=None, storage=None, storage_jobs=None, ai_jobs=None, repos=None, omx_center=None, sim_runs=None, vlm_eval_url=None, workspace_links=None, owners=None, recordings=None, recording_config=None, ladder=None):
     check_bind_host(host)
     if workspace_links is not None:
         workspace_links = check_workspace_links({'schema': WORKSPACE_LINKS_SCHEMA, 'workspaces': workspace_links})
@@ -170,7 +170,7 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                     return
                 if learning_tasks_web.get(self, path, tasks, omx_center, token, learning, native_workflow_cache, sim_runs=sim_runs, owners=owners):
                     return
-                if omx_center_web.get(self, path, omx_center, learning) or camera_setup_web.get(self, path, store.state) or omx_web.get(self, path, learning, omx_center, store.state) or sim_web.get(self, path, sim_runs) or vlm_judge_web.get(self, path, store, token, collaboration):
+                if omx_center_web.get(self, path, omx_center, learning) or camera_setup_web.get(self, path, store.state) or omx_web.get(self, path, learning, omx_center, store.state) or sim_web.get(self, path, sim_runs) or ladder_web.get(self, path, ladder) or vlm_judge_web.get(self, path, store, token, collaboration):
                     return
                 if path == '/api/accounts/options':
                     return self.send({'enabled': False, 'oauth': False})
@@ -295,7 +295,7 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                         omx_reviewed, vlm_counts, task_count = learning_domains.stored(db)
                     domains = learning_domains.domains(
                         pipeline=pipeline, counts=counts, preparation=preparation, items=items,
-                        omx_reviewed=omx_reviewed, sim_runs=sim_status(), vlm_counts=vlm_counts,
+                        omx_reviewed=omx_reviewed, sim_runs=sim_status(), ladder=ladder_web.status(ladder), vlm_counts=vlm_counts,
                         vlm_eval_url=vlm_eval_url, tasks=task_count, pixel_counts=pixel_counts,
                         drafts={'object': object_draft_indices, 'pixel': pixel_candidate_indices})
                     return self.send({'workflows': WORKFLOWS, 'items': items, 'token': token,
@@ -392,7 +392,7 @@ def make_server(store, port=8767, host='127.0.0.1', *, control=None, accounts=No
                     return
                 if camera_setup_web.post(self, path, body, store.state, collaboration):
                     return
-                if sim_web.post(self, path, body, sim_runs, collaboration):
+                if sim_web.post(self, path, body, sim_runs, collaboration) or ladder_web.post(self, path, body, ladder, collaboration):
                     return
                 if vlm_judge_web.post(self, path, body, store, collaboration, Conflict):
                     return
@@ -518,6 +518,7 @@ def main():
     parser.add_argument('--omx-center-config', type=Path, help='private isolated OMX learning root and pinned host learner interpreters')
     parser.add_argument('--recording-config', type=Path, help='private local observer recording sources and exporter configuration')
     parser.add_argument('--sim-config', type=Path, help='private workspace-bound local SIM subprocess configuration')
+    parser.add_argument('--ladder-config', type=Path, help='private OMX ladder root, cell and interpreter paths')
     parser.add_argument('--fleet-owner-config', type=Path, help='private Fleet url, Viewer token file and CA for the read-only robot list')
     parser.add_argument('--vlm-eval-url', help='link from 평가·승격 to a separate VLM evaluation state instance (D-857)')
     parser.add_argument('--workspace-links', type=Path, help='private JSON listing the center\'s other review workspaces (D-857 §2)')
@@ -585,10 +586,11 @@ def main():
     except (OSError, ValueError, KeyError, TypeError) as exc:
         parser.error(f'--fleet-owner-config: {exc}')
     recording_config = learning_recording_web.load_config(args.recording_config, parser)
+    ladder = ladder_web.load(args.ladder_config, parser)
     server = make_server(store, args.port, args.host, control=control, accounts=accounts, oauth=oauth, imports=imports,
                          storage=storage, ai_jobs=ai_jobs, omx_center=omx_center, sim_runs=sim_runs,
                          vlm_eval_url=args.vlm_eval_url, workspace_links=workspace_links, owners=owners,
-                         recording_config=recording_config)
+                         recording_config=recording_config, ladder=ladder)
     print(f'Pinky review: http://{args.host}:{server.server_port}', flush=True)
     serve_review(server, store, args.decisions_port)
 

@@ -27,6 +27,9 @@ def install_static(app, web_root, web_common):
             text = text.replace('<b>Rosy Fleet</b>', '<b>Rosy Account</b>', 1)
             text = text.replace('href="/common/icons/console.svg"', 'href="/common/brand/mark.svg"', 1)
             text = text.replace('계정 로그인', 'Rosy Account 로그인')
+            # /console only redirects to the profile on this origin; Fleet stays open in its own tab.
+            text = text.replace('<ui-brand href="/console">', '<ui-brand href="/console/profile">', 1)
+            text = text.replace('<a href="/console">관제로 돌아가기</a> · ', '', 1)
             return HTMLResponse(text, headers=headers)
         return FileResponse(path, media_type=entry['media_type'], headers=headers)
 
