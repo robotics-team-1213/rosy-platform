@@ -7,6 +7,7 @@ const STAGE={mujoco:'MuJoCo',gazebo:'Gazebo',isaac:'Isaac'};
 const COMPARE={better:'더 좋음 (평가 구간이 겹치지 않고 위쪽)',worse:'더 나쁨 (평가 구간이 겹치지 않고 아래쪽)',
   unclear:'차이 불명확 — 아직 정할 수 없습니다',current:'현재 비교 기준입니다'};
 const TWO_ARM={stack:'3×3×3 적층',rehandle:'임시 칸 재취급'};
+const TWO_ARM_STAGE={collect:'시연 수집',train:'학습',evaluate:'평가'};
 const TWO_ARM_VIEW={'top.png':'위쪽 D435','side.png':'옆 Jieli','a_wrist.png':'손목 arm_a','b_wrist.png':'손목 arm_b'};
 const SCENE={robot:'팔',jaw:'집게',wrist_camera:'손목 카메라',revision:'셀 개정'};
 const RECIPE={policy:'정책',steps:'학습 단계',batch_size:'묶음 크기',chunk_size:'청크',n_action_steps:'행동 단계',optimizer_lr:'학습률'};
@@ -69,7 +70,31 @@ function twoArmCard(row){
   }
   return item;
 }
+function twoArmRoundCard(row){
+  const item=el('article',undefined,'ladder-card');
+  if(row.unreadable){item.append(el('h3',row.round_id),el('p','이 라운드 기록을 읽을 수 없습니다.'));return item;}
+  const line=el('div',undefined,'ladder-stage');line.dataset.status=row.status;line.append(el('span',STATUS[row.status]||STATUS.unknown));
+  item.append(el('h3',`학습 모델 · ${row.round_id}`),el('p',row.created_at||'시각 기록 없음','quiet'),line);
+  if(row.status==='running')item.append(el('p',`진행 중: ${TWO_ARM_STAGE[row.stage]||row.stage}`));
+  if(row.reason)item.append(el('p','이유: '+row.reason));
+  if(row.data.episodes!=null)item.append(el('p',`시연 ${row.data.episodes}단계 · ${row.data.frames}프레임 · 학습 ${row.recipe.steps}스텝`));
+  const score=row.eval;
+  if(score){
+    item.append(el('p',`단계별 통과 ${score.passed ?? '?'} / ${score.n ?? '?'} (95% 구간 ${score.wilson_low ?? '?'}~${score.wilson_high ?? '?'}) · 컨테이너를 든 단계 ${score.lifted ?? '?'}`));
+    for(const run of score.whole)item.append(el('p',`${TWO_ARM[run.task]||run.task} 전체 · 시드 ${run.seed}: ${run.passed} / ${run.total} 단계${run.completed?' 완료':'에서 멈춤'}`));
+    const zero=Object.entries(score.per_step).filter(([,count])=>count===0).map(([key])=>key);
+    if(zero.length)item.append(el('p','한 번도 통과하지 못한 단계: '+zero.join(', ')));
+  }
+  for(const name of row.videos){
+    const fig=el('figure'),video=el('video');
+    video.controls=true;video.preload='none';video.src=`/api/learning/ladder/two-arm-rounds/${row.round_id}/artifacts/${name}`;video.setAttribute('aria-label',`학습 모델 실행 영상 ${name}`);
+    fig.append(video,el('figcaption',`네 카메라 ${name}`));item.append(fig);
+  }
+  return item;
+}
 async function refreshTwoArm(){
+  const learned=await api('two-arm-rounds');
+  $('ladder-two-arm-rounds').replaceChildren(...(learned.rounds||[]).map(twoArmRoundCard));
   const data=await api('two-arm');
   twoArmRunning=!!data.running;
   const box=$('ladder-two-arm');

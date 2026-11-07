@@ -7,3 +7,4 @@
 .ladder-stage[data-status=not_run],.ladder-stage[data-status=pending]{border-inline-start-style:dashed}
 .ladder-note{padding:var(--space-2);border:1px dashed var(--border);font-weight:var(--weight-label)}
 .ladder-best{font-weight:var(--weight-label)}
+.ladder-card video{display:block;width:100%}

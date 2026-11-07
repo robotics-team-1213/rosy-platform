@@ -26,9 +26,11 @@ PAGES = {'/learning/ladder': ('ladder.html', 'text/html'), '/ladder.js': ('ladde
 ROUND = '[0-9]{8}T[0-9]{6}-[0-9a-f]{8}'
 SCHEMA = 'rosy.omx-ladder-round.v1'
 TWO_ARM_SCHEMA = 'rosy.omx-two-arm-run.v1'
+TWO_ARM_ROUND_SCHEMA = 'rosy.omx-two-arm-round.v1'
 TWO_ARM_TASKS = ('stack', 'rehandle')
 STATUSES = {'pending', 'running', 'passed', 'failed', 'blocked', 'not_run'}
 IMAGES = {'.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp'}
+VIDEO_LIMIT = 64 << 20  # a whole task at 640x480; shortcut: sent whole, no range requests, so the player cannot seek before it has loaded
 PART = '[A-Za-z0-9_][A-Za-z0-9._-]{0,99}'
 ARTIFACT = PART + '(?:/' + PART + '){0,3}'
 ENTRY = Path(__file__).resolve().parents[3] / 'tools/sim/omx_ladder.py'
@@ -136,6 +138,21 @@ def two_arm_public(value):
                views=[item for item in views[:8] if isinstance(item, str) and re.fullmatch(PART, item)] if isinstance(views, list) else [],
                failed_steps=[flat(item) for item in failed[:40] if isinstance(item, dict)] if isinstance(failed, list) else [],
                roll_below_floor_steps=[scalar(item, 20) for item in roll[:40]] if isinstance(roll, list) else [])
+    return row
+
+
+def two_arm_round_public(value):
+    """A learned two-arm round through a whitelist: the score, never a path or a log."""
+    score = value.get('eval') if isinstance(value.get('eval'), dict) else None
+    status, cameras, videos = value.get('status'), value.get('cameras'), value.get('artifacts')
+    row = {key: scalar(value.get(key)) for key in ('round_id', 'created_at', 'finished_at', 'source_sha', 'stage', 'reason', 'claim')}
+    row.update(status=status if status in STATUSES else 'unknown', data=flat(value.get('data')), recipe=flat(value.get('recipe')),
+               cameras=[scalar(item, 20) for item in cameras[:8]] if isinstance(cameras, list) else [],
+               videos=[item for item in videos[:8] if isinstance(item, str) and re.fullmatch(PART, item) and item.endswith('.mp4')] if isinstance(videos, list) else [])
+    if score:
+        whole = score.get('whole')
+        row['eval'] = {**{key: scalar(score.get(key)) for key in ('n', 'passed', 'lifted', 'wilson_low', 'wilson_high')}, 'per_step': flat(score.get('per_step')),
+                       'whole': [flat(item) for item in whole[:12] if isinstance(item, dict)] if isinstance(whole, list) else []}
     return row
 
 
@@ -257,6 +274,18 @@ class Ladder:
             rows.append(two_arm_public(value) if good else {'run_id': run_id, 'unreadable': True})
         return rows
 
+    def two_arm_rounds(self):
+        try:
+            ids = sorted((p.name for p in (self.root / 'two_arm_rounds').iterdir() if re.fullmatch(ROUND, p.name)), reverse=True)
+        except OSError:
+            return []
+        rows = []
+        for round_id in ids[:SHOWN]:
+            value = read_record(self.root / 'two_arm_rounds' / round_id / 'round.json')
+            good = value and value.get('schema') == TWO_ARM_ROUND_SCHEMA and value.get('round_id') == round_id
+            rows.append(two_arm_round_public(value) if good else {'round_id': round_id, 'unreadable': True})
+        return rows
+
     def start_two_arm(self, body):
         """Launch the fixed two-arm command; only a named task and a bounded seed reach it."""
         if set(body) != {'task', 'seed'} or body['task'] not in TWO_ARM_TASKS or type(body['seed']) is not int or not 0 <= body['seed'] <= 1000:
@@ -278,10 +307,11 @@ class Ladder:
                                     stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
 
     def artifact(self, round_id, rel, folder='rounds'):
-        """(bytes, media type) of one run's image; nothing outside its artifacts folder, no links."""
+        """(bytes, media type) of one run's image, or a learned two-arm round's video; nothing outside its artifacts folder, no links."""
         suffix = Path(rel).suffix.lower()
         base = self.root / folder / round_id / 'artifacts'
-        if suffix not in IMAGES:
+        video = suffix == '.mp4' and folder == 'two_arm_rounds'
+        if suffix not in IMAGES and not video:
             raise FileNotFoundError
         target = base
         for part in rel.split('/'):
@@ -290,10 +320,10 @@ class Ladder:
             if link.is_symlink():
                 raise FileNotFoundError
         info = target.lstat()
-        if (not stat.S_ISREG(info.st_mode) or info.st_size > 8 << 20
+        if (not stat.S_ISREG(info.st_mode) or info.st_size > (VIDEO_LIMIT if video else 8 << 20)
                 or not target.resolve().is_relative_to(base.resolve())):
             raise FileNotFoundError
-        return target.read_bytes(), IMAGES[suffix]
+        return target.read_bytes(), 'video/mp4' if video else IMAGES[suffix]
 
     def decide(self, actor, body):
         if set(body) != {'round_id', 'verdict', 'note'} or body['verdict'] not in ('replace', 'keep'):
@@ -369,6 +399,14 @@ def get(handler, path, ladder):
         handler.send(ladder.snapshot())
     elif path == PREFIX + 'two-arm':
         handler.send({'running': ladder.two_arm_running(), 'runs': ladder.two_arm_runs()})
+    elif path == PREFIX + 'two-arm-rounds':
+        handler.send({'rounds': ladder.two_arm_rounds()})
+    elif match := re.fullmatch(PREFIX + 'two-arm-rounds/(' + ROUND + ')/artifacts/(' + PART + ')', path):
+        try:
+            raw, mime = ladder.artifact(match[1], match[2], 'two_arm_rounds')
+            handler.send(raw, mime=mime)
+        except OSError:
+            handler.send({'error': '영상을 찾을 수 없습니다.'}, 404)
     elif match := re.fullmatch(PREFIX + 'two-arm/(' + ROUND + ')/artifacts/(' + PART + ')', path):
         try:
             raw, mime = ladder.artifact(match[1], match[2], 'two_arm')

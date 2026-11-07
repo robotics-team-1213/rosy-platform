@@ -38,6 +38,11 @@ def serve(tmp_path, *, configured=True):
     (run / 'run.json').write_text(json.dumps(dict(
         schema=ladder_web.TWO_ARM_SCHEMA, run_id=OLD, task='rehandle', seed=0, status='failed', steps=12, steps_pass=11, final_ok=5, final_total=6,
         roll_below_floor_steps=['a1'], failed_steps=[dict(step='r2', arm='arm_a', result='blocked', reason='too far')])), encoding='utf-8')
+    learned = root / 'two_arm_rounds' / OLD
+    learned.mkdir(parents=True)
+    (learned / 'round.json').write_text(json.dumps(dict(
+        schema=ladder_web.TWO_ARM_ROUND_SCHEMA, round_id=OLD, status='passed', stage='done', data=dict(episodes=630, frames=178236), recipe=dict(steps=60000),
+        eval=dict(n=63, passed=20, lifted=50, wilson_low=.2, wilson_high=.4, per_step={'stack/s1': 3, 'stack/s2': 0}, whole=[dict(task='stack', seed=1, total=9, passed=2, completed=False)]))), encoding='utf-8')
     ladder = Recorded(config(tmp_path, root)) if configured else None
     server = make_server(open_store(tmp_path), free_port(), accounts=Accounts(), ladder=ladder)
     threading.Thread(target=server.serve_forever, daemon=True).start()
@@ -80,6 +85,10 @@ def test_rounds_detail_decision_and_start(tmp_path, width, session):
                 expect(two_arm).to_contain_text('단계 통과 11 / 12')
                 expect(two_arm).to_contain_text('실패 r2 (arm_a): too far')
                 expect(two_arm).to_contain_text('실물 손목 하한 아래로 가는 단계')
+                learned = page.locator('#ladder-two-arm-rounds')
+                expect(learned).to_contain_text('단계별 통과 20 / 63')
+                expect(learned).to_contain_text('3×3×3 적층 전체 · 시드 1: 2 / 9 단계에서 멈춤')
+                expect(learned).to_contain_text('한 번도 통과하지 못한 단계: stack/s2')
                 body = page.locator('main').inner_text()
                 assert '승인' not in body and '승격' not in body
                 if session == 'reader':

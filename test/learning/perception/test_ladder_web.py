@@ -55,6 +55,29 @@ def two_arm_run(root, run_id, **fields):
     (folder / 'run.json').write_text(json.dumps(value), encoding='utf-8')
 
 
+def test_learned_two_arm_rounds_are_read_through_a_whitelist_and_only_their_videos_are_served(tmp_path):
+    with running(tmp_path) as (base, root, ladder):
+        assert request(base, '/api/learning/ladder/two-arm-rounds', 'reader')[1] == {'rounds': []}
+        folder = root / 'two_arm_rounds' / OLD
+        (folder / 'artifacts').mkdir(parents=True)
+        (folder / 'artifacts' / 'stack-seed0.mp4').write_bytes(b'video')
+        (folder / 'artifacts' / 'other.txt').write_bytes(b'text')
+        (folder / 'round.json').write_text(json.dumps(dict(
+            schema=ladder_web.TWO_ARM_ROUND_SCHEMA, round_id=OLD, status='passed', stage='done', private_path='/home/secret', artifacts=['stack-seed0.mp4', '../evil.mp4', 'a.png'],
+            eval=dict(n=21, passed=8, lifted=20, per_step={'stack/s1': 3}, whole=[dict(task='stack', seed=1, total=9, passed=2, completed=False)]))), encoding='utf-8')
+        (root / 'two_arm_rounds' / NEW).mkdir()
+        code, data = request(base, '/api/learning/ladder/two-arm-rounds', 'reader')
+        assert code == 200 and [row['round_id'] for row in data['rounds']] == [NEW, OLD]
+        assert data['rounds'][0] == {'round_id': NEW, 'unreadable': True}
+        assert 'private_path' not in data['rounds'][1] and data['rounds'][1]['videos'] == ['stack-seed0.mp4']
+        assert data['rounds'][1]['eval']['passed'] == 8 and data['rounds'][1]['eval']['whole'][0]['passed'] == 2
+        artifacts = f'/api/learning/ladder/two-arm-rounds/{OLD}/artifacts/'
+        assert request(base, artifacts + 'other.txt', 'reader')[0] == 404
+        assert ladder.artifact(OLD, 'stack-seed0.mp4', 'two_arm_rounds') == (b'video', 'video/mp4')
+        with pytest.raises(FileNotFoundError):
+            ladder.artifact(OLD, 'stack-seed0.mp4', 'two_arm')
+
+
 def test_two_arm_runs_are_read_through_a_whitelist_and_only_a_manager_starts_a_bounded_one(tmp_path, monkeypatch):
     with running(tmp_path) as (base, root, ladder):
         two_arm_run(root, OLD, private_path='/home/secret', views=['top.png', '../evil.png'])
