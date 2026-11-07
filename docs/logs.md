@@ -14532,3 +14532,8 @@ osy-d395-s1d\`.
 - 변경: `test_learning_workflow_pipeline_browser.py`에 다른 고정 학습 시험 4개와 같은 `ROSY_RUN_PINNED_LEARNING=1` 조건을 넣었다.
 - 증거: 21:42 FULL 착지가 환경이 없는 시험 PC에 이 시험이 배정돼 멈췄고, main에서도 같은 단언으로 실패해 MAIN-RED가 됐다. 다른 두 시험 PC에는 환경이 있다.
 - gate 변화: 없음. FULL에서 이 여정은 다른 고정 학습 시험처럼 명시 실행이 필요하다. CE: 해당 없음 — 기존 규칙에 맞춘 수정.
+
+## 2026-11-08 · uncommitted · test(learning): 학습 브라우저 여정 조건을 되돌린다
+- 변경: 바로 앞 항목에서 `test_learning_workflow_pipeline_browser.py`에 넣은 `ROSY_RUN_PINNED_LEARNING=1` 조건을 뺐다. 시험은 main과 같다.
+- 증거: 착지 브라우저 묶음은 그 값을 주지 않아 시험이 늘 건너뛰어졌고, `land_browser.vacuous`가 건너뜀 1건으로 FULL을 멈췄다(219 passed, 1 skipped). 다른 고정 학습 시험은 브라우저 묶음 밖이라 같은 조건이 맞지 않았다.
+- gate 변화: 없음. 고정 학습 환경이 없는 시험 PC에 이 시험이 배정되면 여전히 실패한다(남은 문제). CE: 해당 없음 — 앞 수정의 되돌림.

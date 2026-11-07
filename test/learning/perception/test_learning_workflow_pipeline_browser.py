@@ -23,8 +23,6 @@ def test_synthetic_task_completes_review_training_evaluation_and_download(tmp_pa
     monkeypatch.syspath_prepend(str(root/'learning/training/omx'))
     from experiment_center import Center
     from native_cycle import native
-    if os.environ.get('ROSY_RUN_PINNED_LEARNING') != '1':  # same opt-in as the other pinned learner tests
-        pytest.skip('explicit existing isolated learner environment required')
     python = Path.home()/'.local/share/rosy-learning-center/venv-cpu/bin/python'
     assert python.is_file(), 'existing pinned learner required; no installation in this test'
     fixture_script = '''
