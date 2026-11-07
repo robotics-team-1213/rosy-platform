@@ -49,9 +49,14 @@ def _git(cwd: Path, *args: str) -> subprocess.CompletedProcess:
                           errors="replace")
 
 
+def tmp_root() -> Path:
+    """Where every landing's scratch folder lives (land_gc removes the old ones)."""
+    scratch = Path(os.environ.get("ROSY_SCRATCH") or tempfile.gettempdir())
+    return Path(os.environ.get("ROSY_LAND_TMP") or scratch / "rosy-land")
+
+
 def tmp_dir(branch: str) -> Path:
-    base = os.environ.get("ROSY_LAND_TMP") or Path(os.environ.get("ROSY_SCRATCH") or tempfile.gettempdir()) / "rosy-land"
-    path = Path(base) / branch.replace("/", "-")
+    path = tmp_root() / branch.replace("/", "-")
     path.mkdir(parents=True, exist_ok=True)
     return path
 

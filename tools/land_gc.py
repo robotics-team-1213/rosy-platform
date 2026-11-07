@@ -3,7 +3,9 @@
 land_async keeps a stopped landing's hidden worktree, snapshot branch, `.stopped` marker, script copy and logs for its
 owner; nothing removed them, and by 2026-11-01 there were 122 markers and as many land/... branches. A hidden landing
 is removed only when nothing is lost: no live queue ticket references it, its log is at least an hour old, its tree
-is clean, and its commits are all in main. Anything else is kept and reported, including redundant snapshots.
+is clean, and each of its commits is in main, in the live source branch or in a newer snapshot of it, or is a merge
+git reproduces by itself (2026-11-08: 149 superseded snapshots, 22 GB, were kept as "unlanded work"). Anything else is
+kept and reported.
 
     python tools/land_gc.py [--apply] [--log-days 7]      # dry run without --apply
 """
@@ -13,12 +15,14 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import shutil
 import subprocess
 import sys
 import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import land_checks  # noqa: E402  (tmp_root)
 import land_queue  # noqa: E402  (pid_alive)
 import land_async  # noqa: E402  (supervisor ownership before the queue ticket)
 import worktrees  # noqa: E402  (lossless status, including ignored user data)
@@ -32,6 +36,21 @@ SNAPSHOT = re.compile(r"-\d{14}(-batch\d+-k\d+)?$")  # land_async.snapshot_name,
 def git(repo: Path, *args: str) -> str:
     return subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, encoding="utf-8",
                           errors="replace", check=True).stdout.strip()
+
+
+def source(ref: str) -> str:
+    """land/<branch>-<stamp>[-batchN-kM] -> <branch> (from the ref, not the tree name, which turned / into -)."""
+    return SNAPSHOT.sub("", ref)[len(PREFIX):]
+
+
+def reproducible(repo: Path, sha: str) -> bool:
+    """A merge whose tree is git's own merge of its parents: nothing hand-made to lose (git >= 2.38)."""
+    parents = git(repo, "rev-list", "--parents", "-n1", sha).split()[1:]
+    if len(parents) != 2:
+        return False
+    merged = subprocess.run(["git", "-C", str(repo), "merge-tree", "--write-tree", *parents], capture_output=True,
+                            text=True)
+    return merged.returncode == 0 and merged.stdout.split()[:1] == [git(repo, "rev-parse", f"{sha}^{{tree}}")]
 
 
 class Plan(list):
@@ -72,6 +91,7 @@ def plan(repo: Path, now: float, log_days: float, *, only: str | None = None) ->
     by_name: dict[str, list[str]] = {}
     for ref in refs:
         by_name.setdefault(ref.split("-batch")[0].replace("/", "-"), []).append(ref)
+    heads_all = set(git(repo, "for-each-ref", "--format=%(refname:short)", "refs/heads/").splitlines())
     keys = {p.name for p in holder.iterdir() if p.is_dir()} if holder.is_dir() else set()
     keys |= {p.name[:-len(s)] for s in FILES for p in holder.glob(f"*{s}")} if holder.is_dir() else set()
     keys |= set(by_name)
@@ -99,7 +119,19 @@ def plan(repo: Path, now: float, log_days: float, *, only: str | None = None) ->
         refs = [(branch, git(repo, "rev-parse", "--verify", f"refs/heads/{branch}")) for branch in branches]
         head = (git(tree, "rev-parse", "HEAD"), git(tree, "rev-parse", "--symbolic-full-name", "HEAD")) if tree.is_dir() else ()
         heads = [sha for _, sha in refs] + list(head[:1])
-        unique = git(repo, "rev-list", "--count", *heads, "^main") if heads else "0"
+        # superseded (2026-11-08): commits the live branch or a newer snapshot of it also holds are not lost here
+        covers = ["^main"]
+        if branches:
+            src = source(branches[0])
+            if src in heads_all:
+                covers.append(f"^refs/heads/{src}")
+            for newer, more in by_name.items():
+                if newer > name and source(more[0]) == src:
+                    covers += [f"^refs/heads/{b}" for b in more]
+                    if (holder / newer).is_dir():
+                        covers.append("^" + git(holder / newer, "rev-parse", "HEAD"))
+        left = git(repo, "rev-list", *heads, *covers).split() if heads else []
+        unique = "0" if all(reproducible(repo, sha) for sha in left) else str(len(left))
         if unique != "0":
             out.append(("keep", f"unlanded work ({unique} commit(s) not in main)", tree if tree.is_dir() else None,
                         branches))
@@ -121,6 +153,15 @@ def plan(repo: Path, now: float, log_days: float, *, only: str | None = None) ->
                     and now - log.stat().st_mtime > log_days * 86400):
                 out.append(("log", f"older than {log_days:g} days", None, [str(log)]))
                 out.states[(None, (str(log),))] = log.stat()
+    scratch = land_checks.tmp_root()  # a landing's local logs, kept like its .log, then removed
+    for folder in (scratch.iterdir() if scratch.is_dir() else ()):
+        if not folder.is_dir() or folder.is_symlink() or (only is not None and folder.name != only):
+            continue
+        newest = max((f.stat().st_mtime for f in folder.rglob("*")), default=folder.stat().st_mtime)
+        if (not any(b.replace("/", "-") == folder.name for b in names)
+                and now - newest > log_days * 86400):
+            out.append(("tmp", f"scratch older than {log_days:g} days", None, [str(folder)]))
+            out.states[(None, (str(folder),))] = newest
     return out
 
 
@@ -132,7 +173,7 @@ def apply(repo: Path, rows) -> list[str]:
         return ["removal requires an unchanged plan from this process"]
     for row in rows:
         action, _, tree, items = row
-        if action not in ("remove", "log"):
+        if action not in ("remove", "log", "tmp"):
             continue
         key = (tree, tuple(items))
         try:
@@ -140,6 +181,9 @@ def apply(repo: Path, rows) -> list[str]:
             fresh = plan(repo, time.time(), rows.log_days, only=name)
             if row not in fresh or rows.states[key] != fresh.states.get(key):
                 problems.append(f"{tree or items}: state changed; kept")
+                continue
+            if action == "tmp":
+                shutil.rmtree(items[0])
                 continue
             if action == "log":
                 Path(items[0]).unlink()
@@ -176,7 +220,7 @@ def main(argv=None) -> int:
     for key, n in sorted(counts.items()):
         print(f"[land-gc] {n:4d} {key}")
     if not args.apply:
-        print("[land-gc] dry run; --apply removes the 'remove' and 'log' rows")
+        print("[land-gc] dry run; --apply removes the 'remove', 'log' and 'tmp' rows")
         return 0
     problems = apply(repo, rows)
     for line in problems:
