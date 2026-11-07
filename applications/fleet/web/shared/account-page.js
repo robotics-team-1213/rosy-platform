@@ -103,7 +103,9 @@ function edit(row = null) {
   $('account-grants').replaceChildren(); for (const grant of row?.grants || roleGrants('operator', siteResource)) grantRow(grant);
 }
 async function load() {
-  rows = await request(endpoint); requests = await request(requestsEndpoint);
+  rows = await request(endpoint);
+  // the account list must not go blank because the request list failed
+  requests = await request(requestsEndpoint).catch(() => null);
   $('account-list').replaceChildren();
   for (const row of rows) {
     const item = document.createElement('tr'), button = document.createElement('ui-button');
@@ -208,8 +210,9 @@ setup();
 const requestState = {pending: ['대기 중', 'neutral'], approved: ['승인됨', 'neutral'], rejected: ['거절됨', 'warn']};
 function drawRequests() {
   $('request-list').replaceChildren();
-  $('request-empty').hidden = requests.some(row => row.state === 'pending');
-  for (const row of requests) {
+  $('request-empty').textContent = requests ? '대기 중인 요청이 없습니다.' : '요청 목록을 읽지 못했습니다. 새로 고쳐 주세요.';
+  $('request-empty').hidden = !!requests?.some(row => row.state === 'pending');
+  for (const row of requests || []) {
     const item = document.createElement('tr'), tag = document.createElement('ui-tag'), cell = document.createElement('td');
     tag.setAttribute('status', requestState[row.state][1]);
     tag.textContent = requestState[row.state][0] + (row.state === 'rejected' && row.reason ? ` · ${row.reason}` : '');
