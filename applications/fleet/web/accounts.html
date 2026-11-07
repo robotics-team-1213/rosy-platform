@@ -28,6 +28,10 @@
         <h3>앱 등록</h3>
         <label for="client-id">앱 식별자</label>
         <input id="client-id" class="ui-field password-login-field" autocomplete="off" required maxlength="96">
+        <label for="client-label">표시 이름 · 비우면 앱 식별자</label>
+        <input id="client-label" class="ui-field password-login-field" autocomplete="off" maxlength="96">
+        <label for="client-home">시작 주소 · https, 비우면 앱 목록에 나오지 않음</label>
+        <input id="client-home" class="ui-field password-login-field" type="url" autocomplete="off" maxlength="2048">
         <label for="client-redirects">복귀 주소 · 한 줄에 하나, https만</label>
         <textarea id="client-redirects" class="ui-field password-login-field" rows="2" required></textarea>
         <label for="client-resources">자원 · 한 줄에 하나, 예: site:현장, robot:로봇, project:프로젝트</label>

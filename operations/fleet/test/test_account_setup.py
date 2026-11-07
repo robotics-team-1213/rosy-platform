@@ -50,7 +50,8 @@ def test_managed_setup_uses_live_grant_and_only_public_registration(tmp_path):
     assert response.status_code == 200
     assert response.json() == {'configured': True, 'issuer': 'https://account.example.test',
                               'clients': [{'client_id': 'pilot', 'redirect_uris': [CALLBACK],
-                                           'resources': ['robot:fixture'], 'enabled': True, 'revision': 1}]}
+                                           'resources': ['robot:fixture'], 'label': 'pilot', 'home_url': '',
+                                           'enabled': True, 'revision': 1}]}
     assert 'PRIVATE' not in response.text and 'private_key' not in response.text
     from fleet.server.password_session import COOKIE
     sessions.revoke(client.cookies.get(COOKIE))

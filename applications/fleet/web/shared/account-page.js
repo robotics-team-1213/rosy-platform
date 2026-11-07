@@ -181,7 +181,7 @@ async function setup() {
     const manages = canManageAccounts(after);
     for (const client of result.clients) {
       const item = document.createElement('li');
-      item.append(`${client.client_id} · ${client.enabled ? '사용 중' : '정지됨'} · ${client.resources.join(', ')} · 복귀 주소: ${client.redirect_uris.join(', ')}`);
+      item.append(`${client.label} (${client.client_id}) · ${client.enabled ? '사용 중' : '정지됨'} · ${client.resources.join(', ')} · 복귀 주소: ${client.redirect_uris.join(', ')}`);
       if (manages && result.configured) {
         const toggle = document.createElement('ui-button');
         toggle.setAttribute('kind', 'quiet');
@@ -214,7 +214,8 @@ function changeClient(client, changes) {
 $('client-form').addEventListener('submit', event => { event.preventDefault(); $('client-add').click(); });
 $('client-add').addEventListener('click', () => perform(async () => {
   await request(clientsEndpoint, {method:'POST', headers: {'Content-Type': 'application/json'}, body:JSON.stringify({
-    client_id:$('client-id').value.trim(), redirect_uris:lines('client-redirects'), resources:lines('client-resources')})});
+    client_id:$('client-id').value.trim(), label:$('client-label').value.trim() || $('client-id').value.trim(),
+    home_url:$('client-home').value.trim(), redirect_uris:lines('client-redirects'), resources:lines('client-resources')})});
   $('client-form').reset();
   await setup();
   status('앱을 등록했습니다. 그 앱에서 로그인해 확인하세요.');

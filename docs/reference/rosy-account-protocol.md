@@ -95,7 +95,7 @@ Vault는 2026-10-24 은퇴했다. 저장된 grant의 처리와 이 권한의 제
 `GET /api/fleet/auth/setup`은 same-origin 사람 쿠키만 허용한다. 활성 계정은 현재
 site의 `accounts.manage`, 전환 전 계정은 `policy-admin` 역할을 요구한다. 첫 비밀번호
 변경이 필요한 세션은 거절한다. 응답은 no-store이며 `configured`, `issuer`, `clients`
-(`client_id`, `redirect_uris`, `resources`, `enabled`, `revision`)만 제공한다. 키와 서버 파일 경로는 반환하지 않는다.
+(`client_id`, `redirect_uris`, `resources`, `label`, `home_url`, `enabled`, `revision`)만 제공한다. 키와 서버 파일 경로는 반환하지 않는다.
 `configured`는 현재 프로세스의 Authority 설정 적용 여부이고 HTTPS·앱 로그인 수용 증거가 아니다.
 
 Fleet `/console/accounts`에 설정 상태·앱 등록·최초 설치 안내를 함께 둔다. 계정·권한 변경은
@@ -112,8 +112,8 @@ unsafe 요청은 same-origin 검사를 거친다. 오류는 기존 Fleet detail 
 
 | 경로 | 동작 |
 |---|---|
-| POST /api/fleet/auth/clients | client_id, redirect_uris, resources로 앱 등록 |
-| PATCH /api/fleet/auth/clients/{client_id} | revision과 enabled/redirect_uris/resources 중 변경값 |
+| POST /api/fleet/auth/clients | client_id, redirect_uris, resources와 선택 label, home_url로 앱 등록 |
+| PATCH /api/fleet/auth/clients/{client_id} | revision과 enabled/redirect_uris/resources/label/home_url 중 변경값 |
 | GET /api/fleet/auth/accounts | 비밀 없는 계정 목록 |
 | POST /api/fleet/auth/accounts | login, principal_id, role, password, grants로 계정 발급 |
 | PATCH /api/fleet/auth/accounts/{account_id} | revision과 enabled/role/grants 중 변경값; 미지 필드 거부 |

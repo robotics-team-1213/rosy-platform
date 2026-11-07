@@ -70,12 +70,12 @@ def install_account_routes(app, *, sessions, authorize):
 
     @app.post("/api/fleet/auth/clients", tags=["fleet-auth"], status_code=201)
     def create_client(payload: dict = Body(...), value=Depends(manager)):
-        fields(payload, {"client_id", "redirect_uris", "resources"})
+        fields(payload, {"client_id", "redirect_uris", "resources"}, {"label", "home_url"})
         return call(registry().create, value, status=201, **payload)
 
     @app.patch("/api/fleet/auth/clients/{client_id}", tags=["fleet-auth"])
     def update_client(client_id: str, payload: dict = Body(...), value=Depends(manager)):
-        fields(payload, {"revision"}, {"enabled", "redirect_uris", "resources"})
+        fields(payload, {"revision"}, {"enabled", "redirect_uris", "resources", "label", "home_url"})
         return call(registry().update, value, client_id, **payload)
 
     @app.get("/api/fleet/auth/accounts", tags=["fleet-auth"])

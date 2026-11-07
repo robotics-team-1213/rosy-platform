@@ -67,7 +67,8 @@ def test_new_client_works_without_restart(registry):
     authority, clients = registry
     assert code_for(authority, client='new-app') is None
     row = clients.create('manager', client_id='new-app', redirect_uris=[CALLBACK], resources=['robot:r2'])
-    assert row == {'client_id': 'new-app', 'redirect_uris': [CALLBACK], 'resources': ['robot:r2'], 'enabled': True, 'revision': 1}
+    assert row == {'client_id': 'new-app', 'redirect_uris': [CALLBACK], 'resources': ['robot:r2'], 'label': 'new-app',
+                   'home_url': '', 'enabled': True, 'revision': 1}
     code = code_for(authority, client='new-app', resource='robot:r2')
     assert code and exchange(authority, code, client='new-app')[0] == 200
 
@@ -155,6 +156,13 @@ def test_only_managers_change_the_registry_and_changes_are_audited(registry):
 def test_invalid_registrations_are_refused(uris, resources):
     with pytest.raises(ValueError):
         validate_client('app', uris, resources)
+
+
+@pytest.mark.parametrize('label,home_url', [('a' * 97, ''), ('line\nbreak', ''), (1, ''), ('ok', 'http://a.example.test/'),
+                                            ('ok', 'javascript:alert(1)'), ('ok', 1), ('ok', 'https://user:pw@a.example.test/')])
+def test_invalid_label_and_home_are_refused(label, home_url):
+    with pytest.raises(ValueError):
+        validate_client('app', [CALLBACK], ['robot:r1'], label, home_url)
 
 
 @pytest.mark.parametrize('client_id', ['', 'has space', 'a' * 97, 1, 'a/b'])

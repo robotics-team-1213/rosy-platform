@@ -8,6 +8,7 @@ from urllib.parse import urlsplit
 SCHEMA = '''
     CREATE TABLE IF NOT EXISTS account_clients (
         client_id TEXT PRIMARY KEY,redirect_uris TEXT NOT NULL,resources TEXT NOT NULL,
+        label TEXT NOT NULL,home_url TEXT NOT NULL,
         enabled INTEGER NOT NULL,revision INTEGER NOT NULL);
     CREATE TABLE IF NOT EXISTS account_client_audit (
         actor_account_id TEXT NOT NULL,client_id TEXT NOT NULL,operation TEXT NOT NULL,
@@ -22,9 +23,12 @@ def https_url(value):
             and not parsed.password and not parsed.fragment)
 
 
-def validate_client(client_id, redirect_uris, resources):
+def validate_client(client_id, redirect_uris, resources, label='', home_url=''):
     """No wildcard resource: an issued token names one concrete resource (D-955 2)."""
     if (not isinstance(client_id, str) or not re.fullmatch(r'[A-Za-z0-9._-]{1,96}', client_id)
+            or not isinstance(label, str) or len(label) > 96 or any(ord(c) < 32 for c in label)
+            # A native-only app has no address to open; it stays registered but out of the app list.
+            or not isinstance(home_url, str) or len(home_url) > 2048 or (home_url and not https_url(home_url))
             or not isinstance(redirect_uris, list) or not 1 <= len(redirect_uris) <= 16
             or not isinstance(resources, list) or not 1 <= len(resources) <= 256
             or len(set(map(repr, redirect_uris))) != len(redirect_uris) or len(set(map(repr, resources))) != len(resources)
@@ -39,14 +43,15 @@ def import_first(db, clients):
     """The protected JSON seeds an empty registry once; after that it is ignored so a stopped app stays stopped."""
     if db.execute('SELECT 1 FROM account_clients LIMIT 1').fetchone():
         return
-    db.executemany('INSERT INTO account_clients VALUES (?,?,?,1,1)', [
-        (name, json.dumps(settings['redirect_uris']), json.dumps(settings['resources']))
+    db.executemany("INSERT INTO account_clients VALUES (?,?,?,?,'',1,1)", [
+        (name, json.dumps(settings['redirect_uris']), json.dumps(settings['resources']), name)
         for name, settings in clients.items()])
 
 
 def public(row):
     return {'client_id': row['client_id'], 'redirect_uris': json.loads(row['redirect_uris']),
-            'resources': json.loads(row['resources']), 'enabled': bool(row['enabled']), 'revision': row['revision']}
+            'resources': json.loads(row['resources']), 'label': row['label'], 'home_url': row['home_url'],
+            'enabled': bool(row['enabled']), 'revision': row['revision']}
 
 
 def list_clients(db):
@@ -62,14 +67,15 @@ class ClientRegistry:
             actor, after['client_id'], operation, before['revision'] if before else 0, after['revision'], self.clock(),
             json.dumps(before or {}), json.dumps(after)))
 
-    def create(self, value, *, client_id, redirect_uris, resources):
-        validate_client(client_id, redirect_uris, resources)
+    def create(self, value, *, client_id, redirect_uris, resources, label=None, home_url=''):
+        label = client_id if label is None else label
+        validate_client(client_id, redirect_uris, resources, label, home_url)
         with self.ledger.db(write=True) as db:
             actor = self.ledger.require_manager(db, value)
             if db.execute('SELECT 1 FROM account_clients WHERE client_id=?', (client_id,)).fetchone():
                 raise ValueError('account client already registered')
-            db.execute('INSERT INTO account_clients VALUES (?,?,?,1,1)',
-                       (client_id, json.dumps(redirect_uris), json.dumps(resources)))
+            db.execute('INSERT INTO account_clients VALUES (?,?,?,?,?,1,1)',
+                       (client_id, json.dumps(redirect_uris), json.dumps(resources), label, home_url))
             after = public(db.execute('SELECT * FROM account_clients WHERE client_id=?', (client_id,)).fetchone())
             self._audit(db, actor, 'create', None, after)
             return after
@@ -88,8 +94,10 @@ class ClientRegistry:
             if before['revision'] != revision:
                 raise ValueError('account client revision conflict')
             after = {**before, **changes, 'revision': revision + 1}
-            validate_client(client_id, after['redirect_uris'], after['resources'])
-            db.execute('UPDATE account_clients SET redirect_uris=?,resources=?,enabled=?,revision=? WHERE client_id=?', (
-                json.dumps(after['redirect_uris']), json.dumps(after['resources']), int(after['enabled']), revision + 1, client_id))
+            validate_client(client_id, after['redirect_uris'], after['resources'], after['label'], after['home_url'])
+            db.execute('UPDATE account_clients SET redirect_uris=?,resources=?,label=?,home_url=?,enabled=?,revision=? '
+                       'WHERE client_id=?', (
+                json.dumps(after['redirect_uris']), json.dumps(after['resources']), after['label'], after['home_url'],
+                int(after['enabled']), revision + 1, client_id))
             self._audit(db, actor, 'update', before, after)
             return after
