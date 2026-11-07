@@ -105,8 +105,8 @@
 
 ## 최근 기록
 
-- 2026-11-07 · 154063b541 · fix(fleet): 같은 순간의 부탁은 삽입 순서로, 재시작 시험은 요청자를 둘로
-- 2026-11-07 · 7bea0ca865 · fix(fleet): 사람 부탁은 로봇당 하나만 화면에, 되읽은 것만 표시됨으로
-- 2026-11-07 · 18c323da67 · feat(fleet): 스테이션 복구 요청(S1)과 사람 부탁(저장소·경로·로봇 전달)
-- 2026-11-06 · uncommitted · uiux: 물체 카탈로그 미지정 안내를 한글로
-- 2026-11-06 · uncommitted · feat(fleet): 관제 수동 모드 전환
+- 2026-11-07 · uncommitted · 로그인 콜백 실패가 JSON 막다른 길이 아니다
+- 2026-11-07 · uncommitted · 로그인 복귀가 설치·보정 하위 화면을 유지
+- 2026-11-07 · 7c042262fb · fix(fleet): a stale blip is read again before a trip is refused
+- 2026-11-07 · uncommitted · fix(fleet): 독립 검토 반영 — 충전 복귀·재시도·읽기 대기·칸 dwell/unknown
+- 2026-11-07 · uncommitted · fix(fleet): 운행 시작 배터리 확인 · 충전 칸 점유 유지

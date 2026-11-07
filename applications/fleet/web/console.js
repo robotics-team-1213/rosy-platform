@@ -89,6 +89,7 @@ function layoutConsole() {
   if (focused?.isConnected && document.activeElement !== focused) focused.focus({preventScroll: true});
 }
 layoutConsole();
+delete document.documentElement.dataset.areaPending;
 inbox.focusInitial();
 pageScope.listen(layoutMedia, "change", layoutConsole);
 pageScope.onResume(layoutConsole);

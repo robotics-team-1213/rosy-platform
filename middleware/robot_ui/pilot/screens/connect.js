@@ -576,7 +576,7 @@ export async function mountConnect(root, {onReady, onEnter} = {}) {
     return;
   }
   if (account?.enabled && !account.authenticated) {
-    window.location.assign('/api/account/login?return=/pilot');
+    window.location.replace('/api/account/login?return=/pilot');
     return;
   }
   if (!authenticated()) {

@@ -16,6 +16,7 @@ from fleet.traffic.trip_advice import FLEET_EPOCH, AdviceSender
 from test_lane_traffic import _trip
 from test_routing import demo_site
 from test_trip_authority import AUTH, AuthFleet
+from fakes import fresh_battery
 
 AHEAD = {"robot_id": "a", "signal_id": "sig", "approach": "ring_in", "distance_m": 0.8, "may_enter": False,
          "lamp": "red", "left_s": 3.0, "green_in_s": 4.5, "exact": True, "virtual": True, "advisory": True}
@@ -149,7 +150,7 @@ def test_advice_failure_never_affects_the_authority(monkeypatch):
         fleet = cls(tuple(caps), caps)
         store = SiteMapStore(None, clock=lambda: fleet.now)
         store.import_if_empty(demo_site(), source="test")
-        runner = TripRunner(store=store, routing_config=store.routing_config, caps=fleet.caps_for, poses=fleet,
+        runner = TripRunner(store=store, routing_config=store.routing_config, caps=fleet.caps_for, battery=fresh_battery, poses=fleet,
                             junction=fleet, goal=fleet.goal, cancel_goal=fleet.cancel_goal,
                             blocked=lambda: fleet.blocked, clock=lambda: fleet.now, config=TripConfig(),
                             authority=True, signal_advice=True)

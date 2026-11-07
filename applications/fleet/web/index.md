@@ -32,8 +32,8 @@
 
 ## 최근 기록
 
+- 2026-11-07 · uncommitted · fix(fleet-ui): 칸 확인 불가 문구
+- 2026-11-07 · uncommitted · fix(fleet-ui): 배터리 출발 거절 문구 · 충전 칸 위치 불명 표시
 - 2026-11-07 · 7bea0ca865 · fix(console): 표시 중은 되읽은 것만, 복구 요청 문구는 움직임으로 읽히지 않게
 - 2026-11-07 · 92cb90111c · uiux(fleet): say why a battery stop holds and that charging ends it (D-502 Amendment 2026-11-07)
 - 2026-11-07 · 11b42b5933 · feat(console): 스테이션 복구 요청 행과 사람 부탁 행
-- 2026-11-07 · 285714599b · uiux: 로봇 이동 출처 표시
-- 2026-11-06 · uncommitted · uiux(fleet): 지도 연결 실패 안내, 지도 장소 키보드, 로봇 이름표, Cell 블록 이름표

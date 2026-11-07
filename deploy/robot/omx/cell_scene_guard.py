@@ -35,6 +35,16 @@ def moved_blobs(before, after, roi, base_px, target_px, params=None) -> list:
     return sorted(blobs, key=lambda b: -b["area"])
 
 
+def scene_moved(before, after) -> list:
+    """Regions that differ between two whole top views taken with the arms folded: [area, x0, y0, x1, y1]. Folded, the arm is in
+    both views, so unlike moved_blobs the whole frame can be compared."""
+    diff = cv2.GaussianBlur(cv2.absdiff(before, after), (5, 5), 0).max(2)
+    mask = cv2.morphologyEx((diff > 45).astype(np.uint8), cv2.MORPH_OPEN, np.ones((5, 5), np.uint8))
+    n, _, stats, _ = cv2.connectedComponentsWithStats(mask)
+    return [[int(stats[i, 4]), int(stats[i, 0]), int(stats[i, 1]), int(stats[i, 0] + stats[i, 2]), int(stats[i, 1] + stats[i, 3])]
+            for i in range(1, n) if stats[i, 4] > 150]
+
+
 def hook(cell, config: dict, before, roi, base_px, target_px):
     """The hover hook; no pixel for the base or the target means nothing can be compared, so the carry does not go on."""
     params = config.get("params")

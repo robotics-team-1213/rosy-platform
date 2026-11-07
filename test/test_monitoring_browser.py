@@ -152,7 +152,7 @@ def test_monitoring_uses_shared_chrome_and_keyboard_navigation(monitoring_backen
     errors = []
     page.on('pageerror', lambda error: errors.append(str(error)))
     page.goto(monitoring_backend.origin + '/', wait_until='domcontentloaded')
-    expect(page.get_by_role('link', name='Rosy Monitoring 홈')).to_be_visible()
+    expect(page.get_by_role('link', name='Rosy Monitoring 홈')).to_have_attribute('href', '#main')
     expect(page.locator('main')).to_have_class('ui-task-page')
     expect(page.locator('main h1')).to_have_text('시스템 상태')
     page.locator('.skip-link').focus()

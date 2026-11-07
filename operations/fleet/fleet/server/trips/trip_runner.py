@@ -35,7 +35,7 @@ from fleet.traffic.lane_traffic import TrafficService
 from fleet.traffic.trip_advice import AdviceSender
 from fleet.traffic.trip_authority import AuthoritySender
 from fleet.traffic.trip_lease import TripLease
-from fleet.server.trip_admission import LOCALIZED, TripAdmission  # noqa: F401
+from fleet.server.trip_admission import LOCALIZED, TripAdmission, cached_battery  # noqa: F401
 from fleet.server.trip_halts import TripHalts, error_code as _code
 from fleet.server.trip_laps import LAP_RETRIES, LAP_RETRY_S, convoy_refusal, stop_points  # noqa: F401
 from fleet.server.trip_progress import MANOEUVRE, TripProgress  # noqa: F401
@@ -69,8 +69,12 @@ class TripRunner(TripAdmission, TripProgress, TripSteps, TripReplan):
                  roster: Optional[Callable[[], Iterable[str]]] = None,
                  traffic: Optional[TrafficService] = None, traffic_zones=None, authority: bool = False,
                  traffic_signals=(), signal_advice: bool = False, lease: Optional[dict] = None,
-                 renew_lease: Optional[Callable[[str], Awaitable[None]]] = None) -> None:
+                 renew_lease: Optional[Callable[[str], Awaitable[None]]] = None,
+                 battery: Optional[Callable[[str], Awaitable[Optional[dict]]]] = None) -> None:
         self._store = store
+        #: Start admission reads the robot's battery evidence here (``{"battery", "age_s"}``). None: no source,
+        #: so every start is refused TRIP_BATTERY_UNCONFIRMED (fail closed; there is no bypass default).
+        self._battery = battery
         self._routing = routing_config
         self._caps, self._poses, self._junction = caps, poses, junction
         self._goal, self._cancel_goal = goal, cancel_goal
@@ -163,6 +167,7 @@ class TripRunner(TripAdmission, TripProgress, TripSteps, TripReplan):
             if self.lease.job_of(robot_id) not in (None, job_id):  # D-763 6: a job holds it; before any turn
                 raise TripError(409, "TRIP_ROBOT_BUSY", {"reason": "job", "owner_kind": "mission"})
             self._check_engaged(robot_id)
+            await self._check_battery(robot_id)
             await self._guard_start(robot_id, start_token, start_guard)
             start_at = (row.get("request") or {}).get("start_at")
             pose, enable, turns = await self._start_pose(

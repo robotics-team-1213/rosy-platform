@@ -836,3 +836,26 @@ def test_with_nobody_else_idle_the_rollout_keeps_its_canary(tmp_path, monkeypatc
     coordinator, calls, uploads = _publishing(tmp_path, monkeypatch, state, _eligible(), 1)
     coordinator.tick()
     assert uploads == [] and calls[0][calls[0].index("--canary") + 1] == "robot-a"
+
+
+def test_a_crash_between_saving_and_uploading_the_move_still_finishes_it(tmp_path, monkeypatch):
+    state = {"canary_host": "robot-b", "canary_name": "robot-b", "canary_moved_from": ["robot-a"]}
+    coordinator, calls, uploads = _publishing(tmp_path, monkeypatch, state, _eligible(), 1)
+    assert coordinator.tick() == "rollout_pending"
+    assert [rollout["canary"] for rollout in uploads] == [["robot-b"]]
+    assert calls[0][calls[0].index("--canary") + 1] == "robot-b"
+
+
+def test_a_rollout_naming_a_foreign_canary_is_still_refused(tmp_path, monkeypatch):
+    state = {"canary_host": "robot-b", "canary_name": "robot-b", "canary_moved_from": ["robot-c"]}
+    coordinator, calls, _ = _publishing(tmp_path, monkeypatch, state, _eligible(), 1)
+    with pytest.raises(ValueError, match="differs from this release"):
+        coordinator.tick()
+    assert calls == []
+
+
+def test_a_watch_clears_the_not_started_verdict_before_it_runs(tmp_path, monkeypatch):
+    state = {"canary_host": "robot-a", "canary_name": "robot-a", "canary_not_started": True}
+    coordinator, _, _ = _publishing(tmp_path, monkeypatch, state, _eligible(), 1)
+    assert coordinator.tick() == "rollout_pending"
+    assert coordinator.state["canary_not_started"] is False

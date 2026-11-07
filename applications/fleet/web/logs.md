@@ -1097,6 +1097,35 @@
 - 증거: agent-browser 로컬 Fleet 서버에서 서버를 내리고 지도 칸 글을 확인, 지도 화면 장소에서 Enter로 선택·초점 유지 확인. 로봇 이름표 겹침과 Cell 블록은 이 서버에 해당 자료가 없어 화면으로 보지 못했다.
 - gate 변화: SOURCE 변경. 실물·현장 수용은 별도다. CE: 해당 없음 — 코드와 회귀가 판단을 보존한다.
 
+## 2026-11-07 · uncommitted · uiux(fleet): 로봇 표찰이 장소 이름도 피한다
+- 변경: 현장 지도 로봇 표찰의 겹침 보정 대상에 장소 이름을 더했다. 한 방향 네 번까지라 아주 조밀하면 겹칠 수 있다.
+- 증거: 로봇 3대를 10cm 안에 둔 실제 화면에서 겹침을 봤고 고친 뒤 같은 화면에서 확인한다.
+- gate 변화: SOURCE 회귀. 현장 수용은 별도다. CE: 해당 없음 — 코드가 판단을 보존한다.
+
+## 2026-11-07 · uncommitted · uiux(fleet): 계정 화면을 다녀와도 메뉴에 다시 들어가지 않는다
+- 변경: 내 계정·계정 관리를 모든 Fleet 문서에서 새 탭으로 연다. 로그인 복귀가 설치·보정 하위 화면을 유지한다.
+- 증거: 현장 사이트에서 로그인 전 링크만 눌러 Account 브랜드와 관제로 돌아가기가 303 /console 뒤 /console/profile로 되돌아감을 봤다.
+- gate 변화: SOURCE 회귀. 현장 수용은 별도다. CE: 새 교훈 판단은 완료 보고에 적는다.
+
+## 2026-11-07 · uncommitted · uiux(fleet): 작업·기록을 열 때 관제 화면이 먼저 보이지 않는다
+- 변경: 영역 선택을 첫 페인트 전 일반 스크립트 area-first.js로 옮겼다. 본문은 배치 뒤 보이고, 스크립트가 실패해도 2초 뒤 CSS만으로 보인다. 권한 없는 계정 관리의 로그인 링크가 같은 거절로 되돌아오지 않는다.
+- 증거: 실제 Fleet에서 ?view=work를 열면 약 190~300ms 관제 레일과 패널이 먼저 보이는 것을 화면 캡처로 재고, 로그인 링크 왕복을 4조합에서 재현했다.
+- gate 변화: SOURCE 회귀. 현장 수용은 별도다.
+
+## 2026-11-07 · uncommitted · uiux(fleet): 정책 화면 머리 로그인이 정책 화면으로 돌아온다
+- 변경: /console/policy의 머리 로그인 링크에 복귀 주소를 넣었다.
+- 증거: 실제 Account 왕복에서 이 링크만 /console로 돌아가는 것을 재현했다.
+- gate 변화: SOURCE 회귀. 현장 수용은 별도다.
+
+## 2026-11-07 · uncommitted · uiux(fleet): 설치 작업 탭에서 뒤로 가기가 앞 작업으로 돌아간다
+- 변경: 작업 전환이 기록을 대체하지 않고 쌓는다. 주소가 이미 그 작업이면 기록을 늘리지 않고, 해시가 없으면 첫 작업을 고른다.
+- 증거: 로컬 실제 Fleet에서 세 탭을 거친 뒤 뒤로 가기가 탭을 차례로 되돌리고 네 번째에 /console로 나간다. 깊은 링크와 새로고침도 유지된다.
+- gate 변화: SOURCE 회귀. 현장 수용은 별도다.
+
+## 2026-11-07 · uncommitted · uiux(account): 로그인 뒤 뒤로 가기가 로그인 화면으로 되튀지 않는다
+- 변경: 로그인 문서가 복귀할 때 기록을 대체한다(assign에서 replace로). 로그인 항목이 남으면 살아 있는 Account 세션이 자동 이어가기로 곧바로 다시 앞으로 보냈다.
+- 증거: 실제 Account와 로봇 앱 두 출처에서 로봇 /dashboard, /console, /setup, /device는 되튐을 재현했고 수정 뒤 사라졌다. /pilot은 기록이 2개로 정상이다. 로봇·Pilot 로그아웃은 Account 세션까지 끝내 곧바로 재로그인하지 않는다(실측).
+- gate 변화: SOURCE 회귀. 현장 수용은 별도다.
 ## 2026-11-07 · 285714599b · uiux: 로봇 이동 출처 표시
 - 변경: 로봇 카드 사실 줄에 `motion-source.js`가 고른 이동 출처 칩을 더했다. 증명하는 사실만 이름을 붙인다: 이 화면의 조종 단추(`view.manualDriveRobot`), CORE 운행 임차·열린 운행, 비켜서기, 도킹 상태, 대형, 관제 목표, 보정. 수동 모드·목표 주행은 CORE 모드만으로 누가 시켰는지 알 수 없어 `확인 불가`로 쓴다. 오래된 상태·신선하지 않은 속도 근거는 `출처 확인 불가`이고, 출처 없이 움직이면(속도 0 초과) 예외 큐에 `원인 불명 이동`을 올린다. 계약·가드·권한 변경 없음.
 - 증거: Node motion-source 단위 9와 roster 연동 2 PASS(로컬). 원격 실제 Chromium(ROSY_RUN_BROWSER_TESTS=1) 신규 1·test_fleet_console_browser 포함 SKIPPED 0, 관련 브라우저 범위 FAILED 0(첫 실행의 로스터 높이 1건은 칩 문구를 줄여 해소). 로봇·현장 PC 주행 없음.
@@ -1120,3 +1149,13 @@
 - 증거: `node --test` person-request·station-recovery 10 pass.
 - gate 변화: SOURCE 변경. 로봇·장치 수용 없음.
 - 교훈: CE 해당 없음 — 최종 코드와 시험이 판단을 보존한다. 실물·운영 수용은 아니다.
+
+## 2026-11-07 · uncommitted · fix(fleet-ui): 배터리 출발 거절 문구 · 충전 칸 위치 불명 표시
+- 변경: `trip-display.js`에 `TRIP_BATTERY_UNCONFIRMED` 한국어 문구, `charge-bays-view.js`에 칸 상태 `unknown`과 이유 `pose_unknown` 문구. node 시험 `charge-bays-view`·`trip-path`에 단언 추가.
+- 증거: node 단언 추가(문구 두 곳), 원격 실행 기록 참조.
+- gate 변화: 없음. 브라우저 시험 결과는 원격 실행 기록 참조.
+
+## 2026-11-07 · uncommitted · fix(fleet-ui): 칸 확인 불가 문구
+- 변경: 칸 상태 `unknown`은 "확인 불가 · 비어 있다고 볼 수 없음", 이유 `bay_unknown` 문구 추가.
+- 증거: node `charge-bays-view` 단언 추가, 원격 실행 기록 참조.
+- gate 변화: 없음.

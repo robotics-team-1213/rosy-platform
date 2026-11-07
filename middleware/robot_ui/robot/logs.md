@@ -1460,3 +1460,8 @@
 - 증거: `node --test middleware/robot_ui/robot/test/web/person-request.test.mjs` 3 pass. 브라우저 확인 없음.
 - gate 변화: SOURCE 변경. 로봇·장치 수용 없음.
 - 교훈: CE 해당 없음 — 최종 코드와 시험이 판단을 보존한다. 실물·운영 수용은 아니다.
+
+## 2026-11-07 · uncommitted · uiux(robot): 로그인이 누른 화면으로 돌아오고 뒤로 가기가 갇히지 않는다
+- 변경: 계정 로그인 이동이 return_to를 복귀 주소로 넘기고 기록을 대체한다.
+- 증거: 실제 페이지 서버에서 /console → 로그인이 /dashboard로 끝나고 뒤로 가기 3번이 모두 로그인에 머무는 것을 재현했다. 실제 IdP는 확인 전이다.
+- gate 변화: SOURCE 회귀. 장치 수용은 별도다.

@@ -563,3 +563,6 @@ ui-topbar:has([data-learning-account-entry]) { flex-wrap: wrap; }
 .workspace-entry p{flex-basis:100%;margin:0;overflow-wrap:anywhere}
 #hf-imports ui-actions > a { display: inline-flex; align-items: center; min-height: var(--target-secondary); }
 .review-class-manager { max-width: 70rem; margin: auto; padding: var(--space-4); }
+
+/* 320px: four equal tools cut 되돌리기's text; two rows keep every label whole. */
+@media (width < 23rem) { #pixel-main .pixel-tool-rail > ui-button { flex: 1 1 40%; } }

@@ -252,6 +252,25 @@ def test_the_same_session_reported_twice_is_the_same_session_id(tmp_path, monkey
     assert {r.session_id for r in link.posted} == {SID}
 
 
+def test_a_contact_stop_reports_what_the_trace_read_and_the_frames_of_the_stop(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    trace = tmp_path / "trace.jsonl"
+    rows = [{"t": 100 + i / 30, "chunk": "lift_pick", "sent": [0, 0, 0, 32.6 + 3 * i / 30, 0, 48.8], "present": [0, 0, 0, 32.1 + 0.1 * i / 30, 0, 53.8]} for i in range(44)]
+    trace.write_text("\n".join(json.dumps(r) for r in rows))
+    monkeypatch.setenv("ROSY_CHUNK_TRACE", str(trace))
+    status = [{"error": "contact in lift_pick: wrist_flex lag rose to 2.2 units"}, {"error": "contact in park: the jaws stopped 5.0 units short"}]
+    reading = oi.stop_reading(status)
+    assert reading["chunk"] == "lift_pick" and reading["verdict"] == "blocked" and reading["joint"] == "wrist_flex"
+    assert oi.stop_reading(status[1:]) is None  # only a refused fold: nothing moved to read
+    trace.write_text("not json")
+    assert oi.stop_reading(status)["verdict"] == "undetermined"  # a damaged trace must not lose the report
+    oi.STILLS.mkdir(parents=True)
+    for name in ("arm_b-wrist", "arm_b-top", "arm_b-side", "arm_a-top"):
+        (oi.STILLS / f"{name}.jpg").write_bytes(b"\xff\xd8x")
+    assert sorted(Path(p).stem for p in oi.stills_of("arm_b", 0)) == ["arm_b-side", "arm_b-top"]  # the two the prompt names
+    assert oi.stills_of("arm_b", 9e12) == [] and oi.stills_of(None, 0) == []  # another session's are not this one's
+
+
 def test_the_local_clear_command_is_gone(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     with pytest.raises(SystemExit):

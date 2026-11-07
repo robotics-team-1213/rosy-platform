@@ -208,3 +208,11 @@ def test_a_jaw_tcp_from_the_environment_moves_the_tip_and_a_wild_one_is_refused(
     monkeypatch.setenv("ROSY_OMX_TCP_X_M", "0.3")
     with pytest.raises(SystemExit, match="jaw range"):
         m.load_kinematics(None)
+
+
+@pytest.mark.parametrize("name", ["descend_guard_frac", "lift_guard_frac"])
+def test_a_pace_past_the_guard_or_at_nothing_is_refused(name):
+    assert m.Planner({**PLAN, name: 0.3}).guard_pace(name) == pytest.approx(0.3 * m.GUARD_UNITS_PER_S)
+    for bad in (1.2, 0, -0.5):
+        with pytest.raises(ValueError, match=name):
+            m.Planner({**PLAN, name: bad}).guard_pace(name)
