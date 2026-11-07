@@ -89,7 +89,7 @@ class DelegatedArmJobs:
 def install_arm_transfer_job_routes(app, *, installation, deployment_profile, task_store, transport,
                                     socket_root, require_proposer, require_viewer, require_named_operator,
                                     observer, console, principals, other_tokens, other_services, registries,
-                                    policy_admission_core=None, grant_revisions=None):
+                                    policy_admission_core=None, grant_revisions=None, intake=None):
     store = reader = None
     commissioning = {}
     if installation is not None:
@@ -124,6 +124,24 @@ def install_arm_transfer_job_routes(app, *, installation, deployment_profile, ta
         service = PhysicalObservationService(dispatcher, observer)
     app.state.arm_transfer_dispatcher = dispatcher
     app.state.arm_transfer_delegate = None if store is None else DelegatedArmJobs(store, service)
+    if intake is not None:  # D-996 5: an arrived trip's object_ref becomes the supply arm's proposal
+        from .intake_transfer import intake_loop, validate_intake
+        validate_intake(intake, store)
+
+        @app.on_event("startup")
+        async def intake_start():
+            trips = getattr(app.state, "trip_proposal_store", None)
+            if trips is None:
+                _log.warning("intake proposals are off: trip proposals are not installed")
+                return
+            app.state.intake_task = asyncio.create_task(intake_loop(trips, store, intake, _log))
+
+        @app.on_event("shutdown")
+        async def intake_stop():
+            task = getattr(app.state, "intake_task", None)
+            if task is not None:
+                task.cancel()
+                await asyncio.gather(task, return_exceptions=True)
     control = getattr(app.state, "control_unit", None)
 
     async def check_parent(mission_id):
