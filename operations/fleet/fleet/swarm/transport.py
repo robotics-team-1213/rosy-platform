@@ -254,6 +254,10 @@ class HttpRobotClient(StationTransport, NavigationTransport):
         """D-721 Amendment: show this person request on the robot (dashboard, face). No motion authority."""
         return self._check(await self._http.put("/api/v1/person-request", json=body, headers=self._headers()))
 
+    async def person_request_get(self) -> dict:
+        """D-721 Amendment: the request the robot holds now (``{person_request: {...} | null}``)."""
+        return await self._get("/api/v1/person-request")
+
     async def person_request_clear(self, request_id: str) -> dict:
         """D-721 Amendment: stop showing it. Changes nothing else on the robot."""
         return self._check(await self._http.delete(f"/api/v1/person-request/{request_id}", headers=self._headers()))

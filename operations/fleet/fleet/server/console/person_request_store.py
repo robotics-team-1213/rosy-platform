@@ -18,6 +18,7 @@ from fleet.server.sqlite_policy import configure_connection, enable_wal
 COLUMNS = ("id", "robot_id", "kind", "text", "why", "requested_by", "state", "answered_by", "answer_note",
            "created_at", "expires_at", "answered_at", "delivery")
 LISTED_MAX = 200
+ACTIVE_DELIVERY = frozenset({"not_sent", "waiting", "delivered", "not_delivered"})
 
 
 class PersonRequestStore:
@@ -36,6 +37,8 @@ class PersonRequestStore:
     def _row(self, row) -> dict:
         out = dict(zip(COLUMNS, row))
         out["delivery"] = json.loads(out["delivery"])
+        at = out["delivery"].get("at")
+        out["delivery"]["age_s"] = None if at is None else round(max(0.0, self._wall() - at), 1)
         return out
 
     def create(self, *, robot_id: Optional[str], kind: str, text: str, why: str, requested_by: str,
@@ -85,7 +88,23 @@ class PersonRequestStore:
                 "WHERE id=? AND state='open'", (state, by, note, self._wall(), request_id)).rowcount
         return self.get(request_id) if changed else None
 
-    def set_delivery(self, request_id: str, state: str, error: Optional[str] = None) -> None:
+    def open_for(self, robot_id: Optional[str], requested_by: Optional[str] = None) -> list[dict]:
+        """Open requests for one robot (or none), newest first; optionally only one requester's."""
+        self.expire_due()
+        sql, args = "SELECT * FROM person_requests WHERE state='open' AND robot_id IS ?", [robot_id]
+        if requested_by is not None:
+            sql, args = sql + " AND requested_by=?", [*args, requested_by]
+        with self._lock:
+            rows = self._db.execute(sql + " ORDER BY created_at DESC", args).fetchall()
+        return [self._row(r) for r in rows]
+
+    def set_delivery(self, request_id: str, state: str, error: Optional[str] = None) -> bool:
+        """Record what Fleet last learned about the robot's screen. A closed request is never marked as shown
+        (``delivered``, ``waiting``, ``not_delivered``, ``not_sent`` need it open), and an open one is never marked
+        cleared: the write that lost the race changes nothing."""
+        guard = "state='open'" if state in ACTIVE_DELIVERY else "state<>'open'"
         with self._lock, self._db:
-            self._db.execute("UPDATE person_requests SET delivery=? WHERE id=?",
-                             (json.dumps({"state": state, "at": self._wall(), "error": error}), request_id))
+            changed = self._db.execute(
+                f"UPDATE person_requests SET delivery=? WHERE id=? AND {guard}",
+                (json.dumps({"state": state, "at": self._wall(), "error": error}), request_id)).rowcount
+        return bool(changed)

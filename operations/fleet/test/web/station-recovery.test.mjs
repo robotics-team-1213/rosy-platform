@@ -12,7 +12,8 @@ const { recoveryHeadline, recoveryReason, recoveryView, NO_MOTION } =
 const ok = { robot_id: 'r1', request: true, bay: 'C1', reason: null, percent: 17.6, bays_unknown: 0 };
 
 test('an actionable request names the bay and offers the approve button, with the no-motion line', () => {
-  assert.equal(recoveryHeadline(ok), ': 스테이션 복구 요청 (배터리 18%) — 충전 칸 C1로 보낼 수 있습니다');
+  assert.equal(recoveryHeadline(ok), ': 스테이션 복구 요청 (배터리 18%) — 충전 칸 C1 후보 · 승인은 기록만, 아직 아무것도 움직이지 않음');
+  assert.doesNotMatch(recoveryHeadline(ok), /보낼 수/);
   const spec = recoveryView(ok, { operator: true });
   assert.equal(spec.approve, true);
   assert.equal(spec.approveReason, '');
@@ -20,7 +21,7 @@ test('an actionable request names the bay and offers the approve button, with th
 });
 
 test('a refused request shows its reason as a sentence and no approve button', () => {
-  for (const reason of ['no_station', 'no_free_bay', 'position_unknown', 'already_stopped', 'busy', 'another_returning']) {
+  for (const reason of ['no_station', 'no_free_bay', 'position_unknown', 'already_stopped', 'busy', 'another_returning', 'state_unknown']) {
     const spec = recoveryView({ ...ok, bay: null, reason }, { operator: true });
     assert.equal(spec.approve, false, reason);
     assert.match(recoveryHeadline({ ...ok, bay: null, reason }), /스테이션 복구 요청/);

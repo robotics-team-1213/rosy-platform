@@ -7,6 +7,7 @@ const REASON = Object.freeze({
   no_station: "지도에 충전 스테이션이 없습니다",
   no_free_bay: "빈 충전 칸이 없습니다",
   position_unknown: "위치 확인 불가 — 로봇 위치를 먼저 지정하세요",
+  state_unknown: "로봇 상태 확인 불가",
   already_stopped: "이미 비상 정지 중 — 스테이션 복구는 정지를 풀지 않습니다. 사람이 충전 위치로 옮겨야 합니다",
   busy: "운행 또는 이동 중입니다",
   another_returning: "다른 로봇이 복귀 중입니다",
@@ -27,7 +28,7 @@ export function recoveryHeadline(request) {
   const level = Number.isFinite(request.percent) ? ` (배터리 ${Math.round(request.percent)}%)` : "";
   const why = recoveryReason(request);
   return why ? `: 스테이션 복구 요청${level} — ${why}`
-    : `: 스테이션 복구 요청${level} — 충전 칸 ${request.bay}로 보낼 수 있습니다`;
+    : `: 스테이션 복구 요청${level} — 충전 칸 ${request.bay} 후보 · 승인은 기록만, 아직 아무것도 움직이지 않음`;
 }
 
 /** Pure: what the opened row shows. The approve button exists only when the answer allows it. */

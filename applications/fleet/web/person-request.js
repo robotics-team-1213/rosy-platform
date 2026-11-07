@@ -15,10 +15,16 @@ export function personHeadline(request) {
   return `: 사람 부탁(${kind}) — ${request.text}${request.why ? ` · 이유: ${request.why}` : ""}`;
 }
 
-/** Pure: whether the robot's own screen shows it. Only a confirmed hand-over counts as shown. */
+export const SHOWN_FRESH_S = 30;
+
+/** Pure: whether the robot's own screen shows it. "Shown" means Fleet read it back from the robot lately. */
 export function deliveryText(request) {
+  const age = request.delivery?.age_s;
   switch (request.delivery?.state) {
-    case "delivered": return "로봇 화면에도 표시 중";
+    case "delivered":
+      return Number.isFinite(age) && age <= SHOWN_FRESH_S ? `로봇 화면에도 표시 중 (${Math.round(age)}초 전 확인)`
+        : "로봇 화면 표시 확인 불가 — 최근에 로봇에서 읽지 못했습니다";
+    case "waiting": return "앞선 부탁이 로봇 화면에 있어 이 부탁은 아직 로봇 화면에 없음 — 관제에서만 보입니다";
     case "not_delivered": return "로봇 화면에 전달하지 못함 — 관제에서만 보입니다";
     case "clear_failed": return "로봇 화면에서 지우지 못함 — 시간이 지나면 사라집니다";
     case "cleared": return "로봇 화면에서 지움";

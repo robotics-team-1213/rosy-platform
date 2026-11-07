@@ -234,3 +234,44 @@ def test_an_approved_request_is_recorded_for_the_named_operator_and_starts_nothi
     assert recorder.events == [("station_recovery_approved", "alice",
                                 {"robot_id": "r1", "bay": "C1", "level": "warning", "percent": 18.0,
                                  "map_version": 7, "started": False})]
+
+# ---- a state with missing facts is unknown, never "idle and clear" ----------------------------------
+
+def _drop(path):
+    def mutate(r):
+        target = r
+        for key in path[:-1]:
+            target = target[key]
+        target.pop(path[-1])
+    return mutate
+
+
+@pytest.mark.parametrize("mutate", [
+    lambda r: r["state"].clear(),
+    _drop(("state", "safety")), _drop(("state", "safety", "estop")), _drop(("state", "mode")), _drop(("rule_m",)),
+    lambda r: r["state"].update(mode="WEIRD"),
+    lambda r: r["state"].update(mode=None),
+    lambda r: r["state"]["safety"].update(estop=None),
+    lambda r: r["state"]["safety"].update(estop="false"),
+    lambda r: r.update(rule_m=None),
+])
+def test_missing_state_facts_answer_state_unknown_and_never_a_bay(mutate):
+    candidate = row()
+    mutate(candidate)
+    answer = decide(candidate, LOCALIZED, free_plan(), False)
+    assert (answer["request"], answer["bay"], answer["reason"]) == (True, None, "state_unknown")
+
+
+def test_a_known_stop_still_wins_over_unknown_facts():
+    candidate = row(estop=True)
+    candidate["state"].pop("mode")
+    assert decide(candidate, LOCALIZED, free_plan(), False)["reason"] == "already_stopped"
+
+
+def test_approving_with_an_empty_state_is_refused_with_the_unknown_reason():
+    candidate = row()
+    candidate["state"] = {}
+    client, recorder = make_client([candidate])
+    refused = client.post("/api/fleet/station-recovery/r1/approve")
+    assert refused.status_code == 409 and refused.json()["detail"]["reason"] == "state_unknown"
+    assert recorder.events == []

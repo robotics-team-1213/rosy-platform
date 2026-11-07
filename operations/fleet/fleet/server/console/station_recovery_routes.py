@@ -37,6 +37,10 @@ class RobotRequests:
             "request_id": record["id"], "kind": record["kind"], "text": record["text"], "why": record["why"],
             "ttl_s": max(1.0, min(3600.0, record["expires_at"] - self._wall()))})
 
+    async def read(self, robot_id: str):
+        """What the robot holds right now (its view, with ``id``), or None. Raises when it cannot be read."""
+        return (await self._clients[robot_id].person_request_get()).get("person_request")
+
     async def clear(self, robot_id: str, request_id: str) -> None:
         await self._clients[robot_id].person_request_clear(request_id)
 

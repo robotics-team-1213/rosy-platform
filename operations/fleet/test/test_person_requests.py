@@ -21,20 +21,31 @@ class Clock:
 
 
 class Robots:
-    """Only what a person request may do to a robot: show one and stop showing it. Anything else is an error."""
+    """A model of CORE's one-request holder plus the only calls a person request may make: show, read, clear.
+    Anything else (goal, cancel, estop, release, mode, ...) raises AssertionError."""
 
     def __init__(self, fail=False):
-        self.calls, self.fail = [], fail
+        self.calls, self.fail, self.held, self.on_put = [], fail, None, None
 
     async def put(self, robot_id, record):
         if self.fail:
             raise ConnectionError("no route")
+        if self.on_put:
+            self.on_put(record)   # something happens while the PUT is in flight
         self.calls.append(("put", robot_id, record["id"]))
+        self.held = {"id": record["id"]}   # CORE keeps one: a new id replaces the old
 
     async def clear(self, robot_id, request_id):
         if self.fail:
             raise ConnectionError("no route")
         self.calls.append(("clear", robot_id, request_id))
+        if self.held and self.held["id"] == request_id:
+            self.held = None
+
+    async def read(self, robot_id):
+        if self.fail:
+            raise ConnectionError("no route")
+        return self.held
 
     def __getattr__(self, name):   # goal, cancel, estop, release, mode, ... must never be reached
         raise AssertionError(f"a person request tried to call the robot: {name}")
@@ -51,7 +62,8 @@ def make(path=None, robots=None, clock=None):
 
     async def known():
         return {"r1", "r2"}
-    install_person_request_routes(app, store, [Depends(viewer)], proposer, named, known, robots)
+    install_person_request_routes(app, store, [Depends(viewer)], proposer, named, known, robots,
+                                  monotonic=store._wall)
     return TestClient(app), store
 
 
@@ -212,3 +224,132 @@ def test_an_unreachable_robot_through_the_real_gateway_reads_not_delivered():
     client, _ = make(robots=RobotRequests({"r1": Down()}))
     body = post(client).json()
     assert body["delivery"]["state"] == "not_delivered" and body["state"] == "open"
+
+# ---- the robot's screen follows the newest open request, and "shown" is only what was read back -------------
+
+def reconcile(client):
+    import asyncio
+    asyncio.run(client.app.state.person_request_reconcile())
+
+
+def other_post(client, who="other", **over):
+    return post(client, who, **over)
+
+
+def test_only_the_newest_open_request_is_on_the_robot_and_an_older_one_waits():
+    robots = Robots()
+    client, _ = make(robots=robots)
+    first = post(client).json()
+    second = other_post(client, kind="move_robot").json()
+    assert robots.held["id"] == second["id"]
+    states = {r["id"]: r["delivery"]["state"] for r in client.get("/api/fleet/person-requests").json()["requests"]}
+    assert states == {first["id"]: "waiting", second["id"]: "delivered"}
+    # answering the newest brings the older one onto the screen
+    client.post(f"/api/fleet/person-requests/{second['id']}/answer", json={"answer": "done"})
+    assert robots.held["id"] == first["id"]
+    assert client.get(f"/api/fleet/person-requests/{first['id']}").json()["delivery"]["state"] == "delivered"
+
+
+def test_a_core_restart_is_noticed_and_the_request_is_shown_again():
+    clock = Clock()
+    robots = Robots()
+    client, _ = make(robots=robots, clock=clock)
+    rid = post(client, expires_s=600).json()["id"]
+    robots.held = None   # CORE restarted: the request is gone from the screen
+    clock.now += 10
+    reconcile(client)
+    assert robots.held == {"id": rid}
+    assert [c[0] for c in robots.calls] == ["put", "put"]
+    assert client.get(f"/api/fleet/person-requests/{rid}").json()["delivery"]["state"] == "delivered"
+
+
+def test_delivered_is_set_from_a_read_back_and_an_unreadable_robot_is_not_delivered():
+    clock = Clock()
+    robots = Robots()
+    client, _ = make(robots=robots, clock=clock)
+    rid = post(client).json()["id"]
+    clock.now += 20
+    assert client.get(f"/api/fleet/person-requests/{rid}").json()["delivery"]["age_s"] == 20.0   # old: the console says unknown
+    reconcile(client)
+    assert client.get(f"/api/fleet/person-requests/{rid}").json()["delivery"]["age_s"] == 0.0     # read back just now
+    robots.fail = True
+    clock.now += 10
+    reconcile(client)
+    assert client.get(f"/api/fleet/person-requests/{rid}").json()["delivery"]["state"] == "not_delivered"
+
+
+def test_a_request_closed_while_the_put_is_in_flight_is_taken_back_and_never_marked_shown():
+    robots = Robots()
+    client, store = make(robots=robots)
+    state = {}
+
+    def closes(record):
+        state["closed"] = store.close(record["id"], "withdrawn", by="alice")   # the requester withdraws mid-PUT
+
+    robots.on_put = closes
+    body = post(client).json()
+    assert state["closed"] is not None
+    assert robots.held is None   # the PUT landed and was cleared again
+    final = client.get(f"/api/fleet/person-requests/{body['id']}").json()
+    assert final["state"] == "withdrawn" and final["delivery"]["state"] == "cleared"
+
+
+def test_a_closed_record_cannot_be_marked_delivered_and_an_open_one_cannot_be_marked_cleared():
+    client, store = make()
+    rid = post(client).json()["id"]
+    assert store.set_delivery(rid, "cleared") is False   # still open
+    store.close(rid, "withdrawn", by="alice")
+    assert store.set_delivery(rid, "delivered") is False and store.set_delivery(rid, "waiting") is False
+    assert store.get(rid)["delivery"]["state"] != "delivered"
+    assert store.set_delivery(rid, "clear_failed", "X") is True
+
+
+def test_a_failed_clear_is_retried_until_the_robot_lets_go():
+    clock = Clock()
+    robots = Robots()
+    client, _ = make(robots=robots, clock=clock)
+    rid = post(client).json()["id"]
+    robots.fail = True
+    client.post(f"/api/fleet/person-requests/{rid}/answer", json={"answer": "done"})
+    assert client.get(f"/api/fleet/person-requests/{rid}").json()["delivery"]["state"] == "clear_failed"
+    robots.fail = False
+    assert robots.held == {"id": rid}   # still beeping on the robot
+    clock.now += 10
+    reconcile(client)
+    assert robots.held is None
+    assert client.get(f"/api/fleet/person-requests/{rid}").json()["delivery"]["state"] == "cleared"
+
+
+def test_an_expired_request_is_not_shown_again_by_the_reconcile_step():
+    clock = Clock()
+    robots = Robots()
+    client, _ = make(robots=robots, clock=clock)
+    rid = post(client, expires_s=30).json()["id"]
+    robots.held = None
+    clock.now += 31
+    reconcile(client)
+    assert robots.held is None and [c[0] for c in robots.calls] == ["put"]
+    assert client.get(f"/api/fleet/person-requests/{rid}").json()["state"] == "expired"
+
+
+def test_a_repeat_from_the_same_requester_returns_the_same_request_without_another_beep():
+    robots = Robots()
+    client, _ = make(robots=robots)
+    first = post(client).json()
+    again = post(client, text="다시 부탁합니다").json()
+    assert again["id"] == first["id"] and again["text"] == first["text"]
+    assert [c[0] for c in robots.calls] == ["put"]   # one PUT: the screen was not asked again
+
+
+def test_a_robot_holds_at_most_three_open_requests():
+    client, _ = make()
+    for who in ("operator", "other", "service"):
+        assert post(client, who).status_code == 200
+    PRINCIPALS["fourth"] = SitePrincipal("dave", "operator", grants=legacy_grants({}))
+    try:
+        capped = post(client, "fourth")
+        elsewhere = post(client, "fourth", robot_id="r2")
+    finally:
+        del PRINCIPALS["fourth"]
+    assert capped.status_code == 409 and capped.json()["detail"] == {"code": "TOO_MANY_OPEN_REQUESTS", "limit": 3}
+    assert elsewhere.status_code == 200   # another robot is unaffected

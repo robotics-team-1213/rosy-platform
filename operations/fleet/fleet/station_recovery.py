@@ -20,7 +20,8 @@ BUSY_MODES = ("NAVIGATION", "DOCKING", "MANUAL")
 BUSY_NAVIGATION = ("PLANNING", "NAVIGATING")
 BUSY_DOCKING = ("DOCKING", "UNDOCKING")
 REASONS = ("no_station", "no_free_bay", "position_unknown", "already_stopped", "busy",
-           "another_returning", "battery_evidence_missing")
+           "another_returning", "battery_evidence_missing", "state_unknown")
+KNOWN_MODES = ("IDLE", *BUSY_MODES, "EMERGENCY")
 
 
 def _fresh_battery(row: dict) -> Optional[dict]:
@@ -71,8 +72,11 @@ def decide(row: dict, pose, bays: Optional[dict], another_returning: bool) -> Op
     if mine is not None and mine.get("state") != "planned":
         return None   # already in a bay: charge_bays owns what happens there
     answer["bays_unknown"] = sum(b.get("state") == "unknown" for b in rows)
-    if (state.get("safety") or {}).get("estop") is True or state.get("mode") == "EMERGENCY":
+    estop = (state.get("safety") or {}).get("estop")
+    if estop is True or state.get("mode") == "EMERGENCY":
         reason = "already_stopped"   # recovery never releases a stop
+    elif type(estop) is not bool or state.get("mode") not in KNOWN_MODES or not isinstance(row.get("rule_m"), dict):
+        reason = "state_unknown"   # no stop flag, mode or motion verdict: an empty state is not "idle and clear"
     elif _busy(row, state):
         reason = "busy"
     elif not rows:

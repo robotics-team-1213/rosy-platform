@@ -9,7 +9,7 @@ const { personHeadline, personView, deliveryText, requestsFor, NO_MOTION_LINE } 
   await import('../../../../applications/fleet/web/person-request.js');
 
 const ask = { id: 'a1', robot_id: 'rosy_46', kind: 'unplug_charger', text: '충전기를 뽑아 주세요',
-  why: '주행을 시작해야 합니다', state: 'open', created_at: 2, delivery: { state: 'delivered' } };
+  why: '주행을 시작해야 합니다', state: 'open', created_at: 2, delivery: { state: 'delivered', age_s: 1 } };
 
 test('the queue sentence names the kind, what to do and why', () => {
   assert.equal(personHeadline(ask), ': 사람 부탁(충전기 분리) — 충전기를 뽑아 주세요 · 이유: 주행을 시작해야 합니다');
@@ -29,8 +29,11 @@ test('a viewer, a busy answer or an unnamed login locks the buttons with a reaso
   assert.equal(personView(ask, { operator: true, named: '이름 있는 계정 필요' }).lock, '이름 있는 계정 필요');
 });
 
-test('only a confirmed hand-over reads as shown on the robot', () => {
-  assert.equal(deliveryText({ delivery: { state: 'delivered' } }), '로봇 화면에도 표시 중');
+test('shown means read back from the robot lately; an old or missing read-back is unknown, not shown', () => {
+  assert.equal(deliveryText({ delivery: { state: 'delivered', age_s: 4.2 } }), '로봇 화면에도 표시 중 (4초 전 확인)');
+  assert.match(deliveryText({ delivery: { state: 'delivered', age_s: 120 } }), /확인 불가/);
+  assert.match(deliveryText({ delivery: { state: 'delivered' } }), /확인 불가/);
+  assert.match(deliveryText({ delivery: { state: 'waiting', age_s: 1 } }), /아직 로봇 화면에 없음/);
   assert.match(deliveryText({ delivery: { state: 'not_delivered' } }), /전달하지 못함/);
   assert.match(deliveryText({ delivery: { state: 'not_sent' } }), /보내지 않음/);
   assert.match(deliveryText({}), /보내지 않음/);
