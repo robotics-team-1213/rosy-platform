@@ -167,10 +167,10 @@ class Teacher:
                     pad_touched_neighbours=sorted(self.contacts["pad_neighbour"]), held_tilt_max_deg=round(self.held_tilt, 1), first_contact_phase=self.first)
 
     def _hold_shift(self, arm, off, q, yaw, pos):
-        """TCP shift that puts the container centre (not the TCP) where the waypoint says: R @ held offset, nominal 2.01 mm under the TCP removed."""
+        """TCP shift that puts the container centre (not the TCP) where the waypoint says: R @ held offset, nominal layout.hold_below under the TCP removed."""
         qs, _, _ = arm.ik(q, pos, yaw, 20)
         R = arm.frames(qs)[2]
-        return -(R @ off) - np.array([0, 0, tasks.HOLD_BELOW_TCP])
+        return -(R @ off) - np.array([0, 0, self.layout.hold_below])
 
     def fresh(self, here):
         """A world at rest with the containers of `here` on their sites and every other container parked."""

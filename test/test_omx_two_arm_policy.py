@@ -12,7 +12,7 @@ import omx_two_arm_tasks as tasks  # noqa: E402
 
 
 def test_every_plan_step_gets_its_own_goal():
-    """Only the top camera's picture could otherwise tell the model which of 21 steps it is on."""
+    """Only the top camera's picture could otherwise tell the model which plan step it is on."""
     layout = sites.Layout()
     steps, goals = [], []
     for name in policy.TASKS:
@@ -23,8 +23,8 @@ def test_every_plan_step_gets_its_own_goal():
             goals.append(policy.goal_vector(layout, step, {k: v for k, v in here.items() if k != step["container"]}))
             here[step["container"]] = step["to"]
     goals = np.array(goals)
-    assert goals.shape == (21, 12)
-    assert len({goal.tobytes() for goal in goals}) == 21
+    assert goals.shape == (len(steps), 12)
+    assert len({goal.tobytes() for goal in goals}) == len(steps)
     assert all(goal[0] == (step["arm"] == "arm_a") and goal[1] == (step["arm"] == "arm_b") for goal, step in zip(goals, steps))
 
 

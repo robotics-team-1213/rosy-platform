@@ -16,8 +16,7 @@ import omx_two_arm_sites as sites_mod
 
 ROOT = Path(__file__).resolve().parents[2]
 TASK_FILE = ROOT / "deploy/robot/omx/sim/two_arm_tasks.json"
-HOLD_BELOW_TCP = .00201  # the held container centre sits 2.01 mm under the TCP (Isaac hold check)
-CARRY_CLEAR = .035       # container bottom clears the highest seated container by 5 mm: centre 30 mm up plus 5
+CARRY_CLEAR = .005       # container bottom clears the highest seated container by this much (plus one container height)
 ARM_RADIUS, ARM_MARGIN = .03, .005  # capsule stand-in for a link; MuJoCo contacts are the real check
 RELEASE_DROP = .005     # fixture stack_release_clearance_m; layer 0 rests on studs (floor enforced) and the temp lanes have a funnel
 RELEASE_DROP_UPPER = RELEASE_DROP  # onto a container too (a lower drop was only needed while single-contact deck meshes made boxes creep; see omx_two_arm_world)
@@ -44,7 +43,7 @@ def wrap_pi(angle):
 def carry_z(layout, here, a, b):
     """TCP height for moving between sites a and b: above every seated container and both ends."""
     tops = [layout.sites[s]["z"] for s in here.values() if layout.sites[s]["kind"] == "ship"]
-    return max([layout.sites[a]["z"], layout.sites[b]["z"], *tops]) + CARRY_CLEAR + HOLD_BELOW_TCP
+    return max([layout.sites[a]["z"], layout.sites[b]["z"], *tops]) + layout.box[2] + CARRY_CLEAR + layout.hold_below
 
 
 def waypoints(layout, step, here, pick=None, drop=RELEASE_DROP, drop_upper=RELEASE_DROP_UPPER):
@@ -108,7 +107,7 @@ def solve_chain(arm, wps, q0, samples=12, roll_floor=None, branch="best"):
 
 def link_clearance(layout, arm, path, here):
     """Smallest distance (m) from the link3 and link4 meshes along the joint path to any container standing on a site in `here`
-    (container name -> site): vertex samples of the real URDF meshes against the 90 x 30 x 30 mm boxes. Negative means inside."""
+    (container name -> site): vertex samples of the real URDF meshes against the container boxes (layout.box). Negative means inside."""
     boxes = [(np.array([*layout.sites[s]["xy"], layout.sites[s]["z"]]), layout.sites[s]["yaw"]) for s in here.values() if s != "belt"]
     points = {n: kin.link_points(n) for n in ("link3", "link4")}
     best = 1e9
@@ -120,7 +119,7 @@ def link_clearance(layout, arm, path, here):
                 d = world - c
                 cs, sn = math.cos(-yaw), math.sin(-yaw)
                 local = np.stack([cs * d[:, 0] - sn * d[:, 1], sn * d[:, 0] + cs * d[:, 1], d[:, 2]], 1)
-                q_ = np.abs(local) - np.array([.045, .015, .015])
+                q_ = np.abs(local) - np.array(layout.box) / 2
                 best = min(best, float((np.linalg.norm(np.maximum(q_, 0), axis=1) + np.minimum(q_.max(1), 0)).min()))
     return best
 
@@ -155,12 +154,12 @@ def validate(layout, task, data=None):
         elif here.get(c) != a:
             problems.append(f"{sid}: {c} is not at {a} (it is at {here.get(c)})")
         sa = layout.sites[a]
-        if sa["kind"] == "ship" and (above := f"ship-r{sa['row']}-l{sa['layer'] + 1}") in occupied:
+        if sa["kind"] == "ship" and (above := f"ship-{sa['stack']}-l{sa['layer'] + 1}") in occupied:
             problems.append(f"{sid}: {c} would be taken from under {occupied[above]} at {above}")
         if b != "belt" and b in occupied:
             problems.append(f"{sid}: target {b} already holds {occupied[b]}")
         sb = layout.sites[b]
-        if sb["kind"] == "ship" and sb["layer"] > 0 and f"ship-r{sb['row']}-l{sb['layer'] - 1}" not in occupied:
+        if sb["kind"] == "ship" and sb["layer"] > 0 and f"ship-{sb['stack']}-l{sb['layer'] - 1}" not in occupied:
             problems.append(f"{sid}: {b} has nothing under it")
         if b == "belt":
             problems.append(f"{sid}: the belt end is a source, not a target")
