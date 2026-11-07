@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import re
 import json
 import subprocess
@@ -168,6 +169,31 @@ def test_checksum_detects_bundle_tampering():
 
     with pytest.raises(ValueError, match="checksum"):
         validate_provision_bundle(bundle)
+
+
+TRUST = {"issuer": "https://account.fixture.invalid", "public_key_sha256": [hashlib.sha256(b"pem").hexdigest()]}
+
+
+def test_account_trust_is_optional_validated_and_kept_for_a_reimage():
+    assert "account_trust" not in _bundle()["fleet"]
+    bundle = _bundle(account_trust=TRUST)
+    Draft202012Validator(json.loads(SCHEMA.read_text(encoding="utf-8"))).validate(bundle)
+    assert bundle["fleet"]["account_trust"] == TRUST
+    assert create_provision_receipt(bundle)["fleet"]["account_trust"] == TRUST
+
+
+@pytest.mark.parametrize("trust", [
+    {"issuer": "http://account.fixture.invalid", "public_key_sha256": TRUST["public_key_sha256"]},
+    {"issuer": TRUST["issuer"] + "/", "public_key_sha256": TRUST["public_key_sha256"]},
+    {"issuer": TRUST["issuer"], "public_key_sha256": []},
+    {"issuer": TRUST["issuer"], "public_key_sha256": ["short"]},
+    {"issuer": TRUST["issuer"], "public_key_sha256": "a" * 64},
+    {"issuer": TRUST["issuer"], "public_key_sha256": TRUST["public_key_sha256"], "extra": 1},
+    {"issuer": TRUST["issuer"]},
+])
+def test_a_malformed_account_trust_is_refused(trust):
+    with pytest.raises(ValueError):
+        _bundle(account_trust=trust)
 
 
 def test_receipt_omits_every_transient_secret():

@@ -36,7 +36,7 @@ D-955 결정 5는 장비 등록이 끝나면 같은 transaction에서 등록부 
 
 ### Consequences
 
-- **완전 자동은 아니다.** 로봇마다 `auth.account_trust`를 먼저 설치해야 자동 전달이 된다. 고정 전에는 `account_link`가 `robot_refused`이며 관리자가 직접 보낼 수 있다. 이미지·개인화 단계에서 이 값을 넣는 일은 별도다.
+- **완전 자동은 아니다.** 로봇마다 `auth.account_trust`를 먼저 설치해야 자동 전달이 된다. 고정 전에는 `account_link`가 `robot_refused`이며 관리자가 직접 보낼 수 있다. 새 카드는 `prepare-rosy-sd.ps1 -AccountTrustFile`이 프로비저닝 묶음 `fleet.account_trust`로 넣고, 재이미징은 영수증의 값을 유지한다. 이미 운영 중인 로봇은 CORE overlay에 직접 넣거나 관리자가 전달한다.
 - 활성화에는 Account 설정의 `registrar_token_sha256`, Fleet 환경 변수 `ROSY_ACCOUNT_LINK_CONFIG`가 가리키는 JSON(issuer, 등록 키 파일, 공개 키 파일)가 필요하다. 없으면 지금처럼 동작한다.
 - 로봇을 빼도 등록부 줄은 자동으로 정지되지 않는다. 계정 관리자가 화면에서 정지한다. 재발급 없이 허브 연결만 끊는 경우와 구분할 근거가 없어 자동 정지를 넣지 않았다.
 - `account_link` 상태는 Fleet 메모리에만 있어 재시작하면 `unknown`이다. 등록부와 로봇 readback이 정본이다.
