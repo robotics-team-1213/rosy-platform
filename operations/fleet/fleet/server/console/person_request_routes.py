@@ -12,7 +12,7 @@ from fastapi import Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from core_common.protocol.person_request import CONTROL, DEFAULT_TTL_S, ID_PATTERN, KINDS, MAX_TTL_S
-from fleet.server.console.person_request_store import PersonRequestStore
+from fleet.server.person_request_store import PersonRequestStore
 
 logger = logging.getLogger(__name__)
 STATES = ("open", "done", "cannot", "expired", "withdrawn")

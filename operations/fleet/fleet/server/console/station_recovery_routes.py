@@ -13,8 +13,8 @@ from typing import Awaitable, Callable, Optional
 
 from fastapi import Depends, HTTPException
 
-from fleet.server.console.person_request_routes import install_person_request_routes
-from fleet.server.console.person_request_store import PersonRequestStore
+from fleet.server.person_request_routes import install_person_request_routes
+from fleet.server.person_request_store import PersonRequestStore
 from fleet.station_recovery import decide
 
 logger = logging.getLogger(__name__)

@@ -4,8 +4,8 @@ from fastapi import Depends, FastAPI, Request
 from fastapi.testclient import TestClient
 
 from fleet.server.auth.site_auth import build_role_guards
-from fleet.server.console.person_request_routes import install_person_request_routes
-from fleet.server.console.person_request_store import PersonRequestStore
+from fleet.server.person_request_routes import install_person_request_routes
+from fleet.server.person_request_store import PersonRequestStore
 from rosy_account.principal import SitePrincipal, legacy_grants
 
 PRINCIPALS = {name: SitePrincipal(pid, role, grants=legacy_grants({}))
