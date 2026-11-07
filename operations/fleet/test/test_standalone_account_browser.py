@@ -73,6 +73,7 @@ def test_standalone_existing_cookie_and_initial_password_resume_registered_app(s
                 page.locator('#account-login').click()
                 expect(page.get_by_role('heading', name='Rosy Account 로그인', exact=True)).to_be_visible()
                 expect(page.locator('#login-back')).to_be_hidden()
+                page.goto('about:blank')  # This login page leaves for /console/accounts once it sees the cookie, which can beat the goto below.
                 context.add_cookies([{'name': 'rosy_fleet_session', 'value': value, 'url': origin,
                                       'secure': True, 'httpOnly': True, 'sameSite': 'Lax'}])
                 page.goto(entry)

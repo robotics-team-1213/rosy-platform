@@ -44,7 +44,7 @@ def test_app_login_depends_on_account_availability_not_fleet_mode(account_page, 
     expect(page.locator('#login-availability')).to_be_hidden()
     _credentials(page)
     page.locator('[data-login=submit]').click()
-    expect(page.get_by_role('heading', name='Application authorization')).to_be_visible()
+    expect(page.get_by_role('heading', name='Application authorization')).to_be_visible(timeout=AUTHORIZE_WAIT_MS)
     expect(page).to_have_url(origin + target)
     assert page.request.get(origin + '/api/fleet/auth/session').json()['principal_id'] == 'alice'
 
@@ -78,9 +78,13 @@ def test_denied_login_stays_visible_and_allows_another_account(account_page):
     page.locator('[data-login=login]').fill('bob')
     page.locator('[data-login=password]').fill('pw-1234')
     page.locator('[data-login=submit]').click()
-    expect(page.get_by_role('heading', name='Application authorization')).to_be_visible()
+    expect(page.get_by_role('heading', name='Application authorization')).to_be_visible(timeout=AUTHORIZE_WAIT_MS)
     assert len(authorizations) == 1 and authorizations[0] == origin + target
     assert page.request.get(origin + '/api/fleet/auth/session').json()['principal_id'] == 'bob'
+
+
+# A password hash plus redirects outlasted the 5 s default at load 40 on a test PC (2026-11-07 FULL).
+AUTHORIZE_WAIT_MS = 20000
 
 
 @pytest.fixture

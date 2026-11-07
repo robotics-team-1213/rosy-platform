@@ -17,6 +17,8 @@ class _Policy(UpdaterRecords):
     def _judge_inputs(self, data: object) -> list[str]:
         problems = super()._judge_inputs(data)
         if isinstance(data, dict):
+            if data.get("robot_mode") == "MANUAL":  # D-985 eases MANUAL for payloads only
+                problems.append("OS update requires robot mode IDLE")
             percent = data.get("battery_percent")
             if not (_finite(percent) and 60 <= percent <= 100):
                 problems.append("OS update requires a known battery level between 60 and 100 percent")
