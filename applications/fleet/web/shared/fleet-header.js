@@ -100,6 +100,18 @@ export function showConnection(info) {
   if ($("fleet-login").hidden) $("development-badge").hidden = !developmentConnection;
 }
 
+// D-955 step 4: the header's own session read has no app list, and it repeats, so ask Account's side at most once a minute.
+let appsRead = 0;
+function showApps(force) {
+  const now = Date.now();
+  if (!force && now - appsRead < 60000) return;
+  appsRead = now;
+  fetch("/api/fleet/auth/session", {cache: "no-store", signal: AbortSignal.timeout(5000)})
+    .then(response => response.ok ? response.json() : null)
+    .then(session => renderAccountApps(session, $("fleet-account-identity")))
+    .catch(() => {});  // The menu is navigation only; a failed read leaves the rest of the header alone.
+}
+
 // English role names and principal ids stay in title (D-540 2).
 export function showSession(identity, {credentialChange = false, focusOrigin = document.activeElement} = {}) {
   const tag = $("user-role"), title = `${identity.principal_id} · ${identity.role}`;
@@ -109,7 +121,7 @@ export function showSession(identity, {credentialChange = false, focusOrigin = d
   $('fleet-login').hidden = true;
   $('fleet-account').hidden = false;
   $('fleet-account-identity').textContent = `${identity.principal_id} · ${roleLabel(identity.role)}`;
-  renderAccountApps(identity, $('fleet-account-identity'));
+  showApps(changed);
   const token = $('token-access');
   if (changed || credentialChange) {
     if (token) token.open = false;
@@ -128,6 +140,8 @@ export function showSession(identity, {credentialChange = false, focusOrigin = d
 export function showSignedOut({refused = true} = {}) {
   $("development-badge").hidden = true;
   $('fleet-account').hidden = true;
+  appsRead = 0;
+  renderAccountApps(null, $('fleet-account-identity'));
   $('fleet-login').hidden = false;
   const tag = $("user-role");
   tag.textContent = "인증 필요";

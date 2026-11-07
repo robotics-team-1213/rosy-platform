@@ -196,6 +196,14 @@ def test_manager_registers_and_stops_an_app_in_the_page(tmp_path):
                 expect(page.locator("#client-id")).to_have_value("second")
                 expect(page.locator("#account-clients")).to_contain_text("pilot")
                 assert "second" not in authority.clients
+                # The console header offers the same list. This embedded fixture's session has no list of its own.
+                def session_with_apps(route):
+                    response = route.fetch()
+                    route.fulfill(response=response, json={**response.json(), "authenticated": True, "apps": [
+                        {"client_id": "monitoring", "label": "상태 조회", "home_url": "https://site.example.test/monitoring/"}]})
+                page.route("**/api/fleet/auth/session", session_with_apps)
+                page.goto(origin + "/console")
+                expect(page.locator("#fleet-account [data-account-apps] a")).to_have_attribute("href", "https://site.example.test/monitoring/")
                 assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
             finally:
                 browser.close()

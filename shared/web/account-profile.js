@@ -24,7 +24,9 @@ export function appLinks(session, here = globalThis.location?.href || '') {
     try { url = new URL(app?.home_url); } catch { continue; }
     const label = app?.label;
     if (url.protocol !== 'https:' || url.username || url.password || typeof label !== 'string' || !label.trim()
-        || [...label].length > 96 || /[\p{Cc}\p{Cs}]/u.test(label) || here.startsWith(url.href)) continue;
+        || [...label].length > 96 || /[\p{Cc}\p{Cs}]/u.test(label)
+        // A bare-origin home is a prefix of every page there, so only an exact match means it is open.
+        || (url.pathname === '/' ? here === url.href : here.startsWith(url.href))) continue;
     links.push({href: url.href, label});
   }
   return links;

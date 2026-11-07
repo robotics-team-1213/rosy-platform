@@ -21,7 +21,11 @@ async function identity() {
     // Most Learning pages have no profile link; the topbar still offers the other apps.
     if (!document.querySelector('[data-account-profile]')) renderAccountApps(shown, document.querySelector('ui-topbar [data-spacer]'));
     return current;
-  } catch (error) { renderAccountProfile(null); throw error; }
+  } catch (error) {
+    renderAccountProfile(null);
+    renderAccountApps(null, document.querySelector('ui-topbar [data-spacer]'));
+    throw error;
+  }
 }
 function initialize() {
   return ready ??= (async () => {

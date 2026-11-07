@@ -27,6 +27,8 @@ test('the app list shows only safe https addresses and not the app already open'
     app('line\nbreak', 'https://site.example/a'), app('', 'https://site.example/b'), app('None', ''), null];
   assert.deepEqual(appLinks({authenticated:true, apps}, 'https://site.example/monitoring/?view=1'),
     [{href:'https://site.example/console', label:'Fleet'}]);
+  assert.deepEqual(appLinks({authenticated:true, apps:[app('Root', 'https://site.example/')]}, 'https://site.example/monitoring/'),
+    [{href:'https://site.example/', label:'Root'}]);
   assert.deepEqual(appLinks({authenticated:false, apps}, ''), []);
   assert.deepEqual(appLinks({authenticated:true}, ''), []);
   assert.deepEqual(appLinks(null, ''), []);

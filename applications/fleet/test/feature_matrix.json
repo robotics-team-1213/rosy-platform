@@ -802,6 +802,14 @@
         },
         {
           "consumer": "applications/fleet/web/shared/fleet-header.js",
+          "expression": "/api/fleet/auth/session",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/auth/session"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/shared/fleet-header.js",
           "expression": "/api/fleet/auth/connection",
           "resolution": "literal-or-template",
           "request_ids": [
