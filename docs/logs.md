@@ -14549,3 +14549,10 @@ osy-d395-s1d\`.
 - 증거: D-987·D-807·D-955·D-962·D-661·D-841·D-985, 현재 설정 transaction·알림·감사·backup/업데이트 경로를 대조했다. 카탈로그 실행 서비스 목록·Compose·source holder는 그대로다. 최종 SHA의 문서·원격 시험·독립 검토를 별도로 연결한다.
 - gate 변화: 없음. 설계 수락은 신규 서비스·API·폴더 이동·DB 이관·배포·현장 수용 완료가 아니다.
 - CE: 해당 없음 — 새 아키텍처 결정을 ADR에 남겼고 해결한 장치/운영 장애는 없다.
+
+## 2026-11-08 · uncommitted · docs(reference): 카탈로그 기능별 행을 실제 owner 소스와 연결한다
+
+- 변경: 공통 서비스 카탈로그의 D-997 기능별 표에 `현재 소스` 열을 넣고 7개 기능 행을 실제 경로(Account, Account 연동 등록부·Fleet 장치 등록·공통 조회 client, `core_common` 설정·설정 transaction, Fleet `incidents/notifications.py`, Account 감사, `deploy/site/site_db.py`, site/Pinky/OMX 업데이트 도구)에 묶었다. 알림 행의 "현재 미구현"을 바로잡아 현재 발송 owner는 Fleet이고 `operations/notifications`만 `(목표, 미생성)`임을 분명히 했다.
+- 증거: 각 경로의 실제 존재와 owner를 소스·AGENTS에서 확인했고 `test/architecture/test_common_services.py`가 7개 행의 경로 존재·목표 표시를 검사한다. 변이(빠진 경로·목표 표시 제거)로 시험이 실패하는 것을 원격으로 확인했다.
+- gate 변화: 없음. 코드 추출·알림 서비스 신설·배포·실물 시험은 이 변경의 범위가 아니다.
+- CE: 해당 없음 — 문서와 구조 시험에 근거가 남는다.
