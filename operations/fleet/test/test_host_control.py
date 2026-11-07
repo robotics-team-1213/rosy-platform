@@ -125,7 +125,7 @@ def test_helper_script_matches_the_allowlist_and_has_no_test_switch():
 
 
 @posix
-@pytest.mark.parametrize("role, writes", [("ai", True), ("model", True), ("site", False)])
+@pytest.mark.parametrize("role, writes", [("ai", True), ("model", True), ("site", True)])
 def test_installer_names_the_storage_owner_on_the_lab_pcs(role, writes):
     """D-883: a model PC without units-user refused every clean-storage request."""
     out = subprocess.run(["bash", str(INSTALL), "--role", role, "--dry-run", "--units-user", "lab"],

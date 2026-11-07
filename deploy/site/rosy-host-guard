@@ -46,6 +46,9 @@ MIN_UPTIME_S = int(os.environ.get("GUARD_MIN_UPTIME_S", "3600"))
 MAX_REBOOTS = int(os.environ.get("GUARD_MAX_REBOOTS", "2"))
 REBOOT_MIN_GAP_S = int(os.environ.get("GUARD_REBOOT_MIN_GAP_S", "3600"))
 REBOOT_DELAY_MIN = 10  # D-524 helper reboots with shutdown -r +10
+# D-991: a hung PC answers nothing, so a person has to be told. Absent file: no alert.
+ALERT_WEBHOOK = Path(os.environ.get("GUARD_ALERT_WEBHOOK_FILE", "/etc/rosy/host-guard/alert-webhook"))
+ALERT_AFTER = int(os.environ.get("GUARD_ALERT_AFTER", "2"))  # 2 x 10 min
 # D-883: the rosy-ops lab storage floor. Report only; a reboot does not free a disk.
 MIN_DISK_FREE_GB = float(os.environ.get("GUARD_MIN_DISK_FREE_GB", "30"))
 MAX_DISK_USE_PCT = int(os.environ.get("GUARD_MAX_DISK_USE_PCT", "90"))
@@ -107,6 +110,41 @@ def act(name: str, action: str, reason: str) -> None:
     print(f"{name}: {action} ({reason})", flush=True)
     with open(STATE / "actions.jsonl", "a", encoding="utf-8") as f:
         f.write(json.dumps({"time": int(time.time()), "host": name, "action": action, "reason": reason}) + "\n")
+
+
+def post_alert(text: str) -> bool:
+    """True once the channel took it. The webhook goes through curl's stdin: argv is world readable."""
+    try:
+        url = ALERT_WEBHOOK.read_text(encoding="utf-8").strip()
+    except OSError:
+        return False
+    if not url.startswith("https://") or any(ch in url for ch in '"\\\n '):
+        print("rosy-host-guard: alert webhook file is not one https URL", flush=True)
+        return False
+    body = json.dumps({"content": text, "allowed_mentions": {"parse": []}}, ensure_ascii=False)
+    try:
+        done = subprocess.run(["curl", "-fsS", "--max-time", "10", "-H", "Content-Type: application/json",
+                               "--data-binary", body, "--config", "-"], input=f'url = "{url}"\n',
+                              text=True, capture_output=True, timeout=20, check=False)
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return done.returncode == 0
+
+
+def alert_unreachable(name: str, entry: dict) -> None:
+    """Once when a PC stops answering, once when it is back; a failed post is tried again next check."""
+    if entry["state"] == "unreachable":
+        entry["unreachable_checks"] = entry.get("unreachable_checks", 0) + 1
+        if entry["unreachable_checks"] >= ALERT_AFTER and not entry.get("alerted") and post_alert(
+                f"Rosy: {name} PC가 {entry['unreachable_checks']}번 연속 응답하지 않습니다. "
+                "자동 복구가 안 되면 사람이 직접 전원을 확인해야 합니다."):
+            entry["alerted"] = True
+            act(name, "alert unreachable", f"{entry['unreachable_checks']} checks")
+    elif entry["state"] not in ("quiet", "error"):
+        entry["unreachable_checks"] = 0
+        if entry.get("alerted") and post_alert(f"Rosy: {name} PC가 다시 응답합니다."):
+            entry["alerted"] = False
+            act(name, "alert recovered", "answering again")
 
 
 def plus_minutes(hhmm: str, minutes: int) -> str:
@@ -293,6 +331,7 @@ def main() -> int:
                     entry["resources"] = None
                 else:
                     check_pc(name, line[2], line[3], entry)
+                alert_unreachable(name, entry)
             else:
                 print(f"{name}: unknown kind {kind}", flush=True)
                 continue

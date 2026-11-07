@@ -1,6 +1,6 @@
 ## D-991 PC 정비는 Fleet 안의 화면으로 나누고, 재부팅해도 되는지는 그 PC의 도우미가 판단한다
 
-**Status:** Accepted (2026-11-07, 사용자 결정: "monitoring에서 PC 유지보수도 가능하게", "바로 처리"). 결정 1·2·4·5·6(CLI)은 도우미·API·호스트 서비스 화면·`tools/remote/host_ops.py`로 구현했다. 결정 3의 화면과 접속 불가 알림은 따로 착지한다. 각 PC 재설치와 실물 확인은 하지 않았다.
+**Status:** Accepted (2026-11-07, 사용자 결정: "monitoring에서 PC 유지보수도 가능하게", "바로 처리"). 결정 1·2·4·5·6(CLI)은 도우미·API·호스트 서비스 화면·`tools/remote/host_ops.py`로 구현했다. 접속 불가 알림도 guard에 구현했다. 결정 3의 화면은 따로 착지한다. 각 PC 재설치와 실물 확인은 하지 않았다.
 
 관계: [D-524](D-524-service-control.md)(Service Control, 재부팅 항목을 보충), [D-530](D-530-host-management-desired-state-and-guard.md)(guard 복구 단계), [D-876](D-876-rosy-monitoring-independent-site-and-aggregate.md)·[D-883](D-883-monitoring-host-resources-and-storage-clean.md)(Monitoring 읽기 전용, 조치는 D-524), [D-937](D-937-product-app-entry-grammar.md)(제품 입사 문법), D-988(로봇 유지보수 상태, Proposed, 착지 전), [D-871](D-871-auto-update-every-host-service-and-update-view.md)(중앙→현장→기기).
 
@@ -38,7 +38,7 @@
    레일에는 넣지 않는다. 소수가 가끔 쓰는 일이고 D-961의 다섯 영역을 늘릴 근거가 아직 없다. Monitoring의 PC 행, 접속 불가 알림, `설치` 화면에서 들어온다. 자주 쓰게 되면 그때 올린다.
 4. **`DeviceCareStore`는 합치지 않는다.** 기록은 명령 권한이 없고, D-988 플래그는 admission 입력이며, D-524는 실행 경로다. 이름도 바꾸지 않는다. 화면 말은 `정비`, 코드 말은 `care`(기록), `maintenance`(로봇 상태), `host control`(PC 조치)이다. PC 조치 이력은 `fleet_device_care_events`에 `host:<PC>` 항목으로 함께 남긴다. D-988도 같은 표에 쓰므로 같은 형식으로 읽는다. 기록소가 없거나 쓰기가 실패해도 조치 응답은 바뀌지 않는다. CLI 조치는 Fleet이 없을 때 쓰므로 PC의 journal에만 남는다.
 5. **PC는 역할 하나로 보지 않는다.** 관제 PC는 Fleet과 OMX 셀을 함께 돌리고, 모델 PC는 학습·검수·시험과 임시 Harbor를 돌린다. `deploy/hosts/services.yaml`에 `operator_restart`로 표시한 유닛만 재시작할 수 있고, 시험이 Fleet 목록·도우미와 맞춘다. 유닛 정지는 없앤다. 관제 PC의 셀 카메라 유닛은 도우미가 팔 세션 중 거절한다. 관측기와 관측 브리지는 토크 상태까지 봐야 하므로(D-871) 넣지 않는다. `pinky-*`는 ROSY 밖 서비스이므로 뺐다(2026-11-07 AI PC guard의 감시 목록이 비어 있음을 확인, 감시 목록에 있으면 재시작 거절이 재부팅으로 이어진다). 추가 셀 PC는 아직 없다(`omx_hosts` 비어 있음). 그런 PC가 생기면 `HOSTS`를 "PC + 역할 목록"으로 바꾼다. Harbor는 소유자가 Harbor 저장소이므로 영향 표시만 한다. 로봇은 Rosy Robot과 D-988, 개발 노트북은 대상이 아니다.
-6. **Fleet이 꺼지면 CLI가 같은 도우미를 부른다.** `tools/remote/host_ops.py`가 Fleet과 같은 목록으로 수동 명령 안내를 대신한다. 관제 PC가 현장 관제 소속이 아닌 모델·AI PC까지 맡는 지금 배치는 임시이며, R이 전용 PC로 옮기면 호출 위치만 바뀐다. Fleet 없이 화면 조치가 필요해지거나 현장이 둘이 되면 독립 앱을 ADR로 다시 판단한다. 완전히 멈춘 PC는 소프트웨어로 복구할 수 없다(2026-11-07 모델 PC 6시간 정지). 접속 불가 알림은 후속이고, 원격 전원 장치는 사용자 결정 대기다.
+6. **Fleet이 꺼지면 CLI가 같은 도우미를 부른다.** `tools/remote/host_ops.py`가 Fleet과 같은 목록으로 수동 명령 안내를 대신한다. 관제 PC가 현장 관제 소속이 아닌 모델·AI PC까지 맡는 지금 배치는 임시이며, R이 전용 PC로 옮기면 호출 위치만 바뀐다. Fleet 없이 화면 조치가 필요해지거나 현장이 둘이 되면 독립 앱을 ADR로 다시 판단한다. 완전히 멈춘 PC는 소프트웨어로 복구할 수 없다(2026-11-07 모델 PC 6시간 정지). guard가 PC가 2번 연속(20분) 응답하지 않으면 한 번, 돌아오면 한 번 webhook으로 알린다. Fleet의 알림 경로는 로봇 사건 전용이고 Fleet이 살아 있어야 하므로 쓰지 않는다. `/etc/rosy/host-guard/alert-webhook`(guard 계정 0600)이 없으면 알리지 않는다. 2026-11-07 확인: 이 파일은 없고, 모델 PC에 역방향 guard도 설치되어 있지 않아 관제 PC를 감시하는 쪽이 없다. 원격 전원 장치와 함께 사용자 결정 대기다.
 
 ### Alternatives
 

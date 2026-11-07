@@ -4712,3 +4712,8 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 변경: `rosy-host-control`의 `reboot`는 세션 잠금에서 거절하고, `reboot-if-free`는 작업에서도 거절한다. 예약 뒤 570초에 다시 보고 자기 재부팅만 취소한다. `recheck-reboot`는 강제 명령 키로 부를 수 없다.
 - 증거: 원격 `test_host_control.py`. 도우미를 stub으로 돌린 호스트 시험이다.
 - gate 변화: 없음 — PC 설치 전이다. 설치 전까지 guard 경로는 옛 동작이다.
+
+## 2026-11-07 · uncommitted · feat: 응답 없는 PC를 guard가 팀 채널로 알린다 (D-991)
+- 변경: `rosy-host-guard`가 PC 2번 연속 무응답과 복귀를 webhook으로 한 번씩 보낸다. webhook은 curl 표준 입력으로 넘겨 프로세스 목록에 나오지 않는다. 복구 단계는 바꾸지 않는다.
+- 증거: 원격 `test/test_host_guard.py`. stub curl이며 실제 채널 발송 수용이 아니다.
+- gate 변화: 없음 — webhook 파일과 PC 설치 전이다. CE: 해당 없음 — 시험과 ADR이 판단을 보존한다.
