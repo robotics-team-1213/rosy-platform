@@ -16,10 +16,10 @@ from datetime import datetime, timezone
 from hashlib import sha256
 from pathlib import Path
 from typing import Callable, Mapping, Optional
-from urllib.parse import urlsplit
 
 from fastapi import HTTPException, Request
 
+from core_common.protocol.account_access import same_origin
 from rosy_account.principal import SitePrincipal, legacy_grants
 from rosy_account.site_users import _LOGIN, hash_password, verify_password
 
@@ -46,18 +46,6 @@ def _digest(text: str) -> str:
 
 def _iso(epoch: float) -> str:
     return datetime.fromtimestamp(epoch, timezone.utc).isoformat(timespec="seconds")
-
-
-def same_origin(request: Request) -> bool:
-    """D-519 4: an `Origin` must be present and its authority must equal `Host`."""
-    origin, host = request.headers.get("origin"), request.headers.get("host")
-    if not origin or not host:
-        return False
-    try:
-        parsed = urlsplit(origin)
-    except ValueError:
-        return False
-    return parsed.scheme in {"http", "https"} and parsed.netloc.lower() == host.lower()
 
 
 class SessionStorageUnavailable(Exception):

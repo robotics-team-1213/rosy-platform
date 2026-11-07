@@ -14,7 +14,7 @@ from .local_action_transport import LocalActionUnavailable, UnixLocalActionTrans
 from .mission_store import MissionConflict
 from .physical_transfer_attestations import PhysicalOperatorAttestations
 from .physical_transfer_store import ARM_TRANSFER_PROFILES, PhysicalTransferStore
-from .password_session import same_origin
+from core_common.protocol.account_access import same_origin
 
 
 _log = logging.getLogger("fleet.arm_transfer_policy_admission")
