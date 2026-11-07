@@ -101,7 +101,8 @@ function edit(row = null) {
   $('account-grants').replaceChildren(); for (const grant of row?.grants || roleGrants('operator', siteResource)) grantRow(grant);
 }
 async function load() {
-  rows = await request(endpoint); $('account-list').replaceChildren();
+  rows = await request(endpoint); requests = await request(requestsEndpoint);
+  $('account-list').replaceChildren();
   for (const row of rows) {
     const item = document.createElement('tr'), button = document.createElement('ui-button');
     button.setAttribute('kind', 'quiet'); button.setAttribute('type', 'button');
@@ -114,7 +115,7 @@ async function load() {
     }
     $('account-list').append(item);
   }
-  requests = await request(requestsEndpoint); drawRequests();
+  drawRequests();
   $('account-content').hidden = false; $('account-login').hidden = true; edit();
 }
 function grants() {

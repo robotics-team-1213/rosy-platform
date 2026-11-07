@@ -19,7 +19,10 @@ def anonymous(app):
 def rows(app, sql='SELECT * FROM rosy_access_requests ORDER BY created_at'):
     with sqlite3.connect(app.state.password_sessions.path) as db:
         db.row_factory = sqlite3.Row
-        return [dict(r) for r in db.execute(sql)]
+        try:
+            return [dict(r) for r in db.execute(sql)]
+        except sqlite3.OperationalError:  # the table appears with the first valid request
+            return []
 
 
 def send(client, **body):

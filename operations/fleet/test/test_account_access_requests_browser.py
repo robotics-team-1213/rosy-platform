@@ -53,7 +53,7 @@ def test_request_from_login_then_administrator_approves_and_rejects(standalone, 
                 page = admin.new_page()
                 page.on('pageerror', lambda error: errors.append(str(error)))
                 page.goto(origin + '/console/accounts')
-                expect(page.get_by_role('cell', name='dana')).to_be_visible()
+                expect(page.get_by_role('cell', name='dana', exact=True)).to_be_visible()
                 page.get_by_role('button', name='dana 요청 처리').click()
                 page.locator('#account-password').fill('initial secret 1')
                 page.get_by_role('button', name='승인하고 저장').click()
