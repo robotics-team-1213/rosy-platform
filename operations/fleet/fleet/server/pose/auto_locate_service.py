@@ -9,9 +9,10 @@ lamp blink, the same one ``/identify`` sends. Observation only: not map pose, no
 from __future__ import annotations
 
 import time
-from typing import Callable, Iterable
+from typing import Callable, Iterable, Mapping
 
 from fleet.localization.auto_locate import AlignmentTracker
+from fleet.server.identity_triggers import caution
 
 SESSION_S = 120.0  # D-691: the phone is awake only this long per request
 RETRY_S = 10.0
@@ -49,16 +50,23 @@ class AutoLocateService:
         tracks = {rid: identity.confirmed_track_pose(rid) for rid in self._watched() | set(open_ids)}
         for robot_id in open_ids:
             track = tracks[robot_id]
-            if track["state"] != "CONFIRMED" and now - self._asked_at.get(robot_id, -RETRY_S) >= RETRY_S:
+            if (track["state"] != "CONFIRMED" and now - self._asked_at.get(robot_id, -RETRY_S) >= RETRY_S
+                    and self._may_blink(self.tracking.robot_state(robot_id))):
                 self._asked_at[robot_id] = now
                 try:
-                    await identity.request(robot_id)
+                    await identity.request(robot_id, reason="auto_locate")  # not "operator": no amber, no chirp
                 except Exception:  # busy colour, caution or a robot that is down: asked again after RETRY_S
                     pass
             peers = {rid: (other["x"], other["y"]) for rid, other in tracks.items()
                      if rid != robot_id and other["state"] == "CONFIRMED"
                      and other.get("map_id") == track.get("map_id")}
             self._trackers[robot_id].observe(now, track, self.tracking.robot_state(robot_id), peers)
+
+    @staticmethod
+    def _may_blink(state) -> bool:
+        """The automatic-request rule (identity_triggers): a fresh state, E-Stop exactly false, no caution."""
+        return (isinstance(state, Mapping) and (state.get("safety") or {}).get("estop") is False
+                and not caution(state))
 
     def _watched(self) -> set[str]:
         return {rid for source in self.tracking.sources for rid in source.robot_ids}

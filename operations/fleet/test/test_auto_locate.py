@@ -197,14 +197,15 @@ class FakeIdentity:
     def confirmed_track_pose(self, robot_id):
         return self.tracks.get(robot_id, {"state": "UNKNOWN", "reason": None})
 
-    async def request(self, robot_id):
+    async def request(self, robot_id, reason="operator"):
+        assert reason != "operator"  # an operator request may use amber, the caution lamp, and chirps
         self.asked.append(robot_id)
         raise RuntimeError("busy")  # a refusal must not break the tick
 
 
 def service(clock):
     tracking = SimpleNamespace(identity=FakeIdentity(), sources=[SimpleNamespace(robot_ids=("a", "b"))],
-                               robot_state=lambda rid: robot(0.0, 0.0))
+                               robot_state=lambda rid: robot(0.0, 0.0) | {"safety": {"estop": False}})
     return AutoLocateService(tracking, clock=clock), tracking
 
 
@@ -232,6 +233,16 @@ def test_a_session_asks_for_the_blink_again_only_after_the_retry():
     now[0] = 200.0
     asyncio.run(locate.tick())
     assert tracking.identity.asked == ["a", "a"]
+
+
+@pytest.mark.parametrize("state", [None, {}, {"safety": {"estop": True}}, {"safety": {}},
+                                   {"safety": {"estop": False}, "docking": {"state": "DOCK_FAILED"}}])
+def test_a_session_never_blinks_a_stopped_unknown_or_cautioning_robot(state):
+    locate, tracking = service(lambda: 0.0)
+    tracking.robot_state = lambda rid: state
+    locate.start(["a"])
+    asyncio.run(locate.tick())
+    assert tracking.identity.asked == []
 
 
 def test_a_new_session_clears_a_degraded_latch_and_the_same_session_does_not():
