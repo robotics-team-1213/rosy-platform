@@ -200,7 +200,8 @@ def reach(wt: Path, base: str, head: str, python: str = sys.executable) -> list[
         if str(wt / "test") not in sys.path:
             sys.path.insert(0, str(wt / "test"))
         import browser_scope  # noqa: PLC0415 - the tree's own registry
-        browsers = list(browser_scope.targets([r[-1] for r in rows]))
+        import land_guards  # noqa: PLC0415 - the guards read the whole tree: never reused across trees
+        browsers = list(browser_scope.targets([r[-1] for r in rows])) + list(land_guards.GUARDS)
     except (ValueError, KeyError, TypeError, ImportError) as exc:
         print(f"[cache] no reuse across {base[:10]}..{head[:10]}: {exc!r}")
         return None

@@ -53,6 +53,8 @@ def repo(tmp_path):
         _git(local, "config", key, value)
     _commit(local, {"app.py": "0"})
     candidate_files(local)
+    _commit(local, {name: (ROOT / name).read_text(encoding="utf-8")
+                    for name in ("tools/land_guards.py", "tools/land_isolation.py")})  # reach() reads the guards
     earlier = _commit(local, {"tools/harness/rosy_harness.py": HARNESS, "fixture-selection.json": _selection("pkg/test")})
     qualified_record(tool, local, earlier, _git(local, "rev-parse", f"{earlier}^"))  # every FULL invocation passed
     return local, earlier
@@ -99,10 +101,14 @@ def test_publish_refuses_an_ancestor_row_whose_log_is_not_clean(repo, damage):
     assert _why(local, sha).startswith("missing clean exact execution/log proof")
 
 
-@pytest.mark.parametrize("selected, reused", [("pkg/test", True), (SUITE[0], False)])
-def test_explicit_full_landing_reuses_only_suites_the_delta_does_not_reach(repo, selected, reused):
-    local, _ = repo
+@pytest.mark.parametrize("suite, selected, reused", [(SUITE, "pkg/test", True), (SUITE, SUITE[0], False),
+                                                     (["test/architecture"], "pkg/test", False)])
+def test_explicit_full_landing_reuses_only_suites_the_delta_does_not_reach(repo, suite, selected, reused):
+    local, earlier = repo
+    if suite != SUITE:  # a guard that passed on the earlier tree
+        row = next(e for e in land_cache.entries(local) if e["argv"] == SUITE)
+        land_cache.record(local, earlier, row["tree"], row["env"], suite, Path(row["log"]))
     head = _commit(local, {"app.py": "1", "fixture-selection.json": _selection(selected)})
     args = SimpleNamespace(tests="full", no_cache=False)
-    lines, todo, _ = land_cache.split(local, args, [SUITE], head, sys.executable, select=None)
+    lines, todo, _ = land_cache.split(local, args, [suite], head, sys.executable, select=None)
     assert (todo == []) is reused and any(land_cache.NARROW in line for line in lines) is reused
