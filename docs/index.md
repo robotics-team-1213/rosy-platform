@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
+- 2026-11-07 · uncommitted · fix(remote): 재부팅 경고 2분 동안 시험 PC가 새 작업을 받지 않는다
+- 2026-11-07 · uncommitted · docs(solutions): Pinky LiDAR 0°는 뒤쪽, odom은 이동 증거가 아니다
 - 2026-11-07 · uncommitted · fix(model-pc): GPU 유휴 전원 차단을 끈다
 - 2026-11-07 · uncommitted · fix(remote): 호출의 -rA가 공통 꼬리에 덮이지 않는다
 - 2026-11-07 · uncommitted · fix(land): FULL 대기가 준비 슬롯을 차지하지 않고 MAIN-RED가 닫힌다
-- 2026-11-07 · uncommitted · 공통 서비스 카탈로그와 D-987
-- 2026-11-07 · uncommitted · fix(omx): 사다리가 GPU 없이 시작하지 않게 하고 MuJoCo 접촉 교훈을 기록
