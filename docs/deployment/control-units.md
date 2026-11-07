@@ -23,8 +23,10 @@
 
 | 단위 | 지금 호스트 | 목표 호스트 | 근거 |
 |---|---|---|---|
-| 통합관제 R | OMX 노트북(임시, 포트·DB·인증서 분리) | 상시 가동·저부하 전용 PC | D-960 5항 |
+| 통합관제 R | OMX 노트북(임시, 포트·DB·인증서 분리) | N100 미니 PC(16GB, Ubuntu Server 24.04 LTS amd64) | D-960 5항, [D-994](../adr/D-994-n100-integrated-control-host-and-owner-boundaries.md); 설치·이전·부하 수용 미수행 |
 | 셀 관제 CELL-A | OMX 노트북 | OMX 노트북(팔 local stop UDS가 같은 호스트) | D-960 1항 |
+
+N100 미니 PC는 물리 호스트이고 통합관제 R은 그곳에서 실행할 관제 단위다. R의 직접 소유 장치는 기존 Fleet→CORE 경로를 쓰고, 하위 셀의 승인·팔 실행은 해당 셀과 OMX owner에 남는다. Account·Monitoring·Harbor가 같은 호스트에 있어도 원장·자격·명령 권한을 합치지 않는다. 역할별 책임과 부하·장애 수용 조건은 [D-994](../adr/D-994-n100-integrated-control-host-and-owner-boundaries.md)를 따른다. 이 표의 현재 배치는 기존 기록이며 실물 이전 확인 전에는 목표 배치로 덮어쓰지 않는다.
 
 ## 네트워크 연결 구조
 

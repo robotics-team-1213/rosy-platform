@@ -4,6 +4,8 @@
 
 여기 적혔다고 배포되거나 수용된 것은 아니다. 현재 상태는 각 모듈의 `progress.md`와 [STATUS](../../STATUS.md)에서 확인한다.
 
+통합관제 R과 같은 호스트에서 실행해도 공통 서비스는 R이나 장치 owner가 되지 않는다. R·셀 관제·CORE·OMX owner·기명 운영자의 책임 구분은 [D-994](../adr/D-994-n100-integrated-control-host-and-owner-boundaries.md), 현재·목표 호스트는 [관제 단위 배치표](../deployment/control-units.md#현장-배치표)를 따른다.
+
 ## 실행 서비스
 
 자기 프로세스로 돌고 현장 Compose 서비스로 배치된다.
