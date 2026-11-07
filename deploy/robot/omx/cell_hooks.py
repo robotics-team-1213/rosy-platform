@@ -24,23 +24,33 @@ import cell_wrist
 import cell_wrist_ref
 
 
+def stills(cell, config: dict):
+    """At any guard stop, before the arm backs out and hides it: one frame per camera (top, side, the arm's wrist), kept as
+    <arm>-<camera>.jpg; the incident report carries them (D-971). 11-06/07: the descent contacts kept none, only a lift stall
+    did, and the frames taken after the fold could not tell contact from speed. Reads only."""
+    def keep():
+        import cv2
+
+        import omx_incident
+
+        folder = Path(omx_incident.STILLS)
+        folder.mkdir(parents=True, exist_ok=True)
+        for camera in config["cameras"]:
+            try:
+                cv2.imwrite(str(folder / f"{config.get('arm_id', 'arm_s')}-{camera}.jpg"), cell.frame(camera))
+            except Exception:  # a missing frame must not stop the recovery
+                pass
+    return keep
+
+
 def lift_stall(cell, config: dict, sleep):
     """What a stop on the first lift does: let go and rise (cell_unwedge). Jogs leave the D-911 gate, so supervised only."""
     if config.get("_commissioning") != {"person_at_switch": True}:
         return None
-    import cv2
-
     import cell_unwedge
-    import omx_incident
 
     def stall(gate):
-        stills = Path(omx_incident.STILLS)  # the stop itself, before the arm hides it: the incident report carries them (D-971)
-        stills.mkdir(parents=True, exist_ok=True)
-        for camera in config["cameras"]:
-            try:
-                cv2.imwrite(str(stills / f"{config.get('arm_id', 'arm_s')}-{camera}.jpg"), cell.frame(camera))
-            except Exception:  # a missing frame must not stop the recovery
-                pass
+        stills(cell, config)()
         a = gate.assessment
         # an unchecked jog starts a new session, and the gate's fold after it would be refused with the arm out: same session, same
         # library, past the gate's fault hold only because a person is at the switch

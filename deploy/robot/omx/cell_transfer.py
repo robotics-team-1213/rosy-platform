@@ -102,7 +102,7 @@ STILL_HOLDING_UNITS = 4.0
 
 
 def transfer_folded(cell, library, closed: float | None = None, wrist=None, after_place=None, pinch=None, feel=None,
-                    sequence=FOLDED, lift_stall=None) -> dict:
+                    sequence=FOLDED, lift_stall=None, at_stop=None) -> dict:
     """cell_pipeline.transfer with a fold home between lift and place. Lifting a held box from the reach straight
     to the transit height took shoulder_lift to 525 of 600 and the runner's strain hold stopped it; folding home
     first and placing from home went clean twice (2026-10-28). `cell` is a Gate on the real arm."""
@@ -132,6 +132,8 @@ def transfer_folded(cell, library, closed: float | None = None, wrist=None, afte
             parked = freed["result"] == "risen" and run("park").get("ok")
             return {"result": "contact", "at": command, "steps": steps, "error": status.get("error"), "released": bool(parked)}
         if status.get("contact"):  # the runner held with torque on: back up the same path, fold home
+            if at_stop is not None:  # cell_hooks.stills: the stop as it stands, before the retreat hides it
+                at_stop()
             for after in ("retreat", "park"):
                 run(after)
             return {"result": "contact", "at": command, "steps": steps, "error": status.get("error")}

@@ -64,6 +64,21 @@ def test_the_stall_hook_keeps_the_session_and_only_with_a_person_at_the_switch(m
     assert cell_hooks.lift_stall(raw, {}, None) is None
 
 
+def test_any_stop_keeps_one_frame_per_camera_and_a_dead_camera_does_not_stop_it(monkeypatch, tmp_path):
+    import cell_hooks
+    import omx_incident
+
+    class Cell:
+        def frame(self, camera):
+            if camera == "side":
+                raise OSError("unplugged")
+            return CLEAN
+
+    monkeypatch.setattr(omx_incident, "STILLS", tmp_path / "stills")
+    cell_hooks.stills(Cell(), {"arm_id": "arm_b", "cameras": {"top": {}, "side": {}, "wrist": {}}})()
+    assert sorted(p.name for p in (tmp_path / "stills").iterdir()) == ["arm_b-top.jpg", "arm_b-wrist.jpg"]
+
+
 def test_a_placed_box_ends_it():
     out, emitted = run(["placed"])
     assert out["result"] == "placed" and len(out["rounds"]) == 1 and emitted[0][0] == "recovery"
