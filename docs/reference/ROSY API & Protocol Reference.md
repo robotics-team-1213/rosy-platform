@@ -22,12 +22,12 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 `DeliveryRequest`는 추가 키 금지다. 필수 필드는 `producer`(`fleet` 또는 `harbor`), `notification_id`, `channel`(등록 key),
 `kind`(Fleet `OPEN`/`CLOSED`/`FINAL_REVIEW`, Harbor `HOLD`), `subject_id`, `occurrence_id`, `revision`, `classification`,
 `observed_at`, `expires_at`다. 식별자/분류는 `[A-Za-z0-9_.:-]{1,96}`, 시각은 유한 UTC epoch seconds다.
-접수는 관측≤현재<만료≤관측+생산자 TTL을 검사한다. URL·수신자·본문 자유 텍스트·토큰·원본 자료는 받지 않는다.
+접수는 관측≤현재+5초와 현재<만료≤관측+생산자 TTL을 검사한다. 작은 시계 차이만 허용하고 원래 시각·identity는 보존한다. URL·수신자·본문 자유 텍스트·토큰·원본 자료는 받지 않는다.
 한 notification_id는 한 채널 건이며 생산자는 원래 발생 identity에 채널을 결속하고 재접수에도 같은 본문을 쓴다.
 
 `DeliveryReceipt`는 `producer`, `notification_id`, `state`, `attempts`만 반환한다. state는 `PENDING`, `RETRY`, `SENDING`,
 `SENT`, `UNKNOWN`, `EXPIRED`, `SUPERSEDED`, `FAILED`다. SENT는 provider 수락이며 읽음·인수·해결을 뜻하지 않는다.
-UNKNOWN은 자동 재전송하지 않는다.7일 보관·생산자별 최대1000건/분당20건이며 더 작은 승인 예산이 가능하다.
+UNKNOWN은 자동 재전송하지 않는다. 종결 기록7일 보관·생산자별 비종결 대기 최대1000건/전체 신규 접수 분당20건이며 더 작은 승인 예산이 가능하다. 종결 기록은 대기 용량을 소비하지 않는다.
 Fleet 예산은60초/3회/600초, Harbor 예산은 보호 설정으로 명시한다(D-998 상한 이내).
 
 발송 직전 서비스는 보호 설정의 owner URL에 요청 DTO 전체를 POST한다. 별도 machine bearer와3초 timeout,

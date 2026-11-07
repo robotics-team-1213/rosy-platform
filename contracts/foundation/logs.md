@@ -1138,3 +1138,8 @@
 - 증거: 독립 전달 서비스 시험과 기존 Fleet 알림 회귀를 커밋 SHA의 원격 시험으로 요청한다. 아직 실제 채널 수용 근거는 없다.
 - gate 변화: 없음. ARTIFACT/DEVICE/FIELD와 발송 owner 전환은 별도다.
 - CE: 해당 없음 — 의미가 같은 adapter만 추출하는 경계는 D-998과 회귀 시험에 남는다.
+
+## 2026-11-08 · uncommitted · D-998 foundation 배포 버전 정합성
+- 변경: 신규 채널 모듈·httpx 의존을 제공하는 core_common을0.0.3으로 올리고 setup.py/package.xml·소비 하한·CI 설치 pin을 함께 맞췄다.
+- 증거: 변경 전0f0bf42bbd Foundation·프로토콜 회귀1502 passed/NEW0. 변경 후 동일 회귀와 소비자 wheel 설치를 새 커밋의 원격 시험에서 확인한다.
+- gate 변화: 없음. 배포·실물 수용은 별도다.

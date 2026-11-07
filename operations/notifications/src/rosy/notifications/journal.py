@@ -7,6 +7,8 @@ from contextlib import closing, contextmanager
 
 from core_common.protocol.notification_delivery import DeliveryReceipt
 
+MAX_CLOCK_SKEW_S = 5
+
 
 class DeliveryError(Exception):
     def __init__(self, status, code):
@@ -74,28 +76,35 @@ class Journal:
                 if row['body'] != body:
                     raise DeliveryError(409, 'NOTIFICATION_IDENTITY_CONFLICT')
                 return self.receipt(row)
-            if not request.observed_at <= now < request.expires_at <= request.observed_at + profile.ttl_s:
+            if not (request.observed_at <= now + MAX_CLOCK_SKEW_S and now < request.expires_at
+                    <= request.observed_at + profile.ttl_s):
                 raise DeliveryError(422, 'NOTIFICATION_TIME_INVALID')
             db.execute("UPDATE deliveries SET state='EXPIRED' WHERE state IN ('PENDING','RETRY') AND expires<=?", (now,))
-            db.execute("DELETE FROM deliveries WHERE admitted<? AND state NOT IN ('PENDING','RETRY','SENDING')",
+            db.execute("DELETE FROM deliveries WHERE admitted<=? AND state NOT IN ('PENDING','RETRY','SENDING')",
                        (now - 7 * 86400,))
             db.execute('DELETE FROM channel_attempts WHERE attempted<?', (now - 7 * 86400,))
-            count = db.execute('SELECT COUNT(*), SUM(admitted>?) FROM deliveries WHERE producer=?',
+            count = db.execute("SELECT SUM(state IN ('PENDING','RETRY','SENDING')), SUM(admitted>?) FROM deliveries WHERE producer=?",
                                (now - 60, request.producer)).fetchone()
-            if count[0] >= profile.capacity or (count[1] or 0) >= profile.admissions_per_minute:
+            if (count[0] or 0) >= profile.capacity or (count[1] or 0) >= profile.admissions_per_minute:
                 raise DeliveryError(429, 'PRODUCER_BUDGET_EXHAUSTED')
             db.execute('INSERT INTO deliveries VALUES (?,?,?,?,?,?,?,?,?,0)',
                        (request.producer, request.notification_id, body, request.channel, route_hash,
                         'PENDING', now, request.expires_at, now))
         return self.read(request.producer, request.notification_id)
 
-    def claim(self, producer, now):
+    def claim(self, producer, now, interval_s=60):
         with self.connect() as db:
             db.execute('BEGIN IMMEDIATE')
             db.execute("UPDATE deliveries SET state='EXPIRED' WHERE state IN ('PENDING','RETRY') AND expires<=?", (now,))
-            row = db.execute("""SELECT * FROM deliveries WHERE producer=? AND state IN ('PENDING','RETRY')
-                AND due<=? ORDER BY due, admitted, notification_id LIMIT 1""", (producer, now)).fetchone()
-            if row is not None:
+            rows = db.execute("""SELECT * FROM deliveries WHERE producer=? AND state IN ('PENDING','RETRY')
+                AND due<=? ORDER BY due, admitted, notification_id""", (producer, now)).fetchall()
+            for row in rows:
+                recent = db.execute('SELECT attempted FROM channel_attempts WHERE route_hash=?',
+                                    (row['route_hash'],)).fetchone()
+                if recent and recent[0] + interval_s > now:
+                    db.execute('UPDATE deliveries SET due=? WHERE producer=? AND notification_id=?',
+                               (recent[0] + interval_s, producer, row['notification_id']))
+                    continue
                 db.execute("UPDATE deliveries SET state='SENDING' WHERE producer=? AND notification_id=?",
                            (producer, row['notification_id']))
                 return dict(row)

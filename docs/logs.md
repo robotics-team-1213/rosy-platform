@@ -14540,3 +14540,9 @@ osy-d395-s1d\`.
 - 증거: c1984461a8 원격 Foundation·프로토콜 회귀 1501 passed/1 NEW failed로 누락을 확인했다. test_changelog_has_a_row_for_the_live_version이 헤더와 표를 대조한다. 수정 커밋으로 같은 세 대상을 다시 원격 검증한다.
 - gate 변화: 없음. 문서 계약 정합성 수정이며 발송 owner 전환·현장 수용 근거가 아니다.
 - CE: 해당 없음 — 원인과 재발 방지가 기존 version alignment 시험에 명시돼 있다.
+
+## 2026-11-08 · uncommitted · D-998 독립 검토 반영
+- 변경: 대기 용량과 종결 이력 보관을 분리하고 채널 간격은 owner 호출 전에 다음 가능 시각으로 미룬다. 관측 시각 오차는5초 상수로 제한한다. foundation0.0.3과 소비 하한·CI pin을 정합하게 올린다.
+- 증거: 이전 head0f0bf42bbd의 프로토콜 회귀1502 passed/NEW0. 변경 범위와 프로토콜 회귀는 새 커밋에서 원격 재시험한다. api_reserve list의 v1.377 예약 사유는 D-997 independent notification delivery다.
+- gate 변화: 없음. 발송 owner 전환·배포·채널 수용은 수행하지 않는다.
+- CE: 해당 없음 — 지적·정책·검증은 D-998과 회귀 시험에 남는다.

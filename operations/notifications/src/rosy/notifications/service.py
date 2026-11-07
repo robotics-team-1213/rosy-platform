@@ -65,7 +65,7 @@ class DeliveryService:
             start = self._turn % len(profiles)
             self._turn += 1
             for profile in profiles[start:] + profiles[:start]:
-                row = self.journal.claim(profile.identity, self.clock())
+                row = self.journal.claim(profile.identity, self.clock(), profile.interval_s)
                 if row is not None:
                     await self._deliver(profile, row)
 

@@ -5371,3 +5371,8 @@
 - 증거: 기존 test_notifications/test_final_notifications와 독립 전달 시험을 커밋 SHA에서 원격으로 확인한다. 실제 채널 발송·전환은 하지 않는다.
 - gate 변화: 없음. SOURCE 회귀와 실제 전달·현장 수용을 구별한다.
 - CE: 해당 없음 — 전환 금지 이유와 범위는 D-998에 명시했다.
+
+## 2026-11-08 · uncommitted · D-998 채널 모듈 소비 버전
+- 변경: 공용 채널 adapter를 실제 제공하는 core_common>=0.0.3을 Fleet 설치 하한으로 지정했다.
+- 증거: 신규 전달·기존 Fleet 알림 회귀와 CI 입력 wheel 설치를 변경 커밋의 원격 시험으로 확인한다.
+- gate 변화: 없음. 기존 발송 owner·outbox·사건 검사는 유지한다.

@@ -219,6 +219,53 @@ def test_capacity_is_per_producer_and_duplicate_does_not_consume_it(setup):
     assert len(sent) == 2
 
 
+def test_terminal_history_does_not_consume_pending_capacity(setup):
+    service, now, sent = setup
+    service.producers['fleet'] = replace(service.producers['fleet'], capacity=1)
+    accept(service)
+    run(service)
+    accept(service, identity='notice-2')
+    assert service.journal.read('fleet', 'notice-1').state == 'SENT'
+    assert service.journal.read('fleet', 'notice-2').state == 'PENDING'
+    with service.journal.connect() as db:
+        assert db.execute('SELECT COUNT(*) FROM deliveries').fetchone()[0] == 2
+
+
+def test_channel_spacing_defers_owner_http_until_due_even_between_producers(setup):
+    service, now, sent = setup
+    service.producers['harbor'] = replace(service.producers['harbor'], channels=frozenset(['fleet']))
+    checked = []
+
+    async def owner(profile, request):
+        checked.append((profile.identity, request.notification_id))
+        return True
+
+    service.owner_check = owner
+    accept(service)
+    accept(service, 'harbor', channel='fleet')
+    run(service)
+    assert len(checked) == len(sent) == 1
+    for tick in (101.0, 120.0, 159.0):
+        now[0] = tick
+        run(service)
+    assert len(checked) == len(sent) == 1
+    with service.journal.connect() as db:
+        assert db.execute("SELECT due FROM deliveries WHERE producer='harbor'").fetchone()[0] == 160
+    now[0] = 160.0
+    run(service)
+    assert len(checked) == len(sent) == 2
+
+
+@pytest.mark.parametrize('skew, accepted', [(0.0, True), (5.0, True), (5.001, False)])
+def test_observation_clock_skew_has_a_small_fixed_bound(setup, skew, accepted):
+    service, now, sent = setup
+    if accepted:
+        assert accept(service, observed_at=now[0] + skew).state == 'PENDING'
+    else:
+        with pytest.raises(DeliveryError, match='TIME_INVALID'):
+            accept(service, observed_at=now[0] + skew)
+
+
 def test_minute_budget_and_retention_remain_finite(setup):
     service, now, sent = setup
     service.producers['fleet'] = replace(service.producers['fleet'], admissions_per_minute=1)

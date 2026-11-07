@@ -7,7 +7,7 @@ name = "rosy-notifications"
 version = "0.1.0"
 description = "ROSY scoped notification delivery journal (pre-cutover)"
 requires-python = ">=3.12"
-dependencies = ["core_common==0.0.2", "httpx>=0.27,<1", "fastapi>=0.115,<1", "uvicorn>=0.30,<1"]
+dependencies = ["core_common>=0.0.3", "httpx>=0.27,<1", "fastapi>=0.115,<1", "uvicorn>=0.30,<1"]
 
 [project.scripts]
 rosy-notifications = "rosy.notifications.__main__:main"
