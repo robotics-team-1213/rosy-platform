@@ -16,6 +16,15 @@ _SCHEMA = """CREATE TABLE IF NOT EXISTS fleet_trip_proposals (
 _OBJECT_REF = "ALTER TABLE fleet_trip_proposals ADD COLUMN object_ref TEXT"
 
 
+def proposal_document(row, body: dict) -> dict:
+    """What ``proposal_digest`` hashes; the admission transaction (job_trip_rows) recomputes it from the same row."""
+    document = {"proposal_id": row["proposal_id"], "principal_id": row["principal_id"],
+                "request_key": row["request_key"], **body}
+    if row["object_ref"] is not None:  # D-996 5: the admitting operator's digest binds the cargo code too
+        document["object_ref"] = row["object_ref"]
+    return document
+
+
 class TripProposalStore:
     def __init__(self, store) -> None:  # a CellJobStore: its journal and connection settings
         self.store = store
@@ -30,10 +39,7 @@ class TripProposalStore:
         body = json.loads(row["body_json"])
         if not isinstance(body, dict) or set(body) != {"candidates", "steps"}:
             raise ValueError("trip proposal body is invalid")
-        document = {"proposal_id": row["proposal_id"], "principal_id": row["principal_id"],
-                    "request_key": row["request_key"], **body}
-        if row["object_ref"] is not None:  # the admitting operator's digest binds the cargo code too
-            document["object_ref"] = row["object_ref"]
+        document = proposal_document(row, body)
         if sha256(_json(body).encode()).hexdigest() != row["request_digest"]:
             raise ValueError("trip proposal does not match its digest")
         if row["status"] == "ADMITTED":
