@@ -88,7 +88,7 @@ def test_a_charge_return_start_skips_the_battery_check_but_a_mission_step_does_n
             run(runner._check_battery("rosy_60"))
 
 
-def test_a_transient_miss_is_retried_briefly_but_a_stale_robot_is_not():
+def test_a_transient_miss_is_retried_briefly_and_a_stale_robot_is_still_refused():
     runner, store, ports = _ready(period_s=0.01)
     seen = []
     async def flaky(_):
@@ -104,7 +104,7 @@ def test_a_transient_miss_is_retried_briefly_but_a_stale_robot_is_not():
     runner._battery = stale
     with pytest.raises(TripError):
         run(runner._check_battery("rosy_60"))
-    assert len(seen) == 1                                       # robot-reported stale evidence is no transient miss
+    assert len(seen) == 3                                       # a blip past the limit clears; a frozen robot does not
     seen.clear()
     async def never(_):
         seen.append(1)

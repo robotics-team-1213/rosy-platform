@@ -5332,3 +5332,11 @@
 - gate 변화: SOURCE 회귀만. 충전기 전압 8.40 V 이상은 100%로 눌려 방금 뺀 로봇이 통과할 수 있다(후속). 칸 운영자 해제 경로·방문 영속화 없음(후속).
 - 결정: API v1.365 유지.
 - 교훈: CE 해당 없음.
+
+## 2026-11-07 · 7c042262fb · fix(fleet): a stale blip is read again before a trip is refused
+
+- 변경: `evidence_stale`도 최대 3번 다시 읽는다. 배터리 발행 주기(실측 5.0 s)와 CORE stale 기준(5.0 s)이 같아 정상 기체가 순간 stale로 읽힐 수 있다. 멈춘 기체는 세 번 모두 stale이라 그대로 거절된다.
+- 증거: 독립 검토의 비차단 지적 반영, 빈도는 측정하지 않음. 실물 수용 없음.
+- gate 변화: SOURCE만
+- 결정: API v1.365 유지
+- 교훈: 없음

@@ -78,7 +78,7 @@ def start_check(graph, segments: list, x: float, y: float, yaw, tol_deg: float) 
 #: CORE ``BatteryLevel`` values a start may see; critical, deep and anything unknown refuse.
 BATTERY_START_LEVELS = ("ok", "warning")
 #: Refusals that may be one missed read, and how many reads a start makes.
-BATTERY_TRANSIENT = ("unreadable", "evidence_old")
+BATTERY_TRANSIENT = ("unreadable", "evidence_old", "evidence_stale")  # 5.0 s publish equals CORE's 5.0 s stale limit
 BATTERY_TRIES = 3
 
 
@@ -121,9 +121,9 @@ class TripAdmission:
     async def _check_battery(self, robot_id):
         """A start needs fresh battery evidence at a non-critical level; else 422 TRIP_BATTERY_UNCONFIRMED.
         A charge return (the way to a charger) is not checked: a robot with a dead ADC must still go and charge.
-        A momentary miss (``unreadable``, ``evidence_old``) is read again up to BATTERY_TRIES times, one period
-        apart, so a mission step does not HOLD a robot mid-mission on a single missed read; robot-reported
-        stale, missing or low evidence is final."""
+        A momentary miss (``unreadable``, ``evidence_old``, ``evidence_stale``) is read again up to BATTERY_TRIES times, one period
+        apart, so a mission step does not HOLD a robot mid-mission on a single missed read; missing
+        or low evidence is final, and a frozen robot stays stale through every read."""
         job = self.lease.jobs.get(robot_id)
         if job is not None and job.view.get("owner_kind") == "charge_session":
             return
