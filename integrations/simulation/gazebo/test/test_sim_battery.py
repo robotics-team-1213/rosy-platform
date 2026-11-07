@@ -2,9 +2,14 @@
 
 import importlib.util
 import re
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+REPO = ROOT.parents[2]
+for holder in ("contracts/foundation", "middleware/core/services"):  # this file also runs alone
+    if str(REPO / holder) not in sys.path:
+        sys.path.insert(0, str(REPO / holder))
 
 
 def _sim_battery():
