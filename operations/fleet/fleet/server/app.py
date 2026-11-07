@@ -140,7 +140,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                site_maps=None, routing_config=None, map_pose_config=None,
                trip_caps_port=None, map_pose_port=None, simulation_pose_binding=None,
                lane_junction=None, trip_config=None, traffic_zones=None, traffic_authority=False, traffic_signals=(),
-               traffic_signal_advice=False, trip_lease=None,
+               traffic_signal_advice=False, trip_lease=None, station_recovery=False,
                identity_config=None, lane_compliance_config=None,
                notification_config=None, incident_model_config=None, channel_config=None,channel_model_config=None,
                conversation_config=None, assistant_config=None, station_ingress=None,
@@ -540,7 +540,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                            require_operator=require_operator,
                            require_named_operator=require_named_operator,
                            answer_log_path=task_service.store.path if task_service else None,
-                           tracking=tracking, identity=identity)
+                           tracking=tracking, identity=identity, station_recovery=station_recovery)
     if app.state.line_stuck._log is not None:
         app.state.line_stuck._log.notifications.config = notification_config
     from fleet.stuck.ai_facts import install_ai_routes   # D-577 4: AI PC facts, shadow only

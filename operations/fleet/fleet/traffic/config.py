@@ -93,3 +93,19 @@ def _trip_lease(args) -> dict:
     if required and ttl_s <= AUTHORITY_TTL_S and _traffic_authority(args):  # D-760 1: the authority expires first
         sys.exit(f"trip lease config: fleet.trip_lease_ttl_s must exceed the authority ttl {AUTHORITY_TTL_S:g} s")
     return {"required": required, "ttl_s": float(ttl_s)}
+
+
+def _station_recovery(args) -> bool:
+    """D-721 Amendment: ``fleet.station_recovery.enabled`` (default false). Off, Fleet asks and approves nothing."""
+    import yaml
+
+    try:
+        site_config = {}
+        if getattr(args, "site_config", None) is not None:
+            site_config = yaml.safe_load(Path(args.site_config).read_text(encoding="utf-8")) or {}
+        value = ((site_config.get("fleet") or {}).get("station_recovery") or {}).get("enabled", False)
+    except (OSError, TypeError, AttributeError, yaml.YAMLError) as exc:
+        sys.exit(f"station recovery config: {exc}")
+    if not isinstance(value, bool):
+        sys.exit("station recovery config: fleet.station_recovery.enabled must be true or false")
+    return value
