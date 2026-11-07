@@ -1103,3 +1103,9 @@
 - gate 변화: SOURCE/원격 브라우저 GO. 실제 로봇 주행, 로봇 화면 조종 구분, main 착지·push·CI·배포는 하지 않았다.
 - 남은 일: 로봇 화면(대시보드) 조종·충전 복귀 운행은 현재 데이터로 증명되지 않는다. CORE가 마지막 수락 teleop의 토큰 종류를 상태에 싣는 additive 필드가 필요하다.
 - 교훈: CE 해당 없음 — 표시 규칙은 코드와 시험에 직접 남는다.
+
+## 2026-11-07 · 92cb90111c · uiux(fleet): say why a battery stop holds and that charging ends it (D-502 Amendment 2026-11-07)
+- 변경: 배터리 래치만 잔량 회복 시 스스로 풀림, 다른 정지는 래치를 넘겨받음, 상태 `safety.releases_when_charged`, 화면 문구.
+- 증거: 원격 시험 결과는 착지 기록을 본다. 실제 충전 해제는 새 릴리스 뒤 확인 전이다.
+- gate 변화: 없음
+- 교훈: CE 해당 없음 — 규칙은 D-502 Amendment 2026-11-07과 회귀 시험에 있다.

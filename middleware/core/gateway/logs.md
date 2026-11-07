@@ -2111,3 +2111,9 @@ clpy.duration을 추가했다(bridge AGENTS의 두 파일 함께 갱신 규칙).
 - 증거: 원격 RED ac6386a96d 6개 실패 후 AI PC에서 관련6suite 346passed/skip0. 실제 API fresh motor lease 수락·누락/만료409·CommandManager 최종0, hardware 각 성분 HOLD 및 기존 G4 승인 거절을 확인했다. 독립 계약 검토 무발견이다.
 - gate 변화: 소스 회귀 근거이며 배포·실물 G4/SLAM 수용은 미실행이다. 게시용 canonical FULL은 후속 전체 source에서 별도 조정한다.
 - CE: 기존 교훈 갱신 — `docs/solutions/deployment/native-hardware-mode-profile-and-canonical-runtime-env-2026-11-03.md`에 갱신 후 재커미셔닝 순환 의존과 복구 경계를 추가했다.
+
+## 2026-11-07 · 92cb90111c · fix(battery): release a recovered battery stop in the policy chain (D-502 Amendment 2026-11-07)
+- 변경: 배터리 래치만 잔량 회복 시 스스로 풀림, 다른 정지는 래치를 넘겨받음, 상태 `safety.releases_when_charged`, 화면 문구.
+- 증거: 원격 시험 결과는 착지 기록을 본다. 실제 충전 해제는 새 릴리스 뒤 확인 전이다.
+- gate 변화: 없음
+- 교훈: CE 해당 없음 — 규칙은 D-502 Amendment 2026-11-07과 회귀 시험에 있다.
