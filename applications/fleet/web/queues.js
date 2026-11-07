@@ -10,6 +10,7 @@ import { motionSource } from "./motion-source.js";
 import {routeAttention, trafficAttention} from "/console/assets/site-map-model.js";
 import {tripEndText, tripWaitText} from "/console/assets/trip-display.js";
 import { guideAttention } from "/console/assets/guide-layer.js";
+import { recoveryHeadline } from "./station-recovery.js";
 
 function nodeWithText(tagName, className = "", text) {
   const node = document.createElement(tagName);
@@ -188,6 +189,9 @@ export function createQueues({ scope, el, view, render, streamEvidence }) {
     // D-550 8 / D-760 3: Fleet started a motion that no TTL or link signal bounds. Shown, not refused.
     const unbounded = ruleMTag(robot.rule_m);
     if (unbounded) items.push({ severity: "warn", text: `: 한도 없는 움직임 — ${unbounded.text}` });
+    // D-721 Amendment (S1): a low-battery robot's station recovery request; the row opens on its answer.
+    const recovery = (view.stationRecovery?.requests || []).find((r) => r.robot_id === robot.robot_id);
+    if (recoveryHeadline(recovery)) items.push({ severity: "warn", decision: "recovery", text: recoveryHeadline(recovery) });
     if (robot.queued) items.push({ severity: "warn", text: ": 교통 대기" });
     if (robot.yielding) items.push({ severity: "warn", text: ": 양보 중" });
     if (staleS !== null) items.push({ severity: "warn", text: `: 상태 오래됨 — ${staleS}초 전 값` });

@@ -1348,6 +1348,22 @@
       ],
       "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
     },
+    "GET:/api/fleet/station-recovery": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_station_recovery.py",
+        "test_enabled_list_shows_requests_with_reasons_and_sends_nothing"
+      ],
+      "source_revision": "0000000000000000000000000000000000000000"
+    },
+    "POST:/api/fleet/station-recovery/{robot_id}/approve": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_station_recovery.py",
+        "test_an_approved_request_is_recorded_for_the_named_operator_and_starts_nothing"
+      ],
+      "source_revision": "0000000000000000000000000000000000000000"
+    },
     "GET:/api/fleet/charge-bays": {
       "status": 200,
       "test": [
