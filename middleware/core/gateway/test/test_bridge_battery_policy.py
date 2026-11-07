@@ -365,3 +365,13 @@ def test_a_stop_arriving_during_the_release_keeps_emergency():
     assert services.safety.estop is True
     assert services.modes.mode is Mode.EMERGENCY
     assert services.state.snapshot().safety.source == "api:operator"
+
+
+def test_a_sensor_stuck_high_does_not_end_a_battery_stop():
+    services = _real_services()
+    services.safety.trigger_estop("battery_policy")
+
+    apply_voltage(services, 16.0)
+
+    assert services.safety.estop is True
+    assert services.modes.mode is Mode.EMERGENCY

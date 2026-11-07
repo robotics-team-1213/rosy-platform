@@ -42,6 +42,12 @@ from core_features.command.arbitration import Mode
 from core_features.power.battery import BatteryLevel
 
 
+#: A reading above this is a broken sensor, not a charged pack: a stuck ADC must not end a stop.
+#: shortcut: fixed for the 2S pack (8.4 V full, 8.78 V read on the charger), so another pack just keeps
+#: the administrator release; derive it from the battery curve when one ships.
+MAX_PLAUSIBLE_PACK_V = 9.5
+
+
 def _release_recovered_stop(services) -> None:
     """D-502: end a stop only the battery holds. The robot stays IDLE until a new command."""
     safety = services.safety
@@ -82,7 +88,7 @@ def apply_voltage(services, voltage: float) -> None:
     services.state.set_battery_status(battery.status())
     services.power.on_battery_alert(battery.level.value)
 
-    if recovered:
+    if recovered and voltage <= MAX_PLAUSIBLE_PACK_V:
         _release_recovered_stop(services)
 
     if battery.level is BatteryLevel.DEEP:

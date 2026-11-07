@@ -161,7 +161,7 @@ export function createQueues({ scope, el, view, render, streamEvidence }) {
     if (relay && relay.cls) items.push({ severity: relay.cls === "crit" ? "crit" : "warn", text: `: ${relay.text}` });
     const source = motionSource(robot, view);
     if (source.attention) items.push({ severity: "crit", text: `: ${source.text} — ${source.title}` });
-    if (state.safety?.estop === true) items.push({ severity: "warn", text: `: ${estopText(state, "비상 정지 걸림")} — 관리자가 해제해야 움직입니다` });
+    if (state.safety?.estop === true) items.push({ severity: "warn", text: `: ${estopText(state, "비상 정지 걸림")}${state.safety.releases_when_charged === true ? "" : " — 관리자가 해제해야 움직입니다"}` });
     else if (state.safety?.estop !== false) items.push({ severity: "warn", text: ": 정지 상태 미확인" });
     if (state.navigation === "FAILED") items.push({ severity: "warn", text: ": 목표 실패" });
     // D-511 M0: Fleet이 Rosy Cam 지도 자세로 본 차로 여유. 움직이는 로봇만 알린다(D-511 §2).
