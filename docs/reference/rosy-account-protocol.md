@@ -74,7 +74,7 @@ Account identity는 불변 opaque `account_id`다. login/email은 identity가 �
 
 | 자원 | 허용 capability |
 |---|---|
-| site | accounts.manage, fleet.read, fleet.operate, fleet.policy, camera.manage, games.operate, vault.read, vault.operate, vault.manage |
+| site | accounts.manage, fleet.read, fleet.operate, fleet.policy, camera.manage, games.operate, monitoring.read, vault.read, vault.operate, vault.manage |
 | robot | robot.read, robot.operate, robot.admin |
 | project | learning.view, learning.edit, learning.approve, learning.manage, learning.import, learning.publish |
 

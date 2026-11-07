@@ -27,8 +27,8 @@
 
 ## 최근 기록
 
+- 2026-11-07 · uncommitted · feat(monitoring): 사람 조회를 Rosy Account로 (D-990)
 - 2026-11-06 · uncommitted · uiux(monitoring): 연결 그림 카드에 항목 판정 글
 - 2026-11-02 · uncommitted · D-961 웹 제품 통합
 - 2026-11-01 · 2ba97ac2c346 · 사이트 overlay 현장 수용 (D-936)
 - 2026-11-01 · ea45e0c79f · 관제 PC Monitoring 입력 staging (D-936)
-- 2026-10-30 · 324eb4010f · PC별 업데이트 상태 (D-871)

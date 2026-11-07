@@ -20,6 +20,33 @@ ROOT = Path(__file__).resolve().parents[1]
 KEY_A, KEY_B = 'a' * 32, 'b' * 32
 
 
+class AccountStub:
+    """The Account side of the receiver; Monitoring's routes, cookies and screen stay real."""
+    resource, profile_url, callback = 'site:site-a', None, ''
+
+    def __init__(self):
+        self.capabilities, self.logged_out = None, []
+
+    def resolve(self, cookie):
+        from core_common.protocol.account_access import AccountAccess
+        if cookie != 'good' or not self.capabilities:
+            return None
+        now = int(time.time())
+        return AccountAccess.model_validate({
+            'iss': 'https://account.example.test', 'aud': self.resource, 'sub': 'person', 'sid': 'session', 'jti': 'j' * 16,
+            'rev': 1, 'iat': now, 'exp': now + 60, 'grants': [{'resource': self.resource, 'capabilities': self.capabilities}]})
+
+    def profile(self, _cookie):
+        return None
+
+    def logout(self, cookie):
+        self.capabilities = None
+        self.logged_out.append(cookie)
+
+    def retry_revocations(self):
+        pass
+
+
 @pytest.fixture
 def monitoring_backend(tmp_path, request):
     from rosy.monitoring.config import MonitoringConfig, load_credentials
@@ -28,7 +55,7 @@ def monitoring_backend(tmp_path, request):
 
     mode = getattr(request, 'param', None)
     web_root = None
-    if mode in {'web', 'xss', 'delayed', 'unavailable', 'empty', 'error', 'disconnected', 'prefix'}:
+    if mode in {'account', 'web', 'xss', 'delayed', 'unavailable', 'empty', 'error', 'disconnected', 'prefix'}:
         from rosy.monitoring.web_assets import build_web
         web_root = tmp_path / 'web'
         build_web(ROOT, web_root)
@@ -49,7 +76,8 @@ def monitoring_backend(tmp_path, request):
                                         'sites': [f'site-{site}']} for site in ('a', 'b')])
     store = MonitoringStore(tmp_path / 'monitoring.sqlite3', config.collector_id)
     collector = Collector(config, load_credentials(config, {'READ_A': KEY_A, 'READ_B': KEY_B}), store)
-    app = create_app(collector, web_root=web_root)
+    account = AccountStub() if mode == 'account' else None
+    app = create_app(collector, web_root=web_root, account=account)
     slow = SimpleNamespace(key=None, entered=threading.Event(), release=threading.Event())
     @app.middleware('http')
     async def delayed_actual_response(request, call_next):
@@ -63,6 +91,8 @@ def monitoring_backend(tmp_path, request):
         return response
     listener = safe_listener()
     origin = f'http://127.0.0.1:{listener.getsockname()[1]}'
+    if account:
+        account.callback = origin + '/api/monitoring/v1/account/callback'
     async def prefix_gateway(scope, receive, send):
         from starlette.responses import Response
         if scope['type'] != 'http':
@@ -83,7 +113,7 @@ def monitoring_backend(tmp_path, request):
             time.sleep(0.01)
         assert server.started
         yield SimpleNamespace(origin=origin, server=server, worker=worker, collector=collector,
-                              paths=paths, slow=slow)
+                              paths=paths, slow=slow, account=account)
     finally:
         server.should_exit = True
         worker.join(15)
@@ -269,6 +299,54 @@ def test_declared_g2_evidence_states_use_the_actual_backend(monitoring_backend, 
         expect(page.locator('#connection-status')).to_contain_text('허용된 사이트를 확인하세요.')
         expect(page.locator('#observation-rows')).to_be_empty()
         capture(page, 'scope-denied')
+
+
+@pytest.mark.parametrize('monitoring_backend', ['account'], indirect=True)
+def test_account_session_opens_the_screen_without_a_key(monitoring_backend, monitoring_page):
+    from playwright.sync_api import expect
+    page, account = monitoring_page, monitoring_backend.account
+    status, workspace = page.locator('#connection-status'), page.locator('#workspace')
+    page.goto(monitoring_backend.origin + '/')
+    expect(page.locator('#account-login')).to_be_visible()
+    expect(page.locator('#reader-key')).to_be_hidden()  # the emergency key stays folded
+    expect(workspace).to_be_hidden()
+
+    page.context.add_cookies([{'name': 'rosy_monitoring_account', 'value': 'good', 'url': monitoring_backend.origin}])
+    account.capabilities = ['fleet.read']
+    page.reload()
+    expect(status).to_contain_text('권한이 없습니다')
+    expect(workspace).to_be_hidden()
+    expect(page.locator('#account-login')).to_be_hidden()
+
+    account.capabilities = ['monitoring.read']
+    page.reload()
+    expect(workspace).to_be_visible()
+    expect(page.locator('#login')).to_be_hidden()
+    expect(status).to_contain_text('자료 수신')
+    page.wait_for_timeout(11000)  # one session poll must not overwrite the read status
+    expect(status).to_contain_text('자료 수신')
+
+    page.locator('#logout').click()
+    expect(page.locator('#account-login')).to_be_visible()
+    expect(workspace).to_be_hidden()
+    assert account.logged_out == ['good']
+
+    # A session that ends while reading returns to the login button, not to a key-only dead end.
+    account.capabilities = ['monitoring.read']
+    page.reload()
+    expect(workspace).to_be_visible()
+    account.capabilities = None
+    expect(page.locator('#account-login')).to_be_visible(timeout=20000)
+
+    # With Account unreachable the emergency key opens instead of a dead login button.
+    page.route('**/api/monitoring/v1/account/session', lambda route: route.fulfill(status=503, body='{}'))
+    page.reload()
+    expect(status).to_contain_text('연결할 수 없습니다')
+    expect(page.locator('#reader-key')).to_be_visible()
+    page.locator('#reader-key').fill(KEY_A)
+    page.wait_for_timeout(11000)  # a later failed poll must not fold the field being typed in
+    expect(page.locator('#reader-key')).to_have_value(KEY_A)
+    expect(page.locator('#reader-key')).to_be_visible()
 
 
 @pytest.mark.parametrize('monitoring_backend', ['prefix'], indirect=True)

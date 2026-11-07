@@ -26,6 +26,7 @@
 
 ## 최근 기록
 
+- 2026-11-07 · uncommitted · docs(media): 공통 서비스 안내 README
 - 2026-10-18 · uncommitted · D-801 관제 콘솔 로봇 영상(사이트 발급 읽기 위임)
 - 2026-10-18 · 2190ba6889 · D-789 production kick binding and default-on deployment
 - 2026-10-17 · 683d93218b · D-789 media authority source slice

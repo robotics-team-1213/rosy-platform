@@ -13,7 +13,7 @@ export function canViewAccountSetup(session) {
 // camera, robot-admin or learning approval/publish/manage rights.
 export function teamGrants(siteResource) {
   return [
-    {resource: siteResource, capabilities: ['fleet.read', 'fleet.operate', 'games.operate']},
+    {resource: siteResource, capabilities: ['fleet.read', 'fleet.operate', 'games.operate', 'monitoring.read']},
     {resource: 'robot:*', capabilities: ['robot.read', 'robot.operate']},
     {resource: 'project:*', capabilities: ['learning.view', 'learning.edit', 'learning.import']},
   ];
@@ -22,7 +22,7 @@ export function teamGrants(siteResource) {
 // Choosing a role fills the editor with its bundle; the server still checks only the stored grants.
 export function roleGrants(role, siteResource) {
   if (role === 'viewer') {
-    return [{resource: siteResource, capabilities: ['fleet.read']}, {resource: 'robot:*', capabilities: ['robot.read']},
+    return [{resource: siteResource, capabilities: ['fleet.read', 'monitoring.read']}, {resource: 'robot:*', capabilities: ['robot.read']},
       {resource: 'project:*', capabilities: ['learning.view']}];
   }
   if (role === 'policy-admin') {
@@ -35,7 +35,7 @@ export function roleGrants(role, siteResource) {
 
 export const CAPABILITIES = {
   site: {'accounts.manage': '계정 관리', 'fleet.read': '관제 조회', 'fleet.operate': '관제 조작',
-    'fleet.policy': '관제 정책', 'camera.manage': '카메라 관리', 'games.operate': '게임 조작',
+    'fleet.policy': '관제 정책', 'camera.manage': '카메라 관리', 'games.operate': '게임 조작', 'monitoring.read': 'Monitoring 조회',
     'vault.read': 'Vault 조회', 'vault.operate': 'Vault 조작', 'vault.manage': 'Vault 장부 정리'},
   robot: {'robot.read': '로봇 조회', 'robot.operate': '로봇 조작', 'robot.admin': '로봇 관리'},
   project: {'learning.view': '학습 조회', 'learning.edit': '학습 편집', 'learning.approve': '학습 승인',
