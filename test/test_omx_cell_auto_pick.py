@@ -490,9 +490,9 @@ def test_transport_folds_home_between_lift_and_place():
 def test_a_stop_while_carrying_backs_out_and_reports_contact_with_the_box_in_the_jaws():
     stop = {"ok": False, "contact": True, "error": "contact in goto above_place: shoulder_lift lag rose to 2.2 units"}
     cell = Scripted({"run grasp_pick": {"holding": True}, "goto above_place": stop})
-    moved = auto.transfer_folded(cell, "lib.json")
+    moved = auto.transfer_folded(cell, "lib.json", at_stop=lambda state: cell.commands.append("stills"))
     assert moved["result"] == "contact" and moved["at"] == "goto above_place"
-    assert cell.commands[-2:] == ["retreat", "park"]
+    assert cell.commands[-3:] == ["stills", "retreat", "park"]  # the frames show the stop, not the folded arm
     assert any(s.get("command") == "run grasp_pick" and s.get("holding") for s in moved["steps"])
 
 
