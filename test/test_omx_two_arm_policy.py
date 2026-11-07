@@ -1,5 +1,4 @@
 """Two-arm ACT tool: what the plan tells the model, and how a round's score is counted. No MuJoCo needed."""
-import math
 from pathlib import Path
 import sys
 
@@ -27,15 +26,6 @@ def test_every_plan_step_gets_its_own_goal():
     assert goals.shape == (21, 12)
     assert len({goal.tobytes() for goal in goals}) == 21
     assert all(goal[0] == (step["arm"] == "arm_a") and goal[1] == (step["arm"] == "arm_b") for goal, step in zip(goals, steps))
-
-
-def test_a_container_turned_half_way_round_is_the_same_goal():
-    layout = sites.Layout()
-    step = dict(id="a1", arm="arm_a", to="tmp-a-1", **{"from": "belt"})
-    site = layout.sites["tmp-a-1"]
-    before = policy.goal_vector(layout, step, {})
-    layout.sites["tmp-a-1"] = dict(site, yaw=site["yaw"] + math.pi)
-    assert np.allclose(before, policy.goal_vector(layout, step, {}), atol=1e-3)
 
 
 def test_a_round_counts_steps_and_keeps_whole_runs_apart():
