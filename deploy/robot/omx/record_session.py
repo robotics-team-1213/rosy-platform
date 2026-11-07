@@ -559,12 +559,12 @@ def main(argv=None):
                   **({"params": str(args.params.resolve())} if args.params else {}),
                   **({"load_model": os.environ["ROSY_LOAD_MODEL"]} if os.environ.get("ROSY_LOAD_MODEL") else {})}
     import omx_incident
-    omx_incident.refuse_if_held(args.arm)
     session = Session(open_bus=lambda which: SerialBus(ports[which], 0), systemctl=systemctl, run=run, log=log,
                       replay=replay, chunks=chunks, operating_profile=args.operating_profile)
     lock = session_lock(args.arm)
     record = {}
     try:
+        omx_incident.refuse_if_held(args.arm)
         record = session.execute(args.config, caps, teleop_only=args.teleop_only, task_card=args.task_card,
                                  body_only=args.body_only)
         if not args.teleop_only and chunks is None:
@@ -574,23 +574,22 @@ def main(argv=None):
                 record["static_episodes"] = f"error: {exc}"
     finally:
         try:
-            from motor_health import finish_snapshot
-            finish_snapshot(monitor_state, monitor_owner, monitor_session, safe_end=bool(record.get('safe_end')))
-        except Exception as exc:
-            record['motor_health_snapshot_error'] = str(exc)
+            try:
+                from motor_health import finish_snapshot
+                finish_snapshot(monitor_state, monitor_owner, monitor_session, safe_end=bool(record.get('safe_end')))
+            except Exception as exc:
+                record['motor_health_snapshot_error'] = str(exc)
+            if record:
+                record.update(motor_health_log=str(monitor_path), motor_health_log_created=monitor_path.is_file(),
+                              motor_health_state=str(monitor_state), motor_health_owner=monitor_owner,
+                              motor_health_session=monitor_session)
+                Path("session.json").write_text(json.dumps(record, indent=2, default=str))
+                try:  # a failing incident record must never hide how the session ended
+                    print(json.dumps(omx_incident.after_session(args.arm, ports.get("follower")), default=str)[:2000])
+                except Exception as exc:
+                    print(f"incident pipeline failed: {exc}")
         finally:
             lock.close()
-        if record:
-            record["motor_health_log"] = str(monitor_path)
-            record["motor_health_log_created"] = monitor_path.is_file()
-            record['motor_health_state'] = str(monitor_state)
-            record['motor_health_owner'] = monitor_owner
-            record['motor_health_session'] = monitor_session
-            Path("session.json").write_text(json.dumps(record, indent=2, default=str))
-            try:  # a failing incident record must never hide how the session ended
-                print(json.dumps(omx_incident.after_session(args.arm, ports.get("follower")), default=str)[:2000])
-            except Exception as exc:
-                print(f"incident pipeline failed: {exc}")
     if not record.get("safe_end"):
         raise SystemExit("UNSAFE END: follower torque or caps not confirmed restored - see session.json")
     raise SystemExit(record.get("exit_code") or 0)
