@@ -26,6 +26,9 @@ from pathlib import Path
 
 JOINTS = ("shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll")
 WINDOW_S, MIN_SPEED, BLOCKED_RATIO, MIN_RISE = 0.5, 0.3, 0.25, 0.3
+# a retry of one plan: same start, this much slower, and it stopped within SAME_STOP of the last stop.
+# Real pair: 2026-11-06 23:09 -> 23:27, start 0.2 apart, 3.52 -> 2.11 units/s, stop 1.2 apart, a contact by the side view. No opposite pair yet.
+SAME_START, SAME_STOP, SLOWER = 1.0, 2.0, 0.85
 HYPOTHESES = {
     "too_fast": "the joint kept moving but slower than commanded: the command outran it. Check: the same move slower",
     "blocked": "the joint stood still under a moving command: something holds the arm or what it carries. Check: frames at the stop; move the thing clear",
@@ -69,13 +72,28 @@ def read_motion(rows: list) -> dict:
     facts = {"joint": JOINTS[worst], "lag_start": round(lag(rows[0], worst), 2), "lag_end": round(lag(rows[-1], worst), 2),
              "sent_units_s": round(sent, 2), "present_units_s": round(present, 2), "seconds": round(rows[-1]["t"] - rows[0]["t"], 2),
              "other_joints_lag_rise": {JOINTS[j]: round(lag(rows[-1], j) - lag(rows[0], j), 2) for j in range(5) if j != worst},
-             "jaws": rows[-1]["present"][5]}
+             "jaws": rows[-1]["present"][5], "start": rows[0]["sent"][:5], "stopped_at": rows[-1]["present"][:5],
+             "pwm_end": (rows[-1].get("pwm") or {}).get(JOINTS[worst])}  # no verdict from PWM yet: no contact has been recorded with it
     if sent < MIN_SPEED or facts["lag_end"] - facts["lag_start"] < MIN_RISE:
         return {**facts, "verdict": "undetermined", "why": "the command was not moving, or the lag did not grow"}
     moved = f"{facts['joint']} moved {present:.2f} of {sent:.2f} units/s"
     if present < BLOCKED_RATIO * sent:
         return {**facts, "verdict": "blocked", "why": moved}
     return {**facts, "verdict": "undetermined", "why": f"{moved}: contact and free motion both keep moving like this"}
+
+
+def read_repeat(motion: dict, earlier: list) -> dict:
+    """What the speed ratio cannot tell, a retry can: slower, yet stopped at the same place, so speed is excluded.
+    shortcut: a load limit at that pose reads as blocked too; the push it chooses ends at a person if the top view shows no change."""
+    if motion["verdict"] != "undetermined" or not earlier or "start" not in motion or "start" not in (earlier[-1].get("motion") or {}):
+        return motion
+    before = earlier[-1]["motion"]
+    gap = lambda a, b: max(abs(x - y) for x, y in zip(a, b))  # noqa: E731
+    stood = motion["sent_units_s"] >= MIN_SPEED and motion["lag_end"] - motion["lag_start"] >= MIN_RISE
+    if (stood and gap(motion["start"], before["start"]) <= SAME_START and gap(motion["stopped_at"], before["stopped_at"]) <= SAME_STOP
+            and motion["sent_units_s"] <= SLOWER * before["sent_units_s"]):
+        return {**motion, "verdict": "blocked", "why": f"slower ({before['sent_units_s']} -> {motion['sent_units_s']} units/s), stopped at the same place"}
+    return motion
 
 
 def past_rows(path: Path, kind: str) -> list:
@@ -91,6 +109,7 @@ def explain(kind: str, result: str, trace: list, images: list, backend, path: Pa
     chunk = chunk or chunk_of(result)
     motion = read_motion(last_run(trace, chunk)) if chunk else {"verdict": "undetermined", "why": "no chunk named"}
     past = past_rows(path, kind)
+    motion = read_repeat(motion, [r for r in past if r.get("chunk") == chunk and r["t"] >= since])
     row = {"t": time.time(), "kind": kind, "result": result, "chunk": chunk, "motion": motion, "model": None, "missing": []}
     if backend is not None:
         prompt = (f"A robot arm's attempt failed: {result!r} (kind {kind}). Measured from its 30 Hz trace: {json.dumps(motion)}. Past results "
@@ -134,7 +153,7 @@ def flushing_trace(file):
     last = [None]
 
     def write(row):
-        file.write(json.dumps(row) + "\n")
+        file.write(json.dumps(row, default=float) + "\n")  # a motor read may be numpy: a trace line must not stop the tick
         if row["chunk"] != last[0]:
             file.flush()
         last[0] = row["chunk"]
