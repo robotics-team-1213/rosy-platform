@@ -14521,3 +14521,24 @@ osy-d395-s1d\`.
 - 증거: 실제 `land_mainred.py recheck`에서 통과한 시험이 닫히지 않아 드러났다. 수정 뒤 열린 11개 중 9개가 main 통과로 닫히고, 삭제된 파일 1개가 닫히고, 실제 실패 1개(`test_cell_g2_ports.py` 단독 실행의 AF_UNIX 경로 길이)가 남았다.
 - gate 변화: 없음. 착지의 `close`가 이제 통과한 항목을 실제로 닫는다.
 - CE: 해당 없음 — 원인이 코드와 시험에 남는다.
+
+## 2026-11-07 · uncommitted · fix(model-pc): GPU 유휴 전원 차단을 끈다
+
+- 변경: 모델 PC에 `72-rosy-gpu-awake.rules`를 더해 GPU의 `power/control`을 `on`으로 둔다(기존 `71-nvidia.rules`는 `auto`).
+- 증거: 11-07 03:35 GPU가 깨어나지 못해 `Xid 79`가 났고 05:00 재부팅 뒤 6시간 돌아오지 못했다. 재부팅 정지와의 인과는 증명되지 않았다. 규칙은 모델 PC에 직접 설치해 `power/control=on`을 확인했다.
+- gate 변화: 없음. 다음 재부팅 뒤 값 유지는 아직 확인 전이다.
+- CE: 미해결 — 멈춘 원인은 가설로 남고 기록은 작업 기록에 있다.
+
+## 2026-11-07 · uncommitted · docs(solutions): Pinky LiDAR 0°는 뒤쪽, odom은 이동 증거가 아니다
+
+- 변경: 현장 주행 스크립트 교훈에 11-07 갱신 절을 더했다. LiDAR 방향은 공용 몸체 모델 `PINKY_PRO`(URDF 값 180°)로 읽고, 진행은 odom이 아니라 LiDAR 변화로 확인한다.
+- 증거: rosy_46이 100 s 동안 odom 3.1 m를 기록했지만 지도에는 같은 벽만 반복됐고 몸체는 움직이지 않았다(11-07 현장).
+- gate 변화: 없음.
+- CE: 기존 교훈 갱신 — 같은 문서의 지침 1을 어긴 사례와 빠져 있던 두 사실.
+
+## 2026-11-07 · uncommitted · fix(remote): 재부팅 경고 2분 동안 시험 PC가 새 작업을 받지 않는다
+
+- 변경: `host_probe.REBOOT_CHECK`가 `is-active -q`의 종료 코드를 읽었다. `rosy-nightly-reboot.service`는 oneshot이라 경고 2분 내내 `activating`이고 종료 코드는 3이어서, D-889 추가 13의 "서비스가 도는 동안 받지 않는다"가 처음부터 동작하지 않았다. 출력 문자열로 판정한다.
+- 증거: 11-07 AI PC 06:00·현장 PC 06:10 재부팅에 든 exit 143 호출 18개는 모두 타이머가 울린 뒤 시작했다(`run_s` 61~193초, 다른 시각 사례 없음). 그날 착지 4개에 걸렸고 그중 `sync-origin`은 약 70분짜리 FULL을 잃었다. AI PC 사용자 단위로 oneshot이 `activating`, `is-active -q` rc=3임을 확인했다. 기존 시험의 가짜 `systemctl`은 실행 중에 0을 돌려줘서 이를 놓쳤다.
+- gate 변화: 없음. 경고 2분 동안 새 작업이 들어가지 않는다. 재부팅 13분 전에 시작해 끝나지 않은 작업은 여전히 끊긴다(D-889 추가 13의 위험).
+- CE: 해당 없음 — 원인이 코드와 시험에 남는다.

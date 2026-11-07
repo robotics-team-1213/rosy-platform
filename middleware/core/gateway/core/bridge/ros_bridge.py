@@ -798,8 +798,8 @@ class RosBridge:
             self._node.get_logger().warn("navigate_to_pose server not ready; goal queued anyway")
         generation = self._goals.opening(correlation_id, native_run_id)
         future = self.nav_client.send_goal_async(goal)
-        future.add_done_callback(
-            lambda done, gen=generation: self._goal_response_cb(done, gen))
+        future.add_done_callback(lambda done, gen=generation: self._goal_response_cb(done, gen))
+        goal_tracker.watch_response(self._goals, self._svc.nav, future, generation)
 
     def _goal_response_cb(self, future, generation: int) -> None:
         goal_tracker.on_response(self._goals, self._svc.nav, future, generation,
