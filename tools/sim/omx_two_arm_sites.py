@@ -18,15 +18,21 @@ CHOICES = dict(
     fixture_case="nominal-palletizing-v21-ship-surveyed",  # measured arm bases (arm_b FK, arm_a plate centre); "nominal-palletizing-v21-ship" = CAD bases
     base_z="measured",       # "measured": table + 12 mm base plate (ruler, arm_b; arm_a ASSUMED the same); "cad": the fixture's arm base z
     belt_height="ruler",     # "ruler": belt end surface 55 mm under the table (inventory, D435 says 56); "fixture": the surveyed case's belt_drop face
-    temp_radius_m=.214,      # arm centre to temp plate centre; SCAD arm_r, a photo estimate (candidates .155 to .273)
+    temp_lanes="photo-20261107",  # "photo-20261107": TEMP_LANES_PHOTO, the plates where the top camera saw them; "fan": temp_radius_m and temp_direction_deg
+    temp_radius_m=.214,      # SCAD arm_r: the printed fan's shape, and with temp_lanes="fan" arm centre to plate centre
     temp_direction_deg=180., # from each arm toward -x, away from the belt (the user's slot plan 2026-10-31)
     temp_source="scad-v7",   # the plate source; "stl" keeps the same collision shape and shows the downloaded STL as the visual
     ship_source="fixture-studs",  # the plate the stack sits on: the fixture's stud plate (the physical ship is only partly built)
-    wrist_camera="none",     # "none", "v21-b" (palletizing_gripper.WRIST_CAMERA_B) or "stock" (the cell example's omx-ai-stock)
+    wrist_camera="stock",    # the mounted camera: "stock" (omx-ai-stock, ROBOTIS STEP), "v21-b" (palletizing_gripper.WRIST_CAMERA_B) or "none"; arm_a ASSUMED the same mount
     tcp_x_arm_b=.0740,       # URDF/STL v2.1 jaw (tip 74.1 mm from the pivot); a touch gave .0885 but that rests on an unchecked table height (OPEN, 14.5 mm FK offset)
     tcp_x_arm_a=.0740,       # same jaw, not confirmed on arm_a separately
     sim_tcp_x_m=.0740,       # the MuJoCo pads are the repo's v2.1 STL, whose TCP is .0740: the teacher grasps with this one (STL may not match the installed jaws)
     roll_floor_norm=-18.)    # usable wrist roll floor in the norm unit (coordinator): a step whose joint5 goes below it is flagged
+# Lane centre (x, y) m and long-axis yaw deg, lanes numbered as printed on the plates. Dark pads in the surveyed top camera, back-projected to the plate top;
+# the pads measured 89 x 30 mm against the 90 x 30 container. tmp-a-3 lay under a container: from lanes 1 and 2, its visible end agrees within 0.1 deg.
+# The plates are loose: measure again when one moves.
+TEMP_LANES_PHOTO = dict(a=[((-.0738, -.2167), 15.7), ((-.0818, -.1672), 2.7), ((-.0776, -.1173), -11.3)],
+                        b=[((-.0465, .1439), 4.9), ((-.0466, .1958), -9.7), ((-.0378, .2480), -24.7)])
 SCAD = dict(lanes=3, cont_w=.030, cont_l=.090, deck_t=.008, clr=.0004, clr_l=.001, seat_h=.0006, catch=.005, gap_min=.010, rim=.003, yaw_tol_deg=3.)
 BOX_H, BELT_STOP_X = .03, .158
 ARMS = ("arm_a", "arm_b")  # fixture arm index 0 (y -) and 1 (y +); arm_a does not move in reality (motor 11), it does here
@@ -104,7 +110,11 @@ class Layout:
             self.sites[f"ship-r{row}-l{layer}"] = dict(kind="ship", xy=tuple(item["target"][:2]), z=item["target"][2], yaw=0.,
                                                        arm=ARMS[item["arm"]], item=item["id"], row=row, layer=layer)
         for tag, name in (("a", "arm_a"), ("b", "arm_b")):
-            lanes, centre = temp_lanes(self.arms[name].base[:2], c["temp_radius_m"], c["temp_direction_deg"])
+            if c["temp_lanes"] == "fan":
+                lanes, centre = temp_lanes(self.arms[name].base[:2], c["temp_radius_m"], c["temp_direction_deg"])
+            else:
+                lanes = [(xy, math.radians(yaw)) for xy, yaw in TEMP_LANES_PHOTO[tag]]
+                centre = lanes[1][0]
             self.plates[tag] = dict(arm=name, centre=centre, lanes=lanes, outline=plate_outline(lanes, c["temp_radius_m"]))
             for i, (xy, yaw) in enumerate(lanes, 1):
                 self.sites[f"tmp-{tag}-{i}"] = dict(kind="temp", xy=xy, z=self.deck_z + BOX_H / 2, yaw=yaw, plate=tag, lane=i)

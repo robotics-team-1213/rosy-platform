@@ -366,7 +366,7 @@ class IngestServer:
         except VisionLeaseError:
             return _http_response(401, b"unauthorized\n")
         # A missing, stale, or rate-limited frame is still a request (D-691).
-        self._note_stream_request(source)
+        self.hold_stream(source)
         if view == 'measured-status':
             return _http_response(200, json.dumps(self.measured_status(source)).encode(), extra={
                 'Content-Type': 'application/json', 'Cache-Control': 'no-store'})
@@ -608,8 +608,8 @@ class IngestServer:
             except websockets.exceptions.ConnectionClosed:
                 return
 
-    def _note_stream_request(self, source: str) -> None:
-        """An authorized preview read asks ``source`` to send (D-691)."""
+    def hold_stream(self, source: str) -> None:
+        """An authorized preview read (D-691) or Fleet's locate session (D-989) asks ``source`` to send."""
         if not self._demand.note(source):
             return
         src = self._sources.get(source)

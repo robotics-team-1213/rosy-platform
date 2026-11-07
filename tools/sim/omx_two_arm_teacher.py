@@ -26,6 +26,9 @@ OPEN_GAP = dict(belt=.042, ship=.033, temp=.033)  # 33 mm lets a pad stay inside
 HOLD_GAP = .030 - jaw.SQUEEZE_M
 
 
+RECORDED = ("top", "side", "a_wrist", "b_wrist")  # the cell's four cameras (D-960); the world's overview is not one of them
+
+
 def judge_pose(world, data, cid, site, limits):
     """Container against its target site: position, yaw (180 deg symmetric), height, tilt."""
     s = world.layout.sites[site]
@@ -91,11 +94,7 @@ class Teacher:
         self.contacts, self.carried, self.first = dict(arm_arm=set(), arm_other=set(), pad_neighbour=set()), c, {}
         idle = {o: np.append(L.sim_arms[o].home[:5], L.sim_arms[o].home[5]) for o in L.arms if o != arm}
         if step["from"] == "belt":
-            f = L.fixture  # the belt pick pose varies inside the fixture's infeed tolerance; seed 0 is the nominal pose
-            j = (0., 0., 0.) if self.seed == 0 else (*self.rng.uniform(-1, 1, 2) * f["infeed_jitter_xy_m"], float(self.rng.uniform(-1, 1)) * f["infeed_yaw_jitter_rad"])
-            w.put(data, c, "belt", jitter=j)
-            for _ in range(8):
-                self.frame(data, {arm: self.q_now(data, arm), **idle}, step["id"])
+            self.belt_in(data, step, idle)
         pos0, yaw0, _ = w.pose(data, c)
         row = dict(step=step["id"], container=c, arm=arm, source=step["from"], target=step["to"])
         if np.linalg.norm(pos0[:2] - sa["xy"]) > .03:
@@ -140,7 +139,20 @@ class Teacher:
         self.move(data, arm, np.append(q[:5], g_to), np.append(ik_arm.home[:5], g_to), 2.5, step["id"], idle)  # park
         for _ in range(round(.7 * FPS)):
             self.frame(data, {arm: np.append(ik_arm.home[:5], g_to), **idle}, step["id"])
-        pose = judge_pose(w, data, c, step["to"], self.limits)
+        return dict(self.verdict(data, step, row, before), held=held, worst_ik_error_mm=round(worst * 1000, 2))
+
+    def belt_in(self, data, step, idle):
+        """The next container arrives; the belt pick pose varies inside the fixture's infeed tolerance, seed 0 is the nominal pose."""
+        f, arm = self.layout.fixture, step["arm"]
+        j = (0., 0., 0.) if self.seed == 0 else (*self.rng.uniform(-1, 1, 2) * f["infeed_jitter_xy_m"], float(self.rng.uniform(-1, 1)) * f["infeed_yaw_jitter_rad"])
+        self.world.put(data, step["container"], "belt", jitter=j)
+        for _ in range(8):
+            self.frame(data, {arm: self.q_now(data, arm), **idle}, step["id"])
+
+    def verdict(self, data, step, row, before):
+        """The same judgement for the teacher and a learned policy: the container, its neighbours, and what the arms touched."""
+        w = self.world
+        pose = judge_pose(w, data, step["container"], step["to"], self.limits)
         moved = []
         for o, (p, yw, tl) in before.items():
             p2, yw2, tl2 = w.pose(data, o)
@@ -151,9 +163,8 @@ class Teacher:
         arm_hits = sorted(f"{a}~{b}" for a, b in self.contacts["arm_other"])
         crash = sorted("~".join(p) for p in self.contacts["arm_arm"])
         ok = pose["ok"] and not moved and not crash and not arm_hits
-        return dict(row, result="pass" if ok else "fail", pose=pose, held=held, neighbours_disturbed=moved, arm_arm_contacts=crash,
-                    arm_link_contacts=arm_hits, pad_touched_neighbours=sorted(self.contacts["pad_neighbour"]), worst_ik_error_mm=round(worst * 1000, 2),
-                    held_tilt_max_deg=round(self.held_tilt, 1), first_contact_phase=self.first)
+        return dict(row, result="pass" if ok else "fail", pose=pose, neighbours_disturbed=moved, arm_arm_contacts=crash, arm_link_contacts=arm_hits,
+                    pad_touched_neighbours=sorted(self.contacts["pad_neighbour"]), held_tilt_max_deg=round(self.held_tilt, 1), first_contact_phase=self.first)
 
     def _hold_shift(self, arm, off, q, yaw, pos):
         """TCP shift that puts the container centre (not the TCP) where the waypoint says: R @ held offset, nominal 2.01 mm under the TCP removed."""
@@ -195,6 +206,7 @@ class Teacher:
         final = {}
         for step in task["steps"]:
             final[step["container"]] = step["to"]
+        self.data = data  # the last state, for the record's pictures
         finals = {c: judge_pose(w, data, c, s, self.limits) for c, s in final.items()}
         passed = sum(r["result"] == "pass" for r in rows)
         return dict(task=task["name"], steps=len(rows), steps_pass=passed, final_ok=sum(f["ok"] for f in finals.values()), final_total=len(finals),
@@ -215,6 +227,7 @@ def main(argv=None):
     p.add_argument("task", choices=["stack", "rehandle"])
     p.add_argument("--out", default=".")
     p.add_argument("--video", action="store_true")
+    p.add_argument("--frames", help="folder for one last picture per real camera")
     p.add_argument("--video-skip", type=int, default=1, help="write every Nth frame (a short version); the file is named TASK-short.mp4")
     p.add_argument("--seed", type=int, default=0, help="0 = nominal belt pose, else a seeded pose inside the infeed tolerance")
     p.add_argument("--cone", default="elliptic", choices=["elliptic", "pyramidal"], help="MuJoCo friction cone (sensitivity: resting boxes creep in yaw with elliptic)")
@@ -243,7 +256,7 @@ def main(argv=None):
         import av
         container = av.open(str(out / f"{a.task}{'-short' if a.video_skip > 1 else ''}.mp4"), "w")
         stream = container.add_stream("h264", rate=FPS)
-        stream.width, stream.height, stream.pix_fmt = 1280, 480, "yuv420p"
+        stream.width, stream.height, stream.pix_fmt = 1280, 960, "yuv420p"
         from PIL import Image, ImageDraw
 
         count = [0]
@@ -252,12 +265,16 @@ def main(argv=None):
             count[0] += 1
             if count[0] % a.video_skip:
                 return
-            image = np.hstack([world.render(data, "top"), world.render(data, "overview")])
-            frame = Image.fromarray(image)
+            frame = Image.fromarray(np.vstack([np.hstack([world.render(data, view) for view in row]) for row in (RECORDED[:2], RECORDED[2:])]))
             ImageDraw.Draw(frame).text((8, 8), f"{a.task} {label}", fill=(255, 255, 0))
             container.mux(stream.encode(av.VideoFrame.from_ndarray(np.asarray(frame), format="rgb24")))
     teacher = Teacher(world, frame_hook=writer, seed=a.seed, drop_upper=a.drop_upper)
     result = teacher.run_task(task, a.isolated)
+    if a.frames:
+        from PIL import Image
+        Path(a.frames).mkdir(parents=True, exist_ok=True)
+        for view in RECORDED:
+            Image.fromarray(world.render(teacher.data, view)).save(Path(a.frames) / f"{view}.png")
     if writer:
         container.mux(stream.encode(None))
         container.close()
