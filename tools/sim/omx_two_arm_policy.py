@@ -27,7 +27,7 @@ import omx_two_arm_teacher as teaching  # noqa: E402
 
 SCHEMA = "rosy.omx-two-arm-round.v1"
 SHAPE = (240, 320)
-TASKS = ("stack", "rehandle")
+TASKS = ("stack", "outbound")  # the conveyor stack and Harbor's outbound plan in two-arm mode (omx_two_arm_plan.py)
 GOAL = "observation.environment_state"
 PROMPT = "carry the container of this plan step"
 TRAIN_SEED_BASE, EVAL_SEED_BASE = 1000, 200000  # the teacher never saw an evaluation seed
@@ -139,7 +139,7 @@ class Driver:
         if plan["from"] == "belt":
             home = self.layout.sim_arms
             teacher.belt_in(data, plan, {o: home[o].wait for o in self.layout.arms if o != arm})
-        before = {o: world.pose(data, o) for o, _ in self.layout.containers() if o != c}
+        before = {o: world.pose(data, o) for o in here if o != c}  # on the cell; one that left with Pinky is not a neighbour
         start_z, peak = world.pose(data, c)[0][2], 0.
         goal = goal_vector(self.layout, plan, {k: v for k, v in here.items() if k != c})
         self.policy.reset()
@@ -161,9 +161,11 @@ class Driver:
         with self.torch.inference_mode():
             for plan in task["steps"]:
                 teacher = teaching.Teacher(self.world, seed=seed + len(rows))
-                rows.append(dict(self.step(teacher, teacher.fresh(here), plan, here), task=name, seed=seed))
+                data = teacher.fresh(here)
+                rows.append(dict(self.step(teacher, data, plan, here), task=name, seed=seed))
                 print(json.dumps(rows[-1]), flush=True)
                 here[plan["container"]] = plan["to"]
+                teacher.off_stand(data, plan, here)
         return rows
 
     def whole(self, name, seed, sink=None):
@@ -177,6 +179,7 @@ class Driver:
                 if done[-1]["result"] != "pass":
                     break
                 here[plan["container"]] = plan["to"]
+                teacher.off_stand(data, plan, here)
         passed = sum(row["result"] == "pass" for row in done)
         return dict(task=name, seed=seed, total=len(task["steps"]), passed=passed, completed=passed == len(task["steps"]), last=done[-1])
 

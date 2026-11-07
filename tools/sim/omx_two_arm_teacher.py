@@ -134,7 +134,8 @@ class Teacher:
         g_open, g_to = jaw.angle_for_gap(OPEN_GAP[sa["kind"]]), jaw.angle_for_gap(OPEN_GAP[sb["kind"]])
         g_hold = jaw.angle_for_gap(HOLD_GAP)
         q = self.q_now(data, arm)
-        ok, q_app, _, note = tasks.solve_chain(ik_arm, wps, q, roll_floor=L.roll_floor, branch=self.branch)
+        # solve from home as the validator does: seeded from the side wait pose the IK fell on other branches or missed the approach
+        ok, q_app, _, note = tasks.solve_chain(ik_arm, wps, ik_arm.home, roll_floor=L.roll_floor, branch=self.branch)
         if not ok:
             return dict(row, result="unreachable", reason=f"{arm} cannot do the step tool-down inside the limits: {note}")
         yield from self.move_g(np.append(q[:5], g_open), np.append(q_app[:5], g_open), 2.5)
