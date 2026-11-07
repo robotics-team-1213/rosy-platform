@@ -5,9 +5,14 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.365
+**Version:** v1.374
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.374 Account 가입·권한 요청 (D-993)
+
+- Additive. `POST /api/fleet/auth/access-requests`는 인증이 없는 공개 입력이다. `Origin`이 `Host`와 같아야 하며(아니면 403 `CSRF_REJECTED`) 본문은 4 KiB 이하(413 `REQUEST_TOO_LARGE`), 필드는 `name`(64자)·`username`(`^[a-z0-9._-]{1,32}$`)·`resource`(`site|robot|project:<id>`, 선택)·`note`(500자, 선택)뿐이다(그 밖은 422 `INVALID_REQUEST`). 유효한 로그인 쿠키가 있으면 요청은 그 계정의 권한 요청(`grant`)이고 이름·ID는 세션에서 정한다. 성공, 같은 대기 요청의 반복, 이미 있는 로그인 ID는 모두 같은 202 `{"status":"received"}`다. 대기 요청이 서비스 전체 200건 또는 한 주소 5건이면 429 `REQUESTS_FULL`이다.
+- `GET /api/fleet/auth/access-requests`, `POST /api/fleet/auth/access-requests/{request_id}/approve`(`role`, `grants`, 새 계정은 `password`·선택 `principal_id`, 기존 계정은 `revision`), `POST .../reject`(`reason`)는 `accounts.manage` 쿠키 세션이 필요하다. 승인은 기존 계정 발급·갱신 경로를 같은 트랜잭션에서 쓰며 요청만으로 권한이 생기지 않는다. 자세한 계약은 [Rosy Account protocol](rosy-account-protocol.md).
 
 ### v1.365 운행 시작의 배터리 확인과 충전 칸 점유 불명
 
@@ -4596,6 +4601,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 | 버전 | 일자 | 내용 |
 |---|---|---|
 | v1.362 | 2026-11-04 | Additive: D-977 `device_trial` opens the neutral `arm-transfers` jobs for exactly one arm (owner identity: `device: true`, matching `commissioning_revision`); `production` stays closed. New `operator_attested` record: `POST/GET .../jobs/{mission_id}/operator-attestations` (named operator distinct from proposer and approver, single-use, 45 s validity, `goal_confirmed: false`). The owner still refuses goals. |
+| v1.374 | 2026-11-07 | Additive: Account 가입·권한 요청(D-993) — 공개 `POST /api/fleet/auth/access-requests`와 관리자 목록·승인·거절. |
 | v1.365 | 2026-11-07 | Fleet 운행 시작의 배터리 근거 확인(422 `TRIP_BATTERY_UNCONFIRMED`)과 충전 칸 `unknown` 상태. |
 | v1.363 | 2026-11-06 | Additive: bodyless robot `manual`을 기존 CORE mode owner로 실행. Fleet 직접 조작의 dispatch/작업 소유권 재검사와 인증된 terminal zero 전달을 명시. |
 | v1.361 | 2026-11-04 | Additive: `GET /api/fleet/execution-profile`(D-979) — 앱이 읽는 읽기 전용 실행 프로필(`arm_execution` physical/simulated/closed, 등록·인증된 생산자 목록, `checked_at`). viewer·service 읽기, 쓰기 없음, 증명되지 않으면 closed. |

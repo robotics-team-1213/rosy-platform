@@ -14521,3 +14521,9 @@ osy-d395-s1d\`.
 - 증거: 실제 `land_mainred.py recheck`에서 통과한 시험이 닫히지 않아 드러났다. 수정 뒤 열린 11개 중 9개가 main 통과로 닫히고, 삭제된 파일 1개가 닫히고, 실제 실패 1개(`test_cell_g2_ports.py` 단독 실행의 AF_UNIX 경로 길이)가 남았다.
 - gate 변화: 없음. 착지의 `close`가 이제 통과한 항목을 실제로 닫는다.
 - CE: 해당 없음 — 원인이 코드와 시험에 남는다.
+
+## 2026-11-07 · uncommitted · Account 가입·권한 요청 D-993
+
+- 변경: ADR D-993, API 참조 v1.374, Account 프로토콜의 요청 절, 다른 브랜치가 잡은 D-988~D-992 공백 선언.
+- 증거: harness lint. 구현 시험은 operations/account/logs.md.
+- Gate: 없음. CE: 해당 없음.

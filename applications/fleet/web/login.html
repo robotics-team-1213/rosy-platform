@@ -28,10 +28,28 @@
       <ui-section id="login-recovery" aria-labelledby="login-recovery-title" hidden>
         <h2 id="login-recovery-title" class="ui-section-heading">앱 접근을 확인해 주세요</h2>
         <ui-status id="login-recovery-status" state="forbidden" role="alert"></ui-status>
-        <ui-actions><a class="ui-action-link" data-kind="quiet" id="login-profile" href="/console/profile">내 계정·권한 확인</a><a class="ui-action-link" data-kind="quiet" id="login-retry">접근 다시 확인</a></ui-actions>
+        <ui-actions><a class="ui-action-link" data-kind="quiet" id="login-profile" href="/console/profile">내 계정·권한 확인</a><a class="ui-action-link" data-kind="quiet" id="login-retry">접근 다시 확인</a><ui-button id="access-request-denied" kind="quiet" type="button" hidden>이 앱 사용 권한 요청</ui-button></ui-actions>
       </ui-section>
       <div id="password-login" class="password-login"></div>
       <ui-status id="login-availability" state="pending">로그인 설정을 확인하고 있습니다.</ui-status>
+      <ui-section id="access-request" aria-labelledby="access-request-title" hidden>
+        <h2 id="access-request-title" class="ui-section-heading">가입·권한 요청</h2>
+        <p id="access-request-intro"></p>
+        <form id="access-request-form" class="password-login-form">
+          <div id="access-request-person">
+            <label for="access-request-name">이름</label>
+            <input id="access-request-name" class="ui-field password-login-field" maxlength="64" autocomplete="name">
+            <label for="access-request-username">희망 로그인 ID · 소문자, 숫자, . _ - 로 32자까지</label>
+            <input id="access-request-username" class="ui-field password-login-field" maxlength="32" pattern="[a-z0-9._\-]{1,32}" autocomplete="off">
+          </div>
+          <p id="access-request-resource" hidden></p>
+          <label for="access-request-note">관리자에게 남길 말 (선택)</label>
+          <textarea id="access-request-note" class="ui-field" maxlength="500" rows="3"></textarea>
+          <ui-button id="access-request-send" kind="primary" type="button">요청 보내기</ui-button>
+        </form>
+        <ui-status id="access-request-status" state="pending" role="status" hidden></ui-status>
+      </ui-section>
+      <ui-button id="access-request-open" kind="quiet" type="button" hidden>계정이 없나요? 가입 요청</ui-button>
       <p id="login-support">계정이 없거나 비밀번호를 잊었다면 현장 관리자에게 문의하세요.</p>
       <a id="login-back" class="ui-action-link" data-kind="quiet" href="/console">원래 업무로 돌아가기</a>
       <details class="ui-disclosure"><summary>연결 정보</summary><p id="login-site"></p></details>

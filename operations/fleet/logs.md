@@ -5355,3 +5355,8 @@
 - gate 변화: SOURCE만
 - 결정: API v1.365 유지
 - 교훈: 없음
+
+## 2026-11-07 · uncommitted · test: Account 가입·권한 요청 시험 (D-993)
+- 변경: `test_account_access_requests.py` — 공개 입력의 CSRF·크기·상한·존재 여부 비노출, 승인·거절의 원자성과 감사. Fleet 동작 변경 없음.
+- 증거: 원격 실행 기록은 operations/account/logs.md.
+- gate 변화: 없음.

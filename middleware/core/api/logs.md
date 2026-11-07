@@ -1351,3 +1351,8 @@
 - gate 변화: SOURCE 회귀 검증; ARTIFACT/DEVICE/FIELD 수용 근거로 사용하지 않음. 최종 재조립 SHA 원격 회귀와 FULL은 별도.
 - 결정: API v1.363; 기존 CORE 최종 명령·모드 owner 유지.
 - 교훈: CE 해당 없음 — 최종 코드·회귀 시험·API 계약으로 판단 근거를 재현할 수 있음.
+
+## 2026-11-07 · uncommitted · 계약 버전 v1.374
+- 변경: `contract_version.py`를 API 참조 v1.374(Account 가입·권한 요청, D-993)에 맞췄다. CORE 동작 변경 없음.
+- 증거: 프로토콜 버전 정합 시험.
+- gate 변화: 없음.
