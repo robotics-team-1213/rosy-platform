@@ -45,6 +45,19 @@ Fleet → Robot/Pilot은 등록된 장치 식별자에 결속된 주소만 사�
 
 현재 Fleet 카드의 외부 링크는 PeerCatalogue의 `approved-directory` 행만 사용한다. 승인 신원에 연결된 mDNS 광고도 transport·port까지 승인된 것은 아니므로 링크 원본으로 사용하지 않는다. catalogue가 등록 directory 행을 광고 행으로 대체한 경우에는 링크 대신 안내를 표시한다. 화면 이탈·복원·사용자/역할 변경 때 이전 링크와 cache를 먼저 폐기한다.
 
+## 외부 업무 앱과 공통 서비스
+
+Harbor는 항만 업무 위치·화물·지시·계획 버전·업무 장부·다음 업무 단계·완료 조건 대조를 소유하는 외부 업무 앱이다. ROSY의 플랫폼 앱이나 공통 서비스로 분류하지 않는다. [업무 앱 지원 계약](application-contract-support.md)을 통해 통합관제 R 하나의 공개 Fleet HTTP로 제안·조회하며, R과 셀의 원장·admission·장치 claim을 자기 업무 DB에 복제하거나 직접 장치를 명령하지 않는다(D-965·D-995).
+
+| 경계 | 정본·소유 | 합치지 않는 것 |
+|---|---|---|
+| 항만 업무 | Harbor의 업무 장부와 완료 근거 대조 | Fleet 작업 원장·장치 관측 원장·최종 실행 권한 |
+| 사람 신원 | 공통 Account의 신원·권한·세션, 앱별 업무 허용 판단 | 기계 서비스 principal·독립 관측 자격·셀 기명 승인 |
+| 상태·영상·학습 | Monitoring의 읽기, Media의 세션·미디어 관리, Learning의 자료·평가·승격 증거 | host 복구·업무 완료·장치 admission·최종 명령 |
+| 설치 호스트 | 서비스별 배포·DB·TLS·자격과 자원 예산 | 같은 PC라는 이유의 원장·계정·명령 권한 통합 |
+
+공통 서비스 소유·분류는 [카탈로그](common-services.md), 현재·목표 호스트는 [관제 배치표](../deployment/control-units.md#현장-배치표)가 정본이다. Harbor 내부 책임 결정과 구현·로그인 연동 상태는 [팀 저장소](https://github.com/robotics-team-1213/harborlogi)의 문서·PR을 따른다. 공통 Account 연동 원칙을 Harbor 로그인 설치·현장 수용 완료로 쓰지 않는다.
+
 ## 현재 이행 항목
 
 | 항목 | 처리 | 조건·근거 |
