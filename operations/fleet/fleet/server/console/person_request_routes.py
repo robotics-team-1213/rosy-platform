@@ -160,14 +160,14 @@ def install_person_request_routes(app, store: PersonRequestStore, read_guard, re
             raise _refuse(404, "UNKNOWN_ROBOT")
         mine = store.open_for(body.robot_id, principal.principal_id)
         if mine:   # one open request per robot per requester: a repeat is the same ask, not another beep
-            return mine[0]
+            return {**mine[0], "repeat": True}   # the new text is dropped; the caller is told so
         if len(store.open_for(body.robot_id)) >= MAX_OPEN_PER_ROBOT:
             raise _refuse(409, "TOO_MANY_OPEN_REQUESTS", limit=MAX_OPEN_PER_ROBOT)
         record = store.create(robot_id=body.robot_id, kind=body.kind, text=body.text, why=body.why,
                               requested_by=principal.principal_id, ttl_s=body.expires_s)
         if robots is not None and record["robot_id"]:
             await show_newest(record["robot_id"])
-        return store.get(record["id"])
+        return {**store.get(record["id"]), "repeat": False}
 
     @app.get("/api/fleet/person-requests", dependencies=read_guard, tags=["fleet"])
     async def list_person_requests(state: Optional[str] = Query(None, pattern="^(open|done|cannot|expired|withdrawn)$"),

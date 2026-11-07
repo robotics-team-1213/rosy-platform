@@ -338,6 +338,7 @@ def test_a_repeat_from_the_same_requester_returns_the_same_request_without_anoth
     first = post(client).json()
     again = post(client, text="다시 부탁합니다").json()
     assert again["id"] == first["id"] and again["text"] == first["text"]
+    assert (first["repeat"], again["repeat"]) == (False, True)   # the caller learns its new text was dropped
     assert [c[0] for c in robots.calls] == ["put"]   # one PUT: the screen was not asked again
 
 
