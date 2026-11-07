@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
+- 2026-11-07 · 262d22b30b · docs: D-721 개정과 API v1.372 리뷰 수정 반영
 - 2026-11-07 · 11b42b5933 · docs: D-721 개정(스테이션 복구 요청·사람 부탁)과 API v1.372
 - 2026-11-07 · uncommitted · fix(remote): 호출의 -rA가 공통 꼬리에 덮이지 않는다
 - 2026-11-07 · uncommitted · fix(land): FULL 대기가 준비 슬롯을 차지하지 않고 MAIN-RED가 닫힌다
 - 2026-11-07 · uncommitted · 공통 서비스 카탈로그와 D-987
-- 2026-11-07 · uncommitted · fix(omx): 사다리가 GPU 없이 시작하지 않게 하고 MuJoCo 접촉 교훈을 기록

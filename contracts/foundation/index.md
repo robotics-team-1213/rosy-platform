@@ -38,8 +38,8 @@
 
 ## 최근 기록
 
+- 2026-11-07 · 2a01384d40 · fix(face): 요청 주황 램프는 대기·준비 램프 위에만
 - 2026-11-07 · 11b42b5933 · feat(face): 사람 부탁 띠와 만료
 - 2026-11-06 · uncommitted · feat(fleet): 관제 수동 모드 전환
 - 2026-11-06 · 051927f313 · fix(config): 명시적인 motor readiness 기본 profile
 - 2026-11-04 · uncommitted · feat(foundation): PeerBeacon·PeerRow 스키마와 StateSnapshot.peers
-- 2026-11-02 · uncommitted · D-963 UsbCameraReport·UsbCameraDecisions

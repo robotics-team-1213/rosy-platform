@@ -4718,3 +4718,9 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: `test/test_rosy_face_battery_urgent.py`. 실제 부저와 LCD는 새 릴리스 뒤 확인 전이다.
 - gate 변화: 없음
 - 교훈: CE 해당 없음 — 규칙은 D-502 Amendment와 회귀 시험에 있다.
+
+## 2026-11-07 · 18943fb321 · merge: 긴급 배터리 어두운 화면이 사람 부탁보다 먼저
+- 변경: `fix/battery-estop-auto-release`를 합쳤다. 어두운 화면에서는 `person`을 지우고 호출음·주황 램프를 내지 않는다. 한 루프에 소리 하나(`_buzz`): 정지·실패, 긴급 배터리, 그 다음 호출음.
+- 증거: `test/test_rosy_face_person.py`(긴급+요청, 한 루프 한 소리, 주행 램프).
+- gate 변화: SOURCE 변경. 로봇·장치 수용 없음.
+- 교훈: CE 해당 없음 — 최종 코드와 시험이 판단을 보존한다. 실물·운영 수용은 아니다.

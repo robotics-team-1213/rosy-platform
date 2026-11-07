@@ -1138,3 +1138,9 @@
 - 증거: `test_face_person_request.py`.
 - gate 변화: SOURCE 변경. 로봇·장치 수용 없음.
 - 교훈: CE 해당 없음 — 최종 코드와 시험이 판단을 보존한다. 실물·운영 수용은 아니다.
+
+## 2026-11-07 · 2a01384d40 · fix(face): 요청 주황 램프는 대기·준비 램프 위에만
+- 변경: `presentation.py`가 요청 띠에 맞춰 램프를 주의로 바꾸는 것은 `ready`일 때만. 주행·수동·도킹 램프는 그대로. Safety-Review: pending independent review.
+- 증거: `test_face_person_request.py`.
+- gate 변화: SOURCE 변경. 로봇·장치 수용 없음.
+- 교훈: CE 해당 없음 — 최종 코드와 시험이 판단을 보존한다. 실물·운영 수용은 아니다.
