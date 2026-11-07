@@ -3,6 +3,7 @@
 import importlib.util
 import json
 import os
+import runpy
 import shutil
 import sqlite3
 import sys
@@ -20,6 +21,16 @@ SPEC.loader.exec_module(release)
 def test_current_checkout_satisfies_review_source_inventory():
     root = SCRIPT.parents[2]
     assert not [name for name in release.SPLIT_REQUIRED if not (root / name).is_file()]
+
+
+def test_every_control_source_holder_ships_in_the_signed_archive(monkeypatch):
+    # 43ef9900bd: a new holder missing from these prefixes left signed archives without its modules.
+    root = SCRIPT.parents[2]
+    monkeypatch.syspath_prepend(str(root / "deploy/site"))
+    holders = runpy.run_path(str(root / "middleware/perception/control/_source_layout.py"))["CONTROL_ROOTS"]
+    prefixes = runpy.run_path(str(root / "deploy/site/model_code_layout.py"))["SPLIT_CODE_PREFIXES"]
+    assert not [folder for folder in holders
+                if not (folder.relative_to(root).as_posix() + "/").startswith(prefixes)]
 
 
 def source_tree(path):

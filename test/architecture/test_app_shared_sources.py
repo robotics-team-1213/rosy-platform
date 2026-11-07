@@ -5,7 +5,7 @@ from pathlib import Path
 import re
 
 ROOT = Path(__file__).resolve().parents[2]
-SHARED = ROOT / 'shared/android/peer'
+SHARED = ROOT / 'shared/android'
 APPS = {
     'pilot': ROOT / 'middleware/robot_ui/pilot/android/app',
     'cam': ROOT / 'operations/site_ui/cam/app',
@@ -33,10 +33,12 @@ def _normalized(path):
     return lines
 
 
-def test_every_app_compiles_the_shared_peer_sources():
+def test_every_app_compiles_the_shared_sources():
     for name, app in APPS.items():
         build = (app / 'build.gradle.kts').read_text(encoding='utf-8')
-        assert re.search(r'srcDir\("(?:\.\./)+shared/android/peer"\)', build), f'{name} must compile shared/android/peer'
+        for area in ('peer', 'account'):
+            assert re.search(rf'srcDir\("(?:\.\./)+shared/android/{area}"\)', build), f'{name} must compile {area}'
+        assert '**/account/' not in build, f'{name} must not copy account sources from another app (D-987)'
 
 
 def _stem(name):
@@ -45,13 +47,15 @@ def _stem(name):
 
 
 def test_apps_do_not_redeclare_shared_types():
-    shared = {name for path in SHARED.rglob('*.kt') for name in DECLARATION.findall(path.read_text(encoding='utf-8'))}
-    assert {'PeerProof', 'PeerTls', 'AndroidPeerIdentity'} <= shared
+    # A private helper such as AccountSession's Profile is not a shared type an app could redeclare.
+    public = re.compile(DECLARATION.pattern.replace('private|', ''), re.M)
+    shared = {name for path in SHARED.rglob('*.kt') for name in public.findall(path.read_text(encoding='utf-8'))}
+    assert {'PeerProof', 'PeerTls', 'AndroidPeerIdentity', 'AccountSession', 'AccountConfig'} <= shared
     stems = {_stem(name) for name in shared}
     found = [f'{path.relative_to(ROOT)}: {declared}'
              for app in APPS.values() for path in _product_sources(app)
              for declared in DECLARATION.findall(path.read_text(encoding='utf-8')) if _stem(declared) in stems]
-    assert not found, 'use shared/android/peer instead of redeclaring (D-939):\n' + '\n'.join(found)
+    assert not found, 'use shared/android instead of redeclaring (D-939):\n' + '\n'.join(found)
 
 
 def test_apps_hold_no_renamed_copies_of_each_other():

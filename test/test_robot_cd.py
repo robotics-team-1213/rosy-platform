@@ -684,3 +684,178 @@ def test_state_dir_too_long_for_payload_paths_is_refused(tmp_path):
     path.write_text(json.dumps(config), encoding="utf-8")
     with pytest.raises(ValueError, match="MAX_PATH"):
         tool.load_config(path)
+
+
+LATEST, DELIVERED = "ef" * 20, "cd" * 20
+
+
+def _delivery(tmp_path, monkeypatch, paths, ssh):
+    """A coordinator with a delivered baseline, one new main and the given changed paths."""
+    tool = module()
+    monkeypatch.syspath_prepend(str(ROOT / "tools/release"))
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "operator"))
+    tool.write_json(tmp_path / "state.json", {"sha": DELIVERED, "phase": "done", "deployed_sha": DELIVERED,
+                                              "delivery_base_sha": DELIVERED})
+    dispatches = []
+
+    def github(*args):
+        if args[0] == "workflow":
+            dispatches.append(args)
+            return ""
+        if "--method" in args:
+            return "{}"
+        path = args[1]
+        if path.endswith("git/ref/heads/main"):
+            return json.dumps({"object": {"sha": LATEST}})
+        if "compare/" in path:
+            return json.dumps({"status": "ahead", "files": [{"filename": p, "status": "modified"} for p in paths]})
+        if "/runs?" in path:
+            return json.dumps({"workflow_runs": [run(head_sha=LATEST)]})
+        if "releases?" in path or "matching-refs" in path:
+            return "[]"
+        return json.dumps({"id": 9})
+
+    config = {"repo": "team/robots", "repo_id": 7, "state_dir": tmp_path,
+              "robots": ["robot-on", "robot-off"], "canary": "robot-on", "key_name": "release-key"}
+    coordinator = tool.Coordinator(config, gh=github)
+    monkeypatch.setattr(coordinator, "ssh", ssh)
+    return coordinator, dispatches
+
+
+def _only_robot_on(argv):
+    return (255, "", "no route") if "rosy@robot-off" in argv else (0, "/opt/rosy/releases/2026.10.05-043\n", "")
+
+
+@pytest.mark.parametrize("paths", [
+    ["deploy/robot/pinky_pro/image/customize-rootfs.sh"], ["unowned/file"],
+    ["deploy/robot/pinky_pro/native/rosy-os-update.service", "tools/validation/x.py", "operations/pkg/node.py"]])
+def test_image_or_unclassified_paths_and_a_powered_off_robot_do_not_stop_delivery(tmp_path, monkeypatch, paths):
+    # D-985: each of these held every later release (2026-11-07: 15 image and 2 unclassified paths of 2,429).
+    coordinator, dispatches = _delivery(tmp_path, monkeypatch, paths, _only_robot_on)
+    assert coordinator.tick() == "build_dispatched"
+    assert coordinator.state["delivery_policy"] == "full-payload"
+    assert coordinator.state["release_id"].endswith("-044") and len(dispatches) == 1
+    assert coordinator.state["deployed_sha"] == DELIVERED  # not delivered yet
+
+
+def test_no_robot_answering_refuses_allocation(tmp_path, monkeypatch):
+    coordinator, dispatches = _delivery(tmp_path, monkeypatch, ["operations/pkg/node.py"], lambda argv: (255, "", "down"))
+    with pytest.raises(RuntimeError, match="no configured robot"):
+        coordinator.tick()
+    assert dispatches == []
+
+
+def _publishing(tmp_path, monkeypatch, state, ssh, result):
+    """Phase publishing with a real coordinator; the publisher's process and uploads are recorded."""
+    tool = module()
+    monkeypatch.syspath_prepend(str(ROOT / "tools/release"))
+    import publish_payload_release as publish
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "local"))
+    work = tmp_path / "attempt-1"
+    work.mkdir()
+    signed = work / "2026.10.06-046.tar.gz"
+    artifact(signed)
+    digest = hashlib.sha256(signed.read_bytes()).hexdigest()
+    tool.write_json(tmp_path / "state.json", {"sha": SHA, "phase": "publishing", "release_id": "2026.10.06-046",
+                                              "work_dir": str(work), "tarball_sha256": digest, **state})
+    remote = {"release_id": "2026.10.06-046", "source_revision": SHA, "tarball_sha256": digest,
+              "canary": ["robot-a"], "withdrawn": False}
+    calls, uploads = [], []
+    monkeypatch.setattr(publish.Publisher, "existing_tag", lambda self: "payload-v2-2026.10.06-046" if "canary_name" in state else None)
+    monkeypatch.setattr(publish.Publisher, "download", lambda self: (remote, b"verified"))
+    monkeypatch.setattr(publish.Publisher, "hostname", lambda self, host: host)
+    monkeypatch.setattr(publish.Publisher, "upload", lambda self, rollout: uploads.append(rollout))
+    monkeypatch.setattr(publish, "main", lambda args, **kwargs: calls.append(args) or result)
+
+    def github(*args):
+        path = args[1]
+        if "git/ref/heads/main" in path:
+            return json.dumps({"object": {"sha": SHA}})
+        if "compare/" in path:
+            return json.dumps({"status": "identical"})
+        if "/runs?" in path:
+            return json.dumps({"workflow_runs": [run()]})
+        return json.dumps({"id": 9})
+
+    config = {"repo": "team/robots", "repo_id": 7, "state_dir": tmp_path,
+              "robots": ["robot-a", "robot-b"], "canary": "robot-a", "key_name": "release-key"}
+    coordinator = tool.Coordinator(config, gh=github)
+    monkeypatch.setattr(coordinator, "ssh", ssh)
+    return coordinator, calls, uploads
+
+
+def _eligible(*robots):
+    def ssh(argv):
+        eligible = any(f"rosy@{robot}" in argv for robot in robots)
+        return 0, f'noise\n{{"eligible": {json.dumps(eligible)}}}\n', ""
+    return ssh
+
+
+def test_a_new_rollout_names_the_robot_that_can_apply_now(tmp_path, monkeypatch):
+    coordinator, calls, _ = _publishing(tmp_path, monkeypatch, {}, _eligible("robot-b"), 1)
+    assert coordinator.tick() == "rollout_pending"
+    assert calls[0][calls[0].index("--canary") + 1] == "robot-b" and "--resume" not in calls[0]
+    assert calls[0][calls[0].index("--robot") + 1] == "robot-a"
+    assert coordinator.state["canary_host"] == "robot-b" and coordinator.state["canary_name"] == "robot-b"
+
+
+def test_the_configured_canary_goes_first_when_it_can_apply(tmp_path, monkeypatch):
+    coordinator, calls, _ = _publishing(tmp_path, monkeypatch, {}, _eligible("robot-a", "robot-b"), 1)
+    coordinator.tick()
+    assert calls[0][calls[0].index("--canary") + 1] == "robot-a"
+
+
+@pytest.mark.parametrize("ssh", [_eligible(), lambda argv: (255, "", "down"), lambda argv: (0, "not json", ""),
+                                 lambda argv: (0, "", "")], ids=["busy", "off", "garbage", "empty"])
+def test_no_robot_able_to_apply_waits_without_publishing(tmp_path, monkeypatch, ssh):
+    coordinator, calls, _ = _publishing(tmp_path, monkeypatch, {}, ssh, 0)
+    assert coordinator.tick() == "waiting_idle_canary"
+    assert calls == [] and coordinator.state["phase"] == "publishing"
+
+
+def test_a_canary_that_never_started_keeps_the_transaction_pending(tmp_path, monkeypatch):
+    state = {"canary_host": "robot-a", "canary_name": "robot-a"}
+    coordinator, _, uploads = _publishing(tmp_path, monkeypatch, state, _eligible("robot-b"), 4)
+    assert coordinator.tick() == "canary_not_started"
+    assert coordinator.state["canary_not_started"] is True and coordinator.state["phase"] == "publishing"
+    assert uploads == []
+
+
+def test_the_next_tick_moves_the_rollout_to_an_idle_robot(tmp_path, monkeypatch):
+    state = {"canary_host": "robot-a", "canary_name": "robot-a", "canary_not_started": True}
+    coordinator, calls, uploads = _publishing(tmp_path, monkeypatch, state, _eligible("robot-b"), 1)
+    assert coordinator.tick() == "rollout_pending"
+    assert [rollout["canary"] for rollout in uploads] == [["robot-b"]]
+    assert uploads[0]["withdrawn"] is False
+    assert calls[0][calls[0].index("--canary") + 1] == "robot-b" and "--resume" in calls[0]
+    assert coordinator.state["canary_name"] == "robot-b" and coordinator.state["canary_not_started"] is False
+
+
+def test_with_nobody_else_idle_the_rollout_keeps_its_canary(tmp_path, monkeypatch):
+    state = {"canary_host": "robot-a", "canary_name": "robot-a", "canary_not_started": True}
+    coordinator, calls, uploads = _publishing(tmp_path, monkeypatch, state, _eligible(), 1)
+    coordinator.tick()
+    assert uploads == [] and calls[0][calls[0].index("--canary") + 1] == "robot-a"
+
+
+def test_a_crash_between_saving_and_uploading_the_move_still_finishes_it(tmp_path, monkeypatch):
+    state = {"canary_host": "robot-b", "canary_name": "robot-b", "canary_moved_from": ["robot-a"]}
+    coordinator, calls, uploads = _publishing(tmp_path, monkeypatch, state, _eligible(), 1)
+    assert coordinator.tick() == "rollout_pending"
+    assert [rollout["canary"] for rollout in uploads] == [["robot-b"]]
+    assert calls[0][calls[0].index("--canary") + 1] == "robot-b"
+
+
+def test_a_rollout_naming_a_foreign_canary_is_still_refused(tmp_path, monkeypatch):
+    state = {"canary_host": "robot-b", "canary_name": "robot-b", "canary_moved_from": ["robot-c"]}
+    coordinator, calls, _ = _publishing(tmp_path, monkeypatch, state, _eligible(), 1)
+    with pytest.raises(ValueError, match="differs from this release"):
+        coordinator.tick()
+    assert calls == []
+
+
+def test_a_watch_clears_the_not_started_verdict_before_it_runs(tmp_path, monkeypatch):
+    state = {"canary_host": "robot-a", "canary_name": "robot-a", "canary_not_started": True}
+    coordinator, _, _ = _publishing(tmp_path, monkeypatch, state, _eligible(), 1)
+    assert coordinator.tick() == "rollout_pending"
+    assert coordinator.state["canary_not_started"] is False

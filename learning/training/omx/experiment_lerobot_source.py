@@ -8,6 +8,7 @@ from pathlib import Path, PurePosixPath
 import re
 
 from experiment_io import read_json
+import experiment_robot_adapters as robots
 
 REPO = 'rosy-upload/local-demonstrations'
 TOTAL_BYTES = 2 * 1024**3
@@ -89,6 +90,14 @@ def verify_files(root, files):
     if any((Path(root)/row['name']).stat().st_size != row['size'] for row in files):
         raise ValueError('uploaded source size changed')
     return manifest_revision(files)
+
+
+def check_recipe(values):
+    """The optional ACT recipe values; a run that names neither keeps the shipped recipe."""
+    if 'optimizer_lr' in values and (type(values['optimizer_lr']) is not float or not 1e-6 <= values['optimizer_lr'] <= 1e-3):
+        raise ValueError('study learning rate outside allowed range')
+    if 'chunk_size' in values and (type(values['chunk_size']) is not int or not 1 <= values['chunk_size'] <= 100):
+        raise ValueError('study chunk size outside allowed range')
 
 
 def validate_split(selection, inspection):
@@ -292,6 +301,7 @@ def inspect(root, files):
     root = Path(root)
     verify_files(root, files)
     info = check_info(read_json(root/'meta/info.json'))
+    robots.check(info)  # here, not in check_info: results of earlier runs must stay verifiable
     raw_check(root, info, files)
     data, episodes = reader(root), []
     cameras = [dict(key=k, shape=v['shape'], dtype=v['dtype']) for k, v in sorted(info['features'].items())

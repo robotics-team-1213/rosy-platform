@@ -15,6 +15,111 @@ SID = "6f1c2a3e-1b2d-4e5f-8a9b-0c1d2e3f4a5b"
 HOME = [0.8, -62.2, 51.8, 51.4, 45.0, 54.4]
 
 
+@pytest.fixture(autouse=True)
+def isolated_arm_home(tmp_path, monkeypatch):
+    monkeypatch.setenv("ROSY_OMX_HOME", str(tmp_path / "arm-home"))
+
+
+def test_hold_survives_a_new_recording_directory(tmp_path, monkeypatch):
+    first, second = tmp_path / "first", tmp_path / "second"
+    first.mkdir()
+    second.mkdir()
+    monkeypatch.chdir(first)
+    oi.handle(session(first), "arm_b")
+    monkeypatch.chdir(second)
+    with pytest.raises(SystemExit, match="held for a person"):
+        oi.refuse_if_held("arm_b")
+    oi.refuse_if_held("arm_a")
+
+
+def test_hold_is_durable_before_recovery_callback_can_fail(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+
+    def broken(ids):
+        raise RuntimeError("recovery unavailable")
+
+    with pytest.raises(RuntimeError, match="recovery unavailable"):
+        oi.handle(session(tmp_path), "arm_b", act=broken)
+    with pytest.raises(SystemExit, match="held for a person"):
+        oi.refuse_if_held("arm_b")
+
+
+def test_cli_handle_refuses_while_the_arm_session_is_owned(tmp_path, monkeypatch):
+    import joint_tune
+
+    monkeypatch.chdir(tmp_path)
+    oi.handle(session(tmp_path), "arm_b")
+
+    def busy(arm):
+        raise SystemExit("another OMX session owns this arm")
+
+    monkeypatch.setattr(joint_tune, "session_lock", busy)
+    with pytest.raises(SystemExit, match="another OMX session"):
+        oi.main(["handle", "--session", str(tmp_path / "session.json"), "--arm", "arm_b"])
+    assert oi.held("arm_b")
+
+
+@pytest.mark.parametrize("bad_read", ["transport", "packet"])
+def test_reboot_refuses_failed_torque_readback(tmp_path, monkeypatch, bad_read):
+    from types import SimpleNamespace
+
+    rebooted, closed = [], []
+    port = SimpleNamespace(openPort=lambda: True, setBaudRate=lambda baud: True,
+                           closePort=lambda: closed.append(True))
+
+    def read(bus, motor, address):
+        if motor == 13 and address == 64:
+            return (0, -3001, 0) if bad_read == "transport" else (0, 0, 1)
+        return (32 if address == 70 and motor == 13 else 0, 0, 0)
+
+    packet = SimpleNamespace(read1ByteTxRx=read,
+                             reboot=lambda bus, motor: rebooted.append(motor) or (0, 0))
+    monkeypatch.setitem(sys.modules, "dynamixel_sdk", SimpleNamespace(
+        COMM_SUCCESS=0, PortHandler=lambda device: port, PacketHandler=lambda version: packet))
+    monkeypatch.setattr(oi.time, "sleep", lambda seconds: None)
+    result = oi.reboot_latched("fake-follower")([13])
+    assert rebooted == []
+    assert result.get("error") or result.get("refused")
+    assert closed == [True]
+
+
+@pytest.mark.parametrize("failure", [None, "ack-transport", "ack-packet", "after-transport",
+                                    "after-packet", "torque-on", "still-latched"])
+def test_reboot_requires_valid_ack_and_clean_readback(monkeypatch, failure):
+    from types import SimpleNamespace
+
+    rebooted, closed = [], []
+    port = SimpleNamespace(openPort=lambda: True, setBaudRate=lambda baud: True,
+                           closePort=lambda: closed.append(True))
+
+    def read(bus, motor, address):
+        if rebooted and motor == 13:
+            if failure == "after-transport":
+                return 0, -3001, 0
+            if failure == "after-packet":
+                return 0, 0, 1
+            if failure == "torque-on" and address == 64:
+                return 1, 0, 0
+        fault = motor == 13 and address == 70 and (not rebooted or failure == "still-latched")
+        return (32 if fault else 0), 0, (128 if fault else 0)
+
+    def reboot(bus, motor):
+        rebooted.append(motor)
+        return (-3001 if failure == "ack-transport" else 0), (1 if failure == "ack-packet" else 0)
+
+    packet = SimpleNamespace(read1ByteTxRx=read, reboot=reboot)
+    monkeypatch.setitem(sys.modules, "dynamixel_sdk", SimpleNamespace(
+        COMM_SUCCESS=0, PortHandler=lambda device: port, PacketHandler=lambda version: packet))
+    monkeypatch.setattr(oi.time, "sleep", lambda seconds: None)
+    result = oi.reboot_latched("fake-follower")([13])
+    assert closed == [True]
+    if failure is None:
+        assert result["rebooted"] == [13]
+    else:
+        assert "rebooted" not in result
+        assert result.get("error") or result.get("refused")
+
+
 def session(tmp_path, *, latched=True, last=HOME, status=(), windup=True):
     io = tmp_path / "chunk-io-b"
     io.mkdir()
@@ -147,6 +252,25 @@ def test_the_same_session_reported_twice_is_the_same_session_id(tmp_path, monkey
     assert {r.session_id for r in link.posted} == {SID}
 
 
+def test_a_contact_stop_reports_what_the_trace_read_and_the_frames_of_the_stop(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    trace = tmp_path / "trace.jsonl"
+    rows = [{"t": 100 + i / 30, "chunk": "lift_pick", "sent": [0, 0, 0, 32.6 + 3 * i / 30, 0, 48.8], "present": [0, 0, 0, 32.1 + 0.1 * i / 30, 0, 53.8]} for i in range(44)]
+    trace.write_text("\n".join(json.dumps(r) for r in rows))
+    monkeypatch.setenv("ROSY_CHUNK_TRACE", str(trace))
+    status = [{"error": "contact in lift_pick: wrist_flex lag rose to 2.2 units"}, {"error": "contact in park: the jaws stopped 5.0 units short"}]
+    reading = oi.stop_reading(status)
+    assert reading["chunk"] == "lift_pick" and reading["verdict"] == "blocked" and reading["joint"] == "wrist_flex"
+    assert oi.stop_reading(status[1:]) is None  # only a refused fold: nothing moved to read
+    trace.write_text("not json")
+    assert oi.stop_reading(status)["verdict"] == "undetermined"  # a damaged trace must not lose the report
+    oi.STILLS.mkdir(parents=True)
+    for name in ("arm_b-wrist", "arm_b-top", "arm_b-side", "arm_a-top"):
+        (oi.STILLS / f"{name}.jpg").write_bytes(b"\xff\xd8x")
+    assert sorted(Path(p).stem for p in oi.stills_of("arm_b", 0)) == ["arm_b-side", "arm_b-top"]  # the two the prompt names
+    assert oi.stills_of("arm_b", 9e12) == [] and oi.stills_of(None, 0) == []  # another session's are not this one's
+
+
 def test_the_local_clear_command_is_gone(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     with pytest.raises(SystemExit):
@@ -184,3 +308,45 @@ def test_a_guard_stop_that_ended_the_session_is_an_incident(tmp_path, monkeypatc
             "fault": "session ended: ValueError: wrist_roll: following error >5 motor degrees"}
     out = oi.handle(session(tmp_path, latched=False, windup=False, status=[stop]), "arm_b")
     assert out["incident"] and out["decision"]["hold"] and "wrist_roll" in out["decision"]["reason"]
+
+
+def test_an_unsent_report_follows_the_arm_to_another_recording_directory(tmp_path, monkeypatch):
+    first, second = tmp_path / "first", tmp_path / "second"
+    first.mkdir()
+    second.mkdir()
+    monkeypatch.chdir(first)
+    link = Link()
+    link.down = True
+    oi.handle(session(first), "arm_b", link=link)
+    monkeypatch.chdir(second)
+    assert len(oi.outbox("arm_b")) == 1
+    link.down = False
+    with pytest.raises(SystemExit, match="held for a person"):
+        oi.refuse_if_held("arm_b", link)  # Fleet is told of the incident before it can answer "not held"
+    assert [r.session_id for r in link.posted] == [SID] and not oi.outbox("arm_b")
+
+
+def test_a_hold_and_an_outbox_left_in_the_working_directory_by_an_older_version_still_count(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "incidents/outbox").mkdir(parents=True)
+    (tmp_path / "incidents/HOLD-arm_b.json").write_text(json.dumps({"reason": "old hold"}))
+    old = tmp_path / "incidents/outbox/arm_b-old.json"
+    old.write_text("{}")
+    assert oi.held("arm_b") == "old hold" and oi.hold_file("arm_b") == Path("incidents/HOLD-arm_b.json")
+    assert old.resolve() in [p.resolve() for p in oi.outbox("arm_b")]
+    with pytest.raises(SystemExit, match="old hold"):
+        oi.refuse_if_held("arm_b")
+
+
+def test_hold_consumers_read_the_hold_where_the_incident_pipeline_writes_it(tmp_path, monkeypatch):
+    import cell_upkeep
+    import cell_zones
+
+    here = tmp_path / "elsewhere"
+    here.mkdir()
+    monkeypatch.chdir(here)
+    oi.keep_hold("arm_a", "elbow overload")
+    assert cell_upkeep.check_hold("arm_a")["status"] == "fail"
+    assert cell_upkeep.check_hold("arm_b")["status"] == "ok"
+    z = cell_zones.Zones({"zone_side": "left", "zone_peer": "arm_a", "zone_map_site": "pallet"}, {})
+    assert z.incidents is None and z._peer_held()

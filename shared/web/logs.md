@@ -1211,3 +1211,13 @@
 - 증거: 이전107의6개 GREEN/98개 관련 회귀와 새02 제품 blob은 별도 alias로 대조했다. a9d14PASS/130원본 및 b95516PASS/73원본은 각각0skip/NEW0이며203개 고유 원본을 직접 재해시해 일치했다. 좁은9메뉴의 outer8px/8px와 computed inset8px, 마지막 원본JUnit16/실패·오류·skip0을 확인했다.
 - 한계: 실제 SIM320 current 항목의 일부 잘림과 자동 노출 미검증을 남긴다.7개 no-nav 경로는 기존 단언PASS/추가capture N/A다. 제품·시험을 이번 문서 작업에서 실행하거나 변경하지 않았다.
 - gate 변화: source-bound 문서 결속이며 UI 최종 G1/FULL·main 반영은 아직 미완료다. 별도148PASS 로그 무결성 선행 작업도 공식 착지 대기다. CE: 해당 없음 — 기존 공용 계약·가드·회귀에서 판단을 복원한다.
+
+## 2026-11-06 · uncommitted · uiux(shared): 눌린 칸은 꺼져 있어도 흐리지 않는다
+- 변경: 사유 없는 비활성 흐림에서 aria-pressed/aria-selected=true를 뺐다. 현재 값이 "쓸 수 없음"처럼 읽히던 문제다. 토큰 추가 없음. 2026-11-06 UI/UX 전수 조사 P2.
+- 증거: robot test_surface_layout_browser.py가 눌린 칸 불투명도 1, 사유 없는 꺼진 칸은 흐림을 단언한다. 원격 RED/GREEN은 착지 기록을 따른다.
+- gate 변화: SOURCE 회귀. CE: 해당 없음 — 코드와 회귀가 판단을 보존한다.
+
+## 2026-11-06 · uncommitted · uiux: 공용 하위 내비 가장자리 흐림과 현재 항목 중앙 정렬
+- 변경: 좁은 폭에서 가로로 밀리는 .ui-rail-nav/.ui-subnav-nav가 가려진 쪽 가장자리를 흐리게 하고(ui-wiring.js가 data-more 표시), 현재 항목을 가로로만 중앙에 둔다. 토큰 추가 없음.
+- 증거: agent-browser 로컬 렌더(1920·390·320 화면 확인). 원격 회귀는 착지 기록을 따른다.
+- gate 변화: SOURCE 변경. 실기기·Android 수용은 별도다. CE: 해당 없음 — 코드와 회귀가 판단을 보존한다.

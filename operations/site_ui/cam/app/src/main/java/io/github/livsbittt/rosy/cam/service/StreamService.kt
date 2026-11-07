@@ -29,6 +29,7 @@ import io.github.livsbittt.rosy.cam.camera.LensProbe
 import io.github.livsbittt.rosy.cam.camera.LensSelector
 import io.github.livsbittt.rosy.cam.camera.TuningStatus
 import io.github.livsbittt.rosy.cam.health.CaptureCoolingPolicy
+import io.github.livsbittt.rosy.cam.health.PhoneHeat
 import io.github.livsbittt.rosy.cam.health.DeviceHealth
 import io.github.livsbittt.rosy.cam.health.DeviceHealthMonitor
 import io.github.livsbittt.rosy.cam.health.HealthText
@@ -256,7 +257,13 @@ class StreamService : LifecycleService() {
             link = newLink
             camera = newCamera
             launch {
+                var severe = false
                 monitor.health.collect { health ->
+                    // The OS keeps no thermal history, so a pause could not be explained afterwards.
+                    if (health != null && PhoneHeat.severe(health) != severe) {
+                        severe = !severe
+                        Log.w(TAG, "severe heat $severe: thermal ${health.thermalStatus}, battery ${health.temperatureC} C")
+                    }
                     newCamera.setThermalStatus(health?.thermalStatus ?: DeviceHealth.THERMAL_UNKNOWN)
                     newCamera.setThermalBlocked(
                         (health?.thermalStatus ?: -1) >= 3 ||
@@ -334,6 +341,8 @@ class StreamService : LifecycleService() {
                     activeLink.status.map { it.state to it.wanted }.distinctUntilChanged()
                         .collect { (linkState, wanted) ->
                             legacyJob?.cancel()
+                            // shortcut: runs only when the Vision link returns, enough while Vision is up; a Wi-Fi callback if it is not.
+                            if (linkState == LinkState.STREAMING) WirelessDebugging.keepOn(applicationContext)
                             if (linkState == LinkState.STREAMING && wanted == null) {
                                 legacyJob = launch {
                                     delay(CaptureGate.LEGACY_GRACE_MS)

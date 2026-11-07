@@ -25,6 +25,9 @@ def sha(value):
     return hashlib.sha256(canonical(value).encode()).hexdigest()
 
 
+RECIPE = ('optimizer_lr', 'chunk_size')
+
+
 def fields(body, names):
     if not isinstance(body, dict) or set(body) != set(names):
         raise ValueError('fixed uploaded study fields required')
@@ -213,7 +216,7 @@ class Studies:
             manifest_revision=row['manifest_revision'],
             request_sha256=hashlib.sha256((root/'request.json').read_bytes()).hexdigest(),
             physical_learning_verified=False)
-        run.update({key: request[key] for key in ('source_revision', 'steps', 'batch_size', 'seed') if key in request})
+        run.update({key: request[key] for key in ('source_revision', 'steps', 'batch_size', 'seed', *RECIPE) if key in request})
         if 'split' in request:
             run['split_revision'] = request['split']['revision']
         return launch(self.center, db, body['request_id'], canonical(body), run, process_stamp)
@@ -261,11 +264,14 @@ class Studies:
             return self._public(db, row)
 
     def start(self, body):
-        fields(body, ('study_id', 'split_revision', 'steps', 'batch_size', 'seed', 'request_id'))
+        # A page opened before these values existed still sends the old body after an update.
+        recipe = [key for key in RECIPE if isinstance(body, dict) and key in body]
+        fields(body, ('study_id', 'split_revision', 'steps', 'batch_size', 'seed', 'request_id', *recipe))
         identifier(body['request_id'])
         for key, low, high in [('steps',1,100000),('batch_size',1,8),('seed',0,2147483647)]:
             if type(body[key]) is not int or not low <= body[key] <= high:
                 raise ValueError('study training integer outside allowed range: '+key)
+        source.check_recipe(body)
         with self._db() as db:
             row = self._sync(db, self._load(db, body['study_id']))
             prior = self._prior_run(db, body['request_id'], canonical(body))
@@ -286,7 +292,7 @@ class Studies:
                 project_id=row['project_id'], source_root=str(root), files=row['files'],
                 manifest_revision=row['manifest_revision'], source_revision=row['source_revision'],
                 inspection=row['inspection'], split=row['split'],
-                **{key: body[key] for key in ('steps', 'batch_size', 'seed')})
+                **{key: body[key] for key in ('steps', 'batch_size', 'seed', *recipe)})
             return self._launch(db, row, body, request, 'lerobot_train')
 
     def check_run(self, row, root, result):
@@ -296,7 +302,7 @@ class Studies:
         request = read_json(file, max_bytes=32*1024**2)
         if request['source_root'] != str(upload.source_root(self.center.root, row['study_id'])):
             raise ValueError('owned study source location differs')
-        for key in ('study_id', 'project_id', 'compute_host', 'manifest_revision', 'source_revision', 'steps', 'batch_size', 'seed'):
+        for key in ('study_id', 'project_id', 'compute_host', 'manifest_revision', 'source_revision', 'steps', 'batch_size', 'seed', *RECIPE):
             if key in row and request.get(key) != row[key]:
                 raise ValueError('owned study worker binding differs')
         if row.get('split_revision') and request['split']['revision'] != row['split_revision']:

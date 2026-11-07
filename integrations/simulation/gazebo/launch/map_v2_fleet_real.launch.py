@@ -103,6 +103,7 @@ def generate_launch_description():
             # subscription cost ~24% of a core against <1% without (2026-10-10).
             remappings=[("camera/image_raw", "camera/front")],
         ),
+        Node(package="gz_sim", executable="sim_battery.py", name="sim_battery", output="screen"),  # Fleet trip start needs battery evidence
         Node(
             package="core",
             executable="core",

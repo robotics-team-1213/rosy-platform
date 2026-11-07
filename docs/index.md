@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
-- 2026-11-06 · uncommitted · docs(uiux): 실제 로컬 main 수용과 최종 검증 출처 기록
-- 2026-11-06 · uncommitted · test(tools): 최신 main 도움말 통합과 원자 티켓 fixture
-- 2026-11-06 · uncommitted · fix(tools): 보존된 도움말 수정을 현재 main과 통합
-- 2026-11-06 · uncommitted · fix(tools): 도움말 요청의 착지 snapshot 생성 차단
-- 2026-11-06 · uncommitted · fix(release): 큰 변경의 완전 inventory와 실제 소비자 분류
+- 2026-11-07 · uncommitted · fix(remote): 호출의 -rA가 공통 꼬리에 덮이지 않는다
+- 2026-11-07 · uncommitted · fix(land): FULL 대기가 준비 슬롯을 차지하지 않고 MAIN-RED가 닫힌다
+- 2026-11-07 · uncommitted · 공통 서비스 카탈로그와 D-987
+- 2026-11-07 · uncommitted · fix(omx): 사다리가 GPU 없이 시작하지 않게 하고 MuJoCo 접촉 교훈을 기록
+- 2026-11-07 · uncommitted · fix(omx): 두 팔 세계의 접촉 모델, 손목 간격 검증, rehandle 계획 교체

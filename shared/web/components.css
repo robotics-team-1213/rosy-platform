@@ -299,7 +299,7 @@ ui-button[data-size-missing] {
 
 ui-button[disabled] { cursor: not-allowed; }
 
-ui-button[disabled]:is(:not([reason]), [reason=""]) { opacity: var(--disabled-opacity); }
+ui-button[disabled]:is(:not([reason]), [reason=""]):not([aria-pressed="true"], [aria-selected="true"]) { opacity: var(--disabled-opacity); } /* 눌린 칸은 지금 값이라 흐리지 않는다. */
 
 /* D-359 §5.4 — 상태는 종류마다 여기서 그린다. 움직임 없이(D-220) 선과 면만 바뀐다.
    비활성은 hover·active를 받지 않는다. 채움 종류(주 명령·불가역·눌림)는 누르는

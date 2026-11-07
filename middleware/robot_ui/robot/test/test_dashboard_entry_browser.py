@@ -115,7 +115,7 @@ def test_entry_loads_only_identity_and_destinations_with_stop_on_demand(entry):
     stop = page.get_by_role('button', name='비상 정지', exact=True)
     expect(stop).to_be_enabled()
     stop.click()
-    expect(page.locator('#entry-stop-notice')).to_contain_text('CORE 정지 상태 확인')
+    expect(page.locator('#entry-stop-notice')).to_contain_text('로봇 정지 상태 확인')
     assert state['calls'][-2:] == [('POST', '/api/v1/safety/stop', None), ('GET', '/api/v1/robot/state', None)]
     assert state['errors'] == []
     assert page.locator('[data-state-missing]').count() == 0

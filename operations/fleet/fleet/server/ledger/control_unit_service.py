@@ -190,6 +190,9 @@ class ControlUnitService:
         return self.reply(origin, identity)
 
     def _local_result(self, row, status, result):
+        if _is_arm(row["request"]) and result.get("job") is not None:
+            result = {**result, "job": {**result["job"],
+                      "request_key": row["request"]["transfer"]["request_key"]}}
         if row["status"] == status and row["result"] == result:
             return row
         return self.store.project(*self._key(row), owner_unit=self.unit.unit_id,

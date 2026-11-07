@@ -139,7 +139,7 @@ FIXTURE_OVERRIDES['nominal-palletizing-v21-ship-surveyed-bases-demo'] = dict(
 # geometry the real cell has, with recording on and no debug aids.
 FIXTURE_OVERRIDES['nominal-palletizing-v21-ship-surveyed-bases-demo'] = dict(
     FIXTURE_OVERRIDES['nominal-palletizing-v21-ship-surveyed-bases'], demo_recording=True)
-# Team end part (2026-11-04): the same demonstrations with a wrist camera per arm on the B replacement holder (b16-u16-span-B, rated 2026-11-04),
+# Team end part (2026-11-04): the same demonstrations with a wrist camera per arm on the printed wrist holder (b16-u16-span-D r06, 2026-11-07),
 # so an ACT policy trained here sees the wrist view the real arms will have. Image orientation is ASSUMED (wrist_camera_pose).
 FIXTURE_OVERRIDES['nominal-palletizing-v21-ship-surveyed-bases-wrist-demo'] = dict(
     FIXTURE_OVERRIDES['nominal-palletizing-v21-ship-surveyed-bases-demo'], wrist_camera=dict(WRIST_CAMERA_B))

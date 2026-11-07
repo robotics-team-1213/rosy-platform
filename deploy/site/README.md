@@ -323,7 +323,7 @@ certificate folder (keys, `backups/`) is data and stays where it was prepared.
 `~/.config/rosy/account-tls.env` sets `ROSY_ACCOUNT_TLS_SOURCE` (the release script),
 `ROSY_ACCOUNT_TLS_CERTS` (that folder) and `ROSY_ACCOUNT_TLS_DOMAIN` (the approved
 hostname). tailscale issues a new pair only below 30 days of validity. A changed pair
-reloads the Account proxy and recreates the Vault proxy.
+reloads the Account proxy.
 
 On the existing `site_edge` network, the proxy also owns the approved Account
 hostname as a Docker DNS alias. Approved container clients on that network use
@@ -1075,16 +1075,15 @@ or login IDs are refused; it does not overwrite or reset an existing account.
 Validate before restarting Fleet; the process loads accounts at startup.
 Account provisioning does not bind a Discord identity or authorize a Bot.
 
-The host-side config-reload watcher that restarts Fleet when `site-users.yaml`
-changes is installed on the site host; its source is not part of this
-repository, and it restarts Fleet on any detected change. On 2026-10-07 a
+Fleet does not restart by itself when `site-users.yaml` changes. The host-side
+config-reload watcher that used to do so was removed on 2026-11-06. On 2026-10-07 a
 manually restored file was published with group `101` instead of `10001`, and
 the watcher fed the unreadable file straight into a roughly two-minute Fleet
 crash loop (`unable to load site user credentials`). Never edit or restore
-this file by hand — always use `site_users.py`. Gate every automatic restart
-on `python3 /opt/rosy/candidate/deploy/site/site_users.py validate <file>` (YAML shape, digest
+this file by hand — always use `site_users.py`. Before restarting Fleet, run
+`python3 /opt/rosy/candidate/deploy/site/site_users.py validate <file>` (YAML shape, digest
 formats, permission bits, owning group; a non-zero exit means keep Fleet on
-the last good file and log instead of restarting).
+the last good file).
 
 Generate independent high-entropy credentials with the approved secret
 manager: one user API bearer per named person, the CORE registry credential,
@@ -2152,7 +2151,16 @@ CLI는 이미 인증된 연결을 먼저 검사하고, 없으면 ADB mDNS 및 Av
 `_adb-tls-connect._tcp`에서 예상 serial의 후보를 찾아 변경된 포트로 재연결한다.
 발견 이름만 믿지 않고 실제 serial과 model을 모두 확인한 단일 연결에만
 `KEYCODE_WAKEUP`을 보낸다. 미인증·오프라인 연결, 식별 불가·불일치·다중 연결은
-거절한다. 페어링이나 ADB 권한 변경은 이 CLI가 수행하지 않는다.
+거절한다. 페어링은 이 CLI가 수행하지 않는다. ADB 권한 변경은 아래 `auto-wake-setup`이 Rosy Cam
+자신의 권한 두 개를 주는 경우뿐이다.
+
+**재부팅 뒤 자동 복귀 (D-981).** 앱을 새로 설치한 뒤 한 번 실행한다. 재부팅해도 유지되고, 앱을
+지우면 다시 실행해야 한다.
+
+```bash
+python3 deploy/site/rosy_cam_screen.py auto-wake-setup --config /private/path/cam-screen.json
+```
+
 목록에 다른 기기의 오프라인·미인증 연결이 있어도 보수적으로 거절하므로 먼저
 ADB 연결 목록을 확인한다. 발견된 오래된 포트가 응답하지 않으면 다음 후보를
 시도하지만, 다른 실제 식별자가 응답하면 즉시 거절한다.

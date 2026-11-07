@@ -375,3 +375,21 @@
 - 변경: 이름만 다른 피어 서명·첫 접촉 CA 고정·Keystore 신원 사본(Pilot `PeerProof`/`PeerTls`/`AndroidPeerIdentity`, Cam `CameraProof`/`CameraTls`/`AndroidCameraIdentity`)을 `shared/android/peer` 한 곳으로 모았다. 두 앱이 `srcDir`로 함께 컴파일한다. 신원은 `AndroidPeerIdentity(context, app)`이고 기존 키 별칭·표시 파일·client id 접두어를 그대로 쓴다. 세션·보관소는 앱에 남긴다.
 - 증거: 새 구조 시험 `test/architecture/test_app_shared_sources.py` 3건이 main 배치에서 RED(빌드 미포함·12개 다시 선언·사본 4쌍), 이 브랜치에서 GREEN이다. 로컬 SDK35 빌드: Cam JVM 443 pass/0 skip, Pilot JVM 110 pass/1 skip(기존 ShellPageProbe), 두 앱 assembleDebug 성공. lint 0 error.
 - gate 변화: 없음. 실제 태블릿·휴대폰에서 기존 승인 관계 유지는 설치 후 확인한다. CE: 해당 없음 — 규칙은 D-939와 구조 시험에 있다.
+
+## 2026-11-06 · uncommitted · 재부팅 뒤 링크 복귀와 무선 디버깅 유지(D-981)
+
+- 변경: `AutoStartReceiver`·비공개 빈 `AutoStartActivity`로 부팅·앱 업데이트 뒤 링크를 다시 열고, `WirelessDebugging.keepOn`으로 무선 디버깅을 켜 둔다. 현장 도구에 `auto-wake-setup`을 추가했다.
+- 증거: JVM `AutoStartTest`와 `test/test_site_cam_screen.py`. 실행 결과는 착지 기록을 따른다.
+- gate 변화: 없음. 실제 폰의 재부팅 복귀는 아직 확인하지 못했다. CE: 해당 없음 — 판단은 D-981에 있다.
+
+## 2026-11-07 · uncommitted · Account 세션을 shared/android로 이동
+
+- 변경: `AccountSession`, `AndroidAccount`, `account-config.gradle`을 `shared/android/account`로 옮겼다(D-987). 패키지는 `io.github.livsbittt.rosy.account`이고, 저장 이름 `rosy-account-<scope>`, `rosy-account-aes`, `rosy-account/1:`은 그대로다.
+- 증거: 원격 결과는 착지 기록을 따른다. 실기 설치 뒤 로그인 유지는 확인하지 않았다.
+- Gate: 없음. CE: 해당 없음 — 소스 위치 이동이다.
+
+## 2026-11-07 · uncommitted · 배터리 40°C 경고와 발열 멈춤 기록
+
+- 변경: 온도 경고가 OS 발열 단계와 별개로 배터리 40°C부터 나온다. 송출을 멈추는 기준은 그대로 OS SEVERE, 상태가 없으면 45°C다. 심한 발열의 시작과 끝을 logcat에 남긴다.
+- 증거: 재부팅 뒤 송출이 멈췄을 때 OS 발열 단계 기록이 없어 원인을 밝히지 못했다. JVM `DeviceHealthTest`. 실기 설치 결과는 착지 기록을 따른다.
+- Gate: 없음. CE: 새 교훈 기록 — docs/solutions/deployment/rosy-cam-screen-on-keeps-ceiling-phone-hot-2026-11-07.md.

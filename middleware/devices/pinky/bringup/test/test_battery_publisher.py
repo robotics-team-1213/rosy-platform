@@ -81,3 +81,30 @@ def test_a_failed_read_publishes_nothing_and_reopens(module):
     node.voltage_callback()
     assert _published(node) == ([8.67], [])
     assert bus.opens == 2
+
+
+def test_a_hung_bus_is_probed_with_growing_gaps_and_recovers(module):
+    now = [0.0]
+    bus = FlakyBus(missing=0)
+    node = module.BatteryPublisher(battery_factory=bus, clock=lambda: now[0])
+    bus.fail_reads = 10**6                      # kernel i2c timeouts, every transaction
+
+    node.voltage_callback()                     # 1st failure: reopen at once
+    node.voltage_callback()                     # reopened, 2nd failure: now 10 s quiet
+    assert bus.opens == 2
+    for _ in range(3):
+        node.voltage_callback()
+    assert bus.opens == 2                       # not touched while backing off
+
+    now[0] = 10.0
+    node.voltage_callback()                     # 3rd failure: 20 s quiet
+    now[0] = 29.0
+    node.voltage_callback()
+    assert bus.opens == 3
+
+    bus.fail_reads = 0
+    now[0] = 30.0
+    node.voltage_callback()
+    assert _published(node)[0] == [8.67]
+    node.voltage_callback()                     # healthy again: no gap
+    assert _published(node)[0] == [8.67, 8.67]

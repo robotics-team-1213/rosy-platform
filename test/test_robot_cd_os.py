@@ -172,16 +172,47 @@ def test_artifact_is_bound_to_exact_successful_run_and_source(tmp_path, mutation
 
 def test_real_coordinator_routes_opted_in_os_without_robot_contact(tmp_path, monkeypatch):
     helper = module()
-    from robot_cd import Coordinator as RealCoordinator
+    from robot_cd import Coordinator as RealCoordinator, write_json
+    write_json(tmp_path / "state.json", {"sha": SHA, "phase": "done", "deployed_sha": SHA, "delivery_base_sha": SHA,
+                                         "os_published_sha": "b" * 40})
     c = RealCoordinator(dict(repo="robotics-team-1213/rosy-platform", repo_id=7,
-        state_dir=tmp_path, os_engineering=True, base_source_revision="b" * 40), gh=lambda *args: "")
+        state_dir=tmp_path, os_engineering=True), gh=lambda *args: "")
     backend = Coordinator(tmp_path)
     api = backend.api
     c.api = lambda path: ({"object": {"sha": SHA}} if path == "git/ref/heads/main" else
                          {"status": "ahead"} if path.startswith("compare/") else api(path))
     c.ci = lambda sha: "success"
-    c.delivery_plan = lambda sha: ("os-image", "frozen unit changed")
+    c.source_changes = lambda base, head: [{"filename": "deploy/robot/pinky_pro/image/customize-rootfs.sh"}]
     c.ssh = lambda *args: pytest.fail("OS publication must never contact a robot")
     monkeypatch.setitem(sys.modules, "robot_cd_os", helper)
-    assert c.tick() == "os_build_dispatched"
-    assert c.state["deployed_sha"] == "b" * 40 and c.state["delivery_base_sha"] == "b" * 40
+    assert c.tick() == "os_build_dispatched"  # after the payload for this source is delivered
+    assert c.state["deployed_sha"] == SHA and c.state["delivery_base_sha"] == SHA
+    assert c.state["os_published_sha"] == "b" * 40
+
+
+@pytest.mark.parametrize("state,paths,config", [
+    ({"phase": "failed"}, ["deploy/robot/pinky_pro/image/a.sh"], {}),  # payload not delivered
+    ({"phase": "done"}, ["docs/a.md"], {}),  # nothing frozen changed
+    ({"phase": "done", "os_published_sha": SHA}, ["deploy/robot/pinky_pro/image/a.sh"], {}),  # already published
+    ({"phase": "done"}, ["deploy/robot/pinky_pro/image/a.sh"], {"os_engineering": False}),
+])
+def test_os_publication_waits_for_its_own_reason(tmp_path, state, paths, config):
+    from robot_cd import Coordinator as RealCoordinator, write_json
+    write_json(tmp_path / "state.json", {"sha": SHA, "deployed_sha": SHA, "delivery_base_sha": SHA,
+                                         "os_published_sha": "b" * 40, **state})
+    c = RealCoordinator({"repo": "robotics-team-1213/rosy-platform", "repo_id": 7, "state_dir": tmp_path,
+                         "os_engineering": True, **config}, gh=lambda *args: "")
+    c.source_changes = lambda base, head: [{"filename": path} for path in paths]
+    assert c.os_publication_due(SHA) is False
+
+
+def test_an_unchanged_source_is_compared_once(tmp_path):
+    from robot_cd import Coordinator as RealCoordinator, write_json
+    write_json(tmp_path / "state.json", {"sha": SHA, "phase": "done", "deployed_sha": SHA, "delivery_base_sha": SHA,
+                                         "os_published_sha": "b" * 40})
+    c = RealCoordinator({"repo": "robotics-team-1213/rosy-platform", "repo_id": 7, "state_dir": tmp_path,
+                         "os_engineering": True}, gh=lambda *args: "")
+    calls = []
+    c.source_changes = lambda base, head: calls.append(head) or [{"filename": "docs/a.md"}]
+    assert c.os_publication_due(SHA) is False and c.os_publication_due(SHA) is False
+    assert calls == [SHA]

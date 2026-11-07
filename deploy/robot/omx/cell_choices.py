@@ -49,6 +49,13 @@ class Choices:
             return default
         return max(candidates, key=lambda c: ((c["ok"] + 1) / (c["tries"] + 2), c["tries"]))["value"]
 
+    def ranked(self, name: str, values: list) -> list:
+        """The values by the same record as best(); equal records keep the given order, untried ones included."""
+        def record(value):
+            c = self._find(name, value) or {"ok": 0, "tries": 0}
+            return -(c["ok"] + 1) / (c["tries"] + 2)
+        return sorted(values, key=record)
+
     def save(self):
         self.path.parent.mkdir(parents=True, exist_ok=True)
         tmp = self.path.with_suffix(".tmp")

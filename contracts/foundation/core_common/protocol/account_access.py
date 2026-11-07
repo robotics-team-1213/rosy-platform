@@ -1,8 +1,9 @@
-"""D-757 resource grants and Ed25519 access JWTs; no network or role inheritance."""
+"""D-757 resource grants, Ed25519 access JWTs and the shared Origin check; no network or role inheritance."""
 from __future__ import annotations
 
 import time
 from collections.abc import Mapping
+from urllib.parse import urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, model_validator
 
@@ -17,6 +18,21 @@ RESOURCE_PATTERN = r'^(site|robot|project):[A-Za-z0-9._-]{1,96}$'
 # D-955: a stored grant may name every robot or project; issued tokens stay one concrete resource.
 GRANT_RESOURCE_PATTERN = r'^((site|robot|project):[A-Za-z0-9._-]{1,96}|(robot|project):\*)$'
 ACCESS_TTL_S = 300
+
+
+def same_origin(request) -> bool:
+    """D-519 4: an `Origin` must be present and its authority must equal `Host`.
+
+    D-987: receivers compare against their registered callback instead; the two checks differ.
+    """
+    origin, host = request.headers.get("origin"), request.headers.get("host")
+    if not origin or not host:
+        return False
+    try:
+        parsed = urlsplit(origin)
+    except ValueError:
+        return False
+    return parsed.scheme in {"http", "https"} and parsed.netloc.lower() == host.lower()
 
 
 class AccessRejected(ValueError):

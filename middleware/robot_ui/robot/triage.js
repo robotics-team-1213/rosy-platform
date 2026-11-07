@@ -53,7 +53,7 @@ const BATTERY_FAULT = {
 // this reason. It is one fact, not five faults, and it is a deliberate
 // configuration rather than a failure, so it is told once and without colour.
 export const CORE_ONLY_REASON = "runtime_mode:core";
-export const CORE_ONLY_TEXT = "하드웨어 런타임 꺼짐 (CORE-only)";
+export const CORE_ONLY_TEXT = "하드웨어 런타임 꺼짐";
 // rosy-io in no-motion mode (D-192): battery/odometry flow, motor/ready is
 // false, torque is off and cmd_vel has no subscriber.
 export const DRIVE_DISABLED_REASON = "drive_disabled:no_motion";
@@ -111,7 +111,7 @@ export function estopFault(source) {
   if (text.startsWith("api:")) {
     return {
       title: `API 비상정지 (${text.slice(4) || "?"})`,
-      detail: "소프트웨어 정지입니다. CORE가 이동 명령을 0으로 막고 있습니다. 모터 전원을 끊은 것은 아닙니다. 해제 권한이 있는 운용자가 해제합니다.",
+      detail: "소프트웨어 정지입니다. 로봇이 이동 명령을 0으로 막고 있습니다. 모터 전원을 끊은 것은 아닙니다. 해제 권한이 있는 운용자가 해제합니다.",
     };
   }
   if (text.startsWith("battery")) {
@@ -129,8 +129,8 @@ export function estopFault(source) {
   return {
     title: "비상정지",
     detail: text
-      ? `CORE가 이동 명령을 0으로 막고 있습니다(출처: ${text}).`
-      : "CORE가 이동 명령을 0으로 막고 있습니다.",
+      ? `로봇이 이동 명령을 0으로 막고 있습니다(출처: ${text}).`
+      : "로봇이 이동 명령을 0으로 막고 있습니다.",
   };
 }
 

@@ -2,6 +2,7 @@
 motion, a fold held on the strain of the stop is retried, new table sites share the arm's map, a shallow grip keeps the
 box level at the release, and a person's weight bound stays apart from a reading."""
 import json
+import math
 from pathlib import Path
 import sys
 import types
@@ -16,6 +17,7 @@ sys.path.insert(0, str(OMX))
 try:
     import cell_auto_pick as auto
     import cell_auto_setup
+    import cell_choices
     import cell_jaw_axis
     import cell_objects
     import cell_pipeline_io as cio
@@ -23,6 +25,7 @@ try:
     import cell_reach
     import cell_scale
     import cell_scene_guard
+    import grasp_planner as gp
 finally:
     sys.path.remove(str(OMX))
 
@@ -387,3 +390,135 @@ def test_measure_stops_and_folds_when_the_arm_refuses_to_go():
         auto.cp.write_library = original
     assert result["result"] == "not agreed" and result["rows"] == [{"yaw": -90.0, "stopped": "goto above_pick"}]
     assert cell.commands[-1] == "park"
+
+
+GEOMETRY = {"radius_mm": 16.7, "phase_deg": -86.1, "measured": "2026-11-06"}
+
+
+def marks_at(centre, yaws, geometry=GEOMETRY):
+    r, phase = geometry["radius_mm"] / 1000, geometry["phase_deg"]
+    return [(centre[0] + r * math.cos(math.radians(y + phase)), centre[1] + r * math.sin(math.radians(y + phase))) for y in yaws]
+
+
+def test_a_known_geometry_finds_the_centre_over_a_narrow_arc():
+    yaws = [-105.0, -95.0, -85.0]
+    tcps = [(0.07, -0.1, 0.1, y) for y in yaws]
+    result = cell_pivot.known_geometry_bias(marks_at((0.08, -0.09), yaws), tcps, GEOMETRY, "s", {"homography": []})
+    assert result["result"] == "calibrated" and result["bias"]["bias_mm"] == pytest.approx([10.0, 10.0], abs=0.1)
+    assert result["bias"]["n"] == 3 and result["bias"]["geometry_from"] == "2026-11-06"
+
+
+def test_marks_that_disagree_are_refused_not_averaged():
+    yaws = [-105.0, -85.0]
+    marks = marks_at((0.08, -0.09), yaws)
+    marks[1] = (marks[1][0] + 0.03, marks[1][1])
+    result = cell_pivot.known_geometry_bias(marks, [(0.07, -0.1, 0.1, y) for y in yaws], GEOMETRY, "s", {"homography": []})
+    assert result["result"].startswith("marks disagree")
+
+
+def test_one_mark_or_a_bias_past_the_cap_is_refused_with_a_known_geometry():
+    tcp = [(0.07, -0.1, 0.1, -90.0)]
+    assert "need 2" in cell_pivot.known_geometry_bias(marks_at((0.08, -0.09), [-90.0]), tcp, GEOMETRY, "s", {})["result"]
+    yaws = [-95.0, -85.0]
+    far = cell_pivot.known_geometry_bias(marks_at((0.12, -0.09), yaws), [(0.07, -0.1, 0.1, y) for y in yaws], GEOMETRY, "s", {"homography": []})
+    assert far["result"].startswith("bias refused")
+
+
+def jaw_frames(sides):
+    closed, opened = np.full((480, 640, 3), 200, np.uint8), np.full((480, 640, 3), 200, np.uint8)
+    for x, y in sides:
+        cv2.rectangle(opened, (x - 8, y - 12), (x + 8, y + 12), (20, 20, 20), -1)
+    return closed, opened
+
+
+def test_the_mark_is_the_middle_of_both_sides_of_the_jaws():
+    (cx, cy, _), = cell_pivot.jaw_centre(*jaw_frames([(243, 322), (321, 316)]))
+    assert (cx, cy) == pytest.approx((282, 319), abs=1)
+
+
+def test_one_side_or_two_blobs_too_far_apart_give_no_mark():
+    assert cell_pivot.jaw_centre(*jaw_frames([(297, 267)])) == []
+    assert cell_pivot.jaw_centre(*jaw_frames([(200, 300), (420, 300)])) == []
+
+
+def test_the_centre_mark_does_not_flip_with_the_larger_side(tmp_path):
+    big = jaw_frames([(243, 322), (321, 316)])
+    cv2.rectangle(big[1], (230, 300), (256, 340), (20, 20, 20), -1)
+    (cx, _, _), = cell_pivot.jaw_centre(*big)
+    assert abs(cx - 282) < 4
+
+
+def test_mark_jaws_uses_the_centre_only_when_the_config_asks(monkeypatch):
+    frames = iter(jaw_frames([(243, 322), (321, 316)]) * 6)
+    monkeypatch.setitem(sys.modules, "cell_pipeline", types.SimpleNamespace(grip_to=lambda cell, value: True))
+    monkeypatch.setattr(cell_pivot, "settled_frame", lambda *a, **k: next(frames))
+    config = {"plan": {}, "jaw_mark": {"centre": True}}
+    assert cell_pivot.mark_jaws(None, config, lambda s: None) == pytest.approx((282, 319), abs=1)
+
+
+def test_a_known_geometry_bias_passes_the_check_that_guards_its_saving(tmp_path):
+    yaws = [-105.0, -95.0]
+    result = cell_pivot.known_geometry_bias(marks_at((0.08, -0.09), yaws), [(0.07, -0.1, 0.1, y) for y in yaws], GEOMETRY, "s", {"homography": []})
+    path = tmp_path / "x.bias.json"
+    cell_pivot.save_bias(path, result["bias"], None)
+    assert cell_pivot.load_bias(path, None)["regions"][0]["bias_mm"] == pytest.approx([10.0, 10.0], abs=0.1)
+
+
+def test_an_outcome_on_the_measured_axis_is_recorded_not_raised(tmp_path):
+    choices = cell_choices.Choices(tmp_path / "choices.json")
+    cell_jaw_axis.offer_measured({"closing_axis_offset_deg": 85.5}, choices, auto.CLOSING)
+    cell_jaw_axis.offer_measured({}, choices, auto.CLOSING)
+    choices.outcome(auto.CLOSING, 85.5, False, "contact")
+    assert [c["value"] for c in choices.data["values"][auto.CLOSING]] == [85.5]
+
+
+def test_descend_guard_frac_really_slows_the_descent_and_only_it():
+    cfg = {"plan": json.loads((OMX / "grasp-plan.example.json").read_text())}
+    point = dict(x=0.12, y=0.02, z=0.03, yaw_deg=0.0)
+
+    def library(plan):
+        return gp.Planner(dict(plan, pick=point, place=point, keep_out=None)).library()["chunks"]
+
+    normal, slow = library(cfg["plan"]), library(dict(cfg["plan"], descend_guard_frac=0.42))
+    assert len(slow["descend_pick"]) > 1.5 * len(normal["descend_pick"])
+    assert slow["descend_pick"][-1][:5] == pytest.approx(normal["descend_pick"][-1][:5], abs=0.01)
+    assert len(slow["lift_pick"]) == len(normal["lift_pick"])
+
+
+def test_lift_guard_frac_really_slows_the_lift_and_only_it():
+    plan = json.loads((OMX / "grasp-plan.example.json").read_text())
+    point = dict(x=0.12, y=0.02, z=0.03, yaw_deg=0.0)
+
+    def library(p):
+        return gp.Planner(dict(p, pick=point, place=point, keep_out=None)).library()["chunks"]
+
+    normal, slow = library(plan), library(dict(plan, lift_guard_frac=0.42))
+    assert len(slow["lift_pick"]) > 1.5 * len(normal["lift_pick"])
+    assert slow["lift_pick"][-1][:5] == pytest.approx(normal["lift_pick"][-1][:5], abs=0.01)
+    assert len(slow["descend_pick"]) == len(normal["descend_pick"])
+
+
+def test_what_the_finger_mask_does_not_cover_is_not_room():
+    px = lambda p: (100 + p[0] * 1000, 100 + p[1] * 1000)  # 1 px per mm
+    box = {"raw_m": [0.0, 0.0], "long_axis_deg": 0.0, "width_mm": 30.0, "length_mm": 90.0}
+    wide = np.zeros((200, 200), np.uint8)
+    assert auto.finger_room(wide, (0, 0, 200, 200), px, box)["margin_mm"] is not None
+    tight = np.zeros((40, 200), np.uint8)  # the roi stops 5 mm past the box on both sides: nothing is known beyond it
+    assert auto.finger_room(tight, (0, 80, 200, 120), px, box)["margin_mm"] is None
+
+
+def test_a_site_can_grip_a_box_off_its_centre(monkeypatch):
+    frame = np.zeros((480, 640, 3), np.uint8)
+    cell = types.SimpleNamespace(frame=lambda name: frame)
+    box = {"centre_mm": [60.0, -140.0], "matched": True}
+    monkeypatch.setattr(auto.cell_objects, "detect", lambda *a: [dict(box)])
+    monkeypatch.setattr(auto.cell_objects, "foreground", lambda *a, **k: np.zeros((10, 10), np.uint8))
+    monkeypatch.setattr(auto.cell_objects, "colour_mask", lambda *a: np.zeros((10, 10), np.uint8))
+    monkeypatch.setattr(auto.cell_pivot, "map_record", lambda c, s: {"homography": []})
+    monkeypatch.setattr(auto.cd, "see", lambda *a: None)
+    monkeypatch.setattr(auto, "keep", lambda *a: None)
+    config = {"cameras": {"top": {}}, "sites": {"s": {"surface_z": 0.0, "grip_offset_m": [0.0, -0.033]}}}
+    _, _, objects, _ = auto.observe(cell, config, {}, "s", (0, 0, 10, 10), [])
+    assert objects[0]["raw_m"] == pytest.approx([0.06, -0.173])
+    del config["sites"]["s"]["grip_offset_m"]
+    assert auto.observe(cell, config, {}, "s", (0, 0, 10, 10), [])[2][0]["raw_m"] == pytest.approx([0.06, -0.14])

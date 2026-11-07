@@ -18,8 +18,8 @@ Takes the signed tarball prepare_payload_release.py made and does what the robot
 5. canary: `rosy_auto_update.py status --json` over ssh every 30 s for --canary-timeout-min. Only a result
    newer than the one the canary reported before the release (and not older than published_at) counts.
    A commit of this id sets canary_ok=true; a rollback or refusal of this id, a "failed" phase for it
-   ("error" is transient and keeps the watch going), or the timeout sets withdrawn=true. Before re-uploading, the remote rollout is downloaded again:
-   one withdrawn meanwhile stays withdrawn, and one that changed otherwise is never overwritten.
+   ("error" is transient and keeps the watch going), or a timeout after it may have started sets withdrawn=true; a timeout
+   before it started exits 4 and changes nothing. The remote rollout is reread before upload: withdrawn stays, changed is refused.
 
 New releases add no wave delay after canary success; --wave-delay-s opts into a delay.
 --resume --open-wave-now removes only the delay from an already approved signed rollout.
@@ -57,6 +57,7 @@ KEY_NAME = re.compile(r"[\w.-]+")
 CANARY_HOSTNAME = re.compile(r"rosy-[a-z0-9-]+")
 REVISION = re.compile(r"[0-9a-f]{40}")
 STATUS_COMMAND = "sudo -n python3 /opt/rosy/native-runtime/rosy_auto_update.py status --json"
+CANARY_NOT_STARTED = 4
 POLL_S = 30
 #: Robot and PC clocks are NTP-synced; allow this much when comparing a robot's result time to published_at.
 CLOCK_SKEW_S = 120
@@ -224,8 +225,8 @@ class Publisher:
             raise
 
     def upload_command(self) -> str:
-        files = " ".join(f'"{self.work_dir / name}"' for name in ("rollout.json", "rollout.json.sig"))
-        return f"gh release upload {self.tag} --repo {self.repo} --clobber {files}"
+        return (f'gh release upload {self.tag} --repo {self.repo} --clobber '
+                f'"{self.work_dir / "rollout.json"}" "{self.work_dir / "rollout.json.sig"}"')
 
     def _verified(self, data: bytes, signature: str, where: str) -> dict:
         rejections = signing.verify_signature(data, signature, self.public_key)
@@ -326,7 +327,7 @@ class Publisher:
                     if outcome == "committed" and state.get("current_release") == self.release_id:
                         self.log("canary-phase", line, phase=phase)
                         return True, f"canary {name} committed {self.release_id}"
-                    if outcome in ("rolled_back", "refused"):
+                    if outcome in ("rolled_back", "refused", "image_required"):
                         self.log("canary-phase", line, phase=phase)
                         return False, f"canary {name} {outcome} {self.release_id}: {last.get('detail') or '-'}"
                 # "failed" is T2's verdict on a candidate; "error" is transient (network, activator
@@ -339,11 +340,16 @@ class Publisher:
                 self.log("canary-phase", line, phase=phase)
                 seen = key
             if self.monotonic() >= deadline:
-                return False, f"canary {name} did not commit within {timeout_min} min (last phase: {phase})"
+                # A robot that never started says nothing about the release; unreachable or applying might.
+                not_started = phase in ("idle", "staged", "waiting", "held", "ineligible", "disabled")
+                return None if not_started else False, f"canary {name} did not commit within {timeout_min} min (last phase: {phase})"
             self.sleep(POLL_S)
 
-    def finish(self, ok: bool, reason: str, robots: list[str], out_dir: Path) -> int:
+    def finish(self, ok: bool | None, reason: str, robots: list[str], out_dir: Path) -> int:
         """Re-read the remote rollout first: never undo a withdraw, never overwrite a change made meanwhile."""
+        if ok is None:
+            self.log("canary-waiting", f"{reason}; rollout.json left as it is")
+            return CANARY_NOT_STARTED
         remote, data = self.download()
         if remote["withdrawn"]:
             self.log("withdrawn", f"{self.tag} was withdrawn meanwhile ({remote['reason']}); left as it is",
@@ -569,11 +575,9 @@ def main(argv: list[str] | None = None, *, gh_runner: Runner = run_gh, ssh_runne
 
         if args.resume:
             rollout, publisher.last_uploaded = publisher.download()
-            publisher.log("resume", f"re-attached to {publisher.tag}: canary_ok={rollout['canary_ok']} "
-                                    f"withdrawn={rollout['withdrawn']}")
+            publisher.log("resume", f"re-attached to {publisher.tag}: canary_ok={rollout['canary_ok']} withdrawn={rollout['withdrawn']}")
             if rollout["withdrawn"]:
-                print(f"error: {publisher.tag} is withdrawn ({rollout['reason']}); publish a new release",
-                      file=sys.stderr)
+                print(f"error: {publisher.tag} is withdrawn ({rollout['reason']}); publish a new release", file=sys.stderr)
                 return 3
             if args.open_wave_now:
                 return publisher.open_wave_now(args.robot, out_dir)
@@ -601,18 +605,15 @@ def main(argv: list[str] | None = None, *, gh_runner: Runner = run_gh, ssh_runne
                                     utc_stamp(now()), canary, args.wave_delay_s)
             if transport_delta is not None:
                 rollout["delta"] = transport_delta[1]
-            publisher.log("rollout", f"{rollout['tarball']} sha256 {rollout['tarball_sha256']}, "
-                                     f"canary {canary}, wave delay {args.wave_delay_s}s, "
-                                     f"canary last result before: {baseline}")
+            publisher.log("rollout", f"{rollout['tarball']} sha256 {rollout['tarball_sha256']}, canary {canary}, "
+                                     f"wave delay {args.wave_delay_s}s, canary last result before: {baseline}")
             if transport_delta is None:
                 publisher.create(rollout, tarball, canary)
             else:
                 publisher.create(rollout, tarball, canary, delta_asset=transport_delta[0])
 
-        publisher.log("canary-watch", f"watching {canary} ({args.canary}) every {POLL_S}s "
-                                      f"for up to {args.canary_timeout_min} min")
-        ok, reason = publisher.watch_canary(args.canary, canary, args.canary_timeout_min,
-                                            rollout["published_at"], baseline)
+        publisher.log("canary-watch", f"watching {canary} ({args.canary}) every {POLL_S}s for up to {args.canary_timeout_min} min")
+        ok, reason = publisher.watch_canary(args.canary, canary, args.canary_timeout_min, rollout["published_at"], baseline)
         return publisher.finish(ok, reason, args.robot, out_dir)
     except KeyboardInterrupt:
         print(f"\ninterrupted. {publisher.tag} is left as it is on GitHub; robots other than the canary wait.\n"
@@ -636,9 +637,8 @@ def main(argv: list[str] | None = None, *, gh_runner: Runner = run_gh, ssh_runne
 
 
 def withdraw(publisher: Publisher, reason: str, out_dir: Path) -> int:
-    """Withdraw by hand. A remote rollout that does not verify or is missing (a half-finished --clobber
-    upload) falls back to the copy this PC signed last in the work folder, and then always uploads:
-    only a verified GitHub copy that is already withdrawn needs nothing."""
+    """Withdraw by hand. An unverified or missing remote rollout (a half-finished --clobber upload) falls back
+    to the copy this PC signed last; only a verified GitHub copy that is already withdrawn needs nothing."""
     from_github = True
     try:
         rollout, _data = publisher.download()

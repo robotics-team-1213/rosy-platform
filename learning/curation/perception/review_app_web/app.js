@@ -3,7 +3,7 @@ import {reviewContext} from '/review-context.js';
 import {accountFetch} from '/account-session.js';
 import {showVersions,resetVersions} from '/versions.js';
 import {showAI,resetAI,updateAI,candidateOrigin} from '/ai-jobs.js';
-import { cssColor, canvasFont, clearPalette, actionIcon } from '/common/ui.js';
+import { cssColor, canvasFont, clearPalette, actionIcon, confirmIrreversible } from '/common/ui.js';
 import { drawnBox, dragBox, hitBox, boxHandles } from '/box-geometry.mjs';
 import { showHistory, resetHistory } from '/history.js';
 import {reviewViewport} from '/viewport.js';
@@ -102,6 +102,7 @@ function enable() {
   $('exclude').disabled = locked || frame?.status === 'excluded';
   $('reopen').disabled = locked;
   $('draw').disabled = $('add').disabled = locked || frame?.status === 'excluded';
+  $('object-mode').textContent = `선택한 도구: ${drawing ? '박스 그리기' : '박스 선택·이동'}`;
   $('delete-selected').disabled = locked || frame?.status === 'excluded' || selected===null;
   for (const button of $('object-quick-classes').querySelectorAll('ui-button')) {
     button.disabled = locked || frame?.status === 'excluded' || selected===null;
@@ -235,6 +236,7 @@ function connectAI(){
   });
 }
 async function select(index) {
+  saveOpen=false;
   const serial = ++loadSerial;
   cancelGesture(); selected=null; coordinatePreview=null; undo=null;
   $('empty-review').hidden=true;$('review-content').hidden=false;
@@ -352,13 +354,16 @@ function quickClasses() {
   }
   enable();
 }
+// A save in flight or just failed may not be on the server yet; leaving would lose it silently.
+let saveOpen=false;
+addEventListener('beforeunload',event=>{if(saveOpen)event.preventDefault();});
 async function mutate(action, extras={}, restoring=false) {
   if (busy || !ready || conflicted || forbidden) return;
-  busy=true; error(); $('complete').checked=false; $('save-status').textContent='서버에 저장 중…'; enable();
+  saveOpen=true; busy=true; error(); $('complete').checked=false; $('save-status').textContent='서버에 저장 중…'; enable();
   const id=frame.index,decidedOrdinal=frameOrdinal(workspace,frame.index);
   const previous=structuredClone(frame.review.boxes);
   try {
-    const saved=await request(`/api/frames/${id}`,{version:frame.version,action,...extras});
+    const saved=await request(`/api/frames/${id}`,{version:frame.version,action,...extras});saveOpen=false;
     workspace.counts[frame.status]--;workspace.counts[saved.status]++;
     workspace.frames[workspace.frames.findIndex(f=>f.index===id)]=saved; frame=structuredClone(saved);
     $('export-result').textContent=$('export-result').textContent.replace(/^이번 준비 결과 · /,'이전 준비 결과 · 현재 결정을 반영하려면 다시 준비하세요. ');
@@ -386,14 +391,14 @@ function edit(change) {
 $('complete').onchange=enable;
 $('approve').onclick=()=> {if ($('complete').checked) mutate('approve',{complete_frame_review:true});};
 $('exclude').onclick=()=>mutate('exclude'); $('reopen').onclick=()=>mutate('reopen');
-$('candidates').onclick=()=> {if (window.confirm('현재 수정 라벨을 원본 초안으로 바꾸고 재검수하시겠습니까?')) mutate('candidates');};
+$('candidates').onclick=async()=> {if (await confirmIrreversible({message:'현재 수정 라벨을 원본 초안으로 바꾸고 재검수하시겠습니까?',action:'초안으로 바꾸기',opener:$('candidates')})) mutate('candidates');};
 $('source-preview').onclick=()=>{draftPreview=draftPreview==='source'?null:'source';draftStatus();paint();};
 $('model-preview').onclick=()=>{draftPreview=draftPreview==='model'?null:'model';draftStatus();paint();};
 $('model-draft-select').onchange=()=>{draftPreview='model';draftStatus();paint();};
-$('model-candidates').onclick=()=>{const draft=modelDrafts[Number($('model-draft-select').value)];
-  if(draft&&window.confirm(`현재 박스를 ${candidateOrigin(draft.origin)} 초안 ${draft.boxes.length}개로 바꾸고 재검수하시겠습니까?`))
+$('model-candidates').onclick=async()=>{const draft=modelDrafts[Number($('model-draft-select').value)];
+  if(draft&&await confirmIrreversible({message:`현재 박스를 ${candidateOrigin(draft.origin)} 초안 ${draft.boxes.length}개로 바꾸고 재검수하시겠습니까?`,action:'초안으로 바꾸기',opener:$('model-candidates')}))
     mutate('apply_object_draft',{draft_sha256:draft.sha256});};
-$('draw').onclick=()=> {drawing=!drawing; $('draw').setAttribute('aria-pressed',String(drawing));};
+$('draw').onclick=()=> {drawing=!drawing; $('draw').setAttribute('aria-pressed',String(drawing)); enable();};
 $('add').onclick=()=>edit(boxes=>boxes.push({label:null,bbox_xyxy:[0,0,Math.min(40,frame.source.width),Math.min(40,frame.source.height)]}));
 $('delete-selected').onclick=()=> {if(selected!==null) {const index=selected; selected=null;edit(boxes=>boxes.splice(index,1));}};
 $('undo').onclick=()=> {if(undo?.index===frame?.index&&!$('undo').disabled) {selected=null;mutate('save',{boxes:undo.boxes},true);}};
