@@ -14507,3 +14507,17 @@ osy-d395-s1d\`.
 - 증거: 카탈로그의 경로·Compose 서비스·결정을 `test/architecture/test_common_services.py`가 확인한다. 원격 결과는 착지 기록을 따른다.
 - gate 변화: 없음 — 카탈로그 등재는 배포·현장 수용의 증거가 아니다.
 - CE: 해당 없음 — 구조 정의이며 해결한 장애가 없다.
+
+## 2026-11-07 · uncommitted · fix(land): FULL 대기가 준비 슬롯을 차지하지 않고 MAIN-RED가 닫힌다
+
+- 변경: FULL 차례를 기다리는 착지는 `full_wait`로 표시돼 준비 슬롯 수에서 빠진다. `land_mainred.py recheck`가 열린 항목을 main에서 하나씩 다시 돌려, 통과했거나 시험 파일이 사라진 항목을 닫는다. 야간 전체 시험은 시작할 때 이를 먼저 돌린다.
+- 증거: 11-07 측정에서 대기 중인 FULL 2개가 슬롯 6개 중 2개를 차지했고 파일 하나 바꾼 착지가 대기했다. MAIN-RED는 담당 없는 항목 11개가 열려 있었고 지워진 시험 파일도 포함됐다. 회귀 시험은 `test/test_land_queue.py`, `test/test_land_mainred.py`.
+- gate 변화: 없음. FULL 동시 한도와 시험 PC 입장 제한, 명시 FULL의 LOAD-FLAKY 규칙은 그대로다.
+- CE: 해당 없음 — 원인이 코드와 시험에 남는다.
+
+## 2026-11-07 · uncommitted · fix(remote): 호출의 -rA가 공통 꼬리에 덮이지 않는다
+
+- 변경: 공통 꼬리의 `-rfE`가 뒤에 와서 `-rA`를 덮었기 때문에 `PASSED` 줄이 로그에 남지 않았다. `-rA` 호출에서는 `-rfE`를 뺀다.
+- 증거: 실제 `land_mainred.py recheck`에서 통과한 시험이 닫히지 않아 드러났다. 수정 뒤 열린 11개 중 9개가 main 통과로 닫히고, 삭제된 파일 1개가 닫히고, 실제 실패 1개(`test_cell_g2_ports.py` 단독 실행의 AF_UNIX 경로 길이)가 남았다.
+- gate 변화: 없음. 착지의 `close`가 이제 통과한 항목을 실제로 닫는다.
+- CE: 해당 없음 — 원인이 코드와 시험에 남는다.
