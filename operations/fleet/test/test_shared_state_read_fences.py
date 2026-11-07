@@ -17,6 +17,7 @@ from fleet.swarm.transport import RobotApiError
 from test_shared_state_read import Clock, _shared_setup
 from test_trip_link_wait import NEW, _running, _settle, _ticks
 from test_trip_runner import LANE, LANE_GRAPH, Ports, _plan
+from fakes import fresh_battery
 
 
 class SnapshotPorts(Ports):
@@ -59,7 +60,7 @@ def _snapshot_setup(sim=False):
     ports = SnapshotPorts()
     store = SiteMapStore(None, clock=lambda: ports.now)
     store.import_if_empty(from_lane_graph(LANE_GRAPH), source="test")
-    runner = TripRunner(store=store, routing_config=store.routing_config, caps=ports.caps_for,
+    runner = TripRunner(store=store, routing_config=store.routing_config, caps=ports.caps_for, battery=fresh_battery,
                         poses=SimPose(ports) if sim else ports,
                         junction=ports, goal=ports.goal, cancel_goal=ports.cancel_goal,
                         blocked=lambda: ports.blocked, clock=lambda: ports.now, config=TripConfig())

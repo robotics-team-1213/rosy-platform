@@ -17,12 +17,7 @@ data class DeviceHealth(
 ) {
     val warnings: List<HealthWarning>
         get() = buildList {
-            val hot = if (thermalStatus != THERMAL_UNKNOWN) {
-                thermalStatus >= THERMAL_MODERATE
-            } else {
-                (temperatureC ?: 0.0) >= HOT_BATTERY_C
-            }
-            if (hot) add(HealthWarning.HOT)
+            if (thermalStatus >= THERMAL_MODERATE || (temperatureC ?: 0.0) >= WARN_BATTERY_C) add(HealthWarning.HOT)
             if (batteryPct != null && batteryPct < LOW_BATTERY_PCT && !charging) add(HealthWarning.BATTERY_LOW)
         }
 
@@ -40,7 +35,10 @@ data class DeviceHealth(
         const val THERMAL_MODERATE = 2
         const val LOW_BATTERY_PCT = 20
 
-        /** Fallback before API 29 when there is no thermal status: battery temperature in °C. */
+        /** The warning shows from this battery temperature, with or without a thermal status. Streaming continues. */
+        const val WARN_BATTERY_C = 40.0
+
+        /** The camera light is held from this battery temperature. */
         const val HOT_BATTERY_C = 43.0
 
         /** BatteryManager.BATTERY_STATUS_CHARGING / _FULL. */

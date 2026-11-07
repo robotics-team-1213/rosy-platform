@@ -1240,3 +1240,16 @@ def test_only_full_main_releases_can_be_published(tarball, tmp_path, name, text,
     else:
         with pytest.raises(tool.PublishError):
             tool.read_tarball_identity(candidate)
+
+
+def test_a_canary_that_needs_a_new_image_withdraws_at_once(tarball, keys, tmp_path):
+    gh = FakeGh()
+    clock = FakeClock()
+    refused = status("image_required", candidate=RELEASE_ID, last=result("image_required", detail="NATIVE_PYTHON_RUNTIME: 3.13"))
+
+    assert _publish(tarball, keys, tmp_path, gh, FakeSsh(statuses=[status(), refused]),
+                    "--canary-timeout-min", "30", clock=clock) == 3
+
+    final = _verified(gh, keys)
+    assert final["withdrawn"] is True and "NATIVE_PYTHON_RUNTIME" in final["reason"]
+    assert clock.t < 300

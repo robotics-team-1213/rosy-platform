@@ -116,8 +116,10 @@ def preparation_folder(base, state, release_id):
 
 def check_resume_identity(remote, state):
     expected = {"release_id": state["release_id"], "source_revision": state["sha"],
-                "tarball_sha256": state["tarball_sha256"], "canary": [state["canary_name"]]}
-    if any(remote.get(key) != value for key, value in expected.items()):
+                "tarball_sha256": state["tarball_sha256"]}
+    # canary_moved_from: the move was saved first, so a crash before its upload still resumes.
+    if (any(remote.get(key) != value for key, value in expected.items())
+            or remote.get("canary") not in ([state["canary_name"]], state.get("canary_moved_from"))):
         raise ValueError("signed remote rollout differs from this release transaction")
 
 
@@ -278,10 +280,14 @@ class Coordinator:
     def os_publication_due(self, head):
         """The payload for head is delivered and frozen OS inputs changed since the last OS release."""
         base = self.state.get("os_published_sha")
-        if self.config.get("os_engineering") is not True or self.state.get("phase") != "done" or not base or base == head:
+        if (self.config.get("os_engineering") is not True or self.state.get("phase") != "done" or not base
+                or base == head or self.state.get("os_checked_sha") == head):
             return False
         files = self.source_changes(base, head) or []
-        return self.impact_policy().os_image_changed([item["filename"] for item in files])
+        due = self.impact_policy().os_image_changed([item["filename"] for item in files])
+        if not due:
+            self.save(os_checked_sha=head)  # one comparison per source, not one per tick
+        return due
 
     def delta_sources(self, base, head):
         files = self.source_changes(base, head)
@@ -479,9 +485,11 @@ class Coordinator:
                     return self.audit("withdrawn")
                 if self.state.get("canary_not_started") and (other := self.pick_canary(excluding=host)):
                     # Only a robot that never started is replaced; one that may have is withdrawn by the publisher.
-                    publisher.upload({**remote, "canary": [publisher.hostname(other)]})
                     host = other
-                    self.save(canary_host=other, canary_name=publisher.hostname(other), canary_not_started=False)
+                    self.save(canary_host=other, canary_name=publisher.hostname(other), canary_moved_from=remote["canary"])
+                if remote["canary"] != [self.state["canary_name"]]:
+                    publisher.upload({**remote, "canary": [self.state["canary_name"]]})
+                self.save(canary_not_started=False)  # judged again by this watch
             args = ["--tarball", str(signed), "--canary", host, "--repo", self.repo,
                     "--key-name", self.config["key_name"], "--canary-timeout-min", "30",
                     "--evidence-dir", str(self.folder / "rollouts")]

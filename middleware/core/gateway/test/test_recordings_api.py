@@ -56,6 +56,7 @@ def test_recording_start_rejects_unknown_or_untyped_options_before_transport(cor
 
 def test_typed_annotated_start_returns_actual_mode_and_live_capability(core_client):
     client, svc = core_client()
+    svc.pilot_recording._clock = lambda: 0.0      # the recorder status never goes stale here
     legacy, _ = _wire(svc)
     typed = []
     svc.pilot_recording.start_available = lambda: True
