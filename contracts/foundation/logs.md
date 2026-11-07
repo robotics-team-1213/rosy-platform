@@ -1132,3 +1132,9 @@
 - gate 변화: SOURCE 회귀 검증; ARTIFACT/DEVICE/FIELD 수용 근거로 사용하지 않음. 최종 재조립 SHA 원격 회귀와 FULL은 별도.
 - 결정: API v1.363; 기존 CORE 최종 명령·모드 owner 유지.
 - 교훈: CE 해당 없음 — 최종 코드·회귀 시험·API 계약으로 판단 근거를 재현할 수 있음.
+
+## 2026-11-07 · 11b42b5933 · feat(face): 사람 부탁 띠와 만료
+- 변경: `person_request_text.py`(종류·영어 문구 표), `protocol/person_request.py`, `face_screen`의 `person_request` 검증(만료 시 없음)과 주의 띠(`UNPLUG CHARGER` 등), `presentation`의 주의 램프. 정지·업데이트·실패·부팅 카드가 이긴다.
+- 증거: `test_face_person_request.py`.
+- gate 변화: SOURCE 변경. 로봇·장치 수용 없음.
+- 교훈: CE 해당 없음 — 최종 코드와 시험이 판단을 보존한다. 실물·운영 수용은 아니다.

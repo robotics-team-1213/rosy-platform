@@ -2111,3 +2111,10 @@ clpy.duration을 추가했다(bridge AGENTS의 두 파일 함께 갱신 규칙).
 - 증거: 원격 RED ac6386a96d 6개 실패 후 AI PC에서 관련6suite 346passed/skip0. 실제 API fresh motor lease 수락·누락/만료409·CommandManager 최종0, hardware 각 성분 HOLD 및 기존 G4 승인 거절을 확인했다. 독립 계약 검토 무발견이다.
 - gate 변화: 소스 회귀 근거이며 배포·실물 G4/SLAM 수용은 미실행이다. 게시용 canonical FULL은 후속 전체 source에서 별도 조정한다.
 - CE: 기존 교훈 갱신 — `docs/solutions/deployment/native-hardware-mode-profile-and-canonical-runtime-env-2026-11-03.md`에 갱신 후 재커미셔닝 순환 의존과 복구 경계를 추가했다.
+
+## 2026-11-07 · 11b42b5933 · feat(core): 로봇당 사람 부탁 하나를 쥔다
+- 변경: `core/person_request.py` 홀더(만료·토큰 소유·한 개), `CoreServices.person_request`, face-inputs `person_request`(카운트다운은 읽는 쪽), `ros_bridge` 한 줄. 모션 권한 없음. 상태 스냅샷 필드는 안전 태그 `state/manager.py`라 더하지 않았다.
+- 증거: `test_core_person_request.py` — 정지가 걸린 채 PUT/DELETE 해도 모드·정지·목표·취소가 그대로.
+- 결정: API v1.372.
+- gate 변화: SOURCE 변경. 로봇·장치 수용 없음.
+- 교훈: CE 해당 없음 — 최종 코드와 시험이 판단을 보존한다. 실물·운영 수용은 아니다.

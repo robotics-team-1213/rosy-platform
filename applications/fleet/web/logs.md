@@ -1103,3 +1103,9 @@
 - gate 변화: SOURCE/원격 브라우저 GO. 실제 로봇 주행, 로봇 화면 조종 구분, main 착지·push·CI·배포는 하지 않았다.
 - 남은 일: 로봇 화면(대시보드) 조종·충전 복귀 운행은 현재 데이터로 증명되지 않는다. CORE가 마지막 수락 teleop의 토큰 종류를 상태에 싣는 additive 필드가 필요하다.
 - 교훈: CE 해당 없음 — 표시 규칙은 코드와 시험에 직접 남는다.
+
+## 2026-11-07 · 11b42b5933 · feat(console): 스테이션 복구 요청 행과 사람 부탁 행
+- 변경: `station-recovery.js`·`person-request.js`가 주의 큐 행(`decision` 슬롯)에 요청·사유 문장과 단추를 채운다. 사람 부탁은 `했어요`·`못 해요`, 복구는 허용될 때만 `복구 승인 (기록만)`. 모든 행에 "로봇을 움직이지 않음" 줄. CSS·새 정적 자산 외 변경 없음(assets.json, 허용 목록 시험 갱신).
+- 증거: `node --test operations/fleet/test/web/station-recovery.test.mjs person-request.test.mjs` 10 pass (노트북). 브라우저 시험은 돌리지 않았다.
+- gate 변화: SOURCE 변경. 화면 육안·Chromium 확인 없음.
+- 교훈: CE 해당 없음 — 최종 코드와 시험이 판단을 보존한다. 실물·운영 수용은 아니다.

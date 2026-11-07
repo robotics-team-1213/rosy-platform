@@ -1454,3 +1454,9 @@
 - 변경: 운용 화면의 접수·정지 안내(도킹·차선 추종·모드·위치 설정·지도 목표, 안전 정지 띠, 비상 정지 접수, 하드웨어 런타임 꺼짐)에서 "CORE"를 "로봇"으로 바꿨다. 관리자 호스트·시스템 패널의 CORE·커미셔닝·호스트 에이전트 용어와 툴팁은 그대로 뒀다. 정지·허용·차단 판단은 바꾸지 않았다.
 - 증거: 옛 문구를 고정한 시험(test_dashboard_browser·test_role_menu_panels_browser·robot_ui/robot/test 세 파일)을 새 문구로 고쳤다. 원격 결과는 착지 기록을 따른다.
 - gate 변화: SOURCE 변경. CE: 해당 없음 — 표시 문구 변경이다.
+
+## 2026-11-07 · 11b42b5933 · feat(dashboard): 사람 부탁 카드
+- 변경: `panels/console/person-request.js`와 panels.yaml 항목. 같은 문구·이유를 보이고 "관제에서 답해 주세요"를 말한다(답 단추 없음: 답을 Fleet 기록에 닿게 하는 기존 길이 없다). 읽기 실패·만료는 카드를 숨긴다.
+- 증거: `node --test middleware/robot_ui/robot/test/web/person-request.test.mjs` 3 pass. 브라우저 확인 없음.
+- gate 변화: SOURCE 변경. 로봇·장치 수용 없음.
+- 교훈: CE 해당 없음 — 최종 코드와 시험이 판단을 보존한다. 실물·운영 수용은 아니다.

@@ -4707,3 +4707,9 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: 원격 시험 `test/test_native_mapping_approval.py`·`test/test_image_layer_sync.py` exit 0. b8xy의 실제 릴리스에서 004·005 지문 일치, 10/29와 불일치(읽기 전용 측정, 제외 목록 추가 전 기준).
 - gate 변화: 없음 — 기체 수용 전이다.
 - CE: 해당 없음 — 새 기능이며 해결한 장애가 없다.
+
+## 2026-11-07 · 11b42b5933 · feat(rosy-face): 사람 부탁 도착 소리와 15초 반복
+- 변경: `PersonAsk`(`rosy_face_parts.py`)가 기존 `call` 패턴을 도착 때 한 번, 같은 id가 보이는 동안 15 s마다. 정지·실패 화면이면 소리 없음, ROSY_BUZZER_ENABLED는 Buzzer 그대로.
+- 증거: `test/test_rosy_face_person.py`(도착·반복 시각, 답·만료 뒤 멈춤, 화면 우선순위). 실제 스피커 확인은 하지 않았다.
+- gate 변화: SOURCE 변경. 장치 수용 아님.
+- 교훈: CE 해당 없음 — 최종 코드와 시험이 판단을 보존한다. 실물·운영 수용은 아니다.

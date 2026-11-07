@@ -5333,3 +5333,10 @@
 - 변경: 환경 변수 이름 대신 설치 담당자에게 요청할 것을 말한다. 코드는 그대로. test_doc_tabs·test_cell_app_browser의 제목 고정을 새 제목으로 갱신.
 - 증거: agent-browser 로컬 렌더(1920·390·320 화면 확인). 원격 회귀는 착지 기록을 따른다.
 - gate 변화: SOURCE 변경. 실기기·Android 수용은 별도다. CE: 해당 없음 — 코드와 회귀가 판단을 보존한다.
+
+## 2026-11-07 · 18c323da67 · feat(fleet): 스테이션 복구 요청(S1)과 사람 부탁(저장소·경로·로봇 전달)
+- 변경: `station_recovery.py` 순수 판단(사유 7종, 근거 stale은 battery_evidence_missing), `GET/POST /api/fleet/station-recovery*`(기본 꺼짐, 승인은 기록만 `started:false`), `fleet.station_recovery.enabled`; 사람 부탁 SQLite 저장소·`/api/fleet/person-requests*`·로봇 전달(`person_request_put/clear`). 답은 사람의 말일 뿐 움직임을 시작하지 않는다.
+- 증거: 원격 robttt 18c323da67 `test_station_recovery.py`+`test_person_requests.py` 전부 통과(HTTP 증거 캡처 -n 0). 넓은 묶음은 착지 기록을 따른다.
+- gate 변화: SOURCE 변경. 로봇·현장 수용 없음. S2(이동)·S3(도착 알림)는 만들지 않았다.
+- 결정: D-721 개정, API v1.372.
+- 교훈: CE 해당 없음 — 최종 코드와 시험이 판단을 보존한다. 실물·운영 수용은 아니다.
