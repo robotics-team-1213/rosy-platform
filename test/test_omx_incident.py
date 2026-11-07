@@ -407,3 +407,17 @@ def test_an_unsent_label_report_never_blocks_a_start_and_goes_when_fleet_answers
     link.down = False
     oi.refuse_if_held("arm_b", link)
     assert not oi.label_box("arm_b") and len(link.posted) == 1
+
+
+def test_a_broken_evidence_list_never_stops_a_start(tmp_path, monkeypatch):
+    """Review 2026-11-08: a cut sidecar or a pruned bundle raised through refuse_if_held."""
+    monkeypatch.chdir(tmp_path)
+    link = Labels()
+    link.down = True
+    oi.handle(session(tmp_path, latched=False, windup=False, status=[STOP]), "arm_b", link=link)
+    [report] = oi.label_box("arm_b")
+    sidecar = report.with_name(report.stem + ".evidence")
+    sidecar.write_text('{"bundle": "gone", "fi')  # cut mid-write
+    link.down = False
+    oi.refuse_if_held("arm_b", link)
+    assert not oi.label_box("arm_b") and not sidecar.exists() and link.evidence == []

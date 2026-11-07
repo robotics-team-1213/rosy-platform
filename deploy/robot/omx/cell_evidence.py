@@ -55,7 +55,9 @@ class Ring:
             return [f for f in self.frames if f[0] >= since], [g for g in self.gaps if g[0] >= since]
 
     def close(self) -> None:
+        """Mandatory once the carry ends (transfer_folded does it): the thread polls until then."""
         self.stopped.set()
+        self.thread.join(timeout=2 * self.period_s + 10)  # one camera read may take its 10 s timeout
 
 
 def write(folder: Path, kind: str, arm: str, at: float, frames: list, gaps: list, extra: dict, files: dict | None = None) -> Path:
@@ -71,8 +73,8 @@ def write(folder: Path, kind: str, arm: str, at: float, frames: list, gaps: list
         except FileExistsError:
             n += 1
     listed = []
-    for t, camera, jpeg in frames:
-        name = f"{camera}-{t - at:+.1f}.jpg"
+    for n, (t, camera, jpeg) in enumerate(frames):
+        name = f"{camera}-{t - at:+.1f}-{n}.jpg"  # the index: two frames in one tenth of a second took one name (review)
         (out / name).write_bytes(jpeg)
         listed.append({"file": name, "camera": camera, "t_rel_s": round(t - at, 2), "sha256": hashlib.sha256(jpeg).hexdigest()})
     for name, data in (files or {}).items():

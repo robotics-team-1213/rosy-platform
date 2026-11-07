@@ -71,6 +71,7 @@ class ArmIncidentStore:
                                    (report.source_id, report.session_id)).fetchone()
             if row:
                 return row[0]
+            self._expire()  # every report and upload, not only a clear: a quiet ledger still lets old frames go (review)
             incident_id = uuid4().hex
             self._db.execute(
                 "INSERT INTO arm_incidents (incident_id, source_id, session_id, reported_at, facts, decision, recovery) "
@@ -128,6 +129,7 @@ class ArmIncidentStore:
                                    (incident_id, frame.sha256)).fetchone()
             if had:
                 return had[0]
+            self._expire()
             n = self._db.execute("SELECT count(*) FROM arm_incident_evidence WHERE incident_id=?", (incident_id,)).fetchone()[0]
             if n >= ARM_INCIDENT_EVIDENCE_FRAMES:
                 raise OverflowError(incident_id)

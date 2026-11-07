@@ -364,3 +364,16 @@ def test_a_report_that_does_not_hold_waits_for_its_cause_and_leaves_the_arm_free
     rows = [a for a in client.get(PATH, headers=bearer("viewer-token")).json()["workcells"][0]["arms"]
             if a["source_id"] == "arm_b"][0]["incidents"]
     assert {r["incident_id"] for r in rows if r["state"] == "open"} == {label.json()["incident_id"], held["incident_id"]}
+
+
+def test_old_whole_frames_go_on_a_report_too_not_only_on_a_clear():
+    """Review 2026-11-08: expiry ran only on clear(), so a quiet ledger kept every frame."""
+    from core_common.protocol.arm_incidents import ArmIncidentEvidenceFrame
+    clock = [10.0]
+    store = ArmIncidentStore(wall=lambda: clock[0])
+    old = store.report(ArmIncidentReport.model_validate(report()))
+    store.add_evidence("arm_b", old, ArmIncidentEvidenceFrame.model_validate(evidence(b"f", kind="full")))
+    store.clear("arm_b", old, "checked", "op-7", "blocked", "repeat")
+    clock[0] += 15 * 86400
+    store.report(ArmIncidentReport.model_validate(report(session="7f1c2a3e-1b2d-4e5f-8a9b-0c1d2e3f4a5b")))
+    assert store.labelled()[0]["evidence"] == []

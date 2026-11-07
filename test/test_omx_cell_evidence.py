@@ -52,7 +52,7 @@ def test_a_bundle_lists_every_file_with_its_hash_and_only_the_newest_stay(tmp_pa
     assert manifest["schema"] == ev.SCHEMA and manifest["gaps"] == [{"camera": "side", "t_rel_s": -0.5, "why": "dropped"}]
     for listed in manifest["files"]:
         assert hashlib.sha256((out / listed["file"]).read_bytes()).hexdigest() == listed["sha256"]
-    assert manifest["files"][0]["file"] == "top-+0.0.jpg"
+    assert manifest["files"][0]["file"] == "top-+0.0-0.jpg"  # numbered: one tenth of a second may hold two frames
 
 
 def test_a_stop_and_one_control_per_carry_are_bundled_and_close_waits_for_them(tmp_path, monkeypatch):

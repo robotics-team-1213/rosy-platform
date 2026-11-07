@@ -147,19 +147,22 @@ def upload_evidence(sidecar: Path, reply, link) -> None:
 
     if not sidecar.is_file():
         return
-    chosen = json.loads(sidecar.read_text())
-    manifest = json.loads((Path(chosen["bundle"]) / "manifest.json").read_text())
-    when = {f["file"]: f.get("t_rel_s", 0.0) for f in manifest["files"]}
-    for name in chosen["files"]:
-        try:
-            data = (Path(chosen["bundle"]) / name).read_bytes()
-            camera, tip = name.rsplit("-", 1)[0] if name.endswith("-tip.jpg") else name.split("-", 1)[0], name.endswith("-tip.jpg")
-            link.post_evidence(reply.incident_id, ArmIncidentEvidenceFrame(
-                camera=camera, t_rel_s=when.get(name, 0.0), kind="tip" if tip else "full",
-                sha256=hashlib.sha256(data).hexdigest(), jpeg_b64=base64.b64encode(data).decode()))
-        except Exception as exc:
-            print(f"evidence {name} not sent: {type(exc).__name__}: {str(exc)[:120]}")
-    sidecar.unlink()
+    try:  # a cut sidecar or a pruned bundle must not stop a start (refuse_if_held sends label reports first)
+        chosen = json.loads(sidecar.read_text())
+        listed = {f["file"]: f for f in json.loads((Path(chosen["bundle"]) / "manifest.json").read_text())["files"]}
+        for name in chosen["files"]:
+            try:
+                data, tip = (Path(chosen["bundle"]) / name).read_bytes(), name.endswith("-tip.jpg")
+                link.post_evidence(reply.incident_id, ArmIncidentEvidenceFrame(
+                    camera=listed.get(name, {}).get("camera") or name.removesuffix("-tip.jpg"),
+                    t_rel_s=listed.get(name, {}).get("t_rel_s", 0.0), kind="tip" if tip else "full",
+                    sha256=hashlib.sha256(data).hexdigest(), jpeg_b64=base64.b64encode(data).decode()))
+            except Exception as exc:
+                print(f"evidence {name} not sent: {type(exc).__name__}: {str(exc)[:120]}")
+    except Exception as exc:
+        print(f"evidence of {sidecar.name} not sent: {type(exc).__name__}: {str(exc)[:120]}")
+    finally:
+        sidecar.unlink(missing_ok=True)
 
 
 def refuse_if_held(arm: str | None, link=None) -> None:
