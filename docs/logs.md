@@ -14535,3 +14535,44 @@ osy-d395-s1d\`.
 - 증거: source 조사와 소비자 회귀 시험에 결속한다. 원격 결과는 디스패처 인계에 남긴다.
 - gate 변화: 없음. 중앙 서비스·DB·HTTP 계약·배포는 추가하지 않았다.
 - CE: 해당 없음 — 재사용 범위와 보류 근거가 카탈로그에 있다.
+## 2026-11-08 · uncommitted · docs(control): N100 목표 호스트와 R·owner 책임을 구분한다
+
+- 변경: D-994에 N100·16GB와 Ubuntu Server 24.04 LTS 목표, R·셀·CORE·OMX owner·공통 서비스·기명 운영자의 책임, 부하·장애·이전 수용 조건을 기록했다. 관제 배치표의 목표만 바꾸고 공통 서비스 카탈로그에서 연결했다.
+- 증거: 사용자 하드웨어·문서화 결정과 D-893·D-960·D-974·D-987 및 현재 관제 배포 안내를 대조했다. 문서·하네스 검증 결과는 이 브랜치의 원격 시험 보고서로 확인한다.
+- gate 변화: 없음. Ubuntu 설치·서비스 이전·N100 성능·DEVICE/FIELD 수용은 미수행이다.
+- CE: 해당 없음 — 새 배치 결정이며 해결한 장애나 문서에 없는 실측 사실이 없다.
+
+## 2026-11-08 · uncommitted · docs(control): 현재 ARM 위임과 관제·owner·호스트 구조를 대조한다
+
+- 변경: D-995에 주행 승인과 셀 ARM admit, ARM 증거·재검사의 직계 자식 제한, 기준 문서별 책임과 R 서비스 묶음의 후속 검증을 기록했다. D-965·D-994의 미구현 설명은 당시 본문을 보존하고 Status에서 후속 정정으로 연결했다. README·개발 가이드·앱 책임·앱 이름·용어를 현재 소스와 맞췄다.
+- 증거: `9130e7ba67`의 ARM 후보·relay·셀 job 결속·부모 증명·기명 승인·simulation 정책 제한과 실제 화면 제목을 추적했다. 기존 원격/계약 시험과 독립 검토는 최종 SHA 기준 보고서를 따른다. Confluence는 현재 버전과 원문을 보존한 뒤 같은 범위만 갱신한다.
+- gate 변화: 없음. 코드·실행 권한·서비스 배포·실물 수용은 바꾸지 않았다.
+- CE: 해당 없음 — 판단 근거가 ADR·현재 소스·기존 회귀 시험에 남아 별도 교훈 중복을 만들지 않는다.
+
+## 2026-11-08 · uncommitted · docs(architecture): Harbor와 공통 서비스의 책임을 저장소별로 연결한다
+
+- 변경: 앱 책임 안내에 Harbor 업무·R/셀 admission·CORE/OMX 실행·공통 사람 Account·읽기/영상/학습·호스트 경계를 더했다. 업무 앱 계약 안내의 과거 API 표와 현재 ARM 범위를 구별했다. Harbor 팀 저장소에는 ADR0028과 책임표를 별도 PR로 다룬다.
+- 증거: Harbor 팀 main `fd8965e`의 기존 ADR0005·0013·0015·0018·0021, 미병합 로그인 PR #46 상태와 플랫폼 D-995·현재 route를 대조했다. 실제 시험·검토는 최종 SHA와 각 PR의 기록을 따른다.
+- gate 변화: 없음. 새 API·계정 구현·현장 배포·장치 수용을 추가하지 않았다.
+- CE: 해당 없음 — 기존 책임을 문서 정본에 모으는 정비이며 별도 교훈 중복을 만들지 않는다.
+
+## 2026-11-08 · uncommitted · docs(architecture): 공통 기능별 분리와 장애·복구 계약을 확정한다
+
+- 변경: D-997에 혼합 구조와 계정·등록·설정·알림·감사·백업·업데이트별 owner·데이터·호출·단절·복구·전환 조건을 기록하고 카탈로그에서 연결했다. 알림 전달은 미래 독립 서비스로 추출하되 Fleet 판단/outbox·발송 직전 재검사·기존 D-661 한계를 유지한다. 나머지는 기존 서비스·공용 코드·owner별 운영 어댑터를 재사용한다.
+- 증거: D-987·D-807·D-955·D-962·D-661·D-841·D-985, 현재 설정 transaction·알림·감사·backup/업데이트 경로를 대조했다. 카탈로그 실행 서비스 목록·Compose·source holder는 그대로다. 최종 SHA의 문서·원격 시험·독립 검토를 별도로 연결한다.
+- gate 변화: 없음. 설계 수락은 신규 서비스·API·폴더 이동·DB 이관·배포·현장 수용 완료가 아니다.
+- CE: 해당 없음 — 새 아키텍처 결정을 ADR에 남겼고 해결한 장치/운영 장애는 없다.
+
+## 2026-11-08 · uncommitted · docs(reference): 카탈로그 기능별 행을 실제 owner 소스와 연결한다
+
+- 변경: 공통 서비스 카탈로그의 D-997 기능별 표에 `현재 소스` 열을 넣고 7개 기능 행을 실제 경로(Account, Account 연동 등록부·Fleet 장치 등록·공통 조회 client, `core_common` 설정·설정 transaction, Fleet `incidents/notifications.py`, Account 감사, `deploy/site/site_db.py`, site/Pinky/OMX 업데이트 도구)에 묶었다. 알림 행의 "현재 미구현"을 바로잡아 현재 발송 owner는 Fleet이고 `operations/notifications`만 `(목표, 미생성)`임을 분명히 했다.
+- 증거: 각 경로의 실제 존재와 owner를 소스·AGENTS에서 확인했고 `test/architecture/test_common_services.py`가 7개 행의 경로 존재·목표 표시를 검사한다. 변이(빠진 경로·목표 표시 제거)로 시험이 실패하는 것을 원격으로 확인했다.
+- gate 변화: 없음. 코드 추출·알림 서비스 신설·배포·실물 시험은 이 변경의 범위가 아니다.
+- CE: 해당 없음 — 문서와 구조 시험에 근거가 남는다.
+
+## 2026-11-08 · uncommitted · docs(reference): 검토 반영 — 백업 owner 경로와 알림 현재 owner 검사
+
+- 변경: 백업·복원 행에 Account 백업 owner(`deploy/site/compose.account-backup.yaml`)를 넣고 `site_db.py`를 공용 스크립트(기본은 Fleet data volume, account 백업도 같은 스크립트를 자기 DB로 실행)로 정확히 적었다. 현재 소스 열이 기능별 대표 경로만 적는다는 것을 문단에 명시했고, 시험이 알림 행의 현재 owner(Fleet `incidents/notifications.py`)를 검사한다.
+- 증거: `Dockerfile.account`·`Dockerfile.fleet`이 같은 `deploy/site/site_db.py`를 싣고 account-backup·account-backup-check 서비스가 이를 account DB로 실행한다. 변이(알림 행에서 현재 owner 경로 제거)로 새 검사가 실패하는 것을 원격으로 확인했다.
+- gate 변화: 없음. 백업·전환 구현은 바꾸지 않았다.
+- CE: 해당 없음 — 문서와 구조 시험에 근거가 남는다.
