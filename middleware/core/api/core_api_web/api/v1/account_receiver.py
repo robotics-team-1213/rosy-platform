@@ -11,6 +11,7 @@ from __future__ import annotations
 from hashlib import sha256
 import json
 from pathlib import Path
+import threading
 from urllib.parse import urlsplit
 
 from fastapi import APIRouter, Depends, Request
@@ -27,7 +28,7 @@ from core_common.protocol.account_client import AccountUnavailable, load_account
 account_receiver_router = APIRouter(prefix="/api/v1/account/receiver", tags=["account-receiver"])
 
 CALLBACK_PATH = "/api/account/callback"
-SESSION_DB = "account-sessions.sqlite3"
+_APPLY_LOCK = threading.Lock()  # concurrent deliveries must not prune each other's key files
 
 
 class AccountReceiverRequest(BaseModel):
@@ -72,8 +73,29 @@ def _pinned(svc: CoreServicesLike, body: AccountReceiverRequest) -> bool:
     return isinstance(allowed, list) and all(_digest(pem) in allowed for pem in body.public_keys.values())
 
 
-def _sessions(path: Path) -> list[Path]:
-    return [path.with_name(SESSION_DB + suffix) for suffix in ("", "-journal", "-wal", "-shm")]
+def _session_db(issuer: str, client_id: str) -> str:
+    """One database per issuer and client: another issuer can never read a stored refresh token."""
+    return f"account-sessions-{sha256(f'{issuer} {client_id}'.encode()).hexdigest()[:16]}.sqlite3"
+
+
+def _previous(path: Path) -> tuple[bytes | None, dict]:
+    if not path.exists():
+        return None, {}
+    raw = path.read_bytes()
+    try:
+        parsed = json.loads(raw)
+    except ValueError:  # a damaged file must not block the delivery that repairs it
+        return raw, {}
+    return raw, parsed if isinstance(parsed, dict) else {}
+
+
+def _remove_quietly(paths) -> None:
+    """Leftovers only: the new settings already work, so a failed removal must not fail the delivery."""
+    for stale in paths:
+        try:
+            stale.unlink(missing_ok=True)
+        except OSError:
+            pass
 
 
 def _apply(body: AccountReceiverRequest, robot_id: str):
@@ -81,8 +103,8 @@ def _apply(body: AccountReceiverRequest, robot_id: str):
 
     pems = {kid: _public_pem(pem).decode("ascii") for kid, pem in body.public_keys.items()}
     path = account_receiver_path()
-    previous = path.read_bytes() if path.exists() else None
-    old = json.loads(previous) if previous else {}
+    previous, old = _previous(path)
+    database = _session_db(body.issuer, body.client_id)
     # Content-named, so a refused delivery can never leave the working settings pointing at new keys.
     names = {kid: f"account-key-{_digest(pem)[:16]}.pem" for kid, pem in pems.items()}
     for kid, pem in pems.items():
@@ -93,11 +115,7 @@ def _apply(body: AccountReceiverRequest, robot_id: str):
     write_private(path, json.dumps({
         "issuer": body.issuer, "client_id": body.client_id, "resource": "robot:" + robot_id,
         "callback": body.callback, "public_key_files": names, "encryption_key_file": secret.name,
-        "session_db": SESSION_DB}))
-    # Stored refresh tokens belong to the old issuer; a new one must never receive them.
-    if old and (old.get("issuer"), old.get("client_id")) != (body.issuer, body.client_id):
-        for stale in _sessions(path):
-            stale.unlink(missing_ok=True)
+        "session_db": database}))
     try:
         client = load_account_client(path)
     except Exception:
@@ -106,16 +124,22 @@ def _apply(body: AccountReceiverRequest, robot_id: str):
         else:
             write_private(path, previous.decode("utf-8"))
         raise
-    for stale in path.parent.glob("account-key-*.pem"):
-        if stale.name not in names.values():
-            stale.unlink(missing_ok=True)
+    _remove_quietly(stale for stale in path.parent.glob("account-key-*.pem") if stale.name not in names.values())
+    _remove_quietly(stale for stale in path.parent.glob("account-sessions-*")
+                    if not stale.name.startswith(database))
     return client
+
+
+def _locked_apply(body: AccountReceiverRequest, robot_id: str):
+    with _APPLY_LOCK:
+        return _apply(body, robot_id)
 
 
 def _clear() -> None:
     path = account_receiver_path()
-    for stale in [path, *_sessions(path), *path.parent.glob("account-key-*.pem")]:
-        stale.unlink(missing_ok=True)
+    with _APPLY_LOCK:
+        path.unlink(missing_ok=True)
+        _remove_quietly([*path.parent.glob("account-sessions-*"), *path.parent.glob("account-key-*.pem")])
 
 
 def _readback(request: Request, svc: CoreServicesLike) -> dict:
@@ -150,14 +174,14 @@ async def put_account_receiver(request: Request, auth: AuthContext = Depends(lin
             _public_pem(pem)
     except (ValueError, UnicodeError):
         raise ApiError("VALIDATION_ERROR", 400, "body must be {issuer, client_id, callback, public_keys}") from None
-    # The browser's same-origin check follows this callback, so it must name this listener.
+    # A typo guard, not authentication (Host is the caller's): the Account registry decides what is trusted.
     if parsed.path != CALLBACK_PATH or parsed.netloc != request.headers.get("host"):
         raise ApiError("VALIDATION_ERROR", 400, "callback must be this listener's Account callback")
     _refuse_if_managed(svc)
-    if auth.role != "administrator" and not _pinned(svc, body):
-        raise ApiError("ACCOUNT_TRUST_UNPINNED", 403, "this issuer and these keys are not pinned in auth.account_trust")
+    if auth.role != "administrator" and not (_pinned(svc, body) and body.client_id == "robot-" + svc.identity.robot_id):
+        raise ApiError("ACCOUNT_TRUST_UNPINNED", 403, "this issuer, keys and client are not pinned for this robot")
     try:
-        client = await run_in_threadpool(_apply, body, svc.identity.robot_id)
+        client = await run_in_threadpool(_locked_apply, body, svc.identity.robot_id)
     except (OSError, AccountUnavailable, ValueError, KeyError, TypeError) as exc:
         raise ApiError("INTERNAL_ERROR", 500, f"failed to apply the Account settings: {type(exc).__name__}") from None
     request.app.state.account_client = client

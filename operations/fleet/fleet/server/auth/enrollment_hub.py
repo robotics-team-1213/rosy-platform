@@ -99,7 +99,11 @@ class HubLinkMixin:
         if self._account_link is None:
             return row
         # D-992: after the hub lock, so a hung Account can never delay an unlink. Never undoes the link above.
-        state = await self._account_link.provision(robot_id, self._console()._client(robot_id))
+        client = self._tls_client(robot_id)  # re-checked: the robot may have been unlinked since the lock
+        if client is None:
+            self._account_link.states[robot_id] = state = "robot_unreachable"
+        else:
+            state = await self._account_link.provision(robot_id, client)
         self._store.audit(action="account_link", outcome=state[:64], principal_id=principal_id, target=robot_id)
         return next(item for item in self.listing()["robots"] if item["robot_id"] == robot_id)
 

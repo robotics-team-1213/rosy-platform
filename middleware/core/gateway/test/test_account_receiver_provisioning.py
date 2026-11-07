@@ -47,7 +47,7 @@ def robot(core_client, tmp_path, monkeypatch):
 def pin(svc, body):
     svc.config["auth"]["account_trust"] = {"issuer": body["issuer"], "public_key_sha256": [
         hashlib.sha256(pem.encode("ascii")).hexdigest() for pem in body["public_keys"].values()]}
-    return body
+    return {**body, "client_id": "robot-" + svc.identity.robot_id}
 
 
 def test_delivery_applies_without_a_restart_and_forces_this_robot(robot):
@@ -57,7 +57,7 @@ def test_delivery_applies_without_a_restart_and_forces_this_robot(robot):
     answer = https.put(ROUTE, json=pin(svc, _body()), headers=seats["site"])
     assert answer.status_code == 200
     body = answer.json()
-    assert body["configured"] is True and body["client_id"] == "robot-x"
+    assert body["configured"] is True and body["client_id"] == "robot-" + svc.identity.robot_id
     assert body["resource"] == "robot:" + svc.identity.robot_id
     assert https.app.state.account_client.resource == body["resource"]
     assert https.get("/api/account/session").json()["enabled"] is True  # the shared routes read it live
@@ -89,6 +89,7 @@ def test_a_site_label_alone_cannot_choose_who_signs_admin_here(robot):
     assert https.put(ROUTE, json=_body(), headers=seats["site"]).status_code == 403, "right issuer, unpinned key"
     two = {**real, "public_keys": {**real["public_keys"], "extra": _public_pem()}}
     assert https.put(ROUTE, json=two, headers=seats["site"]).status_code == 403, "one extra key is enough to sign"
+    assert https.put(ROUTE, json={**real, "client_id": "robot-other"}, headers=seats["site"]).status_code == 403
     assert https.put(ROUTE, json=real, headers=seats["site"]).status_code == 200
     moved = https.put(ROUTE, json=attacker, headers=seats["site"])
     assert moved.status_code == 403 and https.app.state.account_client.issuer == ISSUER
@@ -97,17 +98,38 @@ def test_a_site_label_alone_cannot_choose_who_signs_admin_here(robot):
 def test_changing_issuer_drops_stored_sessions_and_only_then(robot):
     https, _, seats, folder = robot
     assert https.put(ROUTE, json=_body(), headers=seats["admin"]).status_code == 200
-    sessions = folder / "account-sessions.sqlite3"
-    assert sessions.exists()
-    with sqlite3.connect(sessions) as db:
+    first = https.app.state.account_client.path
+    with sqlite3.connect(first) as db:
         db.execute("CREATE TABLE marker (x)")
     assert https.put(ROUTE, json=_body(), headers=seats["admin"]).status_code == 200
-    with sqlite3.connect(sessions) as db:
+    assert https.app.state.account_client.path == first
+    with sqlite3.connect(first) as db:
         assert db.execute("SELECT count(*) FROM sqlite_master WHERE name='marker'").fetchone()[0] == 1
     assert https.put(ROUTE, json=_body(issuer="https://other.example.test"), headers=seats["admin"]).status_code == 200
-    with sqlite3.connect(sessions) as db:
-        assert db.execute("SELECT count(*) FROM sqlite_master WHERE name='marker'").fetchone()[0] == 0, \
-            "refresh tokens of the old issuer must never reach the new one"
+    second = https.app.state.account_client.path
+    assert second != first and not first.exists(), "refresh tokens of the old issuer must never reach the new one"
+    with sqlite3.connect(second) as db:
+        assert db.execute("SELECT count(*) FROM sqlite_master WHERE name='marker'").fetchone()[0] == 0
+
+
+def test_a_damaged_file_does_not_block_the_delivery_that_repairs_it(robot):
+    https, _, seats, folder = robot
+    assert https.put(ROUTE, json=_body(), headers=seats["admin"]).status_code == 200
+    for damage in ("{broken", "[1]"):
+        (folder / "account-receiver.json").write_text(damage, encoding="utf-8")
+        assert https.put(ROUTE, json=_body(), headers=seats["admin"]).status_code == 200
+
+
+def test_key_files_survive_a_repeat_and_old_ones_are_pruned(robot):
+    https, _, seats, folder = robot
+    body = _body()
+    assert https.put(ROUTE, json=body, headers=seats["admin"]).status_code == 200
+    kept = {path.name for path in folder.glob("account-key-*.pem")}
+    assert len(kept) == 1
+    assert https.put(ROUTE, json=body, headers=seats["admin"]).status_code == 200
+    assert {path.name for path in folder.glob("account-key-*.pem")} == kept
+    assert https.put(ROUTE, json=_body(), headers=seats["admin"]).status_code == 200
+    assert {path.name for path in folder.glob("account-key-*.pem")}.isdisjoint(kept)
 
 
 def test_administrator_can_clear_and_a_site_token_cannot(robot):

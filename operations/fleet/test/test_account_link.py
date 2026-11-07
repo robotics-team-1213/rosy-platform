@@ -161,6 +161,20 @@ def test_a_hung_account_never_holds_the_hub_lock(tmp_path):
     assert seen == {'locked': False}
 
 
+def test_a_robot_unlinked_after_the_lock_is_not_provisioned(tmp_path):
+    service, _, console, _ = enrolled(tmp_path)
+    calls = []
+    class Probe:
+        states = {}
+        async def provision(self, robot_id, client):
+            calls.append(robot_id)
+            return 'linked'
+    service._account_link = Probe()
+    service._tls_client = lambda robot_id: None
+    row = asyncio.run(service.link_hub('rosy_09', principal_id='alice'))
+    assert calls == [] and row['account_link'] == 'robot_unreachable' and row['hub_linked'] is True
+
+
 def test_load_reads_a_private_token_file(tmp_path):
     token = tmp_path / 'registrar'
     token.write_text(TOKEN + '\n', encoding='utf-8')
