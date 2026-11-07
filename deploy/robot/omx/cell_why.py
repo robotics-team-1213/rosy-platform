@@ -5,7 +5,7 @@
 (30 Hz, sent and present per joint) showed the wrist still moving at half the commanded speed. That alone does not mean too
 fast: the descents the work record calls real contact keep moving too (0.20-0.75 of the command, free wrist motion 0.33-0.79).
 Measurement reads first and says only what it can: a joint that nearly stood still under a moving command was blocked; one that
-kept moving is undetermined. On the arm that reading orders the recovery, goes into the incident report (omx_incident) and so to the AI PC's
+kept moving is read against the same chunk's runs that met nothing (SEED, learn), and is undetermined without them. On the arm that reading orders the recovery, goes into the incident report (omx_incident) and so to the AI PC's
 explanation in Fleet (D-971); the control PC calls no model. Off the arm (this CLI, on a host with the model) the model sees the
 same facts, the frames and past rows of the kind, says what they show, picks among HYPOTHESES and says which evidence is missing.
 Its answer is text: it cannot overrule the measurement (a disagreement stays an open question) and chooses no action. Two
@@ -31,12 +31,16 @@ WINDOW_S, MIN_SPEED, BLOCKED_RATIO, MIN_RISE = 0.5, 0.3, 0.25, 0.3
 # a retry of one plan: same start, this much slower, and it stopped within SAME_STOP of the last stop.
 # Real pair: 2026-11-06 23:09 -> 23:27, start 0.2 apart, 3.52 -> 2.11 units/s, stop 1.2 apart, a contact by the side view. No opposite pair yet.
 SAME_START, SAME_STOP, SLOWER, NOT_FASTER = 1.0, 2.0, 0.85, 1.05
-# What a chunk lags with nothing in the way, measured: arm_b descend_pick over the bare table (air_descend, 2026-11-07 00:36)
-# lagged 0.64 with wrist_flex commanded up to 2.34 units/s; two finished pick descents that night 0.63 and 0.78. A stop at
-# no higher speed whose lag reached 1.8 times that (1.40; the guard stops at about 1.5) was held by something. Twice was the
-# first choice, but it is the stop limit itself: the 00:17 stops ended at 1.56. Faster than measured, or another chunk: no reading.
-FREE_LAG = {"descend_pick": {"joint": "wrist_flex", "peak_units_s": 2.34, "max_lag": 0.78}}
-FREE_MARGIN, FREE_SPEED_SLACK = 1.8, 1.02
+# What a chunk lags with nothing in the way: per chunk and joint, [command peak units/s, largest lag] of runs that ended
+# without a guard stop. Seeded with arm_b descend_pick over the bare table (air_descend, 2026-11-07 00:36) and the two
+# finished pick descents of that night; every carry adds its finished runs (learn). Lag depends on the chunk, not only on
+# speed: at wrist_flex 2-2.5 units/s pick descents lagged at most 0.78, transit moves up to 2.15, so no chunk borrows
+# another's. Only runs at least as fast as the stop count, and at least MIN_FREE of them:
+# - the stop's lag reached FREE_MARGIN times theirs (1.8: twice was the stop limit itself, the 00:17 stops ended at 1.56): blocked;
+# - they lagged SPEED_LIKE of the stop's lag and ran on: with nothing in the way the joint lags that much, so the command
+#   outran it: too_fast (2026-11-07 01:34 a held lift ran to its end at 3.80 units/s and lag 2.10; 02:15's stopped at 3.58, 2.25).
+SEED = {"descend_pick": {"wrist_flex": [[2.34, 0.64], [2.29, 0.63], [2.34, 0.78]]}}
+FREE_MARGIN, FREE_SPEED_SLACK, SPEED_LIKE, MIN_FREE, STOP_LAG, KEEP_RUNS = 1.8, 1.02, 0.9, 2, 1.3, 200
 HYPOTHESES = {
     # not "kept moving but slower": that hands the answer to every moving-joint stop, contact included (11-07 comparison)
     "too_fast": "the command outran the joint; nothing was in the way. Check: the same move slower",
@@ -72,11 +76,54 @@ def last_run(rows: list, chunk: str) -> list:
     return rows[start:end + 1]
 
 
-def read_motion(rows: list) -> dict:
-    """The joint that fell behind most in a chunk, and what it did in the last WINDOW_S: did it keep moving?"""
+def _lag(r, j):
+    return abs(r["present"][j] - r["sent"][j])
+
+
+def _peak(rows, j) -> float:
+    """The command's fastest 5-tick stretch on joint j: the speed a baseline is kept at."""
+    return max((abs(b["sent"][j] - a["sent"][j]) / (b["t"] - a["t"]) for a, b in zip(rows, rows[5:]) if b["t"] > a["t"]), default=0.0)
+
+
+def free_runs(rows: list) -> dict:
+    """chunk -> joint -> [[peak, largest lag, start t]] of the trace's runs that ended with every joint under STOP_LAG."""
+    out, start = {}, 0
+    for i in range(1, len(rows) + 1):
+        if i < len(rows) and rows[i].get("chunk") == rows[start].get("chunk"):
+            continue
+        run, start = rows[start:i], i
+        if not run[0].get("chunk") or len(run) < 10 or max(_lag(run[-1], j) for j in range(5)) >= STOP_LAG:
+            continue
+        for j in (1, 2, 3):  # the pitch joints; the guard stops on them
+            peak = _peak(run, j)
+            if peak >= MIN_SPEED:
+                out.setdefault(run[0]["chunk"], {}).setdefault(JOINTS[j], []).append(
+                    [round(peak, 2), round(max(_lag(r, j) for r in run), 2), round(run[0]["t"], 2)])
+    return out
+
+
+def learn(rows: list, path: Path) -> dict:
+    """Add the trace's finished runs to the baseline file (once each, by start t) and return SEED with it."""
+    kept = json.loads(path.read_text()) if path.exists() else {}
+    for chunk, joints in free_runs(rows).items():
+        for joint, runs in joints.items():
+            have = kept.setdefault(chunk, {}).setdefault(joint, [])
+            have += [r for r in runs if r[2] not in {h[2] for h in have}]
+            # shortcut: the newest KEEP_RUNS per chunk and joint (2 days gave 170 transit runs); keep the fastest instead
+            # if old fast runs start to matter
+            del have[:-KEEP_RUNS]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(kept))
+    return {c: {j: SEED.get(c, {}).get(j, []) + kept.get(c, {}).get(j, []) for j in set(SEED.get(c, {})) | set(kept.get(c, {}))}
+            for c in set(SEED) | set(kept)}
+
+
+def read_motion(rows: list, free: dict | None = None) -> dict:
+    """The joint that fell behind most in a chunk, and what it did in the last WINDOW_S: did it keep moving? Read against
+    `free` (learn; SEED when none): what the same chunk lagged on the same joint with nothing in the way."""
     if len(rows) < 3:
         return {"verdict": "undetermined", "why": "no trace of this chunk"}
-    lag = lambda r, j: abs(r["present"][j] - r["sent"][j])  # noqa: E731
+    lag = _lag
     worst = max(range(5), key=lambda j: lag(rows[-1], j))
     tail = [r for r in rows if r["t"] >= rows[-1]["t"] - WINDOW_S]
     span = tail[-1]["t"] - tail[0]["t"] or 1.0
@@ -92,14 +139,16 @@ def read_motion(rows: list) -> dict:
     moved = f"{facts['joint']} moved {present:.2f} of {sent:.2f} units/s"
     if present < BLOCKED_RATIO * sent:
         return {**facts, "verdict": "blocked", "why": moved}
-    # the command's fastest stretch (5 ticks) over the whole chunk, the number the free baseline was measured at
-    facts["peak_units_s"] = round(max((abs(b["sent"][worst] - a["sent"][worst]) / (b["t"] - a["t"])
-                                       for a, b in zip(rows, rows[5:]) if b["t"] > a["t"]), default=0.0), 2)
-    free = FREE_LAG.get(rows[-1].get("chunk"))
-    if (free and free["joint"] == facts["joint"] and facts["peak_units_s"] <= FREE_SPEED_SLACK * free["peak_units_s"]
-            and facts["lag_end"] >= FREE_MARGIN * free["max_lag"]):
-        return {**facts, "verdict": "blocked",
-                "why": f"{moved}; with nothing in the way this chunk lagged at most {free['max_lag']} up to {free['peak_units_s']} units/s"}
+    facts["peak_units_s"] = round(_peak(rows, worst), 2)
+    runs = [r for r in (free or SEED).get(rows[-1].get("chunk"), {}).get(facts["joint"], [])
+            if r[0] * FREE_SPEED_SLACK >= facts["peak_units_s"]]  # as fast as this one or faster
+    if len(runs) >= MIN_FREE:
+        most = max(r[1] for r in runs)
+        said = f"{moved}; {len(runs)} runs of this chunk as fast, with nothing in the way, lagged at most {most}"
+        if facts["lag_end"] >= FREE_MARGIN * most:
+            return {**facts, "verdict": "blocked", "why": said}
+        if most >= SPEED_LIKE * facts["lag_end"]:
+            return {**facts, "verdict": "too_fast", "why": f"{said} and ran on"}
     return {**facts, "verdict": "undetermined", "why": f"{moved}: contact and free motion both keep moving like this"}
 
 
@@ -130,11 +179,12 @@ def past_rows(path: Path, kind: str) -> list:
     return [r for r in rows if r.get("kind") == kind]
 
 
-def explain(kind: str, result: str, trace: list, images: list, backend, path: Path, chunk: str | None = None, since: float = 0.0) -> dict:
+def explain(kind: str, result: str, trace: list, images: list, backend, path: Path, chunk: str | None = None, since: float = 0.0,
+            free: dict | None = None) -> dict:
     """One row in why.jsonl: measured verdict, the model's pick and missing evidence, and the final `hypothesis`. `repeat_unknown`
     counts only rows since `since`: an unknown of last week is an open question, not this carry's second try."""
     chunk = chunk or chunk_of(result)
-    motion = read_motion(last_run(trace, chunk)) if chunk else {"verdict": "undetermined", "why": "no chunk named"}
+    motion = read_motion(last_run(trace, chunk), free) if chunk else {"verdict": "undetermined", "why": "no chunk named"}
     past = past_rows(path, kind)
     motion = read_repeat(motion, [r for r in past if r.get("chunk") == chunk and r["t"] >= since])
     row = {"t": time.time(), "kind": kind, "result": result, "chunk": chunk, "motion": motion, "model": None, "missing": []}
@@ -234,9 +284,12 @@ def main(argv=None) -> int:
     ap.add_argument("--images", nargs="*", type=Path, default=[])
     ap.add_argument("--url")
     ap.add_argument("--model", default="qwen3-vl:8b-instruct")
+    ap.add_argument("--free", type=Path, help="the baseline file: the trace's finished runs are added, then read against")
     args = ap.parse_args(argv)
     images = [base64.b64encode(p.read_bytes()).decode() for p in args.images]
-    row = explain(args.kind, args.result, read_trace(args.trace), images, ollama(args.url, args.model) if args.url else None, args.out, args.at)
+    trace = read_trace(args.trace)
+    row = explain(args.kind, args.result, trace, images, ollama(args.url, args.model) if args.url else None, args.out, args.at,
+                  free=learn(trace, args.free) if args.free else None)
     print(json.dumps({"why": row, "open": open_questions(args.out)}, indent=1, ensure_ascii=False))
     return 0
 

@@ -47,6 +47,33 @@ def test_a_stop_is_read_against_the_same_chunk_with_nothing_in_the_way(rows, ver
     assert w.read_motion(rows)["verdict"] == verdict
 
 
+HELD_LIFT = lift(2.3, sent_speed=3.58)  # 2026-11-07 02:15: a held lift stopped at 3.58 units/s, lag about 2.3
+RAN_ON = {"lift_pick": {"wrist_flex": [[3.80, 2.10, 1.0], [3.70, 2.20, 2.0]]}}  # held lifts that ran to their end
+
+
+@pytest.mark.parametrize("free, verdict", [
+    (RAN_ON, "too_fast"),  # as fast and as laggy with nothing in the way: the command outran the joint
+    ({"lift_pick": {"wrist_flex": [[3.80, 2.10, 1.0]]}}, "undetermined"),  # one run is not a baseline
+    ({"lift_pick": {"wrist_flex": [[3.0, 2.10, 1.0], [3.1, 2.2, 2.0]]}}, "undetermined"),  # slower runs say nothing of this speed
+    ({"lift_pick": {"wrist_flex": [[3.80, 1.0, 1.0], [3.70, 1.1, 2.0]]}}, "blocked"),  # free runs lag half as much
+    ({"lift_pick": {"elbow_flex": [[3.80, 2.10, 1.0], [3.70, 2.20, 2.0]]}}, "undetermined"),  # another joint's runs
+])
+def test_a_stop_is_read_against_the_finished_runs_of_its_chunk(free, verdict):
+    assert w.read_motion(HELD_LIFT, free)["verdict"] == verdict
+
+
+def test_finished_runs_are_learned_once_and_stops_are_not(tmp_path):
+    finished = lift(2.9, sent_speed=3.0)  # lag ends at 0.68: ran on
+    stopped = [{**r, "t": r["t"] + 10} for r in HELD_LIFT]  # lag ends at 2.3: a stop
+    rows = finished + [{"t": 102, "chunk": "park", "sent": [0] * 6, "present": [0] * 6}] + stopped
+    path = tmp_path / "free_lag.json"
+    free = w.learn(rows, path)
+    runs = free["lift_pick"]["wrist_flex"]
+    assert len(runs) == 1 and runs[0][0] == pytest.approx(3.0, abs=0.01) and runs[0][1] < 1.0
+    assert w.learn(rows, path)["lift_pick"]["wrist_flex"] == runs  # the same trace again adds nothing
+    assert free["descend_pick"]["wrist_flex"] == w.SEED["descend_pick"]["wrist_flex"]  # the seed stays
+
+
 def test_a_joint_that_nearly_stands_was_blocked():
     assert w.read_motion(lift(0.42, sent_speed=2.09))["verdict"] == "blocked"  # the slowed descent of 2026-11-06 23:30
 
