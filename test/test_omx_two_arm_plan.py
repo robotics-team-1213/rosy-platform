@@ -28,10 +28,12 @@ def reach(layout):
 
 
 def zones_never_double_held(rows):
-    held = [(z, r["start"], r["pick_end"]) for r in rows for z in r["zones"][0]] + [(z, r["pick_end"], r["end"]) for r in rows for z in r["zones"][1]]
-    for i, (z, s, e) in enumerate(held):
-        for z2, s2, e2 in held[i + 1:]:
-            assert not (z == z2 and s < e2 and s2 < e), (z, s, e, s2, e2)
+    """No zone is held by two moves at once: source zones through the carry, target zones from the lift."""
+    held = [(r["move"], z, r["start"], r["carry_end"]) for r in rows for z in r["zones"][0]] + \
+           [(r["move"], z, r["pick_end"], r["end"]) for r in rows for z in r["zones"][1]]
+    for i, (m, z, s, e) in enumerate(held):
+        for m2, z2, s2, e2 in held[i + 1:]:
+            assert m == m2 or not (z == z2 and s < e2 and s2 < e), (m, m2, z, s, e, s2, e2)
 
 
 def test_two_arms_take_turns_at_the_conveyor_and_finish_sooner(layout, reach):
@@ -100,3 +102,17 @@ def test_the_validator_gives_the_bottom_of_an_outer_row_to_the_far_arm(layout):
     full = {c: s for c, s, _ in layout.plan_order()}
     here = {c: s for c, s in full.items() if layout.sites[s]["row"] != 0}  # row 0 taken down to bar-2, the middle row standing three high
     assert plan.validator_can(layout)(full["bar-2"], "stand-1", here) == {"arm_b"}
+
+
+def test_a_concurrent_replay_carries_order_conveyor_and_zones(layout, reach):
+    tasks = plan.replay_tasks(layout, plan.compare(layout, "stack", reach))
+    steps = {s["id"]: s for s in tasks["stack-two-arm"]["steps"]}
+    belt = sorted(steps.values(), key=lambda s: int(s["id"][1:]))
+    assert all(b["after_pick"] == [a["id"]] for a, b in zip(belt, belt[1:]))  # the conveyor hands over one at a time
+    for s in steps.values():
+        layer = layout.sites[s["to"]]["layer"]
+        if layer:  # waits for the container it stands on
+            under = next(o for o in steps.values() if o["to"] == f"ship-{layout.sites[s['to']]['stack']}-l{layer - 1}")
+            assert under["id"] in s["after"]
+        assert len(s["zones"]) == 2 and s["zones"][0] and s["zones"][1]
+    assert {s["arm"] for s in steps.values()} == BOTH

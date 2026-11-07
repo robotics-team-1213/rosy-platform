@@ -308,8 +308,10 @@ class World:
         R = data.xmat[self.link5[arm]].reshape(3, 3)
         return data.xpos[self.link5[arm]] + R @ self.layout.sim_arms[arm].tcp, R
 
-    def contact_report(self, data, carried=None):
-        """Contacts of this instant as sets: arm-arm pairs, arm links (not pads) on containers or plates, pads on containers other than the carried one."""
+    def contact_report(self, data, carried=None, by_arm=False):
+        """Contacts of this instant as sets: arm-arm pairs, arm links (not pads) on containers or plates, pads on containers other than the
+        carried one(s) (`carried`: a name or a set). `by_arm` keys each pad contact by the arm prefix ("a_", other), for two arms at once."""
+        carried = {carried} if isinstance(carried, str) else set(carried or ())
         out = dict(arm_arm=set(), arm_other=set(), pad_neighbour=set())
         for c in data.contact[:data.ncon]:
             names = [self.geom_name[g] for g in (c.geom1, c.geom2)]
@@ -321,8 +323,8 @@ class World:
                 if arms[k] and not arms[1 - k]:
                     other = names[1 - k] or bodies[1 - k]
                     if "pad" in names[k] and other.startswith("bar-"):
-                        if other != carried:
-                            out["pad_neighbour"].add(other)
+                        if other not in carried:
+                            out["pad_neighbour"].add((arms[k], other) if by_arm else other)
                     else:
                         out["arm_other"].add((bodies[k], other))
         return out

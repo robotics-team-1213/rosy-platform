@@ -181,6 +181,8 @@ def validate(layout, task, data=None):
             roll = min((float(q[4]) for q in path), default=0.)
             records.append(dict(step=sid, arm=arm, joints_ok=not reach_problems, min_roll_rad=round(roll, 3), roll_below_floor=roll < layout.roll_floor, min_arm_gap_mm=None if gap is None else round(gap * 1000, 1), min_wrist_gap_mm=None if wrist is None or wrist > 1 else round(wrist * 1000, 1)))
         here[c] = b
+        if layout.sites[b]["kind"] == "outbound":  # Pinky takes it off the stand
+            here.pop(c)
     plates = {}
     for s in here.values():
         if layout.sites[s]["kind"] == "temp":

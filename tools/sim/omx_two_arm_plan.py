@@ -7,8 +7,8 @@ it does not say when each arm moves. This module does, the same way for simulati
 - able arms: the arms that can do the move in the state it runs in (validator: tool-down chain and wrist clearance, `validator_can`).
 - order: a move waits for every earlier move that touches the same stack, lane or stand (support and cover stay legal), and the conveyor
   hands over one container at a time, the next one arriving `belt_gap_s` after the previous pick.
-- zones (D-778 L1): a / b (each arm's side), mid (conveyor end, middle row, stern stand). The pick holds the source zone, the place holds
-  the target zone; reaching into the other arm's side, or carrying from one side to the other, also holds mid. Different zones may overlap in time, one zone holds one arm.
+- zones (D-778 L1): a / b (each arm's side), mid (conveyor end, middle row, stern stand). The pick and the carry hold the source zone,
+  the carry and the place the target zone (a carry from the conveyor sweeps the middle: two arms met there in MuJoCo); reaching into the other arm's side, or carrying from one side to the other, also holds mid. Different zones may overlap in time, one zone holds one arm.
 - arm choice: among the able arms, the one that can start first; Harbor's primary arm on a tie. One-arm mode has a single arm; a move
   it cannot do is not moved by it but counted as an extra transport (Pinky round trip or a person, SR-29) and done outside the cell.
 
@@ -145,8 +145,9 @@ def temp_spots(layout, occupied, avoid=frozenset()):
 
 
 def duration(layout, a, b):
+    """(pick, carry, place) seconds."""
     xy = lambda s: np.array(layout.sites[s]["xy"])  # noqa: E731
-    return TIMING["pick"], float(np.linalg.norm(xy(a) - xy(b))) / TIMING["speed"] + TIMING["place"]
+    return TIMING["pick"], float(np.linalg.norm(xy(a) - xy(b))) / TIMING["speed"], TIMING["place"]
 
 
 def schedule(layout, moves, arms, belt_arrivals=None):
@@ -166,7 +167,8 @@ def schedule(layout, moves, arms, belt_arrivals=None):
             extra.append(dict(move=k, cargo_id=m["cargo_id"], source=a, destination=b, why="no arm of this mode can do it"))
             done[k] = ready
             continue
-        t_pick, t_place = duration(layout, a, b)
+        t_pick, t_carry, t_place = duration(layout, a, b)
+        t_src, t_end = t_pick + t_carry, t_pick + t_carry + t_place  # the source zones stay held through the carry, the target zones from the lift
         best = None
         for arm in able:
             za, zb = zone(layout, a), zone(layout, b)
@@ -175,8 +177,8 @@ def schedule(layout, moves, arms, belt_arrivals=None):
             hold_b = {zb} | ({"mid"} if zb not in ("mid", SIDE[arm]) or cross else set())
             t = max(ready, free[arm])
             while True:
-                clash = [e for z in hold_a for s, e in busy.get(z, []) if s < t + t_pick and t < e] + \
-                        [e for z in hold_b for s, e in busy.get(z, []) if s < t + t_pick + t_place and t + t_pick < e]
+                clash = [e for z in hold_a for s, e in busy.get(z, []) if s < t + t_src and t < e] + \
+                        [e for z in hold_b for s, e in busy.get(z, []) if s < t + t_end and t + t_pick < e]
                 if not clash:
                     break
                 t = min(clash)
@@ -185,20 +187,21 @@ def schedule(layout, moves, arms, belt_arrivals=None):
                 best = (arm, t, hold_a, hold_b, primary)
         arm, t, hold_a, hold_b, _ = best
         for z in hold_a:
-            busy.setdefault(z, []).append((t, t + t_pick))
+            busy.setdefault(z, []).append((t, t + t_src))
         for z in hold_b:
-            busy.setdefault(z, []).append((t + t_pick, t + t_pick + t_place))
-        done[k] = t + t_pick + t_place
+            busy.setdefault(z, []).append((t + t_pick, t + t_end))
+        done[k] = t + t_end
         free[arm] = done[k] + TIMING["park"]
         if a == "belt":
             last_pick = t + t_pick
-        rows.append(dict(move=k, cargo_id=m["cargo_id"], source=a, destination=b, phase=m.get("phase_label", "장치"), arm=arm, request=m.get("request"),
-                         start=round(t, 2), pick_end=round(t + t_pick, 2), end=round(t + t_pick + t_place, 2),
+        rows.append(dict(move=k, cargo_id=m["cargo_id"], source=a, destination=b, phase=m.get("phase_label", "장치"), arm=arm,
+                         start=round(t, 2), pick_end=round(t + t_pick, 2), carry_end=round(t + t_src, 2), end=round(t + t_end, 2),
                          zones=[sorted(hold_a), sorted(hold_b)]))
     return rows, extra
 
 
 def done_keys(layout, m):
+    """What a move touches: its two stacks (or lane or stand) and its container; the conveyor end is ordered separately."""
     return {stack_key(layout, m["source"]), stack_key(layout, m["destination"]), m["cargo_id"]} - {"belt"}
 
 
@@ -245,7 +248,6 @@ def plan_outbound(layout, arms, can):
             continue
         avoid |= {m["destination"] for m in found if m["phase_label"] == "재취급"}  # the stand is shared in turn (same-site order)
         for m in found:
-            m["request"] = request["cargo_id"]
             state[m["cargo_id"]] = m["destination"]
         state.pop(request["cargo_id"])  # the stand is cleared by Pinky
         moves += found
@@ -275,21 +277,27 @@ def as_steps(rows):
 
 
 def replay_tasks(layout, result):
-    """Teacher tasks that replay each mode's assignment in start order. Extra transports and HOLDs are not cell moves and are left out:
-    the replay checks that every assigned arm can do its move in that state (sequentially; the overlap is the schedule's claim)."""
+    """One teacher task per scenario and mode (omx_two_arm_teacher.py run plan --plan FILE [--concurrent]). Steps come in start order
+    and carry what the concurrent run needs: `after` (earlier moves on the same stack, lane, stand or container), `after_pick` (the
+    previous conveyor pick) and `zones` (pick, place). Extra transports and HOLDs are not cell moves and are left out."""
     out = {}
     for mode, r in result.items():
-        tag = mode.replace(" ", "-")
-        if "stack" in r:
-            out[f"stack-{tag}"] = dict(name=f"stack {mode}", supply=[c for c, _, _ in layout.plan_order()], start={}, steps=as_steps(r["stack"]["timeline"]))
-        if "outbound" in r:  # one task per request: Pinky clears the stand between them, which is not a cell move
-            state = {c: s for c, s, _ in layout.plan_order()}
-            for request in dict.fromkeys(row["request"] for row in r["outbound"]["timeline"]):
-                rows = [row for row in r["outbound"]["timeline"] if row["request"] == request]
-                out[f"outbound-{tag}-{request}"] = dict(name=f"outbound {request} {mode}", supply=[], start=dict(state), steps=as_steps(rows))
-                for row in sorted(rows, key=lambda row: row["end"]):
-                    state[row["cargo_id"]] = row["destination"]
-                state.pop(request)
+        for name, v in r.items():
+            rows = sorted(v["timeline"], key=lambda row: row["move"])
+            belt = [row for row in rows if row["source"] == "belt"]
+            steps = []
+            for row in rows:
+                keys = done_keys(layout, row)
+                prev = [b for b in belt if b["move"] < row["move"]]
+                steps.append(dict(id=f"m{row['move']}", container=row["cargo_id"], to=row["destination"], arm=row["arm"], **{"from": row["source"]},
+                                  after=[f"m{o['move']}" for o in rows if o["move"] < row["move"] and keys & done_keys(layout, o)],
+                                  after_pick=[f"m{prev[-1]['move']}"] if row["source"] == "belt" and prev else [],
+                                  zones=row["zones"], planned_start_s=row["start"]))
+            steps.sort(key=lambda st: (st["planned_start_s"], st["id"]))
+            stack = name == "stack"
+            out[f"{name}-{mode.replace(' ', '-')}"] = dict(
+                name=f"{name} {mode}", supply=[c for c, _, _ in layout.plan_order()] if stack else [],
+                start={} if stack else {c: s for c, s, _ in layout.plan_order()}, steps=steps)
     return out
 
 
