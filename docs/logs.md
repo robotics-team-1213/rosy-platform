@@ -14522,6 +14522,13 @@ osy-d395-s1d\`.
 - gate 변화: 없음. 착지의 `close`가 이제 통과한 항목을 실제로 닫는다.
 - CE: 해당 없음 — 원인이 코드와 시험에 남는다.
 
+## 2026-11-07 · uncommitted · fix(model-pc): GPU 유휴 전원 차단을 끈다
+
+- 변경: 모델 PC에 `72-rosy-gpu-awake.rules`를 더해 GPU의 `power/control`을 `on`으로 둔다(기존 `71-nvidia.rules`는 `auto`).
+- 증거: 11-07 03:35 GPU가 깨어나지 못해 `Xid 79`가 났고 05:00 재부팅 뒤 6시간 돌아오지 못했다. 재부팅 정지와의 인과는 증명되지 않았다. 규칙은 모델 PC에 직접 설치해 `power/control=on`을 확인했다.
+- gate 변화: 없음. 다음 재부팅 뒤 값 유지는 아직 확인 전이다.
+- CE: 미해결 — 멈춘 원인은 가설로 남고 기록은 작업 기록에 있다.
+
 ## 2026-11-07 · uncommitted · fix(remote): 재부팅 경고 2분 동안 시험 PC가 새 작업을 받지 않는다
 
 - 변경: `host_probe.REBOOT_CHECK`가 `is-active -q`의 종료 코드를 읽었다. `rosy-nightly-reboot.service`는 oneshot이라 경고 2분 내내 `activating`이고 종료 코드는 3이어서, D-889 추가 13의 "서비스가 도는 동안 받지 않는다"가 처음부터 동작하지 않았다. 출력 문자열로 판정한다.

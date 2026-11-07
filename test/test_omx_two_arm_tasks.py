@@ -116,7 +116,7 @@ def test_temporary_plate_capacity_is_enforced(layout, data):
 
 
 def test_an_unreachable_site_is_refused_not_moved(layout, data):
-    far = sites.Layout(temp_radius_m=.45)  # plate centre 450 mm from the arm: beyond any reach
+    far = sites.Layout(temp_lanes="fan", temp_radius_m=.45)  # plate centre 450 mm from the arm: beyond any reach
     reason = refused(far, tasks.get_task(far, "rehandle", data))
     assert "cannot reach" in reason and "cannot reach" in reason
 
@@ -141,7 +141,26 @@ def test_arm_clearance_catches_two_arms_in_the_same_place(layout):
     assert home_gap > 2 * tasks.ARM_RADIUS + tasks.ARM_MARGIN  # the two parked arms are apart
 
 
-def test_temp_lanes_follow_the_scad_fan_and_point_at_the_arm(layout):
+def top_camera_pixels(layout, xy):
+    cam = layout.fixture["real_cameras"]["top"]
+    eye, focus, up = (np.array(cam[key], float) for key in ("eye", "focus", "up"))
+    forward = (focus - eye) / np.linalg.norm(focus - eye)
+    right = np.cross(forward, up)
+    right /= np.linalg.norm(right)
+    p = np.array([*xy, layout.deck_z]) - eye
+    return 320 + cam["f_px"] * (p @ right) / (p @ forward), 240 - cam["f_px"] * (p @ np.cross(right, forward)) / (p @ forward)
+
+
+def test_the_plates_stand_where_the_top_camera_saw_them(layout):
+    """A run still passed 9/9 with the plates 57 mm off: geometry alone cannot catch this, so hold the photo's pixels."""
+    assert layout.choices["temp_lanes"] == "photo-20261107"
+    seen = {"tmp-a-1": (600, 422), "tmp-a-2": (546, 431), "tmp-b-1": (207, 388), "tmp-b-2": (151, 388), "tmp-b-3": (96, 378)}
+    for site, pixel in seen.items():
+        assert np.hypot(*np.subtract(top_camera_pixels(layout, layout.sites[site]["xy"]), pixel)) < 5, site
+
+
+def test_temp_lanes_follow_the_scad_fan_and_point_at_the_arm():
+    layout = sites.Layout(temp_lanes="fan")
     width, length, flare, fan, angles = sites.lane_geometry(.214)
     assert width == pytest.approx(.0308) and math.degrees(fan) == pytest.approx(15.6, abs=.3) and angles[1] == 0
     for tag, arm in (("a", "arm_a"), ("b", "arm_b")):
@@ -184,3 +203,8 @@ def test_strict_pose_judge_names_each_limit(layout, data):
     assert at()["ok"] and at(dx=.002)["ok"]
     assert not at(dx=.005)["ok"] and not at(dz=.004)["ok"] and not at(yaw=math.radians(8))["ok"] and not at(tilt=6)["ok"]
     assert at(yaw=math.pi)["ok"]  # a container turned 180 deg sits the same
+
+
+def test_a_run_records_the_cell_s_four_cameras():
+    assert teacher.RECORDED == ("top", "side", "a_wrist", "b_wrist")  # D-960; the overview is not a camera the cell has
+    assert sites.CHOICES["wrist_camera"] == "stock", "a run without wrist cameras would not match the cell"

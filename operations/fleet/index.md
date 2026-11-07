@@ -105,8 +105,8 @@
 
 ## 최근 기록
 
+- 2026-11-07 · uncommitted · feat(fleet): 자동 위치를 로봇별로 켜면 trip 앵커로 쓴다 (D-989 7항)
+- 2026-11-07 · uncommitted · feat(fleet): LED·카메라·LiDAR 자동 위치 찾기 (D-989)
 - 2026-11-07 · uncommitted · 로그인 콜백 실패가 JSON 막다른 길이 아니다
 - 2026-11-07 · uncommitted · 로그인 복귀가 설치·보정 하위 화면을 유지
 - 2026-11-07 · 7c042262fb · fix(fleet): a stale blip is read again before a trip is refused
-- 2026-11-07 · uncommitted · fix(fleet): 독립 검토 반영 — 충전 복귀·재시도·읽기 대기·칸 dwell/unknown
-- 2026-11-07 · uncommitted · fix(fleet): 운행 시작 배터리 확인 · 충전 칸 점유 유지
