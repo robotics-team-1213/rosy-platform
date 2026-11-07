@@ -14556,3 +14556,10 @@ osy-d395-s1d\`.
 - 증거: 각 경로의 실제 존재와 owner를 소스·AGENTS에서 확인했고 `test/architecture/test_common_services.py`가 7개 행의 경로 존재·목표 표시를 검사한다. 변이(빠진 경로·목표 표시 제거)로 시험이 실패하는 것을 원격으로 확인했다.
 - gate 변화: 없음. 코드 추출·알림 서비스 신설·배포·실물 시험은 이 변경의 범위가 아니다.
 - CE: 해당 없음 — 문서와 구조 시험에 근거가 남는다.
+
+## 2026-11-08 · uncommitted · docs(reference): 검토 반영 — 백업 owner 경로와 알림 현재 owner 검사
+
+- 변경: 백업·복원 행에 Account 백업 owner(`deploy/site/compose.account-backup.yaml`)를 넣고 `site_db.py`를 공용 스크립트(기본은 Fleet data volume, account 백업도 같은 스크립트를 자기 DB로 실행)로 정확히 적었다. 현재 소스 열이 기능별 대표 경로만 적는다는 것을 문단에 명시했고, 시험이 알림 행의 현재 owner(Fleet `incidents/notifications.py`)를 검사한다.
+- 증거: `Dockerfile.account`·`Dockerfile.fleet`이 같은 `deploy/site/site_db.py`를 싣고 account-backup·account-backup-check 서비스가 이를 account DB로 실행한다. 변이(알림 행에서 현재 owner 경로 제거)로 새 검사가 실패하는 것을 원격으로 확인했다.
+- gate 변화: 없음. 백업·전환 구현은 바꾸지 않았다.
+- CE: 해당 없음 — 문서와 구조 시험에 근거가 남는다.

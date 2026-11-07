@@ -41,7 +41,7 @@ Account의 로그인·프로필·관리 화면 소스는 `applications/fleet/web
 
 ## 기능별 공통화 결정
 
-아래는 [D-997](../adr/D-997-common-function-ownership-and-failure-contracts.md)의 확정 설계다. 위 실행 서비스·Compose 목록과 달리 구현·배포 목록이 아니다. 기존 owner·프로세스·DB·폴더·자격·API는 실제 전환 검증 전까지 유지한다. 현재 소스는 이 저장소의 실제 경로이고 `(목표, 미생성)`은 D-997이 정한 전환 뒤 경로가 아직 만들어지지 않았다는 뜻이다. `test/architecture/test_common_services.py`가 경로 존재와 목표 표시를 확인한다.
+아래는 [D-997](../adr/D-997-common-function-ownership-and-failure-contracts.md)의 확정 설계다. 위 실행 서비스·Compose 목록과 달리 구현·배포 목록이 아니다. 기존 owner·프로세스·DB·폴더·자격·API는 실제 전환 검증 전까지 유지한다. 현재 소스는 이 저장소의 실제 경로를 기능별 대표로 적는다. `(목표, 미생성)`은 D-997이 정한 전환 뒤 경로가 아직 만들어지지 않았다는 뜻이다. `test/architecture/test_common_services.py`가 경로 존재와 목표 표시를 확인한다.
 
 | 기능 | 확정한 형태 | 현재 소스 | 책임 경계 |
 |---|---|---|---|
@@ -50,7 +50,7 @@ Account의 로그인·프로필·관리 화면 소스는 `applications/fleet/web
 | 설정 | 공용 검증/transaction 코드 + owner 저장·적용 | `contracts/foundation/core_common/config.py`, `contracts/foundation/core_common/config_transaction.py`(공용 코드) | 중앙 Config DB·쓰기 서비스 신설 없음 |
 | 알림 | 독립 알림 전달 서비스로 추출하는 목표 | `operations/fleet/fleet/incidents/notifications.py`(현재 발송 owner: Fleet), `operations/notifications`(목표, 미생성) | 현재 발송은 Fleet 소유. 첫 생산자는 Fleet 사건·Harbor 업무 HOLD. 원본 outbox·발송 직전 owner 확인·중복·UNKNOWN·단일 발송자 검증 뒤 전환 |
 | 감사 | owner 원본 + 공통 사건/수집·조회 | `operations/account/rosy_account/audit.py`(Account 원본 감사) | 중앙 Audit DB를 모든 쓰기의 필수 경로로 만들지 않음 |
-| 백업·복원 | 공통 도구·검증/receipt + owner 실행 어댑터 | `deploy/site/site_db.py`(공통 도구; account·fleet 백업 compose가 owner별로 실행) | 모든 볼륨·키·임의 경로를 가진 중앙 복구 서비스 신설 없음 |
+| 백업·복원 | 공통 도구·검증/receipt + owner 실행 어댑터 | `deploy/site/site_db.py`(공용 스크립트, 기본은 Fleet data volume; account 백업도 같은 스크립트를 자기 DB로 실행), `deploy/site/compose.account-backup.yaml`(Account 백업·검증 서비스 owner) | 모든 볼륨·키·임의 경로를 가진 중앙 복구 서비스 신설 없음 |
 | 업데이트 | 공통 상태·검증 규약 + 배포 계열별 실행 | `deploy/site/rosy_site_autoupdate.py`(site), `deploy/robot/pinky_pro/release/updater.py`(Pinky payload), `deploy/robot/omx/omx_autoupdate.py`(OMX) | 서명·hold·활성화·재기동·rollback 권한은 기존 owner |
 
 Monitoring은 허용된 상태·읽기 사본, Media는 영상 세션·위임·프로세스 관리를 유지한다. Fleet·World·Decision·CORE·OMX와 Harbor의 원장·판단·실행은 공통화 대상이 아니다. 기능별 실패·복구·전환·검증 조건은 D-997이 정본이다.

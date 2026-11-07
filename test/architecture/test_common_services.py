@@ -70,4 +70,5 @@ def test_d997_function_rows_pin_existing_sources():
 
 def test_notification_delivery_target_is_marked_not_created():
     sources = next(row[2] for row in _rows('기능별 공통화 결정') if row[0] == '알림')
+    assert '`operations/fleet/fleet/incidents/notifications.py`' in sources
     assert f'`operations/notifications`{TARGET_MARK}' in sources
