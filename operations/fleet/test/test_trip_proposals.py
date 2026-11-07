@@ -185,3 +185,26 @@ def test_admission_makes_the_same_trip_ledger_job_as_the_operator_path(tmp_path)
                                    "event_type='CELL_JOB_ADMITTED'", (job["mission_id"],)).fetchone()[0]
     assert actor == "operator-2"
     assert rig.jobs.rows.read("harbor", request_key="k")["mission_id"] == job["mission_id"]
+
+
+def test_object_ref_is_carried_opaquely_bound_by_the_digest_and_survives_admission(rig):
+    # D-996 5: the app's cargo code rides on the proposal unread; omitting it keeps the old response bytes
+    client, _, made = rig
+    plain = propose(rig, request_key="harbor/plain").json()["proposal"]
+    assert "object_ref" not in plain
+    first = propose(rig, request_key="harbor/cargo", object_ref="CNTR-0001")
+    assert first.status_code == 200
+    proposal = first.json()["proposal"]
+    assert proposal["object_ref"] == "CNTR-0001"
+    assert propose(rig, request_key="harbor/cargo", object_ref="CNTR-0001").json() == first.json()
+    assert propose(rig, request_key="harbor/cargo", object_ref="CNTR-0002").status_code == 409
+    assert propose(rig, request_key="harbor/cargo").status_code == 409
+    for bad in (" CNTR", "x" * 129, "a\u0001b", ""):
+        assert propose(rig, request_key="harbor/bad", object_ref=bad).status_code == 422
+    same_body = propose(rig, request_key="harbor/cargo-b", object_ref="CNTR-0003").json()["proposal"]
+    assert same_body["request_digest"] == plain["request_digest"]  # the trip job's body digest is unchanged
+    admitted = client.post(PATH + "/" + proposal["proposal_id"] + "/admit", headers=headers("op1"),
+                           json=args(rig, proposal))
+    assert admitted.status_code == 200
+    assert admitted.json()["proposal"]["object_ref"] == "CNTR-0001"
+    assert admitted.json()["proposal"]["status"] == "ADMITTED"

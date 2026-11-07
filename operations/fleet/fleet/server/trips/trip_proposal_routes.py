@@ -47,7 +47,7 @@ def install_trip_proposal_routes(app, *, cell_job_store, jobs, check, require_pr
             check(body.candidate_robot_ids, [step.model_dump(mode="json") for step in body.steps])
             steps = [step.model_dump(mode="json") for step in body.steps]
             return await asyncio.to_thread(store.create, principal.principal_id, body.request_key,
-                                           body.candidate_robot_ids, steps)
+                                           body.candidate_robot_ids, steps, body.object_ref)
         return await call(run)
 
     @app.get(PATH, response_model=TripProposalResponse, tags=["fleet-work"])

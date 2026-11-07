@@ -12,6 +12,8 @@ _SCHEMA = """CREATE TABLE IF NOT EXISTS fleet_trip_proposals (
     request_digest TEXT NOT NULL, body_json TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'PROPOSED',
     dispatch_generation INTEGER, approved_by TEXT, mission_id TEXT, created_at TEXT NOT NULL,
     UNIQUE (principal_id, request_key))"""
+#: D-996 5: the app's opaque cargo code sits beside the body, so the candidate path's body digest stays the same bytes
+_OBJECT_REF = "ALTER TABLE fleet_trip_proposals ADD COLUMN object_ref TEXT"
 
 
 class TripProposalStore:
@@ -19,6 +21,8 @@ class TripProposalStore:
         self.store = store
         with closing(store._connect()) as connection:
             connection.execute(_SCHEMA)
+            if "object_ref" not in {row[1] for row in connection.execute("PRAGMA table_info(fleet_trip_proposals)")}:
+                connection.execute(_OBJECT_REF)
             connection.commit()
 
     @staticmethod
@@ -28,6 +32,8 @@ class TripProposalStore:
             raise ValueError("trip proposal body is invalid")
         document = {"proposal_id": row["proposal_id"], "principal_id": row["principal_id"],
                     "request_key": row["request_key"], **body}
+        if row["object_ref"] is not None:  # the admitting operator's digest binds the cargo code too
+            document["object_ref"] = row["object_ref"]
         if sha256(_json(body).encode()).hexdigest() != row["request_digest"]:
             raise ValueError("trip proposal does not match its digest")
         if row["status"] == "ADMITTED":
@@ -56,9 +62,10 @@ class TripProposalStore:
                 "proposal_digest": sha256(_json(document).encode()).hexdigest(),
                 "candidate_robot_ids": body["candidates"], "steps": body["steps"], "status": row["status"],
                 "dispatch_generation": row["dispatch_generation"], "approved_by": row["approved_by"],
-                "mission_id": row["mission_id"]}
+                "mission_id": row["mission_id"], "object_ref": row["object_ref"]}
 
-    def create(self, principal_id: str, request_key: str, candidates: list, steps: list) -> dict:
+    def create(self, principal_id: str, request_key: str, candidates: list, steps: list,
+               object_ref: str | None = None) -> dict:
         body = {"candidates": candidates, "steps": steps}  # same bytes the candidate path digests
         digest = sha256(_json(body).encode()).hexdigest()
         with closing(self.store._connect()) as connection:
@@ -67,11 +74,12 @@ class TripProposalStore:
                                        (principal_id, request_key)).fetchone()
             if prior is None:
                 connection.execute("INSERT INTO fleet_trip_proposals (proposal_id, principal_id, request_key, "
-                                   "request_digest, body_json, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-                                   ("trip-prop-" + uuid4().hex, principal_id, request_key, digest, _json(body), _now()))
+                                   "request_digest, body_json, created_at, object_ref) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                                   ("trip-prop-" + uuid4().hex, principal_id, request_key, digest, _json(body), _now(),
+                                    object_ref))
                 prior = connection.execute("SELECT * FROM fleet_trip_proposals WHERE principal_id=? AND request_key=?",
                                            (principal_id, request_key)).fetchone()
-            elif prior["request_digest"] != digest:
+            elif prior["request_digest"] != digest or prior["object_ref"] != object_ref:
                 raise MissionConflict("trip proposal key was reused with a different request")
             view = self._view(prior, connection)
             connection.commit()

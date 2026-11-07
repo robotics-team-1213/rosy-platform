@@ -5,9 +5,13 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.365
+**Version:** v1.376
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.376 항만 사건과 이송 제안의 `object_ref` (D-996)
+
+- `POST /api/fleet/trip-proposals`: 선택 필드 `object_ref`(앞뒤 공백·제어 문자 없는 1~128자)를 받는다. 업무 앱의 화물 코드이고 ROSY는 해석하지 않는다. 같은 `request_key`로 다른 `object_ref`(또는 없음)를 보내면 409다. 값이 있으면 `TripProposalSnapshot.object_ref`로 돌려주고 `proposal_digest`에 들어간다. 없으면 응답 바이트와 digest는 전과 같다. `request_digest`(이송 job 본문)는 바뀌지 않는다. additive다.
 
 ### v1.365 운행 시작의 배터리 확인과 충전 칸 점유 불명
 
@@ -170,7 +174,7 @@ v1.292 limits. No cargo, process or business field exists on the wire.
 
 | Method/path | Input | Access/result |
 |---|---|---|
-| POST /api/fleet/trip-proposals | TripProposalCreate | existing proposer role (operator or service); 200 TripProposalResponse |
+| POST /api/fleet/trip-proposals | TripProposalCreate (optional opaque `object_ref` ≤128, v1.376) | existing proposer role (operator or service); 200 TripProposalResponse |
 | GET /api/fleet/trip-proposals?request_key=... | caller-scoped key | viewer authentication; own record only |
 | GET /api/fleet/trip-proposals/{proposal_id} | proposal ID | creator or a named site operator |
 | POST /api/fleet/trip-proposals/{proposal_id}/admit | TripProposalAdmit: expected_proposal_digest, expected_generation | named operator different from the proposer; 200 |
