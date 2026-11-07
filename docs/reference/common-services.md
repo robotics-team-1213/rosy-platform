@@ -15,7 +15,9 @@
 | Media | `operations/site_ui/media` | `media`, `media-gateway` | 영상 세션 권한, 시청 요청, 미디어 프로세스 관리 | Fleet 영상 중계, 로봇 제어, CORE 장기 자격 수신 | [D-789](../adr/D-789-six-robot-webrtc-camera-transport.md) | D-789, D-801 |
 | 현장 입구 | `deploy/site` | `proxy` | TLS 입구와 경로 전달 | 업무 판단, 계정 원장 | [site 배포 안내](../../deploy/site/README.md) | D-301, D-441 |
 
-Account의 로그인·프로필·관리 화면 소스는 `applications/fleet/web`에, Monitoring 화면 소스는 `applications/monitoring`에 있다.
+Account의 로그인·프로필·관리 화면 소스는 `applications/fleet/web`에, Monitoring 화면 소스는 `applications/monitoring`에 있다. 로봇 쪽 영상 송출 프로세스는 Media와 별도 패키지인 `middleware/media`다(D-791).
+
+인증은 서비스마다 다르다. Account 로그인을 쓰지 않는 Monitoring 화면은 사람이 Monitoring 자체 읽기 키를 넣어 조회하고, Media는 짧은 미디어 위임을 검증한다.
 
 ## 공용 코드
 
