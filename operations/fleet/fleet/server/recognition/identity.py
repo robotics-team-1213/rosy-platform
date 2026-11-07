@@ -219,12 +219,9 @@ class IdentityService:
         await self.poll_lamps()
         if self.tracking is not None and self.tracking.auto_locate is not None:
             try:
-                try:
                 await self.tracking.auto_locate.tick()  # D-989: this loop is its clock
-            except Exception:  # never this loop's blink; an unfed anchor ages out at max_anchor_age_s
+            except Exception:  # it must not stop lamp polling; an unfed anchor ages out at max_anchor_age_s
                 logger.exception("auto locate tick failed")
-            except Exception:  # observation only: it must not stop lamp polling or the automatic requests
-                pass
         if not self.config.auto_request or self.tracking is None:
             return []
         now = self._clock()
