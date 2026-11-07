@@ -156,3 +156,14 @@ def test_new_work_explains_missing_kinds_without_redirecting(account_page):
     expect(page.locator('#work-new-move-item')).to_be_hidden()
     expect(page.locator('#work-new-cell-item')).to_be_hidden()
     expect(page).to_have_url(origin + target)
+
+
+def test_back_after_login_does_not_return_to_the_login_page(account_page):
+    page, origin = account_page
+    page.goto(origin + '/console/policy')
+    page.goto(origin + '/console/login?return=%2Fconsole%2Fpolicy')
+    _credentials(page)
+    page.locator('[data-login=submit]').click()
+    expect(page).to_have_url(origin + '/console/policy')
+    # The login page replaced itself: blank, policy, destination (4 without replace).
+    assert page.evaluate('history.length') == 3
