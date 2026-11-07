@@ -95,6 +95,15 @@ class HubLinkMixin:
             raise refused
 
     async def link_hub(self, robot_id: str, *, principal_id: str) -> dict:
+        row = await self._link_hub(robot_id, principal_id=principal_id)
+        if self._account_link is None:
+            return row
+        # D-992: after the hub lock, so a hung Account can never delay an unlink. Never undoes the link above.
+        state = await self._account_link.provision(robot_id, self._console()._client(robot_id))
+        self._store.audit(action="account_link", outcome=state[:64], principal_id=principal_id, target=robot_id)
+        return next(item for item in self.listing()["robots"] if item["robot_id"] == robot_id)
+
+    async def _link_hub(self, robot_id: str, *, principal_id: str) -> dict:
         """Issue (or rotate) the robot's hub credential and deliver it once over TLS.
 
         Only the SHA-256 digest is stored. It is stored and applied before delivery so the
@@ -145,9 +154,6 @@ class HubLinkMixin:
             self._hub_linked_at[robot_id] = self._clock()
             self._store.audit(action="hub_link", outcome="rotated" if old[0] else "linked",
                               principal_id=principal_id, target=robot_id)
-            if self._account_link is not None:  # D-992: never undoes the hub link above
-                state = await self._account_link.provision(robot_id, client)
-                self._store.audit(action="account_link", outcome=state[:64], principal_id=principal_id, target=robot_id)
             return next(item for item in self.listing()["robots"] if item["robot_id"] == robot_id)
 
     async def _clear_robot_link(self, robot_id: str) -> bool:

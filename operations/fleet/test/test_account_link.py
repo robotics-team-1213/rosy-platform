@@ -36,6 +36,7 @@ def account(tmp_path):
 def test_the_route_needs_the_registrar_key_and_is_closed_without_one(account, tmp_path):
     authority, client = account
     assert client.put(PATH, json=DEVICE).status_code == 403
+    assert client.put(PATH, content=b'not json').status_code == 403, 'nothing is parsed before the key'
     assert client.put(PATH, json=DEVICE, headers={'Authorization': 'Bearer wrong'}).status_code == 403
     assert client.put(PATH, json=DEVICE, headers={'Authorization': 'Basic ' + TOKEN}).status_code == 403
     assert 'robot-rosy_09' not in authority.clients
@@ -55,6 +56,8 @@ def test_it_writes_only_this_robots_row(account):
     assert client.put(PATH, json={**DEVICE, 'callback': ROBOT_BASE + '/steal'}, headers=AUTH).status_code == 422
     assert client.put(PATH, json={**DEVICE, 'callback': 'http://rosy-09.local/api/account/callback'}, headers=AUTH).status_code == 422
     assert client.put('/api/fleet/auth/device-clients/bad%20id', json=DEVICE, headers=AUTH).status_code == 422
+    assert client.put(PATH, content=b'not json', headers=AUTH).status_code == 422
+    assert client.put(PATH, content=b'{' + b' ' * 9000 + b'}', headers=AUTH).status_code == 422
     with authority.transaction() as db:
         rows = db.execute('SELECT * FROM account_client_audit').fetchall()
     assert [(r['actor_account_id'], r['client_id'], r['following_revision']) for r in rows] == [('device-registrar', 'robot-rosy_09', 1)]
@@ -63,9 +66,11 @@ def test_it_writes_only_this_robots_row(account):
 def test_a_person_registered_row_with_that_name_is_refused(account):
     authority, client = account
     registry = ClientRegistry(Ledger(authority), lambda: 1000)
-    registry.create('manager', client_id='robot-rosy_09', redirect_uris=[CALLBACK], resources=['site:one'])
+    registry.create('manager', client_id='robot-rosy_09', redirect_uris=[CALLBACK], resources=['robot:rosy_09'])
+    assert client.put(PATH, json=DEVICE, headers=AUTH).status_code == 409, 'same resource, a person\'s own callback'
+    assert authority.clients['robot-rosy_09']['redirect_uris'] == [CALLBACK]
+    registry.update('manager', 'robot-rosy_09', revision=1, resources=['site:one'])
     assert client.put(PATH, json=DEVICE, headers=AUTH).status_code == 409
-    assert authority.clients['robot-rosy_09']['resources'] == ['site:one']
 
 
 def test_repeating_is_a_no_op_and_an_administrators_stop_survives(account):
@@ -141,6 +146,19 @@ def test_a_failed_account_link_keeps_the_hub_link_and_is_visible(tmp_path):
     assert row['hub_linked'] is True and len(robot.puts) == 1, 'people\'s login never undoes the robot link'
     assert store.get('rosy_09')['hub_digest']
     assert row['account_link'] in {'robot_unsupported', 'account_unreachable'}
+
+
+def test_a_hung_account_never_holds_the_hub_lock(tmp_path):
+    service, _, console, _ = enrolled(tmp_path)
+    seen = {}
+    class Probe:
+        states = {}
+        async def provision(self, robot_id, client):
+            seen['locked'] = service._hub_lock(robot_id).locked()
+            return 'linked'
+    service._account_link = Probe()
+    asyncio.run(service.link_hub('rosy_09', principal_id='alice'))
+    assert seen == {'locked': False}
 
 
 def test_load_reads_a_private_token_file(tmp_path):

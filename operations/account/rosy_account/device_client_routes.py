@@ -5,7 +5,7 @@ import json
 import re
 from urllib.parse import urlsplit
 
-from fastapi import Body, HTTPException, Request
+from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse
 from starlette.concurrency import run_in_threadpool
 
@@ -31,7 +31,9 @@ def register_device(authority, robot_id, *, callback, home_url, label, clock):
             before = None
         else:
             before = public(row)
-            if before['resources'] != resources:
+            # A person's row keeps its own callback; only a CORE callback row can be this robot's.
+            if before['resources'] != resources or any(
+                    urlsplit(uri).path != CALLBACK_PATH for uri in before['redirect_uris']):
                 raise PermissionError('that client is not this robot')
             if (before['redirect_uris'], before['label'], before['home_url']) == ([callback], label, home_url):
                 return before
@@ -46,13 +48,19 @@ def register_device(authority, robot_id, *, callback, home_url, label, clock):
 
 def install_device_client_routes(app, authority, *, registrar_token_sha256, clock):
     @app.put('/api/fleet/auth/device-clients/{robot_id}', include_in_schema=False)
-    async def device_client(robot_id: str, request: Request, payload: dict = Body(...)):
+    async def device_client(robot_id: str, request: Request):
         values = request.headers.getlist('authorization')
         supplied = values[0][7:] if len(values) == 1 and values[0].startswith('Bearer ') else ''
         digest = hashlib.sha256(supplied.encode('utf-8')).hexdigest()
-        if not registrar_token_sha256 or not hmac.compare_digest(digest, registrar_token_sha256):
+        if not supplied or not registrar_token_sha256 or not hmac.compare_digest(digest, registrar_token_sha256):
             raise HTTPException(403, detail={'code': 'REGISTRAR_REQUIRED'}, headers=NO_STORE)
-        if not ROBOT.fullmatch(robot_id) or set(payload) != {'callback', 'home_url', 'label'}:
+        # Parsed only after the key: an anonymous caller learns nothing about the shape.
+        body = await request.body()
+        try:
+            payload = json.loads(body) if len(body) <= 8192 else None
+        except ValueError:
+            payload = None
+        if not isinstance(payload, dict) or not ROBOT.fullmatch(robot_id) or set(payload) != {'callback', 'home_url', 'label'}:
             raise HTTPException(422, detail={'code': 'INVALID_REQUEST'}, headers=NO_STORE)
         try:
             row = await run_in_threadpool(register_device, authority, robot_id, clock=clock, **payload)

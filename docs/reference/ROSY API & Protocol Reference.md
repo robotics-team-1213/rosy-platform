@@ -11,7 +11,7 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 
 ### v1.373 로봇이 Account 수신 설정을 TLS로 받는다 (D-992)
 
-`GET`/`PUT /api/v1/account/receiver`와 capabilities의 `account_receiver_provisioning`을 더했다. 기존 필드와 흐름은 바뀌지 않는다.
+`GET`/`PUT`/`DELETE /api/v1/account/receiver`와 capabilities의 `account_receiver_provisioning`을 더했다. 기존 필드와 흐름은 바뀌지 않는다.
 
 ### v1.363 관제의 고정 수동 모드 의도
 
@@ -1839,6 +1839,7 @@ Fleet 의 로봇 토큰은 operator 토큰이다(`robots.yaml` 의 `token`, 또�
 | `CALIBRATION_ACTIVE` | 409 | 다른 토큰이 보정 세션 lease 를 쥐고 있어 구동 쓰기를 거부함: `teleop`, `/mode`(IDLE 제외), `line-follow/mode`(OFF 제외)·`hold`, `navigation/goal`·`home`, `docking/dock`·`undock`, `swarm/follow`. 멈추기만 하는 것(`safety/stop`, `/mode` IDLE, line-follow OFF, 각종 cancel)은 막지 않는다. `detail: {session}` 은 `GET /calibration/session` 의 세션과 같다. `POST /calibration/session` 이 이미 세션이 있을 때도 같은 코드 (D-321 부록, v1.68). D-395 경로 `POST /localization/decision`·`suspect` 에서는 같은 코드를 **423** 으로 낸다(v1.72, 계약 `docs/plans/2026-10-01-d395-phase2-interfaces.md` §2) | 로봇 |
 | `TRIP_LEASED` | 409 | D-541 (v1.157): Fleet trip lease 가 살아 있어 **주인 아닌 토큰**의 구동·모드 쓰기를 거부함. `require_calibration_owner` 를 지나는 모든 쓰기다: `teleop`, `/mode`(IDLE 제외), `line-follow/mode`(OFF 제외)·`hold`·`junction`·`authority`, 막힘 결정 중 움직이는 답(RESUME·BACK_AND_RETRY·MANUAL·YIELD; `stuck_resolver` 토큰도 주인이 아니다), `navigation/goal`·`home`, `localization/initialpose`, `slam/start`·`stop`·`reset`, `docking/dock`·`undock`, `swarm/follow`, `PUT /safety/limits`, `POST /power/mode`, host install·rollback·reboot(`override_calibration` 없이), `/api/v1/do` 의 같은 동사, `POST /localization/mission`. D-395 경로 `POST /localization/decision`·`suspect` 에서는 `CALIBRATION_ACTIVE` 와 같이 **423** 으로 낸다. `POST /calibration/session` 은 lease 가 있으면 토큰과 관계없이 이 코드다. `PUT /trip-lease` 는 다른 `lease_id`(같은 토큰이어도)나 다른 토큰일 때 이 코드다. `detail: {lease_id, trip_id, holder, operator_name, since, expires_in_s}`. 멈춤(`safety/stop`, `/mode` IDLE, `navigation/cancel`, line-follow OFF, `swarm/cancel`, docking cancel, 막힘 WAIT·ABORT)은 막지 않는다 | 로봇 |
 | `GOAL_LEASE_NOT_ACTIVE` | 409 | D-550 10 (v1.160): `POST /navigation/goal/lease` 의 `correlation_id` 가 활성 임대 목표가 아님(취소·도착·실패·만료·교체, 또는 임대 없이 연 목표). 갱신은 목표를 되살리지 않는다 | 로봇 |
+| `ACCOUNT_TRUST_UNPINNED` | 403 | D-992 (v1.373): 사이트 토큰이 `auth.account_trust`에 없는 발급자나 키를 `PUT /api/v1/account/receiver`로 보냄. |
 | `ACCOUNT_RECEIVER_MANAGED` | 409 | D-992 (v1.373): 운영자가 `auth.account_client_file`을 정한 로봇에 `PUT /api/v1/account/receiver`를 부름. |
 | `FLEET_GOAL_ACTIVE` | 409 | D-555 (v1.163): `PUT`/`DELETE /api/v1/fleet/link` 를 Fleet 목표(`nav.fleet_goal()`)가 진행 중일 때 부름. relink 가 링크를 끊어 SAF-003 을 무장시키지 않도록 목표가 끝난 뒤 다시 한다 | 로봇 |
 | `FLEET_LINK_CONFIG_INVALID` | 409 | D-555 (v1.163): 기동 때 잘못된 `fleet.heartbeat_reply_timeout_s` 또는 SAF-003 시간을 기본값으로 대신한 CORE 에 `PUT /api/v1/fleet/link`. 설정을 고치고 CORE 를 다시 띄운다 | 로봇 |
@@ -2050,7 +2051,8 @@ config `control.sensor_adapter.mode` 와 같은 문자열이다(D-400). 일반 �
 | DELETE | `/api/v1/trip-lease/{lease_id}` | Operator | D-541 1 (v1.157) — 주인 토큰의 정상 끝(`released`). 로봇을 멈추지 않는다(Fleet 이 먼저 `stop`/취소를 보낸다). 200 `{trip_lease_ended}`. 다른 토큰 403 `FORBIDDEN`. 없거나 끝난 lease 404 `NOT_FOUND`, 바로 앞에 끝난 그 lease 면 `detail.ended {lease_id, reason, by}` — Fleet renew 가 404 를 받았을 때 끝 이유를 읽는 자리다 |
 | POST | `/api/v1/trip-lease/takeover` | Operator | D-541 4 (v1.157) — `{lease_id, reason? (≤ 200자)}`. 주인 아닌 토큰의 명시적 넘겨받기: 같은 처리 안에서 lease 를 끝내고(`taken_over`, `by` = 넘겨받은 토큰의 라벨, 없으면 역할) line-follow 를 끄고 내비게이션을 취소해 IDLE 로 둔다. 200 `{trip_lease_ended, mode}`. MANUAL 은 그다음 `POST /mode` 로 따로 요청한다. 주인이 부르면 400(주인은 `DELETE`), 다른·끝난 `lease_id` 404(`detail.ended` 는 DELETE 와 같다), Viewer 403 |
 | GET | `/api/v1/account/receiver` | Viewer | D-992 (v1.373) — `{configured, managed, client_id, issuer, resource}`. 비밀 없음. |
-| PUT | `/api/v1/account/receiver` | Admin 또는 사이트 등록 토큰 | D-992 (v1.373) — CORE TLS 리스너 전용. `{issuer, client_id, callback, public_keys}`를 받아 재시작 없이 사람 로그인 수신 설정을 적용한다. 자원은 CORE가 자기 identity로 정하고 암호화 키는 로봇에서 만든다. 운영자 파일이 있으면 409 `ACCOUNT_RECEIVER_MANAGED`. |
+| PUT | `/api/v1/account/receiver` | Admin 또는 고정값을 보내는 사이트 등록 토큰 | D-992 (v1.373) — CORE TLS 리스너 전용. `{issuer, client_id, callback, public_keys}`를 받아 재시작 없이 사람 로그인 수신 설정을 적용한다. 사이트 토큰은 `auth.account_trust`에 고정된 issuer와 키만 보낼 수 있고 아니면 403 `ACCOUNT_TRUST_UNPINNED`. callback은 요청받은 리스너 주소여야 한다. 자원은 CORE가 자기 identity로 정하고 암호화 키는 로봇에서 만든다. 발급자나 client가 바뀌면 저장 세션을 지운다. 운영자 파일이 있으면 409 `ACCOUNT_RECEIVER_MANAGED`. |
+| DELETE | `/api/v1/account/receiver` | Admin | D-992 (v1.373) — 받은 수신 설정과 세션을 지운다. 운영자 파일이 있으면 409. |
 | GET | `/api/v1/fleet/link` | Viewer | D-555 (v1.163) — `{configured, provisioned, expected_hostname, hub_url, enabled, connected, fleet_goal_active, arm_state, arm_deadline_s}`. `arm_state`: `armed`(WELCOME 받음, 또는 relink 없음) \| `pending`(relink 뒤 첫 WELCOME 대기, `arm_deadline_s` 남은 초) \| `grace_expired`(35 s 안에 WELCOME 없음 — SAF-003 이 끊긴 링크로 센다). 허브 페어링 토큰은 어떤 응답에도 싣지 않는다 |
 | PUT | `/api/v1/fleet/link` | Admin 또는 사이트 등록 토큰 | D-555 3 (v1.163) — CORE 자신의 TLS 리스너(`https` + `network.tls`)로 온 요청만; 아니면 403 `TLS_REQUIRED`. Fleet 목표(`navigation/goal` + `correlation_id`)가 진행 중이면 409 `FLEET_GOAL_ACTIVE`. 기동 때 잘못된 Fleet·SAF-003 설정을 기본값으로 대신했으면 409 `FLEET_LINK_CONFIG_INVALID`. 새 링크는 허브의 첫 WELCOME 또는 relink 뒤 35 s(`FLEET_LINK_ARM_GRACE_S`) 중 먼저 오는 때부터 SAF-003 `fleet_link.configured` 다. 호출자는 관리자, 또는 화면 코드(`pair-physical`·`pair-admin`)로 받은 운영자 토큰 중 라벨이 `site:` 로 시작하는 것(Fleet 등록 토큰. 라벨은 인증이 아니다). 공용 개발 토큰과 그 밖은 403 `FORBIDDEN`. `{pairing_token (32–256자, [A-Za-z0-9_-]), expected_hostname (<name>.local), ca_pem (PEM 인증서, ≤ 16 KiB)}` → 비밀 덮어쓰기 `~/.rosy/fleet-link.yaml`(`ROSY_FLEET_LINK`, 0600)과 CA `fleet-link-ca.pem` 을 쓰고 FleetAgent 만 다시 시작한다(발견 프로필, D-452). 이 파일의 `fleet` 링크 키가 모든 층 위에 온다. 200 은 GET 과 같다. 틀린 본문 400 `VALIDATION_ERROR`(입력을 되돌리지 않도록 필드 detail 없음). 사건 `fleet.link_provisioned`. 능력: `GET /system/capabilities` 최상위 `fleet_link_provisioning: true` |
 | DELETE | `/api/v1/fleet/link` | PUT 과 같음 | D-555 6 (v1.163) — Fleet 목표 중이면 409 `FLEET_GOAL_ACTIVE`. 비밀 파일과 CA 를 지우고 아래 층(덮어쓰기 파일을 뺀 `load_config`)의 링크(있으면)로 FleetAgent 를 다시 시작한다. 200 `{…GET, removed}`. 사건 `fleet.link_cleared` |
@@ -2740,6 +2742,7 @@ close code: `4401` 은 토큰이 없거나 틀린 것(`/ws/state` 와 동일), `
 | `auth.credentials_refused` | warning | 로봇 | `{count}` — 장치 모드가 기동 때 개발 토큰·평문 항목을 거부했다 |
 | `auth.development_mode` | warning | 로봇 | `{marker}` — 장치 모드인데 개발 모드 표식이 있어 공용 개발 토큰을 받는다(D-548) |
 | `account.receiver_provisioned` | warning | 로봇 | `{by, client_id}` — D-992 (v1.373). `by` = 호출 토큰 id. 비밀을 싣지 않는다 |
+| `account.receiver_cleared` | warning | 로봇 | `{by}` — D-992 (v1.373). `by` = 호출 토큰 id |
 | `fleet.link_provisioned` | warning | 로봇 | `{by, expected_hostname}` — D-555 (v1.163). `by` = 호출 토큰 id. 토큰은 싣지 않는다 |
 | `fleet.link_cleared` | warning | 로봇 | `{by, removed}` — D-555 (v1.163) |
 | `mode.changed` | info | 로봇 | `{from, to, by, run_id?, boot_id?}` |
