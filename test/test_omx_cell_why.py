@@ -167,6 +167,20 @@ def test_a_stop_at_the_same_place_from_another_start_excludes_speed(tmp_path, re
     assert w.explain("lift_stall", STALL, retry, [], None, path)["motion"]["verdict"] == verdict
 
 
+def test_a_measured_block_at_the_same_place_settles_the_earlier_unknown(tmp_path):
+    path = tmp_path / "why.jsonl"
+    first = w.explain("lift_stall", STALL, FAST, [], None, path)
+    assert w.open_questions(path)["lift_stall"]["times"] == 1
+    later = w.explain("lift_stall", STALL, SLOW, [], None, path)
+    assert later["hypothesis"] == "blocked" and later["settles"] == [first["t"]] and w.open_questions(path) == {}
+    other, elsewhere = tmp_path / "other.jsonl", from_below(5.0, 1.45)
+    for row in elsewhere:
+        row["present"][3] = row["present"][3] - 1.4 * (row["t"] - 100)  # nearly still: blocked, 5 below FAST's stop
+    w.explain("lift_stall", STALL, FAST, [], None, other)
+    elsewhere_row = w.explain("lift_stall", STALL, elsewhere, [], None, other)
+    assert elsewhere_row["hypothesis"] == "blocked" and elsewhere_row["settles"] == []
+
+
 def test_another_chunks_stop_is_no_repeat(tmp_path):
     path = tmp_path / "why.jsonl"
     w.explain("lift_stall", "stopped: released after a stop at run lift_place", [{**r, "chunk": "lift_place"} for r in FAST], [], None, path)

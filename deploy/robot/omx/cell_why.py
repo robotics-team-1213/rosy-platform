@@ -145,6 +145,11 @@ def explain(kind: str, result: str, trace: list, images: list, backend, path: Pa
     row["by"] = "measurement" if measured else ("model" if picked and picked != "unknown" else "nobody")
     row["disagree"] = bool(measured and said and said not in (measured, "unknown"))
     row["repeat_unknown"] = row["hypothesis"] == "unknown" and any(r.get("hypothesis") == "unknown" and r["t"] >= since for r in past)
+    # Something measured at this place explains the earlier stops there that stayed unknown: they leave the open questions.
+    # Real: 23:09 unknown, 23:27 blocked 1.3 apart; 00:17 unknown, 01:15 blocked 0.3 apart. Recovery is not changed by it.
+    row["settles"] = [r["t"] for r in past if measured == "blocked" and r.get("hypothesis") == "unknown" and r.get("chunk") == chunk
+                      and "stopped_at" in (r.get("motion") or {}) and "stopped_at" in motion
+                      and max(abs(a - b) for a, b in zip(r["motion"]["stopped_at"], motion["stopped_at"])) <= SAME_STOP]
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a") as f:
         f.write(json.dumps(row) + "\n")
@@ -154,8 +159,11 @@ def explain(kind: str, result: str, trace: list, images: list, backend, path: Pa
 def open_questions(path: Path) -> dict:
     """Kind -> how often its cause stayed unknown or the model disagreed, and the evidence asked for."""
     out = {}
-    for line in (path.read_text().splitlines() if path.exists() else []):
-        row = json.loads(line)
+    rows = [json.loads(line) for line in (path.read_text().splitlines() if path.exists() else [])]
+    settled = {t for row in rows for t in row.get("settles", [])}
+    for row in rows:
+        if row["t"] in settled:
+            continue
         if row.get("hypothesis") == "unknown" or row.get("disagree"):
             q = out.setdefault(row["kind"], {"times": 0, "missing": [], "last": None})
             q["times"] += 1
