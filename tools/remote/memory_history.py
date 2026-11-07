@@ -72,17 +72,20 @@ def record(history: Path | None, inv: list[str], host: str, peak: int, sha: str,
 
 def _rows(history: Path | None, inv: list[str]) -> list[dict]:
     want, rows = key(inv), []
+    if history is None:
+        return rows
     try:
-        lines = history.read_text(encoding="utf-8").splitlines() if history else []
+        # Line by line: every invocation of a landing reads this at once, and the file only grows.
+        with history.open(encoding="utf-8") as lines:
+            for line in lines:
+                try:
+                    row = json.loads(line)
+                    if row["key"] == want:
+                        rows.append(row)
+                except (ValueError, KeyError, TypeError):
+                    continue  # a torn or foreign line
     except OSError:
-        lines = []
-    for line in lines:
-        try:
-            row = json.loads(line)
-            if row["key"] == want:
-                rows.append(row)
-        except (ValueError, KeyError, TypeError):
-            continue  # a torn or foreign line
+        pass
     return rows
 
 

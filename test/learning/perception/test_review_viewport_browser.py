@@ -10,7 +10,7 @@ from test_review_flow_browser import browser_workspace
 pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason='requires explicit Chromium run')
 
 
-@pytest.mark.parametrize('route', ['/learning', '/', '/pixels', '/catalog', '/learning/omx', '/learning/vlm', '/learning/evaluate', '/learning/camera', '/learning/workspaces', '/learning/record', '/learning/tasks', '/learning/sim', '/classes', '/learning/imitate', '/learning/public', '/learning/tasks/manage'])
+@pytest.mark.parametrize('route', ['/learning', '/', '/pixels', '/catalog', '/learning/omx', '/learning/vlm', '/learning/evaluate', '/learning/camera', '/learning/workspaces', '/learning/record', '/learning/tasks', '/learning/sim', '/classes', '/learning/imitate', '/learning/tasks/manage'])
 def test_learning_page_has_visible_current_path(browser_workspace, route):
     page, _, expect = browser_workspace
     page.set_viewport_size({'width': 390, 'height': 844})

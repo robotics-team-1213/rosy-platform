@@ -1332,6 +1332,13 @@
 - 증거: committed SHA and remote results are recorded above; final consolidated receipts are retained in the unification validation record.
 - gate 변화: 없음. Source/browser checks do not establish deployment, ARM64, device or field acceptance.
 
+## 2026-11-03 · 6610ceaed5 · fix(api): align the central contract version after merging thermal API
+
+- Change: central `CONTRACT` now names the existing authoritative v1.351 header after merging the central-version migration with the thermal API. The app keeps reading the central value; feature-specific version pins stay removed. No new contract version is reserved.
+- Evidence: merge `0ca7f37163` reproduced one alignment failure/two passes. The independently reviewed one-line commit `6610ceaed5` has tree `7bc30d51e150358a84980246ece4a721f8cb042d`; official remote alignment/API/dashboard/related feature-document tests passed 136, skipped zero, NEW/known/flaky zero.
+- gate 변화: existing header and advertised version now agree; fresh FULL and public CI remain required.
+- Scope: existing header/changelog and bump helper preserved. Fresh canonical FULL, public CI and field acceptance are separate pending gates. CE: no additional lesson; the existing alignment guard and central constant explain this merge correction.
+
 ## 2026-11-04 · uncommitted · feat(api): /api/v1/peers 경로와 PEER_SHARE 부여
 - 변경: `v1/peers.py`(GET 목록 viewer, POST beacon — 부여 `PEER_SHARE`, 오래된 seq는 202 updated:false), `grants.py` operator/administrator에 `PEER_SHARE`, `deps.py` CoreServicesLike.peers, app/routes 등록. 시험 `middleware/core/gateway/test/test_peers_api.py`(부여 경계·왕복·스냅샷 필드)
 - 증거: 게이트 시험 원격 affected 실행 예정(착지 전). API Ref v1.359 행 추가·CONTRACT 동기화(api_reserve release)

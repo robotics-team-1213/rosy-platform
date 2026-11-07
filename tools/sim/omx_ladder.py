@@ -1,0 +1,220 @@
+#!/usr/bin/env python3
+"""OMX learning ladder: one round of teacher data, ACT training and held-out evaluation, recorded for Rosy Learning.
+
+A round is `<root>/rounds/<round_id>/round.json` (rosy.omx-ladder-round.v1). MuJoCo answers geometry only, Gazebo the
+ROS execution contract, Isaac contact and vision (D-947). A person replaces the best round in Rosy Learning; this tool
+never does, and a replacement is a recorded comparison, not an approval or a promotion (D-793, D-857).
+
+    python3 tools/sim/omx_ladder.py round --root R --cell cell.json --python P --lerobot-train T [--parent ID]
+"""
+from __future__ import annotations
+
+import argparse
+from datetime import datetime
+import json
+import math
+import os
+from pathlib import Path
+import re
+import statistics
+import subprocess
+import sys
+import uuid
+
+ROOT = Path(__file__).resolve().parents[2]
+SCHEMA = "rosy.omx-ladder-round.v1"
+ROUND_ID = re.compile(r"[0-9]{8}T[0-9]{6}-[0-9a-f]{8}")
+STATUSES = {"pending", "running", "passed", "failed", "blocked", "not_run"}
+# A fifth of the 36 mm stud pitch and a yaw that still seats between studs; 20 mm passed boxes lying across a stud row.
+STRICT_XY_MM, STRICT_YAW_DEG, STRICT_Z_MM, STRICT_TILT_DEG = 8.0, 8.0, 5.0, 5.0
+LOOSE_XY_MM = 20.0
+RECIPE = dict(policy="act", steps=20000, batch_size=8, chunk_size=30, n_action_steps=8, optimizer_lr=1e-5)
+TRAIN_SEED_BASE = 1000
+EVAL_SEED_STRIDE = 1000  # every round evaluates seeds no earlier round used
+
+
+def judge(xy_err_mm: float, yaw_err_deg: float, z_err_mm: float, tilt_deg: float, peak_lift_m: float) -> dict:
+    """Whether one episode placed the box. Strict is what a round is compared by; loose is the first report's rule."""
+    return dict(lifted=bool(peak_lift_m > .03), loose=bool(xy_err_mm <= LOOSE_XY_MM and abs(z_err_mm) <= 25.0),
+                strict=bool(xy_err_mm <= STRICT_XY_MM and yaw_err_deg <= STRICT_YAW_DEG and abs(z_err_mm) <= STRICT_Z_MM
+                            and tilt_deg <= STRICT_TILT_DEG),
+                xy_err_mm=round(float(xy_err_mm), 1), yaw_err_deg=round(float(yaw_err_deg), 1),
+                z_err_mm=round(float(z_err_mm), 1), tilt_deg=round(float(tilt_deg), 1))
+
+
+def wilson_low(successes: int, n: int, z: float = 1.96) -> float:
+    """Lower bound of the 95 % Wilson interval: 19 of 20 and 190 of 200 are not the same evidence."""
+    if n == 0:
+        return 0.0
+    p = successes / n
+    return round((p + z * z / (2 * n) - z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n))) / (1 + z * z / n), 3)
+
+
+def wilson_high(successes: int, n: int, z: float = 1.96) -> float:
+    if n == 0:
+        return 1.0
+    p = successes / n
+    return round((p + z * z / (2 * n) + z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n))) / (1 + z * z / n), 3)
+
+
+def summarise(rows: list[dict], seed_base: int) -> dict:
+    n = len(rows)
+    strict = sum(row["strict"] for row in rows)
+    placed = [row for row in rows if row["loose"]]
+    return dict(n=n, seed_base=seed_base, lifted=sum(row["lifted"] for row in rows),
+                loose=dict(placed=len(placed)), strict=dict(placed=strict, wilson_low=wilson_low(strict, n), wilson_high=wilson_high(strict, n)),
+                xy_err_mm_median=round(statistics.median(row["xy_err_mm"] for row in placed), 1) if placed else None,
+                yaw_err_deg_median=round(statistics.median(row["yaw_err_deg"] for row in placed), 1) if placed else None,
+                failed_seeds=[row["seed"] for row in rows if not row["strict"]])
+
+
+def compare(candidate: dict, best: dict | None) -> str:
+    """'better', 'worse' or 'unclear': only intervals that do not overlap decide."""
+    if best is None:
+        return "better"
+    a, b = candidate["strict"], best["strict"]
+    if a["wilson_low"] > b["wilson_high"]:
+        return "better"
+    if b["wilson_low"] > a["wilson_high"]:
+        return "worse"
+    return "unclear"
+
+
+def new_round_id(now: datetime | None = None) -> str:
+    return (now or datetime.now()).strftime("%Y%m%dT%H%M%S") + "-" + uuid.uuid4().hex[:8]
+
+
+def write_round(root: Path, row: dict) -> Path:
+    if row.get("schema") != SCHEMA or not ROUND_ID.fullmatch(row["round_id"]):
+        raise ValueError("rosy.omx-ladder-round.v1 with a valid round_id required")
+    for name, stage in row["stages"].items():
+        if stage["status"] not in STATUSES:
+            raise ValueError(f"{name}: unknown status")
+        if stage["status"] in {"blocked", "not_run"} and not stage.get("reason"):
+            raise ValueError(f"{name}: {stage['status']} needs a reason")
+    path = root / "rounds" / row["round_id"] / "round.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(".tmp")
+    temporary.write_text(json.dumps(row, ensure_ascii=False, indent=1), encoding="utf-8")
+    os.replace(temporary, path)
+    return path
+
+
+def read_round(root: Path, round_id: str) -> dict:
+    if not ROUND_ID.fullmatch(round_id):
+        raise ValueError("round id")
+    return json.loads((root / "rounds" / round_id / "round.json").read_text(encoding="utf-8"))
+
+
+def best_round(root: Path) -> str | None:
+    """The newest 'replace' decision. decisions.jsonl is the record; best.json is only a copy of this."""
+    path = root / "decisions.jsonl"
+    if not path.exists():
+        return None
+    chosen = None
+    for line in path.read_text(encoding="utf-8").splitlines():
+        row = json.loads(line)
+        if row["verdict"] == "replace":
+            chosen = row["round_id"]
+    return chosen
+
+
+def eval_seed_base(root: Path) -> int:
+    """Past every seed any recorded round evaluated, so selection cannot overfit a fixed set."""
+    used = [100000]
+    for path in (root / "rounds").glob("*/round.json"):
+        run = json.loads(path.read_text(encoding="utf-8"))["stages"]["mujoco"].get("eval") or {}
+        if run:
+            used.append(run["seed_base"] + EVAL_SEED_STRIDE)
+    return max(used)
+
+
+def new_round(root: Path, parent: str | None, cell: dict, source_sha: str, recipe: dict, from_failures: int, episodes: int) -> dict:
+    return dict(schema=SCHEMA, round_id=new_round_id(), created_at=datetime.now().astimezone().isoformat(timespec="seconds"),
+                parent_round_id=parent, source_sha=source_sha, scene=cell["scene"], recipe=recipe,
+                data=dict(episodes=episodes, from_failures=from_failures),
+                stages=dict(mujoco=dict(status="pending", claim="기하: 도달·순서·충돌", eval=None, artifacts=[], reason=None),
+                            gazebo=dict(status="not_run", claim="ROS 실행 계약", contract=None, artifacts=[],
+                                        reason="이 라운드에서 실행하지 않았습니다."),
+                            isaac=dict(status="not_run", claim="접촉·영상", run_id=None, result=None, artifacts=[],
+                                       reason="단일 팔 Isaac 케이스가 아직 없습니다. v13 작업 뒤에 연결합니다.")))
+
+
+def require_gpu(python: str) -> None:
+    """lerobot-train silently falls back to CPU when the GPU is lost (40k steps became 13 h), so refuse first."""
+    if subprocess.run([python, "-c", "import sys, torch; sys.exit(not torch.cuda.is_available())"]).returncode:
+        raise SystemExit("no usable GPU for training; nothing started. Check nvidia-smi on this host.")
+
+
+def run_round(args) -> int:
+    require_gpu(args.python)
+    root = Path(args.root)
+    cell = json.loads(Path(args.cell).read_text(encoding="utf-8"))
+    parent = args.parent or best_round(root)
+    seeds_from_parent = read_round(root, parent)["stages"]["mujoco"]["eval"]["failed_seeds"] if parent else []
+    recipe = dict(RECIPE, steps=args.steps, optimizer_lr=args.lr)
+    sha = args.source_sha or subprocess.run(["git", "-C", str(ROOT), "rev-parse", "HEAD"], capture_output=True, text=True, check=True).stdout.strip()
+    row = new_round(root, parent, cell, sha, recipe, len(seeds_from_parent), args.episodes + len(seeds_from_parent))
+    path = write_round(root, row)
+    run, sim = path.parent, str(Path(__file__).with_name("omx_cell_sim.py"))
+    environment = dict(os.environ, MUJOCO_GL="egl", PYTHONUNBUFFERED="1")
+    row["stages"]["mujoco"].update(status="running", started_at=datetime.now().astimezone().isoformat(timespec="seconds"))
+    write_round(root, row)
+    base = eval_seed_base(root)
+    steps = [
+        [args.python, sim, "--cell", args.cell, "collect", "--episodes", str(args.episodes), "--extra-seeds", ",".join(map(str, seeds_from_parent)), "--out", str(run / "dataset")],
+        [args.lerobot_train, f"--dataset.repo_id=rosy/omx-ladder-{row['round_id']}", f"--dataset.root={run / 'dataset'}", "--dataset.video_backend=pyav",
+         "--policy.type=act", "--policy.device=cuda", "--policy.push_to_hub=false", f"--policy.chunk_size={recipe['chunk_size']}",
+         f"--policy.n_action_steps={recipe['n_action_steps']}", f"--policy.optimizer_lr={recipe['optimizer_lr']}", f"--batch_size={recipe['batch_size']}",
+         f"--steps={recipe['steps']}", f"--save_freq={recipe['steps']}", "--log_freq=500", "--num_workers=4", "--wandb.enable=false", f"--output_dir={run / 'train'}", "--job_name=omx-ladder"],
+        [args.python, sim, "--cell", args.cell, "evaluate", "--model", str(run / "train/checkpoints/last/pretrained_model"), "--episodes", str(args.eval_episodes),
+         "--seed-base", str(base), "--out", str(run / "eval.json"), "--artifacts", str(run / "artifacts")],
+    ]
+    try:
+        with (run / "round.log").open("w", encoding="utf-8") as log:
+            for argv in steps:
+                subprocess.run(argv, env=environment, stdout=log, stderr=subprocess.STDOUT, check=True)
+    except subprocess.CalledProcessError as exc:
+        row["stages"]["mujoco"].update(status="failed", reason=f"{Path(str(exc.cmd[0])).name} {exc.cmd[2] if len(exc.cmd) > 2 else ''} 종료 코드 {exc.returncode}. round.log를 보세요.",
+                                       finished_at=datetime.now().astimezone().isoformat(timespec="seconds"))
+        write_round(root, row)
+        return 1
+    result = json.loads((run / "eval.json").read_text(encoding="utf-8"))
+    evaluation = summarise(result["rows"], base)
+    stage = row["stages"]["mujoco"]
+    stage.update(status="passed", eval=evaluation, finished_at=datetime.now().astimezone().isoformat(timespec="seconds"),
+                 artifacts=[dict(name=name, path=f"artifacts/{name}", kind="image") for name in result["artifacts"]])
+    best = None
+    if parent:
+        # The same seeds for both: an old score came from easier or harder seeds and would not compare.
+        model = root / "rounds" / parent / "train/checkpoints/last/pretrained_model"
+        subprocess.run([args.python, sim, "--cell", args.cell, "evaluate", "--model", str(model), "--episodes", str(args.eval_episodes),
+                        "--seed-base", str(base), "--out", str(run / "eval-parent.json"), "--artifacts", str(run / "artifacts-parent")],
+                       env=environment, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        best = summarise(json.loads((run / "eval-parent.json").read_text(encoding="utf-8"))["rows"], base)
+    row["comparison"] = dict(against=parent, same_seeds=bool(parent), parent_eval=best, result=compare(evaluation, best))
+    write_round(root, row)
+    print(json.dumps(dict(round_id=row["round_id"], eval=evaluation, comparison=row["comparison"]), ensure_ascii=False))
+    return 0
+
+
+def main(argv=None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    commands = parser.add_subparsers(dest="command", required=True)
+    one = commands.add_parser("round")
+    one.add_argument("--root", required=True)
+    one.add_argument("--cell", required=True)
+    one.add_argument("--python", default=sys.executable)
+    one.add_argument("--lerobot-train", required=True)
+    one.add_argument("--parent")
+    one.add_argument("--source-sha", help="the commit this copy came from, when the folder has no Git")
+    one.add_argument("--episodes", type=int, default=60)
+    one.add_argument("--eval-episodes", type=int, default=50)
+    one.add_argument("--steps", type=int, default=RECIPE["steps"])
+    one.add_argument("--lr", type=float, default=RECIPE["optimizer_lr"])
+    args = parser.parse_args(argv)
+    return run_round(args)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

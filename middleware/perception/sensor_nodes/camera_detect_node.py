@@ -450,8 +450,8 @@ class CameraDetectNode(CameraPowerMixin, CameraLockMixin, RegionRangeMixin, Node
         if bgr is not None:
             self._watch_exposure(processed.pixels)
         self._frame_id += 1
-        self.telemetry_pub.publish(String(
-            data=json.dumps(processed.telemetry.as_dict(), sort_keys=True)))
+        if self.telemetry_pub.get_subscription_count():  # diagnostic only: no JSON unheard
+            self.telemetry_pub.publish(String(data=json.dumps(processed.telemetry.as_dict(), sort_keys=True)))
         if not processed.telemetry.quality_valid:
             self.block_pub.publish(Bool(data=True))
             if processed.telemetry.quality_reason in ('low_light', 'underexposed', 'overexposed'):
@@ -483,8 +483,8 @@ class CameraDetectNode(CameraPowerMixin, CameraLockMixin, RegionRangeMixin, Node
             capture_stamp, cliff, blocked, res['side'], res,
             (bgr.shape[1], bgr.shape[0]), 'onboard_camera_pixels',
             ground_source=self._ground_mode.upper() if self._ground is not None else None))))
-        cols = res['cols']
-        mcols = res.get('mid_cols', cols)
+        if not self.dbg_pub.get_subscription_count(): return  # diagnostic only
+        cols, mcols = res['cols'], res.get('mid_cols', res['cols'])
         self.dbg_pub.publish(String(data=(
             f'cliff={int(cliff)} block={int(blocked)} '
             f'side={res["side"]:.0f} mid_obst={res["mid_obst"]:.2f} '

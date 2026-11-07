@@ -140,6 +140,7 @@ def test_actual_pinned_models_train_save_reload(tmp_path, method):
     assert result['execution_mode'] == 'offline_replay'
     assert result['physical_learning_verified'] is False
     assert result['evaluation']['frames'] == 6
+    assert list(result['evaluation']['action_mae_per_arm']) == [arm['id'] for arm in json.loads((tmp_path / 'dataset.json').read_text())['profile']['arms']]
     assert [event['step'] for event in events] == [1, 2]
     output = tmp_path.parent / (tmp_path.name + '-output')
     assert (output / 'policy/model.safetensors').is_file()
@@ -188,3 +189,11 @@ def test_actual_independent_arm_models_keep_distinct_width_stats_and_optimizers(
         assert set(states[index]['optimizers']) == ({'act'} if method == 'act' else {'actor', 'critic', 'temperature'})
     assert states[0]['model'] is not states[1]['model']
     assert states[0]['optimizers'] is not states[1]['optimizers']
+
+
+def test_a_joint_models_mean_cannot_hide_the_arm_it_does_not_learn():
+    from experiment_evaluation import per_arm_mae
+
+    profile = dict(arms=[dict(id='arm_a', joint_names=['j1', 'j2']), dict(id='arm_b', joint_names=['j1', 'j2'])])
+    rows = [np.array([0.0, 0.0, 8.0, 12.0]), np.array([0.0, 2.0, 8.0, 12.0])]
+    assert per_arm_mae(rows, profile) == dict(arm_a=0.5, arm_b=10.0)

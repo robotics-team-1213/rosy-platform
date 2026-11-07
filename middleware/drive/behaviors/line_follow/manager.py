@@ -314,12 +314,12 @@ class LineFollowManager(RealignMixin, LaneCueMixin, BodyStopMixin, StuckRecovery
             self._clearance_at = float(now)
             self._set_clearance(distance)
 
-    def observe_scan_points(self, points, received_at: Optional[float] = None) -> None:
+    def observe_scan_points(self, points, received_at: Optional[float] = None, *, lag_s: float = 0.0) -> None:
         """path 판정: 로봇 좌표(x 앞, y 왼쪽) 점. 여유 거리는 틱이 의도 조향으로 잰다."""
         now = self._clock() if received_at is None else received_at
         with self._lock:
             self._scan_points = tuple((float(x), float(y)) for x, y in points)
-            self._clearance_at = float(now)
+            self._clearance_at = float(now) - max(0.0, lag_s)  # freshness by stamp; odometry still by arrival
             self._remember_near(float(now))  # D-422: returns that slip under range_min
 
     def obstacle_gap(self, linear: float, angular: float, now: Optional[float] = None):

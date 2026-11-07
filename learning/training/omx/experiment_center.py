@@ -1,6 +1,5 @@
 """Persistent host-only OMX learning jobs; never dispatches or activates a policy."""
 import json
-import copy
 import hashlib
 import os
 from pathlib import Path
@@ -65,7 +64,6 @@ class Center:
             self.reviews.schema(db)
             self.profiles.schema(db)
         self.methods = {}
-        self._public_source = None
         for method, python in self.python.items():
             try:
                 check = subprocess.run([python, '-c',
@@ -291,22 +289,6 @@ class Center:
         from experiment_native_train import start
         return start(self, body, prepared, segments)
 
-    def public_source(self):
-        from experiment_public_train import describe
-        if not self.methods['act']['available']:
-            from experiment_public_source import descriptor
-            return dict(descriptor(), available=False, reason='Pinned ACT CPU learner environment unavailable')
-        if self._public_source is None:
-            checked = describe(self.python['act'])
-            if not checked['available']:
-                return checked
-            self._public_source = copy.deepcopy(checked)
-        return copy.deepcopy(self._public_source)
-
-    def start_public(self, body):
-        from experiment_public_train import start
-        return start(self, body)
-
     def save_review(self, body, prepared, actor=None):
         return self.reviews.save(body, prepared, actor)
 
@@ -370,9 +352,6 @@ class Center:
                 from experiment_lerobot_worker import archive
                 request = self.studies.check_run(row, root.parent, row['result'])
                 return archive(root, row['result'], request)
-            if row.get('execution_mode') == 'public_train':
-                from experiment_public_train import archive
-                return archive(root, row['result'])
             if row.get('execution_mode') == 'native_train':
                 from experiment_native_train import archive
                 return archive(root, row['result'], learning_task=row.get('learning_task'))

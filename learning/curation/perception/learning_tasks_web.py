@@ -22,12 +22,10 @@ def _task(tasks, uid):
 def get(handler, path, tasks, center, token, workspace=None, native_cache=None, sim_runs=None, owners=None):
     native_cache = native_cache if native_cache is not None else {}
     if path in ('/learning/tasks', '/workflow.js', '/workflow.css', '/learning/tasks/manage', '/tasks.js',
-                '/learning/public', '/public-learning.js', '/public-learning.css',
                 '/learning/imitate', '/imitate.js', '/imitate.css'):
         name = {'/learning/tasks': 'workflow.html', '/workflow.js': 'workflow.js',
                 '/learning/tasks/manage': 'tasks.html', '/tasks.js': 'tasks.js', '/workflow.css': 'workflow.css',
-                '/learning/public': 'public-learning.html', '/public-learning.js': 'public-learning.js',
-                '/public-learning.css': 'public-learning.css', '/learning/imitate':'imitate.html',
+                '/learning/imitate':'imitate.html',
                 '/imitate.js':'imitate.js', '/imitate.css':'imitate.css'}[path]
         mime = ('text/javascript' if name.endswith('.js') else 'text/css' if name.endswith('.css') else 'text/html') + '; charset=utf-8'
         handler.send((STATIC / name).read_bytes(), mime=mime)

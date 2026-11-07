@@ -69,6 +69,9 @@ drive/calibration
 drive/recovery
 perception/sensors/line_observation
 perception/calibration
+perception/observers
+perception/robot_web
+perception/sensor_nodes
 fleet/web/shared
 fleet/web/calibration
 fleet/web/sitemap

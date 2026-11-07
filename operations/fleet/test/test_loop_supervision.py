@@ -34,6 +34,7 @@ EXPECTED_LOOPS = {
     "job-trips", "task-dispatch", "proposal-expiry", "mission-dispatch",
     "cell-job-dispatch", "goal-evidence-expiry", "mission-feedback-schedule",
     "mission-model-turn", "control-unit-journal", "control-unit-information", "charge-bays",
+    "event-loop-lag",
 }
 
 

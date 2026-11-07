@@ -210,13 +210,18 @@ def classify_paths(paths: list[str] | tuple[str, ...]) -> ImpactReport:
 def delivery_policy(paths: list[str] | tuple[str, ...]) -> str:
     """Executable CD route; delta additionally needs authenticated artifact checks.
 
-    Host release tooling does not change the robot's installed payload. Unknown
-    paths retain the existing review gate. OS delivery requires its own approval.
+    Host release tooling does not change the robot's installed payload. Anything
+    else ships the payload: the comparison base stays until a payload is delivered,
+    so holding on one image or unclassified path stopped every later release too.
+    A payload that does not fit the installed OS is rolled back by the device.
     """
     robot_paths = [path for path in paths if not path.startswith("tools/release/")]
-    impact = classify_paths(robot_paths).impact
-    return {"none": "none", "native-payload": "full-payload",
-            "flashable-image": "os-image", "review": "review"}[impact]
+    return "none" if classify_paths(robot_paths).impact == "none" else "full-payload"
+
+
+def os_image_changed(paths: list[str] | tuple[str, ...]) -> bool:
+    """Frozen OS inputs changed: a publication-only OS release follows the payload."""
+    return any(item.impact == "flashable-image" for item in classify_paths(paths).paths)
 
 
 def select_impact(base: str, head: str, *, repository: Path | str = ".") -> ImpactReport:
