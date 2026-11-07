@@ -76,7 +76,7 @@ class PersonRequestStore:
                 args.append(value)
         sql = "SELECT * FROM person_requests" + (" WHERE " + " AND ".join(where) if where else "")
         with self._lock:
-            rows = self._db.execute(sql + " ORDER BY created_at DESC LIMIT ?", (*args, LISTED_MAX)).fetchall()
+            rows = self._db.execute(sql + " ORDER BY created_at DESC, rowid DESC LIMIT ?", (*args, LISTED_MAX)).fetchall()
         return [self._row(r) for r in rows]
 
     def close(self, request_id: str, state: str, *, by: str, note: str = "") -> Optional[dict]:
@@ -95,7 +95,7 @@ class PersonRequestStore:
         if requested_by is not None:
             sql, args = sql + " AND requested_by=?", [*args, requested_by]
         with self._lock:
-            rows = self._db.execute(sql + " ORDER BY created_at DESC", args).fetchall()
+            rows = self._db.execute(sql + " ORDER BY created_at DESC, rowid DESC", args).fetchall()
         return [self._row(r) for r in rows]
 
     def set_delivery(self, request_id: str, state: str, error: Optional[str] = None) -> bool:

@@ -142,7 +142,7 @@ def test_an_expired_request_cannot_be_answered_and_reads_expired():
 def test_requests_and_answers_survive_a_restart(tmp_path):
     path = tmp_path / "fleet.sqlite3"
     client, _ = make(path)
-    keep, answered = post(client).json()["id"], post(client, kind="plug_charger").json()["id"]
+    keep, answered = post(client).json()["id"], post(client, "other", kind="plug_charger").json()["id"]
     client.post(f"/api/fleet/person-requests/{answered}/answer", json={"answer": "done"})
     client2, _ = make(path)   # a new process on the same database
     assert client2.get(f"/api/fleet/person-requests/{keep}").json()["state"] == "open"
