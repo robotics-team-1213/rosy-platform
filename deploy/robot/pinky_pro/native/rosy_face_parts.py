@@ -133,6 +133,30 @@ class Buzzer:
                         f"{TEST_BEEPS}×{int(TEST_ON_S * 1000)} ms (부팅 표시가 울림)")
 
 
+class PersonAsk:
+    """D-721 Amendment: the beep that goes with a person request on the screen.
+
+    The ``call`` sound once when a request id first shows, then every ``REPEAT_S`` while that same id keeps
+    showing. It is silent when no request shows (answered, withdrawn, expired, or a stop/update/failed screen
+    covers it: the caller passes None then) and starts over for a new id. A silent robot has nothing to reset.
+    """
+
+    REPEAT_S = 15.0
+
+    def __init__(self) -> None:
+        self._id: str | None = None
+        self._at = 0.0
+
+    def due(self, request_id: str | None, now: float) -> bool:
+        if request_id is None:
+            self._id = None
+            return False
+        if request_id != self._id or now - self._at >= self.REPEAT_S:
+            self._id, self._at = request_id, now
+            return True
+        return False
+
+
 class Lamp:
     """The WS2812 lamp through ``lamp_pattern``; fail-open (D-260 3).
 

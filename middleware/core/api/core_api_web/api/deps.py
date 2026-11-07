@@ -123,6 +123,7 @@ class CoreServicesLike(Protocol):
     swarm: Any
     traffic_policy: Any
     trip_lease: Any
+    person_request: Any
     vision: Any
     vision_stream: Any
     waypoints: Any

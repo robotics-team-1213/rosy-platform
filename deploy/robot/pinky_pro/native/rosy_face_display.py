@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Callable
 
 from rosy_face_inputs import FaceFrames, core_owner, read_test_request, read_update, write_test_result
-from rosy_face_parts import BatteryReader, Buzzer, LAMP_TEST_S, Lamp
+from rosy_face_parts import BatteryReader, Buzzer, LAMP_TEST_S, Lamp, PersonAsk
 
 try:  # the release's rule table (D-260); an older release has none
     from core_common import robot_state
@@ -179,6 +179,7 @@ class FaceDisplay:
         self._sounded: dict[str, float] = {}
         self._sound: str | None = None
         self._reversed_at: float | None = None
+        self._person = PersonAsk()
         self._caution_since: float | None = None
         self._held: tuple[str, float] | None = None
         self._tested: str | None = None
@@ -479,6 +480,8 @@ class FaceDisplay:
         # the lamp and any status card first, especially on emergency entry.
         self._announce(pres.sound, now)
         self._reverse_alarm(pres.reversing, now)
+        if self._person.due((screen or {}).get("person"), now):  # D-721 Amendment: ROSY_BUZZER_ENABLED is the Buzzer's
+            self._buzzer.announce("call")
         return redrawn
 
     def _reverse_alarm(self, reversing: bool, now: float) -> None:

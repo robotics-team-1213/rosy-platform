@@ -16,6 +16,13 @@ panels:
     order: 10
     module: panels/console/overview.js
     css: [panels/surface-panels.css]
+  - id: console.person_request
+    title: 사람 부탁
+    surface: console
+    slot: sense
+    order: 5
+    module: panels/console/person-request.js
+    css: [panels/surface-panels.css]
   - id: console.motor_health
     title: 모터 상태
     surface: console

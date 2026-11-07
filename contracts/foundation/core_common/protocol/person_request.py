@@ -11,12 +11,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-KINDS = ("unplug_charger", "plug_charger", "move_robot", "clear_area", "other")
-#: The face stays English by user decision (2026-11-06); short, upper case, fits the caution strip.
-FACE_TEXT = {"unplug_charger": "UNPLUG CHARGER", "plug_charger": "PLUG CHARGER", "move_robot": "MOVE ROBOT",
-             "clear_area": "CLEAR AREA", "other": "SEE CONSOLE"}
-DEFAULT_TTL_S = 600.0
-MAX_TTL_S = 3600.0
+from core_common.person_request_text import DEFAULT_TTL_S, FACE_TEXT, KINDS, MAX_TTL_S  # noqa: F401
+
 CONTROL = re.compile(r"[\x00-\x1f\x7f]")
 ID_PATTERN = r"^[0-9a-f]{32}$"
 

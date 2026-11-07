@@ -12,6 +12,7 @@ from typing import Any, Optional
 from core_common.capability import Capability
 from core_features.calibration import CalibrationSessionManager
 from core.trip_lease import TripLeaseManager, build_trip_lease  # D-541
+from core.person_request import PersonRequestHolder
 from core_features.command.arbitration import Mode, ModeMachine, SourceRegistry
 from core_features.command.manager import CommandManager, Twist
 from core.teleop_config import teleop_timeout_ms
@@ -132,6 +133,7 @@ class CoreServices:
     localization: Optional[LocalizationAssist] = None  # D-395 P2-1 (ros_bridge ingests)
     # Peer pose sharing (docs/plans/2026-11-04-peer-pose-sharing-design.md).
     peers: PeersManager = field(default_factory=lambda: PeersManager(now=time.monotonic))
+    person_request: PersonRequestHolder = field(default_factory=PersonRequestHolder)  # D-721 Amendment
     peer_beacon: Optional[BeaconSender] = None
     loc_mission: Optional[LocalizationMission] = None  # D-395 P2-7 (ros_bridge ticks)
     fleet_loss: Optional[FleetLossMonitor] = None  # SAF-003 D-419 (ros_bridge ticks)
