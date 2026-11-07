@@ -92,8 +92,21 @@ def test_the_active_document_survives_a_restart(tmp_path):
     assert again.rules.active_rules().departure.blocks_per_robot == 4
 
 
+def test_a_stored_document_that_no_longer_validates_does_not_stop_fleet(tmp_path):
+    store = SiteMapStore(tmp_path / "site.sqlite")
+    activate(store, {"return": {"go_percent": 20}})
+    with store._db:
+        store._db.execute("""UPDATE site_rules_versions SET body = '{"return": {"go_percent": 1}}'""")
+    store.close()
+    assert SiteMapStore(tmp_path / "site.sqlite").rules.active_rules() is None
+
+
 def test_places_must_exist_on_the_active_map():
     store = SiteMapStore()
+    with pytest.raises(SiteMapError) as no_map:
+        store.rules.save_draft(SiteRules.model_validate({"stops": [{"place": "A", "role": "wait"}]}),
+                               expected_revision=None, principal_id="op")
+    assert no_map.value.code == "SITE_RULES_UNKNOWN_PLACE"
     site = SiteMap.model_validate({
         "schema": "rosy.site_map/1", "map_id": "rules_test",
         "places": [{"id": "A", "name": "a", "x": 0, "y": 0}, {"id": "B", "name": "b", "x": 1, "y": 0}],

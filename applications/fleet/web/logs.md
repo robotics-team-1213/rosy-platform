@@ -1109,3 +1109,8 @@
 - 증거: 원격 모델 PC 34867d3b61: operations/fleet·applications/fleet·design_scope_gates·test/architecture·harness_contracts·protocol_version_alignment 8828 passed, 5 skipped, known_failures 0 new/0 known/0 flaky; collect_alone(site_rules 두 파일) 2 passed, 1 skipped. 로그는 외부 scratch siterules/t3·t4/run-1.txt.
 - gate 변화: SOURCE 회귀 검증만. 시뮬·실물 수용 아님.
 - 교훈: CE 해당 없음.
+
+## 2026-11-07 · uncommitted · uiux(fleet): 규칙 판정 실패 문구를 평문으로
+- 변경: 판정 요청이 실패하면 영어 오류 코드 대신 다시 누르라는 한국어 안내를 보인다.
+- 증거: 독립 검토 지적. 실패 경로 브라우저 시험을 더했다.
+- gate 변화: SOURCE 회귀. 현장 수용은 별도다.

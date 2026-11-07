@@ -756,3 +756,18 @@ def test_site_rules_judge_in_the_trip_form_asks_and_sends_nothing_to_a_robot(sit
         assert all(path == judge for path, _ in posts) and not errors
         browser.close()
 
+
+def test_site_rules_judge_failure_is_plain_and_shows_no_verdict(site):
+    from playwright.sync_api import expect, sync_playwright
+
+    posts, judge = [], "/api/fleet/site-rules/judge"
+    with sync_playwright() as playwright:
+        browser, page, _errors = _open(playwright, site, API, posts, {judge: (503, {"detail": {"code": "BUSY"}})})
+        form = _open_form(page, "rosy_02")
+        form.locator('[data-rule-judge="rosy_02"]').click()
+        _settle(page, posts, judge)
+        expect(form).to_contain_text("판정을 받지 못했습니다")
+        expect(form).not_to_contain_text("BUSY")
+        expect(form.locator("ui-tag").filter(has_text="감 ·")).to_have_count(0)
+        browser.close()
+

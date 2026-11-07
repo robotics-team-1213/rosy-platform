@@ -110,7 +110,7 @@ export function ruleJudgeSection({ mine, robot, call, scope, render }) {
     } catch (err) {
       if (err.name === "AbortError") return;
       rule.answer = null;
-      rule.note = `판정 실패 · ${err.code || err.message}`;
+      rule.note = "판정을 받지 못했습니다. 다시 눌러 주세요.";
     } finally {
       rule.busy = false;
       if (life.current()) render();

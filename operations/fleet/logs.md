@@ -5346,3 +5346,8 @@
 - 증거: 원격 모델 PC 34867d3b61: operations/fleet·applications/fleet·design_scope_gates·test/architecture·harness_contracts·protocol_version_alignment 8828 passed, 5 skipped, known_failures 0 new/0 known/0 flaky; collect_alone(site_rules 두 파일) 2 passed, 1 skipped. 로그는 외부 scratch siterules/t3·t4/run-1.txt.
 - gate 변화: SOURCE 회귀 검증만. 시뮬·실물 수용 아님.
 - 교훈: CE 해당 없음.
+
+## 2026-11-07 · uncommitted · fix(fleet): 규칙 검토 지적 반영
+- 변경: 활성 지도가 없으면 장소를 적은 규칙 문서를 거절하고, 저장된 문서가 검증에 실패해도 Fleet은 옛 상수로 시작해 오류를 남긴다.
+- 증거: 독립 검토 지적. 회귀 시험을 더했고 원격 결과는 착지 기록을 따른다.
+- gate 변화: SOURCE 회귀. 실제 지도·현장 수용은 별도다. CE: 해당 없음 — 시험이 판단을 보존한다.

@@ -10,11 +10,14 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import uuid
 from typing import Callable, Optional
 
 from fleet.server.site_map_store import SiteMapError
 from fleet.site_rules import SiteRules
+
+logger = logging.getLogger(__name__)
 
 
 class SiteRulesStore:
@@ -41,7 +44,11 @@ class SiteRulesStore:
     def _publish(self) -> None:
         with self._lock:
             row = self._row()
-            self._cached = SiteRules.model_validate(json.loads(row[1])) if row else None
+            try:
+                self._cached = SiteRules.model_validate(json.loads(row[1])) if row else None
+            except ValueError:  # a later release tightened a bound: Fleet still starts, on the old constants
+                self._cached = None
+                logger.error("active site rules version %s no longer validates; using the defaults", row[0])
 
     def active_rules(self) -> Optional[SiteRules]:
         """The active document, or None when the site has none (callers then keep their constants)."""
@@ -63,8 +70,7 @@ class SiteRulesStore:
         return {"rules": json.loads(row[0]), "revision": row[1], "saved_by": row[2], "saved_at": row[3]}
 
     def _check_places(self, rules: SiteRules) -> None:
-        known = self._places()
-        unknown = sorted(rules.place_ids() - known) if known is not None else []
+        unknown = sorted(rules.place_ids() - (self._places() or set()))  # no active map: no place can be known
         if unknown:
             raise SiteMapError(422, "SITE_RULES_UNKNOWN_PLACE", f"places not on the active map: {', '.join(unknown)}")
 
