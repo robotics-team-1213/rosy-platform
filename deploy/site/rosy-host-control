@@ -91,7 +91,7 @@ restart_user_unit() {
   local owner
   owner=$(cat "$CONF/units-user" 2>/dev/null || true)
   [[ "$owner" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]] || refuse "units-user is not set"
-  systemctl --user --machine="$owner@" --no-block restart "$UNIT"
+  timeout 20 systemctl --user --machine="$owner@" --no-block restart "$UNIT"
 }
 
 schedule_reboot() {
@@ -163,7 +163,7 @@ case "$ROLE:$ACTION:$UNIT" in
     # systemd refuses `cat` over --machine ("Cannot remotely cat units."); LoadState works there.
     [ "$(systemctl --user --machine="$owner@" show -p LoadState --value rosy-test-storage.service 2>/dev/null)" = loaded ] \
       || refuse "no rosy-test-storage.service" 5
-    systemctl --user --machine="$owner@" --no-block start rosy-test-storage.service
+    timeout 20 systemctl --user --machine="$owner@" --no-block start rosy-test-storage.service
     ;;
   site:install-site-config:fleet-site.yaml|\
   site:install-site-config:site-cameras.yaml)
