@@ -353,3 +353,27 @@ def test_a_robot_holds_at_most_three_open_requests():
         del PRINCIPALS["fourth"]
     assert capped.status_code == 409 and capped.json()["detail"] == {"code": "TOO_MANY_OPEN_REQUESTS", "limit": 3}
     assert elsewhere.status_code == 200   # another robot is unaffected
+
+
+def test_robots_are_reconciled_together_so_a_slow_robot_does_not_hold_up_the_others():
+    import asyncio
+
+    class SlowFirst(Robots):
+        """r1 answers only after r2 has been asked: a one-by-one reconcile would never finish."""
+
+        async def read(self, robot_id):
+            self.asked = getattr(self, "asked", None) or asyncio.Event()
+            if robot_id == "r1":
+                await asyncio.wait_for(self.asked.wait(), timeout=2)
+            else:
+                self.asked.set()
+            return None
+
+    clock = Clock()
+    robots = SlowFirst()
+    client, _ = make(robots=robots, clock=clock)
+    post(client, robot_id="r1")
+    post(client, "other", robot_id="r2")
+    clock.now += 10
+    reconcile(client)   # TimeoutError here means the robots were read one after another
+    assert {c[1] for c in robots.calls if c[0] == "put"} >= {"r1", "r2"}

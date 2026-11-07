@@ -5,6 +5,7 @@ else is sent: the answer never starts motion, releases a stop or satisfies a che
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from typing import Literal, Optional
@@ -110,32 +111,35 @@ def install_person_request_routes(app, store: PersonRequestStore, read_guard, re
         store.expire_due()
         stuck = [r for r in store.list() if r["delivery"]["state"] == "clear_failed" and r["robot_id"]]
         ids = {r["robot_id"] for r in store.list(state="open") if r["robot_id"]} | {r["robot_id"] for r in stuck}
-        for robot_id in sorted(ids):
-            opens = store.open_for(robot_id)
-            try:
-                held = await robots.read(robot_id)
-            except Exception as exc:  # noqa: BLE001 - what the robot shows is unknown, and the console says so
-                for record in opens:
-                    store.set_delivery(record["id"], "not_delivered", type(exc).__name__)
-                continue
-            held_id = (held or {}).get("id")
-            for older in opens[1:]:
-                store.set_delivery(older["id"], "waiting")
-            if not opens:
-                if held_id:   # CORE still shows a request Fleet has closed or lost: take it away
-                    try:
-                        await robots.clear(robot_id, held_id)
-                    except Exception as exc:  # noqa: BLE001 - tried again next round
-                        logger.warning("person request %s still on %s: %s", held_id, robot_id, type(exc).__name__)
-                        continue
-                    held_id = None
-            elif held_id == opens[0]["id"]:
-                store.set_delivery(opens[0]["id"], "delivered")   # read back just now
-            else:
-                await put(opens[0])   # missing (a CORE restart) or an older one: show the newest
-            for record in stuck:
-                if record["robot_id"] == robot_id and record["id"] != held_id:
-                    store.set_delivery(record["id"], "cleared")
+        # Robots in parallel: an offline robot's read timeout must not delay the others or the bay loop.
+        await asyncio.gather(*(reconcile_robot(robot_id, stuck) for robot_id in sorted(ids)))
+
+    async def reconcile_robot(robot_id: str, stuck: list) -> None:
+        opens = store.open_for(robot_id)
+        try:
+            held = await robots.read(robot_id)
+        except Exception as exc:  # noqa: BLE001 - what the robot shows is unknown, and the console says so
+            for record in opens:
+                store.set_delivery(record["id"], "not_delivered", type(exc).__name__)
+            return
+        held_id = (held or {}).get("id")
+        for older in opens[1:]:
+            store.set_delivery(older["id"], "waiting")
+        if not opens:
+            if held_id:   # CORE still shows a request Fleet has closed or lost: take it away
+                try:
+                    await robots.clear(robot_id, held_id)
+                except Exception as exc:  # noqa: BLE001 - tried again next round
+                    logger.warning("person request %s still on %s: %s", held_id, robot_id, type(exc).__name__)
+                    return
+                held_id = None
+        elif held_id == opens[0]["id"]:
+            store.set_delivery(opens[0]["id"], "delivered")   # read back just now
+        else:
+            await put(opens[0])   # missing (a CORE restart) or an older one: show the newest
+        for record in stuck:
+            if record["robot_id"] == robot_id and record["id"] != held_id:
+                store.set_delivery(record["id"], "cleared")
     app.state.person_request_reconcile = reconcile
     tick = getattr(app.state, "charge_bays_tick", None)   # Fleet's existing one-second loop carries it
     if tick is not None and robots is not None:
