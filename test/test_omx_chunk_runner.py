@@ -792,7 +792,7 @@ def test_the_trace_gets_one_row_per_tick():
 
 def test_the_trace_keeps_each_health_reading_once():
     """2026-11-07: every descent stop's trace had pwm {} and no current, so a contact could not be told by load."""
-    rows, status, clock, queue = [], [], [0.0], ["run approach_pinky", "stop"]
+    rows, status, clock, queue = [], [], [0.0], ["run approach_pinky"] + ["state"] * 70 + ["stop"]  # over 2 s: 2 readings
     robot = Pressing(after=10**9)
     robot.bus = Bus(current={"wrist_flex": 300})
     r = m.Runner(robot, library(), fps=30, status=status.append, clock=lambda: clock[0],
