@@ -57,17 +57,21 @@ def test_an_ask_past_its_own_expiry_is_gone_even_if_nobody_cleared_it(tmp_path):
     assert display.screen["person"] is None and _beeps(gpio) == base
 
 
-def test_a_stop_or_a_missing_core_outranks_the_ask_and_stays_silent(tmp_path):
-    module, display, _lamp, clock, gpio, _spawn = _recovering(tmp_path, person_request=ASK, estop=True,
-                                                              robot_mode="EMERGENCY")
+def test_a_stop_outranks_the_ask_and_stays_silent(tmp_path):
+    module, display, _lamp, _clock, gpio, _spawn = _recovering(tmp_path, person_request=ASK, estop=True,
+                                                               robot_mode="EMERGENCY")
     display.step()
     assert display.screen["kind"] == "stopped" and display.screen["person"] is None
     assert _beeps(gpio) == 4   # the e-stop alarm only; no call pattern
     assert ("change", module.BUZZER_CALL_HZ) not in gpio.events
-    _face_inputs(tmp_path, age=5.0, person_request=ASK)   # a dead CORE: the hand-over is stale
-    clock.now += 20
+
+
+def test_a_dead_core_has_no_ask_even_if_its_last_file_carried_one(tmp_path):
+    module, display, _lamp, _clock, gpio, _spawn = _recovering(tmp_path)
+    _face_inputs(tmp_path, age=5.0, person_request=ASK)   # written 5 s ago: stale, never read as CORE's
     display.step()
     assert display.screen["row"] == "core_missing" and display.screen["person"] is None
+    assert ("change", module.BUZZER_CALL_HZ) not in gpio.events
 
 
 def test_the_failed_screen_outranks_the_ask(tmp_path):
