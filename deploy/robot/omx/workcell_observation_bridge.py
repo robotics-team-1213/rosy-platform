@@ -222,15 +222,16 @@ def get_arm_hold(fleet_url, source_id, token, *, context):
         return ArmIncidentHold.model_validate_json(response.read(16385))
 
 
-def post_port_event(fleet_url, workcell_id, token, event, *, context):
-    """D-996 2: one port event of this workcell; the same event_id resent is the same ledger row."""
+def post_workcell(fleet_url, workcell_id, token, tail, body, *, context):
+    """D-996: one intake reading (tail 'intake-readings') or port event ('port-events') of this workcell; a resend of
+    the same body is the same ledger row."""
     url = (secure_url(fleet_url, 'https') + '/api/fleet/workcell-observations/' + quote(workcell_id, safe='')
-           + '/port-events')
-    request = Request(url, data=event.model_dump_json().encode(), method='POST',
+           + '/' + tail)
+    request = Request(url, data=body.model_dump_json().encode(), method='POST',
                       headers={'Content-Type': 'application/json', 'X-Workcell-Observation-Token': token})
     with build_opener(HTTPSHandler(context=_verified(context)), _NoRedirect()).open(request, timeout=10) as response:
         if response.status != 200:
-            raise OSError('port event was not accepted')
+            raise OSError(tail + ' was not accepted')
         return json.loads(response.read(4097))
 
 
@@ -263,8 +264,9 @@ class ArmIncidentLink:
     def post(self, report):
         return post_arm_incident(self.fleet_url, self.source_id, self.token, report, context=self.context)
 
-    def post_port_event(self, event):
-        return post_port_event(self.fleet_url, self.workcell_id, self.token, event, context=self.context)
+    def post_intake_reading(self, reading):
+        return post_workcell(self.fleet_url, self.workcell_id, self.token, 'intake-readings', reading,
+                             context=self.context)
 
     def hold(self):
         return get_arm_hold(self.fleet_url, self.source_id, self.token, context=self.context)

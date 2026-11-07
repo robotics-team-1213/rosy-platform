@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Port events from this cell PC to its Fleet (D-996 2): written to a local outbox first, resent with the same event_id.
+"""Intake readings from this cell PC to its Fleet (D-996 2-3): written to a local outbox first, resent unchanged.
 
-An identity fact from cell_identity becomes container.received_at_intake (observed) or container.handling_failed
-(MISMATCH / UNREADABLE). The observation_ref is a fresh uuid per observation, so it never repeats after a restart, and
-the event is stored before it is sent, so a resend is byte-for-byte the same event (Fleet answers with the same row).
+The PC sends what it read (a tag id, unreadable, or a mismatch) at the conveyor end or the A/B wrist; the cell Fleet
+maps the tag to an object_ref, compares it with the trip's declaration and writes the port events. So the PC never
+holds an app's cargo code (D4). The observation_ref is a fresh uuid per reading, so it never repeats after a restart,
+and the reading is stored before it is sent, so a resend is the same reading (Fleet answers with the same rows).
 
-  port_event_outbox.py send      resend every unsent event (also run before each carry, like the incident outbox)
+  port_event_outbox.py send --arm ARM     resend every unsent reading (also run before each carry)
 """
 from __future__ import annotations
 
@@ -19,51 +20,42 @@ for extra in (HERE.parents[3] / "contracts/foundation",):
     if extra.is_dir() and str(extra) not in sys.path:
         sys.path.append(str(extra))
 
-from core_common.protocol.port_events import PortEvent, event_id  # noqa: E402
+from core_common.protocol.port_events import IntakeReading  # noqa: E402
 
 
 def outbox_dir() -> Path:
     from joint_tune import lock_root
 
-    return lock_root() / "port-events" / "outbox"
+    return lock_root() / "intake-readings" / "outbox"
 
 
-def new_observation_ref() -> str:
-    return "obs-" + uuid4().hex
+def reading(point: str, result: dict, *, arm_mission_id: str | None = None,
+            observed_at: datetime | None = None) -> IntakeReading:
+    """A cell_identity point result ({"state", "tag"?}) as the reading Fleet translates."""
+    return IntakeReading(observation_ref="obs-" + uuid4().hex, point=point, state=result["state"],
+                         tag=result.get("tag"), arm_mission_id=arm_mission_id,
+                         observed_at=observed_at or datetime.now(timezone.utc))
 
 
-def intake_event(fact: dict, *, workcell_id: str, intake_point: str, observation_ref: str | None = None,
-                 observed_at: datetime | None = None) -> PortEvent:
-    """The conveyor-end (or wrist) fact as the one port event Harbor reads. Unreadable never becomes observed."""
-    ref, at = observation_ref or new_observation_ref(), observed_at or datetime.now(timezone.utc)
-    if "failed" in fact:
-        kind = "container.handling_failed"
-        fields = {"reason": fact["failed"], "object_ref": fact.get("object_ref")}
-    else:
-        kind = "container.received_at_intake"
-        fields = {"object_ref": fact["object_ref"], "intake_point": intake_point, "identity": fact["identity"]}
-    return PortEvent(event_id=event_id(workcell_id, ref, kind), kind=kind, observation_ref=ref, observed_at=at, **fields)
-
-
-def queue(event: PortEvent, directory: Path | None = None) -> Path:
+def queue(item: IntakeReading, directory: Path | None = None) -> Path:
     directory = directory or outbox_dir()
     directory.mkdir(parents=True, exist_ok=True)
-    path = directory / f"{event.event_id}.json"
+    path = directory / f"{item.observation_ref}.json"
     if not path.exists():  # the first write wins: a resend must carry the stored bytes
         tmp = path.with_suffix(".tmp")
-        tmp.write_text(event.model_dump_json(), encoding="utf-8")
+        tmp.write_text(item.model_dump_json(), encoding="utf-8")
         tmp.replace(path)
     return path
 
 
 def send(link, directory: Path | None = None) -> bool:
-    """Resend every unsent event; a file leaves the outbox only once Fleet recorded it. False if any stays."""
+    """Resend every unsent reading; a file leaves the outbox only once Fleet recorded it. False if any stays."""
     ok = True
     for path in sorted((directory or outbox_dir()).glob("*.json"), key=lambda p: p.stat().st_mtime):
         try:
-            link.post_port_event(PortEvent.model_validate_json(path.read_text(encoding="utf-8")))
+            link.post_intake_reading(IntakeReading.model_validate_json(path.read_text(encoding="utf-8")))
         except Exception as exc:  # unreachable, refused or a bad file: it stays for the next send
-            print(f"port event {path.name} not sent: {type(exc).__name__}: {str(exc)[:120]}")
+            print(f"intake reading {path.name} not sent: {type(exc).__name__}: {str(exc)[:120]}")
             ok = False
             continue
         path.unlink()

@@ -6,7 +6,6 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "deploy/robot/omx"))
 import cell_identity as ci  # noqa: E402
 
-TABLE = {"100": "CNTR-1", "101": "CNTR-2"}
 READ_100 = {"state": "read", "tag": 100}
 NOTHING = {"state": "unreadable"}
 
@@ -25,18 +24,31 @@ def test_one_read_face_is_enough_but_two_faces_must_agree():
     assert ci.point(READ_100, {"state": "mismatch", "tags": [102, 103]})["state"] == "mismatch"
 
 
-def test_identity_is_observed_only_when_the_read_tag_is_the_declared_object_ref():
-    assert ci.identify([READ_100], "CNTR-1", TABLE) == {"identity": "observed", "object_ref": "CNTR-1"}
-    assert ci.identify([READ_100], "CNTR-2", TABLE)["failed"] == "MISMATCH"
-    assert ci.identify([{"state": "read", "tag": 150}], "CNTR-1", TABLE)["failed"] == "MISMATCH"  # not in the table
-    assert ci.identify([READ_100], None, TABLE)["failed"] == "MISMATCH"  # nothing declared: no match to make
-    # no FIFO, no guess: unreadable everywhere stays UNREADABLE even with a declaration
-    assert ci.identify([NOTHING, NOTHING], "CNTR-1", TABLE) == {"failed": "UNREADABLE", "object_ref": "CNTR-1"}
+def test_the_wrist_holds_a_mismatch_before_the_descent_and_an_unreadable_wrist_keeps_the_end():
+    assert ci.place_gate(READ_100, {"state": "read", "tag": 101}) == {"place": False, "hold": "MISMATCH",
+                                                                      "tags": [100, 101]}
+    assert ci.place_gate(READ_100, NOTHING) == {"place": True, "tag": 100}
+    assert ci.place_gate(NOTHING, READ_100) == {"place": True, "tag": 100}  # the wrist read it
+    assert ci.place_gate(NOTHING, NOTHING)["hold"] == "UNREADABLE"  # no guess: a person decides
 
 
-def test_the_wrist_holds_a_mismatch_before_the_place_and_an_unreadable_wrist_keeps_the_end():
-    held = ci.place_gate(READ_100, {"state": "read", "tag": 101}, "CNTR-1", TABLE)
-    assert held["place"] is False and held["hold"] == "MISMATCH"
-    assert ci.place_gate(READ_100, NOTHING, "CNTR-1", TABLE)["place"] is True
-    assert ci.place_gate(NOTHING, READ_100, "CNTR-1", TABLE)["fact"]["identity"] == "observed"  # the wrist read it
-    assert ci.place_gate(NOTHING, NOTHING, "CNTR-1", TABLE)["hold"] == "UNREADABLE"
+class Cell:
+    def __init__(self, frames):
+        self.frames = frames
+
+    def frame(self, camera):
+        assert camera == "wrist"
+        return self.frames.pop(0)
+
+
+def test_the_hover_hook_refuses_a_mismatch_and_queues_what_the_wrist_read(tmp_path, monkeypatch):
+    end = tmp_path / "end.json"
+    end.write_text('{"state": "read", "tag": 100}')
+    queued = []
+    monkeypatch.setattr(ci, "read_frames", lambda frames, k: {"state": "read", "tag": frames[0]})
+    config = {"identity": {"end_path": str(end), "frames": 3, "k": 2, "arm_mission_id": "physical-1"}}
+    run = ci.hook(config, Cell([101, 101, 101]), lambda *a: queued.append(a))
+    assert run()["verdict"] == "refuse"
+    assert queued == [("wrist", {"state": "read", "tag": 101}, "physical-1")]
+    assert ci.hook(config, Cell([100] * 3), None)()["verdict"] == "pass"
+    assert ci.hook({}, Cell([]), None) is None  # S and rescue carries have no identity step

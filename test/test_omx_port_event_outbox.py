@@ -1,4 +1,4 @@
-"""port_event_outbox (D-996 2): an identity fact becomes one port event, kept until Fleet records it, resent unchanged."""
+"""port_event_outbox (D-996 2-3): a reading (tag id only) is kept until Fleet records it and resent unchanged."""
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -14,32 +14,30 @@ import port_event_outbox as po  # noqa: E402
 T = datetime(2026, 11, 8, 3, 0, tzinfo=timezone.utc)
 
 
-def test_observed_and_failed_facts_become_the_right_kinds():
-    seen = po.intake_event({"identity": "observed", "object_ref": "CNTR-1"}, workcell_id="supply",
-                           intake_point="intake-A", observed_at=T)
-    assert seen.kind == "container.received_at_intake" and seen.identity == "observed" and seen.matches("supply")
-    failed = po.intake_event({"failed": "UNREADABLE", "object_ref": "CNTR-1"}, workcell_id="supply",
-                             intake_point="intake-A", observed_at=T)
-    assert failed.kind == "container.handling_failed" and failed.reason == "UNREADABLE" and failed.identity is None
-    assert seen.observation_ref != failed.observation_ref  # a fresh ref per observation, also after a restart
+def test_a_point_result_becomes_a_reading_with_a_fresh_ref():
+    a = po.reading("conveyor_end", {"state": "read", "tag": 100}, observed_at=T)
+    b = po.reading("wrist", {"state": "unreadable"}, arm_mission_id="physical-1", observed_at=T)
+    assert a.tag == 100 and b.tag is None and b.arm_mission_id == "physical-1"
+    assert a.observation_ref != b.observation_ref  # a fresh ref per reading, also after a restart
+    with pytest.raises(ValueError):
+        po.reading("conveyor_end", {"state": "read", "tag": 100}, arm_mission_id="physical-1")
 
 
 class Link:
     def __init__(self, fail=False):
         self.fail, self.sent = fail, []
 
-    def post_port_event(self, event):
+    def post_intake_reading(self, item):
         if self.fail:
             raise OSError("unreachable")
-        self.sent.append(event)
+        self.sent.append(item)
 
 
-def test_an_event_stays_until_fleet_records_it_and_is_resent_unchanged(tmp_path):
-    event = po.intake_event({"identity": "observed", "object_ref": "CNTR-1"}, workcell_id="supply",
-                            intake_point="intake-A", observed_at=T)
-    po.queue(event, tmp_path)
-    po.queue(event.model_copy(update={"intake_point": "changed"}), tmp_path)  # the first stored bytes win
+def test_a_reading_stays_until_fleet_records_it_and_is_resent_unchanged(tmp_path):
+    item = po.reading("conveyor_end", {"state": "read", "tag": 100}, observed_at=T)
+    po.queue(item, tmp_path)
+    po.queue(item.model_copy(update={"tag": 101}), tmp_path)  # the first stored bytes win
     assert po.send(Link(fail=True), tmp_path) is False and len(list(tmp_path.glob("*.json"))) == 1
     link = Link()
     assert po.send(link, tmp_path) is True
-    assert link.sent == [event] and not list(tmp_path.glob("*.json"))
+    assert link.sent == [item] and not list(tmp_path.glob("*.json"))
