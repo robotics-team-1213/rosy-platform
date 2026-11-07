@@ -90,6 +90,7 @@ def test_a_person_restarts_exactly_the_user_units_services_yaml_flags():
                 if not entry.get("operator_restart"):
                     continue
                 assert entry["run"] == "active", unit
+                assert entry.get("gpu") != "idle-yield", unit  # a restart would take back a GPU that was lent out
                 stem = unit[:-len("@.service")] if "@" in unit else None
                 found |= {f"{stem}@{i}.service" for i in entry["instances"]} if stem else {unit}
         return found

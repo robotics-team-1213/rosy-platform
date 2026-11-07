@@ -61,8 +61,12 @@ def run(host: str, action: str, unit: str | None, config: dict, *, runner=subpro
     if target is None:
         print(f'{host}: no SSH target in lab-hosts.json', file=sys.stderr)
         return 2
-    done = runner(['ssh', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=10', '--', target,
-                   'sudo', '-n', HELPER, *command['argv']], check=False, timeout=60)
+    try:
+        done = runner(['ssh', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=10', '--', target,
+                       'sudo', '-n', HELPER, *command['argv']], check=False, timeout=60)
+    except subprocess.TimeoutExpired:
+        print(f'{host} {action}: no answer in 60 s; the result is unknown, check the PC', file=sys.stderr)
+        return 1
     if done.returncode:
         print(f'{host} {action}: {MEANING.get(done.returncode, f"failed with exit {done.returncode}")}', file=sys.stderr)
     return done.returncode

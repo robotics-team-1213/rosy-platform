@@ -51,6 +51,13 @@ def test_a_helper_refusal_keeps_its_exit_code_and_says_why(capsys):
     assert 'arm session' in capsys.readouterr().err
 
 
+def test_a_hung_ssh_reports_an_unknown_result(capsys):
+    def run(argv, **_):
+        raise subprocess.TimeoutExpired(argv, 60)
+    assert ops.run('site', 'reboot', None, CONFIG, runner=run) == 1
+    assert 'unknown' in capsys.readouterr().err
+
+
 def test_a_mistyped_confirm_stops_before_anything_loads(monkeypatch):
     monkeypatch.setattr(ops.lab_hosts, 'load', lambda: pytest.fail('read the host list'))
     with pytest.raises(SystemExit):

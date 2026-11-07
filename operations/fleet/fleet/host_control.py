@@ -33,7 +33,7 @@ HOSTS: dict[str, dict[str, frozenset[str]]] = {
             "rosy-omx-camera@top.service",
         )
     },
-    "ai": {unit: RESTART_ONLY for unit in ("rosy-ollama.service", "rosy-situation.service")},
+    "ai": {"rosy-situation.service": RESTART_ONLY},
     "model": {
         unit: RESTART_ONLY for unit in (
             "rosy-dataset-review-account.service",
