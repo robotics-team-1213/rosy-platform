@@ -114,6 +114,7 @@ unsafe 요청은 same-origin 검사를 거친다. 오류는 기존 Fleet detail 
 
 | 경로 | 동작 |
 |---|---|
+| PUT /api/fleet/auth/device-clients/{robot_id} | 사람 쿠키가 아니라 Fleet 등록 키. callback, home_url, label로 그 로봇 줄만 만들거나 주소를 고침. `enabled`는 바꾸지 않음(D-992) |
 | POST /api/fleet/auth/clients | client_id, redirect_uris, resources와 선택 label, home_url로 앱 등록 |
 | PATCH /api/fleet/auth/clients/{client_id} | revision과 enabled/redirect_uris/resources/label/home_url 중 변경값 |
 | GET /api/fleet/auth/accounts | 비밀 없는 계정 목록 |
@@ -196,7 +197,7 @@ unsafe REST와 쿠키 WebSocket handshake는 정확한 same-origin을 요구한�
 CORE의 중앙 계정은 `robot.read`/`robot.operate`/`robot.admin`을 각각 검사한다.
 중앙 계정으로 회수와 무관하게 남는 legacy token·enrollment를 발급하지 않는다.
 
-수신 설정은 `auth.account_client_file`이 가리키는 보호된 JSON 파일이다.
+수신 설정은 `auth.account_client_file`이 가리키는 보호된 JSON 파일이거나, Fleet이 허브 연결 뒤 TLS로 보내 `PUT /api/v1/account/receiver`로 받은 파일이다(D-992). 운영자 파일이 있으면 받기를 거절한다.
 필드는 issuer, client_id, resource, callback, public_key_files(kid→PEM 경로),
 encryption_key_file(Fernet key 경로), session_db이며 운영 비밀을 기본 설정에 넣지 않는다.
 resource는 해당 호스트의 실제 robot identity와 일치해야 한다. 설정이 없으면 기존

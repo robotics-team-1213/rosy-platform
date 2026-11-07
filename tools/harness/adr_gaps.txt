@@ -111,3 +111,4 @@ D-983 reserved in another in-flight branch (refs/adr/D-983), absent from this D-
 D-984 reserved in another in-flight branch (refs/adr/D-984), absent from this D-985 branch; remove when its ADR lands
 D-988 reserved in another in-flight branch (refs/adr/D-988), absent from this D-990 branch
 D-989 reserved in another in-flight branch (refs/adr/D-989), absent from this D-990 branch
+D-991 reserved in another in-flight branch (refs/adr/D-991), absent from this D-992 branch

@@ -36,7 +36,8 @@ def _form(body):
 
 class AccountAuthority:
     def __init__(self, path, *, issuer, private_key, key_id, clients,
-                 resolve_family, revoke_family, clock=time.time, trusted_public_keys=None):
+                 resolve_family, revoke_family, clock=time.time, trusted_public_keys=None,
+                 registrar_token_sha256=None):
         from joserfc.jwk import OKPKey
         if not _https(issuer) or urlsplit(issuer).query:
             raise ValueError('invalid account issuer')
@@ -46,7 +47,7 @@ class AccountAuthority:
             validate_client(client, settings['redirect_uris'], settings['resources'])
         self.path, self.issuer, self.private_key, self.key_id = path, issuer.rstrip('/'), private_key, key_id
         self.resolve_family, self.revoke_family = resolve_family, revoke_family
-        self.clock = clock
+        self.clock, self.registrar_token_sha256 = clock, registrar_token_sha256
         key = OKPKey.import_key(private_key)
         self.public_keys = dict(trusted_public_keys or {})
         public = key.as_pem(private=False)

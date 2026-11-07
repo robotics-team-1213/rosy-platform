@@ -194,11 +194,12 @@ class EnrollmentService(HubLinkMixin, SafetyReleaseMixin):
     def __init__(self, store: EnrollmentStore, roster, *, key: bytes | None,
                  key_error: str | None = None, fleet_name: str = "rosy-site",
                  discovery=None, transport: httpx.AsyncBaseTransport | None = None,
-                 tls_bindings=None, hub_link: dict | None = None,
+                 tls_bindings=None, hub_link: dict | None = None, account_link=None,
                  clock: Callable[[], float] = time.time) -> None:
         self._store = store
         #: D-555: {expected_hostname, ca_pem} robots get with a hub credential; None = unavailable.
         self._hub_link = hub_link
+        self._account_link = account_link
         self._roster = roster
         self._key = key
         self.unavailable_reason = (key_error or "robot credential key is not configured") if key is None else None
@@ -346,11 +347,7 @@ class EnrollmentService(HubLinkMixin, SafetyReleaseMixin):
                 "legacy_lifetime": row["source"] != "pair-site",
                 "lifetime_shortened": (row["source"] == "pair-site" and lifetime is not None
                                        and lifetime < SITE_LIFETIME_S - 86400.0),
-                # D-555: never the digest itself.
-                "hub_linked": bool(row.get("hub_digest")), "hub_host": row.get("hub_host"),
-                "hub_online": bool(row.get("hub_digest")) and self._hub_online(row["robot_id"]),
-                "hub_state": self._hub_state(row),
-                "hub_linkable": self._hub_link is not None and self._tls_client(row["robot_id"]) is not None,
+                **self._hub_fields(row),
             })
         return {"available": self.available, "unavailable_reason": self.unavailable_reason,
                 "static_robot_ids": sorted(self._roster.static_ids), "robots": robots,

@@ -105,3 +105,9 @@
 - 변경: 등록부에서 그 사람이 권한을 가진 사용 중인 앱을 `/api/fleet/auth/apps`로 준다. 공용 세션 응답과 공용 계정 표시가 이를 앱 전환 메뉴로 보여 Robot·Pilot·Games·Monitoring·Learning·Fleet이 같은 목록을 읽는다.
 - 증거: 원격 시험 결과는 착지 기록을 따른다. 실제 현장 앱 사이 이동은 확인하지 못했다.
 - Gate: 없음. CE: 해당 없음 — 결정된 단계의 구현이다.
+
+## 2026-11-07 · uncommitted · feat(account): 장비 등록과 등록부 연결 (D-992)
+
+- 변경: Fleet 등록 키로 그 로봇 줄만 쓰는 `PUT /api/fleet/auth/device-clients/{robot_id}`를 더했다. 관리자의 정지는 재등록으로 풀리지 않는다.
+- 증거: 원격 시험 결과는 착지 기록을 따른다. 실물 로봇과 현장 Account의 전체 흐름은 확인하지 못했다.
+- Gate: 없음. CE: 해당 없음 — 결정된 단계의 구현이다.

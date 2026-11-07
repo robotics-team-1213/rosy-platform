@@ -11,6 +11,10 @@ from rosy_account.password_session import COOKIE, SessionStorageUnavailable, Sta
 
 
 def install_account_authority_routes(app, *, sessions, authority):
+    from rosy_account.device_client_routes import install_device_client_routes
+    install_device_client_routes(app, authority, registrar_token_sha256=authority.registrar_token_sha256,
+                                 clock=authority.clock)
+
     async def call(fn, *args):
         try:
             return await run_in_threadpool(fn, *args)

@@ -32,7 +32,8 @@ def load_account_config(path):
     data = json.loads(path.read_text(encoding="utf-8"), object_pairs_hook=unique)
     required = {"issuer", "site_id", "key_id", "private_key_file", "clients"}
     if (not isinstance(data, dict) or not required <= set(data)
-            or set(data) - required - {"bootstrap_admin_login", "public_key_files"}
+            or set(data) - required - {"bootstrap_admin_login", "public_key_files", "registrar_token_sha256"}
+            or ("registrar_token_sha256" in data and not re.fullmatch(r"[0-9a-f]{64}", str(data["registrar_token_sha256"])))
             or any(not isinstance(data[key], str) or not data[key] for key in required - {"clients"})
             or not re.fullmatch(r"[A-Za-z0-9._-]{1,96}", data["site_id"])
             or not isinstance(data["clients"], dict) or not data["clients"]
