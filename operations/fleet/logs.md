@@ -5365,3 +5365,8 @@
 - 변경: 흐름이 만료되거나 Account가 끊겨 콜백이 실패하면 브라우저는 /console로 돌아간다. API 호출은 그대로 401·503이고 어느 쪽도 세션을 만들지 않는다.
 - 증거: 실제 Account와 Fleet을 두 출처로 띄운 왕복에서 두 탭 로그인과 교환 중 장애가 JSON 화면에서 멈추는 것을 재현했다.
 - gate 변화: SOURCE 회귀. 현장 수용은 별도다.
+
+## 2026-11-08 · uncommitted · 관제 화면 파일을 다시 받지 않고 압축해 보낸다
+- 변경: 콘솔 문서·자산·/common 파일이 ETag가 맞으면 304로 답한다. Fleet 응답은 1 KB 넘으면 gzip으로 보낸다. `no-cache`는 그대로라 배포 직후 새 파일을 바로 받는다.
+- 증거: 관제 첫 화면은 파일 97개 917 KB(gzip 315 KB)를 받는다. Starlette FileResponse가 If-None-Match를 무시해 레일을 누를 때마다 전부 다시 받았다. test_server_app.py에 304·gzip 시험을 더했다.
+- gate 변화: SOURCE 회귀. 현장 수용은 별도다.
