@@ -440,7 +440,7 @@ Command Manager는 모든 cmd_vel에 상한 클리핑을 적용한다.
 | 단계 | 기본 임계값 | 동작 |
 |---|---|---|
 | Warning | 20% | `battery.low` 경고 이벤트 발행, 상태 표시 |
-| Critical | 10% | 설정 정책 실행: `RETURN_HOME` 또는 `STOP` + `battery.critical` 이벤트 |
+| Critical | 10% | 설정 정책 실행: `RETURN_HOME` 또는 `STOP` + `battery.critical` 이벤트. 로봇 몸은 LCD를 끄고 부저로 충전을 요구한다(D-502) |
 | Deep | 5% | 모터 정지 → 유예 후 호스트 정상 종료 + `battery.deep` 이벤트 (D-27) |
 
 임계값과 정책은 설정으로 변경 가능해야 하며, Critical 정책 실행은 감사 로그에 기록된다.

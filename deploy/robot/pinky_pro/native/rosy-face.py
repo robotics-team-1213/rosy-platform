@@ -60,7 +60,9 @@ the stage and the battery into one state:
 * the buzzer sounds on state changes only: once when ready, three times on
   failure, two low tones on caution; caution is not repeated within
   BUZZER_REPEAT_S. D-381: entering the emergency pattern (an e-stop) adds
-  four higher beeps, once per entry, whatever the health state says;
+  four higher beeps, once per entry, whatever the health state says. At SAF-005
+  critical (10% or under) the LCD goes dark and three beeps repeat every 30 s
+  until the pack recovers (D-502 amendment 2026-11-07);
 * the WS2812 lamp shows the state's pattern through ``lamp_pattern`` (one
   helper process per pattern, /dev/ws281x_pwm granted to this unit alone),
   and only when the driver runs on PWM0 channel 3 (GPIO19; channel 2 is the

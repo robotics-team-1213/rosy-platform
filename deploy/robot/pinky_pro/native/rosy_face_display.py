@@ -67,6 +67,12 @@ TEST_RESULT = "run/rosy-display/display-test.json"
 #: D-472 addendum 5: a blink may stand in for these normal patterns, moving or not. Booting,
 #: failed, emergency, caution and blocked (D-381) always win: refused, or cut short.
 IDENTIFY_OVER = frozenset({"ready", "manual", "navigating", "docking", "illumination"})
+#: SAF-005 critical (D-502 amendment 2026-11-07): at or under this the screen goes dark and the buzzer
+#: asks for a charger. Two readings in a row, so one motor sag does nothing; out above EXIT, or after the
+#: sensor stays silent MISSING readings: a reading that is gone is not low, and it must not beep for ever.
+BATTERY_URGENT_PERCENT, BATTERY_URGENT_EXIT_PERCENT = 10.0, 13.0
+BATTERY_URGENT_SAMPLES, BATTERY_URGENT_MISSING = 2, 4
+BATTERY_URGENT_REPEAT_S = 30.0
 
 
 def _read_json(path: Path) -> dict:
@@ -174,6 +180,10 @@ class FaceDisplay:
         self._battery_interval = battery_interval
         self._battery_due: float | None = None
         self._battery_value: tuple[float, float] | None = None
+        self._urgent = False
+        self._urgent_low = 0
+        self._urgent_missing = 0
+        self._urgent_sounded: float | None = None
         self._drawn: str | None = None
         self._state: str | None = None
         self._sounded: dict[str, float] = {}
@@ -391,6 +401,34 @@ class FaceDisplay:
                 screen = {**screen, "row": "network_recovery", "recovery_page": page}
         return screen
 
+    def _judge_urgent(self, reading: tuple[float, float] | None) -> None:
+        """One new battery reading against the urgent thresholds."""
+        if reading is None:
+            self._urgent_missing += 1
+            if self._urgent_missing >= BATTERY_URGENT_MISSING:
+                self._urgent, self._urgent_low = False, 0
+            return
+        self._urgent_missing = 0
+        self._urgent_low = self._urgent_low + 1 if reading[0] <= BATTERY_URGENT_PERCENT else 0
+        if self._urgent_low >= BATTERY_URGENT_SAMPLES:
+            self._urgent = True
+        elif reading[0] > BATTERY_URGENT_EXIT_PERCENT:
+            self._urgent = False
+
+    def _screen(self, view: dict, now: float) -> dict | None:
+        """The table's screen, dark while the battery is urgent. An update or a shutdown stays visible."""
+        screen = self.screen_of(view, now)
+        if self._urgent and screen is not None and screen["kind"] not in ("update", "shutdown"):
+            return {**screen, "kind": "sleep", "row": "standby", "backlight": 0, "awake": False}
+        return screen
+
+    def _urgent_alarm(self, now: float) -> None:
+        if not self._urgent:
+            self._urgent_sounded = None
+        elif self._urgent_sounded is None or now - self._urgent_sounded >= BATTERY_URGENT_REPEAT_S:
+            self._urgent_sounded = now
+            self._buzzer.announce("battery_urgent")
+
     def _lcd_call(self, name: str, *args) -> None:
         action = getattr(self.lcd, name, None)
         if action is not None:
@@ -421,6 +459,7 @@ class FaceDisplay:
         if self._battery_due is None or now >= self._battery_due:
             self._battery_value = self._battery.read()
             self.battery_reads += 1
+            self._judge_urgent(self._battery_value)
             self._battery_due = now + self._battery_interval
         view = read_view(self.root, self._battery_value)
         # D-385: 기다리는 동안 무대 제목이 1 fps 로 숨쉰다 — 끝난 상태는 고요히 그대로.
@@ -430,7 +469,7 @@ class FaceDisplay:
         if state != self._state:
             self._state = state
         core = self._core()
-        screen = self.screen = self.screen_of(view, now)
+        screen = self.screen = self._screen(view, now)
         pres = self._present(view, state, core, screen)
         pattern = pres.lamp
         if self._lamp is not None:
@@ -439,7 +478,7 @@ class FaceDisplay:
             self._lamp.show(pattern)
             self._lamp.poll()
         if self.handle_test() is not None:
-            screen = self.screen = self.screen_of(view, now)
+            screen = self.screen = self._screen(view, now)
         self._power(screen)
         kind = screen["kind"] if screen else "status"
         redrawn = False
@@ -479,6 +518,7 @@ class FaceDisplay:
         # the lamp and any status card first, especially on emergency entry.
         self._announce(pres.sound, now)
         self._reverse_alarm(pres.reversing, now)
+        self._urgent_alarm(now)
         return redrawn
 
     def _reverse_alarm(self, reversing: bool, now: float) -> None:
