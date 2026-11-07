@@ -5365,3 +5365,9 @@
 - 변경: 흐름이 만료되거나 Account가 끊겨 콜백이 실패하면 브라우저는 /console로 돌아간다. API 호출은 그대로 401·503이고 어느 쪽도 세션을 만들지 않는다.
 - 증거: 실제 Account와 Fleet을 두 출처로 띄운 왕복에서 두 탭 로그인과 교환 중 장애가 JSON 화면에서 멈추는 것을 재현했다.
 - gate 변화: SOURCE 회귀. 현장 수용은 별도다.
+
+## 2026-11-08 · uncommitted · D-998 알림 producer 비활성 경계
+- 변경: 기존 알림 worker는 동일한 공용 채널 adapter를 쓰며 outbox·최종 사건 검사·발송 owner를 유지한다. 새 producer seam은 기본 꺼짐이고 동시 활성·미수용 전환을 거절한다.
+- 증거: 기존 test_notifications/test_final_notifications와 독립 전달 시험을 커밋 SHA에서 원격으로 확인한다. 실제 채널 발송·전환은 하지 않는다.
+- gate 변화: 없음. SOURCE 회귀와 실제 전달·현장 수용을 구별한다.
+- CE: 해당 없음 — 전환 금지 이유와 범위는 D-998에 명시했다.

@@ -1132,3 +1132,9 @@
 - gate 변화: SOURCE 회귀 검증; ARTIFACT/DEVICE/FIELD 수용 근거로 사용하지 않음. 최종 재조립 SHA 원격 회귀와 FULL은 별도.
 - 결정: API v1.363; 기존 CORE 최종 명령·모드 owner 유지.
 - 교훈: CE 해당 없음 — 최종 코드·회귀 시험·API 계약으로 판단 근거를 재현할 수 있음.
+
+## 2026-11-08 · uncommitted · D-998 알림 전달 계약과 채널 adapter 추출
+- 변경: DeliveryRequest/Receipt/OwnerReply와 D-661 고정 채널 전송을 공용화했다. Fleet의 사건 검사·원장은 유지한다.
+- 증거: 독립 전달 서비스 시험과 기존 Fleet 알림 회귀를 커밋 SHA의 원격 시험으로 요청한다. 아직 실제 채널 수용 근거는 없다.
+- gate 변화: 없음. ARTIFACT/DEVICE/FIELD와 발송 owner 전환은 별도다.
+- CE: 해당 없음 — 의미가 같은 adapter만 추출하는 경계는 D-998과 회귀 시험에 남는다.

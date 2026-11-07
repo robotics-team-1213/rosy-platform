@@ -6,6 +6,8 @@ Additive schema changes bump the API Ref MINOR; envelope protocol_version 은 1.
 
 from __future__ import annotations
 
+from .notification_delivery import DeliveryRequest, DeliveryReceipt, DeliveryOwnerReply  # noqa: F401
+
 from .device_actions import (  # noqa: F401
     DeviceActionState, DeviceActionPhaseReceipt, MissionPhaseProgress, LocalStopState,
     StopRequestSource, ResolvedTargetEvidence, FleetActionGrant, DeviceActionReceipt,

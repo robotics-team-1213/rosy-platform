@@ -38,8 +38,8 @@
 
 ## 최근 기록
 
+- 2026-11-08 · uncommitted · D-998 알림 전달 계약과 채널 adapter 추출
 - 2026-11-06 · uncommitted · feat(fleet): 관제 수동 모드 전환
 - 2026-11-06 · 051927f313 · fix(config): 명시적인 motor readiness 기본 profile
 - 2026-11-04 · uncommitted · feat(foundation): PeerBeacon·PeerRow 스키마와 StateSnapshot.peers
 - 2026-11-02 · uncommitted · D-963 UsbCameraReport·UsbCameraDecisions
-- 2026-11-02 · uncommitted · 작업대 관측 manifest의 카메라 `device_path`를 선택 항목으로

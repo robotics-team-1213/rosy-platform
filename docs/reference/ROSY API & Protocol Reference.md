@@ -5,9 +5,38 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.365
+**Version:** v1.377
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.377 독립 알림 전달 접수 (D-998, 전환 전)
+
+독립 `rosy-notifications` 서비스의 표면이다. CORE/Fleet에 mount하거나 현장 TLS 경로를 추가하지 않는다.
+등록된 설치 단위 기계 bearer만 허용하며 사람·장치 토큰을 쓰지 않는다. worker 기본 꺼짐, 기존 Fleet 발송이 정본이다.
+
+| 경로 | 계약 |
+|---|---|
+| `POST /api/notifications/v1/deliveries` | `DeliveryRequest` 접수. 동일 생산자·notification_id·본문은 기존 `DeliveryReceipt`(200), 본문 충돌409. 생산자/채널 범위 위반403, 미등록 자격401, 예산 초과429, 시간/본문 검증422,4096 bytes 초과413 |
+| `GET /api/notifications/v1/deliveries/{notification_id}` | 인증된 생산자 자신의 `DeliveryReceipt`만 조회(200). 없거나 다른 생산자 건이면404 |
+
+`DeliveryRequest`는 추가 키 금지다. 필수 필드는 `producer`(`fleet` 또는 `harbor`), `notification_id`, `channel`(등록 key),
+`kind`(Fleet `OPEN`/`CLOSED`/`FINAL_REVIEW`, Harbor `HOLD`), `subject_id`, `occurrence_id`, `revision`, `classification`,
+`observed_at`, `expires_at`다. 식별자/분류는 `[A-Za-z0-9_.:-]{1,96}`, 시각은 유한 UTC epoch seconds다.
+접수는 관측≤현재<만료≤관측+생산자 TTL을 검사한다. URL·수신자·본문 자유 텍스트·토큰·원본 자료는 받지 않는다.
+한 notification_id는 한 채널 건이며 생산자는 원래 발생 identity에 채널을 결속하고 재접수에도 같은 본문을 쓴다.
+
+`DeliveryReceipt`는 `producer`, `notification_id`, `state`, `attempts`만 반환한다. state는 `PENDING`, `RETRY`, `SENDING`,
+`SENT`, `UNKNOWN`, `EXPIRED`, `SUPERSEDED`, `FAILED`다. SENT는 provider 수락이며 읽음·인수·해결을 뜻하지 않는다.
+UNKNOWN은 자동 재전송하지 않는다.7일 보관·생산자별 최대1000건/분당20건이며 더 작은 승인 예산이 가능하다.
+Fleet 예산은60초/3회/600초, Harbor 예산은 보호 설정으로 명시한다(D-998 상한 이내).
+
+발송 직전 서비스는 보호 설정의 owner URL에 요청 DTO 전체를 POST한다. 별도 machine bearer와3초 timeout,
+TLS 검증·redirect 금지를 적용한다. 생산자는 원래 업무/발생 회차/revision/현재 수신 범위를 검증해
+`DeliveryOwnerReply`(`notification_id`, `revision`, `valid: bool`)를 반환한다.
+불일치·단절·오류는 PENDING, false는 SUPERSEDED, 만료는 EXPIRED이고 어느 경우도 보내지 않는다.
+생산자 callback의 실제 URL·보호 화면 URL은 공개 요청으로 선택하지 않으며 각 생산자 구현 변경이 소유한다.
+첫 구현의 메시지는 고정 분류·불투명 식별자·시각/기한·설정된 보호 업무 링크만 쓴다.
+Fleet의 기존 상세 본문을 대체하는 전환 계약은 별도다. 원본 outbox·UNKNOWN 보존과 두 생산자 양 끝 SHA HTTP 수용 전에는 전환하지 않는다.
 
 ### v1.365 운행 시작의 배터리 확인과 충전 칸 점유 불명
 

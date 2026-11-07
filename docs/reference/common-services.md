@@ -6,7 +6,7 @@
 
 ## 실행 서비스
 
-자기 프로세스로 돌고 현장 Compose 서비스로 배치된다.
+자기 프로세스를 갖는다. 현장 Compose에 없는 준비 단계 모듈은 아래에 별도로 표시한다.
 
 | 이름 | 소스 | Compose 서비스 | 맡는 것 | 맡지 않는 것 | 계약 | 결정 |
 |---|---|---|---|---|---|---|
@@ -14,6 +14,7 @@
 | Monitoring | `operations/monitoring` | `monitoring` | 상태 수집·집계·읽기 API | 명령, host 복구 | [Monitoring API](rosy-monitoring-api.md) | D-876, D-936 |
 | Media | `operations/site_ui/media` | `media`, `media-gateway` | 영상 세션 권한, 시청 요청, 미디어 프로세스 관리 | Fleet 영상 중계, 로봇 제어, CORE 장기 자격 수신 | [D-789](../adr/D-789-six-robot-webrtc-camera-transport.md) | D-789, D-801 |
 | 현장 입구 | `deploy/site` | `proxy` | TLS 입구와 경로 전달 | 업무 판단, 계정 원장 | [site 배포 안내](../../deploy/site/README.md) | D-301, D-441 |
+| 알림 전달 (전환 전) | `operations/notifications` | 없음 (미배포) | 기계 범위별 접수·중복 대조·전달 원장·기존 채널 adapter | 업무 outbox·필요성·수신 범위 판단·장치 명령 | [모듈 안내](../../operations/notifications/README.md) | D-998 |
 
 Account의 로그인·프로필·관리 화면 소스는 `applications/fleet/web`에, Monitoring 화면 소스는 `applications/monitoring`에 있다.
 

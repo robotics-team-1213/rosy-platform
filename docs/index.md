@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
+- 2026-11-08 · uncommitted · D-998 전환 전 알림 전달 계약
 - 2026-11-07 · uncommitted · fix(model-pc): GPU 유휴 전원 차단을 끈다
 - 2026-11-07 · uncommitted · fix(remote): 호출의 -rA가 공통 꼬리에 덮이지 않는다
 - 2026-11-07 · uncommitted · fix(land): FULL 대기가 준비 슬롯을 차지하지 않고 MAIN-RED가 닫힌다
 - 2026-11-07 · uncommitted · 공통 서비스 카탈로그와 D-987
-- 2026-11-07 · uncommitted · fix(omx): 사다리가 GPU 없이 시작하지 않게 하고 MuJoCo 접촉 교훈을 기록
