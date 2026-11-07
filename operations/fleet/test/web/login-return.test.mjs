@@ -51,3 +51,9 @@ test('profile return preserves one allowed work destination and rejects nested l
       '/console/profile?return=%2Fconsole');
   }
 });
+
+test('login returns to the install screen and refuses unknown anchors', () => {
+  assert.equal(loginReturn('/console/install#cameras', origin), '/console/install#cameras');
+  assert.equal(loginReturn('/console/install#other', origin), '/console/install');
+  assert.equal(loginReturn('/console#cameras', origin), '/console');
+});

@@ -393,3 +393,8 @@
 - 변경: 온도 경고가 OS 발열 단계와 별개로 배터리 40°C부터 나온다. 송출을 멈추는 기준은 그대로 OS SEVERE, 상태가 없으면 45°C다. 심한 발열의 시작과 끝을 logcat에 남긴다.
 - 증거: 재부팅 뒤 송출이 멈췄을 때 OS 발열 단계 기록이 없어 원인을 밝히지 못했다. JVM `DeviceHealthTest`. 실기 설치 결과는 착지 기록을 따른다.
 - Gate: 없음. CE: 새 교훈 기록 — docs/solutions/deployment/rosy-cam-screen-on-keeps-ceiling-phone-hot-2026-11-07.md.
+
+## 2026-11-07 · uncommitted · docs(cam): 배터리 보호 값 정정
+- 변경: 발열 교훈의 `protect_battery` 권장값을 1에서 3으로 고쳤다. One UI 7에서 1은 100%까지 충전하는 기본 모드였다.
+- 증거: 현장 폰이 1로 둔 뒤 100%에 머물렀고, 3으로 되돌리자 `mProtectBatteryMode: 3`, 기준 80이 읽혔다.
+- gate 변화: 없음. CE: 기존 교훈 갱신 — 같은 문서를 고쳤다.

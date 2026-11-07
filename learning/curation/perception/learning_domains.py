@@ -133,6 +133,20 @@ def sim(runs):
     return stages
 
 
+def ladder_stages(summary):
+    """summary: None when not configured, {'error': ...}, or ladder_web.status(). Rounds are simulation
+    evidence (D-947); the best round is a comparison record, not approval or promotion (D-793, D-857)."""
+    if summary is None:
+        return {}
+    here = go('학습 사다리', '/learning/ladder')
+    if 'error' in summary:
+        return {'train': ('blocked', '학습 사다리 기록을 읽지 못했습니다.', here)}
+    if not summary['rounds']:
+        return {'train': ('active', '사다리 라운드가 아직 없습니다.', here)}
+    return {'train': ('active', f"사다리 라운드 {summary['rounds']}개 · 비교 기준 {summary['best'] or '없음'}"
+                      + (' · 실행 중' if summary['running'] else ''), here)}
+
+
 def vlm(counts, eval_url=None):
     """counts: None when this workspace has no VLM tables, else {total, labelled, excluded}."""
     if not counts or not counts['total']:
@@ -151,10 +165,10 @@ def vlm(counts, eval_url=None):
 
 
 def domains(*, pipeline, counts, preparation, items, omx_reviewed, sim_runs, vlm_counts, vlm_eval_url=None, tasks=0,
-            pixel_counts=None, drafts=None):
+            pixel_counts=None, drafts=None, ladder=None):
     """drafts: {'object'|'pixel': pending frame indices holding a model draft, oldest first}."""
     sources = {'lane': lane(pipeline), 'object': objects(counts, preparation), 'omx': omx(items, omx_reviewed, tasks),
-               'sim': sim(sim_runs), 'vlm': vlm(vlm_counts, vlm_eval_url), 'decision': {}}
+               'sim': sim(sim_runs) | ladder_stages(ladder), 'vlm': vlm(vlm_counts, vlm_eval_url), 'decision': {}}
     drafts = drafts or {}
 
     def reviewed(decided, kind, page):
