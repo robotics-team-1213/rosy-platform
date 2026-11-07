@@ -105,8 +105,8 @@
 
 ## 최근 기록
 
+- 2026-11-07 · uncommitted · fix(fleet): 충전 복귀 판정이 main의 칸 점유 불명 규칙과 맞는다
 - 2026-11-07 · 7c042262fb · fix(fleet): a stale blip is read again before a trip is refused
 - 2026-11-07 · uncommitted · fix(fleet): 독립 검토 반영 — 충전 복귀·재시도·읽기 대기·칸 dwell/unknown
 - 2026-11-07 · uncommitted · fix(fleet): 운행 시작 배터리 확인 · 충전 칸 점유 유지
 - 2026-11-07 · uncommitted · fix(fleet): 규칙 검토 지적 반영
-- 2026-11-07 · 34867d3b61 · feat(fleet): D-982 1·2단계 원격 시험 결과
