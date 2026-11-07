@@ -18,7 +18,10 @@ from types import SimpleNamespace
 import pytest
 
 from core.bridge.battery_policy import apply_voltage
+from core_features.command.arbitration import Mode, ModeMachine
 from core_features.power.battery import BatteryLevel
+from core_features.safety.manager import BatteryPolicy, SafetyManager, SpeedLimits
+from core_features.state.manager import StateManager
 
 
 class Recorder:
@@ -51,6 +54,7 @@ def build(recorder, *, percent=55.0, level=BatteryLevel.OK, action=None,
         trigger_estop=lambda reason: log.append(("safety.trigger_estop", reason)),
         on_battery_percent=lambda p: (log.append(("safety.on_battery_percent", p)) or action),
         battery_policy=SimpleNamespace(warning_percent=20.0), battery_return_suppressed=False,
+        release_recovered_battery_stop=lambda: False, estop=False, estop_source="",
     )
     docking = SimpleNamespace(
         on_battery_level=lambda lv: log.append(("docking.on_battery_level", lv)),
@@ -265,3 +269,99 @@ def test_return_home_is_dispatched_when_localized():
     apply_voltage(services, 7.0)
 
     assert rec.calls[-1] == ("nav.home", "battery_policy")
+
+
+def _real_services(percent=30.0, level=BatteryLevel.OK):
+    """The real latch and mode machine with their real listener, so the release is judged on both."""
+    safety = SafetyManager(SpeedLimits(), BatteryPolicy())
+    modes = ModeMachine()
+    state = StateManager("rosy_01")
+
+    def reflect_stop():
+        state.set_estop(True, safety.estop_source)
+        modes.transition(Mode.EMERGENCY)
+    safety.estop_listeners.append(reflect_stop)
+    battery = SimpleNamespace(percent=percent, level=level, on_voltage=lambda v: None, status=lambda: "DISCHARGING")
+    return SimpleNamespace(
+        battery=battery, safety=safety, modes=modes, state=state, localization=None,
+        power=SimpleNamespace(on_battery_alert=lambda lv: None),
+        docking=SimpleNamespace(on_battery_level=lambda lv: None, state=None),
+        nav=SimpleNamespace(home=lambda source: None, docking_active_provider=lambda: False))
+
+
+@pytest.mark.parametrize("source", ["battery_policy", "battery_deep"])
+def test_a_battery_stop_ends_when_the_pack_recovers_and_nothing_moves(source):
+    services = _real_services()
+    services.safety.trigger_estop(source)
+    assert services.state.snapshot().safety.releases_when_charged is True
+
+    apply_voltage(services, 7.6)
+
+    assert services.safety.estop is False
+    assert services.modes.mode is Mode.IDLE
+    safety = services.state.snapshot().safety
+    assert (safety.estop, safety.source, safety.releases_when_charged) == (False, "", False)
+
+
+@pytest.mark.parametrize("source", ["api:operator", "control:policy_failed"])
+def test_charging_never_releases_a_stop_a_person_or_policy_set(source):
+    services = _real_services()
+    services.safety.trigger_estop(source)
+
+    apply_voltage(services, 8.3)
+
+    assert services.safety.estop is True
+    assert services.modes.mode is Mode.EMERGENCY
+    assert services.state.snapshot().safety.releases_when_charged is False
+
+
+def test_a_persons_stop_over_a_battery_stop_takes_it_over():
+    services = _real_services()
+    services.safety.trigger_estop("battery_policy")
+
+    assert services.safety.trigger_estop("api:operator") is False  # still not a new latch
+    assert services.state.snapshot().safety.source == "api:operator"
+    apply_voltage(services, 8.3)
+
+    assert services.safety.estop is True
+    assert services.modes.mode is Mode.EMERGENCY
+
+
+def test_a_battery_source_does_not_replace_a_persons_stop():
+    services = _real_services()
+    services.safety.trigger_estop("api:operator")
+    assert services.safety.trigger_estop("battery_policy") is False
+    assert services.safety.estop_source == "api:operator"
+
+
+@pytest.mark.parametrize("percent,level", [
+    (30.0, BatteryLevel.WARNING),   # debounce not finished: the level still lags
+    (15.0, BatteryLevel.OK),        # level lags upward: this reading is under warning
+    (9.0, BatteryLevel.CRITICAL),
+])
+def test_a_battery_stop_stays_until_the_recovery_is_settled(percent, level):
+    services = _real_services(percent, level)
+    services.safety.trigger_estop("battery_policy")
+
+    apply_voltage(services, 7.4)
+
+    assert services.safety.estop is True
+    assert services.modes.mode is Mode.EMERGENCY
+
+
+def test_a_stop_arriving_during_the_release_keeps_emergency():
+    services = _real_services()
+    services.safety.trigger_estop("battery_policy")
+    release = services.modes.release_emergency
+
+    def stopped_meanwhile():
+        result = release()
+        services.safety.trigger_estop("api:operator")
+        return result
+    services.modes.release_emergency = stopped_meanwhile
+
+    apply_voltage(services, 7.6)
+
+    assert services.safety.estop is True
+    assert services.modes.mode is Mode.EMERGENCY
+    assert services.state.snapshot().safety.source == "api:operator"
