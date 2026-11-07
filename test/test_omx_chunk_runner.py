@@ -759,3 +759,55 @@ def test_a_closing_grip_that_catches_something_reopens_where_it_was():
     caught = next(s for s in status if s.get("caught"))
     assert caught["ok"] is False and "jaws" in caught["error"] and caught["target"][5] == 62.0
     assert robot.pos[5] == 62.0
+
+
+@pytest.mark.parametrize("approved_lift", [300, 240])
+def test_main_passes_the_passively_connected_session_caps_to_startup_and_later_load(
+        tmp_path, monkeypatch, approved_lift):
+    from types import SimpleNamespace
+
+    monkeypatch.syspath_prepend(str(OMX))
+    import bus_watchdog
+    import guarded_native
+    import motor_health
+
+    approved = {"shoulder_lift": approved_lift, "elbow_flex": 280, "wrist_flex": 180}
+    robot, connected, reads, checked = Robot(), [], [], []
+
+    def read(register, joint):
+        assert connected and register == "PWM_Limit" and not robot.sent
+        reads.append(joint)
+        return approved.get(joint, 300)
+
+    robot.bus = SimpleNamespace(read=read)
+    config, initial, later = (tmp_path / name for name in ("record.json", "initial.json", "later.json"))
+    config.write_text(json.dumps({"robot": {"type": "omx_follower", "port": "/dev/fake-session",
+                                         "max_relative_target": 5}, "dataset": {"fps": 30}}))
+    initial.write_text(json.dumps(dict(library(), fps=30, chunks={"home": [HOME]})))
+    later.write_text(json.dumps(dict(library(), fps=30, chunks={"home": [HOME], "hold": [HOME]})))
+
+    def plan_check(path, port, params, lib, caps=None):
+        assert caps is not None and {joint: caps[joint] for joint in approved} == approved
+        checked.append(("startup", lib, caps))
+        return lambda candidate: checked.append(("load", candidate, caps))
+
+    class SessionRunner(m.Runner):
+        def run(self, lines):
+            self.target = list(HOME)
+            self.command(f"load {later}")
+
+    monkeypatch.setitem(sys.modules, "lerobot.robots.omx_follower", SimpleNamespace(
+        OmxFollowerConfig=lambda **values: values, OmxFollower=lambda config: robot))
+    monkeypatch.setattr(guarded_native, "connect_passive", lambda *a, **k: connected.append(True))
+    monkeypatch.setattr(guarded_native, "close_device", lambda *a: None)
+    monkeypatch.setattr(motor_health, "MotorHealth", lambda: SimpleNamespace(end=lambda: None))
+    monkeypatch.setattr(bus_watchdog, "arm", lambda *a: None)
+    monkeypatch.setattr(m, "fifo_lines", lambda *a: SimpleNamespace(close=lambda: None))
+    monkeypatch.setattr(m, "runtime_context", lambda *a, **k: {"scope": "simulation"})
+    monkeypatch.setattr(m, "Runner", SessionRunner)
+    monkeypatch.setattr(m.load_predict, "plan_check", plan_check)
+    m.main(["--config", str(config), "--library", str(initial), "--io", str(tmp_path / "io"),
+            "--load-model", str(tmp_path / "session-model.json")])
+    assert [phase for phase, _, _ in checked] == ["startup", "load"]
+    assert set(approved) <= set(reads) and checked[0][2] is checked[1][2]
+    assert "hold" in checked[1][1]["chunks"] and not robot.sent

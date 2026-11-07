@@ -381,3 +381,9 @@
 - 변경: `AutoStartReceiver`·비공개 빈 `AutoStartActivity`로 부팅·앱 업데이트 뒤 링크를 다시 열고, `WirelessDebugging.keepOn`으로 무선 디버깅을 켜 둔다. 현장 도구에 `auto-wake-setup`을 추가했다.
 - 증거: JVM `AutoStartTest`와 `test/test_site_cam_screen.py`. 실행 결과는 착지 기록을 따른다.
 - gate 변화: 없음. 실제 폰의 재부팅 복귀는 아직 확인하지 못했다. CE: 해당 없음 — 판단은 D-981에 있다.
+
+## 2026-11-07 · uncommitted · Account 세션을 shared/android로 이동
+
+- 변경: `AccountSession`, `AndroidAccount`, `account-config.gradle`을 `shared/android/account`로 옮겼다(D-987). 패키지는 `io.github.livsbittt.rosy.account`이고, 저장 이름 `rosy-account-<scope>`, `rosy-account-aes`, `rosy-account/1:`은 그대로다.
+- 증거: 원격 결과는 착지 기록을 따른다. 실기 설치 뒤 로그인 유지는 확인하지 않았다.
+- Gate: 없음. CE: 해당 없음 — 소스 위치 이동이다.

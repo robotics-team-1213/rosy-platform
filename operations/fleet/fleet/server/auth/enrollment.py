@@ -427,6 +427,8 @@ class EnrollmentService(HubLinkMixin, SafetyReleaseMixin):
     async def enroll(self, *, code: object, principal_id: str,
                      discovery_name: str | None = None, address: str | None = None) -> dict:
         self._require_available()
+        if self.owned_robot_ids is not None:
+            raise EnrollmentError("control_unit_enrollment_unavailable", 409, "this control unit has a fixed roster")
         normalized = normalize_code(code)
         target, row, pending = self._candidate(discovery_name, address)
         # D-580: a binding a robot enrolled through here (same hostname, CA, file row) may come back renumbered.
@@ -541,8 +543,6 @@ class EnrollmentService(HubLinkMixin, SafetyReleaseMixin):
             raise self._consumed("tls_binding_required")  # a bound identity answered over HTTP
         if robot_id in self._roster.robot_ids or self._store.get(robot_id) is not None:
             raise self._consumed("robot_id_conflict")
-        if self.owned_robot_ids is not None and robot_id not in self.owned_robot_ids:
-            raise self._consumed("robot_not_owned_by_control_unit")  # else the next start refuses the roster
         if pending is not None and robot_id != pending.robot_id:
             if not renumber:
                 raise self._consumed("tls_binding_mismatch")

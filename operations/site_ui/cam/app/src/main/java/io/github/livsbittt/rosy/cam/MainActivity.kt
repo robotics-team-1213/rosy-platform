@@ -64,8 +64,8 @@ import io.github.livsbittt.rosy.cam.ui.CameraPeerScreen
  * confirms, so a stray link cannot silently redirect frames to another host.
  */
 class MainActivity : ComponentActivity() {
-    private val accountConfigured by lazy { io.github.livsbittt.rosy.cam.account.AndroidAccount.configured(this) }
-    private val account by lazy { if (accountConfigured) io.github.livsbittt.rosy.cam.account.AndroidAccount(this) else null }
+    private val accountConfigured by lazy { io.github.livsbittt.rosy.account.AndroidAccount.configured(this) }
+    private val account by lazy { if (accountConfigured) io.github.livsbittt.rosy.account.AndroidAccount(this) else null }
     private var accountVersion = 0L
     private val accountReady = mutableStateOf(false)
     private val accountName = mutableStateOf<String?>(null)

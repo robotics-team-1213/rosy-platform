@@ -87,3 +87,28 @@ def test_the_real_app_tells_enrollment_which_robots_its_unit_owns(tmp_path):
     create_app(console, task_service=tasks, site_users=users, start_task_dispatcher=False,
                control_unit_config=config_file(tmp_path), enrollment=enrollment)
     assert enrollment.owned_robot_ids == frozenset({"a1"})
+
+
+@pytest.mark.parametrize("robot_id", ["a1", "b1"])
+def test_fixed_unit_refuses_new_enrollment_before_sending_the_robot_code(tmp_path, robot_id):
+    from hashlib import sha256
+    from fastapi.testclient import TestClient
+    from enrollment_fakes import CODE, PINNED, FakeCore, build
+    from fakes import FakeRobot
+    from fleet.server.app import create_app
+    from test_control_unit_runtime import config_file
+
+    enrollment, network, console, _discovery, store, tasks = build(
+        tmp_path, {PINNED: FakeCore(robot_id=robot_id)}, static=(FakeRobot("a1"),))
+    users = {sha256(token.encode()).hexdigest(): {"principal_id": identity, "role": role}
+             for token, identity, role in [("human-token", "operator-a1", "operator"),
+                                           ("parent-token", "control-unit:A", "service")]}
+    app = create_app(console, task_service=tasks, site_users=users, start_task_dispatcher=False,
+                     control_unit_config=config_file(tmp_path), enrollment=enrollment)
+    response = TestClient(app).post("/api/fleet/enrollment/robots",
+                                    headers={"Authorization": "Bearer human-token"},
+                                    json={"code": CODE, "address": PINNED})
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "control_unit_enrollment_unavailable"
+    assert network.requests == []
+    assert store.rows() == [] and console.robot_ids == ["a1"]
