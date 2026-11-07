@@ -52,6 +52,8 @@ UI 표시 조건은 동일 site의 `accounts.manage`이며 서버가 매 요청 
 ### 공통 프로필 표시 (2026-10-14 보완)
 
 프로필 편집 정본은 Fleet의 `/console/profile` 하나다. 앱별 프로필 저장소를 만들지 않는다.
+`POST /api/fleet/auth/apps`는 같은 form 경계로 `token` 하나를 받아, 그 사람이 권한을 가진 사용 중인 앱 가운데 시작 주소가 있는 앱의 `client_id`, `label`, `home_url`을 `apps`로 돌려준다(D-955 4단계). 수신 앱은 이 목록을 세션 응답의 `apps`로 전달하며, 목록은 화면 이동에만 쓰고 권한 판단에 쓰지 않는다. 읽기에 실패하면 빈 목록이다.
+
 `POST /api/fleet/auth/userinfo`는 기존 form 경계로 `token` 하나를 받고, 현재 유효한
 access token의 계정만 조회한다. 성공 응답은 `account_id`, `login`, `display_name`이며
 정지·회수·만료·revision 불일치는 401, 원장 장애는 503이다. grant와 다른 계정 정보는

@@ -3,7 +3,7 @@
 // count, role words on the account button, development badge, the account fold and the one E-stop rule.
 import "/common/ui.js";  // wires the `[data-theme-cycle]` button
 import {OPERATOR_REASON} from "/console/assets/authorization.js";
-import {roleLabel} from "/common/account-profile.js";
+import {renderAccountApps, roleLabel} from "/common/account-profile.js";
 export {roleLabel};
 
 export const SESSION_REASON = "접속이 필요합니다";
@@ -109,6 +109,7 @@ export function showSession(identity, {credentialChange = false, focusOrigin = d
   $('fleet-login').hidden = true;
   $('fleet-account').hidden = false;
   $('fleet-account-identity').textContent = `${identity.principal_id} · ${roleLabel(identity.role)}`;
+  renderAccountApps(identity, $('fleet-account-identity'));
   const token = $('token-access');
   if (changed || credentialChange) {
     if (token) token.open = false;

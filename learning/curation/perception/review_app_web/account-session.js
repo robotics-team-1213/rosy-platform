@@ -1,4 +1,4 @@
-import {renderAccountProfile} from '/common/account-profile.js';
+import {renderAccountApps, renderAccountProfile} from '/common/account-profile.js';
 // Fence responses and drafts when another tab replaces the browser identity.
 let managed = false, owner = '', invalidated = false, ready, initialized = false, loggingOut = false;
 const key = 'rosy.learning.identity';
@@ -15,8 +15,11 @@ async function identity() {
     if (response.status >= 500) throw new Error('계정 연결을 확인하세요.');
     const session = response.ok ? await response.json() : null;
     const current = session?.account_session || '';
-    renderAccountProfile(current && !invalidated && !loggingOut && (!initialized || current === owner)
-      ? {...session, authenticated:true} : null);
+    const shown = current && !invalidated && !loggingOut && (!initialized || current === owner)
+      ? {...session, authenticated:true} : null;
+    renderAccountProfile(shown);
+    // Most Learning pages have no profile link; the topbar still offers the other apps.
+    if (!document.querySelector('[data-account-profile]')) renderAccountApps(shown, document.querySelector('ui-topbar [data-spacer]'));
     return current;
   } catch (error) { renderAccountProfile(null); throw error; }
 }

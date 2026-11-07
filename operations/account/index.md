@@ -25,8 +25,8 @@
 
 ## 최근 기록
 
+- 2026-11-07 · uncommitted · feat(account): 앱 목록 (D-955 4단계)
 - 2026-11-07 · uncommitted · feat(account): 연동 등록부 (D-955 2단계)
 - 2026-11-07 · uncommitted · Account 진입 문서와 소유자 안내 정정
 - 2026-11-03 · bfd53106b3 · 최소 Account 이미지의 실제 스타일 입력 연결
 - 2026-11-03 · 50b5b4340d · 최소 Account 이미지의 공용 작업면 통합
-- 2026-11-03 · e84e4f46b3 · 로그인 전 자기 화면 복귀 제거

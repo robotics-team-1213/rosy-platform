@@ -88,7 +88,7 @@ class AccountClient:
                           headers={'Content-Type': 'application/x-www-form-urlencoded',
                                    'Accept': 'application/json'})
         try:
-            with build_opener(_NoRedirect()).open(request, timeout=1 if endpoint == 'userinfo' else 3) as response:
+            with build_opener(_NoRedirect()).open(request, timeout=1 if endpoint in {'userinfo', 'apps'} else 3) as response:
                 body = response.read(65537)
                 if len(body) > 65536:
                     raise AccountDenied('Oversized Account response')
@@ -261,30 +261,59 @@ class AccountClient:
             return None
         return self.profile_session_id(_digest(cookie))
 
+    def _display_read(self, session_id, endpoint):
+        """(claims, response) for a current session, or None; a read never changes authorization."""
+        with self.transaction() as db:
+            row = db.execute('SELECT tokens,expires FROM app_account_sessions WHERE id=?', (session_id,)).fetchone()
+        if row is None or row['expires'] <= self.clock():
+            return None
+        encrypted = row['tokens']
+        tokens = json.loads(self.cipher.decrypt(encrypted))
+        current = self._claims(tokens['access_token'])
+        if (current.sub, current.sid) != (tokens.get('_account_sub'), tokens.get('_account_sid')):
+            return None
+        response = self.post(endpoint, {'token': tokens['access_token']})
+        # Logout or renewal while the read was in flight must not resurrect old display data.
+        with self.transaction() as db:
+            row = db.execute('SELECT tokens,expires FROM app_account_sessions WHERE id=?', (session_id,)).fetchone()
+        if row is None or row['tokens'] != encrypted or row['expires'] <= self.clock() or current.exp <= self.clock():
+            return None
+        return current, response
+
+    def apps(self, cookie):
+        if not isinstance(cookie, str) or not 1 <= len(cookie) <= 128:
+            return []
+        return self.apps_session_id(_digest(cookie))
+
+    def apps_session_id(self, session_id):
+        """The app list for this person; empty on any failure, which only hides a navigation menu."""
+        if not isinstance(session_id, str) or not re.fullmatch('[a-f0-9]{64}', session_id):
+            return []
+        try:
+            found = self._display_read(session_id, 'apps')
+            listed = found[1]['apps'] if found else []
+            if not isinstance(listed, list) or len(listed) > 256:
+                return []
+            fields = {'client_id', 'label', 'home_url'}
+            return [{key: app[key] for key in fields} for app in listed
+                    if isinstance(app, dict) and set(app) == fields
+                    and all(isinstance(app[key], str) and 1 <= len(app[key]) <= 2048 for key in fields)]
+        except (AccountUnavailable, ValueError, InvalidToken, KeyError, TypeError):
+            return []
+
     def profile_session_id(self, session_id):
         """Read fresh display metadata without caching or changing authorization on failure."""
         if not isinstance(session_id, str) or not re.fullmatch('[a-f0-9]{64}', session_id):
             return None
         try:
-            with self.transaction() as db:
-                row = db.execute('SELECT tokens,expires FROM app_account_sessions WHERE id=?', (session_id,)).fetchone()
-            if row is None or row['expires'] <= self.clock():
+            found = self._display_read(session_id, 'userinfo')
+            if found is None:
                 return None
-            encrypted = row['tokens']
-            tokens = json.loads(self.cipher.decrypt(encrypted))
-            current = self._claims(tokens['access_token'])
-            if (current.sub, current.sid) != (tokens.get('_account_sub'), tokens.get('_account_sid')):
-                return None
-            profile = self.post('userinfo', {'token': tokens['access_token']})
+            current, profile = found
             fields = {'account_id', 'login', 'display_name'}
             if (not isinstance(profile, dict) or set(profile) != fields
                     or profile['account_id'] != current.sub
                     or any(not isinstance(profile[key], str) or not 1 <= len(profile[key]) <= 128 for key in fields)):
-                return None
-            # Logout or renewal while userinfo was in flight must not resurrect an old name.
-            with self.transaction() as db:
-                row = db.execute('SELECT tokens,expires FROM app_account_sessions WHERE id=?', (session_id,)).fetchone()
-            if row is None or row['tokens'] != encrypted or row['expires'] <= self.clock() or current.exp <= self.clock():
                 return None
             return {key: profile[key] for key in fields}
         except (AccountUnavailable, ValueError, InvalidToken, KeyError, TypeError):
@@ -322,7 +351,8 @@ def browser_session(client, cookie):
     if profile and profile['account_id'] != claims.sub:
         profile = None
     body = {'enabled': True, 'authenticated': claims is not None, 'profile': profile,
-            'profile_url': client.profile_url if claims else None}
+            'profile_url': client.profile_url if claims else None,
+            'apps': client.apps(cookie) if claims else []}
     if claims:
         body.update(account_id=claims.sub, session_family=claims.sid, revision=claims.rev, resource=claims.aud,
                     capabilities=[cap for grant in claims.grants for cap in grant.capabilities])

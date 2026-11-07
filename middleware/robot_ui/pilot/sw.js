@@ -5,6 +5,7 @@
 const CACHE = "rosy-pilot-shell-2026-11-06-arm-status-row";   // 캐시 키 = 이미지 버전. 바뀌면 이 이름을 올린다.
 const SHELL = [
   "/common/account-profile.js",
+  "/common/account-apps.css",
   "/pilot",
   "/pilot/assets/styles.css",
   "/pilot/assets/layout.css",

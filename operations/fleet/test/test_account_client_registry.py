@@ -98,6 +98,22 @@ def test_stopping_during_a_request_refuses_instead_of_raising(registry):
     assert not validator.validate_scopes('app', ['robot:r1'], None, None)
 
 
+def test_app_list_is_what_this_person_can_open(registry):
+    import json
+    authority, clients = registry
+    home = 'https://app.example.test/'
+    clients.update('manager', 'app', revision=1, label='First', home_url=home)
+    clients.create('manager', client_id='second', redirect_uris=[CALLBACK], resources=['robot:r2'], label='Second', home_url=home + 's')
+    clients.create('manager', client_id='no-grant', redirect_uris=[CALLBACK], resources=['robot:r9'], home_url=home + 'n')
+    clients.create('manager', client_id='native-only', redirect_uris=[CALLBACK], resources=['robot:r1'])
+    clients.create('manager', client_id='stopped', redirect_uris=[CALLBACK], resources=['robot:r1'], home_url=home + 'x')
+    clients.update('manager', 'stopped', revision=1, enabled=False)
+    token = json.loads(exchange(authority, code_for(authority))[1])['access_token']
+    assert authority.apps(token) == [{'client_id': 'app', 'label': 'First', 'home_url': home},
+                                     {'client_id': 'second', 'label': 'Second', 'home_url': home + 's'}]
+    assert authority.apps('not-a-token') is None
+
+
 def test_narrowing_resources_applies_at_once(registry):
     authority, clients = registry
     clients.update('manager', 'app', revision=1, resources=['robot:r2'])

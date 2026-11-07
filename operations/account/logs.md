@@ -99,3 +99,9 @@
 - 변경: client 목록을 Account DB `account_clients`로 옮겼다. `accounts.manage`가 관리 화면과 API로 재시작 없이 등록·수정·정지한다. 보호 JSON은 빈 등록부에 한 번만 가져온다. 추출 이전은 등록부가 있으면 함께 옮긴다.
 - 증거: 원격 시험 결과는 착지 기록을 따른다. 실제 현장 Account의 등록부 전환은 확인하지 못했다.
 - Gate: 없음. CE: 해당 없음 — 결정된 단계의 구현이다.
+
+## 2026-11-07 · uncommitted · feat(account): 앱 목록 (D-955 4단계)
+
+- 변경: 등록부에서 그 사람이 권한을 가진 사용 중인 앱을 `/api/fleet/auth/apps`로 준다. 공용 세션 응답과 공용 계정 표시가 이를 앱 전환 메뉴로 보여 Robot·Pilot·Games·Monitoring·Learning·Fleet이 같은 목록을 읽는다.
+- 증거: 원격 시험 결과는 착지 기록을 따른다. 실제 현장 앱 사이 이동은 확인하지 못했다.
+- Gate: 없음. CE: 해당 없음 — 결정된 단계의 구현이다.

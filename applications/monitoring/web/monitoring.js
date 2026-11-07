@@ -1,5 +1,6 @@
 import { EVIDENCE_LABEL, evidenceAgeText } from './common/core_ui_logic.js';
 import { createAccountSession } from './common/account-session.js';
+import './common/account-profile.js';
 
 const $ = (id) => document.getElementById(id);
 const HEALTH = { OK: '정상', WARNING: '주의', ERROR: '오류', UNKNOWN: '판정 정보 없음' };

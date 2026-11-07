@@ -189,6 +189,17 @@ class AccountAuthority:
             _, context = found
             return {key: context[key] for key in ('account_id', 'login', 'display_name')}
 
+    def apps(self, token):
+        """Running apps this person holds a grant for, with an address to open (D-955 step 4)."""
+        with self.transaction() as db:
+            found = self._access_context(db, token)
+            if found is None:
+                return None
+            grants = found[1]['grants']
+        return [{key: client[key] for key in ('client_id', 'label', 'home_url')} for client in self.list_clients()
+                if client['enabled'] and client['home_url']
+                and any(grants_for(grants, resource) for resource in client['resources'])]
+
     def revoke(self, token):
         if not isinstance(token, str) or len(token) > 16384:
             return

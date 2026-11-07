@@ -88,6 +88,13 @@ def install_account_authority_routes(app, *, sessions, authority):
             raise HTTPException(401, 'Account session refused', headers=NO_STORE)
         return JSONResponse(profile, headers=NO_STORE)
 
+    @app.post('/api/fleet/auth/apps')
+    async def apps(request: Request):
+        listed = await call(authority.apps, await token_field(request))
+        if listed is None:
+            raise HTTPException(401, 'Account session refused', headers=NO_STORE)
+        return JSONResponse({'apps': listed}, headers=NO_STORE)
+
     @app.post('/api/fleet/auth/revoke')
     async def revoke(request: Request):
         await call(authority.revoke, await token_field(request))
