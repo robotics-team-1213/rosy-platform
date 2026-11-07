@@ -10,7 +10,6 @@ from contextlib import closing
 from fleet.server.intake_transfer import (INTAKE_PRINCIPAL, declared_object_ref, propose_arrived, release_vehicles,
                                           validate_intake)
 from fleet.server.port_event_store import PortEventStore
-from fleet.server.mission_store import MissionConflict
 from test_physical_transfer_store import admit, installation, rig  # noqa: F401 - pytest fixtures
 from test_physical_transfer_evidence import geometry, policy  # noqa: F401 - pytest fixtures
 
@@ -68,6 +67,11 @@ def test_intake_names_an_installed_participant(rig):
         validate_intake({"supply_place": "SUPPLY", "instance_id": "x"}, None)
 
 
+def _trips_again(tmp_path):
+    (tmp_path / "trips.sqlite3").unlink()
+    return _trips(tmp_path, [("trip-1", "CNTR-1", "SUPPLY", "ADMITTED", "GOAL_CONFIRMED")])
+
+
 def test_a_second_trip_cannot_rebind_a_proposal_to_another_object_ref(tmp_path, rig):
     store = rig[3]
     instance = store.installation.policy.primary[1]
@@ -75,8 +79,10 @@ def test_a_second_trip_cannot_rebind_a_proposal_to_another_object_ref(tmp_path, 
                     supply_place="SUPPLY", instance_id=instance)
     (tmp_path / "trips.sqlite3").unlink()
     changed = _trips(tmp_path, [("trip-1", "CNTR-9", "SUPPLY", "ADMITTED", "GOAL_CONFIRMED")])
-    with pytest.raises((ValueError, MissionConflict)):
-        propose_arrived(changed, store, supply_place="SUPPLY", instance_id=instance)
+    assert propose_arrived(changed, store, supply_place="SUPPLY", instance_id=instance) == []  # held, not rebound
+    [(mission, ref)] = [(m, declared_object_ref(store, m)) for m in propose_arrived(
+        _trips_again(tmp_path), store, supply_place="SUPPLY", instance_id=instance)]
+    assert ref == "CNTR-1"
 
 
 def test_a_supply_job_that_confirmed_its_goal_releases_the_trips_vehicle_once(tmp_path, rig):

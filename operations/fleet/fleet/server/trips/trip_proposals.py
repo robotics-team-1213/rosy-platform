@@ -2,6 +2,7 @@
 from contextlib import closing
 from hashlib import sha256
 import json
+import sqlite3
 from uuid import uuid4
 
 from fleet.server.mission_store import MissionConflict, _json, _now
@@ -38,7 +39,11 @@ class TripProposalStore:
         with closing(store._connect()) as connection:
             connection.execute(_SCHEMA)
             if "object_ref" not in {row[1] for row in connection.execute("PRAGMA table_info(fleet_trip_proposals)")}:
-                connection.execute(_OBJECT_REF)
+                try:
+                    connection.execute(_OBJECT_REF)
+                except sqlite3.OperationalError as exc:  # another process added it first
+                    if "duplicate column" not in str(exc):
+                        raise
             connection.commit()
 
     @staticmethod
@@ -47,7 +52,8 @@ class TripProposalStore:
         if not isinstance(body, dict) or set(body) != {"candidates", "steps"}:
             raise ValueError("trip proposal body is invalid")
         document = proposal_document(row, body)
-        if sha256(_json(request_body(body["candidates"], body["steps"], row["object_ref"])).encode()).hexdigest()                 != row["request_digest"]:
+        digested = request_body(body["candidates"], body["steps"], row["object_ref"])
+        if sha256(_json(digested).encode()).hexdigest() != row["request_digest"]:
             raise ValueError("trip proposal does not match its digest")
         if row["status"] == "ADMITTED":
             job = connection.execute("SELECT * FROM fleet_cell_jobs WHERE mission_id=?",

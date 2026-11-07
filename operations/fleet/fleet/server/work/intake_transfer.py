@@ -11,6 +11,8 @@ from datetime import datetime
 import json
 
 from core_common.protocol.port_events import PortEvent, event_id
+from .mission_store import MissionConflict
+from .port_event_store import PortEventConflict
 
 from .site_auth import SitePrincipal
 
@@ -62,8 +64,11 @@ def propose_arrived(trip_store, arm_store, *, supply_place: str, instance_id: st
     for trip in arrived(trip_store, supply_place):
         request = {"workcell_id": participant.workcell_id, "instance_id": instance_id,
                    "object_ref": installed.policy.object_ref, "source": installed.source, "target": installed.target}
-        job = arm_store.create(principal=INTAKE_PRINCIPAL, request_key="intake:" + trip["mission_id"],
-                               request=request, bind=_binder(trip["mission_id"], trip["object_ref"]))
+        try:
+            job = arm_store.create(principal=INTAKE_PRINCIPAL, request_key="intake:" + trip["mission_id"],
+                                   request=request, bind=_binder(trip["mission_id"], trip["object_ref"]))
+        except (ValueError, MissionConflict):  # this trip's binding disagrees: it stays for a person, others go on
+            continue
         made.append(job["mission_id"])
     return made
 
@@ -86,7 +91,10 @@ def release_vehicles(trip_store, arm_store, port_store) -> list[int]:
         kind, ref = "vehicle.release_permitted", "s-done:" + row["arm_mission_id"]
         event = PortEvent(event_id=event_id(row["workcell_id"], ref, kind), kind=kind, observation_ref=ref,
                           vehicle_id=trip["instance_id"], observed_at=datetime.fromisoformat(row["updated_at"]))
-        seqs.append(port_store.append(row["workcell_id"], event))
+        try:
+            seqs.append(port_store.append(row["workcell_id"], event))
+        except PortEventConflict:  # the job row changed after the event was recorded: the first event stands
+            continue
     return seqs
 
 

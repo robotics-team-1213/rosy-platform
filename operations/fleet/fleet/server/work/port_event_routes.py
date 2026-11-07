@@ -62,6 +62,7 @@ async def read_page(store, control, cursor: str | None, limit: int) -> dict:
     for source in sources:
         budget = limit - len(events)
         if budget <= 0:
+            complete = False  # this source was not reached on this page
             break
         after = positions.get(source, 0)
         try:
@@ -73,7 +74,7 @@ async def read_page(store, control, cursor: str | None, limit: int) -> dict:
         except (OSError, sqlite3.Error, httpx.HTTPError, asyncio.TimeoutError, ValueError, ValidationError):
             complete = False  # this cell keeps its position; the next read asks again
             continue
-        kept, gap = contiguous(rows, after)
+        kept, gap = contiguous(rows[:budget], after)
         complete = complete and not gap
         events += [row["event"] for row in kept]
         if kept:
@@ -109,6 +110,8 @@ def install_port_event_routes(app, observations, task_service, *, authorize, req
             event = PortEvent.model_validate_json(data)
         except ValidationError:
             raise HTTPException(422, detail={"code": "INVALID_PORT_EVENT"}) from None
+        if event.kind == "vehicle.release_permitted":  # only Fleet, from its own supply job receipt (release_vehicles)
+            raise HTTPException(422, detail={"code": "PORT_EVENT_KIND_NOT_ALLOWED"})
         try:
             seq = await asyncio.to_thread(available().append, workcell_id, event)
         except PermissionError:

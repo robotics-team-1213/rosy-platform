@@ -114,6 +114,8 @@ def test_r_reads_direct_workcell_children_with_an_opaque_cursor_and_marks_unreac
     assert again["complete"] is False
     last = asyncio.run(read_page(None, unit, again["cursor"], 50))
     assert last["events"] == [] and last["complete"] is False  # the gap holds until it is filled
+    short = asyncio.run(read_page(None, control({"cell-a": [(1, a1), (2, a2)], "cell-b": [(1, b1)]}), None, 2))
+    assert len(short["events"]) == 2 and short["complete"] is False  # the page filled before cell-b was reached
     ledgers["cell-b"].insert(1, (2, make("vehicle.release_permitted", "b2", source="yard")))
     filled = asyncio.run(read_page(None, unit, again["cursor"], 50))
     assert len(filled["events"]) == 2 and filled["complete"] is True
@@ -155,6 +157,8 @@ def test_ingest_needs_the_workcells_machine_token_and_the_peer_read_needs_the_di
     assert client.post(path, content=make(source="other").model_dump_json(), headers=token).status_code == 422
     assert client.post(path, content=b'{"kind": "x"}', headers=token).status_code == 422
     assert client.post(path, content=b"x" * 5000, headers=token).status_code == 413
+    release = make("vehicle.release_permitted", "r1", source="supply").model_dump_json()
+    assert client.post(path, content=release, headers=token).status_code == 422  # only Fleet releases a vehicle
     peer = "/api/fleet/control-unit/port-events"
     assert client.get(peer, headers={"X-Who": "control-unit:other"}).status_code == 403
     assert client.get(peer, headers={"X-Who": "harbor"}).status_code == 403

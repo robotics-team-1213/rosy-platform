@@ -34,6 +34,8 @@
    - 이 필드가 있는 이송이 공급 장소에서 `GOAL_CONFIRMED`가 되면 Fleet이 S의 `ARM_TRANSFER`(Pinky → 컨베이어)를 스스로 **제안**한다. 제안자는 Fleet 내부 서비스 principal(`fleet-intake`)이고 요청 키는 이송 mission에서 만든다(재시작해도 하나).
    - ARM 요청의 `object_ref`는 설치 정책의 물체 프로필 그대로다. owner grant·receipt·증거가 그 값에 묶여 있기 때문이다. 이송의 `object_ref`는 같은 트랜잭션에서 `fleet_intake_bindings`(ARM mission → 선언값)에 붙어 따라가고, 항만 사건 생산자만 읽는다.
    - 실행은 기존대로 기명 승인(D-977)·인계 확인·D-911 가드를 거친다. 이 ADR은 승인·가드를 줄이지 않는다.
+   - 시뮬레이션 정책 승인 worker의 proposer 범위에 `fleet-intake`를 기본으로 넣지 않는다. 넣는 것은 운영자가 정하는 별도 결정이다.
+   - `vehicle.release_permitted`는 Fleet만 쓴다(S 작업 `GOAL_CONFIRMED`에서). 셀 토큰 POST는 이 kind를 거절한다.
    - `cell_role` 자율 루프에는 rescue만 남긴다. load와 retrieve는 설정에 적혀 있어도 코드에서 거부한다.
 6. **마커 번호.**
    - D-954 2항(팔 슬롯 `50 + 15 (n - 1)`)은 그대로다. `cell_marks.py`는 이미 50을 쓴다. 설계 토론의 "35와 50 불일치"는 D-933 8항(대체됨)을 읽은 것이다.
