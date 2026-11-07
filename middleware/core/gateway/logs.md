@@ -2123,3 +2123,8 @@ clpy.duration을 추가했다(bridge AGENTS의 두 파일 함께 갱신 규칙).
 - 증거: 원격 시험 결과는 착지 기록을 본다. 실제 충전 해제는 새 릴리스 뒤 확인 전이다.
 - gate 변화: 없음
 - 교훈: CE 해당 없음 — 규칙은 D-502 Amendment 2026-11-07과 회귀 시험에 있다.
+
+## 2026-11-08 · uncommitted · feat(core): 로봇 화면에서 사람 부탁에 답하기
+- 변경: `POST /api/v1/person-request/{id}/answer` — 계정으로 로그인한 사람만(토큰 403 `PERSON_LOGIN_REQUIRED`). 답은 들고 있는 부탁의 `answer`로 남고 Fleet이 되읽어 기록한다. `GET`에 `can_answer`. 움직임·정지 해제 없음(사용자 결정 2026-11-08: 로그인한 사용자만).
+- 증거: `test_core_person_request.py` 추가, 원격 실행 기록 참조.
+- gate 변화: 없음.

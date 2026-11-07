@@ -135,6 +135,15 @@ def install_person_request_routes(app, store: PersonRequestStore, read_guard, re
                 held_id = None
         elif held_id == opens[0]["id"]:
             store.set_delivery(opens[0]["id"], "delivered")   # read back just now
+            said = held.get("answer")
+            if isinstance(said, dict) and said.get("answer") in ("done", "cannot"):
+                # CORE took it only from a person logged in with an account; the robot is named with them.
+                who = str(said.get("by") or "")[:96]
+                who = "unknown" if not who or CONTROL.search(who) else who
+                record = store.close(held_id, said["answer"], by=f"robot:{robot_id}/{who}", note="로봇 화면에서 답함")
+                if record is not None:
+                    await after_close(record)
+                    held_id = None
         else:
             await put(opens[0])   # missing (a CORE restart) or an older one: show the newest
         for record in stuck:

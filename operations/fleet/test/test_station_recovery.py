@@ -155,7 +155,7 @@ class Recorder:
         self.events.append((action, principal_id, detail))
 
 
-def make_client(rows, *, enabled=True, pose=LOCALIZED, bays=BAYS):
+def make_client(rows, *, enabled=True, pose=LOCALIZED, bays=BAYS, clock=None):
     app = FastAPI()
     recorder = app.state.site_maps = Recorder()
     views = [RobotView(r["robot_id"], r["online"], 18.0, None, (5.0, 5.0 + i), False) for i, r in enumerate(rows)]
@@ -174,7 +174,7 @@ def make_client(rows, *, enabled=True, pose=LOCALIZED, bays=BAYS):
         return (7, {}), views, bays
 
     install_station_recovery_routes(app, enabled, ([Depends(require_viewer)], require_named, require_proposer),
-                                    gathered, bay_inputs)
+                                    gathered, bay_inputs, **({"monotonic": clock} if clock else {}))
     return TestClient(app), recorder
 
 
@@ -281,4 +281,37 @@ def test_approving_with_an_empty_state_is_refused_with_the_unknown_reason():
     client, recorder = make_client([candidate])
     refused = client.post("/api/fleet/station-recovery/r1/approve")
     assert refused.status_code == 409 and refused.json()["detail"]["reason"] == "state_unknown"
+    assert recorder.events == []
+
+
+def _auto(client):
+    import asyncio
+    asyncio.run(client.app.state.station_recovery_auto())
+
+
+def test_fleet_approves_an_actionable_request_by_itself_once_and_starts_nothing():
+    rows = [row("r1", percent=12.0), row("r2", percent=18.0, estop=True)]
+    now = [0.0]
+    client, recorder = make_client(rows, clock=lambda: now[0])
+    _auto(client)
+    assert recorder.events == [("station_recovery_approved", "fleet:auto",
+                                {"robot_id": "r1", "bay": "C1", "level": "warning", "percent": 12.0,
+                                 "map_version": 7, "started": False})]
+    got = {a["robot_id"]: a["approved_by"] for a in client.get("/api/fleet/station-recovery").json()["requests"]}
+    assert got == {"r1": "fleet:auto", "r2": None}   # a stopped robot is never approved
+    now[0] += 10
+    _auto(client)
+    assert len(recorder.events) == 1   # still actionable: approved once
+    rows[0] = row("r1", percent=12.0, rule_m="bounded")   # busy: the request is not actionable now
+    now[0] += 10
+    _auto(client)
+    rows[0] = row("r1", percent=12.0)
+    now[0] += 10
+    _auto(client)
+    assert [e[1] for e in recorder.events] == ["fleet:auto", "fleet:auto"]   # asked afresh, approved afresh
+
+
+def test_auto_approval_is_off_when_station_recovery_is_off():
+    client, recorder = make_client([row()], enabled=False)
+    _auto(client)
     assert recorder.events == []

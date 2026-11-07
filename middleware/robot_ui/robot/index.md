@@ -38,8 +38,8 @@
 
 ## 최근 기록
 
+- 2026-11-08 · uncommitted · feat(robot-ui): 사람 부탁 카드의 답 버튼
 - 2026-11-07 · uncommitted · uiux(robot): 로그인이 누른 화면으로 돌아오고 뒤로 가기가 갇히지 않는다
 - 2026-11-07 · 11b42b5933 · feat(dashboard): 사람 부탁 카드
 - 2026-11-06 · uncommitted · uiux(robot): 운용자 글에서 CORE 대신 로봇
 - 2026-11-06 · uncommitted · uiux(robot): 모드 선택 한 줄과 호스트 소제목 단계
-- 2026-11-05 · a27e97c186 · uiux: Robot 절차 메뉴의 공용 subnav 소비

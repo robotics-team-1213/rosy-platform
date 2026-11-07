@@ -1,8 +1,9 @@
-"""D-721 Amendment (S1): the station recovery requests Fleet can read, and an operator's recorded approval.
+"""D-721 Amendment (S1): the station recovery requests Fleet can read, and their recorded approval.
 
-Read-only plus one record. Approval commands no robot: motion is S2, so the response says
-``started: false``. The list and the approval both answer from the same ``decide`` call at the time
-of the request, so an approval never outlives the answer that justified it.
+Read-only plus one record. Fleet approves an actionable request by itself (``fleet:auto``, user decision
+2026-11-08: a low robot must not wait for a person); a named operator may still approve by hand. Approval
+commands no robot: motion is S2, so the response says ``started: false``. The list and the approval both
+answer from the same ``decide`` call at the time, so an approval never outlives the answer that justified it.
 """
 
 from __future__ import annotations
@@ -19,6 +20,10 @@ from fleet.server.person_request_store import PersonRequestStore
 from fleet.station_recovery import decide
 
 logger = logging.getLogger(__name__)
+
+
+AUTO_APPROVER = "fleet:auto"
+AUTO_EVERY_S = 5.0
 
 
 def _conflict(code: str, **detail) -> HTTPException:
@@ -66,18 +71,22 @@ def _by_battery(row: dict) -> tuple:
 
 def install_station_recovery_routes(app, enabled: bool, guards: tuple,
                                     gathered: Callable[[], Awaitable[dict]],
-                                    bay_inputs: Callable[[], Awaitable[tuple]]) -> None:
+                                    bay_inputs: Callable[[], Awaitable[tuple]], monotonic=time.monotonic) -> None:
     """``enabled`` is ``fleet.station_recovery.enabled`` (default false); off, nothing is asked or approved.
 
     ``guards`` is ``(read_guard, require_named_operator, require_proposer)``. The person request routes
     (always on, they only note what a person is asked to do) are installed here too.
 
     The charge-bay plan, map pose service and site map event log are read from ``app.state`` when asked.
+    ``app.state.station_recovery_auto`` is the periodic step that approves actionable requests; it rides
+    Fleet's charge-bay tick.
     """
     read_guard, require_named_operator, require_proposer = guards
     install_person_requests(app, gathered, read_guard, require_named_operator, require_proposer)
     map_pose = getattr(app.state, "map_pose", None)
     another_returning = lambda: False   # S1 starts no return; S2 reads the open recovery trips here
+    approved: dict = {}   # robot_id -> who approved while its request stays actionable; S2 starts from it
+    last = {"at": None}
 
     async def answers() -> tuple[Optional[int], list[dict]]:
         active, robots, bays = await bay_inputs()
@@ -95,8 +104,41 @@ def install_station_recovery_routes(app, enabled: bool, guards: tuple,
                 for b in plan["bays"]:
                     if b["bay"] == answer["bay"]:
                         b["state"], b["robot_id"] = "planned", row["robot_id"]
-            out.append(answer)
+            out.append({**answer, "approved_by": approved.get(row["robot_id"])})
         return (active[0] if active is not None else None), sorted(out, key=lambda a: a["robot_id"])
+
+    def record_approval(answer: dict, by: str, map_version) -> None:
+        approved[answer["robot_id"]] = by
+        maps = getattr(app.state, "site_maps", None)
+        if maps is not None:
+            maps.record_event("station_recovery_approved", by,
+                              {"robot_id": answer["robot_id"], "bay": answer["bay"], "level": answer["level"],
+                               "percent": answer["percent"], "map_version": map_version, "started": False})
+        logger.info("station recovery: %s approved by %s for bay %s (S1 records only, nothing was sent)",
+                    answer["robot_id"], by, answer["bay"])
+
+    async def auto_approve() -> None:
+        """Approve each actionable request once; a robot that stops being actionable is asked afresh next time."""
+        if not enabled:
+            return
+        now = monotonic()
+        if last["at"] is not None and now - last["at"] < AUTO_EVERY_S:
+            return
+        last["at"] = now
+        map_version, requests = await answers()
+        ready = {a["robot_id"]: a for a in requests if a["request"] and a["reason"] is None}
+        for robot_id in [r for r in approved if r not in ready]:
+            del approved[robot_id]
+        for robot_id, answer in sorted(ready.items()):
+            if robot_id not in approved:
+                record_approval(answer, AUTO_APPROVER, map_version)
+    app.state.station_recovery_auto = auto_approve
+    tick = getattr(app.state, "charge_bays_tick", None)   # Fleet's existing one-second loop carries it
+    if tick is not None and enabled:
+        async def tick_and_approve() -> None:
+            await tick()
+            await auto_approve()
+        app.state.charge_bays_tick = tick_and_approve
 
     @app.get("/api/fleet/station-recovery", dependencies=read_guard, tags=["fleet"])
     async def station_recovery_requests() -> dict:
@@ -116,13 +158,7 @@ def install_station_recovery_routes(app, enabled: bool, guards: tuple,
             raise _conflict("STATION_RECOVERY_NOT_ACTIONABLE", reason=(answer or {}).get("reason") or "no_request")
         if answer["reason"] is not None:
             raise _conflict("STATION_RECOVERY_NOT_ACTIONABLE", reason=answer["reason"])
-        maps = getattr(app.state, "site_maps", None)
-        if maps is not None:
-            maps.record_event("station_recovery_approved", principal.principal_id,
-                         {"robot_id": robot_id, "bay": answer["bay"], "level": answer["level"],
-                          "percent": answer["percent"], "map_version": map_version, "started": False})
-        logger.info("station recovery: %s approved by %s for bay %s (S1 records only, nothing was sent)",
-                    robot_id, principal.principal_id, answer["bay"])
+        record_approval(answer, principal.principal_id, map_version)
         return {"robot_id": robot_id, "approved": True, "bay": answer["bay"], "started": False,
                 "reason": "not_implemented",
                 "message": "Approval recorded. Motion is not built yet, so no robot was commanded."}

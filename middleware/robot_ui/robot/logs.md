@@ -1465,3 +1465,8 @@
 - 변경: 계정 로그인 이동이 return_to를 복귀 주소로 넘기고 기록을 대체한다.
 - 증거: 실제 페이지 서버에서 /console → 로그인이 /dashboard로 끝나고 뒤로 가기 3번이 모두 로그인에 머무는 것을 재현했다. 실제 IdP는 확인 전이다.
 - gate 변화: SOURCE 회귀. 장치 수용은 별도다.
+
+## 2026-11-08 · uncommitted · feat(robot-ui): 사람 부탁 카드의 답 버튼
+- 변경: `panels/console/person-request.js` — `can_answer`일 때만 "했어요"·"못 해요". 답한 뒤에는 버튼을 숨기고 관제 기록을 기다린다고 말한다. 로그인하지 않은 화면은 로그인하면 답할 수 있다고 안내한다.
+- 증거: node `person-request.test.mjs`, 원격 실행 기록 참조.
+- gate 변화: 없음.

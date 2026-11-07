@@ -1,5 +1,6 @@
 // D-721 Amendment (S1): a low-battery robot's station recovery request, as one attention-queue row.
-// The operator's approval is only recorded. S1 sends no motion, and this file says so on the row.
+// Fleet approves an actionable request by itself (approved_by "fleet:auto"); an operator may approve first.
+// Approval is only recorded. S1 sends no motion, and this file says so on the row.
 // No import from queues.js: queues.js imports the text helper below.
 import { isRouteAbsent } from "/console/assets/poll-gate.js";
 
@@ -28,12 +29,17 @@ export function recoveryHeadline(request) {
   const level = Number.isFinite(request.percent) ? ` (배터리 ${Math.round(request.percent)}%)` : "";
   const why = recoveryReason(request);
   return why ? `: 스테이션 복구 요청${level} — ${why}`
-    : `: 스테이션 복구 요청${level} — 충전 칸 ${request.bay} 후보 · 승인은 기록만, 아직 아무것도 움직이지 않음`;
+    : `: 스테이션 복구 요청${level} — 충전 칸 ${request.bay} 후보 · ${approvedText(request.approved_by)}, 아직 아무것도 움직이지 않음`;
+}
+
+/** Pure: who approved, in words. */
+export function approvedText(by) {
+  return !by ? "승인 대기" : by === "fleet:auto" ? "자동 승인됨" : `${by} 승인`;
 }
 
 /** Pure: what the opened row shows. The approve button exists only when the answer allows it. */
 export function recoveryView(request, { operator, named = "", busy = false }) {
-  const allowed = request.request === true && !request.reason && Boolean(request.bay);
+  const allowed = request.request === true && !request.reason && Boolean(request.bay) && !request.approved_by;
   const lock = !operator ? "운영자 권한이 필요합니다" : busy ? "답을 보내는 중" : named;
   return { lines: [recoveryHeadline(request).replace(/^:\s*/, ""), NO_MOTION], approve: allowed, approveReason: lock };
 }

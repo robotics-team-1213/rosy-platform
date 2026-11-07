@@ -113,3 +113,31 @@ def test_the_face_hand_over_carries_the_ask_with_a_countdown_the_writer_does_not
     assert display._coarse({"battery_percent": 50, **first}) == display._coarse({"battery_percent": 50, **second})
     other = display.face_person_request({"id": ID_B, "kind": "clear_area", "remaining_s": 55.0})
     assert display._coarse({"battery_percent": 50, **first}) != display._coarse({"battery_percent": 50, **other})
+
+
+def _as_account(client, sub="user-7"):
+    """A person logged in with an account (D-757); the token path cannot make one."""
+    from core_api_web.api.deps import AuthContext
+    from core_api_web.api.v1.common import viewer
+    client.app.dependency_overrides[viewer] = lambda: AuthContext("account:s1", "viewer", source="account",
+                                                                  principal_ref=sub)
+
+
+def test_only_a_person_logged_in_with_an_account_answers_at_the_robot_and_it_moves_nothing(robot):
+    client, services, _ = robot
+    _put(client)
+    assert client.get(URL, headers=VIEWER).json()["can_answer"] is False
+    refused = client.post(f"{URL}/{ID_A}/answer", json={"answer": "done"}, headers=FLEET)
+    assert refused.status_code == 403 and refused.json()["error"]["code"] == "PERSON_LOGIN_REQUIRED"
+    _as_account(client)
+    try:
+        assert client.get(URL).json()["can_answer"] is True
+        assert client.post(f"{URL}/{ID_A}/answer", json={"answer": "start"}).status_code == 422
+        assert client.post(f"{URL}/{ID_B}/answer", json={"answer": "done"}).status_code == 409
+        said = client.post(f"{URL}/{ID_A}/answer", json={"answer": "cannot"}).json()
+        client.post(f"{URL}/{ID_A}/answer", json={"answer": "done"})   # the first answer stands
+    finally:
+        client.app.dependency_overrides.clear()
+    assert said["person_request"]["answer"] == {"answer": "cannot", "by": "user-7"}
+    assert services.person_request.view()["answer"] == {"answer": "cannot", "by": "user-7"}
+    assert services.nav.executor.goals == [] and services.nav.executor.cancels == 0

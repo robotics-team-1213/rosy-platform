@@ -378,3 +378,29 @@ def test_robots_are_reconciled_together_so_a_slow_robot_does_not_hold_up_the_oth
     clock.now += 10
     reconcile(client)   # TimeoutError here means the robots were read one after another
     assert {c[1] for c in robots.calls if c[0] == "put"} >= {"r1", "r2"}
+
+
+def test_an_answer_given_at_the_robot_by_a_logged_in_person_closes_the_record_and_moves_nothing():
+    clock = Clock()
+    robots = Robots()
+    client, _ = make(robots=robots, clock=clock)
+    first = post(client).json()
+    second = other_post(client, kind="move_robot").json()
+    robots.held["answer"] = {"answer": "cannot", "by": "user-7"}   # CORE took it from an account login
+    clock.now += 10
+    reconcile(client)
+    record = client.get(f"/api/fleet/person-requests/{second['id']}").json()
+    assert (record["state"], record["answered_by"], record["answer_note"]) == (
+        "cannot", "robot:r1/user-7", "로봇 화면에서 답함")
+    assert robots.held["id"] == first["id"]   # the waiting one comes onto the screen; only put/clear/read were used
+
+
+def test_an_unreadable_answerer_from_the_robot_is_recorded_as_unknown():
+    clock = Clock()
+    robots = Robots()
+    client, _ = make(robots=robots, clock=clock)
+    rid = post(client).json()["id"]
+    robots.held["answer"] = {"answer": "done", "by": "bad\nname"}
+    clock.now += 10
+    reconcile(client)
+    assert client.get(f"/api/fleet/person-requests/{rid}").json()["answered_by"] == "robot:r1/unknown"

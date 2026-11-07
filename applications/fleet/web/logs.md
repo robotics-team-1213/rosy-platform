@@ -1164,3 +1164,8 @@
 - 변경: `planning-stall.js` — 로봇이 15초 넘게 PLANNING이면 카드에 "경로 계획 응답 없음 · 운행 취소 후 로봇 확인"(crit). CORE는 Nav2 무응답을 `BACKEND_RESULT_UNKNOWN`으로 두고 상태는 PLANNING에 남기므로 콘솔이 볼 수 있는 유일한 신호다. 시작 시각은 탭 안에만 있어 새로고침하면 다시 센다.
 - 증거: node `test_planning_stall.py`, 원격 실행 기록 참조.
 - gate 변화: 없음.
+
+## 2026-11-08 · uncommitted · feat(fleet-ui): 스테이션 복구 승인 주체 표시
+- 변경: `station-recovery.js` — `approved_by`로 "자동 승인됨"·"<id> 승인"·"승인 대기"를 보이고, 승인된 요청에는 승인 버튼을 두지 않는다.
+- 증거: node `station-recovery.test.mjs`, 원격 실행 기록 참조.
+- gate 변화: 없음.

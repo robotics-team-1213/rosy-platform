@@ -12,7 +12,7 @@ const { recoveryHeadline, recoveryReason, recoveryView, NO_MOTION } =
 const ok = { robot_id: 'r1', request: true, bay: 'C1', reason: null, percent: 17.6, bays_unknown: 0 };
 
 test('an actionable request names the bay and offers the approve button, with the no-motion line', () => {
-  assert.equal(recoveryHeadline(ok), ': 스테이션 복구 요청 (배터리 18%) — 충전 칸 C1 후보 · 승인은 기록만, 아직 아무것도 움직이지 않음');
+  assert.equal(recoveryHeadline(ok), ': 스테이션 복구 요청 (배터리 18%) — 충전 칸 C1 후보 · 승인 대기, 아직 아무것도 움직이지 않음');
   assert.doesNotMatch(recoveryHeadline(ok), /보낼 수/);
   const spec = recoveryView(ok, { operator: true });
   assert.equal(spec.approve, true);
@@ -45,4 +45,11 @@ test('a viewer or a busy answer locks the button with a reason instead of hiding
   assert.equal(recoveryView(ok, { operator: false }).approveReason, '운영자 권한이 필요합니다');
   assert.equal(recoveryView(ok, { operator: true, busy: true }).approveReason, '답을 보내는 중');
   assert.equal(recoveryView(ok, { operator: true, named: '이름 있는 계정 필요' }).approveReason, '이름 있는 계정 필요');
+});
+
+test('an approved request says who approved it and offers no second approval', () => {
+  const auto = { ...ok, approved_by: 'fleet:auto' };
+  assert.match(recoveryHeadline(auto), /자동 승인됨, 아직 아무것도 움직이지 않음/);
+  assert.equal(recoveryView(auto, { operator: true }).approve, false);
+  assert.match(recoveryHeadline({ ...ok, approved_by: 'alice' }), /alice 승인/);
 });

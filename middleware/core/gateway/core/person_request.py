@@ -42,6 +42,16 @@ class PersonRequestHolder:
             self._held = None
             return True
 
+    def answer(self, request_id: str, answer: str, by: str) -> bool:
+        """A logged-in person's answer at the robot, kept on the held request until Fleet reads it back and
+        closes its record. True when this request is held; the first answer stands."""
+        with self._lock:
+            held = self._current()
+            if held is None or held["id"] != request_id:
+                return False
+            held.setdefault("answer", {"answer": answer, "by": by})
+            return True
+
     def view(self) -> Optional[dict]:
         with self._lock:
             held = self._current()
@@ -55,4 +65,4 @@ class PersonRequestHolder:
     def _view(self, held: dict) -> dict:
         return {"id": held["id"], "kind": held["kind"], "text": held["text"], "why": held["why"],
                 "face_text": FACE_TEXT[held["kind"]], "remaining_s": round(max(0.0, held["until"] - self._now()), 1),
-                "motion": False}
+                "answer": held.get("answer"), "motion": False}

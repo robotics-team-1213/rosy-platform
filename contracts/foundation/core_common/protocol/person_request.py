@@ -26,3 +26,10 @@ class PersonRequestBody(BaseModel):
     text: str = Field(min_length=1, max_length=200)
     why: str = Field(default="", max_length=200)
     ttl_s: float = Field(default=DEFAULT_TTL_S, gt=0, le=MAX_TTL_S, allow_inf_nan=False)
+
+
+class PersonRequestAnswerBody(BaseModel):
+    """A logged-in person's answer at the robot: ``POST /api/v1/person-request/{id}/answer``. Fleet reads it back."""
+
+    model_config = ConfigDict(extra="forbid")
+    answer: Literal["done", "cannot"]

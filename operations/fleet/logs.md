@@ -5384,3 +5384,8 @@
 - 변경: 흐름이 만료되거나 Account가 끊겨 콜백이 실패하면 브라우저는 /console로 돌아간다. API 호출은 그대로 401·503이고 어느 쪽도 세션을 만들지 않는다.
 - 증거: 실제 Account와 Fleet을 두 출처로 띄운 왕복에서 두 탭 로그인과 교환 중 장애가 JSON 화면에서 멈추는 것을 재현했다.
 - gate 변화: SOURCE 회귀. 현장 수용은 별도다.
+
+## 2026-11-08 · uncommitted · feat(fleet): 스테이션 복구 자동 승인, 로봇 화면 답 기록
+- 변경: `station_recovery_routes.py` — 실행 가능한 요청을 5 s 주기로 `fleet:auto`가 승인해 기록하고 각 요청에 `approved_by`를 붙인다(사용자 결정 2026-11-08). 실행 가능하지 않게 되면 지우고 다시 묻는다. `person_request_routes.py` — 되읽은 부탁에 로봇에서 받은 답이 있으면 `robot:<id>/<계정>`으로 기록을 닫는다.
+- 증거: `test_station_recovery.py`·`test_person_requests.py` 추가, 원격 실행 기록 참조.
+- gate 변화: 없음. 승인은 여전히 아무것도 움직이지 않는다(S2 전).
