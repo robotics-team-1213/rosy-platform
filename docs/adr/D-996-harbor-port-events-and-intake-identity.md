@@ -25,7 +25,7 @@
    - 태그 번호 → `object_ref` 표는 ROSY marker-profile의 `container_tags`가 갖는다. Harbor는 마커 번호를 받지도 저장하지도 않는다.
    - 셀 PC는 읽은 태그 번호만 보낸다(`intake-readings`). 표 변환과 선언 대조는 셀 Fleet이 한다. 그래서 PC도 업무 앱의 화물 코드를 갖지 않는다.
    - 컨베이어 끝에서 읽은 값은 "공급 작업이 끝났고 아직 받지 않은 선언값" 가운데 하나와 같아야 한다. 순서로 짝짓지 않는다.
-   - `container.stored`는 손목 판독이 가리킨 A/B 작업이 슬롯 앵커 target에서 `GOAL_CONFIRMED`가 될 때만 낸다. `attested` 경로(기명 사람 확인)는 아직 생산자가 없다.
+   - `container.stored`는 손목 판독이 가리킨 A/B 작업이 슬롯 앵커 target에서 `GOAL_CONFIRMED`가 될 때만 낸다. `attested` 경로(기명 사람 확인)는 아직 생산자가 없다. A/B 작업 하나는 컨테이너 하나만 `stored`로 만든다. 손목 판독의 `arm_mission_id`는 carry 설정(`identity.arm_mission_id`)에서 오며, Fleet 하달에서 셀 PC까지 이 값을 자동으로 넘기는 연결은 아직 없다.
 4. **판독 판정 (D6).**
    - 여러 프레임 투표: 한 지점에서 N장을 읽어 같은 번호가 k번 이상일 때만 판독으로 인정한다.
    - 두 면 일치: 지붕·옆면 중 하나만 읽혀도 되지만, 둘 다 읽혔는데 번호가 다르면 `MISMATCH`다.

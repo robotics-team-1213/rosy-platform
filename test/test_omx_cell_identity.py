@@ -52,3 +52,13 @@ def test_the_hover_hook_refuses_a_mismatch_and_queues_what_the_wrist_read(tmp_pa
     assert queued == [("wrist", {"state": "read", "tag": 101}, "physical-1")]
     assert ci.hook(config, Cell([100] * 3), None)()["verdict"] == "pass"
     assert ci.hook({}, Cell([]), None) is None  # S and rescue carries have no identity step
+
+
+def test_a_broken_identity_read_refuses_so_the_arm_parks(tmp_path):
+    end = tmp_path / "end.json"
+    end.write_text("{not json")
+    out = ci.hook({"identity": {"end_path": str(end)}}, Cell([]), None)()
+    assert out["verdict"] == "refuse" and "identity read failed" in out["why"]
+    broken_queue = ci.hook({"identity": {"end_path": str(tmp_path / "none.json"), "frames": 1, "k": 1}},
+                           Cell([None]), lambda *a: 1 / 0)
+    assert broken_queue()["verdict"] in ("pass", "refuse")  # the gate answers even when the report cannot be queued

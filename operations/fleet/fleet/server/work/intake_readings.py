@@ -85,8 +85,12 @@ def stored_due(arm_store, port_store, intake) -> list[int]:
     received, stored, seqs = (_refs(port_store, "container.received_at_intake"),
                               _refs(port_store, "container.stored"), [])
     tags = intake.get("container_tags") or {}
-    for source, raw in rows:
-        reading = IntakeReading.model_validate_json(raw)
+    readings = [(source, IntakeReading.model_validate_json(raw)) for source, raw in rows]
+    # one A/B job stores one container: a reused arm_mission_id never stores a second one
+    used = {r.arm_mission_id for source, r in readings if port_store.by_observation(source, r.observation_ref)}
+    for source, reading in readings:
+        if reading.arm_mission_id in used:
+            continue
         ref = tags.get(str(reading.tag))
         if reading.point != "wrist" or reading.state != "read" or ref not in received or ref in stored:
             continue
@@ -99,4 +103,5 @@ def stored_due(arm_store, port_store, intake) -> list[int]:
         except PortEventConflict:
             continue
         stored.add(ref)
+        used.add(reading.arm_mission_id)
     return seqs

@@ -67,13 +67,19 @@ def hook(config: dict, cell, queue_reading=None):
         return None
 
     def run():
-        end_path = Path(spec["end_path"]).expanduser()
-        end = json.loads(end_path.read_text(encoding="utf-8")) if end_path.exists() else {"state": "unreadable"}
-        frames = [cell.frame(spec.get("camera", "wrist")) for _ in range(int(spec.get("frames", DEFAULT_N)))]
-        wrist = read_frames(frames, int(spec.get("k", DEFAULT_K)))
-        gate = place_gate(end, wrist)
+        try:
+            end_path = Path(spec["end_path"]).expanduser()
+            end = json.loads(end_path.read_text(encoding="utf-8")) if end_path.exists() else {"state": "unreadable"}
+            frames = [cell.frame(spec.get("camera", "wrist")) for _ in range(int(spec.get("frames", DEFAULT_N)))]
+            wrist = read_frames(frames, int(spec.get("k", DEFAULT_K)))
+            gate = place_gate(end, wrist)
+        except Exception as exc:  # a broken read must park like a refusal, never leave the arm at the hover
+            return {"verdict": "refuse", "why": f"identity read failed: {type(exc).__name__}: {str(exc)[:80]}"}
         if queue_reading is not None:
-            queue_reading("wrist", wrist, spec.get("arm_mission_id"))
+            try:
+                queue_reading("wrist", wrist, spec.get("arm_mission_id"))
+            except Exception as exc:  # the gate stands without the report; the outbox is resent later
+                print(f"wrist reading not queued: {type(exc).__name__}: {str(exc)[:80]}")
         # a refusal parks before the descent (cell_transfer); the same mismatch again goes to a person (2 failures)
         return {"verdict": "pass" if gate["place"] else "refuse", "why": gate.get("hold"), "identity": gate}
     return run
