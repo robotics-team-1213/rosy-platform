@@ -276,3 +276,16 @@ def test_toggle_during_the_admit_transaction_holds_it(tmp_path, change):
     assert worker.tick() == 1
     assert not dispatcher.prepared
     assert [r["outcome"] for r in audit.latest()] == ["HELD"]
+
+
+def test_the_intake_proposer_is_never_approved_by_the_unattended_worker():
+    # D-996 5: Fleet's own supply-arm proposal waits for a named operator even if a scope tried to list it
+    from fleet.server.intake_transfer import INTAKE_PRINCIPAL
+    core = arm_core(proposers=frozenset({"harbor", INTAKE_PRINCIPAL.principal_id}))
+    core.toggle(enabled=True, actor="operator-2")
+    assert core.hold_reason(robot_id="arm-a", approval_rule="arm_transfer",
+                            proposer=INTAKE_PRINCIPAL.principal_id) == "INTAKE_NEEDS_NAMED_APPROVAL"
+    assert core.hold_reason(robot_id="arm-a", approval_rule="arm_transfer", proposer="harbor") is None
+    with pytest.raises(ValueError, match="named operator"):
+        PolicyAdmissionSettings.from_config({"enabled": True, "robots": ["arm-a"], "step_approval_kinds": ["arm_transfer"],
+                                             "proposers": ["fleet-intake"], "valid_until": "2026-12-31T00:00:00Z"})

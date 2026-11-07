@@ -14,10 +14,11 @@ from core_common.protocol.port_events import PortEvent, event_id
 from .mission_store import MissionConflict
 from .port_event_store import PortEventConflict
 
+from .policy_admission import INTAKE_PROPOSER
 from .site_auth import SitePrincipal
 
 #: The proposer is Fleet itself: never a named operator, so it can never approve its own proposal.
-INTAKE_PRINCIPAL = SitePrincipal(principal_id="fleet-intake", role="service")
+INTAKE_PRINCIPAL = SitePrincipal(principal_id=INTAKE_PROPOSER, role="service")
 _BINDINGS = """CREATE TABLE IF NOT EXISTS fleet_intake_bindings (
     arm_mission_id TEXT PRIMARY KEY, trip_mission_id TEXT NOT NULL UNIQUE, object_ref TEXT NOT NULL)"""
 
