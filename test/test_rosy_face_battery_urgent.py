@@ -148,3 +148,19 @@ def test_an_update_stays_visible(tmp_path, monkeypatch):
         "face": None, "strip": None, "strip_tone": None, "overlay": None})
     _run(display, clock, 2)
     assert display.screen["kind"] == "update" and "sleep" not in lcd.calls
+
+
+def test_the_urgent_beep_is_a_real_pattern_unlike_the_emergency_one():
+    module = _module()
+    urgent, emergency = module.BUZZER_PATTERNS["battery_urgent"], module.BUZZER_PATTERNS["emergency"]
+    assert urgent[0] > 0 and urgent[1] != emergency[1]
+
+
+def test_a_dark_panel_still_refuses_a_bench_test_during_a_stop(tmp_path, monkeypatch):
+    display, lcd, buzzer, clock = _rig(tmp_path, [9.0])
+    stopped = {"kind": "stopped", "row": "stopped", "backlight": 100, "awake": True,
+               "face": None, "strip": None, "strip_tone": None, "overlay": None}
+    monkeypatch.setattr(display, "screen_of", lambda view, now: stopped)
+    _run(display, clock, 2)
+    assert display.screen["kind"] == "sleep"
+    assert display._table_screen["kind"] == "stopped"

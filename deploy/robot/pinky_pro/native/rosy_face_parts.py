@@ -26,7 +26,7 @@ BUZZER_REVERSE_HZ = 1000
 BUZZER_PATTERNS = {"ready": (1, BUZZER_FREQUENCY_HZ), "failed": (3, BUZZER_FREQUENCY_HZ),
                    "caution": (2, BUZZER_LOW_HZ), "emergency": (4, 2500),
                    "call": (2, BUZZER_CALL_HZ), "reverse": (1, BUZZER_REVERSE_HZ),
-                   "battery_urgent": (3, 2500)}
+                   "battery_urgent": (3, 1800)}
 #: D-247 6's buzzer test, when handed over: three 150 ms beeps, like rosy-hw-test.
 TEST_BEEPS, TEST_ON_S, TEST_OFF_S = 3, 0.15, 0.15
 LAMP_NODE = "dev/ws281x_pwm"

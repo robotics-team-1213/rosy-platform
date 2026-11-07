@@ -184,6 +184,7 @@ class FaceDisplay:
         self._urgent_low = 0
         self._urgent_missing = 0
         self._urgent_sounded: float | None = None
+        self._table_screen: dict | None = None
         self._drawn: str | None = None
         self._state: str | None = None
         self._sounded: dict[str, float] = {}
@@ -302,8 +303,9 @@ class FaceDisplay:
             return state
         if self._lamp is not None and self._lamp.pattern in ("emergency", "failed", "caution", "recovering", "bridging"):
             return None
-        if self.screen and (self.screen["kind"] in ("stopped", "update", "shutdown")
-                            or self.screen["row"] == "failed" or self.screen.get("strip_tone") == "caution"):
+        table = self._table_screen  # what is really happening, also while the urgent battery darkens the panel
+        if table and (table["kind"] in ("stopped", "update", "shutdown")
+                      or table["row"] == "failed" or table.get("strip_tone") == "caution"):
             return None  # Alarm outputs must never wait for a blocking bench test.
         if self._lamp is not None and self._light_session:
             self._lamp.show(None)
@@ -417,7 +419,7 @@ class FaceDisplay:
 
     def _screen(self, view: dict, now: float) -> dict | None:
         """The table's screen, dark while the battery is urgent. An update or a shutdown stays visible."""
-        screen = self.screen_of(view, now)
+        screen = self._table_screen = self.screen_of(view, now)
         if self._urgent and screen is not None and screen["kind"] not in ("update", "shutdown"):
             return {**screen, "kind": "sleep", "row": "standby", "backlight": 0, "awake": False}
         return screen
