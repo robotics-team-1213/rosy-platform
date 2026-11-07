@@ -194,6 +194,9 @@ def test_a_refused_move_folds_and_keeps_the_marks_so_far(tmp_path, monkeypatch):
         def __init__(self, park_ok=True):
             self.at, self.cmds, self.park_ok, self.next = None, [], park_ok, None
 
+        def frame(self, camera):
+            return np.zeros((48, 64, 3), np.uint8)
+
         def act(self, command):
             self.cmds.append(command)
             if command.startswith("load"):
@@ -211,3 +214,109 @@ def test_a_refused_move_folds_and_keeps_the_marks_so_far(tmp_path, monkeypatch):
     assert len(record["points"]) == 6 and cell.cmds[-1] == "park"
     with pytest.raises(SystemExit, match="park failed"):
         cc.remap(Cell(park_ok=False), config, points, tmp_path, log=lambda row: None)
+
+
+SCATTER = [(0, 0), (90, 0), (0, 90), (90, 90), (-90, 40), (40, -90), (-60, -60), (120, 30)]
+GRID = [(0.10, 0.10), (0.12, 0.12), (0.10, 0.14), (0.14, 0.10), (0.15, 0.15), (0.17, 0.12), (0.13, 0.17), (0.18, 0.09)]
+
+
+def test_consensus_keeps_the_larger_group_when_the_mark_flips_sides():
+    marks = [(to_px(p), p) for p in GRID[:6]] + [((to_px(p)[0] + 70, to_px(p)[1] + 15), p) for p in GRID[6:]]
+    assert cc.consensus(marks, 15.0) == marks[:6]
+    assert cc.consensus(marks[:2], 15.0) == marks[:2]
+
+
+def test_a_remap_recovers_when_its_first_marks_flip_and_reports_what_it_dropped(tmp_path, monkeypatch):
+    """arm_b 2026-11-06: the first three marks mixed both groups and the prediction threw away every later mark."""
+    import types
+
+    monkeypatch.setitem(sys.modules, "cell_pipeline", types.SimpleNamespace(write_library=lambda c, p, q, path: path))
+    points = sorted(GRID, key=lambda q: math.hypot(*q))
+    flipped, gates = {points[1]}, []
+
+    class Cell:
+        def __init__(self):
+            self.i = -1
+
+        def frame(self, camera):
+            return np.zeros((48, 64, 3), np.uint8)
+
+        def act(self, command):
+            self.i += command.startswith("load")
+            return {"ok": True}
+
+    def mark(cell, config, near=None):
+        gates.append(near)
+        p = points[cell.i]
+        x, y = to_px(p)
+        return (x + 70, y + 15) if p in flipped else (x, y)
+
+    monkeypatch.setattr(cc.cell_pivot, "mark_jaws", mark)
+    config = {"coarse": {"z_view": 0.14}, "plan": {"approach_m": 0.04}, "sites": {"pallet": {"yaw_deg": 0.0}},
+              "calibrate": {"map_sites": ["pallet"]}}
+    rows = []
+    record = cc.remap(Cell(), config, [list(p) for p in points], tmp_path, log=rows.append)
+    assert len(record["points"]) == 7 and [d["arm_m"] for d in record["dropped_marks"]] == [list(points[1])]
+    assert record["loo_error_mm"]["max"] < 1.0 and gates[:4] == [None] * 4 and gates[-1] is not None
+    assert any("dropped_marks" in row for row in rows)
+
+
+def test_too_few_marks_that_agree_stop_the_remap_with_no_map(tmp_path, monkeypatch):
+    import types
+
+    monkeypatch.setitem(sys.modules, "cell_pipeline", types.SimpleNamespace(write_library=lambda c, p, q, path: path))
+    points = sorted(GRID, key=lambda q: math.hypot(*q))
+
+    class Cell:
+        def __init__(self):
+            self.i = -1
+
+        def frame(self, camera):
+            return np.zeros((48, 64, 3), np.uint8)
+
+        def act(self, command):
+            self.i += command.startswith("load")
+            return {"ok": True}
+
+    monkeypatch.setattr(cc.cell_pivot, "mark_jaws", lambda cell, config, near=None: (
+        (to_px(points[cell.i])[0] + SCATTER[cell.i][0], to_px(points[cell.i])[1] + SCATTER[cell.i][1])))
+    config = {"coarse": {"z_view": 0.14}, "plan": {"approach_m": 0.04}, "sites": {"pallet": {"yaw_deg": 0.0}},
+              "calibrate": {"map_sites": ["pallet"]}}
+    with pytest.raises(SystemExit, match="agree of 8"):
+        cc.remap(Cell(), config, [list(p) for p in points], tmp_path, log=lambda row: None)
+
+
+def test_a_scene_that_changed_during_the_remap_saves_no_map(tmp_path, monkeypatch):
+    import types
+
+    monkeypatch.setitem(sys.modules, "cell_pipeline", types.SimpleNamespace(write_library=lambda c, p, q, path: path))
+    points = sorted(GRID, key=lambda q: math.hypot(*q))
+
+    class Cell:
+        def __init__(self):
+            self.i, self.parked = -1, False
+
+        def frame(self, camera):
+            view = np.zeros((480, 640, 3), np.uint8)
+            if self.parked:  # a box pushed while the arm was out
+                view[100:200, 100:160] = (20, 90, 220)
+            return view
+
+        def act(self, command):
+            self.i += command.startswith("load")
+            self.parked |= command == "park"
+            return {"ok": True}
+
+    monkeypatch.setattr(cc.cell_pivot, "mark_jaws", lambda cell, config, near=None: to_px(points[cell.i]))
+    config = {"coarse": {"z_view": 0.14}, "plan": {"approach_m": 0.04}, "sites": {"pallet": {"yaw_deg": 0.0}},
+              "calibrate": {"map_sites": ["pallet"]}}
+    with pytest.raises(SystemExit, match="scene changed"):
+        cc.remap(Cell(), config, [list(p) for p in points], tmp_path, log=lambda row: None)
+    kept = sorted(p.name for p in next((tmp_path / "remap-frames").iterdir()).iterdir())
+    assert "before.jpg" in kept and "after.jpg" in kept and "07.jpg" in kept
+
+
+def test_a_map_only_a_minority_of_the_marks_agree_on_is_refused():
+    assert cc.enough_agree(5, 8) and cc.enough_agree(5, 9)
+    assert not cc.enough_agree(5, 10)  # half: either side of the jaws could be the true one
+    assert not cc.enough_agree(4, 4)

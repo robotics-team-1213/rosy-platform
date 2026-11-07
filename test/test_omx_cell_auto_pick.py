@@ -496,6 +496,18 @@ def test_a_stop_while_carrying_backs_out_and_reports_contact_with_the_box_in_the
     assert any(s.get("command") == "run grasp_pick" and s.get("holding") for s in moved["steps"])
 
 
+def test_a_stalled_lift_lets_go_and_rises_instead_of_retreating():
+    stop = {"ok": False, "contact": True, "error": "contact in lift_pick: wrist_flex lag rose to 2.2 units"}
+    for freed, sent, released in (("risen", ["park"], True), ("stuck", [], False)):
+        cell = Scripted({"run grasp_pick": {"holding": True}, "run lift_pick": stop})
+        moved = auto.transfer_folded(cell, "lib.json", lift_stall=lambda gate: {"result": freed})
+        assert moved["result"] == "contact" and moved["released"] is released and "retreat" not in cell.commands
+        assert cell.commands[cell.commands.index("run lift_pick") + 1:] == sent
+    cell = Scripted({"run grasp_pick": {"holding": True}, "run lift_pick": stop})
+    moved = auto.transfer_folded(cell, "lib.json")  # outside a supervised trial: as before
+    assert cell.commands[-2:] == ["retreat", "park"] and "released" not in moved
+
+
 def test_an_empty_grasp_lifts_and_folds_without_the_place_leg():
     cell = Scripted({"run grasp_pick": {"holding": False}})
     assert auto.transfer_folded(cell, "lib.json")["result"] == "empty"

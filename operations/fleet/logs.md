@@ -5334,6 +5334,28 @@
 - 증거: agent-browser 로컬 렌더(1920·390·320 화면 확인). 원격 회귀는 착지 기록을 따른다.
 - gate 변화: SOURCE 변경. 실기기·Android 수용은 별도다. CE: 해당 없음 — 코드와 회귀가 판단을 보존한다.
 
+## 2026-11-07 · uncommitted · fix(fleet): 운행 시작 배터리 확인 · 충전 칸 점유 유지
+- 변경: `TripRunner.start`가 `power_health.battery`가 fresh(표본 나이+캐시 나이 ≤ stale_after_s, 캐시 ≤ 5 s)이고 percent가 읽히며 level이 ok/warning일 때만 통과한다. 아니면 422 `TRIP_BATTERY_UNCONFIRMED`(근거 원천이 없어도 닫힘, 우회 기본값 없음). 충전 복귀 시작만 critical을 허용한다. `ChargeBays`는 오프라인·자세 상실·목록에서 사라진 로봇의 방문을 지우지 않고 칸을 `unknown`으로 보이며, 칸 밖에서 신뢰 자세로 보일 때만 방문을 끝낸다. 보이지 않던 시간은 충전 시간에서 뺀다.
+- 증거: 시험 먼저 RED(`test_trip_battery` import 실패, `test_charge_bays` 2 failed) 후 구현. 시험 fixture 14곳은 신선한 배터리를 명시 주입한다(`fakes.fresh_battery`). 결과는 원격 실행 기록 참조.
+- gate 변화: SOURCE 회귀만. 이미 달리는 운행은 멈추지 않는다(후속). 충전 칸 운영자 해제 경로는 없다(후속). 실물·현장 수용 근거가 아니다.
+- 결정: API v1.365. ADR 없음(기존 admission 거절 목록에 코드 추가, 거절만 늘림).
+- 교훈: CE 해당 없음 — 최종 코드·시험·API 계약으로 재현 가능.
+
+## 2026-11-07 · uncommitted · fix(fleet): 독립 검토 반영 — 충전 복귀·재시도·읽기 대기·칸 dwell/unknown
+- 변경: 충전 복귀(`charge_session`) 시작은 배터리 확인을 건너뛴다. `unreadable`·`evidence_old`만 한 주기 간격 최대 3번 다시 읽는다(과제 단계가 한 번 놓친 읽기로 HOLD 되지 않게; 이미 승인된 단계 재확인 생략보다 한 곳에서 끝나 단순). 시작 점검은 진행 중인 읽기를 기다리고(`await_pending`), power 캐시 나이는 읽기 지연을 센다(`age_from_request`). 칸은 신뢰 자세가 3 s 칸 밖일 때만 방문을 끝내고, 방문 없는 로봇이 오프라인·위치 없음이면 빈 칸도 `unknown`, 연결 전 blind 시간은 빼지 않는다. SIM은 `sim_battery.py`(7.6 V)로 근거를 낸다(Pinky bringup은 SIM 런치에 없음을 코드로 확인). 계약 핀 v1.365.
+- 증거: 시험 먼저 RED 후 구현(원격 실행 기록). `/goal`·`/route`·`/formation/start`는 TripRunner를 거치지 않는 별도 입구라 이번에 막지 않았다(후속).
+- gate 변화: SOURCE 회귀만. 충전기 전압 8.40 V 이상은 100%로 눌려 방금 뺀 로봇이 통과할 수 있다(후속). 칸 운영자 해제 경로·방문 영속화 없음(후속).
+- 결정: API v1.365 유지.
+- 교훈: CE 해당 없음.
+
+## 2026-11-07 · 7c042262fb · fix(fleet): a stale blip is read again before a trip is refused
+
+- 변경: `evidence_stale`도 최대 3번 다시 읽는다. 배터리 발행 주기(실측 5.0 s)와 CORE stale 기준(5.0 s)이 같아 정상 기체가 순간 stale로 읽힐 수 있다. 멈춘 기체는 세 번 모두 stale이라 그대로 거절된다.
+- 증거: 독립 검토의 비차단 지적 반영, 빈도는 측정하지 않음. 실물 수용 없음.
+- gate 변화: SOURCE만
+- 결정: API v1.365 유지
+- 교훈: 없음
+
 ## 2026-11-07 · uncommitted · 로그인 복귀가 설치·보정 하위 화면을 유지
 - 변경: fleet_return_allowed가 설치 문서의 알려진 다섯 화면 조각을 허용한다. 그 밖의 조각은 그대로 거절한다.
 - 증거: test_account_receiver.py 허용·거절 두 경우를 더했다. 원격 결과는 착지 기록을 따른다.
