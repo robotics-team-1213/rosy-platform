@@ -1,6 +1,6 @@
 ## D-994 N100·16GB Ubuntu 호스트에 통합관제 R을 두고 장치 owner와 공통 서비스의 책임을 구분한다
 
-**Status:** Accepted (2026-11-08, 사용자 결정). 목표 하드웨어·역할 분담의 결정이다. Ubuntu 설치, 서비스 이전, N100 부하 시험과 DEVICE/FIELD 수용은 미수행이다.
+**Status:** Accepted (2026-11-08, 사용자 결정). 목표 하드웨어·역할 분담의 결정이다. Ubuntu 설치, 서비스 이전, N100 부하 시험과 DEVICE/FIELD 수용은 미수행이다. 2항의 “미구현 팔 위임 wire” 설명은 [D-995](D-995-control-structure-authority-and-evidence-status.md)가 현재 소스 상태에 한해 대체한다. 나머지 결정은 유지한다.
 
 ### Context
 

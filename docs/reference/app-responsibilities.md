@@ -14,6 +14,7 @@ Rosy Fleet은 **현장 운영**, Rosy Robot은 **한 대 관리**, Rosy Pilot은
 | 표시 전용 | Face, `middleware/robot_ui/face` | 이름·표정·부팅·연결 상태 | 입력·운동 명령 없음 |
 | 관측 서비스 | Rosy Vision, `operations/overhead` | 프레임 수신·관측 생성·허가된 preview | 명령·현장 원장은 Fleet/장치 owner |
 | 공통 신원 | Rosy Account, `operations/account` (D-962) | 사람 신원·권한·세션·회수 | 장치 admission·조종 좌석·업무 승인과 구분 |
+| 읽기 전용 앱·서비스 | Rosy Monitoring, `applications/monitoring`, `operations/monitoring` | 상태 수집·집계·조회 | 설정·복구·장치 명령은 기존 owner |
 | 업무 도구 | Games 보드, `operations/apps/games` | 경기 상태와 경기별 입력 | 사이트 Mission과 최종 장치 명령은 별도 owner |
 | 개발 도구 | control diagnostic / lane live view | 현재 PARKED 진단 / 시뮬 관측 | 제품 운용 진입으로 확대하지 않음 |
 | 공유 기반 | `shared/web` | 디자인·컨트롤·통신 도구 | 사용자 업무·전역 인증 상태를 소유하지 않음 |
@@ -24,9 +25,12 @@ Fleet 내부 id·아이콘·URL의 `console`은 호환 식별자다. 표시 이�
 
 아래 경로는 소스 owner다. 배포 호스트·설치 identity는 [폴더 책임 안내](platform-folder-responsibilities.md)와 실제 설치 manifest로 확인한다.
 
+관제 단위와 물리 호스트는 [관제 배치표](../deployment/control-units.md#현장-배치표), R·셀·장치 owner의 책임과 구현/현장 수용 구분은 [D-995](../adr/D-995-control-structure-authority-and-evidence-status.md)를 따른다. Account를 함께 써도 기계 자격·업무 원장·최종 장치 실행 권한을 합치지 않는다.
+
 | 사용자 작업 / 화면 | API·소스 owner | 상태 정본 / 최종 실행 | 완료 확인과 소비자 |
 |---|---|---|---|
 | Mission 요청·진행·개입 / Fleet 작업 | `operations/fleet/fleet/server/missions/{mission_routes,mission_service,mission_store}.py` | Fleet Mission 원장 / 장치 로컬 Action owner | 원장 상태와 연결된 장치 결과·목표 증거. HTTP 수락만으로 물리 완료를 확정하지 않음 |
+| R로 팔 이송 제안·셀 승인 / 외부 앱·셀 화면 | `operations/fleet/fleet/server/work/{arm_transfer_relay_routes,arm_transfer_job_routes}.py`, `ledger/control_unit_service.py` | R의 위임 투영·셀의 ARM job / OMX owner | 실물 팔은 셀 ARM admit·현재 부모 증명·기명 승인. 주행 위임 `/approve`와 구별하며 HTTP 수락은 물리 완료가 아님 |
 | 현장 등록·기기 승인 / Fleet 설치 | `operations/fleet/fleet/server/auth/{enrollment_routes,enrollment_store,pairing_routes}.py` | 승인·등록·카메라 자격의 기존 store / 장치 명령 없음 | 서버 등록 결과. 검색 목록에 보임·로그인 성공과 등록 승인은 별개 |
 | 현장 좌표·카메라 보정 / Fleet 설치·지도 | `applications/fleet/web/{install,site-map,field-view}.js`와 해당 Fleet API | 활성 map/fit의 기존 Fleet 저장 owner / 장치 주행 없음 | 승인·저장된 보정 결과. Cam 송신 성공은 좌표 보정 완료가 아님 |
 | 영구 설정 / Robot 설치·정비 | `middleware/robot_ui/robot/settings.js`, CORE API | CORE 설정 owner / 설정을 적용하는 로컬 기능 | 서버 저장·읽기 결과. Pilot 세션 프리셋은 이 정본을 수정하지 않음 |
