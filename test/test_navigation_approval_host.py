@@ -297,14 +297,63 @@ def test_cancel_returns_to_the_previous_runtime_and_units(root):
     assert host.status(root, ops)["phase"] == "IDLE"
 
 
-def _copy_trials(root, tmp_path):
+def _copy_trials(root, tmp_path, surface="floor", scan_check=True):
     bundle, evidence = _candidate(tmp_path)
     trials = root / host.TRIALS
     trials.mkdir(parents=True, exist_ok=True)
     for trial in bundle["trials"]:
         if (trial["direction"], trial["stop_cause"]) in host.REQUIRED:
-            name = f"{trial['direction']}-{trial['stop_cause']}.json"
-            (trials / name).write_bytes((evidence / trial["evidence_file"]).read_bytes())
+            name = f"{trial['direction']}-{trial['stop_cause']}"
+            content = (evidence / trial["evidence_file"]).read_bytes()
+            (trials / f"{name}.json").write_bytes(content)
+            (trials / f"{name}.surface.json").write_text(json.dumps({
+                "test_surface": surface, "raw_sha256": host.mapping_approval._sha256(content),
+                "scan_check": {"odom": 0.03, "scan": 0.03} if scan_check else None}), encoding="ascii")
+
+
+def _measuring_with_trials(root, tmp_path, **kw):
+    ops = Ops(root)
+    host.begin(root, ops)
+    _copy_trials(root, tmp_path, **kw)
+    return ops
+
+
+def test_a_seal_on_another_surface_than_the_trials_is_refused(root, tmp_path):
+    ops = _measuring_with_trials(root, tmp_path, surface="lifted", scan_check=False)
+    assert all(row["state"] == "valid" and row["test_surface"] == "lifted" for row in host.status(root, ops)["trials"])
+    with pytest.raises(ValueError, match="floor surface"):
+        host.request_seal(root, ops, "person-a", "floor")
+    host.seal(root, ops, "person-a", "floor")
+    assert not (root / "etc/rosy/approvals/navigation.approved").exists()
+    host.seal(root, ops, "person-a", "lifted")
+    bundle = json.loads((root / "etc/rosy/approvals/g4.bundle.json").read_text(encoding="utf-8"))
+    assert bundle["test_surface"] == "lifted"
+
+
+def test_mixed_surfaces_cannot_be_sealed_as_either(root, tmp_path):
+    ops = _measuring_with_trials(root, tmp_path)
+    side = root / host.TRIALS / "cw-button_release.surface.json"
+    side.write_text(json.dumps({**json.loads(side.read_text(encoding="ascii")), "test_surface": "lifted"}), encoding="ascii")
+    for surface in ("floor", "lifted"):
+        with pytest.raises(ValueError, match="surface"):
+            host.request_seal(root, ops, "person-a", surface)
+
+
+@pytest.mark.parametrize("damage", ["missing", "other_raw", "no_scan_check"])
+def test_a_floor_trial_without_its_cross_check_is_not_valid(root, tmp_path, damage):
+    ops = _measuring_with_trials(root, tmp_path)
+    side = root / host.TRIALS / "cw-button_release.surface.json"
+    record = json.loads(side.read_text(encoding="ascii"))
+    if damage == "missing":
+        side.unlink()
+    elif damage == "other_raw":
+        side.write_text(json.dumps({**record, "raw_sha256": "0" * 64}), encoding="ascii")
+    else:
+        side.write_text(json.dumps({**record, "scan_check": None}), encoding="ascii")
+    rows = {row["direction"] + row["stop_cause"]: row for row in host.status(root, ops)["trials"]}
+    assert rows["cwbutton_release"]["state"] == "invalid"
+    with pytest.raises(ValueError, match="every required trial"):
+        host.request_seal(root, ops, "person-a", "floor")
 
 
 def test_seal_writes_the_approver_and_returns_to_hardware_without_starting_navigation(root, tmp_path):
@@ -382,6 +431,32 @@ def test_a_transition_that_died_reads_as_failed_and_a_live_one_refuses_another(r
     assert host.status(root, ops)["phase"] == "BEGINNING"
     with pytest.raises(ValueError, match="cannot begin"):
         host.request_begin(root, ops)
+
+
+@pytest.mark.parametrize("unit,expected", [
+    ("[Unit]\nWants=network-online.target rosy-io.service\n", True),
+    ("[Unit]\nWants=network-online.target\n# Wants=rosy-io.service\nAfter=rosy-io.service\n", False),
+    (None, False),
+])
+def test_status_reports_an_os_update_unit_that_stops_navigation(root, unit, expected):
+    path = root / host.OS_UPDATE_UNIT
+    if unit is not None:
+        path.parent.mkdir(parents=True)
+        path.write_text(unit, encoding="ascii")
+    ops = Ops(root)
+    assert host.status(root, ops)["os_update_stops_navigation"] is expected
+    assert not ops.calls  # read only: the timer is never touched
+
+
+def test_starting_navigation_reports_the_os_update_unit(root, tmp_path):
+    ops = _measuring_with_trials(root, tmp_path)
+    host.seal(root, ops, "person-a", "floor")
+    path = root / host.OS_UPDATE_UNIT
+    path.parent.mkdir(parents=True)
+    path.write_text("[Unit]\nWants=rosy-io.service\n", encoding="ascii")
+    ops.calls.clear()
+    assert host.start_navigation(root, ops)["os_update_stops_navigation"] is True
+    assert not ops.ran("stop", "rosy-os-update.timer")
 
 
 def test_no_seal_reads_as_needing_measurement(root):

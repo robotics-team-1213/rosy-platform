@@ -107,6 +107,10 @@ sudo -n python3 -B /opt/rosy/native-runtime/mapping_approval.py approve \
 파일 해시와 `systemd-analyze verify`를 읽어 확인한다. 봉인 도구가 릴리스
 payload에만 들어갔다고 unit이 갱신된 것으로 취급하지 않는다.
 
+90e631297f 이전 OS 이미지는 이 유닛이 payload 동기화 대상이 아니므로(`image_layer_plan.py`) payload 릴리스로
+고쳐지지 않는다. OS A/B 설치가 필요하다. 항법 재승인 API와 카드는 이 상태를 `os_update_stops_navigation`으로
+알린다. motor 측정 시험은 영향이 없다.
+
 옛 frozen OS의 `rosy-os-update.service`가 `Wants=rosy-io.service`를 포함하면
 업데이트 없음 점검도 I/O를 시작해 항법을 중지시킨다. 감독 시험 전에 frozen 제어기의
 `status`에서 pending 없음과 업데이트 service 비실행을 확인하고, 기존 타이머 활성 상태를

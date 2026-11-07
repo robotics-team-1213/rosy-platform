@@ -12,6 +12,7 @@ const TRIALS = [
   {direction: "forward", stop_cause: "command_loss", label: "전진 후 명령 끊김"},
 ];
 const STATE_LABEL = {missing: "아직 안 함", valid: "통과", invalid: "다시 필요"};
+const SURFACE_LABEL = {floor: "바닥", lifted: "바퀴를 들어 올림"};
 
 function el(tag, cls, text) { const node = document.createElement(tag); if (cls) node.className = cls; if (text) node.textContent = text; return node; }
 
@@ -23,7 +24,7 @@ export function mount(root, ctx) {
   const begin = el("ui-button", "", "측정 시작"); const cancel = el("ui-button", "", "측정 취소");
   const sealButton = el("ui-button", "", "봉인"); const navigate = el("ui-button", "", "항법 시작");
   controls.append(begin, cancel, sealButton, navigate);
-  const surfaceLabel = el("label", "", "시험 바닥 ");
+  const surfaceLabel = el("label", "", "시험 바닥(바닥이면 1초 넘게 눌러야 LiDAR로 실제 이동을 확인합니다) ");
   const surface = el("select");
   for (const [value, text] of [["floor", "바닥"], ["lifted", "바퀴를 들어 올림"]]) { const option = el("option", "", text); option.value = value; surface.append(option); }
   surfaceLabel.append(surface);
@@ -47,7 +48,7 @@ export function mount(root, ctx) {
     if (holding || phase !== "MEASURING") return;
     holding = true;
     try {
-      await call("/trial/start", {direction: trial.direction, stop_cause: trial.stop_cause, blind_zone_confirmed: blind.checked});
+      await call("/trial/start", {direction: trial.direction, stop_cause: trial.stop_cause, test_surface: surface.value, blind_zone_confirmed: blind.checked});
       if (!holding) return void call("/trial/stop").catch(() => {});
       say(`${trial.label} 시험 중입니다.`, "pending");
       const send = () => call("/trial/hold").catch((error) => { endHold(); say(`시험이 멈췄습니다: ${error.message}`, "error"); });
@@ -84,12 +85,16 @@ export function mount(root, ctx) {
       ? `승인 유효${approval.carried ? ` (${approval.measured_release_id}에서 이어받음)` : ""}`
       : `측정 필요: ${approval.reason || "승인 기록 없음"}`;
     summary.setAttribute("state", approval.valid ? "ready" : "warning");
-    if (data.reason) say(data.reason, phase === "FAILED" ? "error" : "ready");
+    const last = data.trial?.last;
+    if (last?.reason && !holding) say(`직전 시험을 인정하지 않았습니다: ${last.reason}`, "error");
+    else if (data.reason) say(data.reason, phase === "FAILED" ? "error" : "ready");
     else if (phase === "MEASURING" && data.measuring_expires_in_s != null) say(`측정은 ${Math.ceil(data.measuring_expires_in_s / 60)}분 뒤 자동으로 취소됩니다. 충전 선을 뺀 채로 지켜봐 주세요.`);
+    if (data.os_update_stops_navigation) summary.textContent += " 이 기체의 OS는 항법을 1분 안에 멈춥니다. OS 업데이트가 필요합니다. 측정은 영향받지 않습니다.";
     const rows = data.trials || [];
     for (const item of buttons) {
       const row = rows.find((candidate) => candidate.direction === item.trial.direction && candidate.stop_cause === item.trial.stop_cause);
-      item.state.textContent = ` ${STATE_LABEL[row?.state] || "확인 중"}${row?.reason ? `: ${row.reason}` : ""}`;
+      const measured = row?.test_surface ? ` (${SURFACE_LABEL[row.test_surface]})` : "";
+      item.state.textContent = ` ${STATE_LABEL[row?.state] || "확인 중"}${measured}${row?.reason ? `: ${row.reason}` : ""}`;
       item.button.disabled = phase !== "MEASURING";
     }
     begin.disabled = !["IDLE", "FAILED"].includes(phase);

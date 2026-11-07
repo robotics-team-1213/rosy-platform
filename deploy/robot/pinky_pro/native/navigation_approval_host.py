@@ -23,6 +23,7 @@ STATE = "var/lib/rosy/commissioning/navigation-approval.json"
 EVIDENCE = "var/lib/rosy/commissioning/navigation-approval-evidence"
 TRIALS = "var/lib/rosy/core/navigation-approval"  # written by CORE's trial collector
 RUNTIME = "etc/rosy/runtime.env"
+OS_UPDATE_UNIT = "etc/systemd/system/rosy-os-update.service"
 UNIT = "rosy-navigation-approval"
 HOLDER = "navigation-approval"
 HERE = Path(__file__).resolve().parent
@@ -189,9 +190,10 @@ def _require_same_measurement(root, state):
     device = mapping_approval._device_identity(root)
     if bound == (device["release_id"], device["source_revision"], mapping_approval.motion_fingerprint(root)):
         return
-    for directory in (root / TRIALS, root / EVIDENCE):
-        for direction, cause in REQUIRED:
-            (directory / f"{direction}-{cause}.json").unlink(missing_ok=True)
+    for stale in (root / TRIALS).glob("*.json"):
+        stale.unlink()
+    for direction, cause in REQUIRED:
+        (root / EVIDENCE / f"{direction}-{cause}.json").unlink(missing_ok=True)
     _bind_measurement(root, state)
     _write_state(root, {**state, "phase": "MEASURING", "reason": "the release changed: trials were discarded"})
     raise ValueError("the release changed since begin: trials were discarded, run them again")
@@ -303,6 +305,7 @@ def seal(root, ops, operator, surface):
     state = _read_state(root)
     try:
         _require_same_measurement(root, state)
+        _require_surface(root, surface)
         mapping_approval.approve(root, _bundle(root, operator, surface), root / EVIDENCE)
     except Exception as exc:  # noqa: BLE001 - nothing was sealed and no mode moved: trials can be run again
         current = _read_state(root)
@@ -339,9 +342,18 @@ def _trial_state(root):
         path = root / TRIALS / f"{direction}-{cause}.json"
         if path.is_file() and not path.is_symlink():
             try:
-                latency = mapping_approval._validate_trial(json.loads(path.read_bytes()), direction, cause)
-                row.update(state="valid", stop_latency_s=round(latency, 3))
-            except (ValueError, KeyError, TypeError) as exc:
+                content = path.read_bytes()
+                latency = mapping_approval._validate_trial(json.loads(content), direction, cause)
+                record = json.loads(path.with_name(f"{direction}-{cause}.surface.json").read_bytes())
+                if record["raw_sha256"] != mapping_approval._sha256(content):
+                    raise ValueError("the surface record belongs to another trial")
+                if record["test_surface"] not in SURFACES:
+                    raise ValueError("the trial's test surface is unknown")
+                if record["test_surface"] == "floor" and not isinstance(record.get("scan_check"), dict):
+                    raise ValueError("a floor trial has no LiDAR cross-check")
+                row.update(state="valid", stop_latency_s=round(latency, 3), test_surface=record["test_surface"],
+                           scan_check=record.get("scan_check"))
+            except (OSError, ValueError, KeyError, TypeError) as exc:
                 row.update(state="invalid", reason=str(exc)[:200])
         rows.append(row)
     return rows
@@ -353,6 +365,22 @@ def _phase(state, ops):
             and not ops.active(f"{UNIT}.service")):
         return "FAILED"
     return phase
+
+
+def _os_update_stops_navigation(root):
+    """Read-only. Images before 90e631297f install a poll unit that wants rosy-io, which Conflicts= stops
+    navigation every minute. Payload sync skips this unit, so only an OS A/B install changes it."""
+    try:
+        lines = (root / OS_UPDATE_UNIT).read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeError):
+        return False
+    return any(line.startswith("Wants=") and "rosy-io.service" in line for line in lines)
+
+
+def _require_surface(root, surface):
+    """The bundle's single test_surface must be what every trial was really measured on."""
+    if any(row.get("test_surface") != surface for row in _trial_state(root)):
+        raise ValueError(f"not every trial was measured on the {surface} surface")
 
 
 def status(root, ops):
@@ -369,6 +397,7 @@ def status(root, ops):
     env = _env(root)
     return {"phase": phase, "reason": state.get("reason", ""), "approval": approval,
             "needs_measurement": not approval["valid"], "runtime_mode": _value(env, "ROSY_RUNTIME_MODE"),
+            "os_update_stops_navigation": _os_update_stops_navigation(root),
             "measuring_expires_in_s": (max(0, round(state.get("deadline", 0) - ops.now()))
                                        if phase == "MEASURING" and state.get("boot_id") == ops.boot_id() else None),
             "trials": _trial_state(root)}
@@ -408,6 +437,7 @@ def request_seal(root, ops, operator, surface):
         raise ValueError("every required trial must be valid before sealing")
     if surface not in SURFACES:
         raise ValueError("test surface must be floor or lifted")
+    _require_surface(root, surface)
     return _start(root, ops, "seal", "SEALING", operator, surface)
 
 

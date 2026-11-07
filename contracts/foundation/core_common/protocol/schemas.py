@@ -559,6 +559,7 @@ class NavigationApprovalTrialRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     direction: Literal["forward", "reverse", "cw", "ccw"]
     stop_cause: Literal["button_release", "command_loss"]
+    test_surface: Literal["floor", "lifted"]  # the person's statement, never inferred
     blind_zone_confirmed: bool = False
 
 

@@ -9,8 +9,9 @@ from types import SimpleNamespace
 import pytest
 
 from core_common.protocol.state_components import BatteryStatus
-from core_features.command.approval_trials import (ApprovalTrials, MAX_HOLD_S, RUN_MARGIN_M, TRAVEL_CAP_M, TrialRefused,
-                                                   require_clearance)
+from core_features.command.approval_trials import (ApprovalTrials, LINEAR_TOLERANCE_M, MAX_HOLD_S, RUN_MARGIN_M,
+                                                   TRAVEL_CAP_M, TrialRefused, _scan_outside, _scan_travel_m,
+                                                   check_floor_motion, require_clearance)
 
 ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(ROOT / "deploy/robot/pinky_pro/native"))
@@ -40,6 +41,9 @@ class Robot:
         self.last_command = -9.0
         self.watchdog_s = 0.5
         self.scan = scan(self.now)
+        self.scene_moves = False  # floor trials: the scan follows the body, unless the wheels are slipping
+        self.body_x = self.body_yaw = 0.0
+        self.slipping = False
         self.odom_fresh = True
         self.zeros = 0
         self.limits = SimpleNamespace(manual_linear=0.15, manual_angular=0.6)
@@ -69,8 +73,20 @@ class Robot:
         self.linear, self.angular = self.commanded
         self.x += self.linear * dt
         self.yaw += self.angular * dt
+        if not self.slipping:
+            self.body_x += self.linear * dt
+            self.body_yaw += self.angular * dt
         if self.scan:
             self.scan = {**self.scan, "received_at": self.now}
+            if self.scene_moves:
+                self.scan["ranges"] = self.room()
+
+    def room(self):
+        # An uneven room, so a turn has something to lay over itself.
+        step = self.scan["angle_increment"]
+        angles = [self.scan["angle_min"] + index * step for index in range(360)]
+        return [1.5 + 0.4 * math.sin(2 * (a + self.body_yaw)) + 0.2 * math.sin(5 * (a + self.body_yaw))
+                - self.body_x * math.cos(a) for a in angles]
 
 
 @pytest.fixture
@@ -84,8 +100,10 @@ def trials(robot, tmp_path):
                           clock=lambda: robot.now, wall=lambda: robot.now, thread=False)
 
 
-def drive(robot, trials, direction, cause, *, hold_s=0.8):
-    trials.start(direction, cause, OWNER, blind_zone_confirmed=True)
+def drive(robot, trials, direction, cause, *, hold_s=1.5, surface="floor"):
+    robot.scene_moves = True
+    robot.scan["ranges"] = robot.room()
+    trials.start(direction, cause, OWNER, test_surface=surface, blind_zone_confirmed=True)
     held = 0.0
     while held < hold_s:
         trials.hold(OWNER, robot.send)
@@ -104,7 +122,7 @@ def drive(robot, trials, direction, cause, *, hold_s=0.8):
 def test_a_trial_writes_evidence_the_approval_tool_accepts(robot, trials, tmp_path, direction, cause):
     import mapping_approval
     drive(robot, trials, direction, cause)
-    assert trials.last == {"direction": direction, "stop_cause": cause, "state": "recorded"}
+    assert trials.last["state"] == "recorded" and trials.last["scan_check"]["odom"], trials.last
     raw = json.loads((tmp_path / f"trials/{direction}-{cause}.json").read_text(encoding="ascii"))
     assert 0 <= mapping_approval._validate_trial(raw, direction, cause) <= 0.65
 
@@ -130,18 +148,18 @@ def test_five_collected_trials_seal_through_the_real_approval_tool(robot, trials
 
 def test_the_request_records_what_was_sent_under_a_lower_live_limit(robot, trials, tmp_path):
     robot.limits.manual_linear = 0.015
-    drive(robot, trials, "forward", "button_release")
+    drive(robot, trials, "forward", "button_release", hold_s=2.0)
     raw = json.loads((tmp_path / "trials/forward-button_release.json").read_text(encoding="ascii"))
     assert raw["requested_linear_mps"] == 0.015
 
 
 def test_the_speed_stays_inside_the_envelope_whatever_the_live_limit(robot, trials):
     import mapping_approval
-    trials.start("forward", "button_release", OWNER)
+    trials.start("forward", "button_release", OWNER, test_surface="lifted")
     trials.hold(OWNER, robot.send)
     assert 0 < robot.commanded[0] < mapping_approval.MAX_LINEAR_MPS
     trials.abort("end")
-    trials.start("ccw", "button_release", OWNER)
+    trials.start("ccw", "button_release", OWNER, test_surface="lifted")
     trials.hold(OWNER, robot.send)
     assert 0 < robot.commanded[1] < mapping_approval.MAX_ANGULAR_RPS
 
@@ -149,12 +167,12 @@ def test_the_speed_stays_inside_the_envelope_whatever_the_live_limit(robot, tria
 def test_a_limit_too_low_to_measure_refuses_the_trial(robot, trials):
     robot.limits.manual_linear = 0.005
     with pytest.raises(TrialRefused) as refused:
-        trials.start("forward", "button_release", OWNER)
+        trials.start("forward", "button_release", OWNER, test_surface="lifted")
     assert refused.value.code == "TRIAL_LIMIT_TOO_LOW"
 
 
 def test_a_button_hold_that_goes_quiet_stops_and_leaves_no_evidence(robot, trials, tmp_path):
-    trials.start("forward", "button_release", OWNER)
+    trials.start("forward", "button_release", OWNER, test_surface="lifted")
     trials.hold(OWNER, robot.send)
     zeros = robot.zeros
     while trials.active:
@@ -167,7 +185,7 @@ def test_a_button_hold_that_goes_quiet_stops_and_leaves_no_evidence(robot, trial
 
 
 def test_a_command_loss_trial_sends_no_stop_of_its_own_while_the_watchdog_answers(robot, trials):
-    trials.start("forward", "command_loss", OWNER)
+    trials.start("forward", "command_loss", OWNER, test_surface="lifted")
     trials.hold(OWNER, robot.send)
     zeros = robot.zeros
     while not trials.status()["active"]["stopping"]:
@@ -180,14 +198,14 @@ def test_a_command_loss_trial_sends_no_stop_of_its_own_while_the_watchdog_answer
 
 
 def test_a_command_loss_trial_cannot_be_turned_into_a_release(robot, trials):
-    trials.start("forward", "command_loss", OWNER)
+    trials.start("forward", "command_loss", OWNER, test_surface="lifted")
     trials.hold(OWNER, robot.send)
     trials.stop(OWNER)
     assert trials.last["state"] == "aborted" and not trials.active
 
 
 def test_the_hold_time_limit_stops_a_held_button(robot, trials):
-    trials.start("cw", "button_release", OWNER)
+    trials.start("cw", "button_release", OWNER, test_surface="lifted")
     deadline = robot.now + MAX_HOLD_S + 1
     while trials.active and robot.now < deadline:
         trials.hold(OWNER, robot.send)
@@ -198,7 +216,7 @@ def test_the_hold_time_limit_stops_a_held_button(robot, trials):
 
 
 def test_the_travel_cap_stops_the_robot(robot, trials):
-    trials.start("forward", "button_release", OWNER)
+    trials.start("forward", "button_release", OWNER, test_surface="lifted")
     trials.hold(OWNER, robot.send)
     robot.step()
     trials.tick()
@@ -209,7 +227,7 @@ def test_the_travel_cap_stops_the_robot(robot, trials):
 
 
 def test_stale_odometry_stops_the_trial(robot, trials):
-    trials.start("forward", "button_release", OWNER)
+    trials.start("forward", "button_release", OWNER, test_surface="lifted")
     trials.hold(OWNER, robot.send)
     robot.odom_fresh = False
     while trials.active:
@@ -220,7 +238,7 @@ def test_stale_odometry_stops_the_trial(robot, trials):
 
 
 def test_another_operator_cannot_hold_or_stop_a_trial(robot, trials):
-    trials.start("forward", "button_release", OWNER)
+    trials.start("forward", "button_release", OWNER, test_surface="lifted")
     with pytest.raises(TrialRefused, match="another operator"):
         trials.hold("person-b", robot.send)
     with pytest.raises(TrialRefused, match="another operator"):
@@ -240,7 +258,7 @@ def test_another_operator_cannot_hold_or_stop_a_trial(robot, trials):
 def test_a_scan_that_shows_no_room_refuses_the_trial(robot, trials, change, code):
     change(robot)
     with pytest.raises(TrialRefused) as refused:
-        trials.start("forward", "button_release", OWNER)
+        trials.start("forward", "button_release", OWNER, test_surface="lifted")
     assert refused.value.code == code and not trials.active
 
 
@@ -248,7 +266,7 @@ def test_a_blank_scan_behind_refuses_reverse_even_when_confirmed(robot, trials):
     for ranges in ([math.inf] * 360, [math.nan] * 360):
         robot.scan.update(ranges=ranges)
         with pytest.raises(TrialRefused) as refused:
-            trials.start("reverse", "button_release", OWNER, blind_zone_confirmed=True)
+            trials.start("reverse", "button_release", OWNER, test_surface="lifted", blind_zone_confirmed=True)
         assert refused.value.code == "CLEARANCE_UNKNOWN"
 
 
@@ -360,17 +378,17 @@ def test_forward_asks_no_person_while_the_body_covers_the_minimum_range():
 def test_rotation_needs_room_beyond_the_turning_circle(robot, trials):
     robot.scan.update(ranges=[0.11] * 360)
     with pytest.raises(TrialRefused) as refused:
-        trials.start("cw", "button_release", OWNER)
+        trials.start("cw", "button_release", OWNER, test_surface="lifted")
     assert refused.value.code == "CLEARANCE_TOO_SMALL"
 
 
 def test_reverse_always_needs_a_person_for_what_the_lidar_cannot_see(robot, trials):
     with pytest.raises(TrialRefused) as refused:
-        trials.start("reverse", "button_release", OWNER)
+        trials.start("reverse", "button_release", OWNER, test_surface="lifted")
     assert refused.value.code == "BLIND_ZONE_CONFIRMATION_REQUIRED"
     robot.scan.update(ranges=[0.10] * 360)
     with pytest.raises(TrialRefused) as refused:
-        trials.start("reverse", "button_release", OWNER, blind_zone_confirmed=True)
+        trials.start("reverse", "button_release", OWNER, test_surface="lifted", blind_zone_confirmed=True)
     assert refused.value.code == "CLEARANCE_TOO_SMALL"
 
 
@@ -379,6 +397,94 @@ def test_an_unknown_body_outline_fails_closed(robot):
     with pytest.raises(TrialRefused) as refused:
         require_clearance(robot.scan, body, "forward", False, robot.now)
     assert refused.value.code == "CLEARANCE_UNKNOWN"
+
+
+def test_spinning_wheels_leave_no_floor_evidence(robot, trials, tmp_path):
+    robot.slipping = True
+    drive(robot, trials, "forward", "button_release")
+    assert trials.last["state"] == "refused" and trials.last["code"] == "WHEELS_NOT_MOVING_BODY"
+    assert not list((tmp_path / "trials").glob("*.json")) if (tmp_path / "trials").exists() else True
+
+
+@pytest.mark.parametrize("direction", ["cw", "ccw"])
+def test_a_turn_that_spins_only_the_wheels_leaves_no_floor_evidence(robot, trials, direction):
+    robot.slipping = True
+    drive(robot, trials, direction, "button_release")
+    assert trials.last["code"] == "WHEELS_NOT_MOVING_BODY"
+
+
+def test_a_lifted_trial_is_recorded_as_lifted_without_a_scan_check(robot, trials, tmp_path):
+    robot.slipping = True
+    drive(robot, trials, "forward", "button_release", surface="lifted")
+    assert trials.last == {"direction": "forward", "stop_cause": "button_release", "state": "recorded",
+                           "test_surface": "lifted", "scan_check": None}
+    record = json.loads((tmp_path / "trials/forward-button_release.surface.json").read_text(encoding="ascii"))
+    raw = (tmp_path / "trials/forward-button_release.json").read_bytes()
+    assert record["test_surface"] == "lifted" and record["raw_sha256"] == hashlib.sha256(raw).hexdigest()
+
+
+def test_a_scan_gone_after_a_floor_trial_fails_closed(robot, trials):
+    trials.start("forward", "command_loss", OWNER, test_surface="floor")
+    trials.hold(OWNER, robot.send)
+    while not trials.status()["active"]["stopping"]:
+        robot.step()
+        trials.tick()
+    robot.scan = None
+    while trials.active:
+        robot.step()
+        trials.tick()
+    assert trials.last["code"] == "SCAN_UNUSABLE"
+
+
+def test_a_floor_trial_too_short_to_check_says_so(robot, trials):
+    drive(robot, trials, "forward", "button_release", hold_s=0.5)
+    assert trials.last["code"] == "TRIAL_TOO_SHORT"
+
+
+REAL_MOVED_M = 0.0625  # scan 0 to 1 of the real fixture, driving ahead
+
+
+def test_real_scans_agree_with_real_travel_within_the_tolerance():
+    first, second = real_scans()[:2]
+    assert check_floor_motion(first, second, PINKY, "forward", REAL_MOVED_M)["scan"] == pytest.approx(REAL_MOVED_M, abs=0.003)
+
+
+@pytest.mark.parametrize("odom", [0.03, -0.03, 0.2])
+def test_real_scans_refuse_odometry_they_do_not_show(odom):
+    first, second = real_scans()[:2]
+    with pytest.raises(TrialRefused) as refused:
+        check_floor_motion(first, first, PINKY, "forward", odom)
+    assert refused.value.code == "WHEELS_NOT_MOVING_BODY"
+    if odom != 0.03:
+        with pytest.raises(TrialRefused):
+            check_floor_motion(first, second, PINKY, "forward", odom)
+
+
+def test_real_neighbouring_scans_stay_inside_the_linear_tolerance():
+    # 0.1 s apart while driving: what is left is noise plus at most a little real motion.
+    second, third = (_scan_outside(sample, PINKY) for sample in real_scans()[1:])
+    assert abs(_scan_travel_m(second, third)) < LINEAR_TOLERANCE_M / 3 + 0.001
+
+
+@pytest.mark.parametrize("beams", [8, 14, 24, -10])
+def test_a_real_scene_turned_by_a_known_angle_is_recovered(beams):
+    first = real_scans()[1]
+    step = first["angle_max"] - first["angle_min"]
+    step /= len(first["ranges"]) - 1
+    # Only the room turns: the robot's own returns would stay put, so they leave the scene first.
+    outside = [r if math.isfinite(r) and r >= 0.3 else math.inf for r in first["ranges"]]
+    start = {**first, "ranges": outside}
+    turned = {**first, "ranges": [outside[(index + beams) % 720] for index in range(720)]}
+    seen = check_floor_motion(start, turned, PINKY, "ccw" if beams > 0 else "cw", beams * step)
+    assert seen["scan"] == pytest.approx(beams * step, abs=step)
+
+
+@pytest.mark.parametrize("direction,odom", [("forward", 0.03), ("cw", -0.1)])
+def test_a_scan_with_too_little_in_view_fails_closed(direction, odom):
+    blank = {**real_scans()[0], "ranges": [math.inf] * 720}
+    with pytest.raises(TrialRefused) as refused:
+        check_floor_motion(blank, blank, PINKY, direction, odom)
+    assert refused.value.code == "SCAN_UNUSABLE"
 
 
 class FakeAgent:
@@ -436,7 +542,7 @@ def test_a_login_is_the_approver_and_the_body_cannot_name_one(api):
 
 @pytest.mark.parametrize("path,body", [("/begin", None), ("/seal", {"test_surface": "floor"}), ("/cancel", None),
                                        ("/navigation-start", None), ("/trial/hold", None), ("/trial/stop", None),
-                                       ("/trial/start", {"direction": "forward", "stop_cause": "button_release"})])
+                                       ("/trial/start", {"direction": "forward", "stop_cause": "button_release", "test_surface": "floor"})])
 def test_the_public_development_token_names_nobody(core_client, monkeypatch, robot, tmp_path, path, body):
     client, svc = core_client()[:2]
     agent = FakeAgent()
@@ -451,14 +557,14 @@ def test_a_trial_needs_the_measuring_phase(api):
     client, _, agent, headers = api
     agent.phase = "IDLE"
     response = client.post("/api/v1/navigation/approval/trial/start",
-                           json={"direction": "forward", "stop_cause": "button_release"}, headers=headers["person-a"])
+                           json={"direction": "forward", "stop_cause": "button_release", "test_surface": "floor"}, headers=headers["person-a"])
     assert response.status_code == 409 and "APPROVAL_NOT_MEASURING" in response.text
 
 
 @pytest.mark.parametrize("battery,code", [(BatteryStatus(filtered_voltage=7.6, charging=True), "CHARGING"),
                                           (BatteryStatus(), "CHARGING_UNKNOWN")])
 @pytest.mark.parametrize("path,body", [("/begin", None),
-                                       ("/trial/start", {"direction": "forward", "stop_cause": "button_release"})])
+                                       ("/trial/start", {"direction": "forward", "stop_cause": "button_release", "test_surface": "floor"})])
 def test_a_plugged_in_or_unknown_robot_is_not_measured(api, battery, code, path, body):
     client, svc, _, headers = api
     svc.state.set_battery_status(battery)
@@ -470,14 +576,14 @@ def test_a_plugged_in_or_unknown_robot_is_not_measured(api, battery, code, path,
 def test_speed_is_not_the_callers_to_choose(api):
     client, _, _, headers = api
     assert client.post("/api/v1/navigation/approval/trial/start", headers=headers["person-a"],
-                       json={"direction": "forward", "stop_cause": "button_release", "linear": 0.5}).status_code == 400
+                       json={"direction": "forward", "stop_cause": "button_release", "test_surface": "floor", "linear": 0.5}).status_code == 400
 
 
 def test_a_hold_goes_through_the_teleop_checks(api):
     # This fixture's runtime is core, where teleop is withheld: the hold must hear that refusal.
     client, _, _, headers = api
     url = "/api/v1/navigation/approval/trial"
-    assert client.post(f"{url}/start", json={"direction": "forward", "stop_cause": "button_release"},
+    assert client.post(f"{url}/start", json={"direction": "forward", "stop_cause": "button_release", "test_surface": "floor"},
                        headers=headers["person-a"]).status_code == 200
     assert "CAPABILITY_WITHHELD" in client.post(f"{url}/hold", headers=headers["person-a"]).text
 
@@ -486,7 +592,7 @@ def test_a_trial_over_the_api_drives_through_teleop_and_stops(api, monkeypatch):
     monkeypatch.setattr("core_api_web.api.v1.control.require_kept", lambda *_: None)
     client, svc, _, headers = api
     url = "/api/v1/navigation/approval/trial"
-    started = client.post(f"{url}/start", json={"direction": "forward", "stop_cause": "button_release"},
+    started = client.post(f"{url}/start", json={"direction": "forward", "stop_cause": "button_release", "test_surface": "floor"},
                           headers=headers["person-a"])
     assert started.status_code == 200, started.text
     assert svc.modes.mode.value == "MANUAL"
