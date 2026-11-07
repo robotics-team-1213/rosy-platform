@@ -86,7 +86,7 @@ def install_account_routes(app, client):
         pending = False
         try:
             await run_in_threadpool(client.logout, request.cookies.get(COOKIE, ''))
-        except AccountUnavailable:
+        except (AccountUnavailable, AccountDenied):
             pending = True
         response = JSONResponse({'authenticated': False, 'revocation_pending': pending},
                                 status_code=503 if pending else 200)

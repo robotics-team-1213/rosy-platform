@@ -5,7 +5,7 @@ import time
 from fastapi.testclient import TestClient
 
 from core_common.protocol.account_access import AccountAccess
-from core_common.protocol.account_client import AccountUnavailable
+from core_common.protocol.account_client import AccountDenied, AccountUnavailable
 from rosy.monitoring.account_routes import COOKIE, COOKIE_PATH, FLOW_COOKIE, HOME
 from rosy.monitoring.config import load_credentials
 from rosy.monitoring.service import Collector, create_app
@@ -29,7 +29,7 @@ class Receiver:
     resource, callback, profile_url = RESOURCE, 'https://site.example.test/api/monitoring/v1/account/callback', None
 
     def __init__(self):
-        self.value, self.down, self.logged_out = None, False, []
+        self.value, self.down, self.denied, self.logged_out = None, False, False, []
 
     def resolve(self, cookie):
         if self.down:
@@ -50,6 +50,8 @@ class Receiver:
     def logout(self, cookie):
         if self.down:
             raise AccountUnavailable()
+        if self.denied:
+            raise AccountDenied()
         self.logged_out.append(cookie)
 
     def retry_revocations(self):
@@ -135,3 +137,6 @@ def test_login_flow_and_logout_cookies(runtime, tmp_path):
     receiver.down = True
     pending = client.post('/api/monitoring/v1/account/logout', cookies={COOKIE: 'good'}, headers=origin)
     assert pending.status_code == 503 and pending.json()['revocation_pending'] is True
+    receiver.down, receiver.denied = False, True
+    denied = client.post('/api/monitoring/v1/account/logout', cookies={COOKIE: 'good'}, headers=origin)
+    assert denied.status_code == 503 and f'{COOKIE}=' in denied.headers['set-cookie']

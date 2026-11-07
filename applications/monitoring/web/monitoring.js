@@ -7,7 +7,7 @@ const KIND = { collector: '수집기', robot: '로봇', host: '호스트', fleet
 const STAGE = { none: '응답 확인', dns: '이름 해석', connect: '연결', tls: '인증서·TLS', auth: '인증 거절',
   http: 'HTTP 응답', protocol: '응답 형식·시각', timeout: '응답 시간 초과', source: '상태 파일', unknown: '단계 미확인' };
 const TRANSPORT = { http: 'HTTP', https: 'HTTPS', file: '상태 파일', unknown: '프로토콜 미확인' };
-const state = { key: null, account: null, epoch: 0, packet: null, scopes: null, site: '', job: null, requests: new Set(),
+const state = { key: null, account: null, keyOpen: true, epoch: 0, packet: null, scopes: null, site: '', job: null, requests: new Set(),
   received: 0, wall: 0, roundTrip: 0, stale: false, page: 0, history: [], cursor: 0, historyJob: null };
 const reading = () => state.key || state.account?.can_read;
 const finite = (value) => typeof value === 'number' && Number.isFinite(value) && value >= 0;
@@ -35,15 +35,17 @@ function clearRows() {
   $('summary').textContent = ''; $('received').textContent = '';
   state.history = []; state.cursor = 0;
 }
-function syncAccount() {
+function syncAccount(entered = false) {
   if (state.key) return;
   const account = state.account, signedIn = !!account?.authenticated;
   $('account-login').hidden = !account?.enabled || signedIn;
-  $('key-entry').open = !account?.enabled;
+  const keyOpen = !account?.enabled || !!account.unreachable;
+  if (keyOpen !== state.keyOpen) { state.keyOpen = keyOpen; $('key-entry').open = keyOpen; }  // never fold it under someone typing
   $('login').hidden = !!account?.can_read;
   $('logout').disabled = !signedIn;
-  if (signedIn && account.can_read && state.packet) return;  // the 10-second session poll keeps the read status
+  if (account?.can_read && !entered) return;  // the 10-second session poll keeps the read status
   if (signedIn) $('connection-status').textContent = account.can_read ? '자료 확인 중…' : '이 계정에는 Monitoring 조회 권한이 없습니다. 계정 관리자에게 요청하세요.';
+  else if (account?.unreachable) $('connection-status').textContent = 'Rosy Account에 연결할 수 없습니다. 비상 조회 키로 읽을 수 있습니다.';
   else if (account?.enabled) $('connection-status').textContent = 'Rosy Account로 로그인하세요.';
 }
 function logout() {
@@ -98,7 +100,7 @@ async function refresh() {
     render(); loadHistory();
   } catch (error) {
     if (epoch !== state.epoch) return;
-    if (error.status === 401) { const wasKey = state.key; logout(); if (!wasKey) state.account = null; syncAccount(); $('connection-status').textContent = wasKey ? '조회 키를 확인하세요.' : '다시 로그인하세요.'; }
+    if (error.status === 401) { const wasKey = state.key; logout(); if (!wasKey) state.account = {enabled: true, authenticated: false, can_read: false}; syncAccount(); $('connection-status').textContent = wasKey ? '조회 키를 확인하세요.' : '다시 로그인하세요.'; }
     else { state.stale = true; $('connection-status').textContent = error.status === 403 ? '허용된 사이트를 확인하세요.' : '조회 연결 끊김 · 마지막 자료의 근거를 확인하세요.'; render(); }
   } finally { if (state.job === job) state.job = null; }
 }
@@ -186,8 +188,11 @@ async function loadHistory() {
 $('login').addEventListener('submit', (event) => { event.preventDefault(); const key = $('reader-key').value.trim(); logout();
   state.key = key; $('reader-key').value = ''; $('login').hidden = true; $('logout').disabled = false; $('connection-status').textContent = '조회 키 확인 중…'; refresh(); });
 const session = createAccountSession({base: '/api/monitoring/v1/account', current: () => state.account,
-  apply: (value) => { state.account = value; syncAccount(); if (!state.key && value.can_read) refresh(); },
-  changed: () => location.reload()});
+  apply: (value) => { const entered = value.can_read && !state.account?.can_read; state.account = value; syncAccount(entered);
+    if (!state.key && entered) refresh(); },
+  changed: () => location.reload(),
+  // A disabled receiver answers 200, so a failed probe means a configured Account we cannot reach.
+  failed: () => { if (!state.account?.authenticated) { state.account = {enabled: true, authenticated: false, can_read: false, unreachable: true}; syncAccount(); } }});
 $('account-login').addEventListener('click', () => location.assign('/api/monitoring/v1/account/login'));
 $('logout').addEventListener('click', async () => {
   const signedIn = !state.key && state.account?.authenticated;

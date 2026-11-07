@@ -331,6 +331,23 @@ def test_account_session_opens_the_screen_without_a_key(monitoring_backend, moni
     expect(workspace).to_be_hidden()
     assert account.logged_out == ['good']
 
+    # A session that ends while reading returns to the login button, not to a key-only dead end.
+    account.capabilities = ['monitoring.read']
+    page.reload()
+    expect(workspace).to_be_visible()
+    account.capabilities = None
+    expect(page.locator('#account-login')).to_be_visible(timeout=20000)
+
+    # With Account unreachable the emergency key opens instead of a dead login button.
+    page.route('**/api/monitoring/v1/account/session', lambda route: route.fulfill(status=503, body='{}'))
+    page.reload()
+    expect(status).to_contain_text('연결할 수 없습니다')
+    expect(page.locator('#reader-key')).to_be_visible()
+    page.locator('#reader-key').fill(KEY_A)
+    page.wait_for_timeout(11000)  # a later failed poll must not fold the field being typed in
+    expect(page.locator('#reader-key')).to_have_value(KEY_A)
+    expect(page.locator('#reader-key')).to_be_visible()
+
 
 @pytest.mark.parametrize('monitoring_backend', ['prefix'], indirect=True)
 def test_prefixed_ui_assets_do_not_depend_on_fleet_common_routes(monitoring_backend, monitoring_page):
