@@ -53,6 +53,9 @@ Counted on their own in `test/architecture/size_units.txt` (unit limit 10,000 li
 | `drive/recovery` | `FLAT_ROOTS`: bounded recovery proposals (escape, trail retreat, hazard response) (see its `AGENTS.md`) |
 | `perception/sensors/line_observation` | `CONTROL_ROOTS`: line observer node, input validation and composition, IR overlay, route followers |
 | `perception/calibration` | `CONTROL_ROOTS`: calibration storage/sequence/record subjects, flat `control.calibration_*` (D-766 #109) |
+| `perception/observers` | `CONTROL_ROOTS`: dock, learned lane, obstacle and road observer nodes, road state, flat `control.*` (D-766 #109) |
+| `perception/robot_web` | `CONTROL_ROOTS`: `web_node` diagnostic server and its HTTP, map control, render and state modules, flat `control.web_*` (D-766 #109) |
+| `perception/sensor_nodes` | `CONTROL_ROOTS`: camera capture and power, IR ADC and sensor provider nodes, flat `control.*` (D-766 #109) |
 
 ## For AI Agents
 
