@@ -27,18 +27,28 @@ import cell_wrist_ref
 def stills(cell, config: dict):
     """At any guard stop, before the arm backs out and hides it: one frame per camera (top, side, the arm's wrist), kept as
     <arm>-<camera>.jpg; the incident report carries them (D-971). 11-06/07: the descent contacts kept none, only a lift stall
-    did, and the frames taken after the fold could not tell contact from speed. Reads only."""
-    def keep():
+    did, and the frames taken after the fold could not tell contact from speed. With config `tip_view` and the stopped joints,
+    also <arm>-<camera>-tip.jpg: the crop around the jaw tip (cell_tip_view). Reads only."""
+    def keep(state=None):
         import cv2
 
         import omx_incident
 
-        folder = Path(omx_incident.STILLS)
+        folder, arm, frames = Path(omx_incident.STILLS), config.get("arm_id", "arm_s"), {}
         folder.mkdir(parents=True, exist_ok=True)
         for camera in config["cameras"]:
             try:
-                cv2.imwrite(str(folder / f"{config.get('arm_id', 'arm_s')}-{camera}.jpg"), cell.frame(camera))
+                frames[camera] = cell.frame(camera)
+                cv2.imwrite(str(folder / f"{arm}-{camera}.jpg"), frames[camera])
             except Exception:  # a missing frame must not stop the recovery
+                pass
+        if config.get("tip_view") and state:
+            try:
+                import cell_tip_view
+
+                for camera, image in cell_tip_view.tip_crops(frames, cell_tip_view.fk_tip(state), config["tip_view"]).items():
+                    cv2.imwrite(str(folder / f"{arm}-{camera}-tip.jpg"), image)
+            except Exception:  # nor a crop
                 pass
     return keep
 
@@ -50,7 +60,7 @@ def lift_stall(cell, config: dict, sleep):
     import cell_unwedge
 
     def stall(gate):
-        stills(cell, config)()
+        stills(cell, config)((cell.act("state") or {}).get("state"))
         a = gate.assessment
         # an unchecked jog starts a new session, and the gate's fold after it would be refused with the arm out: same session, same
         # library, past the gate's fault hold only because a person is at the switch

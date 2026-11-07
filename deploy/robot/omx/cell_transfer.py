@@ -133,7 +133,7 @@ def transfer_folded(cell, library, closed: float | None = None, wrist=None, afte
             return {"result": "contact", "at": command, "steps": steps, "error": status.get("error"), "released": bool(parked)}
         if status.get("contact"):  # the runner held with torque on: back up the same path, fold home
             if at_stop is not None:  # cell_hooks.stills: the stop as it stands, before the retreat hides it
-                at_stop()
+                at_stop(status.get("state"))
             for after in ("retreat", "park"):
                 run(after)
             return {"result": "contact", "at": command, "steps": steps, "error": status.get("error")}
