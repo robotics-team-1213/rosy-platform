@@ -30,7 +30,7 @@ JOINTS = ("shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_ro
 WINDOW_S, MIN_SPEED, BLOCKED_RATIO, MIN_RISE = 0.5, 0.3, 0.25, 0.3
 # a retry of one plan: same start, this much slower, and it stopped within SAME_STOP of the last stop.
 # Real pair: 2026-11-06 23:09 -> 23:27, start 0.2 apart, 3.52 -> 2.11 units/s, stop 1.2 apart, a contact by the side view. No opposite pair yet.
-SAME_START, SAME_STOP, SLOWER = 1.0, 2.0, 0.85
+SAME_START, SAME_STOP, SLOWER, NOT_FASTER = 1.0, 2.0, 0.85, 1.05
 HYPOTHESES = {
     # not "kept moving but slower": that hands the answer to every moving-joint stop, contact included (11-07 comparison)
     "too_fast": "the command outran the joint; nothing was in the way. Check: the same move slower",
@@ -90,16 +90,22 @@ def read_motion(rows: list) -> dict:
 
 
 def read_repeat(motion: dict, earlier: list) -> dict:
-    """What the speed ratio cannot tell, a retry can: slower, yet stopped at the same place, so speed is excluded.
+    """What the speed ratio cannot tell, a retry can: slower, or from another start at no higher speed, yet stopped at the same
+    place, so speed is excluded.
     shortcut: a load limit at that pose reads as blocked too; the push it chooses ends at a person if the top view shows no change."""
     if motion["verdict"] != "undetermined" or not earlier or "start" not in motion or "start" not in (earlier[-1].get("motion") or {}):
         return motion
     before = earlier[-1]["motion"]
     gap = lambda a, b: max(abs(x - y) for x, y in zip(a, b))  # noqa: E731
     stood = motion["sent_units_s"] >= MIN_SPEED and motion["lag_end"] - motion["lag_start"] >= MIN_RISE
-    if (stood and gap(motion["start"], before["start"]) <= SAME_START and gap(motion["stopped_at"], before["stopped_at"]) <= SAME_STOP
-            and motion["sent_units_s"] <= SLOWER * before["sent_units_s"]):
+    if not stood or gap(motion["stopped_at"], before["stopped_at"]) > SAME_STOP:
+        return motion
+    if gap(motion["start"], before["start"]) <= SAME_START and motion["sent_units_s"] <= SLOWER * before["sent_units_s"]:
         return {**motion, "verdict": "blocked", "why": f"slower ({before['sent_units_s']} -> {motion['sent_units_s']} units/s), stopped at the same place"}
+    # A lag that outgrows the command builds with time from the chunk's start, so another start moves the stop with it.
+    # Real pair: 2026-11-07 00:17 -> 01:15, start 2.8 apart (FK z 31 -> 43 mm), 1.98 -> 2.07 units/s, stop 0.3 apart (z 15.5 mm).
+    if gap(motion["start"], before["start"]) > SAME_START and motion["sent_units_s"] <= NOT_FASTER * before["sent_units_s"]:
+        return {**motion, "verdict": "blocked", "why": "started elsewhere at no higher speed, stopped at the same place"}
     return motion
 
 

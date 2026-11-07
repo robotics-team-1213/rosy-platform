@@ -147,6 +147,26 @@ def test_a_repeat_says_nothing_unless_it_really_is_slower_at_the_same_place(tmp_
     assert w.explain("lift_stall", STALL, retry, [], None, path, since=since)["motion"]["verdict"] == "undetermined", name
 
 
+def from_below(offset, seconds, sent_speed=3.0):
+    """The same lift started `offset` lower on wrist_flex and run long enough to reach FAST's stop."""
+    rows = lift(1.5, sent_speed=sent_speed, seconds=seconds)
+    for row in rows:
+        row["sent"][3] -= offset
+        row["present"][3] -= offset
+    return rows
+
+
+@pytest.mark.parametrize("retry, verdict", [
+    (from_below(3.0, 3.43), "blocked"),  # 11-07 00:17 -> 01:15: started 12 mm higher, stopped at the same FK z
+    (from_below(3.0, 3.43, sent_speed=3.6), "undetermined"),  # faster: more lag in less time says nothing
+    (from_below(3.0, 2.0), "undetermined"),  # stopped elsewhere
+])
+def test_a_stop_at_the_same_place_from_another_start_excludes_speed(tmp_path, retry, verdict):
+    path = tmp_path / "why.jsonl"
+    w.explain("lift_stall", STALL, FAST, [], None, path)
+    assert w.explain("lift_stall", STALL, retry, [], None, path)["motion"]["verdict"] == verdict
+
+
 def test_another_chunks_stop_is_no_repeat(tmp_path):
     path = tmp_path / "why.jsonl"
     w.explain("lift_stall", "stopped: released after a stop at run lift_place", [{**r, "chunk": "lift_place"} for r in FAST], [], None, path)
