@@ -1,7 +1,7 @@
 """D-757 OAuthlib code/PKCE authority with transactional one-use credentials."""
 from __future__ import annotations
 
-from contextlib import contextmanager
+from contextlib import closing, contextmanager
 from hashlib import sha256
 import json
 import logging
@@ -14,6 +14,7 @@ from urllib.parse import parse_qs, urlsplit
 
 from oauthlib.oauth2 import RequestValidator, WebApplicationServer, OAuth2Error
 from core_common.protocol.account_access import grants_for, sign_access, verify_access
+from rosy_account.client_registry import SCHEMA as CLIENT_SCHEMA, https_url as _https, import_first, validate_client
 
 NO_STORE = {'Cache-Control': 'no-store', 'Pragma': 'no-cache'}
 # OAuthlib's debug messages contain raw grant/refresh credentials.
@@ -33,12 +34,6 @@ def _form(body):
     return {key: values[0] for key, values in fields.items()}
 
 
-def _https(value):
-    parsed = urlsplit(value)
-    return (parsed.scheme == 'https' and bool(parsed.hostname) and not parsed.username
-            and not parsed.password and not parsed.fragment)
-
-
 class AccountAuthority:
     def __init__(self, path, *, issuer, private_key, key_id, clients,
                  resolve_family, revoke_family, clock=time.time, trusted_public_keys=None):
@@ -46,15 +41,11 @@ class AccountAuthority:
         if not _https(issuer) or urlsplit(issuer).query:
             raise ValueError('invalid account issuer')
         for client, settings in clients.items():
-            if (not re.fullmatch(r'[A-Za-z0-9._-]{1,96}', client)
-                    or set(settings) != {'redirect_uris', 'resources'}
-                    or not settings['redirect_uris'] or not settings['resources']
-                    or any(not _https(uri) or urlsplit(uri).query for uri in settings['redirect_uris'])
-                    or any(not re.fullmatch(r'(site|robot|project):[A-Za-z0-9._-]{1,96}', resource)
-                           for resource in settings['resources'])):
+            if set(settings) != {'redirect_uris', 'resources'}:
                 raise ValueError('invalid account client registration')
+            validate_client(client, settings['redirect_uris'], settings['resources'])
         self.path, self.issuer, self.private_key, self.key_id = path, issuer.rstrip('/'), private_key, key_id
-        self.clients, self.resolve_family, self.revoke_family = clients, resolve_family, revoke_family
+        self.resolve_family, self.revoke_family = resolve_family, revoke_family
         self.clock = clock
         key = OKPKey.import_key(private_key)
         self.public_keys = dict(trusted_public_keys or {})
@@ -75,7 +66,17 @@ class AccountAuthority:
                 CREATE TABLE IF NOT EXISTS account_oauth_access (
                     digest TEXT PRIMARY KEY,client TEXT,family TEXT,revision INTEGER,
                     resource TEXT,expires REAL);
-            ''')
+            ''' + CLIENT_SCHEMA)
+        with self.transaction() as db:
+            import_first(db, clients)
+
+    @property
+    def clients(self):
+        """Enabled apps, read per request: a change or stop applies at once and without a restart (D-955 2)."""
+        with closing(sqlite3.connect(self.path, timeout=1)) as db:
+            return {name: {'redirect_uris': json.loads(uris), 'resources': json.loads(resources)}
+                    for name, uris, resources in db.execute(
+                        'SELECT client_id,redirect_uris,resources FROM account_clients WHERE enabled=1')}
 
     @contextmanager
     def transaction(self):

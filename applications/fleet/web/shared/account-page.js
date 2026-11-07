@@ -178,11 +178,20 @@ async function setup() {
     $('account-setup-state').textContent = result.configured
       ? `통합 로그인 설정 적용됨 · ${result.issuer}`
       : '통합 로그인이 아직 설정되지 않았습니다. 서버 설치 안내에 따라 활성화하세요.';
+    const manages = canManageAccounts(after);
     for (const client of result.clients) {
       const item = document.createElement('li');
-      item.textContent = `${client.client_id} · ${client.resources.join(', ')} · 복귀 주소: ${client.redirect_uris.join(', ')}`;
+      item.append(`${client.client_id} · ${client.enabled ? '사용 중' : '정지됨'} · ${client.resources.join(', ')} · 복귀 주소: ${client.redirect_uris.join(', ')}`);
+      if (manages && result.configured) {
+        const toggle = document.createElement('ui-button');
+        toggle.setAttribute('kind', 'quiet');
+        toggle.textContent = client.enabled ? '정지' : '다시 사용';
+        toggle.addEventListener('click', () => changeClient(client, {enabled: !client.enabled}));
+        item.append(' ', toggle);
+      }
       $('account-clients').append(item);
     }
+    $('client-form').hidden = !(manages && result.configured);
     $('account-setup').hidden = false; $('account-login').hidden = true;
     if (canManageAccounts(after)) {
       await perform(async () => { await load(); status('관리할 계정을 선택하거나 새 계정을 만드세요.'); });
@@ -192,5 +201,21 @@ async function setup() {
     }
   } catch (error) { fail(error); }
 }
+function lines(id) { return $(id).value.split('\n').map(line => line.trim()).filter(Boolean); }
+function changeClient(client, changes) {
+  perform(async () => {
+    await request(`/api/fleet/auth/clients/${encodeURIComponent(client.client_id)}`,
+      {method:'PATCH', headers: {'Content-Type': 'application/json'}, body:JSON.stringify({revision:client.revision, ...changes})});
+    await setup();
+    status(changes.enabled === false ? `${client.client_id} 앱을 정지했습니다. 이 앱의 로그인과 세션 확인이 곧 멈춥니다.` : `${client.client_id} 앱을 변경했습니다.`);
+  });
+}
+$('client-add').addEventListener('click', () => perform(async () => {
+  await request('/api/fleet/auth/clients', {method:'POST', headers: {'Content-Type': 'application/json'}, body:JSON.stringify({
+    client_id:$('client-id').value.trim(), redirect_uris:lines('client-redirects'), resources:lines('client-resources')})});
+  $('client-form').reset();
+  await setup();
+  status('앱을 등록했습니다. 그 앱에서 로그인해 확인하세요.');
+}));
 $('account-setup-reload').addEventListener('click', setup);
 setup();

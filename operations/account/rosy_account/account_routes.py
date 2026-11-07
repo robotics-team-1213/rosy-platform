@@ -2,6 +2,7 @@
 from fastapi import Body, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 
+from rosy_account.client_registry import ClientRegistry, list_clients
 from rosy_account.http import NO_STORE
 from rosy_account.password_session import (
     COOKIE, LoginRateLimited, SessionStorageUnavailable, _storage_unavailable, same_origin)
@@ -19,12 +20,14 @@ def install_account_routes(app, *, sessions, authorize):
                     and request.headers.get("sec-fetch-site") == "same-origin"))):
             raise HTTPException(403, detail={"code": "ACCOUNT_ADMIN_REQUIRED"}, headers=NO_STORE)
         authority = app.state.account_authority
+        clients = []
+        if authority:
+            with authority.transaction() as db:
+                clients = list_clients(db)
         return JSONResponse({
             "configured": authority is not None,
             "issuer": authority.issuer if authority else None,
-            "clients": [{"client_id": name, "redirect_uris": list(settings["redirect_uris"]),
-                         "resources": list(settings["resources"])}
-                        for name, settings in sorted(authority.clients.items())] if authority else [],
+            "clients": clients,
         }, headers=NO_STORE)
 
     def manager(request: Request, principal: SitePrincipal = Depends(authorize)):
@@ -49,7 +52,7 @@ def install_account_routes(app, *, sessions, authorize):
         except PermissionError:
             raise HTTPException(403, detail={"code": "ACCOUNT_ADMIN_REQUIRED", "message": "accounts.manage required"})
         except KeyError:
-            raise HTTPException(404, detail={"code": "ACCOUNT_NOT_FOUND", "message": "account not found"})
+            raise HTTPException(404, detail={"code": "ACCOUNT_NOT_FOUND", "message": "not found"})
         except ValueError as exc:
             code = "REVISION_CONFLICT" if "revision conflict" in str(exc) else "INVALID_REQUEST"
             raise HTTPException(409 if code == "REVISION_CONFLICT" else 422,
@@ -62,6 +65,22 @@ def install_account_routes(app, *, sessions, authorize):
     def fields(payload, required, optional=()):
         if not required <= set(payload) or set(payload) - required - set(optional):
             raise HTTPException(422, detail={"code": "INVALID_REQUEST", "message": "invalid account fields"})
+
+    def registry():
+        if app.state.account_authority is None:
+            raise HTTPException(409, detail={"code": "ACCOUNT_AUTHORITY_UNCONFIGURED",
+                                             "message": "Account authority is not configured"})
+        return ClientRegistry(sessions._ledger, sessions._clock)
+
+    @app.post("/api/fleet/auth/clients", tags=["fleet-auth"], status_code=201)
+    def create_client(payload: dict = Body(...), value=Depends(manager)):
+        fields(payload, {"client_id", "redirect_uris", "resources"})
+        return call(registry().create, value, status=201, **payload)
+
+    @app.patch("/api/fleet/auth/clients/{client_id}", tags=["fleet-auth"])
+    def update_client(client_id: str, payload: dict = Body(...), value=Depends(manager)):
+        fields(payload, {"revision"}, {"enabled", "redirect_uris", "resources"})
+        return call(registry().update, value, client_id, **payload)
 
     @app.get("/api/fleet/auth/accounts", tags=["fleet-auth"])
     def accounts(value=Depends(manager)):

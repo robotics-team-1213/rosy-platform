@@ -24,6 +24,16 @@
       <h2 id="account-setup-heading">통합 로그인과 앱 연결</h2>
       <p id="account-setup-state" role="status"></p>
       <ul id="account-clients" aria-label="등록된 앱"></ul>
+      <form id="client-form" class="password-login-form" hidden>
+        <h3>앱 등록</h3>
+        <label for="client-id">앱 식별자</label>
+        <input id="client-id" class="ui-field password-login-field" autocomplete="off" required maxlength="96">
+        <label for="client-redirects">복귀 주소 · 한 줄에 하나, https만</label>
+        <textarea id="client-redirects" class="ui-field password-login-field" rows="2" required></textarea>
+        <label for="client-resources">자원 · 한 줄에 하나, 예: site:현장, robot:로봇, project:프로젝트</label>
+        <textarea id="client-resources" class="ui-field password-login-field" rows="2" required></textarea>
+        <ui-button id="client-add" kind="quiet" type="button">앱 등록</ui-button>
+      </form>
       <p>앱 등록은 로그인 성공을 뜻하지 않습니다. 각 앱에서 로그인한 뒤 표시 이름 변경과 권한 회수가 반영되는지 확인하세요.</p>
       <details>
         <summary>최초 설정과 앱 추가 방법</summary>

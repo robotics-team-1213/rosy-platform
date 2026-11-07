@@ -95,18 +95,25 @@ Vault는 2026-10-24 은퇴했다. 저장된 grant의 처리와 이 권한의 제
 `GET /api/fleet/auth/setup`은 same-origin 사람 쿠키만 허용한다. 활성 계정은 현재
 site의 `accounts.manage`, 전환 전 계정은 `policy-admin` 역할을 요구한다. 첫 비밀번호
 변경이 필요한 세션은 거절한다. 응답은 no-store이며 `configured`, `issuer`, `clients`
-(`client_id`, `redirect_uris`, `resources`)만 제공한다. 키와 서버 파일 경로는 반환하지 않는다.
+(`client_id`, `redirect_uris`, `resources`, `enabled`, `revision`)만 제공한다. 키와 서버 파일 경로는 반환하지 않는다.
 `configured`는 현재 프로세스의 Authority 설정 적용 여부이고 HTTPS·앱 로그인 수용 증거가 아니다.
 
 Fleet `/console/accounts`에 설정 상태·앱 등록·최초 설치 안내를 함께 둔다. 계정·권한 변경은
-아래 기존 API를 유지한다. HTTPS, 보호 키 설치, 앱 등록 변경은 기존 관리자 배포 경로가
-수행하며 Fleet에 호스트 root 권한이나 비밀 업로드 API를 추가하지 않는다.
+아래 기존 API를 유지한다. HTTPS와 보호 키 설치는 기존 관리자 배포 경로가 수행하며 Fleet에
+호스트 root 권한이나 비밀 업로드 API를 추가하지 않는다.
+
+앱 등록은 Account DB의 등록부가 정본이다(D-955 2단계, D-962). 보호 JSON의 `clients`는 등록부가
+비어 있을 때 한 번만 가져오고, 그 뒤 JSON을 고쳐도 반영되지 않는다. 등록부 변경은 재시작 없이 다음
+요청부터 적용된다. 앱을 정지하면 그 앱의 새 로그인, 토큰 갱신, 세션 확인이 실패하고 같은 사람의 다른 앱
+세션은 유지된다. 변경 기록은 `account_client_audit`에 남는다.
 
 모든 경로는 유효한 변경 완료 사람 쿠키와 해당 site의 `accounts.manage`를 요구한다.
 unsafe 요청은 same-origin 검사를 거친다. 오류는 기존 Fleet detail `{code,message}`를 쓴다.
 
 | 경로 | 동작 |
 |---|---|
+| POST /api/fleet/auth/clients | client_id, redirect_uris, resources로 앱 등록 |
+| PATCH /api/fleet/auth/clients/{client_id} | revision과 enabled/redirect_uris/resources 중 변경값 |
 | GET /api/fleet/auth/accounts | 비밀 없는 계정 목록 |
 | POST /api/fleet/auth/accounts | login, principal_id, role, password, grants로 계정 발급 |
 | PATCH /api/fleet/auth/accounts/{account_id} | revision과 enabled/role/grants 중 변경값; 미지 필드 거부 |
