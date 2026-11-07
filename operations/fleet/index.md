@@ -105,8 +105,8 @@
 
 ## 최근 기록
 
+- 2026-11-08 · uncommitted · refactor(fleet): 감사·task의 동일 비밀 필드 판별 재사용
 - 2026-11-08 · uncommitted · D-998 채널 모듈 소비 버전
 - 2026-11-08 · uncommitted · D-998 알림 producer 비활성 경계
 - 2026-11-07 · uncommitted · 로그인 콜백 실패가 JSON 막다른 길이 아니다
 - 2026-11-07 · uncommitted · 로그인 복귀가 설치·보정 하위 화면을 유지
-- 2026-11-07 · 7c042262fb · fix(fleet): a stale blip is read again before a trip is refused

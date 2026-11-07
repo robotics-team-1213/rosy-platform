@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
-- 2026-11-08 · uncommitted · D-998 독립 검토 반영
-- 2026-11-08 · uncommitted · D-998 API 변경 이력 누락 수정
-- 2026-11-08 · uncommitted · D-998 전환 전 알림 전달 계약
-- 2026-11-07 · uncommitted · fix(model-pc): GPU 유휴 전원 차단을 끈다
-- 2026-11-07 · uncommitted · fix(remote): 호출의 -rA가 공통 꼬리에 덮이지 않는다
+- 2026-11-08 · uncommitted · docs(reference): 검토 반영 — 백업 owner 경로와 알림 현재 owner 검사
+- 2026-11-08 · uncommitted · docs(reference): 카탈로그 기능별 행을 실제 owner 소스와 연결한다
+- 2026-11-08 · uncommitted · docs(architecture): 공통 기능별 분리와 장애·복구 계약을 확정한다
+- 2026-11-08 · uncommitted · docs(architecture): Harbor와 공통 서비스의 책임을 저장소별로 연결한다
+- 2026-11-08 · uncommitted · docs(control): 현재 ARM 위임과 관제·owner·호스트 구조를 대조한다

@@ -1143,3 +1143,9 @@
 - 변경: 신규 채널 모듈·httpx 의존을 제공하는 core_common을0.0.3으로 올리고 setup.py/package.xml·소비 하한·CI 설치 pin을 함께 맞췄다.
 - 증거: 변경 전0f0bf42bbd Foundation·프로토콜 회귀1502 passed/NEW0. 변경 후 동일 회귀와 소비자 wheel 설치를 새 커밋의 원격 시험에서 확인한다.
 - gate 변화: 없음. 배포·실물 수용은 별도다.
+## 2026-11-08 · uncommitted · refactor(foundation): 기록의 비밀 필드 이름 판별 공용화
+
+- 변경: D-997 적용 2단계로 Fleet 감사·task 기록의 동일 정규식만 `core_common.audit_fields.is_credential_field`로 모았다. 재귀·PEM 검사·오류·writer는 각 소비자가 유지한다. 기존 setup 패키지 자동 검색과 Fleet core_common 의존성을 재사용한다.
+- 증거: 시험 선행 커밋 `daacc77040` 원격 RED 24 실패(새 모듈 없음), known_failures 대조 24 NEW. 구현 SHA의 원격 affected와 소비자 회귀 결과는 디스패처 인계에 남긴다.
+- gate 변화: 없음. HTTP schema·배포·실물 수용은 바꾸지 않았다.
+- CE: 해당 없음 — 같은 의미의 범위와 남긴 차이는 코드·회귀 시험·공통 서비스 카탈로그로 재현된다.

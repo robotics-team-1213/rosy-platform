@@ -5376,3 +5376,9 @@
 - 변경: 공용 채널 adapter를 실제 제공하는 core_common>=0.0.3을 Fleet 설치 하한으로 지정했다.
 - 증거: 신규 전달·기존 Fleet 알림 회귀와 CI 입력 wheel 설치를 변경 커밋의 원격 시험으로 확인한다.
 - gate 변화: 없음. 기존 발송 owner·outbox·사건 검사는 유지한다.
+## 2026-11-08 · uncommitted · refactor(fleet): 감사·task의 동일 비밀 필드 판별 재사용
+
+- 변경: observe/events와 ledger/task_payloads가 foundation의 `is_credential_field`를 쓴다. list/tuple 탐색 차이·이벤트 PEM 검사·거절 오류·정렬·크기 상한을 유지하고 소비자 회귀 시험을 더했다.
+- 증거: 구현 커밋 SHA로 원격 affected 및 소비자 시험을 요청한다. 최종 결과는 디스패처 인계에 연결한다.
+- gate 변화: 없음. 원본 감사·admission·발송·설정·업데이트 권한은 그대로다.
+- CE: 해당 없음 — 처리 차이와 추출 근거는 코드·회귀 시험·카탈로그에 남는다.
