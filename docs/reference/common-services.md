@@ -39,6 +39,22 @@ Account의 로그인·프로필·관리 화면 소스는 `applications/fleet/web
 | `vision` | 천장 영상에서 현장 관측을 만드는 업무 생산자다 |
 | `control-unit-peer` | 관제 계층 연결에만 쓰는 peer 프록시다(D-850, D-960) |
 
+## 기능별 공통화 결정
+
+아래는 [D-997](../adr/D-997-common-function-ownership-and-failure-contracts.md)의 확정 설계다. 위 실행 서비스·Compose 목록과 달리 구현·배포 목록이 아니다. 기존 owner·프로세스·DB·폴더·자격·API는 실제 전환 검증 전까지 유지한다.
+
+| 기능 | 확정한 형태 | 책임 경계 |
+|---|---|---|
+| 계정·권한 | 독립 Account | 사람 신원·세션·회수, 기계 자격·업무 admission은 별도 |
+| 등록·앱 목록 | 기존 Account 연동 등록부·장치/서비스 owner + 공통 조회 | 발견·접속 정보와 신뢰·기계 자격·장치 역할을 구별. 범용 Registry 서버 신설 없음 |
+| 설정 | 공용 검증/transaction 코드 + owner 저장·적용 | 중앙 Config DB·쓰기 서비스 신설 없음 |
+| 알림 | 독립 알림 전달 서비스로 추출하는 목표 | 현재 미구현. 첫 생산자는 Fleet 사건·Harbor 업무 HOLD. 원본 outbox·발송 직전 owner 확인·중복·UNKNOWN·단일 발송자 검증 뒤 전환 |
+| 감사 | owner 원본 + 공통 사건/수집·조회 | 중앙 Audit DB를 모든 쓰기의 필수 경로로 만들지 않음 |
+| 백업·복원 | 공통 도구·검증/receipt + owner 실행 어댑터 | 모든 볼륨·키·임의 경로를 가진 중앙 복구 서비스 신설 없음 |
+| 업데이트 | 공통 상태·검증 규약 + 배포 계열별 실행 | 서명·hold·활성화·재기동·rollback 권한은 기존 owner |
+
+Monitoring은 허용된 상태·읽기 사본, Media는 영상 세션·위임·프로세스 관리를 유지한다. Fleet·World·Decision·CORE·OMX와 Harbor의 원장·판단·실행은 공통화 대상이 아니다. 기능별 실패·복구·전환·검증 조건은 D-997이 정본이다.
+
 ## 새 기능을 넣을 때
 
 1. 한 앱만 쓰면 그 앱에 둔다. 나중에 쓸지도 모른다는 이유로 옮기지 않는다.

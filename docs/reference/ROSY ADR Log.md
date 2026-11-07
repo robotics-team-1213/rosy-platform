@@ -10,6 +10,7 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-997 | 공통 기능은 실행 서비스·공용 코드·owner별 운영 어댑터로 나누고 기능별 소유와 장애 계약을 확정한다. [전문](../adr/D-997-common-function-ownership-and-failure-contracts.md) | Accepted (2026-11-08, 사용자 결정; 등록·설정·알림·감사·백업·업데이트 설계 확정, 코드 추출·서비스 신설·배포·현장 수용 미수행) |
 | D-995 | 관제 구조는 논리 단위·실행 owner·공통 서비스·호스트로 구분하고 구현과 현장 수용을 따로 기록한다. [전문](../adr/D-995-control-structure-authority-and-evidence-status.md) | Accepted (2026-11-08, 사용자 지시; D-965·D-994의 팔 위임 구현 상태 설명 정정, 실행·배포·현장 수용 변경 없음) |
 | D-994 | N100·16GB Ubuntu 호스트에 통합관제 R을 두고 장치 owner와 공통 서비스의 책임을 구분한다. [전문](../adr/D-994-n100-integrated-control-host-and-owner-boundaries.md) | Accepted (2026-11-08, 사용자 결정; 설치·이전·N100 부하 시험·현장 수용 미수행) |
 | D-983 | 두 팔의 동시 동작은 고정 경로의 타이밍을 계산해 D-780 barrier로 맞춘다. [전문](../adr/D-983-two-arm-timing-on-fixed-paths.md) | Proposed (2026-11-06, 사용자 지시; 계산 코어와 오프라인 평가만 구현, 실물·시뮬레이션 동시 동작 수용 아님) |
