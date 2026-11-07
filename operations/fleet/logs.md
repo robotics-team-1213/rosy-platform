@@ -5366,7 +5366,7 @@
 - 증거: 실제 Account와 Fleet을 두 출처로 띄운 왕복에서 두 탭 로그인과 교환 중 장애가 JSON 화면에서 멈추는 것을 재현했다.
 - gate 변화: SOURCE 회귀. 현장 수용은 별도다.
 
-## 2026-11-08 · feat/harbor-intake-events · 항만 사건 원장·R 조회·S 반입 제안 (D-996)
+## 2026-11-08 · uncommitted · 항만 사건 원장·R 조회·S 반입 제안 (D-996)
 - 변경: 이송 제안 `object_ref`(값이 있을 때만 request_digest에 포함), 도착한 이송의 S ARM_TRANSFER 제안(`fleet-intake`, 승인 아님), append-only `fleet_port_events` 원장과 셀 토큰 POST, 직계 부모 peer 읽기, R의 불투명 cursor 조회(닿지 않은 셀·seq 빈 곳은 complete:false).
 - 증거: 원격 pytest(시험 PC) — 보고서 참고. 실물 팔·마커 판독률은 미실시.
 - gate 변화: SOURCE. 시뮬레이션 끝까지 돌리기와 현장 수용은 별도다.
