@@ -117,9 +117,16 @@ def test_full_bays_are_no_free_bay_and_an_unknown_bay_is_not_called_free():
 
 
 def test_a_robot_keeps_the_bay_the_plan_already_reserved_for_it():
-    plan = plan_for(RobotView("other", True, 40.0, None, None, False), RobotView("r1", True, 12.0, None, None, False))
+    plan = plan_for(RobotView("other", True, 40.0, None, (5.0, 5.0), False),
+                    RobotView("r1", True, 12.0, None, (6.0, 6.0), False))
     assert [(b["bay"], b["robot_id"]) for b in plan["bays"]] == [("C1", "r1"), ("C2", None)]
     assert decide(row(percent=12.0, level="warning"), LOCALIZED, plan, False)["bay"] == "C1"
+
+
+def test_an_unlocated_robot_makes_every_bay_unknown_so_no_bay_is_offered():
+    plan = plan_for(RobotView("lost", True, 40.0, None, None, False), RobotView("r1", True, 12.0, None, (6.0, 6.0), False))
+    answer = decide(row(percent=12.0), LOCALIZED, plan, False)
+    assert (answer["bay"], answer["reason"], answer["bays_unknown"]) == (None, "no_free_bay", len(BAYS))
 
 
 def test_a_robot_already_in_a_bay_has_nothing_to_recover():
@@ -151,7 +158,7 @@ class Recorder:
 def make_client(rows, *, enabled=True, pose=LOCALIZED, bays=BAYS):
     app = FastAPI()
     recorder = app.state.site_maps = Recorder()
-    views = [RobotView(r["robot_id"], r["online"], 18.0, None, None, False) for r in rows]
+    views = [RobotView(r["robot_id"], r["online"], 18.0, None, (5.0, 5.0 + i), False) for i, r in enumerate(rows)]
     app.state.charge_bays = ChargeBays()
     app.state.map_pose = SimpleNamespace(arbitrated_pose=lambda robot_id: pose)
 
