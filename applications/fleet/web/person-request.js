@@ -90,9 +90,10 @@ export function createPersonRequests({ scope, view, call, log, isOperator, named
     }
   }
 
-  function button(label, kind, reason, click) {
+  function button(label, primary, reason, click) {
     const node = document.createElement("ui-button");
-    node.setAttribute("kind", kind);
+    node.setAttribute("kind", "quiet");
+    if (primary) node.setAttribute("kind", "primary");
     node.type = "button";
     node.textContent = label;
     node.disabled = Boolean(reason);
@@ -121,9 +122,9 @@ export function createPersonRequests({ scope, view, call, log, isOperator, named
       actions.className = "stuck-actions ui-action-bar";
       actions.setAttribute("role", "group");
       actions.setAttribute("aria-label", `${request.robot_id} 사람 부탁 답`);
-      const done = button("했어요", "primary", spec.lock, () => answer(request, "done"));
+      const done = button("했어요", true, spec.lock, () => answer(request, "done"));
       done.dataset.personAnswer = "done";
-      const cannot = button("못 해요", "quiet", spec.lock, () => answer(request, "cannot"));
+      const cannot = button("못 해요", false, spec.lock, () => answer(request, "cannot"));
       cannot.dataset.personAnswer = "cannot";
       actions.append(done, cannot);
       box.append(actions);
