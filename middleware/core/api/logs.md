@@ -1351,3 +1351,10 @@
 - gate 변화: SOURCE 회귀 검증; ARTIFACT/DEVICE/FIELD 수용 근거로 사용하지 않음. 최종 재조립 SHA 원격 회귀와 FULL은 별도.
 - 결정: API v1.363; 기존 CORE 최종 명령·모드 owner 유지.
 - 교훈: CE 해당 없음 — 최종 코드·회귀 시험·API 계약으로 판단 근거를 재현할 수 있음.
+
+## 2026-11-07 · uncommitted · docs(api): v1.368 site rules
+- 변경: `contract_version.py`를 v1.368로 (API 참조 v1.368: `/api/fleet/site-rules/*`).
+- 증거: `contract_version.py`와 API 참조 헤더가 같은 v1.368임을 `test_protocol_version_alignment`가 확인(원격 결과는 착지 기록).
+- gate 변화: SOURCE 변경. 시뮬·실물·현장 수용 없음; 문서가 없으면 동작 동일.
+- 결정: D-982 Proposed, API v1.368 additive.
+- 교훈: CE 해당 없음 — 최종 코드·시험·ADR이 판단을 보존한다.

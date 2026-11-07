@@ -14507,3 +14507,10 @@ osy-d395-s1d\`.
 - 증거: 카탈로그의 경로·Compose 서비스·결정을 `test/architecture/test_common_services.py`가 확인한다. 원격 결과는 착지 기록을 따른다.
 - gate 변화: 없음 — 카탈로그 등재는 배포·현장 수용의 증거가 아니다.
 - CE: 해당 없음 — 구조 정의이며 해결한 장애가 없다.
+
+## 2026-11-07 · uncommitted · docs(adr): D-982 현장 운영 규칙
+- 변경: ADR D-982(Proposed)와 Log 행, API 참조 v1.368, `adr_gaps.txt`의 D-982 줄 제거.
+- 증거: `rosy_harness.py lint` 0 error. 원격 결과는 착지 기록을 따른다.
+- gate 변화: SOURCE 변경. 시뮬·실물·현장 수용 없음; 문서가 없으면 동작 동일.
+- 결정: D-982 Proposed, API v1.368 additive.
+- 교훈: CE 해당 없음 — 최종 코드·시험·ADR이 판단을 보존한다.

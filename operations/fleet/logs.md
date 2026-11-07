@@ -5333,3 +5333,10 @@
 - 변경: 환경 변수 이름 대신 설치 담당자에게 요청할 것을 말한다. 코드는 그대로. test_doc_tabs·test_cell_app_browser의 제목 고정을 새 제목으로 갱신.
 - 증거: agent-browser 로컬 렌더(1920·390·320 화면 확인). 원격 회귀는 착지 기록을 따른다.
 - gate 변화: SOURCE 변경. 실기기·Android 수용은 별도다. CE: 해당 없음 — 코드와 회귀가 판단을 보존한다.
+
+## 2026-11-07 · uncommitted · feat(fleet): 현장 운영 규칙 문서와 판정 API (D-982 1·2단계)
+- 변경: `rosy.site_rules/1` 문서·검증·초안/활성화/감사(`SiteMapStore.rules`), 병합 대기·블록 수·충전 시작/나감 %를 문서 값으로, `POST /api/fleet/site-rules/judge`. 편대 한도는 판정만(시작 경로는 safety 태그라 3단계).
+- 증거: 원격 AI/모델 PC 시험 결과는 이 커밋 뒤 착지 기록을 따른다. 로컬 Fleet 서버에서 agent-browser로 판정 세 종류를 눌러 확인.
+- gate 변화: SOURCE 변경. 시뮬·실물·현장 수용 없음; 문서가 없으면 동작 동일.
+- 결정: D-982 Proposed, API v1.368 additive.
+- 교훈: CE 해당 없음 — 최종 코드·시험·ADR이 판단을 보존한다.
