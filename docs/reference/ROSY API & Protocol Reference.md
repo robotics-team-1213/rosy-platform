@@ -5,9 +5,15 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.363
+**Version:** v1.371
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.371 재부팅은 팔 세션을 끊지 않고, 사람의 요청은 작업에서 멈춘다 (D-991)
+
+- `POST /api/fleet/hosts/{host}/control`의 `action`에 `reboot-over-jobs`를 더한다. `GET /api/fleet/hosts` 행의 `actions`에도 나온다.
+- `reboot`는 팔 세션이 돌면 409 `ARM_SESSION_ACTIVE`, 살아 있는 작업이나 busy가 있으면 409 `HOST_JOBS_ACTIVE`다. `reboot-over-jobs`는 작업을 넘지만 팔 세션은 넘지 못한다.
+- 새 도우미가 설치되지 않은 PC의 `reboot`는 502 `HOST_HELPER_FAILED`다.
 
 ### v1.363 관제의 고정 수동 모드 의도
 
@@ -4590,6 +4596,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 | 버전 | 일자 | 내용 |
 |---|---|---|
 | v1.362 | 2026-11-04 | Additive: D-977 `device_trial` opens the neutral `arm-transfers` jobs for exactly one arm (owner identity: `device: true`, matching `commissioning_revision`); `production` stays closed. New `operator_attested` record: `POST/GET .../jobs/{mission_id}/operator-attestations` (named operator distinct from proposer and approver, single-use, 45 s validity, `goal_confirmed: false`). The owner still refuses goals. |
+| v1.371 | 2026-11-07 | D-991: Service Control `reboot` refused with 409 `ARM_SESSION_ACTIVE` or `HOST_JOBS_ACTIVE`; additive `reboot-over-jobs` passes live jobs, never an arm session. |
 | v1.363 | 2026-11-06 | Additive: bodyless robot `manual`을 기존 CORE mode owner로 실행. Fleet 직접 조작의 dispatch/작업 소유권 재검사와 인증된 terminal zero 전달을 명시. |
 | v1.361 | 2026-11-04 | Additive: `GET /api/fleet/execution-profile`(D-979) — 앱이 읽는 읽기 전용 실행 프로필(`arm_execution` physical/simulated/closed, 등록·인증된 생산자 목록, `checked_at`). viewer·service 읽기, 쓰기 없음, 증명되지 않으면 closed. |
 | v1.360 | 2026-11-04 | Learning SAM 점 선택·보호 규칙·적용 출처, 현재 사진 AI 자동 초안과 검사 상태·의견 없음 구분. 기존 라벨과 별도 승인 경계 유지 |
@@ -5063,7 +5070,7 @@ context는 request, receiver-challenge, session-request로 분리한다. 공개 
 `host`는 `site`, `ai`, `model`이다. GET 행은 `{host, actions, units, stoppable_units, reboot_delay_min}`이다.
 GET 본문은 그 목록과 함께 읽기 전용 `guard`(관제 PC `/var/lib/rosy-host-guard/status.json`)와 `drift`(관제 PC `/var/lib/rosy-host-state/status.json`)를 붙인다(D-530). 파일이 없거나 객체가 아니면 그 필드는 null이고, 수치를 만들지 않는다. PC 가드 항목의 `resources`는 `{avail_pct, swap_pct, load, cores, uptime_s, down, disk, disk_low, gpu, memory, memory_low, cpu}`이다. D-883의 `disk`는 `{test_free_gb, test_use_pct, root_free_gb, root_use_pct}`(`~/rosy-test` 또는 홈, `/`), `gpu`는 `{used_mib, total_mib, util_pct, temp_c}`(여러 GPU는 메모리 합계·최대 사용률·최고 온도), `memory`는 `{total_gb, avail_gb}`, `cpu`는 `{busy_pct, temp_c}`(1초 `/proc/stat` 차이, 가장 뜨거운 thermal zone, 읽지 못하면 각 null)이며, 값을 보내지 않는 예전 PC는 `disk`·`disk_low`·`gpu`·`memory`·`cpu`가 null이다. CPU·GPU 온도와 사용률은 표시 전용이며 상태를 바꾸지 않는다. `memory_low`는 `avail_pct` 10% 미만이며 예전 PC에도 계산한다. 여유 30GiB 미만 또는 사용률 90% 이상이면 `disk_low=true`이고 다른 문제가 없으면 `state=disk-low`, 그 다음으로 `memory_low`이면 `state=memory-low`다. 두 상태는 보고 전용이며 재시작·재부팅을 일으키지 않는다.
 PC별 `guard[host].recovery`와 관제 PC `drift.recovery`는 D-530의 2026-10-18 실행값 감시 보고다(`time`, `role`, `state`, `issues`, `resources`, `watchdog`, `kernel`, `ssh`, `swap`). 구버전·접속 불가·해석 실패는 null/부재이며 정상으로 추정하지 않는다. 가드 자신의 행은 `source=local`이고 원래 보고 시각을 유지한다. 화면은 원격 호스트 보고 15분, 로컬/복구 보고 35분 초과를 점검 지연으로 표시한다. D-883의 `clean-storage` 외에 새 제어 동작이나 설치 API는 추가하지 않는다.
-POST 본문은 `{action, unit, operator_confirmed:true}`이고 추가 필드는 거절한다. `action`은 `reboot`,
+POST 본문은 `{action, unit, operator_confirmed:true}`이고 추가 필드는 거절한다. `action`은 `reboot`, `reboot-over-jobs`(D-991),
 `cancel-reboot`, `restart-unit`, `stop-unit`, `clean-storage`만이다. `clean-storage`(D-883)는 `ai`·`model`에서 `unit` 없이만 받고, 그 PC의 rosy-ops `rosy-test-storage.service`를 한 번 시작한다. `site`는 400 `ACTION_NOT_ALLOWED`, 그 서비스가 없으면 409 `NO_STORAGE_SERVICE`다. 성공은 접수일 뿐이며 회수 결과는 다음 guard 보고의 `disk`로 확인한다. `pkill`, 시그널, 셸, 프로세스 이름은 400
 `UNKNOWN_ACTION`이다. `unit`은 그 호스트의 허용 목록에 있고 그 동작이 허용될 때만 받는다(사이트 유닛은
 `restart-unit`만, 아니면 400 `UNIT_NOT_ALLOWED`). 재부팅은 `shutdown -r +10`이다. 이미 예약된 재부팅이

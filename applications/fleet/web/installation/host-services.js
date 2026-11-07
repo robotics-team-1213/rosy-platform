@@ -146,6 +146,13 @@ export function createHostServices({root, call, confirmIrreversible, onPaint}) {
       say(`${HOST_LABEL[host] || host} ${action} 접수 (${answer.code || "ACCEPTED"})`, "ok");
     } catch (error) {
       const code = error.detail?.code || error.code || "";
+      if (code === "HOST_JOBS_ACTIVE") {
+        return send(host, "reboot-over-jobs", null, `${HOST_LABEL[host] || host}에서 학습이나 시험이 돌고 있습니다. 재부팅하면 그 작업이 끊깁니다. 그래도 10분 뒤에 재부팅합니까?`);
+      }
+      if (code === "ARM_SESSION_ACTIVE") {
+        say(`${HOST_LABEL[host] || host}에서 팔 세션이 돌고 있어 재부팅하지 않았습니다. 세션이 끝난 뒤 다시 요청하세요.`, "error");
+        return;
+      }
       say(code === "OPERATOR_IDENTITY_REQUIRED"
         ? "이름 있는 운영자만 호스트를 제어할 수 있습니다."
         : `제어가 거절되었습니다. ${code}`.trim(), "error");

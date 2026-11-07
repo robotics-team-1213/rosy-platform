@@ -44,16 +44,18 @@ def test_catalogue_is_the_three_ubuntu_hosts():
     hosts = {row["host"]: row for row in catalogue()["hosts"]}
     assert set(hosts) == {"site", "ai", "model"}
     assert hosts["model"]["units"] == []
-    assert hosts["model"]["actions"] == ["reboot", "cancel-reboot", "clean-storage"]
-    assert hosts["ai"]["actions"][:3] == ["reboot", "cancel-reboot", "clean-storage"]
-    assert hosts["site"]["actions"] == ["reboot", "cancel-reboot", "restart-unit"]
+    assert hosts["model"]["actions"] == ["reboot", "reboot-over-jobs", "cancel-reboot", "clean-storage"]
+    assert hosts["ai"]["actions"][:4] == ["reboot", "reboot-over-jobs", "cancel-reboot", "clean-storage"]
+    assert hosts["site"]["actions"] == ["reboot", "reboot-over-jobs", "cancel-reboot", "restart-unit"]
     assert hosts["site"]["stoppable_units"] == []
     assert "docker.service" in hosts["site"]["units"]
     assert "pinky-backend.service" in hosts["ai"]["stoppable_units"]
 
 
 def test_reboot_is_a_delayed_helper_action_and_pkill_is_refused():
-    assert decide("site", "reboot", None, confirmed=True)["argv"] == ("reboot",)
+    # A person's reboot respects running jobs; only the explicit second step goes past them.
+    assert decide("site", "reboot", None, confirmed=True)["argv"] == ("reboot-if-free",)
+    assert decide("site", "reboot-over-jobs", None, confirmed=True)["argv"] == ("reboot",)
     for action in ("pkill", "kill", "shell", "poweroff"):
         assert _code(lambda: decide("site", action, None, confirmed=True)) == "UNKNOWN_ACTION"
 
@@ -208,12 +210,13 @@ def test_ssh_helper_uses_an_argument_list_and_a_fixed_ssh(monkeypatch, tmp_path)
 
 
 def test_helper_exit_codes_become_api_codes(monkeypatch, tmp_path):
-    codes = iter([3, 4, 5, 255])
+    codes = iter([3, 4, 5, 6, 7, 255])
     monkeypatch.setattr(subprocess, "run", lambda argv, **kw: subprocess.CompletedProcess(
         argv, next(codes), stdout="", stderr=""))
     helper = helper_from_config(_config(tmp_path, "model rosy@model-pc.local\n"))
-    assert [helper.run("model", ("reboot",))["code"] for _ in range(4)] == [
-        "REBOOT_ALREADY_SCHEDULED", "NO_HOST_CONTROL_REBOOT", "NO_STORAGE_SERVICE", "HOST_HELPER_FAILED"]
+    assert [helper.run("model", ("reboot",))["code"] for _ in range(6)] == [
+        "REBOOT_ALREADY_SCHEDULED", "NO_HOST_CONTROL_REBOOT", "NO_STORAGE_SERVICE",
+        "ARM_SESSION_ACTIVE", "HOST_JOBS_ACTIVE", "HOST_HELPER_FAILED"]
 
 
 def test_missing_or_bad_config_stays_unavailable(tmp_path):
@@ -345,8 +348,10 @@ def _helper_copy(tmp_path, role):
         "#!/bin/sh\n"
         f'if [ "$1" = -c ]; then rm -f {sched}; echo cancel >> {tmp_path}/calls; exit 0; fi\n'
         f'printf "USEC=%s\\nMODE=reboot\\n" "$(date +%s%N)" > {sched}; echo reboot >> {tmp_path}/calls\n')
-    for name in ("systemctl", "logger", "flock"):
+    for name in ("systemctl", "logger", "systemd-run"):
         (stub / name).write_text(f'#!/bin/sh\necho "{name} $*" >> {tmp_path}/calls\n')
+    # Only the session probe (-n) can find a lock taken; the helper's own `flock 9` always gets it.
+    (stub / "flock").write_text(f'#!/bin/sh\n[ "$1" = -n ] && [ -e {tmp_path}/arm-held ] && exit 1\nexit 0\n')
     for path in stub.iterdir():
         path.chmod(0o755)
     (tmp_path / "conf").mkdir(exist_ok=True)
@@ -356,6 +361,7 @@ def _helper_copy(tmp_path, role):
     for old, new in (("CONF=/etc/rosy/host-control", f"CONF={tmp_path / 'conf'}"),
                      ("/run/systemd/shutdown/scheduled", sched),
                      ("/run/rosy-host-control", tmp_path / "state"),
+                     ("HOME_ROOT=/home", f"HOME_ROOT={tmp_path / 'home'}"),
                      ("PATH=/usr/sbin:/usr/bin:/sbin:/bin", f"PATH={stub}:/usr/bin:/bin")):
         assert old in text
         text = text.replace(old, str(new))
@@ -378,6 +384,98 @@ def test_helper_refuses_a_second_reboot_and_cancels_only_its_own(tmp_path):
     assert helper("reboot") == 3
     assert helper("cancel-reboot") == 4
     assert (tmp_path / "calls").read_text().splitlines().count("cancel") == 1
+
+
+def _arm_session(tmp_path, held):
+    lock = tmp_path / "home" / "op" / "rosy-omx" / "session.lock"
+    lock.parent.mkdir(parents=True, exist_ok=True)
+    lock.touch()
+    marker = tmp_path / "arm-held"
+    marker.touch() if held else marker.unlink(missing_ok=True)
+
+
+def _job_lock(tmp_path, pid, kind="gpu"):
+    jobs = tmp_path / "home" / "op" / "rosy-jobs"
+    jobs.mkdir(parents=True, exist_ok=True)
+    (jobs / f"train-{pid}.lock").write_text(f"{pid} {kind} 8 16\n")
+
+
+@posix
+def test_no_reboot_path_cuts_an_arm_session(tmp_path):
+    """2026-10-28: a reboot cut a chunk session mid-move and the arm dropped with torque off.
+    Only the nightly timer looked at the lock; the button and the guard's ladder did not."""
+    helper = _helper_copy(tmp_path, "site")
+    _arm_session(tmp_path, held=True)
+    assert helper("reboot") == 6
+    assert helper("reboot-if-free") == 6
+    assert not (tmp_path / "scheduled").exists()
+    _arm_session(tmp_path, held=False)
+    assert helper("reboot") == 0
+
+
+@posix
+def test_a_session_started_during_the_delay_cancels_only_our_reboot(tmp_path):
+    """The +10 min is a window of its own: the helper asks again just before it ends."""
+    helper = _helper_copy(tmp_path, "site")
+    _arm_session(tmp_path, held=False)
+    assert helper("reboot") == 0
+    calls = (tmp_path / "calls").read_text()
+    assert "systemd-run" in calls and "/usr/local/sbin/rosy-host-control recheck-reboot" in calls
+    assert helper("recheck-reboot") == 0
+    assert (tmp_path / "scheduled").exists()  # free: it goes ahead
+    _arm_session(tmp_path, held=True)
+    assert helper("recheck-reboot") == 0
+    assert not (tmp_path / "scheduled").exists()
+    assert (tmp_path / "calls").read_text().splitlines().count("cancel") == 1
+    (tmp_path / "scheduled").write_text("USEC=1\nMODE=reboot\n")  # someone else's reboot is not ours
+    assert helper("recheck-reboot") == 0
+    assert (tmp_path / "scheduled").exists()
+
+
+@posix
+def test_a_refused_recheck_timer_means_no_reboot_is_scheduled(tmp_path):
+    """Without the second look the delay is unguarded, so the reboot must not start at all."""
+    helper = _helper_copy(tmp_path, "site")
+    (tmp_path / "bin" / "systemd-run").write_text("#!/bin/sh\nexit 1\n")
+    assert helper("reboot") != 0
+    assert not (tmp_path / "scheduled").exists()
+
+
+@posix
+def test_a_persons_reboot_stops_at_live_jobs_and_the_guard_does_not(tmp_path):
+    """D-530: rebooting a PC a runaway training job has wedged is the guard's whole purpose."""
+    helper = _helper_copy(tmp_path, "model")
+    sleeper = subprocess.Popen(["sleep", "30"])
+    try:
+        _job_lock(tmp_path, sleeper.pid)
+        assert helper("reboot-if-free") == 7
+        assert not (tmp_path / "scheduled").exists()
+        assert helper("reboot") == 0
+    finally:
+        sleeper.kill()
+        sleeper.wait()
+
+
+@posix
+def test_dead_and_malformed_job_locks_do_not_block_and_are_not_evaluated(tmp_path):
+    helper = _helper_copy(tmp_path, "model")
+    finished = subprocess.Popen(["true"])
+    finished.wait()
+    _job_lock(tmp_path, finished.pid)
+    jobs = tmp_path / "home" / "op" / "rosy-jobs"
+    (jobs / "evil.lock").write_text(f"$(touch {tmp_path}/pwned) gpu 1 1\n")
+    assert helper("reboot-if-free") == 0
+    assert not (tmp_path / "pwned").exists()
+
+
+@posix
+@pytest.mark.parametrize("delta, blocks", [(3600, True), (-3600, False)])
+def test_a_busy_hold_blocks_a_persons_reboot_until_it_expires(tmp_path, delta, blocks):
+    helper = _helper_copy(tmp_path, "site")
+    jobs = tmp_path / "home" / "op" / "rosy-jobs"
+    jobs.mkdir(parents=True)
+    (jobs / "busy").write_text(f"{int(time.time()) + delta} person 1\n")
+    assert helper("reboot-if-free") == (7 if blocks else 0)
 
 
 @posix
@@ -429,6 +527,7 @@ def test_forced_command_passes_at_most_two_words(tmp_path):
     assert remote("restart-unit a b") == 2
     assert remote("") == 2
     assert remote("reboot *") == 2
+    assert remote("recheck-reboot") == 2  # the helper's own timer, never a caller's
 
 
 def _install_copy(tmp_path):

@@ -5333,3 +5333,8 @@
 - 변경: 환경 변수 이름 대신 설치 담당자에게 요청할 것을 말한다. 코드는 그대로. test_doc_tabs·test_cell_app_browser의 제목 고정을 새 제목으로 갱신.
 - 증거: agent-browser 로컬 렌더(1920·390·320 화면 확인). 원격 회귀는 착지 기록을 따른다.
 - gate 변화: SOURCE 변경. 실기기·Android 수용은 별도다. CE: 해당 없음 — 코드와 회귀가 판단을 보존한다.
+
+## 2026-11-07 · uncommitted · fix: 재부팅이 팔 세션을 끊지 않게 한다 (D-991)
+- 변경: 화면 `reboot`는 도우미 `reboot-if-free`로 간다. `reboot-over-jobs` 추가, 종료 코드 6·7을 409 `ARM_SESSION_ACTIVE`·`HOST_JOBS_ACTIVE`로 옮긴다. 호스트 서비스 화면이 작업 중이면 다시 묻는다.
+- 증거: 원격 `test_host_control.py`·`test_host_guard.py`. 호스트 pytest이며 실제 재부팅·세션 수용은 아니다.
+- gate 변화: SOURCE. 각 PC 도우미 설치 전. CE: 기존 교훈 갱신 — nightly-reboot-must-yield-to-a-live-arm-session.

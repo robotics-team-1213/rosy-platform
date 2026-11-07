@@ -4707,3 +4707,8 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: 원격 시험 `test/test_native_mapping_approval.py`·`test/test_image_layer_sync.py` exit 0. b8xy의 실제 릴리스에서 004·005 지문 일치, 10/29와 불일치(읽기 전용 측정, 제외 목록 추가 전 기준).
 - gate 변화: 없음 — 기체 수용 전이다.
 - CE: 해당 없음 — 새 기능이며 해결한 장애가 없다.
+
+## 2026-11-07 · uncommitted · fix: 도우미가 재부팅 전에 팔 세션과 작업을 본다 (D-991)
+- 변경: `rosy-host-control`의 `reboot`는 세션 잠금에서 거절하고, `reboot-if-free`는 작업에서도 거절한다. 예약 뒤 570초에 다시 보고 자기 재부팅만 취소한다. `recheck-reboot`는 강제 명령 키로 부를 수 없다.
+- 증거: 원격 `test_host_control.py`. 도우미를 stub으로 돌린 호스트 시험이다.
+- gate 변화: 없음 — PC 설치 전이다. 설치 전까지 guard 경로는 옛 동작이다.
