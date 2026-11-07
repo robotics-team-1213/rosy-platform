@@ -17,12 +17,12 @@ import tempfile
 import time
 
 import mapping_approval
+from os_state_layout import StateError
 
 STATE = "var/lib/rosy/commissioning/navigation-approval.json"
 EVIDENCE = "var/lib/rosy/commissioning/navigation-approval-evidence"
 TRIALS = "var/lib/rosy/core/navigation-approval"  # written by CORE's trial collector
 RUNTIME = "etc/rosy/runtime.env"
-HOLD = "var/lib/rosy/updates/hold.json"
 UNIT = "rosy-navigation-approval"
 HOLDER = "navigation-approval"
 HERE = Path(__file__).resolve().parent
@@ -31,6 +31,9 @@ REQUIRED = (("forward", "button_release"), ("reverse", "button_release"), ("cw",
 PREFLIGHT = "g4-preflight.json"
 BUSY = {"BEGINNING", "SEALING", "CANCELLING"}
 SURFACES = ("floor", "lifted")
+HOLD_HOURS = "4"
+MEASURE_S = 3.5 * 3600  # ends before the update hold it depends on
+RETRY_S = 600.0
 UNIT_START_S = 15.0  # systemd may not report the unit active yet right after the request
 
 
@@ -45,6 +48,12 @@ class SystemOps:
         return self.run("systemd-run", f"--unit={UNIT}", "--collect", "--no-block",
                         "--setenv=PYTHONNOUSERSITE=1", "--setenv=PYTHONDONTWRITEBYTECODE=1",
                         sys.executable, "-B", str(Path(__file__).resolve()), "run", action, *arguments)
+
+    def now(self):
+        return time.monotonic()  # a wall clock can jump; a reboot is caught by the boot id
+
+    def boot_id(self):
+        return Path("/proc/sys/kernel/random/boot_id").read_text(encoding="ascii").strip()
 
     def active(self, unit):
         return self.run("systemctl", "is-active", "--quiet", unit, timeout=20).returncode == 0
@@ -128,9 +137,31 @@ def _unclaim(ops, root):
     ops.run(sys.executable, "-B", str(HERE / "rosy_claim.py"), "--root", str(root), "release", "--holder", HOLDER)
 
 
-def _release_hold(ops, state):
-    if state.get("hold_taken"):
-        ops.run(sys.executable, "-B", str(HERE / "rosy_auto_update.py"), "release-hold")
+def _hold_path(root):
+    from os_state_layout import policy_file  # the updater's own resolution, A/B shared policy included
+    return policy_file(root, "hold.json")
+
+
+def _hold_holder(root):
+    """Who holds updates, or None. A hold nobody can read counts as somebody else's."""
+    path = _hold_path(root)
+    if not path.exists() and not path.is_symlink():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))["holder"]
+    except (OSError, ValueError, KeyError, TypeError):
+        return "unreadable hold"
+
+
+def _release_hold(root, state):
+    # Not `release-hold`: it also acknowledges rollback and apply failures, which are not this flow's to clear.
+    if not state.get("hold_taken"):
+        return
+    try:
+        if _hold_holder(root) == HOLDER:
+            _hold_path(root).unlink(missing_ok=True)
+    except (OSError, StateError):
+        pass  # the hold expires by itself
 
 
 def _restore(root, ops, state):
@@ -146,24 +177,51 @@ def _restore(root, ops, state):
     _restart(ops, state.get("previous_units") or [])
 
 
+def _bind_measurement(root, state):
+    device = mapping_approval._device_identity(root)
+    state.update(measured_release_id=device["release_id"], measured_source_revision=device["source_revision"],
+                 measured_fingerprint=mapping_approval.motion_fingerprint(root))
+
+
+def _require_same_measurement(root, state):
+    """Trials carry no identity of their own: they belong to the release begin found, or to nothing."""
+    bound = (state.get("measured_release_id"), state.get("measured_source_revision"), state.get("measured_fingerprint"))
+    device = mapping_approval._device_identity(root)
+    if bound == (device["release_id"], device["source_revision"], mapping_approval.motion_fingerprint(root)):
+        return
+    for directory in (root / TRIALS, root / EVIDENCE):
+        for direction, cause in REQUIRED:
+            (directory / f"{direction}-{cause}.json").unlink(missing_ok=True)
+    _bind_measurement(root, state)
+    _write_state(root, {**state, "phase": "MEASURING", "reason": "the release changed: trials were discarded"})
+    raise ValueError("the release changed since begin: trials were discarded, run them again")
+
+
 def begin(root, ops):
     state = _read_state(root)
     old = _env(root)
-    state.update(previous_runtime=old.decode("utf-8"), reason="", hold_taken=False,
-                 previous_units=[u for u in ("rosy-io.service", "rosy-navigation.service") if ops.active(u)])
+    # A begin after a failed restore must keep the runtime the robot really came from.
+    fresh = state.get("previous_runtime") is None
+    if fresh:
+        state.update(previous_runtime=old.decode("utf-8"),
+                     previous_units=[u for u in ("rosy-io.service", "rosy-navigation.service") if ops.active(u)])
+    state.update(reason="", boot_id=ops.boot_id(), deadline=ops.now() + MEASURE_S)
     _write_state(root, state)
     try:
+        holder = _hold_holder(root)
+        if holder not in (None, HOLDER):
+            raise ValueError(f"an update hold by {holder} is in place: release it before measuring")
         _claim(ops, root)
-    except ValueError as exc:  # another job holds the robot: nothing changed, so nothing to restore or restart
-        _write_state(root, {**state, "phase": "FAILED", "reason": str(exc)[:300], "previous_runtime": None})
+    except (ValueError, OSError, StateError) as exc:  # nothing changed, so nothing to restore or restart
+        kept = {"previous_runtime": None, "previous_units": None} if fresh else {}
+        _write_state(root, {**state, **kept, "phase": "FAILED", "reason": str(exc)[:300]})
         return
     try:
-        # A person's own hold stays theirs and is not released by the end of this flow.
-        if not (root / HOLD).exists():
-            _check(ops, sys.executable, "-B", str(HERE / "rosy_auto_update.py"), "hold", "--holder", HOLDER,
-                   "--reason", "navigation approval measuring", "--hours", "4")
-            state["hold_taken"] = True
-            _write_state(root, state)
+        _bind_measurement(root, state)
+        _check(ops, sys.executable, "-B", str(HERE / "rosy_auto_update.py"), "hold", "--holder", HOLDER,
+               "--reason", "navigation approval measuring", "--hours", HOLD_HOURS)
+        state["hold_taken"] = True
+        _write_state(root, state)
         for unit in ("rosy-navigation.service", "rosy-io.service"):
             _check(ops, "systemctl", "stop", unit)
         preflight = ops.probe_motors()
@@ -182,7 +240,6 @@ def begin(root, ops):
         _restart(ops, ["rosy-io.service"])
         _write_state(root, {**state, "phase": "MEASURING"})
     except Exception as exc:  # noqa: BLE001 - every failure returns the robot before it is reported
-        _release_hold(ops, state)
         _fail(root, ops, state, exc)
     finally:
         _unclaim(ops, root)
@@ -193,19 +250,35 @@ def _fail(root, ops, state, exc):
     try:
         _restore(root, ops, state)
     except Exception as restore:  # noqa: BLE001 - a person must see that the robot did not come back
-        reason = f"{reason}; restore failed: {str(restore)[:200]}"
-    _write_state(root, {**state, "phase": "FAILED", "reason": reason, "hold_taken": False})
+        # The hold stays while the robot is off its normal runtime; the expiry watch tries again.
+        _write_state(root, {**state, "phase": "FAILED", "boot_id": ops.boot_id(), "deadline": ops.now() + RETRY_S,
+                            "reason": f"{reason}; restore failed: {str(restore)[:200]}"})
+        return
+    _release_hold(root, state)
+    _write_state(root, {"phase": "FAILED", "reason": reason})
 
 
-def cancel(root, ops):
+def cancel(root, ops, reason="cancelled"):
     state = _read_state(root)
     try:
         _restore(root, ops, state)
-    except Exception as exc:  # noqa: BLE001 - reported, and cancel can be asked again
-        _write_state(root, {**state, "phase": "FAILED", "reason": str(exc)[:300]})
+    except Exception as exc:  # noqa: BLE001 - reported, and cancel or the expiry watch can try again
+        _write_state(root, {**state, "phase": "FAILED", "boot_id": ops.boot_id(), "deadline": ops.now() + RETRY_S,
+                            "reason": str(exc)[:300]})
         return
-    _release_hold(ops, state)
-    _write_state(root, {"phase": "IDLE", "reason": "cancelled"})
+    _release_hold(root, state)
+    _write_state(root, {"phase": "IDLE", "reason": reason})
+
+
+def expire_if_due(root, ops):
+    """Motor mode with the drive on never outlives its update hold or the boot it was begun in."""
+    state = _read_state(root)
+    if _phase(state, ops) not in ("MEASURING", "FAILED") or state.get("previous_runtime") is None:
+        return False
+    if state.get("boot_id") == ops.boot_id() and ops.now() < state.get("deadline", 0):
+        return False
+    _start(root, ops, "cancel", "CANCELLING", "measuring expired")
+    return True
 
 
 def _bundle(root, operator, surface):
@@ -229,9 +302,11 @@ def _bundle(root, operator, surface):
 def seal(root, ops, operator, surface):
     state = _read_state(root)
     try:
+        _require_same_measurement(root, state)
         mapping_approval.approve(root, _bundle(root, operator, surface), root / EVIDENCE)
     except Exception as exc:  # noqa: BLE001 - nothing was sealed and no mode moved: trials can be run again
-        _write_state(root, {**state, "phase": "MEASURING", "reason": str(exc)[:300]})
+        current = _read_state(root)
+        _write_state(root, {**current, "phase": "MEASURING", "reason": str(exc)[:300]})
         return
     try:
         _claim(ops, root)
@@ -249,10 +324,9 @@ def seal(root, ops, operator, surface):
             ops.commit(root, new, old)
         _restart(ops, ["rosy-io.service"])
         mapping_approval.check(root)
-        _release_hold(ops, state)
+        _release_hold(root, state)
         _write_state(root, {"phase": "IDLE", "reason": "sealed", "sealed_by": operator})
     except Exception as exc:  # noqa: BLE001
-        _release_hold(ops, state)
         _fail(root, ops, state, exc)
     finally:
         _unclaim(ops, root)
@@ -273,12 +347,19 @@ def _trial_state(root):
     return rows
 
 
-def status(root, ops):
-    state = _read_state(root)
+def _phase(state, ops):
     phase = state.get("phase", "IDLE")
     if (phase in BUSY and time.time() - state.get("requested_at", 0) > UNIT_START_S
             and not ops.active(f"{UNIT}.service")):
-        phase, state["reason"] = "FAILED", "the transition ended without a result"
+        return "FAILED"
+    return phase
+
+
+def status(root, ops):
+    state = _read_state(root)
+    phase = _phase(state, ops)
+    if phase != state.get("phase", "IDLE"):
+        state["reason"] = "the transition ended without a result"
     try:
         found = mapping_approval.check(root, runtime_mode="hardware")
         approval = {"valid": True, "carried": "measured_release_id" in found,
@@ -288,6 +369,8 @@ def status(root, ops):
     env = _env(root)
     return {"phase": phase, "reason": state.get("reason", ""), "approval": approval,
             "needs_measurement": not approval["valid"], "runtime_mode": _value(env, "ROSY_RUNTIME_MODE"),
+            "measuring_expires_in_s": (max(0, round(state.get("deadline", 0) - ops.now()))
+                                       if phase == "MEASURING" and state.get("boot_id") == ops.boot_id() else None),
             "trials": _trial_state(root)}
 
 
@@ -320,6 +403,7 @@ def request_seal(root, ops, operator, surface):
     current = status(root, ops)
     if current["phase"] != "MEASURING":
         raise ValueError(f"cannot seal while {current['phase']}")
+    _require_same_measurement(root, _read_state(root))
     if any(row["state"] != "valid" for row in current["trials"]):
         raise ValueError("every required trial must be valid before sealing")
     if surface not in SURFACES:
@@ -346,7 +430,7 @@ def main(argv=None):
     if args.action == "begin":
         begin(args.root, ops)
     elif args.action == "cancel":
-        cancel(args.root, ops)
+        cancel(args.root, ops, *args.arguments)
     else:
         seal(args.root, ops, *args.arguments)
     return 0

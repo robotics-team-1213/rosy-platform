@@ -32,6 +32,15 @@ def _approver(auth: AuthContext) -> str:
     return auth.principal_ref
 
 
+def _require_unplugged(svc: CoreServicesLike) -> None:
+    """Trials run unplugged and watched. No battery reading means nobody knows, and that refuses too."""
+    battery = svc.state.snapshot().battery_status
+    if battery.charging is True:
+        raise ApiError("CHARGING", 409, "unplug the charger before measuring")
+    if battery.charging is not False or battery.filtered_voltage is None:
+        raise ApiError("CHARGING_UNKNOWN", 409, "the battery state is unknown: cannot confirm the robot is unplugged")
+
+
 def _refused(exc: TrialRefused) -> ApiError:
     return ApiError(exc.code, 409, exc.detail)
 
@@ -49,6 +58,7 @@ def read(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depends(get_s
 def begin(auth: AuthContext = Depends(operator), svc: CoreServicesLike = Depends(get_services)):
     _approver(auth)
     require_calibration_owner(svc, auth, "navigation approval")
+    _require_unplugged(svc)
     if svc.modes.mode not in (Mode.IDLE, Mode.MANUAL) or not robot_still(svc):
         raise ApiError("MODE_CONFLICT", 409, "the robot must be stopped and out of navigation")
     return _view(svc, _host(svc, "navigation_approval.begin", auth))
@@ -82,6 +92,7 @@ def trial_start(body: NavigationApprovalTrialRequest, auth: AuthContext = Depend
                 svc: CoreServicesLike = Depends(get_services)):
     owner = _approver(auth)
     require_calibration_owner(svc, auth, "navigation approval trial")
+    _require_unplugged(svc)
     state = _host(svc, "navigation_approval.status")
     if state["phase"] != "MEASURING" or state["runtime_mode"] != "motor":
         raise ApiError("APPROVAL_NOT_MEASURING", 409, "begin the approval before running a trial")

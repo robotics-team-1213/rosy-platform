@@ -73,7 +73,7 @@ export function mount(root, ctx) {
       try { await call(path, body?.()); say("요청을 받았습니다."); } catch (error) { say(`실패: ${error.message}`, "error"); }
     });
   }
-  run(begin, "/begin", "충전 선을 빼고 주변을 확인했나요? 모터 시험 상태로 바꾸며 CORE가 다시 시작됩니다.");
+  run(begin, "/begin", "충전 선을 빼고 주변을 확인했나요? 충전 중이거나 배터리 상태를 모르면 시작되지 않습니다. 모터 시험 상태로 바꾸며 CORE가 다시 시작됩니다.");
   run(cancel, "/cancel", "측정을 취소하고 원래 상태로 되돌릴까요?");
   run(sealButton, "/seal", "다섯 시험 기록을 내 이름으로 봉인할까요?", () => ({test_surface: surface.value}));
   run(navigate, "/navigation-start", "항법을 시작할까요? 주행 경로를 확인하세요.");
@@ -85,6 +85,7 @@ export function mount(root, ctx) {
       : `측정 필요: ${approval.reason || "승인 기록 없음"}`;
     summary.setAttribute("state", approval.valid ? "ready" : "warning");
     if (data.reason) say(data.reason, phase === "FAILED" ? "error" : "ready");
+    else if (phase === "MEASURING" && data.measuring_expires_in_s != null) say(`측정은 ${Math.ceil(data.measuring_expires_in_s / 60)}분 뒤 자동으로 취소됩니다. 충전 선을 뺀 채로 지켜봐 주세요.`);
     const rows = data.trials || [];
     for (const item of buttons) {
       const row = rows.find((candidate) => candidate.direction === item.trial.direction && candidate.stop_cause === item.trial.stop_cause);

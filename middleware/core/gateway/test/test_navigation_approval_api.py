@@ -8,6 +8,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from core_common.protocol.state_components import BatteryStatus
 from core_features.command.approval_trials import (ApprovalTrials, MAX_HOLD_S, TRAVEL_CAP_M, TrialRefused,
                                                    require_clearance)
 
@@ -243,6 +244,30 @@ def test_a_scan_that_shows_no_room_refuses_the_trial(robot, trials, change, code
     assert refused.value.code == code and not trials.active
 
 
+def test_a_blank_scan_behind_refuses_reverse_even_when_confirmed(robot, trials):
+    for ranges in ([math.inf] * 360, [math.nan] * 360):
+        robot.scan.update(ranges=ranges)
+        with pytest.raises(TrialRefused) as refused:
+            trials.start("reverse", "button_release", OWNER, rear_confirmed=True)
+        assert refused.value.code == "CLEARANCE_UNKNOWN"
+
+
+@pytest.mark.parametrize("direction,beam", [("forward", 180), ("reverse", 0)])
+def test_something_closer_than_the_lidar_measures_refuses_that_direction(robot, trials, direction, beam):
+    ranges = [2.0] * 360
+    ranges[beam] = 0.02
+    robot.scan.update(ranges=ranges)
+    with pytest.raises(TrialRefused) as refused:
+        trials.start(direction, "button_release", OWNER, rear_confirmed=True)
+    assert refused.value.code == "CLEARANCE_UNKNOWN"
+
+
+def test_a_lidar_blind_past_the_body_front_refuses_forward(robot):
+    robot.scan.update(range_min=0.20, ranges=[2.0] * 360)
+    with pytest.raises(TrialRefused, match="right ahead"):
+        require_clearance(robot.scan, BODY, "forward", False, robot.now)
+
+
 def test_rotation_needs_room_beyond_the_turning_circle(robot, trials):
     robot.scan.update(ranges=[0.11] * 360)
     with pytest.raises(TrialRefused) as refused:
@@ -293,6 +318,7 @@ def api(core_client, monkeypatch, robot, tmp_path):
         records.append(dict(id=name, sha256=hashlib.sha256(token.encode()).hexdigest(), role=role, source="manual"))
         headers[name] = {"Authorization": f"Bearer {token}"}
     svc.config["auth"]["tokens"] = records
+    svc.state.set_battery_status(BatteryStatus(filtered_voltage=7.6, charging=False))
     return client, svc, agent, headers
 
 
@@ -338,6 +364,18 @@ def test_a_trial_needs_the_measuring_phase(api):
     response = client.post("/api/v1/navigation/approval/trial/start",
                            json={"direction": "forward", "stop_cause": "button_release"}, headers=headers["person-a"])
     assert response.status_code == 409 and "APPROVAL_NOT_MEASURING" in response.text
+
+
+@pytest.mark.parametrize("battery,code", [(BatteryStatus(filtered_voltage=7.6, charging=True), "CHARGING"),
+                                          (BatteryStatus(), "CHARGING_UNKNOWN")])
+@pytest.mark.parametrize("path,body", [("/begin", None),
+                                       ("/trial/start", {"direction": "forward", "stop_cause": "button_release"})])
+def test_a_plugged_in_or_unknown_robot_is_not_measured(api, battery, code, path, body):
+    client, svc, _, headers = api
+    svc.state.set_battery_status(battery)
+    response = client.post(f"/api/v1/navigation/approval{path}", json=body, headers=headers["person-a"])
+    assert response.status_code == 409 and code in response.text
+    assert not svc.approval_trials.active
 
 
 def test_speed_is_not_the_callers_to_choose(api):
