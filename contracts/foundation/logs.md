@@ -1132,3 +1132,10 @@
 - gate 변화: SOURCE 회귀 검증; ARTIFACT/DEVICE/FIELD 수용 근거로 사용하지 않음. 최종 재조립 SHA 원격 회귀와 FULL은 별도.
 - 결정: API v1.363; 기존 CORE 최종 명령·모드 owner 유지.
 - 교훈: CE 해당 없음 — 최종 코드·회귀 시험·API 계약으로 판단 근거를 재현할 수 있음.
+
+## 2026-11-08 · uncommitted · refactor(foundation): 기록의 비밀 필드 이름 판별 공용화
+
+- 변경: D-997 적용 2단계로 Fleet 감사·task 기록의 동일 정규식만 `core_common.audit_fields.is_credential_field`로 모았다. 재귀·PEM 검사·오류·writer는 각 소비자가 유지한다. 기존 setup 패키지 자동 검색과 Fleet core_common 의존성을 재사용한다.
+- 증거: 시험 선행 커밋 `daacc77040` 원격 RED 24 실패(새 모듈 없음), known_failures 대조 24 NEW. 구현 SHA의 원격 affected와 소비자 회귀 결과는 디스패처 인계에 남긴다.
+- gate 변화: 없음. HTTP schema·배포·실물 수용은 바꾸지 않았다.
+- CE: 해당 없음 — 같은 의미의 범위와 남긴 차이는 코드·회귀 시험·공통 서비스 카탈로그로 재현된다.

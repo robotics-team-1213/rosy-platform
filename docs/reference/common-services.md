@@ -37,6 +37,20 @@ Account의 로그인·프로필·관리 화면 소스는 `applications/fleet/web
 | `vision` | 천장 영상에서 현장 관측을 만드는 업무 생산자다 |
 | `control-unit-peer` | 관제 계층 연결에만 쓰는 peer 프록시다(D-850, D-960) |
 
+## 기계 처리 공용화 조사
+
+후속 추출은 아래 실제 구현을 먼저 대조한다. 동일한 이름보다 입력·오류·수명과 설치 묶음이 같은지 확인한다.
+
+| 후보 | 확인한 구현과 처리 |
+|---|---|
+| 감사·기록의 비밀 필드 | `fleet/observe/events.py`와 `fleet/server/ledger/task_payloads.py`의 동일한 필드 이름 정규식만 `core_common.audit_fields.is_credential_field`로 추출했다. 재귀 범위·PEM 값 검사·오류·JSON 인코딩·보관은 각 owner에 남는다. 완전한 마스킹이나 새 사건 schema가 아니다 |
+| Account·admission 감사 | `rosy_account/audit.py`는 HTTP 요청 메타데이터, `policy_admission_audit.py`는 정책 판정·scope revision을 기록한다. actor·correlation·revision 의미가 달라 사건 형식을 합치지 않았다 |
+| 백업·복원 | Account와 Fleet은 이미 `deploy/site/site_db.py`의 무결성·해시·결과 형식을 함께 쓴다. 검수의 `qwen_review_completion.py`는 병합 전 DB 사본과 mask 버전 receipt이고 Account `migration.py`는 자격 이관 검증이다. 같은 백업·복원 계약으로 합치지 않았다 |
+| 업데이트 | site updater는 candidate commit·switch journal·건강/rollback, Pinky `auto_update_records.py`는 release identity·hold·적용 결과를 소유한다. `tools/remote/update_status.py`는 설치 unit·이미지·파일 drift 조회다. 서로 다른 상태를 공통 updater나 성공 enum으로 바꾸지 않았다 |
+| 설정 | `core_common.config`는 기존 transaction을 쓴다. overhead `track/tuning.py`의 실패 시 경고하는 이력과 `background_blob.py`의 fsync·실패 전파 snapshot은 설정 revision transaction과 의미가 달라 원자적 교체를 합치지 않았다 |
+
+새 foundation 모듈은 기존 `setup.py`의 패키지 자동 검색에 포함되며 Fleet은 이미 `core_common`을 의존한다. 새 프로세스·DB·HTTP 계약·배포 변경은 없다.
+
 ## 새 기능을 넣을 때
 
 1. 한 앱만 쓰면 그 앱에 둔다. 나중에 쓸지도 모른다는 이유로 옮기지 않는다.

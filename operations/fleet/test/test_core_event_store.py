@@ -39,6 +39,15 @@ def test_store_rejects_secret_bearing_or_oversized_event_data(tmp_path):
     assert store.read_events() == []
 
 
+def test_event_field_validation_keeps_owner_specific_traversal():
+    from fleet.observe.events import _contains_sensitive_field
+
+    assert _contains_sensitive_field({"nested": [{"API-Key": "hidden"}]})
+    assert _contains_sensitive_field({"value": "-----BEGIN PRIVATE KEY-----"})
+    assert not _contains_sensitive_field({"nested": ({"API-Key": "hidden"},)})
+    assert not _contains_sensitive_field({"actor_id": "operator", "revision": 1})
+
+
 def test_reusing_event_id_for_different_payload_is_rejected(tmp_path):
     store = CoreEventStore(tmp_path / "fleet.sqlite3")
     event = {"event_id": "evt-1", "seq": 1, "robot_id": "rosy_01",

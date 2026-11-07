@@ -5365,3 +5365,10 @@
 - 변경: 흐름이 만료되거나 Account가 끊겨 콜백이 실패하면 브라우저는 /console로 돌아간다. API 호출은 그대로 401·503이고 어느 쪽도 세션을 만들지 않는다.
 - 증거: 실제 Account와 Fleet을 두 출처로 띄운 왕복에서 두 탭 로그인과 교환 중 장애가 JSON 화면에서 멈추는 것을 재현했다.
 - gate 변화: SOURCE 회귀. 현장 수용은 별도다.
+
+## 2026-11-08 · uncommitted · refactor(fleet): 감사·task의 동일 비밀 필드 판별 재사용
+
+- 변경: observe/events와 ledger/task_payloads가 foundation의 `is_credential_field`를 쓴다. list/tuple 탐색 차이·이벤트 PEM 검사·거절 오류·정렬·크기 상한을 유지하고 소비자 회귀 시험을 더했다.
+- 증거: 구현 커밋 SHA로 원격 affected 및 소비자 시험을 요청한다. 최종 결과는 디스패처 인계에 연결한다.
+- gate 변화: 없음. 원본 감사·admission·발송·설정·업데이트 권한은 그대로다.
+- CE: 해당 없음 — 처리 차이와 추출 근거는 코드·회귀 시험·카탈로그에 남는다.
