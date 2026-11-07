@@ -387,3 +387,9 @@
 - 변경: `AccountSession`, `AndroidAccount`, `account-config.gradle`을 `shared/android/account`로 옮겼다(D-987). 패키지는 `io.github.livsbittt.rosy.account`이고, 저장 이름 `rosy-account-<scope>`, `rosy-account-aes`, `rosy-account/1:`은 그대로다.
 - 증거: 원격 결과는 착지 기록을 따른다. 실기 설치 뒤 로그인 유지는 확인하지 않았다.
 - Gate: 없음. CE: 해당 없음 — 소스 위치 이동이다.
+
+## 2026-11-07 · uncommitted · 배터리 40°C 경고와 발열 멈춤 기록
+
+- 변경: 온도 경고가 OS 발열 단계와 별개로 배터리 40°C부터 나온다. 송출을 멈추는 기준은 그대로 OS SEVERE, 상태가 없으면 45°C다. 심한 발열의 시작과 끝을 logcat에 남긴다.
+- 증거: 재부팅 뒤 송출이 멈췄을 때 OS 발열 단계 기록이 없어 원인을 밝히지 못했다. JVM `DeviceHealthTest`. 실기 설치 결과는 착지 기록을 따른다.
+- Gate: 없음. CE: 새 교훈 기록 — docs/solutions/deployment/rosy-cam-screen-on-keeps-ceiling-phone-hot-2026-11-07.md.

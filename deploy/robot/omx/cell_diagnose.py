@@ -24,6 +24,38 @@ STRATEGY = {
 }
 
 
+# How a whole attempt ended (cell_auto_pick.run_auto's result) -> what cell_recovery changes before the next one.
+ATTEMPT_CAUSES = (("stopped: released", "lift_stall"), ("stopped: holding", "held_stop"), ("stopped: still holding", "stuck_in_jaws"),
+                  ("stopped: misaligned", "misaligned"), ("stopped: placed", "not_seen_placed"), ("stopped: no usable", "no_room"),
+                  ("stopped: pivot", "calibrate"), ("stopped: no clear pivot", "calibrate"),
+                  *((f"stopped: {c} -> ", "contact") for c in STRATEGY))  # the strategy table already ended at a person
+RECOVERY = {
+    # the order is the first guess; cell_recovery reorders by what really worked (cell_choices), never past this list
+    # let go and rose: slower first (moves nothing else); cell_why's reading can put the push first
+    "lift_stall": ["slow_down", "push_clear", "observe_again", "ask_person"],
+    "no_room": ["push_clear", "observe_again", "ask_person"],
+    "no_progress": ["push_clear", "observe_again", "ask_person"],
+    "misaligned": ["observe_again", "push_clear", "ask_person"],
+    "scene_moved": ["observe_again", "push_clear", "ask_person"],  # the top camera saw the pile change: plan from what is there now
+    "not_seen_placed": ["observe_again", "ask_person"],
+    "held_stop": ["ask_person"],  # a box may still be in the jaws
+    "stuck_in_jaws": ["ask_person"],
+    # named apart so the ledger counts them: 13 calibrate and 35 descent stops in the 110 real attempts up to 2026-11-07
+    "calibrate": ["ask_person"],
+    "contact": ["ask_person"],
+    "other": ["ask_person"],  # a fault, a refusal, an abort: never retried
+}
+
+
+def attempt_cause(result: str, pile_moved: bool = False) -> str:
+    """The cause of an attempt's end; a pile the camera saw change overrides only the causes that would try again."""
+    if result == "placed":
+        return "placed"
+    cause = next((c for prefix, c in ATTEMPT_CAUSES if result.startswith(prefix)),
+                 "no_progress" if result.startswith("stopped: ") and result.endswith(" attempts") else "other")
+    return "scene_moved" if pile_moved and RECOVERY[cause] != ["ask_person"] else cause
+
+
 def diagnose(result: str, contact_z: float | None, surface_z: float | None, top_z: float | None,
              grasp_z: float | None, params=None) -> dict:
     """{cause, facts}: from the transfer result and the contact pose's FK height against the planned heights."""
