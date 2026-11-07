@@ -125,6 +125,9 @@ class _Ingest:
     def report_calibration(self, source_id, record, map_id):
         self.calibration = (source_id, record, map_id)
 
+    def hold_stream(self, source_id):
+        self.held = getattr(self, "held", 0) + 1
+
 
 def test_robot_marker_uses_approved_fit_when_corners_absent_even_during_blob_learning():
     client = _Client()
@@ -205,6 +208,16 @@ def test_without_calibration_the_payload_says_so_and_the_detector_is_not_run(mak
     assert (payload.status, payload.calibration_revision, payload.detections) == (
         "CALIBRATION_REQUIRED", None, ())
     assert detector.calls == [] and client.published == [payload]
+
+
+def test_only_fleets_locate_session_wakes_the_camera(make_worker):
+    worker, _ = make_worker(configs=[CONFIG, CONFIG | {"stream_wanted": True}, CONFIG | {"stream_wanted": "yes"}])
+    asyncio.run(worker.refresh_config())
+    assert getattr(worker.ingest, "held", 0) == 0
+    asyncio.run(worker.refresh_config())
+    assert worker.ingest.held == 1
+    asyncio.run(worker.refresh_config())
+    assert worker.ingest.held == 1
 
 
 def test_the_approved_record_is_used_when_markers_are_missing(make_worker):
