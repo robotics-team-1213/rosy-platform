@@ -9,6 +9,8 @@ import math
 from pathlib import Path
 import sys
 
+import numpy as np
+
 ISAAC = Path(__file__).resolve().parents[2] / "learning/envs/isaac"
 sys.path.insert(0, str(ISAAC))
 import mapped_stack_fixture as fx  # noqa: E402
@@ -66,10 +68,21 @@ def wait_pose(arm, kind):
     (+x) and nothing of the arm stays in the middle band between the arms."""
     if kind == "home":
         return arm.home.copy()
+    import palletizing_gripper as jaw
     turned = [arm.home.copy() for _ in (1, -1)]
     for q, sign in zip(turned, (1, -1)):
         q[0] += sign * math.pi / 2
-    return max(turned, key=lambda q: arm.segments(q)[-1][0])
+    q = max(turned, key=lambda q: arm.segments(q)[-1][0])
+    # the wrist roll that turns the camera holder (55 mm to one side of link5) away from the middle: arm_b's faced it and met arm_a's
+    # holder over the stern stand (MuJoCo 2026-11-08)
+    lens = np.array(jaw.WRIST_CAMERA_B["lens_m"])
+    rolls = [r for r in (q[4], q[4] - math.pi, q[4] + math.pi) if arm.limits[4][0] <= r <= arm.limits[4][1]]
+
+    def outward(r):
+        R, p = arm.link_poses(np.r_[q[:4], r, q[5:]])[4]
+        return abs((p + R @ lens)[1])
+    q[4] = max(rolls, key=outward)
+    return q
 
 
 def ship_cell(layout, x_mm, y_mm, z_mm=0.):

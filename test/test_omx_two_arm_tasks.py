@@ -243,3 +243,12 @@ def test_an_arm_waits_out_of_the_middle_band(layout):
         assert all(abs(p[1]) > .1 for p in arm.segments(arm.wait))
         assert any(abs(p[1]) < .125 for p in arm.segments(arm.home))  # what it replaces
         assert arm.segments(arm.wait)[-1][0] > arm.base[0]  # the jaw toward the belt end
+
+
+def test_a_waiting_arm_turns_its_camera_holder_outward(layout):
+    """The D holder sits 55 mm to one side of link5; arm_b's faced the middle and met arm_a's holder over the stern stand."""
+    import palletizing_gripper as jaw
+    lens = np.array(jaw.WRIST_CAMERA_B["lens_m"])
+    for arm in layout.sim_arms.values():
+        R, p = arm.link_poses(arm.wait)[4]
+        assert abs((p + R @ lens)[1]) > .2
