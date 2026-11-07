@@ -48,18 +48,32 @@ def bits(code: int) -> list[str]:
     return [name for bit, name in HW_BITS.items() if code & bit]
 
 
+def incidents_dir() -> Path:
+    """The one place holds and the outbox live (under the cell's lock root, not the recording directory)."""
+    from joint_tune import lock_root
+
+    return lock_root() / "incidents"
+
+
 def hold_path(arm: str) -> Path:
-    return INCIDENTS / f"HOLD-{arm}.json"
+    return incidents_dir() / f"HOLD-{arm}.json"
+
+
+def hold_file(arm: str) -> Path | None:
+    """The hold file of `arm` that exists: here, else one an older version left in the working directory."""
+    return next((p for p in (hold_path(arm), INCIDENTS / f"HOLD-{arm}.json") if p.is_file()), None)
 
 
 def outbox(arm: str) -> list[Path]:
-    return sorted((INCIDENTS / "outbox").glob(f"{arm}-*.json"))
+    """Unsent reports: this cell's outbox plus any an older version left in the working directory."""
+    return sorted(incidents_dir().joinpath("outbox").glob(f"{arm}-*.json")) + sorted(
+        (INCIDENTS / "outbox").glob(f"{arm}-*.json"))
 
 
 def held(arm: str) -> str | None:
     """Why the next session of `arm` must not start according to the local copy of the hold, or None."""
-    path = hold_path(arm)
-    return json.loads(path.read_text())["reason"] if path.is_file() else None
+    path = hold_file(arm)
+    return json.loads(path.read_text())["reason"] if path else None
 
 
 def keep_hold(arm: str, reason: str, incident_ids=(), source="local") -> None:
@@ -117,7 +131,8 @@ def refuse_if_held(arm: str | None, link=None) -> None:
         keep_hold(arm, answer.reason or "arm incident not cleared", answer.incident_ids, "fleet")
         raise SystemExit(f"{arm} held for a person: {answer.reason} (clear it in the Fleet console)")
     if answer is not None and sent:
-        hold_path(arm).unlink(missing_ok=True)  # only Fleet's "not held", with nothing unsent, lifts a hold
+        for gone in (hold_path(arm), INCIDENTS / f"HOLD-{arm}.json"):
+            gone.unlink(missing_ok=True)  # only Fleet's "not held", with nothing unsent, lifts a hold
         return
     reason = held(arm) or ("an incident report could not be sent to Fleet" if outbox(arm) else None)
     if reason:
@@ -233,9 +248,11 @@ def handle(session_path: Path, arm: str, act=None, decisions=Path("decisions.jso
     if not d["actions"] and not d["hold"] and d["reason"] == "no incident sign":
         return {"incident": False}
     stamp = time.strftime("%Y%m%dT%H%M%S")
-    acted = act([int(m) for m in f["latched"]]) if act and "reboot_latched" in d["actions"] else None
     folder = INCIDENTS / f"{stamp}-{arm}"
     folder.mkdir(parents=True, exist_ok=True)
+    if d["hold"]:  # the local hold exists before any device recovery and before Fleet is asked
+        keep_hold(arm, f"{folder}: {d['reason']}"[:380])
+    acted = act([int(m) for m in f["latched"]]) if act and "reboot_latched" in d["actions"] else None
     incident = {"schema": "rosy.omx-incident.v1", "arm": arm, "stamp": stamp, "session": str(session_path),
                 "facts": f, "decision": d, "recovery": acted, "reported": False}
     cell_decisions.append(decisions, {
@@ -243,8 +260,7 @@ def handle(session_path: Path, arm: str, act=None, decisions=Path("decisions.jso
         "stage": "incident", "facts": {k: f[k] for k in ("latched", "folded", "windup_hits", "flagged", "safe_end")},
         "options": d["offered"] + ["hold_for_person"], "chosen": d["actions"] + (["hold_for_person"] if d["hold"] else []),
         "by": "measurement", "reason": d["reason"], "frames": f["frames"], "arm_id": arm, "t": round(time.time(), 3)})
-    if d["hold"]:  # the local hold exists first: if Fleet cannot be reached the next session is still refused
-        keep_hold(arm, f"{folder}: {d['reason']}"[:380])
+    if d["hold"]:  # if Fleet cannot be reached the next session is still refused (the local hold exists)
         sid = session.get("motor_health_session")
         try:
             sid = str(uuid.UUID(str(sid)))
@@ -256,8 +272,8 @@ def handle(session_path: Path, arm: str, act=None, decisions=Path("decisions.jso
             print(f"incident report not built: {type(exc).__name__}: {str(exc)[:120]}")
             report = None
         if report is not None:
-            (INCIDENTS / "outbox").mkdir(parents=True, exist_ok=True)
-            (INCIDENTS / "outbox" / f"{arm}-{sid}.json").write_text(report.model_dump_json())
+            (incidents_dir() / "outbox").mkdir(parents=True, exist_ok=True)
+            (incidents_dir() / "outbox" / f"{arm}-{sid}.json").write_text(report.model_dump_json())
             incident["reported"] = bool(link) and send(arm, link)
     (folder / "incident.json").write_text(json.dumps(incident, indent=1, default=str))
     return {"incident": True, "folder": str(folder), **incident}
@@ -266,21 +282,44 @@ def handle(session_path: Path, arm: str, act=None, decisions=Path("decisions.jso
 def reboot_latched(device: str):
     """Reboot the latched follower IDs on `device`, only while every follower motor reads torque 0."""
     def act(ids):
-        from dynamixel_sdk import PacketHandler, PortHandler
+        from dynamixel_sdk import COMM_SUCCESS, PacketHandler, PortHandler
 
         port, packet = PortHandler(device), PacketHandler(2.0)
-        if not (port.openPort() and port.setBaudRate(1_000_000)):
-            return {"error": "port"}
+        before, after = {}, {}
+
+        def verified(result, error):
+            if result != COMM_SUCCESS or error & ~128:
+                raise ValueError(f"bus response failed: communication={result}, packet={error}")
+
+        def read(motor, address):
+            value, result, error = packet.read1ByteTxRx(port, motor, address)
+            verified(result, error)  # alert 0x80 reports the latch; lower bits are packet errors
+            if type(value) is not int or not 0 <= value <= 255:
+                raise ValueError("invalid register readback")
+            return value
+
+        def snapshot():
+            return {i: {"torque": read(i, 64), "hw_error": read(i, 70)} for i in range(11, 17)}
+
         try:
-            read = lambda i, a: packet.read1ByteTxRx(port, i, a)[0]  # noqa: E731
-            before = {i: {"torque": read(i, 64), "hw_error": read(i, 70)} for i in range(11, 17)}
+            if not (port.openPort() and port.setBaudRate(1_000_000)):
+                return {"error": "port"}
+            if not ids or any(type(i) is not int or i not in range(11, 17) for i in ids):
+                return {"refused": "invalid follower reboot IDs"}
+            before = snapshot()
             if any(v["torque"] for v in before.values()):
                 return {"refused": "a follower motor has torque ON", "before": before}
+            if any(v["hw_error"] & ~REBOOTABLE for v in before.values()) or any(not before[i]["hw_error"] for i in ids):
+                return {"refused": "current hardware faults do not permit reboot", "before": before}
             for i in ids:
-                packet.reboot(port, i)
+                verified(*packet.reboot(port, i))
             time.sleep(1.5)
-            return {"rebooted": ids, "before": before,
-                    "after": {i: {"torque": read(i, 64), "hw_error": read(i, 70)} for i in range(11, 17)}}
+            after = snapshot()
+            if any(v["torque"] or v["hw_error"] for v in after.values()):
+                return {"refused": "reboot readback is not torque OFF and fault-free", "before": before, "after": after}
+            return {"rebooted": ids, "before": before, "after": after}
+        except (OSError, RuntimeError, TypeError, ValueError) as exc:
+            return {"error": str(exc), "before": before, "after": after}
         finally:
             port.closePort()
     return act
@@ -294,8 +333,14 @@ def main(argv=None):
     h.add_argument("--arm", required=True)
     h.add_argument("--device", help="follower by-id path: reboots an allowed latch (no motion)")
     args = parser.parse_args(argv)
-    out = handle(args.session, args.arm, act=reboot_latched(args.device) if args.device else None,
-                 link=link_for(args.arm))  # by hand on an old session.json
+    from joint_tune import session_lock
+
+    lock = session_lock(args.arm)  # a by-hand run never overlaps a recording session of the same arm
+    try:
+        out = handle(args.session, args.arm, act=reboot_latched(args.device) if args.device else None,
+                     link=link_for(args.arm))  # by hand on an old session.json
+    finally:
+        lock.close()
     print(json.dumps({k: out.get(k) for k in ("incident", "folder", "decision", "recovery", "reported")}, default=str))
     return 0
 

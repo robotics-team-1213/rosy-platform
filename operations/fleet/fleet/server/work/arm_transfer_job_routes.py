@@ -75,10 +75,13 @@ class DelegatedArmJobs:
             self.store.withdraw(mission_id, reason=reason)
             return
         if self.observation is None:
+            from .physical_transfer_execution import PhysicalTransferExecution
+            PhysicalTransferExecution(self.store).hold(mission_id, reason=reason)
             return
         try:
             self.observation.execution.snapshot(mission_id)
         except KeyError:
+            self.observation.execution.hold(mission_id, reason=reason)
             return
         self.observation.dispatcher.cancel(mission_id, reason=reason)
 
