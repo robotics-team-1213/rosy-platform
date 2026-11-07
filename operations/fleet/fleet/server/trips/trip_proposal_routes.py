@@ -7,7 +7,7 @@ from fastapi import Depends, HTTPException, Path, Request
 
 from core_common.protocol.schemas import TripProposalAdmit, TripProposalCreate, TripProposalResponse, TripRequestKey
 from fleet.server.mission_store import MissionConflict
-from fleet.server.password_session import same_origin
+from core_common.protocol.account_access import same_origin
 from fleet.server.trip_candidates import create_candidate_trip_job
 from fleet.server.trip_ports import TripError
 from fleet.server.trip_proposals import TripProposalStore

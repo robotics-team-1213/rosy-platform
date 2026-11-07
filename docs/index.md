@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
+- 2026-11-07 · uncommitted · 공통 서비스 카탈로그와 D-987
 - 2026-11-07 · uncommitted · fix(omx): 사다리가 GPU 없이 시작하지 않게 하고 MuJoCo 접촉 교훈을 기록
 - 2026-11-07 · uncommitted · fix(omx): 두 팔 세계의 접촉 모델, 손목 간격 검증, rehandle 계획 교체
 - 2026-11-07 · uncommitted · feat(omx): 두 팔 셀 MuJoCo 세계, 작업 정의, 검증기와 교사
 - 2026-11-07 · fc074c6198 · feat(omx): OMX 학습 사다리 핵심
-- 2026-11-07 · uncommitted · feat(sim): 공통 층 조 v2.1 옵션

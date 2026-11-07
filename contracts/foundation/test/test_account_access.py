@@ -110,3 +110,18 @@ def test_wildcard_resolves_to_one_concrete_resource_and_never_enters_a_token():
         sign_access({**claims(), 'aud': 'robot:*',
                      'grants': [{'resource': 'robot:*', 'capabilities': ['robot.read']}]},
                     private, key_id='key-1')
+
+
+def test_same_origin_compares_origin_authority_with_host():
+    from types import SimpleNamespace
+    from core_common.protocol.account_access import same_origin
+
+    def request(**headers):
+        return SimpleNamespace(headers=headers)
+    assert same_origin(request(origin='https://Site.example', host='site.example'))
+    assert same_origin(request(origin='http://site.example:8443', host='site.example:8443'))
+    assert not same_origin(request(origin='https://other.example', host='site.example'))
+    assert not same_origin(request(origin='ftp://site.example', host='site.example'))
+    assert not same_origin(request(origin='https://[bad', host='site.example'))
+    assert not same_origin(request(host='site.example'))
+    assert not same_origin(request(origin='https://site.example'))
