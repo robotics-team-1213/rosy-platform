@@ -57,6 +57,8 @@ SCENARIOS = [
     {"name": "attempts ran out", "rounds": [("stopped: 2 attempts", False, True), ("placed", False, True)], "result": "placed", "actions": ["push_clear", "done"]},
     {"name": "pivot stopped", "rounds": [("stopped: pivot: stopped", False, True)], "result": "ask a person: calibrate", "actions": ["ask_person"]},
     {"name": "no clear point to pivot", "rounds": [("stopped: no clear pivot point", False, True)], "result": "ask a person: calibrate", "actions": ["ask_person"]},
+    {"name": "contact, then the pile moved: the plan is stale", "rounds": [("stopped: beside -> ask_person", True, True), ("placed", False, True)], "result": "placed",
+     "actions": ["observe_again", "done"]},
     {"name": "contact table reached a person", "rounds": [("stopped: beside -> ask_person", False, True)], "result": "ask a person: contact", "actions": ["ask_person"]},
     {"name": "fault with the pile moved", "rounds": [("stopped: fault", True, True)], "result": "ask a person: other", "actions": ["ask_person"]},
     {"name": "guard abort", "rounds": [("aborted: 55 C", False, True)], "result": "ask a person: other", "actions": ["ask_person"]},

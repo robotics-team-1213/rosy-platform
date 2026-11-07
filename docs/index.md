@@ -353,6 +353,7 @@
 
 ## 최근 기록
 
+- 2026-11-07 · uncommitted · test(learning): 학습 브라우저 여정도 고정 학습 환경을 명시할 때만 돈다
 - 2026-11-07 · uncommitted · fix(remote): 호출의 -rA가 공통 꼬리에 덮이지 않는다
 - 2026-11-07 · uncommitted · fix(land): FULL 대기가 준비 슬롯을 차지하지 않고 MAIN-RED가 닫힌다
 - 2026-11-07 · uncommitted · docs(adr): D-982 현장 운영 규칙
