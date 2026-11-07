@@ -4714,3 +4714,10 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: 원격 시험 `test/test_sd_personalization.py`·`test/test_first_boot_provisioning.py`·`test/test_site_account_deploy.py`.
 - gate 변화: 없음 — 현장 활성화 전이다.
 - CE: 해당 없음 — 새 배선이며 해결한 장애가 없다.
+
+## 2026-11-07 · uncommitted · feat(account): Harbor site capability (D-955 7)
+
+- 변경: site capability `harbor.view`·`harbor.operate`·`harbor.field`·`harbor.admin`을 더하고, 팀원 기본 묶음에 앞의 셋, 조회 묶음에 `harbor.view`를 넣었다. Android 수신기 허용 목록을 같이 고쳤고, 계정 프로토콜 문서에 「바깥 앱 수신 계약」 절을 더했다.
+- 증거: 원격 시험 `contracts/foundation/test/test_account_access.py`·`operations/fleet/test/test_account_admin_browser.py`.
+- gate 변화: 없음 — Harbor 쪽 수신기는 팀 저장소 PR이다.
+- CE: 해당 없음 — 새 권한이며 해결한 장애가 없다.

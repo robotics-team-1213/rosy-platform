@@ -130,7 +130,8 @@ def test_account_administration_uses_real_ledger(tmp_path, managed):
                 assert bob["enabled"] is False and bob["revision"] == 6
                 assert bob["grants"] == [
                     {"resource": "site:test-site", "capabilities": [
-                        "fleet.read", "fleet.operate", "games.operate", "monitoring.read", "vault.read", "vault.operate", "vault.manage"]},
+                        "fleet.read", "fleet.operate", "games.operate", "monitoring.read", "harbor.view", "harbor.operate", "harbor.field",
+                        "vault.read", "vault.operate", "vault.manage"]},
                     {"resource": "robot:*", "capabilities": ["robot.read", "robot.operate"]},
                     {"resource": "project:*", "capabilities": ["learning.view", "learning.edit", "learning.import"]}]
                 assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")

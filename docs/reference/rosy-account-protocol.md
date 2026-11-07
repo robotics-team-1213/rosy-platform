@@ -76,7 +76,7 @@ Account identity는 불변 opaque `account_id`다. login/email은 identity가 �
 
 | 자원 | 허용 capability |
 |---|---|
-| site | accounts.manage, fleet.read, fleet.operate, fleet.policy, camera.manage, games.operate, monitoring.read, vault.read, vault.operate, vault.manage |
+| site | accounts.manage, fleet.read, fleet.operate, fleet.policy, camera.manage, games.operate, monitoring.read, vault.read, vault.operate, vault.manage, harbor.view, harbor.operate, harbor.field, harbor.admin |
 | robot | robot.read, robot.operate, robot.admin |
 | project | learning.view, learning.edit, learning.approve, learning.manage, learning.import, learning.publish |
 
@@ -274,6 +274,18 @@ generation을 승인한 중앙 subject와 session에 결속하며 매 사용/wor
 HF 연결은 한 번에 `read-repos gated-repos write-repos manage-repos`를 요청한다.
 읽기 연결 뒤 관리 연결을 따로 요구하지 않는다. 읽기·쓰기·저장소 관리가 승인된 연결을
 보관하며 기존 읽기 전용 연결은 다시 연결해 공급자의 승인을 받는다.
+
+### 바깥 앱 수신 계약 (D-955 7, 2026-11-07)
+
+ROSY 코드를 import하지 않는 앱(예: Harbor)은 HTTP로만 붙는다.
+
+- 등록: 관리자가 연동 등록부에 client를 만든다. 정확한 HTTPS callback, resource `site:<id>`, 앱 목록에 보일 `home_url`을 넣는다. 앱은 `{issuer, client_id, resource, callback}` 파일 하나를 읽는다.
+- 로그인: 위 「앱 연결」의 code + S256 PKCE. `scope`는 resource 하나다. state와 verifier는 앱 서버 세션에 둔다.
+- 권한: 앱은 접근 토큰의 `aud`가 자기 resource인지, `iss`가 설정한 issuer인지 확인하고, 그 resource의 grant에서 앱 이름 capability만 읽는다. Harbor는 `harbor.view`·`harbor.operate`·`harbor.field`·`harbor.admin`이다. 앱 이름 capability가 없으면 로그인시키지 않고 refresh family를 회수한다.
+- 재확인: 최대 10초마다 `POST /api/fleet/auth/introspect`. `active`가 아니면 refresh로 회전을 시도하고, 실패하면 앱 세션을 끝낸다. 중앙에 닿지 않으면 마지막으로 확인한 토큰의 `exp`까지만 유지한다.
+- 로그아웃: 앱 로그아웃은 `POST /api/fleet/auth/revoke`로 family를 회수한다. 중앙 로그아웃·정지·권한 회수는 다음 재확인에서 앱 세션을 끝낸다.
+- 표시: `POST /api/fleet/auth/userinfo`의 `display_name`은 표시용이다. 권한 판단에 쓰지 않는다.
+- 앱 자체 로컬 로그인은 복구용으로 남길 수 있다. 서버 간 호출은 사람 세션이 아니라 named service 신원을 쓴다(D-807).
 
 ## 명시적인 초기 비밀번호 규칙 (2026-10-19)
 
