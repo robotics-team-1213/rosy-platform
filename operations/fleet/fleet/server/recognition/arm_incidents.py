@@ -17,8 +17,8 @@ from fastapi.responses import Response as RawResponse
 from pydantic import ValidationError
 
 from core_common.protocol.arm_incidents import (
-    ARM_INCIDENT_BODY_BYTES, ArmIncidentAccepted, ArmIncidentClear, ArmIncidentExplanation, ArmIncidentHold,
-    ArmIncidentReport)
+    ARM_INCIDENT_BODY_BYTES, ARM_INCIDENT_EVIDENCE_FRAMES, ARM_INCIDENT_FRAME_BYTES, ArmIncidentAccepted, ArmIncidentClear,
+    ArmIncidentEvidenceFrame, ArmIncidentExplanation, ArmIncidentHold, ArmIncidentReport)
 from fleet.server.camera_peer_routes import body as bounded_json
 from fleet.server.sqlite_policy import configure_connection, enable_wal
 
@@ -26,6 +26,15 @@ LISTED_MAX_AGE_S = 2.0  # backstop only; this store's own writes drop the shared
 SHOWN_CLEARED = 20  # cleared incidents stay in history; the snapshot shows this many per arm
 CONTROL = re.compile(r"[\x00-\x1f\x7f]")
 ROLES = ("top", "side")
+EVIDENCE_KEEP_S = 14 * 86400  # whole frames of a cleared incident; tip crops, labels and facts stay
+EVIDENCE_BODY_BYTES = ARM_INCIDENT_FRAME_BYTES * 4 // 3 + 4096
+
+
+def _holds(decision: str) -> bool:
+    try:
+        return json.loads(decision).get("hold") is not False
+    except (ValueError, AttributeError):
+        return True  # unreadable: hold, as before
 
 
 class ArmIncidentStore:
@@ -44,6 +53,15 @@ class ArmIncidentStore:
             self._db.execute(
                 "CREATE TABLE IF NOT EXISTS arm_incident_frames (incident_id TEXT NOT NULL, role TEXT NOT NULL, "
                 "sha256 TEXT NOT NULL, jpeg BLOB NOT NULL, PRIMARY KEY (incident_id, role))")
+            # the person's cause and its basis (cleared with them), and the frames of the seconds around the stop
+            have = {r[1] for r in self._db.execute("PRAGMA table_info(arm_incidents)")}
+            for column in ("true_cause", "label_basis"):
+                if column not in have:
+                    self._db.execute(f"ALTER TABLE arm_incidents ADD COLUMN {column} TEXT")
+            self._db.execute(
+                "CREATE TABLE IF NOT EXISTS arm_incident_evidence (incident_id TEXT NOT NULL, seq INTEGER NOT NULL, "
+                "camera TEXT NOT NULL, t_rel_s REAL NOT NULL, kind TEXT NOT NULL, sha256 TEXT NOT NULL, jpeg BLOB NOT NULL, "
+                "PRIMARY KEY (incident_id, seq), UNIQUE (incident_id, sha256))")
 
     def report(self, report: ArmIncidentReport) -> str:
         """Store one report; the same (source, session) again is the same incident and changes nothing."""
@@ -68,6 +86,9 @@ class ArmIncidentStore:
         with self._lock:
             rows = self._db.execute("SELECT incident_id, decision FROM arm_incidents WHERE source_id=? "
                                     "AND cleared_at IS NULL ORDER BY reported_at, rowid", (source_id,)).fetchall()
+        # a report whose decision does not hold (a guard stop the recovery handled, sent for a person's cause) waits for
+        # its label and never holds the arm; every report before 2026-11-08 held
+        rows = [r for r in rows if _holds(r[1])]
         if not rows:
             return ArmIncidentHold(held=False, incident_ids=[])
         try:
@@ -81,7 +102,7 @@ class ArmIncidentStore:
     def accepted(self, source_id, incident_id) -> ArmIncidentAccepted:
         return ArmIncidentAccepted(incident_id=incident_id, hold=self.hold(source_id))
 
-    def clear(self, source_id, incident_id, note, principal_id) -> None:
+    def clear(self, source_id, incident_id, note, principal_id, cause=None, basis=None) -> None:
         """KeyError: no such incident for this arm. ValueError: already cleared (the first record stands)."""
         with self._lock, self._db:
             self._listed.clear()
@@ -91,8 +112,46 @@ class ArmIncidentStore:
                 raise KeyError(incident_id)
             if row[0] is not None:
                 raise ValueError("already cleared")
-            self._db.execute("UPDATE arm_incidents SET cleared_by=?, cleared_at=?, clear_note=? WHERE incident_id=?",
-                             (principal_id, self._wall(), note, incident_id))
+            self._db.execute("UPDATE arm_incidents SET cleared_by=?, cleared_at=?, clear_note=?, true_cause=?, label_basis=? "
+                             "WHERE incident_id=?", (principal_id, self._wall(), note, cause, basis, incident_id))
+            self._expire()
+
+    def add_evidence(self, source_id, incident_id, frame: ArmIncidentEvidenceFrame) -> int:
+        """One frame of the seconds around the stop; the same frame again changes nothing. KeyError: no such incident for
+        this arm. OverflowError: the incident has ARM_INCIDENT_EVIDENCE_FRAMES already."""
+        with self._lock, self._db:
+            self._listed.clear()
+            if self._db.execute("SELECT 1 FROM arm_incidents WHERE incident_id=? AND source_id=?",
+                                (incident_id, source_id)).fetchone() is None:
+                raise KeyError(incident_id)
+            had = self._db.execute("SELECT seq FROM arm_incident_evidence WHERE incident_id=? AND sha256=?",
+                                   (incident_id, frame.sha256)).fetchone()
+            if had:
+                return had[0]
+            n = self._db.execute("SELECT count(*) FROM arm_incident_evidence WHERE incident_id=?", (incident_id,)).fetchone()[0]
+            if n >= ARM_INCIDENT_EVIDENCE_FRAMES:
+                raise OverflowError(incident_id)
+            self._db.execute("INSERT INTO arm_incident_evidence VALUES (?,?,?,?,?,?,?)",
+                             (incident_id, n, frame.camera, frame.t_rel_s, frame.kind, frame.sha256,
+                              base64.b64decode(frame.jpeg_b64)))
+            return n
+
+    def evidence_frame(self, source_id, incident_id, seq):
+        with self._lock:
+            row = self._db.execute(
+                "SELECT e.jpeg FROM arm_incident_evidence e JOIN arm_incidents i USING (incident_id) "
+                "WHERE i.source_id=? AND e.incident_id=? AND e.seq=?", (source_id, incident_id, seq)).fetchone()
+        return row[0] if row else None
+
+    def _expire(self) -> None:
+        """Whole frames of incidents cleared EVIDENCE_KEEP_S ago go; the jaw-tip crops, the label and the facts stay."""
+        self._db.execute("DELETE FROM arm_incident_evidence WHERE kind='full' AND incident_id IN "
+                         "(SELECT incident_id FROM arm_incidents WHERE cleared_at < ?)", (self._wall() - EVIDENCE_KEEP_S,))
+
+    def labelled(self, limit=200) -> list:
+        """For learning (the model PC's export): cleared incidents with a cause, newest first; frame list without bytes."""
+        with self._lock:
+            return [self._view(r, False) for r in self._rows("cleared_at IS NOT NULL AND true_cause IS NOT NULL", (), limit)]
 
     def explain(self, source_id, incident_id, explanation: ArmIncidentExplanation) -> None:
         """KeyError: no such incident. ValueError: already explained or cleared (the first explanation stands)."""
@@ -117,13 +176,13 @@ class ArmIncidentStore:
 
     def _rows(self, where, args, limit=None):
         query = ("SELECT incident_id, source_id, session_id, reported_at, facts, decision, recovery, seen, "
-                 "suspected_cause, model, explained_at, cleared_by, cleared_at, clear_note FROM arm_incidents "
+                 "suspected_cause, model, explained_at, cleared_by, cleared_at, clear_note, true_cause, label_basis FROM arm_incidents "
                  f"WHERE {where} ORDER BY reported_at DESC, rowid DESC" + (f" LIMIT {int(limit)}" if limit else ""))
         return self._db.execute(query, args).fetchall()
 
     def _view(self, row, with_bytes):
         (incident_id, source_id, session_id, reported_at, facts, decision, recovery, seen, cause, model, explained_at,
-         cleared_by, cleared_at, note) = row
+         cleared_by, cleared_at, note, true_cause, basis) = row
         # the list only needs each frame's size: never read the JPEG blob (up to 200 kB) for it
         frames = self._db.execute(f"SELECT role, sha256, {'jpeg' if with_bytes else 'length(jpeg)'} "
                                   "FROM arm_incident_frames WHERE incident_id=? ORDER BY role DESC",
@@ -135,9 +194,13 @@ class ArmIncidentStore:
                "explanation": None if explained_at is None else {
                    "seen": seen, "suspected_cause": cause, "model": model, "explained_at": explained_at,
                    "note": "explanation only; it does not decide or move anything"},
-               "cleared": None if cleared_at is None else {"by": cleared_by, "at": cleared_at, "note": note}}
+               "cleared": None if cleared_at is None else {"by": cleared_by, "at": cleared_at, "note": note,
+                                                           "cause": true_cause, "basis": basis}}
         out["frames"] = [({"role": r, "sha256": h, "jpeg_b64": base64.b64encode(j).decode()} if with_bytes
                           else {"role": r, "sha256": h, "bytes": j}) for r, h, j in frames]
+        out["evidence"] = [{"seq": s, "camera": c, "t_rel_s": t, "kind": k, "sha256": h, "bytes": n} for s, c, t, k, h, n in
+                           self._db.execute("SELECT seq, camera, t_rel_s, kind, sha256, length(jpeg) FROM arm_incident_evidence "
+                                            "WHERE incident_id=? ORDER BY kind DESC, camera, t_rel_s", (incident_id,))]
         return out
 
     def unexplained(self, limit=8) -> list:
@@ -207,12 +270,41 @@ def install_arm_incident_routes(app, *, service, store, require_viewer, require_
         except ValidationError:
             raise HTTPException(422, detail={"code": "INVALID_ARM_INCIDENT_CLEAR"}) from None
         try:
-            await asyncio.to_thread(store.clear, source_id, incident_id, note.note, principal.principal_id)
+            await asyncio.to_thread(store.clear, source_id, incident_id, note.note, principal.principal_id, note.cause, note.basis)
         except KeyError:
             raise HTTPException(404, detail={"code": "ARM_INCIDENT_UNKNOWN"}) from None
         except ValueError:
             raise HTTPException(409, detail={"code": "ARM_INCIDENT_ALREADY_CLEARED"}) from None
         return (await asyncio.to_thread(store.hold, source_id)).model_dump()
+
+    @app.post(base + "/arms/{source_id}/incidents/{incident_id}/evidence", tags=["workcell-observations"])
+    async def evidence(source_id: str, incident_id: str, request: Request, response: Response,
+                       token: str | None = Header(None, alias="X-Workcell-Observation-Token")):
+        response.headers["Cache-Control"] = "no-store"
+        source(source_id, token)
+        data = bytearray()
+        async for chunk in request.stream():
+            if len(data) + len(chunk) > EVIDENCE_BODY_BYTES:
+                raise HTTPException(413, detail={"code": "WORKCELL_OBSERVATION_TOO_LARGE"})
+            data.extend(chunk)
+        try:
+            parsed = ArmIncidentEvidenceFrame.model_validate_json(data)
+        except ValidationError:
+            raise HTTPException(422, detail={"code": "INVALID_ARM_INCIDENT_EVIDENCE"}) from None
+        try:
+            seq = await asyncio.to_thread(store.add_evidence, source_id, incident_id, parsed)
+        except KeyError:
+            raise HTTPException(404, detail={"code": "ARM_INCIDENT_UNKNOWN"}) from None
+        except OverflowError:
+            raise HTTPException(409, detail={"code": "ARM_INCIDENT_EVIDENCE_FULL"}) from None
+        return {"incident_id": incident_id, "seq": seq}
+
+    @app.get(base + "/arms/{source_id}/incidents/{incident_id}/evidence/{seq}", tags=["workcell-observations"])
+    def evidence_frame(source_id: str, incident_id: str, seq: int, _principal=Depends(require_viewer)):
+        jpeg = store.evidence_frame(source_id, incident_id, seq)
+        if jpeg is None:
+            raise HTTPException(404, detail={"code": "ARM_INCIDENT_FRAME_UNKNOWN"})
+        return RawResponse(jpeg, media_type="image/jpeg", headers={"Cache-Control": "no-store"})
 
     @app.get(base + "/arms/{source_id}/incidents/{incident_id}/frames/{role}", tags=["workcell-observations"])
     def frame(source_id: str, incident_id: str, role: str, _principal=Depends(require_viewer)):
@@ -233,6 +325,12 @@ def install_arm_incident_routes(app, *, service, store, require_viewer, require_
     def unexplained(response: Response, _principal=Depends(require_ai_observer)):
         response.headers["Cache-Control"] = "no-store"
         return {"incidents": store.unexplained()}
+
+    @app.get(base + "/arm-incidents/labelled", tags=["workcell-observations"])
+    def labelled(response: Response, _principal=Depends(require_ai_observer)):
+        # learning reads what people cleared with a cause; the model PC pulls it through the same observer seat (D-516)
+        response.headers["Cache-Control"] = "no-store"
+        return {"incidents": store.labelled()}
 
     @app.post(base + "/arms/{source_id}/incidents/{incident_id}/explanation", tags=["workcell-observations"])
     async def explanation(source_id: str, incident_id: str, request: Request, response: Response,

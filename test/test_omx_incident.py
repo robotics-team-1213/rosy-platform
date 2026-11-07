@@ -350,3 +350,60 @@ def test_hold_consumers_read_the_hold_where_the_incident_pipeline_writes_it(tmp_
     assert cell_upkeep.check_hold("arm_b")["status"] == "ok"
     z = cell_zones.Zones({"zone_side": "left", "zone_peer": "arm_a", "zone_map_site": "pallet"}, {})
     assert z.incidents is None and z._peer_held()
+
+
+STOP = {"command": "run descend_pick", "ok": False, "contact": True, "t": 101.5,
+        "error": "contact in descend_pick: a joint lagged the command by 1.6 units"}
+
+
+class Labels(Link):
+    """Fleet for a report that does not hold: accepted, the arm stays free; evidence frames are taken one by one."""
+
+    def __init__(self):
+        super().__init__()
+        self.evidence = []
+
+    def post(self, report):
+        if self.down:
+            raise OSError("Fleet unreachable")
+        self.posted.append(report)
+        return Accepted(incident_id="a" * 32, hold=hold(False))
+
+    def post_evidence(self, incident_id, frame):
+        self.evidence.append((incident_id, frame.camera, frame.kind, frame.t_rel_s))
+
+
+def stop_bundle(tmp_path):
+    bundle = tmp_path / "incidents" / "evidence" / "20261108T000000000000Z-arm_b-stop"
+    bundle.mkdir(parents=True)
+    listed = [{"file": "top-tip.jpg"}, {"file": "top--4.0.jpg", "camera": "top", "t_rel_s": -4.0},
+              {"file": "top--2.0.jpg", "camera": "top", "t_rel_s": -2.0}, {"file": "side-+1.0.jpg", "camera": "side", "t_rel_s": 1.0}]
+    for entry in listed:
+        (bundle / entry["file"]).write_bytes(b"\xff\xd8" + entry["file"].encode())
+    (bundle / "manifest.json").write_text(json.dumps({"files": listed}))
+
+
+def test_a_guard_stop_the_recovery_handled_is_reported_for_its_cause_with_its_evidence_and_holds_nothing(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    stop_bundle(tmp_path)
+    link = Labels()
+    out = oi.handle(session(tmp_path, latched=False, windup=False, status=[STOP]), "arm_b", link=link)
+    assert out["incident"] and out["decision"]["hold"] is False and out["reported"]
+    [report] = link.posted
+    assert report.decision["hold"] is False and report.facts["stops"][0]["error"].startswith("contact in descend_pick")
+    # the jaw tip first, then whole frames from 3 s before the stop on
+    assert link.evidence == [("a" * 32, "top", "tip", 0.0), ("a" * 32, "top", "full", -2.0), ("a" * 32, "side", "full", 1.0)]
+    assert oi.held("arm_b") is None and not oi.outbox("arm_b") and not oi.label_box("arm_b")
+    oi.refuse_if_held("arm_b", link)  # nothing holds the arm
+
+
+def test_an_unsent_label_report_never_blocks_a_start_and_goes_when_fleet_answers(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    link = Labels()
+    link.down = True
+    out = oi.handle(session(tmp_path, latched=False, windup=False, status=[STOP]), "arm_b", link=link)
+    assert not out["reported"] and len(oi.label_box("arm_b")) == 1 and oi.held("arm_b") is None and not oi.outbox("arm_b")
+    oi.refuse_if_held("arm_b", link)  # Fleet unreachable and a label unsent: the session still starts
+    link.down = False
+    oi.refuse_if_held("arm_b", link)
+    assert not oi.label_box("arm_b") and len(link.posted) == 1

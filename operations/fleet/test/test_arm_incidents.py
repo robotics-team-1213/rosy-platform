@@ -113,7 +113,8 @@ def test_store_is_idempotent_per_session_and_keeps_the_open_explained_cleared_st
     with pytest.raises(ValueError):
         store.clear("arm_b", first, "again", "op-8")
     states = {i["incident_id"]: i for i in store.snapshot("arm_b")}
-    assert states[first]["state"] == "cleared" and states[first]["cleared"] == {"by": "op-7", "at": 20.0, "note": "box removed"}
+    assert states[first]["state"] == "cleared" and states[first]["cleared"] == {"by": "op-7", "at": 20.0, "note": "box removed",
+                                                                                "cause": None, "basis": None}
     assert states[first]["explanation"]["seen"] == "A box in the jaws." and states[other]["state"] == "open"
     assert all("jpeg_b64" not in f for i in states.values() for f in i["frames"])  # no bytes in the console list
     assert store.hold("arm_b").incident_ids == [other]
@@ -272,3 +273,94 @@ def test_incident_store_work_never_runs_on_the_event_loop(client, monkeypatch):
     reply = client.post(f"{PATH}/arms/arm_b/incidents/{second}/explanation", json={"seen": "A box in the jaws.", "suspected_cause": "Overload.", "model": "m:1"},
                         headers=bearer("ai-token"))
     assert reply.status_code == 200 and on_loop == []
+
+
+def evidence(tag=b"tip", camera="top", t=-1.0, kind="tip"):
+    data = b"\xff\xd8" + tag * 10 + b"\xff\xd9"
+    return {"camera": camera, "t_rel_s": t, "kind": kind, "sha256": hashlib.sha256(data).hexdigest(),
+            "jpeg_b64": base64.b64encode(data).decode()}
+
+
+def test_a_cleared_cause_and_its_basis_are_kept_and_listed_for_learning(client):
+    incident_id = post(client).json()["incident_id"]
+    url, operator = f"{PATH}/arms/arm_b/incidents/{incident_id}/clear", bearer("operator-token")
+    for bad in ({"note": "x", "cause": "ghost"}, {"note": "x", "basis": "hunch"}):
+        assert client.post(url, json=bad, headers=operator).status_code == 422
+    assert client.get(f"{PATH}/arm-incidents/labelled", headers=bearer("ai-token")).json() == {"incidents": []}
+    assert client.post(url, json={"note": "slower retry stopped at the same place", "cause": "blocked", "basis": "repeat"},
+                       headers=operator).status_code == 200
+    [row] = client.get(f"{PATH}/arm-incidents/labelled", headers=bearer("ai-token")).json()["incidents"]
+    assert row["cleared"]["cause"] == "blocked" and row["cleared"]["basis"] == "repeat" and row["facts"]["folded"] is True
+    for headers in (bearer("viewer-token"), bearer("operator-token"), SOURCE):
+        assert client.get(f"{PATH}/arm-incidents/labelled", headers=headers).status_code in (401, 403)
+
+
+def test_the_seconds_around_a_stop_arrive_frame_by_frame_from_the_arm_only(client, monkeypatch):
+    import fleet.server.arm_incidents as module
+    incident_id = post(client).json()["incident_id"]
+    url = f"{PATH}/arms/arm_b/incidents/{incident_id}/evidence"
+    first = client.post(url, json=evidence(), headers=SOURCE)
+    assert first.status_code == 200 and first.json()["seq"] == 0
+    assert client.post(url, json=evidence(), headers=SOURCE).json()["seq"] == 0  # the same frame again changes nothing
+    for headers in ({}, {"X-Workcell-Observation-Token": "arm-a-secret"}, bearer("operator-token")):
+        assert client.post(url, json=evidence(b"x"), headers=headers).status_code == 401, headers
+    assert client.post(f"{PATH}/arms/arm_b/incidents/{'f' * 32}/evidence", json=evidence(b"y"), headers=SOURCE).status_code == 404
+    assert client.post(url, json={**evidence(b"z"), "kind": "video"}, headers=SOURCE).status_code == 422
+    assert client.post(url, json={**evidence(b"z"), "sha256": "0" * 64}, headers=SOURCE).status_code == 422
+    assert client.post(url, content=b"{" + b" " * 300_000 + b"}", headers=SOURCE).status_code == 413
+    monkeypatch.setattr(module, "ARM_INCIDENT_EVIDENCE_FRAMES", 2)
+    assert client.post(url, json=evidence(b"a", "side", 0.5, "full"), headers=SOURCE).json()["seq"] == 1
+    assert client.post(url, json=evidence(b"b"), headers=SOURCE).status_code == 409  # the incident's frames are full
+    [row] = [a for a in client.get(PATH, headers=bearer("viewer-token")).json()["workcells"][0]["arms"]
+             if a["source_id"] == "arm_b"][0]["incidents"]
+    assert [(e["camera"], e["kind"], e["t_rel_s"]) for e in row["evidence"]] == [("top", "tip", -1.0), ("side", "full", 0.5)]
+    assert "jpeg_b64" not in row["evidence"][0]  # the console list carries no bytes
+    image = client.get(f"{url}/1", headers=bearer("viewer-token"))
+    assert image.status_code == 200 and image.content.startswith(b"\xff\xd8") and image.headers["Cache-Control"] == "no-store"
+    assert client.get(f"{url}/9", headers=bearer("viewer-token")).status_code == 404
+    assert client.get(f"{PATH}/arms/arm_a/incidents/{incident_id}/evidence/1", headers=bearer("viewer-token")).status_code == 404
+
+
+def test_whole_frames_expire_two_weeks_after_clearing_and_the_crops_and_label_stay():
+    from core_common.protocol.arm_incidents import ArmIncidentEvidenceFrame
+    clock = [10.0]
+    store = ArmIncidentStore(wall=lambda: clock[0])
+    old = store.report(ArmIncidentReport.model_validate(report()))
+    for tag, kind in ((b"t", "tip"), (b"f", "full")):
+        store.add_evidence("arm_b", old, ArmIncidentEvidenceFrame.model_validate(evidence(tag, kind=kind)))
+    store.clear("arm_b", old, "checked", "op-7", "blocked", "measured")
+    clock[0] += 15 * 86400
+    new = store.report(ArmIncidentReport.model_validate(report(session="7f1c2a3e-1b2d-4e5f-8a9b-0c1d2e3f4a5b")))
+    store.clear("arm_b", new, "checked", "op-7")  # any later clear expires what is due
+    [labelled] = store.labelled()
+    assert labelled["incident_id"] == old and [e["kind"] for e in labelled["evidence"]] == ["tip"]
+    assert labelled["cleared"]["cause"] == "blocked"
+
+
+def test_an_older_ledger_gains_the_label_columns_and_keeps_its_incidents(tmp_path):
+    import sqlite3
+    path = tmp_path / "old.sqlite3"
+    db = sqlite3.connect(path)
+    db.execute("CREATE TABLE arm_incidents (incident_id TEXT PRIMARY KEY, source_id TEXT NOT NULL, session_id TEXT NOT NULL, "
+               "reported_at REAL NOT NULL, facts TEXT NOT NULL, decision TEXT NOT NULL, recovery TEXT, seen TEXT, "
+               "suspected_cause TEXT, model TEXT, explained_at REAL, cleared_by TEXT, cleared_at REAL, clear_note TEXT, "
+               "UNIQUE (source_id, session_id))")
+    db.execute("INSERT INTO arm_incidents (incident_id, source_id, session_id, reported_at, facts, decision) "
+               "VALUES (?,?,?,?,?,?)", ("a" * 32, "arm_b", SESSION, 1.0, "{}", '{"reason": "old"}'))
+    db.commit()
+    db.close()
+    store = ArmIncidentStore(path)
+    assert store.hold("arm_b").incident_ids == ["a" * 32]
+    store.clear("arm_b", "a" * 32, "checked", "op-7", "unknown", "seen")
+    assert store.snapshot("arm_b")[0]["cleared"]["basis"] == "seen"
+
+
+def test_a_report_that_does_not_hold_waits_for_its_cause_and_leaves_the_arm_free(client):
+    label = post(client, report(decision={"hold": False, "reason": "guard stop: contact in descend_pick; not held"}))
+    assert label.status_code == 200 and label.json()["hold"]["held"] is False
+    assert client.get(f"{PATH}/arms/arm_b/hold", headers=SOURCE).json()["held"] is False
+    held = post(client, report(session="7f1c2a3e-1b2d-4e5f-8a9b-0c1d2e3f4a5b")).json()
+    assert held["hold"]["incident_ids"] == [held["incident_id"]]  # only the holding report holds
+    rows = [a for a in client.get(PATH, headers=bearer("viewer-token")).json()["workcells"][0]["arms"]
+            if a["source_id"] == "arm_b"][0]["incidents"]
+    assert {r["incident_id"] for r in rows if r["state"] == "open"} == {label.json()["incident_id"], held["incident_id"]}
