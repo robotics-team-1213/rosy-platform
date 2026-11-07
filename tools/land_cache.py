@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import subprocess
 import sys
@@ -177,6 +178,35 @@ def _delta_paths(wt: Path, base: str, head: str, python: str, select) -> list[st
     return None if None in picked else [p for paths in picked for p in paths]
 
 
+def reach(wt: Path, base: str, head: str, python: str = sys.executable) -> list[str] | None:
+    """D-970 3: test paths base..head reaches (the D-436 selection plus the browser files test/browser_scope.py maps);
+    None when reuse across that range is unsound (not an ancestor, a delete or rename, a known-failure list changed,
+    a FULL selection, anything unreadable). The explicit FULL witness and publish_evidence use only this strict rule,
+    publish recomputing it in its fresh checkout of the candidate."""
+    if _git(wt, "merge-base", "--is-ancestor", base, head).returncode != 0:
+        return None
+    status = _git(wt, "diff", "--name-status", "--no-renames", base, head)
+    rows = [row.split("\t") for row in status.stdout.splitlines() if row]
+    if status.returncode or any(r[0] not in ("M", "A") or r[-1] in LISTS for r in rows):
+        return None
+    run = subprocess.run([python, "tools/harness/rosy_harness.py", "affected", "--base", base, "--head", head, "--json"],
+                         cwd=wt, capture_output=True, text=True, encoding="utf-8", errors="replace",
+                         env={**os.environ, "PYTHONUTF8": "1"})
+    try:
+        sel = json.loads(run.stdout) if run.returncode == 0 else None
+        if not sel or sel["mode"] == "full":
+            return None
+        picked = [_paths(inv) for inv in sel["invocations"]]
+        if str(wt / "test") not in sys.path:
+            sys.path.insert(0, str(wt / "test"))
+        import browser_scope  # noqa: PLC0415 - the tree's own registry
+        browsers = list(browser_scope.targets([r[-1] for r in rows]))
+    except (ValueError, KeyError, TypeError, ImportError) as exc:
+        print(f"[cache] no reuse across {base[:10]}..{head[:10]}: {exc!r}")
+        return None
+    return None if None in picked else [p for paths in picked for p in paths] + browsers
+
+
 def _landed_full(wt: Path, base: str, head: str, python: str, select) -> list[list[str]] | None:
     """D-889 17: base..head is FULL only through commits main already landed with their own FULL tier, so it touches
     their mapped suites (the turn's rule, land_selection) plus what each of this branch's new commits selects.
@@ -225,11 +255,13 @@ def split(wt: Path, args, invocations: list[list[str]], head: str, python: str, 
             reused.append(f"pytest {' '.join(inv)} reused: passed on this tree {tree[:10]} (env {env})")
         else:
             todo.append(inv)
-    if todo and args.tests == "auto" and (wt / "tools/harness/affected_tests.py").is_file():
+    if todo and args.tests in ("auto", "full") and (wt / "tools/harness/affected_tests.py").is_file():
         wanted = {tuple(inv) for inv in todo if not affected_exclusive.dedicated(inv)}
         commits = list(dict.fromkeys(e["commit"] for e in reversed(known) if tuple(e["argv"]) in wanted))
         for commit in commits[:NARROW_COMMITS]:
-            delta = _delta_paths(wt, commit, head, python, select)
+            # explicit FULL: only the strict rule publish_evidence recomputes, never the landed-FULL extension
+            delta = (reach(wt, commit, head, python) if args.tests == "full"
+                     else _delta_paths(wt, commit, head, python, select))
             if delta is None:
                 continue
             passed = {tuple(e["argv"]) for e in known if e["commit"] == commit}
