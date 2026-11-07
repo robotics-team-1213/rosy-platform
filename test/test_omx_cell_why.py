@@ -20,7 +20,10 @@ def lift(present_speed, sent_speed=3.0, seconds=1.45, droop=0.54):
 
 
 def answers(hypothesis="too_fast", missing=("frames at the stop",)):
-    return lambda prompt, images, schema: {"hypothesis": hypothesis, "reason": "seen", "missing": list(missing)}
+    def ask(prompt, images, schema):
+        assert list(schema["properties"])[0] == "seen"  # what is shown comes before the pick
+        return {"seen": "arm folded", "hypothesis": hypothesis, "reason": "seen", "missing": list(missing)}
+    return ask
 
 
 @pytest.mark.parametrize("sent, present", [(3.52, 1.71), (1.98, 1.25), (2.07, 1.14)])
@@ -58,8 +61,13 @@ def test_the_model_cannot_overrule_the_measurement_and_a_disagreement_stays_open
 def test_where_the_measurement_cannot_tell_the_model_may(tmp_path):
     row = w.explain("misaligned", "stopped: misaligned", [], ["img"], answers("wrong_position"), tmp_path / "why.jsonl")
     assert row["hypothesis"] == "wrong_position" and row["by"] == "model" and not row["repeat_unknown"]
-    moving = w.explain("lift_stall", "x at run lift_pick", lift(1.5), [], answers("snagged"), tmp_path / "why.jsonl")
-    assert moving["hypothesis"] == "snagged" and moving["by"] == "model"  # recovery follows only by == measurement
+
+@pytest.mark.parametrize("said", sorted(w.ARM_CAUSES))
+def test_why_an_arm_stopped_is_the_measurements_and_a_models_guess_stays_advice(tmp_path, said):
+    """11-07: no model told contact from speed or a snag in 13 recorded failures; each guessed differently."""
+    moving = w.explain("lift_stall", "x at run lift_pick", lift(1.5), [], answers(said), tmp_path / "why.jsonl")
+    assert (moving["hypothesis"], moving["by"], moving["model"]["hypothesis"]) == ("unknown", "nobody", said)
+    assert w.open_questions(tmp_path / "why.jsonl")["lift_stall"]["missing"] == ["frames at the stop"]
 
 
 def test_no_model_or_a_bad_answer_leaves_the_measurement_or_unknown(tmp_path):

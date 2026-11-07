@@ -7,8 +7,10 @@ fast: the descents the work record calls real contact keep moving too (0.20-0.75
 Measurement reads first and says only what it can: a joint that nearly stood still under a moving command was blocked; one that
 kept moving is undetermined. On the arm that reading orders the recovery, goes into the incident report (omx_incident) and so to the AI PC's
 explanation in Fleet (D-971); the control PC calls no model. Off the arm (this CLI, on a host with the model) the model sees the
-same facts, the frames and past rows of the kind, picks among HYPOTHESES and says which evidence is missing. Its answer is text:
-it cannot overrule the measurement (a disagreement stays an open question) and chooses no action. A kind that stays unknown
+same facts, the frames and past rows of the kind, says what they show, picks among HYPOTHESES and says which evidence is missing.
+Its answer is text: it cannot overrule the measurement (a disagreement stays an open question) and chooses no action. Two
+stages: which kind of stop it was comes from the result's text (cell_diagnose); why an arm stopped (ARM_CAUSES) only from the
+measurement, so a model's arm cause is kept as advice and the row stays unknown. A kind that stays unknown
 twice stops the retries: `repeat_unknown` hands it to a person.
 
   cell_why.py --kind lift_stall --at lift_pick --trace trace-arm_b-X.jsonl --out why.jsonl [--images a.jpg ...] [--url U --model M]
@@ -30,15 +32,20 @@ WINDOW_S, MIN_SPEED, BLOCKED_RATIO, MIN_RISE = 0.5, 0.3, 0.25, 0.3
 # Real pair: 2026-11-06 23:09 -> 23:27, start 0.2 apart, 3.52 -> 2.11 units/s, stop 1.2 apart, a contact by the side view. No opposite pair yet.
 SAME_START, SAME_STOP, SLOWER = 1.0, 2.0, 0.85
 HYPOTHESES = {
-    "too_fast": "the joint kept moving but slower than commanded: the command outran it. Check: the same move slower",
+    # not "kept moving but slower": that hands the answer to every moving-joint stop, contact included (11-07 comparison)
+    "too_fast": "the command outran the joint; nothing was in the way. Check: the same move slower",
     "blocked": "the joint stood still under a moving command: something holds the arm or what it carries. Check: frames at the stop; move the thing clear",
     "snagged": "the held box or a finger caught a neighbour or a rim: the load rose only once it moved. Check: side and wrist frames; a neighbour moved",
     "wrong_position": "the arm came down beside where the box really is. Check: top view against the plan, jaw marks",
     "camera_or_map": "the view or the map was wrong, not the arm. Check: a fresh view, the map's error here",
     "unknown": "none of these fits what is shown: name the evidence that would tell",
 }
-SCHEMA = {"type": "object", "required": ["hypothesis", "reason", "missing"],
-          "properties": {"hypothesis": {"type": "string", "enum": list(HYPOTHESES)}, "reason": {"type": "string"},
+# Why an arm stopped is the measurement's: in 13 recorded failures no model told contact from speed or a snag, from frames
+# after the stop or from the trace, and each guessed differently. Its pick of these stays advice; the row says unknown.
+ARM_CAUSES = {"too_fast", "blocked", "snagged"}
+# what is shown before the pick: an answer that has to name its evidence first guesses less (seen is the first property)
+SCHEMA = {"type": "object", "required": ["seen", "hypothesis", "reason", "missing"],
+          "properties": {"seen": {"type": "string"}, "hypothesis": {"type": "string", "enum": list(HYPOTHESES)}, "reason": {"type": "string"},
                          "missing": {"type": "array", "items": {"type": "string"}}}}
 
 
@@ -114,20 +121,23 @@ def explain(kind: str, result: str, trace: list, images: list, backend, path: Pa
     if backend is not None:
         prompt = (f"A robot arm's attempt failed: {result!r} (kind {kind}). Measured from its 30 Hz trace: {json.dumps(motion)}. Past results "
                   f"of this kind: {json.dumps([{k: r.get(k) for k in ('hypothesis', 'missing')} for r in past[-5:]])}. Images, if any, are "
-                  f"the cameras at or after the stop. Which explains it best? {json.dumps(HYPOTHESES)} Say what evidence is missing to be sure.")
+                  f"the cameras at or after the stop. First say what the record and images show. Then which explains it best? "
+                  f"{json.dumps(HYPOTHESES)} Frames after a stop rarely show contact: without a frame at the moment or a repeat, "
+                  "choose unknown over too_fast, blocked or snagged. Say what evidence is missing to be sure.")
         try:
             answer = backend(prompt, images, SCHEMA)
             if answer.get("hypothesis") not in HYPOTHESES:
                 raise ValueError(f"answered {answer.get('hypothesis')!r}")
-            row["model"] = {"hypothesis": answer["hypothesis"], "reason": str(answer.get("reason", ""))[:400]}
+            row["model"] = {"hypothesis": answer["hypothesis"], "reason": str(answer.get("reason", ""))[:400], "seen": str(answer.get("seen", ""))[:400]}
             row["missing"] = [str(m)[:160] for m in answer.get("missing", [])][:6]
         except Exception as exc:  # the model is advice: without it the measurement stands
             row["model"] = {"hypothesis": None, "reason": f"model unavailable: {str(exc)[:120]}"}
-    picked = (row["model"] or {}).get("hypothesis")
+    said = (row["model"] or {}).get("hypothesis")
+    picked = None if said in ARM_CAUSES else said  # an arm cause stays advice in row["model"]
     measured = motion["verdict"] if motion["verdict"] != "undetermined" else None
     row["hypothesis"] = measured or picked or "unknown"
     row["by"] = "measurement" if measured else ("model" if picked and picked != "unknown" else "nobody")
-    row["disagree"] = bool(measured and picked and picked not in (measured, "unknown"))
+    row["disagree"] = bool(measured and said and said not in (measured, "unknown"))
     row["repeat_unknown"] = row["hypothesis"] == "unknown" and any(r.get("hypothesis") == "unknown" and r["t"] >= since for r in past)
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a") as f:
