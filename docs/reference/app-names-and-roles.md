@@ -30,7 +30,6 @@ ROSY 제품 앱이 아닌 외부 업무 앱은 플랫폼 Python·DB·ROS를 쓰�
 |---|---|
 | **Cell** (기존 공정 앱 명칭 Rosy Cell) | **Fleet의 팔레타이징 작업 준비**. `/console/cell`, 제목 `Rosy Fleet — Cell`. 레시피·작업대 설정 → 계획 미리보기 → 작업 제안. 별도 승인·진행은 Fleet이 소유 |
 | **Studio** | Learning 안의 검수 작업대. Learning 전체 앱 이름으로 쓰지 않음 |
-| **Account** | 공용 로그인·계정·권한 기능. Fleet 계정 관리는 `Rosy Fleet — 계정 관리`, Learning 계정 화면은 `Rosy Learning — 계정과 외부 자료` |
 | **Pilot 연결 로비** | Android에서 신뢰된 대상 발견·접속을 제공하는 Pilot 하위 화면 |
 | **로봇 얼굴 LCD** | Robot의 상태 표시 표면. 별도 Rosy Face 앱을 만들지 않음 |
 | **오프라인 검수 페이지** | Learning의 엣지·영상 라벨 검수 산출물. 별도 검수 앱으로 등록하지 않음 |
@@ -58,6 +57,7 @@ Workcell은 좌표·설비·접근·공유 자원을 가진 작업 공간이다.
 | **World** | 관측·odom 등으로 현재 세계 상태·자세를 제공 |
 | **Decision** | 규칙·정책·판단 후보를 다루는 영역. 독립 앱명 아님 |
 | **Dock / Signal / Signal Observer** | 충전·교통 신호 장치와 관측 서비스. 독립 사용자 앱으로 세지 않음 |
+| **Account** | 공용 로그인·계정·권한을 맡는 별도 서비스(D-962). `operations/account`에 있다. 화면 이름은 Fleet 계정 관리 `Rosy Fleet — 계정 관리`, Learning 계정 화면 `Rosy Learning — 계정과 외부 자료` |
 | **Media** | 영상 세션 권한·시청 요청·미디어 프로세스를 관리하는 별도 서비스. `operations/site_ui/media`에 있으며 Fleet이 설치·제공하는 화면이 아님 |
 | **Site App Gateway** | `applications/fleet/gateway`의 프로세스 조립 코드. 휠 `rosy-app-gateway`, 명령 `rosy-site-gateway`. Fleet 서버나 Fleet 화면과 구분 |
 | **device-core** | 은퇴한 rosy-vault 저장소가 제공하던 Rosy Device 콘솔·기기 API의 서비스 코드 이름(2026-10-24 은퇴). 로봇 CORE와는 다른 것이었다 |

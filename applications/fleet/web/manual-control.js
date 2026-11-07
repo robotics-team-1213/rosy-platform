@@ -119,6 +119,7 @@ export function createManualControl({scope, view, call, namedReason, confirmedAc
     cancelTimeout?.(); cancelTimeout = null;
     const owner = active;
     active = null;
+    if (view.manualDriveRobot === owner?.robotId) view.manualDriveRobot = null;
     if (!owner) return;
     owner.button.setAttribute("aria-pressed", "false");
     ticker.stop(owner);
@@ -142,6 +143,7 @@ export function createManualControl({scope, view, call, namedReason, confirmedAc
     if (active || blocked()) return;
     failure = ""; notice = "";
     active = {...command, robotId: view.focusRobot, generation: view.dispatchControl.generation};
+    view.manualDriveRobot = active.robotId;  // motion-source.js: this console is the driver
     command.button.setAttribute("aria-pressed", "true");
     if (event.pointerId != null) {
       try { command.button.setPointerCapture(event.pointerId); } catch (_error) { /* Window release also stops. */ }

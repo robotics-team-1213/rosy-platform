@@ -86,6 +86,7 @@ D-808: Vault 조회는 `vault.read`, 작업·대기열·응답·정지는 `vault
 site 자원에만 부여하며 서로 상속하지 않는다. Fleet 권한·기존 role·`accounts.manage`로
 대신할 수 없다. 기존 계정과 bootstrap에 자동 추가하지 않고, 계정 관리 API/UI에서 명시적으로
 부여한다. Vault는 독립 HTTP 클라이언트이며 이 grant 지원은 Vault 배포·현장 수용의 증거가 아니다.
+Vault는 2026-10-24 은퇴했다. 저장된 grant의 처리와 이 권한의 제거는 원장을 확인한 뒤 별도로 정한다(D-987).
 
 ## 중앙 계정 관리
 

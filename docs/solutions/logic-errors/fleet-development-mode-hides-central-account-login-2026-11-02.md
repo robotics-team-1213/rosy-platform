@@ -1,5 +1,6 @@
 ---
 module: applications/fleet/web/shared/password-login.js
+modules: [account]
 date: 2026-11-02
 last_updated: 2026-11-02
 problem_type: ui_bug

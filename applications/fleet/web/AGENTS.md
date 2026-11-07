@@ -42,7 +42,7 @@ Source-move verification is recorded in [progress.md](progress.md), [logs.md](lo
 | `shared/map-fit.js`, `map-fit-view.js` | D-375 lane-paint map fit proposal (pure math / view) |
 | `shared/field-warp.js` | Shared `warpImage` read (D-518). The install proposal screen stays in `field-view.js` |
 | `enrollment.js`, `camera-pairing.js` | Robot enrollment (D-361) and camera pairing approval (D-341) panels |
-| `shared/address-drift.js`, `state-age.js`, `localization-badge.js`, `shared/poll-gate.js`, `shared/authorization.js` | Pure helpers: address drift text, queue state staleness (D-493), localization badge, 404 poll gate, role-lock reasons |
+| `shared/address-drift.js`, `state-age.js`, `motion-source.js`, `localization-badge.js`, `shared/poll-gate.js`, `shared/authorization.js` | Pure helpers: address drift text, queue state staleness (D-493), motion source (who or what moves the robot; `확인 불가` when no fact proves it), localization badge, 404 poll gate, role-lock reasons |
 | `login.html`, `shared/login-page.js`, `shared/login-return.js`, `shared/password-login.js`, `shared/password-login.css` | D-683 우측 로그인/계정과 전용 로그인 문서. D-962의 Account 인증과 Fleet receiver 세션을 사용하며 허용된 Fleet 업무 주소로만 복귀한다. 지도/Cell은 새 탭 로그인으로 입력을 보존한다. 로그아웃은 세션 부재를 확인하며 Bearer 해제는 서버 폐기가 아니다. 개발 연결도 사람 로그인이 필요하다. |
 | `shared/fleet-header.js`, `shared/fleet-header.css` | D-540 2 / D-741 3 공통 앱 바 — 네 문서가 같은 `<ui-topbar>` 마크업(`test_fleet_header.py`가 글자 그대로 고정)을 쓰고 연결 글(`실시간`·`지연`·`연결 끊김`)·시계·알림 수·계정 단추의 역할 글·개발 배지·계정 칸 접힘·비상 정지 규칙(401이면 `접속이 필요합니다`, 보기 전용이면 운영자 사유, 모름은 눌림)을 이 모듈 하나로 그린다. 한 줄이고 셸 칸(`.fleet-shell`)의 폭으로 접힌다. 로봇 연결 수는 관제 문서의 지도 머리에 있다. 문서 시트는 머리를 칠하지 않는다 |
 | `package.json` | `{"type": "module"}` so node can run the tests |
