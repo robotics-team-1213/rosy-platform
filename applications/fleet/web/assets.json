@@ -290,6 +290,10 @@
       "path": "motion-source.js",
       "media_type": "application/javascript"
     },
+    "planning-stall.js": {
+      "path": "planning-stall.js",
+      "media_type": "application/javascript"
+    },
     "motion-readiness.js": {
       "path": "motion-readiness.js",
       "media_type": "application/javascript"

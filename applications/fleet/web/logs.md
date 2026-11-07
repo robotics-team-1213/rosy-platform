@@ -1159,3 +1159,8 @@
 - 변경: 칸 상태 `unknown`은 "확인 불가 · 비어 있다고 볼 수 없음", 이유 `bay_unknown` 문구 추가.
 - 증거: node `charge-bays-view` 단언 추가, 원격 실행 기록 참조.
 - gate 변화: 없음.
+
+## 2026-11-08 · uncommitted · fix(fleet-ui): 끝나지 않는 경로 계획 표시
+- 변경: `planning-stall.js` — 로봇이 15초 넘게 PLANNING이면 카드에 "경로 계획 응답 없음 · 운행 취소 후 로봇 확인"(crit). CORE는 Nav2 무응답을 `BACKEND_RESULT_UNKNOWN`으로 두고 상태는 PLANNING에 남기므로 콘솔이 볼 수 있는 유일한 신호다. 시작 시각은 탭 안에만 있어 새로고침하면 다시 센다.
+- 증거: node `test_planning_stall.py`, 원격 실행 기록 참조.
+- gate 변화: 없음.

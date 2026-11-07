@@ -96,6 +96,7 @@ OWN = {
         "platoon-view.js",  # D-941: read-only loop gaps
         "state-age.js",
         "motion-source.js",  # why a robot moves, from proving facts only
+        "planning-stall.js",  # a plan that never ends: Nav2 did not answer
     },
     "install.js": {
         "device-profiles.js", "device-care.js",  # Metadata and care editing stay in Installation.

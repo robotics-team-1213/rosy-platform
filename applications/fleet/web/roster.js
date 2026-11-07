@@ -82,7 +82,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     const state = view.stateUnavailable ? {} : (robot.state || {});
     const pose = state.pose;
     const power = powerHealthView(robot, view.receivedAtMs, Date.now());
-    const nav = navTag(state);
+    const nav = navTag(state, robot.robot_id);
     const tripLine = view.stateUnavailable ? "" : cardTripLine(view, robot.robot_id);
     const estop = state.safety?.estop;
     const stateStale = staleAgeS(robot, view.receivedAtMs, Date.now()) !== null;
