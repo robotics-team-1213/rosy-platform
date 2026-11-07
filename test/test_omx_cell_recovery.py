@@ -76,6 +76,17 @@ def test_a_lift_stall_pushes_then_picks_again():
     assert pushes == ["lift_stall"] and out["result"] == "placed" and [r["action"] for r in out["rounds"]] == ["push_clear", "done"]
 
 
+@pytest.mark.parametrize("by, first", [("model", "slow_down"), ("nobody", "slow_down"), ("measurement", "push_clear")])
+def test_only_a_measured_cause_reorders_the_table(by, first):
+    """cell_why reads a moving joint as undetermined, so a model's answer now fills the row more often: it must not steer."""
+    frames = iter([CLEAN, CLEAN, CLEAN, with_box(100, 100), with_box(100, 100), with_box(100, 100)])
+    results = iter(["stopped: released after a stop at run lift_pick", "placed"])
+    out = rc.carry(lambda: next(frames), lambda: {"result": next(results), "attempts": [{}]}, lambda c, a: True,
+                   expected_px=lambda a: [(100, 100)], emit=lambda *a: None, slow=lambda: True,
+                   explain=lambda cause, o: {"hypothesis": "blocked", "by": by})
+    assert [r["action"] for r in out["rounds"]] == [first, "done"]
+
+
 def test_a_push_the_camera_saw_change_nothing_stops_and_so_does_a_refused_push():
     assert run(["stopped: no usable object"])[0]["result"] == "ask a person: no_room"  # every frame the same
     frames = [CLEAN, CLEAN, CLEAN, with_box(100, 100)]
