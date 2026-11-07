@@ -200,12 +200,12 @@ def _require_same_measurement(root, state):
 def begin(root, ops):
     state = _read_state(root)
     old = _env(root)
-    # A begin after a failed restore must keep the runtime the robot really came from.
+    # A begin after a failed restore keeps the runtime the robot really came from, and its retry timing.
     fresh = state.get("previous_runtime") is None
     if fresh:
-        state.update(previous_runtime=old.decode("utf-8"),
+        state.update(previous_runtime=old.decode("utf-8"), boot_id=ops.boot_id(), deadline=ops.now() + MEASURE_S,
                      previous_units=[u for u in ("rosy-io.service", "rosy-navigation.service") if ops.active(u)])
-    state.update(reason="", boot_id=ops.boot_id(), deadline=ops.now() + MEASURE_S)
+    state["reason"] = ""
     _write_state(root, state)
     try:
         holder = _hold_holder(root)
@@ -250,8 +250,8 @@ def _fail(root, ops, state, exc):
     try:
         _restore(root, ops, state)
     except Exception as restore:  # noqa: BLE001 - a person must see that the robot did not come back
-        # The hold stays while the robot is off its normal runtime; the expiry watch tries again.
-        _write_state(root, {**state, "phase": "FAILED", "boot_id": ops.boot_id(), "deadline": ops.now() + RETRY_S,
+        # The hold stays while the robot is off its normal runtime; the expiry watch tries again, never later.
+        _write_state(root, {**state, "phase": "FAILED", "deadline": min(state.get("deadline", 0), ops.now() + RETRY_S),
                             "reason": f"{reason}; restore failed: {str(restore)[:200]}"})
         return
     _release_hold(root, state)

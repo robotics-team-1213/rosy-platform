@@ -14,8 +14,8 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 - `GET /api/v1/navigation/approval`(viewer)은 `phase`(IDLE·BEGINNING·MEASURING·SEALING·CANCELLING·FAILED), `reason`, `approval`(`valid`·`carried`·`measured_release_id`·`reason`), `needs_measurement`, `runtime_mode`, `trials`(필수 5개의 `state`: missing·valid·invalid), `trial`(진행 중과 직전 결과)을 돌려준다.
 - 다음 POST는 모두 operator다. Account 로그인은 `robot.operate`로 판정한다. 공용 개발 토큰은 403이다.
   - `/begin`: 정지 상태에서 motor 측정으로 넘어간다. CORE가 다시 시작되므로 결과는 GET의 `phase`로 읽는다. 실패하면 이전 설정으로 돌아가 `FAILED`와 사유를 남긴다. 다른 사람의 갱신 hold가 있으면 거절한다. 측정은 3시간 30분이 지나거나 기체가 재부팅되면 자동 취소되고, GET의 `measuring_expires_in_s`가 남은 시간을 보여 준다.
-  - `/begin`과 `/trial/start`는 충전 중이면 `CHARGING`, 배터리 값이 없어 알 수 없으면 `CHARGING_UNKNOWN`으로 거절한다. `charging`은 확인된 충전만 뜻하므로 선을 뺐는지는 사람이 함께 본다.
-  - `/trial/start`: `direction`, `stop_cause`, `blind_zone_confirmed`. 속도는 받지 않는다. MANUAL로 전환하고, LiDAR 여유를 확인한다. 후진과, 스캔의 `range_min`이 몸 밖까지 닿는 방향은 LiDAR로 증명할 수 없으므로, 사람이 확인했다는 `blind_zone_confirmed=true` 없이는 `BLIND_ZONE_CONFIRMATION_REQUIRED`로 거절한다. 없거나 오래된 스캔은 `CLEARANCE_UNKNOWN`, 여유 부족은 `CLEARANCE_TOO_SMALL`이다.
+  - `/begin`과 `/trial/start`는 충전 중이면 `CHARGING`, 배터리 값이 없어 알 수 없으면 `CHARGING_UNKNOWN`으로 거절한다. `charging`은 도크가 확인한 충전만 뜻하므로 USB-C 선이 꽂혀 있어도 false일 수 있다. 선을 뺐는지는 사람이 본다.
+  - `/trial/start`: `direction`, `stop_cause`, `blind_zone_confirmed`. 속도는 받지 않는다. MANUAL로 전환하고, LiDAR 여유를 확인한다. 후진은 LiDAR로 증명할 수 없으므로, 사람이 확인했다는 `blind_zone_confirmed=true` 없이는 `BLIND_ZONE_CONFIRMATION_REQUIRED`로 거절한다. 스캔의 `range_min`이 몸 윤곽 안에 들어오지 않거나 윤곽을 읽을 수 없으면 `CLEARANCE_UNKNOWN`이다. 없거나 오래된 스캔은 `CLEARANCE_UNKNOWN`, 여유 부족은 `CLEARANCE_TOO_SMALL`이다.
   - `/trial/hold`: 시험을 시작한 사람이 누르는 동안 보낸다. 일반 teleop 경로로 고정 저속을 명령한다.
   - `/trial/stop`: 버튼 해제. `command_loss` 시험은 이 호출 없이 hold를 끊는다. 이 시험에 stop을 보내면 기록 없이 중단한다.
   - `/seal`: `test_surface`(floor·lifted). 승인자는 본문이 아니라 로그인의 `principal_ref`다. 다섯 시험이 모두 valid여야 하며 성공하면 hardware 모드로 돌아간다. 항법은 시작하지 않는다. `/begin` 뒤 릴리스나 모터 지문이 바뀌었으면 시험 기록을 버리고 거절한다.

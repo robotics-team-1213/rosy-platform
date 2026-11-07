@@ -9,7 +9,7 @@ from types import SimpleNamespace
 import pytest
 
 from core_common.protocol.state_components import BatteryStatus
-from core_features.command.approval_trials import (ApprovalTrials, MAX_HOLD_S, TRAVEL_CAP_M, TrialRefused,
+from core_features.command.approval_trials import (ApprovalTrials, MAX_HOLD_S, RUN_MARGIN_M, TRAVEL_CAP_M, TrialRefused,
                                                    require_clearance)
 
 ROOT = Path(__file__).resolve().parents[4]
@@ -252,24 +252,70 @@ def test_a_blank_scan_behind_refuses_reverse_even_when_confirmed(robot, trials):
         assert refused.value.code == "CLEARANCE_UNKNOWN"
 
 
-@pytest.mark.parametrize("direction,beam", [("forward", 180), ("reverse", 0)])
-def test_something_closer_than_the_lidar_measures_refuses_that_direction(robot, trials, direction, beam):
-    ranges = [2.0] * 360
-    ranges[beam] = 0.02
-    robot.scan.update(ranges=ranges)
+# The real robot's outline (profile core.yaml) and real C1 scans with 0.033-0.049 m returns on the body.
+PINKY = SimpleNamespace(body_stop_known=True, lidar_forward_deg=180.0, lidar_self_mask=(), body_lidar_x_m=-0.017,
+                        body_front_x_m=0.04205, body_rear_x_m=-0.076, body_half_width_m=0.05655,
+                        body_rotation_radius_m=0.08257)
+FORWARD_BEAM, REAR_BEAM = 0, 360
+
+
+def real_scans():
+    doc = json.loads((ROOT / "test/fixtures/robot_body/c1_coverage_flicker_scans.json").read_text(encoding="utf-8"))
+    meta = doc["meta"]
+    return [{"ranges": [math.inf if r is None else r for r in ranges], "angle_min": meta["angle_min"],
+             "angle_max": meta["angle_min"] + meta["angle_increment"] * (len(ranges) - 1),
+             "range_min": meta["range_min"], "range_max": meta["range_max"], "received_at": 100.0,
+             "source_stamp_ns": 1, "source_now_ns": 1} for ranges in doc["scans"]]
+
+
+def with_obstacle(scan_, beam, distance):
+    ranges = list(scan_["ranges"])
+    for index in range(beam - 3, beam + 4):
+        ranges[index % len(ranges)] = distance
+    return {**scan_, "ranges": ranges}
+
+
+@pytest.mark.parametrize("index", [0, 1, 2])
+@pytest.mark.parametrize("direction", ["forward", "reverse", "cw", "ccw"])
+def test_a_clear_real_scene_passes_despite_returns_on_the_body(index, direction):
+    sample = real_scans()[index]
+    assert any(r < sample["range_min"] for r in sample["ranges"])
+    assert require_clearance(sample, PINKY, direction, True, 100.0)
+
+
+@pytest.mark.parametrize("direction,beam,body_m", [("forward", FORWARD_BEAM, 0.059), ("reverse", REAR_BEAM, 0.059)])
+def test_a_real_obstacle_at_the_limit_still_refuses(direction, beam, body_m):
+    need = TRAVEL_CAP_M + RUN_MARGIN_M
+    sample = real_scans()[0]
+    assert require_clearance(with_obstacle(sample, beam, body_m + need + 0.005), PINKY, direction, True, 100.0)
     with pytest.raises(TrialRefused) as refused:
-        trials.start(direction, "button_release", OWNER, blind_zone_confirmed=True)
+        require_clearance(with_obstacle(sample, beam, body_m + need - 0.005), PINKY, direction, True, 100.0)
+    assert refused.value.code == "CLEARANCE_TOO_SMALL"
+
+
+@pytest.mark.parametrize("direction", ["forward", "reverse", "cw"])
+def test_a_minimum_range_reaching_past_the_body_fails_closed(direction):
+    sample = {**real_scans()[0], "range_min": 0.06}
+    with pytest.raises(TrialRefused, match="outside the body"):
+        require_clearance(sample, PINKY, direction, True, 100.0)
+
+
+def test_an_outline_that_cannot_be_read_fails_closed():
+    outline = SimpleNamespace(**{**vars(PINKY), "body_front_x_m": None})
+    with pytest.raises(TrialRefused) as refused:
+        require_clearance(real_scans()[0], outline, "forward", True, 100.0)
     assert refused.value.code == "CLEARANCE_UNKNOWN"
 
 
-@pytest.mark.parametrize("direction", ["forward", "cw"])
-def test_a_band_inside_range_min_needs_a_person_in_every_direction(robot, direction):
-    # Recorded C1 scans report 0.05 m (D-424), inside the body; a scan reporting more must not read as clear.
-    robot.scan.update(range_min=0.15)
+def test_a_scanner_covered_by_the_robot_itself_sees_nothing():
+    sample = {**real_scans()[0], "ranges": [0.04] * 720}
     with pytest.raises(TrialRefused) as refused:
-        require_clearance(robot.scan, BODY, direction, False, robot.now)
-    assert refused.value.code == "BLIND_ZONE_CONFIRMATION_REQUIRED"
-    assert require_clearance(robot.scan, BODY, direction, True, robot.now)["blind_m"] > 0
+        require_clearance(sample, PINKY, "forward", True, 100.0)
+    assert refused.value.code == "CLEARANCE_UNKNOWN"
+
+
+def test_forward_asks_no_person_while_the_body_covers_the_minimum_range():
+    assert require_clearance(real_scans()[0], PINKY, "forward", False, 100.0)
 
 
 def test_rotation_needs_room_beyond_the_turning_circle(robot, trials):

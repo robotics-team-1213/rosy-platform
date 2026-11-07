@@ -27,7 +27,7 @@ export function mount(root, ctx) {
   const surface = el("select");
   for (const [value, text] of [["floor", "바닥"], ["lifted", "바퀴를 들어 올림"]]) { const option = el("option", "", text); option.value = value; surface.append(option); }
   surfaceLabel.append(surface);
-  const blindLabel = el("label", "", " 로봇 바로 앞·뒤·옆이 비어 있음을 눈이나 카메라로 확인했습니다");
+  const blindLabel = el("label", "", " 로봇 뒤쪽이 비어 있음을 눈이나 카메라로 확인했습니다");
   const blind = el("input"); blind.type = "checkbox"; blindLabel.prepend(blind);
   const list = el("ul", "surface-list"); const buttons = [];
   for (const trial of TRIALS) {
@@ -73,7 +73,7 @@ export function mount(root, ctx) {
       try { await call(path, body?.()); say("요청을 받았습니다."); } catch (error) { say(`실패: ${error.message}`, "error"); }
     });
   }
-  run(begin, "/begin", "충전 선을 빼고 주변을 확인했나요? 충전 중이거나 배터리 상태를 모르면 시작되지 않습니다. 모터 시험 상태로 바꾸며 CORE가 다시 시작됩니다.");
+  run(begin, "/begin", "충전 선을 직접 빼고 주변을 확인했나요? 로봇은 꽂힌 선을 알아채지 못할 수 있습니다. 모터 시험 상태로 바꾸며 CORE가 다시 시작됩니다.");
   run(cancel, "/cancel", "측정을 취소하고 원래 상태로 되돌릴까요?");
   run(sealButton, "/seal", "다섯 시험 기록을 내 이름으로 봉인할까요?", () => ({test_surface: surface.value}));
   run(navigate, "/navigation-start", "항법을 시작할까요? 주행 경로를 확인하세요.");

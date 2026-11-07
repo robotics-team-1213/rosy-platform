@@ -47,33 +47,27 @@ class TrialRefused(Exception):
         self.detail = detail
 
 
-def _returns_in_sector(points, centre_rad) -> int:
-    half = math.pi / 4
-    return sum(abs(math.atan2(math.sin(math.atan2(y, x) - centre_rad), math.cos(math.atan2(y, x) - centre_rad))) <= half
-               for x, y in points)
-
-
-def _closer_than_range_min(sample, forward_deg, centre_rad, range_min) -> bool:
-    """A finite return under range_min is something very close that scan_points drops."""
-    step = (float(sample["angle_max"]) - float(sample["angle_min"])) / (len(sample["ranges"]) - 1)
-    for index, value in enumerate(sample["ranges"]):
+def _sector_seen(sample, config, points, centre_rad: float, half_rad: float) -> bool:
+    """Enough of this sector's beams that could see outside did see outside. A beam ending on the
+    robot itself says nothing about the room, so it does not count either way."""
+    ranges = sample["ranges"]
+    low = float(sample["range_min"])
+    start = float(sample["angle_min"])
+    step = (float(sample["angle_max"]) - start) / (len(ranges) - 1)
+    forward = math.radians(float(config.lidar_forward_deg))
+    looking = 0
+    for index, value in enumerate(ranges):
+        angle = start + index * step - forward
+        if abs(math.atan2(math.sin(angle - centre_rad), math.cos(angle - centre_rad))) > half_rad:
+            continue
         distance = float(value)
-        if math.isfinite(distance) and distance < range_min:
-            angle = float(sample["angle_min"]) + index * step - math.radians(float(forward_deg)) - centre_rad
-            if abs(math.atan2(math.sin(angle), math.cos(angle))) <= math.pi / 4:
-                return True
-    return False
-
-
-def _blind_m(config, direction: str, range_min: float) -> float:
-    """How far past the body the LiDAR cannot see, from the scan's own range_min (recorded C1 scans: 0.05 m, D-424)."""
-    if direction == "forward":
-        return max(0.0, range_min - (config.body_front_x_m - config.body_lidar_x_m))
-    if direction == "reverse":
-        return max(0.0, range_min - (config.body_lidar_x_m - config.body_rear_x_m), self_mask_rear_blind_m(
-            config.lidar_self_mask, lidar_x_m=config.body_lidar_x_m, rear_x_m=config.body_rear_x_m,
-            half_width_m=config.body_half_width_m))
-    return max(0.0, range_min - (config.body_rotation_radius_m - abs(config.body_lidar_x_m)))
+        own = math.isfinite(distance) and (distance < low or inside_body(
+            distance * math.cos(angle) + config.body_lidar_x_m, distance * math.sin(angle), config.body_front_x_m,
+            config.body_rear_x_m, config.body_half_width_m, config.body_rotation_radius_m, strict=True))
+        looking += not own
+    outside = sum(abs(math.atan2(math.sin(math.atan2(y, x) - centre_rad), math.cos(math.atan2(y, x) - centre_rad))) <= half_rad
+                  for x, y in points)
+    return outside > 0 and outside >= MIN_SECTOR_RETURNS * looking
 
 
 def require_clearance(sample, config, direction: str, blind_zone_confirmed: bool, wall_now: float) -> dict:
@@ -95,9 +89,15 @@ def require_clearance(sample, config, direction: str, blind_zone_confirmed: bool
                                                  self_mask=config.lidar_self_mask)
                   if not inside_body(x + config.body_lidar_x_m, y, config.body_front_x_m, config.body_rear_x_m,
                                      config.body_half_width_m, config.body_rotation_radius_m, strict=True)]
-        if direction in ("forward", "reverse") and _closer_than_range_min(
-                sample, config.lidar_forward_deg, 0.0 if direction == "forward" else math.pi, range_min):
-            raise TrialRefused("CLEARANCE_UNKNOWN", "something is closer than the LiDAR can measure")
+        # Under range_min the driver reports the robot itself (real C1 scans: 0.033-0.049 m). That reading
+        # holds only while the whole range_min circle lies inside the body: an outside object then meets
+        # the body first and reads farther away.
+        if range_min > min(config.body_front_x_m - config.body_lidar_x_m, config.body_lidar_x_m - config.body_rear_x_m,
+                           config.body_half_width_m):
+            raise TrialRefused("CLEARANCE_UNKNOWN", "the LiDAR's minimum range reaches outside the body")
+        centre, half = {"forward": (0.0, math.pi / 4), "reverse": (math.pi, math.pi / 4)}.get(direction, (0.0, math.pi))
+        if not _sector_seen(sample, config, points, centre, half):
+            raise TrialRefused("CLEARANCE_UNKNOWN", f"too few LiDAR returns for a {direction} trial")
     except TrialRefused:
         raise
     except (KeyError, TypeError, ValueError, OverflowError) as exc:
@@ -106,32 +106,26 @@ def require_clearance(sample, config, direction: str, blind_zone_confirmed: bool
                            half_width_m=config.body_half_width_m,
                            rotation_radius_m=config.body_rotation_radius_m)
     need = TRAVEL_CAP_M + RUN_MARGIN_M
-    # Returns under range_min and inside self-mask windows are dropped, so the band next to the body can
-    # never be proved clear. Visible returns must still clear, and a person answers for the rest. Reverse
-    # always asks: nothing watches the rear while driving.
-    blind = _blind_m(config, direction, range_min)
-    if (blind > 0.0 or direction == "reverse") and not blind_zone_confirmed:
-        raise TrialRefused("BLIND_ZONE_CONFIRMATION_REQUIRED",
-                           f"LiDAR cannot see {blind * 100:.0f} cm next to the body: confirm it by eye or camera")
     if direction == "reverse":
-        if _returns_in_sector(points, math.pi) < MIN_SECTOR_RETURNS * count / 4:
-            raise TrialRefused("CLEARANCE_UNKNOWN", "too few LiDAR returns behind the robot")
+        # Self-mask windows may hide the rear and nothing watches it while driving. Visible returns must
+        # still clear, and a person answers for the rest.
+        blind = self_mask_rear_blind_m(config.lidar_self_mask, lidar_x_m=config.body_lidar_x_m,
+                                       rear_x_m=config.body_rear_x_m, half_width_m=config.body_half_width_m)
+        if not blind_zone_confirmed:
+            raise TrialRefused("BLIND_ZONE_CONFIRMATION_REQUIRED",
+                               f"LiDAR cannot vouch for the rear ({blind * 100:.0f} cm masked): confirm it by eye or camera")
         if seen["rear_m"] is not None and seen["rear_m"] < need:
             raise TrialRefused("CLEARANCE_TOO_SMALL", f"{seen['rear_m']:.2f} m behind the body, {need:.2f} m needed")
         return {**seen, "blind_m": blind}
     if direction == "forward":
-        if _returns_in_sector(points, 0.0) < MIN_SECTOR_RETURNS * count / 4:
-            raise TrialRefused("CLEARANCE_UNKNOWN", "too few LiDAR returns ahead of the robot")
         front = seen["front_band_m"]
         free = None if front is None else front - (config.body_front_x_m - config.body_lidar_x_m)
         if free is not None and free < need:
             raise TrialRefused("CLEARANCE_TOO_SMALL", f"{free:.2f} m ahead of the body, {need:.2f} m needed")
-        return {**seen, "blind_m": blind}
-    if len(points) < MIN_SECTOR_RETURNS * count:
-        raise TrialRefused("CLEARANCE_UNKNOWN", "too few LiDAR returns around the robot")
+        return seen
     if seen["turn_m"] is None or seen["turn_m"] < TURN_MARGIN_M:
         raise TrialRefused("CLEARANCE_TOO_SMALL", f"{TURN_MARGIN_M:.2f} m needed beyond the turning circle")
-    return {**seen, "blind_m": blind}
+    return seen
 
 
 class ApprovalTrials:

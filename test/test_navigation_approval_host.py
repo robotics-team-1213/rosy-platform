@@ -177,6 +177,50 @@ def test_a_second_begin_after_a_failed_restore_keeps_the_original_runtime(root):
     assert host.status(root, ops)["phase"] == "IDLE"
 
 
+def _state(root):
+    return json.loads((root / host.STATE).read_text(encoding="utf-8"))
+
+
+def _after_failed_restore(root, ops):
+    host.begin(root, ops)
+    ops.fail = "restart rosy-core"
+    host.cancel(root, ops)
+    ops.fail = None
+    return _state(root)["deadline"]
+
+
+def test_a_second_begin_keeps_the_retry_deadline(root):
+    ops = Ops(root)
+    deadline = _after_failed_restore(root, ops)
+    assert deadline == host.RETRY_S
+    ops.clock = 5.0
+    host.begin(root, ops)
+    assert _state(root)["phase"] == "MEASURING" and _state(root)["deadline"] == deadline
+
+
+@pytest.mark.parametrize("step", ["restart rosy-core", "acquire"])
+def test_a_second_begin_that_fails_changes_no_retry_timing(root, step):
+    ops = Ops(root)
+    deadline = _after_failed_restore(root, ops)
+    runtime = _state(root)["previous_runtime"]
+    ops.clock, ops.fail = 5.0, step
+    host.begin(root, ops)
+    state = _state(root)
+    assert state["deadline"] == deadline and state["previous_runtime"] == runtime and state["phase"] == "FAILED"
+    ops.clock, ops.fail = deadline, None
+    assert host.expire_if_due(root, ops) is True
+
+
+def test_a_second_begin_refused_at_the_hold_step_still_brings_the_robot_back(root):
+    original = (root / host.RUNTIME).read_bytes()
+    ops = Ops(root)
+    _after_failed_restore(root, ops)
+    ops.fail = "hold --holder"
+    host.begin(root, ops)
+    assert host.status(root, ops)["phase"] == "FAILED" and (root / host.RUNTIME).read_bytes() == original
+    assert host.expire_if_due(root, ops) is False
+
+
 def test_a_failed_restore_keeps_the_hold_and_only_a_good_one_releases_it(root):
     ops = Ops(root)
     host.begin(root, ops)
