@@ -27,16 +27,16 @@ function status(text, state = 'ready') {
 function clearSecrets() { $('account-password').value = ''; $('account-reset-password').value = ''; }
 function fail(error) {
   clearSecrets();
-  $('account-setup').hidden = true; $('account-clients').replaceChildren();
-  $('account-setup-state').textContent = '';
   if ([401, 403].includes(error.status) || error.code === 'ACCOUNT_CHANGED') {
+    $('account-setup').hidden = true; $('account-clients').replaceChildren();
+    $('account-setup-state').textContent = '';
     $('account-content').hidden = true; $('account-login').hidden = false;
     $('account-grants').replaceChildren(); $('account-list').replaceChildren(); selected = null;
     status('로그인 계정 또는 관리 권한이 변경되었습니다. 다시 로그인한 뒤 확인하세요.', 'warning');
   } else if (error.status === 409) {
     $('account-actions').hidden = true;
     status('다른 관리자가 변경했습니다. 현재 상태를 다시 조회하고 수정 내용을 확인하세요.', 'warning');
-  } else status(error.status === 422 ? '입력값을 확인하세요. 마지막 관리자와 비밀번호 조건도 확인하세요.'
+  } else status(error.status === 422 ? '입력값을 확인하세요. 마지막 관리자와 비밀번호 조건, 앱 식별자 중복과 https 복귀 주소도 확인하세요.'
     : '처리 결과를 확인하지 못했습니다. 현재 상태를 다시 조회하세요.', 'warning');
 }
 async function identity() {
@@ -201,17 +201,19 @@ async function setup() {
     }
   } catch (error) { fail(error); }
 }
+const clientsEndpoint = '/api/fleet/auth/clients';
 function lines(id) { return $(id).value.split('\n').map(line => line.trim()).filter(Boolean); }
 function changeClient(client, changes) {
   perform(async () => {
-    await request(`/api/fleet/auth/clients/${encodeURIComponent(client.client_id)}`,
+    await request(`${clientsEndpoint}/${encodeURIComponent(client.client_id)}`,
       {method:'PATCH', headers: {'Content-Type': 'application/json'}, body:JSON.stringify({revision:client.revision, ...changes})});
     await setup();
     status(changes.enabled === false ? `${client.client_id} 앱을 정지했습니다. 이 앱의 로그인과 세션 확인이 곧 멈춥니다.` : `${client.client_id} 앱을 변경했습니다.`);
   });
 }
+$('client-form').addEventListener('submit', event => { event.preventDefault(); $('client-add').click(); });
 $('client-add').addEventListener('click', () => perform(async () => {
-  await request('/api/fleet/auth/clients', {method:'POST', headers: {'Content-Type': 'application/json'}, body:JSON.stringify({
+  await request(clientsEndpoint, {method:'POST', headers: {'Content-Type': 'application/json'}, body:JSON.stringify({
     client_id:$('client-id').value.trim(), redirect_uris:lines('client-redirects'), resources:lines('client-resources')})});
   $('client-form').reset();
   await setup();

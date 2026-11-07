@@ -3,6 +3,11 @@
   "scope": "One observed response per route from a passing HTTP test. Success selected where observed; refusal-only receipts do not prove successful configuration or device behavior.",
   "reports": [
     {
+      "source_revision": "925a6ed45db7835a317467eb5e58faa1a90d9b03",
+      "pytest_root": ".",
+      "result": "Registry API: registration, duplicate, invalid resource, revision conflict, unknown client, stop and readback through actual Account routes with real SQLite; no deployed Account or device evidence."
+    },
+    {
       "source_revision": "16028faad6154d25061d33aec8a0e9a647e592f8",
       "result": "231 passed, 0 skipped; includes named fixed MANUAL forwarding, startup/owner/generation rejection and terminal zero through actual Fleet HTTP and synthetic robot transport. CORE mode owner and channel/Task regressions included; no physical movement or device acceptance.",
       "pytest_root": "."
@@ -1741,6 +1746,22 @@
         "test_toggle_off_and_on_round_trips"
       ],
       "source_revision": "6dd16b79b939c0954efef354dae965fbab4ecb83"
+    },
+    "POST:/api/fleet/auth/clients": {
+      "status": 201,
+      "test": [
+        "operations/fleet/test/test_account_setup.py",
+        "test_manager_registers_and_stops_a_client_without_restart"
+      ],
+      "source_revision": "925a6ed45db7835a317467eb5e58faa1a90d9b03"
+    },
+    "PATCH:/api/fleet/auth/clients/{client_id}": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_account_setup.py",
+        "test_manager_registers_and_stops_a_client_without_restart"
+      ],
+      "source_revision": "925a6ed45db7835a317467eb5e58faa1a90d9b03"
     }
   }
 }

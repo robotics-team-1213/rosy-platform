@@ -14,7 +14,7 @@ from urllib.parse import parse_qs, urlsplit
 
 from oauthlib.oauth2 import RequestValidator, WebApplicationServer, OAuth2Error
 from core_common.protocol.account_access import grants_for, sign_access, verify_access
-from rosy_account.client_registry import SCHEMA as CLIENT_SCHEMA, https_url as _https, import_first, validate_client
+from rosy_account.client_registry import SCHEMA as CLIENT_SCHEMA, https_url as _https, import_first, list_clients, validate_client
 
 NO_STORE = {'Cache-Control': 'no-store', 'Pragma': 'no-cache'}
 # OAuthlib's debug messages contain raw grant/refresh credentials.
@@ -77,6 +77,12 @@ class AccountAuthority:
             return {name: {'redirect_uris': json.loads(uris), 'resources': json.loads(resources)}
                     for name, uris, resources in db.execute(
                         'SELECT client_id,redirect_uris,resources FROM account_clients WHERE enabled=1')}
+
+    def list_clients(self):
+        """Every app, stopped ones included; a read connection, so it never queues behind a writer."""
+        with closing(sqlite3.connect(self.path, timeout=1)) as db:
+            db.row_factory = sqlite3.Row
+            return list_clients(db)
 
     @contextmanager
     def transaction(self):
@@ -210,7 +216,7 @@ class _Validator(RequestValidator):
         return False  # Only explicitly registered first-party public clients are supported.
 
     def validate_redirect_uri(self, client_id, redirect_uri, request, *args, **kwargs):
-        return redirect_uri in self.a.clients[client_id]['redirect_uris']
+        return redirect_uri in self.a.clients.get(client_id, {}).get('redirect_uris', [])
 
     def get_default_redirect_uri(self, client_id, request, *args, **kwargs):
         return None
@@ -222,7 +228,7 @@ class _Validator(RequestValidator):
         return grant_type in {'authorization_code', 'refresh_token'}
 
     def validate_scopes(self, client_id, scopes, client, request, *args, **kwargs):
-        return (len(scopes) == 1 and scopes[0] in self.a.clients[client_id]['resources']
+        return (len(scopes) == 1 and scopes[0] in self.a.clients.get(client_id, {}).get('resources', [])
                 and grants_for(request.user['grants'], scopes[0]))
 
     def get_default_scopes(self, client_id, request, *args, **kwargs):

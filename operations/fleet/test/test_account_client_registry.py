@@ -88,6 +88,15 @@ def test_stopping_a_client_ends_login_refresh_and_session_checks(registry):
     assert authority.introspect(tokens['access_token'])['active'] is True
 
 
+def test_stopping_during_a_request_refuses_instead_of_raising(registry):
+    from rosy_account.account_authority import _Validator
+    authority, clients = registry
+    validator = _Validator(authority, None)
+    clients.update('manager', 'app', revision=1, enabled=False)
+    assert validator.validate_redirect_uri('app', CALLBACK, None) is False
+    assert not validator.validate_scopes('app', ['robot:r1'], None, None)
+
+
 def test_narrowing_resources_applies_at_once(registry):
     authority, clients = registry
     clients.update('manager', 'app', revision=1, resources=['robot:r2'])
@@ -104,6 +113,17 @@ def test_json_only_seeds_an_empty_registry(tmp_path, registry):
     assert restarted.clients == {}, 'a stopped app stays stopped and later JSON rows are ignored'
     with restarted.transaction() as db:
         assert [row['client_id'] for row in list_clients(db)] == ['app']
+
+
+def test_a_stale_restore_cannot_revive_a_stopped_client(registry, tmp_path):
+    from deploy.site.site_db import DatabaseError, backup_database, restore_database
+    authority, clients = registry
+    backup = tmp_path / 'client-running.sqlite3'
+    backup_database(authority.path, backup)
+    clients.update('manager', 'app', revision=1, enabled=False)
+    with pytest.raises(DatabaseError, match='Account security state'):
+        restore_database(backup, authority.path, replace=True, assume_stopped=True)
+    assert authority.clients == {}
 
 
 def test_only_managers_change_the_registry_and_changes_are_audited(registry):

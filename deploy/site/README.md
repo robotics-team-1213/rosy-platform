@@ -1772,11 +1772,11 @@ command does not start the services or contact robots:
 The empty-volume example below applies only to databases without Account or
 Console credential tables. Account-bearing restores require a readable current
 database whose complete credential schemas and rows match the backup. The tool
-compares `rosy_account*`, `account_oauth_*` and `fleet_console_*` tables, their
+compares `rosy_account*`, `account_oauth_*`, `account_client*` and `fleet_console_*` tables, their
 indexes and triggers using read-only SQLite snapshots, including committed WAL
 data. Differences are refused before archiving or replacing the destination.
 This includes consumed codes/refresh tokens, revoked families, changed passwords,
-disabled accounts and profiles. Even harmless differences such as session touch
+disabled accounts, profiles and the app registry. Even harmless differences such as session touch
 timestamps require retaining the current database; there is no override flag.
 
 For an isolated Account restore drill, first seed the test volume with a separate,

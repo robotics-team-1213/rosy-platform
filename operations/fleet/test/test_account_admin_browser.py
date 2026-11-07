@@ -184,6 +184,16 @@ def test_manager_registers_and_stops_an_app_in_the_page(tmp_path):
                 row.locator("ui-button").click()
                 expect(row).to_contain_text("정지됨")
                 assert "monitoring" not in authority.clients
+                # A refused registration keeps the list and what was typed, and Enter does not leave the page.
+                page.locator("#client-id").fill("second")
+                page.locator("#client-redirects").fill("http://not-https.example.test/cb")
+                page.locator("#client-resources").fill("site:test-site")
+                page.locator("#client-id").press("Enter")
+                expect(page.locator("#account-status")).to_contain_text("입력값을 확인하세요")
+                expect(page.locator("#account-setup")).to_be_visible()
+                expect(page.locator("#client-id")).to_have_value("second")
+                expect(page.locator("#account-clients")).to_contain_text("pilot")
+                assert "second" not in authority.clients
                 assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
             finally:
                 browser.close()

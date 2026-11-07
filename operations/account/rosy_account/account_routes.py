@@ -2,7 +2,7 @@
 from fastapi import Body, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 
-from rosy_account.client_registry import ClientRegistry, list_clients
+from rosy_account.client_registry import ClientRegistry
 from rosy_account.http import NO_STORE
 from rosy_account.password_session import (
     COOKIE, LoginRateLimited, SessionStorageUnavailable, _storage_unavailable, same_origin)
@@ -20,14 +20,10 @@ def install_account_routes(app, *, sessions, authorize):
                     and request.headers.get("sec-fetch-site") == "same-origin"))):
             raise HTTPException(403, detail={"code": "ACCOUNT_ADMIN_REQUIRED"}, headers=NO_STORE)
         authority = app.state.account_authority
-        clients = []
-        if authority:
-            with authority.transaction() as db:
-                clients = list_clients(db)
         return JSONResponse({
             "configured": authority is not None,
             "issuer": authority.issuer if authority else None,
-            "clients": clients,
+            "clients": authority.list_clients() if authority else [],
         }, headers=NO_STORE)
 
     def manager(request: Request, principal: SitePrincipal = Depends(authorize)):
