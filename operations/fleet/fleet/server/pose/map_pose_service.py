@@ -315,7 +315,7 @@ def install_map_pose_routes(app, *, service: MapPoseService, read_guard) -> None
             await service.refresh(robot_id)
         except (HubError, RobotApiError, OSError, httpx.HTTPError, asyncio.TimeoutError):
             pass    # an unreachable robot reads its last odom, which goes UNKNOWN after 3 s
-        pose = service.driving_pose(robot_id)
+        pose = getattr(service, "driving_pose", service.arbitrated_pose)(robot_id)  # a sim port has no auto locate
         if pose is None:            # removed from the roster while the read was in flight
             raise unknown
         return {"robot_id": robot_id, **asdict(pose)}
