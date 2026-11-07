@@ -88,6 +88,7 @@ def test_a_lab_pc_offers_storage_cleaning_and_shows_its_headroom(console_url):
             "time": now, "state": "ok", "issues": [], "watchdog": {"state": "ok", "timeout_s": 30},
             "kernel": {"state": "ok", "panic_s": 10, "softlockup_panic": 1}, "ssh": {"state": "ok"},
             "swap": {"state": "ok", "total_bytes": 0, "used_bytes": 0}}}},
+        "history": {"ai": [{"text": "reboot ARM_SESSION_ACTIVE", "actor": "operator-1", "created_at": now}]},
     }
     with sync_playwright() as p:
         browser, page, errors = _open_console(p, API)
@@ -113,6 +114,7 @@ def test_a_lab_pc_offers_storage_cleaning_and_shows_its_headroom(console_url):
         expect(ai).to_contain_text("시험 디스크 여유 2.6GB(100%)")
         expect(ai).to_contain_text("메모리 여유 2.5/30.8GB(8%)")
         expect(ai).to_contain_text("CPU 온도 56°C")
+        expect(ai).to_contain_text("operator-1 · reboot ARM_SESSION_ACTIVE")
         buttons = root.locator("#host-services-commands ui-button", has_text="시험 저장소 정리")
         expect(buttons).to_have_count(1)  # the site PC has no such action in its catalogue
         buttons.first.click()

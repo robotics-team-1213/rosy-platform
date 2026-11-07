@@ -13,8 +13,8 @@
 #                   if an arm session began during the delay. Not reachable from the SSH keys.
 #   cancel-reboot   shutdown -c, only for the reboot this helper scheduled (else exit 4); the
 #                   nightly window reboot and unattended-upgrades are never cancelled here
-#   restart-unit U  systemctl --no-block restart U (allowlisted U)
-#   stop-unit U     systemctl --no-block stop U (allowlisted U; site units are restart-only)
+#   restart-unit U  systemctl --no-block restart U (allowlisted U). No unit can be stopped (D-991).
+#                   A cell camera unit is refused (exit 6) while an arm session runs.
 #   install-site-config N  copy ~SUDO_USER/.rosy/site-incoming/N to /etc/rosy/site/N (site role,
 #                   allowlisted N, read as SUDO_USER so a symlink reaches nothing more than that
 #                   account can read, YAML-checked, 64 KiB cap, previous copy kept under
@@ -87,6 +87,13 @@ jobs_live() {
   return 1
 }
 
+restart_user_unit() {
+  local owner
+  owner=$(cat "$CONF/units-user" 2>/dev/null || true)
+  [[ "$owner" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]] || refuse "units-user is not set"
+  systemctl --user --machine="$owner@" --no-block restart "$UNIT"
+}
+
 schedule_reboot() {
   [ -z "$(scheduled_usec)" ] || refuse "a reboot is already scheduled" 3
   if arm_session_held; then refuse "an arm session is running" 6; fi
@@ -131,12 +138,24 @@ case "$ROLE:$ACTION:$UNIT" in
   site:restart-unit:rosy-site-firewall.service)
     systemctl --no-block restart "$UNIT"
     ;;
-  ai:stop-unit:pinky-backend.service|ai:restart-unit:pinky-backend.service|\
-  ai:stop-unit:pinky-frontend.service|ai:restart-unit:pinky-frontend.service|\
-  ai:stop-unit:pinky-r2-watch.service|ai:restart-unit:pinky-r2-watch.service)
-    owner=$(cat "$CONF/units-user" 2>/dev/null || true)
-    [[ "$owner" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]] || refuse "units-user is not set"
-    systemctl --user --machine="$owner@" --no-block "${ACTION%-unit}" "$UNIT"
+  site:restart-unit:rosy-omx-camera-readiness.service|\
+  site:restart-unit:rosy-omx-camera-view.service|\
+  site:restart-unit:rosy-omx-camera@arm_a_wrist.service|\
+  site:restart-unit:rosy-omx-camera@top.service)
+    if arm_session_held; then refuse "an arm session is running" 6; fi
+    restart_user_unit
+    ;;
+  ai:restart-unit:rosy-ollama.service|\
+  ai:restart-unit:rosy-situation.service|\
+  model:restart-unit:rosy-dataset-review-account.service|\
+  model:restart-unit:rosy-dataset-review.service|\
+  model:restart-unit:rosy-edge-review.service|\
+  model:restart-unit:rosy-ollama.service|\
+  model:restart-unit:rosy-review-v12.service|\
+  model:restart-unit:rosy-review-v13-eval.service|\
+  model:restart-unit:rosy-review-v13.service|\
+  model:restart-unit:rosy-tensorboard.service)
+    restart_user_unit
     ;;
   ai:clean-storage:|model:clean-storage:)
     # D-883: start the rosy-ops lab storage service once; host_storage.py owns what is kept.

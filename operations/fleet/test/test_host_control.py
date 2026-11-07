@@ -5,6 +5,7 @@ import json
 import os
 import re
 import shutil
+import sqlite3
 import subprocess
 import time
 from pathlib import Path
@@ -14,6 +15,7 @@ import pytest
 import yaml
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
+from fleet.server.device_care import DeviceCareStore
 
 from fleet.host_control import (
     CONFIG_DIR,
@@ -45,13 +47,13 @@ def _code(call):
 def test_catalogue_is_the_three_ubuntu_hosts():
     hosts = {row["host"]: row for row in catalogue()["hosts"]}
     assert set(hosts) == {"site", "ai", "model"}
-    assert hosts["model"]["units"] == []
-    assert hosts["model"]["actions"] == ["reboot", "reboot-over-jobs", "cancel-reboot", "clean-storage"]
+    assert "rosy-review-v13.service" in hosts["model"]["units"]
+    assert hosts["model"]["actions"] == ["reboot", "reboot-over-jobs", "cancel-reboot", "clean-storage", "restart-unit"]
     assert hosts["ai"]["actions"][:4] == ["reboot", "reboot-over-jobs", "cancel-reboot", "clean-storage"]
     assert hosts["site"]["actions"] == ["reboot", "reboot-over-jobs", "cancel-reboot", "restart-unit"]
-    assert hosts["site"]["stoppable_units"] == []
     assert "docker.service" in hosts["site"]["units"]
-    assert "pinky-backend.service" in hosts["ai"]["stoppable_units"]
+    assert "rosy-situation.service" in hosts["ai"]["units"]
+    assert not any(unit.startswith("pinky-") for row in hosts.values() for unit in row["units"])
 
 
 def test_reboot_is_a_delayed_helper_action_and_pkill_is_refused():
@@ -62,20 +64,40 @@ def test_reboot_is_a_delayed_helper_action_and_pkill_is_refused():
         assert _code(lambda: decide("site", action, None, confirmed=True)) == "UNKNOWN_ACTION"
 
 
-def test_site_units_restart_but_never_stop():
-    for unit in HOSTS["site"]:
-        assert decide("site", "restart-unit", unit, confirmed=True)["argv"] == ("restart-unit", unit)
-        assert _code(lambda: decide("site", "stop-unit", unit, confirmed=True)) == "UNIT_NOT_ALLOWED"
+def test_units_restart_but_no_unit_can_stop():
+    for host, units in HOSTS.items():
+        for unit in units:
+            assert decide(host, "restart-unit", unit, confirmed=True)["argv"] == ("restart-unit", unit)
+            assert _code(lambda: decide(host, "stop-unit", unit, confirmed=True)) == "UNKNOWN_ACTION"
 
 
-def test_only_an_allowlisted_unit_on_that_host_can_stop():
-    assert decide("ai", "stop-unit", "pinky-backend.service", confirmed=True)["argv"] == (
-        "stop-unit", "pinky-backend.service")
+def test_only_an_allowlisted_unit_on_that_host_can_restart():
     for host, unit in (("ai", "docker.service"), ("site", "ssh.service"),
-                       ("model", "ollama.service"), ("ai", "pinky-backend.service;reboot"),
+                       ("model", "ollama.service"), ("ai", "rosy-situation.service;reboot"),
                        # D-795: cross-host DDS units (AI PC Nav2, rosbridge) are gone.
                        ("ai", "pinky-nav2.service"), ("ai", "pinky-rosbridge-d12.service")):
-        assert _code(lambda: decide(host, "stop-unit", unit, confirmed=True)) == "UNIT_NOT_ALLOWED"
+        assert _code(lambda: decide(host, "restart-unit", unit, confirmed=True)) == "UNIT_NOT_ALLOWED"
+
+
+def test_a_person_restarts_exactly_the_user_units_services_yaml_flags():
+    """Two lists of one fact; a unit retired from a host must leave the restart list in the same change."""
+    roles = yaml.safe_load((SITE.parents[1] / "deploy/hosts/services.yaml").read_text(encoding="utf-8"))["roles"]
+
+    def flagged(*names):
+        found = set()
+        for name in names:
+            for unit, entry in roles[name].items():
+                if not entry.get("operator_restart"):
+                    continue
+                assert entry["run"] == "active", unit
+                stem = unit[:-len("@.service")] if "@" in unit else None
+                found |= {f"{stem}@{i}.service" for i in entry["instances"]} if stem else {unit}
+        return found
+
+    assert flagged("model") == set(HOSTS["model"])
+    assert flagged("ai") == set(HOSTS["ai"])
+    assert flagged("site", "omx") == set(HOSTS["site"]) - {
+        "docker.service", "rosy-site-stack.service", "rosy-site-firewall.service"}
 
 
 def test_only_the_lab_pcs_clean_storage_and_never_with_a_unit():
@@ -97,9 +119,9 @@ def test_helper_script_matches_the_allowlist_and_has_no_test_switch():
     assert "--machine=ai@" not in text and "\nCONF=/etc/rosy/host-control\n" in text
     for host, units in HOSTS.items():
         for unit, actions in units.items():
-            for action in ("restart-unit", "stop-unit"):
-                listed = re.search(rf"\b{host}:{action}:{re.escape(unit)}[|)]", text) is not None
-                assert listed is (action in actions), (host, action, unit)
+            assert re.search(rf"\b{host}:restart-unit:{re.escape(unit)}[|)]", text), (host, unit)
+    assert len(re.findall(r"\b\w+:restart-unit:\S+?[|)]", text)) == sum(map(len, HOSTS.values()))
+    assert "stop-unit" not in text and "systemctl --no-block stop" not in text
 
 
 @posix
@@ -204,9 +226,9 @@ def test_ssh_helper_uses_an_argument_list_and_a_fixed_ssh(monkeypatch, tmp_path)
 
     monkeypatch.setattr(subprocess, "run", fake_run)
     helper = helper_from_config(_config(tmp_path, "site rosy@site-pc.local\nai ai@ai-pc.local\n"))
-    assert helper.run("ai", ("restart-unit", "pinky-backend.service"))["ok"] is True
+    assert helper.run("ai", ("restart-unit", "rosy-situation.service"))["ok"] is True
     assert seen["argv"][0] == "/usr/bin/ssh" and seen["shell"] is False
-    assert seen["argv"][-4:] == ["--", "ai@ai-pc.local", "restart-unit", "pinky-backend.service"]
+    assert seen["argv"][-4:] == ["--", "ai@ai-pc.local", "restart-unit", "rosy-situation.service"]
     assert "StrictHostKeyChecking=yes" in seen["argv"]
     assert helper.run("model", ("reboot",))["code"] == "HOST_HELPER_UNAVAILABLE"
 
@@ -248,6 +270,46 @@ def _client(helper, *, named=True):
     return TestClient(app)
 
 
+def test_each_request_and_its_answer_stay_in_the_care_history(tmp_path):
+    """D-991: the audit row names only the host; a person asking what happened needs the action."""
+    class Answers:
+        def __init__(self):
+            self.codes = iter([{"ok": True, "code": "ACCEPTED"}, {"ok": False, "code": "ARM_SESSION_ACTIVE"}])
+
+        def run(self, host, argv):
+            return next(self.codes)
+
+    client = _client(Answers())
+    client.app.state.device_care = DeviceCareStore(tmp_path / "care.db")
+    send = {"operator_confirmed": True}
+    assert client.post("/api/fleet/hosts/model/control", json={
+        **send, "action": "restart-unit", "unit": "rosy-review-v13.service"}).status_code == 200
+    assert client.post("/api/fleet/hosts/model/control", json={**send, "action": "reboot"}).status_code == 409
+    rows = client.get("/api/fleet/hosts").json()["history"]["model"]
+    assert [row["text"] for row in rows] == ["reboot ARM_SESSION_ACTIVE", "restart-unit rosy-review-v13.service ACCEPTED"]
+    assert {row["actor"] for row in rows} == {"operator-1"}
+
+
+def test_history_is_optional_and_a_broken_store_never_changes_the_answer(tmp_path):
+    class Broken:
+        def add_host_event(self, *_, **__):
+            raise sqlite3.OperationalError("disk full")
+
+        def host_events(self, *_):
+            raise sqlite3.OperationalError("disk full")
+
+    class Accepts:
+        def run(self, host, argv):
+            return {"ok": True, "code": "ACCEPTED"}
+
+    client = _client(Accepts())
+    assert client.get("/api/fleet/hosts").json()["history"] == {}
+    client.app.state.device_care = Broken()
+    assert client.get("/api/fleet/hosts").json()["history"] == {}
+    assert client.post("/api/fleet/hosts/ai/control", json={
+        "action": "cancel-reboot", "unit": None, "operator_confirmed": True}).status_code == 200
+
+
 def test_route_schedules_a_confirmed_restart_and_refuses_pkill(caplog):
     class Recording:
         def run(self, host, argv):
@@ -263,13 +325,13 @@ def test_route_schedules_a_confirmed_restart_and_refuses_pkill(caplog):
     assert not hasattr(helper, "call")
     caplog.set_level("INFO", logger="fleet.server.host_control_routes")
     accepted = client.post("/api/fleet/hosts/ai/control", json={
-        "action": "restart-unit", "unit": "pinky-backend.service",
+        "action": "restart-unit", "unit": "rosy-situation.service",
         "operator_confirmed": True})
     assert accepted.status_code == 200
-    assert helper.call == ("ai", ("restart-unit", "pinky-backend.service"))
+    assert helper.call == ("ai", ("restart-unit", "rosy-situation.service"))
     assert accepted.json()["requested_by"] == "operator-1"
     logged = [r.getMessage() for r in caplog.records]
-    assert any("action=restart-unit unit=pinky-backend.service principal=operator-1" in m
+    assert any("action=restart-unit unit=rosy-situation.service principal=operator-1" in m
                and "code=ACCEPTED" in m for m in logged)
     assert any(m.startswith("host control request host=ai") for m in logged)
 
@@ -566,13 +628,22 @@ def test_helper_starts_only_the_lab_storage_service_and_refuses_the_site(tmp_pat
 def test_helper_refuses_site_stop_and_unknown_role(tmp_path):
     helper = _helper_copy(tmp_path, "site")
     assert helper("stop-unit", "rosy-site-firewall.service") == 2
+    session = _arm_session(tmp_path)
+    assert helper("restart-unit", "rosy-omx-camera@arm_a_wrist.service") == 6  # a session is reading it
+    assert helper("restart-unit", "rosy-site-stack.service") == 0  # Fleet is not what moves the arm
+    os.close(session)
+    assert helper("restart-unit", "rosy-omx-camera@arm_a_wrist.service") == 0
+    assert "--user --machine=pinky@ --no-block restart rosy-omx-camera@arm_a_wrist.service" in (
+        tmp_path / "calls").read_text()
     assert helper("restart-unit", "rosy-site-firewall.service") == 0
     assert "systemctl --no-block restart rosy-site-firewall.service" in (tmp_path / "calls").read_text()
     (tmp_path / "conf" / "role").write_text("robot\n")
     assert helper("reboot") == 2
     (tmp_path / "conf" / "role").write_text("ai\n")
-    assert helper("stop-unit", "pinky-backend.service") == 0
-    assert "systemctl --user --machine=pinky@ --no-block stop pinky-backend.service" in (
+    assert helper("stop-unit", "rosy-situation.service") == 2
+    assert helper("restart-unit", "pinky-frontend.service") == 2  # another owner's service
+    assert helper("restart-unit", "rosy-situation.service") == 0
+    assert "systemctl --user --machine=pinky@ --no-block restart rosy-situation.service" in (
         tmp_path / "calls").read_text()
 
 
@@ -586,6 +657,7 @@ def test_forced_command_passes_at_most_two_words(tmp_path):
     assert remote("") == 2
     assert remote("reboot *") == 2
     assert remote("recheck-reboot") == 2  # the helper's own timer, never a caller's
+    assert remote("restart-unit a;b") == 2
 
 
 def _install_copy(tmp_path):

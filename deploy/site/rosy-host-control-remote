@@ -13,7 +13,7 @@ set -- ${SSH_ORIGINAL_COMMAND:-}
 [ "$1" != recheck-reboot ] || { echo "refused" >&2; exit 2; }
 for word in "$@"; do
   case "$word" in
-    *[!a-z0-9.@-]*|-*) echo "refused" >&2; exit 2 ;;
+    *[!a-z0-9_.@-]*|-*) echo "refused" >&2; exit 2 ;;
   esac
 done
 exec sudo -n /usr/local/sbin/rosy-host-control "$@"

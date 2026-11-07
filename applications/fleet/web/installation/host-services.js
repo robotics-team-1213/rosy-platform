@@ -58,6 +58,9 @@ function reportRows(body) {
       card.append(node("p", "hint", "최신 복구 설정을 확인할 수 없습니다."));
     }
     for (const line of updateLines(row.updates, {reasons: true})) card.append(node("p", "hint", line));
+    for (const event of body.history?.[name] || []) {
+      card.append(node("p", "hint", `${new Date(event.created_at * 1000).toLocaleString()} · ${event.actor} · ${event.text}`));
+    }
     return card;
   });
 }
@@ -121,13 +124,6 @@ export function createHostServices({root, call, confirmIrreversible, onPaint}) {
         restart.type = "button";
         restart.addEventListener("click", () => send(host.host, "restart-unit", unit, `${unit}을 다시 시작합니다.`));
         row.append(restart);
-        if ((host.stoppable_units || []).includes(unit)) {
-          const stop = node("ui-button", "", `${unit} 정지`);
-          stop.setAttribute("kind", "quiet");
-          stop.type = "button";
-          stop.addEventListener("click", () => send(host.host, "stop-unit", unit, `${unit}을 멈춥니다. 관제 PC의 Docker·스택·방화벽은 여기서 멈추지 않습니다.`));
-          row.append(stop);
-        }
         block.append(row);
       }
       commands.append(block);
