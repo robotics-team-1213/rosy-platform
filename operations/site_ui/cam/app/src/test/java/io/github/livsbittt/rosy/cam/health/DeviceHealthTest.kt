@@ -41,9 +41,17 @@ class DeviceHealthTest {
     }
 
     @Test
-    fun withoutThermalStatusFallsBackToBatteryTemperature() {
-        assertTrue(DeviceHealth(80, true, 42.9).warnings.isEmpty())
-        assertEquals(listOf(HealthWarning.HOT), DeviceHealth(80, true, 43.0).warnings)
+    fun warnsFromFortyDegreesBatteryWithOrWithoutThermalStatus() {
+        assertTrue(DeviceHealth(80, true, 39.9).warnings.isEmpty())
+        assertEquals(listOf(HealthWarning.HOT), DeviceHealth(80, true, 40.0).warnings)
+        assertTrue(DeviceHealth(80, true, 39.9, thermalStatus = 1).warnings.isEmpty())
+        assertEquals(listOf(HealthWarning.HOT), DeviceHealth(80, true, 40.0, thermalStatus = 1).warnings)
+    }
+
+    @Test
+    fun warningDoesNotPauseStreaming() {
+        assertEquals(false, PhoneHeat.severe(DeviceHealth(80, true, 44.9)))
+        assertEquals(false, PhoneHeat.severe(DeviceHealth(80, true, 44.9, thermalStatus = 2)))
     }
 
     @Test
