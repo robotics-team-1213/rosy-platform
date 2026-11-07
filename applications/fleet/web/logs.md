@@ -1109,3 +1109,8 @@
 - 증거: `node --test operations/fleet/test/web/station-recovery.test.mjs person-request.test.mjs` 10 pass (노트북). 브라우저 시험은 돌리지 않았다.
 - gate 변화: SOURCE 변경. 화면 육안·Chromium 확인 없음.
 - 교훈: CE 해당 없음 — 최종 코드와 시험이 판단을 보존한다. 실물·운영 수용은 아니다.
+## 2026-11-07 · 92cb90111c · uiux(fleet): say why a battery stop holds and that charging ends it (D-502 Amendment 2026-11-07)
+- 변경: 배터리 래치만 잔량 회복 시 스스로 풀림, 다른 정지는 래치를 넘겨받음, 상태 `safety.releases_when_charged`, 화면 문구.
+- 증거: 원격 시험 결과는 착지 기록을 본다. 실제 충전 해제는 새 릴리스 뒤 확인 전이다.
+- gate 변화: 없음
+- 교훈: CE 해당 없음 — 규칙은 D-502 Amendment 2026-11-07과 회귀 시험에 있다.

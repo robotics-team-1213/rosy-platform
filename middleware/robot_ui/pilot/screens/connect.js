@@ -333,7 +333,7 @@ function releaseContext(safety) {
   const battery = safety.battery, level = {ok: "정상", warning: "주의", critical: "부족", deep: "매우 부족"}[battery?.level];
   if (battery?.evidence !== "fresh" || !level || !Number.isFinite(battery.percent)) return null;
   return {key: `${safety.source}:${battery.level}`,
-    detail: `배터리 보호 정지 · 배터리 ${battery.percent}% · ${level} · 최신 표본. 보호 조건이 남아 있으면 다시 정지될 수 있습니다. `};
+    detail: `배터리 보호 정지 · 배터리 ${battery.percent}% · ${level} · 최신 표본. 충전되면 자동으로 풀립니다. 지금 풀어도 보호 조건이 남아 있으면 다시 정지될 수 있습니다. `};
 }
 
 function emergencyRelease(role, safety, onReleased) {
