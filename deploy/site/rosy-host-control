@@ -145,7 +145,6 @@ case "$ROLE:$ACTION:$UNIT" in
     if arm_session_held; then refuse "an arm session is running" 6; fi
     restart_user_unit
     ;;
-  ai:restart-unit:rosy-ollama.service|\
   ai:restart-unit:rosy-situation.service|\
   model:restart-unit:rosy-dataset-review-account.service|\
   model:restart-unit:rosy-dataset-review.service|\

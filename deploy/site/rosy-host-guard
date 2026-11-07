@@ -114,9 +114,12 @@ def act(name: str, action: str, reason: str) -> None:
 
 def post_alert(text: str) -> bool:
     """True once the channel took it. The webhook goes through curl's stdin: argv is world readable."""
+    if not ALERT_WEBHOOK.exists():
+        return False
     try:
         url = ALERT_WEBHOOK.read_text(encoding="utf-8").strip()
-    except OSError:
+    except (OSError, UnicodeError) as exc:
+        print(f"rosy-host-guard: alert webhook file unreadable ({type(exc).__name__})", flush=True)
         return False
     if not url.startswith("https://") or any(ch in url for ch in '"\\\n '):
         print("rosy-host-guard: alert webhook file is not one https URL", flush=True)
@@ -126,8 +129,11 @@ def post_alert(text: str) -> bool:
         done = subprocess.run(["curl", "-fsS", "--max-time", "10", "-H", "Content-Type: application/json",
                                "--data-binary", body, "--config", "-"], input=f'url = "{url}"\n',
                               text=True, capture_output=True, timeout=20, check=False)
-    except (OSError, subprocess.TimeoutExpired):
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        print(f"rosy-host-guard: alert not sent ({type(exc).__name__})", flush=True)
         return False
+    if done.returncode:
+        print(f"rosy-host-guard: alert not sent (curl exit {done.returncode})", flush=True)
     return done.returncode == 0
 
 

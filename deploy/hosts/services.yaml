@@ -81,7 +81,7 @@ roles:
     rosy-learning-center.service: {run: "off", channel: retired, note: "candidate retired 2026-10-31; synthetic-only data kept in ~/rosy-learning-candidate-retired-20261031", doc: docs/adr/D-857-rosy-learning-product-definition.md}
     rosy-learning-center-update.service: {run: "off", channel: retired, doc: docs/adr/D-857-rosy-learning-product-definition.md}
     rosy-learning-center-update.timer: {run: "off", channel: retired, doc: docs/adr/D-857-rosy-learning-product-definition.md}
-    rosy-ollama.service: {operator_restart: true, run: active, gpu: idle-yield, channel: host, dropins: [warm.conf], note: "warm.conf keeps the vision model loaded; D-958 lends the GPU to experiments only while no robot is online (gpu_tenants.py), run may read inactive then", doc: deploy/ai_pc/README.md}
+    rosy-ollama.service: {run: active, gpu: idle-yield, channel: host, dropins: [warm.conf], note: "warm.conf keeps the vision model loaded; D-958 lends the GPU to experiments only while no robot is online (gpu_tenants.py), run may read inactive then", doc: deploy/ai_pc/README.md}
     rosy-gpu-tenants.service: {run: oneshot, channel: copy, template: deploy/hosts/rosy-gpu-tenants.service, copies: {.local/lib/rosy-gpu-tenants/gpu_tenants.py: deploy/hosts/gpu_tenants.py}, doc: docs/adr/D-958-lab-compute-ledger-one-admission-gpu-slot-pausable-services.md}
     rosy-gpu-tenants.timer: {run: timer, channel: copy, template: deploy/hosts/rosy-gpu-tenants.timer, doc: docs/adr/D-958-lab-compute-ledger-one-admission-gpu-slot-pausable-services.md}
     rosy-situation.service: {operator_restart: true, run: active, channel: autoupdate, doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}

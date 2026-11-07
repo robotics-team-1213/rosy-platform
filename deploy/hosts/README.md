@@ -159,7 +159,7 @@ OpenSSH LAN 경로로 연결한다. Tailscale SSH는 `authorized_keys` 강제 �
 sudo python3 deploy/hosts/common/rosy-host-state install site --approve recovery
 ```
 
-이후 Fleet의 **설치·보정 → 호스트 서비스**에서 세 PC를 각각 확인한다.
+이후 Fleet의 **PC 정비**(`/console/maintenance`)에서 세 PC를 각각 확인한다.
 
 재부팅은 어느 경로든 도는 팔 세션을 끊지 않는다. 화면 요청은 살아 있는 학습·시험에서도 먼저 멈추고 사람의 두 번째 확인을 받는다. guard 복구는 작업을 보지 않는다(D-991). 도우미를 새로 설치한 PC에만 적용된다. Fleet이 꺼져 있으면 `python tools/remote/host_ops.py`로 같은 도우미를 부른다.
 

@@ -1,4 +1,4 @@
-// D-524 / D-530 — 설치·보정 「호스트 서비스」.
+// D-524 / D-530 / D-991 — PC 정비.
 // 가드가 이미 읽은 메모리 여유·부하를 보여주고, 닫힌 서비스 제어만 보낸다.
 // 프로세스 종료와 로봇 재부팅은 이 화면의 동작이 아니다.
 
@@ -148,7 +148,7 @@ export function createHostServices({root, call, confirmIrreversible, onPaint}) {
         return;
       }
       if (code === "ARM_SESSION_ACTIVE") {
-        say(`${HOST_LABEL[host] || host}에서 팔 세션이 돌고 있어 재부팅하지 않았습니다. 세션이 끝난 뒤 다시 요청하세요.`, "error");
+        say(`${HOST_LABEL[host] || host}에서 팔 세션이 돌고 있어 ${unit ? `${unit}을 다시 시작` : "재부팅"}하지 않았습니다. 세션이 끝난 뒤 다시 요청하세요.`, "error");
         return;
       }
       say(code === "OPERATOR_IDENTITY_REQUIRED"
