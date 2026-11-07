@@ -85,7 +85,7 @@ def trials(robot, tmp_path):
 
 
 def drive(robot, trials, direction, cause, *, hold_s=0.8):
-    trials.start(direction, cause, OWNER, rear_confirmed=True)
+    trials.start(direction, cause, OWNER, blind_zone_confirmed=True)
     held = 0.0
     while held < hold_s:
         trials.hold(OWNER, robot.send)
@@ -248,7 +248,7 @@ def test_a_blank_scan_behind_refuses_reverse_even_when_confirmed(robot, trials):
     for ranges in ([math.inf] * 360, [math.nan] * 360):
         robot.scan.update(ranges=ranges)
         with pytest.raises(TrialRefused) as refused:
-            trials.start("reverse", "button_release", OWNER, rear_confirmed=True)
+            trials.start("reverse", "button_release", OWNER, blind_zone_confirmed=True)
         assert refused.value.code == "CLEARANCE_UNKNOWN"
 
 
@@ -258,14 +258,18 @@ def test_something_closer_than_the_lidar_measures_refuses_that_direction(robot, 
     ranges[beam] = 0.02
     robot.scan.update(ranges=ranges)
     with pytest.raises(TrialRefused) as refused:
-        trials.start(direction, "button_release", OWNER, rear_confirmed=True)
+        trials.start(direction, "button_release", OWNER, blind_zone_confirmed=True)
     assert refused.value.code == "CLEARANCE_UNKNOWN"
 
 
-def test_a_lidar_blind_past_the_body_front_refuses_forward(robot):
-    robot.scan.update(range_min=0.20, ranges=[2.0] * 360)
-    with pytest.raises(TrialRefused, match="right ahead"):
-        require_clearance(robot.scan, BODY, "forward", False, robot.now)
+@pytest.mark.parametrize("direction", ["forward", "cw"])
+def test_a_band_inside_range_min_needs_a_person_in_every_direction(robot, direction):
+    # The real robot: C1 range_min 0.15 m, body front 0.059 m from the LiDAR (D-422).
+    robot.scan.update(range_min=0.15)
+    with pytest.raises(TrialRefused) as refused:
+        require_clearance(robot.scan, BODY, direction, False, robot.now)
+    assert refused.value.code == "BLIND_ZONE_CONFIRMATION_REQUIRED"
+    assert require_clearance(robot.scan, BODY, direction, True, robot.now)["blind_m"] > 0
 
 
 def test_rotation_needs_room_beyond_the_turning_circle(robot, trials):
@@ -275,13 +279,13 @@ def test_rotation_needs_room_beyond_the_turning_circle(robot, trials):
     assert refused.value.code == "CLEARANCE_TOO_SMALL"
 
 
-def test_reverse_needs_a_person_for_what_the_lidar_cannot_see(robot, trials):
+def test_reverse_always_needs_a_person_for_what_the_lidar_cannot_see(robot, trials):
     with pytest.raises(TrialRefused) as refused:
         trials.start("reverse", "button_release", OWNER)
-    assert refused.value.code == "REAR_CONFIRMATION_REQUIRED"
+    assert refused.value.code == "BLIND_ZONE_CONFIRMATION_REQUIRED"
     robot.scan.update(ranges=[0.10] * 360)
     with pytest.raises(TrialRefused) as refused:
-        trials.start("reverse", "button_release", OWNER, rear_confirmed=True)
+        trials.start("reverse", "button_release", OWNER, blind_zone_confirmed=True)
     assert refused.value.code == "CLEARANCE_TOO_SMALL"
 
 

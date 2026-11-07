@@ -559,7 +559,7 @@ class NavigationApprovalTrialRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     direction: Literal["forward", "reverse", "cw", "ccw"]
     stop_cause: Literal["button_release", "command_loss"]
-    rear_confirmed: bool = False
+    blind_zone_confirmed: bool = False
 
 
 class NavigationApprovalSealRequest(BaseModel):

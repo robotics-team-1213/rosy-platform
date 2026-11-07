@@ -27,8 +27,8 @@ export function mount(root, ctx) {
   const surface = el("select");
   for (const [value, text] of [["floor", "바닥"], ["lifted", "바퀴를 들어 올림"]]) { const option = el("option", "", text); option.value = value; surface.append(option); }
   surfaceLabel.append(surface);
-  const rearLabel = el("label", "", " 뒤쪽이 비어 있음을 눈이나 카메라로 확인했습니다");
-  const rear = el("input"); rear.type = "checkbox"; rearLabel.prepend(rear);
+  const blindLabel = el("label", "", " 로봇 바로 앞·뒤·옆이 비어 있음을 눈이나 카메라로 확인했습니다");
+  const blind = el("input"); blind.type = "checkbox"; blindLabel.prepend(blind);
   const list = el("ul", "surface-list"); const buttons = [];
   for (const trial of TRIALS) {
     const row = el("li"); const button = el("ui-button", "", `${trial.label}: 누르는 동안`); const state = el("span", "", " 확인 중");
@@ -38,7 +38,7 @@ export function mount(root, ctx) {
     button.addEventListener("keydown", (event) => { if (event.key === " " && !event.repeat) { event.preventDefault(); void press(trial); } });
     button.addEventListener("keyup", (event) => { if (event.key === " " && trial.stop_cause === "button_release") void release(); });
   }
-  root.append(summary, action, controls, surfaceLabel, rearLabel, list);
+  root.append(summary, action, controls, surfaceLabel, blindLabel, list);
 
   function say(text, state = "ready") { action.textContent = text; action.setAttribute("state", state); }
   async function call(path, body) { return ctx.api(`${BASE}${path}`, {method: "POST", body: JSON.stringify(body ?? {})}); }
@@ -47,7 +47,7 @@ export function mount(root, ctx) {
     if (holding || phase !== "MEASURING") return;
     holding = true;
     try {
-      await call("/trial/start", {direction: trial.direction, stop_cause: trial.stop_cause, rear_confirmed: rear.checked});
+      await call("/trial/start", {direction: trial.direction, stop_cause: trial.stop_cause, blind_zone_confirmed: blind.checked});
       if (!holding) return void call("/trial/stop").catch(() => {});
       say(`${trial.label} 시험 중입니다.`, "pending");
       const send = () => call("/trial/hold").catch((error) => { endHold(); say(`시험이 멈췄습니다: ${error.message}`, "error"); });

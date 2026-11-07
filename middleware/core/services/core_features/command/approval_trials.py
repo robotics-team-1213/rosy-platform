@@ -65,7 +65,18 @@ def _closer_than_range_min(sample, forward_deg, centre_rad, range_min) -> bool:
     return False
 
 
-def require_clearance(sample, config, direction: str, rear_confirmed: bool, wall_now: float) -> dict:
+def _blind_m(config, direction: str, range_min: float) -> float:
+    """How far past the body the LiDAR cannot see in this direction (C1 reports range_min 0.15 m, D-422)."""
+    if direction == "forward":
+        return max(0.0, range_min - (config.body_front_x_m - config.body_lidar_x_m))
+    if direction == "reverse":
+        return max(0.0, range_min - (config.body_lidar_x_m - config.body_rear_x_m), self_mask_rear_blind_m(
+            config.lidar_self_mask, lidar_x_m=config.body_lidar_x_m, rear_x_m=config.body_rear_x_m,
+            half_width_m=config.body_half_width_m))
+    return max(0.0, range_min - (config.body_rotation_radius_m - abs(config.body_lidar_x_m)))
+
+
+def require_clearance(sample, config, direction: str, blind_zone_confirmed: bool, wall_now: float) -> dict:
     """Raises unless a fresh full scan shows room. No or stale data never reads as free space."""
     if not sample:
         raise TrialRefused("CLEARANCE_UNKNOWN", "no LiDAR scan has arrived")
@@ -95,36 +106,32 @@ def require_clearance(sample, config, direction: str, rear_confirmed: bool, wall
                            half_width_m=config.body_half_width_m,
                            rotation_radius_m=config.body_rotation_radius_m)
     need = TRAVEL_CAP_M + RUN_MARGIN_M
+    # Returns under range_min and inside self-mask windows are dropped, so the band next to the body can
+    # never be proved clear. Visible returns must still clear, and a person answers for the rest. Reverse
+    # always asks: nothing watches the rear while driving.
+    blind = _blind_m(config, direction, range_min)
+    if (blind > 0.0 or direction == "reverse") and not blind_zone_confirmed:
+        raise TrialRefused("BLIND_ZONE_CONFIRMATION_REQUIRED",
+                           f"LiDAR cannot see {blind * 100:.0f} cm next to the body: confirm it by eye or camera")
     if direction == "reverse":
-        # The rear can never be proved clear: returns under range_min and inside self-mask windows are
-        # dropped. Visible returns must still clear, and a person answers for what the LiDAR cannot see.
-        blind = max(0.0, range_min - (config.body_lidar_x_m - config.body_rear_x_m), self_mask_rear_blind_m(
-            config.lidar_self_mask, lidar_x_m=config.body_lidar_x_m, rear_x_m=config.body_rear_x_m,
-            half_width_m=config.body_half_width_m))
-        if not rear_confirmed:
-            raise TrialRefused("REAR_CONFIRMATION_REQUIRED",
-                               f"LiDAR cannot see {blind * 100:.0f} cm behind the body: confirm the rear by eye or camera")
         if _returns_in_sector(points, math.pi) < MIN_SECTOR_RETURNS * count / 4:
             raise TrialRefused("CLEARANCE_UNKNOWN", "too few LiDAR returns behind the robot")
         if seen["rear_m"] is not None and seen["rear_m"] < need:
             raise TrialRefused("CLEARANCE_TOO_SMALL", f"{seen['rear_m']:.2f} m behind the body, {need:.2f} m needed")
-        return {**seen, "rear_blind_m": blind}
+        return {**seen, "blind_m": blind}
     if direction == "forward":
-        # Past the body front only: an object inside range_min there reads as no return at all.
-        if range_min > config.body_front_x_m - config.body_lidar_x_m:
-            raise TrialRefused("CLEARANCE_UNKNOWN", "the LiDAR cannot see the space right ahead of the body")
         if _returns_in_sector(points, 0.0) < MIN_SECTOR_RETURNS * count / 4:
             raise TrialRefused("CLEARANCE_UNKNOWN", "too few LiDAR returns ahead of the robot")
         front = seen["front_band_m"]
         free = None if front is None else front - (config.body_front_x_m - config.body_lidar_x_m)
         if free is not None and free < need:
             raise TrialRefused("CLEARANCE_TOO_SMALL", f"{free:.2f} m ahead of the body, {need:.2f} m needed")
-        return seen
+        return {**seen, "blind_m": blind}
     if len(points) < MIN_SECTOR_RETURNS * count:
         raise TrialRefused("CLEARANCE_UNKNOWN", "too few LiDAR returns around the robot")
     if seen["turn_m"] is None or seen["turn_m"] < TURN_MARGIN_M:
         raise TrialRefused("CLEARANCE_TOO_SMALL", f"{TURN_MARGIN_M:.2f} m needed beyond the turning circle")
-    return seen
+    return {**seen, "blind_m": blind}
 
 
 class ApprovalTrials:
@@ -150,7 +157,7 @@ class ApprovalTrials:
                 "stopping": trial["stop_at"] is not None}
             return {"active": current, "last": self.last}
 
-    def start(self, direction: str, stop_cause: str, owner: str, rear_confirmed: bool = False) -> dict:
+    def start(self, direction: str, stop_cause: str, owner: str, blind_zone_confirmed: bool = False) -> dict:
         if (direction, stop_cause) not in PAIRS:
             raise TrialRefused("TRIAL_UNKNOWN", f"{direction}/{stop_cause} is not a required trial")
         limits = self.safety.limits
@@ -160,7 +167,7 @@ class ApprovalTrials:
         if linear < MIN_LINEAR_MPS or angular < MIN_ANGULAR_RPS:
             raise TrialRefused("TRIAL_LIMIT_TOO_LOW", "the manual speed limit leaves no measurable motion")
         seen = require_clearance(self.state.get_sensor("lidar"), self.line_config(), direction,
-                                 rear_confirmed, self.wall())
+                                 blind_zone_confirmed, self.wall())
         odom = self.state.odom_sample()
         if odom is None or odom[3] > ODOM_MAX_AGE_S:
             raise TrialRefused("ODOM_STALE", "odometry is not fresh")
