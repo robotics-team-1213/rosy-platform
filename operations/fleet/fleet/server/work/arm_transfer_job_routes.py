@@ -134,7 +134,8 @@ def install_arm_transfer_job_routes(app, *, installation, deployment_profile, ta
             if trips is None:
                 _log.warning("intake proposals are off: trip proposals are not installed")
                 return
-            app.state.intake_task = asyncio.create_task(intake_loop(trips, store, intake, _log))
+            app.state.intake_task = asyncio.create_task(intake_loop(
+                trips, store, intake, _log, port_store=getattr(app.state, "port_event_store", None)))
 
         @app.on_event("shutdown")
         async def intake_stop():

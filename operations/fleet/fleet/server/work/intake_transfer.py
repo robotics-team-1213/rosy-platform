@@ -7,7 +7,10 @@ are bound to it. The app's declared cargo code rides beside the job in ``fleet_i
 proposal's own transaction, and only the port event producer reads it."""
 import asyncio
 from contextlib import closing
+from datetime import datetime
 import json
+
+from core_common.protocol.port_events import PortEvent, event_id
 
 from .site_auth import SitePrincipal
 
@@ -65,6 +68,28 @@ def propose_arrived(trip_store, arm_store, *, supply_place: str, instance_id: st
     return made
 
 
+def release_vehicles(trip_store, arm_store, port_store) -> list[int]:
+    """D-996 1: a supply-arm intake job that confirmed its goal releases the trip's vehicle. One event per job:
+    the observation is the job, the time is the job's own, so every pass rebuilds the same event (idempotent)."""
+    with closing(arm_store._journal._connect()) as connection:
+        connection.execute(_BINDINGS)
+        done = connection.execute(
+            "SELECT b.arm_mission_id, b.trip_mission_id, j.workcell_id, j.updated_at FROM fleet_intake_bindings b "
+            "JOIN fleet_cell_jobs j ON j.mission_id=b.arm_mission_id WHERE j.status='GOAL_CONFIRMED'").fetchall()
+    seqs = []
+    for row in done:
+        with closing(trip_store.store._connect()) as connection:
+            trip = connection.execute("SELECT instance_id FROM fleet_cell_jobs WHERE mission_id=?",
+                                      (row["trip_mission_id"],)).fetchone()
+        if trip is None:
+            continue
+        kind, ref = "vehicle.release_permitted", "s-done:" + row["arm_mission_id"]
+        event = PortEvent(event_id=event_id(row["workcell_id"], ref, kind), kind=kind, observation_ref=ref,
+                          vehicle_id=trip["instance_id"], observed_at=datetime.fromisoformat(row["updated_at"]))
+        seqs.append(port_store.append(row["workcell_id"], event))
+    return seqs
+
+
 def validate_intake(intake, arm_store) -> None:
     if not isinstance(intake, dict) or set(intake) != {"supply_place", "instance_id"} or not all(
             isinstance(value, str) and value for value in intake.values()):
@@ -74,10 +99,12 @@ def validate_intake(intake, arm_store) -> None:
         raise ValueError("intake instance_id is not an installed ARM transfer participant")
 
 
-async def intake_loop(trip_store, arm_store, intake, log, period_s: float = 2.0):
+async def intake_loop(trip_store, arm_store, intake, log, period_s: float = 2.0, port_store=None):
     while True:
         try:
             await asyncio.to_thread(propose_arrived, trip_store, arm_store, **intake)
+            if port_store is not None:
+                await asyncio.to_thread(release_vehicles, trip_store, arm_store, port_store)
         except asyncio.CancelledError:
             raise
         except Exception:  # a bad row must not stop later trips; the next pass retries

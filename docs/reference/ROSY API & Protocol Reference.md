@@ -12,6 +12,10 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ### v1.376 항만 사건과 이송 제안의 `object_ref` (D-996)
 
 - `POST /api/fleet/trip-proposals`: 선택 필드 `object_ref`(앞뒤 공백·제어 문자 없는 1~128자)를 받는다. 업무 앱의 화물 코드이고 ROSY는 해석하지 않는다. 같은 `request_key`로 다른 `object_ref`(또는 없음)를 보내면 409다. 값이 있으면 `TripProposalSnapshot.object_ref`로 돌려주고 `proposal_digest`에 들어간다. 없으면 응답 바이트와 digest는 전과 같다. `request_digest`(이송 job 본문)는 바뀌지 않는다. additive다.
+- `POST /api/fleet/workcell-observations/{workcell_id}/port-events`: 셀 PC가 `X-Workcell-Observation-Token`(그 workcell 팔 토큰 중 하나, D-807 기계 자격)으로 `PortEvent`(`core_common.protocol.port_events`, 닫힌 모델) 하나를 보낸다. kind별 필수·금지 필드는 모델이 강제한다(`received_at_intake`: `object_ref`·`intake_point`·`identity`, `stored`: `object_ref`·`slot_ref` `{area}-r{row}-c{col}-l{level}`·`identity`, `handling_failed`: `reason` `MISMATCH|UNREADABLE|LOST|DAMAGED`(+선택 `object_ref`), `release_permitted`: `vehicle_id`). `event_id`는 `sha256(workcell_id|observation_ref|kind)`이어야 한다(아니면 422 `PORT_EVENT_ID_MISMATCH`). 200 `{event_id, seq}`. 같은 사건 재전송은 같은 seq, 같은 `event_id`의 다른 사건은 409 `PORT_EVENT_CONFLICT`, 토큰 오류 401, 4 KiB 초과 413. 원장 `fleet_port_events`는 append-only이고 seq는 이 Fleet 안에서 단조 증가한다.
+- `GET /api/fleet/control-unit/port-events?after_seq=&limit=1..200`: 직계 부모 관제 단위의 서비스 principal(`control-unit:<parent>`)만 읽는다. 200 `PortEventLedgerPage{rows:[{seq, event}]}`. 다른 principal은 403 `CONTROL_UNIT_PARENT_ONLY`.
+- `GET /api/fleet/port-events?after=<cursor>&limit=1..200`: viewer 인증(업무 앱 service principal). 200 `PortEventPage{events, cursor, complete}`. 이 Fleet의 원장과 workcell을 가진 **직계 자식** 셀만 읽는다(손자 셀은 범위 밖). `cursor`는 불투명 문자열로, 첫 조회에서는 생략하고 받은 값을 그대로 돌려보낸다. 닿지 않은 셀이 있거나 셀 안 seq에 빈 곳이 있으면 `complete:false`이고 그 셀 위치는 빈 곳 앞에 머문다. 잘못된 cursor는 400 `PORT_EVENT_CURSOR_INVALID`.
+- 시뮬레이션 프로필에서 `create_app(intake_supply={supply_place, instance_id})`이면 `object_ref`가 있는 승인된 이송이 공급 장소에서 `GOAL_CONFIRMED`가 될 때 Fleet(`fleet-intake`)이 S `ARM_TRANSFER`를 **제안**만 한다. 그 작업이 `GOAL_CONFIRMED`가 되면 `vehicle.release_permitted`(이송 로봇)를 원장에 쓴다. 승인·인계 확인·가드는 그대로다.
 
 ### v1.365 운행 시작의 배터리 확인과 충전 칸 점유 불명
 
@@ -178,6 +182,9 @@ v1.292 limits. No cargo, process or business field exists on the wire.
 | GET /api/fleet/trip-proposals?request_key=... | caller-scoped key | viewer authentication; own record only |
 | GET /api/fleet/trip-proposals/{proposal_id} | proposal ID | creator or a named site operator |
 | POST /api/fleet/trip-proposals/{proposal_id}/admit | TripProposalAdmit: expected_proposal_digest, expected_generation | named operator different from the proposer; 200 |
+| GET /api/fleet/port-events?after=&limit= | opaque cursor (D-996 7) | viewer (app service principal); 200 PortEventPage; this Fleet and direct workcell child cells only |
+| POST /api/fleet/workcell-observations/{workcell_id}/port-events | PortEvent (closed, kind-specific fields) | X-Workcell-Observation-Token of that workcell; 200 {event_id, seq}; idempotent on event_id |
+| GET /api/fleet/control-unit/port-events?after_seq=&limit= | ledger seq | direct parent control-unit service principal only; 200 PortEventLedgerPage |
 
 TripProposalResponse has exactly proposal: TripProposalSnapshot with proposal_id,
 proposal_principal_id, request_key, request_digest, proposal_digest,
