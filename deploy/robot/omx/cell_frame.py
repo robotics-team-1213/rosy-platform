@@ -42,7 +42,7 @@ def slot_ids(slot: int) -> dict:
 
 
 def corners(img) -> dict:
-    """{id: 4x2 corner pixels} of every DICT_4X4_100 marker in the frame, OpenCV's corner order."""
+    """{id: 4x2 corner pixels} of every marker cell_marks reads (DICT_4X4_250), OpenCV's corner order."""
     import cv2
 
     grey = img if img.ndim == 2 else cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
