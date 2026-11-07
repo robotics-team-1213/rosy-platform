@@ -48,7 +48,7 @@ if (account) document.querySelector('[data-login=form]').setAttribute('aria-labe
 if (failure) document.querySelector('[data-login=submit]').textContent = '다른 계정으로 로그인';
 login.refresh(true);
 
-// D-988: a person without an account, or without a grant for the app they opened, asks the administrator.
+// D-993: a person without an account, or without a grant for the app they opened, asks the administrator.
 if (account) {
   const $ = id => document.getElementById(id);
   const resource = central ? new URLSearchParams(back.split('?')[1]).get('scope') || '' : '';

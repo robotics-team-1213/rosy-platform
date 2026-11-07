@@ -1,4 +1,4 @@
-"""D-988 access requests: bounded public intake, administrator decision through the ledger's own paths."""
+"""D-993 access requests: bounded public intake, administrator decision through the ledger's own paths."""
 import json
 import sqlite3
 
@@ -151,3 +151,78 @@ def test_reject_needs_a_reason_and_is_audited(standalone):
     assert json.loads(audit['after_state'])['reason'] == 'unknown person'
     assert admin.post(f'{URL}/{request_id}/reject', headers=ORIGIN, json={'reason': 'again'}).status_code == 422
     assert admin.post(f'{URL}/nope/reject', headers=ORIGIN, json={'reason': 'r'}).status_code == 404
+
+
+def test_old_pending_requests_stop_counting_toward_the_caps(standalone, monkeypatch):
+    app, admin, _, _ = standalone
+    client = anonymous(app)
+    for number in range(5):
+        assert send(client, name='N', username=f'user{number}').status_code == 202
+    assert send(client, name='N', username='user5').status_code == 429
+    with sqlite3.connect(app.state.password_sessions.path) as db:  # two days old: still listed, no longer counted
+        db.execute('UPDATE rosy_access_requests SET created_at=created_at-172800')
+    assert send(client, name='N', username='user5').status_code == 202
+    assert len(admin.get(URL, headers=ORIGIN).json()) == 6
+    from rosy_account import access_requests
+    monkeypatch.setattr(access_requests, 'MAX_PENDING', 1)
+    assert send(client, name='N', username='user6').status_code == 429  # the fresh one counts
+
+
+def test_same_login_with_a_different_name_is_a_separate_request(standalone):
+    app, _, _, _ = standalone
+    send(anonymous(app), name='First', username='dana')
+    send(anonymous(app), name='Second', username='dana')
+    send(anonymous(app), name='Second', username='dana')
+    assert [r['requester_name'] for r in rows(app)] == ['First', 'Second']
+
+
+def test_failure_inside_the_transaction_leaves_no_account_and_the_request_pending(standalone, monkeypatch):
+    app, admin, _, _ = standalone
+    send(anonymous(app), name='Dana', username='dana')
+    request_id = rows(app)[0]['request_id']
+
+    def boom(*args, **kwargs):
+        raise ValueError('boom')
+    monkeypatch.setattr(type(app.state.access_requests), '_close', boom)
+    reply = admin.post(f'{URL}/{request_id}/approve', headers=ORIGIN,
+                       json={'role': 'viewer', 'grants': GRANTS, 'password': 'initial secret 1'})
+    assert reply.status_code == 422
+    assert rows(app)[0]['state'] == 'pending'
+    assert not [a for a in admin.get('/api/fleet/auth/accounts', headers=ORIGIN).json() if a['login'] == 'dana']
+
+
+def test_concurrent_approvals_create_one_account(standalone):
+    from concurrent.futures import ThreadPoolExecutor
+    app, admin, _, _ = standalone
+    send(anonymous(app), name='Dana', username='dana')
+    request_id = rows(app)[0]['request_id']
+
+    def approve(_):
+        return admin.post(f'{URL}/{request_id}/approve', headers=ORIGIN,
+                          json={'role': 'viewer', 'grants': GRANTS, 'password': 'initial secret 1'}).status_code
+    with ThreadPoolExecutor(2) as pool:
+        codes = sorted(pool.map(approve, range(2)))
+    assert codes.count(200) == 1 and all(c in (422, 503) for c in codes if c != 200)
+    assert len([a for a in admin.get('/api/fleet/auth/accounts', headers=ORIGIN).json() if a['login'] == 'dana']) == 1
+
+
+def test_grant_approval_for_a_disabled_account_rolls_back(standalone):
+    app, admin, _, _ = standalone
+    admin.post('/api/fleet/auth/accounts', headers=ORIGIN, json={
+        'login': 'bob', 'principal_id': 'bob', 'role': 'viewer', 'password': 'bob!', 'grants': []})
+    bob = anonymous(app)
+    bob.post('/api/fleet/auth/login', headers=ORIGIN, json={'login': 'bob', 'password': 'bob!'})
+    bob.post('/api/fleet/auth/change-password', headers=ORIGIN, json={'password': 'bob changed secret'})
+    send(bob, resource='project:demo')
+    account = next(a for a in admin.get('/api/fleet/auth/accounts', headers=ORIGIN).json() if a['login'] == 'bob')
+    disabled = admin.patch(f'/api/fleet/auth/accounts/{account["account_id"]}', headers=ORIGIN,
+                           json={'revision': account['revision'], 'enabled': False}).json()
+    reply = admin.post(f'{URL}/{rows(app)[0]["request_id"]}/approve', headers=ORIGIN, json={
+        'role': 'viewer', 'revision': disabled['revision'],
+        'grants': [{'resource': 'project:demo', 'capabilities': ['learning.view']}]})
+    assert reply.status_code == 422 and rows(app)[0]['state'] == 'pending'
+
+
+def test_deeply_nested_json_is_malformed_not_a_crash(standalone):
+    app, _, _, _ = standalone
+    assert anonymous(app).post(URL, headers=ORIGIN, content=b'[' * 4000).status_code == 422

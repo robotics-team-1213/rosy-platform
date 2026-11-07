@@ -11,7 +11,7 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 
 ### v1.374 Account 가입·권한 요청 (D-993)
 
-- Additive. `POST /api/fleet/auth/access-requests`는 인증이 없는 공개 입력이다. `Origin`이 `Host`와 같아야 하며(아니면 403 `CSRF_REJECTED`) 본문은 4 KiB 이하(413 `REQUEST_TOO_LARGE`), 필드는 `name`(64자)·`username`(`^[a-z0-9._-]{1,32}$`)·`resource`(`site|robot|project:<id>`, 선택)·`note`(500자, 선택)뿐이다(그 밖은 422 `INVALID_REQUEST`). 유효한 로그인 쿠키가 있으면 요청은 그 계정의 권한 요청(`grant`)이고 이름·ID는 세션에서 정한다. 성공, 같은 대기 요청의 반복, 이미 있는 로그인 ID는 모두 같은 202 `{"status":"received"}`다. 대기 요청이 서비스 전체 200건 또는 한 주소 5건이면 429 `REQUESTS_FULL`이다.
+- Additive. `POST /api/fleet/auth/access-requests`는 인증이 없는 공개 입력이다. `Origin`이 `Host`와 같아야 하며(아니면 403 `CSRF_REJECTED`) 본문은 4 KiB 이하(413 `REQUEST_TOO_LARGE`), 필드는 `name`(64자)·`username`(`^[a-z0-9._-]{1,32}$`)·`resource`(`site|robot|project:<id>`, 선택)·`note`(500자, 선택)뿐이다(그 밖은 422 `INVALID_REQUEST`). 유효한 로그인 쿠키가 있으면 요청은 그 계정의 권한 요청(`grant`)이고 이름·ID는 세션에서 정한다. 성공, 같은 대기 요청의 반복, 이미 있는 로그인 ID는 모두 같은 202 `{"status":"received"}`다. 최근 24시간의 대기 요청이 서비스 전체 200건 또는 한 주소 5건이면 429 `REQUESTS_FULL`이다.
 - `GET /api/fleet/auth/access-requests`, `POST /api/fleet/auth/access-requests/{request_id}/approve`(`role`, `grants`, 새 계정은 `password`·선택 `principal_id`, 기존 계정은 `revision`), `POST .../reject`(`reason`)는 `accounts.manage` 쿠키 세션이 필요하다. 승인은 기존 계정 발급·갱신 경로를 같은 트랜잭션에서 쓰며 요청만으로 권한이 생기지 않는다. 자세한 계약은 [Rosy Account protocol](rosy-account-protocol.md).
 
 ### v1.365 운행 시작의 배터리 확인과 충전 칸 점유 불명

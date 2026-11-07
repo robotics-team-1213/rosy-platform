@@ -90,7 +90,7 @@ def install_account_routes(app, *, sessions, authorize):
         fields(payload, {"revision"})
         return call(sessions.revoke_account_sessions, value, account_id, **payload)
 
-    # D-988: administrators decide sign-up / access requests; the public intake is in access_request_routes.
+    # D-993: administrators decide sign-up / access requests; the public intake is in access_request_routes.
     @app.get("/api/fleet/auth/access-requests", tags=["fleet-auth"])
     def access_requests(value=Depends(manager)):
         return call(requests.list, value)

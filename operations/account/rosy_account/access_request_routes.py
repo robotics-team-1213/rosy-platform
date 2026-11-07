@@ -1,4 +1,4 @@
-"""D-988 public sign-up / access request intake: same-origin, size-bounded, no enumeration, no grants."""
+"""D-993 public sign-up / access request intake: same-origin, size-bounded, no enumeration, no grants."""
 import json
 
 from fastapi import HTTPException, Request
@@ -27,7 +27,7 @@ def install_access_request_routes(app, *, sessions, trust_forwarded):
                 raise refuse(413, 'REQUEST_TOO_LARGE')
         try:
             payload = json.loads(body)
-        except ValueError:
+        except (ValueError, RecursionError):  # deeply nested JSON is just malformed
             payload = None
         if not isinstance(payload, dict) or set(payload) - {'name', 'username', 'resource', 'note'}:
             raise refuse(422, 'INVALID_REQUEST')

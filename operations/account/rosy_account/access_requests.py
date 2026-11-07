@@ -1,4 +1,4 @@
-"""Sign-up and access requests: unauthenticated intake, administrator decision (D-988).
+"""Sign-up and access requests: unauthenticated intake, administrator decision (D-993).
 
 A request never creates credentials or grants. Approval runs the ledger's own create/mutate in the same
 transaction that closes the request, so there is no second user store and no half-approved state.
@@ -13,6 +13,7 @@ from rosy_account.site_users import _LOGIN
 RESOURCE = re.compile(r'(site|robot|project):[A-Za-z0-9._-]{1,96}\Z')
 MAX_PENDING = 200          # whole service
 MAX_PENDING_PER_CLIENT = 5  # one address (stored only as a digest)
+CAP_WINDOW_S = 86400.0      # older pending requests stay listed but stop counting toward either cap
 LIST_LIMIT = 200
 
 
@@ -62,11 +63,12 @@ class AccessRequests:
         digest = hashlib.sha256(client.encode()).hexdigest()
         with self.ledger.db(write=True) as db:
             self._ensure(db)
-            if db.execute('SELECT 1 FROM rosy_access_requests WHERE state=? AND kind=? AND username=? AND resource=?',
-                          ('pending', kind, username, resource)).fetchone():
+            if db.execute('SELECT 1 FROM rosy_access_requests WHERE state=? AND kind=? AND username=? AND resource=? '
+                          'AND requester_name=?', ('pending', kind, username, resource, name)).fetchone():
                 return
-            counts = db.execute("SELECT COUNT(*), SUM(client_sha256=?) FROM rosy_access_requests WHERE state='pending'",
-                                (digest,)).fetchone()
+            counts = db.execute("SELECT COUNT(*), SUM(client_sha256=?) FROM rosy_access_requests "
+                                "WHERE state='pending' AND created_at>=?",
+                                (digest, self.ledger.sessions._clock() - CAP_WINDOW_S)).fetchone()
             if (counts[0] or 0) >= MAX_PENDING or (counts[1] or 0) >= MAX_PENDING_PER_CLIENT:
                 raise RequestsFull()
             db.execute('INSERT INTO rosy_access_requests VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)', (
@@ -121,16 +123,16 @@ class AccessRequests:
             row = self._load(db, request_id)
 
         def close(db, actor, account_id):
+            if row['kind'] == 'grant':  # inside the transaction: a disabled or removed account rolls everything back
+                account = db.execute('SELECT enabled FROM rosy_accounts WHERE account_id=?',
+                                     (row['account_id'],)).fetchone()
+                if account is None or not account[0]:
+                    raise ValueError('requester account is unavailable')
             self._close(db, actor, row, 'approved', '', account_id)
         if row['kind'] == 'new_account':
             created = self.ledger.create(value, login=row['username'], role=role, grants=grants, password=password,
                                          principal_id=principal_id or row['requester_name'], within=close)
         else:
-            with self.ledger.db() as db:
-                account = db.execute('SELECT enabled FROM rosy_accounts WHERE account_id=?',
-                                     (row['account_id'],)).fetchone()
-            if account is None or not account[0]:
-                raise ValueError('requester account is unavailable')
             created = self.ledger.mutate(value, row['account_id'], revision, {'grants': grants},
                                          operation='update', within=close)
         return {'request_id': request_id, 'state': 'approved', 'account': created}

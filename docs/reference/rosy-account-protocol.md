@@ -128,7 +128,7 @@ unsafe 요청은 same-origin 검사를 거친다. 오류는 기존 Fleet detail 
 | POST /api/fleet/auth/access-requests/{request_id}/approve | `accounts.manage` | `role`, `grants`, 새 계정은 `password`(임시, 첫 로그인에서 변경)·선택 `principal_id`, 기존 계정은 `revision`. 계정 발급·갱신과 요청 마감이 한 트랜잭션 |
 | POST /api/fleet/auth/access-requests/{request_id}/reject | `accounts.manage` | `reason` 필수 |
 
-본문 4 KiB, 이름 64자, 남긴 말 500자 제한이다. 대기 요청은 전체 200건, 한 주소(SHA-256 요약만 저장) 5건까지이고 넘으면 429 `REQUESTS_FULL`이다. 새 ID, 이미 있는 ID, 반복 요청은 같은 202로 답해 계정 존재를 드러내지 않는다. 처리된 요청은 409가 아니라 422(`request already decided`)다. 승인·거절은 `rosy_account_audit`에 `access-approve`/`access-reject`로 남고 승인은 `create`/`update` 행도 남긴다. 요청자는 비밀번호를 보내지 않으며 관리자가 승인 때 임시 비밀번호를 정한다.
+본문 4 KiB, 이름 64자, 남긴 말 500자 제한이다. 최근 24시간의 대기 요청이 전체 200건, 한 주소(SHA-256 요약만 저장) 5건까지이고 넘으면 429 `REQUESTS_FULL`이다. 새 ID, 이미 있는 ID, 반복 요청은 같은 202로 답해 계정 존재를 드러내지 않는다. 처리된 요청은 409가 아니라 422(`request already decided`)다. 승인·거절은 `rosy_account_audit`에 `access-approve`/`access-reject`로 남고 승인은 `create`/`update` 행도 남긴다. 요청자는 비밀번호를 보내지 않으며 관리자가 승인 때 임시 비밀번호를 정한다.
 
 ## 앱 연결: authorization code + S256 PKCE
 
