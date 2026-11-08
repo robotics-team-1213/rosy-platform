@@ -4735,3 +4735,7 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: 2026-11-07 y8xs가 `battery.deep`(4.9 %)을 기록하고도 꺼지지 않아 1.3 %(6.45 V)에서 사람이 껐다. 원격 시험 관련 10개 파일 642 passed. 독립 검토 차단 결함 없음
 - gate 변화: 없음 — 기체에서 실제 종료를 확인하기 전이다.
 - CE: 미해결 — 기체에서 `PathChanged` 발화와 종료를 확인한 뒤 교훈을 기록한다.
+## 2026-11-08 · uncommitted · feat(site-map): PC별 역할·모듈·팔 보드를 private 지도 하나로 읽고 실제 보드와 대조한다
+- 변경: `tools/remote/site_map.py`(`show`, `check`)가 main checkout의 `private/site-map.yaml`(rosy.site-map/1)을 읽고 각 PC의 OpenRB 보드를 ssh로 읽어 빠진 보드·지도에 없는 보드를 보고한다. `deploy/hosts/README.md` 새 PC 절차 0단계, `tools/remote/AGENTS.md`
+- 증거: R 이전 중 배치표·lab-hosts·services.yaml·omx-arm-boards.json이 서로 달라 리더 보드 2개가 "매핑 없음"으로 보였다. 서보 ping으로 리더(ID 1–6, XL330)임을 확인해 지도에 넣었고 live `check`가 4개 일치를 보고했다
+- gate 변화: 없음
