@@ -36,6 +36,8 @@ class Physics:
         while seen:
             if seen in self.chain:
                 raise ValueError(f"physics candidate {name!r}: base loop at {seen!r}")
+            if seen not in self.doc["candidates"]:
+                raise ValueError(f"no physics candidate {seen!r} (the base of {name!r})")
             self.chain.insert(0, seen)
             seen = self.doc["candidates"][seen].get("base")
 
