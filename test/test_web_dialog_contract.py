@@ -43,6 +43,7 @@ PINNED_CONFIRMS = {
     "middleware/robot_ui/robot/panels/host/operations.js": 1,
     "middleware/robot_ui/robot/panels/setup/dock-admin.js": 2,
     "middleware/robot_ui/robot/panels/setup/docking.js": 1,
+    "middleware/robot_ui/robot/panels/setup/navigation-approval.js": 1,
     "middleware/robot_ui/robot/panels/setup/localization.js": 1,
     "middleware/robot_ui/robot/panels/setup/traffic-policy.js": 1,
     "middleware/robot_ui/robot/panels/system/security.js": 1,
@@ -67,7 +68,7 @@ PINNED_CONFIRMS = {
     "applications/fleet/web/devices/enrollment.js": 2,  # unenroll + D-555 forced hub revoke
     "applications/fleet/web/installation/host-services.js": 1,  # named operator host control, shared confirmation
     "applications/fleet/web/roster.js": 1,
-    "applications/fleet/web/shared/account-page.js": 1,  # role bundle replaces an existing account's grants
+    "applications/fleet/web/shared/account-page.js": 2,  # role bundle replaces grants; rejecting an access request (D-993)
     # Activation and profile replacement; D-655 camera replacement moved to its controller.
     "applications/fleet/web/sitemap/site-map.js": 2,
     "applications/fleet/web/sitemap/map-authoring.js": 1,  # replace drawing reference while retaining geometry

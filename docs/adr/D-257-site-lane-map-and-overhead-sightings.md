@@ -40,3 +40,5 @@
 **References:** D-12, D-13, D-90, D-94, D-95, D-100, D-136, D-152, D-210, D-249.
 
 ---
+
+**개정 (2026-11-07, D-989, 사용자 결정 "code it so auto-locate is used for driving too, and make it switchable on and off"):** 로봇별로 켠 경우(`fleet.map_pose.auto_locate_robots`, 기본 꺼짐) 카메라로 맞춘 변환이 trip 지도 자세의 앵커가 될 수 있다. 끈 로봇의 sighting은 그대로다. 정확도는 실물 시험 전까지 재지 않았다.

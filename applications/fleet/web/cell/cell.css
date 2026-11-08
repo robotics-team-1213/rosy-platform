@@ -18,6 +18,7 @@
 .cell-fault-history, .cell-incident-history { display: grid; gap: var(--space-2); margin: 0; padding-inline-start: var(--space-4); }
 .cell-fault-history p, .cell-incident-history p { margin: 0; overflow-wrap: anywhere; }
 .cell-fault-frames { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr)); gap: var(--space-2); }
+.cell-fault-frames figure { display: grid; gap: var(--space-1); margin: 0; min-width: 0; }
 .documents { display: grid; gap: var(--space-4); }
 #saved:not([hidden]) { display: grid; gap: var(--space-2); max-width: 40rem; margin: 0; padding: 0; list-style: none; }
 #saved li { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); overflow-wrap: anywhere; }

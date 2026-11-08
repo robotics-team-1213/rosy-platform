@@ -68,8 +68,10 @@ API의 `accepted` 응답만으로 G4를 완료하지 않는다.
 ## 3. 승인과 네이티브 전환
 
 G4 레코드와 장치 readback, 서명 릴리스가 같은 장치/세대임을 확인한 뒤
-`motor` 모드에서 다음 명령으로 봉인한다. 이 도구는 주행을 명령하거나
-자료를 자동 채집하지 않는다.
+`motor` 모드에서 다음 명령으로 봉인한다. 이 도구 자체는 주행을 명령하거나
+자료를 채집하지 않는다. 채집과 봉인을 한 번에 하는 제품 경로는 로그인한 운영자의
+`/api/v1/navigation/approval` API와 작업 준비의 항법 재승인 카드다(D-986). 아래 명령은 그 경로를
+쓸 수 없을 때의 수동 절차다.
 
 ```bash
 sudo -n python3 -B /opt/rosy/native-runtime/mapping_approval.py approve \
@@ -104,6 +106,10 @@ sudo -n python3 -B /opt/rosy/native-runtime/mapping_approval.py approve \
 새 서명 이미지 또는 기록된 벤치 설치로 unit·승인 도구를 함께 갱신하고
 파일 해시와 `systemd-analyze verify`를 읽어 확인한다. 봉인 도구가 릴리스
 payload에만 들어갔다고 unit이 갱신된 것으로 취급하지 않는다.
+
+90e631297f 이전 OS 이미지는 이 유닛이 payload 동기화 대상이 아니므로(`image_layer_plan.py`) payload 릴리스로
+고쳐지지 않는다. OS A/B 설치가 필요하다. 항법 재승인 API와 카드는 이 상태를 `os_update_stops_navigation`으로
+알린다. motor 측정 시험은 영향이 없다.
 
 옛 frozen OS의 `rosy-os-update.service`가 `Wants=rosy-io.service`를 포함하면
 업데이트 없음 점검도 I/O를 시작해 항법을 중지시킨다. 감독 시험 전에 frozen 제어기의

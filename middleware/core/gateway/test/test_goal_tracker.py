@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from core.bridge.goal_tracker import GoalTracker, on_response, on_result
+from core.bridge.goal_tracker import GoalTracker, on_no_response, on_response, on_result
 
 
 def test_a_result_for_the_current_goal_is_current():
@@ -319,3 +319,58 @@ def test_a_future_that_raises_becomes_a_failed_result_not_a_crash():
               generation)
 
     assert nav.calls == [("on_result", (False, "action server gone"))]
+
+
+class _Open:
+    def __init__(self, done=False) -> None:
+        self._done = done
+
+    def done(self) -> bool:
+        return self._done
+
+
+def test_no_answer_from_nav2_fails_the_goal_and_a_late_acceptance_is_cancelled():
+    """A missing navigate_to_pose server left the goal PLANNING forever; Fleet never got a result."""
+    tracker = GoalTracker()
+    generation = tracker.opening("cid-1")
+    nav = _Nav()
+
+    on_no_response(tracker, nav, _Open(), generation)
+
+    assert nav.calls == [("on_result", (False, "NAV2_NO_RESPONSE"))]
+    assert nav.correlation_ids == ["cid-1"]
+    late = _Handle()
+    on_response(tracker, nav, _Future(late), generation, attach_result=lambda *a: None)
+    assert late.cancelled is True
+    assert tracker.live_count == 0
+    assert len(nav.calls) == 1
+
+
+def test_no_answer_for_a_native_run_says_result_unknown_not_failed():
+    """The API contract keeps an undelivered-or-unknown send nonterminal with BACKEND_RESULT_UNKNOWN."""
+    from uuid import uuid4
+    tracker = GoalTracker()
+    run_id = uuid4()
+    generation = tracker.opening("cid-1", run_id)
+    nav = _Nav()
+    unknown = []
+    nav.on_backend_unknown = unknown.append
+
+    on_no_response(tracker, nav, _Open(), generation)
+
+    assert unknown == [run_id]
+    assert nav.calls == []
+
+
+def test_an_answered_or_superseded_goal_is_left_alone_at_the_deadline():
+    tracker = GoalTracker()
+    answered = tracker.opening()
+    tracker.accepted(answered, "h1")
+    nav = _Nav()
+    on_no_response(tracker, nav, _Open(done=True), answered)
+    on_no_response(tracker, nav, _Open(), answered)   # accepted: the result callback reports it
+    superseded = tracker.opening()
+    tracker.opening()
+    on_no_response(tracker, nav, _Open(), superseded)
+
+    assert nav.calls == []

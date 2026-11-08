@@ -317,15 +317,14 @@ class Runner:
             self.target, self.paced, self.pace_last = self.queue.pop(0), 0, None
             if self.chunk is not None:
                 self.played.append(list(self.target))
-        if self.chunk is None:
-            self.trend = []
+        self.trend = [] if self.chunk is None else self.trend
         sent = self.robot.send_action(dict(zip(NAMES, self.target)))
         present = self.present()
-        if self.trace:
-            full = isinstance(sent, dict) and all(n in sent for n in NAMES)
+        if self.trace:  # load: the 1 Hz health reading, once, on the tick after it (cell_why: what a stop pressed with)
+            full, load = isinstance(sent, dict) and all(n in sent for n in NAMES), self.__dict__.pop("load_new", None)
             self.trace({"t": round(self.clock(), 4), "chunk": self.chunk, "target": [round(v, 3) for v in self.target],
-                        "sent": [round(float(sent[n]), 3) for n in NAMES] if full else None,
-                        "present": [round(v, 3) for v in present], "pwm": getattr(getattr(self.robot, "motion", None), "effort_pwm", None) or {}})
+                        "sent": [round(float(sent[n]), 3) for n in NAMES] if full else None, "present": [round(v, 3) for v in present],
+                        "pwm": getattr(getattr(self.robot, "motion", None), "effort_pwm", None) or {}, **({"load": load} if load else {})})
         self.recorder.tick(present, [sent.get(n, t) if isinstance(sent, dict) else t for n, t in zip(NAMES, self.target)])
         if isinstance(sent, dict):
             self.lag = max((abs(present[i] - sent[name]) for i, name in enumerate(NAMES[:5]) if name in sent),
@@ -359,7 +358,7 @@ class Runner:
         self.ticks += 1
         fresh = self.ticks % max(1, round(self.fps * HEALTH_PERIOD_S)) == 0
         if fresh:
-            self.health = self.read_health()
+            self.health = self.load_new = self.read_health()
         if self.health and fresh and not self.fault:
             hot = max(self.health["temp_c"])
             moved = self.health_present or present

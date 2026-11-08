@@ -5334,6 +5334,24 @@
 - 증거: agent-browser 로컬 렌더(1920·390·320 화면 확인). 원격 회귀는 착지 기록을 따른다.
 - gate 변화: SOURCE 변경. 실기기·Android 수용은 별도다. CE: 해당 없음 — 코드와 회귀가 판단을 보존한다.
 
+## 2026-11-07 · uncommitted · feat(fleet): 현장 운영 규칙 문서와 판정 API (D-982 1·2단계)
+- 변경: `rosy.site_rules/1` 문서·검증·초안/활성화/감사(`SiteMapStore.rules`), 병합 대기·블록 수·충전 시작/나감 %를 문서 값으로, `POST /api/fleet/site-rules/judge`. 편대 한도는 판정만(시작 경로는 safety 태그라 3단계).
+- 증거: 원격 AI/모델 PC 시험 결과는 이 커밋 뒤 착지 기록을 따른다. 로컬 Fleet 서버에서 agent-browser로 판정 세 종류를 눌러 확인.
+- gate 변화: SOURCE 변경. 시뮬·실물·현장 수용 없음; 문서가 없으면 동작 동일.
+- 결정: D-982 Proposed, API v1.368 additive.
+- 교훈: CE 해당 없음 — 최종 코드·시험·ADR이 판단을 보존한다.
+
+## 2026-11-07 · 34867d3b61 · feat(fleet): D-982 1·2단계 원격 시험 결과
+- 변경: 없음(앞 항목의 시험 기록).
+- 증거: 원격 모델 PC 34867d3b61: operations/fleet·applications/fleet·design_scope_gates·test/architecture·harness_contracts·protocol_version_alignment 8828 passed, 5 skipped, known_failures 0 new/0 known/0 flaky; collect_alone(site_rules 두 파일) 2 passed, 1 skipped. 로그는 외부 scratch siterules/t3·t4/run-1.txt.
+- gate 변화: SOURCE 회귀 검증만. 시뮬·실물 수용 아님.
+- 교훈: CE 해당 없음.
+
+## 2026-11-07 · uncommitted · fix(fleet): 규칙 검토 지적 반영
+- 변경: 활성 지도가 없으면 장소를 적은 규칙 문서를 거절하고, 저장된 문서가 검증에 실패해도 Fleet은 옛 상수로 시작해 오류를 남긴다.
+- 증거: 독립 검토 지적. 회귀 시험을 더했고 원격 결과는 착지 기록을 따른다.
+- gate 변화: SOURCE 회귀. 실제 지도·현장 수용은 별도다. CE: 해당 없음 — 시험이 판단을 보존한다.
+
 ## 2026-11-07 · uncommitted · fix(fleet): 운행 시작 배터리 확인 · 충전 칸 점유 유지
 - 변경: `TripRunner.start`가 `power_health.battery`가 fresh(표본 나이+캐시 나이 ≤ stale_after_s, 캐시 ≤ 5 s)이고 percent가 읽히며 level이 ok/warning일 때만 통과한다. 아니면 422 `TRIP_BATTERY_UNCONFIRMED`(근거 원천이 없어도 닫힘, 우회 기본값 없음). 충전 복귀 시작만 critical을 허용한다. `ChargeBays`는 오프라인·자세 상실·목록에서 사라진 로봇의 방문을 지우지 않고 칸을 `unknown`으로 보이며, 칸 밖에서 신뢰 자세로 보일 때만 방문을 끝낸다. 보이지 않던 시간은 충전 시간에서 뺀다.
 - 증거: 시험 먼저 RED(`test_trip_battery` import 실패, `test_charge_bays` 2 failed) 후 구현. 시험 fixture 14곳은 신선한 배터리를 명시 주입한다(`fakes.fresh_battery`). 결과는 원격 실행 기록 참조.
@@ -5356,6 +5374,11 @@
 - 결정: API v1.365 유지
 - 교훈: 없음
 
+## 2026-11-07 · uncommitted · fix(fleet): 충전 복귀 판정이 main의 칸 점유 불명 규칙과 맞는다
+- 변경: 가정 상태에서 칸에 서 있지 않은 온라인 로봇에 칸 밖 위치를 준다. main의 점유 불명 규칙(위치 모르는 로봇이 있으면 `bay_unknown`)이 모든 판정을 대기로 바꾸던 것을 막고, 화면 사유 문구를 더했다.
+- 증거: main 병합 뒤 원격 시험에서 판정 시험 3건이 대기로 실패했다.
+- gate 변화: SOURCE 회귀. 현장 수용은 별도다. CE: 해당 없음.
+
 ## 2026-11-07 · uncommitted · 로그인 복귀가 설치·보정 하위 화면을 유지
 - 변경: fleet_return_allowed가 설치 문서의 알려진 다섯 화면 조각을 허용한다. 그 밖의 조각은 그대로 거절한다.
 - 증거: test_account_receiver.py 허용·거절 두 경우를 더했다. 원격 결과는 착지 기록을 따른다.
@@ -5365,3 +5388,29 @@
 - 변경: 흐름이 만료되거나 Account가 끊겨 콜백이 실패하면 브라우저는 /console로 돌아간다. API 호출은 그대로 401·503이고 어느 쪽도 세션을 만들지 않는다.
 - 증거: 실제 Account와 Fleet을 두 출처로 띄운 왕복에서 두 탭 로그인과 교환 중 장애가 JSON 화면에서 멈추는 것을 재현했다.
 - gate 변화: SOURCE 회귀. 현장 수용은 별도다.
+
+## 2026-11-07 · uncommitted · feat(fleet): LED·카메라·LiDAR 자동 위치 찾기 (D-989)
+- 변경: `localization/auto_locate.py`(순수 적합), `pose/auto_locate_service.py`(120초 세션), `GET`·`POST /api/fleet/auto-locate`, config `stream_wanted`. 관찰 전용. API v1.369.
+- 증거: 합성 입력 시험뿐이다. 실물·현장 수용 없음.
+- gate 변화: SOURCE. DEVICE/FIELD 수용 근거로 쓰지 않는다.
+- 결정: D-989 Proposed. 교훈: CE 미해결 — 실물 시험 전이다.
+
+## 2026-11-07 · uncommitted · feat(fleet): 자동 위치를 로봇별로 켜면 trip 앵커로 쓴다 (D-989 7항)
+- 변경: `fleet.map_pose.auto_locate_robots`(기본 빈 목록), `MapPoseTracker.add_auto_locate`/`drop_auto_locate`, 독립 근거 소비자 차단. 사용자 결정 "code it so auto-locate is used for driving too, and make it switchable on and off".
+- 증거: 합성 시험뿐. 정확도는 실물 전까지 재지 않았다.
+- gate 변화: SOURCE. 교훈: CE 미해결 — 실물 시험 전이다.
+
+## 2026-11-07 · uncommitted · test: Account 가입·권한 요청 시험 (D-993)
+- 변경: `test_account_access_requests.py` — 공개 입력의 CSRF·크기·상한·존재 여부 비노출, 승인·거절의 원자성과 감사. Fleet 동작 변경 없음.
+- 증거: 원격 실행 기록은 operations/account/logs.md.
+- gate 변화: 없음.
+
+## 2026-11-08 · uncommitted · 관제 화면 파일을 다시 받지 않고 압축해 보낸다
+- 변경: 콘솔 문서·자산·/common 파일이 ETag가 맞으면 304로 답한다. Fleet 응답은 1 KB 넘으면 gzip으로 보낸다. `no-cache`는 그대로라 배포 직후 새 파일을 바로 받는다.
+- 증거: 관제 첫 화면은 파일 97개 917 KB(gzip 315 KB)를 받는다. Starlette FileResponse가 If-None-Match를 무시해 레일을 누를 때마다 전부 다시 받았다. test_server_app.py에 304·gzip 시험을 더했다.
+- gate 변화: SOURCE 회귀. 현장 수용은 별도다.
+
+## 2026-11-08 · uncommitted · fix: Account 가입·권한 요청 경로를 Fleet 기능표에 등록 (D-993)
+- 변경: `feature_matrix.json`에 공개 `POST /api/fleet/auth/access-requests`(login-page.js)와 관리자 목록·승인·거절(account-page.js), login-page.js의 `/api/fleet/auth/session` 호출을 등록하고, `backend_http_evidence.json`에 `test_account_access_requests.py` 통과 수신 기록(21 passed, 병합 커밋 36e976e701)을 더했다.
+- 증거: 착지 사전 시험 `test_all_supported_features_have_contracts_and_flows`가 미등록 프런트 호출 3건으로 실패했다. 원인은 이 브랜치가 새 프런트 호출을 기능표에 올리지 않은 것이며 main 탓이 아니다.
+- gate 변화: SOURCE 회귀 복구. 현장 수용은 별도다.
