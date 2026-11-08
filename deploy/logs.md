@@ -4743,3 +4743,7 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 변경: `omx_incident.py clear --arm --note --token-file`가 그 PC의 관측 env로 Fleet에 열린 사건을 묻고, 운영자 본인 토큰(0600)으로 기존 `…/incidents/{id}/clear`를 부른 뒤 Fleet의 "not held"로 로컬 HOLD 파일도 걷는다. 팔 source 토큰은 쓰지 않는다
 - 증거: 11-07 arm_b 보류가 남아 사람이 이상 없음을 확인했는데도 콘솔 로그인 없이는 풀 수 없었다. CELL-A에 운영자 `livsbittt` 토큰을 등록해 API로 해제했다. 한글 note와 `basis`를 함께 보내자 CELL-A(09069e25)가 422를 돌려 note만 보낸다
 - gate 변화: 없음
+## 2026-11-08 · uncommitted · fix(omx): 카메라 준비는 역할 별칭이 생긴 뒤 시작하고, services.yaml을 실제 배치에 맞춘다
+- 변경: `rosy-omx-camera-readiness.service`가 `rosy-omx-cameras-bind.service` 뒤에 시작한다. `services.yaml`의 OMX 카메라 인스턴스를 11-07 역할(top·side·arm_a_wrist·arm_b_wrist)로, AI PC의 꺼진 Pinky `pinky-rosbridge-d12/d13`을 선언했다
+- 증거: 11-08 06:10 부팅 뒤 준비 서비스가 `/dev/v4l/by-id/rosy-realsense-d435-color` 없음으로 15 s 간격 3회 실패해 하루 종일 꺼져 있었다(bind 타이머는 부팅 20 s 뒤). `update_status.py`가 AI PC UNDECLARED 2건을 보고했다
+- gate 변화: 없음 — robttt 유닛 갱신은 omx-devices 자동 갱신 뒤

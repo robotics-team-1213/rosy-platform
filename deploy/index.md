@@ -78,8 +78,8 @@
 
 ## 최근 기록
 
+- 2026-11-08 · uncommitted · fix(omx): 카메라 준비는 역할 별칭이 생긴 뒤 시작하고, services.yaml을 실제 배치에 맞춘다
 - 2026-11-08 · uncommitted · feat(omx): 이름 있는 운영자가 API로 팔 사건 보류를 해제한다 (D-971)
 - 2026-11-08 · uncommitted · feat(site-map): PC별 역할·모듈·팔 보드를 private 지도 하나로 읽고 실제 보드와 대조한다
 - 2026-11-07 · uncommitted · fix(power): 네이티브 Pinky가 CORE의 deep 배터리 요청에 꺼진다 (D-27)
 - 2026-11-07 · uncommitted · feat(navigation): 로그인한 운영자가 API로 항법을 다시 승인한다 (D-986)
-- 2026-11-07 · uncommitted · feat: 응답 없는 PC를 guard가 팀 채널로 알린다 (D-991)

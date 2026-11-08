@@ -72,6 +72,8 @@ roles:
     rosy-v13-ai-gpu-restore-20261106.service: {run: "off", channel: retired, note: "one approved GPU window, ended 2026-11-06", doc: docs/adr/D-958-lab-compute-ledger-one-admission-gpu-slot-pausable-services.md}
     rosy-v13-ai-gpu-restore-20261106.timer: {run: "off", channel: retired, doc: docs/adr/D-958-lab-compute-ledger-one-admission-gpu-slot-pausable-services.md}
     pinky-frontend.service: {run: active, channel: external, doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
+    pinky-rosbridge-d12.service: {run: "off", channel: external, note: "Pinky stack from ~/.local/bin (pinky-stack.sh rosbridge-d12), installed and inactive on 2026-11-08", doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
+    pinky-rosbridge-d13.service: {run: "off", channel: external, note: "Pinky stack from ~/.local/bin (pinky-stack.sh rosbridge-d13), installed and inactive on 2026-11-08", doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
     pinky-r2-watch.service: {run: active, channel: external, doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
     pinky-v13-training.service: {run: oneshot, channel: external, doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
     pinky-nav2.service: {run: "off", channel: external, note: "DDS unit; cleanup needs D-530 6 joint consent", doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
@@ -118,7 +120,7 @@ roles:
     rosy-omx-upkeep.timer: {run: timer, channel: adhoc, doc: deploy/robot/omx/README.md}
     rosy-omx-camera-readiness.service: {operator_restart: true, run: active, channel: autoupdate, template: deploy/robot/omx/rosy-omx-camera-readiness.service, source: ".local/share/rosy/omx-devices/current", doc: deploy/robot/omx/README.md}
     rosy-omx-camera-view.service: {operator_restart: true, run: active, channel: autoupdate, template: deploy/robot/omx/rosy-omx-camera-view.service, source: ".local/share/rosy/omx-devices/current", doc: deploy/robot/omx/README.md}
-    rosy-omx-camera@.service: {operator_restart: true, run: active, instances: [top, arm_a_wrist], note: "front retired 2026-10-28: its by-path port is gone and arm S gripper camera is arm_a_wrist", channel: autoupdate, template: deploy/robot/omx/rosy-omx-camera@.service, source: ".local/share/rosy/omx-devices/current", doc: deploy/robot/omx/README.md}
+    rosy-omx-camera@.service: {operator_restart: true, run: active, instances: [top, side, arm_a_wrist, arm_b_wrist], note: "camera roles of 2026-11-07 (omx-cameras.json): top D435, side Jieli, one wrist per arm; front retired 2026-10-28", channel: autoupdate, template: deploy/robot/omx/rosy-omx-camera@.service, source: ".local/share/rosy/omx-devices/current", doc: deploy/robot/omx/README.md}
     rosy-omx-collection.service: {run: "off", channel: snapshot, template: deploy/robot/omx/rosy-omx-collection.service, doc: docs/plans/2026-10-17-omx-next-day-collection.md}
     rosy-omx-observation-bridge.service: {run: active, channel: autoupdate, template: deploy/robot/omx/rosy-omx-observation-bridge.service, source: ".local/share/rosy/omx-devices/current", doc: deploy/robot/omx/README.md}
     rosy-omx-arm-status.service: {run: active, channel: autoupdate, template: deploy/robot/omx/rosy-omx-arm-status.service, source: ".local/share/rosy/omx-devices/current", doc: deploy/robot/omx/README.md}
