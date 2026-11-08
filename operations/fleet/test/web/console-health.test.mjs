@@ -43,5 +43,13 @@ test('a missing or late Fleet read is unknown without an attention problem; robo
   assert.equal(noRead.problem, '');
   assert.equal(powerHealthView(robot(), 1000, 7000).problem, '');
   assert.equal(powerHealthView(robot({ sample_age_s: 4.9 }), 1000, 1200).problem, '');
-  assert.match(powerHealthView(robot({ evidence: 'missing' }), 1000, 1000).problem, /센서\/CORE/);
+  const missing = powerHealthView(robot({ evidence: 'missing' }), 1000, 1000);
+  assert.equal(missing.problem, '배터리 값 없음 — 배터리 센서 서비스 확인');
+  assert.equal(missing.note, '');
+  // A frozen value is told apart from none; the age is in the note, not the grouped problem text.
+  const frozen = powerHealthView(robot({ evidence: 'stale', sample_age_s: 48960 }), 1000, 1000);
+  assert.equal(frozen.problem, '배터리 값 멈춤 — 센서 연결 확인');
+  assert.equal(frozen.note, '값 멈춤 (13.6시간 전)');
+  assert.equal(frozen.battery, '확인 불가');
+  assert.equal(powerHealthView(robot({ evidence: 'stale', sample_age_s: 48000 }), 1000, 1000).problem, frozen.problem);
 });

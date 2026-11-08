@@ -1163,6 +1163,11 @@
 - 증거: 원격 브라우저 시험 기록 참조.
 - gate 변화: 없음.
 
+## 2026-11-07 · uncommitted · feat: 호스트 서비스를 PC 정비 문서로 나눈다 (D-991)
+- 변경: `/console/maintenance`를 더하고 설치 화면의 작업에서 호스트 서비스를 뺀다. 설치 화면과 Monitoring의 PC 행이 링크로 연결한다. 레일은 다섯 영역 그대로다.
+- 증거: 원격 문서·브라우저 시험. 운영 배포와 현장 수용은 별도다.
+- gate 변화: SOURCE. CE: 해당 없음 — 시험과 ADR이 판단을 보존한다.
+
 ## 2026-11-08 · uncommitted · fix(fleet-ui): 끝나지 않는 경로 계획 표시
 - 변경: `planning-stall.js` — 로봇이 15초 넘게 PLANNING이면 카드에 "경로 계획 응답 없음 · 운행 취소 후 로봇 확인"(crit). CORE는 Nav2 무응답을 `BACKEND_RESULT_UNKNOWN`으로 두고 상태는 PLANNING에 남기므로 콘솔이 볼 수 있는 유일한 신호다. 시작 시각은 탭 안에만 있어 새로고침하면 다시 센다.
 - 증거: node `test_planning_stall.py`, 원격 실행 기록 참조.

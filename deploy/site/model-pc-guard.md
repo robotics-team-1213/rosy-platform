@@ -26,7 +26,7 @@
    ```bash
    sudo deploy/site/install-model-pc-guard.sh --site-key "ssh-ed25519 AAAA... rosy-host-guard"
    ```
-   AI PC는 `sudo deploy/hosts/common/install-guard-remote.sh --site-key "..." --unit pinky-backend.service ...`이다(소유자 동의 뒤).
+   AI PC는 `sudo deploy/hosts/common/install-guard-remote.sh --site-key "..." --unit rosy-situation.service ...`이다.
 3. 관제 PC에서 1번을 다시 실행해 연결을 확인하고, `sudo python3 deploy/hosts/common/rosy-host-state install site`로 타이머를 켠다.
 
 무엇이 바뀌는지는 모든 스크립트에서 `--dry-run`으로 먼저 볼 수 있다(sudo 불필요).

@@ -5379,6 +5379,16 @@
 - 증거: 실제 Account와 Fleet을 두 출처로 띄운 왕복에서 두 탭 로그인과 교환 중 장애가 JSON 화면에서 멈추는 것을 재현했다.
 - gate 변화: SOURCE 회귀. 현장 수용은 별도다.
 
+## 2026-11-07 · uncommitted · fix: 재부팅이 팔 세션을 끊지 않게 한다 (D-991)
+- 변경: 화면 `reboot`는 도우미 `reboot-if-free`로 간다. `reboot-over-jobs` 추가, 종료 코드 6·7을 409 `ARM_SESSION_ACTIVE`·`HOST_JOBS_ACTIVE`로 옮긴다. 호스트 서비스 화면이 작업 중이면 다시 묻는다.
+- 증거: 원격 `test_host_control.py`·`test_host_guard.py`. 호스트 pytest이며 실제 재부팅·세션 수용은 아니다.
+- gate 변화: SOURCE. 각 PC 도우미 설치 전. CE: 기존 교훈 갱신 — nightly-reboot-must-yield-to-a-live-arm-session.
+
+## 2026-11-07 · uncommitted · feat: PC 조치 목록을 실제 서비스에 맞추고 이력을 남긴다 (D-991)
+- 변경: `pinky-*`와 `stop-unit`을 빼고 ROSY 서비스 재시작을 더한다. 조치와 응답을 `fleet_device_care_events`에 `host:<PC>`로 남겨 `GET /api/fleet/hosts`의 `history`와 화면에 보인다.
+- 증거: 원격 `test_host_control.py`·`test_host_ops.py`·`test_host_recovery_browser.py`. 호스트 시험이다.
+- gate 변화: SOURCE. CE: 해당 없음 — 시험과 ADR이 판단을 보존한다.
+
 ## 2026-11-07 · uncommitted · feat(fleet): LED·카메라·LiDAR 자동 위치 찾기 (D-989)
 - 변경: `localization/auto_locate.py`(순수 적합), `pose/auto_locate_service.py`(120초 세션), `GET`·`POST /api/fleet/auto-locate`, config `stream_wanted`. 관찰 전용. API v1.369.
 - 증거: 합성 입력 시험뿐이다. 실물·현장 수용 없음.
@@ -5394,6 +5404,12 @@
 - 변경: `test_account_access_requests.py` — 공개 입력의 CSRF·크기·상한·존재 여부 비노출, 승인·거절의 원자성과 감사. Fleet 동작 변경 없음.
 - 증거: 원격 실행 기록은 operations/account/logs.md.
 - gate 변화: 없음.
+
+## 2026-11-07 · uncommitted · fix(fleet): 배터리 근거 없음·멈춤 사유 분리
+- 변경: powerHealthView가 evidence missing은 "배터리 값 없음 — 배터리 센서 서비스 확인", stale은 "배터리 값 멈춤 — 센서 연결 확인"으로 나눔. 멈춤 경과 시간은 그룹 문구가 갈라지지 않도록 problem이 아닌 note로 두고 로스터 배터리 칸에만 표시. D-509 충전 확인(신선한 CORE 근거만) 유지.
+- 증거: node --test queue-inline+console-health 12 passed/skip0; 원격 Chromium(ROSY_RUN_BROWSER_TESTS=1) 176 passed/skip0 (be0e5095e7).
+- gate 변화: SOURCE 회귀 검증만; 실물·현장 수용 근거 아님.
+- 교훈: CE 해당 없음 — 문구 분리, 코드·시험으로 재현 가능.
 
 ## 2026-11-08 · uncommitted · feat(fleet): 스테이션 복구 자동 승인, 로봇 화면 답 기록
 - 변경: `station_recovery_routes.py` — 실행 가능한 요청을 5 s 주기로 `fleet:auto`가 승인해 기록하고 각 요청에 `approved_by`를 붙인다(사용자 결정 2026-11-08). 실행 가능하지 않게 되면 지우고 다시 묻는다. `person_request_routes.py` — 되읽은 부탁에 로봇에서 받은 답이 있으면 `robot:<id>/<계정>`으로 기록을 닫는다.

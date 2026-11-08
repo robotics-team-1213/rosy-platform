@@ -31,6 +31,10 @@
     "/console/install": {
       "path": "installation/install.html",
       "media_type": "text/html"
+    },
+    "/console/maintenance": {
+      "path": "maintenance/maintenance.html",
+      "media_type": "text/html"
     }
   },
   "assets": {
@@ -186,8 +190,12 @@
       "path": "calibration/measured-calibration.css",
       "media_type": "text/css"
     },
+    "maintenance-page.js": {
+      "path": "maintenance/maintenance-page.js",
+      "media_type": "application/javascript"
+    },
     "host-services.js": {
-      "path": "installation/host-services.js",
+      "path": "maintenance/host-services.js",
       "media_type": "application/javascript"
     },
     "host-health.js": {

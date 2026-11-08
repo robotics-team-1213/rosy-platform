@@ -35,5 +35,5 @@
 - 2026-11-08 · uncommitted · fix(accounts): 가입 요청 목록이 실패해도 계정 화면은 그린다
 - 2026-11-08 · uncommitted · feat(fleet-ui): 스테이션 복구 승인 주체 표시
 - 2026-11-08 · uncommitted · fix(fleet-ui): 끝나지 않는 경로 계획 표시
+- 2026-11-07 · uncommitted · feat: 호스트 서비스를 PC 정비 문서로 나눈다 (D-991)
 - 2026-11-07 · uncommitted · feat(account-ui): 가입·권한 요청 화면 (D-993)
-- 2026-11-07 · uncommitted · fix(fleet-ui): 칸 확인 불가 문구

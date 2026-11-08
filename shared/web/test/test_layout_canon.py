@@ -8,7 +8,7 @@ WEB = ROOT / "applications/fleet/web"
 ROBOT = ROOT / "middleware/robot_ui/robot"
 REVIEW = ROOT / "learning/curation/perception/review_app_web"
 
-AREA_DOCS = ["index.html", "installation/install.html", "sitemap/site-map.html", "cell/cell.html", "work/policy.html"]
+AREA_DOCS = ["index.html", "installation/install.html", "sitemap/site-map.html", "cell/cell.html", "work/policy.html", "maintenance/maintenance.html"]
 LIGHT_DOCS = ["login.html", "profile.html", "accounts.html", "learning.html"]
 
 
