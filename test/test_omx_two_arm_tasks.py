@@ -167,11 +167,11 @@ def test_the_photo_plates_stand_where_the_top_camera_saw_them():
 
 
 def test_a_lane_under_the_ship_hull_is_blocked_and_refused(layout, data):
-    """A lane whose container would reach over the r08 hull is no place (MuJoCo 11-08: on the estimated ship plate b's lane 1 sat 5 mm up,
-    7 deg tilted). With the ship where the 11-08 top frame puts it, plate a's lane 3 reaches 2 mm over the hull and plate b's lane 1 is clear."""
-    assert {n for n, s in layout.sites.items() if s.get("blocked")} == {"tmp-a-3"}
-    task = dict(supply=[], start={"bar-9": "ship-h1r2-l2"}, name="t", steps=[dict(id="x", container="bar-9", **{"from": "ship-h1r2-l2"}, to="tmp-a-3", arm="arm_a")])
-    assert "tmp-a-3 is under the ship hull" in refused(layout, task)
+    """Plate v11 where its bridge seats it reaches 20 mm over the estimated r08 hull at arm_b (MuJoCo: the container sat 5 mm up, 7 deg
+    tilted on lane 1). Such a lane is no place until the base plate yaw and the ship are measured."""
+    assert {n for n, s in layout.sites.items() if s.get("blocked")} == {"tmp-b-1"}
+    task = dict(supply=[], start={"bar-9": "ship-h1r2-l2"}, name="t", steps=[dict(id="x", container="bar-9", **{"from": "ship-h1r2-l2"}, to="tmp-b-1", arm="arm_b")])
+    assert "tmp-b-1 is under the ship hull" in refused(layout, task)
 
 
 def test_temp_lanes_follow_the_scad_fan_and_point_at_the_arm():
