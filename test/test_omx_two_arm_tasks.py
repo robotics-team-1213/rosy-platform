@@ -220,7 +220,7 @@ def test_a_run_records_the_cell_s_four_cameras():
 
 def test_the_r08_ship_sites_come_from_its_berth_slot_map(layout):
     """Rated ship v15 on the berth kit: 1x3 sites are the mean of three 1x1 cells, rows 38 mm apart, three tiers 32.4 mm apart from 6 mm over the table."""
-    ship = {n: s for n, s in layout.sites.items() if s["kind"] == "ship"}
+    ship = {n: s for n, s in layout.sites.items() if s["kind"] == "ship" and s["stack"] != "stern"}  # the stern bay: test_omx_two_arm_plan
     assert len(ship) == 18 and layout.box == (.09, .02998, .0324)
     x0, y0 = layout.choices["ship_stern_x_m"], layout.choices["ship_centre_y_m"]
     for h, x in ((1, 99), (2, 197)):  # hold centres from the stern end
