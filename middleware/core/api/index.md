@@ -31,8 +31,8 @@
 
 ## 최근 기록
 
+- 2026-11-07 · uncommitted · 계약 버전 v1.374
 - 2026-11-07 · uncommitted · docs(api): v1.368 site rules
 - 2026-11-07 · uncommitted · 계정 로그인 복귀 목록에 역할 화면 추가
 - 2026-11-07 · uncommitted · feat(navigation): 항법 재승인 REST (D-986)
 - 2026-11-07 · 11b42b5933 · feat(core-api): /api/v1/person-request (v1.372)
-- 2026-11-06 · uncommitted · feat(fleet): 관제 수동 모드 전환

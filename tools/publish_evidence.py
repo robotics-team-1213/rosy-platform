@@ -83,19 +83,21 @@ def clean(row):
         return False
     new, _, _ = known_failures.compare(text, known)
     return not (set(new) - set(known_failures.flaky(text, quarantine)))
+reach = ({a: land_cache.reach(root, a, sha, sys.executable) for a in request.get("ancestors", [])}
+         if hasattr(land_cache, "reach") else {})  # a candidate older than D-970 3 reuses nothing across trees
 print(json.dumps({"plan": plan, "variants": variants, "env": land_cache.env_id(root, sha),
-                  "clean": [clean(row) for row in request["rows"]]}))
+                  "clean": [clean(row) for row in request["rows"]], "reach": reach}))
 '''
 
 
-def describe(publish, repo, sha, base, invocations, rows):
+def describe(publish, repo, sha, base, invocations, rows, ancestors=()):
     """Use the existing publication checkout location and cleanup policy for immutable selection."""
     holder = Path(publish.git(repo, "rev-parse", "--path-format=absolute", "--git-common-dir").stdout.strip())
     temp = holder / "rosy-publish" / f"proof-{sha[:10]}-{uuid.uuid4().hex[:8]}"
     publish.git(repo, "worktree", "add", "--detach", str(temp), sha)
     try:
         result = subprocess.run([sys.executable, "-c", DESCRIBE, sha, base], cwd=temp,
-                                input=json.dumps({"invocations": invocations, "rows": rows}),
+                                input=json.dumps({"invocations": invocations, "rows": rows, "ancestors": list(ancestors)}),
                                 capture_output=True, text=True, encoding="utf-8",
                                 env={**os.environ, "PYTHONUTF8": "1"})
         if result.returncode:
@@ -132,12 +134,22 @@ def reason(publish, repo, sha, record):
         rows = [row for row in entries if row["commit"] == commit and row["tree"] == tree]
         if not rows:
             return f"missing exact execution mappings for {commit[:10]} (possibly pruned)"
-        description = describe(publish, repo, commit, base, invocations, rows)
+        older = ancestor_rows(publish, repo, commit, entries)
+        ancestors = list(dict.fromkeys(row["commit"] for row in older))
+        description = describe(publish, repo, commit, base, invocations, rows + older, ancestors)
         if not description or not description.get("env") or not valid_plan(description.get("plan")):
             return f"canonical candidate plan/environment unavailable for {commit[:10]}"
         usable = [row for row, clean in zip(rows, description["clean"])
                   if clean and row["env"] == description["env"]]
         mapped = {tuple(row["argv"]) for row in usable}
+        # D-970 3: an ancestor's clean exact pass counts when the candidate's own selector, recomputed here, reaches
+        # none of its paths (land_cache.reach); the land record's word for it is never taken.
+        reach = description.get("reach") or {}
+        for row, clean in zip(older, description["clean"][len(rows):]):
+            delta, paths = reach.get(row["commit"]), land_cache._paths(row["argv"])
+            if (clean and row["env"] == description["env"] and isinstance(delta, list) and paths
+                    and not any(land_cache._overlap(p, d) for p in paths for d in delta)):
+                mapped.add(tuple(row["argv"]))
         if commit == sha:
             final_logs = {row["log"] for row in usable}
         descriptions.append(description)
@@ -157,6 +169,19 @@ def reason(publish, repo, sha, record):
             or not set(logs) <= final_logs):
         return "final-round logs lack clean exact final-candidate mappings"
     return None
+
+
+def ancestor_rows(publish, repo, commit, entries, recent=20):
+    """Exact rows (their own tree) of the land_cache.NARROW_COMMITS strict ancestors of commit, among the ``recent``
+    newest commits with rows, that hold the most rows: an earlier FULL candidate of the same branch."""
+    seen = list(dict.fromkeys(row["commit"] for row in reversed(entries) if row["commit"] != commit))[:recent]
+    kept = {}
+    for a in seen:
+        if publish.ancestor(repo, a, commit):
+            tree = publish.git(repo, "rev-parse", f"{a}^{{tree}}").stdout.strip()
+            kept[a] = [row for row in entries if row["commit"] == a and row["tree"] == tree]
+    best = sorted(kept, key=lambda a: -len(kept[a]))[:land_cache.NARROW_COMMITS]
+    return [row for a in best for row in kept[a]]
 
 
 def qualified(publish, repo, sha, record):

@@ -1,0 +1,12 @@
+# 2026-11-08: gpu-manager writes power/control=auto after udev (72-rosy-gpu-awake.rules) at boot; keep the GPU awake after it.
+# Idle GPU failed to wake (Xid 79) on 2026-11-07. Remove together with the udev rule once the Xid stays gone on a newer driver.
+[Unit]
+Description=Keep the NVIDIA GPU out of runtime suspend (after gpu-manager)
+After=gpu-manager.service nvidia-persistenced.service
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -c "for d in /sys/bus/pci/devices/*; do [ \"$(cat $d/vendor)\" = 0x10de ] && case \"$(cat $d/class)\" in 0x03*) echo on > $d/power/control;; esac; done; true"
+
+[Install]
+WantedBy=multi-user.target display-manager.service
