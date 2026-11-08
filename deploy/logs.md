@@ -4727,3 +4727,8 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: 원격 시험 `contracts/foundation/test/test_account_access.py`·`operations/fleet/test/test_account_admin_browser.py`.
 - gate 변화: 없음 — Harbor 쪽 수신기는 팀 저장소 PR이다.
 - CE: 해당 없음 — 새 권한이며 해결한 장애가 없다.
+## 2026-11-07 · uncommitted · fix(power): 네이티브 Pinky가 CORE의 deep 배터리 요청에 꺼진다 (D-27)
+- 변경: `native/rosy-lowbatt-shutdown.path`·`.service`를 더해 CORE가 실제로 쓰는 `/var/lib/rosy/core/.rosy/battery-shutdown-request.json`을 감시하고 기존 도우미(나이 900 s 확인, 유예 상한 600 s)로 끈다. 이미지 계층 동기화 목록에 넣어 payload 릴리스로 기존 기체에 들어간다. 감시는 `PathChanged`(오래된 파일이 재실행 한도에 걸리지 않게)
+- 증거: 2026-11-07 y8xs가 `battery.deep`(4.9 %)을 기록하고도 꺼지지 않아 1.3 %(6.45 V)에서 사람이 껐다. 원격 시험 관련 10개 파일 642 passed. 독립 검토 차단 결함 없음
+- gate 변화: 없음 — 기체에서 실제 종료를 확인하기 전이다.
+- CE: 미해결 — 기체에서 `PathChanged` 발화와 종료를 확인한 뒤 교훈을 기록한다.
