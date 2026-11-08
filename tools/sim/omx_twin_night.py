@@ -105,6 +105,7 @@ def main(argv=None):
     p.add_argument("--until", default="08:30")
     p.add_argument("--since", default="20261101")
     p.add_argument("--no-isaac", action="store_true")
+    p.add_argument("--mujoco", choices=("both", "ai"), default="both", help="ai: MuJoCo on the AI PC only")
     args = p.parse_args(argv)
     # remote_isaac refuses anything but a full lower-case sha (the night's Isaac suite errored on a short one)
     args.sha = subprocess.run(["git", "rev-parse", "--verify", f"{args.sha}^{{commit}}"], cwd=ROOT, capture_output=True,
@@ -115,8 +116,13 @@ def main(argv=None):
     end += dt.timedelta(days=1) if end <= now else dt.timedelta()
     args.deadline, args.night = end.timestamp(), now.strftime("%Y%m%d")
     args.out.mkdir(parents=True, exist_ok=True)
-    lanes = [threading.Thread(target=mujoco_loop, args=(args, "ai", "0/2", True)),
-             threading.Thread(target=(lambda: mujoco_loop(args, "model", "1/2")) if args.no_isaac else model_lane, args=() if args.no_isaac else (args,))]
+    if args.mujoco == "ai":  # the model PC's GPU stays free for Isaac sweeps (Isaac admission wants it alone)
+        lanes = [threading.Thread(target=mujoco_loop, args=(args, "ai", "0/1", True))]
+        if not args.no_isaac:
+            lanes.append(threading.Thread(target=isaac_cases, args=(args,)))
+    else:
+        lanes = [threading.Thread(target=mujoco_loop, args=(args, "ai", "0/2", True)),
+                 threading.Thread(target=(lambda: mujoco_loop(args, "model", "1/2")) if args.no_isaac else model_lane, args=() if args.no_isaac else (args,))]
     for t in lanes:
         t.start()
     for t in lanes:
