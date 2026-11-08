@@ -154,6 +154,15 @@ def lane_geometry(radius):
 
 
 
+def parse_choices(items):
+    """--choice key=value items into CHOICES overrides, numbers as numbers."""
+    out = {}
+    for item in items or []:
+        key, value = item.split("=", 1)
+        out[key] = json.loads(value) if value[:1] in "0123456789-." else value
+    return out
+
+
 def snapshot_lanes(path, tag):
     """[(xy, yaw rad)] of lanes 1..3 of plate `tag` in a cell snapshot (omx_real2sim.py); a plate it could not measure is refused."""
     if not path:

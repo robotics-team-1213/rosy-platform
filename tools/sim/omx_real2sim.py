@@ -47,9 +47,11 @@ GAPS = {"temp_plates": "G-17", "ship": "G-18", "camera": "G-19"}  # sim2real reg
 PY = "MUJOCO_GL=egl $HOME/rosy-test/venvs/sim-mujoco/bin/python"
 SNAP_CHOICES = lambda path: ["--choice", f"cell_snapshot={path}", "--choice", "temp_lanes=snapshot"]
 # stage -> (item it reads, role, minutes, command after the python); every stage also reads the camera and arm bases.
-# Not yet stages: omx_two_arm_plan.py and omx_two_arm_policy.py build their Layout without --choice (design lanes only).
+# A policy round (omx_two_arm_policy.py round --choice ..) takes the same choices but is a GPU job a person starts.
 STAGES = {
     "rehandle": ("temp_plates", "ai", 40, "tools/sim/omx_two_arm_teacher.py run rehandle --out $OUT/rehandle"),
+    "outbound": ("temp_plates", "ai", 50, "tools/sim/omx_two_arm_plan.py compare --scenario outbound --replay-dir $OUT/outbound/plan {choices} && "
+                 "$PY tools/sim/omx_two_arm_teacher.py run plan --plan $OUT/outbound/plan/outbound-two-arm.json --out $OUT/outbound"),
     "matrix-a": ("temp_plates", "model", 60, "tools/sim/omx_two_arm_matrix.py --arm arm_a --out $OUT/matrix-a"),
     "matrix-b": ("temp_plates", "model", 60, "tools/sim/omx_two_arm_matrix.py --arm arm_b --out $OUT/matrix-b"),
     "stack": ("ship", "ai", 40, "tools/sim/omx_two_arm_teacher.py run stack --out $OUT/stack"),
@@ -346,7 +348,8 @@ def sim(snapshot, sha, out, stages):
         if i:
             time.sleep(STAGGER_S)  # remote_sim reserves a host only when it ships: back-to-back starts all pick the same one
         _, role, minutes, cmd = STAGES[name]
-        body = f"mkdir -p $OUT/{name} && {PY} {cmd} {' '.join(SNAP_CHOICES(rel))}"
+        choices = " ".join(SNAP_CHOICES(rel))
+        body = f"mkdir -p $OUT/{name} && {PY} {cmd.format(choices=choices).replace('$PY', PY)} {choices}"
         log = out / name
         log.mkdir(parents=True, exist_ok=True)
         procs[name] = subprocess.Popen([sys.executable, str(ROOT / "tools/remote/remote_sim.py"), "--host", role, "--sha", sha,
