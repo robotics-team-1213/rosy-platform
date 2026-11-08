@@ -96,3 +96,9 @@ def test_run_takes_the_test_once_a_capable_host_is_placed(monkeypatch, repo, tmp
     monkeypatch.setattr(rp, "placed_hosts", lambda cls="pytest", hosts=None, cores=0: ["site@1", "model@1"])
     monkeypatch.setattr(rp, "run_on", lambda host, inv, logs, sha, repo, label, *a, **k: [0] * len(inv))
     assert rp.run([["suite/test_needs.py"]], [tmp_path / "1.txt"], repo=path) == [0]
+
+
+def test_cover_adds_the_capable_host_that_the_worker_cut_dropped():
+    rooms = {"a@1": {"caps": frozenset()}, "b@2": {"caps": NEED}}
+    assert host_caps.cover([("a@1", "any")], ["a@1", "b@2"], [NEED], rooms) == [("a@1", "any"), ("b@2", "any")]
+    assert host_caps.cover([("a@1", "any")], ["a@1", "b@2"], [frozenset()], rooms) == [("a@1", "any")]

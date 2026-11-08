@@ -371,6 +371,7 @@ def run(invocations: list[list[str]], logs: list[Path], sha: str = "HEAD", repo:
             sleep(poll)
             hosts = placed_hosts("pytest", cores=cores)
         plan = workers(hosts, invocations, HEADROOM, os.environ.get("ROSY_TEST_HOSTS", DEFAULT_HOSTS).split(), BLOCKED)
+        plan = host_caps.cover(plan, hosts, wants, HEADROOM)  # workers() cuts by count, not by capability
         if len(plan) == 1 and not work.codes and not reruns and not small_only(plan, HEADROOM):
             try:
                 codes = run_on(plan[0][0], invocations, logs, sha, repo, label,

@@ -1,6 +1,6 @@
 """Host capabilities: a test declares what its host must have, the probe measures it, placement routes on it.
 
-A test module declares ``HOST_CAPABILITIES = ("learner_venv",)``. ``PROBE`` prints a ``ROSYCAPS`` line with the names
+A test module declares ``HOST_CAPABILITIES = ("learner_venv",)`` on one line. ``PROBE`` prints a ``ROSYCAPS`` line with the names
 this host has (CAPABILITIES: name -> a path that must be executable there). An invocation whose paths declare a
 capability only runs on hosts that have it. 2026-11-09: the pinned-learner browser test was placed on the site PC,
 which had no learner venv, and stopped seven landings. Standard library only.
@@ -52,6 +52,15 @@ def route(pick, room: dict | None, wants: list[frozenset[str]]):
 def served(wants: list[frozenset[str]], rooms: list[dict]) -> bool:
     """True when every invocation's capabilities are covered by at least one of the placed hosts."""
     return all(not need or any(has(room, need) for room in rooms) for need in wants)
+
+
+def cover(plan: list[tuple[str, str]], hosts: list[str], wants: list[frozenset[str]], rooms: dict) -> list[tuple[str, str]]:
+    """plan plus, for each needed capability set no planned host covers, the first placed host that does."""
+    plan = list(plan)
+    for need in wants:
+        if not any(has(rooms.get(h), need) for h, _ in plan):
+            plan += [(h, "any") for h in hosts if has(rooms.get(h), need) and h not in {p for p, _ in plan}][:1]
+    return plan
 
 
 def strand(work, wants: list[frozenset[str]], rooms: list[dict]) -> None:
