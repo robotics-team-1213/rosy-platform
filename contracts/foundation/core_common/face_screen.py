@@ -140,6 +140,15 @@ def _card(value: Any) -> Optional[dict]:
     return card
 
 
+def _expression(value: Any) -> Optional[dict]:
+    if not isinstance(value, Mapping) or type(value.get("resting")) is not bool:
+        return None
+    gaze = _number(value.get("gaze_x"))
+    if gaze is None or not -6.0 <= gaze <= 6.0:
+        return None
+    return {"gaze_x": gaze, "resting": value["resting"]}
+
+
 def validate_face_inputs(data: Any, now: datetime) -> Optional[dict]:
     """The hand-over as the table reads it, or None (wrong schema, no time, stale, not an object).
 
@@ -164,6 +173,10 @@ def validate_face_inputs(data: Any, now: datetime) -> Optional[dict]:
     caution = data.get("caution")
     codes = [code for code in caution if code in CAUTION_TEXT] if isinstance(caution, list) else []
     wake = _card(data.get("wake"))
+    expression = _expression(data.get("expression"))
+    expression_until = written.timestamp() + 0.3 if expression is not None else None
+    if not 0 <= age <= 0.3:
+        expression = None
     quality = data.get("camera_quality")
     quality_age = _number(data.get("camera_quality_age_s"))
     quality_until = None
@@ -186,6 +199,8 @@ def validate_face_inputs(data: Any, now: datetime) -> Optional[dict]:
         "nav_state": robot_state.valid_nav_state(data.get("nav_state")),
         "estop": _flag(data.get("estop")),
         "face": _name(data.get("face"), FACES),
+        "expression": expression,
+        "expression_until": expression_until,
         "power_mode": _name(data.get("power_mode"), POWER_MODES),
         "activity_kind": _name(data.get("activity_kind")),
         "docking_state": _name(data.get("docking_state"), DOCK_STATES),

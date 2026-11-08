@@ -244,7 +244,8 @@ def face_recovery(line_follow) -> Optional[str]:
 
 def face_inputs_payload(snapshot, *, face: Optional[str], power_mode: Optional[str],
                         wake: Optional[dict], written_at: str,
-                        goal_x: Optional[float] = None, goal_y: Optional[float] = None) -> dict[str, Any]:
+                        goal_x: Optional[float] = None, goal_y: Optional[float] = None,
+                        expression: Optional[dict] = None) -> dict[str, Any]:
     """What rosy-face draws from (D-433 decision 3); ``face_screen.validate_face_inputs`` reads it.
 
     The drive card body rides only in an operating mode (the face owns IDLE,
@@ -268,6 +269,7 @@ def face_inputs_payload(snapshot, *, face: Optional[str], power_mode: Optional[s
         "nav_state": snapshot.navigation.value,
         "estop": snapshot.safety.estop,
         "face": face,
+        "expression": expression,
         "power_mode": power_mode.lower() if isinstance(power_mode, str) else None,
         "activity_kind": snapshot.activity.kind if snapshot.activity is not None else None,
         "docking_state": snapshot.docking.state.value,

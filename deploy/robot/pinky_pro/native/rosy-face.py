@@ -100,8 +100,8 @@ from rosy_face_inputs import (  # noqa: E402, F401
     BUZZER_DEFAULT_LINE, BUZZER_LINES, CORE_USER, FACE_LOAD_SKIP, FACE_SIZE, FaceFrames,
     GPIOCHIP, IDENTIFY_REQUEST_MAX_AGE_S, LCD_ATTEMPTS, LCD_RETRY_S, MAX_TEST_REQUEST_BYTES,
     RELEASE_ID, RP1_LABEL, TEST_ACTIONS, TEST_REQUEST_ID, TEST_REQUEST_MAX_AGE_S,
-    UPDATE_DISPLAY, UPDATE_MAX_AGE_S, bar_painter, buzzer_settings, chip_label, core_owner,
-    face_converter, lamp_enabled, open_lcd, read_test_request, read_update, write_test_result,
+    UPDATE_DISPLAY, UPDATE_MAX_AGE_S, bar_painter, buzzer_settings, character_renderer,
+    chip_label, core_owner, face_converter, lamp_enabled, open_lcd, read_test_request, read_update, write_test_result,
 )
 from rosy_face_display import (  # noqa: E402, F401
     BATTERY_INTERVAL_S, BUZZER_REPEAT_S, BUZZER_REVERSE_S, CAUTION_DEBOUNCE_S, DEV_MODE_FILE,
@@ -185,7 +185,8 @@ def main(argv: list[str] | None = None) -> int:
 
     from PIL import Image
 
-    faces = FaceFrames(args.root / FACE_DIR, opener=Image.open, convert=face_converter(info_screen), log=log)
+    faces = FaceFrames(args.root / FACE_DIR, opener=Image.open, convert=face_converter(info_screen),
+                       log=log, render=character_renderer(info_screen))
     display = FaceDisplay(args.root, lcd=lcd, render=card_renderer(info_screen), battery=battery,
                           buzzer=buzzer, clock=time.monotonic, lamp=lamp, faces=faces,
                           strip=bar_painter(info_screen), core_owner=core_owner(log),

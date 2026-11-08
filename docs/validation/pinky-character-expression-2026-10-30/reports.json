@@ -1,0 +1,620 @@
+{
+  "tested_commit": "939c3f58924579c225f18a5c86e99b98c4ca0c8c",
+  "selection": "FULL",
+  "test_host_roles": [
+    "model PC",
+    "AI PC"
+  ],
+  "report_directory": "pinky-complete-full (external test logs)",
+  "full": {
+    "finished": 27,
+    "passed": 38255,
+    "failed": 0,
+    "skipped": 2804,
+    "error": 0,
+    "xfailed": 0,
+    "xpassed": 0,
+    "initial_failed": 2,
+    "new": 0,
+    "known": 0,
+    "flaky": 2
+  },
+  "counts_are_invocation_totals_with_overlapping_suites": true,
+  "reports": [
+    {
+      "report": "run-1.txt",
+      "sha256": "e47e4a8755d63db68b940e82e95c8521d0954459e5bc85b0512e3098b734e665",
+      "summary": "35 passed, 9 skipped in 1.87s",
+      "passed": 35,
+      "failed": 0,
+      "skipped": 9,
+      "error": 0,
+      "xfailed": 0,
+      "xpassed": 0,
+      "initial_failed": 0,
+      "new": 0,
+      "known": 0,
+      "flaky": 0,
+      "flaky_tests": [],
+      "targets": [
+        "learning/training/omx/test/test_act_inference_native.py",
+        "learning/training/omx/test/test_act_owner_capture.py",
+        "learning/training/omx/test/test_act_parent_chain.py"
+      ]
+    },
+    {
+      "report": "run-2.txt",
+      "sha256": "fb768750430a4f5c3c3af56415d4fdb9e86daafc60872f6d151498dccfc43c53",
+      "summary": "117 passed, 6 skipped in 4.10s",
+      "passed": 117,
+      "failed": 0,
+      "skipped": 6,
+      "error": 0,
+      "xfailed": 0,
+      "xpassed": 0,
+      "initial_failed": 0,
+      "new": 0,
+      "known": 0,
+      "flaky": 0,
+      "flaky_tests": [],
+      "targets": [
+        "learning/registry/policy/test"
+      ]
+    },
+    {
+      "report": "run-3.txt",
+      "sha256": "ddc1487b15f87ee65e6d2a1c366b285691d10daa9a100f81c6cf2b8bf7ae62b6",
+      "summary": "419 passed, 21 skipped in 12.90s",
+      "passed": 419,
+      "failed": 0,
+      "skipped": 21,
+      "error": 0,
+      "xfailed": 0,
+      "xpassed": 0,
+      "initial_failed": 0,
+      "new": 0,
+      "known": 0,
+      "flaky": 0,
+      "flaky_tests": [],
+      "targets": [
+        "learning/training/omx/test"
+      ]
+    },
+    {
+      "report": "run-4.txt",
+      "sha256": "009c6af5ac519886ccdb179b5c6b007e3dc6a2116076baa75e6df4cdcf20d144",
+      "summary": "6 passed, 6 skipped in 0.49s",
+      "passed": 6,
+      "failed": 0,
+      "skipped": 6,
+      "error": 0,
+      "xfailed": 0,
+      "xpassed": 0,
+      "initial_failed": 0,
+      "new": 0,
+      "known": 0,
+      "flaky": 0,
+      "flaky_tests": [],
+      "targets": [
+        "learning/training/pinky/test"
+      ]
+    },
+    {
+      "report": "run-5.txt",
+      "sha256": "e966416a1b1185bb3462225b1ace32ec387654be6b4ae8999e3d1f3c60a9ba24",
+      "summary": "328 passed, 10 skipped in 1.98s",
+      "passed": 328,
+      "failed": 0,
+      "skipped": 10,
+      "error": 0,
+      "xfailed": 0,
+      "xpassed": 0,
+      "initial_failed": 0,
+      "new": 0,
+      "known": 0,
+      "flaky": 0,
+      "flaky_tests": [],
+      "targets": [
+        "learning/curation/omx/test"
+      ]
+    },
+    {
+      "report": "run-6.txt",
+      "sha256": "95ae74111e65fd6cb231910608d8b6ee6ce12e3b9348928a5ad394f5a61b5db1",
+      "summary": "21 passed, 28 skipped in 1.30s",
+      "passed": 21,
+      "failed": 0,
+      "skipped": 28,
+      "error": 0,
+      "xfailed": 0,
+      "xpassed": 0,
+      "initial_failed": 0,
+      "new": 0,
+      "known": 0,
+      "flaky": 0,
+      "flaky_tests": [],
+      "targets": [
+        "learning/curation/pinky/test"
+      ]
+    },
+    {
+      "report": "run-7.txt",
+      "sha256": "4b06905139f245ad5c4ba40eceba60b4f284ce0fcec07b498318603a67ff4b48",
+      "summary": "3 passed in 0.22s",
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0,
+      "error": 0,
+      "xfailed": 0,
+      "xpassed": 0,
+      "initial_failed": 0,
+      "new": 0,
+      "known": 0,
+      "flaky": 0,
+      "flaky_tests": [],
+      "targets": [
+        "learning/training/world_model/test"
+      ]
+    },
+    {
+      "report": "run-8.txt",
+      "sha256": "0b3f9951dcc9fbcaefa81f35ccd4ed985afb510bfe88a12c29b24d7dae9dad0c",
+      "summary": "4 passed in 0.35s",
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0,
+      "error": 0,
+      "xfailed": 0,
+      "xpassed": 0,
+      "initial_failed": 0,
+      "new": 0,
+      "known": 0,
+      "flaky": 0,
+      "flaky_tests": [],
+      "targets": [
+        "learning/evaluation/world_model/test"
+      ]
+    },
+    {
+      "report": "run-9.txt",
+      "sha256": "413e37c27fbaa8d22d56447df2144317547b17789647ad1281f22f49cfb8dd02",
+      "summary": "12 passed in 0.06s",
+      "passed": 12,
+      "failed": 0,
+      "skipped": 0,
+      "error": 0,
+      "xfailed": 0,
+      "xpassed": 0,
+      "initial_failed": 0,
+      "new": 0,
+      "known": 0,
+      "flaky": 0,
+      "flaky_tests": [],
+      "targets": [
+        "operations/prediction/world_model/test"
+      ]
+    },
+    {
+      "report": "run-10.txt",
+      "sha256": "0703eba289a38a50e703c0a25e7a537602b753ed18e0036f5a38b37b3aa09c87",
+      "summary": "7843 passed, 91 skipped, 10 warnings, 5 subtests passed in 348.16s (0:05:48)",
+      "passed": 7843,
+      "failed": 0,
+      "skipped": 91,
+      "error": 0,
+      "xfailed": 0,
+      "xpassed": 0,
+      "initial_failed": 0,
+      "new": 0,
+      "known": 0,
+      "flaky": 0,
+      "flaky_tests": [],
+      "targets": [
+        "middleware/core/gateway/test",
+        "middleware/core/events/test",
+        "middleware/core/services/test",
+        "shared/web/test",
+        "contracts/foundation/test",
+        "middleware/devices/pinky/profile/test",
+        "middleware/devices/omx/profile/test"
+      ]
+    },
+    {
+      "report": "run-11.txt",
+      "sha256": "a01f19cdb70ce598c4217008fd8165e0031b42ea6090933fe07b69a3209ba269",
+      "summary": "6 passed, 2 skipped, 2 warnings in 34.15s",
+      "passed": 6,
+      "failed": 0,
+      "skipped": 2,
+      "error": 0,
+      "xfailed": 0,
+      "xpassed": 0,
+      "initial_failed": 0,
+      "new": 0,
+      "known": 0,
+      "flaky": 0,
+      "flaky_tests": [],
+      "targets": [
+        "middleware/core/gateway/test/test_account_pipeline.py"
+      ]
+    },
+    {
+      "report": "run-12.txt",
+      "sha256": "9c8da48da01c89793ae155ec072a44ff93dcef363c809799eb730f6d05324c8d",
+      "summary": "3563 passed, 113 skipped, 62 subtests passed in 59.05s",
+      "passed": 3563,
+      "failed": 0,
+      "skipped": 113,
+      "error": 0,
+      "xfailed": 0,
+      "xpassed": 0,
+      "initial_failed": 0,
+      "new": 0,
+      "known": 0,
+      "flaky": 0,
+      "flaky_tests": [],
+      "targets": [
+        "middleware/perception/test"
+      ]
+    },
+    {
+      "report": "run-13.txt",
+      "sha256": "556d234c383b6c8fe2cf7537b7d9e6d01a185a2935e5a50885177099a98df984",
+      "summary": "7403 passed, 566 skipped, 28 warnings in 266.00s (0:04:25)",
+      "passed": 7403,
+      "failed": 0,
+      "skipped": 566,
+      "error": 0,
+      "xfailed": 0,
+      "xpassed": 0,
+      "initial_failed": 0,
+      "new": 0,
+      "known": 0,
+      "flaky": 0,
+      "flaky_tests": [],
+      "targets": [
+        "operations/fleet/test"
+      ]
+    },
+    {
+      "report": "run-14.txt",
+      "sha256": "82673cb78f639ca20d809dac916de9bfec88a1dba399eb307b3730543fd8bb84",
+      "summary": "67 passed, 35 skipped, 2 warnings in 5.77s",
+      "passed": 67,
+      "failed": 0,
+      "skipped": 35,
+      "error": 0,
+      "xfailed": 0,
+      "xpassed": 0,
+      "initial_failed": 0,
+      "new": 0,
+      "known": 0,
+      "flaky": 0,
+      "flaky_tests": [],
+      "targets": [
+        "applications/fleet/test"
+      ]
+    },
+    {
+      "report": "run-15.txt",
+      "sha256": "6cc47625c60c094eda5bbcbce973bc516b08e64179eb41bbf05b894697f67736",
+      "summary": "16 skipped in 0.13s",
+      "passed": 0,
+      "failed": 0,
+      "skipped": 16,
+      "error": 0,
+      "xfailed": 0,
+      "xpassed": 0,
+      "initial_failed": 0,
+      "new": 0,
+      "known": 0,
+      "flaky": 0,
+      "flaky_tests": [],
+      "targets": [
+        "test/test_monitoring_browser.py"
+      ]
+    },
+    {
+      "report": "run-16.txt",
+      "sha256": "bb8c93e6559ef35e30d312d031cb2fcb997267aea1a20d3e2fe2e568f31974e8",
+      "summary": "785 passed in 28.21s",
+      "passed": 785,
+      "failed": 0,
+      "skipped": 0,
+      "error": 0,
+      "xfailed": 0,
+      "xpassed": 0,
+      "initial_failed": 0,
+      "new": 0,
+      "known": 0,
+      "flaky": 0,
+      "flaky_tests": [],
+      "targets": [
+        "operations/overhead/test"
+      ]
+    },
+    {
+      "report": "run-17.txt",
+      "sha256": "7871631c4107601139e6ebe0edb3f5bd9b3afcf53b599cebed9294eb6bcdbbe5",
+      "summary": "155 passed in 0.68s",
+      "passed": 155,
+      "failed": 0,
+      "skipped": 0,
+      "error": 0,
+      "xfailed": 0,
+      "xpassed": 0,
+      "initial_failed": 0,
+      "new": 0,
+      "known": 0,
+      "flaky": 0,
+      "flaky_tests": [],
+      "targets": [
+        "operations/processes/cell/test"
+      ]
+    },
+    {
+      "report": "run-18.txt",
+      "sha256": "33c8f954fafabc59cb2e4b5f242fdd8361025aa1ec25dc57a95a86a3f34fbc2f",
+      "summary": "126 passed, 10 warnings in 4.46s",
+      "passed": 126,
+      "failed": 0,
+      "skipped": 0,
+      "error": 0,
+      "xfailed": 0,
+      "xpassed": 0,
+      "initial_failed": 0,
+      "new": 0,
+      "known": 0,
+      "flaky": 0,
+      "flaky_tests": [],
+      "targets": [
+        "operations/situation/test"
+      ]
+    },
+    {
+      "report": "run-19.txt",
+      "sha256": "7b3b6a3654b2547f63fcec98c18011635d29607f910e7e0b4be1b76dcad4059a",
+      "summary": "42 passed in 2.46s",
+      "passed": 42,
+      "failed": 0,
+      "skipped": 0,
+      "error": 0,
+      "xfailed": 0,
+      "xpassed": 0,
+      "initial_failed": 0,
+      "new": 0,
+      "known": 0,
+      "flaky": 0,
+      "flaky_tests": [],
+      "targets": [
+        "operations/world/test"
+      ]
+    },
+    {
+      "report": "run-20.txt",
+      "sha256": "050ac08bbf1364661f7b48a37758c8960f13297e3c36e53f993c29698b04363e",
+      "summary": "105 passed, 1 skipped, 10 warnings in 9.16s",
+      "passed": 105,
+      "failed": 0,
+      "skipped": 1,
+      "error": 0,
+      "xfailed": 0,
+      "xpassed": 0,
+      "initial_failed": 0,
+      "new": 0,
+      "known": 0,
+      "flaky": 0,
+      "flaky_tests": [],
+      "targets": [
+        "operations/monitoring/test"
+      ]
+    },
+    {
+      "report": "run-21.txt",
+      "sha256": "4750e8896e996b1f03ece9c5e77f0d8d79a7eb2522b7c202f45c0e0f201e8985",
+      "summary": "26 passed in 2.67s",
+      "passed": 26,
+      "failed": 0,
+      "skipped": 0,
+      "error": 0,
+      "xfailed": 0,
+      "xpassed": 0,
+      "initial_failed": 0,
+      "new": 0,
+      "known": 0,
+      "flaky": 0,
+      "flaky_tests": [],
+      "targets": [
+        "test/test_platform_palletizing_compat.py",
+        "test/test_platform_cell_submission.py",
+        "test/architecture/test_platform_dependency_boundaries.py"
+      ]
+    },
+    {
+      "report": "run-22.txt",
+      "sha256": "6712cf350f4f76965a269ebc2b4c760021b7ec05f9b3574cb12730eb8ef3d63a",
+      "summary": "328 passed, 28 skipped in 10.42s",
+      "passed": 328,
+      "failed": 0,
+      "skipped": 28,
+      "error": 0,
+      "xfailed": 0,
+      "xpassed": 0,
+      "initial_failed": 0,
+      "new": 0,
+      "known": 0,
+      "flaky": 0,
+      "flaky_tests": [],
+      "targets": [
+        "integrations/simulation/gazebo/test"
+      ]
+    },
+    {
+      "report": "run-23.txt",
+      "sha256": "91fef32f673d7478145f09d9cd595b92a25fb103add17b41e978ab7af1eba715",
+      "summary": "473 passed in 1.23s",
+      "passed": 473,
+      "failed": 0,
+      "skipped": 0,
+      "error": 0,
+      "xfailed": 0,
+      "xpassed": 0,
+      "initial_failed": 0,
+      "new": 0,
+      "known": 0,
+      "flaky": 0,
+      "flaky_tests": [],
+      "targets": [
+        "middleware/devices/pinky/bringup/test",
+        "middleware/drivers/pinky_adc/test",
+        "middleware/perception/test/test_ir_adc_lock.py",
+        "--ignore=middleware/devices/pinky/bringup/test/test_flake8.py",
+        "--ignore=middleware/devices/pinky/bringup/test/test_pep257.py",
+        "--ignore=middleware/devices/pinky/bringup/test/test_copyright.py"
+      ]
+    },
+    {
+      "report": "run-24.txt",
+      "sha256": "c454fa3b5010cef8088f9c7e5554fb0603759912800c6a7d960fcea98e9221ee",
+      "summary": "2 failed, 13661 passed, 1438 skipped, 199 warnings in 354.83s (0:05:54)",
+      "passed": 13663,
+      "failed": 0,
+      "skipped": 1438,
+      "error": 0,
+      "xfailed": 0,
+      "xpassed": 0,
+      "initial_failed": 2,
+      "new": 0,
+      "known": 0,
+      "flaky": 2,
+      "flaky_tests": [
+        "test/test_platform_g1_timing.py::test_coordinated_pairs_pass_both_barriers_within_the_proposed_bounds",
+        "test/test_platform_g1_timing.py::test_real_uds_round_trip_stays_inside_the_bound"
+      ],
+      "targets": [
+        "test"
+      ]
+    },
+    {
+      "report": "run-25.txt",
+      "sha256": "089d22fa9dcc919e8545cfcf0625ba5876875404163b471c114985e9dad3bbef",
+      "summary": "2025 passed, 419 skipped, 10 warnings in 43.41s",
+      "passed": 2025,
+      "failed": 0,
+      "skipped": 419,
+      "error": 0,
+      "xfailed": 0,
+      "xpassed": 0,
+      "initial_failed": 0,
+      "new": 0,
+      "known": 0,
+      "flaky": 0,
+      "flaky_tests": [],
+      "targets": [
+        "operations/site_ui/media/test",
+        "middleware/media/test",
+        "learning/evaluation/perception/test",
+        "operations/apps/games/test",
+        "operations/processes/palletizing/test",
+        "middleware/robot_ui/face/test/test_info_screen.py",
+        "middleware/robot_ui/face/test/test_info_screen_boot.py",
+        "middleware/robot_ui/face/test/test_wifi_qr.py",
+        "middleware/drivers/pinky_led/test/test_led_package_contract.py",
+        "middleware/drivers/imu_bno055/test/test_package_contract.py",
+        "middleware/drivers/pinky_lamp/test/test_lamp_package_contract.py",
+        "middleware/robot_ui/robot/test",
+        "middleware/robot_ui/pilot/test",
+        "middleware/robot_execution/local/test",
+        "middleware/devices/omx/adapter/test",
+        "contracts/ros_idl/test/test_srv_surface.py",
+        "middleware/devices/rasptank/profile/test",
+        "middleware/devices/pinky/description/test/test_urdf_surface.py",
+        "operations/signal_observation/test",
+        "middleware/robot_ui/face/test/test_face_assets.py"
+      ]
+    },
+    {
+      "report": "run-26.txt",
+      "sha256": "208286ec001e787ff4b7f0a34de40d938ba90481493c84efa31bf42934177260",
+      "summary": "192 passed, 13 skipped, 10 warnings, 25 subtests passed in 4.34s",
+      "passed": 192,
+      "failed": 0,
+      "skipped": 13,
+      "error": 0,
+      "xfailed": 0,
+      "xpassed": 0,
+      "initial_failed": 0,
+      "new": 0,
+      "known": 0,
+      "flaky": 0,
+      "flaky_tests": [],
+      "targets": [
+        "middleware/core/api/test"
+      ]
+    },
+    {
+      "report": "run-27.txt",
+      "sha256": "eabf73a4b42d034b514dd957732903c88b6399b73ca2c387687e6d13ed245fef",
+      "summary": "508 passed, 2 skipped in 30.80s",
+      "passed": 508,
+      "failed": 0,
+      "skipped": 2,
+      "error": 0,
+      "xfailed": 0,
+      "xpassed": 0,
+      "initial_failed": 0,
+      "new": 0,
+      "known": 0,
+      "flaky": 0,
+      "flaky_tests": [],
+      "targets": [
+        "learning/envs/isaac/test",
+        "tools/calibration/test/test_analyze_store.py",
+        "tools/calibration/test/test_camera_board.py",
+        "tools/calibration/test/test_store_cli.py",
+        "tools/calibration/test/test_urdf_nominal.py",
+        "tools/capture/test/test_edge_drive_advisory.py"
+      ]
+    }
+  ],
+  "focused": {
+    "commit": "3d550f49ce",
+    "passed": 536,
+    "skipped": 1,
+    "new": 0
+  },
+  "structure_native_policy": {
+    "commit": "2417f262d6",
+    "passed": 373,
+    "skipped": 1,
+    "new": 0
+  },
+  "main_comparison": {
+    "commit": "73a04687655a06aa827c9f3b68b60ac432986d72",
+    "report": "pinky-main-timing-baseline/run-1.txt",
+    "sha256": "9136ac448b0f7ce07bce1d3832c9d8c4e3095d08c2a7a7e0ca7f7d6adcc3a490",
+    "passed": 12,
+    "skipped": 0,
+    "runner_exit": 0,
+    "new": 0,
+    "main_red": false
+  },
+  "device_accepted": false,
+  "field_accepted": false,
+  "deployed": false,
+  "landed": false,
+  "pushed": false,
+  "automatic_submission": false,
+  "worktree": "pinky-character",
+  "branch": "docs/pinky-character-expression",
+  "ce": "not applicable: source and regression tests preserve the decisions",
+  "runner_exit_code": 0,
+  "matrix_basis": {
+    "base": "181ff1e148",
+    "head": "939c3f58924579c225f18a5c86e99b98c4ca0c8c",
+    "source_array": "full_invocations",
+    "cli_array": "local_invocations",
+    "arrays_identical": true,
+    "scope_reduced": false
+  }
+}
