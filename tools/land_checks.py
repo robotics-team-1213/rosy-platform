@@ -107,7 +107,13 @@ def _ids(wt: Path, verdict: str) -> list[str]:
                              "*test_*.py").stdout.splitlines()
             if len(found) == 1:
                 nodeid = found[0] + sep + rest
-        ids.append(nodeid)
+        # A parameter id pytest printed with spaces or \u escapes does not survive the remote argv (2026-11-08:
+        # "[response1-비상 ...]" ran nothing, exit 4); rerun the whole test function instead.
+        head, bracket, _ = nodeid.partition("[")
+        if bracket and re.search(r"[\s\\]", nodeid[len(head):]):
+            nodeid = head
+        if nodeid not in ids:
+            ids.append(nodeid)
     return ids
 
 
