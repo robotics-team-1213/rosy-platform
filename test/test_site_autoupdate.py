@@ -205,6 +205,7 @@ def _verifier(calls, independent_commits=()):
         manifest.setdefault('omx', True)
         manifest.setdefault('workcell', True)
         manifest.setdefault('control_unit', True)
+        manifest.setdefault('control_unit_remote', True)
         manifest.setdefault('monitoring', True)
         commit = manifest['source_commit']
         services = (*upd.SERVICES, 'account') if commit in independent_commits else upd.SERVICES
