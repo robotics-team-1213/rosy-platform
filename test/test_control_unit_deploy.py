@@ -51,8 +51,9 @@ def test_remote_peer_overlay_only_publishes_the_peer_origin_and_follows_the_cont
     import pytest
     from deploy.site.site_update_io import Refused, allowed_overlays
     overlay = yaml.safe_load((ROOT / "deploy/site/compose.control-unit-remote.yaml").read_text(encoding="utf-8"))
-    assert overlay["services"] == {"control-unit-peer": {"ports": [
-        "${ROSY_CONTROL_UNIT_PEER_PUBLISH:?Set host_address:host_port:peer_port for the cross-host peer origin}"]}}
+    (port,) = overlay["services"].pop("control-unit-peer")["ports"]
+    assert overlay["services"] == {} and port.startswith("${ROSY_CONTROL_UNIT_PEER_BIND:?")
+    assert port.count("${ROSY_CONTROL_UNIT_PEER_PORT:?") == 2  # published unchanged, no wildcard default
     site = "-f /opt/rosy/candidate/deploy/site/compose."
     unit, remote = site + "control-unit.yaml", site + "control-unit-remote.yaml"
     for value in (f"{site}pairing.yaml {unit} {remote} {site}monitoring.yaml {site}account.yaml", f"{unit} {remote}"):
