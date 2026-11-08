@@ -50,6 +50,7 @@ CONTAINER = {"fixture-studs": (.09, .03, .03), "r08-berth": (.09, .02998, .0324)
 # pocket centre, then a slope rising 4.4 over 2.7 to the deck at 8, ridge 0.5 wide between rows, deck to |y| 63, bulwark to z 11 out to 65 (mm).
 HOLD = dict(starts=(50., 148.), length=98., centre=49., rows=(-38., 0., 38.), floor=3., hw=15.7, hl=45.6, seat=.6, catch=2.7, rise=4.4, ridge=.5,
             deck=8., deck_y=63., bulwark=11., half_beam=65.)
+SHIP_LENGTH_M = .316  # r08 v15 stern to bow (hull.stl bounds)
 STERN_BAY = dict(x=25., floor=6.)  # r08 stern_bay centre x and its floor on the berth (pocket floor 3 + lift 3), mm
 # r08 stern around the empty bay, from the r08 README table (fender face x 0-5 at deck 8, bay mouth x 6.5-43.5 with floor 3, side rails
 # x 12-50 at 11) plus the 3 mm berth lift: boxes (x0, x1, y0, y1, z top) in ship mm; y0 = -y1 is one box across, else mirrored to both sides.
@@ -117,6 +118,22 @@ def r08_sites(layout):
     x, cy, z = ship_cell(layout, STERN_BAY["x"], 0, STERN_BAY["floor"])
     out["ship-stern-l0"] = dict(kind="ship", xy=(x, cy), z=z + layout.box[2] / 2, yaw=math.pi / 2, row=1, layer=0, stack="stern", slots=[])
     return out
+
+
+def under_hull(layout, site):
+    """True when a container seated on `site` would reach over the r08 hull (stern to bow, beam 130 mm): plate v11 where its bridge
+    seats it overlaps the estimated ship by up to 20 mm at arm_b (the base plate yaw, arm_b's axis and the ship's place are unmeasured).
+    shortcut: container corners against the hull's bounding box, enough while the hull's sides are straight there; upgrade with the hull mesh."""
+    c = layout.choices
+    x1, y0 = c["ship_stern_x_m"], c["ship_centre_y_m"]
+    long, side = (math.cos(site["yaw"]), math.sin(site["yaw"])), (-math.sin(site["yaw"]), math.cos(site["yaw"]))
+    for a in (-1, 1):
+        for b in (-1, 1):
+            x = site["xy"][0] + a * layout.box[0] / 2 * long[0] + b * layout.box[1] / 2 * side[0]
+            y = site["xy"][1] + a * layout.box[0] / 2 * long[1] + b * layout.box[1] / 2 * side[1]
+            if x1 - SHIP_LENGTH_M <= x <= x1 and abs(y - y0) <= HOLD["half_beam"] / 1000:
+                return True
+    return False
 
 
 def lane_geometry(radius):
@@ -206,6 +223,10 @@ class Layout:
             for i, (xy, yaw) in enumerate(lanes, 1):
                 self.sites[f"tmp-{tag}-{i}"] = dict(kind="temp", xy=xy, z=self.deck_z + self.box[2] / 2, yaw=yaw, plate=tag, lane=i)
         self.ship_xy = {n: s["xy"] for n, s in self.sites.items() if s["kind"] == "ship"}
+        if c["ship_source"] == "r08-berth":
+            for s in self.sites.values():
+                if s["kind"] == "temp" and under_hull(self, s):
+                    s["blocked"] = "under the ship hull"
 
     def containers(self):
         """The container ids of the stack plan, in plan order, with the arm the plan gave each."""

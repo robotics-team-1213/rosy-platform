@@ -166,6 +166,14 @@ def test_the_photo_plates_stand_where_the_top_camera_saw_them():
         assert np.hypot(*np.subtract(top_camera_pixels(layout, layout.sites[site]["xy"]), pixel)) < 5, site
 
 
+def test_a_lane_under_the_ship_hull_is_blocked_and_refused(layout, data):
+    """Plate v11 where its bridge seats it reaches 20 mm over the estimated r08 hull at arm_b (MuJoCo: the container sat 5 mm up, 7 deg
+    tilted on lane 1). Such a lane is no place until the base plate yaw and the ship are measured."""
+    assert {n for n, s in layout.sites.items() if s.get("blocked")} == {"tmp-b-1"}
+    task = dict(supply=[], start={"bar-9": "ship-h1r2-l2"}, name="t", steps=[dict(id="x", container="bar-9", **{"from": "ship-h1r2-l2"}, to="tmp-b-1", arm="arm_b")])
+    assert "tmp-b-1 is under the ship hull" in refused(layout, task)
+
+
 def test_temp_lanes_follow_the_scad_fan_and_point_at_the_arm():
     layout = sites.Layout(temp_lanes="fan", ship_source="fixture-studs")
     width, length, flare, fan, angles = sites.lane_geometry(.200)

@@ -44,8 +44,8 @@ def zone(layout, site):
 
 def planning_sites(layout):
     """Sites the plans use: all but ship hold 2, which the arms reach at grasp height but not on the validated carry from the conveyor
-    (omx_two_arm_tasks refuses it with the stern at the table edge)."""
-    return [s for s, v in layout.sites.items() if v["kind"] != "ship" or v["stack"].startswith("h1") or v["stack"] == "stern"]
+    (omx_two_arm_tasks refuses it with the stern at the table edge), and temporary lanes under the hull."""
+    return [s for s, v in layout.sites.items() if not v.get("blocked") and (v["kind"] != "ship" or v["stack"].startswith("h1") or v["stack"] == "stern")]
 
 
 def validator_can(layout):

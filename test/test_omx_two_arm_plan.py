@@ -20,7 +20,8 @@ def layout():
 
 @pytest.fixture(scope="module")
 def reach(layout):
-    """The IK reach map of 2026-11-08 (reach_map): ship hold 1, belt and stern bay by both, plate a by arm_a, plate b lanes 1-2 by arm_b."""
+    """A fixed reach table: ship hold 1, belt and stern bay by both, plate a by arm_a, plate b lanes 1-2 by arm_b (lane 1 is left out
+    anyway: plate v11 on its bridge puts it under the estimated hull)."""
     table = {s: set(BOTH) for s in plan.planning_sites(layout) if layout.sites[s]["kind"] in ("ship", "belt")}
     table.update({f"tmp-a-{i}": {"arm_a"} for i in (1, 2, 3)})
     table.update({"tmp-b-1": {"arm_b"}, "tmp-b-2": {"arm_b"}, "tmp-b-3": set()})
@@ -61,16 +62,16 @@ def test_harbor_order_rehandle_outbound_restore(layout, reach):
     moves, why = plan.harbor_moves(layout, state, dict(cargo_id="bar-3"), reach)  # bottom of row 2 under bar-6 and bar-9
     assert why is None
     assert [(m["cargo_id"], m["phase_label"]) for m in moves] == [("bar-9", "재취급"), ("bar-6", "재취급"), ("bar-3", "반출"), ("bar-6", "복귀"), ("bar-9", "복귀")]
-    assert moves[2]["destination"] == "tmp-a-1"  # the outbound place is a lane: arm_b's plate is full, so arm_a's
+    assert moves[0]["destination"] == "tmp-b-2"  # row 2 is arm_b's side: its own plate first (lane 1 lies under the hull)
+    assert moves[2]["destination"].startswith("tmp-a")  # the outbound place is a lane: arm_b's plate is used up, so arm_a's
     assert [m["destination"] for m in moves[3:]] == ["ship-h1r2-l0", "ship-h1r2-l1"]  # down into the freed level, old order kept
-    assert all(m["destination"].startswith("tmp-b") for m in moves[:2])  # row 2 is arm_b's side: its own plate first
 
 
 def test_one_arm_without_a_temporary_place_in_reach_holds(layout, reach):
-    """arm_b alone reaches two lanes of its plate and the stern bay: the second request finds no lane left for its target (a person or a
-    Pinky trip)."""
+    """arm_b alone has one free lane of its plate and the stern bay: no request finds a lane left for its target once its blockers are
+    out (a person or a Pinky trip)."""
     moves, holds = plan.plan_outbound(layout, ("arm_b",), reach)
-    assert holds and holds[0] == dict(request="bar-3", reason="NO_STAND_IN_REACH")
+    assert holds and all(h["reason"] == "NO_STAND_IN_REACH" for h in holds)
     both, none = plan.plan_outbound(layout, ("arm_a", "arm_b"), reach)
     assert not none and len(both) == 10
 

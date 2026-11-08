@@ -151,7 +151,7 @@
      "id": "b1",
      "container": "bar-8",
      "from": "ship-h1r0-l2",
-     "to": "tmp-b-1",
+     "to": "ship-stern-l0",
      "arm": "arm_b"
     },
     {
@@ -178,7 +178,7 @@
     {
      "id": "b5",
      "container": "bar-8",
-     "from": "tmp-b-1",
+     "from": "ship-stern-l0",
      "to": "ship-h1r0-l1",
      "arm": "arm_b"
     },
@@ -217,21 +217,21 @@
      "id": "m1",
      "container": "bar-5",
      "from": "ship-h1r0-l1",
-     "to": "tmp-b-1",
+     "to": "tmp-b-2",
      "arm": "arm_b"
     },
     {
      "id": "m2",
      "container": "bar-2",
      "from": "ship-h1r0-l0",
-     "to": "tmp-b-2",
+     "to": "tmp-b-3",
      "arm": "arm_b",
      "outbound": true
     },
     {
      "id": "m3",
      "container": "bar-5",
-     "from": "tmp-b-1",
+     "from": "tmp-b-2",
      "to": "ship-h1r0-l0",
      "arm": "arm_b"
     },
@@ -246,7 +246,7 @@
      "id": "m5",
      "container": "bar-9",
      "from": "ship-h1r2-l2",
-     "to": "tmp-b-2",
+     "to": "tmp-b-3",
      "arm": "arm_b"
     },
     {
@@ -274,7 +274,7 @@
     {
      "id": "m9",
      "container": "bar-9",
-     "from": "tmp-b-2",
+     "from": "tmp-b-3",
      "to": "ship-h1r2-l1",
      "arm": "arm_b"
     }

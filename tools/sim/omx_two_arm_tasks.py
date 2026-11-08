@@ -161,6 +161,9 @@ def validate(layout, task, data=None):
         sb = layout.sites[b]
         if sb["kind"] == "ship" and sb["layer"] > 0 and f"ship-{sb['stack']}-l{sb['layer'] - 1}" not in occupied:
             problems.append(f"{sid}: {b} has nothing under it")
+        for s in (a, b):
+            if layout.sites[s].get("blocked"):
+                problems.append(f"{sid}: {s} is {layout.sites[s]['blocked']}")
         if b == "belt":
             problems.append(f"{sid}: the belt end is a source, not a target")
         if sb["kind"] == "temp" and sum(1 for s in occupied if layout.sites[s].get("plate") == sb["plate"]) + (a not in occupied) > CAPACITY:
