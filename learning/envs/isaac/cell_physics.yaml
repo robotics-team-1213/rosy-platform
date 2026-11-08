@@ -1,0 +1,43 @@
+# OMX cell physics constants: the candidates the sims build from, with where each came from (D-947 2: candidates compared by
+# results, nothing silently overwritten). The MuJoCo cells pick one with --choice physics=<name> (tools/sim/omx_physics.py);
+# training samples `omx_physics.py ranges`. Fitted candidates are written by tools/sim/omx_sysid.py promote; change by commit.
+# Units are what MuJoCo takes: kp N·m/rad (actuator gainprm, biasprm[1] = -kp), kv N·m·s/rad (biasprm[2] = -kv),
+# damping N·m·s/rad, armature kg·m², frictionloss N·m, force N·m (actuator forcerange), mass kg, friction (slide, spin, roll).
+# A container friction below 1 needs priority: 1, or MuJoCo takes the larger friction of the pair (and then also that geom's solref).
+# Contact numbers stay candidates for Isaac to confirm (D-947 5): MuJoCo contact picks candidates, it reports nothing.
+schema: rosy.cell-physics/1
+candidates:
+  design:
+    source: assumed
+    date: '2026-10-27'
+    note: the values omx_cell_sim and omx_two_arm_world had written in until 2026-11-09; not fitted to the arm (D-877)
+    joints:
+      default: {kp: 40.0, kv: 6.3, damping: 0.3, armature: 0.01, frictionloss: 0.0, force: 2.0}
+      gripper_joint_1: {force: 0.2}
+    container: {mass: 0.016, friction: [1.0, 0.005, 0.0001]}
+  twin-kp-20261109:
+    base: design
+    source: fitted
+    date: '2026-11-09'
+    method: omx_twin.py tracking, per-joint kp grid (10-80) by servo lag over arm_b's real episodes, one kp per joint
+    evidence: Rosy/docs/workspace-records/2026-11-09/omx-twin-night/findings.md (feat/omx-sim-twin)
+    note: real lag 0.10-0.34 s per joint against 0.16 s at kp 40; RMS improves only a little (j5 0.62 -> 0.53 deg)
+    arms:
+      arm_b:
+        joint1: {kp: 20.0}
+        joint4: {kp: 20.0}
+        joint5: {kp: 20.0}
+  twin-zero-20261109:
+    base: design
+    source: fitted
+    date: '2026-11-09'
+    method: omx_twin.py fit-camera, joint zeros against the top camera's arm outline; held-out median 12.6 -> 4.5 px
+    evidence: Rosy/docs/workspace-records/2026-11-09/omx-twin-night/findings.md (feat/omx-sim-twin)
+    note: calibration, not dynamics; the worlds do not apply zero_offset_deg, only ranges carry it. Not checked at a known pose (G-20)
+    arms:
+      arm_b:
+        joint1: {zero_offset_deg: 4.0}
+        joint2: {zero_offset_deg: 1.0}
+        joint3: {zero_offset_deg: 3.2}
+        joint4: {zero_offset_deg: 2.8}
+        joint5: {zero_offset_deg: 2.4}

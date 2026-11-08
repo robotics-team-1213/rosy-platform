@@ -20,6 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 os.environ.setdefault("MUJOCO_GL", "egl")
 import mujoco  # noqa: E402
 import numpy as np  # noqa: E402
+import omx_physics as physics  # noqa: E402
 import omx_two_arm_kin as kin  # noqa: E402
 import omx_two_arm_sites as sites  # noqa: E402
 import palletizing_gripper as jaw  # noqa: E402
@@ -114,10 +115,13 @@ class World:
         r08 = c["ship_source"] == "r08-berth"
         if r08:
             spec.add_mesh(name="container", file=self._asset("container_1x3_v3"), scale=[.001] * 3)
+        phys = physics.Physics(c["physics"])
+        held = phys.container()
         for k, (cid, _) in enumerate(L.containers()):
             body = world.add_body(name=cid, pos=[-1.4, 1.0 + .1 * k, .05])
             body.add_freejoint(name=cid)
-            body.add_geom(name=cid, type=box, size=[s / 2 for s in L.box], mass=.016, condim=4, friction=[1, .005, .0001], rgba=[.85, .35, .08, 0 if r08 else 1])
+            body.add_geom(name=cid, type=box, size=[s / 2 for s in L.box], mass=held["mass"], condim=4, friction=held["friction"], priority=held.get("priority", 0),
+                          rgba=[.85, .35, .08, 0 if r08 else 1])
             if r08:  # the printed body with its doors, drawn over the collision box (body x 0..90, the box centre at 45, 14.99, 16.2 mm)
                 body.add_geom(type=mujoco.mjtGeom.mjGEOM_MESH, meshname="container", pos=[-L.box[0] / 2, -L.box[1] / 2, -L.box[2] / 2],
                               contype=0, conaffinity=0, density=0, rgba=[.88, .48, .16, 1])
@@ -131,12 +135,9 @@ class World:
                                                quat=[math.cos(angle / 2), 0, 0, math.sin(angle / 2)], mass=.004, rgba=[0, 0, 0, 0])
             for joint in spec.joints:
                 if joint.name.startswith(p):
-                    joint.damping, joint.armature = .3, .01
+                    physics.apply_joint(joint, phys.joint(arm, joint.name[len(p):]))
             for name in JOINTS:
-                force = .2 if name == "gripper_joint_1" else 2.0
-                spec.add_actuator(name=p + name, target=p + name, trntype=mujoco.mjtTrn.mjTRN_JOINT, gaintype=mujoco.mjtGain.mjGAIN_FIXED,
-                                  gainprm=[40.0] + [0] * 9, biastype=mujoco.mjtBias.mjBIAS_AFFINE, biasprm=[0, -40.0, -6.3] + [0] * 7,
-                                  forcelimited=mujoco.mjtLimited.mjLIMITED_TRUE, forcerange=[-force, force])
+                physics.add_actuator(spec, p + name, phys.joint(arm, name))
             for parent, child in self.pairs[arm]:
                 spec.add_exclude(bodyname1=parent, bodyname2=child)
             spec.add_exclude(bodyname1=p + "link6", bodyname2=p + "link7")

@@ -29,6 +29,7 @@ os.environ.setdefault("MUJOCO_GL", "egl")
 import mujoco  # noqa: E402
 import numpy as np  # noqa: E402
 import omx_ladder as ladder  # noqa: E402
+import omx_physics as physics  # noqa: E402
 import palletizing_gripper as jaw  # noqa: E402
 
 FPS, SHAPE = 15, (240, 320)
@@ -48,8 +49,9 @@ def norm_to_rad(value):
 
 
 class Cell:
-    def __init__(self, path):
+    def __init__(self, path, physics_name="design"):
         self.values = json.loads(Path(path).read_text(encoding="utf-8"))
+        self.physics = physics.Physics(physics_name)
         v = self.values
         self.pick, self.place = v["sites"]["pallet"], v["sites"]["slot1"]
         self.home = np.append(norm_to_rad(v["plan"]["home"]), 1.0)
@@ -106,7 +108,8 @@ class Cell:
                        pos=[*(low + high) / 2, (z + self.table_z) / 2], rgba=[.1, .13, .3, 1])
         body = world.add_body(name="box", pos=[.16, -.03, .005])
         body.add_freejoint(name="box")
-        body.add_geom(name="box", type=box, size=[*(BOX / 2)], mass=.016, friction=[1, .005, .0001], rgba=[.85, .35, .08, 1], **contact)
+        held = self.physics.container()
+        body.add_geom(name="box", type=box, size=[*(BOX / 2)], mass=held["mass"], friction=held["friction"], priority=held.get("priority", 0), rgba=[.85, .35, .08, 1], **contact)
         for k, (finger, side) in enumerate((("link6", 1), ("link7", -1))):
             for part in spec.body(finger).geoms:
                 part.contype = part.conaffinity = 0
@@ -125,12 +128,9 @@ class Cell:
             part.group = 3
         for joint in spec.joints:
             if joint.name != "box":
-                joint.damping, joint.armature = .3, .01
+                physics.apply_joint(joint, self.physics.joint("arm_b", joint.name))
         for name in JOINTS:
-            force = .2 if name == "gripper_joint_1" else 2.0
-            spec.add_actuator(name=name, target=name, trntype=mujoco.mjtTrn.mjTRN_JOINT, gaintype=mujoco.mjtGain.mjGAIN_FIXED,
-                              gainprm=[40.0] + [0] * 9, biastype=mujoco.mjtBias.mjBIAS_AFFINE, biasprm=[0, -40.0, -6.3] + [0] * 7,
-                              forcelimited=mujoco.mjtLimited.mjLIMITED_TRUE, forcerange=[-force, force])
+            physics.add_actuator(spec, name, self.physics.joint("arm_b", name))
         for parent, child in self.pairs:
             spec.add_exclude(bodyname1=parent, bodyname2=child)
         spec.add_exclude(bodyname1="link6", bodyname2="link7")
@@ -386,6 +386,7 @@ def compare(cell, state_path, out):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--cell", required=True)
+    parser.add_argument("--physics", default="design", help="candidate in cell_physics.yaml (omx_physics.py)")
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("check").add_argument("count", type=int)
     one = commands.add_parser("collect")
@@ -406,7 +407,7 @@ def main(argv=None):
     one.add_argument("state")
     one.add_argument("--out", required=True)
     args = parser.parse_args(argv)
-    cell = Cell(args.cell)
+    cell = Cell(args.cell, args.physics)
     if args.command == "check":
         return check(cell, args.count)
     if args.command == "collect":
