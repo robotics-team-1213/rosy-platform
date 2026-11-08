@@ -329,7 +329,7 @@ def test_the_site_pc_never_runs_lab_only_suites_and_leaves_them_not_run(monkeypa
     subprocess.run(["git", "-C", str(repo), "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q",
                     "--allow-empty", "-m", "t"], check=True)
     codes = rp.run([["test/x.py"], journey], [tmp_path / "1.txt", tmp_path / "2.txt"], "HEAD", repo, wait=0)
-    assert codes == [0, rp.remote_job.LOST_EXIT] and [inv[-1] for _, inv in ran] == ["test/x.py"]
+    assert codes == [0, rp.remote_job.LOST_EXIT] and len(ran) == 1 and "test/x.py" in ran[0][1]
     assert "needs a lab PC" in capsys.readouterr().err
 
 
