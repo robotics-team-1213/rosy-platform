@@ -58,6 +58,7 @@ import land_events  # noqa: E402  (rosy-land-events.jsonl: what each landing did
 import land_browser  # noqa: E402  (the browser tier in file-level chunks)
 import land_selection  # noqa: E402  (selection with this caller's Stop and helper seams)
 import land_mainred  # noqa: E402  (D-889 addendum 2: a NEW that main already fails alike may be carried)
+import land_precheck  # noqa: E402  (the cheap gates alone, before land_async makes a ticket)
 import land_batch  # noqa: E402  (waiting landings behind a turn land as one batch)
 from land_checks import ahead_of_origin, tmp_dir  # noqa: E402
 from land_merge import (ADR_GAPS, ADR_LOG, conflict_stages, landed_gaps, plan, stale_adr_rows,  # noqa: E402,F401  (auto-resolve)
@@ -264,12 +265,12 @@ def secret_scan(wt: Path, main_sha: str) -> None:
     finally:
         sys.path.remove(str(release))
         sys.dont_write_bytecode = kept
-    changed = out(wt, "diff", "--name-only", "--diff-filter=d", main_sha, "HEAD").splitlines()
+    changed = out(wt, "diff", "--name-only", "--diff-filter=d", f"{main_sha}...HEAD").splitlines()
     findings = scanner.scan_files([wt / p for p in changed], root=wt, public_provenance=scanner.load_public_provenance(
         release / "public_provenance.json"))
     if findings:
-        raise Stop("secret scan (test_no_secrets_in_tracked_files) failed; a git id needs the word `commit` before it"
-                   " on its line, or 10 characters:\n" + "\n".join(str(f) for f in findings[:20]))
+        raise Stop("secret scan (test_no_secrets_in_tracked_files) failed (a full git id that exists in"
+                   " this repository is excused; other high-entropy text is not):\n" + "\n".join(str(f) for f in findings[:20]))
 
 
 def record_only(path: str) -> bool:
@@ -550,9 +551,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--no-cache", action="store_true", help="rerun every invocation (no land_cache.py reuse)")
     parser.add_argument("--queue-timeout", type=float, default=0, help="minutes to wait in the queue (0: no limit)")
     parser.add_argument("--no-queue", action="store_true", help="incident only: land without waiting in the queue")
+    parser.add_argument("--precheck", action="store_true", help="run the cheap gates only (land_async does this first)")
     parser.add_argument("--urgent", default="", metavar="REASON",
                         help="the user's words: pass waiting tickets (one at a time, D-889 addendum 5)")
     args = parser.parse_args(argv)
+    if args.precheck:
+        try:
+            land_precheck.precheck(sys.modules[__name__], Path(out(Path.cwd(), "rev-parse", "--show-toplevel")), sys.executable)
+            return 0
+        except Stop as exc:
+            print(f"[land] STOP: {exc}", file=sys.stderr)
+            return 1
     if not land_selection.configure(sys.modules[__name__], args):
         return 2
     try:

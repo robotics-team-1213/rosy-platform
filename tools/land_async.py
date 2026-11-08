@@ -383,6 +383,9 @@ def main(argv: list[str]) -> int:
                 "supervisor exited without a ticket or landing; read its .log")
         print(f"[land-async] resumed {argv[1]}: {note}")
         return 0 if status else 1
+    if subprocess.call(  # cheap gates fail here, before a snapshot or ticket exists
+            [sys.executable, str(Path(__file__).with_name("land.py")), "--precheck"], cwd=Path.cwd()):
+        return 1
     snap, log = start(Path.cwd(), argv, datetime.now(timezone.utc), detach)
     print(f"[land-async] queued {snap}; this worktree is free now. Log: {log}")
     return 0
