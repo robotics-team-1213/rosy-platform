@@ -3,7 +3,7 @@ that read the changed items (D-947: geometry evidence; measured values are named
 
   omx_real2sim.py capture --site USER@HOST --out RUN          frames of the cell cameras from the site's view server (read only)
   omx_real2sim.py measure RUN [--prev SNAPSHOT]                each item measured in parallel -> RUN/snapshot.json, RUN/overlay.png
-  omx_real2sim.py diff OLD NEW                                 changed items and the sim stages they feed
+  omx_real2sim.py diff OLD NEW                                 changed items, the sim stages they feed, their sim2real rows
   omx_real2sim.py sim SNAPSHOT --sha SHA --out DIR [--stages ..]   the stages in parallel on the lab PCs (remote_sim.py, never here)
   omx_real2sim.py report DIR                                    Markdown of what ran and passed
 
@@ -41,6 +41,7 @@ LANE = (.090, .030)          # printed pad = container footprint, m
 SIZE_TOL = (.012, .007)      # a blob within this of LANE is a lane
 CHANGED = (.003, 1.5)        # m, deg: a lane moved more than this is a changed item
 STAGGER_S = 45
+GAPS = {"temp_plates": "G-17", "ship": "G-18", "camera": "G-19"}  # sim2real registry rows each item reports to (D-480)
 PY = "MUJOCO_GL=egl $HOME/rosy-test/venvs/sim-mujoco/bin/python"
 SNAP_CHOICES = lambda path: ["--choice", f"cell_snapshot={path}", "--choice", "temp_lanes=snapshot"]
 # stage -> (item it reads, role, minutes, command after the python); every stage also reads the camera and arm bases.
@@ -365,7 +366,7 @@ def main(argv=None):
     elif a.cmd == "diff":
         load = lambda f: json.loads(Path(f).read_text(encoding="utf-8"))
         changed, rerun = diff(load(a.old), load(a.new))
-        print(json.dumps(dict(changed=changed, rerun=rerun), indent=1))
+        print(json.dumps(dict(changed=changed, rerun=rerun, gaps=sorted({GAPS[i] for i in changed})), indent=1))
     elif a.cmd == "sim":
         rcs = sim(a.snapshot, a.sha, a.out, a.stages.split(",") if a.stages else sorted(STAGES))
         print(json.dumps(rcs))
