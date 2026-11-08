@@ -2,11 +2,12 @@
 """Fit the OMX cell's physics constants to what the real arm did, keep a fit only when held-out episodes agree, and say
 which constant to measure next: the constant step of the real-sim loop (docs/reference/omx-real-sim-loop.md, 6b).
 
-  servo EP_DIR [EP_DIR ..] --cell CELL --out DIR [--base design] [--arm arm_b] [--keys kp,kv,damping,frictionloss]
+  servo EP [EP ..] --cell CELL --out DIR [--base design] [--arm arm_b] [--keys kp,kv,damping,frictionloss]
         Replays each real episode's actions open loop in the MuJoCo cell (omx_twin.track, --jobs processes) and fits the chosen constants of
         joint1-5 together (scipy least_squares, joint angle error in degrees). Episodes are split fit/hold by name
         (omx_twin.shard_of, 1 in 3 held out); fit.json has the base and fitted RMS on both, and each constant's sd.
-        Lab PC only (MuJoCo, D-584). No real motion: the episodes are recordings.
+        EP is an episode folder (episode_recorder) or a runner trace of deploy/robot/omx/cell_step.py's per-joint ramps.
+        Lab PC only (MuJoCo, D-584). No real motion here: both are recordings.
   friction --run TRACE:MASS_G:RESULT [--run ..] --out DIR
         Container friction from cell_push.py --friction (supervised, D-911): the pan's PWM while the closed jaws sweep the
         box, less the same sweep through air, as torque (datasheet stall torque at the logged voltage) over the radius,
@@ -37,10 +38,10 @@ HOLD = "0/3"        # omx_twin.shard_of: this share of the episode names is held
 EVERY = 2           # use every 2nd 50 Hz grid row in the fit (the hold-out score uses all)
 # How each constant is narrowed. Real arm motion is a supervised trial only (D-911): person at the switch.
 EXPERIMENTS = {
-    "kp": "servo: fit on recorded episodes (no motion); step test at a safe pose if sd stays wide (supervised, D-911)",
-    "kv": "servo: fit on recorded episodes; step test (supervised) separates it from damping",
-    "damping": "servo: fit on recorded episodes; step test (supervised) separates it from kv",
-    "armature": "step test (supervised): only fast steps show it",
+    "kp": "servo: fit on recorded episodes (no motion); cell_step.py ramps at home if sd stays wide (supervised, D-911)",
+    "kv": "servo: fit on recorded episodes; cell_step.py ramps (supervised) separate it from damping",
+    "damping": "servo: fit on recorded episodes; cell_step.py ramps (supervised) separate it from kv",
+    "armature": "not reachable: the guard streams at most 5 units/s, a true step would be needed",
     "frictionloss": "servo: fit on recorded episodes (slow reversals show it)",
     "force": "assumed servo stall torque; a push test at the guard's PWM limit (supervised)",
     "zero_offset_deg": "twin fit-camera, then a known pose with a person (G-20)",
@@ -73,15 +74,22 @@ def rms(err):
     return np.sqrt((err ** 2).mean(0)).round(3).tolist()
 
 
+def ramp_ticks(rows):
+    """A chunk_runner trace of deploy/robot/omx/cell_step.py as episode ticks: present is the state, what was sent the action."""
+    return [{"t": r["t"], "state": r["present"], "action": r.get("sent") or r["target"]}
+            for r in rows if str(r.get("chunk") or "").startswith("step_j") and r.get("present")]
+
+
 class Episodes:
-    """The real side of the fit: each episode's 50 Hz ticks and its real joint1-5 on the grid (rad)."""
+    """The real side of the fit: each episode folder's ticks (episode_recorder) or a cell_step runner trace file, and its
+    real joint1-5 on the 50 Hz grid (rad)."""
 
     def __init__(self, folders):
         import omx_cell_sim as cs
         import omx_twin as twin
         self.items = []
         for f in map(Path, folders):
-            ticks = twin.read_jsonl(f / "ticks.jsonl")
+            ticks = twin.read_jsonl(f / "ticks.jsonl") if f.is_dir() else ramp_ticks(twin.read_jsonl(f))
             if len(ticks) <= 50:
                 continue  # omx_twin.replay skips these too
             _, state = twin.grid(ticks, "state")

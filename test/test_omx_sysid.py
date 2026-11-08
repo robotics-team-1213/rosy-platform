@@ -166,3 +166,11 @@ def test_a_friction_fit_promotes_to_a_container_candidate_with_priority(tmp_path
     span = physics.ranges(doc)["container"]["friction"]
     assert span["low"] == pytest.approx(max(r["mu"] - 2 * r["sd"], 0)) and span["high"] == 1.0
     assert dict((c, k) for _, c, k, _ in sysid.survey(doc))["container.friction"] == "fitted"
+
+
+def test_a_ramp_trace_reads_as_episode_ticks():
+    rows = [{"t": 0.0, "chunk": None, "present": [0] * 6, "target": [0] * 6},
+            {"t": 0.1, "chunk": "step_j2", "present": [0, 1, 0, 0, 0, 5], "target": [0, 2, 0, 0, 0, 5], "sent": [0, 1.5, 0, 0, 0, 5]},
+            {"t": 0.2, "chunk": "step_j2", "present": [0, 2, 0, 0, 0, 5], "target": [0, 2, 0, 0, 0, 5], "sent": None}]
+    assert sysid.ramp_ticks(rows) == [{"t": 0.1, "state": [0, 1, 0, 0, 0, 5], "action": [0, 1.5, 0, 0, 0, 5]},
+                                      {"t": 0.2, "state": [0, 2, 0, 0, 0, 5], "action": [0, 2, 0, 0, 0, 5]}]
