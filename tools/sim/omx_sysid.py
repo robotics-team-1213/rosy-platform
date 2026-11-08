@@ -43,7 +43,7 @@ EXPERIMENTS = {
     "damping": "servo: fit on recorded episodes; cell_step.py ramps (supervised) separate it from kv",
     "armature": "not reachable: the guard streams at most 5 units/s, a true step would be needed",
     "frictionloss": "servo: fit on recorded episodes (slow reversals show it)",
-    "force": "assumed servo stall torque; a push test at the guard's PWM limit (supervised)",
+    "force": "not fitted: the guard stops a joint long before its stall torque, so this limit never acts in a real run",
     "zero_offset_deg": "twin fit-camera, then a known pose with a person (G-20)",
     "mass": "declared weight (arm-s-declared-weight), or a scale",
     "friction": "push test with the closed jaws (supervised, PWM against an empty pass), else tilt test by a person",
@@ -398,8 +398,15 @@ def main(argv=None):
         if a.json:
             print(json.dumps([dict(width=w, constant=c, known=k, experiment=e) for w, c, k, e in rows], indent=1))
         else:
-            print("| constant | known | width | experiment |\n|---|---|---|---|")
-            print("\n".join(f"| {c} | {k} | {'-' if w > 10 else w} | {e} |" for w, c, k, e in rows))
+            groups = {}  # one line per arm, constant and how it is known, its joints listed together
+            for w, c, k, e in rows:
+                head, _, key = c.rpartition(".")
+                arm, _, joint = head.partition(".")
+                g = groups.setdefault((arm, key, k), [w, [], e])
+                g[0], g[1] = max(g[0], w), g[1] + ([joint] if joint else [])
+            print("| constant | joints | known | width | experiment |\n|---|---|---|---|---|")
+            print("\n".join(f"| {arm}.{key} | {', '.join(j) or '-'} | {k} | {'-' if w > 10 else w} | {e} |"
+                            for (arm, key, k), (w, j, e) in sorted(groups.items(), key=lambda g: -g[1][0])))
     return 0
 
 
