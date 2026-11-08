@@ -1369,3 +1369,8 @@
 - gate 변화: SOURCE 변경. 시뮬·실물·현장 수용 없음; 문서가 없으면 동작 동일.
 - 결정: D-982 Proposed, API v1.368 additive.
 - 교훈: CE 해당 없음 — 최종 코드·시험·ADR이 판단을 보존한다.
+
+## 2026-11-07 · uncommitted · 계약 버전 v1.374
+- 변경: `contract_version.py`를 API 참조 v1.374(Account 가입·권한 요청, D-993)에 맞췄다. CORE 동작 변경 없음.
+- 증거: 프로토콜 버전 정합 시험.
+- gate 변화: 없음.

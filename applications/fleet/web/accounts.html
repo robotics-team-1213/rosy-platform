@@ -41,6 +41,22 @@
     <div id="account-content" hidden>
       <p>변경은 즉시 적용되며 대상 계정의 기존 로그인 세션이 종료됩니다. 마지막 관리자는 정지하거나 관리 권한을 제거할 수 없습니다.</p>
       <ui-button id="account-reload" kind="quiet">현재 상태 다시 조회</ui-button>
+      <section id="request-section" aria-labelledby="request-heading">
+        <h2 id="request-heading">가입·권한 요청</h2>
+        <p id="request-empty" hidden>대기 중인 요청이 없습니다.</p>
+        <div class="ui-table-scroll" role="region" aria-label="가입·권한 요청 표" tabindex="0">
+          <table class="ui-data-table" aria-label="가입·권한 요청"><thead><tr><th scope="col">구분</th><th scope="col">이름</th><th scope="col">로그인 ID</th><th scope="col">요청 대상</th><th scope="col">남긴 말</th><th scope="col">상태</th><th scope="col"><span class="sr-only">처리</span></th></tr></thead>
+            <tbody id="request-list"></tbody></table>
+        </div>
+        <div id="request-decision" hidden>
+          <p id="request-decision-text"></p>
+          <p>승인하면 아래 계정 양식의 내용 그대로 계정과 권한이 저장됩니다. 요청만으로는 어떤 권한도 생기지 않습니다. 새 계정은 임시 비밀번호를 정해 신청자에게 직접 알려 주세요.</p>
+          <label for="request-reason">거절 사유 · 거절할 때만 필요</label>
+          <input id="request-reason" class="ui-field password-login-field" maxlength="300" autocomplete="off">
+          <ui-button id="request-reject" kind="quiet" type="button">거절…</ui-button>
+          <ui-button id="request-cancel" kind="quiet" type="button">처리 취소</ui-button>
+        </div>
+      </section>
       <div class="ui-table-scroll" role="region" aria-label="등록 계정 표" tabindex="0">
         <table class="ui-data-table" aria-label="등록 계정"><thead><tr><th scope="col">로그인 ID</th><th scope="col">사용자 식별</th><th scope="col">기본 역할</th><th scope="col">상태</th><th scope="col"><span class="sr-only">편집</span></th></tr></thead>
           <tbody id="account-list"></tbody></table>

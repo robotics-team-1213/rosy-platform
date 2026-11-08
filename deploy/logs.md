@@ -4714,6 +4714,16 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - gate 변화: 없음 — 기체 수용 전이다.
 - CE: 해당 없음 — 새 기능이며 해결한 장애가 없다.
 
+## 2026-11-07 · uncommitted · fix: 도우미가 재부팅 전에 팔 세션과 작업을 본다 (D-991)
+- 변경: `rosy-host-control`의 `reboot`는 세션 잠금에서 거절하고, `reboot-if-free`는 작업에서도 거절한다. 예약 뒤 570초에 다시 보고 자기 재부팅만 취소한다. `recheck-reboot`는 강제 명령 키로 부를 수 없다.
+- 증거: 원격 `test_host_control.py`. 도우미를 stub으로 돌린 호스트 시험이다.
+- gate 변화: 없음 — PC 설치 전이다. 설치 전까지 guard 경로는 옛 동작이다.
+
+## 2026-11-07 · uncommitted · feat: 응답 없는 PC를 guard가 팀 채널로 알린다 (D-991)
+- 변경: `rosy-host-guard`가 PC 2번 연속 무응답과 복귀를 webhook으로 한 번씩 보낸다. webhook은 curl 표준 입력으로 넘겨 프로세스 목록에 나오지 않는다. 복구 단계는 바꾸지 않는다.
+- 증거: 원격 `test/test_host_guard.py`. stub curl이며 실제 채널 발송 수용이 아니다.
+- gate 변화: 없음 — webhook 파일과 PC 설치 전이다. CE: 해당 없음 — 시험과 ADR이 판단을 보존한다.
+
 ## 2026-11-07 · uncommitted · feat(navigation): 로그인한 운영자가 API로 항법을 다시 승인한다 (D-986)
 - 변경: `native/navigation_approval_host.py`, Host Agent `navigation_approval.*`와 operator 등급, CORE `approval_trials.py`, `/api/v1/navigation/approval`, 작업 준비 카드
 - 증거: 원격 시험. 장치 수용 없음
@@ -4725,3 +4735,8 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: 2026-11-07 y8xs가 `battery.deep`(4.9 %)을 기록하고도 꺼지지 않아 1.3 %(6.45 V)에서 사람이 껐다. 원격 시험 관련 10개 파일 642 passed. 독립 검토 차단 결함 없음
 - gate 변화: 없음 — 기체에서 실제 종료를 확인하기 전이다.
 - CE: 미해결 — 기체에서 `PathChanged` 발화와 종료를 확인한 뒤 교훈을 기록한다.
+## 2026-11-08 · uncommitted · feat(control-unit): 다른 PC의 이웃 관제에 peer 주소로 접속한다 (D-994)
+- 변경: control-unit peers 항목에 선택 `address`(IP 리터럴, https만)를 더해 그 주소로 접속하고 TLS 이름·Host는 `url` 이름으로 확인한다. 서명 overlay `compose.control-unit-remote.yaml`이 peer proxy만 `ROSY_CONTROL_UNIT_PEER_BIND`·`_PORT`의 LAN 주소에 게시하며 `site-firewall.py check`가 와일드카드·loopback·남의 주소를 거절한다. 후보 목록·검증·manifest 요약·업데이터 overlay 허용과 서명 포함 대조에 넣었고, 같은 주소·포트의 두 이웃을 거절한다. 독립 검토 지적(서명 대조 누락, 게시 주소 생략, 연결 풀 공유) 반영
+- 증거: 통합관제 R을 N150 호스트로 옮기려 하자 R↔CELL-A가 같은 PC 도커 네트워크 별칭으로만 닿아 분리할 수 없었다. 원격 시험은 아래 커밋에 기록
+- gate 변화: 없음 — 현장 전환 전이다
+- 결정: D-994 2·3항(서명 경로로만 배치)

@@ -107,6 +107,6 @@
 
 - 2026-11-08 · uncommitted · 컨테이너 태그 실제 크기 인쇄물 (D-996 6)
 - 2026-11-08 · uncommitted · 항만 사건 원장·R 조회·S 반입 제안 (D-996)
+- 2026-11-08 · uncommitted · fix: Account 가입·권한 요청 경로를 Fleet 기능표에 등록 (D-993)
 - 2026-11-08 · uncommitted · 관제 화면 파일을 다시 받지 않고 압축해 보낸다
-- 2026-11-07 · uncommitted · feat(fleet): 자동 위치를 로봇별로 켜면 trip 앵커로 쓴다 (D-989 7항)
-- 2026-11-07 · uncommitted · feat(fleet): LED·카메라·LiDAR 자동 위치 찾기 (D-989)
+- 2026-11-07 · uncommitted · fix(fleet): 배터리 근거 없음·멈춤 사유 분리

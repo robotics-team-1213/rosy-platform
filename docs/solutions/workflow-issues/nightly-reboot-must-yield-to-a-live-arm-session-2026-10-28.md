@@ -29,6 +29,12 @@ applies_when: "a host maintenance timer (reboot, update, cleanup) can fire while
 **Fleet PC에는 아직 설치되지 않았다**(sudo 필요). 설치 전까지 같은 사고가 다시 난다. 설치 후
 이 줄을 실물 확인 결과로 바꾼다.
 
+## 2026-11-07 보완: 야간 타이머만 고쳤다
+
+같은 사고 경로가 둘 더 남아 있었다. 화면 버튼과 guard 복구는 도우미 `reboot`를 부르는데 잠금을 보지 않았고, `shutdown -r +10`의 10분 안에 시작한 세션도 막지 못했다. 정기 작업만 고치면 같은 동작을 하는 다른 호출자가 남는다. 판단을 호출자마다 넣지 말고 실행하는 곳 하나에 둔다.
+
+D-991이 도우미에서 잠금을 보고 예약 30초 전에 다시 본다. 시험은 `operations/fleet/test/test_host_control.py`이며 실물 재부팅 수용이 아니다. 각 PC에 도우미를 설치해야 경로가 닫힌다.
+
 ## 복구
 
 재부팅 뒤 그리퍼 카메라 미리보기가 `No fresh frame`이면
