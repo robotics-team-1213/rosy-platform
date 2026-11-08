@@ -109,7 +109,7 @@ ros2 run --prefix 'python3 -m debugpy --listen 127.0.0.1:5678 --wait-for-client'
 
 ## 테스트와 CI
 
-작업 중에는 변경 범위의 시험을 요청하고, push 전 훅과 GitHub CI에서 검증을 이어간다([D-436](../adr/D-436-change-scoped-test-tiers.md)). PR의 전체 검사 전환 여부는 selector가 정한다. main push·야간·수동 실행은 전체 검사를 수행한다.
+작업 중에는 변경 범위의 시험을 요청하고, push 전 훅과 GitHub CI에서 검증을 이어간다([D-436](../adr/D-436-change-scoped-test-tiers.md)). PR의 전체 검사 전환 여부는 selector가 정한다. main push·주간·수동 실행은 전체 검사를 수행한다.
 
 ```mermaid
 flowchart LR
@@ -125,7 +125,7 @@ flowchart LR
 |---|---|---|
 | affected | 작업하는 동안 | `python tools/harness/rosy_harness.py affected --base origin/main --print`로 선택을 확인하고 아래 원격 실행기로 요청 |
 | quick + affected (pre-push) | push 직전, 훅이 자동 실행 | `bash tools/hooks/install.sh`로 설치한 `pre-push` |
-| GitHub CI | PR은 selector 결과, main·야간·수동 실행은 full | `.github/workflows/ci.yml`. 릴리스 빌드는 별도 검증 관문을 따른다 |
+| GitHub CI | PR은 selector 결과, main·주간·수동 실행은 full | `.github/workflows/ci.yml`. 릴리스 빌드는 별도 검증 관문을 따른다 |
 
 실험실에서는 먼저 자기 변경을 커밋한 뒤 선택 결과를 원격 실행기에 보낸다. `affected --run`은 현재 PC에서 pytest를 직접 호출하므로 이 노트북에서는 쓰지 않는다. 결과는 기존 실패와 비교한다. `NEW`가 나오면 그 브랜치의 실패다.
 로그·증거·빌드 산출물 같은 저장소 밖 파일은 `ROSY_SCRATCH`에 둔다. 설정하지 않으면 시스템 임시 폴더를 쓴다.
@@ -147,7 +147,7 @@ python tools/harness/rosy_harness.py lint   # ADR 중복·mojibake·append-only�
 
 2026-10-30 루트 `AGENTS.md`에서 옮긴 상세다. 규칙(노트북 pytest 금지, D-584)은 `AGENTS.md`에 남아 있다.
 
-PR CI runs affected and goes full by itself when the selector escalates (shared foundation `contracts/**` except Markdown records, `tools/harness/**` except `adr_gaps.txt`, the gap registries `sim2real_gaps.yaml`/`perception_gaps.yaml` and a `harness.yaml` change that only adds `modules` entries owning no existing path (`affected_narrow.harness_modules_added`), `conftest.py`, packaging/pytest config incl. `package.xml` and `_source_layout.py`, requirements pins, `test/architecture/**`, `test/known_failures.txt`, `.github/workflows/**`, a committed rename across folders or a removed Python module, or a file that maps to no module). The full suite runs on GitHub Actions runners as a parallel matrix: push to `main`, pull requests whose selection escalates, nightly schedule, `workflow_dispatch`, and before a release build. The arm64 payload builds on the GitHub ARM64 runner (`build-native-payload.yml`). `affected --run` on an escalated selection runs only the guards plus the suites mapped from the changed files (owning module, direct reverse dependents, referencing tests) and says the rest is on GitHub; `--full` requests the full selection; do not bypass the remote runner. A mapped affected run does not discharge the CI FULL requirement. `tools/land.py` does not land a FULL selection on that mapped run: it runs the lab full tier (`CI_FULL_MATRIX` unsharded, root `test/`, every registered module suite and the selection's own suites; `full_invocations`) on the lab PCs and lands only with 0 NEW. Later rounds of that landing, and a later `land.py` run while the branch adds nothing but merges of main to the FULL-tested commit, run only the selection of main's delta since the FULL-tested main (D-762 stage 0, D-803 6).
+PR CI runs affected and goes full by itself when the selector escalates (shared foundation `contracts/**` except Markdown records, `tools/harness/**` except `adr_gaps.txt`, the gap registries `sim2real_gaps.yaml`/`perception_gaps.yaml` and a `harness.yaml` change that only adds `modules` entries owning no existing path (`affected_narrow.harness_modules_added`), `conftest.py`, packaging/pytest config incl. `package.xml` and `_source_layout.py`, requirements pins, `test/architecture/**`, `test/known_failures.txt`, `.github/workflows/**`, a committed rename across folders or a removed Python module, or a file that maps to no module). The full suite runs on GitHub Actions runners as a parallel matrix: push to `main`, pull requests whose selection escalates, weekly schedule, `workflow_dispatch`, and before a release build. The arm64 payload builds on the GitHub ARM64 runner (`build-native-payload.yml`). `affected --run` on an escalated selection runs only the guards plus the suites mapped from the changed files (owning module, direct reverse dependents, referencing tests) and says the rest is on GitHub; `--full` requests the full selection; do not bypass the remote runner. A mapped affected run does not discharge the CI FULL requirement. `tools/land.py` does not land a FULL selection on that mapped run: it runs the lab full tier (`CI_FULL_MATRIX` unsharded, root `test/`, every registered module suite and the selection's own suites; `full_invocations`) on the lab PCs and lands only with 0 NEW. Later rounds of that landing, and a later `land.py` run while the branch adds nothing but merges of main to the FULL-tested commit, run only the selection of main's delta since the FULL-tested main (D-762 stage 0, D-803 6).
 
 GitHub results (the full tier is never re-run locally to "check"):
 

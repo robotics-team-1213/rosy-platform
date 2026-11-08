@@ -5,9 +5,9 @@ name: ubuntu-26.04 rehearsal
 # 녹색이 연속되면 게이팅 러너를 26.04 로 전환한다. 적색은 이주 전에 발견하는
 # 것이 목적이므로 리허설은 게이팅이 아니다 (continue-on-error).
 
+# D-135 로 게이팅 러너가 이미 26.04 라서 주간 예약은 ci.yml 주간 FULL 과 같은 일을 했다
+# (2026-11-08 예약 제거). 다음 러너 이주 리허설이 필요하면 runs_on 을 바꿔 수동 실행한다.
 on:
-  schedule:
-    - cron: "23 2 * * 1"
   workflow_dispatch:
 
 jobs:

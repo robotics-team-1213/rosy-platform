@@ -14508,6 +14508,13 @@ osy-d395-s1d\`.
 - gate 변화: 없음 — 카탈로그 등재는 배포·현장 수용의 증거가 아니다.
 - CE: 해당 없음 — 구조 정의이며 해결한 장애가 없다.
 
+## 2026-11-07 · uncommitted · docs(adr): D-982 현장 운영 규칙
+- 변경: ADR D-982(Proposed)와 Log 행, API 참조 v1.368, `adr_gaps.txt`의 D-982 줄 제거.
+- 증거: `rosy_harness.py lint` 0 error. 원격 결과는 착지 기록을 따른다.
+- gate 변화: SOURCE 변경. 시뮬·실물·현장 수용 없음; 문서가 없으면 동작 동일.
+- 결정: D-982 Proposed, API v1.368 additive.
+- 교훈: CE 해당 없음 — 최종 코드·시험·ADR이 판단을 보존한다.
+
 ## 2026-11-07 · uncommitted · fix(land): FULL 대기가 준비 슬롯을 차지하지 않고 MAIN-RED가 닫힌다
 
 - 변경: FULL 차례를 기다리는 착지는 `full_wait`로 표시돼 준비 슬롯 수에서 빠진다. `land_mainred.py recheck`가 열린 항목을 main에서 하나씩 다시 돌려, 통과했거나 시험 파일이 사라진 항목을 닫는다. 야간 전체 시험은 시작할 때 이를 먼저 돌린다.
@@ -14522,12 +14529,36 @@ osy-d395-s1d\`.
 - gate 변화: 없음. 착지의 `close`가 이제 통과한 항목을 실제로 닫는다.
 - CE: 해당 없음 — 원인이 코드와 시험에 남는다.
 
+## 2026-11-07 · uncommitted · test(learning): 학습 브라우저 여정도 고정 학습 환경을 명시할 때만 돈다
+- 변경: `test_learning_workflow_pipeline_browser.py`에 다른 고정 학습 시험 4개와 같은 `ROSY_RUN_PINNED_LEARNING=1` 조건을 넣었다.
+- 증거: 21:42 FULL 착지가 환경이 없는 시험 PC에 이 시험이 배정돼 멈췄고, main에서도 같은 단언으로 실패해 MAIN-RED가 됐다. 다른 두 시험 PC에는 환경이 있다.
+- gate 변화: 없음. FULL에서 이 여정은 다른 고정 학습 시험처럼 명시 실행이 필요하다. CE: 해당 없음 — 기존 규칙에 맞춘 수정.
+
 ## 2026-11-07 · uncommitted · fix(model-pc): GPU 유휴 전원 차단을 끈다
 
 - 변경: 모델 PC에 `72-rosy-gpu-awake.rules`를 더해 GPU의 `power/control`을 `on`으로 둔다(기존 `71-nvidia.rules`는 `auto`).
 - 증거: 11-07 03:35 GPU가 깨어나지 못해 `Xid 79`가 났고 05:00 재부팅 뒤 6시간 돌아오지 못했다. 재부팅 정지와의 인과는 증명되지 않았다. 규칙은 모델 PC에 직접 설치해 `power/control=on`을 확인했다.
 - gate 변화: 없음. 다음 재부팅 뒤 값 유지는 아직 확인 전이다.
 - CE: 미해결 — 멈춘 원인은 가설로 남고 기록은 작업 기록에 있다.
+
+## 2026-11-07 · uncommitted · docs(solutions): Pinky LiDAR 0°는 뒤쪽, odom은 이동 증거가 아니다
+
+- 변경: 현장 주행 스크립트 교훈에 11-07 갱신 절을 더했다. LiDAR 방향은 공용 몸체 모델 `PINKY_PRO`(URDF 값 180°)로 읽고, 진행은 odom이 아니라 LiDAR 변화로 확인한다.
+- 증거: rosy_46이 100 s 동안 odom 3.1 m를 기록했지만 지도에는 같은 벽만 반복됐고 몸체는 움직이지 않았다(11-07 현장).
+- gate 변화: 없음.
+- CE: 기존 교훈 갱신 — 같은 문서의 지침 1을 어긴 사례와 빠져 있던 두 사실.
+
+## 2026-11-07 · uncommitted · fix(remote): 재부팅 경고 2분 동안 시험 PC가 새 작업을 받지 않는다
+
+- 변경: `host_probe.REBOOT_CHECK`가 `is-active -q`의 종료 코드를 읽었다. `rosy-nightly-reboot.service`는 oneshot이라 경고 2분 내내 `activating`이고 종료 코드는 3이어서, D-889 추가 13의 "서비스가 도는 동안 받지 않는다"가 처음부터 동작하지 않았다. 출력 문자열로 판정한다.
+- 증거: 11-07 AI PC 06:00·현장 PC 06:10 재부팅에 든 exit 143 호출 18개는 모두 타이머가 울린 뒤 시작했다(`run_s` 61~193초, 다른 시각 사례 없음). 그날 착지 4개에 걸렸고 그중 `sync-origin`은 약 70분짜리 FULL을 잃었다. AI PC 사용자 단위로 oneshot이 `activating`, `is-active -q` rc=3임을 확인했다. 기존 시험의 가짜 `systemctl`은 실행 중에 0을 돌려줘서 이를 놓쳤다.
+- gate 변화: 없음. 경고 2분 동안 새 작업이 들어가지 않는다. 재부팅 13분 전에 시작해 끝나지 않은 작업은 여전히 끊긴다(D-889 추가 13의 위험).
+- CE: 해당 없음 — 원인이 코드와 시험에 남는다.
+
+## 2026-11-08 · uncommitted · test(learning): 학습 브라우저 여정 조건을 되돌린다
+- 변경: 바로 앞 항목에서 `test_learning_workflow_pipeline_browser.py`에 넣은 `ROSY_RUN_PINNED_LEARNING=1` 조건을 뺐다. 시험은 main과 같다.
+- 증거: 착지 브라우저 묶음은 그 값을 주지 않아 시험이 늘 건너뛰어졌고, `land_browser.vacuous`가 건너뜀 1건으로 FULL을 멈췄다(219 passed, 1 skipped). 다른 고정 학습 시험은 브라우저 묶음 밖이라 같은 조건이 맞지 않았다.
+- gate 변화: 없음. 고정 학습 환경이 없는 시험 PC에 이 시험이 배정되면 여전히 실패한다(남은 문제). CE: 해당 없음 — 앞 수정의 되돌림.
 
 ## 2026-11-08 · uncommitted · D-998 전환 전 알림 전달 계약
 - 변경: 독립 원장·기계 범위·owner 확인·유한 예산·UNKNOWN을 결정하고 API v1.377·schema·카탈로그·manifest·wheel·CI 등록을 함께 갱신했다.

@@ -108,5 +108,5 @@
 - 2026-11-08 · uncommitted · refactor(fleet): 감사·task의 동일 비밀 필드 판별 재사용
 - 2026-11-08 · uncommitted · D-998 채널 모듈 소비 버전
 - 2026-11-08 · uncommitted · D-998 알림 producer 비활성 경계
-- 2026-11-07 · uncommitted · 로그인 콜백 실패가 JSON 막다른 길이 아니다
-- 2026-11-07 · uncommitted · 로그인 복귀가 설치·보정 하위 화면을 유지
+- 2026-11-08 · uncommitted · 관제 화면 파일을 다시 받지 않고 압축해 보낸다
+- 2026-11-07 · uncommitted · feat(fleet): 자동 위치를 로봇별로 켜면 trip 앵커로 쓴다 (D-989 7항)
