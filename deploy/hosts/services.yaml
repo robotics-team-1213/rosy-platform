@@ -22,7 +22,7 @@ schema: rosy.host-services/1
 # other repository and more than three tags of one, so test and rollback builds do not pile up on a host again.
 images:
   model: [harborlogi, ghcr.io/robotics-team-1213/harborlogi, nginx, ros, rosy-omx-g2, rosy-omx-pilot, rosy-omx-probe, rosy-omx-workstation]
-  site: [rosy-site-fleet, rosy-site-postgres, rosy-site-proxy, rosy-site-vision]
+  site: [rosy-site-account, rosy-site-fleet, rosy-site-postgres, rosy-site-proxy, rosy-site-vision]  # account: D-962 independent service
 roles:
   model:
     rosy-dataset-review-account.service: {operator_restart: true, run: active, channel: snapshot, source: "rosy-ml/legacy-review-account-code/releases/*", doc: docs/adr/D-809-legacy-learning-account-boundary.md}
