@@ -37,6 +37,19 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 - 규칙은 더 막을 수만 있다. 검증은 안전 하한을 넘는 값을 422로 거절하고(예: 충전 시작 15% 미만, 블록 수 3 미만, 대형 최소 간격 0.4 m 미만), 활성 지도에 없는 장소는 422 `SITE_RULES_UNKNOWN_PLACE`다. 이 문서는 CORE의 최종 판단·가드 한계·사람 확인을 바꾸지 않는다. `stops`는 저장·검증만 하고 실행은 아직 없다.
 - 새 엔드포인트 `POST /api/fleet/site-rules/judge`(읽기 권한). 가정 상태 `{state: {kind: departure|return|formation, ...}, rules?, source?}`를 받아 `{verdict: go|wait|refuse, reason, detail, rules_source, dispatch: false}`를 답한다. 실제 경로와 같은 순수 함수(`blocks.grant_order_key`, `ChargeBays.plan`, `slots`)를 쓰고 로봇에 아무것도 보내지 않는다.
 - 활성 문서가 있으면 Fleet이 쓰는 값이 바뀐다: 차례 출발의 병합 대기와 블록 수, 충전 칸 계획의 시작·나감 %. `formation`의 `min_gap_m`·`max_speed_mps`는 판정 답(`GAP_BELOW_SITE_MIN`→`gap_below_site_min` 등, `detail.enforced: false`)에만 쓰이고 대형 시작은 아직 막지 않는다. 모든 변경은 additive다.
+### v1.367 항법 재승인 REST (D-986)
+
+- `GET /api/v1/navigation/approval`(viewer)은 `phase`(IDLE·BEGINNING·MEASURING·SEALING·CANCELLING·FAILED), `reason`, `approval`(`valid`·`carried`·`measured_release_id`·`reason`), `needs_measurement`, `runtime_mode`, `trials`(필수 5개의 `state`: missing·valid·invalid), `trial`(진행 중과 직전 결과)을 돌려준다.
+- 다음 POST는 모두 operator다. Account 로그인은 `robot.operate`로 판정한다. 공용 개발 토큰은 403이다.
+  - `/begin`: 정지 상태에서 motor 측정으로 넘어간다. CORE가 다시 시작되므로 결과는 GET의 `phase`로 읽는다. 실패하면 이전 설정으로 돌아가 `FAILED`와 사유를 남긴다. 다른 사람의 갱신 hold가 있으면 거절한다. 측정은 3시간 30분이 지나거나 기체가 재부팅되면 자동 취소되고, GET의 `measuring_expires_in_s`가 남은 시간을 보여 준다.
+  - `/begin`과 `/trial/start`는 충전 중이면 `CHARGING`, 배터리 값이 없어 알 수 없으면 `CHARGING_UNKNOWN`으로 거절한다. `charging`은 도크가 확인한 충전만 뜻하므로 USB-C 선이 꽂혀 있어도 false일 수 있다. 선을 뺐는지는 사람이 본다.
+  - `/trial/start`: `direction`, `stop_cause`, `blind_zone_confirmed`. 속도는 받지 않는다. MANUAL로 전환하고, LiDAR 여유를 확인한다. 후진은 LiDAR로 증명할 수 없으므로, 사람이 확인했다는 `blind_zone_confirmed=true` 없이는 `BLIND_ZONE_CONFIRMATION_REQUIRED`로 거절한다. 스캔의 `range_min`이 몸 윤곽 안에 들어오지 않거나 윤곽을 읽을 수 없으면 `CLEARANCE_UNKNOWN`이다. 없거나 오래된 스캔은 `CLEARANCE_UNKNOWN`, 여유 부족은 `CLEARANCE_TOO_SMALL`이다.
+  - `/trial/start`의 `test_surface`(floor·lifted)는 필수이며 요청이 정한다. 추정하지 않는다. floor 시험은 끝날 때 LiDAR로 실제 이동을 확인해, odom과 어긋나면 기록 없이 `trial.last.code`를 `WHEELS_NOT_MOVING_BODY`로, 스캔을 쓸 수 없으면 `SCAN_UNUSABLE`로, 움직임이 짧으면 `TRIAL_TOO_SHORT`로 남긴다. 봉인의 `test_surface`와 다른 시험이 있으면 봉인을 거절한다.
+  - `/trial/hold`: 시험을 시작한 사람이 누르는 동안 보낸다. 일반 teleop 경로로 고정 저속을 명령한다.
+  - `/trial/stop`: 버튼 해제. `command_loss` 시험은 이 호출 없이 hold를 끊는다. 이 시험에 stop을 보내면 기록 없이 중단한다.
+  - `/seal`: `test_surface`(floor·lifted). 승인자는 본문이 아니라 로그인의 `principal_ref`다. 다섯 시험이 모두 valid여야 하며 성공하면 hardware 모드로 돌아간다. 항법은 시작하지 않는다. `/begin` 뒤 릴리스나 모터 지문이 바뀌었으면 시험 기록을 버리고 거절한다.
+  - `/navigation-start`: 유효한 봉인이 있을 때만 항법 서비스를 시작한다. 응답과 GET의 `os_update_stops_navigation=true`는 설치된 OS 갱신 유닛 때문에 항법이 곧 멈춘다는 뜻이다. OS A/B 설치로만 풀린다.
+  - `/cancel`: 진행 중 시험을 멈추고 이전 설정으로 돌아간다.
 
 ### v1.365 운행 시작의 배터리 확인과 충전 칸 점유 불명
 
@@ -4642,6 +4655,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 | v1.362 | 2026-11-04 | Additive: D-977 `device_trial` opens the neutral `arm-transfers` jobs for exactly one arm (owner identity: `device: true`, matching `commissioning_revision`); `production` stays closed. New `operator_attested` record: `POST/GET .../jobs/{mission_id}/operator-attestations` (named operator distinct from proposer and approver, single-use, 45 s validity, `goal_confirmed: false`). The owner still refuses goals. |
 | v1.375 | 2026-11-08 | Additive (D-971): 팔 사건 해제의 `cause`·`basis`, 정지 앞뒤 사진 `POST/GET .../incidents/{id}/evidence`, 보류하지 않는 보고(`decision.hold: false`), `GET .../arm-incidents/labelled`. |
 | v1.369 | 2026-11-07 | Additive (D-989): `GET`·`POST /api/fleet/auto-locate`, detections config `stream_wanted`. 사이트 설정 `fleet.map_pose.auto_locate_robots`(기본 빈 목록)에 든 로봇만 map pose `anchor_source:"auto_locate"`를 낸다 |
+| v1.367 | 2026-11-07 | Additive: 항법 재승인 REST `/api/v1/navigation/approval`(D-986). |
 | v1.365 | 2026-11-07 | Fleet 운행 시작의 배터리 근거 확인(422 `TRIP_BATTERY_UNCONFIRMED`)과 충전 칸 `unknown` 상태. |
 | v1.363 | 2026-11-06 | Additive: bodyless robot `manual`을 기존 CORE mode owner로 실행. Fleet 직접 조작의 dispatch/작업 소유권 재검사와 인증된 terminal zero 전달을 명시. |
 | v1.370 | 2026-11-07 | 동작 변경 + Additive (SAF-005·D-502 Amendment 2026-11-07, Safety-Review 대상): 배터리 래치의 자동 해제, 다른 정지의 래치 넘겨받기, 상태 스냅샷 `safety.releases_when_charged`. |

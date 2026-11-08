@@ -138,6 +138,7 @@ def test_each_base_surface_has_its_role_panel_mounts():
         "console.line_follow", "console.motor_health", "console.person_request",
         "setup.dock_admin",
         "setup.traffic_policy",
+        "setup.navigation_approval",
     }
     hardware = next(panel for panel in registry.panels if panel.id == "host.hardware")
     assert (hardware.surface, hardware.slot, hardware.min_role) == ("device", "main", "administrator")

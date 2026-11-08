@@ -28,6 +28,7 @@ from typing import Protocol
 # features 를 재조정할 때 전파 반경이 이 파일에서 멈춘다. 이 규칙은
 # runtime/gateway/test/test_v1_import_boundary.py 가 고정한다.
 from core_features.calibration import CalibrationSessionError
+from core_features.command.approval_trials import TrialRefused
 from core_features.command.arbitration import Mode
 from core_common.protocol.trip_lease import DEFAULT_TTL_S as TRIP_LEASE_DEFAULT_TTL_S, TripLeaseError
 from core_features.diagnostics.collector import worst
@@ -53,6 +54,7 @@ __all__ = [
     "TRIP_LEASE_DEFAULT_TTL_S",
     "TripLeaseError",
     "Mode",
+    "TrialRefused",
     "NavigationError",
     "GOAL_LEASE_MAX_S",
     "DockError",
@@ -108,6 +110,7 @@ class CoreServicesLike(Protocol):
     identity: Any
     inventory: Any
     maps: Any
+    approval_trials: Any
     line_follow: Any
     line_advice: Any
     localization: Any
