@@ -14594,3 +14594,10 @@ osy-d395-s1d\`.
 - 증거: 11-08 05:01 재부팅 뒤 `power/control`이 다시 `auto`였다. `/var/log/gpu-manager.log`에 udev 규칙 뒤 05:01:36의 `Setting power control to "auto"`가 남아 있었다. 서비스는 모델 PC에 직접 설치해 `on`/`active`를 확인했다. 파일은 그 설치본을 그대로 옮겼다.
 - gate 변화: 없음. 다음 재부팅 뒤에 이 서비스가 마지막에 쓰는지는 아직 확인 전이다.
 - CE: 미해결 — Xid 79 재부팅 정지의 원인은 가설로 남고 기록은 작업 기록에 있다.
+
+## 2026-11-08 · uncommitted · fix(land): 실패만 있는 브라우저 묶음을 "통과 0건"으로 멈추지 않는다
+
+- 변경: `land_browser.vacuous`가 모든 요약 줄에 실패·오류가 있는 실행은 판정 없음으로 보지 않는다. 그 실행은 `known_failures`와 혼자 다시 돌리기(LOAD-FLAKY)가 판정한다. 건너뜀이 하나라도 있으면 그대로 멈춘다.
+- 증거: 11-08 `land-speed-admission` 착지에서 시험 1건짜리 묶음 `test_omx_segments_browser.py`가 함께 돌 때 실패하고 혼자 통과해 LOAD-FLAKY로 판정됐는데, 그보다 먼저 "0 passed, 0 skipped"로 멈췄다.
+- gate 변화: 실패만 있는 브라우저 묶음은 다른 묶음과 같은 판정을 받는다(NEW면 멈추고, LOAD-FLAKY면 계속).
+- CE: 해당 없음 — 원인과 규칙이 코드와 회귀 시험에 남는다.

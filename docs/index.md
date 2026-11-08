@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
+- 2026-11-08 · uncommitted · fix(land): 실패만 있는 브라우저 묶음을 "통과 0건"으로 멈추지 않는다
 - 2026-11-08 · uncommitted · fix(model-pc): gpu-manager 뒤에도 GPU를 깨운 채 둔다
 - 2026-11-08 · uncommitted · docs(architecture): 공통 기능별 분리와 장애·복구 계약을 확정한다
 - 2026-11-08 · uncommitted · docs(architecture): Harbor와 공통 서비스의 책임을 저장소별로 연결한다
 - 2026-11-08 · uncommitted · docs(control): 현재 ARM 위임과 관제·owner·호스트 구조를 대조한다
-- 2026-11-08 · uncommitted · docs(control): N100 목표 호스트와 R·owner 책임을 구분한다
