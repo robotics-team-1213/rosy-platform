@@ -223,7 +223,8 @@ def test_strict_pose_judge_names_each_limit(layout, data):
 
 def test_a_run_records_the_cell_s_four_cameras():
     assert teacher.RECORDED == ("top", "side", "a_wrist", "b_wrist")  # D-960; the overview is not a camera the cell has
-    assert sites.CHOICES["wrist_camera"] == "v21-b", "the printed D holder (r06 lens and angle) is what the cell's wrists carry"
+    assert sites.CHOICES["wrist_camera"] == "photo-20261108", "the wrist camera where arm_b's real frame puts it (the D r06 CAD is 'v21-b')"
+    assert sites.WRIST_PHOTO["lens_m"][2] > .0511 + .01  # higher than the D r06 CAD lens
 
 
 def test_the_r08_ship_sites_come_from_its_berth_slot_map(layout):

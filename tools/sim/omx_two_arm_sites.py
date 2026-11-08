@@ -29,7 +29,8 @@ CHOICES = dict(
     ship_source="r08-berth",  # "r08-berth": the rated ship v15 (r08) on its berth kit with container v3 (SHIP_ASSETS); "fixture-studs": the old stud plate and 30 mm boxes
     ship_stern_x_m=.155,     # r08: stern end x, bow toward -x as the printed ship lay in the 11-07 top photo; ASSUMED at the table's belt edge (r08 not placed yet)
     ship_centre_y_m=.007,    # r08: hull centreline y, the printed ship's hull edges back-projected from the same photo (125 mm wide against 130)
-    wrist_camera="v21-b",    # "v21-b": the team's printed D holder r06 (palletizing_gripper.WRIST_CAMERA_B, link5 drawn and collided as its parts); "stock" (omx-ai-stock, ROBOTIS STEP) or "none"; arm_a ASSUMED the same mount
+    wrist_camera="photo-20261108",  # "photo-20261108": WRIST_PHOTO, fitted to arm_b's real wrist frame; "v21-b": the team's printed D holder r06
+                             # (palletizing_gripper.WRIST_CAMERA_B); both draw and collide link5 as the D parts; "stock" (omx-ai-stock, ROBOTIS STEP) or "none"; arm_a ASSUMED the same mount
     tcp_x_arm_b=.0740,       # URDF/STL v2.1 jaw (tip 74.1 mm from the pivot); a touch gave .0885 but that rests on an unchecked table height (OPEN, 14.5 mm FK offset)
     tcp_x_arm_a=.0740,       # same jaw, not confirmed on arm_a separately
     sim_tcp_x_m=.0740,       # the MuJoCo pads are the repo's v2.1 STL, whose TCP is .0740: the teacher grasps with this one (STL may not match the installed jaws)
@@ -60,7 +61,11 @@ STERN = dict(boxes=((0., 50., -65., 65., 6.), (0., 6.5, -65., 65., 11.), (43.5, 
 
 # Only hold 1 (next to the stern) is in reach with the stern at the table edge: hold 2 lies behind both arms, where no tool-down pose holds a
 # container along x (validator, stern x .155 to .215). So the stack is hold 1, 3 rows x 3 tiers, middle row first, in the stud plan's arm order.
-R08_TIERS = 3  # the cell stacks three high (user, 11-08); the slot map lists tiers 82 and 84, the third sits one container (32.4 mm) higher
+# arm_b's wrist camera as the real frame shows it (2026-11-08 22:30, arm at rest, the jaw silhouette traced and matched in MuJoCo with the
+# jaw opening fitted too, IoU 0.15 -> 0.68): 16 mm higher and 8 mm to the side of the D r06 CAD, the axis meeting the jaw axis 25 mm further
+# out, about the same 34 deg down. One frame at one pose: lens height and aim trade off; refit on frames at other poses.
+WRIST_PHOTO = dict(lens_m=[.0338, .008, .0671], axis_hit_x_m=.1328)
+R08_TIERS = 3 # the cell stacks three high (user, 11-08); the slot map lists tiers 82 and 84, the third sits one container (32.4 mm) higher
 R08_STACK = tuple((f"bar-{3 * layer + k + 1}", f"ship-h1r{row}-l{layer}", arm) for layer in range(R08_TIERS)
                   for k, (row, arm) in enumerate(((1, "arm_b"), (0, "arm_a"), (2, "arm_b"))))
 

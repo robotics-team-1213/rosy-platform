@@ -157,8 +157,10 @@ class World:
         if self.wrist == "stock":
             cell = json.loads(kin.CELL_EXAMPLE.read_text(encoding="utf-8"))["wrist_camera"]
             base.update(lens_m=cell["lens_m"], axis_hit_x_m=cell["axis_hit_x_m"])
+        if self.wrist == "photo-20261108":
+            base.update(sites.WRIST_PHOTO)
         link5 = spec.body(p + "link5")
-        if self.wrist == "v21-b":  # the printed D holder: link5 is the team's parts, not the stock mesh with ROBOTIS frame F9 (both see and collide)
+        if self.wrist in ("v21-b", "photo-20261108"):  # the printed D holder: link5 is the team's parts, not the stock mesh with ROBOTIS frame F9 (both see and collide)
             for part in link5.geoms:
                 part.contype = part.conaffinity = 0
                 part.rgba = [0, 0, 0, 0]
