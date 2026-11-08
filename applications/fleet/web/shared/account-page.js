@@ -2,8 +2,8 @@ import {createFleetClient} from '/common/fleet-client.js';
 import {confirmIrreversible} from '/common/ui.js';
 import {canManageAccounts, canViewAccountSetup, CAPABILITIES, roleGrants} from '/console/assets/account-permissions.js';
 
-const rawRequest = createFleetClient(), $ = id => document.getElementById(id), endpoint = '/api/fleet/auth/accounts';
-let owner = null, rows = [], selected = null, busy = false, siteResource = '', shownRole = 'operator';
+const rawRequest = createFleetClient(), $ = id => document.getElementById(id), endpoint = '/api/fleet/auth/accounts', requestsEndpoint = '/api/fleet/auth/access-requests';
+let owner = null, rows = [], requests = [], pending = null, selected = null, busy = false, siteResource = '', shownRole = 'operator';
 const lifetime = new AbortController();
 let invalidated = false;
 function changed() { return Object.assign(new Error(), {code:'ACCOUNT_CHANGED'}); }
@@ -91,7 +91,10 @@ function grantRow(grant = null) {
   remove.addEventListener('click', () => group.remove()); group.append(remove); $('account-grants').append(group);
 }
 function edit(row = null) {
-  selected = row; clearSecrets();
+  selected = row; pending = null; clearSecrets();
+  $('account-save').textContent = '계정 저장'; $('request-decision').hidden = true;
+  $('account-save').disabled = false; $('account-save').removeAttribute('reason');
+  $('account-role').disabled = false; $('account-role').removeAttribute('reason');
   $('account-heading').textContent = row ? `${row.login} 계정 수정` : '새 계정';
   for (const [id, key] of [['account-name', 'login'], ['account-principal', 'principal_id']]) {
     $(id).value = row?.[key] || ''; $(id).readOnly = !!row;
@@ -102,7 +105,10 @@ function edit(row = null) {
   $('account-grants').replaceChildren(); for (const grant of row?.grants || roleGrants('operator', siteResource)) grantRow(grant);
 }
 async function load() {
-  rows = await request(endpoint); $('account-list').replaceChildren();
+  rows = await request(endpoint);
+  // the account list must not go blank because the request list failed
+  requests = await request(requestsEndpoint).catch(() => null);
+  $('account-list').replaceChildren();
   for (const row of rows) {
     const item = document.createElement('tr'), button = document.createElement('ui-button');
     button.setAttribute('kind', 'quiet'); button.setAttribute('type', 'button');
@@ -115,6 +121,7 @@ async function load() {
     }
     $('account-list').append(item);
   }
+  drawRequests();
   $('account-content').hidden = false; $('account-login').hidden = true; edit();
 }
 function grants() {
@@ -139,16 +146,21 @@ $('account-role').addEventListener('change', async () => {
 });
 $('account-reload').addEventListener('click', () => perform(async () => { await load(); status('최신 계정 상태입니다.'); }));
 $('account-save').addEventListener('click', () => {
-  if (!$('account-form').reportValidity()) return;
-  const target = selected, body = {role: $('account-role').value, grants: grants()};
-  if (target) Object.assign(body, {revision: target.revision, enabled: $('account-enabled').checked});
+  if (pending?.login_taken || !$('account-form').reportValidity()) return;
+  const target = selected, waiting = pending, body = {role: $('account-role').value, grants: grants()};
+  if (waiting) {  // D-993: approval runs the same create/update in one transaction with closing the request
+    if (target) body.revision = target.revision;
+    else Object.assign(body, {principal_id: $('account-principal').value, password: $('account-password').value});
+  } else if (target) Object.assign(body, {revision: target.revision, enabled: $('account-enabled').checked});
   else Object.assign(body, {login: $('account-name').value, principal_id: $('account-principal').value,
     password: $('account-password').value});
   clearSecrets();
   perform(async () => {
-    await request(endpoint + (target ? '/' + target.account_id : ''), {method: target ? 'PATCH' : 'POST',
+    await request(waiting ? `${requestsEndpoint}/${waiting.request_id}/approve`
+      : endpoint + (target ? '/' + target.account_id : ''), {method: target && !waiting ? 'PATCH' : 'POST',
       headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
-    await load(); status('계정을 저장했습니다. 대상 계정의 이전 세션은 종료되었습니다.');
+    await load(); status(waiting ? '요청을 승인하고 저장했습니다. 신청자에게 로그인 방법을 알려 주세요.'
+      : '계정을 저장했습니다. 대상 계정의 이전 세션은 종료되었습니다.');
   });
 });
 for (const [id, action] of [['account-reset', 'reset-password'], ['account-revoke', 'revoke-sessions']]) {
@@ -196,3 +208,59 @@ async function setup() {
 }
 $('account-setup-reload').addEventListener('click', setup);
 setup();
+
+const requestState = {pending: ['대기 중', 'neutral'], approved: ['승인됨', 'neutral'], rejected: ['거절됨', 'warn']};
+function drawRequests() {
+  $('request-list').replaceChildren();
+  $('request-empty').textContent = requests ? '대기 중인 요청이 없습니다.' : '요청 목록을 읽지 못했습니다. 새로 고쳐 주세요.';
+  $('request-empty').hidden = !!requests?.some(row => row.state === 'pending');
+  for (const row of requests || []) {
+    const item = document.createElement('tr'), tag = document.createElement('ui-tag'), cell = document.createElement('td');
+    tag.setAttribute('status', requestState[row.state][1]);
+    tag.textContent = requestState[row.state][0] + (row.state === 'rejected' && row.reason ? ` · ${row.reason}` : '');
+    for (const value of [row.kind === 'grant' ? '기존 계정 권한' : '새 계정', row.requester_name,
+        row.username + (row.login_taken && row.state === 'pending' ? ' (이미 있는 ID)' : ''),
+        row.resource || '지정 없음', row.note || '—', tag]) {
+      const td = document.createElement('td'); td.append(value); item.append(td);
+    }
+    if (row.state === 'pending') {
+      const button = document.createElement('ui-button');
+      button.setAttribute('kind', 'quiet'); button.setAttribute('type', 'button');
+      button.textContent = '처리'; button.setAttribute('aria-label', `${row.username} 요청 처리`);
+      button.addEventListener('click', () => decide(row)); cell.append(button);
+    }
+    item.append(cell); $('request-list').append(item);
+  }
+}
+function decide(row) {
+  const account = rows.find(candidate => candidate.account_id === row.account_id);
+  if (row.kind === 'grant' && !account) { status('요청한 계정을 찾을 수 없습니다. 현재 상태를 다시 조회하세요.', 'warning'); return; }
+  edit(account || null);
+  if (!account) { $('account-name').value = row.username; $('account-name').readOnly = true; $('account-principal').value = row.requester_name; }
+  if (row.resource && ![...$('account-grants').children].some(group =>
+      group.querySelector('[data-grant=kind]').value + ':' + group.querySelector('[data-grant=id]').value === row.resource)) {
+    grantRow({resource: row.resource, capabilities: []});
+  }
+  pending = row; $('account-save').textContent = '승인하고 저장';
+  $('request-decision').hidden = false; $('request-reason').value = '';
+  $('request-decision-text').textContent = `${row.requester_name} (${row.username}) 님의 ${row.kind === 'grant' ? '권한' : '가입'} 요청${row.resource ? ' · ' + row.resource : ''}`;
+  if (row.login_taken) { $('account-save').disabled = true; $('account-save').setAttribute('reason', '이미 있는 로그인 ID라 승인할 수 없습니다. 거절하세요'); }
+  if (account) { $('account-role').disabled = true; $('account-role').setAttribute('reason', '권한 요청 승인은 계정의 역할을 바꾸지 않고 자원별 권한만 저장합니다'); }
+  if (row.login_taken) status('이미 있는 로그인 ID입니다. 승인할 수 없으니 거절하고 다른 ID를 안내하세요.', 'warning');
+  $('account-form').scrollIntoView?.({block: 'nearest'});
+}
+$('request-cancel').addEventListener('click', () => edit(null));
+$('request-reject').addEventListener('click', async () => {
+  const target = pending, reason = $('request-reason');
+  if (!target) return;
+  if (!reason.value.trim()) { reason.setCustomValidity('거절 사유를 입력하세요.'); reason.reportValidity(); reason.setCustomValidity(''); return; }
+  const allowed = await confirmIrreversible({message: `"${target.requester_name}" 요청을 거절할까요? 신청자에게는 권한이 생기지 않고 거절 기록이 남습니다.`,
+    action: '요청 거절', opener: $('request-reject')});
+  if (!allowed || pending !== target) return;
+  const body = {reason: reason.value.trim()};
+  perform(async () => {
+    await request(`${requestsEndpoint}/${target.request_id}/reject`, {method: 'POST',
+      headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
+    await load(); status('요청을 거절하고 기록했습니다.');
+  });
+});

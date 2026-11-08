@@ -117,6 +117,19 @@ unsafe 요청은 same-origin 검사를 거친다. 오류는 기존 Fleet detail 
 저장 불가는 503이다. 마지막 활성 계정 관리자를 없애는 변경은 거부한다.
 현재 사용자의 자가 권한 변경으로 관리 권한을 획득할 수 없다. 응답에 비밀번호 해시를 넣지 않는다.
 
+## 가입·권한 요청 (D-993)
+
+권한이 없는 사람이 관리자에게 청하는 경로다. 요청은 권한을 만들지 않고 기계·장치 자격(D-807)과 무관하다.
+
+| 경로 | 인증 | 동작 |
+|---|---|---|
+| POST /api/fleet/auth/access-requests | 없음, same-origin | `name`, `username`(`^[a-z0-9._-]{1,32}$`), 선택 `resource`·`note`. 유효한 쿠키가 있으면 `grant` 요청이고 이름·ID는 세션에서 정한다. 202 `{"status":"received"}` |
+| GET /api/fleet/auth/access-requests | `accounts.manage` | 대기 요청 먼저, 최대 200건. 새 계정 요청에는 `login_taken` |
+| POST /api/fleet/auth/access-requests/{request_id}/approve | `accounts.manage` | `role`, `grants`, 새 계정은 `password`(임시, 첫 로그인에서 변경)·선택 `principal_id`, 기존 계정은 `revision`. 계정 발급·갱신과 요청 마감이 한 트랜잭션 |
+| POST /api/fleet/auth/access-requests/{request_id}/reject | `accounts.manage` | `reason` 필수 |
+
+본문 4 KiB, 이름 64자, 남긴 말 500자 제한이다. 최근 24시간의 대기 요청이 전체 200건, 한 주소(SHA-256 요약만 저장) 5건까지이고 넘으면 429 `REQUESTS_FULL`이다. 새 ID, 이미 있는 ID, 반복 요청은 같은 202로 답해 계정 존재를 드러내지 않는다. 처리된 요청은 409가 아니라 422(`request already decided`)다. 승인·거절은 `rosy_account_audit`에 `access-approve`/`access-reject`로 남고 승인은 `create`/`update` 행도 남긴다. 요청자는 비밀번호를 보내지 않으며 관리자가 승인 때 임시 비밀번호를 정한다.
+
 ## 앱 연결: authorization code + S256 PKCE
 
 등록된 first-party client만 사용한다. 각 client에는 고정 client_id, 정확한 HTTPS

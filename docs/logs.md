@@ -14555,6 +14555,12 @@ osy-d395-s1d\`.
 - gate 변화: 없음. 경고 2분 동안 새 작업이 들어가지 않는다. 재부팅 13분 전에 시작해 끝나지 않은 작업은 여전히 끊긴다(D-889 추가 13의 위험).
 - CE: 해당 없음 — 원인이 코드와 시험에 남는다.
 
+## 2026-11-07 · uncommitted · Account 가입·권한 요청 D-993
+
+- 변경: ADR D-993, API 참조 v1.374, Account 프로토콜의 요청 절, 다른 브랜치가 잡은 D-988~D-992 공백 선언.
+- 증거: harness lint. 구현 시험은 operations/account/logs.md.
+- Gate: 없음. CE: 해당 없음.
+
 ## 2026-11-08 · uncommitted · test(learning): 학습 브라우저 여정 조건을 되돌린다
 - 변경: 바로 앞 항목에서 `test_learning_workflow_pipeline_browser.py`에 넣은 `ROSY_RUN_PINNED_LEARNING=1` 조건을 뺐다. 시험은 main과 같다.
 - 증거: 착지 브라우저 묶음은 그 값을 주지 않아 시험이 늘 건너뛰어졌고, `land_browser.vacuous`가 건너뜀 1건으로 FULL을 멈췄다(219 passed, 1 skipped). 다른 고정 학습 시험은 브라우저 묶음 밖이라 같은 조건이 맞지 않았다.
