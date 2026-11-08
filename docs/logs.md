@@ -14588,6 +14588,13 @@ osy-d395-s1d\`.
 - gate 변화: 없음. 설계 수락은 신규 서비스·API·폴더 이동·DB 이관·배포·현장 수용 완료가 아니다.
 - CE: 해당 없음 — 새 아키텍처 결정을 ADR에 남겼고 해결한 장치/운영 장애는 없다.
 
+## 2026-11-08 · uncommitted · fix(model-pc): gpu-manager 뒤에도 GPU를 깨운 채 둔다
+
+- 변경: 모델 PC에 `rosy-gpu-awake.service`(oneshot, `After=gpu-manager.service`)를 더하고 manifest에 올린다. NVIDIA 디스플레이 장치의 `power/control`을 `on`으로 쓴다.
+- 증거: 11-08 05:01 재부팅 뒤 `power/control`이 다시 `auto`였다. `/var/log/gpu-manager.log`에 udev 규칙 뒤 05:01:36의 `Setting power control to "auto"`가 남아 있었다. 서비스는 모델 PC에 직접 설치해 `on`/`active`를 확인했다. 파일은 그 설치본을 그대로 옮겼다.
+- gate 변화: 없음. 다음 재부팅 뒤에 이 서비스가 마지막에 쓰는지는 아직 확인 전이다.
+- CE: 미해결 — Xid 79 재부팅 정지의 원인은 가설로 남고 기록은 작업 기록에 있다.
+
 ## 2026-11-08 · uncommitted · fix(land): 명시 FULL과 게시가 앞 후보의 통과를 내용 기준으로 재사용한다 (D-970 3)
 - 변경: `land_cache.reach`가 A..C 변경이 닿는 시험 경로(선택기, 브라우저 대상, 전체 트리를 읽는 guard)를 낸다. 명시 FULL 사전 시험·차례는 겹치지 않는 호출을 A의 통과로 재사용하고, `publish_evidence`는 후보 체크아웃에서 같은 계산을 다시 해 A의 정확한 깨끗한 로그만 증거로 받는다.
 - 증거: 원격 `test/test_land*.py`·`test/test_publish*.py` 910 통과, NEW 0. 새 회귀 `test/test_publish_content_reuse.py`: 겹치지 않는 묶음 재사용, 겹치면·목록이 바뀌면·A 로그가 더럽거나 없으면 거절, guard는 재사용하지 않음.
