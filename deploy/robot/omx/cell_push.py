@@ -34,6 +34,8 @@ import cell_pipeline as cp  # noqa: E402
 import cell_pivot  # noqa: E402
 from cell_observe import KEEP, keep, predicted_pixel  # noqa: E402
 
+TANGENT_COS = 0.17  # --friction: the push within 10 deg of square to the reach, so the pan alone carries it
+
 
 def geometry(centre_raw, direction, half_mm: float, push_mm: float, gap_mm: float):
     """Jaw start (behind the object) and end (object moved push_mm), raw map metres."""
@@ -90,7 +92,15 @@ def path_clear(mask, roi, to_px, centre_raw, d, half_mm: float, push_mm: float, 
     return hits
 
 
-def push_library(plan: dict, start, end, yaw: float, z: float, speed: float) -> dict:
+def pan_only(frames, base):
+    """The slide as a turn of shoulder_pan alone, the other joints held where the descent ended: a friction sweep (cell_friction
+    reading in omx_sysid.py friction) whose only working joint is the pan, whose PWM sign follows its velocity (2026-11-09:
+    12/12 samples on arm_b, 24/24 on arm_a); the arc's sagitta is under 1 mm for 35 mm at 0.2 m."""
+    first, last, n = frames[0][0], frames[-1][0], len(frames)
+    return [[first + (last - first) * i / max(1, n - 1), *base[1:5], f[5]] for i, f in enumerate(frames)]
+
+
+def push_library(plan: dict, start, end, yaw: float, z: float, speed: float, friction: bool = False) -> dict:
     from grasp_planner import NAMES, Planner, norm_to_rad, rad_to_norm
     from motion_profile import retime
     from teach_trajectory import GUARD_UNITS_PER_S, slow
@@ -105,18 +115,25 @@ def push_library(plan: dict, start, end, yaw: float, z: float, speed: float) -> 
     v = 0.85 * GUARD_UNITS_PER_S
     down = retime(down, plan["fps"], v, start=pre)
     slide = slow(slide, plan["fps"], start=down[-1])[1:]
+    if friction:
+        slide = pan_only(slide, down[-1])
     up = retime(up, plan["fps"], v, start=slide[-1])
     rnd = lambda frames: [[round(x, 3) for x in f] for f in frames]  # noqa: E731
     home = [round(x, 3) for x in plan["home"]] + [grip]
+    chunks = {"above_push": [pre], "descend_push": rnd(down), "slide_push": rnd(slide), "lift_push": rnd(up), "home": [home]}
+    if friction:  # the same sweep again: the box now stands where the sweep ends, so the jaws meet it only at the last frame
+        chunks["slide_air"] = rnd(slide)
     return {"schema": "rosy.omx-chunk-library.v1", "names": NAMES, "fps": plan["fps"], "gripper_closed": grip,
-            "chunks": {"above_push": [pre], "descend_push": rnd(down), "slide_push": rnd(slide), "lift_push": rnd(up),
-                       "home": [home]},
+            "chunks": chunks,
             "transit": plan.get("transit", {}), "transit_speed": plan.get("transit_speed", 0.85)}
 
 
-def run_push(cell, library_path: Path) -> dict:
+def run_push(cell, library_path: Path, friction: bool = False) -> dict:
     steps = []
-    for command in (f"load {library_path}", "goto above_push", "run descend_push", "run slide_push", "run lift_push"):
+    commands = [f"load {library_path}", "goto above_push", "run descend_push", "run slide_push", "run lift_push"]
+    if friction:
+        commands += ["goto above_push", "run descend_push", "run slide_air", "run lift_push"]
+    for command in commands:
         status = cell.act(command)
         steps.append({"command": command, **{k: status.get(k) for k in cp.STEP_KEYS}})
         if not status.get("ok"):
@@ -129,7 +146,7 @@ def run_push(cell, library_path: Path) -> dict:
     return {"result": "pushed", "steps": steps}
 
 
-def look_first(cell, config, record, site, region, start_raw, slide, bias, yaw, z, speed, lib, work, room=None) -> dict:
+def look_first(cell, config, record, site, region, start_raw, slide, bias, yaw, z, speed, lib, work, room=None, friction=False) -> dict:
     """cell_look before the descent: the jaws over the push start, measured against the start in the same image,
     since a carried bias left the push 1 cm off and the box did not move (2026-10-29). Off: the plan stands.
     `room` = (mask, roi, pixel_fn): the mark opens the jaws wide (cell_look), so it needs free ground round the start
@@ -151,7 +168,7 @@ def look_first(cell, config, record, site, region, start_raw, slide, bias, yaw, 
 
     def write(_config, pick, _place, path):
         s = np.array([pick["x"], pick["y"]])
-        path.write_text(json.dumps(push_library(config["plan"], s, s + slide, yaw, z, speed)))
+        path.write_text(json.dumps(push_library(config["plan"], s, s + slide, yaw, z, speed, friction)))
         return path
 
     # a push keeps push.gap_mm from the box, so it needs less than a grasp: the field looks went 9.6 -> 6.8 -> 4.3 mm
@@ -175,6 +192,8 @@ def main(argv=None):
     ap.add_argument("--half-width-mm", type=float, help="object half-extent across the push (default --half-mm)")
     ap.add_argument("--narrow", action="store_true", help="push with one finger leading (20 mm pad), not the 42 mm face")
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--friction", action="store_true",
+                    help="sweep with shoulder_pan alone, then the same sweep through air, for omx_sysid.py friction (tangential --along)")
     ap.add_argument("--commissioning", action="store_true", help="a supervised trial of this one push (D-911)")
     ap.add_argument("--person-at-switch", action="store_true", help="with --commissioning: a person is at the power switch")
     args = ap.parse_args(argv)
@@ -223,6 +242,10 @@ def main(argv=None):
                       args.half_mm, args.mm, gap, site.get("surface_px"), lane, args.half_width_mm, 2 * back)
     bias = np.asarray(region["bias_mm"] if region else [0.0, 0.0]) / 1000
     yaw = float(np.degrees(np.arctan2(d[1], d[0]))) + 90.0  # jaws closed across the push: a flat face leads
+    radial = (start - bias) / np.linalg.norm(start - bias)
+    if args.friction and abs(float(np.dot(d / np.linalg.norm(d), radial))) > TANGENT_COS:
+        tangent = np.degrees(np.arctan2(radial[0], -radial[1]))
+        raise SystemExit(f"--friction sweeps the pan: push across the arm's reach, --along {tangent:.0f} or {tangent + 180:.0f}")
     out = {"site": args.site, "px": px, "dir_px": dpx, "object_raw_mm": (a * 1000).round(1).tolist(),
            "start_m": (start - bias).round(4).tolist(), "end_m": (end - bias).round(4).tolist(), "z": round(z, 4),
            "yaw_deg": round(yaw, 1), "bias_mm": (bias * 1000).round(1).tolist(), "blocked": hits}
@@ -246,7 +269,7 @@ def main(argv=None):
         # closed jaws push with a flat face across or along the push; the wrist reaches only some yaws at a point
         for jaw_yaw in ((yaw + 90,) if args.narrow else (yaw, yaw + 90)):  # +90: the closing axis along the push
             try:
-                library = push_library(plan, start - bias, end - bias, ((jaw_yaw + 90) % 180) - 90, z, speed)
+                library = push_library(plan, start - bias, end - bias, ((jaw_yaw + 90) % 180) - 90, z, speed, args.friction)
                 out["yaw_deg"] = round(((jaw_yaw + 90) % 180) - 90, 1)
                 break
             except SystemExit as exc:
@@ -257,9 +280,12 @@ def main(argv=None):
             lib.write_text(json.dumps(library))
             looked = look_first(cell, dict(config, plan=plan), record, args.site, region, start, end - start, bias,
                                 out["yaw_deg"], z, speed, lib, work,
-                                (mask, args.roi, lambda p: predicted_pixel(config, calibration, args.site, p)))
+                                (mask, args.roi, lambda p: predicted_pixel(config, calibration, args.site, p)), args.friction)
             out["look"] = looked
-            out.update(run_push(cell, looked.get("library", lib)) if looked["verdict"] == "pass"
+            if args.friction:
+                out["friction"] = {"chunks": ["slide_push", "slide_air"], "radius_m": round(float(np.linalg.norm(start - bias)), 4),
+                                   "pan_motor": "XL430-W250", "started": time.time()}
+            out.update(run_push(cell, looked.get("library", lib), args.friction) if looked["verdict"] == "pass"
                        else {"result": f"refused: look {looked.get('why')}", "steps": [{"park": cell.act("park").get("ok")}]})
             after = cell.frame("top")
             keep("push-after", after)

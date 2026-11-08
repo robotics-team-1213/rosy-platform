@@ -110,3 +110,59 @@ def test_the_two_arm_world_builds_from_the_chosen_candidate():
         assert m.actuator("b_gripper_joint_1").forcerange[1] == pytest.approx(0.2)
         dof = m.jnt_dofadr[m.joint("b_joint2").id]
         assert (m.dof_damping[dof], m.dof_armature[dof], m.dof_frictionloss[dof]) == pytest.approx((0.3, 0.01, 0.0))
+
+
+def sweep_rows(extra_pwm, pan_step=0.1, contact_from=0.4, noise=1.0, seed=0, ticks=150):
+    """A runner trace: slide_push (the box adds extra_pwm from contact_from on), then slide_air on the same path; 5 Hz PWM
+    samples repeated over 15 Hz ticks as chunk_runner writes them."""
+    import random
+    rnd, rows, t = random.Random(seed), [], 0.0
+    for chunk in ("slide_push", "lift_push", "goto", "slide_air"):
+        pwm = None
+        for i in range(ticks if chunk.startswith("slide") else 5):
+            s = i / (ticks - 1)
+            if i % 3 == 0:
+                extra = extra_pwm if chunk == "slide_push" and s >= contact_from else 0.0
+                pwm = {"shoulder_pan": round(20 + 5 * s + extra + rnd.gauss(0, noise), 1), "shoulder_lift": 3}
+            rows.append({"t": t, "chunk": chunk, "present": [pan_step * i, 0, 0, 0, 0, 0], "pwm": pwm})
+            t += 1 / 15
+    return rows
+
+
+K = 1.5 * 11.7 / 12 / 885
+
+
+def test_friction_reads_mu_from_the_pan_pwm_against_the_air_sweep():
+    r = sysid.friction([(sweep_rows(7.0), 0.016, 0.2)])
+    assert r["ok"], r["why"]
+    assert r["mu"] == pytest.approx(7.0 * K / 0.2 / (0.016 * 9.81), rel=0.1)
+    assert r["sd"] >= 0.25 * r["mu"] * 0.99  # the datasheet constant's share stays in the uncertainty
+
+
+def test_friction_refuses_noise_and_effort_against_the_motion():
+    weak = sysid.friction([(sweep_rows(1.0, noise=4.0), 0.016, 0.2)])
+    assert not weak["ok"] and "tilt test" in weak["why"]
+    backwards = sysid.one_sweep(sweep_rows(7.0, pan_step=-0.1), 0.016, 0.2)
+    assert not backwards["ok"] and "not friction" in backwards["why"]
+    with pytest.raises(SystemExit, match="slide_air"):
+        sysid.one_sweep([r for r in sweep_rows(7.0) if r["chunk"] != "slide_air"], 0.016, 0.2)
+
+
+def test_two_stack_heights_must_agree_like_friction_does():
+    one, two = (sweep_rows(7.0, seed=1), 0.016, 0.2), (sweep_rows(14.0, seed=2), 0.032, 0.2)
+    assert sysid.friction([one, two])["ok"]
+    flat = sysid.friction([one, (sweep_rows(7.0, seed=2), 0.032, 0.2)])  # twice the load, same force: not friction alone
+    assert not flat["ok"] and "disagree" in flat["why"]
+
+
+def test_a_friction_fit_promotes_to_a_container_candidate_with_priority(tmp_path):
+    path = tmp_path / "cell_physics.yaml"
+    shutil.copy(physics.FILE, path)
+    r = sysid.friction([(sweep_rows(7.0), 0.016, 0.2)])
+    sysid.promote(r, "push-test", "docs/validation/x/friction.json", path)
+    doc = physics.load(path)
+    held = physics.Physics("push-test", doc).container()
+    assert held == {"mass": 0.016, "friction": [r["mu"], 0.005, 0.0001], "priority": 1}
+    span = physics.ranges(doc)["container"]["friction"]
+    assert span["low"] == pytest.approx(max(r["mu"] - 2 * r["sd"], 0)) and span["high"] == 1.0
+    assert dict((c, k) for _, c, k, _ in sysid.survey(doc))["container.friction"] == "fitted"

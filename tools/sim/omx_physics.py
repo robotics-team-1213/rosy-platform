@@ -88,8 +88,12 @@ def ranges(doc=None):
                     out["arms"].setdefault(arm, {}).setdefault(j, {})[k] = {"low": max(min(values), 0.0) if k != "zero_offset_deg" else min(values),
                                                                             "high": max(values)}
     for k, pick in (("mass", lambda v: v), ("friction", lambda v: v[0])):
-        values = [pick(p.container()[k]) for p in cands.values() if k in p.container()]
-        out["container"][k] = {"low": min(values), "high": max(values)}
+        values = []
+        for n, p in cands.items():
+            if k in p.container():
+                sd = doc["candidates"][n].get("sd", {}).get("container", {}).get(k, 0.0)
+                values += [pick(p.container()[k]) - 2 * sd, pick(p.container()[k]) + 2 * sd]
+        out["container"][k] = {"low": max(min(values), 0.0), "high": max(values)}
     return out
 
 

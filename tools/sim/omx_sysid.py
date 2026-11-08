@@ -7,7 +7,12 @@ which constant to measure next: the constant step of the real-sim loop (docs/ref
         joint1-5 together (scipy least_squares, joint angle error in degrees). Episodes are split fit/hold by name
         (omx_twin.shard_of, 1 in 3 held out); fit.json has the base and fitted RMS on both, and each constant's sd.
         Lab PC only (MuJoCo, D-584). No real motion: the episodes are recordings.
-  promote FIT --name NAME [--evidence PATH]
+  friction --run TRACE:MASS_G:RESULT [--run ..] --out DIR
+        Container friction from cell_push.py --friction (supervised, D-911): the pan's PWM while the closed jaws sweep the
+        box, less the same sweep through air, as torque (datasheet stall torque at the logged voltage) over the radius,
+        against the box's weight. Kept only when the difference stands SNR >= 3 above the noise and is against the motion;
+        two stack heights must agree within 30 % (friction scales with load). Otherwise a person's tilt test is the fallback.
+  promote FIT --name NAME [--evidence PATH] [--base design]
         Appends the fit as candidate NAME to learning/envs/isaac/cell_physics.yaml, only when the held-out RMS is lower
         than the base's and no joint gets worse by more than WORSE_DEG. The base stays (D-947 2); commit the file.
   next  [--json]
@@ -189,6 +194,87 @@ def servo(folders, cell_path, out, base="design", arm="arm_b", keys=("kp", "kv",
     return result
 
 
+# -- friction -------------------------------------------------------------------------------------------------------------------
+FRICTION_SCHEMA = "rosy.omx-sysid-friction.v1"
+PAN = "shoulder_pan"
+G = 9.81
+STALL = {"XL430-W250": (1.5, 12.0)}  # N·m at V, ROBOTIS e-Manual; torque per PWM unit = stall * V/V_rated / 885
+DATASHEET_SHARE = .25                # how far the datasheet constant may be off for this servo (back-EMF cancels in the difference)
+MIN_SNR, MIN_SAMPLES = 3.0, 8
+
+
+def sweeps(rows):
+    """[(chunk, [(progress 0..1, pan PWM)], pan travel)] for each contiguous slide_push / slide_air segment of a runner trace
+    (chunk_runner trace: one row per tick, the 5 Hz PWM sample repeated until the next)."""
+    out, seg = [], []
+    for r in rows + [{"chunk": None}]:
+        if seg and r.get("chunk") != seg[0]["chunk"]:
+            if seg[0]["chunk"] in ("slide_push", "slide_air") and len(seg) > 2:
+                t0, t1 = seg[0]["t"], seg[-1]["t"]
+                samples, last = [], None
+                for x in seg:
+                    p = (x.get("pwm") or {}).get(PAN)
+                    if p is not None and x["pwm"] != last:
+                        samples.append(((x["t"] - t0) / (t1 - t0), float(p)))
+                    last = x.get("pwm")
+                out.append((seg[0]["chunk"], samples, seg[-1]["present"][0] - seg[0]["present"][0]))
+            seg = []
+        if r.get("chunk") in ("slide_push", "slide_air"):
+            seg.append(r)
+    return out
+
+
+def one_sweep(rows, mass_kg, radius_m, motor="XL430-W250", volts=11.7, window=(.5, .9), before=(.05, .25)):
+    """Friction from the last contact sweep and the air sweep after it: the pan's extra PWM in `window` (box moving) less its
+    extra PWM in `before` (jaws not at the box yet), as a torque, over the radius, against the box's weight."""
+    import numpy as np
+    pairs = sweeps(rows)
+    for i in range(len(pairs) - 1, 0, -1):
+        if pairs[i][0] == "slide_air" and pairs[i - 1][0] == "slide_push":
+            contact, air = pairs[i - 1], pairs[i]
+            break
+    else:
+        raise SystemExit("no slide_push followed by slide_air in the trace: run cell_push.py --friction")
+    s_air, p_air = np.array(air[1]).T
+    s, p = np.array(contact[1]).T
+    delta = p - np.interp(s, s_air, p_air)
+    w, b = delta[(s >= window[0]) & (s <= window[1])], delta[(s >= before[0]) & (s <= before[1])]
+    if len(w) < 2 or len(b) < 2:
+        raise SystemExit(f"too few PWM samples in the windows ({len(w)}, {len(b)}): a longer or slower sweep")
+    net = float(w.mean() - b.mean())
+    se = float(np.sqrt(w.var(ddof=1) / len(w) + b.var(ddof=1) / len(b)))
+    stall, rated = STALL[motor]
+    k = stall * volts / rated / 885
+    force = abs(net) * k / radius_m
+    mu = force / (mass_kg * G)
+    snr = abs(net) / se if se else float("inf")
+    sd = mu * math.sqrt((1 / snr if snr else 1) ** 2 + DATASHEET_SHARE ** 2)
+    agrees = (net > 0) == (contact[2] > 0)  # the extra effort pushes the way the pan turns; the other way is not friction
+    ok = agrees and snr >= MIN_SNR and len(w) >= MIN_SAMPLES
+    why = (f"PWM {net:+.1f} (se {se:.1f}, SNR {snr:.1f}, {len(w)} samples)"
+           + ("" if agrees else ", against the pan's motion: not friction") + ("" if snr >= MIN_SNR else f", SNR under {MIN_SNR}")
+           + ("" if len(w) >= MIN_SAMPLES else f", fewer than {MIN_SAMPLES} samples"))
+    return dict(mass_kg=mass_kg, radius_m=radius_m, pwm=round(net, 2), se=round(se, 2), snr=round(snr, 2), n=len(w),
+                force_n=round(force, 4), mu=round(mu, 3), sd=round(sd, 3), ok=ok, why=why)
+
+
+def friction(runs, motor="XL430-W250", volts=11.7):
+    """runs: [(trace rows, mass kg, radius m)]. One mu through the origin of force against weight (friction scales with the
+    load: two stack heights check that), kept only when every run reads friction clearly."""
+    rows = [one_sweep(r, m, rad, motor, volts) for r, m, rad in runs]
+    good = [r for r in rows if r["ok"]]
+    out = dict(schema=FRICTION_SCHEMA, motor=motor, volts=volts, runs=rows, at=dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"))
+    if len(good) < len(rows) or not rows:
+        return dict(out, ok=False, why="a run did not read friction clearly; a person's tilt test is the fallback")
+    w = [r["mass_kg"] * G for r in good]
+    mu = sum(r["force_n"] * x for r, x in zip(good, w)) / sum(x * x for x in w)
+    spread = max(abs(r["mu"] - mu) for r in good) / mu
+    sd = math.sqrt(sum(r["sd"] ** 2 for r in good)) / len(good) + (spread * mu if len(good) > 1 else 0)
+    ok = len(good) == 1 or spread <= .3
+    return dict(out, mu=round(mu, 3), sd=round(sd, 3), ok=ok,
+                why=f"mu {mu:.3f} +- {sd:.3f} over {len(good)} run(s)" + ("" if ok else f"; runs disagree by {spread:.0%}: not friction alone"))
+
+
 # -- promote --------------------------------------------------------------------------------------------------------------------
 def verdict(fit):
     """(ok, why): held-out mean lower than the base's and no joint worse by more than WORSE_DEG."""
@@ -202,22 +288,31 @@ def verdict(fit):
     return True, f"held-out mean {mb:.3f} -> {mn:.3f} deg over {len(fit['episodes']['hold'])} episodes"
 
 
-def promote(fit, name, evidence=None, path=physics.FILE):
+def promote(fit, name, evidence=None, path=physics.FILE, base="design"):
+    """Append `fit` as candidate NAME. A servo fit keeps its own base; a friction reading sits on `base`."""
     import yaml
-    ok, why = verdict(fit)
+    friction_fit = fit.get("schema") == FRICTION_SCHEMA
+    ok, why = (fit["ok"], fit["why"]) if friction_fit else verdict(fit)
     if not ok:
         raise SystemExit(f"not promoted: {why}")
     doc = physics.load(path)
     if name in doc["candidates"]:
         raise SystemExit(f"candidate {name} exists; pick a new name (candidates are never overwritten)")
-    block = {name: dict(base=fit["base"], source="fitted", date=fit["at"][:10],
-                        method=f"omx_sysid.py servo, {', '.join(fit['keys'])} of joint1-5 by least squares over "
-                               f"{len(fit['episodes']['fit'])} episodes, gravity_comp={fit['gravity_comp']}",
-                        evidence=evidence or "", note=why, arms={fit["arm"]: fit["fitted"]}, sd={fit["arm"]: fit["sd"]})}
-    text = yaml.safe_dump({"candidates": block}, sort_keys=False, allow_unicode=True).split("\n", 1)[1]  # drop the "candidates:" line
+    if friction_fit:
+        runs = ", ".join(f"{r['mass_kg'] * 1000:.0f} g" for r in fit["runs"])
+        block = dict(base=base, source="fitted", date=fit["at"][:10],
+                     method=f"omx_sysid.py friction, cell_push --friction pan sweep against an air sweep ({runs}), {fit['motor']} at {fit['volts']} V",
+                     evidence=evidence or "", note=why, container={"friction": [fit["mu"], .005, .0001], "priority": 1},
+                     sd={"container": {"friction": fit["sd"]}})
+    else:
+        block = dict(base=fit["base"], source="fitted", date=fit["at"][:10],
+                     method=f"omx_sysid.py servo, {', '.join(fit['keys'])} of joint1-5 by least squares over "
+                            f"{len(fit['episodes']['fit'])} episodes, gravity_comp={fit['gravity_comp']}",
+                     evidence=evidence or "", note=why, arms={fit["arm"]: fit["fitted"]}, sd={fit["arm"]: fit["sd"]})
+    text = yaml.safe_dump({"candidates": {name: block}}, sort_keys=False, allow_unicode=True).split("\n", 1)[1]  # drop "candidates:"
     body = Path(path).read_text(encoding="utf-8")
     Path(path).write_text(body.rstrip("\n") + "\n" + text, encoding="utf-8")  # candidates is the file's last section
-    physics.load(path)["candidates"][name]  # the appended block must parse as a candidate
+    physics.Physics(name, physics.load(path))  # the appended block must resolve as a candidate
     return why
 
 
@@ -261,18 +356,35 @@ def main(argv=None):
     s.add_argument("--gravity-comp", action="store_true", help="the sim's ideal gravity compensation (omx_twin tries both)")
     s.add_argument("--max-nfev", type=int, default=60)
     s.add_argument("--jobs", type=int, default=8, help="replay processes (each holds one MuJoCo cell)")
+    fr = sub.add_parser("friction")
+    fr.add_argument("--run", action="append", required=True, metavar="TRACE:MASS_G:RESULT",
+                    help="a runner trace with a cell_push --friction sweep, the pushed stack's mass in grams, and that push's result.json")
+    fr.add_argument("--volts", type=float, default=11.7, help="servo supply, motor-health voltage_v")
+    fr.add_argument("--out", required=True)
     pr = sub.add_parser("promote")
     pr.add_argument("fit")
     pr.add_argument("--name", required=True)
     pr.add_argument("--evidence")
+    pr.add_argument("--base", default="design", help="for a friction fit: the candidate it sits on")
     n = sub.add_parser("next")
     n.add_argument("--json", action="store_true")
     a = p.parse_args(argv)
     if a.cmd == "servo":
         r = servo(a.episodes, a.cell, a.out, a.base, a.arm, a.keys.split(","), a.gravity_comp, a.max_nfev, a.jobs)
         print(json.dumps(dict(rms_deg=r["rms_deg"], verdict=verdict(r)), indent=1))
+    elif a.cmd == "friction":
+        runs = []
+        for item in a.run:
+            trace, grams, result = item.rsplit(":", 2)
+            rows = [json.loads(line) for line in Path(trace).read_text(errors="replace").splitlines() if line.strip()]
+            runs.append((rows, float(grams) / 1000, json.loads(Path(result).read_text())["friction"]["radius_m"]))
+        r = friction(runs, volts=a.volts)
+        Path(a.out).mkdir(parents=True, exist_ok=True)
+        (Path(a.out) / "friction.json").write_text(json.dumps(r, indent=1), encoding="utf-8")
+        print(json.dumps({k: r.get(k) for k in ("mu", "sd", "ok", "why")}, indent=1))
+        return 0 if r["ok"] else 1
     elif a.cmd == "promote":
-        print(promote(json.loads(Path(a.fit).read_text(encoding="utf-8")), a.name, a.evidence))
+        print(promote(json.loads(Path(a.fit).read_text(encoding="utf-8")), a.name, a.evidence, base=a.base))
     else:
         rows = survey()
         if a.json:
