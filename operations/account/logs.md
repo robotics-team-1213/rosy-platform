@@ -115,3 +115,9 @@
 - 변경: Fleet 등록 키로 그 로봇 줄만 쓰는 `PUT /api/fleet/auth/device-clients/{robot_id}`를 더했다. 관리자의 정지는 재등록으로 풀리지 않는다.
 - 증거: 원격 시험 결과는 착지 기록을 따른다. 실물 로봇과 현장 Account의 전체 흐름은 확인하지 못했다.
 - Gate: 없음. CE: 해당 없음 — 결정된 단계의 구현이다.
+## 2026-11-07 · uncommitted · 가입·권한 요청(D-993)
+
+- 변경: 권한 없는 사람이 청하는 요청 표 `rosy_access_requests`, 공개 입력 `POST /api/fleet/auth/access-requests`(same-origin·4 KiB·전체 200/주소 5건 대기 제한·존재 여부 비노출), 관리자 목록·승인·거절을 더했다. 승인은 `AccountLedger.create/mutate`에 `within`을 더해 계정 변경과 요청 마감·감사를 한 트랜잭션에 넣는다. 비밀번호는 요청 때 받지 않고 관리자가 임시 비밀번호를 정한다.
+- 후속(검토 반영): 상한을 최근 24시간 대기 요청으로 제한, 중복 키에 이름 포함, 기존 계정 비활성 검사를 같은 트랜잭션 안으로, 깊은 JSON 거절, 승인 불가 요청의 UI 비활성과 이유.
+- 증거: 원격 시험 `operations/fleet/test/test_account_access_requests.py`와 Account·브라우저 묶음. 결과는 착지 기록을 따른다.
+- Gate: 구현 전 단계이며 배포·현장 수용 전. 운영 authority는 바꾸지 않았다. CE: 해당 없음 — 설계 선택은 D-993에 있다.

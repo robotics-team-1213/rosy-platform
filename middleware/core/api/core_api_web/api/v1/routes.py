@@ -25,6 +25,7 @@ from core_api_web.api.v1.motors import motors_router
 from core_api_web.api.v1.line_follow import line_follow_router
 from core_api_web.api.v1.localization import localization_router
 from core_api_web.api.v1.navigation import navigation_router, slam_router
+from core_api_web.api.v1.navigation_approval import navigation_approval_router
 from core_api_web.api.v1.peers import peers_router
 from core_api_web.api.v1.recordings import recordings_router
 from core_api_web.api.v1.observability import (
@@ -70,6 +71,7 @@ __all__ = [
     "metrics_router",
     "motion_router",
     "motors_router",
+    "navigation_approval_router",
     "navigation_router",
     "peers_router",
     "operator",

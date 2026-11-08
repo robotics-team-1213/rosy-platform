@@ -25,8 +25,8 @@
 
 ## 최근 기록
 
+- 2026-11-07 · uncommitted · 가입·권한 요청(D-993)
 - 2026-11-07 · uncommitted · feat(account): 장비 등록과 등록부 연결 (D-992)
 - 2026-11-07 · uncommitted · feat(account): 앱 목록 (D-955 4단계)
 - 2026-11-07 · uncommitted · feat(account): 연동 등록부 (D-955 2단계)
 - 2026-11-07 · uncommitted · Account 진입 문서와 소유자 안내 정정
-- 2026-11-07 · uncommitted · Account 화면에서 자기 자신으로 되돌아가는 링크 제거

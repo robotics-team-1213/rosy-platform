@@ -2,6 +2,7 @@
 from fastapi import Body, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 
+from rosy_account.access_requests import AccessRequests
 from rosy_account.client_registry import ClientRegistry
 from rosy_account.http import NO_STORE
 from rosy_account.password_session import (
@@ -10,6 +11,8 @@ from rosy_account.principal import SitePrincipal
 
 
 def install_account_routes(app, *, sessions, authorize):
+    requests = app.state.access_requests = AccessRequests(sessions._ledger)
+
     @app.get("/api/fleet/auth/setup", tags=["fleet-auth"])
     def setup(request: Request, principal: SitePrincipal = Depends(authorize)):
         if (getattr(request.state, "site_auth_via", None) != "cookie"
@@ -101,3 +104,18 @@ def install_account_routes(app, *, sessions, authorize):
     def revoke(account_id: str, payload: dict = Body(...), value=Depends(manager)):
         fields(payload, {"revision"})
         return call(sessions.revoke_account_sessions, value, account_id, **payload)
+
+    # D-993: administrators decide sign-up / access requests; the public intake is in access_request_routes.
+    @app.get("/api/fleet/auth/access-requests", tags=["fleet-auth"])
+    def access_requests(value=Depends(manager)):
+        return call(requests.list, value)
+
+    @app.post("/api/fleet/auth/access-requests/{request_id}/approve", tags=["fleet-auth"])
+    def approve_request(request_id: str, payload: dict = Body(...), value=Depends(manager)):
+        fields(payload, {"role", "grants"}, {"password", "principal_id", "revision"})
+        return call(requests.approve, value, request_id, **payload)
+
+    @app.post("/api/fleet/auth/access-requests/{request_id}/reject", tags=["fleet-auth"])
+    def reject_request(request_id: str, payload: dict = Body(...), value=Depends(manager)):
+        fields(payload, {"reason"})
+        return call(requests.reject, value, request_id, **payload)
