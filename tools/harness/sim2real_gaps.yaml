@@ -215,7 +215,7 @@ gaps:
     gap: OMX top camera model is the 2026-11-03 stud PnP; between surveys only the plate pad sizes (within 2.5 mm of 90 x 30 on 11-08) check it
     evidence:
       - learning/envs/isaac/cell_model_inventory.yaml:83-84
-      - tools/sim/omx_twin.py:375
+      - {path: tools/sim/omx_twin.py, branch: feat/omx-sim-twin}
       - D-933
     tier: [M, R]
     owner: calibration / omx_twin
@@ -225,7 +225,7 @@ gaps:
   - id: G-20
     gap: OMX real table sits 6-20 mm below FK zero; the twin's joint-zero fit (j1-j5 +4.0/+1.0/+3.2/+2.8/+2.4 deg) cut the top-view outline offset from 12.6 to 4.5 px and lowers the tip 9.5 mm, cause (zeros or link sag) not settled
     evidence:
-      - tools/sim/omx_twin.py:375
+      - {path: tools/sim/omx_twin.py, branch: feat/omx-sim-twin}
       - tools/sim/omx_two_arm_sites.py:34
       - D-947
     tier: [R, M]
@@ -255,7 +255,7 @@ gaps:
   - id: G-23
     gap: OMX servo lag is 0.10-0.34 s per joint on the real arm while the sim gives 0.16 s on every joint (one gain for all)
     evidence:
-      - tools/sim/omx_twin.py:67-91
+      - {path: tools/sim/omx_twin.py, branch: feat/omx-sim-twin}
       - tools/sim/omx_cell_sim.py:109
     tier: [R, M]
     owner: omx_twin

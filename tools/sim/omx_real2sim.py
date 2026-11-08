@@ -351,7 +351,7 @@ def report(out):
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     sub = p.add_subparsers(dest="cmd", required=True)
-    c = sub.add_parser("capture"); c.add_argument("--site", required=True); c.add_argument("--out", required=True)
+    c = sub.add_parser("capture"); c.add_argument("--site", help="ssh target of the site PC, default site_host in private/lab-hosts.json"); c.add_argument("--out", required=True)
     m = sub.add_parser("measure"); m.add_argument("run"); m.add_argument("--prev")
     d = sub.add_parser("diff"); d.add_argument("old"); d.add_argument("new")
     s = sub.add_parser("sim"); s.add_argument("snapshot"); s.add_argument("--sha", required=True); s.add_argument("--out", required=True)
@@ -359,6 +359,10 @@ def main(argv=None):
     r = sub.add_parser("report"); r.add_argument("out")
     a = p.parse_args(argv)
     if a.cmd == "capture":
+        if not a.site:
+            sys.path.insert(0, str(ROOT / "tools/remote"))
+            import lab_hosts
+            a.site = lab_hosts.site_host() or p.error("--site, or site_host in private/lab-hosts.json")
         print(json.dumps(capture(a.site, a.out)))
     elif a.cmd == "measure":
         snap = measure(a.run, a.prev)
