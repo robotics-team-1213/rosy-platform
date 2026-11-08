@@ -4740,3 +4740,7 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: 통합관제 R을 N150 호스트로 옮기려 하자 R↔CELL-A가 같은 PC 도커 네트워크 별칭으로만 닿아 분리할 수 없었다. 원격 시험은 아래 커밋에 기록
 - gate 변화: 없음 — 현장 전환 전이다
 - 결정: D-994 2·3항(서명 경로로만 배치)
+## 2026-11-09 · uncommitted · fix(site): 현장 PC 원하는 상태에 mDNS 검색 브리지 타이머를 넣는다
+- 변경: site host-state 매니페스트에 `report enabled rosy-mdns-bridge.timer`를 더하고, 비밀 폴더의 `discovery_token`이 `root:rosy-fleet` 0640일 때 `SupplementaryGroups=rosy-fleet` drop-in으로 읽게 하는 설치 안내를 README에 적었다. 광고 유닛은 oneshot이라 `enabled` 줄(active 요구)에 넣지 않았다
+- 증거: 11-09 R 이전 뒤 R에도 옛 robttt에도 브리지가 설치돼 있지 않았다(`rosy-mdns` 사용자 없음). 그래서 Fleet 발견 목록·HTTP 로봇 주소 변경 감지가 꺼져 있었다. R에는 손으로 설치해 `ROSY mDNS scan delivered` 확인
+- gate 변화: 없음

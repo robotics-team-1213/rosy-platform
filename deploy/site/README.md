@@ -629,6 +629,11 @@ Keep it out of the checkout and grant read access only to root and the
 `.service` and `.timer` files to `/etc/systemd/system/`. Create a system user
 and group `rosy-mdns` with no login shell. Grant that group read access to
 `discovery_token`; `site-ca.crt` is already public to the host service.
+Where the migrated secrets dir keeps `discovery_token` as `root:rosy-fleet`
+0640, give the unit a drop-in with `SupplementaryGroups=rosy-fleet` instead of
+changing the file's group (the Fleet container reads it as that group). The
+site host-state manifest reports a site PC whose bridge timer is not running;
+a site PC moved on 2026-11-09 ran without it.
 
 The bridge needs no URL, FQDN or LAN address. Its unit reads
 `ROSY_SITE_TLS_HOST` and `ROSY_SITE_HTTPS_PORT` (both required; neither is defaulted in code)
