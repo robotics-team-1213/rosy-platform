@@ -9,9 +9,10 @@ in a LeRobot environment that can import mujoco:
     MUJOCO_GL=egl python tools/sim/omx_two_arm_policy.py round --root R --python P --lerobot-train T --seeds 30 --steps 60000 [--mode concurrent]
     MUJOCO_GL=egl python tools/sim/omx_two_arm_policy.py evaluate --model DIR --steps-file F --out F2 --artifacts DIR
 
-`--skill grasp` learns only the grasp-close-lift part of each step (the teacher's IK does the rest) under `--zero-error-deg` joint-zero
-calibration error, and the round also judges that IK alone on the same seeds (`eval-ik.json`). `--policy smolvla --base-model B --vlm-assets V`
-fine-tunes SmolVLA offline instead of training ACT, with the step's arm and source as its language input.
+`--skill grasp|release` learns only that part of each step (omx_two_arm_skill.py: the teacher's IK does the rest) under `--zero-error-deg`
+joint-zero calibration error and `--servo-lag`, and the round also judges that IK alone on the same seeds (`eval-ik.json`).
+`--policy smolvla --base-model B --vlm-assets V` fine-tunes SmolVLA offline instead of training ACT, with the step's arm and site as its
+language input.
 
 A round is `<root>/two_arm_rounds/<id>/round.json` (rosy.omx-two-arm-round.v1). MuJoCo answers geometry only (D-947); no learned policy reaches the real arm (D-793).
 """
@@ -28,6 +29,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import numpy as np  # noqa: E402
 import omx_ladder as ladder  # noqa: E402
 import omx_two_arm_sites as sites  # noqa: E402
+import omx_two_arm_skill as skills  # noqa: E402
 import omx_two_arm_tasks as tasks  # noqa: E402
 import omx_two_arm_teacher as teaching  # noqa: E402
 
@@ -37,10 +39,6 @@ TASKS = ("stack", "outbound")  # the conveyor stack and Harbor's outbound plan i
 GOAL = "observation.environment_state"
 PROMPT = "carry the container of this plan step"
 TRAIN_SEED_BASE, EVAL_SEED_BASE = 1000, 200000  # the teacher never saw an evaluation seed
-# Sub-skills: the waypoint phases of a step a policy owns while the teacher's IK does the rest. Whole steps and whole tasks scored 0/63
-# (rounds 1-4, link5 came down 0.04 rad low); the Isaac release corrector learned one short phase 8/9 where IK got 0/9 (2026-10-30).
-SKILLS = {"grasp": ("grasp", "close", "lift")}
-SKILL_PASS = .9  # 18 of 20, the sim acceptance bar (2026-11-05 decision-vla plan)
 
 
 GOAL_SIZE = 22  # per arm (arm_a, arm_b): active, then the five grasp joints and the five lower joints
@@ -72,19 +70,6 @@ def goal_vector(layout, step, here):
     return goal_of({step["arm"]: goal_block(layout, step, here)})
 
 
-def skill_prompt(step):
-    """SmolVLA's language input: which arm and which source (ACT reads the same from the goal vector)."""
-    return f"{step['arm']}: grasp the container at {step['from']} and lift it"
-
-
-def draw_zero_error(seed, deg):
-    """Per-arm joint-zero calibration error for a seed, uniform within +-deg on the five arm joints; seed 0 is the exact arm."""
-    if not seed or not deg:
-        return {}
-    rng = np.random.default_rng(seed + 7919)
-    return {arm: np.append(rng.uniform(-1, 1, 5) * np.radians(deg), 0.) for arm in sites.ARMS}
-
-
 def observe(world, data, zero_error=None):
     """The joints as the arm reports them (true minus its calibration error) and the four cameras."""
     state = np.concatenate([data.qpos[world.q[arm]] - (zero_error or {}).get(arm, 0.) for arm in sites.ARMS]).astype(np.float32)
@@ -111,7 +96,7 @@ class Recorder(teaching.Teacher):
                 if c.step["id"] not in self.blocks:
                     self.blocks[c.step["id"]] = goal_block(self.layout, c.step, c.here)
             goal = goal_of({c.arm: self.blocks[c.step["id"]] for c in ctxs or []})
-        if goal is not None and (self.skill is None or self.phase in SKILLS[self.skill]):
+        if goal is not None and (self.skill is None or self.phase in skills.SKILLS[self.skill]["phases"]):
             state, images = observe(self.world, data, self.zero_error)
             # the privileged teacher moves in true angles; the arm is commanded in reported ones
             action = np.concatenate([targets[arm] - self.zero_error.get(arm, 0.) for arm in sites.ARMS]).astype(np.float32)
@@ -139,7 +124,7 @@ class Recorder(teaching.Teacher):
 
     def run_step(self, data, step, here):
         self.goal, self.count = goal_vector(self.layout, step, here), 0
-        self.prompt = skill_prompt(step) if self.skill else PROMPT
+        self.prompt = skills.prompt(step, self.skill) if self.skill else PROMPT
         row = super().run_step(data, step, here)
         self.goal = None
         if row["result"] == "pass" and not self.spoiled:
@@ -156,7 +141,7 @@ def plan_tasks(plan_dir, names):
     return {name: dict(json.loads((Path(plan_dir) / f"{name}-two-arm.json").read_text(encoding="utf-8")), name=name) for name in names}
 
 
-def collect(seeds, names, out, plan_dir=None, choices=None, skill=None, zero_error_deg=0.):
+def collect(seeds, names, out, plan_dir=None, choices=None, skill=None, zero_error_deg=0., lag=False):
     if skill and plan_dir:
         raise ValueError("a sub-skill is recorded one step at a time, not in concurrent mode")
     from lerobot.datasets.lerobot_dataset import LeRobotDataset
@@ -174,7 +159,7 @@ def collect(seeds, names, out, plan_dir=None, choices=None, skill=None, zero_err
     for seed in seeds:
         for name in names:
             teacher = Recorder(world, dataset, longest, concurrent=planned is not None, skill=skill, seed=seed)
-            teacher.zero_error = draw_zero_error(seed, zero_error_deg)
+            skills.disturb(teacher, seed, zero_error_deg, lag)
             teacher.run_task(planned[name] if planned else tasks.get_task(layout, name))
             if teacher.spoiled:
                 spoiled.append(f"{name}:{seed}")
@@ -242,61 +227,6 @@ class Driver:
         teacher.carried = None
         row = dict(step=plan["id"], container=c, arm=arm, source=plan["from"], target=plan["to"], lifted=bool(peak > .015))
         return teacher.verdict(data, plan, row, before)
-
-    def skill_step(self, teacher, data, plan, here, skill):
-        """The teacher's IK (in reported angles, so off by the calibration error) runs the step up to the sub-skill; then the model, or for
-        "ik" the same IK, runs it. Passes when the container is held 15 mm above where it stood and nothing else was touched."""
-        w, L, arm, c = self.world, self.layout, plan["arm"], plan["container"]
-        others = {k: v for k, v in here.items() if k != c}
-        teacher.privileged, teacher.carried = False, c
-        idle = {o: L.sim_arms[o].wait for o in L.arms if o != arm}
-        before = {o: w.pose(data, o) for o in others}
-        row = dict(step=plan["id"], container=c, arm=arm, source=plan["from"], target=plan["to"], skill=skill, lifted=False)
-        gen = teacher.step_gen(data, plan, others, teacher)
-        try:
-            target = next(gen)
-            while teacher.phase not in SKILLS[skill]:
-                teacher.frame(data, {arm: target, **idle}, plan["id"])
-                target = next(gen)
-            start_z = w.pose(data, c)[0][2]
-            if self.kind == "ik":
-                while teacher.phase in SKILLS[skill]:
-                    teacher.frame(data, {arm: target, **idle}, plan["id"])
-                    target = next(gen)
-            else:
-                goal, prompt = goal_vector(L, plan, others), skill_prompt(plan)
-                self.policy.reset()
-                for _ in range(self.longest[plan["id"]] + 15):  # the teacher's time on the sub-skill and a second of grace
-                    state, images = observe(w, data, teacher.zero_error)
-                    action = self.act(state, images, goal, prompt)
-                    teacher.frame(data, {name: action[i * 6:i * 6 + 6] for i, name in enumerate(sites.ARMS)}, plan["id"])
-        except StopIteration as stop:  # blocked or unreachable before the sub-skill began
-            return dict(row, result=stop.value["result"], reason=stop.value.get("reason", ""))
-        tcp, _ = w.tcp(data, arm)
-        pos = w.pose(data, c)[0]
-        rise, in_jaw = float(pos[2] - start_z), float(np.linalg.norm(pos - tcp))
-        moved = teacher.disturbed(data, before, teacher)
-        arm_hits = sorted(f"{a}~{b}" for a, b in teacher.contacts["arm_other"])
-        crash = sorted("~".join(p) for p in teacher.contacts["arm_arm"])
-        held = rise > .015 and in_jaw < .06
-        return dict(row, result="pass" if held and not moved and not arm_hits and not crash else "fail", lifted=held, rise_mm=round(rise * 1000, 1),
-                    container_to_tcp_mm=round(in_jaw * 1000, 1), neighbours_disturbed=moved, arm_link_contacts=arm_hits, arm_arm_contacts=crash,
-                    first_contact_phase=teacher.first)
-
-    def skill_isolated(self, name, seed, skill, zero_error_deg):
-        """Each step of a task from the plan's nominal state with its own calibration error, the sub-skill judged alone."""
-        task = tasks.get_task(self.layout, name)
-        here, rows = dict(task.get("start", {})), []
-        with self.torch.inference_mode():
-            for plan in task["steps"]:
-                teacher = teaching.Teacher(self.world, seed=seed + len(rows))
-                teacher.zero_error = draw_zero_error(seed + len(rows), zero_error_deg)
-                data = teacher.fresh(here)  # step_gen brings a belt container in itself
-                rows.append(dict(self.skill_step(teacher, data, plan, here, skill), task=name, seed=seed))
-                print(json.dumps(rows[-1], default=str), flush=True)
-                here[plan["container"]] = plan["to"]
-                teacher.off_stand(data, plan, here)
-        return rows
 
     def concurrent(self, task, seed, sink=None):
         """A whole two-arm task with the model driving both arms: each arm's step turns on by the plan's order and zones as in the teacher,
@@ -405,7 +335,7 @@ def evaluate(args):
     if args.skill:
         for name in args.tasks.split(","):
             for k in range(args.isolated_seeds):
-                rows += driver.skill_isolated(name, EVAL_SEED_BASE + 1000 * k, args.skill, args.zero_error_deg)
+                rows += skills.isolated(driver, name, EVAL_SEED_BASE + 1000 * k, args.skill, args.zero_error_deg, args.servo_lag)
         Path(args.out).write_text(json.dumps(dict(rows=rows, whole=[], policy=driver.kind), default=str), encoding="utf-8")
         return 0
     for name in args.tasks.split(","):
@@ -433,12 +363,9 @@ def evaluate(args):
 
 
 def outcome(score, skill=None):
-    """A round that ran to the end has not passed: Rosy Learning shows this status, so only finished tasks earn it. A sub-skill round
-    has no whole tasks: it passes at the sim acceptance bar."""
+    """A round that ran to the end has not passed: Rosy Learning shows this status, so only finished tasks earn it."""
     if skill:
-        if score["n"] and score["passed"] >= SKILL_PASS * score["n"]:
-            return dict(status="passed")
-        return dict(status="failed", reason=f"하위 동작 {skill} 성공 {score['passed']}/{score['n']}, 기준 {SKILL_PASS:.0%} 미만입니다.")
+        return skills.outcome(score, skill)
     if score["whole"] and all(run["completed"] for run in score["whole"]):
         return dict(status="passed")
     return dict(status="failed", reason="평가에서 작업을 끝까지 마치지 못했습니다.")
@@ -463,14 +390,14 @@ def run_round(args):
     if args.skill and args.mode != "steps" or args.policy == "smolvla" and not (args.base_model and args.vlm_assets):
         raise SystemExit("a sub-skill needs --mode steps; SmolVLA needs --base-model and --vlm-assets (local, offline)")
     recipe = dict(ladder.RECIPE, steps=args.steps, optimizer_lr=args.lr, batch_size=args.batch_size, mode=args.mode, policy=args.policy,
-                  skill=args.skill, zero_error_deg=args.zero_error_deg)
+                  skill=args.skill, zero_error_deg=args.zero_error_deg, servo_lag=args.servo_lag)
     record = dict(schema=SCHEMA, round_id=round_id, created_at=now(), source_sha=ladder.source_sha(args), status="running", stage="collect", cameras=list(teaching.RECORDED),
                   tasks=names, seeds=args.seeds, recipe=recipe, choices=sites.parse_choices(args.choice), claim="기하: 도달·순서·충돌(D-947). 실물 근거가 아닙니다.")
     write_record(run, record)
     me, environment = str(Path(__file__)), dict(os.environ, MUJOCO_GL="egl", PYTHONUNBUFFERED="1")
     log = (run / "round.log").open("w", encoding="utf-8")
     chosen = [arg for item in args.choice or [] for arg in ("--choice", item)]  # the same layout for plan, collection and judgement
-    skilled = ["--skill", args.skill, "--zero-error-deg", str(args.zero_error_deg)] if args.skill else []
+    skilled = skills.argv(args)
     try:
         plan = []
         if args.mode == "concurrent":  # one plan for all workers and the evaluation: omx_two_arm_plan.py's two-arm order and zones
@@ -536,11 +463,6 @@ def run_round(args):
     return 0
 
 
-def skill_options(parser):
-    parser.add_argument("--skill", choices=sorted(SKILLS), help="learn and judge only this part of each step; the teacher's IK does the rest")
-    parser.add_argument("--zero-error-deg", type=float, default=0., help="per-seed joint-zero calibration error, uniform within +-deg (the twin fit found up to 4)")
-
-
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     commands = parser.add_subparsers(dest="command", required=True)
@@ -550,14 +472,14 @@ def main(argv=None):
     one.add_argument("--out", required=True)
     one.add_argument("--plan-dir", help="two-arm plans (omx_two_arm_plan.py --replay-dir): record whole tasks with both arms at once")
     one.add_argument("--choice", action="append", help="key=value override of omx_two_arm_sites.CHOICES")
-    skill_options(one)
+    skills.options(one)
     for name in ("evaluate", "round"):
         one = commands.add_parser(name)
         one.add_argument("--tasks", default=",".join(TASKS))
         one.add_argument("--isolated-seeds", type=int, default=3)
         one.add_argument("--whole-seeds", type=int, default=3)
         one.add_argument("--choice", action="append", help="key=value override of omx_two_arm_sites.CHOICES")
-        skill_options(one)
+        skills.options(one)
         if name == "evaluate":
             one.add_argument("--model", required=True, help="a trained ACT or SmolVLA model folder, or ik for the teacher's IK in reported angles")
             one.add_argument("--steps-file", required=True)
@@ -581,7 +503,7 @@ def main(argv=None):
     args = parser.parse_args(argv)
     if args.command == "collect":
         return collect([int(seed) for seed in args.seeds.split(",")], args.tasks.split(","), args.out, args.plan_dir, sites.parse_choices(args.choice),
-                       args.skill, args.zero_error_deg)
+                       args.skill, args.zero_error_deg, args.servo_lag)
     return evaluate(args) if args.command == "evaluate" else run_round(args)
 
 
