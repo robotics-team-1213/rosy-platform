@@ -169,7 +169,7 @@ def test_the_photo_plates_stand_where_the_top_camera_saw_them():
 def test_a_lane_under_the_ship_hull_is_blocked_and_refused(layout, data):
     """Plate v11 where its bridge seats it reaches 20 mm over the estimated r08 hull at arm_b (MuJoCo: the container sat 5 mm up, 7 deg
     tilted on lane 1). Such a lane is no place until the base plate yaw and the ship are measured."""
-    assert {n for n, s in layout.sites.items() if s.get("blocked")} == {"tmp-b-1"}
+    assert {n for n, s in layout.sites.items() if s.get("blocked")} == {"tmp-b-1", "tmp-b-1-l1", "tmp-b-1-l2"}  # every tier of that lane
     task = dict(supply=[], start={"bar-9": "ship-h1r2-l2"}, name="t", steps=[dict(id="x", container="bar-9", **{"from": "ship-h1r2-l2"}, to="tmp-b-1", arm="arm_b")])
     assert "tmp-b-1 is under the ship hull" in refused(layout, task)
 
@@ -272,3 +272,18 @@ def test_the_feasibility_matrix_uncovers_each_container_of_the_stack(layout):
         s = layout.sites[site]
         assert c in state and all(layout.sites[v]["stack"] != s["stack"] or layout.sites[v]["layer"] <= s["layer"] for v in state.values())
         assert len(state) == len(full) - sum(layout.sites[v]["stack"] == s["stack"] and layout.sites[v]["layer"] > s["layer"] for v in full.values())
+
+
+def test_a_temporary_lane_stacks_three_tiers_on_something(layout):
+    """Plate v11 holds three tiers per lane: a tier needs the one under it and its container cannot leave from under another."""
+    lane = [layout.sites[n] for n in ("tmp-b-2", "tmp-b-2-l1", "tmp-b-2-l2")]
+    assert [s["layer"] for s in lane] == [0, 1, 2] and len({s["xy"] for s in lane}) == 1
+    assert lane[1]["z"] - lane[0]["z"] == pytest.approx(layout.box[2])
+    start = {"bar-9": "ship-h1r2-l2", "bar-6": "ship-h1r2-l1"}
+    up = dict(id="b", container="bar-6", **{"from": "ship-h1r2-l1"}, to="tmp-b-2-l1", arm="arm_b")
+    assert "tmp-b-2-l1 has nothing under it" in refused(layout, dict(supply=[], start=start, name="t", steps=[
+        dict(id="a", container="bar-9", **{"from": "ship-h1r2-l2"}, to="tmp-b-1", arm="arm_b"), up]))
+    stacked = [dict(id="a", container="bar-9", **{"from": "ship-h1r2-l2"}, to="tmp-b-2", arm="arm_b"), up]
+    tasks.validate(layout, dict(supply=[], start=start, name="t", steps=stacked))
+    assert "taken from under" in refused(layout, dict(supply=[], start=start, name="t", steps=stacked + [
+        dict(id="c", container="bar-9", **{"from": "tmp-b-2"}, to="ship-h1r2-l2", arm="arm_b")]))

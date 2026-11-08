@@ -103,7 +103,8 @@ def harbor_moves(layout, state, request, can, avoid=()):
     def finish(cur, moves):
         """Outbound to the first free lane that lets the whole job finish, then the blockers back, lowest first into the target's freed
         level; None when an arm is missing on the way."""
-        lanes = sorted(s for s in planning_sites(layout) if layout.sites[s]["kind"] == "temp" and s not in cur.values() and s not in avoid)
+        lanes = sorted(s for s in planning_sites(layout) if layout.sites[s]["kind"] == "temp" and layout.sites[s]["layer"] == 0  # Pinky takes it off an empty lane
+                       and s not in cur.values() and s not in avoid)
         if not lanes:
             failures.append("NO_FREE_OUTBOUND_LANE")
         return next((done for stand in lanes if (done := restore(cur, moves, stand))), None)
@@ -140,13 +141,13 @@ def harbor_moves(layout, state, request, can, avoid=()):
 
 
 def temp_spots(layout, occupied, avoid=frozenset()):
-    """Temporary places in Harbor's order: the free temporary lanes, then free ship sites standing on an occupied one (another 장치 칸)."""
+    """Temporary places in Harbor's order: the free temporary lane tiers on something (bottom tier first), then free ship sites standing
+    on an occupied one (another 장치 칸)."""
     used = occupied | avoid
     names = planning_sites(layout)
-    lanes = sorted(s for s in names if layout.sites[s]["kind"] == "temp" and s not in used)
-    ship = sorted((s for s in names for v in [layout.sites[s]] if v["kind"] == "ship" and s not in used
-                   and (v["layer"] == 0 or f"ship-{v['stack']}-l{v['layer'] - 1}" in occupied)), key=lambda s: (layout.sites[s]["layer"], s))
-    return lanes + ship
+    spots = [s for s in names for v in [layout.sites[s]] if v["kind"] in ("temp", "ship") and s not in used
+             and (v["layer"] == 0 or layout.stack_at.get((v["stack"], v["layer"] - 1)) in occupied)]
+    return sorted(spots, key=lambda s: (layout.sites[s]["kind"] != "temp", layout.sites[s]["layer"], s))
 
 
 def duration(layout, a, b):

@@ -122,3 +122,11 @@ def test_a_concurrent_replay_carries_order_conveyor_and_zones(layout, reach):
             assert under["id"] in s["after"]
         assert len(s["zones"]) == 2 and s["zones"][0] and s["zones"][1]
     assert {s["arm"] for s in steps.values()} == BOTH
+
+
+def test_a_full_bottom_tier_sends_blockers_up_a_lane_before_onto_the_ship(layout):
+    """Harbor's temporary places: free bottom tiers, then a tier on an occupied lane, then the ship; the outbound place is a bottom tier."""
+    bottoms = {s for s in plan.planning_sites(layout) if layout.sites[s]["kind"] == "temp" and layout.sites[s]["layer"] == 0}
+    spots = plan.temp_spots(layout, bottoms)
+    assert layout.sites[spots[0]]["kind"] == "temp" and layout.sites[spots[0]]["layer"] == 1
+    assert all(layout.sites[s]["kind"] == "ship" for s in spots[spots.index(next(s for s in spots if layout.sites[s]["kind"] == "ship")):])

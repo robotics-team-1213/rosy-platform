@@ -65,6 +65,7 @@ STERN = dict(boxes=((0., 50., -65., 65., 6.), (0., 6.5, -65., 65., 11.), (43.5, 
 # jaw opening fitted too, IoU 0.15 -> 0.68): 16 mm higher and 8 mm to the side of the D r06 CAD, the axis meeting the jaw axis 25 mm further
 # out, about the same 34 deg down. One frame at one pose: lens height and aim trade off; refit on frames at other poses.
 WRIST_PHOTO = dict(lens_m=[.0338, .008, .0671], axis_hit_x_m=.1328)
+TEMP_TIERS = 3  # plate v11: 3 lanes x 3 tiers (Confluence 15368863); tier 0 keeps the lane's name, tier k is "<lane>-l<k>"
 R08_TIERS = 3 # the cell stacks three high (user, 11-08); the slot map lists tiers 82 and 84, the third sits one container (32.4 mm) higher
 R08_STACK = tuple((f"bar-{3 * layer + k + 1}", f"ship-h1r{row}-l{layer}", arm) for layer in range(R08_TIERS)
                   for k, (row, arm) in enumerate(((1, "arm_b"), (0, "arm_a"), (2, "arm_b"))))
@@ -226,8 +227,11 @@ class Layout:
                 centre = lanes[1][0]
             self.plates[tag] = dict(arm=name, centre=centre, lanes=lanes, outline=plate_outline(lanes, c["temp_radius_m"]))
             for i, (xy, yaw) in enumerate(lanes, 1):
-                self.sites[f"tmp-{tag}-{i}"] = dict(kind="temp", xy=xy, z=self.deck_z + self.box[2] / 2, yaw=yaw, plate=tag, lane=i)
+                for layer in range(TEMP_TIERS):
+                    self.sites[f"tmp-{tag}-{i}" + (f"-l{layer}" if layer else "")] = dict(
+                        kind="temp", xy=xy, z=self.deck_z + self.box[2] * (layer + .5), yaw=yaw, plate=tag, lane=i, layer=layer, stack=f"tmp-{tag}-{i}")
         self.ship_xy = {n: s["xy"] for n, s in self.sites.items() if s["kind"] == "ship"}
+        self.stack_at = {(s["stack"], s["layer"]): n for n, s in self.sites.items() if "stack" in s}  # what stands on what, ship and plates
         if c["ship_source"] == "r08-berth":
             for s in self.sites.values():
                 if s["kind"] == "temp" and under_hull(self, s):

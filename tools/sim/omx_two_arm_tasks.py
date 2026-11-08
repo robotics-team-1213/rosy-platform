@@ -21,7 +21,7 @@ ARM_RADIUS, ARM_MARGIN = .03, .005  # capsule stand-in for a link; MuJoCo contac
 RELEASE_DROP = .005     # fixture stack_release_clearance_m; layer 0 rests on studs (floor enforced) and the temp lanes have a funnel
 RELEASE_DROP_UPPER = RELEASE_DROP  # onto a container too (a lower drop was only needed while single-contact deck meshes made boxes creep; see omx_two_arm_world)
 LINK_MARGIN = .004      # link3 and link4 (the wrist) must clear every standing container by this much; MuJoCo: failures sat at -3 to -6 mm, passes at +8 mm or more
-CAPACITY = 3             # lanes per temporary plate (3 x 1 each)
+CAPACITY = 3 * sites_mod.TEMP_TIERS  # containers per temporary plate: 3 lanes (3 x 1 each), 3 tiers (plate v11)
 
 
 class PlanRefused(ValueError):
@@ -154,12 +154,12 @@ def validate(layout, task, data=None):
         elif here.get(c) != a:
             problems.append(f"{sid}: {c} is not at {a} (it is at {here.get(c)})")
         sa = layout.sites[a]
-        if sa["kind"] == "ship" and (above := f"ship-{sa['stack']}-l{sa['layer'] + 1}") in occupied:
+        if (above := layout.stack_at.get((sa.get("stack"), sa.get("layer", 0) + 1))) in occupied:
             problems.append(f"{sid}: {c} would be taken from under {occupied[above]} at {above}")
         if b != "belt" and b in occupied:
             problems.append(f"{sid}: target {b} already holds {occupied[b]}")
         sb = layout.sites[b]
-        if sb["kind"] == "ship" and sb["layer"] > 0 and f"ship-{sb['stack']}-l{sb['layer'] - 1}" not in occupied:
+        if sb.get("layer", 0) > 0 and layout.stack_at.get((sb["stack"], sb["layer"] - 1)) not in occupied:
             problems.append(f"{sid}: {b} has nothing under it")
         for s in (a, b):
             if layout.sites[s].get("blocked"):
