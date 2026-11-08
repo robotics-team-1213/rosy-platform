@@ -91,7 +91,7 @@ export function createCameraPeerPanel({scope,headers,identity,locked,dialogs,onU
       remember.type='checkbox'; remember.checked=true; label.append(remember,document.createTextNode(' 이 연결 기억'));
       const approve=button('연결 승인',()=>decide(row,select.value,remember.checked));
       approve.setAttribute('kind','primary');
-      if (!sources.length) {approve.disabled=true; approve.setAttribute('reason','빈 카메라 자리가 없습니다. 기존 자격 자리는 위 '기기 연결'의 카메라 승인에서 교체하거나, 기억한 연결을 해제하세요.');}
+      if (!sources.length) {approve.disabled=true; approve.setAttribute('reason','빈 카메라 자리가 없습니다. 기존 자격 자리는 위 기기 연결의 카메라 승인에서 교체하거나, 기억한 연결을 해제하세요.');}
       const actions=document.createElement('div'); actions.className='camera-actions'; actions.append(select,label,approve);
       item.append(actions); waiting.append(item);
     }

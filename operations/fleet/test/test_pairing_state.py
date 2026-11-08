@@ -529,14 +529,17 @@ def test_replace_of_a_free_source_and_double_replace_are_refused(tmp_path):
     assert service.pending_listing()["paired_sources"][0]["replaceable"] is False
 
 
-def test_replace_does_not_touch_an_operator_revocation_made_before_confirm(tmp_path):
+def test_confirm_refuses_when_the_replaced_credential_was_revoked_meanwhile(tmp_path):
     service, store, clock = _service(tmp_path)
     old_id = _active(service, clock)
     phone, created, approve = _replace_approval(service, old_id)
     approval = approve()
     service.revoke(old_id, principal_id="alice")
     service.poll(created["request_id"], phone.bearer)
-    service.confirm(created["request_id"], phone.bearer, approval["credential_id"])
+    error = _status(lambda: service.confirm(created["request_id"], phone.bearer,
+                                            approval["credential_id"]))
+    assert (error.status, error.code) == (409, "REPLACE_TARGET_CHANGED")
     rows = {row["credential_id"]: row for row in store.credential_rows()}
     assert rows[old_id]["revoke_reason"] == "operator" and rows[old_id]["revoked_by"] == "alice"
-    assert rows[approval["credential_id"]]["state"] == "active"
+    assert rows[approval["credential_id"]]["state"] == "revoked"
+    assert service.sync_listing() == []

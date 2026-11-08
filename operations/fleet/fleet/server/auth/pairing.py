@@ -320,6 +320,13 @@ class PairingService:
             raise PairingError(409, "CREDENTIAL_MISMATCH", "credential id does not match")
         if not self.store.activate(entry.credential_id, replaces=entry.replaces):
             self._close(entry, "rejected", self._monotonic())
+            if entry.replaces is not None:
+                # The new credential was rolled back to pending: do not leave it dangling.
+                self.store.revoke(entry.credential_id, principal_id=None, reason="replace_target_changed")
+                self.store.audit(action="replace", outcome="target_changed", principal_id=None,
+                                 target=entry.replaces, device_kind=OVERHEAD_CAMERA)
+                raise PairingError(409, "REPLACE_TARGET_CHANGED",
+                                   "the credential being replaced changed; ask the operator to approve again")
             raise PairingError(410, "PAIRING_REQUEST_CLOSED", "credential is no longer pending")
         self.store.audit(action="confirm", outcome="active", principal_id=None,
                          target=entry.credential_id, device_kind=OVERHEAD_CAMERA)

@@ -96,15 +96,20 @@ class PairingStore:
         with closing(self._connect()) as connection, connection:
             cursor = connection.execute(
                 "UPDATE device_credentials SET state='active', confirmed_at=? "
-                "WHERE credential_id=? AND state='pending_confirm'",
-                (self._clock(), credential_id))
+                "WHERE credential_id=? AND state='pending_confirm' AND expires_at>?",
+                (self._clock(), credential_id, self._clock()))
             if cursor.rowcount != 1:
                 return False
             if replaces is not None:
-                connection.execute(
+                # The target must still be the one active, non-peer credential of this source.
+                old = connection.execute(
                     "UPDATE device_credentials SET state='revoked', revoked_at=?, "
-                    "revoke_reason='replaced' WHERE credential_id=? AND state!='revoked'",
-                    (self._clock(), replaces))
+                    "revoke_reason='replaced' WHERE credential_id=? AND state='active' "
+                    "AND peer_relationship_id IS NULL AND source_id=(SELECT source_id FROM "
+                    "device_credentials WHERE credential_id=?)", (self._clock(), replaces, credential_id))
+                if old.rowcount != 1:
+                    connection.rollback()
+                    return False
         return True
 
     def revoke(self, credential_id: str, *, principal_id: str | None, reason: str) -> bool:
