@@ -23,9 +23,17 @@ def test_every_plan_step_gets_its_own_goal():
             goals.append(policy.goal_vector(layout, step, {k: v for k, v in here.items() if k != step["container"]}))
             here[step["container"]] = step["to"]
     goals = np.array(goals)
-    assert goals.shape == (len(steps), 12)
+    assert goals.shape == (len(steps), policy.GOAL_SIZE)
     assert len({goal.tobytes() for goal in goals}) == len(steps)
-    assert all(goal[0] == (step["arm"] == "arm_a") and goal[1] == (step["arm"] == "arm_b") for goal, step in zip(goals, steps))
+    assert all(goal[0] == (step["arm"] == "arm_a") and goal[11] == (step["arm"] == "arm_b") for goal, step in zip(goals, steps))
+
+
+def test_both_arms_goals_share_one_vector_and_a_waiting_arm_is_zero():
+    """Concurrent mode: each frame carries both arms' current steps; an arm between steps has zeros."""
+    a, b = np.arange(1, 12, dtype=np.float32), -np.arange(1, 12, dtype=np.float32)
+    both = policy.goal_of({"arm_b": b, "arm_a": a})
+    assert both.shape == (policy.GOAL_SIZE,) and (both[:11] == a).all() and (both[11:] == b).all()
+    assert (policy.goal_of({"arm_b": b})[:11] == 0).all() and (policy.goal_of({}) == 0).all()
 
 
 def test_a_round_counts_steps_and_keeps_whole_runs_apart():

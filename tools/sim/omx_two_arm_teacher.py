@@ -65,7 +65,7 @@ class Teacher:
         self.n += 1
         self.world.advance(data, targets)
         both = ctxs is not None
-        ctxs = ctxs or [self]
+        ctxs = ctxs if both else [self]
         rep = self.world.contact_report(data, {c.carried for c in ctxs if c.carried}, by_arm=both)
         for c in ctxs:
             p = PREFIX[c.arm] if both else None
@@ -203,7 +203,8 @@ class Teacher:
                     queue[arm].pop(0)
                     held.update({z: s["id"] for z in pick | place})
                     ctx = Ctx(arm)
-                    running[arm] = (s, self.step_gen(data, s, {k: v for k, v in here.items() if k != s["container"]}, ctx), ctx, pick - place)
+                    ctx.step, ctx.here = s, {k: v for k, v in here.items() if k != s["container"]}  # what a recorder needs for this step's goal
+                    running[arm] = (s, self.step_gen(data, s, ctx.here, ctx), ctx, pick - place)
                     timing[s["id"]] = dict(arm=arm, start_s=round(frames / FPS, 2))
             if not running:
                 return rows, timing, f"deadlock: {[q[0]['id'] for q in queue.values() if q]} cannot start"
@@ -223,13 +224,14 @@ class Teacher:
                     continue
                 if ctx.phase in ("carry", "lower", "release", "retreat", "park") and not status.get(s["id"]):
                     status[s["id"]] = "picked"  # lifted: the conveyor may bring the next one
+                    timing[s["id"]]["picked_s"] = round(frames / FPS, 2)
                     here.pop(s["container"], None)
                 if ctx.phase in ("lower", "release", "retreat", "park"):  # the carry has left the source side (it crossed the middle)
                     held = {z: i for z, i in held.items() if not (i == s["id"] and z in pick_only)}
             ctxs = [r[2] for r in running.values()]
             for c in ctxs:
                 c.others |= {o.carried for o in ctxs if o is not c and o.carried}
-            self.frame(data, {a: targets.get(a, last[a]) for a in L.arms}, " | ".join(r[0]["id"] for r in running.values()) or "wait", ctxs or None)
+            self.frame(data, {a: targets.get(a, last[a]) for a in L.arms}, " | ".join(r[0]["id"] for r in running.values()) or "wait", ctxs)
             frames += 1
             if frames > max_s * FPS:
                 return rows, timing, f"timeout after {max_s} s"
