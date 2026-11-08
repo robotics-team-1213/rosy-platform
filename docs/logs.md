@@ -14624,3 +14624,9 @@ osy-d395-s1d\`.
 - 증거: 11-08 `land-speed-admission` 착지에서 시험 1건짜리 묶음 `test_omx_segments_browser.py`가 함께 돌 때 실패하고 혼자 통과해 LOAD-FLAKY로 판정됐는데, 그보다 먼저 "0 passed, 0 skipped"로 멈췄다.
 - gate 변화: 실패만 있는 브라우저 묶음은 다른 묶음과 같은 판정을 받는다(NEW면 멈추고, LOAD-FLAKY면 계속).
 - CE: 해당 없음 — 원인과 규칙이 코드와 회귀 시험에 남는다.
+
+## 2026-11-08 · uncommitted · docs(solutions): rclpy Node 비공개 이름 충돌 교훈
+- 변경: `docs/solutions/runtime-errors/ros-node-subclass-must-not-reuse-rclpy-private-names-2026-11-08.md` — battery_publisher가 `self._clock`으로 rclpy 시계를 가려 릴리스 175에서 기동 직후 죽은 일과, 스텁 시험이 이를 못 보는 이유.
+- 증거: b8xy canary 트레이스백(2026-11-08 13:19Z), 수정 커밋 `3ed5a498c6`와 회귀 시험.
+- gate 변화: 없음.
+- CE: 새 교훈 기록 — 실물 기동에서만 드러난 실패라 기록.
