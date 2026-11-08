@@ -284,6 +284,7 @@ def main(argv=None):
             out["look"] = looked
             if args.friction:
                 out["friction"] = {"chunks": ["slide_push", "slide_air"], "radius_m": round(float(np.linalg.norm(start - bias)), 4),
+                                   "gap_mm": round(float(gap), 1), "push_mm": args.mm,
                                    "pan_motor": "XL430-W250", "started": time.time()}
             out.update(run_push(cell, looked.get("library", lib), args.friction) if looked["verdict"] == "pass"
                        else {"result": f"refused: look {looked.get('why')}", "steps": [{"park": cell.act("park").get("ok")}]})

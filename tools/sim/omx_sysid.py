@@ -110,7 +110,7 @@ class Episodes:
             if len(ticks) <= 50:
                 continue  # omx_twin.replay skips these too
             _, state = twin.grid(ticks, "state")
-            self.items.append((f.name, ticks, cs.norm_to_rad(state[:, :5])))
+            self.items.append((f"{f.parent.name}/{f.name}", ticks, cs.norm_to_rad(state[:, :5])))  # unique across days and traces
         if not self.items:
             raise SystemExit("no episode with more than 50 ticks")
 
@@ -201,18 +201,22 @@ def servo(folders, cell_path, out, base="design", arm="arm_b", keys=("kp", "kv",
         res = least_squares(r_fit.fun, np.clip(x0, lo, hi), jac=r_fit.jac, bounds=(lo, hi), max_nfev=max_nfev, x_scale="jac")
         fitted = unpack(res.x, keys)
         score = {name: {"fit": rms(r_fit.errors(v, 1)), "hold": rms(r_hold.errors(v, 1))} for name, v in (("base", start), ("fitted", fitted))}
-    # sd from the Gauss-Newton covariance, carried from log space: sd(v) ~ v * sd(log v)
+    # sd from the Gauss-Newton covariance, carried from log space: sd(v) ~ v * sd(log v). The residuals are a smooth time
+    # series, not independent: scale by sqrt((1 + rho) / (1 - rho)) of their lag-1 autocorrelation (AR(1) effective samples).
     dof = max(1, res.fun.size - res.x.size)
+    per_joint = res.fun.reshape(-1, 5)
+    rho = float(np.clip(np.mean([np.corrcoef(c[:-1], c[1:])[0, 1] for c in per_joint.T if c.std() > 0] or [0.0]), 0, .99))
+    inflate = math.sqrt((1 + rho) / (1 - rho))
     try:
         cov = np.linalg.pinv(res.jac.T @ res.jac) * (2 * res.cost / dof)
-        sd_log = np.sqrt(np.clip(np.diag(cov), 0, None))
+        sd_log = np.sqrt(np.clip(np.diag(cov), 0, None)) * inflate
     except np.linalg.LinAlgError:
         sd_log = np.full(res.x.size, np.nan)
     sd = [{k: round(fitted[j][k] * float(sd_log[j * len(keys) + i]), 6) for i, k in enumerate(keys)} for j in range(5)]
     result = dict(schema=SCHEMA, base=base, arm=arm, keys=list(keys), gravity_comp=gravity_comp, cell=str(cell_path),
                   episodes=dict(fit=[e[0] for e in fit], hold=[e[0] for e in hold], untagged=episodes.untagged, other_arm=episodes.other),
                   fitted={j: {k: round(v, 6) for k, v in row.items()} for j, row in zip(BODY, fitted)},
-                  sd={j: row for j, row in zip(BODY, sd)}, rms_deg=score, nfev=int(res.nfev), status=res.message,
+                  sd={j: row for j, row in zip(BODY, sd)}, sd_inflation=round(inflate, 2), rms_deg=score, nfev=int(res.nfev), status=res.message,
                   at=dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"))
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
@@ -240,7 +244,7 @@ def sweeps(rows):
                 samples, last = [], None
                 for x in seg:
                     p = (x.get("pwm") or {}).get(PAN)
-                    if p is not None and x["pwm"] != last:
+                    if p is not None and x["pwm"] != last:  # shortcut: no sample time in the trace; a new reading equal in every joint is dropped
                         samples.append(((x["t"] - t0) / (t1 - t0), float(p)))
                     last = x.get("pwm")
                 out.append((seg[0]["chunk"], samples, seg[-1]["present"][0] - seg[0]["present"][0]))
@@ -248,6 +252,14 @@ def sweeps(rows):
         if r.get("chunk") in ("slide_push", "slide_air"):
             seg.append(r)
     return out
+
+
+def windows(gap_mm, push_mm):
+    """(box moving, jaws short of the box) as shares of the sweep, from the push's geometry: contact at gap/push."""
+    contact = gap_mm / push_mm
+    if not 0 < contact < .6:
+        raise SystemExit(f"gap {gap_mm} mm of a {push_mm} mm push leaves no clean window: push further")
+    return (contact + .15, .9), (.05, max(.06, .8 * contact))
 
 
 def one_sweep(rows, mass_kg, radius_m, motor="XL430-W250", volts=11.7, window=(.5, .9), before=(.05, .25)):
@@ -285,9 +297,9 @@ def one_sweep(rows, mass_kg, radius_m, motor="XL430-W250", volts=11.7, window=(.
 
 
 def friction(runs, motor="XL430-W250", volts=11.7):
-    """runs: [(trace rows, mass kg, radius m)]. One mu through the origin of force against weight (friction scales with the
+    """runs: [(trace rows, mass kg, radius m[, (window, before)])]. One mu through the origin of force against weight (friction scales with the
     load: two stack heights check that), kept only when every run reads friction clearly."""
-    rows = [one_sweep(r, m, rad, motor, volts) for r, m, rad in runs]
+    rows = [one_sweep(r, m, rad, motor, volts, *(rest[0] if rest else ())) for r, m, rad, *rest in runs]
     good = [r for r in rows if r["ok"]]
     out = dict(schema=FRICTION_SCHEMA, motor=motor, volts=volts, runs=rows, at=dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"))
     if len(good) < len(rows) or not rows:
@@ -309,6 +321,8 @@ def verdict(fit):
     mb, mn = sum(base) / len(base), sum(new) / len(new)
     if worse:
         return False, f"held-out worse: {', '.join(worse)}"
+    if len(fit['episodes']['hold']) < 2:
+        return False, 'a held-out score needs at least two episodes'
     if mn >= mb:
         return False, f"held-out mean {mb:.3f} -> {mn:.3f} deg: no better than {fit['base']}"
     return True, f"held-out mean {mb:.3f} -> {mn:.3f} deg over {len(fit['episodes']['hold'])} episodes"
@@ -328,17 +342,19 @@ def promote(fit, name, evidence=None, path=physics.FILE, base="design"):
         runs = ", ".join(f"{r['mass_kg'] * 1000:.0f} g" for r in fit["runs"])
         block = dict(base=base, source="fitted", date=fit["at"][:10],
                      method=f"omx_sysid.py friction, cell_push --friction pan sweep against an air sweep ({runs}), {fit['motor']} at {fit['volts']} V",
-                     evidence=evidence or "", note=why, container={"friction": [fit["mu"], .005, .0001], "priority": 1},
+                     evidence=evidence or "", note=why + "; priority 1 also sets the jaw-to-box friction in the sim (not measured)",
+                     container={"friction": [fit["mu"], .005, .0001], "priority": 1},
                      sd={"container": {"friction": fit["sd"]}})
     else:
         block = dict(base=fit["base"], source="fitted", date=fit["at"][:10],
                      method=f"omx_sysid.py servo, {', '.join(fit['keys'])} of joint1-5 by least squares over "
                             f"{len(fit['episodes']['fit'])} episodes, gravity_comp={fit['gravity_comp']}",
                      evidence=evidence or "", note=why, arms={fit["arm"]: fit["fitted"]}, sd={fit["arm"]: fit["sd"]})
+    physics.Physics(name, dict(doc, candidates={**doc["candidates"], name: block}))  # resolves (its base exists) before any write
     text = yaml.safe_dump({"candidates": {name: block}}, sort_keys=False, allow_unicode=True).split("\n", 1)[1]  # drop "candidates:"
     body = Path(path).read_text(encoding="utf-8")
     Path(path).write_text(body.rstrip("\n") + "\n" + text, encoding="utf-8")  # candidates is the file's last section
-    physics.Physics(name, physics.load(path))  # the appended block must resolve as a candidate
+    physics.Physics(name, physics.load(path))  # and the appended text parses back to it
     return why
 
 
@@ -403,7 +419,8 @@ def main(argv=None):
         for item in a.run:
             trace, grams, result = item.rsplit(":", 2)
             rows = [json.loads(line) for line in Path(trace).read_text(errors="replace").splitlines() if line.strip()]
-            runs.append((rows, float(grams) / 1000, json.loads(Path(result).read_text())["friction"]["radius_m"]))
+            info = json.loads(Path(result).read_text())["friction"]
+            runs.append((rows, float(grams) / 1000, info["radius_m"], windows(info["gap_mm"], info["push_mm"])))
         r = friction(runs, volts=a.volts)
         Path(a.out).mkdir(parents=True, exist_ok=True)
         (Path(a.out) / "friction.json").write_text(json.dumps(r, indent=1), encoding="utf-8")

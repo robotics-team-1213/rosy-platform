@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import sys
 import time
 from pathlib import Path
@@ -20,6 +21,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cell_pipeline as cp  # noqa: E402
 
 MAX_UNITS = 4.0     # 7.2 deg off home at most: the folded arm stays inside its own footprint
+MAX_HOLD_S = 10.0   # a longer hold only heats the servo
 SPEED = 0.85 * 5.0  # units/s, the share of GUARD_UNITS_PER_S chunk_library admits for streamed frames
 
 
@@ -27,9 +29,11 @@ def step_library(plan: dict, units: float, hold_s: float) -> dict:
     from grasp_planner import NAMES
     if not 0 < units <= MAX_UNITS:
         raise SystemExit(f"--units must be in (0, {MAX_UNITS}]")
+    if not 0 < hold_s <= MAX_HOLD_S:
+        raise SystemExit(f"--hold-s must be in (0, {MAX_HOLD_S}]")
     fps, grip = plan["fps"], plan["grip_closed"]
     home = [round(x, 3) for x in plan["home"]] + [grip]
-    ramp = max(2, round(units / SPEED * fps) + 1)
+    ramp = max(2, math.ceil(units / SPEED * fps) + 1)  # never faster than SPEED
     hold = max(1, round(hold_s * fps))
     chunks = {"home": [home]}
     for j in range(5):

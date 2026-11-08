@@ -28,6 +28,11 @@ def test_each_ramp_moves_one_joint_and_returns_home(tmp_path):
 def test_ramps_stay_small_and_move_only_supervised():
     with pytest.raises(SystemExit, match="--units"):
         cell_step.step_library(PLAN, 5.0, 1.0)
+    with pytest.raises(SystemExit, match="--hold-s"):
+        cell_step.step_library(PLAN, 2.0, 30.0)
+    lib = cell_step.step_library(PLAN, 0.4, 1.0)  # a short ramp rounds its frame count up, never its speed
+    ramp = [f[0] for f in lib["chunks"]["step_j1"]]
+    assert max(b - a for a, b in zip(ramp, ramp[1:])) * PLAN["fps"] <= cell_step.SPEED + 1e-9
     with pytest.raises(SystemExit, match="D-911"):
         cell_step.main(["--config", "nope.json"])
 

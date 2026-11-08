@@ -62,7 +62,7 @@ def test_the_layout_choice_defaults_to_design():
 
 def fit(base_hold, new_hold):
     return {"base": "design", "arm": "arm_b", "keys": ["kp", "damping"], "gravity_comp": False, "at": "2026-11-09T05:00:00+00:00",
-            "episodes": {"fit": ["e1", "e2"], "hold": ["e3"]},
+            "episodes": {"fit": ["e1", "e2"], "hold": ["e3", "e4"]},
             "rms_deg": {"base": {"fit": base_hold, "hold": base_hold}, "fitted": {"fit": new_hold, "hold": new_hold}},
             "fitted": {j: {"kp": 25.0, "damping": 0.2} for j in physics.JOINTS[:5]},
             "sd": {j: {"kp": 2.0, "damping": 0.05} for j in physics.JOINTS[:5]}}
@@ -73,6 +73,9 @@ def test_verdict_needs_a_better_hold_out_and_no_joint_worse():
     assert not sysid.verdict(fit([1, 1, 1, 1, 1], [1, 1, 1, 1, 1]))[0]
     ok, why = sysid.verdict(fit([1, 1, 1, 1, 1], [.2, .2, .2, .2, 1.2]))
     assert not ok and "joint5" in why  # a lower mean does not excuse one joint getting worse
+    one = fit([1, 1, 1, 1, 1], [.5, .5, .5, .5, .5])
+    one["episodes"]["hold"] = ["e3"]
+    assert sysid.verdict(one) == (False, "a held-out score needs at least two episodes")
 
 
 def test_promote_appends_a_candidate_and_never_overwrites(tmp_path):
@@ -90,6 +93,11 @@ def test_promote_appends_a_candidate_and_never_overwrites(tmp_path):
         sysid.promote(fit([1, 1, 1, 1, 1], [.5, .5, .5, .5, .5]), "servo-test", None, path)
     with pytest.raises(SystemExit, match="not promoted"):
         sysid.promote(fit([1, 1, 1, 1, 1], [2, 2, 2, 2, 2]), "servo-worse", None, path)
+    written = path.read_text(encoding="utf-8")
+    orphan = dict(fit([1, 1, 1, 1, 1], [.5, .5, .5, .5, .5]), base="no-such-base")
+    with pytest.raises(ValueError, match="no physics candidate"):
+        sysid.promote(orphan, "servo-orphan", None, path)
+    assert path.read_text(encoding="utf-8") == written  # checked before anything is written
 
 
 def test_next_puts_assumed_constants_first_with_an_experiment():
@@ -112,6 +120,9 @@ def test_the_two_arm_world_builds_from_the_chosen_candidate():
         assert m.actuator("b_gripper_joint_1").forcerange[1] == pytest.approx(0.2)
         dof = m.jnt_dofadr[m.joint("b_joint2").id]
         assert (m.dof_damping[dof], m.dof_armature[dof], m.dof_frictionloss[dof]) == pytest.approx((0.3, 0.01, 0.0))
+        assert m.geom_priority.max() == 0  # design leaves MuJoCo's pair rule (the larger friction) as it was
+        mimic = m.jnt_dofadr[m.joint("b_gripper_joint_2").id]
+        assert m.dof_damping[mimic] == pytest.approx(0.3)
 
 
 def sweep_rows(extra_pwm, pan_step=0.1, contact_from=0.4, noise=1.0, seed=0, ticks=150):
@@ -183,3 +194,9 @@ def test_episodes_say_which_arm_only_from_11_08(tmp_path):
         (tmp_path / name).mkdir()
         (tmp_path / name / "task.json").write_text(json.dumps({"io": io} if io else {"task": "strip-to-strip"}))
     assert [sysid.recorded_arm(tmp_path / n) for n in ("b", "a", "old", "missing")] == ["arm_b", "arm_a", None, None]
+
+
+def test_friction_windows_follow_the_push_geometry():
+    assert sysid.windows(10, 40) == ((pytest.approx(0.4), 0.9), (0.05, pytest.approx(0.2)))
+    with pytest.raises(SystemExit, match="push further"):
+        sysid.windows(30, 40)
