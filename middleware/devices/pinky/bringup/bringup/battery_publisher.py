@@ -21,7 +21,7 @@ class BatteryPublisher(Node):
         # its timers; until then it publishes nothing (fail-closed).
         self._battery_factory = battery_factory
         self.battery = None
-        self._clock = clock
+        self._monotonic = clock  # not _clock: that is rclpy Node's own (create_timer reads its .handle)
         self._read_failures = 0
         self._retry_at = 0.0
 
@@ -45,7 +45,7 @@ class BatteryPublisher(Node):
     def _ensure_battery(self):
         if self.battery is not None:
             return True
-        if self._clock() < self._retry_at:
+        if self._monotonic() < self._retry_at:
             return False
         try:
             self.battery = self._battery_factory()
@@ -77,7 +77,7 @@ class BatteryPublisher(Node):
             if self._read_failures > 1:
                 delay = min(self.MAX_BACKOFF_S,
                             self.timer_period * 2 ** (self._read_failures - 1))
-                self._retry_at = self._clock() + delay
+                self._retry_at = self._monotonic() + delay
             return None
 
     # Fail-closed (sensor_adc pattern): a failed bus transaction publishes

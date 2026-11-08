@@ -14628,3 +14628,9 @@ osy-d395-s1d\`.
 - 변경: `land_checks._ids`가 매개변수 부분에 공백이나 `\`가 있는 NEW id를 `path::test` 함수 id로 바꾸고 중복을 없앤다
 - 증거: feat/control-unit-remote-peer 착지가 `test_fleet_estop_partial_and_unknown_are_visible_on_phone[response1-비…-index.html]`를 혼자 다시 돌리다 "no tests ran"(exit 4)으로 판정 없이 멈췄고, main 대조도 같은 이유로 판정이 없었다
 - gate 변화: 없음
+
+## 2026-11-08 · uncommitted · docs(solutions): rclpy Node 비공개 이름 충돌 교훈
+- 변경: `docs/solutions/runtime-errors/ros-node-subclass-must-not-reuse-rclpy-private-names-2026-11-08.md` — battery_publisher가 `self._clock`으로 rclpy 시계를 가려 릴리스 175에서 기동 직후 죽은 일과, 스텁 시험이 이를 못 보는 이유.
+- 증거: b8xy canary 트레이스백(2026-11-08 13:19Z), 수정 커밋 `3ed5a498c6`와 회귀 시험.
+- gate 변화: 없음.
+- CE: 새 교훈 기록 — 실물 기동에서만 드러난 실패라 기록.

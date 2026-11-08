@@ -27,6 +27,7 @@ STACK_UNIT = "rosy-site-stack.service"
 MONITORING_OVERLAY = ["-f", "/opt/rosy/candidate/deploy/site/compose.monitoring.yaml"]
 ACCOUNT_OVERLAY = ["-f", "/opt/rosy/candidate/deploy/site/compose.account.yaml"]
 CONTROL_UNIT_OVERLAY = ["-f", "/opt/rosy/candidate/deploy/site/compose.control-unit.yaml"]
+CONTROL_UNIT_REMOTE_OVERLAY = ["-f", "/opt/rosy/candidate/deploy/site/compose.control-unit-remote.yaml"]
 COMPANIONS = {'monitoring': 'fleet', 'account': 'fleet', 'control-unit-peer': 'proxy'}
 SIGNATURE = "release.json.sig"
 EXIT_OK = 0
@@ -53,11 +54,12 @@ def allowed_overlays(env: dict[str, str]) -> list[str]:
     allowed = [[], pairing, omx, pairing + omx]  # D-785; Account is appended last.
     workcell = ["-f", "/opt/rosy/candidate/deploy/site/compose.workcell.yaml"]
     allowed += [base + workcell for base in allowed]
-    allowed += [base + CONTROL_UNIT_OVERLAY for base in allowed]  # D-960
+    allowed += [base + CONTROL_UNIT_OVERLAY + remote for base in allowed  # D-960; remote peer D-994
+                for remote in ([], CONTROL_UNIT_REMOTE_OVERLAY)]
     allowed += [base + MONITORING_OVERLAY for base in allowed]  # D-936
     if shlex.split(env.get("ROSY_SITE_PAIRING_COMPOSE", "")) not in allowed + [base + account for base in allowed]:
         raise Refused("ROSY_SITE_PAIRING_COMPOSE adds a Compose file other than "
-                      "the candidate's pairing, omx, workcell, control-unit, monitoring and Account overlays")
+                      "the candidate's pairing, omx, workcell, control-unit(-remote), monitoring and Account overlays")
     if env.get("COMPOSE_FILE") or env.get("COMPOSE_PROFILES"):
         raise Refused("site.env sets COMPOSE_FILE/COMPOSE_PROFILES")
     return shlex.split(env.get("ROSY_SITE_PAIRING_COMPOSE", ""))

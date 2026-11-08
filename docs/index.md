@@ -354,6 +354,7 @@
 ## 최근 기록
 
 - 2026-11-08 · uncommitted · fix(land): 공백·`\u` 이스케이프가 든 매개변수 시험 id는 함수 단위로 다시 돌린다
+- 2026-11-08 · uncommitted · docs(solutions): rclpy Node 비공개 이름 충돌 교훈
 - 2026-11-08 · uncommitted · fix(land): 실패만 있는 브라우저 묶음을 "통과 0건"으로 멈추지 않는다
 - 2026-11-08 · uncommitted · fix(land): 같은 트리 재사용도 새 커밋의 게시 증거로 남긴다
 - 2026-11-08 · uncommitted · fix(land): 명시 FULL과 게시가 앞 후보의 통과를 내용 기준으로 재사용한다 (D-970 3)
