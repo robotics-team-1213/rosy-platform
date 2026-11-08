@@ -131,8 +131,6 @@ roles:
     rosy-site-tools-autoupdate.timer: {run: timer, channel: updater, template: deploy/site/rosy-site-tools-autoupdate.timer, doc: docs/adr/D-871-auto-update-every-host-service-and-update-view.md}
     rosy-test-storage.service: {run: oneshot, channel: copy, template: "rosy-ops:deploy/lab-host-storage/rosy-test-storage.service", copies: {rosy-test/maintenance/host_storage.py: "rosy-ops:tools/host_storage.py"}, doc: "rosy-ops:docs/lab-host-storage.md"}
     rosy-test-storage.timer: {run: timer, channel: copy, template: "rosy-ops:deploy/lab-host-storage/rosy-test-storage.timer", doc: "rosy-ops:docs/lab-host-storage.md"}
-    rosy-account-tls-renew.service: {run: "off", channel: retired, note: "Account TLS renewal moved to R 2026-11-09 (D-994); disabled here, remove with the rosy-site fallback cleanup", doc: docs/deployment/control-units.md}
-    rosy-account-tls-renew.timer: {run: "off", channel: retired, doc: docs/deployment/control-units.md}
     rosy-site-config-reload.service: {run: "off", channel: retired, doc: deploy/site/README.md}
     rosy-site-fleet-mdns.service: {run: "off", channel: retired, doc: deploy/site/README.md}
     rosy-site-overhead-mdns.service: {run: "off", channel: retired, doc: deploy/site/README.md}
