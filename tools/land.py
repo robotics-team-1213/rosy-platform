@@ -427,7 +427,7 @@ def rounds(args, wt: Path, branch: str, main_co: Path, python: str, qdir, ticket
                     # selection (affected + guards, or FULL again) on this candidate, so peers cannot starve us.
                     invocations, note = select(wt, full_main, python, head=main_sha, landed=True)
                     reusable = reusable and (prepared := land_full.prepared(wt, branch, full_main)) is not None
-                    reusable = reusable and not prepared.get("reused")  # D-970 4: a cross-tree pass is not push evidence
+                    reusable = reusable and not prepared.get("reused")  # D-970 4: an auto tier's cross-tree pass is not push evidence
                     summary.append(f"round {round_no}: FULL tier passed over main {full_main[:10]}; main delta"
                                    f" {full_main[:10]}..{main_sha[:10]} runs its {'affected' if not note else 'delta' if note.startswith(land_selection.DELTA_NOTE) else 'FULL'} tier")
                     if args.tests != "full" and (held := land_speculate.held(sys.modules[__name__], wt, branch, full_main, candidate)) is not None:
@@ -466,7 +466,7 @@ def rounds(args, wt: Path, branch: str, main_co: Path, python: str, qdir, ticket
             summary += (guarded := land_guards.first(wt, args, invocations, logdir, round_no, run_tests))  # NEW stops
             if out(wt, "rev-parse", "HEAD") != candidate:
                 raise Stop(f"HEAD changed during guards; {candidate[:10]} was tested; retry the landing")
-            land_selection.require_eligible(sys.modules[__name__], args, land_selection.eligible(sys.modules[__name__], guarded), guarded)
+            land_selection.require_eligible(sys.modules[__name__], args, land_selection.eligible(sys.modules[__name__], guarded, args), guarded)
             if guarded and out(wt, "rev-parse", "main") != main_sha:
                 print("[land] main moved during the guard round; merging again")
                 continue
@@ -475,12 +475,12 @@ def rounds(args, wt: Path, branch: str, main_co: Path, python: str, qdir, ticket
             if out(wt, "rev-parse", "HEAD") != candidate:
                 raise Stop(f"HEAD changed during checks; {candidate[:10]} was tested; retry the landing")
             # pre-push reruns its gate after a LOAD-FLAKY or a pass taken from another tree
-            reusable = reusable and not land_mainred.CARRIED and land_selection.eligible(sys.modules[__name__], guarded + tested)
+            reusable = reusable and not land_mainred.CARRIED and land_selection.eligible(sys.modules[__name__], guarded + tested, args)
             land_selection.require_eligible(sys.modules[__name__], args, reusable, guarded + tested)
             summary += [f"round {round_no}: {s}" for s in tested]
             if note:
                 full_main = main_sha
-                tier = land_selection.tier(sys.modules[__name__], guarded + tested, True)
+                tier = land_selection.tier(sys.modules[__name__], guarded + tested, True, args)
                 land_full.save(wt, branch, candidate, main_sha, tier, invocations)
                 summary.append(f"round {round_no}: FULL tier took {time.monotonic() - began:.0f} s wall clock")
             if invocations or tested_main is None:
