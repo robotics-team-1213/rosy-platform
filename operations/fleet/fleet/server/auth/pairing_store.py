@@ -91,13 +91,21 @@ class PairingStore:
                     (credential_id, OVERHEAD_CAMERA, source_id, token_sha256, device_label,
                      principal_id, self._clock(), expires_at))
 
-    def activate(self, credential_id: str) -> bool:
+    def activate(self, credential_id: str, *, replaces: str | None = None) -> bool:
+        """Activate one pending credential; with ``replaces`` revoke that one in the same transaction."""
         with closing(self._connect()) as connection, connection:
             cursor = connection.execute(
                 "UPDATE device_credentials SET state='active', confirmed_at=? "
                 "WHERE credential_id=? AND state='pending_confirm'",
                 (self._clock(), credential_id))
-        return cursor.rowcount == 1
+            if cursor.rowcount != 1:
+                return False
+            if replaces is not None:
+                connection.execute(
+                    "UPDATE device_credentials SET state='revoked', revoked_at=?, "
+                    "revoke_reason='replaced' WHERE credential_id=? AND state!='revoked'",
+                    (self._clock(), replaces))
+        return True
 
     def revoke(self, credential_id: str, *, principal_id: str | None, reason: str) -> bool:
         with closing(self._connect()) as connection:

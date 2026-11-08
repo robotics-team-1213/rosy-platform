@@ -77,6 +77,7 @@ class _Request:
     approved_at: float | None = None
     credential_id: str | None = None
     source_id: str | None = None
+    replaces: str | None = None  # D-999: revoked in the same transaction that activates this one
     token: str | None = field(default=None, repr=False)
     expires_at: str | None = None
 
@@ -189,12 +190,40 @@ class PairingService:
     def _code_mac(self, code: str) -> bytes:
         return hmac.new(self._code_key, code.encode("ascii"), sha256).digest()
 
-    def _source_has_credential(self, source_id: str) -> bool:
-        if self.peer_source_owned is not None and self.peer_source_owned(source_id):
-            return True
+    def _live_rows(self, source_id: str) -> list[dict]:
         wall = self._wall()
-        return any(row["source_id"] == source_id and row["state"] in ("pending_confirm", "active")
-                   and row["expires_at"] > wall for row in self.store.credential_rows())
+        return [row for row in self.store.credential_rows()
+                if row["source_id"] == source_id and row["state"] in ("pending_confirm", "active")
+                and row["expires_at"] > wall]
+
+    def _peer_owned(self, source_id: str) -> bool:
+        return self.peer_source_owned is not None and bool(self.peer_source_owned(source_id))
+
+    def _source_has_credential(self, source_id: str) -> bool:
+        return self._peer_owned(source_id) or bool(self._live_rows(source_id))
+
+    def _replaceable(self, row: dict) -> bool:
+        return row["state"] == "active" and row.get("peer_relationship_id") is None             and not row["credential_id"].startswith("cam-peer-")
+
+    def _check_replace(self, source_id: str, replace_credential_id: str | None) -> None:
+        """Refuse unless the source is free, or is held by exactly the credential the operator named."""
+        if self._peer_owned(source_id):
+            raise PairingError(409, "SOURCE_HAS_CREDENTIAL",
+                               "source is held by a remembered peer connection; revoke that connection")
+        rows = self._live_rows(source_id)
+        if replace_credential_id is None:
+            if rows:
+                raise PairingError(409, "SOURCE_HAS_CREDENTIAL",
+                                   "source already has a credential; choose to replace it",
+                                   replace_credential_id=next(
+                                       (r["credential_id"] for r in rows if self._replaceable(r)), None))
+            return
+        if any(row["state"] == "pending_confirm" for row in rows):
+            raise PairingError(409, "SOURCE_PENDING_CONFIRM",
+                               "another approval for this source is waiting for its phone")
+        if len(rows) != 1 or rows[0]["credential_id"] != replace_credential_id                 or not self._replaceable(rows[0]):
+            raise PairingError(409, "REPLACE_TARGET_CHANGED",
+                               "the credential to replace changed or was revoked; reload the list")
 
     # -- phone ------------------------------------------------------------
 
@@ -289,11 +318,14 @@ class PairingService:
             raise PairingError(409, "NOT_DELIVERED", "the result has not been collected")
         if not hmac.compare_digest(credential_id.encode(), entry.credential_id.encode()):
             raise PairingError(409, "CREDENTIAL_MISMATCH", "credential id does not match")
-        if not self.store.activate(entry.credential_id):
+        if not self.store.activate(entry.credential_id, replaces=entry.replaces):
             self._close(entry, "rejected", self._monotonic())
             raise PairingError(410, "PAIRING_REQUEST_CLOSED", "credential is no longer pending")
         self.store.audit(action="confirm", outcome="active", principal_id=None,
                          target=entry.credential_id, device_kind=OVERHEAD_CAMERA)
+        if entry.replaces is not None:
+            self.store.audit(action="replace", outcome="revoked", principal_id=None,
+                             target=entry.replaces, device_kind=OVERHEAD_CAMERA)
         self._close(entry, "confirmed", self._monotonic())
         return {"state": "confirmed", "credential_id": credential_id}
 
@@ -311,7 +343,8 @@ class PairingService:
     # -- console ----------------------------------------------------------
 
     @_locked
-    def approve(self, request_id: str, *, code: str, source_id: str, principal_id: str) -> dict:
+    def approve(self, request_id: str, *, code: str, source_id: str, principal_id: str,
+                replace_credential_id: str | None = None) -> dict:
         entry = self._entry(request_id)
         if entry.state in _CLOSED:
             raise PairingError(410, "PAIRING_REQUEST_CLOSED", f"pairing request is {entry.state}")
@@ -325,9 +358,7 @@ class PairingService:
         if kind != "paired":
             raise PairingError(409, "SOURCE_NOT_PAIRED",
                                "static sources use their configured token, not pairing")
-        if self._source_has_credential(source_id):
-            raise PairingError(409, "SOURCE_HAS_CREDENTIAL",
-                               "source already has a credential; revoke it first")
+        self._check_replace(source_id, replace_credential_id)
         supplied = code if isinstance(code, str) and pairing.CODE_PATTERN.fullmatch(code) else ""
         if not hmac.compare_digest(self._code_mac(supplied), entry.code_mac):
             entry.attempts_left -= 1
@@ -348,6 +379,7 @@ class PairingService:
                                   expires_at=expires_wall)
         self.store.audit(action="approve", outcome="approved", principal_id=principal_id,
                          target=credential_id, device_kind=OVERHEAD_CAMERA)
+        entry.replaces = replace_credential_id
         entry.state = "approved"
         entry.approved_at = self._monotonic()
         entry.code_mac = None
@@ -356,6 +388,7 @@ class PairingService:
         entry.token = token
         entry.expires_at = _iso(expires_wall)
         return {"request_id": request_id, "credential_id": credential_id, "source_id": source_id,
+                "replaces": replace_credential_id,
                 "site_ca_fingerprint": self.site_ca_fingerprint, "expires_at": entry.expires_at,
                 "confirm_within_s": int(CONFIRM_DEADLINE_S)}
 
@@ -399,15 +432,23 @@ class PairingService:
         } for entry in self._requests.values() if entry.state in ("pending", "revealed")]
         return {
             "requests": rows,
-            "paired_sources": [{"source_id": source,
-                                "has_credential": self._source_has_credential(source)}
-                               for source in self.paired_source_ids],
+            "paired_sources": [self._source_listing(source) for source in self.paired_source_ids],
             "site_ca_fingerprint": self.site_ca_fingerprint,
             # Since Fleet start: a jammed queue is visible to the operator (D-341 7).
             "unauthenticated_requests": self._unauthenticated_requests,
             "refused_requests": self._refused_requests,
             "commit_mismatches": self._commit_mismatches,
         }
+
+    def _source_listing(self, source: str) -> dict:
+        rows = self._live_rows(source)
+        held = next((r for r in rows if self._replaceable(r)), None)
+        return {"source_id": source,
+                "has_credential": self._peer_owned(source) or bool(rows),
+                # The occupant an operator may replace; absent while a peer owns it or an approval waits.
+                "credential_id": held["credential_id"] if held else None,
+                "device_label": held["device_label"] if held else None,
+                "replaceable": held is not None and len(rows) == 1 and not self._peer_owned(source)}
 
     @_locked
     def credentials_summary(self) -> dict:
