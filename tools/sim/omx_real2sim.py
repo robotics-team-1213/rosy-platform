@@ -268,7 +268,7 @@ def measure(run, prev_path=None):
         results = {k: f.result() for k, f in done.items()}
     tp = results["temp_plates"]
     snap = dict(schema=SCHEMA, taken_at=json.loads((run / "capture.json").read_text())["taken_at"] if (run / "capture.json").exists() else None,
-                frames={c: hashlib.sha256(p.read_bytes()).hexdigest() for c, p in frames.items()},
+                frames={c: "sha256:" + hashlib.sha256(p.read_bytes()).hexdigest() for c, p in frames.items()},
                 camera=dict(top=layout.fixture["real_cameras"]["top"]),
                 items=dict(temp_plates=dict(plates={t: p["lanes"] for t, p in tp["plates"].items() if "lanes" in p},
                                             seen={t: p["seen"] for t, p in tp["plates"].items() if "lanes" in p},

@@ -2,7 +2,7 @@
  "schema": "rosy.omx-cell-snapshot.v1",
  "taken_at": "2026-11-08T13:57:00+00:00",
  "frames": {
-  "top": "1e4ed36ba3ab8e0d5b565dc28df6fce34e14e18d5ed8c59bf65b854f92e0d0ac"
+  "top": "sha256:1e4ed36ba3ab8e0d5b565dc28df6fce34e14e18d5ed8c59bf65b854f92e0d0ac"
  },
  "camera": {
   "top": {
