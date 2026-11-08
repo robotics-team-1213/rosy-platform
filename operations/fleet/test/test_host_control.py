@@ -419,6 +419,8 @@ def _helper_copy(tmp_path, role):
     for name in ("systemctl", "logger", "systemd-run"):
         (stub / name).write_text(f'#!/bin/sh\necho "{name} $*" >> {tmp_path}/calls\n')
     (stub / "flock").write_text("#!/bin/sh\nexit 0\n")  # the helper's own `flock 9`; sessions use real locks
+    # The test PCs have real GPUs: the helper sees only the pids a test writes to gpu-pids.
+    (stub / "nvidia-smi").write_text(f"#!/bin/sh\ncat {tmp_path}/gpu-pids 2>/dev/null\nexit 0\n")
     for path in stub.iterdir():
         path.chmod(0o755)
     (tmp_path / "conf").mkdir(exist_ok=True)
@@ -429,6 +431,7 @@ def _helper_copy(tmp_path, role):
                      ("/run/systemd/shutdown/scheduled", sched),
                      ("/run/rosy-host-control", tmp_path / "state"),
                      ("HOME_ROOT=/home", f"HOME_ROOT={tmp_path / 'home'}"),
+                     ("PROC=/proc", f"PROC={tmp_path / 'proc'}"),
                      ("PATH=/usr/sbin:/usr/bin:/sbin:/bin", f"PATH={stub}:/usr/bin:/bin")):
         assert old in text
         text = text.replace(old, str(new))
@@ -600,6 +603,81 @@ def test_a_bare_touch_busy_ends_with_the_boot(tmp_path):
     assert helper("reboot-if-free") == 7
     os.utime(busy, (1, 1))
     assert helper("reboot-if-free") == 0
+
+
+@posix
+def test_the_nightly_gate_schedules_nothing_and_answers_like_reboot_if_free(tmp_path):
+    """D-991 2026-11-09: the nightly timer cut training and test runs; it now asks the same helper."""
+    helper = _helper_copy(tmp_path, "model")
+    assert helper("nightly-gate") == 0
+    assert not (tmp_path / "scheduled").exists() and "systemd-run" not in (tmp_path / "calls").read_text()
+    session = _arm_session(tmp_path)
+    assert helper("nightly-gate") == 6
+    os.close(session)
+    sleeper = subprocess.Popen(["sleep", "30"])
+    try:
+        _job_lock(tmp_path, sleeper.pid)
+        assert helper("nightly-gate") == 7
+    finally:
+        sleeper.kill()
+        sleeper.wait()
+    assert helper("nightly-gate") == 0
+
+
+@posix
+def test_a_learning_gpu_lease_is_a_job(tmp_path):
+    """train_job, experiment_train and Isaac admission flock ~/.cache/rosy-learning/gpu.lock, not ~/rosy-jobs."""
+    helper = _helper_copy(tmp_path, "ai")
+    lease = tmp_path / "home" / "op" / ".cache" / "rosy-learning" / "gpu.lock"
+    lease.parent.mkdir(parents=True)
+    fd = os.open(lease, os.O_CREAT | os.O_RDWR)
+    fcntl.flock(fd, fcntl.LOCK_EX)
+    assert helper("nightly-gate") == 7
+    assert helper("reboot-if-free") == 7
+    os.close(fd)
+    assert lease.exists()  # a finished trainer leaves its file
+    assert helper("nightly-gate") == 0
+
+
+def _gpu_process(tmp_path, pid, cgroup):
+    (tmp_path / "proc" / str(pid)).mkdir(parents=True, exist_ok=True)
+    (tmp_path / "proc" / str(pid) / "cgroup").write_text(f"0::{cgroup}\n")
+    with (tmp_path / "gpu-pids").open("a") as pids:
+        pids.write(f"{pid}\n")
+
+
+@posix
+@pytest.mark.parametrize("cgroup, blocks", [
+    ("/user.slice/user-1000.slice/user@1000.service/app.slice/rosy-review.service", False),
+    ("/system.slice/docker-0123.scope", True),
+    ("/user.slice/user-1000.slice/session-92270.scope", True),
+    ("/user.slice/user-1000.slice/user@1000.service/app.slice/run-r1.scope", True),
+    ("/system.slice/tailscaled.service", True),
+    ("/system.slice/ssh.service", True),
+])
+def test_a_hand_run_gpu_job_blocks_and_a_resident_gpu_service_does_not(tmp_path, cgroup, blocks):
+    """2026-11-09 AI PC: rosy-ollama keeps a model on the GPU all day; a hand-run trainer has no job file."""
+    helper = _helper_copy(tmp_path, "ai")
+    _gpu_process(tmp_path, 2947, "/user.slice/user-1000.slice/user@1000.service/app.slice/rosy-ollama.service")
+    assert helper("nightly-gate") == 0
+    _gpu_process(tmp_path, 1371545, cgroup)
+    assert helper("nightly-gate") == (7 if blocks else 0)
+
+
+@posix
+def test_a_gpu_pid_that_vanished_or_lies_is_skipped(tmp_path):
+    helper = _helper_copy(tmp_path, "model")
+    (tmp_path / "gpu-pids").write_text("123\n0\n../1\nNo running processes found\n" + "9" * 40 + "\n")
+    assert helper("nightly-gate") == 0  # 123 has no /proc entry
+
+
+@pytest.mark.parametrize("role", ["model_pc", "ai_pc", "site"])
+def test_every_nightly_reboot_asks_the_helper_before_the_warning_and_before_the_reboot(role):
+    unit = (SITE.parent / role / "host-state" / "rosy-nightly-reboot.service").read_text(encoding="utf-8")
+    gate = "/usr/local/sbin/rosy-host-control nightly-gate"
+    assert f"ExecCondition={gate}\n" in unit
+    start = next(line for line in unit.splitlines() if line.startswith("ExecStart="))
+    assert start.index("sleep 120") < start.index(f"{gate} || exit 0") < start.index("/bin/systemctl reboot")
 
 
 @posix

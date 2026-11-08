@@ -64,3 +64,14 @@
 | D-427 | part와 소유 ID를 바꾸지 않는다 |
 | D-429 | Fleet API와 도우미의 방향을 유지하며, 화면은 권한을 갖지 않는다 |
 | D-430 | 최종 장치 권한을 바꾸지 않는다. 팔 세션을 끊는 경로 하나를 닫는다 |
+
+### 보강 (2026-11-09): 야간 재부팅도 도우미에게 묻는다
+
+사용자 결정("모델 PC나 AI PC가 정해진 시각에 껐다 켜져서 하던 일을 처음부터 다시 한다", 방안 1 처리). 다른 모델 세 개(GLM-5.3, DeepSeek, codex)에도 독립적으로 물었고, 셋 모두 같은 결론을 냈다.
+
+- 모델 PC(05:00)와 AI PC(06:00)의 `rosy-nightly-reboot.service`는 업데이트 동결만 보고 재부팅했다. 관제 PC는 팔 세션만 봤다. 그래서 학습·원격 시험·Isaac 생산이 매일 그 시각에 끊겼다. 2026-11-09 03:30 AI PC에서는 `train-*.lock`을 잡은 `lerobot-train`이 2시간째 돌고 있었다.
+- **세 PC의 야간 서비스가 `rosy-host-control nightly-gate`를 두 번 부른다.** 한 번은 경고 전 `ExecCondition`이고, 한 번은 2분 대기 뒤 재부팅 직전이다. 거절되면 그날 밤 재부팅을 건너뛴다. `nightly-gate`는 아무것도 예약하지 않고, `reboot-if-free`와 같은 세션·작업 판정만 돌려준다(종료 코드 6·7).
+- **작업 판정에 두 가지를 더한다(`reboot-if-free`에도 적용된다).** 하나는 학습 임대 `~/.cache/rosy-learning/gpu.lock`이다(`train_job`·`experiment_train`·Isaac admission이 `~/rosy-jobs` 대신 이것을 잡는다). 다른 하나는 손으로 띄운 GPU 작업이다. nvidia-smi의 compute 프로세스 가운데 cgroup이 유닛(`*.service`)이 아닌 것, 그리고 `ssh`·`sshd`·`tailscaled` 아래에 있는 것을 작업으로 본다. 상주 서비스(`rosy-ollama` 등)는 세지 않는다. 그래서 이 판정은 `host_probe.py`가 세는 범위보다 넓다. 시험 배정은 바꾸지 않는다.
+- **강제 재부팅은 없다.** 가동 시간이 3일을 넘으면 guard가 `reboot_overdue`를 기록하고 Fleet PC 정비 화면에 "작업 때문에 야간 재부팅이 며칠째 밀림"으로 보여 준다(사용자 결정 3일, 보고만). 도우미가 없거나 옛 판이어도 재부팅을 건너뛴다. 그 경우도 같은 표시로 드러난다.
+- **설치:** 유닛은 `safe` 줄이고 도우미는 `approval` 줄이다. 그래서 PC마다 `install <역할> --approve /usr/local/sbin/rosy-host-control`로 둘을 함께 설치한다. 유닛만 들어가면 재부팅이 조용히 멈춘다. 관제 PC의 기존 팔 세션 `ExecCondition`은 도우미와 무관한 방어로 남긴다.
+- 남는 한계는 셋이다. 잠금도 GPU도 쓰지 않는 CPU 작업(사람의 대화형 셸, CPU 전용 pytest를 손으로 띄운 것)은 보지 못한다. 재판정과 재부팅 사이 수 초 안에 시작한 작업도 막지 못한다. 매일 재부팅하는 원래 이유는 기록에 없다. 2주 관측(건너뛴 밤 수, 재부팅 뒤 이상)을 보고 유지·주 1회·제거를 다시 판단한다.

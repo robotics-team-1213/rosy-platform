@@ -9,6 +9,8 @@
 #                   (exit 6) while an OMX arm session holds its lock. The caller is the guard's ladder
 #                   or a person who already saw the running jobs.
 #   reboot-if-free  the same, also refused (exit 7) while a job or a busy hold is live on this PC
+#   nightly-gate    schedules nothing: exit 0 when reboot-if-free would pass the session and job checks, else
+#                   6 or 7. rosy-nightly-reboot.service runs it as root before the warning and before the reboot.
 #   recheck-reboot  this helper's own timer, 30 s before the reboot: cancels the reboot it scheduled
 #                   if an arm session began during the delay. Not reachable from the SSH keys.
 #   cancel-reboot   shutdown -c, only for the reboot this helper scheduled (else exit 4); the
@@ -29,6 +31,7 @@ STATE=/run/rosy-host-control                # tmpfs: the marker disappears with 
 SITE_CONF=/etc/rosy/site
 BACKUP=/var/lib/rosy-host-control/backup
 HOME_ROOT=/home
+PROC=/proc
 RECHECK_AFTER_S=570                         # shutdown -r +10 is 600 s
 ACTION=${1:-}
 UNIT=${2:-}
@@ -41,12 +44,32 @@ scheduled_usec() { sed -n 's/^USEC=//p' "$SCHEDULED" 2>/dev/null || true; }
 # The lock the nightly reboot yields to (rosy-nightly-reboot.service), read from /proc/locks. These
 # files are users': root never opens one, because a FIFO would hang this helper inside its own lock,
 # and a probing flock would make a session starting that instant fail (cell_params_web.session_busy).
-arm_session_held() {
+flock_held() {
   local lock inode
   [ -r /proc/locks ] || return 0  # unknown is not free
-  for lock in "$HOME_ROOT"/*/rosy-omx/session.lock; do
+  for lock in "$@"; do
     inode=$(stat -L -c %i -- "$lock" 2>/dev/null) || continue
     if grep -q ":$inode " /proc/locks; then return 0; fi
+  done
+  return 1
+}
+
+arm_session_held() { flock_held "$HOME_ROOT"/*/rosy-omx/session.lock; }
+
+# A GPU compute process a person or agent started by hand (an ssh login, a systemd-run scope, tmux) declares no
+# job file. A unit's own cgroup is a resident service (rosy-ollama keeps its model loaded) and never counts,
+# except the SSH daemons, which hold the sessions they start (Tailscale SSH runs them under tailscaled).
+gpu_hand_job() {
+  local pid group
+  command -v nvidia-smi >/dev/null 2>&1 || return 1
+  for pid in $(timeout 10 nvidia-smi --query-compute-apps=pid --format=csv,noheader,nounits 2>/dev/null); do
+    [[ "$pid" =~ ^[1-9][0-9]{0,6}$ ]] || continue
+    group=$(timeout 2 tail -n 1 -- "$PROC/$pid/cgroup" 2>/dev/null) || continue
+    case "$group" in
+      */tailscaled.service|*/ssh.service|*/sshd.service) return 0 ;;
+      *.service) ;;
+      ?*) return 0 ;;
+    esac
   done
   return 1
 }
@@ -84,7 +107,9 @@ jobs_live() {
       return 0
     fi
   done
-  return 1
+  # Learning trainers and Isaac admission take this lease instead of a job file (train_job, experiment_train).
+  flock_held "$HOME_ROOT"/*/.cache/rosy-learning/gpu.lock && return 0
+  gpu_hand_job
 }
 
 restart_user_unit() {
@@ -118,6 +143,11 @@ case "$ROLE:$ACTION:$UNIT" in
     if arm_session_held; then refuse "an arm session is running" 6; fi
     if jobs_live; then refuse "a job is running on this PC" 7; fi
     schedule_reboot
+    ;;
+  site:nightly-gate:|ai:nightly-gate:|model:nightly-gate:)
+    # rosy-nightly-reboot.service asks before its warning and again just before the reboot; it schedules nothing.
+    if arm_session_held; then refuse "an arm session is running" 6; fi
+    if jobs_live; then refuse "a job is running on this PC" 7; fi
     ;;
   site:recheck-reboot:|ai:recheck-reboot:|model:recheck-reboot:)
     mine=$(cat "$STATE/reboot" 2>/dev/null || true)
