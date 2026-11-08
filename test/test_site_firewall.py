@@ -505,3 +505,22 @@ def test_lan_docs_bind_the_wildcard_and_scope_by_interface():
     assert "ROSY_SITE_DISCOVERY_URL=" not in readme
     assert "ROSY_SITE_BIND_ADDRESS=0.0.0.0" in runbook and "ROSY_SITE_LAN_IFACE" in runbook
     assert "rosy-site-firewall.service" in runbook and "검색기 끊김" in runbook
+
+
+@pytest.mark.parametrize("host_ip,owned,ok", [
+    ("192.168.1.93", True, True), (None, True, False), ("0.0.0.0", True, False),
+    ("127.0.0.1", True, False), ("192.168.1.94", False, False),
+])
+def test_cross_host_peer_origin_binds_one_owned_lan_address(host_ip, owned, ok):
+    """D-994: the remote peer overlay must not open its port on every interface."""
+    fw = _module()
+    entry = {"mode": "ingress", "target": 8544, "published": "8544", "protocol": "tcp"}
+    if host_ip is not None:
+        entry["host_ip"] = host_ip
+    config = {"services": {**_config()["services"], "control-unit-peer": {"ports": [entry]}}}
+    if ok:
+        assert fw.peer_publish(config, assigned=lambda address: owned) == ["192.168.1.93:8544"]
+    else:
+        with pytest.raises(fw.ConfigError):
+            fw.peer_publish(config, assigned=lambda address: owned)
+    assert fw.peer_publish(_config(), assigned=lambda address: False) == []
