@@ -40,6 +40,13 @@ export function mount(el, ctx) {
   el.hidden = true;
   el.replaceChildren(head, body, actions, status);
   let shown = null, sending = false;
+  const lock = (on) => {
+    for (const button of [done, cannot]) {
+      button.disabled = on;
+      if (on) button.setAttribute("reason", "답을 보내는 중");
+      else button.removeAttribute("reason");
+    }
+  };
   const draw = (data) => {
     const held = data?.person_request;
     const lines = personRequestLines(held, data?.can_answer === true);
@@ -47,12 +54,12 @@ export function mount(el, ctx) {
     shown = lines ? held : null;
     body.replaceChildren(...(lines || []).map((text) => createNode("p", "", text)));
     actions.hidden = !personRequestAnswerable(held, data?.can_answer === true);
-    done.disabled = cannot.disabled = sending;
+    lock(sending);
   };
   const answer = (value) => async () => {
     if (!shown || sending) return;
     sending = true;
-    done.disabled = cannot.disabled = true;
+    lock(true);
     status.textContent = "";
     try {
       draw({...(await ctx.api(`/api/v1/person-request/${encodeURIComponent(shown.id)}/answer`,
@@ -61,7 +68,7 @@ export function mount(el, ctx) {
       status.textContent = `답을 보내지 못했습니다: ${error.message}`;
     } finally {
       sending = false;
-      done.disabled = cannot.disabled = false;
+      lock(false);
     }
   };
   done.addEventListener("click", answer("done"));
