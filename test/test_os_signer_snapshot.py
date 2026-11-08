@@ -22,6 +22,12 @@ def test_installer_preserves_the_private_archive_repository_when_worktree_is_rem
                      r"\$config \| Add-Member -NotePropertyName source_repository -NotePropertyValue \$repo\s*\}", installer)
 
 
+def test_reinstall_replaces_the_existing_task():
+    installer = (ROOT / "tools/release/install_robot_cd.ps1").read_text(encoding="utf-8")
+    # 2026-11-07: without -Force the reinstall failed after writing the new config, so the old code kept running.
+    assert re.search(r"^Register-ScheduledTask -Force ", installer, re.MULTILINE)
+
+
 def test_installer_snapshot_contains_the_os_import_closure(tmp_path):
     installer = (ROOT / "tools/release/install_robot_cd.ps1").read_text(encoding="utf-8")
     files = re.findall(r'^    "([^"]+)"', installer, re.MULTILINE)
