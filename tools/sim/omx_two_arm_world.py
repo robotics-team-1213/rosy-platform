@@ -107,9 +107,9 @@ class World:
         wc, ws = f["workplate_center_m"], f["workplate_size_m"]
         world.add_geom(name="floor", type=mujoco.mjtGeom.mjGEOM_PLANE, size=[2, 2, .1], rgba=COLOURS["floor"])
         world.add_geom(name="table", type=box, size=[ws[0] / 2, ws[1] / 2, ws[2] / 2], pos=wc, rgba=COLOURS["table"])
-        bx = sites.BELT_STOP_X
-        world.add_geom(name="belt", type=box, size=[.15, .0425, .002], pos=[bx + .15, f["pickup_center_m"][1], L.belt_top - .002], rgba=COLOURS["belt"])
-        world.add_geom(name="belt_stop", type=box, size=[.002, .0425, .004], pos=[bx, f["pickup_center_m"][1], L.belt_top + .004], rgba=[.6, .6, .6, 1])
+        bx, by = L.belt_stop_x, L.belt_y
+        world.add_geom(name="belt", type=box, size=[.15, .0425, .002], pos=[bx + .15, by, L.belt_top - .002], rgba=COLOURS["belt"])
+        world.add_geom(name="belt_stop", type=box, size=[.002, .0425, .004], pos=[bx, by, L.belt_top + .004], rgba=[.6, .6, .6, 1])
         for arm, a in L.arms.items():  # the 12 mm base plate under each arm (size ASSUMED 120 mm square, visual only)
             world.add_geom(name=f"{PREFIX[arm]}plate", type=box, size=[.06, .06, .006], pos=[*a.base[:2], a.base[2] - .006], contype=0, conaffinity=0, rgba=[.2, .2, .2, 1])
         self._ship(spec)
