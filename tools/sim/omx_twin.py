@@ -546,7 +546,7 @@ def main(argv=None):
         s = sub.add_parser(name)
         s.add_argument("--cell", required=True)
         s.add_argument("--out", required=True)
-        s.add_argument("--cams", default="top=top", help="episode camera=sim camera, comma separated (sim: top, side, wrist)")
+        s.add_argument("--cams", default="top=top,arm_b_wrist=wrist", help="episode camera=sim camera, comma separated (sim: top, side, wrist); the sim cell is arm_b, so only arm_b_wrist is its wrist ('front' was arm_a's wrist, retired 2026-11-08)")
     sub.choices["replay"].add_argument("episode")
     sub.choices["replay"].add_argument("--every", type=float, default=2.0)
     b = sub.choices["batch"]
