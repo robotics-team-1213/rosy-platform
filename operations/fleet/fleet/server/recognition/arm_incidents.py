@@ -18,7 +18,7 @@ from pydantic import ValidationError
 
 from core_common.protocol.arm_incidents import (
     ARM_INCIDENT_BODY_BYTES, ARM_INCIDENT_EVIDENCE_FRAMES, ARM_INCIDENT_FRAME_BYTES, ArmIncidentAccepted, ArmIncidentClear,
-    ArmIncidentEvidenceFrame, ArmIncidentExplanation, ArmIncidentHold, ArmIncidentReport)
+    ArmIncidentEvidenceFrame, ArmIncidentExplanation, ArmIncidentHold, ArmIncidentReport, software_stop)
 from fleet.server.camera_peer_routes import body as bounded_json
 from fleet.server.sqlite_policy import configure_connection, enable_wal
 
@@ -28,6 +28,13 @@ CONTROL = re.compile(r"[\x00-\x1f\x7f]")
 ROLES = ("top", "side")
 EVIDENCE_KEEP_S = 14 * 86400  # whole frames of a cleared incident; tip crops, labels and facts stay
 EVIDENCE_BODY_BYTES = ARM_INCIDENT_FRAME_BYTES * 4 // 3 + 4096
+
+
+def _facts(text: str):
+    try:
+        return json.loads(text)
+    except ValueError:
+        return None  # unreadable: the decision alone decides
 
 
 def _holds(decision: str) -> bool:
@@ -85,11 +92,12 @@ class ArmIncidentStore:
 
     def hold(self, source_id) -> ArmIncidentHold:
         with self._lock:
-            rows = self._db.execute("SELECT incident_id, decision FROM arm_incidents WHERE source_id=? "
+            rows = self._db.execute("SELECT incident_id, decision, facts FROM arm_incidents WHERE source_id=? "
                                     "AND cleared_at IS NULL ORDER BY reported_at, rowid", (source_id,)).fetchall()
         # a report whose decision does not hold (a guard stop the recovery handled, sent for a person's cause) waits for
         # its label and never holds the arm; every report before 2026-11-08 held
-        rows = [r for r in rows if _holds(r[1])]
+        # software_stop: the control PC's own rule on the stored facts, so incidents reported before it stop holding too
+        rows = [r for r in rows if _holds(r[1]) and not software_stop(_facts(r[2]))]
         if not rows:
             return ArmIncidentHold(held=False, incident_ids=[])
         try:

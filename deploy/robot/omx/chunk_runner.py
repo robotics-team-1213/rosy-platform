@@ -471,7 +471,8 @@ class Runner:
                 # a guard stop or a bus error ends the session; without this row the caller waited 300 s for a
                 # status that never came (2026-10-25..27). No bus read here: after a bus error it would raise again
                 self.status({"command": f"run {self.chunk}" if self.chunk else "tick", "ok": False,
-                             "fault": f"session ended: {type(error).__name__}: {error}"[:300], "t": round(time.time(), 3)})
+                             # 1000: the guard's alignment stop ends with command={...}, which software_stop reads (cut at 300, 11-09)
+                             "fault": f"session ended: {type(error).__name__}: {error}"[:1000], "t": round(time.time(), 3)})
                 raise
             if self.idle():
                 return
