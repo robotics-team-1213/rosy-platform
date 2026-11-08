@@ -258,8 +258,8 @@ def check_pc(name: str, target: str, quiet: str, entry: dict) -> None:
     if memory_low:
         print(f"{name}: memory avail {avail}% {memory} (report only, D-883)", flush=True)
     if resources["reboot_overdue"]:
-        print(f"{name}: up {uptime // 86400} days, nightly reboots skipped for running work (report only, D-991)",
-              flush=True)
+        print(f"{name}: up {uptime // 86400} days without a nightly reboot "
+              "(skipped for work or a missing gate; report only, D-991)", flush=True)
     if not reasons:
         state = ("disk-low" if disk_low else "memory-low" if memory_low
                  else "load-high" if high_load else "ok")

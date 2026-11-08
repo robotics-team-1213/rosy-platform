@@ -649,6 +649,8 @@ def _gpu_process(tmp_path, pid, cgroup):
 @posix
 @pytest.mark.parametrize("cgroup, blocks", [
     ("/user.slice/user-1000.slice/user@1000.service/app.slice/rosy-review.service", False),
+    ("/user.slice/user-1000.slice/user@1000.service/app.slice/rosy-review.service/payload", False),
+    ("/user.slice/user-1000.slice/user@1000.service/app.slice/run-r9f.service", True),
     ("/system.slice/docker-0123.scope", True),
     ("/user.slice/user-1000.slice/session-92270.scope", True),
     ("/user.slice/user-1000.slice/user@1000.service/app.slice/run-r1.scope", True),
@@ -669,6 +671,14 @@ def test_a_gpu_pid_that_vanished_or_lies_is_skipped(tmp_path):
     helper = _helper_copy(tmp_path, "model")
     (tmp_path / "gpu-pids").write_text("123\n0\n../1\nNo running processes found\n" + "9" * 40 + "\n")
     assert helper("nightly-gate") == 0  # 123 has no /proc entry
+
+
+@posix
+def test_a_wedged_nvidia_smi_is_killed_and_does_not_keep_the_helper(tmp_path):
+    """An Xid-wedged driver ignores TERM; the helper must still answer within the copy's 20 s."""
+    helper = _helper_copy(tmp_path, "model")
+    (tmp_path / "bin" / "nvidia-smi").write_text("#!/bin/sh\ntrap '' TERM\nexec sleep 60\n")
+    assert helper("nightly-gate") == 0
 
 
 @pytest.mark.parametrize("role", ["model_pc", "ai_pc", "site"])
@@ -739,6 +749,7 @@ def test_forced_command_passes_at_most_two_words(tmp_path):
     assert remote("") == 2
     assert remote("reboot *") == 2
     assert remote("recheck-reboot") == 2  # the helper's own timer, never a caller's
+    assert remote("nightly-gate") == 2  # the nightly unit's question, asked as root
     assert remote("restart-unit a;b") == 2
 
 

@@ -3,6 +3,8 @@ Description=Rosy team PC nightly reboot (warns 2 min ahead, skipped while work r
 
 [Service]
 Type=oneshot
+# A wedged helper (GPU driver) must not hold the unit forever; a timeout is no reboot.
+TimeoutStartSec=10min
 # D-991: this PC's helper judges. A live job lock, Isaac reservation, busy hold, learning GPU lease, hand-run
 # GPU job or arm session skips tonight's reboot; it asks again after the warning. A missing or older helper
 # also skips (fail closed); the guard flags a PC that has not rebooted for days.
