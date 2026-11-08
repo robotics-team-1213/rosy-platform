@@ -27,8 +27,8 @@
 
 ## 최근 기록
 
+- 2026-11-09 · uncommitted · feat(sim): 동시 학습 라운드에 재배치 장면, 측정 벨트 병합
 - 2026-11-09 · uncommitted · feat(sim): 두 팔이 동시에 하는 재배치 시나리오
 - 2026-11-09 · uncommitted · feat(sim): 양팔 세계 색을 실제 셀 색으로
 - 2026-11-09 · uncommitted · feat(sim): 임시 칸 판과 배를 지금 위 카메라 화면 자리로
 - 2026-11-08 · uncommitted · feat(sim): 임시 칸 판 줄마다 3단
-- 2026-11-08 · uncommitted · revert(sim): 위 카메라로 잰 배 자리는 r08 모형과 맞지 않아 되돌림
