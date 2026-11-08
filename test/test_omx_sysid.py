@@ -76,6 +76,10 @@ def test_verdict_needs_a_better_hold_out_and_no_joint_worse():
     one = fit([1, 1, 1, 1, 1], [.5, .5, .5, .5, .5])
     one["episodes"]["hold"] = ["e3"]
     assert sysid.verdict(one) == (False, "a held-out score needs at least two episodes")
+    edge = fit([1, 1, 1, 1, 1], [.5, .5, .5, .5, .5])
+    edge["fitted"]["joint3"]["kp"], edge["bounds"] = 200.0, {"kp": (2.0, 200.0), "damping": (.001, 5.0)}
+    ok, why = sysid.verdict(edge)
+    assert not ok and "joint3 kp 200" in why  # 2026-11-09: a better hold-out with kp at the bound is not a measurement
 
 
 def test_promote_appends_a_candidate_and_never_overwrites(tmp_path):

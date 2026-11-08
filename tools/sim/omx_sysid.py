@@ -32,7 +32,8 @@ import omx_physics as physics  # noqa: E402
 
 SCHEMA = "rosy.omx-sysid-servo.v1"
 BODY = physics.JOINTS[:5]
-BOUNDS = {"kp": (2., 200.), "kv": (.05, 30.), "damping": (.001, 5.), "armature": (1e-4, .1), "frictionloss": (1e-4, .5)}
+# kp spans the twin's grid (10-80) with room; the first fit on 2026-11-09 ran to 2 and 200, absorbing what the model lacks
+BOUNDS = {"kp": (10., 120.), "kv": (.05, 30.), "damping": (.001, 5.), "armature": (1e-4, .1), "frictionloss": (1e-4, .5)}
 WORSE_DEG = .1      # a fit may not make any held-out joint worse than this
 HOLD = "0/3"        # omx_twin.shard_of: this share of the episode names is held out
 EVERY = 2           # use every 2nd 50 Hz grid row in the fit (the hold-out score uses all)
@@ -216,6 +217,7 @@ def servo(folders, cell_path, out, base="design", arm="arm_b", keys=("kp", "kv",
     result = dict(schema=SCHEMA, base=base, arm=arm, keys=list(keys), gravity_comp=gravity_comp, cell=str(cell_path),
                   episodes=dict(fit=[e[0] for e in fit], hold=[e[0] for e in hold], untagged=episodes.untagged, other_arm=episodes.other),
                   fitted={j: {k: round(v, 6) for k, v in row.items()} for j, row in zip(BODY, fitted)},
+                  bounds={k: BOUNDS[k] for k in keys},
                   sd={j: row for j, row in zip(BODY, sd)}, sd_inflation=round(inflate, 2), rms_deg=score, nfev=int(res.nfev), status=res.message,
                   at=dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"))
     out = Path(out)
@@ -315,7 +317,13 @@ def friction(runs, motor="XL430-W250", volts=11.7):
 
 # -- promote --------------------------------------------------------------------------------------------------------------------
 def verdict(fit):
-    """(ok, why): held-out mean lower than the base's and no joint worse by more than WORSE_DEG."""
+    """(ok, why): no constant on its fit bound (an edge value is not identified: it soaks up what the model lacks), the
+    held-out mean lower than the base's and no joint worse by more than WORSE_DEG."""
+    bounds = fit.get("bounds") or BOUNDS
+    edge = [f"{j} {k} {v:g}" for j, row in fit["fitted"].items() for k, v in row.items()
+            if k in bounds and not bounds[k][0] * 1.01 < v < bounds[k][1] / 1.01]
+    if edge:
+        return False, f"on a fit bound, not identified: {', '.join(edge)}"
     base, new = fit["rms_deg"]["base"]["hold"], fit["rms_deg"]["fitted"]["hold"]
     worse = [f"joint{j + 1} {b:.2f}->{n:.2f}" for j, (b, n) in enumerate(zip(base, new)) if n - b > WORSE_DEG]
     mb, mn = sum(base) / len(base), sum(new) / len(new)
