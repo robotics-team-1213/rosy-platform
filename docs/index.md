@@ -355,6 +355,6 @@
 
 - 2026-11-08 · uncommitted · docs(reference): 검토 반영 — 백업 owner 경로와 알림 현재 owner 검사
 - 2026-11-08 · uncommitted · docs(reference): 카탈로그 기능별 행을 실제 owner 소스와 연결한다
-- 2026-11-08 · uncommitted · docs(architecture): 공통 기능별 분리와 장애·복구 계약을 확정한다
-- 2026-11-08 · uncommitted · docs(architecture): Harbor와 공통 서비스의 책임을 저장소별로 연결한다
-- 2026-11-08 · uncommitted · docs(control): 현재 ARM 위임과 관제·owner·호스트 구조를 대조한다
+- 2026-11-08 · uncommitted · docs(solutions): rclpy Node 비공개 이름 충돌 교훈
+- 2026-11-08 · uncommitted · fix(land): 실패만 있는 브라우저 묶음을 "통과 0건"으로 멈추지 않는다
+- 2026-11-08 · uncommitted · fix(land): 같은 트리 재사용도 새 커밋의 게시 증거로 남긴다

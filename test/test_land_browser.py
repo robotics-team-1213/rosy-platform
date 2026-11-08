@@ -75,6 +75,9 @@ def test_a_missing_or_repeated_chunk_stops_the_tier(monkeypatch, tmp_path):
 @pytest.mark.parametrize("summary, why", [
     ("117 passed, 2 warnings in 305.08s (0:05:05)", None),
     ("1 failed, 166 passed, 2 warnings in 367.63s", None),  # the failure is known_failures' to judge
+    ("1 failed in 40.80s", None),  # 2026-11-08: a one-test chunk that failed ran; LOAD-FLAKY judges it, not "0 passed"
+    ("1 error in 2.00s", None),
+    ("1 failed, 2 skipped in 9.00s", "0 passed, 2 skipped"),  # a skip still counts
     ("12 skipped in 0.50s", "0 passed, 12 skipped"),  # the opt-in never reached the job
     ("5 passed, 1 skipped in 9.00s", "5 passed, 1 skipped"),  # e.g. the games board found port 6000 taken
     ("no tests ran in 0.01s", "0 passed, 0 skipped"),

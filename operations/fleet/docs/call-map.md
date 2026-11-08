@@ -44,7 +44,7 @@
 | 등록 | `/api/fleet/enrollment/robots` | Fleet이 로봇 `POST /api/v1/auth/pair`, `GET /auth/whoami`, `GET /system/info`, `POST /auth/logout`을 한다. TLS 프로브는 `GET /api/v1/auth/peer-pairing/identity` |
 | 셀 | `/api/fleet/cell-app/*`, `/api/fleet/cell-jobs/*`, `/api/fleet/missions/{id}/admit` | 읽기·컴파일·제안·작업. 승인 자리의 이동은 D-540 8항 |
 | 로그인 | `/api/fleet/auth/connection`, `/session`, `/login`, `/logout`, `/change-password`, `/profile`, `/development-session` | 개발 세션은 이름 있는 운영자다(D-473) |
-| 호스트 서비스 | `GET /api/fleet/hosts`, `POST /api/fleet/hosts/{host_id}/control` | 설치 문서의 `host-services.js`가 부른다. 서비스 제어 API(D-524, Proposed). 헬퍼가 없으면 503이고 재부팅하지 않는다 |
+| PC 정비 | `GET /api/fleet/hosts`, `POST /api/fleet/hosts/{host_id}/control` | PC 정비 문서의 `host-services.js`가 부른다. 응답의 `history`는 요청과 결과의 이력이다(D-991). 서비스 제어 API(D-524, Proposed). 헬퍼가 없으면 503이고 재부팅하지 않는다 |
 | 설치·발견 | `/api/fleet/discovery`, `/discovery/addresses`, `/tracking/relearn`, `/tracking/identity`, `POST`·`DELETE /api/fleet/robots/{id}/hub-link` 등 | 등록·허브 연결·추적 배경 학습. 설치·보정 문서 |
 | 사건·작업 읽기 | `/api/fleet/incidents`, `/api/fleet/work`, `/api/fleet/channel-requests`, `/api/fleet/dispatch-control` | 사건 증거와 검토, 출처별 Task/Mission 읽기, 채널 요청, 작업 배정 제어. 이 문서가 본문까지 대조한 범위가 아니다 |
 

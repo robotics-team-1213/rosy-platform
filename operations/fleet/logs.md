@@ -5389,6 +5389,16 @@
 - 증거: 실제 Account와 Fleet을 두 출처로 띄운 왕복에서 두 탭 로그인과 교환 중 장애가 JSON 화면에서 멈추는 것을 재현했다.
 - gate 변화: SOURCE 회귀. 현장 수용은 별도다.
 
+## 2026-11-07 · uncommitted · fix: 재부팅이 팔 세션을 끊지 않게 한다 (D-991)
+- 변경: 화면 `reboot`는 도우미 `reboot-if-free`로 간다. `reboot-over-jobs` 추가, 종료 코드 6·7을 409 `ARM_SESSION_ACTIVE`·`HOST_JOBS_ACTIVE`로 옮긴다. 호스트 서비스 화면이 작업 중이면 다시 묻는다.
+- 증거: 원격 `test_host_control.py`·`test_host_guard.py`. 호스트 pytest이며 실제 재부팅·세션 수용은 아니다.
+- gate 변화: SOURCE. 각 PC 도우미 설치 전. CE: 기존 교훈 갱신 — nightly-reboot-must-yield-to-a-live-arm-session.
+
+## 2026-11-07 · uncommitted · feat: PC 조치 목록을 실제 서비스에 맞추고 이력을 남긴다 (D-991)
+- 변경: `pinky-*`와 `stop-unit`을 빼고 ROSY 서비스 재시작을 더한다. 조치와 응답을 `fleet_device_care_events`에 `host:<PC>`로 남겨 `GET /api/fleet/hosts`의 `history`와 화면에 보인다.
+- 증거: 원격 `test_host_control.py`·`test_host_ops.py`·`test_host_recovery_browser.py`. 호스트 시험이다.
+- gate 변화: SOURCE. CE: 해당 없음 — 시험과 ADR이 판단을 보존한다.
+
 ## 2026-11-07 · uncommitted · feat(fleet): LED·카메라·LiDAR 자동 위치 찾기 (D-989)
 - 변경: `localization/auto_locate.py`(순수 적합), `pose/auto_locate_service.py`(120초 세션), `GET`·`POST /api/fleet/auto-locate`, config `stream_wanted`. 관찰 전용. API v1.369.
 - 증거: 합성 입력 시험뿐이다. 실물·현장 수용 없음.
@@ -5400,10 +5410,26 @@
 - 증거: 합성 시험뿐. 정확도는 실물 전까지 재지 않았다.
 - gate 변화: SOURCE. 교훈: CE 미해결 — 실물 시험 전이다.
 
+## 2026-11-07 · uncommitted · test: Account 가입·권한 요청 시험 (D-993)
+- 변경: `test_account_access_requests.py` — 공개 입력의 CSRF·크기·상한·존재 여부 비노출, 승인·거절의 원자성과 감사. Fleet 동작 변경 없음.
+- 증거: 원격 실행 기록은 operations/account/logs.md.
+- gate 변화: 없음.
+
+## 2026-11-07 · uncommitted · fix(fleet): 배터리 근거 없음·멈춤 사유 분리
+- 변경: powerHealthView가 evidence missing은 "배터리 값 없음 — 배터리 센서 서비스 확인", stale은 "배터리 값 멈춤 — 센서 연결 확인"으로 나눔. 멈춤 경과 시간은 그룹 문구가 갈라지지 않도록 problem이 아닌 note로 두고 로스터 배터리 칸에만 표시. D-509 충전 확인(신선한 CORE 근거만) 유지.
+- 증거: node --test queue-inline+console-health 12 passed/skip0; 원격 Chromium(ROSY_RUN_BROWSER_TESTS=1) 176 passed/skip0 (be0e5095e7).
+- gate 변화: SOURCE 회귀 검증만; 실물·현장 수용 근거 아님.
+- 교훈: CE 해당 없음 — 문구 분리, 코드·시험으로 재현 가능.
+
 ## 2026-11-08 · uncommitted · 관제 화면 파일을 다시 받지 않고 압축해 보낸다
 - 변경: 콘솔 문서·자산·/common 파일이 ETag가 맞으면 304로 답한다. Fleet 응답은 1 KB 넘으면 gzip으로 보낸다. `no-cache`는 그대로라 배포 직후 새 파일을 바로 받는다.
 - 증거: 관제 첫 화면은 파일 97개 917 KB(gzip 315 KB)를 받는다. Starlette FileResponse가 If-None-Match를 무시해 레일을 누를 때마다 전부 다시 받았다. test_server_app.py에 304·gzip 시험을 더했다.
 - gate 변화: SOURCE 회귀. 현장 수용은 별도다.
+## 2026-11-08 · uncommitted · fix: Account 가입·권한 요청 경로를 Fleet 기능표에 등록 (D-993)
+- 변경: `feature_matrix.json`에 공개 `POST /api/fleet/auth/access-requests`(login-page.js)와 관리자 목록·승인·거절(account-page.js), login-page.js의 `/api/fleet/auth/session` 호출을 등록하고, `backend_http_evidence.json`에 `test_account_access_requests.py` 통과 수신 기록(21 passed, 병합 커밋 36e976e701)을 더했다.
+- 증거: 착지 사전 시험 `test_all_supported_features_have_contracts_and_flows`가 미등록 프런트 호출 3건으로 실패했다. 원인은 이 브랜치가 새 프런트 호출을 기능표에 올리지 않은 것이며 main 탓이 아니다.
+- gate 변화: SOURCE 회귀 복구. 현장 수용은 별도다.
+
 ## 2026-11-08 · uncommitted · D-998 알림 producer 비활성 경계
 - 변경: 기존 알림 worker는 동일한 공용 채널 adapter를 쓰며 outbox·최종 사건 검사·발송 owner를 유지한다. 새 producer seam은 기본 꺼짐이고 동시 활성·미수용 전환을 거절한다.
 - 증거: 기존 test_notifications/test_final_notifications와 독립 전달 시험을 커밋 SHA에서 원격으로 확인한다. 실제 채널 발송·전환은 하지 않는다.

@@ -38,8 +38,8 @@
 
 ## 최근 기록
 
+- 2026-11-08 · uncommitted · test: 설치 시험의 core_common 버전 기대값을 0.0.3으로
 - 2026-11-08 · uncommitted · refactor(foundation): 기록의 비밀 필드 이름 판별 공용화
 - 2026-11-08 · uncommitted · D-998 foundation 배포 버전 정합성
 - 2026-11-08 · uncommitted · D-998 알림 전달 계약과 채널 adapter 추출
 - 2026-11-06 · uncommitted · feat(fleet): 관제 수동 모드 전환
-- 2026-11-06 · 051927f313 · fix(config): 명시적인 motor readiness 기본 profile

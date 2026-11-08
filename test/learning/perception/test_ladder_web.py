@@ -104,6 +104,36 @@ def test_two_arm_runs_are_read_through_a_whitelist_and_only_a_manager_starts_a_b
         assert request(base, '/api/learning/ladder/two-arm', 'reader')[1]['running'] is True
 
 
+def test_one_arm_vs_two_arm_comparisons_are_whitelisted_their_videos_served_and_a_manager_starts_one(tmp_path, monkeypatch):
+    with running(tmp_path) as (base, root, ladder):
+        folder = root / 'two_arm_compare' / OLD
+        (folder / 'artifacts').mkdir(parents=True)
+        (folder / 'artifacts' / 'stack-two-arm.mp4').write_bytes(b'video')
+        runs = [dict(scenario='outbound', mode='one-arm-B', concurrent=False, steps=5, steps_pass=5, completed=True, makespan_s=92.5,
+                     holds=[dict(request='bar-3', reason='NO_STAND_IN_REACH')], moves_per_arm={'arm_b': 5}, log='/home/secret/run.log'),
+                dict(scenario='stack', mode='two-arm', concurrent=True, steps=9, steps_pass=9, completed=True, makespan_s=148.8, overlap_s=15.1,
+                     video='stack-two-arm.mp4'),
+                dict(scenario='stack', mode='three-arm'), dict(scenario='other', mode='two-arm')]
+        (folder / 'compare.json').write_text(json.dumps(dict(schema=ladder_web.TWO_ARM_COMPARE_SCHEMA, run_id=OLD, seed=0, status='passed',
+                                                             runs=runs, videos=['stack-two-arm.mp4', '../evil.mp4'], private_path='/home/secret')), encoding='utf-8')
+        code, data = request(base, '/api/learning/ladder/two-arm-compare', 'reader')
+        row = data['runs'][0]
+        assert code == 200 and data['running'] is False and 'private_path' not in row and row['videos'] == ['stack-two-arm.mp4']
+        assert [(r['scenario'], r['mode']) for r in row['runs']] == [('outbound', 'one-arm-B'), ('stack', 'two-arm')]  # unknown modes dropped
+        assert row['runs'][0]['holds'] == [{'request': 'bar-3', 'reason': 'NO_STAND_IN_REACH'}] and 'log' not in row['runs'][0]
+        assert row['runs'][1]['concurrent'] is True and row['runs'][1]['overlap_s'] == 15.1
+        assert ladder.artifact(OLD, 'stack-two-arm.mp4', 'two_arm_compare') == (b'video', 'video/mp4')
+        assert request(base, f'/api/learning/ladder/two-arm-compare/{OLD}/artifacts/missing.mp4', 'reader')[0] == 404
+        started = []
+        monkeypatch.setattr(ladder, 'spawn', lambda command, log: started.append(command) or type('P', (), dict(poll=lambda self: None))())
+        assert post(base, 'two-arm-compare', {'seed': 0}, session='reader')[0] == 403
+        for body in [{}, {'seed': -1}, {'seed': 1001}, {'seed': True}, {'seed': 0, 'out': '/tmp'}]:
+            assert post(base, 'two-arm-compare', body)[0] == 400, body
+        assert post(base, 'two-arm-compare', {'seed': 3})[0] == 200
+        assert started[0][2] == 'two-arm-compare' and started[0][-2:] == ['--seed', '3']
+        assert post(base, 'two-arm', {'task': 'stack', 'seed': 0})[0] == 409, 'one two-arm job at a time'
+
+
 def test_a_recorded_same_seed_comparison_wins_over_intervals_from_different_seeds(tmp_path):
     with running(tmp_path) as (base, root, _):
         file = root / 'rounds' / MID / 'round.json'

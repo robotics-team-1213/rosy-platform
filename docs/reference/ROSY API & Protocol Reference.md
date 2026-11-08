@@ -45,6 +45,19 @@ Fleet의 기존 상세 본문을 대체하는 전환 계약은 별도다. 원본
 - 판정 `decision.hold`가 `false`인 보고(복구 흐름이 처리한 가드 정지를 원인 기록용으로 보낸 것)는 팔을 보류하지 않는다. `GET .../hold`와 보고 응답의 `hold`는 `decision.hold`가 false가 아닌 미해제 사건만 센다. 이전 보고는 모두 보류였으므로 기존 동작은 같다.
 - `GET .../arm-incidents/labelled`(`ai_observer`): 원인이 기록된 해제 사건 최근 200건(사실·판정·모델 설명·사람 원인과 근거·증거 장 목록). 학습 쪽이 사람 라벨·규칙 판정·모델 추측을 나란히 채점하는 입력이다. 모델 PC 수집기는 이 자리를 쓴다.
 
+### v1.374 Account 가입·권한 요청 (D-993)
+
+- Additive. `POST /api/fleet/auth/access-requests`는 인증이 없는 공개 입력이다. `Origin`이 `Host`와 같아야 하며(아니면 403 `CSRF_REJECTED`) 본문은 4 KiB 이하(413 `REQUEST_TOO_LARGE`), 필드는 `name`(64자)·`username`(`^[a-z0-9._-]{1,32}$`)·`resource`(`site|robot|project:<id>`, 선택)·`note`(500자, 선택)뿐이다(그 밖은 422 `INVALID_REQUEST`). 유효한 로그인 쿠키가 있으면 요청은 그 계정의 권한 요청(`grant`)이고 이름·ID는 세션에서 정한다. 성공, 같은 대기 요청의 반복, 이미 있는 로그인 ID는 모두 같은 202 `{"status":"received"}`다. 최근 24시간의 대기 요청이 서비스 전체 200건 또는 한 주소 5건이면 429 `REQUESTS_FULL`이다.
+- `GET /api/fleet/auth/access-requests`, `POST /api/fleet/auth/access-requests/{request_id}/approve`(`role`, `grants`, 새 계정은 `password`·선택 `principal_id`, 기존 계정은 `revision`), `POST .../reject`(`reason`)는 `accounts.manage` 쿠키 세션이 필요하다. 승인은 기존 계정 발급·갱신 경로를 같은 트랜잭션에서 쓰며 요청만으로 권한이 생기지 않는다. 자세한 계약은 [Rosy Account protocol](rosy-account-protocol.md).
+
+### v1.371 재부팅은 팔 세션을 끊지 않고, 사람의 요청은 작업에서 멈춘다 (D-991)
+
+- `POST /api/fleet/hosts/{host}/control`의 `action`에 `reboot-over-jobs`를 더한다. `GET /api/fleet/hosts` 행의 `actions`에도 나온다.
+- `reboot`는 팔 세션이 돌면 409 `ARM_SESSION_ACTIVE`, 살아 있는 작업이나 busy가 있으면 409 `HOST_JOBS_ACTIVE`다. `reboot-over-jobs`는 작업을 넘지만 팔 세션은 넘지 못한다.
+- 새 도우미가 설치되지 않은 PC의 `reboot`는 502 `HOST_HELPER_FAILED`다.
+- 유닛은 재시작만 된다. `stop-unit`과 GET 행의 `stoppable_units`를 뺀다. `pinky-*`를 목록에서 빼고 모델 PC·AI PC·관제 PC의 ROSY 서비스를 더한다. 관제 PC 카메라 유닛은 팔 세션 중 409 `ARM_SESSION_ACTIVE`다.
+- GET 본문에 `history`를 더한다. `{host: [{text, actor, created_at}]}` 최신 5건이며, 기록소가 없거나 읽지 못하면 빈 객체다. POST의 응답은 기록 실패로 바뀌지 않는다.
+
 ### v1.368 현장 운영 규칙 문서와 판정 API
 
 - 새 엔드포인트 `GET /api/fleet/site-rules/active`·`GET/PUT /api/fleet/site-rules/draft`·`POST /api/fleet/site-rules/activate`(D-982). 현장 규칙 문서 `rosy.site_rules/1`(차례 출발 `departure`, 충전 복귀 `return`, 정류·상하차 대기 `stops`, 대형 `formation`)을 지도처럼 초안·활성화·버전·감사(`site_map_events`)로 다룬다. 저장·활성화는 이름 있는 운영자, 활성화는 trip·대형·teach 중이면 409 `SITE_RULES_ROUTE_ACTIVE`다. 활성 문서가 없으면 값은 코드 상수와 같고 동작은 달라지지 않는다.
@@ -4661,10 +4674,12 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.371 | 2026-11-07 | D-991: Service Control `reboot` refused with 409 `ARM_SESSION_ACTIVE` or `HOST_JOBS_ACTIVE`; additive `reboot-over-jobs` passes live jobs, never an arm session. Breaking for one consumer, the Fleet screen: `stop-unit` and `stoppable_units` removed, `pinky-*` out of the unit list; additive `history`. |
 | v1.368 | 2026-11-07 | Additive (D-982): 현장 규칙 문서 `rosy.site_rules/1`(`GET/PUT /api/fleet/site-rules/draft`, `GET .../active`, `POST .../activate`)와 가정 상태 판정 `POST /api/fleet/site-rules/judge`(go/wait/refuse, 보내기 없음). 활성 문서가 없으면 동작 동일, 활성 문서는 더 막기만 한다 |
 | v1.362 | 2026-11-04 | Additive: D-977 `device_trial` opens the neutral `arm-transfers` jobs for exactly one arm (owner identity: `device: true`, matching `commissioning_revision`); `production` stays closed. New `operator_attested` record: `POST/GET .../jobs/{mission_id}/operator-attestations` (named operator distinct from proposer and approver, single-use, 45 s validity, `goal_confirmed: false`). The owner still refuses goals. |
 | v1.377 | 2026-11-08 | D-998 독립 알림 전달의 기계 범위별 접수·조회, 중복/충돌·owner 확인·유한 예산·UNKNOWN 계약. 기존 Fleet 발송 owner 전환·배포는 별도. |
 | v1.375 | 2026-11-08 | Additive (D-971): 팔 사건 해제의 `cause`·`basis`, 정지 앞뒤 사진 `POST/GET .../incidents/{id}/evidence`, 보류하지 않는 보고(`decision.hold: false`), `GET .../arm-incidents/labelled`. |
+| v1.374 | 2026-11-07 | Additive: Account 가입·권한 요청(D-993) — 공개 `POST /api/fleet/auth/access-requests`와 관리자 목록·승인·거절. |
 | v1.369 | 2026-11-07 | Additive (D-989): `GET`·`POST /api/fleet/auto-locate`, detections config `stream_wanted`. 사이트 설정 `fleet.map_pose.auto_locate_robots`(기본 빈 목록)에 든 로봇만 map pose `anchor_source:"auto_locate"`를 낸다 |
 | v1.367 | 2026-11-07 | Additive: 항법 재승인 REST `/api/v1/navigation/approval`(D-986). |
 | v1.365 | 2026-11-07 | Fleet 운행 시작의 배터리 근거 확인(422 `TRIP_BATTERY_UNCONFIRMED`)과 충전 칸 `unknown` 상태. |
@@ -5138,11 +5153,11 @@ context는 request, receiver-challenge, session-request로 분리한다. 공개 
 `GET /api/fleet/hosts`는 운영자가, `POST /api/fleet/hosts/{host}/control`은 이름 있는 운영자
 (site-users 자격, 로그인 세션, 개발 세션)만 호출한다. 이름 없는 `site-console`은 403
 `OPERATOR_IDENTITY_REQUIRED`이고, site-users와 로그인이 둘 다 없으면 Fleet은 도우미를 만들지 않는다.
-`host`는 `site`, `ai`, `model`이다. GET 행은 `{host, actions, units, stoppable_units, reboot_delay_min}`이다.
+`host`는 `site`, `ai`, `model`이다. GET 행은 `{host, actions, units, reboot_delay_min}`이다. GET 본문의 `history`는 `{host: [{text, actor, created_at}]}` 최신 5건이다(D-991).
 GET 본문은 그 목록과 함께 읽기 전용 `guard`(관제 PC `/var/lib/rosy-host-guard/status.json`)와 `drift`(관제 PC `/var/lib/rosy-host-state/status.json`)를 붙인다(D-530). 파일이 없거나 객체가 아니면 그 필드는 null이고, 수치를 만들지 않는다. PC 가드 항목의 `resources`는 `{avail_pct, swap_pct, load, cores, uptime_s, down, disk, disk_low, gpu, memory, memory_low, cpu}`이다. D-883의 `disk`는 `{test_free_gb, test_use_pct, root_free_gb, root_use_pct}`(`~/rosy-test` 또는 홈, `/`), `gpu`는 `{used_mib, total_mib, util_pct, temp_c}`(여러 GPU는 메모리 합계·최대 사용률·최고 온도), `memory`는 `{total_gb, avail_gb}`, `cpu`는 `{busy_pct, temp_c}`(1초 `/proc/stat` 차이, 가장 뜨거운 thermal zone, 읽지 못하면 각 null)이며, 값을 보내지 않는 예전 PC는 `disk`·`disk_low`·`gpu`·`memory`·`cpu`가 null이다. CPU·GPU 온도와 사용률은 표시 전용이며 상태를 바꾸지 않는다. `memory_low`는 `avail_pct` 10% 미만이며 예전 PC에도 계산한다. 여유 30GiB 미만 또는 사용률 90% 이상이면 `disk_low=true`이고 다른 문제가 없으면 `state=disk-low`, 그 다음으로 `memory_low`이면 `state=memory-low`다. 두 상태는 보고 전용이며 재시작·재부팅을 일으키지 않는다.
 PC별 `guard[host].recovery`와 관제 PC `drift.recovery`는 D-530의 2026-10-18 실행값 감시 보고다(`time`, `role`, `state`, `issues`, `resources`, `watchdog`, `kernel`, `ssh`, `swap`). 구버전·접속 불가·해석 실패는 null/부재이며 정상으로 추정하지 않는다. 가드 자신의 행은 `source=local`이고 원래 보고 시각을 유지한다. 화면은 원격 호스트 보고 15분, 로컬/복구 보고 35분 초과를 점검 지연으로 표시한다. D-883의 `clean-storage` 외에 새 제어 동작이나 설치 API는 추가하지 않는다.
-POST 본문은 `{action, unit, operator_confirmed:true}`이고 추가 필드는 거절한다. `action`은 `reboot`,
-`cancel-reboot`, `restart-unit`, `stop-unit`, `clean-storage`만이다. `clean-storage`(D-883)는 `ai`·`model`에서 `unit` 없이만 받고, 그 PC의 rosy-ops `rosy-test-storage.service`를 한 번 시작한다. `site`는 400 `ACTION_NOT_ALLOWED`, 그 서비스가 없으면 409 `NO_STORAGE_SERVICE`다. 성공은 접수일 뿐이며 회수 결과는 다음 guard 보고의 `disk`로 확인한다. `pkill`, 시그널, 셸, 프로세스 이름은 400
+POST 본문은 `{action, unit, operator_confirmed:true}`이고 추가 필드는 거절한다. `action`은 `reboot`, `reboot-over-jobs`(D-991),
+`cancel-reboot`, `restart-unit`, `clean-storage`만이다. `clean-storage`(D-883)는 `ai`·`model`에서 `unit` 없이만 받고, 그 PC의 rosy-ops `rosy-test-storage.service`를 한 번 시작한다. `site`는 400 `ACTION_NOT_ALLOWED`, 그 서비스가 없으면 409 `NO_STORAGE_SERVICE`다. 성공은 접수일 뿐이며 회수 결과는 다음 guard 보고의 `disk`로 확인한다. `pkill`, 시그널, 셸, 프로세스 이름은 400
 `UNKNOWN_ACTION`이다. `unit`은 그 호스트의 허용 목록에 있고 그 동작이 허용될 때만 받는다(사이트 유닛은
 `restart-unit`만, 아니면 400 `UNIT_NOT_ALLOWED`). 재부팅은 `shutdown -r +10`이다. 이미 예약된 재부팅이
 있으면 409 `REBOOT_ALREADY_SCHEDULED`이다. `cancel-reboot`는 이 도우미가 예약한 재부팅만 `shutdown -c`로

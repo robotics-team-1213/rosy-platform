@@ -14555,6 +14555,19 @@ osy-d395-s1d\`.
 - gate 변화: 없음. 경고 2분 동안 새 작업이 들어가지 않는다. 재부팅 13분 전에 시작해 끝나지 않은 작업은 여전히 끊긴다(D-889 추가 13의 위험).
 - CE: 해당 없음 — 원인이 코드와 시험에 남는다.
 
+## 2026-11-07 · uncommitted · Account 가입·권한 요청 D-993
+
+- 변경: ADR D-993, API 참조 v1.374, Account 프로토콜의 요청 절, 다른 브랜치가 잡은 D-988~D-992 공백 선언.
+- 증거: harness lint. 구현 시험은 operations/account/logs.md.
+- Gate: 없음. CE: 해당 없음.
+
+## 2026-11-07 · uncommitted · fix(land): 건너뛰기만 한 재시험을 LOAD-FLAKY로 보지 않는다
+
+- 변경: 새 실패를 단독 재시험할 때 exit 0이어도 통과 없이 건너뛰기만 했으면 판정 없음으로 멈춘다.
+- 증거: LeRobot 환경이 있어야 도는 시험이 AI PC에서 실패하고 환경 없는 현장 PC에서 건너뛰어 `LOAD-FLAKY`로 기록됐다(같은 착지의 단독 실행 시험이 잡아 멈췄다). 새 시험은 수정 전 건너뛰기 경우만 실패했다.
+- gate 변화: 강화. 진짜 실패가 환경 없는 PC의 건너뛰기로 착지하지 못한다.
+- CE: 해당 없음 — 원인이 코드와 시험에 남는다.
+
 ## 2026-11-08 · uncommitted · test(learning): 학습 브라우저 여정 조건을 되돌린다
 - 변경: 바로 앞 항목에서 `test_learning_workflow_pipeline_browser.py`에 넣은 `ROSY_RUN_PINNED_LEARNING=1` 조건을 뺐다. 시험은 main과 같다.
 - 증거: 착지 브라우저 묶음은 그 값을 주지 않아 시험이 늘 건너뛰어졌고, `land_browser.vacuous`가 건너뜀 1건으로 FULL을 멈췄다(219 passed, 1 skipped). 다른 고정 학습 시험은 브라우저 묶음 밖이라 같은 조건이 맞지 않았다.
@@ -14610,6 +14623,36 @@ osy-d395-s1d\`.
 - 증거: D-987·D-807·D-955·D-962·D-661·D-841·D-985, 현재 설정 transaction·알림·감사·backup/업데이트 경로를 대조했다. 카탈로그 실행 서비스 목록·Compose·source holder는 그대로다. 최종 SHA의 문서·원격 시험·독립 검토를 별도로 연결한다.
 - gate 변화: 없음. 설계 수락은 신규 서비스·API·폴더 이동·DB 이관·배포·현장 수용 완료가 아니다.
 - CE: 해당 없음 — 새 아키텍처 결정을 ADR에 남겼고 해결한 장치/운영 장애는 없다.
+
+## 2026-11-08 · uncommitted · fix(model-pc): gpu-manager 뒤에도 GPU를 깨운 채 둔다
+
+- 변경: 모델 PC에 `rosy-gpu-awake.service`(oneshot, `After=gpu-manager.service`)를 더하고 manifest에 올린다. NVIDIA 디스플레이 장치의 `power/control`을 `on`으로 쓴다.
+- 증거: 11-08 05:01 재부팅 뒤 `power/control`이 다시 `auto`였다. `/var/log/gpu-manager.log`에 udev 규칙 뒤 05:01:36의 `Setting power control to "auto"`가 남아 있었다. 서비스는 모델 PC에 직접 설치해 `on`/`active`를 확인했다. 파일은 그 설치본을 그대로 옮겼다.
+- gate 변화: 없음. 다음 재부팅 뒤에 이 서비스가 마지막에 쓰는지는 아직 확인 전이다.
+- CE: 미해결 — Xid 79 재부팅 정지의 원인은 가설로 남고 기록은 작업 기록에 있다.
+
+## 2026-11-08 · uncommitted · fix(land): 명시 FULL과 게시가 앞 후보의 통과를 내용 기준으로 재사용한다 (D-970 3)
+- 변경: `land_cache.reach`가 A..C 변경이 닿는 시험 경로(선택기, 브라우저 대상, 전체 트리를 읽는 guard)를 낸다. 명시 FULL 사전 시험·차례는 겹치지 않는 호출을 A의 통과로 재사용하고, `publish_evidence`는 후보 체크아웃에서 같은 계산을 다시 해 A의 정확한 깨끗한 로그만 증거로 받는다.
+- 증거: 원격 `test/test_land*.py`·`test/test_publish*.py` 910 통과, NEW 0. 새 회귀 `test/test_publish_content_reuse.py`: 겹치지 않는 묶음 재사용, 겹치면·목록이 바뀌면·A 로그가 더럽거나 없으면 거절, guard는 재사용하지 않음.
+- gate 변화: 없음. 게시는 재계산과 정확한 로그를 요구한다. 선택기가 FULL로 번지는 범위는 재사용하지 않는다. CE: 해당 없음 — ADR 보완에 판단을 남겼다.
+
+## 2026-11-08 · uncommitted · fix(land): 같은 트리 재사용도 새 커밋의 게시 증거로 남긴다
+- 변경: `land_cache.split`이 트리·환경·명령이 같은 통과를 재사용할 때, 원래 로그 경로와 SHA-256을 그대로 둔 행을 새 커밋 이름으로도 남긴다.
+- 증거: 11-08 08:00 운영 규칙 착지(9a8217cb97)의 FULL 기록은, 다른 세션의 공개 게시 뒤 내용이 같은 동기화 커밋에 이어지지 않아 게시가 FULL을 다시 요구했다. 회귀 시험 `test_same_tree_reuse_maps_the_new_commit_to_the_source_log_and_digest`.
+- gate 변화: 없음. 게시 검사는 그대로 로그 해시·깨끗함·환경·계획을 확인하고, 로그가 바뀌면 원래 해시와 달라 거절한다. CE: 해당 없음 — D-970 3 구현의 연장.
+
+## 2026-11-08 · uncommitted · fix(land): 실패만 있는 브라우저 묶음을 "통과 0건"으로 멈추지 않는다
+
+- 변경: `land_browser.vacuous`가 모든 요약 줄에 실패·오류가 있는 실행은 판정 없음으로 보지 않는다. 그 실행은 `known_failures`와 혼자 다시 돌리기(LOAD-FLAKY)가 판정한다. 건너뜀이 하나라도 있으면 그대로 멈춘다.
+- 증거: 11-08 `land-speed-admission` 착지에서 시험 1건짜리 묶음 `test_omx_segments_browser.py`가 함께 돌 때 실패하고 혼자 통과해 LOAD-FLAKY로 판정됐는데, 그보다 먼저 "0 passed, 0 skipped"로 멈췄다.
+- gate 변화: 실패만 있는 브라우저 묶음은 다른 묶음과 같은 판정을 받는다(NEW면 멈추고, LOAD-FLAKY면 계속).
+- CE: 해당 없음 — 원인과 규칙이 코드와 회귀 시험에 남는다.
+
+## 2026-11-08 · uncommitted · docs(solutions): rclpy Node 비공개 이름 충돌 교훈
+- 변경: `docs/solutions/runtime-errors/ros-node-subclass-must-not-reuse-rclpy-private-names-2026-11-08.md` — battery_publisher가 `self._clock`으로 rclpy 시계를 가려 릴리스 175에서 기동 직후 죽은 일과, 스텁 시험이 이를 못 보는 이유.
+- 증거: b8xy canary 트레이스백(2026-11-08 13:19Z), 수정 커밋 `3ed5a498c6`와 회귀 시험.
+- gate 변화: 없음.
+- CE: 새 교훈 기록 — 실물 기동에서만 드러난 실패라 기록.
 
 ## 2026-11-08 · uncommitted · docs(reference): 카탈로그 기능별 행을 실제 owner 소스와 연결한다
 

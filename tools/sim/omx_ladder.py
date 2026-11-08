@@ -7,6 +7,7 @@ never does, and a replacement is a recorded comparison, not an approval or a pro
 
     python3 tools/sim/omx_ladder.py round --root R --cell cell.json --python P --lerobot-train T [--parent ID]
     python3 tools/sim/omx_ladder.py two-arm --root R --python P --task stack|rehandle [--seed N]
+    python3 tools/sim/omx_ladder.py two-arm-compare --root R --python P [--seed N]
 """
 from __future__ import annotations
 
@@ -25,6 +26,8 @@ import uuid
 ROOT = Path(__file__).resolve().parents[2]
 SCHEMA = "rosy.omx-ladder-round.v1"
 TWO_ARM_SCHEMA = "rosy.omx-two-arm-run.v1"
+TWO_ARM_COMPARE_SCHEMA = "rosy.omx-two-arm-compare.v1"
+COMPARE_RUNS = (("one-arm-A", "one-arm A", False), ("one-arm-B", "one-arm B", False), ("two-arm", "two-arm", True))  # tag, planner mode, both arms at once
 ROUND_ID = re.compile(r"[0-9]{8}T[0-9]{6}-[0-9a-f]{8}")
 STATUSES = {"pending", "running", "passed", "failed", "blocked", "not_run"}
 # A fifth of the 36 mm stud pitch and a yaw that still seats between studs; 20 mm passed boxes lying across a stud row.
@@ -233,6 +236,55 @@ def run_two_arm(args) -> int:
     return 0 if record["status"] == "passed" else 1
 
 
+def run_two_arm_compare(args) -> int:
+    """The same Harbor-ordered input (stack from the conveyor, two outbound requests) in one-arm A, one-arm B and two-arm mode:
+    omx_two_arm_plan.py assigns and schedules, the teacher runs each plan (two-arm with both arms at once). Geometry only (D-947)."""
+    run_id = new_round_id()
+    run = Path(args.root) / "two_arm_compare" / run_id
+    (run / "artifacts").mkdir(parents=True)
+    record = dict(schema=TWO_ARM_COMPARE_SCHEMA, run_id=run_id, seed=args.seed, source_sha=source_sha(args), status="running",
+                  created_at=datetime.now().astimezone().isoformat(timespec="seconds"),
+                  claim="같은 입력의 한 팔·두 팔 기하 비교(D-947). 실제 팔의 성공이 아니고, 시간은 정답 동작의 구간값입니다.")
+    file = run / "compare.json"
+    file.write_text(json.dumps(record, ensure_ascii=False), encoding="utf-8")
+    sim, env = Path(__file__).parent, dict(os.environ, MUJOCO_GL="egl", PYTHONUNBUFFERED="1", PYTHONIOENCODING="utf-8")
+    runs = []
+    with (run / "run.log").open("w", encoding="utf-8") as log:
+        code = subprocess.run([args.python, str(sim / "omx_two_arm_plan.py"), "compare", "--out", str(run / "plan.json"), "--replay-dir", str(run / "replay")],
+                              env=env, stdout=log, stderr=subprocess.STDOUT).returncode
+        plan = json.loads((run / "plan.json").read_text(encoding="utf-8")) if code == 0 else {}
+        for scenario in ("stack", "outbound"):
+            for tag, mode, both in COMPARE_RUNS if plan else ():
+                planned, out = plan[mode][scenario], run / "runs" / f"{scenario}-{tag}"
+                row = dict(scenario=scenario, mode=tag, concurrent=both, planned_makespan_s=planned["makespan_s"], holds=planned.get("holds", []),
+                           extra_transports=planned["extra_transports"], moves_per_arm=planned["moves_per_arm"])
+                subprocess.run([args.python, str(sim / "omx_two_arm_teacher.py"), "run", "plan", "--plan", str(run / "replay" / f"{scenario}-{tag}.json"),
+                                "--seed", str(args.seed), "--out", str(out), "--video", "--video-skip", "3", *(["--concurrent"] if both else [])],
+                               env=env, stdout=log, stderr=subprocess.STDOUT)
+                result = out / f"plan-elliptic-seed{args.seed}.json"
+                if result.exists():
+                    r = json.loads(result.read_text(encoding="utf-8"))
+                    row.update({k: r.get(k) for k in ("steps", "steps_pass", "completed", "makespan_s", "overlap_s")},
+                               failed_steps=[dict(step=x["step"], arm=x["arm"], result=x["result"], reason=x.get("reason")) for x in r["rows"] if x["result"] != "pass"])
+                else:
+                    row.update(completed=False, reason="정답 동작이 결과를 남기지 못했습니다. run.log를 보세요.")
+                video = out / "plan-short.mp4"
+                if video.exists():
+                    row["video"] = f"{scenario}-{tag}.mp4"
+                    video.replace(run / "artifacts" / row["video"])
+                runs.append(row)
+    two = [r for r in runs if r["mode"] == "two-arm"]
+    record.update(runs=runs, videos=sorted(r["video"] for r in runs if r.get("video")),
+                  status="passed" if two and all(r["completed"] for r in two) else "failed",
+                  finished_at=datetime.now().astimezone().isoformat(timespec="seconds"))
+    if not runs:
+        record["reason"] = f"계획 단계가 끝나지 못했습니다(종료 코드 {code}). run.log를 보세요."
+    elif record["status"] == "failed":
+        record["reason"] = "두 팔 모드가 과제를 끝까지 마치지 못했습니다."
+    file.write_text(json.dumps(record, ensure_ascii=False), encoding="utf-8")
+    return 0 if record["status"] == "passed" else 1
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     commands = parser.add_subparsers(dest="command", required=True)
@@ -253,8 +305,13 @@ def main(argv=None) -> int:
     two.add_argument("--task", required=True, choices=["stack", "rehandle"])
     two.add_argument("--seed", type=int, default=0)
     two.add_argument("--source-sha", help="the commit this copy came from, when the folder has no Git")
+    both = commands.add_parser("two-arm-compare")
+    both.add_argument("--root", required=True)
+    both.add_argument("--python", default=sys.executable)
+    both.add_argument("--seed", type=int, default=0)
+    both.add_argument("--source-sha", help="the commit this copy came from, when the folder has no Git")
     args = parser.parse_args(argv)
-    return run_round(args) if args.command == "round" else run_two_arm(args)
+    return dict(round=run_round, two_arm=run_two_arm, two_arm_compare=run_two_arm_compare)[args.command.replace("-", "_")](args)
 
 
 if __name__ == "__main__":

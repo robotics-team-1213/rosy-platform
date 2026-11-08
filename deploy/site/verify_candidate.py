@@ -32,6 +32,7 @@ REQUIRED_DEPLOYMENT_FILES = (
     "rosy-site-firewall-check.timer",
     "discovery-token.template.txt", "site_db.py", "site_users.py", "candidate_signing.py",
     "compose.pairing.yaml", "compose.omx.yaml", "compose.workcell.yaml", "compose.control-unit.yaml",
+    "compose.control-unit-remote.yaml",
     "pairing-sync-token.template.txt",
     "compose.monitoring.yaml", "Caddyfile.monitoring",
     "compose.account.yaml", "Caddyfile.account",
@@ -138,6 +139,8 @@ def _verify_candidate_content(candidate_dir: Path, *, manifest_bytes: bytes | No
         required.discard("compose.workcell.yaml")
     if "compose.control-unit.yaml" not in hashes:
         required.discard("compose.control-unit.yaml")
+    if "compose.control-unit-remote.yaml" not in hashes:
+        required.discard("compose.control-unit-remote.yaml")
     if not set(hashes) & set(MONITORING_DEPLOYMENT_FILES):
         required.difference_update(MONITORING_DEPLOYMENT_FILES)
     unsupported = set(hashes) - required
@@ -222,6 +225,7 @@ def _verify_candidate_content(candidate_dir: Path, *, manifest_bytes: bytes | No
         "omx": "compose.omx.yaml" in hashes,
         "workcell": "compose.workcell.yaml" in hashes,
         "control_unit": "compose.control-unit.yaml" in hashes,
+        "control_unit_remote": "compose.control-unit-remote.yaml" in hashes,
         "monitoring": set(MONITORING_DEPLOYMENT_FILES) <= set(hashes),
         "image_archive_sha256": archive_hash,
     }
@@ -387,6 +391,7 @@ def verify_candidate(
             "omx": summary["omx"],
             "workcell": summary["workcell"],
             "control_unit": summary["control_unit"],
+            "control_unit_remote": summary["control_unit_remote"],
             "monitoring": summary["monitoring"],
             "image_archive_sha256": summary["image_archive_sha256"],
             "manifest_image_ids": summary["image_ids"],

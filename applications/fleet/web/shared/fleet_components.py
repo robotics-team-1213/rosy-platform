@@ -4,7 +4,8 @@ from pathlib import Path
 import re
 
 PAGES = {'index.html': 'console', 'installation/install.html': 'install',
-         'sitemap/site-map.html': 'map', 'cell/cell.html': 'work', 'work/policy.html': 'work'}
+         'sitemap/site-map.html': 'map', 'cell/cell.html': 'work', 'work/policy.html': 'work',
+         'maintenance/maintenance.html': 'install'}
 DOCUMENT_PAGES = {'accounts.html': ('Rosy Account', '계정 관리'), 'profile.html': ('Rosy Account', '내 계정'),
                   'login.html': ('Rosy Account', '계정 로그인'), 'learning.html': ('Rosy Fleet', '학습')}
 
