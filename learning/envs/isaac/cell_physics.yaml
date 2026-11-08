@@ -21,7 +21,8 @@ candidates:
     date: '2026-11-09'
     method: omx_twin.py tracking, per-joint kp grid (10-80) by servo lag over arm_b's real episodes, one kp per joint
     evidence: Rosy/docs/workspace-records/2026-11-09/omx-twin-night/findings.md (feat/omx-sim-twin)
-    note: real lag 0.10-0.34 s per joint against 0.16 s at kp 40; RMS improves only a little (j5 0.62 -> 0.53 deg)
+    note: real lag 0.10-0.34 s per joint against 0.16 s at kp 40; RMS improves only a little (j5 0.62 -> 0.53 deg). kv stayed 6.3,
+      so kp 20 also changes the damping ratio; a 7-step grid over episodes that may include arm_a ones (untagged before 11-08)
     arms:
       arm_b:
         joint1: {kp: 20.0}
@@ -33,7 +34,8 @@ candidates:
     date: '2026-11-09'
     method: omx_twin.py fit-camera, joint zeros against the top camera's arm outline; held-out median 12.6 -> 4.5 px
     evidence: Rosy/docs/workspace-records/2026-11-09/omx-twin-night/findings.md (feat/omx-sim-twin)
-    note: calibration, not dynamics; the worlds do not apply zero_offset_deg, only ranges carry it. Not checked at a known pose (G-20)
+    note: calibration, not dynamics; sim q = real q + radians(zero_offset_deg) (omx_twin.posed). The worlds do not apply it, only
+      ranges carry it. Not checked at a known pose (G-20)
     arms:
       arm_b:
         joint1: {zero_offset_deg: 4.0}

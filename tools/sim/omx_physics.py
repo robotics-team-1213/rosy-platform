@@ -70,10 +70,12 @@ def add_actuator(spec, name, c):
 
 def ranges(doc=None):
     """{low, high} per constant: the spread of every candidate's value, widened by 2 sd where a fit gave its uncertainty
-    (a candidate's `sd`, same shape as its `arms`). Design alone gives low == high."""
+    (a candidate's `sd`, same shape as its `arms`). Design alone gives low == high. `measured` says a fitted candidate
+    sets the constant itself: false means not measured (a sampler keeps its own width there), not known exactly."""
     doc = doc or load()
     cands = {n: Physics(n, doc) for n in doc["candidates"]}
     out = {"source": FILE.name, "candidates": sorted(cands), "arms": {}, "container": {}}
+    fitted = [c for c in doc["candidates"].values() if c.get("source") == "fitted"]
     for arm in ARMS:
         for j in JOINTS:
             for k in KEYS:
@@ -85,15 +87,17 @@ def ranges(doc=None):
                     sd = doc["candidates"][n].get("sd", {}).get(arm, {}).get(j, {}).get(k, 0.0)
                     values += [v - 2 * sd, v + 2 * sd]
                 if len(values) > 1 or k != "zero_offset_deg":
+                    measured = any(k in c.get("arms", {}).get(arm, {}).get(j, {}) for c in fitted)
                     out["arms"].setdefault(arm, {}).setdefault(j, {})[k] = {"low": max(min(values), 0.0) if k != "zero_offset_deg" else min(values),
-                                                                            "high": max(values)}
+                                                                            "high": max(values), "measured": measured}
     for k, pick in (("mass", lambda v: v), ("friction", lambda v: v[0])):
         values = []
         for n, p in cands.items():
             if k in p.container():
                 sd = doc["candidates"][n].get("sd", {}).get("container", {}).get(k, 0.0)
                 values += [pick(p.container()[k]) - 2 * sd, pick(p.container()[k]) + 2 * sd]
-        out["container"][k] = {"low": max(min(values), 0.0), "high": max(values)}
+        out["container"][k] = {"low": max(min(values), 0.0), "high": max(values),
+                               "measured": any(k in c.get("container", {}) for c in fitted)}
     return out
 
 

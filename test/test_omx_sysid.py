@@ -42,14 +42,16 @@ def test_unknown_candidate_and_base_loop_are_refused():
 
 def test_ranges_span_candidates_and_widen_by_two_sd():
     r = physics.ranges()
-    assert r["arms"]["arm_b"]["joint1"]["kp"] == {"low": 20.0, "high": 40.0}
-    assert r["arms"]["arm_a"]["joint1"]["kp"] == {"low": 40.0, "high": 40.0}
-    assert r["arms"]["arm_b"]["joint1"]["zero_offset_deg"] == {"low": 0.0, "high": 4.0}
+    assert r["arms"]["arm_b"]["joint1"]["kp"] == {"low": 20.0, "high": 40.0, "measured": True}
+    assert r["arms"]["arm_a"]["joint1"]["kp"] == {"low": 40.0, "high": 40.0, "measured": False}  # design only: not measured
+    assert r["arms"]["arm_b"]["joint2"]["kp"]["measured"] is False
+    assert r["arms"]["arm_b"]["joint1"]["zero_offset_deg"] == {"low": 0.0, "high": 4.0, "measured": True}
+    assert r["container"]["friction"] == {"low": 1.0, "high": 1.0, "measured": False}
     assert "zero_offset_deg" not in r["arms"]["arm_a"]["joint1"]
     doc = physics.load()
     doc["candidates"]["fit"] = {"base": "design", "source": "fitted", "arms": {"arm_a": {"joint2": {"damping": 0.5}}},
                                 "sd": {"arm_a": {"joint2": {"damping": 0.1}}}}
-    assert physics.ranges(doc)["arms"]["arm_a"]["joint2"]["damping"] == {"low": 0.3, "high": pytest.approx(0.7)}
+    assert physics.ranges(doc)["arms"]["arm_a"]["joint2"]["damping"] == {"low": 0.3, "high": pytest.approx(0.7), "measured": True}
 
 
 def test_the_layout_choice_defaults_to_design():
@@ -83,7 +85,7 @@ def test_promote_appends_a_candidate_and_never_overwrites(tmp_path):
     p = physics.Physics("servo-test", doc)
     assert p.joint("arm_b", "joint3") == dict(DESIGN, kp=25.0, damping=0.2)
     assert p.joint("arm_a", "joint3") == DESIGN
-    assert physics.ranges(doc)["arms"]["arm_b"]["joint3"]["kp"] == {"low": 21.0, "high": 40.0}
+    assert physics.ranges(doc)["arms"]["arm_b"]["joint3"]["kp"] == {"low": 21.0, "high": 40.0, "measured": True}
     with pytest.raises(SystemExit, match="exists"):
         sysid.promote(fit([1, 1, 1, 1, 1], [.5, .5, .5, .5, .5]), "servo-test", None, path)
     with pytest.raises(SystemExit, match="not promoted"):
@@ -164,7 +166,7 @@ def test_a_friction_fit_promotes_to_a_container_candidate_with_priority(tmp_path
     held = physics.Physics("push-test", doc).container()
     assert held == {"mass": 0.016, "friction": [r["mu"], 0.005, 0.0001], "priority": 1}
     span = physics.ranges(doc)["container"]["friction"]
-    assert span["low"] == pytest.approx(max(r["mu"] - 2 * r["sd"], 0)) and span["high"] == 1.0
+    assert span["low"] == pytest.approx(max(r["mu"] - 2 * r["sd"], 0)) and span["high"] == 1.0 and span["measured"]
     assert dict((c, k) for _, c, k, _ in sysid.survey(doc))["container.friction"] == "fitted"
 
 
@@ -174,3 +176,10 @@ def test_a_ramp_trace_reads_as_episode_ticks():
             {"t": 0.2, "chunk": "step_j2", "present": [0, 2, 0, 0, 0, 5], "target": [0, 2, 0, 0, 0, 5], "sent": None}]
     assert sysid.ramp_ticks(rows) == [{"t": 0.1, "state": [0, 1, 0, 0, 0, 5], "action": [0, 1.5, 0, 0, 0, 5]},
                                       {"t": 0.2, "state": [0, 2, 0, 0, 0, 5], "action": [0, 2, 0, 0, 0, 5]}]
+
+
+def test_episodes_say_which_arm_only_from_11_08(tmp_path):
+    for name, io in (("b", "/x/chunk-io-b"), ("a", "/x/chunk-io-a/"), ("old", None)):
+        (tmp_path / name).mkdir()
+        (tmp_path / name / "task.json").write_text(json.dumps({"io": io} if io else {"task": "strip-to-strip"}))
+    assert [sysid.recorded_arm(tmp_path / n) for n in ("b", "a", "old", "missing")] == ["arm_b", "arm_a", None, None]

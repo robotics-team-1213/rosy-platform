@@ -80,15 +80,32 @@ def ramp_ticks(rows):
             for r in rows if str(r.get("chunk") or "").startswith("step_j") and r.get("present")]
 
 
+def recorded_arm(folder):
+    """arm_a / arm_b from an episode's task.json "io" (chunk-io-a / chunk-io-b, recorded from 2026-11-08), else None."""
+    try:
+        io = str(json.loads((Path(folder) / "task.json").read_text()).get("io") or "")
+    except (OSError, ValueError):
+        return None
+    return {"a": "arm_a", "b": "arm_b"}.get(io.rstrip("/")[-1:]) if "chunk-io-" in io else None
+
+
 class Episodes:
     """The real side of the fit: each episode folder's ticks (episode_recorder) or a cell_step runner trace file, and its
-    real joint1-5 on the 50 Hz grid (rad)."""
+    real joint1-5 on the 50 Hz grid (rad). A folder recorded on the other arm is left out; ones that do not say which arm
+    (before 2026-11-08) are kept and listed in `untagged`."""
 
-    def __init__(self, folders):
+    def __init__(self, folders, arm="arm_b"):
         import omx_cell_sim as cs
         import omx_twin as twin
-        self.items = []
+        self.items, self.untagged, self.other = [], [], []
         for f in map(Path, folders):
+            if f.is_dir():
+                who = recorded_arm(f)
+                if who and who != arm:
+                    self.other.append(f.name)
+                    continue
+                if who is None:
+                    self.untagged.append(f.name)
             ticks = twin.read_jsonl(f / "ticks.jsonl") if f.is_dir() else ramp_ticks(twin.read_jsonl(f))
             if len(ticks) <= 50:
                 continue  # omx_twin.replay skips these too
@@ -173,7 +190,8 @@ def servo(folders, cell_path, out, base="design", arm="arm_b", keys=("kp", "kv",
         raise SystemExit("omx_cell_sim models arm_b only; arm_a's episodes need the two-arm world")
     phys = physics.Physics(base)
     start = [{k: phys.joint(arm, j)[k] for k in keys} for j in BODY]
-    fit, hold = Episodes(folders).split()
+    episodes = Episodes(folders, arm)
+    fit, hold = episodes.split()
     x0 = np.log([max(row[k], BOUNDS[k][0]) for row in start for k in keys])
     lo = np.log([BOUNDS[k][0] for _ in BODY for k in keys])
     hi = np.log([BOUNDS[k][1] for _ in BODY for k in keys])
@@ -192,7 +210,7 @@ def servo(folders, cell_path, out, base="design", arm="arm_b", keys=("kp", "kv",
         sd_log = np.full(res.x.size, np.nan)
     sd = [{k: round(fitted[j][k] * float(sd_log[j * len(keys) + i]), 6) for i, k in enumerate(keys)} for j in range(5)]
     result = dict(schema=SCHEMA, base=base, arm=arm, keys=list(keys), gravity_comp=gravity_comp, cell=str(cell_path),
-                  episodes=dict(fit=[e[0] for e in fit], hold=[e[0] for e in hold]),
+                  episodes=dict(fit=[e[0] for e in fit], hold=[e[0] for e in hold], untagged=episodes.untagged, other_arm=episodes.other),
                   fitted={j: {k: round(v, 6) for k, v in row.items()} for j, row in zip(BODY, fitted)},
                   sd={j: row for j, row in zip(BODY, sd)}, rms_deg=score, nfev=int(res.nfev), status=res.message,
                   at=dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"))
