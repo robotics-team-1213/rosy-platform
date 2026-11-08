@@ -4739,3 +4739,7 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 변경: `tools/remote/site_map.py`(`show`, `check`)가 main checkout의 `private/site-map.yaml`(rosy.site-map/1)을 읽고 각 PC의 OpenRB 보드를 ssh로 읽어 빠진 보드·지도에 없는 보드를 보고한다. `deploy/hosts/README.md` 새 PC 절차 0단계, `tools/remote/AGENTS.md`
 - 증거: R 이전 중 배치표·lab-hosts·services.yaml·omx-arm-boards.json이 서로 달라 리더 보드 2개가 "매핑 없음"으로 보였다. 서보 ping으로 리더(ID 1–6, XL330)임을 확인해 지도에 넣었고 live `check`가 4개 일치를 보고했다
 - gate 변화: 없음
+## 2026-11-08 · uncommitted · feat(omx): 이름 있는 운영자가 API로 팔 사건 보류를 해제한다 (D-971)
+- 변경: `omx_incident.py clear --arm --note --token-file`가 그 PC의 관측 env로 Fleet에 열린 사건을 묻고, 운영자 본인 토큰(0600)으로 기존 `…/incidents/{id}/clear`를 부른 뒤 Fleet의 "not held"로 로컬 HOLD 파일도 걷는다. 팔 source 토큰은 쓰지 않는다
+- 증거: 11-07 arm_b 보류가 남아 사람이 이상 없음을 확인했는데도 콘솔 로그인 없이는 풀 수 없었다. CELL-A에 운영자 `livsbittt` 토큰을 등록해 API로 해제했다. 한글 note와 `basis`를 함께 보내자 CELL-A(09069e25)가 422를 돌려 note만 보낸다
+- gate 변화: 없음
