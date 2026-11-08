@@ -18,6 +18,7 @@ import work_queue as wq  # noqa: E402
 
 LEARNER = "test/learning/perception/test_learning_workflow_pipeline_browser.py"
 NEED = frozenset({"learner_venv"})
+ROOM = {"cores": 8, "mem": 16, "site": False, "light": False}
 
 
 @pytest.fixture(autouse=True)
@@ -79,7 +80,7 @@ def test_strand_ends_unservable_work_as_not_run_instead_of_looping():
 def test_run_waits_for_a_capable_host_then_fails_as_not_run(monkeypatch, repo, tmp_path):
     path, _ = repo
     monkeypatch.delenv("ROSY_TEST_LOCAL", raising=False)
-    rp.HEADROOM["site@1"] = {"caps": frozenset()}
+    rp.HEADROOM["site@1"] = {**ROOM, "caps": frozenset()}
     monkeypatch.setattr(rp, "placed_hosts", lambda cls="pytest", hosts=None, cores=0: ["site@1"])
     monkeypatch.setattr(rp, "run_on", lambda *a, **k: pytest.fail("a host without the capability took the test"))
     now = [0.0]
@@ -91,7 +92,7 @@ def test_run_waits_for_a_capable_host_then_fails_as_not_run(monkeypatch, repo, t
 def test_run_takes_the_test_once_a_capable_host_is_placed(monkeypatch, repo, tmp_path):
     path, _ = repo
     monkeypatch.delenv("ROSY_TEST_LOCAL", raising=False)
-    rp.HEADROOM.update({"site@1": {"caps": frozenset()}, "model@1": {"caps": NEED}})
+    rp.HEADROOM.update({"site@1": {**ROOM, "caps": frozenset()}, "model@1": {**ROOM, "caps": NEED}})
     monkeypatch.setattr(rp, "placed_hosts", lambda cls="pytest", hosts=None, cores=0: ["site@1", "model@1"])
     monkeypatch.setattr(rp, "run_on", lambda host, inv, logs, sha, repo, label, *a, **k: [0] * len(inv))
     assert rp.run([["suite/test_needs.py"]], [tmp_path / "1.txt"], repo=path) == [0]

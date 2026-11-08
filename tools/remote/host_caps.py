@@ -35,7 +35,7 @@ def needs(repo: Path, sha: str, invocations: list[list[str]]) -> list[frozenset[
     """Per invocation, the capabilities declared by the test files or folders it names (as committed at sha)."""
     result = []
     for inv in invocations:
-        paths = tuple(sorted({w.split("::")[0] for w in inv if re.fullmatch(r"[\w./-]+(::.*)?", w) and "/" in w}))
+        paths = tuple(sorted({w.split("::")[0] for w in inv if re.fullmatch(r"[\w./-]+(::.*)?", w)}))
         result.append(_declared(str(repo), sha, paths) if paths else frozenset())
     return result
 
