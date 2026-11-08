@@ -43,6 +43,7 @@ PINNED_CONFIRMS = {
     "middleware/robot_ui/robot/panels/host/operations.js": 1,
     "middleware/robot_ui/robot/panels/setup/dock-admin.js": 2,
     "middleware/robot_ui/robot/panels/setup/docking.js": 1,
+    "middleware/robot_ui/robot/panels/setup/navigation-approval.js": 1,
     "middleware/robot_ui/robot/panels/setup/localization.js": 1,
     "middleware/robot_ui/robot/panels/setup/traffic-policy.js": 1,
     "middleware/robot_ui/robot/panels/system/security.js": 1,

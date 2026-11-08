@@ -1352,6 +1352,12 @@
 - 결정: API v1.363; 기존 CORE 최종 명령·모드 owner 유지.
 - 교훈: CE 해당 없음 — 최종 코드·회귀 시험·API 계약으로 판단 근거를 재현할 수 있음.
 
+## 2026-11-07 · uncommitted · feat(navigation): 항법 재승인 REST (D-986)
+- 변경: `v1/navigation_approval.py`, `core_features/command/approval_trials.py`, API reference v1.367
+- 증거: 원격 시험. 장치 수용 없음
+- gate 변화: 없음
+- 결정: D-986 2항
+- 교훈: 없음
 ## 2026-11-07 · uncommitted · 계정 로그인 복귀 목록에 역할 화면 추가
 - 변경: CORE 복귀 허용 목록에 /console, /setup, /device를 정확한 경로로 더했다. 다른 주소는 그대로 거절한다.
 - 증거: test_account_pipeline.py 허용 3건과 거절 1건. 원격 결과는 착지 기록을 따른다.

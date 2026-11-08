@@ -5,20 +5,42 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.374
+**Version:** v1.375
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.375 OMX 팔 사건의 원인 라벨과 정지 앞뒤 사진 (D-971)
+
+- 해제 `POST .../incidents/{incident_id}/clear`가 선택 필드 `cause`(`blocked`·`wrong_position`·`snagged`·`too_fast`·`no_room`·`software_or_config`·`camera_or_map`·`other`·`unknown`)와 `basis`(`repeat`·`measured`·`seen`·`unknown`)를 받는다. 사람이 고른 원인과 그 근거(같은 동작을 다시 해 봄·측정값·사진으로 봄)다. 사건 행의 `cleared`에 `cause`·`basis`가 붙는다(없으면 null). 예전 본문 `{note}`도 그대로 받는다.
+- `POST .../arms/{source_id}/incidents/{incident_id}/evidence`(관측 토큰, 그 팔의 사건만): 정지 앞뒤 사진 한 장 `ArmIncidentEvidenceFrame {camera, t_rel_s(-30..30), kind full|tip, sha256, jpeg_b64}`. 한 장 200,000 바이트 이내, 사건당 24장, 같은 sha256은 같은 장(멱등). 보고 뒤에 따로 보내므로 보고 본문 700,000 바이트는 그대로다. 응답 `{incident_id, seq}`, 404 모르는 사건, 409 가득 참, 413 본문 초과. `GET .../incidents/{incident_id}/evidence/{seq}`(뷰어)는 `image/jpeg`. 사건 행에 `evidence:[{seq,camera,t_rel_s,kind,sha256,bytes}]`(바이트 없음)가 붙는다. 해제 뒤 14일이 지난 사건의 `full` 장은 지우고 `tip` 장·라벨·사실은 남긴다.
+- 판정 `decision.hold`가 `false`인 보고(복구 흐름이 처리한 가드 정지를 원인 기록용으로 보낸 것)는 팔을 보류하지 않는다. `GET .../hold`와 보고 응답의 `hold`는 `decision.hold`가 false가 아닌 미해제 사건만 센다. 이전 보고는 모두 보류였으므로 기존 동작은 같다.
+- `GET .../arm-incidents/labelled`(`ai_observer`): 원인이 기록된 해제 사건 최근 200건(사실·판정·모델 설명·사람 원인과 근거·증거 장 목록). 학습 쪽이 사람 라벨·규칙 판정·모델 추측을 나란히 채점하는 입력이다. 모델 PC 수집기는 이 자리를 쓴다.
+
 
 ### v1.374 Account 가입·권한 요청 (D-993)
 
 - Additive. `POST /api/fleet/auth/access-requests`는 인증이 없는 공개 입력이다. `Origin`이 `Host`와 같아야 하며(아니면 403 `CSRF_REJECTED`) 본문은 4 KiB 이하(413 `REQUEST_TOO_LARGE`), 필드는 `name`(64자)·`username`(`^[a-z0-9._-]{1,32}$`)·`resource`(`site|robot|project:<id>`, 선택)·`note`(500자, 선택)뿐이다(그 밖은 422 `INVALID_REQUEST`). 유효한 로그인 쿠키가 있으면 요청은 그 계정의 권한 요청(`grant`)이고 이름·ID는 세션에서 정한다. 성공, 같은 대기 요청의 반복, 이미 있는 로그인 ID는 모두 같은 202 `{"status":"received"}`다. 최근 24시간의 대기 요청이 서비스 전체 200건 또는 한 주소 5건이면 429 `REQUESTS_FULL`이다.
 - `GET /api/fleet/auth/access-requests`, `POST /api/fleet/auth/access-requests/{request_id}/approve`(`role`, `grants`, 새 계정은 `password`·선택 `principal_id`, 기존 계정은 `revision`), `POST .../reject`(`reason`)는 `accounts.manage` 쿠키 세션이 필요하다. 승인은 기존 계정 발급·갱신 경로를 같은 트랜잭션에서 쓰며 요청만으로 권한이 생기지 않는다. 자세한 계약은 [Rosy Account protocol](rosy-account-protocol.md).
+
 ### v1.368 현장 운영 규칙 문서와 판정 API
 
 - 새 엔드포인트 `GET /api/fleet/site-rules/active`·`GET/PUT /api/fleet/site-rules/draft`·`POST /api/fleet/site-rules/activate`(D-982). 현장 규칙 문서 `rosy.site_rules/1`(차례 출발 `departure`, 충전 복귀 `return`, 정류·상하차 대기 `stops`, 대형 `formation`)을 지도처럼 초안·활성화·버전·감사(`site_map_events`)로 다룬다. 저장·활성화는 이름 있는 운영자, 활성화는 trip·대형·teach 중이면 409 `SITE_RULES_ROUTE_ACTIVE`다. 활성 문서가 없으면 값은 코드 상수와 같고 동작은 달라지지 않는다.
 - 규칙은 더 막을 수만 있다. 검증은 안전 하한을 넘는 값을 422로 거절하고(예: 충전 시작 15% 미만, 블록 수 3 미만, 대형 최소 간격 0.4 m 미만), 활성 지도에 없는 장소는 422 `SITE_RULES_UNKNOWN_PLACE`다. 이 문서는 CORE의 최종 판단·가드 한계·사람 확인을 바꾸지 않는다. `stops`는 저장·검증만 하고 실행은 아직 없다.
 - 새 엔드포인트 `POST /api/fleet/site-rules/judge`(읽기 권한). 가정 상태 `{state: {kind: departure|return|formation, ...}, rules?, source?}`를 받아 `{verdict: go|wait|refuse, reason, detail, rules_source, dispatch: false}`를 답한다. 실제 경로와 같은 순수 함수(`blocks.grant_order_key`, `ChargeBays.plan`, `slots`)를 쓰고 로봇에 아무것도 보내지 않는다.
 - 활성 문서가 있으면 Fleet이 쓰는 값이 바뀐다: 차례 출발의 병합 대기와 블록 수, 충전 칸 계획의 시작·나감 %. `formation`의 `min_gap_m`·`max_speed_mps`는 판정 답(`GAP_BELOW_SITE_MIN`→`gap_below_site_min` 등, `detail.enforced: false`)에만 쓰이고 대형 시작은 아직 막지 않는다. 모든 변경은 additive다.
+### v1.367 항법 재승인 REST (D-986)
+
+- `GET /api/v1/navigation/approval`(viewer)은 `phase`(IDLE·BEGINNING·MEASURING·SEALING·CANCELLING·FAILED), `reason`, `approval`(`valid`·`carried`·`measured_release_id`·`reason`), `needs_measurement`, `runtime_mode`, `trials`(필수 5개의 `state`: missing·valid·invalid), `trial`(진행 중과 직전 결과)을 돌려준다.
+- 다음 POST는 모두 operator다. Account 로그인은 `robot.operate`로 판정한다. 공용 개발 토큰은 403이다.
+  - `/begin`: 정지 상태에서 motor 측정으로 넘어간다. CORE가 다시 시작되므로 결과는 GET의 `phase`로 읽는다. 실패하면 이전 설정으로 돌아가 `FAILED`와 사유를 남긴다. 다른 사람의 갱신 hold가 있으면 거절한다. 측정은 3시간 30분이 지나거나 기체가 재부팅되면 자동 취소되고, GET의 `measuring_expires_in_s`가 남은 시간을 보여 준다.
+  - `/begin`과 `/trial/start`는 충전 중이면 `CHARGING`, 배터리 값이 없어 알 수 없으면 `CHARGING_UNKNOWN`으로 거절한다. `charging`은 도크가 확인한 충전만 뜻하므로 USB-C 선이 꽂혀 있어도 false일 수 있다. 선을 뺐는지는 사람이 본다.
+  - `/trial/start`: `direction`, `stop_cause`, `blind_zone_confirmed`. 속도는 받지 않는다. MANUAL로 전환하고, LiDAR 여유를 확인한다. 후진은 LiDAR로 증명할 수 없으므로, 사람이 확인했다는 `blind_zone_confirmed=true` 없이는 `BLIND_ZONE_CONFIRMATION_REQUIRED`로 거절한다. 스캔의 `range_min`이 몸 윤곽 안에 들어오지 않거나 윤곽을 읽을 수 없으면 `CLEARANCE_UNKNOWN`이다. 없거나 오래된 스캔은 `CLEARANCE_UNKNOWN`, 여유 부족은 `CLEARANCE_TOO_SMALL`이다.
+  - `/trial/start`의 `test_surface`(floor·lifted)는 필수이며 요청이 정한다. 추정하지 않는다. floor 시험은 끝날 때 LiDAR로 실제 이동을 확인해, odom과 어긋나면 기록 없이 `trial.last.code`를 `WHEELS_NOT_MOVING_BODY`로, 스캔을 쓸 수 없으면 `SCAN_UNUSABLE`로, 움직임이 짧으면 `TRIAL_TOO_SHORT`로 남긴다. 봉인의 `test_surface`와 다른 시험이 있으면 봉인을 거절한다.
+  - `/trial/hold`: 시험을 시작한 사람이 누르는 동안 보낸다. 일반 teleop 경로로 고정 저속을 명령한다.
+  - `/trial/stop`: 버튼 해제. `command_loss` 시험은 이 호출 없이 hold를 끊는다. 이 시험에 stop을 보내면 기록 없이 중단한다.
+  - `/seal`: `test_surface`(floor·lifted). 승인자는 본문이 아니라 로그인의 `principal_ref`다. 다섯 시험이 모두 valid여야 하며 성공하면 hardware 모드로 돌아간다. 항법은 시작하지 않는다. `/begin` 뒤 릴리스나 모터 지문이 바뀌었으면 시험 기록을 버리고 거절한다.
+  - `/navigation-start`: 유효한 봉인이 있을 때만 항법 서비스를 시작한다. 응답과 GET의 `os_update_stops_navigation=true`는 설치된 OS 갱신 유닛 때문에 항법이 곧 멈춘다는 뜻이다. OS A/B 설치로만 풀린다.
+  - `/cancel`: 진행 중 시험을 멈추고 이전 설정으로 돌아간다.
 
 ### v1.365 운행 시작의 배터리 확인과 충전 칸 점유 불명
 
@@ -513,7 +535,10 @@ It does not enable a physical owner, command, calibration or motion admission.
 | `POST /api/fleet/workcell-observations/{workcell_id}/usb-devices` | `X-Workcell-Observation-Token` of any arm of that workcell; strict `UsbCameraReport` `{workcell_id,candidates<=16,roles<=32}`; body limit 16KiB | 200 `{decisions:[{key,role}]}` for reported keys an operator decided; the stored report replaces the previous one and decisions for keys no longer reported are dropped. 401 bad token or another workcell's token; 404 unknown workcell; 413 `WORKCELL_OBSERVATION_TOO_LARGE`; 422 `INVALID_USB_CAMERA_REPORT` (incl. `workcell_id` differing from the path). no-store. |
 | `POST /api/fleet/workcell-observations/arms/{source_id}/incidents` | D-971. Source-bound `X-Workcell-Observation-Token`; strict `ArmIncidentReport` `{source_id,session_id,facts,decision,recovery?,frames<=2 [{role top\|side,sha256,jpeg_b64}]}`, `facts`/`decision`/`recovery` each a finite JSON object of at most 12,288 bytes and depth 6, each frame a JPEG of at most 200,000 bytes whose sha256 Fleet recomputes; body limit 700,000 bytes (413); `source_id` must equal the path (422) | 200 `{incident_id,hold:{held,incident_ids<=64,reason}}`; no-store. The same `(source_id, session_id)` returns the same incident |
 | `GET /api/fleet/workcell-observations/arms/{source_id}/hold` | D-971. Source-bound `X-Workcell-Observation-Token` | 200 `{held,incident_ids,reason}`; held while an incident of that arm is not cleared; no-store |
-| `POST /api/fleet/workcell-observations/arms/{source_id}/incidents/{incident_id}/clear` | D-971. Named operator (`require_named_operator`); body `{note}` (1-400 characters, no control characters; required) | 200 the arm's new hold; 404 unknown incident of that arm; 409 already cleared. Records who, when and the note; nothing is deleted |
+| `POST /api/fleet/workcell-observations/arms/{source_id}/incidents/{incident_id}/clear` | D-971. Named operator (`require_named_operator`); body `{note, cause?, basis?}` (note 1-400 characters, no control characters, required; v1.375 cause and basis from fixed lists) | 200 the arm's new hold; 404 unknown incident of that arm; 409 already cleared. Records who, when, the note and the person's cause with its basis; nothing is deleted |
+| `POST /api/fleet/workcell-observations/arms/{source_id}/incidents/{incident_id}/evidence` | v1.375. Source-bound `X-Workcell-Observation-Token`; strict `ArmIncidentEvidenceFrame {camera, t_rel_s, kind full\|tip, sha256, jpeg_b64}`, one JPEG of at most 200,000 bytes whose sha256 Fleet recomputes | 200 `{incident_id, seq}`; the same sha256 is the same frame; 404 unknown incident of that arm; 409 24 frames already; 413 body; no-store |
+| `GET /api/fleet/workcell-observations/arms/{source_id}/incidents/{incident_id}/evidence/{seq}` | v1.375. Existing Fleet viewer authentication | `image/jpeg`; no-store; 404 unknown or expired (whole frames 14 days after clearing) |
+| `GET /api/fleet/workcell-observations/arm-incidents/labelled` | v1.375. `ai_observer` only | `{incidents:[...]}` cleared incidents with a recorded cause, newest first (at most 200), frame lists without bytes; no-store |
 | `GET /api/fleet/workcell-observations/arms/{source_id}/incidents/{incident_id}/frames/{role}` | D-971. Existing Fleet viewer authentication; `role` is `top` or `side` | `image/jpeg`; no-store; 404 unknown |
 | `GET /api/fleet/workcell-observations/arm-incidents/unexplained` | D-971. `ai_observer` only | `{incidents:[{incident_id,source_id,session_id,facts,decision,recovery,frames:[{role,sha256,jpeg_b64}],...}]}` open incidents without an explanation, oldest first (at most 8); no-store |
 | `POST /api/fleet/workcell-observations/arms/{source_id}/incidents/{incident_id}/explanation` | D-971. `ai_observer` only (the one new write path of that role besides facts, heartbeat and proposals); body `{seen,suspected_cause,model}` (strict, text 1-400 characters) | 200 `{incident_id,explained:true}`; 404 unknown; 409 already explained or cleared. Stored and shown; it never changes the hold and starts nothing |
@@ -4615,8 +4640,10 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 |---|---|---|
 | v1.368 | 2026-11-07 | Additive (D-982): 현장 규칙 문서 `rosy.site_rules/1`(`GET/PUT /api/fleet/site-rules/draft`, `GET .../active`, `POST .../activate`)와 가정 상태 판정 `POST /api/fleet/site-rules/judge`(go/wait/refuse, 보내기 없음). 활성 문서가 없으면 동작 동일, 활성 문서는 더 막기만 한다 |
 | v1.362 | 2026-11-04 | Additive: D-977 `device_trial` opens the neutral `arm-transfers` jobs for exactly one arm (owner identity: `device: true`, matching `commissioning_revision`); `production` stays closed. New `operator_attested` record: `POST/GET .../jobs/{mission_id}/operator-attestations` (named operator distinct from proposer and approver, single-use, 45 s validity, `goal_confirmed: false`). The owner still refuses goals. |
+| v1.375 | 2026-11-08 | Additive (D-971): 팔 사건 해제의 `cause`·`basis`, 정지 앞뒤 사진 `POST/GET .../incidents/{id}/evidence`, 보류하지 않는 보고(`decision.hold: false`), `GET .../arm-incidents/labelled`. |
 | v1.374 | 2026-11-07 | Additive: Account 가입·권한 요청(D-993) — 공개 `POST /api/fleet/auth/access-requests`와 관리자 목록·승인·거절. |
 | v1.369 | 2026-11-07 | Additive (D-989): `GET`·`POST /api/fleet/auto-locate`, detections config `stream_wanted`. 사이트 설정 `fleet.map_pose.auto_locate_robots`(기본 빈 목록)에 든 로봇만 map pose `anchor_source:"auto_locate"`를 낸다 |
+| v1.367 | 2026-11-07 | Additive: 항법 재승인 REST `/api/v1/navigation/approval`(D-986). |
 | v1.365 | 2026-11-07 | Fleet 운행 시작의 배터리 근거 확인(422 `TRIP_BATTERY_UNCONFIRMED`)과 충전 칸 `unknown` 상태. |
 | v1.363 | 2026-11-06 | Additive: bodyless robot `manual`을 기존 CORE mode owner로 실행. Fleet 직접 조작의 dispatch/작업 소유권 재검사와 인증된 terminal zero 전달을 명시. |
 | v1.361 | 2026-11-04 | Additive: `GET /api/fleet/execution-profile`(D-979) — 앱이 읽는 읽기 전용 실행 프로필(`arm_execution` physical/simulated/closed, 등록·인증된 생산자 목록, `checked_at`). viewer·service 읽기, 쓰기 없음, 증명되지 않으면 closed. |

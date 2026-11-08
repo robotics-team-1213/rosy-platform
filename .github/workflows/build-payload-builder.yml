@@ -10,6 +10,8 @@ run-name: Payload builder ${{ github.sha }}
 on:
   workflow_dispatch:
   push:
+    # A publish PR branch push and its main push built the same image twice; branches use dispatch.
+    branches: [main]
     paths:
       - deploy/robot/pinky_pro/image/payload-builder/**
       - deploy/robot/pinky_pro/image/inputs.lock.yaml
