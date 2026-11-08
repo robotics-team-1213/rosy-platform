@@ -102,6 +102,14 @@ panels:
     min_role: operator
     module: panels/setup/docking.js
     css: [panels/surface-panels.css]
+  - id: setup.navigation_approval
+    title: 항법 재승인
+    surface: setup
+    slot: main
+    order: 35
+    min_role: operator
+    module: panels/setup/navigation-approval.js
+    css: [panels/surface-panels.css]
   - id: setup.dock_admin
     title: 도크 종류 및 등록 관리
     surface: setup

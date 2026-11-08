@@ -6,7 +6,7 @@ Shared domain vocabulary for this project — entities, named processes, and sta
 
 ### Control Unit, Integrated Control and Sub-control
 
-A Control Unit coordinates work within its own scope. It can operate independently or participate as a Sub-control unit under a parent. Integrated Control names its role when coordinating child units; the same unit may coordinate children while participating under another parent. These are logical roles, not PC or process counts. Hierarchical delegation remains a target; device execution authority stays with the existing owners (D-850).
+A Control Unit coordinates work within its own scope. It can operate independently or participate as a Sub-control unit under a parent. Integrated Control names its role when coordinating child units; the same unit may coordinate children while participating under another parent. These are logical roles, not PC or process counts. Delegating work does not transfer final device execution authority from its owner (D-850, D-995).
 
 On site the root unit is **통합관제 R**: it relays child summaries, delegation and stop requests, is the entry for external apps, and directly owns devices that have no child unit (now the Pinky robots). An arm set that shares objects and space is a **셀 관제 CELL-x** unit that owns its ledger, named approval, admission and arm stop/release (D-960, D-965). "통합 관제" alone names R's panel that gathers its children, not a unit. The console header shows the unit (`unit_id`), not `fleet_name`, which stays the pairing and lease identity (D-974).
 
@@ -15,6 +15,10 @@ On site the root unit is **통합관제 R**: it relays child summaries, delegati
 ### App names and supporting surfaces
 
 Rosy Robot, Fleet, Pilot, Cam, Learning and Games name user-facing applications. Rosy Vault and Rosy Device were work applications in the separate `rosy-vault` repository, which was retired on 2026-10-24; the real arm path is the OMX owner, not its device-core service (D-858). Cell is Fleet's palletizing preparation workspace, shown to operators as "팔레트 적재" so it is not read as a 셀 관제 unit (D-974); Account is a shared identity function; the robot face and Pilot connection lobby are supporting surfaces. These names do not count hosts, processes or installed packages. Current roles and source ownership are listed in [app names and roles](docs/reference/app-names-and-roles.md) (D-806).
+
+### Owner and host
+
+An Owner is the software authority responsible for a particular resource, state or command. Work coordination and final device execution have separate owners. A Host is the physical computer running an instance; sharing a host does not merge authority or ledgers. A person's owner permissions describe account capabilities, not a shared login or another device-command owner (D-994, D-995).
 
 ### ROSY Platform
 

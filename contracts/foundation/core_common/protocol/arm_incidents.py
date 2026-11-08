@@ -41,6 +41,18 @@ def _bounded(value):
 BoundedJson = Annotated[dict[str, Any], AfterValidator(_bounded)]
 
 
+def _intact_jpeg(frame):
+    try:
+        data = base64.b64decode(frame.jpeg_b64, validate=True)
+    except binascii.Error as error:
+        raise ValueError("frame is not base64") from error
+    if len(data) > ARM_INCIDENT_FRAME_BYTES or data[:2] != b"\xff\xd8":
+        raise ValueError("frame is not a JPEG within the size limit")
+    if hashlib.sha256(data).hexdigest() != frame.sha256:
+        raise ValueError("frame sha256 differs")
+    return frame
+
+
 class _Strict(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True, allow_inf_nan=False)
 
@@ -52,15 +64,7 @@ class ArmIncidentFrame(_Strict):
 
     @model_validator(mode="after")
     def intact_jpeg(self):
-        try:
-            data = base64.b64decode(self.jpeg_b64, validate=True)
-        except binascii.Error as error:
-            raise ValueError("frame is not base64") from error
-        if len(data) > ARM_INCIDENT_FRAME_BYTES or data[:2] != b"\xff\xd8":
-            raise ValueError("frame is not a JPEG within the size limit")
-        if hashlib.sha256(data).hexdigest() != self.sha256:
-            raise ValueError("frame sha256 differs")
-        return self
+        return _intact_jpeg(self)
 
 
 class ArmIncidentReport(_Strict):
@@ -96,5 +100,30 @@ class ArmIncidentExplanation(_Strict):
     model: Annotated[str, Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9_.:@/-]+$")]
 
 
+#: what stopped the arm, as the cell names it (cell_why's causes and the kinds of stop); and how the person knows it.
+#: 2026-11-07: people, models and frame strips all misread contact while measurement and repeats decided, so a cause
+#: comes with its basis and only a repeat or a measurement is scored as truth.
+CAUSES = ("blocked", "wrong_position", "snagged", "too_fast", "no_room", "software_or_config", "camera_or_map", "other",
+          "unknown")
+BASES = ("repeat", "measured", "seen", "unknown")
+ARM_INCIDENT_EVIDENCE_FRAMES = 24             # per incident, beside the report's two stills
+
+
 class ArmIncidentClear(_Strict):
     note: Text
+    cause: Literal[CAUSES] | None = None
+    basis: Literal[BASES] | None = None
+
+
+class ArmIncidentEvidenceFrame(_Strict):
+    """One frame of the seconds around a stop, sent after the report and on its own (each within the frame limit), so
+    the report stays small and a dropped link loses a frame, not the incident."""
+    camera: Annotated[str, Field(pattern=r"^[a-z][a-z0-9_]{0,31}$")]
+    t_rel_s: Annotated[float, Field(ge=-30, le=30)]
+    kind: Literal["full", "tip"]
+    sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
+    jpeg_b64: Annotated[str, Field(min_length=8, max_length=ARM_INCIDENT_FRAME_BYTES * 4 // 3 + 8)]
+
+    @model_validator(mode="after")
+    def intact_jpeg(self):
+        return _intact_jpeg(self)
