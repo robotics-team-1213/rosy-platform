@@ -28,6 +28,7 @@ ROOT = Path(__file__).resolve().parents[3]
 @pytest.mark.parametrize("path, identity", [
     ("/console", "#user-role"),
     ("/console/install", "#user-role"),
+    ("/console/maintenance", "#user-role"),
     ("/console/site-map", "#user-role"),
     ("/console/cell", "#user-role"),
     ("/console/policy", "#user-role"),  # field 2026-10-31: no token → signed out → login bounced to /console

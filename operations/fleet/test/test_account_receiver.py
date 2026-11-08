@@ -205,7 +205,7 @@ def test_receiver_pkce_preserves_known_document_query_and_anchor(receiver, targe
     '/console?unknown=value', '/console?view=work&view=records', '/console?view=other',
     '/console?show=new', '/console?view=work&show=other', '/console?inbox=0',
     '/console?view=records&arm_transfer=job:one', '/console?view=work&arm_transfer=bad/one',
-    '/console?robot=' + 'x' * 129, '/console?robot=../../x', '/console/site-map#other', '/console/install#other',
+    '/console?robot=' + 'x' * 129, '/console?robot=../../x', '/console/site-map#other', '/console/install#other', '/console/install#hosts',
     '/console/install?view=work', '/api/fleet/auth/authorize?client_id=evil',
     '/console?view=work&arm_transfer=' + 'x' * 193, '/console?' + 'x' * 4096,
 ])
