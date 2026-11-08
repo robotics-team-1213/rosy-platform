@@ -33,9 +33,9 @@ def main(argv=None):
         provider = ConnectedAPI(args.upstream, ssl.create_default_context(cafile=args.ca), args.origin)
         origin = args.origin
     if args.check:
-        assert len(ASSETS['pages']) == 8
+        assert len(ASSETS['pages']) == 9
         assert not any(name.split('.')[0] in ('fleet', 'rclpy') for name in sys.modules)
-        print('sample ready: 8 pages; Learning previews; no Fleet or ROS imports')
+        print('sample ready: 9 pages; Learning previews; no Fleet or ROS imports')
         return
     with make_server(provider, origin) as server:
         if args.mode == 'connected':

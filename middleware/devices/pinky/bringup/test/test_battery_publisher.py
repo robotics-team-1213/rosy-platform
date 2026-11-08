@@ -108,3 +108,12 @@ def test_a_hung_bus_is_probed_with_growing_gaps_and_recovers(module):
     assert _published(node)[0] == [8.67]
     node.voltage_callback()                     # healthy again: no gap
     assert _published(node)[0] == [8.67, 8.67]
+
+
+def test_the_injected_clock_does_not_replace_the_rclpy_node_clock(module):
+    """Release 175 died at start on the robot: ``self._clock = time.monotonic`` hid rclpy Node's own
+    ``_clock`` and ``create_timer`` read ``.handle`` from it. The stub Node has no clock, so check the name."""
+    def sentinel():
+        return 0.0
+    node = module.BatteryPublisher(battery_factory=FlakyBus(missing=0), clock=sentinel)
+    assert getattr(node, "_clock", None) is not sentinel

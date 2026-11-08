@@ -1,10 +1,13 @@
 """D-524 Service Control. No network and no real shutdown."""
 
+import fcntl
 import json
 import os
 import re
 import shutil
+import sqlite3
 import subprocess
+import time
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -12,6 +15,7 @@ import pytest
 import yaml
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
+from fleet.server.device_care import DeviceCareStore
 
 from fleet.host_control import (
     CONFIG_DIR,
@@ -43,35 +47,58 @@ def _code(call):
 def test_catalogue_is_the_three_ubuntu_hosts():
     hosts = {row["host"]: row for row in catalogue()["hosts"]}
     assert set(hosts) == {"site", "ai", "model"}
-    assert hosts["model"]["units"] == []
-    assert hosts["model"]["actions"] == ["reboot", "cancel-reboot", "clean-storage"]
-    assert hosts["ai"]["actions"][:3] == ["reboot", "cancel-reboot", "clean-storage"]
-    assert hosts["site"]["actions"] == ["reboot", "cancel-reboot", "restart-unit"]
-    assert hosts["site"]["stoppable_units"] == []
+    assert "rosy-review-v13.service" in hosts["model"]["units"]
+    assert hosts["model"]["actions"] == ["reboot", "reboot-over-jobs", "cancel-reboot", "clean-storage", "restart-unit"]
+    assert hosts["ai"]["actions"][:4] == ["reboot", "reboot-over-jobs", "cancel-reboot", "clean-storage"]
+    assert hosts["site"]["actions"] == ["reboot", "reboot-over-jobs", "cancel-reboot", "restart-unit"]
     assert "docker.service" in hosts["site"]["units"]
-    assert "pinky-backend.service" in hosts["ai"]["stoppable_units"]
+    assert "rosy-situation.service" in hosts["ai"]["units"]
+    assert not any(unit.startswith("pinky-") for row in hosts.values() for unit in row["units"])
 
 
 def test_reboot_is_a_delayed_helper_action_and_pkill_is_refused():
-    assert decide("site", "reboot", None, confirmed=True)["argv"] == ("reboot",)
+    # A person's reboot respects running jobs; only the explicit second step goes past them.
+    assert decide("site", "reboot", None, confirmed=True)["argv"] == ("reboot-if-free",)
+    assert decide("site", "reboot-over-jobs", None, confirmed=True)["argv"] == ("reboot",)
     for action in ("pkill", "kill", "shell", "poweroff"):
         assert _code(lambda: decide("site", action, None, confirmed=True)) == "UNKNOWN_ACTION"
 
 
-def test_site_units_restart_but_never_stop():
-    for unit in HOSTS["site"]:
-        assert decide("site", "restart-unit", unit, confirmed=True)["argv"] == ("restart-unit", unit)
-        assert _code(lambda: decide("site", "stop-unit", unit, confirmed=True)) == "UNIT_NOT_ALLOWED"
+def test_units_restart_but_no_unit_can_stop():
+    for host, units in HOSTS.items():
+        for unit in units:
+            assert decide(host, "restart-unit", unit, confirmed=True)["argv"] == ("restart-unit", unit)
+            assert _code(lambda: decide(host, "stop-unit", unit, confirmed=True)) == "UNKNOWN_ACTION"
 
 
-def test_only_an_allowlisted_unit_on_that_host_can_stop():
-    assert decide("ai", "stop-unit", "pinky-backend.service", confirmed=True)["argv"] == (
-        "stop-unit", "pinky-backend.service")
+def test_only_an_allowlisted_unit_on_that_host_can_restart():
     for host, unit in (("ai", "docker.service"), ("site", "ssh.service"),
-                       ("model", "ollama.service"), ("ai", "pinky-backend.service;reboot"),
+                       ("model", "ollama.service"), ("ai", "rosy-situation.service;reboot"),
                        # D-795: cross-host DDS units (AI PC Nav2, rosbridge) are gone.
                        ("ai", "pinky-nav2.service"), ("ai", "pinky-rosbridge-d12.service")):
-        assert _code(lambda: decide(host, "stop-unit", unit, confirmed=True)) == "UNIT_NOT_ALLOWED"
+        assert _code(lambda: decide(host, "restart-unit", unit, confirmed=True)) == "UNIT_NOT_ALLOWED"
+
+
+def test_a_person_restarts_exactly_the_user_units_services_yaml_flags():
+    """Two lists of one fact; a unit retired from a host must leave the restart list in the same change."""
+    roles = yaml.safe_load((SITE.parents[1] / "deploy/hosts/services.yaml").read_text(encoding="utf-8"))["roles"]
+
+    def flagged(*names):
+        found = set()
+        for name in names:
+            for unit, entry in roles[name].items():
+                if not entry.get("operator_restart"):
+                    continue
+                assert entry["run"] == "active", unit
+                assert entry.get("gpu") != "idle-yield", unit  # a restart would take back a GPU that was lent out
+                stem = unit[:-len("@.service")] if "@" in unit else None
+                found |= {f"{stem}@{i}.service" for i in entry["instances"]} if stem else {unit}
+        return found
+
+    assert flagged("model") == set(HOSTS["model"])
+    assert flagged("ai") == set(HOSTS["ai"])
+    assert flagged("site", "omx") == set(HOSTS["site"]) - {
+        "docker.service", "rosy-site-stack.service", "rosy-site-firewall.service"}
 
 
 def test_only_the_lab_pcs_clean_storage_and_never_with_a_unit():
@@ -93,13 +120,13 @@ def test_helper_script_matches_the_allowlist_and_has_no_test_switch():
     assert "--machine=ai@" not in text and "\nCONF=/etc/rosy/host-control\n" in text
     for host, units in HOSTS.items():
         for unit, actions in units.items():
-            for action in ("restart-unit", "stop-unit"):
-                listed = re.search(rf"\b{host}:{action}:{re.escape(unit)}[|)]", text) is not None
-                assert listed is (action in actions), (host, action, unit)
+            assert re.search(rf"\b{host}:restart-unit:{re.escape(unit)}[|)]", text), (host, unit)
+    assert len(re.findall(r"\b\w+:restart-unit:\S+?[|)]", text)) == sum(map(len, HOSTS.values()))
+    assert "stop-unit" not in text and "systemctl --no-block stop" not in text
 
 
 @posix
-@pytest.mark.parametrize("role, writes", [("ai", True), ("model", True), ("site", False)])
+@pytest.mark.parametrize("role, writes", [("ai", True), ("model", True), ("site", True)])
 def test_installer_names_the_storage_owner_on_the_lab_pcs(role, writes):
     """D-883: a model PC without units-user refused every clean-storage request."""
     out = subprocess.run(["bash", str(INSTALL), "--role", role, "--dry-run", "--units-user", "lab"],
@@ -200,20 +227,21 @@ def test_ssh_helper_uses_an_argument_list_and_a_fixed_ssh(monkeypatch, tmp_path)
 
     monkeypatch.setattr(subprocess, "run", fake_run)
     helper = helper_from_config(_config(tmp_path, "site rosy@site-pc.local\nai ai@ai-pc.local\n"))
-    assert helper.run("ai", ("restart-unit", "pinky-backend.service"))["ok"] is True
+    assert helper.run("ai", ("restart-unit", "rosy-situation.service"))["ok"] is True
     assert seen["argv"][0] == "/usr/bin/ssh" and seen["shell"] is False
-    assert seen["argv"][-4:] == ["--", "ai@ai-pc.local", "restart-unit", "pinky-backend.service"]
+    assert seen["argv"][-4:] == ["--", "ai@ai-pc.local", "restart-unit", "rosy-situation.service"]
     assert "StrictHostKeyChecking=yes" in seen["argv"]
     assert helper.run("model", ("reboot",))["code"] == "HOST_HELPER_UNAVAILABLE"
 
 
 def test_helper_exit_codes_become_api_codes(monkeypatch, tmp_path):
-    codes = iter([3, 4, 5, 255])
+    codes = iter([3, 4, 5, 6, 7, 255])
     monkeypatch.setattr(subprocess, "run", lambda argv, **kw: subprocess.CompletedProcess(
         argv, next(codes), stdout="", stderr=""))
     helper = helper_from_config(_config(tmp_path, "model rosy@model-pc.local\n"))
-    assert [helper.run("model", ("reboot",))["code"] for _ in range(4)] == [
-        "REBOOT_ALREADY_SCHEDULED", "NO_HOST_CONTROL_REBOOT", "NO_STORAGE_SERVICE", "HOST_HELPER_FAILED"]
+    assert [helper.run("model", ("reboot",))["code"] for _ in range(6)] == [
+        "REBOOT_ALREADY_SCHEDULED", "NO_HOST_CONTROL_REBOOT", "NO_STORAGE_SERVICE",
+        "ARM_SESSION_ACTIVE", "HOST_JOBS_ACTIVE", "HOST_HELPER_FAILED"]
 
 
 def test_missing_or_bad_config_stays_unavailable(tmp_path):
@@ -243,6 +271,46 @@ def _client(helper, *, named=True):
     return TestClient(app)
 
 
+def test_each_request_and_its_answer_stay_in_the_care_history(tmp_path):
+    """D-991: the audit row names only the host; a person asking what happened needs the action."""
+    class Answers:
+        def __init__(self):
+            self.codes = iter([{"ok": True, "code": "ACCEPTED"}, {"ok": False, "code": "ARM_SESSION_ACTIVE"}])
+
+        def run(self, host, argv):
+            return next(self.codes)
+
+    client = _client(Answers())
+    client.app.state.device_care = DeviceCareStore(tmp_path / "care.db")
+    send = {"operator_confirmed": True}
+    assert client.post("/api/fleet/hosts/model/control", json={
+        **send, "action": "restart-unit", "unit": "rosy-review-v13.service"}).status_code == 200
+    assert client.post("/api/fleet/hosts/model/control", json={**send, "action": "reboot"}).status_code == 409
+    rows = client.get("/api/fleet/hosts").json()["history"]["model"]
+    assert [row["text"] for row in rows] == ["reboot ARM_SESSION_ACTIVE", "restart-unit rosy-review-v13.service ACCEPTED"]
+    assert {row["actor"] for row in rows} == {"operator-1"}
+
+
+def test_history_is_optional_and_a_broken_store_never_changes_the_answer(tmp_path):
+    class Broken:
+        def add_host_event(self, *_, **__):
+            raise sqlite3.OperationalError("disk full")
+
+        def host_events(self, *_):
+            raise sqlite3.OperationalError("disk full")
+
+    class Accepts:
+        def run(self, host, argv):
+            return {"ok": True, "code": "ACCEPTED"}
+
+    client = _client(Accepts())
+    assert client.get("/api/fleet/hosts").json()["history"] == {}
+    client.app.state.device_care = Broken()
+    assert client.get("/api/fleet/hosts").json()["history"] == {}
+    assert client.post("/api/fleet/hosts/ai/control", json={
+        "action": "cancel-reboot", "unit": None, "operator_confirmed": True}).status_code == 200
+
+
 def test_route_schedules_a_confirmed_restart_and_refuses_pkill(caplog):
     class Recording:
         def run(self, host, argv):
@@ -258,13 +326,13 @@ def test_route_schedules_a_confirmed_restart_and_refuses_pkill(caplog):
     assert not hasattr(helper, "call")
     caplog.set_level("INFO", logger="fleet.server.host_control_routes")
     accepted = client.post("/api/fleet/hosts/ai/control", json={
-        "action": "restart-unit", "unit": "pinky-backend.service",
+        "action": "restart-unit", "unit": "rosy-situation.service",
         "operator_confirmed": True})
     assert accepted.status_code == 200
-    assert helper.call == ("ai", ("restart-unit", "pinky-backend.service"))
+    assert helper.call == ("ai", ("restart-unit", "rosy-situation.service"))
     assert accepted.json()["requested_by"] == "operator-1"
     logged = [r.getMessage() for r in caplog.records]
-    assert any("action=restart-unit unit=pinky-backend.service principal=operator-1" in m
+    assert any("action=restart-unit unit=rosy-situation.service principal=operator-1" in m
                and "code=ACCEPTED" in m for m in logged)
     assert any(m.startswith("host control request host=ai") for m in logged)
 
@@ -307,18 +375,21 @@ def test_hosts_route_attaches_guard_headroom_and_ignores_a_bad_drift_file(tmp_pa
     assert body["drift"] is None
 
 
-def test_install_task_shows_host_headroom_and_has_no_process_kill():
+def test_pc_maintenance_shows_host_headroom_and_has_no_process_kill():
     web = Path(__file__).resolve().parents[3] / 'applications/fleet/web'
-    page = (web / "installation" / "install.html").read_text(encoding="utf-8")
-    script = (web / "installation" / "host-services.js").read_text(encoding="utf-8")
-    install = (web / "installation" / "install.js").read_text(encoding="utf-8")
+    page = (web / "maintenance" / "maintenance.html").read_text(encoding="utf-8")
+    script = (web / "maintenance" / "host-services.js").read_text(encoding="utf-8")
+    entry = (web / "maintenance" / "maintenance-page.js").read_text(encoding="utf-8")
+    install = (web / "installation" / "install.html").read_text(encoding="utf-8")
     assets = json.loads((web / 'assets.json').read_text(encoding='utf-8'))['assets']
-    assert 'id="host-services"' in page and "호스트 서비스" in page
+    assert 'id="host-services"' in page and "<title>Rosy Fleet — PC 정비</title>" in page
+    assert 'id="host-services"' not in install and 'href="/console/maintenance"' in install
+    assert 'stop-unit' not in script
     assert "pkill" not in script and "kill" not in script
     assert "10분 뒤 재부팅" in script and "operator_confirmed: true" in script
     assert '.includes("clean-storage")' in script  # only hosts whose catalogue offers it get the button
-    assert 'id: "hosts"' in install and 'from "./host-services.js"' in install
-    assert assets['host-services.js']['path'] == 'installation/host-services.js'
+    assert "createHostServices" in entry
+    assert assets['host-services.js']['path'] == 'maintenance/host-services.js'
 
 
 def test_app_without_named_principals_never_reaches_a_helper(monkeypatch):
@@ -345,8 +416,9 @@ def _helper_copy(tmp_path, role):
         "#!/bin/sh\n"
         f'if [ "$1" = -c ]; then rm -f {sched}; echo cancel >> {tmp_path}/calls; exit 0; fi\n'
         f'printf "USEC=%s\\nMODE=reboot\\n" "$(date +%s%N)" > {sched}; echo reboot >> {tmp_path}/calls\n')
-    for name in ("systemctl", "logger", "flock"):
+    for name in ("systemctl", "logger", "systemd-run"):
         (stub / name).write_text(f'#!/bin/sh\necho "{name} $*" >> {tmp_path}/calls\n')
+    (stub / "flock").write_text("#!/bin/sh\nexit 0\n")  # the helper's own `flock 9`; sessions use real locks
     for path in stub.iterdir():
         path.chmod(0o755)
     (tmp_path / "conf").mkdir(exist_ok=True)
@@ -356,6 +428,7 @@ def _helper_copy(tmp_path, role):
     for old, new in (("CONF=/etc/rosy/host-control", f"CONF={tmp_path / 'conf'}"),
                      ("/run/systemd/shutdown/scheduled", sched),
                      ("/run/rosy-host-control", tmp_path / "state"),
+                     ("HOME_ROOT=/home", f"HOME_ROOT={tmp_path / 'home'}"),
                      ("PATH=/usr/sbin:/usr/bin:/sbin:/bin", f"PATH={stub}:/usr/bin:/bin")):
         assert old in text
         text = text.replace(old, str(new))
@@ -378,6 +451,155 @@ def test_helper_refuses_a_second_reboot_and_cancels_only_its_own(tmp_path):
     assert helper("reboot") == 3
     assert helper("cancel-reboot") == 4
     assert (tmp_path / "calls").read_text().splitlines().count("cancel") == 1
+
+
+def _arm_session(tmp_path, shared=False):
+    """A real lock in /proc/locks, the way joint_tune (exclusive) and per-arm sessions (shared) hold it."""
+    lock = tmp_path / "home" / "op" / "rosy-omx" / "session.lock"
+    lock.parent.mkdir(parents=True, exist_ok=True)
+    fd = os.open(lock, os.O_CREAT | os.O_RDWR)
+    fcntl.flock(fd, fcntl.LOCK_SH if shared else fcntl.LOCK_EX)
+    return fd
+
+
+def _job_lock(tmp_path, pid, kind="gpu"):
+    jobs = tmp_path / "home" / "op" / "rosy-jobs"
+    jobs.mkdir(parents=True, exist_ok=True)
+    (jobs / f"train-{pid}.lock").write_text(f"{pid} {kind} 8 16\n")
+
+
+@posix
+def test_no_reboot_path_cuts_an_arm_session(tmp_path):
+    """2026-10-28: a reboot cut a chunk session mid-move and the arm dropped with torque off.
+    Only the nightly timer looked at the lock; the button and the guard's ladder did not."""
+    helper = _helper_copy(tmp_path, "site")
+    session = _arm_session(tmp_path)
+    assert helper("reboot") == 6
+    assert helper("reboot-if-free") == 6
+    assert not (tmp_path / "scheduled").exists()
+    os.close(session)
+    session = _arm_session(tmp_path, shared=True)
+    assert helper("reboot") == 6
+    os.close(session)
+    assert (tmp_path / "home" / "op" / "rosy-omx" / "session.lock").exists()  # a finished session leaves its file
+    assert helper("reboot") == 0
+
+
+@posix
+def test_a_session_started_during_the_delay_cancels_only_our_reboot(tmp_path):
+    """The +10 min is a window of its own: the helper asks again just before it ends."""
+    helper = _helper_copy(tmp_path, "site")
+    assert helper("reboot") == 0
+    calls = (tmp_path / "calls").read_text()
+    assert "systemd-run" in calls and "/usr/local/sbin/rosy-host-control recheck-reboot" in calls
+    assert helper("recheck-reboot") == 0
+    assert (tmp_path / "scheduled").exists()  # free: it goes ahead
+    session = _arm_session(tmp_path)
+    assert helper("recheck-reboot") == 0
+    os.close(session)
+    assert not (tmp_path / "scheduled").exists()
+    assert (tmp_path / "calls").read_text().splitlines().count("cancel") == 1
+    (tmp_path / "scheduled").write_text("USEC=1\nMODE=reboot\n")  # someone else's reboot is not ours
+    session = _arm_session(tmp_path)
+    assert helper("recheck-reboot") == 0
+    os.close(session)
+    assert (tmp_path / "scheduled").exists()
+
+
+@posix
+def test_a_refused_recheck_timer_means_no_reboot_is_scheduled(tmp_path):
+    """Without the second look the delay is unguarded, so the reboot must not start at all."""
+    helper = _helper_copy(tmp_path, "site")
+    (tmp_path / "bin" / "systemd-run").write_text("#!/bin/sh\nexit 1\n")
+    assert helper("reboot") != 0
+    assert not (tmp_path / "scheduled").exists()
+
+
+@posix
+def test_a_persons_reboot_stops_at_live_jobs_and_the_guard_does_not(tmp_path):
+    """D-530: rebooting a PC a runaway training job has wedged is the guard's whole purpose."""
+    helper = _helper_copy(tmp_path, "model")
+    sleeper = subprocess.Popen(["sleep", "30"])
+    try:
+        _job_lock(tmp_path, sleeper.pid)
+        assert helper("reboot-if-free") == 7
+        assert not (tmp_path / "scheduled").exists()
+        assert helper("reboot") == 0
+    finally:
+        sleeper.kill()
+        sleeper.wait()
+
+
+@posix
+def test_dead_and_malformed_job_locks_do_not_block(tmp_path):
+    helper = _helper_copy(tmp_path, "model")
+    finished = subprocess.Popen(["true"])
+    finished.wait()
+    _job_lock(tmp_path, finished.pid)
+    jobs = tmp_path / "home" / "op" / "rosy-jobs"
+    for name, text in (("word", "abc gpu 1 1\n"), ("zero", "0 gpu 1 1\n"), ("init", "1 gpu 1 1\n"), ("huge", "9" * 40 + "\n")):
+        (jobs / f"{name}.lock").write_text(text)
+    assert helper("reboot-if-free") == 0
+
+
+@posix
+def test_a_job_lock_from_before_this_boot_does_not_block(tmp_path):
+    """Its pid may belong to something else by now."""
+    helper = _helper_copy(tmp_path, "model")
+    sleeper = subprocess.Popen(["sleep", "30"])
+    try:
+        _job_lock(tmp_path, sleeper.pid)
+        os.utime(tmp_path / "home" / "op" / "rosy-jobs" / f"train-{sleeper.pid}.lock", (1, 1))
+        assert helper("reboot-if-free") == 0
+    finally:
+        sleeper.kill()
+        sleeper.wait()
+
+
+@posix
+def test_a_users_file_cannot_hang_or_flood_the_root_helper(tmp_path):
+    """Root holding its own lock on a FIFO's open would also stop the re-check timer."""
+    helper = _helper_copy(tmp_path, "model")
+    home = tmp_path / "home" / "op"
+    (home / "rosy-omx").mkdir(parents=True)
+    (home / "rosy-jobs").mkdir()
+    os.mkfifo(home / "rosy-omx" / "session.lock")
+    os.mkfifo(home / "rosy-jobs" / "pipe.lock")
+    os.mkfifo(home / "rosy-jobs" / "busy")
+    (home / "rosy-jobs" / "zero.lock").symlink_to("/dev/zero")
+    assert helper("reboot-if-free") == 0  # the copy's run times out in 20 s if any of these hang
+
+
+@posix
+@pytest.mark.parametrize("delta, blocks", [(3600, True), (-3600, False)])
+def test_an_isaac_reservation_is_a_job_until_it_expires(tmp_path, delta, blocks):
+    """A supervised Isaac run holds only a .resv (remote_isaac.py), no lock."""
+    helper = _helper_copy(tmp_path, "model")
+    jobs = tmp_path / "home" / "op" / "rosy-jobs"
+    jobs.mkdir(parents=True)
+    (jobs / "isaac-run.resv").write_text(f"{int(time.time()) + delta} gpu 6 8\n")
+    assert helper("reboot-if-free") == (7 if blocks else 0)
+
+
+@posix
+@pytest.mark.parametrize("delta, blocks", [(3600, True), (-3600, False)])
+def test_a_busy_hold_blocks_a_persons_reboot_until_it_expires(tmp_path, delta, blocks):
+    helper = _helper_copy(tmp_path, "site")
+    jobs = tmp_path / "home" / "op" / "rosy-jobs"
+    jobs.mkdir(parents=True)
+    (jobs / "busy").write_text(f"{int(time.time()) + delta} person 1\n")
+    assert helper("reboot-if-free") == (7 if blocks else 0)
+
+
+@posix
+def test_a_bare_touch_busy_ends_with_the_boot(tmp_path):
+    helper = _helper_copy(tmp_path, "site")
+    busy = tmp_path / "home" / "op" / "rosy-jobs" / "busy"
+    busy.parent.mkdir(parents=True)
+    busy.touch()
+    assert helper("reboot-if-free") == 7
+    os.utime(busy, (1, 1))
+    assert helper("reboot-if-free") == 0
 
 
 @posix
@@ -410,13 +632,22 @@ def test_helper_starts_only_the_lab_storage_service_and_refuses_the_site(tmp_pat
 def test_helper_refuses_site_stop_and_unknown_role(tmp_path):
     helper = _helper_copy(tmp_path, "site")
     assert helper("stop-unit", "rosy-site-firewall.service") == 2
+    session = _arm_session(tmp_path)
+    assert helper("restart-unit", "rosy-omx-camera@arm_a_wrist.service") == 6  # a session is reading it
+    assert helper("restart-unit", "rosy-site-stack.service") == 0  # Fleet is not what moves the arm
+    os.close(session)
+    assert helper("restart-unit", "rosy-omx-camera@arm_a_wrist.service") == 0
+    assert "--user --machine=pinky@ --no-block restart rosy-omx-camera@arm_a_wrist.service" in (
+        tmp_path / "calls").read_text()
     assert helper("restart-unit", "rosy-site-firewall.service") == 0
     assert "systemctl --no-block restart rosy-site-firewall.service" in (tmp_path / "calls").read_text()
     (tmp_path / "conf" / "role").write_text("robot\n")
     assert helper("reboot") == 2
     (tmp_path / "conf" / "role").write_text("ai\n")
-    assert helper("stop-unit", "pinky-backend.service") == 0
-    assert "systemctl --user --machine=pinky@ --no-block stop pinky-backend.service" in (
+    assert helper("stop-unit", "rosy-situation.service") == 2
+    assert helper("restart-unit", "pinky-frontend.service") == 2  # another owner's service
+    assert helper("restart-unit", "rosy-situation.service") == 0
+    assert "systemctl --user --machine=pinky@ --no-block restart rosy-situation.service" in (
         tmp_path / "calls").read_text()
 
 
@@ -429,6 +660,8 @@ def test_forced_command_passes_at_most_two_words(tmp_path):
     assert remote("restart-unit a b") == 2
     assert remote("") == 2
     assert remote("reboot *") == 2
+    assert remote("recheck-reboot") == 2  # the helper's own timer, never a caller's
+    assert remote("restart-unit a;b") == 2
 
 
 def _install_copy(tmp_path):
