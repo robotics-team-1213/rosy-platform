@@ -69,6 +69,66 @@ def _actions(tmp_path):
     return [json.loads(line)["action"] for line in path.read_text().splitlines()] if path.exists() else []
 
 
+def _alerts(tmp_path, webhook="https://chat.example/hook/secret", curl_rc=0):
+    """A stub curl records argv and stdin; returns the webhook path's env for _guard."""
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir(exist_ok=True)
+    (bin_dir / "curl").write_text(
+        f'#!/bin/sh\necho "$*" >> {tmp_path}/curl-args\ncat >> {tmp_path}/curl-stdin\nexit {curl_rc}\n')
+    (bin_dir / "curl").chmod(0o755)
+    path = tmp_path / "alert-webhook"
+    if webhook is not None:
+        path.write_text(webhook + "\n")
+    return {"GUARD_ALERT_WEBHOOK_FILE": str(path)}
+
+
+def _sent(tmp_path):
+    path = tmp_path / "curl-args"
+    return path.read_text().splitlines() if path.exists() else []
+
+
+def test_a_silent_pc_alerts_once_and_once_more_when_it_returns(tmp_path):
+    """2026-11-07: the model PC sat off the LAN for six hours and nothing told anyone."""
+    env = _alerts(tmp_path)
+    _guard(tmp_path, "", exit_code=255, runs=1, env_extra=env)
+    assert _sent(tmp_path) == []  # one missed check is not a dead PC
+    _guard(tmp_path, "", exit_code=255, runs=3, env_extra=env)
+    assert len(_sent(tmp_path)) == 1 and "pc1 PC가 2번 연속" in _sent(tmp_path)[0]
+    _guard(tmp_path, HEALTHY, env_extra=env)
+    assert len(_sent(tmp_path)) == 2 and "다시 응답합니다" in _sent(tmp_path)[1]
+    assert _actions(tmp_path) == ["alert unreachable", "alert recovered"]
+
+
+def test_the_webhook_never_reaches_argv_the_status_file_or_the_action_log(tmp_path):
+    env = _alerts(tmp_path)
+    _guard(tmp_path, "", exit_code=255, runs=2, env_extra=env)
+    assert 'url = "https://chat.example/hook/secret"' in (tmp_path / "curl-stdin").read_text()
+    for text in (*_sent(tmp_path), (tmp_path / "state/status.json").read_text(), (tmp_path / "state/actions.jsonl").read_text()):
+        assert "secret" not in text
+
+
+def test_a_failed_post_tries_again_and_never_touches_the_ladder(tmp_path):
+    env = _alerts(tmp_path, curl_rc=22)
+    assert set(_guard(tmp_path, "", exit_code=255, runs=4, env_extra=env)) == {"health"}
+    assert len(_sent(tmp_path)) == 3
+    assert _actions(tmp_path) == []
+
+
+@pytest.mark.parametrize("webhook", [None, "http://chat.example/hook", 'https://x"\nurl = "https://evil'])
+def test_no_alert_without_one_https_webhook(tmp_path, webhook):
+    env = _alerts(tmp_path, webhook=webhook)
+    _guard(tmp_path, "", exit_code=255, runs=3, env_extra=env)
+    assert _sent(tmp_path) == []
+
+
+def test_the_nightly_quiet_window_and_robots_do_not_alert(tmp_path):
+    env = _alerts(tmp_path)
+    _guard(tmp_path, "", exit_code=255, runs=3, now="06:00", env_extra=env)
+    assert _sent(tmp_path) == []
+    _guard(tmp_path, "", runs=3, conf="r1 robot 127.0.0.1:9\n", env_extra=env)
+    assert _sent(tmp_path) == []
+
+
 def test_a_healthy_pc_is_never_touched(tmp_path):
     assert _guard(tmp_path, HEALTHY, runs=5) == ["health"] * 5
     row = json.loads((tmp_path / "state/status.json").read_text())["pc1"]

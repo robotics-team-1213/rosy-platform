@@ -12,6 +12,7 @@
 |---|---|---|
 | D-990 | Monitoring 화면의 Rosy Account 로그인. [전문](../adr/D-990-monitoring-account-receiver.md) | Accepted (2026-11-07, 사용자 지시; Account client 등록·배포·현장 수용 별도) |
 | D-992 | 장비 등록과 Rosy Account 연동. [전문](../adr/D-992-device-enrollment-account-link.md) | Accepted (2026-11-07, 사용자 지시; 현장 활성화·실물 수용 별도) |
+| D-991 | PC 정비는 Fleet 안의 화면으로 나누고, 재부팅해도 되는지는 그 PC의 도우미가 판단한다. [전문](../adr/D-991-pc-maintenance-boundary-and-reboot-gate.md) | Accepted (2026-11-07, 사용자 결정; 결정 1·2 구현, 3~6 후속, 각 PC 설치 전) |
 | D-997 | 공통 기능은 실행 서비스·공용 코드·owner별 운영 어댑터로 나누고 기능별 소유와 장애 계약을 확정한다. [전문](../adr/D-997-common-function-ownership-and-failure-contracts.md) | Accepted (2026-11-08, 사용자 결정; 등록·설정·알림·감사·백업·업데이트 설계 확정, 코드 추출·서비스 신설·배포·현장 수용 미수행) |
 | D-995 | 관제 구조는 논리 단위·실행 owner·공통 서비스·호스트로 구분하고 구현과 현장 수용을 따로 기록한다. [전문](../adr/D-995-control-structure-authority-and-evidence-status.md) | Accepted (2026-11-08, 사용자 지시; D-965·D-994의 팔 위임 구현 상태 설명 정정, 실행·배포·현장 수용 변경 없음) |
 | D-994 | N100·16GB Ubuntu 호스트에 통합관제 R을 두고 장치 owner와 공통 서비스의 책임을 구분한다. [전문](../adr/D-994-n100-integrated-control-host-and-owner-boundaries.md) | Accepted (2026-11-08, 사용자 결정; 설치·이전·N100 부하 시험·현장 수용 미수행) |

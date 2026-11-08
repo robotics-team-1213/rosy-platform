@@ -139,6 +139,17 @@ class DeviceCareStore(DeviceProfileStore):
                    '(SELECT id FROM fleet_device_care_events WHERE device_id=? ORDER BY id DESC LIMIT 100)',
                    (device_id, device_id))
 
+    # D-991: PC actions share this history. A PC has no device profile, and `:` keeps its id out of theirs.
+    def add_host_event(self, host, text, *, actor):
+        with closing(self._connect()) as db, db:
+            self._event(db, f'host:{host}', 'maintenance', text, actor, time.time())
+
+    def host_events(self, host, limit=5):
+        with closing(self._connect()) as db:
+            rows = db.execute('SELECT text,actor,created_at FROM fleet_device_care_events '
+                              'WHERE device_id=? ORDER BY id DESC LIMIT ?', (f'host:{host}', limit)).fetchall()
+        return [dict(row) for row in rows]
+
     def add_event(self, device_id, body, *, actor):
         self._require_profile(device_id)
         if not isinstance(body, dict) or set(body) != {'kind', 'text'} or body['kind'] not in (
