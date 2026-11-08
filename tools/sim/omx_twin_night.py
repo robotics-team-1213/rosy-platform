@@ -14,6 +14,7 @@ the site PC is only read (D-571).
 """
 import argparse
 import datetime as dt
+import os
 import shlex
 import subprocess
 import sys
@@ -65,11 +66,12 @@ def isaac_cases(args):
     cases.write_bytes(subprocess.run(["ssh", "-o", "BatchMode=yes", SITE, f"cat {shlex.quote(CASES)}"],
                                      capture_output=True, check=True).stdout)
     omx = ROOT / "deploy/robot/omx"
-    subprocess.run([sys.executable, str(omx / "cell_cases.py"), "--cases", str(cases), "--out", str(work / "suite.json")], check=True)
+    env = dict(os.environ, PYTHONPATH=str(ROOT / "middleware/devices/omx/adapter"))  # teach_trajectory imports omx_adapter
+    subprocess.run([sys.executable, str(omx / "cell_cases.py"), "--cases", str(cases), "--out", str(work / "suite.json")], check=True, env=env)
     log("model", "isaac suite start")
     with (work / "suite.log").open("w") as f:
         rc = subprocess.run([sys.executable, str(omx / "cell_case_suite.py"), "--suite", str(work / "suite.json"),
-                             "--sha", args.sha, "--out", str(work / "runs")], stdout=f, stderr=subprocess.STDOUT).returncode
+                             "--sha", args.sha, "--out", str(work / "runs")], stdout=f, stderr=subprocess.STDOUT, env=env).returncode
     log("model", "isaac suite rc", rc, "(1 = a case no longer matches the real outcome, see suite.log)")
 
 
