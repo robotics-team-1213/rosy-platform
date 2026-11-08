@@ -51,7 +51,7 @@ def test_rehandle_uses_both_arms_and_temp_space_within_capacity(layout, data):
     steps = data["tasks"]["rehandle"]["steps"]
     assert {s["arm"] for s in steps} == {"arm_a", "arm_b"}
     for s in steps:  # an outer column is rehandled by the arm on the other side (the near arm's wrist hits the middle column)
-        row = layout.sites[s["from"] if s["from"].startswith("ship") else s["to"]]["row"]
+        row = layout.sites[s["from"] if s["from"].startswith("ship-h") else s["to"]]["row"]  # the hold end, not the stern bay
         assert s["arm"] == ("arm_b" if row == 0 else "arm_a")
     held = {}
     for s in steps:
