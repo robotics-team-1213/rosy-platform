@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Feasibility matrix of the two-arm cell (MuJoCo, geometry only, D-947): can arm X take container C out of the full block, and put it back?
 
-For every container, both arms and both jaw branches (the grip turned 180 deg), the state is the full 3x3x3 block minus what lies above C.
+For every container, both arms and both jaw branches (the grip turned 180 deg), the state is the full block minus what lies above C.
 Two single steps run from that nominal state: extract (C to the arm's own temporary lane) and restore (back to C's cell). A step is feasible
 when its pose, neighbours, arm links and pads all pass the strict judge. Run on the AI PC:
 
@@ -17,13 +17,12 @@ import omx_two_arm_sites as sites  # noqa: E402
 
 
 def cases(layout):
-    """(container, ship site, uncovered state) for the nine containers: the block without what lies above."""
+    """(container, ship site, uncovered state) for every container of the stack plan: the block without what lies above."""
     full = {c: s for c, s, _ in layout.plan_order()}
-    by_site = {s: c for c, s in full.items()}
     out = []
     for c, site in full.items():
-        row, layer = layout.sites[site]["row"], layout.sites[site]["layer"]
-        above = {by_site[f"ship-r{row}-l{k}"] for k in range(layer + 1, 3)}
+        s = layout.sites[site]
+        above = {k for k, v in full.items() if layout.sites[v]["stack"] == s["stack"] and layout.sites[v]["layer"] > s["layer"]}
         out.append((c, site, {k: v for k, v in full.items() if k not in above}))
     return out
 
