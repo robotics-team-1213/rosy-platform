@@ -37,6 +37,7 @@ class ExpressionPolicy:
         self._group = None
         self._labels = set()
         self._object = None
+        self._object_gaze = 0.
         self._active = None
         self._target = None
         self._until = 0.0
@@ -215,7 +216,7 @@ class ExpressionPolicy:
             gaze = (2 * self._people[self._target][0] - 1) * 6
             base = self._active if active else "interest"
         elif active and fresh:
-            gaze, base = getattr(self, "_object_gaze", 0.), self._active
+            gaze, base = self._object_gaze, self._active
         else:
             self._active = None
         rgb = self._rgb(mode, nav_state, now, resting=resting, moving=moving)
