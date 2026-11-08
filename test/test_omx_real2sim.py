@@ -19,7 +19,7 @@ COVERED = dict(a=2, b=1)  # a container sits in this lane, the others show their
 
 
 def frame(layout, hide=()):
-    img = np.full((480, 640, 3), (40, 170, 210), np.uint8)  # the yellow table
+    img = np.full((480, 640, 3), (60, 200, 200), np.uint8)  # the yellow table (hue 30, clear of the orange mask's < 22)
     cam = r2s.Camera(layout.fixture["real_cameras"]["top"], img.shape[:2])
     box_h = sites.CONTAINER[layout.choices["ship_source"]][2]
     for tag, pose in POSES.items():
@@ -97,6 +97,8 @@ def test_layout_reads_a_snapshot_choice(tmp_path):
     for t in "ab":
         for k in (1, 2, 3):
             assert math.dist(layout.sites[f"tmp-{t}-{k}"]["xy"], truth(t, k)[0]) < 1e-4
+    with pytest.raises(ValueError, match="cell_snapshot"):
+        sites.Layout(temp_lanes="snapshot")
     broken = snap()
     broken["items"]["temp_plates"]["plates"]["a"].pop()
     path.write_text(json.dumps(broken), encoding="utf-8")
@@ -110,3 +112,11 @@ def test_the_committed_snapshot_loads():
     for p in snaps:
         layout = sites.Layout(cell_snapshot=str(p.relative_to(ROOT)), temp_lanes="snapshot")
         assert all(f"tmp-{t}-{k}" in layout.sites for t in "ab" for k in (1, 2, 3))
+
+
+def test_a_previous_snapshot_without_a_plate_still_measures_both():
+    layout = sites.Layout()
+    first = r2s.measure_temp_plates(frame(layout), layout)
+    prev = dict(plates={"a": first["plates"]["a"]["lanes"]}, shape=first["shape"])  # plate b was not measured last time
+    again = r2s.measure_temp_plates(frame(layout), layout, prev)
+    assert again["plates"]["b"]["seen"] == 3

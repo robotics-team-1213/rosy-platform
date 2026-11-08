@@ -40,6 +40,7 @@ CAMERAS = ("top", "side", "arm_a_wrist", "arm_b_wrist")
 LANE = (.090, .030)          # printed pad = container footprint, m
 SIZE_TOL = (.012, .007)      # a blob within this of LANE is a lane
 CHANGED = (.003, 1.5)        # m, deg: a lane moved more than this is a changed item
+STAGGER_S = 45
 PY = "MUJOCO_GL=egl $HOME/rosy-test/venvs/sim-mujoco/bin/python"
 SNAP_CHOICES = lambda path: ["--choice", f"cell_snapshot={path}", "--choice", "temp_lanes=snapshot"]
 # stage -> (item it reads, role, minutes, command after the python); every stage also reads the camera and arm bases.
@@ -191,11 +192,10 @@ def measure_temp_plates(frame, layout, prev=None):
     cam = Camera(layout.fixture["real_cameras"]["top"], frame.shape[:2])
     box_h = sites.CONTAINER[layout.choices["ship_source"]][2]
     found = lane_blobs(frame, cam, layout.deck_z, box_h)
-    if prev:
-        mid = {t: ls[1] for t, ls in prev["plates"].items()}
-        expected = {t: (*mid[t]["xy"], math.radians(mid[t]["yaw_deg"])) for t in mid}
-    else:
-        expected = {t: (*layout.sites[f"tmp-{t}-2"]["xy"], fold(layout.sites[f"tmp-{t}-2"]["yaw"])) for t in "ab"}
+    # where to look: the previous snapshot's lane 2, else (no snapshot, or a plate it could not measure) the layout's
+    expected = {t: (*layout.sites[f"tmp-{t}-2"]["xy"], fold(layout.sites[f"tmp-{t}-2"]["yaw"])) for t in "ab"}
+    for t, ls in (prev or {}).get("plates", {}).items():
+        expected[t] = (*ls[1]["xy"], math.radians(ls[1]["yaw_deg"]))
     shape = prev and prev.get("shape")
     for t in ("" if shape else "ab"):
         clean = sorted((b for b in found if b["kind"] == "pad" and math.dist(b["xy"], expected[t][:2]) < .14
@@ -256,9 +256,11 @@ def measure(run, prev_path=None):
 
     run = Path(run)
     prev = json.loads(Path(prev_path).read_text(encoding="utf-8")) if prev_path else None
-    layout = sites.Layout(**({"cell_snapshot": str(prev_path), "temp_lanes": "snapshot"} if prev_path else {}))
+    layout = sites.Layout()  # camera, deck and arms; where the plates were comes from prev
     frames = {c: run / "frames" / f"{c}.jpg" for c in CAMERAS if (run / "frames" / f"{c}.jpg").exists()}
-    top = cv2.imread(str(frames["top"]))
+    top = cv2.imread(str(frames["top"])) if "top" in frames else None
+    if top is None:
+        raise SystemExit(f"no readable top frame in {run / 'frames'}")
     items = {"temp_plates": lambda: measure_temp_plates(top, layout, prev and prev["items"]["temp_plates"])}
     with ThreadPoolExecutor() as pool:  # items are independent; more join here (ship hull, belt end) as they get measurers
         done = {k: pool.submit(f) for k, f in items.items()}
@@ -315,12 +317,16 @@ def capture(site, out):
 
 def sim(snapshot, sha, out, stages):
     """Each stage one remote_sim run, all started at once; remote_sim places them by headroom and caps (D-568)."""
+    if not Path(snapshot).resolve().is_relative_to(ROOT):
+        raise SystemExit(f"{snapshot} is outside the repo: copy it to deploy/robot/omx/sim/cell_snapshots/ and commit it")
     rel = Path(snapshot).resolve().relative_to(ROOT).as_posix()
     if subprocess.run(["git", "cat-file", "-e", f"{sha}:{rel}"], cwd=ROOT).returncode:
         raise SystemExit(f"{rel} is not in {sha}: commit the snapshot first (remote_sim ships commits only)")
     out = Path(out)
     procs = {}
-    for name in stages:
+    for i, name in enumerate(stages):
+        if i:
+            time.sleep(STAGGER_S)  # remote_sim reserves a host only when it ships: back-to-back starts all pick the same one
         _, role, minutes, cmd = STAGES[name]
         body = f"mkdir -p $OUT/{name} && {PY} {cmd} {' '.join(SNAP_CHOICES(rel))}"
         log = out / name

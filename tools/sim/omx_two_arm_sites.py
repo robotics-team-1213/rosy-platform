@@ -156,6 +156,8 @@ def lane_geometry(radius):
 
 def snapshot_lanes(path, tag):
     """[(xy, yaw rad)] of lanes 1..3 of plate `tag` in a cell snapshot (omx_real2sim.py); a plate it could not measure is refused."""
+    if not path:
+        raise ValueError('temp_lanes="snapshot" needs cell_snapshot=PATH')
     snap = json.loads((Path(__file__).resolve().parents[2] / path).read_text(encoding="utf-8"))  # a relative path is from the repo root
     lanes = {l["lane"]: l for l in snap["items"]["temp_plates"]["plates"].get(tag, [])}
     if sorted(lanes) != [1, 2, 3]:
