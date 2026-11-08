@@ -51,3 +51,27 @@ def test_only_finished_tasks_make_a_round_pass():
     assert policy.outcome(dict(whole=[dict(completed=True), dict(completed=True)])) == dict(status="passed")
     for whole in ([dict(completed=True), dict(completed=False)], []):
         assert policy.outcome(dict(whole=whole))["status"] == "failed"
+
+
+def test_calibration_error_is_per_seed_bounded_and_spares_the_gripper():
+    """The sub-skill's IK baseline misses by this error; the exact arm (seed 0, or 0 deg) has none."""
+    assert policy.draw_zero_error(0, 4.) == {} and policy.draw_zero_error(5, 0.) == {}
+    error = policy.draw_zero_error(1003, 4.)
+    assert set(error) == set(sites.ARMS)
+    for arm, e in error.items():
+        assert e.shape == (6,) and e[5] == 0 and (np.abs(e[:5]) <= np.radians(4.)).all() and np.abs(e[:5]).max() > 0
+        assert (e == policy.draw_zero_error(1003, 4.)[arm]).all()
+    assert not (policy.draw_zero_error(1004, 4.)["arm_a"] == error["arm_a"]).all()
+
+
+def test_each_step_names_its_arm_and_source_to_the_language_model():
+    layout = sites.Layout()
+    prompts = {policy.skill_prompt(step) for name in policy.TASKS for step in tasks.get_task(layout, name)["steps"]}
+    assert all(p.startswith(("arm_a:", "arm_b:")) for p in prompts) and len(prompts) > 1
+
+
+def test_a_sub_skill_round_passes_at_eighteen_of_twenty():
+    """No whole tasks in a sub-skill round: the bar is the sim acceptance rate, not 'finished every task'."""
+    assert policy.outcome(dict(n=20, passed=18, whole=[]), "grasp") == dict(status="passed")
+    assert policy.outcome(dict(n=20, passed=17, whole=[]), "grasp")["status"] == "failed"
+    assert policy.outcome(dict(n=0, passed=0, whole=[]), "grasp")["status"] == "failed"

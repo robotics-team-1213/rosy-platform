@@ -9,6 +9,10 @@ in a LeRobot environment that can import mujoco:
     MUJOCO_GL=egl python tools/sim/omx_two_arm_policy.py round --root R --python P --lerobot-train T --seeds 30 --steps 60000 [--mode concurrent]
     MUJOCO_GL=egl python tools/sim/omx_two_arm_policy.py evaluate --model DIR --steps-file F --out F2 --artifacts DIR
 
+`--skill grasp` learns only the grasp-close-lift part of each step (the teacher's IK does the rest) under `--zero-error-deg` joint-zero
+calibration error, and the round also judges that IK alone on the same seeds (`eval-ik.json`). `--policy smolvla --base-model B --vlm-assets V`
+fine-tunes SmolVLA offline instead of training ACT, with the step's arm and source as its language input.
+
 A round is `<root>/two_arm_rounds/<id>/round.json` (rosy.omx-two-arm-round.v1). MuJoCo answers geometry only (D-947); no learned policy reaches the real arm (D-793).
 """
 import argparse
@@ -33,6 +37,10 @@ TASKS = ("stack", "outbound")  # the conveyor stack and Harbor's outbound plan i
 GOAL = "observation.environment_state"
 PROMPT = "carry the container of this plan step"
 TRAIN_SEED_BASE, EVAL_SEED_BASE = 1000, 200000  # the teacher never saw an evaluation seed
+# Sub-skills: the waypoint phases of a step a policy owns while the teacher's IK does the rest. Whole steps and whole tasks scored 0/63
+# (rounds 1-4, link5 came down 0.04 rad low); the Isaac release corrector learned one short phase 8/9 where IK got 0/9 (2026-10-30).
+SKILLS = {"grasp": ("grasp", "close", "lift")}
+SKILL_PASS = .9  # 18 of 20, the sim acceptance bar (2026-11-05 decision-vla plan)
 
 
 GOAL_SIZE = 22  # per arm (arm_a, arm_b): active, then the five grasp joints and the five lower joints
@@ -64,8 +72,22 @@ def goal_vector(layout, step, here):
     return goal_of({step["arm"]: goal_block(layout, step, here)})
 
 
-def observe(world, data):
-    state = np.concatenate([data.qpos[world.q[arm]] for arm in sites.ARMS]).astype(np.float32)
+def skill_prompt(step):
+    """SmolVLA's language input: which arm and which source (ACT reads the same from the goal vector)."""
+    return f"{step['arm']}: grasp the container at {step['from']} and lift it"
+
+
+def draw_zero_error(seed, deg):
+    """Per-arm joint-zero calibration error for a seed, uniform within +-deg on the five arm joints; seed 0 is the exact arm."""
+    if not seed or not deg:
+        return {}
+    rng = np.random.default_rng(seed + 7919)
+    return {arm: np.append(rng.uniform(-1, 1, 5) * np.radians(deg), 0.) for arm in sites.ARMS}
+
+
+def observe(world, data, zero_error=None):
+    """The joints as the arm reports them (true minus its calibration error) and the four cameras."""
+    state = np.concatenate([data.qpos[world.q[arm]] - (zero_error or {}).get(arm, 0.) for arm in sites.ARMS]).astype(np.float32)
     return state, {view: world.render(data, view, SHAPE) for view in teaching.RECORDED}
 
 
@@ -77,10 +99,10 @@ class Recorder(teaching.Teacher):
     """A teacher that saves each passed step as an episode (a failed step spoils the rest of its run), or with `concurrent` one whole
     two-arm task per episode, every frame with both arms' goals, kept only when the whole task passed."""
 
-    def __init__(self, world, dataset, longest, concurrent=False, **options):
+    def __init__(self, world, dataset, longest, concurrent=False, skill=None, **options):
         super().__init__(world, **options)
         self.dataset, self.longest, self.goal, self.spoiled, self.count = dataset, longest, None, False, 0
-        self.concurrent, self.recording, self.blocks = concurrent, False, {}
+        self.concurrent, self.recording, self.blocks, self.skill, self.prompt = concurrent, False, {}, skill, PROMPT
 
     def frame(self, data, targets, label, ctxs=None):
         goal = self.goal
@@ -89,10 +111,12 @@ class Recorder(teaching.Teacher):
                 if c.step["id"] not in self.blocks:
                     self.blocks[c.step["id"]] = goal_block(self.layout, c.step, c.here)
             goal = goal_of({c.arm: self.blocks[c.step["id"]] for c in ctxs or []})
-        if goal is not None:
-            state, images = observe(self.world, data)
-            self.dataset.add_frame({"observation.state": state, "action": np.concatenate([targets[arm] for arm in sites.ARMS]).astype(np.float32), GOAL: goal,
-                                    **{f"observation.images.{view}": image for view, image in images.items()}, "task": PROMPT})
+        if goal is not None and (self.skill is None or self.phase in SKILLS[self.skill]):
+            state, images = observe(self.world, data, self.zero_error)
+            # the privileged teacher moves in true angles; the arm is commanded in reported ones
+            action = np.concatenate([targets[arm] - self.zero_error.get(arm, 0.) for arm in sites.ARMS]).astype(np.float32)
+            self.dataset.add_frame({"observation.state": state, "action": action, GOAL: goal,
+                                    **{f"observation.images.{view}": image for view, image in images.items()}, "task": self.prompt})
             self.count += 1
         super().frame(data, targets, label, ctxs)
 
@@ -115,6 +139,7 @@ class Recorder(teaching.Teacher):
 
     def run_step(self, data, step, here):
         self.goal, self.count = goal_vector(self.layout, step, here), 0
+        self.prompt = skill_prompt(step) if self.skill else PROMPT
         row = super().run_step(data, step, here)
         self.goal = None
         if row["result"] == "pass" and not self.spoiled:
@@ -131,7 +156,9 @@ def plan_tasks(plan_dir, names):
     return {name: dict(json.loads((Path(plan_dir) / f"{name}-two-arm.json").read_text(encoding="utf-8")), name=name) for name in names}
 
 
-def collect(seeds, names, out, plan_dir=None, choices=None):
+def collect(seeds, names, out, plan_dir=None, choices=None, skill=None, zero_error_deg=0.):
+    if skill and plan_dir:
+        raise ValueError("a sub-skill is recorded one step at a time, not in concurrent mode")
     from lerobot.datasets.lerobot_dataset import LeRobotDataset
     import omx_two_arm_world as world_mod
     joints = [f"{arm}.{joint}" for arm in sites.ARMS for joint in world_mod.JOINTS]
@@ -146,7 +173,8 @@ def collect(seeds, names, out, plan_dir=None, choices=None):
     planned = plan_tasks(plan_dir, names) if plan_dir else None
     for seed in seeds:
         for name in names:
-            teacher = Recorder(world, dataset, longest, concurrent=planned is not None, seed=seed)
+            teacher = Recorder(world, dataset, longest, concurrent=planned is not None, skill=skill, seed=seed)
+            teacher.zero_error = draw_zero_error(seed, zero_error_deg)
             teacher.run_task(planned[name] if planned else tasks.get_task(layout, name))
             if teacher.spoiled:
                 spoiled.append(f"{name}:{seed}")
@@ -162,22 +190,34 @@ class Driver:
     def __init__(self, model, steps_file, choices=None):
         import omx_two_arm_world as world_mod
         import torch
-        from lerobot.policies.act.modeling_act import ACTPolicy, ACTTemporalEnsembler
         from lerobot.policies.factory import make_pre_post_processors
         self.torch = torch
-        self.policy = ACTPolicy.from_pretrained(model, local_files_only=True).to("cuda" if torch.cuda.is_available() else "cpu").eval()
-        config = self.policy.config  # temporal ensembling: one new chunk each frame, averaged; round 1 without it drove a link into the container
-        config.temporal_ensemble_coeff, config.n_action_steps = .01, 1
-        self.policy.temporal_ensembler = ACTTemporalEnsembler(.01, config.chunk_size)
-        self.pre, self.post = make_pre_post_processors(self.policy.config, pretrained_path=str(model))
-        self.device = next(self.policy.parameters()).device
+        # "ik": no model, the teacher's own IK in reported angles (the sub-skill baseline)
+        self.kind = "ik" if str(model) == "ik" else json.loads((Path(model) / "config.json").read_text(encoding="utf-8"))["type"]
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        if self.kind == "act":
+            from lerobot.policies.act.modeling_act import ACTPolicy, ACTTemporalEnsembler
+            self.policy = ACTPolicy.from_pretrained(model, local_files_only=True).to(device).eval()
+            config = self.policy.config  # temporal ensembling: one new chunk each frame, averaged; round 1 without it drove a link into the container
+            config.temporal_ensemble_coeff, config.n_action_steps = .01, 1
+            self.policy.temporal_ensembler = ACTTemporalEnsembler(.01, config.chunk_size)
+        elif self.kind == "smolvla":
+            from lerobot.policies.smolvla.modeling_smolvla import SmolVLAPolicy
+            self.policy = SmolVLAPolicy.from_pretrained(model, local_files_only=True).to(device).eval()
+            # 5 of the 50-step chunk per inference (0.33 s at 15 fps): one inference per frame is ~0.1 s (policy latency 2026-10-25)
+            self.policy.config.n_action_steps = 5
+        elif self.kind != "ik":
+            raise ValueError(f"unknown policy type {self.kind}")
+        if self.kind != "ik":
+            self.pre, self.post = make_pre_post_processors(self.policy.config, pretrained_path=str(model))
+            self.device = next(self.policy.parameters()).device
         self.layout = sites.Layout(**(choices or {}))
         self.world = world_mod.World(self.layout)
         self.longest = json.loads(Path(steps_file).read_text(encoding="utf-8"))["longest"]
 
-    def act(self, state, images, goal):
+    def act(self, state, images, goal, prompt=PROMPT):
         torch, device = self.torch, self.device
-        batch = {"observation.state": torch.from_numpy(state)[None].to(device), GOAL: torch.from_numpy(goal)[None].to(device), "task": [PROMPT],
+        batch = {"observation.state": torch.from_numpy(state)[None].to(device), GOAL: torch.from_numpy(goal)[None].to(device), "task": [prompt],
                  **{f"observation.images.{view}": (torch.from_numpy(image).permute(2, 0, 1)[None].float() / 255).to(device) for view, image in images.items()}}
         return self.post(self.policy.select_action(self.pre(batch))).cpu().numpy()[0]
 
@@ -202,6 +242,61 @@ class Driver:
         teacher.carried = None
         row = dict(step=plan["id"], container=c, arm=arm, source=plan["from"], target=plan["to"], lifted=bool(peak > .015))
         return teacher.verdict(data, plan, row, before)
+
+    def skill_step(self, teacher, data, plan, here, skill):
+        """The teacher's IK (in reported angles, so off by the calibration error) runs the step up to the sub-skill; then the model, or for
+        "ik" the same IK, runs it. Passes when the container is held 15 mm above where it stood and nothing else was touched."""
+        w, L, arm, c = self.world, self.layout, plan["arm"], plan["container"]
+        others = {k: v for k, v in here.items() if k != c}
+        teacher.privileged, teacher.carried = False, c
+        idle = {o: L.sim_arms[o].wait for o in L.arms if o != arm}
+        before = {o: w.pose(data, o) for o in others}
+        row = dict(step=plan["id"], container=c, arm=arm, source=plan["from"], target=plan["to"], skill=skill, lifted=False)
+        gen = teacher.step_gen(data, plan, others, teacher)
+        try:
+            target = next(gen)
+            while teacher.phase not in SKILLS[skill]:
+                teacher.frame(data, {arm: target, **idle}, plan["id"])
+                target = next(gen)
+            start_z = w.pose(data, c)[0][2]
+            if self.kind == "ik":
+                while teacher.phase in SKILLS[skill]:
+                    teacher.frame(data, {arm: target, **idle}, plan["id"])
+                    target = next(gen)
+            else:
+                goal, prompt = goal_vector(L, plan, others), skill_prompt(plan)
+                self.policy.reset()
+                for _ in range(self.longest[plan["id"]] + 15):  # the teacher's time on the sub-skill and a second of grace
+                    state, images = observe(w, data, teacher.zero_error)
+                    action = self.act(state, images, goal, prompt)
+                    teacher.frame(data, {name: action[i * 6:i * 6 + 6] for i, name in enumerate(sites.ARMS)}, plan["id"])
+        except StopIteration as stop:  # blocked or unreachable before the sub-skill began
+            return dict(row, result=stop.value["result"], reason=stop.value.get("reason", ""))
+        tcp, _ = w.tcp(data, arm)
+        pos = w.pose(data, c)[0]
+        rise, in_jaw = float(pos[2] - start_z), float(np.linalg.norm(pos - tcp))
+        moved = teacher.disturbed(data, before, teacher)
+        arm_hits = sorted(f"{a}~{b}" for a, b in teacher.contacts["arm_other"])
+        crash = sorted("~".join(p) for p in teacher.contacts["arm_arm"])
+        held = rise > .015 and in_jaw < .06
+        return dict(row, result="pass" if held and not moved and not arm_hits and not crash else "fail", lifted=held, rise_mm=round(rise * 1000, 1),
+                    container_to_tcp_mm=round(in_jaw * 1000, 1), neighbours_disturbed=moved, arm_link_contacts=arm_hits, arm_arm_contacts=crash,
+                    first_contact_phase=teacher.first)
+
+    def skill_isolated(self, name, seed, skill, zero_error_deg):
+        """Each step of a task from the plan's nominal state with its own calibration error, the sub-skill judged alone."""
+        task = tasks.get_task(self.layout, name)
+        here, rows = dict(task.get("start", {})), []
+        with self.torch.inference_mode():
+            for plan in task["steps"]:
+                teacher = teaching.Teacher(self.world, seed=seed + len(rows))
+                teacher.zero_error = draw_zero_error(seed + len(rows), zero_error_deg)
+                data = teacher.fresh(here)  # step_gen brings a belt container in itself
+                rows.append(dict(self.skill_step(teacher, data, plan, here, skill), task=name, seed=seed))
+                print(json.dumps(rows[-1], default=str), flush=True)
+                here[plan["container"]] = plan["to"]
+                teacher.off_stand(data, plan, here)
+        return rows
 
     def concurrent(self, task, seed, sink=None):
         """A whole two-arm task with the model driving both arms: each arm's step turns on by the plan's order and zones as in the teacher,
@@ -307,6 +402,12 @@ def evaluate(args):
     rows, runs = [], []
     Path(args.artifacts).mkdir(parents=True, exist_ok=True)
     planned = plan_tasks(args.plan_dir, args.tasks.split(",")) if args.plan_dir else None
+    if args.skill:
+        for name in args.tasks.split(","):
+            for k in range(args.isolated_seeds):
+                rows += driver.skill_isolated(name, EVAL_SEED_BASE + 1000 * k, args.skill, args.zero_error_deg)
+        Path(args.out).write_text(json.dumps(dict(rows=rows, whole=[], policy=driver.kind), default=str), encoding="utf-8")
+        return 0
     for name in args.tasks.split(","):
         for k in range(0 if planned else args.isolated_seeds):
             rows += driver.isolated(name, EVAL_SEED_BASE + 1000 * k)
@@ -331,8 +432,13 @@ def evaluate(args):
     return 0
 
 
-def outcome(score):
-    """A round that ran to the end has not passed: Rosy Learning shows this status, so only finished tasks earn it."""
+def outcome(score, skill=None):
+    """A round that ran to the end has not passed: Rosy Learning shows this status, so only finished tasks earn it. A sub-skill round
+    has no whole tasks: it passes at the sim acceptance bar."""
+    if skill:
+        if score["n"] and score["passed"] >= SKILL_PASS * score["n"]:
+            return dict(status="passed")
+        return dict(status="failed", reason=f"하위 동작 {skill} 성공 {score['passed']}/{score['n']}, 기준 {SKILL_PASS:.0%} 미만입니다.")
     if score["whole"] and all(run["completed"] for run in score["whole"]):
         return dict(status="passed")
     return dict(status="failed", reason="평가에서 작업을 끝까지 마치지 못했습니다.")
@@ -354,13 +460,17 @@ def run_round(args):
     run = Path(args.root) / "two_arm_rounds" / round_id
     run.mkdir(parents=True)
     names = args.tasks.split(",")
-    recipe = dict(ladder.RECIPE, steps=args.steps, optimizer_lr=args.lr, batch_size=args.batch_size, mode=args.mode)
+    if args.skill and args.mode != "steps" or args.policy == "smolvla" and not (args.base_model and args.vlm_assets):
+        raise SystemExit("a sub-skill needs --mode steps; SmolVLA needs --base-model and --vlm-assets (local, offline)")
+    recipe = dict(ladder.RECIPE, steps=args.steps, optimizer_lr=args.lr, batch_size=args.batch_size, mode=args.mode, policy=args.policy,
+                  skill=args.skill, zero_error_deg=args.zero_error_deg)
     record = dict(schema=SCHEMA, round_id=round_id, created_at=now(), source_sha=ladder.source_sha(args), status="running", stage="collect", cameras=list(teaching.RECORDED),
                   tasks=names, seeds=args.seeds, recipe=recipe, choices=sites.parse_choices(args.choice), claim="기하: 도달·순서·충돌(D-947). 실물 근거가 아닙니다.")
     write_record(run, record)
     me, environment = str(Path(__file__)), dict(os.environ, MUJOCO_GL="egl", PYTHONUNBUFFERED="1")
     log = (run / "round.log").open("w", encoding="utf-8")
     chosen = [arg for item in args.choice or [] for arg in ("--choice", item)]  # the same layout for plan, collection and judgement
+    skilled = ["--skill", args.skill, "--zero-error-deg", str(args.zero_error_deg)] if args.skill else []
     try:
         plan = []
         if args.mode == "concurrent":  # one plan for all workers and the evaluation: omx_two_arm_plan.py's two-arm order and zones
@@ -369,7 +479,7 @@ def run_round(args):
             plan = ["--plan-dir", str(run / "plan")]
         # One process per part: rendering four cameras is what takes the time, and LeRobot writes one dataset at a time.
         parts = [(run / f"part{k}", list(range(TRAIN_SEED_BASE + k, TRAIN_SEED_BASE + args.seeds, args.workers))) for k in range(min(args.workers, args.seeds))]
-        running = [subprocess.Popen([args.python, me, "collect", "--seeds", ",".join(map(str, seeds)), "--tasks", args.tasks, "--out", str(part), *plan, *chosen],
+        running = [subprocess.Popen([args.python, me, "collect", "--seeds", ",".join(map(str, seeds)), "--tasks", args.tasks, "--out", str(part), *plan, *chosen, *skilled],
                                     env=dict(environment, OMP_NUM_THREADS="1"), stdout=log, stderr=subprocess.STDOUT) for part, seeds in parts]
         if any(worker.wait() for worker in running):
             raise RuntimeError("collect")
@@ -388,27 +498,47 @@ def run_round(args):
             shutil.rmtree(part)
         record.update(stage="train", data=dict(episodes=info["total_episodes"], frames=info["total_frames"], spoiled_runs=spoiled))
         write_record(run, record)
-        subprocess.run([args.lerobot_train, f"--dataset.repo_id=rosy/omx-two-arm-{round_id}", f"--dataset.root={run / 'dataset'}", "--dataset.video_backend=pyav", "--policy.type=act", "--policy.device=cuda",
-                        "--policy.push_to_hub=false", f"--policy.chunk_size={recipe['chunk_size']}", f"--policy.n_action_steps={recipe['n_action_steps']}", f"--policy.optimizer_lr={recipe['optimizer_lr']}",
-                        f"--batch_size={recipe['batch_size']}", f"--steps={recipe['steps']}", f"--save_freq={max(1, recipe['steps'] // 3)}", "--log_freq=500", f"--num_workers={args.train_workers}", "--wandb.enable=false",
-                        f"--output_dir={run / 'train'}", "--job_name=omx-two-arm",
-                        # whole-task episodes put frames 1400 s into a video file: float rounding exceeded the 0.1 ms default (round 4)
-                        "--tolerance_s=0.001"], env=environment, stdout=log, stderr=subprocess.STDOUT, check=True)
+        common = [f"--batch_size={recipe['batch_size']}", f"--steps={recipe['steps']}", f"--save_freq={max(1, recipe['steps'] // 3)}", "--log_freq=500",
+                  f"--num_workers={args.train_workers}", "--wandb.enable=false", f"--output_dir={run / 'train'}",
+                  # whole-task episodes put frames 1400 s into a video file: float rounding exceeded the 0.1 ms default (round 4)
+                  "--tolerance_s=0.001"]
+        dataset = [f"--dataset.repo_id=rosy/omx-two-arm-{round_id}", f"--dataset.root={run / 'dataset'}", "--dataset.video_backend=pyav"]
+        if args.policy == "smolvla":
+            sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "learning/training/omx"))
+            import smolvla_training  # the same offline snapshot of smolvla_base and SmolVLM2 as the native cycle
+            prepared = smolvla_training.prepare(args.base_model, args.vlm_assets, run / "inputs", device="cuda")
+            (run / "train-config.json").write_text(json.dumps(dict(policy=dict(prepared["policy"], optimizer_lr=args.lr), job_name="omx-two-arm-smolvla")), encoding="utf-8")
+            command = [args.lerobot_train, f"--config_path={run / 'train-config.json'}", *dataset, *common]
+            environment.update(HF_HUB_OFFLINE="1", HF_DATASETS_OFFLINE="1")
+        else:
+            command = [args.lerobot_train, *dataset, "--policy.type=act", "--policy.device=cuda", "--policy.push_to_hub=false", f"--policy.chunk_size={recipe['chunk_size']}",
+                       f"--policy.n_action_steps={recipe['n_action_steps']}", f"--policy.optimizer_lr={recipe['optimizer_lr']}", "--job_name=omx-two-arm", *common]
+        subprocess.run(command, env=environment, stdout=log, stderr=subprocess.STDOUT, check=True)
         record.update(stage="evaluate")
         write_record(run, record)
-        subprocess.run([args.python, me, "evaluate", "--model", str(run / "train/checkpoints/last/pretrained_model"), "--steps-file", str(run / "steps.json"), "--tasks", args.tasks,
-                        "--isolated-seeds", str(args.isolated_seeds), "--whole-seeds", str(args.whole_seeds), "--out", str(run / "eval.json"), "--artifacts", str(run / "artifacts"), *plan, *chosen],
-                       env=environment, stdout=log, stderr=subprocess.STDOUT, check=True)
-    except (RuntimeError, subprocess.CalledProcessError) as exc:
+        judged = [("eval.json", str(run / "train/checkpoints/last/pretrained_model"))] + ([("eval-ik.json", "ik")] if args.skill else [])
+        for out, model in judged:  # a sub-skill round also judges the IK it would replace on the same seeds
+            subprocess.run([args.python, me, "evaluate", "--model", model, "--steps-file", str(run / "steps.json"), "--tasks", args.tasks,
+                            "--isolated-seeds", str(args.isolated_seeds), "--whole-seeds", str(args.whole_seeds), "--out", str(run / out), "--artifacts", str(run / "artifacts"),
+                            *plan, *chosen, *skilled], env=environment, stdout=log, stderr=subprocess.STDOUT, check=True)
+    except (RuntimeError, subprocess.CalledProcessError, ValueError) as exc:
         record.update(status="failed", reason=f"{record['stage']} 단계 실패({exc}). round.log를 보세요.", finished_at=now())
         write_record(run, record)
         return 1
     result = json.loads((run / "eval.json").read_text(encoding="utf-8"))
     score = summarise(result["rows"], result["whole"])
-    record.update(outcome(score), stage="done", eval=score, finished_at=now(), artifacts=sorted(path.name for path in (run / "artifacts").glob("*.mp4")))
+    if args.skill:
+        baseline = json.loads((run / "eval-ik.json").read_text(encoding="utf-8"))
+        record.update(eval_ik=summarise(baseline["rows"], []))
+    record.update(outcome(score, args.skill), stage="done", eval=score, finished_at=now(), artifacts=sorted(path.name for path in (run / "artifacts").glob("*.mp4")))
     write_record(run, record)
     print(json.dumps(dict(round_id=round_id, eval=record["eval"]), ensure_ascii=False))
     return 0
+
+
+def skill_options(parser):
+    parser.add_argument("--skill", choices=sorted(SKILLS), help="learn and judge only this part of each step; the teacher's IK does the rest")
+    parser.add_argument("--zero-error-deg", type=float, default=0., help="per-seed joint-zero calibration error, uniform within +-deg (the twin fit found up to 4)")
 
 
 def main(argv=None):
@@ -420,14 +550,16 @@ def main(argv=None):
     one.add_argument("--out", required=True)
     one.add_argument("--plan-dir", help="two-arm plans (omx_two_arm_plan.py --replay-dir): record whole tasks with both arms at once")
     one.add_argument("--choice", action="append", help="key=value override of omx_two_arm_sites.CHOICES")
+    skill_options(one)
     for name in ("evaluate", "round"):
         one = commands.add_parser(name)
         one.add_argument("--tasks", default=",".join(TASKS))
         one.add_argument("--isolated-seeds", type=int, default=3)
         one.add_argument("--whole-seeds", type=int, default=3)
         one.add_argument("--choice", action="append", help="key=value override of omx_two_arm_sites.CHOICES")
+        skill_options(one)
         if name == "evaluate":
-            one.add_argument("--model", required=True)
+            one.add_argument("--model", required=True, help="a trained ACT or SmolVLA model folder, or ik for the teacher's IK in reported angles")
             one.add_argument("--steps-file", required=True)
             one.add_argument("--out", required=True)
             one.add_argument("--artifacts", required=True)
@@ -443,9 +575,13 @@ def main(argv=None):
     one.add_argument("--lr", type=float, default=1e-4)
     one.add_argument("--batch-size", type=int, default=8)
     one.add_argument("--mode", default="steps", choices=["steps", "concurrent"], help="one arm at a time per step, or whole tasks with both arms at once")
+    one.add_argument("--policy", default="act", choices=["act", "smolvla"])
+    one.add_argument("--base-model", help="SmolVLA: local smolvla_base folder")
+    one.add_argument("--vlm-assets", help="SmolVLA: local SmolVLM2-500M-Video-Instruct folder")
     args = parser.parse_args(argv)
     if args.command == "collect":
-        return collect([int(seed) for seed in args.seeds.split(",")], args.tasks.split(","), args.out, args.plan_dir, sites.parse_choices(args.choice))
+        return collect([int(seed) for seed in args.seeds.split(",")], args.tasks.split(","), args.out, args.plan_dir, sites.parse_choices(args.choice),
+                       args.skill, args.zero_error_deg)
     return evaluate(args) if args.command == "evaluate" else run_round(args)
 
 

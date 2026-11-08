@@ -58,11 +58,16 @@ class Teacher:
         self.hook = frame_hook or (lambda data, label: None)
         self.contacts, self.phase, self.first, self.tilt, self.n, self.held_tilt = dict(arm_arm=set(), arm_other=set(), pad_neighbour=set()), "", {}, 0., 0, 0.
         self.others = set()
+        # joint-zero calibration error per arm (rad, 6 with the gripper 0): true angle = reported + error. The real twin fit found 1-4 deg
+        # (2026-11-09 omx-twin-night). A privileged teacher plans in true angles; anyone else commands in reported ones and lands off by it.
+        self.zero_error, self.privileged = {}, True
 
     def frame(self, data, targets, label, ctxs=None):
         """One video frame of physics. Sequential: the Teacher is the one context. Two arms at once: each context gets its own arm's
         link and pad contacts; arm-arm contacts go to both."""
         self.n += 1
+        if not self.privileged:
+            targets = {arm: t + self.zero_error[arm] if arm in self.zero_error else t for arm, t in targets.items()}
         self.world.advance(data, targets)
         both = ctxs is not None
         ctxs = ctxs if both else [self]
@@ -250,20 +255,25 @@ class Teacher:
         another arm moved meanwhile (ctx.others) are that arm's, not disturbed neighbours."""
         w, ctx = self.world, ctx or self
         pose = judge_pose(w, data, step["container"], step["to"], self.limits)
-        moved = []
-        for o, (p, yw, tl) in before.items():
-            if o in ctx.others:
-                continue
-            p2, yw2, tl2 = w.pose(data, o)
-            d = float(np.linalg.norm(p2 - p)) * 1000
-            dyaw = abs(math.degrees(tasks.wrap_pi(yw2 - yw)))
-            if d > self.limits["neighbour_mm"] or abs(tl2 - tl) > self.limits["neighbour_tilt_deg"] or dyaw > self.limits["neighbour_yaw_deg"]:
-                moved.append(f"{o} {d:.1f} mm {dyaw:.1f} deg")
+        moved = self.disturbed(data, before, ctx)
         arm_hits = sorted(f"{a}~{b}" for a, b in ctx.contacts["arm_other"])
         crash = sorted("~".join(p) for p in ctx.contacts["arm_arm"])
         ok = pose["ok"] and not moved and not crash and not arm_hits
         return dict(row, result="pass" if ok else "fail", pose=pose, neighbours_disturbed=moved, arm_arm_contacts=crash, arm_link_contacts=arm_hits,
                     pad_touched_neighbours=sorted(ctx.contacts["pad_neighbour"]), held_tilt_max_deg=round(ctx.held_tilt, 1), first_contact_phase=ctx.first)
+
+    def disturbed(self, data, before, ctx):
+        """Neighbours that moved past the judge's limits since `before`."""
+        moved = []
+        for o, (p, yw, tl) in before.items():
+            if o in ctx.others:
+                continue
+            p2, yw2, tl2 = self.world.pose(data, o)
+            d = float(np.linalg.norm(p2 - p)) * 1000
+            dyaw = abs(math.degrees(tasks.wrap_pi(yw2 - yw)))
+            if d > self.limits["neighbour_mm"] or abs(tl2 - tl) > self.limits["neighbour_tilt_deg"] or dyaw > self.limits["neighbour_yaw_deg"]:
+                moved.append(f"{o} {d:.1f} mm {dyaw:.1f} deg")
+        return moved
 
     def _hold_shift(self, arm, off, q, yaw, pos):
         """TCP shift that puts the container centre (not the TCP) where the waypoint says: R @ held offset, nominal layout.hold_below under the TCP removed."""
