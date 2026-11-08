@@ -14561,6 +14561,13 @@ osy-d395-s1d\`.
 - 증거: harness lint. 구현 시험은 operations/account/logs.md.
 - Gate: 없음. CE: 해당 없음.
 
+## 2026-11-07 · uncommitted · fix(land): 건너뛰기만 한 재시험을 LOAD-FLAKY로 보지 않는다
+
+- 변경: 새 실패를 단독 재시험할 때 exit 0이어도 통과 없이 건너뛰기만 했으면 판정 없음으로 멈춘다.
+- 증거: LeRobot 환경이 있어야 도는 시험이 AI PC에서 실패하고 환경 없는 현장 PC에서 건너뛰어 `LOAD-FLAKY`로 기록됐다(같은 착지의 단독 실행 시험이 잡아 멈췄다). 새 시험은 수정 전 건너뛰기 경우만 실패했다.
+- gate 변화: 강화. 진짜 실패가 환경 없는 PC의 건너뛰기로 착지하지 못한다.
+- CE: 해당 없음 — 원인이 코드와 시험에 남는다.
+
 ## 2026-11-08 · uncommitted · test(learning): 학습 브라우저 여정 조건을 되돌린다
 - 변경: 바로 앞 항목에서 `test_learning_workflow_pipeline_browser.py`에 넣은 `ROSY_RUN_PINNED_LEARNING=1` 조건을 뺐다. 시험은 main과 같다.
 - 증거: 착지 브라우저 묶음은 그 값을 주지 않아 시험이 늘 건너뛰어졌고, `land_browser.vacuous`가 건너뜀 1건으로 FULL을 멈췄다(219 passed, 1 skipped). 다른 고정 학습 시험은 브라우저 묶음 밖이라 같은 조건이 맞지 않았다.
