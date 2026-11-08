@@ -141,6 +141,8 @@ case "$ROLE:$ACTION:$UNIT" in
   site:restart-unit:rosy-omx-camera-readiness.service|\
   site:restart-unit:rosy-omx-camera-view.service|\
   site:restart-unit:rosy-omx-camera@arm_a_wrist.service|\
+  site:restart-unit:rosy-omx-camera@arm_b_wrist.service|\
+  site:restart-unit:rosy-omx-camera@side.service|\
   site:restart-unit:rosy-omx-camera@top.service)
     if arm_session_held; then refuse "an arm session is running" 6; fi
     restart_user_unit
