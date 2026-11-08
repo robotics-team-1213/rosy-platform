@@ -65,38 +65,38 @@
      {
       "lane": 1,
       "xy": [
-       -0.0297,
-       0.0962
+       -0.0285,
+       0.0963
       ],
-      "yaw_deg": 11.0,
+      "yaw_deg": 11.7,
       "source": "container",
-      "residual_mm": 1.9
+      "residual_mm": 0.8
      },
      {
       "lane": 2,
       "xy": [
-       -0.0334,
-       0.1474
+       -0.0329,
+       0.1475
       ],
-      "yaw_deg": -2.6,
+      "yaw_deg": -1.9,
       "source": "pad",
-      "residual_mm": 0.4
+      "residual_mm": 0.8
      },
      {
       "lane": 3,
       "xy": [
-       -0.0251,
-       0.1981
+       -0.0252,
+       0.1982
       ],
-      "yaw_deg": -16.2,
-      "source": "plate-fit",
-      "residual_mm": null
+      "yaw_deg": -15.4,
+      "source": "pad (partial)",
+      "residual_mm": 9.1
      }
     ]
    },
    "seen": {
     "a": 2,
-    "b": 2
+    "b": 3
    },
    "errors": {},
    "shape": {

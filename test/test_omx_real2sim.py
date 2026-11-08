@@ -120,3 +120,25 @@ def test_a_previous_snapshot_without_a_plate_still_measures_both():
     prev = dict(plates={"a": first["plates"]["a"]["lanes"]}, shape=first["shape"])  # plate b was not measured last time
     again = r2s.measure_temp_plates(frame(layout), layout, prev)
     assert again["plates"]["b"]["seen"] == 3
+
+
+def test_pads_cut_short_still_hold_their_lane():
+    layout = sites.Layout()
+    first = r2s.measure_temp_plates(frame(layout), layout)
+    prev = dict(plates={t: p["lanes"] for t, p in first["plates"].items()}, shape=first["shape"])
+    img = frame(layout)
+    cam = r2s.Camera(layout.fixture["real_cameras"]["top"], img.shape[:2])
+    for k, keep in ((2, .070), (3, .050)):  # plate b's pads lose their -x end, as in the 2026-11-09 frame
+        (x, y), yaw = truth("b", k)
+        far = (x - (.045 - (.09 - keep) / 2) * math.cos(yaw), y - (.045 - (.09 - keep) / 2) * math.sin(yaw))
+        corners = [cam.project((far[0] + a * (.09 - keep) / 2 * math.cos(yaw) - b * .017 * math.sin(yaw),
+                                far[1] + a * (.09 - keep) / 2 * math.sin(yaw) + b * .017 * math.cos(yaw), layout.deck_z))
+                   for a, b in ((-1, -1), (1, -1), (1, 1), (-1, 1))]
+        cv2.fillPoly(img, [np.round(corners).astype(np.int32)], (60, 200, 200))
+    got = r2s.measure_temp_plates(img, layout, prev)
+    b = {l["lane"]: l for l in got["plates"]["b"]["lanes"]}
+    assert got["plates"]["b"]["seen"] == 3
+    assert b[2]["source"] == "pad (partial)"
+    for k, lane in b.items():
+        assert math.dist(lane["xy"], truth("b", k)[0]) < .003
+        assert abs(lane["yaw_deg"] - math.degrees(truth("b", k)[1])) < 1.

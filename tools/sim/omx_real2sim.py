@@ -39,7 +39,9 @@ VIEWER = "http://127.0.0.1:8767/frame/{}.jpg"  # rosy-omx-camera-view on the sit
 CAMERAS = ("top", "side", "arm_a_wrist", "arm_b_wrist")
 LANE = (.090, .030)          # printed pad = container footprint, m
 SIZE_TOL = (.012, .007)      # a blob within this of LANE is a lane
-CHANGED = (.003, 1.5)        # m, deg: a lane moved more than this is a changed item
+PARTIAL_MIN = .040           # a lane-wide pad at least this long is a lane cut short at one end
+CHANGED = (.003, 3.)         # m, deg: a lane moved more than this is a changed item; 3 deg is the pocket's own yaw
+                             # tolerance (SCAD yaw_tol_deg), above one plate's frame-to-frame jitter (1.4 deg, 2026-11-09)
 STAGGER_S = 45
 GAPS = {"temp_plates": "G-17", "ship": "G-18", "camera": "G-19"}  # sim2real registry rows each item reports to (D-480)
 PY = "MUJOCO_GL=egl $HOME/rosy-test/venvs/sim-mujoco/bin/python"
@@ -105,13 +107,18 @@ def rect(points):
 
 
 def lane_blobs(frame, cam, deck_z, box_h):
-    """Every lane-sized blob: dict(kind, xy, yaw, size) on the deck (a container measured on its top face)."""
+    """Every lane-wide blob: dict(kind, xy, yaw, size, partial) on the deck (a container measured on its top face). A pad
+    cut short at one end (glare or shade; 73 and 49 mm on 2026-11-09) is `partial`: its yaw and its offset across the lane
+    still hold, its centre along the lane does not."""
     out = []
     for kind, px in blobs(frame):
         z = deck_z + (box_h if kind == "container" else 0.)
         xy, yaw, size = rect(cam.to_plane(px, z))
-        if abs(size[0] - LANE[0]) <= SIZE_TOL[0] and abs(size[1] - LANE[1]) <= SIZE_TOL[1]:
-            out.append(dict(kind=kind, xy=xy, yaw=yaw, size=size))
+        if abs(size[1] - LANE[1]) > SIZE_TOL[1] or not PARTIAL_MIN <= size[0] <= LANE[0] + SIZE_TOL[0]:
+            continue
+        partial = size[0] < LANE[0] - SIZE_TOL[0]
+        if not partial or kind == "pad":
+            out.append(dict(kind=kind, xy=xy, yaw=yaw, size=size, partial=partial))
     return out
 
 
@@ -153,8 +160,9 @@ def fit_shape(a, b, lanes_apart):
 
 
 def fit_plate(found, shape, expected, near=.14, tol=(.008, math.radians(4))):
-    """Plate pose from its lane-sized blobs: every (blob, lane k) pair gives a pose; the one most blobs agree with wins
-    (ties: nearest the expected pose), refined as the mean of its inliers' poses. (pose, {k: blob}) or None."""
+    """Plate pose from its lane blobs: every (whole blob, lane k) pair gives a pose; the one most blobs agree with wins
+    (ties: nearest the expected pose). A partial pad agrees when its yaw and its offset across the lane fit and it lies
+    within the lane's length; it adds to the yaw, while the position comes from the whole blobs. (pose, {k: blob}) or None."""
     lanes = plate_lanes(shape)
     mine = [b for b in found if math.dist(b["xy"], expected[:2]) < near]
 
@@ -168,12 +176,16 @@ def fit_plate(found, shape, expected, near=.14, tol=(.008, math.radians(4))):
         for b in mine:
             for k in (1, 2, 3):
                 xy, yaw = place(lanes[k], pose)
-                if k not in out and math.dist(xy, b["xy"]) < tol[0] and abs(fold(yaw - b["yaw"])) < tol[1]:
+                if k in out or abs(fold(yaw - b["yaw"])) >= tol[1]:
+                    continue
+                d = np.subtract(b["xy"], xy)
+                along, across = abs(d @ (math.cos(yaw), math.sin(yaw))), abs(d @ (-math.sin(yaw), math.cos(yaw)))
+                if (across < tol[0] and along < (LANE[0] - b["size"][0]) / 2 + tol[0]) if b["partial"] else math.hypot(*d) < tol[0]:
                     out[k] = b
         return out
 
     best = None
-    for b in mine:
+    for b in (b for b in mine if not b["partial"]):
         for k in (1, 2, 3):
             pose = pose_from(b, k)
             inl = agree(pose)
@@ -182,9 +194,14 @@ def fit_plate(found, shape, expected, near=.14, tol=(.008, math.radians(4))):
                 best = (key, inl)
     if best is None:
         return None
-    poses = [pose_from(b, k) for k, b in best[1].items()]
-    theta = math.atan2(np.mean([math.sin(p[2]) for p in poses]), np.mean([math.cos(p[2]) for p in poses]))
-    return (float(np.mean([p[0] for p in poses])), float(np.mean([p[1] for p in poses])), theta), best[1]
+    turns = [pose_from(b, k)[2] for k, b in best[1].items()]
+    theta = math.atan2(np.mean(np.sin(turns)), np.mean(np.cos(turns)))
+    spots = []
+    for k, b in best[1].items():
+        if not b["partial"]:
+            (x, y), _ = place(lanes[k], (0., 0., theta))
+            spots.append((b["xy"][0] - x, b["xy"][1] - y))
+    return (*np.mean(spots, 0).tolist(), theta), best[1]
 
 
 def measure_temp_plates(frame, layout, prev=None):
@@ -222,9 +239,9 @@ def measure_temp_plates(frame, layout, prev=None):
             xy, yaw = place(local, pose)
             b = seen.get(k)
             lanes.append(dict(lane=k, xy=[round(v, 4) for v in xy], yaw_deg=round(math.degrees(fold(yaw)), 1),
-                              source=b["kind"] if b else "plate-fit", residual_mm=round(math.dist(xy, b["xy"]) * 1000, 1) if b else None))
+                              source=(b["kind"] + (" (partial)" if b["partial"] else "")) if b else "plate-fit", residual_mm=round(math.dist(xy, b["xy"]) * 1000, 1) if b else None))
         plates[t] = dict(lanes=lanes, seen=len(seen))
-        sizes += [b["size"] for b in seen.values() if b["kind"] == "pad"]
+        sizes += [b["size"] for b in seen.values() if b["kind"] == "pad" and not b["partial"]]
     scale = None
     if sizes:
         err = np.abs(np.array(sizes) - LANE).max(0)
