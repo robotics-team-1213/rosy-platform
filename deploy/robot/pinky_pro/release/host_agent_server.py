@@ -279,6 +279,12 @@ class SubprocessCommands:
         device_show = device.stdout
         return parse_network_status(active.stdout, device_show=device_show, wifi_show=wifi_show)
 
+    def navigation_approval(self, action: str, *arguments: str) -> dict:
+        import navigation_approval_host as host
+        run = {"status": host.status, "begin": host.request_begin, "cancel": host.request_cancel,
+               "seal": host.request_seal, "start_navigation": host.start_navigation}[action]
+        return run(Path("/"), host.SystemOps(), *arguments)
+
     def lane_perception_status(self) -> dict:
         from host_lane_perception import LanePerceptionConfig
         return LanePerceptionConfig().get()

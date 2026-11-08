@@ -15,7 +15,6 @@ import { createMeasuredCalibrationView } from './measured-calibration-view.js';
 import { createStartPointView } from "./start-point-view.js";
 import { createInstallLine } from "./install-line.js";
 import { createTrackingRelearn } from "./tracking-relearn.js";
-import { createHostServices } from "./host-services.js";
 import { createDeviceProfiles } from "./device-profiles.js";
 import { createPollGate } from "/console/assets/poll-gate.js";
 import { createPeerPicker } from "./peer-picker.js";
@@ -121,12 +120,6 @@ async function call(path, options = {}) {
   }
 }
 
-const hostServices = createHostServices({
-  root: el("host-services"),
-  call,
-  confirmIrreversible,
-  onPaint: () => applyRole(),
-});
 const deviceCare = createDeviceCare({root: el('device-profiles'), scope: pageScope, call,
   identity: () => ({role: auth.role, principal_id: auth.principal})});
 deviceProfiles = createDeviceProfiles({root: el('device-profiles'), scope: pageScope, call, care: deviceCare,
@@ -139,7 +132,6 @@ const installTasks = [
   {id: "device-profiles", title: "장치 정보", panel: el("device-profiles")},
   {id: "cameras", title: "카메라 연결 승인", panel: el("camera-link")},
   {id: "calibration", title: "카메라 설치·보정", panel: el("camera-calibration")},
-  {id: "hosts", title: "호스트 서비스", panel: el("host-services")},
 ];
 const taskChooser = createTaskChooser({beforeSelect: from => {
   if (from === "calibration") visionView.pausePreview();
@@ -148,7 +140,8 @@ const taskChooser = createTaskChooser({beforeSelect: from => {
 }, tasks: installTasks, onSelect: id => {
   // D-926 2 — 경로 줄의 현재 화면. 선택은 chooser가 이미 바꿨고 주소에 남겨 새로고침·공유가 작업을 보존하게 한다.
   el("install-screen").textContent = installTasks.find(task => task.id === id)?.title ?? "";
-  history.replaceState(null, "", `#${id}`);
+  // 뒤로 가기가 설치 화면을 벗어나지 않고 앞 작업으로 돌아간다. 주소가 이미 이 작업이면 기록을 늘리지 않는다.
+  if ((location.hash.slice(1) || installTasks[0].id) !== id) history.pushState(null, "", `#${id}`);
 }});
 el("install-chooser").append(taskChooser.element);
 taskChooser.setReady();
@@ -156,7 +149,7 @@ taskChooser.setReady();
 const initialTask = location.hash.slice(1);
 if (installTasks.some(task => task.id === initialTask)) void taskChooser.choose(initialTask);
 // 설치 노선의 역 링크(#작업-id)도 같은 작업을 고른다 — 숨은 패널로의 앵커는 아무 일도 하지 않는다.
-addEventListener("hashchange", () => { const id = location.hash.slice(1); if (installTasks.some(task => task.id === id)) void taskChooser.choose(id); });
+addEventListener("hashchange", () => { const id = location.hash.slice(1) || installTasks[0].id; if (installTasks.some(task => task.id === id)) void taskChooser.choose(id); });
 pageScope.subscribe(() => {
   taskChooser.resume();
   return () => { void taskChooser.pause().then(() => { if (pageScope.capture().current()) taskChooser.resume(); }); };
@@ -343,7 +336,6 @@ async function refreshAuthorization(renewed = false, credentialChange = false) {
       startPoints.refresh(),
       installLine.refresh(),
       relearn.refresh(),
-      hostServices.refresh(),
       deviceProfiles.refresh(),
     ]);
     life.check();
@@ -373,7 +365,6 @@ visionView.refreshSources();
 pageScope.interval(refreshDiscovery, MAP_MS);
 pageScope.interval(() => peerPicker.refresh(), MAP_MS);
 pageScope.interval(() => visionView.refreshFrame(), STATE_MS + 500);
-pageScope.interval(() => hostServices.refresh().catch(() => {}), 30000);
 pageScope.interval(() => installLine.refresh().catch(() => {}), 30000);
 pageScope.interval(() => {
   if (!auth.locked && taskChooser.selectedId === 'device-profiles') deviceProfiles.refresh();

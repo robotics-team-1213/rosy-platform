@@ -66,7 +66,7 @@ def test_fleet_delivery_keeps_decision_namespace_and_console_resources(tmp_path,
     assert {'login.html', 'shared/login-page.js', 'shared/login-return.js'} <= expected.keys()
     assert {'profile.html', 'shared/profile-page.js'} <= expected.keys()
     assert {'incident-view.js', 'sitemap/site-map-survey.js', 'sitemap/site-map-camera.js', 'shared/site-map-edit.js',
-            'work/__init__.py', 'work/work-view.js', 'work/work.css', 'shared/power-action.js', 'shared/area-nav.js', 'work/channel-request-view.js'} <= expected.keys()
+            'work/__init__.py', 'work/work-view.js', 'work/work.css', 'shared/power-action.js', 'shared/area-first.js', 'shared/area-nav.js', 'work/channel-request-view.js'} <= expected.keys()
     assert {'sitemap/edit-history.js', 'sitemap/geometry-edit.js', 'sitemap/drawing-import.js', 'sitemap/map-editor.js',
             'sitemap/map-authoring.js', 'sitemap/map-editor.css', 'sitemap/map-topology.js',
             'sitemap/extraction-review.js', 'shared/drawing-errors.js', 'cell/cell-observation.js',

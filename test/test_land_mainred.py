@@ -165,3 +165,34 @@ def test_fingerprint_is_none_when_absent_or_ambiguous():
     assert mr.fingerprint(LOG, ID) == "AssertionError|pkg/test/test_a.py:7|E       assert 1 == 2"
     assert mr.fingerprint(LOG + LOG, ID) is None
     assert mr.fingerprint("", ID) is None and mr.fingerprint(LOG, "pkg/test/test_a.py") is None
+
+
+def test_recheck_closes_what_passes_or_is_gone_and_keeps_what_still_fails(repo):
+    wt, main, head = repo
+    gone, failing = "pkg/test/test_gone.py::test_x", "pkg/test/test_a.py::test_b"
+    alone = "tools/collect_alone.py::test_runs_alone[pkg/test/test_a.py]"
+    for nodeid in (gone, failing, alone):
+        mr.red(wt, main, [nodeid], LOG, [], "fix/elsewhere")
+    mr.write(wt, "carry", id=ID, main=main, sha=main, branch="feat/x", why="carried")
+    seen = []
+
+    def run(invocations, logs):
+        seen.extend(invocations)
+        for inv, log in zip(invocations, logs):
+            if inv[-1] == ID:
+                log.write_text(f"PASSED {ID}\n")
+            elif "tools/collect_alone.py" in inv:
+                log.write_text(f"PASSED {alone}\n")
+            else:
+                log.write_text(f"FAILED {failing}\n")
+
+    assert sorted(mr.recheck(wt, main, run, wt)) == sorted([ID, gone, alone])
+    assert list(mr.state(wt)) == [failing], "a failing id stays open and a closed carry is covered"
+    assert ["ROSY_ALONE_FILES=pkg/test/test_a.py", "tools/collect_alone.py", "-rA"] in seen
+    assert not any(gone in inv for inv in seen), "a deleted test file is not run"
+
+
+def test_recheck_keeps_an_id_whose_run_left_no_log(repo):
+    wt, main, _ = repo
+    assert mr.recheck(wt, main, lambda invocations, logs: None, wt) == []
+    assert ID in mr.state(wt), "an unreachable test host closes nothing"

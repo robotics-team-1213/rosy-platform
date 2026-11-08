@@ -167,8 +167,8 @@ def test_account_login_scope_stop_and_revocation_in_real_browser(tmp_path):
             clock[0] += 11
             assert page.evaluate(stop) == 403 and not board.stop
             page.locator('#halt').wait_for(state='hidden', timeout=15000)
-            assert page.locator('#account-login').is_visible()
-            assert page.locator('[data-account-profile]').is_hidden()
+            expect(page.locator('#account-login')).to_be_visible()
+            expect(page.locator('[data-account-profile]')).to_be_hidden()
             browser.close()
     finally:
         server.close()

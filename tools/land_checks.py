@@ -49,9 +49,14 @@ def _git(cwd: Path, *args: str) -> subprocess.CompletedProcess:
                           errors="replace")
 
 
+def tmp_root() -> Path:
+    """Where every landing's scratch folder lives (land_gc removes the old ones)."""
+    scratch = Path(os.environ.get("ROSY_SCRATCH") or tempfile.gettempdir())
+    return Path(os.environ.get("ROSY_LAND_TMP") or scratch / "rosy-land")
+
+
 def tmp_dir(branch: str) -> Path:
-    base = os.environ.get("ROSY_LAND_TMP") or Path(os.environ.get("ROSY_SCRATCH") or tempfile.gettempdir()) / "rosy-land"
-    path = Path(base) / branch.replace("/", "-")
+    path = tmp_root() / branch.replace("/", "-")
     path.mkdir(parents=True, exist_ok=True)
     return path
 
@@ -193,6 +198,12 @@ def load_flaky(wt: Path, inv: list[str], log: Path, verdict: str, logdir: Path, 
     return [], f"{why}; {where}" if where else why
 
 
+def _only_skipped(log: Path) -> bool:
+    """A rerun on a host without the test's environment skips with exit 0 and says nothing about the failure."""
+    text = log.read_text(encoding="utf-8", errors="replace") if log.is_file() else ""
+    return bool(re.search(r"\b\d+ skipped\b", text)) and not re.search(r"\b\d+ passed\b", text)
+
+
 def _rerun_alone(wt: Path, inv: list[str], log: Path, verdict: str, logdir: Path, tag: str, python: str,
                  run, *, tested_sha: str) -> tuple[list[str], str]:
     ids = _ids(wt, verdict)
@@ -209,8 +220,9 @@ def _rerun_alone(wt: Path, inv: list[str], log: Path, verdict: str, logdir: Path
         return [], "incomplete isolated rerun results"
     if _git(wt, "rev-parse", "HEAD").stdout.strip() != tested_sha:
         return [], "HEAD changed during isolated checks; retry the landing"
-    lost = [f"{nodeid} (exit {code}, {alone})" for nodeid, code, alone in zip(ids, codes, logs) if code not in (0, 1)]
-    if lost:  # 4: no such file, 5: nothing collected, 255: host lost: no verdict, not a second failure
+    lost = [f"{nodeid} (exit {code}, {alone})" for nodeid, code, alone in zip(ids, codes, logs)
+            if code not in (0, 1) or code == 0 and _only_skipped(alone)]
+    if lost:  # 4: no such file, 5: nothing collected, 255: host lost, exit 0 by skipping: no verdict, not a second failure
         return [], "the rerun alone gave no verdict: " + "; ".join(lost)
     again = [f"{nodeid} (exit {code}, {alone})" for nodeid, code, alone in zip(ids, codes, logs) if code != 0]
     if again:

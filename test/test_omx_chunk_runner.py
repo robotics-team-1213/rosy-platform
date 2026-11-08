@@ -96,6 +96,38 @@ def test_checked_load_validates_content_before_replacing_the_library(tmp_path):
     assert status[-1]["ok"] and r.library == candidate
 
 
+def test_a_checked_jog_after_a_contact_keeps_the_session_for_the_gated_fold():
+    """2026-11-07 review: an unchecked jog starts a new session, and the gate's park after it was refused with the arm out."""
+    status = []
+    r = m.Runner(Robot(), library(), fps=30, status=status.append, operating_context={"session_id": "current"})
+    r.target = list(HOME)
+    reviewed = m.digest(r.library)
+    r.fault = "contact in lift_pick: wrist_flex lag rose to 2.2 units"
+    r.command(f"checked current {reviewed} jog gripper.pos 3")
+    assert status[-1]["ok"] and r.operating_context["session_id"] == "current"
+    r.command("jog gripper.pos 1")
+    assert status[-1]["ok"] and r.operating_context["session_id"] != "current"
+
+
+def test_the_trace_reaches_the_disk_when_a_chunk_ends_not_every_tick():
+    import cell_why
+
+    class File:
+        def __init__(self):
+            self.lines, self.flushes = [], 0
+
+        def write(self, line):
+            self.lines.append(line)
+
+        def flush(self):
+            self.flushes += 1
+    f = File()
+    write = cell_why.flushing_trace(f)
+    for chunk in (None, "lift_pick", "lift_pick", "lift_pick", None, None):
+        write({"chunk": chunk})
+    assert len(f.lines) == 6 and f.flushes == 2
+
+
 def test_manual_intervention_invalidates_the_automatic_command_chain():
     status = []
     r = m.Runner(Robot(), library(), fps=30, status=status.append,
@@ -709,6 +741,44 @@ def test_a_wrist_roll_travel_lag_is_not_a_block(lag):
     assert done["ok"] is True and done["fault"] is None
 
 
+class StoppedRoll(Robot):
+    """The wrist roll follows, then stops dead at action `after` while its command runs on (arm_a 2026-11-01)."""
+
+    def __init__(self, after):
+        super().__init__()
+        self.after, self.count = after, 0
+        self.motion = type("Motion", (), {"effort_pwm": {"wrist_roll": -82}, "pwm_limits": {"wrist_roll": 300}})()
+
+    def send_action(self, action):
+        self.count += 1
+        stuck = self.pos[4]
+        super().send_action(action)
+        if self.count > self.after:
+            self.pos[4] = stuck
+        return dict(action)
+
+
+def rolling_library(reach=-20.0, ticks=240):
+    lib = goto_library()
+    lib["chunks"]["roll"] = [[*HOME[:4], HOME[4] + reach * i / ticks, HOME[5]] for i in range(ticks + 1)]
+    return lib
+
+
+def test_a_moving_roll_whose_lag_saws_past_the_block_lag_is_not_a_block():
+    # arm_b 2026-11-06: going negative it keeps moving while its lag saws up past ROLL_BLOCK_LAG
+    robot = Straining(lambda n: 1.1 + 0.05 * (n % 12), pwm=38, joint=4)
+    status = run_with(robot, rolling_library(), ["run roll", "stop"])
+    done = by_command(status, "run roll")[0]
+    assert done["fault"] is None
+
+
+def test_a_roll_stopped_dead_holds_before_the_guard():
+    status = run_with(StoppedRoll(after=40), rolling_library(), ["run roll", "park", "stop"])
+    held = by_command(status, "run roll")[0]
+    assert held["ok"] is False and "wrist_roll" in held["fault"]
+    assert float(held["fault"].split("lag rose to ")[1].split()[0]) < m.STRAIN_LAG  # the stillness held it, not the backstop
+
+
 def test_the_trace_gets_one_row_per_tick():
     rows, status, clock, queue = [], [], [0.0], ["run approach_pinky", "stop"]
     r = m.Runner(Pressing(after=10**9), library(), fps=30, status=status.append, clock=lambda: clock[0],
@@ -717,6 +787,41 @@ def test_the_trace_gets_one_row_per_tick():
     r.run(lambda: [queue.pop(0)] if queue and not r.chunk else [])
     assert len(rows) == r.ticks
     assert rows[1]["chunk"] == "approach_pinky" and len(rows[1]["sent"]) == 6 and len(rows[1]["present"]) == 6
+    assert rows[1]["pwm"] == {}  # a robot with no guard sample
+
+
+def test_the_trace_keeps_each_health_reading_once():
+    """2026-11-07: every descent stop's trace had pwm {} and no current, so a contact could not be told by load."""
+    rows, status, clock, queue = [], [], [0.0], ["run approach_pinky"] + ["state"] * 70 + ["stop"]  # over 2 s: 2 readings
+    robot = Pressing(after=10**9)
+    robot.bus = Bus(current={"wrist_flex": 300})
+    r = m.Runner(robot, library(), fps=30, status=status.append, clock=lambda: clock[0],
+                 sleep=lambda s: clock.__setitem__(0, clock[0] + 1 / 30))
+    r.trace = rows.append
+    r.run(lambda: [queue.pop(0)] if queue and not r.chunk else [])
+    loads = [row["load"] for row in rows if "load" in row]
+    readings = robot.bus.reads // 3  # PWM, current and temperature per reading
+    assert loads and len(loads) in (readings, readings - 1)  # one per reading, on the tick after it (the last may end the run)
+    assert all(load["current_ma"][3] == 300 for load in loads) and len(loads) < len(rows) / 10
+
+
+def test_the_trace_keeps_the_guards_pwm_sample_even_as_numpy():
+    import io
+
+    import numpy as np
+
+    import cell_why
+
+    rows, status, clock, queue = [], [], [0.0], ["run approach_pinky", "stop"]
+    robot = Pressing(after=10**9)
+    robot.motion = type("Motion", (), {"effort_pwm": {"wrist_flex": np.int64(120)}})()
+    r = m.Runner(robot, library(), fps=30, status=status.append, clock=lambda: clock[0],
+                 sleep=lambda s: clock.__setitem__(0, clock[0] + 1 / 30))
+    file = io.StringIO()
+    write = cell_why.flushing_trace(file)
+    r.trace = lambda row: (rows.append(row), write(row))
+    r.run(lambda: [queue.pop(0)] if queue and not r.chunk else [])
+    assert rows[1]["pwm"] == {"wrist_flex": 120} and '"wrist_flex": 120' in file.getvalue().splitlines()[1]
 
 
 class Winding(Bus):
@@ -759,3 +864,55 @@ def test_a_closing_grip_that_catches_something_reopens_where_it_was():
     caught = next(s for s in status if s.get("caught"))
     assert caught["ok"] is False and "jaws" in caught["error"] and caught["target"][5] == 62.0
     assert robot.pos[5] == 62.0
+
+
+@pytest.mark.parametrize("approved_lift", [300, 240])
+def test_main_passes_the_passively_connected_session_caps_to_startup_and_later_load(
+        tmp_path, monkeypatch, approved_lift):
+    from types import SimpleNamespace
+
+    monkeypatch.syspath_prepend(str(OMX))
+    import bus_watchdog
+    import guarded_native
+    import motor_health
+
+    approved = {"shoulder_lift": approved_lift, "elbow_flex": 280, "wrist_flex": 180}
+    robot, connected, reads, checked = Robot(), [], [], []
+
+    def read(register, joint):
+        assert connected and register == "PWM_Limit" and not robot.sent
+        reads.append(joint)
+        return approved.get(joint, 300)
+
+    robot.bus = SimpleNamespace(read=read)
+    config, initial, later = (tmp_path / name for name in ("record.json", "initial.json", "later.json"))
+    config.write_text(json.dumps({"robot": {"type": "omx_follower", "port": "/dev/fake-session",
+                                         "max_relative_target": 5}, "dataset": {"fps": 30}}))
+    initial.write_text(json.dumps(dict(library(), fps=30, chunks={"home": [HOME]})))
+    later.write_text(json.dumps(dict(library(), fps=30, chunks={"home": [HOME], "hold": [HOME]})))
+
+    def plan_check(path, port, params, lib, caps=None):
+        assert caps is not None and {joint: caps[joint] for joint in approved} == approved
+        checked.append(("startup", lib, caps))
+        return lambda candidate: checked.append(("load", candidate, caps))
+
+    class SessionRunner(m.Runner):
+        def run(self, lines):
+            self.target = list(HOME)
+            self.command(f"load {later}")
+
+    monkeypatch.setitem(sys.modules, "lerobot.robots.omx_follower", SimpleNamespace(
+        OmxFollowerConfig=lambda **values: values, OmxFollower=lambda config: robot))
+    monkeypatch.setattr(guarded_native, "connect_passive", lambda *a, **k: connected.append(True))
+    monkeypatch.setattr(guarded_native, "close_device", lambda *a: None)
+    monkeypatch.setattr(motor_health, "MotorHealth", lambda: SimpleNamespace(end=lambda: None))
+    monkeypatch.setattr(bus_watchdog, "arm", lambda *a: None)
+    monkeypatch.setattr(m, "fifo_lines", lambda *a: SimpleNamespace(close=lambda: None))
+    monkeypatch.setattr(m, "runtime_context", lambda *a, **k: {"scope": "simulation"})
+    monkeypatch.setattr(m, "Runner", SessionRunner)
+    monkeypatch.setattr(m.load_predict, "plan_check", plan_check)
+    m.main(["--config", str(config), "--library", str(initial), "--io", str(tmp_path / "io"),
+            "--load-model", str(tmp_path / "session-model.json")])
+    assert [phase for phase, _, _ in checked] == ["startup", "load"]
+    assert set(approved) <= set(reads) and checked[0][2] is checked[1][2]
+    assert "hold" in checked[1][1]["chunks"] and not robot.sent

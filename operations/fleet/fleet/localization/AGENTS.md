@@ -16,6 +16,7 @@ D-395 Fleet localization arbiter. Scores each robot's pose candidates with bound
 |------|-------------|
 | `__init__.py` | Package marker |
 | `cues.py` | Bounded cues per hypothesis: peers, slot (10 cm / 20 deg, either way along the axis), last good pose (never after a pickup), overhead sighting (≤ 300 ms), reference square |
+| `auto_locate.py` | D-989: LED-confirmed camera track + robot map pose -> SLAM-to-site transform (rigid fit, or heading from lidar objects toward peers). Disagreement latches DEGRADED. Observation only |
 | `arbiter.py` | `Weights`, `Context`, `score()`, `Arbiter.observe()` → `LocalizationDecision` |
 | (not in this folder) | MapPose lives in `rosy.world.state.projections.map_pose`. Import it directly (D-752). This folder does not re-export it. Fleet service, transaction, and admission stay in `server/` |
 | `lane_compliance.py` | D-511 2: signed lateral offset (left +), body margin `width_m/2 − (|d| + half width)` from `core_common.robot_body`, `LaneComplianceTracker` (OK/WARN/ACT/UNKNOWN, `persist_n`), `LaneComplianceConfig` (`fleet.lane_compliance`, provisional defaults). Observe only |

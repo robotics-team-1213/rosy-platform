@@ -43,7 +43,8 @@ class UpdaterApply:
         synced = self.host.run(["python3", "-B", script], SYNC_TIMEOUT_S)
         result = _last_json(synced.stdout)
         if synced.returncode != 0 or not result or result.get("ok") is not True:
-            raise UpdateError(f"IMAGE_LAYER_SYNC_FAILED: {_tail(synced.stderr or synced.stdout)}")
+            detail = _tail(synced.stderr or synced.stdout) or f"no output, exit {synced.returncode}"
+            raise UpdateError(f"IMAGE_LAYER_SYNC_FAILED: {detail}")
         return result
 
     def _restart(self, sync_result: dict) -> list[str]:
@@ -347,7 +348,7 @@ class UpdaterApply:
             self._save_state(state)
             self._finish(state, "applying", f"activating {release_id} (from {current})", release_id)
             # Re-review N1: native_release runs our precheck after its verify and right
-            # before it stops the runtime, so hold/seal/idleness are judged at that moment.
+            # before it stops the runtime, so hold and idleness are judged at that moment.
             precheck = f"python3 -B {shlex.quote(self._native('rosy_auto_update.py'))} --root " \
                        f"{shlex.quote(str(self.root))} precheck"
             activated = self.host.run(["env", f"ROSY_ACTIVATE_PRECHECK={precheck}", "bash",

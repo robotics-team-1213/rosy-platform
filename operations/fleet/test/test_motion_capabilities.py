@@ -242,3 +242,40 @@ def test_a_display_past_max_age_waits_once_per_refresh_not_per_request():
         assert loop.time() - started < 0.2
         await display.aclose()
     asyncio.run(exercise())
+
+
+def test_an_admission_read_waits_for_the_read_already_in_flight_but_the_console_does_not():
+    """Start admission must not read a live robot as unreadable just because a tick started the refresh."""
+    from fleet.server.console_view import CapabilityDisplay
+
+    class Robot:
+        def __init__(self):
+            self.gate = asyncio.Event()
+
+        async def power_health(self):
+            await self.gate.wait()
+            return {"battery": 1}
+
+    async def exercise():
+        robot = Robot()
+        display = CapabilityDisplay({"one": robot}, FakeClock(), read_method="power_health",
+                                    refresh_s=1.0, max_age_s=5.0)
+        first = asyncio.ensure_future(display.shown("one", wait_s=0.01))   # a tick starts the read
+        assert await first is None
+        assert await display.shown("one", wait_s=0.01) is None            # the console never waits on it
+        waiter = asyncio.ensure_future(display.shown("one", wait_s=2.0, await_pending=True))
+        await asyncio.sleep(0.05)
+        robot.gate.set()
+        assert await waiter == {"battery": 1}
+        await display.aclose()
+    asyncio.run(exercise())
+
+
+def test_the_power_cache_age_counts_the_read_latency():
+    from fleet.server.app import create_app
+    from fleet.server.console import FleetConsole
+    from fleet.swarm.robots import RobotEndpoint
+
+    app = create_app(FleetConsole([RobotEndpoint("rosy_01", "http://x", "t")], [FakeRobot("rosy_01")]),
+                     console_token="op")
+    assert app.state.power_health_display.age_from_request is True

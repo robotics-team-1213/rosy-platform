@@ -5,6 +5,7 @@ import { isRouteAbsent } from "/console/assets/poll-gate.js";
 const BAY_STATE = Object.freeze({
   free: ["비어 있음", "neutral"], planned: ["배정됨", "warn"],
   arrived: ["도착 · 연결 확인 중", "warn"], charging: ["충전 중", "active"],
+  unknown: ["확인 불가 · 비어 있다고 볼 수 없음", "warn"],
 });
 const ACTION = Object.freeze({
   go: "충전 칸으로", after_trip: "운행 끝나면 충전", wait: "대기", stay: "칸에 머무름",
@@ -14,6 +15,8 @@ const REASON = Object.freeze({
   low_battery: "배터리 낮음", battery_unknown: "배터리 모름", no_free_bay: "빈 칸 없음",
   connecting: "전압 상승 기다림", charging: "충전 중", charged: "목표 충전 도달",
   charge_rate_not_measured: "충전 속도 미측정", usb_not_connected: "전압이 오르지 않음",
+  pose_unknown: "로봇 위치를 확인할 수 없음 · 칸을 직접 확인",
+  bay_unknown: "칸이 비었는지 확인 불가 · 오프라인·위치 없는 로봇 확인",
 });
 
 /** Pure: the plan as display rows. */

@@ -10,11 +10,19 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-991 | PC 정비는 Fleet 안의 화면으로 나누고, 재부팅해도 되는지는 그 PC의 도우미가 판단한다. [전문](../adr/D-991-pc-maintenance-boundary-and-reboot-gate.md) | Accepted (2026-11-07, 사용자 결정; 결정 1·2 구현, 3~6 후속, 각 PC 설치 전) |
+| D-997 | 공통 기능은 실행 서비스·공용 코드·owner별 운영 어댑터로 나누고 기능별 소유와 장애 계약을 확정한다. [전문](../adr/D-997-common-function-ownership-and-failure-contracts.md) | Accepted (2026-11-08, 사용자 결정; 등록·설정·알림·감사·백업·업데이트 설계 확정, 코드 추출·서비스 신설·배포·현장 수용 미수행) |
+| D-995 | 관제 구조는 논리 단위·실행 owner·공통 서비스·호스트로 구분하고 구현과 현장 수용을 따로 기록한다. [전문](../adr/D-995-control-structure-authority-and-evidence-status.md) | Accepted (2026-11-08, 사용자 지시; D-965·D-994의 팔 위임 구현 상태 설명 정정, 실행·배포·현장 수용 변경 없음) |
+| D-994 | N100·16GB Ubuntu 호스트에 통합관제 R을 두고 장치 owner와 공통 서비스의 책임을 구분한다. [전문](../adr/D-994-n100-integrated-control-host-and-owner-boundaries.md) | Accepted (2026-11-08, 사용자 결정; 설치·이전·N100 부하 시험·현장 수용 미수행) |
+| D-989 | 사람 핀 없이 LED·카메라·LiDAR로 기체 지도를 현장 지도에 맞춘다(관찰 전용). [전문](../adr/D-989-fleet-auto-locate-observation.md) | Proposed (2026-11-07, 사용자 지시; 실물 시험 전) |
+| D-983 | 두 팔의 동시 동작은 고정 경로의 타이밍을 계산해 D-780 barrier로 맞춘다. [전문](../adr/D-983-two-arm-timing-on-fixed-paths.md) | Proposed (2026-11-06, 사용자 지시; 계산 코어와 오프라인 평가만 구현, 실물·시뮬레이션 동시 동작 수용 아님) |
+| D-993 | Account 가입·권한 요청. [전문](../adr/D-993-account-access-requests.md) | Accepted (2026-11-07, 사용자 요청; 구현·시험의 수용이며 배포·현장 수용은 별도) |
 | D-987 | 공통 서비스의 정의와 카탈로그. [전문](../adr/D-987-common-services-catalog.md) | Accepted (2026-11-07, 사용자 지시; 서비스 배포·현장 수용 별도) |
 | D-973 | 검수 작업공간의 명시적 관리자 클래스 개정. [전문](../adr/D-973-explicit-managed-review-class-revisions.md) | Accepted (2026-11-03, 사용자 요청; 실제 클래스 변경·재검수 수용 별도) |
 | D-977 | `device_trial`에서 승인된 ARM 이송(`arm-transfers`)을 단일 팔 하달로 잇는다 — 설계 초안(기명 현장 운영자 확인은 `operator_attested`로 구분) | 부분 Accepted(Fleet 쪽 개방), owner 목표 수락은 Proposed |
 | D-985 | 접속된 Pinky는 언제나 최신 payload로 스스로 올라간다: 봉인은 hold가 아니고, 이미지·미분류 경로와 꺼진 기체, 시작하지 않은 카나리가 배달을 멈추지 않으며 OS Release는 게시만 한다. [전문](../adr/D-985-pinky-always-self-updates-to-latest-payload.md) | Accepted (2026-11-07) |
 | D-986 | 항법 승인은 측정이 같으면 새 릴리스로 이어지고, 로그인한 운영자가 API로 끝낸다. [전문](../adr/D-986-navigation-approval-flow-and-motion-fingerprint.md) | Accepted (2026-11-07) |
+| D-982 | 현장마다 다른 운영 규칙은 데이터 문서 하나로 두고, 가정 상태로 "감·대기·거절"을 미리 묻는다. [전문](../adr/D-982-site-operating-rules-document-and-decision-api.md) | Proposed (2026-11-07, 사용자 요청; 1·2단계 구현, 시뮬·실물 수용 없음) |
 | D-981 | Rosy Cam은 재부팅 뒤 스스로 링크를 열고 무선 디버깅을 켜 둔다. [전문](../adr/D-981-rosy-cam-recovers-link-after-reboot.md) | Accepted (2026-11-06) |
 | D-979 | 앱이 읽는 실행 프로필 신호: `GET /api/fleet/execution-profile`은 읽기 전용이고 증명되지 않으면 닫힘이다. [전문](../adr/D-979-fleet-execution-profile-read-signal.md) | Accepted (2026-11-04, 사용자 지시; 읽기 API·시험 구현, 실물 미사용) |
 | D-978 | 화면 머리(노선·수치 띠)는 서버 응답만 보이고, 화면별 적용은 「조합 어휘」 표 한 곳에서 관리한다. [전문](../adr/D-978-screen-heads-show-server-answers-and-one-composition-table.md) | Accepted (2026-11-04, 사용자 지시; 표·쓰기 금지 시험 구현) |

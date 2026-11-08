@@ -501,6 +501,11 @@
 - 증거: agent-browser로 복사 상태 서버에서 390·320 객체·픽셀 화면 확인(가로 넘침 없음). 진행 중 카드와 실패·거절 문구는 해당 상태 자료가 없어 화면으로 보지 못했다. 320에서 되돌리기 단추가 오른쪽 끝에서 잘리는 것을 보았다(이전부터).
 - gate 변화: SOURCE 변경. CE: 해당 없음 — 코드와 회귀가 판단을 보존한다.
 
+## 2026-11-07 · uncommitted · uiux(learning): 진행 중 카드 안내와 320 픽셀 도구
+- 변경: 진행 중 결과 카드는 담당자 전달 대신 기다리라고 말한다. 320폭 픽셀 도구는 두 줄로 놓아 되돌리기 글자가 잘리지 않는다.
+- 증거: test_learning_pipeline_browser.py 단정 추가. 잘림은 실제 화면에서 버튼 66px로 측정했다. 원격 결과는 착지 기록을 따른다.
+- gate 변화: SOURCE 회귀. 실검수자 G3는 별도다. CE: 해당 없음 — 코드와 회귀가 판단을 보존한다.
+
 ## 2026-11-07 · uncommitted · feat(learning): 사다리 화면에 양팔 태스크와 같은 위치 비교
 - 변경: 화면 5절이 `omx_ladder.py two-arm` 기록(rosy.omx-two-arm-run.v1)과 셀의 네 카메라(top·side·양 손목) 그림을 보여 주고, 관리 권한으로 정해진 태스크와 시드만 실행한다. 라운드에 기록된 부모 재평가가 있으면 다른 위치의 구간 비교 대신 그것을 쓴다. 부모를 평가할 수 없을 때 라운드가 실행 중에 묶이던 문제도 고쳤다.
 - 증거: 원격 시험 `test/test_omx_two_arm_tasks.py`, `test/test_omx_ladder.py`, `test/learning/perception/test_ladder_web.py` 47개 통과, 브라우저 `test_ladder_browser.py` 5개 통과. AI PC에서 네 카메라로 stack 9/9, rehandle 12/12(시드 3개).

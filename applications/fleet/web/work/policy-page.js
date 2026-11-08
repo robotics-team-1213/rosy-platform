@@ -2,6 +2,7 @@
 import {createFleetClient} from '/common/fleet-client.js';
 import {confirmIrreversible} from '/common/ui.js';
 import {developmentToken} from '/console/assets/development-auth.js';
+import {loginHref} from '/console/assets/login-return.js';
 import {bindEstop, bindTopbarToggle, showSession, showSignedOut, tickClock, watchFleet} from '/console/assets/fleet-header.js';
 import {
   ADMIN_REASON, OPERATOR_REASON, REASON_LABELS, RESOLUTION_LABELS, STAGE_LABELS, WINDOW_LABELS,
@@ -11,6 +12,7 @@ import {
 // A development or token session lives in this tab's storage, not a cookie (same as the other work pages).
 let token = sessionStorage.getItem('rosy-console-token') || '';
 const request = createFleetClient({credential: () => token, origin: location.origin}), $ = id => document.getElementById(id);
+$('fleet-login').href = loginHref(location);  // This page has no password-login component to return here.
 // D-926 2: the same app bar as the other work screens, so the emergency stop and account stay in reach here.
 bindEstop(request);
 bindTopbarToggle();

@@ -246,7 +246,7 @@ class AccountLedger:
             self.require_manager(db, value)
             return [public(row) for row in db.execute("SELECT * FROM rosy_accounts ORDER BY login")]
 
-    def create(self, value, *, login, principal_id, role, password, grants):
+    def create(self, value, *, login, principal_id, role, password, grants, within=None):
         if (not isinstance(login, str) or not _LOGIN.fullmatch(login)
                 or not isinstance(principal_id, str) or not 1 <= len(principal_id) <= 96
                 or principal_id != principal_id.strip() or any(ord(c) < 32 for c in principal_id)
@@ -262,6 +262,8 @@ class AccountLedger:
             db.execute("INSERT INTO rosy_accounts VALUES (?,?,?,?,?,?,?,?,?,?)", (
                 account_id, login, principal_id, role, encoded, 1, 1, 1, login, encoded_grants))
             self.audit(db, actor, account_id, "create", 0, 1)
+            if within:  # same transaction: a failure here leaves no account behind
+                within(db, actor, account_id)
             return public(db.execute("SELECT * FROM rosy_accounts WHERE account_id=?", (account_id,)).fetchone())
 
     @staticmethod
@@ -278,7 +280,7 @@ class AccountLedger:
         finally:
             _SCRYPT_SLOTS.release()
 
-    def mutate(self, value, account_id, revision, changes, *, operation="update"):
+    def mutate(self, value, account_id, revision, changes, *, operation="update", within=None):
         if (type(revision) is not int or revision < 1 or not changes and operation == "update"
                 or set(changes) - {"role", "grants", "enabled", "password_scrypt", "change_required"}):
             raise ValueError("invalid changes or revision")
@@ -308,6 +310,8 @@ class AccountLedger:
                 raise ValueError("cannot remove last active account manager")
             self.delete_sessions(db, account_id)
             self.audit(db, actor, account_id, operation, revision, revision + 1, before=before)
+            if within:
+                within(db, actor, account_id)
             return public(updated)
 
     def delete_sessions(self, db, account_id):

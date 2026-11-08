@@ -42,24 +42,39 @@ HW_BITS = {1: "input voltage", 4: "overheating", 8: "motor encoder", 16: "electr
 REBOOTABLE = 1 | 32       # a latch the cause of which is load or supply, not heat or damage
 HOME_TOL = 3.0            # units: the runner's SETTLE_TOL
 INCIDENTS = Path("incidents")
+STILLS = INCIDENTS / "stills"  # <arm>-<camera>.jpg, kept by the carry at a stop no fault record covers (cell_hooks.stills)
 
 
 def bits(code: int) -> list[str]:
     return [name for bit, name in HW_BITS.items() if code & bit]
 
 
+def incidents_dir() -> Path:
+    """The one place holds and the outbox live (under the cell's lock root, not the recording directory)."""
+    from joint_tune import lock_root
+
+    return lock_root() / "incidents"
+
+
 def hold_path(arm: str) -> Path:
-    return INCIDENTS / f"HOLD-{arm}.json"
+    return incidents_dir() / f"HOLD-{arm}.json"
+
+
+def hold_file(arm: str) -> Path | None:
+    """The hold file of `arm` that exists: here, else one an older version left in the working directory."""
+    return next((p for p in (hold_path(arm), INCIDENTS / f"HOLD-{arm}.json") if p.is_file()), None)
 
 
 def outbox(arm: str) -> list[Path]:
-    return sorted((INCIDENTS / "outbox").glob(f"{arm}-*.json"))
+    """Unsent reports: this cell's outbox plus any an older version left in the working directory."""
+    return sorted(incidents_dir().joinpath("outbox").glob(f"{arm}-*.json")) + sorted(
+        (INCIDENTS / "outbox").glob(f"{arm}-*.json"))
 
 
 def held(arm: str) -> str | None:
     """Why the next session of `arm` must not start according to the local copy of the hold, or None."""
-    path = hold_path(arm)
-    return json.loads(path.read_text())["reason"] if path.is_file() else None
+    path = hold_file(arm)
+    return json.loads(path.read_text())["reason"] if path else None
 
 
 def keep_hold(arm: str, reason: str, incident_ids=(), source="local") -> None:
@@ -85,11 +100,16 @@ def link_for(arm: str):
         return None
 
 
-def send(arm: str, link) -> bool:
-    """Resend the unsent reports of `arm` (each file leaves the outbox only once Fleet accepted it)."""
+def label_box(arm: str) -> list[Path]:
+    """Unsent label-only reports (a guard stop a person names the cause of): they never hold the arm or block a session."""
+    return sorted(incidents_dir().joinpath("labels").glob(f"{arm}-*.json"))
+
+
+def send(arm: str, link, paths=None) -> bool:
+    """Resend the unsent reports of `arm` (each file leaves the outbox only once Fleet accepted it), then their evidence."""
     from core_common.protocol.arm_incidents import ArmIncidentReport
 
-    for path in outbox(arm):
+    for path in outbox(arm) if paths is None else paths:
         try:
             report = ArmIncidentReport.model_validate_json(path.read_text())
             reply = link.post(report.model_copy(update={"source_id": link.source_id}))  # the registered source name
@@ -97,8 +117,52 @@ def send(arm: str, link) -> bool:
             print(f"incident report {path.name} not sent: {type(exc).__name__}: {str(exc)[:120]}")
             return False
         path.unlink()
-        keep_hold(arm, reply.hold.reason or "arm incident not cleared", reply.hold.incident_ids, "fleet")
+        upload_evidence(path.with_name(path.stem + ".evidence"), reply, link)
+        if reply.hold.held:  # a label-only report alone leaves the arm free
+            keep_hold(arm, reply.hold.reason or "arm incident not cleared", reply.hold.incident_ids, "fleet")
     return True
+
+
+def evidence_of(since: float) -> dict | None:
+    """The newest stop bundle (cell_evidence) of this session: its jaw-tip crops, then whole frames from 3 s before on,
+    at most ARM_INCIDENT_EVIDENCE_FRAMES; {"bundle", "files"} or None."""
+    from core_common.protocol.arm_incidents import ARM_INCIDENT_EVIDENCE_FRAMES
+
+    bundles = [p for p in sorted((INCIDENTS / "evidence").glob("*-stop")) if p.stat().st_mtime >= since]
+    if not bundles:
+        return None
+    manifest = json.loads((bundles[-1] / "manifest.json").read_text())
+    tips = [f["file"] for f in manifest["files"] if f["file"].endswith("-tip.jpg")]
+    whole = [f["file"] for f in sorted(manifest["files"], key=lambda f: f.get("t_rel_s", 0)) if "camera" in f
+             and f["t_rel_s"] >= -3]
+    return {"bundle": str(bundles[-1]), "files": (tips + whole)[:ARM_INCIDENT_EVIDENCE_FRAMES]}
+
+
+def upload_evidence(sidecar: Path, reply, link) -> None:
+    """Best effort, after the report: a frame Fleet did not take is left out, never resent and never a hold."""
+    import base64
+    import hashlib
+
+    from core_common.protocol.arm_incidents import ArmIncidentEvidenceFrame
+
+    if not sidecar.is_file():
+        return
+    try:  # a cut sidecar or a pruned bundle must not stop a start (refuse_if_held sends label reports first)
+        chosen = json.loads(sidecar.read_text())
+        listed = {f["file"]: f for f in json.loads((Path(chosen["bundle"]) / "manifest.json").read_text())["files"]}
+        for name in chosen["files"]:
+            try:
+                data, tip = (Path(chosen["bundle"]) / name).read_bytes(), name.endswith("-tip.jpg")
+                link.post_evidence(reply.incident_id, ArmIncidentEvidenceFrame(
+                    camera=listed.get(name, {}).get("camera") or name.removesuffix("-tip.jpg"),
+                    t_rel_s=listed.get(name, {}).get("t_rel_s", 0.0), kind="tip" if tip else "full",
+                    sha256=hashlib.sha256(data).hexdigest(), jpeg_b64=base64.b64encode(data).decode()))
+            except Exception as exc:
+                print(f"evidence {name} not sent: {type(exc).__name__}: {str(exc)[:120]}")
+    except Exception as exc:
+        print(f"evidence of {sidecar.name} not sent: {type(exc).__name__}: {str(exc)[:120]}")
+    finally:
+        sidecar.unlink(missing_ok=True)
 
 
 def refuse_if_held(arm: str | None, link=None) -> None:
@@ -106,6 +170,8 @@ def refuse_if_held(arm: str | None, link=None) -> None:
     if not arm:
         return
     link = link or link_for(arm)
+    if link and label_box(arm):  # label-only reports go when they can; they never decide the start
+        send(arm, link, label_box(arm))
     sent = send(arm, link) if link and outbox(arm) else not outbox(arm)
     answer = None
     if link:
@@ -117,7 +183,8 @@ def refuse_if_held(arm: str | None, link=None) -> None:
         keep_hold(arm, answer.reason or "arm incident not cleared", answer.incident_ids, "fleet")
         raise SystemExit(f"{arm} held for a person: {answer.reason} (clear it in the Fleet console)")
     if answer is not None and sent:
-        hold_path(arm).unlink(missing_ok=True)  # only Fleet's "not held", with nothing unsent, lifts a hold
+        for gone in (hold_path(arm), INCIDENTS / f"HOLD-{arm}.json"):
+            gone.unlink(missing_ok=True)  # only Fleet's "not held", with nothing unsent, lifts a hold
         return
     reason = held(arm) or ("an incident report could not be sent to Fleet" if outbox(arm) else None)
     if reason:
@@ -144,7 +211,34 @@ def rows(path, since=0.0):
     return out
 
 
-def facts(session: dict, home=None) -> dict:
+def stop_reading(status: list) -> dict | None:
+    """What the 30 Hz trace says of the session's last contact stop: too fast or blocked (cell_why). 2026-11-07: an hour of guessing
+    with the answer on disk, and the explanation had no frames and no such fact."""
+    import os
+    import re
+
+    import cell_why
+
+    stops = [re.match(r"contact in (.+?):", str(r.get("error") or "")) for r in status]
+    stops = [m.group(1) for m in stops if m and m.group(1) != "park"]  # a fold refused on what it holds follows the real stop
+    path = os.environ.get("ROSY_CHUNK_TRACE")
+    if not stops or not path or not Path(path).is_file():
+        return None
+    try:
+        return {"chunk": stops[-1], **cell_why.read_motion(cell_why.last_run(cell_why.read_trace(path), stops[-1]))}
+    except (OSError, ValueError, KeyError, IndexError, TypeError) as exc:  # a damaged trace must not lose the report
+        return {"chunk": stops[-1], "verdict": "undetermined", "why": f"trace unreadable: {type(exc).__name__}"}
+
+
+def stills_of(arm: str | None, since: float) -> list:
+    """This session's stop frames, those the explanation's prompt names first (the report carries two)."""
+    if not arm or not STILLS.is_dir():
+        return []
+    kept = [p for p in STILLS.glob(f"{arm}-*.jpg") if p.stat().st_mtime >= since]
+    return [str(p) for p in sorted(kept, key=lambda p: (p.stem.rsplit("-", 1)[-1] not in ("top", "side"), p.name))][:2]
+
+
+def facts(session: dict, home=None, arm: str | None = None) -> dict:
     """Measured facts of one ended session (session.json as record_session writes it)."""
     chunks = session.get("chunks") or {}
     status = rows(Path(chunks["io"]) / "chunk-status.jsonl", session.get("started", 0)) if chunks.get("io") else []
@@ -164,13 +258,21 @@ def facts(session: dict, home=None) -> dict:
             "last_state": last, "flagged": [{k: r.get(k) for k in ("command", "error", "fault", "caught", "t")}
                                            for r in flagged][-5:],
             "windup_hits": [h for arm in replay.values() for h in arm["hits"]],
+            "stop_reading": stop_reading(status),
+            # every guard stop on contact, held or not: what a person names the cause of (labels for learning)
+            "stops": [{k: r.get(k) for k in ("command", "error", "t")} for r in status
+                      if str(r.get("error") or "").startswith("contact in ") and not str(r["error"]).startswith("contact in park")][-5:],
             "fault_records": [str(p) for p in kept],
-            "frames": [str(p.with_name(f"{p.stem}-{v}.jpg")) for p in kept[-1:] for v in ("top", "side")]}
+            "frames": ([str(p.with_name(f"{p.stem}-{v}.jpg")) for p in kept[-1:] for v in ("top", "side")]
+                       or stills_of(arm, session.get("started", 0)))}
 
 
 def decide(f: dict) -> dict:
     """Measurement first: (chosen actions, hold or not, why). Returns {"actions", "hold", "reason", "offered"}."""
     signs = bool(f["latched"] or f["windup_hits"] or f["flagged"] or not f["safe_end"])
+    if not signs and f.get("stops"):  # the recovery handled it; a person still names what stopped it
+        return {"actions": [], "hold": False, "offered": [],
+                "reason": f"guard stop: {f['stops'][-1]['error']}; reported for a person's cause, the arm is not held"}
     if not signs:
         return {"actions": [], "hold": False, "offered": [], "reason": "no incident sign"}
     caught_only = (f["safe_end"] and not f["latched"] and not f["windup_hits"]
@@ -228,14 +330,16 @@ def handle(session_path: Path, arm: str, act=None, decisions=Path("decisions.jso
     if home is None and (session.get("chunks") or {}).get("library"):
         library = json.loads(Path(session["chunks"]["library"]).read_text())
         home = (library.get("chunks", {}).get("home") or [None])[0]
-    f = facts(session, home)
+    f = facts(session, home, arm)
     d = decide(f)
     if not d["actions"] and not d["hold"] and d["reason"] == "no incident sign":
         return {"incident": False}
     stamp = time.strftime("%Y%m%dT%H%M%S")
-    acted = act([int(m) for m in f["latched"]]) if act and "reboot_latched" in d["actions"] else None
     folder = INCIDENTS / f"{stamp}-{arm}"
     folder.mkdir(parents=True, exist_ok=True)
+    if d["hold"]:  # the local hold exists before any device recovery and before Fleet is asked
+        keep_hold(arm, f"{folder}: {d['reason']}"[:380])
+    acted = act([int(m) for m in f["latched"]]) if act and "reboot_latched" in d["actions"] else None
     incident = {"schema": "rosy.omx-incident.v1", "arm": arm, "stamp": stamp, "session": str(session_path),
                 "facts": f, "decision": d, "recovery": acted, "reported": False}
     cell_decisions.append(decisions, {
@@ -243,8 +347,7 @@ def handle(session_path: Path, arm: str, act=None, decisions=Path("decisions.jso
         "stage": "incident", "facts": {k: f[k] for k in ("latched", "folded", "windup_hits", "flagged", "safe_end")},
         "options": d["offered"] + ["hold_for_person"], "chosen": d["actions"] + (["hold_for_person"] if d["hold"] else []),
         "by": "measurement", "reason": d["reason"], "frames": f["frames"], "arm_id": arm, "t": round(time.time(), 3)})
-    if d["hold"]:  # the local hold exists first: if Fleet cannot be reached the next session is still refused
-        keep_hold(arm, f"{folder}: {d['reason']}"[:380])
+    if d["hold"] or f.get("stops"):  # if Fleet cannot be reached a held arm's next session is still refused
         sid = session.get("motor_health_session")
         try:
             sid = str(uuid.UUID(str(sid)))
@@ -256,9 +359,13 @@ def handle(session_path: Path, arm: str, act=None, decisions=Path("decisions.jso
             print(f"incident report not built: {type(exc).__name__}: {str(exc)[:120]}")
             report = None
         if report is not None:
-            (INCIDENTS / "outbox").mkdir(parents=True, exist_ok=True)
-            (INCIDENTS / "outbox" / f"{arm}-{sid}.json").write_text(report.model_dump_json())
-            incident["reported"] = bool(link) and send(arm, link)
+            box = incidents_dir() / ("outbox" if d["hold"] else "labels")  # a label-only report never blocks a start
+            box.mkdir(parents=True, exist_ok=True)
+            (box / f"{arm}-{sid}.json").write_text(report.model_dump_json())
+            chosen = evidence_of(session.get("started", 0))
+            if chosen:
+                (box / f"{arm}-{sid}.evidence").write_text(json.dumps(chosen))
+            incident["reported"] = bool(link) and send(arm, link, None if d["hold"] else label_box(arm))
     (folder / "incident.json").write_text(json.dumps(incident, indent=1, default=str))
     return {"incident": True, "folder": str(folder), **incident}
 
@@ -266,21 +373,44 @@ def handle(session_path: Path, arm: str, act=None, decisions=Path("decisions.jso
 def reboot_latched(device: str):
     """Reboot the latched follower IDs on `device`, only while every follower motor reads torque 0."""
     def act(ids):
-        from dynamixel_sdk import PacketHandler, PortHandler
+        from dynamixel_sdk import COMM_SUCCESS, PacketHandler, PortHandler
 
         port, packet = PortHandler(device), PacketHandler(2.0)
-        if not (port.openPort() and port.setBaudRate(1_000_000)):
-            return {"error": "port"}
+        before, after = {}, {}
+
+        def verified(result, error):
+            if result != COMM_SUCCESS or error & ~128:
+                raise ValueError(f"bus response failed: communication={result}, packet={error}")
+
+        def read(motor, address):
+            value, result, error = packet.read1ByteTxRx(port, motor, address)
+            verified(result, error)  # alert 0x80 reports the latch; lower bits are packet errors
+            if type(value) is not int or not 0 <= value <= 255:
+                raise ValueError("invalid register readback")
+            return value
+
+        def snapshot():
+            return {i: {"torque": read(i, 64), "hw_error": read(i, 70)} for i in range(11, 17)}
+
         try:
-            read = lambda i, a: packet.read1ByteTxRx(port, i, a)[0]  # noqa: E731
-            before = {i: {"torque": read(i, 64), "hw_error": read(i, 70)} for i in range(11, 17)}
+            if not (port.openPort() and port.setBaudRate(1_000_000)):
+                return {"error": "port"}
+            if not ids or any(type(i) is not int or i not in range(11, 17) for i in ids):
+                return {"refused": "invalid follower reboot IDs"}
+            before = snapshot()
             if any(v["torque"] for v in before.values()):
                 return {"refused": "a follower motor has torque ON", "before": before}
+            if any(v["hw_error"] & ~REBOOTABLE for v in before.values()) or any(not before[i]["hw_error"] for i in ids):
+                return {"refused": "current hardware faults do not permit reboot", "before": before}
             for i in ids:
-                packet.reboot(port, i)
+                verified(*packet.reboot(port, i))
             time.sleep(1.5)
-            return {"rebooted": ids, "before": before,
-                    "after": {i: {"torque": read(i, 64), "hw_error": read(i, 70)} for i in range(11, 17)}}
+            after = snapshot()
+            if any(v["torque"] or v["hw_error"] for v in after.values()):
+                return {"refused": "reboot readback is not torque OFF and fault-free", "before": before, "after": after}
+            return {"rebooted": ids, "before": before, "after": after}
+        except (OSError, RuntimeError, TypeError, ValueError) as exc:
+            return {"error": str(exc), "before": before, "after": after}
         finally:
             port.closePort()
     return act
@@ -294,8 +424,14 @@ def main(argv=None):
     h.add_argument("--arm", required=True)
     h.add_argument("--device", help="follower by-id path: reboots an allowed latch (no motion)")
     args = parser.parse_args(argv)
-    out = handle(args.session, args.arm, act=reboot_latched(args.device) if args.device else None,
-                 link=link_for(args.arm))  # by hand on an old session.json
+    from joint_tune import session_lock
+
+    lock = session_lock(args.arm)  # a by-hand run never overlaps a recording session of the same arm
+    try:
+        out = handle(args.session, args.arm, act=reboot_latched(args.device) if args.device else None,
+                     link=link_for(args.arm))  # by hand on an old session.json
+    finally:
+        lock.close()
     print(json.dumps({k: out.get(k) for k in ("incident", "folder", "decision", "recovery", "reported")}, default=str))
     return 0
 

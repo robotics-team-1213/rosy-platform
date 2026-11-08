@@ -545,6 +545,15 @@ def test_a_soft_contact_retreats_parks_and_the_seat_retries(tmp_path):
 def test_recover_lifts_clear_then_places_a_held_box_or_folds_home(tmp_path, current, holding):
     config = {**CONFIG, "recover_settle_s": 0}
     cell = Cell(START, current=current)
+    if not holding:
+        from test_omx_cell_unwedge import Cell as MeasuredCell
+
+        class RecoveryCell(MeasuredCell):
+            def act(self, command):
+                return {**super().act(command), "health": {"current_ma": [0, 0, 0, 0, 0, current]}}
+
+        cell = RecoveryCell([-5.4, 13.5, -1.9, 59.4, 41.3, 48.8])
+        cell.commands = cell.sent
     assert m.recover(cell, config, "pinky", tmp_path, person_at_switch=False)["result"] == "refused"
     assert cell.commands == []  # nothing moves without a person at the switch
     result = m.recover(cell, config, "pinky", tmp_path, person_at_switch=True)
