@@ -22,7 +22,10 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-SITE = "robttt@100.82.51.8"
+sys.path.insert(0, str(ROOT / "tools/remote"))
+import lab_hosts  # noqa: E402  (endpoints stay in private/lab-hosts.json, D-226)
+
+SITE = lab_hosts.site_host()
 EPISODES = "/home/robttt/rosy-data/omx-auto/episodes-20261028"
 LIVE = "/home/robttt/rosy-test/omx-record-prep-20261019/chunk-io-b/live.json"
 CASES = "/home/robttt/rosy-test/omx-record-prep-20261019/cell-pipeline/cases.jsonl"
@@ -84,7 +87,7 @@ def model_lane(args):
 
 def collect(args):
     """Twin results (not the copied episodes) of both hosts into out/twin, then the report."""
-    for host in ("rosy@100.98.162.71", "ai@100.108.76.123"):
+    for host in lab_hosts.sim_roles(lab_hosts.load()):  # keys are the ssh targets
         tar = subprocess.run(["ssh", "-o", "BatchMode=yes", host,
                               f"cd ~/rosy-scratch/twin-night/{args.night} 2>/dev/null && tar -cf - --exclude=./episodes . || true"],
                              capture_output=True).stdout
@@ -108,6 +111,8 @@ def main(argv=None):
     p.add_argument("--no-isaac", action="store_true")
     p.add_argument("--mujoco", choices=("both", "ai"), default="both", help="ai: MuJoCo on the AI PC only")
     args = p.parse_args(argv)
+    if not SITE:
+        raise SystemExit("no site_host in private/lab-hosts.json (copy tools/remote/hosts.example.json)")
     # remote_isaac refuses anything but a full lower-case sha (the night's Isaac suite errored on a short one)
     args.sha = subprocess.run(["git", "rev-parse", "--verify", f"{args.sha}^{{commit}}"], cwd=ROOT, capture_output=True,
                               text=True, check=True).stdout.strip()
