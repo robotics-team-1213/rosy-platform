@@ -14617,3 +14617,10 @@ osy-d395-s1d\`.
 - 변경: `land_cache.split`이 트리·환경·명령이 같은 통과를 재사용할 때, 원래 로그 경로와 SHA-256을 그대로 둔 행을 새 커밋 이름으로도 남긴다.
 - 증거: 11-08 08:00 운영 규칙 착지(9a8217cb97)의 FULL 기록은, 다른 세션의 공개 게시 뒤 내용이 같은 동기화 커밋에 이어지지 않아 게시가 FULL을 다시 요구했다. 회귀 시험 `test_same_tree_reuse_maps_the_new_commit_to_the_source_log_and_digest`.
 - gate 변화: 없음. 게시 검사는 그대로 로그 해시·깨끗함·환경·계획을 확인하고, 로그가 바뀌면 원래 해시와 달라 거절한다. CE: 해당 없음 — D-970 3 구현의 연장.
+
+## 2026-11-08 · uncommitted · fix(land): 실패만 있는 브라우저 묶음을 "통과 0건"으로 멈추지 않는다
+
+- 변경: `land_browser.vacuous`가 모든 요약 줄에 실패·오류가 있는 실행은 판정 없음으로 보지 않는다. 그 실행은 `known_failures`와 혼자 다시 돌리기(LOAD-FLAKY)가 판정한다. 건너뜀이 하나라도 있으면 그대로 멈춘다.
+- 증거: 11-08 `land-speed-admission` 착지에서 시험 1건짜리 묶음 `test_omx_segments_browser.py`가 함께 돌 때 실패하고 혼자 통과해 LOAD-FLAKY로 판정됐는데, 그보다 먼저 "0 passed, 0 skipped"로 멈췄다.
+- gate 변화: 실패만 있는 브라우저 묶음은 다른 묶음과 같은 판정을 받는다(NEW면 멈추고, LOAD-FLAKY면 계속).
+- CE: 해당 없음 — 원인과 규칙이 코드와 회귀 시험에 남는다.
