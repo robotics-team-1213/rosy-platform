@@ -12,6 +12,7 @@ from typing import Any, Optional
 from core_common.capability import Capability
 from core_features.calibration import CalibrationSessionManager
 from core.trip_lease import TripLeaseManager, build_trip_lease  # D-541
+from core_features.command.approval_trials import ApprovalTrials
 from core_features.command.arbitration import Mode, ModeMachine, SourceRegistry
 from core_features.command.manager import CommandManager, Twist
 from core.teleop_config import teleop_timeout_ms
@@ -129,6 +130,7 @@ class CoreServices:
     # control's dock/observation evidence (ros_bridge ingests, docking reads).
     dock_feed: DockObservationFeed = field(default_factory=DockObservationFeed)
     station_docking: Optional[StationDockingOwner] = None
+    approval_trials: Optional[ApprovalTrials] = None  # D-986
     localization: Optional[LocalizationAssist] = None  # D-395 P2-1 (ros_bridge ingests)
     # Peer pose sharing (docs/plans/2026-11-04-peer-pose-sharing-design.md).
     peers: PeersManager = field(default_factory=lambda: PeersManager(now=time.monotonic))
@@ -335,7 +337,10 @@ class CoreServices:
                    audit=audit, calibration=calibration, trip_lease=trip_lease,
                    adapter_registry=adapter_registry, pilot_recording=PilotRecordingGuard(events=events),
                    dock_feed=dock_feed, station_docking=station_docking, localization=localization, loc_mission=loc_mission,
-                   fleet_loss=fleet_loss, peers=peers, peer_beacon=peer_beacon)
+                   fleet_loss=fleet_loss, peers=peers, peer_beacon=peer_beacon,
+                   approval_trials=ApprovalTrials(
+                       state, command, safety, lambda: line_follow.config,
+                       Path(os.environ.get("STATE_DIRECTORY", "/var/lib/rosy/core")) / "navigation-approval"))
 
     def inventory(self) -> dict[str, Any]:
         cap001 = self.capability.to_dict()

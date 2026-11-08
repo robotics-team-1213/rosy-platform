@@ -62,6 +62,9 @@ class SpyCommands:
             raise self.fail_with
         return {"called": "connect_wifi", "ssid": ssid}
 
+    def navigation_approval(self, action: str, *arguments: str) -> dict:
+        return self._record("navigation_approval", action, *arguments)
+
     def release_status(self) -> dict:
         return self._record("release_status")
 
@@ -121,6 +124,11 @@ def test_the_allowlist_matches_the_contract():
     """Every supported command is explicit. Adding one is a contract change."""
     assert set(ALLOWLIST) == {
         "network.status",
+        "navigation_approval.status",
+        "navigation_approval.begin",
+        "navigation_approval.cancel",
+        "navigation_approval.seal",
+        "navigation_approval.start_navigation",
         "lane_perception.status",
         "lane_perception.set",
         "network.apply_profile",
@@ -377,7 +385,7 @@ def test_the_whole_parameter_surface_is_enumerated():
     not an identifier; the agent still lists it so the surface stays closed.
     """
     every_param = {param for spec in ALLOWLIST.values() for param in spec.params}
-    assert every_param == {"profile_id", "release_id", "unit", "mode", "ssid", "psk", "paint_source", "public_key", "request_id"}
+    assert every_param == {"operator", "test_surface", "profile_id", "release_id", "unit", "mode", "ssid", "psk", "paint_source", "public_key", "request_id"}
 
 
 def test_a_missing_required_parameter_is_refused(agent, commands):
@@ -870,7 +878,42 @@ def test_the_contract_records_which_commands_need_administrator():
         if not match:
             continue
         spec = ALLOWLIST[match.group(1)]
-        expected_role = "administrator" if spec.role is Role.ADMINISTRATOR else "viewer"
+        expected_role = spec.role.value
         assert expected_role in line, f"{spec.name}: contract role disagrees with the code"
         expected_confirm = "필요" if spec.requires_confirmation else "불필요"
         assert expected_confirm in line, f"{spec.name}: contract confirmation disagrees with the code"
+
+
+NAVIGATION_APPROVAL = {"navigation_approval.status": ({}, ("status",)), "navigation_approval.begin": ({}, ("begin",)),
+                       "navigation_approval.cancel": ({}, ("cancel",)),
+                       "navigation_approval.start_navigation": ({}, ("start_navigation",)),
+                       "navigation_approval.seal": ({"operator": "person-a", "test_surface": "floor"},
+                                                    ("seal", "person-a", "floor"))}
+
+
+@pytest.mark.parametrize("command", NAVIGATION_APPROVAL)
+@pytest.mark.parametrize("role", ["viewer", "operator", "administrator"])
+def test_navigation_approval_role_matrix(agent, commands, command, role):
+    params, expected = NAVIGATION_APPROVAL[command]
+    allowed = role != "viewer" or command == "navigation_approval.status"
+    response = agent.handle(_request(command, role=role, confirmed=False, **params))
+    assert response["ok"] is allowed
+    assert commands.calls == ([("navigation_approval", expected)] if allowed else [])
+
+
+@pytest.mark.parametrize("command", sorted(set(ALLOWLIST) - set(NAVIGATION_APPROVAL)))
+def test_the_operator_level_opens_no_other_command(command):
+    assert ALLOWLIST[command].role.value in ("viewer", "administrator")
+
+
+def test_an_operator_cannot_run_an_administrator_command(agent, commands):
+    response = agent.handle(_request("system.reboot", role="operator"))
+    assert response["code"] == "HOST_AGENT_ROLE_INSUFFICIENT" and commands.calls == []
+
+
+@pytest.mark.parametrize("params", [{"operator": "a\nb", "test_surface": "floor"}, {"operator": " ", "test_surface": "floor"},
+                                    {"operator": "x" * 121, "test_surface": "floor"}, {"operator": "a", "test_surface": "air"},
+                                    {"operator": "--root=/tmp", "test_surface": "floor"}])
+def test_the_seal_refuses_a_bad_approver_or_surface(agent, commands, params):
+    response = agent.handle(_request("navigation_approval.seal", role="operator", confirmed=False, **params))
+    assert response["code"] == "HOST_AGENT_PARAM_INVALID" and commands.calls == []
