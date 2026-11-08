@@ -84,7 +84,7 @@ def test_diff_names_moved_lanes_and_the_stages_that_read_them():
     assert r2s.diff(snap(), snap(.001)) == ({}, [])
     changed, rerun = r2s.diff(snap(), snap(.02))
     assert len(changed["temp_plates"]) == 6
-    assert rerun == sorted(s for s, (item, *_) in r2s.STAGES.items() if item == "temp_plates")
+    assert rerun == sorted(s for s, (items, *_) in r2s.STAGES.items() if "temp_plates" in items)
     moved = snap()
     moved["camera"] = dict(top=[2])
     assert r2s.diff(snap(), moved)[1] == sorted(r2s.STAGES)
