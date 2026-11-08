@@ -25,7 +25,7 @@ def test_registry_preserves_pages_and_existing_aliases():
     registry = api["load_registry"](WEB)
     assert set(registry["pages"]) == {
         "/console", "/console/login", "/console/profile", "/console/accounts",
-        "/console/policy", "/console/cell", "/console/site-map", "/console/install",
+        "/console/policy", "/console/cell", "/console/site-map", "/console/install", "/console/maintenance",
     }
     assert {entry["path"] for entry in registry["pages"].values()} == {
         path.relative_to(WEB).as_posix() for path in WEB.rglob("*.html")
@@ -85,7 +85,7 @@ def test_resolution_rechecks_files_and_symlinks(tmp_path):
 
 def test_registry_loads_without_fleet_or_ros():
     loader()
-    code = "import runpy,sys; from pathlib import Path; a=runpy.run_path(sys.argv[1]); r=a['load_registry'](Path(sys.argv[2])); assert len(r['pages'])==8; assert not any(n=='fleet' or n.startswith('rclpy') for n in sys.modules)"
+    code = "import runpy,sys; from pathlib import Path; a=runpy.run_path(sys.argv[1]); r=a['load_registry'](Path(sys.argv[2])); assert len(r['pages'])==9; assert not any(n=='fleet' or n.startswith('rclpy') for n in sys.modules)"
     result = subprocess.run([sys.executable, "-I", "-c", code, str(LOADER), str(WEB)],
                             capture_output=True, text=True)
     assert result.returncode == 0, result.stderr

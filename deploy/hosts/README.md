@@ -159,7 +159,11 @@ OpenSSH LAN 경로로 연결한다. Tailscale SSH는 `authorized_keys` 강제 �
 sudo python3 deploy/hosts/common/rosy-host-state install site --approve recovery
 ```
 
-이후 Fleet의 **설치·보정 → 호스트 서비스**에서 세 PC를 각각 확인한다.
+이후 Fleet의 **PC 정비**(`/console/maintenance`)에서 세 PC를 각각 확인한다.
+
+재부팅은 어느 경로든 도는 팔 세션을 끊지 않는다. 화면 요청은 살아 있는 학습·시험에서도 먼저 멈추고 사람의 두 번째 확인을 받는다. guard 복구는 작업을 보지 않는다(D-991). 도우미를 새로 설치한 PC에만 적용된다. Fleet이 꺼져 있으면 `python tools/remote/host_ops.py`로 같은 도우미를 부른다.
+
+PC가 2번 연속(20분) 응답하지 않으면 guard가 팀 채널로 알린다. Discord incoming webhook URL 한 줄을 `/etc/rosy/host-guard/alert-webhook`(소유자 `rosy-host-guard`, 0600)에 넣는다. 파일이 없으면 알리지 않는다. 관제 PC 자체는 모델 PC의 역방향 guard가 있어야 알릴 수 있다([설치](../site/model-pc-guard.md)).
 
 - 가드는 10분마다 원격 PC의 `health`(메모리·swap·부하, D-883의 디스크·RAM 용량·CPU 사용률/온도·GPU)와 `recovery` 캐시를 읽는다.
   관제 PC는 자기 로컬 보고에 같은 `health`를 로컬로 실행한 값을 더한다(D-885).

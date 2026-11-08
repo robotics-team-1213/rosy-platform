@@ -66,7 +66,7 @@ PINNED_CONFIRMS = {
     "applications/fleet/web/console-refresh.js": 1,  # dispatch rearm
     "applications/fleet/web/manual-control.js": 1,  # selected robot's fixed MANUAL transition
     "applications/fleet/web/devices/enrollment.js": 2,  # unenroll + D-555 forced hub revoke
-    "applications/fleet/web/installation/host-services.js": 1,  # named operator host control, shared confirmation
+    "applications/fleet/web/maintenance/host-services.js": 1,  # named operator host control, shared confirmation
     "applications/fleet/web/roster.js": 1,
     "applications/fleet/web/shared/account-page.js": 2,  # role bundle replaces grants; rejecting an access request (D-993)
     # Activation and profile replacement; D-655 camera replacement moved to its controller.

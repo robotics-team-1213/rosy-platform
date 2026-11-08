@@ -5389,6 +5389,16 @@
 - 증거: 실제 Account와 Fleet을 두 출처로 띄운 왕복에서 두 탭 로그인과 교환 중 장애가 JSON 화면에서 멈추는 것을 재현했다.
 - gate 변화: SOURCE 회귀. 현장 수용은 별도다.
 
+## 2026-11-07 · uncommitted · fix: 재부팅이 팔 세션을 끊지 않게 한다 (D-991)
+- 변경: 화면 `reboot`는 도우미 `reboot-if-free`로 간다. `reboot-over-jobs` 추가, 종료 코드 6·7을 409 `ARM_SESSION_ACTIVE`·`HOST_JOBS_ACTIVE`로 옮긴다. 호스트 서비스 화면이 작업 중이면 다시 묻는다.
+- 증거: 원격 `test_host_control.py`·`test_host_guard.py`. 호스트 pytest이며 실제 재부팅·세션 수용은 아니다.
+- gate 변화: SOURCE. 각 PC 도우미 설치 전. CE: 기존 교훈 갱신 — nightly-reboot-must-yield-to-a-live-arm-session.
+
+## 2026-11-07 · uncommitted · feat: PC 조치 목록을 실제 서비스에 맞추고 이력을 남긴다 (D-991)
+- 변경: `pinky-*`와 `stop-unit`을 빼고 ROSY 서비스 재시작을 더한다. 조치와 응답을 `fleet_device_care_events`에 `host:<PC>`로 남겨 `GET /api/fleet/hosts`의 `history`와 화면에 보인다.
+- 증거: 원격 `test_host_control.py`·`test_host_ops.py`·`test_host_recovery_browser.py`. 호스트 시험이다.
+- gate 변화: SOURCE. CE: 해당 없음 — 시험과 ADR이 판단을 보존한다.
+
 ## 2026-11-07 · uncommitted · feat(fleet): LED·카메라·LiDAR 자동 위치 찾기 (D-989)
 - 변경: `localization/auto_locate.py`(순수 적합), `pose/auto_locate_service.py`(120초 세션), `GET`·`POST /api/fleet/auto-locate`, config `stream_wanted`. 관찰 전용. API v1.369.
 - 증거: 합성 입력 시험뿐이다. 실물·현장 수용 없음.
