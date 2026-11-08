@@ -45,7 +45,7 @@ SNAP_CHOICES = lambda path: ["--choice", f"cell_snapshot={path}", "--choice", "t
 # stage -> (item it reads, role, minutes, command after the python); every stage also reads the camera and arm bases.
 # Not yet stages: omx_two_arm_plan.py and omx_two_arm_policy.py build their Layout without --choice (design lanes only).
 STAGES = {
-    "rehandle": ("temp_plates", "ai", 40, "tools/sim/omx_two_arm_teacher.py run rehandle --out $OUT/rehandle --video --video-skip 4"),
+    "rehandle": ("temp_plates", "ai", 40, "tools/sim/omx_two_arm_teacher.py run rehandle --out $OUT/rehandle"),
     "matrix-a": ("temp_plates", "model", 60, "tools/sim/omx_two_arm_matrix.py --arm arm_a --out $OUT/matrix-a"),
     "matrix-b": ("temp_plates", "model", 60, "tools/sim/omx_two_arm_matrix.py --arm arm_b --out $OUT/matrix-b"),
     "stack": ("ship", "ai", 40, "tools/sim/omx_two_arm_teacher.py run stack --out $OUT/stack"),
