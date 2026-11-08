@@ -62,6 +62,16 @@ def test_a_stop_is_read_against_the_finished_runs_of_its_chunk(free, verdict):
     assert w.read_motion(HELD_LIFT, free)["verdict"] == verdict
 
 
+def test_a_stop_reports_the_load_it_pressed_with_and_free_runs_keep_theirs():
+    loaded = [{**r, **({"load": {"current_ma": [0, 0, 0, 40 + i, 0, 0], "pwm": [0, 0, 0, 90, 0, 0]}} if i % 30 == 0 else {})}
+              for i, r in enumerate(HELD_LIFT)]
+    m = w.read_motion(loaded)
+    assert (m["current_ma_end"], m["pwm_load_end"], m["current_ma_peak"]) == (70, 90, 70)
+    assert "current_ma_end" not in w.read_motion(HELD_LIFT)  # an older trace has no load: nothing is made up
+    free = w.free_runs([{**r, "load": {"current_ma": [0, 0, 0, 55, 0, 0], "pwm": [0] * 6}} for r in lift(2.9, sent_speed=3.0)])
+    assert free["lift_pick"]["wrist_flex"][0][3] == 55
+
+
 def test_finished_runs_are_learned_once_and_stops_are_not(tmp_path):
     finished = lift(2.9, sent_speed=3.0)  # lag ends at 0.68: ran on
     stopped = [{**r, "t": r["t"] + 10} for r in HELD_LIFT]  # lag ends at 2.3: a stop

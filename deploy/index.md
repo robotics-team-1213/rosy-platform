@@ -78,8 +78,8 @@
 
 ## 최근 기록
 
+- 2026-11-07 · uncommitted · fix(power): 네이티브 Pinky가 CORE의 deep 배터리 요청에 꺼진다 (D-27)
 - 2026-11-07 · 44fb0c6315 · fix(face): 벤치 시험 보호는 표 화면과 그려진 화면 둘 다 본다
 - 2026-11-07 · 18943fb321 · merge: 긴급 배터리 어두운 화면이 사람 부탁보다 먼저
 - 2026-11-07 · 178d616c75 · feat(face): at 10% or under the screen goes dark and the buzzer asks for a charger
 - 2026-11-07 · 11b42b5933 · feat(rosy-face): 사람 부탁 도착 소리와 15초 반복
-- 2026-11-07 · uncommitted · feat(navigation): 모터·정지 파일이 같으면 항법 승인을 이어받는다 (D-986)
