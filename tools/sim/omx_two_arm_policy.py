@@ -391,7 +391,8 @@ def run_round(args):
                         "--policy.push_to_hub=false", f"--policy.chunk_size={recipe['chunk_size']}", f"--policy.n_action_steps={recipe['n_action_steps']}", f"--policy.optimizer_lr={recipe['optimizer_lr']}",
                         f"--batch_size={recipe['batch_size']}", f"--steps={recipe['steps']}", f"--save_freq={max(1, recipe['steps'] // 3)}", "--log_freq=500", f"--num_workers={args.train_workers}", "--wandb.enable=false",
                         f"--output_dir={run / 'train'}", "--job_name=omx-two-arm",
-                        "--tolerance_s=0.001"]  # whole-task episodes put frames 1400 s into a video file: float rounding exceeded the 0.1 ms default (round 4), env=environment, stdout=log, stderr=subprocess.STDOUT, check=True)
+                        # whole-task episodes put frames 1400 s into a video file: float rounding exceeded the 0.1 ms default (round 4)
+                        "--tolerance_s=0.001"], env=environment, stdout=log, stderr=subprocess.STDOUT, check=True)
         record.update(stage="evaluate")
         write_record(run, record)
         subprocess.run([args.python, me, "evaluate", "--model", str(run / "train/checkpoints/last/pretrained_model"), "--steps-file", str(run / "steps.json"), "--tasks", args.tasks,
