@@ -93,8 +93,9 @@ class ObservationStore:
         now = time.monotonic() if now is None else now
         wall = time.time() if wall is None else wall
         with self._lock:
+            # every configured camera by its own role (arm_a_wrist, arm_b_wrist, side...): preflight reads state[role]
             result = {key: self._metadata(self._samples.get(key), now, wall)
-                      for key in ("top", "front", "joints")}
+                      for key in (*self.cameras, "joints")}
             joints = self._samples.get("joints")
             result["joints"]["values"] = joints[2] if joints and result["joints"]["fresh"] else None
             result["arms"] = {}
@@ -259,7 +260,8 @@ def gate_reader(root, entries):
 
 
 def make_server(store, *, port=8766):
-    titles = {"top": "상단 카메라", "front": "그리퍼 카메라"}
+    titles = {"top": "상단 카메라", "side": "옆 카메라", "arm_a_wrist": "arm_a 손목 카메라", "arm_b_wrist": "arm_b 손목 카메라",
+              "front": "그리퍼 카메라"}
     panels = "".join(
         f'<section><h2>{titles.get(label, label)}</h2><p id="{label}-status"></p>'
         f'<img id="{label}" data-camera alt="{label} 현재 영상" hidden></section>'
