@@ -73,3 +73,8 @@
 - 변경: `DynamixelDriver.read_health`(온도 146, 한계 31, 입력 전압 144, 하드웨어 오류 70). 30 Hz 루프와 같은 실행기 타이머라 버스를 동시에 쓰지 않는다. 지금까지 하드웨어 오류는 시작할 때만 읽었다.
 - 증거: `test/test_dynamixel_driver_safety.py` 가짜 SDK로 레지스터 대응 확인.
 - gate 변화: 없음. 실물 레지스터 값은 배포 뒤 확인한다.
+
+## 2026-11-08 · uncommitted · fix(bringup): battery_publisher가 rclpy Node의 `_clock`을 덮지 않는다
+- 변경: `44faf7ab51`(ADC 재시도 간격)이 주입 시계를 `self._clock`에 두어 rclpy Node의 시계를 가렸고, 릴리스 175에서 `create_timer`가 `.handle`을 읽다 시작 직후 죽었다(b8xy canary, 2026-11-08 13:19Z). 이름을 `_monotonic`으로 바꿨다.
+- 증거: 시험 스텁 Node에는 시계가 없어 놓쳤다. `test_the_injected_clock_does_not_replace_the_rclpy_node_clock` 추가, 원격 실행 기록 참조.
+- gate 변화: 없음. 실물 기동은 다음 릴리스에서 확인한다.
