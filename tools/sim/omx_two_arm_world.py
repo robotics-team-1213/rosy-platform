@@ -1,4 +1,5 @@
-"""The two-arm OMX cell in one MuJoCo frame: both arms with v2.1 jaws, the stud ship plate, both temporary slot plates, the belt end, nine containers.
+"""The two-arm OMX cell in one MuJoCo frame: both arms with v2.1 jaws, the ship (the rated r08 on its berth kit, or the old stud plate), both
+temporary slot plates, the belt end and the stack plan's containers (v3 with doors on the r08 ship).
 
 Cameras are the measured top and side PnP poses of cell_model_inventory.yaml (fixture frame) plus an overview; wrist cameras are the named
 parameter `wrist_camera` of omx_two_arm_sites.CHOICES. MuJoCo answers GEOMETRY only here (reach, order, collision between arms, temporary space
@@ -25,9 +26,10 @@ import palletizing_gripper as jaw  # noqa: E402
 import ship_plate  # noqa: E402
 
 JOINTS = ("joint1", "joint2", "joint3", "joint4", "joint5", "gripper_joint_1")
-BOX = np.array([.09, .03, .03])
 MESHES = (sites.ISAAC / "assets/open_manipulator_description/meshes/omx_f", sites.ISAAC / "assets/omx_f_palletizing_description/meshes/omx_f")
 PREFIX = {"arm_a": "a_", "arm_b": "b_"}
+WRIST_ASSETS = sites.ISAAC / "assets/omx_wrist_camera_b"  # link5 parts in mm, as stacking_scene.WRIST_PARTS draws them in Isaac
+WRIST_PARTS = ("link5_gripper", "gripper_plate_F6", "b16-u16-span-D-holder-assembly")
 FPS = 15
 
 
@@ -109,14 +111,21 @@ class World:
             world.add_geom(name=f"{PREFIX[arm]}plate", type=box, size=[.06, .06, .006], pos=[*a.base[:2], a.base[2] - .006], contype=0, conaffinity=0, rgba=[.2, .2, .2, 1])
         self._ship(spec)
         self._temp(spec)
+        r08 = c["ship_source"] == "r08-berth"
+        if r08:
+            spec.add_mesh(name="container", file=self._asset("container_1x3_v3"), scale=[.001] * 3)
         for k, (cid, _) in enumerate(L.containers()):
             body = world.add_body(name=cid, pos=[-1.4, 1.0 + .1 * k, .05])
             body.add_freejoint(name=cid)
-            body.add_geom(name=cid, type=box, size=[*(BOX / 2)], mass=.016, condim=4, friction=[1, .005, .0001], rgba=[.85, .35, .08, 1])
+            body.add_geom(name=cid, type=box, size=[s / 2 for s in L.box], mass=.016, condim=4, friction=[1, .005, .0001], rgba=[.85, .35, .08, 0 if r08 else 1])
+            if r08:  # the printed body with its doors, drawn over the collision box (body x 0..90, the box centre at 45, 14.99, 16.2 mm)
+                body.add_geom(type=mujoco.mjtGeom.mjGEOM_MESH, meshname="container", pos=[-L.box[0] / 2, -L.box[1] / 2, -L.box[2] / 2],
+                              contype=0, conaffinity=0, density=0, rgba=[.88, .48, .16, 1])
         for arm, p in PREFIX.items():
             for k, (finger, side) in enumerate((("link6", 1), ("link7", -1))):
                 for part in spec.body(p + finger).geoms:
                     part.contype = part.conaffinity = 0
+                    part.rgba = [.95, .95, .93, 1]  # the printed jaws are white (11-08), so the wrist cameras see their tips clearly
                 centre, size, angle = jaw.pad_box(side)
                 spec.body(p + finger).add_geom(name=f"{p}pad{k}", type=box, pos=centre, size=[s / 2 for s in size],
                                                quat=[math.cos(angle / 2), 0, 0, math.sin(angle / 2)], mass=.004, rgba=[0, 0, 0, 0])
@@ -148,12 +157,31 @@ class World:
         if self.wrist == "stock":
             cell = json.loads(kin.CELL_EXAMPLE.read_text(encoding="utf-8"))["wrist_camera"]
             base.update(lens_m=cell["lens_m"], axis_hit_x_m=cell["axis_hit_x_m"])
+        if self.wrist == "photo-20261108":
+            base.update(sites.WRIST_PHOTO)
+        link5 = spec.body(p + "link5")
+        if self.wrist in ("v21-b", "photo-20261108"):  # the printed D holder: link5 is the team's parts, not the stock mesh with ROBOTIS frame F9 (both see and collide)
+            for part in link5.geoms:
+                part.contype = part.conaffinity = 0
+                part.rgba = [0, 0, 0, 0]
+            for name in WRIST_PARTS:
+                if spec.mesh(name) is None:
+                    shutil.copy(WRIST_ASSETS / f"{name}.stl", Path(self.meshes.name) / f"{name}.stl")
+                    spec.add_mesh(name=name, file=f"{name}.stl", scale=[.001] * 3)
+                link5.add_geom(name=p + name, type=mujoco.mjtGeom.mjGEOM_MESH, meshname=name, density=0, rgba=[.12, .12, .13, 1])
         lens, (w, x, y, z) = jaw.wrist_camera_pose(base)
-        spec.body(p + "link5").add_camera(name=p + "wrist", pos=lens, quat=[-z, y, -x, w], fovy=base["vfov_deg"])  # image turned 180 deg as in omx_cell_sim
-        for part in spec.body(p + "link5").geoms:
+        link5.add_camera(name=p + "wrist", pos=lens, quat=[-z, y, -x, w], fovy=base["vfov_deg"])  # image turned 180 deg as in omx_cell_sim
+        for part in link5.geoms:
             part.group = 3
 
+    def _asset(self, name):
+        """Copy a ship asset next to the URDF meshes (the compiler's meshdir) and return its file name."""
+        shutil.copy(sites.SHIP_ASSETS / f"{name}.stl", Path(self.meshes.name) / f"ship_{name}.stl")
+        return f"ship_{name}.stl"
+
     def _ship(self, spec):
+        if self.layout.choices["ship_source"] == "r08-berth":
+            return self._r08(spec)
         L = self.layout
         f, top, thick = L.fixture, ship_plate.top_z(L.fixture), L.fixture["ship_plate"]["thickness_m"]
         spec.add_mesh(name="ship_deck", uservert=prism(ship_plate.outline(f), top - thick, top))
@@ -162,6 +190,45 @@ class World:
         spec.add_mesh(name="stud", uservert=[c for point in solid for c in point])
         for i, (x, y) in enumerate(ship_plate.stud_positions(f)):
             spec.worldbody.add_geom(name=f"stud{i}", type=mujoco.mjtGeom.mjGEOM_MESH, meshname="stud", pos=[x, y, top], rgba=[.08, .12, .3, 1])
+
+    def _r08(self, spec):
+        """The berthed r08 ship: the printed meshes to see; to collide, convex hulls of the bow and house, boxes for the stern around its empty
+        bay (a low ship place, sites.STERN), and per hold a floor slab, the pocket walls of each row (seat and slope as measured, sites.HOLD),
+        the outer deck and the bulwark. The pocket pins sit inside the container's bottom grooves and are left out (shortcut: a container off
+        its seat by more than the groove would not meet them)."""
+        L, H, world = self.layout, sites.HOLD, spec.worldbody
+        x0, y0, z0 = sites.ship_cell(L, 0, 0)
+        turn = [0, 0, 0, 1]  # ship x runs to -x of the fixture frame
+        mesh = mujoco.mjtGeom.mjGEOM_MESH
+        for name, rgba in (("hull", [.09, .15, .29, 1]), ("house", [.9, .94, .94, 1]), ("quay", [.88, .48, .16, 1])):
+            spec.add_mesh(name=f"ship_{name}", file=self._asset(name), scale=[.001] * 3)
+            world.add_geom(name=f"ship_{name}", type=mesh, meshname=f"ship_{name}", pos=[x0, y0, z0], quat=turn, contype=0, conaffinity=0, rgba=rgba)
+        for name in ("cx_bow", "cx_house"):
+            spec.add_mesh(name=name, file=self._asset(name), scale=[.001] * 3)
+            world.add_geom(name=name, type=mesh, meshname=name, pos=[x0, y0, z0], quat=turn, rgba=[0, 0, 0, 0])
+        mm, floor = .001, H["floor"] + 3.  # the hull stands 3 mm up on the berth blocks
+        top = H["seat"] + H["rise"]
+        reach = H["catch"] + H["ridge"]
+        section = lambda h: [(u * mm, z * mm) for u, z in ((h, 0), (h, H["seat"]), (h + H["catch"], top), (h + reach, top), (h + reach, 0))]  # noqa: E731
+        spec.add_mesh(name="pocket_side", uservert=wall(section(H["hw"]), 2 * (H["hl"] + reach) * mm, True))
+        spec.add_mesh(name="pocket_end", uservert=wall(section(H["hl"]), 2 * (H["hw"] + reach) * mm, False))
+        box = mujoco.mjtGeom.mjGEOM_BOX
+        for k, (x0_, x1_, y0_, y1_, z1_) in enumerate(sites.STERN["boxes"]):  # stern floor, aft and fore deck, side decks, rails (ship mm, z from table)
+            for side in ((1,) if y0_ == -y1_ else (-1, 1)):
+                world.add_geom(name=f"stern{k}{'p' if side > 0 else 's'}", type=box, pos=sites.ship_cell(L, (x0_ + x1_) / 2, side * (y0_ + y1_) / 2, (3 + z1_) / 2),
+                               size=[(x1_ - x0_) / 2 * mm, (y1_ - y0_) / 2 * mm, (z1_ - 3) / 2 * mm], rgba=[0, 0, 0, 0])
+        for h, start in enumerate(H["starts"], 1):
+            cx = start + H["centre"]
+            world.add_geom(name=f"hold{h}_floor", type=box, pos=sites.ship_cell(L, cx, 0, (3 + floor) / 2), size=[H["length"] / 2 * mm, H["half_beam"] * mm, H["floor"] / 2 * mm], rgba=[0, 0, 0, 0])
+            for k, row in enumerate(H["rows"]):
+                at = sites.ship_cell(L, cx, row, floor)
+                for name, yaw in (("pocket_side", 0), ("pocket_side", math.pi), ("pocket_end", 0), ("pocket_end", math.pi)):
+                    world.add_geom(name=f"hold{h}r{k}{name[7]}{int(yaw > 0)}", type=mesh, meshname=name, pos=at, quat=[math.cos(yaw / 2), 0, 0, math.sin(yaw / 2)], rgba=[0, 0, 0, 0])
+            inner = max(H["rows"]) + H["hw"] + reach
+            for side in (-1, 1):
+                for name, y_in, y_out, tall in (("deck", inner, H["deck_y"], top), ("bulwark", H["deck_y"], H["half_beam"], H["bulwark"] - H["floor"])):
+                    world.add_geom(name=f"hold{h}_{name}{side}", type=box, pos=sites.ship_cell(L, cx, side * (y_in + y_out) / 2, floor + tall / 2),
+                                   size=[H["length"] / 2 * mm, (y_out - y_in) / 2 * mm, tall / 2 * mm], rgba=[0, 0, 0, 0])
 
     def _temp(self, spec):
         """Both temporary plates: a convex deck, and per lane the vertical 0.6 mm seat plus the 45 degree funnel as four convex walls (SCAD v7)."""
@@ -203,7 +270,7 @@ class World:
     def reset(self):
         data = mujoco.MjData(self.model)
         for arm in PREFIX:
-            home = self.layout.arms[arm].home
+            home = self.layout.arms[arm].wait
             data.qpos[self.q[arm]] = home
             data.qpos[self.mimic[arm]] = -home[5]
             data.ctrl[self.act[arm]] = home
@@ -243,8 +310,10 @@ class World:
         R = data.xmat[self.link5[arm]].reshape(3, 3)
         return data.xpos[self.link5[arm]] + R @ self.layout.sim_arms[arm].tcp, R
 
-    def contact_report(self, data, carried=None):
-        """Contacts of this instant as sets: arm-arm pairs, arm links (not pads) on containers or plates, pads on containers other than the carried one."""
+    def contact_report(self, data, carried=None, by_arm=False):
+        """Contacts of this instant as sets: arm-arm pairs, arm links (not pads) on containers or plates, pads on containers other than the
+        carried one(s) (`carried`: a name or a set). `by_arm` keys each pad contact by the arm prefix ("a_", other), for two arms at once."""
+        carried = {carried} if isinstance(carried, str) else set(carried or ())
         out = dict(arm_arm=set(), arm_other=set(), pad_neighbour=set())
         for c in data.contact[:data.ncon]:
             names = [self.geom_name[g] for g in (c.geom1, c.geom2)]
@@ -256,8 +325,8 @@ class World:
                 if arms[k] and not arms[1 - k]:
                     other = names[1 - k] or bodies[1 - k]
                     if "pad" in names[k] and other.startswith("bar-"):
-                        if other != carried:
-                            out["pad_neighbour"].add(other)
+                        if other not in carried:
+                            out["pad_neighbour"].add((arms[k], other) if by_arm else other)
                     else:
                         out["arm_other"].add((bodies[k], other))
         return out
@@ -275,7 +344,7 @@ def main(argv):
     from PIL import Image
     out = Path(argv[2])
     out.mkdir(parents=True, exist_ok=True)
-    world = World(wrist="stock")
+    world = World()
     data = world.reset()
     for cid, site in zip((c for c, _ in world.layout.containers()), [s for _, s, _ in world.layout.plan_order()]):
         world.put(data, cid, site)
