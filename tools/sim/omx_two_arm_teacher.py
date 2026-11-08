@@ -185,7 +185,7 @@ class Teacher:
         """Both arms at once (D-778 L1). Each arm runs its own steps in the given order; a step starts when its `after` steps are done,
         its `after_pick` steps have lifted their container (the conveyor holds one) and its zones are free. It holds its pick zones until
         the carry ends (a carry from the conveyor to one side sweeps the middle: two arms met there, 2026-11-08) and its place zones
-        until it is done; an arm without a step holds its last pose (the wait pose after a park).
+        until it is done; one arm parks at a time, the other holds its pose; an arm without a step holds its last pose (the wait pose after a park).
         Returns (rows, per-step start and end seconds, None or why it stopped)."""
         L = self.layout
         queue = {a: [s for s in task["steps"] if s["arm"] == a] for a in L.arms}
@@ -209,7 +209,10 @@ class Teacher:
             if not running:
                 return rows, timing, f"deadlock: {[q[0]['id'] for q in queue.values() if q]} cannot start"
             targets = {}
+            parking = [a for a, r in running.items() if r[2].phase == "park"]
             for arm, (s, gen, ctx, pick_only) in list(running.items()):
+                if ctx.phase == "park" and parking[0] != arm:  # one arm parks at a time: two parks met link5 to link5 (MuJoCo 2026-11-08)
+                    continue
                 try:
                     targets[arm] = last[arm] = next(gen)
                 except StopIteration as stop:
