@@ -202,14 +202,14 @@ gaps:
     next: measured from the top frame into a snapshot each time a plate moves (next after the 2026-11-09 move); rehandle 12/12 and stack 9/9 on the 11-08 snapshot
 
   - id: G-18
-    gap: OMX r08 ship pose is assumed (stern x at the belt edge) and its centreline comes from one 11-07 photo; the ship now stands in the cell but is not measured
+    gap: OMX ship on the cell does not match the r08 model's shape; moving r08 to where the top camera saw hold 1 (stern x .180, centre y -.014) failed all nine MuJoCo replays (reverted), and the real frame shows containers right at the belt end, no stern bay and a bright rectangle at the far end
     evidence:
       - tools/sim/omx_two_arm_sites.py:30-31
       - D-947
     tier: [M]
-    owner: tools/sim (omx_real2sim)
+    owner: tools/sim / rosy-modeling
     status: OPEN
-    next: hull outline measurer in omx_real2sim (top frame, back-projected to the deck), snapshot item ship feeding the stack and matrix stages
+    next: name the ship print that stands on the cell (version, which end faces the belt) and model it; only then a hull measurer in omx_real2sim (position alone was tried and reverted, commit 34786139ed then b1d38c6da9)
 
   - id: G-19
     gap: OMX top camera model is the 2026-11-03 stud PnP; between surveys only the plate pad sizes (within 2.5 mm of 90 x 30 on 11-08) check it
@@ -284,14 +284,15 @@ gaps:
     next: every real stop or slip becomes an Isaac case (cell_cases) and the suite is rerun each round; friction is fitted only from such cases
 
   - id: G-26
-    gap: OMX outbound planner and two-arm policy build their layout without choices, so they still use the design plates, not the measured snapshot
+    gap: OMX outbound planner and two-arm policy built their layout without choices, so they used the design plates, not the measured snapshot
     evidence:
-      - tools/sim/omx_two_arm_plan.py:321
+      - tools/sim/omx_two_arm_plan.py:323
       - tools/sim/omx_two_arm_policy.py:141,174
+      - tools/sim/omx_real2sim.py
     tier: [M]
     owner: tools/sim
-    status: OPEN
-    next: both take --choice like the teacher and the matrix; then outbound and a policy round become omx_real2sim stages
+    status: IN-PROGRESS
+    next: both take --choice now (a policy round records them); the outbound stage's first run on the 11-08 snapshot closes the row
 
   - id: G-27
     gap: OMX sim predicts link4 touching a neighbour container when a lower container is taken out or put back (arm_a bar-1, bar-2; arm_b bar-1, bar-3), on the design and the measured layout alike; not seen on the real arm yet
