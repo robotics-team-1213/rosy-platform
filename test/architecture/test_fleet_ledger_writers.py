@@ -16,9 +16,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 FLEET = ROOT / "operations/fleet/fleet"
+# D-996 port event and intake tables are not listed: each has one owner module that creates and writes it.
 LEDGER_TABLES = ("fleet_tasks", "fleet_task_history", "fleet_robot_reservations", "fleet_action_claims",
-                 "fleet_control_stops", "fleet_control_stop_deliveries", "fleet_port_events", "fleet_intake_bindings",
-                 "fleet_intake_readings")
+                 "fleet_control_stops", "fleet_control_stop_deliveries")
 _WRITE = re.compile(r"\b(?:INSERT(?:\s+OR\s+\w+)?\s+INTO|REPLACE\s+INTO|UPDATE|DELETE\s+FROM)\s+("
                     + "|".join(LEDGER_TABLES) + r")\b", re.IGNORECASE)
 
@@ -36,9 +36,6 @@ KNOWN_WRITERS = {
     "server/cancel_all_store.py": {"fleet_tasks", "fleet_task_history", "fleet_robot_reservations"},
     "server/missions/mission_store.py": {"fleet_action_claims"},
     "server/cell/cell_job_store.py": {"fleet_action_claims"},
-    "server/work/port_event_store.py": {"fleet_port_events"},
-    "server/work/intake_transfer.py": {"fleet_intake_bindings"},
-    "server/work/intake_readings.py": {"fleet_intake_readings"},
     "server/cell/cell_arm_claims.py": {"fleet_action_claims"},
     "server/cell/cell_arm_jobs.py": {"fleet_action_claims"},
     "server/cell/cell_sheet_checkpoints.py": {"fleet_action_claims"},
@@ -66,9 +63,6 @@ WRITER_REASONS = {
     "server/cancel_all_store.py": "durable site-wide cancel-all record (D-421, safety path)",
     "server/missions/mission_store.py": "Mission admission moves its claims with the Mission (D-664)",
     "server/cell/cell_job_store.py": "fixed-cell job admission and hold move its claims (D-403)",
-    "server/work/port_event_store.py": "D-996 2 append-only port event ledger: one row per event_id, never updated",
-    "server/work/intake_transfer.py": "D-996 5 binds a declared object_ref to its supply-arm proposal in that transaction",
-    "server/work/intake_readings.py": "D-996 3 keeps each cell PC tag reading once, keyed by its observation_ref",
     "server/cell/cell_arm_claims.py": "per-Action arm and zone claim phases of a multi-arm job (D-779 5-6)",
     "server/cell/cell_arm_jobs.py": "multi-arm job creation, hold and recovery move its claims (D-779)",
     "server/cell/cell_sheet_checkpoints.py": "manual-sheet barrier holds the job's claims",
@@ -92,10 +86,7 @@ def _writers() -> dict[str, set[str]]:
 def test_ledger_tables_are_created_by_the_task_store():
     task_source = (FLEET / "server/ledger/task_store.py").read_text(encoding="utf-8")
     creators = {"fleet_control_stops": "server/ledger/control_stop_schema.py",
-                "fleet_control_stop_deliveries": "server/ledger/control_stop_schema.py",
-                "fleet_port_events": "server/work/port_event_store.py",  # its own table, created on first use
-                "fleet_intake_bindings": "server/work/intake_transfer.py",
-                "fleet_intake_readings": "server/work/intake_readings.py"}
+                "fleet_control_stop_deliveries": "server/ledger/control_stop_schema.py"}
     for table in LEDGER_TABLES:
         source = (FLEET / creators[table]).read_text(encoding="utf-8") if table in creators else task_source
         assert f"CREATE TABLE IF NOT EXISTS {table} (" in source
