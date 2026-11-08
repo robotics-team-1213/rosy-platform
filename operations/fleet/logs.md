@@ -5405,6 +5405,12 @@
 - 증거: 원격 실행 기록은 operations/account/logs.md.
 - gate 변화: 없음.
 
+## 2026-11-07 · uncommitted · fix(fleet): 배터리 근거 없음·멈춤 사유 분리
+- 변경: powerHealthView가 evidence missing은 "배터리 값 없음 — 배터리 센서 서비스 확인", stale은 "배터리 값 멈춤 — 센서 연결 확인"으로 나눔. 멈춤 경과 시간은 그룹 문구가 갈라지지 않도록 problem이 아닌 note로 두고 로스터 배터리 칸에만 표시. D-509 충전 확인(신선한 CORE 근거만) 유지.
+- 증거: node --test queue-inline+console-health 12 passed/skip0; 원격 Chromium(ROSY_RUN_BROWSER_TESTS=1) 176 passed/skip0 (be0e5095e7).
+- gate 변화: SOURCE 회귀 검증만; 실물·현장 수용 근거 아님.
+- 교훈: CE 해당 없음 — 문구 분리, 코드·시험으로 재현 가능.
+
 ## 2026-11-08 · uncommitted · 관제 화면 파일을 다시 받지 않고 압축해 보낸다
 - 변경: 콘솔 문서·자산·/common 파일이 ETag가 맞으면 304로 답한다. Fleet 응답은 1 KB 넘으면 gzip으로 보낸다. `no-cache`는 그대로라 배포 직후 새 파일을 바로 받는다.
 - 증거: 관제 첫 화면은 파일 97개 917 KB(gzip 315 KB)를 받는다. Starlette FileResponse가 If-None-Match를 무시해 레일을 누를 때마다 전부 다시 받았다. test_server_app.py에 304·gzip 시험을 더했다.
