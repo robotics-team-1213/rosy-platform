@@ -66,6 +66,10 @@ def install_site_map_routes(app, *, site_maps, route_active, read_guard, require
     install_site_map_drawing_routes(app, assets=site_maps.drawing_assets, read_guard=read_guard,
                                    require_named_operator=require_named_operator)
 
+    from fleet.server.site_rules_routes import install_site_rules_routes  # D-982: beside the map it is judged on
+    install_site_rules_routes(app, site_maps=site_maps, route_active=route_active, read_guard=read_guard,
+                              require_named_operator=require_named_operator)
+
     def fail(exc: SiteMapError) -> HTTPException:
         return site_map_error(exc.status_code, exc.code, str(exc))
 

@@ -1762,6 +1762,14 @@
         "test_manager_registers_and_stops_a_client_without_restart"
       ],
       "source_revision": "925a6ed45db7835a317467eb5e58faa1a90d9b03"
+    },
+    "POST:/api/fleet/site-rules/judge": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_site_rules_http.py",
+        "test_judge_answers_from_the_active_rules_and_sends_nothing"
+      ],
+      "source_revision": "5ddd185be3ad45f3bd79fc940c9e72e4f7076d3c"
     }
   }
 }
