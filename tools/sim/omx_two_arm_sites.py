@@ -27,8 +27,9 @@ CHOICES = dict(
     temp_direction_deg=180., # from each arm toward -x, away from the belt (the user's slot plan 2026-10-31)
     temp_source="scad-v11",  # the plate source; "stl" keeps the same collision shape and shows the downloaded STL as the visual
     ship_source="r08-berth",  # "r08-berth": the rated ship v15 (r08) on its berth kit with container v3 (SHIP_ASSETS); "fixture-studs": the old stud plate and 30 mm boxes
-    ship_stern_x_m=.155,     # r08: stern end x, bow toward -x as the printed ship lay in the 11-07 top photo; ASSUMED at the table's belt edge (r08 not placed yet)
-    ship_centre_y_m=.007,    # r08: hull centreline y, the printed ship's hull edges back-projected from the same photo (125 mm wide against 130)
+    ship_stern_x_m=.180,     # r08: stern end x, bow toward -x; the 2026-11-08 22:40 top frame puts hold 1's three containers at x 79-82 mm (was .155,
+                             # ASSUMED at the table's belt edge from the 11-07 photo of the older print)
+    ship_centre_y_m=-.014,   # r08: hull centreline y from the same frame: the middle row at -14 mm (rows +25/-14/-56, hull edges +49/-74; was .007 from the 11-07 photo)
     wrist_camera="photo-20261108",  # "photo-20261108": WRIST_PHOTO, fitted to arm_b's real wrist frame; "v21-b": the team's printed D holder r06
                              # (palletizing_gripper.WRIST_CAMERA_B); both draw and collide link5 as the D parts; "stock" (omx-ai-stock, ROBOTIS STEP) or "none"; arm_a ASSUMED the same mount
     tcp_x_arm_b=.0740,       # URDF/STL v2.1 jaw (tip 74.1 mm from the pivot); a touch gave .0885 but that rests on an unchecked table height (OPEN, 14.5 mm FK offset)
@@ -127,7 +128,8 @@ def r08_sites(layout):
 
 def under_hull(layout, site):
     """True when a container seated on `site` would reach over the r08 hull (stern to bow, beam 130 mm): plate v11 where its bridge
-    seats it overlaps the estimated ship by up to 20 mm at arm_b (the base plate yaw, arm_b's axis and the ship's place are unmeasured).
+    seats it reaches 2 mm over the hull at arm_a's lane 3 with the ship where the 11-08 top frame puts it (20 mm at arm_b's lane 1 on
+    the earlier estimate; the base plate yaw and arm_b's axis are still unmeasured).
     shortcut: container corners against the hull's bounding box, enough while the hull's sides are straight there; upgrade with the hull mesh."""
     c = layout.choices
     x1, y0 = c["ship_stern_x_m"], c["ship_centre_y_m"]

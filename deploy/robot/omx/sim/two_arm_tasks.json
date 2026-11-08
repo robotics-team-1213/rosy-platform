@@ -103,7 +103,7 @@
     "bar-8": "ship-h1r0-l2",
     "bar-9": "ship-h1r2-l2"
    },
-   "_note": "Each outer row is rehandled by the arm on the OTHER side (on the stud plate the near arm's wrist hit the standing middle row in MuJoCo). The three containers of a row go to the temporary plate and come back in a new order: bottom to top bar-6, bar-3, bar-9 (r2) and bar-5, bar-8, bar-2 (r0).",
+   "_note": "Each outer row is rehandled by the arm on the OTHER side (on the stud plate the near arm's wrist hit the standing middle row in MuJoCo). The three containers of a row go to the temporary plate (arm_a's lane 3 is over the hull where the 11-08 top frame puts the ship, so its third goes to the stern bay) and come back in a new order: bottom to top bar-6, bar-3, bar-9 (r2) and bar-5, bar-8, bar-2 (r0).",
    "steps": [
     {
      "id": "a1",
@@ -123,7 +123,7 @@
      "id": "a3",
      "container": "bar-3",
      "from": "ship-h1r2-l0",
-     "to": "tmp-a-3",
+     "to": "ship-stern-l0",
      "arm": "arm_a"
     },
     {
@@ -136,7 +136,7 @@
     {
      "id": "a5",
      "container": "bar-3",
-     "from": "tmp-a-3",
+     "from": "ship-stern-l0",
      "to": "ship-h1r2-l1",
      "arm": "arm_a"
     },
@@ -217,21 +217,21 @@
      "id": "m1",
      "container": "bar-5",
      "from": "ship-h1r0-l1",
-     "to": "tmp-b-2",
+     "to": "tmp-b-1",
      "arm": "arm_b"
     },
     {
      "id": "m2",
      "container": "bar-2",
      "from": "ship-h1r0-l0",
-     "to": "tmp-b-3",
+     "to": "tmp-b-2",
      "arm": "arm_b",
      "outbound": true
     },
     {
      "id": "m3",
      "container": "bar-5",
-     "from": "tmp-b-2",
+     "from": "tmp-b-1",
      "to": "ship-h1r0-l0",
      "arm": "arm_b"
     },
@@ -246,35 +246,35 @@
      "id": "m5",
      "container": "bar-9",
      "from": "ship-h1r2-l2",
-     "to": "tmp-b-3",
+     "to": "tmp-b-2",
      "arm": "arm_b"
     },
     {
      "id": "m6",
      "container": "bar-6",
      "from": "ship-h1r2-l1",
-     "to": "tmp-a-2",
+     "to": "ship-stern-l0",
      "arm": "arm_a"
     },
     {
      "id": "m7",
      "container": "bar-3",
      "from": "ship-h1r2-l0",
-     "to": "tmp-a-3",
+     "to": "tmp-a-2",
      "arm": "arm_a",
      "outbound": true
     },
     {
      "id": "m8",
      "container": "bar-6",
-     "from": "tmp-a-2",
+     "from": "ship-stern-l0",
      "to": "ship-h1r2-l0",
      "arm": "arm_a"
     },
     {
      "id": "m9",
      "container": "bar-9",
-     "from": "tmp-b-3",
+     "from": "tmp-b-2",
      "to": "ship-h1r2-l1",
      "arm": "arm_b"
     }
