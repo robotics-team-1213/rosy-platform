@@ -324,7 +324,11 @@ def test_the_site_pc_never_runs_lab_only_suites_and_leaves_them_not_run(monkeypa
     monkeypatch.setattr(rp, "remote", lambda *a, **kw: subprocess.CompletedProcess([], 0, b"", b""))
     ran = []
     monkeypatch.setattr(rp.remote_job, "run", lambda h, name, k, log, job, inv, *a: ran.append((h, inv)) or log.write_bytes(b"") and 0)
-    codes = rp.run([["test/x.py"], journey], [tmp_path / "1.txt", tmp_path / "2.txt"], "ab" * 20, tmp_path, wait=0)
+    repo = tmp_path / "repo"  # run() resolves the sha in a real repository; its git dir keeps the run's history
+    subprocess.run(["git", "init", "-q", str(repo)], check=True)
+    subprocess.run(["git", "-C", str(repo), "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q",
+                    "--allow-empty", "-m", "t"], check=True)
+    codes = rp.run([["test/x.py"], journey], [tmp_path / "1.txt", tmp_path / "2.txt"], "HEAD", repo, wait=0)
     assert codes == [0, rp.remote_job.LOST_EXIT] and [inv[-1] for _, inv in ran] == ["test/x.py"]
     assert "needs a lab PC" in capsys.readouterr().err
 
