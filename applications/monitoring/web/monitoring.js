@@ -110,7 +110,10 @@ function render() {
   const fragment = document.createDocumentFragment();
   for (const node of nodes.slice(state.page * 50, (state.page + 1) * 50)) {
     const row = el('tr');
-    row.append(cell(el('p', node.label), el('small', KIND[node.kind] || '항목'), el('code', node.id)),
+    const owner = cell(el('p', node.label), el('small', KIND[node.kind] || '항목'), el('code', node.id));
+    // D-991: a PC is acted on in Fleet's PC maintenance; this screen stays read-only.
+    if (node.kind === 'host') { const link = el('a', 'PC 정비'); link.href = '/console/maintenance'; owner.append(link); }
+    row.append(owner,
       cell(healthNode(node), evidenceNode(node)),
       cell(el('code', node.origin_collector + ' / ' + node.origin_source), el('small', '보고 관측 ' + stamp(node.sampled_at))));
     fragment.append(row);
