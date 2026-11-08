@@ -14587,3 +14587,10 @@ osy-d395-s1d\`.
 - 증거: D-987·D-807·D-955·D-962·D-661·D-841·D-985, 현재 설정 transaction·알림·감사·backup/업데이트 경로를 대조했다. 카탈로그 실행 서비스 목록·Compose·source holder는 그대로다. 최종 SHA의 문서·원격 시험·독립 검토를 별도로 연결한다.
 - gate 변화: 없음. 설계 수락은 신규 서비스·API·폴더 이동·DB 이관·배포·현장 수용 완료가 아니다.
 - CE: 해당 없음 — 새 아키텍처 결정을 ADR에 남겼고 해결한 장치/운영 장애는 없다.
+
+## 2026-11-08 · uncommitted · fix(remote): 현장 PC가 고정 학습 환경이 필요한 시험을 받지 않는다
+
+- 변경: `work_queue.LAB_ONLY`(지금은 `test_learning_workflow_pipeline_browser.py`)를 현장 PC 작업자가 받지 않는다. 남은 호스트가 현장 PC뿐이면 그 시험은 실패가 아니라 미실행(255)으로 끝난다(`stranded`).
+- 증거: 11-07 이 시험이 두 실험실 PC가 찬 동안 현장 PC에 배정돼 고정 학습 venv 확인에서 실패했고 MAIN-RED가 됐다. 그 venv는 모델 PC·AI PC에만 있다(11-08 확인). 건너뛰기 조건으로 막은 수정은 `land_browser.vacuous`에 걸려 되돌려졌다(a258cda4d7).
+- gate 변화: 현장 PC만 남은 착지는 이 시험에서 실패 대신 미실행으로 멈춘다(자리가 나면 resume).
+- CE: 해당 없음 — 원인과 규칙이 코드와 회귀 시험에 남는다.
