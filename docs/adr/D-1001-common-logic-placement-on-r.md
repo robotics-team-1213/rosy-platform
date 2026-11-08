@@ -51,7 +51,7 @@ D-997은 공통 기능을 실행 서비스·공용 코드·owner 어댑터로 �
 |---|---|---|
 | 1 | 이 ADR의 구조 시험(`test/architecture/test_common_placement.py`)과 카탈로그 「배치와 장애 격리」 (이번 변경) | 시험·문서 되돌림 |
 | 2 | Monitoring 전용 이미지 `rosy-site-monitoring`(fleet 패키지 없음). 후보 빌드·compose 한 줄·시험의 예외 제거 | compose 이미지를 Fleet 이미지로 되돌림(데이터는 `monitoring_state` 그대로) |
-| 3 | 연동 브랜치 착지 뒤 내장 Account 모드·껍데기 제거 | 해당 커밋 revert. receiver 설정은 그대로 |
+| 3 | 연동 브랜치 착지 뒤 내장 Account 모드·껍데기 제거. 같은 변경에서 `FLEET_ACCOUNT_SHELLS` 시험도 줄인다 | 해당 커밋 revert. receiver 설정은 그대로 |
 | 4 | Fleet·Vision·Postgres `mem_limit`: 24시간 측정 뒤 값 결정 | 한도 제거 |
 | 5 | 알림 전달기(D-997 §6·D-998): 전용 이미지·발송 꺼짐 상태로 배치 → Fleet 발송 끔 → 전달기 켬. 두 발송기를 동시에 켜지 않고 UNKNOWN을 보존 | 발송 owner를 Fleet으로 되돌림. outbox 그대로 |
 | 6 | Media를 R에 `rosy-media`로 배치(부하·방화벽 확인 뒤) | `docker compose -p rosy-media down` |

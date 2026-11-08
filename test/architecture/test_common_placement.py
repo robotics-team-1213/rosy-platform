@@ -73,7 +73,7 @@ def test_memory_limit_debt_only_shrinks():
 
 def test_media_project_stays_off_the_site_networks():
     spec = _services()['media'][1]
-    assert not {'site_backend', 'site_edge'} & set(spec['networks'])
+    assert not {'site_backend', 'site_edge'} & set(spec.get('networks', []))
 
 
 def test_fleet_account_files_are_reexport_shells():
