@@ -104,6 +104,7 @@
 
   <!-- D-926 2 — 경로 줄: 문서 제목과 주소가 고른 영역을 본문 머리에도 보인다(area-nav.js). -->
   <div class="ui-pathbar"><h1>사이트 관제</h1><strong id="console-screen" hidden></strong></div>
+  <script src="/console/assets/area-first.js"></script>
 
   <section id="connection-guide" class="connection-guide" aria-labelledby="connection-guide-title" hidden>
     <div><h2 id="connection-guide-title">관제 접속 필요</h2>
@@ -202,7 +203,7 @@
       <details id="map-options" class="map-options">
         <summary class="ui-disclosure-row">지도 표시·경로 옵션</summary>
         <div class="map-options-content">
-        <a href="/console/site-map#profile-heading">지도 설정</a>
+        <a class="ui-action-link" data-kind="quiet" href="/console/site-map#profile-heading">지도 설정</a>
         <span class="hint" id="map-display-status" role="status">공유 map 좌표 · m</span>
         <span class="hint layer-hint" id="map-layer-hint" role="status" hidden></span>
         <!-- D-517 10 — 교통 층 하나. Fleet 블록 표가 있을 때만 보인다. 표시 선호라 권한과 무관하다. -->

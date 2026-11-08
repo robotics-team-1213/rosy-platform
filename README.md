@@ -27,7 +27,9 @@ ROSY Platform은 관측한 세계 상태, 현장 미션 조정, 로봇의 안전
 
 ## 한눈에 보기
 
-사용자가 여는 앱과 내부 서비스는 [앱 이름과 역할](docs/reference/app-names-and-roles.md)에서 구분한다. Cell은 Fleet의 팔레타이징 작업 준비 화면이며, 계정·로봇 얼굴·Pilot 연결 로비는 각 앱의 하위 기능이다.
+사용자가 여는 앱과 내부 서비스는 [앱 이름과 역할](docs/reference/app-names-and-roles.md)에서 구분한다. 팔레트 적재(Cell)은 Fleet의 팔레타이징 작업 준비 화면이며, 로봇 얼굴·Pilot 연결 로비는 각 앱의 하위 기능이다. 여러 앱이 함께 쓰는 Account·Monitoring·Media와 공용 코드는 [공통 서비스 카탈로그](docs/reference/common-services.md)에 있다.
+
+통합관제 R·셀 관제는 논리 단위이고, CORE·OMX owner는 최종 장치 실행을 맡는다. 실행 PC와 운영 브라우저는 별개다. 아래 그림은 역할 연결을 요약하며 한 PC에 모두 배치한다는 뜻이 아니다. 현재·목표 호스트는 [관제 단위 배치표](docs/deployment/control-units.md#현장-배치표), 구현·수용 구분과 남은 구조 개선은 [D-995](docs/adr/D-995-control-structure-authority-and-evidence-status.md)를 본다.
 
 ```mermaid
 flowchart TB

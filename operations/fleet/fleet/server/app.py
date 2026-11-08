@@ -560,7 +560,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         install_tracking_routes(app, tracking=tracking, require_operator=require_operator,
                                 read_guard=read_guard, operator_guard=operator_guard,
                                 require_named_operator=require_named_operator,
-                                map_revision=partial(active_map_revision, site_maps))
+                                map_revision=partial(active_map_revision, site_maps), map_pose=map_pose)
         from fleet.server.start_points import StartPointService
         from fleet.server.start_point_routes import install_start_point_routes
         install_start_point_routes(app, service=StartPointService(sources=tracking.sources,
@@ -636,7 +636,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     from fleet.server.trip_routes import install_trip_routes
     from fleet.server.trip_ports import HttpLaneJunction
     from fleet.server.trip_guard import engaged, install_trip_guard, release_queue
-    from fleet.server.trip_runner import TripConfig, TripRunner
+    from fleet.server.trip_runner import TripConfig, TripRunner, cached_battery
     install_lane_route_routes(app, console=console, task_service=task_service,
                               site_maps=site_maps, require_named_operator=require_named_operator)
 
@@ -663,7 +663,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
                              roster=lambda: console.robot_ids, traffic_zones=traffic_zones, authority=traffic_authority,
                              traffic_signals=traffic_signals, signal_advice=traffic_signal_advice,
                              lease=trip_lease and {**trip_lease, "holder": console.fleet_name},
-                             renew_lease=lambda robot_id: console.goal_leases.renew("trip", robot_id))
+                             renew_lease=lambda robot_id: console.goal_leases.renew("trip", robot_id), battery=cached_battery(app.state))
     install_trip_guard(console, trip_runner, claims=task_service.store.resource_claims if task_service else None)
     trip_runner.autonomous_robots = frozenset(autonomous_robots)
     trip_runner.traffic.autonomous_robots = frozenset(autonomous_robots)

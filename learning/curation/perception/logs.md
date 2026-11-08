@@ -475,3 +475,49 @@
 - 변경: 정상main병합의 producer/consumer·권한·사람정답·draft/generation보존, 편집중AI feedback과지연후보분리, await뒤편집상태재검사, 미저장preview의완료/shortcut차단을 후속검증문서에 결속했다. optionalG2는 시험capture hook3파일만56추가/1삭제하며제품변경0이다. 기존모든로그본문과153/203목록은 보존한다.
 - 증거: 실제merge RED의selector오류1개를제품회귀와분리했고 정정RED1→AI경합GREEN2, preview완료enabled RED1→guard보완을기록했다. commit 7893474ba454ef1a8f33a0ee13a18c30232cd338의browser385/backend408/Node8, source0111메뉴14·9route51소비처alias, commit 10d7133e66b44153b5e65cf4fa7e8205d3adc087의Pixel24는각별도근거다. Pixel은후보6/class Enter12/workspace2/resize2/opinion2이며0skip/NEW0·106원본을확인했다. 후보6개의overflow0·사람mask/version불변·완료disabled와viewport밖control한계를보존했고메뉴130+Pixel106의새236원본은재해시일치/경로중복0이다.
 - gate 변화: Pixel독립G3는실제10d새27PNG/106전수재해시/8기준PASS·새차단0이며실제canvas초점과geometry.focused를구분했다. 좁은control동시viewport가시성/scrollinteraction은미검증이다. 선행main3caa의공식39개NEW0·로컬착지와22raw skip/cache한계는별도다. UI최종G1·공식AUTO/FULL·main·실학습·모델승격·배포·실물/현장수용은대기다. CE: 해당 없음 — 실제코드·회귀·원본과 docs/validation/uiux-surfaces-2026-11-05/main-merge-followup.md로판단을재구성한다.
+
+## 2026-11-06 · uncommitted · uiux(learning): 파괴·대체 확인을 공용 확인 창으로
+- 변경: 객체(원본·모델 초안 적용)·픽셀(전체 채우기·남은 영역 채우기 3종·초안 적용·병합)·계정 연결 해제·저장 설정 다시 불러오기의 native confirm 8곳을 공용 confirmIrreversible(취소 기본 초점, 행동 이름 버튼)로 바꿨다. 문구·가드는 유지하고 평가 작업공간 가드와 busy는 확인 뒤 다시 본다. 픽셀 승인 사유(#pixel-approval-hint)를 완료 버튼 바로 아래로 옮겼다. 2026-11-06 UI/UX 전수 조사 P1.
+- 증거: 브라우저 시험의 native dialog 수락을 공용 확인 창 클릭 helper로 바꾸고, 명령 검색 경로에 취소 기본 초점·취소 시 version 0 단정을 추가했다. 원격 결과는 착지 기록을 따른다.
+- gate 변화: SOURCE 회귀. 실검수자 G3·배포 수용은 별도다. CE: 해당 없음 — 공용 부품 재사용이며 코드와 회귀가 판단을 보존한다.
+
+## 2026-11-06 · uncommitted · uiux(learning): 객체 저장이 서버에 닿기 전 이탈 경고
+- 변경: 객체 화면은 저장 요청 중이거나 저장이 실패한 동안 페이지를 떠나면 브라우저 경고를 띄운다. 다른 사진을 고르거나 저장이 성공하면 풀린다. 픽셀 화면의 기존 보호와 맞췄다. 2026-11-06 UI/UX 조사 후속.
+- 증거: test_review_unload_browser.py가 실패 뒤 경고, 성공 뒤 해제를 단언한다. 원격 결과는 착지 기록을 따른다.
+- gate 변화: SOURCE 회귀. 실검수자 G3는 별도다. CE: 해당 없음 — 코드와 회귀가 판단을 보존한다.
+
+## 2026-11-06 · uncommitted · uiux(learning): 실패 이유 표시와 실패·거절 구분
+- 변경: 보고서 최상위 error가 결과 카드와 상세에 보인다. 기존에는 단계 오류만 보여 이유가 사라졌다. 실패와 품질 거절 라벨을 나누고, 접속 오류 때도 앱 바 버튼을 막지 않는다.
+- 증거: test_learning_pipeline_browser.py에 실패 이유·라벨 구분·403 앱 바 단정 추가. 화면 관찰은 scratch uiux2/other. 원격 결과는 착지 기록을 따른다.
+- gate 변화: SOURCE 회귀. 실검수자 G3는 별도다. CE: 해당 없음 — 코드와 회귀가 판단을 보존한다.
+
+## 2026-11-06 · uncommitted · uiux: 클래스 관리 ui-button, 네트워크·5xx 실패 문구
+- 변경: classes.html 기본 button 3개를 ui-button으로(제출 동작 유지). accountFetch가 연결 끊김·시간 초과·HTML 5xx를 '처리되지 않음/화면 유지/다시 시도' 문장으로 바꾼다.
+- 증거: agent-browser 로컬 렌더(1920·390·320 화면 확인). 원격 회귀는 착지 기록을 따른다.
+- gate 변화: SOURCE 변경. 실기기·Android 수용은 별도다. CE: 해당 없음 — 코드와 회귀가 판단을 보존한다.
+
+## 2026-11-06 · uncommitted · uiux(learning): 도구 모드 글자, 안내 하나, 새 학습 과제 단추, 진행 중 단계 줄, 실패·거절 다음 행동
+- 변경: 객체 검수는 선택한 도구(박스 선택·이동/그리기), 픽셀 검수는 점·브러시·영역을 글자로도 보인다. 객체 화면의 겹친 단축키 안내(사진 정보의 단축키 글, 결정 영역의 단축키 줄)를 없애 조작 방법 한 곳만 남겼다. 학습 과제 빈 화면의 「새 학습 과제」는 흰 채움 단추 모양이다. 진행 중 결과 카드는 진행 중과 지금 단계 줄을 보이고, 실패 확인과 거절 확인은 서로 다른 다음 행동을 말한다. 승인·거절 판정은 바꾸지 않았다.
+- 증거: agent-browser로 복사 상태 서버에서 390·320 객체·픽셀 화면 확인(가로 넘침 없음). 진행 중 카드와 실패·거절 문구는 해당 상태 자료가 없어 화면으로 보지 못했다. 320에서 되돌리기 단추가 오른쪽 끝에서 잘리는 것을 보았다(이전부터).
+- gate 변화: SOURCE 변경. CE: 해당 없음 — 코드와 회귀가 판단을 보존한다.
+
+## 2026-11-07 · uncommitted · uiux(learning): 진행 중 카드 안내와 320 픽셀 도구
+- 변경: 진행 중 결과 카드는 담당자 전달 대신 기다리라고 말한다. 320폭 픽셀 도구는 두 줄로 놓아 되돌리기 글자가 잘리지 않는다.
+- 증거: test_learning_pipeline_browser.py 단정 추가. 잘림은 실제 화면에서 버튼 66px로 측정했다. 원격 결과는 착지 기록을 따른다.
+- gate 변화: SOURCE 회귀. 실검수자 G3는 별도다. CE: 해당 없음 — 코드와 회귀가 판단을 보존한다.
+
+## 2026-11-07 · uncommitted · feat(learning): 사다리 화면에 양팔 태스크와 같은 위치 비교
+- 변경: 화면 5절이 `omx_ladder.py two-arm` 기록(rosy.omx-two-arm-run.v1)과 셀의 네 카메라(top·side·양 손목) 그림을 보여 주고, 관리 권한으로 정해진 태스크와 시드만 실행한다. 라운드에 기록된 부모 재평가가 있으면 다른 위치의 구간 비교 대신 그것을 쓴다. 부모를 평가할 수 없을 때 라운드가 실행 중에 묶이던 문제도 고쳤다.
+- 증거: 원격 시험 `test/test_omx_two_arm_tasks.py`, `test/test_omx_ladder.py`, `test/learning/perception/test_ladder_web.py` 47개 통과, 브라우저 `test_ladder_browser.py` 5개 통과. AI PC에서 네 카메라로 stack 9/9, rehandle 12/12(시드 3개).
+- gate 변화: SOURCE 변경. 정답 동작의 기하 검사이며 학습 모델이나 실물 근거가 아니다(D-947). CE: 해당 없음 — 시험이 판단을 보존한다.
+
+## 2026-11-07 · uncommitted · feat(learning): 학습 사다리 화면 (/learning/ladder)
+- 변경: `ladder_web.py`와 `ladder.html/js/css`가 OMX 사다리 라운드(rosy.omx-ladder-round.v1)를 목록·상세로 보이고, 사람의 기준 교체/유지 기록(`decisions.jsonl` 추가, `best.json` 사본)과 고정 인자 라운드 시작(`tools/sim/omx_ladder.py round`)을 맡는다. 판단자는 서버가 로그인 사용자에서 정하고, 시작은 manage 권한·CSRF·동시 1개 제한을 따른다. 설정은 `--ladder-config`(비공개 JSON: root, cell, python, lerobot_train)이며 없으면 「연결되지 않았습니다」. 학습 루프 SIM 줄의 학습 칸에 사다리 요약을 더했다. 라운드 결과는 시뮬레이션 근거이고 기준 교체는 비교 기록일 뿐 승인·승격·장치 적용이 아니다(D-793, D-857, D-947).
+- 증거: 아래 커밋 뒤 원격 시험 결과를 별도 줄로 덧붙인다.
+- gate 변화: SOURCE 변경. `omx_ladder.py` 본체와 실제 라운드 실행은 다른 작업이며 이 변경으로 입증하지 않는다. CE: 해당 없음.
+
+## 2026-11-07 · uncommitted · feat(learning): 사다리 화면에 양팔 학습 라운드와 영상
+
+- 변경: `/learning/ladder` 5절에 네 카메라·12관절 양팔 ACT 라운드 카드(단계별 통과, 작업 전체, 한 번도 통과 못 한 단계)와 평가 영상을 보여 준다. 기록은 화이트리스트로만 읽고 영상은 `two_arm_rounds`의 mp4만 내보낸다. 라운드는 작업 전체를 끝까지 마쳤을 때만 통과로 적는다.
+- 증거: AI PC 첫 라운드(630단계, 178,236프레임, 60,000스텝)는 새 시드 평가 63단계 중 0 통과, 집어 든 단계 1, 작업 전체 0/9·0/12였고 예전 표시는 이 라운드를 통과로 보였다. 같은 시드에서 평가 입력과 데이터셋은 상태·동작·목표 차이 0, 영상 평균 차이 2 미만이어서 입력 어긋남은 아니다. 원격 `test_ladder_web.py`, `test_ladder_browser.py`, `test_omx_two_arm_policy.py`와 레일 시험을 이 변경에서 돌렸다. 시뮬레이션 기하 근거이며 실물 근거가 아니다(D-947).
+- gate 변화: SOURCE 변경. 모델은 아직 시험을 통과하지 못했고 실물 경로도 없다(D-793). CE: 해당 없음 — 시험이 판단을 보존한다.

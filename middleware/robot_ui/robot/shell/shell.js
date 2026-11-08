@@ -48,7 +48,7 @@ function renderSafetyMode(state) {
   if (state?.mode === "SAFE_STOP" || state?.safety?.estop === true) {
     safetyStatus.hidden = false;
     safetyStatus.setAttribute("state", "warning");
-    safetyStatus.textContent = "안전 정지 · CORE가 정지 상태를 보고했습니다. 이동은 CORE가 차단합니다. 해제와 물리 상태는 별도로 확인하세요.";
+    safetyStatus.textContent = "안전 정지 · 로봇이 정지 상태를 보고했습니다. 이동은 로봇이 막고 있습니다. 해제와 물리 상태는 별도로 확인하세요.";
   } else if (typeof state?.mode === "string" && state?.safety?.estop === false) {
     safetyStatus.hidden = true;
     safetyStatus.removeAttribute("state");
@@ -205,7 +205,7 @@ document.getElementById("shell-estop").addEventListener("click", async () => {
       onSafetyModeError();
     }
     notice.textContent = readback?.safety?.estop === true || readback?.mode === "SAFE_STOP"
-      ? "\uBE44\uC0C1 \uC815\uC9C0 \uC694\uCCAD \uC811\uC218 \u00B7 CORE \uC815\uC9C0 \uC0C1\uD0DC \uD655\uC778. \uBB3C\uB9AC \uC815\uC9C0\uB294 \uBCC4\uB3C4\uB85C \uD655\uC778\uD558\uC138\uC694."
+      ? "\uBE44\uC0C1 \uC815\uC9C0 \uC694\uCCAD \uC811\uC218 \u00B7 \uB85C\uBD07 \uC815\uC9C0 \uC0C1\uD0DC \uD655\uC778. \uBB3C\uB9AC \uC815\uC9C0\uB294 \uBCC4\uB3C4\uB85C \uD655\uC778\uD558\uC138\uC694."
       : "\uBE44\uC0C1 \uC815\uC9C0 \uC694\uCCAD \uC811\uC218 \u00B7 \uC0C1\uD0DC \uD655\uC778 \uBD88\uAC00. \uC2E4\uC81C \uC815\uC9C0\uB97C \uD655\uC778\uD558\uC138\uC694.";
   } catch (error) {
     notice.textContent = `비상 정지 실패: ${error.message}`;
@@ -219,7 +219,7 @@ if (!session.authenticated) {
   if (["setup", "device"].includes(surface) && safetyStatus) {
     safetyStatus.hidden = false;
     safetyStatus.setAttribute("state", "pending");
-    safetyStatus.textContent = "안전 상태 확인 중 · CORE의 첫 상태 응답을 기다리고 있습니다.";
+    safetyStatus.textContent = "안전 상태 확인 중 · 로봇의 첫 상태 응답을 기다리고 있습니다.";
   }
   refresh();
   intervalId = setInterval(refresh, REFRESH_MS);

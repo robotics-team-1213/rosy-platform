@@ -661,8 +661,8 @@ PROGRAM_SOURCES = {
     "rosy-camera-healthy.service": ["deploy/robot/pinky_pro/native/camera-boot-guard.py"],
     "rosy-camera.service": ["deploy/robot/pinky_pro/native/camera-boot-guard.py",
                             "middleware/perception/launch/camera_preview.launch.py",
-                            "middleware/perception/nodes/camera_detect_node.py",
-                            "middleware/perception/nodes/road_observer_node.py",
+                            "middleware/perception/sensor_nodes/camera_detect_node.py",
+                            "middleware/perception/observers/road_observer_node.py",
                             # D-344 §12: the IR calibration overlay the launch validates.
                             "middleware/perception/sensors/line_observation/ir_overlay.py",
                             # D-411: the Pilot recorder and its session state machine.
@@ -1269,7 +1269,7 @@ def test_core_program_scan_follows_imports_into_the_control_package():
     assert "imported-by:middleware/core/gateway:control:middleware/perception" in PROGRAM_SOURCES["rosy-core.service"]
     resolved = {path.relative_to(ROOT).as_posix()
                 for path in _imported_modules("middleware/core/gateway/test", "control", "middleware/perception")}
-    assert "middleware/perception/nodes/sensor_provider.py" in resolved
+    assert "middleware/perception/sensor_nodes/sensor_provider.py" in resolved
     assert "middleware/perception/calibration/calibration_storage.py" in resolved
 
 
@@ -1343,3 +1343,24 @@ def test_the_recover_program_is_the_one_that_verifies():
     # Pins why rosy-release-recover is in VERIFYING_UNITS.
     assert "recover" in _read("recover-release.sh")
     assert "self.verify(" in _read("native_release.py")
+
+def test_the_low_battery_halt_watches_the_file_core_really_writes():
+    # D-27, 2026-11-07: y8xs logged battery.deep and stayed up to 1.3 % because
+    # nothing on the native image watched CORE's sentinel. The path must stay CORE's.
+    core_home = _environment(_directives("rosy-core.service"))["HOME"]
+    declared = "$HOME/.rosy/battery-shutdown-request.json"
+    assert declared in DECLARED_WRITES["rosy-core.service"]
+    sentinel = declared.replace("$HOME", core_home)
+    path = _directives("rosy-lowbatt-shutdown.path")
+    assert path["PathChanged"] == [sentinel] and "PathExists" not in path
+    assert path["Unit"] == ["rosy-lowbatt-shutdown.service"]
+    assert "WantedBy=multi-user.target" in _read("rosy-lowbatt-shutdown.path")
+    service = _directives("rosy-lowbatt-shutdown.service")
+    assert service["Type"] == ["oneshot"] and service["User"] == ["root"]
+    assert _environment(service)["ROSY_LOWBATT_SENTINEL"] == sentinel
+    assert service["ExecStart"] == ["/usr/bin/bash /opt/rosy/native-runtime/rosy-lowbatt-shutdown.sh"]
+    # The helper's grace is capped at 600 s; the unit must outlast it.
+    assert int(service["TimeoutStartSec"][-1]) > 600
+    assert "[Install]" not in _read("rosy-lowbatt-shutdown.service")
+    installer = _read("install-native-runtime.sh")
+    assert 'cp "$SCRIPT_DIR/../rosy-lowbatt-shutdown.sh" "$DESTINATION/rosy-lowbatt-shutdown.sh"' in installer

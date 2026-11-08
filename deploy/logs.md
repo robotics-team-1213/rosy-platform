@@ -4554,6 +4554,52 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - gate 변화: 없음.
 - CE: 해당 없음 — 원인 해결 교훈은 기존 문서(2026-11-03 팔꿈치 과부하)에 갱신했다.
 
+## 2026-11-03 · f81b8315d0 · fix(omx): 실측 순상승과 정착 home 증거로만 복구 완료
+
+- 변경: 빈손 jam 복구는 시작 자세 대비 실측 순상승을 계산하고, held target이 home에 도달하면 추가 jog를 멈춘다. 누락·비유한 상태와 거절된 backoff는 중단하며, park는 `settled=true`와 기존 Runner 허용오차 안의 실측 home을 함께 확인해야 recovered를 반환한다. 기존 가드·세션·동작 한계는 유지한다.
+- 증거: test-only RED commit `1bd891afdf60be4819379e40f2bee3e988e17807`의 공식 원격 unwedge 회귀는 예상한 4건 실패·기존 3건 통과(NEW 4)였다. 독립 D-911 사전 검토 후 source commit `f81b8315d087543c34c091c2a49ba56976b2f9f2`의 공식 원격 `test/test_omx_cell_unwedge.py test/test_omx_cell_pipeline.py`는 55 passed, 0 skipped, NEW 0 / known 0 / flaky 0이었다. 로그는 외부 임시 보관소의 `rosy-unwedge-safety-red-20261103/run-1.txt`, `rosy-unwedge-safety-green-20261103/run-1.txt`에 있다.
+- gate 변화: 없음. 장치 동작·배포·현장 수용은 실행하지 않았다.
+- CE: 기존 jam 복구 교훈 갱신은 통합 담당자가 별도로 수행한다. 이 항목은 소스 회귀 검증 기록이다.
+
+## 2026-11-03 · uncommitted · docs(release): record one reviewed historical Git-tree tuple
+
+- Change: add only the independently reviewed exact commit/path/rule tuple for commit 4fe1969cf6 in the API journal. The suspected token resolves as a Git tree and equals the reviewed code commit tree. No values or excerpts are retained.
+- Evidence: official historical scan found exactly one hit; independent agent proof_retry_review checked its Git object type and correspondence. Existing malformed-row/new-commit/new-rule refusal remains required; targeted remote publisher tests and AUTO landing are pending.
+- Gate: no scanner rule, environment input, canonical FULL/browser/G1 plan, runtime authority or field gate changes. This is an agent review, not a human sign-off.
+- CE: no new lesson; existing exact-triple review mechanism covers this case.
+
+
+## 2026-11-03 · b741d370f0 · fix(site): require the configured signed companion before runtime acceptance
+
+- Change: runtime presence follows the current Compose hash keys. Every enabled companion needs exactly one running container; Account/Monitoring health remains strict and the historical peer without a healthcheck is supported. Explicit unhealthy, duplicate and stopped peers are refused.
+- Evidence: commit 8ae0f56199 reproduced four failures/four passes; independently reviewed commit b741d370f0 passed all149 site-updater/publisher tests, zero skips/NEW/known/flaky. The exact historical Git-tree baseline row is agent-reviewed, with no values or broad exceptions.
+- gate 변화: signed image identity, Compose hash, read-only/unprivileged checks and field acceptance boundaries remain enforced. Qualified FULL/public CI are separate pending checks.
+- CE: no additional lesson; explicit presence regressions cover this correction.
+
+
+## 2026-11-03 · 2aec802f8d · fix(site): preserve release metadata in signer dry run
+
+- Change: the stale-title repair entry point returns immediately in dry-run mode. Normal signed-release repair, signing and host notification keep their existing paths.
+- Evidence: test-only commit ff6e90866e reproduced one expected failure because dry-run changed a signed release title and body. Independently reviewed fix tree a06dcd67131c16057626835ccd97c890f99c7f6e then passed all 63 tests in test_site_auto_sign, test_site_candidate_signing and test_site_candidate_workflow, zero skips. Official remote logs are feedback-site-signer-dryrun-red-20261103/run-1.txt and feedback-site-signer-dryrun-green-20261103/run-1.txt in the external temporary log root.
+- gate 변화: none. No actual GitHub release edits, signing-PC changes, host notification, robot motion or physical acceptance were performed by these fake-runner regressions. Qualified FULL and public CI remain pending.
+- CE: no additional lesson; the cause and prevention are explicit in the two-line guard and the mutation regression.
+
+
+## 2026-11-03 · 50dc0c7c53 · fix(omx): preserve incident ownership and current-session load limits
+
+- Change: incident commit 7a7887d477 keeps the session lock from HOLD admission through incident persistence and verified recovery; the stable arm home stores HOLD before a model/recovery callback can fail. CLI handle/clear use the same lock. SDK communication, packet errors, required register values, reboot acknowledgement and torque-off/fault-free readback are checked; only the hardware-alert bit is allowed while reading a latch. The port always closes. Load-check commit 50dc0c7c53 binds startup and later load to the current passive-connected session PWM caps, before motion and within existing cleanup. Guard limits and model thresholds are unchanged.
+- Evidence: independent exact-tree safety reviews are retained in both commit trailers. Official incident-boundary RED ae21cfa501 reproduced 6 failures; acknowledgement/readback RED a4318df5b1 reproduced 6 failures and 1 pass; durable HOLD/CLI race RED 040c4dfce4 reproduced 2 failures. The full incident/record_session GREEN at 7a7887d477 passed 86 tests with 2 skipped, NEW/known/flaky 0. Load-cap RED b1f12bf821 reproduced 3 startup/handoff failures and a separate later-load failure; full load_predict/chunk_runner GREEN at 50dc0c7c53 passed 62 tests, zero skips/NEW/known/flaky. Logs are feedback-omx-incident-boundary-green-20261103/run-1.txt and feedback-omx-load-session-cap-green-20261103/run-1.txt in the external temporary log root.
+- gate 변화: none. Mock SDK/session/robot regressions establish source behavior only; no device access, torque/motion, deployment or physical acceptance was performed. Qualified FULL and public CI remain pending. Earlier unwedge and thermal fixes remain intact.
+- CE: no additional solution; these corrections are explicit in the ownership/readback code and boundary regressions. Existing task lessons remain preserved.
+
+
+## 2026-11-03 · 7047306026 · test(omx): make incident fixture independent of neighboring collection
+
+- Change: the recorder CLI fixture explicitly prepares its sibling-module import path with monkeypatch, which restores the path after the test. Production incident, ownership, torque/readback and load-cap code is unchanged.
+- Evidence: the earlier combined incident/recorder invocation passed, but the actual FULL isolation child found ModuleNotFoundError in all three new recorder fixtures (68 passed/2 skipped/3 errors). Same-commit corrected file-alone run passed 71 tests with 2 skipped. The actual ROSY_ALONE_FILES recorder gate passed 1 test with 1 empty-collection-input skip and isolation complete:1. Logs are feedback-omx-recorder-standalone-green-20261103/run-1.txt and feedback-omx-recorder-isolation-gate-green-20261103/run-1.txt in the external temporary log root.
+- gate 변화: none. No guard assertion or independent execution is skipped; no runtime/device changes. Qualified FULL/public CI remain pending.
+- CE: existing shared-pytest-process import-isolation lesson updated with the temporary-loader versus execution-fixture case.
+
 ## 2026-11-04 · uncommitted · fix(deploy): native payload가 모드별 프로파일 오버레이를 싣는다
 
 - 변경: `image/build-native-payload.sh`가 `deploy/robot/pinky_pro/config/profile.{core,motor,hardware}.yaml`을 release 트리 `deploy/robot/config/`로 복사한다. `hardware.launch.py`의 프로파일 기본값(navigation/profile_source, 같은 날 착지)이 `/etc/rosy/profile.yaml`이 없는 기기에서 이 파일로 내려간다. 지금까지 native 기기의 hardware 모드는 손 설치 전까지 `cannot read Device profile`로 시작 실패였다(2026-11-03 문서 증상1).
@@ -4642,3 +4688,40 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: 원격 시험 `test/test_omx_cell_params_web.py`·`test/test_omx_cell_params.py`·`test/test_omx_session_caps_layers.py` 89 pass, skip 0. 표의 값이 `load_caps` 결과와 같은지 시험으로 고정했다. 셀 PC에 임시로 띄운 페이지를 터널과 Chromium으로 봤다: 실제 caps 2개와 로봇 프로필 1개, 콘솔 오류 0건, 폰 폭 넘침 없음. 임시 파일과 서버는 지웠고 원본 파일은 바뀌지 않았다.
 - gate 변화: 없음 — 셀 PC에 상설 설치하지 않았고 실제 값 파일 저장도 하지 않았다.
 - CE: 해당 없음 — 새 기능이며 해결한 장애가 없다.
+
+## 2026-11-07 · 6de988c4c4 · fix(release): 접속된 Pinky가 언제나 최신 payload로 올라간다 (D-985)
+- 변경: 게시 경로가 이미지·미분류 경로와 꺼진 기체에 멈추지 않고, 카나리를 게시 때 고르며 시작하지 않은 카나리는 철회 대신 교체한다. 봉인은 payload 업데이터의 hold가 아니다. OS Release는 payload 뒤에 게시만 한다.
+- 증거: 원격 시험 `test/test_robot_cd.py`·`test_robot_cd_os.py`·`test_native_delta_delivery.py`·`test_publish_payload_release.py`·`test_rosy_auto_update_eligibility.py`·`test_rosy_auto_update_resume.py`·`test_pinky_release_impact.py`·`test_os_signer_snapshot.py` 전부 통과, exit 0. 실물 수용은 게시 뒤 별도.
+- gate 변화: 없음 — 기체 수용 전이다.
+- CE: 미해결 — 실물 수용 뒤 교훈을 기록한다.
+
+## 2026-11-07 · uncommitted · fix(omx): 사고 hold와 미전송 보고를 고정 위치로 통일
+
+- 변경: hold와 outbox를 `ROSY_OMX_HOME/incidents` 아래로 모으고, `cell_upkeep.check_hold`와 `cell_zones`의 상대 팔 확인이 같은 위치를 보게 했다. 작업 디렉터리의 옛 hold와 outbox도 계속 인정한다. 해제 조건은 그대로 Fleet의 "held 아님"과 미전송 없음이다.
+- 증거: `test_omx_incident`, `test_omx_record_session`, `test_omx_cell_upkeep`, `test_omx_cell_zones`, `test_omx_cell_pipeline` 원격 실행 NEW 0. 독립 검토 통과.
+- gate 변화: 없음. 실물 제어 PC의 `ROSY_OMX_HOME` 값과 실물 동작은 확인하지 않았다.
+- CE: 해당 없음.
+
+## 2026-11-07 · uncommitted · fix(update): 표시만 남은 MANUAL이 자동 갱신을 막지 않는다 (D-985 7항)
+- 변경: status-inputs에 `manual_quiet_s`(마지막 teleop 뒤 경과)를 더하고, payload 업데이터는 10분 넘게 명령이 없는 MANUAL을 유휴로 본다. 값이 없거나 이상하면 계속 막는다. OS 설치는 계속 IDLE을 요구한다.
+- 증거: 원격 시험은 커밋 뒤 실행.
+- gate 변화: 없음 — 기체 수용 전이다.
+- CE: 미해결 — 실물 수용 뒤 교훈을 기록한다.
+
+## 2026-11-07 · uncommitted · feat(navigation): 모터·정지 파일이 같으면 항법 승인을 이어받는다 (D-986)
+- 변경: `mapping_approval.py`가 승인 때 서명된 `SHA256SUMS`의 지문을 표식에 저장하고, `check`가 현재 릴리스 지문과 같을 때만 다른 릴리스의 승인을 인정한다. 지문이 없거나 다르면 거절하고 봉인 원본은 매번 다시 검증한다.
+- 증거: 원격 시험 `test/test_native_mapping_approval.py`·`test/test_image_layer_sync.py` exit 0. b8xy의 실제 릴리스에서 004·005 지문 일치, 10/29와 불일치(읽기 전용 측정, 제외 목록 추가 전 기준).
+- gate 변화: 없음 — 기체 수용 전이다.
+- CE: 해당 없음 — 새 기능이며 해결한 장애가 없다.
+
+## 2026-11-07 · uncommitted · feat(navigation): 로그인한 운영자가 API로 항법을 다시 승인한다 (D-986)
+- 변경: `native/navigation_approval_host.py`, Host Agent `navigation_approval.*`와 operator 등급, CORE `approval_trials.py`, `/api/v1/navigation/approval`, 작업 준비 카드
+- 증거: 원격 시험. 장치 수용 없음
+- gate 변화: 없음
+- 결정: D-986 2항
+- 교훈: 없음
+## 2026-11-07 · uncommitted · fix(power): 네이티브 Pinky가 CORE의 deep 배터리 요청에 꺼진다 (D-27)
+- 변경: `native/rosy-lowbatt-shutdown.path`·`.service`를 더해 CORE가 실제로 쓰는 `/var/lib/rosy/core/.rosy/battery-shutdown-request.json`을 감시하고 기존 도우미(나이 900 s 확인, 유예 상한 600 s)로 끈다. 이미지 계층 동기화 목록에 넣어 payload 릴리스로 기존 기체에 들어간다. 감시는 `PathChanged`(오래된 파일이 재실행 한도에 걸리지 않게)
+- 증거: 2026-11-07 y8xs가 `battery.deep`(4.9 %)을 기록하고도 꺼지지 않아 1.3 %(6.45 V)에서 사람이 껐다. 원격 시험 관련 10개 파일 642 passed. 독립 검토 차단 결함 없음
+- gate 변화: 없음 — 기체에서 실제 종료를 확인하기 전이다.
+- CE: 미해결 — 기체에서 `PathChanged` 발화와 종료를 확인한 뒤 교훈을 기록한다.

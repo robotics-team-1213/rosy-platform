@@ -223,7 +223,7 @@ ui-topbar:has([data-learning-account-entry]) { flex-wrap: wrap; }
 .review-pan canvas { cursor: grab !important; }
 .review-pan canvas:active { cursor: grabbing !important; }
 .review-pan .pixel-brush { display: none; }
-#pixel-view-status { margin-block: 0 var(--space-2); font-size: var(--text-label); }
+#pixel-view-status, #pixel-mode { margin-block: 0 var(--space-2); font-size: var(--text-label); }
 .pixel-ribbon-nav { gap: var(--space-2); }
 .pixel-quick-tools > label { width: 100%; min-width: 0; }
 .pixel-quick-classes { display: flex; flex-wrap: wrap; gap: var(--space-2); padding-bottom: var(--space-1); }
@@ -340,7 +340,7 @@ ui-topbar:has([data-learning-account-entry]) { flex-wrap: wrap; }
 }
 .frame-navigation ui-button > small[data-reason], .pixel-ribbon-nav ui-button > small[data-reason] { display: none; }
 .pixel-editor-column .review-view-bar { margin-bottom: var(--space-2); }
-#pixel-view-status { margin-bottom: 0; }
+#pixel-view-status, #pixel-mode { margin-bottom: 0; }
 .pixel-editor-column .pixel-vlm-feedback { margin-top: var(--space-3); }
 #pixel-coverage { margin: var(--space-2) 0; font-variant-numeric: tabular-nums; }
 @media (height <= 700px) and (width >= 64rem) {
@@ -563,3 +563,6 @@ ui-topbar:has([data-learning-account-entry]) { flex-wrap: wrap; }
 .workspace-entry p{flex-basis:100%;margin:0;overflow-wrap:anywhere}
 #hf-imports ui-actions > a { display: inline-flex; align-items: center; min-height: var(--target-secondary); }
 .review-class-manager { max-width: 70rem; margin: auto; padding: var(--space-4); }
+
+/* 320px: four equal tools cut 되돌리기's text; two rows keep every label whole. */
+@media (width < 23rem) { #pixel-main .pixel-tool-rail > ui-button { flex: 1 1 40%; } }

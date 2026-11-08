@@ -27,7 +27,7 @@ export function untrustedQueuedReason(who) {
 // Field check 2026-10-10: the card's "위치 0.90, 0.05" was odom and read as a map coordinate.
 // The robot pose names its frame; Fleet's site map pose (D-536 guide row) is a separate line.
 const SITE_POSE_STATE = { LOCALIZED: "확정", DEGRADED: "추정" };
-const SITE_POSE_SOURCE = { sighting: "카메라", operator_pin: "운영자 핀", bridged: "odom 이음" };
+const SITE_POSE_SOURCE = { sighting: "카메라", operator_pin: "운영자 핀", auto_locate: "자동 위치", bridged: "odom 이음" };
 // D-494 3 sighting lease: odom samples newer than an anchor this fresh are the anchor, not a bridge.
 const FRESH_ANCHOR_S = 1.0;
 
@@ -72,10 +72,10 @@ export function positionTag(loc, guideRow) {
     const words = [SITE_POSE_STATE[pose.state] || pose.state, SITE_POSE_SOURCE[pose.source] || pose.source]
       .filter(Boolean).join(" · ");
     return { text: words ? `지도 위치 ${words}` : "지도 위치", cls: pose.state === "LOCALIZED" ? "" : "warn",
-      title: `Fleet map pose: ${pose.state} · ${pose.source}` };
+      title: `Fleet 지도 위치: ${words || "상태 없음"}` };
   }
   if (loc) return localizationTag(loc);
   if (!loc && !guideRow) return null;  // offline or no evidence at all: the card says offline already
   return { text: "지도 위치 없음", cls: "",
-    title: loc?.legacy ? "Fleet map pose: none · CORE localization: null" : "Fleet map pose: none" };
+    title: loc?.legacy ? "Fleet 지도 위치 없음 · 로봇 자체 위치 정보도 없음" : "Fleet 지도 위치 없음" };
 }

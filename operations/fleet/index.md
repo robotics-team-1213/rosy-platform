@@ -106,7 +106,7 @@
 ## 최근 기록
 
 - 2026-11-07 · uncommitted · fix(fleet): 배터리 근거 없음·멈춤 사유 분리
-- 2026-11-06 · uncommitted · feat(fleet): 관제 수동 모드 전환
-- 2026-11-05 · uncommitted · test(fleet): 팔 승인 HTTP 계약 시험의 논리 시계 통일
-- 2026-11-05 · uncommitted · test(fleet): 지도 화면 전환 대기와 초기 모듈 로드 복구
-- 2026-11-03 · uncommitted · feat(fleet): D-971 OMX 팔 사건 원장·AI PC 설명·운영자 해제
+- 2026-11-08 · uncommitted · 관제 화면 파일을 다시 받지 않고 압축해 보낸다
+- 2026-11-07 · uncommitted · feat(fleet): 자동 위치를 로봇별로 켜면 trip 앵커로 쓴다 (D-989 7항)
+- 2026-11-07 · uncommitted · feat(fleet): LED·카메라·LiDAR 자동 위치 찾기 (D-989)
+- 2026-11-07 · uncommitted · 로그인 콜백 실패가 JSON 막다른 길이 아니다

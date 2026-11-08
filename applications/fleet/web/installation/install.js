@@ -148,7 +148,8 @@ const taskChooser = createTaskChooser({beforeSelect: from => {
 }, tasks: installTasks, onSelect: id => {
   // D-926 2 — 경로 줄의 현재 화면. 선택은 chooser가 이미 바꿨고 주소에 남겨 새로고침·공유가 작업을 보존하게 한다.
   el("install-screen").textContent = installTasks.find(task => task.id === id)?.title ?? "";
-  history.replaceState(null, "", `#${id}`);
+  // 뒤로 가기가 설치 화면을 벗어나지 않고 앞 작업으로 돌아간다. 주소가 이미 이 작업이면 기록을 늘리지 않는다.
+  if ((location.hash.slice(1) || installTasks[0].id) !== id) history.pushState(null, "", `#${id}`);
 }});
 el("install-chooser").append(taskChooser.element);
 taskChooser.setReady();
@@ -156,7 +157,7 @@ taskChooser.setReady();
 const initialTask = location.hash.slice(1);
 if (installTasks.some(task => task.id === initialTask)) void taskChooser.choose(initialTask);
 // 설치 노선의 역 링크(#작업-id)도 같은 작업을 고른다 — 숨은 패널로의 앵커는 아무 일도 하지 않는다.
-addEventListener("hashchange", () => { const id = location.hash.slice(1); if (installTasks.some(task => task.id === id)) void taskChooser.choose(id); });
+addEventListener("hashchange", () => { const id = location.hash.slice(1) || installTasks[0].id; if (installTasks.some(task => task.id === id)) void taskChooser.choose(id); });
 pageScope.subscribe(() => {
   taskChooser.resume();
   return () => { void taskChooser.pause().then(() => { if (pageScope.capture().current()) taskChooser.resume(); }); };

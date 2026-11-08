@@ -15,7 +15,9 @@ REBOOT_CHECK = r"""reboot_soon() {
   r=$(systemctl show -P NextElapseUSecRealtime rosy-nightly-reboot.timer 2>/dev/null)
   [ -n "$r" ] && r=$(date -d "$r" +%s 2>/dev/null)
   case "$r" in ''|*[!0-9]*) ;; *) [ "$r" -ge "$1" ] && [ $((r - $1)) -lt 780 ] && return 0;; esac
-  systemctl is-active -q rosy-nightly-reboot.service 2>/dev/null
+  # A oneshot is "activating" (is-active exit 3) while it sleeps through its 2 min warning: never read the exit code here.
+  case "$(systemctl is-active rosy-nightly-reboot.service 2>/dev/null)" in active|activating) return 0;; esac
+  return 1
 }
 """
 

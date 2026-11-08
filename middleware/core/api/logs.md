@@ -1332,6 +1332,13 @@
 - 증거: committed SHA and remote results are recorded above; final consolidated receipts are retained in the unification validation record.
 - gate 변화: 없음. Source/browser checks do not establish deployment, ARM64, device or field acceptance.
 
+## 2026-11-03 · 6610ceaed5 · fix(api): align the central contract version after merging thermal API
+
+- Change: central `CONTRACT` now names the existing authoritative v1.351 header after merging the central-version migration with the thermal API. The app keeps reading the central value; feature-specific version pins stay removed. No new contract version is reserved.
+- Evidence: merge `0ca7f37163` reproduced one alignment failure/two passes. The independently reviewed one-line commit `6610ceaed5` has tree `7bc30d51e150358a84980246ece4a721f8cb042d`; official remote alignment/API/dashboard/related feature-document tests passed 136, skipped zero, NEW/known/flaky zero.
+- gate 변화: existing header and advertised version now agree; fresh FULL and public CI remain required.
+- Scope: existing header/changelog and bump helper preserved. Fresh canonical FULL, public CI and field acceptance are separate pending gates. CE: no additional lesson; the existing alignment guard and central constant explain this merge correction.
+
 ## 2026-11-04 · uncommitted · feat(api): /api/v1/peers 경로와 PEER_SHARE 부여
 - 변경: `v1/peers.py`(GET 목록 viewer, POST beacon — 부여 `PEER_SHARE`, 오래된 seq는 202 updated:false), `grants.py` operator/administrator에 `PEER_SHARE`, `deps.py` CoreServicesLike.peers, app/routes 등록. 시험 `middleware/core/gateway/test/test_peers_api.py`(부여 경계·왕복·스냅샷 필드)
 - 증거: 게이트 시험 원격 affected 실행 예정(착지 전). API Ref v1.359 행 추가·CONTRACT 동기화(api_reserve release)
@@ -1344,3 +1351,21 @@
 - gate 변화: SOURCE 회귀 검증; ARTIFACT/DEVICE/FIELD 수용 근거로 사용하지 않음. 최종 재조립 SHA 원격 회귀와 FULL은 별도.
 - 결정: API v1.363; 기존 CORE 최종 명령·모드 owner 유지.
 - 교훈: CE 해당 없음 — 최종 코드·회귀 시험·API 계약으로 판단 근거를 재현할 수 있음.
+
+## 2026-11-07 · uncommitted · feat(navigation): 항법 재승인 REST (D-986)
+- 변경: `v1/navigation_approval.py`, `core_features/command/approval_trials.py`, API reference v1.367
+- 증거: 원격 시험. 장치 수용 없음
+- gate 변화: 없음
+- 결정: D-986 2항
+- 교훈: 없음
+## 2026-11-07 · uncommitted · 계정 로그인 복귀 목록에 역할 화면 추가
+- 변경: CORE 복귀 허용 목록에 /console, /setup, /device를 정확한 경로로 더했다. 다른 주소는 그대로 거절한다.
+- 증거: test_account_pipeline.py 허용 3건과 거절 1건. 원격 결과는 착지 기록을 따른다.
+- gate 변화: SOURCE 회귀. 장치 수용은 별도다.
+
+## 2026-11-07 · uncommitted · docs(api): v1.368 site rules
+- 변경: `contract_version.py`를 v1.368로 (API 참조 v1.368: `/api/fleet/site-rules/*`).
+- 증거: `contract_version.py`와 API 참조 헤더가 같은 v1.368임을 `test_protocol_version_alignment`가 확인(원격 결과는 착지 기록).
+- gate 변화: SOURCE 변경. 시뮬·실물·현장 수용 없음; 문서가 없으면 동작 동일.
+- 결정: D-982 Proposed, API v1.368 additive.
+- 교훈: CE 해당 없음 — 최종 코드·시험·ADR이 판단을 보존한다.

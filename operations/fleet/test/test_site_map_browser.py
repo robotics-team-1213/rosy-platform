@@ -157,7 +157,13 @@ def test_mapless_driven_survey_records_unknown_robot_and_confirms_only_a_draft(p
         'odom_pose': {'x': 2, 'y': 3, 'yaw': 0, 'stamp': time.time()}}
     page.locator('#teach-start').click()
     expect(page.locator('#teach-status')).to_contain_text('조사 기록 중')
-    robot._state['odom_pose'] = {'x': 2.2, 'y': 3, 'yaw': 0, 'stamp': time.time() + 0.01}
+    # A live robot keeps streaming: refresh the moved pose's stamp until the recorder takes it. One stamp set once
+    # went stale before a slow CI poll read it, and 2점 never came (2026-10-28, GitHub CI under load).
+    for _ in range(60):
+        robot._state['odom_pose'] = {'x': 2.2, 'y': 3, 'yaw': 0, 'stamp': time.time()}
+        if '2점' in page.locator('#teach-status').inner_text():
+            break
+        page.wait_for_timeout(250)
     expect(page.locator('#teach-status')).to_contain_text('2점')
     page.locator('#teach-stop').click()
     expect(page.locator('#teach-form')).to_be_visible()
@@ -550,6 +556,9 @@ def test_view_edit_activate_and_preview_a_trip(page_site, width, height):
     if output := os.environ.get("ROSY_SHOT_DIR"):
         page.screenshot(path=str(Path(output) / f"site-map-fresh-{width}x{height}.png"), full_page=True)
 
+    # A place clicked on the map becomes the destination; the list follows it.
+    page.locator('[data-place="SE"]').click()
+    expect(page.locator("#trip-place")).to_have_value("SE")
     show_screen(page, "trip-heading")
     page.select_option("#trip-place", "NW")
     page.locator("#trip-plan").click()

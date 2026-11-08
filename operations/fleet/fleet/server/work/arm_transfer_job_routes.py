@@ -14,7 +14,7 @@ from .local_action_transport import LocalActionUnavailable, UnixLocalActionTrans
 from .mission_store import MissionConflict
 from .physical_transfer_attestations import PhysicalOperatorAttestations
 from .physical_transfer_store import ARM_TRANSFER_PROFILES, PhysicalTransferStore
-from .password_session import same_origin
+from core_common.protocol.account_access import same_origin
 
 
 _log = logging.getLogger("fleet.arm_transfer_policy_admission")
@@ -75,10 +75,13 @@ class DelegatedArmJobs:
             self.store.withdraw(mission_id, reason=reason)
             return
         if self.observation is None:
+            from .physical_transfer_execution import PhysicalTransferExecution
+            PhysicalTransferExecution(self.store).hold(mission_id, reason=reason)
             return
         try:
             self.observation.execution.snapshot(mission_id)
         except KeyError:
+            self.observation.execution.hold(mission_id, reason=reason)
             return
         self.observation.dispatcher.cancel(mission_id, reason=reason)
 

@@ -1444,3 +1444,18 @@
 - 변경: 공용 chooser native tab이 같은 subnav 규칙을 소비하도록 Robot shell의 중복 chooser padding을 없애고 styleguide 견본을 같은 container에 두었다. 메뉴의 panel identity·retained input·방향키·중단·권한·소스 신선도는 유지한다. 기존 R9 긴 호스트 표 값·행 제목 너비 기준도 바꾸지 않았다.
 - 증거: f8cb261e26의 실제 container resize RED와0de561052a의13개 렌더·의미 회귀 PASS/0 skipped/NEW0. 1a390c9d40에서 procedure/role/action-groups/remaining-workflows와 공용·Fleet·Learning caller를 포함한317개 중315 PASS/NEW2였으며 두 Fleet consumer 실패는 a27e97c186의 해당 전체파일36 PASS/NEW0으로 닫았다. 독립 G3가1a의30PNG 직접검토·83PNG 해시를 대조했다. setup 직접 사진은 default dark390/320의2셀이고 device는3폭×2테마6셀이다.
 - gate 변화: Task10 SOURCE/LOCAL 회귀와 제한된 source-bound 화면 증거다. setup 전체 사진 행렬·공식 FULL·착지·설치본·실장치/현장 수용으로 확대하지 않는다. 역할 시험1498줄로 기존1500 기준 안이며 모든 기존 guard/geometry 단언을 유지했다. CE: 해당 없음.
+
+## 2026-11-06 · uncommitted · uiux(robot): 모드 선택 한 줄과 호스트 소제목 단계
+- 변경: 좁은 폭에서 모드 세 칸을 같은 폭 한 줄로 둔다(.mode-actions, 기존 지도 행동 규칙 재사용). 카드 안 .ui-readback > h3를 브라우저 기본 18.72px 대신 라벨 단계로 둔다. 2026-11-06 UI/UX 전수 조사 P2.
+- 증거: test_surface_layout_browser.py에 390·320 한 줄·같은 폭과 소제목 크기 단정 추가. 원격 RED/GREEN은 착지 기록을 따른다.
+- gate 변화: SOURCE 회귀. 실제 로봇·사용자 G3는 별도다. CE: 해당 없음 — 코드와 회귀가 판단을 보존한다.
+
+## 2026-11-06 · uncommitted · uiux(robot): 운용자 글에서 CORE 대신 로봇
+- 변경: 운용 화면의 접수·정지 안내(도킹·차선 추종·모드·위치 설정·지도 목표, 안전 정지 띠, 비상 정지 접수, 하드웨어 런타임 꺼짐)에서 "CORE"를 "로봇"으로 바꿨다. 관리자 호스트·시스템 패널의 CORE·커미셔닝·호스트 에이전트 용어와 툴팁은 그대로 뒀다. 정지·허용·차단 판단은 바꾸지 않았다.
+- 증거: 옛 문구를 고정한 시험(test_dashboard_browser·test_role_menu_panels_browser·robot_ui/robot/test 세 파일)을 새 문구로 고쳤다. 원격 결과는 착지 기록을 따른다.
+- gate 변화: SOURCE 변경. CE: 해당 없음 — 표시 문구 변경이다.
+
+## 2026-11-07 · uncommitted · uiux(robot): 로그인이 누른 화면으로 돌아오고 뒤로 가기가 갇히지 않는다
+- 변경: 계정 로그인 이동이 return_to를 복귀 주소로 넘기고 기록을 대체한다.
+- 증거: 실제 페이지 서버에서 /console → 로그인이 /dashboard로 끝나고 뒤로 가기 3번이 모두 로그인에 머무는 것을 재현했다. 실제 IdP는 확인 전이다.
+- gate 변화: SOURCE 회귀. 장치 수용은 별도다.

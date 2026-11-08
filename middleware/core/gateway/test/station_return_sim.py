@@ -8,6 +8,10 @@ import math
 from types import SimpleNamespace
 
 
+async def _fresh_battery(robot_id):  # deliberate fixture: fresh, non-critical evidence
+    return {'battery': {'evidence': 'fresh', 'sample_age_s': 0.0, 'stale_after_s': 5.0, 'level': 'ok', 'percent': 80.0}, 'age_s': 0.0}
+
+
 def return_sim(*, svc, client, store, stations, return_http, clock, world, robot_id, navigation_candidate=None):
     from fleet.server.site_map_store import SiteMapStore
     from fleet.server.trip_runner import TripRunner
@@ -59,7 +63,7 @@ def return_sim(*, svc, client, store, stations, return_http, clock, world, robot
     async def release(_, lease_id):
         return await client.trip_lease_release(lease_id)
     plant.trip_lease, plant.trip_lease_release = lease, release
-    runner = TripRunner(store=plans, routing_config=plans.routing_config, caps=plant.caps_for,
+    runner = TripRunner(store=plans, routing_config=plans.routing_config, caps=plant.caps_for, battery=_fresh_battery,
         poses=plant, junction=plant, goal=goal, cancel_goal=halt, clock=clock,
         config=TripConfig(), lease={'required': True, 'holder': 'station'})
     runner.lease._clock = clock

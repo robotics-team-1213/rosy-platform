@@ -676,7 +676,7 @@ def test_console_mode_feedback_full_shell_captures(tmp_path):
             mode_status = page.locator('[data-panel="console.mode"] ui-status').nth(0)
             action_status = page.locator('[data-panel="console.mode"] ui-status[role="status"]').last
             assert "대기" in mode_status.inner_text()  # US-009: MODE_LABEL, enum in title
-            assert "CORE" in action_status.inner_text(), action_status.inner_text()
+            assert "로봇이 받았습니다" in action_status.inner_text(), action_status.inner_text()
             assert posts == [{"path": "/api/v1/mode", "body": {"mode": "MANUAL"}}]
             filename = f"operator-console-mode-feedback-{width}x{height}.png"
             page.screenshot(path=str(CAPTURES / filename), full_page=True)
@@ -691,7 +691,7 @@ def test_console_mode_feedback_full_shell_captures(tmp_path):
             page.wait_for_function("""document.querySelector(
               '[data-panel="console.mode"] ui-status'
             )?.textContent.includes('수동')""")
-            assert "CORE" in action_status.inner_text(), action_status.inner_text()
+            assert "로봇이 받았습니다" in action_status.inner_text(), action_status.inner_text()
             records.append({"viewport": f"{width}x{height}", "image": filename,
                             "posts": posts, "errors": errors, **measured})
             context.close()
@@ -884,7 +884,7 @@ def test_console_line_follow_and_docking_feedback_full_shell_captures(tmp_path):
             page.wait_for_function("document.querySelector('[data-panel=\"console.line_follow\"] ui-button')?.disabled === false")
             line_panel.locator("ui-button").first.click()
             page.locator('dialog.ui-confirm ui-button[kind="irreversible"]').click()
-            page.wait_for_function("document.querySelector('[data-panel=\"console.line_follow\"] ui-status[role=status]:last-of-type')?.textContent.includes('CORE')")
+            page.wait_for_function("document.querySelector('[data-panel=\"console.line_follow\"] ui-status[role=status]:last-of-type')?.textContent.includes('로봇이 받았습니다')")
             page.wait_for_function("document.querySelector('[data-panel=\"console.line_follow\"] ui-status')?.textContent.includes('서버가 요청을 처리하지 못했습니다')")
             line_filename = f"operator-console-line-follow-{width}x{height}.png"
             page.screenshot(path=str(capture_dir / line_filename), full_page=True)
@@ -895,7 +895,7 @@ def test_console_line_follow_and_docking_feedback_full_shell_captures(tmp_path):
               action: [...document.querySelectorAll('[data-panel="console.line_follow"] > ui-status[role="status"]')].at(-1)?.textContent || '',
             })""")
             assert line_measured["overflowX"] == 0 and line_measured["eStopVisible"]
-            assert "서버가 요청을 처리하지 못했습니다" in line_measured["readback"] and "CORE" in line_measured["action"]
+            assert "서버가 요청을 처리하지 못했습니다" in line_measured["readback"] and "로봇이 받았습니다" in line_measured["action"]
             records.append({"surface":"line_follow", "viewport":f"{width}x{height}",
                             "image":line_filename, "posts":list(posts), "errors":list(errors), **line_measured})
 
@@ -908,7 +908,7 @@ def test_console_line_follow_and_docking_feedback_full_shell_captures(tmp_path):
             dock_panel.locator("select").select_option("dock-b")
             dock_panel.locator("ui-button").first.click()
             page.locator('dialog.ui-confirm ui-button[kind="irreversible"]').click()
-            page.wait_for_function("document.querySelector('[data-panel=\"console.docking\"] ui-status[role=status]:last-of-type')?.textContent.includes('CORE')")
+            page.wait_for_function("document.querySelector('[data-panel=\"console.docking\"] ui-status[role=status]:last-of-type')?.textContent.includes('로봇이 받았습니다')")
             page.wait_for_function("document.querySelector('[data-panel=\"console.docking\"] ui-status')?.textContent.includes('도킹 컨트롤러가 준비되지 않았습니다')")
             assert dock_panel.locator("select").input_value() == "dock-b"
             assert len(posts) == 1, posts
@@ -921,7 +921,7 @@ def test_console_line_follow_and_docking_feedback_full_shell_captures(tmp_path):
               dockAction: [...document.querySelectorAll('[data-panel="console.docking"] ui-status[role="status"]')].at(-1)?.textContent || '',
             })""")
             assert measured["overflowX"] == 0 and measured["eStopVisible"] and errors == [], measured
-            assert "도킹 컨트롤러가 준비되지 않았습니다" in measured["dockReadback"] and "CORE" in measured["dockAction"]
+            assert "도킹 컨트롤러가 준비되지 않았습니다" in measured["dockReadback"] and "로봇이 받았습니다" in measured["dockAction"]
             records.append({"surface":"docking", "viewport": f"{width}x{height}", "image": filename,
                             "posts": list(posts), "errors": list(errors), **measured})
             context.close()

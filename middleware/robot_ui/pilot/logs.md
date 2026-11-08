@@ -1133,3 +1133,28 @@
 - 증거: source53471755b2 원격 AI PC Chromium lobby39통과·정본 guards321통과·skip0·NEW/known/flaky0; scratch pilot-release-race-{green,guards}/run-1.txt. 실제 safety 조회 기록은 before에서 battery_policy 1회, after에서 api→battery_policy 2회이며 양쪽 release POST와 teleop/mode 요청은0이다. 고정 source 독립 읽기 검토 미해결 finding 없음.
 - Gate: SOURCE/관련 원격 회귀 확인이며 최종 main 착지는 게시 담당과 조율한다. 실행 중인 canonical의 중단·재시작, 운영 로그인·기체·서비스 동작은 수행하지 않았다.
 - CE: 해당 없음 — 최초 조회와 확인 후 재조회의 순서 및 기대 안전 반응이 최종 시험과 기존 제품 코드에 직접 드러나며 별도 숨은 환경·복구 조건이 없다.
+
+## 2026-11-06 · uncommitted · uiux(pilot): 보정 잠금 사유
+- 변경: 남의 보정으로 잠긴 주행 조작 버튼이 "위 사유"로 배너를 가리킨다. 조작 허용·차단 판단은 바꾸지 않았다. 오래된 관절 값은 소유자가 max_joint_state_age_s(예시 0.2초)를 넘으면 ready:false로 보내 패드가 이미 막히므로 팔 화면을 고치지 않았다.
+- 증거: test_pilot_browser.py 보정 잠금 시험에 사유 단정 추가.
+- gate 변화: SOURCE 회귀. 실제 운전자·장치 수용은 별도다. CE: 해당 없음 — 코드와 회귀가 판단을 보존한다.
+
+## 2026-11-06 · uncommitted · uiux: 운전 모드 묶음 테두리, 가로 페달 크기
+- 변경: 운전 모드(수동·차선 자동)를 속도 묶음과 같은 외곽선에 넣고, 가로 배치 페달·회전 버튼 높이를 1.5배로. 입력·정지·홀드 로직은 바꾸지 않았다.
+- 증거: agent-browser 로컬 렌더(1920·390·320 화면 확인). 원격 회귀는 착지 기록을 따른다.
+- gate 변화: SOURCE 변경. 실기기·Android 수용은 별도다. CE: 해당 없음 — 코드와 회귀가 판단을 보존한다.
+
+## 2026-11-06 · uncommitted · uiux(pilot): 팔 센서 나이 칩 위치, 넓은 화면 녹화 종료 카드
+- 변경: 팔 화면의 센서 나이 칩(수신 중·오래됨)이 연결 상태 줄 옆으로 옮겨 휴대폰에서도 위에 보인다. 넓은 화면에서는 녹화 종료 카드가 화면에 겹치지 않고 자기 칸에 머문다(좁은 화면은 이전처럼 아래에 붙는다). 서비스워커 캐시 이름을 올렸다. 조작·정지 로직은 바꾸지 않았다.
+- 증거: agent-browser 2000×1200 전체 화면과 390 화면으로 가짜 서버(dev_server)에서 확인.
+- gate 변화: SOURCE 변경. 실기기 수용은 별도다. CE: 해당 없음 — 표시 배치 변경이다.
+
+## 2026-11-07 · uncommitted · uiux(pilot): 로그아웃 상태 뒤로 가기가 로그인에 갇히지 않는다
+- 변경: 접속 화면의 계정 로그인 이동이 기록을 대체한다.
+- 증거: 실제 Pilot 페이지와 모사 인증 서버에서 뒤로 가기 3번이 모두 로그인에 머무는 것을 재현했다.
+- gate 변화: SOURCE 회귀. 장치 수용은 별도다.
+## 2026-11-07 · uncommitted · Account 세션을 shared/android에서 컴파일
+
+- 변경: Cam 소스를 복사하던 `**/account/*.kt`를 빼고 `shared/android/account`를 컴파일한다(D-987).
+- 증거: 원격 결과는 착지 기록을 따른다. 실기 설치 뒤 로그인 유지는 확인하지 않았다.
+- Gate: 없음. CE: 해당 없음 — 소스 위치 이동이다.

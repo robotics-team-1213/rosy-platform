@@ -13,7 +13,8 @@ Rosy Fleet은 **현장 운영**, Rosy Robot은 **한 대 관리**, Rosy Pilot은
 | 학습 센터 화면 | Rosy Learning, `learning/curation/perception/review_app_web` | 5단계 메뉴(홈·자료·정답·학습·평가·승격): 정답 달기·확인, 학습 실행 요청, 평가 결과, 승격 요청(D-857) | 학습·평가 실행은 각 pipeline owner, 승격 승인·배포·모델 활성화는 Fleet·사람·배포 owner |
 | 표시 전용 | Face, `middleware/robot_ui/face` | 이름·표정·부팅·연결 상태 | 입력·운동 명령 없음 |
 | 관측 서비스 | Rosy Vision, `operations/overhead` | 프레임 수신·관측 생성·허가된 preview | 명령·현장 원장은 Fleet/장치 owner |
-| 공통 신원 | Rosy Account, 기존 Fleet auth 배포 | 사람 신원·권한·세션·회수 | 장치 admission·조종 좌석·업무 승인과 구분 |
+| 공통 신원 | Rosy Account, `operations/account` (D-962) | 사람 신원·권한·세션·회수 | 장치 admission·조종 좌석·업무 승인과 구분 |
+| 읽기 전용 앱·서비스 | Rosy Monitoring, `applications/monitoring`, `operations/monitoring` | 상태 수집·집계·조회 | 설정·복구·장치 명령은 기존 owner |
 | 업무 도구 | Games 보드, `operations/apps/games` | 경기 상태와 경기별 입력 | 사이트 Mission과 최종 장치 명령은 별도 owner |
 | 개발 도구 | control diagnostic / lane live view | 현재 PARKED 진단 / 시뮬 관측 | 제품 운용 진입으로 확대하지 않음 |
 | 공유 기반 | `shared/web` | 디자인·컨트롤·통신 도구 | 사용자 업무·전역 인증 상태를 소유하지 않음 |
@@ -24,9 +25,12 @@ Fleet 내부 id·아이콘·URL의 `console`은 호환 식별자다. 표시 이�
 
 아래 경로는 소스 owner다. 배포 호스트·설치 identity는 [폴더 책임 안내](platform-folder-responsibilities.md)와 실제 설치 manifest로 확인한다.
 
+관제 단위와 물리 호스트는 [관제 배치표](../deployment/control-units.md#현장-배치표), R·셀·장치 owner의 책임과 구현/현장 수용 구분은 [D-995](../adr/D-995-control-structure-authority-and-evidence-status.md)를 따른다. Account를 함께 써도 기계 자격·업무 원장·최종 장치 실행 권한을 합치지 않는다.
+
 | 사용자 작업 / 화면 | API·소스 owner | 상태 정본 / 최종 실행 | 완료 확인과 소비자 |
 |---|---|---|---|
 | Mission 요청·진행·개입 / Fleet 작업 | `operations/fleet/fleet/server/missions/{mission_routes,mission_service,mission_store}.py` | Fleet Mission 원장 / 장치 로컬 Action owner | 원장 상태와 연결된 장치 결과·목표 증거. HTTP 수락만으로 물리 완료를 확정하지 않음 |
+| R로 팔 이송 제안·셀 승인 / 외부 앱·셀 화면 | `operations/fleet/fleet/server/work/{arm_transfer_relay_routes,arm_transfer_job_routes}.py`, `ledger/control_unit_service.py` | R의 위임 투영·셀의 ARM job / OMX owner | 실물 팔은 셀 ARM admit·현재 부모 증명·기명 승인. 주행 위임 `/approve`와 구별하며 HTTP 수락은 물리 완료가 아님 |
 | 현장 등록·기기 승인 / Fleet 설치 | `operations/fleet/fleet/server/auth/{enrollment_routes,enrollment_store,pairing_routes}.py` | 승인·등록·카메라 자격의 기존 store / 장치 명령 없음 | 서버 등록 결과. 검색 목록에 보임·로그인 성공과 등록 승인은 별개 |
 | 현장 좌표·카메라 보정 / Fleet 설치·지도 | `applications/fleet/web/{install,site-map,field-view}.js`와 해당 Fleet API | 활성 map/fit의 기존 Fleet 저장 owner / 장치 주행 없음 | 승인·저장된 보정 결과. Cam 송신 성공은 좌표 보정 완료가 아님 |
 | 영구 설정 / Robot 설치·정비 | `middleware/robot_ui/robot/settings.js`, CORE API | CORE 설정 owner / 설정을 적용하는 로컬 기능 | 서버 저장·읽기 결과. Pilot 세션 프리셋은 이 정본을 수정하지 않음 |
@@ -35,11 +39,24 @@ Fleet 내부 id·아이콘·URL의 `console`은 호환 식별자다. 표시 이�
 | 현장 정지 / Fleet, 개별 정지 / Robot·Pilot | Fleet stop owner 및 `middleware/core/api/core_api_web/api/v1/safety.py` | Fleet 요청 결과와 로컬 안전 래치 / 각 장치 owner | 요청 접수·장치 래치·물리 정지를 별도로 표시. 취소와 e-stop을 합치지 않음 |
 | 카메라 송신 / Cam | Cam Android, `operations/overhead/rosy_vision` ingest | 프레임·관측 생산자 / 장치 명령 없음 | 송신·수신 상태. 현장 등록과 관측 신선도·보정은 별도 확인 |
 | 검수·승인·export / Learning | `learning/curation/perception/review_app.py`와 검수 handlers | 검수 state/SQLite·exports / 로봇 실행 없음 | 저장 revision·승인·export receipt. 데이터셋 수용·학습 실행·모델 활성화 증거로 대체하지 않음 |
-| 사용자·권한 관리 / Fleet 계정 | `operations/fleet/fleet/server/auth` | Account 원장·회수 revision / 장치 admission과 분리 | 현재 서버 권한·세션 결과. 각 앱은 대상별 권한을 다시 검사 |
+| 사용자·권한 관리 / Fleet 계정 화면 | `operations/account/rosy_account`, 화면 `applications/fleet/web/shared` | Account 원장·회수 revision / 장치 admission과 분리 | 현재 서버 권한·세션 결과. 각 앱은 대상별 권한을 다시 검사 |
 
 Fleet → Robot/Pilot은 등록된 장치 식별자에 결속된 주소만 사용한다. 발견된 주소, 로봇 표시 이름이나 포트 추정만으로 목적지를 만들지 않는다. 앱 전환에 토큰을 URL로 전달하지 않으며, 접근 자격은 기존 Account 흐름으로 처리한다. 승인된 주소라도 현재 닿는다는 보장은 아니므로 연결·권한 상태는 대상 앱에서 확인한다.
 
 현재 Fleet 카드의 외부 링크는 PeerCatalogue의 `approved-directory` 행만 사용한다. 승인 신원에 연결된 mDNS 광고도 transport·port까지 승인된 것은 아니므로 링크 원본으로 사용하지 않는다. catalogue가 등록 directory 행을 광고 행으로 대체한 경우에는 링크 대신 안내를 표시한다. 화면 이탈·복원·사용자/역할 변경 때 이전 링크와 cache를 먼저 폐기한다.
+
+## 외부 업무 앱과 공통 서비스
+
+Harbor는 항만 업무 위치·화물·지시·계획 버전·업무 장부·다음 업무 단계·완료 조건 대조를 소유하는 외부 업무 앱이다. ROSY의 플랫폼 앱이나 공통 서비스로 분류하지 않는다. [업무 앱 지원 계약](application-contract-support.md)을 통해 통합관제 R 하나의 공개 Fleet HTTP로 제안·조회하며, R과 셀의 원장·admission·장치 claim을 자기 업무 DB에 복제하거나 직접 장치를 명령하지 않는다(D-965·D-995).
+
+| 경계 | 정본·소유 | 합치지 않는 것 |
+|---|---|---|
+| 항만 업무 | Harbor의 업무 장부와 완료 근거 대조 | Fleet 작업 원장·장치 관측 원장·최종 실행 권한 |
+| 사람 신원 | 공통 Account의 신원·권한·세션, 앱별 업무 허용 판단 | 기계 서비스 principal·독립 관측 자격·셀 기명 승인 |
+| 상태·영상·학습 | Monitoring의 읽기, Media의 세션·미디어 관리, Learning의 자료·평가·승격 증거 | host 복구·업무 완료·장치 admission·최종 명령 |
+| 설치 호스트 | 서비스별 배포·DB·TLS·자격과 자원 예산 | 같은 PC라는 이유의 원장·계정·명령 권한 통합 |
+
+공통 서비스 소유·분류는 [카탈로그](common-services.md), 현재·목표 호스트는 [관제 배치표](../deployment/control-units.md#현장-배치표)가 정본이다. Harbor 내부 책임 결정과 구현·로그인 연동 상태는 [팀 저장소](https://github.com/robotics-team-1213/harborlogi)의 문서·PR을 따른다. 공통 Account 연동 원칙을 Harbor 로그인 설치·현장 수용 완료로 쓰지 않는다.
 
 ## 현재 이행 항목
 

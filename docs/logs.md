@@ -14125,6 +14125,42 @@ osy-d395-s1d\`.
 - gate 변화: 없음. 학습 결과·폐루프 평가·실물 수용 없음. 그리퍼 0~100 대응은 가정(패드 간격/40 mm).
 - CE: 해당 없음 — 새 기능이다.
 
+## 2026-11-03 · f81b8315d0 · docs: unwedge의 측정 기반 성공 조건과 검증 범위
+
+- 변경: 기존 unwedge 교훈의 clearance를 명령 횟수 대신 시작 측정값 대비 순변위로 정정하고, held-target 기준 HOME 한계·park 정착·측정 HOME 확인을 기록했다. 기존 21단계 현장 기록과 후속 호스트 회귀를 구분했다.
+- 증거: 1bd891afdf의 공식 원격 RED는 예상 실패 4건/통과 3건이었다. 독립 안전 검토된 f81b8315d0의 unwedge·pipeline 원격 회귀는 55 PASS/0 SKIP, NEW/known/flaky=0이었다. 교훈은 실제 코드의 SETTLE_TOL·readback 조건과 대조했다.
+- gate 변화: 기존 guard·torque·session 규칙을 유지한다. 수정 revision의 실물 수용에는 감독 시험이 필요하다. CE: 기존 교훈 갱신.
+
+## 2026-11-03 · uncommitted · docs: 측면 카메라 정량 검증 상태 정정
+
+- 변경: 동결된 cell survey 기록에 정정 절을 추가했다. 기존 측면 PnP 잔차로 렌더 오차를 제한할 수 있다는 서술과 양쪽 통과·완료 판정을 철회했다.
+- 증거: 기존 상단 측정 보고 1.13 px는 제안된 평균 3 px 기준을 만족한다. 측면 렌더 대 실물 정량 측정은 UNKNOWN이며 육안 비교와 구분한다. 추가 영상 측정·실물 동작은 수행하지 않았다.
+- gate 변화: 측면 정량 검증 대기. 중단된 run의 적재 수용은 주장하지 않는다. CE: 해당 없음 — 기존 증거의 주장 범위 정정.
+
+
+## 2026-11-03 · uncommitted · test(remote): verify profiles across each planned host worker
+
+- Change: explicitly pin independent host headroom in the dispatch fixture. Unmeasured hosts use one worker each; 4-core/4-GB hosts use two. Exact host/profile assertions cover every planned worker, with no production change.
+- Evidence: test-only `69b5622629` reproduced the whole-root failure deterministically (one expected failure and one pass). `270285542c` passed all 152 tests across remote_test_tools, remote_pytest and reboot admission, with zero skips/NEW/known/flaky. The prior source9752 whole-root run had one profile-fixture failure; its isolated retry passed, demonstrating uncontrolled shared state rather than missing profile propagation.
+- Gate: no quarantine or weakened evidence. The previous FULL was stopped and its 1855 browser passes plus clean 12-test G1 receipt remain audit evidence only; a new tree requires a fresh canonical FULL before publication. No new public CI or field acceptance claim.
+- CE: no additional lesson; the two resource cases and exact assertions explain the correction. Existing workflow/recovery lessons updated earlier remain applicable.
+
+
+## 2026-11-03 · bd44ee1305 · fix(isaac): keep unverified reboot state outside run admission
+
+- Change: keep one SSH request and its50-second limit, verify service state before timer absence, map active/activating to zero remaining seconds, and accept None only for an explicit successful timer not-found result. Failed/empty/malformed responses become ConnectionError and the existing bounded readiness loop ends in NotReady before a request/start.
+- Evidence: commit 830bc0db27 reproduced12 failures/6 passes using actual Bash branch stubs and the real reader-to-Pipeline path. Independently reviewed commit bd44ee1305 passed76 remote-Isaac/batch tests, zero skips/NEW/known/flaky. This verifies tooling; it is not a model evaluation or an actual simulator/device run.
+- gate 변화: the90-minute budget, GPU/launcher interfaces and physical motion authority are unchanged. Final combined canonical FULL/public CI remain pending.
+- CE: no additional lesson; explicit negative-path regressions cover this distinction.
+
+
+## 2026-11-03 · 7047306026 · docs(solutions): record recorder fixture import isolation evidence
+
+- Change: extend the existing shared-pytest-process import lesson with the reproduced recorder fixture failure: a loader temporary path disappears before fixture execution, while a neighboring test module can hide the missing import.
+- Evidence: same-commit official remote file-alone 71 passed/2 skipped; actual isolation gate 1 passed/1 empty-input skipped, complete:1. The original FULL child failure and verified own-run stop/log/cleanup receipts remain preserved externally.
+- gate 변화: none. No new testing policy or product behavior; the existing file-alone requirement applies to the execution fixture as well.
+- CE: existing lesson updated; no duplicate solution added.
+
 ## 2026-11-04 · uncommitted · docs(control-terms): D-974 착지 준비 — 안전 검토·크기·ADR Log 병합 정리
 - 변경: `console.py` 변경을 줄 수 증가 없이 다시 써(D-766) 독립 안전 검토 trailer와 함께 한 커밋으로 다시 만들었다(D-430 §5). main 병합에서 union으로 겹친 D-968·D-970 ADR Log 행을 하나씩 남겼다(D-970은 main의 최신 상태, D-968은 D-974 대체 표시). D-974 후속 작업 표와 Log 상태를 실제 상태로 갱신했다.
 - 증거: 원격 pytest(관제 단위·서버 앱·브라우저·API 버전) 통과, node 시험 19개 통과, 독립 안전 검토 PASS 2회, lint 0 error. Confluence 2-1 v15 반영. Harbor PR #17 필수 검사 통과, 병합은 팀 승인 대기.
@@ -14429,3 +14465,142 @@ osy-d395-s1d\`.
 - 증거: 공식 원격 시험으로 학습 원본·작업자·연구·서버·구조·브라우저 시험 통과. 첫 수정에서 어댑터를 `check_info`에 넣자 저장 결과 재검증이 실패해 `inspect`로 옮겼다. 실제 OMX 데이터 묶음(AI PC·셀 PC, 한 팔 28개·두 팔 1개)이 어댑터 규격에 맞음을 확인했다. AI PC·모델 PC의 공개 학습 검증 자료와 AI PC의 SO-100 캐시는 삭제했다.
 - gate 변화: 없음 — 배포된 화면은 게시와 갱신 전까지 그대로다. 저장된 공개 학습 실행 기록이 운영 DB에 있는지는 확인하지 못했다.
 - CE: 해당 없음 — 사용자 지시에 따른 기능 제거와 구조 변경이다.
+
+## 2026-11-07 · uncommitted · feat(sim): 공통 층 조 v2.1 옵션
+
+- 변경: D-877 공통 층이 조 v2.1 모델(D-947)로도 돌게 옵션을 더했다. `omx_topic_backend.py --gripper palletizing-v2.1`은 벤더 xacro 대신 저장소의 `omx_f_palletizing.urdf`를 쓰고, 그 URDF에 없는 ros2_control 블록은 벤더 xacro 출력에서 가져와 넣는다(관절 이름이 같으므로 하드웨어 교체·gpio 제거·is_async도 그대로 적용). `omx_mujoco_backend.py --gripper palletizing-v2.1`은 메시 경로를 두 패키지(`open_manipulator_description`, `omx_f_palletizing_description`)에서 모두 풀고(`learning/envs/isaac/assets`, `meshes/omx_f` 아래 하위 경로 유지), 손가락 충돌은 `palletizing_gripper.pad_box` 패드 박스로 바꾼다(`ship_release_scene.add_jaw`와 같은 collider). `run_omx_backend_conformance.sh`는 `OMX_GRIPPER=palletizing-v2.1`로 같은 옵션을 넘기며 Isaac 어댑터는 아직 이 옵션을 받지 않아 거부한다. 기본 `omx-f` 동작은 바꾸지 않았다.
+- 증거: 원격 pytest `test/test_omx_sim_backends.py` 7 통과·skip 0(모델 PC, run-1.txt, known_failures 0 new). 새 시험은 v2.1 URDF에 ros2_control이 들어가는지, 메시 16개가 모두 저장소 assets에서 풀리는지(두 패키지), 패드 박스가 Isaac 것과 같은 함수인지, 벤더 모드 출력(맨 이름 + `strippath="true"`)이 그대로인지를 본다. 실제 적합성 실행(`run_omx_backend_conformance.sh`)은 하지 않았다.
+- gate 변화: 없음 — ROS 포함 실행은 시험 PC·시뮬 호스트에서 확인할 몫이고 이 변경은 옵션 추가다.
+- CE: 해당 없음 — 새 옵션이며 해결한 장애가 없다.
+
+## 2026-11-07 · fc074c6198 · feat(omx): OMX 학습 사다리 핵심
+
+- 변경: `tools/sim/omx_cell_sim.py`(arm_b 실제 셀 MuJoCo 장면, 교사, 수집, 평가, 영상)와 `tools/sim/omx_ladder.py`(라운드 실행과 기록)를 추가했다. 판정은 위치 8 mm, 방향 8°, 높이 5 mm, 기울기 5°다. 평가 위치는 학습보다 넓고 라운드마다 새 시드를 쓰며, 부모 모델을 같은 시드로 다시 평가해 비교한다. 실패한 시드는 다음 라운드 시연이 된다. 교체는 사람이 Rosy Learning에서 기록한다.
+- 증거: `test/test_omx_ladder.py` 원격 통과. AI PC·모델 PC에서 교사 엄격 판정 3/3, 1/1. 관절 단위 오류(도 환산)를 `norm_to_rad`로 고쳤다.
+- gate 변화: 없음 — 시뮬 기하 근거다(D-947). 실물 실행 경로는 없고(D-793), 단위는 라디안이라 실제 데이터와 섞기 전에 변환이 필요하다.
+- CE: 해당 없음 — 새 기능이다.
+
+## 2026-11-07 · uncommitted · feat(omx): 두 팔 셀 MuJoCo 세계, 작업 정의, 검증기와 교사
+
+- 변경: `tools/sim/omx_two_arm_{world,sites,kin,tasks,teacher}.py`와 `deploy/robot/omx/sim/two_arm_tasks.json`을 추가했다. 두 팔(v2.1 조), 스터드 판, SCAD v7 임시 칸 판 둘, 벨트 끝, 실측 top·side 카메라를 한 좌표계에 둔다. 작업 `stack`(9개, fixture 순서·팔 배정)과 `rehandle`(두 열에서 맨 아래 컨테이너를 빼려고 위 것을 임시 칸으로 옮기고 새 순서로 복원, 12단계)은 데이터다. 검증기(MuJoCo 없음)는 순서·받침·임시 칸 용량·관절 한계 안 도달(관절 5 분기 연속 IK)·팔 간격을 확인하고 어기면 이유와 함께 거부한다. CAD·실측 선택은 `CHOICES`의 이름 있는 값이다(TCP는 팔마다, 기본 0.0740).
+- 증거: `test/test_omx_two_arm_tasks.py` 원격 14 passed, skip 0. AI PC MuJoCo 교사(팔 하나씩): `stack` 이어 달리기 5/9(s6에서 실패: 앞 단계의 3.2° 틀어짐·1 mm 어긋남 뒤 패드가 이웃 6 mm 틈에 걸림), 단계마다 공칭 상태에서 시작하면 9/9. `rehandle` 이어 달리기 2/12, 단계 단독 8/12(실패 a3·a4·b3·b4: 가운데 열이 3층일 때 바깥 열 맨 아래 칸에서 손목 link4가 이웃 열에 닿음). 도달 불가 단계 없음. TCP 0.0885 민감도는 검증기 판정 불변(조 끝 14.5 mm 더 길게; 시뮬 접촉은 재실행하지 않음). 손목 롤이 -18(정규화) 아래로 가는 단계가 표시된다(stack 6개, rehandle arm_a 6개).
+- gate 변화: 없음 — 시뮬 기하 근거다(D-947). 접촉·마찰 수치는 결과가 아니다.
+- CE: 해당 없음 — 새 기능이며 미해결 항목은 위 증거에 구분해 적었다.
+
+## 2026-11-07 · uncommitted · fix(omx): 두 팔 세계의 접촉 모델, 손목 간격 검증, rehandle 계획 교체
+
+- 변경: 판(메시)과 상자 사이가 접촉점 하나만 만들어 쌓은 상자가 요(yaw) 방향으로 기어 다니던 것을 `mjENBL_MULTICCD`로 고쳤다(정적 시험: 30초에 16°가 0°). 마찰·접촉 변수는 바꾸지 않았다. 검증기에 손목(link3·link4 메시) 간격 검사(`LINK_MARGIN` 4 mm)를 더했다. MuJoCo 전수표(`omx_two_arm_matrix.py`)로 가까운 팔이 맨 아래 칸을 뺄 때 손목이 가운데 열에 부딪힘(-3~-6 mm)을 확인하고, `rehandle`을 바깥 열마다 반대편 팔이 맡도록 바꿨다. 시드(벨트 집는 자세, 시작 배치)와 단계 단독 실행 옵션을 더했다.
+- 증거: `test/test_omx_two_arm_tasks.py` 원격 통과. AI PC MuJoCo 이어 달리기·단계 단독, 시드 0·1·2: `stack` 9/9, `rehandle` 12/12(최종 자세 6/6), 모두 같은 판정 한계. 이전: `stack` 이어 달리기 5/9, `rehandle` 2/12(단계 단독 8/12). 뒤집은 조 방향은 모든 쌍에서 관절 한계를 넘어 도달 불가. 손목 롤이 -18(정규화) 아래인 단계: stack arm_b 6개, rehandle arm_a 6개(바닥은 arm_b만 측정, arm_a는 가정).
+- gate 변화: 없음 — 시뮬 기하 근거다(D-947). 접촉 수치는 결과가 아니다.
+- CE: 해당 없음 — 원인(단일 접촉)과 해결을 위 증거에 적었고 별도 교훈 문서는 만들지 않았다.
+
+## 2026-11-07 · uncommitted · fix(omx): 사다리가 GPU 없이 시작하지 않게 하고 MuJoCo 접촉 교훈을 기록
+
+- 변경: 모델 PC GPU가 버스에서 떨어지자 `lerobot-train`이 `--policy.device=cuda`를 받고도 CPU로 넘어가 4만 단계가 13시간짜리가 됐다. `omx_ladder.run_round`가 시작 전에 GPU를 확인하고 거절한다. 볼록 메시 위 상자가 접점 하나로 도는 현상은 `docs/solutions/logic-errors/mujoco-box-on-convex-mesh-creeps-one-contact-2026-11-07.md`에 남겼다.
+- 증거: `test/test_omx_ladder.py` 원격 실행(가짜 python이 실패를 돌려주면 회차 기록을 쓰기 전에 거절).
+- gate 변화: 없음.
+- CE: 새 교훈 기록 — 위 문서. 앞 항목의 「별도 교훈 없음」을 이 항목이 대신한다.
+
+## 2026-11-07 · uncommitted · 공통 서비스 카탈로그와 D-987
+
+- 변경: 공통 서비스 정의와 카탈로그(D-987), 구조 시험을 더하고 Account 소유자·분류의 낡은 안내를 고쳤다. 소스 경로·배포는 바꾸지 않았다.
+- 증거: 카탈로그의 경로·Compose 서비스·결정을 `test/architecture/test_common_services.py`가 확인한다. 원격 결과는 착지 기록을 따른다.
+- gate 변화: 없음 — 카탈로그 등재는 배포·현장 수용의 증거가 아니다.
+- CE: 해당 없음 — 구조 정의이며 해결한 장애가 없다.
+
+## 2026-11-07 · uncommitted · docs(adr): D-982 현장 운영 규칙
+- 변경: ADR D-982(Proposed)와 Log 행, API 참조 v1.368, `adr_gaps.txt`의 D-982 줄 제거.
+- 증거: `rosy_harness.py lint` 0 error. 원격 결과는 착지 기록을 따른다.
+- gate 변화: SOURCE 변경. 시뮬·실물·현장 수용 없음; 문서가 없으면 동작 동일.
+- 결정: D-982 Proposed, API v1.368 additive.
+- 교훈: CE 해당 없음 — 최종 코드·시험·ADR이 판단을 보존한다.
+
+## 2026-11-07 · uncommitted · fix(land): FULL 대기가 준비 슬롯을 차지하지 않고 MAIN-RED가 닫힌다
+
+- 변경: FULL 차례를 기다리는 착지는 `full_wait`로 표시돼 준비 슬롯 수에서 빠진다. `land_mainred.py recheck`가 열린 항목을 main에서 하나씩 다시 돌려, 통과했거나 시험 파일이 사라진 항목을 닫는다. 야간 전체 시험은 시작할 때 이를 먼저 돌린다.
+- 증거: 11-07 측정에서 대기 중인 FULL 2개가 슬롯 6개 중 2개를 차지했고 파일 하나 바꾼 착지가 대기했다. MAIN-RED는 담당 없는 항목 11개가 열려 있었고 지워진 시험 파일도 포함됐다. 회귀 시험은 `test/test_land_queue.py`, `test/test_land_mainred.py`.
+- gate 변화: 없음. FULL 동시 한도와 시험 PC 입장 제한, 명시 FULL의 LOAD-FLAKY 규칙은 그대로다.
+- CE: 해당 없음 — 원인이 코드와 시험에 남는다.
+
+## 2026-11-07 · uncommitted · fix(remote): 호출의 -rA가 공통 꼬리에 덮이지 않는다
+
+- 변경: 공통 꼬리의 `-rfE`가 뒤에 와서 `-rA`를 덮었기 때문에 `PASSED` 줄이 로그에 남지 않았다. `-rA` 호출에서는 `-rfE`를 뺀다.
+- 증거: 실제 `land_mainred.py recheck`에서 통과한 시험이 닫히지 않아 드러났다. 수정 뒤 열린 11개 중 9개가 main 통과로 닫히고, 삭제된 파일 1개가 닫히고, 실제 실패 1개(`test_cell_g2_ports.py` 단독 실행의 AF_UNIX 경로 길이)가 남았다.
+- gate 변화: 없음. 착지의 `close`가 이제 통과한 항목을 실제로 닫는다.
+- CE: 해당 없음 — 원인이 코드와 시험에 남는다.
+
+## 2026-11-07 · uncommitted · test(learning): 학습 브라우저 여정도 고정 학습 환경을 명시할 때만 돈다
+- 변경: `test_learning_workflow_pipeline_browser.py`에 다른 고정 학습 시험 4개와 같은 `ROSY_RUN_PINNED_LEARNING=1` 조건을 넣었다.
+- 증거: 21:42 FULL 착지가 환경이 없는 시험 PC에 이 시험이 배정돼 멈췄고, main에서도 같은 단언으로 실패해 MAIN-RED가 됐다. 다른 두 시험 PC에는 환경이 있다.
+- gate 변화: 없음. FULL에서 이 여정은 다른 고정 학습 시험처럼 명시 실행이 필요하다. CE: 해당 없음 — 기존 규칙에 맞춘 수정.
+
+## 2026-11-07 · uncommitted · fix(model-pc): GPU 유휴 전원 차단을 끈다
+
+- 변경: 모델 PC에 `72-rosy-gpu-awake.rules`를 더해 GPU의 `power/control`을 `on`으로 둔다(기존 `71-nvidia.rules`는 `auto`).
+- 증거: 11-07 03:35 GPU가 깨어나지 못해 `Xid 79`가 났고 05:00 재부팅 뒤 6시간 돌아오지 못했다. 재부팅 정지와의 인과는 증명되지 않았다. 규칙은 모델 PC에 직접 설치해 `power/control=on`을 확인했다.
+- gate 변화: 없음. 다음 재부팅 뒤 값 유지는 아직 확인 전이다.
+- CE: 미해결 — 멈춘 원인은 가설로 남고 기록은 작업 기록에 있다.
+
+## 2026-11-07 · uncommitted · docs(solutions): Pinky LiDAR 0°는 뒤쪽, odom은 이동 증거가 아니다
+
+- 변경: 현장 주행 스크립트 교훈에 11-07 갱신 절을 더했다. LiDAR 방향은 공용 몸체 모델 `PINKY_PRO`(URDF 값 180°)로 읽고, 진행은 odom이 아니라 LiDAR 변화로 확인한다.
+- 증거: rosy_46이 100 s 동안 odom 3.1 m를 기록했지만 지도에는 같은 벽만 반복됐고 몸체는 움직이지 않았다(11-07 현장).
+- gate 변화: 없음.
+- CE: 기존 교훈 갱신 — 같은 문서의 지침 1을 어긴 사례와 빠져 있던 두 사실.
+
+## 2026-11-07 · uncommitted · fix(remote): 재부팅 경고 2분 동안 시험 PC가 새 작업을 받지 않는다
+
+- 변경: `host_probe.REBOOT_CHECK`가 `is-active -q`의 종료 코드를 읽었다. `rosy-nightly-reboot.service`는 oneshot이라 경고 2분 내내 `activating`이고 종료 코드는 3이어서, D-889 추가 13의 "서비스가 도는 동안 받지 않는다"가 처음부터 동작하지 않았다. 출력 문자열로 판정한다.
+- 증거: 11-07 AI PC 06:00·현장 PC 06:10 재부팅에 든 exit 143 호출 18개는 모두 타이머가 울린 뒤 시작했다(`run_s` 61~193초, 다른 시각 사례 없음). 그날 착지 4개에 걸렸고 그중 `sync-origin`은 약 70분짜리 FULL을 잃었다. AI PC 사용자 단위로 oneshot이 `activating`, `is-active -q` rc=3임을 확인했다. 기존 시험의 가짜 `systemctl`은 실행 중에 0을 돌려줘서 이를 놓쳤다.
+- gate 변화: 없음. 경고 2분 동안 새 작업이 들어가지 않는다. 재부팅 13분 전에 시작해 끝나지 않은 작업은 여전히 끊긴다(D-889 추가 13의 위험).
+- CE: 해당 없음 — 원인이 코드와 시험에 남는다.
+
+## 2026-11-08 · uncommitted · test(learning): 학습 브라우저 여정 조건을 되돌린다
+- 변경: 바로 앞 항목에서 `test_learning_workflow_pipeline_browser.py`에 넣은 `ROSY_RUN_PINNED_LEARNING=1` 조건을 뺐다. 시험은 main과 같다.
+- 증거: 착지 브라우저 묶음은 그 값을 주지 않아 시험이 늘 건너뛰어졌고, `land_browser.vacuous`가 건너뜀 1건으로 FULL을 멈췄다(219 passed, 1 skipped). 다른 고정 학습 시험은 브라우저 묶음 밖이라 같은 조건이 맞지 않았다.
+- gate 변화: 없음. 고정 학습 환경이 없는 시험 PC에 이 시험이 배정되면 여전히 실패한다(남은 문제). CE: 해당 없음 — 앞 수정의 되돌림.
+
+## 2026-11-08 · uncommitted · docs(control): N100 목표 호스트와 R·owner 책임을 구분한다
+
+- 변경: D-994에 N100·16GB와 Ubuntu Server 24.04 LTS 목표, R·셀·CORE·OMX owner·공통 서비스·기명 운영자의 책임, 부하·장애·이전 수용 조건을 기록했다. 관제 배치표의 목표만 바꾸고 공통 서비스 카탈로그에서 연결했다.
+- 증거: 사용자 하드웨어·문서화 결정과 D-893·D-960·D-974·D-987 및 현재 관제 배포 안내를 대조했다. 문서·하네스 검증 결과는 이 브랜치의 원격 시험 보고서로 확인한다.
+- gate 변화: 없음. Ubuntu 설치·서비스 이전·N100 성능·DEVICE/FIELD 수용은 미수행이다.
+- CE: 해당 없음 — 새 배치 결정이며 해결한 장애나 문서에 없는 실측 사실이 없다.
+
+## 2026-11-08 · uncommitted · docs(control): 현재 ARM 위임과 관제·owner·호스트 구조를 대조한다
+
+- 변경: D-995에 주행 승인과 셀 ARM admit, ARM 증거·재검사의 직계 자식 제한, 기준 문서별 책임과 R 서비스 묶음의 후속 검증을 기록했다. D-965·D-994의 미구현 설명은 당시 본문을 보존하고 Status에서 후속 정정으로 연결했다. README·개발 가이드·앱 책임·앱 이름·용어를 현재 소스와 맞췄다.
+- 증거: `9130e7ba67`의 ARM 후보·relay·셀 job 결속·부모 증명·기명 승인·simulation 정책 제한과 실제 화면 제목을 추적했다. 기존 원격/계약 시험과 독립 검토는 최종 SHA 기준 보고서를 따른다. Confluence는 현재 버전과 원문을 보존한 뒤 같은 범위만 갱신한다.
+- gate 변화: 없음. 코드·실행 권한·서비스 배포·실물 수용은 바꾸지 않았다.
+- CE: 해당 없음 — 판단 근거가 ADR·현재 소스·기존 회귀 시험에 남아 별도 교훈 중복을 만들지 않는다.
+
+## 2026-11-08 · uncommitted · docs(architecture): Harbor와 공통 서비스의 책임을 저장소별로 연결한다
+
+- 변경: 앱 책임 안내에 Harbor 업무·R/셀 admission·CORE/OMX 실행·공통 사람 Account·읽기/영상/학습·호스트 경계를 더했다. 업무 앱 계약 안내의 과거 API 표와 현재 ARM 범위를 구별했다. Harbor 팀 저장소에는 ADR0028과 책임표를 별도 PR로 다룬다.
+- 증거: Harbor 팀 main `fd8965e`의 기존 ADR0005·0013·0015·0018·0021, 미병합 로그인 PR #46 상태와 플랫폼 D-995·현재 route를 대조했다. 실제 시험·검토는 최종 SHA와 각 PR의 기록을 따른다.
+- gate 변화: 없음. 새 API·계정 구현·현장 배포·장치 수용을 추가하지 않았다.
+- CE: 해당 없음 — 기존 책임을 문서 정본에 모으는 정비이며 별도 교훈 중복을 만들지 않는다.
+
+## 2026-11-08 · uncommitted · docs(architecture): 공통 기능별 분리와 장애·복구 계약을 확정한다
+
+- 변경: D-997에 혼합 구조와 계정·등록·설정·알림·감사·백업·업데이트별 owner·데이터·호출·단절·복구·전환 조건을 기록하고 카탈로그에서 연결했다. 알림 전달은 미래 독립 서비스로 추출하되 Fleet 판단/outbox·발송 직전 재검사·기존 D-661 한계를 유지한다. 나머지는 기존 서비스·공용 코드·owner별 운영 어댑터를 재사용한다.
+- 증거: D-987·D-807·D-955·D-962·D-661·D-841·D-985, 현재 설정 transaction·알림·감사·backup/업데이트 경로를 대조했다. 카탈로그 실행 서비스 목록·Compose·source holder는 그대로다. 최종 SHA의 문서·원격 시험·독립 검토를 별도로 연결한다.
+- gate 변화: 없음. 설계 수락은 신규 서비스·API·폴더 이동·DB 이관·배포·현장 수용 완료가 아니다.
+- CE: 해당 없음 — 새 아키텍처 결정을 ADR에 남겼고 해결한 장치/운영 장애는 없다.
+
+## 2026-11-08 · uncommitted · fix(model-pc): gpu-manager 뒤에도 GPU를 깨운 채 둔다
+
+- 변경: 모델 PC에 `rosy-gpu-awake.service`(oneshot, `After=gpu-manager.service`)를 더하고 manifest에 올린다. NVIDIA 디스플레이 장치의 `power/control`을 `on`으로 쓴다.
+- 증거: 11-08 05:01 재부팅 뒤 `power/control`이 다시 `auto`였다. `/var/log/gpu-manager.log`에 udev 규칙 뒤 05:01:36의 `Setting power control to "auto"`가 남아 있었다. 서비스는 모델 PC에 직접 설치해 `on`/`active`를 확인했다. 파일은 그 설치본을 그대로 옮겼다.
+- gate 변화: 없음. 다음 재부팅 뒤에 이 서비스가 마지막에 쓰는지는 아직 확인 전이다.
+- CE: 미해결 — Xid 79 재부팅 정지의 원인은 가설로 남고 기록은 작업 기록에 있다.
+
+## 2026-11-08 · uncommitted · fix(land): 명시 FULL과 게시가 앞 후보의 통과를 내용 기준으로 재사용한다 (D-970 3)
+- 변경: `land_cache.reach`가 A..C 변경이 닿는 시험 경로(선택기, 브라우저 대상, 전체 트리를 읽는 guard)를 낸다. 명시 FULL 사전 시험·차례는 겹치지 않는 호출을 A의 통과로 재사용하고, `publish_evidence`는 후보 체크아웃에서 같은 계산을 다시 해 A의 정확한 깨끗한 로그만 증거로 받는다.
+- 증거: 원격 `test/test_land*.py`·`test/test_publish*.py` 910 통과, NEW 0. 새 회귀 `test/test_publish_content_reuse.py`: 겹치지 않는 묶음 재사용, 겹치면·목록이 바뀌면·A 로그가 더럽거나 없으면 거절, guard는 재사용하지 않음.
+- gate 변화: 없음. 게시는 재계산과 정확한 로그를 요구한다. 선택기가 FULL로 번지는 범위는 재사용하지 않는다. CE: 해당 없음 — ADR 보완에 판단을 남겼다.
+
+## 2026-11-08 · uncommitted · fix(land): 같은 트리 재사용도 새 커밋의 게시 증거로 남긴다
+- 변경: `land_cache.split`이 트리·환경·명령이 같은 통과를 재사용할 때, 원래 로그 경로와 SHA-256을 그대로 둔 행을 새 커밋 이름으로도 남긴다.
+- 증거: 11-08 08:00 운영 규칙 착지(9a8217cb97)의 FULL 기록은, 다른 세션의 공개 게시 뒤 내용이 같은 동기화 커밋에 이어지지 않아 게시가 FULL을 다시 요구했다. 회귀 시험 `test_same_tree_reuse_maps_the_new_commit_to_the_source_log_and_digest`.
+- gate 변화: 없음. 게시 검사는 그대로 로그 해시·깨끗함·환경·계획을 확인하고, 로그가 바뀌면 원래 해시와 달라 거절한다. CE: 해당 없음 — D-970 3 구현의 연장.

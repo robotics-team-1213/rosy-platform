@@ -296,3 +296,32 @@ def test_home_selected_job_is_cleared_when_polling_loses_access(browser_workspac
     expect(page.locator('#job-detail')).to_be_hidden()
     expect(page.locator('#job-detail-content')).to_be_empty()
     expect(page.locator('#refresh')).to_be_enabled()
+
+
+def test_home_shows_top_level_failure_reason_and_separates_failed_from_rejected(browser_workspace):
+    page,_,expect=browser_workspace
+    base=page.url.split('?')[0].rstrip('/')
+    payload=page.request.get(base+'/api/learning').json()
+    kind=payload['workflows'][0]['id']
+    def job(name,declared):
+        return dict(id=name,name=name,kind=kind,path='/result/'+name,version=1,
+                    reports=[dict(name='state.json',status='unchanged',declared=declared,steps=[],metrics=[],images=[])])
+    payload['items']=[job('stopped',dict(status='failed',error='학습 데이터가 비어 있어 중단했습니다')),
+                      job('refused',dict(outcome='rejected')),
+                      job('busy',dict(status='running'))]
+    page.route('**/api/learning',lambda route:route.fulfill(json=payload))
+    page.goto(base+'/learning#learning-results',wait_until='networkidle')
+    stopped=page.locator('#jobs [data-job="stopped"]')
+    expect(stopped).to_contain_text('학습 데이터가 비어 있어 중단했습니다')
+    expect(stopped).to_contain_text('실패 확인')
+    expect(page.locator('#jobs [data-job="refused"]')).to_contain_text('거절 확인')
+    expect(page.locator('#jobs [data-job="busy"]')).to_contain_text('끝나기를 기다리세요')
+
+
+def test_home_app_bar_stays_usable_when_learning_is_forbidden(browser_workspace):
+    page,_,expect=browser_workspace
+    base=page.url.split('?')[0].rstrip('/')
+    page.route('**/api/learning',lambda route:route.fulfill(status=403,json=dict(detail='denied')))
+    page.goto(base+'/learning',wait_until='networkidle')
+    expect(page.locator('#refresh')).to_be_enabled()
+    assert page.locator('ui-topbar ui-button:not([data-always-live])').evaluate_all('nodes=>nodes.every(n=>!n.disabled&&!n.getAttribute("reason"))')

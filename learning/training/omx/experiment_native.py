@@ -14,11 +14,12 @@ from native_cycle import native, validate_split
 
 
 def _profile(profile, source):
-    """Return the profile and the native joint layout it maps; two arms are exactly arm_a then arm_b."""
+    """Return the profile and the native joint layout it maps; two arms are exactly arm_a then arm_b.
+    The same two-arm recording is either mode: one model per arm (independent) or one joint model (cooperative, D-832)."""
     profile = validate_profile(profile)
     arms = profile['arms']
     ids = [arm['id'] for arm in arms]
-    if (ids not in ([ids[0]], ['arm_a', 'arm_b']) or profile['mode'] != 'independent'
+    if (ids not in ([ids[0]], ['arm_a', 'arm_b']) or (profile['mode'] == 'cooperative' and len(arms) != 2)
             or any(arm['joint_names'] != native.JOINTS or arm['units'] != source.get('body_units')
                    for arm in arms)
             or source.get('body_units') != 'normalized_-100_100'

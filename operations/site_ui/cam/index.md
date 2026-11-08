@@ -26,6 +26,7 @@
 ## 교훈 (docs/solutions)
 
 - [Rosy Cam 디버그 APK는 빌드한 PC마다 서명이 달라 재설치하면 연결이 지워진다](../../../docs/solutions/deployment/rosy-cam-apk-signer-differs-per-dev-pc.md)
+- [천장 폰 화면을 켜 두면 요청이 없어도 센서가 켜진 채 뜨거워진다](../../../docs/solutions/deployment/rosy-cam-screen-on-keeps-ceiling-phone-hot-2026-11-07.md)
 
 ## 시험
 
@@ -34,8 +35,8 @@
 
 ## 최근 기록
 
+- 2026-11-07 · uncommitted · docs(cam): 배터리 보호 값 정정
+- 2026-11-07 · uncommitted · 배터리 40°C 경고와 발열 멈춤 기록
+- 2026-11-07 · uncommitted · Account 세션을 shared/android로 이동
 - 2026-11-06 · uncommitted · 재부팅 뒤 링크 복귀와 무선 디버깅 유지(D-981)
 - 2026-10-31 · uncommitted · 피어 공통 소스로 이동(D-939)
-- 2026-10-29 · 5bd25af46e · LAN 목록의 비활성 사유와 초점
-- 2026-10-23 · bc6edabfe0 · 원격 송출 제어와 바닥 경계 설치 안내
-- 2026-10-22 · dadf5eed1f · Cam 복구 화면 렌더링과 안전한 lint 정리

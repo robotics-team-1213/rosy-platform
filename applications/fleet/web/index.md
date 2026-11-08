@@ -32,8 +32,8 @@
 
 ## 최근 기록
 
-- 2026-11-06 · uncommitted · merge(fleet): 최신 UIUX와 수동 관제의 확인·권한 연결 보존
-- 2026-11-06 · uncommitted · merge(fleet): 관제 수동 조작과 검증 후속 변경의 최종 통합
-- 2026-11-06 · uncommitted · fix(fleet): 수동 관제 API 설명의 동시 삽입 충돌 조정
-- 2026-11-06 · uncommitted · fix(fleet): 수동 전환 버튼의 공용 kind 명시
-- 2026-11-06 · uncommitted · feat(fleet): 관제 수동 모드 전환
+- 2026-11-07 · uncommitted · fix(fleet-ui): 칸 확인 불가 문구
+- 2026-11-07 · uncommitted · fix(fleet-ui): 배터리 출발 거절 문구 · 충전 칸 위치 불명 표시
+- 2026-11-07 · uncommitted · uiux(fleet): 규칙 판정 버튼이 공용 화면 규칙을 지킨다
+- 2026-11-07 · 285714599b · uiux: 로봇 이동 출처 표시
+- 2026-11-07 · uncommitted · uiux(fleet): 규칙 판정 실패 문구를 평문으로

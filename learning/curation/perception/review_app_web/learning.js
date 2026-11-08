@@ -15,6 +15,10 @@ const nextActions={perception:'보고서 상태와 단계별 근거를 확인하
   policy:'산출물 파일과 승격 증거를 정책 원장에서 확인하세요.',
   isaac:'환경과 과제 설정이 맞는지 독립 시뮬레이션에서 확인하세요.',
   segmentation:'픽셀 검수 결과를 확인하세요. 객체 박스 승인과 별개입니다.'};
+// 실패와 거절은 다음 행동이 다르다: 실패는 실행 오류를 고치고, 거절은 품질 기준에 맞게 자료·설정을 바꾼다.
+const waitAction='끝나기를 기다리세요. 결과가 나오면 이 카드에서 확인할 수 있습니다. 로봇에는 적용되지 않습니다.';
+const stateActions={'진행 중':waitAction,'학습 중':waitAction,'자료 읽는 중':waitAction,'실패 확인':'실행이 실패했습니다. 아래 실패한 단계와 이유를 확인하고 원인을 고친 뒤 다시 실행하세요.',
+  '거절 확인':'품질 기준을 넘지 못해 거절됐습니다. 자료나 설정을 바꿔 다시 학습하세요. 로봇에는 적용되지 않았습니다.'};
 const reasons={does_not_beat_constant_target_baseline:'오프라인 평가가 상수 목표 기준을 넘지 못했습니다.',no_approved_masks:'아직 사람이 승인한 픽셀 마스크가 없습니다.',
   'work busy: GPU compute job':'다른 GPU 작업이 끝나면 자동으로 다시 확인합니다.',
   'work busy: GPU utilization':'GPU 사용 중입니다. 자동으로 다시 확인합니다.'};
@@ -58,7 +62,7 @@ function renderDomains() {
 function setBusy(value) {
   busy=value;
   for(const button of document.querySelectorAll('ui-button')) {
-    if(button.closest('#storage-section'))continue; // Storage owns its permission and consent controls.
+    if(button.closest('#storage-section,ui-topbar'))continue; // Storage owns its controls; the app bar stays usable on errors.
     button.reason=value?'결과를 확인하는 중입니다':!workspace&&button.id!=='refresh'?'작업 결과를 다시 확인한 뒤 사용하세요.':'';
     button.disabled=value||(!workspace&&button.id!=='refresh');
   }
@@ -193,7 +197,7 @@ function summary(item) {
   if(reports.some(row=>row.status==='invalid')) return {label:'읽기 실패',attention:true};
   if(reports.some(row=>row.declared?.verdict==='HOLD'||row.declared?.promotion?.startsWith('HOLD'))) return {label:'적용 보류',attention:true};
   if(item.path!==workspace.control?.out_path&&reports.some(row=>row.status==='changed')&&!reports.some(row=>row.declared?.status==='held')) return {label:'결과 변경',attention:true};
-  if(reports.some(row=>['reject','rejected','failed'].includes(row.declared?.verdict)||['failed','rejected'].includes(row.declared?.outcome)||['failed','rejected'].includes(row.declared?.status)||row.steps?.some(step=>['failed','rejected'].includes(step.status)))) return {label:'실패·거절 확인',attention:true};
+  if(reports.some(row=>['reject','rejected','failed'].includes(row.declared?.verdict)||['failed','rejected'].includes(row.declared?.outcome)||['failed','rejected'].includes(row.declared?.status)||row.steps?.some(step=>['failed','rejected'].includes(step.status)))) return {label:reports.some(row=>[row.declared?.verdict,row.declared?.outcome,row.declared?.status].includes('failed')||row.steps?.some(step=>step.status==='failed'))?'실패 확인':'거절 확인',attention:true};
   if(reports.some(row=>row.declared?.status==='held')) return {label:states.held,attention:true};
   const status=reports.flatMap(row=>[row.declared?.outcome,row.declared?.status,row.declared?.verdict]).find(value=>states[value]);
   return {label:states[status]||'보고서 확인',attention:false};
@@ -228,7 +232,7 @@ function render() {
     const status=summary(item),kind=workspace.workflows.find(row=>row.id===item.kind);
     const candidate=item.reports.some(row=>row.declared?.schema==='rosy.pidnet-candidate-evaluation/1');
     const card=taskRow({title:item.name,subtitle:kind.name,status:status.label,attention:status.attention,
-      description:candidate?'독립 시험 결과를 확인하세요. 로봇 적용은 별도 검증이 필요합니다.':nextActions[item.kind]||item.next});
+      description:candidate?'독립 시험 결과를 확인하세요. 로봇 적용은 별도 검증이 필요합니다.':stateActions[status.label]||nextActions[item.kind]||item.next});
     card.dataset.job=item.id;
     text(card,'p','','ui-task-meta').dataset.reportAge='';
     for(const report of item.reports) {
@@ -253,7 +257,11 @@ function render() {
     for(const reason of new Set(item.reports.flatMap(report=>report.reasons||[]))) text(card,'p',reasons[reason]||reason,'job-reason');
     for(const report of item.reports) {
       for(const step of report.steps||[]) if(step.error) text(card,'p',`${step.name}: ${step.error}`,'job-reason');
-      if(report.error) text(card,'p',report.error,'job-reason');
+      if(report.declared?.error||report.error) text(card,'p',report.declared?.error||report.error,'job-reason');
+    }
+    if(item.reports.some(report=>['running','reading','training'].includes(report.declared?.status))) {
+      const step=item.reports.flatMap(report=>report.steps||[]).find(row=>row.status==='running');
+      text(card,'p',`진행 중 · ${step?`지금 단계: ${step.name}`:'끝나면 결과가 이 카드에 나타납니다.'}`,'ui-task-meta');
     }
     const link=text(card,'a','단계·결과 파일 및 연결 관리','ui-action-link');link.dataset.kind='quiet';link.href='#job-'+encodeURIComponent(item.id);
     const details=text($('job-detail-content'),'section','');details.dataset.jobDetail=item.id;details.hidden=true;
@@ -261,6 +269,7 @@ function render() {
     for(const report of item.reports) {
       if(report.status==='missing'&&item.reports.some(row=>row.status!=='missing')) continue;
       text(details,'p',`${report.name} · ${labels[report.status]}`);
+      if(report.declared?.error||report.error) text(details,'p',report.declared?.error||report.error);
       for(const step of report.steps||[]) text(details,'p',`${step.name}: ${states[step.status]||step.status}${step.error?' · '+step.error:''}`);
     }
     text(details,'pre',JSON.stringify({path:item.path,version:item.version,reports:item.reports},null,2));

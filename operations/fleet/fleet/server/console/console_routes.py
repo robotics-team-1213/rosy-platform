@@ -23,7 +23,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from core_common.protocol.power_health import PowerHealthResponse
 from core_common.protocol.motor_health import MotorHealthResponse
-from fleet.charge_bays import ChargeBays, RobotView, bays_from_map
+from fleet.charge_bays import ChargeBays, RobotView, bays_from_map, thresholds_of
 from fleet import lane_progress
 from fleet.hub.hub import HubError
 from fleet.server.console_view import CapabilityDisplay
@@ -186,7 +186,7 @@ def install_console_routes(app, *, console, sightings, require_viewer,
     # path and keep the last good body up to that bound (a site read is <=0.4 s, a tunnel 5-12 s).
     power_display = app.state.power_health_display = CapabilityDisplay(
         console._clients, console._clock, read_method="power_health", schema=PowerHealthResponse,
-        refresh_s=1.0, max_age_s=5.0)
+        refresh_s=1.0, max_age_s=5.0, age_from_request=True)   # the age counts the read latency (slow links)
     motor_display = app.state.motor_health_display = CapabilityDisplay(
         console._clients, console._clock, read_method="motor_health", schema=MotorHealthResponse,
         refresh_s=1.0, age_from_request=True)
@@ -236,7 +236,8 @@ def install_console_routes(app, *, console, sightings, require_viewer,
         return await gathered()
 
     # D-941 5/7: the active map's charge bays, shown only; Fleet does not dispatch from the plan yet.
-    bay_plan = app.state.charge_bays = ChargeBays()
+    bay_plan = app.state.charge_bays = ChargeBays(
+        thresholds=lambda: thresholds_of(getattr(app.state, "site_maps", None)))
 
     def bay_view(row: dict, on_trip: set) -> RobotView:
         battery = (row.get("power_health") or {}).get("battery") or {}

@@ -113,13 +113,13 @@ def refuse(model, port, library, params=None, caps=None, status=lambda row: prin
     return out
 
 
-def plan_check(path, port, params, library):
+def plan_check(path, port, params, library, caps=None):
     """chunk_runner's startup: the `plan_check(library)` the Runner applies at every `load`, after refusing the first
-    library here (SystemExit, before the arm is touched). None without a model file (no check, as before)."""
+    library here (SystemExit, before motion). Both checks use the session's caps; None without a model file."""
     if not path:
         return None
     model = load(path)
-    check = lambda lib: refuse(model, port, lib, params)  # noqa: E731
+    check = lambda lib: refuse(model, port, lib, params, caps)  # noqa: E731
     try:
         check(library)
     except ValueError as exc:

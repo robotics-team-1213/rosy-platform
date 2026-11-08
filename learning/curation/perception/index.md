@@ -27,8 +27,8 @@
 
 ## 최근 기록
 
-- 2026-11-05 · uncommitted · docs(learning): main 병합 뒤 AI 권한 가드와 Pixel 캡처 검증 결속
-- 2026-11-05 · b955085656 · docs(learning): 메뉴 여백9소비처와 캡처 가드의 검증 범위
-- 2026-11-05 · a27e97c186 · uiux: Learning 홈 하위 메뉴를 정본 subnav 자리에 배치
-- 2026-11-05 · a4a0251917 · fix(learning): 지연 응답 중 검수·선택 상태 보호
-- 2026-11-03 · f987a0b10e · 상태 일관성 브라우저 시험의 실제 대기 지점
+- 2026-11-07 · uncommitted · feat(learning): 사다리 화면에 양팔 학습 라운드와 영상
+- 2026-11-07 · uncommitted · feat(learning): 학습 사다리 화면 (/learning/ladder)
+- 2026-11-07 · uncommitted · feat(learning): 사다리 화면에 양팔 태스크와 같은 위치 비교
+- 2026-11-07 · uncommitted · uiux(learning): 진행 중 카드 안내와 320 픽셀 도구
+- 2026-11-06 · uncommitted · uiux(learning): 도구 모드 글자, 안내 하나, 새 학습 과제 단추, 진행 중 단계 줄, 실패·거절 다음 행동

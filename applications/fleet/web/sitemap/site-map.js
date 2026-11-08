@@ -105,14 +105,15 @@ function render() {
     for (const points of teach.lines()) el('polyline', {class: 'teach', points: line(points)}, svg);
   for (const [index, place] of map.places.entries()) {
     const [px, py] = view.toPx(place.x, place.y);
-    const dot = el('circle', {cx: px, cy: py, r: 9, 'data-place': place.id,
-      class: `place ${place.kind}${state.selected?.place === place.id ? ' selected' : ''}`}, svg);
+    const dot = el('circle', {cx: px, cy: py, r: 9, 'data-place': place.id, tabindex: 0, role: 'button',
+      'aria-label': `장소 ${place.name} 선택`, class: `place ${place.kind}${state.selected?.place === place.id ? ' selected' : ''}`}, svg);
     el('title', {}, dot).textContent = `${place.name} (${PLACE_KIND_LABEL[place.kind] || place.kind})`;
     if (place.kind === 'start') {
       el('polygon', {class: 'start-heading', points: '26,0 12,-7 12,7',
         transform: `translate(${px} ${py}) rotate(${view.rotateDeg(place.yaw)})`}, svg);
     }
-    el('text', {x: px + 12, y: py - 10, class: 'label'}, svg).textContent = index + 1;
+    // Name, not just an ordinal: the map is where the operator picks a destination, and touch has no <title>.
+    el('text', {x: px + 12, y: py - 10, class: 'label'}, svg).textContent = `${index + 1} ${place.name.length > 8 ? `${place.name.slice(0, 8)}…` : place.name}`;
   }
   drawFacilities(svg, map, view);
   if (survey.points().length) el('polyline', {points: line(survey.points()), class: 'teach'}, svg);
@@ -154,6 +155,7 @@ function drawRobots() {
     }
   }
   const toPoint = (x, y) => { const [px, py] = state.view.toPx(x, y); return {x: px, y: py}; };
+  const placed = [...svg.querySelectorAll('.label')].map(node => node.getBBox());
   for (const {row, p, r, ring, alert, tip} of guideMarks(state.guide, toPoint)) {
     const g = el('g', {class: `robot ${tint(row.robot_id)} ${row.pose.state.toLowerCase()}${row.online ? '' : ' offline'}`,
       'data-robot': row.robot_id, ...(alert ? {'data-alert': alert} : {})}, layer);
@@ -169,6 +171,11 @@ function drawRobots() {
     const half = label.getComputedTextLength() / 2 + 4;  // keep the whole label on the map
     label.setAttribute('x', Math.min(Math.max(p.x, half), W - half));
     if (p.y - ring - 6 < 16) label.setAttribute('y', p.y + ring + 16);
+    // Simple pass (shortcut: down only, 4 tries; a dense cluster can still overlap): step off an earlier label.
+    const hit = (a, b) => a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+    for (let tries = 0; tries < 4 && placed.some(o => hit(label.getBBox(), o)); tries++)
+      label.setAttribute('y', Number(label.getAttribute('y')) + label.getBBox().height + 2);
+    placed.push(label.getBBox());
   }
 }
 
@@ -287,7 +294,7 @@ async function load() {
   catch { calibrations = []; }
   updatePlaneSources();
   $('trip-place').replaceChildren(...(state.active?.map.places || [])
-    .map(place => new Option(`${place.name} (${place.id})`, place.id)));
+    .map((place, index) => new Option(`${index + 1} ${place.name}${place.name === place.id ? '' : ` (${place.id})`}`, place.id)));
   $('trip-robot').replaceChildren(...robots.map(robot => {
     const safety = robot.state?.safety?.estop;
     const stateLabel = !robot.online ? '연결 끊김' : safety === true ? '비상 정지'
@@ -305,7 +312,11 @@ async function load() {
 }
 
 async function guarded(work) {
-  try { await work(); } catch (error) { notice(siteMapErrorText(error)); }
+  try { await work(); } catch (error) {
+    // Reconnecting would discard the edit, so a failed action must not say so; the save button can be far from #notice.
+    notice(error.status >= 500 ? '요청을 처리하지 못했습니다 · 화면의 편집은 그대로입니다. 잠시 뒤 다시 시도하세요' : siteMapErrorText(error));
+    $('notice').scrollIntoView({block: 'center'});
+  }
   syncButtons();
 }
 
@@ -429,6 +440,8 @@ $('site-map-svg').addEventListener('click', event => {
   }
   const target = event.target.closest('[data-place], [data-edge], [data-crosswalk]');
   if (!target) return;
+  // The map is where the operator picks a destination; the list follows the click.
+  if (target.dataset.place && $('map-source').value === 'active') { $('trip-place').value = target.dataset.place; clearPlan(); }
   select(target.dataset.place ? {place: target.dataset.place}
     : target.dataset.crosswalk ? {crosswalk: target.dataset.crosswalk} : {edge: target.dataset.edge});
   syncButtons();
@@ -561,6 +574,15 @@ const screens = bindScreens({nav: document.querySelector('.ui-subnav-nav'), home
 // The map legend promises that picking a place or lane on the view screen opens it for editing.
 $('site-map-svg').addEventListener('click', event => {
   if (screens.current() === 'map-heading' && event.target.closest('[data-place], [data-edge], [data-crosswalk]')) location.hash = '#edit-heading';
+});
+// Keyboard: a focused place dot acts like a click (Enter or Space); the redraw drops focus, so put it back.
+$('site-map-svg').addEventListener('keydown', event => {
+  const dot = event.target.closest?.('[data-place]');
+  if (!dot || !['Enter', ' '].includes(event.key)) return;
+  event.preventDefault();
+  const id = dot.dataset.place;
+  dot.dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true}));
+  $('site-map-svg').querySelector(`[data-place="${CSS.escape(id)}"]`)?.focus();
 });
 $('console-token').addEventListener('keydown', event => { if (event.key === 'Enter') $('token-save').click(); });
 

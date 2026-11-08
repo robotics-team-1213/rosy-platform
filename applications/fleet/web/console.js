@@ -87,6 +87,7 @@ function layoutConsole() {
   if (focused?.isConnected && document.activeElement !== focused) focused.focus({preventScroll: true});
 }
 layoutConsole();
+delete document.documentElement.dataset.areaPending;
 inbox.focusInitial();
 pageScope.listen(layoutMedia, "change", layoutConsole);
 pageScope.onResume(layoutConsole);
@@ -311,7 +312,8 @@ const roster = createRoster({ scope: pageScope, el, view, log, call, render,
 const manualControl = createManualControl({scope: pageScope, view, call: fleetClient,
   confirmedAction, refreshState,
   namedReason: () => auth.locked ? "관제에 다시 접속하세요." : auth.role !== "operator" ? OPERATOR_REASON : namedReason()});
-el("robot-workspace").after(manualControl.root);
+// Wide tier: above the assignment card, so drive stays on the first screen. Phones reorder it below the card (roster.css).
+document.querySelector(".workspace-heading").before(manualControl.root);
 if (el("robot-choice")) pageScope.listen(el("robot-choice"), "change", () => {
   roster.openCard(el("robot-choice").value || null);
   render();

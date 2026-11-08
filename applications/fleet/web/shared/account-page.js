@@ -31,6 +31,8 @@ function fail(error) {
   $('account-setup-state').textContent = '';
   if ([401, 403].includes(error.status) || error.code === 'ACCOUNT_CHANGED') {
     $('account-content').hidden = true; $('account-login').hidden = false;
+    // Without this the login page sees a valid session and returns here at once, to the same refusal.
+    if (error.status === 403) $('account-login').href = '/console/login?return=%2Fconsole%2Faccounts&error=access_denied';
     $('account-grants').replaceChildren(); $('account-list').replaceChildren(); selected = null;
     status('로그인 계정 또는 관리 권한이 변경되었습니다. 다시 로그인한 뒤 확인하세요.', 'warning');
   } else if (error.status === 409) {
@@ -108,7 +110,7 @@ async function load() {
     button.addEventListener('click', () => edit(row));
     const tag = document.createElement('ui-tag'); tag.setAttribute('status', row.enabled ? 'neutral' : 'warn');
     tag.textContent = row.enabled ? '사용 중' : '정지됨';
-    for (const value of [row.login, row.principal_id || '—', row.role || '—', tag, button]) {
+    for (const value of [row.login, row.principal_id || '—', [...$('account-role').options].find(option => option.value === row.role)?.textContent || row.role || '—', tag, button]) {
       const cell = document.createElement('td'); cell.append(value); item.append(cell);
     }
     $('account-list').append(item);
