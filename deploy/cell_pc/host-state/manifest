@@ -3,10 +3,11 @@
 # station and remote-test storage. Site work (Account, its backup and TLS, site autoupdate, site firewall, site
 # stack) belongs to R. Left out on purpose: rosy-docker-upgrade (its dpkg -i restarts Docker and CELL-A, and the
 # update gate ignores arm sessions) and rosy-host-guard (R guards this PC, D-994; a cell PC guards nobody).
-# The nightly reboot skips while ~/rosy-omx/session.lock is held (2026-10-28).
+# Nightly reboot is OFF here (coordinator, 2026-11-09): it checks only ~/rosy-omx/session.lock and the OMX adapter
+# (Fleet-driven arm work) never takes it, so 06:08 could cut a move. Re-enable (safe enabled) once that gate is fixed.
 safe file /etc/systemd/system/rosy-nightly-reboot.timer role/rosy-nightly-reboot.timer
 safe file /etc/systemd/system/rosy-nightly-reboot.service role/rosy-nightly-reboot.service
-safe enabled rosy-nightly-reboot.timer
+safe disabled rosy-nightly-reboot.timer
 approval=wifi wifi-allow
 # PC recovery is shared: install with --approve recovery (common/manifest).
 # D-805 update gate: skip updaters while updates are frozen (ops-update-freeze tag or a local freeze file).

@@ -123,6 +123,7 @@ roles:
     rosy-omx-observation-bridge.service: {run: active, channel: autoupdate, template: deploy/robot/omx/rosy-omx-observation-bridge.service, source: ".local/share/rosy/omx-devices/current", doc: deploy/robot/omx/README.md}
     rosy-omx-arm-status.service: {run: active, channel: autoupdate, template: deploy/robot/omx/rosy-omx-arm-status.service, source: ".local/share/rosy/omx-devices/current", doc: deploy/robot/omx/README.md}
     rosy-omx-observer@.service: {run: active, instances_from: workcell-arms, channel: autoupdate, template: deploy/robot/omx/rosy-omx-observer@.service, source: ".local/share/rosy/omx-devices/current", doc: deploy/robot/omx/README.md}
+    # rosy-nightly-reboot.timer (a system unit, not audited here) is off on this host until the session-lock gate covers Fleet-driven arm work
     # rosy-arm-cell (role cell, 2026-11-09): the ceiling Cam phone ADB station, site-tools that carry its code, and the test host storage prune
     rosy-cam-stream.service: {run: oneshot, channel: autoupdate, template: deploy/site/rosy-cam-stream.service, source: ".local/share/rosy/site-tools/current", doc: deploy/site/README.md}
     rosy-cam-stream.timer: {run: timer, channel: autoupdate, template: deploy/site/rosy-cam-stream.timer, doc: deploy/site/README.md}

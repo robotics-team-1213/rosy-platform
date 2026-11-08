@@ -254,7 +254,7 @@ def test_every_role_manifest_parses_and_its_sources_exist(role):
                 src = (ROOT / "deploy" if base == "deploy" else dirs[base]) / rel
                 assert src.is_file(), raw
                 assert b"\r\n" not in src.read_bytes(), src
-    assert ("enabled", "rosy-nightly-reboot.timer") in kinds
+    assert ("disabled" if role == "cell" else "enabled", "rosy-nightly-reboot.timer") in kinds
     assert ("file", "/etc/systemd/system/rosy-nightly-reboot.timer") in kinds
 
 
