@@ -88,6 +88,11 @@ def test_diff_names_moved_lanes_and_the_stages_that_read_them():
     moved = snap()
     moved["camera"] = dict(top=[2])
     assert r2s.diff(snap(), moved)[1] == sorted(r2s.STAGES)
+    shipped, moved_ship = snap(), snap()
+    shipped["items"]["ship"] = dict(stern_x_m=.170, centre_y_m=-.011, yaw_deg=0.)
+    moved_ship["items"]["ship"] = dict(stern_x_m=.180, centre_y_m=-.011, yaw_deg=0.)
+    changed, rerun = r2s.diff(shipped, moved_ship)
+    assert list(changed) == ["ship"] and rerun == sorted(r2s.STAGES)  # every stage stands on the ship
 
 
 def test_layout_reads_a_snapshot_choice(tmp_path):
@@ -142,3 +147,35 @@ def test_pads_cut_short_still_hold_their_lane():
     for k, lane in b.items():
         assert math.dist(lane["xy"], truth("b", k)[0]) < .003
         assert abs(lane["yaw_deg"] - math.degrees(truth("b", k)[1])) < 1.
+
+
+def test_the_ship_is_found_where_its_hull_lies():
+    layout = sites.Layout()
+    img = np.full((480, 640, 3), (60, 200, 200), np.uint8)
+    cam = r2s.Camera(layout.fixture["real_cameras"]["top"], img.shape[:2])
+    pose = (.1705, -.011, math.radians(.5))
+    cv2.fillPoly(img, [np.round(r2s.ship_polygon(cam, layout, pose)).astype(np.int32)], (250, 215, 150))  # light blue hull
+    got = r2s.measure_ship(img, layout)
+    assert got["stern_x_m"] == pytest.approx(pose[0], abs=.002)
+    assert got["centre_y_m"] == pytest.approx(pose[1], abs=.002)
+    assert got["iou"] > .95
+    assert "error" in r2s.measure_ship(np.full((480, 640, 3), (60, 200, 200), np.uint8), layout)
+
+
+def test_layout_takes_the_ship_from_a_snapshot(tmp_path):
+    s = snap()
+    s["items"]["ship"] = dict(stern_x_m=.1705, centre_y_m=-.011, yaw_deg=0.)
+    path = tmp_path / "snap.json"
+    path.write_text(json.dumps(s), encoding="utf-8")
+    base, moved = sites.Layout(), sites.Layout(cell_snapshot=str(path), ship_pose="snapshot")
+    a, b = base.sites["ship-stern-l0"]["xy"], moved.sites["ship-stern-l0"]["xy"]
+    assert b[0] - a[0] == pytest.approx(.1705 - base.choices["ship_stern_x_m"], abs=1e-6)
+    assert b[1] - a[1] == pytest.approx(-.011 - base.choices["ship_centre_y_m"], abs=1e-6)
+    with pytest.raises(ValueError, match="no measured ship"):
+        sites.Layout(cell_snapshot=str(_write(tmp_path, snap())), ship_pose="snapshot")  # a snapshot without a ship
+
+
+def _write(tmp_path, data):
+    path = tmp_path / "plain.json"
+    path.write_text(json.dumps(data), encoding="utf-8")
+    return path

@@ -35,6 +35,7 @@ CHOICES = dict(
     tcp_x_arm_a=.0740,       # same jaw, not confirmed on arm_a separately
     sim_tcp_x_m=.0740,       # the MuJoCo pads are the repo's v2.1 STL, whose TCP is .0740: the teacher grasps with this one (STL may not match the installed jaws)
     roll_floor_norm=-18.,    # usable wrist roll floor in the norm unit (coordinator): a step whose joint5 goes below it is flagged
+    ship_pose="assumed",     # "assumed": ship_stern_x_m and ship_centre_y_m above; "snapshot": the hull fitted in cell_snapshot's top frame
     cell_snapshot=None,      # with temp_lanes="snapshot": a rosy.omx-cell-snapshot.v1 file (omx_real2sim.py measure), the lanes the top camera saw then
     wait_pose="side")        # where an arm waits between steps: "side" = home folded but turned to the belt end, out of the middle band
                              # (D-983: the folded home points its jaw at the middle, and arm_a brushed arm_b's jaw at the stand); "home"
@@ -163,11 +164,15 @@ def parse_choices(items):
     return out
 
 
+def load_snapshot(path):
+    if not path:
+        raise ValueError('a "snapshot" choice needs cell_snapshot=PATH')
+    return json.loads((Path(__file__).resolve().parents[2] / path).read_text(encoding="utf-8"))  # a relative path is from the repo root
+
+
 def snapshot_lanes(path, tag):
     """[(xy, yaw rad)] of lanes 1..3 of plate `tag` in a cell snapshot (omx_real2sim.py); a plate it could not measure is refused."""
-    if not path:
-        raise ValueError('temp_lanes="snapshot" needs cell_snapshot=PATH')
-    snap = json.loads((Path(__file__).resolve().parents[2] / path).read_text(encoding="utf-8"))  # a relative path is from the repo root
+    snap = load_snapshot(path)
     lanes = {l["lane"]: l for l in snap["items"]["temp_plates"]["plates"].get(tag, [])}
     if sorted(lanes) != [1, 2, 3]:
         raise ValueError(f"snapshot {path}: plate {tag} has lanes {sorted(lanes)}, not 1-3")
@@ -233,6 +238,11 @@ class Layout:
         self.belt_top = belt_top
         self.box = CONTAINER[c["ship_source"]]
         self.sites = {"belt": dict(kind="belt", xy=tuple(f["pickup_center_m"][:2]), z=belt_top + self.box[2] / 2 + .0005, yaw=0.)}
+        if c["ship_pose"] == "snapshot":
+            ship = load_snapshot(c["cell_snapshot"])["items"].get("ship") or {}
+            if "stern_x_m" not in ship:
+                raise ValueError(f"snapshot {c['cell_snapshot']}: no measured ship ({ship.get('error', 'item missing')})")
+            c["ship_stern_x_m"], c["ship_centre_y_m"] = ship["stern_x_m"], ship["centre_y_m"]
         if c["ship_source"] == "r08-berth":
             self.sites.update(r08_sites(self))
         else:

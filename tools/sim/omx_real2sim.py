@@ -13,12 +13,15 @@ deploy/robot/omx/sim/cell_snapshots/<stamp>.json. Today one item is measured aut
                back-projected through the surveyed top camera onto the deck (containers onto their top); each plate is
                one printed fan (step, radius) placed where most of its visible lanes agree, so a covered lane comes from
                the plate; lane 1 is the smaller-y end of a plate facing its arm (+x), as printed.
+  ship         the r08 hull outline (hull.stl, plan view at its deck) fitted to the hull and the containers on it in the
+               top frame: stern x, centre y and yaw by overlap (IoU).
 The pad size against the printed 90 x 30 mm is the check that the top camera model still holds there. Camera pose, joint
-zeros and servo lag stay with omx_twin.py (omx_twin_night.py); the ship and the arm bases keep their CHOICES values.
+zeros and servo lag stay with omx_twin.py (omx_twin_night.py); the arm bases keep their CHOICES values.
 """
 import argparse
 from concurrent.futures import ThreadPoolExecutor
 import datetime as dt
+import functools
 import hashlib
 import json
 import math
@@ -45,16 +48,17 @@ CHANGED = (.003, 3.)         # m, deg: a lane moved more than this is a changed 
 STAGGER_S = 45
 GAPS = {"temp_plates": "G-17", "ship": "G-18", "camera": "G-19"}  # sim2real registry rows each item reports to (D-480)
 PY = "MUJOCO_GL=egl $HOME/rosy-test/venvs/sim-mujoco/bin/python"
-SNAP_CHOICES = lambda path: ["--choice", f"cell_snapshot={path}", "--choice", "temp_lanes=snapshot"]
-# stage -> (item it reads, role, minutes, command after the python); every stage also reads the camera and arm bases.
+SNAP_CHOICES = lambda path: ["--choice", f"cell_snapshot={path}", "--choice", "temp_lanes=snapshot", "--choice", "ship_pose=snapshot"]
+SHIP_CHANGED_DEG = 1.        # the hull is 316 mm long: 1 deg moves its ends 2.8 mm
+# stage -> (items it reads, role, minutes, command after the python); every stage also reads the camera and arm bases.
 # A policy round (omx_two_arm_policy.py round --choice ..) takes the same choices but is a GPU job a person starts.
 STAGES = {
-    "rehandle": ("temp_plates", "ai", 40, "tools/sim/omx_two_arm_teacher.py run rehandle --out $OUT/rehandle"),
-    "outbound": ("temp_plates", "ai", 50, "tools/sim/omx_two_arm_plan.py compare --scenario outbound --replay-dir $OUT/outbound/plan {choices} && "
+    "rehandle": ({"temp_plates", "ship"}, "ai", 40, "tools/sim/omx_two_arm_teacher.py run rehandle --out $OUT/rehandle"),
+    "outbound": ({"temp_plates", "ship"}, "ai", 50, "tools/sim/omx_two_arm_plan.py compare --scenario outbound --replay-dir $OUT/outbound/plan {choices} && "
                  "$PY tools/sim/omx_two_arm_teacher.py run plan --plan $OUT/outbound/plan/outbound-two-arm.json --out $OUT/outbound"),
-    "matrix-a": ("temp_plates", "model", 60, "tools/sim/omx_two_arm_matrix.py --arm arm_a --out $OUT/matrix-a"),
-    "matrix-b": ("temp_plates", "model", 60, "tools/sim/omx_two_arm_matrix.py --arm arm_b --out $OUT/matrix-b"),
-    "stack": ("ship", "ai", 40, "tools/sim/omx_two_arm_teacher.py run stack --out $OUT/stack"),
+    "matrix-a": ({"temp_plates", "ship"}, "model", 60, "tools/sim/omx_two_arm_matrix.py --arm arm_a --out $OUT/matrix-a"),
+    "matrix-b": ({"temp_plates", "ship"}, "model", 60, "tools/sim/omx_two_arm_matrix.py --arm arm_b --out $OUT/matrix-b"),
+    "stack": ({"ship"}, "ai", 40, "tools/sim/omx_two_arm_teacher.py run stack --out $OUT/stack"),
 }
 
 
@@ -251,7 +255,59 @@ def measure_temp_plates(frame, layout, prev=None):
     return dict(plates=plates, shape=shape, camera_check=scale)
 
 
-def overlay(frame, layout, plates):
+@functools.lru_cache(maxsize=1)
+def hull_outline():
+    """Plan-view outline (ship mm, x stern to bow, y to port) and deck height (mm) of the r08 hull mesh."""
+    import cv2
+
+    data = (sites.SHIP_ASSETS / "hull.stl").read_bytes()
+    n = int.from_bytes(data[80:84], "little")
+    v = np.frombuffer(data[84:84 + n * 50], dtype=np.dtype([("n", "<f4", 3), ("v", "<f4", (3, 3)), ("a", "<u2")]))["v"].reshape(-1, 3)
+    return cv2.convexHull(v[:, :2].astype(np.float32)).reshape(-1, 2), float(v[:, 2].max())
+
+
+def ship_polygon(cam, layout, pose):
+    """Image polygon of the hull deck at (stern x, centre y, yaw rad); the bow points -x as omx_two_arm_sites.r08_to_fixture."""
+    outline, deck = hull_outline()
+    c, s = math.cos(pose[2]), math.sin(pose[2])
+    return np.array([cam.project((pose[0] - c * x / 1000 + s * y / 1000, pose[1] - s * x / 1000 - c * y / 1000, layout.table_z + deck / 1000))
+                     for x, y in outline])
+
+
+def measure_ship(frame, layout):
+    """Where the r08 hull stands: its outline fitted to the hull and the containers on it by overlap, a coarse grid around the
+    layout's ship then a finer climb. The hull is light blue (saturation 70-160, value 200+: the grey floor and white plates are
+    outside); the containers are orange (hue under 18: the yellow table is 21)."""
+    import cv2
+
+    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+    m = cv2.inRange(hsv, (90, 70, 200), (110, 160, 255)) | cv2.inRange(hsv, (0, 120, 150), (17, 255, 255))
+    m = cv2.morphologyEx(m, cv2.MORPH_CLOSE, np.ones((9, 9), np.uint8))
+    n, lab, stats, _ = cv2.connectedComponentsWithStats(m)
+    if n < 2:
+        return dict(error="no hull-coloured area in the top frame")
+    blob = (lab == 1 + int(np.argmax(stats[1:, cv2.CC_STAT_AREA]))).astype(np.uint8)
+    blob = cv2.drawContours(np.zeros_like(blob), cv2.findContours(blob, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[0], -1, 1, -1)
+    cam = Camera(layout.fixture["real_cameras"]["top"], frame.shape[:2])
+
+    def iou(pose):
+        hull = cv2.fillPoly(np.zeros_like(blob), [np.round(ship_polygon(cam, layout, pose)).astype(np.int32)], 1)
+        return (hull & blob).sum() / max((hull | blob).sum(), 1)
+
+    x0, y0 = layout.choices["ship_stern_x_m"], layout.choices["ship_centre_y_m"]
+    best = max(((x, y, 0.) for x in np.arange(x0 - .06, x0 + .06, .004) for y in np.arange(y0 - .05, y0 + .05, .004)), key=iou)
+    for step in (.002, .001, .0005):
+        while True:
+            near = max(((best[0] + a * step, best[1] + b * step, best[2] + c * step * 2) for a in (-1, 0, 1) for b in (-1, 0, 1)
+                        for c in (-1, 0, 1)), key=iou)
+            if iou(near) <= iou(best):
+                break
+            best = near
+    return dict(stern_x_m=round(float(best[0]), 4), centre_y_m=round(float(best[1]), 4), yaw_deg=round(math.degrees(best[2]), 2),
+                iou=round(float(iou(best)), 3), model="r08")
+
+
+def overlay(frame, layout, plates, ship=None):
     import cv2
 
     cam = Camera(layout.fixture["real_cameras"]["top"], frame.shape[:2])
@@ -268,6 +324,9 @@ def overlay(frame, layout, plates):
                         cv2.FONT_HERSHEY_SIMPLEX, .4, colour, 1)
     for arm in layout.arms.values():
         cv2.circle(img, tuple(int(v) for v in cam.project(arm.base)), 4, (0, 0, 255), -1)
+    if ship and "error" not in ship:
+        pose = (ship["stern_x_m"], ship["centre_y_m"], math.radians(ship["yaw_deg"]))
+        cv2.polylines(img, [np.round(ship_polygon(cam, layout, pose)).astype(np.int32)], True, (255, 0, 255), 1)
     return img
 
 
@@ -281,8 +340,9 @@ def measure(run, prev_path=None):
     top = cv2.imread(str(frames["top"])) if "top" in frames else None
     if top is None:
         raise SystemExit(f"no readable top frame in {run / 'frames'}")
-    items = {"temp_plates": lambda: measure_temp_plates(top, layout, prev and prev["items"]["temp_plates"])}
-    with ThreadPoolExecutor() as pool:  # items are independent; more join here (ship hull, belt end) as they get measurers
+    items = {"temp_plates": lambda: measure_temp_plates(top, layout, prev and prev["items"]["temp_plates"]),
+             "ship": lambda: measure_ship(top, layout)}
+    with ThreadPoolExecutor() as pool:  # items are independent; more join here (belt end, arm bases) as they get measurers
         done = {k: pool.submit(f) for k, f in items.items()}
         results = {k: f.result() for k, f in done.items()}
     tp = results["temp_plates"]
@@ -292,9 +352,10 @@ def measure(run, prev_path=None):
                 items=dict(temp_plates=dict(plates={t: p["lanes"] for t, p in tp["plates"].items() if "lanes" in p},
                                             seen={t: p["seen"] for t, p in tp["plates"].items() if "lanes" in p},
                                             errors={t: p["error"] for t, p in tp["plates"].items() if "error" in p},
-                                            shape=tp["shape"], camera_check=tp["camera_check"])))
+                                            shape=tp["shape"], camera_check=tp["camera_check"]),
+                           ship=results["ship"]))
     (run / "snapshot.json").write_text(json.dumps(snap, indent=1), encoding="utf-8")
-    cv2.imwrite(str(run / "overlay.png"), overlay(top, layout, tp["plates"]))
+    cv2.imwrite(str(run / "overlay.png"), overlay(top, layout, tp["plates"], results["ship"]))
     return snap
 
 
@@ -312,9 +373,16 @@ def diff(old, new):
             dyaw = abs((lb[n]["yaw_deg"] - la[n]["yaw_deg"] + 90) % 180 - 90)
             if d > CHANGED[0] or dyaw > CHANGED[1]:
                 changed.setdefault("temp_plates", []).append(f"{tag}-{n} {d * 1000:.0f} mm {dyaw:.1f} deg")
+    sa, sb = old["items"].get("ship"), new["items"].get("ship")
+    if sa != sb and (not sa or not sb or "error" in sa or "error" in sb):
+        changed["ship"] = ["measured" if sb and "error" not in sb else "not measured"]
+    elif sa:
+        d = math.dist((sa["stern_x_m"], sa["centre_y_m"]), (sb["stern_x_m"], sb["centre_y_m"]))
+        if d > CHANGED[0] or abs(sb["yaw_deg"] - sa["yaw_deg"]) > SHIP_CHANGED_DEG:
+            changed["ship"] = [f"{d * 1000:.0f} mm {abs(sb['yaw_deg'] - sa['yaw_deg']):.1f} deg"]
     if old.get("camera") != new.get("camera"):
         changed["camera"] = ["top camera model"]
-    rerun = sorted(STAGES) if "camera" in changed else sorted(s for s, (item, *_) in STAGES.items() if item in changed)
+    rerun = sorted(STAGES) if "camera" in changed else sorted(s for s, (items, *_) in STAGES.items() if items & set(changed))
     return changed, rerun
 
 
