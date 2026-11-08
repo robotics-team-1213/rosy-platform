@@ -108,6 +108,9 @@ def main(argv=None):
     p.add_argument("--since", default="20261101")
     p.add_argument("--no-isaac", action="store_true")
     args = p.parse_args(argv)
+    # remote_isaac refuses anything but a full lower-case sha (the night's Isaac suite errored on a short one)
+    args.sha = subprocess.run(["git", "rev-parse", "--verify", f"{args.sha}^{{commit}}"], cwd=ROOT, capture_output=True,
+                              text=True, check=True).stdout.strip()
     now = dt.datetime.now()
     h, m = (int(x) for x in args.until.split(":"))
     end = now.replace(hour=h, minute=m, second=0, microsecond=0)
