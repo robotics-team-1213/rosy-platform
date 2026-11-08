@@ -42,7 +42,7 @@ HW_BITS = {1: "input voltage", 4: "overheating", 8: "motor encoder", 16: "electr
 REBOOTABLE = 1 | 32       # a latch the cause of which is load or supply, not heat or damage
 HOME_TOL = 3.0            # units: the runner's SETTLE_TOL
 INCIDENTS = Path("incidents")
-STILLS = INCIDENTS / "stills"  # <arm>-<camera>.jpg, kept by the carry at a stop no fault record covers (cell_hooks.lift_stall)
+STILLS = INCIDENTS / "stills"  # <arm>-<camera>.jpg, kept by the carry at a stop no fault record covers (cell_hooks.stills)
 
 
 def bits(code: int) -> list[str]:
@@ -100,11 +100,16 @@ def link_for(arm: str):
         return None
 
 
-def send(arm: str, link) -> bool:
-    """Resend the unsent reports of `arm` (each file leaves the outbox only once Fleet accepted it)."""
+def label_box(arm: str) -> list[Path]:
+    """Unsent label-only reports (a guard stop a person names the cause of): they never hold the arm or block a session."""
+    return sorted(incidents_dir().joinpath("labels").glob(f"{arm}-*.json"))
+
+
+def send(arm: str, link, paths=None) -> bool:
+    """Resend the unsent reports of `arm` (each file leaves the outbox only once Fleet accepted it), then their evidence."""
     from core_common.protocol.arm_incidents import ArmIncidentReport
 
-    for path in outbox(arm):
+    for path in outbox(arm) if paths is None else paths:
         try:
             report = ArmIncidentReport.model_validate_json(path.read_text())
             reply = link.post(report.model_copy(update={"source_id": link.source_id}))  # the registered source name
@@ -112,8 +117,52 @@ def send(arm: str, link) -> bool:
             print(f"incident report {path.name} not sent: {type(exc).__name__}: {str(exc)[:120]}")
             return False
         path.unlink()
-        keep_hold(arm, reply.hold.reason or "arm incident not cleared", reply.hold.incident_ids, "fleet")
+        upload_evidence(path.with_name(path.stem + ".evidence"), reply, link)
+        if reply.hold.held:  # a label-only report alone leaves the arm free
+            keep_hold(arm, reply.hold.reason or "arm incident not cleared", reply.hold.incident_ids, "fleet")
     return True
+
+
+def evidence_of(since: float) -> dict | None:
+    """The newest stop bundle (cell_evidence) of this session: its jaw-tip crops, then whole frames from 3 s before on,
+    at most ARM_INCIDENT_EVIDENCE_FRAMES; {"bundle", "files"} or None."""
+    from core_common.protocol.arm_incidents import ARM_INCIDENT_EVIDENCE_FRAMES
+
+    bundles = [p for p in sorted((INCIDENTS / "evidence").glob("*-stop")) if p.stat().st_mtime >= since]
+    if not bundles:
+        return None
+    manifest = json.loads((bundles[-1] / "manifest.json").read_text())
+    tips = [f["file"] for f in manifest["files"] if f["file"].endswith("-tip.jpg")]
+    whole = [f["file"] for f in sorted(manifest["files"], key=lambda f: f.get("t_rel_s", 0)) if "camera" in f
+             and f["t_rel_s"] >= -3]
+    return {"bundle": str(bundles[-1]), "files": (tips + whole)[:ARM_INCIDENT_EVIDENCE_FRAMES]}
+
+
+def upload_evidence(sidecar: Path, reply, link) -> None:
+    """Best effort, after the report: a frame Fleet did not take is left out, never resent and never a hold."""
+    import base64
+    import hashlib
+
+    from core_common.protocol.arm_incidents import ArmIncidentEvidenceFrame
+
+    if not sidecar.is_file():
+        return
+    try:  # a cut sidecar or a pruned bundle must not stop a start (refuse_if_held sends label reports first)
+        chosen = json.loads(sidecar.read_text())
+        listed = {f["file"]: f for f in json.loads((Path(chosen["bundle"]) / "manifest.json").read_text())["files"]}
+        for name in chosen["files"]:
+            try:
+                data, tip = (Path(chosen["bundle"]) / name).read_bytes(), name.endswith("-tip.jpg")
+                link.post_evidence(reply.incident_id, ArmIncidentEvidenceFrame(
+                    camera=listed.get(name, {}).get("camera") or name.removesuffix("-tip.jpg"),
+                    t_rel_s=listed.get(name, {}).get("t_rel_s", 0.0), kind="tip" if tip else "full",
+                    sha256=hashlib.sha256(data).hexdigest(), jpeg_b64=base64.b64encode(data).decode()))
+            except Exception as exc:
+                print(f"evidence {name} not sent: {type(exc).__name__}: {str(exc)[:120]}")
+    except Exception as exc:
+        print(f"evidence of {sidecar.name} not sent: {type(exc).__name__}: {str(exc)[:120]}")
+    finally:
+        sidecar.unlink(missing_ok=True)
 
 
 def refuse_if_held(arm: str | None, link=None) -> None:
@@ -121,6 +170,8 @@ def refuse_if_held(arm: str | None, link=None) -> None:
     if not arm:
         return
     link = link or link_for(arm)
+    if link and label_box(arm):  # label-only reports go when they can; they never decide the start
+        send(arm, link, label_box(arm))
     sent = send(arm, link) if link and outbox(arm) else not outbox(arm)
     answer = None
     if link:
@@ -208,6 +259,9 @@ def facts(session: dict, home=None, arm: str | None = None) -> dict:
                                            for r in flagged][-5:],
             "windup_hits": [h for arm in replay.values() for h in arm["hits"]],
             "stop_reading": stop_reading(status),
+            # every guard stop on contact, held or not: what a person names the cause of (labels for learning)
+            "stops": [{k: r.get(k) for k in ("command", "error", "t")} for r in status
+                      if str(r.get("error") or "").startswith("contact in ") and not str(r["error"]).startswith("contact in park")][-5:],
             "fault_records": [str(p) for p in kept],
             "frames": ([str(p.with_name(f"{p.stem}-{v}.jpg")) for p in kept[-1:] for v in ("top", "side")]
                        or stills_of(arm, session.get("started", 0)))}
@@ -216,6 +270,9 @@ def facts(session: dict, home=None, arm: str | None = None) -> dict:
 def decide(f: dict) -> dict:
     """Measurement first: (chosen actions, hold or not, why). Returns {"actions", "hold", "reason", "offered"}."""
     signs = bool(f["latched"] or f["windup_hits"] or f["flagged"] or not f["safe_end"])
+    if not signs and f.get("stops"):  # the recovery handled it; a person still names what stopped it
+        return {"actions": [], "hold": False, "offered": [],
+                "reason": f"guard stop: {f['stops'][-1]['error']}; reported for a person's cause, the arm is not held"}
     if not signs:
         return {"actions": [], "hold": False, "offered": [], "reason": "no incident sign"}
     caught_only = (f["safe_end"] and not f["latched"] and not f["windup_hits"]
@@ -290,7 +347,7 @@ def handle(session_path: Path, arm: str, act=None, decisions=Path("decisions.jso
         "stage": "incident", "facts": {k: f[k] for k in ("latched", "folded", "windup_hits", "flagged", "safe_end")},
         "options": d["offered"] + ["hold_for_person"], "chosen": d["actions"] + (["hold_for_person"] if d["hold"] else []),
         "by": "measurement", "reason": d["reason"], "frames": f["frames"], "arm_id": arm, "t": round(time.time(), 3)})
-    if d["hold"]:  # if Fleet cannot be reached the next session is still refused (the local hold exists)
+    if d["hold"] or f.get("stops"):  # if Fleet cannot be reached a held arm's next session is still refused
         sid = session.get("motor_health_session")
         try:
             sid = str(uuid.UUID(str(sid)))
@@ -302,9 +359,13 @@ def handle(session_path: Path, arm: str, act=None, decisions=Path("decisions.jso
             print(f"incident report not built: {type(exc).__name__}: {str(exc)[:120]}")
             report = None
         if report is not None:
-            (incidents_dir() / "outbox").mkdir(parents=True, exist_ok=True)
-            (incidents_dir() / "outbox" / f"{arm}-{sid}.json").write_text(report.model_dump_json())
-            incident["reported"] = bool(link) and send(arm, link)
+            box = incidents_dir() / ("outbox" if d["hold"] else "labels")  # a label-only report never blocks a start
+            box.mkdir(parents=True, exist_ok=True)
+            (box / f"{arm}-{sid}.json").write_text(report.model_dump_json())
+            chosen = evidence_of(session.get("started", 0))
+            if chosen:
+                (box / f"{arm}-{sid}.evidence").write_text(json.dumps(chosen))
+            incident["reported"] = bool(link) and send(arm, link, None if d["hold"] else label_box(arm))
     (folder / "incident.json").write_text(json.dumps(incident, indent=1, default=str))
     return {"incident": True, "folder": str(folder), **incident}
 

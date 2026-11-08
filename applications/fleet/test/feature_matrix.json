@@ -3918,6 +3918,7 @@
       ],
       "consumers": [
         "applications/fleet/web/charge-bays-view.js",
+        "applications/fleet/web/site-rules-judge.js",
         "applications/fleet/web/platoon-view.js",
         "applications/fleet/web/calibration/map-fit-view.js",
         "applications/fleet/web/map/map-polling.js",
@@ -4108,6 +4109,14 @@
           "resolution": "literal-or-template",
           "request_ids": [
             "GET:/api/fleet/site-map/drawing-projections/{projection_sha256}/render"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/site-rules-judge.js",
+          "expression": "/api/fleet/site-rules/judge",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/site-rules/judge"
           ]
         }
       ],
@@ -4468,6 +4477,23 @@
           ],
           "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
           "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/site-map/drawing-extractions/{extraction_sha256}/validate"
+        },
+        {
+          "id": "POST:/api/fleet/site-rules/judge",
+          "method": "POST",
+          "path": "/api/fleet/site-rules/judge",
+          "implementation": "operations/fleet/fleet/server/sitemap/site_rules_routes.py",
+          "handler": "site_rules_judge",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_site_rules_http.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/site-rules/judge"
         }
       ],
       "flows": [

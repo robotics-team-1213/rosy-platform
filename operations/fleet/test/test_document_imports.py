@@ -72,6 +72,7 @@ OWN = {
         "device-discovery.js",
         "queues.js",  # D-540 (d): the exception queues, moved out of roster.js
         "card-trip.js",  # D-540 (d): the card 운행… form and the 대형·대열 convoy
+        "site-rules-judge.js",  # D-982: the trip form's site-rules what-if (advice only)
         "line-stuck.js",
         "stuck-evidence.js",  # network load: the stuck picture as raw JPEG (line-stuck.js)
         "device-watch.js",  # map-stage watch: ceiling toggle and the stuck front frame

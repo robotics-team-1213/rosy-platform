@@ -30,7 +30,7 @@ from cell_scene_guard import scene_moved
 
 NEAR_PX, ROUNDS = 60, 5  # about 1 mm per px in the 650 mm top view; a long box is 90 mm
 # what the trace measured -> what it asks for; a model's text never chooses (D-971)
-# shortcut: cell_why reads no too_fast until a free-motion baseline separates it from contact, so that entry waits for it
+# cell_why reads too_fast only where the same chunk ran on, as fast, lagging as much (its free-run baseline)
 PREFER = {"too_fast": "slow_down", "blocked": "push_clear"}
 SLOWER, SLOWEST = 0.7, 0.25  # lift_guard_frac: each slow_down, and its floor
 
@@ -159,7 +159,9 @@ def main(argv=None) -> int:
     def explain(cause, out):  # measurement only: the control PC does not call a model; Fleet hands the incident to the AI PC (D-971)
         # shortcut: the newest trace in the working folder, as the session script writes it; upgrade if a run ever starts elsewhere
         traces = sorted(Path(".").glob(f"trace-{config.get('arm_id', 'arm_s')}-*.jsonl"), key=lambda p: p.stat().st_mtime)
-        return cell_why.explain(cause, out["result"], cell_why.read_trace(traces[-1]) if traces else [], [], None, why_path, since=started)
+        rows = cell_why.read_trace(traces[-1]) if traces else []
+        # the carry's finished runs join the baseline before the stop is read against it
+        return cell_why.explain(cause, out["result"], rows, [], None, why_path, since=started, free=cell_why.learn(rows, work / "free_lag.json"))
 
     def slow():
         slower = round(config["plan"].get("lift_guard_frac", 0.85) * SLOWER, 3)

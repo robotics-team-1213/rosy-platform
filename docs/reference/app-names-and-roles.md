@@ -28,7 +28,7 @@ ROSY 제품 앱이 아닌 외부 업무 앱은 플랫폼 Python·DB·ROS를 쓰�
 
 | 이름 | 소속과 범위 |
 |---|---|
-| **Cell** (기존 공정 앱 명칭 Rosy Cell) | **Fleet의 팔레타이징 작업 준비**. `/console/cell`, 제목 `Rosy Fleet — Cell`. 레시피·작업대 설정 → 계획 미리보기 → 작업 제안. 별도 승인·진행은 Fleet이 소유 |
+| **팔레트 적재** (코드 id `Cell`, 기존 공정 앱 명칭 Rosy Cell) | **Fleet의 팔레타이징 작업 준비**. `/console/cell`, 제목 `Rosy Fleet — 팔레트 적재`(D-974). 레시피·작업대 설정 → 계획 미리보기 → 작업 제안. 별도 승인·진행은 해당 관제의 Fleet이 소유 |
 | **PC 정비** | **Fleet의 PC 조치 화면**. `/console/maintenance`, 제목 `Rosy Fleet — PC 정비`. 실행과 판단은 D-524 경로와 각 PC의 도우미가 맡는다(D-991). 로봇 유지보수(D-988)와 기기 기록(care)은 따로다 |
 | **Studio** | Learning 안의 검수 작업대. Learning 전체 앱 이름으로 쓰지 않음 |
 | **Pilot 연결 로비** | Android에서 신뢰된 대상 발견·접속을 제공하는 Pilot 하위 화면 |

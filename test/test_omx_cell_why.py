@@ -20,7 +20,10 @@ def lift(present_speed, sent_speed=3.0, seconds=1.45, droop=0.54):
 
 
 def answers(hypothesis="too_fast", missing=("frames at the stop",)):
-    return lambda prompt, images, schema: {"hypothesis": hypothesis, "reason": "seen", "missing": list(missing)}
+    def ask(prompt, images, schema):
+        assert list(schema["properties"])[0] == "seen"  # what is shown comes before the pick
+        return {"seen": "arm folded", "hypothesis": hypothesis, "reason": "seen", "missing": list(missing)}
+    return ask
 
 
 @pytest.mark.parametrize("sent, present", [(3.52, 1.71), (1.98, 1.25), (2.07, 1.14)])
@@ -28,6 +31,57 @@ def test_a_joint_that_kept_moving_is_not_called_too_fast(sent, present):
     """Recorded descents the work record calls real contact, 2026-11-06 and 07: the wrist kept moving at these speeds."""
     row = w.read_motion(lift(present, sent_speed=sent))
     assert row["verdict"] == "undetermined" and row["joint"] == "wrist_flex" and row["present_units_s"] == present
+
+
+def descent(present, sent_speed, chunk="descend_pick"):
+    return [{**r, "chunk": chunk} for r in lift(present, sent_speed=sent_speed)]
+
+
+@pytest.mark.parametrize("rows, verdict", [
+    (descent(1.25, 1.98), "blocked"),  # 11-07 00:17: the bare-table descent at this speed lagged 0.64, this one reached 1.6
+    (descent(1.71, 3.52), "undetermined"),  # 11-06 23:09: faster than any descent measured with nothing in the way
+    (descent(1.25, 1.98, chunk="descend_place"), "undetermined"),  # no baseline for the place descent
+    (descent(1.5, 1.98), "undetermined"),  # lag 1.2: under 1.8 times what a free descent lagged
+])
+def test_a_stop_is_read_against_the_same_chunk_with_nothing_in_the_way(rows, verdict):
+    assert w.read_motion(rows)["verdict"] == verdict
+
+
+HELD_LIFT = lift(2.3, sent_speed=3.58)  # 2026-11-07 02:15: a held lift stopped at 3.58 units/s, lag about 2.3
+RAN_ON = {"lift_pick": {"wrist_flex": [[3.80, 2.10, 1.0], [3.70, 2.20, 2.0]]}}  # held lifts that ran to their end
+
+
+@pytest.mark.parametrize("free, verdict", [
+    (RAN_ON, "too_fast"),  # as fast and as laggy with nothing in the way: the command outran the joint
+    ({"lift_pick": {"wrist_flex": [[3.80, 2.10, 1.0]]}}, "undetermined"),  # one run is not a baseline
+    ({"lift_pick": {"wrist_flex": [[3.0, 2.10, 1.0], [3.1, 2.2, 2.0]]}}, "undetermined"),  # slower runs say nothing of this speed
+    ({"lift_pick": {"wrist_flex": [[3.80, 1.0, 1.0], [3.70, 1.1, 2.0]]}}, "blocked"),  # free runs lag half as much
+    ({"lift_pick": {"elbow_flex": [[3.80, 2.10, 1.0], [3.70, 2.20, 2.0]]}}, "undetermined"),  # another joint's runs
+])
+def test_a_stop_is_read_against_the_finished_runs_of_its_chunk(free, verdict):
+    assert w.read_motion(HELD_LIFT, free)["verdict"] == verdict
+
+
+def test_a_stop_reports_the_load_it_pressed_with_and_free_runs_keep_theirs():
+    loaded = [{**r, **({"load": {"current_ma": [0, 0, 0, 40 + i, 0, 0], "pwm": [0, 0, 0, 90, 0, 0]}} if i % 30 == 0 else {})}
+              for i, r in enumerate(HELD_LIFT)]
+    m = w.read_motion(loaded)
+    assert (m["current_ma_end"], m["pwm_load_end"], m["current_ma_peak"]) == (70, 90, 70)
+    assert "current_ma_end" not in w.read_motion(HELD_LIFT)  # an older trace has no load: nothing is made up
+    free = w.free_runs([{**r, "load": {"current_ma": [0, 0, 0, 55, 0, 0], "pwm": [0] * 6}} for r in lift(2.9, sent_speed=3.0)])
+    assert free["lift_pick"]["wrist_flex"][0][3] == 55
+
+
+def test_finished_runs_are_learned_once_and_stops_are_not(tmp_path):
+    finished = lift(2.9, sent_speed=3.0)  # lag ends at 0.68: ran on
+    stopped = [{**r, "t": r["t"] + 10} for r in HELD_LIFT]  # lag ends at 2.3: a stop
+    rows = finished + [{"t": 102, "chunk": "park", "sent": [0] * 6, "present": [0] * 6}] + stopped
+    path = tmp_path / "free_lag.json"
+    free = w.learn(rows, path)
+    runs = free["lift_pick"]["wrist_flex"]
+    assert len(runs) == 1 and runs[0][0] == pytest.approx(3.0, abs=0.01) and runs[0][1] < 1.0
+    assert w.learn(rows, path)["lift_pick"]["wrist_flex"] == runs  # the same trace again adds nothing
+    assert free["descend_pick"]["wrist_flex"] == w.SEED["descend_pick"]["wrist_flex"]  # the seed stays
 
 
 def test_a_joint_that_nearly_stands_was_blocked():
@@ -58,8 +112,13 @@ def test_the_model_cannot_overrule_the_measurement_and_a_disagreement_stays_open
 def test_where_the_measurement_cannot_tell_the_model_may(tmp_path):
     row = w.explain("misaligned", "stopped: misaligned", [], ["img"], answers("wrong_position"), tmp_path / "why.jsonl")
     assert row["hypothesis"] == "wrong_position" and row["by"] == "model" and not row["repeat_unknown"]
-    moving = w.explain("lift_stall", "x at run lift_pick", lift(1.5), [], answers("snagged"), tmp_path / "why.jsonl")
-    assert moving["hypothesis"] == "snagged" and moving["by"] == "model"  # recovery follows only by == measurement
+
+@pytest.mark.parametrize("said", sorted(w.ARM_CAUSES))
+def test_why_an_arm_stopped_is_the_measurements_and_a_models_guess_stays_advice(tmp_path, said):
+    """11-07: no model told contact from speed or a snag in 13 recorded failures; each guessed differently."""
+    moving = w.explain("lift_stall", "x at run lift_pick", lift(1.5), [], answers(said), tmp_path / "why.jsonl")
+    assert (moving["hypothesis"], moving["by"], moving["model"]["hypothesis"]) == ("unknown", "nobody", said)
+    assert w.open_questions(tmp_path / "why.jsonl")["lift_stall"]["missing"] == ["frames at the stop"]
 
 
 def test_no_model_or_a_bad_answer_leaves_the_measurement_or_unknown(tmp_path):
@@ -137,6 +196,40 @@ def test_a_repeat_says_nothing_unless_it_really_is_slower_at_the_same_place(tmp_
     else:
         w.explain("lift_stall", STALL, FAST, [], None, path)
     assert w.explain("lift_stall", STALL, retry, [], None, path, since=since)["motion"]["verdict"] == "undetermined", name
+
+
+def from_below(offset, seconds, sent_speed=3.0):
+    """The same lift started `offset` lower on wrist_flex and run long enough to reach FAST's stop."""
+    rows = lift(1.5, sent_speed=sent_speed, seconds=seconds)
+    for row in rows:
+        row["sent"][3] -= offset
+        row["present"][3] -= offset
+    return rows
+
+
+@pytest.mark.parametrize("retry, verdict", [
+    (from_below(3.0, 3.43), "blocked"),  # 11-07 00:17 -> 01:15: started 12 mm higher, stopped at the same FK z
+    (from_below(3.0, 3.43, sent_speed=3.6), "undetermined"),  # faster: more lag in less time says nothing
+    (from_below(3.0, 2.0), "undetermined"),  # stopped elsewhere
+])
+def test_a_stop_at_the_same_place_from_another_start_excludes_speed(tmp_path, retry, verdict):
+    path = tmp_path / "why.jsonl"
+    w.explain("lift_stall", STALL, FAST, [], None, path)
+    assert w.explain("lift_stall", STALL, retry, [], None, path)["motion"]["verdict"] == verdict
+
+
+def test_a_measured_block_at_the_same_place_settles_the_earlier_unknown(tmp_path):
+    path = tmp_path / "why.jsonl"
+    first = w.explain("lift_stall", STALL, FAST, [], None, path)
+    assert w.open_questions(path)["lift_stall"]["times"] == 1
+    later = w.explain("lift_stall", STALL, SLOW, [], None, path)
+    assert later["hypothesis"] == "blocked" and later["settles"] == [first["t"]] and w.open_questions(path) == {}
+    other, elsewhere = tmp_path / "other.jsonl", from_below(5.0, 1.45)
+    for row in elsewhere:
+        row["present"][3] = row["present"][3] - 1.4 * (row["t"] - 100)  # nearly still: blocked, 5 below FAST's stop
+    w.explain("lift_stall", STALL, FAST, [], None, other)
+    elsewhere_row = w.explain("lift_stall", STALL, elsewhere, [], None, other)
+    assert elsewhere_row["hypothesis"] == "blocked" and elsewhere_row["settles"] == []
 
 
 def test_another_chunks_stop_is_no_repeat(tmp_path):

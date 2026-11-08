@@ -102,10 +102,20 @@ STILL_HOLDING_UNITS = 4.0
 
 
 def transfer_folded(cell, library, closed: float | None = None, wrist=None, after_place=None, pinch=None, feel=None,
-                    sequence=FOLDED, lift_stall=None) -> dict:
+                    sequence=FOLDED, lift_stall=None, at_stop=None) -> dict:
     """cell_pipeline.transfer with a fold home between lift and place. Lifting a held box from the reach straight
     to the transit height took shoulder_lift to 525 of 600 and the runner's strain hold stopped it; folding home
-    first and placing from home went clean twice (2026-10-28). `cell` is a Gate on the real arm."""
+    first and placing from home went clean twice (2026-10-28). `cell` is a Gate on the real arm. at_stop
+    (cell_hooks.Stills) keeps every stop's frames before the arm moves on, a finished pick descent as its control, and is
+    closed however the carry ends."""
+    try:
+        return _transfer(cell, library, closed, wrist, after_place, pinch, feel, sequence, lift_stall, at_stop)
+    finally:
+        if hasattr(at_stop, "close"):
+            at_stop.close()
+
+
+def _transfer(cell, library, closed, wrist, after_place, pinch, feel, sequence, lift_stall, at_stop) -> dict:
     steps = []
 
     def run(command):
@@ -125,6 +135,8 @@ def transfer_folded(cell, library, closed: float | None = None, wrist=None, afte
             # strain after release: backing up brings the open jaws round the box again (2026-10-28 Pinky); fold from here
             run("park")
             continue
+        if status.get("contact") and at_stop is not None:  # the stop as it stands, before a retreat or a release hides it
+            at_stop(status.get("state"), status)
         if status.get("contact") and command == "run lift_pick" and lift_stall is not None:
             # 2026-11-07: the retreat pressed the held box down (lag 2.54) and the park then refused to close on it
             freed = lift_stall(cell)
@@ -145,6 +157,8 @@ def transfer_folded(cell, library, closed: float | None = None, wrist=None, afte
             if aligned["verdict"] == "refuse":
                 run("park")
                 return {"result": "misaligned", "at": "wrist", "wrist": aligned, "steps": steps}
+        if command == "run descend_pick" and hasattr(at_stop, "control"):  # reached the grasp height: met nothing
+            at_stop.control(status)
         if command == "run descend_pick" and pinch is not None:  # cell_pinch: lowered, is the box between the fingers?
             seen = pinch()
             steps.append({"command": "pinch", **{k: seen.get(k) for k in ("verdict", "why", "dx_mm", "dy_mm")}})

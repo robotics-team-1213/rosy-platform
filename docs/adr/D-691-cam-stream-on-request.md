@@ -17,3 +17,5 @@
 **Consequences:** 새 Vision과 새 앱이 같이 있어야 대기가 된다. 한쪽만 새것이면 오늘처럼 계속 보낸다. 콘솔을 닫아도 30초간 프레임이 온다. 그 사이 추적도 그 프레임을 쓸 수 있다. 30초가 지나면 최신 프레임은 오래되고 미리보기는 404가 되며, 다음 읽기가 센서를 다시 연다. 카메라가 열리는 동안의 첫 읽기는 프레임이 없을 수 있다. 심한 발열로 멈춘 동안에도 미리보기는 비고, 식으면 요청이 아직 유효할 때 다시 보낸다.
 
 **Validation:** `operations/vision/test/test_stream_demand.py`, `test_protocol.py`의 `demand` 벡터, 앱 JVM `CaptureGateTest`·`CaptureCoolingPolicyTest`·`ProtocolTest`. 2026-10-12 Galaxy S21에 이 브랜치의 디버그 APK를 같은 서명으로 설치했다. 현장 Vision은 `demand`를 보내지 않아 연결 약 2초 뒤 기존 송출로 붙었고, Fleet lease로 받은 `ceiling_north` JPEG는 1280×720, 순번 1285에서 1289로 늘었다. 화면을 끈 뒤에도 순번 1434가 왔다. 그때 배터리는 36.2°C라 발열 정지는 기기에서 확인하지 않았다. 대기 전류와 요청 뒤 첫 프레임까지의 시간은 측정하지 않았다.
+
+**개정 (2026-11-07, D-989):** Vision 추적은 여전히 스스로 영상을 부르지 않는다. 예외는 운영자가 연 120초 위치 찾기 세션 하나다. Fleet이 detections config에 `stream_wanted:true`를 실으면 Vision이 미리보기 읽기와 같은 30초 유지를 건다.

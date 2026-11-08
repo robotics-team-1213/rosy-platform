@@ -250,6 +250,9 @@ cp "$NATIVE_RUNTIME_SOURCE/rosy-ssh-access.path" "$OVERLAY/etc/systemd/system/"
 cp "$NATIVE_RUNTIME_SOURCE/rosy-ssh-access-boot.service" "$OVERLAY/etc/systemd/system/"
 cp "$NATIVE_RUNTIME_SOURCE/rosy-ssh-password-expire.service" "$OVERLAY/etc/systemd/system/"
 cp "$NATIVE_RUNTIME_SOURCE/rosy-ssh-password-expire.timer" "$OVERLAY/etc/systemd/system/"
+# D-27: halt on CORE's deep-battery request; only the watch is enabled.
+cp "$NATIVE_RUNTIME_SOURCE/rosy-lowbatt-shutdown.service" "$OVERLAY/etc/systemd/system/"
+cp "$NATIVE_RUNTIME_SOURCE/rosy-lowbatt-shutdown.path" "$OVERLAY/etc/systemd/system/"
 # D-477: the one-shot tailnet join, condition-gated on /etc/rosy/tailscale-join.json.
 cp "$NATIVE_RUNTIME_SOURCE/rosy-tailscale-join.service" "$OVERLAY/etc/systemd/system/"
 cp "$NATIVE_RUNTIME_SOURCE/defaults.yaml" "$OVERLAY/etc/rosy/defaults.yaml"

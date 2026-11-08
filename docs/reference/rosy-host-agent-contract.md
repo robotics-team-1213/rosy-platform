@@ -155,8 +155,8 @@ CORE의 typed API를 부른다.
 - `code`는 안정 식별자다. `deploy/robot/pinky_pro/release/manifest.py`와 `signing.py`의 Rejection
   코드를 그대로 쓴다. 설계 §11이 집계 숫자가 아니라 오류 코드와 복구 행동을
   요구하기 때문이다.
-- `actor`는 CORE가 채운다. Host Agent는 이를 **감사 기록용으로만** 쓰고 권한
-  판단의 근거로 삼지 않는다 — 권한은 §3의 peer credential과 §6의 allowlist다.
+- `actor`는 CORE가 채운다. Host Agent는 peer credential(§3)로 CORE임을 확인한 뒤 `actor.role`을
+  §6 allowlist의 등급과 비교하고 감사 기록에 남긴다. 사람의 권한 판단은 CORE가 먼저 한다.
 - `confirmed`는 파괴적 명령의 재확인 여부다. `false`면 Host Agent가 거부한다.
 - `idempotency_key`가 같은 요청이 재도달하면 **다시 실행하지 않고 최초 결과를
   반환한다.** 네트워크가 끊긴 대시보드의 재시도가 두 번째 재부팅이 되어서는 안 된다.
@@ -177,6 +177,11 @@ Host Agent는 아래 명령만 안다. 임의 명령, 임의 경로, 임의 인�
 | command | 파라미터 | 역할 | 재확인 |
 |---|---|---|---|
 | `network.status` | — | viewer | 불필요 |
+| `navigation_approval.status` | — | viewer | 불필요 |
+| `navigation_approval.begin` | — | operator | 불필요 |
+| `navigation_approval.cancel` | — | operator | 불필요 |
+| `navigation_approval.seal` | `operator`: 로그인 신원, `test_surface`: floor / lifted | operator | 불필요 |
+| `navigation_approval.start_navigation` | — | operator | 불필요 |
 | `lane_perception.status` | — | viewer | 불필요 |
 | `lane_perception.set` | `paint_source`: threshold / denoise / learned | administrator | 불필요 |
 | `network.apply_profile` | `profile_id` (등록된 프로파일 id만) | administrator | 필요 |
@@ -229,8 +234,10 @@ denoise / learned / denoise_fallback이며 `applied_source_age_s`가 수신 나�
 표시한다. 설정 source·모델 revision 불일치, malformed packet, 카메라 clock reset,
 stale 수신 또는 camera 재시작 전 증거는 null이다. 이는 주행 정책에 입력하지 않는다.
 
-native `rosy-host-agent.service`는 이 표 중 `lane_perception.status/set`만
-활성화한다. peer는 `/etc/passwd`의 전용 `rosy-core` UID이며 소켓 그룹도
+native `rosy-host-agent.service`는 이 표 중 `lane_perception.status/set`과
+`navigation_approval.*`(D-986)만 활성화한다. operator 등급은 이 항법 재승인 명령에만 쓰며 다른 명령의
+administrator 요구는 그대로다. `begin`·`cancel`·`seal`은 CORE를 다시 시작하므로 별도 transient unit으로
+돌고 결과는 `status`로 읽는다. peer는 `/etc/passwd`의 전용 `rosy-core` UID이며 소켓 그룹도
 `rosy-core`이다. 다른 Host 명령은 해당 runtime에서 COMMAND_UNKNOWN으로
 거부한다. 설치 helper는 release의 native 폴더에 함께 실려 저장소 없이
 실행되며 CORE가 1초마다 쓰는 실제 status 입력을 소비한다.

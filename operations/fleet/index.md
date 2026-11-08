@@ -105,8 +105,8 @@
 
 ## 최근 기록
 
+- 2026-11-08 · uncommitted · 관제 화면 파일을 다시 받지 않고 압축해 보낸다
+- 2026-11-07 · uncommitted · feat(fleet): 자동 위치를 로봇별로 켜면 trip 앵커로 쓴다 (D-989 7항)
+- 2026-11-07 · uncommitted · feat(fleet): LED·카메라·LiDAR 자동 위치 찾기 (D-989)
 - 2026-11-07 · uncommitted · feat: PC 조치 목록을 실제 서비스에 맞추고 이력을 남긴다 (D-991)
 - 2026-11-07 · uncommitted · fix: 재부팅이 팔 세션을 끊지 않게 한다 (D-991)
-- 2026-11-07 · uncommitted · 로그인 콜백 실패가 JSON 막다른 길이 아니다
-- 2026-11-07 · uncommitted · 로그인 복귀가 설치·보정 하위 화면을 유지
-- 2026-11-07 · 7c042262fb · fix(fleet): a stale blip is read again before a trip is refused
