@@ -494,3 +494,7 @@ def main(
         result = {"ok": False, "error": str(exc)}
     print(json.dumps(result, sort_keys=True))
     return 0 if result["ok"] else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
