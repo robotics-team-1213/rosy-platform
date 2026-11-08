@@ -106,6 +106,16 @@ fleet console --robots /etc/rosy/robots.yaml \
 
 단독 CLI 기본 바인드는 `127.0.0.1:8090`이다. PC 간에는 승인된 TLS reverse proxy의 외부 origin으로 연결하고 내부 Fleet 포트는 proxy에서만 접근하게 한다. 기존 site 배치는 [Caddyfile](../../deploy/site/Caddyfile)과 [Compose](../../deploy/site/compose.yaml)의 `ROSY_SITE_HTTPS_PORT`를 사용하며 `.env.example`의 `8443`은 예시다. Compose 안의 Fleet은 `0.0.0.0`으로 bind하지만 컨테이너 내부 범위다. 실제 방화벽에는 선택한 외부 TLS 포트에 대해 직계 이웃과 승인된 운영 화면의 접근만 허용한다. 장치 API의 주소·포트·자격은 별도 robots 설정을 따르며 이 관제 peer 포트와 혼동하지 않는다.
 
+이웃 관제가 **다른 PC**에 있으면(D-994: R은 N100 계열 호스트, 셀은 팔이 연결된 호스트) 두 가지를 더한다. 이웃의 peers 항목에 `address`(IP 리터럴만)를 넣으면 Fleet은 그 주소로 접속하되 TLS 서버 이름 확인과 `Host`는 `url`의 이름(예: `peer-cell-a`)으로 한다. 이름을 다른 DNS에 맡기지 않으며 `https` 항목에만 허용된다. 받는 쪽은 서명 overlay [`compose.control-unit-remote.yaml`](../../deploy/site/compose.control-unit-remote.yaml)을 `compose.control-unit.yaml` 바로 뒤에 붙이고 `site.env`의 `ROSY_CONTROL_UNIT_PEER_PUBLISH=<LAN 주소>:<포트>:<peer.Caddyfile 포트>`로 peer proxy만 그 LAN 주소에 게시한다. Bearer service 인증과 peer 인증서는 그대로다. 사이트 HTTPS 방화벽은 이 포트를 거르지 않으므로 LAN 주소에만 묶는다.
+
+```yaml
+peers:
+  CELL-A:
+    url: https://peer-cell-a:8543   # 인증서 SAN과 Host
+    address: 192.0.2.30              # 셀 PC의 LAN 주소(예시)
+    token_file: secrets/r-to-cell-a.token
+```
+
 CLI는 `--control-unit-config` 또는 환경 기본값 `ROSY_CONTROL_UNIT_CONFIG`를 받으며 명시 옵션이 우선한다. 기본 site Compose는 관제를 자동 활성화하지 않는다. 현장 배포는 서명 candidate의 [`compose.control-unit.yaml`](../../deploy/site/compose.control-unit.yaml)을 `ROSY_SITE_PAIRING_COMPOSE`에 덧붙여 켠다(D-960). `ROSY_CONTROL_UNIT_DIR`(승인 private 디렉터리: `control-unit.yaml`·`certs/`·`secrets/`·`peer.Caddyfile`·`peer-secrets/`)와 `ROSY_CONTROL_UNIT_PEER_ALIAS`(예: `peer-r`)를 `site.env`에 두며, 서명 overlay이므로 자동 갱신이 계속 검증·설치한다. 사이트별 미서명 overlay 파일은 쓰지 않는다. [별도 overlay](../../deploy/site/compose.control-unit.yaml.example)를 함께 사용하면 `ROSY_CONTROL_UNIT_DIR`의 승인 private 디렉터리를 Fleet에만 읽기 전용으로 mount하고 그 안의 `control-unit.yaml`을 선택한다. 상대 token/CA 경로도 그 디렉터리 안에 둔다. 기존 site 설정의 수신 users·직접 roster·독립 DB를 함께 대조한다. 여러 인스턴스를 한 PC에 배치하면 Compose project/포트/볼륨도 분리한다.
 
 관제 peer는 명시 `tls_ca_file`로 만든 SSLContext 또는 기본 인증서 검증을 사용하며 hostname 검증을 유지한다. `trust_env=False`이므로 site의 SSL_CERT_FILE·환경 proxy가 자동 적용된다고 가정하지 않는다. 사설 CA는 승인한 파일을 명시 mount하고, 내부 loopback proxy와 외부 TLS origin을 구분한다. 잘못된 CA·hostname과 압축 응답 거절은 실제 loopback TCP/TLS 회귀로 확인하며 실제 관제 PC 링크 수용은 별도로 남긴다.

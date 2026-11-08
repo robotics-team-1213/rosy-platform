@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 import asyncio
+import ipaddress
 import json
 import ssl
 from pathlib import Path
@@ -17,6 +18,8 @@ from fleet.server.control_unit_config import ControlUnitTopology, _identifier
 class ControlUnitPeer:
     url: str
     token: str = field(repr=False)
+    # Dial target when the peer runs on another host; the url host stays the TLS name and Host header.
+    address: str | None = None
 
 
 @dataclass(frozen=True)
@@ -59,8 +62,16 @@ def load_control_unit(path):
         raise ValueError("CONTROL_UNIT_NEIGHBOR_CONFIGURATION_MISMATCH")
     peers = {}
     for identity, entry in document["peers"].items():
-        if not isinstance(entry, dict) or set(entry) != {"url", "token_file"}:
+        if not isinstance(entry, dict) or not {"url", "token_file"} <= set(entry) <= {"url", "token_file", "address"}:
             raise ValueError("INVALID_CONTROL_UNIT_PEER")
+        address = entry.get("address")
+        if address is not None:
+            try:  # a literal only: names would need resolution outside the TLS check
+                if not isinstance(address, str):
+                    raise ValueError(address)
+                address = str(ipaddress.ip_address(address))
+            except ValueError:
+                raise ValueError("INVALID_CONTROL_UNIT_PEER_ADDRESS") from None
         url = entry["url"]
         if (not isinstance(url, str) or "?" in url or "#" in url
                 or any(ord(c) < 33 or ord(c) == 127 for c in url)):
@@ -84,7 +95,9 @@ def load_control_unit(path):
         token = token_data.decode("ascii").strip()
         if not token or any(ord(c) < 33 or ord(c) > 126 for c in token):
             raise ValueError("INVALID_CONTROL_UNIT_SERVICE_TOKEN")
-        peers[identity] = ControlUnitPeer(str(endpoint.copy_with(path="")).rstrip("/"), token)
+        if address is not None and parsed.scheme != "https":
+            raise ValueError("CONTROL_UNIT_PEER_ADDRESS_REQUIRES_TLS")
+        peers[identity] = ControlUnitPeer(str(endpoint.copy_with(path="")).rstrip("/"), token, address)
     if len({peer.url for peer in peers.values()}) != len(peers):
         raise ValueError("CONTROL_UNIT_PEER_ENDPOINT_COLLISION")
     if len({peer.token for peer in peers.values()}) != len(peers):
@@ -158,11 +171,17 @@ class ControlUnitPeers:
         if payload is not None and len(payload) > 131_072:
             raise ValueError("CONTROL_UNIT_PEER_REQUEST_TOO_LARGE")
         peer = self.config.peers[unit_id]
+        url, headers, extensions = httpx.URL(peer.url + path), {}, {}
+        if peer.address is not None:
+            headers["Host"] = url.netloc.decode("ascii")
+            extensions["sni_hostname"] = url.host
+            url = url.copy_with(host=peer.address)
         async with asyncio.timeout(3.0):
-            async with self.http.stream(method, peer.url + path,
-                                        headers={"Authorization": "Bearer " + peer.token,
+            async with self.http.stream(method, url,
+                                        headers={**headers, "Authorization": "Bearer " + peer.token,
                                                  "Content-Type": "application/json", "Accept-Encoding": "identity"},
-                                        content=payload, follow_redirects=False, timeout=3.0) as response:
+                                        content=payload, follow_redirects=False, timeout=3.0,
+                                        extensions=extensions) as response:
                 if raise_status or response.status_code >= 500:
                     response.raise_for_status()
                 if response.headers.get("Content-Encoding", "").strip().lower() not in {"", "identity"}:

@@ -103,3 +103,47 @@ def test_actual_tls_requires_explicit_ca_and_matching_hostname(
     asyncio.run(exercise())
     assert bool(received) is (trust and host == "localhost")
     assert all(b"accept-encoding: identity" in request.lower() for request in received)
+
+
+def test_peer_address_dials_another_host_but_verifies_the_url_name(tmp_path, monkeypatch, control_unit_tls):
+    from fleet.server.control_unit_runtime import load_control_unit, ControlUnitPeers
+    server_context, ca = control_unit_tls
+    monkeypatch.setenv("SSL_CERT_FILE", str(ca))
+    received = []
+    async def handle(reader, writer):
+        try:
+            received.append(await reader.readuntil(b"\r\n\r\n"))
+            writer.write(b"HTTP/1.1 200 OK\r\nContent-Length: 11\r\nConnection: close\r\n\r\n{\"ok\":true}")
+            await writer.drain()
+        finally:
+            writer.close()
+            await writer.wait_closed()
+    async def exercise(name):
+        server = await asyncio.start_server(handle, "127.0.0.1", 0, ssl=server_context)
+        async with server:
+            port = server.sockets[0].getsockname()[1]
+            config = load_control_unit(config_file(tmp_path, peers={"A": {
+                "url": f"https://{name}:{port}", "address": "127.0.0.1", "token_file": "parent.token"}},
+                tls_ca_file=ca.name))
+            async with httpx.AsyncClient(verify=config.tls_context, trust_env=False) as client:
+                return await ControlUnitPeers(config, client)("A", "GET", "R/job-1"), port
+    result, port = asyncio.run(exercise("localhost"))
+    assert result == {"ok": True}
+    assert f"host: localhost:{port}".encode() in received[0].lower()
+    # The name the certificate does not carry is refused even though the dialed address answers.
+    with pytest.raises(httpx.ConnectError):
+        asyncio.run(exercise("peer-elsewhere"))
+    assert len(received) == 1
+
+
+@pytest.mark.parametrize("entry,error", [
+    ({"url": "https://peer-a:8543", "address": "peer-a.local"}, "INVALID_CONTROL_UNIT_PEER_ADDRESS"),
+    ({"url": "https://peer-a:8543", "address": ""}, "INVALID_CONTROL_UNIT_PEER_ADDRESS"),
+    ({"url": "https://peer-a:8543", "address": 3232235750}, "INVALID_CONTROL_UNIT_PEER_ADDRESS"),
+    ({"url": "http://peer-a:8543", "address": "192.168.1.230"}, "CONTROL_UNIT_PEER_ADDRESS_REQUIRES_TLS"),
+    ({"url": "https://peer-a:8543", "address": "192.168.1.230", "port": 1}, "INVALID_CONTROL_UNIT_PEER"),
+])
+def test_peer_address_is_an_ip_literal_on_a_tls_peer(tmp_path, entry, error):
+    from fleet.server.control_unit_runtime import load_control_unit
+    with pytest.raises(ValueError, match=error):
+        load_control_unit(config_file(tmp_path, peers={"A": {**entry, "token_file": "parent.token"}}))

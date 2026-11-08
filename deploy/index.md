@@ -78,8 +78,8 @@
 
 ## 최근 기록
 
+- 2026-11-08 · uncommitted · feat(control-unit): 다른 PC의 이웃 관제에 peer 주소로 접속한다 (D-994)
 - 2026-11-07 · uncommitted · fix(power): 네이티브 Pinky가 CORE의 deep 배터리 요청에 꺼진다 (D-27)
 - 2026-11-07 · uncommitted · feat(navigation): 로그인한 운영자가 API로 항법을 다시 승인한다 (D-986)
 - 2026-11-07 · uncommitted · feat: 응답 없는 PC를 guard가 팀 채널로 알린다 (D-991)
 - 2026-11-07 · uncommitted · fix: 도우미가 재부팅 전에 팔 세션과 작업을 본다 (D-991)
-- 2026-11-07 · uncommitted · feat(navigation): 모터·정지 파일이 같으면 항법 승인을 이어받는다 (D-986)

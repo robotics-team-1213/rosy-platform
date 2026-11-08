@@ -44,3 +44,19 @@ def test_signed_control_unit_overlay_mounts_the_unit_read_only_and_names_its_pee
     assert peer["image"].startswith("rosy-site-proxy:${ROSY_SITE_IMAGE_TAG")
     assert peer["read_only"] and peer["cap_drop"] == ["ALL"]
     assert peer["networks"]["rosy-control-peers"]["aliases"] == ["${ROSY_CONTROL_UNIT_PEER_ALIAS:?Set this unit's peer alias, e.g. peer-r}"]
+
+
+def test_remote_peer_overlay_only_publishes_the_peer_origin_and_follows_the_control_unit_overlay():
+    """D-994: a neighbour on another PC reaches this unit's peer proxy; nothing else gains a host port."""
+    import pytest
+    from deploy.site.site_update_io import Refused, allowed_overlays
+    overlay = yaml.safe_load((ROOT / "deploy/site/compose.control-unit-remote.yaml").read_text(encoding="utf-8"))
+    assert overlay["services"] == {"control-unit-peer": {"ports": [
+        "${ROSY_CONTROL_UNIT_PEER_PUBLISH:?Set host_address:host_port:peer_port for the cross-host peer origin}"]}}
+    site = "-f /opt/rosy/candidate/deploy/site/compose."
+    unit, remote = site + "control-unit.yaml", site + "control-unit-remote.yaml"
+    for value in (f"{site}pairing.yaml {unit} {remote} {site}monitoring.yaml {site}account.yaml", f"{unit} {remote}"):
+        assert allowed_overlays({"ROSY_SITE_PAIRING_COMPOSE": value}) == value.split()
+    for value in (remote, f"{remote} {unit}", f"{site}pairing.yaml {remote}"):
+        with pytest.raises(Refused):
+            allowed_overlays({"ROSY_SITE_PAIRING_COMPOSE": value})
