@@ -100,6 +100,7 @@ $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) -Repetiti
 $taskLimit = if ($config.os_engineering -eq $true) { New-TimeSpan -Hours 16 } else { New-TimeSpan -Minutes 60 }
 $settings = New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -ExecutionTimeLimit $taskLimit -StartWhenAvailable
 $principal = New-ScheduledTaskPrincipal -UserId ([System.Security.Principal.WindowsIdentity]::GetCurrent().Name) -LogonType Interactive -RunLevel Limited
-Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger -Settings $settings -Principal $principal -Description "ROSY robot CD: successful main CI, unsigned ARM64 build, local signing, guarded rollout" | Out-Null
+# -Force: a reinstall must replace the running task, or it keeps the old snapshot while the config names the new one.
+Register-ScheduledTask -Force -TaskName $TaskName -Action $action -Trigger $trigger -Settings $settings -Principal $principal -Description "ROSY robot CD: successful main CI, unsigned ARM64 build, local signing, guarded rollout" | Out-Null
 Write-Host "Installed approved snapshot $revision; task $TaskName checks every $IntervalMinutes minutes while logged on."
 Write-Host "Private release keys remain in the existing local signing store."
