@@ -518,6 +518,7 @@ function Read-LastJsonLine($Output) {
 
 $claimed = $false
 $forceOutcome = "failed"
+$forceDetail = ""
 
 function Write-ForceAudit([string]$Outcome, [string]$Detail) {
     # Same evidence folder publish_payload_release.py uses; best effort, never the reason a push fails.
@@ -589,7 +590,8 @@ foreach ($step in $plan) {
             Fail "-ForceUpdate refused: $Robot cannot run the updater precheck (exit $($result.exit_code)): $said. Without it idle, battery and hold cannot be checked; push without -ForceUpdate only after checking them yourself."
         }
         $reasons = @($said -split '; ' | Where-Object { $_ -and $_ -notmatch ('^claim held by ' + [regex]::Escape($claimHolder) + '$') })
-        if ($reasons.Count -gt 0) { Fail "-ForceUpdate refused by the robot ($($reasons -join '; ')). Nothing was changed." }
+        $onlyOwnClaim = $said -match ('^claim held by ' + [regex]::Escape($claimHolder) + '$')
+        if ($reasons.Count -gt 0 -or (-not $onlyOwnClaim)) { $forceDetail = "precheck: $said"; Fail "-ForceUpdate refused by the robot ($($reasons -join '; ')). Nothing was changed." }
         continue
     }
     if ($step.role -eq "claim-refresh") {
@@ -690,7 +692,7 @@ Write-Host "done."
 $forceOutcome = "installed"
 
 } finally {
-    if ($ForceUpdate -and (Test-Path variable:forceOutcome)) { Write-ForceAudit $forceOutcome "" }
+    if ($ForceUpdate -and (Test-Path variable:forceOutcome)) { Write-ForceAudit $forceOutcome $forceDetail }
     # $claimed exists only once the execution loop started.
     if ((Test-Path variable:claimed) -and $claimed) {
         $claimRelease = @($plan | Where-Object { $_.role -eq "claim-release" })[0]

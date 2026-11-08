@@ -161,6 +161,7 @@ def test_our_own_push_claim_is_not_a_reason_to_refuse(release):
     "battery 31% is below 40% and not charging",    # battery
     "emergency stop is engaged",                    # E-stop
     "claim held by push-livs@OPS-PC; battery 12%",  # our own claim never hides another reason
+    "",                                             # busy exit with no reasons is not a pass
 ])
 def test_a_busy_robot_refuses_and_nothing_is_switched(release, output):
     done, calls = _push(release, *FORCE, fake=True, env={"ROSY_FAKE_PRECHECK_RC": "3", "ROSY_FAKE_PRECHECK_OUT": output})
@@ -170,6 +171,7 @@ def test_a_busy_robot_refuses_and_nothing_is_switched(release, output):
     assert not any("activate-release.sh" in c for c in calls)
     assert "rosy_claim.py release" in calls[-1]
     assert [a["outcome"] for a in _audit(release)] == ["requested", "failed"]
+    assert _audit(release)[-1]["detail"].startswith("precheck:")
 
 
 def test_a_robot_that_cannot_run_the_precheck_is_refused(release):
