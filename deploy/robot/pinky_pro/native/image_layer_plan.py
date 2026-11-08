@@ -115,6 +115,8 @@ UNITS = (
     "rosy-ssh-access-boot.service",
     "rosy-ssh-password-expire.service",
     "rosy-ssh-password-expire.timer",
+    # D-27: halt on CORE's deep-battery request; only the watch is enabled.
+    "rosy-lowbatt-shutdown.service", "rosy-lowbatt-shutdown.path",
     # D-477: one-shot tailnet join; condition-gated on the provisioned key file.
     "rosy-tailscale-join.service",
     *boot.FEATURE_UNITS,
@@ -140,6 +142,7 @@ ENABLED_UNITS = frozenset({
     "rosy-auto-update.timer",
     "rosy-ssh-access.path",
     "rosy-ssh-access-boot.service",
+    "rosy-lowbatt-shutdown.path",
     "rosy-tailscale-join.service",
     *boot.FEATURE_UNITS,
 })
