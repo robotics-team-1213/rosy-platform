@@ -18,6 +18,7 @@ Offline export of recorded OMX SIM demonstrations to a LeRobot v3 dataset (D-427
 | `world_model_dataset.py` | D-782 W1: closed collection sessions (including failed and aborted attempts) into session-split action-conditioned windows with human labels; `load()` checks the receipt digest |
 | `camera_setup_intake.py` | D-792 S3: shadow camera setup checks at intake (`collection_intake.py`/`collection_pipeline.py prepare --camera-reference ROLE=PATH`): first/last frame of each selected episode per role -> `camera-setup.json` (`rosy.omx-camera-setup-intake/1`) with reference revisions and camera_info fingerprints; never blocks |
 | `test/test_lerobot_export.py` | Schema, frame and refusal checks; the full LeRobot round trip skips without `lerobot` |
+| `arm_incident_labels.py` | Arm incidents a person cleared with a cause (Fleet `arm-incidents/labelled`, API v1.375) to label rows: the person's cause and basis, the cell's measured reading and the AI PC's explanation kept apart; truth only for a repeat or a measurement; `score` the rule against truth. Test `test/test_arm_incident_labels.py` |
 | `sim_batch_export.py` | Teacher reach results + recordings -> one `lerobot_export.py` run per complete successful episode, refusals with reasons, eval = highest seed, `batch-manifest.json` with `act_job.py` args. Test `test/test_sim_batch_export.py` |
 
 ## For AI Agents

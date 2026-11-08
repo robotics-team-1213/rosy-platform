@@ -236,12 +236,12 @@ export function createCellObservation({request, root, credential = () => ''}) {
     }));
   }
 
-  async function incidentFrame(source, incident, frame, image, scope) {
-    const key = `${incident.incident_id}:${frame.role}`;
+  async function incidentFrame(source, incident, part, image, scope) {  // part: frames/<role> or evidence/<seq>
+    const key = `${incident.incident_id}:${part}`;
     if (!incidentFrames.has(key)) {
       try {
         const token = credential();
-        const response = await fetch(`${BASE}/arms/${encodeURIComponent(source)}/incidents/${incident.incident_id}/frames/${frame.role}`, {
+        const response = await fetch(`${BASE}/arms/${encodeURIComponent(source)}/incidents/${incident.incident_id}/${part}`, {
           cache: 'no-store', credentials: 'same-origin', headers: token ? {Authorization: `Bearer ${token}`} : {}, signal: scope.signal});
         if (!response.ok || life !== scope) return;
         incidentFrames.set(key, URL.createObjectURL(await response.blob()));
@@ -250,13 +250,24 @@ export function createCellObservation({request, root, credential = () => ''}) {
     image.src = incidentFrames.get(key);
   }
 
-  async function clearIncident(source, incident, note, button, message) {
+  // what stopped the arm, as cell_why names it, and how the person knows: a cause seen in pictures alone is weaker than a
+  // repeat (11-07: people, models and frame strips all misread contact; measurement and repeats decided)
+  const CAUSES = [['unknown', '원인: 판단 불가'], ['blocked', '막힘 (닿음)'], ['wrong_position', '위치가 어긋나 닿음'], ['snagged', '걸림'],
+    ['too_fast', '속도 초과'], ['no_room', '공간 부족으로 거부'], ['software_or_config', '코드·설정'], ['camera_or_map', '카메라·지도'], ['other', '기타']];
+  const BASES = [['unknown', '근거: 없음'], ['repeat', '같은 동작을 다시 해 봄'], ['measured', '측정값'], ['seen', '사진·눈으로']];
+  function choice(label, options) {
+    const select = element('select'); select.className = 'ui-field'; select.setAttribute('aria-label', label);
+    for (const [value, text] of options) { const option = element('option', text); option.value = value; select.append(option); }
+    return select;
+  }
+
+  async function clearIncident(source, incident, note, button, message, label = {}) {
     const text = note.value.trim();
     if (!text) { message.textContent = '확인한 내용을 적어야 해제할 수 있습니다.'; return; }
     button.disabled = true;
     try {
       await request(`${BASE}/arms/${encodeURIComponent(source)}/incidents/${incident.incident_id}/clear`, {
-        method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({note: text}), timeoutMs: 3000});
+        method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({note: text, ...label}), timeoutMs: 3000});
       message.textContent = '해제했습니다.';
       const entry = arms.get(source); if (entry) entry.incidentKey = '';
       void refresh();
@@ -271,9 +282,12 @@ export function createCellObservation({request, root, credential = () => ''}) {
     const key = JSON.stringify(incidents.map(i => [i.incident_id, i.state]));
     if (key === entry.incidentKey) return;
     entry.incidentKey = key;
-    const held = incidents.filter(i => i.state !== 'cleared');
+    // a guard stop the recovery handled comes with decision.hold false: it waits for a person's cause, the arm stays free
+    const open = incidents.filter(i => i.state !== 'cleared'), held = open.filter(i => i.decision?.hold !== false);
+    const naming = open.length - held.length;
     entry.incidentsSummary.textContent = incidents.length
-      ? `팔 사건 ${incidents.length}건 · ${held.length ? `보류 중 ${held.length}건 (세션 시작 불가)` : '모두 해제됨'}` : '팔 사건 없음';
+      ? `팔 사건 ${incidents.length}건 · ${held.length ? `보류 중 ${held.length}건 (세션 시작 불가)` : naming ? '보류 없음' : '모두 해제됨'}`
+        + (naming ? ` · 원인 기록 대기 ${naming}건` : '') : '팔 사건 없음';
     if (held.length) entry.incidents.open = true;
     entry.incidentsList.replaceChildren(...incidents.map(incident => {
       const item = element('li');
@@ -283,23 +297,45 @@ export function createCellObservation({request, root, credential = () => ''}) {
         const figure = element('div'); figure.className = 'cell-fault-frames';
         for (const frame of incident.frames) {
           const image = element('img'); image.alt = `${frame.role === 'top' ? '상단' : '측면'} 카메라 · 고장 순간`;
-          figure.append(image); void incidentFrame(source, incident, frame, image, scope);
+          figure.append(image); void incidentFrame(source, incident, `frames/${frame.role}`, image, scope);
         }
         item.append(figure);
       }
+      if ((incident.evidence || []).length) {  // the seconds around the stop: the jaw tip first, loaded only when opened
+        const box = element('details'), strip = element('div'); strip.className = 'cell-fault-frames';
+        box.append(element('summary', `정지 앞뒤 사진 ${incident.evidence.length}장 (집게 끝 먼저)`), strip);
+        box.addEventListener('toggle', () => {
+          if (!box.open || strip.childElementCount) return;
+          for (const shot of incident.evidence) {
+            const figure = element('figure'), image = element('img');
+            const when = `${shot.t_rel_s > 0 ? '+' : ''}${shot.t_rel_s.toFixed(1)}초`;
+            image.alt = `${shot.camera} 카메라 ${shot.kind === 'tip' ? '집게 끝 확대' : '전체'} · 정지 ${when}`;
+            figure.append(image, element('figcaption', `${shot.camera} · ${shot.kind === 'tip' ? '집게 끝' : '전체'} · ${when}`));
+            strip.append(figure); void incidentFrame(source, incident, `evidence/${shot.seq}`, image, scope);
+          }
+        });
+        item.append(box);
+      }
       if (incident.explanation) {
-        item.append(element('ui-text', `AI 설명 (설명일 뿐, 판단이나 동작이 아닙니다 · ${incident.explanation.model})`),
-          element('p', `본 것: ${incident.explanation.seen}`), element('p', `추정 원인: ${incident.explanation.suspected_cause}`));
+        const said = [element('ui-text', `AI 설명 (설명일 뿐, 판단이나 동작이 아닙니다 · ${incident.explanation.model})`),
+          element('p', `본 것: ${incident.explanation.seen}`), element('p', `추정 원인: ${incident.explanation.suspected_cause}`)];
+        // a person's cause is only worth scoring if it was picked before the model's was seen
+        if (incident.cleared) item.append(...said);
+        else { const box = element('details'); box.append(element('summary', 'AI 설명 보기 (원인을 고른 뒤에 여세요)'), ...said); item.append(box); }
       }
       if (incident.cleared) {
-        item.append(element('p', `해제: ${incident.cleared.by} · ${when(incident.cleared.at)} · ${incident.cleared.note}`));
+        const label = incident.cleared.cause ? ` · 원인 ${incident.cleared.cause} (근거 ${incident.cleared.basis})` : '';
+        item.append(element('p', `해제: ${incident.cleared.by} · ${when(incident.cleared.at)}${label} · ${incident.cleared.note}`));
       } else {
+        // the cause and how the person knows it are kept with the clear: the labels learning scores rules and models against
+        const cause = choice('원인', CAUSES), basis = choice('근거', BASES);
         const note = element('input'); note.className = 'ui-field'; note.maxLength = 400;
-        note.setAttribute('aria-label', '확인한 내용'); note.placeholder = '팔과 집게를 확인한 내용 (필수)';
+        note.setAttribute('aria-label', '확인한 내용'); note.placeholder = '팔과 집게를 확인한 내용 (필수) · 같은 동작을 다시 해 봤다면 그 결과';
         const button = element('ui-button', '확인했습니다 · 해제'); button.setAttribute('type', 'button');
         const message = element('ui-text');
-        button.addEventListener('click', () => clearIncident(source, incident, note, button, message));
-        item.append(note, button, message);
+        button.addEventListener('click', () => clearIncident(source, incident, note, button, message,
+          {cause: cause.value, basis: basis.value}));
+        item.append(cause, basis, note, button, message);
       }
       return item;
     }));

@@ -5,9 +5,16 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.369
+**Version:** v1.375
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.375 OMX 팔 사건의 원인 라벨과 정지 앞뒤 사진 (D-971)
+
+- 해제 `POST .../incidents/{incident_id}/clear`가 선택 필드 `cause`(`blocked`·`wrong_position`·`snagged`·`too_fast`·`no_room`·`software_or_config`·`camera_or_map`·`other`·`unknown`)와 `basis`(`repeat`·`measured`·`seen`·`unknown`)를 받는다. 사람이 고른 원인과 그 근거(같은 동작을 다시 해 봄·측정값·사진으로 봄)다. 사건 행의 `cleared`에 `cause`·`basis`가 붙는다(없으면 null). 예전 본문 `{note}`도 그대로 받는다.
+- `POST .../arms/{source_id}/incidents/{incident_id}/evidence`(관측 토큰, 그 팔의 사건만): 정지 앞뒤 사진 한 장 `ArmIncidentEvidenceFrame {camera, t_rel_s(-30..30), kind full|tip, sha256, jpeg_b64}`. 한 장 200,000 바이트 이내, 사건당 24장, 같은 sha256은 같은 장(멱등). 보고 뒤에 따로 보내므로 보고 본문 700,000 바이트는 그대로다. 응답 `{incident_id, seq}`, 404 모르는 사건, 409 가득 참, 413 본문 초과. `GET .../incidents/{incident_id}/evidence/{seq}`(뷰어)는 `image/jpeg`. 사건 행에 `evidence:[{seq,camera,t_rel_s,kind,sha256,bytes}]`(바이트 없음)가 붙는다. 해제 뒤 14일이 지난 사건의 `full` 장은 지우고 `tip` 장·라벨·사실은 남긴다.
+- 판정 `decision.hold`가 `false`인 보고(복구 흐름이 처리한 가드 정지를 원인 기록용으로 보낸 것)는 팔을 보류하지 않는다. `GET .../hold`와 보고 응답의 `hold`는 `decision.hold`가 false가 아닌 미해제 사건만 센다. 이전 보고는 모두 보류였으므로 기존 동작은 같다.
+- `GET .../arm-incidents/labelled`(`ai_observer`): 원인이 기록된 해제 사건 최근 200건(사실·판정·모델 설명·사람 원인과 근거·증거 장 목록). 학습 쪽이 사람 라벨·규칙 판정·모델 추측을 나란히 채점하는 입력이다. 모델 PC 수집기는 이 자리를 쓴다.
 
 ### v1.368 현장 운영 규칙 문서와 판정 API
 
@@ -522,7 +529,10 @@ It does not enable a physical owner, command, calibration or motion admission.
 | `POST /api/fleet/workcell-observations/{workcell_id}/usb-devices` | `X-Workcell-Observation-Token` of any arm of that workcell; strict `UsbCameraReport` `{workcell_id,candidates<=16,roles<=32}`; body limit 16KiB | 200 `{decisions:[{key,role}]}` for reported keys an operator decided; the stored report replaces the previous one and decisions for keys no longer reported are dropped. 401 bad token or another workcell's token; 404 unknown workcell; 413 `WORKCELL_OBSERVATION_TOO_LARGE`; 422 `INVALID_USB_CAMERA_REPORT` (incl. `workcell_id` differing from the path). no-store. |
 | `POST /api/fleet/workcell-observations/arms/{source_id}/incidents` | D-971. Source-bound `X-Workcell-Observation-Token`; strict `ArmIncidentReport` `{source_id,session_id,facts,decision,recovery?,frames<=2 [{role top\|side,sha256,jpeg_b64}]}`, `facts`/`decision`/`recovery` each a finite JSON object of at most 12,288 bytes and depth 6, each frame a JPEG of at most 200,000 bytes whose sha256 Fleet recomputes; body limit 700,000 bytes (413); `source_id` must equal the path (422) | 200 `{incident_id,hold:{held,incident_ids<=64,reason}}`; no-store. The same `(source_id, session_id)` returns the same incident |
 | `GET /api/fleet/workcell-observations/arms/{source_id}/hold` | D-971. Source-bound `X-Workcell-Observation-Token` | 200 `{held,incident_ids,reason}`; held while an incident of that arm is not cleared; no-store |
-| `POST /api/fleet/workcell-observations/arms/{source_id}/incidents/{incident_id}/clear` | D-971. Named operator (`require_named_operator`); body `{note}` (1-400 characters, no control characters; required) | 200 the arm's new hold; 404 unknown incident of that arm; 409 already cleared. Records who, when and the note; nothing is deleted |
+| `POST /api/fleet/workcell-observations/arms/{source_id}/incidents/{incident_id}/clear` | D-971. Named operator (`require_named_operator`); body `{note, cause?, basis?}` (note 1-400 characters, no control characters, required; v1.375 cause and basis from fixed lists) | 200 the arm's new hold; 404 unknown incident of that arm; 409 already cleared. Records who, when, the note and the person's cause with its basis; nothing is deleted |
+| `POST /api/fleet/workcell-observations/arms/{source_id}/incidents/{incident_id}/evidence` | v1.375. Source-bound `X-Workcell-Observation-Token`; strict `ArmIncidentEvidenceFrame {camera, t_rel_s, kind full\|tip, sha256, jpeg_b64}`, one JPEG of at most 200,000 bytes whose sha256 Fleet recomputes | 200 `{incident_id, seq}`; the same sha256 is the same frame; 404 unknown incident of that arm; 409 24 frames already; 413 body; no-store |
+| `GET /api/fleet/workcell-observations/arms/{source_id}/incidents/{incident_id}/evidence/{seq}` | v1.375. Existing Fleet viewer authentication | `image/jpeg`; no-store; 404 unknown or expired (whole frames 14 days after clearing) |
+| `GET /api/fleet/workcell-observations/arm-incidents/labelled` | v1.375. `ai_observer` only | `{incidents:[...]}` cleared incidents with a recorded cause, newest first (at most 200), frame lists without bytes; no-store |
 | `GET /api/fleet/workcell-observations/arms/{source_id}/incidents/{incident_id}/frames/{role}` | D-971. Existing Fleet viewer authentication; `role` is `top` or `side` | `image/jpeg`; no-store; 404 unknown |
 | `GET /api/fleet/workcell-observations/arm-incidents/unexplained` | D-971. `ai_observer` only | `{incidents:[{incident_id,source_id,session_id,facts,decision,recovery,frames:[{role,sha256,jpeg_b64}],...}]}` open incidents without an explanation, oldest first (at most 8); no-store |
 | `POST /api/fleet/workcell-observations/arms/{source_id}/incidents/{incident_id}/explanation` | D-971. `ai_observer` only (the one new write path of that role besides facts, heartbeat and proposals); body `{seen,suspected_cause,model}` (strict, text 1-400 characters) | 200 `{incident_id,explained:true}`; 404 unknown; 409 already explained or cleared. Stored and shown; it never changes the hold and starts nothing |
@@ -4624,6 +4634,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 |---|---|---|
 | v1.368 | 2026-11-07 | Additive (D-982): 현장 규칙 문서 `rosy.site_rules/1`(`GET/PUT /api/fleet/site-rules/draft`, `GET .../active`, `POST .../activate`)와 가정 상태 판정 `POST /api/fleet/site-rules/judge`(go/wait/refuse, 보내기 없음). 활성 문서가 없으면 동작 동일, 활성 문서는 더 막기만 한다 |
 | v1.362 | 2026-11-04 | Additive: D-977 `device_trial` opens the neutral `arm-transfers` jobs for exactly one arm (owner identity: `device: true`, matching `commissioning_revision`); `production` stays closed. New `operator_attested` record: `POST/GET .../jobs/{mission_id}/operator-attestations` (named operator distinct from proposer and approver, single-use, 45 s validity, `goal_confirmed: false`). The owner still refuses goals. |
+| v1.375 | 2026-11-08 | Additive (D-971): 팔 사건 해제의 `cause`·`basis`, 정지 앞뒤 사진 `POST/GET .../incidents/{id}/evidence`, 보류하지 않는 보고(`decision.hold: false`), `GET .../arm-incidents/labelled`. |
 | v1.369 | 2026-11-07 | Additive (D-989): `GET`·`POST /api/fleet/auto-locate`, detections config `stream_wanted`. 사이트 설정 `fleet.map_pose.auto_locate_robots`(기본 빈 목록)에 든 로봇만 map pose `anchor_source:"auto_locate"`를 낸다 |
 | v1.367 | 2026-11-07 | Additive: 항법 재승인 REST `/api/v1/navigation/approval`(D-986). |
 | v1.365 | 2026-11-07 | Fleet 운행 시작의 배터리 근거 확인(422 `TRIP_BATTERY_UNCONFIRMED`)과 충전 칸 `unknown` 상태. |

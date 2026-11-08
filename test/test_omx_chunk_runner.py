@@ -790,6 +790,21 @@ def test_the_trace_gets_one_row_per_tick():
     assert rows[1]["pwm"] == {}  # a robot with no guard sample
 
 
+def test_the_trace_keeps_each_health_reading_once():
+    """2026-11-07: every descent stop's trace had pwm {} and no current, so a contact could not be told by load."""
+    rows, status, clock, queue = [], [], [0.0], ["run approach_pinky"] + ["state"] * 70 + ["stop"]  # over 2 s: 2 readings
+    robot = Pressing(after=10**9)
+    robot.bus = Bus(current={"wrist_flex": 300})
+    r = m.Runner(robot, library(), fps=30, status=status.append, clock=lambda: clock[0],
+                 sleep=lambda s: clock.__setitem__(0, clock[0] + 1 / 30))
+    r.trace = rows.append
+    r.run(lambda: [queue.pop(0)] if queue and not r.chunk else [])
+    loads = [row["load"] for row in rows if "load" in row]
+    readings = robot.bus.reads // 3  # PWM, current and temperature per reading
+    assert loads and len(loads) in (readings, readings - 1)  # one per reading, on the tick after it (the last may end the run)
+    assert all(load["current_ma"][3] == 300 for load in loads) and len(loads) < len(rows) / 10
+
+
 def test_the_trace_keeps_the_guards_pwm_sample_even_as_numpy():
     import io
 
