@@ -1,7 +1,7 @@
 """Two-arm OMX cell layout without MuJoCo: arm bases, belt end, ship cells and the two temporary slot plates, in the fixture frame.
 
 Every number comes from an existing module (mapped_stack_fixture, ship_plate, palletizing_gripper, cell_model_inventory.yaml) or from the
-temp_slot_plate v7 SCAD parameters (Confluence 15368863; arm-to-plate 214 mm is a photo estimate, candidates 155 to 273 mm). Where CAD and
+temp_slot_plate v11 SCAD parameters (Confluence 15368863 and set page 23233175: the bridge v7 seats each plate 200 mm from its arm, toward -x). Where CAD and
 a measurement both exist the choice is a named entry of CHOICES (D-947 2: candidates compared by results, nothing silently overwritten).
 """
 import json
@@ -21,10 +21,11 @@ CHOICES = dict(
     fixture_case="nominal-palletizing-v21-ship-surveyed",  # measured arm bases (arm_b FK, arm_a plate centre); "nominal-palletizing-v21-ship" = CAD bases
     base_z="measured",       # "measured": table + 12 mm base plate (ruler, arm_b; arm_a ASSUMED the same); "cad": the fixture's arm base z
     belt_height="ruler",     # "ruler": belt end surface 55 mm under the table (inventory, D435 says 56); "fixture": the surveyed case's belt_drop face
-    temp_lanes="photo-20261107",  # "photo-20261107": TEMP_LANES_PHOTO, the plates where the top camera saw them; "fan": temp_radius_m and temp_direction_deg
-    temp_radius_m=.214,      # SCAD arm_r: the printed fan's shape, and with temp_lanes="fan" arm centre to plate centre
+    temp_lanes="fan",        # "fan": temp_radius_m and temp_direction_deg, where the bridge v7 seats plate v11 (design, not yet measured);
+                             # "photo-20261107": TEMP_LANES_PHOTO, the older loose v7 plates where the top camera saw them (use temp_radius_m=.214)
+    temp_radius_m=.200,      # SCAD arm_r: the printed fan's shape, and with temp_lanes="fan" arm centre to middle-lane centre (v9 to v11: 200)
     temp_direction_deg=180., # from each arm toward -x, away from the belt (the user's slot plan 2026-10-31)
-    temp_source="scad-v7",   # the plate source; "stl" keeps the same collision shape and shows the downloaded STL as the visual
+    temp_source="scad-v11",  # the plate source; "stl" keeps the same collision shape and shows the downloaded STL as the visual
     ship_source="r08-berth",  # "r08-berth": the rated ship v15 (r08) on its berth kit with container v3 (SHIP_ASSETS); "fixture-studs": the old stud plate and 30 mm boxes
     ship_stern_x_m=.155,     # r08: stern end x, bow toward -x as the printed ship lay in the 11-07 top photo; ASSUMED at the table's belt edge (r08 not placed yet)
     ship_centre_y_m=.007,    # r08: hull centreline y, the printed ship's hull edges back-projected from the same photo (125 mm wide against 130)
@@ -40,7 +41,7 @@ CHOICES = dict(
 # The plates are loose: measure again when one moves.
 TEMP_LANES_PHOTO = dict(a=[((-.0738, -.2167), 15.7), ((-.0818, -.1672), 2.7), ((-.0776, -.1173), -11.3)],
                         b=[((-.0465, .1439), 4.9), ((-.0466, .1958), -9.7), ((-.0378, .2480), -24.7)])
-SCAD = dict(lanes=3, cont_w=.030, cont_l=.090, deck_t=.008, clr=.0004, clr_l=.001, seat_h=.0006, catch=.005, gap_min=.010, rim=.003, yaw_tol_deg=3.)
+SCAD = dict(lanes=3, cont_w=.030, cont_l=.090, pk_l=.096, deck_t=.008, clr=.0004, clr_l=.001, seat_h=.0006, catch=.005, gap_min=.010, rim=.003, yaw_tol_deg=3.)
 BELT_STOP_X = .158
 ARMS = ("arm_a", "arm_b")  # fixture arm index 0 (y -) and 1 (y +); arm_a does not move in reality (motor 11), it does here
 SHIP_ASSETS = ISAAC / "assets/ship_r08_berth"  # made by Rosy/docs/research/ship-modular-2026-11-03/proposals/ship-berth/sim_assets.py (SOURCE.json)
@@ -111,16 +112,18 @@ def r08_sites(layout):
         for layer in range(R08_TIERS):
             out[f"ship-h{h}r{row}-l{layer}"] = dict(kind="ship", xy=(x, cy), z=z + layout.box[2] * (layer + .5), yaw=0., row=row, layer=layer,
                                                     stack=f"h{h}r{row}", slots=[g["id"][:4] + str(tier + 2 * layer) for g in group])
-    # The stern bay, kept low (no funnel tile, nothing standing in it), is the outbound stand: one 1x3 across the beam, both arms reach it.
+    # The stern bay, kept low (the low kit: no funnel tile, nothing standing in it), is one more ship place: one 1x3 across the beam that
+    # both arms reach. The outbound place is a lane of a temporary plate (set page 23233175, 2026-11-08), not this bay.
     x, cy, z = ship_cell(layout, STERN_BAY["x"], 0, STERN_BAY["floor"])
-    out["stand-1"] = dict(kind="outbound", xy=(x, cy), z=z + layout.box[2] / 2, yaw=math.pi / 2)
+    out["ship-stern-l0"] = dict(kind="ship", xy=(x, cy), z=z + layout.box[2] / 2, yaw=math.pi / 2, row=1, layer=0, stack="stern", slots=[])
     return out
 
 
 def lane_geometry(radius):
-    """SCAD v7 fan: (pocket width, pocket length, flare, fan angle rad, lane angles). Lane i is rotated by -angle about the arm centre."""
+    """SCAD v11 fan: (pocket width, pocket length, flare, fan angle rad, lane angles). Lane i is rotated by -angle about the arm centre.
+    The pocket is three 1x1 cells at pitch 32 (pk_l 96, v9 on), so the fan is 17.3 deg at arm_r 200."""
     s = SCAD
-    width, length = s["cont_w"] + 2 * s["clr"], s["cont_l"] + 2 * s["clr_l"]
+    width, length = s["cont_w"] + 2 * s["clr"], s["pk_l"]
     flare = length / 2 * math.tan(math.radians(s["yaw_tol_deg"]))
     fan = 2 * math.asin((width + 2 * flare + s["gap_min"]) / 2 / (radius - length / 2))
     return width, length, flare, fan, [(i - (s["lanes"] - 1) / 2) * fan for i in range(s["lanes"])]

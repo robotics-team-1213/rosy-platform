@@ -94,7 +94,7 @@ def test_rounds_detail_decision_and_start(tmp_path, width, session):
                 expect(two_arm).to_contain_text('실패 r2 (arm_a): too far')
                 expect(two_arm).to_contain_text('실물 손목 하한 아래로 가는 단계')
                 compared = page.locator('#ladder-compare')
-                expect(compared).to_contain_text('bar-3: 반출대로 옮길 팔 없음')
+                expect(compared).to_contain_text('bar-3: 반출 자리(임시 칸 줄)로 옮길 팔 없음')
                 expect(compared).to_contain_text('165.7초 (계획 153.8초)')
                 expect(compared.locator('table')).to_have_count(1)
                 learned = page.locator('#ladder-two-arm-rounds')

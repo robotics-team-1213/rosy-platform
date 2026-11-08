@@ -281,8 +281,8 @@ class Teacher:
         return data
 
     def off_stand(self, data, step, here):
-        """A container judged on the outbound stand leaves with Pinky: it is parked off the cell and the stand is free again."""
-        if self.layout.sites[step["to"]]["kind"] == "outbound":
+        """A container judged on its outbound lane leaves with Pinky: it is parked off the cell and the lane is free again."""
+        if step.get("outbound"):
             self.world.put(data, step["container"], None, [c for c, _ in self.layout.containers()].index(step["container"]))
             here.pop(step["container"], None)
 
@@ -309,10 +309,8 @@ class Teacher:
             print(json.dumps(row), flush=True)
             here[step["container"]] = step["to"]
             self.off_stand(data, step, here)
-        final = {}
-        for step in task["steps"]:
-            final[step["container"]] = step["to"]
-        final = {c: s for c, s in final.items() if L.sites[s]["kind"] != "outbound"}  # judged when placed, then gone with Pinky
+        last = {step["container"]: step for step in task["steps"]}
+        final = {c: s["to"] for c, s in last.items() if not s.get("outbound")}  # judged when placed, then gone with Pinky
         self.data = data  # the last state, for the record's pictures
         finals = {c: judge_pose(w, data, c, s, self.limits) for c, s in final.items()}
         passed = sum(r["result"] == "pass" for r in rows)

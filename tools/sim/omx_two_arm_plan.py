@@ -7,7 +7,7 @@ it does not say when each arm moves. This module does, the same way for simulati
 - able arms: the arms that can do the move in the state it runs in (validator: tool-down chain and wrist clearance, `validator_can`).
 - order: a move waits for every earlier move that touches the same stack, lane or stand (support and cover stay legal), and the conveyor
   hands over one container at a time, the next one arriving `belt_gap_s` after the previous pick.
-- zones (D-778 L1): a / b (each arm's side), mid (conveyor end, middle row, stern stand). The pick and the carry hold the source zone,
+- zones (D-778 L1): a / b (each arm's side and plate), mid (conveyor end, middle row, stern bay). The pick and the carry hold the source zone,
   the carry and the place the target zone (a carry from the conveyor sweeps the middle: two arms met there in MuJoCo); reaching into the other arm's side, or carrying from one side to the other, also holds mid. Different zones may overlap in time, one zone holds one arm.
 - arm choice: among the able arms, the one that can start first; Harbor's primary arm on a tie. One-arm mode has a single arm; a move
   it cannot do is not moved by it but counted as an extra transport (Pinky round trip or a person, SR-29) and done outside the cell.
@@ -39,13 +39,13 @@ def zone(layout, site):
         return s["plate"]
     if s["kind"] == "ship":
         return "a" if s["row"] == 0 else "b" if s["row"] == 2 else "mid"
-    return "mid"  # conveyor end, stern stand
+    return "mid"  # conveyor end
 
 
 def planning_sites(layout):
     """Sites the plans use: all but ship hold 2, which the arms reach at grasp height but not on the validated carry from the conveyor
     (omx_two_arm_tasks refuses it with the stern at the table edge)."""
-    return [s for s, v in layout.sites.items() if v["kind"] != "ship" or v["stack"].startswith("h1")]
+    return [s for s, v in layout.sites.items() if v["kind"] != "ship" or v["stack"].startswith("h1") or v["stack"] == "stern"]
 
 
 def validator_can(layout):
@@ -79,7 +79,8 @@ def stack_key(layout, site):
 
 def harbor_moves(layout, state, request, can, avoid=()):
     """Harbor-shaped moves for one outbound request on `state` (cargo -> site): every container above the target, top first, to a free
-    temporary lane or free supported ship site, the target to a free stand, then the blockers back into the target's stack from its bottom,
+    temporary lane or free supported ship site, the target to a free lane of a temporary plate (the outbound place: Harbor names the lane
+    per job, here the first that works), then the blockers back into the target's stack from its bottom,
     in their old order; the first complete plan wins (depth first, as harbor/spatial.plan_spatial searches complete plans). Each move
     carries `arms`, every arm that can do it in the state it runs in. Returns (moves, None) or (None, HOLD reason)."""
     target = request["cargo_id"]
@@ -89,9 +90,6 @@ def harbor_moves(layout, state, request, can, avoid=()):
     key, base = stack_key(layout, site), layout.sites[site].get("layer", 0)
     blockers = sorted((c for c, s in state.items() if stack_key(layout, s) == key and layout.sites[s].get("layer", 0) > base),
                       key=lambda c: -layout.sites[state[c]]["layer"])
-    stand = next((s for s, v in layout.sites.items() if v["kind"] == "outbound" and s not in state.values()), None)
-    if stand is None:
-        return None, "NO_FREE_STAND"
     failures = []
 
     def step(cur, cargo, b, phase):
@@ -103,7 +101,14 @@ def harbor_moves(layout, state, request, can, avoid=()):
                     arms=[HARBOR_ARMS[h] for h in found])
 
     def finish(cur, moves):
-        """Outbound, then the blockers back, lowest first into the target's freed level; None when an arm is missing on the way."""
+        """Outbound to the first free lane that lets the whole job finish, then the blockers back, lowest first into the target's freed
+        level; None when an arm is missing on the way."""
+        lanes = sorted(s for s in planning_sites(layout) if layout.sites[s]["kind"] == "temp" and s not in cur.values() and s not in avoid)
+        if not lanes:
+            failures.append("NO_FREE_OUTBOUND_LANE")
+        return next((done for stand in lanes if (done := restore(cur, moves, stand))), None)
+
+    def restore(cur, moves, stand):
         for k, (cargo, b, phase) in enumerate([(target, stand, "반출")] + [
                 (c, next(s for s, v in layout.sites.items() if v.get("stack") == key and v["layer"] == base + i), "복귀")
                 for i, c in enumerate(reversed(blockers))]):
@@ -121,7 +126,7 @@ def harbor_moves(layout, state, request, can, avoid=()):
             return finish(cur, moves)
         cargo = blockers[i]
         occupied = set(cur.values()) - {cur[cargo]}  # it does not hold itself up
-        options = sorted((t for t in temp_spots(layout, occupied, set(avoid) | {stand}) if stack_key(layout, t) != key),
+        options = sorted((t for t in temp_spots(layout, occupied, set(avoid)) if stack_key(layout, t) != key),
                          key=lambda t: zone(layout, t) != zone(layout, cur[cargo]))
         for t in options:
             m = step(cur, cargo, t, "재취급")
@@ -246,10 +251,10 @@ def plan_outbound(layout, arms, can):
         if found is None:
             holds.append(dict(request=request["cargo_id"], reason=why))
             continue
-        avoid |= {m["destination"] for m in found if m["phase_label"] == "재취급"}  # the stand is shared in turn (same-site order)
+        avoid |= {m["destination"] for m in found if m["phase_label"] == "재취급"}  # an outbound lane is shared in turn (same-site order)
         for m in found:
             state[m["cargo_id"]] = m["destination"]
-        state.pop(request["cargo_id"])  # the stand is cleared by Pinky
+        state.pop(request["cargo_id"])  # Pinky clears the outbound lane
         moves += found
     return moves, holds
 
@@ -272,8 +277,13 @@ def compare(layout, scenario, can=None):
 
 def as_steps(rows):
     """Timeline rows in start order as teacher steps (the sequential MuJoCo replay of an assignment)."""
-    return [dict(id=f"m{r['move']}", container=r["cargo_id"], **{"from": r["source"]}, to=r["destination"], arm=r["arm"])
+    return [dict(id=f"m{r['move']}", container=r["cargo_id"], **{"from": r["source"]}, to=r["destination"], arm=r["arm"], **outbound(r))
             for r in sorted(rows, key=lambda r: (r["start"], r["move"]))]
+
+
+def outbound(row):
+    """A 반출 move ends on a temporary lane that Pinky then clears: the step says so, the site cannot."""
+    return {"outbound": True} if row.get("phase") == "반출" else {}
 
 
 def replay_tasks(layout, result):
@@ -292,7 +302,7 @@ def replay_tasks(layout, result):
                 steps.append(dict(id=f"m{row['move']}", container=row["cargo_id"], to=row["destination"], arm=row["arm"], **{"from": row["source"]},
                                   after=[f"m{o['move']}" for o in rows if o["move"] < row["move"] and keys & done_keys(layout, o)],
                                   after_pick=[f"m{prev[-1]['move']}"] if row["source"] == "belt" and prev else [],
-                                  zones=row["zones"], planned_start_s=row["start"]))
+                                  zones=row["zones"], planned_start_s=row["start"], **outbound(row)))
             steps.sort(key=lambda st: (st["planned_start_s"], st["id"]))
             stack = name == "stack"
             out[f"{name}-{mode.replace(' ', '-')}"] = dict(

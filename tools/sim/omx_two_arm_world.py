@@ -191,7 +191,7 @@ class World:
 
     def _r08(self, spec):
         """The berthed r08 ship: the printed meshes to see; to collide, convex hulls of the bow and house, boxes for the stern around its empty
-        bay (the outbound stand, sites.STERN), and per hold a floor slab, the pocket walls of each row (seat and slope as measured, sites.HOLD),
+        bay (a low ship place, sites.STERN), and per hold a floor slab, the pocket walls of each row (seat and slope as measured, sites.HOLD),
         the outer deck and the bulwark. The pocket pins sit inside the container's bottom grooves and are left out (shortcut: a container off
         its seat by more than the groove would not meet them)."""
         L, H, world = self.layout, sites.HOLD, spec.worldbody

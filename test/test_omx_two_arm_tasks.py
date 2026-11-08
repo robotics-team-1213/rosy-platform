@@ -157,9 +157,10 @@ def top_camera_pixels(layout, xy):
     return 320 + cam["f_px"] * (p @ right) / (p @ forward), 240 - cam["f_px"] * (p @ np.cross(right, forward)) / (p @ forward)
 
 
-def test_the_plates_stand_where_the_top_camera_saw_them(layout):
-    """A run still passed 9/9 with the plates 57 mm off: geometry alone cannot catch this, so hold the photo's pixels."""
-    assert layout.choices["temp_lanes"] == "photo-20261107"
+def test_the_photo_plates_stand_where_the_top_camera_saw_them():
+    """A run still passed 9/9 with the plates 57 mm off: geometry alone cannot catch this, so hold the photo's pixels (the loose v7
+    plates of 11-07; the default is now plate v11 where its bridge seats it, to be measured again once installed)."""
+    layout = sites.Layout(temp_lanes="photo-20261107", temp_radius_m=.214)
     seen = {"tmp-a-1": (600, 422), "tmp-a-2": (546, 431), "tmp-b-1": (207, 388), "tmp-b-2": (151, 388), "tmp-b-3": (96, 378)}
     for site, pixel in seen.items():
         assert np.hypot(*np.subtract(top_camera_pixels(layout, layout.sites[site]["xy"]), pixel)) < 5, site
@@ -167,13 +168,14 @@ def test_the_plates_stand_where_the_top_camera_saw_them(layout):
 
 def test_temp_lanes_follow_the_scad_fan_and_point_at_the_arm():
     layout = sites.Layout(temp_lanes="fan", ship_source="fixture-studs")
-    width, length, flare, fan, angles = sites.lane_geometry(.214)
-    assert width == pytest.approx(.0308) and math.degrees(fan) == pytest.approx(15.6, abs=.3) and angles[1] == 0
+    width, length, flare, fan, angles = sites.lane_geometry(.200)
+    assert width == pytest.approx(.0308) and length == pytest.approx(.096) and math.degrees(fan) == pytest.approx(17.3, abs=.1) and angles[1] == 0
+    assert layout.choices["temp_lanes"] == "fan" and layout.choices["temp_radius_m"] == .200  # plate v11 on its bridge (Confluence 23233175)
     for tag, arm in (("a", "arm_a"), ("b", "arm_b")):
         base = layout.arms[arm].base[:2]
         for i in (1, 2, 3):
             s = layout.sites[f"tmp-{tag}-{i}"]
-            assert np.linalg.norm(np.array(s["xy"]) - base) == pytest.approx(.214, abs=1e-6)
+            assert np.linalg.norm(np.array(s["xy"]) - base) == pytest.approx(.200, abs=1e-6)
             toward = np.array(base) - np.array(s["xy"])
             assert abs(math.cos(s["yaw"]) * toward[1] - math.sin(s["yaw"]) * toward[0]) < 1e-6  # long axis through the arm centre
         assert layout.sites[f"tmp-{tag}-1"]["z"] == layout.sites["ship-r0-l0"]["z"]  # deck as high as the ship plate

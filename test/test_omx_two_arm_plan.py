@@ -20,8 +20,8 @@ def layout():
 
 @pytest.fixture(scope="module")
 def reach(layout):
-    """The IK reach map of 2026-11-08 (reach_map): ship hold 1, belt and stern stand by both, plate a by arm_a, plate b lanes 1-2 by arm_b."""
-    table = {s: set(BOTH) for s in plan.planning_sites(layout) if layout.sites[s]["kind"] in ("ship", "belt", "outbound")}
+    """The IK reach map of 2026-11-08 (reach_map): ship hold 1, belt and stern bay by both, plate a by arm_a, plate b lanes 1-2 by arm_b."""
+    table = {s: set(BOTH) for s in plan.planning_sites(layout) if layout.sites[s]["kind"] in ("ship", "belt")}
     table.update({f"tmp-a-{i}": {"arm_a"} for i in (1, 2, 3)})
     table.update({"tmp-b-1": {"arm_b"}, "tmp-b-2": {"arm_b"}, "tmp-b-3": set()})
     return plan.table_can(table)
@@ -61,28 +61,31 @@ def test_harbor_order_rehandle_outbound_restore(layout, reach):
     moves, why = plan.harbor_moves(layout, state, dict(cargo_id="bar-3"), reach)  # bottom of row 2 under bar-6 and bar-9
     assert why is None
     assert [(m["cargo_id"], m["phase_label"]) for m in moves] == [("bar-9", "재취급"), ("bar-6", "재취급"), ("bar-3", "반출"), ("bar-6", "복귀"), ("bar-9", "복귀")]
-    assert moves[2]["destination"] == "stand-1"
+    assert moves[2]["destination"] == "tmp-a-1"  # the outbound place is a lane: arm_b's plate is full, so arm_a's
     assert [m["destination"] for m in moves[3:]] == ["ship-h1r2-l0", "ship-h1r2-l1"]  # down into the freed level, old order kept
     assert all(m["destination"].startswith("tmp-b") for m in moves[:2])  # row 2 is arm_b's side: its own plate first
 
 
 def test_one_arm_without_a_temporary_place_in_reach_holds(layout, reach):
-    """arm_b alone reaches two lanes of its plate: the second request has nowhere for its two blockers (a person or a Pinky trip)."""
+    """arm_b alone reaches two lanes of its plate and the stern bay: the second request finds no lane left for its target (a person or a
+    Pinky trip)."""
     moves, holds = plan.plan_outbound(layout, ("arm_b",), reach)
-    assert holds and holds[0]["reason"] == "NO_TEMPORARY_SPACE_IN_REACH"
+    assert holds and holds[0] == dict(request="bar-3", reason="NO_STAND_IN_REACH")
     both, none = plan.plan_outbound(layout, ("arm_a", "arm_b"), reach)
     assert not none and len(both) == 10
 
 
-def test_two_requests_overlap_on_their_own_sides_and_share_the_stand_in_turn(layout, reach):
+def test_two_requests_overlap_on_their_own_sides_and_each_target_leaves_from_a_lane(layout, reach):
     moves, _ = plan.plan_outbound(layout, ("arm_a", "arm_b"), reach)
     rows, extra = plan.schedule(layout, moves, ("arm_a", "arm_b"))
     assert not extra
     zones_never_double_held(rows)
     m = plan.metrics(rows, extra, ("arm_a", "arm_b"))
     assert m["overlap_s"] > 0 and m["moves_per_arm"]["arm_a"] and m["moves_per_arm"]["arm_b"]
-    stand = sorted((r["start"], r["end"]) for r in rows if "stand-1" in (r["source"], r["destination"]))
-    assert all(e1 <= s2 for (_, e1), (s2, _) in zip(stand, stand[1:]))
+    out = [r for r in rows if r["phase"] == "반출"]
+    assert len(out) == 2 and all(r["destination"].startswith("tmp-") for r in out)
+    steps = plan.as_steps(rows)
+    assert sorted(s["id"] for s in steps if s.get("outbound")) == sorted(f"m{r['move']}" for r in out)  # Pinky clears exactly these
 
 
 def test_a_move_no_arm_of_the_mode_reaches_is_counted_not_moved(layout, reach):
@@ -91,9 +94,11 @@ def test_a_move_no_arm_of_the_mode_reaches_is_counted_not_moved(layout, reach):
     assert not rows and extra[0]["cargo_id"] == "bar-1"
 
 
-def test_the_stern_stand_lies_across_the_beam(layout):
-    s = layout.sites["stand-1"]
-    assert s["kind"] == "outbound" and s["yaw"] == pytest.approx(1.5708, abs=1e-4)
+def test_the_stern_bay_is_a_low_ship_place_across_the_beam(layout):
+    """The outbound place is a temporary lane (set page 23233175, 2026-11-08); the empty stern bay is one more place on the ship."""
+    s = layout.sites["ship-stern-l0"]
+    assert s["kind"] == "ship" and s["layer"] == 0 and s["yaw"] == pytest.approx(1.5708, abs=1e-4)
+    assert "ship-stern-l0" in plan.planning_sites(layout) and not any(v["kind"] == "outbound" for v in layout.sites.values())
     assert s["xy"][0] == pytest.approx(layout.choices["ship_stern_x_m"] - .025)
 
 
@@ -101,7 +106,7 @@ def test_the_validator_gives_the_bottom_of_an_outer_row_to_the_far_arm(layout):
     """Reach is not enough: the near arm's wrist hits the standing middle row (MuJoCo replay 2026-11-08, -1 to -5 mm), the far arm clears it."""
     full = {c: s for c, s, _ in layout.plan_order()}
     here = {c: s for c, s in full.items() if layout.sites[s]["row"] != 0}  # row 0 taken down to bar-2, the middle row standing three high
-    assert plan.validator_can(layout)(full["bar-2"], "stand-1", here) == {"arm_b"}
+    assert plan.validator_can(layout)(full["bar-2"], "ship-stern-l0", here) == {"arm_b"}
 
 
 def test_a_concurrent_replay_carries_order_conveyor_and_zones(layout, reach):
