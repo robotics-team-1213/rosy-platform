@@ -3,7 +3,7 @@
 which constant to measure next: the constant step of the real-sim loop (docs/reference/omx-real-sim-loop.md, 6b).
 
   servo EP_DIR [EP_DIR ..] --cell CELL --out DIR [--base design] [--arm arm_b] [--keys kp,kv,damping,frictionloss]
-        Replays each real episode's actions open loop in the MuJoCo cell (omx_twin.track) and fits the chosen constants of
+        Replays each real episode's actions open loop in the MuJoCo cell (omx_twin.track, --jobs processes) and fits the chosen constants of
         joint1-5 together (scipy least_squares, joint angle error in degrees). Episodes are split fit/hold by name
         (omx_twin.shard_of, 1 in 3 held out); fit.json has the base and fitted RMS on both, and each constant's sd.
         Lab PC only (MuJoCo, D-584). No real motion: the episodes are recordings.
@@ -107,24 +107,69 @@ def error_deg(cell, episodes, values, gravity_comp, every=1):
     return np.concatenate(out)
 
 
-def servo(folders, cell_path, out, base="design", arm="arm_b", keys=("kp", "kv", "damping", "frictionloss"), gravity_comp=False,
-          max_nfev=60):
-    import numpy as np
-    from scipy.optimize import least_squares
+_W = {}  # one worker's cell and episodes, built once per process
+
+
+def _init(cell_path, base, folders, gravity_comp):
     import omx_cell_sim as cs
+    _W.update(cell=cs.Cell(cell_path, base), eps={e[0]: e for e in Episodes(folders).items}, grav=gravity_comp)
+
+
+def _job(task):
+    values, name, every = task
+    return error_deg(_W["cell"], [_W["eps"][name]], values, _W["grav"], every)
+
+
+class Residual:
+    """least_squares' fun and jac over a process pool: every (episode) replay, and every (constant, episode) replay of the
+    forward-difference Jacobian, is one job. The last fun value is reused by jac at the same x."""
+
+    def __init__(self, pool, names, keys, step=.05):
+        self.pool, self.names, self.keys, self.step, self.last = pool, names, keys, step, (None, None)
+
+    def errors(self, values, every=EVERY):
+        import numpy as np
+        return np.concatenate(list(self.pool.map(_job, [(values, n, every) for n in self.names])))
+
+    def fun(self, x):
+        f = self.errors(unpack(x, self.keys)).ravel()
+        self.last = (x.copy(), f)
+        return f
+
+    def jac(self, x):
+        import numpy as np
+        f0 = self.last[1] if self.last[0] is not None and np.array_equal(self.last[0], x) else self.fun(x)
+        shifted = [x + self.step * np.eye(len(x))[i] for i in range(len(x))]
+        tasks = [(unpack(s, self.keys), n, EVERY) for s in shifted for n in self.names]
+        parts = list(self.pool.map(_job, tasks))
+        k = len(self.names)
+        cols = [(np.concatenate(parts[i * k:(i + 1) * k]).ravel() - f0) / self.step for i in range(len(x))]
+        return np.stack(cols, 1)
+
+
+def servo(folders, cell_path, out, base="design", arm="arm_b", keys=("kp", "kv", "damping", "frictionloss"), gravity_comp=False,
+          max_nfev=60, jobs=8):
+    import numpy as np
+    from concurrent.futures import ProcessPoolExecutor
+    from scipy.optimize import least_squares
     keys = tuple(keys)
     unknown = set(keys) - set(BOUNDS)
     if unknown:
         raise SystemExit(f"cannot fit {sorted(unknown)}; fit keys are {sorted(BOUNDS)}")
-    cell = cs.Cell(cell_path, base)
-    start = [{k: cell.physics.joint(arm, j)[k] for k in keys} for j in BODY]
+    if arm != "arm_b":
+        raise SystemExit("omx_cell_sim models arm_b only; arm_a's episodes need the two-arm world")
+    phys = physics.Physics(base)
+    start = [{k: phys.joint(arm, j)[k] for k in keys} for j in BODY]
     fit, hold = Episodes(folders).split()
     x0 = np.log([max(row[k], BOUNDS[k][0]) for row in start for k in keys])
     lo = np.log([BOUNDS[k][0] for _ in BODY for k in keys])
     hi = np.log([BOUNDS[k][1] for _ in BODY for k in keys])
-    res = least_squares(lambda x: error_deg(cell, fit, unpack(x, keys), gravity_comp, EVERY).ravel(), np.clip(x0, lo, hi),
-                        bounds=(lo, hi), diff_step=.05, max_nfev=max_nfev, x_scale="jac")
-    fitted = unpack(res.x, keys)
+    with ProcessPoolExecutor(jobs, initializer=_init, initargs=(cell_path, base, [str(f) for f in folders], gravity_comp)) as pool:
+        r_fit = Residual(pool, [e[0] for e in fit], keys)
+        r_hold = Residual(pool, [e[0] for e in hold], keys)
+        res = least_squares(r_fit.fun, np.clip(x0, lo, hi), jac=r_fit.jac, bounds=(lo, hi), max_nfev=max_nfev, x_scale="jac")
+        fitted = unpack(res.x, keys)
+        score = {name: {"fit": rms(r_fit.errors(v, 1)), "hold": rms(r_hold.errors(v, 1))} for name, v in (("base", start), ("fitted", fitted))}
     # sd from the Gauss-Newton covariance, carried from log space: sd(v) ~ v * sd(log v)
     dof = max(1, res.fun.size - res.x.size)
     try:
@@ -133,8 +178,6 @@ def servo(folders, cell_path, out, base="design", arm="arm_b", keys=("kp", "kv",
     except np.linalg.LinAlgError:
         sd_log = np.full(res.x.size, np.nan)
     sd = [{k: round(fitted[j][k] * float(sd_log[j * len(keys) + i]), 6) for i, k in enumerate(keys)} for j in range(5)]
-    score = {name: {"fit": rms(error_deg(cell, fit, v, gravity_comp)), "hold": rms(error_deg(cell, hold, v, gravity_comp))}
-             for name, v in (("base", start), ("fitted", fitted))}
     result = dict(schema=SCHEMA, base=base, arm=arm, keys=list(keys), gravity_comp=gravity_comp, cell=str(cell_path),
                   episodes=dict(fit=[e[0] for e in fit], hold=[e[0] for e in hold]),
                   fitted={j: {k: round(v, 6) for k, v in row.items()} for j, row in zip(BODY, fitted)},
@@ -217,6 +260,7 @@ def main(argv=None):
     s.add_argument("--keys", default="kp,kv,damping,frictionloss")
     s.add_argument("--gravity-comp", action="store_true", help="the sim's ideal gravity compensation (omx_twin tries both)")
     s.add_argument("--max-nfev", type=int, default=60)
+    s.add_argument("--jobs", type=int, default=8, help="replay processes (each holds one MuJoCo cell)")
     pr = sub.add_parser("promote")
     pr.add_argument("fit")
     pr.add_argument("--name", required=True)
@@ -225,7 +269,7 @@ def main(argv=None):
     n.add_argument("--json", action="store_true")
     a = p.parse_args(argv)
     if a.cmd == "servo":
-        r = servo(a.episodes, a.cell, a.out, a.base, a.arm, a.keys.split(","), a.gravity_comp, a.max_nfev)
+        r = servo(a.episodes, a.cell, a.out, a.base, a.arm, a.keys.split(","), a.gravity_comp, a.max_nfev, a.jobs)
         print(json.dumps(dict(rms_deg=r["rms_deg"], verdict=verdict(r)), indent=1))
     elif a.cmd == "promote":
         print(promote(json.loads(Path(a.fit).read_text(encoding="utf-8")), a.name, a.evidence))
