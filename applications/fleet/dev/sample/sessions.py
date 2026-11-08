@@ -84,6 +84,8 @@ class Sessions:
         if (method, path) == ('POST', '/auth/logout'):
             self.active = False
             return reply(status=204, headers=self.cookie(clear=True))
+        if (method, path) == ('GET', '/auth/access-requests'):  # D-993: the sample has no waiting requests
+            return reply([]) if self.role == 'operator' else error(403, 'ACCOUNT_ADMIN_REQUIRED')
         if path.startswith('/auth/accounts'):
             if self.role != 'operator':
                 return error(403, 'ACCOUNT_ADMIN_REQUIRED')

@@ -109,6 +109,17 @@ def test_dedicated_login_document_and_allowlisted_assets_keep_csp(path):
     assert client.get('/console/assets/unknown-login.js').status_code == 404
 
 
+@pytest.mark.parametrize('path', ['/console', '/console/assets/console.js'])
+def test_console_files_compress_and_revalidate_with_304(path):
+    client = _client(FakeRobot('rosy_01'), token='operator-secret')
+    first = client.get(path, headers={'Accept-Encoding': 'gzip'})
+    assert first.status_code == 200 and first.headers['content-encoding'] == 'gzip'
+    again = client.get(path, headers={'If-None-Match': first.headers['etag']})
+    assert again.status_code == 304 and again.content == b''
+    assert again.headers['cache-control'] == 'no-cache'
+    assert client.get(path, headers={'If-None-Match': '"stale"'}).status_code == 200
+
+
 def _named_client(tmp_path, *robots: FakeRobot) -> TestClient:
     """D-540 9: moving routes need a named operator, and site-users need the task store."""
     endpoints = [RobotEndpoint(robot_id=r.robot_id, base_url=f"http://127.0.0.1:808{i}",

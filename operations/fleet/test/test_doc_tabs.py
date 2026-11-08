@@ -4,7 +4,7 @@ import re
 from pathlib import Path
 
 WEB = Path(__file__).resolve().parents[3] / 'applications/fleet/web'
-DOCS = {"index.html": "/console", "install.html": "/console/install",
+DOCS = {"index.html": "/console", "install.html": "/console/install", "maintenance.html": "/console/install",
         "site-map.html": "/console/site-map", "cell.html": "/console?view=work",  # D-741 7: Cell은 작업 영역이다
         "policy.html": "/console?view=work"}  # D-926 2: 학습 정책 승인도 작업 영역이다
 ORDER = ["/console", "/console?view=work", "/console?view=records", "/console/site-map", "/console/install"]
@@ -18,7 +18,7 @@ SUBNAV = {"site-map.html": ("현장 지도 작업", ["map", "survey", "profile",
 
 
 def _page(name):
-    for folder in ("cell", "installation", "sitemap", "work"):
+    for folder in ("cell", "installation", "maintenance", "sitemap", "work"):
         path = WEB / folder / name
         if path.is_file():
             return path

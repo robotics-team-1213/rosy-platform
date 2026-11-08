@@ -17,6 +17,7 @@ from test_blocks import _demo_map
 from test_lane_traffic import START_N, Fleet, _s_of, _ticks
 from test_routing import demo_site
 from test_trip_runner import run
+from fakes import fresh_battery
 
 RING = ("ring_n", "ring_s", "ring_e", "ring_w")
 #: The SIM's operator closure: every lap is the outer loop east -> ring_n -> west -> ring_s.
@@ -29,7 +30,7 @@ def _setup(zones=True):
     fleet.blocked = CHORDS
     store = SiteMapStore(None, clock=lambda: fleet.now)
     store.import_if_empty(demo_site(), source="test")
-    runner = TripRunner(store=store, routing_config=store.routing_config, caps=fleet.caps_for, poses=fleet,
+    runner = TripRunner(store=store, routing_config=store.routing_config, caps=fleet.caps_for, battery=fresh_battery, poses=fleet,
                         junction=fleet, goal=fleet.goal, cancel_goal=fleet.cancel_goal,
                         blocked=lambda: fleet.blocked, clock=lambda: fleet.now, config=TripConfig(),
                         traffic_zones={"roundabout": (RING, 1)} if zones else None)

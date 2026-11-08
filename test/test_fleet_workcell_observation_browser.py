@@ -43,7 +43,8 @@ def cell_url():
 
 def observation_feed(page):
     from PIL import Image
-    state = SimpleNamespace(freeze_b=None, sequence=0, stall=False, held=[], limited=set(), failed_assets=[], incidents=[], cleared=[])
+    state = SimpleNamespace(freeze_b=None, sequence=0, stall=False, held=[], limited=set(), failed_assets=[], incidents=[], cleared=[],
+                            evidence_reads=[])
     page.on("response", lambda response: state.failed_assets.append(f"{response.status} {response.url}")
             if response.request.resource_type in ("script", "stylesheet") and not response.ok else None)
     encoded = BytesIO()
@@ -74,12 +75,15 @@ def observation_feed(page):
                 state.held.append(route)
                 return
             return route.fulfill(json=snapshot())
-        if path.endswith("/incidents/" + "a" * 32 + "/frames/top"):  # D-971
+        if path.endswith("/incidents/" + "a" * 32 + "/frames/top") or "/incidents/" + "a" * 32 + "/evidence/" in path:  # D-971
             assert route.request.headers.get("authorization") == "Bearer viewer-token"
+            state.evidence_reads.append(path.rsplit("/", 2)[-2:])
             return route.fulfill(content_type="image/jpeg", body=jpeg)
         if path.endswith("/incidents/" + "a" * 32 + "/clear"):
             state.cleared.append(route.request.post_data_json)
-            state.incidents[0].update(state="cleared", cleared={"by": "op-7", "at": time.time(), "note": state.cleared[-1]["note"]})
+            body = state.cleared[-1]
+            state.incidents[0].update(state="cleared", cleared={"by": "op-7", "at": time.time(), "note": body["note"],
+                                                                "cause": body.get("cause"), "basis": body.get("basis")})
             return route.fulfill(json={"held": False, "incident_ids": [], "reason": None})
         if path == "/api/fleet/vision/lease":
             source = route.request.post_data_json["source_id"]
@@ -238,6 +242,8 @@ def test_cell_shows_an_arm_incident_with_frames_and_an_explanation_and_clears_it
                                                   "flagged": [{"command": "home", "error": "blocked", "fault": None}]},
             "decision": {"hold": True, "reason": "latched ID 13 overload"}, "recovery": {"rebooted": [13]},
             "frames": [{"role": "top", "sha256": "0" * 64, "bytes": 100}],
+            "evidence": [{"seq": 0, "camera": "top", "t_rel_s": 0.0, "kind": "tip", "sha256": "1" * 64, "bytes": 90},
+                         {"seq": 1, "camera": "side", "t_rel_s": -2.0, "kind": "full", "sha256": "2" * 64, "bytes": 90}],
             "explanation": {"seen": "A box between the jaws <b>x</b>", "suspected_cause": "The box blocked home.",
                             "model": "qwen3-vl:8b", "explained_at": 1.0, "note": "explanation only"}, "cleared": None})
         if unfamiliar_facts:
@@ -246,6 +252,8 @@ def test_cell_shows_an_arm_incident_with_frames_and_an_explanation_and_clears_it
         assert not state.failed_assets, state.failed_assets
         card = page.locator('[data-arm-source="feedback_b"]')
         expect(card.locator("summary").filter(has_text="보류 중 1건")).to_be_visible()
+        expect(card.get_by_text("설명일 뿐")).to_be_hidden()  # the person picks a cause before reading the model's
+        card.locator("summary").filter(has_text="AI 설명 보기").click()
         expect(card.get_by_text("설명일 뿐")).to_be_visible()
         if unfamiliar_facts:
             expect(card.get_by_text(json.dumps(state.incidents[0]["facts"], separators=(",", ":")))).to_be_visible()
@@ -281,13 +289,21 @@ def test_cell_shows_an_arm_incident_with_frames_and_an_explanation_and_clears_it
                            cleared_requests=len(state.cleared), facts_variant=shape, facts=state.incidents[0]["facts"],
                            filenames=[viewport.name, full.name])
             viewport.with_name(f"{name}.json").write_text(json.dumps(metrics, ensure_ascii=False, indent=2), encoding="utf-8")
+        assert not [r for r in state.evidence_reads if r[0] == "evidence"]  # the strip loads only when opened
+        card.locator("summary").filter(has_text="정지 앞뒤 사진 2장").click()
+        expect(card.get_by_text("top · 집게 끝 · 0.0초")).to_be_visible()
+        expect(card.get_by_role("img", name="side 카메라 전체 · 정지 -2.0초")).to_have_attribute("src", re.compile("^blob:"))
         card.get_by_text("확인했습니다 · 해제").click()
         expect(card.get_by_text("확인한 내용을 적어야 해제할 수 있습니다.")).to_be_visible()
         assert state.cleared == []
         card.get_by_label("확인한 내용").fill("box removed from the jaws")
+        card.get_by_label("원인", exact=True).select_option("blocked")
+        card.get_by_label("근거", exact=True).select_option("repeat")
         card.get_by_text("확인했습니다 · 해제").click()
         expect(card.get_by_text("해제: op-7", exact=False)).to_be_visible()
-        assert state.cleared == [{"note": "box removed from the jaws"}]
+        # the cause and how the person knows it go with the clear as fields: the labels learning scores against
+        assert state.cleared == [{"note": "box removed from the jaws", "cause": "blocked", "basis": "repeat"}]
+        expect(card.get_by_text("원인 blocked (근거 repeat)", exact=False)).to_be_visible()
         expect(card.locator("summary").filter(has_text="모두 해제됨")).to_be_visible()
         assert not errors, errors
         page.unroute_all(behavior="ignoreErrors")

@@ -82,8 +82,9 @@ def slot(qdir: Path, ticket: Path, sleep=time.sleep, held=None, changed=None) ->
         rows = land_queue.ahead(qdir, Path("~"))
         carried = {name for r in rows for name in (r.get("batch") or [])}
         urgent = any(r["ticket"] == ticket.name and r.get("urgent") for r in rows)
-        return sum(r.get("status") == "preparing" or (r.get("status") == "pending" and r["ticket"] < ticket.name
-                                                      and r.get("branch") not in carried and not urgent)
+        return sum((r.get("status") == "preparing" and not r.get("full_wait"))
+                   or (r.get("status") == "pending" and r["ticket"] < ticket.name
+                       and r.get("branch") not in carried and not urgent)
                    for r in rows if r["ticket"] != ticket.name)
     while (held and held()) or busy() >= MAX_PREPARING:
         land_queue.touch(ticket)
@@ -94,7 +95,9 @@ def slot(qdir: Path, ticket: Path, sleep=time.sleep, held=None, changed=None) ->
 
 
 def full_slot(qdir: Path, ticket: Path, sleep=time.sleep, changed=None) -> None:
-    """Mark this preparing ticket FULL and wait while MAX_FULL older FULL pretests run; an urgent one never waits."""
+    """Mark this preparing ticket FULL and wait while MAX_FULL older FULL pretests run; an urgent one never waits.
+    A waiter runs no test, so ``full_wait`` frees its preparation slot (2026-11-07: two waiters held 2 of 6 slots
+    while a one-file landing stood pending); MAX_FULL and each host's admission still hold the load."""
     land_queue.set_status(ticket, "preparing", tier="full")
     if json.loads(ticket.read_text(encoding="utf-8")).get("urgent"):
         return
@@ -105,10 +108,13 @@ def full_slot(qdir: Path, ticket: Path, sleep=time.sleep, changed=None) -> None:
         if not said:
             print(f"[land] FULL pretest waits for {MAX_FULL} older FULL pretest(s) to finish", flush=True)
             said = True
+            land_queue.set_status(ticket, "preparing", full_wait=True)
         land_queue.touch(ticket)
         if changed and (code := changed()) is not None:
             raise SystemExit(code)
         sleep(POLL)
+    if said:
+        land_queue.set_status(ticket, "preparing", full_wait=False)
 
 
 def again(land, wt: Path, branch: str, args, python: str, qdir: Path, ticket: Path, invocations, note) -> str | None:
@@ -226,7 +232,7 @@ def _prepare(land, wt: Path, branch: str, args, python: str, qdir: Path | None, 
         raise raised[0]
     if land.out(wt, "rev-parse", "HEAD") != candidate:
         raise land.Stop(f"HEAD changed during pretest; {candidate[:10]} was tested; retry the landing")
-    clean = land.land_selection.eligible(land, guarded + tested)
+    clean = land.land_selection.eligible(land, guarded + tested, args)
     land.land_selection.require_eligible(land, args, clean, guarded + tested)
     delta = bool(note) and note.startswith(land.land_selection.DELTA_NOTE) and not explicit
     # D-970 4: a LOAD-FLAKY id no longer voids the whole pretest; the record keeps it and the turn reruns it.
@@ -236,7 +242,8 @@ def _prepare(land, wt: Path, branch: str, args, python: str, qdir: Path | None, 
     # D-970 4: a pass reused from another tree (land_cache NARROW) names the tier for the queue too; the record is
     # marked "reused" so land.py writes no land record from it and pre-push still reruns (11-03: 9 of 20 had none).
     reused = relax and any(land.land_cache.NARROW in line for line in guarded + tested)
-    drop = (("LOAD-FLAKY",) if flaky else ()) + ((land.land_cache.NARROW,) if reused else ())
+    # D-970 3: an explicit FULL keeps no "reused" mark; publish_evidence recomputes each cross-tree pass itself.
+    drop = (("LOAD-FLAKY",) if flaky else ()) + ((land.land_cache.NARROW,) if reused or explicit else ())
     judged = [line for line in guarded + tested if not any(d in line for d in drop)]
     tier = land.land_selection.tier(land, judged, bool(note) and not delta)  # carried: restore() refuses it
     anchor = None

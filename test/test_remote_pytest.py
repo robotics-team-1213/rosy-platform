@@ -1397,6 +1397,14 @@ def test_pytest_tail_keeps_failed_ids_repo_relative_when_the_first_path_has_a_py
     assert set(rp.known_failures.failed_ids(out)) == {"pkg/test_a.py::test_a", "other/test_b.py::test_b"}, out
 
 
+def test_an_invocation_asking_for_passed_lines_gets_them_from_the_real_pytest(tmp_path):
+    (tmp_path / "test_a.py").write_text("def test_a():\n    pass\n", encoding="utf-8")
+    run = lambda *inv: subprocess.run([sys.executable, "-m", "pytest", *inv, *rp.xdist_plan.tail(list(inv), rp.PYTEST_TAIL)], cwd=tmp_path,
+                                      capture_output=True, text=True, timeout=120).stdout
+    assert "PASSED test_a.py::test_a" in run("-rA", "test_a.py"), "the tail must not override -rA"
+    assert "PASSED" not in run("test_a.py"), "a plain invocation keeps the short -rfE report"
+
+
 def test_venv_installs_pinned_xdist_so_its_hash_rebuilds_the_venv():
     assert "pytest-xdist==3.8.0" in rp.VENV.split("UV=", 1)[1].split('echo "$DEPS"', 1)[0]
 

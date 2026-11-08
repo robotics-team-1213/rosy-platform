@@ -67,18 +67,21 @@ def free_push(objects: list, mask, roi, to_px, params, miss_mm: float, surface_p
     return None
 
 
-def next_step(cell, config, calibration, calibration_path, catalog, roi, source, push_site, dest, work) -> dict:
-    """What the cell needs next, from what the top camera shows now. No motion."""
+def next_step(cell, config, calibration, calibration_path, catalog, roi, source, push_site, dest, work, packed=None) -> dict:
+    """What the cell needs next, from what the top camera shows now. No motion. `packed`: centres (mm) already known to need
+    a push, though they look free (cell_recovery: a lift stalled there)."""
     import cell_choices
 
-    dry = auto.run_auto(cell, config, calibration, calibration_path, catalog, roi, source, dest, work,
-                        cell_choices.Choices(work / "choices.json"), dry_run=True)
-    if dry["result"] == "planned":
-        return {"step": "pick", "why": "a box has finger room and a plan", "chosen": dry["attempts"][-1].get("chosen")}
-    refused = (dry.get("attempts") or [{}])[-1].get("refused", [])
-    packed = [r["centre_mm"] for r in refused if str(r["why"]).startswith("no finger room")]
-    if not packed:
-        return {"step": "hold", "why": dry["result"], "refused": refused}
+    refused = []
+    if packed is None:
+        dry = auto.run_auto(cell, config, calibration, calibration_path, catalog, roi, source, dest, work,
+                            cell_choices.Choices(work / "choices.json"), dry_run=True)
+        if dry["result"] == "planned":
+            return {"step": "pick", "why": "a box has finger room and a plan", "chosen": dry["attempts"][-1].get("chosen")}
+        refused = (dry.get("attempts") or [{}])[-1].get("refused", [])
+        packed = [r["centre_mm"] for r in refused if str(r["why"]).startswith("no finger room")]
+        if not packed:
+            return {"step": "hold", "why": dry["result"], "refused": refused}
     _, _, objects, error = auto.observe(cell, config, calibration, source, roi, catalog)
     entries = {e["id"]: e for e in catalog}  # its catalogue size: a 2-layer column's top view adds its side faces
     long_packed = [dict(o, length_mm=entries[o["object"]]["length_mm"], width_mm=entries[o["object"]]["width_mm"])

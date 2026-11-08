@@ -155,7 +155,7 @@ function drawRobots() {
     }
   }
   const toPoint = (x, y) => { const [px, py] = state.view.toPx(x, y); return {x: px, y: py}; };
-  const placed = [];
+  const placed = [...svg.querySelectorAll('.label')].map(node => node.getBBox());
   for (const {row, p, r, ring, alert, tip} of guideMarks(state.guide, toPoint)) {
     const g = el('g', {class: `robot ${tint(row.robot_id)} ${row.pose.state.toLowerCase()}${row.online ? '' : ' offline'}`,
       'data-robot': row.robot_id, ...(alert ? {'data-alert': alert} : {})}, layer);

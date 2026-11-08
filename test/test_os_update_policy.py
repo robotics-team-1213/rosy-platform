@@ -213,3 +213,15 @@ def test_trial_policy_rechecks_firmware_controls_and_motion_fence(tmp_path, monk
     host.sleep = sleep
     with pytest.raises(ValueError):
         m.authorize_trial(root, TRANSACTION, host=host)
+
+
+def test_manual_left_behind_still_holds_an_os_update():
+    # D-985 eases MANUAL for payloads only; an OS update keeps requiring IDLE.
+    from datetime import datetime, timezone
+    from auto_update_fakes import idle_inputs
+    from os_update_policy import _Policy
+    policy = _Policy.__new__(_Policy)
+    moment = datetime.now(timezone.utc)
+    policy.host = type("Clock", (), {"now": staticmethod(lambda: moment)})()
+    data = idle_inputs(moment, robot_mode="MANUAL", manual_quiet_s=900.0)
+    assert "OS update requires robot mode IDLE" in policy._judge_inputs(data)

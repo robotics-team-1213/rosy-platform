@@ -31,6 +31,10 @@
     "/console/install": {
       "path": "installation/install.html",
       "media_type": "text/html"
+    },
+    "/console/maintenance": {
+      "path": "maintenance/maintenance.html",
+      "media_type": "text/html"
     }
   },
   "assets": {
@@ -186,8 +190,12 @@
       "path": "calibration/measured-calibration.css",
       "media_type": "text/css"
     },
+    "maintenance-page.js": {
+      "path": "maintenance/maintenance-page.js",
+      "media_type": "application/javascript"
+    },
     "host-services.js": {
-      "path": "installation/host-services.js",
+      "path": "maintenance/host-services.js",
       "media_type": "application/javascript"
     },
     "host-health.js": {
@@ -286,6 +294,10 @@
       "path": "formation.js",
       "media_type": "application/javascript"
     },
+    "motion-source.js": {
+      "path": "motion-source.js",
+      "media_type": "application/javascript"
+    },
     "motion-readiness.js": {
       "path": "motion-readiness.js",
       "media_type": "application/javascript"
@@ -368,6 +380,10 @@
     },
     "card-trip.js": {
       "path": "card-trip.js",
+      "media_type": "application/javascript"
+    },
+    "site-rules-judge.js": {
+      "path": "site-rules-judge.js",
       "media_type": "application/javascript"
     },
     "power-health-view.js": {
@@ -536,6 +552,10 @@
     },
     "power-action.js": {
       "path": "shared/power-action.js",
+      "media_type": "application/javascript"
+    },
+    "area-first.js": {
+      "path": "shared/area-first.js",
       "media_type": "application/javascript"
     },
     "area-nav.js": {

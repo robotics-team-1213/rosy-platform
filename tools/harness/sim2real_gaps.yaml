@@ -186,3 +186,128 @@ gaps:
     owner: perception / core line_follow
     status: IN-PROGRESS
     next: fixed on host 2026-10-07 (fix/g16-lane-slope-error, D-468 implementation note G-16) - the keep fit uses whole visible cross-sections outside the D-491 crosswalk rows and uncertainty_m adds 2 sqrt(2) sigma of the fit slope over support + 0.3 m and of the fit offset; frame replay margin 21.5 / 22.0 mm vs STL 23.4 (u 23.9 / 14.3 mm; C start now refused as excessive, not a false departure); model PC scenario C rerun pending
+
+  # OMX two-arm cell (D-947: MuJoCo for geometry, Isaac for contact and camera images; M = a measured value or a snapshot
+  # choice, R = real episodes replayed in the twin, D = runtime support). One loop round is docs/reference/omx-real-sim-loop.md.
+  - id: G-17
+    gap: OMX temporary plates are loose and move; the printed plate is not the SCAD v11 fan (step 13.6 deg, radius 217 mm) and sat about 146 mm from each arm axis on 2026-11-08 (design 200)
+    evidence:
+      - tools/sim/omx_real2sim.py
+      - deploy/robot/omx/sim/cell_snapshots/20261108-2257.json
+      - tools/sim/omx_two_arm_sites.py:38
+      - D-947
+    tier: [M]
+    owner: tools/sim (omx_real2sim)
+    status: IN-PROGRESS
+    next: measured from the top frame into a snapshot each time a plate moves (next after the 2026-11-09 move); rehandle 12/12 and stack 9/9 on the 11-08 snapshot
+
+  - id: G-18
+    gap: OMX ship on the cell does not match the r08 model's shape; moving r08 to where the top camera saw hold 1 (stern x .180, centre y -.014) failed all nine MuJoCo replays (reverted), and the real frame shows containers right at the belt end, no stern bay and a bright rectangle at the far end
+    evidence:
+      - tools/sim/omx_two_arm_sites.py:30-31
+      - D-947
+    tier: [M]
+    owner: tools/sim / rosy-modeling
+    status: OPEN
+    next: name the ship print that stands on the cell (version, which end faces the belt) and model it; only then a hull measurer in omx_real2sim (position alone was tried and reverted, commit 34786139ed then b1d38c6da9)
+
+  - id: G-19
+    gap: OMX top camera model is the 2026-11-03 stud PnP; between surveys only the plate pad sizes (within 2.5 mm of 90 x 30 on 11-08) check it
+    evidence:
+      - learning/envs/isaac/cell_model_inventory.yaml:83-84
+      - {path: tools/sim/omx_twin.py, branch: feat/omx-sim-twin}
+      - D-933
+    tier: [M, R]
+    owner: calibration / omx_twin
+    status: OPEN
+    next: every round compares the pad sizes and the twin view offset (D-947 3 px); a larger offset sends the camera to the D-933 marker survey (a person at the switch)
+
+  - id: G-20
+    gap: OMX real table sits 6-20 mm below FK zero; the twin's joint-zero fit (j1-j5 +4.0/+1.0/+3.2/+2.8/+2.4 deg) cut the top-view outline offset from 12.6 to 4.5 px and lowers the tip 9.5 mm, cause (zeros or link sag) not settled
+    evidence:
+      - {path: tools/sim/omx_twin.py, branch: feat/omx-sim-twin}
+      - tools/sim/omx_two_arm_sites.py:34
+      - D-947
+    tier: [R, M]
+    owner: omx_twin / calibration
+    status: IN-PROGRESS
+    next: a supervised known-pose check (D-911) before any real calibration changes; then the zeros become a named choice and the TCP row G-22 is rechecked
+
+  - id: G-21
+    gap: OMX arm_b base axis from FK (y 0.153) and from CAD and photo (y 0.172) differ by 19 mm; lane tmp-b-1 stays blocked until it is settled
+    evidence:
+      - learning/envs/isaac/cell_model_inventory.yaml:80-82
+      - tools/sim/omx_two_arm_sites.py:21
+    tier: [M]
+    owner: calibration / tools/sim
+    status: OPEN
+    next: the top-frame base plate centre beside the FK axis in the same snapshot; both stay candidates until a placed container confirms one (D-947 2)
+
+  - id: G-22
+    gap: OMX jaw TCP is 0.0741 m in CAD while a touch gave 0.0885 m; the 14.5 mm is read as the unexplained height error, not the jaw
+    evidence:
+      - tools/sim/omx_two_arm_sites.py:34
+    tier: [M]
+    owner: calibration
+    status: OPEN
+    next: recheck after G-20 settles the table height
+
+  - id: G-23
+    gap: OMX servo lag is 0.10-0.34 s per joint on the real arm while the sim gives 0.16 s on every joint (one gain for all)
+    evidence:
+      - {path: tools/sim/omx_twin.py, branch: feat/omx-sim-twin}
+      - tools/sim/omx_cell_sim.py:109
+    tier: [R, M]
+    owner: omx_twin
+    status: IN-PROGRESS
+    next: the twin's per-joint gain fit over the night episodes becomes a named choice; the stages are rerun with it and the lag compared again
+
+  - id: G-24
+    gap: OMX wrist cameras have no measured intrinsics or mount; the sim uses a fit to one arm_b frame and assumes arm_a the same
+    evidence:
+      - tools/sim/omx_two_arm_sites.py:32
+      - learning/envs/isaac/cell_model_inventory.yaml:62
+    tier: [M, R]
+    owner: tools/sim / omx_twin
+    status: OPEN
+    next: twin view offset per wrist camera (D-947 5 px), then a board survey per wrist when it is over
+
+  - id: G-25
+    gap: OMX contact physics are hand-set (container mass, one friction); MuJoCo contacts are not results and Isaac has one case against the real outcome
+    evidence:
+      - tools/sim/omx_cell_sim.py:109
+      - learning/envs/isaac/cell_model_inventory.yaml:43
+      - D-947
+    tier: [R, M]
+    owner: learning/envs/isaac
+    status: OPEN
+    next: every real stop or slip becomes an Isaac case (cell_cases) and the suite is rerun each round; friction is fitted only from such cases
+
+  - id: G-26
+    gap: OMX outbound planner and two-arm policy built their layout without choices, so they used the design plates, not the measured snapshot
+    evidence:
+      - tools/sim/omx_two_arm_plan.py:323
+      - tools/sim/omx_two_arm_policy.py:141,174
+      - tools/sim/omx_real2sim.py
+    tier: [M]
+    owner: tools/sim
+    status: IN-PROGRESS
+    next: both take --choice now (a policy round records them); the outbound stage's first run on the 11-08 snapshot closes the row
+
+  - id: G-27
+    gap: OMX sim predicts link4 touching a neighbour container when a lower container is taken out or put back (arm_a bar-1, bar-2; arm_b bar-1, bar-3), on the design and the measured layout alike; not seen on the real arm yet
+    evidence:
+      - tools/sim/omx_two_arm_matrix.py:45
+    tier: [M, R]
+    owner: tools/sim
+    status: OPEN
+    next: a supervised real extract of bar-1 (D-911) says whether the approach or the link mesh is wrong; the answer goes back into the validator
+
+  - id: G-28
+    gap: OMX policies trained in the sim have no real execution path; the learned-policy approval gate is not built
+    evidence:
+      - D-793
+    tier: [D]
+    owner: OMX owner
+    status: HOLD
+    next: held by D-793; the loop judges policies in the sim only until the gate exists

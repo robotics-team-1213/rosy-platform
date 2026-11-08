@@ -81,6 +81,11 @@
       "source_revision": "2957a4e971c3beb0b651191b70609341bcd92cc3",
       "result": "1 passed; console e-stop release with the robot's admin screen code, fake CORE transport (no device evidence)",
       "pytest_root": "."
+    },
+    {
+      "source_revision": "36e976e701e0470c24b7af486c97f741dc038972",
+      "result": "21 passed; D-993 access-request intake and administrator list/approve/reject through actual Account HTTP routes (standalone Account service, real SQLite ledger); no device evidence",
+      "pytest_root": "."
     }
   ],
   "requests": {
@@ -1741,6 +1746,46 @@
         "test_toggle_off_and_on_round_trips"
       ],
       "source_revision": "6dd16b79b939c0954efef354dae965fbab4ecb83"
+    },
+    "POST:/api/fleet/site-rules/judge": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_site_rules_http.py",
+        "test_judge_answers_from_the_active_rules_and_sends_nothing"
+      ],
+      "source_revision": "5ddd185be3ad45f3bd79fc940c9e72e4f7076d3c"
+    },
+    "GET:/api/fleet/auth/access-requests": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_account_access_requests.py",
+        "test_admin_routes_need_a_manager_and_public_post_does_not_list"
+      ],
+      "source_revision": "36e976e701e0470c24b7af486c97f741dc038972"
+    },
+    "POST:/api/fleet/auth/access-requests": {
+      "status": 202,
+      "test": [
+        "operations/fleet/test/test_account_access_requests.py",
+        "test_admin_routes_need_a_manager_and_public_post_does_not_list"
+      ],
+      "source_revision": "36e976e701e0470c24b7af486c97f741dc038972"
+    },
+    "POST:/api/fleet/auth/access-requests/{request_id}/approve": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_account_access_requests.py",
+        "test_approve_new_account_uses_the_ledger_and_forces_a_first_password_change"
+      ],
+      "source_revision": "36e976e701e0470c24b7af486c97f741dc038972"
+    },
+    "POST:/api/fleet/auth/access-requests/{request_id}/reject": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_account_access_requests.py",
+        "test_reject_needs_a_reason_and_is_audited"
+      ],
+      "source_revision": "36e976e701e0470c24b7af486c97f741dc038972"
     }
   }
 }

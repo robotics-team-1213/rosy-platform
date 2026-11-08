@@ -92,6 +92,27 @@ main `4088d1c1d2`에서 기존 재부팅 producer 시험과 profile 전달 시�
 `rosy-headroom-order-green-20261103/run-1.txt`에 있다. 단독 통과만으로 닫지 말고
 오염을 만드는 선행 시험과 소비 시험을 같은 프로세스에서 재현·검증한다.
 
+## 원본 loader의 임시 경로는 실행 fixture에 남지 않는다 (2026-11-03)
+
+`test_omx_record_session.py`의 `module()`은 원본을 읽는 동안만 OMX 폴더를
+`sys.path`에 넣었다가 반환 전에 뺀다. 새 `main_session` fixture가 나중에
+`omx_incident`를 import할 때는 그 경로가 없었다. `test_omx_incident.py`와
+함께 실행한 86 PASS/2 SKIP는 그 파일의 전역 경로 추가 때문에 통과했다.
+FULL의 실제 단독 실행 게이트는 같은 원본에서 68 PASS/2 SKIP 뒤 새 fixture
+세 건의 `ModuleNotFoundError`를 발견했다. 제품 복구 코드의 실패가 아니었다.
+
+commit `7047306026`은 실행 fixture 안에서 필요한 경로를
+`monkeypatch.syspath_prepend(str(DIRECTORY))`로 넣는다. fixture가 끝나면 복원되므로
+다른 시험의 수집 부작용에 의존하지 않는다. 같은 commit의 원격 파일 단독 실행은
+71 PASS/2 SKIP, 실제 `ROSY_ALONE_FILES=test/test_omx_record_session.py tools/collect_alone.py`
+게이트는 1 PASS/1 SKIP와 `[isolation] complete: 1`이었다. 게이트의 SKIP는 비어 있는
+별도 수집 입력이며, 대상 파일의 독립 실행을 건너뛴 것이 아니다.
+근거는 OS Temp의 `feedback-omx-recorder-standalone-green-20261103/run-1.txt`,
+`feedback-omx-recorder-isolation-gate-green-20261103/run-1.txt`에 있다. 원본 FULL 실패와
+중단·정리 receipt는 `rosy-full-fixture-isolation-20261103/`에 보존했다.
+새 fixture가 원본 폴더의 형제 모듈을 직접 import하면, 원본 loader에서 경로를
+준비했는지만 보지 말고 그 fixture가 실제로 실행되는 파일 단독 게이트까지 확인한다.
+
 ## 다음에 적용할 조건
 
 - 착지 뒤 main에서 파일 하나가 빨간데 착지 기록·캐시가 초록이면, 먼저 그 파일을 혼자 원격 실행하고 폴더 실행과 비교한다. 캐시나 known_failures부터 의심하지 않는다.

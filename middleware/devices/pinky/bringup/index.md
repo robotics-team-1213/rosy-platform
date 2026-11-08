@@ -33,8 +33,8 @@
 
 ## 최근 기록
 
+- 2026-11-08 · uncommitted · fix(bringup): battery_publisher가 rclpy Node의 `_clock`을 덮지 않는다
 - 2026-11-03 · uncommitted · feat(bringup): 바퀴 모터 상태를 2초마다 `motor/health`로 낸다
 - 2026-10-11 · 5faad3583 · refactor: Pinky bringup 장치 holder 이전
 - 2026-10-01 · edca9b2e · feat(bringup): 바퀴 기본값을 URDF NOMINAL로, launch 인자는 운영자 덮어쓰기 (D-397)
 - 2026-10-01 · a103808b · fix(bringup): 비상식적 바퀴 레코드 거부 (H2)
-- 2026-10-01 · 79b7681a · feat(bringup): 승인된 바퀴 보정 레코드를 읽는다 (D-47 부록)

@@ -12,7 +12,7 @@
 | **Rosy Cam** | 카메라 폰에서 천장 영상 캡처·전송 | `operations/site_ui/cam`의 Android 앱. 관측 처리는 Vision 서비스가 담당 |
 | **Rosy Learning** | 객체·픽셀 검수·자료 등록·학습 작업·카메라 맞춤·모방학습 | `learning/curation/perception/review_app.py`와 `review_app_web`의 웹앱. 학습 관리 센터이며 작업 실행은 기존 학습 소유자를 호출 |
 | **Rosy Games** | 경기 운영과 게임 호스트 상태 확인 | `operations/apps/games`의 노트북 호스트·경기 보드. Fleet 관제나 CORE 로봇 모드가 아님 |
-| **Rosy Monitoring** | 사이트·시스템의 관측 상태·근거·조회 경로 확인 | `applications/monitoring`의 읽기 전용 웹, `operations/monitoring`의 독립 수집·조회 서비스. 설정·복구 명령은 각 owner가 유지(D-876·D-961) |
+| **Rosy Monitoring** | 사이트·시스템의 관측 상태·근거·조회 경로 확인 | `applications/monitoring`의 읽기 전용 웹, `operations/monitoring`의 독립 수집·조회 서비스. 설정·복구 명령은 각 owner가 유지하며 PC 조치는 Fleet PC 정비로 연결한다(D-876·D-961·D-991) |
 | **Rosy Vault** | (은퇴 2026-10-24) 보관고 입고·출고·장부·보류 작업 처리 | `rosy-vault` 저장소가 GitHub archived로 은퇴해 개발하지 않는다. 보관고 도메인은 선정되지 않았다 |
 | **Rosy Device** | (은퇴 2026-10-24) 로봇팔 등 연결 기기의 상태·보정·설정·복구 | `rosy-vault`의 `device_core/web`이었다. 실물 팔 실행 경로는 플랫폼 OMX owner로 흡수 인계한다(D-797). Robot의 `/device` 역할 화면과는 다른 구현이었다 |
 
@@ -28,7 +28,8 @@ ROSY 제품 앱이 아닌 외부 업무 앱은 플랫폼 Python·DB·ROS를 쓰�
 
 | 이름 | 소속과 범위 |
 |---|---|
-| **Cell** (기존 공정 앱 명칭 Rosy Cell) | **Fleet의 팔레타이징 작업 준비**. `/console/cell`, 제목 `Rosy Fleet — Cell`. 레시피·작업대 설정 → 계획 미리보기 → 작업 제안. 별도 승인·진행은 Fleet이 소유 |
+| **팔레트 적재** (코드 id `Cell`, 기존 공정 앱 명칭 Rosy Cell) | **Fleet의 팔레타이징 작업 준비**. `/console/cell`, 제목 `Rosy Fleet — 팔레트 적재`(D-974). 레시피·작업대 설정 → 계획 미리보기 → 작업 제안. 별도 승인·진행은 해당 관제의 Fleet이 소유 |
+| **PC 정비** | **Fleet의 PC 조치 화면**. `/console/maintenance`, 제목 `Rosy Fleet — PC 정비`. 실행과 판단은 D-524 경로와 각 PC의 도우미가 맡는다(D-991). 로봇 유지보수(D-988)와 기기 기록(care)은 따로다 |
 | **Studio** | Learning 안의 검수 작업대. Learning 전체 앱 이름으로 쓰지 않음 |
 | **Pilot 연결 로비** | Android에서 신뢰된 대상 발견·접속을 제공하는 Pilot 하위 화면 |
 | **로봇 얼굴 LCD** | Robot의 상태 표시 표면. 별도 Rosy Face 앱을 만들지 않음 |

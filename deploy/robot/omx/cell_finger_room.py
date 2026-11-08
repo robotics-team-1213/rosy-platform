@@ -99,7 +99,7 @@ def jaw_margin(mask, roi, pixel_fn, o: dict, closing_deg: float | None = None, p
     most = min(prm.get(params, "auto.jaw_margin_max_mm"), (widest - 2 * half) / 2)
     centre = np.asarray(o["raw_m"], float)
     free = [free_mm(mask, roi, pixel_fn, centre + side * half * across / 1000, side * across, (-pad / 2, 0.0, pad / 2),
-                    most + finger + 2.0, own_mm=own) for side in (-1, 1)]
+                    most + finger + 2.0, own_mm=own, outside_blocks=True) for side in (-1, 1)]  # unseen is not free: a roi cut to one box passed a neighbour 7 times (2026-11-06)
     margin = min(most, min(free) - finger)
     # the jaw mark opens wider than any pick (62 against open_max 56): its own room, from the box's centre, kept with it
     return {"margin_mm": round(margin, 1) if margin >= least else None, "free_mm": [round(f, 1) for f in free],

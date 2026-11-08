@@ -6,6 +6,7 @@ import { localizationUrgent } from "./localization-badge.js";
 import { staleAgeS } from "./state-age.js";
 import { powerHealthView } from "./power-health-view.js";
 import { estopText } from "./motion-readiness.js";
+import { motionSource } from "./motion-source.js";
 import {routeAttention, trafficAttention} from "/console/assets/site-map-model.js";
 import {tripEndText, tripWaitText} from "/console/assets/trip-display.js";
 import { guideAttention } from "/console/assets/guide-layer.js";
@@ -38,7 +39,7 @@ export function groupRows(rows, min = 2) {
   return out;
 }
 
-/** "배터리 근거 확인 불가 — 센서/CORE 확인 · 9대 (rosy_001 · rosy_002 · rosy_003 외 6대)" */
+/** "배터리 값 멈춤 — 센서 연결 확인 · 9대 (rosy_001 · rosy_002 · rosy_003 외 6대)" */
 export function groupText(text, ids, shown = 3) {
   const few = ids.slice(0, shown).join(" · ");
   return `${text.replace(/^:\s*/, "")} · ${ids.length}대 (${few}${ids.length > shown ? ` 외 ${ids.length - shown}대` : ""})`;
@@ -158,6 +159,8 @@ export function createQueues({ scope, el, view, render, streamEvidence }) {
     }
     const relay = streamEvidence(view.formation, robot.robot_id);
     if (relay && relay.cls) items.push({ severity: relay.cls === "crit" ? "crit" : "warn", text: `: ${relay.text}` });
+    const source = motionSource(robot, view);
+    if (source.attention) items.push({ severity: "crit", text: `: ${source.text} — ${source.title}` });
     if (state.safety?.estop === true) items.push({ severity: "warn", text: `: ${estopText(state, "비상 정지 걸림")} — 관리자가 해제해야 움직입니다` });
     else if (state.safety?.estop !== false) items.push({ severity: "warn", text: ": 정지 상태 미확인" });
     if (state.navigation === "FAILED") items.push({ severity: "warn", text: ": 목표 실패" });

@@ -63,6 +63,11 @@ Jazzy. This directory is copied into every offline ROSY release payload.
   `rosy_transfer.py` (`ROSY_UPDATE_LIMIT_KBPS`, default 2000 kbit/s, 0 = off). Tests:
   `test/test_rosy_auto_update.py`, `test/test_rosy_claim.py`, `test/test_rosy_transfer.py`.
 
+- `rosy-lowbatt-shutdown.path` (D-27) watches CORE's `/var/lib/rosy/core/.rosy/battery-shutdown-request.json`
+  (`PathChanged`) and starts `rosy-lowbatt-shutdown.service`, which runs the copied
+  `../rosy-lowbatt-shutdown.sh` (age and grace checks, then poweroff). Test:
+  `test_the_low_battery_halt_watches_the_file_core_really_writes`.
+
 - `rosy-tailscale-join.service` (D-477) is a one-shot root unit, condition-gated on the
   provisioned `/etc/rosy/tailscale-join.json` (0600; absent → the robot stays LAN-only).
   `rosy-tailscale-join.py` spends the auth key once (`tailscale up`, `--accept-dns=false`),

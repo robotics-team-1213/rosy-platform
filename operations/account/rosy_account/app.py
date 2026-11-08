@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from fastapi import FastAPI, HTTPException, Request
 
 from .account_authority import AccountAuthority
+from .access_request_routes import install_access_request_routes
 from .account_authority_routes import install_account_authority_routes
 from .account_config import load_account_config
 from .audit import AccountAudit, install_audit
@@ -56,6 +57,7 @@ def create_app(*, config, db, web_root, web_common):
     install_password_routes(app, sessions=password_sessions, authorize=authorize,
                             task_service=SimpleNamespace(store=store), trust_forwarded=True)
     install_account_authority_routes(app, sessions=password_sessions, authority=authority)
+    install_access_request_routes(app, sessions=password_sessions, trust_forwarded=True)
     install_static(app, web_root, web_common)
 
     @app.get('/api/fleet/auth/connection')

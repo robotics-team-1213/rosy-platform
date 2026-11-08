@@ -81,3 +81,15 @@
 - 변경: 관측 작업 셀이 없는 sample provider가 USB 목록 조회에도 빈 작업 셀 목록을 반환한다. 승인·쓰기 경로는 추가하지 않는다.
 - 증거: 쿠키 운영자의 실제 설치 페이지 조회가 미처리 요청으로 기존 브라우저 3건을 실패시켰다. 빈 목록 읽기 추가 후 같은 SHA에서 상태별 흐름·sample 페이지 브라우저 36건 PASS/0 SKIP, exit 0, known_failures NEW 0이다. 독립 검토 지적 없음.
 - gate 변화: sample 브라우저 회귀만 확인한다. 운영 승인·장치 적용은 미확인이다. CE: 해당 없음 — 읽기 응답 계약과 기존 미처리 요청 검사가 원인과 회귀를 설명한다.
+
+## 2026-11-03 · 8b38f889ba · fix: 쿠키 운영자 화면의 샘플 USB 목록 연결
+
+- 변경: 쿠키 로그인 운영자의 설치 화면이 요청하는 USB 목록을 샘플 provider가 빈 workcells로 응답한다. 검토된 peer 714a852af0의 handler와 HTTP 회귀 두 파일을 재사용했다.
+- 증거: frozen USB AUTO 후보의 설치 browser는 unhandled GET USB 목록으로 두 번 실패했고 main 5121b7d66b에서는 통과했다. source 8b38f889ba의 원격 샘플 서버 9건과 해당 Chromium 설치 node 1건은 모두 PASS/0 SKIP, known_failures NEW/known/flaky=0이다.
+- gate 변화: 기존 쿠키 인증·Origin 검사와 승인 mutation 거절을 유지한다. 실물 USB 적용이나 장치 수용을 확인한 결과는 아니다. CE: 해당 없음 — 누락 경로와 인증 경계는 handler와 회귀에서 확인된다.
+
+## 2026-11-08 · uncommitted · fix: 샘플 계정 화면의 가입 요청 목록 연결
+
+- 변경: 계정 관리 화면이 새로 읽는 `GET /api/fleet/auth/access-requests`(D-993)를 샘플 provider가 운영자에게 빈 목록으로, 다른 역할에는 403으로 응답한다.
+- 증거: 착지 시험에서 `test_sample_browser.py`의 `/console/accounts`가 미처리 요청으로 혼자서도 실패했다. 고친 뒤 같은 시험을 원격으로 다시 돌린다.
+- gate 변화: 미처리 요청 검사는 그대로다. 실제 승인·거절 흐름은 Account 시험이 맡는다. CE: 해당 없음 — 기존 USB 목록 사례와 같은 누락 경로.

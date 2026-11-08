@@ -938,6 +938,21 @@
 - 증거: 전체 페이지의 양 테마·1366/390 캡처에서 가로 넘침 없이도 무게가 여러 줄로 갈라진 것을 육안 확인했다. 텍스트 Range의 줄 수를 검사하는 회귀가 수정 전 06747e3b10에서 네 경우 모두 실패했다. 최종 원격 재검증과 캡처를 함께 확인한다.
 - gate 변화: 없음. CE: 전체 페이지·긴 값에서 읽힘을 확인해야 한다는 조건을 회귀 시험에 반영했다.
 
+## 2026-11-03 · 12aa681800 · USB 카메라 역할 승인에 쿠키 운영자 로그인 허용
+
+- 변경: USB 승인 패널의 Bearer 필수 표시 조건을 제거한다. 기명 운영자의 쿠키 로그인도 기존 same-origin 요청으로 목록을 읽고 확인 대화상자 뒤 승인한다. 운영자·잠금 검사, 서버 권한과 CSRF 검사는 유지한다.
+- 증거: `8316bbe1a9` 원격 Chromium RED는 legacy·managed 로그인 모두 패널 숨김에서 실패(NEW 2/known 0/flaky 0). 수정 소스 `12aa681800`에서 전체 계정 브라우저와 USB 결정 라우트 57 passed/0 skipped, known_failures NEW/known/flaky 0. 실제 테스트 서버·SQLite로 쿠키 로그인, 빈 저장 토큰, 외부 Origin 403, 확인 뒤 승인 200·쿠키 전송·Authorization 부재·저장 결과를 확인했다.
+- Gate: 호스트 브라우저·HTTP 검증이며 실제 USB 적용·장치·현장 수용은 수행하지 않았다.
+- CE: 해당 없음 — 기존 쿠키 로그인 교훈을 검토했고 원인·수정·재발 방지는 한 조건과 실제 브라우저 회귀로 복원 가능하다.
+
+
+## 2026-11-03 · d4e263f5fa · fix(console): explain fixed-unit registration refusal without consuming-code advice
+
+- Change: the existing messageFor path describes current fixed-roster registration as unavailable and confirms the code was not sent. The old manifest-edit/retry advice is removed from the legacy refusal explanation.
+- Evidence: native JavaScript syntax check exit0; the official remote console Node-unit wrapper passed1, skipped0, NEW/known/flaky0. Backend real-application refusal and preserved enrollment flows passed106 tests.
+- gate 변화: existing response rendering, transport and authorization remain in use. Qualified FULL/public CI and physical acceptance are separate.
+- CE: no additional lesson; existing error mapping and regression evidence explain the change.
+
 ## 2026-11-04 · uncommitted · 설치 화면 맨 위 설치 노선 (D-975 P3)
 
 - 변경: 설치·보정 화면 머리에 공용 단계 노선(`ui-stage-track`, Fleet 노선색)을 붙였다. 로봇 등록 → 카메라 승인 → 카메라 보정 → 시작점 네 역이며, 각 역은 기존 GET 응답(등록 로봇, 폐기되지 않은 카메라 자격, 보정, 유효한 시작점)으로만 완료를 그린다. 읽지 못한 역은 완료로 그리지 않고 "확인 못 함"으로 둔다. 역 링크는 기존 구획으로 이동만 하고 새 API·권한·명령은 없다. 기존 `install-step` 구획 상자는 그대로다.
@@ -1081,3 +1096,88 @@
 - 변경: Fleet 상태를 읽지 못하면 현장 지도 빈 자리가 로봇 탓 대신 "Fleet에 연결할 수 없습니다"와 다음 할 일(자동 재시도, 계속되면 관제 PC의 Fleet 서비스 확인)을 말한다. 지도 화면의 장소 점이 Tab 초점과 Enter·Space 선택을 받고 로봇 이름표는 앞 이름표와 겹치면 아래로 비킨다(간단한 한 방향 보정). Cell 블록 이름표는 세로 가운데이며 칸보다 길면 순서 번호만 보인다. 정지·허용·차단 판단은 바꾸지 않았다.
 - 증거: agent-browser 로컬 Fleet 서버에서 서버를 내리고 지도 칸 글을 확인, 지도 화면 장소에서 Enter로 선택·초점 유지 확인. 로봇 이름표 겹침과 Cell 블록은 이 서버에 해당 자료가 없어 화면으로 보지 못했다.
 - gate 변화: SOURCE 변경. 실물·현장 수용은 별도다. CE: 해당 없음 — 코드와 회귀가 판단을 보존한다.
+
+## 2026-11-07 · uncommitted · uiux(fleet): 로봇 표찰이 장소 이름도 피한다
+- 변경: 현장 지도 로봇 표찰의 겹침 보정 대상에 장소 이름을 더했다. 한 방향 네 번까지라 아주 조밀하면 겹칠 수 있다.
+- 증거: 로봇 3대를 10cm 안에 둔 실제 화면에서 겹침을 봤고 고친 뒤 같은 화면에서 확인한다.
+- gate 변화: SOURCE 회귀. 현장 수용은 별도다. CE: 해당 없음 — 코드가 판단을 보존한다.
+
+## 2026-11-07 · uncommitted · uiux(fleet): 계정 화면을 다녀와도 메뉴에 다시 들어가지 않는다
+- 변경: 내 계정·계정 관리를 모든 Fleet 문서에서 새 탭으로 연다. 로그인 복귀가 설치·보정 하위 화면을 유지한다.
+- 증거: 현장 사이트에서 로그인 전 링크만 눌러 Account 브랜드와 관제로 돌아가기가 303 /console 뒤 /console/profile로 되돌아감을 봤다.
+- gate 변화: SOURCE 회귀. 현장 수용은 별도다. CE: 새 교훈 판단은 완료 보고에 적는다.
+
+## 2026-11-07 · uncommitted · uiux(fleet): 작업·기록을 열 때 관제 화면이 먼저 보이지 않는다
+- 변경: 영역 선택을 첫 페인트 전 일반 스크립트 area-first.js로 옮겼다. 본문은 배치 뒤 보이고, 스크립트가 실패해도 2초 뒤 CSS만으로 보인다. 권한 없는 계정 관리의 로그인 링크가 같은 거절로 되돌아오지 않는다.
+- 증거: 실제 Fleet에서 ?view=work를 열면 약 190~300ms 관제 레일과 패널이 먼저 보이는 것을 화면 캡처로 재고, 로그인 링크 왕복을 4조합에서 재현했다.
+- gate 변화: SOURCE 회귀. 현장 수용은 별도다.
+
+## 2026-11-07 · uncommitted · uiux(fleet): 정책 화면 머리 로그인이 정책 화면으로 돌아온다
+- 변경: /console/policy의 머리 로그인 링크에 복귀 주소를 넣었다.
+- 증거: 실제 Account 왕복에서 이 링크만 /console로 돌아가는 것을 재현했다.
+- gate 변화: SOURCE 회귀. 현장 수용은 별도다.
+
+## 2026-11-07 · uncommitted · uiux(fleet): 설치 작업 탭에서 뒤로 가기가 앞 작업으로 돌아간다
+- 변경: 작업 전환이 기록을 대체하지 않고 쌓는다. 주소가 이미 그 작업이면 기록을 늘리지 않고, 해시가 없으면 첫 작업을 고른다.
+- 증거: 로컬 실제 Fleet에서 세 탭을 거친 뒤 뒤로 가기가 탭을 차례로 되돌리고 네 번째에 /console로 나간다. 깊은 링크와 새로고침도 유지된다.
+- gate 변화: SOURCE 회귀. 현장 수용은 별도다.
+
+## 2026-11-07 · uncommitted · uiux(account): 로그인 뒤 뒤로 가기가 로그인 화면으로 되튀지 않는다
+- 변경: 로그인 문서가 복귀할 때 기록을 대체한다(assign에서 replace로). 로그인 항목이 남으면 살아 있는 Account 세션이 자동 이어가기로 곧바로 다시 앞으로 보냈다.
+- 증거: 실제 Account와 로봇 앱 두 출처에서 로봇 /dashboard, /console, /setup, /device는 되튐을 재현했고 수정 뒤 사라졌다. /pilot은 기록이 2개로 정상이다. 로봇·Pilot 로그아웃은 Account 세션까지 끝내 곧바로 재로그인하지 않는다(실측).
+- gate 변화: SOURCE 회귀. 현장 수용은 별도다.
+
+## 2026-11-07 · uncommitted · feat(fleet): 운행 카드의 현장 규칙 판정
+- 변경: 운행 폼에 `현장 규칙 판정`(충전 복귀·출발 순서·편대 시작, 선택 칸만, 로봇에 보내지 않음). `site-rules-judge.js`.
+- 증거: agent-browser 로컬 렌더(1254·390 폭 확인), 브라우저 시험 `test_site_rules_judge_in_the_trip_form...` 추가.
+- gate 변화: SOURCE 변경. 시뮬·실물·현장 수용 없음; 문서가 없으면 동작 동일.
+- 결정: D-982 Proposed, API v1.368 additive.
+- 교훈: CE 해당 없음 — 최종 코드·시험·ADR이 판단을 보존한다.
+
+## 2026-11-07 · 34867d3b61 · feat(fleet): 운행 카드 현장 규칙 판정 원격 시험 결과
+- 변경: 없음(앞 항목의 시험 기록).
+- 증거: 원격 모델 PC 34867d3b61: operations/fleet·applications/fleet·design_scope_gates·test/architecture·harness_contracts·protocol_version_alignment 8828 passed, 5 skipped, known_failures 0 new/0 known/0 flaky; collect_alone(site_rules 두 파일) 2 passed, 1 skipped. 로그는 외부 scratch siterules/t3·t4/run-1.txt.
+- gate 변화: SOURCE 회귀 검증만. 시뮬·실물 수용 아님.
+- 교훈: CE 해당 없음.
+
+## 2026-11-07 · uncommitted · uiux(fleet): 규칙 판정 실패 문구를 평문으로
+- 변경: 판정 요청이 실패하면 영어 오류 코드 대신 다시 누르라는 한국어 안내를 보인다.
+- 증거: 독립 검토 지적. 실패 경로 브라우저 시험을 더했다.
+- gate 변화: SOURCE 회귀. 현장 수용은 별도다.
+
+## 2026-11-07 · 285714599b · uiux: 로봇 이동 출처 표시
+- 변경: 로봇 카드 사실 줄에 `motion-source.js`가 고른 이동 출처 칩을 더했다. 증명하는 사실만 이름을 붙인다: 이 화면의 조종 단추(`view.manualDriveRobot`), CORE 운행 임차·열린 운행, 비켜서기, 도킹 상태, 대형, 관제 목표, 보정. 수동 모드·목표 주행은 CORE 모드만으로 누가 시켰는지 알 수 없어 `확인 불가`로 쓴다. 오래된 상태·신선하지 않은 속도 근거는 `출처 확인 불가`이고, 출처 없이 움직이면(속도 0 초과) 예외 큐에 `원인 불명 이동`을 올린다. 계약·가드·권한 변경 없음.
+- 증거: Node motion-source 단위 9와 roster 연동 2 PASS(로컬). 원격 실제 Chromium(ROSY_RUN_BROWSER_TESTS=1) 신규 1·test_fleet_console_browser 포함 SKIPPED 0, 관련 브라우저 범위 FAILED 0(첫 실행의 로스터 높이 1건은 칩 문구를 줄여 해소). 로봇·현장 PC 주행 없음.
+- gate 변화: SOURCE/원격 브라우저 GO. 실제 로봇 주행, 로봇 화면 조종 구분, main 착지·push·CI·배포는 하지 않았다.
+- 남은 일: 로봇 화면(대시보드) 조종·충전 복귀 운행은 현재 데이터로 증명되지 않는다. CORE가 마지막 수락 teleop의 토큰 종류를 상태에 싣는 additive 필드가 필요하다.
+- 교훈: CE 해당 없음 — 표시 규칙은 코드와 시험에 직접 남는다.
+
+## 2026-11-07 · uncommitted · uiux(fleet): 규칙 판정 버튼이 공용 화면 규칙을 지킨다
+- 변경: 판정 중 꺼진 버튼에 이유를 달고, 결과 표시 `거절`을 `거절됨`으로 바꿔 되돌릴 수 없는 행동 문구와 구분한다.
+- 증거: FULL 착지에서 test_shared_controls·test_list_row_irreversible이 두 줄을 잡았다(단독 재실행에서도 실패).
+- gate 변화: SOURCE 회귀. 현장 수용은 별도다.
+
+## 2026-11-07 · uncommitted · fix(fleet-ui): 배터리 출발 거절 문구 · 충전 칸 위치 불명 표시
+- 변경: `trip-display.js`에 `TRIP_BATTERY_UNCONFIRMED` 한국어 문구, `charge-bays-view.js`에 칸 상태 `unknown`과 이유 `pose_unknown` 문구. node 시험 `charge-bays-view`·`trip-path`에 단언 추가.
+- 증거: node 단언 추가(문구 두 곳), 원격 실행 기록 참조.
+- gate 변화: 없음. 브라우저 시험 결과는 원격 실행 기록 참조.
+
+## 2026-11-07 · uncommitted · fix(fleet-ui): 칸 확인 불가 문구
+- 변경: 칸 상태 `unknown`은 "확인 불가 · 비어 있다고 볼 수 없음", 이유 `bay_unknown` 문구 추가.
+- 증거: node `charge-bays-view` 단언 추가, 원격 실행 기록 참조.
+- gate 변화: 없음.
+
+## 2026-11-07 · uncommitted · feat(account-ui): 가입·권한 요청 화면 (D-993)
+- 변경: 로그인 화면에 "계정이 없나요? 가입 요청"과 접근 거부 안내의 "이 앱 사용 권한 요청" 양식, 계정 관리 화면의 요청 표·승인(기존 계정 양식 재사용)·`거절…`. 새 HTML·자산 없음.
+- 증거: 원격 브라우저 시험 기록 참조.
+- gate 변화: 없음.
+
+## 2026-11-07 · uncommitted · feat: 호스트 서비스를 PC 정비 문서로 나눈다 (D-991)
+- 변경: `/console/maintenance`를 더하고 설치 화면의 작업에서 호스트 서비스를 뺀다. 설치 화면과 Monitoring의 PC 행이 링크로 연결한다. 레일은 다섯 영역 그대로다.
+- 증거: 원격 문서·브라우저 시험. 운영 배포와 현장 수용은 별도다.
+- gate 변화: SOURCE. CE: 해당 없음 — 시험과 ADR이 판단을 보존한다.
+
+## 2026-11-08 · uncommitted · fix(accounts): 가입 요청 목록이 실패해도 계정 화면은 그린다
+- 변경: 계정 관리 화면이 가입 요청 목록을 읽지 못하면 그 자리에 "요청 목록을 읽지 못했습니다. 새로 고쳐 주세요."를 보이고, 계정·앱 목록은 그대로 그린다. 요청 거절 확인 창이 늘어 확인 창 핀을 2로 올렸다(D-993).
+- 증거: 착지 시험에서 `test_procedure_layout_browser.py`가 모든 폭에서 등록된 앱 목록이 비어 실패했다(요청 목록 실패가 읽기 전체를 멈춤). `test_web_dialog_contract.py`는 확인 창 수 1≠2로 실패했다.
+- gate 변화: 없음. CE: 해당 없음 — 새 기능의 실패 경로 보강.

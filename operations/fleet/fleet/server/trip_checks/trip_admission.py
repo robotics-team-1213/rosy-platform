@@ -15,7 +15,7 @@ from types import SimpleNamespace
 from core_common.protocol.line_authority import MAX_TTL_S as AUTHORITY_MAX_TTL_S
 from core_common.robot_body import nominal_body_for
 from fleet.routing.trip import ARRIVED_M
-from rosy.world.state.projections.map_pose import OPERATOR_PIN
+from rosy.world.state.projections.map_pose import AUTO_LOCATE, OPERATOR_PIN
 from fleet.routing.cost import wrap
 from fleet.routing.execute import arc_id, unsupported
 from fleet.server.trip_ports import MapPose, TripError
@@ -75,7 +75,70 @@ def start_check(graph, segments: list, x: float, y: float, yaw, tol_deg: float) 
             "off_lane_m": round(max(0.0, dist - arc.width_m / 2), 3)}
 
 
+#: CORE ``BatteryLevel`` values a start may see; critical, deep and anything unknown refuse.
+BATTERY_START_LEVELS = ("ok", "warning")
+#: Refusals that may be one missed read, and how many reads a start makes.
+BATTERY_TRANSIENT = ("unreadable", "evidence_old", "evidence_stale")  # 5.0 s publish equals CORE's 5.0 s stale limit
+BATTERY_TRIES = 3
+
+
+def cached_battery(state):
+    """Start admission's battery source: the console's ``power_health`` cache (``state.power_health_display``,
+    <= 5 s old) and its age; None when there is no display or no good read (fail closed)."""
+    async def read(robot_id: str):
+        display = getattr(state, "power_health_display", None)  # installed with the console routes
+        health = await display.shown(robot_id, wait_s=2.0, await_pending=True) if display is not None else None
+        return None if health is None else {"battery": health.get("battery"), "age_s": display.age(robot_id)}
+    return read
+
+
+def battery_refusal(reading):
+    """Why a trip may not start on this battery reading, or None. ``reading``: ``{"battery", "age_s"}``, the
+    CORE ``power_health`` battery block and the age of Fleet's cached copy. Fresh means what the console's
+    ``powerHealthView`` means: evidence ``fresh`` and sample age + cache age within ``stale_after_s`` (cache
+    age at most 5 s). ``ok`` and ``warning`` pass; ``critical``, ``deep`` and unknown levels refuse. This
+    proves the evidence is fresh, not that the pack is charged (a charger's voltage reads 100 %)."""
+    battery = (reading or {}).get("battery")
+    age = (reading or {}).get("age_s")
+    if not isinstance(battery, dict):
+        return "unreadable"
+    num = lambda v: isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
+    sample, stale = battery.get("sample_age_s"), battery.get("stale_after_s")
+    if battery.get("evidence") != "fresh":
+        return f"evidence_{battery.get('evidence')}"
+    if not (num(age) and 0 <= age <= 5 and num(sample) and sample >= 0 and num(stale) and stale > 0
+            and sample + age <= stale):
+        return "evidence_old"
+    percent = battery.get("percent")
+    if not (num(percent) and 0 <= percent <= 100):
+        return "percent_unreadable"
+    if battery.get("level") not in BATTERY_START_LEVELS:
+        return f"level_{battery.get('level')}"
+    return None
+
+
 class TripAdmission:
+    async def _check_battery(self, robot_id):
+        """A start needs fresh battery evidence at a non-critical level; else 422 TRIP_BATTERY_UNCONFIRMED.
+        A charge return (the way to a charger) is not checked: a robot with a dead ADC must still go and charge.
+        A momentary miss (``unreadable``, ``evidence_old``, ``evidence_stale``) is read again up to BATTERY_TRIES times, one period
+        apart, so a mission step does not HOLD a robot mid-mission on a single missed read; missing
+        or low evidence is final, and a frozen robot stays stale through every read."""
+        job = self.lease.jobs.get(robot_id)
+        if job is not None and job.view.get("owner_kind") == "charge_session":
+            return
+        for attempt in range(BATTERY_TRIES):
+            try:
+                reading = await self._call(self._battery(robot_id)) if self._battery is not None else None
+            except Exception:  # noqa: BLE001 - an unreadable battery is an unconfirmed one
+                reading = None
+            why = "no_source" if self._battery is None else battery_refusal(reading)
+            if why not in BATTERY_TRANSIENT or attempt == BATTERY_TRIES - 1:
+                break
+            await asyncio.sleep(self.config.period_s)
+        if why is not None:
+            raise TripError(422, "TRIP_BATTERY_UNCONFIRMED", {"reason": why})
+
     def _check_engaged(self, robot_id):
         engaged = self._engaged(robot_id)
         if engaged is not None:
@@ -352,7 +415,9 @@ class TripAdmission:
         for _ in range(math.ceil(ALIGN_SIGHTING_S / self.config.period_s)):
             pose = await self.map_pose(robot_id)
             age = getattr(pose, "anchor_age_s", None)
-            if age is not None and self._clock() - age > done_at:
+            # D-989: the robot's own pose is not the independent sighting this wait is for
+            if (age is not None and getattr(pose, "anchor_source", None) != AUTO_LOCATE
+                    and self._clock() - age > done_at):
                 return {"delta_deg": delta_deg, "final_err_deg": status.get("final_err_deg")}
             await asyncio.sleep(self.config.period_s)
         raise TripError(422, "TRIP_POSE_UNTRUSTED", {"after_align": True, "delta_deg": delta_deg})

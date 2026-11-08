@@ -15,7 +15,7 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
-from fakes import FakeRobot
+from fakes import FakeRobot, fresh_battery, fresh_power_health
 from fleet.hub.hub import HubError
 from fleet.routing.execute import plan_body
 from fleet.routing.trip import PlanRequest, plan_trip
@@ -245,7 +245,7 @@ def _setup(site_map=None, caps=LANE, path=None, **config):
     ports = Ports(caps)
     store = SiteMapStore(path, clock=lambda: ports.now)
     store.import_if_empty(site_map or from_lane_graph(LANE_GRAPH), source="test")
-    runner = TripRunner(store=store, routing_config=store.routing_config, caps=ports.caps_for, poses=ports,
+    runner = TripRunner(store=store, routing_config=store.routing_config, caps=ports.caps_for, battery=fresh_battery, poses=ports,
                         junction=ports, goal=ports.goal, cancel_goal=ports.cancel_goal,
                         blocked=lambda: ports.blocked, clock=lambda: ports.now, config=TripConfig(**config))
     return runner, store, ports
@@ -1088,7 +1088,7 @@ def test_http_robot_client_line_follow_junction_hits_the_core_path():
 # ---- API --------------------------------------------------------------------------------------
 
 def _app(tmp_path, ports):
-    robot = FakeRobot("rosy_60")
+    robot = FakeRobot("rosy_60"); robot.power_health_value = fresh_power_health()  # deliberate: start gate needs fresh battery
     console = FleetConsole([RobotEndpoint("rosy_60", "http://127.0.0.1:8080", "t")], [robot])
     tasks = FleetTaskService(FleetTaskStore(tmp_path / "tasks.sqlite"), robot_ids={"rosy_60"})
     store = SiteMapStore(tmp_path / "tasks.sqlite")

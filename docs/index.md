@@ -353,8 +353,8 @@
 
 ## 최근 기록
 
-- 2026-11-07 · uncommitted · 공통 서비스 카탈로그와 D-987
-- 2026-11-07 · uncommitted · fix(omx): 사다리가 GPU 없이 시작하지 않게 하고 MuJoCo 접촉 교훈을 기록
-- 2026-11-07 · uncommitted · fix(omx): 두 팔 세계의 접촉 모델, 손목 간격 검증, rehandle 계획 교체
-- 2026-11-07 · uncommitted · feat(omx): 두 팔 셀 MuJoCo 세계, 작업 정의, 검증기와 교사
-- 2026-11-07 · fc074c6198 · feat(omx): OMX 학습 사다리 핵심
+- 2026-11-08 · uncommitted · docs(solutions): rclpy Node 비공개 이름 충돌 교훈
+- 2026-11-08 · uncommitted · fix(land): 실패만 있는 브라우저 묶음을 "통과 0건"으로 멈추지 않는다
+- 2026-11-08 · uncommitted · fix(land): 같은 트리 재사용도 새 커밋의 게시 증거로 남긴다
+- 2026-11-08 · uncommitted · fix(land): 명시 FULL과 게시가 앞 후보의 통과를 내용 기준으로 재사용한다 (D-970 3)
+- 2026-11-08 · uncommitted · fix(model-pc): gpu-manager 뒤에도 GPU를 깨운 채 둔다
