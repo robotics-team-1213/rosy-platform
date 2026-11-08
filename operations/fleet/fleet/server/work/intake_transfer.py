@@ -1,5 +1,5 @@
 """D-996 5: a trip that carried an object_ref and arrived at the supply place gets the supply arm's ARM_TRANSFER
-proposal (Pinky -> conveyor). Only a proposal: admission, the D-977 handoff confirmation and the D-911 guards are
+proposal (mobile robot -> conveyor). Only a proposal: admission, the D-977 handoff confirmation and the D-911 guards are
 unchanged, and the cell's own loop no longer loads (cell_role keeps rescue only).
 
 The ARM request's own object_ref stays the installed policy's object profile: the owner grant, receipts and evidence
