@@ -18,7 +18,7 @@ def test_every_test_host_role_declares_the_storage_maintenance():
 
 def test_native_omx_units_are_declared_once_separately_from_fleet_site_units():
     native = {name for units in ROLES.values() for name in units if name.startswith('rosy-omx-')}
-    assert native and native == set(ROLES['omx'])
+    assert native and native <= set(ROLES['omx'])  # the cell host also declares its phone-station and retired site units
     assert not (native & set(ROLES['site']))
     assert 'rosy-site-tools-autoupdate.timer' in ROLES['site']
     assert 'rosy-omx-arm-status.service' in ROLES['omx']

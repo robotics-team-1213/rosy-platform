@@ -131,7 +131,8 @@ def test_ambiguous_or_malformed_roles_fail_closed(config):
 
 def test_service_role_composition_preserves_every_unit_and_rejects_conflicts():
     inventory = status.load_inventory()
-    assert status.declared_units(inventory, {'site', 'omx'}) == {**inventory['site'], **inventory['omx']}
+    # site and omx now differ on the Account TLS renewal (off on the cell host), so they never share a host
+    assert status.declared_units(inventory, {'ai', 'omx'}) == {**inventory['ai'], **inventory['omx']}
     with pytest.raises(SystemExit, match='conflict'):
         status.declared_units({'site': {'x': {'run': 'off'}}, 'omx': {'x': {'run': 'active'}}}, {'site', 'omx'})
 
