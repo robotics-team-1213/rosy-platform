@@ -88,6 +88,22 @@ def test_two_requests_overlap_on_their_own_sides_and_each_target_leaves_from_a_l
     assert sorted(s["id"] for s in steps if s.get("outbound")) == sorted(f"m{r['move']}" for r in out)  # Pinky clears exactly these
 
 
+def test_two_arms_rearrange_both_outer_rows_at_once_each_reversed(layout, reach):
+    """재배치: each outer row goes out top first and comes back with its bottom in place and the two above swapped; the two rows run on
+    their own sides at the same time."""
+    full = {c: s for c, s, _ in layout.plan_order()}
+    moves, holds = plan.plan_outbound(layout, ("arm_a", "arm_b"), reach, reorder=True)
+    assert not holds and len(moves) == 12 and {m["phase_label"] for m in moves} == {"재취급", "복귀"}
+    end = dict(full, **{m["cargo_id"]: m["destination"] for m in moves})
+    for row in (0, 2):
+        old = sorted((c for c, s in full.items() if layout.sites[s]["row"] == row), key=lambda c: layout.sites[full[c]]["layer"])
+        assert sorted(old, key=lambda c: layout.sites[end[c]]["layer"]) == old[:1] + old[:0:-1]
+    rows, extra = plan.schedule(layout, moves, ("arm_a", "arm_b"))
+    assert not extra
+    zones_never_double_held(rows)
+    assert plan.metrics(rows, extra, ("arm_a", "arm_b"))["overlap_s"] > 0 and {r["arm"] for r in rows} == BOTH
+
+
 def test_a_move_no_arm_of_the_mode_reaches_is_counted_not_moved(layout, reach):
     moves = [dict(cargo_id="bar-1", source="ship-h1r1-l0", destination="tmp-a-1", primary_arm="A", alternate_arms=[], phase_label="재취급", arms=["arm_a"])]
     rows, extra = plan.schedule(layout, moves, ("arm_b",))
