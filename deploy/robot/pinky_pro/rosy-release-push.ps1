@@ -20,6 +20,9 @@ param(
     [string]$ScpExe = "scp",
     [string]$TarExe = "tar",
     [switch]$Force,
+    [switch]$ForceUpdate,
+    [string]$ExpectReleaseId = "",
+    [string]$Reason = "",
     [string]$ApiToken = "",
     [string]$ApiTlsHost = "",
     [string]$ApiCaFile = "",
@@ -85,6 +88,19 @@ if ($Rollback) {
               "fail to activate. Build the release tarball on Linux (build-native-payload.sh) " +
               "and pass it with -Tarball for a real push.")
     }
+}
+
+if ($ForceUpdate) {
+    # D-985 addendum: "install this signed release now". See the ADR for what it bypasses.
+    if ($Rollback) { Fail "-ForceUpdate installs a release; it cannot be combined with -Rollback." }
+    if ($ExpectReleaseId -notmatch '^[0-9]{4}\.[0-9]{2}\.[0-9]{2}-[0-9]{3}$') {
+        Fail "-ForceUpdate needs -ExpectReleaseId <YYYY.MM.DD-NNN>: name the release you mean to install."
+    }
+    if ($Reason -notmatch '^[A-Za-z0-9 .,:_/()+=@-]{1,200}$') {
+        Fail "-ForceUpdate needs -Reason (1-200 chars of letters, digits, space and . , : _ / ( ) + = @ -)."
+    }
+} elseif ($ExpectReleaseId -or $Reason) {
+    Fail "-ExpectReleaseId and -Reason belong to -ForceUpdate."
 }
 
 if (-not $KeyPath) {
@@ -248,6 +264,10 @@ if (-not $Rollback) {
     }
 }
 
+if ($ForceUpdate -and $releaseId -ne $ExpectReleaseId) {
+    Fail "-ExpectReleaseId $ExpectReleaseId does not match the release in the package ($releaseId)."
+}
+
 # --- the one function every remote command is built by ---------------------
 
 function Get-CoreReadyArguments([string]$CoreReadyProbe) {
@@ -349,7 +369,8 @@ function Get-RemoteCommandPlan {
         [switch]$Rollback, [string]$ReleaseId, [string]$TarballPath, [string]$UnpackScript,
         [string]$RemoteStagingDir, [string]$RemoteReleasesDir,
         [string]$ActivateWrapper, [string]$RollbackWrapper, [string]$CoreReadyProbe,
-        [string]$SshExe, [string]$ScpExe, [switch]$SkipImageLayerSync, [string]$ClaimHolder, [int]$ClaimTtl
+        [string]$SshExe, [string]$ScpExe, [switch]$SkipImageLayerSync, [string]$ClaimHolder, [int]$ClaimTtl,
+        [switch]$ForceUpdate
     )
     $target = "${RosyUser}@${Robot}"
     # ssh parses a "-o Key=Value" argument the way it parses an ssh_config
@@ -430,6 +451,10 @@ function Get-RemoteCommandPlan {
     Add-Step $plan "scp" $ScpExe (@("-i", $KeyPath) + $sshOptions + @($UnpackScript, "${target}:${remoteUnpack}"))
     Add-Step $plan "ssh" $SshExe (@("-i", $KeyPath) + $sshOptions + @($target, "chmod", "+x", $remoteUnpack))
     Add-Step $plan "ssh" $SshExe (@("-i", $KeyPath) + $sshOptions + @($target, "sudo", "-n", $remoteUnpack, $ReleaseId, $remoteTarball, $RemoteReleasesDir))
+    if ($ForceUpdate) {
+        # The robot's own updater check (hold, claim, CORE idle, battery), run last, right before the switch.
+        Add-Step $plan "ssh" $SshExe (@("-i", $KeyPath) + $sshOptions + @($target, "sudo", "-n", "python3", "-B", "/opt/rosy/native-runtime/rosy_auto_update.py", "precheck")) "force-precheck"
+    }
     Add-Step $plan "ssh" $SshExe (@("-i", $KeyPath) + $sshOptions + @($target, "sudo", "-n", $ActivateWrapper, $ReleaseId))
     Add-Step $plan "ssh" $SshExe (@("-i", $KeyPath) + $sshOptions + @($target) + (Get-CoreReleaseCheckArguments)) "core-release-check"
     Add-Step $plan "ssh" $SshExe (@("-i", $KeyPath) + $sshOptions + @($target) + (Get-CoreReadyArguments $CoreReadyProbe))
@@ -448,7 +473,7 @@ $plan = Get-RemoteCommandPlan -Robot $Robot -RosyUser $RosyUser -KeyPath $KeyPat
     -Rollback:$Rollback -ReleaseId $releaseId -TarballPath $tarballPath -UnpackScript $unpackScript `
     -RemoteStagingDir $RemoteStagingDir -RemoteReleasesDir $RemoteReleasesDir `
     -ActivateWrapper $ActivateWrapper -RollbackWrapper $RollbackWrapper -CoreReadyProbe $CoreReadyProbe `
-    -SshExe $SshExe -ScpExe $ScpExe -SkipImageLayerSync:$SkipImageLayerSync -ClaimHolder $claimHolder -ClaimTtl $claimTtl
+    -SshExe $SshExe -ScpExe $ScpExe -SkipImageLayerSync:$SkipImageLayerSync -ClaimHolder $claimHolder -ClaimTtl $claimTtl -ForceUpdate:$ForceUpdate
 
 if ($PrintCommands) {
     $result = [ordered]@{
@@ -492,6 +517,22 @@ function Read-LastJsonLine($Output) {
 }
 
 $claimed = $false
+$forceOutcome = "failed"
+
+function Write-ForceAudit([string]$Outcome, [string]$Detail) {
+    # Same evidence folder publish_payload_release.py uses; best effort, never the reason a push fails.
+    try {
+        $base = if ($env:ROSY_SCRATCH) { $env:ROSY_SCRATCH } else { [System.IO.Path]::GetTempPath() }
+        $now = [DateTime]::UtcNow
+        $folder = Join-Path $base ("rosy-rollout-evidence\" + $now.ToString("yyyy-MM-dd"))
+        New-Item -ItemType Directory -Force -Path $folder | Out-Null
+        $robotName = if ($Robot -match '^[0-9.]+$') { "<ip>" } else { $Robot }
+        $line = [ordered]@{ at = $now.ToString("yyyy-MM-ddTHH:mm:ssZ"); event = "force_update"; outcome = $Outcome
+            release_id = $releaseId; robot = $robotName; who = $claimHolder; reason = $Reason; detail = $Detail } | ConvertTo-Json -Compress
+        [System.IO.File]::AppendAllText((Join-Path $folder "rollout.jsonl"), $line + "`n", (New-Object System.Text.UTF8Encoding($false)))
+    } catch { Write-Warning "could not write the force-update audit line: $($_.Exception.Message)" }
+}
+if ($ForceUpdate) { Write-ForceAudit "requested" "" }
 
 foreach ($step in $plan) {
     $arguments = $step.arguments
@@ -537,6 +578,18 @@ foreach ($step in $plan) {
             Fail "Release push refused: the claim helper failed (exit $($result.exit_code)) on ${Robot}: $answer"
         }
         if ($result.output) { Write-Host ($result.output -join [Environment]::NewLine) }
+        continue
+    }
+    if ($step.role -eq "force-precheck") {
+        # exit 0 = free. exit 3 = busy, reasons printed; our own push claim is expected, anything else refuses.
+        # No updater on the robot (or one without precheck): refuse, since the checks cannot be made here.
+        $said = ($result.output -join " ").Trim()
+        if ($result.exit_code -eq 0) { continue }
+        if ($result.exit_code -ne 3) {
+            Fail "-ForceUpdate refused: $Robot cannot run the updater precheck (exit $($result.exit_code)): $said. Without it idle, battery and hold cannot be checked; push without -ForceUpdate only after checking them yourself."
+        }
+        $reasons = @($said -split '; ' | Where-Object { $_ -and $_ -notmatch ('^claim held by ' + [regex]::Escape($claimHolder) + '$') })
+        if ($reasons.Count -gt 0) { Fail "-ForceUpdate refused by the robot ($($reasons -join '; ')). Nothing was changed." }
         continue
     }
     if ($step.role -eq "claim-refresh") {
@@ -634,8 +687,10 @@ foreach ($step in $plan) {
 }
 
 Write-Host "done."
+$forceOutcome = "installed"
 
 } finally {
+    if ($ForceUpdate -and (Test-Path variable:forceOutcome)) { Write-ForceAudit $forceOutcome "" }
     # $claimed exists only once the execution loop started.
     if ((Test-Path variable:claimed) -and $claimed) {
         $claimRelease = @($plan | Where-Object { $_.role -eq "claim-release" })[0]
