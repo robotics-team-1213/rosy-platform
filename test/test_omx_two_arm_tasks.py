@@ -252,3 +252,12 @@ def test_a_waiting_arm_turns_its_camera_holder_outward(layout):
     for arm in layout.sim_arms.values():
         R, p = arm.link_poses(arm.wait)[4]
         assert abs((p + R @ lens)[1]) > .2
+
+
+def test_the_feasibility_matrix_uncovers_each_container_of_the_stack(layout):
+    import omx_two_arm_matrix as matrix
+    full = {c: s for c, s, _ in layout.plan_order()}
+    for c, site, state in matrix.cases(layout):
+        s = layout.sites[site]
+        assert c in state and all(layout.sites[v]["stack"] != s["stack"] or layout.sites[v]["layer"] <= s["layer"] for v in state.values())
+        assert len(state) == len(full) - sum(layout.sites[v]["stack"] == s["stack"] and layout.sites[v]["layer"] > s["layer"] for v in full.values())
