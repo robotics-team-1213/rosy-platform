@@ -43,7 +43,8 @@ class UpdaterApply:
         synced = self.host.run(["python3", "-B", script], SYNC_TIMEOUT_S)
         result = _last_json(synced.stdout)
         if synced.returncode != 0 or not result or result.get("ok") is not True:
-            raise UpdateError(f"IMAGE_LAYER_SYNC_FAILED: {_tail(synced.stderr or synced.stdout)}")
+            detail = _tail(synced.stderr or synced.stdout) or f"no output, exit {synced.returncode}"
+            raise UpdateError(f"IMAGE_LAYER_SYNC_FAILED: {detail}")
         return result
 
     def _restart(self, sync_result: dict) -> list[str]:

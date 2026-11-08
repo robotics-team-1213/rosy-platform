@@ -707,3 +707,14 @@ def test_no_swap_otherwise(device, host, hub, keys, case):
 
     assert ["systemctl", "stop", upd.RETIRED_DISPLAY_UNIT] not in host.calls
     assert ["systemctl", "start", upd.FACE_UNIT] not in host.calls
+
+
+def test_silent_sync_failure_names_the_exit_code():
+    import subprocess
+    from types import SimpleNamespace
+    from auto_update_apply import UpdaterApply
+    from auto_update_host import UpdateError
+
+    host = SimpleNamespace(run=lambda argv, timeout: subprocess.CompletedProcess(argv, -9, "", ""))
+    with pytest.raises(UpdateError, match=r"IMAGE_LAYER_SYNC_FAILED: no output, exit -9"):
+        UpdaterApply._sync(SimpleNamespace(host=host), "sync-image-layer.py")
