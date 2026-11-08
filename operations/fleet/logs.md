@@ -1801,7 +1801,6 @@
 - 증거: Node map-fit 17 passed (렌즈 일치·행렬 왕복 포함). pytest 콘솔 추적·카메라 예시·페어링 16 passed, known_failures 신규 0.
 - gate 변화: SOURCE/LOCAL. 서명된 사이트 이미지의 콘솔 JS는 이 커밋만으로 바뀌지 않는다. 주행 없음.
 
-
 ## 2026-10-05 · uncommitted · fix(cell-ui): 좁은 화면 상단 운영자 표시 줄바꿈
 
 - 변경: D-359 좁은 화면 tier에서 셀 준비 화면 상단 바의 줄바꿈을 허용한다. 기존 구성 요소와 토큰·표시 순서·접속·승인·정지 세대 동작을 유지한다.
@@ -1814,13 +1813,11 @@
 - 증거: 준비된 동일 DOM에서 이전 CSS 기준 셀 입력란 176.78125px가 실제 수정 CSS에서 44px로 줄었다. 390/800px 입력란 높이와 390px 좌표, 모든 화면 폭과 컨트롤 상태·운영자 세션을 유지했다. 데스크톱 진단 1 passed/39.12s, 최종 원본 Windows 브라우저 9 passed/32.28s. 독립 검토가 두 CSS 변경의 CSP·포커스·순서·권한·저장·세대 동작 불변을 확인했다.
 - gate 변화: SOURCE/LOCAL. 최종 원격 Linux CI, 서명 배포와 실제 앱·관제·로봇 승인 및 재접속 검증은 별도다.
 
-
 ## 2026-10-05 · uncommitted · fix(fleet): 기존 등록의 승인 TLS 전송과 downgrade 기록
 
 - 변경: 공개 sidecar를 기존 등록 ID·정본 .local 이름·CA DER 지문에 묶는다. 기존 encrypted credentials/principal/expiry/address를 유지하며 bounded nofollow 파일 검증과 같은 TLS 위치의 anonymous identity 확인 뒤에만 코드·Bearer·WSS auth를 보낸다. 기존 hold/expiry를 await 뒤에도 검사한다. 공개 origin/CA marker는 같은 등록부에 원자 저장하고 설정 누락·교체·재시작의 HTTP downgrade를 막는다. 정상 로그아웃 확인 후 실제 등록 행 삭제에만 marker를 함께 지운다. CLI와 두 기존 Compose는 기존 RO config의 선택적 공개 파일만 전달한다. 새 roster·권한·token 갱신·TLS 무시는 없다.
 - 증거: 최종 기존 affected 206 passed/2 Windows filesystem skipped(49.27s), 마지막 새 테스트 23 passed/1 symlink skipped(2.77s), 독립 tail 5 passed(1.61s). restart/CA DER/receiver ID/WS identity/REST await/WS await 6개 X compiled-byte 변이는 모두 실제 RED이며 원본 복원 GREEN과 production hash 불변을 확인했다. owned Python 6파일 flake8 0, diff check 및 known_failures 0 NEW. 초기 namespace prerequisite 실패와 pending logout retry RED는 별도 원본 로그로 보존했다. 공개 runbook은 CA/origin rotation 및 실제 관리자 적용을 미구현·미실행으로 밝힌다.
 - gate 변화: SOURCE/LOCAL만. 독립 SPEC/Quality/Safety source PASS. 실제 TLS handshake/WSS·사이트 설정·기기·운용 승인은 NOT_RUN이며 기존 ARTIFACT/DEVICE/FIELD gate를 올리지 않는다.
-
 
 ## 2026-10-05 · uncommitted · refactor(fleet): CLI feature 생성 경계 분리
 
@@ -1866,7 +1863,6 @@
 - 변경: 진입·해제 시작·최종 해제는 현재 task/attempt/robot/map revision/generation 전체 결속을 대조한다. 미래·비유한 위치와 시간대 없는 시각은 해제 근거가 아니며, 진입 이후 관측의 나이 0~2 s를 최종 삭제에서도 다시 검사한다. 활성 grant의 구간 정의를 덮어쓰지 않는다. 모든 쓰기 helper는 자신의 SAVEPOINT만 닫고 호출자의 기존 Task DB 트랜잭션과 rollback을 보존한다. 표 준비는 implicit commit을 일으키는 executescript를 쓰지 않는다.
 - 증거: 원래 실제 SQLite 미래/NaN/Infinity 위치 해제, 오래된 최종 해제, 읽기·쓰기 중 pending audit 조기 commit 반례 6 FAIL을 재현했다. 기존 10건과 결속·관측·정의·rollback 회귀 31건, TaskStore/dispatch/traffic 관련 시험 합계 106 PASS(6.47s), known_failures 0 NEW, owned flake8 0이다. 원래 성공 fixture의 5 s 최종 대기는 기존 2 s 계약에 맞는 1 s로 정정했다.
 - gate 변화: SQLite 순수 helper SOURCE/LOCAL 보완만. 이 helper는 실제 dispatcher·driver와 연결되지 않았고 robot-side 진입 fence·실제 ROS/SIM·장치 수용은 HOLD를 유지한다. UNKNOWN·RESERVED를 시한만으로 풀거나 motion·승인 역할·전송 경로를 추가하지 않았다.
-
 
 ## 2026-10-05 · uncommitted · fix(test): T2 exact-source import 격리
 
@@ -2091,7 +2087,6 @@
 - 변경: `fleet/server/development_session.py`(세션 저장소·LAN 주소·Host/Origin·분당 6회·상한 8·1시간 만료·발급 감사), `site_auth.build_authorize`의 개발 세션 우선 확인, `require_named_operator`의 `development-*` 허용, `--connection-mode`와 `ROSY_DEPLOYMENT` 이중 조건, 콘솔 자동 발급·배지.
 - 증거: 위 호스트 pytest와 브라우저 시험. 사이트 Caddy 뒤 `X-Forwarded-For`·`Host` 전달은 실사이트 확인이 필요하다.
 - gate 변화: LOCAL 검증만 추가. SITE/FIELD 상태는 그대로 둔다.
-
 
 ## 2026-10-06 · uncommitted · feat(fleet): D-484 field_boundary sighting 수용
 
@@ -2417,7 +2412,6 @@
 - 변경: `site-cameras.yaml` source 선택 키 `display_rotation_deg`(0/90/180/270)를 읽어 site-map source 행으로 내린다. 메인 지도 실영상·크게 보기를 그만큼 돌려 그리고 지도 점도 같이 돌린다. 보정·관측 좌표는 원본 그대로다.
 - 증거: `test_site_map_api.py` 27 passed, 웹 Node 시험 170 passed.
 - gate 변화: SOURCE/LOCAL만. 현장 설정 반영은 새 Fleet·Vision 배포 뒤에 한다(옛 버전은 이 키를 거절한다).
-
 
 ## 2026-10-08 · uncommitted · D-509 로봇 전원 근거 표시
 
@@ -3118,8 +3112,6 @@
 - Evidence: focused stuck resolver/API tests 137 passed; structure size checks 2 passed. Main at 5d93a9255 had both size failures before this split.
 - Gate: SOURCE and host tests only; no field robot action or changed motion contract.
 
-
-
 ## 2026-10-10 · uncommitted · fix(fleet): remove implicit legacy map-pose trust
 
 - Change: 사용자 결정에 따라 위치 미보고를 UNKNOWN/untrusted로 처리한다. LOCALIZED + map만 교통·bays·교착 해결기의 원시 지도 자세로 쓴다. 30 s null 뒤 캐시 좌표를 버려도 신뢰는 복원하지 않는다. 목표 admission은 현재 상태를 먼저 읽는다. 화면은 map_id만 있는 raw pose를 지도에 그리지 않고 Fleet MapPose 출처와 CORE 상태를 구분한다.
@@ -3197,7 +3189,6 @@
 - Evidence: Remote browser verification pending for four entry documents, unread deduplication, keyboard navigation and mobile stop visibility.
 - Gate: SOURCE; server deployment and physical acceptance remain separate.
 
-
 ## 2026-10-11 · 6d686c65a1 · fix(fleet): 현장 지도 좌표 유지와 위치 조회 연결 실패
 
 - 변경: 활성 현장 지도와 카메라 지도 ID가 일치하면 로봇 SLAM 격자로 화면을 바꾸지 않는다. 로봇 발견 실패·시간 초과를 HTTP transport 연결 오류로 처리해 지도 위치 조회가 500 대신 UNKNOWN을 반환한다.
@@ -3247,7 +3238,6 @@
 - 변경: Situation 순수 필요성 평가를 기존 Fleet holder/wheel/sdist에 세 파일로 포함하고 현재 로봇 상태의 내부 shadow read에 연결했다. 사건 ID·owner·revision·freshness·유효기간을 대조하며 정상/개입/보류를 구분한다. 기존 resolver와 CORE final writer는 유지한다.
 - 증거: AI PC 원격 Situation/Fleet API·근거·no-motion·wheel/sdist 178 passed, NEW 0 (`0926fc4fa5`). 추가 freshness/설치 순수성 및 최종 main 통합 검사는 착지 receipt에 기록한다.
 - gate 변화: 내부 소스/원격 설치 계약. 현장 활성화·화면 의미 수용·Discord/Slack/Telegram·모델 토론/학습 승격은 후속이며 FIELD는 승격하지 않는다. 상세: docs/validation/intervention-assessment-2026-10-11.md.
-
 
 ## 2026-10-11 · 027e604fe · D-652 판단·현장 연결·설치 책임 분리
 
@@ -3336,7 +3326,6 @@
 - 증거: Node 29 PASS. AI PC 자원 기준 통과한 원격 Chromium 16 PASS/63 deselected, NEW 0 (`X:/DevTemp/projects/rosy-platform/2026-10-11--194243--mapless-fleet-control--384416/logs/camera-connect-race-green/run-1.txt`). 독립 검토 수용. 이전 구조 시험 1 NEW는 Fleet 52995 > 52840+150이며 기존 실패로 간주하지 않았다. 독립 재측정 53010으로 split 판정을 갱신하고 +150·파일 상한·기존 분리 의무를 유지한다.
 - gate 변화: source/remote 연결 검토 완료. main 통합·CI·배포·실제 사이트 및 실물 정확도는 아직 미확인이다.
 
-
 ## 2026-10-11 · d6abc8e863 · D-655 map activation and command conflicts
 
 - 변경: trip뿐 아니라 진행 중 대형과 지도 기록에서도 활성화를 거절한다. 일반 기록 시작·pose 장소 저장은 위치 조회 전후 map_id·전체 조사 기준·활성 버전을 비교해 이전 위치의 새 지도 저장을 막는다. 팔로워 목표와 참여자 개별 운행, 진행 중 trip의 개별 목표를 기존 admission에 맞춰 설명하며 확인 직전 재검사한다. 충돌 작업을 자동 해제하거나 이동 명령을 추가하지 않는다. 재개·후진 수락과 실제 로봇 진행을 구분한다.
@@ -3362,14 +3351,11 @@
 - 증거: 원격138 PASS/NEW0, 독립 검토 승인, Fleet53617/CLI890/app906 기존 상한 유지.
 - gate 변화: source 검증 완료; 전체 통합과 실제 signed image/현장 접수는 미완료.
 
-
-
 ## 2026-10-12 · acf4fd7eb · D-674 통합 규칙집과 실행 파이프라인
 
 - 변경: 공통 law와 기존 rule/AI 후보 선택을 연결하고 stuck 및 stalled/pose_lost 전송 직전에 현재 사건, E-stop, calibration, trip, 사람 점유를 재검사한다. offline readback은 resolved 근거로 사용하지 않는다. README에서 Fleet 통합 규칙집을 연결했다.
 - 증거: 원격 RED 8 NEW를 재현한 뒤 관련 Fleet 시험 220 PASS, NEW 0. 로그는 X:/DevTemp/projects/rosy-platform/2026-10-12--024325--fleet-rulebook--cdb91d/logs/red 및 logs/green. 추가 affected guard와 독립 검토는 진행 중이다.
 - gate 변화: 브랜치 구현과 원격 범위 증거만 추가한다. main 통합, push, CI, 배포, 활성 현장 설정 및 물리 수용은 미실시다.
-
 
 ## 2026-10-12 · cb7c3396c · D-674 실행 파이프라인 최종 검증
 
@@ -3406,7 +3392,6 @@
 추가만 한다. 형식: [module harness 설계](../../docs/plans/2026-09-15-module-harness-design.md) §4.2.
 
 2026-09-15 이전 이력은 [사이트 패브릭 계획](../../docs/plans/2026-09-14-site-middleware-role-fabric.md), [군집 대형 슬라이스 결과](../../docs/plans/2026-09-08-swarm-formation-slice-results.md)와 `git log -- src/fleet`를 본다.
-
 
 ## 2026-10-12 · 25c036ae8 · D-678 Fleet 실행 파이프라인 완결
 
@@ -3975,7 +3960,6 @@
 - 결정: D-767 개정 2.
 - 교훈: 없음.
 
-
 ## 2026-10-16 · uncommitted · Robot/Pilot 진입 JS 설치 closure
 
 - 변경: Fleet 기존 static allowlist와 wheel/sdist 설치 검증에 device-discovery.js를 포함했다. 기존 API·정적 서빙을 유지한다. e596dc451의 최초 checkout 밖 설치·자산 HTTP 검증 55개 시험이 통과했으며, D-766에 따른 devices/ 분리 이후 최종 설치 검증을 다시 한다.
@@ -4370,7 +4354,6 @@
 - 증거: e436466b2의 source RED 36 FAIL 후 518f2eeec task-18-source-green 원격 151 PASS/0 skip/NEW 0/exit 0. 새 source 및 기존 policy/runtime/battery와 구조/안전 시험을 포함한다. read gap/반환 TTL 및 battery lease 연장 counterexample은 첫 source 커밋 전 수정했고 독립 clock/재시작/파일·DB 오류 회귀와 scoped 안전 검토를 거쳤다.
 - gate 변화: 미연결 source 포트의 software 근거다. 실제 Fleet CLI/factory·선택 작업 경로 예산·BMS/장치 지원·CORE capability/현장 수용은 별도다. 전체 브랜치 CI나 운영 충전 활성화로 확대하지 않는다.
 
-
 ## 2026-10-19 · uncommitted · (origin #92 2026-10-17) feat(fleet): recipe/3을 팔 여러 개 Cell Job으로 컴파일 (D-781 §5, D-779 2~4단계)
 
 - 변경: 레시피 스키마가 `rosy_cell.recipe/3`인 Cell 후보는 `cell_mixed_submission.compile_mixed_submission`으로 간다. `PalletizingCellJobCompiler.compile_mixed`가 혼합 계획기로 다시 컴파일하고, 후보 Job과 바이트 비교, recipe·cell digest 비교, 64 KiB 한도를 한 팔 경로와 같게 지킨다. 팔 목록은 cell/3 문서의 `arms`, claim은 작업대·팔 owner 작업대·팔레트다. 제안의 `instance_id`는 작업대 팔 가운데 하나여야 한다. recipe/1·/2 경로와 그 Job id는 바뀌지 않았다(26a148117 기준 고정값 시험). palletizing을 import하는 Fleet 모듈은 여전히 `cell_compiler.py` 하나다.
@@ -4725,13 +4708,11 @@
 - 증거: 초기 RED21, 검토 네 finding은 RED5 failed/24 passed 뒤 보완했다. 원본3c 회귀의 구조 검사2건·기존 version 기대값1건과9d FULL의 구조/G1 2 NEW를 보존했다. source76 집중1292 passed/skip0, FULL23개 각각exit0/known0 NEW(Fleet6343 passed/336 skipped, root9707 passed/1135 skipped), 동일source G1 timing4 passed/skip0와 독립 안전 검토, source9 commits size/safety exit0다. 기존 normalize/reserve/release AST는 유지했고 중복/skip은 합산·수용으로 세지 않는다. docs/validation/harbor-physical-proposals-2026-10-24/result.md를 따른다.
 - gate 변화: public HTTP/DTO·실제 capability 수집·prepared context/dispatcher·관측 ingress·물리 claim 종료·Harbor ARM은 미완료다. CE 미해결: 원본G1 접촉 간격 p99 0.525457s의 원인은 미확정이며 최신 strict 통과를 해결로 보지 않는다. 코드 검토 finding은 source·회귀·검증 기록에 남긴다.
 
-
 ## 2026-10-24 · 58f7cc7b14 · D-856 중립 ARM 작업 HTTP 제안과 승인
 
 - 변경: simulation 설치 시 create/read-by-key/ID와 named-operator admit를 기존 auth/audit에 연결했다. 모든 owner의 실제 SDK capability를 transaction 밖에서 수집하고 기존 원장의 승인/CAS/fence/claims를 호출한다. present-Origin은 기존 same_origin helper로 검사한다. 앱은 물리 refs만 보내며 자원·capability·grant·업무 완료를 지정하지 못한다. 미설치는503이다.
 - 증거: b5 집중1205 passed/16 NEW(시험의 잘못된 자원 조회15건/Origin누락1건) 뒤 최종18 passed/skip0/known0 NEW다. 소스58 FULL23개 각각exit0/known0 NEW(Fleet6361 passed/336 skipped, root9710 passed/1132 skipped), 독립 계약·전체로그 evidence 검토 추가 finding 없음이다. docs/validation/harbor-arm-job-http-2026-10-24/result.md를 따른다. 원본 실패와 각SHA를 보존하고 중복/skip을 합산·수용으로 세지 않는다.
 - gate 변화: 제안/승인 HTTP만 연결했다. prepared context·장치 제출·관측 credential·physical receipt/claim 종료·Harbor ARM은 이 소스에서 미완료다. 뒤의 schema7/8 변경은 별도 검증한다. CE 미해결: 이전G1 timing 실패 원인은 미확정이며 이번 strict 통과는 원인 해결 근거가 아니다.
-
 
 ## 2026-10-24 · 3b23a23bca · D-856 물리 준비·전송 의도·종료 원장
 
@@ -4739,13 +4720,11 @@
 - 증거: 준비74·최초 의도91·결과 보완229·물리 종료101의 각 고정 SHA 집중 원격은 skip0/known0 NEW다. 원본 RED와 affected 실패를 별도 보존하고, legacy version 기대값72/구조 small 표시46을 보완했다. 독립 계약 검토의 TTL·clock/list·receipt causality/HOLD finding은 RED 후 재검토했으며 source3b 물리 해제의 추가 finding은 없다. 958d→3b19커밋 size/safety 각각exit0. docs/validation/harbor-physical-execution-2026-10-24/result.md를 따른다.
 - gate 변화: synthetic World 사실과 원장 transaction의 집중 검증이다. sourcecf의 local_invocations 두 그룹은 FULL이 아니며 후속 구현을 고정한 최종23개 FULL은 대기 중이다. HTTP58 FULL과 합치지 않고 중복 수치를 합산하지 않는다. 실제 bounds/장치/현장 수용을 넓히지 않는다. CE 미해결: 이전G1 timing 원인은 미확정이다.
 
-
 ## 2026-10-24 · 54f27e6fb7 · D-856 전체 stop 대상과 내부 SDK dispatcher
 
 - 변경: 같은 workcell의 모든 physical participant를 별도 stop/rearm target에 결속하고 legacy dispatcher/recovery mapping을 유지했다. SDK 클래스는 모든 owner의 fresh simulation identity/capability, 공통 journal의 process-safe RPC guard, control 조회 뒤 최종 proof/fence/claim/freshness 재검사를 거쳐 고정 grant로 한 번만 제출한다. refresh/cancel은 원래 grant만 사용하고 유실/404/restart/HOLD는 점유를 보존한다. app ingress에는 아직 연결하지 않았다.
 - 증거: stop RED7 뒤 source80dde 집중65 passed/skip0/0 NEW와 genuine safety review/trailer, SDK RED14 errors 뒤 겹친 dispatcher·늦은 control read RED4 failed/14 passed를 재현했다. source54 집중121 passed/skip0/0 NEW(실제 POSIX process guard 포함), 독립 재검토 추가 finding 없음이다. docs/validation/harbor-physical-execution-2026-10-24/result.md와 stop-source-review.md를 따른다.
 - gate 변화: Fake SDK/stop port와 transaction·동시성의 집중 증거다. native UDS/독립 TCP HTTP·관측 credential·Harbor ARM·최종 FULL23은 후속이며 HTTP58 FULL에 합치지 않는다. 물리/현장 gate를 넓히지 않는다. CE 미해결: 이전G1 timing 원인은 미확정이다.
-
 
 ## 2026-10-24 · bb38fdcdd0 · D-856 independent observer and Harbor ARM HTTP
 
@@ -4785,7 +4764,6 @@
 - 증거: 이동 전후39개 함수/메서드/예외 AST가 모두 같고 트랜잭션·SQL·메서드 서명이 변하지 않음을 확인했다. 기존 caller/import/monkeypatch를 검색했고 query-position 상수의 기존 import를 유지했다. 동작 회귀·구조 검사는 커밋된 source로 공식 원격 실행한다.
 - gate 변화: 없음. 새 정지 요청·rearm guard·장치 동작을 추가하지 않은 선행 책임 분리다.
 - CE: 해당 없음 — 동작 보존의 근거를 AST·기존 회귀·writer 소유 검사로 직접 남긴다.
-
 
 ## 2026-10-25 · uncommitted · D-862 통합 정보 수집과 조건부 하위 정지 결속
 
@@ -5202,13 +5180,11 @@
 - Gate: simulation 팔 이송 HTTP에서만 동작한다. 범위 설정·첫 자동 admit의 원장 대조는 현장 수용으로 따로 남긴다.
 - CE: 해당 없음 — 만료 미적용은 D-938과 회귀 시험이 보여 준다.
 
-
 ## 2026-11-01 · uncommitted · uiux(fleet): 설치 문서 하위 탐색 계약 시험
 
 - 변경: `test/test_doc_tabs.py`에 설치 문서의 화면 안 이동이 공용 하위 탐색 자리에 서는지 검사를 추가했다(사이드바 배치 잔여 없음, app-shell 시트 링크, install.js가 자리를 채움). `test/test_grammar_separation.py`의 install.html 시트 목록에 `/common/app-shell.css`를 반영했다.
 - 증거: node --test 403 passed, 원격 pytest는 착지 전에 기록한다.
 - Gate: 없음. CE: 해당 없음.
-
 
 ## 2026-11-01 · uncommitted · uiux(fleet): 경로 줄 계약 시험
 
@@ -5216,13 +5192,11 @@
 - 증거: 원격 시험은 착지 전 기록한다.
 - Gate: 없음. CE: 해당 없음.
 
-
 ## 2026-11-01 · uncommitted · uiux(fleet): policy 현재 표시 계약 정정
 
 - 변경: `test/test_doc_tabs.py`의 작업 영역 검사에서 policy가 `학습` 링크에 현재 표시를 두지 않는다고 정정했다(거짓 `aria-current="page"` 제거 반영).
 - 증거: 원격 시험은 착지 전 기록한다.
 - Gate: 없음. CE: 해당 없음.
-
 
 ## 2026-11-01 · uncommitted · uiux(fleet): 소속 표시 계약 재정정
 
@@ -5230,13 +5204,11 @@
 - 증거: 원격 시험은 착지 전 기록한다.
 - Gate: 없음. CE: 해당 없음.
 
-
 ## 2026-11-01 · uncommitted · uiux(fleet): 테마 자리 계약 정정
 
 - 변경: `test/test_fleet_header.py`가 테마 단추의 자리를 계정 접힘이 아니라 머리 줄 조작 칸(로그인과 계정 단추 사이, 문서당 하나)으로 정정했다.
 - 증거: 원격 시험은 착지 전 기록한다.
 - Gate: 없음. CE: 해당 없음.
-
 
 ## 2026-11-01 · uncommitted · 헤더 정적 계약 원복
 
@@ -5299,7 +5271,6 @@
 - Evidence: real create_app/control-unit fixtures for owned and foreign robot IDs reproduced two code_consumed failures at commit bdcba7bed8; commit d4e263f5fa passed106 enrollment/owner/API/release/hub tests, zero skips/NEW/known/flaky. The impossible manually-mutated ownership positive fixture was replaced. Independent review confirmed the only bind caller and startup-only immutable ownership writer.
 - gate 변화: roster/store preserved and no robot request is sent on the new refusal. Global availability and the845-line ratchet are preserved; no new schema field/version reservation.
 - CE: no additional lesson; the real application regression explains the invariant.
-
 
 ## 2026-11-03 · 89d6d3ead1 · fix(fleet): isolate delegated ARM jobs and retain cancellation intent
 
@@ -5400,13 +5371,13 @@
 - 증거: 합성 시험뿐. 정확도는 실물 전까지 재지 않았다.
 - gate 변화: SOURCE. 교훈: CE 미해결 — 실물 시험 전이다.
 
-## 2026-11-08 · uncommitted · 관제 화면 파일을 다시 받지 않고 압축해 보낸다
-- 변경: 콘솔 문서·자산·/common 파일이 ETag가 맞으면 304로 답한다. Fleet 응답은 1 KB 넘으면 gzip으로 보낸다. `no-cache`는 그대로라 배포 직후 새 파일을 바로 받는다.
-- 증거: 관제 첫 화면은 파일 97개 917 KB(gzip 315 KB)를 받는다. Starlette FileResponse가 If-None-Match를 무시해 레일을 누를 때마다 전부 다시 받았다. test_server_app.py에 304·gzip 시험을 더했다.
-- gate 변화: SOURCE 회귀. 현장 수용은 별도다.
-
 ## 2026-11-07 · uncommitted · fix(fleet): 배터리 근거 없음·멈춤 사유 분리
 - 변경: powerHealthView가 evidence missing은 "배터리 값 없음 — 배터리 센서 서비스 확인", stale은 "배터리 값 멈춤 — 센서 연결 확인"으로 나눔. 멈춤 경과 시간은 그룹 문구가 갈라지지 않도록 problem이 아닌 note로 두고 로스터 배터리 칸에만 표시. D-509 충전 확인(신선한 CORE 근거만) 유지.
 - 증거: node --test queue-inline+console-health 12 passed/skip0; 원격 Chromium(ROSY_RUN_BROWSER_TESTS=1) 176 passed/skip0 (be0e5095e7).
 - gate 변화: SOURCE 회귀 검증만; 실물·현장 수용 근거 아님.
 - 교훈: CE 해당 없음 — 문구 분리, 코드·시험으로 재현 가능.
+
+## 2026-11-08 · uncommitted · 관제 화면 파일을 다시 받지 않고 압축해 보낸다
+- 변경: 콘솔 문서·자산·/common 파일이 ETag가 맞으면 304로 답한다. Fleet 응답은 1 KB 넘으면 gzip으로 보낸다. `no-cache`는 그대로라 배포 직후 새 파일을 바로 받는다.
+- 증거: 관제 첫 화면은 파일 97개 917 KB(gzip 315 KB)를 받는다. Starlette FileResponse가 If-None-Match를 무시해 레일을 누를 때마다 전부 다시 받았다. test_server_app.py에 304·gzip 시험을 더했다.
+- gate 변화: SOURCE 회귀. 현장 수용은 별도다.
