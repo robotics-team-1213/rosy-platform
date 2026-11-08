@@ -1126,6 +1126,25 @@
 - 변경: 로그인 문서가 복귀할 때 기록을 대체한다(assign에서 replace로). 로그인 항목이 남으면 살아 있는 Account 세션이 자동 이어가기로 곧바로 다시 앞으로 보냈다.
 - 증거: 실제 Account와 로봇 앱 두 출처에서 로봇 /dashboard, /console, /setup, /device는 되튐을 재현했고 수정 뒤 사라졌다. /pilot은 기록이 2개로 정상이다. 로봇·Pilot 로그아웃은 Account 세션까지 끝내 곧바로 재로그인하지 않는다(실측).
 - gate 변화: SOURCE 회귀. 현장 수용은 별도다.
+
+## 2026-11-07 · uncommitted · feat(fleet): 운행 카드의 현장 규칙 판정
+- 변경: 운행 폼에 `현장 규칙 판정`(충전 복귀·출발 순서·편대 시작, 선택 칸만, 로봇에 보내지 않음). `site-rules-judge.js`.
+- 증거: agent-browser 로컬 렌더(1254·390 폭 확인), 브라우저 시험 `test_site_rules_judge_in_the_trip_form...` 추가.
+- gate 변화: SOURCE 변경. 시뮬·실물·현장 수용 없음; 문서가 없으면 동작 동일.
+- 결정: D-982 Proposed, API v1.368 additive.
+- 교훈: CE 해당 없음 — 최종 코드·시험·ADR이 판단을 보존한다.
+
+## 2026-11-07 · 34867d3b61 · feat(fleet): 운행 카드 현장 규칙 판정 원격 시험 결과
+- 변경: 없음(앞 항목의 시험 기록).
+- 증거: 원격 모델 PC 34867d3b61: operations/fleet·applications/fleet·design_scope_gates·test/architecture·harness_contracts·protocol_version_alignment 8828 passed, 5 skipped, known_failures 0 new/0 known/0 flaky; collect_alone(site_rules 두 파일) 2 passed, 1 skipped. 로그는 외부 scratch siterules/t3·t4/run-1.txt.
+- gate 변화: SOURCE 회귀 검증만. 시뮬·실물 수용 아님.
+- 교훈: CE 해당 없음.
+
+## 2026-11-07 · uncommitted · uiux(fleet): 규칙 판정 실패 문구를 평문으로
+- 변경: 판정 요청이 실패하면 영어 오류 코드 대신 다시 누르라는 한국어 안내를 보인다.
+- 증거: 독립 검토 지적. 실패 경로 브라우저 시험을 더했다.
+- gate 변화: SOURCE 회귀. 현장 수용은 별도다.
+
 ## 2026-11-07 · 285714599b · uiux: 로봇 이동 출처 표시
 - 변경: 로봇 카드 사실 줄에 `motion-source.js`가 고른 이동 출처 칩을 더했다. 증명하는 사실만 이름을 붙인다: 이 화면의 조종 단추(`view.manualDriveRobot`), CORE 운행 임차·열린 운행, 비켜서기, 도킹 상태, 대형, 관제 목표, 보정. 수동 모드·목표 주행은 CORE 모드만으로 누가 시켰는지 알 수 없어 `확인 불가`로 쓴다. 오래된 상태·신선하지 않은 속도 근거는 `출처 확인 불가`이고, 출처 없이 움직이면(속도 0 초과) 예외 큐에 `원인 불명 이동`을 올린다. 계약·가드·권한 변경 없음.
 - 증거: Node motion-source 단위 9와 roster 연동 2 PASS(로컬). 원격 실제 Chromium(ROSY_RUN_BROWSER_TESTS=1) 신규 1·test_fleet_console_browser 포함 SKIPPED 0, 관련 브라우저 범위 FAILED 0(첫 실행의 로스터 높이 1건은 칩 문구를 줄여 해소). 로봇·현장 PC 주행 없음.
@@ -1149,6 +1168,11 @@
 - 증거: `node --test` person-request·station-recovery 10 pass.
 - gate 변화: SOURCE 변경. 로봇·장치 수용 없음.
 - 교훈: CE 해당 없음 — 최종 코드와 시험이 판단을 보존한다. 실물·운영 수용은 아니다.
+
+## 2026-11-07 · uncommitted · uiux(fleet): 규칙 판정 버튼이 공용 화면 규칙을 지킨다
+- 변경: 판정 중 꺼진 버튼에 이유를 달고, 결과 표시 `거절`을 `거절됨`으로 바꿔 되돌릴 수 없는 행동 문구와 구분한다.
+- 증거: FULL 착지에서 test_shared_controls·test_list_row_irreversible이 두 줄을 잡았다(단독 재실행에서도 실패).
+- gate 변화: SOURCE 회귀. 현장 수용은 별도다.
 
 ## 2026-11-07 · uncommitted · fix(fleet-ui): 배터리 출발 거절 문구 · 충전 칸 위치 불명 표시
 - 변경: `trip-display.js`에 `TRIP_BATTERY_UNCONFIRMED` 한국어 문구, `charge-bays-view.js`에 칸 상태 `unknown`과 이유 `pose_unknown` 문구. node 시험 `charge-bays-view`·`trip-path`에 단언 추가.

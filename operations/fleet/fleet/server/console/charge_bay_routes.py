@@ -7,14 +7,15 @@ from __future__ import annotations
 
 from fastapi import HTTPException
 
-from fleet.charge_bays import ChargeBays, RobotView, bays_from_map
+from fleet.charge_bays import ChargeBays, RobotView, bays_from_map, thresholds_of
 
 
 def install_charge_bay_routes(app, console, gathered, read_guard):
     """Install ``GET /api/fleet/charge-bays`` and the feeding tick; returns ``bay_inputs`` for other readers."""
     map_pose = getattr(app.state, "map_pose", None)
     # D-941 5/7: the active map's charge bays, shown only; Fleet does not dispatch from the plan yet.
-    bay_plan = app.state.charge_bays = ChargeBays()
+    bay_plan = app.state.charge_bays = ChargeBays(
+        thresholds=lambda: thresholds_of(getattr(app.state, "site_maps", None)))
 
     def bay_view(row: dict, on_trip: set) -> RobotView:
         battery = (row.get("power_health") or {}).get("battery") or {}

@@ -25,6 +25,11 @@ from typing import Callable, Collection, Iterable, Mapping, Optional, Sequence
 
 from fleet.routing.graph import Graph
 
+#: A robot that waited longer than this for a unit is granted before newer waiters (D-982 site rule).
+MERGE_MAX_WAIT_S = 20.0
+#: D-517 3: blocks one robot holds at worst (occupancy 2 + one grant ahead on the demo blocks).
+HELD_PER_ROBOT = 3
+
 #: D-517 3 (2026-10-10 zone stop clearance): an authority that ends where a zone the robot does not hold begins
 #: ends this much earlier still, past the u already taken off. A robot standing there pads (front + u)
 #: to this short of the zone, so a waiter never counts as occupying or holding it; without it the pad
@@ -196,7 +201,7 @@ def _occupied(robot: Robot) -> set[int]:
 
 
 def step(layout: Layout, robots: Sequence[Robot], state: TableState, now: float, *,
-         merge_max_wait_s: float = 20.0, green: Mapping[str, Collection[str]] = {}) -> TickResult:
+         merge_max_wait_s: float = MERGE_MAX_WAIT_S, green: Mapping[str, Collection[str]] = {}) -> TickResult:
     """One Fleet tick: occupancy, release, grants in fair order, authority ends.
 
     1. A robot's grants and last padded body keep blocking others whether or not it is in
@@ -320,8 +325,8 @@ def step(layout: Layout, robots: Sequence[Robot], state: TableState, now: float,
         return any(layout.units[robot.spans[i].unit].zone for i in occupied.get(robot.id, ()))
 
     def key(robot: Robot):
-        since = state.waiting_since.get(robot.id, now)
-        return (now - since < merge_max_wait_s, not inside_zone(robot), since, robot.id)
+        return grant_order_key(robot.id, state.waiting_since.get(robot.id, now), now,
+                               inside_zone(robot), merge_max_wait_s)
 
     # 3. fair-order grants and authority
     authority: dict[str, float] = {}
@@ -423,6 +428,12 @@ def follow(robot: Robot, members: Iterable[Robot], front_of: Callable[[Robot, fl
     robot.follows = member.id
     robot.follow_end = front - member.body_length_m - (stop_m + 2 * robot.uncertainty_m + member.uncertainty_m)
     return front
+
+
+def grant_order_key(robot_id: str, since: float, now: float, in_zone: bool,
+                    merge_max_wait_s: float = MERGE_MAX_WAIT_S) -> tuple:
+    """Fair grant order (D-982): past the merge bound first, then inside a zone, then wait start, then id."""
+    return (now - since < merge_max_wait_s, not in_zone, since, robot_id)
 
 
 def release_robot(state: TableState, robot_id: str) -> None:

@@ -8,12 +8,14 @@ shared-assets.json 이 명시한 파일만 /common 아래로 서빙한다.
 from __future__ import annotations
 
 import json
+import os
 import runpy
 from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.responses import FileResponse, RedirectResponse, Response
 
 from fleet._source_layout import console_root
 from fleet.server.learning_entry import install_learning_routes
@@ -43,17 +45,29 @@ def shared_assets(root: Optional[Path]) -> dict[str, str]:
     return dict(json.loads(manifest.read_text(encoding="utf-8"))["shared_assets"])
 
 
+def file_response(request: Request, path, media_type: str, headers: dict) -> Response:
+    """FileResponse with 304 on a matching ETag. ``no-cache`` makes every page load revalidate
+    all ~100 console files; Starlette's FileResponse ignores If-None-Match and resends them whole."""
+    response = FileResponse(path, media_type=media_type, headers=headers, stat_result=os.stat(path))
+    if request.headers.get("if-none-match") == response.headers["etag"]:
+        return Response(status_code=304, headers={k: v for k, v in response.headers.items()
+                                                   if k not in ("content-length", "content-type")})
+    return response
+
+
 def install_static_routes(app: FastAPI) -> None:
     install_learning_routes(app, WEB_ROOT, CONSOLE_CSP)
+    # Fleet has no compressing proxy; the console's ~900 KB of JS/CSS and the polled state JSON shrink ~3x.
+    app.add_middleware(GZipMiddleware, minimum_size=1024)
 
     def page_handler(url):
-        def page():
+        def page(request: Request):
             entry = _resolve_entry(WEB_ROOT, _REGISTRY["pages"], url)
             if entry is None:
                 raise HTTPException(status_code=404, detail="console page not found")
             path, media_type = entry
-            return FileResponse(path, media_type=media_type,
-                                headers={"Cache-Control": "no-cache", "Content-Security-Policy": CONSOLE_CSP})
+            return file_response(request, path, media_type,
+                                 {"Cache-Control": "no-cache", "Content-Security-Policy": CONSOLE_CSP})
         return page
 
     for url in _REGISTRY["pages"]:
@@ -85,7 +99,7 @@ def install_static_routes(app: FastAPI) -> None:
     common_assets = shared_assets(app.state.web_common)
 
     @app.get("/common/{asset_name:path}", include_in_schema=False)
-    def common_asset(asset_name: str):
+    def common_asset(asset_name: str, request: Request):
         media_type = common_assets.get(asset_name)
         root = app.state.web_common
         if media_type is None:
@@ -99,15 +113,14 @@ def install_static_routes(app: FastAPI) -> None:
         path = root / asset_name
         if not path.is_file():
             raise HTTPException(status_code=404, detail="common asset not found")
-        return FileResponse(path, media_type=media_type,
-                            headers={"Cache-Control": "no-cache"})
+        return file_response(request, path, media_type, {"Cache-Control": "no-cache"})
 
     @app.get("/ui/tokens.css", include_in_schema=False)
-    def legacy_ui_tokens_asset():
-        return common_asset("tokens.css")
+    def legacy_ui_tokens_asset(request: Request):
+        return common_asset("tokens.css", request)
 
     @app.get("/console/assets/{asset_name:path}", include_in_schema=False)
-    def console_asset(asset_name: str):
+    def console_asset(asset_name: str, request: Request):
         # D-518: the public name stays the key. The value is the file under web/.
         entry = CONSOLE_ASSETS.get(asset_name)
         if entry is None:
@@ -117,5 +130,4 @@ def install_static_routes(app: FastAPI) -> None:
         root = WEB_ROOT.resolve()
         if root not in path.parents or not path.is_file():
             raise HTTPException(status_code=404, detail="console asset not found")
-        return FileResponse(path, media_type=media_type,
-                            headers={"Cache-Control": "no-cache"})
+        return file_response(request, path, media_type, {"Cache-Control": "no-cache"})

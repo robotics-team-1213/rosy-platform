@@ -36,4 +36,4 @@
 - 2026-11-08 · uncommitted · fix(fleet-ui): 끝나지 않는 경로 계획 표시
 - 2026-11-07 · uncommitted · fix(fleet-ui): 칸 확인 불가 문구
 - 2026-11-07 · uncommitted · fix(fleet-ui): 배터리 출발 거절 문구 · 충전 칸 위치 불명 표시
-- 2026-11-07 · 7bea0ca865 · fix(console): 표시 중은 되읽은 것만, 복구 요청 문구는 움직임으로 읽히지 않게
+- 2026-11-07 · uncommitted · uiux(fleet): 규칙 판정 버튼이 공용 화면 규칙을 지킨다

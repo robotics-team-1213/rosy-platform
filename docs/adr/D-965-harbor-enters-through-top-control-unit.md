@@ -1,6 +1,6 @@
 ## D-965 외부 업무 앱은 관제 계층의 꼭대기 하나로 들어오고, 팔 작업은 셀로 위임된다
 
-**Status:** Accepted (2026-11-03, 사용자 결정 "권장으로 처리"). 연결 대상과 책임 결정이다. 팔 작업 위임 wire는 미구현이다(아래 「수용 조건」).
+**Status:** Accepted (2026-11-03, 사용자 결정 "권장으로 처리"). 연결 대상과 책임 결정이다. 팔 작업 위임 wire는 결정 당시 미구현이었다(아래 「수용 조건」). 현재 소스 구현 상태와 주행/ARM 승인 경로·직계 자식 제한은 [D-995](D-995-control-structure-authority-and-evidence-status.md)가 대체한다. 나머지 연결·권한 결정과 당시 본문은 유지한다.
 
 잇는 결정: [D-850](D-850-composable-control-units.md) · [D-855](D-855-control-unit-wire-and-scoped-cancel.md) · [D-856](D-856-application-action-boundary.md) · [D-960](D-960-control-unit-per-arm-set-under-integrated-r.md) · [D-963](D-963-usb-camera-role-approval-in-fleet.md). Harbor 쪽 정본은 harborlogi ADR 0018.
 
