@@ -297,8 +297,10 @@ def begin(land, args):
             raise land.Stop("explicit FULL requires queued current preparation; --no-queue is unsupported")
 
 
-def eligible(land, summary):
-    return not any("LOAD-FLAKY" in line or land.land_cache.NARROW in line for line in summary)
+def eligible(land, summary, args=None):
+    # D-970 3: an explicit FULL reuses only land_cache.reach's strict rule, which publish_evidence recomputes
+    narrow_ok = getattr(args, "tests", None) == "full"
+    return not any("LOAD-FLAKY" in line or (land.land_cache.NARROW in line and not narrow_ok) for line in summary)
 
 
 def require_eligible(land, args, qualifies, summary=()):
@@ -307,11 +309,11 @@ def require_eligible(land, args, qualifies, summary=()):
         raise land.Stop("explicit FULL has no qualifying clean evidence; not saving or landing")
 
 
-def tier(land, summary, full):
+def tier(land, summary, full, args=None):
     """Carry refuses restart reuse; other unclean auto evidence retains its nonqualifying delta bridge."""
     if land.land_mainred.CARRIED:
         return "carried"
-    return ("full" if full else "affected") if eligible(land, summary) else None
+    return ("full" if full else "affected") if eligible(land, summary, args) else None
 
 
 def required(land, wt, main, python):
