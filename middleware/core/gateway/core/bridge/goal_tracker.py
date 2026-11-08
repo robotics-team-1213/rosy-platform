@@ -111,6 +111,22 @@ class GoalTracker:
             self._transport_generation += 1
             return generation == self._generation
 
+    def abandon(self, generation: int) -> bool:
+        """No answer from Nav2 in time. True when this was still the current, unanswered goal.
+
+        The generation moves on, so an acceptance that arrives later is stale and cancelled on the spot
+        (`on_response`) instead of driving a goal nobody reports on.
+        """
+        with self._lock:
+            if generation != self._generation or generation in self._live:
+                return False
+            self._pending_generations.discard(generation)
+            self._correlation_ids.pop(generation, None)
+            self._native_ids.pop(generation, None)
+            self._generation += 1
+            self._transport_generation += 1
+            return True
+
     def finished(self, generation: int) -> bool:
         """결과 도착. 현재 세대면 True, 선점된 목표의 뒤늦은 결과면 False."""
         with self._lock:
@@ -193,6 +209,40 @@ def on_response(goals: GoalTracker, nav, future, generation: int, *,
     else:
         nav.on_goal_accepted(native_run_id=native_run_id)
     attach_result(goal_handle.get_result_async(), generation)
+
+
+# Nav2 answers a send in milliseconds; silence this long means no navigate_to_pose server.
+GOAL_RESPONSE_TIMEOUT_S = 10.0
+
+
+def watch_response(goals: GoalTracker, nav, future, generation: int) -> None:
+    """Run `on_no_response` once the deadline passes; a daemon timer, so it never holds shutdown."""
+    timer = threading.Timer(GOAL_RESPONSE_TIMEOUT_S, on_no_response, (goals, nav, future, generation))
+    timer.daemon = True
+    timer.start()
+
+
+def on_no_response(goals: GoalTracker, nav, future, generation: int) -> None:
+    """Send-goal future still open after the deadline: Nav2 is absent or stuck.
+
+    Without this a goal sent to a missing `navigate_to_pose` server stayed PLANNING with no reason: the
+    wheels never move (readiness HOLD) but Fleet saw a normal goal in progress. A native run says
+    BACKEND_RESULT_UNKNOWN (delivery is not known, so it is not turned into a failure; an explicit cancel
+    closes it). A goal without a run (docking staging) fails, and a late acceptance of it is cancelled.
+    """
+    if future.done():
+        return
+    native_run_id = goals.native_run_id(generation)
+    if native_run_id is not None:
+        nav.on_backend_unknown(native_run_id)
+        return
+    correlation_id = goals.correlation_id(generation)
+    if not goals.abandon(generation):
+        return
+    if correlation_id is None:
+        nav.on_result(False, "NAV2_NO_RESPONSE")
+    else:
+        nav.on_result(False, "NAV2_NO_RESPONSE", correlation_id=correlation_id)
 
 
 def on_result(goals: GoalTracker, nav, future, generation: int) -> None:

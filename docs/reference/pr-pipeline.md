@@ -92,7 +92,7 @@ flowchart LR
 
 | 경로 | 실행과 확인 범위 |
 |---|---|
-| 공개 `ci.yml` | PR은 selector 결과, main·야간·수동·merge group은 full. `modules`는 보고용이므로 개별 결과를 확인한다 |
+| 공개 `ci.yml` | PR은 selector 결과, main·주간·수동·merge group은 full. `modules`는 보고용이므로 개별 결과를 확인한다 |
 | `build-site-candidate.yml` | 해당 main 경로 변경 또는 수동 실행. 주 CI와 독립적으로 미서명 prerelease를 만들므로 빌드 성공만으로 배포하지 않는다 |
 | Pinky 산출물·릴리스 | [산출물 선택](../deployment/pinky-release-artifact-selection.md)에서 시작한다. ARM64 빌드·호스트 부팅 관찰·오프라인 서명·게시·장치 수용은 각각 확인한다 |
 | 비공개 `check.yml` | PR·main push·수동 실행에서 `config` 확인. 일반 검사는 HOLD를 허용하고 `--require-ready`는 초기 HOLD에서 실패하는 것이 정상이다 |

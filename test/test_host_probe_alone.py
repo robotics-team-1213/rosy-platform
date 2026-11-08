@@ -91,12 +91,15 @@ def test_legacy_probe_python_capability_does_not_imply_exclusive_admission(pytho
     assert probe.get('pytest_blocked') is False
 
 
-@pytest.mark.parametrize('fires_in,active,held', [
-    (600, False, True), (900, False, False), (-60, False, False), (None, True, True), (None, False, False)])
-def test_no_new_job_lands_on_a_host_whose_nightly_reboot_is_near(tmp_path, fires_in, active, held):
+@pytest.mark.parametrize('fires_in,state,held', [
+    (600, 'inactive', True), (900, 'inactive', False), (-60, 'inactive', False),
+    (None, 'activating', True), (None, 'active', True), (None, 'inactive', False)])
+def test_no_new_job_lands_on_a_host_whose_nightly_reboot_is_near(tmp_path, fires_in, state, held):
     # D-889 13: rosy-nightly-reboot.timer fires 2 min before the reboot; its service sleeps through those 2 min.
+    # The stub answers as the real unit does (2026-11-07): the oneshot is "activating", is-active exits 3 for that.
     when = 'echo' if fires_in is None else f"date -d @$(( $(date +%s) + {fires_in} )) '+%a %Y-%m-%d %H:%M:%S %Z'"
-    stub = f'case "$1" in show) {when};; is-active) {"return 0" if active else "return 3"};; esac'
+    code = 0 if state == 'active' else 3
+    stub = f'case "$1" in show) {when};; is-active) echo {state}; return {code};; esac'
     probe, _ = measured(tmp_path, systemctl=stub)
     assert probe['busy'] is held and probe['reboot_soon'] is held
     assert runner.place('pytest', ['fixture'], [probe])[0] == ([] if held else ['fixture'])
