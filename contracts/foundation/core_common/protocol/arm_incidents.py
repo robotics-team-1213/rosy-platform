@@ -127,3 +127,42 @@ class ArmIncidentEvidenceFrame(_Strict):
     @model_validator(mode="after")
     def intact_jpeg(self):
         return _intact_jpeg(self)
+
+
+#: The guard's own bookkeeping stops (a deadline of its start-up crawl), not a load. 2026-11-09 02:21 both arms: a jog
+#: sent before the guard switched to tracking crawled at 1 deg/s, tripped the deadline, and two folded, untouched arms
+#: waited for a person. Only with the arm on its command (it followed; nothing pushed back) is such a stop released.
+SOFTWARE_STOPS = ("alignment deadline exceeded",)
+FOLLOWED_TICKS = 28                           # 2.5 deg: the guard's own alignment tolerance
+
+
+def _ticks(text, name):
+    import ast
+    import re
+
+    found = re.search(name + r"=(\{[^{}]*\})", text)
+    try:
+        value = ast.literal_eval(found.group(1)) if found else None
+    except (ValueError, SyntaxError):
+        return None
+    return value if isinstance(value, dict) and all(isinstance(v, (int, float)) for v in value.values()) else None
+
+
+def software_stop(facts) -> str | None:
+    """Why measured facts show a session ended by a software stop alone (folded, safe end, nothing latched or wound up,
+    every joint on its command), or None. The control PC does not hold on it and Fleet's hold does not count it, so the
+    two sides judge an incident by the same rule; the incident stays listed for a person's cause."""
+    if not isinstance(facts, dict) or facts.get("truncated") or facts.get("safe_end") is not True \
+            or facts.get("folded") is not True or facts.get("latched") or facts.get("windup_hits"):
+        return None
+    flagged = facts.get("flagged")
+    if not flagged or not isinstance(flagged, list):
+        return None
+    for row in flagged:
+        text = str((row or {}).get("error") or (row or {}).get("fault") or "") if isinstance(row, dict) else ""
+        stop = next((s for s in SOFTWARE_STOPS if s in text), None)
+        current, command = _ticks(text, "current"), _ticks(text, "command")
+        if row.get("caught") or not text.startswith("session ended:") or stop is None or not current or not command \
+                or set(current) != set(command) or any(abs(current[n] - command[n]) > FOLLOWED_TICKS for n in current):
+            return None
+    return f"software stop ({stop}) with the arm folded on its command; nothing physical held it"

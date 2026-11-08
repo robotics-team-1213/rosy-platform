@@ -328,12 +328,7 @@ class Teacher:
         return out
 
 
-def parse_choices(items):
-    out = {}
-    for item in items or []:
-        key, value = item.split("=", 1)
-        out[key] = json.loads(value) if value[:1] in "0123456789-." else value
-    return out
+parse_choices = sites.parse_choices
 
 
 def main(argv=None):
