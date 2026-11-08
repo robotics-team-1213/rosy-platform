@@ -36,7 +36,8 @@ def log(*a):
 
 def remote_sim(args, role, minutes, command):
     cmd = [sys.executable, str(ROOT / "tools/remote/remote_sim.py"), "--host", role, "--sha", args.sha, "--durable",
-           "--minutes", str(minutes), "--log-dir", str(args.out / f"remote-{role}"), "cmd", "--", command]
+           "--minutes", str(minutes), "--log-dir", str(args.out / f"remote-{role}-{time.strftime('%H%M%S')}"),  # durable refuses a dir holding an earlier run
+           "cmd", "--", command]
     return subprocess.run(cmd, cwd=ROOT).returncode
 
 
