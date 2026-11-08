@@ -995,6 +995,22 @@
           ]
         },
         {
+          "consumer": "applications/fleet/web/shared/login-page.js",
+          "expression": "/api/fleet/auth/session",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/auth/session"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/shared/login-page.js",
+          "expression": "/api/fleet/auth/access-requests",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/auth/access-requests"
+          ]
+        },
+        {
           "consumer": "applications/fleet/web/shared/login-return.js",
           "expression": "/api/fleet/auth/authorize",
           "resolution": "literal-or-template",
@@ -1180,6 +1196,23 @@
           ],
           "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
           "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/auth/logout"
+        },
+        {
+          "id": "POST:/api/fleet/auth/access-requests",
+          "method": "POST",
+          "path": "/api/fleet/auth/access-requests",
+          "implementation": "operations/account/rosy_account/access_request_routes.py",
+          "handler": "submit",
+          "expected_statuses": [
+            202
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_account_access_requests.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/auth/access-requests"
         }
       ],
       "flows": [
@@ -1273,6 +1306,16 @@
           "resolution": "literal-or-template",
           "request_ids": [
             "GET:/api/fleet/auth/setup"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/shared/account-page.js",
+          "expression": "/api/fleet/auth/access-requests",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/auth/access-requests",
+            "POST:/api/fleet/auth/access-requests/{request_id}/approve",
+            "POST:/api/fleet/auth/access-requests/{request_id}/reject"
           ]
         }
       ],
@@ -1378,6 +1421,57 @@
           ],
           "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
           "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/auth/accounts/{account_id}/revoke-sessions"
+        },
+        {
+          "id": "GET:/api/fleet/auth/access-requests",
+          "method": "GET",
+          "path": "/api/fleet/auth/access-requests",
+          "implementation": "operations/account/rosy_account/account_routes.py",
+          "handler": "access_requests",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_account_access_requests.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/auth/access-requests"
+        },
+        {
+          "id": "POST:/api/fleet/auth/access-requests/{request_id}/approve",
+          "method": "POST",
+          "path": "/api/fleet/auth/access-requests/{request_id}/approve",
+          "implementation": "operations/account/rosy_account/account_routes.py",
+          "handler": "approve_request",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_account_access_requests.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/auth/access-requests/{request_id}/approve"
+        },
+        {
+          "id": "POST:/api/fleet/auth/access-requests/{request_id}/reject",
+          "method": "POST",
+          "path": "/api/fleet/auth/access-requests/{request_id}/reject",
+          "implementation": "operations/account/rosy_account/account_routes.py",
+          "handler": "reject_request",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_account_access_requests.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/auth/access-requests/{request_id}/reject"
         }
       ],
       "flows": [

@@ -14555,6 +14555,12 @@ osy-d395-s1d\`.
 - gate 변화: 없음. 경고 2분 동안 새 작업이 들어가지 않는다. 재부팅 13분 전에 시작해 끝나지 않은 작업은 여전히 끊긴다(D-889 추가 13의 위험).
 - CE: 해당 없음 — 원인이 코드와 시험에 남는다.
 
+## 2026-11-07 · uncommitted · Account 가입·권한 요청 D-993
+
+- 변경: ADR D-993, API 참조 v1.374, Account 프로토콜의 요청 절, 다른 브랜치가 잡은 D-988~D-992 공백 선언.
+- 증거: harness lint. 구현 시험은 operations/account/logs.md.
+- Gate: 없음. CE: 해당 없음.
+
 ## 2026-11-08 · uncommitted · test(learning): 학습 브라우저 여정 조건을 되돌린다
 - 변경: 바로 앞 항목에서 `test_learning_workflow_pipeline_browser.py`에 넣은 `ROSY_RUN_PINNED_LEARNING=1` 조건을 뺐다. 시험은 main과 같다.
 - 증거: 착지 브라우저 묶음은 그 값을 주지 않아 시험이 늘 건너뛰어졌고, `land_browser.vacuous`가 건너뜀 1건으로 FULL을 멈췄다(219 passed, 1 skipped). 다른 고정 학습 시험은 브라우저 묶음 밖이라 같은 조건이 맞지 않았다.
@@ -14594,3 +14600,13 @@ osy-d395-s1d\`.
 - 증거: 11-08 05:01 재부팅 뒤 `power/control`이 다시 `auto`였다. `/var/log/gpu-manager.log`에 udev 규칙 뒤 05:01:36의 `Setting power control to "auto"`가 남아 있었다. 서비스는 모델 PC에 직접 설치해 `on`/`active`를 확인했다. 파일은 그 설치본을 그대로 옮겼다.
 - gate 변화: 없음. 다음 재부팅 뒤에 이 서비스가 마지막에 쓰는지는 아직 확인 전이다.
 - CE: 미해결 — Xid 79 재부팅 정지의 원인은 가설로 남고 기록은 작업 기록에 있다.
+
+## 2026-11-08 · uncommitted · fix(land): 명시 FULL과 게시가 앞 후보의 통과를 내용 기준으로 재사용한다 (D-970 3)
+- 변경: `land_cache.reach`가 A..C 변경이 닿는 시험 경로(선택기, 브라우저 대상, 전체 트리를 읽는 guard)를 낸다. 명시 FULL 사전 시험·차례는 겹치지 않는 호출을 A의 통과로 재사용하고, `publish_evidence`는 후보 체크아웃에서 같은 계산을 다시 해 A의 정확한 깨끗한 로그만 증거로 받는다.
+- 증거: 원격 `test/test_land*.py`·`test/test_publish*.py` 910 통과, NEW 0. 새 회귀 `test/test_publish_content_reuse.py`: 겹치지 않는 묶음 재사용, 겹치면·목록이 바뀌면·A 로그가 더럽거나 없으면 거절, guard는 재사용하지 않음.
+- gate 변화: 없음. 게시는 재계산과 정확한 로그를 요구한다. 선택기가 FULL로 번지는 범위는 재사용하지 않는다. CE: 해당 없음 — ADR 보완에 판단을 남겼다.
+
+## 2026-11-08 · uncommitted · fix(land): 같은 트리 재사용도 새 커밋의 게시 증거로 남긴다
+- 변경: `land_cache.split`이 트리·환경·명령이 같은 통과를 재사용할 때, 원래 로그 경로와 SHA-256을 그대로 둔 행을 새 커밋 이름으로도 남긴다.
+- 증거: 11-08 08:00 운영 규칙 착지(9a8217cb97)의 FULL 기록은, 다른 세션의 공개 게시 뒤 내용이 같은 동기화 커밋에 이어지지 않아 게시가 FULL을 다시 요구했다. 회귀 시험 `test_same_tree_reuse_maps_the_new_commit_to_the_source_log_and_digest`.
+- gate 변화: 없음. 게시 검사는 그대로 로그 해시·깨끗함·환경·계획을 확인하고, 로그가 바뀌면 원래 해시와 달라 거절한다. CE: 해당 없음 — D-970 3 구현의 연장.
