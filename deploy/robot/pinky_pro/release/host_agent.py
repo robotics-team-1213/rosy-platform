@@ -49,6 +49,7 @@ IDEMPOTENCY_CAPACITY = 256
 
 class Role(str, Enum):
     VIEWER = "viewer"
+    OPERATOR = "operator"  # D-986: only the navigation re-approval commands ask for it
     ADMINISTRATOR = "administrator"
 
 
@@ -77,6 +78,11 @@ ALLOWLIST: dict[str, CommandSpec] = {
         CommandSpec("network.set_mode", Role.ADMINISTRATOR, True, frozenset({"mode"})),
         CommandSpec("network.connect", Role.ADMINISTRATOR, True, frozenset({"ssid", "psk"})),
         CommandSpec("network.start", Role.ADMINISTRATOR, True, frozenset({"request_id"})),
+        CommandSpec("navigation_approval.status", Role.VIEWER, False),
+        CommandSpec("navigation_approval.begin", Role.OPERATOR, False),
+        CommandSpec("navigation_approval.cancel", Role.OPERATOR, False),
+        CommandSpec("navigation_approval.seal", Role.OPERATOR, False, frozenset({"operator", "test_surface"})),
+        CommandSpec("navigation_approval.start_navigation", Role.OPERATOR, False),
         CommandSpec("release.status", Role.VIEWER, False),
         CommandSpec("release.install", Role.ADMINISTRATOR, True, frozenset({"release_id"})),
         CommandSpec("release.rollback", Role.ADMINISTRATOR, True),
@@ -110,6 +116,7 @@ class HostCommands(Protocol):
     """The privileged actions, injected so refusals can be tested in isolation."""
 
     def network_status(self) -> dict: ...
+    def navigation_approval(self, action: str, *arguments: str) -> dict: ...
     def lane_perception_status(self) -> dict: ...
     def set_lane_perception(self, paint_source: str) -> dict: ...
     def register_ssh_key(self, public_key: str) -> dict: ...
@@ -326,7 +333,13 @@ class HostAgent:
             return (
                 "HOST_AGENT_ROLE_UNKNOWN",
                 f"actor role {raw!r} is not recognised",
-                "CORE 가 viewer 또는 administrator 를 실어 보내야 합니다.",
+                "CORE 가 viewer, operator 또는 administrator 를 실어 보내야 합니다.",
+            )
+        if spec.role is Role.OPERATOR and role is Role.VIEWER:
+            return (
+                "HOST_AGENT_ROLE_INSUFFICIENT",
+                f"{spec.name} requires operator, actor is {role.value}",
+                "주행 권한으로 로그인한 뒤 다시 시도하십시오.",
             )
         if spec.role is Role.ADMINISTRATOR and role is not Role.ADMINISTRATOR:
             return (
@@ -359,6 +372,16 @@ class HostAgent:
             if name == "paint_source":
                 if not isinstance(value, str) or value not in {"threshold", "denoise", "learned"}:
                     return ("HOST_AGENT_PARAM_INVALID", "unknown paint_source", "threshold, denoise, learned 중 선택하십시오.")
+                continue
+            if name == "test_surface":
+                if value not in ("floor", "lifted"):
+                    return ("HOST_AGENT_PARAM_INVALID", "unknown test_surface", "floor, lifted 중 선택하십시오.")
+                continue
+            if name == "operator":
+                # Account subjects may carry more than an identifier's characters, never control text or an option.
+                if (not isinstance(value, str) or not value.strip() or len(value) > 120
+                        or not value.isprintable() or value.startswith("-")):
+                    return ("HOST_AGENT_PARAM_INVALID", "invalid approver identity", "로그인 신원을 확인하십시오.")
                 continue
             if name == 'public_key':
                 from ssh_pairing import public_key
@@ -425,6 +448,12 @@ class HostAgent:
             "network.set_mode": lambda: self._commands.set_network_mode(params["mode"]),
             "network.connect": lambda: self._commands.connect_wifi(params["ssid"], params["psk"]),
             "network.start": lambda: self._commands.start_network(params['request_id']),
+            "navigation_approval.status": lambda: self._commands.navigation_approval("status"),
+            "navigation_approval.begin": lambda: self._commands.navigation_approval("begin"),
+            "navigation_approval.cancel": lambda: self._commands.navigation_approval("cancel"),
+            "navigation_approval.seal": lambda: self._commands.navigation_approval(
+                "seal", params["operator"], params["test_surface"]),
+            "navigation_approval.start_navigation": lambda: self._commands.navigation_approval("start_navigation"),
             "release.status": lambda: self._commands.release_status(),
             "release.install": lambda: self._commands.install_release(params["release_id"]),
             "release.rollback": lambda: self._commands.rollback_release(),

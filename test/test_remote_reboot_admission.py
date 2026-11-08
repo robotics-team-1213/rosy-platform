@@ -34,7 +34,8 @@ def test_each_job_reuses_the_probe_cutoff_before_any_priority_or_resource_admiss
     (home / "rosy-jobs").mkdir()
     when = "echo" if delta is None else f"/usr/bin/date -d @{10000 + delta} '+%a %Y-%m-%d %H:%M:%S %Z'"
     prefix = ('date() { if [ "$1" = +%s ]; then echo 10000; else /usr/bin/date "$@"; fi; }\n'
-              f'systemctl() {{ case "$1" in show) {when};; is-active) return {0 if active else 3};; esac; }}\n')
+              # the reboot unit is a oneshot: "activating" with exit 3 through its whole warning, as it answers on the PCs
+              f'systemctl() {{ case "$1" in show) {when};; is-active) echo {"activating" if active else "inactive"}; return 3;; esac; }}\n')
     result = _sh(prefix + rj.JOB, env, "r", "d", "", "0", "60", *words, "x.py")
     assert result.returncode == (253 if blocked else 0), result.stderr
     assert (home / "pytest-started").exists() is not blocked
@@ -50,7 +51,7 @@ def test_waiting_for_room_rechecks_reboot_before_starting_pytest(tmp_path, words
     (home / "rosy-test/runs/r.jobs").mkdir()
     prefix = '''clock=10000
 date() { if [ "$1" = +%s ]; then echo "$clock"; else /usr/bin/date "$@"; fi; }
-systemctl() { case "$1" in show) /usr/bin/date -d @10800 '+%a %Y-%m-%d %H:%M:%S %Z';; is-active) return 3;; esac; }
+systemctl() { case "$1" in show) /usr/bin/date -d @10800 '+%a %Y-%m-%d %H:%M:%S %Z';; is-active) echo inactive; return 3;; esac; }
 sleep() { clock=10030; }
 mkdir -p "$HOME/rosy-jobs"
 echo "$$ alone 2 6" > "$HOME/rosy-jobs/foreign.lock"

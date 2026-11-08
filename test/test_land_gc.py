@@ -17,6 +17,12 @@ import land_gc  # noqa: E402
 OLD = time.time() - 30 * 86400
 
 
+@pytest.fixture(autouse=True)
+def scratch_root(tmp_path, monkeypatch):
+    """plan() also sweeps landing scratch folders: never the test host's real one."""
+    monkeypatch.setenv("ROSY_LAND_TMP", str(tmp_path / "rosy-land"))
+
+
 @contextmanager
 def supervisor_lease(tree):
     """A real process owns the pre-ticket lease without refreshing the landing's old log."""
@@ -248,3 +254,63 @@ def test_apply_keeps_supervisor_starting_after_plan(landing, monkeypatch, after_
         assert (tree.parent / (tree.name + ".stopped")).exists()
     finally:
         lease.__exit__(None, None, None)
+
+
+def test_superseded_snapshots_go_once_a_newer_snapshot_or_the_live_branch_holds_them(landing):
+    repo, common, old, branch = landing
+    holder = common / land_gc.HOLDER
+    (old / "a.txt").write_text("a\n")
+    git(old, "add", "a.txt")
+    git(old, "commit", "-q", "-m", "A")
+    newer_branch = "land/feat/protected-20261102000002"
+    newer = holder / newer_branch.replace("/", "-")
+    git(repo, "worktree", "add", "-q", "-b", newer_branch, str(newer), branch)  # A, then B on top
+    (newer / "b.txt").write_text("b\n")
+    git(newer, "add", "b.txt")
+    git(newer, "commit", "-q", "-m", "B")
+    for suffix in (".log", ".stopped"):
+        (holder / f"{newer.name}{suffix}").write_text("x\n")
+        os.utime(holder / f"{newer.name}{suffix}", (OLD, OLD))
+    rows = land_gc.plan(repo, time.time(), 7)
+    verdict = {t.name: (action, why) for action, why, t, _ in rows if t}
+    assert verdict[old.name][0] == "remove"
+    assert verdict[newer.name] == ("keep", "unlanded work (2 commit(s) not in main)")
+    assert land_gc.apply(repo, rows) == []
+    assert not old.exists() and (holder / f"{old.name}.log").exists()
+    git(repo, "branch", "feat/protected", newer_branch)  # the live branch now carries A and B
+    assert next(a for a, _, t, _ in land_gc.plan(repo, time.time(), 7) if t == newer) == "remove"
+
+
+def test_a_merge_git_reproduces_is_not_unique_but_a_hand_resolved_one_is(landing):
+    repo, common, tree, branch = landing
+    git(repo, "commit", "-q", "--allow-empty", "-m", "main moves")
+    git(tree, "merge", "-q", "--no-ff", "--no-edit", "main")
+    assert land_gc.reproducible(repo, git(tree, "rev-parse", "HEAD"))
+    assert next(a for a, _, t, _ in land_gc.plan(repo, time.time(), 7) if t == tree) == "remove"
+    git(repo, "commit", "-q", "--allow-empty", "-m", "main again")
+    git(tree, "merge", "-q", "--no-ff", "--no-commit", "main")
+    (tree / "hand.txt").write_text("hand\n")
+    git(tree, "add", "hand.txt")
+    git(tree, "commit", "-q", "--no-edit")
+    assert not land_gc.reproducible(repo, git(tree, "rev-parse", "HEAD"))
+    assert next(a for a, _, t, _ in land_gc.plan(repo, time.time(), 7) if t == tree) == "keep"
+
+
+def test_old_landing_scratch_goes_but_a_live_or_recent_one_stays(landing, tmp_path, monkeypatch):
+    repo, common, _, _ = landing
+    scratch = tmp_path / "rosy-land"
+    # feat-protected: the fixture's kept snapshot, whose scratch explains its STOP
+    old, recent, live, kept = (scratch / n for n in ("fix-old", "fix-recent", "feat-alive", "feat-protected"))
+    for folder, age in ((old, OLD), (recent, time.time()), (live, OLD), (kept, OLD)):
+        folder.mkdir(parents=True)
+        (folder / "run-1.txt").write_text("x\n")
+        os.utime(folder / "run-1.txt", (age, age))
+    (common / "rosy-land-queue").mkdir()
+    (common / "rosy-land-queue" / "01-1.json").write_text(json.dumps(
+        {"pid": os.getpid(), "branch": "feat/alive", "worktree": str(tmp_path), "status": "pending"}))
+    rows = land_gc.plan(repo, time.time(), 7)
+    assert [items for action, _, _, items in rows if action == "tmp"] == [[str(old)]]
+    assert land_gc.apply(repo, rows) == []
+    assert not old.exists() and recent.exists() and live.exists() and kept.exists()
+    monkeypatch.setenv("ROSY_LAND_TMP", str(scratch.parent))  # a root not named rosy-land is never swept
+    assert not [row for row in land_gc.plan(repo, time.time(), 7) if row[0] == "tmp"]

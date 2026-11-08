@@ -85,8 +85,18 @@ def _peak(rows, j) -> float:
     return max((abs(b["sent"][j] - a["sent"][j]) / (b["t"] - a["t"]) for a, b in zip(rows, rows[5:]) if b["t"] > a["t"]), default=0.0)
 
 
+def _load(rows, j) -> dict:
+    """Joint j's current and PWM at the run's last health reading, and its largest current in the run; {} without one."""
+    loads = [r["load"] for r in rows if r.get("load")]
+    if not loads:
+        return {}
+    return {"current_ma_end": loads[-1]["current_ma"][j], "pwm_load_end": loads[-1]["pwm"][j],
+            "current_ma_peak": max(abs(load["current_ma"][j]) for load in loads)}
+
+
 def free_runs(rows: list) -> dict:
-    """chunk -> joint -> [[peak, largest lag, start t]] of the trace's runs that ended with every joint under STOP_LAG."""
+    """chunk -> joint -> [[peak, largest lag, start t, largest current or None]] of the trace's runs that ended with every
+    joint under STOP_LAG. The current is kept for a load baseline once stops carry it too."""
     out, start = {}, 0
     for i in range(1, len(rows) + 1):
         if i < len(rows) and rows[i].get("chunk") == rows[start].get("chunk"):
@@ -98,7 +108,7 @@ def free_runs(rows: list) -> dict:
             peak = _peak(run, j)
             if peak >= MIN_SPEED:
                 out.setdefault(run[0]["chunk"], {}).setdefault(JOINTS[j], []).append(
-                    [round(peak, 2), round(max(_lag(r, j) for r in run), 2), round(run[0]["t"], 2)])
+                    [round(peak, 2), round(max(_lag(r, j) for r in run), 2), round(run[0]["t"], 2), _load(run, j).get("current_ma_peak")])
     return out
 
 
@@ -133,9 +143,13 @@ def read_motion(rows: list, free: dict | None = None) -> dict:
              "sent_units_s": round(sent, 2), "present_units_s": round(present, 2), "seconds": round(rows[-1]["t"] - rows[0]["t"], 2),
              "other_joints_lag_rise": {JOINTS[j]: round(lag(rows[-1], j) - lag(rows[0], j), 2) for j in range(5) if j != worst},
              "jaws": rows[-1]["present"][5], "start": rows[0]["sent"][:5], "stopped_at": rows[-1]["present"][:5],
-             "pwm_end": (rows[-1].get("pwm") or {}).get(JOINTS[worst])}  # no verdict from PWM yet: no contact has been recorded with it
-    if sent < MIN_SPEED or facts["lag_end"] - facts["lag_start"] < MIN_RISE:
-        return {**facts, "verdict": "undetermined", "why": "the command was not moving, or the lag did not grow"}
+             "pwm_end": (rows[-1].get("pwm") or {}).get(JOINTS[worst]),
+             # chunk_runner's 1 Hz health reading (load); no verdict from it yet: no contact has been recorded with it
+             **_load(rows, worst)}
+    # a run that did not end on lag is no stop to explain: a finished descent's last half second, its arm already at the
+    # target while the command eased in, read blocked, and a baseline would read its small lag too_fast
+    if sent < MIN_SPEED or facts["lag_end"] - facts["lag_start"] < MIN_RISE or facts["lag_end"] < STOP_LAG:
+        return {**facts, "verdict": "undetermined", "why": "the command was not moving, or the lag did not grow to a stop"}
     moved = f"{facts['joint']} moved {present:.2f} of {sent:.2f} units/s"
     if present < BLOCKED_RATIO * sent:
         return {**facts, "verdict": "blocked", "why": moved}

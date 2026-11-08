@@ -27,7 +27,7 @@ export function untrustedQueuedReason(who) {
 // Field check 2026-10-10: the card's "위치 0.90, 0.05" was odom and read as a map coordinate.
 // The robot pose names its frame; Fleet's site map pose (D-536 guide row) is a separate line.
 const SITE_POSE_STATE = { LOCALIZED: "확정", DEGRADED: "추정" };
-const SITE_POSE_SOURCE = { sighting: "카메라", operator_pin: "운영자 핀", bridged: "odom 이음" };
+const SITE_POSE_SOURCE = { sighting: "카메라", operator_pin: "운영자 핀", auto_locate: "자동 위치", bridged: "odom 이음" };
 // D-494 3 sighting lease: odom samples newer than an anchor this fresh are the anchor, not a bridge.
 const FRESH_ANCHOR_S = 1.0;
 

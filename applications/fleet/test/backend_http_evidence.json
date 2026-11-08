@@ -1741,6 +1741,14 @@
         "test_toggle_off_and_on_round_trips"
       ],
       "source_revision": "6dd16b79b939c0954efef354dae965fbab4ecb83"
+    },
+    "POST:/api/fleet/site-rules/judge": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_site_rules_http.py",
+        "test_judge_answers_from_the_active_rules_and_sends_nothing"
+      ],
+      "source_revision": "5ddd185be3ad45f3bd79fc940c9e72e4f7076d3c"
     }
   }
 }

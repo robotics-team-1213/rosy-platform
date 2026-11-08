@@ -23,6 +23,8 @@ rm -f -- "$DESTINATION/install-native-runtime.sh"
 # native_release.py imports signing; it is standard-library only.
 cp "$SCRIPT_DIR/../../../hosts/common/release/signing.py" "$DESTINATION/signing.py"
 cp "$SCRIPT_DIR/../sd/media_layout.py" "$DESTINATION/media_layout.py"
+# D-27: the low-battery halt helper that rosy-lowbatt-shutdown.service runs.
+cp "$SCRIPT_DIR/../rosy-lowbatt-shutdown.sh" "$DESTINATION/rosy-lowbatt-shutdown.sh"
 for helper in host_agent.py host_agent_server.py host_lane_perception.py ssh_pairing.py network.py network_transaction.py nm_network.py; do
     cp "$RELEASE_TOOLS/$helper" "$DESTINATION/$helper"
 done

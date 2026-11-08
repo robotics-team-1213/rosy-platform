@@ -1,0 +1,19 @@
+[Unit]
+Description=ROSY low-battery guarded shutdown (D-27)
+# Root and outside CORE. Started only by rosy-lowbatt-shutdown.path; the
+# helper re-checks the request's age and halts after its grace period.
+After=local-fs.target rosy-core.service
+StartLimitIntervalSec=0
+
+[Service]
+Type=oneshot
+User=root
+Environment=ROSY_LOWBATT_SENTINEL=/var/lib/rosy/core/.rosy/battery-shutdown-request.json
+ExecStart=/usr/bin/bash /opt/rosy/native-runtime/rosy-lowbatt-shutdown.sh
+# The helper waits out a grace period of at most 600 s before it halts.
+TimeoutStartSec=660
+UMask=0077
+ProtectSystem=true
+ProtectHome=true
+PrivateTmp=true
+NoNewPrivileges=true

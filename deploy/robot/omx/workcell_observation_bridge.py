@@ -212,6 +212,15 @@ def post_arm_incident(fleet_url, source_id, token, report, *, context):
         return ArmIncidentAccepted.model_validate_json(response.read(16385))
 
 
+def post_arm_incident_evidence(fleet_url, source_id, token, incident_id, frame, *, context):
+    """One frame of the seconds around the stop, after the report and on its own (each within the frame limit)."""
+    request = Request(_arm_url(fleet_url, source_id) + f'/incidents/{incident_id}/evidence', data=frame.model_dump_json().encode(),
+                      method='POST', headers={'Content-Type': 'application/json', 'X-Workcell-Observation-Token': token})
+    with build_opener(HTTPSHandler(context=_verified(context)), _NoRedirect()).open(request, timeout=10) as response:
+        if response.status != 200:
+            raise OSError('arm incident evidence was not accepted')
+
+
 def get_arm_hold(fleet_url, source_id, token, *, context):
     """D-971: whether Fleet holds this arm (an incident not cleared by a person)."""
     request = Request(_arm_url(fleet_url, source_id) + '/hold', method='GET',
@@ -267,6 +276,9 @@ class ArmIncidentLink:
     def post_intake_reading(self, reading):
         return post_workcell(self.fleet_url, self.workcell_id, self.token, 'intake-readings', reading,
                              context=self.context)
+
+    def post_evidence(self, incident_id, frame):
+        return post_arm_incident_evidence(self.fleet_url, self.source_id, self.token, incident_id, frame, context=self.context)
 
     def hold(self):
         return get_arm_hold(self.fleet_url, self.source_id, self.token, context=self.context)
