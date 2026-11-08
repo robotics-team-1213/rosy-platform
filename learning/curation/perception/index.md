@@ -27,8 +27,8 @@
 
 ## 최근 기록
 
+- 2026-11-08 · uncommitted · revert(sim): 위 카메라로 잰 배 자리는 r08 모형과 맞지 않아 되돌림
 - 2026-11-08 · uncommitted · feat(sim): 손목 카메라를 실물 화면에 맞춘 자리로
 - 2026-11-08 · uncommitted · feat(sim): 임시 칸 판 v11 자리와 임시 칸 줄 반출
 - 2026-11-08 · uncommitted · feat(sim): 두 팔 동시 동작을 배우는 정책 모드
 - 2026-11-08 · uncommitted · feat(sim): 옆 대기 자세, 사다리 화면의 한 팔·두 팔 비교, 반출 과제 학습
-- 2026-11-08 · uncommitted · feat(sim): 두 팔 동시 실행과 협응·비협응 실측 비교
