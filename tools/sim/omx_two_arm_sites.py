@@ -35,6 +35,7 @@ CHOICES = dict(
     tcp_x_arm_a=.0740,       # same jaw, not confirmed on arm_a separately
     sim_tcp_x_m=.0740,       # the MuJoCo pads are the repo's v2.1 STL, whose TCP is .0740: the teacher grasps with this one (STL may not match the installed jaws)
     roll_floor_norm=-18.,    # usable wrist roll floor in the norm unit (coordinator): a step whose joint5 goes below it is flagged
+    belt_pose="fixture",     # "fixture": BELT_STOP_X and the fixture's pickup line; "snapshot": the belt strip measured in cell_snapshot's top frame
     ship_pose="assumed",     # "assumed": ship_stern_x_m and ship_centre_y_m above; "snapshot": the hull fitted in cell_snapshot's top frame
     cell_snapshot=None,      # with temp_lanes="snapshot": a rosy.omx-cell-snapshot.v1 file (omx_real2sim.py measure), the lanes the top camera saw then
     wait_pose="side")        # where an arm waits between steps: "side" = home folded but turned to the belt end, out of the middle band
@@ -236,8 +237,15 @@ class Layout:
                 arm.wait = wait_pose(arm, c["wait_pose"])
         belt_top = self.table_z - .055 if c["belt_height"] == "ruler" else f["pickup_center_m"][2] - .015
         self.belt_top = belt_top
+        self.belt_stop_x, self.belt_y = BELT_STOP_X, f["pickup_center_m"][1]
+        if c["belt_pose"] == "snapshot":
+            belt = load_snapshot(c["cell_snapshot"])["items"].get("belt") or {}
+            if "end_x_m" not in belt:
+                raise ValueError(f"snapshot {c['cell_snapshot']}: no measured belt ({belt.get('error', 'item missing')})")
+            self.belt_stop_x, self.belt_y = belt["end_x_m"], belt["centre_y_m"]
         self.box = CONTAINER[c["ship_source"]]
-        self.sites = {"belt": dict(kind="belt", xy=tuple(f["pickup_center_m"][:2]), z=belt_top + self.box[2] / 2 + .0005, yaw=0.)}
+        pick_x = self.belt_stop_x + f["pickup_center_m"][0] - BELT_STOP_X  # the container waits as far past the stop as in the fixture
+        self.sites = {"belt": dict(kind="belt", xy=(pick_x, self.belt_y), z=belt_top + self.box[2] / 2 + .0005, yaw=0.)}
         if c["ship_pose"] == "snapshot":
             ship = load_snapshot(c["cell_snapshot"])["items"].get("ship") or {}
             if "stern_x_m" not in ship:

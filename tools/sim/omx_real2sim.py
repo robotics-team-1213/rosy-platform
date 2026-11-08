@@ -15,6 +15,9 @@ deploy/robot/omx/sim/cell_snapshots/<stamp>.json. Today one item is measured aut
                the plate; lane 1 is the smaller-y end of a plate facing its arm (+x), as printed.
   ship         the r08 hull outline (hull.stl, plan view at its deck) fitted to the hull and the containers on it in the
                top frame: stern x, centre y and yaw by overlap (IoU).
+  belt         the dark belt strip back-projected at the belt surface: its near end (the stop) and centreline. The 2026-11-09
+               frames put it at x .205, y -.037 against the fixture's .158 / .007, and a D435 depth check agreed within a
+               few mm in xy; the 11-03 cell file's belt-end site lands on the belt's side rail in the same frame.
 The pad size against the printed 90 x 30 mm is the check that the top camera model still holds there. Camera pose, joint
 zeros and servo lag stay with omx_twin.py (omx_twin_night.py); the arm bases keep their CHOICES values.
 """
@@ -46,9 +49,11 @@ PARTIAL_MIN = .040           # a lane-wide pad at least this long is a lane cut 
 CHANGED = (.003, 3.)         # m, deg: a lane moved more than this is a changed item; 3 deg is the pocket's own yaw
                              # tolerance (SCAD yaw_tol_deg), above one plate's frame-to-frame jitter (1.4 deg, 2026-11-09)
 STAGGER_S = 45
-GAPS = {"temp_plates": "G-17", "ship": "G-18", "camera": "G-19"}  # sim2real registry rows each item reports to (D-480)
+GAPS = {"temp_plates": "G-17", "ship": "G-18", "camera": "G-19", "belt": "G-30"}  # sim2real registry rows each item reports to (D-480)
 PY = "MUJOCO_GL=egl $HOME/rosy-test/venvs/sim-mujoco/bin/python"
-SNAP_CHOICES = lambda path: ["--choice", f"cell_snapshot={path}", "--choice", "temp_lanes=snapshot", "--choice", "ship_pose=snapshot"]
+SNAP_CHOICES = lambda path: ["--choice", f"cell_snapshot={path}", "--choice", "temp_lanes=snapshot", "--choice", "ship_pose=snapshot",
+                                "--choice", "belt_pose=snapshot"]
+BELT_MIN_PX = 2000           # the belt strip is about 11,500 px in the 640x480 top frame
 SHIP_CHANGED_DEG = 1.        # the hull is 316 mm long: 1 deg moves its ends 2.8 mm
 # stage -> (items it reads, role, minutes, command after the python); every stage also reads the camera and arm bases.
 # A policy round (omx_two_arm_policy.py round --choice ..) takes the same choices but is a GPU job a person starts.
@@ -58,7 +63,7 @@ STAGES = {
                  "$PY tools/sim/omx_two_arm_teacher.py run plan --plan $OUT/outbound/plan/outbound-two-arm.json --out $OUT/outbound"),
     "matrix-a": ({"temp_plates", "ship"}, "model", 60, "tools/sim/omx_two_arm_matrix.py --arm arm_a --out $OUT/matrix-a"),
     "matrix-b": ({"temp_plates", "ship"}, "model", 60, "tools/sim/omx_two_arm_matrix.py --arm arm_b --out $OUT/matrix-b"),
-    "stack": ({"ship"}, "ai", 40, "tools/sim/omx_two_arm_teacher.py run stack --out $OUT/stack"),
+    "stack": ({"ship", "belt"}, "ai", 40, "tools/sim/omx_two_arm_teacher.py run stack --out $OUT/stack"),
 }
 
 
@@ -307,7 +312,32 @@ def measure_ship(frame, layout):
                 iou=round(float(iou(best)), 3), model="r08")
 
 
-def overlay(frame, layout, plates, ship=None):
+def measure_belt(frame, layout):
+    """The belt's near end (x where the strip starts, its 1st percentile) and centreline (median y beyond 20 mm from the end),
+    from the largest dark strip whose back-projection at the belt surface lies along the fixture's belt line."""
+    import cv2
+
+    cam = Camera(layout.fixture["real_cameras"]["top"], frame.shape[:2])
+    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+    dark = cv2.morphologyEx(((hsv[..., 2] < 95) & (hsv[..., 1] < 110)).astype(np.uint8), cv2.MORPH_OPEN, np.ones((5, 5), np.uint8))
+    n, lab, stats, _ = cv2.connectedComponentsWithStats(dark)
+    best = None
+    for i in range(1, n):
+        if stats[i, cv2.CC_STAT_AREA] < BELT_MIN_PX:
+            continue
+        ys, xs = np.nonzero(lab == i)
+        pts = cam.to_plane(np.stack([xs, ys], 1), layout.belt_top)
+        if abs(np.median(pts[:, 1]) - layout.belt_y) < .06 and np.median(pts[:, 0]) > layout.belt_stop_x - .02 and (best is None or len(pts) > len(best)):
+            best = pts
+    if best is None:
+        return dict(error="no dark strip along the belt line")
+    end = float(np.percentile(best[:, 0], 1))
+    far = best[best[:, 0] > end + .02]
+    width = float(np.percentile(far[:, 1], 98) - np.percentile(far[:, 1], 2))
+    return dict(end_x_m=round(end, 4), centre_y_m=round(float(np.median(far[:, 1])), 4), width_m=round(width, 4))
+
+
+def overlay(frame, layout, plates, ship=None, belt=None):
     import cv2
 
     cam = Camera(layout.fixture["real_cameras"]["top"], frame.shape[:2])
@@ -324,6 +354,9 @@ def overlay(frame, layout, plates, ship=None):
                         cv2.FONT_HERSHEY_SIMPLEX, .4, colour, 1)
     for arm in layout.arms.values():
         cv2.circle(img, tuple(int(v) for v in cam.project(arm.base)), 4, (0, 0, 255), -1)
+    if belt and "error" not in belt:
+        ends = [cam.project((belt["end_x_m"], belt["centre_y_m"] + s * belt["width_m"] / 2, layout.belt_top)) for s in (-1, 1)]
+        cv2.line(img, tuple(int(v) for v in ends[0]), tuple(int(v) for v in ends[1]), (0, 0, 255), 2)
     if ship and "error" not in ship:
         pose = (ship["stern_x_m"], ship["centre_y_m"], math.radians(ship["yaw_deg"]))
         cv2.polylines(img, [np.round(ship_polygon(cam, layout, pose)).astype(np.int32)], True, (255, 0, 255), 1)
@@ -341,7 +374,8 @@ def measure(run, prev_path=None):
     if top is None:
         raise SystemExit(f"no readable top frame in {run / 'frames'}")
     items = {"temp_plates": lambda: measure_temp_plates(top, layout, prev and prev["items"]["temp_plates"]),
-             "ship": lambda: measure_ship(top, layout)}
+             "ship": lambda: measure_ship(top, layout),
+             "belt": lambda: measure_belt(top, layout)}
     with ThreadPoolExecutor() as pool:  # items are independent; more join here (belt end, arm bases) as they get measurers
         done = {k: pool.submit(f) for k, f in items.items()}
         results = {k: f.result() for k, f in done.items()}
@@ -353,9 +387,9 @@ def measure(run, prev_path=None):
                                             seen={t: p["seen"] for t, p in tp["plates"].items() if "lanes" in p},
                                             errors={t: p["error"] for t, p in tp["plates"].items() if "error" in p},
                                             shape=tp["shape"], camera_check=tp["camera_check"]),
-                           ship=results["ship"]))
+                           ship=results["ship"], belt=results["belt"]))
     (run / "snapshot.json").write_text(json.dumps(snap, indent=1), encoding="utf-8")
-    cv2.imwrite(str(run / "overlay.png"), overlay(top, layout, tp["plates"], results["ship"]))
+    cv2.imwrite(str(run / "overlay.png"), overlay(top, layout, tp["plates"], results["ship"], results["belt"]))
     return snap
 
 
@@ -373,6 +407,11 @@ def diff(old, new):
             dyaw = abs((lb[n]["yaw_deg"] - la[n]["yaw_deg"] + 90) % 180 - 90)
             if d > CHANGED[0] or dyaw > CHANGED[1]:
                 changed.setdefault("temp_plates", []).append(f"{tag}-{n} {d * 1000:.0f} mm {dyaw:.1f} deg")
+    ba, bb = old["items"].get("belt"), new["items"].get("belt")
+    if ba != bb and (not ba or not bb or "error" in ba or "error" in bb):
+        changed["belt"] = ["measured" if bb and "error" not in bb else "not measured"]
+    elif ba and math.dist((ba["end_x_m"], ba["centre_y_m"]), (bb["end_x_m"], bb["centre_y_m"])) > CHANGED[0]:
+        changed["belt"] = [f"{math.dist((ba['end_x_m'], ba['centre_y_m']), (bb['end_x_m'], bb['centre_y_m'])) * 1000:.0f} mm"]
     sa, sb = old["items"].get("ship"), new["items"].get("ship")
     if sa != sb and (not sa or not sb or "error" in sa or "error" in sb):
         changed["ship"] = ["measured" if sb and "error" not in sb else "not measured"]
