@@ -21,14 +21,17 @@ CHOICES = dict(
     fixture_case="nominal-palletizing-v21-ship-surveyed",  # measured arm bases (arm_b FK, arm_a plate centre); "nominal-palletizing-v21-ship" = CAD bases
     base_z="measured",       # "measured": table + 12 mm base plate (ruler, arm_b; arm_a ASSUMED the same); "cad": the fixture's arm base z
     belt_height="ruler",     # "ruler": belt end surface 55 mm under the table (inventory, D435 says 56); "fixture": the surveyed case's belt_drop face
-    temp_lanes="fan",        # "fan": temp_radius_m and temp_direction_deg, where the bridge v7 seats plate v11 (design, not yet measured);
-                             # "photo-20261107": TEMP_LANES_PHOTO, the older loose v7 plates where the top camera saw them (use temp_radius_m=.214)
-    temp_radius_m=.200,      # SCAD arm_r: the printed fan's shape, and with temp_lanes="fan" arm centre to middle-lane centre (v9 to v11: 200)
+    temp_lanes="photo-20261108",  # "photo-20261108": the plates where the 11-08 top frame sees them (the user moves them by hand for now);
+                             # "fan": temp_radius_m and temp_direction_deg, where the bridge v7 seats plate v11 (Confluence 23233175; the user keeps
+                             # the arm freer without it, 11-09); "photo-20261107": the older loose v7 plates (use temp_radius_m=.214)
+    temp_radius_m=.150,      # SCAD arm_r: the printed fan's shape, and with temp_lanes="fan" arm centre to middle-lane centre (v9 to v11: 200;
+                             # the 11-08 plates' middle lanes lie 139 and 155 mm from arm_b and arm_a)
     temp_direction_deg=180., # from each arm toward -x, away from the belt (the user's slot plan 2026-10-31)
     temp_source="scad-v11",  # the plate source; "stl" keeps the same collision shape and shows the downloaded STL as the visual
     ship_source="r08-berth",  # "r08-berth": the rated ship v15 (r08) on its berth kit with container v3 (SHIP_ASSETS); "fixture-studs": the old stud plate and 30 mm boxes
     ship_stern_x_m=.155,     # r08: stern end x, bow toward -x as the printed ship lay in the 11-07 top photo; ASSUMED at the table's belt edge (r08 not placed yet)
-    ship_centre_y_m=.007,    # r08: hull centreline y, the printed ship's hull edges back-projected from the same photo (125 mm wide against 130)
+    ship_centre_y_m=-.014,   # r08: hull centreline y, the middle row of the 11-08 top frame (rows +25/-14/-56 mm; was .007, the 11-07 photo's hull
+                             # edges). Its x reading (holds 25 mm toward the belt) would put the stern over the belt end: x stays
     wrist_camera="photo-20261108",  # "photo-20261108": WRIST_PHOTO, fitted to arm_b's real wrist frame; "v21-b": the team's printed D holder r06
                              # (palletizing_gripper.WRIST_CAMERA_B); both draw and collide link5 as the D parts; "stock" (omx-ai-stock, ROBOTIS STEP) or "none"; arm_a ASSUMED the same mount
     tcp_x_arm_b=.0740,       # URDF/STL v2.1 jaw (tip 74.1 mm from the pivot); a touch gave .0885 but that rests on an unchecked table height (OPEN, 14.5 mm FK offset)
@@ -40,6 +43,10 @@ CHOICES = dict(
 # Lane centre (x, y) m and long-axis yaw deg, lanes numbered as printed on the plates. Dark pads in the surveyed top camera, back-projected to the plate top;
 # the pads measured 89 x 30 mm against the 90 x 30 container. tmp-a-3 lay under a container: from lanes 1 and 2, its visible end agrees within 0.1 deg.
 # The plates are loose: measure again when one moves.
+# the plates on 2026-11-08 22:45: lane pads and containers back-projected through the measured top camera (plate a's lane 3 pad was half seen:
+# mirrored from its lane 1 like plate b's fan); yaws in degrees of the container's long axis
+TEMP_LANES_PHOTO_1108 = dict(a=[((-.0258, -.2176), 16.7), ((-.0394, -.1620), 0.), ((-.0258, -.1064), -16.7)],
+                             b=[((-.0302, .0968), 10.7), ((-.0349, .1482), -1.4), ((-.0281, .1990), -14.4)])
 TEMP_LANES_PHOTO = dict(a=[((-.0738, -.2167), 15.7), ((-.0818, -.1672), 2.7), ((-.0776, -.1173), -11.3)],
                         b=[((-.0465, .1439), 4.9), ((-.0466, .1958), -9.7), ((-.0378, .2480), -24.7)])
 SCAD = dict(lanes=3, cont_w=.030, cont_l=.090, pk_l=.096, deck_t=.008, clr=.0004, clr_l=.001, seat_h=.0006, catch=.005, gap_min=.010, rim=.003, yaw_tol_deg=3.)
@@ -223,7 +230,8 @@ class Layout:
             if c["temp_lanes"] == "fan":
                 lanes, centre = temp_lanes(self.arms[name].base[:2], c["temp_radius_m"], c["temp_direction_deg"])
             else:
-                lanes = [(xy, math.radians(yaw)) for xy, yaw in TEMP_LANES_PHOTO[tag]]
+                photo = TEMP_LANES_PHOTO_1108 if c["temp_lanes"] == "photo-20261108" else TEMP_LANES_PHOTO
+                lanes = [(xy, math.radians(yaw)) for xy, yaw in photo[tag]]
                 centre = lanes[1][0]
             self.plates[tag] = dict(arm=name, centre=centre, lanes=lanes, outline=plate_outline(lanes, c["temp_radius_m"]))
             for i, (xy, yaw) in enumerate(lanes, 1):

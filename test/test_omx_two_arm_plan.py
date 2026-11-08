@@ -20,8 +20,7 @@ def layout():
 
 @pytest.fixture(scope="module")
 def reach(layout):
-    """A fixed reach table: ship hold 1, belt and stern bay by both, plate a by arm_a, plate b lanes 1-2 by arm_b (lane 1 is left out
-    anyway: plate v11 on its bridge puts it under the estimated hull)."""
+    """A fixed reach table: ship hold 1, belt and stern bay by both, plate a by arm_a, plate b lanes 1-2 by arm_b."""
     table = {s: set(BOTH) for s in plan.planning_sites(layout) if layout.sites[s]["kind"] in ("ship", "belt")}
     table.update({f"tmp-a-{i}": {"arm_a"} for i in (1, 2, 3)})
     table.update({"tmp-b-1": {"arm_b"}, "tmp-b-2": {"arm_b"}, "tmp-b-3": set()})
@@ -62,7 +61,7 @@ def test_harbor_order_rehandle_outbound_restore(layout, reach):
     moves, why = plan.harbor_moves(layout, state, dict(cargo_id="bar-3"), reach)  # bottom of row 2 under bar-6 and bar-9
     assert why is None
     assert [(m["cargo_id"], m["phase_label"]) for m in moves] == [("bar-9", "재취급"), ("bar-6", "재취급"), ("bar-3", "반출"), ("bar-6", "복귀"), ("bar-9", "복귀")]
-    assert moves[0]["destination"] == "tmp-b-2"  # row 2 is arm_b's side: its own plate first (lane 1 lies under the hull)
+    assert moves[0]["destination"] == "tmp-b-1"  # row 2 is arm_b's side: its own plate first
     assert moves[2]["destination"].startswith("tmp-a")  # the outbound place is a lane: arm_b's plate is used up, so arm_a's
     assert [m["destination"] for m in moves[3:]] == ["ship-h1r2-l0", "ship-h1r2-l1"]  # down into the freed level, old order kept
 
