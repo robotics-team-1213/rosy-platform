@@ -131,7 +131,7 @@ def test_peer_address_dials_another_host_but_verifies_the_url_name(tmp_path, mon
     assert result == {"ok": True}
     assert f"host: localhost:{port}".encode() in received[0].lower()
     # The name the certificate does not carry is refused even though the dialed address answers.
-    with pytest.raises(httpx.ConnectError):
+    with pytest.raises(httpx.ConnectError, match="CERTIFICATE_VERIFY_FAILED|[Hh]ostname"):
         asyncio.run(exercise("peer-elsewhere"))
     assert len(received) == 1
 
@@ -147,3 +147,17 @@ def test_peer_address_is_an_ip_literal_on_a_tls_peer(tmp_path, entry, error):
     from fleet.server.control_unit_runtime import load_control_unit
     with pytest.raises(ValueError, match=error):
         load_control_unit(config_file(tmp_path, peers={"A": {**entry, "token_file": "parent.token"}}))
+
+
+def test_two_peers_cannot_share_one_dialed_socket(tmp_path):
+    from fleet.server.control_unit_runtime import load_control_unit
+    (tmp_path / "child.token").write_text("child-service-token", encoding="ascii")
+    document = {"unit_id": "A1", "manifest": {"revision": "v1", "units": [
+        {"id": "A"}, {"id": "A1", "parent": "A"}, {"id": "A2", "parent": "A1"}]}, "peers": {
+        "A": {"url": "https://peer-a:8543", "address": "192.0.2.30", "token_file": "parent.token"},
+        "A2": {"url": "https://peer-a2:8543", "address": "192.0.2.30", "token_file": "child.token"}}}
+    (tmp_path / "parent.token").write_text("parent-service-token", encoding="ascii")
+    path = tmp_path / "control.yaml"
+    path.write_text(yaml.safe_dump(document), encoding="utf-8")
+    with pytest.raises(ValueError, match="CONTROL_UNIT_PEER_ENDPOINT_COLLISION"):
+        load_control_unit(path)

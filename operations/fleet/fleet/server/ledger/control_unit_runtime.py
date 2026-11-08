@@ -98,7 +98,9 @@ def load_control_unit(path):
         if address is not None and parsed.scheme != "https":
             raise ValueError("CONTROL_UNIT_PEER_ADDRESS_REQUIRES_TLS")
         peers[identity] = ControlUnitPeer(str(endpoint.copy_with(path="")).rstrip("/"), token, address)
-    if len({peer.url for peer in peers.values()}) != len(peers):
+    # Two names on one dialed socket would share a pooled TLS connection, so the dial target is unique too.
+    dialed = {(peer.address or httpx.URL(peer.url).host, httpx.URL(peer.url).port) for peer in peers.values()}
+    if len({peer.url for peer in peers.values()}) != len(peers) or len(dialed) != len(peers):
         raise ValueError("CONTROL_UNIT_PEER_ENDPOINT_COLLISION")
     if len({peer.token for peer in peers.values()}) != len(peers):
         raise ValueError("CONTROL_UNIT_SERVICE_CREDENTIAL_NOT_ISOLATED")

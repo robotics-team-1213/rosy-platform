@@ -225,6 +225,7 @@ def _verify_candidate_content(candidate_dir: Path, *, manifest_bytes: bytes | No
         "omx": "compose.omx.yaml" in hashes,
         "workcell": "compose.workcell.yaml" in hashes,
         "control_unit": "compose.control-unit.yaml" in hashes,
+        "control_unit_remote": "compose.control-unit-remote.yaml" in hashes,
         "monitoring": set(MONITORING_DEPLOYMENT_FILES) <= set(hashes),
         "image_archive_sha256": archive_hash,
     }
@@ -390,6 +391,7 @@ def verify_candidate(
             "omx": summary["omx"],
             "workcell": summary["workcell"],
             "control_unit": summary["control_unit"],
+            "control_unit_remote": summary["control_unit_remote"],
             "monitoring": summary["monitoring"],
             "image_archive_sha256": summary["image_archive_sha256"],
             "manifest_image_ids": summary["image_ids"],

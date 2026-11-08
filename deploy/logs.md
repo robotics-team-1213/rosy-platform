@@ -4736,7 +4736,7 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - gate 변화: 없음 — 기체에서 실제 종료를 확인하기 전이다.
 - CE: 미해결 — 기체에서 `PathChanged` 발화와 종료를 확인한 뒤 교훈을 기록한다.
 ## 2026-11-08 · uncommitted · feat(control-unit): 다른 PC의 이웃 관제에 peer 주소로 접속한다 (D-994)
-- 변경: control-unit peers 항목에 선택 `address`(IP 리터럴, https만)를 더해 그 주소로 접속하고 TLS 이름·Host는 `url` 이름으로 확인한다. 서명 overlay `compose.control-unit-remote.yaml`이 peer proxy만 `ROSY_CONTROL_UNIT_PEER_PUBLISH`의 LAN 주소에 게시하며, 후보 목록·검증·업데이터 overlay 허용 목록에 넣었다
+- 변경: control-unit peers 항목에 선택 `address`(IP 리터럴, https만)를 더해 그 주소로 접속하고 TLS 이름·Host는 `url` 이름으로 확인한다. 서명 overlay `compose.control-unit-remote.yaml`이 peer proxy만 `ROSY_CONTROL_UNIT_PEER_BIND`·`_PORT`의 LAN 주소에 게시하며 `site-firewall.py check`가 와일드카드·loopback·남의 주소를 거절한다. 후보 목록·검증·manifest 요약·업데이터 overlay 허용과 서명 포함 대조에 넣었고, 같은 주소·포트의 두 이웃을 거절한다. 독립 검토 지적(서명 대조 누락, 게시 주소 생략, 연결 풀 공유) 반영
 - 증거: 통합관제 R을 N150 호스트로 옮기려 하자 R↔CELL-A가 같은 PC 도커 네트워크 별칭으로만 닿아 분리할 수 없었다. 원격 시험은 아래 커밋에 기록
 - gate 변화: 없음 — 현장 전환 전이다
 - 결정: D-994 2·3항(서명 경로로만 배치)

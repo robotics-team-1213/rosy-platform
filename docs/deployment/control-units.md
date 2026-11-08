@@ -106,7 +106,7 @@ fleet console --robots /etc/rosy/robots.yaml \
 
 단독 CLI 기본 바인드는 `127.0.0.1:8090`이다. PC 간에는 승인된 TLS reverse proxy의 외부 origin으로 연결하고 내부 Fleet 포트는 proxy에서만 접근하게 한다. 기존 site 배치는 [Caddyfile](../../deploy/site/Caddyfile)과 [Compose](../../deploy/site/compose.yaml)의 `ROSY_SITE_HTTPS_PORT`를 사용하며 `.env.example`의 `8443`은 예시다. Compose 안의 Fleet은 `0.0.0.0`으로 bind하지만 컨테이너 내부 범위다. 실제 방화벽에는 선택한 외부 TLS 포트에 대해 직계 이웃과 승인된 운영 화면의 접근만 허용한다. 장치 API의 주소·포트·자격은 별도 robots 설정을 따르며 이 관제 peer 포트와 혼동하지 않는다.
 
-이웃 관제가 **다른 PC**에 있으면(D-994: R은 N100 계열 호스트, 셀은 팔이 연결된 호스트) 두 가지를 더한다. 이웃의 peers 항목에 `address`(IP 리터럴만)를 넣으면 Fleet은 그 주소로 접속하되 TLS 서버 이름 확인과 `Host`는 `url`의 이름(예: `peer-cell-a`)으로 한다. 이름을 다른 DNS에 맡기지 않으며 `https` 항목에만 허용된다. 받는 쪽은 서명 overlay [`compose.control-unit-remote.yaml`](../../deploy/site/compose.control-unit-remote.yaml)을 `compose.control-unit.yaml` 바로 뒤에 붙이고 `site.env`의 `ROSY_CONTROL_UNIT_PEER_PUBLISH=<LAN 주소>:<포트>:<peer.Caddyfile 포트>`로 peer proxy만 그 LAN 주소에 게시한다. Bearer service 인증과 peer 인증서는 그대로다. 사이트 HTTPS 방화벽은 이 포트를 거르지 않으므로 LAN 주소에만 묶는다.
+이웃 관제가 **다른 PC**에 있으면(D-994: R은 N100 계열 호스트, 셀은 팔이 연결된 호스트) 두 가지를 더한다. 이웃의 peers 항목에 `address`(IP 리터럴만)를 넣으면 Fleet은 그 주소로 접속하되 TLS 서버 이름 확인과 `Host`는 `url`의 이름(예: `peer-cell-a`)으로 한다. 이름을 다른 DNS에 맡기지 않으며 `https` 항목에만 허용된다. 받는 쪽은 서명 overlay [`compose.control-unit-remote.yaml`](../../deploy/site/compose.control-unit-remote.yaml)을 `compose.control-unit.yaml` 바로 뒤에 붙이고 `site.env`의 `ROSY_CONTROL_UNIT_PEER_BIND=<이 PC의 LAN 주소>`와 `ROSY_CONTROL_UNIT_PEER_PORT=<peer.Caddyfile 포트>`로 peer proxy만 그 주소에 게시한다. 사이트 HTTPS 방화벽은 이 포트를 거르지 않으므로 `site-firewall.py check`가 와일드카드·loopback·이 PC에 없는 주소를 거절한다. Bearer service 인증과 peer 인증서는 그대로다. 같은 주소·포트로 두 이웃을 부르는 설정은 TLS 연결을 섞을 수 있어 시작 시 거절된다.
 
 ```yaml
 peers:
