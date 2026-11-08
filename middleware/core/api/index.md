@@ -36,4 +36,3 @@
 - 2026-11-07 · uncommitted · 계정 로그인 복귀 목록에 역할 화면 추가
 - 2026-11-07 · uncommitted · feat(navigation): 항법 재승인 REST (D-986)
 - 2026-11-06 · uncommitted · feat(fleet): 관제 수동 모드 전환
-- 2026-11-04 · uncommitted · feat(api): /api/v1/peers 경로와 PEER_SHARE 부여

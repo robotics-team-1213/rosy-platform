@@ -5400,14 +5400,15 @@
 - 증거: 합성 시험뿐. 정확도는 실물 전까지 재지 않았다.
 - gate 변화: SOURCE. 교훈: CE 미해결 — 실물 시험 전이다.
 
-## 2026-11-08 · uncommitted · 관제 화면 파일을 다시 받지 않고 압축해 보낸다
-- 변경: 콘솔 문서·자산·/common 파일이 ETag가 맞으면 304로 답한다. Fleet 응답은 1 KB 넘으면 gzip으로 보낸다. `no-cache`는 그대로라 배포 직후 새 파일을 바로 받는다.
-- 증거: 관제 첫 화면은 파일 97개 917 KB(gzip 315 KB)를 받는다. Starlette FileResponse가 If-None-Match를 무시해 레일을 누를 때마다 전부 다시 받았다. test_server_app.py에 304·gzip 시험을 더했다.
-- gate 변화: SOURCE 회귀. 현장 수용은 별도다.
 ## 2026-11-07 · uncommitted · test: Account 가입·권한 요청 시험 (D-993)
 - 변경: `test_account_access_requests.py` — 공개 입력의 CSRF·크기·상한·존재 여부 비노출, 승인·거절의 원자성과 감사. Fleet 동작 변경 없음.
 - 증거: 원격 실행 기록은 operations/account/logs.md.
 - gate 변화: 없음.
+
+## 2026-11-08 · uncommitted · 관제 화면 파일을 다시 받지 않고 압축해 보낸다
+- 변경: 콘솔 문서·자산·/common 파일이 ETag가 맞으면 304로 답한다. Fleet 응답은 1 KB 넘으면 gzip으로 보낸다. `no-cache`는 그대로라 배포 직후 새 파일을 바로 받는다.
+- 증거: 관제 첫 화면은 파일 97개 917 KB(gzip 315 KB)를 받는다. Starlette FileResponse가 If-None-Match를 무시해 레일을 누를 때마다 전부 다시 받았다. test_server_app.py에 304·gzip 시험을 더했다.
+- gate 변화: SOURCE 회귀. 현장 수용은 별도다.
 
 ## 2026-11-08 · uncommitted · fix: Account 가입·권한 요청 경로를 Fleet 기능표에 등록 (D-993)
 - 변경: `feature_matrix.json`에 공개 `POST /api/fleet/auth/access-requests`(login-page.js)와 관리자 목록·승인·거절(account-page.js), login-page.js의 `/api/fleet/auth/session` 호출을 등록하고, `backend_http_evidence.json`에 `test_account_access_requests.py` 통과 수신 기록(21 passed, 병합 커밋 36e976e701)을 더했다.
