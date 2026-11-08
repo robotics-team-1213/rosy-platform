@@ -34,11 +34,12 @@ HERE = Path(__file__).resolve().parent
 sys.path[:0] = [str(HERE), str(HERE.parents[1] / "deploy/robot/omx")]
 import numpy as np  # noqa: E402
 
-KPS = (10.0, 20.0, 40.0, 80.0)  # 40 is omx_cell_sim's actuator gain
+KPS = (10.0, 15.0, 20.0, 30.0, 40.0, 60.0, 80.0)  # 40 is omx_cell_sim's actuator gain
 ARM_LINKS = ("link1", "link2", "link3", "link4", "link5", "link6", "link7")
 LIMIT_PX = {"top": 3, "side": 3, "wrist": 5}  # D-947 proposed camera match
 SEARCH_PX, STEP_PX = 24, 2
 GRID_HZ = 50
+SCHEMA = "rosy.omx-twin-episode.v2"
 
 
 # -- tracking -------------------------------------------------------------------------------------------------------------------
@@ -57,9 +58,10 @@ def grid(ticks, key):
 
 
 def set_kp(cell, kp):
+    """One gain for joint1-5, or one per joint."""
     m = cell.model
-    for a in cell.act[:5]:
-        m.actuator_gainprm[a, 0], m.actuator_biasprm[a, 1] = kp, -kp
+    for a, k in zip(cell.act[:5], np.broadcast_to(kp, 5)):
+        m.actuator_gainprm[a, 0], m.actuator_biasprm[a, 1] = k, -k
 
 
 def track(cell, ticks, kp, gravity_comp):
@@ -104,7 +106,12 @@ def tracking(cell, ticks):
                              lag_s=[lag_s(g, cmd[:, j], sim[:, j]) for j in range(5)]))
     best = min(rows, key=lambda r: float(np.mean(r["rms_deg"])))
     per_joint = [min(rows, key=lambda r: r["rms_deg"][j]) for j in range(5)]  # the real servos do not share one gain
-    return dict(seconds=round(float(g[-1] - g[0]), 1), real_lag_s=real_lag,
+    kp = [r["kp"] for r in per_joint]
+    sim = track(cell, ticks, np.array(kp), best["gravity_comp"])  # the joints are coupled: check the combination itself
+    err = np.degrees(sim - real)
+    fitted = dict(kp=kp, gravity_comp=best["gravity_comp"], rms_deg=np.sqrt((err ** 2).mean(0)).round(2).tolist(),
+                  lag_s=[lag_s(g, cmd[:, j], sim[:, j]) for j in range(5)])
+    return dict(fitted=fitted,seconds=round(float(g[-1] - g[0]), 1), real_lag_s=real_lag,
                 real_follow_rms_deg=np.sqrt((np.degrees(real - cmd) ** 2).mean(0)).round(2).tolist(),
                 grid=rows, best=dict(kp=best["kp"], gravity_comp=best["gravity_comp"], rms_deg=best["rms_deg"]),
                 best_per_joint=[dict(kp=r["kp"], gravity_comp=r["gravity_comp"], rms_deg=r["rms_deg"][j]) for j, r in enumerate(per_joint)])
@@ -227,11 +234,13 @@ def replay(folder, cell_path, out, cams, every_s=2.0, worst=4):
     import omx_cell_sim as cs
     folder, out = Path(folder), Path(out)
     if (out / "twin.json").exists():
-        return json.loads((out / "twin.json").read_text())
+        done = json.loads((out / "twin.json").read_text())
+        if done.get("schema") == SCHEMA:  # an older result (other gain grid, no fit) is measured again
+            return done
     out.mkdir(parents=True, exist_ok=True)
     cell = cs.Cell(cell_path)
     ticks, picked = samples(folder, every_s, cams)
-    result = dict(schema="rosy.omx-twin-episode.v1", episode=folder.name, cell=str(cell_path), cams=cams,
+    result = dict(schema=SCHEMA, episode=folder.name, cell=str(cell_path), cams=cams,
                   real=json.loads((folder / "result.json").read_text()) if (folder / "result.json").exists() else None)
     result["tracking"] = tracking(cell, ticks) if len(ticks) > 50 else None
     set_kp(cell, KPS[2])
@@ -332,6 +341,112 @@ def batch(args):
             time.sleep(args.poll)
 
 
+# -- camera fit -----------------------------------------------------------------------------------------------------------------
+STEPS = {"x": .004, "y": .004, "z": .004, "rx": .4, "ry": .4, "rz": .4, "fovy": .3}  # m, deg (camera frame), deg
+JOINT_STEPS = {f"j{k}": .4 for k in range(1, 6)}  # deg added to the real joint reading (a zero offset)
+
+
+def posed(cell, state, zero_deg=None):
+    import mujoco
+    import omx_cell_sim as cs
+    data = mujoco.MjData(cell.model)
+    data.qpos[cell.qadr] = cs.real_q(state)
+    if zero_deg is not None:
+        data.qpos[cell.qadr[:5]] += np.radians(zero_deg)
+    data.qpos[cell.mimic] = -data.qpos[cell.qadr[5]]
+    data.qpos[cell.box_q:cell.box_q + 3] = [0, 0, -1]
+    mujoco.mj_forward(cell.model, data)
+    return data
+
+
+def apply_delta(cell, camera, base, delta):
+    """Camera pose = surveyed pose moved by delta: x/y/z in the world (m), rx/ry/rz about the camera's own axes (deg)."""
+    import mujoco
+    m, i = cell.model, cell.model.camera(camera).id
+    pos, quat, fovy = base
+    m.cam_pos[i] = pos + [delta.get("x", 0.), delta.get("y", 0.), delta.get("z", 0.)]
+    turn, q = np.zeros(4), quat.copy()
+    for axis, key in (([1., 0, 0], "rx"), ([0, 1., 0], "ry"), ([0, 0, 1.], "rz")):
+        mujoco.mju_axisAngle2Quat(turn, np.array(axis), math.radians(delta.get(key, 0.)))
+        mujoco.mju_mulQuat(q, q.copy(), turn)
+    m.cam_quat[i], m.cam_fovy[i] = q, fovy + delta.get("fovy", 0.)
+
+
+def fit_camera(args):
+    """Fit the camera pose and/or the joints' zero offsets (--params) to the real frames of most episodes; judge on the
+    held-out ones (every third by crc). Either can absorb the other's error: confirm with a still photo and a joint
+    reading at a known pose before the cell file or the calibration changes."""
+    import mujoco
+    import omx_cell_sim as cs
+    cams = {args.real_camera: args.camera}
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+    names = closed_episodes(args.site, args.root, args.since)
+    items = {"fit": [], "hold": []}
+    for name in names:
+        try:
+            folder = fetch(args.site, args.root, name, out / "episodes", args.every, cams)
+        except Exception as e:
+            print(f"[fit] skip {name}: {e}", file=sys.stderr)
+            continue
+        _, picked = samples(folder, args.every, cams)
+        for row, seqs in picked[::max(1, len(picked) // args.per_episode)]:
+            jpg = folder / args.real_camera / f"{seqs[args.real_camera]:06d}.jpg"
+            if jpg.exists():
+                items["hold" if shard_of(name, "0/3") else "fit"].append((row["state"], edge_strength(load_rgb(jpg.read_bytes()))))
+    cell = cs.Cell(args.cell)
+    renderer, geoms = mujoco.Renderer(cell.model, 480, 640), arm_geoms(cell)
+    steps = {**(STEPS if args.params in ("camera", "both") else {}), **(JOINT_STEPS if args.params in ("joints", "both") else {})}
+    i = cell.model.camera(args.camera).id
+    base = (cell.model.cam_pos[i].copy(), cell.model.cam_quat[i].copy(), float(cell.model.cam_fovy[i]))
+
+    def edges(data):
+        mujoco.mj_camlight(cell.model, data)  # a changed model camera reaches data only through this
+        return outline(silhouette(cell, renderer, data, args.camera, geoms)[0])
+
+    def zero_deg(delta):
+        return [delta.get(f"j{k}", 0.) for k in range(1, 6)]
+
+    def score(delta, which="fit"):
+        apply_delta(cell, args.camera, base, delta)
+        vals = []
+        for state, g in items[which]:
+            ys, xs = np.nonzero(edges(posed(cell, state, zero_deg(delta))))
+            if len(ys) >= 40:
+                vals.append(g[ys, xs].mean())
+        return float(np.mean(vals)) if vals else 0.
+
+    def hold_px(delta):
+        apply_delta(cell, args.camera, base, delta)
+        px = [o["px"] for state, g in items["hold"] if (o := offset(g, edges(posed(cell, state, zero_deg(delta)))))]
+        return float(np.median(px)) if px else None
+
+    zero = {k: 0. for k in steps}
+    delta, best = dict(zero), score(zero)
+    start = best
+    for scale in (4, 2, 1, .5):  # coordinate ascent, step halving
+        moved = True
+        while moved:
+            moved = False
+            for key, step in steps.items():
+                for sign in (1, -1):
+                    trial = dict(delta, **{key: delta[key] + sign * step * scale})
+                    s = score(trial)
+                    if s > best + 1e-3:
+                        delta, best, moved = trial, s, True
+                        break
+    result = dict(schema="rosy.omx-twin-view-fit.v1", camera=args.camera, params=args.params, cell=str(args.cell),
+                  n_fit=len(items["fit"]), n_hold=len(items["hold"]), delta={k: round(v, 4) for k, v in delta.items()},
+                  fit_score=[round(start, 3), round(best, 3)], hold_score=[round(score(zero, "hold"), 3), round(score(delta, "hold"), 3)],
+                  hold_median_px=[hold_px(zero), hold_px(delta)], limit_px=LIMIT_PX.get(args.camera))
+    apply_delta(cell, args.camera, base, delta)
+    result.update(pos=cell.model.cam_pos[i].round(5).tolist(), quat=cell.model.cam_quat[i].round(6).tolist(),
+                  fovy=round(float(cell.model.cam_fovy[i]), 3))
+    (out / f"view-fit-{args.params}.json").write_text(json.dumps(result, indent=1))
+    print(json.dumps(result))
+    return 0
+
+
 # -- live -----------------------------------------------------------------------------------------------------------------------
 LIVE_READ = r"""import base64, json, sys, urllib.request
 out = {"live": json.load(open(sys.argv[1])), "frames": {}}
@@ -407,6 +522,8 @@ def report(dirs):
         lines += ["", f"Real servo lag behind the command (s, j1-j5): {' '.join(f'{v:.2f}' for v in real_lag)}",
                   "Best (kp, gravity comp) per episode: " + ", ".join(f"{k}={sum(1 for b in best if (b['kp'], b['gravity_comp']) == k)}"
                                                                      for k in sorted({(b['kp'], b['gravity_comp']) for b in best})),
+                  "Per-joint gains together (mean RMS deg j1-j5): " + " ".join(
+                      f"{v:.2f}" for v in np.mean([r["tracking"]["fitted"]["rms_deg"] for r in tracked if "fitted" in r["tracking"]] or [[np.nan] * 5], 0)),
                   "Median best kp per joint (j1-j5): " + " ".join(f"{np.median([r['tracking']['best_per_joint'][j]['kp'] for r in tracked]):g}"
                                                                   for j in range(5)), ""]
     lines += ["## View: sim arm outline against the real frame", "",
@@ -449,7 +566,18 @@ def main(argv=None):
     v.add_argument("--minutes", type=float, default=600)
     v.add_argument("--alarm", type=int, default=3)
     sub.add_parser("report").add_argument("dirs", nargs="+")
+    f = sub.add_parser("fit-camera")
+    for flag in ("--cell", "--out", "--site", "--root"):
+        f.add_argument(flag, required=True)
+    f.add_argument("--since", default="20261101")
+    f.add_argument("--camera", default="top")
+    f.add_argument("--real-camera", default="top")
+    f.add_argument("--every", type=float, default=2.0)
+    f.add_argument("--per-episode", type=int, default=6)
+    f.add_argument("--params", choices=("camera", "joints", "both"), default="camera")
     a = p.parse_args(argv)
+    if a.command == "fit-camera":
+        return fit_camera(a)
     if a.command == "report":
         return report(a.dirs)
     if a.command == "replay":

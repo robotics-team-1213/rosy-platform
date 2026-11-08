@@ -50,7 +50,8 @@ def test_report_flags_a_camera_off_its_limit(tmp_path, capsys):
     row = dict(kp=40.0, gravity_comp=True, rms_deg=[.5] * 5, p95_deg=[1] * 5, mean_deg=[0] * 5, lag_s=[.16] * 5)
     twin = dict(episode="e1", real={"outcome": "failed"},
                 tracking=dict(real_lag_s=[.2] * 5, grid=[row], best=dict(kp=40.0, gravity_comp=True, rms_deg=[.5] * 5),
-                              best_per_joint=[dict(kp=40.0, gravity_comp=True, rms_deg=.5)] * 5),
+                              best_per_joint=[dict(kp=40.0, gravity_comp=True, rms_deg=.5)] * 5,
+                              fitted=dict(kp=[40.0] * 5, gravity_comp=True, rms_deg=[.4] * 5, lag_s=[.16] * 5)),
                 view={"top": dict(median_px=10.8, p90_px=20, median_dx=0, median_dy=6, median_score=2.1, within=False)})
     (tmp_path / "e1").mkdir()
     (tmp_path / "e1/twin.json").write_text(json.dumps(twin))
@@ -58,3 +59,4 @@ def test_report_flags_a_camera_off_its_limit(tmp_path, capsys):
     text = capsys.readouterr().out
     assert "| e1 | failed | top | 10.8 |" in text and "| NO |" in text
     assert "Median best kp per joint (j1-j5): 40 40 40 40 40" in text
+    assert "Per-joint gains together (mean RMS deg j1-j5): 0.40 0.40 0.40 0.40 0.40" in text
