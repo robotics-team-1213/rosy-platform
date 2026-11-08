@@ -364,14 +364,19 @@ def video(cell, seeds, out, model=None):
     return 0
 
 
+def real_q(state):
+    """The real arm's six values (normalised joints, gripper 0-100) as this model's joint1-5 and gripper_joint_1 radians."""
+    gap = float(np.clip((30 + (state[5] - 52.3) * 10.4) / 1000, .012, .06))  # cell_params mm rule; a 2026-11-07 top-view reading disagrees
+    gap = min(max(gap, jaw.gap_m(-.2)), jaw.gap_m(1.2))  # a wide-open real reading past the modelled stroke poses fully open
+    return np.append(norm_to_rad(state[:5]), jaw.angle_for_gap(gap))
+
+
 def compare(cell, state_path, out):
     """Top, side and wrist at 640x480 for a real joint state, to lay over the real frames."""
     from PIL import Image
     state = json.loads(Path(state_path).read_text(encoding="utf-8"))["state"]
     data = mujoco.MjData(cell.model)
-    data.qpos[cell.qadr[:5]] = norm_to_rad(state[:5])
-    gap = float(np.clip((30 + (state[5] - 52.3) * 10.4) / 1000, .012, .06))  # cell_params mm rule; a 2026-11-07 top-view reading disagrees
-    data.qpos[cell.qadr[5]] = jaw.angle_for_gap(gap)
+    data.qpos[cell.qadr] = real_q(state)
     data.qpos[cell.mimic] = -data.qpos[cell.qadr[5]]
     data.qpos[cell.box_q:cell.box_q + 3] = [0, 0, -1]  # out of view: only the arm is compared
     mujoco.mj_forward(cell.model, data)
