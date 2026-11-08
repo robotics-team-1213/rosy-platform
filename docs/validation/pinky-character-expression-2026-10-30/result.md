@@ -1,6 +1,6 @@
 # D-922 Pinky 캐릭터 표현 구현 검증
 
-- 검증 소스: `939c3f58924579c225f18a5c86e99b98c4ca0c8c`.
+- 검증 소스: commit `939c3f5892` (the pre-port branch tip, before D-949 and the module split; the port onto current main re-ran the focused face, gateway, services and architecture suites).
 - 결정: [D-922](../../adr/D-922-pinky-calm-curious-character-expression.md), [설계](../../plans/2026-10-30-pinky-character-expression-design.md).
 - 범위: CORE의 검증된 감지 입력 → 표현 정책 → 기존 표정 서비스·로컬 LCD hand-over·후면 LED. 호스트 시험 결과이며 DEVICE/FIELD 수용은 아니다.
 - 원격 시험 PC: model PC와 AI PC. 노트북에서 pytest를 실행하지 않았다.

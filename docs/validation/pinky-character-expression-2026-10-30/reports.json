@@ -1,5 +1,5 @@
 {
-  "tested_commit": "939c3f58924579c225f18a5c86e99b98c4ca0c8c",
+  "tested_commit": "939c3f5892",
   "selection": "FULL",
   "test_host_roles": [
     "model PC",
@@ -611,7 +611,7 @@
   "runner_exit_code": 0,
   "matrix_basis": {
     "base": "181ff1e148",
-    "head": "939c3f58924579c225f18a5c86e99b98c4ca0c8c",
+    "head": "939c3f5892",
     "source_array": "full_invocations",
     "cli_array": "local_invocations",
     "arrays_identical": true,
