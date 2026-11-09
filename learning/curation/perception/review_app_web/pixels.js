@@ -135,10 +135,11 @@ $('pixel-selection-method').onchange=()=>{
  resetSam(true);void refreshSample();enable();
 };
 let unknownPixels=null,totalPixels=0;
-function error(value=''){
+// focusReload=false: the caller keeps the photo editable and returns focus to the canvas itself.
+function error(value='',focusReload=true){
  $('pixel-error').textContent=value;$('pixel-error').hidden=!value;
  if(value){const reload=$('pixel-reload');reload.classList.add('pixel-recovery-reload');$('pixel-error').after(reload);
-  requestAnimationFrame(()=>requestAnimationFrame(()=>{if(!$('pixel-error').hidden){reload.scrollIntoView({block:'center'});if(!reload.disabled)reload.focus({preventScroll:true});}}));
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{if(!$('pixel-error').hidden){reload.scrollIntoView({block:'center'});if(focusReload&&!reload.disabled)reload.focus({preventScroll:true});}}));
  }
 }
 async function setView(detail){
@@ -387,7 +388,7 @@ function filter(){url();return load({offset:0}).catch(loadError);}
 function showEmptyFilter(){const rows=visible();if(rows.length)select(rows.some(row=>row.index===frame?.index)?frame.index:rows[0].index);else{++serial;clearReviewContext();ready=false;frame=null;review=null;error();$('pixel-title').textContent='픽셀 검수';$('pixel-status').setAttribute('state','empty');$('pixel-status').textContent=Object.values(workspace.counts).some(Boolean)?`${$('pixel-filter').selectedOptions[0].textContent} 0장 · 필터 결과가 없습니다.`:'등록된 사진 0장 · 자료 등록에서 원본을 추가하세요.';options();url();enable();}}
 $('pixel-frame').onchange=async()=>{await select($('pixel-frame').value);if(ready)canvas.focus({preventScroll:true});};$('pixel-filter').onchange=filter;$('pixel-all').onclick=()=>{if(!Object.values(workspace.counts).some(Boolean)){location.assign('/catalog');return;}$('pixel-filter').value='all';filter();};
 for(const [id,step] of [['pixel-prev',-1],['pixel-next',1]])$(id).onclick=()=>{const rows=visible(),pos=rows.findIndex(row=>row.index===frame.index);if(rows[pos+step])select(rows[pos+step].index);else load({offset:workspace.page.offset+step*workspace.page.limit,last:step<0}).catch(loadError);};
-$('pixel-next-pending').onclick=async()=>{if($('pixel-next-pending').disabled)return;const previous=$('pixel-filter').value,ticket=serial;busy=true;error();enable();try{$('pixel-filter').value='pending';const next=await nextPending(frame.index);if(next)await select(next.index);else if(ticket===serial)$('pixel-filter').value=previous;}catch(e){if(ticket===serial){$('pixel-filter').value=previous;error(e.message);}}finally{busy=false;enable();if(ready)canvas.focus({preventScroll:true});}};
+$('pixel-next-pending').onclick=async()=>{if($('pixel-next-pending').disabled)return;const previous=$('pixel-filter').value,ticket=serial;busy=true;error();enable();try{$('pixel-filter').value='pending';const next=await nextPending(frame.index);if(next)await select(next.index);else if(ticket===serial)$('pixel-filter').value=previous;}catch(e){if(ticket===serial){$('pixel-filter').value=previous;error(e.message,false);}}finally{busy=false;enable();if(ready)canvas.focus({preventScroll:true});}};
 $('pixel-fill').onclick=async()=>{if(await confirmIrreversible({message:'현재 마스크 전체를 선택 클래스로 바꾸고 재검수하시겠습니까?',action:'전체 채우기',opener:$('pixel-fill')}))mutate('fill',{label:Number($('pixel-class').value)});};
 $('pixel-fill-unknown').onclick=async()=>{if(await confirmIrreversible({message:'남은 미검수 영역만 배경으로 채웁니다. 기존 라벨은 유지됩니다. 놓친 선과 물체가 없는지 사진 전체를 확인한 뒤 별도로 승인하세요. 계속할까요?',action:'배경으로 채우기',opener:$('pixel-fill-unknown')}))mutate('fill_unknown');};
 pixelFillClass.onclick=async()=>{const label=Number($('pixel-class').value),name=$('pixel-class').selectedOptions[0]?.textContent;if(!pixelFillClass.disabled&&await confirmIrreversible({message:`남은 미검수 영역만 ${name} 클래스로 채웁니다. 기존 라벨은 유지되고 승인은 별도입니다. 계속할까요?`,action:'클래스로 채우기',opener:pixelFillClass}))mutate('fill_unknown',{label});};

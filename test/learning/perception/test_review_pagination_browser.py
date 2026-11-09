@@ -61,6 +61,9 @@ def test_next_pending_locks_editing_until_both_lookups_finish(browser_workspace,
             route = delayed.pop()
             route.fulfill(response=route.fetch())
         expect(edit).to_be_enabled()
+        # Let the error's deferred recovery focus (two frames) run first: it once stole focus only on slow hosts.
+        page.evaluate('() => new Promise(done => requestAnimationFrame(() => '
+                      'requestAnimationFrame(() => requestAnimationFrame(done))))')
         expect(canvas).to_be_focused()
         expected_frame = '0' if failed else '1'
         assert parse_qs(urlparse(page.url).query)['frame'] == [expected_frame]

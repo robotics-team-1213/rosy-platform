@@ -196,3 +196,15 @@ def test_recheck_keeps_an_id_whose_run_left_no_log(repo):
     wt, main, _ = repo
     assert mr.recheck(wt, main, lambda invocations, logs: None, wt) == []
     assert ID in mr.state(wt), "an unreachable test host closes nothing"
+
+
+def test_recheck_runs_a_legacy_browser_red_with_the_opt_in(repo):
+    wt, main, _ = repo
+    browser = "pkg/test/test_a_browser.py::test_b[size1]"
+    (wt / "pkg/test/test_a_browser.py").write_text("def test_b(): pass\n")
+    git(wt, "add", ".")
+    git(wt, "commit", "-q", "-m", "browser test")
+    mr.red(wt, main, [browser], LOG, [], "nightly")  # 11-08 nightly wrote env [] for a browser id
+    seen = []
+    mr.recheck(wt, git(wt, "rev-parse", "HEAD"), lambda invocations, logs: seen.extend(invocations), wt)
+    assert ["ROSY_RUN_BROWSER_TESTS=1", "-rA", browser] in seen, "without the opt-in the run skips and never closes"

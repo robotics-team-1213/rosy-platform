@@ -247,6 +247,7 @@
 | D-850 | 독립 운영과 하위 구성을 지원하는 관제 단위 |
 | D-851 | 독립·상하위 관제의 상태 소유권과 위임·복구 계약 |
 | D-855 | 관제 위임 요청과 실행 시도에 결속된 취소 계약 |
+| D-922 | Pinky는 차분하고 호기심 많은 동료로 표현하고 방향성 눈인사와 졸린 대기를 연결한다 |
 
 ## 계획·결과 문서
 
@@ -353,8 +354,8 @@
 
 ## 최근 기록
 
-- 2026-11-08 · uncommitted · fix(remote): 현장 PC가 고정 학습 환경이 필요한 시험을 받지 않는다
-- 2026-11-08 · uncommitted · docs(solutions): rclpy Node 비공개 이름 충돌 교훈
-- 2026-11-08 · uncommitted · fix(land): 실패만 있는 브라우저 묶음을 "통과 0건"으로 멈추지 않는다
-- 2026-11-08 · uncommitted · fix(land): 같은 트리 재사용도 새 커밋의 게시 증거로 남긴다
-- 2026-11-08 · uncommitted · fix(land): 명시 FULL과 게시가 앞 후보의 통과를 내용 기준으로 재사용한다 (D-970 3)
+- 2026-11-09 · uncommitted · fix(land): 옛 브라우저 MAIN-RED 기록도 opt-in으로 재확인
+- 2026-11-09 · e94b732208 · D-922 추가 결정 — Pinky 상황 표정 8종
+- 2026-11-09 · uncommitted · chore(publish): 게시용 명시 FULL 근거
+- 2026-11-09 · uncommitted · Pinky 표현의 미결 기본값 결정
+- 2026-11-09 · uncommitted · Pinky 캐릭터 표현 결정과 후속 설계
