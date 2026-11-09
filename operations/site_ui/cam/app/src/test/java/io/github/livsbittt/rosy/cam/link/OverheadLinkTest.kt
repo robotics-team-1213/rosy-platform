@@ -315,6 +315,45 @@ class OverheadLinkTest {
         assertEquals(2, server.requestCount)
     }
 
+    private fun providerLink(pairing: PairingUri, renew: () -> CredentialRenewal): OverheadLink =
+        OverheadLink(pairing, "0.1.0", "jvm-test", credentialProvider = CredentialProvider { _ -> renew() }).also { link = it }
+
+    @Test
+    fun siteRefusalWithAProviderRetriesInsteadOfStopping() {
+        // 2026-11-08: a Vision restart left the camera on "정지됨" until the app was force-stopped.
+        val pairing = PairingUri(server.hostName, server.port, "t", "overhead-1")
+        val calls = java.util.concurrent.atomic.AtomicInteger()
+        server.enqueue(MockResponse().withWebSocketUpgrade(ServerSide()))
+        val l = providerLink(pairing) {
+            if (calls.incrementAndGet() == 1) throw CredentialUnavailable(404)
+            CredentialRenewal(pairing, java.time.Instant.now().plusSeconds(3600))
+        }
+        l.start()
+        assertFalse(awaitStatus(l) { it.error is LinkError.Network }.stopped)
+        awaitStatus(l) { it.state == LinkState.STREAMING }
+    }
+
+    @Test
+    fun upgrade401WithAProviderRetriesBecauseEveryConnectMintsAFreshBearer() {
+        val pairing = PairingUri(server.hostName, server.port, "t", "overhead-1")
+        server.enqueue(MockResponse().setResponseCode(401))
+        server.enqueue(MockResponse().withWebSocketUpgrade(ServerSide()))
+        val l = providerLink(pairing) { CredentialRenewal(pairing, java.time.Instant.now().plusSeconds(3600)) }
+        l.start()
+        assertFalse(awaitStatus(l) { it.error == LinkError.Unauthorized }.stopped)
+        awaitStatus(l) { it.state == LinkState.STREAMING }
+    }
+
+    @Test
+    fun siteMovedEndsTheAttemptWithoutStopping() {
+        val pairing = PairingUri(server.hostName, server.port, "t", "overhead-1")
+        val l = providerLink(pairing) { throw SiteMoved() }
+        l.start()
+        val moved = awaitStatus(l) { it.error == LinkError.SiteMoved }
+        assertFalse(moved.stopped)
+        assertEquals(0, server.requestCount)
+    }
+
     @Test
     fun framesAreNotAdmittedWhileDisconnected() {
         val l = newLink()
