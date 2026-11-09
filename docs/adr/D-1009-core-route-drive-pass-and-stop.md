@@ -18,9 +18,9 @@
 ### Decision
 
 1. **경로 API.** `POST /api/v1/navigation/route` `{points: [{x, y, yaw?, kind: pass|stop}], correlation_id?, lease_ttl_s?, expected_boot_id?, expected_owner_generation?}`. `kind` 기본값은 `stop`이다. 점은 1~64개, 마지막은 `stop`이다. 기존 `/navigation/goal`과 같은 관문(수동 해제, 차선 추종·trip lease, 능력, `navigation.goal_navigation`, 위치 확인)과 같은 소유권(`reserve_goal`, owner generation, native run 영수증, `NAVIGATION_ACTIVE`)을 쓴다. 경로 하나가 native run 하나(`kind: navigate`)·상관 식별자 하나·목표 임대 하나다. 영수증 종류 열거를 늘리지 않아 Fleet의 native 소비자는 바뀌지 않는다.
-2. **정지 점마다 Nav2 액션 하나.** 경로를 stop 점에서 잘라 구간으로 만든다. pass 점이 있는 구간은 `NavigateThroughPoses`(pass 점 + stop 점), 없으면 `NavigateToPose`로 보낸다. 구간이 `SUCCEEDED`면 같은 run 안에서 CORE가 다음 구간을 바로 보낸다(`NavigationManager.on_result` → `route_continue`). 구간 사이에 `ARRIVED`·`IDLE`이 나오지 않고 상태는 `NAVIGATING`을 유지한다. 마지막 stop 도착이 run의 `SUCCEEDED`(`ARRIVED`)다. pass 점의 헤딩은 다음 점 방향, `yaw` 없는 stop은 직전 점에서 오는 방향이라 도착 때 제자리 회전이 생기지 않는다.
+2. **정지 점마다 Nav2 액션 하나.** 경로를 stop 점에서 잘라 구간으로 만든다. pass 점이 있는 구간은 `NavigateThroughPoses`(pass 점 + stop 점), 없으면 `NavigateToPose`로 보낸다. 구간이 `SUCCEEDED`면 같은 run 안에서 CORE가 다음 구간을 바로 보낸다(`NavigationManager.on_result` → `route_continue`). 구간 사이에 `ARRIVED`·`IDLE`이 나오지 않고 상태는 `NAVIGATING`을 유지한다. 마지막 stop 도착이 run의 `SUCCEEDED`(`ARRIVED`)다. pass 점의 헤딩은 다음 점 방향, `yaw` 없는 stop은 직전 점에서 오는 방향이라 도착 때 제자리 회전이 생기지 않는다(첫 점이 곧 stop이면 직전 점이 없어 단일 목표처럼 0.0이다).
 3. **건너뛰기 규칙(pass 점만, stop 점은 건너뛰지 않는다).** (a) 구간을 보내기 전에 전역 코스트맵(`maps.get_costmap("global")`)에서 값이 253 이상(내접·치명·미지)이거나 지도 밖인 pass 점은 건너뛴다. 코스트맵이 아직 없으면 거르지 않는다. (b) 구간이 실패했는데 앞에 pass 점이 남았으면 그 첫 점을 건너뛰고 같은 구간을 다시 보낸다. 재전송마다 점이 하나씩 줄어 유한하다. 로봇이 이미 지나간 pass 점(자세가 0.12 m 안)은 다시 보내지 않는다.
-4. **실패 규칙.** pass 점이 없는 구간이 실패하거나, 다음 구간 전송이 예외를 내거나, NAV-006(30 s 진척 없음)이 끊으면 경로는 `FAILED`다. 취소·E-Stop·임대 만료는 단일 목표와 같은 `cancel` 경로로 경로 전체를 `CANCELED`로 끝내고 이후 늦은 Nav2 결과는 무시한다.
+4. **실패 규칙.** pass 점이 없는 구간이 실패하거나, 다음 구간 전송이 예외를 내거나(앞 구간이 성공했어도 run은 `FAILED`, `nav.failed` `ROUTE_LEG_SEND_FAILED`), NAV-006(30 s 진척 없음)이 끊으면 경로는 `FAILED`다. NAV-006 시계는 경로의 첫 수락에서 시작해 구간 재전송으로 되돌리지 않는다. 안 움직이는 로봇이 짧게 abort를 반복해도 30 s에 끊긴다. 취소·E-Stop·임대 만료는 단일 목표와 같은 `cancel` 경로로 경로 전체를 `CANCELED`로 끝내고 이후 늦은 Nav2 결과는 무시한다.
 5. **진행 읽기.** `GET /api/v1/navigation/state`에 `route`: `active`, `result`, `legs`·`leg`·`stops_made`, `actions`(보낸 Nav2 액션 수), `next_stop`, `remaining`, `skipped`, 점별 `state`(`pending|reached|skipped|stopped`). 새 목표나 경로를 받으면 이전 읽기는 사라진다.
 6. **Nav2 설정(근거 포함).** `middleware/drive/planning/nav2/behavior_trees/rosy_navigate_to_pose.xml`·`rosy_navigate_through_poses.xml`을 새로 두고 launch가 `bt_navigator`의 `default_nav_*_bt_xml`로 가리킨다(`params_rewrite.write_prefixed_nav2_params`, SIM `gz_multi.launch.py`). Jazzy 기본 트리와 다른 점은 다음뿐이다.
 
@@ -42,6 +42,7 @@
 - (b)는 실패한 점이 아니라 "앞에 남은 첫 pass 점"을 건너뛴다. 실패 원인이 다른 점이면 한 번 더 실패한 뒤 그 점을 건너뛴다. 재전송 횟수만큼 BT 실패 시간이 더해진다.
 - 2 Hz 재계획은 Pinky Pro(Pi 5) CPU에서 재지 않았다. SIM은 GPU 렌더 호스트에서 돌았다. 실물에서 `planner_server` CPU가 문제면 두 XML의 `RateController hz`만 낮추면 된다.
 - 복구에서 회전·후진을 뺐다. 벽에 코가 박혀 코스트맵을 비워도 못 빠지는 경우는 20번 재계획 뒤 `FAILED`가 되고 상위(Fleet, 사람)가 판단한다.
+- 구간을 이어 보내는 `route_continue`는 E-Stop·준비·맵핑 관문을 다시 묻지 않는다. E-Stop은 `nav.cancel`로 경로를 끝내고(`pending` 세대까지 `cancel_all`), 취소가 새 구간 전송 뒤에 와도 그 구간을 취소한다. 구간 수락마다 native owner generation이 올라간다(목표 임대 갱신과 같다).
 - 정지 점의 "멈춤"은 목표 허용오차(0.10 m, yaw 0.25 rad) 안에서 Nav2가 서는 것이다. 정지 점 사이 대기 시간(dwell)은 없다.
 
 ### 검증

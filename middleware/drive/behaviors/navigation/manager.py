@@ -17,7 +17,7 @@ from core_common.protocol.schemas import NavigationState
 from core_common.protocol.native_receipts import NativeReceipts
 from .lease import expire_goal_lease, renew_goal_lease
 from .native_handover import native_readback, with_terminal_navigation
-from .route import route, route_closed, route_continue, route_progress, route_status
+from .route import route, route_closed, route_continue, route_progress, route_progress_kept, route_status
 
 
 @dataclass
@@ -491,7 +491,8 @@ class NavigationManager:
                     return
                 self._native_mutate(self.native.update, native_run_id, phase="RUNNING")
             self._set_state(NavigationState.NAVIGATING)
-            if self._moving_session is not None and self._last_progress_pos is not None:
+            if (self._moving_session is not None and self._last_progress_pos is not None
+                    or route_progress_kept(self)):
                 # SWM-002 는 NAV-006 이 그대로 적용된다고 못박았다. 0.5 초마다
                 # 기준점을 초기화하면 30 초 무진척 조건은 영원히 성립하지 않고,
                 # 문틀에 낀 팔로워가 아무 신호 없이 계속 밀어붙인다.
@@ -503,8 +504,11 @@ class NavigationManager:
                   correlation_id: str | None = None,
                   native_run_id: UUID | None = None) -> None:
         closed_receipt = None
-        if route_continue(self, succeeded, error, native_run_id):
+        sent = route_continue(self, succeeded, error, native_run_id)
+        if sent is True:
             return  # a route leg ended and the next leg is out: still the same run
+        if sent:  # the next leg could not be sent: the run fails, whatever the leg that just ended did
+            succeeded, error = False, sent
         with self._lock:
             if not self._execution('callback', native_run_id): return
             if native_run_id is not None:

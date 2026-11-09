@@ -46,6 +46,7 @@ class RouteRun:
     stops_made: int = 0
     actions: int = 0         # Nav2 actions sent (legs plus resends)
     result: Optional[str] = None  # None while active, then succeeded | failed | canceled
+    accepted: bool = False   # Nav2 took the first action: later ones must not restart NAV-006's clock
     skipped: list[int] = field(default_factory=list)
 
 
@@ -126,9 +127,13 @@ def route(self, points, source: str = "api", correlation_id: str | None = None,
     return run
 
 
-def route_continue(self, succeeded: bool, error: str | None, native_run_id: UUID | None) -> bool:
-    """A Nav2 action of the route ended. True when the next action is out and the run goes on;
-    False hands the end (arrived or failed) to the normal result path."""
+SEND_FAILED = "ROUTE_LEG_SEND_FAILED"
+
+
+def route_continue(self, succeeded: bool, error: str | None, native_run_id: UUID | None):
+    """A Nav2 action of the route ended. True: the next action is out and the run goes on. False: the end
+    (arrived, or a leg that failed) goes to the normal result path as it is. An error string: the next action
+    could not be sent, so the run ends as that failure even though the leg itself succeeded."""
     with self._lock:
         run = self._route
         if run is None or run.result is not None:
@@ -165,10 +170,20 @@ def route_continue(self, succeeded: bool, error: str | None, native_run_id: UUID
                 self.executor.send_goal(spec, correlation_id=cid)
         except Exception:
             run.result = "failed"
-            return False
+            return SEND_FAILED
         self._active_spec = spec  # fleet_goal() (SAF-003) follows the leg in progress
         run.actions += 1
         return True
+
+
+def route_progress_kept(self) -> bool:
+    """True from the second accepted action of an active route on: NAV-006 keeps counting from the first one, so
+    a robot that aborts leg after leg without moving still trips it. The first acceptance restarts the clock."""
+    run = self._route
+    if run is None or run.result is not None:
+        return False
+    kept, run.accepted = run.accepted, True
+    return kept and self._last_progress_pos is not None
 
 
 def route_progress(self, x: float, y: float) -> None:

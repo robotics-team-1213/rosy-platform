@@ -24,8 +24,11 @@ class _State:
 
 
 class _Events:
+    def __init__(self):
+        self.names = []
+
     def publish(self, name, **kwargs):
-        pass
+        self.names.append(name)
 
 
 class Nav2:
@@ -42,8 +45,8 @@ class Nav2:
         self.cancelled += 1
 
 
-def make():
-    nav = NavigationManager(_Events(), _State(), None, SimpleNamespace(estop=False))
+def make(**kwargs):
+    nav = NavigationManager(_Events(), _State(), None, SimpleNamespace(estop=False), **kwargs)
     nav.executor = Nav2()
     return nav, nav.executor
 
@@ -198,12 +201,79 @@ def test_a_plain_goal_after_a_route_clears_the_route():
     assert nav.route_status() is None
 
 
-def test_executor_that_cannot_send_the_next_leg_fails_the_run():
+def test_executor_that_cannot_send_the_next_leg_fails_the_run_not_arrives():
     nav, nav2 = make()
-    nav.route(pts("SS"))
+    nav.route(pts("SS"), correlation_id="c")
     nav2.send_native_goal = lambda *a, **k: (_ for _ in ()).throw(RuntimeError("down"))
-    finish(nav)
+    finish(nav)   # the first stop was reached, but the second leg cannot go out
     assert nav.nav_state is NavigationState.FAILED and nav.route_status()["result"] == "failed"
+    assert nav.native.lookup().result == "FAILED"
+    names = nav._events.names
+    assert "nav.failed" in names and "nav.completed" not in names
+
+
+def test_nav_006_clock_runs_across_leg_resends():
+    now = [0.0]
+    nav, nav2 = make(clock=lambda: now[0])
+    nav.route(pts("pppS"))
+    nav.on_goal_accepted(native_run_id=nav.native.current.run_id)
+    nav.on_pose_progress(0.0, 0.0)          # baseline at t=0
+    for _ in range(2):                      # Nav2 aborts and CORE resends; the robot never moves
+        now[0] += 12.0
+        nav.on_result(False, "ABORTED", native_run_id=nav.native.current.run_id)
+        nav.on_goal_accepted(native_run_id=nav.native.current.run_id)
+        nav.on_pose_progress(0.0, 0.0)
+    now[0] += 12.0
+    nav.on_pose_progress(0.0, 0.0)          # 36 s without 5 cm of progress
+    assert nav.nav_state is NavigationState.CANCELED and nav.route_status()["result"] == "failed"
+    assert "nav.stuck" in nav._events.names
+
+
+def test_first_acceptance_of_a_route_restarts_the_progress_clock():
+    now = [0.0]
+    nav, nav2 = make(clock=lambda: now[0])
+    nav._last_progress_pos, nav._last_progress_ts = (9.0, 9.0), -100.0   # an earlier goal left a stale baseline
+    nav.route(pts("S"))
+    nav.on_goal_accepted(native_run_id=nav.native.current.run_id)
+    assert nav._last_progress_pos is None and nav._last_progress_ts == 0.0
+
+
+def test_lease_expiring_between_legs_cancels_the_whole_route():
+    lease = [0.0]
+    nav, nav2 = make(lease_clock=lambda: lease[0])
+    nav.route(pts("SS"), correlation_id="L", lease_ttl_s=2.0, lease_owner="tok")
+    finish(nav)
+    assert len(nav2.sent) == 2
+    lease[0] = 3.0
+    assert nav.expire_goal_lease() is True
+    assert nav2.cancelled == 1 and nav.route_status()["result"] == "canceled"
+    nav.on_result(True, correlation_id="L", native_run_id=nav.native.current.run_id)
+    assert len(nav2.sent) == 2 and nav.nav_state is NavigationState.CANCELED
+
+
+def test_with_the_real_goal_tracker_a_late_result_of_the_first_leg_is_not_the_second_legs():
+    from core.bridge import goal_tracker
+    goals = goal_tracker.GoalTracker()
+    nav, _ = make()
+    gens = []
+
+    class BridgeLike(Nav2):
+        def send_native_goal(self, spec, run_id, *, correlation_id=None):
+            super().send_native_goal(spec, run_id, correlation_id=correlation_id)
+            gens.append(goals.opening(correlation_id, run_id))
+
+    nav.executor = BridgeLike()
+    handle = SimpleNamespace(accepted=True, get_result_async=lambda: None)
+    done = lambda status: SimpleNamespace(result=lambda: SimpleNamespace(status=status))  # noqa: E731
+    nav.route(pts("SS"), correlation_id="c")
+    goal_tracker.on_response(goals, nav, SimpleNamespace(result=lambda: handle), gens[0], attach_result=lambda *a: None)
+    goal_tracker.on_result(goals, nav, done(4), gens[0])            # leg 1 succeeded: leg 2 goes out, same run
+    assert len(gens) == 2 and gens[1] != gens[0] and nav.nav_state is NavigationState.NAVIGATING
+    goal_tracker.on_result(goals, nav, done(4), gens[0])            # the same result delivered again: stale
+    assert nav.nav_state is NavigationState.NAVIGATING and nav.route_status()["stops_made"] == 1
+    goal_tracker.on_response(goals, nav, SimpleNamespace(result=lambda: handle), gens[1], attach_result=lambda *a: None)
+    goal_tracker.on_result(goals, nav, done(4), gens[1])
+    assert nav.nav_state is NavigationState.ARRIVED and nav.route_status()["result"] == "succeeded"
 
 
 # --- REST ---------------------------------------------------------------------------------------------------
