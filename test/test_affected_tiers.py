@@ -26,7 +26,6 @@ FILES = {**base.FILES, "tools/harness/platform_parts.yaml": PARTS,
          "test/test_land_sample.py": "def test_land():\n    pass\n",
          "test/test_remote_pytest.py": "def test_remote():\n    pass\n",
          "deploy/requirements.txt": "pyyaml==6.0\n"}
-SAFETY_SUITES = {"middleware/core/gateway/test", "middleware/drive/motion_limits/test/test_limits.py"}
 
 
 @pytest.fixture(scope="module")
@@ -62,7 +61,9 @@ def test_a_safety_path_stays_full(sample, path):
 
 @pytest.mark.parametrize("path", ["tools/harness/affected_tests.py", "tools/harness/affected_narrow.py",
                                   "tools/land_selection.py", "tools/land_browser.py", "tools/remote/remote_pytest.py",
-                                  "tools/remote/remote_job.py", "tools/remote/work_queue.py", "test/known_failures.py"])
+                                  "tools/remote/remote_job.py", "tools/remote/work_queue.py", "test/known_failures.py",
+                                  "tools/remote/remote_test_tools.py", "tools/remote/xdist_plan.py",
+                                  "test/browser_scope.py"])
 def test_the_code_that_selects_or_runs_tests_stays_full(sample, path):
     """Design 0.7 rule 8: a gate never tests itself with a selection it made."""
     sel = _select(sample, path)
