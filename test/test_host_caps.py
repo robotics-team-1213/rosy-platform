@@ -94,8 +94,19 @@ def test_run_takes_the_test_once_a_capable_host_is_placed(monkeypatch, repo, tmp
     monkeypatch.delenv("ROSY_TEST_LOCAL", raising=False)
     rp.HEADROOM.update({"site@1": {**ROOM, "caps": frozenset()}, "model@1": {**ROOM, "caps": NEED}})
     monkeypatch.setattr(rp, "placed_hosts", lambda cls="pytest", hosts=None, cores=0: ["site@1", "model@1"])
-    monkeypatch.setattr(rp, "run_on", lambda host, inv, logs, sha, repo, label, *a, **k: [0] * len(inv))
+    took = []
+
+    def run_on(host, inv, logs, sha, repo, label, work=None, **k):  # a worker drains what its host may take
+        if work is None:
+            took.append(host)
+            return [0] * len(inv)
+        while (i := work.take(lambda i: host_caps.has(rp.HEADROOM[host], NEED), host)) is not None:
+            took.append(host)
+            work.codes[i] = 0
+
+    monkeypatch.setattr(rp, "run_on", run_on)
     assert rp.run([["suite/test_needs.py"]], [tmp_path / "1.txt"], repo=path) == [0]
+    assert took == ["model@1"]
 
 
 def test_cover_adds_the_capable_host_that_the_worker_cut_dropped():
