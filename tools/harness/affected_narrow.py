@@ -39,7 +39,15 @@ SELF_TRIGGER = "harness configuration or the selector itself"
 #: The selector, landing and runner tools' own suites: what a change to them runs instead of FULL.
 SELF_TEST = re.compile(r"^test/test_(land|remote_|affected|known_failures|worktree|pre_push|publish_|browser_scope"
                        r"|harness|doctor|collect_alone|work_queue|xdist|g1_timing|safety_review|size_range"
+                       r"|host_(?:admission|probe|caps)|lab_hosts"
                        r"|ci_dependencies)[^/]*\.py$")
+
+#: Panel 2026-11-09: the code that picks or runs every other landing's tests keeps FULL (design 0.7 rule 8: a
+#: gate never tests itself with a selection it made). The rest of the gate tools take the self-test tier.
+SELECT_CORE = ("tools/harness/affected_*.py", "tools/land_selection.py", "tools/land_browser.py",
+               "test/known_failures.py", "test/browser_scope.py",
+               *(f"tools/remote/{name}.py" for name in ("remote_pytest", "remote_job", "remote_test_tools",
+                                                       "work_queue", "xdist_plan")))
 
 
 def legacy() -> bool:
@@ -56,7 +64,7 @@ def tier(repo: at.Repo, path: str, trigger: str, add) -> str | None:
     """A non-safety FULL trigger's narrower tier through `add`: None when it stays FULL (unknown reach),
     "own" when the tier itself is the selection, "graph" when the path's own mapping (module, referencing tests,
     reverse dependents) is, so a path that maps to nothing still escalates as unknown."""
-    if legacy() or path in REGISTRY_FILES:
+    if legacy() or path in REGISTRY_FILES or any(at._match(path, p) for p in SELECT_CORE):
         return None
     if trigger.endswith(SELF_TRIGGER):
         for test in repo.test_files:
@@ -70,22 +78,6 @@ def tier(repo: at.Repo, path: str, trigger: str, add) -> str | None:
         add(str(PurePosixPath(path).parent), f"conftest scope ({path})")
         return "own"
     return "own" if trigger.endswith("CI workflow") else "graph"  # lab runs execute no workflow
-
-
-def safety_tier(repo: at.Repo, add) -> None:
-    """Every safety-tagged test: the suites owning a safety module or root, the tests naming one, the guards."""
-    roots = [r["path"] for r in repo.safety_roots if r.get("concern") == "safety"]
-    for path in [*sorted(repo.safety_modules), *roots]:
-        why = f"safety tier ({path})"
-        for test in (repo.module_for(path) or {}).get("tests") or []:
-            if test not in at.BROAD_TESTS:
-                add(test, why)
-        for test in repo.referencing_tests(path):
-            add(test, why)
-    for test in repo.test_files:
-        if any(at._under(test, root) for root in roots):
-            add(test, "safety tier (under a safety root)")
-    add(ARCHITECTURE, "safety tier (separation guards)")
 
 
 def add_readers(repo: at.Repo, path: str, trigger: str, add, changed=(), base_text=None) -> str | None:

@@ -266,7 +266,6 @@ def select(repo: Repo, changed: list[str], moved: list[str] = (),
 
     touched_modules: dict[str, dict] = {}
     broad_fallback_modules: dict[str, dict] = {}
-    safety_tiered = False
     for path in changed:
         tiered = False
         if any(_match(path, p) for p in NOT_TRIGGERS):
@@ -277,9 +276,6 @@ def select(repo: Repo, changed: list[str], moved: list[str] = (),
             trigger = None  # Read-only reports use the existing reader mapping, rather than the landing gate glob.
         else:
             trigger = next((why for pattern, why in FULL_TRIGGERS if _match(path, pattern)), None)
-        if trigger == SAFETY_TRIGGER and not safety_tiered and not affected_narrow.legacy():
-            affected_narrow.safety_tier(repo, add)  # D-436 2026-11-09: the safety tier, not FULL
-            safety_tiered = True
         if trigger and trigger != SAFETY_TRIGGER:
             why = affected_narrow.add_readers(repo, path, trigger, add, changed, base_text)
             if why is None:
@@ -369,9 +365,8 @@ def select(repo: Repo, changed: list[str], moved: list[str] = (),
             if not _under(test, module["path"]) and repo.imports_prefix(test, prefixes):
                 add(test, f"imports {'/'.join(prefixes)} (module {module['name']})")
 
-    # D-436 2026-11-09: a safety path keeps its escalation line (rollup and speculation keep it apart) but runs
-    # the safety tier; the other escalations are unknown reach and stay FULL.
-    if any(affected_narrow.legacy() or not e.endswith(SAFETY_TRIGGER) for e in sel.escalations):
+    # D-436 addendum 1 (panel 2026-11-09): a safety path stays FULL; static reach misses its config/IDL readers.
+    if sel.escalations:
         sel.mode = "full"
         # CI runs the entire root suite in parallel shards for FULL. The local
         # pre-push gate keeps the module's functional tests and all named tests,
@@ -403,7 +398,7 @@ def render(sel: Selection) -> str:
     for path in sel.changed:
         lines.append(f"  changed  {path}")
     lines += [f"  narrowed tier instead of FULL (D-436 2026-11-09): {e}"
-              for e in sel.narrowed + [e for e in sel.escalations if sel.mode != "full"]]
+              for e in sel.narrowed]
     if sel.mode == "full":
         lines.append("escalated to FULL because:")
         lines += [f"  - {e}" for e in sel.escalations]

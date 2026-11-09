@@ -60,8 +60,9 @@
 
 | 바뀐 것 | 착지 시험 |
 |---|---|
-| 관문 도구·선택기·harness(`tools/land*.py`, `tools/remote/*`, `tools/harness/**` 등) | FULL 대신 선택기 자체 시험 묶음: `affected_narrow.SELF_TEST`(land·remote·affected·known_failures·publish·worktree·pre_push 등 시험)와 `test/architecture`, 경로를 이름으로 읽는 시험, 상시 묶음 |
-| 안전 경로(`concern: safety`, `safety_modules`) | FULL 대신 안전 묶음: 모든 안전 모듈·루트를 가진 suite, 그 경로를 읽는 시험, 안전 루트 아래 시험, `test/architecture`, 그리고 바뀐 경로의 모듈·역의존·읽는 시험. 안전 시험은 빠지지 않는다. 안전 표시 줄은 escalations에 남겨 rollup·추측 착지가 따로 다룬다 |
+| 관문 도구·harness 가운데 시험을 고르거나 돌리지 않는 것(`tools/land_queue.py`·`land_async.py`·`land_stats.py` 등, `tools/hooks/**`, `tools/remote/host_probe.py` 등) | FULL 대신 선택기 자체 시험 묶음: `affected_narrow.SELF_TEST`(land·remote·affected·known_failures·publish·worktree·pre_push·host_probe·lab_hosts 등 시험)와 `test/architecture`, 경로를 이름으로 읽는 시험, 상시 묶음. 관문 모듈을 import하는 루트 시험이 이 이름 패턴에서 빠지면 `test_affected_tiers`가 실패한다 |
+| 시험을 고르거나 돌리는 코드(`affected_narrow.SELECT_CORE`: `tools/harness/affected_*.py`, `land_selection.py`, `land_browser.py`, `remote_pytest`·`remote_job`·`remote_test_tools`·`work_queue`·`xdist_plan`, `test/known_failures.py`, `test/browser_scope.py`) | FULL 유지. 설계 0.7 규칙 8(관문은 자기가 고른 선택으로 자기를 시험하지 않는다) |
+| 안전 경로(`concern: safety`, `safety_modules`) | FULL 유지(D-889 6). 정적 import 도달로는 안전 값을 설정·YAML·웹 정적 파일·IDL로 읽는 쪽을 찾지 못한다 |
 | 공용 기반·ROS IDL·하위 conftest·패키징·CI workflow·architecture | 경로의 모듈 suite, 한 단계 역의존(import), 읽는 시험; 하위 conftest는 그 폴더 전체 |
 | 미분류, 폴더 이동·모듈 삭제, 의존성 고정, deploy compose·image·native manifest, source layout, 루트 conftest·pyproject·pytest.ini | FULL 유지(영향 범위를 모름) |
 
@@ -71,6 +72,8 @@
 - 등록부(`harness.yaml`, `platform_parts.yaml`)는 모든 경로의 매핑을 움직이므로 이전 규칙 그대로다(모듈 추가만 좁힘). 좁힌 트리거라도 경로가 어떤 모듈·시험에도 닿지 않으면 미분류로 FULL이다(자체 시험 묶음·하위 conftest·CI workflow만 그 묶음이 곧 선택).
 - 되돌리기: 환경 변수 `ROSY_FULL_LEGACY=1` 하나로 이전 규칙(모든 트리거 FULL)이 돌아온다. 착지 도구는 main의 코드로 돌므로, 착지를 띄우는 셸에 이 값을 두거나 이 추가를 되돌리는 커밋을 착지한다.
 
-**전후(같은 7일, 추정):** FULL 사전 시험 167회 142.5 h → 55회 53.7 h(남는 것: 미분류·이동·manifest·의존성·루트 설정·명시 FULL). 좁혀진 112회는 FULL로 88.8 h였고, affected 중앙값으로 치면 약 19.5 h다(안전·공용 기반 묶음은 affected보다 커서 실제는 이보다 길다). 과거 착지 세 건을 새 선택기로 다시 고른 결과: 관문 도구 변경(`b4226bc7be`) 시험 파일 2,577→80, 공용 기반 변경(`8ef3afdde0`) 2,582→2,321(루트·브라우저·시뮬 제외), 안전 경로 변경(`2c4849279f`) 2,591→1,412. 남는 FULL 한 번은 가장 긴 조각이 루트 `test` 11~20분에서 그 1/3 안팎(4~7분)과 gateway suite 7분이 되어, 호스트가 비어 있으면 30분 안쪽이 목표다. 남는 꼬리는 호스트 자리 대기이며 FULL 횟수가 줄어 함께 준다. 실제 착지 시간은 이 추가가 main에 들어간 뒤의 `land_stats`로 확인한다.
+**패널 수정(2026-11-09, 착지 전):** 외부 모델 4개(glm-5.3, deepseek-v4.1-flash, big-pickle, mimo-v2.6-flash)와 Opus 2개(처리량·안전 역할)의 2라운드 토론에서 6명 모두 안전 경로를 좁히는 것은 "안전 시험을 약하게 하지 않는다"는 제약에 어긋난다고 판단했다. 그래서 안전 경로는 FULL로 되돌렸고, 4명의 지적에 따라 시험을 고르거나 돌리는 코드도 FULL로 남겼다. 아래 추정치에서 안전 경로 32회(29.6 h)와 선택·실행 코드 몫이 FULL로 돌아가므로 실제 감소는 그만큼 작다(대략 167→80~90회).
 
-시험: `test/test_affected_tiers.py`(안전 경로가 안전 묶음을 고르고 되돌리기 변수로 FULL이 되는 것, 관문 도구의 자체 시험 묶음, 문서만 바뀐 착지에 무거운 suite가 없는 것, 공용 기반의 역의존, 하위 conftest·workflow, 영향 범위를 모르는 경로의 FULL 유지, 실험실 FULL에서 모든 경로가 한 번), `test/test_work_queue_split.py`(`--ignore` 분할에서 파일마다 정확히 한 번). 이전 규칙은 `test/test_affected_tests.py`가 `ROSY_FULL_LEGACY=1`로 그대로 고정한다.
+**전후(같은 7일, 추정, 패널 수정 전 계산):** FULL 사전 시험 167회 142.5 h → 55회 53.7 h(남는 것: 미분류·이동·manifest·의존성·루트 설정·명시 FULL). 좁혀진 112회는 FULL로 88.8 h였고, affected 중앙값으로 치면 약 19.5 h다(안전·공용 기반 묶음은 affected보다 커서 실제는 이보다 길다). 과거 착지 세 건을 새 선택기로 다시 고른 결과: 관문 도구 변경(`b4226bc7be`) 시험 파일 2,577→80, 공용 기반 변경(`8ef3afdde0`) 2,582→2,321(루트·브라우저·시뮬 제외), 안전 경로 변경(`2c4849279f`) 2,591→1,412. 남는 FULL 한 번은 가장 긴 조각이 루트 `test` 11~20분에서 그 1/3 안팎(4~7분)과 gateway suite 7분이 되어, 호스트가 비어 있으면 30분 안쪽이 목표다. 남는 꼬리는 호스트 자리 대기이며 FULL 횟수가 줄어 함께 준다. 실제 착지 시간은 이 추가가 main에 들어간 뒤의 `land_stats`로 확인한다.
+
+시험: `test/test_affected_tiers.py`(안전 경로와 시험 선택·실행 코드의 FULL 유지, 관문 도구의 자체 시험 묶음과 그 이름 패턴이 관문 시험을 모두 덮는 것, 문서만 바뀐 착지에 무거운 suite가 없는 것, 공용 기반의 역의존, 하위 conftest·workflow, 영향 범위를 모르는 경로의 FULL 유지, 실험실 FULL에서 모든 경로가 한 번), `test/test_work_queue_split.py`(`--ignore` 분할에서 파일마다 정확히 한 번). 이전 규칙은 `test/test_affected_tests.py`가 `ROSY_FULL_LEGACY=1`로 그대로 고정한다.

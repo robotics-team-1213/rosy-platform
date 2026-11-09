@@ -1,11 +1,13 @@
 """D-436 addendum 2026-11-09 ("더 잘게 나누고 정말 필요할때만 하는걸로 결정해"): FULL only for unknown reach.
 
-A safety path runs the safety tier (every safety-tagged suite plus its own dependents), a landing/selector tool the
+A safety path and the code that selects or runs tests stay FULL (panel 2026-11-09); another landing tool runs the
 selector self-test tier, a foundation or nested conftest its import-graph or folder scope. ``ROSY_FULL_LEGACY=1``
 restores FULL for every trigger. The legacy rules themselves stay pinned in test_affected_tests.py.
 """
 
 from __future__ import annotations
+
+import re
 
 import pytest
 
@@ -51,16 +53,20 @@ def _select(sample, *changed):
 
 
 @pytest.mark.parametrize("path", ["middleware/core/gateway/core/node.py", "middleware/drive/motion_limits/limits.py"])
-def test_a_safety_path_runs_every_safety_suite_and_its_dependents_not_full(sample, path, monkeypatch):
+def test_a_safety_path_stays_full(sample, path):
+    """D-889 6 holds: static import reach misses a safety value's config, YAML, web or IDL readers."""
     sel = _select(sample, path)
-    assert sel.mode == "affected", sel.escalations
-    assert any(e.endswith(affected.SAFETY_TRIGGER) for e in sel.escalations), "rollup/speculation keep it apart"
-    assert SAFETY_SUITES <= set(sel.reasons), sel.reasons
-    assert "test/architecture" in sel.reasons
-    if path.endswith("node.py"):  # its own reverse dependent (core_api_web imports core)
-        assert "middleware/core/api/test" in sel.reasons
-    monkeypatch.setenv("ROSY_FULL_LEGACY", "1")
-    assert _select(sample, path).mode == "full", "the revert switch restores FULL"
+    assert sel.mode == "full" and not sel.narrowed, sel.escalations
+    assert any(e.endswith(affected.SAFETY_TRIGGER) for e in sel.escalations)
+
+
+@pytest.mark.parametrize("path", ["tools/harness/affected_tests.py", "tools/harness/affected_narrow.py",
+                                  "tools/land_selection.py", "tools/land_browser.py", "tools/remote/remote_pytest.py",
+                                  "tools/remote/remote_job.py", "tools/remote/work_queue.py", "test/known_failures.py"])
+def test_the_code_that_selects_or_runs_tests_stays_full(sample, path):
+    """Design 0.7 rule 8: a gate never tests itself with a selection it made."""
+    sel = _select(sample, path)
+    assert sel.mode == "full" and not sel.narrowed, sel.escalations
 
 
 def test_a_gate_tool_runs_the_selector_self_test_tier(sample):
@@ -111,3 +117,16 @@ def test_the_lab_full_plan_runs_every_path_once():
               and not any(f"--ignore={a}" in inv for inv in plain if b in inv)]
     assert not nested, nested
     assert affected.affected_exclusive.canonical_full(plan)
+
+
+GATE_IMPORT = re.compile(r"^\s*(?:import|from)\s+(land\w*|remote_pytest|remote_job|remote_test_tools|work_queue"
+                         r"|xdist_plan|host_probe|host_caps|lab_hosts|memory_history|affected_\w+|known_failures"
+                         r"|browser_scope|publish_main|publish_evidence)\b", re.M)
+
+
+def test_every_root_test_of_a_gate_tool_is_in_the_self_test_tier():
+    """A gate tool's own test whose name the SELF_TEST pattern misses would silently leave the narrowed tier."""
+    missed = [t.relative_to(base.ROOT).as_posix() for t in sorted((base.ROOT / "test").glob("test_*.py"))
+              if GATE_IMPORT.search(t.read_text(encoding="utf-8", errors="replace"))
+              and not affected.affected_narrow.SELF_TEST.match(t.relative_to(base.ROOT).as_posix())]
+    assert not missed, missed
