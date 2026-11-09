@@ -86,7 +86,8 @@ def test_approved_delta_shows_a_moved_camera(candidate):
     assert delta["median_m"] == pytest.approx(0.12, abs=0.01)
 
 
-def test_lane_only_drive_is_rejected_for_spread():
+def test_lane_only_drive_is_rejected_for_spread(monkeypatch):
+    monkeypatch.setattr(cs, "DEDUPE_M", 0.04)  # a line gives few 15 cm-apart samples
     result = solve(drive(np.random.default_rng(4), n=600, amplitude=(0.9, 0.02)))
     assert result["status"] == "insufficient_spread"
     assert "image_to_map" not in result
