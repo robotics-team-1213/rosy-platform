@@ -53,9 +53,9 @@ python3 applications/calibration/calibration_web.py --store ~/.local/state/rosy/
 - Account 설정이 있으면 목록·상세·그림도 그 site의 로그인 세션이 있어야 보이고, 답은 site 권한 `calibration.operate`가 있어야 한다. 답의 누가는 세션의 이름이다.
 - API: `GET /api/calibration/v1/requests`, `.../<id>`, `.../<id>/image`, `POST .../<id>/answer {value|result, note}`(같은 출처 필수; 409 이미 답함, 422 잘못된 값).
 
-운영 단계(사람이 한다, 코드로 하지 않는다):
+운영 단계(2026-11-09 상태):
 
-1. 관제 PC에 HTTPS 역프록시를 두고 `127.0.0.1:8776`으로 넘긴다.
-2. Account에 이 앱의 client를 등록한다(resource `site:<id>`, callback `<HTTPS origin>/api/account/callback`)하고 receiver 설정 파일을 관제 PC에 둔다.
-3. 모든 receiver를 새 `calibration.operate` 목록으로 먼저 배포한 뒤(옛 receiver는 모르는 capability의 토큰을 거절한다, D-990) 답할 사람에게 권한을 부여한다.
-4. 서비스(systemd 사용자 유닛 등)로 올린다.
+1. HTTPS 앞단: 관제 PC `tailscale serve --bg --https=9449 http://127.0.0.1:8776`(tailnet 전용). 했다.
+2. Account: client `rosy-calibration`(resource `site:<id>`, callback `https://<관제 PC tailnet 이름>:9449/api/account/callback`)을 R 호스트의 Account에 등록하고, receiver 설정을 관제 PC `~/.config/rosy/calibration/receiver.json`에 둔다(세션 키는 다시 만들지 않는다). 했다. 관제 PC는 Account에 SSH 터널(`rosy-account-tunnel.service`)로 닿는다. R의 443 방화벽은 손대지 않는다(점검이 실패하면 site proxy가 멈춘다).
+3. 배포: 착지한 sha를 `tools/remote/omx_hotfix.py`로 관제 PC에 풀고(이 앱이 포함된다), 사용자 유닛 `rosy-calibration-web.service`(이 폴더)를 링크해 켠다.
+4. 권한: 모든 receiver를 새 `calibration.operate` 목록으로 먼저 배포한 뒤(옛 receiver는 모르는 capability의 토큰을 거절한다, D-990) 답할 사람에게 관리자가 부여한다. 그 전에는 로그인한 사람도 보기만 한다.
