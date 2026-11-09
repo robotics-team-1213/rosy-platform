@@ -4761,6 +4761,21 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - gate 변화: 없음 — 기체에서 실제 종료를 확인하기 전이다.
 - CE: 미해결 — 기체에서 `PathChanged` 발화와 종료를 확인한 뒤 교훈을 기록한다.
 
+## 2026-11-08 · uncommitted · feat(site-map): PC별 역할·모듈·팔 보드를 private 지도 하나로 읽고 실제 보드와 대조한다
+- 변경: `tools/remote/site_map.py`(`show`, `check`)가 main checkout의 `private/site-map.yaml`(rosy.site-map/1)을 읽고 각 PC의 OpenRB 보드를 ssh로 읽어 빠진 보드·지도에 없는 보드를 보고한다. `deploy/hosts/README.md` 새 PC 절차 0단계, `tools/remote/AGENTS.md`
+- 증거: R 이전 중 배치표·lab-hosts·services.yaml·omx-arm-boards.json이 서로 달라 리더 보드 2개가 "매핑 없음"으로 보였다. 서보 ping으로 리더(ID 1–6, XL330)임을 확인해 지도에 넣었고 live `check`가 4개 일치를 보고했다
+- gate 변화: 없음
+
+## 2026-11-08 · uncommitted · feat(omx): 이름 있는 운영자가 API로 팔 사건 보류를 해제한다 (D-971)
+- 변경: `omx_incident.py clear --arm --note --token-file`가 그 PC의 관측 env로 Fleet에 열린 사건을 묻고, 운영자 본인 토큰(0600)으로 기존 `…/incidents/{id}/clear`를 부른 뒤 Fleet의 "not held"로 로컬 HOLD 파일도 걷는다. 팔 source 토큰은 쓰지 않는다
+- 증거: 11-07 arm_b 보류가 남아 사람이 이상 없음을 확인했는데도 콘솔 로그인 없이는 풀 수 없었다. CELL-A에 운영자 `livsbittt` 토큰을 등록해 API로 해제했다. 한글 note와 `basis`를 함께 보내자 CELL-A(09069e25)가 422를 돌려 note만 보낸다
+- gate 변화: 없음
+
+## 2026-11-08 · uncommitted · fix(omx): 카메라 준비는 역할 별칭이 생긴 뒤 시작하고, services.yaml을 실제 배치에 맞춘다
+- 변경: `rosy-omx-camera-readiness.service`가 `rosy-omx-cameras-bind.service` 뒤에 시작한다. `services.yaml`의 OMX 카메라 인스턴스를 11-07 역할(top·side·arm_a_wrist·arm_b_wrist)로, AI PC의 꺼진 Pinky `pinky-rosbridge-d12/d13`을 선언했다
+- 증거: 11-08 06:10 부팅 뒤 준비 서비스가 `/dev/v4l/by-id/rosy-realsense-d435-color` 없음으로 15 s 간격 3회 실패해 하루 종일 꺼져 있었다(bind 타이머는 부팅 20 s 뒤). `update_status.py`가 AI PC UNDECLARED 2건을 보고했다
+- gate 변화: 없음 — robttt 유닛 갱신은 omx-devices 자동 갱신 뒤
+
 ## 2026-11-08 · uncommitted · feat(control-unit): 다른 PC의 이웃 관제에 peer 주소로 접속한다 (D-994)
 - 변경: control-unit peers 항목에 선택 `address`(IP 리터럴, https만)를 더해 그 주소로 접속하고 TLS 이름·Host는 `url` 이름으로 확인한다. 서명 overlay `compose.control-unit-remote.yaml`이 peer proxy만 `ROSY_CONTROL_UNIT_PEER_BIND`·`_PORT`의 LAN 주소에 게시하며 `site-firewall.py check`가 와일드카드·loopback·남의 주소를 거절한다. 후보 목록·검증·manifest 요약·업데이터 overlay 허용과 서명 포함 대조에 넣었고, 같은 주소·포트의 두 이웃을 거절한다. 독립 검토 지적(서명 대조 누락, 게시 주소 생략, 연결 풀 공유) 반영
 - 증거: 통합관제 R을 N150 호스트로 옮기려 하자 R↔CELL-A가 같은 PC 도커 네트워크 별칭으로만 닿아 분리할 수 없었다. 원격 시험은 아래 커밋에 기록

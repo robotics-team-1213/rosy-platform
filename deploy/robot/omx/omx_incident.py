@@ -428,6 +428,25 @@ def reboot_latched(device: str):
     return act
 
 
+def clear(arm, note, token_file, link=None) -> int:
+    """Clear every open incident of one arm as the named operator whose token this is, then lift the local hold."""
+    if not note.strip():
+        raise SystemExit("a note of what was checked is required")
+    if token_file.stat().st_mode & 0o077:
+        raise SystemExit(f"{token_file} must be readable by its owner only (chmod 600)")
+    link = link or link_for(arm)
+    if link is None:
+        raise SystemExit(f"{arm}: no Fleet channel configured on this PC (source the observation bridge env)")
+    token = token_file.read_text(encoding="utf-8").strip()
+    answer = link.hold()
+    cleared = list(answer.incident_ids)
+    for incident_id in cleared:
+        answer = link.clear(incident_id, note, token)
+    print(json.dumps({"arm": arm, "cleared": cleared, "held": answer.held}))
+    refuse_if_held(arm, link)  # Fleet's "not held" lifts the local hold file too
+    return 0
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -435,7 +454,13 @@ def main(argv=None):
     h.add_argument("--session", type=Path, default=Path("session.json"))
     h.add_argument("--arm", required=True)
     h.add_argument("--device", help="follower by-id path: reboots an allowed latch (no motion)")
+    c = sub.add_parser("clear", help="a named operator clears this arm's open incidents over the Fleet API")
+    c.add_argument("--arm", required=True)
+    c.add_argument("--note", required=True, help="what the person checked on the arm")
+    c.add_argument("--token-file", required=True, type=Path, help="the operator's own Fleet bearer (0600), not the arm token")
     args = parser.parse_args(argv)
+    if args.command == "clear":
+        return clear(args.arm, args.note, args.token_file)
     from joint_tune import session_lock
 
     lock = session_lock(args.arm)  # a by-hand run never overlaps a recording session of the same arm
