@@ -191,20 +191,21 @@ def stop(pid: int) -> None:
 
 def start(cwd: Path, land_args: list[str], now: datetime, launch) -> tuple[str, Path]:
     """Create the snapshot branch and hidden worktree, hand them to ``launch``; (snapshot, log path)."""
-    deadline = time.monotonic() + FULL_WAIT_S
+    deadline, waited = time.monotonic() + FULL_WAIT_S, False
     while True:
         try:
             with locked(holder(cwd).parent / "rosy-land-async.lock", wait=True):
-                return _start(cwd, land_args, now, launch)
+                return _start(cwd, land_args, now, launch, replace=not waited)
         except Full as exc:  # polled outside the lock: resumes and rollups go on meanwhile
             if time.monotonic() >= deadline:
                 raise SystemExit(f"[land-async] {exc} (waited {FULL_WAIT_S // 60} min)") from exc
             print(f"[land-async] {exc}; checking again every {FULL_POLL_S} s for up to {FULL_WAIT_S // 60} min",
                   flush=True)
             time.sleep(FULL_POLL_S)
+            waited = True
 
 
-def _start(cwd: Path, land_args: list[str], now: datetime, launch) -> tuple[str, Path]:
+def _start(cwd: Path, land_args: list[str], now: datetime, launch, replace: bool = True) -> tuple[str, Path]:
     branch = git(cwd, "rev-parse", "--abbrev-ref", "HEAD")
     if branch in ("HEAD", "main") or branch.startswith(PREFIX):
         raise SystemExit(f"[land-async] run it from a topic branch's worktree, not {branch!r}")
@@ -222,6 +223,8 @@ def _start(cwd: Path, land_args: list[str], now: datetime, launch) -> tuple[str,
                           capture_output=True).returncode == 0:  # its snapshot (with main merged in) holds HEAD
             print(f"[land-async] this HEAD is already landing in {where(row)}; nothing new queued", flush=True)
             return row["branch"], holder(cwd) / (row["branch"].replace("/", "-") + ".log")
+        if not replace:  # it started while this call waited for room: it may hold a newer HEAD than ours
+            raise SystemExit(f"[land-async] {where(row)} started while this waited for queue room; not replaced")
         replacements.append((int(row["pid"]), where(row)))
     for pid, said in replacements:
         print(f"[land-async] a newer HEAD replaces {said}", flush=True)
@@ -434,7 +437,8 @@ def main(argv: list[str]) -> int:
                 "supervisor exited without a ticket or landing; read its .log")
         print(f"[land-async] resumed {argv[1]}: {note}")
         return 0 if status else 1
-    words = argv[argv.index("--mixed"):][:2] if "--mixed" in argv else []
+    words = next((argv[i:i + 2] if a == "--mixed" else [a] for i, a in enumerate(argv)
+                  if a == "--mixed" or a.startswith("--mixed=")), [])
     if subprocess.call(  # cheap gates fail here, before a snapshot or ticket exists
             [sys.executable, str(Path(__file__).with_name("land.py")), "--precheck", *words], cwd=Path.cwd()):
         return 1

@@ -680,3 +680,21 @@ def test_orphans_lists_a_snapshot_whose_supervisor_died_unstopped(repo):
     assert tool.orphans(dev, now=tree.stat().st_mtime + 25 * 3600) == []  # older than a day: not a recovery
     _ticket(main, "0004", branch=snap)
     assert tool.orphans(dev, now=tree.stat().st_mtime) == []  # a live ticket still owns it
+
+
+def test_a_waiter_never_replaces_a_landing_that_started_while_it_waited(repo, monkeypatch):
+    """11-09 review: an older call sleeping on a full queue must not stop the owner's newer re-queue."""
+    main, dev = repo
+    state = {"full": True}
+
+    def full(qdir):
+        if state["full"]:
+            state["full"] = False
+            _ticket(main, "0001", branch="land/feat/x-20261028050000")  # queued meanwhile, from a newer HEAD
+            return "landing queue full (12/12 tickets)"
+        return None
+    monkeypatch.setattr(tool._queue(), "full", full)
+    monkeypatch.setattr(tool.time, "sleep", lambda s: None)
+    monkeypatch.setattr(tool, "stop", lambda pid: pytest.fail("a waiter stopped a newer landing"))
+    with pytest.raises(SystemExit, match="started while this waited"):
+        tool.start(dev, [], NOW, lambda *a: None)

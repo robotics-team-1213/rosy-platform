@@ -132,3 +132,11 @@ def test_land_stats_shows_the_stage_times_and_how_far_behind_main_a_change_was_q
     assert (day["pretest_p50"], day["full_p50"], day["merge_p50"]) == (10, 60, .5)
     assert (day["behind_p50"], day["behind_p90"]) == (1, 7)
     assert json.dumps(day)
+
+
+def test_land_async_also_takes_the_mixed_words_in_equals_form(monkeypatch):
+    import land_async
+    seen = []
+    monkeypatch.setattr(land_async.subprocess, "call", lambda argv, **k: seen.append(argv) or 1)
+    assert land_async.main(["--mixed=user said so", "--tests", "auto"]) == 1
+    assert seen[0][-2:] == ["--precheck", "--mixed=user said so"]
