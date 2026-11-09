@@ -597,3 +597,30 @@ def test_run_retries_a_lost_check_and_a_lost_fetch(tmp_path):
                                      sleep=lambda s: None, fetch=fetch)
     assert remote.calls.count('start') == 1 and result['status'] == 'SUCCEEDED'
     assert len(fetched) == 2 and result['snapshot_directory'].endswith('snap')
+
+
+def test_prepare_rebinds_a_commit_whose_source_copy_is_gone_and_marks_each_use(tmp_path):
+    """2026-11-09 model PC: 74 bindings named deleted copies, so prepare said ready and every call failed."""
+    mod = module()
+    env = {**os.environ, 'HOME': str(tmp_path)}
+    (tmp_path / '.config/rosy').mkdir(parents=True)
+    (tmp_path / '.config/rosy/isaac-sdk.json').write_text(json.dumps(
+        {'python': '/sdk/python', 'python_sha256': 'c' * 64, 'version': '6.2.0'}))
+    (tmp_path / '.config/rosy/model-code.json').write_text(json.dumps({'root': '/model-code'}))
+
+    def prepare(name=None):
+        value = {'sha': SHA, **({'name': name} if name else {})}
+        return json.loads(subprocess.run([sys.executable, '-c', mod.PREPARE], input=json.dumps(value).encode(),
+                                         capture_output=True, check=True, env=env).stdout)
+
+    binding = tmp_path / '.config/rosy/isaac-runs' / ('source-' + SHA + '.json')
+    first, second = 'sim-isaac-' + '1' * 32, 'sim-isaac-' + '2' * 32
+    (tmp_path / 'rosy-test/runs' / first).mkdir(parents=True)
+    assert prepare() == {'ready': False} and prepare(first) == {'ready': True}
+    os.utime(binding, (1, 1))
+    assert prepare() == {'ready': True} and binding.stat().st_mtime > time.time() - 60  # a use is recorded
+    (tmp_path / 'rosy-test/runs' / first).rmdir()  # removed by the host's cleanup
+    assert prepare() == {'ready': False}
+    (tmp_path / 'rosy-test/runs' / second).mkdir()
+    assert prepare(second) == {'ready': True}
+    assert json.loads(binding.read_text())['source_root'].endswith(second)

@@ -1,0 +1,194 @@
+{
+ "schema": "rosy.omx-sysid-servo.v1",
+ "base": "design",
+ "arm": "arm_b",
+ "keys": [
+  "kp",
+  "kv",
+  "damping",
+  "frictionloss"
+ ],
+ "gravity_comp": false,
+ "cell": "<lab cell.json (private)>",
+ "episodes": {
+  "fit": [
+   "episodes/20261103-053625-pallet-to-pallet",
+   "episodes/20261104-030057-pallet-to-pallet",
+   "episodes/20261104-030334-pallet-to-pallet",
+   "episodes/20261106-224311-strip-to-strip",
+   "episodes/20261106-231129-strip-to-strip",
+   "episodes/20261106-232713-strip-to-strip",
+   "episodes/20261106-232857-strip-to-strip",
+   "episodes/20261107-001716-strip-to-strip",
+   "episodes/20261107-001857-strip-to-strip",
+   "episodes/20261107-002049-strip-to-strip",
+   "episodes/20261107-011547-strip-to-strip",
+   "episodes/20261107-011740-strip-to-strip",
+   "episodes/20261107-013456-strip-to-strip",
+   "episodes/20261107-021516-strip-to-strip"
+  ],
+  "hold": [
+   "episodes/20261103-052633-pallet-to-pallet",
+   "episodes/20261103-123923-pallet-to-pallet",
+   "episodes/20261103-131916-pallet-to-pallet",
+   "episodes/20261103-132422-pallet-to-pallet",
+   "episodes/20261104-030537-pallet-to-pallet",
+   "episodes/20261106-121131-pallet-to-strip",
+   "episodes/20261106-215625-strip-to-strip",
+   "episodes/20261106-230947-strip-to-strip",
+   "episodes/20261106-231310-strip-to-strip",
+   "episodes/20261106-233041-strip-to-strip",
+   "episodes/20261107-011932-strip-to-strip"
+  ],
+  "untagged": [
+   "20261103-050019-pallet-to-pallet",
+   "20261103-052633-pallet-to-pallet",
+   "20261103-053625-pallet-to-pallet",
+   "20261103-123923-pallet-to-pallet",
+   "20261103-131916-pallet-to-pallet",
+   "20261103-132422-pallet-to-pallet",
+   "20261104-030057-pallet-to-pallet",
+   "20261104-030334-pallet-to-pallet",
+   "20261104-030537-pallet-to-pallet",
+   "20261106-121131-pallet-to-strip",
+   "20261106-215625-strip-to-strip",
+   "20261106-224311-strip-to-strip",
+   "20261106-230306-strip-to-strip",
+   "20261106-230947-strip-to-strip",
+   "20261106-231129-strip-to-strip",
+   "20261106-231310-strip-to-strip",
+   "20261106-232713-strip-to-strip",
+   "20261106-232857-strip-to-strip",
+   "20261106-233041-strip-to-strip",
+   "20261107-001716-strip-to-strip",
+   "20261107-001857-strip-to-strip",
+   "20261107-002049-strip-to-strip",
+   "20261107-011547-strip-to-strip",
+   "20261107-011740-strip-to-strip",
+   "20261107-011932-strip-to-strip",
+   "20261107-013456-strip-to-strip",
+   "20261107-021516-strip-to-strip"
+  ],
+  "other_arm": []
+ },
+ "fitted": {
+  "joint1": {
+   "kp": 10.0,
+   "kv": 0.136983,
+   "damping": 0.004203,
+   "frictionloss": 0.144533
+  },
+  "joint2": {
+   "kp": 35.581368,
+   "kv": 0.965919,
+   "damping": 0.076814,
+   "frictionloss": 0.183345
+  },
+  "joint3": {
+   "kp": 120.0,
+   "kv": 6.883982,
+   "damping": 4.977889,
+   "frictionloss": 0.482525
+  },
+  "joint4": {
+   "kp": 10.859326,
+   "kv": 3.224832,
+   "damping": 0.003587,
+   "frictionloss": 0.000281
+  },
+  "joint5": {
+   "kp": 10.000003,
+   "kv": 1.223737,
+   "damping": 0.015592,
+   "frictionloss": 0.118422
+  }
+ },
+ "bounds": {
+  "kp": [
+   10.0,
+   120.0
+  ],
+  "kv": [
+   0.05,
+   30.0
+  ],
+  "damping": [
+   0.001,
+   5.0
+  ],
+  "frictionloss": [
+   0.0001,
+   0.5
+  ]
+ },
+ "sd": {
+  "joint1": {
+   "kp": 3.030214,
+   "kv": 8.836899,
+   "damping": 8.607961,
+   "frictionloss": 0.059755
+  },
+  "joint2": {
+   "kp": 4.340951,
+   "kv": 30.23782,
+   "damping": 29.900679,
+   "frictionloss": 0.111359
+  },
+  "joint3": {
+   "kp": 26.913683,
+   "kv": 42.885203,
+   "damping": 42.644048,
+   "frictionloss": 0.374446
+  },
+  "joint4": {
+   "kp": 2.92913,
+   "kv": 20.54313,
+   "damping": 20.553923,
+   "frictionloss": 0.008265
+  },
+  "joint5": {
+   "kp": 5.480991,
+   "kv": 45.696463,
+   "damping": 45.451016,
+   "frictionloss": 0.103841
+  }
+ },
+ "sd_inflation": 11.85,
+ "rms_deg": {
+  "base": {
+   "fit": [
+    0.504,
+    0.304,
+    0.522,
+    0.525,
+    0.569
+   ],
+   "hold": [
+    0.34,
+    0.343,
+    0.618,
+    0.524,
+    0.447
+   ]
+  },
+  "fitted": {
+   "fit": [
+    0.47,
+    0.265,
+    0.415,
+    0.5,
+    0.489
+   ],
+   "hold": [
+    0.319,
+    0.324,
+    0.531,
+    0.513,
+    0.395
+   ]
+  }
+ },
+ "nfev": 49,
+ "status": "`xtol` termination condition is satisfied.",
+ "at": "2026-11-08T20:55:27+00:00"
+}
