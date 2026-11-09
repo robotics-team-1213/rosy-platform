@@ -10,6 +10,7 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-1003 | Fleet은 free 구간의 Nav2 목표를 로봇 자기 지도 프레임으로 바꿔 보낸다. [전문](../adr/D-1003-nav2-free-goals-in-the-robot-map-frame.md) | Accepted (2026-11-09, 사용자 지시; SOURCE·Gazebo SIM까지, 기체·현장 수용 없음) |
 | D-991 | PC 정비는 Fleet 안의 화면으로 나누고, 재부팅해도 되는지는 그 PC의 도우미가 판단한다. [전문](../adr/D-991-pc-maintenance-boundary-and-reboot-gate.md) | Accepted (2026-11-07, 사용자 결정; 결정 1·2 구현, 3~6 후속, 각 PC 설치 전) |
 | D-997 | 공통 기능은 실행 서비스·공용 코드·owner별 운영 어댑터로 나누고 기능별 소유와 장애 계약을 확정한다. [전문](../adr/D-997-common-function-ownership-and-failure-contracts.md) | Accepted (2026-11-08, 사용자 결정; 등록·설정·알림·감사·백업·업데이트 설계 확정, 코드 추출·서비스 신설·배포·현장 수용 미수행) |
 | D-995 | 관제 구조는 논리 단위·실행 owner·공통 서비스·호스트로 구분하고 구현과 현장 수용을 따로 기록한다. [전문](../adr/D-995-control-structure-authority-and-evidence-status.md) | Accepted (2026-11-08, 사용자 지시; D-965·D-994의 팔 위임 구현 상태 설명 정정, 실행·배포·현장 수용 변경 없음) |
