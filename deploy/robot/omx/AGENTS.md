@@ -104,6 +104,12 @@ One file per step; a step that a parameter turns off returns None and the carry 
 - Change `stack.lock.yaml` only to another immutable revision; never a branch name.
 - Do not enable a runtime profile or invent joint, serial, or camera identities. Those need device acceptance first.
 - Example/template files must stay free of real hosts, addresses, and credentials (public repo).
+- A new real-arm plan (pose set, path or recovery) runs only after four checks, and one "agree" from a session that did not write it:
+  1. collision along the whole path in sim at the measured cell;
+  2. load along the whole path as tool output, not judgement: per-joint torque (gravity, the path's own acceleration and payload) against the session's actual per-ID caps from the caps file, not the datasheet; `load_predict` where the pose is inside its logged cells; flag at 50 % of a cap;
+  3. what happens if it stops midway, and the recovery for that;
+  4. the first real run approaches with the runner's strain watch live (jogs are watched from 03f71e3ebd, before that only chunks), and a script reads `state.fault` before each jog and never jogs past a hold.
+  An unchanged rerun of a checked plan needs no new check. Why: on 2026-11-09 a hand-eye pose checked for collision only overloaded arm_a's XL330 wrist; the guard cut torque and the extended arm dropped onto its plate.
 
 ### Testing Requirements
 
