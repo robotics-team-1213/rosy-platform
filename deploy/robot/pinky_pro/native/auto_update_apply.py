@@ -149,6 +149,11 @@ class UpdaterApply:
             self._core_release_check()
             self._journal(state, "image-layer-sync")
             result = self._sync(str(Path(self.release_path(release_id)) / RELEASE_SYNC))
+            if result.get("deferred"):
+                # The unit this run started under predates those destinations;
+                # the updated unit lands them at the next sync.
+                self._history("sync_deferred", release_id, "read-only in this run's sandbox, "
+                              "the next sync retries: " + " ".join(result["deferred"]))
             self._journal(state, "restart")
             self._recheck_waived(state)
             self._restart(result)
