@@ -89,6 +89,7 @@ def test_invalid_reuse_proof_is_rejected(candidate, value):
     (["applications/fleet/web/login.html"], {"fleet", "account"}),
     (["operations/account/rosy_account/web_assets.py"], {"fleet", "account"}),
     (["deploy/site/requirements-account.txt"], {"account"}),
+    (["deploy/site/requirements-monitoring.txt"], set()),
     (["deploy/site/site_db.py"], {"fleet", "account"}),
     (["contracts/foundation/core_common/protocol/account_access.py"], {"fleet", "vision", "account"}),
 ])
@@ -98,10 +99,11 @@ def test_builder_only_builds_and_ships_affected_images(candidate, tmp_path, chan
         _add_account(candidate)
     else:
         expected = expected | {'account'}  # First transition must build the missing signed artifact.
+    expected = expected | {'monitoring'}  # The fixture base predates D-1001's own Monitoring image.
     repo = tmp_path / "repo"
     site = repo / "deploy/site"
     site.mkdir(parents=True)
-    for name in (*builder.DEPLOY_FILES, "Dockerfile.fleet", "Dockerfile.vision", "Dockerfile.proxy", "Dockerfile.account"):
+    for name in (*builder.DEPLOY_FILES, "Dockerfile.fleet", "Dockerfile.vision", "Dockerfile.proxy", "Dockerfile.account", "Dockerfile.monitoring"):
         shutil.copyfile(ROOT / "deploy/site" / name, site / name)
     for name in builder.DOC_FILES:
         path = repo / name

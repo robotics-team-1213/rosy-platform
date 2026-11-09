@@ -18,7 +18,7 @@ def test_changed_mounted_caddy_config_recreates_proxy_without_image_transfer(can
     source = Path(__file__).resolve().parents[1]
     site = repo / "deploy/site"
     site.mkdir(parents=True)
-    for name in (*DEPLOY_FILES, "Dockerfile.fleet", "Dockerfile.vision", "Dockerfile.proxy", "Dockerfile.account"):
+    for name in (*DEPLOY_FILES, "Dockerfile.fleet", "Dockerfile.vision", "Dockerfile.proxy", "Dockerfile.account", "Dockerfile.monitoring"):
         shutil.copyfile(source / "deploy/site" / name, site / name)
     for name in DOC_FILES:
         dest = repo / name
