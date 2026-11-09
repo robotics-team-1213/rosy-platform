@@ -93,7 +93,7 @@ def test_one_arm_sustained_effort_stops_both_followers_and_passive_leaders(modul
     together.send(action)
     fakes.effort_read(motions['arm_b'].follower)
     with pytest.raises(ValueError, match='overload risk'):
-        for _ in range(40):
+        for _ in range(120):  # 1 s to the hold, HOLD_S more at the cap
             clock[0] += 0.05
             motions['arm_b'].follower.raw['shoulder_lift'] = 2003
             together.send(action)
@@ -188,7 +188,7 @@ def test_two_arm_sensor_simulation_at_thirty_hz(module, scenario, expected):
         assert all(not any(bus.torque.values()) for m in motions.values()
                    for bus in (m.follower, m.leader))
         if scenario == 'sustained_load':
-            assert tracked_before_fault and 3 <= stopped_at <= 3.3
+            assert tracked_before_fault and 6 <= stopped_at <= 6.3  # 1 s to the overload hold, then HOLD_S at the cap
         elif scenario == 'alignment_stall':
             assert 5 <= stopped_at <= 5.1
         else:

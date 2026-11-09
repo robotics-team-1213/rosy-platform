@@ -287,7 +287,7 @@ def test_probe_script_counts_live_locks_and_drops_dead_ones(tmp_path):
         (jobs / "old.resv").write_text(f"{now - 1} pytest 2 6\n")
         (jobs / "junk.resv").write_text("soon pytest 2 6\n")
         script = rp.PROBE.replace("J=~/rosy-jobs", f"J={shlex.quote(str(jobs))}")
-        fields = subprocess.run(["bash", "-c", script], capture_output=True, text=True, check=True).stdout.split()
+        fields = subprocess.run(["bash", "-c", script], capture_output=True, text=True, check=True).stdout.splitlines()[0].split()  # ROSYCAPS follows
     finally:
         live.kill()
     # site 0, sim_held 3 (the live sim locks + the gpu reservation), browser_jobs 1, then df free_kb use% of ~/rosy-test, /tmp

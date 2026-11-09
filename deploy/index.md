@@ -78,8 +78,8 @@
 
 ## 최근 기록
 
+- 2026-11-09 · uncommitted · fix(omx): 과부하에서 토크를 끄지 않고 버티기, 실물 계획 사전 검토 규칙
+- 2026-11-09 · e94b732208 · D-922 추가 결정 — Pinky 상황 표정 8종
+- 2026-11-09 · 3d550f49ce · D-922 구현 검증 및 기록 항목 정정
+- 2026-11-09 · 79ebad2111 · D-922 Pinky 표정·시선·후면 LED 구현
 - 2026-11-08 · uncommitted · feat(control-unit): 다른 PC의 이웃 관제에 peer 주소로 접속한다 (D-994)
-- 2026-11-08 · uncommitted · fix(omx): 카메라 준비는 역할 별칭이 생긴 뒤 시작하고, services.yaml을 실제 배치에 맞춘다
-- 2026-11-08 · uncommitted · feat(omx): 이름 있는 운영자가 API로 팔 사건 보류를 해제한다 (D-971)
-- 2026-11-08 · uncommitted · feat(site-map): PC별 역할·모듈·팔 보드를 private 지도 하나로 읽고 실제 보드와 대조한다
-- 2026-11-07 · uncommitted · fix(power): 네이티브 Pinky가 CORE의 deep 배터리 요청에 꺼진다 (D-27)

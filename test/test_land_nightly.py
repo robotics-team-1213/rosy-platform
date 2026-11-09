@@ -21,11 +21,16 @@ def test_the_night_runs_full_plus_every_browser_suite_and_records_new_failures_a
     def run(invocations, logs, sha, repo, label):
         logs[0].write_text("FAILED test/test_a.py::test_new - boom\n1 failed\n", encoding="utf-8")
         logs[1].write_text("1 passed\n", encoding="utf-8")
+        logs[2].write_text("FAILED a/test_x_browser.py::test_b - boom\n1 failed\n", encoding="utf-8")
     monkeypatch.setattr(land_nightly.remote_pytest, "run", run)
+    monkeypatch.setattr(land_nightly.land_mainred, "recheck", lambda *a: None)
     reds = []
-    monkeypatch.setattr(land_nightly.land_mainred, "red", lambda wt, main, ids, text, env, by: reds.append((ids, by)))
+    monkeypatch.setattr(land_nightly.land_mainred, "red",
+                        lambda wt, main, ids, text, env, by: reds.append((ids, env, by)))
     assert land_nightly.main([]) == 1
-    assert reds == [(["test/test_a.py::test_new"], "nightly")]
+    # A browser red keeps its opt-in: recheck reruns it instead of skipping it (2026-11-09).
+    assert reds == [(["test/test_a.py::test_new"], [], "nightly"),
+                    (["a/test_x_browser.py::test_b"], ["ROSY_RUN_BROWSER_TESTS=1"], "nightly")]
 
 
 def test_a_green_night_is_not_rerun_on_the_same_main(tmp_path, monkeypatch):

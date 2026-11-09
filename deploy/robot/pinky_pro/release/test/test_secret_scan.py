@@ -141,3 +141,20 @@ def test_camera_public_vectors_keep_other_fields_and_paths_protected():
         assert any(f.kind == 'credential' for f in secret_scan.scan_text(path, leaked))
     key_header = '-----BEGIN ' + 'PRIVATE KEY-----'
     assert any(f.kind == 'private-key' for f in secret_scan.scan_text(path, key_header))
+
+
+def test_a_git_object_id_of_this_repository_is_not_a_secret_without_the_word_commit(tmp_path):
+    """11-02..08: 18 landings stopped because a SHA in a record had no `commit`/`sha` word on its line."""
+    import subprocess
+    git = ["git", "-C", str(tmp_path), "-c", "user.name=t", "-c", "user.email=t@t"]
+    subprocess.run([*git, "init", "-q"], check=True)
+    (tmp_path / "a.txt").write_text("x")
+    subprocess.run([*git, "add", "a.txt"], check=True)
+    subprocess.run([*git, "commit", "-q", "-m", "x"], check=True)
+    real = subprocess.run([*git, "rev-parse", "HEAD"], capture_output=True, text=True, check=True).stdout.strip()
+    invented = "9f" * 20  # same shape, no such object
+    note = tmp_path / "note.md"
+    note.write_text(f"landed at {real} earlier\nlanded at {invented} earlier\n")
+    findings = secret_scan.scan_files([note], root=tmp_path)
+    assert [f.line_number for f in findings] == [2] and findings[0].kind == "high-entropy-token"
+    assert secret_scan.scan_text("note.md", f"landed at {real}") != []  # without a repository the shape still reports
