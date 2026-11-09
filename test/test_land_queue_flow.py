@@ -66,10 +66,11 @@ def fake_land(paths):
     class Stop(Exception):
         pass
     calls = []
+    gate = lambda name: lambda *a: calls.append(name)  # noqa: E731
     return calls, SimpleNamespace(
         Stop=Stop, HARNESS="absent.py", out=lambda *a: "main-sha", lines=lambda *a: paths,
-        safety_review=lambda *a: calls.append("safety"), size_check=lambda *a: calls.append("size"),
-        secret_scan=lambda *a: calls.append("secret"), git=lambda *a, **k: SimpleNamespace(returncode=0))
+        safety_review=gate("safety"), size_check=gate("size"), secret_scan=gate("secret"),
+        git=lambda *a, **k: SimpleNamespace(returncode=0))
 
 
 def test_precheck_refuses_a_mixed_branch_unless_the_users_words_are_given(tmp_path):
