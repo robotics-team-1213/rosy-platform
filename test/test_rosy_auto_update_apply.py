@@ -95,6 +95,28 @@ def test_core_on_the_old_release_is_restarted(device, host, hub, keys):
     assert result["phase"] == "committed"
 
 
+def test_a_sync_that_defers_a_read_only_config_still_commits_and_records_it(device, host, hub, keys):
+    # 2026.11.09-177: the running unit's sandbox predates the NetworkManager
+    # destination. The sync reports it deferred; the release must still commit
+    # and the deferral must be visible in the updater's history.
+    hub.publish(keys, NEXT)
+
+    def deferred_sync(h, argv):
+        if NEXT not in " ".join(argv):
+            return None
+        return h._ok(json.dumps({"ok": True, "release_id": NEXT, "restart_units": [],
+                                 "deferred": ["/etc/NetworkManager/conf.d/60-rosy-wifi.conf"]}))
+
+    host.overrides["sync"] = deferred_sync
+
+    result = updater(host, hub).run()
+
+    assert result["phase"] == "committed", result
+    entry = next(item for item in history(device) if item["event"] == "sync_deferred")
+    assert entry["release_id"] == NEXT
+    assert "/etc/NetworkManager/conf.d/60-rosy-wifi.conf" in entry["detail"]
+
+
 @pytest.mark.parametrize("failure", ["ready", "cwd", "inactive", "failed_unit", "sync", "core_restart"])
 def test_health_failure_rolls_back_and_marks_the_id_failed(device, host, hub, keys, failure):
     hub.publish(keys, NEXT)
