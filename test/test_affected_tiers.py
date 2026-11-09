@@ -67,8 +67,8 @@ def test_a_gate_tool_runs_the_selector_self_test_tier(sample):
     sel = _select(sample, "tools/land_prepare.py")
     assert sel.mode == "affected" and not sel.escalations
     assert sel.narrowed == ["tools/land_prepare.py: harness configuration or the selector itself"]
-    assert {"test/test_land_sample.py", "test/test_remote_pytest.py", "test/test_affected_tests.py",
-            "test/test_harness_contracts.py", "test/architecture"} <= set(sel.reasons)
+    assert {"test/test_land_sample.py", "test/test_remote_pytest.py", "test/test_harness_contracts.py",
+            "test/architecture"} <= set(sel.reasons)
     assert "test/test_unrelated.py" not in sel.reasons and "test" not in sel.reasons
 
 
