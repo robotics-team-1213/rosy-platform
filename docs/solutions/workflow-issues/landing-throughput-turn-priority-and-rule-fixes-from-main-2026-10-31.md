@@ -1,7 +1,7 @@
 ---
 title: The turn holder waited behind the landings it held up, and fixes to the landing rules ran under the old rules
 date: 2026-10-31
-last_updated: 2026-11-02
+last_updated: 2026-11-09
 category: workflow-issues
 module: tools/land.py, tools/land_checks.py, tools/land_prepare.py, tools/land_async.py, tools/land_rollup.py, tools/remote/remote_job.py, tools/remote/xdist_plan.py
 problem_type: workflow_issue
@@ -41,6 +41,17 @@ Since 2026-10-26, `land_checks.landed_copy` makes every landing run main's `tool
 
 - **A rule fix lands at old-rule speed.** The fix that raised `MAX_PREPARING` 3→6 and let an urgent ticket skip older pending reservations waited first-come under the old rules. Resubmitting it twice, once with `--urgent`, changed nothing: its lander ran `D:\...\rosy-platform\tools\land.py`, main's copy. A fresh snapshot does not help.
 - **Running landers keep the rules they loaded.** After the fix landed (05:42), the 13 pending landers still prepared at most 3 at a time. A pending lander has run no tests, so restarting it loses nothing. On 09:25 we killed each pending `land.py` in queue order and resumed its existing snapshot with `--supervise`. The landing that already sat in `main` only had its snapshot removed. Preparing went from 3 to 5 at once.
+
+- **(2026-11-09) Fast-tracking a rule fix means queue position only, and its new flags do not exist yet.** Three
+  pending landing fixes sat behind the FULL queue they were meant to drain. What worked: merge them (merge commits,
+  `git merge-tree` clean first) into one branch and queue it with `--urgent "<user's words>"`; an urgent ticket skips
+  the `MAX_FULL` wait and waiting tickets but still runs the full FULL tier under main's rules. `--replace` stops only
+  the same branch's older lander, so the other members' landers had to be stopped (`land_async.stop(pid)`, what
+  `--replace` does) or the unamended snapshots could still land later. Pitfall: the rollup's own `land_async.py`
+  (branch copy) accepted a new `--mixed` flag and passed it on; the supervisor ran main's `land.py`, which exited 2
+  on the unknown argument before queueing. Recovery: `python tools/land_async.py resume <tree> --tests auto --urgent
+  "..."` with only flags main's `land.py` knows. Before trusting a panel's "it is safe", read the diff: four of six
+  reviewers assumed the bundled tier change kept safety paths FULL; it did not (D-436 addendum 1, panel revision).
 
 **Check which copy runs.** The lander's command line names main's checkout path without `-X utf8`. The supervisor's own child, as `land_async` starts it, is `-X utf8 tools/land.py` in the hidden tree.
 
