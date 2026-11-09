@@ -231,6 +231,10 @@ def run(args):
                 ft.localize(cores[r], token[r], spawns[r], log) for r in ft.ROBOTS), 3.0))
             # CORE says Nav2, AMCL and the costmaps are active (readiness) before the first goal; without loc_assist
             # nothing else waits for them (the first run sent a goal into a Nav2 that was still starting).
+            if result['localized'] and not args.loc_assist:   # no D-395 node to answer: AMCL gets its start pose from the operator
+                for r in ft.ROBOTS:
+                    ft.call(f'{cores[r]}/api/v1/localization/initialpose', token[r], 'POST',
+                            dict(zip(('x', 'y', 'yaw'), spawns[r])), log)
             result['nav_ready'] = result['localized'] and ft.until(240, lambda: all(
                 (nav_state(cores[r], token[r]).get('readiness') or {}).get('ready') is True for r in ft.ROBOTS), 3.0)
             if result['nav_ready']:
