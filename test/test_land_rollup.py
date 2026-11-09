@@ -81,17 +81,11 @@ def test_plan_keeps_one_tier_skips_safety_and_conflicts_and_caps_the_size(repo, 
 def test_mixed_rollup_takes_full_waiters_every_tier_and_overlapping_suites(repo):
     """D-889 33, 11-09: 8 of 11 tickets were FULL waiters ('preparing'), so the half-hourly rollup merged none."""
     main, snapshot = repo
-    rows = [{**snapshot("fix/a", {"pkg/a.py": "x = 2
-"}), "status": "preparing", "full_wait": True},
-            {**snapshot("fix/run", {"pkg/c.py": "z = 5
-"}), "status": "preparing"},  # its pretest runs: stays
-            snapshot("land-rollup-x", {"pkg/c.py": "z = 6
-"}),
-            snapshot("fix/safe", {"pkg/b.py": "y = 9
-"}), snapshot("fix/clash", {"pkg/a.py": "x = 3
-"}),
-            snapshot("fix/c", {"pkg/c.py": "z = 2
-"})]
+    rows = [{**snapshot("fix/a", {"pkg/a.py": "x = 2\n"}), "status": "preparing", "full_wait": True},
+            {**snapshot("fix/run", {"pkg/c.py": "z = 5\n"}), "status": "preparing"},  # its pretest runs: stays
+            snapshot("land-rollup-x", {"pkg/c.py": "z = 6\n"}),
+            snapshot("fix/safe", {"pkg/b.py": "y = 9\n"}), snapshot("fix/clash", {"pkg/a.py": "x = 3\n"}),
+            snapshot("fix/c", {"pkg/c.py": "z = 2\n"})]
     rows[2]["branch"] = "land/fix/land-rollup-20261109000000-20261109000000"  # a rollup is never re-rolled
     git(main, "branch", rows[2]["branch"], "land/land-rollup-x")
     got = land_rollup.candidates(rows, main, host="h", mixed=True)
