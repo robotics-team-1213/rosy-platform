@@ -130,6 +130,12 @@ def _nav_config(ns: str, rosy_nav_share: str,
         return value
 
     params = force_sim_time(apply_nav2_frame_prefix(defaults, ns))
+    # D-1009: the robot's behavior trees (route legs, 2 Hz replanning, short recoveries).
+    trees = os.path.join(rosy_nav_share, "behavior_trees")
+    if os.path.isdir(trees):
+        bt = params["bt_navigator"]["ros__parameters"]
+        bt["default_nav_to_pose_bt_xml"] = os.path.join(trees, "rosy_navigate_to_pose.xml")
+        bt["default_nav_through_poses_bt_xml"] = os.path.join(trees, "rosy_navigate_through_poses.xml")
     if inflation_radius:
         # 통로 폭은 월드마다 다르고, 팽창 반경은 그 폭에 맞춰야 한다. 좁은 통로에서는
         # 반폭보다 크게 잡아야 경로가 중앙을 따라가고, 잡동사니가 빽빽한 방에서는

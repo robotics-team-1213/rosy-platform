@@ -325,6 +325,8 @@ class CoreServices:
         fleet_loss = build_fleet_loss(config, events=events, fleet_agent=fleet_agent, nav=nav,
                                       safety=safety, localization=localization)
 
+        maps = MapSnapshotStore()
+        nav.costmap_provider = lambda: maps.get_costmap("global")  # D-1009 route pass points
         return cls(config=config, identity=identity, profile=profile, capability=capability, fleet_agent=fleet_agent,
                    events=events, state=state, registry=registry, modes=modes,
                    command=command, safety=safety, advisory_feed=advisory_feed,
@@ -335,7 +337,7 @@ class CoreServices:
                    vision=vision,
                    readiness=readiness,
                    power=power, battery=battery, docking=docking, swarm=swarm,
-                   runtime_probe=runtime_probe, host_files=HostFileExchange(), maps=MapSnapshotStore(),
+                   runtime_probe=runtime_probe, host_files=HostFileExchange(), maps=maps,
                    audit=audit, calibration=calibration, trip_lease=trip_lease,
                    adapter_registry=adapter_registry, pilot_recording=PilotRecordingGuard(events=events),
                    dock_feed=dock_feed, station_docking=station_docking, localization=localization, loc_mission=loc_mission,
