@@ -14672,3 +14672,11 @@ osy-d395-s1d\`.
 - 증거: 이 착지의 FULL 기록이 게시 근거다.
 - gate 변화: 없음.
 - CE: 해당 없음 — 게시 절차 실행이며 장애 해결이 아니다.
+
+## 2026-11-09 · e94b732208 · D-922 추가 결정 — Pinky 상황 표정 8종
+
+- 변경: 여러 모델 디자인 패널에서 고른 doze·scan·lost·worry·lowbat·cheer·thinking·searching을 추가했다. 상황 표정은 `face_screen.situation_face`가 기존 face-inputs 필드로 고르고(복구 > dock_failed > line_follow_hold > 보정 > 진행 중 반응 > PLANNING > 배터리 20% 미만 > IDLE 충전), cheer는 함께 나타난 여러 사람의 인사다. native tick은 상황 표정을 CORE 표정·반응 만료보다 우선한다. 주의 램프 아래에서는 cheer·doze를 쓰지 않는다.
+- 자산: 새 GIF 8개는 `make_faces.py`로 생성했다. 32×24 실루엣이 기존·새 표정 모두와 6% 이상(최소 6.38%) 다르도록 디자인 위치·두께를 조정했다. 기존 8종 GIF는 바이트 단위로 같다.
+- 증거: e94b732208 다음 커밋(시험 기대 갱신)에서 원격 집중 시험 1907 passed, 1 skipped; known_failures NEW 0.
+- gate 변화: 없음. 호스트 렌더·시험은 실물 LCD 판독·ARM64·DEVICE/FIELD 수용이 아니다.
+- CE: 해당 없음 — 설계 판단은 ADR 추가 결정과 회귀 시험에 남는다.

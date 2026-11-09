@@ -302,3 +302,11 @@
 - 변경: 앞선 79ebad2111 항목은 fa67fb264b에 커밋되어 원문을 보존한다. 빠진 gate 항목을 이 후속 기록으로 보완한다. 서비스 응답을 실제 IDL 필드로 읽고 동시 발견 시 사람 눈인사를 우선했다.
 - 증거: 3d550f49ce 원격 집중 시험 536 passed, 1 skipped; known_failures NEW 0, known 0, flaky 0. 전체 27개 묶음 검증은 진행 중이며 최종 결과는 구현 계획의 검증 기록으로 결속한다.
 - gate 변화: 없음. 호스트 검증은 ARM64 실행·실물 LCD/LED·DEVICE/FIELD 수용을 입증하지 않는다. 배포·착지·push는 수행하지 않았다.
+
+## 2026-11-09 · e94b732208 · D-922 추가 결정 — Pinky 상황 표정 8종
+
+- 변경: 여러 모델 디자인 패널에서 고른 doze·scan·lost·worry·lowbat·cheer·thinking·searching을 추가했다. 상황 표정은 `face_screen.situation_face`가 기존 face-inputs 필드로 고르고(복구 > dock_failed > line_follow_hold > 보정 > 진행 중 반응 > PLANNING > 배터리 20% 미만 > IDLE 충전), cheer는 함께 나타난 여러 사람의 인사다. native tick은 상황 표정을 CORE 표정·반응 만료보다 우선한다. 주의 램프 아래에서는 cheer·doze를 쓰지 않는다.
+- 자산: 새 GIF 8개는 `make_faces.py`로 생성했다. 32×24 실루엣이 기존·새 표정 모두와 6% 이상(최소 6.38%) 다르도록 디자인 위치·두께를 조정했다. 기존 8종 GIF는 바이트 단위로 같다.
+- 증거: e94b732208 다음 커밋(시험 기대 갱신)에서 원격 집중 시험 1907 passed, 1 skipped; known_failures NEW 0.
+- gate 변화: 없음. 호스트 렌더·시험은 실물 LCD 판독·ARM64·DEVICE/FIELD 수용이 아니다.
+- CE: 해당 없음 — 설계 판단은 ADR 추가 결정과 회귀 시험에 남는다.

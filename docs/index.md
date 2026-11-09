@@ -354,8 +354,8 @@
 
 ## 최근 기록
 
+- 2026-11-09 · e94b732208 · D-922 추가 결정 — Pinky 상황 표정 8종
 - 2026-11-09 · uncommitted · chore(publish): 게시용 명시 FULL 근거
 - 2026-11-09 · uncommitted · Pinky 표현의 미결 기본값 결정
 - 2026-11-09 · uncommitted · Pinky 캐릭터 표현 결정과 후속 설계
 - 2026-11-08 · uncommitted · fix(remote): 현장 PC가 고정 학습 환경이 필요한 시험을 받지 않는다
-- 2026-11-08 · uncommitted · docs(solutions): rclpy Node 비공개 이름 충돌 교훈
