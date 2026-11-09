@@ -36,9 +36,9 @@ class Fixed:
 def test_a_joint_is_flagged_on_its_margin_not_its_bare_share():
     cap = np.ones(5)
     frames = [[0] * 6] * 4
-    out = load.review(Fixed([.15, .1, .1, .35, .1]), frames, 15, cap)
+    out = load.review(Fixed([.15, .1, .1, .55, .1]), frames, 15, cap)
     assert out["worst"]["joint1"] == 0.15 and out["worst_with_margin"]["joint1"] == pytest.approx(0.63)  # 0.15 x 4.2
-    assert {f["joint"] for f in out["flags"]} == {"joint1", "joint4"} and not out["ok"]  # joint4: 0.35 x 1.6 = 0.56
+    assert {f["joint"] for f in out["flags"]} == {"joint1", "joint4"} and not out["ok"]  # joint4: 0.55 x 1.0
     assert load.review(Fixed([.1] * 5), frames, 15, cap)["ok"]
 
 
@@ -50,3 +50,13 @@ def test_the_arm_chain_carries_its_own_weight_and_a_payload():
     held = arm.torque(reach, np.zeros(5), np.zeros(5), payload_kg=0.016)
     assert np.all(np.isfinite(bare)) and abs(bare[1]) > 0.01  # the shoulder holds the arm up
     assert abs(held[1]) > abs(bare[1])  # and a held container on top
+
+
+def test_the_wrist_holder_against_the_upper_arm_is_flagged():
+    pytest.importorskip("mujoco")
+    arm = load.Arm("arm_a")
+    fault = load.norm_to_rad([42.52, -9.4, -0.81, 61.42, 73.09])  # 2026-11-09 15:08, wrist_flex stalled at PWM 300/300
+    park = load.norm_to_rad([0.76, -62.25, 53.06, 51.65, 45.05])
+    assert arm.clearance_mm(fault) < load.CLEAR_MM < arm.clearance_mm(park)
+    out = load.review(arm, [[42.52, -9.4, -0.81, 61.42, 73.09, 0]] * 3, 15, np.ones(5) * 9)
+    assert not out["ok"] and out["flags"][-1]["joint"] == "holder-link4"

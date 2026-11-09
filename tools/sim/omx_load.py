@@ -2,7 +2,8 @@
 """Load review of a real-arm plan before it runs: the torque each body joint needs along the path (gravity, the path's own
 acceleration and an optional held payload, by MuJoCo inverse dynamics on the two-arm world) against what the servo can give
 (the session's caps through omx_sysid.from_registers). The model share times the joint's MARGIN (how far real PWM ran above
-the model on the arm's own traces, 2026-11-09) at or above FLAG is flagged: near the limit means slow down or shorten the
+the model on the arm's own traces, 2026-11-09) at or above FLAG is flagged, and so is the wrist holder within CLEAR_MM of link3/link4
+(the worlds exclude that neighbour contact; it stalled arm_a's wrist on 2026-11-09). Near the limit means slow down or shorten the
 reach, never clearance. The margins come mostly from holds and short moves: refit them with `replay` once clean supervised
 reach sessions are traced (docs/validation/omx-load-2026-11-09/result.md).
 
@@ -22,8 +23,11 @@ sys.path[:0] = [str(HERE), str(HERE.parents[1] / "deploy/robot/omx")]
 import numpy as np  # noqa: E402
 
 FLAG = .5  # load_predict's risky_share: the most any logged standstill outside a press needed
-# p99 of real PWM share over model share per joint on seven traces of 2026-11-09 without the 15:08 session (mostly holds)
-MARGIN = {"joint1": 4.2, "joint2": 4.2, "joint3": 1.2, "joint4": 1.6, "joint5": 2.4}
+# p99 of real PWM share over model share per joint on seven traces of 2026-11-09 without the 15:08 session (mostly holds).
+# The wrist's were measured against its PWM cap (0.215 N·m); against its current-limited cap (0.088 at 250 mA) they fall
+# below 1 (1.6 / 2.44, 2.4 / 2.44) and are held at 1: the model is never discounted.
+MARGIN = {"joint1": 4.2, "joint2": 4.2, "joint3": 1.2, "joint4": 1.0, "joint5": 1.0}
+CLEAR_MM = 10.0  # the wrist holder on link5 nearer than this to link3/link4: 2026-11-09 15:08 it was 6.5 mm in the sim
 G = 9.81
 PREFIX = {"arm_a": "a_", "arm_b": "b_"}
 BODY = ("joint1", "joint2", "joint3", "joint4", "joint5")
@@ -46,6 +50,22 @@ class Arm:
         self.qadr = np.array([m.joint(p + j).qposadr[0] for j in BODY])
         self.dof = np.array([m.joint(p + j).dofadr[0] for j in BODY])
         self.data = mujoco.MjData(m)
+        body = lambda name: m.body(p + name).id  # noqa: E731
+        # the printed camera holder only: link5's own housing overlaps link4 at the joint by design
+        self.near = ([g for g in range(m.ngeom) if m.geom_bodyid[g] == body("link5") and "holder" in m.geom(g).name],
+                     [g for g in range(m.ngeom) if m.geom_bodyid[g] in (body("link3"), body("link4"))])
+
+    def clearance_mm(self, q):
+        """Nearest distance between link5's geoms (the camera holder) and link3/link4, which the worlds exclude as neighbours."""
+        m, d, mj = self.world.model, self.data, self.mj
+        d.qpos[:] = m.qpos0
+        d.qpos[self.qadr] = q
+        mj.mj_kinematics(m, d)
+        best = 1e3
+        for g5 in self.near[0]:
+            for g in self.near[1]:
+                best = min(best, mj.mj_geomDistance(m, d, g5, g, .05, None) * 1000)
+        return best
 
     def torque(self, q, qd, qdd, payload_kg=0.0):
         """N·m each body joint must give: M qdd + bias (gravity, Coriolis) + the payload's weight at the jaw tip."""
@@ -101,8 +121,14 @@ def review(arm, frames, fps, cap, payload_kg=0.0, names=None, margin=MARGIN):
     margined = share * np.array([margin[j] for j in BODY])
     flags = [dict(frame=int(k), chunk=(names[k] if names else None), joint=BODY[j], share=round(float(share[k, j]), 2),
                   with_margin=round(float(margined[k, j]), 2)) for k, j in zip(*np.nonzero(margined >= FLAG))]
+    near = None
+    if getattr(arm, "near", ([], []))[0]:  # every 3rd frame: the path moves under 1 mm between them at the guard's speed
+        gaps = [(arm.clearance_mm(q[k]), k) for k in range(0, len(q), 3)] + [(arm.clearance_mm(q[-1]), len(q) - 1)]
+        near = min(gaps)
+        if near[0] < CLEAR_MM:
+            flags.append(dict(frame=int(near[1]), chunk=(names[near[1]] if names else None), joint="holder-link4", clearance_mm=round(near[0], 1)))
     return dict(worst=dict(zip(BODY, share.max(0).round(2).tolist())), worst_with_margin=dict(zip(BODY, margined.max(0).round(2).tolist())),
-                flags=flags[:50], n_flags=len(flags), ok=not flags)
+                min_clearance_mm=None if near is None else round(near[0], 1), flags=flags[:50], n_flags=len(flags), ok=not flags)
 
 
 def main(argv=None):
