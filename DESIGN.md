@@ -550,7 +550,7 @@ D-741(Accepted)이 정한, 모든 웹 표면이 같이 쓸 자리다. Rosy Fleet
 | 증거 블록 | `<ui-evidence>` · `<ui-empty>` | 로봇 카드, Fleet 큐 |
 | 절차 작업 열 | `.ui-sidebar` | 설치·정비, Fleet 작업 선택 |
 | 매체 칸 | `.ui-pane[data-pane]` | 로봇 셸, 감지·카메라 |
-| 세 칸 틀 | `.ui-stage-grid` | `applications/fleet/web/index.html` · `learning/curation/perception/review_app_web/evaluate.html` · `middleware/robot_ui/robot/styleguide.html` · `shared/web/template.html` |
+| 세 칸 틀 | `.ui-stage-grid` | `applications/calibration/web/index.html` · `applications/fleet/web/index.html` · `learning/curation/perception/review_app_web/evaluate.html` · `middleware/robot_ui/robot/styleguide.html` · `shared/web/template.html` |
 
 ### 상단바 — `<ui-topbar>` (D-466)
 - 자리는 셋이다. `brand`(장미색 워드마크 + 조용한 부제), `cluster`(화면 전환·상태·조용한 도구), `estop`(오른쪽 끝 비상 정지). cluster 안의 순서는 표면이 정하고, 바깥 자리는 더 만들지 않는다.

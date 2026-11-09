@@ -115,8 +115,9 @@ function answerForm(req) {
   form.className = 'answer-form';
   if (req.kind === 'measure') {
     const label = text('label', `잰 값 (${req.unit})`, 'ui-field-label');
-    const input = Object.assign(document.createElement('input'), {type: 'number', name: 'value', required: true, className: 'ui-field'});
-    input.step = 'any';
+    const input = document.createElement('input');
+    input.className = 'ui-field';
+    Object.assign(input, {type: 'number', name: 'value', required: true, step: 'any'});
     label.append(input);
     form.append(label);
   } else {
@@ -125,14 +126,19 @@ function answerForm(req) {
     for (const [value, name] of [['pass', '통과'], ['fail', '실패']]) {
       const label = document.createElement('label');
       label.className = 'ui-check';
-      const input = Object.assign(document.createElement('input'), {type: 'radio', name: 'result', value, required: true, className: 'ui-field'});
+      const input = document.createElement('input');
+      input.className = 'ui-field';
+      Object.assign(input, {type: 'radio', name: 'result', value, required: true});
       label.append(input, ' ' + name);
       set.append(label);
     }
     form.append(set);
   }
   const note = text('label', '메모 (선택)', 'ui-field-label');
-  note.append(Object.assign(document.createElement('input'), {name: 'note', maxLength: 300, className: 'ui-field', autocomplete: 'off'}));
+  const noteInput = document.createElement('input');
+  noteInput.className = 'ui-field';
+  Object.assign(noteInput, {name: 'note', maxLength: 300, autocomplete: 'off'});
+  note.append(noteInput);
   const submit = document.createElement('ui-button');
   submit.setAttribute('kind', 'primary');
   submit.setAttribute('type', 'submit');
