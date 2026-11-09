@@ -2,7 +2,7 @@
 """Fit the OMX cell's physics constants to what the real arm did, keep a fit only when held-out episodes agree, and say
 which constant to measure next: the constant step of the real-sim loop (docs/reference/omx-real-sim-loop.md, 6b).
 
-  servo EP [EP ..] --cell CELL --out DIR [--base design] [--arm arm_b] [--keys kp,kv,damping,frictionloss]
+  servo EP [EP ..] --cell CELL --out DIR [--base design] [--arm arm_b] [--keys kp,damping,frictionloss]
         Replays each real episode's actions open loop in the MuJoCo cell (omx_twin.track, --jobs processes) and fits the chosen constants of
         joint1-5 together (scipy least_squares, joint angle error in degrees). Episodes are split fit/hold by name
         (omx_twin.shard_of, 1 in 3 held out); fit.json has the base and fitted RMS on both, and each constant's sd.
@@ -178,7 +178,7 @@ class Residual:
         return np.stack(cols, 1)
 
 
-def servo(folders, cell_path, out, base="design", arm="arm_b", keys=("kp", "kv", "damping", "frictionloss"), gravity_comp=False,
+def servo(folders, cell_path, out, base="design", arm="arm_b", keys=("kp", "damping", "frictionloss"), gravity_comp=False,
           max_nfev=60, jobs=8):
     import numpy as np
     from concurrent.futures import ProcessPoolExecutor
@@ -402,7 +402,7 @@ def main(argv=None):
     s.add_argument("--out", required=True)
     s.add_argument("--base", default="design")
     s.add_argument("--arm", default="arm_b", choices=physics.ARMS)
-    s.add_argument("--keys", default="kp,kv,damping,frictionloss")
+    s.add_argument("--keys", default="kp,damping,frictionloss")
     s.add_argument("--gravity-comp", action="store_true", help="the sim's ideal gravity compensation (omx_twin tries both)")
     s.add_argument("--max-nfev", type=int, default=60)
     s.add_argument("--jobs", type=int, default=8, help="replay processes (each holds one MuJoCo cell)")
