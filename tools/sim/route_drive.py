@@ -8,11 +8,11 @@ COREs each, Nav2 + AMCL on the world map) and reusing its helpers. No Fleet. ros
 east road of map_v2_fleet, each from the previous route's end. For each route the bench records /odom (sim
 time) and counts the stops it made: stretches of |v| < 0.01 m/s lasting 0.8 s after the robot first moved.
 
+    E  pppS    the same four points as single goals, the old way (409 until each ends) -> a stop at every point
     A  pppS    3 pass points then a stop        -> 1 stop
     B  ppSpS   two stops, passes between        -> 2 stops
     C  SSS     every point a stop               -> 3 stops
     D  qpS     q is 60 m off the costmap, so CORE skips it; p, S as usual -> 1 stop, skipped [0]
-    E  the points of B sent as five single goals (the old way, 409 until each ends) -> 5 stops
 
 Pass = every route ends ARRIVED with route.result succeeded, one POST and no 409 for A-D, observed stops equal
 the stop points of the route (A-D), and E shows the stop-per-point behavior the route replaces.
@@ -37,8 +37,8 @@ import yaml
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import fleet_trips as ft  # noqa: E402
 
-STEP_M = 0.2
-START_S = 0.92 + ft.TRIP_M     # east road, past the straight trip's end
+STEP_M = 0.15                  # the lane-vertex spacing of the field drive (0.15-0.33 m)
+START_S = 0.92                 # where the east road trip starts: rosy_01 spawns here; the road is 4 m long
 STOP_V, STOP_MIN_S, MOVING_V = 0.01, 0.8, 0.03
 OFF_MAP = (60.0, 60.0)
 ROUTES = {'A': 'pppS', 'B': 'ppSpS', 'C': 'SSS', 'D': 'qpS'}
@@ -119,11 +119,19 @@ def nav_state(core, token):
     return ft.call(f'{core}/api/v1/navigation/state', token)[1]
 
 
-def wait_end(core, token, budget_s, log):
-    """Poll until navigation leaves PLANNING/NAVIGATING; returns the last state body."""
+def wait_end(core, token, budget_s, log, seen=None):
+    """Poll until navigation leaves PLANNING/NAVIGATING; returns the last state body. Each change of what CORE
+    reports (navigation, leg, remaining, localization) is appended to `seen`."""
     end, state = time.monotonic() + budget_s, {}
     while time.monotonic() < end:
         state = nav_state(core, token)
+        route = state.get('route') or {}
+        loc = ft.call(f'{core}/api/v1/robot/state', token)[1].get('localization') or {}
+        view = dict(navigation=state.get('navigation'), leg=route.get('leg'), actions=route.get('actions'),
+                    remaining=route.get('remaining'), skipped=route.get('skipped'), loc=loc.get('state'),
+                    reason=loc.get('reason'))
+        if seen is not None and (not seen or {k: v for k, v in seen[-1].items() if k != 't'} != view):
+            seen.append(dict(t=round(time.time(), 1), **view))
         if state.get('navigation') in ('ARRIVED', 'FAILED', 'CANCELED', 'IDLE'):
             break
         time.sleep(1.0)
@@ -131,15 +139,23 @@ def wait_end(core, token, budget_s, log):
     return state
 
 
+def events_since(core, token, seq):
+    """Navigation, localization and safety events CORE published since `seq`, as (type, data)."""
+    url = f'{core}/api/v1/events?limit=500' + ('' if seq is None else f'&since_seq={seq}')
+    rows = ft.call(url, token)[1].get('events') or []
+    return [(r.get('type'), r.get('data')) for r in rows if str(r.get('type', '')).split('.')[0] in ('nav', 'localization', 'safety')]
+
+
 def drive_route(core, token, trace, points, expected_stops, budget_s, log):
-    mark = trace.mark()
+    mark, seq = trace.mark(), ft.call(f'{core}/api/v1/events?limit=1', token)[1].get('last_seq')
     code, reply = ft.call(f'{core}/api/v1/navigation/route', token, 'POST',
                           {'points': points, 'correlation_id': 'route-' + secrets.token_hex(3)}, log)
-    row = {'post': code, 'points': len(points), 'expected_stops': expected_stops}
+    row = {'post': code, 'points': len(points), 'expected_stops': expected_stops, 'seen': []}
     if code != 200:
         return dict(row, reply=reply, ok=False)
-    state = wait_end(core, token, budget_s, log)
+    state = wait_end(core, token, budget_s, log, row['seen'])
     time.sleep(3.0)
+    row['events'] = events_since(core, token, seq)
     stops = count_stops(trace.since(mark))
     route = state.get('route') or {}
     row.update(navigation=state.get('navigation'), route_result=route.get('result'), stops_made=route.get('stops_made'),
@@ -151,7 +167,7 @@ def drive_route(core, token, trace, points, expected_stops, budget_s, log):
 
 def drive_goals(core, token, trace, points, budget_s, log):
     """The old way: one single goal per point, the next only after the last ended (409 until then)."""
-    mark, conflicts, deadline = trace.mark(), 0, time.monotonic() + budget_s
+    mark, conflicts, deadline, seen = trace.mark(), 0, time.monotonic() + budget_s, []
     for point in points:
         while time.monotonic() < deadline:
             code, _ = ft.call(f'{core}/api/v1/navigation/goal', token, 'POST', {'x': point['x'], 'y': point['y']}, log)
@@ -159,10 +175,11 @@ def drive_goals(core, token, trace, points, budget_s, log):
                 break
             conflicts += code == 409
             time.sleep(1.0)
-        wait_end(core, token, deadline - time.monotonic(), log)
+        wait_end(core, token, deadline - time.monotonic(), log, seen)
     time.sleep(3.0)
     stops = count_stops(trace.since(mark))
-    return {'points': len(points), 'conflicts': conflicts, 'observed_stops': stops, 'ok': len(stops) >= len(points) - 1}
+    return {'points': len(points), 'conflicts': conflicts, 'observed_stops': stops, 'seen': seen,
+            'ok': len(stops) >= len(points) - 1}
 
 
 def run(args):
@@ -209,15 +226,15 @@ def run(args):
                 time.sleep(args.settle_s)
                 trace = OdomTrace(ns)
                 s = START_S
+                if args.baseline:   # first, from the spawn: the old way over the points of route A
+                    points, s = build_points(graph, ROUTES['A'], s)
+                    result['routes']['E'] = dict(kinds='goals:' + ROUTES['A'], points_body=points,
+                                                 **drive_goals(cores[ns], token[ns], trace, points, args.budget_s, log))
                 for name, kinds in ROUTES.items():
                     points, s = build_points(graph, kinds, s)
                     result['routes'][name] = dict(kinds=kinds, **drive_route(
                         cores[ns], token[ns], trace, points, kinds.count('S'), args.budget_s, log))
                     result['routes'][name]['points_body'] = points
-                if args.baseline:
-                    points, _ = build_points(graph, ROUTES['B'], s)
-                    result['routes']['E'] = dict(kinds='goals:' + ROUTES['B'],
-                                                 **drive_goals(cores[ns], token[ns], trace, points, args.budget_s, log))
     finally:
         log.close()
         if trace is not None:
@@ -232,6 +249,10 @@ def run(args):
     for name, row in rows.items():
         print(name, json.dumps({k: row.get(k) for k in ('kinds', 'post', 'navigation', 'stops_made', 'skipped', 'actions',
                                                          'conflicts', 'ok')}), 'observed stops:', len(row.get('observed_stops', [])))
+        for view in row.get('seen', []):
+            print('   ', json.dumps(view))
+        if not row.get('ok'):
+            print('    events:', json.dumps(row.get('events'), default=str)[:1500])
     print('[route-drive]', 'PASS' if result['pass'] else 'FAIL', out / 'result.json', flush=True)
     return 0 if result['pass'] else 1
 
