@@ -86,3 +86,4 @@ fleet/fleet/server/rightofway
 situation
 devices/omx/adapter/omx_adapter/contracts
 devices/omx/adapter/omx_adapter/real
+core/api/core_api_web/api/peer_pairing
