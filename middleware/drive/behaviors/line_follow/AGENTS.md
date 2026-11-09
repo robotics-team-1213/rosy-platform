@@ -15,7 +15,7 @@ Turn a `FOLLOW` decision into a capped speed (D-228, D-229). Pixels stay in `con
 | File | Description |
 |------|-------------|
 | `manager.py` | Mode, loss latch, the speed formula, obstacle hold (D-422 body gap along the intended path, ultrasonic fusion), and the manual-ladder angular cap (D-344 §11/§13) |
-| `clearance.py` | ROS-free LiDAR geometry: front sector minimum, swept-corridor path clearance, D-407 body clearances, D-422 swept-body gap, rotation gap, ultrasonic cone points |
+| `clearance.py` | ROS-free LiDAR geometry: front sector minimum, swept-corridor path clearance, D-407 body clearances, D-422 swept-body gap, D-1008 rotation sweep gap (only the side the body turns into), ultrasonic cone points |
 | `body_stop.py` | D-422 manager mixin: body gap along the intended path, derived/override stop gaps, LiDAR blind floor, ultrasonic echo freshness |
 | `authority.py` | D-517 4 (M2) manager mixin: Fleet movement authority (`POST /line-follow/authority`), wall-stamped odom path log for `pose_stamp`, stop at remaining ≤ D-424 stop gap, non-shrinking unless `shrink` (D-760 3; a shrink never grants), per-leg `seq` order (bounded memory), `ttl_s` expiry (≤ 5 s), enforced once CORE's trip lease was seen open, latched until the mode changes (D-760 2); only ever zeroes the tick's final decision |
 | `crosswalk/gate.py` | D-573 crosswalk gate (default off, `concern: safety` path): stop before a D-491 camera zone at max(g(v), range_min - (front - lidar) + margin), look with LiDAR rays only (no return / shadow / blind = unknown), cross after `crosswalk_clear_s` (5 s, D-573 rev 3) of continuous empty scans, no timeout, `crosswalk_blocked` D-407 stuck after `crosswalk_report_s`; manager mixin applies its cap with `min` after the authority gate |
