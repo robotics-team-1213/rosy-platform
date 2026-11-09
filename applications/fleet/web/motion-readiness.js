@@ -14,7 +14,9 @@ export function estopCause(source) {
 /** `label`, followed by the e-stop cause when CORE reported one. */
 export function estopText(state, label = "비상정지 중") {
   const cause = estopCause(state?.safety?.source);
-  return cause ? `${label} · ${cause}` : label;
+  if (!cause) return label;
+  // D-502: only a CORE that says so releases by itself; older robots still need a person.
+  return `${label} · ${cause}${state.safety.releases_when_charged === true ? " · 충전되면 자동 해제" : ""}`;
 }
 
 // Shared heading must agree, and a pack closer than one body is not "in front".

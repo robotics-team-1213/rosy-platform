@@ -23,12 +23,13 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from core_common.protocol.power_health import PowerHealthResponse
 from core_common.protocol.motor_health import MotorHealthResponse
-from fleet.charge_bays import ChargeBays, RobotView, bays_from_map, thresholds_of
+from fleet.server.charge_bay_routes import install_charge_bay_routes
 from fleet import lane_progress
 from fleet.hub.hub import HubError
 from fleet.server.console_view import CapabilityDisplay
 from fleet.server.monitoring_routes import cached_projection, install_monitoring_routes
 from fleet.server.http_errors import http_error
+from fleet.server.station_recovery_routes import install_station_recovery_routes
 from fleet.server.identity import IdentityError, IdentityService
 from fleet.stuck.board import LineStuckBoard
 from fleet.stuck.reports import LineStuckAnswerLog
@@ -153,7 +154,7 @@ class SharedGather:
 def install_console_routes(app, *, console, sightings, require_viewer,
                            read_guard, operator_guard, require_operator, require_named_operator,
                            site_lanes=None, answer_log_path=None, tracking=None,
-                           identity=None) -> None:
+                           identity=None, station_recovery=False, require_proposer=None) -> None:
     # D-407: open lane stucks, read from each gather. CORE's stuck block is the truth.
     board = app.state.line_stuck = LineStuckBoard(
         log=LineStuckAnswerLog(answer_log_path) if answer_log_path is not None else None)
@@ -235,42 +236,8 @@ def install_console_routes(app, *, console, sightings, require_viewer,
     async def fleet_state() -> dict:
         return await gathered()
 
-    # D-941 5/7: the active map's charge bays, shown only; Fleet does not dispatch from the plan yet.
-    bay_plan = app.state.charge_bays = ChargeBays(
-        thresholds=lambda: thresholds_of(getattr(app.state, "site_maps", None)))
-
-    def bay_view(row: dict, on_trip: set) -> RobotView:
-        battery = (row.get("power_health") or {}).get("battery") or {}
-        fresh = battery.get("evidence") == "fresh"
-        pose = map_pose.arbitrated_pose(row["robot_id"]) if map_pose is not None else None
-        return RobotView(row["robot_id"], bool(row["online"]), battery.get("percent") if fresh else None,
-                         battery.get("filtered_voltage") if fresh else None,
-                         (pose.x, pose.y) if pose is not None and pose.state == "LOCALIZED" else None,
-                         row["robot_id"] in on_trip)
-
-    async def bay_inputs():
-        maps = getattr(app.state, "site_maps", None)
-        active = maps.active() if maps is not None else None
-        if active is None:
-            return None, [], []
-        runner = getattr(app.state, "trip_runner", None)
-        on_trip = {trip["robot_id"] for trip in runner.open_trips()} if runner is not None else set()
-        robots = [bay_view(row, on_trip) for row in (await gathered())["robots"]]
-        return active, robots, bays_from_map(active[1])
-
-    async def charge_bays_tick() -> None:
-        """Feed the plan each period, so a voltage rise is seen with nobody on the page."""
-        active, robots, bays = await bay_inputs()
-        if active is not None and bays:
-            bay_plan.observe(console._clock(), robots, bays)
-    app.state.charge_bays_tick = charge_bays_tick
-
-    @app.get("/api/fleet/charge-bays", dependencies=read_guard, tags=["fleet"])
-    async def charge_bay_plan() -> dict:
-        active, robots, bays = await bay_inputs()
-        if active is None:
-            raise HTTPException(404, detail={"code": "NO_ACTIVE_MAP"})
-        return {"map_version": active[0], **bay_plan.plan(robots, bays)}
+    bay_inputs = install_charge_bay_routes(app, console, gathered, read_guard)   # D-941 5/7, shown only
+    install_station_recovery_routes(app, station_recovery, (read_guard, require_named_operator, require_proposer), gathered, bay_inputs)
 
     # D-941 2: gaps on the active map's loop, shown only; the 20 Hz following loop belongs to CORE.
     platoon_geometry = PlatoonGeometry()
