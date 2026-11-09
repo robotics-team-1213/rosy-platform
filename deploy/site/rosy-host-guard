@@ -46,11 +46,16 @@ MIN_UPTIME_S = int(os.environ.get("GUARD_MIN_UPTIME_S", "3600"))
 MAX_REBOOTS = int(os.environ.get("GUARD_MAX_REBOOTS", "2"))
 REBOOT_MIN_GAP_S = int(os.environ.get("GUARD_REBOOT_MIN_GAP_S", "3600"))
 REBOOT_DELAY_MIN = 10  # D-524 helper reboots with shutdown -r +10
+# D-991: a hung PC answers nothing, so a person has to be told. Absent file: no alert.
+ALERT_WEBHOOK = Path(os.environ.get("GUARD_ALERT_WEBHOOK_FILE", "/etc/rosy/host-guard/alert-webhook"))
+ALERT_AFTER = int(os.environ.get("GUARD_ALERT_AFTER", "2"))  # 2 x 10 min
 # D-883: the rosy-ops lab storage floor. Report only; a reboot does not free a disk.
 MIN_DISK_FREE_GB = float(os.environ.get("GUARD_MIN_DISK_FREE_GB", "30"))
 MAX_DISK_USE_PCT = int(os.environ.get("GUARD_MAX_DISK_USE_PCT", "90"))
 # Report-only RAM warning, well before the MIN_AVAIL_PCT + swap ladder above acts.
 WARN_AVAIL_PCT = int(os.environ.get("GUARD_WARN_AVAIL_PCT", "10"))
+# D-991: a nightly reboot skips while work runs; up this long, the skips are reported (never a forced reboot).
+REBOOT_OVERDUE_S = int(os.environ.get("GUARD_REBOOT_OVERDUE_S", str(3 * 86400)))
 # D-885: a disk-low lab PC gets one clean-storage request per gap; the site PC keeps product data.
 LAB_PCS = ("ai", "model")
 CLEAN_GAP_S = int(os.environ.get("GUARD_CLEAN_GAP_S", "21600"))
@@ -109,6 +114,47 @@ def act(name: str, action: str, reason: str) -> None:
         f.write(json.dumps({"time": int(time.time()), "host": name, "action": action, "reason": reason}) + "\n")
 
 
+def post_alert(text: str) -> bool:
+    """True once the channel took it. The webhook goes through curl's stdin: argv is world readable."""
+    if not ALERT_WEBHOOK.exists():
+        return False
+    try:
+        url = ALERT_WEBHOOK.read_text(encoding="utf-8").strip()
+    except (OSError, UnicodeError) as exc:
+        print(f"rosy-host-guard: alert webhook file unreadable ({type(exc).__name__})", flush=True)
+        return False
+    if not url.startswith("https://") or any(ch in url for ch in '"\\\n '):
+        print("rosy-host-guard: alert webhook file is not one https URL", flush=True)
+        return False
+    body = json.dumps({"content": text, "allowed_mentions": {"parse": []}}, ensure_ascii=False)
+    try:
+        done = subprocess.run(["curl", "-fsS", "--max-time", "10", "-H", "Content-Type: application/json",
+                               "--data-binary", body, "--config", "-"], input=f'url = "{url}"\n',
+                              text=True, capture_output=True, timeout=20, check=False)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        print(f"rosy-host-guard: alert not sent ({type(exc).__name__})", flush=True)
+        return False
+    if done.returncode:
+        print(f"rosy-host-guard: alert not sent (curl exit {done.returncode})", flush=True)
+    return done.returncode == 0
+
+
+def alert_unreachable(name: str, entry: dict) -> None:
+    """Once when a PC stops answering, once when it is back; a failed post is tried again next check."""
+    if entry["state"] == "unreachable":
+        entry["unreachable_checks"] = entry.get("unreachable_checks", 0) + 1
+        if entry["unreachable_checks"] >= ALERT_AFTER and not entry.get("alerted") and post_alert(
+                f"Rosy: {name} PC가 {entry['unreachable_checks']}번 연속 응답하지 않습니다. "
+                "자동 복구가 안 되면 사람이 직접 전원을 확인해야 합니다."):
+            entry["alerted"] = True
+            act(name, "alert unreachable", f"{entry['unreachable_checks']} checks")
+    elif entry["state"] not in ("quiet", "error"):
+        entry["unreachable_checks"] = 0
+        if entry.get("alerted") and post_alert(f"Rosy: {name} PC가 다시 응답합니다."):
+            entry["alerted"] = False
+            act(name, "alert recovered", "answering again")
+
+
 def plus_minutes(hhmm: str, minutes: int) -> str:
     total = (int(hhmm[:2]) * 60 + int(hhmm[3:]) + minutes) % 1440
     return f"{total // 60:02d}:{total % 60:02d}"
@@ -154,11 +200,12 @@ def parse_health(answer: str) -> dict:
         cpu = {"busy_pct": None if fields[16] == "-" else int(fields[16]),
                "temp_c": None if fields[17] == "-" else int(fields[17])}
     memory_low = avail < WARN_AVAIL_PCT
+    reboot_overdue = uptime > REBOOT_OVERDUE_S
     return {
         "avail_pct": avail, "swap_pct": swap, "load": load,
         "cores": cores, "uptime_s": uptime, "down": down,
         "disk": disk, "disk_low": disk_low, "gpu": gpu, "memory": memory, "memory_low": memory_low,
-        "cpu": cpu,
+        "cpu": cpu, "reboot_overdue": reboot_overdue,
     }
 
 
@@ -210,6 +257,9 @@ def check_pc(name: str, target: str, quiet: str, entry: dict) -> None:
         print(f"{name}: disk low {disk} (clean-storage requested at {entry.get('last_clean_request')})", flush=True)
     if memory_low:
         print(f"{name}: memory avail {avail}% {memory} (report only, D-883)", flush=True)
+    if resources["reboot_overdue"]:
+        print(f"{name}: up {uptime // 86400} days without a nightly reboot "
+              "(skipped for work or a missing gate; report only, D-991)", flush=True)
     if not reasons:
         state = ("disk-low" if disk_low else "memory-low" if memory_low
                  else "load-high" if high_load else "ok")
@@ -293,6 +343,7 @@ def main() -> int:
                     entry["resources"] = None
                 else:
                     check_pc(name, line[2], line[3], entry)
+                alert_unreachable(name, entry)
             else:
                 print(f"{name}: unknown kind {kind}", flush=True)
                 continue

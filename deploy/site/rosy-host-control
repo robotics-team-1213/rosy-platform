@@ -5,11 +5,18 @@
 # /etc/rosy/host-control/role and the account that owns the AI user units from
 # /etc/rosy/host-control/units-user, never from the environment. It does not accept a process name,
 # a signal, or a shell string.
-#   reboot          shutdown -r +10, refused (exit 3) while any reboot is already scheduled
+#   reboot          shutdown -r +10, refused (exit 3) while any reboot is already scheduled and
+#                   (exit 6) while an OMX arm session holds its lock. The caller is the guard's ladder
+#                   or a person who already saw the running jobs.
+#   reboot-if-free  the same, also refused (exit 7) while a job or a busy hold is live on this PC
+#   nightly-gate    schedules nothing: exit 0 when reboot-if-free would pass the session and job checks, else
+#                   6 or 7. rosy-nightly-reboot.service runs it as root before the warning and before the reboot.
+#   recheck-reboot  this helper's own timer, 30 s before the reboot: cancels the reboot it scheduled
+#                   if an arm session began during the delay. Not reachable from the SSH keys.
 #   cancel-reboot   shutdown -c, only for the reboot this helper scheduled (else exit 4); the
 #                   nightly window reboot and unattended-upgrades are never cancelled here
-#   restart-unit U  systemctl --no-block restart U (allowlisted U)
-#   stop-unit U     systemctl --no-block stop U (allowlisted U; site units are restart-only)
+#   restart-unit U  systemctl --no-block restart U (allowlisted U). No unit can be stopped (D-991).
+#                   A cell camera unit is refused (exit 6) while an arm session runs.
 #   install-site-config N  copy ~SUDO_USER/.rosy/site-incoming/N to /etc/rosy/site/N (site role,
 #                   allowlisted N, read as SUDO_USER so a symlink reaches nothing more than that
 #                   account can read, YAML-checked, 64 KiB cap, previous copy kept under
@@ -23,6 +30,9 @@ SCHEDULED=/run/systemd/shutdown/scheduled   # logind's record of a pending shutd
 STATE=/run/rosy-host-control                # tmpfs: the marker disappears with the reboot
 SITE_CONF=/etc/rosy/site
 BACKUP=/var/lib/rosy-host-control/backup
+HOME_ROOT=/home
+PROC=/proc
+RECHECK_AFTER_S=570                         # shutdown -r +10 is 600 s
 ACTION=${1:-}
 UNIT=${2:-}
 ROLE=$(cat "$CONF/role" 2>/dev/null || true)
@@ -31,6 +41,98 @@ log() { logger -t rosy-host-control "role=$ROLE action=$ACTION unit=$UNIT by=${S
 refuse() { log "result=refused($1)"; echo "refused: $1" >&2; exit "${2:-2}"; }
 scheduled_usec() { sed -n 's/^USEC=//p' "$SCHEDULED" 2>/dev/null || true; }
 
+# The lock the nightly reboot yields to (rosy-nightly-reboot.service), read from /proc/locks. These
+# files are users': root never opens one, because a FIFO would hang this helper inside its own lock,
+# and a probing flock would make a session starting that instant fail (cell_params_web.session_busy).
+flock_held() {
+  local lock inode
+  [ -r /proc/locks ] || return 0  # unknown is not free
+  for lock in "$@"; do
+    inode=$(stat -L -c %i -- "$lock" 2>/dev/null) || continue
+    if grep -q ":$inode " /proc/locks; then return 0; fi
+  done
+  return 1
+}
+
+arm_session_held() { flock_held "$HOME_ROOT"/*/rosy-omx/session.lock; }
+
+# A GPU compute process a person or agent started by hand (an ssh login, systemd-run, tmux) declares no job
+# file. The innermost unit of its cgroup decides: a named service (rosy-ollama keeps its model loaded, a
+# sub-cgroup of it included) never counts; a scope, a systemd-run `run-*.service` and the SSH daemons (Tailscale
+# SSH starts sessions under tailscaled) do. fd 9 (this helper's own lock) is closed for the children and a
+# wedged driver is killed, so a hung nvidia-smi cannot keep every later helper call waiting.
+gpu_hand_job() {
+  local pid unit
+  command -v nvidia-smi >/dev/null 2>&1 || return 1
+  for pid in $(timeout -k 2 10 nvidia-smi --query-compute-apps=pid --format=csv,noheader,nounits 2>/dev/null 9>&-); do
+    [[ "$pid" =~ ^[1-9][0-9]{0,6}$ ]] || continue
+    unit=$(timeout -k 1 2 tail -n 1 -- "$PROC/$pid/cgroup" 2>/dev/null 9>&- | tr / '\n' |
+           grep -E '\.(service|scope)$' | tail -n 1) || unit=""
+    [ -e "$PROC/$pid/cgroup" ] || continue  # gone since nvidia-smi listed it
+    case "$unit" in
+      tailscaled.service|ssh.service|sshd.service|run-*.service) return 0 ;;
+      *.service) ;;
+      *) return 0 ;;
+    esac
+  done
+  return 1
+}
+
+# The first word of a user's job file, bounded: a regular file only, 64 bytes, 2 s if it is swapped.
+first_word() {
+  local text
+  [ -f "$1" ] && [ ! -L "$1" ] || return 1
+  text=$(timeout 2 head -c 64 -- "$1" 2>/dev/null) || return 1
+  printf '%s' "${text%%[[:space:]]*}"
+}
+
+# The same files host_probe.py counts: <pid> <class> <cores> <GB> locks, <expiry> <class> <cores> <GB>
+# reservations (a supervised Isaac run holds only one), and busy. Nothing read is evaluated.
+jobs_live() {
+  local file word boot now
+  now=$(date +%s)
+  boot=$(awk '/^btime /{print $2}' /proc/stat)
+  for file in "$HOME_ROOT"/*/rosy-jobs/*.lock; do
+    word=$(first_word "$file") || continue
+    [[ "$word" =~ ^[1-9][0-9]{0,6}$ ]] && [ "$word" -gt 1 ] || continue
+    [ "$(stat -c %Y -- "$file")" -ge "$boot" ] || continue  # the pid is from before this boot
+    if kill -0 "$word" 2>/dev/null; then return 0; fi
+  done
+  for file in "$HOME_ROOT"/*/rosy-jobs/*.resv; do
+    word=$(first_word "$file") || continue
+    [[ "$word" =~ ^[0-9]{10,12}$ ]] && [ "$word" -gt "$now" ] && return 0
+  done
+  for file in "$HOME_ROOT"/*/rosy-jobs/busy; do
+    word=$(first_word "$file") || continue
+    # "<expiry epoch> <owner> <pid>" or a bare touch, which ends with the boot.
+    if [[ "$word" =~ ^[0-9]{10,12}$ ]]; then
+      [ "$word" -le "$now" ] || return 0
+    elif [ "$(stat -c %Y -- "$file")" -ge "$boot" ]; then
+      return 0
+    fi
+  done
+  # Learning trainers and Isaac admission take this lease instead of a job file (train_job, experiment_train).
+  flock_held "$HOME_ROOT"/*/.cache/rosy-learning/gpu.lock && return 0
+  gpu_hand_job
+}
+
+restart_user_unit() {
+  local owner
+  owner=$(cat "$CONF/units-user" 2>/dev/null || true)
+  [[ "$owner" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]] || refuse "units-user is not set"
+  timeout 20 systemctl --user --machine="$owner@" --no-block restart "$UNIT"
+}
+
+schedule_reboot() {
+  [ -z "$(scheduled_usec)" ] || refuse "a reboot is already scheduled" 3
+  if arm_session_held; then refuse "an arm session is running" 6; fi
+  # Armed first: a reboot nobody re-checks could cut a session that starts during the delay.
+  systemd-run --quiet --on-active="$RECHECK_AFTER_S" --unit="rosy-host-control-recheck-$(date +%s%N)" \
+    /usr/local/sbin/rosy-host-control recheck-reboot || refuse "cannot arm the session re-check"
+  shutdown -r +10 "Rosy Service Control will reboot this host in 10 minutes."
+  scheduled_usec > "$STATE/reboot"
+}
+
 [ $# -le 2 ] || refuse "arguments"
 mkdir -p -m 0700 "$STATE"
 exec 9>"$STATE/lock"
@@ -38,9 +140,26 @@ flock 9
 
 case "$ROLE:$ACTION:$UNIT" in
   site:reboot:|ai:reboot:|model:reboot:)
+    schedule_reboot
+    ;;
+  site:reboot-if-free:|ai:reboot-if-free:|model:reboot-if-free:)
     [ -z "$(scheduled_usec)" ] || refuse "a reboot is already scheduled" 3
-    shutdown -r +10 "Rosy Service Control will reboot this host in 10 minutes."
-    scheduled_usec > "$STATE/reboot"
+    if arm_session_held; then refuse "an arm session is running" 6; fi
+    if jobs_live; then refuse "a job is running on this PC" 7; fi
+    schedule_reboot
+    ;;
+  site:nightly-gate:|ai:nightly-gate:|model:nightly-gate:)
+    # rosy-nightly-reboot.service asks before its warning and again just before the reboot; it schedules nothing.
+    if arm_session_held; then refuse "an arm session is running" 6; fi
+    if jobs_live; then refuse "a job is running on this PC" 7; fi
+    ;;
+  site:recheck-reboot:|ai:recheck-reboot:|model:recheck-reboot:)
+    mine=$(cat "$STATE/reboot" 2>/dev/null || true)
+    if [ -n "$mine" ] && [ "$mine" = "$(scheduled_usec)" ] && arm_session_held; then
+      shutdown -c "Rosy Service Control: an arm session began, the reboot is cancelled."
+      rm -f "$STATE/reboot"
+      log "result=cancelled(arm session)"
+    fi
     ;;
   site:cancel-reboot:|ai:cancel-reboot:|model:cancel-reboot:)
     mine=$(cat "$STATE/reboot" 2>/dev/null || true)
@@ -53,21 +172,32 @@ case "$ROLE:$ACTION:$UNIT" in
   site:restart-unit:rosy-site-firewall.service)
     systemctl --no-block restart "$UNIT"
     ;;
-  ai:stop-unit:pinky-backend.service|ai:restart-unit:pinky-backend.service|\
-  ai:stop-unit:pinky-frontend.service|ai:restart-unit:pinky-frontend.service|\
-  ai:stop-unit:pinky-r2-watch.service|ai:restart-unit:pinky-r2-watch.service)
-    owner=$(cat "$CONF/units-user" 2>/dev/null || true)
-    [[ "$owner" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]] || refuse "units-user is not set"
-    systemctl --user --machine="$owner@" --no-block "${ACTION%-unit}" "$UNIT"
+  site:restart-unit:rosy-omx-camera-readiness.service|\
+  site:restart-unit:rosy-omx-camera-view.service|\
+  site:restart-unit:rosy-omx-camera@arm_a_wrist.service|\
+  site:restart-unit:rosy-omx-camera@top.service)
+    if arm_session_held; then refuse "an arm session is running" 6; fi
+    restart_user_unit
+    ;;
+  ai:restart-unit:rosy-situation.service|\
+  model:restart-unit:rosy-dataset-review-account.service|\
+  model:restart-unit:rosy-dataset-review.service|\
+  model:restart-unit:rosy-edge-review.service|\
+  model:restart-unit:rosy-ollama.service|\
+  model:restart-unit:rosy-review-v12.service|\
+  model:restart-unit:rosy-review-v13-eval.service|\
+  model:restart-unit:rosy-review-v13.service|\
+  model:restart-unit:rosy-tensorboard.service)
+    restart_user_unit
     ;;
   ai:clean-storage:|model:clean-storage:)
     # D-883: start the rosy-ops lab storage service once; host_storage.py owns what is kept.
     owner=$(cat "$CONF/units-user" 2>/dev/null || true)
     [[ "$owner" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]] || refuse "units-user is not set"
     # systemd refuses `cat` over --machine ("Cannot remotely cat units."); LoadState works there.
-    [ "$(systemctl --user --machine="$owner@" show -p LoadState --value rosy-test-storage.service 2>/dev/null)" = loaded ] \
+    [ "$(timeout 20 systemctl --user --machine="$owner@" show -p LoadState --value rosy-test-storage.service 2>/dev/null)" = loaded ] \
       || refuse "no rosy-test-storage.service" 5
-    systemctl --user --machine="$owner@" --no-block start rosy-test-storage.service
+    timeout 20 systemctl --user --machine="$owner@" --no-block start rosy-test-storage.service
     ;;
   site:install-site-config:fleet-site.yaml|\
   site:install-site-config:site-cameras.yaml)

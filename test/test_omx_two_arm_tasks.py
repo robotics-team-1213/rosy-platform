@@ -20,6 +20,12 @@ def layout():
 
 
 @pytest.fixture(scope="module")
+def studs():
+    """The old stud plate with its 3x3x3 block: the MuJoCo wrist evidence below was measured there."""
+    return sites.Layout(ship_source="fixture-studs")
+
+
+@pytest.fixture(scope="module")
 def data():
     return tasks.load()
 
@@ -45,8 +51,8 @@ def test_rehandle_uses_both_arms_and_temp_space_within_capacity(layout, data):
     steps = data["tasks"]["rehandle"]["steps"]
     assert {s["arm"] for s in steps} == {"arm_a", "arm_b"}
     for s in steps:  # an outer column is rehandled by the arm on the other side (the near arm's wrist hits the middle column)
-        row = (s["from"] if s["from"].startswith("ship") else s["to"])[6]
-        assert s["arm"] == ("arm_b" if row == "0" else "arm_a")
+        row = layout.sites[s["from"] if s["from"].startswith("ship-h") else s["to"]]["row"]  # the hold end, not the stern bay
+        assert s["arm"] == ("arm_b" if row == 0 else "arm_a")
     held = {}
     for s in steps:
         held[s["container"]] = s["to"]
@@ -57,37 +63,37 @@ def test_rehandle_uses_both_arms_and_temp_space_within_capacity(layout, data):
 
 def test_a_container_is_never_taken_from_under_another(layout, data):
     task = copy.deepcopy(tasks.get_task(layout, "rehandle", data))
-    task["steps"] = [dict(id="x", container="bar-2", **{"from": "ship-r0-l0"}, to="tmp-b-1", arm="arm_b")]  # bar-5 and bar-8 still lie on it
+    task["steps"] = [dict(id="x", container="bar-2", **{"from": "ship-h1r0-l0"}, to="tmp-b-1", arm="arm_b")]  # bar-5 and bar-8 still lie on it
     reason = refused(layout, task)
-    assert "taken from under" in reason and "ship-r0-l1" in reason
+    assert "taken from under" in reason and "ship-h1r0-l1" in reason
 
 
-def bad_near_arm_plan(layout, data):
-    """The first rehandle plan: arm_a takes bar-2 (bottom of the near column r0) while the middle column stands. MuJoCo: link4 hit bar-7."""
-    task = copy.deepcopy(tasks.get_task(layout, "rehandle", data))
+def bad_near_arm_plan(studs):
+    """The first rehandle plan on the stud plate: arm_a takes bar-2 (bottom of the near column r0) while the middle column stands. MuJoCo: link4 hit bar-7."""
+    task = dict(name="t", supply=[], start={c: s for c, s, _ in studs.plan_order()})
     task["steps"] = [dict(id="a1", container="bar-8", **{"from": "ship-r0-l2"}, to="tmp-a-1", arm="arm_a"),
                      dict(id="a2", container="bar-5", **{"from": "ship-r0-l1"}, to="tmp-a-2", arm="arm_a"),
                      dict(id="a3", container="bar-2", **{"from": "ship-r0-l0"}, to="tmp-a-3", arm="arm_a")]
     return task
 
 
-def test_a_wrist_that_would_hit_a_standing_column_is_refused(layout, data):
-    reason = refused(layout, bad_near_arm_plan(layout, data))
+def test_a_wrist_that_would_hit_a_standing_column_is_refused(studs):
+    reason = refused(studs, bad_near_arm_plan(studs))
     assert "a3:" in reason and "wrist" in reason and "neighbouring column" in reason
     assert "a1:" not in reason and "a2:" not in reason  # the layer 1 and 2 steps of the same plan are fine
 
 
-def test_the_same_container_taken_by_the_far_arm_is_accepted(layout, data):
-    task = bad_near_arm_plan(layout, data)
+def test_the_same_container_taken_by_the_far_arm_is_accepted(studs):
+    task = bad_near_arm_plan(studs)
     task["steps"] = [dict(s, arm="arm_b", to=s["to"].replace("tmp-a", "tmp-b")) for s in task["steps"]]
-    records = tasks.validate(layout, task)
+    records = tasks.validate(studs, task)
     assert records[2]["min_wrist_gap_mm"] >= tasks.LINK_MARGIN * 1000  # bar-2 by arm_b: MuJoCo isolated run passed
 
 
-def test_wrist_clearance_matches_the_mujoco_matrix_at_layer_0(layout, data):
+def test_wrist_clearance_matches_the_mujoco_matrix_at_layer_0(studs):
     """arm_a/bar-2, arm_b/bar-3 and the middle bottom bar-1 collided in MuJoCo (link4 -3 to -6 mm); the others cleared by 8 mm or more."""
     cases = {("bar-2", "arm_a"): False, ("bar-2", "arm_b"): True, ("bar-3", "arm_b"): False, ("bar-3", "arm_a"): True, ("bar-1", "arm_a"): False, ("bar-1", "arm_b"): False}
-    full = {c: s for c, s, _ in layout.plan_order()}
+    layout, full = studs, {c: s for c, s, _ in studs.plan_order()}
     for (c, arm), clear in cases.items():
         row = full[c].split("-")[1]
         above = {n for n, s in full.items() if s.startswith(f"ship-{row}-l") and int(s[-1]) > 0}
@@ -101,10 +107,10 @@ def test_wrist_clearance_matches_the_mujoco_matrix_at_layer_0(layout, data):
 
 
 def test_a_target_needs_a_support_and_must_be_free(layout, data):
-    task = dict(supply=["bar-1"], start={}, steps=[dict(id="x", container="bar-1", **{"from": "belt"}, to="ship-r1-l1", arm="arm_b")], name="t")
+    task = dict(supply=["bar-1"], start={}, steps=[dict(id="x", container="bar-1", **{"from": "belt"}, to="ship-h1r1-l1", arm="arm_b")], name="t")
     assert "nothing under it" in refused(layout, task)
     full = copy.deepcopy(tasks.get_task(layout, "rehandle", data))
-    full["steps"] = [dict(id="y", container="bar-2", **{"from": "ship-r0-l0"}, to="tmp-a-1", arm="arm_a")]
+    full["steps"] = [dict(id="y", container="bar-2", **{"from": "ship-h1r0-l0"}, to="tmp-a-1", arm="arm_a")]
     assert "taken from under" in refused(layout, full)
 
 
@@ -128,9 +134,9 @@ def test_unknown_names_are_refused(layout):
 
 
 def test_the_belt_is_a_source_only_and_must_supply_the_container(layout):
-    task = dict(supply=[], start={"bar-1": "ship-r1-l0"}, name="t", steps=[dict(id="x", container="bar-1", **{"from": "ship-r1-l0"}, to="belt", arm="arm_b")])
+    task = dict(supply=[], start={"bar-1": "ship-h1r1-l0"}, name="t", steps=[dict(id="x", container="bar-1", **{"from": "ship-h1r1-l0"}, to="belt", arm="arm_b")])
     assert "source, not a target" in refused(layout, task)
-    task = dict(supply=[], start={}, name="t", steps=[dict(id="x", container="bar-1", **{"from": "belt"}, to="ship-r1-l0", arm="arm_b")])
+    task = dict(supply=[], start={}, name="t", steps=[dict(id="x", container="bar-1", **{"from": "belt"}, to="ship-h1r1-l0", arm="arm_b")])
     assert "not on the belt supply" in refused(layout, task)
 
 
@@ -151,23 +157,33 @@ def top_camera_pixels(layout, xy):
     return 320 + cam["f_px"] * (p @ right) / (p @ forward), 240 - cam["f_px"] * (p @ np.cross(right, forward)) / (p @ forward)
 
 
-def test_the_plates_stand_where_the_top_camera_saw_them(layout):
-    """A run still passed 9/9 with the plates 57 mm off: geometry alone cannot catch this, so hold the photo's pixels."""
-    assert layout.choices["temp_lanes"] == "photo-20261107"
+def test_the_photo_plates_stand_where_the_top_camera_saw_them():
+    """A run still passed 9/9 with the plates 57 mm off: geometry alone cannot catch this, so hold the photo's pixels (the loose v7
+    plates of 11-07; the default is now plate v11 where its bridge seats it, to be measured again once installed)."""
+    layout = sites.Layout(temp_lanes="photo-20261107", temp_radius_m=.214)
     seen = {"tmp-a-1": (600, 422), "tmp-a-2": (546, 431), "tmp-b-1": (207, 388), "tmp-b-2": (151, 388), "tmp-b-3": (96, 378)}
     for site, pixel in seen.items():
         assert np.hypot(*np.subtract(top_camera_pixels(layout, layout.sites[site]["xy"]), pixel)) < 5, site
 
 
+def test_a_lane_under_the_ship_hull_is_blocked_and_refused(layout, data):
+    """Plate v11 where its bridge seats it reaches 20 mm over the estimated r08 hull at arm_b (MuJoCo: the container sat 5 mm up, 7 deg
+    tilted on lane 1). Such a lane is no place until the base plate yaw and the ship are measured."""
+    assert {n for n, s in layout.sites.items() if s.get("blocked")} == {"tmp-b-1", "tmp-b-1-l1", "tmp-b-1-l2"}  # every tier of that lane
+    task = dict(supply=[], start={"bar-9": "ship-h1r2-l2"}, name="t", steps=[dict(id="x", container="bar-9", **{"from": "ship-h1r2-l2"}, to="tmp-b-1", arm="arm_b")])
+    assert "tmp-b-1 is under the ship hull" in refused(layout, task)
+
+
 def test_temp_lanes_follow_the_scad_fan_and_point_at_the_arm():
-    layout = sites.Layout(temp_lanes="fan")
-    width, length, flare, fan, angles = sites.lane_geometry(.214)
-    assert width == pytest.approx(.0308) and math.degrees(fan) == pytest.approx(15.6, abs=.3) and angles[1] == 0
+    layout = sites.Layout(temp_lanes="fan", ship_source="fixture-studs")
+    width, length, flare, fan, angles = sites.lane_geometry(.200)
+    assert width == pytest.approx(.0308) and length == pytest.approx(.096) and math.degrees(fan) == pytest.approx(17.3, abs=.1) and angles[1] == 0
+    assert layout.choices["temp_lanes"] == "fan" and layout.choices["temp_radius_m"] == .200  # plate v11 on its bridge (Confluence 23233175)
     for tag, arm in (("a", "arm_a"), ("b", "arm_b")):
         base = layout.arms[arm].base[:2]
         for i in (1, 2, 3):
             s = layout.sites[f"tmp-{tag}-{i}"]
-            assert np.linalg.norm(np.array(s["xy"]) - base) == pytest.approx(.214, abs=1e-6)
+            assert np.linalg.norm(np.array(s["xy"]) - base) == pytest.approx(.200, abs=1e-6)
             toward = np.array(base) - np.array(s["xy"])
             assert abs(math.cos(s["yaw"]) * toward[1] - math.sin(s["yaw"]) * toward[0]) < 1e-6  # long axis through the arm centre
         assert layout.sites[f"tmp-{tag}-1"]["z"] == layout.sites["ship-r0-l0"]["z"]  # deck as high as the ship plate
@@ -190,7 +206,7 @@ def test_roll_below_the_usable_floor_is_flagged(layout, data):
 
 def test_strict_pose_judge_names_each_limit(layout, data):
     limits = data["judge"]
-    site = layout.sites["ship-r1-l0"]
+    site = layout.sites["ship-h1r1-l0"]
 
     class Fake:
         def __init__(self, layout, pos, yaw, tilt):
@@ -199,7 +215,7 @@ def test_strict_pose_judge_names_each_limit(layout, data):
         def pose(self, _data, _cid):
             return self._p
 
-    at = lambda dx=0., dz=0., yaw=0., tilt=0.: teacher.judge_pose(Fake(layout, [site["xy"][0] + dx, site["xy"][1], site["z"] + dz], yaw, tilt), None, "c", "ship-r1-l0", limits)  # noqa: E731
+    at = lambda dx=0., dz=0., yaw=0., tilt=0.: teacher.judge_pose(Fake(layout, [site["xy"][0] + dx, site["xy"][1], site["z"] + dz], yaw, tilt), None, "c", "ship-h1r1-l0", limits)  # noqa: E731
     assert at()["ok"] and at(dx=.002)["ok"]
     assert not at(dx=.005)["ok"] and not at(dz=.004)["ok"] and not at(yaw=math.radians(8))["ok"] and not at(tilt=6)["ok"]
     assert at(yaw=math.pi)["ok"]  # a container turned 180 deg sits the same
@@ -207,4 +223,67 @@ def test_strict_pose_judge_names_each_limit(layout, data):
 
 def test_a_run_records_the_cell_s_four_cameras():
     assert teacher.RECORDED == ("top", "side", "a_wrist", "b_wrist")  # D-960; the overview is not a camera the cell has
-    assert sites.CHOICES["wrist_camera"] == "stock", "a run without wrist cameras would not match the cell"
+    assert sites.CHOICES["wrist_camera"] == "photo-20261108", "the wrist camera where arm_b's real frame puts it (the D r06 CAD is 'v21-b')"
+    assert sites.WRIST_PHOTO["lens_m"][2] > .0511 + .01  # higher than the D r06 CAD lens
+
+
+def test_the_r08_ship_sites_come_from_its_berth_slot_map(layout):
+    """Rated ship v15 on the berth kit: 1x3 sites are the mean of three 1x1 cells, rows 38 mm apart, three tiers 32.4 mm apart from 6 mm over the table."""
+    ship = {n: s for n, s in layout.sites.items() if s["kind"] == "ship" and s["stack"] != "stern"}  # the stern bay: test_omx_two_arm_plan
+    assert len(ship) == 18 and layout.box == (.09, .02998, .0324)
+    x0, y0 = layout.choices["ship_stern_x_m"], layout.choices["ship_centre_y_m"]
+    for h, x in ((1, 99), (2, 197)):  # hold centres from the stern end
+        for row, y in enumerate((38, 0, -38)):
+            for layer, bottom in enumerate((.006, .0384, .0708)):
+                s = ship[f"ship-h{h}r{row}-l{layer}"]
+                assert s["xy"] == pytest.approx((x0 - x / 1000, y0 - y / 1000)) and len(s["slots"]) == 3
+                assert s["z"] - layout.box[2] / 2 - layout.table_z == pytest.approx(bottom)
+
+
+def test_the_far_hold_is_out_of_reach_where_the_ship_lies(layout):
+    """Hold 2 lies behind both arms with the stern at the table edge: refused, so the tasks use hold 1 only."""
+    for row in range(3):
+        for arm in sites.ARMS:
+            task = dict(supply=["bar-1"], start={}, name="t", steps=[dict(id="x", container="bar-1", **{"from": "belt"}, to=f"ship-h2r{row}-l0", arm=arm)])
+            assert "cannot reach" in refused(layout, task)
+
+
+def test_an_arm_waits_out_of_the_middle_band(layout):
+    """The folded home points the jaw at the middle (arm_a brushed arm_b's jaw at the stern stand); the side wait turns it to the belt end."""
+    for name, arm in layout.sim_arms.items():
+        assert all(abs(p[1]) > .1 for p in arm.segments(arm.wait))
+        assert any(abs(p[1]) < .125 for p in arm.segments(arm.home))  # what it replaces
+        assert arm.segments(arm.wait)[-1][0] > arm.base[0]  # the jaw toward the belt end
+
+
+def test_a_waiting_arm_turns_its_camera_holder_outward(layout):
+    """The D holder sits 55 mm to one side of link5; arm_b's faced the middle and met arm_a's holder over the stern stand."""
+    import palletizing_gripper as jaw
+    lens = np.array(jaw.WRIST_CAMERA_B["lens_m"])
+    for arm in layout.sim_arms.values():
+        R, p = arm.link_poses(arm.wait)[4]
+        assert abs((p + R @ lens)[1]) > .2
+
+
+def test_the_feasibility_matrix_uncovers_each_container_of_the_stack(layout):
+    import omx_two_arm_matrix as matrix
+    full = {c: s for c, s, _ in layout.plan_order()}
+    for c, site, state in matrix.cases(layout):
+        s = layout.sites[site]
+        assert c in state and all(layout.sites[v]["stack"] != s["stack"] or layout.sites[v]["layer"] <= s["layer"] for v in state.values())
+        assert len(state) == len(full) - sum(layout.sites[v]["stack"] == s["stack"] and layout.sites[v]["layer"] > s["layer"] for v in full.values())
+
+
+def test_a_temporary_lane_stacks_three_tiers_on_something(layout):
+    """Plate v11 holds three tiers per lane: a tier needs the one under it and its container cannot leave from under another."""
+    lane = [layout.sites[n] for n in ("tmp-b-2", "tmp-b-2-l1", "tmp-b-2-l2")]
+    assert [s["layer"] for s in lane] == [0, 1, 2] and len({s["xy"] for s in lane}) == 1
+    assert lane[1]["z"] - lane[0]["z"] == pytest.approx(layout.box[2])
+    start = {"bar-9": "ship-h1r2-l2", "bar-6": "ship-h1r2-l1"}
+    up = dict(id="b", container="bar-6", **{"from": "ship-h1r2-l1"}, to="tmp-b-2-l1", arm="arm_b")
+    assert "tmp-b-2-l1 has nothing under it" in refused(layout, dict(supply=[], start=start, name="t", steps=[
+        dict(id="a", container="bar-9", **{"from": "ship-h1r2-l2"}, to="tmp-b-1", arm="arm_b"), up]))
+    stacked = [dict(id="a", container="bar-9", **{"from": "ship-h1r2-l2"}, to="tmp-b-2", arm="arm_b"), up]
+    tasks.validate(layout, dict(supply=[], start=start, name="t", steps=stacked))
+    assert "taken from under" in refused(layout, dict(supply=[], start=start, name="t", steps=stacked + [
+        dict(id="c", container="bar-9", **{"from": "tmp-b-2"}, to="ship-h1r2-l2", arm="arm_b")]))

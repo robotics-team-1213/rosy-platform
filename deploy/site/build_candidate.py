@@ -25,11 +25,13 @@ DEPLOY_FILES = (
     "rosy-site-firewall-check.timer",
     "discovery-token.template.txt", "site_db.py", "site_users.py", "candidate_signing.py",
     "compose.pairing.yaml", "compose.omx.yaml", "compose.workcell.yaml", "compose.control-unit.yaml",
+    "compose.control-unit-remote.yaml",
     "pairing-sync-token.template.txt",
     "compose.monitoring.yaml", "Caddyfile.monitoring",
     "compose.account.yaml", "Caddyfile.account",
     "compose.account-backup.yaml", "rosy-account-backup.service", "rosy-account-backup.timer",
     "rosy-account-backup-check.service", "rosy-account-backup-check.timer",
+    "account_tls_renew.py", "account-tls.env.example", "rosy-site-account-tls-renew.service", "rosy-site-account-tls-renew.timer",  # D-1001: R renews from the signed release
     "sign_candidate.py", "verify_candidate.py",
 )
 DOC_FILES = ("docs/reference/site-lan-discovery-profile.md",)

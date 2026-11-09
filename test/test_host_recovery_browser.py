@@ -88,6 +88,7 @@ def test_a_lab_pc_offers_storage_cleaning_and_shows_its_headroom(console_url):
             "time": now, "state": "ok", "issues": [], "watchdog": {"state": "ok", "timeout_s": 30},
             "kernel": {"state": "ok", "panic_s": 10, "softlockup_panic": 1}, "ssh": {"state": "ok"},
             "swap": {"state": "ok", "total_bytes": 0, "used_bytes": 0}}}},
+        "history": {"ai": [{"text": "reboot ARM_SESSION_ACTIVE", "actor": "operator-1", "created_at": now}]},
     }
     with sync_playwright() as p:
         browser, page, errors = _open_console(p, API)
@@ -113,6 +114,7 @@ def test_a_lab_pc_offers_storage_cleaning_and_shows_its_headroom(console_url):
         expect(ai).to_contain_text("시험 디스크 여유 2.6GB(100%)")
         expect(ai).to_contain_text("메모리 여유 2.5/30.8GB(8%)")
         expect(ai).to_contain_text("CPU 온도 56°C")
+        expect(ai).to_contain_text("operator-1 · reboot ARM_SESSION_ACTIVE")
         buttons = root.locator("#host-services-commands ui-button", has_text="시험 저장소 정리")
         expect(buttons).to_have_count(1)  # the site PC has no such action in its catalogue
         buttons.first.click()
@@ -121,6 +123,53 @@ def test_a_lab_pc_offers_storage_cleaning_and_shows_its_headroom(console_url):
         assert calls == [{"url": "/api/fleet/hosts/ai/control", "method": "POST",
                           "body": {"action": "clean-storage", "unit": None, "operator_confirmed": True}}]
         assert "모델·데이터·사용 중 환경은 지우지 않으며" in page.evaluate("window.cleanPrompts[0]")
+        assert not errors
+        browser.close()
+
+
+@pytest.mark.parametrize("confirm_second, code, sent, note", [
+    (True, "HOST_JOBS_ACTIVE", ["reboot", "reboot-over-jobs"], "reboot-over-jobs 접수"),
+    (False, "HOST_JOBS_ACTIVE", ["reboot"], "작업이 돌고 있어 재부팅하지 않았습니다"),
+    (True, "ARM_SESSION_ACTIVE", ["reboot"], "팔 세션이 돌고 있어 재부팅하지 않았습니다"),
+])
+def test_a_reboot_asks_again_over_jobs_and_never_offers_to_pass_an_arm_session(console_url, confirm_second, code, sent, note):
+    # D-991: the helper refuses; the screen only relays it. An arm session has no second step.
+    from playwright.sync_api import sync_playwright, expect
+
+    body = {"hosts": [{"host": "model", "actions": ["reboot", "reboot-over-jobs", "cancel-reboot"], "units": []}], "guard": {}}
+    with sync_playwright() as p:
+        browser, page, errors = _open_console(p, API)
+        page.goto(console_url, wait_until="networkidle")
+        page.evaluate("""async ({body, code, confirmSecond}) => {
+            const {createHostServices} = await import('/console/assets/host-services.js');
+            const root = document.createElement('section');
+            root.id = 'reboot-test';
+            root.innerHTML = '<p id="host-services-status"></p><div id="host-services-report"></div>' +
+                '<div id="host-services-commands"></div><p id="host-services-note"></p>';
+            document.body.append(root);
+            window.rebootCalls = [];
+            window.rebootPrompts = [];
+            const view = createHostServices({root, call: async (url, options) => {
+                if (!options) return body;
+                window.rebootCalls.push(options.body.action);
+                if (options.body.action === 'reboot') throw Object.assign(new Error('refused'), {code});
+                return {code: 'ACCEPTED'};
+            }, confirmIrreversible: async prompt => {
+                window.rebootPrompts.push(prompt.message);
+                return window.rebootPrompts.length === 1 || confirmSecond;
+            }});
+            await view.refresh();
+        }""", {"body": body, "code": code, "confirmSecond": confirm_second})
+        root = page.locator("#reboot-test")
+        root.locator("#host-services-commands ui-button", has_text="10분 뒤 재부팅").click()
+        if code == "HOST_JOBS_ACTIVE":
+            page.wait_for_function("window.rebootPrompts.length === 2")
+        expect(root.locator("#host-services-note")).to_contain_text(note)
+        assert page.evaluate("window.rebootCalls") == sent
+        prompts = page.evaluate("window.rebootPrompts")
+        assert len(prompts) == (2 if code == "HOST_JOBS_ACTIVE" else 1)
+        if code == "HOST_JOBS_ACTIVE":
+            assert "그 작업이 끊깁니다" in prompts[1]
         assert not errors
         browser.close()
 

@@ -1,0 +1,9 @@
+# Signed overlay for a control-unit neighbour on another PC (D-994). Add it right after compose.control-unit.yaml.
+# It publishes this unit's peer origin on one LAN address only: ROSY_CONTROL_UNIT_PEER_BIND is that host address
+# (required, never 0.0.0.0) and ROSY_CONTROL_UNIT_PEER_PORT is the port in peer.Caddyfile, published unchanged.
+# The remote side dials it through the peer `address` in its control-unit.yaml and still verifies this unit's peer
+# certificate name; Bearer service auth is unchanged. The site HTTPS firewall does not filter this port.
+services:
+  control-unit-peer:
+    ports:
+      - "${ROSY_CONTROL_UNIT_PEER_BIND:?Set the LAN address the cross-host peer origin binds}:${ROSY_CONTROL_UNIT_PEER_PORT:?Set the peer.Caddyfile port}:${ROSY_CONTROL_UNIT_PEER_PORT:?Set the peer.Caddyfile port}"

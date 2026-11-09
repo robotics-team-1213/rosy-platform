@@ -22,7 +22,7 @@ def test_fleet_task_documents_share_composition_and_keep_live_stop(account_page,
     page.locator("[data-login=submit]").click()
     expect(page.locator("#user-role")).to_have_attribute("title", "alice · operator")
     for target in ["/console/profile", "/console/accounts", "/console/install", "/console/site-map",
-                   "/console/cell", "/console/policy", "/console/learning"]:
+                   "/console/cell", "/console/policy", "/console/learning", "/console/maintenance"]:
         page.goto(origin + target, wait_until="domcontentloaded")
         page.evaluate("theme => window.RosyTheme.set(theme)", theme)
         expect(page.locator("main")).to_have_class(re.compile(r"\bui-task-page\b"))

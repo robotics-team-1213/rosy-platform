@@ -348,3 +348,13 @@ def test_viewer_script_parses_even_when_browser_tests_skip(tmp_path):
     script.write_text(_viewer.SCRIPT, encoding="utf-8")
     checked = subprocess.run([node, "--check", str(script)], capture_output=True, text=True)
     assert checked.returncode == 0, checked.stderr
+
+
+def test_each_wrist_camera_is_reported_by_its_own_arm_role():
+    """2026-11-08: the site served arm_a's wrist as "front", so an arm_b episode recorded the other arm's wrist."""
+    store = ObservationStore(cameras={"top": "/top_camera/image_raw", "arm_a_wrist": "/arm_a_wrist_camera/image_raw",
+                                      "arm_b_wrist": "/arm_b_wrist_camera/image_raw"})
+    store.put("arm_b_wrist", 100, b"jpeg", received=10)
+    state = store.snapshot(now=10.1, wall=100.1)
+    assert state["arm_b_wrist"]["fresh"] and not state["arm_a_wrist"]["fresh"]
+    assert "front" not in state

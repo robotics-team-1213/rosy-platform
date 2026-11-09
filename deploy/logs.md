@@ -4714,6 +4714,39 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - gate 변화: 없음 — 기체 수용 전이다.
 - CE: 해당 없음 — 새 기능이며 해결한 장애가 없다.
 
+## 2026-11-07 · 11b42b5933 · feat(rosy-face): 사람 부탁 도착 소리와 15초 반복
+- 변경: `PersonAsk`(`rosy_face_parts.py`)가 기존 `call` 패턴을 도착 때 한 번, 같은 id가 보이는 동안 15 s마다. 정지·실패 화면이면 소리 없음, ROSY_BUZZER_ENABLED는 Buzzer 그대로.
+- 증거: `test/test_rosy_face_person.py`(도착·반복 시각, 답·만료 뒤 멈춤, 화면 우선순위). 실제 스피커 확인은 하지 않았다.
+- gate 변화: SOURCE 변경. 장치 수용 아님.
+- 교훈: CE 해당 없음 — 최종 코드와 시험이 판단을 보존한다. 실물·운영 수용은 아니다.
+## 2026-11-07 · 178d616c75 · feat(face): at 10% or under the screen goes dark and the buzzer asks for a charger
+- 변경: `rosy-face`가 표본 두 번 연속 10% 이하이면 LCD를 끄고 30초마다 부저 세 번, 13% 초과로 복귀. 업데이트·종료 화면 예외.
+- 증거: `test/test_rosy_face_battery_urgent.py`. 실제 부저와 LCD는 새 릴리스 뒤 확인 전이다.
+- gate 변화: 없음
+- 교훈: CE 해당 없음 — 규칙은 D-502 Amendment와 회귀 시험에 있다.
+
+## 2026-11-07 · 18943fb321 · merge: 긴급 배터리 어두운 화면이 사람 부탁보다 먼저
+- 변경: `fix/battery-estop-auto-release`를 합쳤다. 어두운 화면에서는 `person`을 지우고 호출음·주황 램프를 내지 않는다. 한 루프에 소리 하나(`_buzz`): 정지·실패, 긴급 배터리, 그 다음 호출음.
+- 증거: `test/test_rosy_face_person.py`(긴급+요청, 한 루프 한 소리, 주행 램프).
+- gate 변화: SOURCE 변경. 로봇·장치 수용 없음.
+- 교훈: CE 해당 없음 — 최종 코드와 시험이 판단을 보존한다. 실물·운영 수용은 아니다.
+
+## 2026-11-07 · 44fb0c6315 · fix(face): 벤치 시험 보호는 표 화면과 그려진 화면 둘 다 본다
+- 변경: 배터리 병합이 `handle_test`를 `_table_screen`만 보게 해 `test_an_accepted_fleet_call_chirps_once…`가 깨졌다(`fix/battery-estop-auto-release` 끝에서도 같은 시험이 실패함을 원격으로 확인). 두 화면 중 하나라도 정지·업데이트·실패·주의면 시험을 기다리게 한다. 시험 기대는 바꾸지 않았다. Safety-Review: pending independent review.
+- 증거: 원격 robttt: test_rosy_face·test_rosy_face_person·test_rosy_face_battery_urgent 포함 299 passed·1 skipped.
+- gate 변화: SOURCE 변경. 로봇·장치 수용 없음.
+- 교훈: CE 해당 없음 — 최종 코드와 시험이 판단을 보존한다. 실물·운영 수용은 아니다.
+
+## 2026-11-07 · uncommitted · fix: 도우미가 재부팅 전에 팔 세션과 작업을 본다 (D-991)
+- 변경: `rosy-host-control`의 `reboot`는 세션 잠금에서 거절하고, `reboot-if-free`는 작업에서도 거절한다. 예약 뒤 570초에 다시 보고 자기 재부팅만 취소한다. `recheck-reboot`는 강제 명령 키로 부를 수 없다.
+- 증거: 원격 `test_host_control.py`. 도우미를 stub으로 돌린 호스트 시험이다.
+- gate 변화: 없음 — PC 설치 전이다. 설치 전까지 guard 경로는 옛 동작이다.
+
+## 2026-11-07 · uncommitted · feat: 응답 없는 PC를 guard가 팀 채널로 알린다 (D-991)
+- 변경: `rosy-host-guard`가 PC 2번 연속 무응답과 복귀를 webhook으로 한 번씩 보낸다. webhook은 curl 표준 입력으로 넘겨 프로세스 목록에 나오지 않는다. 복구 단계는 바꾸지 않는다.
+- 증거: 원격 `test/test_host_guard.py`. stub curl이며 실제 채널 발송 수용이 아니다.
+- gate 변화: 없음 — webhook 파일과 PC 설치 전이다. CE: 해당 없음 — 시험과 ADR이 판단을 보존한다.
+
 ## 2026-11-07 · uncommitted · feat(navigation): 로그인한 운영자가 API로 항법을 다시 승인한다 (D-986)
 - 변경: `native/navigation_approval_host.py`, Host Agent `navigation_approval.*`와 operator 등급, CORE `approval_trials.py`, `/api/v1/navigation/approval`, 작업 준비 카드
 - 증거: 원격 시험. 장치 수용 없음
@@ -4725,3 +4758,23 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: 2026-11-07 y8xs가 `battery.deep`(4.9 %)을 기록하고도 꺼지지 않아 1.3 %(6.45 V)에서 사람이 껐다. 원격 시험 관련 10개 파일 642 passed. 독립 검토 차단 결함 없음
 - gate 변화: 없음 — 기체에서 실제 종료를 확인하기 전이다.
 - CE: 미해결 — 기체에서 `PathChanged` 발화와 종료를 확인한 뒤 교훈을 기록한다.
+## 2026-11-08 · uncommitted · feat(control-unit): 다른 PC의 이웃 관제에 peer 주소로 접속한다 (D-994)
+- 변경: control-unit peers 항목에 선택 `address`(IP 리터럴, https만)를 더해 그 주소로 접속하고 TLS 이름·Host는 `url` 이름으로 확인한다. 서명 overlay `compose.control-unit-remote.yaml`이 peer proxy만 `ROSY_CONTROL_UNIT_PEER_BIND`·`_PORT`의 LAN 주소에 게시하며 `site-firewall.py check`가 와일드카드·loopback·남의 주소를 거절한다. 후보 목록·검증·manifest 요약·업데이터 overlay 허용과 서명 포함 대조에 넣었고, 같은 주소·포트의 두 이웃을 거절한다. 독립 검토 지적(서명 대조 누락, 게시 주소 생략, 연결 풀 공유) 반영
+- 증거: 통합관제 R을 N150 호스트로 옮기려 하자 R↔CELL-A가 같은 PC 도커 네트워크 별칭으로만 닿아 분리할 수 없었다. 원격 시험은 아래 커밋에 기록
+- gate 변화: 없음 — 현장 전환 전이다
+- 결정: D-994 2·3항(서명 경로로만 배치)
+
+## 2026-11-09 · 79ebad2111 · D-922 Pinky 표정·시선·후면 LED 구현
+
+- 변경: 검증된 감지 입력의 시간·중복·세대 처리, 방향성 눈인사, 300초 일반 대기의 졸린 휴식, 공통 얼굴·LED 의도와 기존 안전·정보·전력 표시 우선권을 연결했다.
+- 범위: CORE 정책·bridge, 선택적 로컬 표현 hand-over와 독립 만료, 단일 native LCD 소유자의 pupil 렌더링 및 기존 8종 자산 생성기 재사용. 기존 안전 자문과 최종 주행 writer는 유지한다.
+- 검증: 원격 RED에서 정책·핸드오버·렌더링·서비스 응답·모드 전환·시선 캐시·패킷 손실의 누락을 확인했다. 초기 GREEN 정책 190 passed, native/자산 198 passed·1 skipped, 독립 검토 보완 후 결합 시험 284 passed·1 skipped. 최종 커밋의 FULL 및 추가 도착/lease 시험 결과는 후속 검증 기록으로 결속한다.
+- 한계: 기본 검출 producer는 track_id를 내지 않아 무리 fallback이 적용된다. 개별 인사 선택은 ID를 제공하는 계약 입력에서 지원된다. ARM64 실행·실물 LCD/LED 수용·배포·현장 gate는 올리지 않는다.
+- gate 변화: 없음. 호스트 시험은 ARM64 실행·실물 LCD/LED·DEVICE/FIELD 수용을 입증하지 않는다.
+- CE: 해당 없음 — 구현·회귀 시험에서 결정과 실패 처리를 복원할 수 있으며 새 장치/운영 복구 교훈은 없다.
+
+## 2026-11-09 · 3d550f49ce · D-922 구현 검증 및 기록 항목 정정
+
+- 변경: 앞선 79ebad2111 항목은 fa67fb264b에 커밋되어 원문을 보존한다. 빠진 gate 항목을 이 후속 기록으로 보완한다. 서비스 응답을 실제 IDL 필드로 읽고 동시 발견 시 사람 눈인사를 우선했다.
+- 증거: 3d550f49ce 원격 집중 시험 536 passed, 1 skipped; known_failures NEW 0, known 0, flaky 0. 전체 27개 묶음 검증은 진행 중이며 최종 결과는 구현 계획의 검증 기록으로 결속한다.
+- gate 변화: 없음. 호스트 검증은 ARM64 실행·실물 LCD/LED·DEVICE/FIELD 수용을 입증하지 않는다. 배포·착지·push는 수행하지 않았다.

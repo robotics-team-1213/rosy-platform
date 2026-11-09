@@ -10,6 +10,8 @@ import { motionSource } from "./motion-source.js";
 import {routeAttention, trafficAttention} from "/console/assets/site-map-model.js";
 import {tripEndText, tripWaitText} from "/console/assets/trip-display.js";
 import { guideAttention } from "/console/assets/guide-layer.js";
+import { recoveryHeadline } from "./station-recovery.js";
+import { personHeadline, requestsFor } from "./person-request.js";
 
 function nodeWithText(tagName, className = "", text) {
   const node = document.createElement(tagName);
@@ -39,7 +41,7 @@ export function groupRows(rows, min = 2) {
   return out;
 }
 
-/** "배터리 근거 확인 불가 — 센서/CORE 확인 · 9대 (rosy_001 · rosy_002 · rosy_003 외 6대)" */
+/** "배터리 값 멈춤 — 센서 연결 확인 · 9대 (rosy_001 · rosy_002 · rosy_003 외 6대)" */
 export function groupText(text, ids, shown = 3) {
   const few = ids.slice(0, shown).join(" · ");
   return `${text.replace(/^:\s*/, "")} · ${ids.length}대 (${few}${ids.length > shown ? ` 외 ${ids.length - shown}대` : ""})`;
@@ -161,7 +163,7 @@ export function createQueues({ scope, el, view, render, streamEvidence }) {
     if (relay && relay.cls) items.push({ severity: relay.cls === "crit" ? "crit" : "warn", text: `: ${relay.text}` });
     const source = motionSource(robot, view);
     if (source.attention) items.push({ severity: "crit", text: `: ${source.text} — ${source.title}` });
-    if (state.safety?.estop === true) items.push({ severity: "warn", text: `: ${estopText(state, "비상 정지 걸림")} — 관리자가 해제해야 움직입니다` });
+    if (state.safety?.estop === true) items.push({ severity: "warn", text: `: ${estopText(state, "비상 정지 걸림")}${state.safety.releases_when_charged === true ? "" : " — 관리자가 해제해야 움직입니다"}` });
     else if (state.safety?.estop !== false) items.push({ severity: "warn", text: ": 정지 상태 미확인" });
     if (state.navigation === "FAILED") items.push({ severity: "warn", text: ": 목표 실패" });
     // D-511 M0: Fleet이 Rosy Cam 지도 자세로 본 차로 여유. 움직이는 로봇만 알린다(D-511 §2).
@@ -188,6 +190,12 @@ export function createQueues({ scope, el, view, render, streamEvidence }) {
     // D-550 8 / D-760 3: Fleet started a motion that no TTL or link signal bounds. Shown, not refused.
     const unbounded = ruleMTag(robot.rule_m);
     if (unbounded) items.push({ severity: "warn", text: `: 한도 없는 움직임 — ${unbounded.text}` });
+    // D-721 Amendment (S1): a low-battery robot's station recovery request; the row opens on its answer.
+    const recovery = (view.stationRecovery?.requests || []).find((r) => r.robot_id === robot.robot_id);
+    if (recoveryHeadline(recovery)) items.push({ severity: "warn", decision: "recovery", text: recoveryHeadline(recovery) });
+    // D-721 Amendment: 사람 부탁 — a person is asked for something physical; the row opens on the answer buttons.
+    for (const ask of requestsFor(view, robot.robot_id))
+      items.push({ severity: "warn", decision: "person", key: `${robot.robot_id}|person-${ask.id}`, text: personHeadline(ask) });
     if (robot.queued) items.push({ severity: "warn", text: ": 교통 대기" });
     if (robot.yielding) items.push({ severity: "warn", text: ": 양보 중" });
     if (staleS !== null) items.push({ severity: "warn", text: `: 상태 오래됨 — ${staleS}초 전 값` });
@@ -278,7 +286,7 @@ export function createQueues({ scope, el, view, render, streamEvidence }) {
     for (const r of view.stateUnavailable ? [] : view.robots) {
       for (const item of attentionItems(r)) {
         const list = item.severity === "crit" ? rows.crit : rows.warn;
-        const key = `${r.robot_id}|${item.decision || list.length}`;
+        const key = item.key || `${r.robot_id}|${item.decision || list.length}`;
         list.push({ ...item, robotId: r.robot_id, key });
       }
     }

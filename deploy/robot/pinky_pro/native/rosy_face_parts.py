@@ -25,7 +25,8 @@ BUZZER_CALL_HZ = 1400
 BUZZER_REVERSE_HZ = 1000
 BUZZER_PATTERNS = {"ready": (1, BUZZER_FREQUENCY_HZ), "failed": (3, BUZZER_FREQUENCY_HZ),
                    "caution": (2, BUZZER_LOW_HZ), "emergency": (4, 2500),
-                   "call": (2, BUZZER_CALL_HZ), "reverse": (1, BUZZER_REVERSE_HZ)}
+                   "call": (2, BUZZER_CALL_HZ), "reverse": (1, BUZZER_REVERSE_HZ),
+                   "battery_urgent": (3, 1800)}
 #: D-247 6's buzzer test, when handed over: three 150 ms beeps, like rosy-hw-test.
 TEST_BEEPS, TEST_ON_S, TEST_OFF_S = 3, 0.15, 0.15
 LAMP_NODE = "dev/ws281x_pwm"
@@ -131,6 +132,30 @@ class Buzzer:
             return "failed", f"BCM {self._pin} 구동 실패: {type(exc).__name__}"
         return "done", (f"BCM {self._pin} · 2 kHz · duty {BUZZER_DUTY} % · "
                         f"{TEST_BEEPS}×{int(TEST_ON_S * 1000)} ms (부팅 표시가 울림)")
+
+
+class PersonAsk:
+    """D-721 Amendment: the beep that goes with a person request on the screen.
+
+    The ``call`` sound once when a request id first shows, then every ``REPEAT_S`` while that same id keeps
+    showing. It is silent when no request shows (answered, withdrawn, expired, or a stop/update/failed screen
+    covers it: the caller passes None then) and starts over for a new id. A silent robot has nothing to reset.
+    """
+
+    REPEAT_S = 15.0
+
+    def __init__(self) -> None:
+        self._id: str | None = None
+        self._at = 0.0
+
+    def due(self, request_id: str | None, now: float) -> bool:
+        if request_id is None:
+            self._id = None
+            return False
+        if request_id != self._id or now - self._at >= self.REPEAT_S:
+            self._id, self._at = request_id, now
+            return True
+        return False
 
 
 class Lamp:

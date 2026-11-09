@@ -82,7 +82,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     const state = view.stateUnavailable ? {} : (robot.state || {});
     const pose = state.pose;
     const power = powerHealthView(robot, view.receivedAtMs, Date.now());
-    const nav = navTag(state);
+    const nav = navTag(state, robot.robot_id);
     const tripLine = view.stateUnavailable ? "" : cardTripLine(view, robot.robot_id);
     const estop = state.safety?.estop;
     const stateStale = staleAgeS(robot, view.receivedAtMs, Date.now()) !== null;
@@ -197,7 +197,8 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
 
     const facts = nodeWithText("div", "facts");
     const battery = power.battery.endsWith("%") && typeof power.voltage === "number"
-      ? `${power.battery} · ${power.voltage.toFixed(2)} V` : power.battery;
+      ? `${power.battery} · ${power.voltage.toFixed(2)} V`
+      : power.note ? `${power.battery} · ${power.note}` : power.battery;
     const rows = [
       ["pose", "위치", robotPoseText(state, robot.localization)],
       ["yaw", "방향", pose ? `${(pose.yaw * 180 / Math.PI).toFixed(0)}°` : "—"],

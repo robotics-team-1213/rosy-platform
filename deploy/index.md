@@ -78,8 +78,8 @@
 
 ## 최근 기록
 
+- 2026-11-09 · 3d550f49ce · D-922 구현 검증 및 기록 항목 정정
+- 2026-11-09 · 79ebad2111 · D-922 Pinky 표정·시선·후면 LED 구현
+- 2026-11-08 · uncommitted · feat(control-unit): 다른 PC의 이웃 관제에 peer 주소로 접속한다 (D-994)
 - 2026-11-07 · uncommitted · fix(power): 네이티브 Pinky가 CORE의 deep 배터리 요청에 꺼진다 (D-27)
 - 2026-11-07 · uncommitted · feat(navigation): 로그인한 운영자가 API로 항법을 다시 승인한다 (D-986)
-- 2026-11-07 · uncommitted · feat(navigation): 모터·정지 파일이 같으면 항법 승인을 이어받는다 (D-986)
-- 2026-11-07 · uncommitted · fix(update): 표시만 남은 MANUAL이 자동 갱신을 막지 않는다 (D-985 7항)
-- 2026-11-07 · uncommitted · fix(omx): 사고 hold와 미전송 보고를 고정 위치로 통일

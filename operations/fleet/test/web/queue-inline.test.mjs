@@ -105,7 +105,7 @@ test("a later row of the same robot hides the name and its colon", () => {
 });
 
 test("one warn cause on many robots is one row; decisions and single causes stay their own rows", () => {
-  const battery = ": 배터리 근거 확인 불가 — 센서/CORE 확인";
+  const battery = ": 배터리 값 멈춤 — 센서 연결 확인";
   const rows = [
     { robotId: "rosy_001", text: battery, key: "rosy_001|0" },
     { robotId: "rosy_002", text: ": 연결 끊김", key: "rosy_002|1" },
@@ -116,6 +116,6 @@ test("one warn cause on many robots is one row; decisions and single causes stay
   assert.deepEqual(out.map((row) => row.key), ["group|" + battery, "rosy_002|1", "rosy_007|stuck"]);
   assert.deepEqual(out[0].group, ["rosy_001", "rosy_003", "rosy_004", "rosy_005", "rosy_006"]);
   assert.equal(groupText(battery, out[0].group),
-    "배터리 근거 확인 불가 — 센서/CORE 확인 · 5대 (rosy_001 · rosy_003 · rosy_004 외 2대)");
+    "배터리 값 멈춤 — 센서 연결 확인 · 5대 (rosy_001 · rosy_003 · rosy_004 외 2대)");
   assert.equal(groupText(": 연결 끊김", ["a", "b"]), "연결 끊김 · 2대 (a · b)");
 });

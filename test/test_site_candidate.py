@@ -31,11 +31,12 @@ def test_site_candidate_is_commit_tagged_and_contains_sbom_and_image_hash(tmp_pa
                  "verify_candidate.py",
                  "discovery-token.template.txt", "site_db.py", "site_users.py",
                  "compose.pairing.yaml", "compose.omx.yaml", "compose.workcell.yaml", "compose.control-unit.yaml",
+                 "compose.control-unit-remote.yaml",
                  "pairing-sync-token.template.txt",
                  "compose.monitoring.yaml", "Caddyfile.monitoring",
                  "compose.account.yaml", "Caddyfile.account", "compose.account-backup.yaml",
                  "rosy-account-backup.service", "rosy-account-backup.timer",
-                 "rosy-account-backup-check.service", "rosy-account-backup-check.timer"):
+                 "rosy-account-backup-check.service", "rosy-account-backup-check.timer", "account_tls_renew.py", "account-tls.env.example", "rosy-site-account-tls-renew.service", "rosy-site-account-tls-renew.timer"):
         (site / name).write_text(f"fixture:{name}", encoding="utf-8")
     (site / "rosy-site-stack.service").write_text(
         "Requires=docker.service\n"
@@ -113,11 +114,12 @@ def test_site_candidate_is_commit_tagged_and_contains_sbom_and_image_hash(tmp_pa
         "candidate_signing.py", "sign_candidate.py",
         "discovery-token.template.txt", "site_db.py", "site_users.py",
                  "compose.pairing.yaml", "compose.omx.yaml", "compose.workcell.yaml", "compose.control-unit.yaml",
+                 "compose.control-unit-remote.yaml",
                  "pairing-sync-token.template.txt",
                  "compose.monitoring.yaml", "Caddyfile.monitoring",
                  "compose.account.yaml", "Caddyfile.account",
                  "compose.account-backup.yaml", "rosy-account-backup.service", "rosy-account-backup.timer",
-                 "rosy-account-backup-check.service", "rosy-account-backup-check.timer",
+                 "rosy-account-backup-check.service", "rosy-account-backup-check.timer", "account_tls_renew.py", "account-tls.env.example", "rosy-site-account-tls-renew.service", "rosy-site-account-tls-renew.timer",
     }
     stack_unit = (output / "deploy" / "site" / "rosy-site-stack.service").read_text(
         encoding="utf-8")
@@ -169,13 +171,14 @@ def test_site_candidate_refuses_non_amd64_images_and_output_inside_checkout(tmp_
                  "candidate_signing.py", "sign_candidate.py", "verify_candidate.py",
                  "discovery-token.template.txt", "site_db.py", "site_users.py",
                  "compose.pairing.yaml", "compose.omx.yaml", "compose.workcell.yaml", "compose.control-unit.yaml",
+                 "compose.control-unit-remote.yaml",
                  "pairing-sync-token.template.txt",
                  "compose.monitoring.yaml", "Caddyfile.monitoring",
                  "compose.account.yaml", "Caddyfile.account",
                  "Dockerfile.fleet", "Dockerfile.vision", "Dockerfile.proxy", "Dockerfile.account"):
         (site / name).write_text("fixture", encoding="utf-8")
     for name in ("compose.account-backup.yaml", "rosy-account-backup.service", "rosy-account-backup.timer",
-                 "rosy-account-backup-check.service", "rosy-account-backup-check.timer"):
+                 "rosy-account-backup-check.service", "rosy-account-backup-check.timer", "account_tls_renew.py", "account-tls.env.example", "rosy-site-account-tls-renew.service", "rosy-site-account-tls-renew.timer"):
         (site / name).write_text("fixture", encoding="utf-8")
     (site / "rosy-site-stack.service").write_text("fixture", encoding="utf-8")
 
