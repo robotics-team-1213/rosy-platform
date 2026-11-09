@@ -133,7 +133,7 @@ class SiteMapStore:
             try:
                 row = self._active_row()
             except SiteMapError as error:
-                _LOG.error("site map: the active version is not served: %s", error.message)
+                _LOG.error("site map: the active version is not served: %s", error)
                 self._cached = None   # fail closed: no map is served until an operator re-activates
                 return
             if row is None:

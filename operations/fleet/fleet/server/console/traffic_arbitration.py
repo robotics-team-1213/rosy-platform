@@ -78,16 +78,16 @@ class TrafficArbitration:
             if (robot_id == mover or robot_id in self._claims
                     or self._verdict(robot_id) == trust.UNTRUSTED):
                 continue
-            if self._map_mismatch(mover, robot_id):
-                # D-1010: its pose is another frame's numbers. We cannot prove it is clear of
-                # this route, and we cannot move it either — it stays a blocker for a human.
-                out.append(robot_id)
-                continue
             pose = self._pose_of(robot_id)
             if pose is None:
                 continue
             if here is not None and traffic.coincident(pose, here):
                 # 출발점과 같은 보고는 길을 막은 로봇이 아니라 측위가 안 된 겹침이다 (D-116).
+                continue
+            if self._map_mismatch(mover, robot_id):
+                # D-1010: its pose is another frame's numbers, so this route-versus-pose
+                # verdict would be fiction. It stays a blocker for a human, never moved.
+                out.append(robot_id)
                 continue
             nearest = bays.nearest_on_route(route, pose)
             if nearest is None or math.dist(nearest, pose) >= self._yield_keep_out_m:

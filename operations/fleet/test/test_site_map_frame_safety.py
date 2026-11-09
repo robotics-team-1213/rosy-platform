@@ -16,9 +16,9 @@ from test_trip_robot_frame_goal import _in_robot_map, _state
 
 
 def _v2_map():
-    """The same corridors, one place moved: a body that must activate as a new version."""
+    """The same corridors, one place renamed: a valid body that must activate as a new version."""
     body = _free_map().body()
-    body["places"][2]["x"] = 1.05
+    body["places"][2]["name"] = "C2"
     from fleet.site_map import SiteMap
     return SiteMap.model_validate(body)
 
