@@ -698,3 +698,26 @@ def test_a_waiter_never_replaces_a_landing_that_started_while_it_waited(repo, mo
     monkeypatch.setattr(tool, "stop", lambda pid: pytest.fail("a waiter stopped a newer landing"))
     with pytest.raises(SystemExit, match="started while this waited"):
         tool.start(dev, [], NOW, lambda *a: None)
+
+
+def test_a_stopped_rollup_splits_itself_from_mains_checkout(tmp_path, monkeypatch):
+    """D-889 33: a failed rollup bisects on its own; any other stopped snapshot, or the revert switch, does not."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "init", "-q", str(repo)], check=True)
+    tree = repo / ".git" / "rosy-land-wt" / "land-fix-land-rollup-20261109000000-20261109000000"
+    tree.mkdir(parents=True)
+    rollup = "land/fix/land-rollup-20261109000000-20261109000000"
+    monkeypatch.setattr(tool, "git", lambda cwd, *a, **k: str(repo / ".git"))
+    seen = []
+    launch = lambda argv, log, cwd=None: seen.append((argv[-2:], log.name, cwd))  # noqa: E731
+    tool.split_rollup(tree, rollup, launch)
+    assert seen == [], "no .members record: not a rollup land_rollup built"
+    (tree.parent / (tree.name + ".members")).write_text("[]", encoding="utf-8")
+    tool.split_rollup(tree, "land/fix/a-20261109000000", launch)
+    monkeypatch.setenv("ROSY_ROLLUP_MIXED", "0")
+    tool.split_rollup(tree, rollup, launch)
+    assert seen == []
+    monkeypatch.delenv("ROSY_ROLLUP_MIXED")
+    tool.split_rollup(tree, rollup, launch)
+    assert seen == [(["split", tree.name], tree.name + ".split.log", repo)]
