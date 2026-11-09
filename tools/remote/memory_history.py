@@ -76,7 +76,7 @@ def _rows(history: Path | None, inv: list[str]) -> list[dict]:
         return rows
     try:
         # Line by line: every invocation of a landing reads this at once, and the file only grows.
-        with history.open(encoding="utf-8") as lines:
+        with history.open(encoding="utf-8", errors="replace") as lines:
             for line in lines:
                 try:
                     row = json.loads(line)
@@ -101,7 +101,7 @@ def reserve_gb_all(history: Path | None, invs: list[list[str]]) -> int:
     keys, peaks = {key(inv) for inv in invs}, {}
     if history is not None and invs:
         try:
-            with history.open(encoding="utf-8") as lines:
+            with history.open(encoding="utf-8", errors="replace") as lines:
                 for line in lines:
                     try:
                         row = json.loads(line)

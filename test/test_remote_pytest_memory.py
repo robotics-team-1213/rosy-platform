@@ -170,3 +170,6 @@ def test_a_run_reserves_its_largest_measured_need_and_full_while_any_is_unmeasur
     assert mh.reserve_gb_all(history, [small, heavy]) == 3  # 1.25 x 2000 MiB, rounded up
     assert mh.reserve_gb_all(history, []) == 6
     assert 'pytest 2 ${5:-6}' in rp.SHIP  # the run's measured GB, 6 from an older caller
+    with history.open("ab") as out:
+        out.write(b'\xff\xfe{"key": "torn\n')  # a torn multibyte write must not crash a run
+    assert mh.reserve_gb_all(history, [small, heavy]) == 3 and mh.reserve_gb(history, small) == 1
