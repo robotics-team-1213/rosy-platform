@@ -210,3 +210,26 @@ def test_io_unit_gate_fails_closed_when_the_variable_is_unset():
     completed = subprocess.run([shutil.which("bash"), "--noprofile", "--norc", "-c", _drive_gate()],
                                env=env, capture_output=True, text=True, check=False)
     assert completed.returncode == 78
+
+
+def test_bringup_ignores_repeat_signals_while_it_turns_torque_off():
+    source = (BRINGUP / "bringup" / "bringup.py").read_text(encoding="utf-8")
+    finally_block = source.split("    finally:\n", 1)[1].split("node.driver.terminate()")[0]
+
+    assert "signal.signal(signum, signal.SIG_IGN)" in finally_block
+    assert "signal.SIGINT" in finally_block and "signal.SIGTERM" in finally_block
+
+
+@pytest.mark.parametrize("unit", ["rosy-io", "rosy-navigation"])
+def test_motor_units_repeat_torque_off_after_every_stop(unit):
+    native = ROOT / "deploy" / "robot" / "pinky_pro" / "native"
+    service = (native / f"{unit}.service").read_text(encoding="utf-8")
+
+    assert (
+        "ExecStopPost=+/usr/bin/python3 -I -B /opt/rosy/native-runtime/wheel_torque_off.py"
+        in service
+    )
+    script = (native / "wheel_torque_off.py").read_text(encoding="utf-8")
+    assert "write1ByteTxRx(port, motor_id, ADDR_TORQUE_ENABLE, 0)" in script
+    assert "print(f\"FAIL torque-off: cannot open" in script
+    assert "sys.exit(main())" in script and "return 0" in script
