@@ -137,7 +137,16 @@ def test_a_healthy_pc_is_never_touched(tmp_path):
         "avail_pct": 60, "swap_pct": 5, "load": 1.2, "cores": 24, "uptime_s": 7200, "down": [],
         # a six-field reply: disk and RAM size unknown, not healthy; the RAM warning still uses avail_pct
         "disk": None, "disk_low": None, "gpu": None, "memory": None, "memory_low": False, "cpu": None,
+        "reboot_overdue": False,
     }
+
+
+def test_a_pc_whose_nightly_reboots_kept_skipping_is_reported_never_rebooted(tmp_path):
+    """D-991: a nightly reboot skips while work runs; after three days that is flagged, never forced."""
+    answer = HEALTHY.replace(" 7200 ", f" {3 * 86400 + 1} ")
+    assert _guard(tmp_path, answer, runs=4) == ["health"] * 4
+    row = json.loads((tmp_path / "state/status.json").read_text())["pc1"]
+    assert row["state"] == "ok" and row["resources"]["reboot_overdue"] is True and _actions(tmp_path) == []
 
 
 def test_disk_and_gpu_headroom_are_recorded(tmp_path):
