@@ -14666,6 +14666,13 @@ osy-d395-s1d\`.
 - gate 변화: 없음. 감지→표현 producer·renderer 연결과 실제 LCD·LED 수용은 후속 구현·검증이다.
 - CE: 해당 없음 — 미결 설계 결정의 구체화이며 운영·장치 장애 해결이 아니다.
 
+## 2026-11-09 · uncommitted · chore(publish): 게시용 명시 FULL 근거
+
+- 변경: 코드 변경 없음. 공개 main 게시(D-868)에 필요한 명시 `--tests full` 착지 기록을 남기려는 기록 항목이다. 11-08 FULL 착지(chore/publish-full-20261108)는 그 뒤 고친 MAIN-RED 브라우저 시험에 막혀 멈췄고, 로컬 main 4f9e225d77에서 새로 돈다.
+- 증거: 이 착지의 FULL 기록이 게시 근거다.
+- gate 변화: 없음.
+- CE: 해당 없음 — 게시 절차 실행이며 장애 해결이 아니다.
+
 ## 2026-11-09 · e94b732208 · D-922 추가 결정 — Pinky 상황 표정 8종
 
 - 변경: 여러 모델 디자인 패널에서 고른 doze·scan·lost·worry·lowbat·cheer·thinking·searching을 추가했다. 상황 표정은 `face_screen.situation_face`가 기존 face-inputs 필드로 고르고(복구 > dock_failed > line_follow_hold > 보정 > 진행 중 반응 > PLANNING > 배터리 20% 미만 > IDLE 충전), cheer는 함께 나타난 여러 사람의 인사다. native tick은 상황 표정을 CORE 표정·반응 만료보다 우선한다. 주의 램프 아래에서는 cheer·doze를 쓰지 않는다.
