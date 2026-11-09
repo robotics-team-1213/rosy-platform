@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Rosy Calibration — 실측 요청</title>
+  <link rel="stylesheet" href="/common/tokens.css">
+  <script src="/common/theme.js"></script>
+  <link rel="stylesheet" href="/common/components.css">
+  <link rel="stylesheet" href="/common/component-controls.css">
+  <link rel="stylesheet" href="/common/app-shell.css">
+  <link rel="stylesheet" href="/styles.css">
+  <script type="module" src="/common/ui.js"></script>
+  <script type="module" src="/app.js"></script>
+</head>
+<body>
+  <ui-shell grammar="procedure" class="ui-app-shell">
+    <a class="skip-link" href="#request-main">요청 내용으로 건너뛰기</a>
+    <noscript><ui-status state="error">이 화면은 브라우저 스크립트를 사용합니다. 스크립트를 허용한 뒤 다시 여세요.</ui-status></noscript>
+    <ui-topbar role="banner">
+      <ui-brand href="/" aria-label="Rosy Calibration 홈">
+        <b>Calibration</b>
+        <small>셀 실측 요청 · 사람이 확인하는 값</small>
+      </ui-brand>
+      <span data-spacer></span>
+      <ui-tag id="mode-tag">확인 중</ui-tag>
+      <a id="account-login" href="/api/account/login" hidden>Rosy Account 로그인</a>
+      <a data-account-profile hidden></a>
+      <ui-button id="account-logout" kind="quiet" type="button" hidden>로그아웃</ui-button>
+    </ui-topbar>
+    <div class="ui-app-body">
+      <main class="ui-app-main" id="request-main" tabindex="-1">
+        <div class="ui-pathbar"><h1 class="ui-page-heading">실측 요청</h1></div>
+        <div class="ui-stage-grid" data-layout="watch">
+          <section class="ui-pane" data-pane="stage" aria-labelledby="detail-heading">
+            <h2 id="detail-heading" class="sr-only">요청 내용</h2>
+            <ui-status id="status" role="status" aria-live="polite">요청을 불러오는 중입니다.</ui-status>
+            <div id="detail" hidden></div>
+          </section>
+          <aside class="ui-pane" data-pane="now" aria-labelledby="list-heading">
+            <h2 id="list-heading">요청 목록</h2>
+            <ul id="list" class="request-list"></ul>
+            <ui-empty id="empty" hidden>열린 요청이 없습니다.</ui-empty>
+          </aside>
+        </div>
+      </main>
+    </div>
+  </ui-shell>
+</body>
+</html>
