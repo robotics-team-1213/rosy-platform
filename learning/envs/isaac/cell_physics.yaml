@@ -104,3 +104,48 @@ candidates:
         joint5:
           frictionloss: 0.003178
           damping: 0.060463
+  servo-friction-hold34-20261109:
+    base: registers-20261109
+    source: fitted
+    date: '2026-11-09'
+    method: omx_sysid.py servo, frictionloss, damping of joint1-5 by least squares
+      over 14 episodes, gravity_comp=['joint3', 'joint4']
+    evidence: docs/validation/omx-sysid-2026-11-09/fit-servo-run4.json
+    note: held-out mean 0.493 -> 0.455 deg over 11 episodes
+    arms:
+      arm_b:
+        joint1:
+          frictionloss: 0.045967
+          damping: 0.088592
+        joint2:
+          frictionloss: 0.068785
+          damping: 0.001
+        joint3:
+          frictionloss: 0.02213
+          damping: 0.001109
+        joint4:
+          frictionloss: 0.0001
+          damping: 0.822935
+        joint5:
+          frictionloss: 0.026411
+          damping: 0.001
+    sd:
+      arm_b:
+        joint1:
+          frictionloss: 0.013415
+          damping: 0.238519
+        joint2:
+          frictionloss: 0.032851
+          damping: 0.549857
+        joint3:
+          frictionloss: 0.007371
+          damping: 0.148945
+        joint4:
+          frictionloss: 0.002324
+          damping: 0.100875
+        joint5:
+          frictionloss: 0.003468
+          damping: 0.065924
+    gravity_hold:
+    - joint3
+    - joint4
