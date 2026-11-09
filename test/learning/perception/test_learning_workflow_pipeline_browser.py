@@ -14,6 +14,7 @@ from browser_harness import browser_tests_enabled, free_port
 from review_app import ReviewStore, make_server
 from learning_workspace import Workspace
 
+HOST_CAPABILITIES = ('learner_venv',)  # remote_pytest places this file only on hosts with the pinned learner venv
 pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason='requires explicit Chromium run')
 
 

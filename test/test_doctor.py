@@ -175,3 +175,25 @@ def test_capacity_warns_on_a_refusal_the_hosts_raw_numbers_do_not_explain(monkey
     assert levels == {"booked": "WARN", "full": "OK", "free": "OK", "gone": "WARN"}
     assert "refused by bookkeeping" in found[0][1] and "locks 35 GB" in found[0][1]
     assert "no probe answer" in found[3][1]
+
+
+def test_hosts_warns_on_a_stopped_maintenance_timer_and_a_stale_tool_copy(repo, monkeypatch):
+    """Merging to rosy-ops deploys nothing (2026-10-26, 11-06): an old copy ran for days unnoticed."""
+    now = time.time()
+    monkeypatch.setattr(doctor.lab_hosts, "test_hosts", lambda: ["pc-a", "pc-b", "pc-c"])
+    monkeypatch.setattr(doctor, "ops_tool_digest", lambda: "abc123abc123")
+    reports = {"pc-a": {"started": now - 3600, "tool_sha256": "abc123abc123"},
+               "pc-b": {"started": now - 10 * 3600, "tool_sha256": "abc123abc123"},
+               "pc-c": {"started": now - 3600}}
+    real_run = subprocess.run
+
+    def fake_run(argv, **kw):
+        if argv[0] != "ssh":
+            return real_run(argv, **kw)
+        return subprocess.CompletedProcess(argv, 0, json.dumps(reports[argv[-2]]) + "\nROSY-DISK-LOW=0\n", "")
+
+    monkeypatch.setattr(doctor.subprocess, "run", fake_run)
+    text = lines(repo, hosts=True)[1]
+    assert "host pc-a: last" not in text and "host pc-a: host_storage" not in text
+    assert "WARN host pc-b: last storage maintenance 10 h ago" in text
+    assert "WARN host pc-c: host_storage.py older copy is not rosy-ops origin/main abc123abc123" in text

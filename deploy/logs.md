@@ -4719,6 +4719,7 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: `test/test_rosy_face_person.py`(도착·반복 시각, 답·만료 뒤 멈춤, 화면 우선순위). 실제 스피커 확인은 하지 않았다.
 - gate 변화: SOURCE 변경. 장치 수용 아님.
 - 교훈: CE 해당 없음 — 최종 코드와 시험이 판단을 보존한다. 실물·운영 수용은 아니다.
+
 ## 2026-11-07 · 178d616c75 · feat(face): at 10% or under the screen goes dark and the buzzer asks for a charger
 - 변경: `rosy-face`가 표본 두 번 연속 10% 이하이면 LCD를 끄고 30초마다 부저 세 번, 13% 초과로 복귀. 업데이트·종료 화면 예외.
 - 증거: `test/test_rosy_face_battery_urgent.py`. 실제 부저와 LCD는 새 릴리스 뒤 확인 전이다.
@@ -4753,16 +4754,63 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - gate 변화: 없음
 - 결정: D-986 2항
 - 교훈: 없음
+
 ## 2026-11-07 · uncommitted · fix(power): 네이티브 Pinky가 CORE의 deep 배터리 요청에 꺼진다 (D-27)
 - 변경: `native/rosy-lowbatt-shutdown.path`·`.service`를 더해 CORE가 실제로 쓰는 `/var/lib/rosy/core/.rosy/battery-shutdown-request.json`을 감시하고 기존 도우미(나이 900 s 확인, 유예 상한 600 s)로 끈다. 이미지 계층 동기화 목록에 넣어 payload 릴리스로 기존 기체에 들어간다. 감시는 `PathChanged`(오래된 파일이 재실행 한도에 걸리지 않게)
 - 증거: 2026-11-07 y8xs가 `battery.deep`(4.9 %)을 기록하고도 꺼지지 않아 1.3 %(6.45 V)에서 사람이 껐다. 원격 시험 관련 10개 파일 642 passed. 독립 검토 차단 결함 없음
 - gate 변화: 없음 — 기체에서 실제 종료를 확인하기 전이다.
 - CE: 미해결 — 기체에서 `PathChanged` 발화와 종료를 확인한 뒤 교훈을 기록한다.
+
+## 2026-11-08 · uncommitted · feat(site-map): PC별 역할·모듈·팔 보드를 private 지도 하나로 읽고 실제 보드와 대조한다
+- 변경: `tools/remote/site_map.py`(`show`, `check`)가 main checkout의 `private/site-map.yaml`(rosy.site-map/1)을 읽고 각 PC의 OpenRB 보드를 ssh로 읽어 빠진 보드·지도에 없는 보드를 보고한다. `deploy/hosts/README.md` 새 PC 절차 0단계, `tools/remote/AGENTS.md`
+- 증거: R 이전 중 배치표·lab-hosts·services.yaml·omx-arm-boards.json이 서로 달라 리더 보드 2개가 "매핑 없음"으로 보였다. 서보 ping으로 리더(ID 1–6, XL330)임을 확인해 지도에 넣었고 live `check`가 4개 일치를 보고했다
+- gate 변화: 없음
+
+## 2026-11-08 · uncommitted · feat(omx): 이름 있는 운영자가 API로 팔 사건 보류를 해제한다 (D-971)
+- 변경: `omx_incident.py clear --arm --note --token-file`가 그 PC의 관측 env로 Fleet에 열린 사건을 묻고, 운영자 본인 토큰(0600)으로 기존 `…/incidents/{id}/clear`를 부른 뒤 Fleet의 "not held"로 로컬 HOLD 파일도 걷는다. 팔 source 토큰은 쓰지 않는다
+- 증거: 11-07 arm_b 보류가 남아 사람이 이상 없음을 확인했는데도 콘솔 로그인 없이는 풀 수 없었다. CELL-A에 운영자 `livsbittt` 토큰을 등록해 API로 해제했다. 한글 note와 `basis`를 함께 보내자 CELL-A(09069e25)가 422를 돌려 note만 보낸다
+- gate 변화: 없음
+
+## 2026-11-08 · uncommitted · fix(omx): 카메라 준비는 역할 별칭이 생긴 뒤 시작하고, services.yaml을 실제 배치에 맞춘다
+- 변경: `rosy-omx-camera-readiness.service`가 `rosy-omx-cameras-bind.service` 뒤에 시작한다. `services.yaml`의 OMX 카메라 인스턴스를 11-07 역할(top·side·arm_a_wrist·arm_b_wrist)로, AI PC의 꺼진 Pinky `pinky-rosbridge-d12/d13`을 선언했다
+- 증거: 11-08 06:10 부팅 뒤 준비 서비스가 `/dev/v4l/by-id/rosy-realsense-d435-color` 없음으로 15 s 간격 3회 실패해 하루 종일 꺼져 있었다(bind 타이머는 부팅 20 s 뒤). `update_status.py`가 AI PC UNDECLARED 2건을 보고했다
+- gate 변화: 없음 — robttt 유닛 갱신은 omx-devices 자동 갱신 뒤
+
 ## 2026-11-08 · uncommitted · feat(control-unit): 다른 PC의 이웃 관제에 peer 주소로 접속한다 (D-994)
 - 변경: control-unit peers 항목에 선택 `address`(IP 리터럴, https만)를 더해 그 주소로 접속하고 TLS 이름·Host는 `url` 이름으로 확인한다. 서명 overlay `compose.control-unit-remote.yaml`이 peer proxy만 `ROSY_CONTROL_UNIT_PEER_BIND`·`_PORT`의 LAN 주소에 게시하며 `site-firewall.py check`가 와일드카드·loopback·남의 주소를 거절한다. 후보 목록·검증·manifest 요약·업데이터 overlay 허용과 서명 포함 대조에 넣었고, 같은 주소·포트의 두 이웃을 거절한다. 독립 검토 지적(서명 대조 누락, 게시 주소 생략, 연결 풀 공유) 반영
 - 증거: 통합관제 R을 N150 호스트로 옮기려 하자 R↔CELL-A가 같은 PC 도커 네트워크 별칭으로만 닿아 분리할 수 없었다. 원격 시험은 아래 커밋에 기록
 - gate 변화: 없음 — 현장 전환 전이다
 - 결정: D-994 2·3항(서명 경로로만 배치)
+
+## 2026-11-09 · 79ebad2111 · D-922 Pinky 표정·시선·후면 LED 구현
+
+- 변경: 검증된 감지 입력의 시간·중복·세대 처리, 방향성 눈인사, 300초 일반 대기의 졸린 휴식, 공통 얼굴·LED 의도와 기존 안전·정보·전력 표시 우선권을 연결했다.
+- 범위: CORE 정책·bridge, 선택적 로컬 표현 hand-over와 독립 만료, 단일 native LCD 소유자의 pupil 렌더링 및 기존 8종 자산 생성기 재사용. 기존 안전 자문과 최종 주행 writer는 유지한다.
+- 검증: 원격 RED에서 정책·핸드오버·렌더링·서비스 응답·모드 전환·시선 캐시·패킷 손실의 누락을 확인했다. 초기 GREEN 정책 190 passed, native/자산 198 passed·1 skipped, 독립 검토 보완 후 결합 시험 284 passed·1 skipped. 최종 커밋의 FULL 및 추가 도착/lease 시험 결과는 후속 검증 기록으로 결속한다.
+- 한계: 기본 검출 producer는 track_id를 내지 않아 무리 fallback이 적용된다. 개별 인사 선택은 ID를 제공하는 계약 입력에서 지원된다. ARM64 실행·실물 LCD/LED 수용·배포·현장 gate는 올리지 않는다.
+- gate 변화: 없음. 호스트 시험은 ARM64 실행·실물 LCD/LED·DEVICE/FIELD 수용을 입증하지 않는다.
+- CE: 해당 없음 — 구현·회귀 시험에서 결정과 실패 처리를 복원할 수 있으며 새 장치/운영 복구 교훈은 없다.
+
+## 2026-11-09 · 3d550f49ce · D-922 구현 검증 및 기록 항목 정정
+
+- 변경: 앞선 79ebad2111 항목은 fa67fb264b에 커밋되어 원문을 보존한다. 빠진 gate 항목을 이 후속 기록으로 보완한다. 서비스 응답을 실제 IDL 필드로 읽고 동시 발견 시 사람 눈인사를 우선했다.
+- 증거: 3d550f49ce 원격 집중 시험 536 passed, 1 skipped; known_failures NEW 0, known 0, flaky 0. 전체 27개 묶음 검증은 진행 중이며 최종 결과는 구현 계획의 검증 기록으로 결속한다.
+- gate 변화: 없음. 호스트 검증은 ARM64 실행·실물 LCD/LED·DEVICE/FIELD 수용을 입증하지 않는다. 배포·착지·push는 수행하지 않았다.
+
+## 2026-11-09 · e94b732208 · D-922 추가 결정 — Pinky 상황 표정 8종
+
+- 변경: 여러 모델 디자인 패널에서 고른 doze·scan·lost·worry·lowbat·cheer·thinking·searching을 추가했다. 상황 표정은 `face_screen.situation_face`가 기존 face-inputs 필드로 고르고(복구 > dock_failed > line_follow_hold > 보정 > 진행 중 반응 > PLANNING > 배터리 20% 미만 > IDLE 충전), cheer는 함께 나타난 여러 사람의 인사다. native tick은 상황 표정을 CORE 표정·반응 만료보다 우선한다. 주의 램프 아래에서는 cheer·doze를 쓰지 않는다.
+- 자산: 새 GIF 8개는 `make_faces.py`로 생성했다. 32×24 실루엣이 기존·새 표정 모두와 6% 이상(최소 6.38%) 다르도록 디자인 위치·두께를 조정했다. 기존 8종 GIF는 바이트 단위로 같다.
+- 증거: e94b732208 다음 커밋(시험 기대 갱신)에서 원격 집중 시험 1907 passed, 1 skipped; known_failures NEW 0.
+- gate 변화: 없음. 호스트 렌더·시험은 실물 LCD 판독·ARM64·DEVICE/FIELD 수용이 아니다.
+- CE: 해당 없음 — 설계 판단은 ADR 추가 결정과 회귀 시험에 남는다.
+
+## 2026-11-09 · uncommitted · fix(omx): 과부하에서 토크를 끄지 않고 버티기, 실물 계획 사전 검토 규칙
+
+- 변경: `guarded_native`가 관절의 첫 과부하(기존 판정 그대로: 오차 2° 초과·PWM 상한 90 % 이상 1 s)에서 세션을 끝내지 않는다. 그 관절 목표를 현재 위치로 한 번만 옮기고 토크를 켠 채 `held`에 기록한다. 그동안 그 관절 명령은 고정되고, 러너가 XL430 관절로 짐을 덜 수 있다(robot-db 러너 브랜치). PWM만 보는 감시가 상한 90 %에 3.0 s 머물기, 온도 3 °C 상승, 같은 관절 두 번째 과부하, 감시 중 오류 중 하나를 보면 지금처럼 토크를 끈다. 메시지는 계속 `overload risk`를 담아 motor_health 분류가 그대로다. `deploy/robot/omx/AGENTS.md`에 실물 팔 새 계획의 네 가지 사전 확인(충돌, 실제 상한 기준 부하 도구, 중단 시 회복, 첫 실행의 strain 감시)과 작성자 아닌 세션 동의를 적었다.
+- 증거: 2026-11-09 15:09 arm_a가 충돌만 검사한 hand-eye 자세에서 wrist_flex PWM 300/300으로 1.2 s 뒤처져 가드가 토크를 끄고 뻗은 채 판 위로 떨어졌다(cell_unwedge로 회복). robot-db·robot-13·robot-57 합의로 설계했다(되잡기는 정지 1회, 감시는 PWM만, N=3 s는 로그상 상한 3 s 초과 무정지 사례 없음·기록된 래치 18 s). 회귀 시험: 버티기 중 토크 유지와 목표 1회 고정(처지는 관절을 따라가지 않음), 고정 목표에서 PWM만으로 3 s 시간 초과, 해제 뒤 두 번째 과부하 정지, 온도 상승 정지, 감시 중 읽기 오류 시 토크 끔.
+- gate 변화: SOURCE 변경(safety 경로, Safety-Review·독립 검토 필요). 호스트 시험은 실물 수용이 아니다. 사람 입회 D-911 실물 시험이 남았다.
+
 ## 2026-11-09 · uncommitted · fix(site): 현장 PC 원하는 상태에 mDNS 검색 브리지 타이머를 넣는다
 - 변경: site host-state 매니페스트에 브리지 unit·timer `report file`과 `report enabled rosy-mdns-bridge.timer`를 더하고, `discovery_token`이 `root:rosy-fleet` 0640일 때 그룹 대신 파일 ACL(`g:rosy-mdns:r`)로 읽게 하라는 안내를 README에 적었다(그 그룹은 `robot_credential_key`·`site.key`도 읽음, 독립 검토 지적). 광고 유닛은 oneshot이라 `enabled` 줄(active 요구)에 넣지 않았다
 - 증거: 11-09 R 이전 뒤 R에도 옛 robttt에도 브리지가 설치돼 있지 않았다(`rosy-mdns` 사용자 없음). 그래서 Fleet 발견 목록·HTTP 로봇 주소 변경 감지가 꺼져 있었다. R에는 손으로 설치해 `ROSY mDNS scan delivered` 확인

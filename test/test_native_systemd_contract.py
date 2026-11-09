@@ -470,9 +470,10 @@ DECLARED_WRITES = {
         "/opt/rosy/releases/2026.10.01-022", "/opt/rosy/current", "/opt/rosy/previous",
         "/var/lib/rosy/releases/native-release.lock", "/var/lib/rosy/releases/native-activation.json",
         # sync-image-layer.py: native-runtime scripts, units, udev rules, modprobe
-        # options, and its BACKUP_ROOT.
+        # options, NetworkManager overlay configs, and its BACKUP_ROOT.
         "/opt/rosy/native-runtime/rosy_auto_update.py", "/etc/systemd/system/rosy-core.service",
         "/etc/udev/rules.d/99-rosy-lamp.rules", "/etc/modprobe.d/rosy-ws281x.conf",
+        "/etc/NetworkManager/conf.d/60-rosy-wifi.conf",
         "/var/lib/rosy/image-layer-backup/pending.json",
     },
     "rosy-hw-test.service": {
@@ -671,6 +672,7 @@ PROGRAM_SOURCES = {
     "rosy-navigation.service": ["middleware/drive/planning/nav2", "middleware/devices/pinky/bringup"],
     # D-190 / D-433: the face loop, the emotion cards and LCD driver, rosylib.Battery.
     "rosy-face.service": ["deploy/robot/pinky_pro/native/rosy-face.py",
+                          "deploy/robot/pinky_pro/native/face_frames.py",
                           "deploy/robot/pinky_pro/native/face_card_renderer.py",
                           "deploy/robot/pinky_pro/native/rosy_face_parts.py",
                           "deploy/robot/pinky_pro/native/rosy_face_inputs.py",
@@ -681,6 +683,7 @@ PROGRAM_SOURCES = {
                           # D-433: the situation table and the face-inputs reader.
                           "contracts/foundation/core_common/face_screen.py",
                           "middleware/robot_ui/face/emotion/info_screen.py",
+                          "middleware/robot_ui/face/emotion/character.py",
                           "middleware/robot_ui/face/emotion/rosy_lcd.py",
                           "middleware/devices/pinky/bringup/rosylib"],
     # D-433: the retired unit runs the pre-D-433 program an old image still holds;

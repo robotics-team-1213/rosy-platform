@@ -16,6 +16,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import math
+import os
 import time
 from typing import Awaitable, Callable, Mapping, Optional, Sequence
 from urllib.parse import urlsplit
@@ -23,6 +24,7 @@ from urllib.parse import urlsplit
 import httpx
 
 from core_common.protocol.vision_preview import VisionLeaseSigner
+from fleet.server.calibration_health import CalibrationHealth
 from fleet.server.sightings import SightingSource
 from fleet.server.tracking_calibration import CalibrationRecord, TrackingCalibrationStore
 
@@ -121,7 +123,8 @@ class CalibrationDriftWatch:
                  calibrations: TrackingCalibrationStore,
                  fetch_proposal: Callable[[str], Awaitable[Optional[Mapping]]],
                  clock: Callable[[], float] = time.time,
-                 interval_s: float = DEFAULT_INTERVAL_S) -> None:
+                 interval_s: float = DEFAULT_INTERVAL_S,
+                 health: Optional[CalibrationHealth] = None) -> None:
         if not math.isfinite(interval_s) or interval_s <= 0:
             raise ValueError("calibration drift interval must be positive and finite")
         self.sources = tuple(sources)
@@ -130,6 +133,10 @@ class CalibrationDriftWatch:
         self._fetch_proposal = fetch_proposal
         self._clock = clock
         self._verdicts: dict[str, dict] = {}
+        #: D-1006: every poll (rejected and missing ones too) feeds the health state machine.
+        self.health = health if health is not None else CalibrationHealth(
+            clock=clock, journal_path=calibrations.path,
+            gate=os.environ.get("ROSY_FLEET_CALIBRATION_GATE") == "1")
 
     def verdicts(self) -> dict[str, dict]:
         """The per-source verdicts the tracking snapshot embeds (a copy)."""
@@ -140,15 +147,18 @@ class CalibrationDriftWatch:
             record = self.calibrations.get(source.source_id)
             if record is None or record.map_id != source.map_id:
                 self._verdicts.pop(source.source_id, None)  # revoked or wrong map
+                self.health.forget(source.source_id)
                 continue
             held = self._verdicts.get(source.source_id)
             if held is not None and held.get("calibration_revision") != record.calibration_revision:
                 self._verdicts.pop(source.source_id, None)  # a new approval resets it
             body = await self._fetch_proposal(source.source_id)
-            if body is None:
-                continue
-            metrics = calibration_drift_verdict(record, body)
-            if metrics is None:
+            metrics = calibration_drift_verdict(record, body) if body is not None else None
+            try:
+                self.health.observe(source.source_id, record.calibration_revision, body, metrics)
+            except Exception:  # noqa: BLE001 - health is observation only; the drift verdict must still update
+                _LOG.exception("calibration health observation failed for %s", source.source_id)
+            if body is None or metrics is None:
                 continue
             self._verdicts[source.source_id] = {
                 **metrics,

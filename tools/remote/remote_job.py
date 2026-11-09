@@ -39,17 +39,18 @@ WAIT_CAP = 3  # timeout_s multiples a job may wait for room; new jobs stay out m
 # or serial suites) or one waiting to start, and an alone job only once no other job runs. A job alone on the host
 # always starts, however large. One flock makes check and lock one step across runs. Waiting keeps the laptop
 # polling (its pid is up), so land_watchdog sees it as alive.
-ADMIT = REBOOT_CHECK + r"""AL=${ROSY_JOB_ALONE:-0}; [ "$AL" = 1 ] && X=alone
+HOLD_DEFERRED = b"[remote-pytest] admission deferred: gpu/sim hold"
+ADMIT = REBOOT_CHECK + r"""AL=${ROSY_JOB_ALONE:-0}; [ "$AL" = 1 ] && X=alone; DEFER_HOLD='""" + HOLD_DEFERRED.decode() + r"""'
 CAPC=${ROSY_HOST_CORES:-$(nproc)}; CAPG=${ROSY_HOST_GB:-$(awk '/^MemTotal:/{print int($2 / 1048576)}' /proc/meminfo)}
 exec 9> ~/rosy-jobs/.admit
 while :; do
   now=$(date +%s)
   if reboot_soon "$now"; then echo '[remote-pytest] admission deferred: nightly reboot'; exit 253; fi
-  flock 9; uc=0; ug=0; others=0; held=0; pending=0
+  flock 9; uc=0; ug=0; others=0; held=0; pending=0; gh=0
   for f in ~/rosy-jobs/*.lock; do
     [ -e "$f" ] || continue; read -r p k fc fm < "$f" || true
     kill -0 "$p" 2>/dev/null || continue
-    others=$((others + 1)); [ "$k" = alone ] && held=1
+    others=$((others + 1)); [ "$k" = alone ] && held=1; case "$k" in sim|gpu) gh=1;; esac
     [[ $fc$fm =~ ^[0-9]+$ ]] && { uc=$((uc + fc)); ug=$((ug + fm)); }
   done
   for f in ~/rosy-jobs/*.resv; do
@@ -65,6 +66,14 @@ while :; do
   elif [ "${ROSY_JOB_TURN:-}" = 1 ]; then ok=$((held == 0))
   else ok=$((held == 0 && pending == 0 && (others == 0 || (uc + RC <= CAPC && ug + G <= CAPG)))); fi
   if [ $ok = 1 ]; then echo "$$ $X $RC $G" > "$L"; rm -f ~/rosy-jobs/$$.alone-wait; flock -u 9; break; fi
+  # 11-09: behind a training or Gazebo hold (hours) an alone waiter's marker kept every pytest off the host. It
+  # waits without the marker, then gives its invocation back to be placed on another host (RebootSoon path).
+  [ "$gh" = 1 ] || unset w0  # the 180 s count is one continuous hold
+  if [ "$AL" = 1 ] && [ "$gh" = 1 ]; then
+    rm -f ~/rosy-jobs/$$.alone-wait; flock -u 9; : "${w0:=$now}"
+    if [ $((now - w0)) -ge "${ROSY_ALONE_HOLD_WAIT_S:-180}" ]; then echo "$DEFER_HOLD"; exit 253; fi
+    sleep 5; continue
+  fi
   [ "$AL" = 1 ] && echo $$ > ~/rosy-jobs/$$.alone-wait
   flock -u 9
   [ -n "${said:-}" ] || { echo "[remote-pytest] waiting for host room ($others job(s), ${uc}c ${ug}GB in use)"; said=1; }
@@ -97,6 +106,9 @@ trap 'exit 143' TERM INT  # runs once timeout/pytest have ended; else $? would s
 export PYTHONPATH="$V/receiver-crypto${PYTHONPATH:+:$PYTHONPATH}" PYTHONUTF8=1
 # Leading ROSY_*=value args are this job's environment (remote_pytest.ENV_ARG), not pytest args.
 while [ $# -gt 0 ] && [[ $1 =~ ^ROSY_[A-Z0-9_]*= ]]; do export "$1"; shift; done
+# 2026-11-09: one hung test (a websocket receive, 42 min) stalled a landing. pytest-timeout fails it with its id;
+# @pytest.mark.timeout(n) or a ROSY_PER_TEST_TIMEOUT=n word overrides; a venv without the plugin ignores this.
+export PYTEST_TIMEOUT="${ROSY_PER_TEST_TIMEOUT:-900}"
 # xdist_plan job words: an xdist job's workers and a light host's memory cap, for the lock and MemoryMax.
 # ROSY_JOB_RESERVE_GB: the lock budget placement counts (laptop memory history), apart from the MemoryMax cap.
 # ROSY_JOB_RESERVE_CORES: the lock's cores from the laptop's cpu history; -n stays ROSY_JOB_CORES.
@@ -333,6 +345,8 @@ def run(host: str, name: str, k: int, log: Path, job_args: list[str], pytest_arg
                 if rc is not None:  # land_checks.timing reads this line into the tests event
                     if rc == 253 and b"[remote-pytest] admission deferred: nightly reboot\n" in log.read_bytes():
                         raise RebootSoon(f"{host}: nightly reboot admission deferred")
+                    if rc == 253 and HOLD_DEFERRED + b"\n" in log.read_bytes():
+                        raise RebootSoon(f"{host}: an alone job behind a gpu/sim hold; placed elsewhere")
                     wait = max(0.0, admitted - wait_from) if waiting else 0.0  # user@address: only the user part
                     out.write(f"\n{TIMING} host={host.split('@')[0]} start={start_at:.0f} wait_s={wait:.0f}"
                               f" run_s={clock() - admitted:.0f}\n".encode())
