@@ -7,13 +7,19 @@ On 2026-11-01 seven paused landings were rolled up by hand this way.
 
     python tools/land_rollup.py plan                # read-only: which pending landings would roll up
     python tools/land_rollup.py apply               # build land rollup branch, check, queue it, stop the members
-    python tools/land_rollup.py apply --auto        # the watchdog's half-hourly run: affected-tier members only
+    python tools/land_rollup.py apply --auto        # the watchdog's run: every compatible waiting landing
+    python tools/land_rollup.py apply --urgent "<the user's words>"   # the rollup jumps the queue (D-889 5)
     python tools/land_rollup.py split <rollup>      # after a failed rollup: its members as two halves (or alone)
 
 Members: 'pending' land_async tickets on this host, not urgent, not explicit ('alone': FULL, checks, --no-cache), not
-carried and not leading a batch, whose hidden tree is at the snapshot tip. A landing that touches a safety path lands alone. Affected-tier and FULL-tier landings
-never share a rollup. At most ROLLUP_MAX members; a member that does not merge cleanly (land_merge's record
-auto-resolve aside) is left to land on its own.
+carried and not leading a batch, whose hidden tree is at the snapshot tip. At most ROLLUP_MAX members; a member that
+does not merge cleanly (land_merge's record auto-resolve aside) is left to land on its own.
+
+D-889 addendum 33 (user, 2026-11-09: "대기하는것들을 하나로 합쳐서 하면 더이상 문제가 없잖아"): a FULL waiter
+('preparing' with ``full_wait``, it runs no test) is a member too, and tiers mix: one FULL run covers every member,
+safety tests included, instead of one FULL per landing. A rollup is never re-rolled. A stopped rollup is split by
+land_async's supervisor (halves, a half of one lands alone with its own STOP). ROSY_ROLLUP_MIXED=0 restores the
+addendum 23/32 rules: preparing tickets stay out, one tier per rollup, safety and (with --auto) FULL land alone.
 """
 
 from __future__ import annotations
@@ -35,7 +41,8 @@ import land_merge  # noqa: E402
 import land_queue  # noqa: E402
 import land_selection  # noqa: E402
 
-ROLLUP_MAX = int(os.environ.get("ROSY_ROLLUP_MAX", "6"))
+ROLLUP_MAX = int(os.environ.get("ROSY_ROLLUP_MAX", "12"))
+MIXED = os.environ.get("ROSY_ROLLUP_MIXED", "1") != "0"  # D-889 addendum 33's revert switch
 
 
 def git(repo: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess:
@@ -56,15 +63,19 @@ def affected(repo: Path, branch: str) -> str | None:
     return "affected" if tier(repo, branch) == "affected" else None
 
 
-def candidates(rows: list[dict], repo: Path, host: str | None = None) -> list[dict]:
+def candidates(rows: list[dict], repo: Path, host: str | None = None, mixed: bool | None = None) -> list[dict]:
     """Queue rows (oldest first) a rollup may take."""
+    mixed = MIXED if mixed is None else mixed
     host = host or socket.gethostname()
     carried = land_batch.taken(rows)
     found = []
     for r in rows:
         tree = Path(r.get("worktree") or "")
         # 2026-11-03: a --tests full --no-cache landing for publish evidence was rolled up and ran auto (alone)
-        if (r.get("status") not in ("pending", "waiting") or land_async.HOLDER not in tree.parts or r.get("urgent")
+        idle = (r.get("status") in ("pending", "waiting")
+                or (mixed and r.get("status") == "preparing" and r.get("full_wait")))  # a FULL waiter runs no test
+        if (not idle or land_async.HOLDER not in tree.parts or r.get("urgent")
+                or (mixed and land_async.ROLLUP.fullmatch(r.get("branch") or ""))
                 or r.get("alone")
                 or r.get("host") != host or r.get("batch") or r.get("branch") in carried or not tree.is_dir()):
             continue
@@ -80,18 +91,23 @@ def reach(repo: Path, branch: str) -> list[list[str]]:
     return sel["local_invocations"] if sel["mode"] == "full" else sel["invocations"]
 
 
-def plan(repo: Path, rows: list[dict], tier_of=tier, reach_of=reach) -> list[dict]:
-    """Members, in queue order: one tier, merging together onto main; fewer than two means no rollup."""
+def plan(repo: Path, rows: list[dict], tier_of=tier, reach_of=reach, mixed: bool | None = None) -> list[dict]:
+    """Members, in queue order, merging together onto main; fewer than two means no rollup. Unmixed: one tier,
+    no safety member. Mixed (addendum 33): any tier; with a FULL or safety member the rollup runs FULL, which
+    covers every member, so suite overlap no longer matters."""
+    mixed = MIXED if mixed is None else mixed
     cur, kind, members, reached = git(repo, "rev-parse", "main").stdout.strip(), None, [], []
     guards = getattr(getattr(land, "land_guards", None), "GUARDS", ())
+    tiers = {r["branch"]: tier_of(repo, r["branch"]) for r in rows}
+    whole = mixed and any(t != "affected" for t in tiers.values())
     for r in rows:
         if len(members) >= ROLLUP_MAX:
             break
-        t = tier_of(repo, r["branch"])
-        if t is None or (kind and t != kind):
+        t = tiers[r["branch"]]
+        if not mixed and (t is None or (kind and t != kind)):
             continue
         # D-889 23: members whose suites overlap would each have to rerun the others'; such a member lands alone
-        mine = reach_of(repo, r["branch"])
+        mine = [] if whole else reach_of(repo, r["branch"])
         if any(land_selection.overlaps(other, mine, guards) for other in reached):
             continue
         res = git(repo, "merge-tree", "--write-tree", "--no-messages", cur, r["branch"], check=False)
@@ -109,6 +125,9 @@ def plan(repo: Path, rows: list[dict], tier_of=tier, reach_of=reach) -> list[dic
         kind = kind or t
         members.append(r)
         reached.append(mine)
+    if whole and members and all(tiers[m["branch"]] == "affected" for m in members):
+        # the FULL rows all stayed out: an affected rollup again, so suite overlap matters again
+        return plan(repo, [r for r in rows if tiers[r["branch"]] == "affected"], lambda _r, b: tiers[b], reach_of, mixed)
     return members if len(members) >= 2 else []
 
 
@@ -137,7 +156,7 @@ def member_metadata(place: Path, member: dict, ancestors=()) -> dict:
 
 
 def build(repo: Path, members: list[dict], now: datetime, python: str = sys.executable,
-          start=land_async.start) -> tuple[str, list[dict]] | None:
+          start=land_async.start, urgent: str = "") -> tuple[str, list[dict]] | None:
     """Merge members into a fresh branch from main, run the stage-0 checks, queue it; (snapshot, merged members)."""
     if len({r["branch"] for r in members}) != len(members):
         raise land.Stop("duplicate rollup member branch; preserve the competing tickets for review")
@@ -165,7 +184,8 @@ def build(repo: Path, members: list[dict], now: datetime, python: str = sys.exec
         if first:
             os.environ[land_queue.TICKET_ENV] = str(land_queue.queue_dir(repo) / first)
         try:
-            snap, log = start(wt, ["--tests", "auto"], now, land_async.detach)
+            snap, log = start(wt, ["--tests", "auto", *(["--urgent", urgent] if urgent else [])], now,
+                              land_async.detach)
         finally:
             os.environ.pop(land_queue.TICKET_ENV, None)
         (log.parent / (log.name.removesuffix(".log") + ".members")).write_text(
@@ -232,21 +252,24 @@ def split(repo: Path, rollup: str, now: datetime, builder=build, resumer=resume)
 
 
 def main(argv: list[str]) -> int:
-    repo = Path(git(Path.cwd(), "rev-parse", "--show-toplevel").stdout.strip())
+    # this file's checkout, not the cwd: land_async's supervisor runs ``split`` from the hidden holder (.git/...)
+    repo = Path(git(Path(__file__).resolve().parent, "rev-parse", "--show-toplevel").stdout.strip())
     qdir = land_queue.queue_dir(repo)
     now = datetime.now(timezone.utc)
     if argv[:1] == ["split"] and len(argv) == 2:
         split(repo, argv[1], now)
         return 0
-    auto = "--auto" in argv  # D-889 23 item 6 / 32: unattended, FULL-tier (and safety) landings stay alone
-    members = plan(repo, candidates(land_queue.ahead(qdir, Path("~")), repo), tier_of=affected if auto else tier)
+    auto = "--auto" in argv  # D-889 23 item 6 / 32: unattended; unmixed, FULL-tier (and safety) landings stay alone
+    urgent = argv[argv.index("--urgent") + 1] if "--urgent" in argv[:-1] else ""
+    members = plan(repo, candidates(land_queue.ahead(qdir, Path("~")), repo),
+                   tier_of=affected if auto and not MIXED else tier)
     if not members:
         print("[rollup] no rollup: fewer than two pending landings fit together")
         return 0
     print("[rollup] members: " + ", ".join(r["branch"] for r in members))
     if argv[:1] != ["apply"]:
         return 0
-    built = build(repo, members, now)
+    built = build(repo, members, now, urgent=urgent)
     if built is None:
         return 1
     snap, merged = built
