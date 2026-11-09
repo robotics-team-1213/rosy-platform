@@ -377,6 +377,14 @@ def test_avahi_interfaces_pick_physical_ones_and_restart_only_on_change(tmp_path
     assert conf.read_text().count("allow-interfaces") == 1
 
 
+def test_site_manifest_declares_robot_discovery_units():
+    """2026-11-09: the new site PC ran Fleet without the scan bridge; the bridge timer is desired state."""
+    lines = (ROOT / "deploy/site/host-state/manifest").read_text(encoding="utf-8").splitlines()
+    assert "report enabled rosy-mdns-bridge.timer" in lines
+    for unit in ("rosy-mdns-bridge.service", "rosy-mdns-bridge.timer"):  # install places the units it enables
+        assert f"report file /etc/systemd/system/{unit} deploy/site/{unit}" in lines
+
+
 def test_avahi_interfaces_unit_is_in_the_common_manifest():
     manifest = (ROOT / "deploy/hosts/common/host-state/manifest").read_text(encoding="utf-8")
     assert "safe enabled rosy-avahi-interfaces.service" in manifest
