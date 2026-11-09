@@ -94,10 +94,13 @@ def slot(qdir: Path, ticket: Path, sleep=time.sleep, held=None, changed=None) ->
     land_queue.set_status(ticket, "preparing")
 
 
-def full_slot(qdir: Path, ticket: Path, sleep=time.sleep, changed=None) -> None:
+def full_slot(qdir: Path, ticket: Path, sleep=time.sleep, changed=None, roll=None) -> None:
     """Mark this preparing ticket FULL and wait while MAX_FULL older FULL pretests run; an urgent one never waits.
     A waiter runs no test, so ``full_wait`` frees its preparation slot (2026-11-07: two waiters held 2 of 6 slots
-    while a one-file landing stood pending); MAX_FULL and each host's admission still hold the load."""
+    while a one-file landing stood pending); MAX_FULL and each host's admission still hold the load.
+    On starting to wait it calls ``roll`` (D-889 addendum 34): the rollup takes this waiter with every other waiter
+    and any rollup whose FULL has not started, so one combined FULL candidate waits (11-09 22:40: five did, with no
+    turn holder to run the scheduled rollup)."""
     land_queue.set_status(ticket, "preparing", tier="full")
     if json.loads(ticket.read_text(encoding="utf-8")).get("urgent"):
         return
@@ -109,6 +112,10 @@ def full_slot(qdir: Path, ticket: Path, sleep=time.sleep, changed=None) -> None:
             print(f"[land] FULL pretest waits for {MAX_FULL} older FULL pretest(s) to finish", flush=True)
             said = True
             land_queue.set_status(ticket, "preparing", full_wait=True)
+            try:
+                roll and roll()
+            except Exception:  # noqa: BLE001  a rollup that cannot start never costs the landing
+                pass
         land_queue.touch(ticket)
         if changed and (code := changed()) is not None:
             raise SystemExit(code)
@@ -205,7 +212,8 @@ def _prepare(land, wt: Path, branch: str, args, python: str, qdir: Path | None, 
           flush=True)
     if ticket is not None:
         if note:
-            full_slot(qdir, ticket, changed=lambda: relaunch(land, qdir, ticket))
+            full_slot(qdir, ticket, changed=lambda: relaunch(land, qdir, ticket),
+                      roll=lambda: land.land_watchdog.rollup(qdir.parent))
         else:
             land_queue.set_status(ticket, "preparing", tier="")
     # Cache log hashes outlive this preparation; later preparations must keep its raw bytes intact.
