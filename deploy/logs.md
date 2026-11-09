@@ -4714,6 +4714,29 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - gate 변화: 없음 — 기체 수용 전이다.
 - CE: 해당 없음 — 새 기능이며 해결한 장애가 없다.
 
+## 2026-11-07 · 11b42b5933 · feat(rosy-face): 사람 부탁 도착 소리와 15초 반복
+- 변경: `PersonAsk`(`rosy_face_parts.py`)가 기존 `call` 패턴을 도착 때 한 번, 같은 id가 보이는 동안 15 s마다. 정지·실패 화면이면 소리 없음, ROSY_BUZZER_ENABLED는 Buzzer 그대로.
+- 증거: `test/test_rosy_face_person.py`(도착·반복 시각, 답·만료 뒤 멈춤, 화면 우선순위). 실제 스피커 확인은 하지 않았다.
+- gate 변화: SOURCE 변경. 장치 수용 아님.
+- 교훈: CE 해당 없음 — 최종 코드와 시험이 판단을 보존한다. 실물·운영 수용은 아니다.
+## 2026-11-07 · 178d616c75 · feat(face): at 10% or under the screen goes dark and the buzzer asks for a charger
+- 변경: `rosy-face`가 표본 두 번 연속 10% 이하이면 LCD를 끄고 30초마다 부저 세 번, 13% 초과로 복귀. 업데이트·종료 화면 예외.
+- 증거: `test/test_rosy_face_battery_urgent.py`. 실제 부저와 LCD는 새 릴리스 뒤 확인 전이다.
+- gate 변화: 없음
+- 교훈: CE 해당 없음 — 규칙은 D-502 Amendment와 회귀 시험에 있다.
+
+## 2026-11-07 · 18943fb321 · merge: 긴급 배터리 어두운 화면이 사람 부탁보다 먼저
+- 변경: `fix/battery-estop-auto-release`를 합쳤다. 어두운 화면에서는 `person`을 지우고 호출음·주황 램프를 내지 않는다. 한 루프에 소리 하나(`_buzz`): 정지·실패, 긴급 배터리, 그 다음 호출음.
+- 증거: `test/test_rosy_face_person.py`(긴급+요청, 한 루프 한 소리, 주행 램프).
+- gate 변화: SOURCE 변경. 로봇·장치 수용 없음.
+- 교훈: CE 해당 없음 — 최종 코드와 시험이 판단을 보존한다. 실물·운영 수용은 아니다.
+
+## 2026-11-07 · 44fb0c6315 · fix(face): 벤치 시험 보호는 표 화면과 그려진 화면 둘 다 본다
+- 변경: 배터리 병합이 `handle_test`를 `_table_screen`만 보게 해 `test_an_accepted_fleet_call_chirps_once…`가 깨졌다(`fix/battery-estop-auto-release` 끝에서도 같은 시험이 실패함을 원격으로 확인). 두 화면 중 하나라도 정지·업데이트·실패·주의면 시험을 기다리게 한다. 시험 기대는 바꾸지 않았다. Safety-Review: pending independent review.
+- 증거: 원격 robttt: test_rosy_face·test_rosy_face_person·test_rosy_face_battery_urgent 포함 299 passed·1 skipped.
+- gate 변화: SOURCE 변경. 로봇·장치 수용 없음.
+- 교훈: CE 해당 없음 — 최종 코드와 시험이 판단을 보존한다. 실물·운영 수용은 아니다.
+
 ## 2026-11-07 · uncommitted · fix: 도우미가 재부팅 전에 팔 세션과 작업을 본다 (D-991)
 - 변경: `rosy-host-control`의 `reboot`는 세션 잠금에서 거절하고, `reboot-if-free`는 작업에서도 거절한다. 예약 뒤 570초에 다시 보고 자기 재부팅만 취소한다. `recheck-reboot`는 강제 명령 키로 부를 수 없다.
 - 증거: 원격 `test_host_control.py`. 도우미를 stub으로 돌린 호스트 시험이다.
