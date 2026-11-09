@@ -11,6 +11,7 @@ from dataclasses import fields
 from typing import Optional
 
 from rosy.world.state.projections.map_pose import MapPose
+from fleet.localization import trust
 from fleet.routing.cost import LEFT, RIGHT, STRAIGHT, wrap
 from fleet.routing.execute import ends_at_place
 from fleet.server import trip_ports as _ports
@@ -280,3 +281,27 @@ def pose_view(pose: Optional[MapPose]) -> Optional[dict]:
     return {"x": rounded(pose.x, 3), "y": rounded(pose.y, 3), "yaw": rounded(pose.yaw, 3), "state": pose.state,
             "source": pose.source, "dead_reckon_m": rounded(pose.dead_reckon_m, 3),
             "age_s": rounded(pose.age_s, 2), "anchor_age_s": getattr(pose, "anchor_age_s", None)}
+
+
+def robot_frame_goal(goal: tuple, site_pose: MapPose, state) -> Optional[tuple]:
+    """D-1003: a site-map free goal ``(x, y, yaw)`` in the robot's own Nav2 ``map`` frame; None without a
+    LOCALIZED map-frame pose in the robot ``state`` snapshot.
+
+    A robot's Nav2 map is its own (SLAM) map, not the site map. The same body seen in both frames gives
+    ``T = robot ∘ site⁻¹``; equal frames give the goal back. shortcut: the two poses come from separate
+    reads within one trip period, so motion between them shifts the goal (≤ speed × read gap); pair them
+    on the snapshot's odom stamp when that error matters."""
+    status = trust.status_of(state)
+    if status is None or status.state != trust.LocState.LOCALIZED or status.pose_frame != trust.PoseFrame.MAP:
+        return None
+    try:
+        raw = state["pose"]
+        rx, ry, ryaw = float(raw["x"]), float(raw["y"]), float(raw["yaw"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    if not all(math.isfinite(v) for v in (rx, ry, ryaw)):
+        return None
+    turn = wrap(ryaw - site_pose.yaw)
+    c, s = math.cos(turn), math.sin(turn)
+    dx, dy = goal[0] - site_pose.x, goal[1] - site_pose.y
+    return rx + c * dx - s * dy, ry + s * dx + c * dy, wrap(goal[2] + turn)

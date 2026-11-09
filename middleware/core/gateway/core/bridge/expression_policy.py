@@ -35,6 +35,7 @@ class ExpressionPolicy:
         self._people = {}
         self._encounters = {}
         self._group = None
+        self._crowd = 0
         self._labels = set()
         self._object = None
         self._object_gaze = 0.
@@ -94,6 +95,8 @@ class ExpressionPolicy:
             self._frame_at, self._ever, self._recover = at, True, False
             persons = evidence.of_label("person", .5)
             ids = [p.track_id for p in persons]
+            # People, not boxes: a repeated track ID is one person; an unnamed box counts once.
+            self._crowd = len({p.track_id for p in persons if p.track_id is not None}) + ids.count(None)
             group = any(i is None for i in ids) or len(set(ids)) != len(ids)
             switched = self._group is not None and group != self._group and bool(persons)
             if switched:
@@ -199,7 +202,9 @@ class ExpressionPolicy:
                                                           -self._people[key][1], key if isinstance(key, int) else 0))
             entry = self._encounters[self._target]
             entry["pending"], entry["greeted"] = False, now
-            self._active, self._until, self._hold_until = "happy", now + duration, now + 3
+            # A group arriving together (two or more to greet, or a counted group) gets cheer.
+            crowd = len(candidates) >= 2 or self._target == "group" and self._crowd >= 2
+            self._active, self._until, self._hold_until = "cheer" if crowd else "happy", now + duration, now + 3
             self._last_event, self._idle_since, resting = now, now if mode == "IDLE" else None, False
         elif self._object is not None and not pending_people and now - self._last_event >= 5:
             self._active, self._until = "interest", now + duration

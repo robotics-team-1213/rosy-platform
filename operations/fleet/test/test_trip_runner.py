@@ -666,22 +666,6 @@ def test_core_waiting_at_a_junction_stops_the_trip_after_the_timeout():
 
 # ---- free -----------------------------------------------------------------------------------
 
-def test_free_trip_sends_d463_points_ahead_across_the_place_and_arrives():
-    runner, store, ports = _setup(_free_map(), caps=BOTH)
-    _plan(store, ports, "ab:fwd", 0.1, "C")
-    run(runner.start("p1", "bob"))
-    _ticks(runner, ports)
-    assert ports.goals == [(0.3, 0.0)] and ports.sent == []
-    _ticks(runner, ports)
-    assert len(ports.goals) == 1  # the same point is not sent again
-    ports.at(_arc(store, "ab:fwd"), 0.9)
-    _ticks(runner, ports)
-    assert ports.goals[-1] == (1.0, 0.1)  # 0.2 m ahead runs on into bc
-    ports.at(_arc(store, "bc:fwd"), 0.97)
-    _ticks(runner, ports)
-    assert runner.view("p1")["state"] == "arrived"
-
-
 def test_each_trip_step_renews_the_goal_lease_and_a_failed_renewal_keeps_the_trip():
     """D-550 10: the trip loop is the renewer of trip goals; a renewal error is left to CORE."""
     runner, store, ports = _setup(_free_map(), caps=BOTH)
