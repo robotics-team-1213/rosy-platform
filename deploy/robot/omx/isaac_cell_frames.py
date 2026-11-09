@@ -20,6 +20,8 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
+# the Isaac worker runs this with the host's /usr/bin/python3, where omx_adapter is not installed (teach_trajectory needs it)
+sys.path.insert(1, str(HERE.parents[2] / "middleware/devices/omx/adapter"))
 from grasp_planner import NAMES, Planner, norm_to_rad  # noqa: E402
 from sim_chunk_plan import phases as chunk_phases, sim_plan  # noqa: E402
 
