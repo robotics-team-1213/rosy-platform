@@ -71,7 +71,6 @@
 - 증거: 새 경로 RED 3 FAIL 뒤 6 PASS. 넓은 회귀 158 PASS/2 fixture FAIL은 목표 미지원 fake를 누른 시험이어서 지원하는 운행 폼으로 수정했다. 기록 대상 RED 뒤 최종 자원 기준 통과 AI PC 역할/배정/대형/대상/지도/구조 30 PASS/111 deselected, NEW 0 (`X:/DevTemp/projects/rosy-platform/2026-10-11--194243--mapless-fleet-control--384416/logs/selected-context-acceptance/run-1.txt`). 독립 소스 검토 수용.
 - gate 변화: source/remote 진입·대상 유지 범위. Task 5 충돌 및 지도 활성화 busy 보강, main 통합·CI·배포·실제 사이트·실물 수용은 남아 있다.
 
-
 ## 2026-10-11 · d6abc8e863 · D-655 map activation and command conflicts
 
 - 변경: trip뿐 아니라 진행 중 대형과 지도 기록에서도 활성화를 거절한다. 일반 기록 시작·pose 장소 저장은 위치 조회 전후 map_id·전체 조사 기준·활성 버전을 비교해 이전 위치의 새 지도 저장을 막는다. 팔로워 목표와 참여자 개별 운행, 진행 중 trip의 개별 목표를 기존 admission에 맞춰 설명하며 확인 직전 재검사한다. 충돌 작업을 자동 해제하거나 이동 명령을 추가하지 않는다. 재개·후진 수락과 실제 로봇 진행을 구분한다.
@@ -157,7 +156,6 @@
 - 변경: 초기 쿠키는 첫 비밀번호 변경에만 사용하고 네 운용 문서의 조작을 잠근다. 우상단 계정에서 본인 표시 이름/현재 비밀번호 확인 변경/읽기 전용 ID·이메일·권한을 관리한다. Map/Cell은 새 탭과 초안을 보존한다. 비밀번호/표시 이름 결과를 서버 재조회하며 만료·계정 전환은 비밀 삭제/제출 중단/명시적 재조회로 처리한다.
 - 증거: 서버 73b23b956 원격 선택 173 PASS와 70e970acb Unicode 수정 20 PASS, 각각 NEW 0. UI/권한/소스의 독립 검토에서 찾은 오류를 수정했고 현재 통합 브라우저 시험은 별도 진행 중이다. 상세는 전체 UI 검증 결과 문서에 SHA/범위별로 기록한다.
 - gate 변화: 최신 영향 gate·main 착지·push·CI·서명·설치·팀원 발급과 실제 첫 변경은 미확인이다. 기존 서비스 자격과 CORE 최종 명령 권한을 유지한다.
-
 
 ## 2026-10-12 · d002c579d · D-689 계정 화면 용어 정렬
 
@@ -320,7 +318,6 @@
 - 변경: `shared/site-map-model.js` `trafficCardLine`이 `/traffic` 행의 `preview` 첫 두 사건을 "예고: 0.42 m 왼쪽 회전 · 0.95 m 횡단보도"로 붙인다. 없거나 만료한 미리보기는 서버가 행에서 빼므로 아무것도 안 보인다. 파일 800/800, 콘솔 단위 17,718/17,719.
 - 증거: `operations/fleet/test/web/traffic-layer.test.mjs`(원격 `test_site_map_api.py` node 시험 포함 fleet 5,290 passed). 브라우저는 확인 못 함.
 - gate 변화: 없음.
-
 
 ## 2026-10-16 · uncommitted · 앱별 작업으로 이동하는 로봇 카드
 
@@ -663,13 +660,11 @@
 - 증거: 작업 세션 Fleet 샘플 서버(4173) Chromium에서 세 문서(설치·지도·관제 작업 화면)의 자리 위치가 같다(레일 0·72px, 자리 x=72·232px, 본문 x=304). 탭 여섯 전환·tabpanel 라벨·좁은 화면 콤팩트 선택 유지, 페이지 오류 없음. node --test 403 passed. 원격 pytest는 착지 전에 기록한다.
 - gate 변화: 없음. CE: 해당 없음 — 화면 규칙은 D-741 6이 담는다.
 
-
 ## 2026-11-01 · uncommitted · D-741 6 보강: 좁은 컨테이너에서 콤팩트 선택 기준 통일
 
 - 변경: `doc-tabs.css`의 `@container (width < 64rem)` 안에서 설치 자리의 task-chooser도 같은 컨테이너 기준으로 세로 레일을 숨기고 콤팩트 선택을 띄운다. `task-chooser.css`의 전환은 뷰포트 기준이라 고전 스크롤바 창(뷰포트 64rem 이상·컨테이너 미만)에서 레일이 세로로 남던 창을 메운다. 공용 시트는 그대로 두고 Fleet 표면이 자기 컨테이너 기준만 더한다.
 - 증거: 작업 세션 Fleet 샘플 서버(4173) Chromium 1440에서 컨테이너만 1000px로 줄인 경우 레일 숨김·콤팩트 선택 표시·탭 전환 정상, 1440 기본·480 좁은 폭은 기존과 같음, 페이지 오류 없음. 원격 브라우저 시험은 아래 착지 전 기록 참조.
 - gate 변화: 없음. CE: 해당 없음.
-
 
 ## 2026-11-01 · uncommitted · D-926 2·비평 P0: 경로 줄 도입, 설치 문서 죽은 탭 수리, h1 모델 통일
 
@@ -677,13 +672,11 @@
 - 증거: 작업 세션 Fleet 샘플 서버(4173) Chromium — 호스트 서비스 탭 패널 표시·설치 기록 모든 탭에서 표시, 경로 줄 화면 이름이 chooser·해시·view를 따라감("카메라 설치·보정"·"초안 편집"·"레시피"·"작업"), site-map main h1 0개·map-heading H2, 페이지 오류 없음. node --test 403 passed. 원격 시험은 착지 전 기록.
 - gate 변화: 없음. CE: 해당 없음.
 
-
 ## 2026-11-01 · uncommitted · 비평 P1: 현재 표시 어휘 통일, 설치 작업 주소 보존, policy 거짓 표시 제거
 
 - 변경: `aria-current="step"`(문서 안 현재 단계)이 `page`와 같은 장미색 자리 표식을 받는다(app-shell.css, Cell 단계가 처음으로 보인다). install 작업 선택이 `history.replaceState(#작업-id)`로 주소에 남고 첫 로드가 해시를 일반화해 읽어 새로고침·공유가 작업을 보존한다(기존 `#device-profiles` 특수 처리 제거). policy 좌석의 `학습` 링크에서 남의 문서를 가리키던 거짓 `aria-current="page"`를 뺐다 — 화면 이름은 경로 줄 strong이 말한다.
 - 증거: 작업 세션 Fleet 샘플 서버(4173) Chromium — Cell 현재 단계 표식 배경 확인, 탭 클릭 → `#hosts` → 새로고침 후 같은 작업 복원, 신규 로드 `#device-profiles` → 해당 패널, policy 현재 표시 0개, 페이지 오류 없음. node --test 403 passed. 원격 시험은 착지 전 기록.
 - gate 변화: 없음. CE: 해당 없음.
-
 
 ## 2026-11-01 · uncommitted · 비평 사소한 관찰: 절차 문서 skip link·header 랜드마크, 좁은 좌석 단계 머리글, 영상 제목 층위
 
@@ -691,13 +684,11 @@
 - 증거: 작업 세션 Fleet 샘플 서버(4173) Chromium — accounts/profile/login skip link 1개·header 랜드마크 1개·main id 확인, Cell 390px에서 "Cell 적재 단계" 머리글 표시, 두 문서 vision-heading H3, 페이지 오류 없음. node --test 403 passed. 원격 시험은 착지 전 기록.
 - gate 변화: 없음. CE: 해당 없음.
 
-
 ## 2026-11-01 · uncommitted · 비평 후속: 호스트 안내 문장 줄이기, 실측 블록 흰 채움 하나, estop 폭 정합 확인
 
 - 변경: 호스트 서비스 안내 hint를 4문장에서 2문장으로 줄였다(사실 30초 갱신·점검 10분/30분·재부팅 10분·비상 정지 모두 보존). 실측 교정 블록의 `현재 조건 확인 후 미리보기` 단추가 primary→quiet로, 블록의 흰 채움은 `실측 교정 승인 저장` 하나다(D-926 7).
 - 증거: Chromium — 안내 문구·단추 kind 확인, 페이지 오류 없음. `#estop-feedback`는 1440·1920에서 main 본문과 픽셀 정렬(x·폭 일치) — 비평의 미실측 우려 종결, 수정 불필요. 원격 시험은 착지 전 기록.
 - gate 변화: 없음. CE: 해당 없음.
-
 
 ## 2026-11-01 · uncommitted · 재비평 P2/P3: 소속 표시 복원, 경로 줄 화면 이름, canvas role 상태 추종, 알림 글리프, 묶음 머리글, 첫 화면 primary
 
@@ -705,13 +696,11 @@
 - 증거: 작업 세션 Fleet 샘플 서버(4173) Chromium — policy 표식 1개, `?view=work&show=pending` 경로 줄 "승인 대기", 머리글 3문서, 접속 단추 UI-BUTTON kind=primary(비접속 클릭 가능·로그인 완료), canvas role 무장 시 "button"·해제 시 제거(핀 토글 실측), 알림 탭 sign 글리프 path 확인, 페이지 오류 없음. node --test 403 passed. 원격 시험은 착지 전 기록.
 - gate 변화: 없음. CE: 해당 없음.
 
-
 ## 2026-11-01 · uncommitted · 테마 단추를 머리 줄 조작 칸으로(사용자 결정)
 
 - 변경: 영역 문서 다섯의 테마 단추(`#fleet-theme`)가 계정 접힘(`topbar-extra`, 펼치면 두 번째 줄처럼 보이는 패널)에서 머리 줄 조작 칸(알림·로그인 다음, 계정 단추 앞)으로 옮겼다. 머리에 들어갈 것은 머리 줄의 공용 아이콘 단추 하나로 충분하며 표시 선택을 계정 상세 뒤에 숨기지 않는다(가벼운 문서 넷은 원래 topbar 직속 — 이제 아홉 문서가 같은 자리). 정본 inc + 재생성.
 - 증거: Chromium — 다섯 영역 문서 actions 칸 소속·보임·topbar-extra 부재·문서당 1개, 가벼운 문서 셋 topbar 직속 1개, 계정 접힘 안 열고 다크→라이트 순환 확인, 페이지 오류 없음. node --test 403 passed. 원격 시험은 착지 전 기록.
 - gate 변화: 없음. CE: 해당 없음.
-
 
 ## 2026-11-01 · uncommitted · 재비평 사소 관찰 마무리: policy 도입 산문 접기, 서식
 
@@ -719,13 +708,11 @@
 - 증거: Chromium — 첫 문장 표시·접힘 열림·페이지 오류 없음. node --test 403 passed. 원격 시험은 착지 전 기록.
 - gate 변화: 없음. CE: 해당 없음.
 
-
 ## 2026-11-01 · uncommitted · 재비평 자극 문제 두 건 결정 — 현행 유지
 
 - 변경: 없음(결정 기록). ① `학습` 링크는 작업 하위 탐색에 잔류한다 — "다른 문서" 머리글이 문서 경계를 말하고, 여섯째 영역·계정 이동은 레일 5영역 원칙과 정책→학습 맥락을 흐린다. ② 설치 문서의 tablist(task-chooser)는 유지한다 — beforeSelect 상태 보호·초안 보존이 hash 화면 문법에 없고 robot UI와 같은 공용 부품이며, URL 보존·경로 줄 표시로 사용자 체감 차이는 해소됐다.
 - 증거: 문제 정의와 권고는 재비평(2026-10-31T18-09-46Z 스냅숏)에 있고 이 행이 채택을 기록한다.
 - gate 변화: 없음. CE: 해당 없음.
-
 
 ## 2026-11-01 · uncommitted · 착지 브라우저 시험 반영: 캔버스 role 소유권 존중
 
@@ -733,13 +720,11 @@
 - 증거: Chromium — 사이트 뷰 role=img가 여러 렌더 틱 생존, 핀 무장 → button → 해제 → img 즉시 복원, 페이지 오류 없음. node --test 403 passed. 원격 시험은 재착지 전 기록.
 - gate 변화: 없음. CE: 해당 없음.
 
-
 ## 2026-11-01 · uncommitted · 착지 반영: 좁은 칸 머리 예산과 계약 갱신 (테마 머리 줄)
 
 - 변경: 테마 단추의 머리 줄 이동(사용자 결정)에 맞춰 <30rem에서 로그인 글자 링크를 접는다 — 계정 단추(계정과 접속)와 본문 관제 접속 안내가 같은 문을 연다. test_fleet_console_browser의 compact 예산·wide 한 줄 계약을 새 자리로 갱신(테마 머리 줄 표시).
 - 증거: Chromium — 390·320에서 overflow 0·topbar 64px(예산 내)·테마 보임·정지 우측·계정 48px, 1280 한 줄 64px·테마 보임. node --test 403 passed. 원격 시험은 재착지 전 기록.
 - gate 변화: 없음. CE: 해당 없음.
-
 
 ## 2026-11-01 · uncommitted · 테마 단추 계정 접힘 원복 (사용자 재확인)
 
@@ -773,13 +758,11 @@
 - 증거: Chromium — 세 링크 48px·아이콘 1개 확인, node --test 403 passed. 원격 시험은 다음 착지 전 기록.
 - gate 변화: 없음. CE: 해당 없음.
 
-
 ## 2026-11-02 · uncommitted · 정보 위계 스윕: 지도 범례 첫 문장 + 접힌 기호 안내
 
 - 변경: 지도 범례(6행 한 문장)를 첫 문장(점·선·화살표와 조작 안내)과 접힌 「기호 안내」 정의 목록(횡단보도·대기 띠·로봇 표식·경로 선형)으로 나눴다 — 모든 안전·기호 사실 보존, 위계는 D-926 7(첫 눈에 목적, 나머지는 접힘). 장치 정보 hint·설치 카메라 패널 hint는 각각 한두 문장 상태·안전 안내라 그대로 둔다(aria-describedby 이동은 오히려 접근성을 해친다).
 - 증거: Chromium — 첫 문장 56자·접힘 48px·용어 4개·열림 확인, node --test 403 passed, fleet_components --check 통과. 원격 시험은 다음 착지 전 기록.
 - gate 변화: 없음. CE: 해당 없음.
-
 
 ## 2026-11-02 · uncommitted · 좁은 좌석 하위 탐색: 민 스크롤 대신 줄바꿈(22–64rem)
 
@@ -787,13 +770,11 @@
 - 증거: Chromium — 390·430 줄바꿈(13/13 보임, 높이 220·168px, 스크롤 없음), 320 스크롤(83px), 세 폭 모두 넘침 0. 원격 시험은 다음 착지 전 기록.
 - gate 변화: 없음. CE: 해당 없음.
 
-
 ## 2026-11-02 · uncommitted · 정적 감사 2차: 마지막 긴 hint 두 개 접힘(대형 조작·배경 학습)
 
 - 변경: 전 표면 정적 감사(CSP 인라인·kind 누락·알 수 없는 아이콘·alt·describedby·skip-link 대상·중복 id·tabindex) 결과 규격 밖 0건, hint 100자 이상 2건만 남아 대형 조작 규칙(154자)·배경 학습 세부(157자)를 첫 문장+접힘으로 나눴다(안전 사실 보존). 검수 앱 el.style는 학습 화면 고유 규칙이라 그대로 둔다. 접힘은 p 안에 두지 않고 형제로 둔다(HTML 파서가 p를 자동 닫음 — 실측으로 확인).
 - 증거: Chromium — 두 접힘 48px·세부 p 포함 확인, 감사 재실행 hint 0건, node --test 403 passed. 원격 시험은 다음 착지 전 기록.
 - gate 변화: 없음. CE: 해당 없음.
-
 
 ## 2026-11-02 · uncommitted · 접힘 부품 하나로: hint-more 공용 클래스로 통합
 
@@ -801,13 +782,11 @@
 - 증거: Chromium — 세 접힘 48px 통일, node --test 403 passed. 원격 시험은 다음 착지 전 기록.
 - gate 변화: 없음. CE: 해당 없음.
 
-
 ## 2026-11-02 · uncommitted · 구조 감사 3차: CSS 중복 2건 통합
 
 - 변경: 중복 감사로 찾은 진짜 중복 2건을 정리했다 — ① styles.css 안에서 `#fleet-main :is(.map-stage #map-canvas, .map-birdseye)` 규칙이 두 번 선언돼 있던 것을 한 곳으로 합침(절대 배치는 폭과 무관). ② cell.css와 site-map.css가 각자 가진 `a { color: var(--text-primary) }` 링크 색 규칙 제거(공용 components.css가 이미 같은 규칙을 소유). 나머지 감사 결과(JS 함수명 56건·다문서 id 36건·같은 값 다른 변수명 137쌍)는 전부 설계상 정상(모듈 클로저·공용 헤더·시맨틱 토큰)으로 판정해 그대로 둔다.
 - 증거: test_layout_canon 전 통과, node --test 403 passed. 원격 시험은 다음 착지 전 기록.
 - gate 변화: 없음. CE: 해당 없음.
-
 
 ## 2026-11-02 · uncommitted · 4차 감사: noscript 안내 — JS 없는 사용자에게 물리 정지 경로 알림
 
@@ -815,13 +794,11 @@
 - 증거: fleet_components --check·test_layout_canon 전 통과·node --test 403 passed. 원격 시험은 다음 착지 전 기록.
 - gate 변화: 없음. CE: 해당 없음.
 
-
 ## 2026-11-02 · uncommitted · 로그인 문서 skip-link 재정의 제거
 
 - 변경: `password-login.css`의 skip-link 사본을 지우고 공용 규칙을 쓴다.
 - 증거: 공용 덧칠 검사.
 - Gate: 없음. CE: 해당 없음.
-
 
 ## 2026-11-02 · uncommitted · 신호기 녹색 등을 녹색으로 (D-525 보강)
 
@@ -849,7 +826,6 @@
 - Log: `rosy-account-image-closure/run-1.txt`; native `size_range.py d7fcc74e43 b9424451a0` checked four commits successfully; native static secret scan found zero findings.
 - Gate: scoped SOURCE/LOCAL verification only; existing artifact, device and field limits remain.
 
-
 ## 2026-11-02 · 5f02d723d1 · D-962 independent identity backup and presentation
 
 - Change: Login/profile/admin identity pages now display Rosy Account. Plain login and accessible form use the Account login label; the existing OAuth Account heading remains compatible with Learning. Return links, theme and layout are unchanged. Actual standalone TLS browser confirms all three brands, profile edit, admin listing, cookie resume and first-password return; all affected identity browser suites passed.
@@ -857,14 +833,12 @@
 - Logs: `rosy-account-backup-replay/run-1.txt` (335 passed), `rosy-account-identity-replay/run-1.txt` (71 passed); known-failure comparison 0 new/known/flaky. Native size range checked eight commits without a violation.
 - Gate: scoped SOURCE/LOCAL GO; image artifact, installation, timer activation and human field acceptance remain separate.
 
-
 ## 2026-11-02 · 59dbc2136b · D-962 canonical Account scope closure
 
 - Change: Canonical lightweight header now takes the document brand and title from one renderer: Account login/profile/admin, Fleet learning. Existing component propagation checks remain; a brand mutation proves form/task bytes outside the header are unchanged. Identity HTML needs no manual regeneration delta.
 - Evidence: Official FULL snapshot 20261102132628 exposed stale Fleet component/title consumers and stopped; it was not a FULL success. At 59dbc2136b, committed remote shared-web contracts, component/registry/app ownership, Account TLS identity, Fleet header browser/Node and Account image/deploy closure passed 581 tests, with one separately disabled Android native-token-export check skipped and 0 NEW. Exact title-file isolation via tools/collect_alone.py completed one whole-file target (wrapper 1 passed, 1 empty collection parametrization skipped). Independent review found no supported material findings.
 - Logs: `rosy-account-surface-closure/run-1.txt`; `rosy-account-title-isolated/run-1.txt`. Native canonical renderer check, AST, secret scan (0 findings), diff check and one-commit size range passed.
 - Gate: Scoped SOURCE/LOCAL evidence only. Replacement FULL/no-cache, OCI artifact, installation and live field acceptance remain pending. CE: no additional lesson; canonical ownership, propagation and strict mutation regressions retain the cause and fix.
-
 
 ## 2026-11-02 · uncommitted · D-961 웹 제품 통합
 
@@ -944,7 +918,6 @@
 - 증거: `8316bbe1a9` 원격 Chromium RED는 legacy·managed 로그인 모두 패널 숨김에서 실패(NEW 2/known 0/flaky 0). 수정 소스 `12aa681800`에서 전체 계정 브라우저와 USB 결정 라우트 57 passed/0 skipped, known_failures NEW/known/flaky 0. 실제 테스트 서버·SQLite로 쿠키 로그인, 빈 저장 토큰, 외부 Origin 403, 확인 뒤 승인 200·쿠키 전송·Authorization 부재·저장 결과를 확인했다.
 - Gate: 호스트 브라우저·HTTP 검증이며 실제 USB 적용·장치·현장 수용은 수행하지 않았다.
 - CE: 해당 없음 — 기존 쿠키 로그인 교훈을 검토했고 원인·수정·재발 방지는 한 조건과 실제 브라우저 회귀로 복원 가능하다.
-
 
 ## 2026-11-03 · d4e263f5fa · fix(console): explain fixed-unit registration refusal without consuming-code advice
 
@@ -1152,6 +1125,24 @@
 - 남은 일: 로봇 화면(대시보드) 조종·충전 복귀 운행은 현재 데이터로 증명되지 않는다. CORE가 마지막 수락 teleop의 토큰 종류를 상태에 싣는 additive 필드가 필요하다.
 - 교훈: CE 해당 없음 — 표시 규칙은 코드와 시험에 직접 남는다.
 
+## 2026-11-07 · 11b42b5933 · feat(console): 스테이션 복구 요청 행과 사람 부탁 행
+- 변경: `station-recovery.js`·`person-request.js`가 주의 큐 행(`decision` 슬롯)에 요청·사유 문장과 단추를 채운다. 사람 부탁은 `했어요`·`못 해요`, 복구는 허용될 때만 `복구 승인 (기록만)`. 모든 행에 "로봇을 움직이지 않음" 줄. CSS·새 정적 자산 외 변경 없음(assets.json, 허용 목록 시험 갱신).
+- 증거: `node --test operations/fleet/test/web/station-recovery.test.mjs person-request.test.mjs` 10 pass (노트북). 브라우저 시험은 돌리지 않았다.
+- gate 변화: SOURCE 변경. 화면 육안·Chromium 확인 없음.
+- 교훈: CE 해당 없음 — 최종 코드와 시험이 판단을 보존한다. 실물·운영 수용은 아니다.
+
+## 2026-11-07 · 92cb90111c · uiux(fleet): say why a battery stop holds and that charging ends it (D-502 Amendment 2026-11-07)
+- 변경: 배터리 래치만 잔량 회복 시 스스로 풀림, 다른 정지는 래치를 넘겨받음, 상태 `safety.releases_when_charged`, 화면 문구.
+- 증거: 원격 시험 결과는 착지 기록을 본다. 실제 충전 해제는 새 릴리스 뒤 확인 전이다.
+- gate 변화: 없음
+- 교훈: CE 해당 없음 — 규칙은 D-502 Amendment 2026-11-07과 회귀 시험에 있다.
+
+## 2026-11-07 · 7bea0ca865 · fix(console): 표시 중은 되읽은 것만, 복구 요청 문구는 움직임으로 읽히지 않게
+- 변경: 사람 부탁 전달 줄은 최근 30초 안 되읽기만 "표시 중", 오래되면 "확인 불가", 대기 중이면 "아직 로봇 화면에 없음". 복구 요청 머리말은 "충전 칸 C1 후보 · 승인은 기록만, 아직 아무것도 움직이지 않음".
+- 증거: `node --test` person-request·station-recovery 10 pass.
+- gate 변화: SOURCE 변경. 로봇·장치 수용 없음.
+- 교훈: CE 해당 없음 — 최종 코드와 시험이 판단을 보존한다. 실물·운영 수용은 아니다.
+
 ## 2026-11-07 · uncommitted · uiux(fleet): 규칙 판정 버튼이 공용 화면 규칙을 지킨다
 - 변경: 판정 중 꺼진 버튼에 이유를 달고, 결과 표시 `거절`을 `거절됨`으로 바꿔 되돌릴 수 없는 행동 문구와 구분한다.
 - 증거: FULL 착지에서 test_shared_controls·test_list_row_irreversible이 두 줄을 잡았다(단독 재실행에서도 실패).
@@ -1176,6 +1167,16 @@
 - 변경: `/console/maintenance`를 더하고 설치 화면의 작업에서 호스트 서비스를 뺀다. 설치 화면과 Monitoring의 PC 행이 링크로 연결한다. 레일은 다섯 영역 그대로다.
 - 증거: 원격 문서·브라우저 시험. 운영 배포와 현장 수용은 별도다.
 - gate 변화: SOURCE. CE: 해당 없음 — 시험과 ADR이 판단을 보존한다.
+
+## 2026-11-08 · uncommitted · fix(fleet-ui): 끝나지 않는 경로 계획 표시
+- 변경: `planning-stall.js` — 로봇이 15초 넘게 PLANNING이면 카드에 "경로 계획 응답 없음 · 운행 취소 후 로봇 확인"(crit). CORE는 Nav2 무응답을 `BACKEND_RESULT_UNKNOWN`으로 두고 상태는 PLANNING에 남기므로 콘솔이 볼 수 있는 유일한 신호다. 시작 시각은 탭 안에만 있어 새로고침하면 다시 센다.
+- 증거: node `test_planning_stall.py`, 원격 실행 기록 참조.
+- gate 변화: 없음.
+
+## 2026-11-08 · uncommitted · feat(fleet-ui): 스테이션 복구 승인 주체 표시
+- 변경: `station-recovery.js` — `approved_by`로 "자동 승인됨"·"<id> 승인"·"승인 대기"를 보이고, 승인된 요청에는 승인 버튼을 두지 않는다.
+- 증거: node `station-recovery.test.mjs`, 원격 실행 기록 참조.
+- gate 변화: 없음.
 
 ## 2026-11-08 · uncommitted · fix(accounts): 가입 요청 목록이 실패해도 계정 화면은 그린다
 - 변경: 계정 관리 화면이 가입 요청 목록을 읽지 못하면 그 자리에 "요청 목록을 읽지 못했습니다. 새로 고쳐 주세요."를 보이고, 계정·앱 목록은 그대로 그린다. 요청 거절 확인 창이 늘어 확인 창 핀을 2로 올렸다(D-993).

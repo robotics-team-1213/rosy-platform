@@ -7,8 +7,10 @@ function agoText(sec) {
 export function powerHealthView(robot, receivedAtMs, nowMs) {
   const unknown = { battery: "확인 불가", voltage: null, charging: "확인 불가",
     problem: "배터리 값 없음 — 배터리 센서 서비스 확인", note: "" };
+  // D-502: the battery latch ends itself on charge; an administrator can still release it earlier.
+  const charged = robot.state?.safety?.releases_when_charged === true ? "충전되면 자동으로 풀립니다. 먼저 풀려면 " : "";
   const safetyRelease = robot.online && robot.state?.safety?.estop === true
-    ? "로봇 안전 확인 후: 로봇 등록 목록 → 비상정지 해제… → 그 로봇 정지 화면의 Release code" : "";
+    ? charged + "로봇 안전 확인 후: 로봇 등록 목록 → 비상정지 해제… → 그 로봇 정지 화면의 Release code" : "";
   const age = robot.power_health_age_s;
   const health = robot.power_health;
   const battery = health?.battery;

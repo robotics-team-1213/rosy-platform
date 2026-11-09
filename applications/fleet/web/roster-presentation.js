@@ -8,6 +8,7 @@ import { powerHealthView } from "./power-health-view.js";
 import { cardTripLine } from "./card-trip.js";
 import { estopText } from "./motion-readiness.js";
 import { motionSource } from "./motion-source.js";
+import { planningStalled } from "./planning-stall.js";
 
 const TAG_STATUS = { nav: "active", ok: "active", warn: "warn", crit: "crit" };
 
@@ -74,8 +75,13 @@ export function blockWith(button, reason) {
   else button.removeAttribute("reason");
 }
 
-export function navTag(state) {
+const planningSince = new Map();
+
+export function navTag(state, robotId = null, nowMs = Date.now()) {
   const nav = state && state.navigation;
+  if (robotId !== null && planningStalled(planningSince, robotId, nav, nowMs)) {
+    return { text: "경로 계획 응답 없음 · 운행 취소 후 로봇 확인", cls: "crit" };
+  }
   if (!nav) return { text: "—", cls: "" };
   if (nav === "NAVIGATING") {
     return { text: state.safety?.estop === false ? "목표 활성" : "목표 남음", cls: "nav" };
@@ -160,7 +166,7 @@ export function createRosterSummary({scope, view, openCard, render, attentionIte
     node.append(facts);
     const lane = state.line_follow;
     const mode = lane?.mode === "CAMERA_LINE" || lane?.mode === "IR_LINE"
-      ? `${enumLabel(LINE_FOLLOW_MODE_LABEL, lane.mode)} · ${enumLabel(LINE_STATE_LABEL, lane.state)}` : navTag(state).text;
+      ? `${enumLabel(LINE_FOLLOW_MODE_LABEL, lane.mode)} · ${enumLabel(LINE_STATE_LABEL, lane.state)}` : navTag(state, robot.robot_id).text;
     const trip = view.stateUnavailable ? "운행 확인 불가"
       : cardTripLine(view, robot.robot_id) || (robot.yielding ? "비켜서는 중" : robot.queued ? "출발 대기" : mode);
     if (trip !== "—") node.append(nodeWithText("p", "trip-line", trip)); // no navigation state: no placeholder line
