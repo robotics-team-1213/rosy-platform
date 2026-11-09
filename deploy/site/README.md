@@ -332,6 +332,7 @@ every release and is never copied. Install the units once from the verified curr
 (candidates signed before this group still verify; a partial group does not):
 
 ```sh
+sudo install -d -o 10001 -g 10001 -m 0500 /etc/rosy/account-tls   # installed pair; the run fails to install without it
 sudo install -d -m 0700 /var/lib/rosy/account-tls   # data folder: renewed pair and backups, outside the release
 sudo install -m 0600 /opt/rosy/candidate/deploy/site/account-tls.env.example /etc/rosy/site/account-tls.env
 sudoedit /etc/rosy/site/account-tls.env             # set ROSY_ACCOUNT_TLS_DOMAIN (the approved Account DNS name)

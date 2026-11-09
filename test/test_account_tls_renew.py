@@ -22,6 +22,15 @@ def test_no_site_hostname_or_preparation_folder_is_written_in_the_public_source(
     assert "domain = os.environ['ROSY_TLS_DOMAIN']" in load().HELPER
 
 
+def test_refuses_root_or_relative_certificate_folder(monkeypatch):
+    module = load()
+    monkeypatch.setattr(module.subprocess, 'check_output', lambda *a, **k: pytest.fail('docker reached'))
+    for certs in ('/', '', 'relative'):
+        monkeypatch.setattr('sys.argv', ['x', '--certs', certs, '--domain', 'site.example.net'])
+        with pytest.raises(SystemExit):
+            module.main()
+
+
 @pytest.mark.parametrize('domain', ['', 'bad host', 'a/b', '../x'])
 def test_refuses_a_missing_folder_or_a_non_dns_name_before_docker(tmp_path, monkeypatch, domain):
     module = load()
@@ -90,7 +99,7 @@ def test_system_twin_runs_the_signed_release_script_and_keeps_certs_outside_it()
     unit.read(ROOT / 'deploy/site/rosy-site-account-tls-renew.service')
     service = unit['Service']
     assert service['EnvironmentFile'] == '/etc/rosy/site/account-tls.env'
-    assert service['ExecStart'] == ('/usr/bin/python3 /opt/rosy/candidate/deploy/site/account_tls_renew.py '
+    assert service['ExecStart'] == ('/usr/bin/python3 -I /opt/rosy/candidate/deploy/site/account_tls_renew.py '
                                     '--certs ${ROSY_ACCOUNT_TLS_CERTS} --domain ${ROSY_ACCOUNT_TLS_DOMAIN}')
     assert service['UMask'] == '0077' and service['NoNewPrivileges'] == 'yes'
     assert 'ROSY_ACCOUNT_TLS_SOURCE' not in (ROOT / 'deploy/site/rosy-site-account-tls-renew.service').read_text()

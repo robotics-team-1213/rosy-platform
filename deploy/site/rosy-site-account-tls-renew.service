@@ -1,7 +1,7 @@
 [Unit]
 Description=Check and renew the site Account TLS certificate
 Documentation=file:/opt/rosy/candidate/deploy/site/README.md
-After=docker.service
+After=docker.service tailscaled.service
 Requires=docker.service
 
 [Service]
@@ -9,9 +9,10 @@ Type=oneshot
 # System-level twin of rosy-account-tls-renew.service for hosts that take the script from the signed
 # release (D-1001 R host). The certificate folder stays outside the release (D-852).
 EnvironmentFile=/etc/rosy/site/account-tls.env
-ExecStart=/usr/bin/python3 /opt/rosy/candidate/deploy/site/account_tls_renew.py --certs ${ROSY_ACCOUNT_TLS_CERTS} --domain ${ROSY_ACCOUNT_TLS_DOMAIN}
+ExecStart=/usr/bin/python3 -I /opt/rosy/candidate/deploy/site/account_tls_renew.py --certs ${ROSY_ACCOUNT_TLS_CERTS} --domain ${ROSY_ACCOUNT_TLS_DOMAIN}
 TimeoutStartSec=240
 UMask=0077
 NoNewPrivileges=yes
 PrivateTmp=yes
 ProtectHome=yes
+ProtectSystem=full
