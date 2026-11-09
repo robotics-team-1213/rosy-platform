@@ -163,6 +163,8 @@ def state(wt: Path, rows: list[dict] | None = None) -> dict[str, dict]:
         s["carries"] = [c for c in s["carries"] if c["sha"] not in covered]
         if not s["mains"] and not s["carries"]:
             del out[nodeid]
+        elif not s["env"] and "_browser.py::" in nodeid:  # red recorded before nightly kept env: a bare run skips it
+            s["env"] = ["ROSY_RUN_BROWSER_TESTS=1"]
     return out
 
 

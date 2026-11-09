@@ -206,3 +206,15 @@ def test_recheck_refuses_a_sha_that_is_not_a_commit_and_closes_nothing(repo):
     with pytest.raises(ValueError):
         mr.recheck(wt, "0" * 40, lambda invocations, logs: None, wt)
     assert mr.state(wt) == before
+
+
+def test_recheck_runs_a_legacy_browser_red_with_the_opt_in(repo):
+    wt, main, _ = repo
+    browser = "pkg/test/test_a_browser.py::test_b[size1]"
+    (wt / "pkg/test/test_a_browser.py").write_text("def test_b(): pass\n")
+    git(wt, "add", ".")
+    git(wt, "commit", "-q", "-m", "browser test")
+    mr.red(wt, main, [browser], LOG, [], "nightly")  # 11-08 nightly wrote env [] for a browser id
+    seen = []
+    mr.recheck(wt, git(wt, "rev-parse", "HEAD"), lambda invocations, logs: seen.extend(invocations), wt)
+    assert ["ROSY_RUN_BROWSER_TESTS=1", "-rA", browser] in seen, "without the opt-in the run skips and never closes"
