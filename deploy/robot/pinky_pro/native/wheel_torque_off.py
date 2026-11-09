@@ -7,15 +7,23 @@ Write-only; a failure is logged and never fails the stop.
 """
 import sys
 
-sys.path.insert(0, "/opt/rosy/current/install/lib/python3.12/site-packages")
-from dynamixel_sdk import COMM_SUCCESS, PacketHandler, PortHandler  # noqa: E402
+try:
+    from dynamixel_sdk import COMM_SUCCESS, PacketHandler, PortHandler
+except ImportError:  # -I hides user paths; fall back to the release's copy
+    sys.path.insert(0, "/opt/rosy/current/install/lib/python3.12/site-packages")
+    from dynamixel_sdk import COMM_SUCCESS, PacketHandler, PortHandler
 
 DEVICE, BAUDRATE, ADDR_TORQUE_ENABLE, WHEEL_IDS = "/dev/rosy-motor", 1_000_000, 64, (1, 2)
 
 
 def main() -> int:
-    port = PortHandler(DEVICE)
-    if not (port.openPort() and port.setBaudRate(BAUDRATE)):
+    try:
+        port = PortHandler(DEVICE)
+        opened = port.openPort() and port.setBaudRate(BAUDRATE)
+    except Exception as error:  # the SDK raises SerialException for a missing device
+        print(f"FAIL torque-off: {error}", file=sys.stderr)
+        return 0
+    if not opened:
         print(f"FAIL torque-off: cannot open {DEVICE}", file=sys.stderr)
         return 0
     try:
@@ -25,6 +33,8 @@ def main() -> int:
             ok = comm == COMM_SUCCESS and err == 0
             print(f"{'ok' if ok else 'FAIL'} torque-off id {motor_id} comm {comm} err {err}",
                   file=None if ok else sys.stderr)
+    except Exception as error:
+        print(f"FAIL torque-off: {error}", file=sys.stderr)
     finally:
         port.closePort()
     return 0

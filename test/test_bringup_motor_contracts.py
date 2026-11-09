@@ -5,6 +5,7 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
+import sys
 
 import pytest
 
@@ -233,3 +234,45 @@ def test_motor_units_repeat_torque_off_after_every_stop(unit):
     assert "write1ByteTxRx(port, motor_id, ADDR_TORQUE_ENABLE, 0)" in script
     assert "print(f\"FAIL torque-off: cannot open" in script
     assert "sys.exit(main())" in script and "return 0" in script
+
+
+def test_wheel_torque_off_script_never_fails_the_stop(monkeypatch, capsys):
+    import importlib.util
+    import types
+
+    sdk = types.ModuleType("dynamixel_sdk")
+    sdk.COMM_SUCCESS = 0
+    writes = []
+
+    class Port:
+        def __init__(self, _device):
+            pass
+
+        def openPort(self):
+            raise OSError("no such device")
+
+        def closePort(self):
+            pass
+
+    class Packet:
+        def __init__(self, _protocol):
+            pass
+
+        def write1ByteTxRx(self, _port, motor_id, address, value):
+            writes.append((motor_id, address, value))
+            return 0, 0
+
+    sdk.PortHandler, sdk.PacketHandler = Port, Packet
+    monkeypatch.setitem(sys.modules, "dynamixel_sdk", sdk)
+    path = ROOT / "deploy" / "robot" / "pinky_pro" / "native" / "wheel_torque_off.py"
+    spec = importlib.util.spec_from_file_location("wheel_torque_off", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    assert module.main() == 0
+    assert "FAIL" in capsys.readouterr().err and writes == []
+
+    Port.openPort = lambda self: True
+    Port.setBaudRate = lambda self, _baud: True
+    assert module.main() == 0
+    assert writes == [(1, 64, 0), (2, 64, 0)]
