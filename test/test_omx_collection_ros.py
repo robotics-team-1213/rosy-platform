@@ -220,3 +220,86 @@ def test_rehearsal_cli_exercises_success_and_failures_with_no_hardware(tmp_path)
     report=json.loads(result.stdout)
     assert report['passed'] and len(report['checks'])==7 and report['real_demonstrations']==0
     assert all(row['hardware_connections']==0 for row in report['checks'])
+
+
+# Arm move lock: a move sent through the adapter is a session to the nightly reboot and the host reboot gate.
+def _held_elsewhere(root):
+    code = ("import fcntl,sys,time;h=open(sys.argv[1]+'/session.lock','a');fcntl.flock(h,fcntl.LOCK_EX);"
+            "print('ok',flush=True);time.sleep(30)")
+    proc = subprocess.Popen([sys.executable, '-c', code, str(root)], stdout=subprocess.PIPE, text=True)
+    assert proc.stdout.readline().strip() == 'ok'
+    return proc
+
+
+def test_collection_takes_the_cell_session_lock_and_frees_it_on_close(tmp_path, monkeypatch):
+    import fcntl
+    monkeypatch.setenv('ROSY_OMX_HOME', str(tmp_path / 'omx'))
+    monkeypatch.setenv('HOME', str(tmp_path))  # session_lock's busy marker lives under ~/rosy-jobs
+    module = _module('collection_ros')
+    held = module.acquire_move_lock()
+    other = open(tmp_path / 'omx' / 'session.lock', 'a')
+    with pytest.raises(BlockingIOError):  # a reboot gate, a session or the updater sees it held
+        fcntl.flock(other, fcntl.LOCK_SH | fcntl.LOCK_NB)
+    with pytest.raises(ValueError, match='no collection'):  # a second mover is refused, not queued
+        module.acquire_move_lock()
+    cls = module.RosBackend
+    backend = cls.__new__(cls)
+    backend.closed, backend.runtime, backend.supervisor, backend.executor = threading.Event(), None, None, None
+    backend.thread, backend.node, backend.guard, backend.move_lock = None, None, None, held
+    backend.rclpy = NS(ok=lambda: False)
+    module.MOVE_SETTLE_S = 0.0
+    backend.close()
+    fcntl.flock(other, fcntl.LOCK_EX | fcntl.LOCK_NB)  # released by close
+    other.close()
+
+
+def test_collection_refuses_to_move_while_a_session_holds_the_cell(tmp_path, monkeypatch):
+    monkeypatch.setenv('ROSY_OMX_HOME', str(tmp_path / 'omx'))
+    monkeypatch.setenv('HOME', str(tmp_path))
+    (tmp_path / 'omx').mkdir()
+    proc = _held_elsewhere(tmp_path / 'omx')
+    try:
+        with pytest.raises(ValueError, match='no collection'):
+            _module('collection_ros').acquire_move_lock()
+    finally:
+        proc.kill()
+        proc.wait()
+
+
+def test_lock_dies_with_the_process(tmp_path, monkeypatch):
+    """A crashed mover must not leave the cell locked (flock on an fd), nor free while it lives."""
+    monkeypatch.setenv('ROSY_OMX_HOME', str(tmp_path / 'omx'))
+    monkeypatch.setenv('HOME', str(tmp_path))
+    (tmp_path / 'omx').mkdir()
+    proc = _held_elsewhere(tmp_path / 'omx')
+    proc.kill()
+    proc.wait()
+    _module('collection_ros').acquire_move_lock().close()
+
+
+def test_the_backend_takes_the_lock_before_anything_can_move():
+    source = (ROOT/'deploy/robot/omx/collection_ros.py').read_text(encoding='utf-8')
+    init = source.split('def __init__', 1)[1].split('def verify_processes', 1)[0]
+    assert init.index('acquire_move_lock()') < init.index('RosArmCommandRuntime(')
+    assert init.index('acquire_move_lock()') < init.index('rclpy.init()')
+
+
+def test_every_hardware_runtime_user_takes_the_move_lock():
+    """A new real-arm path built on RosArmCommandRuntime must lock too; sim and no-goal users are listed here."""
+    no_arm_moves = {'g2_owner.py', 'probe_cell_transfer.py', 'run_cell_owner.py', 'run_hardware_owner.py',
+                    'sim_pick_place_policy.py', 'sim_pick_place_teacher.py'}  # sim, or the owner that refuses goals
+    found = {p.name for p in (ROOT/'deploy/robot/omx').glob('*.py')
+             if 'RosArmCommandRuntime(' in p.read_text(encoding='utf-8')}
+    movers = found - no_arm_moves
+    assert movers == {'collection_ros.py'}, f'new RosArmCommandRuntime user needs the arm move lock: {movers}'
+
+
+def test_exempt_runtime_users_really_cannot_move_hardware_and_direct_movers_stay_children():
+    omx = ROOT/'deploy/robot/omx'
+    assert 'refuses hardware device grants' in (omx/'run_cell_owner.py').read_text(encoding='utf-8')
+    assert 'owner_clock="sim"' in (omx/'g2_owner.py').read_text(encoding='utf-8')
+    # bimanual_native has no lock of its own: record_session (which holds session.lock) must stay its only launcher.
+    users = {p.name for p in omx.glob('*.py') if p.name != 'bimanual_native.py'
+             and 'bimanual_native' in p.read_text(encoding='utf-8')}
+    assert users == {'record_session.py'}
+    assert 'session_lock(' in (omx/'record_session.py').read_text(encoding='utf-8')
