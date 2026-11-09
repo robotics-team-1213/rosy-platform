@@ -46,7 +46,7 @@ Account의 로그인·프로필·관리 화면 소스는 `applications/fleet/web
 | 서비스 | 프로젝트 | 이미지 | R 상태(2026-11-09) | 예외·남은 일 |
 |---|---|---|---|---|
 | `account` | `rosy-site` | `rosy-site-account` | 실행 중 | 없음 |
-| `monitoring` | `rosy-site` | `rosy-site-fleet` | 실행 중 | 한시 예외: 전용 이미지로 옮긴다(D-1001 이행 2) |
+| `monitoring` | `rosy-site` | `rosy-site-monitoring` | 실행 중 | 전용 이미지(D-1001 이행 2) |
 | `proxy` | `rosy-site` | `rosy-site-proxy` | 실행 중 | `mem_limit` 부채 |
 | `media`, `media-gateway` | `rosy-media` | `rosy-site-media`, `rosy-site-proxy` | 미배치 | D-994 §5 부하 관측·방화벽 뒤 |
 
