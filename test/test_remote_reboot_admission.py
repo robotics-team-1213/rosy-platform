@@ -145,3 +145,26 @@ def test_quarantine_deferral_moves_only_the_remaining_rerun_and_keeps_original_f
     assert log.read_text().count(rp.known_failures.RERUN_MARKER) == 1
     assert calls == [("a", False), ("a", True), ("b", True)]
     assert completed == [["x.py"]]
+
+
+@pytest.mark.skipif(os.name != "posix" or not shutil.which("flock"), reason="actual admission shell needs Linux")
+@pytest.mark.parametrize("hold", ["lock", "resv"])
+def test_an_alone_job_behind_a_gpu_hold_never_blocks_others_and_gives_its_invocation_back(tmp_path, hold):
+    """11-09: an alone waiter behind a multi-hour training lock kept every pytest off the AI PC for ~4 h."""
+    home, env = _job_env(tmp_path, 'touch "$HOME/pytest-started"\n')
+    (home / "rosy-test/runs/r.jobs").mkdir()
+    line = 'echo "$$ gpu 1 1" > "$HOME/rosy-jobs/train-1.lock"' if hold == "lock" else \
+        'echo "99999 gpu 6 8" > "$HOME/rosy-jobs/isaac-1.resv"'
+    prefix = '''clock=10000
+date() { if [ "$1" = +%s ]; then echo "$clock"; else /usr/bin/date "$@"; fi; }
+systemctl() { case "$1" in show) echo;; is-active) echo inactive; return 3;; esac; }
+sleep() { [ -e "$HOME/rosy-jobs/$$.alone-wait" ] && touch "$HOME/marked"; clock=$((clock + 100)); }
+mkdir -p "$HOME/rosy-jobs"
+''' + line + "\n"
+    result = _sh(prefix + rj.JOB, env, "r", "d", "", "0", "60", "ROSY_JOB_ALONE=1", "x.py")
+    assert result.returncode == 253, result.stderr
+    assert rj.HOLD_DEFERRED + b"\n" in result.stdout
+    assert not (home / "pytest-started").exists() and not (home / "marked").exists()
+    assert not list((home / "rosy-jobs").glob("*.alone-wait"))
+    result = _sh(prefix + rj.JOB, env, "r", "d", "", "0", "60", "x.py")
+    assert result.returncode == 0, result.stderr  # an ordinary job still fits beside the hold
