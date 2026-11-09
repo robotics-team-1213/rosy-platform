@@ -14680,3 +14680,10 @@ osy-d395-s1d\`.
 - 증거: e94b732208 다음 커밋(시험 기대 갱신)에서 원격 집중 시험 1907 passed, 1 skipped; known_failures NEW 0.
 - gate 변화: 없음. 호스트 렌더·시험은 실물 LCD 판독·ARM64·DEVICE/FIELD 수용이 아니다.
 - CE: 해당 없음 — 설계 판단은 ADR 추가 결정과 회귀 시험에 남는다.
+
+## 2026-11-09 · uncommitted · fix(land): 옛 브라우저 MAIN-RED 기록도 opt-in으로 재확인
+
+- 변경: `land_mainred.state()`가 env 없이 남은 `*_browser.py::` 빨간 기록에 `ROSY_RUN_BROWSER_TESTS=1`을 붙인다. nightly가 env를 남기기 전의 기록(11-08 console_queue_inline size1)은 recheck에서 건너뛰어져 main에서 통과해도 닫히지 않았다.
+- 증거: `test_recheck_runs_a_legacy_browser_red_with_the_opt_in`, 로컬 `test_land_mainred*`·`test_land_nightly` 27 passed.
+- gate 변화: 없음.
+- CE: 해당 없음 — 원인과 규칙이 코드와 회귀 시험에 남는다.
