@@ -64,7 +64,7 @@ def crlf_added(land, wt: Path, base: str, changed: list[str]) -> list[str]:
 def precheck(land, wt: Path, python: str, mixed_ok: str = "") -> None:
     """``land`` is tools/land.py (its Stop, gates and git helpers); raises land.Stop on the first failing gate."""
     before = land.out(wt, "rev-parse", "main")
-    changed = land.lines(wt, "diff", "--name-only", "--diff-filter=AMR", f"{before}...HEAD")
+    changed = land.lines(wt, "diff", "--name-only", "--diff-filter=AM", f"{before}...HEAD")  # a rename: its base copy is under the old name
     if crlf := crlf_added(land, wt, before, changed):
         listed = " ".join(f'"{path}"' for path in crlf)
         raise land.Stop(f"this branch adds CRLF line endings to {len(crlf)} text file(s): {', '.join(crlf[:5])}. Main"

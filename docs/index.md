@@ -354,8 +354,8 @@
 
 ## 최근 기록
 
+- 2026-11-09 · uncommitted · fix(land): CRLF를 들이는 브랜치 거절, 병합은 -X renormalize
 - 2026-11-09 · uncommitted · fix(land): 옛 브라우저 MAIN-RED 기록도 opt-in으로 재확인
 - 2026-11-09 · e94b732208 · D-922 추가 결정 — Pinky 상황 표정 8종
 - 2026-11-09 · uncommitted · chore(publish): 게시용 명시 FULL 근거
 - 2026-11-09 · uncommitted · Pinky 표현의 미결 기본값 결정
-- 2026-11-09 · uncommitted · Pinky 캐릭터 표현 결정과 후속 설계
