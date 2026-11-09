@@ -334,7 +334,7 @@ class OverheadLinkTest {
     }
 
     @Test
-    fun upgrade401WithAProviderRetriesBecauseEveryConnectMintsAFreshBearer() {
+    fun upgrade401WithAProviderRetries() {
         val pairing = PairingUri(server.hostName, server.port, "t", "overhead-1")
         server.enqueue(MockResponse().setResponseCode(401))
         server.enqueue(MockResponse().withWebSocketUpgrade(ServerSide()))
