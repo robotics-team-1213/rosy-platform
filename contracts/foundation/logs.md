@@ -1132,3 +1132,38 @@
 - gate 변화: SOURCE 회귀 검증; ARTIFACT/DEVICE/FIELD 수용 근거로 사용하지 않음. 최종 재조립 SHA 원격 회귀와 FULL은 별도.
 - 결정: API v1.363; 기존 CORE 최종 명령·모드 owner 유지.
 - 교훈: CE 해당 없음 — 최종 코드·회귀 시험·API 계약으로 판단 근거를 재현할 수 있음.
+
+## 2026-11-07 · 11b42b5933 · feat(face): 사람 부탁 띠와 만료
+- 변경: `person_request_text.py`(종류·영어 문구 표), `protocol/person_request.py`, `face_screen`의 `person_request` 검증(만료 시 없음)과 주의 띠(`UNPLUG CHARGER` 등), `presentation`의 주의 램프. 정지·업데이트·실패·부팅 카드가 이긴다.
+- 증거: `test_face_person_request.py`.
+- gate 변화: SOURCE 변경. 로봇·장치 수용 없음.
+- 교훈: CE 해당 없음 — 최종 코드와 시험이 판단을 보존한다. 실물·운영 수용은 아니다.
+
+## 2026-11-07 · 2a01384d40 · fix(face): 요청 주황 램프는 대기·준비 램프 위에만
+- 변경: `presentation.py`가 요청 띠에 맞춰 램프를 주의로 바꾸는 것은 `ready`일 때만. 주행·수동·도킹 램프는 그대로. Safety-Review: pending independent review.
+- 증거: `test_face_person_request.py`.
+- gate 변화: SOURCE 변경. 로봇·장치 수용 없음.
+- 교훈: CE 해당 없음 — 최종 코드와 시험이 판단을 보존한다. 실물·운영 수용은 아니다.
+
+## 2026-11-09 · 79ebad2111 · D-922 Pinky 표정·시선·후면 LED 구현
+
+- 변경: 검증된 감지 입력의 시간·중복·세대 처리, 방향성 눈인사, 300초 일반 대기의 졸린 휴식, 공통 얼굴·LED 의도와 기존 안전·정보·전력 표시 우선권을 연결했다.
+- 범위: CORE 정책·bridge, 선택적 로컬 표현 hand-over와 독립 만료, 단일 native LCD 소유자의 pupil 렌더링 및 기존 8종 자산 생성기 재사용. 기존 안전 자문과 최종 주행 writer는 유지한다.
+- 검증: 원격 RED에서 정책·핸드오버·렌더링·서비스 응답·모드 전환·시선 캐시·패킷 손실의 누락을 확인했다. 초기 GREEN 정책 190 passed, native/자산 198 passed·1 skipped, 독립 검토 보완 후 결합 시험 284 passed·1 skipped. 최종 커밋의 FULL 및 추가 도착/lease 시험 결과는 후속 검증 기록으로 결속한다.
+- 한계: 기본 검출 producer는 track_id를 내지 않아 무리 fallback이 적용된다. 개별 인사 선택은 ID를 제공하는 계약 입력에서 지원된다. ARM64 실행·실물 LCD/LED 수용·배포·현장 gate는 올리지 않는다.
+- gate 변화: 없음. 호스트 시험은 ARM64 실행·실물 LCD/LED·DEVICE/FIELD 수용을 입증하지 않는다.
+- CE: 해당 없음 — 구현·회귀 시험에서 결정과 실패 처리를 복원할 수 있으며 새 장치/운영 복구 교훈은 없다.
+
+## 2026-11-09 · 3d550f49ce · D-922 구현 검증 및 기록 항목 정정
+
+- 변경: 앞선 79ebad2111 항목은 fa67fb264b에 커밋되어 원문을 보존한다. 빠진 gate 항목을 이 후속 기록으로 보완한다. 서비스 응답을 실제 IDL 필드로 읽고 동시 발견 시 사람 눈인사를 우선했다.
+- 증거: 3d550f49ce 원격 집중 시험 536 passed, 1 skipped; known_failures NEW 0, known 0, flaky 0. 전체 27개 묶음 검증은 진행 중이며 최종 결과는 구현 계획의 검증 기록으로 결속한다.
+- gate 변화: 없음. 호스트 검증은 ARM64 실행·실물 LCD/LED·DEVICE/FIELD 수용을 입증하지 않는다. 배포·착지·push는 수행하지 않았다.
+
+## 2026-11-09 · e94b732208 · D-922 추가 결정 — Pinky 상황 표정 8종
+
+- 변경: 여러 모델 디자인 패널에서 고른 doze·scan·lost·worry·lowbat·cheer·thinking·searching을 추가했다. 상황 표정은 `face_screen.situation_face`가 기존 face-inputs 필드로 고르고(복구 > dock_failed > line_follow_hold > 보정 > 진행 중 반응 > PLANNING > 배터리 20% 미만 > IDLE 충전), cheer는 함께 나타난 여러 사람의 인사다. native tick은 상황 표정을 CORE 표정·반응 만료보다 우선한다. 주의 램프 아래에서는 cheer·doze를 쓰지 않는다.
+- 자산: 새 GIF 8개는 `make_faces.py`로 생성했다. 32×24 실루엣이 기존·새 표정 모두와 6% 이상(최소 6.38%) 다르도록 디자인 위치·두께를 조정했다. 기존 8종 GIF는 바이트 단위로 같다.
+- 증거: e94b732208 다음 커밋(시험 기대 갱신)에서 원격 집중 시험 1907 passed, 1 skipped; known_failures NEW 0.
+- gate 변화: 없음. 호스트 렌더·시험은 실물 LCD 판독·ARM64·DEVICE/FIELD 수용이 아니다.
+- CE: 해당 없음 — 설계 판단은 ADR 추가 결정과 회귀 시험에 남는다.

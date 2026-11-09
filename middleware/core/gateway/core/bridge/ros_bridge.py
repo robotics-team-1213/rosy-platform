@@ -35,6 +35,7 @@ from std_srvs.srv import Empty, SetBool
 from core.bridge import (
     device_power,
     display,
+    expression,
     docking_mode,
     goal_tracker,
     map_observation,
@@ -42,7 +43,6 @@ from core.bridge import (
     observation,
     odometry,
     pilot_recorder_client,
-    reconcile,
     save_map,
     thermal_policy,
     traffic_gate,
@@ -58,7 +58,7 @@ from core_features.navigation.initial_pose import amcl_pose_covariance
 from interfaces.srv import Emotion, SetLed, PilotRecordingStart
 from tf2_ros import Buffer, TransformListener
 
-from core_features.command.emotion_map import emotion_for
+from core.bridge.expression_policy import Expression, ExpressionPolicy
 from core_features.command.manager import Twist as CoreTwist
 from core_features.diagnostics.collector import (
     CpuLoadProvider,
@@ -220,9 +220,10 @@ class RosBridge:
 
         self._published_power_mode: Optional[str] = None
         self._info_was_visible = False
-        self._applied_led = None
-        self._emotion_shown = None
-        self._idle_since: Optional[float] = None
+        self._expression = ExpressionPolicy()
+        self._expression_intent = Expression(None)
+        self._face_output = expression.ServiceOutput(accept=expression.emotion_accepted)
+        self._led_output = expression.ServiceOutput()
         #: D-385 확장: CORE 기동 직후 10초간 인사한다. 첫 인상은 hello 다.
         self._hello_until: Optional[float] = None
         self._drive_last_pub: Optional[float] = None
@@ -338,6 +339,9 @@ class RosBridge:
 
     def _on_detection_evidence(self, msg: String) -> None:
         observation.detection_evidence(self._svc, msg.data)
+        expression.observe(self._expression, msg.data, models=self._svc.vision.models,
+                           source_now=self._node.get_clock().now().nanoseconds / 1e9,
+                           now=time.monotonic())
 
     def _on_nav_cmd_vel(self, msg: Twist) -> None:
         # Docking owns the nav slot rules (NAVIGATION, or DOCKING+STAGING);
@@ -589,8 +593,8 @@ class RosBridge:
             self._info_last_pub = now
         self._info_was_visible = status.info_visible
 
+        self._reconcile_emotion(now)
         self._reconcile_led(status.info_visible, now)
-        self._reconcile_emotion()
         self._maybe_publish_drive(now)
         self._maybe_write_face_inputs(status, now)
 
@@ -610,11 +614,14 @@ class RosBridge:
                 address=self._api_endpoint(), hold_s=self._svc.power.info_hold_s)
         content = display.face_inputs_payload(
             snapshot, face=self._face_desired, power_mode=status.mode.value, wake=wake,
+            expression=self._expression_intent.handover(),
             written_at=datetime.now(timezone.utc).isoformat(timespec="milliseconds"))
         preview = self._svc.vision.status(now=time.monotonic())
-        content.update(display.face_camera_quality(preview))
+        content.update(display.face_camera_quality(preview), **display.face_person_request(self._svc.person_request.view()))
+        expressive = self._expression_intent.handover() is not None
+        period = min(FACE_INPUTS_PERIOD_S, .15) if expressive else FACE_INPUTS_PERIOD_S
         if not display.face_inputs_due(content, self._face_inputs_last, now,
-                                       self._face_inputs_at, FACE_INPUTS_PERIOD_S):
+                                       self._face_inputs_at, period):
             return
         try:
             self._svc.host_files.write_face_inputs(self._svc, content)
@@ -644,13 +651,13 @@ class RosBridge:
 
     def _reconcile_led(self, info_visible: bool, now: float) -> None:
         """중재 결과에 LED 를 맞춘다 (SAF-005 경보 > 정보창 게이지)."""
-        self._applied_led = reconcile.led(
-            self._svc.battery.led_alert, self._applied_led,
+        command = expression.led_command(
+            self._expression_intent, alert=self._svc.battery.led_alert,
             info_visible=info_visible,
             gauge_percent=self._svc.state.snapshot().battery.percent,
-            now=now,
-            act=lambda command: self._call_led(
-                command.command, command.r, command.g, command.b))
+            now=now)
+        self._led_output.apply(command, now=now, ready=self._led_client.service_is_ready(),
+                               send=lambda value: self._call_led(value.command, value.r, value.g, value.b))
 
     def _maybe_publish_drive(self, now: float) -> None:
         """D-394: 운용 중에는 20 s 마다 주행 카드가 얼굴 위로 잠깐 지나간다."""
@@ -666,44 +673,35 @@ class RosBridge:
         self._drive_last_pub = now
 
     def _reconcile_emotion(self, now: Optional[float] = None) -> None:
-        """D-385: 모드가 얼굴 표정을 고른다 — 감정 노드가 없으면 지금 표정을 유지한다.
-
-        IDLE 로 5분 이상 있으면 심심해한다(bored). 모드가 바뀌면 대기 시계는
-        리셋된다 — 심심함은 대기의 누적이지 잔재가 아니다.
-        CORE 기동 직후 10초간은 인사(hello)가 모드보다 먼저다.
-        """
-        current = now or time.monotonic()
+        """D-922: one display intent feeds the face service, native hand-over and LED."""
+        current = time.monotonic() if now is None else now
         if self._hello_until is None:
             self._hello_until = current + 10.0
         snapshot = self._svc.state.snapshot()
         mode = snapshot.mode.value
-        if mode != "IDLE" or self._idle_since is None:
-            self._idle_since = None if mode != "IDLE" else current
-        idle_seconds = 0.0 if self._idle_since is None else current - self._idle_since
-        if current < self._hello_until and self._emotion_shown is None:
+        status = self._svc.power.status()
+        suspended = (snapshot.safety.estop or status.info_visible or status.mode.value == "STANDBY"
+                     or self.diagnostics.summary_health() != HealthState.OK or bool(display.face_cautions(snapshot)))
+        velocity = snapshot.velocity
+        moving = (bool(velocity.linear or velocity.angular)
+                  if 0 <= current - self._last_odom_ts <= .5 and self._last_odom_ts > 0 else None)
+        self._expression_intent = self._expression.update(
+            mode, snapshot.navigation.value, current, suspended=suspended, moving=moving)
+        desired = self._expression_intent.face
+        if (current < self._hello_until and not suspended and mode == "IDLE"
+                and self._expression_intent.face == "basic"):
             desired = "hello"
-            self._face_desired = desired
-            if self._call_emotion(desired):
-                self._emotion_shown = desired
-            return
-        # D-433: rosy-face draws CORE's choice from the hand-over; no service needed.
-        self._face_desired = emotion_for(mode, snapshot.navigation.value,
-                                         idle_seconds=idle_seconds) or self._face_desired
-        self._emotion_shown = reconcile.emotion(
-            mode,
-            snapshot.navigation.value,
-            self._emotion_shown,
-            act=lambda face: self._call_emotion(face),
-            idle_seconds=idle_seconds)
+        self._face_desired = desired or self._face_desired
+        self._face_output.apply(self._face_desired, now=current,
+                                ready=self._emotion_client.service_is_ready(), send=self._call_emotion)
 
-    def _call_emotion(self, face: str) -> bool:
+    def _call_emotion(self, face: str):
         """표정은 부가 표시다 — 서비스가 없으면 조용히 건너뛰고 다음 틱에 다시 한다."""
         if not self._emotion_client.service_is_ready():
-            return False
+            return None
         request = Emotion.Request()
         request.emotion = face
-        self._emotion_client.call_async(request)
-        return True
+        return self._emotion_client.call_async(request)
 
     def _send_lidar(self, spinning: bool) -> bool:
         """LiDAR 는 내비게이션 입력 — 서비스가 늦게 뜨면 False, 다음 틱에 재시도한다."""
@@ -718,16 +716,15 @@ class RosBridge:
         if report is not None:
             self._svc.power.report_device_ready(*report)
 
-    def _call_led(self, command: str, r: int, g: int, b: int) -> bool:
+    def _call_led(self, command: str, r: int, g: int, b: int):
         """LED는 부가 표시다 — 서비스가 없으면 조용히 건너뛴다."""
         if not self._led_client.service_is_ready():
-            return False
+            return None
         request = SetLed.Request()
         request.command = command
         request.pixels = []
         request.r, request.g, request.b = r, g, b
-        self._led_client.call_async(request)
-        return True
+        return self._led_client.call_async(request)
 
     def _on_hitl_request(self, msg: String) -> None:
         observation.hitl_request(self._svc, msg.data,

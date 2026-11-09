@@ -83,6 +83,8 @@ jobs:
         shell: bash
         env:
           SCOPE_BASE: ${{ github.event.pull_request.base.sha }}
+          # D-436 2026-11-09 narrows landing tiers only; GitHub PRs keep the FULL triggers as the publish net.
+          ROSY_FULL_LEGACY: "1"
         run: |
           set -eo pipefail
           if [ "${{ github.event_name }}" = "pull_request" ] && [ -n "$SCOPE_BASE" ]; then

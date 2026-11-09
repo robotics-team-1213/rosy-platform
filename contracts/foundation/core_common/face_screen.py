@@ -32,6 +32,7 @@ import stat
 from typing import Any, Mapping, Optional
 
 from core_common import robot_state
+from core_common.person_request_text import FACE_TEXT, MAX_TTL_S
 
 # --- the hand-over ------------------------------------------------------------
 
@@ -48,7 +49,10 @@ MAX_NAME = 64
 MAX_CARD_KEYS = 32
 
 #: The emotion package's GIF vocabulary (D-385); set_emotion and rosy-face know these.
-FACES = frozenset({"hello", "basic", "angry", "bored", "fun", "happy", "interest", "sad"})
+FACES = frozenset({"hello", "basic", "angry", "bored", "fun", "happy", "interest", "sad",
+                   "doze", "scan", "lost", "worry", "lowbat", "cheer", "thinking", "searching"})
+#: Below this battery percent, off the charger, the face is ``lowbat`` (the light-assist cutoff too).
+LOW_BATTERY_PERCENT = 20.0
 DEFAULT_FACE = "basic"
 POWER_MODES = frozenset({"active", "idle", "standby"})
 DOCK_STATES = frozenset({"UNDOCKED", "DOCKING", "DOCKED", "CHARGING", "UNDOCKING", "DOCK_FAILED"})
@@ -140,6 +144,31 @@ def _card(value: Any) -> Optional[dict]:
     return card
 
 
+def _expression(value: Any) -> Optional[dict]:
+    if not isinstance(value, Mapping) or type(value.get("resting")) is not bool:
+        return None
+    gaze = _number(value.get("gaze_x"))
+    if gaze is None or not -6.0 <= gaze <= 6.0:
+        return None
+    return {"gaze_x": gaze, "resting": value["resting"]}
+
+
+def _person_request(value: Any, written: datetime, now: datetime) -> Optional[dict]:
+    """D-721 Amendment: the person request CORE holds, only while its own expiry has not passed.
+
+    ``remaining_s`` is what was left when CORE wrote the file; the reader counts it down from ``written_at``, so a
+    request that expired (or a CORE that died) is gone without anyone clearing it. A bad field is no request.
+    """
+    if not isinstance(value, Mapping) or value.get("kind") not in FACE_TEXT:
+        return None
+    remaining, request_id = _number(value.get("remaining_s")), value.get("id")
+    if remaining is None or not 0 < remaining <= MAX_TTL_S or not isinstance(request_id, str) or not request_id:
+        return None
+    if (now - written).total_seconds() >= remaining:
+        return None
+    return {"kind": value["kind"], "id": request_id[:64]}
+
+
 def validate_face_inputs(data: Any, now: datetime) -> Optional[dict]:
     """The hand-over as the table reads it, or None (wrong schema, no time, stale, not an object).
 
@@ -164,6 +193,10 @@ def validate_face_inputs(data: Any, now: datetime) -> Optional[dict]:
     caution = data.get("caution")
     codes = [code for code in caution if code in CAUTION_TEXT] if isinstance(caution, list) else []
     wake = _card(data.get("wake"))
+    expression = _expression(data.get("expression"))
+    expression_until = written.timestamp() + 0.3 if expression is not None else None
+    if not 0 <= age <= 0.3:
+        expression = None
     quality = data.get("camera_quality")
     quality_age = _number(data.get("camera_quality_age_s"))
     quality_until = None
@@ -186,6 +219,8 @@ def validate_face_inputs(data: Any, now: datetime) -> Optional[dict]:
         "nav_state": robot_state.valid_nav_state(data.get("nav_state")),
         "estop": _flag(data.get("estop")),
         "face": _name(data.get("face"), FACES),
+        "expression": expression,
+        "expression_until": expression_until,
         "power_mode": _name(data.get("power_mode"), POWER_MODES),
         "activity_kind": _name(data.get("activity_kind")),
         "docking_state": _name(data.get("docking_state"), DOCK_STATES),
@@ -201,6 +236,7 @@ def validate_face_inputs(data: Any, now: datetime) -> Optional[dict]:
         "signal": data.get("signal") if data.get("signal") in robot_state.DRIVE_SIGNALS else None,
         "drive": _card(data.get("drive")),
         "wake": wake,
+        "person_request": _person_request(data.get("person_request"), written, now),
     }
 
 
@@ -363,6 +399,37 @@ def _stopped_cause(core: Mapping[str, Any]) -> str:
     return "Emergency stop"
 
 
+def situation_face(core: Mapping[str, Any]) -> Optional[str]:
+    """The face a robot situation shows over CORE's mode face, or None for CORE's face.
+
+    One owner per situation, highest first: a moving lane recovery (searching), then
+    the cautions (worry for dock_failed, lost for line_follow_hold; a fleet question
+    replaces the line hold), then calibration (scan). A live greeting or look
+    (``expression`` without ``resting``) outranks the calm rest: PLANNING
+    (thinking), a low pack off the charger (lowbat), and idle charging (doze).
+    """
+    codes = core.get("caution") or []
+    if core.get("recovery") in RECOVERY_TEXT:
+        return "searching"
+    if "dock_failed" in codes:
+        return "worry"
+    if "line_follow_hold" in codes and core.get("signal") != "ask":
+        return "lost"
+    if core.get("activity_kind") == "CALIBRATING":
+        return "scan"
+    expression = core.get("expression")
+    if expression is not None and not expression.get("resting"):
+        return None
+    if core.get("robot_mode") == "NAVIGATION" and core.get("nav_state") == "PLANNING":
+        return "thinking"
+    percent = core.get("battery_percent")
+    if percent is not None and percent < LOW_BATTERY_PERCENT and not core.get("battery_charging"):
+        return "lowbat"
+    if core.get("robot_mode") == "IDLE" and core.get("battery_charging"):
+        return "doze"
+    return None
+
+
 def screen_for(*, stage: Any = None, state: Any = None, todo: Optional[str] = None,
                ap_mode: bool = False, login: Optional[str] = None,
                core: Optional[Mapping[str, Any]] = None, update: Optional[Mapping[str, Any]] = None,
@@ -389,7 +456,7 @@ def screen_for(*, stage: Any = None, state: Any = None, todo: Optional[str] = No
     a stopped card, ``cause``/``release``.
     """
     answer = {"kind": STATUS, "row": "", "face": None, "overlay": None, "strip": None,
-              "strip_tone": None, "backlight": 100, "awake": True}
+              "strip_tone": None, "backlight": 100, "awake": True, "person": None}
     kind = robot_state.stage_kind(stage)
 
     def status(row: str, **extra: Any) -> dict:
@@ -424,13 +491,17 @@ def screen_for(*, stage: Any = None, state: Any = None, todo: Optional[str] = No
     caution = [CAUTION_TEXT[code] for code in codes if code in CAUTION_TEXT]
     # Text and tone are assigned apart: a (text, "info") pair reads as an event emit
     # to the D-8 catalogue guard (test_event_catalogue.py).
-    strip = tone = None
+    strip = tone = person = None
     if core.get("recovery") in RECOVERY_TEXT:  # D-546: a moving recovery outranks every other strip
         strip = RECOVERY_TEXT[core["recovery"]]
         tone = "caution"
     elif state == robot_state.CAUTION or caution:
         strip = todo or (caution[0] if caution else "Caution")
         tone = "caution"
+    elif core.get("person_request") is not None:  # D-721 Amendment: a person is asked; below every stop/boot/update card
+        strip = FACE_TEXT[core["person_request"]["kind"]]
+        tone = "caution"
+        person = core["person_request"]["id"]
     elif test in ("buzzer", "lamp"):
         strip = f"Testing {test}"
         tone = "info"
@@ -470,15 +541,13 @@ def screen_for(*, stage: Any = None, state: Any = None, todo: Optional[str] = No
     percent = core.get("battery_percent")
     if (light_assist and strip is None and wake is None
             and mode in ("IDLE", "MANUAL") and not core.get("battery_charging")
-            and (percent is None or percent >= 20)):
+            and (percent is None or percent >= LOW_BATTERY_PERCENT)):
         return {**answer, "kind": LIGHT, "row": "light", "backlight": 100}
     # Row 18: standby sleeps unless a wake card, a caution, a call, or a fleet question must be seen.
     if power == "standby" and wake is None and tone != "caution" and call_line is None and ask_line is None:
         return {**answer, "kind": SLEEP, "row": "standby", "backlight": BACKLIGHT["standby"], "awake": False}
 
-    face = core.get("face") if core.get("face") in FACES else DEFAULT_FACE
-    if core.get("activity_kind") == "CALIBRATING":
-        face = "interest"
+    face = situation_face(core) or (core.get("face") if core.get("face") in FACES else DEFAULT_FACE)
     overlay = None
     row = "face"
     if wake is not None:  # Row 12: the PWR-003 wake card, as long as CORE keeps it open.
@@ -505,6 +574,7 @@ def screen_for(*, stage: Any = None, state: Any = None, todo: Optional[str] = No
         tone = "info"
     if strip is not None and tone == "info" and not strip.startswith("Charging"):
         strip = _with_level(strip, core)
-    backlight = 100 if overlay is not None or call_line is not None or ask_line is not None else BACKLIGHT.get(power, 100)
+    backlight = (100 if overlay is not None or call_line is not None or ask_line is not None or person
+                 else BACKLIGHT.get(power, 100))
     return {**answer, "kind": FACE, "row": row, "face": face, "overlay": overlay, "strip": strip,
-            "strip_tone": tone, "backlight": backlight}
+            "strip_tone": tone, "backlight": backlight, "person": person}
