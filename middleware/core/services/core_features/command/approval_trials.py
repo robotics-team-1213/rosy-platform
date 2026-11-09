@@ -11,21 +11,23 @@ import json
 import math
 import os
 from pathlib import Path
-import statistics
 import tempfile
 import threading
 import time
 
+from core_common.approval_floor import TrialRefused, check_floor_motion
 from core_common.robot_body import inside_body
 from core_features.line_follow.clearance import body_clearances, scan_points, self_mask_rear_blind_m
 
-# The measured speed must stay under mapping_approval's 0.03/0.10 too, so the request stays below it.
-TRIAL_LINEAR_MPS = 0.02
-TRIAL_ANGULAR_RPS = 0.07
+# D-1005: the request speed and run distance are the operator's settings (SpeedLimits.approval_*),
+# bounded by the signed ceiling (max_linear/max_angular) and TRAVEL_RUN_CEILING_M; the defaults are 0.02/0.07/0.06.
 # Slowest request that still shows as motion above mapping_approval's measured floors (0.002, 0.03).
 MIN_LINEAR_MPS = 0.01
 MIN_ANGULAR_RPS = 0.05
-TRAVEL_CAP_M = 0.06  # stops well inside the 10 cm limit, which also has to hold the stop's own travel
+TRAVEL_CAP_M = 0.06  # default run distance: stops well inside the 10 cm limit, which also holds the stop's own travel
+TRAVEL_RUN_CEILING_M = 0.25  # plus the stop allowance below stays inside mapping_approval's 0.40 m ceiling
+STOP_TRAVEL_FLOOR_M = 0.04
+STOP_LATENCY_S = 0.65  # mapping_approval.MAX_STOP_LATENCY_S; a stop at speed v can travel v * this
 MAX_HOLD_S = 3.0
 HOLD_START_S = 5.0
 HOLD_GAP_S = 0.4  # a button hold that goes quiet aborts: only a commanded stop proves a button release
@@ -39,34 +41,13 @@ TURN_MARGIN_M = 0.03
 MIN_SECTOR_RETURNS = 0.5
 # Of all the sector's beams, however many end on the body. Recorded C1 scans never fall below 0.44.
 MIN_SEEING_BEAMS = 0.25
+SURFACE_SUFFIX = ".surface.json"
 PAIRS = {("forward", "button_release"), ("reverse", "button_release"), ("cw", "button_release"),
          ("ccw", "button_release"), ("forward", "command_loss")}
 COMMANDS = {"forward": (1, 0), "reverse": (-1, 0), "cw": (0, -1), "ccw": (0, 1)}
 
 
-# Floor trials: spinning wheels move odometry but not the scan (b8xy, 2026-11-07: odom -3.11 m, clearances unchanged).
-# Per-beam noise is 0.6-3.4 mm standing still (D-573). The sector median's spread on real moving C1 scans is about
-# 3 mm (1.25 * 0.020 m / sqrt(72)), so the 10 mm tolerance leaves about three times the noise.
-MIN_LINEAR_CHECK_M = 0.02
-LINEAR_TOLERANCE_M = 0.01
-LINEAR_SECTOR_RAD = math.radians(20)
-SCAN_RANGE_CAP_M = 4.0
-BEAM_JUMP_M = 0.2  # a beam that jumps this far changed target: no use as a distance difference
-MIN_PAIRED_BEAMS = 20
-# Shifting a real scan onto itself lands exactly; real neighbouring scans differ by up to 2 beams (0.0175 rad).
-MIN_TURN_CHECK_RAD = 0.06
-TURN_TOLERANCE_RAD = 0.035
-TURN_SEARCH_BEAMS = 60
-MIN_TURN_BEAMS = 100
-RELATIVE_TOLERANCE = 0.5
-SURFACE_SUFFIX = ".surface.json"
 
-
-class TrialRefused(Exception):
-    def __init__(self, code: str, detail: str) -> None:
-        super().__init__(detail)
-        self.code = code
-        self.detail = detail
 
 
 def _sector_seen(sample, config, points, centre_rad: float, half_rad: float) -> bool:
@@ -94,79 +75,6 @@ def _sector_seen(sample, config, points, centre_rad: float, half_rad: float) -> 
     return outside >= MIN_SEEING_BEAMS * beams and outside >= MIN_SECTOR_RETURNS * looking
 
 
-def _scan_outside(sample, config) -> list:
-    """(robot-frame angle, distance) per beam, None where the beam sees no return or the robot itself."""
-    start = float(sample["angle_min"])
-    ranges = sample["ranges"]
-    step = (float(sample["angle_max"]) - start) / (len(ranges) - 1)
-    forward = math.radians(float(config.lidar_forward_deg))
-    low = float(sample["range_min"])
-    beams = []
-    for index, value in enumerate(ranges):
-        angle = start + index * step - forward
-        angle = math.atan2(math.sin(angle), math.cos(angle))
-        distance = float(value)
-        beams.append((angle, distance) if math.isfinite(distance) and distance >= low and not inside_body(
-            distance * math.cos(angle) + config.body_lidar_x_m, distance * math.sin(angle), config.body_front_x_m,
-            config.body_rear_x_m, config.body_half_width_m, config.body_rotation_radius_m, strict=True) else None)
-    return beams
-
-
-def _scan_travel_m(first, last) -> float:
-    """Signed travel along the body axis: what lies ahead comes closer, what lies behind goes away."""
-    changes = []
-    for before, after in zip(first, last):
-        if before is None or after is None or max(before[1], after[1]) > SCAN_RANGE_CAP_M \
-                or abs(before[1] - after[1]) > BEAM_JUMP_M:
-            continue
-        if abs(before[0]) <= LINEAR_SECTOR_RAD:
-            changes.append(before[1] - after[1])
-        elif math.pi - abs(before[0]) <= LINEAR_SECTOR_RAD:
-            changes.append(after[1] - before[1])
-    if len(changes) < MIN_PAIRED_BEAMS:
-        raise TrialRefused("SCAN_UNUSABLE", "too few LiDAR beams ahead or behind to check the travel")
-    return statistics.median(changes)
-
-
-def _scan_turn_rad(first, last, step: float) -> float:
-    """Signed turn: the shift that best lays the second scan over the first. Scene turning left moves beams right."""
-    count = len(first)
-    best = None
-    for shift in sorted(range(-TURN_SEARCH_BEAMS, TURN_SEARCH_BEAMS + 1), key=abs):
-        differences = [abs(before[1] - after[1]) for before, after in
-                       ((first[index], last[(index + shift) % count]) for index in range(count))
-                       if before is not None and after is not None]
-        if len(differences) < MIN_TURN_BEAMS:
-            continue
-        score = statistics.median(differences)
-        if best is None or score < best[0]:
-            best = (score, shift)
-    if best is None:
-        raise TrialRefused("SCAN_UNUSABLE", "too few LiDAR beams to check the turn")
-    return -best[1] * step
-
-
-def check_floor_motion(start, end, config, direction: str, odom: float) -> dict:
-    """Raises unless the room moved as odometry says. odom: signed metres along the axis, or radians for a turn."""
-    linear = direction in ("forward", "reverse")
-    if abs(odom) < (MIN_LINEAR_CHECK_M if linear else MIN_TURN_CHECK_RAD):
-        raise TrialRefused("TRIAL_TOO_SHORT", "hold the button longer: too little motion to check against the LiDAR")
-    try:
-        if len(start["ranges"]) != len(end["ranges"]) or start["angle_min"] != end["angle_min"]:
-            raise TrialRefused("SCAN_UNUSABLE", "the two LiDAR scans do not line up")
-        first, last = _scan_outside(start, config), _scan_outside(end, config)
-        step = (float(end["angle_max"]) - float(end["angle_min"])) / (len(end["ranges"]) - 1)
-    except (KeyError, TypeError, ValueError, OverflowError, ZeroDivisionError) as exc:
-        raise TrialRefused("SCAN_UNUSABLE", f"the LiDAR scan is unreadable: {exc}") from exc
-    seen = _scan_travel_m(first, last) if linear else _scan_turn_rad(first, last, step)
-    tolerance = max(LINEAR_TOLERANCE_M if linear else TURN_TOLERANCE_RAD, RELATIVE_TOLERANCE * abs(odom))
-    if abs(seen - odom) > tolerance:
-        raise TrialRefused("WHEELS_NOT_MOVING_BODY",
-                           f"odometry says {odom:+.3f} but the LiDAR saw {seen:+.3f}: the wheels may be slipping")
-    return {"odom": round(odom, 4), "scan": round(seen, 4), "tolerance": round(tolerance, 4),
-            "unit": "m" if linear else "rad"}
-
-
 def _scan_is_current(sample, wall_now: float) -> bool:
     try:
         return (0 <= wall_now - sample["received_at"] <= SCAN_MAX_AGE_S
@@ -175,7 +83,8 @@ def _scan_is_current(sample, wall_now: float) -> bool:
         return False
 
 
-def require_clearance(sample, config, direction: str, blind_zone_confirmed: bool, wall_now: float) -> dict:
+def require_clearance(sample, config, direction: str, blind_zone_confirmed: bool, wall_now: float,
+                      travel_m: float = TRAVEL_CAP_M) -> dict:
     """Raises unless a fresh full scan shows room. No or stale data never reads as free space."""
     if not sample:
         raise TrialRefused("CLEARANCE_UNKNOWN", "no LiDAR scan has arrived")
@@ -210,7 +119,7 @@ def require_clearance(sample, config, direction: str, blind_zone_confirmed: bool
     seen = body_clearances(points, lidar_x_m=config.body_lidar_x_m, rear_x_m=config.body_rear_x_m,
                            half_width_m=config.body_half_width_m,
                            rotation_radius_m=config.body_rotation_radius_m)
-    need = TRAVEL_CAP_M + RUN_MARGIN_M
+    need = travel_m + RUN_MARGIN_M
     if direction == "reverse":
         # Self-mask windows may hide the rear and nothing watches it while driving. Visible returns must
         # still clear, and a person answers for the rest.
@@ -262,12 +171,15 @@ class ApprovalTrials:
             raise TrialRefused("TRIAL_UNKNOWN", f"{direction}/{stop_cause} is not a required trial")
         limits = self.safety.limits
         # A lower live limit would clip the command, and the evidence must say what was really sent.
-        linear = min(TRIAL_LINEAR_MPS, limits.manual_linear)
-        angular = min(TRIAL_ANGULAR_RPS, limits.manual_angular)
+        linear = min(limits.approval_linear, limits.manual_linear, limits.max_linear)
+        angular = min(limits.approval_angular, limits.manual_angular, limits.max_angular)
+        travel_cap = limits.approval_travel_m
         if linear < MIN_LINEAR_MPS or angular < MIN_ANGULAR_RPS:
             raise TrialRefused("TRIAL_LIMIT_TOO_LOW", "the manual speed limit leaves no measurable motion")
         scan = self.state.get_sensor("lidar")
-        seen = require_clearance(scan, self.line_config(), direction, blind_zone_confirmed, self.wall())
+        # The robot keeps moving after the cap; the 0.05 m margin covers the floor, so only the excess is added.
+        seen = require_clearance(scan, self.line_config(), direction, blind_zone_confirmed, self.wall(),
+                                 travel_cap + max(0.0, linear * STOP_LATENCY_S - STOP_TRAVEL_FLOOR_M))
         odom = self.state.odom_sample()
         if odom is None or odom[3] > ODOM_MAX_AGE_S:
             raise TrialRefused("ODOM_STALE", "odometry is not fresh")
@@ -278,9 +190,11 @@ class ApprovalTrials:
                 raise TrialRefused("TRIAL_ACTIVE", "another trial is running")
             self._trial = {"direction": direction, "stop_cause": stop_cause, "owner": owner, "started_at": now,
                            "test_surface": test_surface, "start_scan": scan,
-                           "linear": sign_linear * linear, "angular": sign_angular * angular, "first_hold": None,
+                           "linear": sign_linear * linear, "angular": sign_angular * angular, "travel_cap": travel_cap,
+                           "first_hold": None,
                            "last_hold": None, "stop_at": None, "samples": [], "travel": 0.0, "last_odom_at": now}
             self.last = None
+            limits.trial_cap = (linear, angular)  # the re-measurement may drive at its own speed
         if self.thread:
             threading.Thread(target=self._run, name="approval-trial", daemon=True).start()
         return seen
@@ -320,15 +234,23 @@ class ApprovalTrials:
     def _zero(self) -> None:
         self.command.teleop(0.0, 0.0, source="manual")
 
-    def _abort(self, trial, reason) -> None:
+    def _end(self) -> None:
         self._trial = None
+        self.safety.limits.trial_cap = None
+
+    def _abort(self, trial, reason) -> None:
+        self._end()
         self._zero()
         self.last = {"direction": trial["direction"], "stop_cause": trial["stop_cause"],
                      "state": "aborted", "reason": reason}
 
     def _run(self) -> None:
-        while self.tick():
-            time.sleep(0.01)
+        try:
+            while self.tick():
+                time.sleep(0.01)
+        except Exception:
+            self.abort("the trial thread failed")  # never leave the trial's speed opening the sealed binding
+            raise
 
     def _sample(self, trial, now) -> None:
         odom = self.state.odom_sample()
@@ -360,7 +282,7 @@ class ApprovalTrials:
                 return True
             if now - trial["last_odom_at"] > ODOM_MAX_AGE_S:
                 self._abort(trial, "odometry went stale during the trial")
-            elif trial["travel"] >= TRAVEL_CAP_M:
+            elif trial["travel"] >= trial["travel_cap"]:
                 self._abort(trial, "the travel cap was reached")
             elif trial["first_hold"] is None:
                 if now - trial["started_at"] > HOLD_START_S:
@@ -400,7 +322,7 @@ class ApprovalTrials:
         os.replace(temporary, self.directory / name)
 
     def _finish(self, trial) -> None:
-        self._trial = None
+        self._end()
         self._zero()
         identity = {"direction": trial["direction"], "stop_cause": trial["stop_cause"]}
         try:
@@ -409,6 +331,7 @@ class ApprovalTrials:
             self.last = {**identity, "state": "refused", "code": exc.code, "reason": exc.detail}
             return
         raw = json.dumps({**identity, "requested_linear_mps": trial["linear"], "requested_angular_rps": trial["angular"],
+                          "travel_cap_m": round(trial["travel_cap"] + max(STOP_TRAVEL_FLOOR_M, abs(trial["linear"]) * STOP_LATENCY_S), 6),
                           "stop_requested_at": trial["stop_at"], "samples": trial["samples"]}).encode("ascii")
         name = f"{trial['direction']}-{trial['stop_cause']}"
         # Beside the raw file, not in it: schema v2 takes exactly its own fields.

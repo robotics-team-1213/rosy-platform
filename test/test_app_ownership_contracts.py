@@ -9,6 +9,7 @@ import sys
 from types import SimpleNamespace
 
 import pytest
+from core_features.safety_gate.limits import SpeedLimits
 import yaml
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -56,7 +57,7 @@ def core(monkeypatch):
          "sha256": sha256(f"core-{role}".encode()).hexdigest()}
         for role in ("viewer", "operator", "administrator")
     ]}}
-    limits = SimpleNamespace(max_linear=0.5, max_angular=2.0, manual_linear=0.3, manual_angular=1.0)
+    limits = SpeedLimits(max_linear=0.5, max_angular=2.0, manual_linear=0.3, manual_angular=1.0)
     safety_owner = SimpleNamespace(
         limits=limits, estop=False, estop_source=None, fleet_loss_policy="STOP", session_linear=0.5,
         battery_policy=SimpleNamespace(warning_percent=30, critical_percent=15, critical_action="STOP"),

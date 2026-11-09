@@ -9,9 +9,9 @@ from types import SimpleNamespace
 import pytest
 
 from core_common.protocol.state_components import BatteryStatus
-from core_features.command.approval_trials import (ApprovalTrials, LINEAR_TOLERANCE_M, MAX_HOLD_S, RUN_MARGIN_M,
-                                                   TRAVEL_CAP_M, TrialRefused, _scan_outside, _scan_travel_m,
-                                                   check_floor_motion, require_clearance)
+from core_common.approval_floor import LINEAR_TOLERANCE_M, _scan_outside, _scan_travel_m, check_floor_motion
+from core_features.command.approval_trials import (ApprovalTrials, MAX_HOLD_S, RUN_MARGIN_M, TRAVEL_CAP_M, TrialRefused,
+                                                   require_clearance)
 
 ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(ROOT / "deploy/robot/pinky_pro/native"))
@@ -46,7 +46,8 @@ class Robot:
         self.slipping = False
         self.odom_fresh = True
         self.zeros = 0
-        self.limits = SimpleNamespace(manual_linear=0.15, manual_angular=0.6)
+        self.limits = SimpleNamespace(manual_linear=0.15, manual_angular=0.6, max_linear=0.2, max_angular=0.8,
+                                      approval_linear=0.02, approval_angular=0.07, approval_travel_m=0.06, trial_cap=None)
 
     def get_sensor(self, _key):
         return self.scan
@@ -154,14 +155,13 @@ def test_the_request_records_what_was_sent_under_a_lower_live_limit(robot, trial
 
 
 def test_the_speed_stays_inside_the_envelope_whatever_the_live_limit(robot, trials):
-    import mapping_approval
     trials.start("forward", "button_release", OWNER, test_surface="lifted")
     trials.hold(OWNER, robot.send)
-    assert 0 < robot.commanded[0] < mapping_approval.MAX_LINEAR_MPS
+    assert 0 < robot.commanded[0] < 0.03  # nothing set: the 0.02 default of before D-1005
     trials.abort("end")
     trials.start("ccw", "button_release", OWNER, test_surface="lifted")
     trials.hold(OWNER, robot.send)
-    assert 0 < robot.commanded[1] < mapping_approval.MAX_ANGULAR_RPS
+    assert 0 < robot.commanded[1] < 0.10
 
 
 def test_a_limit_too_low_to_measure_refuses_the_trial(robot, trials):

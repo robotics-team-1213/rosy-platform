@@ -19,7 +19,14 @@ robot_router = APIRouter(prefix="/api/v1/robot", tags=["robot"])
 
 @robot_router.get("/state")
 def robot_state(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depends(get_services)):
-    return svc.state.snapshot().model_dump()
+    # D-1005: what a manual drive may use right now, so a console pad needs no number of its own.
+    limits = svc.safety.limits
+    caps = limits.approved_caps()
+    return {**svc.state.snapshot().model_dump(), "speed_limits": {
+        "manual_linear": min(limits.manual_linear, caps[0]), "manual_angular": min(limits.manual_angular, caps[1]),
+        "set_linear": limits.manual_linear, "set_angular": limits.manual_angular,
+        "approved_linear": limits.approved_linear, "approved_angular": limits.approved_angular,
+        "max_linear": limits.max_linear, "max_angular": limits.max_angular}}
 
 
 @robot_router.get("/pose")
