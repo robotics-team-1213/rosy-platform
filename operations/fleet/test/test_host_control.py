@@ -489,6 +489,32 @@ def test_no_reboot_path_cuts_an_arm_session(tmp_path):
 
 
 @posix
+def test_a_move_through_the_adapter_holds_the_lock_every_reboot_gate_reads(tmp_path, monkeypatch):
+    """The collection backend's lock and the gate's glob name one file: nightly-gate and reboot refuse during a
+    move, and the unit's own ExecCondition reads the same name."""
+    import importlib.util
+    root = Path(__file__).resolve().parents[3] / "deploy" / "robot" / "omx"
+    home = tmp_path / "home" / "op"
+    monkeypatch.setenv("ROSY_OMX_HOME", str(home / "rosy-omx"))
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.syspath_prepend(str(root))
+    spec = importlib.util.spec_from_file_location("collection_ros_gate", root / "collection_ros.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    helper = _helper_copy(tmp_path, "site")
+    held = module.acquire_move_lock()
+    try:
+        assert helper("nightly-gate") == 6
+        assert helper("reboot") == 6
+        assert helper("reboot-if-free") == 6
+    finally:
+        held.close()
+    assert helper("nightly-gate") == 0
+    unit = (HELPER.parent / "host-state" / "rosy-nightly-reboot.service").read_text(encoding="utf-8")
+    assert "/home/*/rosy-omx/session.lock" in unit and "rosy-omx/session.lock" in HELPER.read_text(encoding="utf-8")
+
+
+@posix
 def test_a_session_started_during_the_delay_cancels_only_our_reboot(tmp_path):
     """The +10 min is a window of its own: the helper asks again just before it ends."""
     helper = _helper_copy(tmp_path, "site")

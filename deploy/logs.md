@@ -4810,3 +4810,8 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 변경: `guarded_native`가 관절의 첫 과부하(기존 판정 그대로: 오차 2° 초과·PWM 상한 90 % 이상 1 s)에서 세션을 끝내지 않는다. 그 관절 목표를 현재 위치로 한 번만 옮기고 토크를 켠 채 `held`에 기록한다. 그동안 그 관절 명령은 고정되고, 러너가 XL430 관절로 짐을 덜 수 있다(robot-db 러너 브랜치). PWM만 보는 감시가 상한 90 %에 3.0 s 머물기, 온도 3 °C 상승, 같은 관절 두 번째 과부하, 감시 중 오류 중 하나를 보면 지금처럼 토크를 끈다. 메시지는 계속 `overload risk`를 담아 motor_health 분류가 그대로다. `deploy/robot/omx/AGENTS.md`에 실물 팔 새 계획의 네 가지 사전 확인(충돌, 실제 상한 기준 부하 도구, 중단 시 회복, 첫 실행의 strain 감시)과 작성자 아닌 세션 동의를 적었다.
 - 증거: 2026-11-09 15:09 arm_a가 충돌만 검사한 hand-eye 자세에서 wrist_flex PWM 300/300으로 1.2 s 뒤처져 가드가 토크를 끄고 뻗은 채 판 위로 떨어졌다(cell_unwedge로 회복). robot-db·robot-13·robot-57 합의로 설계했다(되잡기는 정지 1회, 감시는 PWM만, N=3 s는 로그상 상한 3 s 초과 무정지 사례 없음·기록된 래치 18 s). 회귀 시험: 버티기 중 토크 유지와 목표 1회 고정(처지는 관절을 따라가지 않음), 고정 목표에서 PWM만으로 3 s 시간 초과, 해제 뒤 두 번째 과부하 정지, 온도 상승 정지, 감시 중 읽기 오류 시 토크 끔.
 - gate 변화: SOURCE 변경(safety 경로, Safety-Review·독립 검토 필요). 호스트 시험은 실물 수용이 아니다. 사람 입회 D-911 실물 시험이 남았다.
+
+## 2026-11-09 · uncommitted · fix(site): 현장 PC 원하는 상태에 mDNS 검색 브리지 타이머를 넣는다
+- 변경: site host-state 매니페스트에 브리지 unit·timer `report file`과 `report enabled rosy-mdns-bridge.timer`를 더하고, `discovery_token`이 `root:rosy-fleet` 0640일 때 그룹 대신 파일 ACL(`g:rosy-mdns:r`)로 읽게 하라는 안내를 README에 적었다(그 그룹은 `robot_credential_key`·`site.key`도 읽음, 독립 검토 지적). 광고 유닛은 oneshot이라 `enabled` 줄(active 요구)에 넣지 않았다
+- 증거: 11-09 R 이전 뒤 R에도 옛 robttt에도 브리지가 설치돼 있지 않았다(`rosy-mdns` 사용자 없음). 그래서 Fleet 발견 목록·HTTP 로봇 주소 변경 감지가 꺼져 있었다. R에는 손으로 설치해 `ROSY mDNS scan delivered` 확인
+- gate 변화: 없음
