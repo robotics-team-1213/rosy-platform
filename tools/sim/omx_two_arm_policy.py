@@ -45,6 +45,7 @@ GOAL = "observation.environment_state"
 PROMPT = "carry the container of this plan step"
 TRAIN_SEED_BASE, EVAL_SEED_BASE = 1000, 200000  # the teacher never saw an evaluation seed
 TRAIN_POLL_S = 10  # how often train() looks for a new checkpoint
+STEP_ERROR_SEED_BASE = 10 ** 6  # collect's per-step error draws, clear of the training and evaluation seeds
 
 
 GOAL_SIZE = 22  # per arm (arm_a, arm_b): active, then the five grasp joints and the five lower joints
@@ -111,6 +112,12 @@ class Recorder(teaching.Teacher):
             self.count += 1
         super().frame(data, targets, label, ctxs)
 
+    def run_step(self, data, step, others):
+        if self.skill and getattr(self, "error_draw", None):
+            seed, deg, physics = self.error_draw
+            self.error_draw, self.zero_error = (seed + 1, deg, physics), skills.draw_errors(seed, deg, physics)
+        return super().run_step(data, step, others)
+
     def run_task(self, task, isolated=False, concurrent=False):
         if not self.concurrent:
             return super().run_task(task, isolated)
@@ -166,6 +173,8 @@ def collect(seeds, names, out, plan_dir=None, choices=None, skill=None, zero_err
         for name in names:
             teacher = Recorder(world, dataset, longest, concurrent=planned is not None, skill=skill, seed=seed)
             skills.disturb(teacher, seed, zero_error_deg, lag, physics)
+            # a fresh zero error per step, as the evaluation draws it: one per seed gave the whole dataset 30 offsets (review 11-10)
+            teacher.error_draw = (STEP_ERROR_SEED_BASE + 100 * seed + 50 * names.index(name), zero_error_deg, physics)
             teacher.run_task(planned[name] if planned else tasks.get_task(layout, name))
             if teacher.spoiled:
                 spoiled.append(f"{name}:{seed}")
@@ -399,32 +408,48 @@ def train(command, out, lerobot_train, log, env):
     round's steps, so the learning-rate schedule is the one an uninterrupted run has. Older checkpoints go: eval reads last."""
     while True:
         trainer, seen, stopped = subprocess.Popen(command, env=env, stdout=log, stderr=subprocess.STDOUT, start_new_session=True), checkpoint_step(out), False
-        while trainer.poll() is None:
-            time.sleep(TRAIN_POLL_S)
-            step = checkpoint_step(out)
-            if step == seen:
-                continue
-            seen = step
-            for old in (out / "checkpoints").iterdir():
-                if old.name.isdigit() and int(old.name) < step:  # never one still being written
-                    shutil.rmtree(old)
-            if gpu_yield.alone_waiting():
-                os.killpg(trainer.pid, signal.SIGTERM)  # its own session: the trainer and its data workers
-                try:
-                    trainer.wait(timeout=120)
-                except subprocess.TimeoutExpired:
-                    os.killpg(trainer.pid, signal.SIGKILL)
-                    trainer.wait()
-                stopped = True
+        try:
+            while trainer.poll() is None:
+                time.sleep(TRAIN_POLL_S)
+                step = checkpoint_step(out)
+                if step is None or step == seen:  # LeRobot unlinks last before it links the new step
+                    continue
+                seen = step
+                for old in (out / "checkpoints").iterdir():
+                    if old.name.isdigit() and int(old.name) < step:  # never one still being written
+                        shutil.rmtree(old)
+                if gpu_yield.alone_waiting():
+                    stop(trainer)
+                    stopped = True
+        finally:  # the trainer has its own session: a round that dies must not leave it on the GPU without a lock
+            if trainer.poll() is None:
+                stop(trainer)
         if not stopped:
             if trainer.returncode:
                 raise subprocess.CalledProcessError(trainer.returncode, command)
             return
+        last = checkpoint_step(out) or 0
+        for partial in (out / "checkpoints").iterdir():  # a save cut short past last would be written over by the resumed run
+            if partial.name.isdigit() and int(partial.name) > last:
+                shutil.rmtree(partial)
         gpu_yield.yield_turn(say=functools.partial(print, file=log))
         command = [lerobot_train, f"--config_path={out / 'checkpoints/last/pretrained_model/train_config.json'}", "--resume=true"]
 
 
+def stop(trainer):
+    """SIGTERM the trainer's session (it and its data workers), SIGKILL after 2 min; it may have ended on its own meanwhile."""
+    try:
+        os.killpg(trainer.pid, signal.SIGTERM)
+        trainer.wait(timeout=120)
+    except subprocess.TimeoutExpired:
+        os.killpg(trainer.pid, signal.SIGKILL)
+        trainer.wait()
+    except ProcessLookupError:
+        trainer.wait()
+
+
 def run_round(args):
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(143))  # so train() takes its trainer down with the round
     ladder.require_gpu(args.python)
     round_id = ladder.new_round_id()
     run = Path(args.root) / "two_arm_rounds" / round_id

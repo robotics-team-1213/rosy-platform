@@ -10,9 +10,8 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools/remote"))
 sys.path.insert(0, str(ROOT / "tools/sim"))
-import gpu_yield  # noqa: E402
-
 pytest.importorskip("fcntl")
+import gpu_yield  # noqa: E402
 
 
 def dead_pid():
@@ -81,3 +80,21 @@ def test_a_failed_trainer_still_fails_the_round(tmp_path, monkeypatch):
     monkeypatch.setattr(policy, "TRAIN_POLL_S", 0.1)
     with open(tmp_path / "round.log", "w") as log, pytest.raises(subprocess.CalledProcessError):
         policy.train([sys.executable, "-c", "raise SystemExit(3)"], tmp_path / "train", "unused", log, dict(os.environ))
+
+
+def test_a_round_that_fails_mid_training_takes_its_trainer_down(tmp_path, monkeypatch):
+    """The trainer runs in its own session, so nothing else would stop it: an orphan would hold the GPU with no lock."""
+    import omx_two_arm_policy as policy
+    monkeypatch.setattr(policy, "TRAIN_POLL_S", 0.1)
+    pid_file = tmp_path / "pid"
+    calls = []
+
+    def broken(out):
+        calls.append(1)
+        if len(calls) > 2:
+            raise RuntimeError("round dies")
+    monkeypatch.setattr(policy, "checkpoint_step", broken)
+    with open(tmp_path / "round.log", "w") as log, pytest.raises(RuntimeError):
+        policy.train([sys.executable, "-c", f"import os, time; open({str(pid_file)!r}, 'w').write(str(os.getpid())); time.sleep(60)"],
+                     tmp_path / "train", "unused", log, dict(os.environ))
+    assert not gpu_yield.alive(int(pid_file.read_text()))

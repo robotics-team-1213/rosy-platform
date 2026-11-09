@@ -68,12 +68,18 @@ def draw_physics(seed, ranges):
     return servo, zero
 
 
+def draw_errors(seed, zero_error_deg, physics=False):
+    """A seed's joint-zero error: +-deg, or between 0 and the fitted offset where --physics-ranges has one."""
+    error = draw_zero_error(seed, zero_error_deg)
+    error.update(draw_physics(seed, physics_ranges() if physics else None)[1])
+    return error
+
+
 def disturb(teacher, seed, zero_error_deg, lag, physics=False):
     """A seed's errors: +-deg zero error and lag-derived gains, overridden where --physics-ranges has measured values."""
-    teacher.zero_error = draw_zero_error(seed, zero_error_deg)
+    teacher.zero_error = draw_errors(seed, zero_error_deg, physics)
     teacher.servo = {arm: dict(kp=gain) for arm, gain in draw_servo_gain(seed, lag).items()}
-    servo, zero = draw_physics(seed, physics_ranges() if physics else None)
-    teacher.zero_error.update(zero)
+    servo, _ = draw_physics(seed, physics_ranges() if physics else None)
     for arm, values in servo.items():
         for k, v in values.items():
             mine = teacher.servo.setdefault(arm, {}).get(k)
@@ -114,7 +120,8 @@ def step(driver, teacher, data, plan, here, skill):
             for _ in range(driver.longest[plan["id"]] + 15):  # the teacher's time on the sub-skill and a second of grace
                 state, images = policy.observe(w, data, teacher.zero_error)
                 action = driver.act(state, images, goal, said)
-                teacher.frame(data, {name: action[i * 6:i * 6 + 6] for i, name in enumerate(sites.ARMS)}, plan["id"])
+                k = sites.ARMS.index(arm)  # the other arm waits as the teacher had it wait: the model drives only the step's arm
+                teacher.frame(data, {arm: action[k * 6:k * 6 + 6], **idle}, plan["id"])
     except StopIteration as stop:  # blocked or unreachable before the sub-skill began
         return dict(row, result=stop.value["result"], reason=stop.value.get("reason", ""))
     if SKILLS[skill]["judge"] == "placed":

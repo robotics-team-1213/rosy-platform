@@ -44,7 +44,10 @@ def yield_turn(jobs=None, pid=None, poll=30., say=print, sleep=time.sleep):
     """Seconds spent aside; 0 when this process holds no lock or no alone job waits."""
     jobs = jobs or JOBS
     lock = jobs / f"train-{pid or os.getpid()}.lock"
-    if not lock.exists() or not alone_waiting(jobs):
+    if not alone_waiting(jobs):
+        return 0.
+    if not lock.exists():
+        say(f"[gpu-yield] an alone test waits but {lock.name} does not exist: run the job under tools/remote/hold_gpu.sh", flush=True)
         return 0.
     aside, started = lock.with_name(lock.name + ".aside"), time.monotonic()
     lock.rename(aside)  # a dead job's .aside is no lock: remote_job reads *.lock only

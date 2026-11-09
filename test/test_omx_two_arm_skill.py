@@ -85,3 +85,11 @@ def test_fresh_applies_a_seeds_servo_and_gives_the_next_teacher_the_candidates_o
     assert world.model.actuator_gainprm[ids, 0] == pytest.approx(np.where(np.isnan(a.servo["arm_b"]["kp"]), 40., a.servo["arm_b"]["kp"]))
     skills.teaching.Teacher(world, seed=0).fresh({})
     assert (world.model.actuator_gainprm[ids, 0] == 40.).all() and (world.model.actuator_forcerange[ids, 1] == 2.).all()
+
+
+def test_collects_per_step_errors_never_reuse_an_evaluation_seed():
+    """Evaluation draws EVAL_SEED_BASE + 1000k + step; collection's per-step draws start far above any of them."""
+    highest_eval = policy.EVAL_SEED_BASE + 1000 * 100 + 100
+    lowest_collect = policy.STEP_ERROR_SEED_BASE + 100 * policy.TRAIN_SEED_BASE
+    assert lowest_collect > highest_eval
+    assert skills.draw_errors(lowest_collect, 4.)["arm_a"].tolist() != skills.draw_errors(lowest_collect + 1, 4.)["arm_a"].tolist()
