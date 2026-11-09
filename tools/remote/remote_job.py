@@ -55,8 +55,7 @@ while :; do
   done
   for f in ~/rosy-jobs/*.resv; do
     [ -e "$f" ] || continue; read -r t k fc fm < "$f" || true
-    [[ $t$fc$fm =~ ^[0-9]+$ ]] && [ "$t" -gt "$now" ] && { uc=$((uc + fc)); ug=$((ug + fm))
-      case "$k" in sim|gpu) gh=1;; esac; }
+    [[ $t$fc$fm =~ ^[0-9]+$ ]] && [ "$t" -gt "$now" ] && { uc=$((uc + fc)); ug=$((ug + fm)); }
   done
   for f in ~/rosy-jobs/*.alone-wait; do
     [ -e "$f" ] || continue; read -r p < "$f" || true

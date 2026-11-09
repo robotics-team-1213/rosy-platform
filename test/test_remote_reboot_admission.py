@@ -148,13 +148,11 @@ def test_quarantine_deferral_moves_only_the_remaining_rerun_and_keeps_original_f
 
 
 @pytest.mark.skipif(os.name != "posix" or not shutil.which("flock"), reason="actual admission shell needs Linux")
-@pytest.mark.parametrize("hold", ["lock", "resv"])
-def test_an_alone_job_behind_a_gpu_hold_never_blocks_others_and_gives_its_invocation_back(tmp_path, hold):
+def test_an_alone_job_behind_a_gpu_hold_never_blocks_others_and_gives_its_invocation_back(tmp_path):
     """11-09: an alone waiter behind a multi-hour training lock kept every pytest off the AI PC for ~4 h."""
     home, env = _job_env(tmp_path, 'touch "$HOME/pytest-started"\n')
     (home / "rosy-test/runs/r.jobs").mkdir()
-    line = 'echo "$$ gpu 1 1" > "$HOME/rosy-jobs/train-1.lock"' if hold == "lock" else \
-        'echo "99999 gpu 6 8" > "$HOME/rosy-jobs/isaac-1.resv"'
+    line = 'echo "$$ gpu 1 1" > "$HOME/rosy-jobs/train-1.lock"'  # hold_gpu.sh's lock (an Isaac .resv admits)
     prefix = '''clock=10000
 date() { if [ "$1" = +%s ]; then echo "$clock"; else /usr/bin/date "$@"; fi; }
 systemctl() { case "$1" in show) echo;; is-active) echo inactive; return 3;; esac; }
