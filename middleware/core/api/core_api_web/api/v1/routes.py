@@ -40,6 +40,7 @@ from core_api_web.api.v1.swarm import swarm_router
 from core_api_web.api.v1.system import system_router
 from core_api_web.api.v1.traffic import traffic_router
 from core_api_web.api.v1.trip_lease import trip_lease_router
+from core_api_web.api.v1.person_request import person_request_router
 from core_api_web.api.v1.vision import vision_router
 from core_api_web.api.v1.vision_media import media_router
 from core_api_web.api.v1.ui import ui_router
@@ -84,6 +85,7 @@ __all__ = [
     "system_router",
     "traffic_router",
     "trip_lease_router",
+    "person_request_router",
     "ui_router",
     "vision_router",
     "viewer",
