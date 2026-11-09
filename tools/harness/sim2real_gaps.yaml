@@ -199,17 +199,19 @@ gaps:
     tier: [M]
     owner: tools/sim (omx_real2sim)
     status: IN-PROGRESS
-    next: measured from the top frame into a snapshot each time a plate moves (next after the 2026-11-09 move); rehandle 12/12 and stack 9/9 on the 11-08 snapshot
+    next: measured from the top frame into a snapshot each time a plate moves; rehandle 12/12 and stack 9/9 on the 11-08 snapshot. Plate v11 (not printed) plans four 4 mm top fiducials; at about 1.1 px/mm that is 4-5 px, too small to find reliably (cell_marks found 12 mm marks 16 of 20), so the lane-pad fit stays the path
 
   - id: G-18
-    gap: OMX ship on the cell does not match the r08 model's shape; moving r08 to where the top camera saw hold 1 (stern x .180, centre y -.014) failed all nine MuJoCo replays (reverted), and the real frame shows containers right at the belt end, no stern bay and a bright rectangle at the far end
+    gap: OMX ship stands at stern x .1705, centre y -.012 to -.014 (r08 hull outline fitted to the top frame, overlap .87-.91 on two frames) while the sim assumed .155 / .007; the 11-08 revert misread r08's deckhouse as a different ship, and the CAD table edge (.155) is about 35 mm short of the real one (.19)
     evidence:
+      - tools/sim/omx_real2sim.py
+      - deploy/robot/omx/sim/cell_snapshots/20261108-2257.json
       - tools/sim/omx_two_arm_sites.py:30-31
       - D-947
     tier: [M]
-    owner: tools/sim / rosy-modeling
-    status: OPEN
-    next: name the ship print that stands on the cell (version, which end faces the belt) and model it; only then a hull measurer in omx_real2sim (position alone was tried and reverted, commit 34786139ed then b1d38c6da9)
+    owner: tools/sim (omx_real2sim)
+    status: IN-PROGRESS
+    next: MuJoCo replays at the measured cell (snapshot plates and ship, 2026-11-09) match the design layout - stack 9/9, rehandle 12/12, outbound 10/10 (with the tier-stagger fix for MuJoCo 3.3.7's false contact between exactly stacked equal boxes, branch feat/ladder-two-arm commit d90eb37896, not landed), matrix 14 pass / 4 fail per arm as G-27; switch the default to the measured ship once that fix lands; the berth is being reworked so the stern sits about 2 mm from the table edge, then measure again
 
   - id: G-19
     gap: OMX top camera model is the 2026-11-03 stud PnP; between surveys only the plate pad sizes (within 2.5 mm of 90 x 30 on 11-08) check it
@@ -294,7 +296,7 @@ gaps:
     tier: [M]
     owner: tools/sim
     status: IN-PROGRESS
-    next: both take --choice now (a policy round records them); the outbound stage's first run on the 11-08 snapshot closes the row
+    next: both take --choice and a policy round records them; the outbound replay at the 11-08 snapshot passed 10/10 on 2026-11-09 (lab PC run, not kept in the repo), so a recorded validation run closes the row
 
   - id: G-27
     gap: OMX sim predicts link4 touching a neighbour container when a lower container is taken out or put back (arm_a bar-1, bar-2; arm_b bar-1, bar-3), on the design and the measured layout alike; not seen on the real arm yet
@@ -303,7 +305,7 @@ gaps:
     tier: [M, R]
     owner: tools/sim
     status: OPEN
-    next: a supervised real extract of bar-1 (D-911) says whether the approach or the link mesh is wrong; the answer goes back into the validator
+    next: the measured cell gives the same four cases per arm as the design layout (2026-11-09, arm_a bar-1 and bar-2, arm_b bar-1 and bar-3, neighbours moved 1.5-4.3 mm), so the layout is not the cause; a supervised real extract of bar-1 (D-911) says whether the approach or the link mesh is wrong; the answer goes back into the validator
 
   - id: G-28
     gap: OMX policies trained in the sim have no real execution path; the learned-policy approval gate is not built
@@ -313,3 +315,14 @@ gaps:
     owner: OMX owner
     status: HOLD
     next: held by D-793; the loop judges policies in the sim only until the gate exists
+
+  - id: G-30
+    gap: OMX belt end and centreline in the sim (stop x .158, centre y .007, from the fixture) are about 47 mm and 44 mm off the real belt (end x .205, centre y -.037 from the top frame; a D435 depth check agreed within a few mm in xy); the 11-03 cell file's belt-end site lands on the belt's side rail in the same frame
+    evidence:
+      - tools/sim/omx_real2sim.py
+      - tools/sim/omx_two_arm_sites.py:48
+      - deploy/robot/omx/sim/cell_snapshots/20261108-2257.json
+    tier: [M]
+    owner: tools/sim (omx_real2sim)
+    status: IN-PROGRESS
+    next: the stack replay at belt_pose=snapshot passed 9/9 (2026-11-09) and no longer meets the fixture belt stop; a real belt pick in the two-arm cell (supervised, D-911) or a ruler distance from arm_b's axis confirms it before the default changes
