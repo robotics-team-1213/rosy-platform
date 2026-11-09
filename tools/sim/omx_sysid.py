@@ -252,6 +252,7 @@ def servo(folders, cell_path, out, base="design", arm="arm_b", keys=("kp", "damp
 # e in ticks (4096 a turn), the loop at 1 kHz; torque ~ PWM/885 * stall torque, less back-EMF (stall / no-load speed) * w.
 MOTORS = {11: "XL430-W250", 12: "XL430-W250", 13: "XL430-W250", 14: "XL330-M288", 15: "XL330-M288"}
 STALL = {"XL430-W250": (1.5, 12.0), "XL330-M288": (0.52, 5.0)}  # N·m at V, ROBOTIS e-Manual
+STALL_CURRENT = {"XL330-M288": 1470}  # mA at the stall torque; a Current_Limit caps torque in proportion (XL430: no current register)
 NO_LOAD = {"XL430-W250": (5.97, 11.1), "XL330-M288": (10.9, 5.0)}  # rad/s at V (57 and 104 rpm)
 DEFAULT_GAINS = {"XL430-W250": {"p": 640, "i": 0, "d": 4000}, "XL330-M288": {"p": 400, "i": 0, "d": 0}}  # not read back
 TICKS_PER_RAD = 4096 / (2 * math.pi)
@@ -271,7 +272,8 @@ def from_registers(caps, volts):
         per_pwm = stall * v / rated / 885  # N·m per PWM unit
         out[BODY[j]] = {"kp": round(per_pwm * gains["p"] / 128 * TICKS_PER_RAD, 3),
                         "kv": round(stall * v / rated / (speed * v / at) + per_pwm * gains["d"] / 16 * TICKS_PER_RAD / 1000, 4),
-                        "force": round(per_pwm * cap.get("pwm", 885), 3)}
+                        "force": round(min(per_pwm * cap.get("pwm", 885),  # 2026-11-09: arm_a's wrist at 250 mA holds 0.09, not 0.215
+                                           stall * cap["current"] / STALL_CURRENT[model] if "current" in cap and model in STALL_CURRENT else 1e9), 3)}
         if gains["i"]:
             integral.append(BODY[j])
     return out, integral

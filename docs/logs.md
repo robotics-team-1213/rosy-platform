@@ -14650,6 +14650,44 @@ osy-d395-s1d\`.
 - gate 변화: 현장 PC만 남은 착지는 이 시험에서 실패 대신 미실행으로 멈춘다(자리가 나면 resume).
 - CE: 해당 없음 — 원인과 규칙이 코드와 회귀 시험에 남는다.
 
+## 2026-11-09 · uncommitted · Pinky 캐릭터 표현 결정과 후속 설계
+
+- 변경: D-922와 설계 문서에 차분하고 호기심 많은 성격, 방향성 있는 선제 눈인사, 긴 일반 대기의 졸린 휴식 및 표정·후면 LED 공통 판단을 기록했다. ADR 색인·모듈 목록을 함께 연결했다.
+- 근거: 사용자 자동 반응·성격·방향성 눈인사·졸린 휴식 선택과 정식 ADR 기록 지시. D-385·D-433·D-504 및 현재 표정·LED 적용 경로를 대조했다.
+- 검증: 문서 하네스·색인 및 공식 원격 문서 계약 검증 대상이다. 결과는 검증 후 별도 증거로 기록한다.
+- gate 변화: 없음. 경험·책임 경계의 결정이며 표현 코드·감지 연동·장치 배포·LCD/LED 수용은 후속 작업이다.
+- CE: 해당 없음 — 설계 결정 기록이며 장애 원인·해결을 새로 검증한 작업이 아니다.
+
+## 2026-11-09 · uncommitted · Pinky 표현의 미결 기본값 결정
+
+- 변경: 사용자 위임에 따라 D-922에 추가 결정을 남기고 여러 사람 선택·반복 인사·졸린 대기·시선·8종 어휘·후면 LED 기본값을 설계 문서에 기록했다. 기존 ADR 본문은 보존하고 미정 항목이 닫힌 근거를 추가했다.
+- 근거: 현재 감지 계약의 정규화 상자·선택적 track_id·person 신뢰도 0.5와 0.3초 신선도, 얼굴 자산의 320×240 눈 기하, LED의 채널 색/전역 밝기 서비스 구분을 대조했다. 상자 크기로 실제 거리를 추정하지 않는다.
+- 검증: 문서 하네스·독립 검토 및 공식 원격 영향 시험 대상이다. 설계 수치는 구현자의 위임 결정이며 사용자 직접 측정값·장치 수용값으로 쓰지 않는다.
+- gate 변화: 없음. 감지→표현 producer·renderer 연결과 실제 LCD·LED 수용은 후속 구현·검증이다.
+- CE: 해당 없음 — 미결 설계 결정의 구체화이며 운영·장치 장애 해결이 아니다.
+
+## 2026-11-09 · uncommitted · chore(publish): 게시용 명시 FULL 근거
+
+- 변경: 코드 변경 없음. 공개 main 게시(D-868)에 필요한 명시 `--tests full` 착지 기록을 남기려는 기록 항목이다. 11-08 FULL 착지(chore/publish-full-20261108)는 그 뒤 고친 MAIN-RED 브라우저 시험에 막혀 멈췄고, 로컬 main 4f9e225d77에서 새로 돈다.
+- 증거: 이 착지의 FULL 기록이 게시 근거다.
+- gate 변화: 없음.
+- CE: 해당 없음 — 게시 절차 실행이며 장애 해결이 아니다.
+
+## 2026-11-09 · e94b732208 · D-922 추가 결정 — Pinky 상황 표정 8종
+
+- 변경: 여러 모델 디자인 패널에서 고른 doze·scan·lost·worry·lowbat·cheer·thinking·searching을 추가했다. 상황 표정은 `face_screen.situation_face`가 기존 face-inputs 필드로 고르고(복구 > dock_failed > line_follow_hold > 보정 > 진행 중 반응 > PLANNING > 배터리 20% 미만 > IDLE 충전), cheer는 함께 나타난 여러 사람의 인사다. native tick은 상황 표정을 CORE 표정·반응 만료보다 우선한다. 주의 램프 아래에서는 cheer·doze를 쓰지 않는다.
+- 자산: 새 GIF 8개는 `make_faces.py`로 생성했다. 32×24 실루엣이 기존·새 표정 모두와 6% 이상(최소 6.38%) 다르도록 디자인 위치·두께를 조정했다. 기존 8종 GIF는 바이트 단위로 같다.
+- 증거: e94b732208 다음 커밋(시험 기대 갱신)에서 원격 집중 시험 1907 passed, 1 skipped; known_failures NEW 0.
+- gate 변화: 없음. 호스트 렌더·시험은 실물 LCD 판독·ARM64·DEVICE/FIELD 수용이 아니다.
+- CE: 해당 없음 — 설계 판단은 ADR 추가 결정과 회귀 시험에 남는다.
+
+## 2026-11-09 · uncommitted · fix(land): 옛 브라우저 MAIN-RED 기록도 opt-in으로 재확인
+
+- 변경: `land_mainred.state()`가 env 없이 남은 `*_browser.py::` 빨간 기록에 `ROSY_RUN_BROWSER_TESTS=1`을 붙인다. nightly가 env를 남기기 전의 기록(11-08 console_queue_inline size1)은 recheck에서 건너뛰어져 main에서 통과해도 닫히지 않았다.
+- 증거: `test_recheck_runs_a_legacy_browser_red_with_the_opt_in`, 로컬 `test_land_mainred*`·`test_land_nightly` 27 passed.
+- gate 변화: 없음.
+- CE: 해당 없음 — 원인과 규칙이 코드와 회귀 시험에 남는다.
+
 ## 2026-11-09 · uncommitted · feat(fleet): 현장 차로 편대 미션 — 리더 Nav2 trip + FOR-004 TRAIL 팔로워 (D-1002)
 
 - 변경: `fleet.server.formation_mission`(차로 적합성 `lane_fit`, 무장 → 리더 trip job 구성, 리더 lease 해제로 미션 종료) + `/api/fleet/formation/mission` 세 경로(v1.378), `tools/sim/formation_lane.py` Gazebo 시나리오(map_v2_fleet, Nav2 리더, TRAIL 팔로워, 리더 급정지·팔로워 상실 주입, 참값 채점), ADR D-1002.
