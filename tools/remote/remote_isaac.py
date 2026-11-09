@@ -271,12 +271,14 @@ def fetch_snapshot(receipt, remote, destination):
 
 
 BOOTSTRAP = 'ARTIFACT_RPC_LIMITS = ' + repr(ARTIFACT_RPC_LIMITS) + '\n' + r'''
-import json,subprocess,sys
+import json,os,subprocess,sys
 from pathlib import Path
 value=json.loads(sys.stdin.buffer.read(1048577)); sha=value['sha']
 if len(sha)!=40 or any(c not in '0123456789abcdef' for c in sha): raise ValueError('SHA')
 config=Path.home()/'.config/rosy/isaac-runs'/('source-'+sha+'.json')
 binding=json.loads(config.read_text())
+try: os.utime(config)  # last use: rosy-ops host_storage removes copies idle for 3 days
+except OSError: pass
 source=Path(binding['source_root'])/'learning/envs/isaac/run_control.py'
 result=subprocess.run(['/usr/bin/python3',str(source),'--binding',str(config)],
  input=json.dumps(value['payload']).encode(),capture_output=True,timeout=35)
@@ -295,8 +297,11 @@ value=json.loads(sys.stdin.buffer.read(65537)); sha=value['sha']; name=value.get
 if len(sha)!=40 or any(c not in '0123456789abcdef' for c in sha): raise ValueError('SHA')
 root=Path.home()/'.config/rosy/isaac-runs';root.mkdir(mode=0o700,parents=True,exist_ok=True)
 target=root/('source-'+sha+'.json')
-if target.exists(): print('{"ready":true}');sys.exit(0)
+try: ready=Path(json.loads(target.read_text())['source_root']).is_dir()
+except FileNotFoundError: ready=None
+if ready: os.utime(target);print('{"ready":true}');sys.exit(0)
 if not name: print('{"ready":false}');sys.exit(0)
+if ready is False: target.unlink(missing_ok=True)  # its copy is gone (cleanup, disk): bind the new one
 if not name.startswith('sim-isaac-') or not all(c.isalnum() or c=='-' for c in name): raise ValueError('source')
 sdk=json.loads((Path.home()/'.config/rosy/isaac-sdk.json').read_text())
 owner=json.loads((Path.home()/'.config/rosy/model-code.json').read_text())
