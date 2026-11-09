@@ -353,6 +353,7 @@
 
 ## 최근 기록
 
+- 2026-11-09 · uncommitted · feat(fleet): 현장 차로 편대 미션 — 리더 Nav2 trip + FOR-004 TRAIL 팔로워 (D-1002)
 - 2026-11-08 · uncommitted · fix(remote): 현장 PC가 고정 학습 환경이 필요한 시험을 받지 않는다
 - 2026-11-08 · uncommitted · docs(solutions): rclpy Node 비공개 이름 충돌 교훈
 - 2026-11-08 · uncommitted · fix(land): 실패만 있는 브라우저 묶음을 "통과 0건"으로 멈추지 않는다
