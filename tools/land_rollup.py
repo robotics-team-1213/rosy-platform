@@ -103,6 +103,7 @@ def unrolled(repo: Path, row: dict) -> list[dict]:
         return []
     if not isinstance(members, list) or not members or any(
             not isinstance(m, dict) or not isinstance(m.get("branch"), str) or "members" in m or "members_error" in m
+            or not Path(str(m.get("worktree") or "")).is_dir()  # split's resume needs the kept tree
             or not git(repo, "rev-parse", "-q", "--verify", f"refs/heads/{m['branch']}", check=False).stdout.strip()
             for m in members):
         return []
@@ -115,6 +116,11 @@ def unrolled(repo: Path, row: dict) -> list[dict]:
 def sources(members: list[dict]) -> set[str]:
     """The landings a rollup combines: a re-rolled rollup counts once."""
     return {m.get("rollup") or m["branch"] for m in members}
+
+
+def lead(merged: list[dict]) -> dict:
+    """Whose ticket the rollup takes: never one of a re-rolled rollup that keeps landing (it keeps its place)."""
+    return (whole(merged) or merged)[0]
 
 
 def whole(members: list[dict]) -> list[dict]:
@@ -218,7 +224,7 @@ def build(repo: Path, members: list[dict], now: datetime, python: str = sys.exec
         land.size_check(wt, "main", "HEAD", python)
         if (wt / land.HARNESS).is_file():
             land.step(wt, [python, land.HARNESS, "lint"], None, "lint")
-        first = members[0].get("ticket")  # D-889 23: the rollup takes its first member's place in the queue
+        first = lead(merged).get("ticket")  # D-889 23: the rollup takes its first member's place in the queue
         if first:
             os.environ[land_queue.TICKET_ENV] = str(land_queue.queue_dir(repo) / first)
         try:
@@ -325,7 +331,7 @@ def roll(repo: Path, qdir: Path, now: datetime, argv: list[str]) -> int:
     if built is None:
         return 1
     snap, merged = built
-    adopted(land_queue.queue_dir(repo), members[0])  # build handed members[0]'s ticket over
+    adopted(land_queue.queue_dir(repo), lead(merged))
     complete, holder = whole(merged), land_async.holder(repo)
     for name in {m["rollup"] for m in merged if m.get("rollup")}:
         if any(m.get("rollup") == name for m in complete):  # its supervisor must not bisect it into duplicates

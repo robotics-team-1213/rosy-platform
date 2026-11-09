@@ -31,6 +31,7 @@ POLL = 15.0
 # 2026-11-04 05:42: five FULL pretests shared the two lab PCs at once, so none finished for 45 min and main stood
 # still with nothing ready. FULL pretests beyond this many wait (oldest first), so one finishes and takes the turn.
 MAX_FULL = 2
+ROLL_POLLS = 40  # D-889 34: a FULL waiter starts a rollup again every 40 polls (10 min) while it waits
 # D-889 28: speculation (addendum 3) ran 9.8 h of test-PC time in 6 h on 11-03 and its tree was held at 3 of 34
 # turns, while the ticket stayed "preparing" behind it. It runs only when this is "1".
 SPECULATE_ENV = "ROSY_LAND_SPECULATE"
@@ -107,7 +108,13 @@ def full_slot(qdir: Path, ticket: Path, sleep=time.sleep, changed=None, roll=Non
     said = False
     def older() -> int:
         return sum(r.get("status") == "preparing" and r.get("tier") == "full" for r in land_queue.ahead(qdir, ticket))
+    polls = 0
     while older() >= MAX_FULL:
+        if roll and said and (polls := polls + 1) % ROLL_POLLS == 0:
+            try:  # a waiter that came while another apply held its lock was left out of that one
+                roll()
+            except Exception:  # noqa: BLE001
+                pass
         if not said:
             print(f"[land] FULL pretest waits for {MAX_FULL} older FULL pretest(s) to finish", flush=True)
             said = True
