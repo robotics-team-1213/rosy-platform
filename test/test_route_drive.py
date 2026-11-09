@@ -24,10 +24,11 @@ def trace(*legs):
     return out
 
 
-def test_stops_are_counted_after_the_first_motion_and_short_pauses_are_not_stops():
-    samples = trace((3, 0.0), (2, 0.1), (1.5, 0.0), (2, 0.1), (0.2, 0.0), (2, 0.1), (2, 0.0))
+def test_stops_are_counted_after_the_first_motion_and_a_stop_that_creeps_off_counts_once():
+    # 3 s before the first motion is not a stop; 1.5 s, a 0.5 s creep and 1.0 s more are one stop; then the final stop
+    samples = trace((3, 0.0), (2, 0.1), (1.5, 0.0), (0.5, 0.1), (1.0, 0.0), (2, 0.1), (2, 0.0))
     stops = rd.count_stops(samples)
-    assert [round(d) for _, d in stops] == [2, 2]   # 1.5 s mid-route and the final 2 s; the 3 s start and the 0.2 s dip are not
+    assert [round(d, 1) for _, d in stops] == [3.0, 1.9]
     assert rd.count_stops(trace((5, 0.0))) == []
 
 
@@ -42,4 +43,4 @@ def test_route_bodies_follow_the_east_road_and_q_is_off_the_map():
     assert (points[0]["x"], points[0]["y"]) == rd.OFF_MAP
     assert math.isclose(end, 1.0 + 2 * rd.STEP_M)
     assert math.dist((points[1]["x"], points[1]["y"]), (points[2]["x"], points[2]["y"])) < 0.25
-    assert [r.count("S") for r in rd.ROUTES.values()] == [1, 2, 3, 1]
+    assert [r.count("S") for r in rd.ROUTES.values()] == [1, 1, 2, 3]

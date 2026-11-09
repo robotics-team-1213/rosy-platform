@@ -6,14 +6,14 @@
 Runs on a sim host (never the laptop, D-584), launching what fleet_trips.py --nav launches (two robots, one
 COREs each, Nav2 + AMCL on the world map) and reusing its helpers. No Fleet. rosy_01 gets routes along the
 east road of map_v2_fleet, each from the previous route's end. For each route the bench records /odom (sim
-time, odom-<route>.csv) and counts the stops it made: stretches of |v| < 0.02 m/s lasting 0.3 s after the robot
-first moved.
+time, odom-<route>.csv) and counts the stops it made: runs of |v| < 0.015 m/s lasting 0.1 s after the robot first
+moved, runs less than 1 s apart counted once (a stop decelerates, turns in place, creeps off).
 
     E  pppS    the same four points as single goals, the old way (409 until each ends) -> a stop at every point
+    D  qpS     q is 60 m off the costmap, so CORE skips it; p, S as usual -> 1 stop, skipped [0]
     A  pppS    3 pass points then a stop        -> 1 stop
     B  ppSpS   two stops, passes between        -> 2 stops
     C  SSS     every point a stop               -> 3 stops
-    D  qpS     q is 60 m off the costmap, so CORE skips it; p, S as usual -> 1 stop, skipped [0]
 
 Pass = every route ends ARRIVED with route.result succeeded, one POST and no 409 for A-D, observed stops equal
 the stop points of the route (A-D), and E shows the stop-per-point behavior the route replaces.
@@ -40,9 +40,9 @@ import fleet_trips as ft  # noqa: E402
 
 STEP_M = 0.15                  # the lane-vertex spacing of the field drive (0.15-0.33 m)
 START_S = 0.92                 # where the east road trip starts: rosy_01 spawns here; the road is 4 m long
-STOP_V, STOP_MIN_S, MOVING_V = 0.015, 0.3, 0.02
+STOP_V, STOP_MIN_S, MERGE_S, MOVING_V = 0.015, 0.1, 1.0, 0.02
 OFF_MAP = (60.0, 60.0)
-ROUTES = {'A': 'pppS', 'B': 'ppSpS', 'C': 'SSS', 'D': 'qpS'}
+ROUTES = {'D': 'qpS', 'A': 'pppS', 'B': 'ppSpS', 'C': 'SSS'}
 
 
 class OdomTrace:
@@ -85,8 +85,9 @@ class OdomTrace:
 
 
 def count_stops(samples):
-    """Stops after the first motion: runs of |v| < STOP_V of at least STOP_MIN_S sim seconds. -> [(start, seconds)]"""
-    stops, run_start, last, moved = [], None, None, False
+    """Stops after the first motion: runs of |v| < STOP_V of at least STOP_MIN_S sim seconds, runs closer than
+    MERGE_S (a stop is decelerating, turning in place, creeping off again) counted once. -> [(start, seconds)]"""
+    runs, run_start, last, moved = [], None, None, False
     for t, v, *_ in samples:
         moved = moved or v > MOVING_V
         if not moved:
@@ -94,13 +95,18 @@ def count_stops(samples):
         if v < STOP_V:
             run_start = t if run_start is None else run_start
         elif run_start is not None:
-            if t - run_start >= STOP_MIN_S:
-                stops.append((round(run_start, 2), round(t - run_start, 2)))
+            runs.append((run_start, t))
             run_start = None
         last = t
-    if run_start is not None and last is not None and last - run_start >= STOP_MIN_S:
-        stops.append((round(run_start, 2), round(last - run_start, 2)))
-    return stops
+    if run_start is not None and last is not None:
+        runs.append((run_start, last))
+    merged = []
+    for start, end in (r for r in runs if r[1] - r[0] >= STOP_MIN_S):
+        if merged and start - merged[-1][1] < MERGE_S:
+            merged[-1] = (merged[-1][0], end)
+        else:
+            merged.append((start, end))
+    return [(round(a, 2), round(b - a, 2)) for a, b in merged]
 
 
 def save_trace(path, samples):
@@ -190,7 +196,7 @@ def drive_goals(core, token, trace, points, budget_s, log):
     time.sleep(3.0)
     stops = count_stops(trace.since(mark))
     return {'points': len(points), 'conflicts': conflicts, 'observed_stops': stops, 'seen': seen,
-            'ok': len(stops) >= len(points) - 1}
+            'ok': len(stops) == len(points)}
 
 
 def run(args):
