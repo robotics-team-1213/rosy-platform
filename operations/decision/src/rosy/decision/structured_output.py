@@ -9,7 +9,8 @@ import json
 
 def ollama_chat(model, messages, schema, *, num_predict=1024, **options):
     """Ollama /api/chat body with the schema as constrained decoding."""
-    return {'model': model, 'messages': messages, 'format': schema, 'stream': False,
+    # Thinking models (Qwen3.5) return empty content under format; judgment calls never think here.
+    return {'model': model, 'messages': messages, 'format': schema, 'stream': False, 'think': False,
             'options': {'num_predict': num_predict, **options}}
 
 

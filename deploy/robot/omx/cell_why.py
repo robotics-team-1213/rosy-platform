@@ -280,7 +280,7 @@ def ollama(url: str, model: str, timeout: int = 180):
     import urllib.request
 
     def ask(prompt, images, schema):
-        body = {"model": model, "stream": False, "format": schema, "options": {"temperature": 0, "seed": 42},
+        body = {"model": model, "stream": False, "think": False, "format": schema, "options": {"temperature": 0, "seed": 42},
                 "messages": [{"role": "user", "content": prompt, "images": list(images)}]}
         request = urllib.request.Request(f"{url}/api/chat", json.dumps(body).encode(), {"Content-Type": "application/json"})
         with urllib.request.urlopen(request, timeout=timeout) as reply:

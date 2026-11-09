@@ -32,6 +32,7 @@ export function resourceText(resources) {
     parts.push(`부하 ${resources.load}/${resources.cores}코어`);
   }
   if (Number.isFinite(resources.uptime_s)) parts.push(`가동 ${resources.uptime_s}초`);
+  if (resources.reboot_overdue === true) parts.push("야간 재부팅 없이 며칠째 가동(작업 중이라 건너뛰었을 수 있음)");
   if (Array.isArray(resources.down) && resources.down.length) parts.push(`멈춘 유닛 ${resources.down.join(", ")}`);
   const disk = resources.disk;
   if (disk && Number.isFinite(disk.test_free_gb) && Number.isFinite(disk.root_free_gb)) {
