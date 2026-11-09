@@ -62,5 +62,5 @@ Run 8 numbers (`result.json`, 2 robots, spacing 0.8 m, cap 0.2 m/s):
 
 Open (not diagnosed): why the TRAIL follower leaves the leader's trail (`trail_lost`, reference_stream.py "a jump the trail cannot bridge" or off-trail > 0.30 m). Hypotheses, unverified: a leader map-pose jump (AMCL) over 0.3 m in the relayed stream; the follower seeded 0.74 m behind the leader's first point on a bend. Next check: log the leader's relayed map pose and the follower's `swarm/state` during the run and compare with truth. D-1002 stays Proposed; this is not a pass.
 
-Logs: laptop `%TEMP%emote-simd093a3b4e4d\outormation\`; copies in `Rosy/docs/workspace-records/2026-11-09/formation-driving/sim-run8/`.
+Logs: laptop temp dir `remote-sim/2d093a3b4e4d/out/formation/`; copies in `Rosy/docs/workspace-records/2026-11-09/formation-driving/sim-run8/`.
 
