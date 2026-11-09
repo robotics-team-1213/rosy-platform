@@ -14,6 +14,21 @@ from collection_profile import require, validate_profile
 from collection_session import validate_environment, validate_observation
 
 
+MOVE_SETTLE_S = 3.0
+
+
+def acquire_move_lock():
+    """The cell's `session.lock`, the one joint_tune/record_session hold, kept from before the first command until
+    the backend is closed (stop wait included). The nightly reboot and the host helper's reboot gate read exactly
+    this file (rosy-host-control arm_session_held), so a move sent through this adapter is a session to them too.
+    flock on an fd: the kernel drops it if this process dies. Busy means no move: it fails closed."""
+    from joint_tune import session_lock
+    try:
+        return session_lock()
+    except SystemExit as exc:  # session_lock reports a held lock or an unusable root this way
+        raise ValueError(f'arm move lock not taken, no collection: {exc}') from None
+
+
 def resource_key(action, domain):
     require(isinstance(action, str) and action.startswith('/') and '//' not in action
             and action == action.rstrip('/') and '/.' not in action, 'canonical action name required')
@@ -45,7 +60,9 @@ class RosBackend:
         self.runtime, self.node, self.executor, self.thread, self.supervisor = None, None, None, None, None
         self.rclpy = rclpy
         self.guard = None
+        self.move_lock = None
         try:
+            self.move_lock = acquire_move_lock()  # before anything can reach the arm
             runtime_dir = Path(f'/run/user/{os.getuid()}')
             require(runtime_dir.is_dir() and not runtime_dir.is_symlink()
                     and runtime_dir.stat().st_uid == os.getuid(), 'private runtime directory required')
@@ -235,3 +252,7 @@ class RosBackend:
             self.rclpy.shutdown()
         if self.guard is not None:
             self.guard.close()
+        if getattr(self, 'move_lock', None) is not None:  # last: the stop wait above is still a move
+            time.sleep(MOVE_SETTLE_S)  # physical stop is never verified here; keep the cell held while it settles
+            self.move_lock.close()
+            self.move_lock = None
