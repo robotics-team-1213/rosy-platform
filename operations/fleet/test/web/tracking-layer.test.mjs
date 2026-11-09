@@ -5,7 +5,7 @@ import {
   classifyTracking, trackingStatusLine, offsetLabel, OFFSET_WARN_M, TRACKING_STATUS_TEXT,
   preferMarkers, positionRows, displayLeaseMs, trackingDriftSample, calibrationDriftVerdict,
   rememberTrackingPoses, CALIBRATION_DRIFT_POLLS, CALIBRATION_DRIFT_M,
-  serverCalibrationDrift, effectiveDriftVerdict,
+  serverCalibrationDrift, effectiveDriftVerdict, calibrationHealthNotice,
 } from "../../../../applications/fleet/web/map/tracking-layer.js";
 
 const source = (changes = {}) => ({
@@ -189,4 +189,20 @@ test("a live robot-sample verdict outranks the server check; no robots falls bac
     [{ source_id: "x", calibration_drift: { state: "ok", max_move_m: 0.1 } }]), null);
   assert.equal(effectiveDriftVerdict(null, []), null);
   assert.equal(effectiveDriftVerdict(null, undefined), null);
+});
+
+test("D-1006 보정 건강: 거부된 맞춤(불일치)도 알리고 가장 무거운 상태 하나만 고른다", () => {
+  const row = (source_id, state, blocking = false) => ({ source_id, calibration_health: { state, blocking } });
+  assert.equal(calibrationHealthNotice([]), null);
+  assert.equal(calibrationHealthNotice(undefined), null);
+  assert.equal(calibrationHealthNotice([row("a", "fresh"), row("b", "unknown"), { source_id: "c" }]), null);
+  const coverage = calibrationHealthNotice([row("a", "insufficient_coverage")]);
+  assert.equal(coverage.state, "insufficient_coverage");
+  assert.match(coverage.text, /카메라를 옮겨/);
+  const worst = calibrationHealthNotice([row("a", "insufficient_coverage"), row("b", "drifting"),
+    row("c", "mismatch", true), row("d", "drifting")]);
+  assert.equal(worst.sourceId, "c");
+  assert.equal(worst.blocking, true);
+  assert.match(worst.text, /판정은 중지/);
+  assert.doesNotMatch(calibrationHealthNotice([row("b", "drifting")]).text, /중지/);
 });
