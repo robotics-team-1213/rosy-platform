@@ -49,10 +49,10 @@ def mujoco_loop(args, role, shard, live=False):
     out = f"~/rosy-scratch/twin-night/{args.night}"
     while (left := (args.deadline - time.time()) / 60) > 20:
         minutes = int(left) - 10
-        body = (f"{PY} batch --site {SITE} --root {EPISODES} --since {args.since} --shard {shard} --cell {args.cell_on_host} "
+        body = (f"{PY} batch --site {SITE} --root {EPISODES} --since {args.since} --shard {shard} --cell {args.cell_on_host} --physics {args.physics} "
                 f"--out {out} --jobs {JOBS[role]} --watch {minutes - 15}")
         if live:
-            body = (f"( {PY} live --site {SITE} --live {LIVE} --cell {args.cell_on_host} --out {out}/live "
+            body = (f"( {PY} live --site {SITE} --live {LIVE} --cell {args.cell_on_host} --physics {args.physics} --out {out}/live "
                     f"--minutes {minutes - 15} > {out}-live.log 2>&1 & ) ; {body}")
         body = f"mkdir -p {out} && {body}"
         log(role, "start", shard, f"{minutes} min")
@@ -108,6 +108,7 @@ def main(argv=None):
     p.add_argument("--out", required=True, type=Path)
     p.add_argument("--until", default="08:30")
     p.add_argument("--since", default="20261101")
+    p.add_argument("--physics", default="design", help="cell_physics.yaml candidate the twin is built from")
     p.add_argument("--no-isaac", action="store_true")
     p.add_argument("--mujoco", choices=("both", "ai"), default="both", help="ai: MuJoCo on the AI PC only")
     args = p.parse_args(argv)
