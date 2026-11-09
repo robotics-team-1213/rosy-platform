@@ -179,3 +179,36 @@ def _write(tmp_path, data):
     path = tmp_path / "plain.json"
     path.write_text(json.dumps(data), encoding="utf-8")
     return path
+
+
+def test_the_belt_end_and_centreline_come_from_its_strip():
+    layout = sites.Layout()
+    img = np.full((480, 640, 3), (60, 200, 200), np.uint8)
+    cam = r2s.Camera(layout.fixture["real_cameras"]["top"], img.shape[:2])
+    end, y, half = .205, -.037, .0425
+    strip = [cam.project((x, yy, layout.belt_top)) for x, yy in ((end, y - half), (.40, y - half), (.40, y + half), (end, y + half))]
+    cv2.fillPoly(img, [np.round(strip).astype(np.int32)], (30, 30, 30))
+    got = r2s.measure_belt(img, layout)
+    assert got["end_x_m"] == pytest.approx(end, abs=.003)
+    assert got["centre_y_m"] == pytest.approx(y, abs=.003)
+    assert got["width_m"] == pytest.approx(2 * half, abs=.006)
+
+
+def test_layout_takes_the_belt_from_a_snapshot(tmp_path):
+    s = snap()
+    s["items"]["belt"] = dict(end_x_m=.205, centre_y_m=-.037, width_m=.085)
+    path = _write(tmp_path, s)
+    base, moved = sites.Layout(), sites.Layout(cell_snapshot=str(path), belt_pose="snapshot")
+    assert (moved.belt_stop_x, moved.belt_y) == (.205, -.037)
+    assert moved.sites["belt"]["xy"][0] - base.sites["belt"]["xy"][0] == pytest.approx(.205 - sites.BELT_STOP_X)
+    assert moved.sites["belt"]["xy"][1] == -.037
+    with pytest.raises(ValueError, match="no measured belt"):
+        sites.Layout(cell_snapshot=str(_write(tmp_path, snap())), belt_pose="snapshot")
+
+
+def test_a_stage_takes_extra_choices_after_the_snapshots_so_they_win():
+    body = r2s.stage_body("stack", "deploy/robot/omx/sim/cell_snapshots/x.json", ["physics=twin-kp-20261109"])
+    assert "--choice physics=twin-kp-20261109" in body
+    assert body.rindex("--choice physics=") > body.rindex("--choice ship_pose=snapshot")  # parse_choices keeps the last
+    assert sites.parse_choices(["temp_lanes=snapshot", "physics=design", "physics=twin-kp-20261109"])["physics"] == "twin-kp-20261109"
+    assert "physics=" not in r2s.stage_body("stack", "x.json")
