@@ -1,15 +1,10 @@
 """D-1001: Monitoring's own signed image is an optional inventory member beside the Fleet image."""
 import json
-from pathlib import Path
-import sys
 from types import SimpleNamespace
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "deploy/site"))
-import site_update_io as io  # noqa: E402
-import site_update_runtime as runtime  # noqa: E402
-import verify_candidate as verify  # noqa: E402
+from deploy.site import site_update_io as io, site_update_runtime as runtime, verify_candidate as verify
 
 TAG = "a" * 40
 BASE = ("fleet", "vision", "proxy", "postgres")
@@ -38,7 +33,6 @@ def test_own_monitoring_image_is_required_when_the_signed_inventory_has_one():
     inventory = (*BASE, "monitoring")
     images = {role: f"rosy-site-{role}:{TAG}" for role in inventory}
     _overrides(images, inventory)
-    _overrides({**images, "monitoring": f"rosy-site-fleet:{TAG}"}, inventory) if False else None
     with pytest.raises(io.Refused, match="Compose resolves monitoring"):
         _overrides({**images, "monitoring": f"rosy-site-fleet:{TAG}"}, inventory)
     with pytest.raises(io.Refused, match="service set differs"):  # overlay off: a running monitoring is not signed
@@ -54,7 +48,6 @@ def test_older_candidates_keep_monitoring_on_the_fleet_image():
 def test_runtime_check_pins_monitoring_to_its_own_image_and_identity(fault):
     roles = (*BASE, "monitoring")
     references = {role: f"rosy-site-{role}:{TAG}" for role in roles}
-    accepted = {role: [f"sha256:{role[0] * 64}"] for role in roles}
     accepted = {role: ["sha256:" + format(i, "x") * 64] for i, role in enumerate(roles)}
     rows = [{"Service": role, "Image": references[role], "State": "running", "Health": "healthy", "ID": role}
             for role in roles]
