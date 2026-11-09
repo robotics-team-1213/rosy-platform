@@ -693,6 +693,8 @@
 3. rollup이 멈추면 `land_async`의 감독이 main 체크아웃의 `land_rollup.py split`을 띄워 반으로 나눈다. 반쪽은 다시 rollup으로, 하나 남은 구성원은 자기 스냅숏에서 혼자 다시 착지해 실패하면 자기 STOP 이유로 주인에게 돌아간다. 모든 구성원의 스냅숏은 그대로 둔다.
 4. watchdog의 자동 rollup은 30분이 아니라 10분마다(차례 한 번 안에 적어도 한 번) 돈다. `apply --urgent "<사용자의 말>"`은 rollup을 급한 착지로 넣는다. 이미 급한 착지가 있으면 추가 5대로 하나만 급하다.
 
+5. 시험 PC에서 살아 있는 `gpu`·`sim` 잠금(`hold_gpu.sh` 학습, Gazebo) 뒤에 선 alone 작업은 `*.alone-wait` 표시를 쓰지 않는다. 그 표시가 같은 PC의 일반 pytest를 모두 막아 11-09 AI PC가 약 4시간 멈췄다. 180초(`ROSY_ALONE_HOLD_WAIT_S`) 뒤에도 잠금이 있으면 입장을 미루고(exit 253) 그 호출은 다른 PC로 다시 배치된다(야간 재부팅 미룸과 같은 길).
+
 **검증.** 11-09 18:58 이 규칙으로 기다리던 5표(FULL 4, affected 1)를 한 rollup(`land/fix/land-rollup-20261109095841-20261109095841`)으로 묶었고, main과 충돌하는 FULL 2표는 빠졌다. 대기열은 12표에서 9표가 됐다.
 
 **되돌림.** `ROSY_ROLLUP_MIXED=0`이면 추가 23·32 규칙으로 돌아간다(`pending`·`waiting`만, 한 등급, 안전과 `--auto`의 FULL은 따로, 자동 split 없음). 섞인 rollup이 나뉘는 일이 일주일에 1/3을 넘거나, 나뉜 반쪽 착지가 따로 착지했을 때보다 늦으면 끈다.
