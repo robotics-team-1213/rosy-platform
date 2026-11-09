@@ -56,6 +56,7 @@ def camera_axes(eye, focus, up):
 class World:
     def __init__(self, layout=None, wrist=None, cone="elliptic", **choices):
         self.layout = layout or sites.Layout(**choices)
+        self.physics = physics.Physics(self.layout.choices["physics"])
         self.wrist = wrist or self.layout.choices["wrist_camera"]
         self.cone = cone
         self.meshes = tempfile.TemporaryDirectory()
@@ -105,9 +106,9 @@ class World:
         wc, ws = f["workplate_center_m"], f["workplate_size_m"]
         world.add_geom(name="floor", type=mujoco.mjtGeom.mjGEOM_PLANE, size=[2, 2, .1], rgba=[.3, .3, .3, 1])
         world.add_geom(name="table", type=box, size=[ws[0] / 2, ws[1] / 2, ws[2] / 2], pos=wc, rgba=[.55, .5, .42, 1])
-        bx = sites.BELT_STOP_X
-        world.add_geom(name="belt", type=box, size=[.15, .0425, .002], pos=[bx + .15, f["pickup_center_m"][1], L.belt_top - .002], rgba=[.15, .15, .15, 1])
-        world.add_geom(name="belt_stop", type=box, size=[.002, .0425, .004], pos=[bx, f["pickup_center_m"][1], L.belt_top + .004], rgba=[.6, .6, .6, 1])
+        bx, by = L.belt_stop_x, L.belt_y
+        world.add_geom(name="belt", type=box, size=[.15, .0425, .002], pos=[bx + .15, by, L.belt_top - .002], rgba=[.15, .15, .15, 1])
+        world.add_geom(name="belt_stop", type=box, size=[.002, .0425, .004], pos=[bx, by, L.belt_top + .004], rgba=[.6, .6, .6, 1])
         for arm, a in L.arms.items():  # the 12 mm base plate under each arm (size ASSUMED 120 mm square, visual only)
             world.add_geom(name=f"{PREFIX[arm]}plate", type=box, size=[.06, .06, .006], pos=[*a.base[:2], a.base[2] - .006], contype=0, conaffinity=0, rgba=[.2, .2, .2, 1])
         self._ship(spec)
@@ -115,7 +116,7 @@ class World:
         r08 = c["ship_source"] == "r08-berth"
         if r08:
             spec.add_mesh(name="container", file=self._asset("container_1x3_v3"), scale=[.001] * 3)
-        phys = physics.Physics(c["physics"])
+        phys = self.physics
         held = phys.container()
         for k, (cid, _) in enumerate(L.containers()):
             body = world.add_body(name=cid, pos=[-1.4, 1.0 + .1 * k, .05])
@@ -255,13 +256,14 @@ class World:
     # -- state ---------------------------------------------------------------------------------------------------------------
     def _bind(self):
         m = self.model
-        self.q, self.dof, self.act, self.mimic, self.link5, self.arm_dof = {}, {}, {}, {}, {}, {}
+        self.q, self.dof, self.act, self.mimic, self.link5, self.arm_dof, self.hold_dof = {}, {}, {}, {}, {}, {}, {}
         for arm, p in PREFIX.items():
             self.q[arm] = np.array([m.joint(p + n).qposadr[0] for n in JOINTS])
             self.act[arm] = np.array([m.actuator(p + n).id for n in JOINTS])
             self.mimic[arm] = m.joint(p + "gripper_joint_2").qposadr[0]
             self.link5[arm] = m.body(p + "link5").id
             self.arm_dof[arm] = np.array([m.joint(p + n).dofadr[0] for n in (*JOINTS, "gripper_joint_2")])
+            self.hold_dof[arm] = self.physics.hold_dofs(m, p)
         self.box_q = {c: m.joint(c).qposadr[0] for c, _ in self.layout.containers()}
         self.box_v = {c: m.joint(c).dofadr[0] for c, _ in self.layout.containers()}
         self.substeps = round(1 / FPS / m.opt.timestep)
@@ -293,12 +295,13 @@ class World:
         data.qvel[self.box_v[cid]:self.box_v[cid] + 6] = 0
 
     def advance(self, data, targets, frames=1):
-        """Command {arm: 6 joint targets} for `frames` frames; ideal gravity compensation on both arms (real servos sag: shortcut)."""
+        """Command {arm: 6 joint targets} for `frames` frames; ideal gravity compensation on the physics candidate's held joints
+        (every arm joint by default; registers: the I-gain joints only)."""
         for arm, t in targets.items():
             data.ctrl[self.act[arm]] = t
         for _ in range(self.substeps * frames):
             for arm in PREFIX:
-                data.qfrc_applied[self.arm_dof[arm]] = data.qfrc_bias[self.arm_dof[arm]]
+                data.qfrc_applied[self.hold_dof[arm]] = data.qfrc_bias[self.hold_dof[arm]]
             mujoco.mj_step(self.model, data)
 
     def pose(self, data, cid):

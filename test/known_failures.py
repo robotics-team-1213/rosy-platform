@@ -57,8 +57,14 @@ def failed_ids(report: str) -> list[str]:
     for line in report.splitlines():
         match = SUMMARY.match(line.strip())
         if match:
-            ids.append(match.group("nodeid").replace("\\", "/"))
+            ids.append(_posix(match.group("nodeid")))
     return ids
+
+
+def _posix(nodeid: str) -> str:
+    """Windows separators in the file part only: pytest escapes a non-ASCII param id as \\uXXXX (11-04 d283)."""
+    path, sep, rest = nodeid.partition("::")
+    return path.replace("\\", "/") + sep + rest
 
 
 def _matches(failed: str, known: str) -> bool:
@@ -75,7 +81,7 @@ def rerun_ids(report: str, quarantine: dict[str, str]) -> list[str]:
 
 def _rerun_clean(ids: list[str], section: str) -> list[str]:
     """Ids the rerun section shows PASSED and never FAILED/ERROR (a teardown error prints both)."""
-    passed = {m.group("nodeid").replace("\\", "/") for line in section.splitlines()
+    passed = {_posix(m.group("nodeid")) for line in section.splitlines()
               if (m := PASSED.match(line.strip()))}
     bad = set(failed_ids(section))
     return [i for i in ids if i in passed and i not in bad]

@@ -287,7 +287,7 @@ def test_probe_script_counts_live_locks_and_drops_dead_ones(tmp_path):
         (jobs / "old.resv").write_text(f"{now - 1} pytest 2 6\n")
         (jobs / "junk.resv").write_text("soon pytest 2 6\n")
         script = rp.PROBE.replace("J=~/rosy-jobs", f"J={shlex.quote(str(jobs))}")
-        fields = subprocess.run(["bash", "-c", script], capture_output=True, text=True, check=True).stdout.split()
+        fields = subprocess.run(["bash", "-c", script], capture_output=True, text=True, check=True).stdout.splitlines()[0].split()  # ROSYCAPS follows
     finally:
         live.kill()
     # site 0, sim_held 3 (the live sim locks + the gpu reservation), browser_jobs 1, then df free_kb use% of ~/rosy-test, /tmp
@@ -309,6 +309,28 @@ def test_site_pc_pytest_gets_a_cpu_quota(monkeypatch, tmp_path):
     for h in (rp.SITE_HOST, "model@1"):
         rp.run_on(h, [["test/x.py"]], [tmp_path / "1.txt"], "ab" * 20, tmp_path, None)
     assert sent[0][2] == "400%" and sent[1][2] == ""
+
+
+def test_the_site_pc_never_runs_lab_only_suites_and_leaves_them_not_run(monkeypatch, tmp_path, capsys):
+    """2026-11-07: the learning browser journey needs the lab PCs' pinned learner venv; on the site PC it was MAIN-RED."""
+    journey = [rp.BROWSER_ENV, "test/learning/perception/test_learning_workflow_pipeline_browser.py"]
+    assert wq.lab_only(journey) and wq.lab_only(["test/learning"]) and not wq.lab_only([rp.BROWSER_ENV, "test/x.py"])
+    assert wq.wanted("any", [journey]) is None  # a lab PC's worker takes anything
+    assert wq.wanted("any", [journey], site=True)(0) is False and wq.wanted("any", [["t"]], site=True)(0) is True
+    monkeypatch.setitem(rp.HEADROOM, "site@lab", {"cores": 4, "mem": 8, "site": True, "light": False})  # place()'s flag
+    monkeypatch.setattr(rp, "placed_hosts", lambda cls="pytest", hosts=None, cores=0: ["site@lab"])
+    monkeypatch.setattr(rp, "ship", lambda *a: None)
+    monkeypatch.setattr(rp, "deps", lambda repo, sha: ("d" * 16, []))
+    monkeypatch.setattr(rp, "remote", lambda *a, **kw: subprocess.CompletedProcess([], 0, b"", b""))
+    ran = []
+    monkeypatch.setattr(rp.remote_job, "run", lambda h, name, k, log, job, inv, *a: ran.append((h, inv)) or log.write_bytes(b"") and 0)
+    repo = tmp_path / "repo"  # run() resolves the sha in a real repository; its git dir keeps the run's history
+    subprocess.run(["git", "init", "-q", str(repo)], check=True)
+    subprocess.run(["git", "-C", str(repo), "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q",
+                    "--allow-empty", "-m", "t"], check=True)
+    codes = rp.run([["test/x.py"], journey], [tmp_path / "1.txt", tmp_path / "2.txt"], "HEAD", repo, wait=0)
+    assert codes == [0, rp.remote_job.LOST_EXIT] and len(ran) == 1 and "test/x.py" in ran[0][1]
+    assert "needs a lab PC" in capsys.readouterr().err
 
 
 def test_unreachable_hosts_stop_the_gate(monkeypatch, tmp_path):

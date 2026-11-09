@@ -9,18 +9,53 @@ setup up to 3,600 s) run through ``remote_job.step``, which marks LAST_POLL ever
 Past LIMIT_S without one, the watchdog writes ``faulthandler`` stacks of all threads to ``<logdir>/watchdog-<pid>.txt``,
 records a ``stop`` event, removes the process's tickets and exits 3. It never writes to stdout or stderr: a blocked
 stream must not block it too. Standard library only.
+
+The same check loop is the half-hourly rollup schedule (D-889 addendum 23 item 6, addendum 32): the process holding the
+turn starts ``land_rollup.py apply --auto`` from the main checkout once per ROLLUP_EVERY_S (a stamp in the git common
+dir), output appended to ``<git-common-dir>/rosy-land-rollup.log``. Only the turn holder: it is never a rollup member,
+so the rollup's stop of its members cannot reach the child.
 """
 
 from __future__ import annotations
 
 import faulthandler
 import os
+import subprocess
+import sys
 import threading
 import time
 from pathlib import Path
 
 LIMIT_S = 30 * 60.0
 CHECK_S = 60.0
+ROLLUP_EVERY_S = 10 * 60.0  # D-889 33: at least once per (<= 30 min) turn, was 30 min
+STAMP, ROLLUP_LOG = "rosy-land-rollup.stamp", "rosy-land-rollup.log"
+
+
+def rollup_due(land_events, land_queue, now=time.time) -> Path | None:
+    """The git common dir when this process holds the turn and no rollup started for ROLLUP_EVERY_S (claims it)."""
+    path = land_events._where.get("path")
+    if path is None or not any(land_queue.owns_turn(t) for t in list(land_queue._held)):
+        return None
+    stamp = Path(path).parent / STAMP
+    try:
+        if now() - stamp.stat().st_mtime < ROLLUP_EVERY_S:
+            return None
+    except FileNotFoundError:
+        pass
+    stamp.touch()
+    os.utime(stamp)
+    return stamp.parent
+
+
+def rollup(common: Path, popen=subprocess.Popen):
+    """``land_rollup.py apply --auto`` from main's checkout (land code runs from main), detached from our stdout."""
+    main = common.parent
+    # shortcut: a --replace of the turn holder (taskkill /T) also ends this child mid-build; detach fully if seen.
+    with open(common / ROLLUP_LOG, "a", encoding="utf-8") as out:
+        return popen([sys.executable, "-X", "utf8", str(main / "tools" / "land_rollup.py"), "apply", "--auto"],
+                     cwd=main, stdout=out, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
+                     creationflags=0x08000000 if os.name == "nt" else 0)  # CREATE_NO_WINDOW
 
 
 def idle(land_events, remote_job, clock=time.monotonic) -> float:
@@ -32,6 +67,11 @@ def start(logdir: Path, land_events, land_queue, remote_job, limit: float = LIMI
     def watch() -> None:
         while True:
             sleep(check)
+            try:
+                if common := rollup_due(land_events, land_queue):
+                    rollup(common)
+            except (OSError, ValueError):
+                pass  # a rollup that cannot start never costs the landing
             quiet = idle(land_events, remote_job, clock)
             if quiet <= limit:
                 continue

@@ -42,9 +42,9 @@ def test_unknown_candidate_and_base_loop_are_refused():
 
 def test_ranges_span_candidates_and_widen_by_two_sd():
     r = physics.ranges()
-    assert r["arms"]["arm_b"]["joint1"]["kp"] == {"low": 20.0, "high": 40.0, "measured": True}
-    assert r["arms"]["arm_a"]["joint1"]["kp"] == {"low": 40.0, "high": 40.0, "measured": False}  # design only: not measured
-    assert r["arms"]["arm_b"]["joint2"]["kp"]["measured"] is False
+    assert r["arms"]["arm_b"]["joint1"]["kp"] == {"low": 5.386, "high": 40.0, "measured": True}
+    assert r["arms"]["arm_a"]["joint1"]["kp"] == {"low": 5.386, "high": 40.0, "measured": True}  # the servo registers
+    assert r["arms"]["arm_a"]["joint1"]["damping"] == {"low": 0.3, "high": 0.3, "measured": False}  # design only: not measured
     assert r["arms"]["arm_b"]["joint1"]["zero_offset_deg"] == {"low": 0.0, "high": 4.0, "measured": True}
     assert r["container"]["friction"] == {"low": 1.0, "high": 1.0, "measured": False}
     assert "zero_offset_deg" not in r["arms"]["arm_a"]["joint1"]
@@ -80,6 +80,11 @@ def test_verdict_needs_a_better_hold_out_and_no_joint_worse():
     edge["fitted"]["joint3"]["kp"], edge["bounds"] = 200.0, {"kp": (2.0, 200.0), "damping": (.001, 5.0)}
     ok, why = sysid.verdict(edge)
     assert not ok and "joint3 kp 200" in why  # 2026-11-09: a better hold-out with kp at the bound is not a measurement
+    floor = fit([1, 1, 1, 1, 1], [.5, .5, .5, .5, .5])
+    floor["fitted"]["joint3"]["damping"], floor["bounds"] = 0.001, {"kp": (10.0, 120.0), "damping": (.001, 5.0)}
+    assert sysid.verdict(floor)[0]  # damping at its zero floor: not needed, still a measurement
+    floor["fitted"]["joint3"]["damping"] = 5.0
+    assert not sysid.verdict(floor)[0]
 
 
 def test_promote_appends_a_candidate_and_never_overwrites(tmp_path):
@@ -90,9 +95,10 @@ def test_promote_appends_a_candidate_and_never_overwrites(tmp_path):
     assert path.read_text(encoding="utf-8").startswith(before.rstrip("\n"))  # comments and old candidates kept as they were
     doc = physics.load(path)
     p = physics.Physics("servo-test", doc)
+    assert p.gravity_hold() == []  # fitted without compensation: the world replays it that way
     assert p.joint("arm_b", "joint3") == dict(DESIGN, kp=25.0, damping=0.2)
     assert p.joint("arm_a", "joint3") == DESIGN
-    assert physics.ranges(doc)["arms"]["arm_b"]["joint3"]["kp"] == {"low": 21.0, "high": 40.0, "measured": True}
+    assert physics.ranges(doc)["arms"]["arm_b"]["joint3"]["kp"] == {"low": 5.34, "high": 40.0, "measured": True}
     with pytest.raises(SystemExit, match="exists"):
         sysid.promote(fit([1, 1, 1, 1, 1], [.5, .5, .5, .5, .5]), "servo-test", None, path)
     with pytest.raises(SystemExit, match="not promoted"):
@@ -109,7 +115,9 @@ def test_next_puts_assumed_constants_first_with_an_experiment():
     assert rows[0][2] == "assumed"
     names = {c: (k, e) for _, c, k, e in rows}
     assert names["container.friction"][0] == "assumed" and "push test" in names["container.friction"][1]
-    assert names["arm_b.joint1.kp"][0].startswith("fitted")
+    assert names["arm_b.joint1.kp"][0].startswith("measured (") and "twin-kp-20261109" in names["arm_b.joint1.kp"][0]
+    assert names["arm_b.joint1.damping"][0].startswith("measured (") and "servo-friction-20261109" in names["arm_b.joint1.damping"][0]
+    assert names["arm_a.joint1.damping"][0] == "assumed"
     assert json.dumps([list(r) for r in rows])  # the --json form serialises
 
 
@@ -127,6 +135,10 @@ def test_the_two_arm_world_builds_from_the_chosen_candidate():
         assert m.geom_priority.max() == 0  # design leaves MuJoCo's pair rule (the larger friction) as it was
         mimic = m.jnt_dofadr[m.joint("b_gripper_joint_2").id]
         assert m.dof_damping[mimic] == pytest.approx(0.3)
+    design, soft = tw.World(physics="design"), tw.World(physics="registers-20261109")
+    assert design.hold_dof["arm_b"].tolist() == design.arm_dof["arm_b"].tolist()  # as before: every arm joint held
+    held = [soft.model.joint("b_" + n).dofadr[0] for n in ("joint3", "joint4")]
+    assert soft.hold_dof["arm_b"].tolist() == held  # the I-gain servos only, travelling with their soft gains
 
 
 def sweep_rows(extra_pwm, pan_step=0.1, contact_from=0.4, noise=1.0, seed=0, ticks=150):
@@ -204,3 +216,32 @@ def test_friction_windows_follow_the_push_geometry():
     assert sysid.windows(10, 40) == ((pytest.approx(0.4), 0.9), (0.05, pytest.approx(0.2)))
     with pytest.raises(SystemExit, match="push further"):
         sysid.windows(30, 40)
+
+
+def test_registers_give_the_servo_the_session_set():
+    caps = {"11": {"pwm": 300}, "12": {"pwm": 600, "p": 1600}, "13": {"pwm": 600, "i": 50},
+            "14": {"pwm": 300, "current": 250, "p": 800, "i": 50}, "15": {"pwm": 300, "current": 250}}
+    joints, integral = sysid.from_registers(caps, {11: 11.7, 12: 11.7, 13: 11.6, 14: 6.1, 15: 6.1})
+    per_pwm = 1.5 * 11.7 / 12 / 885
+    assert joints["joint1"]["kp"] == pytest.approx(per_pwm * 640 / 128 * 4096 / (2 * 3.141592653589793), rel=1e-3)
+    assert joints["joint2"]["kp"] == pytest.approx(joints["joint1"]["kp"] * 1600 / 640, rel=1e-3)  # the session's P 1600
+    assert joints["joint1"]["force"] == pytest.approx(per_pwm * 300, rel=1e-3) and joints["joint2"]["force"] == pytest.approx(per_pwm * 600, rel=1e-3)
+    assert joints["joint4"]["force"] == pytest.approx(0.52 * 250 / 1470, rel=1e-2)  # the current limit, below PWM 300's 0.215
+    assert joints["joint5"]["force"] == pytest.approx(0.52 * 250 / 1470, rel=1e-2)
+    assert integral == ["joint3", "joint4"]
+    doc = physics.load()
+    assert physics.Physics("registers-20261109", doc).joint("arm_a", "joint2")["kp"] == pytest.approx(joints["joint2"]["kp"], rel=1e-3)
+
+
+def test_gravity_compensation_can_stand_for_the_i_gain_joints_only():
+    import numpy as np
+    from types import SimpleNamespace
+    cell = SimpleNamespace(dof=np.array([10, 11, 12, 13, 14]), arm_dof=np.arange(10, 17), model="m")
+    held = sysid._Compensated(cell, ["joint3", "joint4"])
+    assert held.arm_dof.tolist() == [12, 13] and held.model == "m" and held.dof is cell.dof
+
+
+def test_gravity_hold_travels_with_the_candidate():
+    assert physics.Physics("design").gravity_hold() == "all"
+    assert physics.Physics("registers-20261109").gravity_hold() == ["joint3", "joint4"]
+    assert physics.Physics("servo-friction-20261109").gravity_hold() == "all"  # as it was fitted

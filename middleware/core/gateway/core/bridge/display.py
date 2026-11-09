@@ -244,7 +244,8 @@ def face_recovery(line_follow) -> Optional[str]:
 
 def face_inputs_payload(snapshot, *, face: Optional[str], power_mode: Optional[str],
                         wake: Optional[dict], written_at: str,
-                        goal_x: Optional[float] = None, goal_y: Optional[float] = None) -> dict[str, Any]:
+                        goal_x: Optional[float] = None, goal_y: Optional[float] = None,
+                        expression: Optional[dict] = None) -> dict[str, Any]:
     """What rosy-face draws from (D-433 decision 3); ``face_screen.validate_face_inputs`` reads it.
 
     The drive card body rides only in an operating mode (the face owns IDLE,
@@ -268,6 +269,7 @@ def face_inputs_payload(snapshot, *, face: Optional[str], power_mode: Optional[s
         "nav_state": snapshot.navigation.value,
         "estop": snapshot.safety.estop,
         "face": face,
+        "expression": expression,
         "power_mode": power_mode.lower() if isinstance(power_mode, str) else None,
         "activity_kind": snapshot.activity.kind if snapshot.activity is not None else None,
         "docking_state": snapshot.docking.state.value,
@@ -286,6 +288,14 @@ def face_inputs_payload(snapshot, *, face: Optional[str], power_mode: Optional[s
         "drive": drive,
         "wake": wake,
     }
+
+
+def face_person_request(view: Optional[dict]) -> dict:
+    """D-721 Amendment: the open person request for the face. ``remaining_s`` is counted down by the reader from
+    ``written_at``, so a request nobody clears is gone at its expiry and a dead CORE's request is gone with it."""
+    if view is None:
+        return {"person_request": None}
+    return {"person_request": {key: view[key] for key in ("id", "kind", "remaining_s")}}
 
 
 def face_camera_quality(preview: dict) -> dict:
@@ -321,6 +331,9 @@ def _coarse(body: dict) -> dict:
     coarse = {key: value for key, value in body.items() if key != "written_at"}
     coarse["battery_percent"] = rounded(coarse.get("battery_percent"), 0)
     coarse["battery_voltage"] = rounded(coarse.get("battery_voltage"), 1)
+    ask = coarse.get("person_request")
+    if isinstance(ask, dict):   # the countdown moves every tick; the ask itself changes rarely
+        coarse["person_request"] = {name: value for name, value in ask.items() if name != "remaining_s"}
     for key in ("drive", "wake"):
         card = coarse.get(key)
         if isinstance(card, dict):
