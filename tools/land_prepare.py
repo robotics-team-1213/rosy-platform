@@ -151,7 +151,7 @@ def watch(land, wt: Path):
         if main == seen[0]:
             return None
         seen[0] = main
-        tree = land.git(wt, "merge-tree", "--write-tree", "--no-messages", "HEAD", main, check=False)
+        tree = land.git(wt, "merge-tree", "--write-tree", "--no-messages", *land.RENORMALIZE, "HEAD", main, check=False)
         if tree.returncode == 0:
             return size(tree.stdout.split()[0], main)
         if tree.returncode != 1:
