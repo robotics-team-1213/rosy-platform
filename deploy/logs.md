@@ -4819,5 +4819,6 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 ## 2026-11-10 · uncommitted · fix(site): 원장 백업 정리 대상 확대, 백업본 압축, robots.yaml 소유 규칙 문서화
 - 변경: site_db.py backup이 fleet_api_audit(--prune-api-audit, 기본 90일)과 sighting_audit(--prune-sightings, 기본 90일)도 정리한다(2026-11-10 R 관측: 각 34.6만/16.1만 행 무대책 성장. observations·rule_selections의 저장소 자체 cap 10만 행/30일과 judgment 7일 자체 정리는 그대로라 도구가 건드리지 않는다). 타이머 백업본은 복사 뒤 VACUUM로 압축해 14개 보관 크기가 보존 분량을 따르게 했고, 정기 유지보수용 compact --assume-stopped 서브커맨드(정지 서비스 전제, verify 전후)를 추가했다. compose fleet-backup에 새 플래그를 명시하고 README 원장 타이머 절에 보존 기간·압축·compact 절차, robots.yaml 소유(10001:10001, 0600) 규칙을 적었다(11-10 R 시작 경고로 확인한 group-readable 배치의 교정 기준).
 - 시험: 원격 시험으로 확인 뒤 착지(아래 행에 결과 추가).
+- 시험(원격 rosy, 88f207b22f+): test_site_db_maintenance.py·test_site_ledger_backup_deploy.py·test_site_account_backup.py 58 passed, known_failures NEW 0(2026-11-10).
 - 증거: R fleet.sqlite3 관측(2026-11-10, `Rosy/docs/workspace-records/2026-11-10/fleet-hub-comm-check.md`) — fleet_api_audit 346,685행·sighting_audit 160,892행·파일 665MB, 기존 prune_ledger는 두 표를 덮지 않음.
 - gate 변화: 없음.
