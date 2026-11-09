@@ -23,6 +23,7 @@ gates:
   FIELD:
     state: N/A
 adrs:
+- D-922
 - D-855
 - D-851
 - D-850

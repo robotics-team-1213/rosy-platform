@@ -75,8 +75,8 @@
 
 ## 최근 기록
 
+- 2026-11-09 · 3d550f49ce · D-922 구현 검증 및 기록 항목 정정
+- 2026-11-09 · 79ebad2111 · D-922 Pinky 표정·시선·후면 LED 구현
 - 2026-11-08 · 6160ccf28e · fix(core): Nav2 무응답 목표 보고
 - 2026-11-08 · uncommitted · feat(core): 로봇 화면에서 사람 부탁에 답하기
 - 2026-11-07 · 92cb90111c · fix(battery): release a recovered battery stop in the policy chain (D-502 Amendment 2026-11-07)
-- 2026-11-07 · 11b42b5933 · feat(core): 로봇당 사람 부탁 하나를 쥔다
-- 2026-11-06 · 051927f313 · fix(core): motor 커미셔닝 readiness profile

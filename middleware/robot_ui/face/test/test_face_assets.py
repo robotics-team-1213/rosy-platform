@@ -39,3 +39,31 @@ def test_panel_edges_have_intermediate_colours():
         with Image.open(ASSETS / f"{name}.gif") as gif:
             colours = {rgb for _count, rgb in gif.convert("RGB").getcolors(320 * 240)}
         assert len(colours) > 2, f"{name} has hard pixel edges"
+
+
+def test_directional_gaze_moves_pupils_without_moving_the_mouth():
+    from emotion.character import frame
+
+    left = frame("interest", 0, gaze_x=-6)
+    right = frame("interest", 0, gaze_x=6)
+    difference = ImageChops.difference(left, right)
+    assert difference.getbbox() is not None
+    assert difference.crop((0, 112, 320, 240)).getbbox() is None
+    # The pupil catchlights follow direction in both eyes.
+    for center in (108, 212):
+        def catchlight_x(image):
+            points = [(x, y) for x in range(center - 20, center + 20)
+                      for y in range(40, 90) if min(image.getpixel((x, y))) > 190]
+            return sum(x for x, _ in points) / len(points)
+        assert catchlight_x(right) > catchlight_x(left) + 8
+
+
+def test_resting_is_a_quiet_slow_face_and_still_has_open_eyes():
+    from emotion.character import frame
+
+    normal = frame("bored", 0)
+    resting = frame("bored", 0, gaze_x=0, resting=1.0)
+    assert resting.size == (320, 240)
+    assert ImageChops.difference(normal, resting).getbbox()
+    for center in (108, 212):
+        assert resting.crop((center - 35, 160, center + 35, 190)).getbbox()
