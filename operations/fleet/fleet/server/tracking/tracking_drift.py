@@ -154,7 +154,10 @@ class CalibrationDriftWatch:
                 self._verdicts.pop(source.source_id, None)  # a new approval resets it
             body = await self._fetch_proposal(source.source_id)
             metrics = calibration_drift_verdict(record, body) if body is not None else None
-            self.health.observe(source.source_id, record.calibration_revision, body, metrics)
+            try:
+                self.health.observe(source.source_id, record.calibration_revision, body, metrics)
+            except Exception:  # noqa: BLE001 - health is observation only; the drift verdict must still update
+                _LOG.exception("calibration health observation failed for %s", source.source_id)
             if body is None or metrics is None:
                 continue
             self._verdicts[source.source_id] = {

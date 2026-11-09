@@ -150,6 +150,29 @@ def test_the_journal_keeps_every_poll_for_threshold_tuning(tmp_path):
                     (DISAGREE, None, None, None, 0.5, 77)]
 
 
+def test_a_malformed_rejected_fit_never_breaks_the_watch_or_the_drift_verdict():
+    assert classify({"accepted": False, "rejected_fit": {"score": 0.5, "coverage": 0.5, "cut_sides": 7}}, None)         == (MISMATCH, {"score": 0.5, "coverage": 0.5, "cut_sides": []})
+    calibrations = TrackingCalibrationStore()
+    calibrations.put(_record())
+    watch = _watch(_Fetcher(_body(_translated(0.5))), calibrations)
+    watch.health.observe = lambda *args: (_ for _ in ()).throw(TypeError("boom"))
+    asyncio.run(watch.poll_once())
+    assert watch.verdicts()["ceiling_north"]["state"] == "stale"
+
+
+def test_a_state_held_for_an_older_revision_does_not_block_after_reapproval():
+    clock = _Clock()
+    health = CalibrationHealth(clock=clock, gate=True)
+    _feed(health, 5, _rejected(), clock=clock)
+    assert health.blocks("ceiling_north", REV) and not health.blocks("ceiling_north", "paint-new")
+
+
+def test_a_locked_or_unwritable_journal_does_not_stop_startup(tmp_path):
+    health = CalibrationHealth(clock=_Clock(), journal_path=tmp_path)   # a directory is not a database
+    health.observe("ceiling_north", REV, _rejected(), None)
+    assert health.view("ceiling_north")["last"]["category"] == MISMATCH
+
+
 def test_the_watch_feeds_every_poll_including_rejected_ones():
     calibrations = TrackingCalibrationStore()
     calibrations.put(_record())

@@ -390,10 +390,10 @@ class TrackingService:
         D-1006: None as well while the optional health gate blocks the source, so camera
         poses and auto-locate stop anchoring on a fit the picture no longer supports.
         """
-        if self.health is not None and self.health.blocks(source.source_id):
-            return None
         record = self.calibrations.get(source.source_id)
         if record is None or record.map_id != source.map_id:
+            return None
+        if self.health is not None and self.health.blocks(source.source_id, record.calibration_revision):
             return None
         return record.calibration_revision
 

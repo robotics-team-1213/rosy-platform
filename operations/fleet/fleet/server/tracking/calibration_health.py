@@ -65,7 +65,7 @@ def classify(body: Optional[Mapping], verdict: Optional[Mapping]) -> tuple[str, 
     if not isinstance(fit, Mapping):
         return LOW_COVERAGE, {}  # no fit at all: nothing of the paint could be registered
     score, coverage = _num(fit.get("score")), _num(fit.get("coverage"))
-    metrics = {"score": score, "coverage": coverage, "cut_sides": list(fit.get("cut_sides") or ())}
+    metrics = {"score": score, "coverage": coverage, "cut_sides": _sides(fit.get("cut_sides"))}
     if coverage is None or score is None:
         return INCONCLUSIVE, metrics
     if coverage < LOW_COVERAGE_BELOW:
@@ -73,6 +73,10 @@ def classify(body: Optional[Mapping], verdict: Optional[Mapping]) -> tuple[str, 
     if coverage >= MISMATCH_COVERAGE_AT_LEAST and score < MISMATCH_SCORE_BELOW:
         return MISMATCH, metrics
     return INCONCLUSIVE, metrics
+
+
+def _sides(value) -> list:
+    return [side for side in value if isinstance(side, str)] if isinstance(value, (list, tuple)) else []
 
 
 def _num(value) -> Optional[float]:
@@ -88,14 +92,18 @@ class CalibrationHealth:
         self._journal = Path(journal_path) if journal_path is not None else None
         self._rows: dict[str, dict] = {}
         if self._journal is not None:
-            with closing(self._connect()) as connection:
-                enable_wal(connection)
-                connection.execute(
-                    """CREATE TABLE IF NOT EXISTS calibration_health_log (
-                           log_id INTEGER PRIMARY KEY AUTOINCREMENT, at REAL NOT NULL,
-                           source_id TEXT NOT NULL, calibration_revision TEXT, category TEXT NOT NULL,
-                           state TEXT NOT NULL, score REAL, coverage REAL, cut_sides TEXT,
-                           move_m REAL, rotation_deg REAL, frame_seq INTEGER)""")
+            try:
+                with closing(self._connect()) as connection:
+                    enable_wal(connection)
+                    connection.execute(
+                        """CREATE TABLE IF NOT EXISTS calibration_health_log (
+                               log_id INTEGER PRIMARY KEY AUTOINCREMENT, at REAL NOT NULL,
+                               source_id TEXT NOT NULL, calibration_revision TEXT, category TEXT NOT NULL,
+                               state TEXT NOT NULL, score REAL, coverage REAL, cut_sides TEXT,
+                               move_m REAL, rotation_deg REAL, frame_seq INTEGER)""")
+            except sqlite3.Error:
+                _LOG.exception("calibration health journal unavailable; continuing without it")
+                self._journal = None  # observation only: a locked file must not stop Fleet starting
 
     def forget(self, source_id: str) -> None:
         self._rows.pop(source_id, None)
@@ -142,9 +150,11 @@ class CalibrationHealth:
                 "last": dict(row["metrics"]), "blocking": self.gate and state in BLOCKING,
                 "gate": self.gate}
 
-    def blocks(self, source_id: str) -> bool:
+    def blocks(self, source_id: str, revision: Optional[str] = None) -> bool:
+        """True while the gate blocks; a state held for another revision (a re-approval) is void."""
         view = self.view(source_id)
-        return bool(view and view["blocking"])
+        return bool(view and view["blocking"]
+                    and (revision is None or view["calibration_revision"] == revision))
 
     def _log(self, now, source_id, revision, category, state, metrics, body) -> None:
         if self._journal is None:
