@@ -403,8 +403,8 @@ def open_episode(cell, config: dict, source: str, dest: str, object_id: str):
     folder = Path(spec["root"]).expanduser() / f"{time.strftime('%Y%m%d-%H%M%S')}-{source}-to-{dest}"
     folder.mkdir(parents=True, exist_ok=True)
     task = spec.get("tasks", {}).get(f"{source}->{dest}") or f"Pick the green container from the {source} and place it on the {dest}."
-    (folder / "task.json").write_text(json.dumps({"task": task, "object": object_id, "cameras": spec["cameras"],
-                                                  "payload": config.get("_payload")}))  # D-935: the load, for learning
+    (folder / "task.json").write_text(json.dumps({"task": task, "object": object_id, "cameras": spec["cameras"], "io": str(config.get("io", "")),
+                                                  "payload": config.get("_payload")}))  # D-935: the load; io: which arm (one episode root)
     if not cell.act(f"episode start {folder}").get("ok"):
         return None
     import episode_recorder

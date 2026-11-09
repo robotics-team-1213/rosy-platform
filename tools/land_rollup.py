@@ -7,6 +7,7 @@ On 2026-11-01 seven paused landings were rolled up by hand this way.
 
     python tools/land_rollup.py plan                # read-only: which pending landings would roll up
     python tools/land_rollup.py apply               # build land rollup branch, check, queue it, stop the members
+    python tools/land_rollup.py apply --auto        # the watchdog's half-hourly run: affected-tier members only
     python tools/land_rollup.py split <rollup>      # after a failed rollup: its members as two halves (or alone)
 
 Members: 'pending' land_async tickets on this host, not urgent, not explicit ('alone': FULL, checks, --no-cache), not
@@ -48,6 +49,11 @@ def tier(repo: Path, branch: str) -> str | None:
     if any(e.endswith(land_selection.SAFETY_TRIGGER) for e in sel.get("escalations") or ()):
         return None
     return sel["mode"]
+
+
+def affected(repo: Path, branch: str) -> str | None:
+    """``tier`` for the unattended rollup: a FULL-tier landing lands alone like a safety one."""
+    return "affected" if tier(repo, branch) == "affected" else None
 
 
 def candidates(rows: list[dict], repo: Path, host: str | None = None) -> list[dict]:
@@ -232,7 +238,8 @@ def main(argv: list[str]) -> int:
     if argv[:1] == ["split"] and len(argv) == 2:
         split(repo, argv[1], now)
         return 0
-    members = plan(repo, candidates(land_queue.ahead(qdir, Path("~")), repo))
+    auto = "--auto" in argv  # D-889 23 item 6 / 32: unattended, FULL-tier (and safety) landings stay alone
+    members = plan(repo, candidates(land_queue.ahead(qdir, Path("~")), repo), tier_of=affected if auto else tier)
     if not members:
         print("[rollup] no rollup: fewer than two pending landings fit together")
         return 0

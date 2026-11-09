@@ -50,6 +50,8 @@ def test_default_recipe_changes_only_pytest_pin_and_rekeys_the_environment(monke
     pinned = pinned.replace('echo "[remote] ready $V"\n', 'echo "[remote] ready $V"\necho "[remote-pytest] venv built'
                             ' $DEPS in $((SECONDS - B))s (pip cache $(du -sm ~/.cache/pip 2>/dev/null | cut -f1 ||'
                             ' true) MB)"\n')
+    # 2026-11-09: pytest-timeout fails a hung test with its id (remote_job exports PYTEST_TIMEOUT).
+    pinned = pinned.replace("pytest-xdist==3.8.0", "pytest-xdist==3.8.0 pytest-timeout==2.4.0")
     assert pinned != old
     assert rp.VENV == pinned
     assert tools().render_setup(rp.VENV, None) == pinned

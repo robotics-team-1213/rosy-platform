@@ -67,3 +67,19 @@ def test_an_aimed_case_reaches_off_the_box_by_its_aim_and_leaves_the_box_where_i
     aimed, centred = tcp(value["phases"][0]["frames"][-1]), tcp(nominal["phases"][0]["frames"][-1])
     assert (aimed.x - centred.x, aimed.y - centred.y) == pytest.approx((0.006, -0.008), abs=0.002)
     assert aimed.z == pytest.approx(centred.z, abs=0.002)
+
+
+def test_the_isaac_worker_can_run_it_with_a_bare_interpreter(tmp_path):
+    """run_worker starts it with the host's /usr/bin/python3, where omx_adapter is not installed (2026-11-08: every
+    arm-s-cell-case run failed in 0.2 s on that import). -S drops site-packages; only PyYAML (apt's python3-yaml on
+    the host) is copied in, so an installed omx_adapter cannot make this pass."""
+    import os
+    import shutil
+    import subprocess
+    import yaml
+    shutil.copytree(Path(yaml.__file__).parent, tmp_path / "site/yaml")
+    env = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"} | {"PYTHONPATH": str(tmp_path / "site")}
+    out = tmp_path / "frames.json"
+    subprocess.run([sys.executable, "-S", str(OMX / "isaac_cell_frames.py"), "--scenario", "nominal", "--out", str(out)],
+                   cwd=tmp_path, env=env, check=True, capture_output=True, timeout=120)
+    assert json.loads(out.read_text())["scenario"] == "nominal"

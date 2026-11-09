@@ -97,6 +97,9 @@ trap 'exit 143' TERM INT  # runs once timeout/pytest have ended; else $? would s
 export PYTHONPATH="$V/receiver-crypto${PYTHONPATH:+:$PYTHONPATH}" PYTHONUTF8=1
 # Leading ROSY_*=value args are this job's environment (remote_pytest.ENV_ARG), not pytest args.
 while [ $# -gt 0 ] && [[ $1 =~ ^ROSY_[A-Z0-9_]*= ]]; do export "$1"; shift; done
+# 2026-11-09: one hung test (a websocket receive, 42 min) stalled a landing. pytest-timeout fails it with its id;
+# @pytest.mark.timeout(n) or a ROSY_PER_TEST_TIMEOUT=n word overrides; a venv without the plugin ignores this.
+export PYTEST_TIMEOUT="${ROSY_PER_TEST_TIMEOUT:-900}"
 # xdist_plan job words: an xdist job's workers and a light host's memory cap, for the lock and MemoryMax.
 # ROSY_JOB_RESERVE_GB: the lock budget placement counts (laptop memory history), apart from the MemoryMax cap.
 # ROSY_JOB_RESERVE_CORES: the lock's cores from the laptop's cpu history; -n stays ROSY_JOB_CORES.

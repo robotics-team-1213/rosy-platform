@@ -153,6 +153,8 @@ class Selection:
     escalations: list[str] = field(default_factory=list)
     #: Changed paths behind an "unknown -> full" escalation: no module, import root or test names them.
     unmapped: list[str] = field(default_factory=list)
+    #: D-436 2026-11-09: FULL triggers that ran a narrower tier instead (affected_narrow.tier).
+    narrowed: list[str] = field(default_factory=list)
     invocations: list[list[str]] = field(default_factory=list)
     #: What runs locally when the selection escalated: guards + directly affected suites.
     local_invocations: list[list[str]] = field(default_factory=list)
@@ -161,7 +163,7 @@ class Selection:
 
     def to_json(self) -> dict:
         return {"mode": self.mode, "changed": self.changed, "escalations": self.escalations,
-                "unmapped": self.unmapped, "reasons": self.reasons, "invocations": self.invocations,
+                "unmapped": self.unmapped, "narrowed": self.narrowed, "reasons": self.reasons, "invocations": self.invocations,
                 "local_invocations": self.local_invocations,
                 "full_invocations": self.full_invocations}
 
@@ -212,9 +214,29 @@ def lab_full_invocations(repo: Repo, local: list[list[str]] = ()) -> list[list[s
     suite (`_full_paths`) and every `local` path none of those already covers.
     """
     ci = [inv for entry in CI_FULL_MATRIX for inv in entry["invocations"]] + [["test"]]
-    return affected_exclusive.separate(ci + pack(repo, _outside_ci_matrix(
+    return _once(affected_exclusive.separate(ci + pack(repo, _outside_ci_matrix(
         [*_full_paths(repo), *(p for inv in local for p in inv if not p.startswith(('ROSY_', '-')))])),
-        affected_exclusive.TARGET in repo.test_files)
+        affected_exclusive.TARGET in repo.test_files))
+
+
+def _once(invocations: list[list[str]]) -> list[list[str]]:
+    """Drop a path another plain invocation's folder already collects (not --ignore'd there). 2026-11-09: CI's
+    separate runners put the ACT, account-pipeline, monitoring and palletizing files in the lab FULL twice."""
+    plain = [inv for inv in invocations if not any(affected_exclusive.ENV.match(w) for w in inv)]
+
+    def covered(word: str, own: list[str]) -> bool:
+        # Not covered when that folder's invocation ignores the word, something above it or anything under it.
+        return any(d != word and not d.startswith("-") and not d.endswith(".py") and _under(word, d)
+                   and not any(_under(word, w[9:]) or _under(w[9:], word) for w in inv if w.startswith("--ignore="))
+                   for inv in plain if inv is not own for d in inv)
+    out = []
+    for inv in invocations:
+        if any(inv is p for p in plain):
+            inv = [w for w in inv if w.startswith("-") or not covered(w, inv)]
+            if all(w.startswith("-") for w in inv):
+                continue
+        out.append(inv)
+    return out
 
 
 def _outside_ci_matrix(paths: list[str]) -> list[str]:
@@ -245,6 +267,7 @@ def select(repo: Repo, changed: list[str], moved: list[str] = (),
     touched_modules: dict[str, dict] = {}
     broad_fallback_modules: dict[str, dict] = {}
     for path in changed:
+        tiered = False
         if any(_match(path, p) for p in NOT_TRIGGERS):
             trigger = None
         elif safety_review.is_safety(path, repo.safety_roots, repo.safety_modules):
@@ -259,6 +282,10 @@ def select(repo: Repo, changed: list[str], moved: list[str] = (),
                 continue  # D-762 stage 0: a NARROWABLE_TRIGGERS path selected its readers instead
             if why:  # land.py HARNESS_TRIGGER matches the suffix, so the reason goes before it
                 trigger = f"({why}): {trigger}"
+            narrow = affected_narrow.tier(repo, path, trigger, add)  # D-436 2026-11-09: narrower tier, not FULL
+            if narrow:
+                sel.narrowed.append(f"{path}: {trigger}")
+                trigger, tiered = None, narrow == "own"
         if path == affected_narrow.HARNESS_YAML:  # reads harness.yaml; not in GUARD_SET
             add("test/architecture/test_folder_layout.py", f"reads {path}")
         if path == affected_narrow.HARNESS_YAML and trigger:
@@ -307,7 +334,7 @@ def select(repo: Repo, changed: list[str], moved: list[str] = (),
         importing = [t for t in repo.test_files if prefixes and repo.imports_prefix(t, prefixes)]
         for test in importing:
             add(test, f"imports {'/'.join(prefixes)} ({path})")
-        if referencing or importing or trigger:
+        if referencing or importing or trigger or tiered:
             continue
         if path.endswith((".md", ".test.mjs")):
             # D-436 2: a Markdown note outside every module runs the guards only. No runner runs the three
@@ -338,6 +365,7 @@ def select(repo: Repo, changed: list[str], moved: list[str] = (),
             if not _under(test, module["path"]) and repo.imports_prefix(test, prefixes):
                 add(test, f"imports {'/'.join(prefixes)} (module {module['name']})")
 
+    # D-436 addendum 1 (panel 2026-11-09): a safety path stays FULL; static reach misses its config/IDL readers.
     if sel.escalations:
         sel.mode = "full"
         # CI runs the entire root suite in parallel shards for FULL. The local
@@ -369,7 +397,9 @@ def render(sel: Selection) -> str:
     lines = [f"affected tier (D-436): mode={sel.mode}, {len(sel.changed)} changed file(s)"]
     for path in sel.changed:
         lines.append(f"  changed  {path}")
-    if sel.escalations:
+    lines += [f"  narrowed tier instead of FULL (D-436 2026-11-09): {e}"
+              for e in sel.narrowed]
+    if sel.mode == "full":
         lines.append("escalated to FULL because:")
         lines += [f"  - {e}" for e in sel.escalations]
         if sel.unmapped:

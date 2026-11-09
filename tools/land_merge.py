@@ -1,7 +1,7 @@
 """tools/land.py conflict auto-resolution (split from land.py, pure move).
 
-Which conflicted paths land.py may resolve itself (ADR Log, logs.md, adr_gaps.txt, index.md and the
-generated files) and the bytes it writes for them. ``plan`` touches nothing; ``land.merge`` applies it.
+Which conflicted paths land.py may resolve itself (ADR Log, logs.md, adr_gaps.txt, index.md, the API version
+pins and the generated files) and the bytes it writes for them. ``plan`` touches nothing; ``land.merge`` applies it.
 Standard library only.
 """
 
@@ -13,6 +13,7 @@ import os
 import re
 import subprocess
 import tempfile
+from collections import Counter
 from pathlib import Path, PurePosixPath
 
 from land_logs import append_blocks, shared  # logs.md: whole entries, date order
@@ -21,6 +22,11 @@ ADR_LOG = "docs/reference/ROSY ADR Log.md"
 ADR_GAPS = "tools/harness/adr_gaps.txt"  # from the ADR-reservation branch; absent until it lands
 ADR_ROW = re.compile(rb"^\| D-(\d+) \|")
 GENERATED = {"STATUS.md", "docs/reference/sim2real-gaps.md"}
+# The API version pins: both sides bump them and insert a changelog section under the header (2026-11-09 report: 33
+# merge aborts on the reference, 14 on contract_version.py). Each side's pin is set to the higher version first.
+API_REF = "docs/reference/ROSY API & Protocol Reference.md"
+API_PINS = {API_REF, "middleware/core/api/core_api_web/api/contract_version.py"}
+API_PIN = re.compile(rb"(\*\*Version:\*\* |ROSY-API-REF-001 )v1\.(\d+)\b")
 ENV = {**os.environ, "PYTHONUTF8": "1"}
 
 
@@ -76,6 +82,8 @@ def resolver(path: str) -> str | None:
         return "append"
     if path == ADR_GAPS:
         return "union-dedupe"
+    if path in API_PINS:
+        return "api"
     if name == "AGENTS.md":
         return "table-rows"
     # progress.md is hand-written lint input (gates), not generated: a human resolves it.
@@ -213,7 +221,39 @@ def table_rows(base: bytes, ours: bytes, theirs: bytes) -> bytes | None:
 MARKER = re.compile(rb"^(<{7,}|>{7,}) ", re.MULTILINE)  # a virtual base nests longer markers (9 for one level)
 
 
+def api_version(base: bytes, ours: bytes, theirs: bytes) -> bytes | None:
+    """Both sides' API changes: the pin at the higher version, then a line union with the higher side's lines
+    first (the changelog runs newest first); None when a side changed lines other than its pin."""
+    found, old = [API_PIN.search(x) for x in (ours, theirs)], API_PIN.search(base)
+    if None in found:
+        return None
+    mine, main = (int(m.group(2)) for m in found)
+    if mine == main and (old is None or int(old.group(2)) != mine):
+        return None  # both sides took one number: one did not reserve it (api_reserve.py); a person renumbers
+    top = max(mine, main)
+    base, ours, theirs = (API_PIN.sub(lambda m: m.group(1) + b"v1.%d" % top, x, count=1) for x in (base, ours, theirs))
+    if not clashes_are_insertions(base, ours, theirs):
+        return None
+    heads = [{int(n) for n in re.findall(rb"(?m)^### v1\.(\d+)", x)} for x in (base, ours, theirs)]
+    if (heads[1] - heads[0]) & heads[2] or (heads[2] - heads[0]) & heads[1]:
+        return None  # a side added a section under a number the other side has
+    newest = [max(heads[i] - heads[0], default=pin) for i, pin in ((1, mine), (2, main))]
+    data = union(base, theirs, ours) if newest[1] > newest[0] else union(base, ours, theirs)
+    lines = lambda x: Counter(line for line in x.splitlines() if line.strip())  # noqa: E731
+    if lines(data) != lines(ours) + lines(theirs) - lines(base):
+        return None  # the union resurrected a line a side changed (difflib aligned the edit as an insertion)
+    known, out = set(base.splitlines()), []
+    for line in data.splitlines(keepends=True):
+        # the union shares the sections' common trailing blank line: give each new section its own again
+        if line.startswith(b"### v1.") and line.rstrip(b"\r\n") not in known and out and out[-1].strip():
+            out.append(line[len(line.rstrip(b"\r\n")):] or b"\n")
+        out.append(line)
+    return b"".join(out)
+
+
 def _resolve(kind: str, base: bytes, ours: bytes, theirs: bytes) -> bytes | None:
+    if kind == "api":
+        return api_version(base, ours, theirs)
     if kind == "generated":
         return theirs
     if kind == "append":
