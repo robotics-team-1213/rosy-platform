@@ -14649,3 +14649,10 @@ osy-d395-s1d\`.
 - 증거: 11-07 이 시험이 두 실험실 PC가 찬 동안 현장 PC에 배정돼 고정 학습 venv 확인에서 실패했고 MAIN-RED가 됐다. 그 venv는 모델 PC·AI PC에만 있다(11-08 확인). 건너뛰기 조건으로 막은 수정은 `land_browser.vacuous`에 걸려 되돌려졌다(a258cda4d7).
 - gate 변화: 현장 PC만 남은 착지는 이 시험에서 실패 대신 미실행으로 멈춘다(자리가 나면 resume).
 - CE: 해당 없음 — 원인과 규칙이 코드와 회귀 시험에 남는다.
+
+## 2026-11-09 · uncommitted · fix(land): 옛 브라우저 MAIN-RED 기록도 opt-in으로 재확인
+
+- 변경: `land_mainred.state()`가 env 없이 남은 `*_browser.py::` 빨간 기록에 `ROSY_RUN_BROWSER_TESTS=1`을 붙인다. nightly가 env를 남기기 전의 기록(11-08 console_queue_inline size1)은 recheck에서 건너뛰어져 main에서 통과해도 닫히지 않았다.
+- 증거: `test_recheck_runs_a_legacy_browser_red_with_the_opt_in`, 로컬 `test_land_mainred*`·`test_land_nightly` 27 passed.
+- gate 변화: 없음.
+- CE: 해당 없음 — 원인과 규칙이 코드와 회귀 시험에 남는다.
