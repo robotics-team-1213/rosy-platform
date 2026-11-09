@@ -28,7 +28,7 @@ from fleet.console_site_config import (_build_site_map, _goal_lease_ttl_s, _poli
                                        _lane_compliance_config, _map_pose_config, _trip_config,
                                        _account_login_config)
 from fleet.traffic.config import (_traffic_authority, _traffic_signal_advice, _traffic_signals, _traffic_zones,
-                                   _trip_lease)
+                                   _trip_lease, _station_recovery)
 from fleet.formation.geometry import DEFAULT_SPACING, Formation, FormationError
 from fleet.swarm.relay import Relay
 from fleet.swarm.robots import RobotEndpoint, load_robots
@@ -711,7 +711,7 @@ def run_console(args: argparse.Namespace) -> None:
                      map_pose_config=map_pose_config, trip_config=_trip_config(args),
                      traffic_zones=_traffic_zones(args), traffic_authority=_traffic_authority(args),
                      traffic_signals=_traffic_signals(args), traffic_signal_advice=_traffic_signal_advice(args),
-                     trip_lease=_trip_lease(args),
+                     trip_lease=_trip_lease(args), station_recovery=_station_recovery(args),
                      identity_config=identity_config,
                      lane_compliance_config=_lane_compliance_config(args), notification_config=notification_config,
                      channel_config=channel_config,channel_model_config=model_config,
