@@ -75,6 +75,8 @@ def test_valid_region_is_the_driven_hull_not_the_track(candidate):
     region = np.array(candidate["valid_region_m"])
     assert 0.0 <= region[:, 0].min() and region[:, 0].max() <= 1.8
     assert cs._hull_area(region) < 0.6 * (TRACK[2] * TRACK[3])
+    # floor frame: the driven floor points lie inside the (floor-scaled) region
+    assert all(_inside(region, p) for p in [(0.5, 0.4), (0.9, 0.6), (1.3, 0.8)])
     assert candidate["heldout_rms_m"] < 0.03 and candidate["n_heldout"] >= cs.MIN_HELDOUT
 
 
@@ -120,3 +122,13 @@ def test_unknown_lens_gives_no_floor_homography():
     result = solve_candidate(drive(np.random.default_rng(3)), image_size=SIZE, hfov_deg=None,
                              track_bounds_m=TRACK)
     assert result["status"] == "camera_not_solvable"
+
+
+def _inside(poly, p):
+    h = cs._hull(np.vstack([poly, [p]]))
+    return len(h) == len(cs._hull(poly))
+
+
+def test_nan_residual_cannot_pass_the_heldout_gate(monkeypatch):
+    monkeypatch.setattr(cs, "_rms", lambda *a: float("nan"))
+    assert solve(drive(np.random.default_rng(3)))["status"] == "camera_not_solvable"

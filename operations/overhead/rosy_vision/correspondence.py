@@ -127,17 +127,23 @@ def solve_candidate(samples: Sequence[Sample], *, image_size: tuple[int, int],
     h_all = _dlt(pix[inliers], world[inliers])  # final plane fit uses every inlier
     out.update(rms_m=round(_rms(h_all, pix[inliers], world[inliers]), 4),
                heldout_rms_m=round(rms_held, 4), n_heldout=int(held.sum()))
+    if not (math.isfinite(rms_fit) and math.isfinite(rms_held)):
+        out["status"] = "camera_not_solvable"  # a fit point maps behind the camera
+        return out
     if rms_held > max(HELDOUT_FACTOR * rms_fit, HELDOUT_FLOOR_M):
         out["status"] = "heldout_residual_high"
         return out
 
-    floor = _floor_homography(h_all, image_size, hfov_deg)
-    if floor is None:
+    solved = _floor_homography(h_all, image_size, hfov_deg)
+    if solved is None:
         out["status"] = "camera_not_solvable"
         return out
+    floor, scale = solved
     out["image_to_map"] = [float(f"{v:.8g}") for v in floor.reshape(-1)]
     out["plane_height_m"] = MARKER_HEIGHT_M
-    out["valid_region_m"] = _grown_hull(pts, HULL_MARGIN_M)
+    # The hull is in marker-plane metres; the floor homography is scaled about the nadir.
+    out["valid_region_m"] = [[round(float(v), 4) for v in (scale @ [x, y, 1.0])[:2]]
+                             for x, y in _grown_hull(pts, HULL_MARGIN_M)]
     if approved_map_to_image is not None:
         out["approved_delta_m"] = _approved_delta(floor, approved_map_to_image, pix[inliers])
     out["status"] = "ok"
@@ -240,7 +246,7 @@ def _grown_hull(pts: np.ndarray, margin: float) -> list[list[float]]:
     return [[round(float(x), 4), round(float(y), 4)] for x, y in grown]
 
 
-def _floor_homography(plane: np.ndarray, size, hfov_deg) -> np.ndarray | None:
+def _floor_homography(plane: np.ndarray, size, hfov_deg) -> tuple[np.ndarray, np.ndarray] | None:
     """Pixel -> floor map from the plane-at-marker-height fit: scale about the camera nadir
     by H / (H - h), H the camera height above the floor."""
     cam = geometry.camera_from_homography(plane, size, hfov_deg)
@@ -250,13 +256,16 @@ def _floor_homography(plane: np.ndarray, size, hfov_deg) -> np.ndarray | None:
     height = above + MARKER_HEIGHT_M
     k = height / above  # = H / (H - h) with above = H - h
     scale = np.array([[k, 0, cx * (1 - k)], [0, k, cy * (1 - k)], [0, 0, 1.0]])
-    return geometry.normalized(scale @ plane)
+    return geometry.normalized(scale @ plane), scale
 
 
 def _approved_delta(floor: np.ndarray, approved_map_to_image: Sequence[float], pix: np.ndarray) -> dict:
     """How far the approved record would place these same pixels from the candidate (floor
     plane, metres): the number a reviewer reads to tell a moved camera from noise."""
-    approved = np.linalg.inv(geometry.as_matrix(approved_map_to_image))
+    try:
+        approved = np.linalg.inv(geometry.as_matrix(approved_map_to_image))
+    except (ValueError, np.linalg.LinAlgError):
+        return {"error": "approved record is not invertible"}
     d = np.linalg.norm(geometry.apply(floor, pix) - geometry.apply(approved, pix), axis=1)
     d = d[np.isfinite(d)]
     return {"median_m": round(float(np.median(d)), 3), "p90_m": round(float(np.percentile(d, 90)), 3)}

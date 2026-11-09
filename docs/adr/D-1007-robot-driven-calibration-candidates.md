@@ -18,7 +18,7 @@
 
 1. **`rosy_vision/correspondence.py`(numpy만, 오프라인).** 표본 = 로봇의 현장 지도 자세(AMCL을 D-1003 변환으로 옮긴 값, 변환은 호출자 책임) + 같은 로봇 마커의 프레임 픽셀 + 시각·AMCL 상태·자세 나이·속도. `gate_samples`가 `LOCALIZED`, 자세 나이 ≤ 0.3 s, 시각 어긋남 ≤ 0.1 s, 속도 ≤ 0.15 m/s만 남기고 0.15 m 안의 중복을 솎는다(버린 이유를 센다).
 2. **`solve_candidate`.** 스티커 높이(0.125 m) 평면의 호모그래피를 RANSAC(0.05 m)로 맞추고, 렌즈 FOV로 카메라 바로 아래 점(nadir)·높이를 풀어 바닥 호모그래피로 바꾼다. 상태는 첫 실패 문턱의 이름 또는 `ok`: `insufficient_samples`(< 12) · `insufficient_inliers` · `insufficient_time_span`(< 20 s) · `insufficient_spread`(껍질 면적/트랙 < 0.25 또는 공선) · `insufficient_heldout` · `heldout_residual_high`(홀드아웃 RMS > max(1.5×적합 RMS, 3 cm)) · `camera_not_solvable`(렌즈 모름·해 불량).
-3. **후보 JSON**(`use: review-only`): `image_to_map`, `plane_height_m`, `rms_m`, `heldout_rms_m`, `n_*`, `spread`, `valid_region_m`(인라이어 볼록 껍질, 5 cm 바깥으로 키움), 승인 기록이 있으면 `approved_delta_m`(같은 픽셀을 두 보정이 놓는 거리의 중앙값·p90). 후자가 카메라 이동(A)을 보는 첫 독립 숫자다. 바닥 변경(B)과의 구분은 여전히 미해결(D-1006 3항).
+3. **후보 JSON**(`use: review-only`): `image_to_map`, `plane_height_m`, `rms_m`, `heldout_rms_m`, `n_*`, `spread`, `valid_region_m`(인라이어 볼록 껍질을 바닥 기준으로 옮기고 5 cm 키움), 승인 기록이 있으면 `approved_delta_m`(같은 픽셀을 두 보정이 놓는 거리의 중앙값·p90). 후자가 카메라 이동(A)을 보는 첫 독립 숫자다. 바닥 변경(B)과의 구분은 여전히 미해결(D-1006 3항).
 4. **연결하지 않는다.** Fleet 저장·API·콘솔·Vision `from_record`·`marker_pose`는 바뀌지 않는다. 문턱(0.25·12·20 s·0.05 m 등)은 한 사건에서 잡은 시작값이고 근거가 아니다. 기록된 주행으로 조정한다.
 
 ### 다음 증분 (각각 별도 증거·ADR)
@@ -31,4 +31,5 @@
 
 - 카메라 위치와 무관한 보정의 독립 증거 경로가 생겼지만 **오늘은 아무 동작도 바뀌지 않는다.** 실제 로봇이 화면 안을 천천히 달리는 기록이 있어야 처음으로 쓸모가 생긴다.
 - 사람이 해야 하는 일: 기체 하나를 `LOCALIZED` 상태로 카메라 시야 안에서 0.15 m/s 이하로 20 s 이상, 시야 대부분을 가로지르게 달리게 하고 그 동안의 Vision 마커 픽셀과 Fleet 자세 기록 확보(수집기 증분).
+- 한계: 홀드아웃 칸은 RANSAC 합의에 이미 든 점에서 고르므로 홀드아웃 RMS는 최대 0.05 m까지 낙관적이다. 비유한 잔차는 `camera_not_solvable`이다.
 - 시험: `operations/overhead/test/test_correspondence.py`(ceiling_north 모델 합성 주행: 트랙 약 40 %만 보임, 바닥 정확도 < 2 cm, 공선·무작위 픽셀·낡은 표본 거절). 호스트 pytest는 현장 수용을 대신하지 않는다.
