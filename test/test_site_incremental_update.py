@@ -91,7 +91,7 @@ def test_invalid_reuse_proof_is_rejected(candidate, value):
     (["deploy/site/requirements-account.txt"], {"account"}),
     (["deploy/site/requirements-monitoring.txt"], {"monitoring"}),
     (["applications/monitoring/web/monitoring.js"], {"monitoring"}),
-    (["shared/web/theme.js"], {"fleet", "monitoring"}),
+    (["shared/web/theme.js"], {"fleet", "account", "monitoring"}),
     (["deploy/site/site_db.py"], {"fleet", "account"}),
     (["contracts/foundation/core_common/protocol/account_access.py"], {"fleet", "vision", "account"}),
 ])
