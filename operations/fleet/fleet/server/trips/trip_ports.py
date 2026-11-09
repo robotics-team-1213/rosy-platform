@@ -144,10 +144,12 @@ class TripConfig:
     junction_expires_s: float = 15.0
     #: A lane robot this close to its last place (after the stop went out) has arrived.
     arrive_lane_m: float = 0.15
-    #: The D-463 ``DONE_M``: a free robot this close to the end has arrived.
-    arrive_free_m: float = 0.05
-    #: A free robot this close to a segment's end is on the next segment.
-    advance_free_m: float = 0.05
+    #: A free robot this close to the end has arrived. D-1003 4: each segment end is a Nav2 goal and Nav2 stops
+    #: anywhere inside its xy_goal_tolerance (0.10 m, nav2_params.yaml) as AMCL sees it; Fleet's pose differs by
+    #: the localization error too (SIM run 8: stopped 0.101 m off, stall). Same margin as arrive_lane_m.
+    arrive_free_m: float = 0.15
+    #: A free robot this close to a segment's end is on the next segment (the same margin).
+    advance_free_m: float = 0.15
     #: CORE idle (or a newer seq) this close to the place means the instruction was carried out.
     pass_window_m: float = 0.3
     #: The pose is on the next lane once it is this far along it (and closer to it).

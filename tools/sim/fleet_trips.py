@@ -61,6 +61,10 @@ SETTLE_AFTER_S = 10.0
 #: --lap via place: the west road's west side, where the straight rosy_02 trip starts.
 LAP_VIA = ('west', 'rev', 1.00)
 TERMINAL = ('arrived', 'canceled', 'stopped', 'failed')
+#: --nav (D-1003): (tx, ty, yaw) of the site map from the world. The site map is the world turned and moved, so a
+#: free goal sent in site coordinates lands metres off each robot's own Nav2 map (the world map); arriving proves
+#: Fleet sent it in the robot's frame.
+NAV_SITE_FROM_WORLD = (2.0, 3.0, math.pi / 2)
 #: Marks this run's children so cleanup never touches a parent shell or another run.
 MARK = 'FLEET_TRIPS_RUN'
 RENDER = {'cpu': {'LIBGL_ALWAYS_SOFTWARE': '1', 'MESA_LOADER_DRIVER_OVERRIDE': 'llvmpipe'},
@@ -80,6 +84,41 @@ def lane_pose(graph, segment, direction, s):
             return a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1]), math.atan2(b[1] - a[1], b[0] - a[0])
         walked += step
     raise ValueError(f'{segment} is shorter than {s} m')
+
+
+def to_site(pose, nav=True):
+    """A world (x, y[, yaw]) in the run's site frame; unchanged without --nav."""
+    if not nav:
+        return tuple(pose)
+    tx, ty, turn = NAV_SITE_FROM_WORLD
+    c, s = math.cos(turn), math.sin(turn)
+    xy = (tx + c * pose[0] - s * pose[1], ty + s * pose[0] + c * pose[1])
+    return xy + tuple(math.atan2(math.sin(a + turn), math.cos(a + turn)) for a in pose[2:3])
+
+
+def nav_site_map(base):
+    """--nav: the lane graph import in the site frame with every edge ``free`` (Fleet drives it with Nav2 goals).
+    Crosswalks are lane-drive checks and are left out."""
+    turn = lambda a: None if a is None else to_site((0.0, 0.0, a))[2]  # noqa: E731
+    places = [dict(p, x=to_site((p['x'], p['y']))[0], y=to_site((p['x'], p['y']))[1], yaw=turn(p.get('yaw')),
+                   exit_yaw=turn(p.get('exit_yaw'))) for p in base['places']]
+    edges = [dict(e, drive_mode='free', polyline=[list(to_site(q)) for q in e['polyline']]) for e in base['edges']]
+    return {**base, 'places': places, 'edges': edges, 'crosswalks': []}
+
+
+def cyclone_profile(root, nav=False):
+    """The localhost DDS profile; --nav adds two Nav2 stacks, past Cyclone's default 9 automatic participant indexes
+    on a unicast-only loopback (run 1: amcl, planner_server and loc_assist died with "no free participant index").
+    120 indexes use 240 ports, inside one domain's 250-port stride."""
+    base = REPO / 'middleware/devices/pinky/bringup/config/cyclonedds_localhost.xml'
+    if not nav:
+        return base
+    discovery = ('    <Discovery>\n      <ParticipantIndex>auto</ParticipantIndex>\n'
+                 '      <MaxAutoParticipantIndex>120</MaxAutoParticipantIndex>\n    </Discovery>\n')
+    xml = base.read_text(encoding='utf-8').replace('    </General>\n', '    </General>\n' + discovery, 1)
+    assert '<MaxAutoParticipantIndex>' in xml
+    (root / 'cyclonedds_nav.xml').write_text(xml, encoding='utf-8')
+    return root / 'cyclonedds_nav.xml'
 
 
 def plan_trips(graph):
@@ -112,16 +151,17 @@ def layout(graph, lap=False):
             {'rosy_01': {'to': 'lap_start', 'via': ['lap_via'], 'start_at': 'lap_start', 'speed_cap': SPEED_CAP}})
 
 
-def seed_site_map(tasks_db, lap=False):
+def seed_site_map(tasks_db, lap=False, nav=False):
     """Site map version 1 = the lane graph import plus each trip end as a stop place: a lane trip
     must end at a place (Fleet refuses LANE_END_NOT_A_PLACE). Fleet's own import then finds a map."""
     from fleet.server.site_map_store import SiteMapStore
     from fleet.site_map import SiteMap, from_lane_graph
     base = from_lane_graph(GRAPH, map_id=GRAPH.parent.name).model_dump(by_alias=True)
-    ends = [dict(id=pid, name=pid, kind='stop', x=pose[0], y=pose[1], yaw=pose[2])
+    ends = [dict(id=pid, name=pid, kind='stop', **dict(zip('xy', to_site(pose, nav))), yaw=to_site(pose, nav)[2])
             for pid, pose in layout(yaml.safe_load(GRAPH.read_text(encoding='utf-8')), lap)[1].items()]
     # D-573 rev 8: the surveyed walls of this world from its site map (the lane graph has none)
-    walls = json.loads((REPO / 'deploy/site/site-maps/map_v2_fleet-v5.json').read_text(encoding='utf-8'))['walls']
+    walls = [] if nav else json.loads((REPO / 'deploy/site/site-maps/map_v2_fleet-v5.json').read_text(encoding='utf-8'))['walls']
+    base = nav_site_map(base) if nav else base
     SiteMapStore(Path(tasks_db)).import_if_empty(SiteMap.model_validate({**base, 'places': base['places'] + ends,
                                                                          'walls': walls}),
                                                  source=GRAPH.name)
@@ -145,6 +185,21 @@ def call(url, token, method='GET', body=None, log=None):
         log.write(json.dumps(dict(t=round(time.time(), 2), method=method, url=url, body=body,
                                   status=code, response=value)) + '\n')
     return code, value if isinstance(value, dict) else {'value': value}
+
+
+def localize(core, token, pose, log=None):
+    """--nav: True once CORE reports LOCALIZED in its map frame. A robot in CANDIDATES gets the operator's
+    answer, its spawn pose on its own (world) map (D-395 `human` decision, as a person sets it in the field);
+    run 2-3 waited in CANDIDATES on the symmetric map and Fleet refused every goal (ROBOT_MAP_POSE_UNKNOWN)."""
+    _, state = call(f'{core}/api/v1/robot/state', token)
+    loc = state.get('localization') or {}
+    if loc.get('state') == 'LOCALIZED' and loc.get('pose_frame') == 'map':
+        return True
+    if loc.get('state') == 'CANDIDATES' and loc.get('request_id'):
+        call(f'{core}/api/v1/localization/decision', token, 'POST', {
+            'request_id': loc['request_id'], 'source': 'human',
+            'pose': dict(zip(('x', 'y', 'yaw'), pose))}, log)
+    return False
 
 
 def until(deadline_s, check, every=1.0):
@@ -183,7 +238,7 @@ def stop(run_id):
 SKIP_CHECKS = {'crosswalk': 'crosswalk_gate_enabled', 'lane_return': 'recovery_local_enabled'}
 
 
-def write_run(root, run_id, partition, reservations, stall_s=None, *, route_guide=False, skip=()):
+def write_run(root, run_id, partition, reservations, stall_s=None, *, route_guide=False, skip=(), nav=False):
     """CORE overlays, Fleet manifest/site/users and the D-725 binding. Returns the operator token."""
     base = yaml.safe_load((GAZEBO / 'config/map_v2_fleet_core.yaml').read_text(encoding='utf-8'))
     sensors = yaml.safe_load((GAZEBO / 'config/sim_sensors_core.yaml').read_text(encoding='utf-8'))
@@ -230,7 +285,7 @@ def write_run(root, run_id, partition, reservations, stall_s=None, *, route_guid
     binding = dict(run_id=run_id, epoch=1, world='map_v2_fleet', map_id='map_v2_fleet', map_revision=1,
                    source_revision=revision, world_sha256=digest(WORLD), graph_sha256=digest(GRAPH),
                    urdf_sha256=digest(URDF), domain_id=reservations.ros_domain_id, partition=partition,
-                   map_from_world=[0.0, 0.0, 0.0],
+                   map_from_world=list(NAV_SITE_FROM_WORLD) if nav else [0.0, 0.0, 0.0],
                    robots=[dict(robot_id=ns, model=ns, frame_id=ns + '/odom') for ns in ROBOTS])
     (root / 'binding.json').write_text(json.dumps(binding), encoding='utf-8')
     for name in ('robots.yaml', 'users.yaml'):
@@ -312,7 +367,7 @@ def run(args):
     root = Path(tempfile.mkdtemp(prefix='fleet-trips-'))
     operator = write_run(root, run_id, partition, reservations, args.stall_s,
                          route_guide=bool(args.learned_lane_pointer) and args.learned_paint_target == 'drivable',
-                         skip=args.skip_check)
+                         skip=args.skip_check, nav=args.nav)
     manifest = yaml.safe_load((root / 'robots.yaml').read_text(encoding='utf-8'))['robots']
     rest = {row['robot_id']: row['token'] for row in manifest}
     cores = {row['robot_id']: row['base_url'] for row in manifest}
@@ -323,11 +378,13 @@ def run(args):
     spawns, places, requests = layout(yaml.safe_load(GRAPH.read_text(encoding='utf-8')), mode)
     env = dict(os.environ, GZ_PARTITION=partition, ROS_DOMAIN_ID=str(reservations.ros_domain_id), GZ_IP='127.0.0.1',
                ROS_AUTOMATIC_DISCOVERY_RANGE='LOCALHOST', RMW_IMPLEMENTATION='rmw_cyclonedds_cpp',
-               CYCLONEDDS_URI='file://' + str(REPO / 'middleware/devices/pinky/bringup/config/cyclonedds_localhost.xml'),
-               FLEET_TRIPS_LAP=args.scenario or ('1' if args.lap else ''), **RENDER[args.render], **{MARK: run_id})
+               CYCLONEDDS_URI='file://' + str(cyclone_profile(root, args.nav)),
+               FLEET_TRIPS_LAP=args.scenario or ('1' if args.lap else ''), FLEET_TRIPS_NAV='1' if args.nav else '', **RENDER[args.render], **{MARK: run_id})
     launch = ['ros2', 'launch', 'gz_sim', 'map_v2_fleet_multi_real.launch.py', 'map_variant:=.',
               f'run_spec:={root / "run_spec.yaml"}',
               'spawn_poses:=' + ';'.join('%.5f,%.5f,%.6f' % tuple(spawns[ns]) for ns in ROBOTS)]
+    if args.nav:  # D-1003: each robot runs Nav2 + AMCL on the world map (gz_multi mode nav)
+        launch.append('nav_mode:=nav')  # uncomposed: run 4's composed containers loaded no Nav2 node
     if args.learned_lane_pointer:
         launch += [f'learned_lane_pointer:={args.learned_lane_pointer}',
                    f'learned_paint_target:={args.learned_paint_target}']
@@ -340,7 +397,7 @@ def run(args):
                   ports=[*reservations.api_ports, reservations.console_port],
                   learned_lane_pointer=args.learned_lane_pointer or None, render=args.render,
                   learned_paint_target=args.learned_paint_target if args.learned_lane_pointer else None,
-                  lap=args.lap, scenario=args.scenario, skipped_checks=sorted(args.skip_check), stall_s=args.stall_s, spawns=spawns, places=places, requests=requests, load_start=os.getloadavg())
+                  lap=args.lap, nav=args.nav, scenario=args.scenario, skipped_checks=sorted(args.skip_check), stall_s=args.stall_s, spawns=spawns, places=places, requests=requests, load_start=os.getloadavg())
     log = (out / 'api-log.jsonl').open('w', buffering=1)
     try:
         with (out / 'launch.log').open('w') as launch_log, (out / 'fleet.log').open('w') as fleet_log:
@@ -360,10 +417,16 @@ def run(args):
                 result['camera'] = result['localized'] and until(120, lambda: all(
                     call(f'{cores[ns]}/api/v1/vision/front/status', rest[ns])[1].get('available') is True
                     for ns in ROBOTS), 2.0)
+                if result['camera'] and args.nav:
+                    result['core_localized'] = until(120, lambda: all(
+                        localize(cores[ns], rest[ns], spawns[ns], log) for ns in ROBOTS), 3.0)
+                    result['core_localization'] = {
+                        ns: call(f'{cores[ns]}/api/v1/robot/state', rest[ns])[1].get('localization') for ns in ROBOTS}
                 if result['camera']:
                     time.sleep(args.settle_s)  # observers and lane keepers settle, as the lap probe does
                     result['recorder_ready'] = not args.record or Path(str(out / 'observations.jsonl') + '.ready').exists()
-                    result['robots'] = drive(fleet, operator, spawns, places, requests, args.budget_s, log,
+                    site = lambda poses: {k: to_site(v, args.nav) for k, v in poses.items()}  # noqa: E731
+                    result['robots'] = drive(fleet, operator, site(spawns), site(places), requests, args.budget_s, log,
                                              core=lambda ns: call(f'{cores[ns]}/api/v1/line-follow', rest[ns])[1])
     finally:
         log.close()
@@ -482,7 +545,8 @@ def fleet_console(binding_path, cli_args):
 
     app_module.create_app = create_app
     mode = os.environ.get('FLEET_TRIPS_LAP', '')
-    seed_site_map(cli_args[cli_args.index('--tasks-db') + 1], lap=mode == '1' or mode)
+    seed_site_map(cli_args[cli_args.index('--tasks-db') + 1], lap=mode == '1' or mode,
+                  nav=os.environ.get('FLEET_TRIPS_NAV') == '1')
     return fleet_main(cli_args)
 
 
@@ -511,7 +575,11 @@ def main(argv=None):
     parser.add_argument('--settle-s', type=float, default=10)   # observers settle in a few seconds (30 s cost every run)
     parser.add_argument('--budget-s', type=float, default=240, help='wall time for both trips (a --lap gets at least 900)')
     parser.add_argument('--stall-s', type=float, help="Fleet's trip stall_s (wall clock; default 20 s), scaled for a slow sim")
+    parser.add_argument('--nav', action='store_true',
+                        help="D-1003: free trips driven by each robot's Nav2 on the world map, the site map turned and moved")
     args = parser.parse_args(argv)
+    if args.nav and (args.lap or args.scenario):
+        parser.error('--nav runs the two straight trips only')
     if args.learned_paint_target == 'drivable' and not args.learned_lane_pointer:
         parser.error('--learned-paint-target drivable needs --learned-lane-pointer')
     return run(args)
