@@ -14636,6 +14636,7 @@ osy-d395-s1d\`.
 - 증거: 11-08 `land-speed-admission` 착지에서 시험 1건짜리 묶음 `test_omx_segments_browser.py`가 함께 돌 때 실패하고 혼자 통과해 LOAD-FLAKY로 판정됐는데, 그보다 먼저 "0 passed, 0 skipped"로 멈췄다.
 - gate 변화: 실패만 있는 브라우저 묶음은 다른 묶음과 같은 판정을 받는다(NEW면 멈추고, LOAD-FLAKY면 계속).
 - CE: 해당 없음 — 원인과 규칙이 코드와 회귀 시험에 남는다.
+
 ## 2026-11-08 · uncommitted · fix(land): 공백·`\u` 이스케이프가 든 매개변수 시험 id는 함수 단위로 다시 돌린다
 - 변경: `land_checks._ids`가 매개변수 부분에 공백이나 `\`가 있는 NEW id를 `path::test` 함수 id로 바꾸고 중복을 없앤다
 - 증거: feat/control-unit-remote-peer 착지가 `test_fleet_estop_partial_and_unknown_are_visible_on_phone[response1-비…-index.html]`를 혼자 다시 돌리다 "no tests ran"(exit 4)으로 판정 없이 멈췄고, main 대조도 같은 이유로 판정이 없었다
@@ -14691,6 +14692,14 @@ osy-d395-s1d\`.
 - 증거: `test_recheck_runs_a_legacy_browser_red_with_the_opt_in`, 로컬 `test_land_mainred*`·`test_land_nightly` 27 passed.
 - gate 변화: 없음.
 - CE: 해당 없음 — 원인과 규칙이 코드와 회귀 시험에 남는다.
+
+## 2026-11-09 · uncommitted · fix(git): `* text=auto`로 텍스트는 늘 LF로 저장
+
+- 변경: `.gitattributes` 첫 규칙 `* text=auto`. autocrlf를 끄고 커밋해도 텍스트는 LF로 들어간다. 체크아웃은 그대로 core.autocrlf를 따른다. 뒤 규칙(`-text`, `eol=lf`)이 우선한다.
+- 근거: `tools/land_mainred.py`가 10-27부터 CRLF로 저장돼 LF 브랜치마다 전체 충돌(fix/eol-guard가 두 파일 정규화·검사·병합 처리). main 488dab2970에서 `git add --renormalize .`가 바꾸는 파일은 그 두 개뿐이었다.
+- 증거: 원격 `.gitattributes`를 읽는 시험.
+- gate 변화: 없음.
+- CE: 기존 교훈 갱신은 fix/eol-guard에 있다(`docs/solutions/workflow-issues/autocrlf-false-commit-a-rewrites-tree-to-crlf-2026-11-01.md`).
 
 ## 2026-11-09 · uncommitted · fix(land): CRLF를 들이는 브랜치 거절, 병합은 -X renormalize
 

@@ -10,6 +10,7 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-1006 | 지도·보정이 현실과 어긋난 것을 먼저 알아챈다 — 보정 건강 상태와 선택 게이트, 자동 재보정은 독립 기준이 생길 때까지 규정만. [전문](../adr/D-1006-calibration-health-before-adaptation.md) | Accepted (2026-11-09, 사용자 지시; SOURCE·호스트 시험까지, 현장 수용 없음) |
 | D-1003 | Fleet은 free 구간의 Nav2 목표를 로봇 자기 지도 프레임으로 바꿔 보낸다. [전문](../adr/D-1003-nav2-free-goals-in-the-robot-map-frame.md) | Accepted (2026-11-09, 사용자 지시; SOURCE·Gazebo SIM까지, 기체·현장 수용 없음) |
 | D-922 | Pinky는 차분하고 호기심 많은 동료로 표현하고 방향성 눈인사와 졸린 대기를 연결한다 | Accepted (2026-10-30, 표현 경험·책임 경계; 구현·실물 수용 별도) |
 | D-991 | PC 정비는 Fleet 안의 화면으로 나누고, 재부팅해도 되는지는 그 PC의 도우미가 판단한다. [전문](../adr/D-991-pc-maintenance-boundary-and-reboot-gate.md) | Accepted (2026-11-07, 사용자 결정; 결정 1·2 구현, 3~6 후속, 각 PC 설치 전) |

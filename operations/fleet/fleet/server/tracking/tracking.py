@@ -63,7 +63,8 @@ class TrackingService:
     def __init__(self, sources: Sequence[SightingSource], *, calibrations: TrackingCalibrationStore,
                  clock: Callable[[], float] = time.time, lease_s: float = DETECTION_LEASE_S,
                  state_fresh_s: float = STATE_FRESH_S, gate_m: float = GATE_M,
-                 drift_provider: Optional[Callable[[], Mapping[str, dict]]] = None) -> None:
+                 drift_provider: Optional[Callable[[], Mapping[str, dict]]] = None,
+                 health=None) -> None:
         # drift_provider (calibration-drift watch, tracking_drift.py): per-source server
         # verdicts embedded in the snapshot's source rows. Display only; None keeps the
         # rows without the field's value (calibration_drift stays null).
@@ -91,6 +92,8 @@ class TrackingService:
         self.state_fresh_s = state_fresh_s
         self.gate_m = gate_m
         self._drift_provider = drift_provider
+        #: D-1006 CalibrationHealth (the drift watch's): state on the rows, optional sighting gate.
+        self.health = health
         self._sources = {source.source_id: _SourceState() for source in self.sources}
         self._states: dict[str, tuple[dict, float]] = {}
         #: D-472 IdentityService (set by the app): its challenge rides the config, bindings follow detections.
@@ -309,6 +312,9 @@ class TrackingService:
                 # Server-side calibration-drift verdict (tracking_drift.py); null when the
                 # watch never produced one for this source. Display only.
                 "calibration_drift": drift.get(source.source_id),
+                # D-1006: fresh/drifting/mismatch/insufficient_coverage/unknown; null without a watch.
+                "calibration_health": (self.health.view(source.source_id)
+                                       if self.health is not None else None),
             })
             seen = ([Seen(d.x, d.y, d.footprint_m, d.score) for d in payload.detections
                      if d.marker_id is None]
@@ -379,9 +385,15 @@ class TrackingService:
         return entry[0]
 
     def approved_revision(self, source: SightingSource) -> Optional[str]:
-        """D-587 2: the approved record's revision for this source's map, else None."""
+        """D-587 2: the approved record's revision for this source's map, else None.
+
+        D-1006: None as well while the optional health gate blocks the source, so camera
+        poses and auto-locate stop anchoring on a fit the picture no longer supports.
+        """
         record = self.calibrations.get(source.source_id)
         if record is None or record.map_id != source.map_id:
+            return None
+        if self.health is not None and self.health.blocks(source.source_id, record.calibration_revision):
             return None
         return record.calibration_revision
 
