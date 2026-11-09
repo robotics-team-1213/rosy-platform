@@ -14665,3 +14665,25 @@ osy-d395-s1d\`.
 - 검증: 문서 하네스·독립 검토 및 공식 원격 영향 시험 대상이다. 설계 수치는 구현자의 위임 결정이며 사용자 직접 측정값·장치 수용값으로 쓰지 않는다.
 - gate 변화: 없음. 감지→표현 producer·renderer 연결과 실제 LCD·LED 수용은 후속 구현·검증이다.
 - CE: 해당 없음 — 미결 설계 결정의 구체화이며 운영·장치 장애 해결이 아니다.
+
+## 2026-11-09 · uncommitted · chore(publish): 게시용 명시 FULL 근거
+
+- 변경: 코드 변경 없음. 공개 main 게시(D-868)에 필요한 명시 `--tests full` 착지 기록을 남기려는 기록 항목이다. 11-08 FULL 착지(chore/publish-full-20261108)는 그 뒤 고친 MAIN-RED 브라우저 시험에 막혀 멈췄고, 로컬 main 4f9e225d77에서 새로 돈다.
+- 증거: 이 착지의 FULL 기록이 게시 근거다.
+- gate 변화: 없음.
+- CE: 해당 없음 — 게시 절차 실행이며 장애 해결이 아니다.
+
+## 2026-11-09 · e94b732208 · D-922 추가 결정 — Pinky 상황 표정 8종
+
+- 변경: 여러 모델 디자인 패널에서 고른 doze·scan·lost·worry·lowbat·cheer·thinking·searching을 추가했다. 상황 표정은 `face_screen.situation_face`가 기존 face-inputs 필드로 고르고(복구 > dock_failed > line_follow_hold > 보정 > 진행 중 반응 > PLANNING > 배터리 20% 미만 > IDLE 충전), cheer는 함께 나타난 여러 사람의 인사다. native tick은 상황 표정을 CORE 표정·반응 만료보다 우선한다. 주의 램프 아래에서는 cheer·doze를 쓰지 않는다.
+- 자산: 새 GIF 8개는 `make_faces.py`로 생성했다. 32×24 실루엣이 기존·새 표정 모두와 6% 이상(최소 6.38%) 다르도록 디자인 위치·두께를 조정했다. 기존 8종 GIF는 바이트 단위로 같다.
+- 증거: e94b732208 다음 커밋(시험 기대 갱신)에서 원격 집중 시험 1907 passed, 1 skipped; known_failures NEW 0.
+- gate 변화: 없음. 호스트 렌더·시험은 실물 LCD 판독·ARM64·DEVICE/FIELD 수용이 아니다.
+- CE: 해당 없음 — 설계 판단은 ADR 추가 결정과 회귀 시험에 남는다.
+
+## 2026-11-09 · uncommitted · fix(land): 옛 브라우저 MAIN-RED 기록도 opt-in으로 재확인
+
+- 변경: `land_mainred.state()`가 env 없이 남은 `*_browser.py::` 빨간 기록에 `ROSY_RUN_BROWSER_TESTS=1`을 붙인다. nightly가 env를 남기기 전의 기록(11-08 console_queue_inline size1)은 recheck에서 건너뛰어져 main에서 통과해도 닫히지 않았다.
+- 증거: `test_recheck_runs_a_legacy_browser_red_with_the_opt_in`, 로컬 `test_land_mainred*`·`test_land_nightly` 27 passed.
+- gate 변화: 없음.
+- CE: 해당 없음 — 원인과 규칙이 코드와 회귀 시험에 남는다.
