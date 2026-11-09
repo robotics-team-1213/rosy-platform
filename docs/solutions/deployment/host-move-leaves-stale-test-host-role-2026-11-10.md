@@ -18,7 +18,7 @@ tags: [lab-hosts, test-hosts, host-roles, landing-stop, remote-pytest]
 
 2026-11-09에 robttt가 통합관제 site 호스트에서 OMX 셀 호스트(rosy-arm-cell, 4 cores)로
 역할을 바꿀 때 `private/lab-hosts.json`의 `site_host`·`omx_hosts`는 고쳤지만 옛 강호스트
-역할이던 `test_hosts`의 `robttt@100.82.51.8`은 그대로 남았다. 그 뒤 `fix/arm-cell-host-role`
+역할이던 `test_hosts`의 `robttt@<test-host-ip>`(주소는 `private/lab-hosts.json`)은 그대로 남았다. 그 뒤 `fix/arm-cell-host-role`
 착지가 두 번 "`pytest … exited 255`"로 멈췄다. 작은 시험 묶음은 그 호스트에서 통과했지만
 큰 묶음(`test --ignore=test_platform_g1_timing.py`)은 출력 중간에 끊겼고(62바이트 로그),
 remote_pytest의 "below pytest floor 6 cores/4 GB" 경고는 디스패치를 막지 않았다. 두 번 모두
