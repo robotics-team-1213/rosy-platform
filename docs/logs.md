@@ -14705,3 +14705,7 @@ osy-d395-s1d\`.
 - 증거: 원격 시험 로그는 착지 시점의 실행 기록을 따른다(이 행 작성 시점 미실행).
 - gate 변화: 없음.
 - 결정: D-1011 Accepted.
+## 2026-11-10 · uncommitted · fix: 독립 검토 11건 — 관제 단위 개명의 접두사·스크립트·감사·정규화 보강 (D-1011)
+- 변경: stop·information 경로가 service principal의 `control-unit:` 접두사를 먼저 확인(꼬리만 같은 위조 거절, 시험 추가). 정지 snapshot/reconcile 경로가 origin 경로 매개변수를 정규화(CELL-A 조회가 이행된 ARM-CELL 행에 닿음, 시험 추가). `ControlUnitStore`는 실제로 행을 고쳤을 때만 감사 행을 씀(새 DB 무기록, 시험 추가). 호스트 스크립트 `rename_arm_cell_runtime.sh` 재작성: OPERATOR_HOME(/home/robttt 기본) 기반 세션 lock(`flock -n`, 없으면 거부)·작업 lock·motor-health(`rosy.motor-health.v1`, 안전 상태만) 검사, 스택 선행 down 후 백업·볼륨 복사·모든 파일 sha256 대조, 디렉터리 이동+symlink(ln -sfn 중첩 제거), compose 키(cell_a_data/cell_a_backend)·경로 재작성과 fleet 볼륨 mount 확인, healthcheck 없으면 건강 아님, 실패 시 구 스택 자동 롤백, rm -r 제거. ADR·계획·배포 문서에 peer 이름(`peer-cell-a`)·token 파일 개명이 나중 단계임을 명시.
+- 증거: 원격 시험 로그는 착지 시점의 실행 기록을 따른다.
+- gate 변화: 없음.

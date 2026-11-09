@@ -45,9 +45,6 @@ def migrate_unit_identifier(connection, unit_id):
     old = next((source for source, target in UNIT_IDENTIFIER_ALIASES.items() if target == unit_id), None)
     if old is None:
         return
-    connection.execute("""CREATE TABLE IF NOT EXISTS fleet_control_unit_identifier_events (
-        event_id INTEGER PRIMARY KEY AUTOINCREMENT, from_id TEXT NOT NULL, to_id TEXT NOT NULL,
-        applied_at TEXT NOT NULL)""")
     tables = {row[0] for row in connection.execute(
         "SELECT name FROM sqlite_master WHERE type='table'")}
     rewritten = 0
@@ -74,11 +71,14 @@ def migrate_unit_identifier(connection, unit_id):
                                        (json.dumps(migrated, sort_keys=True,
                                                    separators=(",", ":"), allow_nan=False), rowid))
                     rewritten += 1
-    if rewritten or not connection.execute(
-            "SELECT 1 FROM fleet_control_unit_identifier_events LIMIT 1").fetchone():
-        connection.execute(
-            "INSERT INTO fleet_control_unit_identifier_events (from_id,to_id,applied_at) VALUES (?,?,?)",
-            (old, unit_id, datetime.now(timezone.utc).isoformat()))
+    if not rewritten:  # fresh or already-migrated journal: nothing renamed, no audit row
+        return
+    connection.execute("""CREATE TABLE IF NOT EXISTS fleet_control_unit_identifier_events (
+        event_id INTEGER PRIMARY KEY AUTOINCREMENT, from_id TEXT NOT NULL, to_id TEXT NOT NULL,
+        applied_at TEXT NOT NULL)""")
+    connection.execute(
+        "INSERT INTO fleet_control_unit_identifier_events (from_id,to_id,applied_at) VALUES (?,?,?)",
+        (old, unit_id, datetime.now(timezone.utc).isoformat()))
 
 
 def _json(value):

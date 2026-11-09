@@ -5430,3 +5430,7 @@
 - 변경: `control_unit_config.py` `UNIT_IDENTIFIER_ALIASES`·`canonical_unit_id`, `unit()` 별칭 해석. `load_control_unit` peers key 별칭(이중 정의 거절 유지), 이웃 service principal 별칭. routes의 `peer_id`·stop `parent`·information `reader`/`scope` 정규화. `ControlUnitStops` ingress 정규화. `ControlUnitStore` identity 충돌 전 멱등 재작성 + 감사 행. 시험 기대값 `ARM-CELL`/`arm-cell`로, 신규 `test_control_unit_identifier_rename.py`.
 - 증거: 원격 시험 로그는 착지 시점의 실행 기록을 따른다(이 행 작성 시점 미실행).
 - gate 변화: 없음. 현장 전환·수용은 별도.
+## 2026-11-10 · uncommitted · fix: 관제 단위 개명의 접두사 확인·origin 정규화·감사 행 조건 (D-1011)
+- 변경: `control_unit_stop_routes.py` `parent`와 `control_unit_information_routes.py` `reader`가 principal_id를 자르기 전 `control-unit:` 접두사를 확인(정지·정보 경로 모두). stop snapshot/reconcile 경로의 origin 매개변수 `canonical_unit_id` 정규화. `control_unit_store.py` 마이그레이션이 재작성한 행이 있을 때만 감사 테이블·행 생성.
+- 증거: `test_integrated_control_http_pipeline.py` 위조 principal 403 시험, `test_control_unit_identifier_rename.py` origin 정규화·새 DB 무감사 시험. 원격 실행 기록은 착지 시점.
+- gate 변화: 없음.

@@ -15,8 +15,8 @@
 | Compose project (dev 이미지, D-960) | `cell-a` | `arm-cell` |
 | 호스트 설정 디렉터리 | `/etc/rosy/cell-a` | `/etc/rosy/arm-cell` (기존 경로는 symlink 유지) |
 | Docker volume | `cell-a_cell_a_data` | `arm-cell_arm_cell_data` (데이터 복사·검증) |
-| peer TLS 이름/alias (R의 peers url) | `peer-cell-a` | `peer-arm-cell` |
-| 송신 service token 파일 (R 측) | `secrets/r-to-cell-a.token` | `secrets/r-to-arm-cell.token` |
+| peer TLS 이름/alias (R의 peers url) | `peer-cell-a` | 나중 단계: `peer-arm-cell`(R의 peer DNS alias가 서비스 이름에 걸림) |
+| 송신 service token 파일 (R 측) | `secrets/r-to-cell-a.token` | 나중 단계: `secrets/r-to-arm-cell.token`(peer 개명과 함께) |
 | 수신 service principal (users 파일) | `control-unit:CELL-A` | `control-unit:ARM-CELL` |
 
 소스 코드는 이 id들을 하드코드하지 않는다. `unit_id`·`manifest`·`peers`는 모두 `control-unit.yaml`(private)에서 오고, 코드(`control_unit_config.py`·`control_unit_runtime.py`)는 검증만 한다. 그래서 코드 변경은 **입력 별칭 수용 + DB 마이그레이션**이 중심이다.
@@ -65,7 +65,7 @@
 
 ## 3. 호스트 전환 (Stage A 스크립트, 실행하지 않는다)
 
-`tools/ops/rename_arm_cell_runtime.sh` — 셀 호스트에서 dry-run 기본, `--apply`일 때만 변경. 팔 세션/작업/motor torque 확인 후 백업 → 볼륨 복사·sha256 검증 → `/etc/rosy/arm-cell` 생성(구 경로 symlink) → Compose project `arm-cell`로 재기동 → 건강 확인 → 롤백 안내 출력. R 측(관제 PC)의 `control-unit.yaml` 갱신(peers key·manifest revision)은 같은 보수 창구에 사람이 한다.
+`tools/ops/rename_arm_cell_runtime.sh` — 셀 호스트에서 dry-run 기본, `--apply`일 때만 변경. 팔 세션 lock(없으면 거부)·작업 lock·motor-health 상태 확인 후 **스택을 먼저 끄고**(sqlite/WAL 정합) 백업 → 볼륨 복사·모든 파일 sha256 대조 → `/etc/rosy/cell-a`를 `/etc/rosy/arm-cell`로 이동하고 compose 키·경로 재작성, 구 경로 symlink → Compose project `arm-cell` 재기동 → fleet 볼륨 mount 확인·건강 확인(healthcheck 없으면 건강 아님). 실패 시 구 스택을 자동 롤백. 서비스 이름 `peer-cell-a`는 R의 peer DNS alias 때문에 그대로(나중 단계). R 측(관제 PC)의 `control-unit.yaml` 갱신(peers key·manifest revision)은 같은 보수 창구에 사람이 한다.
 
 ## 4. 완료 기준
 

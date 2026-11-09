@@ -105,8 +105,8 @@
 
 ## 최근 기록
 
+- 2026-11-10 · uncommitted · fix: 관제 단위 개명의 접두사 확인·origin 정규화·감사 행 조건 (D-1011)
 - 2026-11-10 · uncommitted · refactor: 관제 단위 id CELL-A → ARM-CELL 별칭 수용과 원장 마이그레이션 (D-1011)
 - 2026-11-08 · uncommitted · fix: Account 가입·권한 요청 경로를 Fleet 기능표에 등록 (D-993)
 - 2026-11-08 · uncommitted · 관제 화면 파일을 다시 받지 않고 압축해 보낸다
 - 2026-11-08 · uncommitted · feat(fleet): 스테이션 복구 자동 승인, 로봇 화면 답 기록
-- 2026-11-07 · uncommitted · fix(fleet): 배터리 근거 없음·멈춤 사유 분리

@@ -16,6 +16,7 @@ def install_control_information_routes(app, collection, *, authorize, require_vi
         if principal.role == "service":
             if (not collection.config.share_information_with_parent
                     or collection.unit.parent is None
+                    or not principal.principal_id.startswith("control-unit:")
                     or canonical_unit_id(principal.principal_id[len("control-unit:"):])
                     != collection.unit.parent):  # D-1011 alias
                 raise HTTPException(403, detail={"code": "CONTROL_UNIT_PARENT_INFORMATION_NOT_ENABLED"})

@@ -2,13 +2,19 @@
 
 import json
 import sqlite3
+from types import SimpleNamespace
+
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 from core_common.protocol.integrated_control import ControlDispatchFence, ControlStopIngress
 from fleet.server.control_stop_schema import ensure_schema
 from fleet.server.control_unit_config import ControlUnitTopology
 from fleet.server.control_unit_runtime import load_control_unit
+from fleet.server.control_unit_stop_routes import install_control_stop_routes
 from fleet.server.control_unit_stops import canonical_stop_ingress
 from fleet.server.control_unit_store import ControlUnitStore
+from fleet.server.site_auth import SitePrincipal
 
 
 MANIFEST = {"revision": "v1", "units": [
@@ -126,6 +132,48 @@ def test_store_without_the_renamed_unit_leaves_the_journal_alone(tmp_path):
         assert connection.execute(
             "SELECT COUNT(*) FROM sqlite_master WHERE name='fleet_control_unit_identifier_events'"
         ).fetchone()[0] == 0
+
+
+def test_store_on_a_fresh_database_writes_no_rename_audit_row(tmp_path):
+    path = tmp_path / "fresh.sqlite3"
+    store = ControlUnitStore(path, unit_id="ARM-CELL")  # no pre-rename rows exist to rename
+    store.create("R", "arm-1", {"target_unit": "ARM-CELL"}, owner_unit="ARM-CELL",
+                 config_revision="v1")
+    with sqlite3.connect(path) as connection:
+        assert connection.execute(
+            "SELECT COUNT(*) FROM sqlite_master WHERE name='fleet_control_unit_identifier_events'"
+        ).fetchone()[0] == 0
+
+
+def test_stop_routes_canonicalize_the_pre_rename_origin_path_parameter():
+    seen = SimpleNamespace(reads=[], reconciles=[])
+    viewer, operator = SitePrincipal("reader-1", "viewer"), SitePrincipal("operator-1", "operator")
+
+    class Routes:  # the route boundary is under test; the service only records what it received
+        config = SimpleNamespace(accept_parent_stop=False)
+        store = SimpleNamespace(history=lambda: [])
+
+        async def read(self, origin, identity):
+            seen.reads.append((origin, identity))
+            return {"origin_id": origin, "stop_id": identity}
+
+        async def reconcile(self, origin, identity, body, *, actor_id):
+            seen.reconciles.append((origin, identity))
+            return {"origin_id": origin, "stop_id": identity}
+
+    app = FastAPI()
+    install_control_stop_routes(app, Routes(), authorize=lambda: operator,
+                                require_viewer=lambda principal=None: viewer,
+                                require_named_operator=lambda principal=None: operator)
+    attestation = {"expected_generation": 1, "receiver_channels_terminated": True,
+                   "receivers_recommissioned": True, "affected_units": ["ARM-CELL"],
+                   "evidence": "rows were migrated to the renamed origin id"}
+    with TestClient(app) as client:
+        assert client.get("/api/fleet/control-unit/stops/CELL-A/s-1").status_code == 200
+        assert client.post("/api/fleet/control-unit/stops/CELL-A/s-1/reconcile",
+                           json=attestation).status_code == 200
+    assert seen.reads == [("ARM-CELL", "s-1")]
+    assert seen.reconciles == [("ARM-CELL", "s-1")]
 
 
 def test_stop_ingress_canonicalizes_the_pre_rename_target_and_fences():
