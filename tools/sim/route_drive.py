@@ -121,6 +121,11 @@ def build_points(graph, kinds, s_start):
     return points, s
 
 
+def nav2_active(ns, env):
+    out = subprocess.run(['ros2', 'lifecycle', 'get', f'/{ns}/bt_navigator'], env=env, capture_output=True, text=True, timeout=30)
+    return out.stdout.strip().startswith('active')
+
+
 def nav_state(core, token):
     return ft.call(f'{core}/api/v1/navigation/state', token)[1]
 
@@ -231,11 +236,16 @@ def run(args):
                 ft.localize(cores[r], token[r], spawns[r], log) for r in ft.ROBOTS), 3.0))
             # CORE says Nav2, AMCL and the costmaps are active (readiness) before the first goal; without loc_assist
             # nothing else waits for them (the first run sent a goal into a Nav2 that was still starting).
-            if result['localized'] and not args.loc_assist:   # no D-395 node to answer: AMCL gets its start pose from the operator
+            # Nav2 comes up ~15 s after the COREs; CORE's readiness does not wait for it, and an initial pose sent
+            # before AMCL is up is lost. So: bt_navigator active, then the start pose, then a pause.
+            result['nav2_active'] = result['localized'] and ft.until(240, lambda: all(
+                nav2_active(r, env) for r in ft.ROBOTS), 3.0)
+            if result['nav2_active'] and not args.loc_assist:   # no D-395 node to answer: AMCL gets its start pose from the operator
                 for r in ft.ROBOTS:
                     ft.call(f'{cores[r]}/api/v1/localization/initialpose', token[r], 'POST',
                             dict(zip(('x', 'y', 'yaw'), spawns[r])), log)
-            result['nav_ready'] = result['localized'] and ft.until(240, lambda: all(
+                time.sleep(8.0)
+            result['nav_ready'] = result['nav2_active'] and ft.until(240, lambda: all(
                 (nav_state(cores[r], token[r]).get('readiness') or {}).get('ready') is True for r in ft.ROBOTS), 3.0)
             if result['nav_ready']:
                 time.sleep(args.settle_s)
