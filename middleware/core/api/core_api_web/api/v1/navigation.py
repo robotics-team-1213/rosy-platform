@@ -19,12 +19,11 @@ from core_api_web.api.v1.common import (
     stop_ends_trip_lease,
     viewer,
 )
-from core_api_web.api.deps import GOAL_LEASE_MAX_S, AuthContext, get_services, CoreServicesLike
+from core_api_web.api.deps import GOAL_LEASE_MAX_S, MAX_POINTS, AuthContext, RoutePoint, get_services, CoreServicesLike
 from core_api_web.api.errors import ApiError
 from core_api_web.api.grants import NAVIGATE, check_grant
 from core_api_web.api.v1.localization import send_decision
 from core_common.domain.tasks import TaskKind
-from core_features.navigation.route import MAX_POINTS, RoutePoint
 from core_common.protocol.schemas import ScopedNavigationCancelRequest
 from core_api_web.api.v1.navigation_handover import navigation_handover
 
