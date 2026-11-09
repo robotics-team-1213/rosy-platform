@@ -303,7 +303,7 @@ class OverheadLink(
                         }
                     }
                 } catch (_: kotlinx.coroutines.CancellationException) { }
-                catch (_: SiteMoved) { onLost(gen, LinkError.SiteMoved, fatal = false, delayMs = 0) }
+                catch (_: SiteMoved) { onLost(gen, LinkError.SiteMoved, fatal = false, moved = true) }
                 catch (failure: Exception) {
                     // Only a local, definite denial stops the link. A refusal by the site (CredentialUnavailable) or any
                     // transport error is retried: the site may be restarting (2026-11-08 Vision restart stopped the camera).
@@ -332,16 +332,17 @@ class OverheadLink(
     private fun isCurrent(gen: Int): Boolean = synchronized(lock) { running && gen == generation }
 
     /** Drops the socket of [gen] and either retries with backoff or stops for good. */
-    private fun onLost(gen: Int, error: LinkError, fatal: Boolean, slow: Boolean = false, delayMs: Long? = null) {
+    private fun onLost(gen: Int, error: LinkError, fatal: Boolean, slow: Boolean = false, moved: Boolean = false) {
         synchronized(lock) {
             if (!running || gen != generation) return
             socket = null
             expiryJob?.cancel(); expiryJob = null
             generation++
-            if (fatal) {
+            if (fatal || moved) {
+                // A moved site ends this link without a retry: the saved host changed, so the service builds a new one.
                 running = false
             } else {
-                val wait = delayMs ?: if (slow) slowBackoff.nextDelayMs() else backoff.nextDelayMs()
+                val wait = if (slow) slowBackoff.nextDelayMs() else backoff.nextDelayMs()
                 reconnectJob = scope.launch {
                     delay(wait)
                     connect()

@@ -347,11 +347,14 @@ class OverheadLinkTest {
     @Test
     fun siteMovedEndsTheAttemptWithoutStopping() {
         val pairing = PairingUri(server.hostName, server.port, "t", "overhead-1")
-        val l = providerLink(pairing) { throw SiteMoved() }
+        val calls = java.util.concurrent.atomic.AtomicInteger()
+        val l = providerLink(pairing) { calls.incrementAndGet(); throw SiteMoved() }
         l.start()
         val moved = awaitStatus(l) { it.error == LinkError.SiteMoved }
         assertFalse(moved.stopped)
-        assertEquals(0, server.requestCount)
+        // No retry on the old host: the service builds a new link for the saved one (security review).
+        Thread.sleep(1_500)
+        assertEquals(1, calls.get()); assertEquals(0, server.requestCount)
     }
 
     @Test

@@ -46,10 +46,10 @@ class CameraCredentialProvider(private val manager: CameraPeerManager, private v
             manager.install(result, expected, current)
             return CredentialRenewal(result.link.toPairing(), Instant.parse(result.link.expiresAt))
         } catch (failure: PeerRefused) {
-            // 409 is the receiver saying the relationship was revoked or replaced: final. Other refusals are no proof that
-            // the approval is gone (a restarting site answers 4xx): retry slowly instead of stopping.
-            if (failure.status == 409) throw CredentialDenied()
-            throw CredentialUnavailable(failure.status)
+            // Only refusals a restarting or busy site gives are retried slowly; any other 4xx (revoked, unknown, replaced)
+            // keeps the operator-visible stop.
+            if (failure.status in TRANSIENT || failure.status >= 500) throw CredentialUnavailable(failure.status)
+            throw CredentialDenied()
         } catch (_: IllegalArgumentException) { throw CredentialDenied() }
         catch (_: PeerKeyChanged) { throw CredentialDenied() }
         catch (_: PeerApprovalExpired) { throw CredentialDenied() }
@@ -78,10 +78,11 @@ class CameraCredentialProvider(private val manager: CameraPeerManager, private v
             } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled } catch (_: Exception) { continue }
             if (result.relationship.id != relationshipId || result.link.source != original.source || result.link.caPin != original.caPin) continue
             manager.install(result, expected, current)
-            manager.vault.erase(old)
+            runCatching { manager.vault.erase(old) } // best effort: a stale old record is harmless and must not mask the move
             throw SiteMoved()
         }
     }
+    private companion object { val TRANSIENT = setOf(401, 408, 425, 429) }
     private suspend fun CameraPeerClient.awaitRemembered(): CameraConnection = suspendCancellableCoroutine { continuation ->
         continuation.invokeOnCancellation { close() }
         Dispatchers.IO.dispatch(EmptyCoroutineContext, Runnable {
