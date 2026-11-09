@@ -709,6 +709,43 @@ def test_a_lag_that_keeps_rising_while_the_joint_pushes_holds_with_torque_on_the
     assert by_command(status, "run park")[0]["ok"] is True and by_command(status, "run park")[0]["fault"] is None
 
 
+def test_a_jog_path_whose_wrist_strains_holds_with_torque_on_then_retreats_along_the_jogs():
+    # arm_a 2026-11-09 15:09: coordinated jogs toward a reach; wrist_flex rose to PWM 300 of 300 with no chunk
+    # running, so nothing watched below the guard, whose overload cut dropped the extended arm
+    robot = Straining(lambda n: min(2.8, max(0.0, 0.05 * (n - 40))), pwm=300, joint=3)
+    status, clock, ticks = [], [0.0], [0]
+    queue = ["jog shoulder_lift.pos 3 wrist_flex.pos 3"] * 6 + ["retreat", "park", "stop"]
+    r = m.Runner(robot, goto_library(), fps=30, status=status.append, clock=lambda: clock[0],
+                 sleep=lambda s: clock.__setitem__(0, clock[0] + 1 / 30))
+
+    def lines():
+        ticks[0] += 1
+        while queue and queue[0].startswith("jog") and r.fault:
+            queue.pop(0)  # never jog past a hold
+        if not queue or r.chunk or ticks[0] % 20:
+            return []
+        if queue[0] == "retreat":
+            robot.lag = lambda n: 0.0  # backing off: the wrist follows again
+        return [queue.pop(0)]
+
+    r.run(lines)
+    held = by_command(status, "run jog")[0]
+    assert held["ok"] is False and held["contact"] is True and "wrist_flex" in held["fault"]
+    assert held["target"][3] == pytest.approx(held["state"][3], abs=0.01)  # held where it was, torque on
+    jogs = len([s for s in status if s["command"].startswith("jog") and s["ok"]])
+    assert 1 <= jogs < 6  # the hold came before the path's end
+    assert by_command(status, "run retreat")[0]["ok"] is True
+    back = by_command(status, "run retreat")[0]["state"]
+    assert back[1] == pytest.approx(HOME[1], abs=0.5) and back[3] == pytest.approx(HOME[3], abs=0.5)  # where the jogs began
+    assert by_command(status, "run park")[0]["ok"] is True and by_command(status, "run park")[0]["fault"] is None
+
+
+def test_plain_jogs_that_follow_are_not_strain():
+    status = run_with(Straining(lambda n: 0.3, pwm=300, joint=3), goto_library(),
+                      ["jog wrist_flex.pos 3", "jog wrist_flex.pos -3", "stop"])
+    assert not by_command(status, "run jog") and all(s["ok"] for s in status if s["command"].startswith("jog"))
+
+
 @pytest.mark.parametrize("lag, pwm", [
     (lambda n: 2.0, 500),                                # a steady travel lag, even past STRAIN_LAG, is not strain
     (lambda n: min(2.5, max(0.0, 0.05 * (n - 30))), 100),  # rising but hardly pushing: the guard's PWM is low
