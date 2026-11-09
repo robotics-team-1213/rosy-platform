@@ -13,7 +13,7 @@ import pytest
 from deploy.site import build_candidate as builder
 from deploy.site import verify_candidate as verifier
 from test_site_candidate_verifier import (
-    COMMIT, TEST_KEY_ID, _image_blobs, _sha, _verify_with, candidate, _add_account,
+    COMMIT, TEST_KEY_ID, _image_blobs, _sha, _verify_with, candidate, _add_account, _add_monitoring,
 )
 import test_site_autoupdate as site_tests
 from test_site_autoupdate import host
@@ -89,17 +89,23 @@ def test_invalid_reuse_proof_is_rejected(candidate, value):
     (["applications/fleet/web/login.html"], {"fleet", "account"}),
     (["operations/account/rosy_account/web_assets.py"], {"fleet", "account"}),
     (["deploy/site/requirements-account.txt"], {"account"}),
-    (["deploy/site/requirements-monitoring.txt"], set()),
+    (["deploy/site/requirements-monitoring.txt"], {"monitoring"}),
+    (["applications/monitoring/web/monitoring.js"], {"monitoring"}),
+    (["shared/web/theme.js"], {"fleet", "monitoring"}),
     (["deploy/site/site_db.py"], {"fleet", "account"}),
     (["contracts/foundation/core_common/protocol/account_access.py"], {"fleet", "vision", "account"}),
 ])
 @pytest.mark.parametrize('independent_base', [False, True])
-def test_builder_only_builds_and_ships_affected_images(candidate, tmp_path, changed, expected, independent_base):
+@pytest.mark.parametrize('monitoring_base', [False, True])
+def test_builder_only_builds_and_ships_affected_images(candidate, tmp_path, changed, expected, independent_base, monitoring_base):
     if independent_base:
         _add_account(candidate)
     else:
         expected = expected | {'account'}  # First transition must build the missing signed artifact.
-    expected = expected | {'monitoring'}  # The fixture base predates D-1001's own Monitoring image.
+    if monitoring_base:
+        _add_monitoring(candidate)
+    else:
+        expected = expected | {'monitoring'}  # D-1001: the first own-image release must build it
     repo = tmp_path / "repo"
     site = repo / "deploy/site"
     site.mkdir(parents=True)
@@ -139,8 +145,8 @@ def test_builder_only_builds_and_ships_affected_images(candidate, tmp_path, chan
         assert set(saves[0][5:]) == {f"rosy-site-{s}:{NEW}" for s in expected}
     assert not any(c[:2] == ["docker", "pull"] for c in calls)
     for s in set(candidate[2]) - expected:
-        compose = (output / ('deploy/site/compose.account.yaml' if s == 'account' else
-                              'deploy/site/compose.yaml')).read_text()
+        compose = (output / {'account': 'deploy/site/compose.account.yaml',
+                             'monitoring': 'deploy/site/compose.monitoring.yaml'}.get(s, 'deploy/site/compose.yaml')).read_text()
         assert f"rosy-site-{s}:{COMMIT}" in compose
         if s == 'account':
             maintenance = (output / 'deploy/site/compose.account-backup.yaml').read_text()
