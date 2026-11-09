@@ -1,6 +1,7 @@
 # D-530 site PC desired state (role: site). Format: deploy/hosts/common/host-state/manifest.
 # Firewall, stack and Wi-Fi lines touch the network: install applies them only with --approve firewall / wifi.
-# Nightly reboot and Docker upgrade were copied byte for byte from the site PC on 2026-10-09.
+# Nightly reboot and Docker upgrade were copied from the site PC on 2026-10-09; the reboot asks the helper
+# first since 2026-11-09 (D-991): install with --approve /usr/local/sbin/rosy-host-control.
 safe file /etc/systemd/system/rosy-nightly-reboot.timer role/rosy-nightly-reboot.timer
 safe file /etc/systemd/system/rosy-nightly-reboot.service role/rosy-nightly-reboot.service
 safe enabled rosy-nightly-reboot.timer
@@ -23,3 +24,5 @@ approval disabled rosy-site-update.timer
 safe file /etc/systemd/system/rosy-site-autoupdate.service.d/10-update-gate.conf common/10-update-gate.conf
 safe file /etc/systemd/system/rosy-docker-upgrade.service.d/10-update-gate.conf common/10-update-gate.conf
 safe file /etc/systemd/system/rosy-nightly-reboot.service.d/10-update-gate.conf common/10-update-gate.conf
+# D-991: owner of the cell camera user units a person may restart.
+approval=recovery file /etc/rosy/host-control/units-user common/host-control-units-user.in

@@ -96,6 +96,27 @@ def test_a_two_arm_run_that_writes_nothing_says_why(tmp_path):
     assert record["status"] == "failed" and "종료 코드 2" in record["reason"]
 
 
+def test_a_one_arm_vs_two_arm_comparison_records_each_mode_and_moves_its_videos(tmp_path):
+    scenario = lambda holds: dict(makespan_s=100.0, extra_transports=0, moves_per_arm={"arm_a": 1}, holds=holds)  # noqa: E731
+    plan = {mode: dict(stack=scenario([]), outbound=scenario([dict(request="bar-3", reason="NO_STAND_IN_REACH")] if "one" in mode else []))
+            for mode in ("one-arm A", "one-arm B", "two-arm")}
+    (tmp_path / "plan.json").write_text(json.dumps(plan), encoding="utf-8")
+    (tmp_path / "result.json").write_text(json.dumps(dict(steps=2, steps_pass=2, completed=True, makespan_s=90.0, overlap_s=5.0,
+                                                          rows=[dict(step="m0", arm="arm_a", result="pass")])), encoding="utf-8")
+    python = stub_python(tmp_path, f'case "$2" in compare) cp {tmp_path}/plan.json "$4";; '
+                                   f'run) mkdir -p "$9"; cp {tmp_path}/result.json "$9/plan-elliptic-seed0.json"; touch "$9/plan-short.mp4"; echo "$@" >> {tmp_path}/calls;; esac')
+    args = type("Args", (), dict(root=str(tmp_path / "root"), python=python, seed=0, source_sha="a" * 40))
+    assert ladder.run_two_arm_compare(args) == 0
+    folder = next((tmp_path / "root/two_arm_compare").glob("*"))
+    record = json.loads((folder / "compare.json").read_text(encoding="utf-8"))
+    assert record["schema"] == ladder.TWO_ARM_COMPARE_SCHEMA and record["status"] == "passed"
+    assert [(r["scenario"], r["mode"]) for r in record["runs"]] == [(s, m) for s in ("stack", "outbound") for m in ("one-arm-A", "one-arm-B", "two-arm")]
+    assert record["runs"][3]["holds"] == [dict(request="bar-3", reason="NO_STAND_IN_REACH")] and record["runs"][5]["makespan_s"] == 90.0
+    assert sorted(p.name for p in (folder / "artifacts").iterdir()) == record["videos"] and len(record["videos"]) == 6
+    calls = (tmp_path / "calls").read_text().splitlines()
+    assert sum("--concurrent" in c for c in calls) == 2  # only the two-arm runs move both arms at once
+
+
 def test_every_round_evaluates_new_seeds(tmp_path):
     assert ladder.eval_seed_base(tmp_path) == 100000
     row = fresh(tmp_path)

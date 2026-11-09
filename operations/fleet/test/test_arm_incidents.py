@@ -366,6 +366,18 @@ def test_a_report_that_does_not_hold_waits_for_its_cause_and_leaves_the_arm_free
     assert {r["incident_id"] for r in rows if r["state"] == "open"} == {label.json()["incident_id"], held["incident_id"]}
 
 
+def test_an_open_software_stop_reported_as_held_stops_holding_by_the_shared_rule(client):
+    """2026-11-09: two folded arms held for a person by the guard's own alignment deadline; Fleet judges the stored facts."""
+    fault = ("session ended: ValueError: follower: alignment deadline exceeded; current={'shoulder_pan': 2105}, "
+             "target={'shoulder_pan': 2063}, command={'shoulder_pan': 2105.79}")
+    facts = {"safe_end": True, "folded": True, "latched": {}, "windup_hits": [], "flagged": [{"command": "tick", "fault": fault}]}
+    stop = post(client, report(facts=facts, decision={"hold": True, "reason": "runner: " + fault[:200]})).json()
+    assert stop["hold"]["held"] is False
+    lagging = {**facts, "flagged": [{"command": "tick", "fault": fault.replace("2105.79", "2200.0")}]}
+    held = post(client, report(session="7f1c2a3e-1b2d-4e5f-8a9b-0c1d2e3f4a5b", facts=lagging)).json()
+    assert held["hold"]["incident_ids"] == [held["incident_id"]]
+
+
 def test_old_whole_frames_go_on_a_report_too_not_only_on_a_clear():
     """Review 2026-11-08: expiry ran only on clear(), so a quiet ledger kept every frame."""
     from core_common.protocol.arm_incidents import ArmIncidentEvidenceFrame

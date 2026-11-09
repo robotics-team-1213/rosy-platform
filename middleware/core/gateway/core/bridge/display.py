@@ -288,6 +288,14 @@ def face_inputs_payload(snapshot, *, face: Optional[str], power_mode: Optional[s
     }
 
 
+def face_person_request(view: Optional[dict]) -> dict:
+    """D-721 Amendment: the open person request for the face. ``remaining_s`` is counted down by the reader from
+    ``written_at``, so a request nobody clears is gone at its expiry and a dead CORE's request is gone with it."""
+    if view is None:
+        return {"person_request": None}
+    return {"person_request": {key: view[key] for key in ("id", "kind", "remaining_s")}}
+
+
 def face_camera_quality(preview: dict) -> dict:
     """Hand over only fresh JPEG exposure evidence; the reader ages it again."""
     quality, age_ms = preview.get('quality'), preview.get('quality_age_ms', preview.get('age_ms'))
@@ -321,6 +329,9 @@ def _coarse(body: dict) -> dict:
     coarse = {key: value for key, value in body.items() if key != "written_at"}
     coarse["battery_percent"] = rounded(coarse.get("battery_percent"), 0)
     coarse["battery_voltage"] = rounded(coarse.get("battery_voltage"), 1)
+    ask = coarse.get("person_request")
+    if isinstance(ask, dict):   # the countdown moves every tick; the ask itself changes rarely
+        coarse["person_request"] = {name: value for name, value in ask.items() if name != "remaining_s"}
     for key in ("drive", "wake"):
         card = coarse.get(key)
         if isinstance(card, dict):
