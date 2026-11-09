@@ -368,8 +368,6 @@ class TripSteps:
             return
         goal = (x, y, yaw)
         if self._robot_state is not None:  # D-1003: Nav2 runs on the robot's own map, not the site map
-            # No LOCALIZED map pose: the site goal as before; console trust and CORE admission still decide
-            # (charge returns run on CORE's station owner without one).
             state = await self._call(self._robot_state(live.view["robot_id"]))
             try:
                 converted = robot_frame_goal(goal, pose, state, active[1].map_id)
@@ -379,11 +377,26 @@ class TripSteps:
                 await self._stop(live, "stopped", "map_frame",
                                  {"pose_map_id": error.pose_map_id, "map_id": error.map_id})
                 return
-            goal = converted or goal
+            if converted is None:
+                # D-1010 review: no proof the frames bind (not LOCALIZED, no robot map id equal to
+                # the site's, an unreadable state). The site goal never goes out raw to another
+                # frame's robot; charge returns ride on the same-map proof in robot_frame_goal.
+                await self._stop(live, "stopped", "map_frame",
+                                 {"map_id": active[1].map_id,
+                                  "robot_map_id": None if state is None else state.get("map_id")})
+                return
+            site_frame = converted is goal  # the same-map proof returns the goal object itself
+            goal = converted
             live.view["detail"]["goal_frame"] = {  # D-1010: the audit binding of the sent goal
                 "map_id": active[1].map_id, "map_version": active[0],
-                "robot_map_id": (state or {}).get("map_id") if isinstance(state, dict) else None,
-                "goal_frame": "robot" if converted is not None else "site"}
+                "robot_map_id": (state or {}).get("map_id"),
+                "goal_frame": "site" if site_frame else "robot"}
+        elif not self._poses_in_robot_frame:
+            # D-1010 review: a port without robot snapshots (D-1003 6) proves nothing either; an
+            # unproven free goal stops the trip instead of leaving in site coordinates.
+            await self._stop(live, "stopped", "map_frame",
+                             {"map_id": active[1].map_id, "robot_map_id": None})
+            return
         try:
             reply = await self._call(self._goal(live.view["robot_id"], *goal)) or {}
         except RobotApiError as exc:

@@ -19,23 +19,25 @@
 
 1. **활성 지도는 한 정의로만 읽는다.** 활성 포인터는 "가장 최근에 활성화된 행"(AUTOINCREMENT `version` 내림차순 첫 행)으로 정의하고, 읽는 곳은 `SiteMapStore._active_row()` 하나다. 모든 읽기에서 `sha256(body)`를 저장값과 대조하고, 다르면 422 `SITE_MAP_BODY_HASH_MISMATCH`로 거절한다. 시작 시 손상을 만나면 활성 지도 없이 뜬다(지도가 필요한 기능은 전부 거절). 최신 행·정렬 추정으로 지도를 고르는 코드는 이 길 외에 없다.
 2. **free 목표는 계획의 지도 버전에 묶인다.** `TripSteps._step_free`는 활성 버전이 trip 계획의 `map_version`과 다르면 목표를 보내지 않고 trip을 `map_version` 사유로 끝낸다. 지도 활성화가 진행 중 trip을 거절하므로(D-488) 정상 운영에서는 일어나지 않는, 일관성 깨짐을 잡는 방어다.
-3. **변환의 현장 쪽 자세는 활성 `map_id`여야 한다.** `robot_frame_goal`은 기체가 자기 지도에서 LOCALIZED일 때, 현장 자세가 LOCALIZED이고 그 `map_id`가 활성 지도의 `map_id`와 같을 때만 변환한다. 다르면 `SiteFrameMismatch`로 거절하고 trip을 `map_frame` 사유로 끝낸다(현장 좌표를 그대로 보내는 폴백은 기체 지도 자세가 없을 때뿐, D-1003 3항 그대로).
+3. **변환의 현장 쪽 자세는 활성 `map_id`여야 한다.** `robot_frame_goal`은 기체가 자기 지도에서 LOCALIZED일 때, 현장 자세가 LOCALIZED이고 그 `map_id`가 활성 지도의 `map_id`와 같을 때만 변환한다. 다르면 `SiteFrameMismatch`로 거절하고 trip을 `map_frame` 사유로 끝낸다. 변환 짝이 없다고 현장 좌표를 그대로 보내던 D-1003 3항의 무조건 폴백은 없다(2026-11-10 독립 검토): 기체 상태를 모르거나(포트·읽기 없음) LOCALIZED가 아니면 free 목표를 보내지 않고 `map_frame`으로 정지한다. 예외는 하나, 기체 상태의 `map_id`가 활성 지도의 `map_id`와 같을 때뿐이다 — 기체 프레임이 곧 현장 프레임이라는 명시적 증명이고(충전 복귀가 이 결속으로 운다), 그때만 변환 없이 현장 좌표를 보낸다. 스냅숏을 주지 않는 위치 포트(D-1003 6항, 호스트 시험 플랜트)는 `poses_in_robot_frame` 선언으로 한 프레임임을 증명해야 하고, 증명 없는 free 목표는 정지한다.
 4. **보낸 목표의 프레임을 trip에 기록한다.** `detail.goal_frame`에 활성 `map_id`·`map_version`, 기체 상태가 보고한 `robot_map_id`, 보낸 목표의 프레임(`robot`/`site`)을 남긴다. 기체는 이미 상태로 자기 `map_id`를 보고한다. 목표의 map_id·sha를 CORE가 명시적으로 에코하는 것은 API 계약 바꿈이 필요하므로 이번에 하지 않는다(아래 한계).
 5. **D-546 천장 답은 같은 지도에서만 나간다.** `overhead_decision`은 현장 자세의 `map_id`와 기체 상태의 `map_id`가 둘 다 알려지고 같을 때만 답한다. 다르면 답하지 않고 사람으로 간다(기체는 위치 후보 상태라 변환할 짝이 없다).
-6. **교행 판정은 프레임이 같은 기체끼리만 비교한다.** `console._goal`은 다른 기체의 선점 경로가 **알려진** 다른 `map_id`에 있으면 교차 판정을 하지 않고 나중 미션을 `MAP_FRAME_MISMATCH`로 보류한다. 다른 프레임에 선 로봇은 길을 막은 쪽에 두되(`NO_YIELD_SPACE`), 다른 프레임의 자세로 비켜설 자리를 계산하지 않는다. `map_id`를 보고하지 않는 기체는 기존 공유 `map` 프레임 계약(server/AGENTS)대로 비교를 유지한다.
+6. **교행 판정은 프레임이 같은 기체끼리만 비교한다.** `console._goal`은 다른 기체의 선점 경로가 **알려진** 다른 `map_id`에 있으면 교차 판정을 하지 않고 나중 미션을 `MAP_FRAME_MISMATCH`로 보류한다. 다른 프레임에 선 로봇은 길을 막은 쪽에 두되(`NO_YIELD_SPACE`), 다른 프레임의 자세로 비켜설 자리를 계산하지 않는다. `map_id`는 알려진 값끼리 같을 때만 비교한다(2026-11-10 독립 검토): 한쪽을 모르면 교차 판정에 쓰지 않고 보류한다. 스냅숏에 `map_id`가 없는 기체는 그 기체가 **마지막으로 확인한** `map_id`로 대신 비교한다(가용성 근거; 대체가 일어나면 경고 로그에 한 번 남긴다). 확인된 프레임이 아예 없는 구형 기체는 교차 판정에서 보류된 채로, 사람이 지도를 맞추거나 기체가 `map_id`를 보고할 때까지 기다린다.
 7. **지도 자세 뷰에 프레임을 싣는다.** `pose_view`가 `map_id`를 포함해 trip 화면·기록이 프레임을 구분하게 한다. sighting·핀·auto-locate 앵커는 이미 활성 `map_id`로 걸러진다(D-494 3, D-989; `MapPoseTracker`).
 8. **display-only 보정은 이미 근거가 못 되고, 그대로 둔다.** `tracking_calibrations` 기록은 `use: display-only`이고 Vision이 화면 배치에만 읽는다(D-457). sighting·auto-locate 경로는 이 보정을 읽지 않는다(`start_points`·`path_history`의 표시 전용 소비만 있다). 이번에 규칙을 바꾸지 않고, 이 ADR이 "틀린 지도를 가져오는 경로" 점검에서 display-only 보정이 위치 근거로 쓰이는 곳이 없음을 확인한 기록이 된다.
 
 ### 한계
 
 - CORE `/api/v1/navigation/goal`에 `map_id`·지도 sha를 싣고 기체가 상태로 에코하는 대조는 API 버전·CORE 변경이 필요하다. 지금은 기체 상태의 `map_id`와 `detail.goal_frame` 기록으로 대조한다. 후속 API 주기 후보다.
-- `MAP_FRAME_MISMATCH`·다른 프레임 로봇의 `NO_YIELD_SPACE` 보류는 상대 선점이 풀리거나 사람이 지도를 맞출 때까지 풀리지 않는다. 프레임이 섞인 채 여러 대를 free 운행하는 현장은 이 설계에서 의도적으로 막힌다.
+- `MAP_FRAME_MISMATCH`·다른 프레임 로봇의 `NO_YIELD_SPACE` 보류는 상대 선점이 풀리거나 사람이 지도를 맞출 때까지 풀리지 않는다. 프레임이 섞인 채 여러 대를 free 운행하는 현장은 이 설계에서 의도적으로 막힌다. `map_id`를 한 번도 보고한 적 없는 구형 기체도 같은 이유로 보류된다(6항).
+- 충전 복귀는 이제 기체 상태의 `map_id`가 활성 지도 `map_id`와 같다는 증명, 또는 LOCALIZED 변환 짝이 있을 때만 free 목표를 받는다(3항). 충전 어댑터의 `map_scope` 검사가 이미 같은 결속을 요구하므로 정상 충전 경로는 바뀌지 않지만, 두 `map_id`가 어긋난 현장에서 충전 복귀 trip은 `map_frame`으로 정지한다.
+- 스냅숏을 주지 않는 위치 포트(D-1003 6항)는 `poses_in_robot_frame` 선언이 있어야 현장 좌표 목표를 보낸다. 이 선언은 호스트 시험 플랜트가 쓰고, 운영 포트(`MapPoseService`, SIM 네이티브 포트)는 선언하지 않는다.
 - 활성 지도 본문 검증은 SQLite 행 단위다. 활성화 이후 파일 수준 조작(DB 파일 통째 교체)은 막지 않는다.
 - 격자(`console.map()`)는 여전히 "응답한 첫 로봇"의 점유격자다. 프레임이 섞인 현장에서 이 격자와 bay 계산의 조합은 이번에 고치지 않았다(6항의 거절가 그 위험의 상단을 막는다).
 
 ### 검증
 
-- 호스트: `operations/fleet/test/test_site_map_frame_safety.py`(본문 sha 불일치 거절·정상 경로, 다른 `map_id`/없는 앵커/DEGRADED 현장 자세 거절, 버전 불일치·프레임 불일치 정지, `goal_frame` 기록, `pose_view`의 `map_id`), `test_localization_pose_request.py`(다른 `map_id` 천장 답 거절), `test_server_traffic.py`(`MAP_FRAME_MISMATCH` 보류, 다른 프레임 로봇 `NO_YIELD_SPACE`, `map_id` 없는 기체는 종전 비교), `test_trip_robot_frame_goal.py`(D-1003 회귀).
+- 호스트: `operations/fleet/test/test_site_map_frame_safety.py`(본문 sha 불일치 거절·정상 경로와 `import_if_empty`의 변조 행 생존, 다른 `map_id`/없는 앵커/DEGRADED 현장 자세 거절, 버전 불일치 정지, LOCALIZED 아님·상태 없음·스냅숏 없는 포트의 free 목표 미전송 `map_frame` 정지, 같은 `map_id` 증명의 충전 폴백과 `goal_frame` 기록, `pose_view`의 `map_id`), `test_localization_pose_request.py`(다른 `map_id` 천장 답 거절), `test_server_traffic.py`(`MAP_FRAME_MISMATCH` 보류, 다른 프레임 로봇 `NO_YIELD_SPACE`, `map_id` 없는 기체 보류, 마지막 확인 `map_id` 대체 비교와 로그), `test_trip_robot_frame_goal.py`(D-1003 회귀, 변환 짝 없음 정지).
 
 ### 기각
 

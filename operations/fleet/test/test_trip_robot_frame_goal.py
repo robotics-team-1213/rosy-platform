@@ -57,8 +57,9 @@ def test_a_free_trip_sends_its_goals_in_the_robot_map_frame():
     assert ports.goals == [(2.0, 4.0)]  # the segment end, site (1, 0), seen from the robot's own map
 
 
-def test_a_robot_without_a_map_frame_pose_gets_the_site_goal_as_before():
-    """No LOCALIZED map pose to pair with: unchanged, so console trust and CORE admission decide as before."""
+def test_a_robot_without_a_map_frame_pose_gets_no_goal():
+    """D-1010 review: no LOCALIZED map pose to pair with and no map id proof — the site goal no
+    longer goes out raw (D-1003 3항's unconditional fallback is gone); the trip stops on map_frame."""
     runner, store, ports = _setup(_free_map(), caps=BOTH)
     ports.map_id = "site"
 
@@ -69,7 +70,8 @@ def test_a_robot_without_a_map_frame_pose_gets_the_site_goal_as_before():
     _plan(store, ports, "ab:fwd", 0.1, "C")
     run(runner.start("p1", "bob"))
     _ticks(runner, ports)
-    assert ports.goals == [(1.0, 0.0)]
+    row = runner.view("p1")
+    assert ports.goals == [] and row["state"] == "stopped" and row["reason"] == "map_frame"
 
 
 def test_free_trip_sends_each_segment_end_once_and_arrives():

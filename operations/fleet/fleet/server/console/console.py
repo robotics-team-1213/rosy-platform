@@ -109,9 +109,9 @@ class FleetConsole(TripAware, TrafficArbitration, FormationControl):
         #: 비켜서 있는 로봇 → 어디로, 누구를 위해. 화면이 "왜 저리로 갔는지"를 말하려면
         #: 필요하고, 비켜서기가 끝났는지 판단하는 데도 쓴다.
         self._yielding: dict[str, dict] = {}
-        #: 마지막으로 본 로봇의 pose 와 주행 상태. 길을 막고 선 로봇을 찾으려면 좌표가
-        #: 있어야 하는데, 로봇 상태는 스냅샷으로 들어온다.
+        #: 마지막으로 본 로봇의 pose와 주행 상태(막고 선 로봇을 찾으려면 좌표가 필요한데, 스냅숏으로 들어온다).
         self._seen: dict[str, dict] = {}
+        self._robot_maps, self._robot_map_fallbacks = {}, {}  # D-1010: last confirmed map_id (+ fallback warned)
         # Console clock time of each robot's last answered state read (link grace below).
         self._last_ok: dict[str, float] = {}
         #: D-395 P2-2: last pose traffic may use, per robot (`trust.trusted_xy`): only
@@ -208,8 +208,8 @@ class FleetConsole(TripAware, TrafficArbitration, FormationControl):
         self._rest_tokens.pop(robot_id, None)
         self._agent_pairing_tokens.pop(robot_id, None)
         self._hub.drop(robot_id)
-        for table in (self._goals, self._claims, self._queued, self._yielding, self._seen,
-                      self._held, self._trusted, self._loc_null_since, self.goal_leases):
+        for table in (self._goals, self._claims, self._queued, self._yielding, self._seen, self._held,
+                      self._trusted, self._loc_null_since, self._robot_maps, self._robot_map_fallbacks, self.goal_leases):
             table.pop(robot_id, None)
         return client
 

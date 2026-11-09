@@ -74,12 +74,12 @@ def _console(*robots: FakeRobot) -> FleetConsole:
 
 
 def _navigating(robot_id):
-    return {"robot_id": robot_id, "navigation": "NAVIGATING",
+    return {"robot_id": robot_id, "navigation": "NAVIGATING", "map_id": "site",
             "localization": {"state": "LOCALIZED", "pose_frame": "map"}}
 
 
 def _arrived(robot_id):
-    return {"robot_id": robot_id, "navigation": "ARRIVED",
+    return {"robot_id": robot_id, "navigation": "ARRIVED", "map_id": "site",
             "localization": {"state": "LOCALIZED", "pose_frame": "map"}}
 
 
@@ -216,15 +216,34 @@ def test_a_standing_robot_on_another_map_frame_is_never_moved_by_foreign_geometr
     assert result["blocked_by"] == "rosy_02" and _goal_calls(other) == 0
 
 
-def test_robots_that_do_not_report_a_map_id_stay_comparable():
+def test_robots_that_report_no_map_id_are_held_instead_of_compared():
+    """D-1010 review(2026-11-10): 한쪽 map_id를 모르면 교차 판정에 쓰지 않는다 — 다른 프레임
+    선 로봇과 똑같이 사람이 풀 NO_YIELD_SPACE."""
     mover = _mover()
-    other = FakeRobot("rosy_02", state=_standing("rosy_02", (5.0, 5.0), _loc()))
+    other = FakeRobot("rosy_02", state=_standing("rosy_02", (5.0, 5.0), _loc()) | {"map_id": None})
     console = _console(mover, other)
     run(console.snapshot())
 
     result = run(console.goal("rosy_01", 2.0, 0.0))
 
+    assert result["queued"] is True and result["reason"] == "NO_YIELD_SPACE"
+    assert result["blocked_by"] == "rosy_02" and _goal_calls(other) == 0
+
+
+def test_a_robot_that_stopped_reporting_its_map_id_compares_on_its_last_confirmed_one(caplog):
+    """D-1010 가용성: 지금 스냅숏에 map_id가 없어도 마지막 확인값이 같으면 비교한다 — 단,
+    그 대체가 조용히 일어나지 않도록 로그에 한 번 남긴다."""
+    mover = _mover()
+    other = FakeRobot("rosy_02", state=_standing("rosy_02", (5.0, 5.0), _loc()))
+    console = _console(mover, other)
+    run(console.snapshot())                       # remembers rosy_02's confirmed "site"
+    other._state = _standing("rosy_02", (5.0, 5.0), _loc()) | {"map_id": None}
+    run(console.snapshot())
+
+    result = run(console.goal("rosy_01", 2.0, 0.0))
+
     assert "queued" not in result
+    assert "last confirmed" in caplog.text
 
 
 def test_the_queued_mission_goes_out_once_the_blocker_stops_navigating():
@@ -320,7 +339,7 @@ def _loc(state="LOCALIZED", frame="map"):
 
 
 def _standing(robot_id, xy, localization=...):
-    state = {"robot_id": robot_id, "navigation": "IDLE",
+    state = {"robot_id": robot_id, "navigation": "IDLE", "map_id": "site",
              "pose": {"x": xy[0], "y": xy[1], "yaw": 0.0}}
     if localization is not ...:
         state["localization"] = localization

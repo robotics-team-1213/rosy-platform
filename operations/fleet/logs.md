@@ -5431,3 +5431,9 @@
 - 이유: R의 site_map_versions에 map_id가 섞여 있고(1-5 map_v2_fleet, 6-7 world_261026), 틀린 지도·틀린 좌표계를 조용히 쓰면 로봇이 다른 곳으로 달린다(사용자 2026-11-10). 임시 스크립트의 최신 행 추정이 제품에 들어오지 않게 활성 정의를 한 곳에 둔다.
 - 근거: test_site_map_frame_safety.py, test_localization_pose_request.py, test_server_traffic.py, test_trip_robot_frame_goal.py(회귀). 원격 시험 기록은 커밋 메시지와 작업 기록에.
 - gate 변화: 없음(SOURCE만, 기체·현장 수용 별도).
+
+## 2026-11-10 · uncommitted · fix(fleet): D-1010 독립 검토 반영 — 증명 없는 free 목표 정지·모르는 프레임 교차 판정 배제·변조 DB 시동 생존 (D-1010)
+- 변경: robot_frame_goal은 기체 상태 map_id가 활성 map_id와 같을 때만 변환 없이 현장 좌표를 돌려주고(충전 복귀의 명시적 증명), 그 외 증명 없으면 None. _step_free는 변환 실패·상태 모름(포트·읽기 없음)·스냅숏 없는 포트(poses_in_robot_frame 미선언)에서 free 목표를 보내지 않고 map_frame으로 정지. console._map_mismatch는 map_id를 알려진 값끼리 같을 때만 비교하고, 스냅숏에 없으면 마지막 확인 map_id로 대신(경고 로그 1회), 확인된 적 없으면 보류. import_if_empty는 변조된 활성 행에서 죽지 않고 지도 없이 시동(_publish와 같은 fail closed).
+- 이유: 독립 검토(2026-11-10) 중간 지적 1·2·3 — LOCALIZED가 아니면 SiteFrameMismatch 검사가 안 돌아 현장 좌표가 그대로 나가고, 한쪽 map_id가 None이면 "비교 가능"으로 읽히며, 변조 DB가 첫 가져오기에서 프로세스를 죽일 수 있었다.
+- 근거: test_site_map_frame_safety.py(LOCALIZED 아님·상태 None·스냅숏 없는 포트 정지, 같은 map_id 증명 폴백, import 생존), test_server_traffic.py(map_id 없음 보류, 마지막 확인값 대체·로그), test_trip_robot_frame_goal.py(변환 짝 없음 정지로 갱신).
+- gate 변화: 없음(SOURCE만, 기체·현장 수용 별도).

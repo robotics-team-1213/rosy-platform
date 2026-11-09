@@ -208,7 +208,15 @@ class SiteMapStore:
         self._plannable(site_map)
         with self._lock, self._db:
             self._db.execute("BEGIN IMMEDIATE")
-            if self._active_row() is not None:
+            try:
+                occupied = self._active_row() is not None
+            except SiteMapError as error:
+                # D-1010: a tampered active row is not overwritten and does not kill startup
+                # (fail closed like _publish): no map is served (422 on read) until an
+                # operator re-activates one, and the import source stays unapplied.
+                _LOG.error("site map: the import source is not applied: %s", error)
+                return None
+            if occupied:
                 return None
             version = self._insert_version(site_map, f"import:{source}"[:96])
         self._publish()

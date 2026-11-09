@@ -295,15 +295,19 @@ class SiteFrameMismatch(ValueError):
 
 
 def robot_frame_goal(goal: tuple, site_pose: MapPose, state, map_id: Optional[str] = None) -> Optional[tuple]:
-    """D-1003: a site-map free goal ``(x, y, yaw)`` in the robot's own Nav2 ``map`` frame; None without a
-    LOCALIZED map-frame pose in the robot ``state`` snapshot.
+    """D-1003: a site-map free goal ``(x, y, yaw)`` in the robot's own Nav2 ``map`` frame; None without
+    a frame proof, so the caller stops instead of sending site coordinates (D-1010 review 2026-11-10).
 
     A robot's Nav2 map is its own (SLAM) map, not the site map. The same body seen in both frames gives
-    ``T = robot ∘ site⁻¹``; equal frames give the goal back. With ``map_id`` (the active site map's id,
-    D-1010) a site pose that is not a LOCALIZED pose on exactly that map raises ``SiteFrameMismatch``:
-    a goal converted from another frame, or sent raw instead, drives the robot to a wrong place.
+    ``T = robot ∘ site⁻¹``; equal frames give the goal back. A robot whose reported ``map_id`` is the
+    active site map's proves the two are one frame — the goal returns unchanged, localized or not
+    (D-1003 3's charge-return fallback, now only on that explicit proof). With ``map_id`` a site pose
+    that is not a LOCALIZED pose on exactly that map raises ``SiteFrameMismatch``: a goal converted
+    from another frame, or sent raw instead, drives the robot to a wrong place.
     shortcut: the two poses come from separate reads within one trip period, so motion between them
     shifts the goal (≤ speed × read gap); pair them on the snapshot's odom stamp when that error matters."""
+    if map_id is not None and state is not None and state.get("map_id") == map_id:
+        return goal  # D-1010: the robot's own map is this site map: one frame, nothing to convert
     status = trust.status_of(state)
     if status is None or status.state != trust.LocState.LOCALIZED or status.pose_frame != trust.PoseFrame.MAP:
         return None

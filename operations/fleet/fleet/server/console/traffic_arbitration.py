@@ -209,6 +209,8 @@ class TrafficArbitration:
             if state:
                 robot_id = row["robot_id"]
                 self._seen[robot_id] = state
+                if state.get("map_id") is not None:  # D-1010: the last frame this robot confirmed
+                    self._robot_maps[robot_id] = state["map_id"]
                 if self._state_sink is not None:
                     try:
                         self._state_sink(robot_id, state)
@@ -261,12 +263,23 @@ class TrafficArbitration:
         return trust.classify(self._seen.get(robot_id))
 
     def _map_mismatch(self, mover: str, robot_id: str) -> bool:
-        """D-1010: two robots on known different maps (their own ``state.map_id``) cannot share
-        one crossing grid. A robot that reports no map id keeps the shared-``map`` contract and
-        stays comparable; a known difference never does."""
-        mover_map = (self._seen.get(mover) or {}).get("map_id")
-        other_map = (self._seen.get(robot_id) or {}).get("map_id")
-        return mover_map is not None and other_map is not None and mover_map != other_map
+        """D-1010: only two robots on the same **known** map (their own ``state.map_id``) may share
+        one crossing grid. A snapshot without a map id falls back to that robot's last confirmed
+        one (logged once); a robot with no confirmed frame at all is held as a mismatch — an
+        unknown frame is never used in a crossing verdict (2026-11-10 review)."""
+        mover_map, other_map = self._frame_of(mover), self._frame_of(robot_id)
+        return not (mover_map is not None and other_map is not None and mover_map == other_map)
+
+    def _frame_of(self, robot_id: str) -> Optional[str]:
+        current = (self._seen.get(robot_id) or {}).get("map_id")
+        if current is not None:
+            return current
+        remembered = self._robot_maps.get(robot_id)
+        if remembered is not None and robot_id not in self._robot_map_fallbacks:
+            self._robot_map_fallbacks[robot_id] = True
+            logger.warning("traffic: %s reports no map_id; comparing on its last confirmed %s",
+                           robot_id, remembered)
+        return remembered
 
     def _claim_blocker(self, mover: str, route) -> tuple[Optional[str], bool]:
         """``(blocker, is_conflict)`` for a dispatched goal's route: the first claim crossing it,

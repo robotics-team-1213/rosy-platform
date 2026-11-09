@@ -45,6 +45,10 @@ def test_a_tampered_active_body_is_refused(tmp_path):
         with pytest.raises(SiteMapError) as err:
             reopened.active_view()
         assert err.value.code == "SITE_MAP_BODY_HASH_MISMATCH"
+        # D-1010 review: the first import must not die on the tampered row (startup survives) and
+        # must not overwrite it either — the site stays without an active map, refused with 422.
+        assert reopened.import_if_empty(_free_map(), source="test") is None
+        assert reopened.active() is None
     finally:
         reopened.close()
 
@@ -83,6 +87,16 @@ def test_a_robot_without_its_own_map_pose_is_still_no_conversion():
     site = MapPose(0.1, 0.0, 0.0, "LOCALIZED", "sighting", 0.0, 0.1, 0.1, "site")
     assert robot_frame_goal((0.3, 0.0, 0.0), site, _state((5.0, 5.0, 1.0), frame="odom"),
                             "site") is None
+
+
+def test_the_robots_own_map_equal_to_the_site_map_proves_one_frame():
+    """D-1010 review: the charge-return fallback, allowed only on this proof — the robot's
+    reported map id is the active site map's, so site coordinates are its own frame."""
+    site = MapPose(0.1, 0.0, 0.0, "LOCALIZED", "sighting", 0.0, 0.1, 0.1, "site")
+    same = _state((5.0, 5.0, 1.0), frame="odom", map_id="site")
+    assert robot_frame_goal((0.3, 0.0, 0.0), site, same, "site") == (0.3, 0.0, 0.0)
+    other = _state((5.0, 5.0, 1.0), frame="odom", map_id="slam")
+    assert robot_frame_goal((0.3, 0.0, 0.0), site, other, "site") is None
 
 
 # ---- the trip sends no goal on another map version or frame --------------------------------
@@ -141,6 +155,79 @@ def test_a_converted_goal_records_both_frames():
     frame = runner.view("p1")["detail"]["goal_frame"]
     assert frame == {"map_id": "site", "map_version": store.active()[0],
                      "robot_map_id": "slam", "goal_frame": "robot"}
+
+
+def test_a_free_trip_stops_when_the_robots_map_differs_and_cannot_convert():
+    """D-1010 review: not LOCALIZED and the robot's map id is not the site's — no conversion and
+    no proof, so the site goal never goes out raw (review 2026-11-10, medium finding 1)."""
+    runner, store, ports = _setup(_free_map(), caps=BOTH)
+    ports.map_id = "site"
+
+    async def robot_state(robot_id):
+        return _state((5.0, 5.0, 1.0), frame="odom", map_id="slam")
+
+    runner._robot_state = robot_state
+    _plan(store, ports, "ab:fwd", 0.1, "C")
+    run(runner.start("p1", "bob"))
+
+    _ticks(runner, ports)
+
+    row = runner.view("p1")
+    assert ports.goals == [] and row["state"] == "stopped" and row["reason"] == "map_frame"
+    assert row["detail"]["map_id"] == "site" and row["detail"]["robot_map_id"] == "slam"
+
+
+def test_a_free_trip_stops_when_the_robot_state_is_unknown():
+    """The state read itself answers nothing: no proof, no goal (fail closed)."""
+    runner, store, ports = _setup(_free_map(), caps=BOTH)
+    ports.map_id = "site"
+
+    async def robot_state(robot_id):
+        return None
+
+    runner._robot_state = robot_state
+    _plan(store, ports, "ab:fwd", 0.1, "C")
+    run(runner.start("p1", "bob"))
+
+    _ticks(runner, ports)
+
+    row = runner.view("p1")
+    assert ports.goals == [] and row["state"] == "stopped" and row["reason"] == "map_frame"
+    assert row["detail"]["map_id"] == "site" and row["detail"]["robot_map_id"] is None
+
+
+def test_a_free_trip_stops_when_a_snapshot_less_port_proves_no_frame():
+    """A port without robot snapshots (D-1003 6) that does not declare its one frame either."""
+    runner, store, ports = _setup(_free_map(), caps=BOTH)
+    runner._poses_in_robot_frame = False
+    _plan(store, ports, "ab:fwd", 0.1, "C")
+    run(runner.start("p1", "bob"))
+
+    _ticks(runner, ports)
+
+    row = runner.view("p1")
+    assert ports.goals == [] and row["state"] == "stopped" and row["reason"] == "map_frame"
+
+
+def test_a_robot_on_the_site_map_gets_the_site_goal_even_unlocalized():
+    """The charge-return case: no map pose to convert with, but the robot's reported map id
+    proves its frame is the site map — the goal goes out unchanged and the audit says so."""
+    runner, store, ports = _setup(_free_map(), caps=BOTH)
+    ports.map_id = "site"
+
+    async def robot_state(robot_id):
+        return _state((5.0, 5.0, 1.0), frame="odom", map_id="site")
+
+    runner._robot_state = robot_state
+    _plan(store, ports, "ab:fwd", 0.1, "C")
+    run(runner.start("p1", "bob"))
+
+    _ticks(runner, ports)
+
+    assert ports.goals == [(1.0, 0.0)]
+    frame = runner.view("p1")["detail"]["goal_frame"]
+    assert frame == {"map_id": "site", "map_version": store.active()[0],
+                     "robot_map_id": "site", "goal_frame": "site"}
 
 
 def test_pose_view_carries_the_map_id():
