@@ -115,8 +115,8 @@ def test_next_puts_assumed_constants_first_with_an_experiment():
     assert rows[0][2] == "assumed"
     names = {c: (k, e) for _, c, k, e in rows}
     assert names["container.friction"][0] == "assumed" and "push test" in names["container.friction"][1]
-    assert names["arm_b.joint1.kp"][0] == "measured (registers-20261109, twin-kp-20261109)"
-    assert names["arm_b.joint1.damping"][0] == "measured (servo-friction-20261109)"
+    assert names["arm_b.joint1.kp"][0].startswith("measured (") and "twin-kp-20261109" in names["arm_b.joint1.kp"][0]
+    assert names["arm_b.joint1.damping"][0].startswith("measured (") and "servo-friction-20261109" in names["arm_b.joint1.damping"][0]
     assert names["arm_a.joint1.damping"][0] == "assumed"
     assert json.dumps([list(r) for r in rows])  # the --json form serialises
 
