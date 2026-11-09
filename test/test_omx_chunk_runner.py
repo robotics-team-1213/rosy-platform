@@ -449,7 +449,7 @@ class SlowWrist(Robot):
 
 
 def test_pacing_and_idle_thresholds_come_from_the_params_a_runner_is_given(monkeypatch):
-    monkeypatch.setattr(m, "STRAIN_LAG", 99.0)  # without pacing or the strain hold, the guard stops it
+    monkeypatch.setattr(m.runner_strain, "STRAIN_LAG", 99.0)  # without pacing or the strain hold, the guard stops it
     lift = library()
     lift["chunks"]["approach_pinky"] = [[0.0, -60.0, 50.0, 45.0 + 0.15 * k, 10.0, 46.6] for k in range(1, 101)]
     robot, status, clock, queue = SlowWrist(), [], [0.0], ["run approach_pinky", "stop"]
@@ -470,7 +470,7 @@ def test_pacing_and_idle_thresholds_come_from_the_params_a_runner_is_given(monke
 def test_a_lagging_joint_holds_the_next_frame_until_it_catches_up_before_the_guard_stops(monkeypatch, paced):
     if not paced:  # neither pacing nor the strain hold: the guard stops it
         monkeypatch.setattr(m, "PACE_LAG", 99.0)
-        monkeypatch.setattr(m, "STRAIN_LAG", 99.0)
+        monkeypatch.setattr(m.runner_strain, "STRAIN_LAG", 99.0)
     lift = library()
     lift["chunks"]["approach_pinky"] = [[0.0, -60.0, 50.0, 45.0 + 0.15 * k, 10.0, 46.6] for k in range(1, 101)]
     robot, status, clock, queue = SlowWrist(), [], [0.0], ["run approach_pinky", "stop"]
@@ -738,6 +738,48 @@ def test_a_jog_path_whose_wrist_strains_holds_with_torque_on_then_retreats_along
     back = by_command(status, "run retreat")[0]["state"]
     assert back[1] == pytest.approx(HOME[1], abs=0.5) and back[3] == pytest.approx(HOME[3], abs=0.5)  # where the jogs began
     assert by_command(status, "run park")[0]["ok"] is True and by_command(status, "run park")[0]["fault"] is None
+
+
+def test_an_overload_hold_by_the_guard_sheds_with_lift_and_elbow_then_parks_once_released():
+    # 2026-11-09 panel: the guard freezes an overloaded joint with torque on (motion.held) instead of cutting torque;
+    # the runner stops pushing, moves only the XL430 lift and elbow toward the fold, and parks after the release
+    robot = Robot()
+    robot.pos = [40.0, -10.0, 0.0, 60.0, 70.0, 46.6]  # reached out, like arm_a at 15:09
+    robot.motion = type("Motion", (), {"held": {}, "effort_pwm": {}, "pwm_limits": {}})()
+    status, clock, ticks, during = [], [0.0], [0], []
+    r = m.Runner(robot, goto_library(), fps=30, status=status.append, clock=lambda: clock[0],
+                 sleep=lambda s: clock.__setitem__(0, clock[0] + 1 / 30))
+
+    def lines():
+        ticks[0] += 1
+        if ticks[0] == 5:
+            robot.motion.held = {"wrist_flex": {"since": clock[0], "temp": 30, "clear_since": None}}
+        if 5 < ticks[0] <= 45:
+            during.append(list(r.target))
+        if ticks[0] == 45:
+            robot.motion.held = {}
+        return {10: ["park"], 60: ["park"]}.get(ticks[0]) or (["stop"] if ticks[0] > 60 and not r.chunk else [])
+
+    r.run(lines)
+    held = [s for s in status if "overload-hold on wrist_flex" in (s.get("fault") or "")][0]
+    assert held["command"] == "fault" and held["contact"] is True
+    refused = [s for s in status if s["command"] == "park" and not s["ok"]]
+    assert refused and "shedding" in refused[0]["error"]  # no park while the guard still holds
+    first, last = during[0], during[-1]
+    assert [first[i] for i in (0, 3, 4)] == [last[i] for i in (0, 3, 4)] == [40.0, 60.0, 70.0]  # pan and wrist stay
+    assert abs(last[1] - HOME[1]) < abs(first[1] - HOME[1]) and abs(last[2] - HOME[2]) < abs(first[2] - HOME[2])
+    assert by_command(status, "run park")[0]["ok"] is True and by_command(status, "run park")[0]["fault"] is None
+
+
+def test_the_shed_moves_only_lift_and_elbow_toward_home_and_stops_a_joint_at_its_own_lag():
+    target, home = [40.0, -10.0, 0.0, 60.0, 70.0, 46.6], HOME
+    sent = {n: v for n, v in zip(m.NAMES, target)}
+    out = m.runner_strain.shed(target, target, sent, home, 1.0)
+    assert out[1] == -11.0 and out[2] == 1.0 and [out[i] for i in (0, 3, 4, 5)] == [40.0, 60.0, 70.0, 46.6]
+    lagging = list(target)
+    lagging[1] += m.STRAIN_LAG  # the lift no longer follows: it stops shedding, the elbow goes on
+    out = m.runner_strain.shed(target, lagging, sent, home, 1.0)
+    assert out[1] == -10.0 and out[2] == 1.0
 
 
 def test_plain_jogs_that_follow_are_not_strain():
