@@ -423,6 +423,32 @@ def test_a_broken_evidence_list_never_stops_a_start(tmp_path, monkeypatch):
     assert not oi.label_box("arm_b") and not sidecar.exists() and link.evidence == []
 
 
+def test_a_named_operator_clears_over_the_api_and_the_local_hold_lifts(tmp_path, monkeypatch):
+    """2026-11-08: the person checked arm_b; the agent clears with that person's own token, not the arm's."""
+    monkeypatch.chdir(tmp_path)
+    link = Link()
+    oi.handle(session(tmp_path), "arm_b", act=lambda ids: {"rebooted": ids}, link=link)
+    assert oi.held("arm_b")
+    calls = []
+
+    def clear(incident_id, note, token):
+        calls.append((incident_id, note, token))
+        link.held = False
+        return hold(False)
+    link.clear = clear
+    token = tmp_path / "operator.token"
+    token.write_text("person-token\n")
+    token.chmod(0o644)
+    with pytest.raises(SystemExit, match="owner only"):
+        oi.clear("arm_b", "jaws empty", token, link)
+    token.chmod(0o600)
+    with pytest.raises(SystemExit, match="note"):
+        oi.clear("arm_b", "  ", token, link)
+    assert oi.clear("arm_b", "jaws empty", token, link) == 0
+    assert calls == [("a" * 32, "jaws empty", "person-token")]
+    assert oi.held("arm_b") is None
+
+
 ALIGN = ("session ended: ValueError: follower: alignment deadline exceeded; current={'shoulder_pan': 2105, 'gripper': 2034}, "
          "target={'shoulder_pan': 2063, 'gripper': 2034}, command={'shoulder_pan': 2105.79, 'gripper': 2034.0}; last sample age=0.03")
 
