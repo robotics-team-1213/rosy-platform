@@ -671,6 +671,7 @@ PROGRAM_SOURCES = {
     "rosy-navigation.service": ["middleware/drive/planning/nav2", "middleware/devices/pinky/bringup"],
     # D-190 / D-433: the face loop, the emotion cards and LCD driver, rosylib.Battery.
     "rosy-face.service": ["deploy/robot/pinky_pro/native/rosy-face.py",
+                          "deploy/robot/pinky_pro/native/face_frames.py",
                           "deploy/robot/pinky_pro/native/face_card_renderer.py",
                           "deploy/robot/pinky_pro/native/rosy_face_parts.py",
                           "deploy/robot/pinky_pro/native/rosy_face_inputs.py",
@@ -681,6 +682,7 @@ PROGRAM_SOURCES = {
                           # D-433: the situation table and the face-inputs reader.
                           "contracts/foundation/core_common/face_screen.py",
                           "middleware/robot_ui/face/emotion/info_screen.py",
+                          "middleware/robot_ui/face/emotion/character.py",
                           "middleware/robot_ui/face/emotion/rosy_lcd.py",
                           "middleware/devices/pinky/bringup/rosylib"],
     # D-433: the retired unit runs the pre-D-433 program an old image still holds;

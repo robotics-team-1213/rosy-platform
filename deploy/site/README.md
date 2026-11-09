@@ -334,6 +334,29 @@ certificate folder (keys, `backups/`) is data and stays where it was prepared.
 hostname). tailscale issues a new pair only below 30 days of validity. A changed pair
 reloads the Account proxy.
 
+Hosts that get the stack from signed releases and have no site-tools channel (the R host,
+D-1001) use the system-level twin instead. The signed candidate carries `account_tls_renew.py`,
+`rosy-site-account-tls-renew.service`/`.timer` and `account-tls.env.example`, so the script follows
+every release and is never copied. Install the units once from the verified current candidate
+(candidates signed before this group still verify; a partial group does not):
+
+```sh
+sudo install -d -o 10001 -g 10001 -m 0500 /etc/rosy/account-tls   # installed pair; the run fails to install without it
+sudo install -d -m 0700 /var/lib/rosy/account-tls   # data folder: renewed pair and backups, outside the release
+sudo install -m 0600 /opt/rosy/candidate/deploy/site/account-tls.env.example /etc/rosy/site/account-tls.env
+sudoedit /etc/rosy/site/account-tls.env             # set ROSY_ACCOUNT_TLS_DOMAIN (the approved Account DNS name)
+for unit in rosy-site-account-tls-renew.service rosy-site-account-tls-renew.timer; do
+  sudo install -m 0644 /opt/rosy/candidate/deploy/site/$unit /etc/systemd/system/$unit
+done
+sudo systemctl daemon-reload
+sudo systemctl start rosy-site-account-tls-renew.service   # first run issues and installs the pair
+sudo systemctl enable --now rosy-site-account-tls-renew.timer
+```
+
+The renewer writes the installed pair to `/etc/rosy/account-tls` (UID10001, mode 0400) and reloads the
+proxy only after the replacement validates. Do not enable the user-level
+`rosy-account-tls-renew.timer` on the same host.
+
 On the existing `site_edge` network, the proxy also owns the approved Account
 hostname as a Docker DNS alias. Approved container clients on that network use
 the same HTTPS issuer and certificate verification without routing through the

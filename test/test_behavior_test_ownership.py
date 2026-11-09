@@ -27,6 +27,8 @@ KNOWN_EXTERNAL_BEHAVIOR_TESTS = frozenset({
     "middleware/core/gateway/test/test_core_logic.py",
     "middleware/core/gateway/test/test_domain_model.py",
     "middleware/core/gateway/test/test_evidence.py",
+    # D-922 bridge admission consumes the real model-status store; pure policy tests live in services/test.
+    "middleware/core/gateway/test/test_expression_bridge.py",
     "middleware/core/gateway/test/test_fleet_agent.py",
     "middleware/core/gateway/test/test_fleet_agent_mdns.py",
     "middleware/core/gateway/test/test_initial_pose.py",
