@@ -81,9 +81,9 @@ def candidates(rows: list[dict], repo: Path, host: str | None = None, mixed: boo
         # 2026-11-03: a --tests full --no-cache landing for publish evidence was rolled up and ran auto (alone)
         idle = (r.get("status") in ("pending", "waiting")
                 or (mixed and r.get("status") == "preparing" and r.get("full_wait")))  # a FULL waiter runs no test
-        rollup = land_async.ROLLUP.fullmatch(r.get("branch") or "")
+        rollup = mixed and land_async.ROLLUP.fullmatch(r.get("branch") or "")  # unmixed: a plain row (addendum 23)
         if (not idle or land_async.HOLDER not in tree.parts or r.get("urgent")
-                or (rollup and (not mixed or r.get("status") == "waiting"))  # 'waiting': its FULL passed, keep it
+                or (rollup and r.get("status") == "waiting")  # 'waiting': its FULL passed, keep it
                 or r.get("alone")
                 or r.get("host") != host or r.get("batch") or r.get("branch") in carried or not tree.is_dir()):
             continue
@@ -325,7 +325,7 @@ def roll(repo: Path, qdir: Path, now: datetime, argv: list[str]) -> int:
     if built is None:
         return 1
     snap, merged = built
-    adopted(land_queue.queue_dir(repo), merged[0])
+    adopted(land_queue.queue_dir(repo), members[0])  # build handed members[0]'s ticket over
     complete, holder = whole(merged), land_async.holder(repo)
     for name in {m["rollup"] for m in merged if m.get("rollup")}:
         if any(m.get("rollup") == name for m in complete):  # its supervisor must not bisect it into duplicates

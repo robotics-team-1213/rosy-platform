@@ -705,7 +705,7 @@
 
 **결정.**
 1. FULL을 시작하지 않은 rollup(`pending`, 또는 `preparing`+`full_wait`)도 rollup 구성원 후보다. 그 rollup의 `.members` 기록에 있는 구성원이 각자 남아 있는 스냅숏으로 새 계획에 들어간다. FULL을 통과하고 차례를 기다리는(`waiting`) rollup과 급한 rollup은 그대로 둔다. 기록을 못 읽거나 중첩되었거나 구성원 스냅숏이 없으면 다시 묶지 않는다.
-2. 옛 rollup은 구성원 전부가 새 rollup에 병합됐을 때만 멈춘다. 멈추기 전에 `.split` 표시를 남겨 감독이 그 rollup을 반으로 나눠 다시 넣지 않게 한다. 구성원 하나라도 빠지면 옛 rollup은 계속 착지하고, 병합된 구성원은 두 rollup에 같이 실린다(나중 것은 이미 main에 있는 커밋을 병합할 뿐이다). 새 것이 없이 rollup 하나만 다시 묶는 일은 하지 않는다.
+2. 옛 rollup은 구성원 전부가 새 rollup에 병합됐을 때만 멈춘다. 멈추기 전에 `.split` 표시를 남겨 감독이 그 rollup을 반으로 나눠 다시 넣지 않게 한다. 구성원 하나라도 빠지면 옛 rollup은 계속 착지하고, 병합된 구성원은 두 rollup에 같이 실린다(나중 것은 이미 main에 있는 커밋을 병합할 뿐이다). 새 것이 없이 rollup 하나만 다시 묶는 일은 하지 않는다. 계획과 멈춤 사이에 옛 rollup이 FULL을 시작했으면 그 진행은 버려진다(구성원은 새 rollup에 다 있다).
 3. 착지가 FULL 자리를 기다리기 시작하면(`full_wait`) main 체크아웃의 `land_rollup.py apply --auto`를 한 번 띄운다. 그래서 기다리는 FULL 후보는 차례를 쥔 표가 없어도 곧 하나의 rollup으로 묶인다. 띄운 착지가 구성원이면 rollup은 그 착지를 맨 나중에 멈춘다. `apply`는 `rosy-land-rollup.lock`으로 한 번에 하나만 돈다.
 
 **검증.** `test/test_land_rollup.py`(다시 묶기, `waiting` rollup 제외, 일부만 병합되면 옛 rollup 유지와 `.split` 표시), `test/test_land_prepare.py`(FULL 대기 시작 때 한 번 rollup)를 원격 시험 PC에서 돌린다.
