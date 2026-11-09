@@ -41,7 +41,7 @@ def safety_stop(auth: AuthContext = Depends(viewer), svc: CoreServicesLike = Dep
     # nothing they do may leave EMERGENCY without the latch behind it.
     svc.safety.trigger_estop(f"api:{auth.role}")
     svc.modes.transition(Mode.EMERGENCY)
-    svc.state.set_estop(True, svc.safety.estop_source)  # the first latch's source stays
+    svc.state.set_estop(True, svc.safety.estop_source)  # a battery latch is taken over; any other first source stays
     operations = []
     for owner, operation in captured:
         try:

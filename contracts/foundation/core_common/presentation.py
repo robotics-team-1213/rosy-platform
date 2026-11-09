@@ -121,6 +121,8 @@ def present(*, state: Any, robot_mode: Any = None, nav_state: Any = None,
     lamp = "illumination" if kind == "light" else robot_state.lamp_pattern(
         state, mode, nav, recovery, signal)
     level = LAMP_LEVEL.get(lamp, OK)
+    if lamp == "ready" and screen and screen.get("person"):  # D-721 Amendment: an amber ask strip is not under a calm idle lamp
+        lamp, level = "caution", CAUTION  # idle or ready only: navigating, manual and docking keep their lamp
 
     percent = core.get("battery_percent") if core else None
     percent = percent if percent is not None else battery_percent
