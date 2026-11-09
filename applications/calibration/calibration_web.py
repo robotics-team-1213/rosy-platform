@@ -45,6 +45,7 @@ API = "/api/calibration/v1/requests"
 ID = re.compile(r"[A-Za-z0-9_-]{1,96}")
 IMAGE_TYPES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg"}
 NOTE_MAX = 300
+VALUE_MAX = 1e6  # a reading in mm or deg; anything larger is a typing slip, not a measurement
 BODY_MAX = 4096
 MEDIA = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8"}
 CSP = ("default-src 'self'; connect-src 'self'; img-src 'self'; style-src 'self'; script-src 'self'; "
@@ -240,16 +241,17 @@ class Handler(BaseHTTPRequestHandler):
         value, result, note = body.get("value"), body.get("result"), body.get("note", "")
         if (not isinstance(note, str) or len(note) > NOTE_MAX
                 or (value is not None and (isinstance(value, bool) or not isinstance(value, (int, float))
-                                           or value != value or abs(value) == float("inf")))):
+                                           or not abs(value) <= VALUE_MAX))):  # NaN, inf and 1<<4000 all fail
             return self.json(422, {"error": "값은 숫자, 메모는 300자 이하여야 합니다."})
         profile = self.account.profile(_cookie(self, SESSION_COOKIE))
         by = f"{profile['display_name']} ({claims.sub})" if profile else claims.sub
         try:
             with _answer_lock:
                 done = cell_requests.answer(req["id"], by, value, result, note, self.store)
+        except cell_requests.AlreadyAnswered as exc:
+            return self.json(409, {"error": str(exc)})
         except ValueError as exc:
-            text = str(exc)
-            return self.json(409 if "already" in text else 422, {"error": text})
+            return self.json(422, {"error": str(exc)})
         self.json(200, done)
 
 

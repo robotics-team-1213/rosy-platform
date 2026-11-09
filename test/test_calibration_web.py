@@ -139,7 +139,8 @@ def test_answer_is_recorded_by_the_engine_with_the_session_name(account_screen, 
     assert cr.load("belt-end-1", store)["answer"]["value"] == 212.0
 
 
-@pytest.mark.parametrize("body", [{}, {"value": "x"}, {"value": True}, {"value": 1, "note": "n" * 301}, {"result": "pass"}])
+@pytest.mark.parametrize("body", [{}, {"value": "x"}, {"value": True}, {"value": 1, "note": "n" * 301}, {"result": "pass"},
+                                  {"value": 1 << 4000}, {"value": 1e300}])  # a huge int once overflowed float() in the engine
 def test_bad_answers_are_422_and_leave_the_request_open(account_screen, store, body):
     url, _ = account_screen
     assert call(url, web.API + "/belt-end-1/answer", cookie="valid", origin=ORIGIN, body=body)[0] == 422
