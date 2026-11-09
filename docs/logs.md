@@ -14529,6 +14529,18 @@ osy-d395-s1d\`.
 - gate 변화: 없음. 착지의 `close`가 이제 통과한 항목을 실제로 닫는다.
 - CE: 해당 없음 — 원인이 코드와 시험에 남는다.
 
+## 2026-11-07 · 11b42b5933 · docs: D-721 개정(스테이션 복구 요청·사람 부탁)과 API v1.372
+- 변경: D-721 끝에 개정 절(새 ADR 번호 없음), API 참조 v1.372 머리·변경 절·이력 행·CORE 경로 3행.
+- 증거: 문서 변경. `rosy_harness.py lint`와 API 참조 버전 정렬 시험을 본다.
+- gate 변화: SOURCE 변경. 로봇·장치 수용 없음.
+- 교훈: CE 해당 없음 — 최종 코드와 시험이 판단을 보존한다. 실물·운영 수용은 아니다.
+
+## 2026-11-07 · 262d22b30b · docs: D-721 개정과 API v1.372 리뷰 수정 반영
+- 변경: 배달 의미(되읽기·waiting·age_s), 한도, `state_unknown`, 긴급 배터리 우선, D-502 개정과의 일치.
+- 증거: 문서 변경. lint 0 error.
+- gate 변화: SOURCE 변경. 로봇·장치 수용 없음.
+- 교훈: CE 해당 없음 — 최종 코드와 시험이 판단을 보존한다. 실물·운영 수용은 아니다.
+
 ## 2026-11-07 · uncommitted · test(learning): 학습 브라우저 여정도 고정 학습 환경을 명시할 때만 돈다
 - 변경: `test_learning_workflow_pipeline_browser.py`에 다른 고정 학습 시험 4개와 같은 `ROSY_RUN_PINNED_LEARNING=1` 조건을 넣었다.
 - 증거: 21:42 FULL 착지가 환경이 없는 시험 PC에 이 시험이 배정돼 멈췄고, main에서도 같은 단언으로 실패해 MAIN-RED가 됐다. 다른 두 시험 PC에는 환경이 있다.
@@ -14634,3 +14646,10 @@ osy-d395-s1d\`.
 - 증거: b8xy canary 트레이스백(2026-11-08 13:19Z), 수정 커밋 `3ed5a498c6`와 회귀 시험.
 - gate 변화: 없음.
 - CE: 새 교훈 기록 — 실물 기동에서만 드러난 실패라 기록.
+
+## 2026-11-08 · uncommitted · fix(remote): 현장 PC가 고정 학습 환경이 필요한 시험을 받지 않는다
+
+- 변경: `work_queue.LAB_ONLY`(지금은 `test_learning_workflow_pipeline_browser.py`)를 현장 PC 작업자가 받지 않는다. 남은 호스트가 현장 PC뿐이면 그 시험은 실패가 아니라 미실행(255)으로 끝난다(`stranded`).
+- 증거: 11-07 이 시험이 두 실험실 PC가 찬 동안 현장 PC에 배정돼 고정 학습 venv 확인에서 실패했고 MAIN-RED가 됐다. 그 venv는 모델 PC·AI PC에만 있다(11-08 확인). 건너뛰기 조건으로 막은 수정은 `land_browser.vacuous`에 걸려 되돌려졌다(a258cda4d7).
+- gate 변화: 현장 PC만 남은 착지는 이 시험에서 실패 대신 미실행으로 멈춘다(자리가 나면 resume).
+- CE: 해당 없음 — 원인과 규칙이 코드와 회귀 시험에 남는다.

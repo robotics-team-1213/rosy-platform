@@ -23,7 +23,7 @@ def openai_value():
 
 def test_wire_bodies_carry_the_consumer_schema():
     assert ollama_chat('m', MESSAGES, SCHEMA, temperature=0) == {
-        'model': 'm', 'messages': MESSAGES, 'format': SCHEMA, 'stream': False,
+        'model': 'm', 'messages': MESSAGES, 'format': SCHEMA, 'stream': False, 'think': False,
         'options': {'num_predict': 1024, 'temperature': 0}}
     assert openai_chat('m', MESSAGES)['response_format'] == {'type': 'json_object'}
     strict = openai_chat('m', MESSAGES, SCHEMA, name='judgment', reasoning_effort='low')

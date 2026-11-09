@@ -76,7 +76,7 @@
 ## 최근 기록
 
 - 2026-11-08 · 6160ccf28e · fix(core): Nav2 무응답 목표 보고
+- 2026-11-08 · uncommitted · feat(core): 로봇 화면에서 사람 부탁에 답하기
+- 2026-11-07 · 92cb90111c · fix(battery): release a recovered battery stop in the policy chain (D-502 Amendment 2026-11-07)
+- 2026-11-07 · 11b42b5933 · feat(core): 로봇당 사람 부탁 하나를 쥔다
 - 2026-11-06 · 051927f313 · fix(core): motor 커미셔닝 readiness profile
-- 2026-11-04 · uncommitted · feat(core): peers 관리자·beacon 송신 배선
-- 2026-11-03 · uncommitted · fix(bridge): rear_dock_scan reads services.docking directly (C6)
-- 2026-11-03 · uncommitted · feat(bridge): 후진 충전소 V 표지를 CORE 스캔에서 찾는다 (D-972)
