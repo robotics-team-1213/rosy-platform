@@ -349,17 +349,23 @@ def split(repo: Path, invocations: list[list[str]], seen: dict | None = None) ->
         env = list(itertools.takewhile(ENV_WORD.match, inv))
         rest = inv[len(env):]
         paths = [w for w in rest if not w.startswith("-")]
+        # 2026-11-09: --ignore words go to every part, so `test --ignore=<g1 timing>` (11 min median, 71 min worst in
+        # a FULL, the longest pole) splits too; any other option keeps the invocation whole.
+        ignores = [w for w in rest if w.startswith("--ignore=")]
+        ignored = [w.split("=", 1)[1].rstrip("/") for w in ignores]
         seconds = cost(repo, inv, seen)  # measured history first, the same byte estimate as dispatch for cold packets
-        whole = (seconds < SPLIT_S or any(w.startswith(("ROSY_RUN_BROWSER_TESTS", "ROSY_ALONE",
-                 "ROSY_JOB_ALONE", "ROSY_COLLECT")) for w in env) or len(paths) != len(rest)
+        whole = (seconds < SPLIT_S or not paths or any(w.startswith(("ROSY_RUN_BROWSER_TESTS", "ROSY_ALONE",
+                 "ROSY_JOB_ALONE", "ROSY_COLLECT")) for w in env) or len(paths) + len(ignores) != len(rest)
                  or any("::" in p or "collect_alone" in p for p in paths) or serial_reason(inv, serial))
         if whole:
             out.append(inv)
         elif len(paths) > 1:
-            out += [[*env, p] for p in paths]
+            out += [[*env, p, *ignores] for p in paths]
         elif (repo / paths[0]).is_dir():
             files = sorted((f for f in (repo / paths[0]).rglob("*.py")
-                            if f.name.startswith("test_") or f.name.endswith("_test.py")),
+                            if (f.name.startswith("test_") or f.name.endswith("_test.py"))
+                            and not any(f.relative_to(repo).as_posix() == i
+                                        or f.relative_to(repo).as_posix().startswith(i + "/") for i in ignored)),
                            key=lambda f: -f.stat().st_size)
             n = min(MAX_SPLIT, math.ceil(seconds / SPLIT_S), len(files))
             groups, sizes = [[] for _ in range(n)], [0] * n
@@ -367,7 +373,7 @@ def split(repo: Path, invocations: list[list[str]], seen: dict | None = None) ->
                 i = sizes.index(min(sizes))
                 groups[i].append(f.relative_to(repo).as_posix())
                 sizes[i] += f.stat().st_size
-            out += [[*env, *sorted(g)] for g in groups if g] if n > 1 else [inv]
+            out += [[*env, *sorted(g), *ignores] for g in groups if g] if n > 1 else [inv]
         else:
             out.append(inv)
     return [list(inv) for inv in dict.fromkeys(map(tuple, out))]
