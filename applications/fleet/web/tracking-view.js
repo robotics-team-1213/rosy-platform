@@ -3,7 +3,7 @@
 
 import { classifyTracking, trackingStatusLine, positionRows, displayLeaseMs,
   trackingDriftSample, calibrationDriftVerdict, effectiveDriftVerdict, rememberTrackingPoses,
-  CALIBRATION_DRIFT_POLLS,
+  calibrationHealthNotice, CALIBRATION_DRIFT_POLLS,
 } from "./tracking-layer.js";
 import { isRouteAbsent } from "/console/assets/poll-gate.js";
 
@@ -35,6 +35,7 @@ export function createTrackingView({ scope, el, view, call, auth, onChanged = ()
       driftHistory = driftHistory.slice(-CALIBRATION_DRIFT_POLLS);
       previousPoses = rememberTrackingPoses(next);
       view.trackingDrift = effectiveDriftVerdict(calibrationDriftVerdict(driftHistory), body.sources);
+      view.calibrationHealth = calibrationHealthNotice(body.sources);
     }
     legend.hidden = !(next.robots.length || next.unknown.length);
     if (positions && positionBody) {
@@ -104,6 +105,7 @@ export function createTrackingView({ scope, el, view, call, auth, onChanged = ()
     driftHistory = [];
     previousPoses = new Map();
     view.trackingDrift = null;
+    view.calibrationHealth = null;
     show(null);
     line.hidden = true;
   }
