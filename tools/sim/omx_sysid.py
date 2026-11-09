@@ -16,6 +16,10 @@ which constant to measure next: the constant step of the real-sim loop (docs/ref
   promote FIT --name NAME [--evidence PATH] [--base design]
         Appends the fit as candidate NAME to learning/envs/isaac/cell_physics.yaml, only when the held-out RMS is lower
         than the base's and no joint gets worse by more than WORSE_DEG. The base stays (D-947 2); commit the file.
+  score EP [EP ..] --cell CELL --candidates A,B --out DIR [--gravity-comp]
+        Each candidate as it stands (no fit) on the same held-out and all episodes: which one follows the real arm.
+  registers --caps CAPS --volts 11=V,..
+        The MuJoCo kp, kv, force a session's servo registers stand for (Dynamixel PID behind its PWM limit).
   next  [--json]
         Every constant with how it is known (assumed, fitted with sd) and the experiment that would narrow it, widest first.
 """
@@ -130,7 +134,7 @@ def error_deg(cell, episodes, values, gravity_comp, every=1):
     import numpy as np
     import omx_twin as twin
     set_constants(cell, values)
-    kp = [row["kp"] for row in values]
+    kp = [row.get("kp", cell.model.actuator_gainprm[cell.act[j], 0]) for j, row in enumerate(values)]  # unfitted: the candidate's own
     out = []
     for _, ticks, real in episodes:
         sim = twin.track(cell, ticks, np.array(kp), gravity_comp)  # sets kp again; the other constants stay as set here
@@ -226,11 +230,72 @@ def servo(folders, cell_path, out, base="design", arm="arm_b", keys=("kp", "damp
     return result
 
 
+# -- registers ------------------------------------------------------------------------------------------------------------------
+# What the real servos are set to, as the MuJoCo position servo (kp, kv, force). The fits above ran kp to their bounds
+# (2026-11-09) because the real joints are a Dynamixel PID behind a PWM limit, far softer than the sim's kp 40.
+# ROBOTIS e-Manual, X series position mode: PWM = KPP*e + KPI*sum(e) + KPD*de, KPP = P/128, KPI = I/65536, KPD = D/16,
+# e in ticks (4096 a turn), the loop at 1 kHz; torque ~ PWM/885 * stall torque, less back-EMF (stall / no-load speed) * w.
+MOTORS = {11: "XL430-W250", 12: "XL430-W250", 13: "XL430-W250", 14: "XL330-M288", 15: "XL330-M288"}
+STALL = {"XL430-W250": (1.5, 12.0), "XL330-M288": (0.52, 5.0)}  # N·m at V, ROBOTIS e-Manual
+NO_LOAD = {"XL430-W250": (5.97, 11.1), "XL330-M288": (10.9, 5.0)}  # rad/s at V (57 and 104 rpm)
+DEFAULT_GAINS = {"XL430-W250": {"p": 640, "i": 0, "d": 4000}, "XL330-M288": {"p": 400, "i": 0, "d": 0}}  # not read back
+TICKS_PER_RAD = 4096 / (2 * math.pi)
+
+
+def from_registers(caps, volts):
+    """{jointN: {kp, kv, force}} for joint1-5 from a session's caps (record_session: pwm, p, i per motor ID) and the
+    motor-health voltages. An I gain has no MuJoCo position-servo term: it is listed, and the fit's gravity_comp stands
+    in for it. shortcut: D and the 1 kHz loop are ROBOTIS defaults, not read from the arm; read them back when a probe can."""
+    out, integral = {}, []
+    for j, motor_id in enumerate(sorted(MOTORS)):
+        model, cap = MOTORS[motor_id], caps.get(str(motor_id), {})
+        gains = dict(DEFAULT_GAINS[model], **{k: cap[k] for k in ("p", "i") if k in cap})
+        stall, rated = STALL[model]
+        speed, at = NO_LOAD[model]
+        v = volts[motor_id]
+        per_pwm = stall * v / rated / 885  # N·m per PWM unit
+        out[BODY[j]] = {"kp": round(per_pwm * gains["p"] / 128 * TICKS_PER_RAD, 3),
+                        "kv": round(stall * v / rated / (speed * v / at) + per_pwm * gains["d"] / 16 * TICKS_PER_RAD / 1000, 4),
+                        "force": round(per_pwm * cap.get("pwm", 885), 3)}
+        if gains["i"]:
+            integral.append(BODY[j])
+    return out, integral
+
+
+_S = {}
+
+
+def _score_init(cell_path, name, folders, arm, gravity_comp):
+    import omx_cell_sim as cs
+    _S.update(cell=cs.Cell(cell_path, name), eps={e[0]: e for e in Episodes(folders, arm).items}, grav=gravity_comp)
+
+
+def _score_job(name):
+    c = _S["cell"]
+    values = [{k: c.physics.joint("arm_b", j)[k] for k in ("kp",)} for j in BODY]  # every other constant is the model's own
+    return error_deg(c, [_S["eps"][name]], values, _S["grav"])
+
+
+def score(folders, cell_path, names, arm="arm_b", gravity_comp=False, jobs=8):
+    """Held-out and all-episode RMS of each named candidate as it stands (no fit): the comparison D-947 2 asks for."""
+    import numpy as np
+    from concurrent.futures import ProcessPoolExecutor
+    episodes = Episodes(folders, arm)
+    fit, hold = episodes.split()
+    out = {"episodes": {"hold": [e[0] for e in hold], "all": len(episodes.items), "untagged": episodes.untagged},
+           "gravity_comp": gravity_comp, "candidates": {}}
+    for name in names:
+        with ProcessPoolExecutor(jobs, initializer=_score_init, initargs=(cell_path, name, [str(f) for f in folders], arm, gravity_comp)) as pool:
+            errs = dict(zip([e[0] for e in episodes.items], pool.map(_score_job, [e[0] for e in episodes.items])))
+        out["candidates"][name] = {"hold": rms(np.concatenate([errs[e[0]] for e in hold])),
+                                   "all": rms(np.concatenate(list(errs.values())))}
+    return out
+
+
 # -- friction -------------------------------------------------------------------------------------------------------------------
 FRICTION_SCHEMA = "rosy.omx-sysid-friction.v1"
 PAN = "shoulder_pan"
 G = 9.81
-STALL = {"XL430-W250": (1.5, 12.0)}  # N·m at V, ROBOTIS e-Manual; torque per PWM unit = stall * V/V_rated / 885
 DATASHEET_SHARE = .25                # how far the datasheet constant may be off for this servo (back-EMF cancels in the difference)
 MIN_SNR, MIN_SAMPLES = 3.0, 8
 
@@ -373,8 +438,9 @@ def survey(doc=None):
     r = physics.ranges(doc)
     fitted = {}
     for name, c in doc["candidates"].items():
-        if c.get("source") == "fitted":
-            for arm, joints in c.get("arms", {}).items():
+        if c.get("source") in physics.MEASURED:
+            layers = [(arm, joints) for arm, joints in c.get("arms", {}).items()] + [(arm, c.get("joints", {})) for arm in physics.ARMS]
+            for arm, joints in layers:  # `joints` holds for every arm
                 for j, row in joints.items():
                     for k in row:
                         fitted.setdefault((arm, j, k), []).append(name)
@@ -385,7 +451,7 @@ def survey(doc=None):
                 by = fitted.get((arm, j, k))
                 mid = (span["low"] + span["high"]) / 2 or 1.0
                 width = 11.0 if not by else (span["high"] - span["low"]) / abs(mid)  # assumed beats any fitted width
-                rows.append((round(width, 3), f"{arm}.{j}.{k}", f"fitted ({', '.join(by)})" if by else "assumed", EXPERIMENTS[k]))
+                rows.append((round(width, 3), f"{arm}.{j}.{k}", f"measured ({', '.join(sorted(set(by)))})" if by else "assumed", EXPERIMENTS[k]))
     for k in r["container"]:
         known = [c.get("source") for c in doc["candidates"].values() if k in c.get("container", {})]
         rows.append((11.0 if set(known) <= {"assumed"} else 0.0, f"container.{k}", "assumed" if set(known) <= {"assumed"} else "fitted",
@@ -416,13 +482,34 @@ def main(argv=None):
     pr.add_argument("--name", required=True)
     pr.add_argument("--evidence")
     pr.add_argument("--base", default="design", help="for a friction fit: the candidate it sits on")
+    sc = sub.add_parser("score")
+    sc.add_argument("episodes", nargs="+")
+    sc.add_argument("--cell", required=True)
+    sc.add_argument("--candidates", default="design", help="comma list of cell_physics.yaml candidates")
+    sc.add_argument("--gravity-comp", action="store_true")
+    sc.add_argument("--jobs", type=int, default=8)
+    sc.add_argument("--out", required=True)
+    rg = sub.add_parser("registers")
+    rg.add_argument("--caps", required=True, help="a record_session caps.json, or session.json (its caps section)")
+    rg.add_argument("--volts", required=True, help="ID=V per motor 11-15, from motor-health voltage_v, e.g. 11=11.7,12=11.7,..")
     n = sub.add_parser("next")
     n.add_argument("--json", action="store_true")
     a = p.parse_args(argv)
     if a.cmd == "servo":
         r = servo(a.episodes, a.cell, a.out, a.base, a.arm, a.keys.split(","), a.gravity_comp, a.max_nfev, a.jobs)
         print(json.dumps(dict(rms_deg=r["rms_deg"], verdict=verdict(r)), indent=1))
-    elif a.cmd == "friction":
+    elif a.cmd == "score":
+        r = score(a.episodes, a.cell, a.candidates.split(","), gravity_comp=a.gravity_comp, jobs=a.jobs)
+        Path(a.out).mkdir(parents=True, exist_ok=True)
+        (Path(a.out) / "score.json").write_text(json.dumps(r, indent=1), encoding="utf-8")
+        print(json.dumps(r["candidates"], indent=1))
+    elif a.cmd == "registers":
+        import yaml
+        caps = json.loads(Path(a.caps).read_text())
+        if "caps" in caps:  # session.json: {"caps": {"11": {"pwm_limit": .., "p_gain": ..}}}
+            caps = {k: {{"pwm_limit": "pwm", "p_gain": "p", "i_gain": "i"}.get(n, n): v for n, v in row.items()} for k, row in caps["caps"].items()}
+        joints, integral = from_registers(caps, {int(k): float(v) for k, v in (x.split("=") for x in a.volts.split(","))})
+        print(yaml.safe_dump({"joints": joints, "integral_gain": integral}, sort_keys=False))
         runs = []
         for item in a.run:
             trace, grams, result = item.rsplit(":", 2)

@@ -42,9 +42,9 @@ def test_unknown_candidate_and_base_loop_are_refused():
 
 def test_ranges_span_candidates_and_widen_by_two_sd():
     r = physics.ranges()
-    assert r["arms"]["arm_b"]["joint1"]["kp"] == {"low": 20.0, "high": 40.0, "measured": True}
-    assert r["arms"]["arm_a"]["joint1"]["kp"] == {"low": 40.0, "high": 40.0, "measured": False}  # design only: not measured
-    assert r["arms"]["arm_b"]["joint2"]["kp"]["measured"] is False
+    assert r["arms"]["arm_b"]["joint1"]["kp"] == {"low": 5.386, "high": 40.0, "measured": True}
+    assert r["arms"]["arm_a"]["joint1"]["kp"] == {"low": 5.386, "high": 40.0, "measured": True}  # the servo registers
+    assert r["arms"]["arm_a"]["joint1"]["damping"] == {"low": 0.3, "high": 0.3, "measured": False}  # design only: not measured
     assert r["arms"]["arm_b"]["joint1"]["zero_offset_deg"] == {"low": 0.0, "high": 4.0, "measured": True}
     assert r["container"]["friction"] == {"low": 1.0, "high": 1.0, "measured": False}
     assert "zero_offset_deg" not in r["arms"]["arm_a"]["joint1"]
@@ -92,7 +92,7 @@ def test_promote_appends_a_candidate_and_never_overwrites(tmp_path):
     p = physics.Physics("servo-test", doc)
     assert p.joint("arm_b", "joint3") == dict(DESIGN, kp=25.0, damping=0.2)
     assert p.joint("arm_a", "joint3") == DESIGN
-    assert physics.ranges(doc)["arms"]["arm_b"]["joint3"]["kp"] == {"low": 21.0, "high": 40.0, "measured": True}
+    assert physics.ranges(doc)["arms"]["arm_b"]["joint3"]["kp"] == {"low": 5.34, "high": 40.0, "measured": True}
     with pytest.raises(SystemExit, match="exists"):
         sysid.promote(fit([1, 1, 1, 1, 1], [.5, .5, .5, .5, .5]), "servo-test", None, path)
     with pytest.raises(SystemExit, match="not promoted"):
@@ -109,7 +109,8 @@ def test_next_puts_assumed_constants_first_with_an_experiment():
     assert rows[0][2] == "assumed"
     names = {c: (k, e) for _, c, k, e in rows}
     assert names["container.friction"][0] == "assumed" and "push test" in names["container.friction"][1]
-    assert names["arm_b.joint1.kp"][0].startswith("fitted")
+    assert names["arm_b.joint1.kp"][0] == "measured (registers-20261109, twin-kp-20261109)"
+    assert names["arm_b.joint1.damping"][0] == "assumed"
     assert json.dumps([list(r) for r in rows])  # the --json form serialises
 
 
@@ -204,3 +205,16 @@ def test_friction_windows_follow_the_push_geometry():
     assert sysid.windows(10, 40) == ((pytest.approx(0.4), 0.9), (0.05, pytest.approx(0.2)))
     with pytest.raises(SystemExit, match="push further"):
         sysid.windows(30, 40)
+
+
+def test_registers_give_the_servo_the_session_set():
+    caps = {"11": {"pwm": 300}, "12": {"pwm": 600, "p": 1600}, "13": {"pwm": 600, "i": 50},
+            "14": {"pwm": 300, "current": 250, "p": 800, "i": 50}, "15": {"pwm": 300, "current": 250}}
+    joints, integral = sysid.from_registers(caps, {11: 11.7, 12: 11.7, 13: 11.6, 14: 6.1, 15: 6.1})
+    per_pwm = 1.5 * 11.7 / 12 / 885
+    assert joints["joint1"]["kp"] == pytest.approx(per_pwm * 640 / 128 * 4096 / (2 * 3.141592653589793), rel=1e-3)
+    assert joints["joint2"]["kp"] == pytest.approx(joints["joint1"]["kp"] * 1600 / 640, rel=1e-3)  # the session's P 1600
+    assert joints["joint1"]["force"] == pytest.approx(per_pwm * 300, rel=1e-3) and joints["joint2"]["force"] == pytest.approx(per_pwm * 600, rel=1e-3)
+    assert integral == ["joint3", "joint4"]
+    doc = physics.load()
+    assert physics.Physics("registers-20261109", doc).joint("arm_a", "joint2")["kp"] == pytest.approx(joints["joint2"]["kp"], rel=1e-3)

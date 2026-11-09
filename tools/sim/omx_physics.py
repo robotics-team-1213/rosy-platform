@@ -14,6 +14,7 @@ import yaml
 FILE = Path(__file__).resolve().parents[2] / "learning/envs/isaac/cell_physics.yaml"
 ARMS = ("arm_a", "arm_b")
 JOINTS = ("joint1", "joint2", "joint3", "joint4", "joint5", "gripper_joint_1")
+MEASURED = ("fitted", "registers")  # read off the real arm: fitted to its recordings, or its servo settings
 KEYS = ("kp", "kv", "damping", "armature", "frictionloss", "force", "zero_offset_deg")
 
 
@@ -77,7 +78,7 @@ def ranges(doc=None):
     doc = doc or load()
     cands = {n: Physics(n, doc) for n in doc["candidates"]}
     out = {"source": FILE.name, "candidates": sorted(cands), "arms": {}, "container": {}}
-    fitted = [c for c in doc["candidates"].values() if c.get("source") == "fitted"]
+    fitted = [c for c in doc["candidates"].values() if c.get("source") in MEASURED]
     for arm in ARMS:
         for j in JOINTS:
             for k in KEYS:
@@ -89,7 +90,7 @@ def ranges(doc=None):
                     sd = doc["candidates"][n].get("sd", {}).get(arm, {}).get(j, {}).get(k, 0.0)
                     values += [v - 2 * sd, v + 2 * sd]
                 if len(values) > 1 or k != "zero_offset_deg":
-                    measured = any(k in c.get("arms", {}).get(arm, {}).get(j, {}) for c in fitted)
+                    measured = any(k in c.get("arms", {}).get(arm, {}).get(j, {}) or k in c.get("joints", {}).get(j, {}) for c in fitted)
                     out["arms"].setdefault(arm, {}).setdefault(j, {})[k] = {"low": max(min(values), 0.0) if k != "zero_offset_deg" else min(values),
                                                                             "high": max(values), "measured": measured}
     for k, pick in (("mass", lambda v: v), ("friction", lambda v: v[0])):
