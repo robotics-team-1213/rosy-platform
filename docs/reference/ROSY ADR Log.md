@@ -10,6 +10,7 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-1008 | 몸 주변 안전지대는 실제 진행 방향만 지킨다: 후진 사람 확인 삭제, 제자리 회전은 몸이 돌아 들어가는 쪽만. [전문](../adr/D-1008-heading-only-safety-zone.md) | Accepted (2026-11-09, 사용자 지시; CORE 구현·호스트 시험, 하드웨어 worker 회전 게이트와 실물 적용은 별도) |
 | D-1006 | 지도·보정이 현실과 어긋난 것을 먼저 알아챈다 — 보정 건강 상태와 선택 게이트, 자동 재보정은 독립 기준이 생길 때까지 규정만. [전문](../adr/D-1006-calibration-health-before-adaptation.md) | Accepted (2026-11-09, 사용자 지시; SOURCE·호스트 시험까지, 현장 수용 없음) |
 | D-1003 | Fleet은 free 구간의 Nav2 목표를 로봇 자기 지도 프레임으로 바꿔 보낸다. [전문](../adr/D-1003-nav2-free-goals-in-the-robot-map-frame.md) | Accepted (2026-11-09, 사용자 지시; SOURCE·Gazebo SIM까지, 기체·현장 수용 없음) |
 | D-922 | Pinky는 차분하고 호기심 많은 동료로 표현하고 방향성 눈인사와 졸린 대기를 연결한다 | Accepted (2026-10-30, 표현 경험·책임 경계; 구현·실물 수용 별도) |

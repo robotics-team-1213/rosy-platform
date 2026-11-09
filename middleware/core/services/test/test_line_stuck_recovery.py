@@ -40,6 +40,9 @@ def _inp(now, **kw):
                 rear_m=0.30, rear_blind_m=0.0, console_linked=True, linear_ceiling=0.15,
                 trail_age_s=1.0)
     base.update(kw)
+    if "turn_m" in base:                      # D-1008: one number for both sides unless a test splits them
+        base.setdefault("turn_ccw_m", base["turn_m"])
+        base.setdefault("turn_cw_m", base["turn_m"])
     return StuckInput(**base)
 
 
@@ -182,6 +185,32 @@ def test_active_yield_cannot_restart_or_extend_a_segment(turn_rad, replacement):
     # A lost reply must not buy additional motion at the original segment boundary.
     assert machine.step(_inp(until, turn_m=0.10, front_band_m=0.40)).kind == "hold"
     assert machine.phase == ("CRAWLING" if turn_rad else "YIELDED")
+
+
+def test_yield_checks_only_the_side_it_turns_into():
+    """User 2026-11-09 (D-1008): no room to turn left does not refuse a turn to the right."""
+    for turn_rad, blocked_side in ((0.6, "turn_ccw_m"), (-0.6, "turn_cw_m")):
+        machine, _bus = _machine()
+        room = {"turn_ccw_m": 0.10, "turn_cw_m": 0.10, blocked_side: 0.0}
+        machine.step(_inp(0.0, front_band_m=0.10, **room))
+        machine.step(_inp(1.0, front_band_m=0.10, **room))
+        with pytest.raises(AnswerRefused) as refused:
+            machine.answer(1.0, "stuck-1", "YIELD", "stuck_resolver", yield_m=0.30, yield_turn_rad=turn_rad)
+        assert "turn_blocked" in str(refused.value)
+        other = {"turn_ccw_m": 0.10, "turn_cw_m": 0.10, "turn_ccw_m" if turn_rad < 0 else "turn_cw_m": 0.0}
+        again, _bus = _machine()
+        again.step(_inp(0.0, front_band_m=0.10, **other))
+        again.step(_inp(1.0, front_band_m=0.10, **other))
+        assert again.answer(1.0, "stuck-1", "YIELD", "stuck_resolver", yield_m=0.30, yield_turn_rad=turn_rad) == "yield"
+
+
+def test_turn_blocked_reads_the_turning_side_and_both_when_there_is_no_side():
+    from core_features.line_follow.recovery.stuck.stuck_recovery import turn_blocked
+    left_only = _inp(0.0, turn_ccw_m=0.10, turn_cw_m=0.0)
+    assert not turn_blocked(left_only, 1.0) and turn_blocked(left_only, -1.0)
+    assert turn_blocked(left_only, 0.0) and turn_blocked(left_only, math.nan)
+    assert turn_blocked(_inp(0.0), 1.0)                      # no scan: unknown reads as blocked, on either side
+    assert not turn_blocked(_inp(0.0, turn_m=math.inf), -1.0)
 
 
 def test_yield_refuses_a_turn_without_clearance_but_not_the_peer_in_front():

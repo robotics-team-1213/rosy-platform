@@ -5,9 +5,14 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.380
+**Version:** v1.381
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.381 재승인 시험의 `blind_zone_confirmed` 삭제 (D-1008)
+
+- Breaking(한 필드 삭제): `POST /api/v1/navigation/approval/trial/start` 본문에서 `blind_zone_confirmed`를 뺐다. 보내면 400이다(`extra=forbid`). 사용자 결정(2026-11-09)에 따라 후진 시험도 사람 확인 없이 LiDAR가 본 뒤 여유로만 판단하며, 거절 코드 `BLIND_ZONE_CONFIRMATION_REQUIRED`와 응답 `clearance.blind_m`은 없어졌다.
+- 여유 확인은 시험이 움직이는 쪽만 본다. 전진은 앞, 후진은 뒤, 회전은 도는 쪽에 몸이 닿는 영역(0.05 m 호)이다. 그 밖의 방향은 `CLEARANCE_TOO_SMALL`의 이유가 되지 않는다.
 
 ### v1.375 OMX 팔 사건의 원인 라벨과 정지 앞뒤 사진 (D-971)
 
@@ -57,7 +62,7 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 - 다음 POST는 모두 operator다. Account 로그인은 `robot.operate`로 판정한다. 공용 개발 토큰은 403이다.
   - `/begin`: 정지 상태에서 motor 측정으로 넘어간다. CORE가 다시 시작되므로 결과는 GET의 `phase`로 읽는다. 실패하면 이전 설정으로 돌아가 `FAILED`와 사유를 남긴다. 다른 사람의 갱신 hold가 있으면 거절한다. 측정은 3시간 30분이 지나거나 기체가 재부팅되면 자동 취소되고, GET의 `measuring_expires_in_s`가 남은 시간을 보여 준다.
   - `/begin`과 `/trial/start`는 충전 중이면 `CHARGING`, 배터리 값이 없어 알 수 없으면 `CHARGING_UNKNOWN`으로 거절한다. `charging`은 도크가 확인한 충전만 뜻하므로 USB-C 선이 꽂혀 있어도 false일 수 있다. 선을 뺐는지는 사람이 본다.
-  - `/trial/start`: `direction`, `stop_cause`, `blind_zone_confirmed`. 속도는 받지 않는다. MANUAL로 전환하고, LiDAR 여유를 확인한다. 후진은 LiDAR로 증명할 수 없으므로, 사람이 확인했다는 `blind_zone_confirmed=true` 없이는 `BLIND_ZONE_CONFIRMATION_REQUIRED`로 거절한다. 스캔의 `range_min`이 몸 윤곽 안에 들어오지 않거나 윤곽을 읽을 수 없으면 `CLEARANCE_UNKNOWN`이다. 없거나 오래된 스캔은 `CLEARANCE_UNKNOWN`, 여유 부족은 `CLEARANCE_TOO_SMALL`이다.
+  - `/trial/start`: `direction`, `stop_cause`. 속도는 받지 않는다. MANUAL로 전환하고, LiDAR 여유를 확인한다. 확인은 시험이 움직이는 쪽만 본다(D-1008): 전진은 앞, 후진은 뒤, 회전은 도는 쪽에 몸이 닿는 영역이다. 사람이 뒤를 확인했다는 표시는 받지 않는다(`blind_zone_confirmed`를 보내면 400). 스캔의 `range_min`이 움직이는 쪽 몸 윤곽 안에 들어오지 않거나 윤곽을 읽을 수 없으면 `CLEARANCE_UNKNOWN`이다. 없거나 오래된 스캔은 `CLEARANCE_UNKNOWN`, 여유 부족은 `CLEARANCE_TOO_SMALL`이다.
   - `/trial/start`의 `test_surface`(floor·lifted)는 필수이며 요청이 정한다. 추정하지 않는다. floor 시험은 끝날 때 LiDAR로 실제 이동을 확인해, odom과 어긋나면 기록 없이 `trial.last.code`를 `WHEELS_NOT_MOVING_BODY`로, 스캔을 쓸 수 없으면 `SCAN_UNUSABLE`로, 움직임이 짧으면 `TRIAL_TOO_SHORT`로 남긴다. 봉인의 `test_surface`와 다른 시험이 있으면 봉인을 거절한다.
   - `/trial/hold`: 시험을 시작한 사람이 누르는 동안 보낸다. 일반 teleop 경로로 고정 저속을 명령한다.
   - `/trial/stop`: 버튼 해제. `command_loss` 시험은 이 호출 없이 hold를 끊는다. 이 시험에 stop을 보내면 기록 없이 중단한다.
@@ -4678,6 +4683,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.381 | 2026-11-09 | Breaking (D-1008, 한 필드 삭제): 재승인 `/trial/start`에서 `blind_zone_confirmed`와 `BLIND_ZONE_CONFIRMATION_REQUIRED`·`clearance.blind_m` 삭제. 여유 확인은 움직이는 쪽만. |
 | v1.371 | 2026-11-07 | D-991: Service Control `reboot` refused with 409 `ARM_SESSION_ACTIVE` or `HOST_JOBS_ACTIVE`; additive `reboot-over-jobs` passes live jobs, never an arm session. Breaking for one consumer, the Fleet screen: `stop-unit` and `stoppable_units` removed, `pinky-*` out of the unit list; additive `history`. |
 | v1.368 | 2026-11-07 | Additive (D-982): 현장 규칙 문서 `rosy.site_rules/1`(`GET/PUT /api/fleet/site-rules/draft`, `GET .../active`, `POST .../activate`)와 가정 상태 판정 `POST /api/fleet/site-rules/judge`(go/wait/refuse, 보내기 없음). 활성 문서가 없으면 동작 동일, 활성 문서는 더 막기만 한다 |
 | v1.362 | 2026-11-04 | Additive: D-977 `device_trial` opens the neutral `arm-transfers` jobs for exactly one arm (owner identity: `device: true`, matching `commissioning_revision`); `production` stays closed. New `operator_attested` record: `POST/GET .../jobs/{mission_id}/operator-attestations` (named operator distinct from proposer and approver, single-use, 45 s validity, `goal_confirmed: false`). The owner still refuses goals. |
