@@ -1,6 +1,6 @@
-"""Rebuild the eight LCD faces of one character: python make_faces.py.
+"""Rebuild the LCD faces of one character: python make_faces.py.
 
-D-504 keeps the eight names, 20 frames at 100 ms, and no blink or flash.
+D-504 keeps 20 frames at 100 ms and no blink or flash for every name.
 Life is a slow breath and a slow look. Each mood is one face: the mouth
 sits about one eye-height under the eyes, and both eyes share one shape.
 Same eye spacing. Pink on black, drawn at 3x and scaled to 320x240.
@@ -20,7 +20,9 @@ SCALE = 3
 PINK = (238, 79, 203)  # #ee4fcb
 BLACK = (0, 0, 0)
 CATCH = (255, 236, 248)
-NAMES = ("hello", "basic", "angry", "bored", "fun", "happy", "interest", "sad")
+NAMES = ("hello", "basic", "angry", "bored", "fun", "happy", "interest", "sad",
+         # Situation faces: face_screen.situation_face picks them; cheer is a group greeting.
+         "doze", "scan", "lost", "worry", "lowbat", "cheer", "thinking", "searching")
 EYE_L = 108
 EYE_R = 212
 
@@ -176,6 +178,57 @@ def frame(name: str, phase: float, *, gaze_x: float | None = None,
         open_eye(EYE_L, 114, 22, 18, 6, 1)
         open_eye(EYE_R, 114, 22, 18, -6, 1)
         stroke([(128, 166 + bob), (192, 166 + bob)], 14)
+    # The eight situation faces below were placed so each keeps >= 6% of the 32x24
+    # silhouette away from every other face (test_face_assets).
+    elif name == "doze":
+        # Eyes shut to two slow arcs; only breath moves them. No pupils to steer.
+        stroke(bow(EYE_L, 92 + bob, 34.5, -17.25), 20.8)
+        stroke(bow(EYE_R, 92 + bob, 34.5, -17.25), 20.8)
+        filled_smile(30, 14, 174)
+    elif name == "scan":
+        # Narrow tall eyes sweeping with `look`, over one flat measure line.
+        open_eye(EYE_L, 94, 23.4, 36.8, look * 0.9, 0)
+        open_eye(EYE_R, 94, 23.4, 36.8, look * 0.9, 0)
+        stroke([(124, 140 + bob), (196, 140 + bob)], 15.6)
+    elif name == "lost":
+        # Wide short eyes hunting, and a zigzag mouth: the line is not straight.
+        open_eye(EYE_L, 92, 36.8, 20.8, look * 0.6, -2)
+        open_eye(EYE_R, 92, 36.8, 20.8, look * 0.6, -2)
+        stroke([(112 + 24 * k, 156 + bob + (-8 if k % 2 else 8)) for k in range(5)], 16.9)
+    elif name == "worry":
+        # Inner-raised brows (the opposite slant of angry) over eyes that look down.
+        open_eye(EYE_L, 84, 28.75, 27.6, look * 0.3, 4)
+        open_eye(EYE_R, 84, 28.75, 27.6, look * 0.3, 4)
+        stroke([(EYE_L - 24, 60 + bob), (EYE_L + 20, 46 + bob)], 12.8)
+        stroke([(EYE_R - 20, 46 + bob), (EYE_R + 24, 60 + bob)], 12.8)
+        stroke(bow(160, 172 + bob, 24, -8), 19.2)
+    elif name == "lowbat":
+        # Tired but awake: squinting low with a weak thin mouth.
+        smile_eye(EYE_L, 144)
+        smile_eye(EYE_R, 144)
+        stroke([(128, 202 + bob), (192, 202 + bob)], 10)
+    elif name == "cheer":
+        # Raised brows, big eyes, a wide grin: a whole group just arrived.
+        open_eye(EYE_L, 84, 27, 24, look * 0.45, -6)
+        open_eye(EYE_R, 84, 27, 24, look * 0.45, -6)
+        stroke(bow(EYE_L, 52 + bob, 18, -6), 8)
+        stroke(bow(EYE_R, 52 + bob, 18, -6), 8)
+        filled_smile(58, 24, 136)
+    elif name == "thinking":
+        # Eyes ride high with lifted pupils; one small round mouth does the rest.
+        open_eye(EYE_L, 56, 24, 21, look * 0.35, -7)
+        open_eye(EYE_R, 56, 24, 21, look * 0.35, -7)
+        stroke(bow(EYE_L, 26 + bob, 16, -4), 9.1)
+        stroke(bow(EYE_R, 26 + bob, 16, -4), 9.1)
+        ellipse((141.8, 137.8 + bob, 178.2, 174.2 + bob), PINK)
+        ellipse((154, 150 + bob, 166, 162 + bob), BLACK)
+    elif name == "searching":
+        # Brows up, pupils dropped to the floor, flat mouth: hunting for the lane.
+        stroke(bow(EYE_L, 80 + bob, 20, -6), 10.4)
+        stroke(bow(EYE_R, 80 + bob, 20, -6), 10.4)
+        open_eye(EYE_L, 128, 29.9, 27.6, look * 0.2, 10)
+        open_eye(EYE_R, 128, 29.9, 27.6, look * 0.2, 10)
+        stroke([(136, 180 + bob), (184, 180 + bob)], 13)
     else:
         raise ValueError(name)
     return image.resize(SIZE, Image.Resampling.LANCZOS)

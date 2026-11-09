@@ -7,7 +7,8 @@ from PIL import Image, ImageChops
 
 
 ASSETS = Path(__file__).resolve().parents[1] / "emotion"
-FACES = ("hello", "basic", "angry", "bored", "fun", "happy", "interest", "sad")
+SITUATION = ("doze", "scan", "lost", "worry", "lowbat", "cheer", "thinking", "searching")
+FACES = ("hello", "basic", "angry", "bored", "fun", "happy", "interest", "sad", *SITUATION)
 OPERATING = ("basic", "interest", "happy", "fun", "bored")
 
 
@@ -32,6 +33,32 @@ def test_faces_are_visible_and_distinct_at_a_glance():
     for left, right in combinations(OPERATING, 2):
         difference = sum(a != b for a, b in zip(masks[left], masks[right])) / len(masks[left])
         assert difference >= 0.06, f"{left} and {right} differ by only {difference:.1%}"
+
+
+
+def test_every_situation_face_is_distinct_from_every_other_face():
+    masks = {name: _silhouette(name) for name in FACES}
+    for left in SITUATION:
+        for right in FACES:
+            if right == left:
+                continue
+            difference = sum(a != b for a, b in zip(masks[left], masks[right])) / len(masks[left])
+            assert difference >= 0.06, f"{left} and {right} differ by only {difference:.1%}"
+
+
+def test_assets_are_the_renderer_names():
+    from emotion.character import NAMES
+
+    assert NAMES == FACES
+    assert {path.stem for path in ASSETS.glob("*.gif")} == set(FACES)
+
+
+def test_situation_faces_with_pupils_follow_the_gaze():
+    from emotion.character import frame
+
+    for name in SITUATION:
+        moved = ImageChops.difference(frame(name, 0, gaze_x=-6), frame(name, 0, gaze_x=6)).getbbox()
+        assert (moved is None) == (name == "doze"), name  # doze has its eyes shut
 
 
 def test_panel_edges_have_intermediate_colours():
