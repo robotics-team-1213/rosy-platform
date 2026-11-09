@@ -7,6 +7,7 @@ import sqlite3
 from fastapi import Depends, HTTPException
 
 from core_common.protocol.integrated_control import ControlStopIngress, ControlStopReconcile, ControlStopRequest
+from fleet.server.control_unit_config import canonical_unit_id
 
 
 def install_control_stop_routes(app, service, *, authorize, require_viewer, require_named_operator):
