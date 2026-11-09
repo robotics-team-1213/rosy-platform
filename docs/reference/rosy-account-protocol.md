@@ -74,7 +74,7 @@ Account identity는 불변 opaque `account_id`다. login/email은 identity가 �
 
 | 자원 | 허용 capability |
 |---|---|
-| site | accounts.manage, fleet.read, fleet.operate, fleet.policy, camera.manage, games.operate, vault.read, vault.operate, vault.manage |
+| site | accounts.manage, fleet.read, fleet.operate, fleet.policy, camera.manage, games.operate, calibration.operate, vault.read, vault.operate, vault.manage |
 | robot | robot.read, robot.operate, robot.admin |
 | project | learning.view, learning.edit, learning.approve, learning.manage, learning.import, learning.publish |
 
@@ -264,6 +264,10 @@ Games 보드는 `--preview-account-config <receiver.json>`으로 같은 receiver
 HTTPS reverse proxy 뒤의 loopback 서버로 연다. 등록한 HTTPS origin만 쓰기
 요청을 허용한다. `/stop`은 `games.operate`를 검사한다. 설정이 없으면 보드는
 공개 읽기 전용이며 CLI의 기존 물리 현장 정지·Ctrl+C는 그대로 유지한다.
+
+Calibration 화면(D-1004)도 같은 receiver를 쓴다. 목록·상세·그림은 그 site의 유효한 세션이면 보고,
+실측 요청의 답은 `calibration.operate`를 정확히 요구한다. 답의 `by`는 세션의 표시 이름과 account_id다.
+설정이 없으면 읽기 전용이다. 모르는 capability를 옛 receiver가 거절하므로 receiver를 먼저 배포하고 그 뒤 부여한다.
 
 학습 연결의 소유자는 기존 user_id로 보존한다. 중앙 모드의 개인 연결 사용은
 현재 소유자의 `learning.import` 권한을 확인한다. 프로젝트 공유 연결은 해당
