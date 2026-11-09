@@ -571,12 +571,14 @@ class FaceDisplay:
             core = self._read_core()
             if core is None or core.get("estop") or core.get("robot_mode") == "EMERGENCY":
                 return False
-            if core.get("face") and core.get("activity_kind") != "CALIBRATING":
+            # A situation face (calibration, caution, rest) is already the bar's face; keep it.
+            situation = getattr(face_screen, "situation_face", lambda _core: None)(core)
+            if core.get("face") and situation is None:
                 face = core["face"]
             expires = core.get("expression_until")
             live = expires is not None and self._wall() <= expires
             intent = core.get("expression") if live else None
-            if expires is not None and not live:
+            if expires is not None and not live and situation is None:
                 face = "basic"
             intent = intent or {"gaze_x": 0., "resting": False}
             frame = self._faces.next(face, expression=intent, now=self._clock())

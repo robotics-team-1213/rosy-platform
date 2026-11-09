@@ -1,5 +1,5 @@
 # D-922 native expression smoothing, expiry and card precedence.
-from test_rosy_face import WALL, _display, _face_inputs, _face_loop, _status
+from test_rosy_face import ROOT, WALL, _display, _face_inputs, _face_loop, _status
 
 
 def test_directional_face_frames_smooth_the_pupils_and_can_return_to_neutral(tmp_path):
@@ -58,3 +58,31 @@ def test_cached_core_does_not_extend_directional_intent_after_a_read_failure(tmp
     _face_inputs(tmp_path, power_mode="standby")
     display.step()
     assert not display.tick()
+
+
+def test_native_character_keeps_the_situation_face_over_cores_face_and_its_expiry(tmp_path):
+    module = _display()
+    _status(tmp_path, "CORE_READY", runtime_mode="hardware")
+    _face_inputs(tmp_path, face="bored", battery_charging=True, expression={"gaze_x": 0., "resting": True})
+    display, _, clock, _, _, _ = _face_loop(module, tmp_path)
+    names = []
+    display._faces._render = lambda name, phase, gaze_x, resting: names.append(name) or b"panel"
+    display.step()
+    display.tick()
+    assert names[-1] == "doze"
+    display._wall = lambda: WALL + 1  # the resting intent has expired; a situation face does not
+    clock.now += .1
+    display.tick()
+    assert names[-1] == "doze"
+    _face_inputs(tmp_path, face="happy", activity_kind="CALIBRATING")
+    display.step()
+    clock.now += .1
+    display.tick()
+    assert names[-1] == "scan"
+
+
+def test_every_face_name_has_a_shipped_asset():
+    from core_common.face_screen import FACES
+
+    assets = ROOT / "middleware/robot_ui/face/emotion"
+    assert {path.stem for path in assets.glob("*.gif")} == set(FACES)

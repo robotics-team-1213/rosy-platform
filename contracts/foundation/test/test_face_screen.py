@@ -194,13 +194,13 @@ def test_caution_beats_test_and_calibration_strips():
 def test_test_strip_beats_calibration():
     answer = fs.screen_for(**READY, core=core(activity_kind="CALIBRATING"), test="buzzer")
 
-    assert answer["strip"] == "Testing buzzer" and answer["face"] == "interest"
+    assert answer["strip"] == "Testing buzzer" and answer["face"] == "scan"
 
 
 def test_calibration_strip_and_face():
     answer = fs.screen_for(**READY, core=core(activity_kind="CALIBRATING"))
 
-    assert (answer["face"], answer["strip"]) == ("interest", fs.CALIBRATING_STRIP)
+    assert (answer["face"], answer["strip"]) == ("scan", fs.CALIBRATING_STRIP)
 
 
 def test_caution_strip_wakes_standby():
@@ -584,3 +584,48 @@ def test_the_stopped_card_shows_roots_release_code_and_nothing_else_does():
     stopped = fs.screen_for(**READY, core=core(estop=True), release_code="HJKM-NPQR")
     assert stopped["kind"] == fs.STOPPED and stopped["release"] == "Release code HJKM-NPQR"
     assert "HJKM" not in json.dumps(fs.screen_for(**READY, core=core(), release_code="HJKM-NPQR"))
+
+
+# --- situation faces (D-922 추가 결정 2026-11-09) ----------------------------------------
+
+
+@pytest.mark.parametrize("fields,face", [
+    ({"recovery": "retrace", "caution": ["dock_failed", "line_follow_hold"]}, "searching"),
+    ({"recovery": "return", "activity_kind": "CALIBRATING"}, "searching"),
+    ({"recovery": "bridge"}, "basic"),  # the soft bridge is lamp only
+    ({"caution": ["dock_failed", "line_follow_hold"]}, "worry"),
+    ({"caution": ["line_follow_hold"], "battery_percent": 5.0}, "lost"),
+    ({"caution": ["line_follow_hold"], "signal": "ask"}, "basic"),  # a fleet question replaces the hold
+    ({"activity_kind": "CALIBRATING", "battery_percent": 5.0}, "scan"),
+    ({"robot_mode": "NAVIGATION", "nav_state": "PLANNING", "face": "happy", "battery_percent": 5.0}, "thinking"),
+    ({"robot_mode": "NAVIGATION", "nav_state": "NAVIGATING", "face": "happy"}, "happy"),
+    ({"battery_percent": 19.9}, "lowbat"),
+    ({"robot_mode": "DOCKING", "face": "fun", "battery_percent": 12.0}, "lowbat"),
+    ({"battery_percent": 20.0}, "basic"),
+    ({"battery_percent": None}, "basic"),
+    ({"battery_percent": 10.0, "battery_charging": True}, "doze"),
+    ({"battery_charging": True, "face": "bored"}, "doze"),
+    ({"robot_mode": "MANUAL", "face": "interest", "battery_charging": True}, "interest"),
+])
+def test_each_situation_has_one_face_owner(fields, face):
+    assert fs.screen_for(**READY, core=core(**fields))["face"] == face
+
+
+def test_a_live_greeting_outranks_the_rest_faces_but_not_a_caution():
+    look = {"gaze_x": 4.0, "resting": False}
+    rest = {"gaze_x": 0.0, "resting": True}
+
+    def face(**fields):
+        return fs.screen_for(**READY, core=core(**fields))["face"]
+
+    assert face(battery_charging=True, face="cheer", expression=look) == "cheer"
+    assert face(battery_percent=10.0, face="happy", expression=look) == "happy"
+    assert face(robot_mode="NAVIGATION", nav_state="PLANNING", face="happy", expression=look) == "happy"
+    assert face(battery_charging=True, face="bored", expression=rest) == "doze"
+    assert face(caution=["line_follow_hold"], face="happy", expression=look) == "lost"
+    assert face(activity_kind="CALIBRATING", face="happy", expression=look) == "scan"
+
+
+@pytest.mark.parametrize("name", sorted(fs.FACES))
+def test_every_face_name_survives_the_hand_over(name):
+    assert fs.validate_face_inputs(handover(face=name), NOW)["face"] == name
