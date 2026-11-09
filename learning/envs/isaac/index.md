@@ -32,8 +32,8 @@
 
 ## 최근 기록
 
+- 2026-11-09 · uncommitted · physics candidates and the sysid loop (D-947 2, G-23, G-25)
 - 2026-11-01 · e51d9f1a62 · KAN-108 plate, release strategies and container variants (step 4, D-947 order: MuJoCo candidates, Isaac boundary)
 - 2026-11-01 · de414c8795 · Isaac confirmation of off-centre ship-plate releases; stud ride-up now fails the seat check
 - 2026-11-01 · ab049f0b98 · MuJoCo sweep of off-centre release on the ship plate, Isaac offset cases (D-947 order, candidates only)
 - 2026-11-01 · f0d8c10dc9 · navy stud plate under the stack, opt-in case nominal-palletizing-v21-ship (step 2)
-- 2026-11-01 · 45da34bf98 · finger inside a 6 mm row gap places nine at a 3 mm release

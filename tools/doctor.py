@@ -11,13 +11,15 @@ and the ``tools/land.py`` queue (tickets, holder, dead or stale tickets; ``land_
 on its next read, this tool does not; a live run that re-prepared ``REPREPARED`` times or showed no activity in its
 ticket, events or logs for ``QUIET_MIN`` minutes is a WARN), and ``land_isolation`` records still open after a night (FAIL). ``--hosts`` also reads each lab PC's
 ``~/rosy-test/maintenance/last-report.json`` and ``~/rosy-jobs/disk-low`` over ssh, and places each host as a landing
-would: a refusal its raw memory, load and disk do not explain is a WARN (bookkeeping, not a full host). Standard
+would: a refusal its raw memory, load and disk do not explain is a WARN (bookkeeping, not a full host); a report older
+than ``REPORT_STALE_S`` or a ``tool_sha256`` other than rosy-ops origin/main's (sibling checkout) is a WARN. Standard
 library only.
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import subprocess
@@ -42,6 +44,8 @@ import worktrees  # noqa: E402
 SLOTS = 15  # docs/reference/shared-checkout.md: worktrees, main included (worktrees.CAP is the hard stop)
 # 2026-10-27: runs 4-5 h old could not be told apart, waiting from hung; one had prepared FULL four times (248 min).
 REPREPARED, QUIET_MIN = 3, 30
+# rosy-test-storage runs at 05:30 and 00/06/12/18:20; an older report means the timer stopped or keeps failing.
+REPORT_STALE_S = 7 * 3600
 HOST_SCRIPT = ("cat ~/rosy-test/maintenance/last-report.json 2>/dev/null; echo;"
                " [ -e ~/rosy-jobs/disk-low ] && echo ROSY-DISK-LOW=1 || echo ROSY-DISK-LOW=0")
 
@@ -133,11 +137,23 @@ def check_queue(repo: Path, now: float) -> list[tuple]:
     return found
 
 
+def ops_tool_digest() -> str | None:
+    """deploy_host_storage.py's digest of rosy-ops origin/main host_storage.py, from the sibling rosy-ops checkout.
+
+    2026-10-26 and 11-06: merging to rosy-ops deployed nothing and the PCs ran an old copy for days."""
+    common = _git(TOOLS, "rev-parse", "--path-format=absolute", "--git-common-dir").stdout.strip()
+    if not common:
+        return None
+    blob = subprocess.run(["git", "-C", str(Path(common).parent.parent / "rosy-ops"), "show",
+                           "origin/main:tools/host_storage.py"], capture_output=True)
+    return hashlib.sha256(blob.stdout).hexdigest()[:12] if blob.returncode == 0 and blob.stdout else None
+
+
 def check_hosts(now: float) -> list[tuple]:
     hosts = lab_hosts.test_hosts()
     if not hosts:
         return [("WARN", "hosts: no test_hosts in private/lab-hosts.json", None)]
-    found = []
+    found, want = [], ops_tool_digest()
     for host in hosts:
         try:
             done = subprocess.run([*update_status.SSH, host, HOST_SCRIPT], stdin=subprocess.DEVNULL,
@@ -158,6 +174,14 @@ def check_hosts(now: float) -> list[tuple]:
                 f"{'' if report else ' (no last-report.json)'}, disk-low {'present' if low else 'absent'}")
         found.append(("WARN", text, "docs/solutions/workflow-issues/read-only-test-dirs-fill-lab-disks-2026-10-26.md")
                      if low else ("OK", text, None))
+        started = report.get("started")
+        if isinstance(started, (int, float)) and now - started > REPORT_STALE_S:
+            found.append(("WARN", f"host {host}: last storage maintenance {(now - started) / 3600:.0f} h ago",
+                          "ssh <host> systemctl --user status rosy-test-storage.timer rosy-test-storage.service"))
+        if want and report and report.get("tool_sha256") != want:
+            found.append(("WARN", f"host {host}: host_storage.py {report.get('tool_sha256') or 'older copy'}"
+                          f" is not rosy-ops origin/main {want}",
+                          f"cd ../rosy-ops && python tools/deploy_host_storage.py {host}"))
     return found
 
 

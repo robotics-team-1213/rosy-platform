@@ -256,11 +256,12 @@ gaps:
     gap: OMX servo lag is 0.10-0.34 s per joint on the real arm while the sim gives 0.16 s on every joint (one gain for all)
     evidence:
       - {path: tools/sim/omx_twin.py, branch: feat/omx-sim-twin}
-      - tools/sim/omx_cell_sim.py:109
+      - learning/envs/isaac/cell_physics.yaml
+      - tools/sim/omx_sysid.py
     tier: [R, M]
-    owner: omx_twin
+    owner: omx_twin / omx_sysid
     status: IN-PROGRESS
-    next: the twin's per-joint gain fit over the night episodes becomes a named choice; the stages are rerun with it and the lag compared again
+    next: the twin's kp grid is the candidate twin-kp-20261109 (--choice physics=); omx_sysid.py servo fits kp, kv, damping and frictionloss over the night episodes and cell_step.py ramps, promoted only when held-out episodes improve, then the stages are rerun with it
 
   - id: G-24
     gap: OMX wrist cameras have no measured intrinsics or mount; the sim uses a fit to one arm_b frame and assumes arm_a the same
@@ -275,13 +276,14 @@ gaps:
   - id: G-25
     gap: OMX contact physics are hand-set (container mass, one friction); MuJoCo contacts are not results and Isaac has one case against the real outcome
     evidence:
-      - tools/sim/omx_cell_sim.py:109
+      - learning/envs/isaac/cell_physics.yaml
       - learning/envs/isaac/cell_model_inventory.yaml:43
+      - tools/sim/omx_sysid.py
       - D-947
     tier: [R, M]
-    owner: learning/envs/isaac
+    owner: learning/envs/isaac / omx_sysid
     status: OPEN
-    next: every real stop or slip becomes an Isaac case (cell_cases) and the suite is rerun each round; friction is fitted only from such cases
+    next: a supervised cell_push.py --friction sweep at two stack heights gives the container friction (omx_sysid.py friction, SNR >= 3, else a person's tilt test); every real stop or slip still becomes an Isaac case (cell_cases) and the suite reruns with the candidate
 
   - id: G-26
     gap: OMX outbound planner and two-arm policy built their layout without choices, so they used the design plates, not the measured snapshot
