@@ -60,3 +60,11 @@ def test_the_wrist_holder_closes_on_the_upper_arm_as_the_wrist_flexes_past_58():
     assert gap[-1] < load.CLEAR_MM  # far enough over, the holder comes within the bound
     out = load.review(arm, [[42.52, -9.4, -0.81, 76, 73.09, 0]] * 3, 15, np.ones(5) * 9)
     assert not out["ok"] and out["flags"][-1]["joint"] == "holder-link4"
+
+
+def test_surface_distance_is_to_the_triangle_not_its_corners():
+    verts = np.array([[0, 0, 0], [0.1, 0, 0], [0, 0.1, 0]], float)  # one 100 mm triangle: vertices far from its middle
+    faces = np.array([[0, 1, 2]])
+    assert load.surface_mm(np.array([[0.02, 0.02, 0.005]]), verts, faces) == pytest.approx(5.0)  # straight above the face
+    assert load.surface_mm(np.array([[-0.003, -0.004, 0.0]]), verts, faces) == pytest.approx(5.0)  # off the corner
+    assert load.surface_mm(np.array([[0.06, 0.06, 0.0]]), verts, faces) == pytest.approx(0.02 / np.sqrt(2) * 1000, rel=1e-6)  # past the long edge
