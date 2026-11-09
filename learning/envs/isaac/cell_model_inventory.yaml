@@ -2,6 +2,7 @@
 # Learning → SIM 실험 shows this file read-only; change it by commit (this file is the one source).
 # Real-cell photos stay out of Git (public repository): register the file name here and put the file in
 # cell-photos/ beside the private SIM operator configuration on the review host.
+# Physics constants (servo gains, joint damping, container mass and friction) are candidates in cell_physics.yaml beside this file.
 schema: rosy.cell-model-inventory/1
 checked_at: '2026-11-03'
 models:

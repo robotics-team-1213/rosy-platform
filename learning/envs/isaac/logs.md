@@ -630,3 +630,10 @@
 - 증거: Isaac seed 42 — 새 판 기준 9/9(a9d31a94aa, 간격 5.57-5.99 mm). 일반 컨테이너는 0.6 mm 어긋남에서 떨어뜨리기·가드 하강 모두 첫 상자가 점 위에 1.1 mm 높이로 실패. 발 릴리프 29.0 mm(바닥 3 mm)는 기준 9/9, 0.8 mm 어긋남 9/9, 1.0 mm는 앞 두 상자 안착 뒤 계획기의 수렴 검사에서 막힘(안착 실패 아님). MuJoCo 3,942 + 1,377(여유 0.2/0.5/1.0) 경우: 일반 대역 0.6 mm, 릴리프 1.0 mm, 가드 하강 +0~0.25 mm, 가로 탐색은 오히려 나쁨, 요 3도는 어느 쪽도 못 고침. 원격 시험 47 통과(MuJoCo 시험 2개 파일은 호스트에 MuJoCo가 없어 건너뜀, 노트북에서 스크립트로 같은 논리 확인).
 - gate 변화: 없음. 시뮬레이션이며 실물 수용이 아니다. 열린 결정: 실제 선미·브리지·벨트 끝과 레벨링 지점 배치.
 - CE: 새 교훈 기록 아님 — 판단 근거(mocap 조 속도 없음, 판 자르기 이유)는 result.md Step 4와 코드 주석에 있고, 해결된 장애는 아니다.
+
+## 2026-11-09 · uncommitted · physics candidates and the sysid loop (D-947 2, G-23, G-25)
+
+- 변경: `cell_physics.yaml`(물리 상수 후보 원장: design, twin-kp-20261109, twin-zero-20261109), `tools/sim/omx_physics.py`(후보 해석, MuJoCo 적용, 학습 범위와 measured 표시), 두 MuJoCo 셀이 `--choice physics=`로 빌드, `tools/sim/omx_sysid.py`(servo·friction·promote·next), `cell_push.py --friction`, `cell_step.py`, `omx_real2sim.py sim --choice`, 루프 6b 단계.
+- 증거: design 모델 해시가 main과 같음(AI PC). 원격 시험 119개 통과(MuJoCo 시험은 AI PC 16/16). 첫 서보 맞춤은 보류 0.455→0.393°였지만 kp가 범위 끝에 붙어 올리지 않음 — `docs/validation/omx-sysid-2026-11-09/result.md`.
+- gate 변화: 없음. 시뮬 근거이며 실물 실험(마찰·램프)은 감독 시험(D-911)으로 남음.
+- CE: 해당 없음 — 범위 끝 값 거절은 `verdict` 코드·회귀 시험·result.md에 남겼다.
