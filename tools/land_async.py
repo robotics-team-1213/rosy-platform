@@ -14,8 +14,10 @@ owner can read the STOP, fix it on the branch and queue again. Uncommitted chang
     python tools/land_async.py resume <tree-name> [land.py args]   # relaunch a stopped landing on its snapshot
     python tools/land_async.py orphans [--resume]                    # after a reboot: landings that died unstopped
 
-A branch already held by a live ticket is refused; ``--replace`` stops that older lander first (2026-10-31/11-01: the
-same change was queued twice and ran two pretests).
+One live landing per branch (2026-10-31/11-01: the same change was queued twice and ran two pretests; 11-09 report:
+322 re-queues). Queueing a HEAD the live landing already holds reuses it; a newer HEAD stops that older lander and
+queues this one (``--replace`` is still accepted). A full queue is polled for FULL_WAIT_S before it stops. When a
+landing ends, older snapshots of its branch that it covers go (land_gc's lossless rules).
 """
 
 from __future__ import annotations
@@ -37,6 +39,7 @@ ROLLUP = re.compile(r"land/fix/land-rollup-\d{14}-\d{14}")
 NO_WINDOW = 0x08000000  # subprocess.CREATE_NO_WINDOW, named here so the module imports off Windows too
 QUEUE_FULL = "landing queue full"
 ROOM_WAIT_S = 3 * 3600  # a landing refused only by the queue cap waits this long for room, then stops as before
+FULL_WAIT_S, FULL_POLL_S = 30 * 60, 60  # D-889 addendum 32: a full queue at queue time waits, then stops
 # Laptop commit exhaustion ended four landings at once on 2026-11-06 with these as land.py's last line.
 RESOURCE_SHORTAGE = ("WinError 1450", "WinError 1455", "Out of memory", "MemoryError")
 RESOURCE_RETRIES = 3
@@ -45,6 +48,10 @@ RESOURCE_WAIT_S = 300
 
 class Busy(SystemExit):
     """Another supervisor or launch admission owns this OS lock."""
+
+
+class Full(Exception):
+    """The queue cap refused a new ticket; ``start`` polls outside the launch lock."""
 
 
 @contextmanager
@@ -169,6 +176,10 @@ def holders(cwd: Path, branch: str) -> list[dict]:
     return rows
 
 
+def where(row: dict) -> str:
+    return f"{row['ticket']} ({row.get('branch')}, {row.get('status')}, pid {row.get('pid')})"
+
+
 def stop(pid: int) -> None:
     if os.name == "nt":
         subprocess.run(["taskkill", "/PID", str(pid), "/T", "/F"], capture_output=True)
@@ -180,40 +191,58 @@ def stop(pid: int) -> None:
 
 def start(cwd: Path, land_args: list[str], now: datetime, launch) -> tuple[str, Path]:
     """Create the snapshot branch and hidden worktree, hand them to ``launch``; (snapshot, log path)."""
-    with locked(holder(cwd).parent / "rosy-land-async.lock", wait=True):
-        return _start(cwd, land_args, now, launch)
+    deadline, waited = time.monotonic() + FULL_WAIT_S, False
+    while True:
+        try:
+            with locked(holder(cwd).parent / "rosy-land-async.lock", wait=True):
+                return _start(cwd, land_args, now, launch, replace=not waited)
+        except Full as exc:  # polled outside the lock: resumes and rollups go on meanwhile
+            if time.monotonic() >= deadline:
+                raise SystemExit(f"[land-async] {exc} (waited {FULL_WAIT_S // 60} min)") from exc
+            print(f"[land-async] {exc}; checking again every {FULL_POLL_S} s for up to {FULL_WAIT_S // 60} min",
+                  flush=True)
+            time.sleep(FULL_POLL_S)
+            waited = True
 
 
-def _start(cwd: Path, land_args: list[str], now: datetime, launch) -> tuple[str, Path]:
+def _start(cwd: Path, land_args: list[str], now: datetime, launch, replace: bool = True) -> tuple[str, Path]:
     branch = git(cwd, "rev-parse", "--abbrev-ref", "HEAD")
     if branch in ("HEAD", "main") or branch.startswith(PREFIX):
         raise SystemExit(f"[land-async] run it from a topic branch's worktree, not {branch!r}")
     if git(cwd, "status", "--porcelain", "--untracked-files=no"):
         raise SystemExit("[land-async] uncommitted changes: commit them first (a landing takes only commits)")
-    replace = "--replace" in land_args
-    land_args = [a for a in land_args if a != "--replace"]
-    replacements = []
-    for row in holders(cwd, branch):  # one landing per change: a second one only doubled the pretest
+    land_args = [a for a in land_args if a != "--replace"]  # replacing a live landing is the default now
+    replacements, rows = [], holders(cwd, branch)
+    for row in rows:  # every owner is checked before any reuse or stop
         carried = row.get("branch") not in (branch,) and not row.get("branch", "").startswith(PREFIX + branch + "-")
-        where = f"{row['ticket']} ({row.get('branch')}, {row.get('status')}, pid {row.get('pid')})"
-        if not replace or carried or row.get("status") == "starting":
-            raise SystemExit(f"[land-async] {branch} is already landing in {where}"
-                             + ("; it rides in that batch" if carried else "; its supervisor is still starting"
-                                if row.get("status") == "starting" else "; --replace stops it and queues this HEAD"))
-        replacements.append((int(row["pid"]), where))
-    for pid, where in replacements:
-        print(f"[land-async] --replace: stopping {where}", flush=True)
+        if carried or row.get("status") == "starting":
+            raise SystemExit(f"[land-async] {branch} is already landing in {where(row)}"
+                             + ("; it rides in that batch" if carried else "; its supervisor is still starting"))
+    for row in rows:  # one landing per change: a second one only doubled the pretest
+        if subprocess.run(["git", "-C", str(cwd), "merge-base", "--is-ancestor", "HEAD", row["branch"]],
+                          capture_output=True).returncode == 0:  # its snapshot (with main merged in) holds HEAD
+            print(f"[land-async] this HEAD is already landing in {where(row)}; nothing new queued", flush=True)
+            return row["branch"], holder(cwd) / (row["branch"].replace("/", "-") + ".log")
+        if not replace:  # it started while this call waited for room: it may hold a newer HEAD than ours
+            raise SystemExit(f"[land-async] {where(row)} started while this waited for queue room; not replaced")
+        replacements.append((int(row["pid"]), where(row)))
+    for pid, said in replacements:
+        print(f"[land-async] a newer HEAD replaces {said}", flush=True)
         stop(pid)
-    if "--urgent" not in land_args:  # refused before a snapshot or hidden worktree exists
-        land_queue = _queue()
+    land_queue = _queue()
+    # refused before a snapshot exists; a replacement or a rollup adopting a member's ticket adds none
+    if not ("--urgent" in land_args or replacements or os.environ.get(land_queue.TICKET_ENV)):
         if why := land_queue.full(land_queue.queue_dir(cwd)):
-            raise SystemExit(f"[land-async] {why}")
+            raise Full(why)
     snap = snapshot_name(branch, now)
     place = holder(cwd)
     place.mkdir(exist_ok=True)
     tree = place / snap.replace("/", "-")
     git(cwd, "branch", snap, "HEAD")
     git(cwd, "worktree", "add", "-q", str(tree), snap)
+    import land_events  # tools/ is on sys.path (_queue); D-889 addendum 32: how far behind main it was queued
+    land_events.bind(cwd, snap)
+    land_events.emit("async", source=branch, behind=int(git(cwd, "rev-list", "--count", "HEAD..main", check=False) or 0))
     log = tree.parent / (tree.name + ".log")
     # The supervisor runs a copy beside the log, never the caller's file: Windows keeps a running script's
     # folder from being deleted, and the caller's worktree must be free (2026-10-28).
@@ -275,7 +304,32 @@ def _supervise(tree: Path, snap: str, land_args: list[str], run, room) -> int:
         (tree.parent / (tree.name + ".stopped")).write_text(f"land.py exit {code}; read {tree.name}.log\n",
                                                             encoding="utf-8")
         print(f"[land-async] {snap} did not land (exit {code}); kept {tree} for the owner", flush=True)
+    superseded(tree, snap)
     return code
+
+
+def superseded(tree: Path, snap: str) -> list[str]:
+    """Remove the older snapshots of ``snap``'s branch that land_gc finds nothing unique in (this one covers them);
+    the names removed. 2026-11-08: 149 superseded snapshots (22 GB) waited for a person."""
+    repo = tree.parent.parent.parent  # <main checkout>/.git/rosy-land-wt/<tree>; the tree itself may be gone
+    sys.path[:0] = [str(repo / "tools"), str(Path(__file__).resolve().parent)]  # main's land_gc (this is a copy)
+    try:
+        import land_gc
+        src = land_gc.source(snap)
+        older = {ref.split("-batch")[0].replace("/", "-") for ref in git(
+            repo, "for-each-ref", "--format=%(refname:short)", f"refs/heads/{PREFIX}{src}-*").splitlines()
+            if land_gc.SNAPSHOT.search(ref) and land_gc.source(ref) == src and ref < snap}
+        gone = []
+        for name in sorted(older):
+            rows = land_gc.plan(repo, time.time(), 7, only=name)
+            if any(row[0] == "remove" for row in rows) and not land_gc.apply(repo, rows):
+                gone.append(name)
+        if gone:
+            print(f"[land-async] removed superseded snapshots of {src}: {gone}", flush=True)
+        return gone
+    except Exception as exc:  # cleanup must never change the landing's own outcome
+        print(f"[land-async] superseded snapshot cleanup skipped: {exc}", flush=True)
+        return []
 
 
 def detach(argv: list[str], log: Path) -> subprocess.Popen:
@@ -383,6 +437,11 @@ def main(argv: list[str]) -> int:
                 "supervisor exited without a ticket or landing; read its .log")
         print(f"[land-async] resumed {argv[1]}: {note}")
         return 0 if status else 1
+    words = next((argv[i:i + 2] if a == "--mixed" else [a] for i, a in enumerate(argv)
+                  if a == "--mixed" or a.startswith("--mixed=")), [])
+    if subprocess.call(  # cheap gates fail here, before a snapshot or ticket exists
+            [sys.executable, str(Path(__file__).with_name("land.py")), "--precheck", *words], cwd=Path.cwd()):
+        return 1
     snap, log = start(Path.cwd(), argv, datetime.now(timezone.utc), detach)
     print(f"[land-async] queued {snap}; this worktree is free now. Log: {log}")
     return 0

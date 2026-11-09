@@ -212,3 +212,19 @@ def test_a_stage_takes_extra_choices_after_the_snapshots_so_they_win():
     assert body.rindex("--choice physics=") > body.rindex("--choice ship_pose=snapshot")  # parse_choices keeps the last
     assert sites.parse_choices(["temp_lanes=snapshot", "physics=design", "physics=twin-kp-20261109"])["physics"] == "twin-kp-20261109"
     assert "physics=" not in r2s.stage_body("stack", "x.json")
+
+
+def test_the_belt_request_asks_for_one_tape_reading_that_tells_the_two_belts_apart(tmp_path):
+    (tmp_path / "frames").mkdir()
+    cv2.imwrite(str(tmp_path / "frames" / "top.jpg"), np.full((480, 640, 3), (60, 200, 200), np.uint8))
+    s = snap()
+    s["items"]["belt"] = dict(end_x_m=.205, centre_y_m=-.037, width_m=.085)
+    s["taken_at"] = "2026-11-09T04:28:23+00:00"
+    (tmp_path / "snapshot.json").write_text(json.dumps(s), encoding="utf-8")
+    req, image = r2s.belt_request(tmp_path)
+    layout = sites.Layout()
+    axis = layout.arms["arm_b"].base[:2]
+    assert req["candidates"] == dict(sim=round(math.dist(axis, (sites.BELT_STOP_X, layout.belt_y)) * 1000),
+                                     camera=round(math.dist(axis, (.205, -.037)) * 1000))
+    assert abs(req["candidates"]["camera"] - req["candidates"]["sim"]) > 2 * req["tolerance"]  # one reading decides
+    assert req["id"] == "belt-end-20261109-0428" and req["gap"] == "G-30" and image.exists()

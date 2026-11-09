@@ -1,6 +1,7 @@
 ---
 title: LeRobot lives in the Learning center's learner venv, not in the remote test venv
 date: 2026-10-25
+updated: 2026-11-09
 category: workflow-issues
 module: tools/remote/remote_pytest.py, learning/curation/omx, learning/training/omx
 problem_type: workflow_issue
@@ -9,9 +10,10 @@ severity: medium
 symptoms:
   - "a LeRobot-dependent test (lerobot==0.4.4 import) skips under remote_pytest on every test host"
   - "an agent searched the test hosts, found no LeRobot, and reported that ROSY has no LeRobot environment"
+  - "a landing stops with NEW failure `assert python.is_file(), 'existing pinned learner required...'` for test_learning_workflow_pipeline_browser, only when remote_pytest placed it on the site PC"
 root_cause: wrong_environment_assumed
 resolution_type: procedure
-tags: [lerobot, remote-pytest, model-pc, learner-venv, skipped-test, omx, verification]
+tags: [host-capability, lerobot, remote-pytest, model-pc, learner-venv, skipped-test, omx, verification]
 applies_when:
   - "a test or check needs lerobot, torch or another learner-only package and skips under remote_pytest"
   - "deciding whether a host has a package before proposing to install it"
@@ -35,3 +37,17 @@ Use the pattern `learning/training/omx/test/test_experiment_tasks_pinned.py` alr
 
 ## Evidence
 Model PC, 2026-10-25. The test venvs and `~/rosy-ml/.venv` returned `ModuleNotFoundError: No module named 'lerobot'`. The learner venv imported `lerobot` from `venv-cpu/lib/python3.12/site-packages/lerobot` and reported `0.4.4`, `2.10.0+cpu`, with `No module named pytest`.
+
+
+## Update 2026-11-09: the site PC had no learner venv, and placement did not know
+**Symptom.** `test/learning/perception/test_learning_workflow_pipeline_browser.py::test_synthetic_task_completes_review_training_evaluation_and_download` asserts `~/.local/share/rosy-learning-center/venv-cpu/bin/python` exists. On the site PC (robttt) it never did, so every landing whose browser tier put that file there stopped with a NEW failure: seven branches in the 11-02..08 window, all on robttt, none caused by the branch.
+
+**Cause.** The model and AI PCs had the venv, the site PC never had it, and no script built it. `remote_pytest` places invocations on any host of `ROSY_TEST_HOSTS` or `private/lab-hosts.json` `test_hosts` that has free cores and memory. Nothing said that this test needs the environment.
+
+**Fix.** Two parts. (1) Environment: `tools/remote/provision_learner_venv.sh` builds the venv with `uv` from `deploy/robot/omx/requirements-lerobot-export.txt` (or a full `pip freeze` of the model PC's venv) and the PyTorch CPU index with `--index-strategy unsafe-best-match`; a second run builds nothing. On 2026-11-09 robttt got it by hand the same way (Python 3.12.15, lerobot 0.4.4, torch 2.10.0+cpu, about 1.9 GB). (2) Routing: the test module declares `HOST_CAPABILITIES = ('learner_venv',)`. The host probe prints a `ROSYCAPS` line, `tools/remote/host_caps.py` maps a capability name to the path that proves it, and `remote_pytest` hands such an invocation only to hosts that have it. When no placed host has it, the run waits like any "no test host reachable" case and then fails as not run, never as a pass. The assertion in the test is unchanged.
+
+**Verification.** On robttt with the new venv, main `e741ce764f`: the test ran `1 passed`. The routing has regression tests in `test/test_host_caps.py` (probe parse, declaration read from the committed file and folder, route filter, stranded work, no capable host). Those ran on a remote test host; they do not prove the real placement on a host without the venv, which the next landing that carries the file shows.
+
+**Recovery.** A host that lacks a capability is not broken: run `tools/remote/provision_learner_venv.sh` on it (no root, `uv` needed), or leave it out of `ROSY_TEST_HOSTS`. Do not install into the center's own venv on the model PC. A new environment-bound test adds its name to `host_caps.CAPABILITIES` and the module constant; it does not get a skip.
+
+**Apply next time** a test asserts a host-local path, GPU, browser or package that some test hosts lack: declare it, do not rely on ROSY_TEST_HOSTS pinning by memory.
