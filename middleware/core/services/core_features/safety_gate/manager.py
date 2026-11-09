@@ -18,6 +18,8 @@ from core_features.safety.shadow import ShadowLog, ShadowVerdict
 
 from core_features.safety.velocity import finite_velocity, limit_velocity, same_curve
 from core_features.safety.thermal import ThermalMonitor
+from core_features.safety.limits import BatteryPolicy, SpeedLimits  # noqa: F401 (public names here)
+from core_common.protocol.state_components import BATTERY_ESTOP_SOURCES
 
 
 class TeleopWatchdog:
@@ -33,39 +35,6 @@ class TeleopWatchdog:
     def expired(self, now: Optional[float] = None) -> bool:
         current = now if now is not None else time.monotonic()
         return (current - self._last_refresh) * 1000.0 > self.timeout_ms
-
-
-@dataclass
-class SpeedLimits:
-    max_linear: float = 0.20
-    max_angular: float = 0.80
-    manual_linear: float = 0.15
-    manual_angular: float = 0.60
-    fleet_linear: float = 0.20
-    fleet_angular: float = 0.80
-
-    @classmethod
-    def from_config(cls, *, profile, nav_cfg: dict, safety_cfg: dict) -> "SpeedLimits":
-        """프로필이 있으면 그걸 쓰고, 없으면 rosy.yaml navigation/safety 폴백."""
-        nav_cfg = nav_cfg or {}
-        safety_cfg = safety_cfg or {}
-        max_linear = float(profile.max_linear_velocity or nav_cfg.get("max_linear_velocity") or cls.max_linear)
-        max_angular = float(profile.max_angular_velocity or nav_cfg.get("max_angular_velocity") or cls.max_angular)
-        return cls(
-            max_linear=max_linear,
-            max_angular=max_angular,
-            manual_linear=float(safety_cfg.get("manual_linear", cls.manual_linear)),
-            manual_angular=float(safety_cfg.get("manual_angular", cls.manual_angular)),
-            fleet_linear=float(safety_cfg.get("fleet_linear", max_linear)),
-            fleet_angular=float(safety_cfg.get("fleet_angular", max_angular)),
-        )
-
-
-@dataclass
-class BatteryPolicy:
-    warning_percent: float = 20.0
-    critical_percent: float = 10.0
-    critical_action: str = "RETURN_HOME"
 
 
 @dataclass(frozen=True)
@@ -263,6 +232,7 @@ class SafetyManager:
         self.estop_source: str = ""
         self._battery_state: str = "ok"
         self.battery_return_suppressed = False  # D-502: any e-stop sets; battery_policy clears at level OK
+        self._estop_lock = Lock()  # D-502: a person's stop must not race the automatic release
         self.thermal = ThermalMonitor()  # heat mode: lowers `clip` caps only; services sets the policy
         #: 한 활동이 자기 구간 동안만 더 낮춰 쓰는 상한 (SWM-002 max_speed).
         #: 프로필 상한을 넘겨 올릴 수는 없다 — clip 이 둘 중 작은 값을 쓴다.
@@ -500,11 +470,15 @@ class SafetyManager:
             self._events.publish(type_, severity=severity, source=source, data=data or {})
 
     def trigger_estop(self, source: str) -> bool:
-        if self.estop:
-            return False
-        self.estop = True
-        self.estop_source = source
-        self.battery_return_suppressed = True
+        with self._estop_lock:
+            first = not self.estop
+            # D-502: any other stop over a battery latch takes it over, so charging cannot release it.
+            if not first and not (self.estop_source in BATTERY_ESTOP_SOURCES
+                                  and source not in BATTERY_ESTOP_SOURCES):
+                return False
+            self.estop = True
+            self.estop_source = source
+            self.battery_return_suppressed = True
         self._emit("safety.estop", "critical", source, {"source": source})
         for listener in list(self.estop_listeners):
             try:
@@ -512,14 +486,25 @@ class SafetyManager:
             except Exception:
                 # 한 구독자의 실패가 E-Stop 경로를 막으면 안 된다.
                 pass
-        return True
+        return first
 
     def release(self, by: str) -> bool:
-        if not self.estop:
-            return False
-        self.estop = False
-        self.estop_source = ""
+        with self._estop_lock:
+            if not self.estop:
+                return False
+            self.estop = False
+            self.estop_source = ""
         self._emit("safety.estop_released", "warning", "safety_manager", {"by": by})
+        return True
+
+    def release_recovered_battery_stop(self) -> bool:
+        """D-502: end a latch only the battery policy holds. Any other source stays a person's to release."""
+        with self._estop_lock:
+            if not self.estop or self.estop_source not in BATTERY_ESTOP_SOURCES:
+                return False
+            self.estop = False
+            self.estop_source = ""
+        self._emit("safety.estop_released", "warning", "safety_manager", {"by": "battery_recovered"})
         return True
 
     def set_session_speed(self, max_linear: Optional[float]) -> None:

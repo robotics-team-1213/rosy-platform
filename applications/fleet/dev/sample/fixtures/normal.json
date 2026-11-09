@@ -9,6 +9,8 @@
   "GET /site-map/lane-graph-crosswalks": {"source": "sample", "crosswalks": []},
   "GET /tracking": {"lease_s": 1, "sources": [], "robots": [], "unknown": []},
   "GET /tracking/identity": {"robots": [], "suspects": []},
+  "GET /station-recovery": {"enabled": false, "reason": "disabled", "map_version": null, "requests": [], "dispatch": false},
+  "GET /person-requests": {"requests": [], "motion": false},
   "GET /charge-bays": {"map_version": 1, "thresholds": {"go_percent": 15.0, "leave_percent": 80.0, "rate_pct_per_min": null}, "bays": [{"bay": "C1", "x": -0.414, "y": 0.47, "state": "free", "robot_id": null}], "actions": [], "dispatch": false},
   "GET /platoon": {"map_version": 1, "loop": {"edges": ["loop_right", "upper_east", "upper_west", "loop_left"], "perimeter_m": 4.424}, "target_gap_m": 0.6, "min_gap_m": 0.25, "robots": [], "speed": {"length_m": 4.422, "rows": [[0.0, 0.05], [0.06, 0.15]], "stripes": [{"place": "S5", "s_m": 0.0}, {"place": "S3", "s_m": 0.611}], "curve_caps_measured": false}, "dispatch": false},
   "GET /calibrations": {"calibrations": []},

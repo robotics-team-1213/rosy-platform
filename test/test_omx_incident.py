@@ -421,3 +421,24 @@ def test_a_broken_evidence_list_never_stops_a_start(tmp_path, monkeypatch):
     link.down = False
     oi.refuse_if_held("arm_b", link)
     assert not oi.label_box("arm_b") and not sidecar.exists() and link.evidence == []
+
+
+ALIGN = ("session ended: ValueError: follower: alignment deadline exceeded; current={'shoulder_pan': 2105, 'gripper': 2034}, "
+         "target={'shoulder_pan': 2063, 'gripper': 2034}, command={'shoulder_pan': 2105.79, 'gripper': 2034.0}; last sample age=0.03")
+
+
+def test_a_software_stop_on_a_folded_arm_that_followed_its_command_is_listed_and_holds_nothing(tmp_path, monkeypatch):
+    """2026-11-09 02:21: a jog sent before the guard tracked crawled into its alignment deadline on both arms."""
+    monkeypatch.chdir(tmp_path)
+    link = Labels()
+    stop = {"command": "tick", "ok": False, "t": 150.0, "fault": ALIGN}
+    out = oi.handle(session(tmp_path, latched=False, windup=False, status=[stop]), "arm_b", link=link)
+    assert out["decision"]["hold"] is False and "alignment deadline" in out["decision"]["reason"] and out["reported"]
+    assert oi.held("arm_b") is None and link.posted[0].decision["hold"] is False
+    # the arm lagging its command (something pushed back) or an arm not folded still holds
+    for i, (other, last) in enumerate(((ALIGN.replace("2105.79", "2200.0"), HOME), (ALIGN, [20.0] + HOME[1:]))):
+        case = tmp_path / f"case{i}"
+        case.mkdir()
+        monkeypatch.chdir(case)
+        lagging = {"command": "tick", "ok": False, "t": 150.0, "fault": other}
+        assert oi.handle(session(case, latched=False, windup=False, last=last, status=[lagging]), "arm_b")["decision"]["hold"]

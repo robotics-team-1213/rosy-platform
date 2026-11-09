@@ -1,0 +1,152 @@
+# OMX cell physics constants: the candidates the sims build from, with where each came from (D-947 2: candidates compared by
+# results, nothing silently overwritten). The MuJoCo cells pick one with --choice physics=<name> (tools/sim/omx_physics.py);
+# training samples `omx_physics.py ranges`. Fitted candidates are written by tools/sim/omx_sysid.py promote; change by commit.
+# Units are what MuJoCo takes: kp N·m/rad (actuator gainprm, biasprm[1] = -kp), kv N·m·s/rad (biasprm[2] = -kv),
+# damping N·m·s/rad, armature kg·m², frictionloss N·m, force N·m (actuator forcerange), mass kg, friction (slide, spin, roll).
+# gravity_hold: arm joints the sim holds against gravity (default all), the stand-in for a servo I gain.
+# A container friction below 1 needs priority: 1, or MuJoCo takes the larger friction of the pair (and then also that geom's solref).
+# Contact numbers stay candidates for Isaac to confirm (D-947 5): MuJoCo contact picks candidates, it reports nothing.
+schema: rosy.cell-physics/1
+candidates:
+  design:
+    source: assumed
+    date: '2026-10-27'
+    note: the values omx_cell_sim and omx_two_arm_world had written in until 2026-11-09; not fitted to the arm (D-877)
+    joints:
+      default: {kp: 40.0, kv: 6.3, damping: 0.3, armature: 0.01, frictionloss: 0.0, force: 2.0}
+      gripper_joint_1: {force: 0.2}
+    container: {mass: 0.016, friction: [1.0, 0.005, 0.0001]}
+  twin-kp-20261109:
+    base: design
+    source: fitted
+    date: '2026-11-09'
+    method: omx_twin.py tracking, per-joint kp grid (10-80) by servo lag over arm_b's real episodes, one kp per joint
+    evidence: Rosy/docs/workspace-records/2026-11-09/omx-twin-night/findings.md (feat/omx-sim-twin)
+    note: real lag 0.10-0.34 s per joint against 0.16 s at kp 40; RMS improves only a little (j5 0.62 -> 0.53 deg). kv stayed 6.3,
+      so kp 20 also changes the damping ratio; a 7-step grid over episodes that may include arm_a ones (untagged before 11-08)
+    arms:
+      arm_b:
+        joint1: {kp: 20.0}
+        joint4: {kp: 20.0}
+        joint5: {kp: 20.0}
+  twin-zero-20261109:
+    base: design
+    source: fitted
+    date: '2026-11-09'
+    method: omx_twin.py fit-camera, joint zeros against the top camera's arm outline; held-out median 12.6 -> 4.5 px
+    evidence: Rosy/docs/workspace-records/2026-11-09/omx-twin-night/findings.md (feat/omx-sim-twin)
+    note: calibration, not dynamics; sim q = real q + radians(zero_offset_deg) (omx_twin.posed). The worlds do not apply it, only
+      ranges carry it. Not checked at a known pose (G-20). Live 2026-11-09 on arm_b (omx_twin live, 11-08 camera frame) top fit
+      10.2 -> 2.8 px (limit 3), only joint1 and joint5 moved, joint2-4 seen at the park pose only
+    arms:
+      arm_b:
+        joint1: {zero_offset_deg: 4.0}
+        joint2: {zero_offset_deg: 1.0}
+        joint3: {zero_offset_deg: 3.2}
+        joint4: {zero_offset_deg: 2.8}
+        joint5: {zero_offset_deg: 2.4}
+  registers-20261109:
+    base: design
+    source: registers
+    date: '2026-11-09'
+    method: omx_sysid.py registers over the session caps (P 1600 on joint2, 800 on joint4, I 50 on joint3 and joint4, PWM 300/600/600/300/300)
+      at 11.7/11.7/11.6/6.1/6.1 V; ROBOTIS e-Manual stall torque, no-load speed and default D, not read back from the arm
+    evidence: docs/validation/omx-sysid-2026-11-09/result.md
+    note: the real servo as a PD behind its PWM limit; joint3 and joint4 also hold an I gain the MuJoCo servo has no term for
+      (score with --gravity-comp). Both arms carry the same caps (caps-arm-a-igain, caps-arm-b-igain)
+    gravity_hold: [joint3, joint4]  # the I gain 50 servos; the others sag as the PD does
+    joints:
+      joint1: {kp: 5.386, kv: 0.5017, force: 0.496}
+      joint2: {kp: 13.466, kv: 0.5017, force: 0.992}
+      joint3: {kp: 5.34, kv: 0.4994, force: 0.983}
+      joint4: {kp: 2.921, kv: 0.0477, force: 0.215}
+      joint5: {kp: 1.46, kv: 0.0477, force: 0.215}
+  servo-friction-20261109:
+    base: registers-20261109
+    gravity_hold: all  # as fitted
+    source: fitted
+    date: '2026-11-09'
+    method: omx_sysid.py servo, frictionloss, damping of joint1-5 by least squares
+      over 14 episodes, gravity_comp=True
+    evidence: docs/validation/omx-sysid-2026-11-09/fit-servo-run3.json
+    note: held-out mean 0.448 -> 0.410 deg over 11 episodes. Fitted with gravity compensation on every arm joint, the stand-in
+      for the I gain on joint3 and joint4; a world without it lets joint3 sag about 2.4 deg (score, same day)
+    arms:
+      arm_b:
+        joint1:
+          frictionloss: 0.045967
+          damping: 0.088592
+        joint2:
+          frictionloss: 0.042635
+          damping: 0.30826
+        joint3:
+          frictionloss: 0.022174
+          damping: 0.001
+        joint4:
+          frictionloss: 0.0001
+          damping: 0.822877
+        joint5:
+          frictionloss: 0.026288
+          damping: 0.001
+    sd:
+      arm_b:
+        joint1:
+          frictionloss: 0.012285
+          damping: 0.218433
+        joint2:
+          frictionloss: 0.030661
+          damping: 0.521197
+        joint3:
+          frictionloss: 0.00673
+          damping: 0.136063
+        joint4:
+          frictionloss: 0.002128
+          damping: 0.092376
+        joint5:
+          frictionloss: 0.003178
+          damping: 0.060463
+  servo-friction-hold34-20261109:
+    base: registers-20261109
+    source: fitted
+    date: '2026-11-09'
+    method: omx_sysid.py servo, frictionloss, damping of joint1-5 by least squares
+      over 14 episodes, gravity_comp=['joint3', 'joint4']
+    evidence: docs/validation/omx-sysid-2026-11-09/fit-servo-run4.json
+    note: held-out mean 0.493 -> 0.455 deg over 11 episodes
+    arms:
+      arm_b:
+        joint1:
+          frictionloss: 0.045967
+          damping: 0.088592
+        joint2:
+          frictionloss: 0.068785
+          damping: 0.001
+        joint3:
+          frictionloss: 0.02213
+          damping: 0.001109
+        joint4:
+          frictionloss: 0.0001
+          damping: 0.822935
+        joint5:
+          frictionloss: 0.026411
+          damping: 0.001
+    sd:
+      arm_b:
+        joint1:
+          frictionloss: 0.013415
+          damping: 0.238519
+        joint2:
+          frictionloss: 0.032851
+          damping: 0.549857
+        joint3:
+          frictionloss: 0.007371
+          damping: 0.148945
+        joint4:
+          frictionloss: 0.002324
+          damping: 0.100875
+        joint5:
+          frictionloss: 0.003468
+          damping: 0.065924
+    gravity_hold:
+    - joint3
+    - joint4
