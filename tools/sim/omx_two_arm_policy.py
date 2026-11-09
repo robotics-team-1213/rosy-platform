@@ -17,17 +17,22 @@ language input.
 A round is `<root>/two_arm_rounds/<id>/round.json` (rosy.omx-two-arm-round.v1). MuJoCo answers geometry only (D-947); no learned policy reaches the real arm (D-793).
 """
 import argparse
+import functools
 from datetime import datetime
 import json
 import os
 from pathlib import Path
 import shutil
+import signal
 import subprocess
 import sys
+import time
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import numpy as np  # noqa: E402
 import omx_ladder as ladder  # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "remote"))
+import gpu_yield  # noqa: E402
 import omx_two_arm_sites as sites  # noqa: E402
 import omx_two_arm_skill as skills  # noqa: E402
 import omx_two_arm_tasks as tasks  # noqa: E402
@@ -39,6 +44,7 @@ TASKS = ("stack", "outbound")  # the conveyor stack and Harbor's outbound plan i
 GOAL = "observation.environment_state"
 PROMPT = "carry the container of this plan step"
 TRAIN_SEED_BASE, EVAL_SEED_BASE = 1000, 200000  # the teacher never saw an evaluation seed
+TRAIN_POLL_S = 10  # how often train() looks for a new checkpoint
 
 
 GOAL_SIZE = 22  # per arm (arm_a, arm_b): active, then the five grasp joints and the five lower joints
@@ -382,6 +388,42 @@ def write_record(run, record):
     os.replace(temporary, run / "round.json")
 
 
+def checkpoint_step(out):
+    """The step of the last complete checkpoint: LeRobot points checkpoints/last at a step folder once it is written."""
+    last = out / "checkpoints" / "last"
+    return int(last.resolve().name) if last.is_symlink() else None
+
+
+def train(command, out, lerobot_train, log, env):
+    """lerobot-train that steps aside at a checkpoint while an alone test waits, then resumes from it. The total stays the
+    round's steps, so the learning-rate schedule is the one an uninterrupted run has. Older checkpoints go: eval reads last."""
+    while True:
+        trainer, seen, stopped = subprocess.Popen(command, env=env, stdout=log, stderr=subprocess.STDOUT, start_new_session=True), checkpoint_step(out), False
+        while trainer.poll() is None:
+            time.sleep(TRAIN_POLL_S)
+            step = checkpoint_step(out)
+            if step == seen:
+                continue
+            seen = step
+            for old in (out / "checkpoints").iterdir():
+                if old.name.isdigit() and int(old.name) < step:  # never one still being written
+                    shutil.rmtree(old)
+            if gpu_yield.alone_waiting():
+                os.killpg(trainer.pid, signal.SIGTERM)  # its own session: the trainer and its data workers
+                try:
+                    trainer.wait(timeout=120)
+                except subprocess.TimeoutExpired:
+                    os.killpg(trainer.pid, signal.SIGKILL)
+                    trainer.wait()
+                stopped = True
+        if not stopped:
+            if trainer.returncode:
+                raise subprocess.CalledProcessError(trainer.returncode, command)
+            return
+        gpu_yield.yield_turn(say=functools.partial(print, file=log))
+        command = [lerobot_train, f"--config_path={out / 'checkpoints/last/pretrained_model/train_config.json'}", "--resume=true"]
+
+
 def run_round(args):
     ladder.require_gpu(args.python)
     round_id = ladder.new_round_id()
@@ -425,9 +467,10 @@ def run_round(args):
         info = json.loads((run / "dataset/meta/info.json").read_text(encoding="utf-8"))
         for part, _ in parts:
             shutil.rmtree(part)
+        gpu_yield.yield_turn(say=functools.partial(print, file=log))
         record.update(stage="train", data=dict(episodes=info["total_episodes"], frames=info["total_frames"], spoiled_runs=spoiled))
         write_record(run, record)
-        common = [f"--batch_size={recipe['batch_size']}", f"--steps={recipe['steps']}", f"--save_freq={max(1, recipe['steps'] // 3)}", "--log_freq=500",
+        common = [f"--batch_size={recipe['batch_size']}", f"--steps={recipe['steps']}", f"--save_freq={max(500, recipe['steps'] // 20)}", "--log_freq=500",
                   f"--num_workers={args.train_workers}", "--wandb.enable=false", f"--output_dir={run / 'train'}",
                   # whole-task episodes put frames 1400 s into a video file: float rounding exceeded the 0.1 ms default (round 4)
                   "--tolerance_s=0.001"]
@@ -442,11 +485,13 @@ def run_round(args):
         else:
             command = [args.lerobot_train, *dataset, "--policy.type=act", "--policy.device=cuda", "--policy.push_to_hub=false", f"--policy.chunk_size={recipe['chunk_size']}",
                        f"--policy.n_action_steps={recipe['n_action_steps']}", f"--policy.optimizer_lr={recipe['optimizer_lr']}", "--job_name=omx-two-arm", *common]
-        subprocess.run(command, env=environment, stdout=log, stderr=subprocess.STDOUT, check=True)
+        log.flush()
+        train(command, run / "train", args.lerobot_train, log, environment)
         record.update(stage="evaluate")
         write_record(run, record)
         judged = [("eval.json", str(run / "train/checkpoints/last/pretrained_model"))] + ([("eval-ik.json", "ik")] if args.skill else [])
         for out, model in judged:  # a sub-skill round also judges the IK it would replace on the same seeds
+            gpu_yield.yield_turn(say=functools.partial(print, file=log))
             subprocess.run([args.python, me, "evaluate", "--model", model, "--steps-file", str(run / "steps.json"), "--tasks", args.tasks,
                             "--isolated-seeds", str(args.isolated_seeds), "--whole-seeds", str(args.whole_seeds), "--out", str(run / out), "--artifacts", str(run / "artifacts"),
                             *plan, *chosen, *skilled], env=environment, stdout=log, stderr=subprocess.STDOUT, check=True)
