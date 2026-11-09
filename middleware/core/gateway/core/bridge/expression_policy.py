@@ -94,8 +94,9 @@ class ExpressionPolicy:
             self._seq, self._revision = evidence.seq, evidence.model_revision
             self._frame_at, self._ever, self._recover = at, True, False
             persons = evidence.of_label("person", .5)
-            self._crowd = len(persons)
             ids = [p.track_id for p in persons]
+            # People, not boxes: a repeated track ID is one person; an unnamed box counts once.
+            self._crowd = len({p.track_id for p in persons if p.track_id is not None}) + ids.count(None)
             group = any(i is None for i in ids) or len(set(ids)) != len(ids)
             switched = self._group is not None and group != self._group and bool(persons)
             if switched:

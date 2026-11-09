@@ -77,6 +77,7 @@ def test_a_group_arriving_together_is_cheered_and_one_person_is_greeted():
     assert together.face == "cheer" and together.reacting
     assert seen(policy(), people=[person(None, .3), person(None, .7)]).face == "cheer"
     assert seen(policy(), people=[person(None, .5)]).face == "happy"
+    assert seen(policy(), people=[person(1, .5), person(1, .52)]).face == "happy"  # one person, two boxes
     p = policy()
     seen(p, people=[person(1, .4), person(2, .6)])
     faces = []

@@ -86,3 +86,33 @@ def test_every_face_name_has_a_shipped_asset():
 
     assets = ROOT / "middleware/robot_ui/face/emotion"
     assert {path.stem for path in assets.glob("*.gif")} == set(FACES)
+
+
+def test_native_character_draws_the_lamp_filtered_face_not_cores_cheerful_one(tmp_path):
+    module = _display()
+    _status(tmp_path, "CORE_READY", runtime_mode="hardware")
+    _face_inputs(tmp_path, robot_mode="NAVIGATION", nav_state="BLOCKED", face="cheer",
+                 expression={"gaze_x": 4., "resting": False})
+    display, _, clock, _, _, _ = _face_loop(module, tmp_path)
+    names = []
+    display._faces._render = lambda name, phase, gaze_x, resting: names.append(name) or b"panel"
+    display.step()
+    display.tick()
+    assert display.animating[0] == "sad" and names[-1] == "sad"  # a blocked (amber) lamp keeps no grin
+
+
+def test_native_character_keeps_searching_through_the_recovery_hold(tmp_path):
+    module = _display()
+    _status(tmp_path, "CORE_READY", runtime_mode="hardware")
+    _face_inputs(tmp_path, robot_mode="NAVIGATION", recovery="return", face="happy")
+    display, _, clock, _, _, _ = _face_loop(module, tmp_path)
+    names = []
+    display._faces._render = lambda name, phase, gaze_x, resting: names.append(name) or b"panel"
+    display.step()
+    display.tick()
+    assert names[-1] == "searching"
+    _face_inputs(tmp_path, robot_mode="NAVIGATION", recovery=None, face="happy")
+    clock.now += .5  # inside the 1.5 s hold: the bar still says recovering
+    display.step()
+    display.tick()
+    assert names[-1] == "searching"
