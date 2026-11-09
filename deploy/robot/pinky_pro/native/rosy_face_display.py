@@ -567,7 +567,21 @@ class FaceDisplay:
         if self._backlight < 100 and self._ticks % 2:
             return False  # D-185: the dimmed (idle) face plays at half rate
         face, *bar = self.animating
-        frame = self._faces.next(face)
+        if self._faces.expressive:
+            core = self._read_core()
+            if core is None or core.get("estop") or core.get("robot_mode") == "EMERGENCY":
+                return False
+            if core.get("face") and core.get("activity_kind") != "CALIBRATING":
+                face = core["face"]
+            expires = core.get("expression_until")
+            live = expires is not None and self._wall() <= expires
+            intent = core.get("expression") if live else None
+            if expires is not None and not live:
+                face = "basic"
+            intent = intent or {"gaze_x": 0., "resting": False}
+            frame = self._faces.next(face, expression=intent, now=self._clock())
+        else:
+            frame = self._faces.next(face)
         if frame is None:
             return False
         if self._strip is not None:
