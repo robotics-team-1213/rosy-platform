@@ -7,6 +7,7 @@ lock aside, waits until no alone job waits or runs, and puts the lock back under
 """
 import fcntl
 import os
+import subprocess
 import time
 from pathlib import Path
 
@@ -38,6 +39,26 @@ def alone_waiting(jobs=None):
 def alone_running(jobs=None):
     jobs = jobs or JOBS
     return any(len(f) > 1 and f[1] == "alone" and f[0].isdigit() and alive(int(f[0])) for f in map(_fields, jobs.glob("*.lock")))
+
+
+def free_vram_mb():
+    """Free memory of GPU 0 by nvidia-smi, or None where there is none to ask."""
+    try:
+        out = subprocess.run(["nvidia-smi", "--query-gpu=memory.free", "--format=csv,noheader,nounits"], capture_output=True, text=True, timeout=30).stdout
+        return int(out.split()[0])
+    except (OSError, subprocess.TimeoutExpired, ValueError, IndexError):
+        return None
+
+
+def wait_vram(mb, poll=60., say=print, sleep=time.sleep, free=free_vram_mb):
+    """Wait until GPU 0 has `mb` free. The lock files count cores and GB, not GPU memory: on 2026-11-10 an evaluation's
+    llama-server took 13 of 16 GB and a SmolVLA round died of CUDA OOM after half an hour of collection."""
+    said = False
+    while (left := free()) is not None and left < mb:
+        if not said:
+            say(f"[gpu-yield] waiting for {mb} MiB of GPU memory ({left} free)", flush=True)
+            said = True
+        sleep(poll)
 
 
 def yield_turn(jobs=None, pid=None, poll=30., say=print, sleep=time.sleep):

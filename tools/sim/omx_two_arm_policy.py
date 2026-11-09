@@ -45,6 +45,7 @@ GOAL = "observation.environment_state"
 PROMPT = "carry the container of this plan step"
 TRAIN_SEED_BASE, EVAL_SEED_BASE = 1000, 200000  # the teacher never saw an evaluation seed
 TRAIN_POLL_S = 10  # how often train() looks for a new checkpoint
+VRAM_MB = dict(act=4000, smolvla=9000)  # what training needs free on the GPU: SmolVLA at batch 8 took about 7.5 GB
 STEP_ERROR_SEED_BASE = 10 ** 6  # collect's per-step error draws, clear of the training and evaluation seeds
 
 
@@ -403,10 +404,11 @@ def checkpoint_step(out):
     return int(last.resolve().name) if last.is_symlink() else None
 
 
-def train(command, out, lerobot_train, log, env):
+def train(command, out, lerobot_train, log, env, vram_mb=0):
     """lerobot-train that steps aside at a checkpoint while an alone test waits, then resumes from it. The total stays the
     round's steps, so the learning-rate schedule is the one an uninterrupted run has. Older checkpoints go: eval reads last."""
     while True:
+        gpu_yield.wait_vram(vram_mb, say=functools.partial(print, file=log))
         trainer, seen, stopped = subprocess.Popen(command, env=env, stdout=log, stderr=subprocess.STDOUT, start_new_session=True), checkpoint_step(out), False
         try:
             while trainer.poll() is None:
@@ -511,7 +513,7 @@ def run_round(args):
             command = [args.lerobot_train, *dataset, "--policy.type=act", "--policy.device=cuda", "--policy.push_to_hub=false", f"--policy.chunk_size={recipe['chunk_size']}",
                        f"--policy.n_action_steps={recipe['n_action_steps']}", f"--policy.optimizer_lr={recipe['optimizer_lr']}", "--job_name=omx-two-arm", *common]
         log.flush()
-        train(command, run / "train", args.lerobot_train, log, environment)
+        train(command, run / "train", args.lerobot_train, log, environment, vram_mb=VRAM_MB[args.policy])
         record.update(stage="evaluate")
         write_record(run, record)
         judged = [("eval.json", str(run / "train/checkpoints/last/pretrained_model"))] + ([("eval-ik.json", "ik")] if args.skill else [])

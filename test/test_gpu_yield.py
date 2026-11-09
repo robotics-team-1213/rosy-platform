@@ -98,3 +98,11 @@ def test_a_round_that_fails_mid_training_takes_its_trainer_down(tmp_path, monkey
         policy.train([sys.executable, "-c", f"import os, time; open({str(pid_file)!r}, 'w').write(str(os.getpid())); time.sleep(60)"],
                      tmp_path / "train", "unused", log, dict(os.environ))
     assert not gpu_yield.alive(int(pid_file.read_text()))
+
+
+def test_training_waits_for_gpu_memory_instead_of_running_out():
+    readings, slept, said = iter([3000, 5000, 9500]), [], []
+    gpu_yield.wait_vram(9000, sleep=slept.append, say=lambda *a, **k: said.append(a), free=lambda: next(readings))
+    assert len(slept) == 2 and len(said) == 1  # said once, then quiet until there is room
+    gpu_yield.wait_vram(9000, sleep=slept.append, free=lambda: None)  # no nvidia-smi: nothing to wait for
+    assert len(slept) == 2
