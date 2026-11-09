@@ -39,10 +39,14 @@ from fleet_trips import lane_pose, GRAPH, RENDER  # noqa: E402  the same lane gr
 from preflight import Reservations  # noqa: E402  D-426 run reservations: domain 20-29, API ports
 
 WORLD = 'map_v2_fleet'
-#: east road, driven in reverse like the trip bench: the convoy starts at S0 and the leader's goals climb
-#: through the north-east bend (lap scenario `ne_corner` 0.3-1.3 m from east rev 0.92).
-S0, GOAL_STEPS = 0.40, (0.9, 1.7, 2.6)
-LEADER_STOP_S, LEADER_STOP_AT_S = 8.0, 4.0        # hard stop during goal 2, 4 s in
+#: east road, driven in reverse like the trip bench, the leader's goals climbing through the north-east bend.
+#: Run 7 (2026-11-09): the first 1.4 m of this road is a 0.24 m lane; in Nav2's 0.05 m global costmap every cell
+#: there is within the 0.115 m planner radius of a wall (inscribed cost), so a leader spawned on it got
+#: "Start occupied". The leader therefore starts (and plans) only where the lane centre is >= 0.20 m from a wall
+#: (east rev s >= 1.7, measured on the map as costmap cells); followers are TRAIL, never planned, and may stand
+#: on the narrow stretch. END_S is where the lane graph ends (3.99 m) less a margin.
+LEADER_S_MIN, END_S, GOAL_STEPS = 1.7, 3.9, (0.5, 1.5, 2.2)
+LEADER_STOP_S, MOVING_AFTER_S, MOVING_WAIT_S = 8.0, 1.0, 20.0  # hard stop 1 s after the convoy is seen moving
 GAP_TOL_M, GAP_MAX_M, MIN_CENTRE_M, HOLD_S = 0.10, 0.15, 0.30, 1.5
 MOVING_MPS, STOPPED_MPS = 0.02, 0.01
 TERMINAL_NAV = ('IDLE', 'SUCCEEDED', 'FAILED', 'CANCELED', 'ARRIVED')
@@ -185,6 +189,25 @@ async def wait_ready(clients, robots, truth, mark, boot_s: float) -> bool:
     return False
 
 
+async def wait_moving(session, truth, names, mark, label: str) -> dict | None:
+    """Wait until the session is RUNNING and every robot is really moving (3 polls in a row); the speeds then.
+
+    Run 7 injected on a timer while the session was already HOLDING and the robots stood, so the stop check
+    measured nothing. None after MOVING_WAIT_S: the caller must not inject and the check stays red.
+    """
+    from fleet.bench import SessionState
+    deadline, streak = time.monotonic() + MOVING_WAIT_S, 0
+    while time.monotonic() < deadline:
+        speeds = {rid: round(truth.speed(rid), 3) for rid in names}
+        streak = streak + 1 if session.state is SessionState.RUNNING and min(speeds.values()) >= MOVING_MPS else 0
+        if streak >= 3:
+            mark('moving', label, session=session.state.value, speeds=speeds)
+            return speeds
+        await asyncio.sleep(0.1)
+    mark('not_moving', label, session=session.state.value, speeds={rid: round(truth.speed(rid), 3) for rid in names})
+    return None
+
+
 async def goal(leader, pose, mark) -> str:
     x, y, yaw = pose
     try:
@@ -207,9 +230,9 @@ async def main_async(args) -> int:
     names = [f'rosy_{i:02d}' for i in range(1, args.robots + 1)]
     leader_id, follower_ids = names[0], names[1:]
     graph = yaml.safe_load(GRAPH.read_text(encoding='utf-8'))
-    s_leader = S0 + args.spacing * len(follower_ids)
+    s_leader = max(LEADER_S_MIN, args.spacing * len(follower_ids) + 0.1)  # shortcut: 3 followers leave ~1.4 m of road
     spawns = {rid: lane_pose(graph, 'east', 'rev', s_leader - args.spacing * k) for k, rid in enumerate(names)}
-    goals = [lane_pose(graph, 'east', 'rev', s_leader + d) for d in GOAL_STEPS]
+    goals = [lane_pose(graph, 'east', 'rev', min(END_S, s_leader + d)) for d in GOAL_STEPS]
     partition = os.environ.get('GZ_PARTITION') or f'formation-{secrets.token_hex(3)}'
     reservations = Reservations.derive(partition.lower(), args.robots, started_at=time.time())
     env = dict(os.environ, GZ_PARTITION=partition, ROS_DOMAIN_ID=str(reservations.ros_domain_id), GZ_IP='127.0.0.1',
@@ -272,26 +295,36 @@ async def main_async(args) -> int:
         nav = []
         nav.append(await goal(leader, goals[0], mark))
         mark('goal', 1, nav=nav[-1], speeds={rid: round(truth.speed(rid), 3) for rid in names})
-        # Injection 1: hard stop of the leader 4 s into goal 2; followers must stop on their own trail gap.
+        # Injection 1: hard stop of the leader 1 s after the convoy is seen moving in goal 2; followers must stop on their own trail gap.
         task = asyncio.create_task(goal(leader, goals[1], mark))
-        await asyncio.sleep(LEADER_STOP_AT_S)
+        stop_moving = await wait_moving(session, truth, names, mark, 'leader_stop')
+        await asyncio.sleep(MOVING_AFTER_S)
         await leader.navigation_cancel()
         mark('inject', 'leader_stop')
         await asyncio.sleep(LEADER_STOP_S)
         result['leader_stop'] = {'speeds_after_8s': {rid: round(truth.speed(rid), 3) for rid in names},
-                                 'session': session.state.value}
+                                 'session': session.state.value, 'moving_before': stop_moving}
         mark('leader_stop', result['leader_stop'])
         nav.append(await task)
+        if session.state is SessionState.HOLDING:  # the cancel is a nav.failed trigger: re-arm, or goal 2 runs on a held convoy
+            try:
+                await session.reform(session.spec)
+            except Exception as exc:  # noqa: BLE001
+                mark('reform_failed', repr(exc)[:200])
+            mark('reform', session.state.value)
         nav.append(await goal(leader, goals[1], mark))
         mark('goal', 2, nav=nav[-1])
         # Injection 2: the last follower is lost (its own E-stop) during goal 3 -> HOLD, leader cancelled.
         task = asyncio.create_task(goal(leader, goals[2], mark))
-        await asyncio.sleep(LEADER_STOP_AT_S)
+        lost_moving = await wait_moving(session, truth, names, mark, 'follower_lost')
+        if lost_moving is not None:
+            await asyncio.sleep(MOVING_AFTER_S)
         t_lost = time.monotonic()
-        await followers[-1].estop()
-        mark('inject', 'follower_lost', robot=follower_ids[-1])
+        if lost_moving is not None:
+            await followers[-1].estop()
+            mark('inject', 'follower_lost', robot=follower_ids[-1], session=session.state.value)
         hold_at = stopped_at = None
-        while time.monotonic() - t_lost < 15.0:
+        while lost_moving is not None and time.monotonic() - t_lost < 15.0:
             if hold_at is None and session.state is not SessionState.RUNNING:
                 hold_at = time.monotonic() - t_lost
             if stopped_at is None and all(truth.speed(rid) < STOPPED_MPS for rid in names):
@@ -300,7 +333,7 @@ async def main_async(args) -> int:
                 break
             await asyncio.sleep(0.1)
         nav.append(await task)
-        result['follower_lost'] = {'session_left_running_s': hold_at, 'all_stopped_s': stopped_at,
+        result['follower_lost'] = {'moving_before': lost_moving, 'session_left_running_s': hold_at, 'all_stopped_s': stopped_at,
                                    'session': session.state.value, 'reason': session.reason_text(),
                                    'leader_nav': nav[-1], 'speeds': {rid: round(truth.speed(rid), 3) for rid in names}}
         mark('follower_lost', result['follower_lost'])
@@ -327,9 +360,9 @@ async def main_async(args) -> int:
     result['checks'] = {
         'spacing': all(g['samples'] > 50 and g['p95_abs_m'] <= GAP_TOL_M and g['max_abs_m'] <= GAP_MAX_M for g in gaps),
         'no_contact': result['score']['min_centre_m'] >= MIN_CENTRE_M,
-        'leader_stop_followers_stop': all(v < STOPPED_MPS for v in result.get('leader_stop', {}).get(
+        'leader_stop_followers_stop': result.get('leader_stop', {}).get('moving_before') is not None and all(v < STOPPED_MPS for v in result.get('leader_stop', {}).get(
             'speeds_after_8s', {}).values()) if 'leader_stop' in result else False,
-        'lost_follower_degrades_safely': (lost.get('all_stopped_s') is not None and lost['all_stopped_s'] <= HOLD_S
+        'lost_follower_degrades_safely': (lost.get('moving_before') is not None and lost.get('all_stopped_s') is not None and lost['all_stopped_s'] <= HOLD_S
                                           and lost.get('session') in ('HOLDING', 'STOPPED')),
     }
     result['pass'] = all(result['checks'].values())
