@@ -112,9 +112,14 @@ def test_login_callback_refresh_revoke_and_core_scope(pipeline):
         sessions.revoke(fleet.cookies[COOKIE])
         clock[0] += 10
         started = time.monotonic()
+        # 2026-11-09: receive_json() has no timeout and hung 42 min on the model PC; each wait is bounded, so a
+        # missing close fails here with TimeoutError instead of stalling the run.
+        from concurrent.futures import ThreadPoolExecutor
+        pool = ThreadPoolExecutor(1)
         with pytest.raises(WebSocketDisconnect) as closed:
-            while time.monotonic()-started < 20:
-                ws.receive_json()
+            while (left := 20 - (time.monotonic()-started)) > 0:
+                pool.submit(ws.receive_json).result(timeout=left)
+        pool.shutdown(wait=False)
         assert closed.value.code == 4401
         assert time.monotonic()-started < 15
     assert core.get('/api/v1/auth/whoami').status_code == 401
