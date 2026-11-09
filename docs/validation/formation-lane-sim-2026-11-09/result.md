@@ -45,3 +45,22 @@ Run 7 numbers (`result.json`, 2 robots, spacing 0.8 m, follower cap 0.2 m/s):
 Cause of the leader failure (launch.log, rosy_01 planner/controller): at goal 1 the leader reported `RegulatedPurePursuitController detected collision ahead!` repeatedly, backed to (0.67, -0.49), then `GridBased plugin failed to plan ... "Start occupied"`, `Goal failed`; goal 2 failed the same way in 0.5 s; later goals (a minute on) planned and succeeded (`Goal succeeded`). The leader spawns on the lane at (0.81, -0.51) and its start cell reads occupied in the global costmap (inflation 0.10 vs inscribed 0.113, the gz_multi nav profile warning noted in run 3). Not confirmed whether the lane wall or the follower's scan returns cause it. Next check: dump the rosy_01 global costmap around the spawn, or spawn the leader farther from the wall. The scenario needs a leader goal that plans before the other checks mean anything.
 
 Logs: model PC `~/rosy-test/runs/sim-082fa961cd-9671a6-out/formation/`; copies in `Rosy/docs/workspace-records/2026-11-09/formation-driving/sim-run5-8/`.
+
+## Run 8 (2026-11-09 12:16, AI PC, GPU, `2d093a3b4e`) — leader fixed, convoy still FAIL
+
+Cause of the run 7 leader failure (measured, not guessed): the east road's first 1.4 m (east rev s 0.4-1.4) is a 0.24 m lane. The pgm centre-line clearance there is 0.12 m. Nav2's global costmap is 0.05 m per cell with `robot_radius` 0.1149 (footprint 0.06 half-side circumscribed 0.085 + padding 0.03, `gz_multi._nav_config`). Re-binning the pgm into 0.05 m cells (a cell lethal if any pixel is occupied) puts every cell of that stretch at 0.10 m from a lethal cell, below 0.1149, so SmacPlanner2D reads each as inscribed/occupied (`Start occupied`) and RPP saw collision ahead. s >= 1.5 has 0.15-0.60 m. Run 7 spawned the leader at s 1.2, inside the stretch. Not the follower's scan, not inflation 0.10.
+
+Fix (scenario only; no Nav2 param, CORE limit or threshold touched): leader spawns at east rev s 1.7 (0.20 m cell clearance; followers behind it are TRAIL and may stand on the narrow stretch), goals at s 2.2, 3.2, 3.9. `wait_moving` makes both injections wait for a RUNNING session with every robot at >= 0.02 m/s for 3 polls; if that never happens the injection is skipped and the check stays red; a leader cancel that leaves the session HOLDING is re-armed with `reform`.
+
+Run 8 numbers (`result.json`, 2 robots, spacing 0.8 m, cap 0.2 m/s):
+
+- leader: goal 1 ARRIVED, goal 2 cancelled at the injection then ARRIVED, goal 3 ARRIVED; no `Start occupied`, no `collision ahead`.
+- leader_stop_followers_stop: **true**, with the convoy moving first (leader 0.091, follower 0.048 m/s); 0.0 m/s for both 8 s later; session stayed RUNNING (the cancel is not a FOR-004 trigger).
+- no_contact: **true**, minimum centre distance 0.477 m.
+- spacing: **false**. Follower p95 error 0.907 m, max 1.002 m, off-path max 0.703 m (1037 samples). The follower drives in short bursts, stops, and `swarm.hold trail_lost` fires from rosy_02 during goal 3; it then stood at (1.19, -0.07) while the leader finished.
+- lost_follower_degrades_safely: **false**, correctly: at goal 3 the follower had already stopped, `wait_moving` timed out after 20 s (`not_moving`, session RUNNING, speeds 0/0), so no E-stop was injected. The check measures nothing until the follower keeps moving.
+
+Open (not diagnosed): why the TRAIL follower leaves the leader's trail (`trail_lost`, reference_stream.py "a jump the trail cannot bridge" or off-trail > 0.30 m). Hypotheses, unverified: a leader map-pose jump (AMCL) over 0.3 m in the relayed stream; the follower seeded 0.74 m behind the leader's first point on a bend. Next check: log the leader's relayed map pose and the follower's `swarm/state` during the run and compare with truth. D-1002 stays Proposed; this is not a pass.
+
+Logs: laptop `%TEMP%emote-simd093a3b4e4d\outormation\`; copies in `Rosy/docs/workspace-records/2026-11-09/formation-driving/sim-run8/`.
+
