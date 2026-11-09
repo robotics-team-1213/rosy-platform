@@ -719,5 +719,8 @@ def test_a_stopped_rollup_splits_itself_from_mains_checkout(tmp_path, monkeypatc
     tool.split_rollup(tree, rollup, launch)
     assert seen == []
     monkeypatch.delenv("ROSY_ROLLUP_MIXED")
-    tool.split_rollup(tree, rollup, launch)
+    tool.split_rollup(tree, rollup, launch, reason="[land] STOP: landing queue full (12/12 tickets)")
+    assert seen == [], "halves would stop on the same full queue"
+    tool.split_rollup(tree, rollup, launch, reason="[land] STOP: NEW failure")
+    tool.split_rollup(tree, rollup, launch, reason="[land] STOP: NEW failure")  # a retried supervisor
     assert seen == [(["split", tree.name], tree.name + ".split.log", repo)]

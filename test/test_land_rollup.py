@@ -95,6 +95,9 @@ def test_mixed_rollup_takes_full_waiters_every_tier_and_overlapping_suites(repo)
     same = lambda repo_, branch: [["pkg/test"]]  # noqa: E731  (every suite overlaps)
     plan = land_rollup.plan(main, got, lambda r, b: tiers.get(b, "affected"), same, mixed=True)
     assert [r["branch"] for r in plan] == ["land/fix/a", "land/fix/safe", "land/fix/c"], "the clash stays out"
+    tiers = {"land/fix/clash": "full"}  # the only FULL row clashes: an affected rollup, overlap counts again
+    plan = land_rollup.plan(main, got, lambda r, b: tiers.get(b, "affected"), same, mixed=True)
+    assert [r["branch"] for r in plan] == [], "every affected member overlaps the first: no rollup"
 
 
 def test_build_merges_the_members_into_one_branch_and_records_them(repo, monkeypatch):

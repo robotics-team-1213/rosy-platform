@@ -68,6 +68,7 @@ while :; do
   if [ $ok = 1 ]; then echo "$$ $X $RC $G" > "$L"; rm -f ~/rosy-jobs/$$.alone-wait; flock -u 9; break; fi
   # 11-09: behind a training or Gazebo hold (hours) an alone waiter's marker kept every pytest off the host. It
   # waits without the marker, then gives its invocation back to be placed on another host (RebootSoon path).
+  [ "$gh" = 1 ] || unset w0  # the 180 s count is one continuous hold
   if [ "$AL" = 1 ] && [ "$gh" = 1 ]; then
     rm -f ~/rosy-jobs/$$.alone-wait; flock -u 9; : "${w0:=$now}"
     if [ $((now - w0)) -ge "${ROSY_ALONE_HOLD_WAIT_S:-180}" ]; then echo "$DEFER_HOLD"; exit 253; fi

@@ -304,7 +304,7 @@ def _supervise(tree: Path, snap: str, land_args: list[str], run, room) -> int:
         (tree.parent / (tree.name + ".stopped")).write_text(f"land.py exit {code}; read {tree.name}.log\n",
                                                             encoding="utf-8")
         print(f"[land-async] {snap} did not land (exit {code}); kept {tree} for the owner", flush=True)
-        split_rollup(tree, snap)
+        split_rollup(tree, snap, reason=reason)
     superseded(tree, snap)
     return code
 
@@ -333,12 +333,19 @@ def superseded(tree: Path, snap: str) -> list[str]:
         return []
 
 
-def split_rollup(tree: Path, snap: str, launch=None) -> None:
+NO_SPLIT = (QUEUE_FULL, "MAIN-RED", "no host", "not run", *RESOURCE_SHORTAGE)  # halves would stop the same way
+
+
+def split_rollup(tree: Path, snap: str, launch=None, reason: str = "") -> None:
     """A stopped rollup bisects itself (D-889 addendum 33): main's ``land_rollup.py split`` re-rolls each half and
     sends a half of one back alone, so passing members still land and the failing one stops with its own reason."""
     if (not ROLLUP.fullmatch(snap) or os.environ.get("ROSY_ROLLUP_MIXED", "1") == "0"
-            or not (tree.parent / (tree.name + ".members")).is_file()):
+            or not (tree.parent / (tree.name + ".members")).is_file() or any(m in reason for m in NO_SPLIT)):
         return
+    done = tree.parent / (tree.name + ".split")
+    if done.exists():  # a resumed or retried supervisor never queues the halves twice
+        return
+    done.write_text(reason + "\n", encoding="utf-8")
     main = Path(git(tree, "rev-parse", "--path-format=absolute", "--git-common-dir")).parent
     print(f"[land-async] {snap}: splitting the rollup into halves", flush=True)
     (launch or detach)([sys.executable, "-X", "utf8", str(main / "tools" / "land_rollup.py"), "split", tree.name],

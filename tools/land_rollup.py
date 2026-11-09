@@ -125,6 +125,9 @@ def plan(repo: Path, rows: list[dict], tier_of=tier, reach_of=reach, mixed: bool
         kind = kind or t
         members.append(r)
         reached.append(mine)
+    if whole and members and all(tiers[m["branch"]] == "affected" for m in members):
+        # the FULL rows all stayed out: an affected rollup again, so suite overlap matters again
+        return plan(repo, [r for r in rows if tiers[r["branch"]] == "affected"], lambda _r, b: tiers[b], reach_of, mixed)
     return members if len(members) >= 2 else []
 
 
