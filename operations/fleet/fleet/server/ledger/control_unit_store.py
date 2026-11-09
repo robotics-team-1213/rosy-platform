@@ -7,12 +7,78 @@ from pathlib import Path
 import sqlite3
 
 from core_common.protocol.control_units import ControlDelegationState
-from fleet.server.control_unit_config import _identifier
+from fleet.server.control_unit_config import UNIT_IDENTIFIER_ALIASES, _identifier
 from fleet.server.sqlite_policy import configure_connection, enable_wal
 
 
 STATES = frozenset(state.value for state in ControlDelegationState)
 TERMINAL = frozenset({"COMPLETED", "FAILED", "CANCELED", "EXPIRED"})
+
+# D-1011: journal tables whose unit-id columns follow the identifier rename.
+_UNIT_COLUMNS = {
+    "fleet_control_unit_identity": ("unit_id",),
+    "fleet_control_delegations": ("origin_id", "owner_unit"),
+    "fleet_control_delegation_history": ("origin_id",),
+    "fleet_control_stops": ("origin_id", "unit_id", "target_unit"),
+    "fleet_control_stop_deliveries": ("origin_id", "delivery_unit"),
+}
+# JSON columns whose exactly-matching unit-id values follow the rename (never substrings).
+_UNIT_DOCUMENTS = {
+    "fleet_control_delegations": ("request_json", "result_json"),
+    "fleet_control_stops": ("body_json",),
+    "fleet_control_stop_deliveries": ("assigned_json", "results_json", "original_json", "reconcile_json"),
+}
+
+
+def _rewrite_ids(value, old, new):
+    if isinstance(value, str):
+        return new if value == old else value
+    if isinstance(value, list):
+        return [_rewrite_ids(item, old, new) for item in value]
+    if isinstance(value, dict):
+        return {key: _rewrite_ids(item, old, new) for key, item in value.items()}
+    return value
+
+
+def migrate_unit_identifier(connection, unit_id):
+    """D-1011: rewrite a pre-rename journal to the renamed unit once, with an audit row."""
+    old = next((source for source, target in UNIT_IDENTIFIER_ALIASES.items() if target == unit_id), None)
+    if old is None:
+        return
+    connection.execute("""CREATE TABLE IF NOT EXISTS fleet_control_unit_identifier_events (
+        event_id INTEGER PRIMARY KEY AUTOINCREMENT, from_id TEXT NOT NULL, to_id TEXT NOT NULL,
+        applied_at TEXT NOT NULL)""")
+    tables = {row[0] for row in connection.execute(
+        "SELECT name FROM sqlite_master WHERE type='table'")}
+    rewritten = 0
+    for table, columns in _UNIT_COLUMNS.items():
+        if table not in tables:
+            continue
+        for column in columns:
+            rewritten += connection.execute(
+                f"UPDATE {table} SET {column}=? WHERE {column}=?", (unit_id, old)).rowcount
+    for table, columns in _UNIT_DOCUMENTS.items():
+        if table not in tables:
+            continue
+        for column in columns:
+            rows = connection.execute(
+                f"SELECT rowid, {column} FROM {table} WHERE {column} LIKE ?", (f"%{old}%",)).fetchall()
+            for rowid, payload in rows:
+                try:
+                    document = json.loads(payload)
+                except (TypeError, ValueError):
+                    continue
+                migrated = _rewrite_ids(document, old, unit_id)
+                if migrated != document:
+                    connection.execute(f"UPDATE {table} SET {column}=? WHERE rowid=?",
+                                       (json.dumps(migrated, sort_keys=True,
+                                                   separators=(",", ":"), allow_nan=False), rowid))
+                    rewritten += 1
+    if rewritten or not connection.execute(
+            "SELECT 1 FROM fleet_control_unit_identifier_events LIMIT 1").fetchone():
+        connection.execute(
+            "INSERT INTO fleet_control_unit_identifier_events (from_id,to_id,applied_at) VALUES (?,?,?)",
+            (old, unit_id, datetime.now(timezone.utc).isoformat()))
 
 
 def _json(value):
@@ -65,6 +131,7 @@ class ControlUnitStore:
             if "cancel_reason" not in {c[1] for c in connection.execute("PRAGMA table_info(fleet_control_delegations)")}:
                 connection.execute("ALTER TABLE fleet_control_delegations ADD COLUMN cancel_reason TEXT")
         with self._transaction() as connection:
+            migrate_unit_identifier(connection, self.unit_id)  # D-1011 rename, idempotent + audited
             connection.execute("INSERT OR IGNORE INTO fleet_control_unit_identity VALUES (1, ?)",
                                (self.unit_id,))
             if connection.execute("SELECT unit_id FROM fleet_control_unit_identity").fetchone()[0] != self.unit_id:

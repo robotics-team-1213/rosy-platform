@@ -14699,3 +14699,9 @@ osy-d395-s1d\`.
 - 증거: 원격 `.gitattributes`를 읽는 시험.
 - gate 변화: 없음.
 - CE: 기존 교훈 갱신은 fix/eol-guard에 있다(`docs/solutions/workflow-issues/autocrlf-false-commit-a-rewrites-tree-to-crlf-2026-11-01.md`).
+
+## 2026-11-10 · uncommitted · refactor: 팔 셀 식별자 CELL-A/cell-a → ARM-CELL/arm-cell (D-1011)
+- 변경: 입력(위임 target·peers key·service principal·정지 ingress·`/units/{unit_id}`)에 구 id `CELL-A`를 별칭으로 받고 출력·저장은 새 id로. `ControlUnitStore` identity 충돌 전 멱등 원장 마이그레이션(`fleet_control_unit_identifier_events` 감사 행). 시험 기대값 교체와 신규 `test_control_unit_identifier_rename.py`. 관제 단위 배포 문서·헤더 주석 갱신, dry-run 호스트 스크립트 `tools/ops/rename_arm_cell_runtime.sh`(이 브랜치에서 실행 안 함). 재고와 결정 근거는 `docs/plans/2026-11-10-arm-cell-identifier.md`.
+- 증거: 원격 시험 로그는 착지 시점의 실행 기록을 따른다(이 행 작성 시점 미실행).
+- gate 변화: 없음.
+- 결정: D-1011 Accepted.

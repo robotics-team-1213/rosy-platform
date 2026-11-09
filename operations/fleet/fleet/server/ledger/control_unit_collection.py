@@ -116,6 +116,7 @@ class ControlUnitCollection:
                                  *(self._refresh_child(child) for child in self.children))
 
     async def detail(self, unit_id):
+        unit_id = canonical_unit_id(unit_id)  # D-1011 alias
         if unit_id not in self.scope:
             raise ValueError("CONTROL_UNIT_OUTSIDE_SCOPE")
         if unit_id == self.unit.unit_id:
@@ -147,6 +148,7 @@ class ControlUnitCollection:
         return detail
 
     async def map(self, unit_id):
+        unit_id = canonical_unit_id(unit_id)  # D-1011 alias
         if unit_id not in self.scope:
             raise ValueError("CONTROL_UNIT_OUTSIDE_SCOPE")
         if unit_id == self.unit.unit_id:

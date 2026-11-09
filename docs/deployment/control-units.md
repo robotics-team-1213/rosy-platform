@@ -19,12 +19,12 @@
 
 ### 현장 배치표
 
-단위가 어느 PC에서 도는지는 이 표에만 적는다. PC는 물리 이름으로 부르고, 단위 이름(통합관제 R, CELL-A)과 화면 이름은 호스트를 옮겨도 바뀌지 않는다(D-893, D-974).
+단위가 어느 PC에서 도는지는 이 표에만 적는다. PC는 물리 이름으로 부르고, 단위 이름(통합관제 R, ARM-CELL)과 화면 이름은 호스트를 옮겨도 바뀌지 않는다(D-893, D-974, D-1011).
 
 | 단위 | 지금 호스트 | 목표 호스트 | 근거 |
 |---|---|---|---|
 | 통합관제 R | OMX 노트북(임시, 포트·DB·인증서 분리) | N100 계열 미니 PC(실물 Intel N150·16GB·SSD 256GB, Ubuntu 24.04 Desktop, 로봇 LAN 유선) | D-960 5항, [D-994](../adr/D-994-n100-integrated-control-host-and-owner-boundaries.md); 2026-11-08 기본 준비(Docker·SSH·서명 후보 사본)만, 이전·부하 수용 미수행 |
-| 셀 관제 CELL-A | OMX 노트북 | OMX 노트북(팔 local stop UDS가 같은 호스트) | D-960 1항 |
+| 셀 관제 ARM-CELL | 팔 셀 호스트(`rosy-arm-cell`) | 팔 셀 호스트(팔 local stop UDS가 같은 호스트) | D-960 1항, D-1011 |
 
 N100 미니 PC는 물리 호스트이고 통합관제 R은 그곳에서 실행할 관제 단위다. R의 직접 소유 장치는 기존 Fleet→CORE 경로를 쓰고, 하위 셀의 승인·팔 실행은 해당 셀과 OMX owner에 남는다. Account·Monitoring·Harbor가 같은 호스트에 있어도 원장·자격·명령 권한을 합치지 않는다. 역할별 책임과 부하·장애 수용 조건은 [D-994](../adr/D-994-n100-integrated-control-host-and-owner-boundaries.md)를 따른다. 통합관제 R은 2026-11-09 `rosy-fleet-r`로 옮겼고(증거: `Rosy/docs/workspace-records/2026-11-09/r-host-migration/README.md`) 이전하지 않은 단위는 표의 기존 기록 그대로다. 호스트를 옮긴 뒤 남는 참조(Fleet host-control 대상, 다른 호스트의 `.local` 접속 URL)는 [호스트 이전 뒤 남는 참조](../solutions/deployment/host-move-leaves-name-and-target-references-2026-11-09.md)를 따라 지운다.
 
@@ -106,14 +106,14 @@ fleet console --robots /etc/rosy/robots.yaml \
 
 단독 CLI 기본 바인드는 `127.0.0.1:8090`이다. PC 간에는 승인된 TLS reverse proxy의 외부 origin으로 연결하고 내부 Fleet 포트는 proxy에서만 접근하게 한다. 기존 site 배치는 [Caddyfile](../../deploy/site/Caddyfile)과 [Compose](../../deploy/site/compose.yaml)의 `ROSY_SITE_HTTPS_PORT`를 사용하며 `.env.example`의 `8443`은 예시다. Compose 안의 Fleet은 `0.0.0.0`으로 bind하지만 컨테이너 내부 범위다. 실제 방화벽에는 선택한 외부 TLS 포트에 대해 직계 이웃과 승인된 운영 화면의 접근만 허용한다. 장치 API의 주소·포트·자격은 별도 robots 설정을 따르며 이 관제 peer 포트와 혼동하지 않는다.
 
-이웃 관제가 **다른 PC**에 있으면(D-994: R은 N100 계열 호스트, 셀은 팔이 연결된 호스트) 두 가지를 더한다. 이웃의 peers 항목에 `address`(IP 리터럴만)를 넣으면 Fleet은 그 주소로 접속하되 TLS 서버 이름 확인과 `Host`는 `url`의 이름(예: `peer-cell-a`)으로 한다. 이름을 다른 DNS에 맡기지 않으며 `https` 항목에만 허용된다. 받는 쪽은 서명 overlay [`compose.control-unit-remote.yaml`](../../deploy/site/compose.control-unit-remote.yaml)을 `compose.control-unit.yaml` 바로 뒤에 붙이고 `site.env`의 `ROSY_CONTROL_UNIT_PEER_BIND=<이 PC의 LAN 주소>`와 `ROSY_CONTROL_UNIT_PEER_PORT=<peer.Caddyfile 포트>`로 peer proxy만 그 주소에 게시한다. 사이트 HTTPS 방화벽은 이 포트를 거르지 않으므로 `site-firewall.py check`가 와일드카드·loopback·이 PC에 없는 주소를 거절한다. Bearer service 인증과 peer 인증서는 그대로다. 같은 주소·포트로 두 이웃을 부르는 설정은 TLS 연결을 섞을 수 있어 시작 시 거절된다.
+이웃 관제가 **다른 PC**에 있으면(D-994: R은 N100 계열 호스트, 셀은 팔이 연결된 호스트) 두 가지를 더한다. 이웃의 peers 항목에 `address`(IP 리터럴만)를 넣으면 Fleet은 그 주소로 접속하되 TLS 서버 이름 확인과 `Host`는 `url`의 이름(예: `peer-arm-cell`)으로 한다. 이름을 다른 DNS에 맡기지 않으며 `https` 항목에만 허용된다. 받는 쪽은 서명 overlay [`compose.control-unit-remote.yaml`](../../deploy/site/compose.control-unit-remote.yaml)을 `compose.control-unit.yaml` 바로 뒤에 붙이고 `site.env`의 `ROSY_CONTROL_UNIT_PEER_BIND=<이 PC의 LAN 주소>`와 `ROSY_CONTROL_UNIT_PEER_PORT=<peer.Caddyfile 포트>`로 peer proxy만 그 주소에 게시한다. 사이트 HTTPS 방화벽은 이 포트를 거르지 않으므로 `site-firewall.py check`가 와일드카드·loopback·이 PC에 없는 주소를 거절한다. Bearer service 인증과 peer 인증서는 그대로다. 같은 주소·포트로 두 이웃을 부르는 설정은 TLS 연결을 섞을 수 있어 시작 시 거절된다. 전환 중 잔여 구성(D-1011: `peers.CELL-A` key, `control-unit:CELL-A` principal)은 서버가 별칭으로 받아들인다.
 
 ```yaml
 peers:
-  CELL-A:
-    url: https://peer-cell-a:8543   # 인증서 SAN과 Host
+  ARM-CELL:
+    url: https://peer-arm-cell:8543   # 인증서 SAN과 Host
     address: 192.0.2.30              # 셀 PC의 LAN 주소(예시)
-    token_file: secrets/r-to-cell-a.token
+    token_file: secrets/r-to-arm-cell.token
 ```
 
 CLI는 `--control-unit-config` 또는 환경 기본값 `ROSY_CONTROL_UNIT_CONFIG`를 받으며 명시 옵션이 우선한다. 기본 site Compose는 관제를 자동 활성화하지 않는다. 현장 배포는 서명 candidate의 [`compose.control-unit.yaml`](../../deploy/site/compose.control-unit.yaml)을 `ROSY_SITE_PAIRING_COMPOSE`에 덧붙여 켠다(D-960). `ROSY_CONTROL_UNIT_DIR`(승인 private 디렉터리: `control-unit.yaml`·`certs/`·`secrets/`·`peer.Caddyfile`·`peer-secrets/`)와 `ROSY_CONTROL_UNIT_PEER_ALIAS`(예: `peer-r`)를 `site.env`에 두며, 서명 overlay이므로 자동 갱신이 계속 검증·설치한다. 사이트별 미서명 overlay 파일은 쓰지 않는다. [별도 overlay](../../deploy/site/compose.control-unit.yaml.example)를 함께 사용하면 `ROSY_CONTROL_UNIT_DIR`의 승인 private 디렉터리를 Fleet에만 읽기 전용으로 mount하고 그 안의 `control-unit.yaml`을 선택한다. 상대 token/CA 경로도 그 디렉터리 안에 둔다. 기존 site 설정의 수신 users·직접 roster·독립 DB를 함께 대조한다. 여러 인스턴스를 한 PC에 배치하면 Compose project/포트/볼륨도 분리한다.
@@ -157,7 +157,7 @@ CLI는 `--control-unit-config` 또는 환경 기본값 `ROSY_CONTROL_UNIT_CONFIG
 - 상위에서 받은 위임의 승인 직전 직접 부모부터 조상까지 같은 배정의 취소 여부와 연결을 확인한다. 단절 때 해당 위임의 새 승인을 막는다. 이미 admission을 마친 유한 Action은 기존 owner가 처리한다. 자동 대체·재배정·재무장은 없다.
 - 미완료 owner 투영은 마지막 성공 조회 뒤 5초가 지나면 stale이다. 원장 상태가 바뀌지 않아도 재대조로 신선도를 확인한다. 확정된 종단 결과는 단절 뒤에도 원래 결과로 보존한다.
 - 재시작해도 위임·승인자·Task identity를 유지하며 dispatch는 기존 startup 정책대로 닫힌다. Task 없는 승인 중 기록은 운영자가 최신 상태로 다시 확인한다.
-- 미완료 위임이 있는 구성 revision 변경은 시작을 거절한다. 기존 구성에서 원래 작업을 조정·해결한 뒤 계획된 변경을 수행한다. DB를 새 unit ID에 재사용하지 않는다.
+- 미완료 위임이 있는 구성 revision 변경은 시작을 거절한다. 기존 구성에서 원래 작업을 조정·해결한 뒤 계획된 변경을 수행한다. DB를 새 unit ID에 그대로 재사용하지 않는다. 단, 이번 `CELL-A`→`ARM-CELL` 개명은 감사 행과 함께 원장을 재작성하는 멱등 마이그레이션으로 한 번 허용한다(D-1011).
 
 ## 검증 경계
 

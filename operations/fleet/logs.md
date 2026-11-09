@@ -5425,3 +5425,8 @@
 - 변경: `feature_matrix.json`에 공개 `POST /api/fleet/auth/access-requests`(login-page.js)와 관리자 목록·승인·거절(account-page.js), login-page.js의 `/api/fleet/auth/session` 호출을 등록하고, `backend_http_evidence.json`에 `test_account_access_requests.py` 통과 수신 기록(21 passed, 병합 커밋 36e976e701)을 더했다.
 - 증거: 착지 사전 시험 `test_all_supported_features_have_contracts_and_flows`가 미등록 프런트 호출 3건으로 실패했다. 원인은 이 브랜치가 새 프런트 호출을 기능표에 올리지 않은 것이며 main 탓이 아니다.
 - gate 변화: SOURCE 회귀 복구. 현장 수용은 별도다.
+
+## 2026-11-10 · uncommitted · refactor: 관제 단위 id CELL-A → ARM-CELL 별칭 수용과 원장 마이그레이션 (D-1011)
+- 변경: `control_unit_config.py` `UNIT_IDENTIFIER_ALIASES`·`canonical_unit_id`, `unit()` 별칭 해석. `load_control_unit` peers key 별칭(이중 정의 거절 유지), 이웃 service principal 별칭. routes의 `peer_id`·stop `parent`·information `reader`/`scope` 정규화. `ControlUnitStops` ingress 정규화. `ControlUnitStore` identity 충돌 전 멱등 재작성 + 감사 행. 시험 기대값 `ARM-CELL`/`arm-cell`로, 신규 `test_control_unit_identifier_rename.py`.
+- 증거: 원격 시험 로그는 착지 시점의 실행 기록을 따른다(이 행 작성 시점 미실행).
+- gate 변화: 없음. 현장 전환·수용은 별도.

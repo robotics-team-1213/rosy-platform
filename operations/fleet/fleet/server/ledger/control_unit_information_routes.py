@@ -6,6 +6,8 @@ import sqlite3
 import httpx
 from fastapi import Depends, HTTPException
 
+from fleet.server.control_unit_config import canonical_unit_id
+
 
 def install_control_information_routes(app, collection, *, authorize, require_viewer):
     prefix = "/api/fleet/control-unit"
@@ -14,14 +16,15 @@ def install_control_information_routes(app, collection, *, authorize, require_vi
         if principal.role == "service":
             if (not collection.config.share_information_with_parent
                     or collection.unit.parent is None
-                    or principal.principal_id != "control-unit:" + collection.unit.parent):
+                    or canonical_unit_id(principal.principal_id[len("control-unit:"):])
+                    != collection.unit.parent):  # D-1011 alias
                 raise HTTPException(403, detail={"code": "CONTROL_UNIT_PARENT_INFORMATION_NOT_ENABLED"})
         else:
             require_viewer(principal)
         return principal
 
     def scope(unit_id):
-        if unit_id not in collection.scope:
+        if canonical_unit_id(unit_id) not in collection.scope:  # D-1011 alias
             raise HTTPException(404, detail={"code": "CONTROL_UNIT_NOT_FOUND"})
 
     async def execute(operation):

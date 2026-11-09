@@ -20,7 +20,8 @@ def install_control_stop_routes(app, service, *, authorize, require_viewer, requ
     def parent(principal, origin):
         if (not service.config.accept_parent_stop or service.unit.parent is None
                 or principal.role != "service"
-                or principal.principal_id != "control-unit:" + service.unit.parent):
+                or canonical_unit_id(principal.principal_id[len("control-unit:"):])
+                != service.unit.parent):  # D-1011: the parent may still present the pre-rename id
             raise HTTPException(403, detail={"code": "CONTROL_UNIT_PARENT_STOP_NOT_ENABLED"})
         ancestor = service.config.topology.unit(service.unit.parent)
         while ancestor.unit_id != origin and ancestor.parent is not None:
