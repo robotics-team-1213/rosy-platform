@@ -229,7 +229,11 @@ def run(args):
                 ft.call(f'{cores[r]}/api/v1/robot/state', token[r])[1].get('robot_id') == r for r in ft.ROBOTS), 2.0)
             result['localized'] = result['core_ready'] and (not args.loc_assist or ft.until(180, lambda: all(
                 ft.localize(cores[r], token[r], spawns[r], log) for r in ft.ROBOTS), 3.0))
-            if result['localized']:
+            # CORE says Nav2, AMCL and the costmaps are active (readiness) before the first goal; without loc_assist
+            # nothing else waits for them (the first run sent a goal into a Nav2 that was still starting).
+            result['nav_ready'] = result['localized'] and ft.until(240, lambda: all(
+                (nav_state(cores[r], token[r]).get('readiness') or {}).get('ready') is True for r in ft.ROBOTS), 3.0)
+            if result['nav_ready']:
                 time.sleep(args.settle_s)
                 trace = OdomTrace(ns)
                 s = START_S
