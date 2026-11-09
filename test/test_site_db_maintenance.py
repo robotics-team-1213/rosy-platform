@@ -537,7 +537,8 @@ def test_prune_ledger_deletes_only_terminal_task_history_and_expired_audit(tmp_p
         kept_pairing = db.execute("SELECT COUNT(*) FROM device_pairing_audit").fetchone()[0]
         kept_events = db.execute("SELECT COUNT(*) FROM core_event_audit").fetchone()[0]
     assert removed == {"fleet_task_history": 2, "fleet_tasks": 0, "rosy_account_audit": 0,
-                       "device_pairing_audit": 1, "core_event_audit": 2}
+                       "device_pairing_audit": 1, "core_event_audit": 2,
+                       "fleet_api_audit": 0, "sighting_audit": 0}
     assert kept_tasks == {"old-hold", "new-done", "old-running"}
     assert kept_rows == {"old-done", "old-failed", "old-hold", "new-done", "old-running"}
     assert kept_audit == 2 and kept_pairing == 0
@@ -550,7 +551,8 @@ def test_prune_ledger_zero_retention_disables_and_missing_tables_are_skipped(tmp
 
     disabled = prune_ledger(database, history_days=0, audit_days=0)
     assert disabled == {"fleet_task_history": 0, "fleet_tasks": 0, "rosy_account_audit": 0,
-                        "device_pairing_audit": 0, "core_event_audit": 0}
+                        "device_pairing_audit": 0, "core_event_audit": 0,
+                        "fleet_api_audit": 0, "sighting_audit": 0}
     with closing(sqlite3.connect(database)) as db:
         assert db.execute("SELECT COUNT(*) FROM fleet_task_history").fetchone()[0] == 5
         assert db.execute("SELECT COUNT(*) FROM fleet_tasks").fetchone()[0] == 5
@@ -560,7 +562,8 @@ def test_prune_ledger_zero_retention_disables_and_missing_tables_are_skipped(tmp
         db.execute("CREATE TABLE marker (v INT)")
     assert prune_ledger(empty) == {"fleet_task_history": 0, "fleet_tasks": 0,
                                    "rosy_account_audit": 0, "device_pairing_audit": 0,
-                                   "core_event_audit": 0}
+                                   "core_event_audit": 0, "fleet_api_audit": 0,
+                                   "sighting_audit": 0}
 
 
 def test_prune_ledger_preserves_task_identity_after_an_earlier_history_prune(tmp_path):
@@ -590,7 +593,8 @@ def test_backup_command_prunes_the_live_ledger_after_writing_the_backup(tmp_path
     report = json.loads(capsys.readouterr().out)
     assert report["pruned_ledger"] == {"fleet_task_history": 2, "fleet_tasks": 0,
                                        "rosy_account_audit": 0, "device_pairing_audit": 1,
-                                       "core_event_audit": 2}
+                                       "core_event_audit": 2, "fleet_api_audit": 0,
+                                       "sighting_audit": 0}
     assert "checkpoint" in report and report["checkpoint"]["wal_checkpoint"] is not None
     with closing(sqlite3.connect(database)) as db:
         assert db.execute("SELECT COUNT(*) FROM fleet_task_history").fetchone()[0] == 3
