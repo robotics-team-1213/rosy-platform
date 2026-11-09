@@ -9,7 +9,7 @@ SITE = ROOT / 'deploy/site'
 # Long-running common services of the R stack (docs/reference/common-services.md, 「배치와 장애 격리」).
 COMMON = {'account', 'monitoring', 'media', 'media-gateway'}
 # D-1001 debt lists. Entries leave when the cause is fixed; a new entry needs an ADR.
-FLEET_IMAGE_USERS = {'fleet', 'fleet-backup', 'monitoring'}  # monitoring: until its own image (D-1001 step 2)
+FLEET_IMAGE_USERS = {'fleet', 'fleet-backup'}  # monitoring has its own image since D-1001 step 2
 NO_MEM_LIMIT = {'fleet', 'vision', 'postgres', 'fleet-backup', 'proxy', 'control-unit-peer',
                 'media-gateway', 'account-backup', 'account-backup-check'}  # sizes follow the D-994 24 h run
 FORBIDDEN_MOUNTS = ('docker.sock', '/etc/rosy/fleet', 'host-control', 'sighting_data', 'vision_state', 'pg_data')
