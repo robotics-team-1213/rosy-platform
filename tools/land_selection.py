@@ -177,7 +177,8 @@ def select(land, wt: Path, base: str, python: str, head: str | None = None,
             # suites on the merged tree. A safety path in this branch keeps FULL (D-889 6). One in main's delta
             # no longer does (D-889 addendum 8): a branch touching a safety path lands only through its own FULL
             # tier, and the delta's selection keeps the suites mapped to those safety paths.
-            own = _affected(land, wt, python, head, None) if landed and head and sel["escalations"] else None
+            # D-436 2026-11-09: a safety escalation without FULL is a narrowed tier, handled as an ordinary delta.
+            own = _affected(land, wt, python, head, None) if landed and head and sel["mode"] == "full" else None
             if own is not None and not any(e.endswith(SAFETY_TRIGGER) for e in own["escalations"]):
                 print("[tests] main's delta escalated but landed with its own FULL tier: its mapped suites and"
                       " this branch's own selection on the merged tree")

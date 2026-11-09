@@ -28,6 +28,58 @@ ARCHITECTURE = "test/architecture"
 REGISTRIES = {"shared/web/surfaces.yaml": ("surfaces", "surface_registry")}
 FROM_IMPORT = re.compile(r"^\s*from\s+(\.*)([\w.]*)\s+import\s+(\([^)]*\)|[^\n]*)", re.MULTILINE)
 
+# D-436 addendum 2026-11-09 (user: "더 잘게 나누고 정말 필요할때만 하는걸로 결정해"): a FULL trigger selects a
+# narrower tier; FULL stays only where no mapping can find the reach. The nightly full run and the pre-publish
+# green FULL (D-868) are the net. ROSY_FULL_LEGACY=1 restores the earlier rule (every trigger FULL).
+LEGACY_ENV = "ROSY_FULL_LEGACY"
+#: Reach no mapping finds: dependency pins (every venv), manifests read through path constants, layout.
+STAY_FULL = ("pinned Python dependencies", "deploy compose manifest", "image manifest", "native manifest",
+             "source layout")
+SELF_TRIGGER = "harness configuration or the selector itself"
+#: The selector, landing and runner tools' own suites: what a change to them runs instead of FULL.
+SELF_TEST = re.compile(r"^test/test_(land|remote_|affected|known_failures|worktree|pre_push|publish_|browser_scope"
+                       r"|harness|doctor|collect_alone|work_queue|xdist|g1_timing|safety_review|size_range"
+                       r"|ci_dependencies)[^/]*\.py$")
+
+
+def legacy() -> bool:
+    import os
+    return os.environ.get(LEGACY_ENV) == "1"
+
+
+def tier(repo: at.Repo, path: str, trigger: str, add) -> bool:
+    """A non-safety FULL trigger's narrower tier through `add`: False when it stays FULL (unknown reach).
+    True leaves the path's own mapping (module, referencing tests, reverse dependents) to the caller."""
+    if legacy():
+        return False
+    if trigger.endswith(SELF_TRIGGER):
+        for test in repo.test_files:
+            if SELF_TEST.match(test):
+                add(test, f"selector self-test tier ({path})")
+        add(ARCHITECTURE, f"selector self-test tier ({path})")
+        return True
+    if "/" not in path or any(trigger.endswith(t) for t in STAY_FULL):
+        return False  # a root conftest, pyproject or pytest.ini reaches every suite
+    if trigger.endswith("pytest conftest"):
+        add(str(PurePosixPath(path).parent), f"conftest scope ({path})")
+    return True
+
+
+def safety_tier(repo: at.Repo, add) -> None:
+    """Every safety-tagged test: the suites owning a safety module or root, the tests naming one, the guards."""
+    roots = [r["path"] for r in repo.safety_roots if r.get("concern") == "safety"]
+    for path in [*sorted(repo.safety_modules), *roots]:
+        why = f"safety tier ({path})"
+        for test in (repo.module_for(path) or {}).get("tests") or []:
+            if test not in at.BROAD_TESTS:
+                add(test, why)
+        for test in repo.referencing_tests(path):
+            add(test, why)
+    for test in repo.test_files:
+        if any(at._under(test, root) for root in roots):
+            add(test, "safety tier (under a safety root)")
+    add(ARCHITECTURE, "safety tier (separation guards)")
+
 
 def add_readers(repo: at.Repo, path: str, trigger: str, add, changed=(), base_text=None) -> str | None:
     """Select the readers of a triggered `path` through `add`: None when narrowed, else why it stays

@@ -130,3 +130,15 @@ def test_history_is_the_median_run_of_each_argv_from_the_events_log(tmp_path):
 def test_a_run_may_ask_six_main_workers_of_a_full_host():
     room = {"cores": 24.0, "mem": 30.0, "site": False, "light": False}
     assert wq.MAX_MAIN == 6 and wq.main_workers(room, 20) == 6
+
+
+def test_an_ignore_word_splits_too_and_the_ignored_file_never_runs(tmp_path, monkeypatch):
+    """2026-11-09: `test --ignore=<g1 timing>` was the FULL long pole (11 min median, 71 min worst) and stayed whole."""
+    _tree(tmp_path, monkeypatch)
+    inv = ["pkg/test", "--ignore=pkg/test/test_a.py"]
+    groups = wq.split(tmp_path, [inv], {tuple(inv): 600.0})
+    assert len(groups) == 3 and all(g[-1] == "--ignore=pkg/test/test_a.py" for g in groups)
+    files = sorted(w for g in groups for w in g if not w.startswith("-"))
+    assert files == [f"pkg/test/test_{n}.py" for n in "bcde"], "every other test file exactly once"
+    other = ["pkg/test", "-k", "x"]
+    assert wq.split(tmp_path, [other], {tuple(other): 600.0}) == [other], "any other option keeps it whole"
