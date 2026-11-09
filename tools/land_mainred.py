@@ -250,6 +250,9 @@ def recheck(wt: Path, main_sha: str, run, logdir: Path) -> list[str]:
     """Run each open id on ``main_sha`` alone; close the ones that pass there or whose test file is gone, and return
     them. Only a landing's own selection closed an id before, so ids nothing selected stayed red for days after the
     fix (2026-11-07: 11 open, the oldest from 10-28, some of deleted files). A failing or unreachable id stays open."""
+    # 2026-11-08 02:55: a recheck at sha 0000… read every file as gone and closed 7 ids whose files were on main.
+    if _git(wt, "cat-file", "-e", f"{main_sha}^{{commit}}").returncode:
+        raise ValueError(f"main-red recheck: {main_sha!r} is not a commit here")
     opened = state(wt)
 
     def settle(nodeid: str, why: str) -> None:
