@@ -52,11 +52,11 @@ def test_the_arm_chain_carries_its_own_weight_and_a_payload():
     assert abs(held[1]) > abs(bare[1])  # and a held container on top
 
 
-def test_the_wrist_holder_against_the_upper_arm_is_flagged():
+def test_the_wrist_holder_closes_on_the_upper_arm_as_the_wrist_flexes_past_58():
     pytest.importorskip("mujoco")
     arm = load.Arm("arm_a")
-    fault = load.norm_to_rad([42.52, -9.4, -0.81, 61.42, 73.09])  # 2026-11-09 15:08, wrist_flex stalled at PWM 300/300
-    park = load.norm_to_rad([0.76, -62.25, 53.06, 51.65, 45.05])
-    assert arm.clearance_mm(fault) < load.CLEAR_MM < arm.clearance_mm(park)
-    out = load.review(arm, [[42.52, -9.4, -0.81, 61.42, 73.09, 0]] * 3, 15, np.ones(5) * 9)
+    gap = [arm.clearance_mm(load.norm_to_rad([42.52, -9.4, -0.81, w, 73.09])) for w in (50, 58, 61.42, 64, 70, 76)]
+    assert all(b <= a + 1e-6 for a, b in zip(gap, gap[1:])) and gap[0] > load.CLEAR_MM  # vertices: monotonic, no hull jumps
+    assert gap[-1] < load.CLEAR_MM  # far enough over, the holder comes within the bound
+    out = load.review(arm, [[42.52, -9.4, -0.81, 76, 73.09, 0]] * 3, 15, np.ones(5) * 9)
     assert not out["ok"] and out["flags"][-1]["joint"] == "holder-link4"

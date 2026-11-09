@@ -27,7 +27,7 @@ FLAG = .5  # load_predict's risky_share: the most any logged standstill outside 
 # The wrist's were measured against its PWM cap (0.215 N·m); against its current-limited cap (0.088 at 250 mA) they fall
 # below 1 (1.6 / 2.44, 2.4 / 2.44) and are held at 1: the model is never discounted.
 MARGIN = {"joint1": 4.2, "joint2": 4.2, "joint3": 1.2, "joint4": 1.0, "joint5": 1.0}
-CLEAR_MM = 10.0  # the wrist holder on link5 nearer than this to link3/link4: 2026-11-09 15:08 it was 6.5 mm in the sim
+CLEAR_MM = 10.0  # the wrist holder on link5 nearer than this to link3/link4 (CAD vertices; print and cable not modelled)
 G = 9.81
 PREFIX = {"arm_a": "a_", "arm_b": "b_"}
 BODY = ("joint1", "joint2", "joint3", "joint4", "joint5")
@@ -52,20 +52,27 @@ class Arm:
         self.data = mujoco.MjData(m)
         body = lambda name: m.body(p + name).id  # noqa: E731
         # the printed camera holder only: link5's own housing overlaps link4 at the joint by design
-        self.near = ([g for g in range(m.ngeom) if m.geom_bodyid[g] == body("link5") and "holder" in m.geom(g).name],
-                     [g for g in range(m.ngeom) if m.geom_bodyid[g] in (body("link3"), body("link4"))])
+        mesh = mujoco.mjtGeom.mjGEOM_MESH
+        self.near = ([g for g in range(m.ngeom) if m.geom_bodyid[g] == body("link5") and "holder" in m.geom(g).name and m.geom_type[g] == mesh],
+                     [g for g in range(m.ngeom) if m.geom_bodyid[g] in (body("link3"), body("link4")) and m.geom_type[g] == mesh])
 
     def clearance_mm(self, q):
-        """Nearest distance between link5's geoms (the camera holder) and link3/link4, which the worlds exclude as neighbours."""
+        """Nearest distance between the holder's mesh vertices on link5 and link3/link4's, which the worlds exclude as
+        neighbours. Vertices, not mj_geomDistance: that works on convex hulls, and the U-shaped holder's hull reached link4
+        where the part does not (0 mm at wrist 57, 7 mm at 64, 2026-11-09)."""
+        from scipy.spatial import cKDTree
         m, d, mj = self.world.model, self.data, self.mj
         d.qpos[:] = m.qpos0
         d.qpos[self.qadr] = q
         mj.mj_kinematics(m, d)
-        best = 1e3
-        for g5 in self.near[0]:
-            for g in self.near[1]:
-                best = min(best, mj.mj_geomDistance(m, d, g5, g, .05, None) * 1000)
-        return best
+
+        def verts(g):
+            mesh = m.geom_dataid[g]
+            v = m.mesh_vert[m.mesh_vertadr[mesh]:m.mesh_vertadr[mesh] + m.mesh_vertnum[mesh]]
+            return d.geom_xpos[g] + v @ d.geom_xmat[g].reshape(3, 3).T
+
+        arm = cKDTree(np.vstack([verts(g) for g in self.near[1]]))
+        return float(min(arm.query(verts(g))[0].min() for g in self.near[0]) * 1000)
 
     def torque(self, q, qd, qdd, payload_kg=0.0):
         """N·m each body joint must give: M qdd + bias (gravity, Coriolis) + the payload's weight at the jaw tip."""
