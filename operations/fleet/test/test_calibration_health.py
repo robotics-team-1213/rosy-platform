@@ -39,9 +39,9 @@ def _disagree():
     return _body(_translated(0.5)), {"state": "stale", "max_move_m": 0.5, "rotation_deg": 0.2}
 
 
-def _feed(health, polls, body, verdict=None, clock=None):
+def _feed(health, polls, body, verdict=None, clock=None, rev=REV):
     for _ in range(polls):
-        health.observe("ceiling_north", REV, body, verdict)
+        health.observe("ceiling_north", rev, body, verdict)
         if clock is not None:
             clock.now += 60.0
 
@@ -198,7 +198,7 @@ def test_the_gate_stops_approved_record_sightings_only_when_enabled(gate):
     sightings = SightingService([source], known_robot_ids=["rosy_01"], clock=clock)
     sightings.approved_revision = tracking.approved_revision
     assert tracking.approved_revision(source) == record.calibration_revision
-    _feed(health, 5, _rejected(), clock=clock)
+    _feed(health, 5, _rejected(), clock=clock, rev=record.calibration_revision)
     row = tracking.snapshot()["sources"][0]["calibration_health"]
     assert row["state"] == "mismatch" and row["blocking"] is gate
     assert tracking.approved_revision(source) == (None if gate else record.calibration_revision)
