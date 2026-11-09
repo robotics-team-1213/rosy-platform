@@ -14643,16 +14643,16 @@ osy-d395-s1d\`.
 - gate 변화: 없음.
 - CE: 새 교훈 기록 — 실물 기동에서만 드러난 실패라 기록.
 
-## 2026-11-09 · uncommitted · feat(fleet): 현장 차로 편대 미션 — 리더 Nav2 trip + FOR-004 TRAIL 팔로워 (D-1002)
-
-- 변경: `fleet.server.formation_mission`(차로 적합성 `lane_fit`, 무장 → 리더 trip job 구성, 리더 lease 해제로 미션 종료) + `/api/fleet/formation/mission` 세 경로(v1.378), `tools/sim/formation_lane.py` Gazebo 시나리오(map_v2_fleet, Nav2 리더, TRAIL 팔로워, 리더 급정지·팔로워 상실 주입, 참값 채점), ADR D-1002.
-- 증거: 설계자·비평자 토론(A 리더-팔로워 vs B 독립 trip 편대 vs C 가상 강체). 호스트 시험 `test_formation_mission.py`는 시험 PC 실행 결과로, SIM은 `docs/validation/formation-lane-sim-2026-11-09/`로 기록한다. 실물 수용 없음.
-- gate 변화: 없음(SIM·device_trial 프로필에서만 라우트가 선다).
-- CE: 해당 없음 — 판단은 ADR에, 수치는 검증 기록에 남는다.
-
 ## 2026-11-08 · uncommitted · fix(remote): 현장 PC가 고정 학습 환경이 필요한 시험을 받지 않는다
 
 - 변경: `work_queue.LAB_ONLY`(지금은 `test_learning_workflow_pipeline_browser.py`)를 현장 PC 작업자가 받지 않는다. 남은 호스트가 현장 PC뿐이면 그 시험은 실패가 아니라 미실행(255)으로 끝난다(`stranded`).
 - 증거: 11-07 이 시험이 두 실험실 PC가 찬 동안 현장 PC에 배정돼 고정 학습 venv 확인에서 실패했고 MAIN-RED가 됐다. 그 venv는 모델 PC·AI PC에만 있다(11-08 확인). 건너뛰기 조건으로 막은 수정은 `land_browser.vacuous`에 걸려 되돌려졌다(a258cda4d7).
 - gate 변화: 현장 PC만 남은 착지는 이 시험에서 실패 대신 미실행으로 멈춘다(자리가 나면 resume).
 - CE: 해당 없음 — 원인과 규칙이 코드와 회귀 시험에 남는다.
+
+## 2026-11-09 · uncommitted · feat(fleet): 현장 차로 편대 미션 — 리더 Nav2 trip + FOR-004 TRAIL 팔로워 (D-1002)
+
+- 변경: `fleet.server.formation_mission`(차로 적합성 `lane_fit`, 무장 → 리더 trip job 구성, 리더 lease 해제로 미션 종료) + `/api/fleet/formation/mission` 세 경로(v1.378), `tools/sim/formation_lane.py` Gazebo 시나리오(map_v2_fleet, Nav2 리더, TRAIL 팔로워, 리더 급정지·팔로워 상실 주입, 참값 채점), ADR D-1002.
+- 증거: 설계자·비평자 토론(A 리더-팔로워 vs B 독립 trip 편대 vs C 가상 강체). 호스트 시험 `test_formation_mission.py`는 시험 PC 실행 결과로, SIM은 `docs/validation/formation-lane-sim-2026-11-09/`로 기록한다. 실물 수용 없음.
+- gate 변화: 없음(SIM·device_trial 프로필에서만 라우트가 선다).
+- CE: 해당 없음 — 판단은 ADR에, 수치는 검증 기록에 남는다.
