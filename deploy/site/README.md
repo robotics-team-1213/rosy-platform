@@ -914,7 +914,11 @@ expected `.local` hostname and site CA path. The one-time SD
 issued site CA at `/etc/rosy/trust/<trust_profile>.crt`, then provision the
 same persistent pairing token as `fleet.pairing_token` in the robot CORE's
 private `/var/lib/rosy/core/.rosy/rosy.yaml` and `fleet_pairing_token` in the
-site's root-owned `robots.yaml`. Apply the token during a controlled CORE
+site's `robots.yaml`. That file holds operator tokens and only the Fleet
+service reads it: own it by the Fleet UID/GID (`10001:10001`) with mode
+`0600` — group-readable is the warning the console prints at start, and
+provisioning that leaves it root-owned must not widen the mode to compensate.
+Apply the token during a controlled CORE
 restart after pairing approval. With the token in place, FleetAgent discovers
 the site and reconnects over WSS automatically; without it, the robot stays
 in registration/pairing wait. If a site is unreachable or multicast is
@@ -1775,6 +1779,20 @@ once:
 sudo install -d -o 10001 -g 10001 -m 0700 /var/backups/rosy-site
 sudo systemctl enable --now rosy-site-ledger-backup.timer
 ```
+
+After each backup the same run applies ledger retention to the live volume
+(also explicit in the compose `fleet-backup` command): terminal-task history
+`--prune-history 30`, pairing and CORE event audit `--prune-audit 90`, site
+API request audit `--prune-api-audit 90`, accepted-sighting audit
+`--prune-sightings 90` — every flag accepts `0` to disable that group, and
+tables missing from an older schema are skipped. The timer's backup copy is
+VACUUMed after the copy completes, so the 14 kept backups track the retained
+data instead of the source file's high-water mark; the live volume keeps its
+size until the quarterly maintenance window, when a stopped-service
+`site_db.py compact --path <volume> --assume-stopped` rewrites it in place
+(verify runs before and after). In-store caps already bound the tables the
+tool does not prune: observations/rule selections keep the newest 100k rows
+and 30 days in the store itself, and judgment records keep 7 days.
 
 The timer keeps only the operational SQLite ledger; keep transferring copies
 to the approved encrypted target as above — the retention here bounds disk
