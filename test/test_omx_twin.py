@@ -60,3 +60,11 @@ def test_report_flags_a_camera_off_its_limit(tmp_path, capsys):
     assert "| e1 | failed | top | 10.8 |" in text and "| NO |" in text
     assert "Median best kp per joint (j1-j5): 40 40 40 40 40" in text
     assert "Per-joint gains together (mean RMS deg j1-j5): 0.40 0.40 0.40 0.40 0.40" in text
+
+
+def test_the_sim_is_posed_with_the_physics_candidates_zero():
+    import omx_physics
+    from types import SimpleNamespace
+    cell = lambda name: SimpleNamespace(physics=omx_physics.Physics(name))  # noqa: E731
+    assert omx_twin.physics_zero(cell("design")) == [0.] * 5
+    assert omx_twin.physics_zero(cell("twin-zero-20261109")) == [4.0, 1.0, 3.2, 2.8, 2.4]

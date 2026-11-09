@@ -222,19 +222,19 @@ def samples(folder, every_s, cams):
     return ticks, out
 
 
-def replay(folder, cell_path, out, cams, every_s=2.0, worst=4):
+def replay(folder, cell_path, out, cams, every_s=2.0, worst=4, physics="design"):
     """twin.json (+ worst overlays) for one episode folder. Resumable: an existing twin.json is the result."""
     import mujoco
     import omx_cell_sim as cs
     folder, out = Path(folder), Path(out)
     if (out / "twin.json").exists():
         done = json.loads((out / "twin.json").read_text())
-        if done.get("schema") == SCHEMA:  # an older result (other gain grid, no fit) is measured again
+        if done.get("schema") == SCHEMA and done.get("physics", "design") == physics:  # older grid or other physics: measure again
             return done
     out.mkdir(parents=True, exist_ok=True)
-    cell = cs.Cell(cell_path)
+    cell = cs.Cell(cell_path, physics)
     ticks, picked = samples(folder, every_s, cams)
-    result = dict(schema=SCHEMA, episode=folder.name, cell=str(cell_path), cams=cams,
+    result = dict(schema=SCHEMA, episode=folder.name, cell=str(cell_path), physics=physics, cams=cams,
                   real=json.loads((folder / "result.json").read_text()) if (folder / "result.json").exists() else None)
     result["tracking"] = tracking(cell, ticks) if len(ticks) > 50 else None
     set_kp(cell, KPS[2])
@@ -297,10 +297,10 @@ def fetch(site, root, name, dest, every_s, cams):
 
 
 def one_episode(job):
-    site, root, name, cell, out, every_s, cams = job
+    site, root, name, cell, out, every_s, cams, physics = job
     try:
         folder = fetch(site, root, name, Path(out) / "episodes", every_s, cams)
-        r = replay(folder, cell, Path(out) / "twin" / name, cams, every_s)
+        r = replay(folder, cell, Path(out) / "twin" / name, cams, every_s, physics=physics)
         return name, "ok", (r.get("tracking") or {}).get("best")
     except Exception as e:  # one bad episode must not stop the night
         return name, f"error {type(e).__name__}: {e}", None
@@ -326,7 +326,7 @@ def batch(args):
         while True:
             names = [n for n in args.episodes.split(",") if n] if args.episodes else closed_episodes(args.site, args.root, args.since)
             todo = [n for n in names if n not in done and shard_of(n, args.shard)]
-            jobs = [(args.site, args.root, n, args.cell, args.out, args.every, parse_cams(args.cams)) for n in todo]
+            jobs = [(args.site, args.root, n, args.cell, args.out, args.every, parse_cams(args.cams), args.physics) for n in todo]
             for name, status, best in pool.map(one_episode, jobs):
                 done.add(name)
                 print(json.dumps(dict(episode=name, status=status, best=best)), flush=True)
@@ -340,13 +340,17 @@ STEPS = {"x": .004, "y": .004, "z": .004, "rx": .4, "ry": .4, "rz": .4, "fovy": 
 JOINT_STEPS = {f"j{k}": .4 for k in range(1, 6)}  # deg added to the real joint reading (a zero offset)
 
 
+def physics_zero(cell):
+    """The cell's physics candidate's zero_offset_deg for j1-j5 (sim q = real + offset; the sim cell is arm_b)."""
+    return [cell.physics.joint("arm_b", f"joint{k}").get("zero_offset_deg", 0.) for k in range(1, 6)]
+
+
 def posed(cell, state, zero_deg=None):
     import mujoco
     import omx_cell_sim as cs
     data = mujoco.MjData(cell.model)
     data.qpos[cell.qadr] = cs.real_q(state)
-    if zero_deg is not None:
-        data.qpos[cell.qadr[:5]] += np.radians(zero_deg)
+    data.qpos[cell.qadr[:5]] += np.radians(physics_zero(cell) if zero_deg is None else zero_deg)
     data.qpos[cell.mimic] = -data.qpos[cell.qadr[5]]
     data.qpos[cell.box_q:cell.box_q + 3] = [0, 0, -1]
     mujoco.mj_forward(cell.model, data)
@@ -388,7 +392,7 @@ def fit_camera(args):
             jpg = folder / args.real_camera / f"{seqs[args.real_camera]:06d}.jpg"
             if jpg.exists():
                 items["hold" if shard_of(name, "0/3") else "fit"].append((row["state"], edge_strength(load_rgb(jpg.read_bytes()))))
-    cell = cs.Cell(args.cell)
+    cell = cs.Cell(args.cell, args.physics)
     renderer, geoms = mujoco.Renderer(cell.model, 480, 640), arm_geoms(cell)
     steps = {**(STEPS if args.params in ("camera", "both") else {}), **(JOINT_STEPS if args.params in ("joints", "both") else {})}
     i = cell.model.camera(args.camera).id
@@ -398,8 +402,8 @@ def fit_camera(args):
         mujoco.mj_camlight(cell.model, data)  # a changed model camera reaches data only through this
         return outline(silhouette(cell, renderer, data, args.camera, geoms)[0])
 
-    def zero_deg(delta):
-        return [delta.get(f"j{k}", 0.) for k in range(1, 6)]
+    def zero_deg(delta):  # fitted on top of the physics candidate's zero
+        return [z + delta.get(f"j{k}", 0.) for k, z in enumerate(physics_zero(cell), 1)]
 
     def score(delta, which="fit"):
         apply_delta(cell, args.camera, base, delta)
@@ -460,7 +464,7 @@ def live(args):
     import omx_cell_sim as cs
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
-    cell = cs.Cell(args.cell)
+    cell = cs.Cell(args.cell, args.physics)
     renderer, geoms = mujoco.Renderer(cell.model, 480, 640), arm_geoms(cell)
     cams = parse_cams(args.cams)
     urls = {c: f"http://127.0.0.1:8767/frame/{c}.jpg" for c in cams}
@@ -539,6 +543,7 @@ def main(argv=None):
     for name in ("replay", "batch", "live"):
         s = sub.add_parser(name)
         s.add_argument("--cell", required=True)
+        s.add_argument("--physics", default="design", help="candidate in cell_physics.yaml (omx_physics.py): gains, zero offsets")
         s.add_argument("--out", required=True)
         s.add_argument("--cams", default="top=top,arm_b_wrist=wrist", help="episode camera=sim camera, comma separated (sim: top, side, wrist); the sim cell is arm_b, so only arm_b_wrist is its wrist ('front' was arm_a's wrist, retired 2026-11-08)")
     sub.choices["replay"].add_argument("episode")
@@ -559,11 +564,12 @@ def main(argv=None):
     v.add_argument("--period", type=float, default=2.0)
     v.add_argument("--minutes", type=float, default=600)
     v.add_argument("--alarm", type=int, default=3)
-    v.add_argument("--zero", type=lambda t: [float(x) for x in t.split(",")], help="deg added to j1-j5 (a zero-offset candidate)")
+    v.add_argument("--zero", type=lambda t: [float(x) for x in t.split(",")], help="deg added to j1-j5, in place of the physics candidate's zero")
     sub.add_parser("report").add_argument("dirs", nargs="+")
     f = sub.add_parser("fit-camera")
     for flag in ("--cell", "--out", "--site", "--root"):
         f.add_argument(flag, required=True)
+    f.add_argument("--physics", default="design", help="candidate in cell_physics.yaml; its zero is the fit's start")
     f.add_argument("--since", default="20261101")
     f.add_argument("--camera", default="top")
     f.add_argument("--real-camera", default="top")
@@ -576,7 +582,7 @@ def main(argv=None):
     if a.command == "report":
         return report(a.dirs)
     if a.command == "replay":
-        replay(a.episode, a.cell, a.out, parse_cams(a.cams), a.every)
+        replay(a.episode, a.cell, a.out, parse_cams(a.cams), a.every, physics=a.physics)
         return 0
     return batch(a) if a.command == "batch" else live(a)
 
