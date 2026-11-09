@@ -745,7 +745,9 @@ def test_an_overload_hold_by_the_guard_sheds_with_lift_and_elbow_then_parks_once
     # the runner stops pushing, moves only the XL430 lift and elbow toward the fold, and parks after the release
     robot = Robot()
     robot.pos = [40.0, -10.0, 0.0, 60.0, 70.0, 46.6]  # reached out, like arm_a at 15:09
-    robot.motion = type("Motion", (), {"held": {}, "effort_pwm": {}, "pwm_limits": {}})()
+    released = []
+    robot.motion = type("Motion", (), {"held": {}, "effort_pwm": {"wrist_flex": 300}, "pwm_limits": {"wrist_flex": 300},
+                                       "release_hold": lambda self: (released.append(clock[0]), self.held.clear())})()
     status, clock, ticks, during = [], [0.0], [0], []
     r = m.Runner(robot, goto_library(), fps=30, status=status.append, clock=lambda: clock[0],
                  sleep=lambda s: clock.__setitem__(0, clock[0] + 1 / 30))
@@ -754,10 +756,10 @@ def test_an_overload_hold_by_the_guard_sheds_with_lift_and_elbow_then_parks_once
         ticks[0] += 1
         if ticks[0] == 5:
             robot.motion.held = {"wrist_flex": {"since": clock[0], "temp": 30, "clear_since": None}}
-        if 5 < ticks[0] <= 45:
+        if 5 < ticks[0] <= 30:
             during.append(list(r.target))
-        if ticks[0] == 45:
-            robot.motion.held = {}
+        if ticks[0] == 30:
+            robot.motion.effort_pwm = {"wrist_flex": 120}  # the shed took the load off the wrist
         return {10: ["park"], 60: ["park"]}.get(ticks[0]) or (["stop"] if ticks[0] > 60 and not r.chunk else [])
 
     r.run(lines)
@@ -768,6 +770,7 @@ def test_an_overload_hold_by_the_guard_sheds_with_lift_and_elbow_then_parks_once
     first, last = during[0], during[-1]
     assert [first[i] for i in (0, 3, 4)] == [last[i] for i in (0, 3, 4)] == [40.0, 60.0, 70.0]  # pan and wrist stay
     assert abs(last[1] - HOME[1]) < abs(first[1] - HOME[1]) and abs(last[2] - HOME[2]) < abs(first[2] - HOME[2])
+    assert len(released) == 1 and 30 / 30 + 0.5 - 0.1 <= released[0] < 60 / 30  # asked once, after 0.5 s off the cap
     assert by_command(status, "run park")[0]["ok"] is True and by_command(status, "run park")[0]["fault"] is None
 
 

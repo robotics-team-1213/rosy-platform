@@ -309,7 +309,8 @@ class Runner:
                            default=0.0)
             if self.chunk is not None:
                 self.peak_lag, self.over_ticks = max(self.peak_lag, self.lag), self.over_ticks + (self.lag > CONTACT_LAG)
-        held = getattr(getattr(self.robot, "motion", None), "held", None) or {}
+        motion = getattr(self.robot, "motion", None)
+        held = getattr(motion, "held", None) or {}
         if held:  # the guard froze an overloaded joint (2026-11-09): stop pushing, shed its load
             if not (self.fault or "").startswith("contact"):
                 self.hold(present, f"contact (overload-hold on {', '.join(held)} by the guard): lift and elbow shed its load")
@@ -317,6 +318,7 @@ class Runner:
             home = self.library["chunks"].get("home")
             if home:
                 self.target = runner_strain.shed(self.target, present, sent if isinstance(sent, dict) else {}, home[-1], 0.5 * GUARD_UNITS_PER_S / self.fps)
+            runner_strain.release_when_clear(self, motion, held, self.clock())
             return
         if (isinstance(sent, dict) and not self.fault and self.chunk is not None
                 and self.chunk.startswith(CONTACT_CHUNKS)):
@@ -549,6 +551,7 @@ def main(argv=None):
     # configure), seeded torque ON, 10 deg/s streaming, following-error, effort and fault stops.
     connect_passive(robot, follower=True)
     motion = NativeJointMotion(robot.bus, None, teacher=True, monitor=MotorHealth())
+    motion.shed_load = True  # a guard hold freezes only the held joint: runner_strain.shed moves lift and elbow
     guarded = Guarded(robot, motion)
     try:
         check = load_predict.plan_check(args.load_model, robot_cfg.get("port"), params, library, {j: robot.bus.read("PWM_Limit", j) for j in load_predict.BODY[1:]}) if args.load_model else None

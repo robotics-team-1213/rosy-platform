@@ -1,8 +1,9 @@
 """The chunk runner's holds below the guard (moved out of chunk_runner.py at its 600-line cap, 2026-11-09).
 
 `strained`: a load-bearing joint pushing with a rising lag, or a blocked wrist roll. `shed`: while the guard holds an
-overloaded joint (NativeJointMotion.held), the XL430 shoulder lift and elbow carry the load off it toward the fold,
-each stopping at its own STRAIN_LAG (the cell_unwedge way: no wrist command)."""
+overloaded joint (NativeJointMotion.held, shed_load=True), the XL430 shoulder lift and elbow carry the load off it
+toward the fold, each stopping at its own STRAIN_LAG (the cell_unwedge way: no wrist command); `release_when_clear`
+ends the hold once the held joint is off its cap."""
 from __future__ import annotations
 
 from omx_adapter.chunk_library import NAMES
@@ -51,3 +52,15 @@ def shed(target, present, sent, home, step):
         if abs(present[i] - sent.get(f"{name}.pos", target[i])) < STRAIN_LAG:
             out[i] += max(-step, min(step, home[i] - out[i]))
     return out
+
+
+def release_when_clear(runner, motion, held, now, clear_s=0.5):
+    """The guard's hold ends only by release_hold(): ask once every held joint sat under 90 % of its cap for clear_s
+    (the guard's own 5 Hz PWM). The runner's targets for a held joint are where the hold froze it, so nothing re-pushes."""
+    pwm, caps = getattr(motion, "effort_pwm", None) or {}, getattr(motion, "pwm_limits", None) or {}
+    off = all(j in pwm and j in caps and abs(pwm[j]) < 0.9 * caps[j] for j in held)
+    since = getattr(runner, "shed_clear", None)
+    runner.shed_clear = (now if since is None else since) if off else None
+    if off and now - runner.shed_clear >= clear_s - 1e-9 and hasattr(motion, "release_hold"):
+        motion.release_hold()
+        runner.shed_clear = None
