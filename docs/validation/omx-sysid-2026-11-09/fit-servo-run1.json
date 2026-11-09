@@ -1,0 +1,164 @@
+{
+ "schema": "rosy.omx-sysid-servo.v1",
+ "base": "design",
+ "arm": "arm_b",
+ "keys": [
+  "kp",
+  "kv",
+  "damping",
+  "frictionloss"
+ ],
+ "gravity_comp": false,
+ "cell": "<lab cell.json (private)>",
+ "episodes": {
+  "fit": [
+   "20261103-053625-pallet-to-pallet",
+   "20261103-131916-pallet-to-pallet",
+   "20261104-030334-pallet-to-pallet",
+   "20261104-030537-pallet-to-pallet",
+   "20261106-121131-pallet-to-strip",
+   "20261106-215625-strip-to-strip",
+   "20261106-230947-strip-to-strip",
+   "20261106-231129-strip-to-strip",
+   "20261106-231310-strip-to-strip",
+   "20261106-232857-strip-to-strip",
+   "20261106-233041-strip-to-strip",
+   "20261107-001716-strip-to-strip",
+   "20261107-001857-strip-to-strip",
+   "20261107-002049-strip-to-strip",
+   "20261107-011740-strip-to-strip",
+   "20261107-011932-strip-to-strip"
+  ],
+  "hold": [
+   "20261103-052633-pallet-to-pallet",
+   "20261103-123923-pallet-to-pallet",
+   "20261103-132422-pallet-to-pallet",
+   "20261104-030057-pallet-to-pallet",
+   "20261106-224311-strip-to-strip",
+   "20261106-232713-strip-to-strip",
+   "20261107-011547-strip-to-strip",
+   "20261107-013456-strip-to-strip",
+   "20261107-021516-strip-to-strip"
+  ]
+ },
+ "fitted": {
+  "joint1": {
+   "kp": 2.000007,
+   "kv": 0.188784,
+   "damping": 0.039867,
+   "frictionloss": 0.016715
+  },
+  "joint2": {
+   "kp": 40.924587,
+   "kv": 1.02643,
+   "damping": 0.448166,
+   "frictionloss": 0.197944
+  },
+  "joint3": {
+   "kp": 199.954556,
+   "kv": 26.858639,
+   "damping": 1.975822,
+   "frictionloss": 0.377963
+  },
+  "joint4": {
+   "kp": 9.229886,
+   "kv": 1.31534,
+   "damping": 0.871548,
+   "frictionloss": 0.009553
+  },
+  "joint5": {
+   "kp": 2.000729,
+   "kv": 0.073744,
+   "damping": 0.005294,
+   "frictionloss": 0.034136
+  }
+ },
+ "sd": {
+  "joint1": {
+   "kp": 0.045803,
+   "kv": 0.006985,
+   "damping": 0.00429,
+   "frictionloss": 0.000551
+  },
+  "joint2": {
+   "kp": 0.443701,
+   "kv": 0.096097,
+   "damping": 0.046808,
+   "frictionloss": 0.006634
+  },
+  "joint3": {
+   "kp": 5.216939,
+   "kv": 1.096985,
+   "damping": 0.202374,
+   "frictionloss": 0.032196
+  },
+  "joint4": {
+   "kp": 0.160115,
+   "kv": 0.086353,
+   "damping": 0.081446,
+   "frictionloss": 0.00055
+  },
+  "joint5": {
+   "kp": 0.032837,
+   "kv": 0.005697,
+   "damping": 0.000559,
+   "frictionloss": 0.000763
+  }
+ },
+ "rms_deg": {
+  "base": {
+   "fit": [
+    0.45,
+    0.326,
+    0.57,
+    0.556,
+    0.533
+   ],
+   "hold": [
+    0.42,
+    0.317,
+    0.564,
+    0.479,
+    0.497
+   ]
+  },
+  "fitted": {
+   "fit": [
+    0.377,
+    0.292,
+    0.467,
+    0.536,
+    0.393
+   ],
+   "hold": [
+    0.367,
+    0.291,
+    0.458,
+    0.459,
+    0.388
+   ]
+  }
+ },
+ "nfev": 25,
+ "status": "The maximum number of function evaluations is exceeded.",
+ "at": "2026-11-08T19:44:10+00:00",
+ "bounds": {
+  "kp": [
+   2.0,
+   200.0
+  ],
+  "kv": [
+   0.05,
+   30.0
+  ],
+  "damping": [
+   0.001,
+   5.0
+  ],
+  "frictionloss": [
+   0.0001,
+   0.5
+  ]
+ },
+ "note": "bounds as run (before the 10-120 kp bound); sd not yet scaled for autocorrelation (code before 94a8fee33c)"
+}

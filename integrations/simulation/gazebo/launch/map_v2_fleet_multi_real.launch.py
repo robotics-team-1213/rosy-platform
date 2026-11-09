@@ -38,6 +38,8 @@ def generate_launch_description():
         # D-597: drivable needs a model with a drivable class and a line/lane_guide producer.
         DeclareLaunchArgument('learned_paint_target', default_value='lane_marking',
                               choices=['lane_marking', 'drivable']),
+        DeclareLaunchArgument('nav_mode', default_value='none', choices=['none', 'nav'],
+                              description='nav: each robot also runs Nav2 + AMCL on the world map (D-1003)'),
         DeclareLaunchArgument('spawn_poses', default_value='-1.26955,0.24255,-1.570796;-1.26955,0.64,-1.570796'),
     ]
     actions.append(OpaqueFunction(function=_observers, kwargs={'control_share': control_share, 'gz_share': gz_share}))
@@ -55,7 +57,8 @@ def _observers(context, *, control_share, gz_share):
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(os.path.join(gz_share, 'launch', 'gz_multi.launch.py')),
             launch_arguments=dict(robots='2', prefix='rosy', world_name=world_name,
-                                  mode='none', headless='true', nominal_camera='true', core='true',
+                                  mode=LaunchConfiguration('nav_mode', default='none'),
+                                  nav_composition=LaunchConfiguration('nav_composition', default='false'), headless='true', nominal_camera='true', core='true',
                                   run_spec=LaunchConfiguration('run_spec'),
                                   spawn_poses=LaunchConfiguration('spawn_poses')).items()),
     ]

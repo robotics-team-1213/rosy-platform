@@ -57,10 +57,16 @@ class BatteryStatus(BaseModel):
     shown_percent: Optional[float] = None  # D-688 display estimate; percent stays the live policy value
 
 
+#: D-502: latches the battery policy holds; only these release themselves when the pack recovers.
+BATTERY_ESTOP_SOURCES = ("battery_policy", "battery_deep")
+
+
 class SafetySummary(BaseModel):
     estop: bool = False
     # v1.342: who latched it (`api:<role>`, `battery_policy`, `battery_deep`, `control:<reason>`); "" when clear.
     source: str = ""
+    # v1.370 (D-502): this latch ends by itself once the pack recovers. False on older CORE and for any other source.
+    releases_when_charged: bool = False
     # v1.351: heat mode level ok|warm|hot (core_features.safety.thermal); never latches.
     thermal: str = "ok"
 

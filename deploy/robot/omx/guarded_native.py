@@ -35,6 +35,16 @@ PWM_ADMIT_MAX = {"shoulder_pan": 600, "shoulder_lift": 600, "elbow_flex": 600, "
 #: against the 5 deg following-error bound. Anything else is cleared to 0 (step goals) as before.
 PROFILE_ACC, PROFILE_VEL = (5, 100), (15, 200)
 PROFILE = {"Profile_Acceleration": PROFILE_ACC, "Profile_Velocity": PROFILE_VEL}
+#: Overload hold (2026-11-09 panel, after arm_a dropped extended when this guard cut torque on a wrist overload): the
+#: first overload on a joint sets that joint's goal to where it stands, once, and keeps torque on. While any joint is
+#: held every joint's command is frozen, so a runner that knows nothing of holds cannot carry the arm into a pose no
+#: one checked; a runner built with `shed_load=True` may move the other joints to shed the load (cell_unwedge style).
+#: A hold ends only by `release_hold()`, which that runner calls once its targets no longer push into the stall. The
+#: watch is PWM alone, since a frozen goal zeroes the error: at 90 % of the cap for HOLD_S, a temperature rise of
+#: HOLD_TEMP_RISE_C, a second overload on the joint in the session, or a failed read in the watch (temperature is read
+#: each 0.2 s on held joints) ends the session with torque off as before. HOLD_S: no body joint has sat at the cap past
+#: 3 s without a stop, and the one recorded latch (elbow wind-up, hw error 32) came after about 18 s.
+HOLD_S, HOLD_TEMP_RISE_C = 3.0, 3
 
 
 def torque_off(bus):
@@ -120,7 +130,7 @@ def normalized(bus, raw):
 
 class NativeJointMotion:
     def __init__(self, follower, leader, *, clock=time.monotonic, body_only=False, label="follower", monitor=None,
-                 offsets=None, teacher=False):
+                 offsets=None, teacher=False, shed_load=False):
         if teacher != (leader is None) or (teacher and body_only):
             raise ValueError("teacher mode streams all six joints and has no leader")
         self.follower, self.leader, self.clock = follower, leader, clock
@@ -141,6 +151,8 @@ class NativeJointMotion:
         self.pwm_limits = None
         self.effort_pwm = {}
         self.effort_since = dict.fromkeys(BODY)
+        # joint -> hold state; joints that already used their one hold (per session: a later stall there goes to off)
+        self.held, self.held_once, self.shed_load = {}, set(), shed_load
         self.last_effort_time = None
         self.alignment_deadline = None
         self.monitor = monitor
@@ -252,7 +264,9 @@ class NativeJointMotion:
             command, state = self._body_command(target, current, elapsed, now)
             return {"started": started, "command": command, "time": now, "body_state": state}
         step = elapsed * TICKS_PER_DEGREE  # one degree/second, independent of loop frequency
-        command = {n: self.command[n] + max(-step, min(step, target[n] - self.command[n])) for n in self.active}
+        frozen = self.frozen()
+        command = {n: self.command[n] if n in frozen else self.command[n] + max(-step, min(step, target[n] - self.command[n]))
+                   for n in self.active}
         return {"started": started, "command": command, "time": now}
 
     def _check_effort(self, current, started):
@@ -269,16 +283,59 @@ class NativeJointMotion:
                 or (self.last_effort_time is not None and not 0 <= now - self.last_effort_time <= MAX_GAP_S)):
             raise ValueError("stale effort sample (>0.5 seconds)")
         for name in BODY:
+            saturated = abs(pwm[name]) >= 0.9 * self.pwm_limits[name]
+            if name in self.held:
+                self._watch_hold(name, saturated, pwm[name], now)
+                continue
             error = abs(current[name] - int(self.command[name])) / TICKS_PER_DEGREE
-            loaded = error > 2 and abs(pwm[name]) >= 0.9 * self.pwm_limits[name]
+            loaded = error > 2 and saturated
             since = self.effort_since[name] if loaded else None
             if loaded and since is None:
                 since = now
             self.effort_since[name] = since
             if since is not None and now - since >= 1 - 1e-9:
-                raise ValueError(f"{name}: overload risk; PWM={pwm[name]} limit={self.pwm_limits[name]} "
-                                 f"error_deg={error:.2f} duration={now - since:.2f}s")
+                detail = (f"{name}: overload risk; PWM={pwm[name]} limit={self.pwm_limits[name]} "
+                          f"error_deg={error:.2f} duration={now - since:.2f}s")
+                if name in self.held_once:
+                    raise ValueError(f"{detail}; second overload on this joint")
+                # once per stall: the goal follows present only here, never tick by tick, so a sagging joint is not chased down
+                self.command[name] = current[name]
+                if name in self.velocity:
+                    self.velocity[name] = 0.0
+                self.held[name] = {"since": now, "saturated_since": now, "temp": self.follower.read("Present_Temperature", name)}
+                self.held_once.add(name)
+                self.effort_since[name] = None
+                print(f"{self.label}: overload-hold {detail}; goal set to present, torque on, "
+                      f"hold watch {HOLD_S:.0f} s", flush=True)
         self.effort_pwm, self.last_effort_time = pwm, now
+
+    def _watch_hold(self, name, saturated, pwm, now):
+        """A held joint: at the cap for HOLD_S in a row, or warming, ends the session. It never frees itself."""
+        hold = self.held[name]
+        rise = self.follower.read("Present_Temperature", name) - hold["temp"]
+        if rise >= HOLD_TEMP_RISE_C:
+            raise ValueError(f"{name}: overload risk; held joint warmed {rise} C at PWM={pwm} limit={self.pwm_limits[name]} "
+                             f"duration={now - hold['since']:.2f}s")
+        if not saturated:
+            hold["saturated_since"] = None
+            return
+        if hold["saturated_since"] is None:
+            hold["saturated_since"] = now
+        if now - hold["saturated_since"] >= HOLD_S - 1e-9:
+            raise ValueError(f"{name}: overload risk; hold timed out at PWM={pwm} limit={self.pwm_limits[name]} "
+                             f"duration={now - hold['since']:.2f}s")
+
+    def frozen(self):
+        """Joints whose command stays put this tick: all of them while anything is held, unless the runner sheds load."""
+        if not self.held:
+            return ()
+        return tuple(self.held) if self.shed_load else self.active
+
+    def release_hold(self):
+        """For a runner whose targets no longer push into the stall: streaming resumes toward the targets it sends next."""
+        for name, hold in self.held.items():
+            print(f"{self.label}: overload-hold released on {name} after {self.clock() - hold['since']:.2f}s", flush=True)
+        self.held.clear()
 
     def _body_command(self, target, current, elapsed, now):
         tracking, since = self.tracking, self.aligned_since
@@ -304,7 +361,11 @@ class NativeJointMotion:
         acceleration = 10 * TICKS_PER_DEGREE
         limit = (10 if tracking else 1) * TICKS_PER_DEGREE
         command, velocity = {}, {}
+        frozen = self.frozen()
         for name in self.active:
+            if name in frozen:  # a hold keeps these commands where they are
+                command[name], velocity[name] = self.command[name], 0.0
+                continue
             error = target[name] - self.command[name]
             # Leave enough distance for this step and subsequent braking; moving targets may still be passed.
             brake = math.sqrt((acceleration * elapsed) ** 2 + 2 * acceleration * abs(error)) - acceleration * elapsed

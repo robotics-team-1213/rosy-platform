@@ -1,0 +1,167 @@
+{
+ "schema": "rosy.omx-sysid-servo.v1",
+ "base": "registers-20261109",
+ "arm": "arm_b",
+ "keys": [
+  "frictionloss",
+  "damping"
+ ],
+ "gravity_comp": [
+  "joint3",
+  "joint4"
+ ],
+ "cell": "<lab cell.json (private)>",
+ "episodes": {
+  "fit": [
+   "episodes/20261103-053625-pallet-to-pallet",
+   "episodes/20261104-030057-pallet-to-pallet",
+   "episodes/20261104-030334-pallet-to-pallet",
+   "episodes/20261106-224311-strip-to-strip",
+   "episodes/20261106-231129-strip-to-strip",
+   "episodes/20261106-232713-strip-to-strip",
+   "episodes/20261106-232857-strip-to-strip",
+   "episodes/20261107-001716-strip-to-strip",
+   "episodes/20261107-001857-strip-to-strip",
+   "episodes/20261107-002049-strip-to-strip",
+   "episodes/20261107-011547-strip-to-strip",
+   "episodes/20261107-011740-strip-to-strip",
+   "episodes/20261107-013456-strip-to-strip",
+   "episodes/20261107-021516-strip-to-strip"
+  ],
+  "hold": [
+   "episodes/20261103-052633-pallet-to-pallet",
+   "episodes/20261103-123923-pallet-to-pallet",
+   "episodes/20261103-131916-pallet-to-pallet",
+   "episodes/20261103-132422-pallet-to-pallet",
+   "episodes/20261104-030537-pallet-to-pallet",
+   "episodes/20261106-121131-pallet-to-strip",
+   "episodes/20261106-215625-strip-to-strip",
+   "episodes/20261106-230947-strip-to-strip",
+   "episodes/20261106-231310-strip-to-strip",
+   "episodes/20261106-233041-strip-to-strip",
+   "episodes/20261107-011932-strip-to-strip"
+  ],
+  "untagged": [
+   "20261103-050019-pallet-to-pallet",
+   "20261103-052633-pallet-to-pallet",
+   "20261103-053625-pallet-to-pallet",
+   "20261103-123923-pallet-to-pallet",
+   "20261103-131916-pallet-to-pallet",
+   "20261103-132422-pallet-to-pallet",
+   "20261104-030057-pallet-to-pallet",
+   "20261104-030334-pallet-to-pallet",
+   "20261104-030537-pallet-to-pallet",
+   "20261106-121131-pallet-to-strip",
+   "20261106-215625-strip-to-strip",
+   "20261106-224311-strip-to-strip",
+   "20261106-230306-strip-to-strip",
+   "20261106-230947-strip-to-strip",
+   "20261106-231129-strip-to-strip",
+   "20261106-231310-strip-to-strip",
+   "20261106-232713-strip-to-strip",
+   "20261106-232857-strip-to-strip",
+   "20261106-233041-strip-to-strip",
+   "20261107-001716-strip-to-strip",
+   "20261107-001857-strip-to-strip",
+   "20261107-002049-strip-to-strip",
+   "20261107-011547-strip-to-strip",
+   "20261107-011740-strip-to-strip",
+   "20261107-011932-strip-to-strip",
+   "20261107-013456-strip-to-strip",
+   "20261107-021516-strip-to-strip"
+  ],
+  "other_arm": []
+ },
+ "fitted": {
+  "joint1": {
+   "frictionloss": 0.045967,
+   "damping": 0.088592
+  },
+  "joint2": {
+   "frictionloss": 0.068785,
+   "damping": 0.001
+  },
+  "joint3": {
+   "frictionloss": 0.02213,
+   "damping": 0.001109
+  },
+  "joint4": {
+   "frictionloss": 0.0001,
+   "damping": 0.822935
+  },
+  "joint5": {
+   "frictionloss": 0.026411,
+   "damping": 0.001
+  }
+ },
+ "bounds": {
+  "frictionloss": [
+   0.0001,
+   0.5
+  ],
+  "damping": [
+   0.001,
+   5.0
+  ]
+ },
+ "sd": {
+  "joint1": {
+   "frictionloss": 0.013415,
+   "damping": 0.238519
+  },
+  "joint2": {
+   "frictionloss": 0.032851,
+   "damping": 0.549857
+  },
+  "joint3": {
+   "frictionloss": 0.007371,
+   "damping": 0.148945
+  },
+  "joint4": {
+   "frictionloss": 0.002324,
+   "damping": 0.100875
+  },
+  "joint5": {
+   "frictionloss": 0.003468,
+   "damping": 0.065924
+  }
+ },
+ "sd_inflation": 13.12,
+ "rms_deg": {
+  "base": {
+   "fit": [
+    0.512,
+    0.467,
+    0.416,
+    0.546,
+    0.545
+   ],
+   "hold": [
+    0.346,
+    0.609,
+    0.531,
+    0.539,
+    0.44
+   ]
+  },
+  "fitted": {
+   "fit": [
+    0.461,
+    0.431,
+    0.404,
+    0.51,
+    0.4
+   ],
+   "hold": [
+    0.317,
+    0.571,
+    0.528,
+    0.525,
+    0.335
+   ]
+  }
+ },
+ "nfev": 23,
+ "status": "`ftol` termination condition is satisfied.",
+ "at": "2026-11-09T01:45:50+00:00"
+}

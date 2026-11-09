@@ -6,9 +6,7 @@
 
 Only the committed ``--sha`` (default HEAD) is tested: uncommitted changes are not
 shipped. The commit travels as a git bundle (so guard tests that run git see a real
-``.git``) into ``~/rosy-test/repo``, a clone of the public origin, and is checked out
-as a detached worktree under ``~/rosy-test/runs/``, removed afterwards. Venvs
-under ``~/rosy-test/venvs/<deps-sha>`` follow the CI install step
+``.git``) into ``~/rosy-test/repo``, a clone of the public origin, and is checked out as a detached worktree under ``~/rosy-test/runs/``, removed afterwards. Venvs under ``~/rosy-test/venvs/<deps-sha>`` follow the CI install step
 (``.github/workflows/ci.yml``); different dependency versions can run together.
 Each pytest runs under a 6 GB memory cap, nice 15 and idle I/O, detached from ssh
 (``remote_job.py``): the laptop follows its log with short polls and rides out a dropped
@@ -21,13 +19,10 @@ and the ones above the class floor are used, most headroom first (a pytest host 
 serial, capped at its free GB, smallest invocations); the site PC only when no other host qualifies (D-568).
 An invocation gets pytest-xdist ``-n`` unless ``xdist_plan.py`` keeps it serial. Several invocations
 share one queue over the chosen hosts (D-553): each host runs one at a time and takes the next
-when free, largest test files first. Pytest never runs on this machine (D-584): when no host is reachable
-the probe is retried every ``--retry-poll`` s (default 30) for ``--wait`` s (default 3600), then the
+when free, largest test files first (a test module's ``HOST_CAPABILITIES`` limits it to hosts that have them, host_caps.py). Pytest never runs on this machine (D-584): when no host is reachable the probe is retried every ``--retry-poll`` s (default 30) for ``--wait`` s (default 3600), then the
 gate fails with "no test host reachable (D-584)". ``--local`` and ``ROSY_TEST_LOCAL`` are rejected.
-Logs land in ``--log-dir`` (default ``$ROSY_SCRATCH/remote-pytest/<sha>``, or the system
-temp directory without ``ROSY_SCRATCH``), one
-``run-<n>.txt`` per invocation. Exit code: the worst pytest exit (5, nothing
-collected, counts as 0). Leading ``ROSY_*=value`` words of an invocation are its environment
+Logs land in ``--log-dir`` (default ``$ROSY_SCRATCH/remote-pytest/<sha>``, or the system temp directory without
+``ROSY_SCRATCH``), one ``run-<n>.txt`` per invocation. Exit code: the worst pytest exit (5, nothing collected, counts as 0). Leading ``ROSY_*=value`` words of an invocation are its environment
 on the host: ``-- ROSY_RUN_BROWSER_TESTS=1 <paths>`` runs the real-Chromium tests, and the job
 installs Chromium for the venv's playwright first. Standard library only.
 """
@@ -60,11 +55,11 @@ import lab_hosts  # noqa: E402
 import memory_history  # noqa: E402
 import remote_job  # noqa: E402
 import remote_test_tools  # noqa: E402
-import host_probe  # noqa: E402
+import host_caps, host_probe  # noqa: E402
 from host_probe import DISK_FLOOR_GB, PROBE, current_profile, disk_full, parse_probe  # noqa: E402,F401
 import xdist_plan  # noqa: E402
 from work_queue import (ALONE_ENV, BROWSER_ENV, Gate, Work, cancelled, cost, guard, history,  # noqa: E402,F401
-                        small_only, upgrade_watch, wanted, workers)
+                        small_only, stranded, upgrade_watch, wanted, workers)
 
 CANCELLED = remote_job.CANCELLED
 
@@ -232,7 +227,7 @@ def place(cls: str, hosts: list[str], probes: list[dict | None], cores: int = 0)
         (BLOCKED.add if why.startswith("alone job") else BLOCKED.discard)(host)
         if why == "ok" or why.startswith("light"):
             HEADROOM[host] = {"cores": cores, "mem": mem, "site": site, "light": mem < need_m,
-                              "sim_held": p.get("sim_held", 0), "browser_jobs": p.get("browser_jobs", 0)}
+                              "sim_held": p.get("sim_held", 0), "browser_jobs": p.get("browser_jobs", 0), "caps": p.get("caps", ())}
             ranked.append((site, mem < need_m, -min(cores / need_c, mem / need_m), i, host))
     ranked.sort()
     return [r[-1] for r in ranked if not r[0]] or [r[-1] for r in ranked], notes
@@ -362,8 +357,9 @@ def run(invocations: list[list[str]], logs: list[Path], sha: str = "HEAD", repo:
     work = Work(sorted(range(len(invocations)), key=lambda i, s=history(repo): -cost(repo, invocations[i], s)), on_done, stop=stop)
     reruns = {}  # Work index -> original failure and the remaining quarantine rerun; never a completed code
     hosts = placed_hosts("pytest", cores=cores)
+    wants = host_caps.needs(repo, sha, invocations)  # HOST_CAPABILITIES a test module declares
     while work.todo and not work.stop.is_set():
-        while not hosts:
+        while not hosts or not host_caps.served(wants, [HEADROOM.get(h, {}) for h in hosts]):
             if work.stop.is_set():
                 return cancelled(invocations, [work.codes.get(i) for i in range(len(invocations))])
             if clock() + poll > deadline:
@@ -373,6 +369,7 @@ def run(invocations: list[list[str]], logs: list[Path], sha: str = "HEAD", repo:
             sleep(poll)
             hosts = placed_hosts("pytest", cores=cores)
         plan = workers(hosts, invocations, HEADROOM, os.environ.get("ROSY_TEST_HOSTS", DEFAULT_HOSTS).split(), BLOCKED)
+        plan = host_caps.cover(plan, hosts, wants, HEADROOM)  # workers() cuts by count, not by capability
         if len(plan) == 1 and not work.codes and not reruns and not small_only(plan, HEADROOM):
             try:
                 codes = run_on(plan[0][0], invocations, logs, sha, repo, label,
@@ -406,6 +403,7 @@ def run(invocations: list[list[str]], logs: list[Path], sha: str = "HEAD", repo:
             ok = list(pool.map(attempt, plan))
         while work.todo and not work.stop.is_set():
             working = [h for (h, _), good in zip(plan, ok) if good and h not in work.lost and h not in deferred]
+            host_caps.strand(work, wants, [HEADROOM.get(h, {}) for h in working])
             if not working:
                 if deferred:
                     hosts = [h for h in placed_hosts("pytest", cores=cores) if h not in deferred]
@@ -414,6 +412,8 @@ def run(invocations: list[list[str]], logs: list[Path], sha: str = "HEAD", repo:
                     raise SystemExit("[remote-pytest] every test host failed to set up")
                 for i in work.todo:
                     work.codes[i] = remote_job.LOST_EXIT
+                break
+            if stranded(work, invocations, working, HEADROOM):  # site PCs only, LAB_ONLY suites left
                 break
             if not attempt((working[0], "any")):
                 ok = [good and h != working[0] for (h, _), good in zip(plan, ok)]
@@ -459,7 +459,7 @@ def run_on(host: str, invocations: list[list[str]], logs: list[Path], sha: str, 
             raise SystemExit(f"[remote-pytest] venv setup on {host} failed")
         cpu = SITE_CPU_QUOTA if host in SITES else ""
         k = 0  # job number on this host's run dir
-        pick = wanted(kind, invocations)
+        pick = host_caps.route(wanted(kind, invocations, site=bool(HEADROOM.get(host, {}).get("site"))), HEADROOM.get(host), host_caps.needs(repo, sha, invocations))
         take = (lambda: work.take_small(pick, host)) if HEADROOM.get(host, {}).get("light") else lambda: work.take(pick, host)
         while not (lost and shared) and (i := take()) is not None:
             inv, log, queued = invocations[i], logs[i], round(time.monotonic() - work.began)

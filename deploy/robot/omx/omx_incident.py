@@ -267,8 +267,20 @@ def facts(session: dict, home=None, arm: str | None = None) -> dict:
                        or stills_of(arm, session.get("started", 0)))}
 
 
+def software_stop(f: dict) -> str | None:
+    """The shared rule (core_common, so Fleet's hold judges the same facts); not importable here: hold, as before."""
+    try:
+        from core_common.protocol.arm_incidents import software_stop as rule
+    except ImportError:
+        return None
+    return rule(f)
+
+
 def decide(f: dict) -> dict:
     """Measurement first: (chosen actions, hold or not, why). Returns {"actions", "hold", "reason", "offered"}."""
+    released = software_stop(f)
+    if released:  # the guard's own stop on a folded arm that followed its command: listed for a cause, not held
+        return {"actions": [], "hold": False, "offered": [], "reason": released}
     signs = bool(f["latched"] or f["windup_hits"] or f["flagged"] or not f["safe_end"])
     if not signs and f.get("stops"):  # the recovery handled it; a person still names what stopped it
         return {"actions": [], "hold": False, "offered": [],
@@ -347,7 +359,7 @@ def handle(session_path: Path, arm: str, act=None, decisions=Path("decisions.jso
         "stage": "incident", "facts": {k: f[k] for k in ("latched", "folded", "windup_hits", "flagged", "safe_end")},
         "options": d["offered"] + ["hold_for_person"], "chosen": d["actions"] + (["hold_for_person"] if d["hold"] else []),
         "by": "measurement", "reason": d["reason"], "frames": f["frames"], "arm_id": arm, "t": round(time.time(), 3)})
-    if d["hold"] or f.get("stops"):  # if Fleet cannot be reached a held arm's next session is still refused
+    if d["hold"] or f.get("stops") or software_stop(f):  # if Fleet cannot be reached a held arm's next session is still refused
         sid = session.get("motor_health_session")
         try:
             sid = str(uuid.UUID(str(sid)))

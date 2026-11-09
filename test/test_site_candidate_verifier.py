@@ -620,3 +620,22 @@ def test_pre_monitoring_candidate_verifies_but_half_pair_does_not(candidate, rem
     else:
         with pytest.raises(_load_verifier().CandidateVerificationError, match="required deployment file"):
             _verify(candidate)
+
+
+@pytest.mark.parametrize("removed", ["all", "one"])
+def test_account_tls_renewal_group_is_signed_and_all_or_nothing(candidate, removed):
+    verifier = _load_verifier()
+    root = candidate[0]
+    (root / "deploy/site/account_tls_renew.py").write_text("tampered", encoding="utf-8")
+    with pytest.raises(verifier.CandidateVerificationError, match="deployment file hash mismatch"):
+        _verify(candidate)
+    manifest = json.loads((root / "release.json").read_text())
+    for name in (verifier.ACCOUNT_TLS_FILES if removed == "all" else verifier.ACCOUNT_TLS_FILES[:1]):
+        del manifest["deployment_file_sha256"][name]
+        (root / "deploy/site" / name).unlink()
+    (root / "release.json").write_text(json.dumps(manifest), encoding="utf-8")
+    if removed == "all":  # candidates signed before D-1001 still verify for rollback
+        _verify(candidate)
+    else:
+        with pytest.raises(verifier.CandidateVerificationError, match="required deployment file"):
+            _verify(candidate)

@@ -20,6 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 os.environ.setdefault("MUJOCO_GL", "egl")
 import mujoco  # noqa: E402
 import numpy as np  # noqa: E402
+import omx_physics as physics  # noqa: E402
 import omx_two_arm_kin as kin  # noqa: E402
 import omx_two_arm_sites as sites  # noqa: E402
 import palletizing_gripper as jaw  # noqa: E402
@@ -58,6 +59,7 @@ def camera_axes(eye, focus, up):
 class World:
     def __init__(self, layout=None, wrist=None, cone="elliptic", **choices):
         self.layout = layout or sites.Layout(**choices)
+        self.physics = physics.Physics(self.layout.choices["physics"])
         self.wrist = wrist or self.layout.choices["wrist_camera"]
         self.cone = cone
         self.meshes = tempfile.TemporaryDirectory()
@@ -119,10 +121,13 @@ class World:
         r08 = c["ship_source"] == "r08-berth"
         if r08:
             spec.add_mesh(name="container", file=self._asset("container_1x3_v3"), scale=[.001] * 3)
+        phys = self.physics
+        held = phys.container()
         for k, (cid, _) in enumerate(L.containers()):
             body = world.add_body(name=cid, pos=[-1.4, 1.0 + .1 * k, .05])
             body.add_freejoint(name=cid)
-            body.add_geom(name=cid, type=box, size=[s / 2 for s in L.box], mass=.016, condim=4, friction=[1, .005, .0001], rgba=[.85, .35, .08, 0 if r08 else 1])
+            body.add_geom(name=cid, type=box, size=[s / 2 for s in L.box], mass=held["mass"], condim=4, friction=held["friction"], priority=held.get("priority", 0),
+                          rgba=[.85, .35, .08, 0 if r08 else 1])
             if r08:  # the printed body with its doors, drawn over the collision box (body x 0..90, the box centre at 45, 14.99, 16.2 mm)
                 body.add_geom(type=mujoco.mjtGeom.mjGEOM_MESH, meshname="container", pos=[-L.box[0] / 2, -L.box[1] / 2, -L.box[2] / 2],
                               contype=0, conaffinity=0, density=0, rgba=COLOURS["container"])
@@ -136,12 +141,9 @@ class World:
                                                quat=[math.cos(angle / 2), 0, 0, math.sin(angle / 2)], mass=.004, rgba=[0, 0, 0, 0])
             for joint in spec.joints:
                 if joint.name.startswith(p):
-                    joint.damping, joint.armature = .3, .01
+                    physics.apply_joint(joint, phys.joint(arm, joint.name[len(p):]))
             for name in JOINTS:
-                force = .2 if name == "gripper_joint_1" else 2.0
-                spec.add_actuator(name=p + name, target=p + name, trntype=mujoco.mjtTrn.mjTRN_JOINT, gaintype=mujoco.mjtGain.mjGAIN_FIXED,
-                                  gainprm=[40.0] + [0] * 9, biastype=mujoco.mjtBias.mjBIAS_AFFINE, biasprm=[0, -40.0, -6.3] + [0] * 7,
-                                  forcelimited=mujoco.mjtLimited.mjLIMITED_TRUE, forcerange=[-force, force])
+                physics.add_actuator(spec, p + name, phys.joint(arm, name))
             for parent, child in self.pairs[arm]:
                 spec.add_exclude(bodyname1=parent, bodyname2=child)
             spec.add_exclude(bodyname1=p + "link6", bodyname2=p + "link7")
@@ -261,13 +263,14 @@ class World:
     # -- state ---------------------------------------------------------------------------------------------------------------
     def _bind(self):
         m = self.model
-        self.q, self.dof, self.act, self.mimic, self.link5, self.arm_dof = {}, {}, {}, {}, {}, {}
+        self.q, self.dof, self.act, self.mimic, self.link5, self.arm_dof, self.hold_dof = {}, {}, {}, {}, {}, {}, {}
         for arm, p in PREFIX.items():
             self.q[arm] = np.array([m.joint(p + n).qposadr[0] for n in JOINTS])
             self.act[arm] = np.array([m.actuator(p + n).id for n in JOINTS])
             self.mimic[arm] = m.joint(p + "gripper_joint_2").qposadr[0]
             self.link5[arm] = m.body(p + "link5").id
             self.arm_dof[arm] = np.array([m.joint(p + n).dofadr[0] for n in (*JOINTS, "gripper_joint_2")])
+            self.hold_dof[arm] = self.physics.hold_dofs(m, p)
         self.box_q = {c: m.joint(c).qposadr[0] for c, _ in self.layout.containers()}
         self.box_v = {c: m.joint(c).dofadr[0] for c, _ in self.layout.containers()}
         self.substeps = round(1 / FPS / m.opt.timestep)
@@ -301,12 +304,13 @@ class World:
         data.qvel[self.box_v[cid]:self.box_v[cid] + 6] = 0
 
     def advance(self, data, targets, frames=1):
-        """Command {arm: 6 joint targets} for `frames` frames; ideal gravity compensation on both arms (real servos sag: shortcut)."""
+        """Command {arm: 6 joint targets} for `frames` frames; ideal gravity compensation on the physics candidate's held joints
+        (every arm joint by default; registers: the I-gain joints only)."""
         for arm, t in targets.items():
             data.ctrl[self.act[arm]] = t
         for _ in range(self.substeps * frames):
             for arm in PREFIX:
-                data.qfrc_applied[self.arm_dof[arm]] = data.qfrc_bias[self.arm_dof[arm]]
+                data.qfrc_applied[self.hold_dof[arm]] = data.qfrc_bias[self.hold_dof[arm]]
             mujoco.mj_step(self.model, data)
 
     def pose(self, data, cid):

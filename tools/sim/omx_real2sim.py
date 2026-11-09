@@ -6,6 +6,7 @@ that read the changed items (D-947: geometry evidence; measured values are named
   omx_real2sim.py diff OLD NEW                                 changed items, the sim stages they feed, their sim2real rows
   omx_real2sim.py sim SNAPSHOT --sha SHA --out DIR [--stages ..]   the stages in parallel on the lab PCs (remote_sim.py, never here)
   omx_real2sim.py report DIR                                    Markdown of what ran and passed
+  omx_real2sim.py request belt RUN [--store DIR]               a ruler reading for a person (deploy/robot/omx/cell_requests.py)
 
 The snapshot a sim stage reads must be committed at SHA (remote_sim ships commits only): keep the cell's snapshots in
 deploy/robot/omx/sim/cell_snapshots/<stamp>.json. Today one item is measured automatically:
@@ -337,6 +338,49 @@ def measure_belt(frame, layout):
     return dict(end_x_m=round(end, 4), centre_y_m=round(float(np.median(far[:, 1])), 4), width_m=round(width, 4))
 
 
+BELT_TOLERANCE_MM = 20.  # a tape between two points on a 55 mm step: the candidates differ by about 60 mm (2026-11-09)
+
+
+def belt_request(run, layout=None):
+    """A ruler reading that tells the snapshot's belt from the fixture's without the camera model: the level distance from
+    arm_b's turntable axis to the middle of the belt's width at its stop. (request dict, image path)"""
+    import cv2
+
+    run = Path(run)
+    snap = json.loads((run / "snapshot.json").read_text(encoding="utf-8"))
+    belt = snap["items"].get("belt") or {}
+    if "end_x_m" not in belt:
+        raise SystemExit(f"{run}/snapshot.json has no measured belt ({belt.get('error', 'item missing')})")
+    layout = layout or sites.Layout()
+    axis = layout.arms["arm_b"].base[:2]
+    points = dict(sim=(sites.BELT_STOP_X, layout.belt_y), camera=(belt["end_x_m"], belt["centre_y_m"]))
+    predicted = {name: round(math.dist(axis, xy) * 1000) for name, xy in points.items()}
+    frame = cv2.imread(str(run / "frames" / "top.jpg"))
+    cam = Camera(layout.fixture["real_cameras"]["top"], frame.shape[:2])
+    px = lambda x, y, z: tuple(int(round(v)) for v in cam.project((x, y, z)))  # noqa: E731
+    origin = px(*axis, layout.table_z)
+    for (name, xy), colour in zip(points.items(), ((0, 200, 0), (0, 0, 255))):
+        cv2.line(frame, origin, px(*xy, layout.belt_top), colour, 2)
+        cv2.circle(frame, px(*xy, layout.belt_top), 5, colour, -1)
+        cv2.putText(frame, f"{name} {predicted[name]} mm", (px(*xy, layout.belt_top)[0] + 6, px(*xy, layout.belt_top)[1] - 6),
+                    cv2.FONT_HERSHEY_SIMPLEX, .45, colour, 1)
+    cv2.circle(frame, origin, 6, (255, 0, 255), -1)
+    image = run / "belt-request.png"
+    cv2.imwrite(str(image), frame)
+    stamp = (snap.get("taken_at") or "")[:16].replace("-", "").replace(":", "").replace("T", "-") or time.strftime("%Y%m%d-%H%M")
+    return dict(
+        id=f"belt-end-{stamp}", kind="measure", item="belt", gap=GAPS["belt"],
+        question="arm_b 회전축에서 벨트 끝(멈춤 막대) 폭 가운데까지의 수평 거리",
+        how=["arm_b 받침 위 회전 관절의 중심(보라 점)에 줄자 끝을 댄다.",
+             "벨트가 끝나는 멈춤 막대에서 벨트 폭의 가운데 점까지 줄자를 수평으로 당긴다(벨트는 작업대보다 약 55 mm 낮다).",
+             "mm로 읽어 적는다. 팔은 움직이지 않는다."],
+        candidates=predicted, unit="mm", tolerance=BELT_TOLERANCE_MM,
+        means=dict(sim="시뮬의 설계 벨트(멈춤 x %.3f, 중심 y %.3f)가 맞다: 카메라 모델을 다시 잰다(G-19)." % points["sim"],
+                   camera="위 카메라가 잰 벨트(끝 x %.3f, 중심 y %.3f)가 맞다: belt_pose=snapshot을 기본으로 바꿀 수 있다(G-30)." % points["camera"],
+                   neither="둘 다 아니다: 다시 재거나 벨트가 옮겨졌는지 본다."),
+        source=dict(snapshot_taken_at=snap.get("taken_at"), frames=snap.get("frames"))), image
+
+
 def overlay(frame, layout, plates, ship=None, belt=None):
     import cv2
 
@@ -442,7 +486,15 @@ def capture(site, out):
     return meta
 
 
-def sim(snapshot, sha, out, stages):
+def stage_body(name, rel, extra=()):
+    """The remote shell line of one stage: the snapshot's choices, then `extra` (--choice key=value items), which win
+    over them because parse_choices keeps the last value of a key (e.g. physics=<cell_physics.yaml candidate>)."""
+    _, _, _, cmd = STAGES[name]
+    choices = " ".join(SNAP_CHOICES(rel) + [w for c in extra for w in ("--choice", shlex.quote(c))])
+    return f"mkdir -p $OUT/{name} && {PY} {cmd.format(choices=choices).replace('$PY', PY)} {choices}"
+
+
+def sim(snapshot, sha, out, stages, extra=()):
     """Each stage one remote_sim run, all started at once; remote_sim places them by headroom and caps (D-568)."""
     if not Path(snapshot).resolve().is_relative_to(ROOT):
         raise SystemExit(f"{snapshot} is outside the repo: copy it to deploy/robot/omx/sim/cell_snapshots/ and commit it")
@@ -454,23 +506,23 @@ def sim(snapshot, sha, out, stages):
     for i, name in enumerate(stages):
         if i:
             time.sleep(STAGGER_S)  # remote_sim reserves a host only when it ships: back-to-back starts all pick the same one
-        _, role, minutes, cmd = STAGES[name]
-        choices = " ".join(SNAP_CHOICES(rel))
-        body = f"mkdir -p $OUT/{name} && {PY} {cmd.format(choices=choices).replace('$PY', PY)} {choices}"
+        _, role, minutes, _ = STAGES[name]
+        body = stage_body(name, rel, extra)
         log = out / name
         log.mkdir(parents=True, exist_ok=True)
         procs[name] = subprocess.Popen([sys.executable, str(ROOT / "tools/remote/remote_sim.py"), "--host", role, "--sha", sha,
                                         "--minutes", str(minutes), "--log-dir", str(log / "remote"), "cmd", "--", body],
                                        cwd=ROOT, stdout=(log / "stdout.txt").open("w"), stderr=subprocess.STDOUT)
     rcs = {n: p.wait() for n, p in procs.items()}
-    (out / "sim.json").write_text(json.dumps(dict(snapshot=rel, sha=sha, rc=rcs, at=time.strftime("%Y-%m-%dT%H:%M:%S")), indent=1),
+    (out / "sim.json").write_text(json.dumps(dict(snapshot=rel, sha=sha, choices=list(extra), rc=rcs, at=time.strftime("%Y-%m-%dT%H:%M:%S")), indent=1),
                                   encoding="utf-8")
     return rcs
 
 
 def report(out):
     s = json.loads((Path(out) / "sim.json").read_text(encoding="utf-8"))
-    lines = [f"# real-to-sim {s['at']}", "", f"snapshot `{s['snapshot']}` at `{s['sha'][:10]}`", "", "| stage | rc |", "|---|---|"]
+    lines = [f"# real-to-sim {s['at']}", "", f"snapshot `{s['snapshot']}` at `{s['sha'][:10]}`"
+             + (f", choices {', '.join(f'`{c}`' for c in s['choices'])}" if s.get("choices") else ""), "", "| stage | rc |", "|---|---|"]
     lines += [f"| {n} | {rc} |" for n, rc in s["rc"].items()]
     return "\n".join(lines)
 
@@ -478,18 +530,22 @@ def report(out):
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     sub = p.add_subparsers(dest="cmd", required=True)
-    c = sub.add_parser("capture"); c.add_argument("--site", help="ssh target of the site PC, default site_host in private/lab-hosts.json"); c.add_argument("--out", required=True)
+    c = sub.add_parser("capture"); c.add_argument("--site", help="ssh target of the PC serving the cell cameras, default the first omx_hosts entry in private/lab-hosts.json"); c.add_argument("--out", required=True)
     m = sub.add_parser("measure"); m.add_argument("run"); m.add_argument("--prev")
     d = sub.add_parser("diff"); d.add_argument("old"); d.add_argument("new")
     s = sub.add_parser("sim"); s.add_argument("snapshot"); s.add_argument("--sha", required=True); s.add_argument("--out", required=True)
     s.add_argument("--stages", help="comma list, default every stage")
+    s.add_argument("--choice", action="append", default=[], help="key=value after the snapshot's choices, e.g. physics=<candidate>")
     r = sub.add_parser("report"); r.add_argument("out")
+    q = sub.add_parser("request"); q.add_argument("item", choices=["belt"]); q.add_argument("run")
+    q.add_argument("--store", help="request store, default cell_requests.store() (ROSY_CELL_REQUESTS)")
     a = p.parse_args(argv)
     if a.cmd == "capture":
         if not a.site:
             sys.path.insert(0, str(ROOT / "tools/remote"))
             import lab_hosts
-            a.site = lab_hosts.site_host() or p.error("--site, or site_host in private/lab-hosts.json")
+            # the cameras hang off the OMX owner's PC (rosy-omx-camera-view); site_host is the Fleet site, which may be another PC
+            a.site = next(iter(lab_hosts.omx_hosts(lab_hosts.load())), "") or p.error("--site, or omx_hosts in private/lab-hosts.json")
         print(json.dumps(capture(a.site, a.out)))
     elif a.cmd == "measure":
         snap = measure(a.run, a.prev)
@@ -499,9 +555,15 @@ def main(argv=None):
         changed, rerun = diff(load(a.old), load(a.new))
         print(json.dumps(dict(changed=changed, rerun=rerun, gaps=sorted({GAPS[i] for i in changed})), indent=1))
     elif a.cmd == "sim":
-        rcs = sim(a.snapshot, a.sha, a.out, a.stages.split(",") if a.stages else sorted(STAGES))
+        rcs = sim(a.snapshot, a.sha, a.out, a.stages.split(",") if a.stages else sorted(STAGES), a.choice)
         print(json.dumps(rcs))
         return int(any(rcs.values()))
+    elif a.cmd == "request":
+        sys.path.insert(0, str(ROOT / "deploy/robot/omx"))
+        import cell_requests
+        req, image = belt_request(a.run)
+        made = cell_requests.open_request(req, image, Path(a.store) if a.store else None)
+        print(json.dumps(dict(id=made["id"], candidates=made["candidates"], unit=made["unit"]), ensure_ascii=False))
     else:
         print(report(a.out))
     return 0

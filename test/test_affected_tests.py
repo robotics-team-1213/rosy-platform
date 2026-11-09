@@ -25,6 +25,13 @@ ROOT = Path(__file__).resolve().parents[1]
 GUARDS = set(affected.GUARD_SET)
 
 
+@pytest.fixture(autouse=True)
+def _legacy_full_rule(monkeypatch):
+    """These cases pin the FULL triggers as they were before D-436 2026-11-09: the revert switch must restore them.
+    The default narrowed tiers are in test_affected_tiers.py."""
+    monkeypatch.setenv("ROSY_FULL_LEGACY", "1")
+
+
 def _assert_g1_timing_is_dedicated(invocations):
     target = 'test/test_platform_g1_timing.py'
     dedicated = [inv for inv in invocations if target in inv and 'ROSY_JOB_ALONE=1' in inv]
