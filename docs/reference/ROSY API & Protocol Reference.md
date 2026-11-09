@@ -5,7 +5,7 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.378
+**Version:** v1.380
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -3484,6 +3484,19 @@ unknown 행은 `{source_id,x,y,footprint_m,score,marker_id}`이다. 익명 검�
 token 오류 401, source 불일치 403, map/revision/future/stale/out-of-order 409, 잘못된 body 422.
 보정과 검출은 CORE pose 주입·자동 작업·주행 명령의 입력이 아니다.
 
+**보정 건강 `calibration_health`(D-1006).** 같은 감시가 거부된 맞춤과 응답 없음도 한 회차로 센다.
+행은 `{state, since, cause: "undetermined", calibration_revision, streak: {kind, polls},
+last: {category, score, coverage, cut_sides | move_m, rotation_deg, checked_at}, blocking, gate}`
+이고 승인 교정이 없으면 null이다. `state`는 `fresh`(수락 맞춤이 승인과 일치, 3회) ·
+`drifting`(수락 맞춤이 0.3 m/3° 넘게 어긋남, 3회) · `mismatch`(맞춤은 거부, 보이는 면적 0.40 이상
+이고 점수 0.70 미만, 5회) · `insufficient_coverage`(보이는 면적 0.20 미만 또는 맞춤 없음, 3회) ·
+`unknown`(180 s 안에 쓸 답이 없음)이다. 상태를 바꾸는 연속 회차 수는 위와 같고, 막는 상태에서
+`fresh`로 나가려면 5회가 필요하다. 원인(카메라 이동 대 지도·바닥 변경)은 판정하지 않는다.
+`ROSY_FLEET_CALIBRATION_GATE=1`(기본 꺼짐)이면 `drifting`·`mismatch`(`blocking: true`) 동안
+`approved_revision`이 없어져 `approved_record` sighting과 auto-locate가 409 `CALIBRATION_MISMATCH`로
+멈춘다. `unknown`·`insufficient_coverage`는 막지 않고, 추적 표시 자체는 계속한다. 모든 회차는
+`calibration_health_log`(SQLite, 최근 5000건)에 문턱 조정용으로 남는다. 교정을 쓰지 않고 주행에 쓰지 않는다.
+
 **교정 낡음 자동 검사.** Fleet이 `--vision-url`(Vision 수신 서버 origin)과
 `--vision-preview-secret-env`로 추적 보정 감시를 켜면, 승인된 교정(`tracking_calibrations`)이
 있는 출처마다 `--calibration-drift-interval-s`(기본 60 s, 0이면 끔)마다 Vision의
@@ -4675,6 +4688,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 | v1.371 | 2026-11-07 | D-991: Service Control `reboot` refused with 409 `ARM_SESSION_ACTIVE` or `HOST_JOBS_ACTIVE`; additive `reboot-over-jobs` passes live jobs, never an arm session. Breaking for one consumer, the Fleet screen: `stop-unit` and `stoppable_units` removed, `pinky-*` out of the unit list; additive `history`. |
 | v1.368 | 2026-11-07 | Additive (D-982): 현장 규칙 문서 `rosy.site_rules/1`(`GET/PUT /api/fleet/site-rules/draft`, `GET .../active`, `POST .../activate`)와 가정 상태 판정 `POST /api/fleet/site-rules/judge`(go/wait/refuse, 보내기 없음). 활성 문서가 없으면 동작 동일, 활성 문서는 더 막기만 한다 |
 | v1.362 | 2026-11-04 | Additive: D-977 `device_trial` opens the neutral `arm-transfers` jobs for exactly one arm (owner identity: `device: true`, matching `commissioning_revision`); `production` stays closed. New `operator_attested` record: `POST/GET .../jobs/{mission_id}/operator-attestations` (named operator distinct from proposer and approver, single-use, 45 s validity, `goal_confirmed: false`). The owner still refuses goals. |
+| v1.380 | 2026-11-09 | Additive (D-1006, feat/adaptive-map-calibration): `GET /api/fleet/tracking` 출처 행에 `calibration_health` — 승인 교정과 Vision 맞춤의 건강 상태(거부·응답 없음 포함, 없으면 null). 새 엔드포인트 없음. 선택 게이트(`ROSY_FLEET_CALIBRATION_GATE=1`, 기본 꺼짐)가 켜지면 `drifting`·`mismatch`에서 `approved_record` sighting이 409 `CALIBRATION_MISMATCH`. Robot API·envelope 1.0 변경 없음 |
 | v1.378 | 2026-11-09 | Additive (D-1002): 편대 미션 `POST/GET /api/fleet/formation/mission`, `POST .../mission/stop` — 차로 적합성 → 팔로워 무장 → 리더 TRIP job 한 행; 리더 job 행이 HOLD·GOAL_CONFIRMED가 되면 `ENDED`. 새 스키마 없음. |
 | v1.375 | 2026-11-08 | Additive (D-971): 팔 사건 해제의 `cause`·`basis`, 정지 앞뒤 사진 `POST/GET .../incidents/{id}/evidence`, 보류하지 않는 보고(`decision.hold: false`), `GET .../arm-incidents/labelled`. |
 | v1.374 | 2026-11-07 | Additive: Account 가입·권한 요청(D-993) — 공개 `POST /api/fleet/auth/access-requests`와 관리자 목록·승인·거절. |
