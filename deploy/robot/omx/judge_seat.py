@@ -47,7 +47,7 @@ def rules(prompt, images, schema):
 
 def ollama(url="http://127.0.0.1:11434", model="qwen3-vl:8b-instruct", timeout=90):
     def ask(prompt, images, schema):
-        body = {"model": model, "stream": False, "format": schema, "options": {"temperature": 0, "seed": 42},
+        body = {"model": model, "stream": False, "think": False, "format": schema, "options": {"temperature": 0, "seed": 42},
                 "messages": [{"role": "user", "content": prompt, "images": list(images)}]}
         request = urllib.request.Request(f"{url}/api/chat", json.dumps(body).encode(),
                                          {"Content-Type": "application/json"})
