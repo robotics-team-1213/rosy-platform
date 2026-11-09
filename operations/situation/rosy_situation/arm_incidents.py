@@ -47,7 +47,7 @@ class ArmIncidentExplainer:
         facts = json.dumps({k: incident.get(k) for k in ("facts", "decision", "recovery")}, default=str,
                            ensure_ascii=False)[:6000]
         reply = self.vlm._post(f"{self.vlm.url}/api/chat", {
-            "model": self.vlm.model, "stream": False, "format": SCHEMA, "options": self.vlm.options,
+            "model": self.vlm.model, "stream": False, "think": False, "format": SCHEMA, "options": self.vlm.options,
             "messages": [{"role": "user", "images": [f["jpeg_b64"] for f in frames],
                           "content": PROMPT.format(facts=facts, roles=", ".join(f["role"] for f in frames))}]},
             TIMEOUT_S)

@@ -78,7 +78,10 @@ def vacuous(inv: list[str], log: Path) -> str | None:
     # every summary counts: a later run appended to the same log must not replace an earlier "87 skipped"
     counts = {"passed": min((r.get("passed", 0) for r in runs), default=0),
               "skipped": sum(r.get("skipped", 0) for r in runs)}
-    if not counts.get("passed") or counts.get("skipped"):
+    # A run whose every test failed did run: known_failures and the alone rerun judge it (2026-11-08: a one-test chunk
+    # that failed under load and passed alone, LOAD-FLAKY, stopped here as "0 passed" before that verdict counted).
+    failed = all(re.search(r"\d+ (failed|errors?)\b", ln) for ln in lines) if lines else False
+    if (not counts.get("passed") and not failed) or counts.get("skipped"):
         return (f"ran no browser test for real ({counts.get('passed', 0)} passed, {counts.get('skipped', 0)} skipped;"
                 f" the opt-in or Chromium did not reach the job, or a guard skipped)")
     return None

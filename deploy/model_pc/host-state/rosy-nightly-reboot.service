@@ -1,6 +1,12 @@
 [Unit]
-Description=Rosy team PC nightly reboot (warns 2 min ahead)
+Description=Rosy team PC nightly reboot (warns 2 min ahead, skipped while work runs)
 
 [Service]
 Type=oneshot
-ExecStart=/bin/sh -c 'wall "Rosy nightly reboot in 2 minutes (05:00). Save your work." ; sleep 120 ; /bin/systemctl reboot'
+# A wedged helper (GPU driver) must not hold the unit forever; a timeout is no reboot.
+TimeoutStartSec=10min
+# D-991: this PC's helper judges. A live job lock, Isaac reservation, busy hold, learning GPU lease, hand-run
+# GPU job or arm session skips tonight's reboot; it asks again after the warning. A missing or older helper
+# also skips (fail closed); the guard flags a PC that has not rebooted for days.
+ExecCondition=/usr/local/sbin/rosy-host-control nightly-gate
+ExecStart=/bin/sh -c 'wall "Rosy nightly reboot in 2 minutes (05:00). Save your work." ; sleep 120 ; /usr/local/sbin/rosy-host-control nightly-gate || exit 0 ; /bin/systemctl reboot'

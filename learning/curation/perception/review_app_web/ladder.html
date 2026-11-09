@@ -34,6 +34,11 @@
 <section class="learning-section" aria-labelledby="ladder-two-arm-title"><h2 id="ladder-two-arm-title">5 · 양팔 태스크</h2>
 <p class="quiet">정해 둔 정답 동작을 양팔 장면에서 그대로 돌려 본 기하 검사입니다. 학습 모델이 아닙니다. 한 번에 한 팔만 움직이고 컨테이너의 참값 위치를 쓰며, 실제 팔이 성공했다는 뜻이 아닙니다(D-947). 그림은 셀의 네 카메라와 같은 시점입니다. 위쪽과 옆은 실측 각도이고, 손목 둘은 CAD 값이라 아직 실측하지 않았습니다.</p>
 <div id="ladder-two-arm" class="ladder-rounds" aria-live="polite"></div>
+<h3>한 팔과 두 팔(협응) 비교</h3>
+<p class="quiet">Harbor 순서와 같은 입력(컨베이어에서 장치, 바깥 두 줄의 반출 2건)을 한 팔 A, 한 팔 B, 두 팔로 나눠 돌린 결과입니다. 팔 배정·일정은 셀 쪽 일정기가 정하고, 두 팔은 구역을 나눠 동시에 움직입니다(D-778 L1). 한 팔이 못 하는 요청은 보류(사람 또는 Pinky 추가 이송)로 셉니다. 시뮬레이션 기하 비교이며 시간은 정답 동작의 구간값입니다(D-947).</p>
+<div id="ladder-compare" class="ladder-rounds" aria-live="polite"></div>
+<form id="ladder-compare-form" class="ui-form learning-form"><label class="ui-field-label">시드 (0은 놓인 위치 그대로) <input id="ladder-compare-seed" class="ui-field" type="number" min="0" max="1000" step="1" value="0" required></label>
+<div class="ui-workspace-bar"><ui-button id="ladder-compare-start" data-action-icon="next" kind="primary" type="submit" disabled>한 팔·두 팔 비교 실행</ui-button></div></form>
 <h3>학습 모델</h3>
 <p class="quiet">네 카메라와 양팔 관절만 보고, 계획이 주는 단계(어느 팔이 어디서 어디로)를 수행하도록 학습한 ACT 모델입니다. 정답 동작과 같은 기준으로 판정합니다. 시뮬레이션 결과이며 실제 팔 경로가 없습니다(D-947, D-793).</p>
 <div id="ladder-two-arm-rounds" class="ladder-rounds" aria-live="polite"></div>

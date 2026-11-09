@@ -152,6 +152,21 @@ def compose_settings(config: dict) -> dict:
                         if name in secrets}}
 
 
+def peer_publish(config: dict, *, assigned=None) -> list[str]:
+    """D-994: a published control-unit peer origin binds one address this host owns, never a wildcard."""
+    assigned = assigned or address_assigned
+    bound = []
+    for entry in config["services"].get("control-unit-peer", {}).get("ports", []):
+        try:
+            ip = ipaddress.ip_address(entry.get("host_ip") or "")
+        except ValueError:
+            raise ConfigError("the control-unit peer publish needs ROSY_CONTROL_UNIT_PEER_BIND set to one LAN address") from None
+        if ip.is_unspecified or ip.is_loopback or not assigned(str(ip)):
+            raise ConfigError(f"the control-unit peer publish binds {ip}; use a LAN address this host owns")
+        bound.append(f"{ip}:{entry.get('published')}")
+    return bound
+
+
 def address_assigned(address: str) -> bool:
     """True when this host owns `address` (a bind to it succeeds)."""
     family = socket.AF_INET6 if ":" in address else socket.AF_INET
@@ -424,8 +439,9 @@ def main(argv: list[str] | None = None, run=_run) -> int:
     args = parser.parse_args(argv)
     try:
         env = check_env_keys(args.env_file)
-        settings = compose_settings(compose_config(args.env_file, args.compose_file,
-                                                   args.project_name, run, overlay_files(env)))
+        config = compose_config(args.env_file, args.compose_file, args.project_name, run, overlay_files(env))
+        settings = compose_settings(config)
+        peer_publish(config)
         settings["pairing"] = "1" if env.get("ROSY_SITE_PAIRING") == "1" else "0"
         plan = site_plan(settings)
         if args.command == "check" and args.verify_certs:

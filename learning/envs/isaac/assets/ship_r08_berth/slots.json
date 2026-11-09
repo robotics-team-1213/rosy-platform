@@ -1,0 +1,1201 @@
+{
+ "layout": [
+  "stern",
+  "hold",
+  "hold",
+  "bow"
+ ],
+ "starts_mm": [
+  0,
+  50,
+  148,
+  246
+ ],
+ "first_cargo_module_anchor_mm": 50,
+ "floor_slots": 18,
+ "tier_records": [
+  {
+   "id": "010182",
+   "bay": "01",
+   "row": "01",
+   "tier": 82,
+   "module_index": 2,
+   "module": "hold",
+   "x_mm": 227.0,
+   "y_mm": -38,
+   "z_mm": 6.0,
+   "tray_y_offsets_mm": [
+    0
+   ],
+   "stern_default_fill": null,
+   "cargo_kind": "canonical hold grid cell",
+   "arms": [
+    "B",
+    "A"
+   ],
+   "ik_arms": [
+    "B",
+    "A"
+   ]
+  },
+  {
+   "id": "010184",
+   "bay": "01",
+   "row": "01",
+   "tier": 84,
+   "module_index": 2,
+   "module": "hold",
+   "x_mm": 227.0,
+   "y_mm": -38,
+   "z_mm": 38.4,
+   "tray_y_offsets_mm": [
+    0
+   ],
+   "stern_default_fill": null,
+   "cargo_kind": "canonical hold grid cell",
+   "arms": [
+    "B",
+    "A"
+   ],
+   "ik_arms": [
+    "B",
+    "A"
+   ]
+  },
+  {
+   "id": "010082",
+   "bay": "01",
+   "row": "00",
+   "tier": 82,
+   "module_index": 2,
+   "module": "hold",
+   "x_mm": 227.0,
+   "y_mm": 0,
+   "z_mm": 6.0,
+   "tray_y_offsets_mm": [
+    0
+   ],
+   "stern_default_fill": null,
+   "cargo_kind": "canonical hold grid cell",
+   "arms": [
+    "B",
+    "A"
+   ],
+   "ik_arms": [
+    "B",
+    "A"
+   ]
+  },
+  {
+   "id": "010084",
+   "bay": "01",
+   "row": "00",
+   "tier": 84,
+   "module_index": 2,
+   "module": "hold",
+   "x_mm": 227.0,
+   "y_mm": 0,
+   "z_mm": 38.4,
+   "tray_y_offsets_mm": [
+    0
+   ],
+   "stern_default_fill": null,
+   "cargo_kind": "canonical hold grid cell",
+   "arms": [
+    "B",
+    "A"
+   ],
+   "ik_arms": [
+    "B",
+    "A"
+   ]
+  },
+  {
+   "id": "010282",
+   "bay": "01",
+   "row": "02",
+   "tier": 82,
+   "module_index": 2,
+   "module": "hold",
+   "x_mm": 227.0,
+   "y_mm": 38,
+   "z_mm": 6.0,
+   "tray_y_offsets_mm": [
+    0
+   ],
+   "stern_default_fill": null,
+   "cargo_kind": "canonical hold grid cell",
+   "arms": [
+    "B",
+    "A"
+   ],
+   "ik_arms": [
+    "B",
+    "A"
+   ]
+  },
+  {
+   "id": "010284",
+   "bay": "01",
+   "row": "02",
+   "tier": 84,
+   "module_index": 2,
+   "module": "hold",
+   "x_mm": 227.0,
+   "y_mm": 38,
+   "z_mm": 38.4,
+   "tray_y_offsets_mm": [
+    0
+   ],
+   "stern_default_fill": null,
+   "cargo_kind": "canonical hold grid cell",
+   "arms": [
+    "B",
+    "A"
+   ],
+   "ik_arms": [
+    "B",
+    "A"
+   ]
+  },
+  {
+   "id": "030182",
+   "bay": "03",
+   "row": "01",
+   "tier": 82,
+   "module_index": 2,
+   "module": "hold",
+   "x_mm": 197.0,
+   "y_mm": -38,
+   "z_mm": 6.0,
+   "tray_y_offsets_mm": [
+    0
+   ],
+   "stern_default_fill": null,
+   "cargo_kind": "canonical hold grid cell",
+   "arms": [
+    "B",
+    "A"
+   ],
+   "ik_arms": [
+    "B",
+    "A"
+   ]
+  },
+  {
+   "id": "030184",
+   "bay": "03",
+   "row": "01",
+   "tier": 84,
+   "module_index": 2,
+   "module": "hold",
+   "x_mm": 197.0,
+   "y_mm": -38,
+   "z_mm": 38.4,
+   "tray_y_offsets_mm": [
+    0
+   ],
+   "stern_default_fill": null,
+   "cargo_kind": "canonical hold grid cell",
+   "arms": [
+    "B",
+    "A"
+   ],
+   "ik_arms": [
+    "B",
+    "A"
+   ]
+  },
+  {
+   "id": "030082",
+   "bay": "03",
+   "row": "00",
+   "tier": 82,
+   "module_index": 2,
+   "module": "hold",
+   "x_mm": 197.0,
+   "y_mm": 0,
+   "z_mm": 6.0,
+   "tray_y_offsets_mm": [
+    0
+   ],
+   "stern_default_fill": null,
+   "cargo_kind": "canonical hold grid cell",
+   "arms": [
+    "B",
+    "A"
+   ],
+   "ik_arms": [
+    "B",
+    "A"
+   ]
+  },
+  {
+   "id": "030084",
+   "bay": "03",
+   "row": "00",
+   "tier": 84,
+   "module_index": 2,
+   "module": "hold",
+   "x_mm": 197.0,
+   "y_mm": 0,
+   "z_mm": 38.4,
+   "tray_y_offsets_mm": [
+    0
+   ],
+   "stern_default_fill": null,
+   "cargo_kind": "canonical hold grid cell",
+   "arms": [
+    "B",
+    "A"
+   ],
+   "ik_arms": [
+    "B",
+    "A"
+   ]
+  },
+  {
+   "id": "030282",
+   "bay": "03",
+   "row": "02",
+   "tier": 82,
+   "module_index": 2,
+   "module": "hold",
+   "x_mm": 197.0,
+   "y_mm": 38,
+   "z_mm": 6.0,
+   "tray_y_offsets_mm": [
+    0
+   ],
+   "stern_default_fill": null,
+   "cargo_kind": "canonical hold grid cell",
+   "arms": [
+    "B",
+    "A"
+   ],
+   "ik_arms": [
+    "B",
+    "A"
+   ]
+  },
+  {
+   "id": "030284",
+   "bay": "03",
+   "row": "02",
+   "tier": 84,
+   "module_index": 2,
+   "module": "hold",
+   "x_mm": 197.0,
+   "y_mm": 38,
+   "z_mm": 38.4,
+   "tray_y_offsets_mm": [
+    0
+   ],
+   "stern_default_fill": null,
+   "cargo_kind": "canonical hold grid cell",
+   "arms": [
+    "B",
+    "A"
+   ],
+   "ik_arms": [
+    "B",
+    "A"
+   ]
+  },
+  {
+   "id": "050182",
+   "bay": "05",
+   "row": "01",
+   "tier": 82,
+   "module_index": 2,
+   "module": "hold",
+   "x_mm": 167.0,
+   "y_mm": -38,
+   "z_mm": 6.0,
+   "tray_y_offsets_mm": [
+    0
+   ],
+   "stern_default_fill": null,
+   "cargo_kind": "canonical hold grid cell",
+   "arms": [
+    "B",
+    "A"
+   ],
+   "ik_arms": [
+    "B",
+    "A"
+   ]
+  },
+  {
+   "id": "050184",
+   "bay": "05",
+   "row": "01",
+   "tier": 84,
+   "module_index": 2,
+   "module": "hold",
+   "x_mm": 167.0,
+   "y_mm": -38,
+   "z_mm": 38.4,
+   "tray_y_offsets_mm": [
+    0
+   ],
+   "stern_default_fill": null,
+   "cargo_kind": "canonical hold grid cell",
+   "arms": [
+    "B",
+    "A"
+   ],
+   "ik_arms": [
+    "B",
+    "A"
+   ]
+  },
+  {
+   "id": "050082",
+   "bay": "05",
+   "row": "00",
+   "tier": 82,
+   "module_index": 2,
+   "module": "hold",
+   "x_mm": 167.0,
+   "y_mm": 0,
+   "z_mm": 6.0,
+   "tray_y_offsets_mm": [
+    0
+   ],
+   "stern_default_fill": null,
+   "cargo_kind": "canonical hold grid cell",
+   "arms": [
+    "B",
+    "A"
+   ],
+   "ik_arms": [
+    "B",
+    "A"
+   ]
+  },
+  {
+   "id": "050084",
+   "bay": "05",
+   "row": "00",
+   "tier": 84,
+   "module_index": 2,
+   "module": "hold",
+   "x_mm": 167.0,
+   "y_mm": 0,
+   "z_mm": 38.4,
+   "tray_y_offsets_mm": [
+    0
+   ],
+   "stern_default_fill": null,
+   "cargo_kind": "canonical hold grid cell",
+   "arms": [
+    "B",
+    "A"
+   ],
+   "ik_arms": [
+    "B",
+    "A"
+   ]
+  },
+  {
+   "id": "050282",
+   "bay": "05",
+   "row": "02",
+   "tier": 82,
+   "module_index": 2,
+   "module": "hold",
+   "x_mm": 167.0,
+   "y_mm": 38,
+   "z_mm": 6.0,
+   "tray_y_offsets_mm": [
+    0
+   ],
+   "stern_default_fill": null,
+   "cargo_kind": "canonical hold grid cell",
+   "arms": [
+    "B",
+    "A"
+   ],
+   "ik_arms": [
+    "B",
+    "A"
+   ]
+  },
+  {
+   "id": "050284",
+   "bay": "05",
+   "row": "02",
+   "tier": 84,
+   "module_index": 2,
+   "module": "hold",
+   "x_mm": 167.0,
+   "y_mm": 38,
+   "z_mm": 38.4,
+   "tray_y_offsets_mm": [
+    0
+   ],
+   "stern_default_fill": null,
+   "cargo_kind": "canonical hold grid cell",
+   "arms": [
+    "B",
+    "A"
+   ],
+   "ik_arms": [
+    "B",
+    "A"
+   ]
+  },
+  {
+   "id": "070182",
+   "bay": "07",
+   "row": "01",
+   "tier": 82,
+   "module_index": 1,
+   "module": "hold",
+   "x_mm": 129.0,
+   "y_mm": -38,
+   "z_mm": 6.0,
+   "tray_y_offsets_mm": [
+    0
+   ],
+   "stern_default_fill": null,
+   "cargo_kind": "canonical hold grid cell",
+   "arms": [
+    "B",
+    "A"
+   ],
+   "ik_arms": [
+    "B",
+    "A"
+   ]
+  },
+  {
+   "id": "070184",
+   "bay": "07",
+   "row": "01",
+   "tier": 84,
+   "module_index": 1,
+   "module": "hold",
+   "x_mm": 129.0,
+   "y_mm": -38,
+   "z_mm": 38.4,
+   "tray_y_offsets_mm": [
+    0
+   ],
+   "stern_default_fill": null,
+   "cargo_kind": "canonical hold grid cell",
+   "arms": [
+    "B",
+    "A"
+   ],
+   "ik_arms": [
+    "B",
+    "A"
+   ]
+  },
+  {
+   "id": "070082",
+   "bay": "07",
+   "row": "00",
+   "tier": 82,
+   "module_index": 1,
+   "module": "hold",
+   "x_mm": 129.0,
+   "y_mm": 0,
+   "z_mm": 6.0,
+   "tray_y_offsets_mm": [
+    0
+   ],
+   "stern_default_fill": null,
+   "cargo_kind": "canonical hold grid cell",
+   "arms": [
+    "B",
+    "A"
+   ],
+   "ik_arms": [
+    "B",
+    "A"
+   ]
+  },
+  {
+   "id": "070084",
+   "bay": "07",
+   "row": "00",
+   "tier": 84,
+   "module_index": 1,
+   "module": "hold",
+   "x_mm": 129.0,
+   "y_mm": 0,
+   "z_mm": 38.4,
+   "tray_y_offsets_mm": [
+    0
+   ],
+   "stern_default_fill": null,
+   "cargo_kind": "canonical hold grid cell",
+   "arms": [
+    "B",
+    "A"
+   ],
+   "ik_arms": [
+    "B",
+    "A"
+   ]
+  },
+  {
+   "id": "070282",
+   "bay": "07",
+   "row": "02",
+   "tier": 82,
+   "module_index": 1,
+   "module": "hold",
+   "x_mm": 129.0,
+   "y_mm": 38,
+   "z_mm": 6.0,
+   "tray_y_offsets_mm": [
+    0
+   ],
+   "stern_default_fill": null,
+   "cargo_kind": "canonical hold grid cell",
+   "arms": [
+    "B",
+    "A"
+   ],
+   "ik_arms": [
+    "B",
+    "A"
+   ]
+  },
+  {
+   "id": "070284",
+   "bay": "07",
+   "row": "02",
+   "tier": 84,
+   "module_index": 1,
+   "module": "hold",
+   "x_mm": 129.0,
+   "y_mm": 38,
+   "z_mm": 38.4,
+   "tray_y_offsets_mm": [
+    0
+   ],
+   "stern_default_fill": null,
+   "cargo_kind": "canonical hold grid cell",
+   "arms": [
+    "B",
+    "A"
+   ],
+   "ik_arms": [
+    "B",
+    "A"
+   ]
+  },
+  {
+   "id": "090182",
+   "bay": "09",
+   "row": "01",
+   "tier": 82,
+   "module_index": 1,
+   "module": "hold",
+   "x_mm": 99.0,
+   "y_mm": -38,
+   "z_mm": 6.0,
+   "tray_y_offsets_mm": [
+    0
+   ],
+   "stern_default_fill": null,
+   "cargo_kind": "canonical hold grid cell",
+   "arms": [
+    "B",
+    "A"
+   ],
+   "ik_arms": [
+    "B",
+    "A"
+   ]
+  },
+  {
+   "id": "090184",
+   "bay": "09",
+   "row": "01",
+   "tier": 84,
+   "module_index": 1,
+   "module": "hold",
+   "x_mm": 99.0,
+   "y_mm": -38,
+   "z_mm": 38.4,
+   "tray_y_offsets_mm": [
+    0
+   ],
+   "stern_default_fill": null,
+   "cargo_kind": "canonical hold grid cell",
+   "arms": [
+    "B",
+    "A"
+   ],
+   "ik_arms": [
+    "B",
+    "A"
+   ]
+  },
+  {
+   "id": "090082",
+   "bay": "09",
+   "row": "00",
+   "tier": 82,
+   "module_index": 1,
+   "module": "hold",
+   "x_mm": 99.0,
+   "y_mm": 0,
+   "z_mm": 6.0,
+   "tray_y_offsets_mm": [
+    0
+   ],
+   "stern_default_fill": null,
+   "cargo_kind": "canonical hold grid cell",
+   "arms": [
+    "B",
+    "A"
+   ],
+   "ik_arms": [
+    "B",
+    "A"
+   ]
+  },
+  {
+   "id": "090084",
+   "bay": "09",
+   "row": "00",
+   "tier": 84,
+   "module_index": 1,
+   "module": "hold",
+   "x_mm": 99.0,
+   "y_mm": 0,
+   "z_mm": 38.4,
+   "tray_y_offsets_mm": [
+    0
+   ],
+   "stern_default_fill": null,
+   "cargo_kind": "canonical hold grid cell",
+   "arms": [
+    "B",
+    "A"
+   ],
+   "ik_arms": [
+    "B",
+    "A"
+   ]
+  },
+  {
+   "id": "090282",
+   "bay": "09",
+   "row": "02",
+   "tier": 82,
+   "module_index": 1,
+   "module": "hold",
+   "x_mm": 99.0,
+   "y_mm": 38,
+   "z_mm": 6.0,
+   "tray_y_offsets_mm": [
+    0
+   ],
+   "stern_default_fill": null,
+   "cargo_kind": "canonical hold grid cell",
+   "arms": [
+    "B",
+    "A"
+   ],
+   "ik_arms": [
+    "B",
+    "A"
+   ]
+  },
+  {
+   "id": "090284",
+   "bay": "09",
+   "row": "02",
+   "tier": 84,
+   "module_index": 1,
+   "module": "hold",
+   "x_mm": 99.0,
+   "y_mm": 38,
+   "z_mm": 38.4,
+   "tray_y_offsets_mm": [
+    0
+   ],
+   "stern_default_fill": null,
+   "cargo_kind": "canonical hold grid cell",
+   "arms": [
+    "B",
+    "A"
+   ],
+   "ik_arms": [
+    "B",
+    "A"
+   ]
+  },
+  {
+   "id": "110182",
+   "bay": "11",
+   "row": "01",
+   "tier": 82,
+   "module_index": 1,
+   "module": "hold",
+   "x_mm": 69.0,
+   "y_mm": -38,
+   "z_mm": 6.0,
+   "tray_y_offsets_mm": [
+    0
+   ],
+   "stern_default_fill": null,
+   "cargo_kind": "canonical hold grid cell",
+   "arms": [
+    "B",
+    "A"
+   ],
+   "ik_arms": [
+    "B",
+    "A"
+   ]
+  },
+  {
+   "id": "110184",
+   "bay": "11",
+   "row": "01",
+   "tier": 84,
+   "module_index": 1,
+   "module": "hold",
+   "x_mm": 69.0,
+   "y_mm": -38,
+   "z_mm": 38.4,
+   "tray_y_offsets_mm": [
+    0
+   ],
+   "stern_default_fill": null,
+   "cargo_kind": "canonical hold grid cell",
+   "arms": [
+    "B",
+    "A"
+   ],
+   "ik_arms": [
+    "B",
+    "A"
+   ]
+  },
+  {
+   "id": "110082",
+   "bay": "11",
+   "row": "00",
+   "tier": 82,
+   "module_index": 1,
+   "module": "hold",
+   "x_mm": 69.0,
+   "y_mm": 0,
+   "z_mm": 6.0,
+   "tray_y_offsets_mm": [
+    0
+   ],
+   "stern_default_fill": null,
+   "cargo_kind": "canonical hold grid cell",
+   "arms": [
+    "B",
+    "A"
+   ],
+   "ik_arms": [
+    "B",
+    "A"
+   ]
+  },
+  {
+   "id": "110084",
+   "bay": "11",
+   "row": "00",
+   "tier": 84,
+   "module_index": 1,
+   "module": "hold",
+   "x_mm": 69.0,
+   "y_mm": 0,
+   "z_mm": 38.4,
+   "tray_y_offsets_mm": [
+    0
+   ],
+   "stern_default_fill": null,
+   "cargo_kind": "canonical hold grid cell",
+   "arms": [
+    "B",
+    "A"
+   ],
+   "ik_arms": [
+    "B",
+    "A"
+   ]
+  },
+  {
+   "id": "110282",
+   "bay": "11",
+   "row": "02",
+   "tier": 82,
+   "module_index": 1,
+   "module": "hold",
+   "x_mm": 69.0,
+   "y_mm": 38,
+   "z_mm": 6.0,
+   "tray_y_offsets_mm": [
+    0
+   ],
+   "stern_default_fill": null,
+   "cargo_kind": "canonical hold grid cell",
+   "arms": [
+    "B",
+    "A"
+   ],
+   "ik_arms": [
+    "B",
+    "A"
+   ]
+  },
+  {
+   "id": "110284",
+   "bay": "11",
+   "row": "02",
+   "tier": 84,
+   "module_index": 1,
+   "module": "hold",
+   "x_mm": 69.0,
+   "y_mm": 38,
+   "z_mm": 38.4,
+   "tray_y_offsets_mm": [
+    0
+   ],
+   "stern_default_fill": null,
+   "cargo_kind": "canonical hold grid cell",
+   "arms": [
+    "B",
+    "A"
+   ],
+   "ik_arms": [
+    "B",
+    "A"
+   ]
+  }
+ ],
+ "stern_cells": [
+  {
+   "row": "01",
+   "x_mm": 25,
+   "y_mm": -30,
+   "fill": "mooring",
+   "cargo_slot": false
+  },
+  {
+   "row": "00",
+   "x_mm": 25,
+   "y_mm": 0,
+   "fill": "funnel",
+   "cargo_slot": false
+  },
+  {
+   "row": "02",
+   "x_mm": 25,
+   "y_mm": 30,
+   "fill": "mooring",
+   "cargo_slot": false
+  }
+ ],
+ "stern_bay": {
+  "x_mm": 25,
+  "y_mm": 0,
+  "length_mm": 90,
+  "axis": "y",
+  "grip_axis": "x",
+  "accepts": [
+   "1x3",
+   "1x2+1x1",
+   "1x1 x3",
+   "tile x3"
+  ],
+  "tiers": 1
+ },
+ "coordinate_scope": "Per configuration only; slider and extra holds change later x/bay positions",
+ "arm_x_mm": 148.0,
+ "arm_y_mm": 165,
+ "grasp_r_mm": 230,
+ "measured": false,
+ "harbor": {
+  "spatial_areas": [
+   {
+    "area_id": "ship",
+    "rows": 3,
+    "columns": 6,
+    "levels": 2
+   }
+  ],
+  "arm_reach": [
+   [
+    "A",
+    "ship"
+   ],
+   [
+    "B",
+    "ship"
+   ]
+  ],
+  "temporary_bays": [],
+  "slot_map": [
+   {
+    "slot": "010182",
+    "area_id": "ship",
+    "row": 1,
+    "column": 1,
+    "level": 1
+   },
+   {
+    "slot": "010184",
+    "area_id": "ship",
+    "row": 1,
+    "column": 1,
+    "level": 2
+   },
+   {
+    "slot": "010082",
+    "area_id": "ship",
+    "row": 2,
+    "column": 1,
+    "level": 1
+   },
+   {
+    "slot": "010084",
+    "area_id": "ship",
+    "row": 2,
+    "column": 1,
+    "level": 2
+   },
+   {
+    "slot": "010282",
+    "area_id": "ship",
+    "row": 3,
+    "column": 1,
+    "level": 1
+   },
+   {
+    "slot": "010284",
+    "area_id": "ship",
+    "row": 3,
+    "column": 1,
+    "level": 2
+   },
+   {
+    "slot": "030182",
+    "area_id": "ship",
+    "row": 1,
+    "column": 2,
+    "level": 1
+   },
+   {
+    "slot": "030184",
+    "area_id": "ship",
+    "row": 1,
+    "column": 2,
+    "level": 2
+   },
+   {
+    "slot": "030082",
+    "area_id": "ship",
+    "row": 2,
+    "column": 2,
+    "level": 1
+   },
+   {
+    "slot": "030084",
+    "area_id": "ship",
+    "row": 2,
+    "column": 2,
+    "level": 2
+   },
+   {
+    "slot": "030282",
+    "area_id": "ship",
+    "row": 3,
+    "column": 2,
+    "level": 1
+   },
+   {
+    "slot": "030284",
+    "area_id": "ship",
+    "row": 3,
+    "column": 2,
+    "level": 2
+   },
+   {
+    "slot": "050182",
+    "area_id": "ship",
+    "row": 1,
+    "column": 3,
+    "level": 1
+   },
+   {
+    "slot": "050184",
+    "area_id": "ship",
+    "row": 1,
+    "column": 3,
+    "level": 2
+   },
+   {
+    "slot": "050082",
+    "area_id": "ship",
+    "row": 2,
+    "column": 3,
+    "level": 1
+   },
+   {
+    "slot": "050084",
+    "area_id": "ship",
+    "row": 2,
+    "column": 3,
+    "level": 2
+   },
+   {
+    "slot": "050282",
+    "area_id": "ship",
+    "row": 3,
+    "column": 3,
+    "level": 1
+   },
+   {
+    "slot": "050284",
+    "area_id": "ship",
+    "row": 3,
+    "column": 3,
+    "level": 2
+   },
+   {
+    "slot": "070182",
+    "area_id": "ship",
+    "row": 1,
+    "column": 4,
+    "level": 1
+   },
+   {
+    "slot": "070184",
+    "area_id": "ship",
+    "row": 1,
+    "column": 4,
+    "level": 2
+   },
+   {
+    "slot": "070082",
+    "area_id": "ship",
+    "row": 2,
+    "column": 4,
+    "level": 1
+   },
+   {
+    "slot": "070084",
+    "area_id": "ship",
+    "row": 2,
+    "column": 4,
+    "level": 2
+   },
+   {
+    "slot": "070282",
+    "area_id": "ship",
+    "row": 3,
+    "column": 4,
+    "level": 1
+   },
+   {
+    "slot": "070284",
+    "area_id": "ship",
+    "row": 3,
+    "column": 4,
+    "level": 2
+   },
+   {
+    "slot": "090182",
+    "area_id": "ship",
+    "row": 1,
+    "column": 5,
+    "level": 1
+   },
+   {
+    "slot": "090184",
+    "area_id": "ship",
+    "row": 1,
+    "column": 5,
+    "level": 2
+   },
+   {
+    "slot": "090082",
+    "area_id": "ship",
+    "row": 2,
+    "column": 5,
+    "level": 1
+   },
+   {
+    "slot": "090084",
+    "area_id": "ship",
+    "row": 2,
+    "column": 5,
+    "level": 2
+   },
+   {
+    "slot": "090282",
+    "area_id": "ship",
+    "row": 3,
+    "column": 5,
+    "level": 1
+   },
+   {
+    "slot": "090284",
+    "area_id": "ship",
+    "row": 3,
+    "column": 5,
+    "level": 2
+   },
+   {
+    "slot": "110182",
+    "area_id": "ship",
+    "row": 1,
+    "column": 6,
+    "level": 1
+   },
+   {
+    "slot": "110184",
+    "area_id": "ship",
+    "row": 1,
+    "column": 6,
+    "level": 2
+   },
+   {
+    "slot": "110082",
+    "area_id": "ship",
+    "row": 2,
+    "column": 6,
+    "level": 1
+   },
+   {
+    "slot": "110084",
+    "area_id": "ship",
+    "row": 2,
+    "column": 6,
+    "level": 2
+   },
+   {
+    "slot": "110282",
+    "area_id": "ship",
+    "row": 3,
+    "column": 6,
+    "level": 1
+   },
+   {
+    "slot": "110284",
+    "area_id": "ship",
+    "row": 3,
+    "column": 6,
+    "level": 2
+   }
+  ],
+  "note": "Harbor 맵에 넣을 때: spatial_areas · arm_reach · temporary_bays를 정책에 더하고, slot_map으로 자리 번호(베이 · 로우 · 단)와 (영역, 행, 열, 층)을 잇는다. 등록은 팀 결정(본선은 아직 Pinky 출발점)."
+ },
+ "berth_lift_mm": 3.0
+}

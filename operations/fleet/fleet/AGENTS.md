@@ -52,6 +52,7 @@ Authority: **pure** = no I/O, inputs to outputs; **view** = read-only route or j
 | `site_map.py` | D-488 `rosy.site_map/1`: places, directed lanes, bans, crosswalks | pure |
 | `lane_route.py` | Ordered lane edges to one polyline and the next point | pure |
 | `charge_bays.py` | D-941 5/7 charge-bay plan: who goes to which bay, when to leave; fed by the `charge-bays` loop, read at `GET /api/fleet/charge-bays` | pure (shown, not dispatched) |
+| `station_recovery.py` | D-721 Amendment: whether a low-battery robot has a station recovery request and which bay or which reason (`GET /api/fleet/station-recovery`, off by default); an approval is recorded, never executed in S1 | pure (shown, not dispatched) |
 | `lane_progress.py` | D-941 2 loop progress `s`, leader and gap; `GET /api/fleet/platoon` | pure (shown, not dispatched) |
 | `speed_table.py` | D-941 3 speed table v(s): lane cap, measured curve cap, stripe slow zones, braking ahead; open or closed loop; shown in `GET /api/fleet/platoon` | pure (shown, not sent) |
 | `host_control.py` | Allowlisted reboot/restart of site, AI and model hosts | robot (hosts) |

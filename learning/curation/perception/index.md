@@ -27,8 +27,8 @@
 
 ## 최근 기록
 
-- 2026-11-07 · uncommitted · feat(learning): 사다리 화면에 양팔 학습 라운드와 영상
-- 2026-11-07 · uncommitted · feat(learning): 학습 사다리 화면 (/learning/ladder)
-- 2026-11-07 · uncommitted · feat(learning): 사다리 화면에 양팔 태스크와 같은 위치 비교
-- 2026-11-07 · uncommitted · uiux(learning): 진행 중 카드 안내와 320 픽셀 도구
-- 2026-11-06 · uncommitted · uiux(learning): 도구 모드 글자, 안내 하나, 새 학습 과제 단추, 진행 중 단계 줄, 실패·거절 다음 행동
+- 2026-11-08 · uncommitted · feat(sim): 임시 칸 판 줄마다 3단
+- 2026-11-08 · uncommitted · revert(sim): 위 카메라로 잰 배 자리는 r08 모형과 맞지 않아 되돌림
+- 2026-11-08 · uncommitted · feat(sim): 손목 카메라를 실물 화면에 맞춘 자리로
+- 2026-11-08 · uncommitted · feat(sim): 임시 칸 판 v11 자리와 임시 칸 줄 반출
+- 2026-11-08 · uncommitted · feat(sim): 두 팔 동시 동작을 배우는 정책 모드

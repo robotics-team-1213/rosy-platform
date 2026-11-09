@@ -26,6 +26,7 @@ Shared contracts: REST/WS/protocol, architecture decisions, and the Host Agent u
 | `held-branches.md` | 2026-10-13/14 정리의 결과: 보류한 브랜치 5개와 풀리는 조건, 보관 태그(`archive/<날짜>/<브랜치>`) 목록·되살리기 명령. 태그와 wip 스냅샷은 실험실 clone에만 있고 wip은 공개 원격에 push하지 않는다 (D-172, D-762) |
 | `developer-guide.md` | 구조, 빌드·시뮬, 테스트 단계(affected/quick/full), 관제 배치, Pi 5 런타임, 로드맵 — README에서 옮김 |
 | `sim2real-gaps.md` | GENERATED from `tools/harness/sim2real_gaps.yaml` by `rosy_harness.py generate`; edit the YAML, not this table |
+| `omx-real-sim-loop.md` | 양팔 OMX 셀의 실물↔시뮬 한 바퀴(관측→측정→차이→시뮬→실물 시도→대조→기록), 판정 기준, 다음 바퀴 할 일. 차이 목록은 `sim2real_gaps.yaml`의 OMX 행(G-17~) |
 | `perception-gaps.md` | GENERATED from `tools/harness/perception_gaps.yaml`. Do not hand-edit |
 | `ROSY Module Operational Acceptance Criteria.md` | ROSY-MODULE-ACCEPTANCE-001 — per-package operational GO criteria, evidence gates, and M01–M14 traceability |
 | `platform-folder-responsibilities.md` | Current semantic tree (D-625, D-626, D-627, D-628, D-630, D-637). Ownership stays in `tools/harness/platform_parts.yaml` |

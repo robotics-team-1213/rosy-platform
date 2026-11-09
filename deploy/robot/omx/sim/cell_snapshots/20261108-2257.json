@@ -1,0 +1,128 @@
+{
+ "schema": "rosy.omx-cell-snapshot.v1",
+ "taken_at": "2026-11-08T13:57:00+00:00",
+ "frames": {
+  "top": "sha256:1e4ed36ba3ab8e0d5b565dc28df6fce34e14e18d5ed8c59bf65b854f92e0d0ac"
+ },
+ "camera": {
+  "top": {
+   "eye": [
+    -0.0411,
+    0.0374,
+    0.6652
+   ],
+   "focus": [
+    0.0722,
+    0.0401,
+    0.1783
+   ],
+   "up": [
+    0.974,
+    0.0071,
+    0.2266
+   ],
+   "f_px": 615.0,
+   "width": 640,
+   "height": 480
+  }
+ },
+ "items": {
+  "temp_plates": {
+   "plates": {
+    "a": [
+     {
+      "lane": 1,
+      "xy": [
+       -0.0312,
+       -0.2181
+      ],
+      "yaw_deg": 14.2,
+      "source": "pad",
+      "residual_mm": 0.3
+     },
+     {
+      "lane": 2,
+      "xy": [
+       -0.0378,
+       -0.1672
+      ],
+      "yaw_deg": 0.6,
+      "source": "plate-fit",
+      "residual_mm": null
+     },
+     {
+      "lane": 3,
+      "xy": [
+       -0.0323,
+       -0.1162
+      ],
+      "yaw_deg": -12.9,
+      "source": "pad",
+      "residual_mm": 0.3
+     }
+    ],
+    "b": [
+     {
+      "lane": 1,
+      "xy": [
+       -0.0285,
+       0.0963
+      ],
+      "yaw_deg": 11.7,
+      "source": "container",
+      "residual_mm": 0.8
+     },
+     {
+      "lane": 2,
+      "xy": [
+       -0.0329,
+       0.1475
+      ],
+      "yaw_deg": -1.9,
+      "source": "pad",
+      "residual_mm": 0.8
+     },
+     {
+      "lane": 3,
+      "xy": [
+       -0.0252,
+       0.1982
+      ],
+      "yaw_deg": -15.4,
+      "source": "pad (partial)",
+      "residual_mm": 9.1
+     }
+    ]
+   },
+   "seen": {
+    "a": 2,
+    "b": 3
+   },
+   "errors": {},
+   "shape": {
+    "step_deg": 13.57,
+    "radius_m": 0.2173,
+    "from": "plate a, two clean pads"
+   },
+   "camera_check": {
+    "pads": 3,
+    "worst_mm": [
+     2.3,
+     2.5
+    ]
+   }
+  },
+  "ship": {
+   "stern_x_m": 0.1705,
+   "centre_y_m": -0.0135,
+   "yaw_deg": -0.63,
+   "iou": 0.877,
+   "model": "r08"
+  },
+  "belt": {
+   "end_x_m": 0.2053,
+   "centre_y_m": -0.0371,
+   "width_m": 0.0855
+  }
+ }
+}

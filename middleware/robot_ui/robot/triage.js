@@ -117,7 +117,7 @@ export function estopFault(source) {
   if (text.startsWith("battery")) {
     return {
       title: "배터리 보호 정지",
-      detail: "배터리 정책이 건 소프트웨어 정지입니다. 충전 뒤 해제하세요.",
+      detail: "배터리 정책이 건 소프트웨어 정지입니다. 충전되면 자동으로 풀리고, 새 명령이 있을 때만 움직입니다.",
     };
   }
   if (text.startsWith("control:")) {

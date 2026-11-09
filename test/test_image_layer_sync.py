@@ -18,6 +18,7 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
+import sys
 
 import pytest
 
@@ -1346,3 +1347,11 @@ def test_a_rollback_to_026_restores_the_old_display_unit(device):
     assert (device / "etc/systemd/system" / OLD_DISPLAY).read_text(encoding="utf-8") == old_unit
     # The restored unit is enabled but not running: the updater starts it (D-433 Q5).
     assert OLD_DISPLAY not in result["restart_units"]
+
+
+def test_script_run_as_main_prints_a_json_result(tmp_path):
+    # Release 2026.11.07-175 shipped without the __main__ guard: exit 0, no output, updater rolled back.
+    run = subprocess.run([sys.executable, "-I", "-B", str(SCRIPT), "--root", str(tmp_path), "--dry-run"],
+                         capture_output=True, text=True, timeout=60)
+    assert json.loads(run.stdout.strip().splitlines()[-1])["ok"] in (True, False)
+    assert run.returncode in (0, 1)
