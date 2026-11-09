@@ -470,9 +470,10 @@ DECLARED_WRITES = {
         "/opt/rosy/releases/2026.10.01-022", "/opt/rosy/current", "/opt/rosy/previous",
         "/var/lib/rosy/releases/native-release.lock", "/var/lib/rosy/releases/native-activation.json",
         # sync-image-layer.py: native-runtime scripts, units, udev rules, modprobe
-        # options, and its BACKUP_ROOT.
+        # options, NetworkManager overlay configs, and its BACKUP_ROOT.
         "/opt/rosy/native-runtime/rosy_auto_update.py", "/etc/systemd/system/rosy-core.service",
         "/etc/udev/rules.d/99-rosy-lamp.rules", "/etc/modprobe.d/rosy-ws281x.conf",
+        "/etc/NetworkManager/conf.d/60-rosy-wifi.conf",
         "/var/lib/rosy/image-layer-backup/pending.json",
     },
     "rosy-hw-test.service": {
