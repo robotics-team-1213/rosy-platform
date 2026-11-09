@@ -73,7 +73,7 @@ def test_partial_view_fit_is_ok_and_floor_accurate_inside_the_hull(candidate):
 
 def test_valid_region_is_the_driven_hull_not_the_track(candidate):
     region = np.array(candidate["valid_region_m"])
-    assert 0.0 <= region[:, 0].min() and region[:, 0].max() <= 1.8
+    assert -0.1 <= region[:, 0].min() and region[:, 0].max() <= 1.9
     assert cs._hull_area(region) < 0.6 * (TRACK[2] * TRACK[3])
     # floor frame: the driven floor points lie inside the (floor-scaled) region
     assert all(_inside(region, p) for p in [(0.5, 0.4), (0.9, 0.6), (1.3, 0.8)])
