@@ -18,8 +18,11 @@ def _in_robot_map(x, y, yaw):
     return c * x - s * y + SHIFT[0], s * x + c * y + SHIFT[1], yaw + TURN
 
 
-def _state(pose, state="LOCALIZED", frame="map"):
-    return {"pose": dict(zip(("x", "y", "yaw"), pose)), "localization": {"state": state, "pose_frame": frame}}
+def _state(pose, state="LOCALIZED", frame="map", map_id=None):
+    body = {"pose": dict(zip(("x", "y", "yaw"), pose)), "localization": {"state": state, "pose_frame": frame}}
+    if map_id is not None:
+        body["map_id"] = map_id
+    return body
 
 
 def test_the_goal_moves_with_the_frame_offset_and_equal_frames_keep_it():

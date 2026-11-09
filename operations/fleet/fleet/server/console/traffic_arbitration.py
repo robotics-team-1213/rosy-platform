@@ -78,6 +78,11 @@ class TrafficArbitration:
             if (robot_id == mover or robot_id in self._claims
                     or self._verdict(robot_id) == trust.UNTRUSTED):
                 continue
+            if self._map_mismatch(mover, robot_id):
+                # D-1010: its pose is another frame's numbers. We cannot prove it is clear of
+                # this route, and we cannot move it either — it stays a blocker for a human.
+                out.append(robot_id)
+                continue
             pose = self._pose_of(robot_id)
             if pose is None:
                 continue
@@ -118,8 +123,9 @@ class TrafficArbitration:
             pose = self._pose_of(robot_id)
             # 거리장 계산은 맵이 크면 몇백 ms(40x40 m, 20 m 경로에서 0.38 s)라 이벤트 루프 밖에서 돈다.
             # 제 목표를 받고 교통 판정을 기다리는 로봇은 비켜세울 수 없다(_send_to_bay 거절) - 자리 없음으로 기다린다.
-            bay = None if pose is None or self.trip_busy(robot_id) or robot_id in self._goal_busy else await asyncio.to_thread(
-                bays.best_bay, grid, route, pose, keep_out_m=self._yield_keep_out_m)
+            bay = None if pose is None or self.trip_busy(robot_id) or robot_id in self._goal_busy \
+                or self._map_mismatch(mover, robot_id) else await asyncio.to_thread(
+                    bays.best_bay, grid, route, pose, keep_out_m=self._yield_keep_out_m)
             self.goal_leases.check_stop(mover, stop)
             if bay is None:
                 no_space.append(robot_id)
@@ -253,6 +259,23 @@ class TrafficArbitration:
     def _verdict(self, robot_id: str) -> str:
         """Trust only an explicit LOCALIZED map snapshot."""
         return trust.classify(self._seen.get(robot_id))
+
+    def _map_mismatch(self, mover: str, robot_id: str) -> bool:
+        """D-1010: two robots on known different maps (their own ``state.map_id``) cannot share
+        one crossing grid. A robot that reports no map id keeps the shared-``map`` contract and
+        stays comparable; a known difference never does."""
+        mover_map = (self._seen.get(mover) or {}).get("map_id")
+        other_map = (self._seen.get(robot_id) or {}).get("map_id")
+        return mover_map is not None and other_map is not None and mover_map != other_map
+
+    def _claim_blocker(self, mover: str, route) -> tuple[Optional[str], bool]:
+        """``(blocker, is_conflict)`` for a dispatched goal's route: the first claim crossing it,
+        or the first claim on another known map frame — never a silent frame merge (D-1010)."""
+        conflict = traffic.blocking_robot(route, self._claims, self._clearance_m, skip=(mover,))
+        if conflict is not None:
+            return conflict, True
+        return next((rid for rid in sorted(self._claims)
+                     if rid != mover and self._map_mismatch(mover, rid)), None), False
 
     def _untrusted_blocks(self, robot_id: str, route: Sequence) -> bool:
         return (self._verdict(robot_id) == trust.UNTRUSTED

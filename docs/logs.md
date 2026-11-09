@@ -14699,3 +14699,9 @@ osy-d395-s1d\`.
 - 증거: 원격 `.gitattributes`를 읽는 시험.
 - gate 변화: 없음.
 - CE: 기존 교훈 갱신은 fix/eol-guard에 있다(`docs/solutions/workflow-issues/autocrlf-false-commit-a-rewrites-tree-to-crlf-2026-11-01.md`).
+
+## 2026-11-10 · uncommitted · docs: D-1010 사이트 지도 프레임 결속 ADR
+- 변경: ADR D-1010과 ADR Log 행, API Reference v1.383(활성 지도 본문 검증 거절 코드, trip detail.goal_frame, MAP_FRAME_MISMATCH 보류 이유, pose map_id).
+- 이유: Fleet R 등에서 지도를 따올 때 틀린 지도·틀린 좌표계를 쓰지 않게(사용자 2026-11-10 원문 ADR에 인용).
+- 증거: ADR D-1010 본문과 ADR Log 행, API Reference v1.383 행.
+- gate 변화: 없음(SOURCE만).

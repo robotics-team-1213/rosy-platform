@@ -474,7 +474,7 @@ class FleetConsole(TripAware, TrafficArbitration, FormationControl):
             try:
                 route = await self._route_of(robot_id)
                 self.goal_leases.check_stop(robot_id, stop)
-                blocker = traffic.blocking_robot(route, self._claims, self._clearance_m, skip=(robot_id,))
+                blocker, conflict = self._claim_blocker(robot_id, route)
                 if blocker is not None:
                     stop = (stop[0], stop[1] + 1)  # Only this traffic cancel may advance the token.
                     cancel_receipt = await self.goal_leases.cancel(robot_id, self._client(robot_id))
@@ -483,7 +483,7 @@ class FleetConsole(TripAware, TrafficArbitration, FormationControl):
                         raise RuntimeError("navigation goal cancellation was not confirmed")
                     self._goals.pop(robot_id, None)
                     self._claims.pop(robot_id, None)
-                    decision = goal_admission.route_conflict_hold(blocker, route)
+                    decision = (goal_admission.route_conflict_hold if conflict else goal_admission.map_frame_hold)(blocker, route)
                     # 선착 순서(누가 공유 충돌 지점에 먼저 도달하나)는 이 경로 위의 남은
                     # 거리로 재 단다. 취소하면 로봇이 경로를 잃으므로 미션에 묻어 둔다.
                     self._queued[robot_id] = goal_admission.mission_of(

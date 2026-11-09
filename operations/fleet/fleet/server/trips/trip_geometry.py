@@ -280,20 +280,36 @@ def pose_view(pose: Optional[MapPose]) -> Optional[dict]:
 
     return {"x": rounded(pose.x, 3), "y": rounded(pose.y, 3), "yaw": rounded(pose.yaw, 3), "state": pose.state,
             "source": pose.source, "dead_reckon_m": rounded(pose.dead_reckon_m, 3),
-            "age_s": rounded(pose.age_s, 2), "anchor_age_s": getattr(pose, "anchor_age_s", None)}
+            "age_s": rounded(pose.age_s, 2), "anchor_age_s": getattr(pose, "anchor_age_s", None),
+            "map_id": pose.map_id}   # D-1010: the frame this pose is anchored on; never mix it silently
 
 
-def robot_frame_goal(goal: tuple, site_pose: MapPose, state) -> Optional[tuple]:
+class SiteFrameMismatch(ValueError):
+    """D-1010: the site side of a robot-frame goal is not a LOCALIZED pose on the active site
+    map. The goal must not silently fall back to site coordinates then: the caller stops."""
+
+    def __init__(self, pose_map_id, map_id: str) -> None:
+        super().__init__(f"site pose is anchored on {pose_map_id!r}, not the active site map {map_id!r}")
+        self.pose_map_id = pose_map_id
+        self.map_id = map_id
+
+
+def robot_frame_goal(goal: tuple, site_pose: MapPose, state, map_id: Optional[str] = None) -> Optional[tuple]:
     """D-1003: a site-map free goal ``(x, y, yaw)`` in the robot's own Nav2 ``map`` frame; None without a
     LOCALIZED map-frame pose in the robot ``state`` snapshot.
 
     A robot's Nav2 map is its own (SLAM) map, not the site map. The same body seen in both frames gives
-    ``T = robot ∘ site⁻¹``; equal frames give the goal back. shortcut: the two poses come from separate
-    reads within one trip period, so motion between them shifts the goal (≤ speed × read gap); pair them
-    on the snapshot's odom stamp when that error matters."""
+    ``T = robot ∘ site⁻¹``; equal frames give the goal back. With ``map_id`` (the active site map's id,
+    D-1010) a site pose that is not a LOCALIZED pose on exactly that map raises ``SiteFrameMismatch``:
+    a goal converted from another frame, or sent raw instead, drives the robot to a wrong place.
+    shortcut: the two poses come from separate reads within one trip period, so motion between them
+    shifts the goal (≤ speed × read gap); pair them on the snapshot's odom stamp when that error matters."""
     status = trust.status_of(state)
     if status is None or status.state != trust.LocState.LOCALIZED or status.pose_frame != trust.PoseFrame.MAP:
         return None
+    if map_id is not None and (site_pose is None or site_pose.state != "LOCALIZED"
+                               or site_pose.map_id != map_id):
+        raise SiteFrameMismatch(None if site_pose is None else site_pose.map_id, map_id)
     try:
         raw = state["pose"]
         rx, ry, ryaw = float(raw["x"]), float(raw["y"]), float(raw["yaw"])

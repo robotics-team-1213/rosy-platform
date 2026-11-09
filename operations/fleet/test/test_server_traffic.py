@@ -187,6 +187,46 @@ def test_task_traffic_queue_requires_confirmed_cancel_before_waiting():
     assert console._goals["rosy_02"] == {"x": -2.0, "y": 0.1, "yaw": 0.0}
 
 
+def test_a_claim_on_another_map_frame_holds_the_mission_instead_of_comparing():
+    """D-1010: 경로가 서로 다른 프레임이면 한 격자에 겹칠 수 없다 — 비교 대신 나중 미션이 기다린다."""
+    first = FakeRobot("rosy_01", state=_navigating("rosy_01") | {"map_id": "site"})
+    first._path = _line(-2.0, 0, 2.0, 0)
+    second = FakeRobot("rosy_02", state=_navigating("rosy_02") | {"map_id": "world_261026"})
+    second._path = _line(2.0, 9.0, -2.0, 9.0)     # far away in its own frame: must not clear the hold
+    console = _console(first, second)
+
+    run(console.goal("rosy_01", 2.0, 0.0))
+    result = run(console.goal("rosy_02", -2.0, 0.1))
+
+    assert result["queued"] is True and result["reason"] == "MAP_FRAME_MISMATCH"
+    assert result["blocked_by"] == "rosy_01" and ("navigation_cancel",) in second.calls
+
+
+def test_a_standing_robot_on_another_map_frame_is_never_moved_by_foreign_geometry():
+    """D-1010: 다른 프레임의 자세로 비켜설 자리를 계산하지 않는다 — 사람이 풀 NO_YIELD_SPACE."""
+    mover = FakeRobot("rosy_01", state=_standing("rosy_01", (-2.0, 0.0), _loc()) | {"map_id": "site"})
+    mover._path = _line(-2.0, 0, 2.0, 0)
+    other = FakeRobot("rosy_02", state=_standing("rosy_02", (0.0, 0.3), _loc()) | {"map_id": "world"})
+    console = _console(mover, other)
+    run(console.snapshot())
+
+    result = run(console.goal("rosy_01", 2.0, 0.0))
+
+    assert result["queued"] is True and result["reason"] == "NO_YIELD_SPACE"
+    assert result["blocked_by"] == "rosy_02" and _goal_calls(other) == 0
+
+
+def test_robots_that_do_not_report_a_map_id_stay_comparable():
+    mover = _mover()
+    other = FakeRobot("rosy_02", state=_standing("rosy_02", (5.0, 5.0), _loc()))
+    console = _console(mover, other)
+    run(console.snapshot())
+
+    result = run(console.goal("rosy_01", 2.0, 0.0))
+
+    assert "queued" not in result
+
+
 def test_the_queued_mission_goes_out_once_the_blocker_stops_navigating():
     first = FakeRobot("rosy_01", state=_navigating("rosy_01"))
     first._path = _line(-2.0, 0, 2.0, 0)

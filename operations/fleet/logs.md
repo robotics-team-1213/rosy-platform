@@ -5425,3 +5425,9 @@
 - 변경: `feature_matrix.json`에 공개 `POST /api/fleet/auth/access-requests`(login-page.js)와 관리자 목록·승인·거절(account-page.js), login-page.js의 `/api/fleet/auth/session` 호출을 등록하고, `backend_http_evidence.json`에 `test_account_access_requests.py` 통과 수신 기록(21 passed, 병합 커밋 36e976e701)을 더했다.
 - 증거: 착지 사전 시험 `test_all_supported_features_have_contracts_and_flows`가 미등록 프런트 호출 3건으로 실패했다. 원인은 이 브랜치가 새 프런트 호출을 기능표에 올리지 않은 것이며 main 탓이 아니다.
 - gate 변화: SOURCE 회귀 복구. 현장 수용은 별도다.
+
+## 2026-11-10 · uncommitted · fix(fleet): 사이트 지도 프레임 결속 — 활성 본문 검증과 목표·자세·경로의 프레임 거절 (D-1010)
+- 변경: SiteMapStore._active_row이 모든 읽기에서 본문 sha256을 저장값과 대조(422 SITE_MAP_BODY_HASH_MISMATCH, 시동 때 활성 지도 없이 fail closed). TripSteps._step_free는 활성 버전이 계획과 다르면 map_version으로, 변환의 현장 자세가 활성 map_id가 아니면 map_frame으로 trip을 끝내고 detail.goal_frame에 활성 map_id·버전·기체 robot_map_id·목표 프레임을 기록. pose_request.overhead_decision은 현장 자세 map_id와 기체 상태 map_id가 같을 때만 답(D-546 갭). console._goal은 알려진 다른 map_id의 선점 경로와 비교하지 않고 MAP_FRAME_MISMATCH 보류, 다른 프레임에 선 로봇은 NO_YIELD_SPACE(bay 계산 없음). pose_view에 map_id.
+- 이유: R의 site_map_versions에 map_id가 섞여 있고(1-5 map_v2_fleet, 6-7 world_261026), 틀린 지도·틀린 좌표계를 조용히 쓰면 로봇이 다른 곳으로 달린다(사용자 2026-11-10). 임시 스크립트의 최신 행 추정이 제품에 들어오지 않게 활성 정의를 한 곳에 둔다.
+- 근거: test_site_map_frame_safety.py, test_localization_pose_request.py, test_server_traffic.py, test_trip_robot_frame_goal.py(회귀). 원격 시험 기록은 커밋 메시지와 작업 기록에.
+- gate 변화: 없음(SOURCE만, 기체·현장 수용 별도).

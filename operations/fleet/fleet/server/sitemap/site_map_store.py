@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import sqlite3
 import threading
 import time
@@ -30,6 +31,8 @@ from fleet.site_map import MapProfileInfo, SiteMap, _polyline_polygon_gap
 
 PLAN_KEEP = 1000
 PLAN_KEEP_S = 30 * 24 * 3600.0
+
+_LOG = logging.getLogger(__name__)
 
 
 class SiteMapError(ValueError):
@@ -112,14 +115,27 @@ class SiteMapStore:
     # ---- active ---------------------------------------------------------------------
 
     def _active_row(self):
-        return self._db.execute(
+        """The one active version: the highest activated row (``version`` is the activation
+        order, so this is the defined active pointer, never a "newest row" guess). Every read
+        verifies the body against the stored sha256 and refuses a row edited outside Fleet
+        (D-1010: a wrong map served as the active one is worse than no active map)."""
+        row = self._db.execute(
             "SELECT version, body, sha256, activated_by, activated_at FROM site_map_versions "
             "ORDER BY version DESC LIMIT 1").fetchone()
+        if row is not None and hashlib.sha256(row[1].encode("utf-8")).hexdigest() != row[2]:
+            raise SiteMapError(422, "SITE_MAP_BODY_HASH_MISMATCH",
+                               "the active site map body does not match its stored sha256")
+        return row
 
     def _publish(self) -> None:
-        """Rebuild the cached map/graph and the meet ``Painted`` for the newest version."""
+        """Rebuild the cached map/graph and the meet ``Painted`` for the active version."""
         with self._lock:
-            row = self._active_row()
+            try:
+                row = self._active_row()
+            except SiteMapError as error:
+                _LOG.error("site map: the active version is not served: %s", error.message)
+                self._cached = None   # fail closed: no map is served until an operator re-activates
+                return
             if row is None:
                 return
             site_map = SiteMap.model_validate(json.loads(row[1]))

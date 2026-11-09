@@ -17,7 +17,8 @@ from fleet.routing.cost import LEFT, RIGHT, STOP
 from fleet.routing.execute import advance_m, exit_segment, lane_action, turn_target
 from fleet.server.trip_admission import LOCALIZED
 from fleet.server.charge_goal_gate import ready_free_goal
-from fleet.server.trip_geometry import arc_newer, bend_fields, junction_fields, next_bend, robot_frame_goal
+from fleet.server.trip_geometry import (SiteFrameMismatch, arc_newer, bend_fields, junction_fields,
+                                        next_bend, robot_frame_goal)
 from fleet.server.trip_halts import error_code as _code
 from fleet.server.trip_laps import hold_back_m, lap_due, lap_retry_due
 from fleet.server.trip_live import LiveTrip
@@ -348,6 +349,14 @@ class TripSteps:
 
     async def _step_free(self, live: LiveTrip, index: int, s: float, pose) -> None:
         segment = live.segments[index]
+        active = self._store.active()
+        if active is None or active[0] != live.view["map_version"]:
+            # D-1010: the plan's frame is not the active site map any more. A free goal is a
+            # coordinate in one frame; sending it against another map drives the robot elsewhere.
+            await self._stop(live, "stopped", "map_version",
+                             {"map_version": live.view["map_version"],
+                              "active_version": None if active is None else active[0]})
+            return
         # D-1003 4: the segment's end place, one goal per segment. CORE refuses a new goal while Nav2 runs one
         # (409 NAVIGATION_ACTIVE, SIM run 5), so the D-463 rolling point 0.2 m ahead failed the trip at its second send.
         x, y, yaw = live.arc(index).point_at(segment["s_to"])
@@ -361,7 +370,20 @@ class TripSteps:
         if self._robot_state is not None:  # D-1003: Nav2 runs on the robot's own map, not the site map
             # No LOCALIZED map pose: the site goal as before; console trust and CORE admission still decide
             # (charge returns run on CORE's station owner without one).
-            goal = robot_frame_goal(goal, pose, await self._call(self._robot_state(live.view["robot_id"]))) or goal
+            state = await self._call(self._robot_state(live.view["robot_id"]))
+            try:
+                converted = robot_frame_goal(goal, pose, state, active[1].map_id)
+            except SiteFrameMismatch as error:
+                # D-1010: the site side of the conversion is not this map. Never convert, never
+                # send the site goal raw to a robot known to run its own map frame.
+                await self._stop(live, "stopped", "map_frame",
+                                 {"pose_map_id": error.pose_map_id, "map_id": error.map_id})
+                return
+            goal = converted or goal
+            live.view["detail"]["goal_frame"] = {  # D-1010: the audit binding of the sent goal
+                "map_id": active[1].map_id, "map_version": active[0],
+                "robot_map_id": (state or {}).get("map_id") if isinstance(state, dict) else None,
+                "goal_frame": "robot" if converted is not None else "site"}
         try:
             reply = await self._call(self._goal(live.view["robot_id"], *goal)) or {}
         except RobotApiError as exc:
