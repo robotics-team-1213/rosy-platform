@@ -24,7 +24,14 @@ FPS = 15
 CARRY_SPEED = .05  # m/s; .08 let a 16 g container swing 10 deg in the jaws on the short reach to the near row
 OPEN_GAP = dict(belt=.042, ship=.033, temp=.033, outbound=.033)  # 33 mm lets a pad stay inside the 6 mm gaps between rows (release_gap_m of the ship case); the stern bay mouth is 37 mm
 HOLD_GAP = .030 - jaw.SQUEEZE_M
-SERVO_GAIN = 40.  # omx_two_arm_world's position gain of every joint: about 0.16 s from command to arrival
+SERVO_GAIN = 40.  # omx_physics design kp of every joint: about 0.16 s from command to arrival
+
+
+def servo_values(model, ids):
+    """The five arm joints' servo and passive constants a seed may change (omx_two_arm_skill.disturb), as the model has them."""
+    dofs = model.jnt_dofadr[model.actuator_trnid[ids[:5], 0]]
+    return dict(kp=model.actuator_gainprm[ids[:5], 0].copy(), kv=-model.actuator_biasprm[ids[:5], 2], force=model.actuator_forcerange[ids[:5], 1].copy(),
+                damping=model.dof_damping[dofs].copy(), frictionloss=model.dof_frictionloss[dofs].copy())
 
 
 RECORDED = ("top", "side", "a_wrist", "b_wrist")  # the cell's four cameras (D-960); the world's overview is not one of them
@@ -62,7 +69,7 @@ class Teacher:
         # joint-zero calibration error per arm (rad, 6 with the gripper 0): true angle = reported + error. The real twin fit found 1-4 deg
         # (2026-11-09 omx-twin-night). A privileged teacher plans in true angles; anyone else commands in reported ones and lands off by it.
         self.zero_error, self.privileged = {}, True
-        self.servo_gain = {}  # arm: five position gains (omx_two_arm_skill.draw_servo_gain); fresh() applies them, the sim's one gain otherwise
+        self.servo = {}  # arm: {kp|kv|force|damping|frictionloss: five values, nan keeps} (omx_two_arm_skill.disturb); fresh() applies them
 
     def frame(self, data, targets, label, ctxs=None):
         """One video frame of physics. Sequential: the Teacher is the one context. Two arms at once: each context gets its own arm's
@@ -286,9 +293,16 @@ class Teacher:
     def fresh(self, here):
         """A world at rest with the containers of `here` on their sites and every other container parked."""
         w, L = self.world, self.layout
-        for arm, ids in w.act.items():  # the model is shared by every teacher of the process: set each joint's gain every time
-            gain = self.servo_gain.get(arm, np.full(5, SERVO_GAIN))
-            w.model.actuator_gainprm[ids[:5], 0], w.model.actuator_biasprm[ids[:5], 1] = gain, -gain
+        m = w.model
+        if not hasattr(w, "servo0"):  # the physics candidate's own values, before any teacher of the process changed the shared model
+            w.servo0 = {arm: servo_values(m, ids) for arm, ids in w.act.items()}
+        for arm, ids in w.act.items():  # the model is shared by every teacher of the process: set every joint every time
+            mine = self.servo.get(arm, {})
+            v = {k: np.where(np.isnan(mine[k]), base, mine[k]) if k in mine else base for k, base in w.servo0[arm].items()}
+            dofs = m.jnt_dofadr[m.actuator_trnid[ids[:5], 0]]
+            m.actuator_gainprm[ids[:5], 0], m.actuator_biasprm[ids[:5], 1], m.actuator_biasprm[ids[:5], 2] = v["kp"], -v["kp"], -v["kv"]
+            m.actuator_forcerange[ids[:5]] = np.stack([-v["force"], v["force"]], 1)
+            m.dof_damping[dofs], m.dof_frictionloss[dofs] = v["damping"], v["frictionloss"]
         data = w.reset()
         for cid, site in here.items():
             # seeds above 0 vary the start placement inside the stud-lane clearance (0.4 mm per side): +-0.3 mm, +-0.5 deg

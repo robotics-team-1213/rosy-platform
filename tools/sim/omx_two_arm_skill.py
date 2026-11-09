@@ -6,6 +6,7 @@ model, or for "ik" the same IK, commands in the angles the arm reports, which ar
 fit found 1-4 deg), with per-joint servo lag (0.10-0.34 s measured, one 0.16 s in the plain sim). omx_two_arm_policy.py records and trains;
 this module says what a sub-skill is and judges it. MuJoCo answers geometry only (D-947); no learned policy reaches the real arm (D-793).
 """
+import functools
 import json
 
 import numpy as np
@@ -44,8 +45,39 @@ def draw_servo_gain(seed, lag):
     return {arm: teaching.SERVO_GAIN * .16 / rng.uniform(*LAG_S, 5) for arm in sites.ARMS}
 
 
-def disturb(teacher, seed, zero_error_deg, lag):
-    teacher.zero_error, teacher.servo_gain = draw_zero_error(seed, zero_error_deg), draw_servo_gain(seed, lag)
+@functools.cache
+def physics_ranges():
+    import omx_physics
+    return omx_physics.ranges()
+
+
+def draw_physics(seed, ranges):
+    """Per-arm servo constants and joint-zero error for a seed from omx_physics.ranges(): uniform where `measured`, nan (the world's own
+    value) elsewhere. kp, kv and force share one fraction per joint, a servo being stiff or soft as a whole (design at the top, the real
+    registers at the bottom). A fitted zero_offset_deg has a known sign (sim q = real q + offset), so the error is drawn between 0 and it."""
+    if not seed or not ranges:
+        return {}, {}
+    rng, servo, zero = np.random.default_rng(seed + 15485863), {}, {}
+    for arm in sites.ARMS:
+        rows = [ranges["arms"][arm][j] for j in ("joint1", "joint2", "joint3", "joint4", "joint5")]
+        stiff = rng.uniform(0, 1, 5)
+        servo[arm] = {k: np.array([r[k]["low"] + (stiff[i] if k in ("kp", "kv", "force") else rng.uniform()) * (r[k]["high"] - r[k]["low"])
+                                   if r[k]["measured"] else np.nan for i, r in enumerate(rows)]) for k in ("kp", "kv", "force", "damping", "frictionloss")}
+        if all("zero_offset_deg" in r for r in rows):
+            zero[arm] = np.append(np.radians([rng.uniform(r["zero_offset_deg"]["low"], r["zero_offset_deg"]["high"]) for r in rows]), 0.)
+    return servo, zero
+
+
+def disturb(teacher, seed, zero_error_deg, lag, physics=False):
+    """A seed's errors: +-deg zero error and lag-derived gains, overridden where --physics-ranges has measured values."""
+    teacher.zero_error = draw_zero_error(seed, zero_error_deg)
+    teacher.servo = {arm: dict(kp=gain) for arm, gain in draw_servo_gain(seed, lag).items()}
+    servo, zero = draw_physics(seed, physics_ranges() if physics else None)
+    teacher.zero_error.update(zero)
+    for arm, values in servo.items():
+        for k, v in values.items():
+            mine = teacher.servo.setdefault(arm, {}).get(k)
+            teacher.servo[arm][k] = v if mine is None else np.where(np.isnan(v), mine, v)
 
 
 def outcome(score, skill):
@@ -100,14 +132,14 @@ def step(driver, teacher, data, plan, here, skill):
                 first_contact_phase=teacher.first)
 
 
-def isolated(driver, name, seed, skill, zero_error_deg, lag):
+def isolated(driver, name, seed, skill, zero_error_deg, lag, physics=False):
     """Each step of a task from the plan's nominal state with its own errors, the sub-skill judged alone."""
     task = tasks.get_task(driver.layout, name)
     here, rows = dict(task.get("start", {})), []
     with driver.torch.inference_mode():
         for plan in task["steps"]:
             teacher = teaching.Teacher(driver.world, seed=seed + len(rows))
-            disturb(teacher, seed + len(rows), zero_error_deg, lag)
+            disturb(teacher, seed + len(rows), zero_error_deg, lag, physics)
             data = teacher.fresh(here)  # step_gen brings a belt container in itself
             rows.append(dict(step(driver, teacher, data, plan, here, skill), task=name, seed=seed))
             print(json.dumps(rows[-1], default=str), flush=True)
@@ -120,8 +152,10 @@ def options(parser):
     parser.add_argument("--skill", choices=sorted(SKILLS), help="learn and judge only this part of each step; the teacher's IK does the rest")
     parser.add_argument("--zero-error-deg", type=float, default=0., help="per-seed joint-zero calibration error, uniform within +-deg (the twin fit found up to 4)")
     parser.add_argument("--servo-lag", action="store_true", help="per-seed per-joint servo lag in the measured 0.10-0.34 s")
+    parser.add_argument("--physics-ranges", action="store_true", help="per-seed servo, friction and zero error from omx_physics ranges where measured")
 
 
 def argv(args):
     """The sub-skill options again, for a child process of the round."""
-    return ["--skill", args.skill, "--zero-error-deg", str(args.zero_error_deg), *(["--servo-lag"] if args.servo_lag else [])] if args.skill else []
+    flags = [*(["--servo-lag"] if args.servo_lag else []), *(["--physics-ranges"] if args.physics_ranges else [])]
+    return ["--skill", args.skill, "--zero-error-deg", str(args.zero_error_deg), *flags] if args.skill else []

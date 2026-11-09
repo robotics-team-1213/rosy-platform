@@ -10,7 +10,7 @@ in a LeRobot environment that can import mujoco:
     MUJOCO_GL=egl python tools/sim/omx_two_arm_policy.py evaluate --model DIR --steps-file F --out F2 --artifacts DIR
 
 `--skill grasp|release` learns only that part of each step (omx_two_arm_skill.py: the teacher's IK does the rest) under `--zero-error-deg`
-joint-zero calibration error and `--servo-lag`, and the round also judges that IK alone on the same seeds (`eval-ik.json`).
+joint-zero calibration error, `--servo-lag` and `--physics-ranges` (omx_physics, measured constants only), and the round also judges that IK alone on the same seeds (`eval-ik.json`).
 `--policy smolvla --base-model B --vlm-assets V` fine-tunes SmolVLA offline instead of training ACT, with the step's arm and site as its
 language input.
 
@@ -141,7 +141,7 @@ def plan_tasks(plan_dir, names):
     return {name: dict(json.loads((Path(plan_dir) / f"{name}-two-arm.json").read_text(encoding="utf-8")), name=name) for name in names}
 
 
-def collect(seeds, names, out, plan_dir=None, choices=None, skill=None, zero_error_deg=0., lag=False):
+def collect(seeds, names, out, plan_dir=None, choices=None, skill=None, zero_error_deg=0., lag=False, physics=False):
     if skill and plan_dir:
         raise ValueError("a sub-skill is recorded one step at a time, not in concurrent mode")
     from lerobot.datasets.lerobot_dataset import LeRobotDataset
@@ -159,7 +159,7 @@ def collect(seeds, names, out, plan_dir=None, choices=None, skill=None, zero_err
     for seed in seeds:
         for name in names:
             teacher = Recorder(world, dataset, longest, concurrent=planned is not None, skill=skill, seed=seed)
-            skills.disturb(teacher, seed, zero_error_deg, lag)
+            skills.disturb(teacher, seed, zero_error_deg, lag, physics)
             teacher.run_task(planned[name] if planned else tasks.get_task(layout, name))
             if teacher.spoiled:
                 spoiled.append(f"{name}:{seed}")
@@ -335,7 +335,8 @@ def evaluate(args):
     if args.skill:
         for name in args.tasks.split(","):
             for k in range(args.isolated_seeds):
-                rows += skills.isolated(driver, name, EVAL_SEED_BASE + 1000 * k, args.skill, args.zero_error_deg, args.servo_lag)
+                rows += skills.isolated(driver, name, EVAL_SEED_BASE + 1000 * k, args.skill, args.zero_error_deg, args.servo_lag,
+                                         args.physics_ranges)
         Path(args.out).write_text(json.dumps(dict(rows=rows, whole=[], policy=driver.kind), default=str), encoding="utf-8")
         return 0
     for name in args.tasks.split(","):
@@ -390,7 +391,8 @@ def run_round(args):
     if args.skill and args.mode != "steps" or args.policy == "smolvla" and not (args.base_model and args.vlm_assets):
         raise SystemExit("a sub-skill needs --mode steps; SmolVLA needs --base-model and --vlm-assets (local, offline)")
     recipe = dict(ladder.RECIPE, steps=args.steps, optimizer_lr=args.lr, batch_size=args.batch_size, mode=args.mode, policy=args.policy,
-                  skill=args.skill, zero_error_deg=args.zero_error_deg, servo_lag=args.servo_lag)
+                  skill=args.skill, zero_error_deg=args.zero_error_deg, servo_lag=args.servo_lag,
+                  physics_ranges=args.physics_ranges)
     record = dict(schema=SCHEMA, round_id=round_id, created_at=now(), source_sha=ladder.source_sha(args), status="running", stage="collect", cameras=list(teaching.RECORDED),
                   tasks=names, seeds=args.seeds, recipe=recipe, choices=sites.parse_choices(args.choice), claim="기하: 도달·순서·충돌(D-947). 실물 근거가 아닙니다.")
     write_record(run, record)
@@ -503,7 +505,7 @@ def main(argv=None):
     args = parser.parse_args(argv)
     if args.command == "collect":
         return collect([int(seed) for seed in args.seeds.split(",")], args.tasks.split(","), args.out, args.plan_dir, sites.parse_choices(args.choice),
-                       args.skill, args.zero_error_deg, args.servo_lag)
+                       args.skill, args.zero_error_deg, args.servo_lag, args.physics_ranges)
     return evaluate(args) if args.command == "evaluate" else run_round(args)
 
 

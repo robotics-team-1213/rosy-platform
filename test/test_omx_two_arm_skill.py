@@ -1,8 +1,9 @@
-"""Two-arm sub-skills: the errors a seed draws, the language each step gets, and the pass bar. No MuJoCo needed."""
+"""Two-arm sub-skills: the errors a seed draws, the language each step gets, and the pass bar. MuJoCo only where fresh() applies a seed."""
 from pathlib import Path
 import sys
 
 import numpy as np
+import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools/sim"))
@@ -55,3 +56,32 @@ def test_a_sub_skill_round_passes_at_eighteen_of_twenty():
     assert policy.outcome(dict(n=20, passed=18, whole=[]), "grasp") == dict(status="passed")
     assert policy.outcome(dict(n=20, passed=17, whole=[]), "release")["status"] == "failed"
     assert policy.outcome(dict(n=0, passed=0, whole=[]), "grasp")["status"] == "failed"
+
+
+def test_physics_ranges_draw_measured_constants_only_and_the_fitted_zero_offset_by_its_sign():
+    ranges = skills.physics_ranges()
+    assert skills.draw_physics(0, ranges) == ({}, {}) and skills.draw_physics(5, None) == ({}, {})
+    servo, zero = skills.draw_physics(1003, ranges)
+    for arm, values in servo.items():
+        rows = [ranges["arms"][arm][f"joint{i}"] for i in range(1, 6)]
+        for k, v in values.items():
+            for x, r in zip(v, rows):
+                assert np.isnan(x) if not r[k]["measured"] else r[k]["low"] <= x <= r[k]["high"]
+        fraction = [(values[k][0] - rows[0][k]["low"]) / (rows[0][k]["high"] - rows[0][k]["low"]) for k in ("kp", "kv", "force")]
+        assert fraction == pytest.approx([fraction[0]] * 3)  # one servo, stiff or soft as a whole
+    assert "arm_a" not in zero  # no fit: the +-deg draw stays
+    offsets = [ranges["arms"]["arm_b"][f"joint{i}"]["zero_offset_deg"]["high"] for i in range(1, 6)]
+    assert zero["arm_b"][5] == 0 and all(0 <= e <= np.radians(o) for e, o in zip(zero["arm_b"][:5], offsets))
+
+
+def test_fresh_applies_a_seeds_servo_and_gives_the_next_teacher_the_candidates_own():
+    pytest.importorskip("mujoco")
+    import omx_two_arm_world as tw
+    world = tw.World(sites.Layout())
+    a = skills.teaching.Teacher(world, seed=1003)
+    skills.disturb(a, 1003, 4., True, physics=True)
+    a.fresh({})
+    ids = world.act["arm_b"][:5]
+    assert world.model.actuator_gainprm[ids, 0] == pytest.approx(np.where(np.isnan(a.servo["arm_b"]["kp"]), 40., a.servo["arm_b"]["kp"]))
+    skills.teaching.Teacher(world, seed=0).fresh({})
+    assert (world.model.actuator_gainprm[ids, 0] == 40.).all() and (world.model.actuator_forcerange[ids, 1] == 2.).all()
