@@ -25,9 +25,9 @@ def trace(*legs):
 
 
 def test_stops_are_counted_after_the_first_motion_and_short_pauses_are_not_stops():
-    samples = trace((3, 0.0), (2, 0.1), (1.5, 0.0), (2, 0.1), (0.4, 0.0), (2, 0.1), (2, 0.0))
+    samples = trace((3, 0.0), (2, 0.1), (1.5, 0.0), (2, 0.1), (0.2, 0.0), (2, 0.1), (2, 0.0))
     stops = rd.count_stops(samples)
-    assert [round(d) for _, d in stops] == [2, 2]   # 1.5 s mid-route and the final 2 s; the 3 s start and 0.4 s dip are not
+    assert [round(d) for _, d in stops] == [2, 2]   # 1.5 s mid-route and the final 2 s; the 3 s start and the 0.2 s dip are not
     assert rd.count_stops(trace((5, 0.0))) == []
 
 

@@ -6,7 +6,8 @@
 Runs on a sim host (never the laptop, D-584), launching what fleet_trips.py --nav launches (two robots, one
 COREs each, Nav2 + AMCL on the world map) and reusing its helpers. No Fleet. rosy_01 gets routes along the
 east road of map_v2_fleet, each from the previous route's end. For each route the bench records /odom (sim
-time) and counts the stops it made: stretches of |v| < 0.01 m/s lasting 0.8 s after the robot first moved.
+time, odom-<route>.csv) and counts the stops it made: stretches of |v| < 0.02 m/s lasting 0.3 s after the robot
+first moved.
 
     E  pppS    the same four points as single goals, the old way (409 until each ends) -> a stop at every point
     A  pppS    3 pass points then a stop        -> 1 stop
@@ -39,13 +40,13 @@ import fleet_trips as ft  # noqa: E402
 
 STEP_M = 0.15                  # the lane-vertex spacing of the field drive (0.15-0.33 m)
 START_S = 0.92                 # where the east road trip starts: rosy_01 spawns here; the road is 4 m long
-STOP_V, STOP_MIN_S, MOVING_V = 0.01, 0.8, 0.03
+STOP_V, STOP_MIN_S, MOVING_V = 0.02, 0.3, 0.05
 OFF_MAP = (60.0, 60.0)
 ROUTES = {'A': 'pppS', 'B': 'ppSpS', 'C': 'SSS', 'D': 'qpS'}
 
 
 class OdomTrace:
-    """(sim seconds, |linear v|) from <ns>/odom on a spin thread."""
+    """(sim seconds, |linear v|, angular z) from <ns>/odom on a spin thread."""
 
     def __init__(self, ns):
         import rclpy
@@ -63,7 +64,7 @@ class OdomTrace:
         t = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
         v = msg.twist.twist.linear
         with self.lock:
-            self.samples.append((t, math.hypot(v.x, v.y)))
+            self.samples.append((t, math.hypot(v.x, v.y), msg.twist.twist.angular.z))
 
     def _spin(self):
         while not self.stopping.is_set():
@@ -86,7 +87,7 @@ class OdomTrace:
 def count_stops(samples):
     """Stops after the first motion: runs of |v| < STOP_V of at least STOP_MIN_S sim seconds. -> [(start, seconds)]"""
     stops, run_start, last, moved = [], None, None, False
-    for t, v in samples:
+    for t, v, *_ in samples:
         moved = moved or v > MOVING_V
         if not moved:
             continue
@@ -100,6 +101,11 @@ def count_stops(samples):
     if run_start is not None and last is not None and last - run_start >= STOP_MIN_S:
         stops.append((round(run_start, 2), round(last - run_start, 2)))
     return stops
+
+
+def save_trace(path, samples):
+    rows = ''.join(f'{t:.3f},{v:.4f},{w:.4f}\n' for t, v, w in samples)
+    path.write_text('sim_s,speed_mps,yaw_rate\n' + rows, encoding='utf-8')
 
 
 def build_points(graph, kinds, s_start):
@@ -210,7 +216,8 @@ def run(args):
                CYCLONEDDS_URI='file://' + str(ft.cyclone_profile(root, True)), **ft.RENDER[args.render], **{ft.MARK: run_id})
     launch = ['ros2', 'launch', 'gz_sim', 'map_v2_fleet_multi_real.launch.py', 'map_variant:=.',
               f'run_spec:={root / "run_spec.yaml"}',
-              'spawn_poses:=' + ';'.join('%.5f,%.5f,%.6f' % tuple(spawns[ns]) for ns in ft.ROBOTS), 'nav_mode:=nav']
+              'spawn_poses:=' + ';'.join('%.5f,%.5f,%.6f' % tuple(spawns[ns]) for ns in ft.ROBOTS), 'nav_mode:=nav',
+              f'loc_assist:={"true" if args.loc_assist else "false"}']
     result = dict(run_id=run_id, render=args.render, load_start=os.getloadavg(), routes={})
     log = (out / 'api-log.jsonl').open('w', buffering=1)
     ns, trace = ft.ROBOTS[0], None
@@ -220,21 +227,25 @@ def run(args):
             os.environ.update(env)
             result['core_ready'] = ft.until(args.boot_s, lambda: all(
                 ft.call(f'{cores[r]}/api/v1/robot/state', token[r])[1].get('robot_id') == r for r in ft.ROBOTS), 2.0)
-            result['localized'] = result['core_ready'] and ft.until(180, lambda: all(
-                ft.localize(cores[r], token[r], spawns[r], log) for r in ft.ROBOTS), 3.0)
+            result['localized'] = result['core_ready'] and (not args.loc_assist or ft.until(180, lambda: all(
+                ft.localize(cores[r], token[r], spawns[r], log) for r in ft.ROBOTS), 3.0))
             if result['localized']:
                 time.sleep(args.settle_s)
                 trace = OdomTrace(ns)
                 s = START_S
                 if args.baseline:   # first, from the spawn: the old way over the points of route A
                     points, s = build_points(graph, ROUTES['A'], s)
+                    mark = trace.mark()
                     result['routes']['E'] = dict(kinds='goals:' + ROUTES['A'], points_body=points,
                                                  **drive_goals(cores[ns], token[ns], trace, points, args.budget_s, log))
+                    save_trace(out / 'odom-E.csv', trace.since(mark))
                 for name, kinds in ROUTES.items():
                     points, s = build_points(graph, kinds, s)
+                    mark = trace.mark()
                     result['routes'][name] = dict(kinds=kinds, **drive_route(
                         cores[ns], token[ns], trace, points, kinds.count('S'), args.budget_s, log))
                     result['routes'][name]['points_body'] = points
+                    save_trace(out / f'odom-{name}.csv', trace.since(mark))
     finally:
         log.close()
         if trace is not None:
@@ -264,6 +275,8 @@ def main(argv=None):
     parser.add_argument('--boot-s', type=float, default=300)
     parser.add_argument('--settle-s', type=float, default=10)
     parser.add_argument('--budget-s', type=float, default=420, help='wall time per route')
+    parser.add_argument('--loc-assist', action='store_true',
+                        help='run the D-395 loc_assist too (SIM: its fit_drop halts navigation after ~20 s of driving)')
     parser.add_argument('--no-baseline', dest='baseline', action='store_false', help='skip route E (the old single goals)')
     return run(parser.parse_args(argv))
 
