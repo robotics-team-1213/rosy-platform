@@ -42,6 +42,12 @@ def test_windows_separators_and_errors_are_read():
     assert (new, seen) == ([], ["src/a/test/test_x.py::test_old"])
 
 
+def test_an_escaped_non_ascii_param_id_keeps_its_backslashes():
+    # 11-04: '\uc9c0' became '/uc9c0', so the MAIN-RED rerun on main found no such test and blamed 7 branches
+    report = r"FAILED t\test_c.py::test_state[1366-delayed-\uc9c0\uc5f0] - AssertionError"
+    assert known_failures.failed_ids(report) == [r"t/test_c.py::test_state[1366-delayed-\uc9c0\uc5f0]"]
+
+
 @pytest.mark.parametrize("encoding", ["utf-8", "utf-16"])
 def test_main_exits_nonzero_only_for_a_new_failure(tmp_path, capsys, monkeypatch, encoding):
     # 2026-10-02 — 장부가 비어도(전 녹색이 목표 상태) 이 시험은 합성 항목으로 돈다.
