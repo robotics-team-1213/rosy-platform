@@ -225,9 +225,9 @@ def _once(invocations: list[list[str]]) -> list[list[str]]:
     plain = [inv for inv in invocations if not any(affected_exclusive.ENV.match(w) for w in inv)]
 
     def covered(word: str, own: list[str]) -> bool:
+        # Not covered when that folder's invocation ignores the word, something above it or anything under it.
         return any(d != word and not d.startswith("-") and not d.endswith(".py") and _under(word, d)
-                   and f"--ignore={word}" not in inv and not any(_under(word, w[9:]) for w in inv
-                                                                 if w.startswith("--ignore="))
+                   and not any(_under(word, w[9:]) or _under(w[9:], word) for w in inv if w.startswith("--ignore="))
                    for inv in plain if inv is not own for d in inv)
     out = []
     for inv in invocations:
@@ -286,9 +286,10 @@ def select(repo: Repo, changed: list[str], moved: list[str] = (),
                 continue  # D-762 stage 0: a NARROWABLE_TRIGGERS path selected its readers instead
             if why:  # land.py HARNESS_TRIGGER matches the suffix, so the reason goes before it
                 trigger = f"({why}): {trigger}"
-            if affected_narrow.tier(repo, path, trigger, add):  # D-436 2026-11-09: narrower tier, not FULL
+            narrow = affected_narrow.tier(repo, path, trigger, add)  # D-436 2026-11-09: narrower tier, not FULL
+            if narrow:
                 sel.narrowed.append(f"{path}: {trigger}")
-                trigger, tiered = None, True
+                trigger, tiered = None, narrow == "own"
         if path == affected_narrow.HARNESS_YAML:  # reads harness.yaml; not in GUARD_SET
             add("test/architecture/test_folder_layout.py", f"reads {path}")
         if path == affected_narrow.HARNESS_YAML and trigger:
@@ -401,7 +402,7 @@ def render(sel: Selection) -> str:
     lines = [f"affected tier (D-436): mode={sel.mode}, {len(sel.changed)} changed file(s)"]
     for path in sel.changed:
         lines.append(f"  changed  {path}")
-    lines += [f"  narrowed (D-436 2026-11-09, {affected_narrow.LEGACY_ENV}=1 for FULL): {e}"
+    lines += [f"  narrowed tier instead of FULL (D-436 2026-11-09): {e}"
               for e in sel.narrowed + [e for e in sel.escalations if sel.mode != "full"]]
     if sel.mode == "full":
         lines.append("escalated to FULL because:")

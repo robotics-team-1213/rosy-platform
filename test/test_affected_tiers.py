@@ -94,7 +94,8 @@ def test_a_nested_conftest_or_workflow_is_narrowed(sample, path, scope):
 
 
 @pytest.mark.parametrize("path", ["conftest.py", "deploy/requirements.txt", "tools/mystery/run.sh",
-                                  "deploy/site/compose.yaml"])
+                                  "deploy/site/compose.yaml", "tools/harness/harness.yaml",
+                                  "tools/harness/platform_parts.yaml", "tools/mystery/pyproject.toml"])
 def test_unknown_reach_still_escalates_to_full(sample, path):
     assert _select(sample, path).mode == "full"
 

@@ -354,7 +354,7 @@ def split(repo: Path, invocations: list[list[str]], seen: dict | None = None) ->
         ignores = [w for w in rest if w.startswith("--ignore=")]
         ignored = [w.split("=", 1)[1].rstrip("/") for w in ignores]
         seconds = cost(repo, inv, seen)  # measured history first, the same byte estimate as dispatch for cold packets
-        whole = (seconds < SPLIT_S or any(w.startswith(("ROSY_RUN_BROWSER_TESTS", "ROSY_ALONE",
+        whole = (seconds < SPLIT_S or not paths or any(w.startswith(("ROSY_RUN_BROWSER_TESTS", "ROSY_ALONE",
                  "ROSY_JOB_ALONE", "ROSY_COLLECT")) for w in env) or len(paths) + len(ignores) != len(rest)
                  or any("::" in p or "collect_alone" in p for p in paths) or serial_reason(inv, serial))
         if whole:

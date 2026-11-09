@@ -47,22 +47,29 @@ def legacy() -> bool:
     return os.environ.get(LEGACY_ENV) == "1"
 
 
-def tier(repo: at.Repo, path: str, trigger: str, add) -> bool:
-    """A non-safety FULL trigger's narrower tier through `add`: False when it stays FULL (unknown reach).
-    True leaves the path's own mapping (module, referencing tests, reverse dependents) to the caller."""
-    if legacy():
-        return False
+#: The registries every mapping reads: a change there moves what any path selects (unknown reach).
+REGISTRY_FILES = ("tools/harness/harness.yaml", "tools/harness/platform_parts.yaml")  # harness.yaml keeps its
+# module-added narrowing in affected_tests.select
+
+
+def tier(repo: at.Repo, path: str, trigger: str, add) -> str | None:
+    """A non-safety FULL trigger's narrower tier through `add`: None when it stays FULL (unknown reach),
+    "own" when the tier itself is the selection, "graph" when the path's own mapping (module, referencing tests,
+    reverse dependents) is, so a path that maps to nothing still escalates as unknown."""
+    if legacy() or path in REGISTRY_FILES:
+        return None
     if trigger.endswith(SELF_TRIGGER):
         for test in repo.test_files:
             if SELF_TEST.match(test):
                 add(test, f"selector self-test tier ({path})")
         add(ARCHITECTURE, f"selector self-test tier ({path})")
-        return True
+        return "own"
     if "/" not in path or any(trigger.endswith(t) for t in STAY_FULL):
-        return False  # a root conftest, pyproject or pytest.ini reaches every suite
+        return None  # a root conftest, pyproject or pytest.ini reaches every suite
     if trigger.endswith("pytest conftest"):
         add(str(PurePosixPath(path).parent), f"conftest scope ({path})")
-    return True
+        return "own"
+    return "own" if trigger.endswith("CI workflow") else "graph"  # lab runs execute no workflow
 
 
 def safety_tier(repo: at.Repo, add) -> None:

@@ -142,3 +142,5 @@ def test_an_ignore_word_splits_too_and_the_ignored_file_never_runs(tmp_path, mon
     assert files == [f"pkg/test/test_{n}.py" for n in "bcde"], "every other test file exactly once"
     other = ["pkg/test", "-k", "x"]
     assert wq.split(tmp_path, [other], {tuple(other): 600.0}) == [other], "any other option keeps it whole"
+    bare = ["--ignore=pkg/test/test_a.py"]
+    assert wq.split(tmp_path, [bare], {tuple(bare): 600.0}) == [bare], "no path: nothing to split"
