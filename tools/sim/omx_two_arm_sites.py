@@ -38,6 +38,7 @@ CHOICES = dict(
     belt_pose="fixture",     # "fixture": BELT_STOP_X and the fixture's pickup line; "snapshot": the belt strip measured in cell_snapshot's top frame
     ship_pose="assumed",     # "assumed": ship_stern_x_m and ship_centre_y_m above; "snapshot": the hull fitted in cell_snapshot's top frame
     cell_snapshot=None,      # with temp_lanes="snapshot": a rosy.omx-cell-snapshot.v1 file (omx_real2sim.py measure), the lanes the top camera saw then
+    physics="design",        # a candidate of learning/envs/isaac/cell_physics.yaml (omx_physics.py): servo gains, joint damping, container mass and friction
     wait_pose="side")        # where an arm waits between steps: "side" = home folded but turned to the belt end, out of the middle band
                              # (D-983: the folded home points its jaw at the middle, and arm_a brushed arm_b's jaw at the stand); "home"
 # Lane centre (x, y) m and long-axis yaw deg, lanes numbered as printed on the plates. Dark pads in the surveyed top camera, back-projected to the plate top;

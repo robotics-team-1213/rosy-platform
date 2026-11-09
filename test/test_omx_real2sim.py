@@ -204,3 +204,11 @@ def test_layout_takes_the_belt_from_a_snapshot(tmp_path):
     assert moved.sites["belt"]["xy"][1] == -.037
     with pytest.raises(ValueError, match="no measured belt"):
         sites.Layout(cell_snapshot=str(_write(tmp_path, snap())), belt_pose="snapshot")
+
+
+def test_a_stage_takes_extra_choices_after_the_snapshots_so_they_win():
+    body = r2s.stage_body("stack", "deploy/robot/omx/sim/cell_snapshots/x.json", ["physics=twin-kp-20261109"])
+    assert "--choice physics=twin-kp-20261109" in body
+    assert body.rindex("--choice physics=") > body.rindex("--choice ship_pose=snapshot")  # parse_choices keeps the last
+    assert sites.parse_choices(["temp_lanes=snapshot", "physics=design", "physics=twin-kp-20261109"])["physics"] == "twin-kp-20261109"
+    assert "physics=" not in r2s.stage_body("stack", "x.json")

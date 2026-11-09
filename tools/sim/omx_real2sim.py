@@ -442,7 +442,15 @@ def capture(site, out):
     return meta
 
 
-def sim(snapshot, sha, out, stages):
+def stage_body(name, rel, extra=()):
+    """The remote shell line of one stage: the snapshot's choices, then `extra` (--choice key=value items), which win
+    over them because parse_choices keeps the last value of a key (e.g. physics=<cell_physics.yaml candidate>)."""
+    _, _, _, cmd = STAGES[name]
+    choices = " ".join(SNAP_CHOICES(rel) + [w for c in extra for w in ("--choice", shlex.quote(c))])
+    return f"mkdir -p $OUT/{name} && {PY} {cmd.format(choices=choices).replace('$PY', PY)} {choices}"
+
+
+def sim(snapshot, sha, out, stages, extra=()):
     """Each stage one remote_sim run, all started at once; remote_sim places them by headroom and caps (D-568)."""
     if not Path(snapshot).resolve().is_relative_to(ROOT):
         raise SystemExit(f"{snapshot} is outside the repo: copy it to deploy/robot/omx/sim/cell_snapshots/ and commit it")
@@ -454,23 +462,23 @@ def sim(snapshot, sha, out, stages):
     for i, name in enumerate(stages):
         if i:
             time.sleep(STAGGER_S)  # remote_sim reserves a host only when it ships: back-to-back starts all pick the same one
-        _, role, minutes, cmd = STAGES[name]
-        choices = " ".join(SNAP_CHOICES(rel))
-        body = f"mkdir -p $OUT/{name} && {PY} {cmd.format(choices=choices).replace('$PY', PY)} {choices}"
+        _, role, minutes, _ = STAGES[name]
+        body = stage_body(name, rel, extra)
         log = out / name
         log.mkdir(parents=True, exist_ok=True)
         procs[name] = subprocess.Popen([sys.executable, str(ROOT / "tools/remote/remote_sim.py"), "--host", role, "--sha", sha,
                                         "--minutes", str(minutes), "--log-dir", str(log / "remote"), "cmd", "--", body],
                                        cwd=ROOT, stdout=(log / "stdout.txt").open("w"), stderr=subprocess.STDOUT)
     rcs = {n: p.wait() for n, p in procs.items()}
-    (out / "sim.json").write_text(json.dumps(dict(snapshot=rel, sha=sha, rc=rcs, at=time.strftime("%Y-%m-%dT%H:%M:%S")), indent=1),
+    (out / "sim.json").write_text(json.dumps(dict(snapshot=rel, sha=sha, choices=list(extra), rc=rcs, at=time.strftime("%Y-%m-%dT%H:%M:%S")), indent=1),
                                   encoding="utf-8")
     return rcs
 
 
 def report(out):
     s = json.loads((Path(out) / "sim.json").read_text(encoding="utf-8"))
-    lines = [f"# real-to-sim {s['at']}", "", f"snapshot `{s['snapshot']}` at `{s['sha'][:10]}`", "", "| stage | rc |", "|---|---|"]
+    lines = [f"# real-to-sim {s['at']}", "", f"snapshot `{s['snapshot']}` at `{s['sha'][:10]}`"
+             + (f", choices {', '.join(f'`{c}`' for c in s['choices'])}" if s.get("choices") else ""), "", "| stage | rc |", "|---|---|"]
     lines += [f"| {n} | {rc} |" for n, rc in s["rc"].items()]
     return "\n".join(lines)
 
@@ -483,6 +491,7 @@ def main(argv=None):
     d = sub.add_parser("diff"); d.add_argument("old"); d.add_argument("new")
     s = sub.add_parser("sim"); s.add_argument("snapshot"); s.add_argument("--sha", required=True); s.add_argument("--out", required=True)
     s.add_argument("--stages", help="comma list, default every stage")
+    s.add_argument("--choice", action="append", default=[], help="key=value after the snapshot's choices, e.g. physics=<candidate>")
     r = sub.add_parser("report"); r.add_argument("out")
     a = p.parse_args(argv)
     if a.cmd == "capture":
@@ -500,7 +509,7 @@ def main(argv=None):
         changed, rerun = diff(load(a.old), load(a.new))
         print(json.dumps(dict(changed=changed, rerun=rerun, gaps=sorted({GAPS[i] for i in changed})), indent=1))
     elif a.cmd == "sim":
-        rcs = sim(a.snapshot, a.sha, a.out, a.stages.split(",") if a.stages else sorted(STAGES))
+        rcs = sim(a.snapshot, a.sha, a.out, a.stages.split(",") if a.stages else sorted(STAGES), a.choice)
         print(json.dumps(rcs))
         return int(any(rcs.values()))
     else:

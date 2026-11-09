@@ -24,10 +24,8 @@ share one queue over the chosen hosts (D-553): each host runs one at a time and 
 when free, largest test files first. Pytest never runs on this machine (D-584): when no host is reachable
 the probe is retried every ``--retry-poll`` s (default 30) for ``--wait`` s (default 3600), then the
 gate fails with "no test host reachable (D-584)". ``--local`` and ``ROSY_TEST_LOCAL`` are rejected.
-Logs land in ``--log-dir`` (default ``$ROSY_SCRATCH/remote-pytest/<sha>``, or the system
-temp directory without ``ROSY_SCRATCH``), one
-``run-<n>.txt`` per invocation. Exit code: the worst pytest exit (5, nothing
-collected, counts as 0). Leading ``ROSY_*=value`` words of an invocation are its environment
+Logs land in ``--log-dir`` (default ``$ROSY_SCRATCH/remote-pytest/<sha>``, or the system temp directory without
+``ROSY_SCRATCH``), one ``run-<n>.txt`` per invocation. Exit code: the worst pytest exit (5, nothing collected, counts as 0). Leading ``ROSY_*=value`` words of an invocation are its environment
 on the host: ``-- ROSY_RUN_BROWSER_TESTS=1 <paths>`` runs the real-Chromium tests, and the job
 installs Chromium for the venv's playwright first. Standard library only.
 """
@@ -64,7 +62,7 @@ import host_probe  # noqa: E402
 from host_probe import DISK_FLOOR_GB, PROBE, current_profile, disk_full, parse_probe  # noqa: E402,F401
 import xdist_plan  # noqa: E402
 from work_queue import (ALONE_ENV, BROWSER_ENV, Gate, Work, cancelled, cost, guard, history,  # noqa: E402,F401
-                        small_only, upgrade_watch, wanted, workers)
+                        small_only, stranded, upgrade_watch, wanted, workers)
 
 CANCELLED = remote_job.CANCELLED
 
@@ -415,6 +413,8 @@ def run(invocations: list[list[str]], logs: list[Path], sha: str = "HEAD", repo:
                 for i in work.todo:
                     work.codes[i] = remote_job.LOST_EXIT
                 break
+            if stranded(work, invocations, working, HEADROOM):  # site PCs only, LAB_ONLY suites left
+                break
             if not attempt((working[0], "any")):
                 ok = [good and h != working[0] for (h, _), good in zip(plan, ok)]
         watch.set()
@@ -459,7 +459,7 @@ def run_on(host: str, invocations: list[list[str]], logs: list[Path], sha: str, 
             raise SystemExit(f"[remote-pytest] venv setup on {host} failed")
         cpu = SITE_CPU_QUOTA if host in SITES else ""
         k = 0  # job number on this host's run dir
-        pick = wanted(kind, invocations)
+        pick = wanted(kind, invocations, site=bool(HEADROOM.get(host, {}).get("site")))
         take = (lambda: work.take_small(pick, host)) if HEADROOM.get(host, {}).get("light") else lambda: work.take(pick, host)
         while not (lost and shared) and (i := take()) is not None:
             inv, log, queued = invocations[i], logs[i], round(time.monotonic() - work.began)

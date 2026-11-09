@@ -612,7 +612,7 @@ class RosBridge:
             snapshot, face=self._face_desired, power_mode=status.mode.value, wake=wake,
             written_at=datetime.now(timezone.utc).isoformat(timespec="milliseconds"))
         preview = self._svc.vision.status(now=time.monotonic())
-        content.update(display.face_camera_quality(preview))
+        content.update(display.face_camera_quality(preview), **display.face_person_request(self._svc.person_request.view()))
         if not display.face_inputs_due(content, self._face_inputs_last, now,
                                        self._face_inputs_at, FACE_INPUTS_PERIOD_S):
             return
