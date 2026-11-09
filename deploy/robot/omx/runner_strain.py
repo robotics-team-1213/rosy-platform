@@ -45,7 +45,8 @@ def strained(runner, sent, present):
 
 
 def shed(target, present, sent, home, step):
-    """One tick of load shedding: SHED joints step toward `home` by at most `step`; the rest stay."""
+    """One tick of load shedding: SHED joints step toward `home` by at most `step`; the rest stay. Only their own lag
+    stops them: a pose where folding adds to the held joint's load is left to the guard's PWM watch (3 s, then off)."""
     out = list(target)
     for name in SHED:
         i = MOTORS.index(name)
