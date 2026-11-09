@@ -310,7 +310,7 @@ def test_a_full_queue_at_queue_time_is_polled_then_stops(repo, monkeypatch, room
         assert tool.start(dev, [], NOW, lambda *a: None)[0] == "land/feat/x-20261028044000"
         assert clock[0] == 2 * tool.FULL_POLL_S
     else:
-        with pytest.raises(SystemExit, match="queue full .* waited 30 min"):
+        with pytest.raises(SystemExit, match="queue full .*waited 30 min"):
             tool.start(dev, [], NOW, lambda *a: None)
         assert clock[0] >= tool.FULL_WAIT_S and not _git(dev, "branch", "--list", "land/*")
 

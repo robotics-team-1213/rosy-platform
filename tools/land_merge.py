@@ -13,6 +13,7 @@ import os
 import re
 import subprocess
 import tempfile
+from collections import Counter
 from pathlib import Path, PurePosixPath
 
 from land_logs import append_blocks, shared  # logs.md: whole entries, date order
@@ -237,8 +238,12 @@ def api_version(base: bytes, ours: bytes, theirs: bytes) -> bytes | None:
     if (heads[1] - heads[0]) & heads[2] or (heads[2] - heads[0]) & heads[1]:
         return None  # a side added a section under a number the other side has
     newest = [max(heads[i] - heads[0], default=pin) for i, pin in ((1, mine), (2, main))]
+    data = union(base, theirs, ours) if newest[1] > newest[0] else union(base, ours, theirs)
+    lines = lambda x: Counter(line for line in x.splitlines() if line.strip())  # noqa: E731
+    if lines(data) != lines(ours) + lines(theirs) - lines(base):
+        return None  # the union resurrected a line a side changed (difflib aligned the edit as an insertion)
     known, out = set(base.splitlines()), []
-    for line in (union(base, theirs, ours) if newest[1] > newest[0] else union(base, ours, theirs)).splitlines(keepends=True):
+    for line in data.splitlines(keepends=True):
         # the union shares the sections' common trailing blank line: give each new section its own again
         if line.startswith(b"### v1.") and line.rstrip(b"\r\n") not in known and out and out[-1].strip():
             out.append(line[len(line.rstrip(b"\r\n")):] or b"\n")

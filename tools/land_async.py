@@ -176,6 +176,10 @@ def holders(cwd: Path, branch: str) -> list[dict]:
     return rows
 
 
+def where(row: dict) -> str:
+    return f"{row['ticket']} ({row.get('branch')}, {row.get('status')}, pid {row.get('pid')})"
+
+
 def stop(pid: int) -> None:
     if os.name == "nt":
         subprocess.run(["taskkill", "/PID", str(pid), "/T", "/F"], capture_output=True)
@@ -207,18 +211,18 @@ def _start(cwd: Path, land_args: list[str], now: datetime, launch) -> tuple[str,
     if git(cwd, "status", "--porcelain", "--untracked-files=no"):
         raise SystemExit("[land-async] uncommitted changes: commit them first (a landing takes only commits)")
     land_args = [a for a in land_args if a != "--replace"]  # replacing a live landing is the default now
-    replacements = []
-    for row in holders(cwd, branch):  # one landing per change: a second one only doubled the pretest
+    replacements, rows = [], holders(cwd, branch)
+    for row in rows:  # every owner is checked before any reuse or stop
         carried = row.get("branch") not in (branch,) and not row.get("branch", "").startswith(PREFIX + branch + "-")
-        where = f"{row['ticket']} ({row.get('branch')}, {row.get('status')}, pid {row.get('pid')})"
         if carried or row.get("status") == "starting":
-            raise SystemExit(f"[land-async] {branch} is already landing in {where}"
+            raise SystemExit(f"[land-async] {branch} is already landing in {where(row)}"
                              + ("; it rides in that batch" if carried else "; its supervisor is still starting"))
+    for row in rows:  # one landing per change: a second one only doubled the pretest
         if subprocess.run(["git", "-C", str(cwd), "merge-base", "--is-ancestor", "HEAD", row["branch"]],
                           capture_output=True).returncode == 0:  # its snapshot (with main merged in) holds HEAD
-            print(f"[land-async] this HEAD is already landing in {where}; nothing new queued", flush=True)
+            print(f"[land-async] this HEAD is already landing in {where(row)}; nothing new queued", flush=True)
             return row["branch"], holder(cwd) / (row["branch"].replace("/", "-") + ".log")
-        replacements.append((int(row["pid"]), where))
+        replacements.append((int(row["pid"]), where(row)))
     for pid, where in replacements:
         print(f"[land-async] a newer HEAD replaces {where}", flush=True)
         stop(pid)
@@ -310,7 +314,7 @@ def superseded(tree: Path, snap: str) -> list[str]:
         import land_gc
         src = land_gc.source(snap)
         older = {ref.split("-batch")[0].replace("/", "-") for ref in git(
-            repo, "for-each-ref", "--format=%(refname:short)", f"refs/heads/{PREFIX}{src}-").splitlines()
+            repo, "for-each-ref", "--format=%(refname:short)", f"refs/heads/{PREFIX}{src}-*").splitlines()
             if land_gc.SNAPSHOT.search(ref) and land_gc.source(ref) == src and ref < snap}
         gone = []
         for name in sorted(older):
