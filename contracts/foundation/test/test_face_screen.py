@@ -268,7 +268,7 @@ def test_the_situation_line_names_the_mode_under_the_face(mode, nav, line):
 
     assert answer["kind"] == fs.FACE
     assert answer["strip"] == line and answer["strip_tone"] == "info"
-    assert answer["face"] == "happy"
+    assert answer["face"] == ("thinking" if nav == "PLANNING" else "happy")  # PLANNING owns a situation face
 
 
 @pytest.mark.parametrize("note,line", [
