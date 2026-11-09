@@ -43,6 +43,7 @@ def test_no_localized_map_frame_pose_is_no_goal():
 
 def test_a_free_trip_sends_its_goals_in_the_robot_map_frame():
     runner, store, ports = _setup(_free_map(), caps=BOTH)
+    ports.map_id = "site"  # D-1010: the site side of the conversion is anchored on the active map
     robot = {"state": None}
 
     async def robot_state(robot_id):
@@ -59,6 +60,7 @@ def test_a_free_trip_sends_its_goals_in_the_robot_map_frame():
 def test_a_robot_without_a_map_frame_pose_gets_the_site_goal_as_before():
     """No LOCALIZED map pose to pair with: unchanged, so console trust and CORE admission decide as before."""
     runner, store, ports = _setup(_free_map(), caps=BOTH)
+    ports.map_id = "site"
 
     async def robot_state(robot_id):
         return _state((5.0, 5.0, 1.0), frame="odom")

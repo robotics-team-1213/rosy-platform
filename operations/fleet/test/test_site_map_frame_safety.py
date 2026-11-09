@@ -105,6 +105,7 @@ def test_a_free_trip_stops_when_the_active_map_is_not_the_plans_version():
 
 def test_a_free_trip_stops_when_the_site_pose_is_on_another_frame():
     runner, store, ports = _setup(_free_map(), caps=BOTH)
+    ports.map_id = "site"
 
     async def robot_state(robot_id):
         return _state(_in_robot_map(ports.pose.x, ports.pose.y, ports.pose.yaw))
@@ -125,6 +126,7 @@ def test_a_free_trip_stops_when_the_site_pose_is_on_another_frame():
 
 def test_a_converted_goal_records_both_frames():
     runner, store, ports = _setup(_free_map(), caps=BOTH)
+    ports.map_id = "site"
 
     async def robot_state(robot_id):
         return _state(_in_robot_map(ports.pose.x, ports.pose.y, ports.pose.yaw), map_id="slam")

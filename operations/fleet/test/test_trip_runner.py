@@ -146,7 +146,6 @@ class FakeCore:
 class Ports:
     def __init__(self, caps=LANE):
         self.caps = {"rosy_60": caps}
-        self.map_id = None  # D-1010: the active site map frame id the rig's poses are anchored on
         self.pose = None
         self.core = FakeCore(self)
         self.sent: list[tuple] = []
@@ -220,7 +219,7 @@ class Ports:
 
     def at(self, arc, s, state="LOCALIZED", dy=0.0, anchor_age_s=0.1):
         x, y, yaw = arc.point_at(s)
-        self.pose = MapPose(x, y + dy, yaw, state, "sighting", 0.0, 0.1, anchor_age_s, self.map_id)
+        self.pose = MapPose(x, y + dy, yaw, state, "sighting", 0.0, 0.1, anchor_age_s, getattr(self, "map_id", None))
 
 
 def _map(*places, edges) -> SiteMap:
@@ -246,7 +245,6 @@ def _setup(site_map=None, caps=LANE, path=None, **config):
     ports = Ports(caps)
     store = SiteMapStore(path, clock=lambda: ports.now)
     store.import_if_empty(site_map or from_lane_graph(LANE_GRAPH), source="test")
-    ports.map_id = store.active()[1].map_id
     runner = TripRunner(store=store, routing_config=store.routing_config, caps=ports.caps_for, battery=fresh_battery, poses=ports,
                         junction=ports, goal=ports.goal, cancel_goal=ports.cancel_goal,
                         blocked=lambda: ports.blocked, clock=lambda: ports.now, config=TripConfig(**config))
