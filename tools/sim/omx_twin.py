@@ -184,15 +184,9 @@ def load_rgb(blob, shape=(480, 640)):
     return np.asarray(im)
 
 
-def view_one(cell, renderer, geoms, state, frames, cams):
+def view_one(cell, renderer, geoms, state, frames, cams, zero_deg=None):
     """{sim camera: offset dict} for one real state and its real frames ({episode camera: jpeg bytes})."""
-    import mujoco
-    import omx_cell_sim as cs
-    data = mujoco.MjData(cell.model)
-    data.qpos[cell.qadr] = cs.real_q(state)
-    data.qpos[cell.mimic] = -data.qpos[cell.qadr[5]]
-    data.qpos[cell.box_q:cell.box_q + 3] = [0, 0, -1]
-    mujoco.mj_forward(cell.model, data)
+    data = posed(cell, state, zero_deg)
     out, pictures = {}, {}
     for real_name, sim_name in cams.items():
         if real_name not in frames:
@@ -484,7 +478,7 @@ def live(args):
             frames = {c: base64.b64decode(b) for c, b in got["frames"].items() if b}
             fresh, last_t = got["live"].get("t") != last_t, got["live"].get("t")  # the runner is not running: nothing new
             if state and fresh:
-                o, pictures = view_one(cell, renderer, geoms, state, frames, cams)
+                o, pictures = view_one(cell, renderer, geoms, state, frames, cams, args.zero)
                 target = got["live"].get("target")
                 row = dict(t=got["live"].get("t"), read=start, view=o, lag=got["live"].get("lag"), fault=got["live"].get("fault"),
                            follow_deg=(np.degrees(cs.norm_to_rad(state[:5]) - cs.norm_to_rad(target[:5])).round(2).tolist() if target else None))
@@ -565,6 +559,7 @@ def main(argv=None):
     v.add_argument("--period", type=float, default=2.0)
     v.add_argument("--minutes", type=float, default=600)
     v.add_argument("--alarm", type=int, default=3)
+    v.add_argument("--zero", type=lambda t: [float(x) for x in t.split(",")], help="deg added to j1-j5 (a zero-offset candidate)")
     sub.add_parser("report").add_argument("dirs", nargs="+")
     f = sub.add_parser("fit-camera")
     for flag in ("--cell", "--out", "--site", "--root"):
