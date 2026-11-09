@@ -89,3 +89,24 @@ def test_red_records_the_suspects_and_a_broken_log_never_loses_the_red(repo, mon
     monkeypatch.setattr(land_blame, "suspects", lambda *a, **k: 1 / 0)
     mr.red(wt, shas["D"], [ID], "", [], "nightly")
     assert [r["suspects"] for r in mr.read(wt) if r["event"] == "red"][-1] is None
+
+
+def test_a_cut_list_keeps_the_oldest_toucher_after_the_anchor(repo, monkeypatch):
+    wt, shas = repo
+    monkeypatch.setattr(land_blame, "MAX_SUSPECTS", 1)
+    assert [s["branch"] for s in land_blame.suspects(wt, ID, shas["D"])["suspects"]] == ["land/b"]
+
+
+def test_a_red_main_that_is_not_a_commit_is_an_error_not_an_empty_list(repo):
+    with pytest.raises(ValueError):
+        land_blame.suspects(repo[0], ID, "0" * 40)
+
+
+def test_a_malformed_close_row_never_loses_the_red(repo):
+    wt, shas = repo
+    mr.write(wt, "close", id=ID)  # no sha
+    with open(mr.path(wt), "a", encoding="utf-8") as out:
+        out.write(json.dumps({"id": ID}) + "\n")  # no event
+    mr.red(wt, shas["D"], [ID], "", [], "nightly")
+    assert [r for r in mr.read(wt) if r.get("event") == "red"]
+

@@ -17,6 +17,7 @@ from pathlib import Path, PurePosixPath
 EVENTS = "rosy-land-events.jsonl"
 DEPTH = 5000  # main commits searched; shortcut: older landings are not suspects, raise it if a red sat that long
 MAX_SUSPECTS = 15
+SCAN = 200  # landings after the anchor whose files are read; shortcut: a red older than that names only these
 
 
 def _git(wt: Path, *args: str) -> str:
@@ -43,6 +44,8 @@ def suspects(wt: Path, nodeid: str, red_main: str, env: list[str] = (), closes: 
     """{"green": sha or None, "green_branch", "suspects": [{branch, sha, touches}]}: file touchers, folder, rest."""
     common = Path(_git(wt, "rev-parse", "--path-format=absolute", "--git-common-dir"))
     on_main = _git(wt, "rev-list", f"--max-count={DEPTH}", red_main).split()
+    if not on_main:
+        raise ValueError(f"red main {red_main!r} is not a commit here")
     order = {sha: i for i, sha in enumerate(reversed(on_main))}  # oldest first
     landed, passed = [], set()
     try:
@@ -68,13 +71,17 @@ def suspects(wt: Path, nodeid: str, red_main: str, env: list[str] = (), closes: 
     file = nodeid.split("::", 1)[0]
     folder = str(PurePosixPath(file).parent)
     rows = []
+    # No anchor: only the newest landings are worth naming. With one: every landing after it, the touchers kept
+    # first when the list is cut (review 2026-11-09: cutting by age dropped the likeliest culprit).
+    keep = len(landed) - (MAX_SUSPECTS if floor is None else SCAN)
     for i, r in enumerate(landed):
-        if floor is not None and order[r["sha"]] <= floor or i < len(landed) - MAX_SUSPECTS:
+        if floor is not None and order[r["sha"]] <= floor or i < keep:
             continue
         changed = _git(wt, "diff", "--name-only", landed[i - 1]["sha"], r["sha"]).splitlines() if i else []
         touches = "file" if file in changed else "folder" if any(c.startswith(folder + "/") for c in changed) else ""
         rows.append({"branch": r.get("branch"), "sha": r["sha"], "touches": touches})
     rows.sort(key=lambda r: ("file", "folder", "").index(r["touches"]))  # stable: time order within each group
+    rows = rows[:MAX_SUSPECTS]
     oldest_first = on_main[::-1]
     return {"green": oldest_first[floor] if floor is not None else None, "green_branch": marks.get(floor),
             "suspects": rows}

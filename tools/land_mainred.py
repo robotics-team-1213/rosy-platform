@@ -120,8 +120,9 @@ def red(wt: Path, main: str, ids: list[str], text: str, env: list[str], by: str)
 
 def blame(wt: Path, nodeid: str, main: str, env: list[str], rows: list[dict] | None = None) -> dict | None:
     """``land_blame.suspects`` with this id's closes; None when it fails (a red record is never lost to it)."""
-    closes = [r["sha"] for r in (read(wt) if rows is None else rows) if r["event"] == "close" and r["id"] == nodeid]
     try:
+        closes = [r.get("sha") for r in (read(wt) if rows is None else rows)
+                  if r.get("event") == "close" and r["id"] == nodeid]
         return land_blame.suspects(wt, nodeid, main, env, closes)
     except Exception as exc:  # noqa: BLE001  advisory only
         print(f"[main-red] no suspects for {nodeid}: {exc}", flush=True)
