@@ -3,6 +3,7 @@
 # training samples `omx_physics.py ranges`. Fitted candidates are written by tools/sim/omx_sysid.py promote; change by commit.
 # Units are what MuJoCo takes: kp N·m/rad (actuator gainprm, biasprm[1] = -kp), kv N·m·s/rad (biasprm[2] = -kv),
 # damping N·m·s/rad, armature kg·m², frictionloss N·m, force N·m (actuator forcerange), mass kg, friction (slide, spin, roll).
+# gravity_hold: arm joints the sim holds against gravity (default all), the stand-in for a servo I gain.
 # A container friction below 1 needs priority: 1, or MuJoCo takes the larger friction of the pair (and then also that geom's solref).
 # Contact numbers stay candidates for Isaac to confirm (D-947 5): MuJoCo contact picks candidates, it reports nothing.
 schema: rosy.cell-physics/1
@@ -52,6 +53,7 @@ candidates:
     evidence: docs/validation/omx-sysid-2026-11-09/result.md
     note: the real servo as a PD behind its PWM limit; joint3 and joint4 also hold an I gain the MuJoCo servo has no term for
       (score with --gravity-comp). Both arms carry the same caps (caps-arm-a-igain, caps-arm-b-igain)
+    gravity_hold: [joint3, joint4]  # the I gain 50 servos; the others sag as the PD does
     joints:
       joint1: {kp: 5.386, kv: 0.5017, force: 0.496}
       joint2: {kp: 13.466, kv: 0.5017, force: 0.992}
@@ -60,6 +62,7 @@ candidates:
       joint5: {kp: 1.46, kv: 0.0477, force: 0.215}
   servo-friction-20261109:
     base: registers-20261109
+    gravity_hold: all  # as fitted
     source: fitted
     date: '2026-11-09'
     method: omx_sysid.py servo, frictionloss, damping of joint1-5 by least squares

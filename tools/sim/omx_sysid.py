@@ -132,9 +132,22 @@ class Episodes:
         return fit, hold
 
 
+class _Compensated:
+    """The cell as omx_twin.track sees it, with gravity compensation only on `joints` (track compensates cell.arm_dof)."""
+
+    def __init__(self, cell, joints):
+        self._cell, self.arm_dof = cell, cell.dof[[BODY.index(j) for j in joints]]
+
+    def __getattr__(self, name):
+        return getattr(self._cell, name)
+
+
 def error_deg(cell, episodes, values, gravity_comp, every=1):
+    """gravity_comp: False, True (every arm joint) or joint names (the servos holding an I gain, a stand-in for it)."""
     import numpy as np
     import omx_twin as twin
+    if isinstance(gravity_comp, (list, tuple)):
+        cell, gravity_comp = _Compensated(cell, gravity_comp), bool(gravity_comp)
     set_constants(cell, values)
     kp = [row.get("kp", cell.model.actuator_gainprm[cell.act[j], 0]) for j, row in enumerate(values)]  # unfitted: the candidate's own
     out = []
@@ -425,7 +438,8 @@ def promote(fit, name, evidence=None, path=physics.FILE, base="design"):
         block = dict(base=fit["base"], source="fitted", date=fit["at"][:10],
                      method=f"omx_sysid.py servo, {', '.join(fit['keys'])} of joint1-5 by least squares over "
                             f"{len(fit['episodes']['fit'])} episodes, gravity_comp={fit['gravity_comp']}",
-                     evidence=evidence or "", note=why, arms={fit["arm"]: fit["fitted"]}, sd={fit["arm"]: fit["sd"]})
+                     evidence=evidence or "", note=why, arms={fit["arm"]: fit["fitted"]}, sd={fit["arm"]: fit["sd"]},
+                     gravity_hold="all" if fit["gravity_comp"] is True else list(fit["gravity_comp"] or []))  # the world replays it as fitted
     physics.Physics(name, dict(doc, candidates={**doc["candidates"], name: block}))  # resolves (its base exists) before any write
     text = yaml.safe_dump({"candidates": {name: block}}, sort_keys=False, allow_unicode=True).split("\n", 1)[1]  # drop "candidates:"
     body = Path(path).read_text(encoding="utf-8")
@@ -472,7 +486,8 @@ def main(argv=None):
     s.add_argument("--base", default="design")
     s.add_argument("--arm", default="arm_b", choices=physics.ARMS)
     s.add_argument("--keys", default="kp,damping,frictionloss")
-    s.add_argument("--gravity-comp", action="store_true", help="the sim's ideal gravity compensation (omx_twin tries both)")
+    s.add_argument("--gravity-comp", nargs="?", const="all", default=None,
+                   help="ideal gravity compensation, on every arm joint or on JOINTS (comma list: the I-gain servos, e.g. joint3,joint4)")
     s.add_argument("--max-nfev", type=int, default=60)
     s.add_argument("--jobs", type=int, default=8, help="replay processes (each holds one MuJoCo cell)")
     fr = sub.add_parser("friction")
@@ -489,7 +504,7 @@ def main(argv=None):
     sc.add_argument("episodes", nargs="+")
     sc.add_argument("--cell", required=True)
     sc.add_argument("--candidates", default="design", help="comma list of cell_physics.yaml candidates")
-    sc.add_argument("--gravity-comp", action="store_true")
+    sc.add_argument("--gravity-comp", nargs="?", const="all", default=None, help="as for servo")
     sc.add_argument("--jobs", type=int, default=8)
     sc.add_argument("--out", required=True)
     rg = sub.add_parser("registers")
@@ -498,6 +513,10 @@ def main(argv=None):
     n = sub.add_parser("next")
     n.add_argument("--json", action="store_true")
     a = p.parse_args(argv)
+    if getattr(a, "gravity_comp", None) is not None:
+        a.gravity_comp = True if a.gravity_comp == "all" else a.gravity_comp.split(",")
+    else:
+        a.gravity_comp = False
     if a.cmd == "servo":
         r = servo(a.episodes, a.cell, a.out, a.base, a.arm, a.keys.split(","), a.gravity_comp, a.max_nfev, a.jobs)
         print(json.dumps(dict(rms_deg=r["rms_deg"], verdict=verdict(r)), indent=1))

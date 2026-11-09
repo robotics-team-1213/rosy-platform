@@ -51,6 +51,21 @@ class Physics:
                 out.update(layer.get(joint, {}))
         return out
 
+    def gravity_hold(self):
+        """Which arm joints the sim holds against gravity: "all" (the cells' ideal compensation, the default) or joint names.
+        It stands in for a servo I gain the MuJoCo position servo lacks, so it belongs with the gains (registers: joint3, joint4)."""
+        hold = "all"
+        for name in self.chain:
+            hold = self.doc["candidates"][name].get("gravity_hold", hold)
+        return hold
+
+    def hold_dofs(self, model, prefix=""):
+        """The dof addresses of gravity_hold() in a compiled model (prefix: the two-arm world's a_ / b_)."""
+        import numpy as np
+        hold = self.gravity_hold()
+        names = (*JOINTS, "gripper_joint_2") if hold == "all" else hold
+        return np.array([model.joint(prefix + n).dofadr[0] for n in names], dtype=int)
+
     def container(self):
         out = {}
         for name in self.chain:

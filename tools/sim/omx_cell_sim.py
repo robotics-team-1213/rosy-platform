@@ -147,6 +147,7 @@ class Cell:
         self.dof = np.array([model.joint(n).dofadr[0] for n in JOINTS])
         self.act = np.array([model.actuator(n).id for n in JOINTS])
         self.arm_dof = np.array([model.joint(n).dofadr[0] for n in (*JOINTS, "gripper_joint_2")])
+        self.hold_dof = self.physics.hold_dofs(model)
         self.mimic = model.joint("gripper_joint_2").qposadr[0]
         self.link5 = model.body("link5").id
         self.box_q = model.joint("box").qposadr[0]
@@ -192,7 +193,7 @@ class Cell:
     def advance(self, data, target):
         data.ctrl[self.act] = target
         for _ in range(self.substeps):
-            data.qfrc_applied[self.arm_dof] = data.qfrc_bias[self.arm_dof]  # shortcut: ideal gravity compensation, real servos sag
+            data.qfrc_applied[self.hold_dof] = data.qfrc_bias[self.hold_dof]  # the candidate's held joints (all by default)
             mujoco.mj_step(self.model, data)
 
     def teacher(self, data, xy, yaw):

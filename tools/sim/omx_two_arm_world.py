@@ -56,6 +56,7 @@ def camera_axes(eye, focus, up):
 class World:
     def __init__(self, layout=None, wrist=None, cone="elliptic", **choices):
         self.layout = layout or sites.Layout(**choices)
+        self.physics = physics.Physics(self.layout.choices["physics"])
         self.wrist = wrist or self.layout.choices["wrist_camera"]
         self.cone = cone
         self.meshes = tempfile.TemporaryDirectory()
@@ -115,7 +116,7 @@ class World:
         r08 = c["ship_source"] == "r08-berth"
         if r08:
             spec.add_mesh(name="container", file=self._asset("container_1x3_v3"), scale=[.001] * 3)
-        phys = physics.Physics(c["physics"])
+        phys = self.physics
         held = phys.container()
         for k, (cid, _) in enumerate(L.containers()):
             body = world.add_body(name=cid, pos=[-1.4, 1.0 + .1 * k, .05])
@@ -255,13 +256,14 @@ class World:
     # -- state ---------------------------------------------------------------------------------------------------------------
     def _bind(self):
         m = self.model
-        self.q, self.dof, self.act, self.mimic, self.link5, self.arm_dof = {}, {}, {}, {}, {}, {}
+        self.q, self.dof, self.act, self.mimic, self.link5, self.arm_dof, self.hold_dof = {}, {}, {}, {}, {}, {}, {}
         for arm, p in PREFIX.items():
             self.q[arm] = np.array([m.joint(p + n).qposadr[0] for n in JOINTS])
             self.act[arm] = np.array([m.actuator(p + n).id for n in JOINTS])
             self.mimic[arm] = m.joint(p + "gripper_joint_2").qposadr[0]
             self.link5[arm] = m.body(p + "link5").id
             self.arm_dof[arm] = np.array([m.joint(p + n).dofadr[0] for n in (*JOINTS, "gripper_joint_2")])
+            self.hold_dof[arm] = self.physics.hold_dofs(m, p)
         self.box_q = {c: m.joint(c).qposadr[0] for c, _ in self.layout.containers()}
         self.box_v = {c: m.joint(c).dofadr[0] for c, _ in self.layout.containers()}
         self.substeps = round(1 / FPS / m.opt.timestep)
@@ -293,12 +295,13 @@ class World:
         data.qvel[self.box_v[cid]:self.box_v[cid] + 6] = 0
 
     def advance(self, data, targets, frames=1):
-        """Command {arm: 6 joint targets} for `frames` frames; ideal gravity compensation on both arms (real servos sag: shortcut)."""
+        """Command {arm: 6 joint targets} for `frames` frames; ideal gravity compensation on the physics candidate's held joints
+        (every arm joint by default; registers: the I-gain joints only)."""
         for arm, t in targets.items():
             data.ctrl[self.act[arm]] = t
         for _ in range(self.substeps * frames):
             for arm in PREFIX:
-                data.qfrc_applied[self.arm_dof[arm]] = data.qfrc_bias[self.arm_dof[arm]]
+                data.qfrc_applied[self.hold_dof[arm]] = data.qfrc_bias[self.hold_dof[arm]]
             mujoco.mj_step(self.model, data)
 
     def pose(self, data, cid):

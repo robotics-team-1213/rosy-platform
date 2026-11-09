@@ -95,6 +95,7 @@ def test_promote_appends_a_candidate_and_never_overwrites(tmp_path):
     assert path.read_text(encoding="utf-8").startswith(before.rstrip("\n"))  # comments and old candidates kept as they were
     doc = physics.load(path)
     p = physics.Physics("servo-test", doc)
+    assert p.gravity_hold() == []  # fitted without compensation: the world replays it that way
     assert p.joint("arm_b", "joint3") == dict(DESIGN, kp=25.0, damping=0.2)
     assert p.joint("arm_a", "joint3") == DESIGN
     assert physics.ranges(doc)["arms"]["arm_b"]["joint3"]["kp"] == {"low": 5.34, "high": 40.0, "measured": True}
@@ -115,7 +116,8 @@ def test_next_puts_assumed_constants_first_with_an_experiment():
     names = {c: (k, e) for _, c, k, e in rows}
     assert names["container.friction"][0] == "assumed" and "push test" in names["container.friction"][1]
     assert names["arm_b.joint1.kp"][0] == "measured (registers-20261109, twin-kp-20261109)"
-    assert names["arm_b.joint1.damping"][0] == "assumed"
+    assert names["arm_b.joint1.damping"][0] == "measured (servo-friction-20261109)"
+    assert names["arm_a.joint1.damping"][0] == "assumed"
     assert json.dumps([list(r) for r in rows])  # the --json form serialises
 
 
@@ -133,6 +135,10 @@ def test_the_two_arm_world_builds_from_the_chosen_candidate():
         assert m.geom_priority.max() == 0  # design leaves MuJoCo's pair rule (the larger friction) as it was
         mimic = m.jnt_dofadr[m.joint("b_gripper_joint_2").id]
         assert m.dof_damping[mimic] == pytest.approx(0.3)
+    design, soft = tw.World(physics="design"), tw.World(physics="registers-20261109")
+    assert design.hold_dof["arm_b"].tolist() == design.arm_dof["arm_b"].tolist()  # as before: every arm joint held
+    held = [soft.model.joint("b_" + n).dofadr[0] for n in ("joint3", "joint4")]
+    assert soft.hold_dof["arm_b"].tolist() == held  # the I-gain servos only, travelling with their soft gains
 
 
 def sweep_rows(extra_pwm, pan_step=0.1, contact_from=0.4, noise=1.0, seed=0, ticks=150):
@@ -223,3 +229,17 @@ def test_registers_give_the_servo_the_session_set():
     assert integral == ["joint3", "joint4"]
     doc = physics.load()
     assert physics.Physics("registers-20261109", doc).joint("arm_a", "joint2")["kp"] == pytest.approx(joints["joint2"]["kp"], rel=1e-3)
+
+
+def test_gravity_compensation_can_stand_for_the_i_gain_joints_only():
+    import numpy as np
+    from types import SimpleNamespace
+    cell = SimpleNamespace(dof=np.array([10, 11, 12, 13, 14]), arm_dof=np.arange(10, 17), model="m")
+    held = sysid._Compensated(cell, ["joint3", "joint4"])
+    assert held.arm_dof.tolist() == [12, 13] and held.model == "m" and held.dof is cell.dof
+
+
+def test_gravity_hold_travels_with_the_candidate():
+    assert physics.Physics("design").gravity_hold() == "all"
+    assert physics.Physics("registers-20261109").gravity_hold() == ["joint3", "joint4"]
+    assert physics.Physics("servo-friction-20261109").gravity_hold() == "all"  # as it was fitted
