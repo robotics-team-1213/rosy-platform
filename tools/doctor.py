@@ -181,7 +181,7 @@ def check_hosts(now: float) -> list[tuple]:
         if want and report and report.get("tool_sha256") != want:
             found.append(("WARN", f"host {host}: host_storage.py {report.get('tool_sha256') or 'older copy'}"
                           f" is not rosy-ops origin/main {want}",
-                          f"cd ../rosy-ops && python tools/deploy_host_storage.py <user>@{host}"))
+                          f"cd ../rosy-ops && python tools/deploy_host_storage.py {host}"))
     return found
 
 
