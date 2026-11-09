@@ -31,9 +31,10 @@
    | `RemovePassedGoals` 반경 | 0.7 m | 0.15 m | 0.2 m 간격 점이 한꺼번에 삼켜지면 모서리를 자른다 |
    | 복구 진입 | `WouldA*RecoveryHelp`가 참일 때만 | 모든 planner·controller 실패 | "no valid path"·"collision ahead"도 코스트맵을 비우고 다시 계획한다 |
    | 복구 동작 | 코스트맵 비우기, 제자리 회전 1.57 rad, 5 s 대기, 0.30 m 후진 | 코스트맵 비우기, 1 s 대기 | 벽 0.15 m 옆 회전·후진은 새 충돌 위험이고 5 s 대기는 멈춤이다 |
+   | `rotate_to_heading_min_angle`(`nav2_params.yaml`) | 0.35 rad | 1.0 rad | SIM에서 pass 점마다 제자리 회전이 걸렸다. 차선 꼭짓점은 0.15 m에 30도씩 꺾여, 20도 기준이면 지나가는 점이 멈춤이 된다. 57도까지는 곡률로 돌며 지나간다. 출발·도착 자세 정렬은 그대로다. 모든 Nav2 목표에 적용된다 |
    | 복구 횟수 | 6 | 20 | 약 12 s 동안 계속 재계획한 뒤에만 액션이 실패한다. 그 위에 SimpleProgressChecker(10 s, 0.5 m)와 NAV-006(30 s)이 진척 없음을 끊는다 |
 
-   속도·가속·목표 허용오차·`failure_tolerance`·costmap은 그대로다. CORE가 속도 한도를 자르는 방식(`feat/speed-limit-config`)도 그대로다.
+   속도·가속·목표 허용오차·`failure_tolerance`·costmap은 그대로다(`rotate_to_heading_min_angle`만 위 표처럼 모든 목표에 걸린다. 실물에서 코너를 크게 도는 것이 문제면 이 한 줄을 0.35로 되돌린다). CORE가 속도 한도를 자르는 방식(`feat/speed-limit-config`)도 그대로다.
 7. **Fleet 연동은 이번에 하지 않는다.** 차선 trip(lane segment)을 이 API로 한 번에 보내는 일은 다음 단계다. D-1003(`feat/nav2-site-map-goals`, 아직 로컬 main에 없음)이 구간 끝 장소 하나와 409 재전송으로 고치는 `trip_steps`·`robot_frame_goal`과 같은 파일을 건드리므로, 그 브랜치가 착지한 뒤 그 위에 얹는다. Fleet이 경로 점을 보낼 때는 D-1003의 `robot_frame_goal`로 각 점을 기체 프레임으로 바꾼 뒤 보낸다(경로 API는 기체 `map` 프레임 좌표를 받는다). D-463의 0.2 m 앞 점 목표와 지점마다의 409 재시도는 이 API로 대체한다.
 
 ### 한계

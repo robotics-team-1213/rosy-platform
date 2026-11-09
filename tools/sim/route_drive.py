@@ -40,7 +40,7 @@ import fleet_trips as ft  # noqa: E402
 
 STEP_M = 0.15                  # the lane-vertex spacing of the field drive (0.15-0.33 m)
 START_S = 0.92                 # where the east road trip starts: rosy_01 spawns here; the road is 4 m long
-STOP_V, STOP_MIN_S, MOVING_V = 0.02, 0.3, 0.05
+STOP_V, STOP_MIN_S, MOVING_V = 0.015, 0.3, 0.02
 OFF_MAP = (60.0, 60.0)
 ROUTES = {'A': 'pppS', 'B': 'ppSpS', 'C': 'SSS', 'D': 'qpS'}
 
