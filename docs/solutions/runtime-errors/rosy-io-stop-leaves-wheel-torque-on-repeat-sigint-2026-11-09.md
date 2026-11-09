@@ -38,3 +38,11 @@ torque still 1. rosy-navigation runs the same bringup node and had the same faul
 Next time a cleanup "never ran", read the journal traceback for where it was interrupted before blaming
 the close path. A hand-installed drop-in `90-local-torque-off.conf` (11-09 hotfix) is redundant once this
 release is on the robot; remove it then.
+
+## Second fault found in the same re-approval (geg6 2026-11-09)
+
+`navigation_approval_host.SystemOps.commit` ran `HERE / "os_storage_dispatch.py" --projected`. The API spawns
+begin/seal from the release copy (`/opt/rosy/releases/<id>/deploy/robot/native/`), where the dispatcher's
+`bootstrap_entry()` looks for `os-bootstrap` beside its own `parent.parent`, finds none, and answers
+`{"phase":"HOLD"}` rc 1, so begin and seal failed with "did not reach the PROJECTED phase" although runtime.env
+was committed. It now runs `/opt/rosy/native-runtime/os_storage_dispatch.py`, the image-installed copy.
