@@ -55,15 +55,20 @@ def check_backups(directory: Path, *, max_age_hours: int) -> dict:
 #: 2026-10-28 자원 경계: 무한히 쌓이던 원장 행의 보존 기간(일).
 DEFAULT_HISTORY_RETENTION_DAYS = 30   # 종료 작업의 fleet_task_history 행
 DEFAULT_AUDIT_RETENTION_DAYS = 90     # device_pairing_audit / core_event_audit
+#: 2026-11-10 자원 경계: 같은 이유로 무한히 쌓이던 사이트 감사표.
+DEFAULT_API_AUDIT_RETENTION_DAYS = 90   # fleet_api_audit (요청 감사, created_at ISO)
+DEFAULT_SIGHTING_RETENTION_DAYS = 90    # sighting_audit (수용 감사, received_at epoch)
 
 
 def prune_ledger(source: Path | str, *, history_days: int = DEFAULT_HISTORY_RETENTION_DAYS,
-                 audit_days: int = DEFAULT_AUDIT_RETENTION_DAYS) -> dict[str, int]:
+                 audit_days: int = DEFAULT_AUDIT_RETENTION_DAYS,
+                 api_audit_days: int = DEFAULT_API_AUDIT_RETENTION_DAYS,
+                 sighting_days: int = DEFAULT_SIGHTING_RETENTION_DAYS) -> dict[str, int]:
     """Delete terminal-task history older than
     ``history_days`` and pairing/CORE audit rows older than ``audit_days``. Runs on the live
     volume after a fresh backup; tables missing from an older schema are skipped."""
     path = Path(source)
-    if history_days < 0 or audit_days < 0:
+    if history_days < 0 or audit_days < 0 or api_audit_days < 0 or sighting_days < 0:
         raise DatabaseError("retention days must not be negative")
     if not path.is_file():
         raise DatabaseError("source database is missing")
@@ -78,8 +83,14 @@ def prune_ledger(source: Path | str, *, history_days: int = DEFAULT_HISTORY_RETE
     audit_cutoff_iso = (datetime.now(timezone.utc)
                         - timedelta(days=audit_days)).isoformat(timespec="milliseconds") \
         if audit_days > 0 else None
+    api_audit_cutoff_iso = (datetime.now(timezone.utc)
+                            - timedelta(days=api_audit_days)).isoformat(timespec="milliseconds") \
+        if api_audit_days > 0 else None
+    sighting_cutoff = time.time() - sighting_days * 86400.0 if sighting_days > 0 else None
     removed = {"fleet_task_history": 0, "fleet_tasks": 0, "rosy_account_audit": 0,
-               "device_pairing_audit": 0, "core_event_audit": 0}
+               "device_pairing_audit": 0, "core_event_audit": 0,
+               "fleet_api_audit": 0, "sighting_audit": 0}
+
     try:
         with closing(sqlite3.connect(path, timeout=30.0)) as db:
             tables = {row[0] for row in
@@ -105,7 +116,21 @@ def prune_ledger(source: Path | str, *, history_days: int = DEFAULT_HISTORY_RETE
                     removed["core_event_audit"] = db.execute(
                         "DELETE FROM core_event_audit WHERE received_at < ?",
                         (audit_cutoff_iso,)).rowcount
+                # Site API request audit (task_store.begin/finish_api_audit) shares the
+                # `_now()` ISO shape; the request_id link is per request, not a durable
+                # contract, so rows past the retention window have no reader.
+                if api_audit_cutoff_iso is not None and "fleet_api_audit" in tables:
+                    removed["fleet_api_audit"] = db.execute(
+                        "DELETE FROM fleet_api_audit WHERE created_at < ?",
+                        (api_audit_cutoff_iso,)).rowcount
+                # Accepted-sighting audit (recognition/sighting_store.py) keeps epoch
+                # seconds in received_at; latest_sightings (the live view) is untouched.
+                if sighting_cutoff is not None and "sighting_audit" in tables:
+                    removed["sighting_audit"] = db.execute(
+                        "DELETE FROM sighting_audit WHERE received_at < ?",
+                        (sighting_cutoff,)).rowcount
                 db.commit()
+
             except sqlite3.Error:
                 db.rollback()
                 raise
@@ -127,6 +152,23 @@ def checkpoint_wal(source: Path | str) -> dict:
         return {"wal_checkpoint": [int(value) for value in row]} if row else {"wal_checkpoint": None}
     except sqlite3.Error:
         return {"wal_checkpoint": None}
+
+
+def vacuum_database(path: Path | str) -> dict:
+    """Rewrite ``path`` in place with VACUUM so pages freed by the prune return to
+    the OS. The caller owns the stop decision: on the live volume this blocks writers
+    for the duration, so the CLI only reaches it with --assume-stopped or on a backup
+    copy."""
+    target = Path(path)
+    if not target.is_file():
+        raise DatabaseError("database is missing")
+    before = target.stat().st_size
+    try:
+        with closing(sqlite3.connect(target, timeout=30.0)) as db:
+            db.execute("VACUUM")
+    except sqlite3.Error as exc:
+        raise DatabaseError("vacuum failed") from exc
+    return {"bytes_before": before, "bytes_after": target.stat().st_size}
 
 
 class DatabaseError(RuntimeError):
@@ -358,8 +400,21 @@ def main(argv: Sequence[str] | None = None) -> int:
                         metavar="DAYS",
                         help="delete pairing/CORE event audit rows older than DAYS after the "
                              "backup (default 90; 0 disables)")
+    backup.add_argument("--prune-api-audit", type=int, default=DEFAULT_API_AUDIT_RETENTION_DAYS,
+                        metavar="DAYS",
+                        help="delete fleet_api_audit rows older than DAYS after the "
+                             "backup (default 90; 0 disables)")
+    backup.add_argument("--prune-sightings", type=int, default=DEFAULT_SIGHTING_RETENTION_DAYS,
+                        metavar="DAYS",
+                        help="delete sighting_audit rows older than DAYS after the "
+                             "backup (default 90; 0 disables)")
     verify = commands.add_parser("verify", help="run SQLite integrity_check")
     verify.add_argument("--path", type=Path, required=True)
+    compact = commands.add_parser(
+        "compact", help="VACUUM the database in place (quarterly, maintenance window)")
+    compact.add_argument("--path", type=Path, default=DEFAULT_DATABASE)
+    compact.add_argument("--assume-stopped", action="store_true",
+                         help="assert the site services are stopped (VACUUM blocks writers)")
     check = commands.add_parser(
         "check", help="verify the newest dest-dir backup is fresh and passes integrity_check")
     check.add_argument("--dest-dir", type=Path, default=DEFAULT_BACKUP_DIR,
@@ -383,6 +438,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         pruned = []
         pruned_ledger = None
         checkpointed = None
+        vacuumed = None
         if args.command == "backup":
             if bool(args.destination) == bool(args.dest_dir):
                 parser.error("pass exactly one of --destination or --dest-dir")
@@ -394,13 +450,26 @@ def main(argv: Sequence[str] | None = None) -> int:
                 args.destination = args.dest_dir / f"{BACKUP_PREFIX}{timestamp}.sqlite3"
             result = backup_database(args.source, args.destination)
             if args.dest_dir is not None:
+                # The timer copy is off the live volume: compact it so 14 kept
+                # backups track the retained data, not the source's high-water mark.
+                vacuumed = vacuum_database(args.destination)
                 pruned = _prune_backups(args.dest_dir, args.prune)
             # Retention runs only after the backup file exists (2026-10-28 resource bounds).
             pruned_ledger = prune_ledger(args.source, history_days=args.prune_history,
-                                         audit_days=args.prune_audit)
+                                         audit_days=args.prune_audit,
+                                         api_audit_days=args.prune_api_audit,
+                                         sighting_days=args.prune_sightings)
             checkpointed = checkpoint_wal(args.source)
         elif args.command == "verify":
             print(json.dumps({"path": str(args.path), "integrity": verify_database(args.path)}))
+            return 0
+        elif args.command == "compact":
+            if not args.assume_stopped:
+                parser.error("stop the site services first, then pass --assume-stopped")
+            verify_database(args.path)
+            report = vacuum_database(args.path)
+            report.update({"path": str(args.path), "integrity": verify_database(args.path)})
+            print(json.dumps(report))
             return 0
         elif args.command == "check":
             print(json.dumps(check_backups(args.dest_dir,
@@ -419,6 +488,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "pruned": pruned,
         "pruned_ledger": pruned_ledger,
         "checkpoint": checkpointed,
+        "vacuum": vacuumed,
     }))
     return 0
 
