@@ -8,6 +8,7 @@ import httpx
 from core_common.protocol.integrated_control import (
     ControlMapSnapshot, ControlOverview, ControlUnitDetail, ControlUnitSummary,
 )
+from fleet.server.control_unit_config import canonical_unit_id
 
 
 class ControlUnitCollection:

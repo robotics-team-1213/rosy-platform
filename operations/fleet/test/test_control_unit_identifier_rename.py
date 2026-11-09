@@ -96,8 +96,8 @@ def test_store_migration_rewrites_the_pre_rename_journal_once(tmp_path):
     assert row["request"]["other_unit"] == "CELL-B"
     with sqlite3.connect(path) as connection:
         identity = connection.execute("SELECT unit_id FROM fleet_control_unit_identity").fetchone()[0]
-        stops = dict(connection.execute(
-            "SELECT unit_id, target_unit, body_json FROM fleet_control_stops").fetchone())
+        unit_id, target_unit, body_json = connection.execute(
+            "SELECT unit_id, target_unit, body_json FROM fleet_control_stops").fetchone()
         delivery = connection.execute(
             "SELECT delivery_unit, assigned_json, results_json FROM fleet_control_stop_deliveries"
         ).fetchone()
@@ -105,8 +105,8 @@ def test_store_migration_rewrites_the_pre_rename_journal_once(tmp_path):
             "SELECT from_id, to_id, COUNT(*) FROM fleet_control_unit_identifier_events "
             "GROUP BY from_id, to_id").fetchall()
     assert identity == "ARM-CELL"
-    assert stops["unit_id"] == "ARM-CELL" and stops["target_unit"] == "ARM-CELL"
-    assert json.loads(stops["body_json"]) == {"target_unit": "ARM-CELL"}
+    assert unit_id == "ARM-CELL" and target_unit == "ARM-CELL"
+    assert json.loads(body_json) == {"target_unit": "ARM-CELL"}
     assert delivery[0] == "ARM-CELL"
     assert json.loads(delivery[1]) == {"units": ["ARM-CELL"]}
     assert json.loads(delivery[2]) == [{"unit_id": "ARM-CELL", "state": "REQUESTED"}]
