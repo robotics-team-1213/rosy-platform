@@ -33,7 +33,7 @@ def fake_land(tmp_path, fail=None, merged=True):
                 raise Stop(name)
         return run
     return calls, SimpleNamespace(
-        Stop=Stop, HARNESS="h.py", out=lambda *a: "main-sha", safety_review=gate("safety"), size_check=gate("size"),
+        Stop=Stop, HARNESS="h.py", out=lambda *a: "main-sha", lines=lambda *a: [], safety_review=gate("safety"), size_check=gate("size"),
         step=lambda wt, cmd, log, label: gate("lint")(), secret_scan=gate("secret"),
         git=lambda *a, **k: SimpleNamespace(returncode=0 if merged else 1))
 

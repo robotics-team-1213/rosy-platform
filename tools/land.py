@@ -403,7 +403,9 @@ def rounds(args, wt: Path, branch: str, main_co: Path, python: str, qdir, ticket
             print(f"== round {round_no}: main {main_sha[:10]}, branch {branch}")
             land_events.emit("round", round=round_no, main=main_sha)
             if git(wt, "merge-base", "--is-ancestor", main_sha, "HEAD", check=False).returncode != 0:
+                began = time.monotonic()
                 resolved = merge(wt, main_sha, branch, python, args.dry_run)
+                land_events.emit("merged", round=round_no, seconds=round(time.monotonic() - began), resolved=resolved)
                 summary.append(f"round {round_no}: merged main {main_sha[:10]}"
                                + (f", auto-resolved {resolved}" if resolved else ""))
             candidate = out(wt, "rev-parse", "HEAD")  # the commit the checks below vouch for
@@ -554,10 +556,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--precheck", action="store_true", help="run the cheap gates only (land_async does this first)")
     parser.add_argument("--urgent", default="", metavar="REASON",
                         help="the user's words: pass waiting tickets (one at a time, D-889 addendum 5)")
+    parser.add_argument("--mixed", default="", metavar="REASON", help="the user's words: gate or safety paths with product")
     args = parser.parse_args(argv)
     if args.precheck:
         try:
-            land_precheck.precheck(sys.modules[__name__], Path(out(Path.cwd(), "rev-parse", "--show-toplevel")), sys.executable)
+            land_precheck.precheck(sys.modules[__name__], Path(out(Path.cwd(), "rev-parse", "--show-toplevel")), sys.executable,
+                                   args.mixed)
             return 0
         except Stop as exc:
             print(f"[land] STOP: {exc}", file=sys.stderr)

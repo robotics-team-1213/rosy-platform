@@ -3,16 +3,54 @@
 safety review, size ratchet, lint (ADR gaps included) and the secret scan took 67 + 18 stops that only showed up
 inside the queued supervisor, after the owner had left. Here they fail fast in the owner's own terminal. The branch is
 not touched: when main is not yet in it lint is advisory (the supervisor re-lints after merging main).
+
+First of all, a branch that changes landing-gate tools or safety paths together with product paths is refused (report
+item 6, D-889 addendum 32): such a change runs FULL and holds the product change behind it, and a broken gate stops
+every landing after it. ``--mixed "<the user's words>"`` lets one through.
 """
 
 from __future__ import annotations
 
-from pathlib import Path
+import sys
+from pathlib import Path, PurePosixPath
+
+# the landing gates themselves; secret_scan.py is the scanner land.secret_scan runs
+GATE = ("tools/land", "tools/remote/", "deploy/robot/pinky_pro/release/secret_scan.py")
+MANIFEST = "tools/harness/platform_parts.yaml"
 
 
-def precheck(land, wt: Path, python: str) -> None:
+def mixed(paths: list[str], is_safety) -> tuple[list[str], list[str]]:
+    """(gate-tool or safety paths, product paths); docs, Markdown and tests go with either side."""
+    held, product = [], []
+    for path in paths:
+        parts = PurePosixPath(path).parts
+        if path.startswith("docs/") or path.endswith(".md") or {"test", "tests"} & set(parts) \
+                or parts[-1].startswith("test_"):
+            continue
+        (held if path.startswith(GATE) or is_safety(path) else product).append(path)
+    return held, product
+
+
+def safety_of(wt: Path):
+    """``safety_review.is_safety`` over this tree's manifest, or nothing is safety when the harness is absent."""
+    if not (wt / MANIFEST).is_file():
+        return lambda path: False
+    sys.path.insert(0, str(wt / "tools" / "harness"))
+    import safety_review
+    manifest = safety_review.yaml.safe_load((wt / MANIFEST).read_text(encoding="utf-8")) or {}
+    roots, modules = manifest.get("roots") or [], set(manifest.get("safety_modules") or ())
+    return lambda path: safety_review.is_safety(path, roots, modules)
+
+
+def precheck(land, wt: Path, python: str, mixed_ok: str = "") -> None:
     """``land`` is tools/land.py (its Stop, gates and git helpers); raises land.Stop on the first failing gate."""
     before = land.out(wt, "rev-parse", "main")
+    held, product = mixed(land.lines(wt, "diff", "--name-only", f"{before}...HEAD"), safety_of(wt))
+    if held and product and not mixed_ok.strip():
+        raise land.Stop(f"this branch changes landing-gate tools or safety paths ({len(held)}: {', '.join(held[:5])})"
+                        f" together with product paths ({len(product)}: {', '.join(product[:5])}). Split them into"
+                        " separate branches (a gate or safety change runs FULL and holds the product change behind"
+                        ' it), or pass --mixed "<the user\'s words>" (D-889 addendum 32)')
     land.safety_review(wt, before, "HEAD", python)
     land.size_check(wt, before, "HEAD", python)
     merged = land.git(wt, "merge-base", "--is-ancestor", before, "HEAD", check=False).returncode == 0
