@@ -131,14 +131,14 @@ def plan_tasks(plan_dir, names):
     return {name: dict(json.loads((Path(plan_dir) / f"{name}-two-arm.json").read_text(encoding="utf-8")), name=name) for name in names}
 
 
-def collect(seeds, names, out, plan_dir=None):
+def collect(seeds, names, out, plan_dir=None, choices=None):
     from lerobot.datasets.lerobot_dataset import LeRobotDataset
     import omx_two_arm_world as world_mod
     joints = [f"{arm}.{joint}" for arm in sites.ARMS for joint in world_mod.JOINTS]
     vector = dict(dtype="float32", shape=(12,), names=joints)  # radians, unlike the real recordings' normalised units
     image = dict(dtype="video", shape=(*SHAPE, 3), names=["height", "width", "channels"])
     goal = dict(dtype="float32", shape=(GOAL_SIZE,), names=[f"goal{i}" for i in range(GOAL_SIZE)])
-    layout = sites.Layout()
+    layout = sites.Layout(**(choices or {}))
     world = world_mod.World(layout)
     dataset = LeRobotDataset.create("rosy/omx-two-arm", world_mod.FPS, root=out, robot_type="omx_follower_pair", features={
         "observation.state": vector, "action": vector, GOAL: goal, **{f"observation.images.{view}": image for view in teaching.RECORDED}})
@@ -159,7 +159,7 @@ def collect(seeds, names, out, plan_dir=None):
 class Driver:
     """Runs plan steps with the model in the teacher's place, under the teacher's judgement."""
 
-    def __init__(self, model, steps_file):
+    def __init__(self, model, steps_file, choices=None):
         import omx_two_arm_world as world_mod
         import torch
         from lerobot.policies.act.modeling_act import ACTPolicy, ACTTemporalEnsembler
@@ -171,7 +171,7 @@ class Driver:
         self.policy.temporal_ensembler = ACTTemporalEnsembler(.01, config.chunk_size)
         self.pre, self.post = make_pre_post_processors(self.policy.config, pretrained_path=str(model))
         self.device = next(self.policy.parameters()).device
-        self.layout = sites.Layout()
+        self.layout = sites.Layout(**(choices or {}))
         self.world = world_mod.World(self.layout)
         self.longest = json.loads(Path(steps_file).read_text(encoding="utf-8"))["longest"]
 
@@ -303,7 +303,7 @@ def summarise(rows, whole):
 
 def evaluate(args):
     import av
-    driver = Driver(args.model, args.steps_file)
+    driver = Driver(args.model, args.steps_file, sites.parse_choices(args.choice))
     rows, runs = [], []
     Path(args.artifacts).mkdir(parents=True, exist_ok=True)
     planned = plan_tasks(args.plan_dir, args.tasks.split(",")) if args.plan_dir else None
@@ -356,19 +356,20 @@ def run_round(args):
     names = args.tasks.split(",")
     recipe = dict(ladder.RECIPE, steps=args.steps, optimizer_lr=args.lr, batch_size=args.batch_size, mode=args.mode)
     record = dict(schema=SCHEMA, round_id=round_id, created_at=now(), source_sha=ladder.source_sha(args), status="running", stage="collect", cameras=list(teaching.RECORDED),
-                  tasks=names, seeds=args.seeds, recipe=recipe, claim="기하: 도달·순서·충돌(D-947). 실물 근거가 아닙니다.")
+                  tasks=names, seeds=args.seeds, recipe=recipe, choices=sites.parse_choices(args.choice), claim="기하: 도달·순서·충돌(D-947). 실물 근거가 아닙니다.")
     write_record(run, record)
     me, environment = str(Path(__file__)), dict(os.environ, MUJOCO_GL="egl", PYTHONUNBUFFERED="1")
     log = (run / "round.log").open("w", encoding="utf-8")
+    chosen = [arg for item in args.choice or [] for arg in ("--choice", item)]  # the same layout for plan, collection and judgement
     try:
         plan = []
         if args.mode == "concurrent":  # one plan for all workers and the evaluation: omx_two_arm_plan.py's two-arm order and zones
-            subprocess.run([args.python, str(Path(__file__).with_name("omx_two_arm_plan.py")), "compare", "--out", str(run / "plan.json"), "--replay-dir", str(run / "plan")],
+            subprocess.run([args.python, str(Path(__file__).with_name("omx_two_arm_plan.py")), "compare", "--out", str(run / "plan.json"), "--replay-dir", str(run / "plan"), *chosen],
                            env=dict(environment, PYTHONIOENCODING="utf-8"), stdout=log, stderr=subprocess.STDOUT, check=True)
             plan = ["--plan-dir", str(run / "plan")]
         # One process per part: rendering four cameras is what takes the time, and LeRobot writes one dataset at a time.
         parts = [(run / f"part{k}", list(range(TRAIN_SEED_BASE + k, TRAIN_SEED_BASE + args.seeds, args.workers))) for k in range(min(args.workers, args.seeds))]
-        running = [subprocess.Popen([args.python, me, "collect", "--seeds", ",".join(map(str, seeds)), "--tasks", args.tasks, "--out", str(part), *plan],
+        running = [subprocess.Popen([args.python, me, "collect", "--seeds", ",".join(map(str, seeds)), "--tasks", args.tasks, "--out", str(part), *plan, *chosen],
                                     env=dict(environment, OMP_NUM_THREADS="1"), stdout=log, stderr=subprocess.STDOUT) for part, seeds in parts]
         if any(worker.wait() for worker in running):
             raise RuntimeError("collect")
@@ -396,7 +397,7 @@ def run_round(args):
         record.update(stage="evaluate")
         write_record(run, record)
         subprocess.run([args.python, me, "evaluate", "--model", str(run / "train/checkpoints/last/pretrained_model"), "--steps-file", str(run / "steps.json"), "--tasks", args.tasks,
-                        "--isolated-seeds", str(args.isolated_seeds), "--whole-seeds", str(args.whole_seeds), "--out", str(run / "eval.json"), "--artifacts", str(run / "artifacts"), *plan],
+                        "--isolated-seeds", str(args.isolated_seeds), "--whole-seeds", str(args.whole_seeds), "--out", str(run / "eval.json"), "--artifacts", str(run / "artifacts"), *plan, *chosen],
                        env=environment, stdout=log, stderr=subprocess.STDOUT, check=True)
     except (RuntimeError, subprocess.CalledProcessError) as exc:
         record.update(status="failed", reason=f"{record['stage']} 단계 실패({exc}). round.log를 보세요.", finished_at=now())
@@ -418,11 +419,13 @@ def main(argv=None):
     one.add_argument("--tasks", default=",".join(TASKS))
     one.add_argument("--out", required=True)
     one.add_argument("--plan-dir", help="two-arm plans (omx_two_arm_plan.py --replay-dir): record whole tasks with both arms at once")
+    one.add_argument("--choice", action="append", help="key=value override of omx_two_arm_sites.CHOICES")
     for name in ("evaluate", "round"):
         one = commands.add_parser(name)
         one.add_argument("--tasks", default=",".join(TASKS))
         one.add_argument("--isolated-seeds", type=int, default=3)
         one.add_argument("--whole-seeds", type=int, default=3)
+        one.add_argument("--choice", action="append", help="key=value override of omx_two_arm_sites.CHOICES")
         if name == "evaluate":
             one.add_argument("--model", required=True)
             one.add_argument("--steps-file", required=True)
@@ -442,7 +445,7 @@ def main(argv=None):
     one.add_argument("--mode", default="steps", choices=["steps", "concurrent"], help="one arm at a time per step, or whole tasks with both arms at once")
     args = parser.parse_args(argv)
     if args.command == "collect":
-        return collect([int(seed) for seed in args.seeds.split(",")], args.tasks.split(","), args.out, args.plan_dir)
+        return collect([int(seed) for seed in args.seeds.split(",")], args.tasks.split(","), args.out, args.plan_dir, sites.parse_choices(args.choice))
     return evaluate(args) if args.command == "evaluate" else run_round(args)
 
 

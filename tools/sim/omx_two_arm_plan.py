@@ -318,8 +318,9 @@ def main(argv=None):
     p.add_argument("--scenario", default="both", choices=["stack", "outbound", "both"])
     p.add_argument("--out")
     p.add_argument("--replay-dir", help="write one teacher task JSON per scenario and mode here (omx_two_arm_teacher.py run plan --plan FILE)")
+    p.add_argument("--choice", action="append", help="key=value override of omx_two_arm_sites.CHOICES (e.g. a measured cell snapshot)")
     a = p.parse_args(argv)
-    layout = sites_mod.Layout()
+    layout = sites_mod.Layout(**sites_mod.parse_choices(a.choice))
     result = compare(layout, a.scenario)
     if a.replay_dir:
         Path(a.replay_dir).mkdir(parents=True, exist_ok=True)
