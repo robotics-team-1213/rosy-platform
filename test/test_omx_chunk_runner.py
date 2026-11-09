@@ -427,6 +427,7 @@ def test_a_session_that_ends_mid_chunk_says_so_in_its_last_status(bus_dead):
     last = status[-1]
     assert last["command"] == "run approach_pinky" and last["ok"] is False
     assert last["fault"].startswith("session ended: ValueError: wrist_flex: following error")
+    assert last["fault"].endswith("command=3344, current=3287")  # the measurement a release rule reads stays whole
 
 
 class SlowWrist(Robot):
