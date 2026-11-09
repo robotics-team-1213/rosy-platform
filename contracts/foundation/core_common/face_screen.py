@@ -32,6 +32,7 @@ import stat
 from typing import Any, Mapping, Optional
 
 from core_common import robot_state
+from core_common.person_request_text import FACE_TEXT, MAX_TTL_S
 
 # --- the hand-over ------------------------------------------------------------
 
@@ -149,6 +150,22 @@ def _expression(value: Any) -> Optional[dict]:
     return {"gaze_x": gaze, "resting": value["resting"]}
 
 
+def _person_request(value: Any, written: datetime, now: datetime) -> Optional[dict]:
+    """D-721 Amendment: the person request CORE holds, only while its own expiry has not passed.
+
+    ``remaining_s`` is what was left when CORE wrote the file; the reader counts it down from ``written_at``, so a
+    request that expired (or a CORE that died) is gone without anyone clearing it. A bad field is no request.
+    """
+    if not isinstance(value, Mapping) or value.get("kind") not in FACE_TEXT:
+        return None
+    remaining, request_id = _number(value.get("remaining_s")), value.get("id")
+    if remaining is None or not 0 < remaining <= MAX_TTL_S or not isinstance(request_id, str) or not request_id:
+        return None
+    if (now - written).total_seconds() >= remaining:
+        return None
+    return {"kind": value["kind"], "id": request_id[:64]}
+
+
 def validate_face_inputs(data: Any, now: datetime) -> Optional[dict]:
     """The hand-over as the table reads it, or None (wrong schema, no time, stale, not an object).
 
@@ -216,6 +233,7 @@ def validate_face_inputs(data: Any, now: datetime) -> Optional[dict]:
         "signal": data.get("signal") if data.get("signal") in robot_state.DRIVE_SIGNALS else None,
         "drive": _card(data.get("drive")),
         "wake": wake,
+        "person_request": _person_request(data.get("person_request"), written, now),
     }
 
 
@@ -404,7 +422,7 @@ def screen_for(*, stage: Any = None, state: Any = None, todo: Optional[str] = No
     a stopped card, ``cause``/``release``.
     """
     answer = {"kind": STATUS, "row": "", "face": None, "overlay": None, "strip": None,
-              "strip_tone": None, "backlight": 100, "awake": True}
+              "strip_tone": None, "backlight": 100, "awake": True, "person": None}
     kind = robot_state.stage_kind(stage)
 
     def status(row: str, **extra: Any) -> dict:
@@ -439,13 +457,17 @@ def screen_for(*, stage: Any = None, state: Any = None, todo: Optional[str] = No
     caution = [CAUTION_TEXT[code] for code in codes if code in CAUTION_TEXT]
     # Text and tone are assigned apart: a (text, "info") pair reads as an event emit
     # to the D-8 catalogue guard (test_event_catalogue.py).
-    strip = tone = None
+    strip = tone = person = None
     if core.get("recovery") in RECOVERY_TEXT:  # D-546: a moving recovery outranks every other strip
         strip = RECOVERY_TEXT[core["recovery"]]
         tone = "caution"
     elif state == robot_state.CAUTION or caution:
         strip = todo or (caution[0] if caution else "Caution")
         tone = "caution"
+    elif core.get("person_request") is not None:  # D-721 Amendment: a person is asked; below every stop/boot/update card
+        strip = FACE_TEXT[core["person_request"]["kind"]]
+        tone = "caution"
+        person = core["person_request"]["id"]
     elif test in ("buzzer", "lamp"):
         strip = f"Testing {test}"
         tone = "info"
@@ -520,6 +542,7 @@ def screen_for(*, stage: Any = None, state: Any = None, todo: Optional[str] = No
         tone = "info"
     if strip is not None and tone == "info" and not strip.startswith("Charging"):
         strip = _with_level(strip, core)
-    backlight = 100 if overlay is not None or call_line is not None or ask_line is not None else BACKLIGHT.get(power, 100)
+    backlight = (100 if overlay is not None or call_line is not None or ask_line is not None or person
+                 else BACKLIGHT.get(power, 100))
     return {**answer, "kind": FACE, "row": row, "face": face, "overlay": overlay, "strip": strip,
-            "strip_tone": tone, "backlight": backlight}
+            "strip_tone": tone, "backlight": backlight, "person": person}

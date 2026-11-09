@@ -356,6 +356,6 @@
 
 - 2026-11-09 · uncommitted · Pinky 표현의 미결 기본값 결정
 - 2026-11-09 · uncommitted · Pinky 캐릭터 표현 결정과 후속 설계
+- 2026-11-08 · uncommitted · fix(remote): 현장 PC가 고정 학습 환경이 필요한 시험을 받지 않는다
 - 2026-11-08 · uncommitted · docs(solutions): rclpy Node 비공개 이름 충돌 교훈
 - 2026-11-08 · uncommitted · fix(land): 실패만 있는 브라우저 묶음을 "통과 0건"으로 멈추지 않는다
-- 2026-11-08 · uncommitted · fix(land): 같은 트리 재사용도 새 커밋의 게시 증거로 남긴다

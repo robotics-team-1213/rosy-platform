@@ -617,7 +617,7 @@ class RosBridge:
             expression=self._expression_intent.handover(),
             written_at=datetime.now(timezone.utc).isoformat(timespec="milliseconds"))
         preview = self._svc.vision.status(now=time.monotonic())
-        content.update(display.face_camera_quality(preview))
+        content.update(display.face_camera_quality(preview), **display.face_person_request(self._svc.person_request.view()))
         expressive = self._expression_intent.handover() is not None
         period = min(FACE_INPUTS_PERIOD_S, .15) if expressive else FACE_INPUTS_PERIOD_S
         if not display.face_inputs_due(content, self._face_inputs_last, now,

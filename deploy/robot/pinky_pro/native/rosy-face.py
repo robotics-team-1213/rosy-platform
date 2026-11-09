@@ -60,7 +60,9 @@ the stage and the battery into one state:
 * the buzzer sounds on state changes only: once when ready, three times on
   failure, two low tones on caution; caution is not repeated within
   BUZZER_REPEAT_S. D-381: entering the emergency pattern (an e-stop) adds
-  four higher beeps, once per entry, whatever the health state says;
+  four higher beeps, once per entry, whatever the health state says. At SAF-005
+  critical (10% or under) the LCD goes dark and three beeps repeat every 30 s
+  until the pack recovers (D-502 amendment 2026-11-07);
 * the WS2812 lamp shows the state's pattern through ``lamp_pattern`` (one
   helper process per pattern, /dev/ws281x_pwm granted to this unit alone),
   and only when the driver runs on PWM0 channel 3 (GPIO19; channel 2 is the
@@ -94,7 +96,7 @@ from rosy_face_parts import (  # noqa: E402, F401
     BUZZER_CALL_HZ, BUZZER_DUTY, BUZZER_FREQUENCY_HZ, BUZZER_LOW_HZ, BUZZER_OFF_S, BUZZER_ON_S,
     BUZZER_PATTERNS, BUZZER_REVERSE_HZ, BatteryReader, Buzzer, IDENTIFY_MAX_S, LAMP_CHANNEL,
     LAMP_HELPER, LAMP_NODE, LAMP_PWM_CHANNEL, LAMP_STOP_S, LAMP_TEST_S, Lamp, Log, TEST_BEEPS,
-    TEST_OFF_S, TEST_ON_S, _spawn_helper,
+    TEST_OFF_S, TEST_ON_S, PersonAsk, _spawn_helper,
 )
 from rosy_face_inputs import (  # noqa: E402, F401
     BUZZER_DEFAULT_LINE, BUZZER_LINES, CORE_USER, FACE_LOAD_SKIP, FACE_SIZE, FaceFrames,

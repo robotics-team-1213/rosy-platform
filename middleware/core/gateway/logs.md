@@ -2112,6 +2112,23 @@ clpy.duration을 추가했다(bridge AGENTS의 두 파일 함께 갱신 규칙).
 - gate 변화: 소스 회귀 근거이며 배포·실물 G4/SLAM 수용은 미실행이다. 게시용 canonical FULL은 후속 전체 source에서 별도 조정한다.
 - CE: 기존 교훈 갱신 — `docs/solutions/deployment/native-hardware-mode-profile-and-canonical-runtime-env-2026-11-03.md`에 갱신 후 재커미셔닝 순환 의존과 복구 경계를 추가했다.
 
+## 2026-11-07 · 11b42b5933 · feat(core): 로봇당 사람 부탁 하나를 쥔다
+- 변경: `core/person_request.py` 홀더(만료·토큰 소유·한 개), `CoreServices.person_request`, face-inputs `person_request`(카운트다운은 읽는 쪽), `ros_bridge` 한 줄. 모션 권한 없음. 상태 스냅샷 필드는 안전 태그 `state/manager.py`라 더하지 않았다.
+- 증거: `test_core_person_request.py` — 정지가 걸린 채 PUT/DELETE 해도 모드·정지·목표·취소가 그대로.
+- 결정: API v1.372.
+- gate 변화: SOURCE 변경. 로봇·장치 수용 없음.
+- 교훈: CE 해당 없음 — 최종 코드와 시험이 판단을 보존한다. 실물·운영 수용은 아니다.
+## 2026-11-07 · 92cb90111c · fix(battery): release a recovered battery stop in the policy chain (D-502 Amendment 2026-11-07)
+- 변경: 배터리 래치만 잔량 회복 시 스스로 풀림, 다른 정지는 래치를 넘겨받음, 상태 `safety.releases_when_charged`, 화면 문구.
+- 증거: 원격 시험 결과는 착지 기록을 본다. 실제 충전 해제는 새 릴리스 뒤 확인 전이다.
+- gate 변화: 없음
+- 교훈: CE 해당 없음 — 규칙은 D-502 Amendment 2026-11-07과 회귀 시험에 있다.
+
+## 2026-11-08 · uncommitted · feat(core): 로봇 화면에서 사람 부탁에 답하기
+- 변경: `POST /api/v1/person-request/{id}/answer` — 계정으로 로그인한 사람만(토큰 403 `PERSON_LOGIN_REQUIRED`). 답은 들고 있는 부탁의 `answer`로 남고 Fleet이 되읽어 기록한다. `GET`에 `can_answer`. 움직임·정지 해제 없음(사용자 결정 2026-11-08: 로그인한 사용자만).
+- 증거: `test_core_person_request.py` 추가, 원격 실행 기록 참조.
+- gate 변화: 없음.
+
 ## 2026-11-08 · 6160ccf28e · fix(core): Nav2 무응답 목표 보고
 - 변경: `bridge/goal_tracker.py`의 `on_no_response`와 `GoalTracker.abandon`, `ros_bridge.send_native_goal`의 10초 타이머. `navigate_to_pose` 서버가 없을 때 목표가 이유 없이 PLANNING에 머물던 것을, native run은 `BACKEND_RESULT_UNKNOWN`(계약대로 실패로 바꾸지 않음)으로, run 없는 목표(도킹 staging)는 `NAV2_NO_RESPONSE` 실패로 보고한다. 늦게 온 수락은 취소한다.
 - 증거: `test_goal_tracker.py` 3개 추가, gateway 시험 원격 실행.

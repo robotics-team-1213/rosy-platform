@@ -48,7 +48,7 @@ def _payload(snapshot=None, *, face="happy", power="ACTIVE", wake=None, at=NOW):
 
 
 def test_the_payload_is_what_the_reader_validates():
-    payload = _payload()
+    payload = {**_payload(), **display.face_person_request(None)}   # the bridge adds the person request key
     read = fs.validate_face_inputs(json.loads(json.dumps(payload)), NOW)
 
     assert read is not None
