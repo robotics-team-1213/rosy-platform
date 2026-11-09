@@ -33,7 +33,7 @@ WRIST_PARTS = ("link5_gripper", "gripper_plate_F6", "b16-u16-span-D-holder-assem
 FPS = 15
 # the cell as its top camera sees it (median pixels of the 11-09 top frame): yellow table, white plates with dark lane pads, light-blue ship
 COLOURS = dict(floor=[.45, .5, .55, 1], table=[.74, .64, .35, 1], belt=[.2, .25, .28, 1], plate=[.88, .89, .9, 1], pad=[.08, .09, .1, 1],
-               ship=[.6, .85, .97, 1], container=[.91, .47, .22, 1])
+               ship=[.6, .85, .97, 1], container=[.91, .47, .22, 1], wall=[.6, .84, 1., 1])  # wall: the room behind the cell in the side frame (11-09)
 
 
 def prism(polygon, z0, z1):
@@ -101,6 +101,8 @@ class World:
         spec.option.enableflags |= mujoco.mjtEnableBit.mjENBL_MULTICCD  # a convex mesh against a box gives ONE contact point otherwise: boxes on the deck rocked and crept
         spec.option.cone, spec.option.impratio = (mujoco.mjtCone.mjCONE_PYRAMIDAL if self.cone == "pyramidal" else mujoco.mjtCone.mjCONE_ELLIPTIC), 10
         spec.visual.global_.offwidth, spec.visual.global_.offheight = 1280, 960
+        spec.add_texture(name="room", type=mujoco.mjtTexture.mjTEXTURE_SKYBOX, builtin=mujoco.mjtBuiltin.mjBUILTIN_FLAT,
+                         rgb1=COLOURS["wall"][:3], rgb2=COLOURS["wall"][:3], width=8, height=8)  # past the floor the side camera saw black
         spec.default.geom.solref, spec.default.geom.solimp = [.002, 1], [.95, .99, .001, .5, 2]
         world, box = spec.worldbody, mujoco.mjtGeom.mjGEOM_BOX
         f = L.fixture
