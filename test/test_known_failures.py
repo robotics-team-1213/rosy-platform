@@ -43,9 +43,9 @@ def test_windows_separators_and_errors_are_read():
 
 
 def test_an_escaped_non_ascii_param_id_keeps_its_backslashes():
-    # 11-04: '지' became '/uc9c0', so the MAIN-RED rerun on main found no such test and blamed 7 branches
-    report = r"FAILED t\test_c.py::test_state[1366-delayed-지연] - AssertionError"
-    assert known_failures.failed_ids(report) == [r"t/test_c.py::test_state[1366-delayed-지연]"]
+    # 11-04: '\uc9c0' became '/uc9c0', so the MAIN-RED rerun on main found no such test and blamed 7 branches
+    report = r"FAILED t\test_c.py::test_state[1366-delayed-\uc9c0\uc5f0] - AssertionError"
+    assert known_failures.failed_ids(report) == [r"t/test_c.py::test_state[1366-delayed-\uc9c0\uc5f0]"]
 
 
 @pytest.mark.parametrize("encoding", ["utf-8", "utf-16"])
