@@ -1,3 +1,6 @@
+# Text is stored LF whatever core.autocrlf says (2026-11-09: CRLF blobs committed with autocrlf off kept
+# CRLF on every edit and conflicted as whole files). Checkout still follows core.autocrlf. Later lines override.
+* text=auto
 .gitattributes text eol=lf
 *.sh text eol=lf
 integrations/simulation/gazebo/scripts/*.py text eol=lf

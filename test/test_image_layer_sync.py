@@ -10,6 +10,7 @@ real systemctl or udevadm.
 from __future__ import annotations
 
 import datetime as dt
+import errno
 import hashlib
 import importlib.util
 import json
@@ -342,6 +343,89 @@ def test_an_image_without_the_wifi_config_gets_it_without_a_restart(device):
     assert "/etc/NetworkManager/conf.d/60-rosy-wifi.conf" in result["new"]
     assert "wifi.powersave = 2" in wifi.read_text(encoding="utf-8")
     assert "rosy-network.service" not in result["restart_units"]
+
+
+def _fails_under(relative: str, number: int):
+    """An _install error whose destination sits in `relative`, like a sandbox denial."""
+    real = sync_mod._install
+
+    def install(source, destination, mode):
+        parent = destination.parent.as_posix()
+        if parent == relative or parent.endswith("/" + relative):
+            raise OSError(number, os.strerror(number), str(destination))
+        real(source, destination, mode)
+
+    return install
+
+
+def test_a_read_only_overlay_config_is_deferred_and_the_rest_of_the_release_lands(device, monkeypatch):
+    # 2026.11.09-177 rolled back with Errno 30: the running updater's unit
+    # predates the NetworkManager destination, so that run's sandbox cannot
+    # write it. The sync keeps the release, records the file as deferred and
+    # never claims it in a manifest; the next sync writes it.
+    wifi = device / "etc/NetworkManager/conf.d/60-rosy-wifi.conf"
+    wifi.unlink()
+    real = sync_mod._install
+    monkeypatch.setattr(sync_mod, "_install", _fails_under("etc/NetworkManager/conf.d", errno.EROFS))
+    runner = Runner(active={"rosy-network.service"})
+
+    result = _sync(device, NEW_ID, runner, dry_run=False)
+
+    assert result["deferred"] == ["/etc/NetworkManager/conf.d/60-rosy-wifi.conf"]
+    assert not wifi.exists()
+    release = device / "opt/rosy/releases" / NEW_ID / "deploy/robot/native"
+    assert (device / "etc/systemd/system/rosy-io.service").read_text(encoding="utf-8") \
+        == (release / "rosy-io.service").read_text(encoding="utf-8")  # units before it landed
+    assert (device / "etc/udev/rules.d/99-rosy-lamp.rules").is_file()  # the run continued past it
+    manifests = list((device / sync_mod.BACKUP_ROOT).glob("*/backup-manifest.json"))
+    applied = [json.loads(path.read_text(encoding="utf-8")) for path in manifests]
+    assert applied and all(data["files_applied"] for data in applied)
+    assert all(record["path"] != "/etc/NetworkManager/conf.d/60-rosy-wifi.conf"
+               for data in applied for record in data["files"])
+
+    monkeypatch.setattr(sync_mod, "_install", real)
+    second = _sync(device, NEW_ID, runner, dry_run=False)
+
+    assert second["deferred"] == []
+    assert "wifi.powersave = 2" in wifi.read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("relative, number", (
+    ("etc/NetworkManager/conf.d", errno.EACCES),
+    ("opt/rosy/native-runtime", errno.EROFS),
+))
+def test_any_other_write_error_still_fails_the_sync(device, monkeypatch, relative, number):
+    # Only the sandbox-shaped EROFS on an overlay config is deferrable; a
+    # permission problem, or a read-only core destination, still rolls back.
+    (device / "etc/NetworkManager/conf.d/60-rosy-wifi.conf").unlink()
+    (device / "opt/rosy/native-runtime/rosy-boot-status.py").write_text("old\n", encoding="utf-8")
+    monkeypatch.setattr(sync_mod, "_install", _fails_under(relative, number))
+    before = {k: v for k, v in _tree(device).items() if not k.startswith(sync_mod.BACKUP_ROOT)}
+
+    with pytest.raises(OSError):
+        _sync(device, NEW_ID, Runner(), dry_run=False)
+
+    after = {k: v for k, v in _tree(device).items() if not k.startswith(sync_mod.BACKUP_ROOT)}
+    assert after == before
+
+
+def test_every_plan_destination_is_writable_in_the_updater_unit():
+    # The plan reaches destinations the updater unit's sandbox must allow: a
+    # new ALLOWED_PREFIXES or overlay-config directory fails here until
+    # rosy-auto-update.service grants it (2026.11.09-177 rolled back on this).
+    unit = (NATIVE / "rosy-auto-update.service").read_text(encoding="utf-8")
+    writable: set[str] = set()
+    for line in unit.splitlines():
+        if line.startswith("ReadWritePaths="):
+            writable |= {word.lstrip("-+") for word in line.partition("=")[2].split()}
+        if line.startswith("StateDirectory="):
+            writable |= {"/var/lib/" + word for word in line.partition("=")[2].split()}
+    roots = {"/" + prefix.rstrip("/") for prefix in sync_mod.ALLOWED_PREFIXES}
+    roots |= {"/" + sync_mod.boot.BOOT_DIRECTORY, "/" + sync_mod.BACKUP_ROOT, "/var/lib/rosy/releases"}
+
+    for root in sorted(roots):
+        assert any(root == path or root.startswith(path + "/") for path in writable), \
+            f"rosy-auto-update.service cannot write {root}"
 
 
 @needs_bash
