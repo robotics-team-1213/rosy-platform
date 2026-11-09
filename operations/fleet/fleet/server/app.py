@@ -36,7 +36,7 @@ from fleet.server.local_action_transport import UnixLocalActionTransport
 from fleet.server.arm_transfer_preflight_routes import install_arm_transfer_preflight_routes
 from fleet.server.execution_profile_routes import install_execution_profile_routes
 from fleet.server.arm_transfer_job_routes import install_arm_transfer_job_routes
-from fleet.server.mission_storage import configure_mission_storage
+from fleet.server.mission_storage import configure_mission_storage, validate_model_turn_worker
 from fleet.server.simulation_pose_binding import validate_simulation_pose_binding
 from fleet.server.physical_transfer_stop_targets import configure_omx_stops
 from fleet.server.mission_dispatcher import MissionDispatcher
@@ -65,13 +65,11 @@ from fleet.server.intent_routes import install_intent_routes
 from fleet.server.mission_routes import install_mission_routes
 from fleet.server.site_auth import (
     SitePrincipal,
-    assert_registry_credential_isolated,
-    assert_pairing_sync_token_isolated,
-    assert_robot_credential_key_isolated,
     build_authorize,
     build_role_guards,
     install_mutation_audit,
 )
+from fleet.server.credential_isolation import assert_credentials_isolated
 from fleet.server.static_routes import install_static_routes
 from fleet.server.account_runtime import configure_account_sessions, install_account_login_routes
 from fleet.hub.server import fan_out_events as _fan_out_events
@@ -236,24 +234,8 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
             turn_store=mission_model_turn_store, policy_revision="er2-feedback-v1",
         ) if mission_configured else None
     )
-    if mission_model_turn_worker is not None:
-        worker_store = getattr(mission_model_turn_worker, "store", None)
-        consume_next = getattr(mission_model_turn_worker, "consume_next", None)
-        if mission_model_turn_scheduler is None:
-            raise ValueError("Mission model-turn worker requires persistent Mission services")
-        if (worker_store is None or not callable(consume_next)
-                or Path(worker_store.path).resolve() != Path(mission_model_turn_store.path).resolve()):
-            raise ValueError("Mission model-turn worker must consume the configured shared SQLite outbox")
-    if post_action_observation_source is not None:
-        if mission_model_turn_worker is None:
-            raise ValueError("post-action observation source requires an injected Mission model-turn worker")
-        tool_dispatcher = getattr(mission_model_turn_worker, "dispatcher", None)
-        if not hasattr(tool_dispatcher, "post_action_observation_source"):
-            raise ValueError("Mission model-turn worker must use the Fleet feedback tool dispatcher")
-        configured_source = tool_dispatcher.post_action_observation_source
-        if configured_source is not None and configured_source is not post_action_observation_source:
-            raise ValueError("Mission worker and app must share one post-action observation source")
-        tool_dispatcher.post_action_observation_source = post_action_observation_source
+    validate_model_turn_worker(mission_model_turn_worker, mission_model_turn_scheduler, mission_model_turn_store,
+                               post_action_observation_source)
     vision_signer, vision_sources = configure_vision_previews(
         console, console_token=console_token, vision_lease_secret=vision_lease_secret,
         vision_sources=vision_sources, discovery_token=discovery_token, sightings=sightings,
@@ -366,40 +348,15 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
     principals = configure_account_sessions(
         app, console=console, task_service=task_service, site_users=site_users, site_logins=site_logins,
         accounts_bootstrap=accounts_bootstrap, account_config=account_config, account_client_config=account_client_config)
-    other_tokens = (console_token, discovery_token, vision_lease_secret, robot_credential_key, pairing_sync_token)
-    if workcell_observations is not None:
-        from fleet.server.workcell_observation_routes import assert_workcell_observation_credentials_isolated
-        evidence_tokens = tuple(producer.token for registry in (
-            goal_evidence_service.registry if goal_evidence_service is not None else None, cell_goal_registry)
-            if registry is not None for producer in registry.producers)
-        assert_workcell_observation_credentials_isolated(
-            workcell_observations, console=console, principals=principals,
-            other_tokens=other_tokens + evidence_tokens, other_services=(sightings, policy_evidence))
-        other_tokens += workcell_observations.credential_values()
+    other_tokens = assert_credentials_isolated(
+        console=console, principals=principals, console_token=console_token, discovery_token=discovery_token,
+        vision_lease_secret=vision_lease_secret, robot_credential_key=robot_credential_key,
+        pairing_sync_token=pairing_sync_token, workcell_observations=workcell_observations,
+        goal_evidence_service=goal_evidence_service, cell_goal_registry=cell_goal_registry,
+        cell_goal_evidence_service=cell_goal_evidence_service, sightings=sightings, policy_evidence=policy_evidence)
     if cell_goal_evidence_service is not None:
-        from fleet.server.cell_goal_evidence_routes import (
-            assert_cell_producer_credentials_isolated, install_cell_goal_evidence_routes)
-        if goal_evidence_service is not None:
-            other_tokens += tuple(item.token for item in goal_evidence_service.registry.producers)
-        assert_cell_producer_credentials_isolated(
-            cell_goal_registry, console=console, principals=principals,
-            other_tokens=other_tokens, other_services=(sightings, policy_evidence),
-        )
+        from fleet.server.cell_goal_evidence_routes import install_cell_goal_evidence_routes
         install_cell_goal_evidence_routes(app, cell_goal_evidence_service)
-    if principals:
-        assert_registry_credential_isolated(console_token, principals)
-    if robot_credential_key is not None:
-        assert_robot_credential_key_isolated(
-            robot_credential_key, console_token=console_token,
-            discovery_token=discovery_token, vision_lease_secret=vision_lease_secret,
-            console=console, sightings=sightings, policy_evidence=policy_evidence,
-            principals=principals)
-    if pairing_sync_token is not None:
-        assert_pairing_sync_token_isolated(
-            pairing_sync_token, console_token=console_token, discovery_token=discovery_token,
-            vision_lease_secret=vision_lease_secret, robot_credential_key=robot_credential_key,
-            console=console, sightings=sightings, policy_evidence=policy_evidence,
-            principals=principals)
     authorize = build_authorize(console_token, principals, task_service, development=development_sessions,
                                 password_sessions=app.state.password_sessions)
     require_viewer, require_operator, require_named_operator, require_proposer = build_role_guards(
