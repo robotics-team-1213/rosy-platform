@@ -72,6 +72,9 @@ class TripRunner(TripAdmission, TripProgress, TripSteps, TripReplan):
                  renew_lease: Optional[Callable[[str], Awaitable[None]]] = None,
                  battery: Optional[Callable[[str], Awaitable[Optional[dict]]]] = None) -> None:
         self._store = store
+        #: D-1003: the pose port's robot snapshot (the read its map pose came from); free goals go out in the
+        #: robot's own Nav2 map frame. A port without one (test plants) keeps the site frame as is.
+        self._robot_state = getattr(poses, "state", None)
         #: Start admission reads the robot's battery evidence here (``{"battery", "age_s"}``). None: no source,
         #: so every start is refused TRIP_BATTERY_UNCONFIRMED (fail closed; there is no bypass default).
         self._battery = battery

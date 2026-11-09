@@ -10,6 +10,7 @@ import stat
 from pathlib import Path
 from typing import Callable
 
+from face_frames import FaceFrames  # noqa: F401  (re-exported for rosy-face.py)
 from rosy_face_parts import Log
 
 CORE_USER = "rosy-core"
@@ -127,59 +128,6 @@ def read_update(root: Path, wall: float) -> dict | None:
     return {"step": lines[0], "release": release}
 
 
-class FaceFrames:
-    """The emotion GIFs as panel bytes, converted once and lazily (D-433 decision 4).
-
-    A face's frames are converted one per call while it first plays (every
-    FACE_LOAD_SKIP-th GIF frame), so no single tick pays for a whole GIF and a
-    face that is never shown is never loaded. Afterwards the bytes replay.
-    """
-
-    def __init__(self, directory: Path, *, opener: Callable[[Path], object],
-                 convert: Callable[[object], object], log: Log, skip: int = FACE_LOAD_SKIP) -> None:
-        self._directory = directory
-        self._open = opener
-        self._convert = convert
-        self._log = log
-        self._skip = skip
-        self._faces: dict[str, dict] = {}
-
-    def frame_count(self, name: str) -> int:
-        return len(self._faces.get(name, {}).get("frames", []))
-
-    def next(self, name: str):
-        """The next panel frame of ``name``, or None when that GIF cannot be read."""
-        entry = self._faces.get(name)
-        if entry is None:
-            entry = {"frames": [], "image": None, "done": False, "source": 0, "position": -1}
-            try:
-                entry["image"] = self._open(self._directory / f"{name}.gif")
-            except (OSError, ValueError) as exc:
-                self._log.once(f"face-{name}", f"face {name!r} unavailable ({type(exc).__name__})")
-                entry["done"] = True
-            self._faces[name] = entry
-        if not entry["done"]:
-            image = entry["image"]
-            try:
-                image.seek(entry["source"])
-                entry["frames"].append(self._convert(image))
-                entry["source"] += self._skip
-                entry["position"] = len(entry["frames"]) - 1
-                return entry["frames"][-1]
-            except EOFError:
-                pass
-            except (OSError, ValueError) as exc:
-                self._log.once(f"face-{name}-frame", f"face {name!r} frame unreadable ({type(exc).__name__})")
-            entry["done"] = True
-            entry["image"] = None
-            if hasattr(image, "close"):
-                image.close()
-        if not entry["frames"]:
-            return None
-        entry["position"] = (entry["position"] + 1) % len(entry["frames"])
-        return entry["frames"][entry["position"]]
-
-
 def chip_label(path: str = GPIOCHIP) -> str | None:
     """The kernel label of a GPIO chip (GPIO_GET_CHIPINFO_IOCTL), or None."""
     import fcntl
@@ -239,6 +187,14 @@ def face_converter(info_screen) -> Callable[[object], object]:
         return info_screen.to_panel(info_screen.compose_face(landscape))
 
     return convert
+
+
+def character_renderer(info_screen) -> Callable:
+    from emotion.character import frame
+
+    convert = face_converter(info_screen)
+    return lambda name, phase, gaze_x, resting: convert(
+        frame(name, phase, gaze_x=gaze_x, resting=resting))
 
 
 def bar_painter(info_screen) -> Callable[..., object]:

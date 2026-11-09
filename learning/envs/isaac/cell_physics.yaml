@@ -59,8 +59,8 @@ candidates:
       joint1: {kp: 5.386, kv: 0.5017, force: 0.496}
       joint2: {kp: 13.466, kv: 0.5017, force: 0.992}
       joint3: {kp: 5.34, kv: 0.4994, force: 0.983}
-      joint4: {kp: 2.921, kv: 0.0477, force: 0.215}
-      joint5: {kp: 1.46, kv: 0.0477, force: 0.215}
+      joint4: {kp: 2.921, kv: 0.0477, force: 0.088}  # corrected 2026-11-09: Current_Limit 250 mA, not PWM 300 (0.215)
+      joint5: {kp: 1.46, kv: 0.0477, force: 0.088}
   servo-friction-20261109:
     base: registers-20261109
     gravity_hold: all  # as fitted
