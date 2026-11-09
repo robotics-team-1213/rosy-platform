@@ -118,6 +118,10 @@ class CameraPeerClientTest {
                 if (value == "approved") { put("relationship_id", "A".repeat(32)); put("generation", 0); put("source_id", "ceiling_north"); put("persistent", true)
                     put("authorization_expires_at", JSONObject.NULL); put("authorization_available", true) }
             }
+        fun trustedFor(site: PairableSite): OkHttpClient {
+            val trust = HandshakeCertificates.Builder().addTrustedCertificate(ca.certificate).build()
+            return cameraPeerHttp(site).newBuilder().sslSocketFactory(trust.sslSocketFactory(), trust.trustManager).build()
+        }
         fun flow(client: OkHttpClient = trusted) = CameraPeerClient(site, mobile, vault, baseClient = client, pause = {})
         fun json(row: JSONObject) = MockResponse().setHeader("Content-Type", "application/json").setBody(row.toString())
         override fun close() { hold?.countDown(); challengeHold?.countDown(); server.close() }
@@ -140,7 +144,7 @@ class CameraPeerClientTest {
         Fixture().use { f ->
             val old = f.site; f.flow().connect({}, { false })
             val site = moved(f, "moved-site.local"); f.requests.clear()
-            val link = CameraPeerClient(site, f.mobile, f.vault, baseClient = f.trusted, pause = {}, moveFrom = old)
+            val link = CameraPeerClient(site, f.mobile, f.vault, baseClient = f.trustedFor(site), pause = {}, moveFrom = old)
                 .connect({ fail("consent repeated") }, { fail("CA repeated"); false }).link
             assertEquals("moved-site.local", link.tlsHost); assertEquals("ceiling_north", link.source)
             assertTrue(f.requests.none { it.path!!.contains("/requests") })
@@ -155,14 +159,14 @@ class CameraPeerClientTest {
             f.vault.remember(old, real.copy(receiverId = "fleet-" + PeerProof.fingerprint(other.publicKey).take(32), receiverPublicKey = other.publicKey), f.vault.fence(old))
             val site = moved(f, "moved-site.local")
             assertThrows(PeerKeyChanged::class.java) {
-                CameraPeerClient(site, f.mobile, f.vault, baseClient = f.trusted, pause = {}, moveFrom = old).connect({}, { false })
+                CameraPeerClient(site, f.mobile, f.vault, baseClient = f.trustedFor(site), pause = {}, moveFrom = old).connect({}, { false })
             }
             assertNull(f.vault.read(site))
             // A name the site certificate does not cover fails TLS and saves nothing.
             f.vault.remember(old, real, f.vault.fence(old))
             val stranger = moved(f, "stranger.local")
             assertThrows(Exception::class.java) {
-                CameraPeerClient(stranger, f.mobile, f.vault, baseClient = f.trusted, pause = {}, moveFrom = old).connect({}, { false })
+                CameraPeerClient(stranger, f.mobile, f.vault, baseClient = f.trustedFor(stranger), pause = {}, moveFrom = old).connect({}, { false })
             }
             assertNull(f.vault.read(stranger))
         }
