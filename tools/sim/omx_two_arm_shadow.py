@@ -96,6 +96,12 @@ def compare(args):
     import omx_two_arm_teacher as teaching
     snap = Path(args.snapshot)
     meta = json.loads((snap / "snapshot.json").read_text(encoding="utf-8"))
+    import torch
+    if not torch.cuda.is_available():  # the saved processors name cuda; on a CPU run (the GPU busy training) move them
+        import lerobot.policies.factory as factory
+        make = factory.make_pre_post_processors
+        factory.make_pre_post_processors = lambda config, **kw: make(config, preprocessor_overrides={"device_processor": {"device": "cpu"}},
+                                                                      postprocessor_overrides={"device_processor": {"device": "cpu"}}, **kw)
     driver = pol.Driver(args.model, args.steps_file, sites.parse_choices(args.choice))
     world, layout = driver.world, driver.layout
     task = tasks.get_task(layout, args.task)
