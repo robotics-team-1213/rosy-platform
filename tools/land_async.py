@@ -223,8 +223,8 @@ def _start(cwd: Path, land_args: list[str], now: datetime, launch) -> tuple[str,
             print(f"[land-async] this HEAD is already landing in {where(row)}; nothing new queued", flush=True)
             return row["branch"], holder(cwd) / (row["branch"].replace("/", "-") + ".log")
         replacements.append((int(row["pid"]), where(row)))
-    for pid, where in replacements:
-        print(f"[land-async] a newer HEAD replaces {where}", flush=True)
+    for pid, said in replacements:
+        print(f"[land-async] a newer HEAD replaces {said}", flush=True)
         stop(pid)
     land_queue = _queue()
     # refused before a snapshot exists; a replacement or a rollup adopting a member's ticket adds none
