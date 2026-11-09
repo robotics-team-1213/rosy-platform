@@ -84,6 +84,11 @@ export function approveTargets(listing) {
   ];
 }
 
+// 빈 자리는 source_id 그대로, 교체는 자격 ID를 붙여 같은 자리의 두 항목을 구분한다.
+export function targetValue(target) {
+  return target.replace ? `${target.source}#${target.replace}` : target.source;
+}
+
 // expires_in_s 는 조회 순간의 값이다. 다음 조회 전까지 이 브라우저 시계로 줄인다.
 export function remainingSeconds(expiresInS, fetchedAt, now) {
   return Math.max(0, Math.ceil(Number(expiresInS) - (now - fetchedAt) / 1000));
@@ -338,9 +343,9 @@ export function createCameraPairingPanel({ scope, headers, identity, locked, log
     el("camera-approve-target").textContent = row.device_label;
     const select = el("camera-approve-source");
     state.targets = approveTargets(state.pending);
-    select.replaceChildren(...state.targets.map((target, index) => {
+    select.replaceChildren(...state.targets.map((target) => {
       const option = document.createElement("option");
-      option.value = String(index);
+      option.value = targetValue(target);
       option.textContent = target.label;
       return option;
     }));
@@ -363,7 +368,8 @@ export function createCameraPairingPanel({ scope, headers, identity, locked, log
     const row = state.target;
     if (state.busy || !row) return;
     const code = normalizePairingCode(el("camera-approve-code").value);
-    const target = (state.targets || [])[Number(el("camera-approve-source").value)];
+    const chosen = el("camera-approve-source").value;
+    const target = (state.targets || []).find((t) => targetValue(t) === chosen);
     const source = target?.source;
     const error = pairingCodeError(code) || (source ? null : MESSAGES.no_source);
     if (error) return lines(el("camera-approve-error"), [error], true);
