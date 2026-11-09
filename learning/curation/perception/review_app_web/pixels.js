@@ -137,8 +137,9 @@ $('pixel-selection-method').onchange=()=>{
 let unknownPixels=null,totalPixels=0;
 function error(value=''){
  $('pixel-error').textContent=value;$('pixel-error').hidden=!value;
- if(value){const reload=$('pixel-reload');reload.classList.add('pixel-recovery-reload');$('pixel-error').after(reload);
-  requestAnimationFrame(()=>requestAnimationFrame(()=>{if(!$('pixel-error').hidden){reload.scrollIntoView({block:'center'});if(!reload.disabled)reload.focus({preventScroll:true});}}));
+ if(value){const reload=$('pixel-reload'),before=document.activeElement;reload.classList.add('pixel-recovery-reload');$('pixel-error').after(reload);
+  // The deferred recovery focus must not take focus back from a control the handler focused after the error.
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{if(!$('pixel-error').hidden){reload.scrollIntoView({block:'center'});if(!reload.disabled&&[before,document.body].includes(document.activeElement))reload.focus({preventScroll:true});}}));
  }
 }
 async function setView(detail){
