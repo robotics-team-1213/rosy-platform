@@ -24,7 +24,7 @@ import threading
 import time
 from pathlib import Path
 
-from remote_job import CANCELLED
+from remote_job import CANCELLED, LOST_EXIT
 from xdist_plan import HOST_ALONE, SERIAL_FILE, load_serial, serial_reason
 
 
@@ -44,6 +44,10 @@ BROWSER_PER_HOST = int(os.environ.get("ROSY_BROWSER_PER_HOST", "4"))
 MAX_MAIN = 6  # main workers one run may ask of a full host (1 restores one-at-a-time)
 MAIN_CORES, MAIN_GB = 2, 2  # headroom one more main worker needs
 SKIP_ALONE = "!"  # workers(): a worker kind on a host other than the host_alone suites' one
+# Suites that need a lab PC's own environment (the pinned learner venv under ~/.local/share/rosy-learning-center,
+# installed on the model and AI PCs only): the site PC never takes them. 2026-11-07: placed there while both lab PCs
+# were full, the learning browser journey failed its venv assert and became MAIN-RED.
+LAB_ONLY = ("test/learning/perception/test_learning_workflow_pipeline_browser.py",)
 
 
 def cancelled(invocations: list[list[str]], codes: list) -> list[int | str]:
@@ -67,8 +71,17 @@ def host_alone(inv: list[str]) -> bool:
     env = set(itertools.takewhile(ENV_WORD.match, inv))
     if ALONE_ENV in env or "ROSY_JOB_ALONE=1" in env:
         return True
-    paths = [w.replace("\\", "/") for w in inv if not ENV_WORD.match(w) and not w.startswith("-")]
-    return any(p == a or p.startswith(a + "/") or a.startswith(p + "/") for p in paths for a in HOST_ALONE)
+    return _names(inv, HOST_ALONE)
+
+
+def lab_only(inv: list[str]) -> bool:
+    """An invocation that names a LAB_ONLY suite, a file of it or a folder above it."""
+    return _names(inv, LAB_ONLY)
+
+
+def _names(inv: list[str], suites) -> bool:
+    paths = [w.replace("\\", "/").split("::")[0] for w in inv if not ENV_WORD.match(w) and not w.startswith("-")]
+    return any(p == a or p.startswith(a + "/") or a.startswith(p + "/") for p in paths for a in suites)
 
 
 def workers(hosts: list[str], invocations: list[list[str]], headroom: dict,
@@ -116,8 +129,28 @@ def main_workers(room: dict, jobs: int) -> int:
     return max(1, min(MAX_MAIN, by_room, jobs))
 
 
-def wanted(kind: str, invocations: list[list[str]]):
-    """The Work.take filter of a worker kind (None: anything)."""
+def wanted(kind: str, invocations: list[list[str]], site: bool = False):
+    """The Work.take filter of a worker kind (None: anything); a site PC's worker never takes a LAB_ONLY one."""
+    pick = _wanted(kind, invocations)
+    if not site:
+        return pick
+    return lambda i: not lab_only(invocations[i]) and (pick is None or pick(i))
+
+
+def stranded(work: "Work", invocations: list[list[str]], hosts: list[str], headroom: dict) -> bool:
+    """With only site PCs left and only LAB_ONLY invocations queued, mark those not run (LOST_EXIT: no lab PC had
+    room, D-584), never a failure; True when it did. Otherwise a site worker that takes nothing would loop."""
+    if not all((headroom.get(h) or {}).get("site") for h in hosts) or not all(lab_only(invocations[i]) for i in work.todo):
+        return False
+    for i in work.todo:
+        print(f"[remote-pytest] not run: {' '.join(invocations[i])} needs a lab PC (work_queue.LAB_ONLY)",
+              file=sys.stderr, flush=True)
+        work.codes[i] = LOST_EXIT
+    work.todo.clear()
+    return True
+
+
+def _wanted(kind: str, invocations: list[list[str]]):
     skip, kind = kind.endswith(SKIP_ALONE), kind.removesuffix(SKIP_ALONE)
     if kind == "alone":
         return lambda i: host_alone(invocations[i])
