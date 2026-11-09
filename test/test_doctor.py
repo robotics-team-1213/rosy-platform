@@ -190,9 +190,7 @@ def test_hosts_warns_on_a_stopped_maintenance_timer_and_a_stale_tool_copy(repo, 
     def fake_run(argv, **kw):
         if argv[0] != "ssh":
             return real_run(argv, **kw)
-        return subprocess.CompletedProcess(argv, 0, json.dumps(reports[argv[-2]]) + "
-ROSY-DISK-LOW=0
-", "")
+        return subprocess.CompletedProcess(argv, 0, json.dumps(reports[argv[-2]]) + "\nROSY-DISK-LOW=0\n", "")
 
     monkeypatch.setattr(doctor.subprocess, "run", fake_run)
     text = lines(repo, hosts=True)[1]
