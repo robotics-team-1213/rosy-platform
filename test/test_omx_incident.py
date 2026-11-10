@@ -468,3 +468,32 @@ def test_a_software_stop_on_a_folded_arm_that_followed_its_command_is_listed_and
         monkeypatch.chdir(case)
         lagging = {"command": "tick", "ok": False, "t": 150.0, "fault": other}
         assert oi.handle(session(case, latched=False, windup=False, last=last, status=[lagging]), "arm_b")["decision"]["hold"]
+
+
+def test_status_and_clear_with_cause_basis_and_env_discovery(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    env_file = tmp_path / "bridge.env"
+    env_file.write_text('ROSY_WORKCELL_OBSERVATIONS="/tmp/obs.yaml"\n# comment\nROSY_OBSERVATION_WORKCELL="cell_a"\n')
+    monkeypatch.setenv("ROSY_OBSERVATION_BRIDGE_ENV", str(env_file))
+    parsed = oi._bridge_environ()
+    assert parsed["ROSY_WORKCELL_OBSERVATIONS"] == "/tmp/obs.yaml" and parsed["ROSY_OBSERVATION_WORKCELL"] == "cell_a"
+
+    link = Link()
+    oi.handle(session(tmp_path), "arm_b", act=lambda ids: {"rebooted": ids}, link=link)
+    st = oi.status("arm_b", link)
+    assert st["local_held"] is True and st["fleet_held"] is True and st["incident_ids"] == ["a" * 32]
+
+    calls = []
+    def clear(incident_id, note, token, *, cause=None, basis=None):
+        calls.append((incident_id, note, token, cause, basis))
+        link.held = False
+        return hold(False)
+    link.clear = clear
+    token = tmp_path / "cell-a-operator-test.token"
+    token.write_text("op-token\n")
+    token.chmod(0o600)
+    monkeypatch.setenv("ROSY_OPERATOR_TOKEN_FILE", str(token))
+    assert oi.clear("arm_b", "checked home", None, link, cause="software_or_config", basis="measured") == 0
+    assert calls == [("a" * 32, "checked home", "op-token", "software_or_config", "measured")]
+    assert oi.status("arm_b", link)["fleet_held"] is False
+

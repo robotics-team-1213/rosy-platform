@@ -101,7 +101,7 @@ def blobs(frame):
     masks = (("pad", (hsv[..., 2] < 140) & (hsv[..., 1] < 90)),
              ("container", ((hsv[..., 0] < 22) & (hsv[..., 1] > 120) & (hsv[..., 2] > 120))
               | ((hsv[..., 0] >= 22) & (hsv[..., 0] < 29) & (hsv[..., 1] > 140) & (hsv[..., 2] > 140))
-              | ((((hsv[..., 0] >= 35) & (hsv[..., 0] < 88)) | (hsv[..., 0] >= 135)) & (hsv[..., 1] > 110) & (hsv[..., 2] > 90))))
+              | ((((hsv[..., 0] >= 35) & (hsv[..., 0] < 88)) | (hsv[..., 0] >= 135)) & (hsv[..., 1] > 110) & (hsv[..., 2] > 125))))
     for kind, m in masks:
         if kind == "pad":  # bridge the white lane label and alignment dots printed across a dark pad
             m = cv2.morphologyEx(m.astype(np.uint8), cv2.MORPH_CLOSE, np.ones((9, 9), np.uint8))
