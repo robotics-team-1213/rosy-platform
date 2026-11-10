@@ -10,7 +10,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 TOOL = ROOT / "deploy" / "hosts" / "common" / "rosy-host-state"
-ROLES = {"site": "site", "model": "model_pc", "ai": "ai_pc"}
+ROLES = {"site": "site", "model": "model_pc", "ai": "ai_pc", "cell": "cell_pc"}
 PENDING_D524 = "deploy/site/rosy-host-control"
 
 pytestmark = pytest.mark.skipif(os.name == "nt", reason="needs POSIX fakes on PATH")
@@ -229,7 +229,7 @@ def test_sudoers_gets_the_login_and_a_broken_file_is_never_installed(tmp_path):
     assert not list(sudoers.parent.glob("*.rosy-tmp"))
 
 
-@pytest.mark.parametrize("role", ["ai", "model", "site"])
+@pytest.mark.parametrize("role", ["ai", "model", "site", "cell"])
 def test_every_pc_carries_the_user_unit_owner_as_desired_state(role):
     """D-883: a model PC installed without units-user refused every clean-storage request. D-991: site too."""
     lines = (ROOT / "deploy" / ROLES[role] / "host-state" / "manifest").read_text(encoding="utf-8").splitlines()
@@ -254,7 +254,7 @@ def test_every_role_manifest_parses_and_its_sources_exist(role):
                 src = (ROOT / "deploy" if base == "deploy" else dirs[base]) / rel
                 assert src.is_file(), raw
                 assert b"\r\n" not in src.read_bytes(), src
-    assert ("enabled", "rosy-nightly-reboot.timer") in kinds
+    assert ("disabled" if role == "cell" else "enabled", "rosy-nightly-reboot.timer") in kinds
     assert ("file", "/etc/systemd/system/rosy-nightly-reboot.timer") in kinds
 
 
@@ -377,6 +377,14 @@ def test_avahi_interfaces_pick_physical_ones_and_restart_only_on_change(tmp_path
     assert conf.read_text().count("allow-interfaces") == 1
 
 
+def test_site_manifest_declares_robot_discovery_units():
+    """2026-11-09: the new site PC ran Fleet without the scan bridge; the bridge timer is desired state."""
+    lines = (ROOT / "deploy/site/host-state/manifest").read_text(encoding="utf-8").splitlines()
+    assert "report enabled rosy-mdns-bridge.timer" in lines
+    for unit in ("rosy-mdns-bridge.service", "rosy-mdns-bridge.timer"):  # install places the units it enables
+        assert f"report file /etc/systemd/system/{unit} deploy/site/{unit}" in lines
+
+
 def test_avahi_interfaces_unit_is_in_the_common_manifest():
     manifest = (ROOT / "deploy/hosts/common/host-state/manifest").read_text(encoding="utf-8")
     assert "safe enabled rosy-avahi-interfaces.service" in manifest
@@ -440,7 +448,7 @@ def test_sim_packages_are_approval_only_and_never_on_the_site_pc():
     for role, folder in ROLES.items():
         lines = [line for line in (ROOT / "deploy" / folder / "host-state" / "manifest").read_text(
             encoding="utf-8").splitlines() if line.split()[1:2] == ["apt"]]
-        if role == "site":
+        if role in ("site", "cell"):
             assert not lines
         else:
             assert len(lines) == 1 and lines[0].startswith("approval=sim apt ros-jazzy-ros-gz "), role

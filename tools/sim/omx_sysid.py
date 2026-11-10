@@ -254,14 +254,14 @@ MOTORS = {11: "XL430-W250", 12: "XL430-W250", 13: "XL430-W250", 14: "XL330-M288"
 STALL = {"XL430-W250": (1.5, 12.0), "XL330-M288": (0.52, 5.0)}  # N·m at V, ROBOTIS e-Manual
 STALL_CURRENT = {"XL330-M288": 1470}  # mA at the stall torque; a Current_Limit caps torque in proportion (XL430: no current register)
 NO_LOAD = {"XL430-W250": (5.97, 11.1), "XL330-M288": (10.9, 5.0)}  # rad/s at V (57 and 104 rpm)
-DEFAULT_GAINS = {"XL430-W250": {"p": 640, "i": 0, "d": 4000}, "XL330-M288": {"p": 400, "i": 0, "d": 0}}  # not read back
+DEFAULT_GAINS = {"XL430-W250": {"p": 640, "i": 0, "d": 3600}, "XL330-M288": {"p": 400, "i": 0, "d": 0}}  # read back on arm_b 2026-11-08 (register probe)
 TICKS_PER_RAD = 4096 / (2 * math.pi)
 
 
 def from_registers(caps, volts):
     """{jointN: {kp, kv, force}} for joint1-5 from a session's caps (record_session: pwm, p, i per motor ID) and the
     motor-health voltages. An I gain has no MuJoCo position-servo term: it is listed, and the fit's gravity_comp stands
-    in for it. shortcut: D and the 1 kHz loop are ROBOTIS defaults, not read from the arm; read them back when a probe can."""
+    in for it. The baseline P, I, D were read back on arm_b (2026-11-08 register probe); the 1 kHz loop is ROBOTIS's."""
     out, integral = {}, []
     for j, motor_id in enumerate(sorted(MOTORS)):
         model, cap = MOTORS[motor_id], caps.get(str(motor_id), {})

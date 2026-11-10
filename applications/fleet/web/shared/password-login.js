@@ -60,9 +60,13 @@ export function createPasswordLogin(host, {onChange = () => {}, standalone = fal
     profile.target = accounts.target = '_blank'; profile.rel = accounts.rel = 'noopener';
     profile.title = '새 탭에서 내 계정 · 이 화면은 그대로'; accounts.title = '새 탭에서 계정 관리 · 이 화면은 그대로';
   }
-  if (link) link.href = loginHref(location);
+  if (link) {  // Recomputed on click: the hash and query change after load without a reload.
+    const draft = ['/console/site-map', '/console/cell'].includes(location.pathname) ? '&draft=1' : '';
+    const point = () => { link.href = loginHref(location) + draft; };
+    point(); addEventListener('hashchange', point); link.addEventListener('click', point);
+  }
   if (link && ['/console/site-map', '/console/cell'].includes(location.pathname)) {
-    link.target = '_blank'; link.rel = 'noopener'; link.href += '&draft=1';
+    link.target = '_blank'; link.rel = 'noopener';
     link.title = '새 탭에서 로그인 · 이 탭의 편집 내용 보존';
   }
   const errorText = message => {

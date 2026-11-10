@@ -50,6 +50,8 @@ Restart=always
 RestartSec=2
 TimeoutStopSec=10
 KillSignal=SIGINT
+# Wheel torque must be off after any stop (D-986 begin probes it); the + runs it outside the sandbox.
+ExecStopPost=+/usr/bin/python3 -I -B /opt/rosy/native-runtime/wheel_torque_off.py
 UMask=0027
 
 NoNewPrivileges=true

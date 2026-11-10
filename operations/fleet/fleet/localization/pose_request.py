@@ -36,15 +36,19 @@ def is_live(request: Mapping) -> bool:
     return math.isfinite(age) and math.isfinite(ttl) and 0.0 <= age <= ttl
 
 
-def overhead_decision(request: Mapping, pose) -> Optional[LocalizationDecision]:
+def overhead_decision(request: Mapping, pose, robot_map_id: Optional[str] = None) -> Optional[LocalizationDecision]:
     """The overhead map pose as a decision, or None when it is not trustworthy.
 
     `pose` is `rosy.world.state.projections.map_pose.MapPose`. Only a LOCALIZED pose whose anchor is a
     fresh sighting counts: DEGRADED and UNKNOWN are not, and neither is any pose that is
-    odom alone (a robot's own odom is what a stale-pose request says it cannot trust)."""
+    odom alone (a robot's own odom is what a stale-pose request says it cannot trust).
+    D-1010: the decision answers in the robot's localization frame, so the overhead pose must be
+    anchored on exactly the robot's own `robot_map_id` (both known and equal). A site-frame pose on
+    another map is never silently re-posted as the robot's pose."""
     if (pose is None or pose.state != "LOCALIZED" or pose.anchor_age_s is None
             or getattr(pose, "anchor_source", None) in ("operator_pin", "auto_locate")   # D-593, D-989: not overhead
-            or not 0.0 <= pose.anchor_age_s <= OVERHEAD_ANCHOR_FRESH_S):
+            or not 0.0 <= pose.anchor_age_s <= OVERHEAD_ANCHOR_FRESH_S
+            or not robot_map_id or pose.map_id != robot_map_id):
         return None
     try:
         return LocalizationDecision(
