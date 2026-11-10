@@ -10,6 +10,7 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-1007 | 카메라 위치에 관계없이 맞추기의 첫 걸음 — 로봇 대응점으로 검토용 보정 후보(유효 구역=대응점 껍질)를 만든다, 오프라인·적용 없음. [전문](../adr/D-1007-robot-driven-calibration-candidates.md) | Accepted (2026-11-09, 사용자 지시; SOURCE·호스트 시험까지, 현장 수용 없음) |
 | D-1001 | 공통 로직은 R의 서명된 rosy-site 스택에서 서비스별 독립 컨테이너로 돌리고, 기계 자격·안전 권한은 Fleet에 남긴다. [전문](../adr/D-1001-common-logic-placement-on-r.md) | Accepted (2026-11-09, 사용자 승인: 초안 그대로 수락; 내장 Account 모드는 연동 브랜치 착지·R 배포 뒤 제거; 알림 전달기는 Monitoring 전용 이미지 분리 뒤 나중에 전달 전용·자기 이미지로. 문서와 구조 시험만 변경, 배포·이미지·compose 변경 없음) |
 | D-1002 | 현장 차로 편대 주행: 리더는 Nav2 trip, 팔로워는 FOR-004 TRAIL 추종, Fleet은 둘을 미션 하나로 묶고 차로 적합성만 더한다. [전문](../adr/D-1002-formation-driving-on-site-lanes.md) | Proposed (2026-11-09, 사용자 목표; Fleet 구현·호스트 시험·Gazebo SIM 시나리오, 실물 미수용) |
 | D-1010 | 사이트 지도 프레임 결속: 활성 본문 검증, 목표·자세·경로의 프레임 거절. [전문](../adr/D-1010-site-map-frame-binding.md) | Accepted (2026-11-10, 사용자 지시; SOURCE·호스트 시험까지, 기체·현장 수용 없음) |
