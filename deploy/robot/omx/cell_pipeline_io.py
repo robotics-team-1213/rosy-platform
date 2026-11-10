@@ -36,12 +36,11 @@ def write_library(config: dict, pick: dict, place: dict, path: Path) -> Path:
 
 def fold(cell, sleep=time.sleep, wait_s: float = 2.0) -> dict:
     """Park; once more after a pause when the first one held on a contact or while the runner sheds an overload-hold."""
-    for _ in range(3):
-        status = cell.act("park")
-        if status.get("ok") or (not status.get("contact") and "shedding its load" not in (status.get("error") or "")):
-            return status
-        sleep(wait_s)
-    return status
+    status = cell.act("park")
+    if status.get("ok") or (not status.get("contact") and "shedding its load" not in (status.get("error") or "")):
+        return status
+    sleep(wait_s)
+    return cell.act("park")
 
 
 class FifoCell:
