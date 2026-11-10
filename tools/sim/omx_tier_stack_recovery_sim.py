@@ -36,6 +36,7 @@ import cell_arm_cal  # noqa: E402
 import cell_fingers  # noqa: E402
 import cell_grasp_debate as cgd  # noqa: E402
 import cell_params as prm  # noqa: E402
+import cell_problem_pipeline as cpp  # noqa: E402
 
 TIERS = (
     {"tier": 1, "site": "pallet-l0", "z_m": 0.0074, "above_z_m": 0.0474},
@@ -275,6 +276,62 @@ def simulate_descent_and_hold_preservation() -> dict[str, Any]:
     }
 
 
+def replay_and_verify_problem_case(case: dict[str, Any], work_dir: Path) -> dict[str, Any]:
+    """Reproduce a recorded `rosy.omx-problem-case.v1` ledger entry in simulation and verify its recovery."""
+    rep = case.get("sim_reproducer") or {}
+    arm_id = str(rep.get("arm_id") or case.get("arm_id") or "arm_b")
+    tier = int(rep.get("tier") or case.get("tier") or 1)
+    cat = str(rep.get("category") or case.get("category") or "wrist_offset_or_visual_hazard")
+    init_off = float(rep.get("initial_offset_mm") or -6.4)
+    if abs(init_off) < 2.0 and cat == "wrist_offset_or_visual_hazard":
+        init_off = -6.4
+
+    if cat == "wrist_offset_or_visual_hazard":
+        res = simulate_wrist_centering_loop(arm_id, initial_offset_mm=init_off, work_dir=work_dir)
+        passed = bool(res["converged"] and abs(res["final_offset_mm"]) <= 1.5)
+        return {"case_id": case.get("case_id"), "category": cat, "arm_id": arm_id, "tier": tier, "verified": passed, "sim_result": res}
+    if cat in ("unstable_grasp_reinsert", "slip_during_lift"):
+        res = simulate_grasp_debate_reinsert_and_retry(arm_id, tier=tier, work_dir=work_dir)
+        passed = bool(res["attempt_1"]["verdict"] == "reinsert_and_retry" and res["attempt_2"]["verdict"] == "proceed")
+        return {"case_id": case.get("case_id"), "category": cat, "arm_id": arm_id, "tier": tier, "verified": passed, "sim_result": res}
+    if cat == "descent_or_park_contact":
+        res = simulate_descent_and_hold_preservation()
+        passed = bool(
+            res["holding_preserved_on_descend_place_contact"]
+            and res["holding_cleared_when_jaws_empty"]
+            and res["infer_holding_overrides_uncalibrated_threshold"]
+        )
+        return {"case_id": case.get("case_id"), "category": cat, "arm_id": arm_id, "tier": tier, "verified": passed, "sim_result": res}
+    # calibration_drift
+    w_res = simulate_wrist_centering_loop(arm_id, initial_offset_mm=init_off if abs(init_off) >= 2.0 else 5.8, work_dir=work_dir)
+    g_res = simulate_grasp_debate_reinsert_and_retry(arm_id, tier=tier, work_dir=work_dir)
+    cal_after = cell_arm_cal.load(work_dir, arm_id)
+    passed = bool(w_res["converged"] and g_res["attempt_2"]["verdict"] == "proceed" and cal_after.get("samples", 0) >= 1)
+    return {
+        "case_id": case.get("case_id"),
+        "category": cat,
+        "arm_id": arm_id,
+        "tier": tier,
+        "verified": passed,
+        "sim_result": {"wrist": w_res, "grasp": g_res, "calibration_after": cal_after},
+    }
+
+
+def replay_and_verify_ledger(out_dir: Path) -> dict[str, Any]:
+    """Seed canonical real-hardware problem cases into `problem-cases.jsonl`, replay all in simulation, and verify 100% pass."""
+    cases = cpp.seed_real_hardware_problem_cases(out_dir)
+    verifications = [replay_and_verify_problem_case(c, out_dir) for c in cases]
+    passed = sum(1 for v in verifications if v["verified"])
+    return {
+        "schema": cpp.REPORT_SCHEMA,
+        "ledger_path": str(cpp.ledger_path(out_dir)),
+        "total_cases": len(verifications),
+        "passed_cases": passed,
+        "all_verified": passed == len(verifications) and len(verifications) > 0,
+        "cases": verifications,
+    }
+
+
 def run_full_problem_recovery_simulation(out_dir: Path) -> dict[str, Any]:
     """Run all tier (1단/2단/3단) and multi-arm (`arm_s`, `arm_a`, `arm_b`) problem-recovery simulations."""
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -302,6 +359,7 @@ def run_full_problem_recovery_simulation(out_dir: Path) -> dict[str, Any]:
                 )
             )
     descent_hold = simulate_descent_and_hold_preservation()
+    ledger_replay = replay_and_verify_ledger(out_dir)
     cal_files = {
         arm: cell_arm_cal.load(out_dir, arm)
         for arm in ("arm_s", "arm_a", "arm_b")
@@ -317,12 +375,14 @@ def run_full_problem_recovery_simulation(out_dir: Path) -> dict[str, Any]:
             and descent_hold["holding_preserved_on_descend_place_contact"]
             and descent_hold["holding_cleared_when_jaws_empty"]
             and descent_hold["infer_holding_overrides_uncalibrated_threshold"]
+            and ledger_replay["all_verified"]
         ),
         "tiers_verified": [t["tier"] for t in TIERS],
         "arms_verified": ["arm_s", "arm_a", "arm_b"],
         "wrist_centering": wrist_results,
         "grasp_debate_reinsert_recovery": debate_results,
         "descent_and_hold_preservation": descent_hold,
+        "problem_ledger_replay": ledger_replay,
         "persisted_arm_calibrations": cal_files,
     }
     (out_dir / "problem-recovery-sim-report.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")

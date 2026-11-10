@@ -9,6 +9,7 @@ for _p in (ROOT / "tools/sim", ROOT / "deploy/robot/omx", ROOT / "middleware/dev
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 
+import cell_problem_pipeline as cpp  # noqa: E402
 import judge_seat  # noqa: E402
 import omx_tier_stack_recovery_sim as rsim  # noqa: E402
 
@@ -42,3 +43,28 @@ def test_judge_seat_from_config_accepts_shorthand_string_specs():
     assert callable(fn_glm)
     assert callable(fn_ollama)
     assert callable(fn_panel)
+
+
+def test_real_problem_ledger_capture_and_sim_replay_verification_pipeline(tmp_path: Path):
+    cfg = {"_work": tmp_path, "arm_id": "arm_b"}
+    captured = cpp.capture_from_attempt(
+        cfg,
+        {
+            "from": "pallet-l1",
+            "dest": "pallet-l2",
+            "result": "reinserted",
+            "fail_stage": "run lift_pick",
+            "why": "skewed grasp reinserted",
+            "grasp_debate": {"verdict": "reinsert_and_retry", "dx_mm": 6.1, "dy_mm": 0.0},
+            "wrist": {"along_mm": -6.1, "across_mm": 0.2, "finger_color": "white"},
+        },
+    )
+    assert captured is not None
+    assert captured["category"] == "unstable_grasp_reinsert"
+    assert (tmp_path / "problem-cases.jsonl").exists()
+
+    report = rsim.replay_and_verify_ledger(tmp_path)
+    assert report["all_verified"] is True
+    assert report["total_cases"] >= 5
+    assert report["passed_cases"] == report["total_cases"]
+

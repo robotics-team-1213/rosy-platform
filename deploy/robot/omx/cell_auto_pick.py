@@ -498,6 +498,22 @@ def run_auto(cell, config, calibration, calibration_path, catalog, roi, source, 
             episode = None
             cd.after(moved, choices.best(CLOSING), attempt + 1 < attempts, guarded.monitor)
             cell_attempts.record(config, calibration, source, dest, attempt, tried, t0, choices)
+            try:
+                import cell_problem_pipeline
+                cell_problem_pipeline.capture_from_attempt(
+                    config,
+                    {
+                        "from": source,
+                        "dest": dest,
+                        "result": moved["result"],
+                        "fail_stage": moved.get("at"),
+                        "why": moved.get("error"),
+                        "grasp_debate": moved.get("grasp_debate"),
+                        "wrist": moved.get("wrist"),
+                    },
+                )
+            except Exception:
+                pass
             if moved["result"] == "placed" and tried["verify"]["inside"]:
                 return {**out, "result": "placed"}
             grasped = any(s.get("command") == "run grasp_pick" and s.get("holding") for s in moved["steps"])
