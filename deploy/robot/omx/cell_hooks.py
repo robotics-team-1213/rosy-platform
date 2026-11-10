@@ -159,3 +159,12 @@ def pick_hooks(config: dict, cell, target: dict, write_library, source: str, des
             target["entry"]["length_mm"] * target["entry"]["width_mm"])
     return (wrist, capture, cell_pinch.hook(config, cell, target, write_library, gap, target["entry"]["width_mm"]),
             cell_feel.feel_hook(config, cell, target, write_library))
+
+
+def grasp_debate(config: dict, cell, target: dict, write_library):
+    """Post-grasp / post-lift stability and put-back (`release_pick` / `reinsert_pick`) debate hook."""
+    import cell_grasp_debate
+
+    params = config.get("params")
+    gap = 30.0 + (config["plan"]["grip_open"] - prm.get(params, "gripper.held_30mm")) * prm.get(params, "gripper.gap_mm_per_unit")
+    return cell_grasp_debate.hook(config, cell, target, write_library, gap)

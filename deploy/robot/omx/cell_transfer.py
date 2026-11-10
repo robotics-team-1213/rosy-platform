@@ -102,20 +102,20 @@ STILL_HOLDING_UNITS = 4.0
 
 
 def transfer_folded(cell, library, closed: float | None = None, wrist=None, after_place=None, pinch=None, feel=None,
-                    sequence=FOLDED, lift_stall=None, at_stop=None) -> dict:
+                    sequence=FOLDED, lift_stall=None, at_stop=None, grasp_check=None) -> dict:
     """cell_pipeline.transfer with a fold home between lift and place. Lifting a held box from the reach straight
     to the transit height took shoulder_lift to 525 of 600 and the runner's strain hold stopped it; folding home
     first and placing from home went clean twice (2026-10-28). `cell` is a Gate on the real arm. at_stop
     (cell_hooks.Stills) keeps every stop's frames before the arm moves on, a finished pick descent as its control, and is
     closed however the carry ends."""
     try:
-        return _transfer(cell, library, closed, wrist, after_place, pinch, feel, sequence, lift_stall, at_stop)
+        return _transfer(cell, library, closed, wrist, after_place, pinch, feel, sequence, lift_stall, at_stop, grasp_check)
     finally:
         if hasattr(at_stop, "close"):
             at_stop.close()
 
 
-def _transfer(cell, library, closed, wrist, after_place, pinch, feel, sequence, lift_stall, at_stop) -> dict:
+def _transfer(cell, library, closed, wrist, after_place, pinch, feel, sequence, lift_stall, at_stop, grasp_check=None) -> dict:
     steps = []
 
     def run(command):
@@ -188,6 +188,17 @@ def _transfer(cell, library, closed, wrist, after_place, pinch, feel, sequence, 
             if command != "park":
                 run("park")
             return {"result": "empty", "at": command, "steps": steps}
+        if command in ("run grasp_pick", "run lift_pick") and status.get("holding") and grasp_check is not None:
+            checked = grasp_check(command, status, run)
+            steps.append({"command": "grasp_debate", "at": command, **{k: checked.get(k) for k in ("verdict", "recovery_chunk", "dx_mm", "dy_mm", "reason", "telemetry", "vision", "debate")}})
+            if checked.get("verdict") == "reinsert_and_park":
+                run("park")
+                return {"result": "reinserted", "at": command, "grasp_debate": checked, "steps": steps}
+            if checked.get("verdict") == "reinsert_and_retry" and isinstance(checked.get("retry_status"), dict):
+                status = checked["retry_status"]
+                if not status.get("holding"):
+                    run("park")
+                    return {"result": "empty", "at": command, "grasp_debate": checked, "steps": steps}
     if closed is None:
         try:
             closed = json.loads(Path(library).read_text())["gripper_closed"]

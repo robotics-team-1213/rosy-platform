@@ -195,6 +195,17 @@ class Planner:
         place, q5 = self.site("place", p["place"], p["grip_closed"], grip_release, q5)
         chunks.update(pick)
         chunks.update(place)
+        grasp_end, lift_end = pick["grasp_pick"][-1], pick["lift_pick"][-1]
+        rel_act = self.hold(grasp_end, p["grip_s"], p["grip_closed"], grip_release) + self.hold(grasp_end[:5] + [grip_release], p["settle_s"])
+        rel_act = [[round(v, 3) for v in f] for f in slow(rel_act, self.fps, start=grasp_end)]
+        lift_pace_key = "lift_pick_guard_frac" if "lift_pick_guard_frac" in p else "lift_guard_frac"
+        rel_up = [[round(v, 3) for v in f] for f in retime([f[:5] + [grip_release] for f in pick["lift_pick"]],
+                                                           self.fps, self.guard_pace(lift_pace_key), start=rel_act[-1])]
+        chunks["release_pick"] = rel_act + rel_up
+        put_pace_key = "descend_place_guard_frac" if "descend_place_guard_frac" in p else "descend_guard_frac"
+        put_down = [[round(v, 3) for v in f] for f in retime([f[:5] + [p["grip_closed"]] for f in reversed(pick["lift_pick"])],
+                                                             self.fps, self.guard_pace(put_pace_key), start=lift_end)]
+        chunks["reinsert_pick"] = put_down + chunks["release_pick"]
         chunks["home"] = [home]
         for name, frames in chunks.items():
             if too_fast(frames, self.fps):

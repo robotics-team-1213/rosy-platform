@@ -520,8 +520,10 @@ def run_auto(cell, config, calibration, calibration_path, catalog, roi, source, 
             guard = cell_scene_guard.hook(guarded, config, guarded.frame("top"), roi, predicted_pixel(config, calibration, source, (0.0, 0.0)),
                                           predicted_pixel(config, calibration, source, o["raw_m"]))
             wrist, capture, pinch, feel = cell_hooks.pick_hooks(same, gate, target, cp.write_library, source, dest_site, cd.emit, calibration, guard)
+            grasp_check = cell_hooks.grasp_debate(same, gate, target, cp.write_library)
             moved = transfer_folded(gate, target["library"], wrist=wrist, after_place=capture, pinch=pinch, feel=feel,
-                                    sequence=sequence, lift_stall=cell_hooks.lift_stall(cell, config, sleep), at_stop=cell_hooks.stills(cell, config))
+                                    sequence=sequence, lift_stall=cell_hooks.lift_stall(cell, config, sleep),
+                                    at_stop=cell_hooks.stills(cell, config), grasp_check=grasp_check)
             tried["envelope"] = gate.assessment
             tried["wrist"] = (moved.get("wrist") or next((s for s in moved["steps"] if s.get("command") == "wrist"), None)
                               or ("disabled or uncalibrated" if wrist is None else None))
