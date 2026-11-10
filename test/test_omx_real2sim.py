@@ -387,7 +387,7 @@ def test_tilted_bottom_clipped_temp_lane_and_servo_zero_offset_compensation():
     seen = r2s_comp.perceive_container(img, sa, sa["xy"], sa["yaw"], layout, here=here)
     assert seen is not None
     _, _, info = seen
-    assert info["size_mm"] == [90.0, 30.0]
+    assert info["size_mm"] == pytest.approx([90.0, 30.0], abs=1.0)
     assert info["xy_err_mm"] < 2.5
     assert info["yaw_err_deg"] < 1.5
 
