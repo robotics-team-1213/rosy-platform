@@ -93,3 +93,21 @@ class DockingConfig:
     contact_progress_m: float = 0.002   # 이보다 덜 가면 진행이 없다
     rear_backoff_m: float = 0.55        # 재시도 전진 거리(레일 밖으로)
     rear_charge_rise_v: float = 0.02    # 멈춘 뒤 기준보다 이만큼 올라야 충전으로 본다(팩 실측 후 조정)
+
+    # 칸 유도선 접근 (approach="line", D-1013). 이득·게이트·예산은 bay_pit_sim 게이트 값
+    # (Rosy/docs/research/charge-bay-pink-line-2026-11-10/, 명목 36/36·시나리오 13/13).
+    bay_reverse_speed: float = 0.05     # m/s, 선 가운데·평행 유지하며 후진
+    bay_gain_lateral: float = 8.0       # rad/(s·m), ω = -(a·횡 + b·방위)
+    bay_gain_heading: float = 0.6
+    bay_gate_jump_m: float = 0.02       # 프레임당 횡 점프 게이트(물리 가능 범위 밖 = 이웃선)
+    bay_gate_jump_rad: float = 0.0873   # 5 deg/프레임
+    bay_coast_slow_s: float = 0.5       # 관측 무효: 이 안은 제어량 유지(코스트)
+    bay_coast_stop_s: float = 1.0       # 이 넘으면 감속 끝 정지 → 스캔
+    bay_scan_rad: float = 0.0873        # 스캔 회전 폭 ±5 deg(정지 상태)
+    bay_scan_s: float = 6.0
+    bay_settle_creep_m: float = 0.04    # 회전 뒤 캐스터 정착 크립(전진)
+    bay_travel_margin_m: float = 0.02   # 접촉 거리 상한 = 진입 잔여거리 + 이 값
+    bay_backoff_m: float = 0.15         # 재시도 전진(교차점 쪽)
+    bay_settle_baseline_s: float = 2.0  # 멈춘 뒤 기준 전압을 잡기 전 대기
+    bay_charge_rise_v: float = 0.05     # D-941: 20 s 안 +0.05 V(도크 계측 없음)
+    bay_charge_confirm_s: float = 20.0
