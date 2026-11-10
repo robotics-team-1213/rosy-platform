@@ -382,6 +382,55 @@ class Teacher:
 parse_choices = sites.parse_choices
 
 
+def isaac_handoff(result, layout, seed=0):
+    """Build a Stage-1 (MuJoCo geometry/vision/IK) -> Stage-2 (Isaac PhysX contact/slip/seating) handoff spec."""
+    rows = result.get("rows", [])
+    vis = [r["vision_pick"] for r in rows if "vision_pick" in r]
+    poses = [r["pose"] for r in rows if "pose" in r]
+    contacts_clear = all(not r.get("arm_arm_contacts") and not r.get("arm_link_contacts")
+                         and not r.get("neighbours_disturbed") for r in rows)
+    belt_xy = layout.sites["belt"]["xy"]
+    single_cases = []
+    for r in rows:
+        vp = r.get("vision_pick")
+        if vp:
+            dx = max(-.025, min(.025, round(vp["seen_xy"][0] - belt_xy[0], 4)))
+            dy = max(-.025, min(.025, round(vp["seen_xy"][1] - belt_xy[1], 4)))
+            turn = max(-45., min(45., round(vp["seen_yaw_deg"], 1)))
+            aim_m = round(min(.025, vp["xy_err_mm"] / 1000), 4)
+            single_cases.append(dict(
+                id=f"mujoco-{result['task']}-{r['step']}-{r['container']}",
+                source=f"mujoco:{result['task']}:{r['step']}",
+                sim=dict(box=[dx, dy, turn], place="belt", grasp_turn=turn, expect=None, aim=[aim_m, 0.0]),
+            ))
+    layers = 3 if result.get("steps", 0) > 3 else 1
+    return dict(
+        schema="rosy.omx-mujoco-isaac-handoff.v1",
+        task=result["task"],
+        stage_1_mujoco=dict(
+            role="geometry_vision_ik_and_collision_screening",
+            completed=bool(result.get("completed")),
+            steps_pass=result.get("steps_pass", 0),
+            steps_total=result.get("steps", 0),
+            contacts_clear=contacts_clear,
+            worst_vision_xy_mm=max((v["xy_err_mm"] for v in vis), default=0.0),
+            worst_vision_yaw_deg=max((v["yaw_err_deg"] for v in vis), default=0.0),
+            worst_pose_xy_mm=max((p["xy_mm"] for p in poses), default=0.0),
+            worst_pose_yaw_deg=max((p["yaw_deg"] for p in poses), default=0.0),
+            worst_ik_error_mm=max((r.get("worst_ik_error_mm", 0.0) for r in rows), default=0.0),
+            colours_seen=[v.get("colour") for v in vis if v.get("colour")],
+        ),
+        stage_2_isaac=dict(
+            role="physx_contact_pad_slip_and_seating_confirmation",
+            ready=bool(result.get("completed") and contacts_clear),
+            two_arm_scenario="omx-map-container-stack",
+            two_arm_config=dict(seed=seed, layers=layers, case="nominal-palletizing-v21-ship-surveyed-skew-20261110"),
+            single_arm_scenario="arm-s-cell-case",
+            single_arm_cases=single_cases,
+        ),
+    )
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     p.add_argument("command", choices=["run", "validate"])
@@ -400,6 +449,7 @@ def main(argv=None):
     p.add_argument("--concurrent", action="store_true", help="both arms at once by the steps' after/after_pick/zones (omx_two_arm_plan.py --concurrent output)")
     p.add_argument("--pick-vision", action="store_true", help="perceive each pick container's (xy, yaw) from the rendered top camera instead of true pose")
     p.add_argument("--belt-skew", action="store_true", help="arrive belt containers with +-8..12 mm xy offset and +-15..22 deg yaw skew")
+    p.add_argument("--isaac-handoff", help="write Stage-1 MuJoCo -> Stage-2 Isaac Sim handoff spec JSON to this path")
     p.add_argument("--choice", action="append", help="key=value override of omx_two_arm_sites.CHOICES (named parameters)")
     a = p.parse_args(argv)
     choices = parse_choices(a.choice)
@@ -463,6 +513,10 @@ def main(argv=None):
     result.update(choices=layout.choices, cone=a.cone, seed=a.seed, drop_m=[teacher.drop, teacher.drop_upper], roll_below_floor_steps=[s for s, v in roll.items() if v],
                   note="geometry only (D-947): contact numbers are not results; " + ("both arms at once by zones" if a.concurrent else "one arm moves at a time") + "; true container pose, no perception")
     (out / f"{a.task}{'-isolated' if a.isolated else ''}-{a.cone}-seed{a.seed}.json").write_text(json.dumps(result, indent=1, default=str), encoding="utf-8")
+    if a.isaac_handoff:
+        hp = Path(a.isaac_handoff)
+        hp.parent.mkdir(parents=True, exist_ok=True)
+        hp.write_text(json.dumps(isaac_handoff(result, layout, a.seed), indent=1), encoding="utf-8")
     print(f"{a.task}: steps pass {result['steps_pass']}/{result['steps']}, final poses ok {result['final_ok']}/{result['final_total']}, completed {result['completed']}"
           + f", makespan {result['makespan_s']} s" + (f", overlap {result['overlap_s']} s, stopped {result['stopped']}" if a.concurrent else ""))
     return 0 if result["completed"] else 1

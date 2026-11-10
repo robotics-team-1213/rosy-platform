@@ -151,3 +151,17 @@ for _name, _offset in (('y060', .0006), ('y080', .0008)):
                  release_offset_m=[0., _offset])
     FIXTURE_OVERRIDES[f'nominal-palletizing-v21-ship-{_name}-c2-g315'] = _base
     FIXTURE_OVERRIDES[f'nominal-palletizing-v21-ship-{_name}-c2-seat-g315'] = dict(_base, seat_replace=dict(SEAT_REPLACE))
+# 2026-11-10 MuJoCo -> Isaac two-stage pipeline: Stage 1 (MuJoCo) screens vision-guided skewed belt picks and 3-tier IK/collision;
+# Stage 2 (Isaac) confirms PhysX contact, finger-pad slip and stud/pocket seating under the measured 2026-11-10 cell geometry and skew jitter.
+FIXTURE_OVERRIDES['nominal-palletizing-v21-ship-surveyed-skew-20261110'] = dict(
+    FIXTURE_OVERRIDES['nominal-palletizing-v21-ship-surveyed'],
+    planning_scene='surveyed-cell-20261110-skew-vision',
+    arm_bases_m=[[.116, -.164, .072], [.107, .164, .072]],
+    arm_base_yaws_rad=[math.pi/2, -math.pi/2],
+    cargo_colors_rgb=[[.91, .47, .22], [.18, .72, .24], [.88, .14, .28]],
+    infeed_jitter_xy_m=[.006, .007],
+    infeed_yaw_jitter_rad=.32,
+    release_offset_m=[0., .0004],
+    release_yaw_rad=math.radians(.5),
+    wrist_camera=dict(WRIST_CAMERA_B),
+)
