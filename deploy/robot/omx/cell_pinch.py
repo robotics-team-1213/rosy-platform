@@ -32,8 +32,14 @@ def measure(img, hsv, gap_mm: float, width_mm: float | None = None, params=None)
     axis = (b - a) / np.linalg.norm(b - a)
     across = np.array([-axis[1], axis[0]])
     g = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    h = g.shape[0]
-    dark = np.argwhere(g[2 * h // 3:] < 60)[:, ::-1] + (0, 2 * h // 3)
+    hsv_img = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+    h, w = g.shape[:2]
+    ax_x, ax_y = int(np.clip(a[0], 0, w - 1)), int(np.clip(a[1], 0, h - 1))
+    if g[ax_y, ax_x] > 140:  # v2.1 white finger pads
+        pad_mask = (g[2 * h // 3:] > 185) & (hsv_img[2 * h // 3:, :, 1] < 55)
+    else:
+        pad_mask = g[2 * h // 3:] < 60
+    dark = np.argwhere(pad_mask)[:, ::-1] + (0, 2 * h // 3)
     mid = (a + b) / 2
     proj = (dark - mid) @ axis
     near = np.abs((dark - mid) @ across) < prm.get(params, "pinch.band_px")
@@ -42,7 +48,6 @@ def measure(img, hsv, gap_mm: float, width_mm: float | None = None, params=None)
     if left_in is None or right_in is None or right_in - left_in < 10:
         return {"found": False, "why": "pad inner edges not found"}
     s = gap_mm / float(right_in - left_in)
-    hsv_img = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
     green = np.argwhere(cv2.inRange(hsv_img, np.array(hsv[0]), np.array(hsv[1])) > 0)[:, ::-1]
     band = green[np.abs((green - mid) @ across) < prm.get(params, "pinch.band_px")]
     if len(band) < 50:

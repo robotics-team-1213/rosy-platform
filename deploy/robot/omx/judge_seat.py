@@ -34,7 +34,18 @@ from pathlib import Path
 SCHEMA_VERSION = 2
 DECISIONS = ("proceed", "retry", "reinsert", "remap", "park", "abort")
 PRECONDITION = {"grasp": "aligned", "lift": "holding", "transport": "stable"}
-CONSERVATIVE_ORDER = ("abort", "park", "reinsert", "remap", "retry", "proceed")
+CONSERVATIVE_ORDER = (
+    "abort",
+    "park",
+    "reinsert_and_park",
+    "reinsert",
+    "reinsert_and_retry",
+    "remap",
+    "retry",
+    "unknown",
+    -1,
+    "proceed",
+)
 
 
 def measured(facts: dict):
@@ -106,19 +117,12 @@ def ollama(url="http://127.0.0.1:11434", model="qwen3-vl:8b-instruct", timeout=9
 
 
 def openai_chat(url="https://api.z.ai/api/coding/paas/v4/chat/completions", model="glm-5.3",
-                api_key=None, api_key_env=None, provider="zai", timeout=15, extra_body=None):
+                api_key=None, api_key_env=None, provider="zai", timeout=15, extra_body=None, vision=None):
     """Model-agnostic OpenAI-compatible HTTP chat backend (supports ZAI GLM-5.3/5.3-flash, OpenAI, vLLM, LiteLLM)."""
-    def ask(prompt, images, schema):
-        key = _resolve_api_key(api_key, api_key_env, provider)
-        sys_text = "Reply with a single compact JSON object matching the schema."
-        if schema:
-            sys_text += f" Schema: {json.dumps(schema)}"
-        if images:
-            content = [{"type": "text", "text": prompt}]
-            for b64 in images:
-                content.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}})
-        else:
-            content = prompt
+    if vision is None:
+        vision = any(tag in str(model).lower() for tag in ("vl", "vision", "4v", "gpt-4o", "claude-3", "gemini"))
+
+    def _send(content, key, sys_text):
         body = {
             "model": model,
             "temperature": 0.0,
@@ -138,6 +142,21 @@ def openai_chat(url="https://api.z.ai/api/coding/paas/v4/chat/completions", mode
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             payload = json.loads(resp.read())
         return _extract_json(payload["choices"][0]["message"]["content"])
+
+    def ask(prompt, images, schema):
+        key = _resolve_api_key(api_key, api_key_env, provider)
+        sys_text = "Reply with a single compact JSON object matching the schema."
+        if schema:
+            sys_text += f" Schema: {json.dumps(schema)}"
+        if images and vision:
+            content = [{"type": "text", "text": prompt}]
+            for b64 in images:
+                content.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}})
+            try:
+                return _send(content, key, sys_text)
+            except Exception:
+                pass
+        return _send(prompt, key, sys_text)
 
     ask.__name__ = f"{provider}:{model}"
     return ask
@@ -177,7 +196,7 @@ def cooperate(backends: list | tuple, *, arbiter=None):
 
     def ask(prompt_text, images, schema):
         props = (schema or {}).get("properties") or {}
-        key = "decision" if "decision" in props else ("verdict" if "verdict" in props else "choice")
+        key = next((k for k in ("decision", "verdict", "choice", "hypothesis") if k in props), "decision")
         allowed = props.get(key, {}).get("enum")
         rounds = []
         for idx, backend_fn in enumerate(live):
@@ -268,7 +287,7 @@ def from_config(spec):
         kw = {k: spec[k] for k in ("url", "model", "timeout") if k in spec}
         return ollama(**kw)
     if provider in ("zai", "glm", "openai", "http", "vllm", "litellm", "openrouter"):
-        kw = {k: spec[k] for k in ("url", "model", "api_key", "api_key_env", "timeout", "extra_body") if k in spec}
+        kw = {k: spec[k] for k in ("url", "model", "api_key", "api_key_env", "timeout", "extra_body", "vision") if k in spec}
         kw.setdefault("provider", provider)
         if provider in ("zai", "glm"):
             kw.setdefault("model", "glm-5.3")

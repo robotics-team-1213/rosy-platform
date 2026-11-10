@@ -51,22 +51,23 @@ def glm_backend(model: str = "glm-5.3", url: str = "https://api.z.ai/api/coding/
     return judge_seat.openai_chat(url=url, model=model, api_key=api_key, provider="zai", timeout=timeout)
 
 
-def telemetry_judge(state: list | None, holding: bool | None, params=None) -> dict:
-    """Agent 1: evaluate jaw position `state[5]` against nominal 30 mm container width (`gripper.held_30mm`)."""
+def telemetry_judge(state: list | None, holding: bool | None, params=None, current_ma: float | None = None) -> dict:
+    """Agent 1: evaluate jaw position `state[5]` and squeeze current `current_ma` against nominal 30 mm container width."""
     if holding is False:
         jaw = round(float(state[5]), 2) if isinstance(state, list) and len(state) >= 6 and state[5] is not None else None
         return {"verdict": "empty", "class": "empty", "jaw_units": jaw, "error_units": None,
-                "reason": "runner reported holding=False"}
+                "current_ma": current_ma, "reason": "runner reported holding=False"}
     if not isinstance(state, list) or len(state) < 6 or not isinstance(state[5], (int, float)):
         return {"verdict": "proceed", "class": "unmeasured", "jaw_units": None, "error_units": 0.0,
-                "reason": "no jaw state vector"}
+                "current_ma": current_ma, "reason": "no jaw state vector"}
     # Only enforce tight 30 mm jaw band when gripper.held_30mm is explicitly calibrated in params
     if not isinstance(params, dict) or "gripper.held_30mm" not in params:
         return {"verdict": "proceed", "class": "uncalibrated_jaw_band", "jaw_units": round(float(state[5]), 2),
-                "error_units": 0.0, "reason": "gripper.held_30mm not in params"}
+                "error_units": 0.0, "current_ma": current_ma, "reason": "gripper.held_30mm not in params"}
     held_30 = float(prm.get(params, "gripper.held_30mm"))
     shallow_tol = float(prm.get(params, "grasp.shallow_tol_units", 1.2))
     wedged_tol = float(prm.get(params, "grasp.wedged_tol_units", 0.7))
+    min_current = float(prm.get(params, "grasp.min_stable_current_ma", 0.0))
     jaw = round(float(state[5]), 2)
     err = round(jaw - held_30, 2)
     if err < -shallow_tol:
@@ -76,6 +77,7 @@ def telemetry_judge(state: list | None, holding: bool | None, params=None) -> di
             "jaw_units": jaw,
             "held_30mm_units": held_30,
             "error_units": err,
+            "current_ma": current_ma,
             "reason": f"jaws closed {abs(err):.2f} units past nominal 30mm ({jaw} < {held_30 - shallow_tol:.2f}): shallow corner pinch",
         }
     if err > wedged_tol:
@@ -85,7 +87,18 @@ def telemetry_judge(state: list | None, holding: bool | None, params=None) -> di
             "jaw_units": jaw,
             "held_30mm_units": held_30,
             "error_units": err,
+            "current_ma": current_ma,
             "reason": f"jaws stopped {err:.2f} units wider than nominal 30mm ({jaw} > {held_30 + wedged_tol:.2f}): diagonal/rim wedge",
+        }
+    if min_current > 0 and current_ma is not None and abs(float(current_ma)) < min_current:
+        return {
+            "verdict": "reinsert",
+            "class": "unstable_slipping",
+            "jaw_units": jaw,
+            "held_30mm_units": held_30,
+            "error_units": err,
+            "current_ma": current_ma,
+            "reason": f"gripper squeeze current {abs(float(current_ma)):.0f} mA below stable threshold {float(min_current):.0f} mA: slipping grasp",
         }
     return {
         "verdict": "proceed",
@@ -93,6 +106,7 @@ def telemetry_judge(state: list | None, holding: bool | None, params=None) -> di
         "jaw_units": jaw,
         "held_30mm_units": held_30,
         "error_units": err,
+        "current_ma": current_ma,
         "reason": "jaw span within nominal 30mm stability band",
     }
 
@@ -166,17 +180,20 @@ def _normalize_models(models) -> list:
 
 
 def debate_and_decide(stage: str, telemetry: dict, vision: dict, reinsert_count: int = 0,
-                      max_reinsert: int = 1, models: list | tuple | dict = ()) -> dict:
+                      max_reinsert: int = 1, models: list | tuple | dict = (), *,
+                      images: list | tuple = (), knowledge=None, context: str = "") -> dict:
     """Cross-check Telemetry (Agent 1) + Wrist Vision (Agent 2) + Model Deliberation (Agent 3..N).
 
-    Uses `judge_seat.measured` for precondition sovereignty (`next='transport'`, `holding=True`, `stable=not unstable`)
-    and runs `proposal -> critique -> arbiter` deliberation across any configured model backends.
+    Uses `judge_seat.measured` for precondition sovereignty (`next='transport'`, `holding=True`, `stable=not unstable`),
+    injects `cell_knowledge` and `cell_decisions.context` background, and runs `proposal -> critique -> arbiter`
+    deliberation across any configured model backends.
     """
     if telemetry.get("verdict") == "empty":
         return {
             "schema_version": SCHEMA_VERSION,
             "verdict": "empty",
             "by": "measurement",
+            "consensus": True,
             "recovery_chunk": None,
             "dx_mm": 0.0,
             "dy_mm": 0.0,
@@ -197,6 +214,7 @@ def debate_and_decide(stage: str, telemetry: dict, vision: dict, reinsert_count:
     seat_facts = {
         "box_found": True,
         "next": "lift" if stage == "run grasp_pick" else "transport",
+        "applies": ["grasp", "lift", "safety"],
         "holding": True,
         "stable": not unstable,
         "reinsert": unstable,
@@ -204,6 +222,13 @@ def debate_and_decide(stage: str, telemetry: dict, vision: dict, reinsert_count:
         "reinsert_count": reinsert_count,
     }
     _, seat_forbidden = judge_seat.measured(seat_facts)
+
+    notes = []
+    if knowledge:
+        import cell_knowledge
+        if isinstance(knowledge, (str, Path)):
+            knowledge = cell_knowledge.load(knowledge)
+        notes = cell_knowledge.select(knowledge, seat_facts)
 
     if not unstable:
         rule_verdict = "proceed"
@@ -238,11 +263,17 @@ def debate_and_decide(stage: str, telemetry: dict, vision: dict, reinsert_count:
         },
     }
 
+    bg = ""
+    if notes:
+        bg += "Cell knowledge (background): " + " ".join(f"[{e['id']} {e['status']}] {e['statement']}" for e in notes) + "\n"
+    if context:
+        bg += f"Past cell decisions (background): {context}\n"
+
     live_models = _normalize_models(models)
     for idx, model_fn in enumerate(live_models):
         role = "proposal" if idx == 0 else ("critique" if idx == 1 and len(live_models) > 2 else f"arbiter_{idx}")
         prompt = (
-            f"[Deliberation v{SCHEMA_VERSION}] Role: {role}. Stage: {stage}. Reinsert count: {reinsert_count}/{max_reinsert}.\n"
+            f"{bg}[Deliberation v{SCHEMA_VERSION}] Role: {role}. Stage: {stage}. Reinsert count: {reinsert_count}/{max_reinsert}.\n"
             f"Seat measured facts: {json.dumps(seat_facts)} (forbidden decisions: {sorted(seat_forbidden)})\n"
             f"Agent 1 (Telemetry): {json.dumps(telemetry)}\n"
             f"Agent 2 (Wrist Vision): {json.dumps(vision)}\n"
@@ -252,7 +283,7 @@ def debate_and_decide(stage: str, telemetry: dict, vision: dict, reinsert_count:
             "Reply with JSON only: {\"verdict\": ..., \"dx_mm\": ..., \"dy_mm\": ..., \"reason\": ...}."
         )
         try:
-            ans = model_fn(prompt, (), schema)
+            ans = model_fn(prompt, images, schema)
             m_verdict = ans.get("verdict") or ans.get("decision")
             if m_verdict == "reinsert":
                 m_verdict = "reinsert_and_retry" if reinsert_count < max_reinsert else "reinsert_and_park"
@@ -287,10 +318,13 @@ def debate_and_decide(stage: str, telemetry: dict, vision: dict, reinsert_count:
                 "error": str(exc)[:120],
             })
 
-    return {
+    verdicts_seen = [d["verdict"] for d in debate_log if "verdict" in d]
+    consensus = len(set(verdicts_seen)) <= 1
+    out = {
         "schema_version": SCHEMA_VERSION,
         "verdict": final_verdict,
         "by": by,
+        "consensus": consensus,
         "options": allowed,
         "recovery_chunk": None if final_verdict == "proceed" else recovery_chunk,
         "dx_mm": round(dx_mm, 2),
@@ -300,6 +334,9 @@ def debate_and_decide(stage: str, telemetry: dict, vision: dict, reinsert_count:
         "debate": debate_log,
         "reason": final_reason,
     }
+    if notes:
+        out["knowledge_ids"] = [e["id"] for e in notes]
+    return out
 
 
 def hook(config: dict, cell, target: dict, write_library, gap_mm: float):
@@ -319,19 +356,39 @@ def hook(config: dict, cell, target: dict, write_library, gap_mm: float):
     default_signs = dict({"along": -1.0, "across": 1.0}, **(spec.get("finger_sign") or {}))
     max_reinsert = int(prm.get(params, "grasp.max_reinsert", 1))
     models = _normalize_models(config.get("debate_models") or config.get("decision_model"))
+    knowledge = config.get("knowledge")
+    decision_ctx = cd.context(config["decision_context"]) if config.get("decision_context") else ""
 
-    state_tracker = {"reinsert_count": 0}
+    state_tracker = {"reinsert_count": 0, "last_along_mm": None}
 
     def check(stage: str, status: dict, run_cmd) -> dict:
-        signs = json.loads(signs_path.read_text()) if signs_path.exists() else default_signs
-        t_res = telemetry_judge(status.get("state"), status.get("holding"), params)
-        wrist_img = None
+        signs = json.loads(signs_path.read_text()) if signs_path.exists() else dict(default_signs)
+        current_ma = status.get("gripper_current_ma")
+        if current_ma is None:
+            cur_list = (status.get("health") or {}).get("current_ma")
+            if isinstance(cur_list, list) and len(cur_list) >= 6:
+                current_ma = cur_list[5]
+        t_res = telemetry_judge(status.get("state"), status.get("holding"), params, current_ma=current_ma)
+        wrist_img, images_b64 = None, ()
         if hsv is not None and stage == "run grasp_pick" and prm.get(params, "grasp.vision_after_grasp", 0):
             try:
                 wrist_img = cell.frame(camera)
+                if wrist_img is not None:
+                    import base64
+                    import cv2
+                    images_b64 = (base64.b64encode(cv2.imencode(".jpg", wrist_img)[1].tobytes()).decode(),)
             except Exception:
                 wrist_img = None
         v_res = vision_judge(wrist_img, hsv, gap_mm, closing, signs, params)
+        # Adaptive overshoot dampening: if a prior re-insert flipped the lateral offset sign, damp step by 0.5x
+        if v_res.get("found") and state_tracker["last_along_mm"] is not None:
+            prev_along, cur_along = state_tracker["last_along_mm"], v_res["along_mm"]
+            if prev_along * cur_along < 0 and abs(cur_along) > 1.5:
+                v_res["dx_mm"] = round(v_res["dx_mm"] * 0.5, 2)
+                v_res["dy_mm"] = round(v_res["dy_mm"] * 0.5, 2)
+        if v_res.get("found"):
+            state_tracker["last_along_mm"] = v_res["along_mm"]
+
         decision = debate_and_decide(
             stage=stage,
             telemetry=t_res,
@@ -339,6 +396,9 @@ def hook(config: dict, cell, target: dict, write_library, gap_mm: float):
             reinsert_count=state_tracker["reinsert_count"],
             max_reinsert=max_reinsert,
             models=models,
+            images=images_b64,
+            knowledge=knowledge,
+            context=decision_ctx,
         )
         cd.emit(
             "grasp_stability",
@@ -349,6 +409,7 @@ def hook(config: dict, cell, target: dict, write_library, gap_mm: float):
                 "reinsert_count": state_tracker["reinsert_count"],
                 "dx_mm": decision["dx_mm"],
                 "dy_mm": decision["dy_mm"],
+                "consensus": decision["consensus"],
                 "debate": decision["debate"],
             },
             decision.get("options", list(ACTIONS)),
@@ -362,6 +423,8 @@ def hook(config: dict, cell, target: dict, write_library, gap_mm: float):
         # Execute physical put-back (`run release_pick` at grasp_pick, or `run reinsert_pick` at lift_pick)
         rec_cmd = decision["recovery_chunk"]
         rec_status = run_cmd(rec_cmd)
+        rec_state = rec_status.get("state")
+        decision["released_jaw_units"] = round(float(rec_state[5]), 2) if isinstance(rec_state, list) and len(rec_state) >= 6 and rec_state[5] is not None else None
         decision["put_back_ok"] = bool(rec_status.get("ok")) and not rec_status.get("contact")
         if not decision["put_back_ok"]:
             decision["verdict"] = "reinsert_and_park"
@@ -377,10 +440,20 @@ def hook(config: dict, cell, target: dict, write_library, gap_mm: float):
             )
             target["pick"] = pick
             replan_path = write_library(config, pick, target["place"], work / "reinsert-replan.json")
-            retry_cmds = (f"load {replan_path}", "goto above_pick", "run descend_pick", "run grasp_pick")
+            reach_fn = None
+            if prm.get(params, "grasp.reach_on_reinsert", 0):
+                import cell_reach
+                reach_fn = cell_reach.hook(config, cell, target, write_library)
+            retry_cmds = (f"load {replan_path}", "goto above_pick", "reach", "run descend_pick", "run grasp_pick")
             if stage == "run lift_pick":
                 retry_cmds = (*retry_cmds, "run lift_pick")
             for c in retry_cmds:
+                if c == "reach":
+                    if reach_fn is not None and reach_fn().get("verdict") == "refuse":
+                        decision["verdict"] = "reinsert_and_park"
+                        decision["retry_failed_at"] = "reach"
+                        return decision
+                    continue
                 st = run_cmd(c)
                 if not st.get("ok") or st.get("contact"):
                     decision["verdict"] = "reinsert_and_park"

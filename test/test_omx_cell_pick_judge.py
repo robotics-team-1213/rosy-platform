@@ -38,3 +38,16 @@ def test_a_veto_empties_the_list_and_a_failure_keeps_the_rule():
     out = pj.ask(down, IMG, USABLE)
     assert out["order"] == [0, 1] and out["by"] == "rule" and "unavailable" in out["reason"]
     assert pj.ask(None, IMG, USABLE)["order"] == [0, 1]
+
+
+def test_multi_model_deliberation_in_pick_judge_and_conservative_veto_tiebreak():
+    proposer = lambda p, i, s: {"choice": 1, "reason": "candidate 1 is isolated"}
+    critic_agree = lambda p, i, s: {"choice": 1, "reason": "confirmed candidate 1"}
+    out = pj.ask([proposer, critic_agree], IMG, USABLE)
+    assert out["order"] == [1, 0] and out["consensus"] is True and len(out["deliberation"]) == 2
+
+    # When one model vetoes (-1) and one picks 1, conservative tie-break chooses -1 (veto)
+    critic_veto = lambda p, i, s: {"choice": -1, "reason": "tilted"}
+    out_veto = pj.ask([proposer, critic_veto], IMG, USABLE)
+    assert out_veto["choice"] == -1 and out_veto["order"] == [] and out_veto["consensus"] is False
+

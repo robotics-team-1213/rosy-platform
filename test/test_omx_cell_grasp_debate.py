@@ -47,6 +47,11 @@ def test_telemetry_judge_distinguishes_shallow_corner_pinch_stable_grasp_and_dia
     # Diagonal rim wedge (56.6 > 56.4)
     wedged = cgd.telemetry_judge([0, 0, 0, 0, 0, 56.6], True, params)
     assert wedged["verdict"] == "reinsert" and wedged["class"] == "unstable_wedged"
+    # Slipping grasp: jaw within band (55.1) but squeeze current (85 mA) below min_stable_current_ma (140 mA)
+    params_cur = dict(params, **{"grasp.min_stable_current_ma": 140})
+    slipping = cgd.telemetry_judge([0, 0, 0, 0, 0, 55.1], True, params_cur, current_ma=85.0)
+    assert slipping["verdict"] == "reinsert" and slipping["class"] == "unstable_slipping"
+
 
 
 def test_multi_model_debate_enforces_safety_invariant_and_chooses_reinsert_pick():
