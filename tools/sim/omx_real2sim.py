@@ -101,6 +101,8 @@ def blobs(frame):
     masks = {"pad": (hsv[..., 2] < 140) & (hsv[..., 1] < 90),
              "container": (hsv[..., 0] < 22) & (hsv[..., 1] > 120) & (hsv[..., 2] > 120)}
     for kind, m in masks.items():
+        if kind == "pad":  # bridge the white lane label and alignment dots printed across a dark pad
+            m = cv2.morphologyEx(m.astype(np.uint8), cv2.MORPH_CLOSE, np.ones((9, 9), np.uint8))
         m = cv2.morphologyEx(m.astype(np.uint8), cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
         for c in cv2.findContours(m, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)[0]:
             if cv2.contourArea(c) >= 150:

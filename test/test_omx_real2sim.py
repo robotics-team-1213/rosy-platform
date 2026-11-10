@@ -149,6 +149,20 @@ def test_pads_cut_short_still_hold_their_lane():
         assert abs(lane["yaw_deg"] - math.degrees(truth("b", k)[1])) < 1.
 
 
+def test_white_printed_lane_labels_across_a_pad_do_not_split_it():
+    layout = sites.Layout()
+    img = frame(layout)
+    cam = r2s.Camera(layout.fixture["real_cameras"]["top"], img.shape[:2])
+    for t, k in (("a", 1), ("b", 2), ("b", 3)):  # 2026-11-10 live cell: white R1/R3 labels & dots split pads in two
+        (x, y), yaw = truth(t, k)
+        stripe = [cam.project((x + a * .002 * math.cos(yaw) - b * .017 * math.sin(yaw),
+                               y + a * .002 * math.sin(yaw) + b * .017 * math.cos(yaw), layout.deck_z))
+                  for a, b in ((-1, -1), (1, -1), (1, 1), (-1, 1))]
+        cv2.fillPoly(img, [np.round(stripe).astype(np.int32)], (245, 245, 245))
+    got = r2s.measure_temp_plates(img, layout)
+    assert got["plates"]["a"]["seen"] == 3 and got["plates"]["b"]["seen"] == 3
+
+
 def test_the_ship_is_found_where_its_hull_lies():
     layout = sites.Layout()
     img = np.full((480, 640, 3), (60, 200, 200), np.uint8)

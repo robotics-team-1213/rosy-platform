@@ -71,39 +71,48 @@ def clearance(moving, idle_pose, q_path, idle):
 
 def solve_chain(arm, wps, q0, samples=12, roll_floor=None, branch="best"):
     """Walk the waypoints with continuous IK (warm start, as the teacher moves). The jaw closes the same way turned 180 deg, so joint5 has
-    two branches: seeds on both are tried and the branch whose joint5 stays highest above roll_floor wins (a path needing joint5 past its
-    limit on one branch is solved on the other). branch="other" takes the second-best branch (the jaw turned 180 deg), for the feasibility matrix. Returns (ok, approach q, joint path, note)."""
+    two branches and a carry can also turn the symmetric container +-180 deg when the shortest turn drives joint5 below roll_floor.
+    branch="other" takes the second-best branch (the jaw turned 180 deg), for the feasibility matrix. Returns (ok, approach q, joint path, note)."""
     note, found = "no branch converged", []
-    for j5 in (q0[4], -1.5, -.4, 0., .8, 1.5, 1.9):
-        seed = np.array(q0, float)
-        seed[4] = j5
-        first = np.array([*wps[0][1], wps[0][2]])
-        ok, q, err = arm.reach(seed, first, wps[0][3])
-        if not ok:
-            note = f"approach {err * 1000:.1f} mm short at x {first[0]:.3f} y {first[1]:.3f} z {first[2]:.3f}"
-            continue
-        approach, path, last, yaw_last, failed = q, [q.copy()], first, wps[0][3], None
-        for name, xy, z, yaw, _ in wps[1:]:
-            target = np.array([*xy, z])
-            for s in np.linspace(0, 1, samples + 1)[1:]:
-                q, e_pos, e_rot = arm.ik(q, last + (target - last) * s, yaw_last + (yaw - yaw_last) * s, 40)
-                if e_pos > 1e-3 or e_rot > .03:
-                    failed = f"{name} {e_pos * 1000:.1f} mm / {e_rot:.2f} rad off at x {xy[0]:.3f} y {xy[1]:.3f} z {z:.3f}"
+    turns = (0., -math.pi, math.pi) if branch == "best" and len(wps) >= 8 and roll_floor is not None else (0.,)
+    for turn in turns:
+        trial = list(wps[:4]) + [(n, xy, z, y + turn, g) for n, xy, z, y, g in wps[4:]] if turn else list(wps)
+        for j5 in (q0[4], -1.5, -.4, 0., .8, 1.5, 1.9):
+            seed = np.array(q0, float)
+            seed[4] = j5
+            first = np.array([*trial[0][1], trial[0][2]])
+            ok, q, err = arm.reach(seed, first, trial[0][3])
+            if not ok:
+                note = f"approach {err * 1000:.1f} mm short at x {first[0]:.3f} y {first[1]:.3f} z {first[2]:.3f}"
+                continue
+            approach, path, last, yaw_last, failed = q, [q.copy()], first, trial[0][3], None
+            for name, xy, z, yaw, _ in trial[1:]:
+                target = np.array([*xy, z])
+                for s in np.linspace(0, 1, samples + 1)[1:]:
+                    q, e_pos, e_rot = arm.ik(q, last + (target - last) * s, yaw_last + (yaw - yaw_last) * s, 40)
+                    if e_pos > 1e-3 or e_rot > .03:
+                        failed = f"{name} {e_pos * 1000:.1f} mm / {e_rot:.2f} rad off at x {xy[0]:.3f} y {xy[1]:.3f} z {z:.3f}"
+                        break
+                    path.append(q.copy())
+                if failed:
                     break
-                path.append(q.copy())
+                last, yaw_last = target, yaw
             if failed:
+                note = failed
+                continue
+            found.append((min(float(p[4]) for p in path), approach, path, trial))
+            found = [f for k, f in enumerate(found) if all(abs(f[1][4] - g[1][4]) > .3 or f[3] is not g[3] for g in found[:k])]  # one entry per distinct branch
+            if branch == "best" and roll_floor is not None and found[-1][0] >= roll_floor:
                 break
-            last, yaw_last = target, yaw
-        if failed:
-            note = failed
-            continue
-        found.append((min(float(p[4]) for p in path), approach, path))
-        found = [f for k, f in enumerate(found) if all(abs(f[1][4] - g[1][4]) > .3 for g in found[:k])]  # one entry per distinct branch
-        if branch == "best" and roll_floor is not None and found[-1][0] >= roll_floor:
+        if not found or (branch == "best" and (roll_floor is None or max(f[0] for f in found) >= roll_floor)):
             break
     found.sort(key=lambda f: -f[0])
     pick = 0 if branch == "best" else 1
-    return (True, found[pick][1], found[pick][2], None) if len(found) > pick else (False, None, [], note if not found else "no second branch")
+    if len(found) <= pick:
+        return False, None, [], note if not found else "no second branch"
+    if isinstance(wps, list):
+        wps[:] = found[pick][3]
+    return True, found[pick][1], found[pick][2], None
 
 
 def link_clearance(layout, arm, path, here):

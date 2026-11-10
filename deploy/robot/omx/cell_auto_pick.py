@@ -431,7 +431,7 @@ def run_auto(cell, config, calibration, calibration_path, catalog, roi, source, 
             return {**out, "result": f"refused: {site}: {out[f'track_{site}'].get('why')}"}
         roi = config["sites"][site]["auto_roi"] if site == source else roi
     dest_site, place_xy = parse_dest(config, source, dest)
-    droi = config["sites"][dest_site].get("auto_roi") or (roi if dest_site == source else None)
+    droi = config["sites"][dest_site].get("auto_roi") or (roi if dest_site == source or config["sites"][dest_site].get("layer", 0) > 0 else None)
     guarded = None if dry_run else Guarded(cell, config)
     if guarded is not None and not cell.act("state").get("ok"):
         return {"result": "refused", "error": "start record_session.py --chunks first: no chunk_runner answers"}

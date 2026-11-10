@@ -78,3 +78,11 @@ def test_with_tiers_expands_three_tiers_and_upper_tiers_require_support():
         assert "nothing under it" in pf.options(cfg, upper, (0.0, 0.0), 0.0, box, PX, empty, roi)[1]
         fits, why = pf.options(cfg, upper, (0.0, 0.0), 0.0, box, PX, occupied, roi)
         assert why is None and fits[0] == ((0.0, 0.0), 0.0)
+    # Real cell (pallet yaw_deg=0.0, 1단 30x90 container standing along y at x in [-15, 15], y in [-45, 45]):
+    # a 2단 3-cell must align with the 1단 container (yaw 90/-90), not sit crosswise (yaw 0) overhanging empty air
+    wide_tray = [[40, 40], [160, 40], [160, 160], [40, 160]]
+    cfg_wide, _ = pf.with_tiers({"sites": {"dest": {"yaw_deg": 0.0, "surface_z": -0.01, "surface_px": wide_tray}}, "params": None})
+    bar_along_y = np.zeros((160, 160), np.uint8)
+    bar_along_y[55:145, 85:115] = 1  # 30 mm wide in x (cols 85..115), 90 mm long in y (rows 55..145) around (100, 100)
+    fits_bar, why_bar = pf.options(cfg_wide, "dest-l1", (0.0, 0.0), 0.0, C3, PX, bar_along_y, (0, 0, 160, 160))
+    assert why_bar is None and fits_bar[0][1] in (90.0, -90.0)

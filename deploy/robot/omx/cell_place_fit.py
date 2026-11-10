@@ -110,7 +110,7 @@ def why_not(points, pixel_fn, polygon_px, occupied=None, roi=None, layer: int = 
                 return "something is already there"
     if layer > 0 and occupied is not None and roi is not None:
         centre = tuple(np.mean(points, axis=0))
-        if not has_support(centre, pixel_fn, occupied, roi):
+        if not has_support(centre, pixel_fn, occupied, roi) or sum(has_support(p, pixel_fn, occupied, roi) for p in points) < 0.6 * len(points):
             return "nothing under it at the lower tier"
     return None
 

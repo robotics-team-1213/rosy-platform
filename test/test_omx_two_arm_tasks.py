@@ -305,3 +305,7 @@ def test_stack_and_cell_stack_divide_into_three_validated_tier_stages(layout, da
                 seen[s["container"]] = s["to"]
     t2 = tasks.get_task(layout, "cell-stack-t2", data)
     assert [s["from"] for s in t2["steps"]] == ["tmp-a-2", "tmp-a-1", "tmp-b-2"]
+    snap_layout = sites.Layout(cell_snapshot="deploy/robot/omx/sim/cell_snapshots/20261108-2257.json",
+                               temp_lanes="snapshot", ship_pose="snapshot", belt_pose="snapshot")
+    snap_records = tasks.validate(snap_layout, tasks.get_task(snap_layout, "cell-stack", data))
+    assert len(snap_records) == 9 and not any(r["roll_below_floor"] for r in snap_records)

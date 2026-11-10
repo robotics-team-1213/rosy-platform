@@ -42,3 +42,18 @@ applies_when:
 ## 복구와 다음 적용 조건
 
 칸은 고정되지 않았으므로 옮기면 다시 잰다. 손목 카메라는 CAD 값이고, arm_a 쪽 장착은 같다고 가정했다. 이 값들은 실측이 아니다. 다른 장면에서 배치를 추정했다면, 시험 통과를 근거로 삼기 전에 실제 카메라 시점으로 사진과 겹쳐 본다.
+
+## 추가 교훈 (2026-11-10): 1·2·3단 적층 Sim → Real → Sim 왕복에서 드러난 세 가지 간극
+
+1. **`temp_slot_plate v11` 흰색 칸 표식(`R1`, `R3`)과 정렬 점이 검은 패드 윤곽을 반으로 가름 (`tools/sim/omx_real2sim.py`)**
+   - **증상**: 실물 셀 top 카메라에서 `omx_real2sim.py capture` 실행 시 빈 칸 `a-1`, `b-1`, `b-3`의 검은 패드가 흰색 글자·점 때문에 약 `33 mm` 조각 두 개로 쪼개져 `PARTIAL_MIN(40 mm)` 미만으로 버려졌다.
+   - **해결**: `blobs(frame)`의 `pad` 마스크에 `9x9` `cv2.MORPH_CLOSE`를 적용해 흰색 표식 간극을 메웠다.
+   - **검증 근거**: `test_white_printed_lane_labels_across_a_pad_do_not_split_it` 통과 및 실물 셀 캡처에서 `a-1`(`78.7x30.0 mm`), `b-1`(`87.3x30.7 mm`), `b-3`(`89.0x34.8 mm`) 패드 실측 복구 확인.
+2. **실물 스냅샷 배치에서 180° 대칭 컨테이너의 최단 회전(`wrap_pi`)이 손목 롤 하한(`roll_floor`)을 침범 (`tools/sim/omx_two_arm_tasks.py`)**
+   - **증상**: 기본 시뮬 배치에서는 `cell-stack` 9단계가 모두 `roll_below_floor: False`였으나, 실물 스냅샷(`20261108-2257.json`)에서는 `c1, c2, c4, c5, c8`의 `arm_a` joint5가 `-1.30 rad`(`< -0.565 rad`)까지 내려갔다.
+   - **해결**: 컨테이너와 그리퍼 조는 `±180°`(`±pi`) 대칭이므로, `solve_chain`에서 기본 회전(`0 rad`) 경로가 실패하거나 `roll_floor` 아래로 내려가면 `wps[4:]`(`carry..retreat`)에 `-pi`, `+pi` 회전을 시도해 `roll_floor` 이상인 분기를 선택하도록 수정했다.
+   - **검증 근거**: 실물 스냅샷(`20261108-2257.json`) 기준 `cell-stack` 9단계 모두 `roll_below_floor: False`(`min_roll_rad: -0.144 ~ +0.233 rad`) 확인(`test_stack_and_cell_stack_divide_into_three_validated_tier_stages`).
+3. **실물 2·3단(`layer > 0`) 안착 시 중심점 지지 검사만으로는 1단 컨테이너와 직교(`90°`)하는 허공 돌출 배치를 막지 못함 (`deploy/robot/omx/cell_place_fit.py`)**
+   - **증상**: 실물 셀 `pallet` 사이트의 기본 `yaw_deg`는 `0.0°`이고 1단(`pallet-l0`) 컨테이너는 `±89°`(`y`축 방향, 폭 `30 mm`)로 놓여 있는데, `why_not()`이 중심점(`centre`) 하나만 검사해 2단·3단 컨테이너가 1단 컨테이너를 가로질러 양쪽으로 돌출되는 후보를 허용했다.
+   - **해결**: `layer > 0`에서 중심점뿐 아니라 컨테이너 `footprint` 점들의 `60%` 이상이 아래 단 `occupied` 마스크 위에 놓이는지 검사하도록 강화했다.
+   - **검증 근거**: `test_with_tiers_expands_three_tiers_and_upper_tiers_require_support` 및 실물 셀(`rosy-arm-cell`) 라이브 카메라 대상 `pallet-l0 -> pallet-l1`, `pallet-l0 -> pallet-l2`, `pallet-l1 -> pallet-l2` dry-run 계획 검증 완료.
