@@ -38,10 +38,13 @@ REQUIRED_DEPLOYMENT_FILES = (
     "compose.account.yaml", "Caddyfile.account",
     "compose.account-backup.yaml", "rosy-account-backup.service", "rosy-account-backup.timer",
     "rosy-account-backup-check.service", "rosy-account-backup-check.timer",
+    "account_tls_renew.py", "account-tls.env.example", "rosy-site-account-tls-renew.service", "rosy-site-account-tls-renew.timer",  # D-1001: R renews from the signed release
     "sign_candidate.py", "verify_candidate.py",
 )
 REQUIRED_DOCUMENT_FILES = ("docs/reference/site-lan-discovery-profile.md",)
 ACCOUNT_DEPLOYMENT_FILES = ("compose.account.yaml", "Caddyfile.account")
+ACCOUNT_TLS_FILES = ("account_tls_renew.py", "account-tls.env.example",
+                     "rosy-site-account-tls-renew.service", "rosy-site-account-tls-renew.timer")
 ACCOUNT_BACKUP_FILES = ("compose.account-backup.yaml", "rosy-account-backup.service", "rosy-account-backup.timer",
                         "rosy-account-backup-check.service", "rosy-account-backup-check.timer")
 MONITORING_DEPLOYMENT_FILES = ("compose.monitoring.yaml", "Caddyfile.monitoring")  # D-936
@@ -56,11 +59,12 @@ class CandidateVerificationError(ValueError):
 
 
 def verified_services(value: object) -> tuple[str, ...]:
-    """Canonicalize only the legacy and independent-Account signed inventories."""
-    if isinstance(value, list) and all(isinstance(s, str) for s in value):
+    """Canonicalize only the legacy, independent-Account and optional own-Monitoring-image inventories."""
+    if isinstance(value, list) and all(isinstance(s, str) for s in value) and value.count("monitoring") <= 1:
+        rest = [s for s in value if s != "monitoring"]  # D-1001: optional own image; older candidates lack it
         for services in (SERVICES[:3], SERVICES, ACCOUNT_SERVICES):
-            if len(value) == len(services) and set(value) == set(services):
-                return services
+            if len(rest) == len(services) and set(rest) == set(services):
+                return (*services, *(("monitoring",) if "monitoring" in value else ()))
     raise CandidateVerificationError("candidate images must contain exactly the legacy or independent Account inventory")
 
 
@@ -133,6 +137,8 @@ def _verify_candidate_content(candidate_dir: Path, *, manifest_bytes: bytes | No
         if set(hashes) & set(ACCOUNT_BACKUP_FILES):
             raise CandidateVerificationError('Account maintenance requires its own signed image inventory')
         required.difference_update(ACCOUNT_BACKUP_FILES)
+    if not set(hashes) & set(ACCOUNT_TLS_FILES):
+        required.difference_update(ACCOUNT_TLS_FILES)  # earlier signed candidates; a half group stays required
     if "compose.omx.yaml" not in hashes:
         required.discard("compose.omx.yaml")
     if "compose.workcell.yaml" not in hashes:

@@ -472,7 +472,8 @@ def run_round(args):
     try:
         plan = []
         if args.mode == "concurrent":  # one plan for all workers and the evaluation: omx_two_arm_plan.py's two-arm order and zones
-            subprocess.run([args.python, str(Path(__file__).with_name("omx_two_arm_plan.py")), "compare", "--out", str(run / "plan.json"), "--replay-dir", str(run / "plan"), *chosen],
+            scenario = "all" if "rearrange" in args.tasks.split(",") else "both"  # the rearrange search is the slow one: plan it only when trained
+            subprocess.run([args.python, str(Path(__file__).with_name("omx_two_arm_plan.py")), "compare", "--scenario", scenario, "--out", str(run / "plan.json"), "--replay-dir", str(run / "plan"), *chosen],
                            env=dict(environment, PYTHONIOENCODING="utf-8"), stdout=log, stderr=subprocess.STDOUT, check=True)
             plan = ["--plan-dir", str(run / "plan")]
         # One process per part: rendering four cameras is what takes the time, and LeRobot writes one dataset at a time.

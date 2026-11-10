@@ -325,6 +325,29 @@ certificate folder (keys, `backups/`) is data and stays where it was prepared.
 hostname). tailscale issues a new pair only below 30 days of validity. A changed pair
 reloads the Account proxy.
 
+Hosts that get the stack from signed releases and have no site-tools channel (the R host,
+D-1001) use the system-level twin instead. The signed candidate carries `account_tls_renew.py`,
+`rosy-site-account-tls-renew.service`/`.timer` and `account-tls.env.example`, so the script follows
+every release and is never copied. Install the units once from the verified current candidate
+(candidates signed before this group still verify; a partial group does not):
+
+```sh
+sudo install -d -o 10001 -g 10001 -m 0500 /etc/rosy/account-tls   # installed pair; the run fails to install without it
+sudo install -d -m 0700 /var/lib/rosy/account-tls   # data folder: renewed pair and backups, outside the release
+sudo install -m 0600 /opt/rosy/candidate/deploy/site/account-tls.env.example /etc/rosy/site/account-tls.env
+sudoedit /etc/rosy/site/account-tls.env             # set ROSY_ACCOUNT_TLS_DOMAIN (the approved Account DNS name)
+for unit in rosy-site-account-tls-renew.service rosy-site-account-tls-renew.timer; do
+  sudo install -m 0644 /opt/rosy/candidate/deploy/site/$unit /etc/systemd/system/$unit
+done
+sudo systemctl daemon-reload
+sudo systemctl start rosy-site-account-tls-renew.service   # first run issues and installs the pair
+sudo systemctl enable --now rosy-site-account-tls-renew.timer
+```
+
+The renewer writes the installed pair to `/etc/rosy/account-tls` (UID10001, mode 0400) and reloads the
+proxy only after the replacement validates. Do not enable the user-level
+`rosy-account-tls-renew.timer` on the same host.
+
 On the existing `site_edge` network, the proxy also owns the approved Account
 hostname as a Docker DNS alias. Approved container clients on that network use
 the same HTTPS issuer and certificate verification without routing through the
@@ -629,6 +652,13 @@ Keep it out of the checkout and grant read access only to root and the
 `.service` and `.timer` files to `/etc/systemd/system/`. Create a system user
 and group `rosy-mdns` with no login shell. Grant that group read access to
 `discovery_token`; `site-ca.crt` is already public to the host service.
+Where the migrated secrets dir keeps `discovery_token` as `root:rosy-fleet`
+0640, add a per-file ACL (`setfacl -m g:rosy-mdns:r discovery_token`) rather
+than the `rosy-fleet` group: that group also reads `robot_credential_key`,
+`site.key` and the other tokens. The site host-state manifest installs the
+unit and timer and reports a site PC whose bridge timer is not running; the
+`rosy-mdns` user and the ACL stay manual. A site PC moved on 2026-11-09 ran
+without the bridge.
 
 The bridge needs no URL, FQDN or LAN address. Its unit reads
 `ROSY_SITE_TLS_HOST` and `ROSY_SITE_HTTPS_PORT` (both required; neither is defaulted in code)
@@ -884,7 +914,11 @@ expected `.local` hostname and site CA path. The one-time SD
 issued site CA at `/etc/rosy/trust/<trust_profile>.crt`, then provision the
 same persistent pairing token as `fleet.pairing_token` in the robot CORE's
 private `/var/lib/rosy/core/.rosy/rosy.yaml` and `fleet_pairing_token` in the
-site's root-owned `robots.yaml`. Apply the token during a controlled CORE
+site's `robots.yaml`. That file holds operator tokens and only the Fleet
+service reads it: own it by the Fleet UID/GID (`10001:10001`) with mode
+`0600` — group-readable is the warning the console prints at start, and
+provisioning that leaves it root-owned must not widen the mode to compensate.
+Apply the token during a controlled CORE
 restart after pairing approval. With the token in place, FleetAgent discovers
 the site and reconnects over WSS automatically; without it, the robot stays
 in registration/pairing wait. If a site is unreachable or multicast is
@@ -1746,6 +1780,22 @@ sudo install -d -o 10001 -g 10001 -m 0700 /var/backups/rosy-site
 sudo systemctl enable --now rosy-site-ledger-backup.timer
 ```
 
+After each backup the same run applies ledger retention to the live volume
+(also explicit in the compose `fleet-backup` command): terminal-task history
+`--prune-history 30`, pairing and CORE event audit `--prune-audit 90`, site
+API request audit `--prune-api-audit 90`, accepted-sighting audit
+`--prune-sightings 90` — every flag accepts `0` to disable that group, and
+tables missing from an older schema are skipped. The timer's backup copy is
+VACUUMed after the copy completes, so the 14 kept backups track the retained
+data instead of the source file's high-water mark; the live volume keeps its
+size until the quarterly maintenance window, when a stopped-service
+`site_db.py compact --path <volume> --assume-stopped` rewrites it in place
+(verify runs before and after). In-store caps already bound the tables the
+tool does not prune: observations/rule selections keep the newest 100k rows
+and 30 days in the store itself, and judgment records keep 7 days. Stuck incident
+reports enrich older episodes from the sighting audit; past the 90-day retention
+those reports keep their content but lose the camera column.
+
 The timer keeps only the operational SQLite ledger; keep transferring copies
 to the approved encrypted target as above — the retention here bounds disk
 use on the site host, it is not an off-site backup.
@@ -2365,7 +2415,7 @@ forget-failed·resume·run → 전체 매핑 복원)는
 ## ROSY Monitoring (D-936)
 
 관제 PC의 시스템 상태 화면은 선택 오버레이 `compose.monitoring.yaml`로 켠다.
-서명된 Fleet 이미지를 쓰지만 Fleet과 다른 프로세스·상태 볼륨·키로 돈다. Fleet이 멈춰도 계속 조회되고,
+자기 서명 이미지 `rosy-site-monitoring`(D-1001, fleet 패키지 없음)로 Fleet과 다른 프로세스·상태 볼륨·키로 돈다. Fleet이 멈춰도 계속 조회되고,
 프록시는 이 서비스를 기다리지 않는다. 화면은 읽기 전용이며 재시작·재부팅은 Fleet 설치 화면의 운영자 제어로 한다.
 
 사이트 관리자는 `ROSY_SITE_CONFIG_DIR` 밖에 아래 입력을 준비한다. 예를 들어 `/etc/rosy/monitoring/` 아래에 둔다.
@@ -2395,6 +2445,7 @@ python3 /opt/rosy/candidate/deploy/site/site_users.py add <site-users.yaml> --pr
 서비스 확인은 `https://<site>/monitoring-health`다. 이 응답은 수집기 자신의 생존만 뜻한다.
 
 이 기능에는 overlay 한 쌍을 포함한 새 서명 candidate와 이를 아는 host verifier·updater가 필요하다.
+전용 이미지 이전의 서명 candidate(Fleet 이미지로 도는 Monitoring)도 검증·되돌림은 된다. 전용 이미지 candidate로 올라가면 Monitoring 컨테이너가 새 이미지로 다시 만들어지며 `monitoring_state` 볼륨은 그대로다.
 기능 도입 전 candidate로 되돌릴 때는 백업된 site.env에서도 오버레이가 꺼져 있어야 한다.
 
 ## 시뮬레이션은 돌리지 않는다 (D-571)

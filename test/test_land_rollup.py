@@ -60,7 +60,7 @@ def test_only_plain_pending_landings_at_their_snapshot_tip_roll_up(repo):
     moved = snapshot("fix/m", {"pkg/c.py": "z = 6\n"})
     git(Path(moved["worktree"]), "checkout", "-q", "-b", "land/fix/m-batch-k2")  # land.py moved it onto a batch
     commit(Path(moved["worktree"]), {"pkg/c.py": "z = 7\n"}, "batch merge")
-    assert land_rollup.candidates(rows + [moved], main, host="h") == [a, b], "leader l and carried k stay out"
+    assert land_rollup.candidates(rows + [moved], main, host="h", mixed=False) == [a, b], "leader l, carried k out"
 
 
 def test_plan_keeps_one_tier_skips_safety_and_conflicts_and_caps_the_size(repo, monkeypatch):
@@ -71,10 +71,33 @@ def test_plan_keeps_one_tier_skips_safety_and_conflicts_and_caps_the_size(repo, 
     tiers = {"land/fix/safe": None, "land/fix/full": "full"}
     tier = lambda repo_, branch: tiers.get(branch, "affected")  # noqa: E731
     apart = lambda repo_, branch: [[branch + "/test"]]  # noqa: E731  (no two members share a suite)
-    assert [r["branch"] for r in land_rollup.plan(main, rows, tier, apart)] == ["land/fix/a", "land/fix/b", "land/fix/c"]
+    plan = lambda rows_: [r["branch"] for r in land_rollup.plan(main, rows_, tier, apart, mixed=False)]  # noqa: E731
+    assert plan(rows) == ["land/fix/a", "land/fix/b", "land/fix/c"]
     monkeypatch.setattr(land_rollup, "ROLLUP_MAX", 2)
-    assert [r["branch"] for r in land_rollup.plan(main, rows, tier, apart)] == ["land/fix/a", "land/fix/b"]
-    assert land_rollup.plan(main, rows[:2], tier, apart) == [], "one member is no rollup"
+    assert plan(rows) == ["land/fix/a", "land/fix/b"]
+    assert plan(rows[:2]) == [], "one member is no rollup"
+
+
+def test_mixed_rollup_takes_full_waiters_every_tier_and_overlapping_suites(repo):
+    """D-889 33, 11-09: 8 of 11 tickets were FULL waiters ('preparing'), so the half-hourly rollup merged none."""
+    main, snapshot = repo
+    rows = [{**snapshot("fix/a", {"pkg/a.py": "x = 2\n"}), "status": "preparing", "full_wait": True},
+            {**snapshot("fix/run", {"pkg/c.py": "z = 5\n"}), "status": "preparing"},  # its pretest runs: stays
+            snapshot("land-rollup-x", {"pkg/c.py": "z = 6\n"}),
+            snapshot("fix/safe", {"pkg/b.py": "y = 9\n"}), snapshot("fix/clash", {"pkg/a.py": "x = 3\n"}),
+            snapshot("fix/c", {"pkg/c.py": "z = 2\n"})]
+    rows[2]["branch"] = "land/fix/land-rollup-20261109000000-20261109000000"  # no .members record: kept whole
+    git(main, "branch", rows[2]["branch"], "land/land-rollup-x")
+    got = land_rollup.candidates(rows, main, host="h", mixed=True)
+    assert [r["branch"] for r in got] == ["land/fix/a", "land/fix/safe", "land/fix/clash", "land/fix/c"]
+    assert land_rollup.candidates(rows, main, host="h", mixed=False) == rows[2:], "revert switch: idle only"
+    tiers = {"land/fix/a": "full", "land/fix/safe": None}
+    same = lambda repo_, branch: [["pkg/test"]]  # noqa: E731  (every suite overlaps)
+    plan = land_rollup.plan(main, got, lambda r, b: tiers.get(b, "affected"), same, mixed=True)
+    assert [r["branch"] for r in plan] == ["land/fix/a", "land/fix/safe", "land/fix/c"], "the clash stays out"
+    tiers = {"land/fix/clash": "full"}  # the only FULL row clashes: an affected rollup, overlap counts again
+    plan = land_rollup.plan(main, got, lambda r, b: tiers.get(b, "affected"), same, mixed=True)
+    assert [r["branch"] for r in plan] == [], "every affected member overlaps the first: no rollup"
 
 
 def test_build_merges_the_members_into_one_branch_and_records_them(repo, monkeypatch):
@@ -171,7 +194,7 @@ def test_ready_landings_roll_up_only_when_their_suites_do_not_overlap(repo):
             snapshot("fix/c", {"pkg/c.py": "z = 2\n"})]
     assert land_rollup.candidates(rows, main, host="h") == rows, "waiting (ready) tickets are members too"
     reach = {"land/fix/a": [["pkg/test/test_a.py"]], "land/fix/b": [["pkg/test"]], "land/fix/c": [["other/test"]]}
-    plan = land_rollup.plan(main, rows, lambda r, b: "affected", lambda r, b: reach[b])
+    plan = land_rollup.plan(main, rows, lambda r, b: "affected", lambda r, b: reach[b], mixed=True)
     assert [r["branch"] for r in plan] == ["land/fix/a", "land/fix/c"], "b's suites contain a's: b lands alone"
 
 
@@ -194,3 +217,44 @@ def test_the_rollup_takes_its_first_members_place_and_the_member_leaves_it(repo,
     monkeypatch.setattr(land_rollup.land_queue, "_held", [first])
     land_rollup.land_queue.leave()
     assert first.exists(), "an adopted ticket stays when its old owner leaves"
+
+
+def test_a_rollup_whose_full_has_not_started_rerolls_with_new_waiters(repo, monkeypatch):
+    """D-889 34, 11-09 22:40: two rollups and three FULL waiters each waited for one of two FULL slots."""
+    main, snapshot = repo
+    holder = land_rollup.land_async.holder(main)
+    a, b = snapshot("fix/a", {"pkg/a.py": "x = 2\n"}), snapshot("fix/b", {"pkg/b.py": "y = 2\n"})
+    old = snapshot("fix/land-rollup-20261109000000-20261109000000", {"pkg/r.py": "r = 1\n"})
+    old.update(status="preparing", full_wait=True, ticket="t-old", pid=7)
+    (holder / (old["branch"].replace("/", "-") + ".members")).write_text(json.dumps(
+        [{"branch": m["branch"], "worktree": m["worktree"], "ticket": "gone"} for m in (a, b)]))
+    new = {**snapshot("fix/c", {"pkg/c.py": "z = 2\n"}), "status": "preparing", "full_wait": True,
+           "ticket": "t-new", "pid": 8}
+    got = land_rollup.candidates([old, new], main, host="h", mixed=True)
+    assert [(r["branch"], r["ticket"], r["pid"]) for r in got] == [
+        ("land/fix/a", "t-old", 7), ("land/fix/b", "t-old", 7), ("land/fix/c", "t-new", 8)]
+    passed = {**old, "status": "waiting"}
+    assert land_rollup.candidates([passed, new], main, host="h", mixed=True) == [new], "its FULL passed: kept"
+    assert land_rollup.whole(got[1:]) == got[2:], "a rollup with a member left out is not stopped"
+    assert land_rollup.sources(got[:2]) == {old["branch"]}, "re-rolling with nothing new is no rollup"
+
+    stopped, built = [], []
+    monkeypatch.setattr(land_rollup.socket, "gethostname", lambda: "h")
+    monkeypatch.setattr(land_rollup, "plan", lambda repo_, rows, tier_of=None: rows)
+    monkeypatch.setattr(land_rollup, "adopted", lambda qdir, first: True)
+    monkeypatch.setattr(land_rollup, "stop", stopped.append)
+    monkeypatch.setattr(land_rollup.land_queue, "ahead", lambda qdir, t: [old, new])
+    monkeypatch.setattr(land_rollup, "build", lambda repo_, members, now, urgent="": built.append(members) or (
+        "land/fix/land-rollup-x", members))
+    assert land_rollup.roll(main, holder.parent / "q", NOW, ["apply"]) == 0
+    assert [m["branch"] for m in built[0]] == ["land/fix/a", "land/fix/b", "land/fix/c"]
+    assert sorted(stopped) == [7, 8], "the old rollup's land.py and the waiter's, each once"
+    marker = holder / (old["branch"].replace("/", "-") + ".split")
+    assert "re-rolled into land/fix/land-rollup-x" in marker.read_text(), "its supervisor must not bisect it"
+
+    stopped.clear()
+    monkeypatch.setattr(land_rollup, "build", lambda repo_, members, now, urgent="": (
+        "land/fix/land-rollup-y", [m for m in members if m["branch"] != "land/fix/b"]))  # b clashed in the merge
+    marker.unlink()
+    land_rollup.roll(main, holder.parent / "q", NOW, ["apply"])
+    assert stopped == [8] and not marker.exists(), "the old rollup keeps landing b"

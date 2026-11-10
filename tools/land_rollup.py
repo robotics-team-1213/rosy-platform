@@ -7,18 +7,32 @@ On 2026-11-01 seven paused landings were rolled up by hand this way.
 
     python tools/land_rollup.py plan                # read-only: which pending landings would roll up
     python tools/land_rollup.py apply               # build land rollup branch, check, queue it, stop the members
+    python tools/land_rollup.py apply --auto        # the watchdog's run: every compatible waiting landing
+    python tools/land_rollup.py apply --urgent "<the user's words>"   # the rollup jumps the queue (D-889 5)
     python tools/land_rollup.py split <rollup>      # after a failed rollup: its members as two halves (or alone)
 
 Members: 'pending' land_async tickets on this host, not urgent, not explicit ('alone': FULL, checks, --no-cache), not
-carried and not leading a batch, whose hidden tree is at the snapshot tip. A landing that touches a safety path lands alone. Affected-tier and FULL-tier landings
-never share a rollup. At most ROLLUP_MAX members; a member that does not merge cleanly (land_merge's record
-auto-resolve aside) is left to land on its own.
+carried and not leading a batch, whose hidden tree is at the snapshot tip. At most ROLLUP_MAX members; a member that
+does not merge cleanly (land_merge's record auto-resolve aside) is left to land on its own.
+
+D-889 addendum 33 (user, 2026-11-09: "대기하는것들을 하나로 합쳐서 하면 더이상 문제가 없잖아"): a FULL waiter
+('preparing' with ``full_wait``, it runs no test) is a member too, and tiers mix: one FULL run covers every member,
+safety tests included, instead of one FULL per landing. A stopped rollup is split by land_async's supervisor (halves,
+a half of one lands alone with its own STOP). ROSY_ROLLUP_MIXED=0 restores the addendum 23/32 rules: preparing
+tickets stay out, one tier per rollup, safety and (with --auto) FULL land alone.
+
+D-889 addendum 34 (user, 2026-11-09 22:40, the same words): a rollup whose FULL has not started ('pending', or a
+FULL waiter) is re-rolled. Its recorded members join the plan with their own snapshots; when all of them merge into
+the new rollup, the old one gets a ``.split`` marker (its supervisor must not bisect it) and its land.py is stopped.
+Only one apply builds at a time (``rosy-land-rollup.lock``), and land_prepare starts one when a ticket starts to
+wait for a FULL slot, so waiting FULL candidates become one rollup at once instead of one FULL each.
 """
 
 from __future__ import annotations
 
 import json
 import os
+from collections import Counter
 import socket
 import subprocess
 import sys
@@ -34,7 +48,8 @@ import land_merge  # noqa: E402
 import land_queue  # noqa: E402
 import land_selection  # noqa: E402
 
-ROLLUP_MAX = int(os.environ.get("ROSY_ROLLUP_MAX", "6"))
+ROLLUP_MAX = int(os.environ.get("ROSY_ROLLUP_MAX", "12"))
+MIXED = os.environ.get("ROSY_ROLLUP_MIXED", "1") != "0"  # D-889 addendum 33's revert switch
 
 
 def git(repo: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess:
@@ -50,22 +65,68 @@ def tier(repo: Path, branch: str) -> str | None:
     return sel["mode"]
 
 
-def candidates(rows: list[dict], repo: Path, host: str | None = None) -> list[dict]:
+def affected(repo: Path, branch: str) -> str | None:
+    """``tier`` for the unattended rollup: a FULL-tier landing lands alone like a safety one."""
+    return "affected" if tier(repo, branch) == "affected" else None
+
+
+def candidates(rows: list[dict], repo: Path, host: str | None = None, mixed: bool | None = None) -> list[dict]:
     """Queue rows (oldest first) a rollup may take."""
+    mixed = MIXED if mixed is None else mixed
     host = host or socket.gethostname()
     carried = land_batch.taken(rows)
     found = []
     for r in rows:
         tree = Path(r.get("worktree") or "")
         # 2026-11-03: a --tests full --no-cache landing for publish evidence was rolled up and ran auto (alone)
-        if (r.get("status") not in ("pending", "waiting") or land_async.HOLDER not in tree.parts or r.get("urgent")
+        idle = (r.get("status") in ("pending", "waiting")
+                or (mixed and r.get("status") == "preparing" and r.get("full_wait")))  # a FULL waiter runs no test
+        rollup = mixed and land_async.ROLLUP.fullmatch(r.get("branch") or "")  # unmixed: a plain row (addendum 23)
+        if (not idle or land_async.HOLDER not in tree.parts or r.get("urgent")
+                or (rollup and r.get("status") == "waiting")  # 'waiting': its FULL passed, keep it
                 or r.get("alone")
                 or r.get("host") != host or r.get("batch") or r.get("branch") in carried or not tree.is_dir()):
             continue
         tip = git(repo, "rev-parse", "-q", "--verify", f"refs/heads/{r['branch']}", check=False).stdout.strip()
         if tip and tip == git(tree, "rev-parse", "HEAD", check=False).stdout.strip():
-            found.append(r)
+            found += unrolled(repo, r) if rollup else [r]
     return found
+
+
+def unrolled(repo: Path, row: dict) -> list[dict]:
+    """A rollup's recorded members, each on its own kept snapshot, carrying the rollup's ticket and pid (D-889
+    addendum 34); none when its record is unreadable, nested or names a snapshot that is gone: it lands as it is."""
+    try:
+        members = json.loads((land_async.holder(repo) / (row["branch"].replace("/", "-") + ".members")).read_text(
+            encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    if not isinstance(members, list) or not members or any(
+            not isinstance(m, dict) or not isinstance(m.get("branch"), str) or "members" in m or "members_error" in m
+            or not Path(str(m.get("worktree") or "")).is_dir()  # split's resume needs the kept tree
+            or not git(repo, "rev-parse", "-q", "--verify", f"refs/heads/{m['branch']}", check=False).stdout.strip()
+            for m in members):
+        return []
+    keep = ("branch", "worktree", "candidate")
+    return [{**{k: m[k] for k in keep if k in m}, "status": row.get("status"), "host": row.get("host"),
+             "pid": row.get("pid"), "ticket": row.get("ticket"), "rollup": row["branch"], "rollup_size": len(members)}
+            for m in members]
+
+
+def sources(members: list[dict]) -> set[str]:
+    """The landings a rollup combines: a re-rolled rollup counts once."""
+    return {m.get("rollup") or m["branch"] for m in members}
+
+
+def lead(merged: list[dict]) -> dict:
+    """Whose ticket the rollup takes: never one of a re-rolled rollup that keeps landing (it keeps its place)."""
+    return (whole(merged) or merged)[0]
+
+
+def whole(members: list[dict]) -> list[dict]:
+    """Re-rolled rollups all or nothing: stopping one whose member stayed out would leave that member unqueued."""
+    got = Counter(m.get("rollup") for m in members)
+    return [m for m in members if not m.get("rollup") or got[m["rollup"]] == m["rollup_size"]]
 
 
 def reach(repo: Path, branch: str) -> list[list[str]]:
@@ -74,18 +135,23 @@ def reach(repo: Path, branch: str) -> list[list[str]]:
     return sel["local_invocations"] if sel["mode"] == "full" else sel["invocations"]
 
 
-def plan(repo: Path, rows: list[dict], tier_of=tier, reach_of=reach) -> list[dict]:
-    """Members, in queue order: one tier, merging together onto main; fewer than two means no rollup."""
+def plan(repo: Path, rows: list[dict], tier_of=tier, reach_of=reach, mixed: bool | None = None) -> list[dict]:
+    """Members, in queue order, merging together onto main; fewer than two means no rollup. Unmixed: one tier,
+    no safety member. Mixed (addendum 33): any tier; with a FULL or safety member the rollup runs FULL, which
+    covers every member, so suite overlap no longer matters."""
+    mixed = MIXED if mixed is None else mixed
     cur, kind, members, reached = git(repo, "rev-parse", "main").stdout.strip(), None, [], []
     guards = getattr(getattr(land, "land_guards", None), "GUARDS", ())
+    tiers = {r["branch"]: tier_of(repo, r["branch"]) for r in rows}
+    whole = mixed and any(t != "affected" for t in tiers.values())
     for r in rows:
         if len(members) >= ROLLUP_MAX:
             break
-        t = tier_of(repo, r["branch"])
-        if t is None or (kind and t != kind):
+        t = tiers[r["branch"]]
+        if not mixed and (t is None or (kind and t != kind)):
             continue
         # D-889 23: members whose suites overlap would each have to rerun the others'; such a member lands alone
-        mine = reach_of(repo, r["branch"])
+        mine = [] if whole else reach_of(repo, r["branch"])
         if any(land_selection.overlaps(other, mine, guards) for other in reached):
             continue
         res = git(repo, "merge-tree", "--write-tree", "--no-messages", cur, r["branch"], check=False)
@@ -103,6 +169,9 @@ def plan(repo: Path, rows: list[dict], tier_of=tier, reach_of=reach) -> list[dic
         kind = kind or t
         members.append(r)
         reached.append(mine)
+    if whole and members and all(tiers[m["branch"]] == "affected" for m in members):
+        # the FULL rows all stayed out: an affected rollup again, so suite overlap matters again
+        return plan(repo, [r for r in rows if tiers[r["branch"]] == "affected"], lambda _r, b: tiers[b], reach_of, mixed)
     return members if len(members) >= 2 else []
 
 
@@ -131,7 +200,7 @@ def member_metadata(place: Path, member: dict, ancestors=()) -> dict:
 
 
 def build(repo: Path, members: list[dict], now: datetime, python: str = sys.executable,
-          start=land_async.start) -> tuple[str, list[dict]] | None:
+          start=land_async.start, urgent: str = "") -> tuple[str, list[dict]] | None:
     """Merge members into a fresh branch from main, run the stage-0 checks, queue it; (snapshot, merged members)."""
     if len({r["branch"] for r in members}) != len(members):
         raise land.Stop("duplicate rollup member branch; preserve the competing tickets for review")
@@ -148,18 +217,19 @@ def build(repo: Path, members: list[dict], now: datetime, python: str = sys.exec
                 merged.append({**r, **metadata})
             except land.Stop as exc:
                 print(f"[rollup] {r['branch']} left out: {str(exc).splitlines()[0]}", flush=True)
-        if len(merged) < 2:
+        if len(sources(merged)) < 2:
             print("[rollup] fewer than two members merged: no rollup", flush=True)
             return None
         land.safety_review(wt, "main", "HEAD", python)
         land.size_check(wt, "main", "HEAD", python)
         if (wt / land.HARNESS).is_file():
             land.step(wt, [python, land.HARNESS, "lint"], None, "lint")
-        first = members[0].get("ticket")  # D-889 23: the rollup takes its first member's place in the queue
+        first = lead(merged).get("ticket")  # D-889 23: the rollup takes its first member's place in the queue
         if first:
             os.environ[land_queue.TICKET_ENV] = str(land_queue.queue_dir(repo) / first)
         try:
-            snap, log = start(wt, ["--tests", "auto"], now, land_async.detach)
+            snap, log = start(wt, ["--tests", "auto", *(["--urgent", urgent] if urgent else [])], now,
+                              land_async.detach)
         finally:
             os.environ.pop(land_queue.TICKET_ENV, None)
         (log.parent / (log.name.removesuffix(".log") + ".members")).write_text(
@@ -226,27 +296,54 @@ def split(repo: Path, rollup: str, now: datetime, builder=build, resumer=resume)
 
 
 def main(argv: list[str]) -> int:
-    repo = Path(git(Path.cwd(), "rev-parse", "--show-toplevel").stdout.strip())
+    # this file's checkout, not the cwd: land_async's supervisor runs ``split`` from the hidden holder (.git/...)
+    repo = Path(git(Path(__file__).resolve().parent, "rev-parse", "--show-toplevel").stdout.strip())
     qdir = land_queue.queue_dir(repo)
     now = datetime.now(timezone.utc)
     if argv[:1] == ["split"] and len(argv) == 2:
         split(repo, argv[1], now)
         return 0
-    members = plan(repo, candidates(land_queue.ahead(qdir, Path("~")), repo))
+    if argv[:1] != ["apply"]:
+        return roll(repo, qdir, now, argv)
+    try:  # D-889 34: the turn holder's schedule and every new FULL waiter may start one at the same moment
+        with land_async.locked(qdir.parent / "rosy-land-rollup.lock"):
+            return roll(repo, qdir, now, argv)
+    except land_async.Busy:
+        print("[rollup] another rollup is being built: skipped", flush=True)
+        return 0
+
+
+def roll(repo: Path, qdir: Path, now: datetime, argv: list[str]) -> int:
+    auto = "--auto" in argv  # D-889 23 item 6 / 32: unattended; unmixed, FULL-tier (and safety) landings stay alone
+    urgent = argv[argv.index("--urgent") + 1] if "--urgent" in argv[:-1] else ""
+    members = plan(repo, candidates(land_queue.ahead(qdir, Path("~")), repo),
+                   tier_of=affected if auto and not MIXED else tier)
+    members = whole(members)
+    if len(sources(members)) < 2:  # a rollup re-rolled with nothing new would only restart its own FULL
+        members = []
     if not members:
         print("[rollup] no rollup: fewer than two pending landings fit together")
         return 0
     print("[rollup] members: " + ", ".join(r["branch"] for r in members))
     if argv[:1] != ["apply"]:
         return 0
-    built = build(repo, members, now)
+    built = build(repo, members, now, urgent=urgent)
     if built is None:
         return 1
     snap, merged = built
-    adopted(land_queue.queue_dir(repo), merged[0])
-    for r in merged:  # only now: the rollup ticket exists, so the members' commits are still queued
-        stop(int(r["pid"]))
-    print(f"[rollup] queued {snap}; stopped {len(merged)} member landing(s)")
+    adopted(land_queue.queue_dir(repo), lead(merged))
+    complete, holder = whole(merged), land_async.holder(repo)
+    for name in {m["rollup"] for m in merged if m.get("rollup")}:
+        if any(m.get("rollup") == name for m in complete):  # its supervisor must not bisect it into duplicates
+            (holder / (name.replace("/", "-") + ".split")).write_text(f"re-rolled into {snap}\n", encoding="utf-8")
+        else:
+            print(f"[rollup] {name} keeps landing: not every member merged here (those ride twice)", flush=True)
+    pids = {int(r["pid"]) for r in complete} | {int(r["pid"]) for r in merged if not r.get("rollup")}
+    # shortcut: a FULL waiter that started this apply is our parent; stopping it (taskkill /T) ends us, so last.
+    # A relaunched lander (land_prepare.relaunch) is our grandparent: then later stops may be lost; see the log.
+    for pid in sorted(pids, key=lambda p: p == os.getppid()):  # only now: the rollup ticket exists
+        stop(pid)
+    print(f"[rollup] queued {snap}; stopped {len(pids)} landing(s) for {len(merged)} member(s)", flush=True)
     return 0
 
 

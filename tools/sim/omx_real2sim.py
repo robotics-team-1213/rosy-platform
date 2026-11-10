@@ -6,6 +6,7 @@ that read the changed items (D-947: geometry evidence; measured values are named
   omx_real2sim.py diff OLD NEW                                 changed items, the sim stages they feed, their sim2real rows
   omx_real2sim.py sim SNAPSHOT --sha SHA --out DIR [--stages ..]   the stages in parallel on the lab PCs (remote_sim.py, never here)
   omx_real2sim.py report DIR                                    Markdown of what ran and passed
+  omx_real2sim.py request belt RUN [--store DIR]               a ruler reading for a person (deploy/robot/omx/cell_requests.py)
 
 The snapshot a sim stage reads must be committed at SHA (remote_sim ships commits only): keep the cell's snapshots in
 deploy/robot/omx/sim/cell_snapshots/<stamp>.json. Today one item is measured automatically:
@@ -15,6 +16,9 @@ deploy/robot/omx/sim/cell_snapshots/<stamp>.json. Today one item is measured aut
                the plate; lane 1 is the smaller-y end of a plate facing its arm (+x), as printed.
   ship         the r08 hull outline (hull.stl, plan view at its deck) fitted to the hull and the containers on it in the
                top frame: stern x, centre y and yaw by overlap (IoU).
+  belt         the dark belt strip back-projected at the belt surface: its near end (the stop) and centreline. The 2026-11-09
+               frames put it at x .205, y -.037 against the fixture's .158 / .007, and a D435 depth check agreed within a
+               few mm in xy; the 11-03 cell file's belt-end site lands on the belt's side rail in the same frame.
 The pad size against the printed 90 x 30 mm is the check that the top camera model still holds there. Camera pose, joint
 zeros and servo lag stay with omx_twin.py (omx_twin_night.py); the arm bases keep their CHOICES values.
 """
@@ -35,6 +39,7 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools/sim"))
+import omx_cell_anchor as anchor  # noqa: E402
 import omx_two_arm_sites as sites  # noqa: E402
 
 SCHEMA = "rosy.omx-cell-snapshot.v1"
@@ -46,9 +51,11 @@ PARTIAL_MIN = .040           # a lane-wide pad at least this long is a lane cut 
 CHANGED = (.003, 3.)         # m, deg: a lane moved more than this is a changed item; 3 deg is the pocket's own yaw
                              # tolerance (SCAD yaw_tol_deg), above one plate's frame-to-frame jitter (1.4 deg, 2026-11-09)
 STAGGER_S = 45
-GAPS = {"temp_plates": "G-17", "ship": "G-18", "camera": "G-19"}  # sim2real registry rows each item reports to (D-480)
+GAPS = {"temp_plates": "G-17", "ship": "G-18", "camera": "G-19", "belt": "G-30"}  # sim2real registry rows each item reports to (D-480)
 PY = "MUJOCO_GL=egl $HOME/rosy-test/venvs/sim-mujoco/bin/python"
-SNAP_CHOICES = lambda path: ["--choice", f"cell_snapshot={path}", "--choice", "temp_lanes=snapshot", "--choice", "ship_pose=snapshot"]
+SNAP_CHOICES = lambda path: ["--choice", f"cell_snapshot={path}", "--choice", "temp_lanes=snapshot", "--choice", "ship_pose=snapshot",
+                                "--choice", "belt_pose=snapshot"]
+BELT_MIN_PX = 2000           # the belt strip is about 11,500 px in the 640x480 top frame
 SHIP_CHANGED_DEG = 1.        # the hull is 316 mm long: 1 deg moves its ends 2.8 mm
 # stage -> (items it reads, role, minutes, command after the python); every stage also reads the camera and arm bases.
 # A policy round (omx_two_arm_policy.py round --choice ..) takes the same choices but is a GPU job a person starts.
@@ -58,7 +65,7 @@ STAGES = {
                  "$PY tools/sim/omx_two_arm_teacher.py run plan --plan $OUT/outbound/plan/outbound-two-arm.json --out $OUT/outbound"),
     "matrix-a": ({"temp_plates", "ship"}, "model", 60, "tools/sim/omx_two_arm_matrix.py --arm arm_a --out $OUT/matrix-a"),
     "matrix-b": ({"temp_plates", "ship"}, "model", 60, "tools/sim/omx_two_arm_matrix.py --arm arm_b --out $OUT/matrix-b"),
-    "stack": ({"ship"}, "ai", 40, "tools/sim/omx_two_arm_teacher.py run stack --out $OUT/stack"),
+    "stack": ({"ship", "belt"}, "ai", 40, "tools/sim/omx_two_arm_teacher.py run stack --out $OUT/stack"),
 }
 
 
@@ -307,7 +314,75 @@ def measure_ship(frame, layout):
                 iou=round(float(iou(best)), 3), model="r08")
 
 
-def overlay(frame, layout, plates, ship=None):
+def measure_belt(frame, layout):
+    """The belt's near end (x where the strip starts, its 1st percentile) and centreline (median y beyond 20 mm from the end),
+    from the largest dark strip whose back-projection at the belt surface lies along the fixture's belt line."""
+    import cv2
+
+    cam = Camera(layout.fixture["real_cameras"]["top"], frame.shape[:2])
+    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+    dark = cv2.morphologyEx(((hsv[..., 2] < 95) & (hsv[..., 1] < 110)).astype(np.uint8), cv2.MORPH_OPEN, np.ones((5, 5), np.uint8))
+    n, lab, stats, _ = cv2.connectedComponentsWithStats(dark)
+    best = None
+    for i in range(1, n):
+        if stats[i, cv2.CC_STAT_AREA] < BELT_MIN_PX:
+            continue
+        ys, xs = np.nonzero(lab == i)
+        pts = cam.to_plane(np.stack([xs, ys], 1), layout.belt_top)
+        if abs(np.median(pts[:, 1]) - layout.belt_y) < .06 and np.median(pts[:, 0]) > layout.belt_stop_x - .02 and (best is None or len(pts) > len(best)):
+            best = pts
+    if best is None:
+        return dict(error="no dark strip along the belt line")
+    end = float(np.percentile(best[:, 0], 1))
+    far = best[best[:, 0] > end + .02]
+    width = float(np.percentile(far[:, 1], 98) - np.percentile(far[:, 1], 2))
+    return dict(end_x_m=round(end, 4), centre_y_m=round(float(np.median(far[:, 1])), 4), width_m=round(width, 4))
+
+
+BELT_TOLERANCE_MM = 20.  # a tape between two points on a 55 mm step: the candidates differ by about 60 mm (2026-11-09)
+
+
+def belt_request(run, layout=None):
+    """A ruler reading that tells the snapshot's belt from the fixture's without the camera model: the level distance from
+    arm_b's turntable axis to the middle of the belt's width at its stop. (request dict, image path)"""
+    import cv2
+
+    run = Path(run)
+    snap = json.loads((run / "snapshot.json").read_text(encoding="utf-8"))
+    belt = snap["items"].get("belt") or {}
+    if "end_x_m" not in belt:
+        raise SystemExit(f"{run}/snapshot.json has no measured belt ({belt.get('error', 'item missing')})")
+    layout = layout or sites.Layout()
+    axis = layout.arms["arm_b"].base[:2]
+    points = dict(sim=(sites.BELT_STOP_X, layout.belt_y), camera=(belt["end_x_m"], belt["centre_y_m"]))
+    predicted = {name: round(math.dist(axis, xy) * 1000) for name, xy in points.items()}
+    frame = cv2.imread(str(run / "frames" / "top.jpg"))
+    cam = Camera(layout.fixture["real_cameras"]["top"], frame.shape[:2])
+    px = lambda x, y, z: tuple(int(round(v)) for v in cam.project((x, y, z)))  # noqa: E731
+    origin = px(*axis, layout.table_z)
+    for (name, xy), colour in zip(points.items(), ((0, 200, 0), (0, 0, 255))):
+        cv2.line(frame, origin, px(*xy, layout.belt_top), colour, 2)
+        cv2.circle(frame, px(*xy, layout.belt_top), 5, colour, -1)
+        cv2.putText(frame, f"{name} {predicted[name]} mm", (px(*xy, layout.belt_top)[0] + 6, px(*xy, layout.belt_top)[1] - 6),
+                    cv2.FONT_HERSHEY_SIMPLEX, .45, colour, 1)
+    cv2.circle(frame, origin, 6, (255, 0, 255), -1)
+    image = run / "belt-request.png"
+    cv2.imwrite(str(image), frame)
+    stamp = (snap.get("taken_at") or "")[:16].replace("-", "").replace(":", "").replace("T", "-") or time.strftime("%Y%m%d-%H%M")
+    return dict(
+        id=f"belt-end-{stamp}", kind="measure", item="belt", gap=GAPS["belt"],
+        question="arm_b 회전축에서 벨트 끝(멈춤 막대) 폭 가운데까지의 수평 거리",
+        how=["arm_b 받침 위 회전 관절의 중심(보라 점)에 줄자 끝을 댄다.",
+             "벨트가 끝나는 멈춤 막대에서 벨트 폭의 가운데 점까지 줄자를 수평으로 당긴다(벨트는 작업대보다 약 55 mm 낮다).",
+             "mm로 읽어 적는다. 팔은 움직이지 않는다."],
+        candidates=predicted, unit="mm", tolerance=BELT_TOLERANCE_MM,
+        means=dict(sim="시뮬의 설계 벨트(멈춤 x %.3f, 중심 y %.3f)가 맞다: 카메라 모델을 다시 잰다(G-19)." % points["sim"],
+                   camera="위 카메라가 잰 벨트(끝 x %.3f, 중심 y %.3f)가 맞다: belt_pose=snapshot을 기본으로 바꿀 수 있다(G-30)." % points["camera"],
+                   neither="둘 다 아니다: 다시 재거나 벨트가 옮겨졌는지 본다."),
+        source=dict(snapshot_taken_at=snap.get("taken_at"), frames=snap.get("frames"))), image
+
+
+def overlay(frame, layout, plates, ship=None, belt=None):
     import cv2
 
     cam = Camera(layout.fixture["real_cameras"]["top"], frame.shape[:2])
@@ -324,13 +399,16 @@ def overlay(frame, layout, plates, ship=None):
                         cv2.FONT_HERSHEY_SIMPLEX, .4, colour, 1)
     for arm in layout.arms.values():
         cv2.circle(img, tuple(int(v) for v in cam.project(arm.base)), 4, (0, 0, 255), -1)
+    if belt and "error" not in belt:
+        ends = [cam.project((belt["end_x_m"], belt["centre_y_m"] + s * belt["width_m"] / 2, layout.belt_top)) for s in (-1, 1)]
+        cv2.line(img, tuple(int(v) for v in ends[0]), tuple(int(v) for v in ends[1]), (0, 0, 255), 2)
     if ship and "error" not in ship:
         pose = (ship["stern_x_m"], ship["centre_y_m"], math.radians(ship["yaw_deg"]))
         cv2.polylines(img, [np.round(ship_polygon(cam, layout, pose)).astype(np.int32)], True, (255, 0, 255), 1)
     return img
 
 
-def measure(run, prev_path=None):
+def measure(run, prev_path=None, camera_moved_ok=False):
     import cv2
 
     run = Path(run)
@@ -340,22 +418,34 @@ def measure(run, prev_path=None):
     top = cv2.imread(str(frames["top"])) if "top" in frames else None
     if top is None:
         raise SystemExit(f"no readable top frame in {run / 'frames'}")
+    anchor.remember(frames["top"])  # this frame is the next snapshot's reference
+    camera_motion = dict(checked=False, reason="no previous snapshot")
+    ref = prev and anchor.reference(prev.get("frames", {}).get("top", ""))
+    if prev and not ref:
+        camera_motion["reason"] = "the previous snapshot's top frame is not in the local frame store"
+    elif ref:
+        m = anchor.motion(cv2.imread(str(ref)), top)
+        camera_motion = dict(checked=True, moved=anchor.moved(m), **m) if m else dict(checked=False, reason="too few far-band matches")
+        if camera_motion.get("moved") and not camera_moved_ok:
+            raise SystemExit(f"top camera moved since the previous snapshot ({m}): re-survey it (G-19, calibration step 3) "
+                             "before measuring; --camera-moved-ok measures anyway")
     items = {"temp_plates": lambda: measure_temp_plates(top, layout, prev and prev["items"]["temp_plates"]),
-             "ship": lambda: measure_ship(top, layout)}
+             "ship": lambda: measure_ship(top, layout),
+             "belt": lambda: measure_belt(top, layout)}
     with ThreadPoolExecutor() as pool:  # items are independent; more join here (belt end, arm bases) as they get measurers
         done = {k: pool.submit(f) for k, f in items.items()}
         results = {k: f.result() for k, f in done.items()}
     tp = results["temp_plates"]
     snap = dict(schema=SCHEMA, taken_at=json.loads((run / "capture.json").read_text())["taken_at"] if (run / "capture.json").exists() else None,
                 frames={c: "sha256:" + hashlib.sha256(p.read_bytes()).hexdigest() for c, p in frames.items()},
-                camera=dict(top=layout.fixture["real_cameras"]["top"]),
+                camera=dict(top=layout.fixture["real_cameras"]["top"]), camera_motion=camera_motion,
                 items=dict(temp_plates=dict(plates={t: p["lanes"] for t, p in tp["plates"].items() if "lanes" in p},
                                             seen={t: p["seen"] for t, p in tp["plates"].items() if "lanes" in p},
                                             errors={t: p["error"] for t, p in tp["plates"].items() if "error" in p},
                                             shape=tp["shape"], camera_check=tp["camera_check"]),
-                           ship=results["ship"]))
+                           ship=results["ship"], belt=results["belt"]))
     (run / "snapshot.json").write_text(json.dumps(snap, indent=1), encoding="utf-8")
-    cv2.imwrite(str(run / "overlay.png"), overlay(top, layout, tp["plates"], results["ship"]))
+    cv2.imwrite(str(run / "overlay.png"), overlay(top, layout, tp["plates"], results["ship"], results["belt"]))
     return snap
 
 
@@ -373,6 +463,11 @@ def diff(old, new):
             dyaw = abs((lb[n]["yaw_deg"] - la[n]["yaw_deg"] + 90) % 180 - 90)
             if d > CHANGED[0] or dyaw > CHANGED[1]:
                 changed.setdefault("temp_plates", []).append(f"{tag}-{n} {d * 1000:.0f} mm {dyaw:.1f} deg")
+    ba, bb = old["items"].get("belt"), new["items"].get("belt")
+    if ba != bb and (not ba or not bb or "error" in ba or "error" in bb):
+        changed["belt"] = ["measured" if bb and "error" not in bb else "not measured"]
+    elif ba and math.dist((ba["end_x_m"], ba["centre_y_m"]), (bb["end_x_m"], bb["centre_y_m"])) > CHANGED[0]:
+        changed["belt"] = [f"{math.dist((ba['end_x_m'], ba['centre_y_m']), (bb['end_x_m'], bb['centre_y_m'])) * 1000:.0f} mm"]
     sa, sb = old["items"].get("ship"), new["items"].get("ship")
     if sa != sb and (not sa or not sb or "error" in sa or "error" in sb):
         changed["ship"] = ["measured" if sb and "error" not in sb else "not measured"]
@@ -447,22 +542,26 @@ def report(out):
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     sub = p.add_subparsers(dest="cmd", required=True)
-    c = sub.add_parser("capture"); c.add_argument("--site", help="ssh target of the site PC, default site_host in private/lab-hosts.json"); c.add_argument("--out", required=True)
+    c = sub.add_parser("capture"); c.add_argument("--site", help="ssh target of the PC serving the cell cameras, default the first omx_hosts entry in private/lab-hosts.json"); c.add_argument("--out", required=True)
     m = sub.add_parser("measure"); m.add_argument("run"); m.add_argument("--prev")
+    m.add_argument("--camera-moved-ok", action="store_true", help="measure although the top camera moved since --prev")
     d = sub.add_parser("diff"); d.add_argument("old"); d.add_argument("new")
     s = sub.add_parser("sim"); s.add_argument("snapshot"); s.add_argument("--sha", required=True); s.add_argument("--out", required=True)
     s.add_argument("--stages", help="comma list, default every stage")
     s.add_argument("--choice", action="append", default=[], help="key=value after the snapshot's choices, e.g. physics=<candidate>")
     r = sub.add_parser("report"); r.add_argument("out")
+    q = sub.add_parser("request"); q.add_argument("item", choices=["belt"]); q.add_argument("run")
+    q.add_argument("--store", help="request store, default cell_requests.store() (ROSY_CELL_REQUESTS)")
     a = p.parse_args(argv)
     if a.cmd == "capture":
         if not a.site:
             sys.path.insert(0, str(ROOT / "tools/remote"))
             import lab_hosts
-            a.site = lab_hosts.site_host() or p.error("--site, or site_host in private/lab-hosts.json")
+            # the cameras hang off the OMX owner's PC (rosy-omx-camera-view); site_host is the Fleet site, which may be another PC
+            a.site = next(iter(lab_hosts.omx_hosts(lab_hosts.load())), "") or p.error("--site, or omx_hosts in private/lab-hosts.json")
         print(json.dumps(capture(a.site, a.out)))
     elif a.cmd == "measure":
-        snap = measure(a.run, a.prev)
+        snap = measure(a.run, a.prev, a.camera_moved_ok)
         print(json.dumps(snap["items"], indent=1))
     elif a.cmd == "diff":
         load = lambda f: json.loads(Path(f).read_text(encoding="utf-8"))
@@ -472,6 +571,12 @@ def main(argv=None):
         rcs = sim(a.snapshot, a.sha, a.out, a.stages.split(",") if a.stages else sorted(STAGES), a.choice)
         print(json.dumps(rcs))
         return int(any(rcs.values()))
+    elif a.cmd == "request":
+        sys.path.insert(0, str(ROOT / "deploy/robot/omx"))
+        import cell_requests
+        req, image = belt_request(a.run)
+        made = cell_requests.open_request(req, image, Path(a.store) if a.store else None)
+        print(json.dumps(dict(id=made["id"], candidates=made["candidates"], unit=made["unit"]), ensure_ascii=False))
     else:
         print(report(a.out))
     return 0

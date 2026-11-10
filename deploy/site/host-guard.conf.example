@@ -10,5 +10,7 @@ robot-a robot <robot-a-address>:8080
 robot-b robot <robot-b-address>:8080
 site updates <site-user>@127.0.0.1
 # One more pc line per OMX cell control PC, e.g.: cell-b pc <user>@<cell-b-address> 05:40-06:10
+# rosy-arm-cell (role cell) is guarded from R, never by itself: its own host-guard stays off. Add its line only after
+# its rosy-host-control helper matches D-991 (reboot refused during an arm session); the guard ladder reboots otherwise.
 # On the model PC (reverse guard of the site PC), the file holds one line:
 # site pc <user>@<site-pc-address> 05:58-06:28
