@@ -455,8 +455,14 @@ def run_round(args):
     stages = pipeline_stages(score, sites.Layout(**(parsed_choices or {})), result["rows"],
                              pick_vision=getattr(args, "pick_vision", False), belt_skew=getattr(args, "belt_skew", False),
                              gazebo_report=getattr(args, "gazebo_report", None), isaac_report=getattr(args, "isaac_report", None))
-    (run / "isaac-handoff.json").write_text(json.dumps(stages["isaac"]["handoff"], ensure_ascii=False, indent=2), encoding="utf-8")
-    record.update(outcome(score), stage="done", eval=score, stages=stages, isaac_handoff="isaac-handoff.json",
+    handoff_file, suite_file = run / "isaac-handoff.json", run / "isaac-suite.json"
+    handoff_file.write_text(json.dumps(stages["isaac"]["handoff"], ensure_ascii=False, indent=2), encoding="utf-8")
+    cell_cases = Path(__file__).resolve().parents[2] / "deploy/robot/omx/cell_cases.py"
+    if cell_cases.is_file():
+        subprocess.run([args.python, str(cell_cases), "--mujoco-handoff", str(handoff_file), "--out", str(suite_file)],
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    record.update(outcome(score), stage="done", eval=score, stages=stages, isaac_handoff=handoff_file.name,
+                  isaac_suite=suite_file.name if suite_file.exists() else None,
                   finished_at=now(), artifacts=sorted(path.name for path in (run / "artifacts").glob("*.mp4")))
     write_record(run, record)
     print(json.dumps(dict(round_id=round_id, eval=record["eval"]), ensure_ascii=False))

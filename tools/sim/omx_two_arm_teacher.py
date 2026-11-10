@@ -73,7 +73,12 @@ class Teacher:
         import omx_real2sim as r2s
 
         cam = r2s.Camera(self.layout.fixture["real_cameras"]["top"], (480, 640))
+        qid = self.world.model.geom("ship_quay").id if "ship_quay" in self.world.geom_name else -1
+        if qid >= 0 and sa["kind"] == "belt":
+            self.world.model.geom_rgba[qid, 3] = 0.
         bgr = cv2.cvtColor(self.world.render(data, "top"), cv2.COLOR_RGB2BGR)
+        if qid >= 0 and sa["kind"] == "belt":
+            self.world.model.geom_rgba[qid, 3] = 1.
         hsv = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV)
         top_z, box_l, box_w = sa["z"] + self.layout.box[2] / 2, self.layout.box[0], self.layout.box[1]
         cands = []
@@ -361,7 +366,10 @@ class Teacher:
             row = self.run_step(data, step, {k: v for k, v in here.items() if k != step["container"]})
             rows.append(row)
             print(json.dumps(row), flush=True)
-            here[step["container"]] = step["to"]
+            if row["result"] in ("blocked", "unreachable") and step["from"] == "belt":
+                self.world.put(data, step["container"], None, [c for c, _ in self.layout.containers()].index(step["container"]))
+            else:
+                here[step["container"]] = step["to"]
             self.off_stand(data, step, here)
         last = {step["container"]: step for step in task["steps"]}
         final = {c: s["to"] for c, s in last.items() if not s.get("outbound")}  # judged when placed, then gone with Pinky

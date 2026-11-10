@@ -288,16 +288,20 @@ gaps:
     next: wrist_camera=photo-20261110 applies WRIST_PHOTO_A on arm_a (jaw IoU 0.183 -> 0.385, outline offset 26.0 -> 12.8 px) and WRIST_PHOTO on arm_b (jaw IoU 0.652, score 0.95); follow with a ~12-pose supervised hand-eye per arm over the v11 plate pads to reach D-947 5 px
 
   - id: G-25
-    gap: OMX contact physics are hand-set (container mass, one friction); MuJoCo contacts are not results and Isaac has one case against the real outcome
+    gap: OMX contact physics are hand-set (container mass, one friction); MuJoCo contacts are not results and Isaac had one case against the real outcome before the D-1012 Stage-1 MuJoCo -> Stage-2 Isaac handoff suite
     evidence:
       - learning/envs/isaac/cell_physics.yaml
       - learning/envs/isaac/cell_model_inventory.yaml:43
+      - learning/envs/isaac/release_cases.py
+      - deploy/robot/omx/cell_cases.py
+      - tools/sim/omx_two_arm_teacher.py
       - tools/sim/omx_sysid.py
       - D-947
+      - D-1012
     tier: [R, M]
     owner: learning/envs/isaac / omx_sysid
-    status: OPEN
-    next: a supervised cell_push.py --friction sweep at two stack heights gives the container friction (omx_sysid.py friction, SNR >= 3, else a person's tilt test); every real stop or slip still becomes an Isaac case (cell_cases) and the suite reruns with the candidate
+    status: IN-PROGRESS
+    next: D-1012 Stage-1 MuJoCo -> Stage-2 Isaac handoff automatically emits isaac-handoff.json and isaac-suite.json (9 multi-colour skewed belt cases mujoco-stack-s1-bar-1..s9-bar-9 plus skew-t1-s1..s3 and nominal-palletizing-v21-ship-surveyed-skew-20261110); follow with a supervised cell_push.py --friction sweep at two stack heights (omx_sysid.py friction, SNR >= 3) and rerun cell_case_suite.py with the measured friction candidate
 
   - id: G-26
     gap: OMX outbound planner and two-arm policy built their layout without choices, so they used the design plates, not the measured snapshot

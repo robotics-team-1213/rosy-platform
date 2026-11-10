@@ -139,7 +139,7 @@ def two_arm_public(value):
     status = value.get('status')
     stages = value.get('stages') if isinstance(value.get('stages'), dict) else None
     row = {key: scalar(value.get(key)) for key in ('run_id', 'created_at', 'task', 'seed', 'source_sha', 'reason', 'steps', 'steps_pass',
-                                                   'final_ok', 'final_total', 'note', 'isaac_handoff')}
+                                                   'final_ok', 'final_total', 'note', 'isaac_handoff', 'isaac_suite')}
     row.update(status=status if status in STATUSES else 'unknown',
                views=[item for item in views[:8] if isinstance(item, str) and re.fullmatch(PART, item)] if isinstance(views, list) else [],
                failed_steps=[flat(item) for item in failed[:40] if isinstance(item, dict)] if isinstance(failed, list) else [],
@@ -154,7 +154,7 @@ def two_arm_round_public(value):
     score = value.get('eval') if isinstance(value.get('eval'), dict) else None
     stages = value.get('stages') if isinstance(value.get('stages'), dict) else None
     status, cameras, videos = value.get('status'), value.get('cameras'), value.get('artifacts')
-    row = {key: scalar(value.get(key)) for key in ('round_id', 'created_at', 'finished_at', 'source_sha', 'stage', 'reason', 'claim', 'isaac_handoff')}
+    row = {key: scalar(value.get(key)) for key in ('round_id', 'created_at', 'finished_at', 'source_sha', 'stage', 'reason', 'claim', 'isaac_handoff', 'isaac_suite')}
     row.update(status=status if status in STATUSES else 'unknown', data=flat(value.get('data')), recipe=flat(value.get('recipe')),
                cameras=[scalar(item, 20) for item in cameras[:8]] if isinstance(cameras, list) else [],
                videos=[item for item in videos[:8] if isinstance(item, str) and re.fullmatch(PART, item) and item.endswith('.mp4')] if isinstance(videos, list) else [])

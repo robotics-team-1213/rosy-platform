@@ -47,6 +47,7 @@ function stageLine(name,stage){
   const line=el('div',undefined,'ladder-stage');line.dataset.status=stage.status;
   const head=el('div');head.append(el('b',STAGE[name]+' '),el('span',STATUS[stage.status]||STATUS.unknown));line.append(head);
   line.append(el('small','말할 수 있는 범위: '+(stage.claim||'기록 없음')));
+  if(stage.status==='pending'&&stage.result?.prepared_cases?.length)line.append(el('small',`핸드오프 준비 완료: ${stage.result.prepared_cases.length}건 (${stage.scenario||'isaac'})`));
   if(stage.status==='blocked'||stage.status==='not_run')line.append(el('small','이유: '+(stage.reason||'이유가 기록되지 않았습니다.')));
   return line;
 }
@@ -59,6 +60,7 @@ function twoArmCard(row){
   if(row.unreadable){item.append(el('h3',row.run_id),el('p','이 실행 기록을 읽을 수 없습니다.'));return item;}
   const line=el('div',undefined,'ladder-stage');line.dataset.status=row.status;line.append(el('span',STATUS[row.status]||STATUS.unknown));
   item.append(el('h3',`${TWO_ARM[row.task]||row.task} · 시드 ${row.seed ?? '?'}`),el('p',row.created_at||'시각 기록 없음','quiet'),line);
+  if(row.stages)for(const name of Object.keys(STAGE))if(row.stages[name])item.append(stageLine(name,row.stages[name]));
   if(row.steps!=null)item.append(el('p',`단계 통과 ${row.steps_pass ?? '?'} / ${row.steps} · 최종 위치 ${row.final_ok ?? '?'} / ${row.final_total ?? '?'}`));
   if(row.reason)item.append(el('p','이유: '+row.reason));
   for(const step of row.failed_steps)item.append(el('p',`실패 ${step.step} (${step.arm}): ${step.reason||step.result}`));
@@ -112,6 +114,7 @@ function twoArmRoundCard(row){
   if(row.unreadable){item.append(el('h3',row.round_id),el('p','이 라운드 기록을 읽을 수 없습니다.'));return item;}
   const line=el('div',undefined,'ladder-stage');line.dataset.status=row.status;line.append(el('span',STATUS[row.status]||STATUS.unknown));
   item.append(el('h3',`학습 모델 · ${row.round_id}`),el('p',row.created_at||'시각 기록 없음','quiet'),line);
+  if(row.stages)for(const name of Object.keys(STAGE))if(row.stages[name])item.append(stageLine(name,row.stages[name]));
   if(row.status==='running')item.append(el('p',`진행 중: ${TWO_ARM_STAGE[row.stage]||row.stage}`));
   if(row.reason)item.append(el('p','이유: '+row.reason));
   if(row.data.episodes!=null)item.append(el('p',`시연 ${row.data.episodes}단계 · ${row.data.frames}프레임 · 학습 ${row.recipe.steps}스텝`));
