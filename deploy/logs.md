@@ -4829,3 +4829,10 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 시험(원격 rosy, 88f207b22f+): test_site_db_maintenance.py·test_site_ledger_backup_deploy.py·test_site_account_backup.py 58 passed, known_failures NEW 0(2026-11-10).
 - 증거: R fleet.sqlite3 관측(2026-11-10, `Rosy/docs/workspace-records/2026-11-10/fleet-hub-comm-check.md`) — fleet_api_audit 346,685행·sighting_audit 160,892행·파일 665MB, 기존 prune_ledger는 두 표를 덮지 않음.
 - gate 변화: 없음.
+
+## 2026-11-10 · uncommitted · refactor(omx): cell_auto_pick 600줄 한도 복귀 — 순수 집기 기하를 cell_pick_geom으로 분리
+- 변경: `cell_auto_pick.py`에서 순수 함수 7개(`grasp_depth`·`surface_z`·`parse_dest`·`grasp_yaw`·`across`·`jaw_open_for`·`reachable_ends`, 63줄)를 새 모듈 `cell_pick_geom.py`로 옮기고 `cell_auto_pick`이 이름을 그대로 재수출한다(호출자·시험의 `auto.*` 접근 불변). 코드는 바이트 단위로 동일하게 옮겼고 동작 변경은 없다. `cell_auto_pick.py` 605→544줄.
+- 이유: main의 `cell_auto_pick.py`가 bc989974c3부터 605줄로 D-766 한도(600)를 넘어, 그 뒤 착지되는 모든 병합 커밋의 size-range 검사가 멈춘다(2026-11-10 feat/map-reality-check 착지 거절로 확인). omx AGENTS의 원칙("각 단계는 자기 모듈에서, cell_auto_pick은 순서만")을 따라 집기 기하를 분리했다.
+- 시험: 원격 시험으로 확인 뒤 착지(아래 행에 결과 추가).
+- 증거: 이동한 함수 7개 본문이 main과 바이트 동일함을 정규식 추출 비교로 확인(2026-11-10), `py_compile` 통과, `size_range.py main HEAD` 통과(cell_auto_pick 605→544줄).
+- gate 변화: 없음(코드 이동만, 장치·현장 수용 별도).
