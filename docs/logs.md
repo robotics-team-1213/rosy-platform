@@ -14709,6 +14709,13 @@ osy-d395-s1d\`.
 - gate 변화: precheck에 줄 끝 검사 추가.
 - CE: 기존 교훈 갱신 — `docs/solutions/workflow-issues/autocrlf-false-commit-a-rewrites-tree-to-crlf-2026-11-01.md`.
 
+## 2026-11-09 · uncommitted · feat(fleet): 현장 차로 편대 미션 — 리더 Nav2 trip + FOR-004 TRAIL 팔로워 (D-1002)
+
+- 변경: `fleet.server.formation_mission`(차로 적합성 `lane_fit`, 무장 → 리더 trip job 구성, 리더 lease 해제로 미션 종료) + `/api/fleet/formation/mission` 세 경로(v1.378), `tools/sim/formation_lane.py` Gazebo 시나리오(map_v2_fleet, Nav2 리더, TRAIL 팔로워, 리더 급정지·팔로워 상실 주입, 참값 채점), ADR D-1002.
+- 증거: 설계자·비평자 토론(A 리더-팔로워 vs B 독립 trip 편대 vs C 가상 강체). 호스트 시험 `test_formation_mission.py`는 시험 PC 실행 결과로, SIM은 `docs/validation/formation-lane-sim-2026-11-09/`로 기록한다. 실물 수용 없음.
+- gate 변화: 없음(SIM·device_trial 프로필에서만 라우트가 선다).
+- CE: 해당 없음 — 판단은 ADR에, 수치는 검증 기록에 남는다.
+
 ## 2026-11-10 · uncommitted · docs: D-1010 사이트 지도 프레임 결속 ADR
 - 변경: ADR D-1010과 ADR Log 행, API Reference v1.383(활성 지도 본문 검증 거절 코드, trip detail.goal_frame, MAP_FRAME_MISMATCH 보류 이유, pose map_id).
 - 이유: Fleet R 등에서 지도를 따올 때 틀린 지도·틀린 좌표계를 쓰지 않게(사용자 2026-11-10 원문 ADR에 인용).
