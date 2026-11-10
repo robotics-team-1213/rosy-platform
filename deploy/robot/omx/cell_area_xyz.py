@@ -34,15 +34,15 @@ import grasp_planner  # noqa: E402
 # modelled after Isaac Sim target volume checks: if fill_ratio or centroid offset exceeds tolerance, mark as
 # failure (`verified = False`) and enter `recovery_mode`.
 SIDE_ROI_BY_COL_TIER: dict[tuple[int, int], tuple[int, int, int, int]] = {
-    (1, 1): (155, 252, 220, 315),
-    (1, 2): (155, 190, 220, 255),
-    (1, 3): (155, 120, 220, 195),
-    (2, 1): (226, 252, 292, 315),
-    (2, 2): (226, 190, 292, 255),
-    (2, 3): (226, 120, 292, 195),
+    (1, 1): (175, 252, 225, 315),
+    (1, 2): (175, 190, 225, 252),
+    (1, 3): (175, 120, 225, 190),
+    (2, 1): (226, 252, 285, 315),
+    (2, 2): (226, 190, 285, 252),
+    (2, 3): (226, 120, 285, 190),
     (3, 1): (295, 252, 365, 315),
-    (3, 2): (295, 190, 365, 255),
-    (3, 3): (295, 120, 365, 195),
+    (3, 2): (295, 190, 365, 252),
+    (3, 3): (295, 120, 365, 190),
 }
 
 SIDE_COL_CENTER_U: dict[int, float] = {1: 186.5, 2: 259.0, 3: 326.9}
@@ -86,7 +86,10 @@ def evaluate_zone(
     if crop.size == 0:
         return {"roi": list(roi), "fill_ratio": 0.0, "centroid_px": None, "offset_px": None, "within_zone": False}
     hsv = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)
-    warm = (hsv[..., 0] >= 4) & (hsv[..., 0] <= 38) & (hsv[..., 1] >= 85) & (hsv[..., 2] >= 90)
+    hue, sat, val = hsv[..., 0], hsv[..., 1], hsv[..., 2]
+    orange_or_top_yellow = ((hue <= 38) | (hue >= 158)) & (sat >= 65) & (val >= 90)
+    side_yellow = (hue >= 35) & (hue <= 75) & (sat >= 16) & (sat <= 115) & (val >= 140) & (val <= 228)
+    warm = orange_or_top_yellow | side_yellow
     fill = round(float(warm.mean()), 3)
     ys, xs = np.where(warm)
     if len(xs) == 0:
