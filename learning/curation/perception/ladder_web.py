@@ -96,14 +96,15 @@ def artifacts(raw):
 def stage(raw):
     raw = raw if isinstance(raw, dict) else {}
     out = {'status': raw.get('status') if raw.get('status') in STATUSES else 'unknown'}
-    out.update({key: scalar(raw.get(key)) for key in ('claim', 'reason', 'started_at', 'finished_at', 'run_id', 'result')})
+    out.update({key: scalar(raw.get(key)) for key in ('claim', 'reason', 'started_at', 'finished_at', 'run_id', 'result',
+                                                      'stage_order', 'track', 'role', 'scenario')})
     out['artifacts'] = artifacts(raw.get('artifacts'))
     if isinstance(raw.get('eval'), dict):
         ev = raw['eval']
         out['eval'] = {**{key: scalar(ev.get(key)) for key in ('n', 'seed_base', 'lifted', 'xy_err_mm_median', 'yaw_err_deg_median')},
                        'strict': flat(ev.get('strict')), 'loose': flat(ev.get('loose'))}
     if isinstance(raw.get('contract'), dict):
-        out['contract'] = {key: scalar(raw['contract'].get(key)) for key in ('backend', 'passed', 'report')}
+        out['contract'] = {key: scalar(raw['contract'].get(key)) for key in ('backend', 'passed', 'report', 'camera_hz')}
         out['contract']['checks'] = flat(raw['contract'].get('checks'))
     return out
 
@@ -136,20 +137,24 @@ def two_arm_public(value):
     roll = value.get('roll_below_floor_steps')
     views = value.get('views')
     status = value.get('status')
+    stages = value.get('stages') if isinstance(value.get('stages'), dict) else None
     row = {key: scalar(value.get(key)) for key in ('run_id', 'created_at', 'task', 'seed', 'source_sha', 'reason', 'steps', 'steps_pass',
-                                                   'final_ok', 'final_total', 'note')}
+                                                   'final_ok', 'final_total', 'note', 'isaac_handoff')}
     row.update(status=status if status in STATUSES else 'unknown',
                views=[item for item in views[:8] if isinstance(item, str) and re.fullmatch(PART, item)] if isinstance(views, list) else [],
                failed_steps=[flat(item) for item in failed[:40] if isinstance(item, dict)] if isinstance(failed, list) else [],
                roll_below_floor_steps=[scalar(item, 20) for item in roll[:40]] if isinstance(roll, list) else [])
+    if stages:
+        row['stages'] = {name: stage(stages.get(name)) for name in ('mujoco', 'isaac', 'gazebo')}
     return row
 
 
 def two_arm_round_public(value):
     """A learned two-arm round through a whitelist: the score, never a path or a log."""
     score = value.get('eval') if isinstance(value.get('eval'), dict) else None
+    stages = value.get('stages') if isinstance(value.get('stages'), dict) else None
     status, cameras, videos = value.get('status'), value.get('cameras'), value.get('artifacts')
-    row = {key: scalar(value.get(key)) for key in ('round_id', 'created_at', 'finished_at', 'source_sha', 'stage', 'reason', 'claim')}
+    row = {key: scalar(value.get(key)) for key in ('round_id', 'created_at', 'finished_at', 'source_sha', 'stage', 'reason', 'claim', 'isaac_handoff')}
     row.update(status=status if status in STATUSES else 'unknown', data=flat(value.get('data')), recipe=flat(value.get('recipe')),
                cameras=[scalar(item, 20) for item in cameras[:8]] if isinstance(cameras, list) else [],
                videos=[item for item in videos[:8] if isinstance(item, str) and re.fullmatch(PART, item) and item.endswith('.mp4')] if isinstance(videos, list) else [])
@@ -157,6 +162,8 @@ def two_arm_round_public(value):
         whole = score.get('whole')
         row['eval'] = {**{key: scalar(score.get(key)) for key in ('n', 'passed', 'lifted', 'wilson_low', 'wilson_high')}, 'per_step': flat(score.get('per_step')),
                        'whole': [flat(item) for item in whole[:12] if isinstance(item, dict)] if isinstance(whole, list) else []}
+    if stages:
+        row['stages'] = {name: stage(stages.get(name)) for name in ('mujoco', 'isaac', 'gazebo')}
     return row
 
 
@@ -185,7 +192,7 @@ def public(value):
     row = {'round_id': value['round_id'], 'created_at': scalar(value.get('created_at')),
            'parent_round_id': scalar(value.get('parent_round_id')), 'source_sha': scalar(value.get('source_sha'), 40)}
     row.update({key: flat(value.get(key)) for key in ('scene', 'recipe', 'data')})
-    row['stages'] = {name: stage(stages.get(name)) for name in ('mujoco', 'gazebo', 'isaac')}
+    row['stages'] = {name: stage(stages.get(name)) for name in ('mujoco', 'isaac', 'gazebo')}
     row['paired'] = paired(value)
     return row
 

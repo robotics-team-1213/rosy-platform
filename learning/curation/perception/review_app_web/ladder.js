@@ -3,7 +3,7 @@ import '/commands.js';
 const $=id=>document.getElementById(id);
 let token='', manager=false, busy=false, configured=false, running=false, twoArmRunning=false, selected=null, bestId=null;
 const STATUS={passed:'✓ 통과',failed:'✕ 실패',blocked:'⊘ 막힘',not_run:'– 실행 안 함',pending:'… 대기',running:'▶ 실행 중',unknown:'? 알 수 없음'};
-const STAGE={mujoco:'MuJoCo',gazebo:'Gazebo',isaac:'Isaac'};
+const STAGE={mujoco:'Stage 1 · MuJoCo',isaac:'Stage 2 · Isaac',gazebo:'ROS 계약 · Gazebo'};
 const COMPARE={better:'더 좋음 (평가 구간이 겹치지 않고 위쪽)',worse:'더 나쁨 (평가 구간이 겹치지 않고 아래쪽)',
   unclear:'차이 불명확 — 아직 정할 수 없습니다',current:'현재 비교 기준입니다'};
 const TWO_ARM={stack:'3×3×3 적층',rehandle:'임시 칸 재취급'};
@@ -205,11 +205,11 @@ function detail(data){
     data.best_round_id?compare:el('p','아직 비교 기준이 없습니다. 첫 판단이 기준이 됩니다.'),
     ...(round.paired?[pairedLine(round)]:[]),
     ...(round.same_seeds===false?[el('p','평가 시드가 달라 숫자 비교가 거칠 수 있습니다. 같은 시드로 다시 평가한 값이 필요합니다.','quiet')]:[]),
-    el('h3','Gazebo 계약 점검'),
+    el('h3','Stage 2 · Isaac 접촉·안착 실행 참조'),
+    el('p',isaac.run_id?`실행 ${isaac.run_id} · 결과 ${isaac.result ?? '기록 없음'}`:'연결된 Isaac 실행이 없습니다.'),
+    el('h3','별도 트랙 · Gazebo 계약 점검'),
     gazebo.contract?list([`백엔드 ${gazebo.contract.backend ?? '?'} · ${gazebo.contract.passed?'통과':'통과하지 못함'}`,
       ...Object.entries(gazebo.contract.checks||{}).map(([key,value])=>`${key}: ${value}`)]):el('p','계약 점검 기록이 없습니다.'),
-    el('h3','Isaac 실행 참조'),
-    el('p',isaac.run_id?`실행 ${isaac.run_id} · 결과 ${isaac.result ?? '기록 없음'}`:'연결된 Isaac 실행이 없습니다.'),
     el('h3','그림'),images(round),
     ...(data.decisions.length?[el('h3','이 라운드의 판단 기록'),list(data.decisions.map(row=>
       `${row.at} · ${row.by} · ${row.verdict==='replace'?'기준으로 바꿈':'기준 유지'} · ${row.note}`))]:[]));
