@@ -41,7 +41,8 @@ LAMP_LEVEL = {
 #: amber lamp is the disagreement this table removes; ``sad``/``angry`` are the replacements.
 FACE_BY_LEVEL = {
     OK: None,  # any face CORE chose
-    CAUTION: ("basic", "interest", "sad", "bored", "angry"),
+    CAUTION: ("basic", "interest", "sad", "bored", "angry",
+              "scan", "lost", "worry", "lowbat", "thinking", "searching"),  # situation faces, not cheer/doze
     DANGER: ("sad", "angry"),
 }
 FALLBACK_FACE = {CAUTION: "sad", DANGER: "angry"}

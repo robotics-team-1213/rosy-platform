@@ -10,6 +10,11 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-1002 | 현장 차로 편대 주행: 리더는 Nav2 trip, 팔로워는 FOR-004 TRAIL 추종, Fleet은 둘을 미션 하나로 묶고 차로 적합성만 더한다. [전문](../adr/D-1002-formation-driving-on-site-lanes.md) | Proposed (2026-11-09, 사용자 목표; Fleet 구현·호스트 시험·Gazebo SIM 시나리오, 실물 미수용) |
+| D-1010 | 사이트 지도 프레임 결속: 활성 본문 검증, 목표·자세·경로의 프레임 거절. [전문](../adr/D-1010-site-map-frame-binding.md) | Accepted (2026-11-10, 사용자 지시; SOURCE·호스트 시험까지, 기체·현장 수용 없음) |
+| D-999 | 카메라 연결 승인은 사용 중인 자리를 명시적으로 교체할 수 있고 옛 자격은 새 폰이 확인할 때 같이 폐기한다. [전문](../adr/D-999-camera-pairing-replace-occupied-source.md) | Accepted (2026-11-09, 사용자 요청; D-341 6항의 '먼저 회수, 그 다음 승인' 순서를 대체) |
+| D-1006 | 지도·보정이 현실과 어긋난 것을 먼저 알아챈다 — 보정 건강 상태와 선택 게이트, 자동 재보정은 독립 기준이 생길 때까지 규정만. [전문](../adr/D-1006-calibration-health-before-adaptation.md) | Accepted (2026-11-09, 사용자 지시; SOURCE·호스트 시험까지, 현장 수용 없음) |
+| D-1003 | Fleet은 free 구간의 Nav2 목표를 로봇 자기 지도 프레임으로 바꿔 보낸다. [전문](../adr/D-1003-nav2-free-goals-in-the-robot-map-frame.md) | Accepted (2026-11-09, 사용자 지시; SOURCE·Gazebo SIM까지, 기체·현장 수용 없음) |
 | D-922 | Pinky는 차분하고 호기심 많은 동료로 표현하고 방향성 눈인사와 졸린 대기를 연결한다 | Accepted (2026-10-30, 표현 경험·책임 경계; 구현·실물 수용 별도) |
 | D-991 | PC 정비는 Fleet 안의 화면으로 나누고, 재부팅해도 되는지는 그 PC의 도우미가 판단한다. [전문](../adr/D-991-pc-maintenance-boundary-and-reboot-gate.md) | Accepted (2026-11-07, 사용자 결정; 결정 1·2 구현, 3~6 후속, 각 PC 설치 전) |
 | D-997 | 공통 기능은 실행 서비스·공용 코드·owner별 운영 어댑터로 나누고 기능별 소유와 장애 계약을 확정한다. [전문](../adr/D-997-common-function-ownership-and-failure-contracts.md) | Accepted (2026-11-08, 사용자 결정; 등록·설정·알림·감사·백업·업데이트 설계 확정, 코드 추출·서비스 신설·배포·현장 수용 미수행) |

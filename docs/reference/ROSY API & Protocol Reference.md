@@ -5,9 +5,15 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.375
+**Version:** v1.383
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.378 현장 차로 편대 미션 (D-1002)
+
+- `POST /api/fleet/formation/mission` (이름 있는 `operator`): `{leader, members[2-4], formation: TRAIL|COLUMN, spacing?, max_speed?, steps: [{to, via[]}]}`. 순서는 차로 적합성 → 팔로워 무장(D-20 릴레이, `formation/start`와 같은 세션) → 리더 TRIP 단계 job(`trip-jobs`와 같은 행, D-763 7). LINE·V·GRID·CIRCLE, 간격이 `max(0.4, 0.20 + max_speed × 1.5 s + 0.10)` m 미만, 팔로워 0 또는 4대 이상은 422 `FORMATION_LANE_UNFIT`. 이미 돌고 있으면 409 `FORMATION_ACTIVE`. 리더 job이 거절되면 무장을 되돌리고 그 TripError 코드를 그대로 낸다. `steps`는 `TripJobStep`이고 새 프로토콜 스키마는 없다.
+- `GET /api/fleet/formation/mission` (viewer): `{active, mission_id, leader, members, formation, spacing, max_speed, spacing_floor, lane_width_m, state RUNNING|ENDED, end_reason, formation_status}`; 미션이 없으면 `{active: false}`. `mission_id`는 리더 TRIP job의 것이다. 팔로워 상실(FOR-004 HOLD → 리더 `navigation/cancel` → job 행 HOLD)이나 리더 도착(행 `GOAL_CONFIRMED`)으로 리더 job 행이 READY·RUNNING을 떠나면 `ENDED`, `end_reason`은 세션 사유 또는 `leader_job_ended`.
+- `POST /api/fleet/formation/mission/stop` (`operator`): 세션을 풀고 리더 항법을 취소한다. TRIP 단계 장부가 열리지 않은 배포 프로필에는 이 세 경로가 없다.
 
 ### v1.375 OMX 팔 사건의 원인 라벨과 정지 앞뒤 사진 (D-971)
 
@@ -3478,6 +3484,19 @@ unknown 행은 `{source_id,x,y,footprint_m,score,marker_id}`이다. 익명 검�
 token 오류 401, source 불일치 403, map/revision/future/stale/out-of-order 409, 잘못된 body 422.
 보정과 검출은 CORE pose 주입·자동 작업·주행 명령의 입력이 아니다.
 
+**보정 건강 `calibration_health`(D-1006).** 같은 감시가 거부된 맞춤과 응답 없음도 한 회차로 센다.
+행은 `{state, since, cause: "undetermined", calibration_revision, streak: {kind, polls},
+last: {category, score, coverage, cut_sides | move_m, rotation_deg, checked_at}, blocking, gate}`
+이고 승인 교정이 없으면 null이다. `state`는 `fresh`(수락 맞춤이 승인과 일치, 3회) ·
+`drifting`(수락 맞춤이 0.3 m/3° 넘게 어긋남, 3회) · `mismatch`(맞춤은 거부, 보이는 면적 0.40 이상
+이고 점수 0.70 미만, 5회) · `insufficient_coverage`(보이는 면적 0.20 미만 또는 맞춤 없음, 3회) ·
+`unknown`(180 s 안에 쓸 답이 없음)이다. 상태를 바꾸는 연속 회차 수는 위와 같고, 막는 상태에서
+`fresh`로 나가려면 5회가 필요하다. 원인(카메라 이동 대 지도·바닥 변경)은 판정하지 않는다.
+`ROSY_FLEET_CALIBRATION_GATE=1`(기본 꺼짐)이면 `drifting`·`mismatch`(`blocking: true`) 동안
+`approved_revision`이 없어져 `approved_record` sighting과 auto-locate가 409 `CALIBRATION_MISMATCH`로
+멈춘다. `unknown`·`insufficient_coverage`는 막지 않고, 추적 표시 자체는 계속한다. 모든 회차는
+`calibration_health_log`(SQLite, 최근 5000건)에 문턱 조정용으로 남는다. 교정을 쓰지 않고 주행에 쓰지 않는다.
+
 **교정 낡음 자동 검사.** Fleet이 `--vision-url`(Vision 수신 서버 origin)과
 `--vision-preview-secret-env`로 추적 보정 감시를 켜면, 승인된 교정(`tracking_calibrations`)이
 있는 출처마다 `--calibration-drift-interval-s`(기본 60 s, 0이면 끔)마다 Vision의
@@ -3619,6 +3638,7 @@ command. Reusing a key for a different request returns `409 IDEMPOTENCY_CONFLICT
 | POST | `/api/fleet/robots/{robot_id}/line-stuck/claim` | `operator` bearer (D-540 9: open, the console claims before an `ABORT` confirm) | D-438 (v1.91): `{stuck_id}` — 사람이 그 막힘을 맡는다. 판단기는 맡은 막힘에 답하지 않고 `human_claimed` 로 올린다. 200 `{robot_id, stuck_id, claimed_by}`, 모르는 로봇 404 `UNKNOWN_ROBOT`. `.../line-stuck/decision` 도 404 확인 뒤 먼저 맡고, CORE 전달이 실패해도 맡음을 유지한다. 로봇 행 `line_stuck.resolver` = `{tier, rule, decision, escalated, at, age_s}` 또는 null(escalated 사유: `no_rule`, `rule_budget`, `deadline`, `restuck_after_resume`, `estop`, `calibration`, `no_resolver_token`, `human_claimed`, `core:<CODE>`, D-577 `lane_lost_hold:<peer_behind|peer_unknown|attempts|local_disabled|crosswalk|crosswalk_unknown|pose|refused|rule_budget>`, v1.187 같은 이유의 `no_motion_hold:<…>`). 2026-10-10 (v1.187): CORE `no_motion` 막힘은 `lane_lost` 와 같은 조건으로 R6 `BACK_AND_RETRY`(조건이 모두 참) 또는 R5 `WAIT` + 사람(`no_motion_hold:<이유>`)이고 `RESUME`·`YIELD` 는 나가지 않는다. 뒤 띠는 `localization` 을 보고하는 신뢰 지도 자세로만 잰다: 동료가 온라인인데 자신이나 동료가 LEGACY(odom)이면 `peer_unknown`(D-577 남은 항목 1). 현장 설정 `fleet.stuck_resolver.enrolled_robots`(로봇 id 목록, `--site-config`)에 적은 등록(D-361) 로봇은 판단기가 Fleet 의 등록 CORE 자격(operator, `STUCK_DECIDE` 포함)으로 답한다. 기본은 빈 목록이다. D-577 1 (v1.173): `lane_lost` 막힘에 R3 `BACK_AND_RETRY`는 로컬 복구 켜짐·시도 남음·규칙 예산 남음·R3 거절 없음·CORE 상태의 `line_follow.crosswalk`가 `null`(키가 없으면 지금의 모든 CORE처럼 보고 안 함 → `crosswalk_unknown`, 객체면 `crosswalk`; D-573 구현은 구역 밖에서 `null`을 낸다)·Fleet 지도 자세가 `LOCALIZED`이고 `age_s` ≤ 2 s이거나 그 로봇의 목격 출처가 한 번도 없어 `UNKNOWN`(출처가 있었는데 `UNKNOWN`이면 `pose`)·뒤 띠(R1 띠의 반대쪽, D-395 신뢰 지도 자세로만 잼)에 동료 없음일 때만이다. 다른 로봇이 온라인인데 자신이나 그 로봇의 신뢰 자세가 없으면 `peer_unknown`. 아니면 R5가 `WAIT`을 보내고 같은 주기에 `lane_lost_hold:<이유>`로 사람에게 올린다(`tier: human`, `rule: R5`, `decision: WAIT`; CORE가 `WAIT`을 거절해도 올리고, 전송 실패면 `WAIT`을 한 번 다시 보낸 뒤 올린다). R5는 막힘마다 한 번이고 규칙 예산을 쓰지 않는다. `lane_lost`에 `RESUME`·`YIELD`는 어떤 경로로도 나가지 않는다. `age_s`는 그 메모 뒤 초이고, 콘솔은 30 s 넘게 답이 없는 올림 행을 큐 맨 위로 올린다(콘솔만, 로봇은 계속 HOLD). 판단기 답은 `principal_id: "fleet-resolver"` 로 기록하고, 전송 실패는 `ROBOT_UNREACHABLE` 이면 `accepted=false`, 아니면 null. 설정: `robots.yaml` 의 `resolver_token`(비어 있지 않은 따옴표 문자열, `token`·`fleet_pairing_token` 과 달라야 함). D-577 2 (v1.173): `fleet console` 은 판단기를 기본으로 돌리고 `--no-stuck-resolver` 로 끈다(`--stuck-resolver` 는 호환용, 효과 없음). 시작할 때 판단기가 답할 로봇(`resolver_token` 있음)을 stderr 에 적는다. 자격(`resolver_token`)이 없는 로봇의 막힘은 지금처럼 `no_resolver_token` 으로 사람에게 간다. `robots.yaml` 로봇만 판단기 클라이언트를 가진다(등록 D-361 로봇은 아직 없음) |
 | POST | `/api/fleet/robots/{robot_id}/line-follow` | `operator` bearer for `{mode: "OFF"}`; named `operator` (D-540 9, v1.161) for `IR_LINE` | Forwards the bounded line-follow selection to CORE `PUT /api/v1/line-follow/mode`. OFF stops, so it stays open |
 | POST | `/api/fleet/formation/start` · `/reform` · `/resume` | named `operator` (D-540 9, v1.161) | D-20 formation. `formation: TRAIL` (D-559, v1.170) = COLUMN slots, every follower armed with `mode: trail` and `distance` = slot × spacing behind the leader on its path; a follower whose follow reply lacks `mode: trail` is disarmed and the start fails `ARMING_FAILED` (`TRAIL_NOT_SUPPORTED`). D-581 (v1.176): while the leader streams `frame: odom`, Fleet re-expresses each frame in each follower's odom from the ceiling-camera map pose (§7.8 `anchor`); while an anchor is missing the follower gets `anchor_hold` samples, not silence; formation status carries `anchor: {followers: {robot_id: "<robot>:no_map_pose|anchor_stale|map_pose_degraded|anchor_jump|map_id_differs|leader_odom_mismatch" or null while sending usable samples}, robots: {robot_id: {anchor_age_s, residual_m, residual_deg, jumped}}, jumps}` (null when no map pose service), and `stream_evidence[robot_id].anchor_hold` repeats a follower's reason (frames flow, the follower stands). `/api/fleet/formation/stop` stays `operator` bearer (a stop) |
+| POST/GET | `/api/fleet/formation/mission` · `/mission/stop` | named `operator` / viewer (v1.378) | D-1002 편대 미션: 차로 적합성(한 줄 대형, 속도 묶인 간격 하한) → 팔로워 무장 → 리더 TRIP job 하나가 장부 행. 리더 job 행이 HOLD·GOAL_CONFIRMED가 되면 `ENDED`. 열린 TRIP 단계 장부가 있는 프로필에만 있다. |
 | POST | `/api/fleet/signals/{signal_id}/command` | `operator` bearer for `mode` `all_red`·`flash_red`; named `operator` (D-540 9, v1.161) otherwise | D-443 physical signal. `manual` without any configured credential still answers 401 `UNAUTHORIZED` first |
 
 v1.136: 진행 중인 lane trip의 `detail.bend_candidate`는 읽기 전용 지도 굽이 **후보**다. 현재 활성 지도 버전이 trip과 같고, 자세가 `LOCALIZED`이며 나이 ≤0.30 s, dead reckoning ≤0.05 m, 현재 edge 중심선에서 ≤0.04 m, 투영 진행 거리 차 ≤0.05 m, 접선과 yaw 차 ≤15°일 때만 기록한다. 값은 `{map_id, map_version, arc_id, bend_in_m, heading_change_deg, map_offset_m}`이며 0.40 m 앞까지의 edge polyline에서 접선 변화 ≥15°와 전체 변화 ≤80°를 찾는다. 다음 tick에서 근거가 사라지거나 trip이 끝나면 삭제한다. CORE로 보내는 지시나 운동 허가가 아니며 페인트·벽·분기의 같은 경계 확인을 뜻하지 않는다.
@@ -4665,9 +4685,12 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.383 | 2026-11-10 | Additive·거절 추가 (D-1010, fix/site-map-frame-binding): Fleet 활성 지도 본문이 저장 sha256과 다르면 422 `SITE_MAP_BODY_HASH_MISMATCH`(활성 지도 없이 시동). free 목표는 trip `detail.goal_frame`(활성 `map_id`·`map_version`, 기체 `robot_map_id`, 목표 프레임 `robot`/`site`)을 남기고, 활성 버전·프레임이 계획과 다르면 trip이 `map_version`·`map_frame`으로 정지. 콘솔 목표 대기 이유 `MAP_FRAME_MISMATCH`(다른 알려진 `map_id` 경로와는 비교하지 않고 보류). trip 지도 자세 뷰 `pose`에 `map_id` 추가. Robot API·envelope 1.0 변경 없음 |
 | v1.371 | 2026-11-07 | D-991: Service Control `reboot` refused with 409 `ARM_SESSION_ACTIVE` or `HOST_JOBS_ACTIVE`; additive `reboot-over-jobs` passes live jobs, never an arm session. Breaking for one consumer, the Fleet screen: `stop-unit` and `stoppable_units` removed, `pinky-*` out of the unit list; additive `history`. |
 | v1.368 | 2026-11-07 | Additive (D-982): 현장 규칙 문서 `rosy.site_rules/1`(`GET/PUT /api/fleet/site-rules/draft`, `GET .../active`, `POST .../activate`)와 가정 상태 판정 `POST /api/fleet/site-rules/judge`(go/wait/refuse, 보내기 없음). 활성 문서가 없으면 동작 동일, 활성 문서는 더 막기만 한다 |
 | v1.362 | 2026-11-04 | Additive: D-977 `device_trial` opens the neutral `arm-transfers` jobs for exactly one arm (owner identity: `device: true`, matching `commissioning_revision`); `production` stays closed. New `operator_attested` record: `POST/GET .../jobs/{mission_id}/operator-attestations` (named operator distinct from proposer and approver, single-use, 45 s validity, `goal_confirmed: false`). The owner still refuses goals. |
+| v1.380 | 2026-11-09 | Additive (D-1006, feat/adaptive-map-calibration): `GET /api/fleet/tracking` 출처 행에 `calibration_health` — 승인 교정과 Vision 맞춤의 건강 상태(거부·응답 없음 포함, 없으면 null). 새 엔드포인트 없음. 선택 게이트(`ROSY_FLEET_CALIBRATION_GATE=1`, 기본 꺼짐)가 켜지면 `drifting`·`mismatch`에서 `approved_record` sighting이 409 `CALIBRATION_MISMATCH`. Robot API·envelope 1.0 변경 없음 |
+| v1.378 | 2026-11-09 | Additive (D-1002): 편대 미션 `POST/GET /api/fleet/formation/mission`, `POST .../mission/stop` — 차로 적합성 → 팔로워 무장 → 리더 TRIP job 한 행; 리더 job 행이 HOLD·GOAL_CONFIRMED가 되면 `ENDED`. 새 스키마 없음. |
 | v1.375 | 2026-11-08 | Additive (D-971): 팔 사건 해제의 `cause`·`basis`, 정지 앞뒤 사진 `POST/GET .../incidents/{id}/evidence`, 보류하지 않는 보고(`decision.hold: false`), `GET .../arm-incidents/labelled`. |
 | v1.374 | 2026-11-07 | Additive: Account 가입·권한 요청(D-993) — 공개 `POST /api/fleet/auth/access-requests`와 관리자 목록·승인·거절. |
 | v1.369 | 2026-11-07 | Additive (D-989): `GET`·`POST /api/fleet/auto-locate`, detections config `stream_wanted`. 사이트 설정 `fleet.map_pose.auto_locate_robots`(기본 빈 목록)에 든 로봇만 map pose `anchor_source:"auto_locate"`를 낸다 |
