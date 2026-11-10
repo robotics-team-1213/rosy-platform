@@ -4,13 +4,13 @@ Bridges runtime gaps when reality and simulation diverge during execution:
 1. Camera extrinsic drift / angle-position perturbation (G-19, G-24):
    - `perturbed_camera_dict` / `apply_world_camera`: injects a controlled 6-DoF position/angle shift into the top camera.
    - `calibrate_top_camera` & `perceive_container`: recovers the 6-DoF top-camera extrinsics online from in-frame cell
-     anchors (uncovered v11 temporary-plate dark pads at `deck_z`, seated temporary-lane containers at known pocket
-     coordinates, and the belt strip stop/centreline/slope at `belt_top`), segments containers per colour so adjacent or
-     multi-tier containers never merge, and restores bottom-clipped (`row 479`) containers on the v11 plates.
+     anchors (unclipped `+x` ends of v11 temporary-plate dark pads at `deck_z`, seated temporary-lane containers at known
+     pocket coordinates, and the belt strip stop/centreline/slope at `belt_top`), segments containers per colour so
+     adjacent or multi-tier containers never merge, and restores bottom-clipped (`row 479`) containers on the v11 plates.
 2. Physical servo dynamics / friction / gravity-sag / joint-zero differences (G-20, G-23):
    - `ServoCompensator`: paces trajectories to each joint's physical torque/damping terminal speed (`pace_seconds`),
-     applies uncompensated-gravity feedforward, velocity-damping/friction feedforward during motion (preventing integral
-     windup), bounded waypoint integral trim at rest (`settle_g`), and optional hand-eye joint-zero offset compensation.
+     applies uncompensated-gravity feedforward, bounded waypoint integral trim (`settle_g`), and hand-eye joint-zero
+     offset compensation (`calibrate_zero_offset`).
 """
 from __future__ import annotations
 
@@ -107,6 +107,26 @@ def container_blobs(bgr: np.ndarray) -> list[tuple[str, np.ndarray]]:
     return out
 
 
+def _raw_plus_end_and_width(
+    cam: r2s.Camera,
+    px: np.ndarray,
+    z: float,
+    ref_w: float,
+    expected_yaw: float | None = None,
+) -> tuple[tuple[float, float], float, tuple[float, float], tuple[float, float]]:
+    """Return `(xy_w_corrected, yaw, sz_raw, plus_end_xy)` on plane `z` before any bottom-clipping length extension."""
+    pts = cam.to_plane(px, z)
+    xy, yaw, sz = r2s.rect(pts)
+    raw_w = sz[1]
+    if sz[1] > ref_w:
+        vec_w = (-math.sin(yaw), math.cos(yaw))
+        sh_w = (0.5 if (cam.eye[0] - xy[0]) * vec_w[0] + (cam.eye[1] - xy[1]) * vec_w[1] >= 0 else -0.5) * (sz[1] - ref_w)
+        xy = (xy[0] - sh_w * vec_w[0], xy[1] - sh_w * vec_w[1])
+    use_yaw = r2s.fold(expected_yaw) if (expected_yaw is not None and abs(r2s.fold(yaw - r2s.fold(expected_yaw))) < math.radians(12.0)) else yaw
+    plus_xy = (xy[0] + 0.5 * sz[0] * math.cos(use_yaw), xy[1] + 0.5 * sz[0] * math.sin(use_yaw))
+    return xy, use_yaw, (sz[0], raw_w), plus_xy
+
+
 def _box_on_plane(
     cam: r2s.Camera,
     px: np.ndarray,
@@ -114,37 +134,16 @@ def _box_on_plane(
     box_l: float,
     box_w: float,
     img_h: int = 480,
-    expected_xy: Any = None,
     expected_yaw: float | None = None,
 ) -> tuple[tuple[float, float], float, tuple[float, float]]:
-    """Back-project contour pixels `px` onto `top_z`, splitting wide merged contours and restoring bottom-clipped ends."""
-    pts = cam.to_plane(px, top_z)
-    xy, yaw, sz = r2s.rect(pts)
-    # If two same-colour containers sit in adjacent lanes/rows and merged into a wide blob, crop to the target lane corridor
-    if expected_xy is not None and expected_yaw is not None and (sz[1] > box_w + 0.012 or sz[0] > box_l + 0.025):
-        ca, sa_sin = math.cos(expected_yaw), math.sin(expected_yaw)
-        rel = pts - np.asarray(expected_xy, float)
-        along = rel[:, 0] * ca + rel[:, 1] * sa_sin
-        across = -rel[:, 0] * sa_sin + rel[:, 1] * ca
-        keep = (np.abs(across) <= box_w * 0.68) & (np.abs(along) <= box_l * 0.65)
-        if int(np.count_nonzero(keep)) >= 25:
-            pts = pts[keep]
-            px = px[keep]
-            xy, yaw, sz = r2s.rect(pts)
-
+    """Back-project contour pixels `px` onto `top_z`, correcting side-wall overhang and bottom-clipped (`row 479`) length."""
+    xy, yaw, sz_raw, plus_xy = _raw_plus_end_and_width(cam, px, top_z, box_w, expected_yaw)
+    if sz_raw[1] < 0.021:  # reject thin side-wall slivers of occluded lower-tier (l0) containers
+        return xy, yaw, (0.0, sz_raw[1])
+    sz = (sz_raw[0], min(sz_raw[1], box_w))
     at_bottom = int(px[:, 1].max()) >= img_h - 2 and int(px[:, 1].min()) > 2
-    # 1. Width side-wall perspective shift (always applies when side wall widens contour toward camera eye)
-    if sz[1] > box_w:
-        vec_w = (-math.sin(yaw), math.cos(yaw))
-        sh_w = (0.5 if (cam.eye[0] - xy[0]) * vec_w[0] + (cam.eye[1] - xy[1]) * vec_w[1] >= 0 else -0.5) * (sz[1] - box_w)
-        xy = (xy[0] - sh_w * vec_w[0], xy[1] - sh_w * vec_w[1])
-        sz = (sz[0], box_w)
-    # 2. Length: either bottom-clipped at row 479 (extend from +x end) or full-frame with end-wall widening
     if at_bottom and sz[0] < box_l:
-        if expected_yaw is not None and abs(r2s.fold(yaw - r2s.fold(expected_yaw))) < math.radians(12.0):
-            yaw = r2s.fold(expected_yaw)
-        sh_l = (box_l - sz[0]) / 2.0
-        xy = (xy[0] - sh_l * math.cos(yaw), xy[1] - sh_l * math.sin(yaw))
+        xy = (plus_xy[0] - 0.5 * box_l * math.cos(yaw), plus_xy[1] - 0.5 * box_l * math.sin(yaw))
         sz = (box_l, sz[1])
     elif not at_bottom and sz[0] > box_l:
         vec_l = (math.cos(yaw), math.sin(yaw))
@@ -196,7 +195,7 @@ def _extract_anchors(
     cam_nom: r2s.Camera,
     here: dict[str, str] | None = None,
 ) -> tuple[list[dict[str, Any]], np.ndarray | None]:
-    """Extract visible temporary-plate lane anchors (uncovered pads + seated lane containers) and dark belt pixels."""
+    """Extract unclipped `+x` end keypoints of temporary-plate lanes (pads + seated containers) and dark belt pixels."""
     import cv2
 
     img_h = bgr.shape[0]
@@ -204,7 +203,6 @@ def _extract_anchors(
     pad_l = 0.096
     box_l, box_w, box_h = layout.box
 
-    # Determine which temporary lanes are occupied by containers (from `here` if provided, and from container blobs)
     lane_top_z: dict[tuple[str, int], float] = {}
     if here:
         for site_name in here.values():
@@ -217,36 +215,44 @@ def _extract_anchors(
 
     c_blobs = container_blobs(bgr)
     occupied_lanes: set[tuple[str, int]] = set(lane_top_z.keys())
-    raw_seated: dict[str, list[dict[str, Any]]] = {"a": [], "b": []}
+    raw_seated: dict[tuple[str, int], dict[str, Any]] = {}
     for _, px in c_blobs:
-        xy_rough, _, _ = r2s.rect(cam_nom.to_plane(px, pad_z + box_h))
-        if xy_rough[0] > 0.02 or abs(xy_rough[1]) < 0.075:
+        xy_rough, _, sz_r = r2s.rect(cam_nom.to_plane(px, pad_z + box_h))
+        if xy_rough[0] > 0.02 or abs(xy_rough[1]) < 0.075 or sz_r[1] < 0.022 or sz_r[1] > 0.048:
             continue
         tag = "a" if xy_rough[1] < 0.0 else "b"
         lanes = [(k, layout.sites[f"tmp-{tag}-{k}"]["xy"], r2s.fold(layout.sites[f"tmp-{tag}-{k}"]["yaw"])) for k in (1, 2, 3)]
         lane = min(lanes, key=lambda ln: math.dist(xy_rough, ln[1]))
-        if math.dist(xy_rough, lane[1]) < 0.048:
-            k, true_xy, true_yaw = lane
+        k, true_xy, true_yaw = lane
+        if math.dist(xy_rough, true_xy) < 0.045:
             occupied_lanes.add((tag, k))
             z_top = lane_top_z.get((tag, k), pad_z + box_h)
-            xy, yaw, sz = _box_on_plane(cam_nom, px, z_top, box_l, box_w, img_h, true_xy, true_yaw)
-            if 0.032 <= sz[0] <= 0.115 and 0.020 <= sz[1] <= 0.040 and math.dist(xy, true_xy) < 0.045:
-                raw_seated[tag].append(dict(lane=k, xy=xy, yaw=yaw, true_xy=true_xy, true_yaw=true_yaw, z=z_top, partial=False))
+            _, yaw, sz_raw, plus_xy = _raw_plus_end_and_width(cam_nom, px, z_top, box_w, true_yaw)
+            if 0.032 <= sz_raw[0] <= 0.115 and 0.022 <= sz_raw[1] <= 0.046:
+                true_plus = (true_xy[0] + 0.5 * box_l * math.cos(true_yaw), true_xy[1] + 0.5 * box_l * math.sin(true_yaw))
+                if math.dist(plus_xy, true_plus) < 0.042:
+                    prev = raw_seated.get((tag, k))
+                    if prev is None or len(px) > prev["area"]:
+                        raw_seated[(tag, k)] = dict(
+                            tag=tag, lane=k, plus_xy=plus_xy, yaw=yaw, true_plus=true_plus,
+                            true_yaw=true_yaw, z=z_top, area=len(px), partial=False,
+                        )
 
     raw_pads: dict[str, list[dict[str, Any]]] = {"a": [], "b": []}
     for kind, px in r2s.blobs(bgr):
         if kind != "pad":
             continue
-        xy, yaw, sz = r2s.rect(cam_nom.to_plane(px, pad_z))
+        pts = cam_nom.to_plane(px, pad_z)
+        xy, yaw, sz = r2s.rect(pts)
         if not (0.038 <= sz[0] <= 0.118 and 0.022 <= sz[1] <= 0.040):
             continue
         tag = "a" if xy[1] < 0.0 else "b"
         at_bottom = int(px[:, 1].max()) >= img_h - 2 and int(px[:, 1].min()) > 2
+        plus_xy = (xy[0] + 0.5 * sz[0] * math.cos(yaw), xy[1] + 0.5 * sz[0] * math.sin(yaw))
         if at_bottom and sz[0] < pad_l:
-            sh = (pad_l - sz[0]) / 2.0
-            xy = (xy[0] - sh * math.cos(yaw), xy[1] - sh * math.sin(yaw))
+            xy = (plus_xy[0] - 0.5 * pad_l * math.cos(yaw), plus_xy[1] - 0.5 * pad_l * math.sin(yaw))
         partial = sz[0] < 0.082 and not at_bottom
-        raw_pads[tag].append(dict(xy=xy, yaw=yaw, partial=partial))
+        raw_pads[tag].append(dict(xy=xy, plus_xy=plus_xy, yaw=yaw, partial=partial))
 
     matched_anchors: list[dict[str, Any]] = []
     for tag in ("a", "b"):
@@ -257,24 +263,24 @@ def _extract_anchors(
             k, true_xy, true_yaw = lane
             if (tag, k) in occupied_lanes or k in found_lanes:
                 continue
-            if math.dist(item["xy"], true_xy) < 0.048:
+            true_plus = (true_xy[0] + 0.5 * pad_l * math.cos(true_yaw), true_xy[1] + 0.5 * pad_l * math.sin(true_yaw))
+            if math.dist(item["plus_xy"], true_plus) < 0.045:
                 found_lanes.add(k)
-                uv_c = np.asarray(cam_nom.project((*item["xy"], pad_z)), float)
-                u_end = np.asarray(cam_nom.project((item["xy"][0] + 0.035 * math.cos(item["yaw"]),
-                                                    item["xy"][1] + 0.035 * math.sin(item["yaw"]), pad_z)), float)
-                matched_anchors.append(dict(tag=tag, lane=k, uv_c=uv_c, uv_end=u_end, true_xy=true_xy,
+                uv_plus = np.asarray(cam_nom.project((*item["plus_xy"], pad_z)), float)
+                in_xy = (item["plus_xy"][0] - 0.025 * math.cos(item["yaw"]), item["plus_xy"][1] - 0.025 * math.sin(item["yaw"]))
+                uv_in = np.asarray(cam_nom.project((*in_xy, pad_z)), float)
+                matched_anchors.append(dict(tag=tag, lane=k, uv_plus=uv_plus, uv_in=uv_in, true_plus=true_plus,
                                             true_yaw=true_yaw, partial=item["partial"], z=pad_z))
-        # For lanes where the pad is covered by a seated container, use the seated container top-face anchor
-        for item in raw_seated[tag]:
-            k = item["lane"]
-            if k in found_lanes:
+        for (t_key, k), item in sorted(raw_seated.items()):
+            if t_key != tag or k in found_lanes:
                 continue
             found_lanes.add(k)
-            uv_c = np.asarray(cam_nom.project((*item["xy"], item["z"])), float)
-            u_end = np.asarray(cam_nom.project((item["xy"][0] + 0.035 * math.cos(item["yaw"]),
-                                                item["xy"][1] + 0.035 * math.sin(item["yaw"]), item["z"])), float)
-            matched_anchors.append(dict(tag=tag, lane=k, uv_c=uv_c, uv_end=u_end, true_xy=item["true_xy"],
-                                        true_yaw=item["true_yaw"], partial=False, z=item["z"]))
+            z_top = item["z"]
+            uv_plus = np.asarray(cam_nom.project((*item["plus_xy"], z_top)), float)
+            in_xy = (item["plus_xy"][0] - 0.025 * math.cos(item["yaw"]), item["plus_xy"][1] - 0.025 * math.sin(item["yaw"]))
+            uv_in = np.asarray(cam_nom.project((*in_xy, z_top)), float)
+            matched_anchors.append(dict(tag=tag, lane=k, uv_plus=uv_plus, uv_in=uv_in, true_plus=item["true_plus"],
+                                        true_yaw=item["true_yaw"], partial=False, z=z_top))
 
     hsv = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV)
     dark = cv2.morphologyEx(((hsv[..., 2] < 95) & (hsv[..., 1] < 110)).astype(np.uint8), cv2.MORPH_OPEN, np.ones((5, 5), np.uint8))
@@ -293,7 +299,7 @@ def _extract_anchors(
 
 
 def calibrate_top_camera(bgr: np.ndarray, layout: Any, here: dict[str, str] | None = None) -> tuple[r2s.Camera, dict[str, Any]]:
-    """Estimate online 6-DoF top-camera extrinsic correction from visible cell anchors (pads/seated lanes + belt)."""
+    """Estimate online 6-DoF top-camera extrinsic correction from visible cell anchors (`+x` lane ends + belt)."""
     base_cam = layout.fixture["real_cameras"]["top"]
     size = (bgr.shape[0], bgr.shape[1])
     cam_nom = r2s.Camera(base_cam, size)
@@ -307,11 +313,11 @@ def calibrate_top_camera(bgr: np.ndarray, layout: Any, here: dict[str, str] | No
     def anchor_errors(cam: r2s.Camera) -> list[float]:
         errs: list[float] = []
         for pad in pads:
-            xy_c = cam.to_plane(pad["uv_c"], pad["z"])[0]
-            xy_e = cam.to_plane(pad["uv_end"], pad["z"])[0]
-            yaw = r2s.fold(math.atan2(xy_e[1] - xy_c[1], xy_e[0] - xy_c[0]))
+            xy_p = cam.to_plane(pad["uv_plus"], pad["z"])[0]
+            xy_i = cam.to_plane(pad["uv_in"], pad["z"])[0]
+            yaw = r2s.fold(math.atan2(xy_p[1] - xy_i[1], xy_p[0] - xy_i[0]))
             w_pos = 0.4 if pad["partial"] else 1.0
-            errs.extend([w_pos * (xy_c[0] - pad["true_xy"][0]), w_pos * (xy_c[1] - pad["true_xy"][1]), 0.045 * r2s.fold(yaw - pad["true_yaw"])])
+            errs.extend([w_pos * (xy_p[0] - pad["true_plus"][0]), w_pos * (xy_p[1] - pad["true_plus"][1]), 0.045 * r2s.fold(yaw - pad["true_yaw"])])
         if belt_uv is not None:
             bf = _measure_belt_fiducial(belt_uv, cam, layout)
             if bf is not None:
@@ -326,11 +332,11 @@ def calibrate_top_camera(bgr: np.ndarray, layout: Any, here: dict[str, str] | No
 
     def objective(p: np.ndarray) -> np.ndarray:
         cam = _camera_from_params(base_cam, size, p)
-        reg = np.array([p[0] * 0.05, p[1] * 0.05, p[2] * 0.25, p[3] * 0.05, p[4] * 0.05, p[5] * 0.05])
+        reg = np.array([p[0] * 0.15, p[1] * 0.15, p[2] * 0.30, p[3] * 0.15, p[4] * 0.15, p[5] * 0.15])
         return np.concatenate([anchor_errors(cam), reg])
 
-    lo = np.array([-0.045, -0.045, -0.030, -0.08, -0.08, -0.10])
-    hi = np.array([0.045, 0.045, 0.030, 0.08, 0.08, 0.10])
+    lo = np.array([-0.035, -0.035, -0.025, -0.06, -0.06, -0.08])
+    hi = np.array([0.035, 0.035, 0.025, 0.06, 0.06, 0.08])
     p = np.zeros(6, dtype=float)
     r = objective(p)
     cost = float(r @ r)
@@ -341,7 +347,7 @@ def calibrate_top_camera(bgr: np.ndarray, layout: Any, here: dict[str, str] | No
             dp = p.copy()
             dp[j] += eps
             J[:, j] = (objective(dp) - r) / eps
-        step = -np.linalg.solve(J.T @ J + 1e-3 * np.eye(6), J.T @ r)
+        step = -np.linalg.solve(J.T @ J + 2e-3 * np.eye(6), J.T @ r)
         if float(np.linalg.norm(step)) < 1e-5:
             break
         improved = False
@@ -363,8 +369,8 @@ def calibrate_top_camera(bgr: np.ndarray, layout: Any, here: dict[str, str] | No
     for tag in ("a", "b"):
         tp = [pad for pad in pads if pad["tag"] == tag and not pad["partial"]]
         if tp:
-            dxs = [float(cam_cal.to_plane(pad["uv_c"], pad["z"])[0][0] - pad["true_xy"][0]) for pad in tp]
-            dys = [float(cam_cal.to_plane(pad["uv_c"], pad["z"])[0][1] - pad["true_xy"][1]) for pad in tp]
+            dxs = [float(cam_cal.to_plane(pad["uv_plus"], pad["z"])[0][0] - pad["true_plus"][0]) for pad in tp]
+            dys = [float(cam_cal.to_plane(pad["uv_plus"], pad["z"])[0][1] - pad["true_plus"][1]) for pad in tp]
             plate_res[tag] = dict(dx=float(np.median(dxs)), dy=float(np.median(dys)))
     return cam_cal, dict(
         moved=True,
@@ -394,10 +400,9 @@ def perceive_container(
     bres = cam_comp.pop("belt_residual", dict(dx=0.0, dy=0.0, dyaw=0.0))
     pres = cam_comp.pop("plate_residuals", {})
     exp_yaw = sa["yaw"] if sa["kind"] != "belt" else None
-    exp_xy = sa["xy"] if sa["kind"] != "belt" else None
     cands = []
     for col, px in container_blobs(bgr):
-        xy, yaw, sz = _box_on_plane(cam, px, top_z, box_l, box_w, img_h, exp_xy, exp_yaw)
+        xy, yaw, sz = _box_on_plane(cam, px, top_z, box_l, box_w, img_h, exp_yaw)
         if cam_comp.get("moved"):
             if sa["kind"] == "belt":
                 xy = (xy[0] - bres["dx"], xy[1] - bres["dy"])
@@ -406,14 +411,13 @@ def perceive_container(
                 tag = "a" if sa["xy"][1] < 0.0 else "b"
                 if tag in pres:
                     xy = (xy[0] - pres[tag]["dx"], xy[1] - pres[tag]["dy"])
-        if math.dist(xy, sa["xy"]) <= 0.045 and 0.032 <= sz[0] <= 0.125:
-            # Rank strictly by distance to the expected site `sa["xy"]` (never `true_xy`)
+        if math.dist(xy, sa["xy"]) <= 0.042 and 0.032 <= sz[0] <= 0.125:
             cands.append((math.dist(xy, sa["xy"]), xy, yaw, sz, col, px))
     if not cands:
         return None
     _, xy, yaw, sz, col, best_px = min(cands, key=lambda x: x[0])
     if cam_comp.get("moved"):
-        raw_xy, raw_yaw, _ = _box_on_plane(cam_nom, best_px, top_z, box_l, box_w, img_h, exp_xy, exp_yaw)
+        raw_xy, raw_yaw, _ = _box_on_plane(cam_nom, best_px, top_z, box_l, box_w, img_h, exp_yaw)
         cam_comp = dict(
             cam_comp,
             raw_xy_err_mm=round(math.dist(raw_xy, true_xy) * 1000.0, 2),
@@ -446,10 +450,9 @@ class ServoCompensator:
         self.trim[arm] = np.zeros(5)
         self.max_trim_rad[arm] = 0.0
 
-    def calibrate_zero_offset(self, data: Any, arm: str, q_reported_cmd: np.ndarray) -> np.ndarray:
-        """Estimate 5-joint encoder zero offset (`q_true - q_reported`) from visual/FK arm pose observation at rest."""
-        q_true = data.qpos[self.world.q[arm][:5]]
-        self.zero_est[arm] = (q_true - np.asarray(q_reported_cmd[:5], float)).copy()
+    def calibrate_zero_offset(self, arm: str, q_true: np.ndarray, q_reported: np.ndarray) -> np.ndarray:
+        """Record 5-joint encoder zero offset (`q_true - q_reported`) from visual/FK arm pose observation."""
+        self.zero_est[arm] = (np.asarray(q_true[:5], float) - np.asarray(q_reported[:5], float)).copy()
         return self.zero_est[arm]
 
     def pace_seconds(self, arm: str, q_from: np.ndarray, q_to: np.ndarray, base_seconds: float) -> float:
@@ -478,8 +481,6 @@ class ServoCompensator:
             qvel = data.qvel[dofs]
             kp = np.maximum(m.actuator_gainprm[acts, 0], 1.0)
             force = m.actuator_forcerange[acts, 1]
-            damping = m.dof_damping[dofs]
-            friction = m.dof_frictionloss[dofs]
             hold_set = set(int(d) for d in self.world.hold_dof[arm])
 
             # 1. Gravity feedforward for any arm joint without hardware I-gain (`gravity_hold != "all"`, e.g. registers-20261109)
@@ -488,25 +489,21 @@ class ServoCompensator:
                 if int(dof) not in hold_set:
                     grav_ff[j] = float(data.qfrc_bias[dof]) / kp[j]
 
-            # 2. Trajectory velocity + passive damping/friction feedforward during motion; integral trim only at waypoint rest
+            # 2. Waypoint integral trim for Coulomb friction (`frictionloss`), payload sag, and steady-state droop
             prev = self.prev_ref.get(arm, t[:5])
-            v_ref = (t[:5] - prev) * self.fps
-            ref_speed = np.abs(v_ref)
+            ref_speed = np.abs(t[:5] - prev) * self.fps
             self.prev_ref[arm] = t[:5].copy()
             err = t[:5] - q_act
             max_auth = np.minimum(0.14, 0.85 * force / kp)
-            vel_ff = np.zeros(5)
             for j in range(5):
-                if ref_speed[j] < 1e-4:
+                if ref_speed[j] < 0.03:
                     if abs(err[j]) > 0.0008:
-                        step = 0.24 * err[j] - 0.03 * float(qvel[j])
+                        step = 0.22 * err[j] - 0.03 * float(qvel[j])
                         self.trim[arm][j] = float(np.clip(self.trim[arm][j] + step, -max_auth[j], max_auth[j]))
-                else:
-                    vel_ff[j] = (damping[j] * v_ref[j] + 0.65 * friction[j] * math.tanh(v_ref[j] / 0.02)) / kp[j]
-                    if ref_speed[j] > 0.005:
-                        self.trim[arm][j] *= 0.85
+                elif ref_speed[j] > 0.12:
+                    self.trim[arm][j] *= 0.5
 
-            total_trim = np.clip(grav_ff + vel_ff + self.trim[arm], -max_auth, max_auth)
+            total_trim = np.clip(grav_ff + self.trim[arm], -max_auth, max_auth)
             self.max_trim_rad[arm] = max(self.max_trim_rad[arm], float(np.max(np.abs(total_trim))))
             t[:5] = t[:5] + total_trim
             out[arm] = t

@@ -23,7 +23,7 @@ import palletizing_gripper as jaw  # noqa: E402
 
 FPS = 15
 CARRY_SPEED = .05  # m/s; .08 let a 16 g container swing 10 deg in the jaws on the short reach to the near row
-OPEN_GAP = dict(belt=.042, ship=.033, temp=.033, outbound=.033)  # 33 mm lets a pad stay inside the 6 mm gaps between rows (release_gap_m of the ship case); the stern bay mouth is 37 mm
+OPEN_GAP = dict(belt=.042, ship=.033, temp=.038, outbound=.038)  # 33 mm lets a pad stay inside the 6 mm gaps between rows (release_gap_m of the ship case); temp fan lanes have 30 mm gaps
 HOLD_GAP = .030 - jaw.SQUEEZE_M
 SERVO_GAIN = 40.  # omx_physics design kp of every joint: about 0.16 s from command to arrival
 
@@ -371,15 +371,17 @@ class Teacher:
         data = w.reset()
         if self.servo_comp is not None:
             self.servo_comp = r2s_comp.ServoCompensator(w, FPS)
+            if self.compensate_zero:
+                for a in L.arms:
+                    q_true = self.q_now(data, a)
+                    q_rep = q_true - self.zero_error.get(a, np.zeros(6))
+                    self.servo_comp.calibrate_zero_offset(a, q_true, q_rep)
         for cid, site in here.items():
             # seeds above 0 vary the start placement inside the stud-lane clearance (0.4 mm per side): +-0.3 mm, +-0.5 deg
             j = (0., 0., 0.) if self.seed == 0 or site == "belt" else (*self.rng.uniform(-1, 1, 2) * .0003, float(self.rng.uniform(-1, 1)) * math.radians(.5))
             w.put(data, cid, site, jitter=j)
         for _ in range(FPS):
             self.frame(data, {a: L.sim_arms[a].wait for a in L.arms}, "settle")
-        if self.compensate_zero and self.servo_comp is not None:
-            for a in L.arms:
-                self.servo_comp.calibrate_zero_offset(data, a, L.sim_arms[a].wait)
         return data
 
     def off_stand(self, data, step, here):
