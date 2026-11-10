@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""One Pinky on the 261026 track parking area: pink guide-tape camera evidence
+"""One camera robot on the 261026 track parking area: pink guide-tape camera evidence
 into CORE (D-1013 gate b). Keep mode with paint_source pink; the bay pit-in
 docking approach is a later branch, so no dock observer here."""
 
