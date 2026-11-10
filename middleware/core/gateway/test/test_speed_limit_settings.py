@@ -269,7 +269,7 @@ def test_a_wider_run_distance_asks_for_more_room(robot, trials):
     robot.limits.approval_travel_m = 0.25
     robot.scan = {**robot.scan, "ranges": [0.30] * 360}
     with pytest.raises(trials_module.TrialRefused) as refused:
-        trials.start("forward", "button_release", OWNER, test_surface="lifted", blind_zone_confirmed=True)
+        trials.start("forward", "button_release", OWNER, test_surface="lifted")
     assert refused.value.code == "CLEARANCE_TOO_SMALL"
 
 
@@ -277,7 +277,7 @@ def test_a_fast_trial_needs_room_for_its_stop_not_only_its_run(robot, trials):
     robot.limits.manual_linear, robot.limits.approval_linear, robot.limits.approval_travel_m = 0.2, 0.2, 0.25
     robot.scan = {**robot.scan, "ranges": [0.45] * 360}  # 0.38 m free ahead: the 0.30 m run + margin fits, run + stop does not
     with pytest.raises(trials_module.TrialRefused) as refused:
-        trials.start("forward", "button_release", OWNER, test_surface="lifted", blind_zone_confirmed=True)
+        trials.start("forward", "button_release", OWNER, test_surface="lifted")
     assert refused.value.code == "CLEARANCE_TOO_SMALL"
 
 
