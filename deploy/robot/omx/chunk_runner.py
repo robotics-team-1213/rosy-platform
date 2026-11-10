@@ -508,7 +508,13 @@ class Runner:
             if arrived:
                 self.last_input, self.idle_parks = started, 0
             self.pending += arrived
-            # one command per tick: a burst of jogs must not move the target by more than one jog at once
+            # one motion command per tick: a burst of jogs must not move the target by more than one jog at once;
+            # read-only state/episode queries ahead of a non-state command do not consume the motion slot
+            while (len(self.pending) > 1
+                   and self.pending[0].strip().split()[:1] in (["state"], ["episode"])
+                   and self.pending[1].strip().split()[:1] != ["state"]):
+                if not self.command(self.pending.pop(0)):
+                    return
             if self.pending and not self.command(self.pending.pop(0)):
                 return
             try:
@@ -615,7 +621,10 @@ def main(argv=None):
     motion.shed_load = True  # a guard hold freezes only the held joint: runner_strain.shed moves lift and elbow
     guarded = Guarded(robot, motion)
     try:
-        check = load_predict.plan_check(args.load_model, robot_cfg.get("port"), params, library, {j: robot.bus.read("PWM_Limit", j) for j in load_predict.BODY[1:]}) if args.load_model else None
+        caps = (robot.bus.sync_read("PWM_Limit", list(load_predict.BODY[1:]), normalize=False, num_retry=2)
+                if "read" not in vars(robot.bus) and hasattr(robot.bus, "model_ctrl_table")
+                else {j: robot.bus.read("PWM_Limit", j) for j in load_predict.BODY[1:]}) if args.load_model else None
+        check = load_predict.plan_check(args.load_model, robot_cfg.get("port"), params, library, caps) if args.load_model else None
         import bus_watchdog  # the motors stop by themselves if this PC goes silent (off unless the params set it)
 
         print(json.dumps({"bus_watchdog": bus_watchdog.arm(robot.bus, prm.get(params, "safety.bus_watchdog_ms"))}), flush=True)

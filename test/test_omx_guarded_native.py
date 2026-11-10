@@ -1134,17 +1134,28 @@ def test_effort_check_uses_sync_read_on_dynamixel_bus_to_avoid_5hz_unicast_stall
     original_sync = follower.sync_read
 
     def sync_read(register, motors=None, *, normalize=True, num_retry=0):
-        if register in ("Present_PWM", "Hardware_Error_Status"):
+        if register in ("Present_PWM", "Hardware_Error_Status", "Torque_Enable", "PWM_Limit",
+                        "Operating_Mode", "Profile_Acceleration", "Profile_Velocity", "Drive_Mode"):
             pwm_sync_calls.append((register, tuple(motors), normalize, num_retry))
+            if register == "PWM_Limit":
+                return {n: 330 for n in motors}
+            if register == "Operating_Mode":
+                return {n: 5 if n == "gripper" else 4 for n in motors}
+            if register in ("Profile_Acceleration", "Profile_Velocity"):
+                return {n: 8 if register == "Profile_Acceleration" else 20 for n in motors}
             return {n: 0 for n in motors}
         return original_sync(register, motors=motors, normalize=normalize, num_retry=num_retry)
 
     follower.sync_read = sync_read
+    guard.connect_passive(SimpleNamespace(bus=follower, cameras={}), follower=True)
+    assert ("Operating_Mode", guard.NAMES, False, guard.READ_RETRY) in pwm_sync_calls
     motion = guard.NativeJointMotion(follower, None, teacher=True, clock=lambda: clock[0])
     here = {n + ".pos": v for n, v in follower.norm(follower.raw).items()}
     motion.send(here)
     clock[0] += 0.25
     motion.send(here)
     assert ("Hardware_Error_Status", guard.NAMES, False, guard.READ_RETRY) in pwm_sync_calls
+    assert ("PWM_Limit", guard.BODY, False, guard.READ_RETRY) in pwm_sync_calls
     assert ("Present_PWM", guard.BODY, False, guard.READ_RETRY) in pwm_sync_calls
     assert not any(e[:2] == ("read", "Present_PWM") for e in follower.events)
+    assert not any(e[:2] == ("read", "PWM_Limit") for e in follower.events)

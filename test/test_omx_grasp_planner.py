@@ -227,3 +227,11 @@ def test_a_pace_past_the_guard_or_at_nothing_is_refused(name):
     for bad in (1.2, 0, -0.5):
         with pytest.raises(ValueError, match=name):
             m.Planner({**PLAN, name: bad}).guard_pace(name)
+
+
+def test_load_kinematics_caches_parsed_kinematics_and_deduplicates_sys_path():
+    before_len = len(sys.path)
+    kin1, _, _ = m.load_kinematics(None, 0.0885)
+    kin2, _, _ = m.load_kinematics(None, 0.0885)
+    assert kin1 is kin2
+    assert len(sys.path) <= before_len + 1

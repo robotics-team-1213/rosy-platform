@@ -1107,3 +1107,15 @@ def test_read_health_uses_retry_on_real_dynamixel_bus():
         ("Present_Current", False, 2),
         ("Present_Temperature", False, 2),
     ]
+
+
+def test_state_query_ahead_of_motion_command_does_not_delay_chunk_start_by_a_tick():
+    robot, status, clock = Robot(), [], [0.0]
+    batches = [["state", "run approach_pinky"], ["stop"]]
+    r = m.Runner(robot, library(), fps=30, status=status.append, clock=lambda: clock[0],
+                 sleep=lambda s: clock.__setitem__(0, clock[0] + 1 / 30))
+    r.run(lambda: batches.pop(0) if batches and not r.chunk else [])
+    assert by_command(status, "state")[0]["ok"] is True
+    assert by_command(status, "run approach_pinky")[0]["ok"] is True
+    # Only the 10 chunk frames + settle ticks, without wasting an extra idle tick on the leading `state`
+    assert robot.sent[0]["shoulder_pan.pos"] == 0.0 and robot.sent[1]["shoulder_pan.pos"] == 2.0
