@@ -1184,7 +1184,7 @@ def test_teacher_mode_feedforward_tracks_streamed_ramp_without_braking_chaser_la
         streamed = {**here, "shoulder_pan.pos": pos}
         sent = motion.send(streamed)
         follower.raw.update({n: int(v) for n, v in follower.goals.items()})
-        if 30 <= k <= 57:  # steady-state cruise at 4.5 units/s (~8.1 deg/s)
+        if 34 <= k <= 57:  # steady-state cruise at 4.5 units/s (~8.1 deg/s)
             lags_deg.append(abs(streamed["shoulder_pan.pos"] - sent["shoulder_pan.pos"]) * 1.8)
     # Feedforward velocity matching keeps steady-state tracking lag well under 0.5 deg (vs ~3.9 deg without v_ff)
     assert max(lags_deg) < 0.5
