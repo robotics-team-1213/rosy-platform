@@ -381,3 +381,51 @@ def test_mjpeg_stream_endpoint_serves_multipart_frame_and_503_when_stale():
         server.server_close()
         worker.join()
 
+
+def test_frame_endpoint_etag_304_and_fifo_cell_keepalive_decode_cache(tmp_path):
+    cv2 = pytest.importorskip("cv2")
+    np = pytest.importorskip("numpy")
+    spec = importlib.util.spec_from_file_location(
+        "cell_pipeline_io", Path(__file__).parents[1] / "deploy" / "robot" / "omx" / "cell_pipeline_io.py")
+    io_mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(io_mod)
+
+    store = ObservationStore()
+    server = make_server(store, port=0)
+    worker = threading.Thread(target=server.serve_forever, daemon=True)
+    worker.start()
+    base = f"http://127.0.0.1:{server.server_port}"
+    try:
+        img1 = np.full((8, 8, 3), 40, dtype=np.uint8)
+        ok, buf1 = cv2.imencode(".jpg", img1)
+        assert ok
+        stamp1 = time.time()
+        store.put("top", stamp1, bytes(buf1))
+        with urllib.request.urlopen(base + "/frame/top.jpg") as resp:
+            assert resp.headers["X-Frame-Seq"] == "1"
+            assert resp.headers["ETag"] == '"1"'
+            assert float(resp.headers["X-Source-Stamp"]) == pytest.approx(stamp1, rel=1e-6)
+        req_304 = urllib.request.Request(base + "/frame/top.jpg", headers={"If-None-Match": '"1"'})
+        with pytest.raises(urllib.error.HTTPError) as err:
+            urllib.request.urlopen(req_304)
+        assert err.value.code == 304
+
+        cell = io_mod.FifoCell(tmp_path, {"top": {"url": f"{base}/frame/top.jpg"}})
+        f1 = cell.frame("top")
+        f1_cached = cell.frame("top")
+        assert f1.shape == (8, 8, 3) and f1_cached.shape == (8, 8, 3)
+        f1[0, 0, 0] = 255
+        assert f1_cached[0, 0, 0] != 255  # cached frame returns a defensive copy
+
+        img2 = np.full((8, 8, 3), 200, dtype=np.uint8)
+        ok2, buf2 = cv2.imencode(".jpg", img2)
+        assert ok2
+        store.put("top", stamp1 + 0.05, bytes(buf2))
+        f2 = cell.frame("top")
+        assert int(f2[4, 4, 0]) > 150
+    finally:
+        server.shutdown()
+        server.server_close()
+        worker.join()
+
+

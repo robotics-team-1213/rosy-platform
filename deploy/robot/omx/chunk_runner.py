@@ -557,7 +557,7 @@ class Runner:
                 raise
             if self.idle():
                 return
-            if self.live and self.ticks % max(1, self.fps // 2) == 0:
+            if self.live and self.ticks % max(1, self.fps // 10) == 0:
                 self.live({"t": round(time.time(), 3), "state": [round(v, 2) for v in (getattr(self, "last_present", None) or self.present())],
                            "target": [round(v, 2) for v in self.target], "chunk": self.chunk,
                            "lag": round(self.lag, 2),
