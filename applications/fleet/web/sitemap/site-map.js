@@ -7,8 +7,7 @@ import {developmentToken} from '/console/assets/development-auth.js';
 import {createPasswordLogin} from '/console/assets/password-login.js';
 import {confirmIrreversible} from '/common/ui.js';
 import {bindEstop, bindTopbarToggle, showSession, showSignedOut, tickClock, watchFleet} from '/console/assets/fleet-header.js';
-import {PLACE_KINDS, PLACE_KIND_LABEL, actionRows, arrowMarks, fitView, planIsCurrent, planPolylines, siteMapErrorText, viewTurnOf, editViewTurn, planTrip, tripRefusalText, planSummaryText, tripPoseReason, robotMapPose, addApproach, removeApproach, mergeCrosswalks} from '/console/assets/site-map-model.js';
-import {tripStatusText} from '/console/assets/trip-display.js';
+import {PLACE_KINDS, PLACE_KIND_LABEL, actionRows, arrowMarks, fitView, planIsCurrent, planPolylines, siteMapErrorText, viewTurnOf, editViewTurn, planTrip, tripRefusalText, planSummaryText, tripPoseReason, robotMapPose} from '/console/assets/site-map-model.js';import {tripStatusText} from '/console/assets/trip-display.js';
 import {editEdge, editPlace} from '/console/assets/site-map-edit.js';
 import {bindScreens} from '/console/assets/subnav-screens.js';
 import '/console/assets/file-picker.js';
@@ -16,6 +15,8 @@ import {guideMarks, poseLabel} from '/console/assets/guide-layer.js';
 import {createTeachPanel} from '/console/assets/site-map-teach.js';
 import {createSurveyPanel} from '/console/assets/site-map-survey.js';
 import {createCameraMapPanel} from '/console/assets/site-map-camera.js';
+import {createRealityPanel} from '/console/assets/site-map-reality.js';
+import {installBandEditing} from '/console/assets/site-map-bands.js';
 import {createMapAuthoring} from '/console/assets/map-authoring.js';
 import {drawFacilities, svgElement as el} from '/console/assets/map-editor.js';
 
@@ -44,6 +45,10 @@ const cameraMap = createCameraMapPanel({request, guarded, reason: () => operator
   context: () => [state.working, state.sessionEpoch],
   draft: () => state.draft, dirty: () => state.dirty, notice,
   reload: async () => { await load(); $('map-source').value = 'draft'; clearPlan(); }});
+const reality = createRealityPanel({request, guarded, reason: () => operatorReason(),
+  draft: () => state.draft, dirty: () => state.dirty, robots: () => state.robots,
+  reload: async () => { await load(); $('map-source').value = 'draft'; clearPlan(); },
+  notice, gate, status});
 const authoring = createMapAuthoring({request, svg: $('site-map-svg'), map: shown, draft: () => state.working,
   source: () => $('map-source').value, view: () => state.view, reason: operatorReason, dirty: () => state.dirty,
   begin: () => { survey.cancel(); clearPlane(); $('trip-pick').checked = false; state.band = null; },
@@ -214,6 +219,7 @@ function select(selection) {
 function syncButtons() {
   authoring.sync();
   cameraMap.sync();
+  reality.sync();
   survey.sync();
   const reason = operatorReason();
   sourcePanel.sync();
@@ -447,37 +453,7 @@ $('site-map-svg').addEventListener('click', event => {
   syncButtons();
 });
 
-// D-573 1/7: waiting bands are drawn on the draft; the polygon itself is lane_graph's.
-$('band-draw').addEventListener('click', () => {
-  state.band = [];
-  $('map-source').value = 'draft';
-  render(); syncButtons();
-  notice('지도에서 대기 띠의 꼭짓점을 차례로 찍고 띠 닫기를 누르세요.');
-});
-$('band-finish').addEventListener('click', () => guarded(async () => {
-  const sel = state.selected;
-  state.working = addApproach(state.working, sel.crosswalk, state.band);
-  state.band = null;
-  state.dirty = true;
-  select(sel);
-  notice('대기 띠를 초안에 넣었습니다. 저장할 때 차로에 닿는지, 바닥 안인지 확인합니다.');
-}));
-$('band-delete').addEventListener('click', () => guarded(async () => {
-  const sel = state.selected;
-  state.working = removeApproach(state.working, sel.crosswalk, Number($('crosswalk-band').value || 0));
-  state.dirty = true;
-  $('map-source').value = 'draft';
-  select(sel);
-  notice('대기 띠를 초안에서 지웠습니다. 저장해야 남습니다.');
-}));
-$('import-crosswalks').addEventListener('click', () => guarded(async () => {
-  const got = await request('/api/fleet/site-map/lane-graph-crosswalks');
-  state.working = mergeCrosswalks(state.working, got.crosswalks || []);
-  state.dirty = true;
-  $('map-source').value = 'draft';
-  select(null);
-  notice(`${got.source}에서 횡단보도 ${(got.crosswalks || []).length}개를 초안에 넣었습니다. 그린 대기 띠는 그대로 둡니다. 저장해야 남습니다.`);
-}));
+installBandEditing({request, guarded, state, select, render, syncButtons, notice});
 
 $('trip-pick').addEventListener('change', () => {
   $('site-map-svg').classList.toggle('picking', $('trip-pick').checked);
