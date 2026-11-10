@@ -59,7 +59,10 @@ def load_kinematics(root: Path | None, tcp_x_m: float | None = None):
     """The OMX-F kinematics; ROSY_OMX_TCP_X_M (or plan tcp_x_m) replaces the stock TCP (link5 x 0.09193) for another jaw.
     arm_b's v2.1 jaws end at 0.0740 (STL); on 2026-11-03 closed jaws over a box top went to stock-FK 12.4 mm
     without touching the 20 mm top, so the stock TCP put the real tips about 18 mm above every planned height."""
-    root = root or Path(__file__).resolve().parents[3] / "middleware/devices/omx/adapter"
+    if root is None:
+        here = Path(__file__).resolve().parent
+        repo_adapter = Path(__file__).resolve().parents[3] / "middleware/devices/omx/adapter"
+        root = here if (here / "config/omx_f_kinematics.yaml").is_file() else repo_adapter
     if str(root) not in sys.path:
         sys.path.insert(0, str(root))
     from omx_adapter.kinematics import IkLimits, OmxKinematics, TopDownPose
@@ -186,11 +189,12 @@ class Planner:
         """above (one frame, reached by goto) -> descend -> close/open -> lift."""
         p = self.plan
         x, y, z, yaw = target["x"], target["y"], target["z"], target["yaw_deg"]
-        above = (x, y, z + self.standoff(x, y, z, yaw, p["approach_m"]))
+        above_dz = self.standoff(x, y, z, yaw, p["approach_m"])
+        above = (x, y, z + above_dz)
         # after a release the jaws rise clear before the park closes them: 3 cm let the fingertips take the box back
         # (2026-10-28); the pick's lift can stay low for the shoulder. Either lift shrinks inside the wrist limit.
         rise = p.get("release_lift_m", p["lift_m"]) if grip_out > grip_in else p["lift_m"]
-        lifted = (x, y, z + self.standoff(x, y, z, yaw, rise))
+        lifted = above if rise == p["approach_m"] else (x, y, z + self.standoff(x, y, z, yaw, rise))
         joints = self.solve(*above, yaw, q5)
         pre = [round(rad_to_norm(q), 3) for q in joints] + [grip_in]
         descend_v = float(p.get(f"descend_{name}_m_s", p["descend_m_s"]))
@@ -273,12 +277,13 @@ class Planner:
             if worst > bound:
                 raise SystemExit(f"{name}: a link (elbow, wrist or gripper) reaches x {worst:.3f} m "
                                  f"past keep_out x_max {bound} m")
-        first = None
-        for transit in [taught, *self.pulled_in_transits(taught)]:
+        first = max(cached_body_x(f) for f in self.travel(chunks, taught))
+        if first <= bound:
+            return taught
+        for transit in self.pulled_in_transits(taught):
             worst = max(cached_body_x(f) for f in self.travel(chunks, transit))
             if worst <= bound:
                 return transit
-            first = first if first is not None else worst
         raise SystemExit(f"travel: a link (elbow, wrist or gripper) reaches x {first:.3f} m past keep_out x_max "
                          f"{bound} m with the taught transit, and no pulled-in transit stays inside")
 
@@ -338,11 +343,11 @@ class Planner:
         home = list(self.plan["home"]) + [self.plan["grip_closed"]]
         return [[round(v, 3) for v in f] for _, frames in self.stream(library, home) for f in frames]
 
-    def cycle_trajectory(self, reset_s: float = 2.0) -> dict:
+    def cycle_trajectory(self, reset_s: float = 2.0, *, first_library: dict | None = None) -> dict:
         """A self-resetting cycle for record_session --replay: A carries pick -> place, B carries it back."""
         from teach_trajectory import compose
 
-        a = self.leg(self.library())
+        a = self.leg(first_library if first_library is not None else self.library())
         back = Planner(dict(self.plan, pick=self.plan["place"], place=self.plan["pick"]), self.kinematics_root)
         b = back.leg(back.library())
         source = {"planner": "grasp_planner.py top-down v1", "pick": self.plan["pick"], "place": self.plan["place"]}
@@ -356,12 +361,14 @@ def main(argv=None):
     parser.add_argument("--kinematics-root", type=Path)
     parser.add_argument("--trajectory", type=Path, help="also write a recordable A/B cycle for record_session --replay")
     args = parser.parse_args(argv)
-    library = Planner(json.loads(args.plan.read_text()), args.kinematics_root).library()
-    library = {k: v for k, v in library.items() if v is not None}
+    plan_data = json.loads(args.plan.read_text())
+    planner = Planner(plan_data, args.kinematics_root)
+    raw_library = planner.library()
+    library = {k: v for k, v in raw_library.items() if v is not None}
     args.out.write_text(json.dumps(library))
     print(json.dumps({"out": str(args.out), "chunks": {k: len(v) for k, v in library["chunks"].items()}}))
     if args.trajectory:
-        trajectory = Planner(json.loads(args.plan.read_text()), args.kinematics_root).cycle_trajectory()
+        trajectory = planner.cycle_trajectory(first_library=raw_library)
         args.trajectory.write_text(json.dumps(trajectory))
         print(json.dumps({"trajectory": str(args.trajectory), "segments": trajectory["segments"]}))
 

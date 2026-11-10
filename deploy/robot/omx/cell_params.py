@@ -135,11 +135,25 @@ def validate(data: dict) -> dict:
     return values
 
 
+_DEFAULT_VALUES = {name: spec[0] for name, spec in DEFAULTS.items()}
+_DEFAULT_SHA = hashlib.sha256(json.dumps(_DEFAULT_VALUES, sort_keys=True).encode()).hexdigest()[:12]
+_LOAD_CACHE: dict[tuple[str, int, int], tuple[dict, str]] = {}
+
+
 def load(path=None) -> dict:
     """{"values": every parameter (the file's, else the default), "sha": digest of those effective values}."""
-    chosen = validate(json.loads(Path(path).read_text(encoding="utf-8-sig"))) if path else {}
-    values = {name: chosen.get(name, spec[0]) for name, spec in DEFAULTS.items()}
-    return {"values": values, "sha": digest(values)}
+    if not path:
+        return {"values": dict(_DEFAULT_VALUES), "sha": _DEFAULT_SHA}
+    p = Path(path)
+    st = p.stat()
+    key = (str(p.resolve()), st.st_mtime_ns, st.st_size)
+    cached = _LOAD_CACHE.get(key)
+    if cached is None:
+        chosen = validate(json.loads(p.read_text(encoding="utf-8-sig")))
+        values = {name: chosen.get(name, spec[0]) for name, spec in DEFAULTS.items()}
+        cached = (values, digest(values))
+        _LOAD_CACHE[key] = cached
+    return {"values": dict(cached[0]), "sha": cached[1]}
 
 
 if __name__ == "__main__":

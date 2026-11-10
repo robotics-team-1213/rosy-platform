@@ -130,8 +130,17 @@ class Runner:
         self.health_present, self.samples, self.grip_from, self.holding = None, [], None, False  # joint_push's samples and reopen point
         self.recorder = Recorder()  # raw training episodes: rows here, encoding after the session
         self.operating_context = operating_context
+        self._lib_digest_cache: tuple[int, str] | None = None
         self.trend: list = []  # load-bearing joints' lags over the last STRAIN_TICKS ticks of a chunk
         self.trace = None      # called every tick with what was commanded and where the arm was (jitter)
+
+    def _library_digest(self) -> str:
+        lib = self.library
+        cached = self._lib_digest_cache
+        if cached is None or cached[0] != id(lib):
+            cached = (id(lib), digest(lib))
+            self._lib_digest_cache = cached
+        return cached[1]
 
     def present(self) -> list:
         observation = self.robot.get_observation()
@@ -144,7 +153,7 @@ class Runner:
         state = self.present() if present is None else present
         self.status(dict(fields, state=[round(v, 2) for v in state],
                          target=[round(v, 2) for v in self.target], health=self.health, fault=self.fault,
-                         operating_context=self.operating_context, library_sha256=digest(self.library),
+                         operating_context=self.operating_context, library_sha256=self._library_digest(),
                          t=time.time()))
 
     def read_health(self):
@@ -178,7 +187,7 @@ class Runner:
                 line, verb = " ".join(words), words[0]
                 if not self.operating_context or self.operating_context.get("session_id") != session:
                     raise ValueError("checked command targets another session")
-                if verb != "load" and digest(self.library) != expected_library:
+                if verb != "load" and self._library_digest() != expected_library:
                     raise ValueError("checked command targets another library")
             self.grip_from = self.grip_from if verb in ("state", "grip", "episode") else None
             self.jog_path = self.jog_path if verb in ("jog", "state", "episode") else []
@@ -333,10 +342,12 @@ class Runner:
                     raise ValueError(str(exc)) from None
                 if library["fps"] != self.fps:
                     raise ValueError(f"library fps {library['fps']} differs from the runner fps {self.fps}")
-                if expected_library is not None and digest(library) != expected_library:
+                lib_digest = digest(library)
+                if expected_library is not None and lib_digest != expected_library:
                     raise ValueError("checked load content differs from the reviewed library")
                 self.plan_check(library)  # raises: a plan the arm's own load data says it cannot hold is refused here
                 self.library = library
+                self._lib_digest_cache = (id(library), lib_digest)
             elif verb != "state":
                 raise ValueError("commands: run <chunk> [rel] | jog <joint> <delta> [...] | grip <value> | goto <chunk> | load <library> | park | state | stop")
             self.report(command=line, ok=True, present=locals().get("present"))

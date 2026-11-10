@@ -56,20 +56,33 @@ class FifoCell:
         self.operating_profile = operating_profile
         self._http_conns: dict[tuple[str, int], http.client.HTTPConnection] = {}
         self._frame_cache: dict[str, tuple[str, np.ndarray]] = {}
+        self._file_digest_cache: dict[tuple[str, int, int], str] = {}
+
+    def _cached_library_digest(self, path_str: str) -> str:
+        from cell_envelope import digest
+
+        p = Path(path_str)
+        st = p.stat()
+        key = (str(p), st.st_mtime_ns, st.st_size)
+        cached = self._file_digest_cache.get(key)
+        if cached is None:
+            cached = digest(json.loads(p.read_text()))
+            self._file_digest_cache[key] = cached
+        return cached
 
     def checked(self, command: str, assessment: dict) -> dict:
         return self.act(f"checked {assessment['session_id']} {assessment['library_sha256']} {command}")
 
     def act(self, command: str) -> dict:
         if self.operating_profile is not None and command not in ("state", "stop") and not command.startswith("checked "):
-            from cell_envelope import _state_current, digest
+            from cell_envelope import _state_current
 
             state = self.act("state")
             context = state.get("operating_context") or {}
             if not _state_current(state, time.time()) or context.get("operating_profile") != self.operating_profile:
                 return {"ok": False, "fault": "profile_mismatch", "error": "live follower differs from selected profile"}
             try:
-                revision = (digest(json.loads(Path(command.split(" ", 1)[1]).read_text()))
+                revision = (self._cached_library_digest(command.split(" ", 1)[1])
                             if command.startswith("load ") else state["library_sha256"])
             except (OSError, ValueError, KeyError):
                 return {"ok": False, "fault": "profile_library_unavailable", "error": "cannot bind this command library"}

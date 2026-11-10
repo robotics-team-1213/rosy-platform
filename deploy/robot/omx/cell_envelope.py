@@ -162,12 +162,14 @@ def assess(config: dict, calibration: dict, library: dict, state: dict, *, now=N
         conditions = _conditions(config)
         import cell_params
 
+        raw_params = config.get("params")
+        effective_params = (cell_params._DEFAULT_VALUES if not raw_params
+                            else {name: cell_params.get(raw_params, name) for name in cell_params.DEFAULTS})
         conditions_sha = digest({"conditions": conditions, "calibration": calibration,
                                   "profiles": config.get("profiles"), "cameras": config.get("cameras"),
                                   "sites": config.get("sites"), "plan": config.get("plan"),
                                   "verify_tol_mm": verification_tolerance(config), "sequence": list(sequence),
-                                  "params": {name: cell_params.get(config.get("params"), name)
-                                             for name in cell_params.DEFAULTS}})
+                                  "params": effective_params})
         out.update(scope=context["scope"], runtime_sha256=context["sha256"], session_id=context["session_id"],
                    conditions=conditions, operating_profile=profile["binding"],
                    conditions_sha256=conditions_sha, library_sha256=digest(library), client_code_sha256=_code_digest())

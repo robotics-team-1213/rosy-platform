@@ -21,8 +21,16 @@ def _unique(pairs):
     return result
 
 
+_PROFILE_CACHE: dict[tuple[str, int, int], dict] = {}
+
+
 def load(path, *, robot_config=None) -> dict:
     path = Path(path).expanduser().resolve()
+    st = path.stat()
+    key = (str(path), st.st_mtime_ns, st.st_size)
+    if robot_config is None and key in _PROFILE_CACHE:
+        cached = _PROFILE_CACHE[key]
+        return {**cached, "servo": dict(cached["servo"]), "binding": dict(cached["binding"])}
     document = json.loads(path.read_text(encoding="utf-8"), object_pairs_hook=_unique)
     if (not isinstance(document, dict) or not FIELDS <= set(document) <= FIELDS | OPTIONAL
             or document["schema"] != SCHEMA):
@@ -43,14 +51,17 @@ def load(path, *, robot_config=None) -> dict:
             or digest(robot_config) != revision):
         raise ValueError("operating profile belongs to another follower or robot configuration")
     paths = {}
-    for key in ("operating_envelope_path", "work_dir"):
-        value = document[key]
+    for k in ("operating_envelope_path", "work_dir"):
+        value = document[k]
         if not isinstance(value, str) or not value.strip() or value != value.strip() or "<" in value:
-            raise ValueError(f"profile {key} must be explicitly configured")
+            raise ValueError(f"profile {k} must be explicitly configured")
         target = Path(value).expanduser()
-        paths[key] = str((target if target.is_absolute() else path.parent / target).resolve())
-    return {**paths, "servo": servo, "binding": {"device_id": device_id, "instance_id": instance,
-            "robot_config_sha256": revision, "profile_sha256": digest({**document, **paths})}}
+        paths[k] = str((target if target.is_absolute() else path.parent / target).resolve())
+    out = {**paths, "servo": servo, "binding": {"device_id": device_id, "instance_id": instance,
+           "robot_config_sha256": revision, "profile_sha256": digest({**document, **paths})}}
+    if robot_config is None:
+        _PROFILE_CACHE[key] = out
+    return out
 
 
 def bind_pipeline(config: dict, profile_path=None) -> dict:
