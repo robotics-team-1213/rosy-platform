@@ -4829,3 +4829,9 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 시험(원격 rosy, 88f207b22f+): test_site_db_maintenance.py·test_site_ledger_backup_deploy.py·test_site_account_backup.py 58 passed, known_failures NEW 0(2026-11-10).
 - 증거: R fleet.sqlite3 관측(2026-11-10, `Rosy/docs/workspace-records/2026-11-10/fleet-hub-comm-check.md`) — fleet_api_audit 346,685행·sighting_audit 160,892행·파일 665MB, 기존 prune_ledger는 두 표를 덮지 않음.
 - gate 변화: 없음.
+
+## 2026-11-10 · uncommitted · feat(omx): 실물 팔 지터링 완화 및 청크 블렌딩 파이프라인 구축
+- 변경: (1) `omx-ai-follower-tuning.json`의 몸통 5관절(`11`–`15`)에 하드웨어 램프 프로파일 `acc=8, vel=20`을 복원해 저속 구간 틱 양자화(`int(v)`)로 인한 계단식 스냅(`sent_stall` 89%, `pres_rev` 47회)을 서보 온칩 S-curve로 평활화한다. (2) `guarded_native._check_effort`가 실물 `DynamixelMotorsBus`에서 5회 개별 `read` 대신 단일 패킷 `sync_read("Present_PWM", ...)`를 사용해 5Hz 버스 지연 스파이크(`p95_dt` 55ms -> 35ms)를 제거한다. (3) `grasp_planner.stream`과 `chunk_runner`(`chain <step1> ; <step2>`)가 `chain_path`/`blend_chunks`로 정점 정지 없이 구간을 이어 흐르게 하고, 부하 정적 처짐(`2.05–2.20` units)에서 몸통 정지(`body_still < 0.08`) 시 `SETTLE_S`(2.5s) 타임아웃 대기를 즉시 통과시킨다. `FifoCell.act` 폴링 주기를 100ms에서 20ms로 줄였다.
+- 증거: `robttt` 실물 텔레메트리(`trace-arm_b-20261110-200027.jsonl`, `session.jsonl`) 정량 분석 및 원격 pytest 검증.
+- gate 변화: 없음(가드 한계 5°/10°/s 및 토크 OFF 불변).
+- CE: 새 교훈 기록 — `docs/solutions/runtime-errors/omx-real-arm-jitter-tick-quantization-and-chunk-stops-2026-11-10.md`.

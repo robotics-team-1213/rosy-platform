@@ -46,6 +46,7 @@ from omx_adapter.chunk_library import (  # noqa: E402
     RISE_SPEED as RISE_SPEED,
     SCHEMA as SCHEMA,
     TRANSIT as TRANSIT,
+    chain_path as chain_path,
     load_library,
     park_path,
     too_fast as too_fast,
@@ -109,7 +110,7 @@ class Runner:
         self.queue: list = []
         self.chunk = None
         self.settle_since = None
-        self.far_since, self.last_grip = None, None
+        self.far_since, self.last_grip, self.last_body = None, None, None
         self.pending: list = []
         self.ticks, self.health, self.overload_since, self.fault = 0, None, None, None
         self.played, self.retreat_frames, self.jog_path, self.contact_ticks, self.contact_start = [], [], [], 0, None
@@ -129,7 +130,8 @@ class Runner:
 
     def present(self) -> list:
         observation = self.robot.get_observation()
-        return [float(observation[name]) for name in NAMES]
+        self.last_present = [float(observation[name]) for name in NAMES]
+        return self.last_present
 
     def report(self, **fields) -> None:
         self.status(dict(fields, state=[round(v, 2) for v in self.present()],
@@ -236,6 +238,45 @@ class Runner:
                 self.queue = park_path(self.target, home[-1], self.library["gripper_closed"], self.fps, transit,
                                        self.library.get("transit_speed", 0.85))
                 self.chunk, self.settle_since, self.played = "park", None, []
+                return True
+            elif verb == "chain" and len(words) >= 2:
+                parts = [part.strip().split() for part in " ".join(words[1:]).split(";") if part.strip()]
+                if not parts:
+                    raise ValueError("chain requires at least one step")
+                cursor, segments, release = list(self.target), [], False
+                transit = {NAMES.index(k): float(v) for k, v in self.library.get("transit", {}).items()} or None
+                speed = self.library.get("transit_speed", 0.85)
+                closed = self.library["gripper_closed"]
+                for step in parts:
+                    if step[0] == "run" and len(step) == 2:
+                        frames = self.library["chunks"].get(step[1])
+                        if frames is None:
+                            raise ValueError(f"unknown chunk {step[1]}")
+                        gap = max(abs(a - b) for a, b in zip(frames[0][:5], cursor[:5]))
+                        if gap > JOG_MAX * 2:
+                            raise ValueError(f"chunk {step[1]} starts {gap:.1f} away from the held target")
+                        seg = [list(f) for f in frames]
+                        if step[1].startswith("release"):
+                            release = True
+                    elif step[0] == "goto" and len(step) == 2:
+                        frames = self.library["chunks"].get(step[1])
+                        if frames is None:
+                            raise ValueError(f"unknown chunk {step[1]}")
+                        seg = transit_path(cursor, frames[0], closed, self.fps, transit, speed)
+                    elif step == ["park"]:
+                        home = self.library["chunks"].get("home")
+                        if not home:
+                            raise ValueError("park needs a home chunk in the library")
+                        seg = park_path(cursor, home[-1], closed, self.fps, transit, speed)
+                    else:
+                        raise ValueError(f"chain step {step!r} must be 'run <chunk>', 'goto <chunk>' or 'park'")
+                    segments.append(seg)
+                    cursor = list(seg[-1])
+                if release:
+                    self.holding = False
+                self.queue = chain_path(segments, self.fps)
+                self.chunk = " ; ".join(" ".join(s) for s in parts)
+                self.settle_since, self.played, self.contact_ticks, self.contact_start = None, [], 0, None
                 return True
             elif verb == "grip" and len(words) == 2:
                 # never below the taught closed value: past the jaws' stop the gripper only pushes at its PWM
@@ -393,14 +434,19 @@ class Runner:
             grasp = self.chunk.startswith("grasp")
             gripper_still = self.last_grip is not None and abs(present[5] - self.last_grip) < 0.3
             self.last_grip = present[5]
-            if (error <= SETTLE_TOL and (gripper_still or not grasp)) or now - self.settle_since >= SETTLE_S:
-                fields = dict(command=f"run {self.chunk}", ok=True, settled=error <= SETTLE_TOL,
+            body_still = (self.last_body is not None
+                          and max(abs(a - b) for a, b in zip(present[:5], self.last_body)) < 0.08
+                          and error <= SETTLE_TOL + min(self.pace_floor, 0.8))
+            self.last_body = list(present[:5])
+            settled = error <= SETTLE_TOL or body_still
+            if (settled and (gripper_still or not grasp)) or now - self.settle_since >= SETTLE_S:
+                fields = dict(command=f"run {self.chunk}", ok=True, settled=settled,
                               paced_ticks=self.paced_ticks, peak_lag=round(self.peak_lag, 2), over_ticks=self.over_ticks)
                 self.paced_ticks, self.pace_floor, self.peak_lag, self.over_ticks = 0, 0.0, 0.0, 0
-                if self.chunk == "park" and error <= SETTLE_TOL:  # torque goes OFF from here: only when really home
+                if (self.chunk == "park" or self.chunk.endswith("; park")) and settled:  # torque goes OFF from here: only when really home
                     self.home_since = now
-                backed_out = self.chunk == "retreat" and error <= SETTLE_TOL
-                if (self.chunk == "park" or backed_out) and (self.fault or "").startswith("contact"):
+                backed_out = self.chunk == "retreat" and settled
+                if (self.chunk == "park" or self.chunk.endswith("; park") or backed_out) and (self.fault or "").startswith("contact"):
                     # folded home, or back where the held chunk began: the next attempt may start. A touch grid
                     # otherwise parks between every point (2026-10-27).
                     self.fault = None
@@ -419,7 +465,7 @@ class Runner:
                 elif self.holding and self.chunk in ("lift_pick", "park", "goto above_place", "descend_place"):
                     self.holding = present[5] > self.target[5] + EMPTY_MARGIN
                     fields["holding"] = self.holding
-                self.chunk, self.last_grip = None, None
+                self.chunk, self.last_grip, self.last_body = None, None, None
                 self.report(**fields)
 
     def idle(self) -> bool:
@@ -474,7 +520,7 @@ class Runner:
             if self.idle():
                 return
             if self.live and self.ticks % max(1, self.fps // 2) == 0:
-                self.live({"t": round(time.time(), 3), "state": [round(v, 2) for v in self.present()],
+                self.live({"t": round(time.time(), 3), "state": [round(v, 2) for v in (getattr(self, "last_present", None) or self.present())],
                            "target": [round(v, 2) for v in self.target], "chunk": self.chunk,
                            "lag": round(self.lag, 2),
                            "fault": self.fault, "health": self.health})

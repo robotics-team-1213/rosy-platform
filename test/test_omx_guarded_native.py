@@ -1125,3 +1125,26 @@ def test_teacher_recording_refuses_a_leader_teleop_and_a_non_recording(guard):
     with pytest.raises(ValueError, match="recording"):
         guard.run_native(SimpleNamespace(), Follower, Leader, teacher=True)
     assert calls == []
+
+
+def test_effort_check_uses_sync_read_on_dynamixel_bus_to_avoid_5hz_unicast_stall(guard):
+    follower, clock = Bus(), [10.0]
+    follower.model_ctrl_table = {}
+    pwm_sync_calls = []
+    original_sync = follower.sync_read
+
+    def sync_read(register, motors=None, *, normalize=True, num_retry=0):
+        if register in ("Present_PWM", "Hardware_Error_Status"):
+            pwm_sync_calls.append((register, tuple(motors), normalize, num_retry))
+            return {n: 0 for n in motors}
+        return original_sync(register, motors=motors, normalize=normalize, num_retry=num_retry)
+
+    follower.sync_read = sync_read
+    motion = guard.NativeJointMotion(follower, None, teacher=True, clock=lambda: clock[0])
+    here = {n + ".pos": v for n, v in follower.norm(follower.raw).items()}
+    motion.send(here)
+    clock[0] += 0.25
+    motion.send(here)
+    assert ("Hardware_Error_Status", guard.NAMES, False, guard.READ_RETRY) in pwm_sync_calls
+    assert ("Present_PWM", guard.BODY, False, guard.READ_RETRY) in pwm_sync_calls
+    assert not any(e[:2] == ("read", "Present_PWM") for e in follower.events)

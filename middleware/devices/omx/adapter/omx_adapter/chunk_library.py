@@ -5,7 +5,7 @@ import json
 import math
 from pathlib import Path
 
-from .motion_profile import flow
+from .motion_profile import blend_chunks, flow
 
 # The guard streams at most 10 deg/s; 5 native units/s keeps every joint under 9 deg/s.
 GUARD_UNITS_PER_S = 5.0
@@ -33,7 +33,7 @@ def transit_path(start: list, goal: list, grip_transit: float, fps: int, transit
     turn pan/roll to the goal there, descend into the goal body pose, then set the goal's jaws.
     `transit` maps joint indexes to values (a cell profile's transit); default TRANSIT (arm S).
     `speed` is the fraction of the guard speed (a plan's transit_speed)."""
-    if max(abs(a - b) for a, b in zip(start[:5], goal[:5])) <= 8.0:
+    if start[1] >= -35.0 and goal[1] >= -35.0 and max(abs(a - b) for a, b in zip(start[:5], goal[:5])) <= 16.0:
         return flow([list(start), list(goal[:6])], fps, speed * PARK_SPEED, blend=[False, False], blend_s=0.2,
                     rise_speed=RISE_SPEED)
     transit = TRANSIT if transit is None else transit
@@ -48,6 +48,16 @@ def transit_path(start: list, goal: list, grip_transit: float, fps: int, transit
     # are reached at rest. The overlap is capped at 0.6 s: the rise has about 0.4 units left when the turn begins.
     return flow(waypoints, fps, speed * PARK_SPEED, blend=[False, False, True, True, False, False], blend_s=0.6,
                 rise_speed=RISE_SPEED)
+
+
+def chain_path(steps: list[list], fps: int, blend_s: float = 0.25) -> list:
+    """Blend a list of non-empty frame sequences so consecutive body chunks flow without dead stops."""
+    out: list = []
+    for frames in steps:
+        if not frames:
+            continue
+        out = blend_chunks(out, frames, fps, blend_s=blend_s, vmax=GUARD_UNITS_PER_S) if out else [list(f) for f in frames]
+    return out
 
 
 def park_path(start: list, home: list, closed: float, fps: int, transit: dict | None = None,

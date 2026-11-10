@@ -512,6 +512,34 @@ def test_a_steady_droop_is_not_waited_out_frame_by_frame():
     done = by_command(status, "run approach_pinky")[0]
     assert done["ok"] and done["paced_ticks"] <= 3  # one look at a lag that does not shrink, then on
     assert clock[0] < 100 / 30 + m.SETTLE_S + 1  # 2026-10-28: one frame per 3 s took a park past 300 s
+    # Even when steady droop under a held box is 2.15 units (> SETTLE_TOL 2.0), once the body is still it settles immediately
+    status2, clock2, queue2 = [], [0.0], ["run approach_pinky", "stop"]
+    r2 = m.Runner(DroopingWrist(droop=2.15), lift, fps=30, status=status2.append, clock=lambda: clock2[0],
+                  sleep=lambda s: clock2.__setitem__(0, clock2[0] + 1 / 30))
+    r2.run(lambda: [queue2.pop(0)] if queue2 and not r2.chunk else [])
+    done2 = by_command(status2, "run approach_pinky")[0]
+    assert done2["ok"] and done2["settled"] and clock2[0] < 100 / 30 + 0.5
+
+
+def test_chain_streams_consecutive_chunks_without_inter_chunk_stop():
+    lib = library()
+    lib["chunks"]["home"] = [HOME]
+    lib["chunks"]["above_place"] = [[-3.0, -16.0, 9.0, 48.0, 5.0, 46.6]]
+    lib["chunks"]["descend_place"] = [[-3.0, -16.0 + 0.2 * k, 9.0 + 0.2 * k, 48.0, 5.0, 46.6] for k in range(1, 16)]
+    robot = Robot()
+    status = run_with(robot, lib, ["chain goto above_place ; run descend_place ; park", "stop"])
+    done = by_command(status, "run goto above_place ; run descend_place ; park")[0]
+    assert done["ok"] and done["settled"] and done["state"][:5] == pytest.approx(HOME[:5])
+
+
+def test_local_hover_reapproach_up_to_16_units_flows_directly_without_climbing_to_transit():
+    # 2026-11-10: a 12-24 mm feel/reach shift at hover changed elbow_flex by 9.6-13.5 units (> 8.0) and folded to TRANSIT (-27)
+    hover_a = [-32.5, -2.5, -3.5, 45.2, 54.4, 56.58]
+    hover_b = [-39.2, 5.2, -13.1, 47.0, 47.8, 56.58]  # max body delta = 9.6 units
+    path = m.transit_path(hover_a, hover_b, 48.8, fps=30)
+    assert min(f[1] for f in path) >= -3.0  # stays at hover height instead of climbing to TRANSIT (-27.0)
+    assert min(f[5] for f in path) >= 56.5  # jaws stay open instead of closing to 48.8 and reopening
+    assert len(path) <= 120  # ~3.6 seconds direct flow, not 25 seconds (760 frames) via TRANSIT
 
 
 def test_the_library_contract_is_enforced(tmp_path):

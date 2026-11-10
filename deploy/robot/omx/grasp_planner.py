@@ -259,16 +259,18 @@ class Planner:
         """What chunk_runner plays for one leg from ``home``, as the teacher's four phases: its goto travel (jaws at
         the library's gripper_closed, its transit and transit_speed) and the chunks. The recorded cycle, the keep-out
         check, the native SIM teacher and Isaac all replay this, so no simulation runs another motion than the cell."""
-        from chunk_runner import transit_path
+        from omx_adapter.chunk_library import chain_path, transit_path
 
         c = library["chunks"]
         transit = {NAMES.index(k): float(v) for k, v in library.get("transit", {}).items()} or None
         travel = lambda start, goal: transit_path(start, goal, library["gripper_closed"], self.fps,  # noqa: E731
                                                   transit, library.get("transit_speed", 0.85))
-        return [("approach", travel(home, c["above_pick"][0]) + c["descend_pick"]),
+        return [("approach", chain_path([travel(home, c["above_pick"][0]), c["descend_pick"]], self.fps)),
                 ("grasp", c["grasp_pick"]),
-                ("transfer", c["lift_pick"] + travel(c["lift_pick"][-1], c["above_place"][0]) + c["descend_place"]),
-                ("release", c["release_place"] + c["lift_place"] + travel(c["lift_place"][-1], home))]
+                ("transfer", chain_path([c["lift_pick"], travel(c["lift_pick"][-1], c["above_place"][0]),
+                                         c["descend_place"]], self.fps)),
+                ("release", c["release_place"] + chain_path([c["lift_place"],
+                                                             travel(c["lift_place"][-1], home)], self.fps))]
 
     def pulled_in_transits(self, taught: dict) -> list[dict]:
         """Tool-down transits 1 cm apart from the taught one's reach toward the base, the TCP no lower than the

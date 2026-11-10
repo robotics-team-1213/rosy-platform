@@ -66,8 +66,9 @@ def smooth(waypoints: list, fps: int, vmax: float, amax: float = GUARD_ACCEL_UNI
 
 
 def retime(frames: list, fps: int, vmax: float, amax: float = GUARD_ACCEL_UNITS_S2, start=None) -> list:
-    """The same path (a planner's IK frames along a vertical line) at a trapezoid speed: it eases out of
-    rest and into rest instead of starting and stopping at full speed. `start` is the pose before frames[0]."""
+    """The same path (a planner's IK frames along a vertical line) at an eased speed: it eases out of
+    rest and into rest along a half cosine instead of starting and stopping with an acceleration step.
+    `start` is the pose before frames[0]."""
     path = [list(start)] + [list(f) for f in frames] if start is not None else [list(f) for f in frames]
     if len(path) < 2:
         return [list(f) for f in frames]
@@ -80,7 +81,7 @@ def retime(frames: list, fps: int, vmax: float, amax: float = GUARD_ACCEL_UNITS_
     duration, ramp = trapezoid(total, vmax, amax)
     out, i = [], 0
     for k in range(1, max(1, math.ceil(duration * fps)) + 1):
-        target = total * progress(min(k / fps, duration), duration, ramp)
+        target = total * eased_progress(min(k / fps, duration), duration, ramp)
         while i < len(lengths) - 2 and lengths[i + 1] < target:
             i += 1
         span = lengths[i + 1] - lengths[i]
@@ -88,6 +89,25 @@ def retime(frames: list, fps: int, vmax: float, amax: float = GUARD_ACCEL_UNITS_
         out.append([p + (q - p) * w for p, q in zip(path[i], path[i + 1])])
     out[-1] = list(path[-1])
     return out
+
+
+def blend_chunks(a: list, b: list, fps: int, blend_s: float = 0.25, vmax: float = 5.0) -> list:
+    """Overlap the decelerating tail of chunk `a` with the accelerating head of chunk `b` around `a[-1]`
+    so consecutive body chunks flow through their shared waypoint without coming to a dead stop."""
+    if not a or not b:
+        return [list(f) for f in (a or b)]
+    corner = a[-1]
+    if any(abs(x - y) > vmax / fps + 1e-3 for x, y in zip(corner[:5], b[0][:5])):
+        return [list(f) for f in a] + [list(f) for f in b]
+    limit = vmax / fps + 1e-3
+    max_m = min(round(blend_s * fps), len(a) // 2, len(b) // 2)
+    for m in range(max_m, 0, -1):
+        middle = [[av + (bv - cv) for av, bv, cv in zip(af, bf, corner)] for af, bf in zip(a[-m:], b[:m])]
+        candidate = [list(f) for f in a[:-m]] + middle + [list(f) for f in b[m:]]
+        if all(abs(x - y) <= limit for p, q in zip(candidate, candidate[1:]) for x, y in zip(p, q)):
+            candidate[-1] = list(b[-1])
+            return candidate
+    return [list(f) for f in a] + [list(f) for f in b]
 
 
 def eased(distance: float, vmax: float, amax: float) -> tuple[float, float]:

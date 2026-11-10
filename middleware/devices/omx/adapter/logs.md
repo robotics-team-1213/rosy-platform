@@ -871,3 +871,10 @@
 - 변경: `omx_adapter.coordination`(조정 다이어그램, barrier용 만남 지점)을 더했다.
 - 증거: `test/test_omx_coordination.py` 원격 통과, 저장된 라이브러리로 오프라인 계산.
 - gate 변화: 없음. 실물·시뮬레이션 동시 동작 수용이 아니다.
+
+## 2026-11-10 · uncommitted · feat(omx): C2 코사인 리타이밍, 청크 경계 블렌딩 및 호버 직행 경로 개선
+
+- 변경: `motion_profile.retime`을 사다리꼴(`trapezoid`) 대신 C2 반코사인(`eased`/`eased_progress`)으로 전환해 하강·상승 시작/끝의 가속도 계단(jerk 110 units/s³)을 없앴다. 인접 청크의 감속 꼬리와 가속 머리를 겹쳐 속도 0 정지 없이 잇는 `blend_chunks`와 `chunk_library.chain_path`를 추가하고, 호버 높이(`shoulder_lift >= -35.0`) 내 근거리 이동(`<= 16.0` units)은 `TRANSIT` 접기 상승 없이 직행하도록 완화했다.
+- 증거: 원격 pytest(`test_omx_motion_profile.py`, `test_chunk_library.py`, `test_omx_chunk_runner.py`, `test_omx_grasp_planner.py`) 통과.
+- gate 변화: 없음.
+- CE: 새 교훈 기록 — `docs/solutions/runtime-errors/omx-real-arm-jitter-tick-quantization-and-chunk-stops-2026-11-10.md`.

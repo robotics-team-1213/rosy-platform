@@ -67,3 +67,19 @@ def test_retime_keeps_the_planned_path_and_eases_in_and_out():
     for f in frames:  # every frame lies on the planned polyline (here a straight joint line)
         k = (f[1] + 30) / 0.4
         assert f[2] == pytest.approx(20 - k * 0.3, abs=1e-6) and f[3] == pytest.approx(46 + k * 0.1, abs=1e-6)
+    acc = [[(b - a) * FPS for a, b in zip(p, q)] for p, q in zip(v, v[1:])]
+    jerk = max(max(abs(b - a) * FPS for a, b in zip(p[:5], q[:5])) for p, q in zip(acc, acc[1:]))
+    assert jerk < 30  # half-cosine acceleration: no 110+ units/s^3 trapezoid jerk kick
+
+
+def test_blend_chunks_eliminates_dead_stop_between_consecutive_chunks_within_guard_speed():
+    first = m.retime([[0, -30 + k * 0.4, 20 - k * 0.3, 46, 10, 46.6] for k in range(1, 26)],
+                     FPS, VMAX, start=[0, -30, 20, 46, 10, 46.6])
+    second = m.retime([[0, -20 + k * 0.4, 12.5 - k * 0.3, 46, 10, 46.6] for k in range(1, 26)],
+                      FPS, VMAX, start=first[-1])
+    blended = m.blend_chunks(first, second, FPS, blend_s=0.25, vmax=5.0)
+    assert len(blended) < len(first) + len(second) and blended[-1] == second[-1]
+    v = speeds(blended, [0, -30, 20, 46, 10, 46.6])
+    assert max(abs(x) for row in v for x in row) <= 5.0 + 1e-6
+    stopped_mid = [i for i, row in enumerate(v[5:-5]) if max(abs(x) for x in row[:5]) < 0.05]
+    assert not stopped_mid

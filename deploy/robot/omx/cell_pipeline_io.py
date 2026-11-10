@@ -84,7 +84,7 @@ class FifoCell:
                     row = json.loads(line)
                     if row.get("command") in (expected, "run " + expected) or row.get("fault"):
                         return row
-            time.sleep(0.1)
+            time.sleep(0.02)
         return {"ok": False, "error": f"no status within {self.timeout_s} s"}
 
     def frame(self, camera: str):

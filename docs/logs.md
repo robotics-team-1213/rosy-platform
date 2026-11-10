@@ -14727,3 +14727,9 @@ osy-d395-s1d\`.
 - 이유: 2026-11-10 독립 검토 지적의 결정 근거를 ADR 본문에 남기기 위해서(D-1010은 이 브랜치의 미착지 ADR이라 제자리 갱신).
 - 증거: ADR D-1010 본문.
 - gate 변화: 없음(SOURCE만).
+
+## 2026-11-10 · uncommitted · docs(solutions): OMX 실물 팔 지터링 및 청크 정지 원인·해결 교훈 기록
+- 변경: `docs/solutions/runtime-errors/omx-real-arm-jitter-tick-quantization-and-chunk-stops-2026-11-10.md` 추가.
+- 증거: `trace-arm_b-20261110-200027.jsonl` 및 `session.jsonl` 실측치와 원격 pytest 회귀 시험.
+- gate 변화: 없음.
+- CE: 새 교훈 기록.

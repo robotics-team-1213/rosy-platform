@@ -231,9 +231,7 @@ class NativeJointMotion:
                 raise ValueError(f"{name}: target outside follower calibrated range")
         if not self.body_only and abs(target["gripper"] - current["gripper"]) >= 100 * TICKS_PER_DEGREE - 1e-9:
             raise ValueError("gripper motor travel >=100 degrees; align manually with torque OFF")
-        for name in NAMES:
-            if self.follower.read("Hardware_Error_Status", name):
-                raise ValueError(f"{name}: hardware error")
+        self._check_hardware_errors()
         if self.pwm_limits is None:
             limits = {}
             for name in BODY:
@@ -269,11 +267,27 @@ class NativeJointMotion:
                    for n in self.active}
         return {"started": started, "command": command, "time": now}
 
+    def _check_hardware_errors(self):
+        if "read" not in vars(self.follower) and hasattr(self.follower, "model_ctrl_table"):
+            errors = self.follower.sync_read("Hardware_Error_Status", list(NAMES), normalize=False, num_retry=READ_RETRY)
+            for name in NAMES:
+                if errors[name]:
+                    raise ValueError(f"{name}: hardware error")
+            return
+        for name in NAMES:
+            if self.follower.read("Hardware_Error_Status", name):
+                raise ValueError(f"{name}: hardware error")
+
+    def _read_body_pwm(self):
+        if "read" not in vars(self.follower) and hasattr(self.follower, "model_ctrl_table"):
+            return self.follower.sync_read("Present_PWM", list(BODY), normalize=False, num_retry=READ_RETRY)
+        return {name: self.follower.read("Present_PWM", name) for name in BODY}
+
     def _check_effort(self, current, started):
         before = self.clock()
         if self.last_effort_time is not None and before - self.last_effort_time < 0.2 - 1e-9:
             return
-        pwm = {name: self.follower.read("Present_PWM", name) for name in BODY}
+        pwm = self._read_body_pwm()
         finite_values(pwm, BODY)
         if self.monitor is not None:
             self.monitor.sample(self, current, pwm, self.clock())
