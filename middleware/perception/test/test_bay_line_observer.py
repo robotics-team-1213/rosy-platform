@@ -59,11 +59,16 @@ def render(offset_m, heading_rad, south_of_camera_m, *, carpet=105, tape_dim=1.0
     return frame
 
 
+def heading_error(yaw, want):
+    """|yaw - want| wrapped to (-pi, pi]: -pi and +pi are the same heading."""
+    return abs(math.atan2(math.sin(yaw - want), math.cos(yaw - want)))
+
+
 def test_a_centred_visible_line_reads_the_virtual_dock():
     payload = observer().observe(render(0.0, math.pi, 0.30), stamp=10.0)
     assert payload["visible"] is True
     assert payload["source"] == "CAMERA_LINE" and payload["tag_id"] is None
-    assert payload["yaw"] == pytest.approx(math.pi, abs=math.radians(1.5))
+    assert heading_error(payload["yaw"], math.pi) <= math.radians(1.5)
     assert payload["y"] == pytest.approx(0.0, abs=0.005)
     # x = line_total - camera->south end - camera offset ahead of base_link.
     assert payload["x"] == pytest.approx(LINE_TOTAL_M - 0.30 - MOUNT.x_offset_m,
@@ -76,8 +81,7 @@ def test_a_lateral_offset_and_heading_read_through():
                                  stamp=10.0)
     assert payload["visible"] is True
     assert payload["y"] == pytest.approx(0.03, abs=0.008)
-    assert payload["yaw"] == pytest.approx(math.pi + math.radians(5.0),
-                                           abs=math.radians(1.5))
+    assert heading_error(payload["yaw"], math.pi + math.radians(5.0)) <= math.radians(1.5)
 
 
 @pytest.mark.parametrize("south_m", [0.55, 0.70])
@@ -86,7 +90,7 @@ def test_beyond_the_far_field_the_along_degrades_but_steering_stays(south_m):
     assert payload["visible"] is True
     assert payload["along_measured"] is False
     assert payload["y"] == pytest.approx(0.0, abs=0.008)
-    assert payload["yaw"] == pytest.approx(math.pi, abs=math.radians(1.5))
+    assert heading_error(payload["yaw"], math.pi) <= math.radians(1.5)
 
 
 def test_no_tape_and_a_speck_fail_closed():
@@ -103,7 +107,7 @@ def test_shadowed_tape_is_still_the_line():
     # a brightness threshold would lose it (the D-1013 reason for a colour source).
     payload = observer().observe(render(0.0, math.pi, 0.30, tape_dim=0.5), stamp=10.0)
     assert payload["visible"] is True
-    assert payload["yaw"] == pytest.approx(math.pi, abs=math.radians(1.5))
+    assert heading_error(payload["yaw"], math.pi) <= math.radians(1.5)
 
 
 def test_bad_geometry_is_refused_not_guessed():
