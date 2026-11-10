@@ -554,18 +554,18 @@ def execute_directive(
         )
 
         slipped_in_transfer = False
-        for chunk_cmd in ("run lift_pick", "park", "goto above_place", "run descend_place", "run release_place", "run lift_place", "park"):
+        for chunk_cmd in ("run lift_pick", "goto above_place", "run descend_place", "run release_place", "run lift_place", "park"):
             r_step = _run_cmd(chunk_cmd)
-            if chunk_cmd in ("run lift_pick", "park") and chunk_cmd != "park":
-                # Check if container slipped out during lift_pick
+            if chunk_cmd in ("run lift_pick", "goto above_place"):
+                # Check if container slipped out during lift_pick or transit to above_place
                 if not cell_arm_cal.infer_holding(r_step, closed=float(cal.get("grip_closed", 48.8)), min_units_above_closed=2.5, min_current_ma=40.0):
                     slipped_in_transfer = True
                     _run_cmd("park")
                     break
             if not r_step.get("ok"):
-                if chunk_cmd in ("run lift_place", "park"):
+                if chunk_cmd != "park":
                     _run_cmd("park")
-                else:
+                if chunk_cmd not in ("run lift_place", "park"):
                     out_err = {
                         "directive_id": cur_directive.get("directive_id"),
                         "result": "contact",
