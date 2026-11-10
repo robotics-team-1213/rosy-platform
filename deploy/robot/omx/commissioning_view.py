@@ -226,7 +226,7 @@ async function refresh() {
     document.getElementById("connection").textContent = "연결 끊김";
     for (const key of cameras) document.getElementById(key).hidden = true;
     for (const key of jointKeys) jointElement(key).textContent = "최신 피드백 없음";
-  } finally { setTimeout(refresh, 500); }
+  } finally { setTimeout(refresh, 120); }
 }
 for (const key of cameras) document.getElementById(key).onerror = () => {
   document.getElementById(key).hidden = true;
@@ -308,6 +308,36 @@ def make_server(store, *, port=8766):
             elif path in {f"/frame/{label}.jpg" for label in store.cameras}:
                 body = store.image(path.split("/")[2].split(".")[0])
                 self.reply(200 if body else 503, body or b"no fresh frame", "image/jpeg" if body else "text/plain")
+            elif path in {f"/stream/{label}.mjpg" for label in store.cameras}:
+                label = path.split("/")[2].split(".")[0]
+                body = store.image(label)
+                if not body:
+                    self.reply(503, b"no fresh frame", "text/plain")
+                    return
+                self.send_response(200)
+                self.send_header("Content-Type", "multipart/x-mixed-replace; boundary=frame")
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("X-Content-Type-Options", "nosniff")
+                self.end_headers()
+                last_seq = None
+                while True:
+                    snap = store.snapshot()
+                    cam = snap["cameras"].get(label, {})
+                    frame = store.image(label)
+                    if not frame or not cam.get("fresh"):
+                        break
+                    if cam.get("sequence") != last_seq:
+                        last_seq = cam.get("sequence")
+                        part = (b"--frame\r\nContent-Type: image/jpeg\r\nContent-Length: "
+                                + str(len(frame)).encode() + b"\r\n\r\n" + frame + b"\r\n")
+                        try:
+                            self.wfile.write(part)
+                            self.wfile.flush()
+                        except OSError:
+                            break
+                    if self.headers.get("X-Max-Frames") == "1":
+                        break
+                    time.sleep(0.05)
             else:
                 self.reply(404)
 
@@ -358,7 +388,7 @@ def main():
     try:
         while True:
             consume_native(store)
-            time.sleep(.05)
+            time.sleep(.025)
     except KeyboardInterrupt:
         pass
     finally:

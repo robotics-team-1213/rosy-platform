@@ -40,7 +40,13 @@ def transit_path(start: list, goal: list, grip_transit: float, fps: int, transit
     waypoints = [list(start)]
     waypoints.append(waypoints[-1][:5] + [grip_transit])
     waypoints.append([transit.get(i, v) for i, v in enumerate(waypoints[-1])])
-    waypoints.append([goal[i] if i in (0, 4) else v for i, v in enumerate(waypoints[-1])])
+    turn = [goal[i] if i in (0, 4) else v for i, v in enumerate(waypoints[-1])]
+    if goal[1] <= waypoints[-1][1] and max(abs(turn[i] - waypoints[-1][i]) for i in (0, 4)) <= 8.0:
+        waypoints.append(list(goal[:5]) + [grip_transit])
+        waypoints.append(list(goal[:6]))
+        return flow(waypoints, fps, speed * PARK_SPEED, blend=[False, False, True, False, False], blend_s=0.6,
+                    rise_speed=RISE_SPEED)
+    waypoints.append(turn)
     waypoints.append(list(goal[:5]) + [grip_transit])
     waypoints.append(list(goal[:6]))
     # One flowing move, eased in and out (no jerk step), the lift rising no faster than RISE_SPEED: the turn

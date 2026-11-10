@@ -358,3 +358,26 @@ def test_each_wrist_camera_is_reported_by_its_own_arm_role():
     state = store.snapshot(now=10.1, wall=100.1)
     assert state["arm_b_wrist"]["fresh"] and not state["arm_a_wrist"]["fresh"]
     assert "front" not in state
+
+
+def test_mjpeg_stream_endpoint_serves_multipart_frame_and_503_when_stale():
+    store = ObservationStore()
+    server = make_server(store, port=0)
+    worker = threading.Thread(target=server.serve_forever, daemon=True)
+    worker.start()
+    base = f"http://127.0.0.1:{server.server_port}"
+    try:
+        with pytest.raises(urllib.error.HTTPError) as err:
+            urllib.request.urlopen(base + "/stream/top.mjpg")
+        assert err.value.code == 503
+        store.put("top", time.time(), b"\xff\xd8\xff\xe0test-jpeg\xff\xd9")
+        req = urllib.request.Request(base + "/stream/top.mjpg", headers={"X-Max-Frames": "1"})
+        with urllib.request.urlopen(req, timeout=2) as resp:
+            assert "multipart/x-mixed-replace" in resp.headers["Content-Type"]
+            payload = resp.read()
+            assert b"--frame\r\nContent-Type: image/jpeg" in payload and b"test-jpeg" in payload
+    finally:
+        server.shutdown()
+        server.server_close()
+        worker.join()
+

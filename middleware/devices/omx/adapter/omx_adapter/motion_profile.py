@@ -78,7 +78,7 @@ def retime(frames: list, fps: int, vmax: float, amax: float = GUARD_ACCEL_UNITS_
     total = lengths[-1]
     if total <= 0:
         return [list(path[-1])]
-    duration, ramp = trapezoid(total, vmax, amax)
+    duration, ramp = eased(total, vmax, amax)
     out, i = [], 0
     for k in range(1, max(1, math.ceil(duration * fps)) + 1):
         target = total * eased_progress(min(k / fps, duration), duration, ramp)
@@ -149,8 +149,11 @@ def flow(waypoints: list, fps: int, vmax: float, blend: list, blend_s: float,
     segments, start = [], 0.0
     for i, (a, b) in enumerate(zip(waypoints, waypoints[1:])):
         delta = [y - x for x, y in zip(a, b)]
-        # stretch the rising lift's distance so the shared profile moves it no faster than rise_speed
-        span = max(abs(d) * (vmax / rise_speed if rise_speed and j == 1 and d < 0 and vmax > rise_speed else 1.0)
+        # stretch the rising lift's distance so the shared profile moves it no faster than rise_speed;
+        # once at/above transit (a[1] <= -27) and folding the elbow into home (b[2] - a[2] >= 15), the CoM is over the base
+        eff_rise = (max(rise_speed, min(vmax, 3.5))
+                    if rise_speed and a[1] <= -27.0 and b[1] < a[1] and b[2] - a[2] >= 15.0 else rise_speed)
+        span = max(abs(d) * (vmax / eff_rise if eff_rise and j == 1 and d < 0 and vmax > eff_rise else 1.0)
                    for j, d in enumerate(delta))
         if span <= 1e-9:
             continue

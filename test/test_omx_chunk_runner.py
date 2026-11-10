@@ -1145,3 +1145,23 @@ def test_splice_command_transitions_active_chunk_in_flight_without_stopping():
     assert done["ok"] is True and done["settled"] is True
     assert done["state"][1] == pytest.approx(-58.0, abs=0.5)
 
+
+def test_retime_keeps_acceleration_within_amax_and_park_folds_through_transit_without_stopping():
+    from omx_adapter.motion_profile import retime
+
+    origin = [0.0, -20.0, 30.0, 45.0, 0.0, 46.6]
+    raw = [[0.0, -20.0 + k * 0.4, 30.0, 45.0, 0.0, 46.6] for k in range(1, 21)]
+    retimed = [origin] + retime(raw, 30, vmax=3.0, amax=m.GUARD_ACCEL_UNITS_S2, start=origin)
+    vel = [(b[1] - a[1]) * 30 for a, b in zip(retimed, retimed[1:])]
+    acc = [abs(b - a) * 30 for a, b in zip(vel, vel[1:])]
+    assert max(acc) <= m.GUARD_ACCEL_UNITS_S2 + 0.05  # true half-cosine ramp duration, not pi/2 * amax
+
+    start = [-2.1, 1.4, 15.8, 39.8, 86.2, 46.6]
+    home = [0.8, -62.2, 53.1, 51.6, 86.2, 46.6]
+    park = [start] + m.park_path(start, home, 46.6, 30)
+    lift_v = [-(b[1] - a[1]) * 30 for a, b in zip(park, park[1:])]
+    # Does not come to a dead stop at TRANSIT (-27.0) and finishes well under 28 s (<= 840 frames at 30 Hz)
+    mid_v = [v for p, v in zip(park[1:], lift_v) if -30.0 <= p[1] <= -24.0]
+    assert min(mid_v) > 0.5 and len(park) < 840
+
+

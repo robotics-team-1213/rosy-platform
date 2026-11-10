@@ -377,7 +377,7 @@ class SourceWorker:
         while not stop.is_set():
             sample = self.source.latest()
             if sample is None or sample.sequence == last:
-                stop.wait(0.05)
+                stop.wait(0.02)
                 continue
             try:
                 self.send(sample)
