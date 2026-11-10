@@ -8,7 +8,7 @@ that brings the map onto the drive. Applying it is the operator's call, to the d
 (``docs/plans/2026-11-10-map-reality-check.md``).
 
 A lane is *matched* when driven points lie on it within ``TOLERANCE_M``; the same 0.15 m is
-the D-455 ``max_jump_m`` sighting gate, so "on the lane" means the same thing here as it does
+the D-494 ``max_jump_m`` sighting gate, so "on the lane" means the same thing here as it does
 for a camera sighting. A point further than ``PAIR_GATE_M`` from any lane sample is not paired
 for the fit: a robot that drove a lane the map does not have must not drag the whole map.
 """

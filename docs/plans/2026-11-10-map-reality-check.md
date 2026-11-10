@@ -30,7 +30,7 @@ Status: Implemented (`feat/map-reality-check`) — 관제 지도 화면의 「�
 
 차로 중심선을 0.25 m 간격으로 샘플해 가장 가까운 주행 점과의 거리를 잰다.
 
-- **허용 오차 0.15 m** — D-455 sighting `max_jump_m` 과 같은 값이다. "차로 위에 있다"가
+- **허용 오차 0.15 m** — D-494 sighting `max_jump_m` 과 같은 값이다. "차로 위에 있다"가
   카메라 sighting 과 여기서 같은 뜻이 된다. 조절 손잡이를 만들지 않는다.
 - 차로 상태: 샘플의 절반 이상이 0.15 m 안 → `matched`; 0.5 m 안쪽 샘플의 중앙값이 0.15 m 초과
   → `offset`(차로는 있는데 밀렸다); 나머지 → `uncovered`(아무도 안 달린 차로).
@@ -63,7 +63,7 @@ ICP(6회, 최근접 짝 게이트 0.5 m)로 `yaw + 평행이동` 하나를 찾�
 
 | 경로 | 권한 | 하는 일 |
 |---|---|---|
-| `GET /api/fleet/site-map/reality-check?last_s=&robot_id=` | 읽기 | 활성 지도(없으면 초안)를 경로 이력과 대조해 `rosy.site_map_reality/1` 보고서를 돌려준다. 쓰기 없음 |
+| `GET /api/fleet/site-map/reality-check?last_s=&robot_id=` | 읽기 | 초안(없으면 활성 지도)을 경로 이력과 대조해 `rosy.site_map_reality/1` 보고서를 돌려준다. 쓰기 없음 |
 | `POST /api/fleet/site-map/reality-check/apply` | 이름 있는 운영자 | 초안에만 강체 변환을 적용해 새 초안 리비전을 만든다 |
 
 `apply` 본문은 `expected_revision`, `last_s`, `robot_id` 뿐이다. **변환은 브라우저가 보내지 않고
@@ -102,7 +102,7 @@ ICP(6회, 최근접 짝 게이트 0.5 m)로 `yaw + 평행이동` 하나를 찾�
 |---|---|
 | D-488 지도 초안·활성 | 변경 없음 — 보정은 초안 저장 경로(`save_draft`)만 쓴다 |
 | D-594 경로 이력 | 근거로 소비만 한다. 기록·보관 규칙 변경 없음 |
-| D-455 sighting `max_jump_m` | 같은 0.15 m 를 차로 판정 허용 오차로 재사용 |
+| D-494 sighting `max_jump_m` | 같은 0.15 m 를 차로 판정 허용 오차로 재사용 |
 | D-2 / CORE 최종 명령 | 무관 — 지도 편집은 로봇을 부르지 않는다 |
 | D-18 스키마·API 동시 | API Reference 에 두 경로를 같은 변경에서 기록 |
 | D-427/429/430 | 구조 변경 없음(새 최상위 폴더 없음). 신규 ADR 없음 — 권한·소유 변경이 없다 |
