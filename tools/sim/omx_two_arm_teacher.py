@@ -398,15 +398,16 @@ def isaac_handoff(result, layout, seed=0):
             dy = max(-.025, min(.025, round(vp["seen_xy"][1] - belt_xy[1], 4)))
             turn = max(-45., min(45., round(vp["seen_yaw_deg"], 1)))
             aim_m = round(min(.025, vp["xy_err_mm"] / 1000), 4)
+            task_name = r.get("task") or result.get("task", "two-arm")
             single_cases.append(dict(
-                id=f"mujoco-{result['task']}-{r['step']}-{r['container']}",
-                source=f"mujoco:{result['task']}:{r['step']}",
+                id=f"mujoco-{task_name}-{r['step']}-{r['container']}",
+                source=f"mujoco:{task_name}:{r['step']}",
                 sim=dict(box=[dx, dy, turn], place="belt", grasp_turn=turn, expect=None, aim=[aim_m, 0.0]),
             ))
     layers = 3 if result.get("steps", 0) > 3 else 1
     return dict(
         schema="rosy.omx-mujoco-isaac-handoff.v1",
-        task=result["task"],
+        task=result.get("task", "two-arm"),
         stage_1_mujoco=dict(
             role="geometry_vision_ik_and_collision_screening",
             completed=bool(result.get("completed")),

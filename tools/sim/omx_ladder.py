@@ -180,7 +180,7 @@ def judge_isaac_stage(suite_or_report: dict | Path, *, scenario: str = "arm-s-ce
         return dict(status="passed" if passed else "failed", claim="접촉·영상", scenario=scenario,
                     run_id=data.get("run_id"), result=judgement, artifacts=[],
                     reason=None if passed else f"Isaac 판정 실패: {judgement.get('result')}")
-    cases = data.get("cases") or []
+    cases = data.get("cases") or (data.get("stage_2_isaac") or {}).get("single_arm_cases") or []
     return dict(status="pending" if cases else "not_run", claim="접촉·영상", scenario=scenario,
                 run_id=None, result=dict(prepared_cases=[c.get("id") for c in cases]), artifacts=[],
                 reason=None if cases else "전달할 Isaac 케이스가 없습니다.")

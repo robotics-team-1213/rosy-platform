@@ -355,7 +355,10 @@ def pipeline_stages(score, layout, eval_rows, *, pick_vision=False, belt_skew=Fa
         eval=score,
         reason=verdict.get("reason"),
     )
-    handoff = teaching.isaac_handoff(dict(completed=verdict["status"] == "passed", rows=eval_rows), layout)
+    handoff = teaching.isaac_handoff(
+        dict(task="two-arm-policy", completed=verdict["status"] == "passed", steps=score["n"], steps_pass=score["passed"], rows=eval_rows),
+        layout,
+    )
     isaac_stage = dict(
         stage_order=2,
         track="learning_and_physics",

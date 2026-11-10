@@ -81,7 +81,7 @@ def test_pipeline_stages_connect_mujoco_gazebo_and_isaac_roles():
     assert stages["mujoco"]["pick_vision"] is True and stages["mujoco"]["belt_skew"] is True
     assert stages["isaac"]["status"] == "passed" and stages["isaac"]["stage_order"] == 2
     assert stages["isaac"]["role"] == "stage2_physx_contact_pad_slip_and_seating"
-    assert len(stages["isaac"]["handoff"]["cases"]) == 1
-    assert stages["isaac"]["handoff"]["cases"][0]["vision_pick"]["colour"] == "orange"
+    assert len(stages["isaac"]["handoff"]["stage_2_isaac"]["single_arm_cases"]) == 1
+    assert stages["isaac"]["handoff"]["stage_1_mujoco"]["colours_seen"] == ["orange"]
     assert stages["gazebo"]["status"] == "passed" and stages["gazebo"]["stage_order"] is None
     assert stages["gazebo"]["track"] == "ros2_execution_contract" and stages["gazebo"]["role"] == "ros2_interface_conformance"
