@@ -4835,3 +4835,23 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: `robttt` 실물 텔레메트리(`trace-arm_b-20261110-200027.jsonl`, `session.jsonl`) 정량 분석 및 원격 pytest 검증.
 - gate 변화: 없음(가드 한계 5°/10°/s 및 토크 OFF 불변).
 - CE: 새 교훈 기록 — `docs/solutions/runtime-errors/omx-real-arm-jitter-tick-quantization-and-chunk-stops-2026-11-10.md`.
+
+## 2026-11-10 · uncommitted · refactor(omx): cell_auto_pick 600줄 한도 복귀 — 순수 집기 기하를 cell_pick_geom으로 분리
+- 변경: `cell_auto_pick.py`에서 순수 함수 7개(`grasp_depth`·`surface_z`·`parse_dest`·`grasp_yaw`·`across`·`jaw_open_for`·`reachable_ends`, 63줄)를 새 모듈 `cell_pick_geom.py`로 옮기고 `cell_auto_pick`이 이름을 그대로 재수출한다(호출자·시험의 `auto.*` 접근 불변). 코드는 바이트 단위로 동일하게 옮겼고 동작 변경은 없다. `cell_auto_pick.py` 605→544줄.
+- 이유: main의 `cell_auto_pick.py`가 bc989974c3부터 605줄로 D-766 한도(600)를 넘어, 그 뒤 착지되는 모든 병합 커밋의 size-range 검사가 멈춘다(2026-11-10 feat/map-reality-check 착지 거절로 확인). omx AGENTS의 원칙("각 단계는 자기 모듈에서, cell_auto_pick은 순서만")을 따라 집기 기하를 분리했다.
+- 시험: 원격 시험으로 확인 뒤 착지(아래 행에 결과 추가).
+- 증거: 이동한 함수 7개 본문이 main과 바이트 동일함을 정규식 추출 비교로 확인(2026-11-10), `py_compile` 통과, `size_range.py main HEAD` 통과(cell_auto_pick 605→544줄).
+- gate 변화: 없음(코드 이동만, 장치·현장 수용 별도).
+
+## 2026-11-10 · uncommitted · fix(omx): 재삽입(unstable_grasp) 회복 시나리오 추가 — main MAIN-RED 복구
+- 변경: `cell_failure_scenarios.py` SCENARIOS에 "stopped: reinserted" 원인(`cell_diagnose.ATTEMPT_CAUSES`의 `unstable_grasp`, bc989974c3 추가)을 다루는 시나리오 1건. 첫 시도 reinserted → 표의 첫 동작 `observe_again` → 다음 `placed`. 기대 동작은 `cell_recovery.carry`(cause `unstable_grasp` → `options` 첫 동작)와 `World`(넷째 원소 없음 → why "unknown") 경로를 읽어 정했다.
+- 이유: `test/test_omx_cell_failure_scenarios.py::test_the_scenarios_cover_every_cause_in_the_table`이 main 78b700784b에서 실패(MAIN-RED, RECOVERY의 `unstable_grasp`을 덮는 시나리오 없음). 이 빨간불이 이후 모든 착지를 막는다(2026-11-10 두 착지 정지로 확인).
+- 시험: 원격 시험으로 확인 뒤 착지(아래 행에 결과 추가).
+- 증거: land.py MAIN-RED 판정 기록(`main-pre-pre-1.txt`, 2026-11-10), `py_compile` 통과. 로컬 실행은 cell_zones의 fcntl(Linux 전용)로 불가해 원격으로만 확인한다.
+- gate 변화: 없음.
+
+## 2026-11-11 · uncommitted · perf(omx): D-1015 궤적·통신·인식·기구학 전 구간 병목 제거 및 실시간 연동 최적화
+- 변경: (1) `motion_profile.retime` 코사인 가감속, `grasp_planner.flow`/`transit_path` TRANSIT 위 부드러운 전환, `commissioning_view.py` `HTTP/1.1` Keep-Alive·`ETag`/`304 Not Modified`·MJPEG(`/stream/<label>.mjpg`). (2) `cell_pipeline_io.py` 영구 `HTTPConnection` + `ETag` 프레임 디코드 캐시(`3.78ms -> 0.22ms`) 및 5ms FIFO 폴링, `chunk_runner.py`·`arm_status_bridge.py` 10Hz 상태 주기와 `_library_digest` 캐시(`1.59ms -> 0.00014ms`), `workcell_observation_bridge.py` HTTPS Keep-Alive + `TCP_NODELAY`. (3) `cell_wrist.py`·`cell_perception.py` 바운딩 박스 슬라이싱·센트로이드 직결, `cell_frame.py`·`cell_marks.py` `ArucoDetector` 캐시, `cell_calibration.py` 2D 행렬식 전환(NumPy 2.0 경고 108건 제거), `cell_params.py`·`cell_envelope.py`·`cell_robot_profile.py`·`cell_transfer.py` 설정 캐시, `kinematics.py` 3x3 행렬 언롤링(`Planner.library()` `226.1ms -> 63.2ms`, 3.58x 가속).
+- 증거: `robttt@100.82.51.8` 실물 벤치마크 및 원격 pytest(`ai`·`rosy`) 통과.
+- gate 변화: 없음(가드 안전 한계 5°/10°/s·토크 OFF 불변).
+- CE: 기존 교훈 갱신 — `docs/solutions/runtime-errors/omx-real-arm-jitter-tick-quantization-and-chunk-stops-2026-11-10.md`.

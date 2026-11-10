@@ -83,6 +83,7 @@
     <a class="ui-subnav-item" href="#trip-heading">경로 미리보기</a>
     <a class="ui-subnav-item" href="#run-heading">운행 확인</a>
     <a class="ui-subnav-item" href="#edit-heading">초안 편집</a>
+    <a class="ui-subnav-item" href="#reality-heading">지도-실제 대조</a>
     <a class="ui-subnav-item" href="#teach-heading">지도 가르치기</a>
   </nav></div>
   <div class="fleet-workspace">
@@ -355,6 +356,19 @@
         <label id="camera-connect-check" class="ui-check" hidden><input class="ui-field" id="camera-connect-confirm" type="checkbox">후보 장소와 실제 도로 연결을 확인했습니다</label>
         <ui-button id="merge-camera-map" kind="quiet" disabled>현재 초안에 관측 누적</ui-button>
         <ui-text>가져온 차로의 연결·통행 방향을 검토하세요. 활성 지도는 초안 활성화 전까지 바뀌지 않습니다.</ui-text>
+      </ui-section>
+      <ui-section aria-labelledby="reality-heading">
+        <ui-head><h2 class="ui-section-heading" id="reality-heading">지도-실제 대조</h2></ui-head>
+        <ui-text>로봇이 실제로 지나간 기록과 지도의 차로·구역을 비교합니다. 보정은 초안에만 쓰고 활성 지도는 바뀌지 않습니다.</ui-text>
+        <div class="form">
+          <label>살펴볼 운행 기록<select class="ui-field" id="reality-window"><option value="3600">최근 1시간</option><option value="21600" selected>최근 6시간</option><option value="86400">최근 24시간</option></select></label>
+          <label>로봇<select class="ui-field" id="reality-robot"></select></label>
+        </div>
+        <div class="actions"><ui-button id="reality-check" kind="primary" disabled>대조하기</ui-button>
+          <ui-button id="reality-apply" kind="irreversible" disabled>초안을 운행 경로에 맞추기</ui-button></div>
+        <ui-status id="reality-verdict" state="empty">아직 대조하지 않았습니다</ui-status>
+        <details><summary class="ui-disclosure-row">차로별 결과</summary><ol id="reality-lanes" class="survey-elements"></ol></details>
+        <details><summary class="ui-disclosure-row">구역별 결과</summary><ol id="reality-zones" class="survey-elements"></ol></details>
       </ui-section>
     </div>
     <ui-section aria-labelledby="teach-heading">

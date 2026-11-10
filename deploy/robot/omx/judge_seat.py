@@ -276,6 +276,17 @@ def from_config(spec):
         return spec
     if isinstance(spec, (list, tuple)):
         return cooperate([from_config(item) for item in spec if item is not None])
+    if isinstance(spec, str):
+        s = spec.strip()
+        if s.startswith(("zai:", "glm:", "openai:")):
+            prov, model = s.split(":", 1)
+            spec = {"provider": prov, "model": model}
+        elif s.startswith("ollama:"):
+            spec = {"provider": "ollama", "model": s.split(":", 1)[1]}
+        elif s.startswith("glm"):
+            spec = {"provider": "zai", "model": s}
+        else:
+            spec = {"provider": "ollama", "model": s}
     if not isinstance(spec, dict):
         raise ValueError(f"unsupported decision_model spec: {spec!r}")
     if "models" in spec or "profiles" in spec:

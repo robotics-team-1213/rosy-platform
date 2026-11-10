@@ -193,6 +193,12 @@ def _transfer(cell, library, closed, wrist, after_place, pinch, feel, sequence, 
                 return {"result": "misaligned", "at": "pinch", "pinch": seen, "steps": steps}
         if command == "run lift_place" and status.get("ok") and after_place is not None:
             after_place()  # hover over the box just placed: the wrist reference for 'centred' (cell_wrist_ref)
+        if command in ("run grasp_pick", "run lift_pick") and not status.get("holding"):
+            import cell_arm_cal
+
+            if cell_arm_cal.infer_holding(status, closed=closed if closed is not None else 48.8):
+                status["holding"] = True
+                status["holding_inferred"] = True
         if command == "run grasp_pick" and not status.get("holding") and feel is not None:
             status = feel(run)  # cell_feel: an empty grasp feels again, shifted along the closing axis
             if status.get("contact") or not status.get("ok"):
