@@ -105,8 +105,8 @@
 
 ## 최근 기록
 
+- 2026-11-10 · uncommitted · fix(fleet): D-1010 독립 검토 반영 — 증명 없는 free 목표 정지·모르는 프레임 교차 판정 배제·변조 DB 시동 생존 (D-1010)
+- 2026-11-10 · uncommitted · fix(fleet): 사이트 지도 프레임 결속 — 활성 본문 검증과 목표·자세·경로의 프레임 거절 (D-1010)
 - 2026-11-08 · uncommitted · fix: Account 가입·권한 요청 경로를 Fleet 기능표에 등록 (D-993)
 - 2026-11-08 · uncommitted · 관제 화면 파일을 다시 받지 않고 압축해 보낸다
 - 2026-11-08 · uncommitted · feat(fleet): 스테이션 복구 자동 승인, 로봇 화면 답 기록
-- 2026-11-07 · uncommitted · fix(fleet): 배터리 근거 없음·멈춤 사유 분리
-- 2026-11-07 · uncommitted · test: Account 가입·권한 요청 시험 (D-993)
