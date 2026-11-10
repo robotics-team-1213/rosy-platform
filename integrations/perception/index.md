@@ -28,5 +28,5 @@
 
 ## 최근 기록
 
-- 2026-11-11 · 005e187bbb · feat(perception): floor_pink_mask HSV paint source (D-1013)
+- 2026-11-11 · 1e35310e23 · feat(perception): floor_pink_mask HSV paint source (D-1013)
 - 2026-11-03 · uncommitted · refactor(perception): split perception_runtime out of control

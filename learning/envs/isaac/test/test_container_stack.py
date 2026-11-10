@@ -324,7 +324,11 @@ def test_every_ship_case_is_accepted_by_the_isaac_task_command_line():
             assert suffix in names or case in names, case
 
 
-@pytest.mark.parametrize('case', ['nominal-palletizing-v21-ship-surveyed-bases', 'nominal-palletizing-v21-ship-surveyed'])
+@pytest.mark.parametrize('case', [
+    'nominal-palletizing-v21-ship-surveyed-bases',
+    'nominal-palletizing-v21-ship-surveyed',
+    'nominal-palletizing-v21-ship-surveyed-skew-20261110',
+])
 def test_surveyed_bases_reach_belt_stack_and_their_own_leveling_spot(tmp_path, case):
     """Cell survey 2026-11-03: from the measured bases (24-36 mm toward the stern) arm_a no longer reaches the shared
     leveling spot past the bow (x -0.12, 0.287 m), so each arm levels on its own spot in front of it; both arms still

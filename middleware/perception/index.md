@@ -72,7 +72,7 @@
 
 ## 최근 기록
 
-- 2026-11-11 · 005e187bbb · feat(sim,perception): 261026 bay world generator and pink paint wiring (D-1013 gate b)
+- 2026-11-11 · 1e35310e23 · feat(sim,perception): 261026 bay world generator and pink paint wiring (D-1013 gate b)
 - 2026-11-07 · uncommitted · refactor(control): 노드 20개를 calibration·observers·robot_web·sensor_nodes 홀더로 순수 이동 (D-766 #109)
 - 2026-11-04 · uncommitted · test(control): 시작 보정 노드의 매개변수 검사 경로 수정
 - 2026-11-04 · uncommitted · refactor(control): calibration* 9파일을 calibration/ 홀더로 순수 이동 (D-766 #109)
