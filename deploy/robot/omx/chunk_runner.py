@@ -276,7 +276,7 @@ class Runner:
         chunk, jogging = self.chunk, bool(self.jog_path)
         self.queue, self.retreat_frames = [], (self.played or self.jog_path[:-1])[::-1]  # a jog's own target pushed
         self.target = list(present[:5]) + [self.target[5]]
-        self.fault, self.holding = reason, False
+        self.fault, self.holding = reason, bool(self.holding and present[5] > self.target[5] + EMPTY_MARGIN)
         self.chunk, self.played, self.jog_path = None, [], []
         if chunk == "park":
             self.last_input = self.clock()  # an idle fold's retry waits idle_retry_s from the hold, not from its start

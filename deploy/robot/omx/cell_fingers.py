@@ -73,11 +73,13 @@ def _white_pads(img):
 
     h, w = img.shape[:2]
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-    # 1. Wide-open v2.1 white fingers at bottom quarter (y >= 0.78*h): cool white under cell LED (H 95..138, V >= 140)
+    # 1. Wide-open v2.1 white fingers at bottom quarter (y >= 0.78*h): cool white under cell LED (H 95..138, S <= 170, V >= 135)
     bot = hsv[int(h * 0.78):]
-    cool_white = (bot[..., 0] >= 95) & (bot[..., 0] <= 138) & (bot[..., 2] >= 140)
-    left_xs = np.where(cool_white[:, :int(w * 0.35)].mean(axis=0) > 0.25)[0]
-    right_xs = np.where(cool_white[:, int(w * 0.75):].mean(axis=0) > 0.25)[0] + int(w * 0.75)
+    bot_bgr = img[int(h * 0.78):]
+    not_orange = (bot_bgr[..., 2].astype(int) - bot_bgr[..., 1].astype(int)) <= 8
+    cool_white = (bot[..., 0] >= 95) & (bot[..., 0] <= 138) & (bot[..., 1] <= 170) & (bot[..., 2] >= 135) & not_orange
+    left_xs = np.where(cool_white[:, int(w * 0.08):int(w * 0.36)].mean(axis=0) > 0.25)[0] + int(w * 0.08)
+    right_xs = np.where(cool_white[:, int(w * 0.72):int(w * 0.96)].mean(axis=0) > 0.25)[0] + int(w * 0.72)
     if len(left_xs) and len(right_xs):
         xl, xr = float(left_xs.max()), float(right_xs.min())
         yp = float(int(h * 0.88))
@@ -86,9 +88,14 @@ def _white_pads(img):
     # 2. Neutral bright white or narrow/partially open white fingers (e.g. arm_a / arm_b) in bottom third
     y0 = 2 * h // 3
     band_hsv = hsv[y0:]
+    band_bgr = img[y0:]
+    not_cyan = (band_bgr[..., 0].astype(int) - band_bgr[..., 2].astype(int)) <= 45
     mask = (
-        ((band_hsv[..., 0] >= 95) & (band_hsv[..., 0] <= 138) & (band_hsv[..., 2] >= 140))
-        | ((band_hsv[..., 2] >= 200) & (band_hsv[..., 1] <= 55))
+        (
+            ((band_hsv[..., 0] >= 95) & (band_hsv[..., 0] <= 138) & (band_hsv[..., 2] >= 140))
+            | ((band_hsv[..., 2] >= 200) & (band_hsv[..., 1] <= 55))
+        )
+        & not_cyan
     ).astype(np.uint8)
     n, labels, stats, cents = cv2.connectedComponentsWithStats(mask)
     min_bottom = int(h * 0.90) - y0
@@ -97,6 +104,7 @@ def _white_pads(img):
             i for i in range(1, n)
             if stats[i, cv2.CC_STAT_AREA] > 250
             and (stats[i, cv2.CC_STAT_TOP] + stats[i, cv2.CC_STAT_HEIGHT]) >= min_bottom
+            and (w * 0.06) <= cents[i][0] <= (w * 0.94)
         ),
         key=lambda i: -stats[i, cv2.CC_STAT_AREA],
     )[:2]
@@ -136,25 +144,34 @@ def top_face_between_fingers(img, a, b):
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
     y0, y1 = int(h * 0.18), int(h * 0.73)
     mid = hsv[y0:y1]
-    warm = (img[y0:y1, :, 2].astype(int) - img[y0:y1, :, 0].astype(int)) >= -15
+    r_ch = img[y0:y1, :, 2].astype(int)
+    g_ch = img[y0:y1, :, 1].astype(int)
+    b_ch = img[y0:y1, :, 0].astype(int)
+    warm = ((r_ch - g_ch) >= 6) | ((r_ch - b_ch) >= 12)
     top_face = (mid[..., 2] >= 132) & (mid[..., 1] <= 98) & warm
     col_ratio = top_face.mean(axis=0)
-    search = col_ratio[int(w * 0.25):int(w * 0.75)]
+    x_min = max(int(a[0]) - 25, int(w * 0.05)) if a is not None else int(w * 0.05)
+    x_max = min(int(b[0]) + 25, int(w * 0.95)) if b is not None else int(w * 0.95)
+    s0 = max(int(a[0]) + 5, int(w * 0.25)) if a is not None else int(w * 0.30)
+    s1 = min(int(b[0]) - 5, int(w * 0.75)) if b is not None else int(w * 0.70)
+    if s1 <= s0:
+        s0, s1 = int(w * 0.30), int(w * 0.70)
+    search = col_ratio[s0:s1]
     if len(search) == 0 or float(search.max()) < 0.5:
         return None
-    c0 = int(np.argmax(search) + int(w * 0.25))
-    left_seam = int(w * 0.05)
-    for x in range(c0, int(w * 0.05), -1):
+    c0 = int(np.argmax(search) + s0)
+    left_seam = x_min
+    for x in range(c0, x_min, -1):
         if col_ratio[x] < 0.45:
             left_seam = x
             break
-    right_seam = int(w * 0.95)
-    for x in range(c0, int(w * 0.95)):
+    right_seam = x_max
+    for x in range(c0, x_max):
         if col_ratio[x] < 0.45:
             right_seam = x
             break
     w_px = float(right_seam - left_seam)
-    if not (160.0 <= w_px <= 440.0):
+    if not (120.0 <= w_px <= 440.0):
         return None
     cx = 0.5 * (left_seam + right_seam)
     # Front edge of the container top face (y where V drops into the front shadow)
@@ -201,12 +218,14 @@ def finger_offset_mm(img, hsv, gap_mm: float, params=None, color: str | int | No
         return {"found": False, "why": "finger pads not seen"}
     a, b, gap_px = pads
     target = on_surface_blob(img, hsv, params)
-    if target is None or target[2] > 55000:
+    if target is None or target[2] > 55000 or not (float(a[0]) <= target[0] <= float(b[0])):
         face = top_face_between_fingers(img, a, b)
         if face is not None:
             cx, y_front, w_px = face
             s_face = 30.0 / max(w_px, 1.0)
-            along_mm = round(float(cx - 0.5 * (a[0] + b[0])) * s_face, 1)
+            parallax_px = float(params.get("wrist.parallax_px", 0.0)) if isinstance(params, dict) else 0.0
+            ref_x = 0.5 * (a[0] + b[0]) - parallax_px
+            along_mm = round(float(cx - ref_x) * s_face, 1)
             across_mm = round(float(y_front - 0.76 * img.shape[0]) * s_face, 1)
             return {"found": True, "along_mm": along_mm, "across_mm": across_mm,
                     "gap_px": round(gap_px, 1), "mm_per_px": round(s_face, 3), "mode": "top_face", "finger_color": mode}
@@ -297,5 +316,18 @@ def finger_hook(config: dict, cell, target: dict, write_library, gap_mm: float):
                 out["verdict"] = "pass"
         elif out.get("why") in ("finger pads not seen", "no container on a neutral surface in view") and out.get("total_mm", 0.0) == 0.0:
             out["verdict"] = "skipped"
+        if out["verdict"] == "pass":
+            try:
+                import cell_arm_cal
+
+                detected_color = (out.get("iterations") or [{}])[-1].get("finger_color")
+                cell_arm_cal.record_wrist_observation(
+                    config,
+                    arm_id=config.get("arm_id", "arm_s"),
+                    finger_color=detected_color if detected_color in ("dark", "white") else None,
+                    finger_sign=signs,
+                )
+            except Exception:
+                pass
         return out
     return run
