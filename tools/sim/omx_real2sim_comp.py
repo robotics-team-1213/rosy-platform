@@ -104,8 +104,9 @@ def container_blobs(bgr: np.ndarray) -> list[tuple[str, np.ndarray]]:
     g_ab = np.max(gx * gx + gy * gy, axis=-1)
     edge_cut = g_ab >= max(4500.0, float(np.percentile(g_ab, 90)))
 
-    hsv = cv2.cvtColor(cv2.cvtColor( np.dstack([l_eq, lab_u8[..., 1], lab_u8[..., 2]]), cv2.COLOR_Lab2BGR), cv2.COLOR_BGR2HSV)
-    h, s, v = hsv[..., 0], hsv[..., 1], hsv[..., 2]
+    hsv = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV)
+    h, s = hsv[..., 0], hsv[..., 1]
+    v = np.maximum(hsv[..., 2], l_eq)
     kernel = np.ones((3, 3), np.uint8)
     chromatic = (s > 80) & (v > 70)
     cut_u8 = (chromatic & (~edge_cut)).astype(np.uint8)
@@ -152,10 +153,13 @@ def _raw_plus_end_and_width(
         u_along = np.array([math.cos(use_yaw), math.sin(use_yaw)])
         u_across = np.array([-math.sin(use_yaw), math.cos(use_yaw)])
         if expected_xy is not None:
-            rel_t = (pts - np.asarray(expected_xy, float)) @ u_across
-            if float(np.ptp(rel_t)) > 0.048:
-                keep = np.abs(rel_t) <= 0.034
-                if int(np.count_nonzero(keep)) >= 25:
+            t0 = float(np.asarray(expected_xy, float) @ u_across)
+            t_all = pts @ u_across
+            if float(np.ptp(t_all)) > 0.044:
+                grid = np.linspace(t0 - 0.024, t0 + 0.024, 17)
+                t_mode = float(max(grid, key=lambda tc: int(np.count_nonzero(np.abs(t_all - tc) <= 0.015))))
+                keep = np.abs(t_all - t_mode) <= 0.021
+                if int(np.count_nonzero(keep)) >= 20:
                     pts, px = pts[keep], px[keep]
         s = pts @ u_along
         t = pts @ u_across
@@ -283,20 +287,24 @@ def _extract_anchors(
     occupied_lanes: set[tuple[str, int]] = set(lane_top_z.keys())
     raw_seated: dict[tuple[str, int], dict[str, Any]] = {}
     for _, px in c_blobs:
-        xy_rough, _, sz_r = r2s.rect(cam_nom.to_plane(px, pad_z + box_h))
-        if xy_rough[0] > 0.02 or abs(xy_rough[1]) < 0.075 or sz_r[1] < 0.021:
+        xy_rough, yaw_r, sz_r = r2s.rect(cam_nom.to_plane(px, pad_z + box_h))
+        if xy_rough[0] > 0.02 or abs(xy_rough[1]) < 0.065 or sz_r[1] < 0.021:
             continue
         tag = "a" if xy_rough[1] < 0.0 else "b"
         lanes = [(k, layout.sites[f"tmp-{tag}-{k}"]["xy"], r2s.fold(layout.sites[f"tmp-{tag}-{k}"]["yaw"])) for k in (1, 2, 3)]
-        cand_lanes = lanes if sz_r[1] > 0.048 else [min(lanes, key=lambda ln: math.dist(xy_rough, ln[1]))]
+        if sz_r[1] > 0.048:
+            cand_lanes = lanes
+        else:
+            yaw_lanes = [ln for ln in lanes if abs(r2s.fold(yaw_r - ln[2])) < math.radians(11.0)]
+            cand_lanes = [min(yaw_lanes or lanes, key=lambda ln: math.dist(xy_rough, ln[1]))]
         for k, true_xy, true_yaw in cand_lanes:
-            if sz_r[1] <= 0.048 and math.dist(xy_rough, true_xy) >= 0.045:
+            if sz_r[1] <= 0.048 and math.dist(xy_rough, true_xy) >= 0.075:
                 continue
             z_top = lane_top_z.get((tag, k), pad_z + box_h)
             _, yaw, sz_raw, plus_xy, px_u = _raw_plus_end_and_width(cam_nom, px, z_top, box_w, true_yaw, true_xy)
-            if len(px_u) >= 25 and 0.032 <= sz_raw[0] <= 0.115 and 0.022 <= sz_raw[1] <= 0.046:
+            if len(px_u) >= 20 and 0.032 <= sz_raw[0] <= 0.115 and 0.022 <= sz_raw[1] <= 0.046:
                 true_plus = (true_xy[0] + 0.5 * box_l * math.cos(true_yaw), true_xy[1] + 0.5 * box_l * math.sin(true_yaw))
-                if math.dist(plus_xy, true_plus) < 0.042:
+                if math.dist(plus_xy, true_plus) < 0.072:
                     occupied_lanes.add((tag, k))
                     prev = raw_seated.get((tag, k))
                     if prev is None or len(px_u) > prev["area"]:
@@ -326,13 +334,14 @@ def _extract_anchors(
         lanes = [(k, layout.sites[f"tmp-{tag}-{k}"]["xy"], r2s.fold(layout.sites[f"tmp-{tag}-{k}"]["yaw"])) for k in (1, 2, 3)]
         found_lanes: set[int] = set()
         for item in sorted(raw_pads[tag], key=lambda it: it["xy"][1]):
-            lane = min(lanes, key=lambda ln: math.dist(item["xy"], ln[1]))
+            yaw_lanes = [ln for ln in lanes if abs(r2s.fold(item["yaw"] - ln[2])) < math.radians(11.0)]
+            lane = min(yaw_lanes or lanes, key=lambda ln: math.dist(item["xy"], ln[1]))
             k, true_xy, true_yaw = lane
             if (tag, k) in occupied_lanes or k in found_lanes:
                 continue
             _, yaw_p, _, plus_xy, _ = _raw_plus_end_and_width(cam_nom, item["px"], pad_z, 0.030, true_yaw, true_xy)
             true_plus = (true_xy[0] + 0.5 * pad_l * math.cos(true_yaw), true_xy[1] + 0.5 * pad_l * math.sin(true_yaw))
-            if math.dist(plus_xy, true_plus) < 0.045:
+            if math.dist(plus_xy, true_plus) < 0.072:
                 found_lanes.add(k)
                 uv_plus = np.asarray(cam_nom.project((*plus_xy, pad_z)), float)
                 in_xy = (plus_xy[0] - 0.025 * math.cos(yaw_p), plus_xy[1] - 0.025 * math.sin(yaw_p))
@@ -373,6 +382,12 @@ def calibrate_top_camera(bgr: np.ndarray, layout: Any, here: dict[str, str] | No
     cam_nom = r2s.Camera(base_cam, size)
     pads, belt_uv = _extract_anchors(bgr, layout, cam_nom, here=here)
     belt_nom = _measure_belt_fiducial(belt_uv, cam_nom, layout) if belt_uv is not None else None
+    w_belt = 2.0
+    if belt_nom is not None and len(pads) >= 2:
+        p_dx = float(np.median([cam_nom.to_plane(p["uv_plus"], p["z"])[0][0] - p["true_plus"][0] for p in pads]))
+        p_dy = float(np.median([cam_nom.to_plane(p["uv_plus"], p["z"])[0][1] - p["true_plus"][1] for p in pads]))
+        if math.hypot(belt_nom["dx"] - p_dx, belt_nom["dy"] - p_dy) > 0.018:
+            w_belt = 0.0
     n_anchors = len(pads) + int(belt_nom is not None)
     if n_anchors < 1:
         return cam_nom, dict(moved=False, anchors_used=0, raw_err_mm=0.0, cal_err_mm=0.0,
@@ -386,17 +401,19 @@ def calibrate_top_camera(bgr: np.ndarray, layout: Any, here: dict[str, str] | No
             yaw = r2s.fold(math.atan2(xy_p[1] - xy_i[1], xy_p[0] - xy_i[0]))
             w_pos = 0.4 if pad["partial"] else 1.0
             errs.extend([w_pos * (xy_p[0] - pad["true_plus"][0]), w_pos * (xy_p[1] - pad["true_plus"][1]), 0.045 * r2s.fold(yaw - pad["true_yaw"])])
-        if belt_uv is not None:
+        if belt_uv is not None and w_belt > 0.0:
             bf = _measure_belt_fiducial(belt_uv, cam, layout)
             if bf is not None:
-                errs.extend([bf["dx"] * 2.0, bf["dy"] * 2.0, 0.090 * bf["dyaw"] * 2.0])
+                errs.extend([bf["dx"] * w_belt, bf["dy"] * w_belt, 0.090 * bf["dyaw"] * w_belt])
         return errs
 
     raw_res = np.array(anchor_errors(cam_nom), float)
-    raw_err_mm = float(np.sqrt(np.mean(raw_res ** 2)) * 1000.0)
+    raw_err_mm = float(np.sqrt(np.mean(raw_res ** 2)) * 1000.0) if len(raw_res) else 0.0
     if raw_err_mm <= 1.8:
-        return cam_nom, dict(moved=False, anchors_used=n_anchors, raw_err_mm=round(raw_err_mm, 2), cal_err_mm=round(raw_err_mm, 2),
-                             belt_residual=dict(dx=0.0, dy=0.0, dyaw=0.0), plate_residuals={})
+        b_res = dict(dx=belt_nom["dx"], dy=belt_nom["dy"], dyaw=belt_nom["dyaw"]) if belt_nom is not None else dict(dx=0.0, dy=0.0, dyaw=0.0)
+        b_moved = belt_nom is not None and math.hypot(belt_nom["dx"], belt_nom["dy"]) > 0.002
+        return cam_nom, dict(moved=b_moved, anchors_used=n_anchors, raw_err_mm=round(raw_err_mm, 2), cal_err_mm=round(raw_err_mm, 2),
+                             belt_residual=b_res, plate_residuals={})
 
     def objective(p: np.ndarray) -> np.ndarray:
         cam = _camera_from_params(base_cam, size, p)

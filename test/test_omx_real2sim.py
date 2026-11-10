@@ -414,6 +414,19 @@ def test_tilted_bottom_clipped_temp_lane_and_servo_zero_offset_compensation():
     assert seen_lit[2]["size_mm"][1] == pytest.approx(30.0, abs=1.5)
     assert seen_lit[2]["xy_err_mm"] < 2.5
 
+    # Real 2026-11-10 camera shift test: frame rendered with 2026-11-10 camera, perceived with old 2026-11-03 camera (~45 mm shift).
+    layout_old_cam = sites.Layout(temp_lanes="photo-20261110", ship_pose="photo-20261110", belt_pose="photo-20261110",
+                                  arm_bases="plate-centre", top_camera="2026-11-03")
+    sa_a2 = layout_old_cam.sites["tmp-a-2"]
+    seen_shift = r2s_comp.perceive_container(
+        img, sa_a2, sa_a2["xy"], sa_a2["yaw"], layout_old_cam,
+        here={k: v for k, v in here.items() if v != "tmp-a-1-l1"},
+    )
+    assert seen_shift is not None
+    assert seen_shift[2]["camera_comp"]["raw_xy_err_mm"] > 25.0
+    assert seen_shift[2]["xy_err_mm"] < 3.0
+
+
 
 
 
