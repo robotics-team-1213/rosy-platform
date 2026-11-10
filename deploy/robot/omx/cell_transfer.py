@@ -125,6 +125,9 @@ def _transfer(cell, library, closed, wrist, after_place, pinch, feel, sequence, 
 
     for command in (f"load {library}", *sequence):  # FOLDED, or cp.SEQUENCE where auto.fold_before_transport is 0
         status = run(command)
+        if not status.get("ok") and command == "goto above_pick" and "must park before recovery" in (status.get("error") or ""):
+            if run("park").get("ok"):
+                status = run(command)
         if status.get("contact") and command == "park":
             # a fold's strain hold at the reach: back off and fold again (home in runs 3-4, 2026-10-28); a second stops
             run("retreat")
