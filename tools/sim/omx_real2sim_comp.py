@@ -113,18 +113,50 @@ def _raw_plus_end_and_width(
     z: float,
     ref_w: float,
     expected_yaw: float | None = None,
-) -> tuple[tuple[float, float], float, tuple[float, float], tuple[float, float]]:
-    """Return `(xy_w_corrected, yaw, sz_raw, plus_end_xy)` on plane `z` before any bottom-clipping length extension."""
+    expected_xy: Any = None,
+) -> tuple[tuple[float, float], float, tuple[float, float], tuple[float, float], np.ndarray]:
+    """Return `(xy_w_corrected, yaw, sz_raw, plus_end_xy, px_used)` on plane `z` before bottom-clipping extension."""
     pts = cam.to_plane(px, z)
+    if expected_yaw is not None:
+        use_yaw = r2s.fold(expected_yaw)
+        u_along = np.array([math.cos(use_yaw), math.sin(use_yaw)])
+        u_across = np.array([-math.sin(use_yaw), math.cos(use_yaw)])
+        if expected_xy is not None:
+            rel_t = (pts - np.asarray(expected_xy, float)) @ u_across
+            if float(np.ptp(rel_t)) > 0.048:
+                keep = np.abs(rel_t) <= 0.034
+                if int(np.count_nonzero(keep)) >= 25:
+                    pts, px = pts[keep], px[keep]
+        s = pts @ u_along
+        t = pts @ u_across
+        s_span = float(np.percentile(s, 99) - np.percentile(s, 1))
+        front = s >= (float(np.max(s)) - min(0.035, max(0.015, 0.75 * s_span)))
+        t_front = t[front] if int(np.count_nonzero(front)) >= 12 else t
+        t_lo, t_hi = float(np.percentile(t_front, 2)), float(np.percentile(t_front, 98))
+        raw_w = t_hi - t_lo
+        c_approx = float(np.mean(s)) * u_along + 0.5 * (t_lo + t_hi) * u_across
+        d_eye = (cam.eye[0] - c_approx[0]) * u_across[0] + (cam.eye[1] - c_approx[1]) * u_across[1]
+        t_center = ((t_lo + 0.5 * ref_w) if d_eye >= 0.0 else (t_hi - 0.5 * ref_w)) if raw_w > ref_w else 0.5 * (t_lo + t_hi)
+        mid_band = np.abs(t - t_center) <= ref_w * 0.42
+        s_band = s[mid_band] if int(np.count_nonzero(mid_band)) >= 8 else s
+        s_max, s_min = float(np.percentile(s_band, 99)), float(np.percentile(s_band, 1))
+        plus_approx = s_max * u_along + t_center * u_across
+        d_eye_along = (cam.eye[0] - plus_approx[0]) * u_along[0] + (cam.eye[1] - plus_approx[1]) * u_along[1]
+        if d_eye_along > 0.0 and z > 0.045:
+            s_max -= min(0.0025, 0.028 * d_eye_along / max(0.3, cam.eye[2] - z))
+        plus_xy = (float(s_max * u_along[0] + t_center * u_across[0]), float(s_max * u_along[1] + t_center * u_across[1]))
+        s_mid = 0.5 * (s_max + s_min)
+        xy_c = (float(s_mid * u_along[0] + t_center * u_across[0]), float(s_mid * u_along[1] + t_center * u_across[1]))
+        return xy_c, use_yaw, (max(0.0, s_max - s_min), raw_w), plus_xy, px
+
     xy, yaw, sz = r2s.rect(pts)
     raw_w = sz[1]
     if sz[1] > ref_w:
         vec_w = (-math.sin(yaw), math.cos(yaw))
         sh_w = (0.5 if (cam.eye[0] - xy[0]) * vec_w[0] + (cam.eye[1] - xy[1]) * vec_w[1] >= 0 else -0.5) * (sz[1] - ref_w)
         xy = (xy[0] - sh_w * vec_w[0], xy[1] - sh_w * vec_w[1])
-    use_yaw = r2s.fold(expected_yaw) if (expected_yaw is not None and abs(r2s.fold(yaw - r2s.fold(expected_yaw))) < math.radians(12.0)) else yaw
-    plus_xy = (xy[0] + 0.5 * sz[0] * math.cos(use_yaw), xy[1] + 0.5 * sz[0] * math.sin(use_yaw))
-    return xy, use_yaw, (sz[0], raw_w), plus_xy
+    plus_xy = (xy[0] + 0.5 * sz[0] * math.cos(yaw), xy[1] + 0.5 * sz[0] * math.sin(yaw))
+    return xy, yaw, (sz[0], raw_w), plus_xy, px
 
 
 def _box_on_plane(
@@ -135,13 +167,14 @@ def _box_on_plane(
     box_w: float,
     img_h: int = 480,
     expected_yaw: float | None = None,
+    expected_xy: Any = None,
 ) -> tuple[tuple[float, float], float, tuple[float, float]]:
     """Back-project contour pixels `px` onto `top_z`, correcting side-wall overhang and bottom-clipped (`row 479`) length."""
-    xy, yaw, sz_raw, plus_xy = _raw_plus_end_and_width(cam, px, top_z, box_w, expected_yaw)
+    xy, yaw, sz_raw, plus_xy, px_used = _raw_plus_end_and_width(cam, px, top_z, box_w, expected_yaw, expected_xy)
     if sz_raw[1] < 0.021:  # reject thin side-wall slivers of occluded lower-tier (l0) containers
         return xy, yaw, (0.0, sz_raw[1])
     sz = (sz_raw[0], min(sz_raw[1], box_w))
-    at_bottom = int(px[:, 1].max()) >= img_h - 2 and int(px[:, 1].min()) > 2
+    at_bottom = int(px_used[:, 1].max()) >= img_h - 2 and int(px_used[:, 1].min()) > 2
     if at_bottom and sz[0] < box_l:
         xy = (plus_xy[0] - 0.5 * box_l * math.cos(yaw), plus_xy[1] - 0.5 * box_l * math.sin(yaw))
         sz = (box_l, sz[1])
@@ -218,24 +251,25 @@ def _extract_anchors(
     raw_seated: dict[tuple[str, int], dict[str, Any]] = {}
     for _, px in c_blobs:
         xy_rough, _, sz_r = r2s.rect(cam_nom.to_plane(px, pad_z + box_h))
-        if xy_rough[0] > 0.02 or abs(xy_rough[1]) < 0.075 or sz_r[1] < 0.022 or sz_r[1] > 0.048:
+        if xy_rough[0] > 0.02 or abs(xy_rough[1]) < 0.075 or sz_r[1] < 0.021:
             continue
         tag = "a" if xy_rough[1] < 0.0 else "b"
         lanes = [(k, layout.sites[f"tmp-{tag}-{k}"]["xy"], r2s.fold(layout.sites[f"tmp-{tag}-{k}"]["yaw"])) for k in (1, 2, 3)]
-        lane = min(lanes, key=lambda ln: math.dist(xy_rough, ln[1]))
-        k, true_xy, true_yaw = lane
-        if math.dist(xy_rough, true_xy) < 0.045:
-            occupied_lanes.add((tag, k))
+        cand_lanes = lanes if sz_r[1] > 0.048 else [min(lanes, key=lambda ln: math.dist(xy_rough, ln[1]))]
+        for k, true_xy, true_yaw in cand_lanes:
+            if sz_r[1] <= 0.048 and math.dist(xy_rough, true_xy) >= 0.045:
+                continue
             z_top = lane_top_z.get((tag, k), pad_z + box_h)
-            _, yaw, sz_raw, plus_xy = _raw_plus_end_and_width(cam_nom, px, z_top, box_w, true_yaw)
-            if 0.032 <= sz_raw[0] <= 0.115 and 0.022 <= sz_raw[1] <= 0.046:
+            _, yaw, sz_raw, plus_xy, px_u = _raw_plus_end_and_width(cam_nom, px, z_top, box_w, true_yaw, true_xy)
+            if len(px_u) >= 25 and 0.032 <= sz_raw[0] <= 0.115 and 0.022 <= sz_raw[1] <= 0.046:
                 true_plus = (true_xy[0] + 0.5 * box_l * math.cos(true_yaw), true_xy[1] + 0.5 * box_l * math.sin(true_yaw))
                 if math.dist(plus_xy, true_plus) < 0.042:
+                    occupied_lanes.add((tag, k))
                     prev = raw_seated.get((tag, k))
-                    if prev is None or len(px) > prev["area"]:
+                    if prev is None or len(px_u) > prev["area"]:
                         raw_seated[(tag, k)] = dict(
                             tag=tag, lane=k, plus_xy=plus_xy, yaw=yaw, true_plus=true_plus,
-                            true_yaw=true_yaw, z=z_top, area=len(px), partial=False,
+                            true_yaw=true_yaw, z=z_top, area=len(px_u), partial=False,
                         )
 
     raw_pads: dict[str, list[dict[str, Any]]] = {"a": [], "b": []}
@@ -244,7 +278,7 @@ def _extract_anchors(
             continue
         pts = cam_nom.to_plane(px, pad_z)
         xy, yaw, sz = r2s.rect(pts)
-        if not (0.038 <= sz[0] <= 0.118 and 0.022 <= sz[1] <= 0.040):
+        if not (0.038 <= sz[0] <= 0.118 and 0.022 <= sz[1] <= 0.042):
             continue
         tag = "a" if xy[1] < 0.0 else "b"
         at_bottom = int(px[:, 1].max()) >= img_h - 2 and int(px[:, 1].min()) > 2
@@ -252,7 +286,7 @@ def _extract_anchors(
         if at_bottom and sz[0] < pad_l:
             xy = (plus_xy[0] - 0.5 * pad_l * math.cos(yaw), plus_xy[1] - 0.5 * pad_l * math.sin(yaw))
         partial = sz[0] < 0.082 and not at_bottom
-        raw_pads[tag].append(dict(xy=xy, plus_xy=plus_xy, yaw=yaw, partial=partial))
+        raw_pads[tag].append(dict(xy=xy, plus_xy=plus_xy, yaw=yaw, partial=partial, px=px))
 
     matched_anchors: list[dict[str, Any]] = []
     for tag in ("a", "b"):
@@ -263,11 +297,12 @@ def _extract_anchors(
             k, true_xy, true_yaw = lane
             if (tag, k) in occupied_lanes or k in found_lanes:
                 continue
+            _, yaw_p, _, plus_xy, _ = _raw_plus_end_and_width(cam_nom, item["px"], pad_z, 0.030, true_yaw, true_xy)
             true_plus = (true_xy[0] + 0.5 * pad_l * math.cos(true_yaw), true_xy[1] + 0.5 * pad_l * math.sin(true_yaw))
-            if math.dist(item["plus_xy"], true_plus) < 0.045:
+            if math.dist(plus_xy, true_plus) < 0.045:
                 found_lanes.add(k)
-                uv_plus = np.asarray(cam_nom.project((*item["plus_xy"], pad_z)), float)
-                in_xy = (item["plus_xy"][0] - 0.025 * math.cos(item["yaw"]), item["plus_xy"][1] - 0.025 * math.sin(item["yaw"]))
+                uv_plus = np.asarray(cam_nom.project((*plus_xy, pad_z)), float)
+                in_xy = (plus_xy[0] - 0.025 * math.cos(yaw_p), plus_xy[1] - 0.025 * math.sin(yaw_p))
                 uv_in = np.asarray(cam_nom.project((*in_xy, pad_z)), float)
                 matched_anchors.append(dict(tag=tag, lane=k, uv_plus=uv_plus, uv_in=uv_in, true_plus=true_plus,
                                             true_yaw=true_yaw, partial=item["partial"], z=pad_z))
@@ -400,9 +435,10 @@ def perceive_container(
     bres = cam_comp.pop("belt_residual", dict(dx=0.0, dy=0.0, dyaw=0.0))
     pres = cam_comp.pop("plate_residuals", {})
     exp_yaw = sa["yaw"] if sa["kind"] != "belt" else None
+    exp_xy = sa["xy"] if sa["kind"] != "belt" else None
     cands = []
     for col, px in container_blobs(bgr):
-        xy, yaw, sz = _box_on_plane(cam, px, top_z, box_l, box_w, img_h, exp_yaw)
+        xy, yaw, sz = _box_on_plane(cam, px, top_z, box_l, box_w, img_h, exp_yaw, exp_xy)
         if cam_comp.get("moved"):
             if sa["kind"] == "belt":
                 xy = (xy[0] - bres["dx"], xy[1] - bres["dy"])
@@ -417,7 +453,7 @@ def perceive_container(
         return None
     _, xy, yaw, sz, col, best_px = min(cands, key=lambda x: x[0])
     if cam_comp.get("moved"):
-        raw_xy, raw_yaw, _ = _box_on_plane(cam_nom, best_px, top_z, box_l, box_w, img_h, exp_yaw)
+        raw_xy, raw_yaw, _ = _box_on_plane(cam_nom, best_px, top_z, box_l, box_w, img_h, exp_yaw, exp_xy)
         cam_comp = dict(
             cam_comp,
             raw_xy_err_mm=round(math.dist(raw_xy, true_xy) * 1000.0, 2),
