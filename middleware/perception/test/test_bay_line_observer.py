@@ -39,11 +39,11 @@ def render(offset_m, heading_rad, south_of_camera_m, *, carpet=105, tape_dim=1.0
     tape = tuple(int(c * tape_dim) for c in PINK)
     axis = np.array([math.cos(heading_rad), math.sin(heading_rad)])
     south = -axis
-    # base_link points: the line's foot is at (0, offset); the camera is
-    # x_offset ahead, so camera-relative ahead = base x - x_offset.
     foot = np.array([0.0, offset_m])
-    for t in np.arange(0.0, south_of_camera_m + MOUNT.x_offset_m, 0.004):
-        p = foot + south * (south_of_camera_m - t)
+    # The param is camera-relative: base x = south_of_camera_m + x_offset.
+    south_base_x = south_of_camera_m + MOUNT.x_offset_m
+    for t in np.arange(0.0, south_base_x, 0.004):
+        p = foot + south * (south_base_x - t)
         for lateral in (-0.006, 0.0, 0.006):
             q = p + np.array([-axis[1], axis[0]]) * lateral
             ahead = q[0] - MOUNT.x_offset_m

@@ -107,8 +107,9 @@ class BayLineObserver:
                                 hfov_rad=self._hfov, pitch_rad=self._mount.pitch_rad,
                                 height_m=self._mount.height_m)
             if g is not None:
-                # The camera sits x_offset ahead of base_link.
-                points.append((g[0] - self._mount.x_offset_m, g[1]))
+                # pixel_to_ground is camera-relative; the camera sits x_offset
+                # ahead of base_link, so a point is that much farther from base.
+                points.append((g[0] + self._mount.x_offset_m, g[1]))
         if len(points) < MIN_MASK_PIXELS:
             return self._payload(stamp, False)
         pts = np.asarray(points, dtype=np.float64)
@@ -124,11 +125,16 @@ class BayLineObserver:
         # The far (corridor-side) end: the visible extent along -direction.
         along = (pts - centre) @ direction
         south = centre + direction * float(along.min())
-        d_south = south[0] + self._mount.x_offset_m      # camera -> south end
+        # Points are base_link; the camera sits x_offset ahead, so the
+        # camera->end distance is the point's x minus that offset.
+        south_base = float(south[0])
+        d_south = south_base - self._mount.x_offset_m
         measured = d_south <= self._far_field_m - 0.02
         if not measured:
-            d_south = self._far_field_m
-        x = self._line_total_m - d_south - self._mount.x_offset_m
+            # The end has left the view: the longitudinal signal is gone; the
+            # saturated value stays finite for rear_errors, flagged not measured.
+            south_base = self._far_field_m + self._mount.x_offset_m
+        x = self._line_total_m - south_base
         return self._payload(
             stamp, True, x=float(x), y=float(foot[1]), yaw=float(yaw),
             confidence=min(1.0, len(xs) / CONFIDENCE_PIXELS),
