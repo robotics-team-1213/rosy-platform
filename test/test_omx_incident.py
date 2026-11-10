@@ -499,10 +499,10 @@ def test_status_and_clear_with_cause_basis_and_env_discovery(tmp_path, monkeypat
 
     # Pre-2026-11-08 Fleet servers return held=True for a single label-only report ("the arm is not held")
     label_only = Hold(
-        workcell_id="cell_a", source_id="arm_b", held=True, incident_ids=["b" * 32],
+        held=True, incident_ids=["b" * 32],
         reason="1 open arm incident(s): " + "b" * 32 + "; reported for a person's cause, the arm is not held")
     assert oi._effectively_held(label_only) is False
-    link.ask = lambda: label_only
+    link.hold = lambda: label_only
     oi.refuse_if_held("arm_b", link)
     assert oi.held("arm_b") is None
 
@@ -517,9 +517,9 @@ def test_status_and_clear_with_cause_basis_and_env_discovery(tmp_path, monkeypat
         link.held = False
         return hold(False)
     link.held = True
-    link.ask = lambda: hold(link.held)
+    link.hold = lambda: hold(link.held)
     link.clear = clear_422
-    assert oi.clear("arm_b", "checked home", "op-token", link, cause="software_or_config", basis="seen") == 0
+    assert oi.clear("arm_b", "checked home", None, link, cause="software_or_config", basis="seen") == 0
     assert fallback_calls == [
         ("a" * 32, "checked home", "op-token", "software_or_config", "seen"),
         ("a" * 32, "checked home", "op-token", None, None),
