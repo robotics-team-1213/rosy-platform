@@ -922,7 +922,7 @@ def test_gate_validates_zone_entry_and_park_release_across_chained_commands(tmp_
         {"command": "state", "ok": True, "state": home6, "t": time.time(),
          "operating_context": dict(SESSION), "health": {"temp_c": [40] * 6, "pwm": [10] * 6, "current_ma": [0] * 6}}
         if cmd == "state" else
-        {"command": cmd, "ok": True, "settled": True, "state": home6,
+        {"command": cmd, "ok": True, "settled": True, "state": home6, "t": time.time(),
          "operating_context": dict(SESSION), "library_sha256": gate.assessment["library_sha256"]}
     )
     assert gate.act("chain goto above_place ; run descend_place")["ok"]
