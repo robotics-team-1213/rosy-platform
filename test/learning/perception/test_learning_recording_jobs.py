@@ -23,6 +23,8 @@ def _setup(tmp_path, monkeypatch):
     process.wait = lambda **kwargs: process.returncode
     monkeypatch.setattr(module.subprocess, 'Popen', lambda *a, **k: process)
     monkeypatch.setattr(module, 'process_stamp', lambda pid, request=None: dict(pid=pid, start='1', boot='test'))
+    # The 5 GiB reserve is the host's free disk, not the fixture's; small test-PC /tmp stopped landings.
+    monkeypatch.setattr(module.shutil, 'disk_usage', lambda path: SimpleNamespace(free=1 << 50))
     jobs = Jobs(tmp_path/'recordings', str(python))
     session = dict(id=str(uuid.uuid4()), name='two wrist takes', profile_revision='a'*64,
                    export=None, study_id=None, profile=dict(cameras=[dict(

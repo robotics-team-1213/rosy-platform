@@ -43,6 +43,14 @@ def serve(tmp_path, *, configured=True):
     (learned / 'round.json').write_text(json.dumps(dict(
         schema=ladder_web.TWO_ARM_ROUND_SCHEMA, round_id=OLD, status='passed', stage='done', data=dict(episodes=630, frames=178236), recipe=dict(steps=60000),
         eval=dict(n=63, passed=20, lifted=50, wilson_low=.2, wilson_high=.4, per_step={'stack/s1': 3, 'stack/s2': 0}, whole=[dict(task='stack', seed=1, total=9, passed=2, completed=False)]))), encoding='utf-8')
+    compare = root / 'two_arm_compare' / OLD
+    compare.mkdir(parents=True)
+    (compare / 'compare.json').write_text(json.dumps(dict(
+        schema=ladder_web.TWO_ARM_COMPARE_SCHEMA, run_id=OLD, seed=0, status='passed', runs=[
+            dict(scenario='outbound', mode='one-arm-B', steps=5, steps_pass=5, completed=True, makespan_s=92.5, planned_makespan_s=90.0,
+                 holds=[dict(request='bar-3', reason='NO_STAND_IN_REACH')], moves_per_arm={'arm_b': 5}),
+            dict(scenario='outbound', mode='two-arm', concurrent=True, steps=10, steps_pass=10, completed=True, makespan_s=165.7, overlap_s=18.2,
+                 planned_makespan_s=153.8, holds=[], moves_per_arm={'arm_a': 5, 'arm_b': 5})])), encoding='utf-8')
     ladder = Recorded(config(tmp_path, root)) if configured else None
     server = make_server(open_store(tmp_path), free_port(), accounts=Accounts(), ladder=ladder)
     threading.Thread(target=server.serve_forever, daemon=True).start()
@@ -85,6 +93,10 @@ def test_rounds_detail_decision_and_start(tmp_path, width, session):
                 expect(two_arm).to_contain_text('단계 통과 11 / 12')
                 expect(two_arm).to_contain_text('실패 r2 (arm_a): too far')
                 expect(two_arm).to_contain_text('실물 손목 하한 아래로 가는 단계')
+                compared = page.locator('#ladder-compare')
+                expect(compared).to_contain_text('bar-3: 반출 자리(임시 칸 줄)로 옮길 팔 없음')
+                expect(compared).to_contain_text('165.7초 (계획 153.8초)')
+                expect(compared.locator('table')).to_have_count(1)
                 learned = page.locator('#ladder-two-arm-rounds')
                 expect(learned).to_contain_text('단계별 통과 20 / 63')
                 expect(learned).to_contain_text('3×3×3 적층 전체 · 시드 1: 2 / 9 단계에서 멈춤')
@@ -95,6 +107,7 @@ def test_rounds_detail_decision_and_start(tmp_path, width, session):
                     expect(page.locator('#ladder-decide')).to_be_disabled()
                     expect(page.locator('#ladder-start')).to_be_disabled()
                     expect(page.locator('#ladder-two-arm-start')).to_be_disabled()
+                    expect(page.locator('#ladder-compare-start')).to_be_disabled()
                 else:
                     expect(page.locator('#ladder-decide')).to_be_enabled()
                     page.locator('#ladder-note').fill('엄격 성공이 높다')

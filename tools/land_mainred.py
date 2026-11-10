@@ -38,6 +38,9 @@ import tempfile
 import time
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import land_blame  # noqa: E402  (advisory suspects for a red id)
+
 FILE = "rosy-main-red.jsonl"
 SWITCH = "ROSY_LAND_MAINRED_CARRY"
 MAX_AGE_S, MAX_CARRIES = 6 * 3600, 5
@@ -104,9 +107,26 @@ def merged_main(wt: Path, head: str = "HEAD") -> str:
 
 
 def red(wt: Path, main: str, ids: list[str], text: str, env: list[str], by: str) -> None:
-    """Record ids a main run failed (land_checks.main_red), each with its fingerprint (None: never carries)."""
+    """Record ids a main run failed (land_checks.main_red), each with its fingerprint (None: never carries) and the
+    landings that may have broken it (``land_blame``, advisory)."""
+    rows = read(wt)
     for nodeid in ids:
-        write(wt, "red", id=nodeid, main=main, fp=fingerprint(text, nodeid), env=env, by=by)
+        found = blame(wt, nodeid, main, env, rows)
+        write(wt, "red", id=nodeid, main=main, fp=fingerprint(text, nodeid), env=env, by=by,
+              suspects=[s["branch"] for s in found["suspects"]] if found else None)
+        if found:
+            print(land_blame.line(nodeid, found), flush=True)
+
+
+def blame(wt: Path, nodeid: str, main: str, env: list[str], rows: list[dict] | None = None) -> dict | None:
+    """``land_blame.suspects`` with this id's closes; None when it fails (a red record is never lost to it)."""
+    try:
+        closes = [r.get("sha") for r in (read(wt) if rows is None else rows)
+                  if r.get("event") == "close" and r["id"] == nodeid]
+        return land_blame.suspects(wt, nodeid, main, env, closes)
+    except Exception as exc:  # noqa: BLE001  advisory only
+        print(f"[main-red] no suspects for {nodeid}: {exc}", flush=True)
+        return None
 
 
 def known(wt: Path, main: str, ids: list[str]) -> bool:
@@ -143,6 +163,8 @@ def state(wt: Path, rows: list[dict] | None = None) -> dict[str, dict]:
         s["carries"] = [c for c in s["carries"] if c["sha"] not in covered]
         if not s["mains"] and not s["carries"]:
             del out[nodeid]
+        elif not s["env"] and "_browser.py::" in nodeid:  # red recorded before nightly kept env: a bare run skips it
+            s["env"] = ["ROSY_RUN_BROWSER_TESTS=1"]
     return out
 
 
@@ -228,6 +250,9 @@ def recheck(wt: Path, main_sha: str, run, logdir: Path) -> list[str]:
     """Run each open id on ``main_sha`` alone; close the ones that pass there or whose test file is gone, and return
     them. Only a landing's own selection closed an id before, so ids nothing selected stayed red for days after the
     fix (2026-11-07: 11 open, the oldest from 10-28, some of deleted files). A failing or unreachable id stays open."""
+    # 2026-11-08 02:55: a recheck at sha 0000… read every file as gone and closed 7 ids whose files were on main.
+    if _git(wt, "cat-file", "-e", f"{main_sha}^{{commit}}").returncode:
+        raise ValueError(f"main-red recheck: {main_sha!r} is not a commit here")
     opened = state(wt)
 
     def settle(nodeid: str, why: str) -> None:
@@ -264,11 +289,24 @@ def main(argv: list[str] | None = None) -> int:
     own.add_argument("id")
     own.add_argument("owner")
     sub.add_parser("status", help="open red ids")
+    who = sub.add_parser("blame", help="landings that may have turned an id red (advisory)")
+    who.add_argument("id")
+    who.add_argument("--main", help="the red main (default: the id's newest red record, else main)")
     sub.add_parser("recheck", help="run the open ids on main; close the ones that pass or whose test file is gone")
     args = parser.parse_args(argv)
     wt = Path.cwd()
     if args.cmd == "own":
         write(wt, "own", id=args.id, owner=args.owner)
+        return 0
+    if args.cmd == "blame":
+        reds = [r for r in read(wt) if r["event"] == "red" and r["id"] == args.id]
+        main_sha = args.main or (reds[-1].get("main") if reds else None) or _git(wt, "rev-parse", "main").stdout.strip()
+        found = blame(wt, args.id, main_sha, reds[-1].get("env") or [] if reds else [])
+        if found is None:
+            return 1
+        print(land_blame.line(args.id, found))
+        for s in found["suspects"]:
+            print(f"  {s['sha'][:10]}  {s['touches'] or '-':6}  {s['branch']}")
         return 0
     if args.cmd == "recheck":
         sys.path[:0] = [str(Path(__file__).resolve().parent / "remote")]

@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Callable
 
 from rosy_face_inputs import FaceFrames, core_owner, read_test_request, read_update, write_test_result
-from rosy_face_parts import BatteryReader, Buzzer, LAMP_TEST_S, Lamp
+from rosy_face_parts import BatteryReader, Buzzer, LAMP_TEST_S, Lamp, PersonAsk
 
 try:  # the release's rule table (D-260); an older release has none
     from core_common import robot_state
@@ -67,6 +67,12 @@ TEST_RESULT = "run/rosy-display/display-test.json"
 #: D-472 addendum 5: a blink may stand in for these normal patterns, moving or not. Booting,
 #: failed, emergency, caution and blocked (D-381) always win: refused, or cut short.
 IDENTIFY_OVER = frozenset({"ready", "manual", "navigating", "docking", "illumination"})
+#: SAF-005 critical (D-502 amendment 2026-11-07): at or under this the screen goes dark and the buzzer
+#: asks for a charger. Two readings in a row, so one motor sag does nothing; out above EXIT, or after the
+#: sensor stays silent MISSING readings: a reading that is gone is not low, and it must not beep for ever.
+BATTERY_URGENT_PERCENT, BATTERY_URGENT_EXIT_PERCENT = 10.0, 13.0
+BATTERY_URGENT_SAMPLES, BATTERY_URGENT_MISSING = 2, 4
+BATTERY_URGENT_REPEAT_S = 30.0
 
 
 def _read_json(path: Path) -> dict:
@@ -174,11 +180,18 @@ class FaceDisplay:
         self._battery_interval = battery_interval
         self._battery_due: float | None = None
         self._battery_value: tuple[float, float] | None = None
+        self._urgent = False
+        self._urgent_low = 0
+        self._urgent_missing = 0
+        self._urgent_sounded: float | None = None
+        self._table_screen: dict | None = None
         self._drawn: str | None = None
         self._state: str | None = None
         self._sounded: dict[str, float] = {}
         self._sound: str | None = None
         self._reversed_at: float | None = None
+        self._person = PersonAsk()
+        self._tick_sounded = False
         self._caution_since: float | None = None
         self._held: tuple[str, float] | None = None
         self._tested: str | None = None
@@ -197,6 +210,7 @@ class FaceDisplay:
         self._ticks = 0
         self.shutting_down = False
         self.animating: tuple | None = None
+        self._core_face_live = False  # tick may draw CORE's newest face (see step)
         self.screen: dict | None = None
         self.draws = 0
         self.frames = 0
@@ -261,7 +275,7 @@ class FaceDisplay:
                 and last is not None and now - last < BUZZER_REPEAT_S):
             return
         self._sounded[sound] = now
-        self._buzzer.announce(sound)
+        self._buzz(sound)
 
     def handle_test(self) -> str | None:
         """Play a D-247 test rosy-hw-test handed over; each request id once. The state played, or None."""
@@ -292,9 +306,12 @@ class FaceDisplay:
             return state
         if self._lamp is not None and self._lamp.pattern in ("emergency", "failed", "caution", "recovering", "bridging"):
             return None
-        if self.screen and (self.screen["kind"] in ("stopped", "update", "shutdown")
-                            or self.screen["row"] == "failed" or self.screen.get("strip_tone") == "caution"):
-            return None  # Alarm outputs must never wait for a blocking bench test.
+        # What is really happening (also while the urgent battery darkens the panel) or what is drawn: either one
+        # saying stop, update, shutdown, failed or caution keeps the alarm outputs from waiting for a bench test.
+        for table in (self._table_screen, self.screen):
+            if table and (table["kind"] in ("stopped", "update", "shutdown")
+                          or table["row"] == "failed" or table.get("strip_tone") == "caution"):
+                return None
         if self._lamp is not None and self._light_session:
             self._lamp.show(None)
         self._tested = request["request_id"]
@@ -391,6 +408,35 @@ class FaceDisplay:
                 screen = {**screen, "row": "network_recovery", "recovery_page": page}
         return screen
 
+    def _judge_urgent(self, reading: tuple[float, float] | None) -> None:
+        """One new battery reading against the urgent thresholds."""
+        if reading is None:
+            self._urgent_missing += 1
+            if self._urgent_missing >= BATTERY_URGENT_MISSING:
+                self._urgent, self._urgent_low = False, 0
+            return
+        self._urgent_missing = 0
+        self._urgent_low = self._urgent_low + 1 if reading[0] <= BATTERY_URGENT_PERCENT else 0
+        if self._urgent_low >= BATTERY_URGENT_SAMPLES:
+            self._urgent = True
+        elif reading[0] > BATTERY_URGENT_EXIT_PERCENT:
+            self._urgent = False
+
+    def _screen(self, view: dict, now: float) -> dict | None:
+        """The table's screen, dark while the battery is urgent. An update or a shutdown stays visible."""
+        screen = self._table_screen = self.screen_of(view, now)
+        if self._urgent and screen is not None and screen["kind"] not in ("update", "shutdown"):
+            # a dark panel shows no person request: the urgent beep is already asking for a charger (D-721 Amendment)
+            return {**screen, "kind": "sleep", "row": "standby", "backlight": 0, "awake": False, "person": None}
+        return screen
+
+    def _urgent_alarm(self, now: float) -> None:
+        if not self._urgent:
+            self._urgent_sounded = None
+        elif self._urgent_sounded is None or now - self._urgent_sounded >= BATTERY_URGENT_REPEAT_S:
+            self._urgent_sounded = now
+            self._buzz("battery_urgent")
+
     def _lcd_call(self, name: str, *args) -> None:
         action = getattr(self.lcd, name, None)
         if action is not None:
@@ -414,6 +460,7 @@ class FaceDisplay:
     def step(self) -> bool:
         """True when the LCD was redrawn."""
         now = self._clock()
+        self._tick_sounded = False
         if self.shutting_down:
             # Review LOW: the last poll only draws the shutdown card — no battery read,
             # no sound, no lamp, no handed-over test on the way out.
@@ -421,6 +468,7 @@ class FaceDisplay:
         if self._battery_due is None or now >= self._battery_due:
             self._battery_value = self._battery.read()
             self.battery_reads += 1
+            self._judge_urgent(self._battery_value)
             self._battery_due = now + self._battery_interval
         view = read_view(self.root, self._battery_value)
         # D-385: 기다리는 동안 무대 제목이 1 fps 로 숨쉰다 — 끝난 상태는 고요히 그대로.
@@ -430,7 +478,7 @@ class FaceDisplay:
         if state != self._state:
             self._state = state
         core = self._core()
-        screen = self.screen = self.screen_of(view, now)
+        screen = self.screen = self._screen(view, now)
         pres = self._present(view, state, core, screen)
         pattern = pres.lamp
         if self._lamp is not None:
@@ -439,7 +487,7 @@ class FaceDisplay:
             self._lamp.show(pattern)
             self._lamp.poll()
         if self.handle_test() is not None:
-            screen = self.screen = self.screen_of(view, now)
+            screen = self.screen = self._screen(view, now)
         self._power(screen)
         kind = screen["kind"] if screen else "status"
         redrawn = False
@@ -449,6 +497,9 @@ class FaceDisplay:
         if kind == "face" and screen["overlay"] is None:
             # The face plays from tick(); the status bar rides every frame.
             self.animating = bar
+            # CORE's live face replaces the bar's only while the bar shows it unchanged: no
+            # situation face (recovery hold included) and no lamp-level substitution.
+            self._core_face_live = bar is not None and core is not None and bar[0] == core.get("face")
             self._drawn = None
         else:
             self.animating = None
@@ -479,7 +530,16 @@ class FaceDisplay:
         # the lamp and any status card first, especially on emergency entry.
         self._announce(pres.sound, now)
         self._reverse_alarm(pres.reversing, now)
+        self._urgent_alarm(now)
+        # D-721 Amendment: one sound pattern per loop. The e-stop and failed sounds come first, the urgent battery
+        # beep owns the panel while it is dark, and the person's call waits for a tick where nothing else sounded.
+        if not self._urgent and not self._tick_sounded and self._person.due((screen or {}).get("person"), now):
+            self._buzz("call")  # ROSY_BUZZER_ENABLED is the Buzzer's own switch
         return redrawn
+
+    def _buzz(self, sound: str) -> None:
+        self._tick_sounded = True
+        self._buzzer.announce(sound)
 
     def _reverse_alarm(self, reversing: bool, now: float) -> None:
         """D-546: one reversing beep per BUZZER_REVERSE_S while ``Presentation.reversing``; silent otherwise."""
@@ -487,7 +547,7 @@ class FaceDisplay:
             self._reversed_at = None
         elif self._reversed_at is None or now - self._reversed_at >= BUZZER_REVERSE_S:
             self._reversed_at = now
-            self._buzzer.announce("reverse")
+            self._buzz("reverse")
 
     def _draw_shutdown(self, now: float) -> bool:
         view = read_view(self.root, self._battery_value)
@@ -511,7 +571,21 @@ class FaceDisplay:
         if self._backlight < 100 and self._ticks % 2:
             return False  # D-185: the dimmed (idle) face plays at half rate
         face, *bar = self.animating
-        frame = self._faces.next(face)
+        if self._faces.expressive:
+            core = self._read_core()
+            if core is None or core.get("estop") or core.get("robot_mode") == "EMERGENCY":
+                return False
+            if core.get("face") and self._core_face_live:
+                face = core["face"]
+            expires = core.get("expression_until")
+            live = expires is not None and self._wall() <= expires
+            intent = core.get("expression") if live else None
+            if expires is not None and not live and self._core_face_live:
+                face = "basic"
+            intent = intent or {"gaze_x": 0., "resting": False}
+            frame = self._faces.next(face, expression=intent, now=self._clock())
+        else:
+            frame = self._faces.next(face)
         if frame is None:
             return False
         if self._strip is not None:

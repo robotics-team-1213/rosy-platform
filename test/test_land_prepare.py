@@ -627,8 +627,10 @@ def test_full_pretests_beyond_max_full_wait_for_older_ones_and_affected_ones_do_
         naps.append(1)
         queue.set_status(older[0], "waiting")  # its pretest ended: the turn's wait, no longer preparing
 
-    prep.full_slot(tmp_path, mine, sleep=finish_one)
+    rolls = []
+    prep.full_slot(tmp_path, mine, sleep=finish_one, roll=lambda: rolls.append(1))
     assert naps == [1] and json.loads(mine.read_text())["tier"] == "full"
+    assert rolls == [1], "D-889 34: a new FULL waiter starts one rollup of every waiter, once"
     later = queue.take(tmp_path, "feat/later", status="preparing")
     queue.set_status(later, "preparing", tier="")  # an affected pretest never counts against FULL ones
     urgent = queue.take(tmp_path, "feat/urgent", status="preparing", urgent="hotfix")

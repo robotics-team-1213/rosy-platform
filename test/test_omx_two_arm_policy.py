@@ -1,5 +1,4 @@
 """Two-arm ACT tool: what the plan tells the model, and how a round's score is counted. No MuJoCo needed."""
-import math
 from pathlib import Path
 import sys
 
@@ -13,22 +12,28 @@ import omx_two_arm_tasks as tasks  # noqa: E402
 
 
 def test_every_plan_step_gets_its_own_goal():
-    """Only the top camera's picture could otherwise tell the model which of 21 steps it is on."""
+    """Only the top camera's picture could otherwise tell the model which plan step it is on."""
     layout = sites.Layout()
-    steps = [step for name in policy.TASKS for step in tasks.get_task(layout, name)["steps"]]
-    goals = np.array([policy.goal_vector(layout, step) for step in steps])
-    assert goals.shape == (21, 12)
-    assert len({goal.tobytes() for goal in goals}) == 21
-    assert all(goal[0] == (step["arm"] == "arm_a") and goal[1] == (step["arm"] == "arm_b") for goal, step in zip(goals, steps))
+    steps, goals = [], []
+    for name in policy.TASKS:
+        task = tasks.get_task(layout, name)
+        here = dict(task.get("start", {}))
+        for step in task["steps"]:
+            steps.append(step)
+            goals.append(policy.goal_vector(layout, step, {k: v for k, v in here.items() if k != step["container"]}))
+            here[step["container"]] = step["to"]
+    goals = np.array(goals)
+    assert goals.shape == (len(steps), policy.GOAL_SIZE)
+    assert len({goal.tobytes() for goal in goals}) == len(steps)
+    assert all(goal[0] == (step["arm"] == "arm_a") and goal[11] == (step["arm"] == "arm_b") for goal, step in zip(goals, steps))
 
 
-def test_a_container_turned_half_way_round_is_the_same_goal():
-    layout = sites.Layout()
-    step = dict(arm="arm_a", to="tmp-a-1", **{"from": "belt"})
-    site = layout.sites["tmp-a-1"]
-    before = policy.goal_vector(layout, step)
-    layout.sites["tmp-a-1"] = dict(site, yaw=site["yaw"] + math.pi)
-    assert np.allclose(before, policy.goal_vector(layout, step), atol=1e-5)
+def test_both_arms_goals_share_one_vector_and_a_waiting_arm_is_zero():
+    """Concurrent mode: each frame carries both arms' current steps; an arm between steps has zeros."""
+    a, b = np.arange(1, 12, dtype=np.float32), -np.arange(1, 12, dtype=np.float32)
+    both = policy.goal_of({"arm_b": b, "arm_a": a})
+    assert both.shape == (policy.GOAL_SIZE,) and (both[:11] == a).all() and (both[11:] == b).all()
+    assert (policy.goal_of({"arm_b": b})[:11] == 0).all() and (policy.goal_of({}) == 0).all()
 
 
 def test_a_round_counts_steps_and_keeps_whole_runs_apart():

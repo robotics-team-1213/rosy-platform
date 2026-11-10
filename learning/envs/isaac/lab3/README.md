@@ -4,7 +4,7 @@ AI PC·모델 PC의 수동 Lab v3.0.0 환경은 기존 SDK 설치와 별도 경�
 
 | 환경 | 위치 | 2026-10-27 최종 검증 |
 |---|---|---|
-| Newton / MJWarp | 두 PC의 `~/rosy-test/venvs/isaaclab-3.0.0-newton/` | 의존성 207개·CUDA·Cartpole·PPO 동시 실행·정리 통과 |
+| Newton / MJWarp | 2026-11-09 두 PC에서 삭제(13일간 실행·설정·코드 참조 없음, 13.4GB). 필요하면 아래 고정 버전으로 다시 만든다 | 의존성 207개·CUDA·Cartpole·PPO 동시 실행·정리 통과 |
 | Sim 6.2 로컬 호환 환경 | 두 PC의 `~/rosy-test/venvs/isaaclab-3.0.0-sim62/` | 의존성·CUDA·PhysX Cartpole·PPO·정리 통과 |
 
 공통 소스는 IsaacLab Git v3.0.0 commit `e3f7d9ff1f5d7f8280de3ece9000b7117f66bcf4`, Python 3.12.3, Torch 2.11.0+cu130이다. Newton은 Warp 1.17.0 / Newton 1.6.1 / MuJoCo-Warp 3.12.0 / RSL-RL 5.5.1 / NumPy 2.3.5다. Sim은 NumPy 2.3.1을 사용한다. 각각 source/와 .venv/를 함께 보존한다.

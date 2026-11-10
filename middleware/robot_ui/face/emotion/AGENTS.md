@@ -20,7 +20,7 @@ Installed to `share/emotion/emotion`; runtime lookup is
 | `emotion_server.py` | LCD service and display/info node (`emotion_server=emotion.emotion_server:main`) |
 | `rosy_lcd.py` | Hardware LCD helper (SPI, RPi.GPIO — device only) |
 | `info_screen.py` | PIL renderer for `display/info` JSON (320×240, ROS-free) |
-| `*.gif` | hello, basic, angry, bored, fun, happy, interest, sad |
+| `*.gif` | hello, basic, angry, bored, fun, happy, interest, sad, doze, scan, lost, worry, lowbat, cheer, thinking, searching (`character.NAMES`) |
 
 ## Subdirectories
 
@@ -30,7 +30,7 @@ None.
 
 ### Working In This Directory
 
-- Known emotions: hello, basic, angry, bored, fun, happy, interest, sad. Unknown
+- Known emotions: `character.NAMES` (= `core_common.face_screen.FACES`). Unknown
   names should fail closed. Filenames are the `set_emotion` names — renaming a
   GIF without updating the service contract breaks the LCD.
 - Info-screen cards are drawn in PIL (`info_screen.py`), not as GIFs here.

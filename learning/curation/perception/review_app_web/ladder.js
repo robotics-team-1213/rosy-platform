@@ -8,6 +8,9 @@ const COMPARE={better:'더 좋음 (평가 구간이 겹치지 않고 위쪽)',wo
   unclear:'차이 불명확 — 아직 정할 수 없습니다',current:'현재 비교 기준입니다'};
 const TWO_ARM={stack:'3×3×3 적층',rehandle:'임시 칸 재취급'};
 const TWO_ARM_STAGE={collect:'시연 수집',train:'학습',evaluate:'평가'};
+const COMPARE_SCENARIO={stack:'컨베이어에서 장치(9개)',outbound:'재취급을 동반한 반출(2건)'};
+const COMPARE_MODE={'one-arm-A':'한 팔 A','one-arm-B':'한 팔 B','two-arm':'두 팔 동시'};
+const HOLD_REASON={NO_STAND_IN_REACH:'반출 자리(임시 칸 줄)로 옮길 팔 없음',NO_TEMPORARY_SPACE_IN_REACH:'임시 자리에 닿는 팔 없음',NO_ARM_FOR_RESTORE:'되돌릴 팔 없음',NO_FREE_OUTBOUND_LANE:'빈 반출 자리(임시 칸 줄) 없음'};
 const TWO_ARM_VIEW={'top.png':'위쪽 D435','side.png':'옆 Jieli','a_wrist.png':'손목 arm_a','b_wrist.png':'손목 arm_b'};
 const SCENE={robot:'팔',jaw:'집게',wrist_camera:'손목 카메라',revision:'셀 개정'};
 const RECIPE={policy:'정책',steps:'학습 단계',batch_size:'묶음 크기',chunk_size:'청크',n_action_steps:'행동 단계',optimizer_lr:'학습률'};
@@ -28,6 +31,7 @@ function controls(){
   $('ladder-decide').disabled=busy||!manager||!configured||!passed;
   $('ladder-start').disabled=busy||!manager||!configured||running;
   $('ladder-two-arm-start').disabled=busy||!manager||!configured||twoArmRunning;
+  $('ladder-compare-start').disabled=busy||!manager||!configured||twoArmRunning;
   $('ladder-decide-round').textContent=selected?.round_id||'없음';
   $('ladder-start-state').textContent=!configured?'학습 사다리가 연결되지 않았습니다. 라운드를 시작할 수 없습니다.':
     running?'다른 라운드가 실행 중입니다. 끝난 뒤 시작할 수 있습니다.':
@@ -70,6 +74,39 @@ function twoArmCard(row){
   }
   return item;
 }
+function compareCard(row){
+  const item=el('article',undefined,'ladder-card');
+  if(row.unreadable){item.append(el('h3',row.run_id),el('p','이 비교 기록을 읽을 수 없습니다.'));return item;}
+  const line=el('div',undefined,'ladder-stage');line.dataset.status=row.status;line.append(el('span',STATUS[row.status]||STATUS.unknown));
+  item.append(el('h3',`한 팔·두 팔 비교 · 시드 ${row.seed ?? '?'}`),el('p',row.created_at||'시각 기록 없음','quiet'),line);
+  if(row.reason)item.append(el('p','이유: '+row.reason));
+  for(const scenario of Object.keys(COMPARE_SCENARIO)){
+    const runs=row.runs.filter(run=>run.scenario===scenario);
+    if(!runs.length)continue;
+    item.append(el('h4',COMPARE_SCENARIO[scenario]));
+    const scroll=el('div',undefined,'ui-table-scroll'),table=el('table',undefined,'ui-data-table'),head=el('tr'),body=el('tbody');
+    scroll.tabIndex=0;table.setAttribute('aria-label',`${COMPARE_SCENARIO[scenario]} 모드별 결과`);
+    for(const name of ['모드','결과','보류(사람·추가 이송)','걸린 시간','겹쳐 움직인 시간','팔별 이동'])head.append(el('th',name));
+    table.append(el('thead'),body);table.tHead.append(head);
+    for(const run of runs){
+      const tr=el('tr');
+      const result=run.steps==null?(run.reason||'결과 없음'):`단계 ${run.steps_pass ?? '?'} / ${run.steps}${run.completed?' 완료':' 멈춤'}`;
+      const holds=run.holds.length?run.holds.map(h=>`${h.request}: ${HOLD_REASON[h.reason]||h.reason}`).join(', '):'없음';
+      const time=run.makespan_s==null?'—':`${run.makespan_s}초 (계획 ${run.planned_makespan_s ?? '?'}초)`;
+      const moves=Object.entries(run.moves_per_arm||{}).map(([arm,n])=>`${arm} ${n}`).join(' · ')||'—';
+      for(const text of [COMPARE_MODE[run.mode]||run.mode,result,holds,time,run.concurrent?`${run.overlap_s ?? '?'}초`:'—',moves])tr.append(el('td',text));
+      body.append(tr);
+    }
+    scroll.append(table);item.append(scroll);
+    for(const run of runs.filter(run=>run.video)){
+      const fig=el('figure'),video=el('video');
+      video.controls=true;video.preload='none';video.src=`/api/learning/ladder/two-arm-compare/${row.run_id}/artifacts/${run.video}`;
+      video.setAttribute('aria-label',`${COMPARE_SCENARIO[scenario]} ${COMPARE_MODE[run.mode]||run.mode} 영상`);
+      fig.append(video,el('figcaption',`${COMPARE_MODE[run.mode]||run.mode} · 네 카메라`));item.append(fig);
+    }
+  }
+  return item;
+}
 function twoArmRoundCard(row){
   const item=el('article',undefined,'ladder-card');
   if(row.unreadable){item.append(el('h3',row.round_id),el('p','이 라운드 기록을 읽을 수 없습니다.'));return item;}
@@ -93,6 +130,10 @@ function twoArmRoundCard(row){
   return item;
 }
 async function refreshTwoArm(){
+  const compared=await api('two-arm-compare');
+  const compareBox=$('ladder-compare');
+  if(compared.runs?.length)compareBox.replaceChildren(...compared.runs.map(compareCard));
+  else compareBox.textContent=configured?'아직 한 팔·두 팔 비교 기록이 없습니다.':'학습 사다리가 연결되지 않았습니다.';
   const learned=await api('two-arm-rounds');
   $('ladder-two-arm-rounds').replaceChildren(...(learned.rounds||[]).map(twoArmRoundCard));
   const data=await api('two-arm');
@@ -182,6 +223,14 @@ $('ladder-two-arm-form').addEventListener('submit',event=>{
     await api('two-arm',{task:$('ladder-two-arm-task').value,seed:Number($('ladder-two-arm-seed').value)});
     await refreshTwoArm();
     notice('ladder-notice','양팔 태스크를 시작했습니다. 몇 분 뒤 새로고침하면 결과를 볼 수 있습니다.');
+  });
+});
+$('ladder-compare-form').addEventListener('submit',event=>{
+  event.preventDefault();
+  work(async()=>{
+    await api('two-arm-compare',{seed:Number($('ladder-compare-seed').value)});
+    await refreshTwoArm();
+    notice('ladder-notice','한 팔·두 팔 비교를 시작했습니다. 여섯 번을 돌리므로 수십 분 뒤 새로고침하면 결과를 볼 수 있습니다.');
   });
 });
 $('ladder-decision').addEventListener('submit',event=>{
