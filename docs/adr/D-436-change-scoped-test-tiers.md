@@ -49,3 +49,31 @@
 - 역의존은 정적 import만 본다. 웹 정적 파일·YAML 설정 같은 비 Python 결합은 직접 참조 규칙과 main push 풀 실행이 마지막 그물이다. main 풀 실행에서 affected가 놓친 실패가 나오면 선택 규칙을 고치고 그 사례를 선택기 시험 표에 더한다.
 
 **References:** [D-346 커밋 시점 충돌 방어](D-346-commit-time-collision-defenses.md), [D-61 progress-logs-index](D-61-progress-logs-index.md), [D-427](D-427-platform-three-parts-middleware-operations-learning.md), [D-430](D-430-safety-as-a-separate-concern.md), `tools/harness/affected_tests.py`, `test/test_affected_tests.py`.
+
+### 추가 1 (2026-11-09): 착지 FULL은 영향 범위를 모를 때만 (사용자 결정)
+
+사용자 결정(2026-11-09): "더 잘게 나누고 정말 필요할때만 하는걸로 결정해". 착지마다 도는 FULL을 줄이고, 남는 FULL은 짧게 나눈다.
+
+**측정(최근 7일, `rosy-land-events.jsonl`의 사전 시험 542회를 지금 선택기로 다시 분류):** FULL 사전 시험 167회, 142.5시간, 중앙값 36분, p90 118분, 최대 236분. affected는 중앙값 10.5분이다. FULL을 부른 규칙(한 착지에 여럿 겹침): 관문 도구·선택기 73회 53.6 h, 공용 기반 51회 51.6 h, 안전 경로 32회 29.6 h, 명시 `--tests full`(게시용) 22회 25.4 h, 미분류 15회 15.1 h, 패키징 14회 16.8 h, CI workflow 12회 10.7 h, 폴더 이동 6회, compose 5회, source layout 5회, native·image manifest 6회, 의존성 고정 3회, 루트 설정 3회, conftest 2회. FULL 한 번의 시간은 호스트 자리 대기(호출 대기 p90 58분)와 긴 막대 하나(루트 `test --ignore=<g1 timing>`, 착지 중앙값 11분·야간 20.5분, `--ignore` 때문에 나뉘지 않음)가 정했다. 실험실 FULL 계획에는 폴더 호출이 이미 모으는 파일 4묶음(ACT 3파일, account pipeline, monitoring·palletizing 등 루트 파일, `test_ir_adc_lock.py`)이 두 번 들어 있었다.
+
+**결정:**
+
+| 바뀐 것 | 착지 시험 |
+|---|---|
+| 관문 도구·harness 가운데 시험을 고르거나 돌리지 않는 것(`tools/land_queue.py`·`land_async.py`·`land_stats.py` 등, `tools/hooks/**`, `tools/remote/host_probe.py` 등) | FULL 대신 선택기 자체 시험 묶음: `affected_narrow.SELF_TEST`(land·remote·affected·known_failures·publish·worktree·pre_push·host_probe·lab_hosts 등 시험)와 `test/architecture`, 경로를 이름으로 읽는 시험, 상시 묶음. 관문 모듈을 import하는 루트 시험이 이 이름 패턴에서 빠지면 `test_affected_tiers`가 실패한다 |
+| 시험을 고르거나 돌리는 코드(`affected_narrow.SELECT_CORE`: `tools/harness/affected_*.py`, `land_selection.py`, `land_browser.py`, `remote_pytest`·`remote_job`·`remote_test_tools`·`work_queue`·`xdist_plan`, `test/known_failures.py`, `test/browser_scope.py`) | FULL 유지. 설계 0.7 규칙 8(관문은 자기가 고른 선택으로 자기를 시험하지 않는다) |
+| 안전 경로(`concern: safety`, `safety_modules`) | FULL 유지(D-889 6). 정적 import 도달로는 안전 값을 설정·YAML·웹 정적 파일·IDL로 읽는 쪽을 찾지 못한다 |
+| 공용 기반·ROS IDL·하위 conftest·패키징·CI workflow·architecture | 경로의 모듈 suite, 한 단계 역의존(import), 읽는 시험; 하위 conftest는 그 폴더 전체 |
+| 미분류, 폴더 이동·모듈 삭제, 의존성 고정, deploy compose·image·native manifest, source layout, 루트 conftest·pyproject·pytest.ini | FULL 유지(영향 범위를 모름) |
+
+- 그물: 야간 FULL(`tools/land_nightly.py`, `--full` + 모든 브라우저 suite)과 게시 전 녹색 FULL(D-868, `publish_evidence.py`)은 그대로다. 명시 `--tests full`도 그대로다(게시 증거). GitHub PR의 범위 계산은 이전 규칙을 쓴다(`ci.yml`이 `ROSY_FULL_LEGACY=1`). 좁힌 착지가 놓친 실패는 야간 FULL이 `land_mainred`에 `by: nightly`와 main sha로 남기고, 그 뒤 착지는 기존 main 빨강 이월로 지나간다. 어느 착지가 깼는지는 지금 자동으로 짚지 않는다(전 녹색 야간..main 범위를 사람이 본다).
+- 남는 FULL 단축: 실험실 FULL 계획에서 같은 파일을 두 번 돌리지 않는다(`affected_tests._once`, 29→25 호출). `work_queue.split`은 `--ignore=`만 붙은 호출도 나눈다(루트 `test`가 측정 시간대로 최대 6조각, 무시 파일은 어느 조각에도 없다).
+- 멈춘 시험 하나가 착지를 붙잡지 않는다: 원격 venv에 `pytest-timeout==2.4.0`을 넣고 `remote_job`이 `PYTEST_TIMEOUT=900`(초)을 둔다. 넘긴 시험은 그 id로 보통 실패가 되어 known_failures·main 빨강 처리로 간다. `@pytest.mark.timeout(n)`이나 호출 앞 `ROSY_PER_TEST_TIMEOUT=n`으로 바꾼다. 11-09 `test_account_pipeline.py::test_login_callback_refresh_revoke_and_core_scope`가 시간 제한 없는 websocket 수신에서 42분 멈춘 일이 계기이고, 그 수신은 남은 20초 창 안에서만 기다리게 했다. venv 입력이 바뀌어 첫 실행 때 호스트마다 venv를 한 번 새로 만들고, 착지 캐시는 한 번 비어 있는 것처럼 돈다.
+- 등록부(`harness.yaml`, `platform_parts.yaml`)는 모든 경로의 매핑을 움직이므로 이전 규칙 그대로다(모듈 추가만 좁힘). 좁힌 트리거라도 경로가 어떤 모듈·시험에도 닿지 않으면 미분류로 FULL이다(자체 시험 묶음·하위 conftest·CI workflow만 그 묶음이 곧 선택).
+- 되돌리기: 환경 변수 `ROSY_FULL_LEGACY=1` 하나로 이전 규칙(모든 트리거 FULL)이 돌아온다. 착지 도구는 main의 코드로 돌므로, 착지를 띄우는 셸에 이 값을 두거나 이 추가를 되돌리는 커밋을 착지한다.
+
+**패널 수정(2026-11-09, 착지 전):** 외부 모델 4개(glm-5.3, deepseek-v4.1-flash, big-pickle, mimo-v2.6-flash)와 Opus 2개(처리량·안전 역할)의 2라운드 토론에서 6명 모두 안전 경로를 좁히는 것은 "안전 시험을 약하게 하지 않는다"는 제약에 어긋난다고 판단했다. 그래서 안전 경로는 FULL로 되돌렸고, 4명의 지적에 따라 시험을 고르거나 돌리는 코드도 FULL로 남겼다. 아래 추정치에서 안전 경로 32회(29.6 h)와 선택·실행 코드 몫이 FULL로 돌아가므로 실제 감소는 그만큼 작다(대략 167→80~90회).
+
+**전후(같은 7일, 추정, 패널 수정 전 계산):** FULL 사전 시험 167회 142.5 h → 55회 53.7 h(남는 것: 미분류·이동·manifest·의존성·루트 설정·명시 FULL). 좁혀진 112회는 FULL로 88.8 h였고, affected 중앙값으로 치면 약 19.5 h다(안전·공용 기반 묶음은 affected보다 커서 실제는 이보다 길다). 과거 착지 세 건을 새 선택기로 다시 고른 결과: 관문 도구 변경(`b4226bc7be`) 시험 파일 2,577→80, 공용 기반 변경(`8ef3afdde0`) 2,582→2,321(루트·브라우저·시뮬 제외), 안전 경로 변경(`2c4849279f`) 2,591→1,412. 남는 FULL 한 번은 가장 긴 조각이 루트 `test` 11~20분에서 그 1/3 안팎(4~7분)과 gateway suite 7분이 되어, 호스트가 비어 있으면 30분 안쪽이 목표다. 남는 꼬리는 호스트 자리 대기이며 FULL 횟수가 줄어 함께 준다. 실제 착지 시간은 이 추가가 main에 들어간 뒤의 `land_stats`로 확인한다.
+
+시험: `test/test_affected_tiers.py`(안전 경로와 시험 선택·실행 코드의 FULL 유지, 관문 도구의 자체 시험 묶음과 그 이름 패턴이 관문 시험을 모두 덮는 것, 문서만 바뀐 착지에 무거운 suite가 없는 것, 공용 기반의 역의존, 하위 conftest·workflow, 영향 범위를 모르는 경로의 FULL 유지, 실험실 FULL에서 모든 경로가 한 번), `test/test_work_queue_split.py`(`--ignore` 분할에서 파일마다 정확히 한 번). 이전 규칙은 `test/test_affected_tests.py`가 `ROSY_FULL_LEGACY=1`로 그대로 고정한다.

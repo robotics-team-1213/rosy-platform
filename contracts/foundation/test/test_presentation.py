@@ -172,3 +172,17 @@ def test_estop_failed_and_emergency_are_never_masked():
     assert pr.present(state=rs.FAILED, robot_mode="NAVIGATION", core=None).lamp == "failed"
     # and CORE's unknown mode does not hide the files' EMERGENCY
     assert pr.present(state=rs.READY, robot_mode="EMERGENCY", core=core(robot_mode=None)).lamp == "emergency"
+
+
+@pytest.mark.parametrize("fields,face", [
+    ({"caution": ["line_follow_hold"]}, "lost"), ({"caution": ["dock_failed"]}, "worry"),
+    ({"robot_mode": "NAVIGATION", "recovery": "retrace"}, "searching"),
+])
+def test_caution_situation_faces_are_kept_under_the_caution_lamp(fields, face):
+    _screen, record = both(rs.READY, core(**fields))
+    assert record.status_level == pr.CAUTION and record.expression == face
+
+
+def test_rest_faces_are_not_shown_under_a_caution_lamp():
+    screen, record = both(rs.CAUTION, core(battery_charging=True))
+    assert screen["face"] == "doze" and record.expression == pr.FALLBACK_FACE[pr.CAUTION]

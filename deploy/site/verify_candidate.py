@@ -38,10 +38,13 @@ REQUIRED_DEPLOYMENT_FILES = (
     "compose.account.yaml", "Caddyfile.account",
     "compose.account-backup.yaml", "rosy-account-backup.service", "rosy-account-backup.timer",
     "rosy-account-backup-check.service", "rosy-account-backup-check.timer",
+    "account_tls_renew.py", "account-tls.env.example", "rosy-site-account-tls-renew.service", "rosy-site-account-tls-renew.timer",  # D-1001: R renews from the signed release
     "sign_candidate.py", "verify_candidate.py",
 )
 REQUIRED_DOCUMENT_FILES = ("docs/reference/site-lan-discovery-profile.md",)
 ACCOUNT_DEPLOYMENT_FILES = ("compose.account.yaml", "Caddyfile.account")
+ACCOUNT_TLS_FILES = ("account_tls_renew.py", "account-tls.env.example",
+                     "rosy-site-account-tls-renew.service", "rosy-site-account-tls-renew.timer")
 ACCOUNT_BACKUP_FILES = ("compose.account-backup.yaml", "rosy-account-backup.service", "rosy-account-backup.timer",
                         "rosy-account-backup-check.service", "rosy-account-backup-check.timer")
 MONITORING_DEPLOYMENT_FILES = ("compose.monitoring.yaml", "Caddyfile.monitoring")  # D-936
@@ -134,6 +137,8 @@ def _verify_candidate_content(candidate_dir: Path, *, manifest_bytes: bytes | No
         if set(hashes) & set(ACCOUNT_BACKUP_FILES):
             raise CandidateVerificationError('Account maintenance requires its own signed image inventory')
         required.difference_update(ACCOUNT_BACKUP_FILES)
+    if not set(hashes) & set(ACCOUNT_TLS_FILES):
+        required.difference_update(ACCOUNT_TLS_FILES)  # earlier signed candidates; a half group stays required
     if "compose.omx.yaml" not in hashes:
         required.discard("compose.omx.yaml")
     if "compose.workcell.yaml" not in hashes:

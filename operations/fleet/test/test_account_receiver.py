@@ -188,6 +188,8 @@ def test_receiver_sends_a_person_back_to_the_console_when_the_login_flow_expired
     '/console?view=work&arm_transfer=job:one&robot=r1',
     '/console/site-map?robot=r1#teach-heading',
     '/console/install#cameras',
+    '/console/install#camera-link',
+    '/console/install#camera-peer-panel',
 ])
 def test_receiver_pkce_preserves_known_document_query_and_anchor(receiver, target):
     client, _, authority, context, _ = receiver
