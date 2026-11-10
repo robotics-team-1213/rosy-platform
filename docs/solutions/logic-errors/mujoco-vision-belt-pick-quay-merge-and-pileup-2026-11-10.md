@@ -38,5 +38,5 @@ applies_when:
 
 ## 검증
 
-- 원격 시뮬레이션(`ai@100.108.76.123`): `omx_ladder.py two-arm --task stack --seed 0 --pick-vision --belt-skew --choice container_colours=multi` → `steps_pass: 9/9`, `status: "passed"`, `isaac-handoff.json`·`isaac-suite.json` 9건 생성 확인.
+- 원격 시뮬레이션(AI PC): `omx_ladder.py two-arm --task stack --seed 0 --pick-vision --belt-skew --choice container_colours=multi` → `steps_pass: 9/9`, `status: "passed"`, `isaac-handoff.json`·`isaac-suite.json` 9건 생성 확인.
 - 원격 pytest: `test/test_omx_two_arm_policy.py`, `test/test_omx_ladder.py`, `test/learning/perception/test_ladder_web.py`, `test/test_omx_cell_cases.py` 47건 통과.
