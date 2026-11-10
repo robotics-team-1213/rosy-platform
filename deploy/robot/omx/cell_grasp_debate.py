@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """Multi-agent consistency debate and post-grasp stability / put-back (reinsert) judge.
 
+Built on top of ROSY's `judge_seat` (`schema_version = 2`), `cell_decisions`, `cell_knowledge`, and `cell_diagnose`
+architecture so that any single model or multi-model deliberation panel (`ollama` local VLM, `zai`/`glm-5.3`/
+`glm-5.3-flash`, `openai`/`vllm` HTTP, `opencode`/`claude` CLI, or custom callables) can participate.
+
 Combines three seats at `above_pick`, `run grasp_pick`, and `run lift_pick`:
   1. Telemetry / Kinematic Judge (`telemetry_judge`): checks jaw position `state[5]` against `gripper.held_30mm`
      to catch shallow corner pinches (`state[5] < held_30mm - shallow_tol_units`, which slipped during fold in
@@ -8,9 +12,9 @@ Combines three seats at `above_pick`, `run grasp_pick`, and `run lift_pick`:
   2. Wrist-Vision Judge (`vision_judge`): measures the container's lateral (`along_mm`) and depth (`across_mm`)
      offset between the v2.1 white fingers (`cell_fingers.finger_offset_mm`) and computes the corrective shift
      `(dx_mm, dy_mm)` along the closing axis.
-  3. Multi-Model Debate (`debate_models`): runs a Critic -> Arbiter consistency debate across configured decision
-     models (e.g., GLM `glm-4.7` + `glm-4.5-air` via ZAI API or Ollama VLMs) while keeping measured safety bounds
-     sovereign.
+  3. Model-Agnostic Deliberation (`judge_seat.from_config` / `judge_seat.cooperate`): runs a Proposal -> Critique ->
+     Arbiter consistency deliberation across configured models (defaulting GLM to `glm-5.3` / `glm-5.3-flash`) while
+     keeping measured safety bounds sovereign (`judge_seat.measured`).
 
 When a grasp is judged unstable (`unstable_shallow`, `unstable_wedged`, or `unstable_skewed`), the container is
 never dropped in mid-air or carried crooked to `place`:
@@ -24,79 +28,27 @@ from __future__ import annotations
 
 import json
 import math
-import os
-import urllib.request
 from pathlib import Path
 
 import numpy as np
 
+import cell_decisions as cd
 import cell_fingers
 import cell_params as prm
+import judge_seat
 
+SCHEMA_VERSION = judge_seat.SCHEMA_VERSION
 ACTIONS = ("proceed", "reinsert_and_retry", "reinsert_and_park")
 
 
-def _extract_json(text: str) -> dict:
-    text = (text or "").strip()
-    if text.startswith("```"):
-        lines = [line for line in text.splitlines() if not line.strip().startswith("```")]
-        text = "\n".join(lines).strip()
-    start, end = text.find("{"), text.rfind("}")
-    if start >= 0 and end > start:
-        return json.loads(text[start:end + 1])
-    return json.loads(text)
-
-
 def load_zai_key() -> str | None:
-    for env_name in ("ZAI_API_KEY", "GLM_API_KEY"):
-        if os.environ.get(env_name):
-            return os.environ[env_name].strip()
-    auth_path = Path.home() / ".local/share/opencode/auth.json"
-    if auth_path.is_file():
-        try:
-            data = json.loads(auth_path.read_text(encoding="utf-8"))
-            key = (data.get("zai-coding-plan") or {}).get("key")
-            if isinstance(key, str) and key.strip():
-                return key.strip()
-        except Exception:
-            pass
-    return None
+    return judge_seat._resolve_api_key(provider="zai")
 
 
-def glm_backend(model: str = "glm-4.7", url: str = "https://api.z.ai/api/coding/paas/v4/chat/completions",
-                api_key: str | None = None, timeout: float = 12.0):
-    """Decision model callable `(prompt, images_b64, schema) -> dict` backed by GLM (ZAI Coding Plan API)."""
-    def ask(prompt: str, images=(), schema=None) -> dict:
-        key = api_key or load_zai_key()
-        if not key:
-            raise RuntimeError("no ZAI_API_KEY / opencode auth key configured")
-        sys_msg = (
-            "You are a robotics grasp-stability and multi-tier stacking arbiter. "
-            "Reply with a single compact JSON object matching the requested schema."
-        )
-        if schema:
-            sys_msg += f" Schema: {json.dumps(schema)}"
-        body = {
-            "model": model,
-            "thinking": {"type": "disabled"},
-            "temperature": 0.0,
-            "messages": [
-                {"role": "system", "content": sys_msg},
-                {"role": "user", "content": prompt},
-            ],
-        }
-        req = urllib.request.Request(
-            url,
-            data=json.dumps(body).encode("utf-8"),
-            headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
-        )
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            payload = json.loads(resp.read())
-        content = payload["choices"][0]["message"]["content"]
-        return _extract_json(content)
-
-    ask.__name__ = f"glm({model})"
-    return ask
+def glm_backend(model: str = "glm-5.3", url: str = "https://api.z.ai/api/coding/paas/v4/chat/completions",
+                api_key: str | None = None, timeout: float = 15.0):
+    """Decision model callable `(prompt, images_b64, schema) -> dict` backed by latest GLM (`glm-5.3` / `glm-5.3-flash`)."""
+    return judge_seat.openai_chat(url=url, model=model, api_key=api_key, provider="zai", timeout=timeout)
 
 
 def telemetry_judge(state: list | None, holding: bool | None, params=None) -> dict:
@@ -192,21 +144,39 @@ def vision_judge(wrist_img, hsv, gap_mm: float, closing_deg: float, sign: dict |
     }
 
 
-def debate_and_decide(stage: str, telemetry: dict, vision: dict, reinsert_count: int = 0,
-                      max_reinsert: int = 1, models: list | tuple = ()) -> dict:
-    """Cross-check Telemetry (Agent 1) + Wrist Vision (Agent 2) + Decision Model Debate (Agent 3..N).
+def _normalize_models(models) -> list:
+    if not models:
+        return []
+    if callable(models):
+        return [models]
+    if isinstance(models, dict):
+        if "models" in models or "profiles" in models:
+            items = [judge_seat.from_config(m) for m in (models.get("models") or models.get("profiles") or ())]
+            if models.get("arbiter"):
+                items.append(judge_seat.from_config(models["arbiter"]))
+            return [m for m in items if callable(m)]
+        fn = judge_seat.from_config(models)
+        return [fn] if callable(fn) else []
+    out = []
+    for item in models:
+        fn = item if callable(item) else judge_seat.from_config(item)
+        if callable(fn):
+            out.append(fn)
+    return out
 
-    Returns:
-      {
-        "verdict": "proceed" | "reinsert_and_retry" | "reinsert_and_park" | "empty",
-        "recovery_chunk": None | "run release_pick" | "run reinsert_pick",
-        "dx_mm": float, "dy_mm": float,
-        "telemetry": dict, "vision": dict, "debate": list[dict], "reason": str
-      }
+
+def debate_and_decide(stage: str, telemetry: dict, vision: dict, reinsert_count: int = 0,
+                      max_reinsert: int = 1, models: list | tuple | dict = ()) -> dict:
+    """Cross-check Telemetry (Agent 1) + Wrist Vision (Agent 2) + Model Deliberation (Agent 3..N).
+
+    Uses `judge_seat.measured` for precondition sovereignty (`next='transport'`, `holding=True`, `stable=not unstable`)
+    and runs `proposal -> critique -> arbiter` deliberation across any configured model backends.
     """
     if telemetry.get("verdict") == "empty":
         return {
+            "schema_version": SCHEMA_VERSION,
             "verdict": "empty",
+            "by": "measurement",
             "recovery_chunk": None,
             "dx_mm": 0.0,
             "dy_mm": 0.0,
@@ -224,6 +194,17 @@ def debate_and_decide(stage: str, telemetry: dict, vision: dict, reinsert_count:
         dx_mm = 2.0 if (telemetry.get("error_units") or 0.0) < 0 else -2.0
 
     unstable = telemetry.get("verdict") == "reinsert" or vision.get("verdict") == "reinsert"
+    seat_facts = {
+        "box_found": True,
+        "next": "lift" if stage == "run grasp_pick" else "transport",
+        "holding": True,
+        "stable": not unstable,
+        "reinsert": unstable,
+        "stage": stage,
+        "reinsert_count": reinsert_count,
+    }
+    _, seat_forbidden = judge_seat.measured(seat_facts)
+
     if not unstable:
         rule_verdict = "proceed"
         rule_reason = f"{telemetry.get('reason')}; {vision.get('reason')}"
@@ -239,7 +220,13 @@ def debate_and_decide(stage: str, telemetry: dict, vision: dict, reinsert_count:
     debate_log = []
     final_verdict = rule_verdict
     final_reason = rule_reason
-    allowed = list(ACTIONS) if reinsert_count < max_reinsert else ["proceed", "reinsert_and_park"]
+    by = "measurement"
+    allowed = [a for a in ACTIONS if not (a == "proceed" and "proceed" in seat_forbidden)]
+    if reinsert_count >= max_reinsert and "reinsert_and_retry" in allowed:
+        allowed.remove("reinsert_and_retry")
+    if not allowed:
+        allowed = [rule_verdict]
+
     schema = {
         "type": "object",
         "required": ["verdict", "dx_mm", "dy_mm", "reason"],
@@ -251,22 +238,28 @@ def debate_and_decide(stage: str, telemetry: dict, vision: dict, reinsert_count:
         },
     }
 
-    for idx, model_fn in enumerate(models or ()):
-        role = "critic" if idx == 0 else f"arbiter_{idx}"
+    live_models = _normalize_models(models)
+    for idx, model_fn in enumerate(live_models):
+        role = "proposal" if idx == 0 else ("critique" if idx == 1 and len(live_models) > 2 else f"arbiter_{idx}")
         prompt = (
-            f"Role: {role}. Stage: {stage}. Reinsert count: {reinsert_count}/{max_reinsert}.\n"
+            f"[Deliberation v{SCHEMA_VERSION}] Role: {role}. Stage: {stage}. Reinsert count: {reinsert_count}/{max_reinsert}.\n"
+            f"Seat measured facts: {json.dumps(seat_facts)} (forbidden decisions: {sorted(seat_forbidden)})\n"
             f"Agent 1 (Telemetry): {json.dumps(telemetry)}\n"
             f"Agent 2 (Wrist Vision): {json.dumps(vision)}\n"
             f"Rule baseline: {{'verdict': {rule_verdict!r}, 'dx_mm': {dx_mm}, 'dy_mm': {dy_mm}, 'reason': {rule_reason!r}}}\n"
-            f"Prior debate rounds: {json.dumps(debate_log)}\n"
+            f"Prior deliberation rounds: {json.dumps(debate_log)}\n"
             f"Allowed verdicts: {allowed}. Note: if Agent 1 or Agent 2 flagged 'reinsert', 'proceed' is forbidden by safety invariant. "
             "Reply with JSON only: {\"verdict\": ..., \"dx_mm\": ..., \"dy_mm\": ..., \"reason\": ...}."
         )
         try:
             ans = model_fn(prompt, (), schema)
-            m_verdict = ans.get("verdict")
+            m_verdict = ans.get("verdict") or ans.get("decision")
+            if m_verdict == "reinsert":
+                m_verdict = "reinsert_and_retry" if reinsert_count < max_reinsert else "reinsert_and_park"
+            elif m_verdict in ("park", "abort"):
+                m_verdict = "reinsert_and_park"
             # Measured safety invariant: a model cannot override a measured unstable grasp into 'proceed'
-            if unstable and m_verdict == "proceed":
+            if (unstable or "proceed" in seat_forbidden) and m_verdict == "proceed":
                 m_verdict = rule_verdict
             if m_verdict not in allowed:
                 m_verdict = rule_verdict
@@ -280,10 +273,13 @@ def debate_and_decide(stage: str, telemetry: dict, vision: dict, reinsert_count:
                 "dy_mm": round(m_dy, 2),
                 "reason": str(ans.get("reason", ""))[:240],
             }
+            if "deliberation" in ans:
+                entry["sub_deliberation"] = ans["deliberation"]
             debate_log.append(entry)
             final_verdict = m_verdict
             dx_mm, dy_mm = entry["dx_mm"], entry["dy_mm"]
             final_reason = entry["reason"] or rule_reason
+            by = "model"
         except Exception as exc:
             debate_log.append({
                 "role": role,
@@ -292,7 +288,10 @@ def debate_and_decide(stage: str, telemetry: dict, vision: dict, reinsert_count:
             })
 
     return {
+        "schema_version": SCHEMA_VERSION,
         "verdict": final_verdict,
+        "by": by,
+        "options": allowed,
         "recovery_chunk": None if final_verdict == "proceed" else recovery_chunk,
         "dx_mm": round(dx_mm, 2),
         "dy_mm": round(dy_mm, 2),
@@ -319,16 +318,7 @@ def hook(config: dict, cell, target: dict, write_library, gap_mm: float):
     signs_path = work / f"wrist-signs-{config.get('arm_id', 'arm_s')}.json"
     default_signs = dict({"along": -1.0, "across": 1.0}, **(spec.get("finger_sign") or {}))
     max_reinsert = int(prm.get(params, "grasp.max_reinsert", 1))
-
-    models = []
-    for m_spec in (config.get("debate_models") or ()):
-        if callable(m_spec):
-            models.append(m_spec)
-        elif isinstance(m_spec, dict) and m_spec.get("provider") == "glm":
-            models.append(glm_backend(model=m_spec.get("model", "glm-4.7"), timeout=float(m_spec.get("timeout", 10.0))))
-        elif isinstance(m_spec, dict):
-            import judge_seat
-            models.append(judge_seat.ollama(**{k: v for k, v in m_spec.items() if k in ("url", "model", "timeout")}))
+    models = _normalize_models(config.get("debate_models") or config.get("decision_model"))
 
     state_tracker = {"reinsert_count": 0}
 
@@ -349,6 +339,22 @@ def hook(config: dict, cell, target: dict, write_library, gap_mm: float):
             reinsert_count=state_tracker["reinsert_count"],
             max_reinsert=max_reinsert,
             models=models,
+        )
+        cd.emit(
+            "grasp_stability",
+            {
+                "stage": stage,
+                "telemetry": t_res,
+                "vision": v_res,
+                "reinsert_count": state_tracker["reinsert_count"],
+                "dx_mm": decision["dx_mm"],
+                "dy_mm": decision["dy_mm"],
+                "debate": decision["debate"],
+            },
+            decision.get("options", list(ACTIONS)),
+            decision["verdict"],
+            decision.get("by", "measurement"),
+            decision["reason"],
         )
         if decision["verdict"] == "proceed" or decision["verdict"] == "empty":
             return decision

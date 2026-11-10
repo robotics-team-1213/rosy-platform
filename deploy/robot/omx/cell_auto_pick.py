@@ -455,7 +455,7 @@ def run_auto(cell, config, calibration, calibration_path, catalog, roi, source, 
             cd.target(objects, usable, refused)
             if usable and config.get("decision_model"):  # the model orders what the measurement kept, or vetoes all
                 import cell_pick_judge, judge_seat  # noqa: E401
-                judged = cell_pick_judge.ask(judge_seat.ollama(**config["decision_model"]), img, usable)
+                judged = cell_pick_judge.ask(judge_seat.from_config(config["decision_model"]), img, usable)
                 cd.emit("target_judge", {"candidates": len(usable)}, list(range(len(usable))) + [-1], judged["choice"],
                         judged["by"], judged["reason"])
                 usable = [usable[i] for i in judged["order"]]
@@ -528,7 +528,7 @@ def run_auto(cell, config, calibration, calibration_path, catalog, roi, source, 
             tried["wrist"] = (moved.get("wrist") or next((s for s in moved["steps"] if s.get("command") == "wrist"), None)
                               or ("disabled or uncalibrated" if wrist is None else None))
             tried["transfer"] = moved
-            if moved["result"] == "empty" or (moved["result"] == "contact" and moved.get("at") in ("run descend_pick", "run grasp_pick")):
+            if moved["result"] in ("empty", "reinserted") or (moved["result"] == "contact" and moved.get("at") in ("run descend_pick", "run grasp_pick")):
                 decided = after_failure(config, source, target, moved, wrist is not None, failed_yaws)
                 tried["diagnosis"] = decided
                 if decided["chosen"] in ("ask_person", "probe_surface"):
@@ -537,8 +537,8 @@ def run_auto(cell, config, calibration, calibration_path, catalog, roi, source, 
                     cell_attempts.record(config, calibration, source, dest, attempt, tried, t0, choices)
                     return {**out, "result": f"stopped: {decided['cause']} -> {decided['chosen']}"}
             held = moved["result"] == "placed" or any(s.get("holding") for s in moved["steps"])
-            if target["offset"] is not None and moved["result"] in ("placed", "empty", "contact"):
-                choices.outcome(CLOSING, target["offset"], held, f"{moved['result']} at yaw {target['pick']['yaw_deg']}")
+            if target["offset"] is not None and moved["result"] in ("placed", "empty", "contact", "reinserted"):
+                choices.outcome(CLOSING, target["offset"], moved["result"] == "placed", f"{moved['result']} at yaw {target['pick']['yaw_deg']}")
                 choices.save()
             if moved["result"] == "placed":
                 place_xy = (target["place"]["x"], target["place"]["y"])  # where it was put (cell_place_fit may move it)
@@ -564,7 +564,7 @@ def run_auto(cell, config, calibration, calibration_path, catalog, roi, source, 
             grasped = any(s.get("command") == "run grasp_pick" and s.get("holding") for s in moved["steps"])
             if moved["result"] == "contact" and grasped:  # stopped while carrying: in the jaws unless released (cell_recovery goes on)
                 return {**out, "result": f"stopped: {'released' if moved.get('released') else 'holding'} after a stop at {moved['at']}"}
-            if moved["result"] not in ("empty", "contact"):  # a fault, a refusal or a misplaced object: a person looks
+            if moved["result"] not in ("empty", "contact", "reinserted"):  # a fault, a refusal or a misplaced object: a person looks
                 if moved["result"] in ("fault", "refused"):
                     cp.fold(cell, sleep)
                 return {**out, "result": f"stopped: {moved['result']}"}

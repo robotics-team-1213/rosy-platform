@@ -92,7 +92,11 @@ def test_hook_executes_reinsert_pick_replans_and_retries_on_unstable_lift(tmp_pa
     target = {"pick": {"x": 0.1650, "y": -0.1020, "z": 0.0074, "yaw_deg": -90.0}, "place": {"x": 0.1280, "y": -0.0120, "z": 0.0398, "yaw_deg": -90.0}}
     chk = cgd.hook(cfg, FakeCell(), target, lambda c, pk, pl, p: p, 34.4)
     res = chk("run lift_pick", {"ok": True, "holding": True, "state": states[0]}, FakeCell().act)
+    assert res["schema_version"] == 2
     assert res["verdict"] == "reinsert_and_retry" and res["put_back_ok"] is True
     assert commands[0] == "run reinsert_pick"
     assert commands[1].startswith("load ") and commands[2:] == ["goto above_pick", "run descend_pick", "run grasp_pick", "run lift_pick"]
     assert target["pick"]["x"] != 0.1650
+    # Default glm_backend points to glm-5.3 via judge_seat.openai_chat
+    assert cgd.glm_backend().__name__ == "zai:glm-5.3"
+
