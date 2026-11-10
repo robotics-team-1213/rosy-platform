@@ -1352,6 +1352,12 @@
 - 결정: API v1.363; 기존 CORE 최종 명령·모드 owner 유지.
 - 교훈: CE 해당 없음 — 최종 코드·회귀 시험·API 계약으로 판단 근거를 재현할 수 있음.
 
+## 2026-11-07 · 11b42b5933 · feat(core-api): /api/v1/person-request (v1.372)
+- 변경: PUT(Operator, 소유 토큰)·GET(Viewer)·DELETE. 헤더·변경 절·이력 행·`contract_version.CONTRACT`를 함께 v1.372로. 대시보드 패널 레지스트리 시험에 `console.person_request`.
+- 증거: 원격 결과는 착지 기록을 따른다.
+- gate 변화: SOURCE 변경. 로봇·장치 수용 없음.
+- 교훈: CE 해당 없음 — 최종 코드와 시험이 판단을 보존한다. 실물·운영 수용은 아니다.
+
 ## 2026-11-07 · uncommitted · feat(navigation): 항법 재승인 REST (D-986)
 - 변경: `v1/navigation_approval.py`, `core_features/command/approval_trials.py`, API reference v1.367
 - 증거: 원격 시험. 장치 수용 없음

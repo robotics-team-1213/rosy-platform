@@ -188,7 +188,7 @@ class Vlm:
                 if remaining <= 0:
                     raise TimeoutError("VLM observation deadline")
                 observed = self._post(f"{self.url}/api/chat", {
-                    "model": self.model, "stream": False, "options": {**self.options, "num_predict": 96},
+                    "model": self.model, "stream": False, "think": False, "options": {**self.options, "num_predict": 96},
                     "format": {"type": "object", "additionalProperties": False, "required": ["observation"],
                                "properties": {"observation": {"type": "string", "minLength": 1, "maxLength": 180}}},
                     "messages": [{"role": "user", "content": observation_prompt, "images": [jpeg]}]}, remaining)
@@ -210,7 +210,7 @@ class Vlm:
                 raise TimeoutError("VLM judgement deadline")
             prompt_calls.append({"text": prompt, "model_options": dict(self.options)})
             reply = self._post(f"{self.url}/api/chat", {
-                "model": self.model, "stream": False, "format": response_schema(words, members, deadlock), "options": self.options,
+                "model": self.model, "stream": False, "think": False, "format": response_schema(words, members, deadlock), "options": self.options,
                 "messages": [{"role": "user", "content": prompt}]}, remaining)
             answer = json.loads((reply.get("message") or {}).get("content") or "")
             decision = str(answer["decision"]).upper()

@@ -76,11 +76,13 @@ def main(argv: list[str] | None = None) -> int:
     known = {name: why for path in ("test/known_failures.txt", "test/flaky_quarantine.txt") if (ROOT / path).is_file()
              for name, why in known_failures.load_known((ROOT / path).read_text(encoding="utf-8")).items()}
     new = []
-    for log in logs:
+    for inv, log in zip(invocations, logs):
         text = log.read_text(encoding="utf-8", errors="replace") if log.is_file() else ""
         ids = known_failures.compare(text, known)[0]
         if ids:
-            land_mainred.red(ROOT, main_sha, ids, text, [], by="nightly")
+            # The env makes recheck and later selections run a browser id instead of skipping it forever.
+            env = [token for token in inv if land_checks.ENV_TOKEN.match(token)]
+            land_mainred.red(ROOT, main_sha, ids, text, env, by="nightly")
             new += ids
     print(f"[nightly] {main_sha[:10]}: {len(invocations)} invocation(s), {len(new)} NEW", flush=True)
     for nodeid in new:

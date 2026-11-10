@@ -107,8 +107,8 @@ def main():
     parser.add_argument('--domain', required=True)
     args_in = parser.parse_args()
     root, domain = args_in.certs, args_in.domain
-    if not root.is_dir() or root.is_symlink() or not re.fullmatch(r'[a-z0-9-]+(\.[a-z0-9-]+)+', domain):
-        raise SystemExit('an existing certificate folder and a plain DNS name are required')
+    if not root.is_absolute() or root == Path('/') or not root.is_dir() or root.is_symlink() or not re.fullmatch(r'[a-z0-9-]+(\.[a-z0-9-]+)+', domain):
+        raise SystemExit('an existing absolute certificate folder (not /) and a plain DNS name are required')
     image = json.loads(subprocess.check_output(
         ['docker', 'inspect', 'rosy-site-fleet-1'], text=True))[0]['Image']
     args = ['docker', 'run', '--rm', '--pull=never', '--network', 'none',
@@ -138,7 +138,7 @@ def main():
                            check=True, capture_output=True, timeout=30)
         except Exception as error:
             raise RuntimeError('TLS consumer reload pending: Account') from error
-        pending.unlink()
+        pending.unlink(missing_ok=True)
     print(json.dumps(receipt))
 
 
