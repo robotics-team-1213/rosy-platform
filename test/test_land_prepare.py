@@ -635,3 +635,41 @@ def test_full_pretests_beyond_max_full_wait_for_older_ones_and_affected_ones_do_
     queue.set_status(later, "preparing", tier="")  # an affected pretest never counts against FULL ones
     urgent = queue.take(tmp_path, "feat/urgent", status="preparing", urgent="hotfix")
     prep.full_slot(tmp_path, urgent, sleep=lambda _: pytest.fail("an urgent FULL pretest waited"))
+
+
+def test_delta_prepare_skips_full_slot_and_isolation_gate(full_anchor, monkeypatch):
+    """A DELTA_NOTE re-prepare must not take the FULL slot or overwrite the branch's prepare isolation record."""
+    main, wt, base, candidate, path, _ = full_anchor
+    qdir = land.land_queue.queue_dir(wt)
+    ticket = land.land_queue.take(qdir, "feat/x", status="preparing")
+    isolated_flags = []
+    monkeypatch.setattr(land.land_prepare, "full_slot", lambda *a, **k: pytest.fail("delta took full_slot"))
+    monkeypatch.setattr(land.land_guards, "first",
+                        lambda *a, isolated=False, **k: isolated_flags.append(isolated) or [])
+    monkeypatch.setattr(land, "run_tests", lambda *a, **k: [])
+    args = land.argparse.Namespace(tests="auto", no_cache=False)
+    land.land_prepare.prepare(land, wt, "feat/x", args, sys.executable, qdir, ticket,
+                              [["pkg/test"]], land.land_selection.DELTA_NOTE + " (1 suite folder invocation(s))")
+    assert isolated_flags == [False]
+    assert json.loads(ticket.read_text(encoding="utf-8")).get("tier") == ""
+
+
+def test_guard_and_body_rounds_share_one_lint_run_per_tree(repos, monkeypatch, tmp_path):
+    """gpre/pre and g1/1 run on the exact same tree and must not spawn two lint processes each."""
+    _, wt = repos
+    commit(wt, {land.HARNESS: "print('lint pass')\n"}, "harness")
+    lint_calls = []
+    real_step = land.step
+
+    def counting_step(wt_, cmd, log, label, **kw):
+        if label == "lint":
+            lint_calls.append(log.name if log else None)
+        return real_step(wt_, cmd, log, label, **kw)
+
+    monkeypatch.setattr(land, "step", counting_step)
+    args = land.argparse.Namespace(tests="auto", node=False, no_cache=True)
+    for phase in ("gpre", "pre"):
+        land.run_tests(wt, args, [], tmp_path, phase)
+    assert len(lint_calls) == 1
+    assert (tmp_path / "lint-gpre.txt").read_text(encoding="utf-8") == "lint pass\n"
+    assert (tmp_path / "lint-pre.txt").read_text(encoding="utf-8") == "lint pass\n"

@@ -215,10 +215,12 @@ def _prepare(land, wt: Path, branch: str, args, python: str, qdir: Path | None, 
         invocations, note = land.select(wt, main_sha, python)
         if not note and not (wt / "tools/harness/affected_tests.py").is_file():
             return  # main's delta stands in for an affected tier only where the D-436 selector maps it
-    print(f"[land] {'FULL' if note else 'affected'} tier before the turn, ticket preparing (main {main_sha[:10]})",
-          flush=True)
+    delta = bool(note) and note.startswith(land.land_selection.DELTA_NOTE) and not explicit
+    full = bool(note) and not delta
+    print(f"[land] {'FULL' if full else 'delta' if delta else 'affected'} tier before the turn, ticket preparing"
+          f" (main {main_sha[:10]})", flush=True)
     if ticket is not None:
-        if note:
+        if full:
             full_slot(qdir, ticket, changed=lambda: relaunch(land, qdir, ticket),
                       roll=lambda: land.land_watchdog.rollup(qdir.parent))
         else:
@@ -236,7 +238,8 @@ def _prepare(land, wt: Path, branch: str, args, python: str, qdir: Path | None, 
     def guards() -> None:
         nonlocal guarded
         try:
-            guarded = land.land_guards.first(wt, guard_args, invocations, logdir, "pre", land.run_tests, isolated=True)
+            guarded = land.land_guards.first(wt, guard_args, invocations, logdir, "pre", land.run_tests,
+                                             isolated=not delta)
         except BaseException as error:  # noqa: BLE001 - re-raised on the caller's thread below
             raised.append(error)
     side = threading.Thread(target=guards, name="pretest-guards", daemon=True)
@@ -249,10 +252,9 @@ def _prepare(land, wt: Path, branch: str, args, python: str, qdir: Path | None, 
         raise land.Stop(f"HEAD changed during pretest; {candidate[:10]} was tested; retry the landing")
     clean = land.land_selection.eligible(land, guarded + tested, args)
     land.land_selection.require_eligible(land, args, clean, guarded + tested)
-    delta = bool(note) and note.startswith(land.land_selection.DELTA_NOTE) and not explicit
     # D-970 4: a LOAD-FLAKY id no longer voids the whole pretest; the record keeps it and the turn reruns it.
     # An explicit FULL witness stays strict, and so does a summary whose LOAD-FLAKY line cannot be read.
-    relax = not explicit and not (note and not delta)  # a FULL tier (explicit or escalated) stays strict
+    relax = not explicit and not full  # a FULL tier (explicit or escalated) stays strict
     flaky = land.land_selection.load_flaky_ids(guarded + tested) if relax else None
     # D-970 4: a pass reused from another tree (land_cache NARROW) names the tier for the queue too; the record is
     # marked "reused" so land.py writes no land record from it and pre-push still reruns (11-03: 9 of 20 had none).
@@ -260,7 +262,7 @@ def _prepare(land, wt: Path, branch: str, args, python: str, qdir: Path | None, 
     # D-970 3: an explicit FULL keeps no "reused" mark; publish_evidence recomputes each cross-tree pass itself.
     drop = (("LOAD-FLAKY",) if flaky else ()) + ((land.land_cache.NARROW,) if reused or explicit else ())
     judged = [line for line in guarded + tested if not any(d in line for d in drop)]
-    tier = land.land_selection.tier(land, judged, bool(note) and not delta)  # carried: restore() refuses it
+    tier = land.land_selection.tier(land, judged, full)  # carried: restore() refuses it
     anchor = None
     if delta:
         # D-889 27: main's delta suites passed here outside the lock. They extend the earlier tier over the new
