@@ -283,6 +283,13 @@ def run_two_arm(args) -> int:
         record.update(status="failed", reason=f"종료 코드 {code}. run.log를 보세요.")
     if handoff_file.exists():
         record["isaac_handoff"] = handoff_file.name
+        suite_file = run / "isaac-suite.json"
+        cell_cases = ROOT / "deploy/robot/omx/cell_cases.py"
+        if cell_cases.is_file():
+            subprocess.run([args.python, str(cell_cases), "--mujoco-handoff", str(handoff_file), "--out", str(suite_file)],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            if suite_file.exists():
+                record["isaac_suite"] = suite_file.name
     if getattr(args, "gazebo_report", None) or getattr(args, "isaac_report", None) or handoff_file.exists():
         record["stages"] = dict(
             mujoco=dict(stage_order=1, track="learning_and_physics", status=record["status"], claim="기하: 도달·순서·충돌", steps_pass=record.get("steps_pass"), steps=record.get("steps")),
@@ -295,6 +302,7 @@ def run_two_arm(args) -> int:
     record["views"] = sorted(path.name for path in (run / "artifacts").glob("*.png"))
     record["finished_at"] = datetime.now().astimezone().isoformat(timespec="seconds")
     file.write_text(json.dumps(record, ensure_ascii=False), encoding="utf-8")
+    print(json.dumps({k: record.get(k) for k in ("run_id", "status", "steps_pass", "steps", "isaac_handoff", "isaac_suite", "stages")}, ensure_ascii=False))
     return 0 if record["status"] == "passed" else 1
 
 
