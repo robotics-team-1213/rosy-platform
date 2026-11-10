@@ -159,11 +159,11 @@ def test_pick_hooks_skips_crowded_look_when_reach_and_calibrated_bias_region_alr
     cal = {"sites": {"pallet~coarse": {"homography": [[1, 0, 0], [0, 1, 0], [0, 0, 1]]}}}
     cfg = {"params": {"look.enabled": 1, "reach.enabled": 1}, "plan": {"grip_open": 56}, "work_dir": "."}
     crowded_obj = {"raw_m": [0.1269, -0.1082], "mark_half_mm": [24.3, 20.3], "width_mm": 30.0, "length_mm": 90.0}
-    target_ok = {"pick": {"x": 0.1269, "y": -0.1082}, "place": {}, "object": crowded_obj, "entry": crowded_obj,
+    target_ok = {"pick": {"x": 0.1269, "y": -0.1082, "yaw_deg": 0.0}, "place": {}, "object": crowded_obj, "entry": crowded_obj,
                  "bias_region": {"radius_mm": 0.0, "phase_deg": 0.0, "rms_mm": 0.4}}
     wrist_ok, _, _, _ = cell_hooks.pick_hooks(cfg, Mute(), target_ok, None, "pallet", "pallet-l1", calibration=cal)
     res_ok = wrist_ok()
-    assert res_ok["verdict"] == "pass" and res_ok["hooks"][-1]["verdict"] == "skipped"
+    assert res_ok["verdict"] == "skipped" and res_ok["hooks"][0]["verdict"] == "pass" and res_ok["hooks"][-1]["verdict"] == "skipped"
 
     target_uncal = dict(target_ok, bias_region={"radius_mm": 30.0, "phase_deg": 60.0, "rms_mm": 8.5})
     wrist_uncal, _, _, _ = cell_hooks.pick_hooks(cfg, Mute(), target_uncal, None, "pallet", "pallet-l1", calibration=cal)
