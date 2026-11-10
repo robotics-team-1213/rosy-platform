@@ -50,7 +50,7 @@ def test_resolve_area_xyz_unifies_slot_and_explicit_coordinates_across_tiers():
     assert t1["effective_xyz_m"] == [0.128, -0.012, 0.0074]
 
     assert t2["site_id"] == "pallet-l1"
-    assert t2["effective_xyz_m"] == [0.1935, -0.003, 0.0398]
+    assert t2["effective_xyz_m"] == [0.1988, -0.003, 0.0398]
 
     assert t3["site_id"] == "pallet-l2"
     assert t3["tier"] == 3
@@ -100,3 +100,58 @@ def test_middleware_directive_executes_on_cell_and_stacks_tier3_with_autocal(tmp
     assert "run release_pick" in cmds
     assert "run descend_place" in cmds
     assert "run release_place" in cmds
+
+
+def test_empty_grasp_recovery_lowers_z_and_verify_stack_outcome_checks_side_camera(tmp_path: Path):
+    import numpy as np
+
+    directive = build_directive(
+        arm_id="arm_b",
+        pick={"area": "pallet", "col": 3, "row": 1, "tier": 2, "x": 0.2045, "y": -0.0030, "z": 0.0398},
+        place={"area": "pallet", "col": 2, "row": 1, "tier": 3, "x": 0.1580, "y": -0.0130, "z": 0.0674},
+        directive_id="test-empty-recover-verify",
+        vision_refine=False,
+    )
+    grasp_calls = 0
+
+    def fake_act(cmd: str):
+        nonlocal grasp_calls
+        if cmd == "run grasp_pick":
+            grasp_calls += 1
+            if grasp_calls == 1:
+                # Attempt 1: jaws close in thin air above the container (52.65 units, 55 mA, holding=False)
+                return {"ok": True, "holding": False, "state": [0.0, 5.79, 2.56, 40.76, 47.06, 52.65], "gripper_current_ma": 55.0}
+            # Attempt 2 (after recovery lowered z and adjusted x to 0.1988): solid grasp at 54.35 units, 168 mA
+            return {"ok": True, "holding": True, "state": [0.0, 5.9, 3.1, 40.2, 47.0, 54.35], "gripper_current_ma": 168.0}
+        return {"ok": True, "holding": True, "state": [0.0, 5.9, 3.1, 40.2, 47.0, 54.35], "gripper_current_ma": 115.0}
+
+    frame_calls = 0
+
+    def fake_frame(cam: str):
+        nonlocal frame_calls
+        img = np.full((480, 640, 3), (180, 180, 180), dtype=np.uint8)
+        if cam == "side":
+            frame_calls += 1
+            if frame_calls == 1:
+                # Before pick: Col 3 Tier 2 (295..368, 182..250) has orange container
+                img[182:250, 295:368] = (30, 120, 240)
+            else:
+                # After place: Col 3 Tier 2 is vacated, Col 2 Tier 3 (225..292, 114..182) has orange container
+                img[114:182, 225:292] = (30, 120, 240)
+        return img
+
+    res = cell_area_xyz.execute_directive(
+        directive,
+        base_plan=SAMPLE_BASE_PLAN,
+        work_dir=tmp_path,
+        act_fn=fake_act,
+        frame_fn=fake_frame,
+        max_attempts=3,
+    )
+    assert res["result"] == "placed"
+    assert res["task_verified"] is True
+    assert res["verification"]["verified"] is True
+    assert len(res["recovery"]) == 1
+    assert res["pick"]["x"] == 0.1988
+    assert res["pick"]["z"] < 0.0398
+

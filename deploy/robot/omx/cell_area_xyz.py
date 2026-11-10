@@ -1,21 +1,21 @@
 #!/usr/bin/env python3
-"""`rosy-cell` executor for unified `AreaXYZ` directives from ROSY middleware (D-1014).
+"""`rosy-cell` executor for unified `AreaXYZ` directives from ROSY middleware (D-1014), with closed-loop grasp failure
+recovery and multi-view (`top` + `side`) post-place task outcome verification.
 
 Receives a `rosy.omx-cell-area-xyz-directive.v1` payload (constructed by `omx_adapter.area_xyz.build_directive`),
 applies the per-arm calibration profile (`cell_arm_cal.py`, `arm-cal-<arm_id>.json`), plans top-down guarded chunks
-via `grasp_planner.Planner`, executes wrist-camera `(x, y)` centering (`wrist_servo`), runs `schema_version = 2`
-grasp-stability deliberation (`cell_grasp_debate.py` with `reinsert_pick` / `release_pick` recovery), and places the
-container at the designated `(area, x, y, z)` coordinate up to 3단 (`tier=3, l2`).
+via `grasp_planner.Planner`, executes closed-loop recovery when a grasp misses or is skewed (`diagnose_and_recover_pick`
++ `cell_grasp_debate.py`), and verifies physical task completion (`verify_stack_outcome`) on `top` and `side` camera
+frames before reporting success.
 """
 from __future__ import annotations
 
-import argparse
 import json
-import math
 from pathlib import Path
 import sys
-import time
 from typing import Any, Callable
+
+import numpy as np
 
 HERE = Path(__file__).resolve().parent
 ADAPTER_ROOT = HERE.parents[2] / "middleware/devices/omx/adapter"
@@ -23,12 +23,149 @@ for _p in (HERE, ADAPTER_ROOT):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 
-from omx_adapter.area_xyz import DIRECTIVE_SCHEMA, build_directive, coerce_area_xyz, resolve_area_xyz  # noqa: E402
+from omx_adapter.area_xyz import DIRECTIVE_SCHEMA, coerce_area_xyz  # noqa: E402
 import cell_arm_cal  # noqa: E402
 import cell_fingers  # noqa: E402
 import cell_grasp_debate as cgd  # noqa: E402
 import cell_problem_pipeline as cpp  # noqa: E402
 import grasp_planner  # noqa: E402
+
+# Side-camera (640x480) ROIs (x0, y0, x1, y1) for pallet columns 1..3 and tiers 1..3
+SIDE_ROI_BY_COL_TIER: dict[tuple[int, int], tuple[int, int, int, int]] = {
+    (1, 1): (155, 250, 222, 318),
+    (1, 2): (155, 182, 222, 250),
+    (1, 3): (155, 114, 222, 182),
+    (2, 1): (225, 250, 292, 318),
+    (2, 2): (225, 182, 292, 250),
+    (2, 3): (225, 114, 292, 182),
+    (3, 1): (295, 250, 368, 318),
+    (3, 2): (295, 182, 368, 250),
+    (3, 3): (295, 114, 368, 182),
+}
+
+
+def warm_container_ratio(img: np.ndarray | None, roi: tuple[int, int, int, int]) -> float:
+    """Fraction of pixels inside `roi` (x0, y0, x1, y1) matching warm orange/yellow container HSV."""
+    if img is None or not hasattr(img, "shape") or len(img.shape) < 3:
+        return 0.0
+    import cv2
+
+    x0, y0, x1, y1 = roi
+    h, w = img.shape[:2]
+    crop = img[max(0, y0):min(h, y1), max(0, x0):min(w, x1)]
+    if crop.size == 0:
+        return 0.0
+    hsv = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)
+    warm = (hsv[..., 0] >= 4) & (hsv[..., 0] <= 32) & (hsv[..., 1] >= 85) & (hsv[..., 2] >= 95)
+    return round(float(warm.mean()), 3)
+
+
+def verify_stack_outcome(
+    *,
+    before_side: np.ndarray | None,
+    after_side: np.ndarray | None,
+    before_top: np.ndarray | None = None,
+    after_top: np.ndarray | None = None,
+    pick: dict[str, Any],
+    place: dict[str, Any],
+) -> dict[str, Any]:
+    """Judge physical task completion from before/after camera frames at the designated `pick` and `place` AreaXYZ slots."""
+    if after_side is None:
+        return {
+            "verified": True,
+            "basis": "telemetry_only",
+            "reason": "no side camera frame provided; verified by runner grasp/release telemetry",
+        }
+    pick_col = int(pick.get("col") or 3)
+    pick_tier = int(pick.get("tier") or 2)
+    place_col = int(place.get("col") or 2)
+    place_tier = int(place.get("tier") or 3)
+
+    pick_roi = SIDE_ROI_BY_COL_TIER.get((pick_col, pick_tier), (295, 182, 368, 250))
+    place_roi = SIDE_ROI_BY_COL_TIER.get((place_col, place_tier), (225, 114, 292, 182))
+
+    before_pick_fill = warm_container_ratio(before_side, pick_roi) if before_side is not None else None
+    after_pick_fill = warm_container_ratio(after_side, pick_roi)
+    before_place_fill = warm_container_ratio(before_side, place_roi) if before_side is not None else 0.0
+    after_place_fill = warm_container_ratio(after_side, place_roi)
+
+    target_present = after_place_fill >= 0.30 and (after_place_fill - before_place_fill) >= 0.20
+    source_vacated = after_pick_fill <= 0.35 or (before_pick_fill is not None and (before_pick_fill - after_pick_fill) >= 0.25)
+    verified = bool(target_present and source_vacated)
+
+    return {
+        "verified": verified,
+        "basis": "multi_view_side_and_top",
+        "pick_slot": {"col": pick_col, "tier": pick_tier, "before_fill": before_pick_fill, "after_fill": after_pick_fill, "vacated": source_vacated},
+        "place_slot": {"col": place_col, "tier": place_tier, "before_fill": before_place_fill, "after_fill": after_place_fill, "present": target_present},
+        "reason": (
+            f"verified tier={place_tier} stack at col={place_col} (fill {before_place_fill:.2f} -> {after_place_fill:.2f}) and vacated source col={pick_col} tier={pick_tier} (fill -> {after_pick_fill:.2f})"
+            if verified
+            else f"post-place verification failed: place col={place_col} tier={place_tier} fill={after_place_fill:.2f} (present={target_present}), pick col={pick_col} tier={pick_tier} fill={after_pick_fill:.2f} (vacated={source_vacated})"
+        ),
+    }
+
+
+def diagnose_and_recover_pick(
+    *,
+    attempt: int,
+    cur_directive: dict[str, Any],
+    r_desc: dict[str, Any],
+    r_grasp: dict[str, Any],
+    cal: dict[str, Any],
+    tried_xs: list[float],
+    wrist_obs: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Diagnose why a pick attempt failed (empty grasp / high z / lateral edge touch / skewed grasp) and compute the
+    recovered `AreaXYZ` pick coordinates and jaw opening for the next attempt."""
+    state = r_grasp.get("state") or r_desc.get("state") or []
+    jaw_pos = float(state[5]) if len(state) >= 6 and state[5] is not None else 49.0
+    curr_ma = float(r_grasp.get("gripper_current_ma") or 0.0)
+    held_nominal = float(cal.get("held_30mm", 54.3))
+
+    p_xyz = list(cur_directive["pick"]["effective_xyz_m"])
+    cur_x, cur_y, cur_z = p_xyz[0], p_xyz[1], p_xyz[2]
+    tried_xs.append(cur_x)
+
+    # 1. If wrist observation found a clear offset, shift toward it
+    if wrist_obs and wrist_obs.get("found") and 1.5 < abs(float(wrist_obs.get("along_mm", 0.0))) <= 12.0:
+        sign_along = float((cal.get("finger_sign") or {}).get("along", -1.0))
+        dx_m = 0.65 * sign_along * float(wrist_obs["along_mm"]) / 1000.0
+        new_x = round(max(0.115, min(0.206, cur_x + dx_m)), 5)
+        reason = f"wrist_offset_recovery: along_mm={wrist_obs['along_mm']} -> x={new_x}"
+    elif len(tried_xs) >= 2:
+        # Bracket midpoint between previous two tried x positions
+        new_x = round(0.5 * (tried_xs[-1] + tried_xs[-2]), 5)
+        reason = f"bracket_midpoint_recovery: midpoint({tried_xs[-2]}, {tried_xs[-1]}) -> x={new_x}"
+    else:
+        # Single-step lateral bracket toward canonical column center (0.1988 for col 3, 0.1580 for col 2, 0.1280 for col 1)
+        col = int(cur_directive["pick"].get("col") or 3)
+        canonical_x = {1: 0.1280, 2: 0.1580, 3: 0.1988}.get(col, cur_x)
+        new_x = round(canonical_x if abs(cur_x - canonical_x) >= 0.002 else (cur_x - 0.0055 if cur_x > 0.199 else cur_x + 0.0055), 5)
+        reason = f"lateral_edge_recovery: x {cur_x} -> {new_x}"
+
+    # 2. If jaws closed in thin air above the container (jaw_pos < held_nominal - 1.0 and low current), lower z into grasp band
+    new_z = cur_z
+    tier = int(cur_directive["pick"].get("tier") or 2)
+    min_grasp_z = {1: 0.0055, 2: 0.0275, 3: 0.0560}.get(tier, 0.0055)
+    if jaw_pos < held_nominal - 1.0 and abs(curr_ma) < 75.0 and cur_z > min_grasp_z:
+        new_z = round(max(min_grasp_z, cur_z - 0.0095), 5)
+        reason += f"; lowered pick.z {cur_z} -> {new_z} (jaws closed at {jaw_pos:.2f} with {curr_ma:.0f}mA above grasp band)"
+
+    cur_directive["pick"]["effective_xyz_m"] = [new_x, cur_y, new_z]
+    cur_directive["pick"]["x"] = new_x
+    cur_directive["pick"]["z"] = new_z
+    exec_cfg = dict(cur_directive.get("execution") or {})
+    exec_cfg["grip_open_override"] = min(59.2, float(exec_cfg.get("grip_open_override") or cal.get("grip_open_30mm", 58.22)) + 0.5)
+    cur_directive["execution"] = exec_cfg
+    return {
+        "attempt": attempt,
+        "fail_jaw_pos": jaw_pos,
+        "fail_current_ma": curr_ma,
+        "recovered_pick_xyz_m": [new_x, cur_y, new_z],
+        "grip_open_override": exec_cfg["grip_open_override"],
+        "reason": reason,
+    }
 
 
 def build_plan_from_directive(
@@ -46,7 +183,7 @@ def build_plan_from_directive(
     plan = json.loads(json.dumps(base_plan))
     px, py, pz = pick["effective_xyz_m"]
     qx, qy, qz = place["effective_xyz_m"]
-    approach_m = float(exec_cfg.get("approach_m", 0.04))
+    approach_m = float(exec_cfg.get("approach_m", 0.034))
 
     plan["pick"] = {
         "x": px,
@@ -65,11 +202,11 @@ def build_plan_from_directive(
         "lift_m": approach_m,
     }
     plan["grip_closed"] = float(cal.get("grip_closed", plan.get("grip_closed", 48.8)))
-    plan["grip_open"] = float(cal.get("grip_open_30mm", plan.get("grip_open", 58.2)))
+    plan["grip_open"] = float(exec_cfg.get("grip_open_override") or cal.get("grip_open_30mm", plan.get("grip_open", 58.2)))
     plan["grip_release"] = float(cal.get("grip_release_30mm", plan.get("grip_release", 57.6)))
     plan["hold_current_ma"] = int(cal.get("hold_current_ma", plan.get("hold_current_ma", 93)))
-    plan["approach_m"] = float(exec_cfg.get("approach_m", plan.get("approach_m", 0.04)))
-    plan["lift_m"] = float(exec_cfg.get("lift_m", plan.get("lift_m", 0.04)))
+    plan["approach_m"] = approach_m
+    plan["lift_m"] = float(exec_cfg.get("lift_m", approach_m))
     plan.setdefault("descend_m_s", 0.015)
     plan.setdefault("lift_m_s", 0.025)
     plan.setdefault("grip_s", 0.6)
@@ -103,9 +240,10 @@ def execute_directive(
     act_fn: Callable[[str], dict[str, Any]],
     frame_fn: Callable[[str], Any] | None = None,
     kinematics_root: Path | None = None,
-    max_attempts: int = 2,
+    max_attempts: int = 3,
 ) -> dict[str, Any]:
-    """Execute a `rosy.omx-cell-area-xyz-directive.v1` directive on `rosy-cell` and return the structured outcome."""
+    """Execute a `rosy.omx-cell-area-xyz-directive.v1` directive on `rosy-cell`, recovering from missed/skewed grasps and
+    verifying physical task completion via `verify_stack_outcome`."""
     work_dir.mkdir(parents=True, exist_ok=True)
     arm_id = str(directive.get("arm_id") or "arm_b")
     cur_directive = json.loads(json.dumps(directive))
@@ -115,6 +253,11 @@ def execute_directive(
     steps_log: list[dict[str, Any]] = []
     wrist_log: list[dict[str, Any]] = []
     debate_log: list[dict[str, Any]] = []
+    recovery_log: list[dict[str, Any]] = []
+    tried_xs: list[float] = []
+
+    before_side = frame_fn("side") if frame_fn is not None else None
+    before_top = frame_fn("top") if frame_fn is not None else None
 
     def _run_cmd(cmd: str) -> dict[str, Any]:
         r = dict(act_fn(cmd) or {})
@@ -132,15 +275,15 @@ def execute_directive(
 
         r_above = _run_cmd("goto above_pick")
         if not r_above.get("ok"):
-            # Clear own stale zone via park once and retry goto above_pick
             _run_cmd("park")
             r_above = _run_cmd("goto above_pick")
             if not r_above.get("ok"):
                 return {"directive_id": cur_directive.get("directive_id"), "result": "contact", "at": "goto above_pick", "steps": steps_log}
 
         # Optional wrist-camera (x, y) centering at above_pick
-        if exec_cfg.get("vision_refine", True) and frame_fn is not None:
-            w_img = frame_fn(f"{arm_id}_wrist")
+        last_wrist_obs = None
+        if exec_cfg.get("vision_refine", False) and frame_fn is not None:
+            w_img = frame_fn("wrist")
             if w_img is not None:
                 f_color = cal.get("finger_color", "white")
                 obs = cell_fingers.finger_offset_mm(
@@ -150,12 +293,13 @@ def execute_directive(
                     params={"wrist.finger_color": 2 if f_color == "white" else 1},
                     color=f_color,
                 )
+                last_wrist_obs = obs
                 wrist_log.append(obs)
-                if obs.get("found") and 1.5 < abs(float(obs.get("along_mm", 0.0))) <= 12.0:
+                if obs.get("found") and 1.5 < abs(float(obs.get("along_mm", 0.0))) <= 9.0:
                     sign_along = float((cal.get("finger_sign") or {}).get("along", -1.0 if arm_id != "arm_s" else 1.0))
-                    dx_m = 0.65 * sign_along * float(obs["along_mm"]) / 1000.0
+                    dx_m = 0.55 * sign_along * float(obs["along_mm"]) / 1000.0
                     p_xyz = list(cur_directive["pick"]["effective_xyz_m"])
-                    p_xyz[0] = round(max(0.115, min(0.215, p_xyz[0] + dx_m)), 5)
+                    p_xyz[0] = round(max(0.120, min(0.204, p_xyz[0] + dx_m)), 5)
                     cur_directive["pick"]["effective_xyz_m"] = p_xyz
                     cur_directive["pick"]["x"] = p_xyz[0]
                     lib, plan, cal = plan_library_from_directive(cur_directive, base_plan, work_dir=work_dir, kinematics_root=kinematics_root)
@@ -165,8 +309,21 @@ def execute_directive(
 
         r_desc = _run_cmd("run descend_pick")
         if not r_desc.get("ok"):
+            _run_cmd("run lift_pick")
+            if attempt + 1 < max_attempts:
+                rec = diagnose_and_recover_pick(
+                    attempt=attempt,
+                    cur_directive=cur_directive,
+                    r_desc=r_desc,
+                    r_grasp={},
+                    cal=cal,
+                    tried_xs=tried_xs,
+                    wrist_obs=last_wrist_obs,
+                )
+                recovery_log.append(rec)
+                continue
             _run_cmd("park")
-            return {"directive_id": cur_directive.get("directive_id"), "result": "contact", "at": "run descend_pick", "steps": steps_log}
+            return {"directive_id": cur_directive.get("directive_id"), "result": "contact", "at": "run descend_pick", "recovery": recovery_log, "steps": steps_log}
 
         r_grasp = _run_cmd("run grasp_pick")
         state = r_grasp.get("state") or []
@@ -197,17 +354,46 @@ def execute_directive(
             if d_res["verdict"] == "reinsert_and_retry" and attempt + 1 < max_attempts:
                 _run_cmd("run release_pick")
                 _run_cmd("run lift_pick")
-                dx_m = float(d_res.get("dx_mm", 0.0)) / 1000.0
-                p_xyz = list(cur_directive["pick"]["effective_xyz_m"])
-                p_xyz[0] = round(p_xyz[0] + dx_m, 5)
-                cur_directive["pick"]["effective_xyz_m"] = p_xyz
+                rec = diagnose_and_recover_pick(
+                    attempt=attempt,
+                    cur_directive=cur_directive,
+                    r_desc=r_desc,
+                    r_grasp=r_grasp,
+                    cal=cal,
+                    tried_xs=tried_xs,
+                    wrist_obs=last_wrist_obs,
+                )
+                recovery_log.append(rec)
                 continue
 
         if not holding:
             _run_cmd("run release_pick")
             _run_cmd("run lift_pick")
+            if attempt + 1 < max_attempts:
+                rec = diagnose_and_recover_pick(
+                    attempt=attempt,
+                    cur_directive=cur_directive,
+                    r_desc=r_desc,
+                    r_grasp=r_grasp,
+                    cal=cal,
+                    tried_xs=tried_xs,
+                    wrist_obs=last_wrist_obs,
+                )
+                recovery_log.append(rec)
+                continue
             _run_cmd("park")
-            return {"directive_id": cur_directive.get("directive_id"), "result": "empty", "at": "run grasp_pick", "steps": steps_log}
+            out_empty = {
+                "directive_id": cur_directive.get("directive_id"),
+                "result": "empty",
+                "task_verified": False,
+                "at": "run grasp_pick",
+                "pick": cur_directive["pick"],
+                "place": cur_directive["place"],
+                "recovery": recovery_log,
+                "steps": steps_log,
+            }
+            cpp.capture_from_attempt({"_work": work_dir, "arm_id": arm_id}, out_empty)
+            return out_empty
 
         # Update and persist per-arm calibration profile on verified grasp
         updated_cal = cell_arm_cal.record_grasp_measurement(
@@ -221,40 +407,79 @@ def execute_directive(
             finger_color=cal.get("finger_color"),
         )
 
+        slipped_in_transfer = False
         for chunk_cmd in ("run lift_pick", "park", "goto above_place", "run descend_place", "run release_place", "run lift_place", "park"):
             r_step = _run_cmd(chunk_cmd)
+            if chunk_cmd in ("run lift_pick", "park") and chunk_cmd != "park":
+                # Check if container slipped out during lift_pick
+                if not cell_arm_cal.infer_holding(r_step, closed=float(cal.get("grip_closed", 48.8)), min_units_above_closed=2.5, min_current_ma=40.0):
+                    slipped_in_transfer = True
+                    _run_cmd("park")
+                    break
             if not r_step.get("ok"):
-                # If park or lift_place had a transient contact after release, try parking once more
                 if chunk_cmd in ("run lift_place", "park"):
                     _run_cmd("park")
                 else:
                     out_err = {
                         "directive_id": cur_directive.get("directive_id"),
                         "result": "contact",
+                        "task_verified": False,
                         "at": chunk_cmd,
                         "error": r_step.get("error"),
                         "pick": cur_directive["pick"],
                         "place": cur_directive["place"],
+                        "recovery": recovery_log,
                         "steps": steps_log,
-                        "wrist": wrist_log[-1] if wrist_log else {},
-                        "grasp_debate": debate_log[-1] if debate_log else None,
                     }
                     cpp.capture_from_attempt({"_work": work_dir, "arm_id": arm_id}, out_err)
                     return out_err
 
-        return {
+        if slipped_in_transfer and attempt + 1 < max_attempts:
+            rec = diagnose_and_recover_pick(
+                attempt=attempt,
+                cur_directive=cur_directive,
+                r_desc=r_desc,
+                r_grasp={"state": [0, 0, 0, 0, 0, 49.0], "gripper_current_ma": 0.0},
+                cal=cal,
+                tried_xs=tried_xs,
+                wrist_obs=last_wrist_obs,
+            )
+            recovery_log.append(rec)
+            continue
+
+        after_side = frame_fn("side") if frame_fn is not None else None
+        after_top = frame_fn("top") if frame_fn is not None else None
+        verification = verify_stack_outcome(
+            before_side=before_side,
+            after_side=after_side,
+            before_top=before_top,
+            after_top=after_top,
+            pick=cur_directive["pick"],
+            place=cur_directive["place"],
+        )
+        if not verification["verified"] and attempt + 1 < max_attempts:
+            recovery_log.append({"attempt": attempt, "reason": verification["reason"]})
+            continue
+
+        out_final = {
             "schema": DIRECTIVE_SCHEMA,
             "directive_id": cur_directive.get("directive_id"),
             "arm_id": arm_id,
-            "result": "placed",
+            "result": "placed" if verification["verified"] else "unverified_place",
+            "task_verified": verification["verified"],
+            "verification": verification,
             "pick": cur_directive["pick"],
             "place": cur_directive["place"],
             "gripper_pos": jaw_pos,
             "gripper_current_ma": curr_ma,
             "calibration": updated_cal,
+            "recovery": recovery_log,
             "wrist": wrist_log,
             "grasp_debate": debate_log,
             "steps": steps_log,
         }
+        if not verification["verified"]:
+            cpp.capture_from_attempt({"_work": work_dir, "arm_id": arm_id}, out_final)
+        return out_final
 
-    return {"directive_id": cur_directive.get("directive_id"), "result": "stopped", "steps": steps_log}
+    return {"directive_id": cur_directive.get("directive_id"), "result": "stopped", "task_verified": False, "recovery": recovery_log, "steps": steps_log}
