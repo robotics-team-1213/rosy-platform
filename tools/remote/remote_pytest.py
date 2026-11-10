@@ -121,7 +121,7 @@ STEP_TIMEOUT = {"ship": 900, "venv": 3600, "cleanup": 120}
 SHIP = r"""set -euo pipefail
 R=~/rosy-test; NAME=$1; SHA=$2
 umask 022  # the checkout keeps git modes; 0002 would leave 0664 files for mode-asserting tests
-mkdir -p ~/rosy-jobs; echo "$(( $(date +%s) + $4 )) pytest 2 6" > ~/rosy-jobs/"$NAME".resv  # D-568 2
+mkdir -p ~/rosy-jobs; echo "$(( $(date +%s) + $4 )) pytest 2 ${5:-6}" > ~/rosy-jobs/"$NAME".resv  # D-568 2; $5 measured GB
 mkdir -p "$R/runs"
 trap 'rm -f "$R/runs/$NAME.bundle"' EXIT
 # Read the bundle before taking the lock, bounded: a half-open link once left `cat` holding it for hours.
@@ -293,7 +293,7 @@ def deps(repo: Path, sha: str, test_tools: str | None = None) -> tuple[str, list
     return key, dirs
 
 
-def ship(repo: Path, host: str, sha: str, name: str) -> None:
+def ship(repo: Path, host: str, sha: str, name: str, gb: int = NEEDS["pytest"][1]) -> None:
     ref = f"refs/remote-pytest/{name}"
     git(repo, "update-ref", ref, sha)
     try:
@@ -304,7 +304,7 @@ def ship(repo: Path, host: str, sha: str, name: str) -> None:
         for base in (base0, None):
             data = subprocess.run(["git", "-C", str(repo), "bundle", "create", "-", ref,
                                    *([f"^{base}"] if base else [])], capture_output=True, check=True).stdout
-            result = remote(host, SHIP, name, sha, PUBLIC, str(RESERVE_S["pytest"]), input=data,
+            result = remote(host, SHIP, name, sha, PUBLIC, str(RESERVE_S["pytest"]), str(gb), input=data,
                             capture_output=True, timeout=STEP_TIMEOUT["ship"], tries=3)
             if result.returncode == 0:
                 return
@@ -447,7 +447,7 @@ def run_on(host: str, invocations: list[list[str]], logs: list[Path], sha: str, 
     print(f"[remote-pytest] {sha[:10]} on {host} (~/rosy-test/runs/{name})", flush=True)
     lost = None
     try:
-        ship(repo, host, sha, name)
+        ship(repo, host, sha, name, memory_history.reserve_gb_all(memory_history.path(repo), invocations))
         deps_sha, dirs = deps(repo, sha, test_tools=test_tools) if test_tools else deps(repo, sha)
         if test_tools:
             blobs = ",".join(git(repo, "rev-parse", f"{sha}:{path}")

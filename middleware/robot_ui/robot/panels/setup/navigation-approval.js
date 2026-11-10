@@ -31,8 +31,6 @@ export function mount(root, ctx) {
   const surface = el("select", "ui-field");
   for (const [value, text] of [["floor", "바닥"], ["lifted", "바퀴를 들어 올림"]]) { const option = el("option", "", text); option.value = value; surface.append(option); }
   surfaceLabel.append(surface);
-  const blindLabel = el("label", "ui-check", " 로봇 뒤쪽이 비어 있음을 눈이나 카메라로 확인했습니다");
-  const blind = el("input", "ui-field"); blind.type = "checkbox"; blindLabel.prepend(blind);
   const list = el("ul", "surface-list"); const buttons = [];
   for (const trial of TRIALS) {
     const row = el("li"); const state = el("span", "", " 확인 중");
@@ -43,7 +41,7 @@ export function mount(root, ctx) {
     button.addEventListener("keydown", (event) => { if (event.key === " " && !event.repeat) { event.preventDefault(); void press(trial); } });
     button.addEventListener("keyup", (event) => { if (event.key === " " && trial.stop_cause === "button_release") void release(); });
   }
-  root.append(summary, action, controls, surfaceLabel, blindLabel, list);
+  root.append(summary, action, controls, surfaceLabel, list);
 
   function say(text, state = "ready") { action.textContent = text; action.setAttribute("state", state); }
   async function call(path, body) { return ctx.api(`${BASE}${path}`, {method: "POST", body: JSON.stringify(body ?? {})}); }
@@ -52,7 +50,7 @@ export function mount(root, ctx) {
     if (holding || phase !== "MEASURING") return;
     holding = true;
     try {
-      await call("/trial/start", {direction: trial.direction, stop_cause: trial.stop_cause, test_surface: surface.value, blind_zone_confirmed: blind.checked});
+      await call("/trial/start", {direction: trial.direction, stop_cause: trial.stop_cause, test_surface: surface.value});
       if (!holding) return void call("/trial/stop").catch(() => {});
       say(`${trial.label} 시험 중입니다.`, "pending");
       const send = () => call("/trial/hold").catch((error) => { endHold(); say(`시험이 멈췄습니다: ${error.message}`, "error"); });

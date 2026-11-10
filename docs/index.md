@@ -354,8 +354,8 @@
 
 ## 최근 기록
 
-- 2026-11-09 · uncommitted · chore(publish): 게시용 명시 FULL 근거
-- 2026-11-09 · uncommitted · Pinky 표현의 미결 기본값 결정
-- 2026-11-09 · uncommitted · Pinky 캐릭터 표현 결정과 후속 설계
-- 2026-11-08 · uncommitted · fix(remote): 현장 PC가 고정 학습 환경이 필요한 시험을 받지 않는다
-- 2026-11-08 · uncommitted · docs(solutions): rclpy Node 비공개 이름 충돌 교훈
+- 2026-11-10 · uncommitted · docs: D-1010 독립 검토 반영 — 3·6항과 한계 갱신
+- 2026-11-10 · uncommitted · docs: D-1010 사이트 지도 프레임 결속 ADR
+- 2026-11-09 · uncommitted · feat(fleet): 현장 차로 편대 미션 — 리더 Nav2 trip + FOR-004 TRAIL 팔로워 (D-1002)
+- 2026-11-09 · uncommitted · fix(land): CRLF를 들이는 브랜치 거절, 병합은 -X renormalize
+- 2026-11-09 · uncommitted · fix(git): `* text=auto`로 텍스트는 늘 LF로 저장

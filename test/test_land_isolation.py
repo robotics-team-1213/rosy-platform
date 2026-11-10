@@ -349,6 +349,14 @@ def test_guard_round_wiring(monkeypatch, mode):
     out = land_guards.first(ROOT, argparse.Namespace(tests=mode, node=True), [["pkg/test"]], Path("."), "pre",
                             None, isolated=True)
     assert seen == [([["pkg/test"]], "pre", [list(land_guards.GUARDS)], True)] and out == ["round pre: guard round first: x"]
+    seen.clear()
+    land_guards.first(ROOT, argparse.Namespace(tests=mode, node=True),
+                      [["pkg/test", "test/test_harness_contracts.py"]], Path("."), "pre", None, isolated=True)
+    assert seen[0][2] == [[g for g in land_guards.GUARDS if g != "test/test_harness_contracts.py"]]
+    seen.clear()
+    land_guards.first(ROOT, argparse.Namespace(tests=mode, node=True),
+                      [["pkg/test", "test/test_harness_contracts.py"]], Path("."), 1, None, isolated=False)
+    assert seen[0][2] == [list(land_guards.GUARDS)]
 
 
 def test_selector_edge_on_this_repo_selects_the_incident_test():
