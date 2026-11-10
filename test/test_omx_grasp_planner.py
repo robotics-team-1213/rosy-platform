@@ -208,6 +208,17 @@ def test_a_jaw_tcp_from_the_environment_moves_the_tip_and_a_wild_one_is_refused(
     monkeypatch.setenv("ROSY_OMX_TCP_X_M", "0.3")
     with pytest.raises(SystemExit, match="jaw range"):
         m.load_kinematics(None)
+    monkeypatch.delenv("ROSY_OMX_TCP_X_M", raising=False)
+    from_plan = m.Planner(dict(PLAN, tcp_x_m=0.0885)).kin.fk(q)
+    assert abs(math.dist((stock.x, stock.y, stock.z), (from_plan.x, from_plan.y, from_plan.z)) - (0.09193 - 0.0885)) < 1e-6
+
+
+def test_descent_to_exact_workspace_floor_with_40mm_approach_does_not_underflow():
+    """2026-11-10 real2sim: 0.045 + (0.005 - 0.045) * 1.0 was 0.0049999999999999975 < workspace_min_m[2] (0.005)."""
+    pick = {"x": 0.1269, "y": -0.1082, "z": 0.005, "yaw_deg": -80.9}
+    planner = m.Planner(dict(PLAN, tcp_x_m=0.0885, approach_m=0.04, pick=pick))
+    lib = planner.library()
+    assert lib["source"]["reach"]["pick"]["approach_m"] == pytest.approx(0.04, abs=1e-3)
 
 
 @pytest.mark.parametrize("name", ["descend_guard_frac", "lift_guard_frac"])

@@ -52,15 +52,15 @@ def norm_to_rad(norm: float, lo: float = 0, hi: float = 4095) -> float:
     return raw * 2 * math.pi / TICKS - math.pi
 
 
-def load_kinematics(root: Path | None):
-    """The OMX-F kinematics; ROSY_OMX_TCP_X_M replaces the stock TCP (link5 x 0.09193) for another jaw.
+def load_kinematics(root: Path | None, tcp_x_m: float | None = None):
+    """The OMX-F kinematics; ROSY_OMX_TCP_X_M (or plan tcp_x_m) replaces the stock TCP (link5 x 0.09193) for another jaw.
     arm_b's v2.1 jaws end at 0.0740 (STL); on 2026-11-03 closed jaws over a box top went to stock-FK 12.4 mm
     without touching the 20 mm top, so the stock TCP put the real tips about 18 mm above every planned height."""
     root = root or Path(__file__).resolve().parents[3] / "middleware/devices/omx/adapter"
     sys.path.insert(0, str(root))
     from omx_adapter.kinematics import IkLimits, OmxKinematics, TopDownPose
 
-    path, tcp = root / "config/omx_f_kinematics.yaml", os.environ.get("ROSY_OMX_TCP_X_M")
+    path, tcp = root / "config/omx_f_kinematics.yaml", os.environ.get("ROSY_OMX_TCP_X_M") or tcp_x_m
     if not tcp:
         return OmxKinematics.load(path), IkLimits, TopDownPose
     tcp = float(tcp)
@@ -76,7 +76,7 @@ def load_kinematics(root: Path | None):
 class Planner:
     def __init__(self, plan: dict, kinematics_root: Path | None = None):
         self.plan = plan
-        self.kin, IkLimits, self.TopDownPose = load_kinematics(kinematics_root)
+        self.kin, IkLimits, self.TopDownPose = load_kinematics(kinematics_root, plan.get("tcp_x_m"))
         lim = plan["limits"]
         self.limits = IkLimits(position_limits={k: tuple(v) for k, v in lim["joints_rad"].items()},
                                workspace_min_m=tuple(lim["workspace_min_m"]),

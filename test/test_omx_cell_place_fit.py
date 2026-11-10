@@ -86,3 +86,31 @@ def test_with_tiers_expands_three_tiers_and_upper_tiers_require_support():
     bar_along_y[55:145, 85:115] = 1  # 30 mm wide in x (cols 85..115), 90 mm long in y (rows 55..145) around (100, 100)
     fits_bar, why_bar = pf.options(cfg_wide, "dest-l1", (0.0, 0.0), 0.0, C3, PX, bar_along_y, (0, 0, 160, 160))
     assert why_bar is None and fits_bar[0][1] in (90.0, -90.0)
+
+
+def test_overload_hold_contact_waits_for_load_shedding_before_parking(monkeypatch, tmp_path):
+    """2026-11-10 real2sim: after an overload-hold contact, chunk_runner sheds load before accepting park."""
+    import cell_pipeline_io as cpio
+    import cell_transfer as ct
+
+    monkeypatch.setattr(ct.cp.time, "sleep", lambda _: None)
+    replies = [
+        {"ok": True},  # load
+        {"ok": False, "contact": True, "error": "contact (overload-hold on wrist_flex by the guard): lift and elbow shed its load"},
+        {"ok": False, "error": "the guard holds an overloaded joint: the runner is shedding its load first"},
+        {"ok": True, "settled": True},  # park succeeds once shedding finishes
+    ]
+    seen = []
+
+    class SheddingCell:
+        def act(self, cmd):
+            seen.append(cmd)
+            return replies.pop(0)
+
+    out = ct.transfer_folded(SheddingCell(), tmp_path / "lib.json", closed=48.8)
+    assert out["result"] == "contact" and seen == [f"load {tmp_path / 'lib.json'}", "goto above_pick", "park", "park"]
+    fold_replies = [
+        {"ok": False, "error": "the guard holds an overloaded joint: the runner is shedding its load first"},
+        {"ok": True, "settled": True},
+    ]
+    assert cpio.fold(type("C", (), {"act": lambda self, _: fold_replies.pop(0)})(), sleep=lambda _: None)["ok"] is True

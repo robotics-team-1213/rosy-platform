@@ -143,9 +143,14 @@ def _transfer(cell, library, closed, wrist, after_place, pinch, feel, sequence, 
             steps.append({"command": "release and rise", **freed})
             parked = freed["result"] == "risen" and run("park").get("ok")
             return {"result": "contact", "at": command, "steps": steps, "error": status.get("error"), "released": bool(parked)}
-        if status.get("contact"):  # the runner held with torque on: back up the same path, fold home
-            for after in ("retreat", "park"):
-                run(after)
+        if status.get("contact"):  # the runner held with torque on: back up the same path (unless shedding), fold home
+            if "overload-hold" not in (status.get("error") or ""):
+                run("retreat")
+            for _ in range(4):
+                parked = run("park")
+                if parked.get("ok") or "shedding its load" not in (parked.get("error") or ""):
+                    break
+                cp.time.sleep(1.0)
             return {"result": "contact", "at": command, "steps": steps, "error": status.get("error")}
         if not status.get("ok"):
             if not status.get("fault") and command not in ("park", f"load {library}"):

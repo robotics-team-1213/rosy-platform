@@ -241,7 +241,7 @@ class OmxKinematics:
         samples, previous = [], tuple(start_joints)
         for i in range(1, count + 1):
             s = i / count
-            pose = TopDownPose(x0 + (x1 - x0) * s, y0 + (y1 - y0) * s, z0 + (z1 - z0) * s,
+            pose = TopDownPose((1.0 - s) * x0 + s * x1, (1.0 - s) * y0 + s * y1, (1.0 - s) * z0 + s * z1,
                                start.yaw + yaw_delta * s)
             result = self.solve_top_down(pose, limits, reference_q5=previous[4])
             where = f"({pose.x:.4f}, {pose.y:.4f}, {pose.z:.4f}, yaw {pose.yaw:.3f})"
