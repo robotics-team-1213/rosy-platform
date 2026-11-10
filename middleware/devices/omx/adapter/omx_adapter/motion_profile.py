@@ -152,7 +152,10 @@ def flow(waypoints: list, fps: int, vmax: float, blend: list, blend_s: float,
         # stretch the rising lift's distance so the shared profile moves it no faster than rise_speed
         span = max(abs(d) * (vmax / rise_speed if rise_speed and j == 1 and d < 0 and vmax > rise_speed else 1.0)
                    for j, d in enumerate(delta))
-        duration, ramp = eased(span, vmax, amax)
+        if span <= 1e-9:
+            continue
+        seg_amax = max(amax, 25.0) if all(abs(d) <= 1e-9 for d in delta[:5]) else amax
+        duration, ramp = eased(span, vmax, seg_amax)
         if segments and blend[i]:
             start -= min(segments[-1][3], ramp, blend_s)
             if len(segments) > 1:
@@ -167,3 +170,68 @@ def flow(waypoints: list, fps: int, vmax: float, blend: list, blend_s: float,
                        for j, w in enumerate(waypoints[0])])
     frames[-1] = list(waypoints[-1])
     return frames
+
+
+def receding_horizon_splice(active_queue: list, current_pose: list, next_frames: list, fps: int,
+                            blend_s: float = 0.25, vmax: float = 5.0) -> list:
+    """Splice `next_frames` into an in-flight `active_queue` over a receding window of `blend_s` seconds
+    without decelerating to a dead stop at the switch point (D-1014)."""
+    if not next_frames:
+        return [list(f) for f in active_queue]
+    if not active_queue:
+        return [list(f) for f in next_frames]
+    window = max(1, min(len(active_queue), round(blend_s * fps)))
+    head = [list(f) for f in active_queue[:window]]
+    anchor = head[-1]
+    step_limit = vmax / fps
+    if any(abs(a - b) > step_limit + 1e-3 for a, b in zip(anchor[:5], next_frames[0][:5])):
+        bridge = retime([list(f) for f in next_frames], fps, vmax=min(vmax, 4.5), start=anchor)
+        return blend_chunks([list(current_pose)] + head, bridge, fps, blend_s=blend_s, vmax=vmax)[1:]
+    return blend_chunks([list(current_pose)] + head, [list(f) for f in next_frames], fps,
+                        blend_s=blend_s, vmax=vmax)[1:]
+
+
+class TemporalChunkEnsembler:
+    """Exponential temporal action ensembler (w_i = exp(-coeff * i), ACT policy parity, D-1014)
+    with per-tick kinodynamic velocity clamping under the native guard limit."""
+
+    def __init__(self, coeff: float = 0.01, vmax: float = 5.0, fps: int = 30) -> None:
+        self.coeff = float(coeff)
+        self.vmax = float(vmax)
+        self.fps = int(fps)
+        self._chunks: list[tuple[int, list[list[float]]]] = []
+        self._last: list[float] | None = None
+
+    def reset(self, pose: list[float] | None = None) -> None:
+        self._chunks.clear()
+        self._last = list(pose) if pose is not None else None
+
+    def push(self, chunk: list[list[float]]) -> None:
+        if chunk:
+            self._chunks.append((0, [list(f) for f in chunk]))
+
+    def step(self, fallback: list[float] | None = None) -> list[float]:
+        active: list[tuple[int, list[list[float]]]] = []
+        samples: list[tuple[float, list[float]]] = []
+        for age, frames in self._chunks:
+            if age < len(frames):
+                weight = math.exp(-self.coeff * age)
+                samples.append((weight, frames[age]))
+                if age + 1 < len(frames):
+                    active.append((age + 1, frames))
+        self._chunks = active
+        if not samples:
+            out = list(fallback if fallback is not None else (self._last or [0.0] * 6))
+            self._last = list(out)
+            return out
+        total_w = sum(w for w, _ in samples)
+        blended = [sum(w * frame[j] for w, frame in samples) / total_w for j in range(len(samples[0][1]))]
+        if self._last is not None and self.fps > 0:
+            max_step = self.vmax / self.fps
+            blended = [
+                prev + max(-max_step, min(max_step, target - prev)) if j < 5 else target
+                for j, (prev, target) in enumerate(zip(self._last, blended))
+            ]
+        self._last = list(blended)
+        return blended
+

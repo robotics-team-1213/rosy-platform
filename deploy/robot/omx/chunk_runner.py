@@ -46,9 +46,11 @@ from omx_adapter.chunk_library import (  # noqa: E402
     RISE_SPEED as RISE_SPEED,
     SCHEMA as SCHEMA,
     TRANSIT as TRANSIT,
+    TemporalChunkEnsembler as TemporalChunkEnsembler,
     chain_path as chain_path,
     load_library,
     park_path,
+    receding_horizon_splice as receding_horizon_splice,
     too_fast as too_fast,
     transit_path,
 )
@@ -181,7 +183,7 @@ class Runner:
             if verb == "episode":  # bookkeeping only: allowed between chunks and after a fault (to drop the episode)
                 self.report(command=line, ok=True, **self.recorder.command(words[1:]))
                 return True
-            if self.chunk is not None:
+            if self.chunk is not None and verb != "splice":
                 raise ValueError(f"chunk {self.chunk} is still running")
             if getattr(getattr(self.robot, "motion", None), "held", None) and verb != "state":
                 raise ValueError("the guard holds an overloaded joint: the runner is shedding its load first")
@@ -189,6 +191,28 @@ class Runner:
             if self.fault and verb not in ("park", "state") and not (soft and verb in ("retreat", "jog")):
                 raise ValueError(f"fault ({self.fault}): only park, state or stop"
                                  + (", or retreat/jog after a contact" if soft else ""))
+            if verb == "splice" and len(words) in (2, 3) and words[2:] in ([], ["rel"]):
+                frames = self.library["chunks"].get(words[1])
+                if frames is None:
+                    raise ValueError(f"unknown chunk {words[1]}")
+                window = max(1, min(len(self.queue), round(0.25 * self.fps))) if self.queue else 0
+                anchor = self.queue[window - 1] if window else self.target
+                offset = [0.0] * 6
+                if words[2:] == ["rel"]:
+                    offset = [t - s for t, s in zip(anchor[:5], frames[0][:5])] + [0.0]
+                    if max(abs(v) for v in offset) > REL_MAX:
+                        raise ValueError(f"relative offset {max(abs(v) for v in offset):.1f} exceeds {REL_MAX}")
+                next_frames = [[max(-100.0, min(100.0, v + o)) for v, o in zip(f, offset)] for f in frames]
+                gap = max(abs(a - b) for a, b in zip(next_frames[0][:5], anchor[:5]))
+                if gap > JOG_MAX * 2:
+                    raise ValueError(f"chunk {words[1]} starts {gap:.1f} away from the splice anchor")
+                self.queue = receding_horizon_splice(self.queue, self.target, next_frames, self.fps,
+                                                     blend_s=0.25, vmax=GUARD_UNITS_PER_S)
+                if words[1].startswith("release"):
+                    self.holding = False
+                self.chunk = words[1] if self.chunk is None else f"{self.chunk} -> {words[1]}"
+                self.settle_since, self.contact_ticks, self.contact_start = None, 0, None
+                return True
             if verb == "run" and len(words) in (2, 3) and words[2:] in ([], ["rel"]):
                 frames = self.library["chunks"].get(words[1])
                 if frames is None:

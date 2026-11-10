@@ -83,3 +83,48 @@ def test_blend_chunks_eliminates_dead_stop_between_consecutive_chunks_within_gua
     assert max(abs(x) for row in v for x in row) <= 5.0 + 1e-6
     stopped_mid = [i for i, row in enumerate(v[5:-5]) if max(abs(x) for x in row[:5]) < 0.05]
     assert not stopped_mid
+
+
+def test_temporal_chunk_ensembler_blends_overlapping_predictions_within_guard_speed():
+    ensembler = m.TemporalChunkEnsembler(coeff=0.01, vmax=5.0, fps=FPS)
+    start = [0.0, -30.0, 20.0, 46.0, 10.0, 46.6]
+    ensembler.reset(start)
+    chunk_a = [[0.1 * k, -30.0, 20.0, 46.0, 10.0, 46.6] for k in range(1, 16)]
+    chunk_b = [[0.5 + 0.12 * k, -30.0, 20.0, 46.0, 10.0, 52.0] for k in range(1, 16)]
+    ensembler.push(chunk_a)
+    out = [ensembler.step() for _ in range(5)]
+    ensembler.push(chunk_b)
+    out.extend(ensembler.step() for _ in range(15))
+    v = speeds(out, start)
+    assert max(abs(x) for row in v for x in row[:5]) <= 5.0 + 1e-6
+    assert out[-1][0] > out[4][0] and out[-1][5] == pytest.approx(52.0)
+
+
+def test_receding_horizon_splice_transitions_in_flight_without_dead_stop():
+    start = [0.0, -30.0, 20.0, 46.0, 10.0, 46.6]
+    active = m.retime([[0.0, -30.0 + k * 0.4, 20.0 - k * 0.3, 46.0, 10.0, 46.6] for k in range(1, 26)],
+                      FPS, VMAX, start=start)
+    current = active[9]
+    remaining = active[10:]
+    anchor = remaining[min(len(remaining), round(0.25 * FPS)) - 1]
+    next_chunk = m.retime([[anchor[0] + k * 0.3, anchor[1] + k * 0.2, anchor[2], 46.0, 10.0, 46.6]
+                           for k in range(1, 21)], FPS, VMAX, start=anchor)
+    spliced = m.receding_horizon_splice(remaining, current, next_chunk, FPS, blend_s=0.25, vmax=5.0)
+    assert spliced[-1] == pytest.approx(next_chunk[-1])
+    v = speeds(spliced, current)
+    assert max(abs(x) for row in v for x in row[:5]) <= 5.0 + 1e-6
+    stopped_mid = [i for i, row in enumerate(v[3:-5]) if max(abs(x) for x in row[:5]) < 0.05]
+    assert not stopped_mid
+
+
+def test_flow_decouples_pure_gripper_segments_and_skips_zero_delta_waypoints():
+    wp = [[0.0, -30.0, 20.0, 46.0, 10.0, 46.6],
+          [0.0, -30.0, 20.0, 46.0, 10.0, 46.6],  # redundant zero-delta waypoint
+          [0.0, -30.0, 20.0, 46.0, 10.0, 56.6]]  # pure 10-unit gripper opening
+    frames = m.flow(wp, FPS, VMAX, blend=[False, False, False], blend_s=0.2)
+    assert frames[-1][5] == pytest.approx(56.6)
+    # With decoupled gripper acceleration (amax >= 25), a 10-unit jaw move takes ~1.0s (~31 frames) instead of ~1.9s (58 frames)
+    assert len(frames) <= 35
+    v = speeds(frames, wp[0])
+    assert max(abs(x) for row in v for x in row) <= VMAX + 1e-6
+

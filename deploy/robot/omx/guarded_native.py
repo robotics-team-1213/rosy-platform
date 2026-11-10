@@ -170,6 +170,7 @@ class NativeJointMotion:
         self.held, self.held_once, self.shed_load = {}, set(), shed_load
         self.last_effort_time = None
         self.last_present = None
+        self.prev_target = None
         self.alignment_deadline = None
         self.monitor = monitor
         self.monitor_admitted = False
@@ -278,11 +279,11 @@ class NativeJointMotion:
             deadline = started + min(105, max(5, max(abs(target[n] - current[n]) for n in BODY)
                                                / TICKS_PER_DEGREE + 5))
             current = self._seed({n: current[n] for n in self.active}, target, started)
-            return {"started": started, "seed": current, "alignment_deadline": deadline}
+            return {"started": started, "seed": current, "alignment_deadline": deadline, "target": dict(target)}
         elapsed = min(now - self.last_time, MAX_STEP_S)
         if self.body_only or self.teacher:
             command, state = self._body_command(target, current, elapsed, now)
-            return {"started": started, "command": command, "time": now, "body_state": state}
+            return {"started": started, "command": command, "time": now, "body_state": state, "target": dict(target)}
         step = elapsed * TICKS_PER_DEGREE  # one degree/second, independent of loop frequency
         frozen = self.frozen()
         command = {n: self.command[n] if n in frozen else self.command[n] + max(-step, min(step, target[n] - self.command[n]))
@@ -405,6 +406,11 @@ class NativeJointMotion:
             error = target[name] - self.command[name]
             # Leave enough distance for this step and subsequent braking; moving targets may still be passed.
             brake = math.sqrt((acceleration * elapsed) ** 2 + 2 * acceleration * abs(error)) - acceleration * elapsed
+            if self.teacher and tracking and self.prev_target is not None and elapsed > 0:
+                v_ff = (target[name] - self.prev_target[name]) / elapsed
+                if error * v_ff > 0:
+                    reach = min(abs(error) / elapsed, math.sqrt(min(limit, abs(v_ff)) ** 2 + 2 * acceleration * abs(error)))
+                    brake = max(brake, reach)
             desired = math.copysign(min(limit, brake), error)
             change = max(-acceleration * elapsed, min(acceleration * elapsed, desired - self.velocity[name]))
             velocity[name] = self.velocity[name] + change
@@ -430,12 +436,15 @@ class NativeJointMotion:
             else:
                 self.follower.enable_torque()
             self.command = dict(prepared["seed"])
+            self.prev_target = dict(prepared.get("target") or self.command)
             self.alignment_deadline = prepared["alignment_deadline"]
             self.last_time = self.clock()
             return normalized(self.follower, self.command)
         goals = {n: int(v) for n, v in prepared["command"].items()}
         self.follower.sync_write("Goal_Position", goals, normalize=False)
         self.command = prepared["command"]
+        if "target" in prepared:
+            self.prev_target = dict(prepared["target"])
         self.last_time = prepared["time"]
         if "body_state" in prepared:
             was_tracking = self.tracking

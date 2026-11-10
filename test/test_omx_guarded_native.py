@@ -1159,3 +1159,34 @@ def test_effort_check_uses_sync_read_on_dynamixel_bus_to_avoid_5hz_unicast_stall
     assert ("Present_PWM", guard.BODY, False, guard.READ_RETRY) in pwm_sync_calls
     assert not any(e[:2] == ("read", "Present_PWM") for e in follower.events)
     assert not any(e[:2] == ("read", "PWM_Limit") for e in follower.events)
+
+
+def test_teacher_mode_feedforward_tracks_streamed_ramp_without_braking_chaser_lag(guard):
+    motion, follower, clock, here = teacher(guard)
+    motion.send(here)
+    for _ in range(14):
+        clock[0] += 1 / 30
+        motion.send(here)
+    assert motion.tracking
+    # Stream a 30 Hz ramp at 4.5 units/s (~8.1 deg/s) for 2 seconds, then hold steady for 0.6 s.
+    streamed = dict(here)
+    lags_deg = []
+    for k in range(1, 61):
+        clock[0] += 1 / 30
+        streamed = {**here, "shoulder_pan.pos": here["shoulder_pan.pos"] + 4.5 * (k / 30)}
+        sent = motion.send(streamed)
+        follower.raw.update({n: int(v) for n, v in follower.goals.items()})
+        if k >= 30:  # after initial acceleration ramp
+            lags_deg.append(abs(streamed["shoulder_pan.pos"] - sent["shoulder_pan.pos"]) * 1.8)
+    # Feedforward velocity matching keeps steady-state tracking lag well under 0.5 deg (vs ~3.9 deg without v_ff)
+    assert max(lags_deg) < 0.5
+    # When the streamed trajectory stops at the final pose, the guard decelerates smoothly within 10 deg/s^2
+    prev_v = motion.velocity["shoulder_pan"]
+    for _ in range(20):
+        clock[0] += 1 / 30
+        sent = motion.send(streamed)
+        follower.raw.update({n: int(v) for n, v in follower.goals.items()})
+        assert abs(motion.velocity["shoulder_pan"] - prev_v) <= 10 * guard.TICKS_PER_DEGREE * (1 / 30) + 1e-6
+        prev_v = motion.velocity["shoulder_pan"]
+    assert sent["shoulder_pan.pos"] == pytest.approx(streamed["shoulder_pan.pos"], abs=0.2)
+

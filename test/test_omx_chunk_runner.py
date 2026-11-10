@@ -1119,3 +1119,29 @@ def test_state_query_ahead_of_motion_command_does_not_delay_chunk_start_by_a_tic
     assert by_command(status, "run approach_pinky")[0]["ok"] is True
     # Only the 10 chunk frames + settle ticks, without wasting an extra idle tick on the leading `state`
     assert robot.sent[0]["shoulder_pan.pos"] == 0.0 and robot.sent[1]["shoulder_pan.pos"] == 2.0
+
+
+def test_splice_command_transitions_active_chunk_in_flight_without_stopping():
+    robot, status, clock = Robot(), [], [0.0]
+    lib = library()
+    lib["chunks"]["approach_pinky"] = [[k * 0.15, -60.0, 50.0, 45.0, 10.0, 46.6] for k in range(1, 31)]
+    lib["chunks"]["follow_up"] = [[1.5 + k * 0.15, -60.0 + k * 0.1, 50.0, 45.0, 10.0, 46.6] for k in range(1, 21)]
+    sent_splice = [False]
+
+    def lines():
+        if clock[0] == 0.0:
+            return ["run approach_pinky"]
+        if not sent_splice[0] and len(robot.sent) == 5:
+            sent_splice[0] = True
+            return ["splice follow_up rel"]
+        if sent_splice[0] and not r.chunk:
+            return ["stop"]
+        return []
+
+    r = m.Runner(robot, lib, fps=30, status=status.append, clock=lambda: clock[0],
+                 sleep=lambda s: clock.__setitem__(0, clock[0] + 1 / 30))
+    r.run(lines)
+    done = next(s for s in status if s["command"] == "run approach_pinky -> follow_up")
+    assert done["ok"] is True and done["settled"] is True
+    assert done["state"][1] == pytest.approx(-58.0, abs=0.5)
+

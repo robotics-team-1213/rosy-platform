@@ -5,7 +5,7 @@ import json
 import math
 from pathlib import Path
 
-from .motion_profile import blend_chunks, flow
+from .motion_profile import TemporalChunkEnsembler, blend_chunks, flow, receding_horizon_splice
 
 # The guard streams at most 10 deg/s; 5 native units/s keeps every joint under 9 deg/s.
 GUARD_UNITS_PER_S = 5.0
