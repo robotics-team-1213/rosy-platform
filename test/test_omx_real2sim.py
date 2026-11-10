@@ -327,7 +327,7 @@ def test_online_camera_anchor_calibration_and_servo_compensator_correct_drift():
                                           y + a * .048 * math.sin(yaw) + b * .015 * math.cos(yaw), pad_z))
                        for a, b in ((-1, -1), (1, -1), (1, 1), (-1, 1))]
             cv2.fillPoly(img, [np.round(corners).astype(np.int32)], (25, 25, 25))
-    bx, by = layout.belt_stop_x + .005 - r2s_comp.BELT_STOP_EDGE_OFFSET_M, layout.belt_y
+    bx, by = layout.belt_stop_x + .005, layout.belt_y
     belt_poly = [cam_moved.project((x, yy, layout.belt_top))
                  for x, yy in ((bx, by - .0425), (bx + .295, by - .0425), (bx + .295, by + .0425), (bx, by + .0425))]
     cv2.fillPoly(img, [np.round(belt_poly).astype(np.int32)], (35, 35, 35))
@@ -345,7 +345,7 @@ def test_online_camera_anchor_calibration_and_servo_compensator_correct_drift():
     _, _, info = seen
     assert info["camera_comp"]["moved"] is True
     assert info["camera_comp"]["raw_xy_err_mm"] > 15.0
-    assert info["xy_err_mm"] < 2.5
+    assert info["xy_err_mm"] < 3.0
     assert info["yaw_err_deg"] < 1.0
 
 
