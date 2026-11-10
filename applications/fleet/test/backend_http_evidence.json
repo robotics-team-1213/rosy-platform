@@ -1818,6 +1818,22 @@
         "test_reject_needs_a_reason_and_is_audited"
       ],
       "source_revision": "36e976e701e0470c24b7af486c97f741dc038972"
+    },
+    "GET:/api/fleet/site-map/reality-check": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_site_map_reality_api.py",
+        "test_a_drive_on_the_draft_lanes_reports_a_match"
+      ],
+      "source_revision": "a2f1cd146c276af8a79515836ce129a565f7eb94"
+    },
+    "POST:/api/fleet/site-map/reality-check/apply": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_site_map_reality_api.py",
+        "test_apply_moves_the_draft_onto_the_drive"
+      ],
+      "source_revision": "a2f1cd146c276af8a79515836ce129a565f7eb94"
     }
   }
 }

@@ -64,7 +64,8 @@ export function createRealityPanel(host) {
   }
   $('reality-check').addEventListener('click', () => host.guarded(async () => {
     if (host.reason()) return;
-    report = await host.request(`/api/fleet/site-map/reality-check?${query()}`);
+    const path = '/api/fleet/site-map/reality-check';  // the feature matrix pins this literal
+    report = await host.request(query() ? `${path}?${query()}` : path);
     sync();
     host.notice(report.verdict === 'match' ? '지도와 운행 경로가 맞습니다.'
       : report.fit?.accepted ? '지도가 운행 경로에서 벗어났습니다 · 초안 보정을 적용할 수 있습니다.'
