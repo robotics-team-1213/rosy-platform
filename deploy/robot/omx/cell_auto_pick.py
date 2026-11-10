@@ -177,7 +177,10 @@ def observe(cell, config: dict, calibration: dict, site: str, roi, catalog: list
     near = cell_objects.foreground(img, roi, params=config.get("params"), surface_lab=lab)  # not clipped to site polygon: adjacent surface objects still meet open fingers
     for poly in config["sites"][site].get("markings_px", []):  # flat floor markings (a white line) are no obstacle
         cv2.fillPoly(near, [np.asarray(poly, np.int32) - [roi[0], roi[1]]], 0)
-    return img, object_sized(near, config.get("params")) | cell_objects.colour_mask(img, roi, obj.get("hsv")), objects, None
+    mask = object_sized(near, config.get("params")) | cell_objects.colour_mask(img, roi, obj.get("hsv"))
+    for poly in config["sites"][site].get("markings_px", []):
+        cv2.fillPoly(mask, [np.asarray(poly, np.int32) - [roi[0], roi[1]]], 0)
+    return img, mask, objects, None
 
 
 def object_sized(mask, params=None):

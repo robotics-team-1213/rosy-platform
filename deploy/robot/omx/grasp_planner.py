@@ -167,19 +167,23 @@ class Planner:
         lifted = (x, y, z + self.standoff(x, y, z, yaw, rise))
         joints = self.solve(*above, yaw, q5)
         pre = [round(rad_to_norm(q), 3) for q in joints] + [grip_in]
-        down, q5 = self.line(above, (x, y, z), p["descend_m_s"], yaw, grip_in, joints[4])
+        descend_v = float(p.get(f"descend_{name}_m_s", p["descend_m_s"]))
+        lift_v = float(p.get(f"lift_{name}_m_s", p["lift_m_s"]))
+        down, q5 = self.line(above, (x, y, z), descend_v, yaw, grip_in, joints[4])
         verb = "grasp" if grip_out < grip_in else "release"
         act = self.hold(down[-1], p["grip_s"], grip_in, grip_out) + self.hold(down[-1][:5] + [grip_out], p["settle_s"])
-        up, q5 = self.line((x, y, z), lifted, p["lift_m_s"], yaw, grip_out, q5)
+        up, q5 = self.line((x, y, z), lifted, lift_v, yaw, grip_out, q5)
         # A joint can turn faster than the Cartesian speed suggests near the wrist; the guard streams at
         # GUARD_UNITS_PER_S, so each chunk is slowed to that from where the previous one ended.
         # the vertical lines ease out of and into rest (the same IK path, a trapezoid speed); the jaws'
         # close/open keeps its own pace
         # `descend_guard_frac`: this retime, not descend_m_s, sets a descent's pace; the fastest joint tracks with lag at the cap
-        down = [[round(v, 3) for v in f] for f in retime(down, self.fps, self.guard_pace("descend_guard_frac"), start=pre)]
+        descend_pace_key = f"descend_{name}_guard_frac" if f"descend_{name}_guard_frac" in p else "descend_guard_frac"
+        lift_pace_key = f"lift_{name}_guard_frac" if f"lift_{name}_guard_frac" in p else "lift_guard_frac"
+        down = [[round(v, 3) for v in f] for f in retime(down, self.fps, self.guard_pace(descend_pace_key), start=pre)]
         act = [[round(v, 3) for v in f] for f in slow(act, self.fps, start=down[-1])]
         # `lift_guard_frac`: at 0.85 the wrist_flex fell 2.1 and 2.2 behind on the first cm of two held lifts (2026-11-07), at the strain limit
-        up = [[round(v, 3) for v in f] for f in retime(up, self.fps, self.guard_pace("lift_guard_frac"), start=act[-1])]
+        up = [[round(v, 3) for v in f] for f in retime(up, self.fps, self.guard_pace(lift_pace_key), start=act[-1])]
         return {f"above_{name}": [pre], f"descend_{name}": down, f"{verb}_{name}": act, f"lift_{name}": up}, q5
 
     def library(self):
@@ -187,7 +191,8 @@ class Planner:
         home = [round(v, 3) for v in p["home"]] + [p["grip_closed"]]
         chunks, q5 = {}, norm_to_rad(p["home"][4])
         pick, q5 = self.site("pick", p["pick"], p["grip_open"], p["grip_closed"], q5)
-        place, q5 = self.site("place", p["place"], p["grip_closed"], p["grip_open"], q5)
+        grip_release = min(float(p.get("grip_release", p["grip_open"])), float(p["grip_open"]))
+        place, q5 = self.site("place", p["place"], p["grip_closed"], grip_release, q5)
         chunks.update(pick)
         chunks.update(place)
         chunks["home"] = [home]

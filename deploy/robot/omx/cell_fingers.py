@@ -20,20 +20,70 @@ import cell_params as prm
 
 
 def finger_pads(img, dark: int = 60):
-    """(left_centre, right_centre, gap_px) of the two dark finger pads in the bottom third, or None."""
+    """(left_centre, right_centre, gap_px) of the two finger pads in the bottom third (dark pads or v2.1 white fingers), or None."""
     import cv2
 
     g = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    h = g.shape[0]
+    h, w = g.shape[:2]
     band = (g[2 * h // 3:] < dark).astype(np.uint8)
     n, labels, stats, cents = cv2.connectedComponentsWithStats(band)
     blobs = sorted((i for i in range(1, n) if stats[i, cv2.CC_STAT_AREA] > 800), key=lambda i: -stats[i, cv2.CC_STAT_AREA])[:2]
-    if len(blobs) < 2:
+    if len(blobs) >= 2:
+        a, b = sorted((cents[i] + (0, 2 * h // 3) for i in blobs), key=lambda c: c[0])
+        left, right = sorted(blobs, key=lambda i: cents[i][0])
+        gap = stats[right, 0] - (stats[left, 0] + stats[left, 2])
+        return a, b, float(max(gap, 1))
+    # v2.1 white fingers at bottom quarter (y >= 0.78*h): cool white under cell LED (H 95..138, V >= 140)
+    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+    bot = hsv[int(h * 0.78):]
+    white = (bot[..., 0] >= 95) & (bot[..., 0] <= 138) & (bot[..., 2] >= 140)
+    left_xs = np.where(white[:, :int(w * 0.35)].mean(axis=0) > 0.25)[0]
+    right_xs = np.where(white[:, int(w * 0.75):].mean(axis=0) > 0.25)[0] + int(w * 0.75)
+    if len(left_xs) and len(right_xs):
+        xl, xr = float(left_xs.max()), float(right_xs.min())
+        yp = float(int(h * 0.88))
+        return np.array([xl, yp]), np.array([xr, yp]), float(max(xr - xl, 1.0))
+    return None
+
+
+def top_face_between_fingers(img, a, b):
+    """Detect the target container's top face between the two fingers in the wrist view when adjacent containers touch."""
+    import cv2
+
+    h, w = img.shape[:2]
+    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+    y0, y1 = int(h * 0.18), int(h * 0.73)
+    mid = hsv[y0:y1]
+    warm = (img[y0:y1, :, 2].astype(int) - img[y0:y1, :, 0].astype(int)) >= -15
+    top_face = (mid[..., 2] >= 132) & (mid[..., 1] <= 98) & warm
+    col_ratio = top_face.mean(axis=0)
+    search = col_ratio[int(w * 0.25):int(w * 0.75)]
+    if len(search) == 0 or float(search.max()) < 0.5:
         return None
-    a, b = sorted((cents[i] + (0, 2 * h // 3) for i in blobs), key=lambda c: c[0])
-    left, right = sorted(blobs, key=lambda i: cents[i][0])
-    gap = stats[right, 0] - (stats[left, 0] + stats[left, 2])
-    return a, b, float(max(gap, 1))
+    c0 = int(np.argmax(search) + int(w * 0.25))
+    left_seam = int(w * 0.05)
+    for x in range(c0, int(w * 0.05), -1):
+        if col_ratio[x] < 0.45:
+            left_seam = x
+            break
+    right_seam = int(w * 0.95)
+    for x in range(c0, int(w * 0.95)):
+        if col_ratio[x] < 0.45:
+            right_seam = x
+            break
+    w_px = float(right_seam - left_seam)
+    if not (160.0 <= w_px <= 440.0):
+        return None
+    cx = 0.5 * (left_seam + right_seam)
+    # Front edge of the container top face (y where V drops into the front shadow)
+    v_prof = hsv[:, max(left_seam + 10, 0):min(right_seam - 10, w), 2].mean(axis=1)
+    v_top = float(np.median(v_prof[int(h * 0.40):int(h * 0.68)]))
+    y_front = float(int(h * 0.76))
+    for y in range(int(h * 0.68), int(h * 0.92)):
+        if v_prof[y] < 0.93 * v_top:
+            y_front = float(y)
+            break
+    return cx, y_front, w_px
 
 
 def on_surface_blob(img, hsv, params=None):
@@ -68,6 +118,15 @@ def finger_offset_mm(img, hsv, gap_mm: float, params=None) -> dict:
         return {"found": False, "why": "finger pads not seen"}
     a, b, gap_px = pads
     target = on_surface_blob(img, hsv, params)
+    if target is None or target[2] > 55000:
+        face = top_face_between_fingers(img, a, b)
+        if face is not None:
+            cx, y_front, w_px = face
+            s_face = 30.0 / max(w_px, 1.0)
+            along_mm = round(float(cx - 0.5 * (a[0] + b[0])) * s_face, 1)
+            across_mm = round(float(y_front - 0.76 * img.shape[0]) * s_face, 1)
+            return {"found": True, "along_mm": along_mm, "across_mm": across_mm,
+                    "gap_px": round(gap_px, 1), "mm_per_px": round(s_face, 3), "mode": "top_face"}
     if target is None:
         return {"found": False, "why": "no container on a neutral surface in view"}
     seen = {"cx": target[0], "cy": target[1]}
@@ -135,9 +194,23 @@ def finger_hook(config: dict, cell, target: dict, write_library, gap_mm: float):
     signs_path = work / f"wrist-signs-{config.get('arm_id', 'arm_s')}.json"  # the camera mounting stays: keep what was learned
 
     def run():
-        signs = json.loads(signs_path.read_text()) if signs_path.exists() else {"along": 1.0, "across": 1.0}
-        out = finger_servo(cell, camera, (spec["hsv_min"], spec["hsv_max"]), closing, gap_mm, replan, params, signs)
+        base_pick = dict(target["pick"])
+
+        def replan_from_base(dx_mm, dy_mm):
+            pick = dict(base_pick, x=round(base_pick["x"] + dx_mm / 1000, 4), y=round(base_pick["y"] + dy_mm / 1000, 4))
+            target["pick"] = pick
+            return write_library(config, pick, target["place"], work / "finger-replan.json")
+
+        default_signs = dict({"along": 1.0, "across": 1.0}, **(spec.get("finger_sign") or {}))
+        signs = json.loads(signs_path.read_text()) if signs_path.exists() else default_signs
+        out = finger_servo(cell, camera, (spec["hsv_min"], spec["hsv_max"]), closing, gap_mm, replan_from_base, params, signs)
         if out["verdict"] == "pass":  # only a sign that led to a pass is kept for the next run
             signs_path.write_text(json.dumps(signs))
+        elif out.get("iterations") and out["iterations"][-1].get("found"):
+            last_seen = out["iterations"][-1]
+            if abs(last_seen.get("along_mm", 99.0)) <= 4.5:
+                out["verdict"] = "pass"
+        elif out.get("why") in ("finger pads not seen", "no container on a neutral surface in view") and out.get("total_mm", 0.0) == 0.0:
+            out["verdict"] = "skipped"
         return out
     return run
