@@ -45,8 +45,8 @@ SIDE_ROI_BY_COL_TIER: dict[tuple[int, int], tuple[int, int, int, int]] = {
     (3, 3): (295, 120, 365, 190),
 }
 
-SIDE_COL_CENTER_U: dict[int, float] = {1: 186.5, 2: 259.0, 3: 326.9}
-SIDE_M_PER_PX: float = 0.000248  # Measured on rosy-arm-cell: +5.7 mm in arm_b x = +23.0 px in side camera u
+SIDE_COL_CENTER_U: dict[int, float] = {1: 205.0, 2: 254.0, 3: 300.0}
+SIDE_M_PER_PX: float = 0.00070  # Measured 3-point calibration on rosy-arm-cell side camera (u=190->0.1280m, u=232->0.1551m, u=264->0.1796m)
 
 TOP_ROI_BY_COL_ROW: dict[tuple[int, int], tuple[int, int, int, int]] = {
     (1, 1): (315, 165, 368, 270),
@@ -411,7 +411,7 @@ def execute_directive(
         # Ensure jaws have finished opening to grip_open at above_pick before descending
         above_state = r_above.get("state") or []
         if len(above_state) >= 6 and above_state[5] is not None and float(above_state[5]) < float(plan["grip_open"]) - 1.0:
-            _run_cmd(f"grip {float(plan['grip_open']):.2f}")
+            _run_cmd("run above_pick")
 
         # Pre-pick target zone alignment using Side View + Wrist View
         last_wrist_obs = None
