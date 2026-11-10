@@ -45,13 +45,13 @@ class CameraPeerClientTest {
         val receiver = Signer(); val mobile = Signer(); val memory = Memory()
         val receiverId = "fleet-" + PeerProof.fingerprint(receiver.publicKey).take(32)
         val ca = HeldCertificate.Builder().certificateAuthority(0).commonName("fixture CA").build()
-        val leaf = HeldCertificate.Builder().commonName("site.local").addSubjectAlternativeName("site.local").signedBy(ca).build()
+        val leaf = HeldCertificate.Builder().commonName("site.local").addSubjectAlternativeName("site.local").addSubjectAlternativeName("moved-site.local").signedBy(ca).build()
         val server = MockWebServer(); val requests = mutableListOf<RecordedRequest>()
         val aes = KeyGenerator.getInstance("AES").apply { init(256) }.generateKey()
         val vault = CameraRelationshipVault(memory) { aes }
         var site: PairableSite
         val trusted: OkHttpClient
-        var fault = ""; var hold: CountDownLatch? = null; val polled = CountDownLatch(1)
+        var reportedHost = "site.local"; var fault = ""; var hold: CountDownLatch? = null; val polled = CountDownLatch(1)
         var challengeHold: CountDownLatch? = null; val challenged = CountDownLatch(1)
         init {
             server.useHttps(HandshakeCertificates.Builder().heldCertificate(leaf, ca.certificate).build().sslSocketFactory(), false)
@@ -65,7 +65,7 @@ class CameraPeerClientTest {
                     if (path == "/identity") {
                         val key = if (fault == "key") Signer().publicKey else receiver.publicKey
                         return json(profile().put("receiver_id", receiverId).put("receiver_public_key", key).put("receiver_key_sha256", PeerProof.fingerprint(key))
-                            .put("tls_ca_pem", ca.certificatePem()).put("tls_ca_sha256", PeerProof.hash(ca.certificate.encoded)).put("tls_hostname", "site.local"))
+                            .put("tls_ca_pem", ca.certificatePem()).put("tls_ca_sha256", PeerProof.hash(ca.certificate.encoded)).put("tls_hostname", reportedHost))
                     }
                     if (path == "/requests") {
                         assertNull(request.getHeader("Authorization"))
@@ -118,6 +118,10 @@ class CameraPeerClientTest {
                 if (value == "approved") { put("relationship_id", "A".repeat(32)); put("generation", 0); put("source_id", "ceiling_north"); put("persistent", true)
                     put("authorization_expires_at", JSONObject.NULL); put("authorization_available", true) }
             }
+        fun trustedFor(site: PairableSite): OkHttpClient {
+            val trust = HandshakeCertificates.Builder().addTrustedCertificate(ca.certificate).build()
+            return cameraPeerHttp(site).newBuilder().sslSocketFactory(trust.sslSocketFactory(), trust.trustManager).build()
+        }
         fun flow(client: OkHttpClient = trusted) = CameraPeerClient(site, mobile, vault, baseClient = client, pause = {})
         fun json(row: JSONObject) = MockResponse().setHeader("Content-Type", "application/json").setBody(row.toString())
         override fun close() { hold?.countDown(); challengeHold?.countDown(); server.close() }
@@ -133,6 +137,38 @@ class CameraPeerClientTest {
             assertEquals("overhead-camera", link.role); assertEquals("ceiling_north", link.source)
             assertTrue(f.requests.none { it.path!!.contains("/requests") || it.path!!.contains("/overhead/") })
             assertTrue(f.requests.all { it.getHeader("Authorization") == null })
+        }
+    }
+    private fun moved(f: Fixture, host: String) = f.site.copy(tlsHost = host)
+    @Test fun renamedHostKeepsTheApprovalAfterTheSameReceiverProvesItself() {
+        Fixture().use { f ->
+            val old = f.site; f.flow().connect({}, { false })
+            val site = moved(f, "moved-site.local"); f.reportedHost = "moved-site.local"; f.requests.clear()
+            val link = CameraPeerClient(site, f.mobile, f.vault, baseClient = f.trustedFor(site), pause = {}, moveFrom = old)
+                .connect({ fail("consent repeated") }, { fail("CA repeated"); false }).link
+            assertEquals("moved-site.local", link.tlsHost); assertEquals("ceiling_north", link.source)
+            assertTrue(f.requests.none { it.path!!.contains("/requests") })
+            assertEquals("ceiling_north", f.vault.read(site)!!.sourceId)
+        }
+    }
+    @Test fun renamedHostNeverAdoptsTheApprovalOfAnotherReceiverOrAnUncoveredName() {
+        Fixture().use { f ->
+            val old = f.site; f.flow().connect({}, { false })
+            val real = f.vault.read(old)!!; val other = Signer()
+            // Another receiver key behind the new name: the record must not move.
+            f.vault.remember(old, real.copy(receiverId = "fleet-" + PeerProof.fingerprint(other.publicKey).take(32), receiverPublicKey = other.publicKey), f.vault.fence(old))
+            val site = moved(f, "moved-site.local"); f.reportedHost = "moved-site.local"
+            assertThrows(PeerKeyChanged::class.java) {
+                CameraPeerClient(site, f.mobile, f.vault, baseClient = f.trustedFor(site), pause = {}, moveFrom = old).connect({}, { false })
+            }
+            assertNull(f.vault.read(site))
+            // A name the site certificate does not cover fails TLS and saves nothing.
+            f.vault.remember(old, real, f.vault.fence(old))
+            val stranger = moved(f, "stranger.local")
+            assertThrows(Exception::class.java) {
+                CameraPeerClient(stranger, f.mobile, f.vault, baseClient = f.trustedFor(stranger), pause = {}, moveFrom = old).connect({}, { false })
+            }
+            assertNull(f.vault.read(stranger))
         }
     }
     @Test fun physicalCaMatchPrecedesOperationalProof() {

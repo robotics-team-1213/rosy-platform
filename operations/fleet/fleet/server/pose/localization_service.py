@@ -286,7 +286,8 @@ class LocalizationService:
                                    "state": "needs_human", "tries": tries, "failed": True}
             return
         pose = self._overhead_pose(rid) if self._overhead_pose is not None and self.pose_request_overhead else None
-        decision = pose_request.overhead_decision(request, pose)
+        robot_map = state.get("map_id") if isinstance(state, Mapping) else None
+        decision = pose_request.overhead_decision(request, pose, robot_map_id=robot_map)
         if decision is not None:
             by = "overhead"
         else:

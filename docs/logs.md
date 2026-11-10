@@ -14708,3 +14708,15 @@ osy-d395-s1d\`.
 - 증거: 원격 `test_land_precheck`·`test_land_mainred*`·`test_land_prepare`·`test_land_full` 92 passed(90669a4d31).
 - gate 변화: precheck에 줄 끝 검사 추가.
 - CE: 기존 교훈 갱신 — `docs/solutions/workflow-issues/autocrlf-false-commit-a-rewrites-tree-to-crlf-2026-11-01.md`.
+
+## 2026-11-10 · uncommitted · docs: D-1010 사이트 지도 프레임 결속 ADR
+- 변경: ADR D-1010과 ADR Log 행, API Reference v1.383(활성 지도 본문 검증 거절 코드, trip detail.goal_frame, MAP_FRAME_MISMATCH 보류 이유, pose map_id).
+- 이유: Fleet R 등에서 지도를 따올 때 틀린 지도·틀린 좌표계를 쓰지 않게(사용자 2026-11-10 원문 ADR에 인용).
+- 증거: ADR D-1010 본문과 ADR Log 행, API Reference v1.383 행.
+- gate 변화: 없음(SOURCE만).
+
+## 2026-11-10 · uncommitted · docs: D-1010 독립 검토 반영 — 3·6항과 한계 갱신
+- 변경: ADR D-1010 3항(증명 없는 free 목표 정지, 같은 map_id 증명일 때만 충전 폴백, poses_in_robot_frame 포트 선언)·6항(모르는 map_id는 교차 판정에 안 씀, 마지막 확인값 대체와 로그)·한계(충전 결속 요건, 구형 기체 보류)·검증 갱신. 제목·상태 불변.
+- 이유: 2026-11-10 독립 검토 지적의 결정 근거를 ADR 본문에 남기기 위해서(D-1010은 이 브랜치의 미착지 ADR이라 제자리 갱신).
+- 증거: ADR D-1010 본문.
+- gate 변화: 없음(SOURCE만).
