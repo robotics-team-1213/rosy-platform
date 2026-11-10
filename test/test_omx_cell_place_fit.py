@@ -114,3 +114,29 @@ def test_overload_hold_contact_waits_for_load_shedding_before_parking(monkeypatc
         {"ok": True, "settled": True},
     ]
     assert cpio.fold(type("C", (), {"act": lambda self, _: fold_replies.pop(0)})(), sleep=lambda _: None)["ok"] is True
+
+
+def test_restore_caps_retries_transient_bus_timeout():
+    """2026-11-10 real2sim: restore_caps hit transient comm -3001 on readback while the write succeeded."""
+    import record_session as rs
+
+    class FlakyBus:
+        motor = 11
+        flaky = {(11, "pwm_limit"): 1, (12, "pwm_limit"): 2}
+        regs = {m: {"pwm_limit": 20, "current_limit": 50, "hw_error": 0} for m in rs.FOLLOWER}
+
+        def cleanup_write(self, name, value):
+            self.regs[self.motor][name] = value
+
+        def cleanup_read(self, name):
+            left = self.flaky.get((self.motor, name), 0)
+            if left > 0:
+                self.flaky[(self.motor, name)] = left - 1
+                raise RuntimeError("cleanup: comm -3001 error 0")
+            return self.regs[self.motor][name]
+
+        def close(self):
+            pass
+
+    s = rs.Session(open_bus=lambda _: FlakyBus(), systemctl=lambda *_: "", run=lambda *_: 0, log=lambda **_: None)
+    assert s.restore_caps() == []

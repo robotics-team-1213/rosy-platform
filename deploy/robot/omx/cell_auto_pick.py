@@ -271,7 +271,7 @@ def after_failure(config: dict, site: str, target: dict, moved: dict, wrist_on: 
     contact_z = None
     if contact is not None:
         from cell_surface import fk_z
-        contact_z = round(fk_z(contact["state"]), 4)
+        contact_z = round(fk_z(contact["state"], config.get("tcp_x_m")), 4)
     surface = surface_z(config, site)
     diag = cell_diagnose.diagnose(moved["result"], contact_z, surface, surface + target["entry"]["top_height_mm"] / 1000,
                                   target["pick"]["z"], config.get("params"))

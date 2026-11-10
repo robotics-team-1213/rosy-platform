@@ -61,3 +61,15 @@ applies_when:
    - **증상**: 2026-11-10 상단 카메라 재연결 후 다리 v7(`200 mm`)에 놓인 v11 판을 측정할 때, (a) `a-2`·`b-2`의 노란 컨테이너(`H ≈ 25..26`)가 주황 컨테이너 마스크(`H < 22`)에 잡히지 않고, (b) 반지름 `200 mm` 배치에서 칸들의 `-x` 끝단이 640×480 영상 하단 경계(`y = 479`)에 잘려 외곽 패드 길이가 `83~85 mm`, 중앙 컨테이너 길이가 `64 mm`(`partial`)로 줄어들며, (c) `--prev 20261108-2257.json` 전달 시 구형 판 모양(`13.57°, 217.3 mm`)을 고정 재사용해 신형 v11 판(`17.0°, 203.4 mm`) 맞춤이 틀어졌다.
    - **해결**: `blobs(frame)`에 노란 컨테이너 대역(`22 <= H < 29, S > 140, V > 140`)을 추가하고, `lane_blobs`에서 하단 경계(`y >= h - 2`)에 잘린 칸은 화면 안에 온전히 들어오는 `+x` 끝단(팔 쪽 끝)으로부터 중심·길이를 복원하며 사선 시야 컨테이너 옆면 번짐을 보정하고, `measure_temp_plates`가 현재 프레임에서 두 패드가 보이는 판으로부터 판 모양을 먼저 맞추도록 수정했다.
    - **검증 근거**: `test_yellow_containers_and_bottom_clipped_v11_plates_are_measured` 통과 및 2026-11-10 실물 스냅샷(`20261110-1231.json`)에서 `a-1..3`, `b-1..3` 6칸 모두 검출(잔차 `0.2~2.1 mm`, 패드 폭 오차 최대 `1.9 mm <= 3.0 mm`).
+5. **`solve_line` 종점 부동소수점 언더플로가 `approach_m=0.04`를 거절하고 `0.02 m`로 낮춤 (`middleware/devices/omx/adapter/omx_adapter/kinematics.py`)**
+   - **증상**: 실물 구동(`20261110T042820Z-001`)에서 `pallet-l0`(`z = 0.005 m = workspace_min_m[2]`) 상차 시 `z0 = 0.045 -> z1 = 0.005` 직선 보간 `z0 + (z1 - z0) * 1.0`이 IEEE-754 float64에서 `0.0049999999999999975 < 0.005`가 되어 `OUTSIDE_WORKSPACE`로 거절되었고, `plan_pick`이 `approach_near_m = 0.020 m`(`above_pick` `z = 0.025 m`)로 후퇴했다.
+   - **해결**: `solve_line`에서 `(1.0 - s) * z0 + s * z1`(x, y 동일) 보간을 사용해 `s = 1.0` 종점이 `z1`과 정확히 일치하도록 수정했다.
+   - **검증 근거**: `test_descent_to_exact_workspace_floor_with_40mm_approach_does_not_underflow` 통과 및 실물 셀 dry-run에서 `approach_m = 0.04` 유지 확인.
+6. **설정 파일의 `tcp_x_m`이 플래너·표면 FK에 전달되지 않아 신형 집게(`0.0885 m`)가 `14.5 mm` 낮게 진입 (`deploy/robot/omx/grasp_planner.py`, `cell_pipeline_io.py`, `cell_surface.py`, `cell_pivot.py`)**
+   - **증상**: `arm_b` 신형 집게(`0.0885 m`, 구형 `0.0740 m` 대비 `+14.5 mm`)에서 환경변수 `ROSY_OMX_TCP_X_M`이 누락되거나 `0.0740`으로 들어가면 `above_pick` 목표 높이가 실제 집게 끝 기준 `z = +0.0158 m`(컨테이너 상면 `+0.021 m` 아래 `5.2 mm`)가 되어 `goto above_pick` 도중 상면에 접촉(`z = +0.0213 m`, `overload-hold on wrist_flex`)했다.
+   - **해결**: `write_library`, `Planner`, `fk_z`, `joints_tcp`가 설정의 `tcp_x_m`을 직접 받아 `load_kinematics`에 전달하도록 수정했다.
+   - **검증 근거**: `test_a_jaw_tcp_from_the_environment_moves_the_tip_and_a_wild_one_is_refused` 통과 및 실물 셀 `cell_auto_pick --dry-run` 검증.
+7. **`overload-hold` 하중 해제 중 즉시 전송된 `retreat`/`park` 거절 및 세션 종료 시 `restore_caps` 일시적 버스 타임아웃 (`deploy/robot/omx/cell_transfer.py`, `cell_pipeline_io.py`, `record_session.py`)**
+   - **증상**: (a) `overload-hold` 발생 직후 러너가 하중을 푸는 동안(`shedding its load first`) `_transfer`가 0.2초 만에 보낸 `retreat`·`park`가 거절되었고, (b) 세션 종료 시 `restore_caps()`에서 쓰기는 성공했으나 읽기 응답이 일시적 `comm -3001` 타임아웃을 내어 정상 접힘·토크 OFF 상태에서도 `safe_end: false`로 기록되었다.
+   - **해결**: `overload-hold` 시 `retreat`를 건너뛰고 하중 해제가 끝날 때까지 `park`를 재시도하며, `restore_caps()`가 레지스터별 최대 3회 재시도하도록 수정했다.
+   - **검증 근거**: `test_overload_hold_contact_waits_for_load_shedding_before_parking`, `test_restore_caps_retries_transient_bus_timeout` 통과 및 `register_probe.py`로 실물 팔 `11..16` 전 축 `torque=0, hw_error=0, pwm_limit=20, current_limit=50` 복원 확인.

@@ -78,8 +78,8 @@ def transfer(cell, library: Path, hover=None, *, config=None, calibration=None, 
         if command == f"load {library}" and status.get("library_sha256") != assessment["library_sha256"]:
             return {"result": "held", "at": command, "steps": steps,
                     "envelope": {**assessment, "allowed": False, "reason": "library_changed"}}
-        if status.get("contact"):  # the runner held with torque on: back up the same path, fold home
-            for after in ("retreat", "park"):
+        if status.get("contact"):  # the runner held with torque on: back up the same path (unless shedding), fold home
+            for after in (() if "overload-hold" in (status.get("error") or "") else ("retreat",)) + ("park",):
                 steps.append({"command": after, "ok": act(after).get("ok")})
             return {"result": "contact", "at": command, "steps": steps, "error": status.get("error"),
                     "envelope": assessment}
