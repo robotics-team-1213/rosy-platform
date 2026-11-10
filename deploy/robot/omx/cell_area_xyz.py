@@ -259,10 +259,13 @@ def diagnose_and_recover_pick(
         new_x = round(0.5 * (tried_xs[-1] + tried_xs[-2]), 5)
         reason = f"bracket_midpoint_recovery: midpoint({tried_xs[-2]}, {tried_xs[-1]}) -> x={new_x}"
     else:
-        # Single-step lateral bracket toward canonical column center (0.1988 for col 3, 0.1580 for col 2, 0.1280 for col 1)
+        # Single-step lateral bracket: if cur_x is near canonical_x, step to canonical_x, else bracket locally by -6 mm
         col = int(cur_directive["pick"].get("col") or 3)
         canonical_x = {1: 0.1280, 2: 0.1580, 3: 0.1988}.get(col, cur_x)
-        new_x = round(canonical_x if abs(cur_x - canonical_x) >= 0.002 else (cur_x - 0.0055 if cur_x > 0.199 else cur_x + 0.0055), 5)
+        if 0.002 <= abs(cur_x - canonical_x) <= 0.012:
+            new_x = round(canonical_x, 5)
+        else:
+            new_x = round(cur_x - 0.0060 if cur_x > 0.160 else cur_x + 0.0060, 5)
         reason = f"lateral_edge_recovery: x {cur_x} -> {new_x}"
 
     # 2. If jaws closed in thin air above the container (jaw_pos < held_nominal - 1.0 and low current), lower z into grasp band
