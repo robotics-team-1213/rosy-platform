@@ -380,6 +380,8 @@ class Teacher:
 
 
 parse_choices = sites.parse_choices
+VISION_SKEW_CHOICES = dict(temp_lanes="photo-20261110", ship_pose="photo-20261110", belt_pose="photo-20261110",
+                           arm_bases="plate-centre", wrist_camera="photo-20261110", physics="twin-kp-20261109")
 
 
 def isaac_handoff(result, layout, seed=0):
@@ -454,6 +456,9 @@ def main(argv=None):
     p.add_argument("--choice", action="append", help="key=value override of omx_two_arm_sites.CHOICES (named parameters)")
     a = p.parse_args(argv)
     choices = parse_choices(a.choice)
+    if a.pick_vision or a.belt_skew:
+        for k, v in VISION_SKEW_CHOICES.items():
+            choices.setdefault(k, v)
     layout = sites.Layout(**choices)
     task = json.loads(Path(a.plan).read_text(encoding="utf-8")) if a.task == "plan" else tasks.get_task(layout, a.task, tier=a.tier)
     if a.task == "plan" and a.tier is not None:

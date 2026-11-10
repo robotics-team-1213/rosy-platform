@@ -138,7 +138,8 @@ def collect(seeds, names, out, plan_dir=None, choices=None, *, pick_vision=False
     vector = dict(dtype="float32", shape=(12,), names=joints)  # radians, unlike the real recordings' normalised units
     image = dict(dtype="video", shape=(*SHAPE, 3), names=["height", "width", "channels"])
     goal = dict(dtype="float32", shape=(GOAL_SIZE,), names=[f"goal{i}" for i in range(GOAL_SIZE)])
-    layout = sites.Layout(**(choices or {}))
+    choices = dict(teaching.VISION_SKEW_CHOICES if (pick_vision or belt_skew) else {}, **(choices or {}))
+    layout = sites.Layout(**choices)
     world = world_mod.World(layout)
     dataset = LeRobotDataset.create("rosy/omx-two-arm", world_mod.FPS, root=out, robot_type="omx_follower_pair", features={
         "observation.state": vector, "action": vector, GOAL: goal, **{f"observation.images.{view}": image for view in teaching.RECORDED}})
@@ -171,7 +172,8 @@ class Driver:
         self.policy.temporal_ensembler = ACTTemporalEnsembler(.01, config.chunk_size)
         self.pre, self.post = make_pre_post_processors(self.policy.config, pretrained_path=str(model))
         self.device = next(self.policy.parameters()).device
-        self.layout = sites.Layout(**(choices or {}))
+        choices = dict(teaching.VISION_SKEW_CHOICES if (pick_vision or belt_skew) else {}, **(choices or {}))
+        self.layout = sites.Layout(**choices)
         self.world = world_mod.World(self.layout)
         self.longest = json.loads(Path(steps_file).read_text(encoding="utf-8"))["longest"]
         self.pick_vision = pick_vision
@@ -393,7 +395,8 @@ def run_round(args):
     run = Path(args.root) / "two_arm_rounds" / round_id
     run.mkdir(parents=True)
     names = args.tasks.split(",")
-    parsed_choices = sites.parse_choices(args.choice)
+    parsed_choices = dict(teaching.VISION_SKEW_CHOICES if (getattr(args, "pick_vision", False) or getattr(args, "belt_skew", False)) else {},
+                          **sites.parse_choices(args.choice))
     recipe = dict(ladder.RECIPE, steps=args.steps, optimizer_lr=args.lr, batch_size=args.batch_size, mode=args.mode,
                   pick_vision=bool(getattr(args, "pick_vision", False)), belt_skew=bool(getattr(args, "belt_skew", False)))
     record = dict(schema=SCHEMA, round_id=round_id, created_at=now(), source_sha=ladder.source_sha(args), status="running", stage="collect", cameras=list(teaching.RECORDED),
