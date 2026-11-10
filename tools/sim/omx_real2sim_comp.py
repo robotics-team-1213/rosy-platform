@@ -85,24 +85,26 @@ def _camera_from_params(base_cam: dict[str, Any], size: tuple[int, int], p: np.n
 
 
 def container_blobs(bgr: np.ndarray) -> list[tuple[str, np.ndarray]]:
-    """Lighting-adaptive, edge-severed container segmentation in CIE Lab + HSV space.
+    """Lighting-adaptive container segmentation using CIE Lab CLAHE, bilateral filtering, and Scharr chrominance edges.
 
-    Instead of relying on a narrow hue threshold between warm containers and the worktable:
-    1. Multi-channel CIE Lab Sobel gradients (`edge_cut`) locate 3D physical step edges around `90x30 mm` containers.
-    2. Large background surfaces (`area > 4200 px` after edge-cutting, plus their live `(a*, b*)` chrominance mode) are
-       suppressed automatically regardless of white-balance or exposure shifts.
-    3. Broad chromatic bands segment multi-colour stacks, while oversized same-colour blobs (`area > 2200 px`) are
-       split along internal 3D step edges (`edge_cut`).
+    1. Applies `cv2.createCLAHE` to `L*` and `cv2.bilateralFilter` to `(a*, b*)` to normalize uneven shadows/exposure
+       while preserving sharp container boundaries and ignoring 3D-printed surface corrugations.
+    2. Uses rotationally symmetric `cv2.Scharr` chrominance gradients (`g_ab`) to sever `90x30 mm` containers from
+       large background surfaces (`area > 6000 px`, e.g. the yellow worktable) and suppresses the live background
+       `(a*, b*)` mode without brittle HSV hue cutoffs.
     """
     import cv2
 
-    lab = cv2.cvtColor(bgr, cv2.COLOR_BGR2Lab).astype(np.float32)
-    gx = cv2.Sobel(lab, cv2.CV_32F, 1, 0, ksize=3)
-    gy = cv2.Sobel(lab, cv2.CV_32F, 0, 1, ksize=3)
-    g2 = np.max(gx * gx + gy * gy, axis=-1)
-    edge_cut = g2 >= max(1600.0, float(np.percentile(g2, 91)))
+    lab_u8 = cv2.cvtColor(bgr, cv2.COLOR_BGR2Lab)
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+    l_eq = clahe.apply(lab_u8[..., 0])
+    ab_smooth = cv2.bilateralFilter(lab_u8, d=5, sigmaColor=18, sigmaSpace=5)[..., 1:3].astype(np.float32)
+    gx = cv2.Scharr(ab_smooth, cv2.CV_32F, 1, 0)
+    gy = cv2.Scharr(ab_smooth, cv2.CV_32F, 0, 1)
+    g_ab = np.max(gx * gx + gy * gy, axis=-1)
+    edge_cut = g_ab >= max(4500.0, float(np.percentile(g_ab, 90)))
 
-    hsv = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV)
+    hsv = cv2.cvtColor(cv2.cvtColor( np.dstack([l_eq, lab_u8[..., 1], lab_u8[..., 2]]), cv2.COLOR_Lab2BGR), cv2.COLOR_BGR2HSV)
     h, s, v = hsv[..., 0], hsv[..., 1], hsv[..., 2]
     kernel = np.ones((3, 3), np.uint8)
     chromatic = (s > 80) & (v > 70)
@@ -110,11 +112,11 @@ def container_blobs(bgr: np.ndarray) -> list[tuple[str, np.ndarray]]:
     n_cc, lab_cc, stats_cc, _ = cv2.connectedComponentsWithStats(cut_u8)
     bg_mask = np.zeros_like(cut_u8, dtype=bool)
     for idx in range(1, n_cc):
-        if stats_cc[idx, cv2.CC_STAT_AREA] > 4200:
+        if stats_cc[idx, cv2.CC_STAT_AREA] > 6000:
             bg_mask |= (lab_cc == idx)
     if np.any(bg_mask):
-        bg_ab = np.median(lab[bg_mask, 1:3], axis=0)
-        ab_dist = np.hypot(lab[..., 1] - bg_ab[0], lab[..., 2] - bg_ab[1])
+        bg_ab = np.median(ab_smooth[bg_mask], axis=0)
+        ab_dist = np.hypot(ab_smooth[..., 0] - bg_ab[0], ab_smooth[..., 1] - bg_ab[1])
         bg_bleed = bg_mask | (ab_dist < 6.5)
     else:
         bg_bleed = np.zeros_like(bg_mask)
@@ -130,21 +132,7 @@ def container_blobs(bgr: np.ndarray) -> list[tuple[str, np.ndarray]]:
     for col, mask in colour_masks:
         m = cv2.morphologyEx(mask.astype(np.uint8), cv2.MORPH_OPEN, kernel)
         for c in cv2.findContours(m, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)[0]:
-            area = cv2.contourArea(c)
-            if area < 110:
-                continue
-            if area > 2200:
-                sub_m = np.zeros_like(m)
-                cv2.drawContours(sub_m, [c], -1, 1, -1)
-                sub_cut = (sub_m.astype(bool) & (~edge_cut)).astype(np.uint8)
-                n_s, l_s, st_s, _ = cv2.connectedComponentsWithStats(sub_cut)
-                for s_idx in range(1, n_s):
-                    if 90 <= st_s[s_idx, cv2.CC_STAT_AREA] <= 3800:
-                        part = cv2.dilate((l_s == s_idx).astype(np.uint8), kernel) & sub_m
-                        for sc in cv2.findContours(part, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)[0]:
-                            if cv2.contourArea(sc) >= 110:
-                                out.append((col, sc.reshape(-1, 2)))
-            else:
+            if cv2.contourArea(c) >= 110:
                 out.append((col, c.reshape(-1, 2)))
     return out
 
@@ -229,7 +217,9 @@ def _box_on_plane(
 
 
 def _measure_belt_fiducial(belt_uv: np.ndarray, cam: r2s.Camera, layout: Any) -> dict[str, float] | None:
-    """Measure belt stop `end_x`, belt centreline `y_at_pick`, and belt angle `yaw` from unobstructed belt pixels."""
+    """Measure belt stop `end_x`, belt centreline `y_at_pick`, and belt angle `yaw` via OpenCV Huber M-estimator."""
+    import cv2
+
     pts = cam.to_plane(belt_uv, layout.belt_top)
     if len(pts) < 80:
         return None
@@ -237,15 +227,16 @@ def _measure_belt_fiducial(belt_uv: np.ndarray, cam: r2s.Camera, layout: Any) ->
     if x_hi <= x_lo + 0.04:
         return None
     edges = np.linspace(x_lo, x_hi, 7)
-    xs, ys = [], []
+    centres = []
     for a, b in zip(edges[:-1], edges[1:]):
         sub = pts[(pts[:, 0] >= a) & (pts[:, 0] < b), 1]
         if len(sub) >= 10:
-            xs.append(0.5 * (a + b))
-            ys.append(0.5 * (float(np.percentile(sub, 5)) + float(np.percentile(sub, 95))))
-    if len(xs) < 3:
+            centres.append([0.5 * (a + b), 0.5 * (float(np.percentile(sub, 5)) + float(np.percentile(sub, 95)))])
+    if len(centres) < 3:
         return None
-    slope, intercept = np.polyfit(np.array(xs), np.array(ys), 1)
+    vx, vy, x0, y0 = [float(v) for v in cv2.fitLine(np.array(centres, np.float32), cv2.DIST_HUBER, 0, 0.01, 0.01).flatten()]
+    slope = vy / (vx if abs(vx) > 1e-6 else 1e-6)
+    intercept = y0 - slope * x0
     dyaw = float(math.atan(slope))
     pick_x = layout.sites["belt"]["xy"][0]
     y_at_pick = float(slope * pick_x + intercept)
