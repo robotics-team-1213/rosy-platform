@@ -499,7 +499,7 @@ def test_status_and_clear_with_cause_basis_and_env_discovery(tmp_path, monkeypat
 
     # Pre-2026-11-08 Fleet servers return held=True for a single label-only report ("the arm is not held")
     label_only = Hold(
-        source="arm_b", held=True, open_count=1, incident_ids=("b" * 32,),
+        workcell_id="cell_a", source_id="arm_b", held=True, incident_ids=["b" * 32],
         reason="1 open arm incident(s): " + "b" * 32 + "; reported for a person's cause, the arm is not held")
     assert oi._effectively_held(label_only) is False
     link.ask = lambda: label_only
