@@ -25,9 +25,10 @@ class Gate:
         # two arms, one pallet (cell_zones): a reach claims its zone before it moves and frees it once folded home
         self.zones = Zones(config, calibration) if config.get("zone_side") else None
 
-    def _assess(self, library) -> dict:
-        return assess(self.config, self.calibration, json.loads(Path(library).read_text()), self.cell.act("state"),
-                      sequence=self.sequence)
+    def _assess(self, library, state: dict | None = None) -> dict:
+        loaded = library if isinstance(library, dict) else json.loads(Path(library).read_text())
+        return assess(self.config, self.calibration, loaded,
+                      self.cell.act("state") if state is None else state, sequence=self.sequence)
 
     def open(self, library, before_motion) -> dict | None:
         """None when the carry may start (the intent is written first); else the held envelope."""
@@ -44,20 +45,20 @@ class Gate:
     def act(self, command: str) -> dict:
         if command == "state":
             return self.cell.act(command)
+        state, recovering = self.cell.act("state"), command.split()[0] in ("retreat", "park")
         if command.startswith("load "):
             library = json.loads(Path(command[5:]).read_text())
             self.source = library.get("source") or {}
             # The unchanged reviewed carry already owns its durable pending intent.
             identical = (self.assessment["mode"] == "automatic"
                          and digest([self.config, self.calibration, self.sequence]) == self.scope_sha
-                         and digest(json.loads(Path(command[5:]).read_text())) == self.assessment["library_sha256"])
+                         and digest(library) == self.assessment["library_sha256"])
             if not identical:
-                fresh = self._assess(command[5:])
+                fresh = self._assess(library, state=state)
                 if not fresh["allowed"] or fresh["mode"] != self.assessment["mode"]:
                     return {"ok": False, "error": f"held: {fresh['reason']}", "envelope": fresh}
                 fresh["session_id"] = self.assessment["session_id"]
                 self.assessment = fresh
-        state, recovering = self.cell.act("state"), command.split()[0] in ("retreat", "park")
         if not same_session(state, self.assessment, recovering=recovering):
             faulted = state.get("fault") and same_session(state, self.assessment, recovering=True)
             return {"ok": False, "error": "held: fault" if faulted else "held: session_changed"}

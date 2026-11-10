@@ -1057,3 +1057,53 @@ def test_main_passes_the_passively_connected_session_caps_to_startup_and_later_l
     assert [phase for phase, _, _ in checked] == ["startup", "load"]
     assert set(approved) <= set(reads) and checked[0][2] is checked[1][2]
     assert "hold" in checked[1][1]["chunks"] and not robot.sent
+
+
+def test_guarded_wrapper_reuses_motion_last_present_to_avoid_duplicate_tick_bus_reads():
+    from types import SimpleNamespace
+
+    obs_calls = []
+
+    class RawRobot:
+        bus = None
+
+        def get_observation(self):
+            obs_calls.append("raw")
+            return dict(zip(m.NAMES, HOME))
+
+    class Motion:
+        last_present = None
+
+        def send(self, action):
+            self.last_present = dict(action)
+            return dict(action)
+
+    guarded = m.Guarded(RawRobot(), Motion())
+    # First standalone get_observation calls the underlying robot
+    assert guarded.get_observation()["shoulder_pan.pos"] == 0.0 and obs_calls == ["raw"]
+    # After send_action, get_observation consumes motion.last_present without another bus read
+    guarded.send_action({name: float(i) for i, name in enumerate(m.NAMES)})
+    assert guarded.get_observation()["shoulder_lift.pos"] == 1.0 and obs_calls == ["raw"]
+    assert guarded.motion.last_present is None
+
+
+def test_read_health_uses_retry_on_real_dynamixel_bus():
+    from types import SimpleNamespace
+
+    calls = []
+
+    class RealBus:
+        model_ctrl_table = {}
+
+        def sync_read(self, name, *, normalize=True, num_retry=0):
+            calls.append((name, normalize, num_retry))
+            return {joint: 40 for joint in m.MOTORS}
+
+    r = m.Runner(SimpleNamespace(bus=RealBus()), library(), fps=30, status=lambda _: None)
+    health = r.read_health()
+    assert health["temp_c"] == [40] * 6
+    assert calls == [
+        ("Present_PWM", False, 2),
+        ("Present_Current", False, 2),
+        ("Present_Temperature", False, 2),
+    ]

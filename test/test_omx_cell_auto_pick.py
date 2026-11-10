@@ -878,3 +878,21 @@ def test_three_tier_pick_and_place_plans_each_tier_height_and_checks_support(tmp
         rt = auto.run_auto(Cell(supported), config, cal_data, path, CATALOG, ROI, "pinky-l0", tier, tmp_path,
                            cell_choices.Choices(tmp_path / f"{tier}.json"), dry_run=True)
         assert rt["result"] == "planned" and rt["attempts"][0]["plan"]["place"]["z"] == pytest.approx(expected_z, abs=1e-4)
+
+
+def test_gate_and_guarded_share_state_query_per_checked_command(tmp_path):
+    path = biased_map(tmp_path)
+    cell = Cell([CONT2])
+    guarded = auto.Guarded(cell, CONFIG)
+    gate = auto.Gate(guarded, dict(CONFIG, _payload={"kg": 0.03, "source": "catalogue"}), cal.load(path))
+    lib_path = tmp_path / "lib.json"
+    lib_path.write_text(json.dumps({"fps": 30, "chunks": {"home": [list(CONFIG["plan"]["home"])],
+                                                          "above_pick": [list(CONFIG["plan"]["home"])]}}))
+    assert gate.open(lib_path, lambda a: None) is None
+    cell.commands.clear()
+    assert gate.act(f"load {lib_path}")["ok"]
+    assert cell.commands == ["state", f"load {lib_path}"]
+    cell.commands.clear()
+    assert gate.act("goto above_pick")["ok"]
+    # Gate's state query is reused by Guarded.monitor.check() instead of issuing a second state round-trip
+    assert cell.commands == ["state", "goto above_pick"]

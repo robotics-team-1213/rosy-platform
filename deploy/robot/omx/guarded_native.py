@@ -154,6 +154,7 @@ class NativeJointMotion:
         # joint -> hold state; joints that already used their one hold (per session: a later stall there goes to off)
         self.held, self.held_once, self.shed_load = {}, set(), shed_load
         self.last_effort_time = None
+        self.last_present = None
         self.alignment_deadline = None
         self.monitor = monitor
         self.monitor_admitted = False
@@ -196,6 +197,7 @@ class NativeJointMotion:
         current = self.follower.sync_read("Present_Position", normalize=False, num_retry=READ_RETRY)
         finite_values(leader, NAMES)
         finite_values(current, NAMES)
+        self.last_present = normalized(self.follower, current)
         if self.body_only and self.follower.read("Torque_Enable", "gripper"):
             raise ValueError("passive gripper torque must remain OFF")
         if self.command is not None:
@@ -453,6 +455,7 @@ class NativeJointMotion:
                    or abs(fresh[n] - origin[n]) > SEED_TOLERANCE_TICKS for n in self.active):
                 raise ValueError(detail)
             if all(abs(goals[n] - fresh[n]) <= SEED_TOLERANCE_TICKS for n in self.active):
+                self.last_present = normalized(self.follower, fresh)
                 return goals
             current = fresh
         raise ValueError(detail)

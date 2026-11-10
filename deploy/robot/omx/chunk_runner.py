@@ -133,8 +133,9 @@ class Runner:
         self.last_present = [float(observation[name]) for name in NAMES]
         return self.last_present
 
-    def report(self, **fields) -> None:
-        self.status(dict(fields, state=[round(v, 2) for v in self.present()],
+    def report(self, *, present=None, **fields) -> None:
+        state = self.present() if present is None else present
+        self.status(dict(fields, state=[round(v, 2) for v in state],
                          target=[round(v, 2) for v in self.target], health=self.health, fault=self.fault,
                          operating_context=self.operating_context, library_sha256=digest(self.library),
                          t=time.time()))
@@ -146,7 +147,8 @@ class Runner:
             return None
         def signed(v):
             return int(v) - 65536 if int(v) > 32767 else int(v)
-        pwm, current, temp = (bus.sync_read(name) for name in ("Present_PWM", "Present_Current", "Present_Temperature"))
+        kw = {"normalize": False, "num_retry": 2} if "read" not in vars(bus) and hasattr(bus, "model_ctrl_table") else {}
+        pwm, current, temp = (bus.sync_read(name, **kw) for name in ("Present_PWM", "Present_Current", "Present_Temperature"))
         return {"pwm": [signed(pwm[m]) for m in MOTORS], "current_ma": [signed(current[m]) for m in MOTORS],
                 "temp_c": [int(temp[m]) for m in MOTORS]}
 
@@ -284,7 +286,8 @@ class Runner:
                 to = max(float(self.library["gripper_closed"]), min(100.0, float(words[1])))
                 if to > self.target[5]:
                     self.holding = False
-                free = to < self.target[5] and abs(self.present()[5] - self.target[5]) <= EMPTY_MARGIN  # not holding
+                present = self.present() if to < self.target[5] else None
+                free = present is not None and abs(present[5] - self.target[5]) <= EMPTY_MARGIN  # not holding
                 self.grip_from, self.target[5] = (self.target[5] if free else None), to  # reopen point
             elif verb == "retreat" and len(words) == 1:
                 if not self.retreat_frames:
@@ -307,9 +310,9 @@ class Runner:
                 self.library = library
             elif verb != "state":
                 raise ValueError("commands: run <chunk> [rel] | jog <joint> <delta> [...] | grip <value> | goto <chunk> | load <library> | park | state | stop")
-            self.report(command=line, ok=True)
+            self.report(command=line, ok=True, present=locals().get("present"))
         except ValueError as error:
-            self.report(command=line, ok=False, error=str(error))
+            self.report(command=line, ok=False, error=str(error), present=locals().get("present"))
         return True
 
     def hold(self, present, reason) -> None:
@@ -321,7 +324,7 @@ class Runner:
         self.chunk, self.played, self.jog_path = None, [], []
         if chunk == "park":
             self.last_input = self.clock()  # an idle fold's retry waits idle_retry_s from the hold, not from its start
-        self.report(command=f"run {chunk or 'jog'}" if chunk or jogging else "fault", ok=False, error=self.fault, contact=True)
+        self.report(command=f"run {chunk or 'jog'}" if chunk or jogging else "fault", ok=False, error=self.fault, contact=True, present=present)
 
     def strained(self, sent, present):
         return runner_strain.strained(self, sent, present)
@@ -410,19 +413,19 @@ class Runner:
             if reason:  # stop pushing where the arm is; the judge may only park or stop
                 self.fault, self.queue, self.target = reason, [], present[:5] + [self.target[5]]
                 chunk, self.chunk = self.chunk, None
-                self.report(command=f"run {chunk}" if chunk else "fault", ok=False, error=reason)
+                self.report(command=f"run {chunk}" if chunk else "fault", ok=False, error=reason, present=present)
                 return
             self.samples = (self.samples + [(list(self.target), present, self.health["pwm"])])[-4:]
             push = joint_push.pushing(self.samples, getattr(getattr(self.robot, "motion", None), "pwm_limits", None),
                                       (self.chunk == "park" and not self.holding) or self.grip_from is not None, self.params)
             if push and push[0] == "gripper" and self.chunk is None:  # a closing grip caught something: let it go
                 self.target[5], self.grip_from = self.grip_from, None
-                return self.report(command="grip", ok=False, caught=True, error=f"{push[1]}; reopened")
+                return self.report(command="grip", ok=False, caught=True, error=f"{push[1]}; reopened", present=present)
             if push and self.chunk is not None:
                 return self.hold(present, f"contact in {self.chunk}: {push[1]}")
             if push:  # at rest: stop the wind-up where the arm is; folded home, idle() ends the session (torque OFF)
                 self.fault, self.target = f"pushing at rest: {push[1]}", present[:5] + [self.target[5]]
-                return self.report(command="fault", ok=False, error=self.fault, person_needed=True)
+                return self.report(command="fault", ok=False, error=self.fault, person_needed=True, present=present)
         if loaded > FOLLOW_STOP:
             self.far_since = self.far_since if self.far_since is not None else now
             if now - self.far_since >= FOLLOW_STOP_S:
@@ -466,7 +469,7 @@ class Runner:
                     self.holding = present[5] > self.target[5] + EMPTY_MARGIN
                     fields["holding"] = self.holding
                 self.chunk, self.last_grip, self.last_body = None, None, None
-                self.report(**fields)
+                self.report(**fields, present=present)
 
     def idle(self) -> bool:
         """Fold home, then end the session (True), when no command has come for a while."""
@@ -496,7 +499,7 @@ class Runner:
     def run(self, lines) -> None:
         """`lines()` returns the commands that arrived since the last call."""
         self.target = self.present()
-        self.report(command="start", ok=True)
+        self.report(command="start", ok=True, present=self.target)
         period = 1.0 / self.fps
         self.last_input = self.clock()
         while True:
@@ -537,6 +540,10 @@ class Guarded:
         return self.motion.send(action)
 
     def get_observation(self):
+        present = getattr(self.motion, "last_present", None)
+        if present is not None:
+            self.motion.last_present = None
+            return present
         return self.robot.get_observation()
 
 
