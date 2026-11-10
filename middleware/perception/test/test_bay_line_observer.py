@@ -110,3 +110,14 @@ def test_bad_geometry_is_refused_not_guessed():
     with pytest.raises(ValueError):
         BayLineObserver(mount=MOUNT, hfov_rad=0.0, width=W, height=H,
                         line_total_m=LINE_TOTAL_M)
+
+
+def test_the_node_is_an_installed_entry_point_and_publishes_only_evidence():
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[1]
+    setup = (root / "setup.py").read_text(encoding="utf-8")
+    assert "'bay_line_observer_node = control.bay_line_observer_node:main'" in setup
+    source = (root / "observers" / "bay_line_observer_node.py").read_text(encoding="utf-8")
+    assert "cmd_vel" not in source.replace("``cmd_vel``", "")
+    assert "Twist" not in source
+    assert "source != 'GAZEBO' or not use_sim_time" in source
