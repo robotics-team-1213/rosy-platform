@@ -42,13 +42,16 @@ def resolve_finger_color(params=None, wrist_spec: dict | None = None, color: str
     return "auto"
 
 
+_KERNEL_3 = np.ones((3, 3), np.uint8)
+_KERNEL_25 = np.ones((25, 25), np.uint8)
+
+
 def _dark_pads(img, dark: int = 60):
     import cv2
 
-    g = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    h, w = g.shape[:2]
+    h, w = img.shape[:2]
     y0 = 2 * h // 3
-    band = (g[y0:] < dark).astype(np.uint8)
+    band = (cv2.cvtColor(img[y0:], cv2.COLOR_BGR2GRAY) < dark).astype(np.uint8)
     n, labels, stats, cents = cv2.connectedComponentsWithStats(band)
     min_bottom = int(h * 0.90) - y0
     blobs = sorted(
@@ -72,11 +75,14 @@ def _white_pads(img):
     import cv2
 
     h, w = img.shape[:2]
-    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+    y0 = 2 * h // 3
+    band_bgr = img[y0:]
+    band_hsv = cv2.cvtColor(band_bgr, cv2.COLOR_BGR2HSV)
     # 1. Wide-open v2.1 white fingers at bottom quarter (y >= 0.78*h): cool white under cell LED (H 95..138, S <= 170, V >= 135)
-    bot = hsv[int(h * 0.78):]
-    bot_bgr = img[int(h * 0.78):]
-    not_orange = (bot_bgr[..., 2].astype(int) - bot_bgr[..., 1].astype(int)) <= 8
+    bot_off = max(0, int(h * 0.78) - y0)
+    bot = band_hsv[bot_off:]
+    bot_bgr = band_bgr[bot_off:]
+    not_orange = (bot_bgr[..., 2].astype(np.int16) - bot_bgr[..., 1].astype(np.int16)) <= 8
     cool_white = (bot[..., 0] >= 95) & (bot[..., 0] <= 138) & (bot[..., 1] <= 170) & (bot[..., 2] >= 135) & not_orange
     left_xs = np.where(cool_white[:, int(w * 0.08):int(w * 0.36)].mean(axis=0) > 0.25)[0] + int(w * 0.08)
     right_xs = np.where(cool_white[:, int(w * 0.72):int(w * 0.96)].mean(axis=0) > 0.25)[0] + int(w * 0.72)
@@ -86,10 +92,7 @@ def _white_pads(img):
         return np.array([xl, yp]), np.array([xr, yp]), float(max(xr - xl, 1.0))
 
     # 2. Neutral bright white or narrow/partially open white fingers (e.g. arm_a / arm_b) in bottom third
-    y0 = 2 * h // 3
-    band_hsv = hsv[y0:]
-    band_bgr = img[y0:]
-    not_cyan = (band_bgr[..., 0].astype(int) - band_bgr[..., 2].astype(int)) <= 45
+    not_cyan = (band_bgr[..., 0].astype(np.int16) - band_bgr[..., 2].astype(np.int16)) <= 45
     mask = (
         (
             ((band_hsv[..., 0] >= 95) & (band_hsv[..., 0] <= 138) & (band_hsv[..., 2] >= 140))
@@ -192,22 +195,32 @@ def on_surface_blob(img, hsv, params=None):
     a board container. Returns (cx, cy, area) of the largest qualifying blob, or None."""
     import cv2
 
+    h, w = img.shape[:2]
     hsv_img = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-    lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB).astype(int)
-    mask = cv2.morphologyEx(cv2.inRange(hsv_img, np.array(hsv[0]), np.array(hsv[1])), cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
+    mask = cv2.morphologyEx(cv2.inRange(hsv_img, np.array(hsv[0]), np.array(hsv[1])), cv2.MORPH_OPEN, _KERNEL_3)
     n, labels, stats, cents = cv2.connectedComponentsWithStats(mask)
-    best = None
-    for i in range(1, n):
-        if stats[i, cv2.CC_STAT_AREA] < prm.get(params, "wrist.min_blob_px"):
+    min_blob = prm.get(params, "wrist.min_blob_px")
+    max_chroma = prm.get(params, "wrist.neutral_ring_chroma")
+    candidates = sorted(
+        (i for i in range(1, n) if stats[i, cv2.CC_STAT_AREA] >= min_blob),
+        key=lambda i: -int(stats[i, cv2.CC_STAT_AREA]),
+    )
+    for i in candidates:
+        x0 = max(0, int(stats[i, cv2.CC_STAT_LEFT]) - 12)
+        y0 = max(0, int(stats[i, cv2.CC_STAT_TOP]) - 12)
+        x1 = min(w, int(stats[i, cv2.CC_STAT_LEFT] + stats[i, cv2.CC_STAT_WIDTH]) + 12)
+        y1 = min(h, int(stats[i, cv2.CC_STAT_TOP] + stats[i, cv2.CC_STAT_HEIGHT]) + 12)
+        blob = (labels[y0:y1, x0:x1] == i).astype(np.uint8)
+        ring = (cv2.dilate(blob, _KERNEL_25) - blob) & (mask[y0:y1, x0:x1] == 0)
+        if int(ring.sum()) < 200:
             continue
-        blob = (labels == i).astype(np.uint8)
-        ring = (cv2.dilate(blob, np.ones((25, 25), np.uint8)) - blob) & (mask == 0)
-        if ring.sum() < 200:
-            continue
-        chroma = float(np.hypot(lab[..., 1][ring > 0] - 128, lab[..., 2][ring > 0] - 128).mean())
-        if chroma <= prm.get(params, "wrist.neutral_ring_chroma") and (best is None or stats[i, cv2.CC_STAT_AREA] > best[2]):
-            best = (float(cents[i][0]), float(cents[i][1]), int(stats[i, cv2.CC_STAT_AREA]))
-    return best
+        sub_lab = cv2.cvtColor(img[y0:y1, x0:x1], cv2.COLOR_BGR2LAB)
+        ring_mask = ring > 0
+        chroma = float(np.hypot(sub_lab[..., 1][ring_mask].astype(np.float32) - 128.0,
+                                sub_lab[..., 2][ring_mask].astype(np.float32) - 128.0).mean())
+        if chroma <= max_chroma:
+            return (float(cents[i][0]), float(cents[i][1]), int(stats[i, cv2.CC_STAT_AREA]))
+    return None
 
 
 def finger_offset_mm(img, hsv, gap_mm: float, params=None, color: str | int | None = None) -> dict:

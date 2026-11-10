@@ -61,7 +61,7 @@ def load(path, *, robot_config=None) -> dict:
            "robot_config_sha256": revision, "profile_sha256": digest({**document, **paths})}}
     if robot_config is None:
         _PROFILE_CACHE[key] = out
-    return out
+    return {**out, "servo": dict(out["servo"]), "binding": dict(out["binding"])}
 
 
 def bind_pipeline(config: dict, profile_path=None) -> dict:

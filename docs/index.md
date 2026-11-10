@@ -354,8 +354,8 @@
 
 ## 최근 기록
 
+- 2026-11-11 · uncommitted · docs(adr,solutions): D-1015 6항 실시간 프로토콜·비전·기구학 최적화 및 실물 데몬 경로 드리프트 CE 교훈 반영
 - 2026-11-10 · uncommitted · docs(solutions): OMX 실물 팔 지터링 및 청크 정지 원인·해결 교훈 기록
 - 2026-11-10 · uncommitted · docs: D-1010 독립 검토 반영 — 3·6항과 한계 갱신
 - 2026-11-10 · uncommitted · docs: D-1010 사이트 지도 프레임 결속 ADR
 - 2026-11-09 · uncommitted · feat(fleet): 현장 차로 편대 미션 — 리더 Nav2 trip + FOR-004 TRAIL 팔로워 (D-1002)
-- 2026-11-09 · uncommitted · fix(land): CRLF를 들이는 브랜치 거절, 병합은 -X renormalize

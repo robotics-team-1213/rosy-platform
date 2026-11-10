@@ -142,7 +142,8 @@ def payload_check(config: dict, conditions: dict) -> tuple[dict | None, str | No
     return facts, (None if p["kg"] <= facts["bound_kg"] else "payload_over_bound")
 
 
-def assess(config: dict, calibration: dict, library: dict, state: dict, *, now=None, sequence=SEQUENCE) -> dict:
+def assess(config: dict, calibration: dict, library: dict, state: dict, *,
+           now=None, sequence=SEQUENCE, library_sha256: str | None = None) -> dict:
     """Exact paths only: no radius shrink, spatial interpolation or automatic promotion from success."""
     out = {"schema": SCHEMA, "mode": "automatic", "status": "unverified", "allowed": False,
            "reason": "not_reviewed"}
@@ -172,7 +173,8 @@ def assess(config: dict, calibration: dict, library: dict, state: dict, *, now=N
                                   "params": effective_params})
         out.update(scope=context["scope"], runtime_sha256=context["sha256"], session_id=context["session_id"],
                    conditions=conditions, operating_profile=profile["binding"],
-                   conditions_sha256=conditions_sha, library_sha256=digest(library), client_code_sha256=_code_digest())
+                   conditions_sha256=conditions_sha, library_sha256=library_sha256 or digest(library),
+                   client_code_sha256=_code_digest())
         out["task_sha256"] = digest({key: out[key] for key in (
             "scope", "runtime_sha256", "conditions_sha256", "library_sha256", "client_code_sha256", "operating_profile")})
         out["payload"], over = payload_check(config, conditions)

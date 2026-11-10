@@ -40,9 +40,10 @@ class Gate:
         return cached
 
     def _assess(self, library, state: dict | None = None) -> dict:
-        loaded, _ = self._load_library(library)
+        loaded, lib_sha = self._load_library(library)
         return assess(self.config, self.calibration, loaded,
-                      self.cell.act("state") if state is None else state, sequence=self.sequence)
+                      self.cell.act("state") if state is None else state,
+                      sequence=self.sequence, library_sha256=lib_sha)
 
     def open(self, library, before_motion) -> dict | None:
         """None when the carry may start (the intent is written first); else the held envelope."""
