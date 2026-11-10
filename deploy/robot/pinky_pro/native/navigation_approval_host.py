@@ -27,6 +27,9 @@ OS_UPDATE_UNIT = "etc/systemd/system/rosy-os-update.service"
 UNIT = "rosy-navigation-approval"
 HOLDER = "navigation-approval"
 HERE = Path(__file__).resolve().parent
+# The release copy of the dispatcher looks for os-bootstrap beside its own /opt/rosy prefix and answers HOLD,
+# so the projection check runs the image-installed copy (geg6 2026-11-09).
+DISPATCH = Path("/opt/rosy/native-runtime/os_storage_dispatch.py")
 REQUIRED = (("forward", "button_release"), ("reverse", "button_release"), ("cw", "button_release"),
             ("ccw", "button_release"), ("forward", "command_loss"))
 PREFLIGHT = "g4-preflight.json"
@@ -64,7 +67,7 @@ class SystemOps:
         from os_state_ready import publish_ready
         commit_runtime(root, new, expected=old)
         publish_ready(root)
-        result = self.run(sys.executable, "-B", str(HERE / "os_storage_dispatch.py"), "--projected")
+        result = self.run(sys.executable, "-B", str(DISPATCH), "--projected")
         if result.returncode or json.loads(result.stdout).get("phase") != "PROJECTED":
             raise ValueError("runtime change did not reach the PROJECTED phase")
 

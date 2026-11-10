@@ -17,7 +17,7 @@ import time
 
 from core_common.approval_floor import TrialRefused, check_floor_motion
 from core_common.robot_body import inside_body
-from core_features.line_follow.clearance import body_clearances, scan_points, self_mask_rear_blind_m
+from core_features.line_follow.clearance import body_clearances, rotation_sweep_gap, scan_points
 
 # D-1005: the request speed and run distance are the operator's settings (SpeedLimits.approval_*),
 # bounded by the signed ceiling (max_linear/max_angular) and TRAVEL_RUN_CEILING_M; the defaults are 0.02/0.07/0.06.
@@ -38,6 +38,7 @@ SCAN_MAX_AGE_S = 0.5
 SOURCE_MAX_AGE_S = 0.25
 RUN_MARGIN_M = 0.05
 TURN_MARGIN_M = 0.03
+TURN_SWEEP_M = 0.05  # a trial turns well under 0.02 m of arc; the side it turns into must be free this far
 MIN_SECTOR_RETURNS = 0.5
 # Of all the sector's beams, however many end on the body. Recorded C1 scans never fall below 0.44.
 MIN_SEEING_BEAMS = 0.25
@@ -83,9 +84,12 @@ def _scan_is_current(sample, wall_now: float) -> bool:
         return False
 
 
-def require_clearance(sample, config, direction: str, blind_zone_confirmed: bool, wall_now: float,
+def require_clearance(sample, config, direction: str, wall_now: float,
                       travel_m: float = TRAVEL_CAP_M) -> dict:
-    """Raises unless a fresh full scan shows room. No or stale data never reads as free space."""
+    """Raises unless a fresh full scan shows room where the trial moves. No or stale data never reads as free space.
+
+    User 2026-11-09 (D-1008): only the heading is judged. Forward looks ahead, reverse behind, a turn at the side the
+    body swings into; what lies elsewhere never refuses, and no person is asked to vouch for the rear."""
     if not sample:
         raise TrialRefused("CLEARANCE_UNKNOWN", "no LiDAR scan has arrived")
     try:
@@ -106,8 +110,9 @@ def require_clearance(sample, config, direction: str, blind_zone_confirmed: bool
         # Under range_min the driver reports the robot itself (real C1 scans: 0.033-0.049 m). That reading
         # holds only while the whole range_min circle lies inside the body: an outside object then meets
         # the body first and reads farther away.
-        if range_min > min(config.body_front_x_m - config.body_lidar_x_m, config.body_lidar_x_m - config.body_rear_x_m,
-                           config.body_half_width_m):
+        ahead, behind = config.body_front_x_m - config.body_lidar_x_m, config.body_lidar_x_m - config.body_rear_x_m
+        blind_reach = {"forward": ahead, "reverse": behind}.get(direction, min(ahead, behind, config.body_half_width_m))
+        if range_min > blind_reach:
             raise TrialRefused("CLEARANCE_UNKNOWN", "the LiDAR's minimum range reaches outside the body")
         centre, half = {"forward": (0.0, math.pi / 4), "reverse": (math.pi, math.pi / 4)}.get(direction, (0.0, math.pi))
         if not _sector_seen(sample, config, points, centre, half):
@@ -121,24 +126,22 @@ def require_clearance(sample, config, direction: str, blind_zone_confirmed: bool
                            rotation_radius_m=config.body_rotation_radius_m)
     need = travel_m + RUN_MARGIN_M
     if direction == "reverse":
-        # Self-mask windows may hide the rear and nothing watches it while driving. Visible returns must
-        # still clear, and a person answers for the rest.
-        blind = self_mask_rear_blind_m(config.lidar_self_mask, lidar_x_m=config.body_lidar_x_m,
-                                       rear_x_m=config.body_rear_x_m, half_width_m=config.body_half_width_m)
-        if not blind_zone_confirmed:
-            raise TrialRefused("BLIND_ZONE_CONFIRMATION_REQUIRED",
-                               f"LiDAR cannot vouch for the rear ({blind * 100:.0f} cm masked): confirm it by eye or camera")
         if seen["rear_m"] is not None and seen["rear_m"] < need:
             raise TrialRefused("CLEARANCE_TOO_SMALL", f"{seen['rear_m']:.2f} m behind the body, {need:.2f} m needed")
-        return {**seen, "blind_m": blind}
+        return seen
     if direction == "forward":
         front = seen["front_band_m"]
         free = None if front is None else front - (config.body_front_x_m - config.body_lidar_x_m)
         if free is not None and free < need:
             raise TrialRefused("CLEARANCE_TOO_SMALL", f"{free:.2f} m ahead of the body, {need:.2f} m needed")
         return seen
-    if seen["turn_m"] is None or seen["turn_m"] < TURN_MARGIN_M:
-        raise TrialRefused("CLEARANCE_TOO_SMALL", f"{TURN_MARGIN_M:.2f} m needed beyond the turning circle")
+    swing = rotation_sweep_gap([(x + config.body_lidar_x_m, y) for x, y in points], sign=COMMANDS[direction][1],
+                               front_x_m=config.body_front_x_m, rear_x_m=config.body_rear_x_m,
+                               half_width_m=config.body_half_width_m, rotation_radius_m=config.body_rotation_radius_m,
+                               horizon_m=TURN_SWEEP_M, pad_m=TURN_MARGIN_M)
+    if swing is not None:
+        raise TrialRefused("CLEARANCE_TOO_SMALL",
+                           f"something lies {swing:.2f} m of turning ahead, {TURN_SWEEP_M:.2f} m needed free")
     return seen
 
 
@@ -165,8 +168,7 @@ class ApprovalTrials:
                 "stopping": trial["stop_at"] is not None}
             return {"active": current, "last": self.last}
 
-    def start(self, direction: str, stop_cause: str, owner: str, *, test_surface: str,
-              blind_zone_confirmed: bool = False) -> dict:
+    def start(self, direction: str, stop_cause: str, owner: str, *, test_surface: str) -> dict:
         if (direction, stop_cause) not in PAIRS:
             raise TrialRefused("TRIAL_UNKNOWN", f"{direction}/{stop_cause} is not a required trial")
         limits = self.safety.limits
@@ -178,7 +180,7 @@ class ApprovalTrials:
             raise TrialRefused("TRIAL_LIMIT_TOO_LOW", "the manual speed limit leaves no measurable motion")
         scan = self.state.get_sensor("lidar")
         # The robot keeps moving after the cap; the 0.05 m margin covers the floor, so only the excess is added.
-        seen = require_clearance(scan, self.line_config(), direction, blind_zone_confirmed, self.wall(),
+        seen = require_clearance(scan, self.line_config(), direction, self.wall(),
                                  travel_cap + max(0.0, linear * STOP_LATENCY_S - STOP_TRAVEL_FLOOR_M))
         odom = self.state.odom_sample()
         if odom is None or odom[3] > ODOM_MAX_AGE_S:

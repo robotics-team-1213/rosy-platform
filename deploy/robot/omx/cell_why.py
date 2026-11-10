@@ -202,6 +202,9 @@ def explain(kind: str, result: str, trace: list, images: list, backend, path: Pa
     past = past_rows(path, kind)
     motion = read_repeat(motion, [r for r in past if r.get("chunk") == chunk and r["t"] >= since])
     row = {"t": time.time(), "kind": kind, "result": result, "chunk": chunk, "motion": motion, "model": None, "missing": []}
+    if backend is not None and not callable(backend):
+        import judge_seat
+        backend = judge_seat.from_config(backend)
     if backend is not None:
         prompt = (f"A robot arm's attempt failed: {result!r} (kind {kind}). Measured from its 30 Hz trace: {json.dumps(motion)}. Past results "
                   f"of this kind: {json.dumps([{k: r.get(k) for k in ('hypothesis', 'missing')} for r in past[-5:]])}. Images, if any, are "
@@ -213,6 +216,9 @@ def explain(kind: str, result: str, trace: list, images: list, backend, path: Pa
             if answer.get("hypothesis") not in HYPOTHESES:
                 raise ValueError(f"answered {answer.get('hypothesis')!r}")
             row["model"] = {"hypothesis": answer["hypothesis"], "reason": str(answer.get("reason", ""))[:400], "seen": str(answer.get("seen", ""))[:400]}
+            for k in ("deliberation", "consensus"):
+                if k in answer:
+                    row["model"][k] = answer[k]
             row["missing"] = [str(m)[:160] for m in answer.get("missing", [])][:6]
         except Exception as exc:  # the model is advice: without it the measurement stands
             row["model"] = {"hypothesis": None, "reason": f"model unavailable: {str(exc)[:120]}"}

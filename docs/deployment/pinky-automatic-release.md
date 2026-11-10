@@ -58,6 +58,10 @@ publisher만 서명된 wave를 연다. 게시 직후 canary가 자동 설치를 
 기존 거래 재개는 같은 source·tar digest·canary의 서명된 rollout 일치부터 검사한다.
 `canary_ok=false`, 실패·철회 또는 장치 대기를 성공으로 기록하지 않는다.
 
+## 강제 갱신
+
+"자동 갱신을 기다리지 않고 이 기체를 지금 올린다"는 `rosy-release-push.ps1 -ForceUpdate -ExpectReleaseId <id> -Reason "<이유>"`다. 우회하는 것과 우회하지 않는 것, 오래된 기체의 동작은 [D-985 부록 2026-11-09](../adr/D-985-pinky-always-self-updates-to-latest-payload.md)가 정본이다. wave 지연만 걷는 일은 `publish_payload_release.py --open-wave-now`로 충분하다.
+
 ## OS engineering 게시
 
 OS 게시는 payload 전달이 끝난 같은 source에서, 마지막 OS Release 이후 frozen OS 입력이 바뀌었을 때 시작한다(D-985).

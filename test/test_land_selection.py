@@ -785,6 +785,7 @@ def test_a_delta_turn_yields_only_with_a_ticket_and_a_clean_tier_under_it():
     selection = load_selection()
     base = {"tier": "affected", "invocations": [["mine/test"]]}
     assert selection.delta_yields("ticket.json", base)
+    assert not selection.delta_yields("ticket.json", base, False)
     assert not selection.delta_yields("ticket.json", None)
     assert not selection.delta_yields(None, base)
 

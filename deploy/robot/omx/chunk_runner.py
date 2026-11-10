@@ -121,7 +121,7 @@ class Runner:
         # the contact margin a real run leaves, which live.json's chunk target does not show (2026-10-26)
         self.peak_lag, self.over_ticks = 0.0, 0
         self.live = live  # called about twice a second with the current state (Fleet observation bridge)
-        self.health_present, self.samples, self.grip_from = None, [], None  # joint_push's samples and reopen point
+        self.health_present, self.samples, self.grip_from, self.holding = None, [], None, False  # joint_push's samples and reopen point
         self.recorder = Recorder()  # raw training episodes: rows here, encoding after the session
         self.operating_context = operating_context
         self.trend: list = []  # load-bearing joints' lags over the last STRAIN_TICKS ticks of a chunk
@@ -199,6 +199,8 @@ class Runner:
                 if gap > JOG_MAX * 2:  # chunks chain end to start; a big jump means the wrong order
                     raise ValueError(f"chunk {words[1]} starts {gap:.1f} away from the held target")
                 self.queue = [[max(-100.0, min(100.0, v + o)) for v, o in zip(f, offset)] for f in frames]
+                if words[1].startswith("release"):
+                    self.holding = False
                 self.chunk, self.settle_since, self.played, self.contact_ticks = words[1], None, [], 0
                 self.contact_start = None
                 return True
@@ -239,6 +241,8 @@ class Runner:
                 # never below the taught closed value: past the jaws' stop the gripper only pushes at its PWM
                 # cap, and the guard's teacher mode does not bound the gripper (2026-10-25: 40 asked, stuck at 48.4)
                 to = max(float(self.library["gripper_closed"]), min(100.0, float(words[1])))
+                if to > self.target[5]:
+                    self.holding = False
                 free = to < self.target[5] and abs(self.present()[5] - self.target[5]) <= EMPTY_MARGIN  # not holding
                 self.grip_from, self.target[5] = (self.target[5] if free else None), to  # reopen point
             elif verb == "retreat" and len(words) == 1:
@@ -272,7 +276,7 @@ class Runner:
         chunk, jogging = self.chunk, bool(self.jog_path)
         self.queue, self.retreat_frames = [], (self.played or self.jog_path[:-1])[::-1]  # a jog's own target pushed
         self.target = list(present[:5]) + [self.target[5]]
-        self.fault = reason
+        self.fault, self.holding = reason, False
         self.chunk, self.played, self.jog_path = None, [], []
         if chunk == "park":
             self.last_input = self.clock()  # an idle fold's retry waits idle_retry_s from the hold, not from its start
@@ -369,7 +373,7 @@ class Runner:
                 return
             self.samples = (self.samples + [(list(self.target), present, self.health["pwm"])])[-4:]
             push = joint_push.pushing(self.samples, getattr(getattr(self.robot, "motion", None), "pwm_limits", None),
-                                      self.chunk == "park" or self.grip_from is not None, self.params)
+                                      (self.chunk == "park" and not self.holding) or self.grip_from is not None, self.params)
             if push and push[0] == "gripper" and self.chunk is None:  # a closing grip caught something: let it go
                 self.target[5], self.grip_from = self.grip_from, None
                 return self.report(command="grip", ok=False, caught=True, error=f"{push[1]}; reopened")
@@ -411,6 +415,10 @@ class Runner:
                         threshold = self.library.get("hold_current_ma")
                         if threshold is not None:  # both must agree once the cell has a measured threshold
                             fields["holding"] = by_position and current >= threshold
+                    self.holding = bool(fields["holding"])
+                elif self.holding and self.chunk in ("lift_pick", "park", "goto above_place", "descend_place"):
+                    self.holding = present[5] > self.target[5] + EMPTY_MARGIN
+                    fields["holding"] = self.holding
                 self.chunk, self.last_grip = None, None
                 self.report(**fields)
 

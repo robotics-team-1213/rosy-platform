@@ -231,10 +231,11 @@ def get_arm_hold(fleet_url, source_id, token, *, context):
         return ArmIncidentHold.model_validate_json(response.read(16385))
 
 
-def clear_arm_incident(fleet_url, source_id, operator_token, incident_id, note, *, context):
+def clear_arm_incident(fleet_url, source_id, operator_token, incident_id, note, *, context, cause=None, basis=None):
     """D-971: a named operator's clear over the API; the operator's own bearer, never the arm's source token."""
+    payload = {'note': note, **({'cause': cause} if cause else {}), **({'basis': basis} if basis else {})}
     request = Request(_arm_url(fleet_url, source_id) + f'/incidents/{quote(incident_id, safe="")}/clear', method='POST',
-                      data=json.dumps({'note': note}).encode('utf-8'),
+                      data=json.dumps(payload).encode('utf-8'),
                       headers={'Authorization': 'Bearer ' + operator_token, 'Content-Type': 'application/json'})
     with build_opener(HTTPSHandler(context=_verified(context)), _NoRedirect()).open(request, timeout=5) as response:
         return ArmIncidentHold.model_validate_json(response.read(16385))
@@ -273,8 +274,9 @@ class ArmIncidentLink:
     def hold(self):
         return get_arm_hold(self.fleet_url, self.source_id, self.token, context=self.context)
 
-    def clear(self, incident_id, note, operator_token):
-        return clear_arm_incident(self.fleet_url, self.source_id, operator_token, incident_id, note, context=self.context)
+    def clear(self, incident_id, note, operator_token, *, cause=None, basis=None):
+        return clear_arm_incident(self.fleet_url, self.source_id, operator_token, incident_id, note,
+                                  context=self.context, cause=cause, basis=basis)
 
 
 def run_usb_reports(stop, post, workcell_id, *, interval=20):

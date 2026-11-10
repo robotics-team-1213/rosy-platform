@@ -214,3 +214,129 @@ def test_three_3_cells_in_a_row_longer_than_one_box_are_split_along_the_row():
     assert [o["object"] for o in found] == ["container-3"] * 3
     assert sorted(round(o["centre_mm"][0]) for o in found) == [15, 51, 87]
 
+
+@pytest.mark.parametrize(("bgr", "expected"), [
+    ((30, 120, 235), "orange"),
+    ((25, 220, 240), "yellow"),
+    ((60, 170, 60), "green"),
+    ((210, 110, 40), "blue"),
+    ((180, 50, 160), "purple"),
+    ((35, 35, 220), "red"),
+    ((15, 15, 15), "black"),
+])
+def test_diverse_container_colours_are_tagged(bgr, expected):
+    (o,) = seen(scene([(10, -5, 60, 30, 0)], colour=bgr))
+    assert o["matched"] and o["object"] == "container-2" and o["colour"] == expected
+
+
+def test_split_strips_keep_each_containers_own_colour_and_want_filter_selects_target():
+    img = scene([(-30, 0, 60, 30, 0)], colour=(30, 120, 235))  # orange container-2
+    pts = cv2.boxPoints(((-15, 31), (90, 30), 0))
+    px = [cal.parallax((320 + 2 * x, 240 + 2 * y), 0.0, TOP, CAMERA) for x, y in pts]
+    cv2.fillPoly(img, [np.round(px).astype(np.int32)], (25, 220, 240))  # touching yellow container-3
+    found = sorted(seen(img), key=lambda o: o["object"])
+    assert [(o["object"], o["colour"]) for o in found] == [("container-2", "orange"), ("container-3", "yellow")]
+    assert co.want_reason({"colour": "yellow"}, found[0]) == "wanted colour yellow, got orange"
+    assert co.want_reason({"colour": "yellow", "object": "container-3"}, found[1]) is None
+    assert co.want_reason({"object": "container-2"}, found[1]) == "wanted object container-2, got container-3"
+
+
+def test_enroll_measures_and_saves_a_custom_object_for_detection(tmp_path):
+    img = scene([(15, -20, 48, 42, 10)], colour=(210, 110, 40))  # 48x42 mm blue non-standard cargo block
+    assert not any(o["matched"] for o in seen(img))  # unmatched before enrollment
+    cat_path = tmp_path / "catalog.json"
+    cat_path.write_text(Path(OMX / "object-catalog.example.json").read_text(encoding="utf-8"), encoding="utf-8")
+    entry = co.enroll(img, ROI, RECORD, CAMERA, "cargo-drum", top_height_mm=30.0, mass_kg=0.024)
+    assert entry["id"] == "cargo-drum" and entry["colour"] == "blue" and entry["mass_kg"] == 0.024
+    assert entry["length_mm"] == pytest.approx(48, abs=2.5) and entry["width_mm"] == pytest.approx(42, abs=2.5)
+    updated = co.save_catalog_entry(cat_path, entry)
+    (o,) = co.detect(img, ROI, RECORD, CAMERA, updated)
+    assert o["matched"] and o["object"] == "cargo-drum" and o["colour"] == "blue"
+    # A colour-constrained catalogue entry does not match an orange block of the same size
+    orange_img = scene([(15, -20, 48, 42, 10)], colour=(30, 120, 235))
+    (mismatch,) = co.detect(orange_img, ROI, RECORD, CAMERA, updated)
+    assert not mismatch["matched"] and mismatch["colour"] == "orange"
+
+
+def test_auto_pick_choose_filters_by_wanted_colour_and_object_id(tmp_path, monkeypatch):
+    monkeypatch.syspath_prepend(str(OMX))
+    import cell_auto_pick as auto
+    import cell_auto_setup as setup
+    import cell_choices
+
+    args = setup.parser("test").parse_args(["--config", "c.json", "--catalog", "cat.json", "--roi", "60", "60", "580", "420",
+                                            "--dest", "belt", "--object", "container-2", "--colour", "yellow", "--dry-run"])
+    assert args.want_object == "container-2" and args.want_colour == "yellow"
+    img = scene([(-40, 0, 30, 30, 0)], colour=(60, 170, 60))  # green container-1 (nearer start)
+    pts = cv2.boxPoints(((30, 0), (60, 30), 0))
+    px = [cal.parallax((320 + 2 * x, 240 + 2 * y), 0.0, TOP, CAMERA) for x, y in pts]
+    cv2.fillPoly(img, [np.round(px).astype(np.int32)], (25, 220, 240))  # yellow container-2
+    objs = co.detect(img, ROI, RECORD, CAMERA, CATALOG)
+    for o in objs:
+        o["raw_m"] = [c / 1000 for c in o["centre_mm"]]
+    # With want={"colour": "yellow", "object": "container-2"}, green container-1 is refused and yellow container-2 is kept
+    reasons = {o["object"]: co.want_reason({"colour": "yellow", "object": "container-2"}, o) for o in objs}
+    assert reasons["container-1"] == "wanted object container-2, got container-1"
+    assert reasons["container-2"] is None
+    assert getattr(auto, "choose") is not None
+
+
+def test_skewed_non_square_objects_at_varied_positions_are_picked_and_placed_sequentially(tmp_path, monkeypatch):
+    """Non-square 2-cell (60x30), 3-cell (90x30), and custom (48x30) objects at different positions and skewed angles
+    are detected by colour/size, grasped across their tilted short axis, and placed at the destination."""
+    monkeypatch.syspath_prepend(str(OMX))
+    import test_omx_cell_auto_pick as ap_test
+    from cell_robot_profile import load
+
+    prof = tmp_path / "robot-profile.json"
+    prof.write_text(json.dumps({"schema": "rosy.omx-cell-robot-profile.v1", "device_id": "sim-device",
+        "instance_id": "sim-arm", "robot_config_sha256": "c" * 64,
+        "operating_envelope_path": "review.json", "work_dir": "."}))
+    monkeypatch.setitem(ap_test.CONFIG, "operating_profile_path", str(prof))
+    monkeypatch.setitem(ap_test.CONFIG, "work_dir", str(tmp_path))
+    monkeypatch.setitem(ap_test.CONFIG, "operating_envelope_path", str(tmp_path / "review.json"))
+    monkeypatch.setitem(ap_test.SESSION, "operating_profile", load(prof)["binding"])
+
+    class MultiColourCell(ap_test.Cell):
+        def frame(self, camera):
+            img = np.full((480, 640, 3), (240, 230, 200), np.uint8)
+            img[40:200, 150:510] = (90, 70, 55)
+            for o in self.objects:
+                if o is not self.held:
+                    ap_test.draw(img, o, colour=o.get("bgr", (60, 160, 60)))
+            return img
+
+    path = ap_test.biased_map(tmp_path)
+    # Pre-save the map bias so each carry plans and executes directly
+    ap_test.cell_pivot.save_bias(ap_test.cell_pivot.bias_path(path), {
+        "site": "pinky", "point_m": [0.072, 0.105], "bias_mm": [1000 * ap_test.BIAS[0], 1000 * ap_test.BIAS[1]],
+        "radius_mm": 18.8, "phase_deg": 53.0, "rms_mm": 0.4, "n": 6,
+    })
+    catalog = [dict(e, mass_kg=0.03) for e in CATALOG] + [{
+        "id": "cargo-box", "kind": "blue custom box", "length_mm": 48, "width_mm": 30, "top_height_mm": 30,
+        "tolerance_mm": 8, "length_tolerance_mm": 8, "colour": "blue", "mass_kg": 0.025,
+        "grasp": {"close_across": "short_side", "jaw_axis_deg_from_long": 90},
+    }]
+    choices = ap_test.cell_choices.Choices(tmp_path / "choices.json")
+    scenarios = [
+        ({"x": 0.078, "y": 0.124, "long": 28.0, "length": 60, "width": 30, "bgr": (25, 220, 240)}, "yellow", "container-2", "0.060,0.088"),
+        ({"x": 0.070, "y": 0.120, "long": -22.0, "length": 90, "width": 30, "bgr": (30, 120, 235)}, "orange", "container-3", "0.060,0.090"),
+        ({"x": 0.074, "y": 0.118, "long": 18.0, "length": 48, "width": 30, "bgr": (210, 110, 40)}, "blue", "cargo-box", "0.058,0.092"),
+    ]
+    for item, want_col, want_id, dest_xy in scenarios:
+        # Place a distractor object of another colour/size alongside the target so want-filtering + finger room both act
+        distractor = {"x": -0.015, "y": 0.145, "long": -12.0, "length": 30, "width": 30, "bgr": (60, 170, 60)}
+        cell = MultiColourCell([distractor, item], true_closing=90.0)
+        cfg = {**ap_test.CONFIG, "want": {"colour": want_col, "object": want_id}}
+        res = ap_test.auto.run_auto(cell, cfg, cal.load(path), path, catalog, ap_test.ROI, "pinky", dest_xy,
+                                    tmp_path, choices, sleep=ap_test.no_sleep, log=lambda row: None)
+        assert res["result"] == "placed", f"{want_id} ({want_col}) failed: {res}"
+        attempt = res["attempts"][-1]
+        assert attempt["chosen"]["object"] == want_id and attempt["chosen"]["colour"] == want_col
+        assert angle_gap(attempt["long_axis_deg"], item["long"]) < 4.0
+        tx, ty = (float(v) for v in dest_xy.split(","))
+        assert math.dist((cell.objects[1]["x"], cell.objects[1]["y"]), (tx, ty)) < 0.006
+
+
+
+

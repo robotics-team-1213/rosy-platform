@@ -149,6 +149,49 @@ def test_pads_cut_short_still_hold_their_lane():
         assert abs(lane["yaw_deg"] - math.degrees(truth("b", k)[1])) < 1.
 
 
+def test_white_printed_lane_labels_across_a_pad_do_not_split_it():
+    layout = sites.Layout()
+    img = frame(layout)
+    cam = r2s.Camera(layout.fixture["real_cameras"]["top"], img.shape[:2])
+    for t, k in (("a", 1), ("b", 2), ("b", 3)):  # 2026-11-10 live cell: white R1/R3 labels & dots split pads in two
+        (x, y), yaw = truth(t, k)
+        stripe = [cam.project((x + a * .002 * math.cos(yaw) - b * .017 * math.sin(yaw),
+                               y + a * .002 * math.sin(yaw) + b * .017 * math.cos(yaw), layout.deck_z))
+                  for a, b in ((-1, -1), (1, -1), (1, 1), (-1, 1))]
+        cv2.fillPoly(img, [np.round(stripe).astype(np.int32)], (245, 245, 245))
+    got = r2s.measure_temp_plates(img, layout)
+    assert got["plates"]["a"]["seen"] == 3 and got["plates"]["b"]["seen"] == 3
+
+
+def test_yellow_containers_and_bottom_clipped_v11_plates_are_measured():
+    layout = sites.Layout()
+    first = r2s.measure_temp_plates(frame(layout), layout)
+    prev = dict(plates={t: p["lanes"] for t, p in first["plates"].items()}, shape=first["shape"])
+    v11 = dict(step_deg=17.0, radius_m=.203)
+    poses = dict(a=(-.0933, -.1676, 0.), b=(-.0906, .1668, 0.))
+    img = np.full((480, 640, 3), (60, 200, 200), np.uint8)
+    cam = r2s.Camera(layout.fixture["real_cameras"]["top"], img.shape[:2])
+    box_h = sites.CONTAINER[layout.choices["ship_source"]][2]
+    for tag, pose in poses.items():
+        for k, local in r2s.plate_lanes(v11).items():
+            (x, y), yaw = r2s.place(local, pose)
+            on_top = k == 2 or (tag == "a" and k == 3)
+            z = layout.deck_z + (box_h if on_top else 0.)
+            bgr = (30, 195, 220) if k == 2 else (40, 110, 240) if on_top else (30, 30, 30)  # yellow (H 26) in lane 2, orange in a-3
+            corners = [cam.project((x + a * .045 * math.cos(yaw) - b * .015 * math.sin(yaw),
+                                    y + a * .045 * math.sin(yaw) + b * .015 * math.cos(yaw), z))
+                       for a, b in ((-1, -1), (1, -1), (1, 1), (-1, 1))]
+            cv2.fillPoly(img, [np.round(corners).astype(np.int32)], bgr)
+    got = r2s.measure_temp_plates(img, layout, prev)
+    assert got["shape"]["step_deg"] == pytest.approx(17.0, abs=1.)
+    for tag, pose in poses.items():
+        assert got["plates"][tag]["seen"] == 3
+        lanes = {l["lane"]: l for l in got["plates"][tag]["lanes"]}
+        assert "container" in lanes[2]["source"]
+        for k, local in r2s.plate_lanes(v11).items():
+            assert math.dist(lanes[k]["xy"], r2s.place(local, pose)[0]) < .004, (tag, k)
+
+
 def test_the_ship_is_found_where_its_hull_lies():
     layout = sites.Layout()
     img = np.full((480, 640, 3), (60, 200, 200), np.uint8)
@@ -228,3 +271,38 @@ def test_the_belt_request_asks_for_one_tape_reading_that_tells_the_two_belts_apa
                                      camera=round(math.dist(axis, (.205, -.037)) * 1000))
     assert abs(req["candidates"]["camera"] - req["candidates"]["sim"]) > 2 * req["tolerance"]  # one reading decides
     assert req["id"] == "belt-end-20261109-0428" and req["gap"] == "G-30" and image.exists()
+
+
+def test_a_moved_top_camera_is_caught_on_the_far_band(tmp_path, monkeypatch):
+    import omx_cell_anchor as anchor
+    rng = np.random.default_rng(0)
+    scene = (rng.random((540, 720)) * 255).astype(np.uint8)
+    scene = cv2.GaussianBlur(scene, (0, 0), 2)  # texture ORB can match, like the far table, belt and floor
+    still = cv2.cvtColor(scene[30:510, 40:680], cv2.COLOR_GRAY2BGR)
+    shifted = cv2.cvtColor(scene[30:510, 52:692], cv2.COLOR_GRAY2BGR)  # the camera turned: the view slid 12 px
+    assert not anchor.moved(anchor.motion(still, still.copy()))
+    m = anchor.motion(still, shifted)
+    assert anchor.moved(m) and abs(m["dx_px"] + 12) < 1.5
+    monkeypatch.setenv("ROSY_REAL2SIM_FRAMES", str(tmp_path / "frames"))
+    path = tmp_path / "top.jpg"
+    cv2.imwrite(str(path), still)
+    name = anchor.remember(path)
+    assert name == anchor.digest(path) and anchor.reference(name).read_bytes() == path.read_bytes()
+    assert anchor.reference("sha256:" + "0" * 64) is None
+
+
+def test_20261110_named_choices_and_arm_bases_candidates_match_the_snapshot():
+    snap_path = "deploy/robot/omx/sim/cell_snapshots/20261110-1231.json"
+    from_snap = sites.Layout(cell_snapshot=snap_path, temp_lanes="snapshot", ship_pose="snapshot", belt_pose="snapshot", arm_bases="snapshot")
+    from_named = sites.Layout(temp_lanes="photo-20261110", ship_pose="photo-20261110", belt_pose="photo-20261110", arm_bases="plate-centre")
+    for k in ("tmp-a-1", "tmp-a-2", "tmp-a-3", "tmp-b-1", "tmp-b-2", "tmp-b-3", "ship-h1r1-l0", "belt"):
+        assert math.dist(from_snap.sites[k]["xy"], from_named.sites[k]["xy"]) < 1e-6, k
+    assert tuple(from_named.arms["arm_b"].base[:2]) == pytest.approx((.107, .164))
+    assert tuple(sites.Layout().arms["arm_b"].base[:2]) == pytest.approx((.104, .153))
+    assert not any(s.get("blocked") for s in from_named.sites.values())  # tmp-b-1 clears the measured ship by 15.9 mm
+    assert sites.WRIST_PHOTO_A["lens_m"][0] > sites.WRIST_PHOTO["lens_m"][0] and sites.WRIST_PHOTO_A["axis_hit_x_m"] > sites.WRIST_PHOTO["axis_hit_x_m"]
+    img = np.full((200, 320, 3), (200, 175, 130), np.uint8)  # sky-blue v11 plate background
+    for i, bgr in enumerate(((30, 120, 235), (25, 220, 240), (50, 180, 50), (160, 40, 180))):  # orange, yellow, green, purple
+        cv2.rectangle(img, (20 + 70 * i, 60), (65 + 70 * i, 120), bgr, -1)
+    assert sum(k == "container" for k, _ in r2s.blobs(img)) == 4
+

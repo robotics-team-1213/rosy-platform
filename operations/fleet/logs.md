@@ -5425,3 +5425,22 @@
 - 변경: `feature_matrix.json`에 공개 `POST /api/fleet/auth/access-requests`(login-page.js)와 관리자 목록·승인·거절(account-page.js), login-page.js의 `/api/fleet/auth/session` 호출을 등록하고, `backend_http_evidence.json`에 `test_account_access_requests.py` 통과 수신 기록(21 passed, 병합 커밋 36e976e701)을 더했다.
 - 증거: 착지 사전 시험 `test_all_supported_features_have_contracts_and_flows`가 미등록 프런트 호출 3건으로 실패했다. 원인은 이 브랜치가 새 프런트 호출을 기능표에 올리지 않은 것이며 main 탓이 아니다.
 - gate 변화: SOURCE 회귀 복구. 현장 수용은 별도다.
+
+## 2026-11-10 · uncommitted · fix(fleet): 사이트 지도 프레임 결속 — 활성 본문 검증과 목표·자세·경로의 프레임 거절 (D-1010)
+- 변경: SiteMapStore._active_row이 모든 읽기에서 본문 sha256을 저장값과 대조(422 SITE_MAP_BODY_HASH_MISMATCH, 시동 때 활성 지도 없이 fail closed). TripSteps._step_free는 활성 버전이 계획과 다르면 map_version으로, 변환의 현장 자세가 활성 map_id가 아니면 map_frame으로 trip을 끝내고 detail.goal_frame에 활성 map_id·버전·기체 robot_map_id·목표 프레임을 기록. pose_request.overhead_decision은 현장 자세 map_id와 기체 상태 map_id가 같을 때만 답(D-546 갭). console._goal은 알려진 다른 map_id의 선점 경로와 비교하지 않고 MAP_FRAME_MISMATCH 보류, 다른 프레임에 선 로봇은 NO_YIELD_SPACE(bay 계산 없음). pose_view에 map_id.
+- 이유: R의 site_map_versions에 map_id가 섞여 있고(1-5 map_v2_fleet, 6-7 world_261026), 틀린 지도·틀린 좌표계를 조용히 쓰면 로봇이 다른 곳으로 달린다(사용자 2026-11-10). 임시 스크립트의 최신 행 추정이 제품에 들어오지 않게 활성 정의를 한 곳에 둔다.
+- 근거: test_site_map_frame_safety.py, test_localization_pose_request.py, test_server_traffic.py, test_trip_robot_frame_goal.py(회귀). 원격 시험 기록은 커밋 메시지와 작업 기록에.
+- gate 변화: 없음(SOURCE만, 기체·현장 수용 별도).
+
+## 2026-11-10 · uncommitted · fix(fleet): D-1010 독립 검토 반영 — 증명 없는 free 목표 정지·모르는 프레임 교차 판정 배제·변조 DB 시동 생존 (D-1010)
+- 변경: robot_frame_goal은 기체 상태 map_id가 활성 map_id와 같을 때만 변환 없이 현장 좌표를 돌려주고(충전 복귀의 명시적 증명), 그 외 증명 없으면 None. _step_free는 변환 실패·상태 모름(포트·읽기 없음)·스냅숏 없는 포트(poses_in_robot_frame 미선언)에서 free 목표를 보내지 않고 map_frame으로 정지. console._map_mismatch는 map_id를 알려진 값끼리 같을 때만 비교하고, 스냅숏에 없으면 마지막 확인 map_id로 대신(경고 로그 1회), 확인된 적 없으면 보류. import_if_empty는 변조된 활성 행에서 죽지 않고 지도 없이 시동(_publish와 같은 fail closed).
+- 이유: 독립 검토(2026-11-10) 중간 지적 1·2·3 — LOCALIZED가 아니면 SiteFrameMismatch 검사가 안 돌아 현장 좌표가 그대로 나가고, 한쪽 map_id가 None이면 "비교 가능"으로 읽히며, 변조 DB가 첫 가져오기에서 프로세스를 죽일 수 있었다.
+- 근거: test_site_map_frame_safety.py(LOCALIZED 아님·상태 None·스냅숏 없는 포트 정지, 같은 map_id 증명 폴백, import 생존), test_server_traffic.py(map_id 없음 보류, 마지막 확인값 대체·로그), test_trip_robot_frame_goal.py(변환 짝 없음 정지로 갱신).
+- gate 변화: 없음(SOURCE만, 기체·현장 수용 별도).
+
+## 2026-11-10 · uncommitted · feat(fleet): 지도–실제 대조와 초안 강체 보정
+- 변경: 신규 순수 모듈 `fleet/map_reality.py`(`rosy.site_map_reality/1` 보고서: 차로 matched/offset/uncovered, 제외 구역·횡단보도 entered/used, 지도 밖 주행, ICP 강체 fit). `site_map_routes.py`에 `GET /api/fleet/site-map/reality-check`(읽기 권한, `last_s` 기본 6 h·최대 24 h, `robot_id` 선택)와 `POST .../reality-check/apply`(이름 있는 운영자, 409 `SITE_MAP_NO_DRAFT`/`SITE_MAP_DRAFT_CHANGED`/`SITE_MAP_NO_CORRECTION`, 422 `SITE_MAP_INVALID`) 추가. apply의 변환은 브라우저가 보내지 않고 서버가 같은 근거 창으로 재계산해 초안에만 적용하고 사건 `reality_corrected`를 남긴다. 활성 지도·로봇은 불변. 경로 기록은 `install_site_map_routes`가 요청 때 `app.state.paths`를 늦게 읽는다(app.py 불변). 화면은 `site-map-reality.js`(지도 만들기 흐름의 「지도–실제 대조」 절)와 `assets.json`·서브내비·`site-map.js` 연결. D-766 한도 초과로 횡단보도 대기 띠 네 단추를 `site-map-bands.js`로 분리해 `site-map.js`를 576줄로 내렸다(동작 변경 없음).
+- 이유: 사용자 요청(2026-11-10) — Fleet이 보는 지도가 실제와 같은지 판정하고 선·구역 일치를 보고 처리한다. 근거는 이미 서버에 있는 D-594 경로 이력만 쓴다(카메라 가져오기는 브라우저 쪽, SLAM 정합은 오프라인 도구라 범위 밖 — `docs/plans/2026-11-10-map-reality-check.md`). 허용 오차 0.15 m는 D-455 `max_jump_m`과 같은 값을 재사용하고, 판정 사다리는 `offset`을 `unmapped`보다 먼저 본다(한 방향으로 밀린 지도는 안 달린 차로처럼 보인다).
+- 근거: `test_map_reality.py`(순수 8건), `test_site_map_reality_api.py`(HTTP 6건: 409 세 종·적용 뒤 리비전 증가·활성 불변·사건 기록), `test_document_imports.py`·`test_doc_tabs.py` 허용 목록. 원격 시험 기록은 커밋 메시지와 작업 기록에.
+- gate 변화: 없음(SOURCE만, 기체·현장 수용 별도).
+- 결정: 신규 ADR 없음(권한·소유 변경 없음, 초안 저장 경로 재사용). API Reference v1.384.

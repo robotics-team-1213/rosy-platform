@@ -20,21 +20,51 @@ import sys
 import time
 from pathlib import Path
 
+import cell_place_fit
+
 SCHEMA = "rosy.omx-cell-task.v1"
 HERE = Path(__file__).resolve().parent
+
+
+def tier_site(site: str, tier: int, sites: dict) -> str:
+    """Resolve `site` at `tier` (1 = 1단/-l0, 2 = 2단/-l1, 3 = 3단/-l2)."""
+    if tier not in cell_place_fit.TIERS:
+        raise ValueError(f"tier must be in {cell_place_fit.TIERS}, got {tier!r}")
+    name = f"{site}-l{tier - 1}"
+    return name if name in sites else site
 
 
 def carries(task: dict, sites: dict) -> list:
     """[(from, to)] for a task, or ValueError naming what is wrong (unknown site, same site, missing field)."""
     if task.get("schema") != SCHEMA or not task.get("task_id"):
         raise ValueError(f"not a {SCHEMA} task")
+    sites = cell_place_fit.with_tiers({"sites": sites})[0]["sites"]
     if task["kind"] == "move":
-        plan = [(task["from"], task["to"])]
+        src = tier_site(task["from"], task["from_tier"], sites) if "from_tier" in task else task["from"]
+        dst = tier_site(task["to"], task["to_tier"], sites) if "to_tier" in task else task["to"]
+        plan = [(src, dst)]
     elif task["kind"] == "swap":
         a, b, buf = task["a"], task["b"], task["buffer"]
         if len({a, b, buf}) < 3:
             raise ValueError("swap needs two sites and a distinct free buffer site")
         plan = [(a, buf), (b, a), (buf, b)]
+    elif task["kind"] in ("stack", "unstack"):
+        tiers = [task["tier"]] if "tier" in task else list(task.get("tiers") or cell_place_fit.TIERS)
+        if not tiers or any(t not in cell_place_fit.TIERS for t in tiers):
+            raise ValueError(f"tiers must be in {cell_place_fit.TIERS}")
+        cols = list(task.get("columns") or [task["to" if task["kind"] == "stack" else "from"]])
+        if task["kind"] == "stack":
+            srcs = list(task.get("sources") or [task["from"]] * (len(tiers) * len(cols)))
+            targets = [f"{c}-l{t - 1}" for t in tiers for c in cols]
+            if len(srcs) < len(targets):
+                raise ValueError("not enough sources for stack targets")
+            plan = list(zip(srcs[:len(targets)], targets))
+        else:
+            sources = [f"{c}-l{t - 1}" for t in reversed(tiers) for c in cols]
+            dsts = list(task.get("destinations") or [task["to"]] * len(sources))
+            if len(dsts) < len(sources):
+                raise ValueError("not enough destinations for unstack sources")
+            plan = list(zip(sources, dsts[:len(sources)]))
     else:
         raise ValueError(f"unknown kind {task['kind']!r}")
     for src, dst in plan:
@@ -62,7 +92,7 @@ def run_carry(config_path: Path, catalog: Path, sites: dict, src: str, dst: str,
 
 
 def run_task(task: dict, config_path: Path, catalog: Path, log_dir: Path, preflight=None, carry=run_carry) -> dict:
-    config = json.loads(config_path.read_text(encoding="utf-8"))
+    config = cell_place_fit.with_tiers(json.loads(config_path.read_text(encoding="utf-8")))[0]
     out = {"task_id": task.get("task_id"), "kind": task.get("kind"), "source": task.get("source"), "started": time.time(), "steps": []}
     try:
         plan = carries(task, config["sites"])

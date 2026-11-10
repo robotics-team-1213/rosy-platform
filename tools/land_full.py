@@ -114,7 +114,7 @@ def bridge(wt: Path, candidate: str, tested_main: str, head: str, main: str) -> 
         sha, first, *others = line.split()
         if len(others) != 1 or not ancestor(others[0], main):
             return False  # something other than main was merged in
-        tree = _git(wt, "merge-tree", "--write-tree", "--no-messages", first, others[0])
+        tree = _git(wt, "merge-tree", "--write-tree", "--no-messages", "-X", "renormalize", first, others[0])  # as land.merge
         if tree.returncode == 0:
             # land.merge regenerates index.md and drops landed gap lines in the merge commit itself
             edited = _git(wt, "diff", "--name-only", tree.stdout.split()[0], sha).stdout.splitlines()

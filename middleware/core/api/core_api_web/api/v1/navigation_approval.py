@@ -125,8 +125,7 @@ def trial_start(body: NavigationApprovalTrialRequest, auth: AuthContext = Depend
     if svc.modes.mode is not Mode.MANUAL:
         apply_mode(svc, auth, Mode.MANUAL)
     try:
-        clearance = svc.approval_trials.start(body.direction, body.stop_cause, owner, test_surface=body.test_surface,
-                                              blind_zone_confirmed=body.blind_zone_confirmed)
+        clearance = svc.approval_trials.start(body.direction, body.stop_cause, owner, test_surface=body.test_surface)
     except TrialRefused as exc:
         raise _refused(exc) from exc
     return {"clearance": clearance, **svc.approval_trials.status()}

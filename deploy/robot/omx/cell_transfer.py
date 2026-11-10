@@ -102,20 +102,20 @@ STILL_HOLDING_UNITS = 4.0
 
 
 def transfer_folded(cell, library, closed: float | None = None, wrist=None, after_place=None, pinch=None, feel=None,
-                    sequence=FOLDED, lift_stall=None, at_stop=None) -> dict:
+                    sequence=FOLDED, lift_stall=None, at_stop=None, grasp_check=None) -> dict:
     """cell_pipeline.transfer with a fold home between lift and place. Lifting a held box from the reach straight
     to the transit height took shoulder_lift to 525 of 600 and the runner's strain hold stopped it; folding home
     first and placing from home went clean twice (2026-10-28). `cell` is a Gate on the real arm. at_stop
     (cell_hooks.Stills) keeps every stop's frames before the arm moves on, a finished pick descent as its control, and is
     closed however the carry ends."""
     try:
-        return _transfer(cell, library, closed, wrist, after_place, pinch, feel, sequence, lift_stall, at_stop)
+        return _transfer(cell, library, closed, wrist, after_place, pinch, feel, sequence, lift_stall, at_stop, grasp_check)
     finally:
         if hasattr(at_stop, "close"):
             at_stop.close()
 
 
-def _transfer(cell, library, closed, wrist, after_place, pinch, feel, sequence, lift_stall, at_stop) -> dict:
+def _transfer(cell, library, closed, wrist, after_place, pinch, feel, sequence, lift_stall, at_stop, grasp_check=None) -> dict:
     steps = []
 
     def run(command):
@@ -125,6 +125,9 @@ def _transfer(cell, library, closed, wrist, after_place, pinch, feel, sequence, 
 
     for command in (f"load {library}", *sequence):  # FOLDED, or cp.SEQUENCE where auto.fold_before_transport is 0
         status = run(command)
+        if not status.get("ok") and command == "goto above_pick" and "must park before recovery" in (status.get("error") or ""):
+            if run("park").get("ok"):
+                status = run(command)
         if status.get("contact") and command == "park":
             # a fold's strain hold at the reach: back off and fold again (home in runs 3-4, 2026-10-28); a second stops
             run("retreat")
@@ -143,9 +146,14 @@ def _transfer(cell, library, closed, wrist, after_place, pinch, feel, sequence, 
             steps.append({"command": "release and rise", **freed})
             parked = freed["result"] == "risen" and run("park").get("ok")
             return {"result": "contact", "at": command, "steps": steps, "error": status.get("error"), "released": bool(parked)}
-        if status.get("contact"):  # the runner held with torque on: back up the same path, fold home
-            for after in ("retreat", "park"):
-                run(after)
+        if status.get("contact"):  # the runner held with torque on: back up the same path (unless shedding), fold home
+            if "overload-hold" not in (status.get("error") or ""):
+                run("retreat")
+            for _ in range(4):
+                parked = run("park")
+                if parked.get("ok") or "shedding its load" not in (parked.get("error") or ""):
+                    break
+                cp.time.sleep(1.0)
             return {"result": "contact", "at": command, "steps": steps, "error": status.get("error")}
         if not status.get("ok"):
             if not status.get("fault") and command not in ("park", f"load {library}"):
@@ -176,6 +184,21 @@ def _transfer(cell, library, closed, wrist, after_place, pinch, feel, sequence, 
             for after in ("run lift_pick", "park"):
                 run(after)
             return {"result": "empty", "at": command, "steps": steps}
+        if command in ("run lift_pick", "park", "goto above_place", "run descend_place") and status.get("holding") is False:
+            if command != "park":
+                run("park")
+            return {"result": "empty", "at": command, "steps": steps}
+        if command in ("run grasp_pick", "run lift_pick") and status.get("holding") and grasp_check is not None:
+            checked = grasp_check(command, status, run)
+            steps.append({"command": "grasp_debate", "at": command, **{k: checked.get(k) for k in ("verdict", "recovery_chunk", "dx_mm", "dy_mm", "reason", "telemetry", "vision", "debate")}})
+            if checked.get("verdict") == "reinsert_and_park":
+                run("park")
+                return {"result": "reinserted", "at": command, "grasp_debate": checked, "steps": steps}
+            if checked.get("verdict") == "reinsert_and_retry" and isinstance(checked.get("retry_status"), dict):
+                status = checked["retry_status"]
+                if not status.get("holding"):
+                    run("park")
+                    return {"result": "empty", "at": command, "grasp_debate": checked, "steps": steps}
     if closed is None:
         try:
             closed = json.loads(Path(library).read_text())["gripper_closed"]

@@ -33,6 +33,9 @@ def transit_path(start: list, goal: list, grip_transit: float, fps: int, transit
     turn pan/roll to the goal there, descend into the goal body pose, then set the goal's jaws.
     `transit` maps joint indexes to values (a cell profile's transit); default TRANSIT (arm S).
     `speed` is the fraction of the guard speed (a plan's transit_speed)."""
+    if max(abs(a - b) for a, b in zip(start[:5], goal[:5])) <= 8.0:
+        return flow([list(start), list(goal[:6])], fps, speed * PARK_SPEED, blend=[False, False], blend_s=0.2,
+                    rise_speed=RISE_SPEED)
     transit = TRANSIT if transit is None else transit
     waypoints = [list(start)]
     waypoints.append(waypoints[-1][:5] + [grip_transit])

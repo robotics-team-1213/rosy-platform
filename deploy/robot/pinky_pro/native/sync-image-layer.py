@@ -31,6 +31,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import datetime as _dt
+import errno
 import json
 import os
 from pathlib import Path
@@ -263,6 +264,7 @@ def apply(root: Path, release_id: str, work: list[dict], runner: Runner,
     backup_dir = None
     manifest: dict | None = None
     backup: Path | None = None
+    deferred: list[str] = []
     if work or cleanup:
         stamp = _stamp(now)
         # The serial orders runs; the timestamp is only for people (no RTC).
@@ -311,7 +313,18 @@ def apply(root: Path, release_id: str, work: list[dict], runner: Runner,
                 if item["state"] == "removed":
                     destination.unlink()
                 else:
-                    _install(item["source"], destination, item["mode"])
+                    try:
+                        _install(item["source"], destination, item["mode"])
+                    except OSError as exc:
+                        # Bootstrap: the running updater's unit predates this
+                        # overlay-config destination (ProtectSystem=strict),
+                        # so this run's sandbox cannot write it. Keep the
+                        # release; the next sync retries the file once the
+                        # updated unit grants the path. Anything else fails.
+                        if item["kind"] != "config" or exc.errno != errno.EROFS:
+                            raise
+                        deferred.append("/" + item["destination"])
+                        continue
                 done.append(item)
         except BaseException:
             for item in reversed(done):
@@ -332,12 +345,17 @@ def apply(root: Path, release_id: str, work: list[dict], runner: Runner,
                 if before["active"]:
                     runner(["systemctl", "start", unit])
             raise
+        if deferred:
+            # A deferred file never landed; its record would make a later
+            # reconcile or rollback undo a file this run never touched.
+            dropped = set(deferred)
+            manifest["files"] = [record for record in manifest["files"] if record["path"] not in dropped]
         manifest["files_applied"] = True
         _write_json(backup / BACKUP_MANIFEST, manifest)
 
     commands = _post_commands(steps)
     if not commands and not pending:
-        return {"backup_dir": backup_dir, "commands": [], "enabled": []}
+        return {"backup_dir": backup_dir, "commands": [], "enabled": [], "deferred": deferred}
     _write_json(root / PENDING_FILE, {
         **steps,
         "units": sorted(set(units or []) | set(pending.get("units", []))),
@@ -369,7 +387,7 @@ def apply(root: Path, release_id: str, work: list[dict], runner: Runner,
         manifest.update(complete=True, commands=[" ".join(argv) for argv in commands])
         _write_json(backup / BACKUP_MANIFEST, manifest)
     return {"backup_dir": backup_dir, "commands": [" ".join(argv) for argv in commands],
-            "enabled": [argv[-1] for argv in commands if argv[1] == "enable"]}
+            "enabled": [argv[-1] for argv in commands if argv[1] == "enable"], "deferred": deferred}
 
 
 def sync(

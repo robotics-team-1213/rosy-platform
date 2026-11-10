@@ -24,6 +24,14 @@ FPS = 15
 CARRY_SPEED = .05  # m/s; .08 let a 16 g container swing 10 deg in the jaws on the short reach to the near row
 OPEN_GAP = dict(belt=.042, ship=.033, temp=.033, outbound=.033)  # 33 mm lets a pad stay inside the 6 mm gaps between rows (release_gap_m of the ship case); the stern bay mouth is 37 mm
 HOLD_GAP = .030 - jaw.SQUEEZE_M
+SERVO_GAIN = 40.  # omx_physics design kp of every joint: about 0.16 s from command to arrival
+
+
+def servo_values(model, ids):
+    """The five arm joints' servo and passive constants a seed may change (omx_two_arm_skill.disturb), as the model has them."""
+    dofs = model.jnt_dofadr[model.actuator_trnid[ids[:5], 0]]
+    return dict(kp=model.actuator_gainprm[ids[:5], 0].copy(), kv=-model.actuator_biasprm[ids[:5], 2], force=model.actuator_forcerange[ids[:5], 1].copy(),
+                damping=model.dof_damping[dofs].copy(), frictionloss=model.dof_frictionloss[dofs].copy())
 
 
 RECORDED = ("top", "side", "a_wrist", "b_wrist")  # the cell's four cameras (D-960); the world's overview is not one of them
@@ -51,18 +59,69 @@ class Ctx:
 
 
 class Teacher:
-    def __init__(self, world, data_file=None, frame_hook=None, drop=tasks.RELEASE_DROP, drop_upper=tasks.RELEASE_DROP_UPPER, seed=0):
+    SKEW_CASES = (
+        (.006, .006, 18.), (.005, -.006, -16.), (.004, .005, -12.),
+        (.005, .006, 15.), (.004, -.005, 14.), (.004, .006, -10.),
+        (.004, .007, 16.), (.004, -.006, -14.), (.004, .006, 12.),
+    )
+
+    def __init__(self, world, data_file=None, frame_hook=None, drop=tasks.RELEASE_DROP, drop_upper=tasks.RELEASE_DROP_UPPER, seed=0,
+                 pick_vision=False, belt_skew=False):
         self.rng, self.seed, self.branch, self.carried = np.random.default_rng(seed), seed, "best", None
         self.world, self.layout, self.drop, self.drop_upper = world, world.layout, drop, drop_upper
+        self.pick_vision, self.belt_skew, self.skew_i = pick_vision, belt_skew, 0
         self.limits = (data_file or tasks.load())["judge"]
         self.hook = frame_hook or (lambda data, label: None)
         self.contacts, self.phase, self.first, self.tilt, self.n, self.held_tilt = dict(arm_arm=set(), arm_other=set(), pad_neighbour=set()), "", {}, 0., 0, 0.
         self.others = set()
+        # joint-zero calibration error per arm (rad, 6 with the gripper 0): true angle = reported + error. The real twin fit found 1-4 deg
+        # (2026-11-09 omx-twin-night). A privileged teacher plans in true angles; anyone else commands in reported ones and lands off by it.
+        self.zero_error, self.privileged = {}, True
+        self.servo = {}  # arm: {kp|kv|force|damping|frictionloss: five values, nan keeps} (omx_two_arm_skill.disturb); fresh() applies them
+
+    def perceive_pick(self, data, sa, true_xy, true_yaw):
+        """Detect a skewed/offset container at `sa` from the rendered top camera frame (omx_real2sim pinhole back-projection)."""
+        import cv2
+        import omx_real2sim as r2s
+
+        cam = r2s.Camera(self.layout.fixture["real_cameras"]["top"], (480, 640))
+        qid = self.world.model.geom("ship_quay").id if "ship_quay" in self.world.geom_name else -1
+        if qid >= 0 and sa["kind"] == "belt":
+            self.world.model.geom_rgba[qid, 3] = 0.
+        bgr = cv2.cvtColor(self.world.render(data, "top"), cv2.COLOR_RGB2BGR)
+        if qid >= 0 and sa["kind"] == "belt":
+            self.world.model.geom_rgba[qid, 3] = 1.
+        hsv = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV)
+        top_z, box_l, box_w = sa["z"] + self.layout.box[2] / 2, self.layout.box[0], self.layout.box[1]
+        cands = []
+        for kind, px in r2s.blobs(bgr):
+            if kind != "container":
+                continue
+            xy, yaw, sz = r2s.rect(cam.to_plane(px, top_z))
+            for idx, ref, vec in ((0, box_l, (math.cos(yaw), math.sin(yaw))), (1, box_w, (-math.sin(yaw), math.cos(yaw)))):
+                if sz[idx] > ref:  # oblique end/side wall widens the contour toward the camera eye
+                    sh = (.5 if (cam.eye[0] - xy[0]) * vec[0] + (cam.eye[1] - xy[1]) * vec[1] >= 0 else -.5) * (sz[idx] - ref)
+                    xy = (xy[0] - sh * vec[0], xy[1] - sh * vec[1])
+                    sz = (ref, sz[1]) if idx == 0 else (sz[0], ref)
+            if math.dist(xy, sa["xy"]) <= .045 and .040 <= sz[0] <= .125:
+                cx, cy = int(round(px[:, 0].mean())), int(round(px[:, 1].mean()))
+                h = float(np.median(hsv[max(0, cy - 2):cy + 3, max(0, cx - 2):cx + 3, 0]))
+                col = "red" if h < 6 or h >= 160 else "orange" if h < 22 else "green" if h < 90 else "purple"
+                cands.append((math.dist(xy, true_xy), xy, yaw, sz, col))
+        if not cands:
+            return None
+        _, xy, yaw, sz, col = min(cands, key=lambda x: x[0])
+        return xy, yaw, dict(colour=col, xy_err_mm=round(math.dist(xy, true_xy) * 1000, 2),
+                             yaw_err_deg=round(abs(math.degrees(r2s.fold(yaw - true_yaw))), 2),
+                             seen_xy=[round(xy[0], 4), round(xy[1], 4)], seen_yaw_deg=round(math.degrees(yaw), 1),
+                             size_mm=[round(sz[0] * 1000, 1), round(sz[1] * 1000, 1)])
 
     def frame(self, data, targets, label, ctxs=None):
         """One video frame of physics. Sequential: the Teacher is the one context. Two arms at once: each context gets its own arm's
         link and pad contacts; arm-arm contacts go to both."""
         self.n += 1
+        if not self.privileged:
+            targets = {arm: t + self.zero_error[arm] if arm in self.zero_error else t for arm, t in targets.items()}
         self.world.advance(data, targets)
         both = ctxs is not None
         ctxs = ctxs if both else [self]
@@ -127,10 +186,16 @@ class Teacher:
             yield from self.belt_in_g(data, step)
         pos0, yaw0, _ = w.pose(data, c)
         row = dict(step=step["id"], container=c, arm=arm, source=step["from"], target=step["to"])
-        if np.linalg.norm(pos0[:2] - sa["xy"]) > .03:
+        if np.linalg.norm(pos0[:2] - sa["xy"]) > .035:
             return dict(row, result="blocked", reason=f"{c} is {np.linalg.norm(pos0[:2] - sa['xy']) * 1000:.0f} mm from {step['from']}")
+        pick_xy, pick_yaw = pos0[:2], yaw0
+        if self.pick_vision:
+            seen = self.perceive_pick(data, sa, pos0[:2], yaw0)
+            if seen is None:
+                return dict(row, result="blocked", reason=f"top camera did not see {c} at {step['from']}")
+            pick_xy, pick_yaw, row["vision_pick"] = seen[0], seen[1], seen[2]
         before = {o: w.pose(data, o) for o in here}  # the containers on the cell; one that left with Pinky is not a neighbour
-        wps = tasks.waypoints(L, step, here, pick=(pos0[:2], yaw0), drop=self.drop, drop_upper=self.drop_upper)
+        wps = tasks.waypoints(L, step, here, pick=(pick_xy, pick_yaw), drop=self.drop, drop_upper=self.drop_upper)
         g_open, g_to = jaw.angle_for_gap(OPEN_GAP[sa["kind"]]), jaw.angle_for_gap(OPEN_GAP[sb["kind"]])
         g_hold = jaw.angle_for_gap(HOLD_GAP)
         q = self.q_now(data, arm)
@@ -176,7 +241,12 @@ class Teacher:
     def belt_in_g(self, data, step):
         """The next container arrives; the belt pick pose varies inside the fixture's infeed tolerance, seed 0 is the nominal pose."""
         f, arm = self.layout.fixture, step["arm"]
-        j = (0., 0., 0.) if self.seed == 0 else (*self.rng.uniform(-1, 1, 2) * f["infeed_jitter_xy_m"], float(self.rng.uniform(-1, 1)) * f["infeed_yaw_jitter_rad"])
+        if self.belt_skew:
+            dx, dy, y_deg = self.SKEW_CASES[self.skew_i % len(self.SKEW_CASES)]
+            self.skew_i += 1
+            j = (dx, dy, math.radians(y_deg))
+        else:
+            j = (0., 0., 0.) if self.seed == 0 else (*self.rng.uniform(-1, 1, 2) * f["infeed_jitter_xy_m"], float(self.rng.uniform(-1, 1)) * f["infeed_yaw_jitter_rad"])
         self.world.put(data, step["container"], "belt", jitter=j)
         for _ in range(8):
             yield self.q_now(data, arm)
@@ -250,20 +320,25 @@ class Teacher:
         another arm moved meanwhile (ctx.others) are that arm's, not disturbed neighbours."""
         w, ctx = self.world, ctx or self
         pose = judge_pose(w, data, step["container"], step["to"], self.limits)
-        moved = []
-        for o, (p, yw, tl) in before.items():
-            if o in ctx.others:
-                continue
-            p2, yw2, tl2 = w.pose(data, o)
-            d = float(np.linalg.norm(p2 - p)) * 1000
-            dyaw = abs(math.degrees(tasks.wrap_pi(yw2 - yw)))
-            if d > self.limits["neighbour_mm"] or abs(tl2 - tl) > self.limits["neighbour_tilt_deg"] or dyaw > self.limits["neighbour_yaw_deg"]:
-                moved.append(f"{o} {d:.1f} mm {dyaw:.1f} deg")
+        moved = self.disturbed(data, before, ctx)
         arm_hits = sorted(f"{a}~{b}" for a, b in ctx.contacts["arm_other"])
         crash = sorted("~".join(p) for p in ctx.contacts["arm_arm"])
         ok = pose["ok"] and not moved and not crash and not arm_hits
         return dict(row, result="pass" if ok else "fail", pose=pose, neighbours_disturbed=moved, arm_arm_contacts=crash, arm_link_contacts=arm_hits,
                     pad_touched_neighbours=sorted(ctx.contacts["pad_neighbour"]), held_tilt_max_deg=round(ctx.held_tilt, 1), first_contact_phase=ctx.first)
+
+    def disturbed(self, data, before, ctx):
+        """Neighbours that moved past the judge's limits since `before`."""
+        moved = []
+        for o, (p, yw, tl) in before.items():
+            if o in ctx.others:
+                continue
+            p2, yw2, tl2 = self.world.pose(data, o)
+            d = float(np.linalg.norm(p2 - p)) * 1000
+            dyaw = abs(math.degrees(tasks.wrap_pi(yw2 - yw)))
+            if d > self.limits["neighbour_mm"] or abs(tl2 - tl) > self.limits["neighbour_tilt_deg"] or dyaw > self.limits["neighbour_yaw_deg"]:
+                moved.append(f"{o} {d:.1f} mm {dyaw:.1f} deg")
+        return moved
 
     def _hold_shift(self, arm, off, q, yaw, pos):
         """TCP shift that puts the container centre (not the TCP) where the waypoint says: R @ held offset, nominal layout.hold_below under the TCP removed."""
@@ -274,6 +349,16 @@ class Teacher:
     def fresh(self, here):
         """A world at rest with the containers of `here` on their sites and every other container parked."""
         w, L = self.world, self.layout
+        m = w.model
+        if not hasattr(w, "servo0"):  # the physics candidate's own values, before any teacher of the process changed the shared model
+            w.servo0 = {arm: servo_values(m, ids) for arm, ids in w.act.items()}
+        for arm, ids in w.act.items():  # the model is shared by every teacher of the process: set every joint every time
+            mine = self.servo.get(arm, {})
+            v = {k: np.where(np.isnan(mine[k]), base, mine[k]) if k in mine else base for k, base in w.servo0[arm].items()}
+            dofs = m.jnt_dofadr[m.actuator_trnid[ids[:5], 0]]
+            m.actuator_gainprm[ids[:5], 0], m.actuator_biasprm[ids[:5], 1], m.actuator_biasprm[ids[:5], 2] = v["kp"], -v["kp"], -v["kv"]
+            m.actuator_forcerange[ids[:5]] = np.stack([-v["force"], v["force"]], 1)
+            m.dof_damping[dofs], m.dof_frictionloss[dofs] = v["damping"], v["frictionloss"]
         data = w.reset()
         for cid, site in here.items():
             # seeds above 0 vary the start placement inside the stud-lane clearance (0.4 mm per side): +-0.3 mm, +-0.5 deg
@@ -310,7 +395,10 @@ class Teacher:
             row = self.run_step(data, step, {k: v for k, v in here.items() if k != step["container"]})
             rows.append(row)
             print(json.dumps(row), flush=True)
-            here[step["container"]] = step["to"]
+            if row["result"] in ("blocked", "unreachable") and step["from"] == "belt":
+                self.world.put(data, step["container"], None, [c for c, _ in self.layout.containers()].index(step["container"]))
+            else:
+                here[step["container"]] = step["to"]
             self.off_stand(data, step, here)
         last = {step["container"]: step for step in task["steps"]}
         final = {c: s["to"] for c, s in last.items() if not s.get("outbound")}  # judged when placed, then gone with Pinky
@@ -329,12 +417,66 @@ class Teacher:
 
 
 parse_choices = sites.parse_choices
+VISION_SKEW_CHOICES = dict(temp_lanes="photo-20261110", ship_pose="photo-20261110", belt_pose="photo-20261110",
+                           arm_bases="plate-centre", wrist_camera="photo-20261110", physics="twin-kp-20261109")
+
+
+def isaac_handoff(result, layout, seed=0):
+    """Build a Stage-1 (MuJoCo geometry/vision/IK) -> Stage-2 (Isaac PhysX contact/slip/seating) handoff spec."""
+    rows = result.get("rows", [])
+    vis = [r["vision_pick"] for r in rows if "vision_pick" in r]
+    poses = [r["pose"] for r in rows if "pose" in r]
+    contacts_clear = all(not r.get("arm_arm_contacts") and not r.get("arm_link_contacts")
+                         and not r.get("neighbours_disturbed") for r in rows)
+    belt_xy = layout.sites["belt"]["xy"]
+    single_cases = []
+    for r in rows:
+        vp = r.get("vision_pick")
+        if vp:
+            dx = max(-.025, min(.025, round(vp["seen_xy"][0] - belt_xy[0], 4)))
+            dy = max(-.025, min(.025, round(vp["seen_xy"][1] - belt_xy[1], 4)))
+            turn = max(-45., min(45., round(vp["seen_yaw_deg"], 1)))
+            aim_m = round(min(.025, vp["xy_err_mm"] / 1000), 4)
+            task_name = r.get("task") or result.get("task", "two-arm")
+            single_cases.append(dict(
+                id=f"mujoco-{task_name}-{r['step']}-{r['container']}",
+                source=f"mujoco:{task_name}:{r['step']}",
+                sim=dict(box=[dx, dy, turn], place="belt", grasp_turn=turn, expect=None, aim=[aim_m, 0.0]),
+            ))
+    layers = 3 if result.get("steps", 0) > 3 else 1
+    return dict(
+        schema="rosy.omx-mujoco-isaac-handoff.v1",
+        task=result.get("task", "two-arm"),
+        stage_1_mujoco=dict(
+            role="geometry_vision_ik_and_collision_screening",
+            completed=bool(result.get("completed")),
+            steps_pass=result.get("steps_pass", 0),
+            steps_total=result.get("steps", 0),
+            contacts_clear=contacts_clear,
+            worst_vision_xy_mm=max((v["xy_err_mm"] for v in vis), default=0.0),
+            worst_vision_yaw_deg=max((v["yaw_err_deg"] for v in vis), default=0.0),
+            worst_pose_xy_mm=max((p["xy_mm"] for p in poses), default=0.0),
+            worst_pose_yaw_deg=max((p["yaw_deg"] for p in poses), default=0.0),
+            worst_ik_error_mm=max((r.get("worst_ik_error_mm", 0.0) for r in rows), default=0.0),
+            colours_seen=[v.get("colour") for v in vis if v.get("colour")],
+        ),
+        stage_2_isaac=dict(
+            role="physx_contact_pad_slip_and_seating_confirmation",
+            ready=bool(result.get("completed") and contacts_clear),
+            two_arm_scenario="omx-map-container-stack",
+            two_arm_config=dict(seed=seed, layers=layers, case="nominal-palletizing-v21-ship-surveyed-skew-20261110"),
+            single_arm_scenario="arm-s-cell-case",
+            single_arm_cases=single_cases,
+        ),
+    )
 
 
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     p.add_argument("command", choices=["run", "validate"])
-    p.add_argument("task", choices=["stack", "rehandle", "plan"])
+    p.add_argument("task", choices=["stack", "cell-stack", "rehandle", "outbound", "plan",
+                                    "stack-t1", "stack-t2", "stack-t3", "cell-stack-t1", "cell-stack-t2", "cell-stack-t3"])
+    p.add_argument("--tier", type=int, choices=list(tasks.TIERS), help="run or validate only tier 1 (1단/l0), 2 (2단/l1), or 3 (3단/l2)")
     p.add_argument("--plan", help="with task 'plan': a JSON task (name, supply, start, steps), e.g. omx_two_arm_plan.py replay output")
     p.add_argument("--out", default=".")
     p.add_argument("--video", action="store_true")
@@ -345,11 +487,19 @@ def main(argv=None):
     p.add_argument("--drop-upper", type=float, default=tasks.RELEASE_DROP_UPPER, help="release height over a lower container, m")
     p.add_argument("--isolated", action="store_true", help="reset to the nominal plan state before every step (per-step truth without cascades)")
     p.add_argument("--concurrent", action="store_true", help="both arms at once by the steps' after/after_pick/zones (omx_two_arm_plan.py --concurrent output)")
+    p.add_argument("--pick-vision", action="store_true", help="perceive each pick container's (xy, yaw) from the rendered top camera instead of true pose")
+    p.add_argument("--belt-skew", action="store_true", help="arrive belt containers with +-8..12 mm xy offset and +-15..22 deg yaw skew")
+    p.add_argument("--isaac-handoff", help="write Stage-1 MuJoCo -> Stage-2 Isaac Sim handoff spec JSON to this path")
     p.add_argument("--choice", action="append", help="key=value override of omx_two_arm_sites.CHOICES (named parameters)")
     a = p.parse_args(argv)
     choices = parse_choices(a.choice)
+    if a.pick_vision or a.belt_skew:
+        for k, v in VISION_SKEW_CHOICES.items():
+            choices.setdefault(k, v)
     layout = sites.Layout(**choices)
-    task = json.loads(Path(a.plan).read_text(encoding="utf-8")) if a.task == "plan" else tasks.get_task(layout, a.task)
+    task = json.loads(Path(a.plan).read_text(encoding="utf-8")) if a.task == "plan" else tasks.get_task(layout, a.task, tier=a.tier)
+    if a.task == "plan" and a.tier is not None:
+        task = tasks.tier_task(layout, task, a.tier)
     try:
         records = tasks.validate(layout, task)
     except tasks.PlanRefused as e:
@@ -363,13 +513,26 @@ def main(argv=None):
     world = world_mod.World(layout, cone=a.cone)
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
-    writer = None
+    writer = close_video = None
     if a.video:
-        import av
-        container = av.open(str(out / f"{a.task}{'-short' if a.video_skip > 1 else ''}.mp4"), "w")
-        stream = container.add_stream("h264", rate=FPS)
-        stream.width, stream.height, stream.pix_fmt = 1280, 960, "yuv420p"
+        video_path = str(out / f"{a.task}{'-short' if a.video_skip > 1 else ''}.mp4")
         from PIL import Image, ImageDraw
+        try:
+            import av
+            container = av.open(video_path, "w")
+            stream = container.add_stream("h264", rate=FPS)
+            stream.width, stream.height, stream.pix_fmt = 1280, 960, "yuv420p"
+            encode_rgb = lambda arr: container.mux(stream.encode(av.VideoFrame.from_ndarray(arr, format="rgb24")))
+            close_video = lambda: (container.mux(stream.encode(None)), container.close())
+        except ImportError:
+            import subprocess
+            ff = subprocess.Popen(
+                ["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", "1280x960",
+                 "-r", str(FPS), "-i", "-", "-c:v", "libx264", "-pix_fmt", "yuv420p", video_path],
+                stdin=subprocess.PIPE,
+            )
+            encode_rgb = lambda arr: ff.stdin.write(arr.tobytes())
+            close_video = lambda: (ff.stdin.close(), ff.wait())
 
         count = [0]
 
@@ -379,21 +542,24 @@ def main(argv=None):
                 return
             frame = Image.fromarray(np.vstack([np.hstack([world.render(data, view) for view in row]) for row in (RECORDED[:2], RECORDED[2:])]))
             ImageDraw.Draw(frame).text((8, 8), f"{a.task} {label}", fill=(255, 255, 0))
-            container.mux(stream.encode(av.VideoFrame.from_ndarray(np.asarray(frame), format="rgb24")))
-    teacher = Teacher(world, frame_hook=writer, seed=a.seed, drop_upper=a.drop_upper)
+            encode_rgb(np.asarray(frame))
+    teacher = Teacher(world, frame_hook=writer, seed=a.seed, drop_upper=a.drop_upper, pick_vision=a.pick_vision, belt_skew=a.belt_skew)
     result = teacher.run_task(task, a.isolated, a.concurrent)
     if a.frames:
         from PIL import Image
         Path(a.frames).mkdir(parents=True, exist_ok=True)
         for view in RECORDED:
             Image.fromarray(world.render(teacher.data, view)).save(Path(a.frames) / f"{view}.png")
-    if writer:
-        container.mux(stream.encode(None))
-        container.close()
+    if close_video:
+        close_video()
     roll = {r["step"]: r["roll_below_floor"] for r in records}
     result.update(choices=layout.choices, cone=a.cone, seed=a.seed, drop_m=[teacher.drop, teacher.drop_upper], roll_below_floor_steps=[s for s, v in roll.items() if v],
                   note="geometry only (D-947): contact numbers are not results; " + ("both arms at once by zones" if a.concurrent else "one arm moves at a time") + "; true container pose, no perception")
     (out / f"{a.task}{'-isolated' if a.isolated else ''}-{a.cone}-seed{a.seed}.json").write_text(json.dumps(result, indent=1, default=str), encoding="utf-8")
+    if a.isaac_handoff:
+        hp = Path(a.isaac_handoff)
+        hp.parent.mkdir(parents=True, exist_ok=True)
+        hp.write_text(json.dumps(isaac_handoff(result, layout, a.seed), indent=1), encoding="utf-8")
     print(f"{a.task}: steps pass {result['steps_pass']}/{result['steps']}, final poses ok {result['final_ok']}/{result['final_total']}, completed {result['completed']}"
           + f", makespan {result['makespan_s']} s" + (f", overlap {result['overlap_s']} s, stopped {result['stopped']}" if a.concurrent else ""))
     return 0 if result["completed"] else 1
