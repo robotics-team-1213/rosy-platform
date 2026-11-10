@@ -2415,7 +2415,7 @@ forget-failed·resume·run → 전체 매핑 복원)는
 ## ROSY Monitoring (D-936)
 
 관제 PC의 시스템 상태 화면은 선택 오버레이 `compose.monitoring.yaml`로 켠다.
-서명된 Fleet 이미지를 쓰지만 Fleet과 다른 프로세스·상태 볼륨·키로 돈다. Fleet이 멈춰도 계속 조회되고,
+자기 서명 이미지 `rosy-site-monitoring`(D-1001, fleet 패키지 없음)로 Fleet과 다른 프로세스·상태 볼륨·키로 돈다. Fleet이 멈춰도 계속 조회되고,
 프록시는 이 서비스를 기다리지 않는다. 화면은 읽기 전용이며 재시작·재부팅은 Fleet 설치 화면의 운영자 제어로 한다.
 
 사이트 관리자는 `ROSY_SITE_CONFIG_DIR` 밖에 아래 입력을 준비한다. 예를 들어 `/etc/rosy/monitoring/` 아래에 둔다.
@@ -2445,6 +2445,7 @@ python3 /opt/rosy/candidate/deploy/site/site_users.py add <site-users.yaml> --pr
 서비스 확인은 `https://<site>/monitoring-health`다. 이 응답은 수집기 자신의 생존만 뜻한다.
 
 이 기능에는 overlay 한 쌍을 포함한 새 서명 candidate와 이를 아는 host verifier·updater가 필요하다.
+전용 이미지 이전의 서명 candidate(Fleet 이미지로 도는 Monitoring)도 검증·되돌림은 된다. 전용 이미지 candidate로 올라가면 Monitoring 컨테이너가 새 이미지로 다시 만들어지며 `monitoring_state` 볼륨은 그대로다.
 기능 도입 전 candidate로 되돌릴 때는 백업된 site.env에서도 오버레이가 꺼져 있어야 한다.
 
 ## 시뮬레이션은 돌리지 않는다 (D-571)
