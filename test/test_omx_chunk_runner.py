@@ -939,6 +939,17 @@ def test_a_park_with_something_in_the_jaws_holds_instead_of_folding_it_home():
     assert held["ok"] is False and "jaws" in held["error"] and held["contact"] is True
 
 
+def test_a_park_carrying_a_grasped_box_folds_home_without_a_caught_jaw_hold():
+    """2026-11-10 Trial 3: FOLDED parks after grasp_pick + lift_pick with the container held in the jaws."""
+    robot = Robot(object_at=53.8)
+    robot.pos[5], robot.bus = 55.6, Bus(pwm={"gripper": 65536 - 255}, current={"gripper": 239})
+    status = run_with(robot, lifting_library(), ["run approach_pinky", "run grasp_pinky", "park", "stop"])
+    grasped = by_command(status, "run grasp_pinky")[0]
+    folded = by_command(status, "run park")[0]
+    assert grasped["ok"] is True and grasped["holding"] is True
+    assert folded["ok"] is True and folded["settled"] is True
+
+
 def test_a_closing_grip_that_catches_something_reopens_where_it_was():
     """arm_b 2026-11-03 13:27: a jaw-mark close caught a box edge and the park later folded the box home."""
     robot = Robot(object_at=55.0)

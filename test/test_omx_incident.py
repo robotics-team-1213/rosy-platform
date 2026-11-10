@@ -497,3 +497,13 @@ def test_status_and_clear_with_cause_basis_and_env_discovery(tmp_path, monkeypat
     assert calls == [("a" * 32, "checked home", "op-token", "software_or_config", "measured")]
     assert oi.status("arm_b", link)["fleet_held"] is False
 
+    # Pre-2026-11-08 Fleet servers return held=True for a single label-only report ("the arm is not held")
+    label_only = oi.HoldStatus(
+        source="arm_b", held=True, open_count=1, incident_ids=("b" * 32,),
+        reason="1 open arm incident(s): " + "b" * 32 + "; reported for a person's cause, the arm is not held")
+    assert oi._effectively_held(label_only) is False
+    link.ask = lambda: label_only
+    oi.refuse_if_held("arm_b", link)
+    assert oi.held("arm_b") is None
+
+

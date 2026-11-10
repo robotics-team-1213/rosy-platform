@@ -83,6 +83,12 @@ details.group > summary .tag { font-weight: 600; font-size: .8125rem; color: var
   </div>
   <p id="banner" class="banner" hidden role="status"></p>
 </header>
+<main id="incidents-box" hidden><details class="history" id="incidents-details" open><summary>팔 안전 홀드 · 해제</summary>
+  <p class="quiet">사고 후 홀드(omx_incident) 상태입니다. 전원 스위치와 팔 자세를 직접 확인한 뒤 근거를 적어 홀드를 해제할 수 있습니다.</p>
+  <div id="incidents"></div></details></main>
+<main id="attempts-box" hidden><details class="history" id="attempts-details" open><summary>최근 시도 및 적층 기록 (1단·2단·3단)</summary>
+  <p class="quiet">attempts.jsonl 기준 최근 실행 결과, 층(1단·2단·3단), 중단 단계 및 원인 분류입니다.</p>
+  <div id="attempts"></div></details></main>
 <main id="groups"></main>
 <main id="servo-box" hidden><details class="history" id="servo-details" open><summary>서보 값 (읽기 전용)</summary>
   <p class="quiet">record_session 기준. 모델 → 현장 caps → 로봇 프로필 순서로 덮어쓰며, 표시는 마지막으로 정한 층입니다. 로봇 층은 세션에 --operating-profile을 줄 때만 적용됩니다. 지금 파일 내용이므로 이미 실행 중인 세션이 읽은 값과 다를 수 있습니다. 값은 해당 파일에서 고칩니다.</p>
@@ -246,6 +252,45 @@ async function loadServo() {
     el('thead', {}, el('tr', {}, ...['모터', ...Object.values(SERVO_KEYS)].map(text => el('th', {scope: 'col', textContent: text})))),
     el('tbody', {}, ...table.motors.map(motor => el('tr', {}, el('th', {scope: 'row', textContent: `${motor.id} ${motor.joint}`}), ...Object.keys(SERVO_KEYS).map(key => servoCell(motor.values[key])))))))));
 }
+async function loadIncidents() {
+  const rows = await call('/incidents.json');
+  $('incidents-box').hidden = !rows.length;
+  $('incidents').replaceChildren(...rows.map(row => {
+    if (row.error) return el('p', {className: 'banner error', textContent: `${row.arm}: ${row.error}`});
+    const badge = el('span', {className: 'badge ' + (row.held ? '' : 'measured'), textContent: row.held ? '홀드 잠김' : '해제됨(정상)'});
+    const info = el('div', {className: 'mono', textContent: `${row.arm} · ${row.reason || '열린 홀드 없음'}`});
+    if (!row.held) return el('div', {className: 'bar'}, badge, info);
+    const note = el('input', {type: 'text', maxLength: 300, placeholder: '직접 확인 및 조치 내용 (필수)'});
+    note.setAttribute('aria-label', `${row.arm} 홀드 해제 근거`);
+    const btn = el('button', {type: 'button', className: 'primary', textContent: '확인했습니다 · 홀드 해제', disabled: Boolean(data?.busy)});
+    btn.onclick = async () => {
+      if (!note.value.trim()) { banner('홀드 해제 근거를 적어 주세요.', true); return; }
+      btn.disabled = true;
+      try {
+        await call('/incidents/clear', {arm: row.arm, note: note.value.trim(), cause: 'operator_verified', basis: 'direct_observation'});
+        banner(`${row.arm} 안전 홀드를 해제했습니다.`);
+        await loadIncidents();
+      } catch (err) { banner(err.message, true); btn.disabled = false; }
+    };
+    return el('div', {className: 'bar'}, badge, info, note, btn);
+  }));
+}
+async function loadAttempts() {
+  const tables = await call('/attempts.json');
+  $('attempts-box').hidden = !tables.length;
+  $('attempts').replaceChildren(...tables.map(table => table.error ? el('p', {className: 'banner error', textContent: `${table.name}: ${table.error}`}) : el('div', {className: 'servo-wrap'}, el('table', {className: 'servo'},
+    el('caption', {textContent: `${table.name} · ${table.path}`}),
+    el('thead', {}, el('tr', {}, ...['시각', '출발→도착', '층', '물체', '결과', '집기 전류', '중단 단계 · 원인'].map(text => el('th', {scope: 'col', textContent: text})))),
+    el('tbody', {}, ...(table.rows.length ? table.rows.map(r => el('tr', {},
+      el('td', {className: 'mono', textContent: (r.t_utc || '').replace('T', ' ').slice(0, 19)}),
+      el('td', {className: 'mono', textContent: `${r.from || '-'} → ${r.to || '-'}`}),
+      el('td', {}, el('span', {className: 'badge' + (r.tier ? ' measured' : ''), textContent: r.tier ? `${r.tier}단` : '-'})),
+      el('td', {className: 'mono', textContent: r.object || '-'}),
+      el('td', {className: 'mono', textContent: `${r.outcome || '-'}${r.inside === true ? ' (정위치)' : r.inside === false ? ' (이탈)' : ''}`}),
+      el('td', {className: 'mono', textContent: r.holding ? `${r.gripper_current_ma || '-'} mA` : '-'}),
+      el('td', {className: 'quiet', textContent: [r.at, r.fail_stage, r.fail_class, r.error].filter(Boolean).join(' · ') || '-'})))
+      : [el('tr', {}, el('td', {colSpan: 7, className: 'quiet', textContent: '기록된 시도가 없습니다.'}))]))))));
+}
 async function poll() {
   if (saving || document.hidden) return;
   try {
@@ -283,8 +328,10 @@ $('save').onclick = async () => {
 addEventListener('beforeunload', event => { if (Object.keys(draft).length) event.preventDefault(); });
 load().catch(error => banner(error.message, true));
 const refreshServo = () => loadServo().catch(error => { $('servo-box').hidden = false; $('servo').replaceChildren(el('p', {className: 'banner error', textContent: error.message})); });
+const refreshLive = () => { loadIncidents().catch(() => {}); loadAttempts().catch(() => {}); };
 refreshServo();
+refreshLive();
 setInterval(poll, 5000);
-setInterval(() => { if (!document.hidden) refreshServo(); }, 30000);
+setInterval(() => { if (!document.hidden) { refreshServo(); refreshLive(); } }, 10000);
 </script>
 </html>

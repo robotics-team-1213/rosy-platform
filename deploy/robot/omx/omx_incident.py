@@ -123,6 +123,17 @@ def label_box(arm: str) -> list[Path]:
     return sorted(incidents_dir().joinpath("labels").glob(f"{arm}-*.json"))
 
 
+def _effectively_held(answer) -> bool:
+    """True when Fleet's hold answer reflects a holding incident (guards against pre-2026-11-08 Fleet servers that
+    returned held=True for a single 'reported for a person's cause, the arm is not held' label-only report)."""
+    if answer is None or not answer.held:
+        return False
+    reason = str(answer.reason or "").strip()
+    if reason.startswith("1 open arm incident(s):") and reason.endswith("reported for a person's cause, the arm is not held"):
+        return False
+    return True
+
+
 def send(arm: str, link, paths=None) -> bool:
     """Resend the unsent reports of `arm` (each file leaves the outbox only once Fleet accepted it), then their evidence."""
     from core_common.protocol.arm_incidents import ArmIncidentReport
@@ -136,7 +147,7 @@ def send(arm: str, link, paths=None) -> bool:
             return False
         path.unlink()
         upload_evidence(path.with_name(path.stem + ".evidence"), reply, link)
-        if reply.hold.held:  # a label-only report alone leaves the arm free
+        if _effectively_held(reply.hold):  # a label-only report alone leaves the arm free
             keep_hold(arm, reply.hold.reason or "arm incident not cleared", reply.hold.incident_ids, "fleet")
     return True
 
@@ -197,7 +208,7 @@ def refuse_if_held(arm: str | None, link=None) -> None:
             answer = link.hold()
         except Exception as exc:
             print(f"fleet hold unreachable: {type(exc).__name__}: {str(exc)[:120]}")
-    if answer is not None and answer.held:
+    if _effectively_held(answer):
         keep_hold(arm, answer.reason or "arm incident not cleared", answer.incident_ids, "fleet")
         raise SystemExit(f"{arm} held for a person: {answer.reason} (clear it in the Fleet console)")
     if answer is not None and sent:
@@ -465,7 +476,7 @@ def status(arm: str, link=None) -> dict:
     if link is not None:
         try:
             ans = link.hold()
-            fleet_held, fleet_ids, fleet_reason = ans.held, list(ans.incident_ids), ans.reason
+            fleet_held, fleet_ids, fleet_reason = _effectively_held(ans), list(ans.incident_ids), ans.reason
         except Exception as exc:
             fleet_reason = f"unreachable: {type(exc).__name__}: {str(exc)[:120]}"
     return {"arm": arm, "local_held": bool(local_reason), "local_reason": local_reason,
