@@ -77,23 +77,23 @@ class Teacher:
         self.others = set()
         # joint-zero calibration error per arm (rad, 6 with the gripper 0): true angle = reported + error. The real twin fit found 1-4 deg
         # (2026-11-09 omx-twin-night). A privileged teacher plans in true angles; anyone else commands in reported ones and lands off by it.
-        self.zero_error, self.privileged = {}, True
+        self.zero_error, self.privileged, self.compensate_zero = {}, True, False
         self.servo = {}  # arm: {kp|kv|force|damping|frictionloss: five values, nan keeps} (omx_two_arm_skill.disturb); fresh() applies them
         self.servo_comp = r2s_comp.ServoCompensator(world, FPS) if hasattr(world, "q") else None
         if cam_jitter and hasattr(world, "model"):
             r2s_comp.apply_world_camera(world, "top", r2s_comp.perturbed_camera_dict(self.layout.fixture["real_cameras"]["top"], **r2s_comp.DEFAULT_CAM_JITTER))
 
-    def perceive_pick(self, data, sa, true_xy, true_yaw):
+    def perceive_pick(self, data, sa, true_xy, true_yaw, here=None):
         """Detect a skewed/offset container at `sa` from the rendered top camera frame (online 6-DoF anchor-calibrated pinhole back-projection)."""
         import cv2
 
         qid = self.world.model.geom("ship_quay").id if "ship_quay" in self.world.geom_name else -1
-        if qid >= 0 and sa["kind"] == "belt":
+        if qid >= 0:
             self.world.model.geom_rgba[qid, 3] = 0.
         bgr = cv2.cvtColor(self.world.render(data, "top"), cv2.COLOR_RGB2BGR)
-        if qid >= 0 and sa["kind"] == "belt":
+        if qid >= 0:
             self.world.model.geom_rgba[qid, 3] = 1.
-        return r2s_comp.perceive_container(bgr, sa, true_xy, true_yaw, self.layout)
+        return r2s_comp.perceive_container(bgr, sa, true_xy, true_yaw, self.layout, here=here)
 
     def frame(self, data, targets, label, ctxs=None):
         """One video frame of physics. Sequential: the Teacher is the one context. Two arms at once: each context gets its own arm's
@@ -133,10 +133,12 @@ class Teacher:
     def settle_g(self, data, arm, q_target, grip, pos_target=None, max_s=6.0):
         """Closed-loop settle at a waypoint until joint error, velocity, and TCP position converge."""
         cmd = np.append(q_target[:5], grip)
+        z_off = (self.zero_error[arm][:5] - (self.servo_comp.zero_est[arm] if self.servo_comp is not None else 0.)) if (not self.privileged and arm in self.zero_error) else 0.
+        check_tcp = self.privileged or self.compensate_zero
         for _ in range(round(max_s * FPS)):
-            q_err = float(np.max(np.abs(q_target[:5] - self.q_now(data, arm)[:5])))
+            q_err = float(np.max(np.abs((q_target[:5] + z_off) - self.q_now(data, arm)[:5])))
             q_vel = float(np.max(np.abs(data.qvel[self.world.arm_dof[arm][:5]])))
-            tcp_ok = pos_target is None or float(np.linalg.norm(self.world.tcp(data, arm)[0] - pos_target)) <= .0012
+            tcp_ok = not check_tcp or pos_target is None or float(np.linalg.norm(self.world.tcp(data, arm)[0] - pos_target)) <= .0012
             if q_err <= .0045 and q_vel <= .02 and tcp_ok:
                 break
             self.settle_frames += 1
@@ -189,7 +191,7 @@ class Teacher:
             return dict(row, result="blocked", reason=f"{c} is {np.linalg.norm(pos0[:2] - sa['xy']) * 1000:.0f} mm from {step['from']}")
         pick_xy, pick_yaw = pos0[:2], yaw0
         if self.pick_vision:
-            seen = self.perceive_pick(data, sa, pos0[:2], yaw0)
+            seen = self.perceive_pick(data, sa, pos0[:2], yaw0, here=here)
             if seen is None:
                 return dict(row, result="blocked", reason=f"top camera did not see {c} at {step['from']}")
             pick_xy, pick_yaw, row["vision_pick"] = seen[0], seen[1], seen[2]
@@ -375,6 +377,9 @@ class Teacher:
             w.put(data, cid, site, jitter=j)
         for _ in range(FPS):
             self.frame(data, {a: L.sim_arms[a].wait for a in L.arms}, "settle")
+        if self.compensate_zero and self.servo_comp is not None:
+            for a in L.arms:
+                self.servo_comp.calibrate_zero_offset(data, a, L.sim_arms[a].wait)
         return data
 
     def off_stand(self, data, step, here):
@@ -501,6 +506,7 @@ def main(argv=None):
     p.add_argument("--pick-vision", action="store_true", help="perceive each pick container's (xy, yaw) from the rendered top camera instead of true pose")
     p.add_argument("--belt-skew", action="store_true", help="arrive belt containers with +-8..12 mm xy offset and +-15..22 deg yaw skew")
     p.add_argument("--cam-jitter", action="store_true", help="perturb physical top camera pose to verify online 6-DoF anchor self-calibration")
+    p.add_argument("--zero-error-deg", type=float, default=0.0, help="inject +-deg joint-zero calibration error per arm and compensate online (G-20)")
     p.add_argument("--isaac-handoff", help="write Stage-1 MuJoCo -> Stage-2 Isaac Sim handoff spec JSON to this path")
     p.add_argument("--choice", action="append", help="key=value override of omx_two_arm_sites.CHOICES (named parameters)")
     a = p.parse_args(argv)
@@ -556,6 +562,10 @@ def main(argv=None):
             ImageDraw.Draw(frame).text((8, 8), f"{a.task} {label}", fill=(255, 255, 0))
             encode_rgb(np.asarray(frame))
     teacher = Teacher(world, frame_hook=writer, seed=a.seed, drop_upper=a.drop_upper, pick_vision=a.pick_vision, belt_skew=a.belt_skew, cam_jitter=a.cam_jitter)
+    if a.zero_error_deg > 0:
+        import omx_two_arm_skill as skill_mod
+        teacher.zero_error = skill_mod.draw_zero_error(a.seed or 1003, a.zero_error_deg)
+        teacher.privileged, teacher.compensate_zero = False, True
     result = teacher.run_task(task, a.isolated, a.concurrent)
     if a.frames:
         from PIL import Image
