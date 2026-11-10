@@ -164,9 +164,11 @@ def judge_gazebo_contract(samples_or_report: dict | Path, *, shape: tuple[int, i
 def judge_isaac_stage(suite_or_report: dict | Path, *, scenario: str = "arm-s-cell-case") -> dict:
     """Judge or stage Isaac Sim's D-872 / D-947 contact & vision confirmation from a suite report, single report, or MuJoCo handoff."""
     data = json.loads(Path(suite_or_report).read_text(encoding="utf-8")) if isinstance(suite_or_report, (str, Path)) else dict(suite_or_report)
+    ok_results = {"placed", "success", "completed"}
     if "rows" in data:
         rows = data["rows"]
-        bad = [r["id"] for r in rows if r.get("matches") is False or (r.get("expect") is not None and r.get("judgement") is None)]
+        bad = [r["id"] for r in rows if r.get("matches") is False or r.get("judgement") is None
+               or (r.get("expect") is None and (r.get("judgement") or {}).get("result") not in ok_results)]
         passed = bool(rows) and not bad
         return dict(status="passed" if passed else "failed", claim="접촉·영상", scenario=scenario,
                     run_id=rows[-1].get("run_id") if rows else None,
@@ -176,7 +178,7 @@ def judge_isaac_stage(suite_or_report: dict | Path, *, scenario: str = "arm-s-ce
                     artifacts=[], reason=None if passed else (f"Isaac 불일치/미판정: {', '.join(bad)}" if bad else "Isaac 실행 결과가 비어 있습니다."))
     if "judgement" in data:
         judgement = data["judgement"] or {}
-        passed = judgement.get("result") in {"success", "completed"}
+        passed = judgement.get("result") in ok_results
         return dict(status="passed" if passed else "failed", claim="접촉·영상", scenario=scenario,
                     run_id=data.get("run_id"), result=judgement, artifacts=[],
                     reason=None if passed else f"Isaac 판정 실패: {judgement.get('result')}")

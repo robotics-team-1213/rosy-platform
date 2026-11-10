@@ -181,6 +181,12 @@ def test_isaac_stage_judges_suite_reports_and_handoff(tmp_path):
     suite_pass = dict(sha="a" * 40, rows=[dict(id="skew-t1-s1", expect="completed", run_id="r1", status="SUCCEEDED", result="completed", matches=True, judgement=dict(result="completed"))])
     passed = ladder.judge_isaac_stage(suite_pass)
     assert passed["status"] == "passed" and passed["run_id"] == "r1" and passed["result"]["matched"] == 1
+    candidate_pass = dict(sha="a" * 40, rows=[dict(id="mujoco-stack-s1-bar-1", expect=None, run_id="r-cand", status="SUCCEEDED", result="placed", matches=None, judgement=dict(result="placed"))])
+    assert ladder.judge_isaac_stage(candidate_pass)["status"] == "passed"
+    candidate_fail = dict(sha="a" * 40, rows=[dict(id="mujoco-stack-s1-bar-1", expect=None, run_id="r-drop", status="SUCCEEDED", result="dropped", matches=None, judgement=dict(result="dropped"))])
+    assert ladder.judge_isaac_stage(candidate_fail)["status"] == "failed"
+    single_placed = dict(run_id="r-single", judgement=dict(result="placed", lifted_samples=143))
+    assert ladder.judge_isaac_stage(single_placed)["status"] == "passed"
     suite_fail = dict(sha="a" * 40, rows=[dict(id="skew-t1-s1", expect="completed", run_id="r2", status="SUCCEEDED", result="dropped", matches=False, judgement=dict(result="dropped"))])
     failed = ladder.judge_isaac_stage(suite_fail)
     assert failed["status"] == "failed" and "skew-t1-s1" in failed["reason"]
