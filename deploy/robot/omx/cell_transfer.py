@@ -65,17 +65,19 @@ class Gate:
         a = self.assessment
         if self.zones:
             self.zones.bind(a.get("operating_profile"), a["session_id"])
-        target = {"goto above_pick": "pick", "goto above_place": "place"}.get(command)
-        if self.zones and target:
-            xy = self.source.get(target) or {}
-            allowed, why = self.zones.enter((xy["x"], xy["y"])) if "x" in xy else (False, f"library names no {target} point")
-            if not allowed:
-                return {"ok": False, "error": f"held: zone: {why}"}
+        sub_commands = [s.strip() for s in command[6:].split(";") if s.strip()] if command.startswith("chain ") else [command]
+        for sub in sub_commands:
+            target = {"goto above_pick": "pick", "goto above_place": "place"}.get(sub)
+            if self.zones and target:
+                xy = self.source.get(target) or {}
+                allowed, why = self.zones.enter((xy["x"], xy["y"])) if "x" in xy else (False, f"library names no {target} point")
+                if not allowed:
+                    return {"ok": False, "error": f"held: zone: {why}"}
         status = self.cell.act(f"checked {a['session_id']} {a['library_sha256']} {command}")
         if command.startswith("load ") and status.get("ok"):
             self.home = ((library.get("chunks", {}).get("home") or [None])[-1]
                          if digest(library) == a["library_sha256"] else None)
-        if self.zones and command == "park":
+        if self.zones and sub_commands and sub_commands[-1] == "park":
             from chunk_runner import SETTLE_TOL
 
             present, home = status.get("state"), self.home

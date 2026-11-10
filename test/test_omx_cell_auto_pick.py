@@ -896,3 +896,37 @@ def test_gate_and_guarded_share_state_query_per_checked_command(tmp_path):
     assert gate.act("goto above_pick")["ok"]
     # Gate's state query is reused by Guarded.monitor.check() instead of issuing a second state round-trip
     assert cell.commands == ["state", "goto above_pick"]
+
+
+def test_gate_validates_zone_entry_and_park_release_across_chained_commands(tmp_path):
+    path = biased_map(tmp_path)
+    cell = Cell([CONT2])
+    guarded = auto.Guarded(cell, CONFIG)
+    gate = auto.Gate(guarded, dict(CONFIG, _payload={"kg": 0.03, "source": "catalogue"}), cal.load(path))
+    lib_path = tmp_path / "lib.json"
+    lib_path.write_text(json.dumps({
+        "fps": 30,
+        "source": {"pick": {"x": 0.072, "y": 0.120}, "place": {"x": 0.060, "y": 0.090}},
+        "chunks": {"home": [list(CONFIG["plan"]["home"])], "above_place": [list(CONFIG["plan"]["home"])],
+                   "descend_place": [list(CONFIG["plan"]["home"])], "lift_place": [list(CONFIG["plan"]["home"])]}
+    }))
+    assert gate.open(lib_path, lambda a: None) is None
+    assert gate.act(f"load {lib_path}")["ok"]
+    entered, left = [], []
+    gate.zones = type("Z", (), {
+        "bind": lambda self, p, s: None,
+        "enter": lambda self, xy: (entered.append(xy) or True, "ok"),
+        "leave": lambda self: left.append(True),
+    })()
+    cell.act = lambda cmd: (
+        {"command": "state", "ok": True, "state": list(CONFIG["plan"]["home"]) + [56.0], "t": time.time(),
+         "operating_context": dict(SESSION), "health": {"temp_c": [40] * 6, "pwm": [10] * 6, "current_ma": [0] * 6}}
+        if cmd == "state" else
+        {"command": cmd, "ok": True, "settled": True, "state": list(CONFIG["plan"]["home"]) + [56.0],
+         "operating_context": dict(SESSION)}
+    )
+    assert gate.act("chain goto above_place ; run descend_place")["ok"]
+    assert entered == [(0.060, 0.090)]
+    assert gate.act("chain run lift_place ; park")["ok"]
+    assert left == [True]
+

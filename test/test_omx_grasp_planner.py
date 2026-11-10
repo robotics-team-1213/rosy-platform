@@ -235,3 +235,15 @@ def test_load_kinematics_caches_parsed_kinematics_and_deduplicates_sys_path():
     kin2, _, _ = m.load_kinematics(None, 0.0885)
     assert kin1 is kin2
     assert len(sys.path) <= before_len + 1
+
+
+def test_feasible_pre_filters_endpoints_and_hold_eases_gripper_smoothly():
+    planner = m.Planner(PLAN)
+    assert planner.feasible() is True
+    assert planner.feasible(pick=dict(PLAN["pick"], x=0.45, y=0.45)) is False
+    # Half-cosine gripper hold starts and ends with smaller steps than its midpoint peak
+    frames = planner.hold([0.0] * 5 + [56.0], 1.0, grip_from=56.0, grip_to=46.0)
+    steps = [abs(b[5] - a[5]) for a, b in zip([[0.0] * 5 + [56.0]] + frames, frames)]
+    assert steps[0] < max(steps) * 0.5 and steps[-1] < max(steps) * 0.5
+    assert frames[-1][5] == 46.0
+

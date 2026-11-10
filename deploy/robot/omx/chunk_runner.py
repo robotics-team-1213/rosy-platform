@@ -139,6 +139,8 @@ class Runner:
         return self.last_present
 
     def report(self, *, present=None, **fields) -> None:
+        if hasattr(self.trace, "flush"):
+            self.trace.flush()
         state = self.present() if present is None else present
         self.status(dict(fields, state=[round(v, 2) for v in state],
                          target=[round(v, 2) for v in self.target], health=self.health, fault=self.fault,

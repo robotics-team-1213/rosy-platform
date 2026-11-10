@@ -140,6 +140,18 @@ class Planner:
             return False
         return self.kin.solve_top_down(self.TopDownPose(x, y, z, math.radians(yaw_deg)), self.limits_at(x, y)).ok
 
+    def feasible(self, pick: dict | None = None, place: dict | None = None) -> bool:
+        """Fast endpoint reachability and IK pre-filter before full trajectory generation."""
+        for site in (pick or self.plan.get("pick"), place or self.plan.get("place")):
+            if not site:
+                continue
+            x, y, z, yaw = site["x"], site["y"], site["z"], site["yaw_deg"]
+            if not self.kin.solve_top_down(self.TopDownPose(x, y, z, math.radians(yaw)), self.limits_at(x, y)).ok:
+                return False
+            if not self.fits(x, y, z + MIN_STANDOFF_M, yaw):
+                return False
+        return True
+
     def line(self, start, end, speed_m_s, yaw_deg, grip, reference_q5):
         """Frames along a straight Cartesian line at `speed_m_s` and the q5 it ends at: the kinematics' shared
         line (one IK solve and FK check per frame, a yaw-twin flip refused), the same one the sim planner uses."""
@@ -158,7 +170,10 @@ class Planner:
         n = max(1, round(seconds * self.fps))
         if grip_from is None:
             return [list(frame)] * n
-        return [frame[:5] + [round(grip_from + (grip_to - grip_from) * k / n, 3)] for k in range(1, n + 1)]
+        return [
+            frame[:5] + [round(grip_from + (grip_to - grip_from) * 0.5 * (1.0 - math.cos(math.pi * k / n)), 3)]
+            for k in range(1, n + 1)
+        ]
 
     def guard_pace(self, name):
         """A fraction of the guard's pace from the plan file; above 1 would stream past what the guard allows."""
@@ -245,14 +260,22 @@ class Planner:
         bound = (self.plan.get("keep_out") or {}).get("x_max_m")
         if bound is None:
             return taught
+        seen_x: dict[tuple, float] = {}
+
+        def cached_body_x(frame) -> float:
+            key = tuple(frame[:5])
+            if key not in seen_x:
+                seen_x[key] = self.body_x(frame)
+            return seen_x[key]
+
         for name, frames in chunks.items():
-            worst = max(self.body_x(f) for f in frames)
+            worst = max(cached_body_x(f) for f in frames)
             if worst > bound:
                 raise SystemExit(f"{name}: a link (elbow, wrist or gripper) reaches x {worst:.3f} m "
                                  f"past keep_out x_max {bound} m")
         first = None
         for transit in [taught, *self.pulled_in_transits(taught)]:
-            worst = max(self.body_x(f) for f in self.travel(chunks, transit))
+            worst = max(cached_body_x(f) for f in self.travel(chunks, transit))
             if worst <= bound:
                 return transit
             first = first if first is not None else worst
