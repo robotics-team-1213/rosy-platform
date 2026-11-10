@@ -14701,6 +14701,14 @@ osy-d395-s1d\`.
 - gate 변화: 없음.
 - CE: 기존 교훈 갱신은 fix/eol-guard에 있다(`docs/solutions/workflow-issues/autocrlf-false-commit-a-rewrites-tree-to-crlf-2026-11-01.md`).
 
+## 2026-11-09 · uncommitted · fix(land): CRLF를 들이는 브랜치 거절, 병합은 -X renormalize
+
+- 원인: `tools/land_mainred.py`·`test/test_land_mainred_flow.py`가 생성 커밋(fd9019f795, 10-27)부터 CRLF였고, safer autocrlf가 이후 수정마다 CRLF를 유지했다. LF로 저장한 브랜치는 파일 전체가 충돌해 착지가 멈췄다.
+- 변경: 두 파일을 LF로 정규화. `land_precheck.crlf_added`가 바뀐 텍스트 파일에 CRLF를 새로 들이는 브랜치를 거절하고 `git add --renormalize` 명령을 알려 준다(`-text` 제외). `land.py` 병합·미리보기, `land_prepare` 대기 미리보기, `land_full` FULL 재사용 확인이 `-X renormalize`로 병합한다.
+- 증거: 원격 `test_land_precheck`·`test_land_mainred*`·`test_land_prepare`·`test_land_full` 92 passed(90669a4d31).
+- gate 변화: precheck에 줄 끝 검사 추가.
+- CE: 기존 교훈 갱신 — `docs/solutions/workflow-issues/autocrlf-false-commit-a-rewrites-tree-to-crlf-2026-11-01.md`.
+
 ## 2026-11-09 · uncommitted · feat(fleet): 현장 차로 편대 미션 — 리더 Nav2 trip + FOR-004 TRAIL 팔로워 (D-1002)
 
 - 변경: `fleet.server.formation_mission`(차로 적합성 `lane_fit`, 무장 → 리더 trip job 구성, 리더 lease 해제로 미션 종료) + `/api/fleet/formation/mission` 세 경로(v1.378), `tools/sim/formation_lane.py` Gazebo 시나리오(map_v2_fleet, Nav2 리더, TRAIL 팔로워, 리더 급정지·팔로워 상실 주입, 참값 채점), ADR D-1002.
