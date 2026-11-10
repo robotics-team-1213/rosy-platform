@@ -155,3 +155,36 @@ def test_empty_grasp_recovery_lowers_z_and_verify_stack_outcome_checks_side_came
     assert res["pick"]["x"] == 0.1988
     assert res["pick"]["z"] < 0.0398
 
+
+def test_target_zone_deviation_triggers_failure_and_recovery_mode():
+    import numpy as np
+
+    before_side = np.full((480, 640, 3), (180, 180, 180), dtype=np.uint8)
+    # Col 1 Tier 1 (155..220, 252..315) occupied before pick
+    before_side[252:315, 155:220] = (30, 120, 240)
+
+    # Case 1: Container never left source zone -> verified=False, recovery_mode="re_pick_and_re_place"
+    after_unmoved = before_side.copy()
+    v1 = cell_area_xyz.verify_stack_outcome(
+        before_side=before_side,
+        after_side=after_unmoved,
+        pick={"col": 1, "tier": 1},
+        place={"col": 2, "tier": 3},
+    )
+    assert v1["verified"] is False
+    assert v1["recovery_mode"] == "re_pick_and_re_place"
+
+    # Case 2: Source vacated and container landed inside Col 2 Tier 3 zone (226..292, 120..195) -> verified=True
+    after_placed = np.full((480, 640, 3), (180, 180, 180), dtype=np.uint8)
+    after_placed[125:190, 230:288] = (30, 120, 240)
+    v2 = cell_area_xyz.verify_stack_outcome(
+        before_side=before_side,
+        after_side=after_placed,
+        pick={"col": 1, "tier": 1},
+        place={"col": 2, "tier": 3},
+    )
+    assert v2["verified"] is True
+    assert v2["recovery_mode"] is None
+    assert v2["place_slot"]["zone"]["within_zone"] is True
+
+
