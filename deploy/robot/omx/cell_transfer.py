@@ -22,11 +22,25 @@ class Gate:
     def __init__(self, cell, config: dict, calibration: dict, *, sequence=cp.SEQUENCE):
         self.cell, self.config, self.calibration, self.assessment = cell, config, calibration, None
         self.sequence, self.source, self.home = sequence, {}, None
+        self._lib_cache: dict[tuple[str, int, int], tuple[dict, str]] = {}
         # two arms, one pallet (cell_zones): a reach claims its zone before it moves and frees it once folded home
         self.zones = Zones(config, calibration) if config.get("zone_side") else None
 
+    def _load_library(self, library) -> tuple[dict, str]:
+        if isinstance(library, dict):
+            return library, digest(library)
+        p = Path(library)
+        st = p.stat()
+        key = (str(p), st.st_mtime_ns, st.st_size)
+        cached = self._lib_cache.get(key)
+        if cached is None:
+            loaded = json.loads(p.read_text())
+            cached = (loaded, digest(loaded))
+            self._lib_cache[key] = cached
+        return cached
+
     def _assess(self, library, state: dict | None = None) -> dict:
-        loaded = library if isinstance(library, dict) else json.loads(Path(library).read_text())
+        loaded, _ = self._load_library(library)
         return assess(self.config, self.calibration, loaded,
                       self.cell.act("state") if state is None else state, sequence=self.sequence)
 
@@ -46,13 +60,14 @@ class Gate:
         if command == "state":
             return self.cell.act(command)
         state, recovering = self.cell.act("state"), command.split()[0] in ("retreat", "park")
+        lib_sha = None
         if command.startswith("load "):
-            library = json.loads(Path(command[5:]).read_text())
+            library, lib_sha = self._load_library(command[5:])
             self.source = library.get("source") or {}
             # The unchanged reviewed carry already owns its durable pending intent.
             identical = (self.assessment["mode"] == "automatic"
                          and digest([self.config, self.calibration, self.sequence]) == self.scope_sha
-                         and digest(library) == self.assessment["library_sha256"])
+                         and lib_sha == self.assessment["library_sha256"])
             if not identical:
                 fresh = self._assess(library, state=state)
                 if not fresh["allowed"] or fresh["mode"] != self.assessment["mode"]:
@@ -76,7 +91,7 @@ class Gate:
         status = self.cell.act(f"checked {a['session_id']} {a['library_sha256']} {command}")
         if command.startswith("load ") and status.get("ok"):
             self.home = ((library.get("chunks", {}).get("home") or [None])[-1]
-                         if digest(library) == a["library_sha256"] else None)
+                         if lib_sha == a["library_sha256"] else None)
         if self.zones and sub_commands and sub_commands[-1] == "park":
             from chunk_runner import SETTLE_TOL
 
