@@ -125,6 +125,9 @@ def prune_ledger(source: Path | str, *, history_days: int = DEFAULT_HISTORY_RETE
                         (api_audit_cutoff_iso,)).rowcount
                 # Accepted-sighting audit (recognition/sighting_store.py) keeps epoch
                 # seconds in received_at; latest_sightings (the live view) is untouched.
+                # Stuck incident reports (stuck/reports.py) enrich episodes from this
+                # table by captured_at — episodes older than the retention keep their
+                # report but lose the camera column (the join already tolerates absence).
                 if sighting_cutoff is not None and "sighting_audit" in tables:
                     removed["sighting_audit"] = db.execute(
                         "DELETE FROM sighting_audit WHERE received_at < ?",
@@ -158,11 +161,18 @@ def vacuum_database(path: Path | str) -> dict:
     """Rewrite ``path`` in place with VACUUM so pages freed by the prune return to
     the OS. The caller owns the stop decision: on the live volume this blocks writers
     for the duration, so the CLI only reaches it with --assume-stopped or on a backup
-    copy."""
+    copy.
+
+    VACUUM stages its temp copy in the SQLite temp dir. The fleet-backup container
+    has a read-only rootfs with a 32 MB tmpfs /tmp, so a real-size backup (hundreds
+    of MB) would fail with SQLITE_FULL there; keep the temp copy beside the target,
+    which is writable by construction in both CLI paths (the backup bind, the DB
+    volume) and is skipped when the caller already set a temp dir."""
     target = Path(path)
     if not target.is_file():
         raise DatabaseError("database is missing")
     before = target.stat().st_size
+    os.environ.setdefault("SQLITE_TMPDIR", str(target.parent))
     try:
         with closing(sqlite3.connect(target, timeout=30.0)) as db:
             db.execute("VACUUM")

@@ -205,6 +205,26 @@ def test_cli_compact_requires_stopped_and_reclaims_deleted_pages(tmp_path, capsy
     assert _value(source) == "keep"
 
 
+def test_vacuum_keeps_its_temp_copy_beside_the_target(tmp_path, monkeypatch):
+    """fleet-backup has a read-only rootfs with a 32 MB tmpfs /tmp: a real-size
+    VACUUM stages its copy where SQLITE_TMPDIR points, or it fails with SQLITE_FULL."""
+    source = tmp_path / "fleet.sqlite3"
+    with closing(sqlite3.connect(source)) as connection, connection:
+        connection.execute("CREATE TABLE blobs (padding TEXT NOT NULL)")
+        connection.executemany("INSERT INTO blobs VALUES (?)",
+                               [("x" * 2048,) for _ in range(400)])
+        connection.execute("DELETE FROM blobs WHERE rowid % 2 = 0")
+
+    monkeypatch.delenv("SQLITE_TMPDIR", raising=False)
+    site_db.vacuum_database(source)
+    assert os.environ["SQLITE_TMPDIR"] == str(tmp_path)
+
+    monkeypatch.setenv("SQLITE_TMPDIR", tmp_path / "operator-set")
+    site_db.vacuum_database(source)
+    assert os.environ["SQLITE_TMPDIR"] == str(tmp_path / "operator-set")  # 사용자 값 존중
+    os.environ.pop("SQLITE_TMPDIR", None)  # vacuum이 건 환경을 다음 시험에 흘리지 않는다
+
+
 def test_cli_check_accepts_a_fresh_intact_backup(tmp_path, capsys):
     source = tmp_path / "fleet.sqlite3"
     _database(source, "check")

@@ -79,7 +79,7 @@
 ## 최근 기록
 
 - 2026-11-10 · uncommitted · fix(site): 원장 백업 정리 대상 확대, 백업본 압축, robots.yaml 소유 규칙 문서화
+- 2026-11-10 · uncommitted · fix(site): VACUUM temp를 대상 옆 디렉터리로 두어 fleet-backup 컨테이너에서 실물 크기에도 돌게 한다
 - 2026-11-09 · uncommitted · fix(site): 현장 PC 원하는 상태에 mDNS 검색 브리지 타이머를 넣는다
 - 2026-11-09 · uncommitted · fix(omx): 과부하에서 토크를 끄지 않고 버티기, 실물 계획 사전 검토 규칙
 - 2026-11-09 · e94b732208 · D-922 추가 결정 — Pinky 상황 표정 8종
-- 2026-11-09 · 3d550f49ce · D-922 구현 검증 및 기록 항목 정정

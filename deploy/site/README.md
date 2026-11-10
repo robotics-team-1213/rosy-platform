@@ -1792,7 +1792,9 @@ size until the quarterly maintenance window, when a stopped-service
 `site_db.py compact --path <volume> --assume-stopped` rewrites it in place
 (verify runs before and after). In-store caps already bound the tables the
 tool does not prune: observations/rule selections keep the newest 100k rows
-and 30 days in the store itself, and judgment records keep 7 days.
+and 30 days in the store itself, and judgment records keep 7 days. Stuck incident
+reports enrich older episodes from the sighting audit; past the 90-day retention
+those reports keep their content but lose the camera column.
 
 The timer keeps only the operational SQLite ledger; keep transferring copies
 to the approved encrypted target as above — the retention here bounds disk

@@ -4816,6 +4816,12 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: 11-09 R 이전 뒤 R에도 옛 robttt에도 브리지가 설치돼 있지 않았다(`rosy-mdns` 사용자 없음). 그래서 Fleet 발견 목록·HTTP 로봇 주소 변경 감지가 꺼져 있었다. R에는 손으로 설치해 `ROSY mDNS scan delivered` 확인
 - gate 변화: 없음
 
+## 2026-11-10 · uncommitted · fix(site): VACUUM temp를 대상 옆 디렉터리로 두어 fleet-backup 컨테이너에서 실물 크기에도 돌게 한다
+- 변경: 독립 검토(게시 전, publish 파이프라인)가 지적한 fleet-backup 컨테이너 결함 — 읽기 전용 rootfs·32MB tmpfs /tmp에서 665MB급 백업본 VACUUM이 SQLITE_FULL로 실패하고 main() 순서상 prune까지 건너뛴다(시험 fixture는 KB급이라 못 잡음). `vacuum_database`가 `SQLITE_TMPDIR`(사용자가 이미 줬으면 존중)를 대상 파일 옆 디렉터리로 지정한다 — 백업 bind·DB 볼륨 모두 그 경로는 쓰기 가능. stuck 사고 보고서가 sighting_audit를 captured_at으로 조인한다는 보존 주의문을 주석·README에 추가(90일 지난 에피소드는 camera 열만 열화, 깨지지 않음).
+- 시험: 원격 시험으로 확인 뒤 착지(아래 행에 결과 추가).
+- 증거: 독립 검토 보고(발견 1·2)와 R fleet.sqlite3 실측 665MB, `Rosy/docs/workspace-records/2026-11-10/fleet-hub-comm-check.md`.
+- gate 변화: 없음.
+
 ## 2026-11-10 · uncommitted · fix(site): 원장 백업 정리 대상 확대, 백업본 압축, robots.yaml 소유 규칙 문서화
 - 변경: site_db.py backup이 fleet_api_audit(--prune-api-audit, 기본 90일)과 sighting_audit(--prune-sightings, 기본 90일)도 정리한다(2026-11-10 R 관측: 각 34.6만/16.1만 행 무대책 성장. observations·rule_selections의 저장소 자체 cap 10만 행/30일과 judgment 7일 자체 정리는 그대로라 도구가 건드리지 않는다). 타이머 백업본은 복사 뒤 VACUUM로 압축해 14개 보관 크기가 보존 분량을 따르게 했고, 정기 유지보수용 compact --assume-stopped 서브커맨드(정지 서비스 전제, verify 전후)를 추가했다. compose fleet-backup에 새 플래그를 명시하고 README 원장 타이머 절에 보존 기간·압축·compact 절차, robots.yaml 소유(10001:10001, 0600) 규칙을 적었다(11-10 R 시작 경고로 확인한 group-readable 배치의 교정 기준).
 - 시험: 원격 시험으로 확인 뒤 착지(아래 행에 결과 추가).
