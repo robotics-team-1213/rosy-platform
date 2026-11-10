@@ -265,6 +265,8 @@ def flushing_trace(file):
         if row["chunk"] != last[0]:
             file.flush()
         last[0] = row["chunk"]
+
+    write.flush = file.flush
     return write
 
 

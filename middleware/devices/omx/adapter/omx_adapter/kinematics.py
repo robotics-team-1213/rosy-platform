@@ -78,12 +78,27 @@ def wrap_angle(value: float) -> float:
 
 
 def _matmul(a: Matrix, b: Matrix) -> Matrix:
-    return tuple(tuple(sum(a[i][k] * b[k][j] for k in range(3)) for j in range(3))
-                 for i in range(3))  # type: ignore[return-value]
+    a00, a01, a02 = a[0]
+    a10, a11, a12 = a[1]
+    a20, a21, a22 = a[2]
+    b00, b01, b02 = b[0]
+    b10, b11, b12 = b[1]
+    b20, b21, b22 = b[2]
+    return (
+        (a00 * b00 + a01 * b10 + a02 * b20, a00 * b01 + a01 * b11 + a02 * b21, a00 * b02 + a01 * b12 + a02 * b22),
+        (a10 * b00 + a11 * b10 + a12 * b20, a10 * b01 + a11 * b11 + a12 * b21, a10 * b02 + a11 * b12 + a12 * b22),
+        (a20 * b00 + a21 * b10 + a22 * b20, a20 * b01 + a21 * b11 + a22 * b21, a20 * b02 + a21 * b12 + a22 * b22),
+    )
 
 
 def _matvec(a: Matrix, v: Sequence[float]) -> tuple[float, float, float]:
-    return tuple(sum(a[i][k] * v[k] for k in range(3)) for i in range(3))  # type: ignore[return-value]
+    v0, v1, v2 = v[0], v[1], v[2]
+    a0, a1, a2 = a[0], a[1], a[2]
+    return (
+        a0[0] * v0 + a0[1] * v1 + a0[2] * v2,
+        a1[0] * v0 + a1[1] * v1 + a1[2] * v2,
+        a2[0] * v0 + a2[1] * v1 + a2[2] * v2,
+    )
 
 
 def _rpy(roll: float, pitch: float, yaw: float) -> Matrix:
@@ -198,19 +213,20 @@ class OmxKinematics:
             raise ValueError("FK requires joint1..joint5")
         q = [_finite("joint", value) for value in joints]
         rotation: Matrix = _IDENTITY
-        position = (0.0, 0.0, 0.0)
+        px, py, pz = 0.0, 0.0, 0.0
         index = 0
         for joint in self.chain:
-            offset = _matvec(rotation, joint.xyz)
-            position = tuple(p + o for p, o in zip(position, offset))  # type: ignore[assignment]
-            rotation = _matmul(rotation, _rpy(*joint.rpy))
+            ox, oy, oz = _matvec(rotation, joint.xyz)
+            px, py, pz = px + ox, py + oy, pz + oz
+            if joint.rpy != (0.0, 0.0, 0.0):
+                rotation = _matmul(rotation, _rpy(*joint.rpy))
             if joint.axis is not None:
                 rotation = _matmul(rotation, _axis_angle(joint.axis, q[index]))
                 index += 1
         approach = (rotation[0][0], rotation[1][0], rotation[2][0])
         error = math.acos(max(-1.0, min(1.0, -approach[2])))
         yaw = math.atan2(rotation[1][2], rotation[0][2])
-        return TcpPose(position[0], position[1], position[2], yaw, error, rotation)
+        return TcpPose(px, py, pz, yaw, error, rotation)
 
     def link_points(self, joints: Sequence[float], fingertip_m: float = 0.0,
                     ) -> tuple[list[tuple[float, float, float]], tuple[float, float, float]]:
@@ -218,16 +234,19 @@ class OmxKinematics:
 
         The chain has zero origin rpy (checked at load), so each joint is offset then rotated."""
         rotation: Matrix = _IDENTITY
-        position, points, index = (0.0, 0.0, 0.0), [], 0
+        px, py, pz = 0.0, 0.0, 0.0
+        points, index = [], 0
         for joint in self.chain:
-            position = tuple(p + o for p, o in zip(position, _matvec(rotation, joint.xyz)))  # type: ignore[assignment]
+            ox, oy, oz = _matvec(rotation, joint.xyz)
+            px, py, pz = px + ox, py + oy, pz + oz
             if joint.name != "joint1":
-                points.append(position)
+                points.append((px, py, pz))
             if joint.axis is not None:
                 rotation = _matmul(rotation, _axis_angle(joint.axis, joints[index]))
                 index += 1
-        approach = (rotation[0][0], rotation[1][0], rotation[2][0])
-        return points + [tuple(p + a * fingertip_m for p, a in zip(position, approach))], approach
+        ax, ay, az = rotation[0][0], rotation[1][0], rotation[2][0]
+        approach = (ax, ay, az)
+        return points + [(px + ax * fingertip_m, py + ay * fingertip_m, pz + az * fingertip_m)], approach
 
     def solve_line(self, start_joints: Sequence[float], start: TopDownPose, end_xyz: Sequence[float],
                    limits: IkLimits, *, count: int, max_joint_step_rad: float,

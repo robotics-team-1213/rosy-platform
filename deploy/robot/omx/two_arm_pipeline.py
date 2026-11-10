@@ -205,8 +205,9 @@ def stage_align(arms, *, config: dict, log, clock=time.monotonic, sleep=time.sle
                 except ValueError as exc:
                     error = exc
                     break
+                pwms = guard._read_body_pwm()
                 for name in BODY:
-                    last["pwm"][name] = arm.follower_bus.read("Present_PWM", name)
+                    last["pwm"][name] = pwms[name]
                     last["cap"][name] = guard.pwm_limits.get(name)
                 if guard.tracking:
                     break
@@ -311,11 +312,11 @@ def stage_drive(arms, *, poses, pose_name, attestation, config: dict, log,
                 target = targets[arm.arm_id]
                 command = actuator.step(target, elapsed)
                 actuator.write(command)
-                actuator.check_effort(read_positions(arm.leader_bus))
-                guard = guards[arm.arm_id]
-                prepared = guard.prepare(_action(arm))
-                guard.commit(prepared)
                 present = read_positions(arm.leader_bus)
+                actuator.check_effort(present)
+                guard = guards[arm.arm_id]
+                prepared = guard.prepare(normalized(arm.leader_bus, present))
+                guard.commit(prepared)
                 if any(abs(present[name] - target[name]) > tolerance * TURN / 360 for name in BODY):
                     reached = False
                 # The tolerance is the acceptance band; the ramp still has to settle on the

@@ -33,8 +33,12 @@ def frame_quality(pixels):
     mean = float(gray.mean())
     dark = float((gray < 15).mean())
     clipped = float((gray > 245).mean())
-    tiles = [float(tile.mean()) for row in np.array_split(gray, 4, axis=0)
-             for tile in np.array_split(row, 4, axis=1)]
+    gh, gw = gray.shape
+    if gh >= 4 and gw >= 4 and gh % 4 == 0 and gw % 4 == 0:
+        tiles = gray.reshape(4, gh // 4, 4, gw // 4).mean(axis=(1, 3)).ravel()
+    else:
+        tiles = [float(tile.mean()) for row in np.array_split(gray, 4, axis=0)
+                 for tile in np.array_split(row, 4, axis=1)]
     spatial_contrast = float(np.percentile(tiles, 95)-np.percentile(tiles, 5))
     if dark > .25 and clipped > .05:
         condition = 'MIXED_LIGHTING'

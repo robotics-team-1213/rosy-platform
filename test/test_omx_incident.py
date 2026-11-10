@@ -526,4 +526,19 @@ def test_status_and_clear_with_cause_basis_and_env_discovery(tmp_path, monkeypat
     ]
 
 
+def test_decide_handles_torque_after_open_error_string_without_crashing(tmp_path, monkeypatch):
+    """2026-11-10 20:06: USB disconnect during session teardown wrote {'open': 'error: ...'} to torque_after."""
+    monkeypatch.chdir(tmp_path)
+    s = session(tmp_path, latched=False, windup=False)
+    data = json.loads(s.read_text())
+    data["safe_end"] = False
+    data["torque_after"] = {"open": "error: a physically confirmed /dev/serial/by-id symlink is required"}
+    data["caps_restored"] = ["follower 11: a physically confirmed /dev/serial/by-id symlink is required"]
+    s.write_text(json.dumps(data))
+    out = oi.handle(s, "arm_b", link=Link())
+    assert out["decision"]["hold"] is True
+    assert "torque not confirmed OFF" in out["decision"]["reason"]
+    assert "caps not confirmed restored" in out["decision"]["reason"]
+
+
 

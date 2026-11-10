@@ -11,14 +11,52 @@ the viewer's JPEG bytes to disk; video encoding happens later in `convert`, with
 from __future__ import annotations
 
 import argparse
+import http.client
 import json
 import shutil
 import threading
 import time
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
 NAMES = ["shoulder_pan.pos", "shoulder_lift.pos", "elbow_flex.pos", "wrist_flex.pos", "wrist_roll.pos", "gripper.pos"]
+
+
+def _keepalive_fetcher():
+    """HTTP keep-alive fetcher for localhost/LAN camera services so 30 Hz polling reuses TCP sockets."""
+    conns: dict[tuple[str, str], http.client.HTTPConnection] = {}
+
+    def fetch(url: str) -> bytes:
+        parsed = urllib.parse.urlsplit(url)
+        if parsed.scheme not in ("http", "https") or not parsed.netloc:
+            return urllib.request.urlopen(url, timeout=1).read()
+        key = (parsed.scheme, parsed.netloc)
+        path = (parsed.path or "/") + (f"?{parsed.query}" if parsed.query else "")
+        for attempt in range(2):
+            conn = conns.get(key)
+            if conn is None:
+                cls = http.client.HTTPSConnection if parsed.scheme == "https" else http.client.HTTPConnection
+                conn = cls(parsed.netloc, timeout=1)
+                conns[key] = conn
+            try:
+                conn.request("GET", path, headers={"Connection": "keep-alive"})
+                resp = conn.getresponse()
+                data = resp.read()
+                if resp.status >= 400:
+                    raise OSError(f"HTTP Error {resp.status}: {resp.reason}")
+                return data
+            except (OSError, http.client.HTTPException):
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+                conns.pop(key, None)
+                if attempt == 1:
+                    raise
+        raise OSError("unreachable")
+
+    return fetch
 
 
 class Cameras(threading.Thread):
@@ -27,7 +65,7 @@ class Cameras(threading.Thread):
     def __init__(self, urls: dict, folder: Path, period_s: float = 1 / 30, fetch=None):
         super().__init__(daemon=True)
         self.urls, self.folder, self.period_s, self.stop_event = urls, folder, period_s, threading.Event()
-        self.fetch = fetch or (lambda url: urllib.request.urlopen(url, timeout=1).read())
+        self.fetch = fetch or _keepalive_fetcher()
         self.counts = {name: 0 for name in urls}
         self.errors = {name: None for name in urls}  # last fetch error: a stopped camera service answers 503
 
@@ -60,6 +98,7 @@ class Recorder:
         # (HTTP fetch + JPEG writes at 30 Hz) stalled it past the guard's 0.5 s effort sample and dropped the arm
         # (2026-10-29). The pipeline process records the frames (CameraSession).
         self.folder, self.cameras, self.rows, self.factory = None, None, None, cameras_factory
+        self._buffer: list[tuple[float, list[float], list[float]]] = []
 
     @property
     def active(self) -> bool:
@@ -71,7 +110,7 @@ class Recorder:
                 raise ValueError(f"episode {self.folder} is still open")
             folder = Path(words[1])
             task = json.loads((folder / "task.json").read_text())
-            self.folder, self.rows = folder, (folder / "ticks.jsonl").open("a")
+            self.folder, self.rows, self._buffer = folder, (folder / "ticks.jsonl").open("a"), []
             if self.factory is not None:
                 self.cameras = self.factory(task.get("cameras", {}), folder)
                 self.cameras.start()
@@ -101,14 +140,20 @@ class Recorder:
 
     def tick(self, state, action) -> None:
         if self.active:
-            self.rows.write(json.dumps({"t": time.time(), "state": [round(v, 3) for v in state],
-                                        "action": [round(v, 3) for v in action]}) + "\n")
+            # Buffer in memory during the 30 Hz control loop to avoid per-tick json.dumps + disk I/O jitter.
+            self._buffer.append((time.time(), [round(v, 3) for v in state], [round(v, 3) for v in action]))
+
+    def flush(self) -> None:
+        if self.rows is not None and self._buffer:
+            self.rows.write("".join(json.dumps({"t": t, "state": s, "action": a}) + "\n" for t, s, a in self._buffer))
+            self._buffer.clear()
 
     def close(self) -> Path:
         folder = self.folder
         if self.cameras is not None:
             self.cameras.stop_event.set()
             self.cameras.join(timeout=2)
+        self.flush()
         self.rows.close()
         self.folder = self.cameras = self.rows = None
         return folder

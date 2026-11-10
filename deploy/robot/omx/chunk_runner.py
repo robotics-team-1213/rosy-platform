@@ -39,6 +39,9 @@ import uuid
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # guarded_native, motor_health, cell_params, episode_recorder
+_ADAPTER_SRC = str(Path(__file__).resolve().parents[3] / "middleware/devices/omx/adapter")
+if _ADAPTER_SRC not in sys.path:
+    sys.path.insert(0, _ADAPTER_SRC)
 from omx_adapter.chunk_library import (  # noqa: E402
     GUARD_UNITS_PER_S as GUARD_UNITS_PER_S,
     NAMES,
@@ -46,8 +49,11 @@ from omx_adapter.chunk_library import (  # noqa: E402
     RISE_SPEED as RISE_SPEED,
     SCHEMA as SCHEMA,
     TRANSIT as TRANSIT,
+    TemporalChunkEnsembler as TemporalChunkEnsembler,
+    chain_path as chain_path,
     load_library,
     park_path,
+    receding_horizon_splice as receding_horizon_splice,
     too_fast as too_fast,
     transit_path,
 )
@@ -109,7 +115,7 @@ class Runner:
         self.queue: list = []
         self.chunk = None
         self.settle_since = None
-        self.far_since, self.last_grip = None, None
+        self.far_since, self.last_grip, self.last_body = None, None, None
         self.pending: list = []
         self.ticks, self.health, self.overload_since, self.fault = 0, None, None, None
         self.played, self.retreat_frames, self.jog_path, self.contact_ticks, self.contact_start = [], [], [], 0, None
@@ -124,17 +130,30 @@ class Runner:
         self.health_present, self.samples, self.grip_from, self.holding = None, [], None, False  # joint_push's samples and reopen point
         self.recorder = Recorder()  # raw training episodes: rows here, encoding after the session
         self.operating_context = operating_context
+        self._lib_digest_cache: tuple[int, str] | None = None
         self.trend: list = []  # load-bearing joints' lags over the last STRAIN_TICKS ticks of a chunk
         self.trace = None      # called every tick with what was commanded and where the arm was (jitter)
 
+    def _library_digest(self) -> str:
+        lib = self.library
+        cached = self._lib_digest_cache
+        if cached is None or cached[0] != id(lib):
+            cached = (id(lib), digest(lib))
+            self._lib_digest_cache = cached
+        return cached[1]
+
     def present(self) -> list:
         observation = self.robot.get_observation()
-        return [float(observation[name]) for name in NAMES]
+        self.last_present = [float(observation[name]) for name in NAMES]
+        return self.last_present
 
-    def report(self, **fields) -> None:
-        self.status(dict(fields, state=[round(v, 2) for v in self.present()],
+    def report(self, *, present=None, **fields) -> None:
+        if hasattr(self.trace, "flush"):
+            self.trace.flush()
+        state = self.present() if present is None else present
+        self.status(dict(fields, state=[round(v, 2) for v in state],
                          target=[round(v, 2) for v in self.target], health=self.health, fault=self.fault,
-                         operating_context=self.operating_context, library_sha256=digest(self.library),
+                         operating_context=self.operating_context, library_sha256=self._library_digest(),
                          t=time.time()))
 
     def read_health(self):
@@ -144,7 +163,8 @@ class Runner:
             return None
         def signed(v):
             return int(v) - 65536 if int(v) > 32767 else int(v)
-        pwm, current, temp = (bus.sync_read(name) for name in ("Present_PWM", "Present_Current", "Present_Temperature"))
+        kw = {"normalize": False, "num_retry": 2} if "read" not in vars(bus) and hasattr(bus, "model_ctrl_table") else {}
+        pwm, current, temp = (bus.sync_read(name, **kw) for name in ("Present_PWM", "Present_Current", "Present_Temperature"))
         return {"pwm": [signed(pwm[m]) for m in MOTORS], "current_ma": [signed(current[m]) for m in MOTORS],
                 "temp_c": [int(temp[m]) for m in MOTORS]}
 
@@ -167,7 +187,7 @@ class Runner:
                 line, verb = " ".join(words), words[0]
                 if not self.operating_context or self.operating_context.get("session_id") != session:
                     raise ValueError("checked command targets another session")
-                if verb != "load" and digest(self.library) != expected_library:
+                if verb != "load" and self._library_digest() != expected_library:
                     raise ValueError("checked command targets another library")
             self.grip_from = self.grip_from if verb in ("state", "grip", "episode") else None
             self.jog_path = self.jog_path if verb in ("jog", "state", "episode") else []
@@ -177,7 +197,7 @@ class Runner:
             if verb == "episode":  # bookkeeping only: allowed between chunks and after a fault (to drop the episode)
                 self.report(command=line, ok=True, **self.recorder.command(words[1:]))
                 return True
-            if self.chunk is not None:
+            if self.chunk is not None and verb != "splice":
                 raise ValueError(f"chunk {self.chunk} is still running")
             if getattr(getattr(self.robot, "motion", None), "held", None) and verb != "state":
                 raise ValueError("the guard holds an overloaded joint: the runner is shedding its load first")
@@ -185,6 +205,28 @@ class Runner:
             if self.fault and verb not in ("park", "state") and not (soft and verb in ("retreat", "jog")):
                 raise ValueError(f"fault ({self.fault}): only park, state or stop"
                                  + (", or retreat/jog after a contact" if soft else ""))
+            if verb == "splice" and len(words) in (2, 3) and words[2:] in ([], ["rel"]):
+                frames = self.library["chunks"].get(words[1])
+                if frames is None:
+                    raise ValueError(f"unknown chunk {words[1]}")
+                window = max(1, min(len(self.queue), round(0.25 * self.fps))) if self.queue else 0
+                anchor = self.queue[window - 1] if window else self.target
+                offset = [0.0] * 6
+                if words[2:] == ["rel"]:
+                    offset = [t - s for t, s in zip(anchor[:5], frames[0][:5])] + [0.0]
+                    if max(abs(v) for v in offset) > REL_MAX:
+                        raise ValueError(f"relative offset {max(abs(v) for v in offset):.1f} exceeds {REL_MAX}")
+                next_frames = [[max(-100.0, min(100.0, v + o)) for v, o in zip(f, offset)] for f in frames]
+                gap = max(abs(a - b) for a, b in zip(next_frames[0][:5], anchor[:5]))
+                if gap > JOG_MAX * 2:
+                    raise ValueError(f"chunk {words[1]} starts {gap:.1f} away from the splice anchor")
+                self.queue = receding_horizon_splice(self.queue, self.target, next_frames, self.fps,
+                                                     blend_s=0.25, vmax=GUARD_UNITS_PER_S)
+                if words[1].startswith("release"):
+                    self.holding = False
+                self.chunk = words[1] if self.chunk is None else f"{self.chunk} -> {words[1]}"
+                self.settle_since, self.contact_ticks, self.contact_start = None, 0, None
+                return True
             if verb == "run" and len(words) in (2, 3) and words[2:] in ([], ["rel"]):
                 frames = self.library["chunks"].get(words[1])
                 if frames is None:
@@ -237,13 +279,53 @@ class Runner:
                                        self.library.get("transit_speed", 0.85))
                 self.chunk, self.settle_since, self.played = "park", None, []
                 return True
+            elif verb == "chain" and len(words) >= 2:
+                parts = [part.strip().split() for part in " ".join(words[1:]).split(";") if part.strip()]
+                if not parts:
+                    raise ValueError("chain requires at least one step")
+                cursor, segments, release = list(self.target), [], False
+                transit = {NAMES.index(k): float(v) for k, v in self.library.get("transit", {}).items()} or None
+                speed = self.library.get("transit_speed", 0.85)
+                closed = self.library["gripper_closed"]
+                for step in parts:
+                    if step[0] == "run" and len(step) == 2:
+                        frames = self.library["chunks"].get(step[1])
+                        if frames is None:
+                            raise ValueError(f"unknown chunk {step[1]}")
+                        gap = max(abs(a - b) for a, b in zip(frames[0][:5], cursor[:5]))
+                        if gap > JOG_MAX * 2:
+                            raise ValueError(f"chunk {step[1]} starts {gap:.1f} away from the held target")
+                        seg = [list(f) for f in frames]
+                        if step[1].startswith("release"):
+                            release = True
+                    elif step[0] == "goto" and len(step) == 2:
+                        frames = self.library["chunks"].get(step[1])
+                        if frames is None:
+                            raise ValueError(f"unknown chunk {step[1]}")
+                        seg = transit_path(cursor, frames[0], closed, self.fps, transit, speed)
+                    elif step == ["park"]:
+                        home = self.library["chunks"].get("home")
+                        if not home:
+                            raise ValueError("park needs a home chunk in the library")
+                        seg = park_path(cursor, home[-1], closed, self.fps, transit, speed)
+                    else:
+                        raise ValueError(f"chain step {step!r} must be 'run <chunk>', 'goto <chunk>' or 'park'")
+                    segments.append(seg)
+                    cursor = list(seg[-1])
+                if release:
+                    self.holding = False
+                self.queue = chain_path(segments, self.fps)
+                self.chunk = " ; ".join(" ".join(s) for s in parts)
+                self.settle_since, self.played, self.contact_ticks, self.contact_start = None, [], 0, None
+                return True
             elif verb == "grip" and len(words) == 2:
                 # never below the taught closed value: past the jaws' stop the gripper only pushes at its PWM
                 # cap, and the guard's teacher mode does not bound the gripper (2026-10-25: 40 asked, stuck at 48.4)
                 to = max(float(self.library["gripper_closed"]), min(100.0, float(words[1])))
                 if to > self.target[5]:
                     self.holding = False
-                free = to < self.target[5] and abs(self.present()[5] - self.target[5]) <= EMPTY_MARGIN  # not holding
+                present = self.present() if to < self.target[5] else None
+                free = present is not None and abs(present[5] - self.target[5]) <= EMPTY_MARGIN  # not holding
                 self.grip_from, self.target[5] = (self.target[5] if free else None), to  # reopen point
             elif verb == "retreat" and len(words) == 1:
                 if not self.retreat_frames:
@@ -260,15 +342,17 @@ class Runner:
                     raise ValueError(str(exc)) from None
                 if library["fps"] != self.fps:
                     raise ValueError(f"library fps {library['fps']} differs from the runner fps {self.fps}")
-                if expected_library is not None and digest(library) != expected_library:
+                lib_digest = digest(library)
+                if expected_library is not None and lib_digest != expected_library:
                     raise ValueError("checked load content differs from the reviewed library")
                 self.plan_check(library)  # raises: a plan the arm's own load data says it cannot hold is refused here
                 self.library = library
+                self._lib_digest_cache = (id(library), lib_digest)
             elif verb != "state":
                 raise ValueError("commands: run <chunk> [rel] | jog <joint> <delta> [...] | grip <value> | goto <chunk> | load <library> | park | state | stop")
-            self.report(command=line, ok=True)
+            self.report(command=line, ok=True, present=locals().get("present"))
         except ValueError as error:
-            self.report(command=line, ok=False, error=str(error))
+            self.report(command=line, ok=False, error=str(error), present=locals().get("present"))
         return True
 
     def hold(self, present, reason) -> None:
@@ -280,7 +364,7 @@ class Runner:
         self.chunk, self.played, self.jog_path = None, [], []
         if chunk == "park":
             self.last_input = self.clock()  # an idle fold's retry waits idle_retry_s from the hold, not from its start
-        self.report(command=f"run {chunk or 'jog'}" if chunk or jogging else "fault", ok=False, error=self.fault, contact=True)
+        self.report(command=f"run {chunk or 'jog'}" if chunk or jogging else "fault", ok=False, error=self.fault, contact=True, present=present)
 
     def strained(self, sent, present):
         return runner_strain.strained(self, sent, present)
@@ -369,19 +453,19 @@ class Runner:
             if reason:  # stop pushing where the arm is; the judge may only park or stop
                 self.fault, self.queue, self.target = reason, [], present[:5] + [self.target[5]]
                 chunk, self.chunk = self.chunk, None
-                self.report(command=f"run {chunk}" if chunk else "fault", ok=False, error=reason)
+                self.report(command=f"run {chunk}" if chunk else "fault", ok=False, error=reason, present=present)
                 return
             self.samples = (self.samples + [(list(self.target), present, self.health["pwm"])])[-4:]
             push = joint_push.pushing(self.samples, getattr(getattr(self.robot, "motion", None), "pwm_limits", None),
                                       (self.chunk == "park" and not self.holding) or self.grip_from is not None, self.params)
             if push and push[0] == "gripper" and self.chunk is None:  # a closing grip caught something: let it go
                 self.target[5], self.grip_from = self.grip_from, None
-                return self.report(command="grip", ok=False, caught=True, error=f"{push[1]}; reopened")
+                return self.report(command="grip", ok=False, caught=True, error=f"{push[1]}; reopened", present=present)
             if push and self.chunk is not None:
                 return self.hold(present, f"contact in {self.chunk}: {push[1]}")
             if push:  # at rest: stop the wind-up where the arm is; folded home, idle() ends the session (torque OFF)
                 self.fault, self.target = f"pushing at rest: {push[1]}", present[:5] + [self.target[5]]
-                return self.report(command="fault", ok=False, error=self.fault, person_needed=True)
+                return self.report(command="fault", ok=False, error=self.fault, person_needed=True, present=present)
         if loaded > FOLLOW_STOP:
             self.far_since = self.far_since if self.far_since is not None else now
             if now - self.far_since >= FOLLOW_STOP_S:
@@ -393,14 +477,19 @@ class Runner:
             grasp = self.chunk.startswith("grasp")
             gripper_still = self.last_grip is not None and abs(present[5] - self.last_grip) < 0.3
             self.last_grip = present[5]
-            if (error <= SETTLE_TOL and (gripper_still or not grasp)) or now - self.settle_since >= SETTLE_S:
-                fields = dict(command=f"run {self.chunk}", ok=True, settled=error <= SETTLE_TOL,
+            body_still = (self.last_body is not None
+                          and max(abs(a - b) for a, b in zip(present[:5], self.last_body)) < 0.08
+                          and error <= SETTLE_TOL + min(self.pace_floor, 0.8))
+            self.last_body = list(present[:5])
+            settled = error <= SETTLE_TOL or body_still
+            if (settled and (gripper_still or not grasp)) or now - self.settle_since >= SETTLE_S:
+                fields = dict(command=f"run {self.chunk}", ok=True, settled=settled,
                               paced_ticks=self.paced_ticks, peak_lag=round(self.peak_lag, 2), over_ticks=self.over_ticks)
                 self.paced_ticks, self.pace_floor, self.peak_lag, self.over_ticks = 0, 0.0, 0.0, 0
-                if self.chunk == "park" and error <= SETTLE_TOL:  # torque goes OFF from here: only when really home
+                if (self.chunk == "park" or self.chunk.endswith("; park")) and settled:  # torque goes OFF from here: only when really home
                     self.home_since = now
-                backed_out = self.chunk == "retreat" and error <= SETTLE_TOL
-                if (self.chunk == "park" or backed_out) and (self.fault or "").startswith("contact"):
+                backed_out = self.chunk == "retreat" and settled
+                if (self.chunk == "park" or self.chunk.endswith("; park") or backed_out) and (self.fault or "").startswith("contact"):
                     # folded home, or back where the held chunk began: the next attempt may start. A touch grid
                     # otherwise parks between every point (2026-10-27).
                     self.fault = None
@@ -419,8 +508,8 @@ class Runner:
                 elif self.holding and self.chunk in ("lift_pick", "park", "goto above_place", "descend_place"):
                     self.holding = present[5] > self.target[5] + EMPTY_MARGIN
                     fields["holding"] = self.holding
-                self.chunk, self.last_grip = None, None
-                self.report(**fields)
+                self.chunk, self.last_grip, self.last_body = None, None, None
+                self.report(**fields, present=present)
 
     def idle(self) -> bool:
         """Fold home, then end the session (True), when no command has come for a while."""
@@ -450,7 +539,7 @@ class Runner:
     def run(self, lines) -> None:
         """`lines()` returns the commands that arrived since the last call."""
         self.target = self.present()
-        self.report(command="start", ok=True)
+        self.report(command="start", ok=True, present=self.target)
         period = 1.0 / self.fps
         self.last_input = self.clock()
         while True:
@@ -459,7 +548,13 @@ class Runner:
             if arrived:
                 self.last_input, self.idle_parks = started, 0
             self.pending += arrived
-            # one command per tick: a burst of jogs must not move the target by more than one jog at once
+            # one motion command per tick: a burst of jogs must not move the target by more than one jog at once;
+            # read-only state/episode queries ahead of a non-state command do not consume the motion slot
+            while (len(self.pending) > 1
+                   and self.pending[0].strip().split()[:1] in (["state"], ["episode"])
+                   and self.pending[1].strip().split()[:1] != ["state"]):
+                if not self.command(self.pending.pop(0)):
+                    return
             if self.pending and not self.command(self.pending.pop(0)):
                 return
             try:
@@ -473,8 +568,8 @@ class Runner:
                 raise
             if self.idle():
                 return
-            if self.live and self.ticks % max(1, self.fps // 2) == 0:
-                self.live({"t": round(time.time(), 3), "state": [round(v, 2) for v in self.present()],
+            if self.live and self.ticks % max(1, self.fps // 10) == 0:
+                self.live({"t": round(time.time(), 3), "state": [round(v, 2) for v in (getattr(self, "last_present", None) or self.present())],
                            "target": [round(v, 2) for v in self.target], "chunk": self.chunk,
                            "lag": round(self.lag, 2),
                            "fault": self.fault, "health": self.health})
@@ -491,6 +586,10 @@ class Guarded:
         return self.motion.send(action)
 
     def get_observation(self):
+        present = getattr(self.motion, "last_present", None)
+        if present is not None:
+            self.motion.last_present = None
+            return present
         return self.robot.get_observation()
 
 
@@ -562,7 +661,10 @@ def main(argv=None):
     motion.shed_load = True  # a guard hold freezes only the held joint: runner_strain.shed moves lift and elbow
     guarded = Guarded(robot, motion)
     try:
-        check = load_predict.plan_check(args.load_model, robot_cfg.get("port"), params, library, {j: robot.bus.read("PWM_Limit", j) for j in load_predict.BODY[1:]}) if args.load_model else None
+        caps = (robot.bus.sync_read("PWM_Limit", list(load_predict.BODY[1:]), normalize=False, num_retry=2)
+                if "read" not in vars(robot.bus) and hasattr(robot.bus, "model_ctrl_table")
+                else {j: robot.bus.read("PWM_Limit", j) for j in load_predict.BODY[1:]}) if args.load_model else None
+        check = load_predict.plan_check(args.load_model, robot_cfg.get("port"), params, library, caps) if args.load_model else None
         import bus_watchdog  # the motors stop by themselves if this PC goes silent (off unless the params set it)
 
         print(json.dumps({"bus_watchdog": bus_watchdog.arm(robot.bus, prm.get(params, "safety.bus_watchdog_ms"))}), flush=True)

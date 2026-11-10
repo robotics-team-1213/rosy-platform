@@ -444,3 +444,27 @@ def test_shipped_envelope_and_condition_templates_cannot_enable_automatic_motion
     config, calibration, library, state = task
     config["operating_conditions"] = template["operating_conditions"]
     assert not envelope.assess(config, calibration, library, state, now=100.01)["allowed"]
+
+
+def test_runtime_context_uses_batch_sync_read_on_real_dynamixel_bus(envelope):
+    @dataclass
+    class Calibration:
+        range_min: int = 0
+        range_max: int = 4095
+
+    sync_calls = []
+
+    class RealBus:
+        model_ctrl_table = {}
+        motors = {name: SimpleNamespace(id=11 + i, model="xl430-w250" if i < 3 else "xl330-m288")
+                  for i, name in enumerate(envelope.NAMES)}
+        calibration = {name: Calibration() for name in envelope.NAMES}
+
+        def sync_read(self, register, motors=None, *, normalize=True, num_retry=0):
+            sync_calls.append((register, tuple(motors), normalize, num_retry))
+            return {n: 20 for n in motors}
+
+    ctx = envelope.runtime_context({"id": "fixture-arm"}, RealBus(), 30)
+    assert ctx["scope"] == "hardware" and len(ctx["sha256"]) == 64
+    assert len(sync_calls) == 8
+    assert ("Current_Limit", ("wrist_flex", "wrist_roll", "gripper"), False, 2) in sync_calls
