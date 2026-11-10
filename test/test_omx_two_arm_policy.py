@@ -66,7 +66,7 @@ def test_pipeline_stages_connect_mujoco_gazebo_and_isaac_roles():
             result="pass",
             lifted=True,
             belt_skew=dict(dx_mm=6.0, dy_mm=5.0, dyaw_deg=8.0),
-            vision_pick=dict(colour="orange", seen_x_mm=166.0, seen_y_mm=169.0, seen_yaw_deg=-82.0, xy_err_mm=1.2, yaw_err_deg=1.1),
+            vision_pick=dict(colour="orange", seen_xy=[0.166, 0.169], seen_yaw_deg=-82.0, xy_err_mm=1.2, yaw_err_deg=1.1),
             xy_mm=0.4,
             yaw_deg=0.0,
         )
