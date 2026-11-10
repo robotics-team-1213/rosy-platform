@@ -59,3 +59,7 @@ def test_narrow_reuse_skips_non_ancestor_sibling_commits_in_shared_cache(cached)
     done, todo, _ = land.land_cache.split(wt, args, [["pkg/test"]], git(wt, "rev-parse", "HEAD"), sys.executable,
                                           select)
     assert todo == [] and len(done) == 1 and asked == [ancestor]
+    # A second split on the same range (e.g. gpre and pre threads) reuses the memoized delta paths.
+    done2, todo2, _ = land.land_cache.split(wt, args, [["pkg/test"]], git(wt, "rev-parse", "HEAD"), sys.executable,
+                                            select)
+    assert todo2 == [] and len(done2) == 1 and asked == [ancestor]
