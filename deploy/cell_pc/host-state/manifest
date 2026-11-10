@@ -1,0 +1,16 @@
+# Cell PC desired state (role: cell), rosy-arm-cell, 2026-11-09. Format: deploy/hosts/common/host-state/manifest.
+# OMX arm-cell host only: CELL-A (compose project cell-a), the rosy-omx-* user units, the ceiling Cam phone ADB
+# station and remote-test storage. Site work (Account, its backup and TLS, site autoupdate, site firewall, site
+# stack) belongs to R. Left out on purpose: rosy-docker-upgrade (its dpkg -i restarts Docker and CELL-A, and the
+# update gate ignores arm sessions) and rosy-host-guard (R guards this PC, D-994; a cell PC guards nobody).
+# Nightly reboot is OFF here (coordinator, 2026-11-09): it checks only ~/rosy-omx/session.lock and the OMX adapter
+# (Fleet-driven arm work) never takes it, so 06:08 could cut a move. Re-enable (safe enabled) once that gate is fixed.
+safe file /etc/systemd/system/rosy-nightly-reboot.timer role/rosy-nightly-reboot.timer
+safe file /etc/systemd/system/rosy-nightly-reboot.service role/rosy-nightly-reboot.service
+safe disabled rosy-nightly-reboot.timer
+approval=wifi wifi-allow
+# PC recovery is shared: install with --approve recovery (common/manifest).
+# D-805 update gate: skip updaters while updates are frozen (ops-update-freeze tag or a local freeze file).
+safe file /etc/systemd/system/rosy-nightly-reboot.service.d/10-update-gate.conf common/10-update-gate.conf
+# D-991: owner of the cell camera user units a person may restart.
+approval=recovery file /etc/rosy/host-control/units-user common/host-control-units-user.in

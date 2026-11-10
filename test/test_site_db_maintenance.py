@@ -118,6 +118,113 @@ def test_cli_backup_rejects_ambiguous_or_empty_targets(tmp_path):
                       "--prune", "0"])
 
 
+def test_prune_ledger_removes_api_and_sighting_audit_past_retention(tmp_path):
+    from datetime import datetime, timedelta, timezone
+
+    source = tmp_path / "fleet.sqlite3"
+    old_iso = (datetime.now(timezone.utc) - timedelta(days=120)).isoformat(
+        timespec="milliseconds")
+    new_iso = datetime.now(timezone.utc).isoformat(timespec="milliseconds")
+    old_epoch = time.time() - 120 * 86400.0
+    with closing(sqlite3.connect(source)) as connection, connection:
+        connection.execute("""CREATE TABLE fleet_api_audit (
+            request_id TEXT, event_type TEXT, principal_id TEXT, role TEXT,
+            method TEXT, path TEXT, status_code INTEGER, created_at TEXT)""")
+        connection.execute("INSERT INTO fleet_api_audit VALUES ('old','INTENT','p','operator','POST','/api/fleet/x',NULL,?)", (old_iso,))
+        connection.execute("INSERT INTO fleet_api_audit VALUES ('new','INTENT','p','operator','POST','/api/fleet/x',NULL,?)", (new_iso,))
+        connection.execute("""CREATE TABLE sighting_audit (
+            audit_id INTEGER PRIMARY KEY, event TEXT, robot_id TEXT, source_id TEXT,
+            seq INTEGER, captured_at REAL, received_at REAL)""")
+        connection.execute("INSERT INTO sighting_audit (event, robot_id, source_id, seq, captured_at, received_at) VALUES ('sighting.accepted','rosy_42','ceiling_north',1,?,?)", (old_epoch, old_epoch))
+        connection.execute("INSERT INTO sighting_audit (event, robot_id, source_id, seq, captured_at, received_at) VALUES ('sighting.accepted','rosy_42','ceiling_north',2,?,?)", (time.time(), time.time()))
+
+    removed = prune_ledger(source, history_days=0, audit_days=0,
+                           api_audit_days=90, sighting_days=90)
+
+    assert removed["fleet_api_audit"] == 1 and removed["sighting_audit"] == 1
+    with closing(sqlite3.connect(source)) as connection:
+        assert connection.execute("SELECT count(*) FROM fleet_api_audit").fetchone()[0] == 1
+        assert connection.execute("SELECT count(*) FROM sighting_audit").fetchone()[0] == 1
+
+    # 0 disables the group: rows past the window stay.
+    with closing(sqlite3.connect(source)) as connection, connection:
+        connection.execute("INSERT INTO fleet_api_audit VALUES ('old2','INTENT','p','operator','POST','/api/fleet/x',NULL,?)", (old_iso,))
+        connection.execute("INSERT INTO sighting_audit (event, robot_id, source_id, seq, captured_at, received_at) VALUES ('sighting.accepted','rosy_42','ceiling_north',3,?,?)", (old_epoch, old_epoch))
+
+    kept = prune_ledger(source, history_days=0, audit_days=0,
+                        api_audit_days=0, sighting_days=0)
+
+    assert kept["fleet_api_audit"] == 0 and kept["sighting_audit"] == 0
+    with closing(sqlite3.connect(source)) as connection:
+        assert connection.execute("SELECT count(*) FROM fleet_api_audit").fetchone()[0] == 2
+        assert connection.execute("SELECT count(*) FROM sighting_audit").fetchone()[0] == 2
+
+    with pytest.raises(DatabaseError, match="retention"):
+        prune_ledger(source, api_audit_days=-1)
+    with pytest.raises(DatabaseError, match="retention"):
+        prune_ledger(source, sighting_days=-1)
+
+
+def test_cli_backup_vacuums_the_timer_copy(tmp_path, capsys):
+    source = tmp_path / "fleet.sqlite3"
+    with closing(sqlite3.connect(source)) as connection, connection:
+        connection.execute("CREATE TABLE blobs (padding TEXT NOT NULL)")
+        connection.executemany("INSERT INTO blobs VALUES (?)",
+                               [("x" * 2048,) for _ in range(400)])
+        connection.execute("DELETE FROM blobs WHERE rowid % 2 = 0")
+    dest_dir = tmp_path / "nightly"
+
+    code = site_db.main(["backup", "--source", str(source), "--dest-dir", str(dest_dir),
+                         "--prune-history", "0", "--prune-audit", "0"])
+
+    assert code == 0
+    report = json.loads(capsys.readouterr().out)
+    vacuum = report["vacuum"]
+    assert vacuum["bytes_after"] < vacuum["bytes_before"]
+    assert verify_database(Path(report["path"])) == "ok"
+
+
+def test_cli_compact_requires_stopped_and_reclaims_deleted_pages(tmp_path, capsys):
+    source = tmp_path / "fleet.sqlite3"
+    with closing(sqlite3.connect(source)) as connection, connection:
+        connection.execute("CREATE TABLE records (value TEXT NOT NULL)")
+        connection.execute("INSERT INTO records VALUES ('keep')")
+        connection.execute("CREATE TABLE blobs (padding TEXT NOT NULL)")
+        connection.executemany("INSERT INTO blobs VALUES (?)",
+                               [("x" * 2048,) for _ in range(400)])
+        connection.execute("DELETE FROM blobs")
+
+    with pytest.raises(SystemExit):
+        site_db.main(["compact", "--path", str(source)])
+
+    assert site_db.main(["compact", "--path", str(source), "--assume-stopped"]) == 0
+
+    report = json.loads(capsys.readouterr().out)
+    assert report["integrity"] == "ok"
+    assert report["bytes_after"] < report["bytes_before"]
+    assert _value(source) == "keep"
+
+
+def test_vacuum_keeps_its_temp_copy_beside_the_target(tmp_path, monkeypatch):
+    """fleet-backup has a read-only rootfs with a 32 MB tmpfs /tmp: a real-size
+    VACUUM stages its copy where SQLITE_TMPDIR points, or it fails with SQLITE_FULL."""
+    source = tmp_path / "fleet.sqlite3"
+    with closing(sqlite3.connect(source)) as connection, connection:
+        connection.execute("CREATE TABLE blobs (padding TEXT NOT NULL)")
+        connection.executemany("INSERT INTO blobs VALUES (?)",
+                               [("x" * 2048,) for _ in range(400)])
+        connection.execute("DELETE FROM blobs WHERE rowid % 2 = 0")
+
+    monkeypatch.delenv("SQLITE_TMPDIR", raising=False)
+    site_db.vacuum_database(source)
+    assert os.environ["SQLITE_TMPDIR"] == str(tmp_path)
+
+    monkeypatch.setenv("SQLITE_TMPDIR", tmp_path / "operator-set")
+    site_db.vacuum_database(source)
+    assert os.environ["SQLITE_TMPDIR"] == str(tmp_path / "operator-set")  # 사용자 값 존중
+    os.environ.pop("SQLITE_TMPDIR", None)  # vacuum이 건 환경을 다음 시험에 흘리지 않는다
+
+
 def test_cli_check_accepts_a_fresh_intact_backup(tmp_path, capsys):
     source = tmp_path / "fleet.sqlite3"
     _database(source, "check")
@@ -450,7 +557,8 @@ def test_prune_ledger_deletes_only_terminal_task_history_and_expired_audit(tmp_p
         kept_pairing = db.execute("SELECT COUNT(*) FROM device_pairing_audit").fetchone()[0]
         kept_events = db.execute("SELECT COUNT(*) FROM core_event_audit").fetchone()[0]
     assert removed == {"fleet_task_history": 2, "fleet_tasks": 0, "rosy_account_audit": 0,
-                       "device_pairing_audit": 1, "core_event_audit": 2}
+                       "device_pairing_audit": 1, "core_event_audit": 2,
+                       "fleet_api_audit": 0, "sighting_audit": 0}
     assert kept_tasks == {"old-hold", "new-done", "old-running"}
     assert kept_rows == {"old-done", "old-failed", "old-hold", "new-done", "old-running"}
     assert kept_audit == 2 and kept_pairing == 0
@@ -463,7 +571,8 @@ def test_prune_ledger_zero_retention_disables_and_missing_tables_are_skipped(tmp
 
     disabled = prune_ledger(database, history_days=0, audit_days=0)
     assert disabled == {"fleet_task_history": 0, "fleet_tasks": 0, "rosy_account_audit": 0,
-                        "device_pairing_audit": 0, "core_event_audit": 0}
+                        "device_pairing_audit": 0, "core_event_audit": 0,
+                        "fleet_api_audit": 0, "sighting_audit": 0}
     with closing(sqlite3.connect(database)) as db:
         assert db.execute("SELECT COUNT(*) FROM fleet_task_history").fetchone()[0] == 5
         assert db.execute("SELECT COUNT(*) FROM fleet_tasks").fetchone()[0] == 5
@@ -473,7 +582,8 @@ def test_prune_ledger_zero_retention_disables_and_missing_tables_are_skipped(tmp
         db.execute("CREATE TABLE marker (v INT)")
     assert prune_ledger(empty) == {"fleet_task_history": 0, "fleet_tasks": 0,
                                    "rosy_account_audit": 0, "device_pairing_audit": 0,
-                                   "core_event_audit": 0}
+                                   "core_event_audit": 0, "fleet_api_audit": 0,
+                                   "sighting_audit": 0}
 
 
 def test_prune_ledger_preserves_task_identity_after_an_earlier_history_prune(tmp_path):
@@ -503,7 +613,8 @@ def test_backup_command_prunes_the_live_ledger_after_writing_the_backup(tmp_path
     report = json.loads(capsys.readouterr().out)
     assert report["pruned_ledger"] == {"fleet_task_history": 2, "fleet_tasks": 0,
                                        "rosy_account_audit": 0, "device_pairing_audit": 1,
-                                       "core_event_audit": 2}
+                                       "core_event_audit": 2, "fleet_api_audit": 0,
+                                       "sighting_audit": 0}
     assert "checkpoint" in report and report["checkpoint"]["wal_checkpoint"] is not None
     with closing(sqlite3.connect(database)) as db:
         assert db.execute("SELECT COUNT(*) FROM fleet_task_history").fetchone()[0] == 3

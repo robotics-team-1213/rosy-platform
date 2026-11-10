@@ -11,6 +11,12 @@
 | ID | 제목 | Status |
 |---|---|---|
 | D-1009 | CORE는 pass/stop 점 경로를 한 번에 받아 stop 점에서만 서고, 막힘은 이동을 유지하며 재계획한다. [전문](../adr/D-1009-core-route-drive-pass-and-stop.md) | Accepted (2026-11-10, 사용자 지시; SOURCE·Gazebo SIM까지, 기체 적용·실물 주행 없음, Fleet 연동은 다음 단계) |
+| D-1008 | 몸 주변 안전지대는 실제 진행 방향만 지킨다: 후진 사람 확인 삭제, 제자리 회전은 몸이 돌아 들어가는 쪽만. [전문](../adr/D-1008-heading-only-safety-zone.md) | Accepted (2026-11-09, 사용자 지시; CORE 구현·호스트 시험, 하드웨어 worker 회전 게이트와 실물 적용은 별도) |
+| D-1007 | 카메라 위치에 관계없이 맞추기의 첫 걸음 — 로봇 대응점으로 검토용 보정 후보(유효 구역=대응점 껍질)를 만든다, 오프라인·적용 없음. [전문](../adr/D-1007-robot-driven-calibration-candidates.md) | Accepted (2026-11-09, 사용자 지시; SOURCE·호스트 시험까지, 현장 수용 없음) |
+| D-1001 | 공통 로직은 R의 서명된 rosy-site 스택에서 서비스별 독립 컨테이너로 돌리고, 기계 자격·안전 권한은 Fleet에 남긴다. [전문](../adr/D-1001-common-logic-placement-on-r.md) | Accepted (2026-11-09, 사용자 승인: 초안 그대로 수락; 내장 Account 모드는 연동 브랜치 착지·R 배포 뒤 제거; 알림 전달기는 Monitoring 전용 이미지 분리 뒤 나중에 전달 전용·자기 이미지로. 문서와 구조 시험만 변경, 배포·이미지·compose 변경 없음) |
+| D-1002 | 현장 차로 편대 주행: 리더는 Nav2 trip, 팔로워는 FOR-004 TRAIL 추종, Fleet은 둘을 미션 하나로 묶고 차로 적합성만 더한다. [전문](../adr/D-1002-formation-driving-on-site-lanes.md) | Proposed (2026-11-09, 사용자 목표; Fleet 구현·호스트 시험·Gazebo SIM 시나리오, 실물 미수용) |
+| D-1010 | 사이트 지도 프레임 결속: 활성 본문 검증, 목표·자세·경로의 프레임 거절. [전문](../adr/D-1010-site-map-frame-binding.md) | Accepted (2026-11-10, 사용자 지시; SOURCE·호스트 시험까지, 기체·현장 수용 없음) |
+| D-999 | 카메라 연결 승인은 사용 중인 자리를 명시적으로 교체할 수 있고 옛 자격은 새 폰이 확인할 때 같이 폐기한다. [전문](../adr/D-999-camera-pairing-replace-occupied-source.md) | Accepted (2026-11-09, 사용자 요청; D-341 6항의 '먼저 회수, 그 다음 승인' 순서를 대체) |
 | D-1006 | 지도·보정이 현실과 어긋난 것을 먼저 알아챈다 — 보정 건강 상태와 선택 게이트, 자동 재보정은 독립 기준이 생길 때까지 규정만. [전문](../adr/D-1006-calibration-health-before-adaptation.md) | Accepted (2026-11-09, 사용자 지시; SOURCE·호스트 시험까지, 현장 수용 없음) |
 | D-1003 | Fleet은 free 구간의 Nav2 목표를 로봇 자기 지도 프레임으로 바꿔 보낸다. [전문](../adr/D-1003-nav2-free-goals-in-the-robot-map-frame.md) | Accepted (2026-11-09, 사용자 지시; SOURCE·Gazebo SIM까지, 기체·현장 수용 없음) |
 | D-922 | Pinky는 차분하고 호기심 많은 동료로 표현하고 방향성 눈인사와 졸린 대기를 연결한다 | Accepted (2026-10-30, 표현 경험·책임 경계; 구현·실물 수용 별도) |

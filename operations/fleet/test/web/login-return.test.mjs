@@ -57,3 +57,10 @@ test('login returns to the install screen and refuses unknown anchors', () => {
   assert.equal(loginReturn('/console/install#other', origin), '/console/install');
   assert.equal(loginReturn('/console#cameras', origin), '/console');
 });
+test('install login keeps a camera section anchor and nothing else in the fragment', () => {
+  assert.equal(loginReturn('/console/install#camera-link', origin), '/console/install#camera-link');
+  assert.equal(loginHref({origin, href: origin + '/console/install#camera-peer-panel'}),
+    '/console/login?return=' + encodeURIComponent('/console/install#camera-peer-panel'));
+  assert.equal(loginReturn('/console/install#javascript:alert(1)', origin), '/console/install');
+  assert.equal(loginReturn('//evil.test/console/install#camera-link', origin), '/console');
+});
