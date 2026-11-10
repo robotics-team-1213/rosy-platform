@@ -36,7 +36,7 @@ from harness import affected_exclusive
 
 CACHE = "rosy-land-cache.jsonl"
 FAILED = "rosy-land-failed.json"  # argv of invocations whose last run had a NEW failure
-MAX_LINES, KEEP = 2000, 1000
+MAX_LINES, KEEP = 20000, 15000
 NARROW_COMMITS = 3  # ancestor commits tried for narrow reuse: one selector call each
 NARROW = "reused across trees"  # land.py: a narrow reuse is not this candidate's own run (land record)
 LISTS = ("test/known_failures.py", "test/known_failures.txt", "test/flaky_quarantine.txt")
@@ -262,7 +262,9 @@ def split(wt: Path, args, invocations: list[list[str]], head: str, python: str, 
             todo.append(inv)
     if todo and args.tests in ("auto", "full") and (wt / "tools/harness/affected_tests.py").is_file():
         wanted = {tuple(inv) for inv in todo if not affected_exclusive.dedicated(inv)}
-        commits = list(dict.fromkeys(e["commit"] for e in reversed(known) if tuple(e["argv"]) in wanted))
+        ancestors = set(_git(wt, "rev-list", head).stdout.split()) - {head}
+        commits = [c for c in dict.fromkeys(e["commit"] for e in reversed(known) if tuple(e["argv"]) in wanted)
+                   if c in ancestors]
         for commit in commits[:NARROW_COMMITS]:
             # explicit FULL: only the strict rule publish_evidence recomputes, never the landed-FULL extension
             delta = (reach(wt, commit, head, python) if args.tests == "full"
