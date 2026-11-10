@@ -118,13 +118,16 @@ def test_receding_horizon_splice_transitions_in_flight_without_dead_stop():
 
 
 def test_flow_decouples_pure_gripper_segments_and_skips_zero_delta_waypoints():
-    wp = [[0.0, -30.0, 20.0, 46.0, 10.0, 46.6],
-          [0.0, -30.0, 20.0, 46.0, 10.0, 46.6],  # redundant zero-delta waypoint
-          [0.0, -30.0, 20.0, 46.0, 10.0, 56.6]]  # pure 10-unit gripper opening
-    frames = m.flow(wp, FPS, VMAX, blend=[False, False, False], blend_s=0.2)
-    assert frames[-1][5] == pytest.approx(56.6)
-    # With decoupled gripper acceleration (amax >= 25), a 10-unit jaw move takes ~1.0s (~31 frames) instead of ~1.9s (58 frames)
-    assert len(frames) <= 35
-    v = speeds(frames, wp[0])
+    wp_body = [[0.0, -30.0, 20.0, 46.0, 10.0, 46.6],
+               [10.0, -30.0, 20.0, 46.0, 10.0, 46.6]]
+    wp_grip = [[0.0, -30.0, 20.0, 46.0, 10.0, 46.6],
+               [0.0, -30.0, 20.0, 46.0, 10.0, 46.6],  # redundant zero-delta waypoint
+               [0.0, -30.0, 20.0, 46.0, 10.0, 56.6]]  # pure 10-unit gripper opening
+    body_frames = m.flow(wp_body, FPS, VMAX, blend=[False, False], blend_s=0.2)
+    grip_frames = m.flow(wp_grip, FPS, VMAX, blend=[False, False, False], blend_s=0.2)
+    assert grip_frames[-1][5] == pytest.approx(56.6)
+    # With decoupled gripper acceleration (amax >= 25), a 10-unit jaw move takes ~2.5s (~76 frames) vs ~3.6s (~109 frames) for body
+    assert len(grip_frames) <= 80 and len(grip_frames) < len(body_frames) - 25
+    v = speeds(grip_frames, wp_grip[0])
     assert max(abs(x) for row in v for x in row) <= VMAX + 1e-6
 

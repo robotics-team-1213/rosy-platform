@@ -1168,21 +1168,24 @@ def test_teacher_mode_feedforward_tracks_streamed_ramp_without_braking_chaser_la
         clock[0] += 1 / 30
         motion.send(here)
     assert motion.tracking
-    # Stream a 30 Hz ramp at 4.5 units/s (~8.1 deg/s) for 2 seconds, then hold steady for 0.6 s.
+    # Stream a C2 eased trajectory (matching retime/flow) reaching 4.5 units/s (~8.1 deg/s) and holding for 2s.
     streamed = dict(here)
     lags_deg = []
-    for k in range(1, 61):
+    pos = here["shoulder_pan.pos"]
+    for k in range(1, 76):
         clock[0] += 1 / 30
-        streamed = {**here, "shoulder_pan.pos": here["shoulder_pan.pos"] + 4.5 * (k / 30)}
+        v_u = min(4.5, 4.5 * (k / 27))
+        pos += v_u / 30
+        streamed = {**here, "shoulder_pan.pos": pos}
         sent = motion.send(streamed)
         follower.raw.update({n: int(v) for n, v in follower.goals.items()})
-        if k >= 30:  # after initial acceleration ramp
+        if k >= 45:  # steady-state cruise
             lags_deg.append(abs(streamed["shoulder_pan.pos"] - sent["shoulder_pan.pos"]) * 1.8)
     # Feedforward velocity matching keeps steady-state tracking lag well under 0.5 deg (vs ~3.9 deg without v_ff)
     assert max(lags_deg) < 0.5
     # When the streamed trajectory stops at the final pose, the guard decelerates smoothly within 10 deg/s^2
     prev_v = motion.velocity["shoulder_pan"]
-    for _ in range(20):
+    for _ in range(30):
         clock[0] += 1 / 30
         sent = motion.send(streamed)
         follower.raw.update({n: int(v) for n, v in follower.goals.items()})
