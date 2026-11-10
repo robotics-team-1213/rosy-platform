@@ -150,3 +150,40 @@ def test_the_best_round_comes_only_from_a_person_s_replace_decision(tmp_path):
         stream.write(json.dumps(dict(verdict="replace", round_id=row["round_id"])) + "\n")
         stream.write(json.dumps(dict(verdict="keep", round_id="20261107T000000-00000000")) + "\n")
     assert ladder.best_round(tmp_path) == row["round_id"]
+
+
+def test_gazebo_contract_stage_judges_conformance_samples_and_reports(tmp_path):
+    import sys
+    sys.path.insert(0, str(ROOT / "tools/sim"))
+    joints = ("joint1", "joint2", "joint3", "joint4", "joint5", "gripper_joint_1")
+    samples = dict(
+        joint_states=[(i * 25_000_000, joints, [0.0] * 6) for i in range(45)],
+        cameras={name: [(i * 100_000_000, "rgb8", 240, 320) for i in range(12)] for name in ("top", "front")},
+        clock=[i * 10_000_000 for i in range(100)],
+        objects={"box_a": [(0.2, 0.0, 0.1), (0.201, 0.0, 0.1)]},
+        stop=dict(accepted=True, cancel_acknowledged=True, travel_before_rad=0.08, travel_after_rad=0.002),
+    )
+    stage = ladder.judge_gazebo_contract(samples)
+    assert stage["status"] == "passed" and stage["claim"] == "ROS 실행 계약" and stage["reason"] is None
+    bad_report = tmp_path / "gazebo-fail.json"
+    bad_report.write_text(json.dumps(dict(failures=["clock: must advance without going back"], shape=[240, 320], camera_hz=5.0)), encoding="utf-8")
+    failed = ladder.judge_gazebo_contract(bad_report)
+    assert failed["status"] == "failed" and "clock" in failed["reason"]
+    row = fresh(tmp_path)
+    row["stages"]["gazebo"] = stage
+    ladder.write_round(tmp_path, row)
+
+
+def test_isaac_stage_judges_suite_reports_and_handoff(tmp_path):
+    handoff = dict(schema="rosy.omx-isaac-handoff.v1", cases=[dict(id="mujoco-handoff-s1", sim=dict(expect="completed"))])
+    pending = ladder.judge_isaac_stage(handoff)
+    assert pending["status"] == "pending" and pending["result"]["prepared_cases"] == ["mujoco-handoff-s1"]
+    suite_pass = dict(sha="a" * 40, rows=[dict(id="skew-t1-s1", expect="completed", run_id="r1", status="SUCCEEDED", result="completed", matches=True, judgement=dict(result="completed"))])
+    passed = ladder.judge_isaac_stage(suite_pass)
+    assert passed["status"] == "passed" and passed["run_id"] == "r1" and passed["result"]["matched"] == 1
+    suite_fail = dict(sha="a" * 40, rows=[dict(id="skew-t1-s1", expect="completed", run_id="r2", status="SUCCEEDED", result="dropped", matches=False, judgement=dict(result="dropped"))])
+    failed = ladder.judge_isaac_stage(suite_fail)
+    assert failed["status"] == "failed" and "skew-t1-s1" in failed["reason"]
+    row = fresh(tmp_path)
+    row["stages"]["isaac"] = passed
+    ladder.write_round(tmp_path, row)
