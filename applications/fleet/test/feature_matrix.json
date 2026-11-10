@@ -2081,6 +2081,14 @@
           ]
         },
         {
+          "consumer": "applications/fleet/web/manual-control.js",
+          "expression": "/api/fleet/robots/${encodeURIComponent(robotId)}/speed-limits",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "PUT:/api/fleet/robots/{robot_id}/speed-limits"
+          ]
+        },
+        {
           "consumer": "applications/fleet/web/console-goal.js",
           "expression": "/api/fleet/robots/${encodeURIComponent(robotId)}/map-pin",
           "resolution": "literal-or-template",
