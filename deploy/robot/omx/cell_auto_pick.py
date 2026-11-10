@@ -392,9 +392,9 @@ def run_auto(cell, config, calibration, calibration_path, catalog, roi, source, 
             usable, refused = choose(cell, config, calibration, source, dest_site, place_xy, roi, objects, mask, catalog,
                                      bias_data, choices, work, failed_yaws, dest_view) if not error else ([], [])
             cd.target(objects, usable, refused)
-            if usable and config.get("decision_model"):  # the model orders what the measurement kept, or vetoes all
-                import cell_pick_judge, judge_seat  # noqa: E401
-                judged = cell_pick_judge.ask(judge_seat.from_config(config["decision_model"]), img, usable)
+            if usable and (config.get("debate_models") or config.get("decision_model")):  # the model orders what the measurement kept, or vetoes all
+                import cell_pick_judge  # noqa: E401
+                judged = cell_pick_judge.ask(config.get("debate_models") or config["decision_model"], img, usable)
                 cd.emit("target_judge", {"candidates": len(usable)}, list(range(len(usable))) + [-1], judged["choice"],
                         judged["by"], judged["reason"])
                 usable = [usable[i] for i in judged["order"]]
