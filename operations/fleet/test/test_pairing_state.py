@@ -356,8 +356,8 @@ def test_pending_listing_shows_no_code_or_secret(tmp_path):
     row = listing["requests"][0]
     assert row["state"] == "revealed" and row["device_label"] == phone.label
     assert listing["paired_sources"] == [
-        {"source_id": "ceiling_north", "has_credential": False},
-        {"source_id": "ceiling_south", "has_credential": False}]
+        {"source_id": "ceiling_north", "has_credential": False, "credential_id": None, "device_label": None, "replaceable": False},
+        {"source_id": "ceiling_south", "has_credential": False, "credential_id": None, "device_label": None, "replaceable": False}]
     assert listing["site_ca_fingerprint"] == pairing.site_fingerprint(SITE_CA_PEM)
     text = repr(listing)
     for secret in (phone.poll, phone.client_nonce, created["server_nonce"],
@@ -448,3 +448,98 @@ def test_a_repeated_confirm_is_refused_after_the_window_a_revoke_or_with_another
     clock2.advance(121)
     assert _status(lambda: service2.confirm(created2["request_id"], phone2.bearer,
                                             approval2["credential_id"])).status == 410
+
+
+def _active(service, clock, source="ceiling_north"):
+    phone, created, approval = _approved(service, clock, source)
+    service.poll(created["request_id"], phone.bearer)
+    service.confirm(created["request_id"], phone.bearer, approval["credential_id"])
+    return approval["credential_id"]
+
+
+def _replace_approval(service, old_id, source="ceiling_north"):
+    phone, created = _revealed(service)
+    code = phone.code(created["request_id"], created["server_nonce"])
+    return phone, created, (lambda **kw: service.approve(
+        created["request_id"], code=code, source_id=source, principal_id="bob",
+        replace_credential_id=old_id, **kw))
+
+
+def test_replace_keeps_old_credential_until_the_phone_confirms(tmp_path):
+    service, store, clock = _service(tmp_path)
+    old_id = _active(service, clock)
+    listing = service.pending_listing()["paired_sources"][0]
+    assert (listing["replaceable"], listing["credential_id"]) == (True, old_id)
+
+    phone, created, approve = _replace_approval(service, old_id)
+    approval = approve()
+    assert approval["replaces"] == old_id
+    states = {row["credential_id"]: row["state"] for row in store.credential_rows()}
+    assert states == {old_id: "active", approval["credential_id"]: "pending_confirm"}
+    assert [row["credential_id"] for row in service.sync_listing()] == [old_id]
+
+    service.poll(created["request_id"], phone.bearer)
+    service.confirm(created["request_id"], phone.bearer, approval["credential_id"])
+    rows = {row["credential_id"]: row for row in store.credential_rows()}
+    assert rows[old_id]["state"] == "revoked" and rows[old_id]["revoke_reason"] == "replaced"
+    assert rows[approval["credential_id"]]["state"] == "active"
+    assert [row["credential_id"] for row in service.sync_listing()] == [approval["credential_id"]]
+    audits = [(r["action"], r["target"]) for r in store.audit_rows()]
+    assert ("replace", old_id) in audits
+
+
+def test_abandoned_replacement_leaves_the_old_camera_active(tmp_path):
+    service, store, clock = _service(tmp_path)
+    old_id = _active(service, clock)
+    _, _, approve = _replace_approval(service, old_id)
+    approve()
+    clock.advance(130)
+    service.sweep()
+    assert [row["credential_id"] for row in service.sync_listing()] == [old_id]
+    assert {row["state"] for row in store.credential_rows()} == {"active", "revoked"}
+
+
+def test_replace_refuses_a_stale_or_wrong_target(tmp_path):
+    service, store, clock = _service(tmp_path)
+    old_id = _active(service, clock)
+    _, _, wrong = _replace_approval(service, "cred-someoneelse")
+    assert (_status(wrong).status, _status(wrong).code) == (409, "REPLACE_TARGET_CHANGED")
+    # No replace id on an occupied source still refuses and names the occupant.
+    phone, created = _revealed(service)
+    code = phone.code(created["request_id"], created["server_nonce"])
+    error = _status(lambda: service.approve(created["request_id"], code=code,
+                                            source_id="ceiling_north", principal_id="bob"))
+    assert (error.code, error.extra["replace_credential_id"]) == ("SOURCE_HAS_CREDENTIAL", old_id)
+    # Revoked meanwhile: replacing it is refused rather than silently treated as a free source.
+    service.revoke(old_id, principal_id="alice")
+    _, _, stale = _replace_approval(service, old_id)
+    assert _status(stale).code == "REPLACE_TARGET_CHANGED"
+    assert [row["state"] for row in store.credential_rows()] == ["revoked"]
+
+
+def test_replace_of_a_free_source_and_double_replace_are_refused(tmp_path):
+    service, _, clock = _service(tmp_path)
+    _, _, free = _replace_approval(service, "cred-none", source="ceiling_south")
+    assert _status(free).code == "REPLACE_TARGET_CHANGED"
+    old_id = _active(service, clock)
+    _, _, first = _replace_approval(service, old_id)
+    first()
+    _, _, second = _replace_approval(service, old_id)
+    assert _status(second).code == "SOURCE_PENDING_CONFIRM"
+    assert service.pending_listing()["paired_sources"][0]["replaceable"] is False
+
+
+def test_confirm_refuses_when_the_replaced_credential_was_revoked_meanwhile(tmp_path):
+    service, store, clock = _service(tmp_path)
+    old_id = _active(service, clock)
+    phone, created, approve = _replace_approval(service, old_id)
+    approval = approve()
+    service.revoke(old_id, principal_id="alice")
+    service.poll(created["request_id"], phone.bearer)
+    error = _status(lambda: service.confirm(created["request_id"], phone.bearer,
+                                            approval["credential_id"]))
+    assert (error.status, error.code) == (409, "REPLACE_TARGET_CHANGED")
+    rows = {row["credential_id"]: row for row in store.credential_rows()}
+    assert rows[old_id]["revoke_reason"] == "operator" and rows[old_id]["revoked_by"] == "alice"
+    assert rows[approval["credential_id"]]["state"] == "revoked"
+    assert service.sync_listing() == []

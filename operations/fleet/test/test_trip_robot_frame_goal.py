@@ -18,8 +18,11 @@ def _in_robot_map(x, y, yaw):
     return c * x - s * y + SHIFT[0], s * x + c * y + SHIFT[1], yaw + TURN
 
 
-def _state(pose, state="LOCALIZED", frame="map"):
-    return {"pose": dict(zip(("x", "y", "yaw"), pose)), "localization": {"state": state, "pose_frame": frame}}
+def _state(pose, state="LOCALIZED", frame="map", map_id=None):
+    body = {"pose": dict(zip(("x", "y", "yaw"), pose)), "localization": {"state": state, "pose_frame": frame}}
+    if map_id is not None:
+        body["map_id"] = map_id
+    return body
 
 
 def test_the_goal_moves_with_the_frame_offset_and_equal_frames_keep_it():
@@ -40,6 +43,7 @@ def test_no_localized_map_frame_pose_is_no_goal():
 
 def test_a_free_trip_sends_its_goals_in_the_robot_map_frame():
     runner, store, ports = _setup(_free_map(), caps=BOTH)
+    ports.map_id = "site"  # D-1010: the site side of the conversion is anchored on the active map
     robot = {"state": None}
 
     async def robot_state(robot_id):
@@ -53,9 +57,11 @@ def test_a_free_trip_sends_its_goals_in_the_robot_map_frame():
     assert ports.goals == [(2.0, 4.0)]  # the segment end, site (1, 0), seen from the robot's own map
 
 
-def test_a_robot_without_a_map_frame_pose_gets_the_site_goal_as_before():
-    """No LOCALIZED map pose to pair with: unchanged, so console trust and CORE admission decide as before."""
+def test_a_robot_without_a_map_frame_pose_gets_no_goal():
+    """D-1010 review: no LOCALIZED map pose to pair with and no map id proof — the site goal no
+    longer goes out raw (D-1003 3항's unconditional fallback is gone); the trip stops on map_frame."""
     runner, store, ports = _setup(_free_map(), caps=BOTH)
+    ports.map_id = "site"
 
     async def robot_state(robot_id):
         return _state((5.0, 5.0, 1.0), frame="odom")
@@ -64,7 +70,8 @@ def test_a_robot_without_a_map_frame_pose_gets_the_site_goal_as_before():
     _plan(store, ports, "ab:fwd", 0.1, "C")
     run(runner.start("p1", "bob"))
     _ticks(runner, ports)
-    assert ports.goals == [(1.0, 0.0)]
+    row = runner.view("p1")
+    assert ports.goals == [] and row["state"] == "stopped" and row["reason"] == "map_frame"
 
 
 def test_free_trip_sends_each_segment_end_once_and_arrives():

@@ -99,7 +99,10 @@ def install_site_map_routes(app, *, site_maps, route_active, read_guard, require
 
     @app.get("/api/fleet/site-map/active", dependencies=read_guard, tags=["site-map"])
     def site_map_active() -> dict:
-        view = site_maps.active_view()
+        try:
+            view = site_maps.active_view()
+        except SiteMapError as exc:  # D-1010: a tampered active row refuses, never a 500
+            raise site_map_error(exc.status_code, exc.code, exc.args[0]) from exc
         if view is None:
             raise site_map_error(404, "SITE_MAP_NOT_ACTIVE")
         return view
