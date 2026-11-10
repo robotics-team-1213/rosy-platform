@@ -4836,3 +4836,10 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 시험: 원격 시험으로 확인 뒤 착지(아래 행에 결과 추가).
 - 증거: 이동한 함수 7개 본문이 main과 바이트 동일함을 정규식 추출 비교로 확인(2026-11-10), `py_compile` 통과, `size_range.py main HEAD` 통과(cell_auto_pick 605→544줄).
 - gate 변화: 없음(코드 이동만, 장치·현장 수용 별도).
+
+## 2026-11-10 · uncommitted · fix(omx): 재삽입(unstable_grasp) 회복 시나리오 추가 — main MAIN-RED 복구
+- 변경: `cell_failure_scenarios.py` SCENARIOS에 "stopped: reinserted" 원인(`cell_diagnose.ATTEMPT_CAUSES`의 `unstable_grasp`, bc989974c3 추가)을 다루는 시나리오 1건. 첫 시도 reinserted → 표의 첫 동작 `observe_again` → 다음 `placed`. 기대 동작은 `cell_recovery.carry`(cause `unstable_grasp` → `options` 첫 동작)와 `World`(넷째 원소 없음 → why "unknown") 경로를 읽어 정했다.
+- 이유: `test/test_omx_cell_failure_scenarios.py::test_the_scenarios_cover_every_cause_in_the_table`이 main 78b700784b에서 실패(MAIN-RED, RECOVERY의 `unstable_grasp`을 덮는 시나리오 없음). 이 빨간불이 이후 모든 착지를 막는다(2026-11-10 두 착지 정지로 확인).
+- 시험: 원격 시험으로 확인 뒤 착지(아래 행에 결과 추가).
+- 증거: land.py MAIN-RED 판정 기록(`main-pre-pre-1.txt`, 2026-11-10), `py_compile` 통과. 로컬 실행은 cell_zones의 fcntl(Linux 전용)로 불가해 원격으로만 확인한다.
+- gate 변화: 없음.
