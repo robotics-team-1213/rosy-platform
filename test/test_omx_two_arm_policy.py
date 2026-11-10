@@ -52,7 +52,6 @@ def test_only_finished_tasks_make_a_round_pass():
     for whole in ([dict(completed=True), dict(completed=False)], []):
         assert policy.outcome(dict(whole=whole))["status"] == "failed"
 
-
 def test_pipeline_stages_connect_mujoco_gazebo_and_isaac_roles():
     layout = sites.Layout(container_colours="multi")
     eval_rows = [

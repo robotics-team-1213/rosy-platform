@@ -396,8 +396,8 @@ def _link(from_dir: Path, target: Path) -> str:
     return quote(os.path.relpath(target, from_dir).replace(os.sep, "/"), safe="/-._~")
 
 
-def _title(path: Path) -> str:
-    meta = _optional_frontmatter(path)
+def _title(path: Path, meta: dict | None = None) -> str:
+    meta = _optional_frontmatter(path) if meta is None else meta
     if isinstance(meta.get("title"), str):
         return meta["title"]
     for line in _normalize(path.read_text(encoding="utf-8", errors="replace")).split("\n"):
@@ -427,7 +427,8 @@ def _read_log(repo: Path, module: dict) -> list[LogEntry]:
     return parse_log(path.read_text(encoding="utf-8")) if path.is_file() else []
 
 
-def render_module_index(repo: Path, module: dict, adr: AdrLog, adr_log_path: Path) -> str:
+def render_module_index(repo: Path, module: dict, adr: AdrLog, adr_log_path: Path,
+                        plan_docs: list | None = None, solution_docs: list | None = None) -> str:
     base = repo / module["path"]
     meta = _read_progress(repo, module)
     name = module["name"]
@@ -450,19 +451,17 @@ def render_module_index(repo: Path, module: dict, adr: AdrLog, adr_log_path: Pat
         title, _ = adr.index.get(adr_id, ("(ADR log에 없음)", "?"))
         lines.append(f"| {adr_id} | {title} |")
 
-    plans = {repo / p for p in meta.get("plans") or []}
-    plans |= {p for p in (repo / "docs" / "plans").glob("*.md") if _names_module(_optional_frontmatter(p), name)}
+    plan_docs = [(p, _optional_frontmatter(p)) for p in (repo / "docs" / "plans").glob("*.md")] if plan_docs is None else plan_docs
+    plans = {repo / p for p in meta.get("plans") or []} | {p for p, fm in plan_docs if _names_module(fm, name)}
     lines += ["", "## 계획·결과 문서", ""]
     ordered = sorted(plans, key=lambda p: p.relative_to(repo).as_posix())
     lines += [f"- [{p.name}]({_link(base, p)})" for p in ordered] or ["- 없음"]
 
     solutions_root = repo / "docs" / "solutions"
-    solutions = sorted(
-        (p for p in solutions_root.rglob("*.md") if p.name != "AGENTS.md" and _names_module(_optional_frontmatter(p), name)),
-        key=lambda p: p.relative_to(solutions_root).as_posix(),
-    )
+    solution_docs = [(p, _optional_frontmatter(p)) for p in solutions_root.rglob("*.md") if p.name != "AGENTS.md"] if solution_docs is None else solution_docs
+    solutions = sorted(((p, fm) for p, fm in solution_docs if _names_module(fm, name)), key=lambda x: x[0].relative_to(solutions_root).as_posix())
     lines += ["", "## 교훈 (docs/solutions)", ""]
-    lines += [f"- [{_title(p)}]({_link(base, p)})" for p in solutions] or ["- 없음"]
+    lines += [f"- [{_title(p, fm)}]({_link(base, p)})" for p, fm in solutions] or ["- 없음"]
 
     lines += ["", "## 시험", ""]
     lines += [f"- `{t}`" for t in module.get("tests") or []] or ["- 없음"]
@@ -533,15 +532,14 @@ def generated_targets(repo: Path) -> dict[Path, str]:
     config = load_config(repo)
     adr_path = repo / config["adr_log"]
     adr = parse_adr_log(adr_path.read_text(encoding="utf-8"), repo / "docs" / "adr")
-    targets = {
-        repo / m["path"] / "index.md": render_module_index(repo, m, adr, adr_path) for m in config["modules"]
-    }
+    plan_docs = [(p, _optional_frontmatter(p)) for p in (repo / "docs" / "plans").glob("*.md")]
+    sol_docs = [(p, _optional_frontmatter(p)) for p in (repo / "docs" / "solutions").rglob("*.md") if p.name != "AGENTS.md"]
+    targets = {repo / m["path"] / "index.md": render_module_index(repo, m, adr, adr_path, plan_docs, sol_docs) for m in config["modules"]}
     targets[repo / config["status"]] = render_status(repo, config)
     if config.get("sim2real_gaps"):
         targets[repo / config["sim2real_table"]] = sim2real.render(sim2real.read(repo / config["sim2real_gaps"]))
     if config.get("perception_gaps"):
-        targets[repo / config["perception_table"]] = perception_gaps.render(
-            perception_gaps.read(repo / config["perception_gaps"]))
+        targets[repo / config["perception_table"]] = perception_gaps.render(perception_gaps.read(repo / config["perception_gaps"]))
     return targets
 
 
@@ -712,15 +710,16 @@ def lint(repo: Path) -> tuple[list[str], list[str]]:
             errors.append(f"{rel}: conflict marker at line {', '.join(map(str, lines))}")
         mojibake = find_mojibake(text)
         if mojibake:
-            errors.append(
-                f"{rel}: suspicious encoding ('??' runs) at line "
-                f"{', '.join(map(str, mojibake[:5]))}")
+            errors.append(f"{rel}: suspicious encoding ('??' runs) at line {', '.join(map(str, mojibake[:5]))}")
 
     refs, note = _history_refs(repo)
     if note:
         warnings.append(note)
     moved_roots = _moved_roots(repo)
-
+    log_rels = [f"{m['path']}/logs.md" for m in config["modules"]]
+    unchanged = {r: set(t.splitlines()) - set(d.splitlines())
+                 if (t := _git(repo, "ls-tree", "--name-only", r, "--", *log_rels)) is not None
+                 and (d := _git(repo, "diff", "--name-only", r, "--", *log_rels)) is not None else set() for r in refs}
     for module in config["modules"]:
         name, base = module["name"], repo / module["path"]
         try:
@@ -739,7 +738,8 @@ def lint(repo: Path) -> tuple[list[str], list[str]]:
         else:
             text = log_path.read_text(encoding="utf-8")
             errors += [f"{name}/logs.md: {e}" for e in validate_log(text)]
-            log_errors, log_warnings = _append_only_findings(repo, refs, name, module["path"], text, moved_roots)
+            check_refs = [r for r in refs if f"{module['path']}/logs.md" not in unchanged[r]]
+            log_errors, log_warnings = _append_only_findings(repo, check_refs, name, module["path"], text, moved_roots)
             errors += log_errors
             warnings += log_warnings
 

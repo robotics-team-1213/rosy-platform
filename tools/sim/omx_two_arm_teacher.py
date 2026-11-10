@@ -24,6 +24,14 @@ FPS = 15
 CARRY_SPEED = .05  # m/s; .08 let a 16 g container swing 10 deg in the jaws on the short reach to the near row
 OPEN_GAP = dict(belt=.042, ship=.033, temp=.033, outbound=.033)  # 33 mm lets a pad stay inside the 6 mm gaps between rows (release_gap_m of the ship case); the stern bay mouth is 37 mm
 HOLD_GAP = .030 - jaw.SQUEEZE_M
+SERVO_GAIN = 40.  # omx_physics design kp of every joint: about 0.16 s from command to arrival
+
+
+def servo_values(model, ids):
+    """The five arm joints' servo and passive constants a seed may change (omx_two_arm_skill.disturb), as the model has them."""
+    dofs = model.jnt_dofadr[model.actuator_trnid[ids[:5], 0]]
+    return dict(kp=model.actuator_gainprm[ids[:5], 0].copy(), kv=-model.actuator_biasprm[ids[:5], 2], force=model.actuator_forcerange[ids[:5], 1].copy(),
+                damping=model.dof_damping[dofs].copy(), frictionloss=model.dof_frictionloss[dofs].copy())
 
 
 RECORDED = ("top", "side", "a_wrist", "b_wrist")  # the cell's four cameras (D-960); the world's overview is not one of them
@@ -66,6 +74,10 @@ class Teacher:
         self.hook = frame_hook or (lambda data, label: None)
         self.contacts, self.phase, self.first, self.tilt, self.n, self.held_tilt = dict(arm_arm=set(), arm_other=set(), pad_neighbour=set()), "", {}, 0., 0, 0.
         self.others = set()
+        # joint-zero calibration error per arm (rad, 6 with the gripper 0): true angle = reported + error. The real twin fit found 1-4 deg
+        # (2026-11-09 omx-twin-night). A privileged teacher plans in true angles; anyone else commands in reported ones and lands off by it.
+        self.zero_error, self.privileged = {}, True
+        self.servo = {}  # arm: {kp|kv|force|damping|frictionloss: five values, nan keeps} (omx_two_arm_skill.disturb); fresh() applies them
 
     def perceive_pick(self, data, sa, true_xy, true_yaw):
         """Detect a skewed/offset container at `sa` from the rendered top camera frame (omx_real2sim pinhole back-projection)."""
@@ -108,6 +120,8 @@ class Teacher:
         """One video frame of physics. Sequential: the Teacher is the one context. Two arms at once: each context gets its own arm's
         link and pad contacts; arm-arm contacts go to both."""
         self.n += 1
+        if not self.privileged:
+            targets = {arm: t + self.zero_error[arm] if arm in self.zero_error else t for arm, t in targets.items()}
         self.world.advance(data, targets)
         both = ctxs is not None
         ctxs = ctxs if both else [self]
@@ -306,20 +320,25 @@ class Teacher:
         another arm moved meanwhile (ctx.others) are that arm's, not disturbed neighbours."""
         w, ctx = self.world, ctx or self
         pose = judge_pose(w, data, step["container"], step["to"], self.limits)
-        moved = []
-        for o, (p, yw, tl) in before.items():
-            if o in ctx.others:
-                continue
-            p2, yw2, tl2 = w.pose(data, o)
-            d = float(np.linalg.norm(p2 - p)) * 1000
-            dyaw = abs(math.degrees(tasks.wrap_pi(yw2 - yw)))
-            if d > self.limits["neighbour_mm"] or abs(tl2 - tl) > self.limits["neighbour_tilt_deg"] or dyaw > self.limits["neighbour_yaw_deg"]:
-                moved.append(f"{o} {d:.1f} mm {dyaw:.1f} deg")
+        moved = self.disturbed(data, before, ctx)
         arm_hits = sorted(f"{a}~{b}" for a, b in ctx.contacts["arm_other"])
         crash = sorted("~".join(p) for p in ctx.contacts["arm_arm"])
         ok = pose["ok"] and not moved and not crash and not arm_hits
         return dict(row, result="pass" if ok else "fail", pose=pose, neighbours_disturbed=moved, arm_arm_contacts=crash, arm_link_contacts=arm_hits,
                     pad_touched_neighbours=sorted(ctx.contacts["pad_neighbour"]), held_tilt_max_deg=round(ctx.held_tilt, 1), first_contact_phase=ctx.first)
+
+    def disturbed(self, data, before, ctx):
+        """Neighbours that moved past the judge's limits since `before`."""
+        moved = []
+        for o, (p, yw, tl) in before.items():
+            if o in ctx.others:
+                continue
+            p2, yw2, tl2 = self.world.pose(data, o)
+            d = float(np.linalg.norm(p2 - p)) * 1000
+            dyaw = abs(math.degrees(tasks.wrap_pi(yw2 - yw)))
+            if d > self.limits["neighbour_mm"] or abs(tl2 - tl) > self.limits["neighbour_tilt_deg"] or dyaw > self.limits["neighbour_yaw_deg"]:
+                moved.append(f"{o} {d:.1f} mm {dyaw:.1f} deg")
+        return moved
 
     def _hold_shift(self, arm, off, q, yaw, pos):
         """TCP shift that puts the container centre (not the TCP) where the waypoint says: R @ held offset, nominal layout.hold_below under the TCP removed."""
@@ -330,6 +349,16 @@ class Teacher:
     def fresh(self, here):
         """A world at rest with the containers of `here` on their sites and every other container parked."""
         w, L = self.world, self.layout
+        m = w.model
+        if not hasattr(w, "servo0"):  # the physics candidate's own values, before any teacher of the process changed the shared model
+            w.servo0 = {arm: servo_values(m, ids) for arm, ids in w.act.items()}
+        for arm, ids in w.act.items():  # the model is shared by every teacher of the process: set every joint every time
+            mine = self.servo.get(arm, {})
+            v = {k: np.where(np.isnan(mine[k]), base, mine[k]) if k in mine else base for k, base in w.servo0[arm].items()}
+            dofs = m.jnt_dofadr[m.actuator_trnid[ids[:5], 0]]
+            m.actuator_gainprm[ids[:5], 0], m.actuator_biasprm[ids[:5], 1], m.actuator_biasprm[ids[:5], 2] = v["kp"], -v["kp"], -v["kv"]
+            m.actuator_forcerange[ids[:5]] = np.stack([-v["force"], v["force"]], 1)
+            m.dof_damping[dofs], m.dof_frictionloss[dofs] = v["damping"], v["frictionloss"]
         data = w.reset()
         for cid, site in here.items():
             # seeds above 0 vary the start placement inside the stud-lane clearance (0.4 mm per side): +-0.3 mm, +-0.5 deg

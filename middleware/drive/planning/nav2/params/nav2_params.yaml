@@ -99,7 +99,9 @@ controller_server:
 
       # 제자리 회전 (고개 먼저 돌리기)
       use_rotate_to_heading: true            # 경로 방향과 로봇 헤딩이 다를 때 제자리 회전 먼저 하기
-      rotate_to_heading_min_angle: 0.35      # [rad] 약 20도 이상 차이나면 제자리 회전 모드 진입
+      # D-1009: 0.35 rad(20도)였다. 차선 꼭짓점은 0.15 m 간격에 30도씩 꺾여서(SIM 경로 A, D-1009 검증) 지나가는 점마다
+      # 제자리 회전이 걸려 멈춘 것과 같았다. 57도까지는 곡률로 돌며 지나간다. 출발·도착 자세 정렬은 그대로 제자리 회전이다.
+      rotate_to_heading_min_angle: 1.0       # [rad] 약 57도 이상 차이나면 제자리 회전 모드 진입
       rotate_to_heading_angular_vel: 0.8     # [rad/s] 제자리 회전할 때의 회전 속도
 
       # 커브길 감속 (Regulated)
