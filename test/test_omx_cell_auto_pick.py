@@ -903,12 +903,12 @@ def test_gate_validates_zone_entry_and_park_release_across_chained_commands(tmp_
     cell = Cell([CONT2])
     guarded = auto.Guarded(cell, CONFIG)
     gate = auto.Gate(guarded, dict(CONFIG, _payload={"kg": 0.03, "source": "catalogue"}), cal.load(path))
+    home6 = list(CONFIG["plan"]["home"]) + [56.0]
     lib_path = tmp_path / "lib.json"
     lib_path.write_text(json.dumps({
         "fps": 30,
         "source": {"pick": {"x": 0.072, "y": 0.120}, "place": {"x": 0.060, "y": 0.090}},
-        "chunks": {"home": [list(CONFIG["plan"]["home"])], "above_place": [list(CONFIG["plan"]["home"])],
-                   "descend_place": [list(CONFIG["plan"]["home"])], "lift_place": [list(CONFIG["plan"]["home"])]}
+        "chunks": {"home": [home6], "above_place": [home6], "descend_place": [home6], "lift_place": [home6]}
     }))
     assert gate.open(lib_path, lambda a: None) is None
     assert gate.act(f"load {lib_path}")["ok"]
@@ -919,11 +919,11 @@ def test_gate_validates_zone_entry_and_park_release_across_chained_commands(tmp_
         "leave": lambda self: left.append(True),
     })()
     cell.act = lambda cmd: (
-        {"command": "state", "ok": True, "state": list(CONFIG["plan"]["home"]) + [56.0], "t": time.time(),
+        {"command": "state", "ok": True, "state": home6, "t": time.time(),
          "operating_context": dict(SESSION), "health": {"temp_c": [40] * 6, "pwm": [10] * 6, "current_ma": [0] * 6}}
         if cmd == "state" else
-        {"command": cmd, "ok": True, "settled": True, "state": list(CONFIG["plan"]["home"]) + [56.0],
-         "operating_context": dict(SESSION)}
+        {"command": cmd, "ok": True, "settled": True, "state": home6,
+         "operating_context": dict(SESSION), "library_sha256": gate.assessment["library_sha256"]}
     )
     assert gate.act("chain goto above_place ; run descend_place")["ok"]
     assert entered == [(0.060, 0.090)]
