@@ -41,9 +41,12 @@ CHOICES = dict(
     belt_pose="fixture",     # "fixture": BELT_STOP_X and the fixture's pickup line; "snapshot": the belt strip measured in cell_snapshot's top frame
     ship_pose="assumed",     # "assumed": ship_stern_x_m and ship_centre_y_m above; "snapshot": the hull fitted in cell_snapshot's top frame
     cell_snapshot=None,      # with temp_lanes="snapshot": a rosy.omx-cell-snapshot.v1 file (omx_real2sim.py measure), the lanes the top camera saw then
+    top_camera="2026-11-10", # "2026-11-10": resurveyed top camera (cell_model_inventory.yaml); "2026-11-03": initial stud-grid PnP
     physics="design",        # a candidate of learning/envs/isaac/cell_physics.yaml (omx_physics.py): servo gains, joint damping, container mass and friction
     wait_pose="side")        # where an arm waits between steps: "side" = home folded but turned to the belt end, out of the middle band
                              # (D-983: the folded home points its jaw at the middle, and arm_a brushed arm_b's jaw at the stand); "home"
+TOP_CAMERA_20261110 = dict(eye=[-.0334, .0493, .6613], focus=[.0804, .0086, .1762], up=[.9737, .0296, .226],
+                           f_px=615., width=640, height=480)
 # Lane centre (x, y) m and long-axis yaw deg, lanes numbered as printed on the plates. Dark pads in the surveyed top camera, back-projected to the plate top;
 # the pads measured 89 x 30 mm against the 90 x 30 container. tmp-a-3 lay under a container: from lanes 1 and 2, its visible end agrees within 0.1 deg.
 # The plates are loose: measure again when one moves.
@@ -234,6 +237,8 @@ class Layout:
         self.choices = dict(CHOICES, **choices)
         c = self.choices
         self.fixture = f = fx.container_fixture(layers=3, case=c["fixture_case"])
+        if c["top_camera"] == "2026-11-10" and ("top_camera" in choices or c["temp_lanes"] != "photo-20261107"):
+            f["real_cameras"] = dict(f["real_cameras"], top=dict(TOP_CAMERA_20261110))
         self.table_z = f["workplate_center_m"][2] + f["workplate_size_m"][2] / 2
         self.deck_z = ship_plate.top_z(f)
         self.arms, self.sim_arms, self.plates = {}, {}, {}

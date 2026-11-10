@@ -163,6 +163,35 @@ def test_white_printed_lane_labels_across_a_pad_do_not_split_it():
     assert got["plates"]["a"]["seen"] == 3 and got["plates"]["b"]["seen"] == 3
 
 
+def test_yellow_containers_and_bottom_clipped_v11_plates_are_measured():
+    layout = sites.Layout()
+    first = r2s.measure_temp_plates(frame(layout), layout)
+    prev = dict(plates={t: p["lanes"] for t, p in first["plates"].items()}, shape=first["shape"])
+    v11 = dict(step_deg=17.0, radius_m=.203)
+    poses = dict(a=(-.0933, -.1676, 0.), b=(-.0906, .1668, 0.))
+    img = np.full((480, 640, 3), (60, 200, 200), np.uint8)
+    cam = r2s.Camera(layout.fixture["real_cameras"]["top"], img.shape[:2])
+    box_h = sites.CONTAINER[layout.choices["ship_source"]][2]
+    for tag, pose in poses.items():
+        for k, local in r2s.plate_lanes(v11).items():
+            (x, y), yaw = r2s.place(local, pose)
+            on_top = k == 2 or (tag == "a" and k == 3)
+            z = layout.deck_z + (box_h if on_top else 0.)
+            bgr = (30, 195, 220) if k == 2 else (40, 110, 240) if on_top else (30, 30, 30)  # yellow (H 26) in lane 2, orange in a-3
+            corners = [cam.project((x + a * .045 * math.cos(yaw) - b * .015 * math.sin(yaw),
+                                    y + a * .045 * math.sin(yaw) + b * .015 * math.cos(yaw), z))
+                       for a, b in ((-1, -1), (1, -1), (1, 1), (-1, 1))]
+            cv2.fillPoly(img, [np.round(corners).astype(np.int32)], bgr)
+    got = r2s.measure_temp_plates(img, layout, prev)
+    assert got["shape"]["step_deg"] == pytest.approx(17.0, abs=1.)
+    for tag, pose in poses.items():
+        assert got["plates"][tag]["seen"] == 3
+        lanes = {l["lane"]: l for l in got["plates"][tag]["lanes"]}
+        assert "container" in lanes[2]["source"]
+        for k, local in r2s.plate_lanes(v11).items():
+            assert math.dist(lanes[k]["xy"], r2s.place(local, pose)[0]) < .004, (tag, k)
+
+
 def test_the_ship_is_found_where_its_hull_lies():
     layout = sites.Layout()
     img = np.full((480, 640, 3), (60, 200, 200), np.uint8)

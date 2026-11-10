@@ -4,7 +4,7 @@
 # cell-photos/ beside the private SIM operator configuration on the review host.
 # Physics constants (servo gains, joint damping, container mass and friction) are candidates in cell_physics.yaml beside this file.
 schema: rosy.cell-model-inventory/1
-checked_at: '2026-11-03'
+checked_at: '2026-11-10'
 models:
   - id: gripper
     name: 그리퍼(OMX 팔레타이징 조 v2.1)
@@ -22,8 +22,8 @@ models:
     name: 임시 칸 판(두 장)
     cad: {file: null, sha256: null}
     sim: reflected
-    measured: 위 카메라 프레임에서 칸 패드·놓인 컨테이너를 판 윗면으로 되투영해 판마다 부채꼴 하나로 맞춤(omx_real2sim measure). 스냅샷 deploy/robot/omx/sim/cell_snapshots/. 2026-11-08 판 모양 단계 13.6°, 반지름 217 mm, 팔 축에서 약 146 mm
-    differs: 설계(SCAD v11, 다리 v7에서 200 mm)와 모양·자리가 다르다. 판은 고정돼 있지 않아 옮길 때마다 다시 잰다. 시뮬은 스냅샷을 선택지 temp_lanes=snapshot으로 읽는다(sim2real G-17)
+    measured: 위 카메라 프레임에서 칸 패드·놓인 컨테이너(주황·노랑)를 판 윗면으로 되투영해 판마다 부채꼴 하나로 맞춤(omx_real2sim measure). 스냅샷 deploy/robot/omx/sim/cell_snapshots/. 2026-11-10 다리 v7 + 판 v11 실측 단계 17.0°, 반지름 203.4 mm(설계 17.3°, 200 mm), 패드 폭 30.3~31.9 mm(2026-11-08 구형 판은 단계 13.6°, 반지름 217 mm, 팔 축에서 약 146 mm)
+    differs: 판은 옮길 때마다 다시 잰다. 시뮬은 스냅샷을 선택지 temp_lanes=snapshot으로 읽는다(sim2real G-17)
   - id: workbench
     name: 작업대
     cad: {file: 261026_World.STL, sha256: dd91457a4a8d17d7fbb4fbfdb12dff9c2ae98e92e74760231c9ec08aa377f3cc}
@@ -58,8 +58,8 @@ models:
     name: 위쪽 카메라(RealSense D435)
     cad: {file: null, sha256: null}
     sim: stand_in
-    measured: 2026-11-03 640×480 컬러. 자세(fixture 좌표) (-0.041, 0.037, 0.662) m, 판 위 588 mm, 선미 쪽으로 13.1° 기움, f 615 px(D435 일반값) 돌기 25개 PnP 0.58 px
-    differs: 양팔 시뮬레이션은 이 자세로 top 카메라를 둔다(omx_two_arm_world, 2026-11-09 확인). 측량 사이에는 임시판 칸 크기로만 확인한다(sim2real G-19)
+    measured: 2026-11-10 USB3 재연결 뒤 재측량(640×480 컬러). 자세(fixture 좌표) (-0.0334, 0.0493, 0.6613) m, focus (0.0804, 0.0086, 0.1762) m, up (0.9737, 0.0296, 0.226), f 615 px(다중 평면 61점 PnP 중앙값 0.74 px, p90 1.39 px, 독립 hold-out 21점 중앙값 0.92 px·최대 1.84 px; 2026-11-03 돌기 25개 PnP 0.58 px 대비 -56 px, -17 px, 2.8° 이동)
+    differs: 양팔 시뮬레이션은 이 자세로 top 카메라를 둔다(omx_two_arm_sites top_camera=2026-11-10, omx_two_arm_world). 측량 사이에는 원거리 정적 앵커(omx_cell_anchor)와 임시판 칸 크기로 확인한다(sim2real G-19)
   - id: camera_side
     name: 옆 카메라(Jieli)
     cad: {file: null, sha256: null}
@@ -75,7 +75,7 @@ models:
 # Measured cell layout: the numbers tools read (ship_stack_sites, real-cell site planning). The map may change a little;
 # re-measure and bump `revision`, keep the old one in git. Heights: work table top = 0, mm. Positions: fixture frame, m.
 layout:
-  revision: ship-cell-2026-11-03
+  revision: ship-cell-2026-11-10
   heights_mm:
     arm_b_base_plate: {value: 12, source: ruler, measured: '2026-11-03'}
     ship_plate_top: {value: 8, source: ruler, measured: '2026-11-03'}
@@ -88,9 +88,9 @@ layout:
     arm_a: {xy: [0.116, -0.164], yaw_deg: 90.0, source: 'top frame, base plate centre (no FK)'}
     arm_b: {xy: [0.104, 0.153], yaw_deg: -94.3, source: 'FK of live joint states, 3.1 px'}
   cameras:
-    top: {eye: [-0.0411, 0.0374, 0.6652], focus: [0.0722, 0.0401, 0.1783], up: [0.974, 0.0071, 0.2266], f_px: 615, residual_px: 0.58}
+    top: {eye: [-0.0334, 0.0493, 0.6613], focus: [0.0804, 0.0086, 0.1762], up: [0.9737, 0.0296, 0.226], f_px: 615, residual_px: 0.74, holdout_px: 0.92, measured: '2026-11-10'}
     side: {eye: [-0.5078, 0.0019, 0.1471], focus: [-0.0082, -0.0166, 0.1445], up: [0.0061, 0.0257, 0.9997], f_px: 950, residual_px: 2.8}
-  top_camera_parallax_centre_px: [322, 383]
+  top_camera_parallax_centre_px: [265, 383]
   evidence: docs/validation/omx-cell-survey-2026-11-03/result.md
 photos:
   - id: ceiling
