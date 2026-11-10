@@ -484,7 +484,8 @@ def execute_directive(
             params = {
                 "gripper.held_30mm": float(cal.get("held_30mm", 54.3)),
                 "gripper.closed": float(cal.get("grip_closed", 48.8)),
-                "grasp.pos_tol_units": 2.2,
+                "grasp.shallow_tol_units": float(exec_cfg.get("shallow_tol_units", 2.2)),
+                "grasp.wedged_tol_units": float(exec_cfg.get("wedged_tol_units", 2.5)),
                 "grasp.max_skew_mm": 5.5,
                 "wrist.finger_color": 2 if cal.get("finger_color") == "white" else 1,
             }
