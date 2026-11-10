@@ -289,3 +289,15 @@ def test_a_moved_top_camera_is_caught_on_the_far_band(tmp_path, monkeypatch):
     name = anchor.remember(path)
     assert name == anchor.digest(path) and anchor.reference(name).read_bytes() == path.read_bytes()
     assert anchor.reference("sha256:" + "0" * 64) is None
+
+
+def test_20261110_named_choices_and_arm_bases_candidates_match_the_snapshot():
+    snap_path = "deploy/robot/omx/sim/cell_snapshots/20261110-1231.json"
+    from_snap = sites.Layout(cell_snapshot=snap_path, temp_lanes="snapshot", ship_pose="snapshot", belt_pose="snapshot", arm_bases="snapshot")
+    from_named = sites.Layout(temp_lanes="photo-20261110", ship_pose="photo-20261110", belt_pose="photo-20261110", arm_bases="plate-centre")
+    for k in ("tmp-a-1", "tmp-a-2", "tmp-a-3", "tmp-b-1", "tmp-b-2", "tmp-b-3", "ship-h1r1-l0", "belt"):
+        assert math.dist(from_snap.sites[k]["xy"], from_named.sites[k]["xy"]) < 1e-6, k
+    assert tuple(from_named.arms["arm_b"].base[:2]) == pytest.approx((.107, .164))
+    assert tuple(sites.Layout().arms["arm_b"].base[:2]) == pytest.approx((.104, .153))
+    assert not any(s.get("blocked") for s in from_named.sites.values())  # tmp-b-1 clears the measured ship by 15.9 mm
+    assert sites.WRIST_PHOTO_A["lens_m"][0] > sites.WRIST_PHOTO["lens_m"][0] and sites.WRIST_PHOTO_A["axis_hit_x_m"] > sites.WRIST_PHOTO["axis_hit_x_m"]

@@ -32,9 +32,9 @@ PREFIX = {"arm_a": "a_", "arm_b": "b_"}
 WRIST_ASSETS = sites.ISAAC / "assets/omx_wrist_camera_b"  # link5 parts in mm, as stacking_scene.WRIST_PARTS draws them in Isaac
 WRIST_PARTS = ("link5_gripper", "gripper_plate_F6", "b16-u16-span-D-holder-assembly")
 FPS = 15
-# the cell as its top camera sees it (median pixels of the 11-09 top frame): yellow table, white plates with dark lane pads, light-blue ship
-COLOURS = dict(floor=[.45, .5, .55, 1], table=[.74, .64, .35, 1], belt=[.2, .25, .28, 1], plate=[.88, .89, .9, 1], pad=[.08, .09, .1, 1],
-               ship=[.6, .85, .97, 1], container=[.91, .47, .22, 1], wall=[.6, .84, 1., 1])  # wall: the room behind the cell in the side frame (11-09)
+# the cell as its cameras see it (2026-11-10 top/side frames, G-29): yellow table, light-blue v11 plates with dark lane pads, light-blue ship
+COLOURS = dict(floor=[.37, .43, .37, 1], table=[.58, .47, .21, 1], belt=[.16, .21, .24, 1], plate=[.52, .69, .79, 1], pad=[.08, .09, .1, 1],
+               ship=[.50, .72, .85, 1], container=[.91, .47, .22, 1], wall=[.6, .84, 1., 1])  # wall: the room behind the cell in the side frame (11-09)
 
 
 def prism(polygon, z0, z1):
@@ -150,7 +150,8 @@ class World:
             spec.add_equality(type=mujoco.mjtEq.mjEQ_JOINT, name1=p + "gripper_joint_2", name2=p + "gripper_joint_1", data=([0, -1, 0, 0, 0] + [0] * 7)[:mujoco.mjNEQDATA])
             if self.wrist != "none":
                 self._wrist(spec, p)
-        world.add_light(pos=[.1, 0, 1.2], dir=[0, 0, -1], diffuse=[.8, .8, .8])
+        spec.visual.headlight.ambient, spec.visual.headlight.diffuse, spec.visual.headlight.specular = [.28] * 3, [.42] * 3, [.05] * 3
+        world.add_light(pos=[.1, 0, 1.2], dir=[0, 0, -1], diffuse=[.68, .68, .68], specular=[.06, .06, .06])
         real = f["real_cameras"]
         for name, cam in (("top", real["top"]), ("side", real["side"])):
             right, up = camera_axes(cam["eye"], cam["focus"], cam["up"])
@@ -164,10 +165,12 @@ class World:
         if self.wrist == "stock":
             cell = json.loads(kin.CELL_EXAMPLE.read_text(encoding="utf-8"))["wrist_camera"]
             base.update(lens_m=cell["lens_m"], axis_hit_x_m=cell["axis_hit_x_m"])
-        if self.wrist == "photo-20261108":
+        elif self.wrist == "photo-20261108":
             base.update(sites.WRIST_PHOTO)
+        elif self.wrist == "photo-20261110":
+            base.update(sites.WRIST_PHOTO_A if p == "a_" else sites.WRIST_PHOTO)
         link5 = spec.body(p + "link5")
-        if self.wrist in ("v21-b", "photo-20261108"):  # the printed D holder: link5 is the team's parts, not the stock mesh with ROBOTIS frame F9 (both see and collide)
+        if self.wrist in ("v21-b", "photo-20261108", "photo-20261110"):  # the printed D holder: link5 is the team's parts, not the stock mesh with ROBOTIS frame F9 (both see and collide)
             for part in link5.geoms:
                 part.contype = part.conaffinity = 0
                 part.rgba = [0, 0, 0, 0]

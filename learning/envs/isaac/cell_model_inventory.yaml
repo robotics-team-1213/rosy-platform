@@ -69,9 +69,9 @@ models:
   - id: camera_wrist
     name: 손목 카메라 둘(Innomaker)
     cad: {file: null, sha256: null}
-    sim: none
-    measured: front가 Innomaker 1.3
-    differs: arm_a 손목 서비스는 404
+    sim: reflected
+    measured: Innomaker 1080P USB2.0(640×480, D 홀더 r06 장착). 2026-11-08·2026-11-10 실물 손목 프레임의 조 윤곽으로 팔별 렌즈 위치·시선 교점 맞춤(WRIST_PHOTO_A, WRIST_PHOTO_B)
+    differs: 양팔 시뮬레이션(omx_two_arm_world)은 D 홀더 메시와 팔별 맞춤 자세(wrist_camera=photo-20261108·photo-20261110)를 쓴다. 다자세 hand-eye는 미수행(sim2real G-24)
 # Measured cell layout: the numbers tools read (ship_stack_sites, real-cell site planning). The map may change a little;
 # re-measure and bump `revision`, keep the old one in git. Heights: work table top = 0, mm. Positions: fixture frame, m.
 layout:
@@ -129,8 +129,8 @@ person_tasks:
     why: arm_a를 실물로 움직일 수 없다
     status: open
   - task: RealSense를 USB 3.0 포트에 직결
-    why: USB 2.0이라 424×240만 나온다
-    status: open
+    why: USB 2.0이라 424×240만 나온다(2026-11-10 USB 3.0 재연결 및 위 카메라 재측량 완료)
+    status: done
   - task: 리더 팔 두 대의 짝 지정
     why: 원격 조종 기록에서 어느 팔을 따르는지 정해야 한다
     status: open

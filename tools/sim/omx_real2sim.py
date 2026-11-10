@@ -51,7 +51,7 @@ PARTIAL_MIN = .040           # a lane-wide pad at least this long is a lane cut 
 CHANGED = (.003, 3.)         # m, deg: a lane moved more than this is a changed item; 3 deg is the pocket's own yaw
                              # tolerance (SCAD yaw_tol_deg), above one plate's frame-to-frame jitter (1.4 deg, 2026-11-09)
 STAGGER_S = 45
-GAPS = {"temp_plates": "G-17", "ship": "G-18", "camera": "G-19", "belt": "G-30"}  # sim2real registry rows each item reports to (D-480)
+GAPS = {"temp_plates": "G-17", "ship": "G-18", "camera": "G-19", "arm_bases": "G-21", "belt": "G-30"}  # sim2real registry rows each item reports to (D-480)
 PY = "MUJOCO_GL=egl $HOME/rosy-test/venvs/sim-mujoco/bin/python"
 SNAP_CHOICES = lambda path: ["--choice", f"cell_snapshot={path}", "--choice", "temp_lanes=snapshot", "--choice", "ship_pose=snapshot",
                                 "--choice", "belt_pose=snapshot"]
@@ -442,12 +442,13 @@ def measure(run, prev_path=None, camera_moved_ok=False):
             raise SystemExit(f"top camera moved since the previous snapshot ({m}): re-survey it (G-19, calibration step 3) "
                              "before measuring; --camera-moved-ok measures anyway")
     items = {"temp_plates": lambda: measure_temp_plates(top, layout, prev and prev["items"]["temp_plates"]),
-             "ship": lambda: measure_ship(top, layout),
-             "belt": lambda: measure_belt(top, layout)}
+             "ship": lambda: measure_ship(top, layout), "belt": lambda: measure_belt(top, layout)}
     with ThreadPoolExecutor() as pool:  # items are independent; more join here (belt end, arm bases) as they get measurers
         done = {k: pool.submit(f) for k, f in items.items()}
         results = {k: f.result() for k, f in done.items()}
     tp = results["temp_plates"]
+    ab = dict(fk={n: dict(xy=[round(v, 4) for v in a.base[:2]], yaw_deg=round(math.degrees(a.yaw), 1)) for n, a in layout.arms.items()},
+              plate_centre={n: dict(xy=list(xy), yaw_deg=yaw) for n, (xy, yaw) in sites.ARM_BASES_PLATE_CENTRE.items()})
     snap = dict(schema=SCHEMA, taken_at=json.loads((run / "capture.json").read_text())["taken_at"] if (run / "capture.json").exists() else None,
                 frames={c: "sha256:" + hashlib.sha256(p.read_bytes()).hexdigest() for c, p in frames.items()},
                 camera=dict(top=layout.fixture["real_cameras"]["top"]), camera_motion=camera_motion,
@@ -455,7 +456,7 @@ def measure(run, prev_path=None, camera_moved_ok=False):
                                             seen={t: p["seen"] for t, p in tp["plates"].items() if "lanes" in p},
                                             errors={t: p["error"] for t, p in tp["plates"].items() if "error" in p},
                                             shape=tp["shape"], camera_check=tp["camera_check"]),
-                           ship=results["ship"], belt=results["belt"]))
+                           ship=results["ship"], belt=results["belt"], arm_bases=ab))
     (run / "snapshot.json").write_text(json.dumps(snap, indent=1), encoding="utf-8")
     cv2.imwrite(str(run / "overlay.png"), overlay(top, layout, tp["plates"], results["ship"], results["belt"]))
     return snap
