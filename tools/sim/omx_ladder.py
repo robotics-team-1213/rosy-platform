@@ -138,11 +138,11 @@ def new_round(root: Path, parent: str | None, cell: dict, source_sha: str, recip
     return dict(schema=SCHEMA, round_id=new_round_id(), created_at=datetime.now().astimezone().isoformat(timespec="seconds"),
                 parent_round_id=parent, source_sha=source_sha, scene=cell["scene"], recipe=recipe,
                 data=dict(episodes=episodes, from_failures=from_failures),
-                stages=dict(mujoco=dict(status="pending", claim="기하: 도달·순서·충돌", eval=None, artifacts=[], reason=None),
-                            gazebo=dict(status="not_run", claim="ROS 실행 계약", contract=None, artifacts=[],
-                                        reason="이 라운드에서 실행하지 않았습니다."),
-                            isaac=dict(status="not_run", claim="접촉·영상", scenario="arm-s-cell-case", run_id=None, result=None, artifacts=[],
-                                       reason="이 라운드에서 Isaac 접촉·안착 스위트를 아직 실행하지 않았습니다(cell_case_suite.py).")))
+                stages=dict(mujoco=dict(stage_order=1, track="learning_and_physics", status="pending", claim="기하: 도달·순서·충돌", eval=None, artifacts=[], reason=None),
+                            isaac=dict(stage_order=2, track="learning_and_physics", status="not_run", claim="접촉·영상", scenario="arm-s-cell-case", run_id=None, result=None, artifacts=[],
+                                       reason="Stage 1(MuJoCo) 뒤 Stage 2(Isaac 접촉·안착 스위트, cell_case_suite.py)를 아직 실행하지 않았습니다."),
+                            gazebo=dict(stage_order=None, track="ros2_execution_contract", status="not_run", claim="ROS 실행 계약", contract=None, artifacts=[],
+                                        reason="별도 ROS 2 실행 계약 점검(omx_backend_conformance.py)을 이 라운드에서 실행하지 않았습니다.")))
 
 
 def judge_gazebo_contract(samples_or_report: dict | Path, *, shape: tuple[int, int] = (240, 320), camera_hz: float = 5.0) -> dict:
@@ -285,12 +285,12 @@ def run_two_arm(args) -> int:
         record["isaac_handoff"] = handoff_file.name
     if getattr(args, "gazebo_report", None) or getattr(args, "isaac_report", None) or handoff_file.exists():
         record["stages"] = dict(
-            mujoco=dict(status=record["status"], claim="기하: 도달·순서·충돌", steps_pass=record.get("steps_pass"), steps=record.get("steps")),
-            gazebo=judge_gazebo_contract(args.gazebo_report) if getattr(args, "gazebo_report", None) else dict(
-                status="not_run", claim="ROS 실행 계약", contract=None, artifacts=[], reason="이 실행에서 Gazebo ROS 실행 계약 점검을 실행하지 않았습니다."),
-            isaac=judge_isaac_stage(args.isaac_report if getattr(args, "isaac_report", None) else handoff_file)
+            mujoco=dict(stage_order=1, track="learning_and_physics", status=record["status"], claim="기하: 도달·순서·충돌", steps_pass=record.get("steps_pass"), steps=record.get("steps")),
+            isaac=dict(stage_order=2, track="learning_and_physics", **(judge_isaac_stage(args.isaac_report if getattr(args, "isaac_report", None) else handoff_file)
             if (getattr(args, "isaac_report", None) or handoff_file.exists()) else dict(
-                status="not_run", claim="접촉·영상", scenario="arm-s-cell-case", run_id=None, result=None, artifacts=[], reason="이 실행에서 Isaac 핸드오프를 생성하지 않았습니다."),
+                status="not_run", claim="접촉·영상", scenario="arm-s-cell-case", run_id=None, result=None, artifacts=[], reason="이 실행에서 Isaac 핸드오프를 생성하지 않았습니다."))),
+            gazebo=dict(stage_order=None, track="ros2_execution_contract", **(judge_gazebo_contract(args.gazebo_report) if getattr(args, "gazebo_report", None) else dict(
+                status="not_run", claim="ROS 실행 계약", contract=None, artifacts=[], reason="별도 ROS 2 실행 계약 점검을 이 실행에서 수행하지 않았습니다."))),
         )
     record["views"] = sorted(path.name for path in (run / "artifacts").glob("*.png"))
     record["finished_at"] = datetime.now().astimezone().isoformat(timespec="seconds")

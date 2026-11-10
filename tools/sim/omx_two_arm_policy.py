@@ -342,30 +342,36 @@ def outcome(score):
 
 
 def pipeline_stages(score, layout, eval_rows, *, pick_vision=False, belt_skew=False, gazebo_report=None, isaac_report=None):
-    """Three-simulator pipeline breakdown (MuJoCo -> Gazebo -> Isaac Sim) with each backend's D-947 / D-866 / D-872 role."""
+    """Two-stage learning/physics pipeline (Stage 1 MuJoCo -> Stage 2 Isaac Sim) plus separate ROS 2 execution contract track (Gazebo)."""
     verdict = outcome(score)
     mujoco_stage = dict(
+        stage_order=1,
+        track="learning_and_physics",
         status=verdict["status"],
-        role="geometry_vision_and_act_policy_evaluation",
-        claim="기하·비전 정책: 4카메라+12관절 입력 ACT 추론 및 도달·순서·충돌 검증(D-947)",
+        role="stage1_geometry_vision_and_act_policy",
+        claim="기하·비전 정책(Stage 1): 4카메라+12관절 입력 ACT 추론 및 도달·순서·충돌 검증(D-947)",
         pick_vision=bool(pick_vision),
         belt_skew=bool(belt_skew),
         eval=score,
         reason=verdict.get("reason"),
     )
-    gazebo_stage = dict(
-        role="ros2_execution_contract_conformance",
-        **(ladder.judge_gazebo_contract(gazebo_report) if gazebo_report else dict(
-            status="not_run", claim="ROS 실행 계약", contract=None, artifacts=[],
-            reason="이 라운드에서 Gazebo ROS 실행 계약 점검을 실행하지 않았습니다(omx_backend_conformance.py).")),
-    )
-    handoff = teaching.isaac_handoff(layout, dict(completed=verdict["status"] == "passed", rows=eval_rows))
+    handoff = teaching.isaac_handoff(dict(completed=verdict["status"] == "passed", rows=eval_rows), layout)
     isaac_stage = dict(
-        role="physx_contact_pad_slip_and_seating_confirmation",
+        stage_order=2,
+        track="learning_and_physics",
+        role="stage2_physx_contact_pad_slip_and_seating",
         handoff=handoff,
         **(ladder.judge_isaac_stage(isaac_report if isaac_report else handoff)),
     )
-    return dict(mujoco=mujoco_stage, gazebo=gazebo_stage, isaac=isaac_stage)
+    gazebo_stage = dict(
+        stage_order=None,
+        track="ros2_execution_contract",
+        role="ros2_interface_conformance",
+        **(ladder.judge_gazebo_contract(gazebo_report) if gazebo_report else dict(
+            status="not_run", claim="ROS 실행 계약", contract=None, artifacts=[],
+            reason="별도 ROS 2 실행 계약 점검(omx_backend_conformance.py)을 이 라운드에서 실행하지 않았습니다.")),
+    )
+    return dict(mujoco=mujoco_stage, isaac=isaac_stage, gazebo=gazebo_stage)
 
 
 def now():

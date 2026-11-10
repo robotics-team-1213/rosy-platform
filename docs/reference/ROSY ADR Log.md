@@ -980,6 +980,7 @@
 | D-915 | Immutable physical evidence export with measured joint provenance | Accepted |
 | D-916 | Atomic raw source stamps on validated OMX joint snapshots | Accepted |
 | D-945 | 모든 표면이 같은 뼈대를 쓰는 자리 규칙 | Accepted |
+| D-1012 | OMX 시뮬레이션·학습 파이프라인은 Stage 1(MuJoCo 기하·비전·ACT 학습) → Stage 2(Isaac Sim PhysX 접촉·슬립·안착 확증) 직렬 2단계로 잇고, Gazebo는 별도 ROS 2 실행 계약 점검 트랙으로 분리한다 | Accepted (2026-11-10, 사용자 결정; 코드·단위 시험 반영, 실물 수용 별도) |
 
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
 

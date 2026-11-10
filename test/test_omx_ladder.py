@@ -185,5 +185,8 @@ def test_isaac_stage_judges_suite_reports_and_handoff(tmp_path):
     failed = ladder.judge_isaac_stage(suite_fail)
     assert failed["status"] == "failed" and "skew-t1-s1" in failed["reason"]
     row = fresh(tmp_path)
+    assert list(row["stages"])[:2] == ["mujoco", "isaac"]
+    assert row["stages"]["mujoco"]["stage_order"] == 1 and row["stages"]["isaac"]["stage_order"] == 2
+    assert row["stages"]["gazebo"]["stage_order"] is None and row["stages"]["gazebo"]["track"] == "ros2_execution_contract"
     row["stages"]["isaac"] = passed
     ladder.write_round(tmp_path, row)

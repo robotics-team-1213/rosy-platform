@@ -75,10 +75,13 @@ def test_pipeline_stages_connect_mujoco_gazebo_and_isaac_roles():
     gazebo_report = dict(failures=[], shape=[240, 320], camera_hz=5.0, stop=dict(accepted=True, cancel_acknowledged=True, travel_before_rad=0.05, travel_after_rad=0.001))
     isaac_report = dict(sha="b" * 40, rows=[dict(id="mujoco-handoff-s1-bar-1", expect="completed", run_id="isaac-01", status="SUCCEEDED", result="completed", matches=True, judgement=dict(result="completed"))])
     stages = policy.pipeline_stages(score, layout, eval_rows, pick_vision=True, belt_skew=True, gazebo_report=gazebo_report, isaac_report=isaac_report)
-    assert stages["mujoco"]["status"] == "passed"
-    assert stages["mujoco"]["role"] == "geometry_vision_and_act_policy_evaluation"
+    assert list(stages)[:2] == ["mujoco", "isaac"]
+    assert stages["mujoco"]["status"] == "passed" and stages["mujoco"]["stage_order"] == 1
+    assert stages["mujoco"]["role"] == "stage1_geometry_vision_and_act_policy"
     assert stages["mujoco"]["pick_vision"] is True and stages["mujoco"]["belt_skew"] is True
-    assert stages["gazebo"]["status"] == "passed" and stages["gazebo"]["role"] == "ros2_execution_contract_conformance"
-    assert stages["isaac"]["status"] == "passed" and stages["isaac"]["role"] == "physx_contact_pad_slip_and_seating_confirmation"
+    assert stages["isaac"]["status"] == "passed" and stages["isaac"]["stage_order"] == 2
+    assert stages["isaac"]["role"] == "stage2_physx_contact_pad_slip_and_seating"
     assert len(stages["isaac"]["handoff"]["cases"]) == 1
     assert stages["isaac"]["handoff"]["cases"][0]["vision_pick"]["colour"] == "orange"
+    assert stages["gazebo"]["status"] == "passed" and stages["gazebo"]["stage_order"] is None
+    assert stages["gazebo"]["track"] == "ros2_execution_contract" and stages["gazebo"]["role"] == "ros2_interface_conformance"
