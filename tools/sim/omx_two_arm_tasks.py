@@ -22,6 +22,7 @@ RELEASE_DROP = .005     # fixture stack_release_clearance_m; layer 0 rests on st
 RELEASE_DROP_UPPER = RELEASE_DROP  # onto a container too (a lower drop was only needed while single-contact deck meshes made boxes creep; see omx_two_arm_world)
 LINK_MARGIN = .004      # link3 and link4 (the wrist) must clear every standing container by this much; MuJoCo: failures sat at -3 to -6 mm, passes at +8 mm or more
 CAPACITY = 3 * sites_mod.TEMP_TIERS  # containers per temporary plate: 3 lanes (3 x 1 each), 3 tiers (plate v11)
+TIERS = (1, 2, 3)       # 1단 (layer 0), 2단 (layer 1), 3단 (layer 2)
 
 
 class PlanRefused(ValueError):
@@ -197,7 +198,32 @@ def validate(layout, task, data=None):
     return records
 
 
-def get_task(layout, name, data=None):
-    """Task dict by name with its start state; `stack` and `rehandle` come from the data file."""
+def tier_task(layout, task, tier: int):
+    """Slice a multi-tier stacking task into one tier stage (1 = 1단/l0, 2 = 2단/l1, 3 = 3단/l2): earlier tiers are rolled
+    forward into `start` so tier 2 stands on tier 1 and tier 3 stands on tiers 1-2."""
+    if tier not in TIERS:
+        raise ValueError(f"tier must be in {TIERS}, got {tier!r}")
+    layer = tier - 1
+    here, supply, steps = dict(task.get("start", {})), list(task.get("supply", [])), []
+    for s in task["steps"]:
+        target_layer = layout.sites[s["to"]].get("layer", 0)
+        if target_layer < layer and not steps:
+            if s["from"] == "belt" and s["container"] in supply:
+                supply.remove(s["container"])
+            here[s["container"]] = s["to"]
+            if s.get("outbound"):
+                here.pop(s["container"], None)
+        elif target_layer == layer:
+            steps.append(dict(s))
+    kept_belt = {s["container"] for s in steps if s["from"] == "belt"}
+    return dict(task, name=f"{task.get('name', 'task')}-t{tier}", tier=tier, layer=layer,
+                supply=[c for c in supply if c in kept_belt], start=here, steps=steps)
+
+
+def get_task(layout, name, data=None, tier: int | None = None):
+    """Task dict by name with its start state; `stack`, `cell-stack`, `rehandle` and `<task>-t{1|2|3}` come from the data file."""
     data = data or load()
-    return dict(data["tasks"][name], name=name)
+    if name not in data["tasks"] and len(name) > 3 and name[-3:-1] == "-t" and name[-1].isdigit():
+        name, tier = name[:-3], int(name[-1]) if tier is None else tier
+    task = dict(data["tasks"][name], name=name)
+    return tier_task(layout, task, tier) if tier is not None else task

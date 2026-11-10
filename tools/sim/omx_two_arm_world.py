@@ -289,6 +289,8 @@ class World:
         else:
             s = self.layout.sites[site]
             lift = .0005 + .001 * s.get("layer", 0) if lift is None else lift  # a stack dropped in at once must not start in exact contact (it was ejected)
+            if not any(jitter):  # equal boxes stacked exactly in line get a false ~35 mm box-box contact and fly off (seed 0, 11-09): stagger tiers 0.1 mm
+                jitter = (.0001 * (-1) ** s.get("layer", 0), 0., 0.)
             yaw = s["yaw"] + jitter[2]
             pose = [s["xy"][0] + jitter[0], s["xy"][1] + jitter[1], s["z"] + lift, math.cos(yaw / 2), 0, 0, math.sin(yaw / 2)]
         data.qpos[self.box_q[cid]:self.box_q[cid] + 7] = pose

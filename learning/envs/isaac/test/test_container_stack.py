@@ -385,6 +385,14 @@ def test_stack_sites_map_back_onto_the_isaac_targets_for_the_arm_that_places_the
         target = f.plan(True, fixture=fixture)[step['item']]['target']
         assert math.dist(back, target[:2]) < 1e-3
         assert found[step['site']]['surface_z'] == pytest.approx(-.01+.03*int(step['site'][-1]))
+        assert found[step['site']]['tier'] == int(step['site'][-1]) + 1
+    grouped = sites.by_tier(order)
+    assert [len(grouped[t]) for t in (1, 2, 3)] == [3, 3, 3]
+    assert [[s['site'] for s in grouped[t]] for t in (1, 2, 3)] == [
+        ['stack-r1-l0', 'stack-r0-l0', 'stack-r2-l0'],
+        ['stack-r1-l1', 'stack-r0-l1', 'stack-r2-l1'],
+        ['stack-r1-l2', 'stack-r0-l2', 'stack-r2-l2'],
+    ]
 
 
 def test_measured_layout_gives_the_arm_b_heights_the_sites_use():

@@ -287,3 +287,21 @@ def test_a_temporary_lane_stacks_three_tiers_on_something(layout):
     tasks.validate(layout, dict(supply=[], start=start, name="t", steps=stacked))
     assert "taken from under" in refused(layout, dict(supply=[], start=start, name="t", steps=stacked + [
         dict(id="c", container="bar-9", **{"from": "tmp-b-2"}, to="ship-h1r2-l2", arm="arm_b")]))
+
+
+def test_stack_and_cell_stack_divide_into_three_validated_tier_stages(layout, data):
+    """Both belt stacking and cell-plate stacking split into 1단 (l0), 2단 (l1), and 3단 (l2), each starting on the lower tiers."""
+    assert len(tasks.validate(layout, tasks.get_task(layout, "cell-stack", data))) == 9
+    for base in ("stack", "cell-stack"):
+        seen = {}
+        for tier in tasks.TIERS:
+            sub = tasks.get_task(layout, f"{base}-t{tier}", data)
+            assert sub["tier"] == tier and sub["layer"] == tier - 1 and len(sub["steps"]) == 3
+            assert all(layout.sites[s["to"]]["layer"] == tier - 1 for s in sub["steps"])
+            for c, s in seen.items():
+                assert sub["start"][c] == s  # earlier tiers stand underneath this tier
+            assert len(tasks.validate(layout, sub, data)) == 3
+            for s in sub["steps"]:
+                seen[s["container"]] = s["to"]
+    t2 = tasks.get_task(layout, "cell-stack-t2", data)
+    assert [s["from"] for s in t2["steps"]] == ["tmp-a-2", "tmp-a-1", "tmp-b-2"]

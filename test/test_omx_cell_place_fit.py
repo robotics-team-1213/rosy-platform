@@ -59,3 +59,22 @@ def test_an_occupied_tray_is_refused():
 def test_no_surface_polygon_keeps_the_configured_point():
     fits, why = pf.options({"sites": {"dest": {"yaw_deg": -14.4}}, "params": None}, "dest", (0.12, 0.08), 0.0, C3, PX)
     assert (fits, why) == ([((0.12, 0.08), -14.4)], None)
+
+
+def test_with_tiers_expands_three_tiers_and_upper_tiers_require_support():
+    tray = [[60, 60], [140, 60], [140, 140], [60, 140]]
+    cfg, cal = pf.with_tiers({"sites": {"dest": {"yaw_deg": 0.0, "surface_z": -0.01, "surface_px": tray}}, "params": None},
+                             {"sites": {"dest": {"homography": "H"}}}, [{"top_height_mm": 32.4}])
+    assert [cfg["sites"][f"dest-l{k}"]["surface_z"] for k in (0, 1, 2)] == pytest.approx([-0.01, 0.0224, 0.0548])
+    assert [cfg["sites"][f"dest-l{k}"]["tier"] for k in (0, 1, 2)] == [1, 2, 3]
+    assert all(cal["sites"][f"dest-l{k}"] == {"homography": "H"} for k in (0, 1, 2))
+    empty, occupied = np.zeros((100, 100), np.uint8), np.ones((100, 100), np.uint8)
+    roi, box = (50, 50, 150, 150), {"length_mm": 30, "width_mm": 30}
+    # 1단 (dest-l0): accepted when empty, refused when occupied
+    assert pf.options(cfg, "dest-l0", (0.0, 0.0), 0.0, box, PX, empty, roi)[1] is None
+    assert "already there" in pf.options(cfg, "dest-l0", (0.0, 0.0), 0.0, box, PX, occupied, roi)[1]
+    # 2단 (dest-l1) and 3단 (dest-l2): refused when empty, accepted when the lower tier supports it
+    for upper in ("dest-l1", "dest-l2"):
+        assert "nothing under it" in pf.options(cfg, upper, (0.0, 0.0), 0.0, box, PX, empty, roi)[1]
+        fits, why = pf.options(cfg, upper, (0.0, 0.0), 0.0, box, PX, occupied, roi)
+        assert why is None and fits[0] == ((0.0, 0.0), 0.0)

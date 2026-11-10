@@ -853,3 +853,28 @@ def test_a_box_held_by_its_ends_needs_room_past_its_ends_not_beside_it():
     wide = {**auto.prm.load()["values"], "gripper.open_max": 62.0}  # the field's arm_b: opens ~131 mm
     assert auto.finger_room(mask, (0, 0, 200, 200), px, box, box["long_axis_deg"], wide)["margin_mm"] is not None
     assert auto.finger_room(mask, (0, 0, 200, 200), px, box, box["long_axis_deg"])["margin_mm"] is None  # 68 mm < 90
+
+
+def test_three_tier_pick_and_place_plans_each_tier_height_and_checks_support(tmp_path):
+    """1단 (l0), 2단 (l1), and 3단 (l2) expand from a base site, step pick/place z by container height, and require lower-tier support."""
+    path = biased_map(tmp_path)
+    config = copy.deepcopy(CONFIG)
+    config["sites"]["stack"] = {**config["sites"]["pinky"], "place": [0.060, 0.090], "map_from": "pinky"}
+    cal_data = auto.cell_pivot.with_site_maps(config, cal.load(path))
+    # 1단 (stack-l0): empty destination is accepted at base surface_z (0.045 -> pick/place z 0.060)
+    r1 = auto.run_auto(Cell([CONT2]), config, cal_data, path, CATALOG, ROI, "pinky-l0", "stack-l0", tmp_path,
+                       cell_choices.Choices(tmp_path / "c1.json"), dry_run=True)
+    assert r1["result"] == "planned"
+    assert r1["attempts"][0]["plan"]["pick"]["z"] == pytest.approx(0.060, abs=1e-4)
+    assert r1["attempts"][0]["plan"]["place"]["z"] == pytest.approx(0.060, abs=1e-4)
+    # 2단 (stack-l1) without a 1단 container at (0.060, 0.090) is refused
+    empty_t2 = auto.run_auto(Cell([CONT2]), config, cal_data, path, CATALOG, ROI, "pinky-l0", "stack-l1", tmp_path,
+                             cell_choices.Choices(tmp_path / "c2.json"), dry_run=True)
+    assert empty_t2["result"] == "stopped: no usable object"
+    assert "nothing under it" in empty_t2["attempts"][0]["refused"][0]["why"]
+    # With a supporting container seated at (0.060, 0.090), 2단 (l1: z 0.090) and 3단 (l2: z 0.120) both plan cleanly
+    supported = [CONT2, {"x": 0.060, "y": 0.090, "long": 30.0, "length": 60, "width": 30}]
+    for tier, expected_z in (("stack-l1", 0.090), ("stack-l2", 0.120)):
+        rt = auto.run_auto(Cell(supported), config, cal_data, path, CATALOG, ROI, "pinky-l0", tier, tmp_path,
+                           cell_choices.Choices(tmp_path / f"{tier}.json"), dry_run=True)
+        assert rt["result"] == "planned" and rt["attempts"][0]["plan"]["place"]["z"] == pytest.approx(expected_z, abs=1e-4)

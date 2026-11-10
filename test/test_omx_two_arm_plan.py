@@ -130,3 +130,17 @@ def test_a_full_bottom_tier_sends_blockers_up_a_lane_before_onto_the_ship(layout
     spots = plan.temp_spots(layout, bottoms)
     assert layout.sites[spots[0]]["kind"] == "temp" and layout.sites[spots[0]]["layer"] == 1
     assert all(layout.sites[s]["kind"] == "ship" for s in spots[spots.index(next(s for s in spots if layout.sites[s]["kind"] == "ship")):])
+
+
+def test_tier_by_tier_stack_and_cell_stack_schedule_and_replay(layout):
+    """1단 (t1), 2단 (t2), and 3단 (t3) each plan 3 moves on top of the lower tiers, from the belt or from the cell's plates."""
+    can = plan.validator_can(layout)
+    for scenario in ("stack", "cell-stack"):
+        for tier in (1, 2, 3):
+            res = plan.compare(layout, scenario, can, tier=tier)
+            key = f"{scenario}-t{tier}"
+            assert res["two-arm"][key]["moves"] == 3 and res["two-arm"][key]["extra_transports"] == 0
+            replays = plan.replay_tasks(layout, res)
+            task = replays[f"{key}-two-arm"]
+            assert len(task["steps"]) == 3 and all(layout.sites[s["to"]]["layer"] == tier - 1 for s in task["steps"])
+            assert sum(1 for s in task["start"].values() if layout.sites[s]["kind"] == "ship" and s != "ship-stern-l0") == 3 * (tier - 1)

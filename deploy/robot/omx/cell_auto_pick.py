@@ -139,34 +139,31 @@ class Guarded:
 
 
 def grasp_depth(config: dict, site: str) -> float:
-    """How far under the object's top this site grips. A site whose grip the arm cannot reach at the default states
-    its own (`grasp_depth_m`): the same grip height then also sets the release height, so the box lands flat."""
-    return config["sites"][site].get("grasp_depth_m", prm.get(config.get("params"), "auto.grasp_depth_m", 0.015))
+    """How far under the object's top this site grips (`grasp_depth_m`); also sets the release height so the box lands flat."""
+    s = config["sites"].get(site) or cell_place_fit.with_tiers(config)[0]["sites"][site]
+    return s.get("grasp_depth_m", prm.get(config.get("params"), "auto.grasp_depth_m", 0.015))
 
 
 def surface_z(config: dict, site: str) -> float:
-    """The site's surface height (m), which every auto-pick site must state: the grasp height is computed from
-    it (catalogue top height - grasp depth), never taken from the site's `z`, which is the taught cube grasp
-    height. A site giving only its surface as `z` (a floor at 0.006) was once planned at the surface itself."""
-    s = config["sites"][site]
+    """The site's surface height (m), which every auto-pick site must state (grasp height = top height - grasp depth)."""
+    s = config["sites"].get(site) or cell_place_fit.with_tiers(config)[0]["sites"][site]
     if "surface_z" not in s:
         raise SystemExit(f"site {site!r}: auto pick needs `surface_z` (the surface height in metres)")
-    depth = grasp_depth(config, site)
-    if "z" in s and s["z"] < s["surface_z"] + depth - 1e-9:
-        raise SystemExit(f"site {site!r}: z {s['z']} is below surface_z {s['surface_z']} + grasp depth {depth}")
-    return s["surface_z"]
+    z0, depth = round(s["surface_z"] + s.get("layer", 0) * s.get("tier_step_m", 0.0), 4), grasp_depth(config, site)
+    if "z" in s and s["z"] < z0 + depth - 1e-9:
+        raise SystemExit(f"site {site!r}: z {s['z']} is below surface_z {z0} + grasp depth {depth}")
+    return z0
 
 
 def parse_dest(config: dict, source: str, dest: str):
     """A site name, or 'x,y' metres on the source surface -> (site, (x, y))."""
-    if dest in config["sites"]:
-        return dest, tuple(config["sites"][dest]["place"])
-    return source, tuple(float(v) for v in dest.split(","))
+    return (dest, tuple(config["sites"][dest]["place"])) if dest in config["sites"] else (source, tuple(float(v) for v in dest.split(",")))
 
 
 def observe(cell, config: dict, calibration: dict, site: str, roi, catalog: list):
     import cv2
 
+    config, calibration = cell_place_fit.with_tiers(config, calibration, catalog)
     record = cell_pivot.map_record(calibration, site)
     if record is None:
         return None, None, [], f"no map for {site}"
@@ -177,9 +174,7 @@ def observe(cell, config: dict, calibration: dict, site: str, roi, catalog: list
                                   config.get("params"), poly, lab, obj.get("hsv"))
     for o in objects:
         o["raw_m"] = [c / 1000 + d for c, d in zip(o["centre_mm"], config["sites"][site].get("grip_offset_m", (0.0, 0.0)))]  # a site may grip off centre
-    # the finger-side mask is not clipped to the site polygon: a container on the next surface (the board beside the
-    # floor) still meets an open finger (2026-10-29: the jaws came down on a 2-cell on the board, contact at z 0.040)
-    near = cell_objects.foreground(img, roi, params=config.get("params"), surface_lab=lab)
+    near = cell_objects.foreground(img, roi, params=config.get("params"), surface_lab=lab)  # not clipped to site polygon: adjacent surface objects still meet open fingers
     for poly in config["sites"][site].get("markings_px", []):  # flat floor markings (a white line) are no obstacle
         cv2.fillPoly(near, [np.asarray(poly, np.int32) - [roi[0], roi[1]]], 0)
     return img, object_sized(near, config.get("params")) | cell_objects.colour_mask(img, roi, obj.get("hsv")), objects, None
@@ -246,6 +241,7 @@ def plan_pick(config: dict, site: str, dest_site: str, place_xy, o: dict, entry:
               yaw: float | None = None, place_yaw: float | None = None):
     """Library for one candidate: grasp 15 mm below the top, approach 40 mm above it (else 20), the yaw and its
     180 degree twin tried in turn. Returns (library path, pick, place, approach_m, yaw) or an error string."""
+    config = cell_place_fit.with_tiers(config, catalog=[entry])[0]
     cell_pivot.validate_bias({"point_m": o["raw_m"], "bias_mm": bias_mm}, config.get("params"))
     height = entry["top_height_mm"] / 1000 - grasp_depth(config, site)
     x, y = (o["raw_m"][0] - bias_mm[0] / 1000, o["raw_m"][1] - bias_mm[1] / 1000)
@@ -299,6 +295,7 @@ def square_entry(entries: dict, o: dict) -> bool:
 def choose(cell, config, calibration, site, dest_site, place_xy, roi, objects, mask, catalog, bias_data, choices, work,
            failed_yaws=(), dest_view=None):
     """Ordered usable targets: [{object, plan...}], and why the others were refused."""
+    config, calibration = cell_place_fit.with_tiers(config, calibration, catalog)
     entries, usable, refused = {e["id"]: e for e in catalog}, [], []
     pixel_fn = lambda p: predicted_pixel(config, calibration, site, p)  # noqa: E731
     p = config.get("params")
@@ -422,6 +419,7 @@ def run_auto(cell, config, calibration, calibration_path, catalog, roi, source, 
              dry_run=False, sleep=time.sleep, log=print, attempts=None) -> dict:
     """One object from `source` to `dest`; up to `attempts` grasps (the second with the better candidate)."""
     work, out = Path(work), {"from": source, "to": dest, "attempts": []}
+    config, calibration = cell_place_fit.with_tiers(config, calibration, catalog)
     if source not in config["sites"]:  # the --from default (pinky) on a cell without one was a bare KeyError
         return {**out, "result": f"refused: source {source!r} is not a site in the config"}
     if dest in config["sites"] and "place" not in config["sites"][dest]:  # the board: taken from, never put on
@@ -437,7 +435,7 @@ def run_auto(cell, config, calibration, calibration_path, catalog, roi, source, 
     guarded = None if dry_run else Guarded(cell, config)
     if guarded is not None and not cell.act("state").get("ok"):
         return {"result": "refused", "error": "start record_session.py --chunks first: no chunk_runner answers"}
-    bias_data = cell_pivot.load_bias(cell_pivot.bias_path(calibration_path), config.get("params"))
+    bias_data = cell_place_fit.with_tier_biases(config, cell_pivot.load_bias(cell_pivot.bias_path(calibration_path), config.get("params")))
     episode, failed_yaws, dest_view = None, [], None
     if droi is not None and dest_site != source:  # what is already on the destination (cell_place_fit)
         _, dmask, _, derr = observe(cell, config, calibration, dest_site, droi, catalog)
@@ -451,9 +449,7 @@ def run_auto(cell, config, calibration, calibration_path, catalog, roi, source, 
                                      bias_data, choices, work, failed_yaws, dest_view) if not error else ([], [])
             cd.target(objects, usable, refused)
             if usable and config.get("decision_model"):  # the model orders what the measurement kept, or vetoes all
-                import cell_pick_judge
-                import judge_seat
-
+                import cell_pick_judge, judge_seat  # noqa: E401
                 judged = cell_pick_judge.ask(judge_seat.ollama(**config["decision_model"]), img, usable)
                 cd.emit("target_judge", {"candidates": len(usable)}, list(range(len(usable))) + [-1], judged["choice"],
                         judged["by"], judged["reason"])
@@ -472,6 +468,7 @@ def run_auto(cell, config, calibration, calibration_path, catalog, roi, source, 
             pivot_cell = guarded if not dry_run and "_commissioning" in config else None
             bias_data, problem = self_calibrate(pivot_cell, config, calibration, calibration_path, source,
                                                 target["object"]["raw_m"], objects, work, bias_data, sleep, log)
+            bias_data = cell_place_fit.with_tier_biases(config, bias_data)
             cd.bias(known, problem, target["object"]["raw_m"])
             if problem and not dry_run:
                 tried["locate"] = {"found": True, "arm_m": target["object"]["raw_m"]}
