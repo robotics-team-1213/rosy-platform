@@ -306,3 +306,46 @@ def test_20261110_named_choices_and_arm_bases_candidates_match_the_snapshot():
         cv2.rectangle(img, (20 + 70 * i, 60), (65 + 70 * i, 120), bgr, -1)
     assert sum(k == "container" for k, _ in r2s.blobs(img)) == 4
 
+
+def test_online_camera_anchor_calibration_and_servo_compensator_correct_drift():
+    import omx_real2sim_comp as r2s_comp
+
+    layout = sites.Layout(temp_lanes="photo-20261110", ship_pose="photo-20261110", belt_pose="photo-20261110",
+                          arm_bases="plate-centre", top_camera="2026-11-10")
+    base_cam = layout.fixture["real_cameras"]["top"]
+    moved_dict = r2s_comp.perturbed_camera_dict(base_cam, **r2s_comp.DEFAULT_CAM_JITTER)
+    cam_moved = r2s.Camera(moved_dict, (480, 640))
+
+    # Render synthetic top frame from the perturbed camera with 6 dark lane pads, belt strip, and a skewed belt container
+    img = np.full((480, 640, 3), (60, 200, 200), np.uint8)
+    pad_z = layout.deck_z + .0006
+    for tag in ("a", "b"):
+        for k in (1, 2, 3):
+            s = layout.sites[f"tmp-{tag}-{k}"]
+            x, y, yaw = s["xy"][0], s["xy"][1], s["yaw"]
+            corners = [cam_moved.project((x + a * .048 * math.cos(yaw) - b * .015 * math.sin(yaw),
+                                          y + a * .048 * math.sin(yaw) + b * .015 * math.cos(yaw), pad_z))
+                       for a, b in ((-1, -1), (1, -1), (1, 1), (-1, 1))]
+            cv2.fillPoly(img, [np.round(corners).astype(np.int32)], (25, 25, 25))
+    bx, by = layout.belt_stop_x + .005, layout.belt_y
+    belt_poly = [cam_moved.project((x, yy, layout.belt_top))
+                 for x, yy in ((bx, by - .0425), (bx + .295, by - .0425), (bx + .295, by + .0425), (bx, by + .0425))]
+    cv2.fillPoly(img, [np.round(belt_poly).astype(np.int32)], (35, 35, 35))
+    sa = layout.sites["belt"]
+    true_xy = (sa["xy"][0] + .006, sa["xy"][1] + .006)
+    true_yaw = math.radians(18.0)
+    top_z = sa["z"] + layout.box[2] / 2
+    box_poly = [cam_moved.project((true_xy[0] + a * .045 * math.cos(true_yaw) - b * .015 * math.sin(true_yaw),
+                                   true_xy[1] + a * .045 * math.sin(true_yaw) + b * .015 * math.cos(true_yaw), top_z))
+                for a, b in ((-1, -1), (1, -1), (1, 1), (-1, 1))]
+    cv2.fillPoly(img, [np.round(box_poly).astype(np.int32)], (35, 115, 235))
+
+    seen = r2s_comp.perceive_container(img, sa, true_xy, true_yaw, layout)
+    assert seen is not None
+    _, _, info = seen
+    assert info["camera_comp"]["moved"] is True
+    assert info["camera_comp"]["raw_xy_err_mm"] > 15.0
+    assert info["xy_err_mm"] < 2.5
+    assert info["yaw_err_deg"] < 1.0
+
+

@@ -427,7 +427,10 @@ def test_seat_check_flags_a_box_riding_on_a_stud_and_passes_a_seated_one():
 def test_every_ship_case_fixture_survives_the_json_round_trip_the_report_check_makes():
     # run a5e03df9 (2026-11-04): a tuple in the wrist camera spec made the stored fixture differ -> provenance refused
     import json
-    from release_cases import FIXTURE_OVERRIDES
+    from release_cases import FIXTURE_OVERRIDES, REAL_CAMERAS_20261110
     for case in (c for c in FIXTURE_OVERRIDES if c.startswith('nominal-palletizing-v21-ship')):
         fixture = f.container_fixture(layers=3, case=case)
         assert json.loads(json.dumps(fixture)) == fixture, case
+    skew_fx = f.container_fixture(layers=3, case='nominal-palletizing-v21-ship-surveyed-skew-20261110')
+    assert skew_fx['real_cameras']['top']['eye'] == REAL_CAMERAS_20261110['top']['eye']
+
