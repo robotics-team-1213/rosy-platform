@@ -306,6 +306,8 @@ def choose(cell, config, calibration, site, dest_site, place_xy, roi, objects, m
             why = "tangled blob"
         elif not o["matched"]:
             why = "no catalogue match"
+        elif (w := cell_objects.want_reason(config.get("want"), o)):
+            why = w
         elif px is None or not (roi[0] + 12 <= px[0] <= roi[2] - 12 and roi[1] + 12 <= px[1] <= roi[3] - 12):
             why = "not inside the camera view"
         elif not square_entry(entries, o):
@@ -319,7 +321,7 @@ def choose(cell, config, calibration, site, dest_site, place_xy, roi, objects, m
             if room["margin_mm"] is None:
                 why = f"no finger room: {room['free_mm'][0]} / {room['free_mm'][1]} mm free beside it"
         if why:
-            refused.append({"centre_mm": o["centre_mm"], "object": o.get("object"), "why": why})
+            refused.append({"centre_mm": o["centre_mm"], "object": o.get("object"), "colour": o.get("colour"), "why": why})
             continue
         entry = entries[o["object"]]
         square = abs(entry["length_mm"] - entry["width_mm"]) < 1e-6
@@ -490,7 +492,8 @@ def run_auto(cell, config, calibration, calibration_path, catalog, roi, source, 
                                "object": o["object"], "long_axis_deg": o["long_axis_deg"]}
             tried["grasp_yaw"] = {"choice": target["offset"], "yaw_deg": target["pick"]["yaw_deg"]}
             tried["plan"] = {"pick": target["pick"], "place": target["place"]}
-            tried["auto"] = {"object": o["object"], "closing_axis_offset_deg": target["offset"], "bias_mm": target["bias_mm"],
+            tried["auto"] = {"object": o["object"], **({"colour": o["colour"]} if "colour" in o else {}),
+                             "closing_axis_offset_deg": target["offset"], "bias_mm": target["bias_mm"],
                              "bias_region": target["bias_region"], "approach_m": target["approach_m"]}
             cd.closing(target["offset"], choices.data["values"].get(CLOSING, []), o["object"])
             row.update(chosen=tried["auto"], plan=tried["plan"], pivot_needed=problem, long_axis_deg=o["long_axis_deg"])

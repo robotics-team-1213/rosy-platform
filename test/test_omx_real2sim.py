@@ -301,3 +301,8 @@ def test_20261110_named_choices_and_arm_bases_candidates_match_the_snapshot():
     assert tuple(sites.Layout().arms["arm_b"].base[:2]) == pytest.approx((.104, .153))
     assert not any(s.get("blocked") for s in from_named.sites.values())  # tmp-b-1 clears the measured ship by 15.9 mm
     assert sites.WRIST_PHOTO_A["lens_m"][0] > sites.WRIST_PHOTO["lens_m"][0] and sites.WRIST_PHOTO_A["axis_hit_x_m"] > sites.WRIST_PHOTO["axis_hit_x_m"]
+    img = np.full((200, 320, 3), (200, 175, 130), np.uint8)  # sky-blue v11 plate background
+    for i, bgr in enumerate(((30, 120, 235), (25, 220, 240), (50, 180, 50), (160, 40, 180))):  # orange, yellow, green, purple
+        cv2.rectangle(img, (20 + 70 * i, 60), (65 + 70 * i, 120), bgr, -1)
+    assert sum(k == "container" for k, _ in r2s.blobs(img)) == 4
+

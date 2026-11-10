@@ -214,3 +214,71 @@ def test_three_3_cells_in_a_row_longer_than_one_box_are_split_along_the_row():
     assert [o["object"] for o in found] == ["container-3"] * 3
     assert sorted(round(o["centre_mm"][0]) for o in found) == [15, 51, 87]
 
+
+@pytest.mark.parametrize(("bgr", "expected"), [
+    ((30, 120, 235), "orange"),
+    ((25, 220, 240), "yellow"),
+    ((60, 170, 60), "green"),
+    ((210, 110, 40), "blue"),
+    ((180, 50, 160), "purple"),
+    ((35, 35, 220), "red"),
+    ((15, 15, 15), "black"),
+])
+def test_diverse_container_colours_are_tagged(bgr, expected):
+    (o,) = seen(scene([(10, -5, 60, 30, 0)], colour=bgr))
+    assert o["matched"] and o["object"] == "container-2" and o["colour"] == expected
+
+
+def test_split_strips_keep_each_containers_own_colour_and_want_filter_selects_target():
+    img = scene([(-30, 0, 60, 30, 0)], colour=(30, 120, 235))  # orange container-2
+    pts = cv2.boxPoints(((-15, 31), (90, 30), 0))
+    px = [cal.parallax((320 + 2 * x, 240 + 2 * y), 0.0, TOP, CAMERA) for x, y in pts]
+    cv2.fillPoly(img, [np.round(px).astype(np.int32)], (25, 220, 240))  # touching yellow container-3
+    found = sorted(seen(img), key=lambda o: o["object"])
+    assert [(o["object"], o["colour"]) for o in found] == [("container-2", "orange"), ("container-3", "yellow")]
+    assert co.want_reason({"colour": "yellow"}, found[0]) == "wanted colour yellow, got orange"
+    assert co.want_reason({"colour": "yellow", "object": "container-3"}, found[1]) is None
+    assert co.want_reason({"object": "container-2"}, found[1]) == "wanted object container-2, got container-3"
+
+
+def test_enroll_measures_and_saves_a_custom_object_for_detection(tmp_path):
+    img = scene([(15, -20, 48, 42, 10)], colour=(210, 110, 40))  # 48x42 mm blue non-standard cargo block
+    assert not any(o["matched"] for o in seen(img))  # unmatched before enrollment
+    cat_path = tmp_path / "catalog.json"
+    cat_path.write_text(Path(OMX / "object-catalog.example.json").read_text(encoding="utf-8"), encoding="utf-8")
+    entry = co.enroll(img, ROI, RECORD, CAMERA, "cargo-drum", top_height_mm=30.0, mass_kg=0.024)
+    assert entry["id"] == "cargo-drum" and entry["colour"] == "blue" and entry["mass_kg"] == 0.024
+    assert entry["length_mm"] == pytest.approx(48, abs=2.5) and entry["width_mm"] == pytest.approx(42, abs=2.5)
+    updated = co.save_catalog_entry(cat_path, entry)
+    (o,) = co.detect(img, ROI, RECORD, CAMERA, updated)
+    assert o["matched"] and o["object"] == "cargo-drum" and o["colour"] == "blue"
+    # A colour-constrained catalogue entry does not match an orange block of the same size
+    orange_img = scene([(15, -20, 48, 42, 10)], colour=(30, 120, 235))
+    (mismatch,) = co.detect(orange_img, ROI, RECORD, CAMERA, updated)
+    assert not mismatch["matched"] and mismatch["colour"] == "orange"
+
+
+def test_auto_pick_choose_filters_by_wanted_colour_and_object_id(tmp_path, monkeypatch):
+    monkeypatch.syspath_prepend(str(OMX))
+    import cell_auto_pick as auto
+    import cell_auto_setup as setup
+    import cell_choices
+
+    args = setup.parser("test").parse_args(["--config", "c.json", "--catalog", "cat.json", "--roi", "60", "60", "580", "420",
+                                            "--dest", "belt", "--object", "container-2", "--colour", "yellow", "--dry-run"])
+    assert args.want_object == "container-2" and args.want_colour == "yellow"
+    img = scene([(-40, 0, 30, 30, 0)], colour=(60, 170, 60))  # green container-1 (nearer start)
+    pts = cv2.boxPoints(((30, 0), (60, 30), 0))
+    px = [cal.parallax((320 + 2 * x, 240 + 2 * y), 0.0, TOP, CAMERA) for x, y in pts]
+    cv2.fillPoly(img, [np.round(px).astype(np.int32)], (25, 220, 240))  # yellow container-2
+    objs = co.detect(img, ROI, RECORD, CAMERA, CATALOG)
+    for o in objs:
+        o["raw_m"] = [c / 1000 for c in o["centre_mm"]]
+    # With want={"colour": "yellow", "object": "container-2"}, green container-1 is refused and yellow container-2 is kept
+    reasons = {o["object"]: co.want_reason({"colour": "yellow", "object": "container-2"}, o) for o in objs}
+    assert reasons["container-1"] == "wanted object container-2, got container-1"
+    assert reasons["container-2"] is None
+    assert getattr(auto, "choose") is not None
+
+
+
