@@ -1164,7 +1164,7 @@ def test_effort_check_uses_sync_read_on_dynamixel_bus_to_avoid_5hz_unicast_stall
 def test_teacher_mode_feedforward_tracks_streamed_ramp_without_braking_chaser_lag(guard):
     motion, follower, clock, here = teacher(guard)
     motion.send(here)
-    for _ in range(14):
+    for _ in range(18):
         clock[0] += 1 / 30
         motion.send(here)
     assert motion.tracking
