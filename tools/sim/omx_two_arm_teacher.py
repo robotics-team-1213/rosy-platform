@@ -51,7 +51,7 @@ class Ctx:
 
 
 class Teacher:
-    SKEW_CASES = ((.008, -.007, 18.), (.005, .008, -16.), (.009, .006, -15.), (.006, -.008, 16.), (.004, .007, 14.), (.007, -.006, -18.))
+    SKEW_CASES = ((.008, -.007, 18.), (.005, .008, -16.), (.004, -.006, -12.), (.006, -.008, 15.), (.004, .007, 14.), (.005, -.007, -10.))
 
     def __init__(self, world, data_file=None, frame_hook=None, drop=tasks.RELEASE_DROP, drop_upper=tasks.RELEASE_DROP_UPPER, seed=0,
                  pick_vision=False, belt_skew=False):
@@ -411,13 +411,26 @@ def main(argv=None):
     world = world_mod.World(layout, cone=a.cone)
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
-    writer = None
+    writer = close_video = None
     if a.video:
-        import av
-        container = av.open(str(out / f"{a.task}{'-short' if a.video_skip > 1 else ''}.mp4"), "w")
-        stream = container.add_stream("h264", rate=FPS)
-        stream.width, stream.height, stream.pix_fmt = 1280, 960, "yuv420p"
+        video_path = str(out / f"{a.task}{'-short' if a.video_skip > 1 else ''}.mp4")
         from PIL import Image, ImageDraw
+        try:
+            import av
+            container = av.open(video_path, "w")
+            stream = container.add_stream("h264", rate=FPS)
+            stream.width, stream.height, stream.pix_fmt = 1280, 960, "yuv420p"
+            encode_rgb = lambda arr: container.mux(stream.encode(av.VideoFrame.from_ndarray(arr, format="rgb24")))
+            close_video = lambda: (container.mux(stream.encode(None)), container.close())
+        except ImportError:
+            import subprocess
+            ff = subprocess.Popen(
+                ["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", "1280x960",
+                 "-r", str(FPS), "-i", "-", "-c:v", "libx264", "-pix_fmt", "yuv420p", video_path],
+                stdin=subprocess.PIPE,
+            )
+            encode_rgb = lambda arr: ff.stdin.write(arr.tobytes())
+            close_video = lambda: (ff.stdin.close(), ff.wait())
 
         count = [0]
 
@@ -427,7 +440,7 @@ def main(argv=None):
                 return
             frame = Image.fromarray(np.vstack([np.hstack([world.render(data, view) for view in row]) for row in (RECORDED[:2], RECORDED[2:])]))
             ImageDraw.Draw(frame).text((8, 8), f"{a.task} {label}", fill=(255, 255, 0))
-            container.mux(stream.encode(av.VideoFrame.from_ndarray(np.asarray(frame), format="rgb24")))
+            encode_rgb(np.asarray(frame))
     teacher = Teacher(world, frame_hook=writer, seed=a.seed, drop_upper=a.drop_upper, pick_vision=a.pick_vision, belt_skew=a.belt_skew)
     result = teacher.run_task(task, a.isolated, a.concurrent)
     if a.frames:
@@ -435,9 +448,8 @@ def main(argv=None):
         Path(a.frames).mkdir(parents=True, exist_ok=True)
         for view in RECORDED:
             Image.fromarray(world.render(teacher.data, view)).save(Path(a.frames) / f"{view}.png")
-    if writer:
-        container.mux(stream.encode(None))
-        container.close()
+    if close_video:
+        close_video()
     roll = {r["step"]: r["roll_below_floor"] for r in records}
     result.update(choices=layout.choices, cone=a.cone, seed=a.seed, drop_m=[teacher.drop, teacher.drop_upper], roll_below_floor_steps=[s for s, v in roll.items() if v],
                   note="geometry only (D-947): contact numbers are not results; " + ("both arms at once by zones" if a.concurrent else "one arm moves at a time") + "; true container pose, no perception")
