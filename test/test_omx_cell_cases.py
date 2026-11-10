@@ -77,6 +77,27 @@ def test_a_busy_gpu_is_waited_out_and_the_judgement_compared_with_the_real_outco
                                ("SUCCEEDED", None)], report={"result": "frame_contact"})
     row = suite_runner.run_case(case, "f" * 40, tmp_path, sleep=lambda s: None, call=call)
     assert calls.count("start") == 2 and row["matches"] is True and row["status"] == "SUCCEEDED"
+    # Real remote_isaac status puts admission_refused under result.reason when start returns FAILED without error.
+    real_queue = [
+        {"run_id": "r-refused", "status": "FAILED"},
+        {"run_id": "r-refused", "status": "FAILED", "result": {"reason": "admission_refused", "judgement": {"result": "admission_refused"}}},
+        {"run_id": "r-ok", "status": "SUCCEEDED", "result": {"judgement": {"result": "frame_contact"}}},
+    ]
+    real_calls = []
+
+    def real_call(action, *args):
+        real_calls.append(action)
+        if action == "check":
+            return {"input_sha256": "ab" * 32}
+        if action in ("start", "status"):
+            return real_queue.pop(0)
+        folder = Path(args[args.index("--receipt") + 1]).parent / "snap2"
+        folder.mkdir(exist_ok=True)
+        (folder / suite_runner.REPORT).write_text(json.dumps({"judgement": {"result": "frame_contact"}}))
+        return {"snapshot_directory": str(folder)}
+
+    row2 = suite_runner.run_case(case, "f" * 40, tmp_path / "real", sleep=lambda s: None, call=real_call)
+    assert real_calls.count("start") == 2 and row2["status"] == "SUCCEEDED" and row2["matches"] is True
 
 
 def test_a_run_without_a_published_report_fails_the_suite(tmp_path):
