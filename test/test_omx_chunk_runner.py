@@ -941,13 +941,32 @@ def test_a_park_with_something_in_the_jaws_holds_instead_of_folding_it_home():
 
 def test_a_park_carrying_a_grasped_box_folds_home_without_a_caught_jaw_hold():
     """2026-11-10 Trial 3: FOLDED parks after grasp_pick + lift_pick with the container held in the jaws."""
+    lib = library()
+    lib["chunks"]["home"] = [HOME]
     robot = Robot(object_at=53.8)
     robot.pos[5], robot.bus = 55.6, Bus(pwm={"gripper": 65536 - 255}, current={"gripper": 239})
-    status = run_with(robot, lifting_library(), ["run approach_pinky", "run grasp_pinky", "park", "stop"])
+    status = run_with(robot, lib, ["run approach_pinky", "run grasp_pinky", "park", "stop"])
     grasped = by_command(status, "run grasp_pinky")[0]
     folded = by_command(status, "run park")[0]
     assert grasped["ok"] is True and grasped["holding"] is True
     assert folded["ok"] is True and folded["settled"] is True
+
+
+def test_a_box_that_slips_out_during_lift_pick_reports_holding_false():
+    class SlippingRobot(Robot):
+        def send_action(self, action):
+            if len(self.sent) > 22:
+                self.object_at = None
+            return super().send_action(action)
+
+    lib = library()
+    lib["chunks"]["home"] = [HOME]
+    lib["chunks"]["lift_pick"] = [[18.0, -60.0, 50.0, 45.0, 10.0, 46.6] for _ in range(10)]
+    robot = SlippingRobot(object_at=53.8)
+    robot.pos[5], robot.bus = 55.6, Bus(pwm={"gripper": 65536 - 255}, current={"gripper": 239})
+    status = run_with(robot, lib, ["run approach_pinky", "run grasp_pinky", "run lift_pick", "stop"])
+    assert by_command(status, "run grasp_pinky")[0]["holding"] is True
+    assert by_command(status, "run lift_pick")[0]["holding"] is False
 
 
 def test_a_closing_grip_that_catches_something_reopens_where_it_was():

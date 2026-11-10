@@ -498,12 +498,32 @@ def test_status_and_clear_with_cause_basis_and_env_discovery(tmp_path, monkeypat
     assert oi.status("arm_b", link)["fleet_held"] is False
 
     # Pre-2026-11-08 Fleet servers return held=True for a single label-only report ("the arm is not held")
-    label_only = oi.HoldStatus(
+    label_only = Hold(
         source="arm_b", held=True, open_count=1, incident_ids=("b" * 32,),
         reason="1 open arm incident(s): " + "b" * 32 + "; reported for a person's cause, the arm is not held")
     assert oi._effectively_held(label_only) is False
     link.ask = lambda: label_only
     oi.refuse_if_held("arm_b", link)
     assert oi.held("arm_b") is None
+
+    # Older Fleet servers reject cause/basis with HTTP 422; clear() retries without cause/basis
+    fallback_calls = []
+    def clear_422(incident_id, note, token, *, cause=None, basis=None):
+        fallback_calls.append((incident_id, note, token, cause, basis))
+        if cause is not None or basis is not None:
+            err = OSError("HTTP Error 422: Unprocessable Entity")
+            err.code = 422
+            raise err
+        link.held = False
+        return hold(False)
+    link.held = True
+    link.ask = lambda: hold(link.held)
+    link.clear = clear_422
+    assert oi.clear("arm_b", "checked home", "op-token", link, cause="software_or_config", basis="seen") == 0
+    assert fallback_calls == [
+        ("a" * 32, "checked home", "op-token", "software_or_config", "seen"),
+        ("a" * 32, "checked home", "op-token", None, None),
+    ]
+
 
 

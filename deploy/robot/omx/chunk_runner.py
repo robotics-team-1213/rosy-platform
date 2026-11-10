@@ -416,6 +416,9 @@ class Runner:
                         if threshold is not None:  # both must agree once the cell has a measured threshold
                             fields["holding"] = by_position and current >= threshold
                     self.holding = bool(fields["holding"])
+                elif self.holding and self.chunk in ("lift_pick", "park", "goto above_place", "descend_place"):
+                    self.holding = present[5] > self.target[5] + EMPTY_MARGIN
+                    fields["holding"] = self.holding
                 self.chunk, self.last_grip = None, None
                 self.report(**fields)
 

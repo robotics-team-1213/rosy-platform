@@ -236,14 +236,19 @@ def attempts_table(name: str, path: Path) -> dict:
         ]
         rows.append({
             "attempt_id": row.get("attempt_id"),
+            "t_utc": row.get("t_utc"),
             "run_id": row.get("run_id"),
             "from": row.get("from"),
             "to": row.get("to"),
+            "tier": row.get("tier"),
             "outcome": row.get("outcome"),
+            "holding": row.get("holding"),
+            "gripper_current_ma": row.get("gripper_current_ma"),
+            "verify": row.get("verify"),
             "fail_stage": row.get("fail_stage"),
             "fail_class": row.get("fail_class"),
             "plan": row.get("plan"),
-            "object": (row.get("auto") or {}).get("object") or (row.get("locate") or {}).get("object"),
+            "object": row.get("object") or (row.get("auto") or {}).get("object") or (row.get("locate") or {}).get("object"),
             "diagnosis": row.get("diagnosis"),
             "steps": steps,
         })

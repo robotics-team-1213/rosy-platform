@@ -502,7 +502,12 @@ def clear(arm, note, token_file=None, link=None, *, cause=None, basis=None) -> i
     cleared = list(answer.incident_ids)
     for incident_id in cleared:
         if cause is not None or basis is not None:
-            answer = link.clear(incident_id, note, token, cause=cause, basis=basis)
+            try:
+                answer = link.clear(incident_id, note, token, cause=cause, basis=basis)
+            except OSError as exc:
+                if getattr(exc, "code", None) != 422:
+                    raise
+                answer = link.clear(incident_id, note, token)
         else:
             answer = link.clear(incident_id, note, token)
     print(json.dumps({"arm": arm, "cleared": cleared, "held": answer.held,

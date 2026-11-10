@@ -184,6 +184,10 @@ def _transfer(cell, library, closed, wrist, after_place, pinch, feel, sequence, 
             for after in ("run lift_pick", "park"):
                 run(after)
             return {"result": "empty", "at": command, "steps": steps}
+        if command in ("run lift_pick", "park", "goto above_place", "run descend_place") and status.get("holding") is False:
+            if command != "park":
+                run("park")
+            return {"result": "empty", "at": command, "steps": steps}
     if closed is None:
         try:
             closed = json.loads(Path(library).read_text())["gripper_closed"]

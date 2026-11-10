@@ -267,7 +267,7 @@ async function loadIncidents() {
       if (!note.value.trim()) { banner('홀드 해제 근거를 적어 주세요.', true); return; }
       btn.disabled = true;
       try {
-        await call('/incidents/clear', {arm: row.arm, note: note.value.trim(), cause: 'operator_verified', basis: 'direct_observation'});
+        await call('/incidents/clear', {arm: row.arm, note: note.value.trim(), cause: 'software_or_config', basis: 'seen'});
         banner(`${row.arm} 안전 홀드를 해제했습니다.`);
         await loadIncidents();
       } catch (err) { banner(err.message, true); btn.disabled = false; }
