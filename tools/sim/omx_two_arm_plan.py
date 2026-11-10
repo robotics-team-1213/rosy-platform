@@ -14,7 +14,7 @@ it does not say when each arm moves. This module does, the same way for simulati
 
 Durations are the teacher's segment times (TIMING), the same yardstick for every mode; the MuJoCo run measures the real ones.
 
-    python tools/sim/omx_two_arm_plan.py compare --scenario stack|outbound|both
+    python tools/sim/omx_two_arm_plan.py compare --scenario stack|outbound|rearrange|both|all
 """
 import argparse
 import json
@@ -31,6 +31,7 @@ HARBOR_ARMS = {"A": "arm_a", "B": "arm_b"}
 # place = lower, release, retreat 1.5 each; park 2.5 + 0.7 back to the waiting pose (no zone held). belt_gap_s: conveyor spacing (ASSUMED).
 TIMING = dict(speed=.05, pick=7., place=4.5, park=3.2, belt_gap_s=6.)
 SIDE = {"arm_a": "a", "arm_b": "b"}
+REORDER_WIDTH = 4
 
 
 def zone(layout, site):
@@ -82,13 +83,14 @@ def harbor_moves(layout, state, request, can, avoid=()):
     temporary lane or free supported ship site, the target to a free lane of a temporary plate (the outbound place: Harbor names the lane
     per job, here the first that works), then the blockers back into the target's stack from its bottom,
     in their old order; the first complete plan wins (depth first, as harbor/spatial.plan_spatial searches complete plans). Each move
-    carries `arms`, every arm that can do it in the state it runs in. Returns (moves, None) or (None, HOLD reason)."""
-    target = request["cargo_id"]
+    carries `arms`, every arm that can do it in the state it runs in. Returns (moves, None) or (None, HOLD reason).
+    `reorder` (재배치): the target stays; it and everything above it go out top first and come back in a new order (see finish)."""
+    target, reorder = request["cargo_id"], request.get("reorder", False)
     if target not in state:
         return None, "OUTBOUND_NOT_OBSERVED"
     site = state[target]
     key, base = stack_key(layout, site), layout.sites[site].get("layer", 0)
-    blockers = sorted((c for c, s in state.items() if stack_key(layout, s) == key and layout.sites[s].get("layer", 0) > base),
+    blockers = sorted((c for c, s in state.items() if stack_key(layout, s) == key and (layout.sites[s].get("layer", 0) > base or reorder and c == target)),
                       key=lambda c: -layout.sites[state[c]]["layer"])
     failures = []
 
@@ -100,19 +102,24 @@ def harbor_moves(layout, state, request, can, avoid=()):
         return dict(cargo_id=cargo, source=a, destination=b, primary_arm=found[0], alternate_arms=found[1:], phase_label=phase,
                     arms=[HARBOR_ARMS[h] for h in found])
 
+    def seat(i):
+        return next(s for s, v in layout.sites.items() if v.get("stack") == key and v["layer"] == base + i)
+
     def finish(cur, moves):
         """Outbound to the first free lane that lets the whole job finish, then the blockers back, lowest first into the target's freed
-        level; None when an arm is missing on the way."""
+        level; None when an arm is missing on the way. A reorder puts the old bottom back first, then the rest top first (the containers
+        above it reversed): only the bottom needs the far arm, the rest stays with the near arm on its own side, so the two rows overlap."""
+        if reorder:
+            return put(cur, moves, [(c, seat(i), "복귀") for i, c in enumerate(blockers[-1:] + blockers[:-1])])
         lanes = sorted(s for s in planning_sites(layout) if layout.sites[s]["kind"] == "temp" and layout.sites[s]["layer"] == 0  # Pinky takes it off an empty lane
                        and s not in cur.values() and s not in avoid)
         if not lanes:
             failures.append("NO_FREE_OUTBOUND_LANE")
-        return next((done for stand in lanes if (done := restore(cur, moves, stand))), None)
+        return next((done for stand in lanes if (done := put(cur, moves, [(target, stand, "반출")] + [
+            (c, seat(i), "복귀") for i, c in enumerate(reversed(blockers))]))), None)
 
-    def restore(cur, moves, stand):
-        for k, (cargo, b, phase) in enumerate([(target, stand, "반출")] + [
-                (c, next(s for s, v in layout.sites.items() if v.get("stack") == key and v["layer"] == base + i), "복귀")
-                for i, c in enumerate(reversed(blockers))]):
+    def put(cur, moves, places):
+        for cargo, b, phase in places:
             m = step(cur, cargo, b, phase)
             if m is None:
                 failures.append("NO_STAND_IN_REACH" if phase == "반출" else "NO_ARM_FOR_RESTORE")
@@ -129,7 +136,7 @@ def harbor_moves(layout, state, request, can, avoid=()):
         occupied = set(cur.values()) - {cur[cargo]}  # it does not hold itself up
         options = sorted((t for t in temp_spots(layout, occupied, set(avoid)) if stack_key(layout, t) != key),
                          key=lambda t: zone(layout, t) != zone(layout, cur[cargo]))
-        for t in options:
+        for t in options[:REORDER_WIDTH] if reorder else options:  # shortcut: a reorder tries the first places only (three levels of every place took >10 min on the validator), widen if a plan Harbor would find is missed
             m = step(cur, cargo, t, "재취급")
             if m is not None and (found := search(i + 1, {**cur, cargo: t}, moves + [m])):
                 return found
@@ -269,21 +276,24 @@ def outbound_requests(layout):
 MODES = {"one-arm A": ("arm_a",), "one-arm B": ("arm_b",), "two-arm": ("arm_a", "arm_b")}
 
 
-def plan_outbound(layout, arms, can):
+def plan_outbound(layout, arms, can, reorder=False):
     """Harbor plans each request on the state the previous one leaves, with the arms this mode has; a request with no legal plan is a
-    HOLD (a person or an extra transport). Requests after the first avoid the first one's temporary places so they can overlap."""
+    HOLD (a person or an extra transport). Requests after the first avoid the first one's temporary places so they can overlap.
+    `reorder`: the same two outer rows are rearranged in place (재배치: emptied, the bottom back, the two above it swapped) instead of
+    their bottoms leaving."""
     state = {c: s for c, s, _ in layout.plan_order()}
     mode_can = lambda a, b, here: can(a, b, here) & set(arms)  # noqa: E731
     moves, holds, avoid = [], [], set()
     for request in outbound_requests(layout):
-        found, why = harbor_moves(layout, state, request, mode_can, avoid)
+        found, why = harbor_moves(layout, state, dict(request, reorder=reorder), mode_can, avoid)
         if found is None:
             holds.append(dict(request=request["cargo_id"], reason=why))
             continue
         avoid |= {m["destination"] for m in found if m["phase_label"] == "재취급"}  # an outbound lane is shared in turn (same-site order)
         for m in found:
             state[m["cargo_id"]] = m["destination"]
-        state.pop(request["cargo_id"])  # Pinky clears the outbound lane
+        if not reorder:
+            state.pop(request["cargo_id"])  # Pinky clears the outbound lane
         moves += found
     return moves, holds
 
@@ -293,16 +303,16 @@ def compare(layout, scenario, can=None, tier: int | None = None):
     out = {}
     for mode, arms in MODES.items():
         result = {}
-        if scenario in ("stack", "both"):
+        if scenario in ("stack", "both", "all"):
             rows, extra = schedule(layout, stack_moves(layout, can, tier=tier), arms)
             result["stack" if tier is None else f"stack-t{tier}"] = dict(metrics(rows, extra, arms), timeline=rows, extra=extra)
         if scenario in ("cell-stack",):
             rows, extra = schedule(layout, cell_stack_moves(layout, can, tier=tier), arms)
             result["cell-stack" if tier is None else f"cell-stack-t{tier}"] = dict(metrics(rows, extra, arms), timeline=rows, extra=extra)
-        if scenario in ("outbound", "both"):
-            moves, holds = plan_outbound(layout, arms, can)
+        for name in [n for n in ("outbound", "rearrange") if scenario in (n, "all") or scenario == "both" and n == "outbound"]:
+            moves, holds = plan_outbound(layout, arms, can, reorder=name == "rearrange")
             rows, extra = schedule(layout, moves, arms)
-            result["outbound"] = dict(metrics(rows, extra, arms), holds=holds, timeline=rows, extra=extra)
+            result[name] = dict(metrics(rows, extra, arms), holds=holds, timeline=rows, extra=extra)
         out[mode] = result
     return out
 
@@ -351,7 +361,8 @@ def replay_tasks(layout, result):
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     p.add_argument("command", choices=["compare"])
-    p.add_argument("--scenario", default="both", choices=["stack", "cell-stack", "outbound", "both"])
+    p.add_argument("--scenario", default="both", choices=["stack", "cell-stack", "outbound", "rearrange", "both", "all"],
+                   help="both: stack and outbound; all: also rearrange")
     p.add_argument("--tier", type=int, choices=[1, 2, 3], help="stack only tier 1 (1단/l0), 2 (2단/l1), or 3 (3단/l2)")
     p.add_argument("--out")
     p.add_argument("--replay-dir", help="write one teacher task JSON per scenario and mode here (omx_two_arm_teacher.py run plan --plan FILE)")
