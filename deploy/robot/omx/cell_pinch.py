@@ -17,15 +17,16 @@ from pathlib import Path
 import numpy as np
 
 import cell_params as prm
-from cell_fingers import finger_pads
+from cell_fingers import finger_pads, resolve_finger_color
 
 
-def measure(img, hsv, gap_mm: float, width_mm: float | None = None, params=None) -> dict:
+def measure(img, hsv, gap_mm: float, width_mm: float | None = None, params=None, color: str | int | None = None) -> dict:
     """Gaps (mm) between each pad's inner edge and the box along the pads' line, the box width and the shift that
     centres it (+ toward the right pad in the image)."""
     import cv2
 
-    pads = finger_pads(img)
+    mode = resolve_finger_color(params=params, color=color)
+    pads = finger_pads(img, color=mode)
     if pads is None:
         return {"found": False, "why": "finger pads not seen"}
     a, b, _ = pads
@@ -35,8 +36,12 @@ def measure(img, hsv, gap_mm: float, width_mm: float | None = None, params=None)
     hsv_img = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
     h, w = g.shape[:2]
     ax_x, ax_y = int(np.clip(a[0], 0, w - 1)), int(np.clip(a[1], 0, h - 1))
-    if g[ax_y, ax_x] > 140:  # v2.1 white finger pads
-        pad_mask = (g[2 * h // 3:] > 185) & (hsv_img[2 * h // 3:, :, 1] < 55)
+    is_white = mode == "white" or (mode == "auto" and g[ax_y, ax_x] > 180)
+    if is_white:  # v2.1 white finger pads (neutral bright white or cool-LED white)
+        bot_hsv = hsv_img[2 * h // 3:]
+        pad_mask = ((g[2 * h // 3:] > 185) & (bot_hsv[:, :, 1] <= 55)) | (
+            (bot_hsv[:, :, 0] >= 95) & (bot_hsv[:, :, 0] <= 138) & (bot_hsv[:, :, 2] >= 140)
+        )
     else:
         pad_mask = g[2 * h // 3:] < 60
     dark = np.argwhere(pad_mask)[:, ::-1] + (0, 2 * h // 3)
@@ -52,11 +57,12 @@ def measure(img, hsv, gap_mm: float, width_mm: float | None = None, params=None)
     band = green[np.abs((green - mid) @ across) < prm.get(params, "pinch.band_px")]
     if len(band) < 50:
         return {"found": True, "between": False, "why": "no box at the pads' height", "mm_per_px": round(s, 3),
-                "pads": [[round(float(v), 1) for v in a], [round(float(v), 1) for v in b]]}
+                "pads": [[round(float(v), 1) for v in a], [round(float(v), 1) for v in b]], "finger_color": "white" if is_white else "dark"}
     gp = (band - mid) @ axis
     lo, hi = np.percentile(gp, 0.5), np.percentile(gp, 99.5)
     out = {"found": True, "pads": [[round(float(v), 1) for v in a], [round(float(v), 1) for v in b]], "gap_left_mm": round(float(lo - left_in) * s, 1), "gap_right_mm": round(float(right_in - hi) * s, 1),
-           "width_mm": round(float(hi - lo) * s, 1), "shift_mm": round(float((lo + hi) / 2) * s, 1), "mm_per_px": round(s, 3)}
+           "width_mm": round(float(hi - lo) * s, 1), "shift_mm": round(float((lo + hi) / 2) * s, 1), "mm_per_px": round(s, 3),
+           "finger_color": "white" if is_white else "dark"}
     need = prm.get(params, "pinch.min_gap_mm")
     sized = width_mm is None or abs(out["width_mm"] - width_mm) <= prm.get(params, "pinch.width_tol") * width_mm
     out["between"] = out["gap_left_mm"] >= need and out["gap_right_mm"] >= need
@@ -65,7 +71,7 @@ def measure(img, hsv, gap_mm: float, width_mm: float | None = None, params=None)
 
 
 def check(cell, camera: str, hsv, closing_deg: float, gap_mm: float, width_mm, redescend, params=None, sign=None,
-          mount=None) -> dict:
+          mount=None, color: str | int | None = None) -> dict:
     """Measure at grasp height; when the box is not between the pads, lift, shift along the closing axis and lower
     again (pinch.max_iter). The image->arm sign of the pads' line is learned: a step that made it worse flips it.
     `mount` is the pads' pixels from the last pass: the fingers are fixed to the camera, so pads far from there mean the
@@ -76,7 +82,7 @@ def check(cell, camera: str, hsv, closing_deg: float, gap_mm: float, width_mm, r
     dx = dy = 0.0
     rows, last = [], None
     for i in range(int(prm.get(params, "pinch.max_iter")) + 1):
-        seen = measure(cell.frame(camera), hsv, gap_mm, width_mm, params)
+        seen = measure(cell.frame(camera), hsv, gap_mm, width_mm, params, color=color)
         rows.append({"iteration": i, **seen})
         if not seen["found"]:
             return {"verdict": "refuse", "why": seen["why"], "dx_mm": dx, "dy_mm": dy, "iterations": rows}
@@ -107,6 +113,7 @@ def hook(config: dict, cell, target: dict, write_library, gap_mm: float, width_m
     work = Path(config["work_dir"]).expanduser()
     signs_path = work / f"pinch-sign-{config.get('arm_id', 'arm_s')}.json"
     mount_path = work / f"pinch-mount-{config.get('arm_id', 'arm_s')}.json"
+    finger_color = resolve_finger_color(params, spec)
 
     def redescend(dx_mm, dy_mm):
         pick = dict(target["pick"], x=round(target["pick"]["x"] + dx_mm / 1000, 4), y=round(target["pick"]["y"] + dy_mm / 1000, 4))
@@ -118,7 +125,7 @@ def hook(config: dict, cell, target: dict, write_library, gap_mm: float, width_m
         closing = target["pick"]["yaw_deg"] + prm.get(params, "auto.closing_theory_deg")
         mount = json.loads(mount_path.read_text())["pads"] if mount_path.exists() else None
         out = check(cell, spec.get("camera", "wrist"), (spec["hsv_min"], spec["hsv_max"]), closing, gap_mm, width_mm,
-                    redescend, params, sign, mount)
+                    redescend, params, sign, mount, color=finger_color)
         if out["verdict"] == "pass":
             signs_path.write_text(json.dumps(sign))
             mount_path.write_text(json.dumps({"pads": out["iterations"][-1]["pads"]}))

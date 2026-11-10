@@ -111,12 +111,13 @@ def telemetry_judge(state: list | None, holding: bool | None, params=None, curre
     }
 
 
-def vision_judge(wrist_img, hsv, gap_mm: float, closing_deg: float, sign: dict | None = None, params=None) -> dict:
+def vision_judge(wrist_img, hsv, gap_mm: float, closing_deg: float, sign: dict | None = None, params=None,
+                 color: str | int | None = None) -> dict:
     """Agent 2: measure container centering between the fingers in the wrist camera view."""
     if wrist_img is None or hsv is None:
         return {"verdict": "proceed", "class": "no_frame", "found": False, "dx_mm": 0.0, "dy_mm": 0.0,
                 "reason": "wrist frame not provided"}
-    seen = cell_fingers.finger_offset_mm(wrist_img, hsv, gap_mm, params)
+    seen = cell_fingers.finger_offset_mm(wrist_img, hsv, gap_mm, params, color=color)
     if not seen.get("found"):
         return {"verdict": "proceed", "class": "unseen", "found": False, "dx_mm": 0.0, "dy_mm": 0.0,
                 "reason": seen.get("why", "container not isolated in wrist view")}
@@ -354,6 +355,7 @@ def hook(config: dict, cell, target: dict, write_library, gap_mm: float):
     closing = target["pick"]["yaw_deg"] + prm.get(params, "auto.closing_theory_deg")
     signs_path = work / f"wrist-signs-{config.get('arm_id', 'arm_s')}.json"
     default_signs = dict({"along": -1.0, "across": 1.0}, **(spec.get("finger_sign") or {}))
+    finger_color = cell_fingers.resolve_finger_color(params, spec)
     max_reinsert = int(prm.get(params, "grasp.max_reinsert", 1))
     models = _normalize_models(config.get("debate_models") or config.get("decision_model"))
     knowledge = config.get("knowledge")
@@ -379,7 +381,7 @@ def hook(config: dict, cell, target: dict, write_library, gap_mm: float):
                     images_b64 = (base64.b64encode(cv2.imencode(".jpg", wrist_img)[1].tobytes()).decode(),)
             except Exception:
                 wrist_img = None
-        v_res = vision_judge(wrist_img, hsv, gap_mm, closing, signs, params)
+        v_res = vision_judge(wrist_img, hsv, gap_mm, closing, signs, params, color=finger_color)
         # Adaptive overshoot dampening: if a prior re-insert flipped the lateral offset sign, damp step by 0.5x
         if v_res.get("found") and state_tracker["last_along_mm"] is not None:
             prev_along, cur_along = state_tracker["last_along_mm"], v_res["along_mm"]
