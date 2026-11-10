@@ -200,15 +200,25 @@ def capture_from_attempt(config: dict[str, Any], attempt_result: dict[str, Any])
     )
     if not needs_capture:
         return None
-    arm_id = str(config.get("arm_id") or "arm_b")
+    arm_id = str(config.get("arm_id") or attempt_result.get("arm_id") or "arm_b")
     cal = config.get("_arm_calibration") or cell_arm_cal.load(config, arm_id)
+    pick_d = attempt_result.get("pick") if isinstance(attempt_result.get("pick"), dict) else {}
+    place_d = attempt_result.get("place") if isinstance(attempt_result.get("place"), dict) else {}
+    ver_d = attempt_result.get("verification") if isinstance(attempt_result.get("verification"), dict) else {}
+    site_from = str(attempt_result.get("from") or pick_d.get("site_id") or "pallet-l0")
+    site_to = str(attempt_result.get("dest") or place_d.get("site_id") or "pallet-l1")
+    tier_val = place_d.get("tier") or pick_d.get("tier")
+    stage_val = str(attempt_result.get("fail_stage") or attempt_result.get("at") or ("verify_stack_outcome" if ver_d and not ver_d.get("verified", True) else "run grasp_pick"))
+    err_val = attempt_result.get("why") or attempt_result.get("error") or ver_d.get("reason")
+    fclass_val = attempt_result.get("fail_class") or ver_d.get("recovery_mode")
     case = build_problem_case(
         arm_id=arm_id,
-        site_from=str(attempt_result.get("from") or "pallet-l0"),
-        site_to=str(attempt_result.get("dest") or "pallet-l1"),
-        stage=str(attempt_result.get("fail_stage") or "run grasp_pick"),
-        fail_class=attempt_result.get("fail_class"),
-        error=attempt_result.get("why") or attempt_result.get("error"),
+        tier=int(tier_val) if tier_val in (1, 2, 3) else None,
+        site_from=site_from,
+        site_to=site_to,
+        stage=stage_val,
+        fail_class=fclass_val,
+        error=err_val,
         telemetry={
             "gripper_pos": attempt_result.get("gripper_pos"),
             "gripper_current_ma": attempt_result.get("gripper_current_ma"),
@@ -280,6 +290,20 @@ def seed_real_hardware_problem_cases(config_or_work: dict | Path) -> list[dict[s
             telemetry={"gripper_pos": 52.05, "gripper_current_ma": 138.0, "holding": True},
             vision={"along_mm": 5.8, "across_mm": 0.4, "finger_color": "dark"},
             notes="Solved via cell_arm_cal.py automatic EMA profile calibration and persistence (arm-cal-<arm_id>.json).",
+        ),
+        build_problem_case(
+            case_id="real-trial13-transfer-park-drop-and-zone-verification",
+            arm_id="arm_b",
+            tier=3,
+            site_from="pallet-l0",
+            site_to="pallet-l2",
+            category="slip_during_lift",
+            stage="verify_stack_outcome",
+            fail_class="re_align_place_zone",
+            error="place_slot target zone check failed (fill_ratio=0.0 < 0.30, offset=None) after intermediate park knocked container out",
+            telemetry={"gripper_pos": 58.12, "gripper_current_ma": 238.0, "holding": True},
+            vision={"along_mm": 0.0, "across_mm": 0.0, "finger_color": "white"},
+            notes="Caught by Isaac-Sim-style SIDE_ROI_BY_COL_TIER + TOP_ROI_BY_COL_ROW evaluate_zone(); fixed by removing intermediate park before goto above_place.",
         ),
     ]
     for c in cases:
