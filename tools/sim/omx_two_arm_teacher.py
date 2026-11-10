@@ -51,13 +51,44 @@ class Ctx:
 
 
 class Teacher:
-    def __init__(self, world, data_file=None, frame_hook=None, drop=tasks.RELEASE_DROP, drop_upper=tasks.RELEASE_DROP_UPPER, seed=0):
+    SKEW_CASES = ((.008, -.007, 18.), (.005, .008, -16.), (.009, .006, -15.), (.006, -.008, 16.), (.004, .007, 14.), (.007, -.006, -18.))
+
+    def __init__(self, world, data_file=None, frame_hook=None, drop=tasks.RELEASE_DROP, drop_upper=tasks.RELEASE_DROP_UPPER, seed=0,
+                 pick_vision=False, belt_skew=False):
         self.rng, self.seed, self.branch, self.carried = np.random.default_rng(seed), seed, "best", None
         self.world, self.layout, self.drop, self.drop_upper = world, world.layout, drop, drop_upper
+        self.pick_vision, self.belt_skew, self.skew_i = pick_vision, belt_skew, 0
         self.limits = (data_file or tasks.load())["judge"]
         self.hook = frame_hook or (lambda data, label: None)
         self.contacts, self.phase, self.first, self.tilt, self.n, self.held_tilt = dict(arm_arm=set(), arm_other=set(), pad_neighbour=set()), "", {}, 0., 0, 0.
         self.others = set()
+
+    def perceive_pick(self, data, sa, true_xy, true_yaw):
+        """Detect a skewed/offset container at `sa` from the rendered top camera frame (omx_real2sim pinhole back-projection)."""
+        import cv2
+        import omx_real2sim as r2s
+
+        cam = r2s.Camera(self.layout.fixture["real_cameras"]["top"], (480, 640))
+        bgr = cv2.cvtColor(self.world.render(data, "top"), cv2.COLOR_RGB2BGR)
+        top_z, box_w = sa["z"] + self.layout.box[2] / 2, self.layout.box[1]
+        cands = []
+        for kind, px in r2s.blobs(bgr):
+            if kind != "container":
+                continue
+            xy, yaw, sz = r2s.rect(cam.to_plane(px, top_z))
+            if sz[1] > box_w:  # oblique side wall widens the contour toward the camera eye
+                v = (-math.sin(yaw), math.cos(yaw))
+                sh = (.5 if (cam.eye[0] - xy[0]) * v[0] + (cam.eye[1] - xy[1]) * v[1] >= 0 else -.5) * (sz[1] - box_w)
+                xy, sz = (xy[0] - sh * v[0], xy[1] - sh * v[1]), (sz[0], box_w)
+            if math.dist(xy, sa["xy"]) <= .045 and .040 <= sz[0] <= .110:
+                cands.append((math.dist(xy, true_xy), xy, yaw, sz))
+        if not cands:
+            return None
+        _, xy, yaw, sz = min(cands, key=lambda x: x[0])
+        return xy, yaw, dict(xy_err_mm=round(math.dist(xy, true_xy) * 1000, 2),
+                             yaw_err_deg=round(abs(math.degrees(r2s.fold(yaw - true_yaw))), 2),
+                             seen_xy=[round(xy[0], 4), round(xy[1], 4)], seen_yaw_deg=round(math.degrees(yaw), 1),
+                             size_mm=[round(sz[0] * 1000, 1), round(sz[1] * 1000, 1)])
 
     def frame(self, data, targets, label, ctxs=None):
         """One video frame of physics. Sequential: the Teacher is the one context. Two arms at once: each context gets its own arm's
@@ -127,10 +158,16 @@ class Teacher:
             yield from self.belt_in_g(data, step)
         pos0, yaw0, _ = w.pose(data, c)
         row = dict(step=step["id"], container=c, arm=arm, source=step["from"], target=step["to"])
-        if np.linalg.norm(pos0[:2] - sa["xy"]) > .03:
+        if np.linalg.norm(pos0[:2] - sa["xy"]) > .035:
             return dict(row, result="blocked", reason=f"{c} is {np.linalg.norm(pos0[:2] - sa['xy']) * 1000:.0f} mm from {step['from']}")
+        pick_xy, pick_yaw = pos0[:2], yaw0
+        if self.pick_vision:
+            seen = self.perceive_pick(data, sa, pos0[:2], yaw0)
+            if seen is None:
+                return dict(row, result="blocked", reason=f"top camera did not see {c} at {step['from']}")
+            pick_xy, pick_yaw, row["vision_pick"] = seen[0], seen[1], seen[2]
         before = {o: w.pose(data, o) for o in here}  # the containers on the cell; one that left with Pinky is not a neighbour
-        wps = tasks.waypoints(L, step, here, pick=(pos0[:2], yaw0), drop=self.drop, drop_upper=self.drop_upper)
+        wps = tasks.waypoints(L, step, here, pick=(pick_xy, pick_yaw), drop=self.drop, drop_upper=self.drop_upper)
         g_open, g_to = jaw.angle_for_gap(OPEN_GAP[sa["kind"]]), jaw.angle_for_gap(OPEN_GAP[sb["kind"]])
         g_hold = jaw.angle_for_gap(HOLD_GAP)
         q = self.q_now(data, arm)
@@ -176,7 +213,12 @@ class Teacher:
     def belt_in_g(self, data, step):
         """The next container arrives; the belt pick pose varies inside the fixture's infeed tolerance, seed 0 is the nominal pose."""
         f, arm = self.layout.fixture, step["arm"]
-        j = (0., 0., 0.) if self.seed == 0 else (*self.rng.uniform(-1, 1, 2) * f["infeed_jitter_xy_m"], float(self.rng.uniform(-1, 1)) * f["infeed_yaw_jitter_rad"])
+        if self.belt_skew:
+            dx, dy, y_deg = self.SKEW_CASES[self.skew_i % len(self.SKEW_CASES)]
+            self.skew_i += 1
+            j = (dx, dy, math.radians(y_deg))
+        else:
+            j = (0., 0., 0.) if self.seed == 0 else (*self.rng.uniform(-1, 1, 2) * f["infeed_jitter_xy_m"], float(self.rng.uniform(-1, 1)) * f["infeed_yaw_jitter_rad"])
         self.world.put(data, step["container"], "belt", jitter=j)
         for _ in range(8):
             yield self.q_now(data, arm)
@@ -347,6 +389,8 @@ def main(argv=None):
     p.add_argument("--drop-upper", type=float, default=tasks.RELEASE_DROP_UPPER, help="release height over a lower container, m")
     p.add_argument("--isolated", action="store_true", help="reset to the nominal plan state before every step (per-step truth without cascades)")
     p.add_argument("--concurrent", action="store_true", help="both arms at once by the steps' after/after_pick/zones (omx_two_arm_plan.py --concurrent output)")
+    p.add_argument("--pick-vision", action="store_true", help="perceive each pick container's (xy, yaw) from the rendered top camera instead of true pose")
+    p.add_argument("--belt-skew", action="store_true", help="arrive belt containers with +-8..12 mm xy offset and +-15..22 deg yaw skew")
     p.add_argument("--choice", action="append", help="key=value override of omx_two_arm_sites.CHOICES (named parameters)")
     a = p.parse_args(argv)
     choices = parse_choices(a.choice)
@@ -384,7 +428,7 @@ def main(argv=None):
             frame = Image.fromarray(np.vstack([np.hstack([world.render(data, view) for view in row]) for row in (RECORDED[:2], RECORDED[2:])]))
             ImageDraw.Draw(frame).text((8, 8), f"{a.task} {label}", fill=(255, 255, 0))
             container.mux(stream.encode(av.VideoFrame.from_ndarray(np.asarray(frame), format="rgb24")))
-    teacher = Teacher(world, frame_hook=writer, seed=a.seed, drop_upper=a.drop_upper)
+    teacher = Teacher(world, frame_hook=writer, seed=a.seed, drop_upper=a.drop_upper, pick_vision=a.pick_vision, belt_skew=a.belt_skew)
     result = teacher.run_task(task, a.isolated, a.concurrent)
     if a.frames:
         from PIL import Image
