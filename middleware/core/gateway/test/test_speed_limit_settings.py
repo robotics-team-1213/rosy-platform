@@ -14,7 +14,10 @@ from core_features.safety_gate.manager import SafetyManager
 from core_api_web.api.v1 import speed_settings
 from core_api_web.api.v1.speed_settings import SpeedSettingError, sealed_speeds, validate
 
-from test_navigation_approval_api import OWNER, drive, robot, trials  # noqa: F401  (fixtures)
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # alone-loadable: sibling fixtures without the dir conftest
+from test_navigation_approval_api import OWNER, drive, robot, trials  # noqa: E402,F401  (fixtures)
 
 
 ADMIN = {"Authorization": "Bearer rosy-dev-admin"}
