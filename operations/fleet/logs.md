@@ -5444,3 +5444,10 @@
 - 근거: `test_map_reality.py`(순수 8건), `test_site_map_reality_api.py`(HTTP 6건: 409 세 종·적용 뒤 리비전 증가·활성 불변·사건 기록), `test_document_imports.py`·`test_doc_tabs.py` 허용 목록. 원격 시험 기록은 커밋 메시지와 작업 기록에.
 - gate 변화: 없음(SOURCE만, 기체·현장 수용 별도).
 - 결정: 신규 ADR 없음(권한·소유 변경 없음, 초안 저장 경로 재사용). API Reference v1.384.
+
+
+## 2026-11-11 · uncommitted · docs(fleet): 지도-실제 대조 독립 검토 반영 - 판정 대상 우선순위·근거 결정 번호 정정
+- 변경: API Reference v1.384(절·경로 표)와 설계 문서의 판정 대상을 「활성 지도(없으면 초안)」에서 「초안(없으면 활성 지도)」로 바로잡았다(judged_map 구현과 일치). 허용 오차 0.15 m의 근거 결정 번호 D-455를 D-494(max_jump_m)로 정정(설계 §3·§8, map_reality.py docstring). site-map.js 붙은 import 줄 분리(동작 불변).
+- 이유: 독립 검토(2026-11-11) 발견 — 문서가 코드와 반대를 말했고 결정 번호가 틀렸다. 코드·보안·계약 등록은 지적 없음.
+- 근거: 독립 검토 보고(2532b95683..778ee4e8f4, 2026-11-11), py_compile·node --check 통과.
+- gate 변화: 없음.

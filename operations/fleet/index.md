@@ -105,8 +105,8 @@
 
 ## 최근 기록
 
+- 2026-11-11 · uncommitted · docs(fleet): 지도-실제 대조 독립 검토 반영 - 판정 대상 우선순위·근거 결정 번호 정정
 - 2026-11-10 · uncommitted · feat(fleet): 지도–실제 대조와 초안 강체 보정
 - 2026-11-10 · uncommitted · fix(fleet): D-1010 독립 검토 반영 — 증명 없는 free 목표 정지·모르는 프레임 교차 판정 배제·변조 DB 시동 생존 (D-1010)
 - 2026-11-10 · uncommitted · fix(fleet): 사이트 지도 프레임 결속 — 활성 본문 검증과 목표·자세·경로의 프레임 거절 (D-1010)
 - 2026-11-08 · uncommitted · fix: Account 가입·권한 요청 경로를 Fleet 기능표에 등록 (D-993)
-- 2026-11-08 · uncommitted · 관제 화면 파일을 다시 받지 않고 압축해 보낸다
