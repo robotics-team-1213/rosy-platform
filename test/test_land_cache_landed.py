@@ -63,3 +63,31 @@ def test_narrow_reuse_skips_non_ancestor_sibling_commits_in_shared_cache(cached)
     done2, todo2, _ = land.land_cache.split(wt, args, [["pkg/test"]], git(wt, "rev-parse", "HEAD"), sys.executable,
                                             select)
     assert todo2 == [] and len(done2) == 1 and asked == [ancestor]
+
+
+def test_generate_records_handles_title_with_unhashable_frontmatter_dict(tmp_path):
+    """07571bd128 passed fm: dict as the second argument of _title(p, fm); lru_cache must not hash the dict."""
+    import land_merge
+
+    (tmp_path / "tools" / "harness").mkdir(parents=True)
+    (tmp_path / "docs").mkdir(parents=True)
+    script = tmp_path / land.HARNESS
+    script.write_text(
+        "from pathlib import Path\n"
+        "def _optional_frontmatter(p): return {'title': 'T'}\n"
+        "def _title(p, meta=None):\n"
+        "    meta = _optional_frontmatter(p) if meta is None else meta\n"
+        "    return meta.get('title') or p.stem\n"
+        "def generated_targets(repo):\n"
+        "    p = repo / 'docs/index.md'\n"
+        "    return {p: _title(p, {'title': 'FromDict'}) + '/' + _title(p, {}) + '\\n'}\n"
+        "def generate(repo):\n"
+        "    targets = generated_targets(repo)\n"
+        "    for p, text in targets.items(): p.write_text(text, encoding='utf-8')\n"
+        "    return list(targets)\n",
+        encoding="utf-8",
+    )
+    written = land_merge.generate_records(tmp_path, sys.executable, land.HARNESS)
+    assert written == ["docs/index.md"]
+    assert (tmp_path / "docs/index.md").read_text(encoding="utf-8") == "FromDict/T\n"
+
