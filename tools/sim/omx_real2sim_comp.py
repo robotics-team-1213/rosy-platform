@@ -85,24 +85,66 @@ def _camera_from_params(base_cam: dict[str, Any], size: tuple[int, int], p: np.n
 
 
 def container_blobs(bgr: np.ndarray) -> list[tuple[str, np.ndarray]]:
-    """Segment containers per colour so adjacent or stacked containers of different colours never merge."""
+    """Lighting-adaptive, edge-severed container segmentation in CIE Lab + HSV space.
+
+    Instead of relying on a narrow hue threshold between warm containers and the worktable:
+    1. Multi-channel CIE Lab Sobel gradients (`edge_cut`) locate 3D physical step edges around `90x30 mm` containers.
+    2. Large background surfaces (`area > 4200 px` after edge-cutting, plus their live `(a*, b*)` chrominance mode) are
+       suppressed automatically regardless of white-balance or exposure shifts.
+    3. Broad chromatic bands segment multi-colour stacks, while oversized same-colour blobs (`area > 2200 px`) are
+       split along internal 3D step edges (`edge_cut`).
+    """
     import cv2
+
+    lab = cv2.cvtColor(bgr, cv2.COLOR_BGR2Lab).astype(np.float32)
+    gx = cv2.Sobel(lab, cv2.CV_32F, 1, 0, ksize=3)
+    gy = cv2.Sobel(lab, cv2.CV_32F, 0, 1, ksize=3)
+    g2 = np.max(gx * gx + gy * gy, axis=-1)
+    edge_cut = g2 >= max(1600.0, float(np.percentile(g2, 91)))
 
     hsv = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV)
     h, s, v = hsv[..., 0], hsv[..., 1], hsv[..., 2]
+    kernel = np.ones((3, 3), np.uint8)
+    chromatic = (s > 80) & (v > 70)
+    cut_u8 = (chromatic & (~edge_cut)).astype(np.uint8)
+    n_cc, lab_cc, stats_cc, _ = cv2.connectedComponentsWithStats(cut_u8)
+    bg_mask = np.zeros_like(cut_u8, dtype=bool)
+    for idx in range(1, n_cc):
+        if stats_cc[idx, cv2.CC_STAT_AREA] > 4200:
+            bg_mask |= (lab_cc == idx)
+    if np.any(bg_mask):
+        bg_ab = np.median(lab[bg_mask, 1:3], axis=0)
+        ab_dist = np.hypot(lab[..., 1] - bg_ab[0], lab[..., 2] - bg_ab[1])
+        bg_bleed = bg_mask | (ab_dist < 6.5)
+    else:
+        bg_bleed = np.zeros_like(bg_mask)
+
     colour_masks = (
-        ("red", (((h < 6) | (h >= 160)) & (s > 120) & (v > 120))),
-        ("orange", ((h >= 6) & (h < 18) & (s > 120) & (v > 120))),
-        ("yellow", ((h >= 23) & (h < 32) & (s > 145) & (v > 145))),
-        ("green", ((h >= 35) & (h < 88) & (s > 110) & (v > 120))),
-        ("purple", ((h >= 125) & (h < 160) & (s > 100) & (v > 115))),
+        ("red", (((h < 6) | (h >= 160)) & (s > 85) & (v > 75))),
+        ("orange", ((h >= 6) & (h < 22) & (s > 85) & (v > 75) & (~bg_bleed))),
+        ("yellow", ((h >= 19) & (h < 34) & (s > 110) & (v > 95) & (~bg_bleed))),
+        ("green", ((h >= 35) & (h < 88) & (s > 80) & (v > 75) & (~bg_mask))),
+        ("purple", ((h >= 125) & (h < 160) & (s > 75) & (v > 75) & (~bg_mask))),
     )
     out: list[tuple[str, np.ndarray]] = []
-    kernel = np.ones((3, 3), np.uint8)
     for col, mask in colour_masks:
         m = cv2.morphologyEx(mask.astype(np.uint8), cv2.MORPH_OPEN, kernel)
         for c in cv2.findContours(m, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)[0]:
-            if cv2.contourArea(c) >= 110:
+            area = cv2.contourArea(c)
+            if area < 110:
+                continue
+            if area > 2200:
+                sub_m = np.zeros_like(m)
+                cv2.drawContours(sub_m, [c], -1, 1, -1)
+                sub_cut = (sub_m.astype(bool) & (~edge_cut)).astype(np.uint8)
+                n_s, l_s, st_s, _ = cv2.connectedComponentsWithStats(sub_cut)
+                for s_idx in range(1, n_s):
+                    if 90 <= st_s[s_idx, cv2.CC_STAT_AREA] <= 3800:
+                        part = cv2.dilate((l_s == s_idx).astype(np.uint8), kernel) & sub_m
+                        for sc in cv2.findContours(part, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)[0]:
+                            if cv2.contourArea(sc) >= 110:
+                                out.append((col, sc.reshape(-1, 2)))
+            else:
                 out.append((col, c.reshape(-1, 2)))
     return out
 

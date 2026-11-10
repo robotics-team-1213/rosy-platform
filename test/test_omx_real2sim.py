@@ -391,5 +391,29 @@ def test_tilted_bottom_clipped_temp_lane_and_servo_zero_offset_compensation():
     assert info["xy_err_mm"] < 2.5
     assert info["yaw_err_deg"] < 1.5
 
+    # Lighting-shift / similar-colour test: warm container (H~19) touching a large yellow-orange table (H~21)
+    # under dimmed exposure, separated by 3D step edge and live Lab background suppression.
+    lit = np.full((480, 640, 3), (42, 96, 122), np.uint8)  # warm table under shifted lighting (H=21)
+    cv2.fillPoly(lit, [np.round(belt_poly).astype(np.int32)], (30, 30, 30))
+    for sname in ("tmp-a-1", "tmp-a-2", "tmp-a-3", "tmp-b-1", "tmp-b-2", "tmp-b-3"):
+        s = layout.sites[sname]
+        x, y, yaw, top_z = s["xy"][0], s["xy"][1], s["yaw"], s["z"] + layout.box[2] / 2
+        poly = [cam_moved.project((x + a * .045 * math.cos(yaw) - b * .015 * math.sin(yaw),
+                                   y + a * .045 * math.sin(yaw) + b * .015 * math.cos(yaw), top_z))
+                for a, b in ((-1, -1), (1, -1), (1, 1), (-1, 1))]
+        pts_i = np.round(poly).astype(np.int32)
+        cv2.fillPoly(lit, [pts_i], (32, 118, 175))  # warm shifted orange (H=19) directly on H=21 table
+
+    sa_l0 = layout.sites["tmp-a-1"]
+    seen_lit = r2s_comp.perceive_container(
+        lit, sa_l0, sa_l0["xy"], sa_l0["yaw"], layout,
+        here={k: v for k, v in here.items() if v != "tmp-a-1-l1"},
+    )
+    assert seen_lit is not None
+    assert seen_lit[2]["size_mm"][0] == pytest.approx(90.0, abs=1.0)
+    assert seen_lit[2]["size_mm"][1] == pytest.approx(30.0, abs=1.5)
+    assert seen_lit[2]["xy_err_mm"] < 2.5
+
+
 
 
