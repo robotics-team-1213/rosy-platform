@@ -10,7 +10,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 TOOL = ROOT / "deploy" / "hosts" / "common" / "rosy-host-state"
-ROLES = {"site": "site", "model": "model_pc", "ai": "ai_pc"}
+ROLES = {"site": "site", "model": "model_pc", "ai": "ai_pc", "cell": "cell_pc"}
 PENDING_D524 = "deploy/site/rosy-host-control"
 
 pytestmark = pytest.mark.skipif(os.name == "nt", reason="needs POSIX fakes on PATH")
@@ -229,7 +229,7 @@ def test_sudoers_gets_the_login_and_a_broken_file_is_never_installed(tmp_path):
     assert not list(sudoers.parent.glob("*.rosy-tmp"))
 
 
-@pytest.mark.parametrize("role", ["ai", "model", "site"])
+@pytest.mark.parametrize("role", ["ai", "model", "site", "cell"])
 def test_every_pc_carries_the_user_unit_owner_as_desired_state(role):
     """D-883: a model PC installed without units-user refused every clean-storage request. D-991: site too."""
     lines = (ROOT / "deploy" / ROLES[role] / "host-state" / "manifest").read_text(encoding="utf-8").splitlines()
@@ -254,7 +254,7 @@ def test_every_role_manifest_parses_and_its_sources_exist(role):
                 src = (ROOT / "deploy" if base == "deploy" else dirs[base]) / rel
                 assert src.is_file(), raw
                 assert b"\r\n" not in src.read_bytes(), src
-    assert ("enabled", "rosy-nightly-reboot.timer") in kinds
+    assert ("disabled" if role == "cell" else "enabled", "rosy-nightly-reboot.timer") in kinds
     assert ("file", "/etc/systemd/system/rosy-nightly-reboot.timer") in kinds
 
 
@@ -448,7 +448,7 @@ def test_sim_packages_are_approval_only_and_never_on_the_site_pc():
     for role, folder in ROLES.items():
         lines = [line for line in (ROOT / "deploy" / folder / "host-state" / "manifest").read_text(
             encoding="utf-8").splitlines() if line.split()[1:2] == ["apt"]]
-        if role == "site":
+        if role in ("site", "cell"):
             assert not lines
         else:
             assert len(lines) == 1 and lines[0].startswith("approval=sim apt ros-jazzy-ros-gz "), role

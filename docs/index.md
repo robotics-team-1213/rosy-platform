@@ -356,6 +356,6 @@
 
 - 2026-11-10 · uncommitted · docs: D-1010 독립 검토 반영 — 3·6항과 한계 갱신
 - 2026-11-10 · uncommitted · docs: D-1010 사이트 지도 프레임 결속 ADR
+- 2026-11-09 · uncommitted · fix(land): CRLF를 들이는 브랜치 거절, 병합은 -X renormalize
 - 2026-11-09 · uncommitted · fix(git): `* text=auto`로 텍스트는 늘 LF로 저장
 - 2026-11-09 · uncommitted · fix(land): 옛 브라우저 MAIN-RED 기록도 opt-in으로 재확인
-- 2026-11-09 · e94b732208 · D-922 추가 결정 — Pinky 상황 표정 8종
