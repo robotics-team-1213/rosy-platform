@@ -312,3 +312,25 @@ def test_stack_and_cell_stack_divide_into_three_validated_tier_stages(layout, da
         snap_layout = sites.Layout(cell_snapshot=snap, temp_lanes="snapshot", ship_pose="snapshot", belt_pose="snapshot")
         snap_records = tasks.validate(snap_layout, tasks.get_task(snap_layout, "cell-stack", data))
         assert len(snap_records) == 9 and not any(r["roll_below_floor"] for r in snap_records)
+
+
+def test_skewed_belt_containers_across_all_three_tiers_have_valid_ik_chains(data):
+    """Every skewed/offset belt arrival in Teacher.SKEW_CASES across tiers 1..3 (s1..s9) solves cleanly without mid-air 180 deg flips."""
+    import omx_two_arm_teacher as teacher_mod
+
+    L = sites.Layout(temp_lanes="photo-20261110", ship_pose="photo-20261110", belt_pose="photo-20261110",
+                     arm_bases="plate-centre", container_colours="multi")
+    assert L.choices["container_colours"] == "multi"
+    task = tasks.get_task(L, "stack", data)
+    here = {}
+    belt_xy, belt_yaw = L.sites["belt"]["xy"], L.sites["belt"]["yaw"]
+    for i, step in enumerate(task["steps"]):
+        dx, dy, yaw_deg = teacher_mod.Teacher.SKEW_CASES[i % len(teacher_mod.Teacher.SKEW_CASES)]
+        pick = ((belt_xy[0] + dx, belt_xy[1] + dy), belt_yaw + math.radians(yaw_deg))
+        wps = tasks.waypoints(L, step, here, pick=pick)
+        arm = L.sim_arms[step["arm"]]
+        ok, q_app, path, note = tasks.solve_chain(arm, wps, arm.home, roll_floor=L.roll_floor)
+        assert ok, f"{step['id']} ({step['arm']}) failed at skew {(dx, dy, yaw_deg)}: {note}"
+        assert abs(wps[4][3] - wps[3][3]) < math.pi / 2  # no 180-deg mid-air carry spin
+        here[step["container"]] = step["to"]
+

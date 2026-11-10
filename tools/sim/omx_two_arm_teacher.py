@@ -51,7 +51,11 @@ class Ctx:
 
 
 class Teacher:
-    SKEW_CASES = ((.008, -.007, 18.), (.005, .008, -16.), (.004, -.006, -12.), (.006, -.008, 15.), (.004, .007, 14.), (.005, -.007, -10.))
+    SKEW_CASES = (
+        (.008, -.007, 18.), (.005, .008, -16.), (.004, -.006, -12.),
+        (.006, -.005, 15.), (.004, .007, 14.), (.005, -.007, -10.),
+        (.007, -.006, 16.), (.006, .006, -14.), (.004, -.005, 12.),
+    )
 
     def __init__(self, world, data_file=None, frame_hook=None, drop=tasks.RELEASE_DROP, drop_upper=tasks.RELEASE_DROP_UPPER, seed=0,
                  pick_vision=False, belt_skew=False):
@@ -70,6 +74,7 @@ class Teacher:
 
         cam = r2s.Camera(self.layout.fixture["real_cameras"]["top"], (480, 640))
         bgr = cv2.cvtColor(self.world.render(data, "top"), cv2.COLOR_RGB2BGR)
+        hsv = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV)
         top_z, box_w = sa["z"] + self.layout.box[2] / 2, self.layout.box[1]
         cands = []
         for kind, px in r2s.blobs(bgr):
@@ -81,11 +86,14 @@ class Teacher:
                 sh = (.5 if (cam.eye[0] - xy[0]) * v[0] + (cam.eye[1] - xy[1]) * v[1] >= 0 else -.5) * (sz[1] - box_w)
                 xy, sz = (xy[0] - sh * v[0], xy[1] - sh * v[1]), (sz[0], box_w)
             if math.dist(xy, sa["xy"]) <= .045 and .040 <= sz[0] <= .110:
-                cands.append((math.dist(xy, true_xy), xy, yaw, sz))
+                cx, cy = int(round(px[:, 0].mean())), int(round(px[:, 1].mean()))
+                h = float(np.median(hsv[max(0, cy - 2):cy + 3, max(0, cx - 2):cx + 3, 0]))
+                col = "red" if h < 6 or h >= 160 else "orange" if h < 22 else "green" if h < 90 else "purple"
+                cands.append((math.dist(xy, true_xy), xy, yaw, sz, col))
         if not cands:
             return None
-        _, xy, yaw, sz = min(cands, key=lambda x: x[0])
-        return xy, yaw, dict(xy_err_mm=round(math.dist(xy, true_xy) * 1000, 2),
+        _, xy, yaw, sz, col = min(cands, key=lambda x: x[0])
+        return xy, yaw, dict(colour=col, xy_err_mm=round(math.dist(xy, true_xy) * 1000, 2),
                              yaw_err_deg=round(abs(math.degrees(r2s.fold(yaw - true_yaw))), 2),
                              seen_xy=[round(xy[0], 4), round(xy[1], 4)], seen_yaw_deg=round(math.degrees(yaw), 1),
                              size_mm=[round(sz[0] * 1000, 1), round(sz[1] * 1000, 1)])

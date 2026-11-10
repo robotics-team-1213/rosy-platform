@@ -123,14 +123,16 @@ class World:
             spec.add_mesh(name="container", file=self._asset("container_1x3_v3"), scale=[.001] * 3)
         phys = self.physics
         held = phys.container()
+        palette = (COLOURS["container"], [.18, .72, .24, 1], [.88, .14, .28, 1], [.62, .20, .86, 1])
         for k, (cid, _) in enumerate(L.containers()):
+            rgba = palette[k % len(palette)] if c.get("container_colours") == "multi" else COLOURS["container"]
             body = world.add_body(name=cid, pos=[-1.4, 1.0 + .1 * k, .05])
             body.add_freejoint(name=cid)
             body.add_geom(name=cid, type=box, size=[s / 2 for s in L.box], mass=held["mass"], condim=4, friction=held["friction"], priority=held.get("priority", 0),
-                          rgba=[.85, .35, .08, 0 if r08 else 1])
+                          rgba=[*rgba[:3], 0 if r08 else 1])
             if r08:  # the printed body with its doors, drawn over the collision box (body x 0..90, the box centre at 45, 14.99, 16.2 mm)
                 body.add_geom(type=mujoco.mjtGeom.mjGEOM_MESH, meshname="container", pos=[-L.box[0] / 2, -L.box[1] / 2, -L.box[2] / 2],
-                              contype=0, conaffinity=0, density=0, rgba=COLOURS["container"])
+                              contype=0, conaffinity=0, density=0, rgba=rgba)
         for arm, p in PREFIX.items():
             for k, (finger, side) in enumerate((("link6", 1), ("link7", -1))):
                 for part in spec.body(p + finger).geoms:
