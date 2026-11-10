@@ -204,6 +204,7 @@ gaps:
   - id: G-18
     gap: OMX ship stands at stern x .1705, centre y -.012 to -.014 (r08 hull outline fitted to the top frame, overlap .87-.91 on two frames) while the sim assumed .155 / .007; the 11-08 revert misread r08's deckhouse as a different ship, and the CAD table edge (.155) is about 35 mm short of the real one (.19)
     evidence:
+      - docs/validation/omx-real-sim-loop-2026-11-09/result.md
       - tools/sim/omx_real2sim.py
       - deploy/robot/omx/sim/cell_snapshots/20261108-2257.json
       - tools/sim/omx_two_arm_sites.py:30-31
@@ -296,8 +297,9 @@ gaps:
       - tools/sim/omx_real2sim.py
     tier: [M]
     owner: tools/sim
-    status: IN-PROGRESS
-    next: both take --choice and a policy round records them; the outbound replay at the 11-08 snapshot passed 10/10 on 2026-11-09 (lab PC run, not kept in the repo), so a recorded validation run closes the row
+    status: CLOSED
+    validated_by: docs/validation/omx-real-sim-loop-2026-11-09/result.md
+    next: done 2026-11-09 - the outbound plan and policy rounds take the snapshot choices and the outbound replay passed 10/10 at the measured cell; a policy round at the snapshot is robot-43's round 6
 
   - id: G-27
     gap: OMX sim predicts link4 touching a neighbour container when a lower container is taken out or put back (arm_a bar-1, bar-2; arm_b bar-1, bar-3), on the design and the measured layout alike; not seen on the real arm yet
@@ -320,6 +322,7 @@ gaps:
   - id: G-30
     gap: OMX belt end and centreline in the sim (stop x .158, centre y .007, from the fixture) are about 47 mm and 44 mm off the real belt (end x .205, centre y -.037 from the top frame; a D435 depth check agreed within a few mm in xy); the 11-03 cell file's belt-end site lands on the belt's side rail in the same frame
     evidence:
+      - docs/validation/omx-real-sim-loop-2026-11-09/result.md
       - tools/sim/omx_real2sim.py
       - tools/sim/omx_two_arm_sites.py:48
       - deploy/robot/omx/sim/cell_snapshots/20261108-2257.json

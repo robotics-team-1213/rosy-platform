@@ -5,7 +5,7 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.380
+**Version:** v1.383
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -4685,6 +4685,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.383 | 2026-11-10 | Additive·거절 추가 (D-1010, fix/site-map-frame-binding): Fleet 활성 지도 본문이 저장 sha256과 다르면 422 `SITE_MAP_BODY_HASH_MISMATCH`(활성 지도 없이 시동). free 목표는 trip `detail.goal_frame`(활성 `map_id`·`map_version`, 기체 `robot_map_id`, 목표 프레임 `robot`/`site`)을 남기고, 활성 버전·프레임이 계획과 다르면 trip이 `map_version`·`map_frame`으로 정지. 콘솔 목표 대기 이유 `MAP_FRAME_MISMATCH`(다른 알려진 `map_id` 경로와는 비교하지 않고 보류). trip 지도 자세 뷰 `pose`에 `map_id` 추가. Robot API·envelope 1.0 변경 없음 |
 | v1.371 | 2026-11-07 | D-991: Service Control `reboot` refused with 409 `ARM_SESSION_ACTIVE` or `HOST_JOBS_ACTIVE`; additive `reboot-over-jobs` passes live jobs, never an arm session. Breaking for one consumer, the Fleet screen: `stop-unit` and `stoppable_units` removed, `pinky-*` out of the unit list; additive `history`. |
 | v1.368 | 2026-11-07 | Additive (D-982): 현장 규칙 문서 `rosy.site_rules/1`(`GET/PUT /api/fleet/site-rules/draft`, `GET .../active`, `POST .../activate`)와 가정 상태 판정 `POST /api/fleet/site-rules/judge`(go/wait/refuse, 보내기 없음). 활성 문서가 없으면 동작 동일, 활성 문서는 더 막기만 한다 |
 | v1.362 | 2026-11-04 | Additive: D-977 `device_trial` opens the neutral `arm-transfers` jobs for exactly one arm (owner identity: `device: true`, matching `commissioning_revision`); `production` stays closed. New `operator_attested` record: `POST/GET .../jobs/{mission_id}/operator-attestations` (named operator distinct from proposer and approver, single-use, 45 s validity, `goal_confirmed: false`). The owner still refuses goals. |
