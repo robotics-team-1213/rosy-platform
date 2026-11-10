@@ -92,8 +92,8 @@ def container_blobs(bgr: np.ndarray) -> list[tuple[str, np.ndarray]]:
     h, s, v = hsv[..., 0], hsv[..., 1], hsv[..., 2]
     colour_masks = (
         ("red", (((h < 6) | (h >= 160)) & (s > 120) & (v > 120))),
-        ("orange", ((h >= 6) & (h < 22) & (s > 120) & (v > 120))),
-        ("yellow", ((h >= 22) & (h < 32) & (s > 135) & (v > 135))),
+        ("orange", ((h >= 6) & (h < 18) & (s > 120) & (v > 120))),
+        ("yellow", ((h >= 23) & (h < 32) & (s > 145) & (v > 145))),
         ("green", ((h >= 35) & (h < 88) & (s > 110) & (v > 120))),
         ("purple", ((h >= 125) & (h < 160) & (s > 100) & (v > 115))),
     )
