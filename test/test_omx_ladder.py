@@ -187,6 +187,14 @@ def test_isaac_stage_judges_suite_reports_and_handoff(tmp_path):
     assert ladder.judge_isaac_stage(candidate_fail)["status"] == "failed"
     single_placed = dict(run_id="r-single", judgement=dict(result="placed", lifted_samples=143))
     assert ladder.judge_isaac_stage(single_placed)["status"] == "passed"
+    stack_pass = dict(schema="rosy.omx-container-stack/1", run_id="r-stack3", task_success=True,
+                      fixture=dict(layers=3, row_order=[1, 0, 2], case="nominal-palletizing-v21-ship-surveyed-skew-20261110"),
+                      trials=[dict(layers=[dict(item=i, opened_sample={}) for i in range(9)])])
+    stack_judged = ladder.judge_isaac_stage(stack_pass)
+    assert stack_judged["status"] == "passed" and stack_judged["scenario"] == "omx-map-container-stack"
+    assert stack_judged["result"]["placed"] == 9 and stack_judged["result"]["planned"] == 9
+    combined = ladder.judge_isaac_stage(dict(suite=candidate_pass, container_stack=stack_pass))
+    assert combined["status"] == "passed" and combined["scenario"] == "arm-s-cell-case+omx-map-container-stack"
     suite_fail = dict(sha="a" * 40, rows=[dict(id="skew-t1-s1", expect="completed", run_id="r2", status="SUCCEEDED", result="dropped", matches=False, judgement=dict(result="dropped"))])
     failed = ladder.judge_isaac_stage(suite_fail)
     assert failed["status"] == "failed" and "skew-t1-s1" in failed["reason"]
@@ -196,3 +204,31 @@ def test_isaac_stage_judges_suite_reports_and_handoff(tmp_path):
     assert row["stages"]["gazebo"]["stage_order"] is None and row["stages"]["gazebo"]["track"] == "ros2_execution_contract"
     row["stages"]["isaac"] = passed
     ladder.write_round(tmp_path, row)
+
+
+def test_two_arm_run_isaac_chains_stage1_mujoco_into_stage2_isaac_suite(tmp_path):
+    result = dict(steps=9, steps_pass=9, final_ok=9, final_total=9, completed=True, roll_below_floor_steps=[], note="geometry only", rows=[])
+    handoff = dict(schema="rosy.omx-mujoco-isaac-handoff.v1", stage_2_isaac=dict(
+        two_arm_scenario="omx-map-container-stack",
+        two_arm_config=dict(seed=0, layers=3, case="nominal-palletizing-v21-ship-surveyed-skew-20261110"),
+        single_arm_cases=[dict(id="mujoco-stack-s1-bar-1", sim=dict(box=[0.0, 0.0, 0.0], place="belt", grasp_turn=0.0, expect=None))]))
+    suite = dict(schema="rosy.omx-cell-case-suite.v1", cases=handoff["stage_2_isaac"]["single_arm_cases"])
+    suite_report = dict(sha="a" * 40, rows=[dict(id="mujoco-stack-s1-bar-1", expect=None, run_id="r-auto", status="SUCCEEDED", result="placed", matches=None, judgement=dict(result="placed"))])
+    (tmp_path / "result.json").write_text(json.dumps(result), encoding="utf-8")
+    (tmp_path / "handoff.json").write_text(json.dumps(handoff), encoding="utf-8")
+    (tmp_path / "suite.json").write_text(json.dumps(suite), encoding="utf-8")
+    (tmp_path / "suite-report.json").write_text(json.dumps(suite_report), encoding="utf-8")
+    python = stub_python(tmp_path, (
+        f'case "$1" in '
+        f'*omx_two_arm_teacher.py) cp {tmp_path}/result.json "$7/stack-elliptic-seed0.json"; cp {tmp_path}/handoff.json "$7/isaac-handoff.json"; mkdir -p "$7/artifacts" && touch "$7/artifacts/top.png";; '
+        f'*cell_cases.py) cp {tmp_path}/suite.json "$5";; '
+        f'*cell_case_suite.py) mkdir -p "$7" && cp {tmp_path}/suite-report.json "$7/suite-report.json";; '
+        f'esac'
+    ))
+    args = type("Args", (), dict(root=str(tmp_path / "root"), python=python, task="stack", seed=0, source_sha="a" * 40,
+                                 pick_vision=False, belt_skew=False, choice=None, isaac_handoff=False,
+                                 run_isaac="suite", isaac_only=["mujoco-stack-s1-bar-1"], gazebo_report=None, isaac_report=None))
+    assert ladder.run_two_arm(args) == 0
+    record = json.loads(next((tmp_path / "root/two_arm").glob("*/run.json")).read_text(encoding="utf-8"))
+    assert record["stages"]["mujoco"]["status"] == "passed"
+    assert record["stages"]["isaac"]["status"] == "passed" and record["stages"]["isaac"]["run_id"] == "r-auto"
