@@ -1,6 +1,7 @@
 # D-530 site PC desired state (role: site). Format: deploy/hosts/common/host-state/manifest.
 # Firewall, stack and Wi-Fi lines touch the network: install applies them only with --approve firewall / wifi.
-# Nightly reboot and Docker upgrade were copied byte for byte from the site PC on 2026-10-09.
+# Nightly reboot and Docker upgrade were copied from the site PC on 2026-10-09; the reboot asks the helper
+# first since 2026-11-09 (D-991): install with --approve /usr/local/sbin/rosy-host-control.
 safe file /etc/systemd/system/rosy-nightly-reboot.timer role/rosy-nightly-reboot.timer
 safe file /etc/systemd/system/rosy-nightly-reboot.service role/rosy-nightly-reboot.service
 safe enabled rosy-nightly-reboot.timer
@@ -10,6 +11,12 @@ safe file /usr/local/sbin/rosy-docker-upgrade role/rosy-docker-upgrade 0755
 safe enabled rosy-docker-upgrade.timer
 safe enabled rosy-site-autoupdate.timer
 safe enabled rosy-site-firewall-check.timer
+# deploy/site/README.md 「Same-LAN ROSY discovery」: the bridge's scan feeds Fleet's enroll list and HTTP robots'
+# address drift; the 2026-11-09 move to a new site PC missed it. The fleet/overhead advertise units are oneshot
+# (never "active"), so they are not lines here; the boot check in that README section covers them.
+report file /etc/systemd/system/rosy-mdns-bridge.service deploy/site/rosy-mdns-bridge.service
+report file /etc/systemd/system/rosy-mdns-bridge.timer deploy/site/rosy-mdns-bridge.timer
+report enabled rosy-mdns-bridge.timer
 approval=firewall enabled rosy-site-firewall.service
 approval=firewall enabled rosy-site-stack.service
 approval=wifi wifi-allow

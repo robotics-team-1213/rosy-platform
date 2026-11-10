@@ -28,6 +28,57 @@ ARCHITECTURE = "test/architecture"
 REGISTRIES = {"shared/web/surfaces.yaml": ("surfaces", "surface_registry")}
 FROM_IMPORT = re.compile(r"^\s*from\s+(\.*)([\w.]*)\s+import\s+(\([^)]*\)|[^\n]*)", re.MULTILINE)
 
+# D-436 addendum 2026-11-09 (user: "더 잘게 나누고 정말 필요할때만 하는걸로 결정해"): a FULL trigger selects a
+# narrower tier; FULL stays only where no mapping can find the reach. The nightly full run and the pre-publish
+# green FULL (D-868) are the net. ROSY_FULL_LEGACY=1 restores the earlier rule (every trigger FULL).
+LEGACY_ENV = "ROSY_FULL_LEGACY"
+#: Reach no mapping finds: dependency pins (every venv), manifests read through path constants, layout.
+STAY_FULL = ("pinned Python dependencies", "deploy compose manifest", "image manifest", "native manifest",
+             "source layout")
+SELF_TRIGGER = "harness configuration or the selector itself"
+#: The selector, landing and runner tools' own suites: what a change to them runs instead of FULL.
+SELF_TEST = re.compile(r"^test/test_(land|remote_|affected|known_failures|worktree|pre_push|publish_|browser_scope"
+                       r"|harness|doctor|collect_alone|work_queue|xdist|g1_timing|safety_review|size_range"
+                       r"|host_(?:admission|probe|caps)|lab_hosts"
+                       r"|ci_dependencies)[^/]*\.py$")
+
+#: Panel 2026-11-09: the code that picks or runs every other landing's tests keeps FULL (design 0.7 rule 8: a
+#: gate never tests itself with a selection it made). The rest of the gate tools take the self-test tier.
+SELECT_CORE = ("tools/harness/affected_*.py", "tools/land_selection.py", "tools/land_browser.py",
+               "test/known_failures.py", "test/browser_scope.py",
+               *(f"tools/remote/{name}.py" for name in ("remote_pytest", "remote_job", "remote_test_tools",
+                                                       "work_queue", "xdist_plan")))
+
+
+def legacy() -> bool:
+    import os
+    return os.environ.get(LEGACY_ENV) == "1"
+
+
+#: The registries every mapping reads: a change there moves what any path selects (unknown reach).
+REGISTRY_FILES = ("tools/harness/harness.yaml", "tools/harness/platform_parts.yaml")  # harness.yaml keeps its
+# module-added narrowing in affected_tests.select
+
+
+def tier(repo: at.Repo, path: str, trigger: str, add) -> str | None:
+    """A non-safety FULL trigger's narrower tier through `add`: None when it stays FULL (unknown reach),
+    "own" when the tier itself is the selection, "graph" when the path's own mapping (module, referencing tests,
+    reverse dependents) is, so a path that maps to nothing still escalates as unknown."""
+    if legacy() or path in REGISTRY_FILES or any(at._match(path, p) for p in SELECT_CORE):
+        return None
+    if trigger.endswith(SELF_TRIGGER):
+        for test in repo.test_files:
+            if SELF_TEST.match(test):
+                add(test, f"selector self-test tier ({path})")
+        add(ARCHITECTURE, f"selector self-test tier ({path})")
+        return "own"
+    if "/" not in path or any(trigger.endswith(t) for t in STAY_FULL):
+        return None  # a root conftest, pyproject or pytest.ini reaches every suite
+    if trigger.endswith("pytest conftest"):
+        add(str(PurePosixPath(path).parent), f"conftest scope ({path})")
+        return "own"
+    return "own" if trigger.endswith("CI workflow") else "graph"  # lab runs execute no workflow
+
 
 def add_readers(repo: at.Repo, path: str, trigger: str, add, changed=(), base_text=None) -> str | None:
     """Select the readers of a triggered `path` through `add`: None when narrowed, else why it stays

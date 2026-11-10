@@ -7,6 +7,8 @@ fields; one ``os.write`` on an ``O_APPEND`` descriptor per line, so concurrent l
   queue    entered the queue: ticket, position (live tickets ahead + 1)
   turn     first in line: waited_s
   round    a round began: round, main
+  merged   the round's merge of main ended: round, seconds, resolved (auto-resolved paths)
+  async    land_async queued a snapshot (its own branch field): source, behind (commits of main not in HEAD)
   tests    one invocation judged: round, argv, verdict (pass, flaky, new, unusable, cancelled), seconds
            (its batch's wall time)
   landed   main fast-forwarded: sha, rounds

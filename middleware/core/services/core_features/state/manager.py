@@ -10,6 +10,7 @@ from typing import Callable, Optional
 import time
 
 from core_common.protocol.evidence import CHANNEL_STALE_AFTER_S, judge
+from core_common.protocol.state_components import BATTERY_ESTOP_SOURCES
 from core_common.protocol.schemas import (
     Battery,
     BatteryStatus,
@@ -283,7 +284,9 @@ class StateManager:
 
     def set_estop(self, active: bool, source: str = "") -> None:
         with self._lock:
-            self._safety = self._safety.model_copy(update={"estop": active, "source": source if active else ""})
+            self._safety = self._safety.model_copy(update={
+                "estop": active, "source": source if active else "",
+                "releases_when_charged": active and source in BATTERY_ESTOP_SOURCES})
             self._mark("safety")
 
     def set_thermal(self, level: str) -> None:

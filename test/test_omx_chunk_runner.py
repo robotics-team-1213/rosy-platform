@@ -427,6 +427,7 @@ def test_a_session_that_ends_mid_chunk_says_so_in_its_last_status(bus_dead):
     last = status[-1]
     assert last["command"] == "run approach_pinky" and last["ok"] is False
     assert last["fault"].startswith("session ended: ValueError: wrist_flex: following error")
+    assert last["fault"].endswith("command=3344, current=3287")  # the measurement a release rule reads stays whole
 
 
 class SlowWrist(Robot):
@@ -448,7 +449,7 @@ class SlowWrist(Robot):
 
 
 def test_pacing_and_idle_thresholds_come_from_the_params_a_runner_is_given(monkeypatch):
-    monkeypatch.setattr(m, "STRAIN_LAG", 99.0)  # without pacing or the strain hold, the guard stops it
+    monkeypatch.setattr(m.runner_strain, "STRAIN_LAG", 99.0)  # without pacing or the strain hold, the guard stops it
     lift = library()
     lift["chunks"]["approach_pinky"] = [[0.0, -60.0, 50.0, 45.0 + 0.15 * k, 10.0, 46.6] for k in range(1, 101)]
     robot, status, clock, queue = SlowWrist(), [], [0.0], ["run approach_pinky", "stop"]
@@ -469,7 +470,7 @@ def test_pacing_and_idle_thresholds_come_from_the_params_a_runner_is_given(monke
 def test_a_lagging_joint_holds_the_next_frame_until_it_catches_up_before_the_guard_stops(monkeypatch, paced):
     if not paced:  # neither pacing nor the strain hold: the guard stops it
         monkeypatch.setattr(m, "PACE_LAG", 99.0)
-        monkeypatch.setattr(m, "STRAIN_LAG", 99.0)
+        monkeypatch.setattr(m.runner_strain, "STRAIN_LAG", 99.0)
     lift = library()
     lift["chunks"]["approach_pinky"] = [[0.0, -60.0, 50.0, 45.0 + 0.15 * k, 10.0, 46.6] for k in range(1, 101)]
     robot, status, clock, queue = SlowWrist(), [], [0.0], ["run approach_pinky", "stop"]
@@ -706,6 +707,88 @@ def test_a_lag_that_keeps_rising_while_the_joint_pushes_holds_with_torque_on_the
     assert held["target"][1] == pytest.approx(held["state"][1], abs=0.01)  # held where it was, not pushed on
     assert by_command(status, "run retreat")[0]["ok"] is True
     assert by_command(status, "run park")[0]["ok"] is True and by_command(status, "run park")[0]["fault"] is None
+
+
+def test_a_jog_path_whose_wrist_strains_holds_with_torque_on_then_retreats_along_the_jogs():
+    # arm_a 2026-11-09 15:09: coordinated jogs toward a reach; wrist_flex rose to PWM 300 of 300 with no chunk
+    # running, so nothing watched below the guard, whose overload cut dropped the extended arm
+    robot = Straining(lambda n: min(2.8, max(0.0, 0.05 * (n - 40))), pwm=300, joint=3)
+    status, clock, ticks = [], [0.0], [0]
+    queue = ["jog shoulder_lift.pos 3 wrist_flex.pos 3"] * 6 + ["retreat", "park", "stop"]
+    r = m.Runner(robot, goto_library(), fps=30, status=status.append, clock=lambda: clock[0],
+                 sleep=lambda s: clock.__setitem__(0, clock[0] + 1 / 30))
+
+    def lines():
+        ticks[0] += 1
+        while queue and queue[0].startswith("jog") and r.fault:
+            queue.pop(0)  # never jog past a hold
+        if not queue or r.chunk or ticks[0] % 20:
+            return []
+        if queue[0] == "retreat":
+            robot.lag = lambda n: 0.0  # backing off: the wrist follows again
+        return [queue.pop(0)]
+
+    r.run(lines)
+    held = by_command(status, "run jog")[0]
+    assert held["ok"] is False and held["contact"] is True and "wrist_flex" in held["fault"]
+    assert held["target"][3] == pytest.approx(held["state"][3], abs=0.01)  # held where it was, torque on
+    jogs = len([s for s in status if s["command"].startswith("jog") and s["ok"]])
+    assert 1 <= jogs < 6  # the hold came before the path's end
+    assert by_command(status, "run retreat")[0]["ok"] is True
+    back = by_command(status, "run retreat")[0]["state"]
+    assert back[1] == pytest.approx(HOME[1], abs=0.5) and back[3] == pytest.approx(HOME[3], abs=0.5)  # where the jogs began
+    assert by_command(status, "run park")[0]["ok"] is True and by_command(status, "run park")[0]["fault"] is None
+
+
+def test_an_overload_hold_by_the_guard_sheds_with_lift_and_elbow_then_parks_once_released():
+    # 2026-11-09 panel: the guard freezes an overloaded joint with torque on (motion.held) instead of cutting torque;
+    # the runner stops pushing, moves only the XL430 lift and elbow toward the fold, and parks after the release
+    robot = Robot()
+    robot.pos = [40.0, -10.0, 0.0, 60.0, 70.0, 46.6]  # reached out, like arm_a at 15:09
+    released = []
+    robot.motion = type("Motion", (), {"held": {}, "effort_pwm": {"wrist_flex": 300}, "pwm_limits": {"wrist_flex": 300},
+                                       "release_hold": lambda self: (released.append(clock[0]), self.held.clear())})()
+    status, clock, ticks, during = [], [0.0], [0], []
+    r = m.Runner(robot, goto_library(), fps=30, status=status.append, clock=lambda: clock[0],
+                 sleep=lambda s: clock.__setitem__(0, clock[0] + 1 / 30))
+
+    def lines():
+        ticks[0] += 1
+        if ticks[0] == 5:
+            robot.motion.held = {"wrist_flex": {"since": clock[0], "temp": 30, "clear_since": None}}
+        if 5 < ticks[0] <= 30:
+            during.append(list(r.target))
+        if ticks[0] == 30:
+            robot.motion.effort_pwm = {"wrist_flex": 120}  # the shed took the load off the wrist
+        return {10: ["park"], 60: ["park"]}.get(ticks[0]) or (["stop"] if ticks[0] > 60 and not r.chunk else [])
+
+    r.run(lines)
+    held = [s for s in status if "overload-hold on wrist_flex" in (s.get("fault") or "")][0]
+    assert held["command"] == "fault" and held["contact"] is True
+    refused = [s for s in status if s["command"] == "park" and not s["ok"]]
+    assert refused and "shedding" in refused[0]["error"]  # no park while the guard still holds
+    first, last = during[0], during[-1]
+    assert [first[i] for i in (0, 3, 4)] == [last[i] for i in (0, 3, 4)] == [40.0, 60.0, 70.0]  # pan and wrist stay
+    assert abs(last[1] - HOME[1]) < abs(first[1] - HOME[1]) and abs(last[2] - HOME[2]) < abs(first[2] - HOME[2])
+    assert len(released) == 1 and 30 / 30 + 0.5 - 0.1 <= released[0] < 60 / 30  # asked once, after 0.5 s off the cap
+    assert by_command(status, "run park")[0]["ok"] is True and by_command(status, "run park")[0]["fault"] is None
+
+
+def test_the_shed_moves_only_lift_and_elbow_toward_home_and_stops_a_joint_at_its_own_lag():
+    target, home = [40.0, -10.0, 0.0, 60.0, 70.0, 46.6], HOME
+    sent = {n: v for n, v in zip(m.NAMES, target)}
+    out = m.runner_strain.shed(target, target, sent, home, 1.0)
+    assert out[1] == -11.0 and out[2] == 1.0 and [out[i] for i in (0, 3, 4, 5)] == [40.0, 60.0, 70.0, 46.6]
+    lagging = list(target)
+    lagging[1] += m.STRAIN_LAG  # the lift no longer follows: it stops shedding, the elbow goes on
+    out = m.runner_strain.shed(target, lagging, sent, home, 1.0)
+    assert out[1] == -10.0 and out[2] == 1.0
+
+
+def test_plain_jogs_that_follow_are_not_strain():
+    status = run_with(Straining(lambda n: 0.3, pwm=300, joint=3), goto_library(),
+                      ["jog wrist_flex.pos 3", "jog wrist_flex.pos -3", "stop"])
+    assert not by_command(status, "run jog") and all(s["ok"] for s in status if s["command"].startswith("jog"))
 
 
 @pytest.mark.parametrize("lag, pwm", [

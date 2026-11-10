@@ -112,3 +112,12 @@ header — the header is the source the tests read.
 - D-18 (schemas + reference move together), D-347 (the three-pin rule),
   PRT-006 (additive = MINOR).
 - The hook that caught it: `tools/hooks/` pre-push fast gate (D-346).
+
+## When two bumps meet in a merge (2026-11-09)
+
+Two branches that each bump the pin and add a `### v1.N` section at the top conflict on the header, the new sections
+and `contract_version.py` every time: 33 + 14 of 68 landing merge aborts by the 11-09 bottleneck report. `land.py`
+now resolves that shape itself (`land_merge.api_version`, D-889 addendum 32): each side's pin moves to the higher
+version, then the sides' added lines are joined, newest section first. It still stops for a person when both sides used
+one number (one of them skipped `api_reserve.py next`) or a side edited an existing line. So reserve the number; do not
+renumber by hand at merge time.

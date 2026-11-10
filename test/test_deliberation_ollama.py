@@ -113,7 +113,7 @@ def test_fixed_local_readback_and_only_bounded_request(monkeypatch, change):
         request = seen[1][1]
         assert len(canonical(request).encode()) <= 16384
         assert request['model'] == ollama.MODEL and request['stream'] is False
-        assert request['options']['num_predict'] == 1024 and 'tools' not in request and 'think' not in request
+        assert request['options']['num_predict'] == 1024 and 'tools' not in request and request['think'] is False
 
 
 def test_wrong_schema_refuses_before_http(monkeypatch):

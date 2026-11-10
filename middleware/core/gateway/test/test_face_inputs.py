@@ -48,7 +48,7 @@ def _payload(snapshot=None, *, face="happy", power="ACTIVE", wake=None, at=NOW):
 
 
 def test_the_payload_is_what_the_reader_validates():
-    payload = _payload()
+    payload = {**_payload(), **display.face_person_request(None)}   # the bridge adds the person request key
     read = fs.validate_face_inputs(json.loads(json.dumps(payload)), NOW)
 
     assert read is not None
@@ -58,7 +58,7 @@ def test_the_payload_is_what_the_reader_validates():
     assert read["battery_voltage"] == 7.81 and read["battery_level"] is None
     # Every key the bridge writes is one the reader knows: nothing rides unread.
     assert set(payload) - {"schema", "written_at", "camera_quality_age_s"} == set(read) - {
-        "written_ts", "camera_quality", "camera_quality_until"}
+        "written_ts", "camera_quality", "camera_quality_until", "expression_until"}
 
 
 def test_charging_hands_over_the_held_percent_not_the_live_one():
@@ -87,6 +87,26 @@ def test_driving_keeps_the_live_percent_when_a_held_value_is_also_present():
 
 def test_idle_carries_no_drive_card():
     assert _payload(_snapshot(mode="IDLE", navigation="IDLE"), face="basic")["drive"] is None
+
+
+def test_expression_intent_survives_the_local_handover():
+    payload = display.face_inputs_payload(
+        _snapshot(mode="IDLE", navigation="IDLE"), face="happy", power_mode="idle",
+        wake=None, written_at=NOW.isoformat(),
+        expression={"gaze_x": 6.0, "resting": False})
+    read = fs.validate_face_inputs(payload, NOW)
+    assert read["expression"] == {"gaze_x": 6.0, "resting": False}
+
+
+@pytest.mark.parametrize("expression", [None, {}, {"gaze_x": True, "resting": False},
+    {"gaze_x": 7, "resting": False}, {"gaze_x": float("nan"), "resting": False},
+    {"gaze_x": 2, "resting": "yes"}])
+def test_bad_expression_is_neutral_without_losing_a_safety_card(expression):
+    payload = _payload(_snapshot(estop=True))
+    payload["expression"] = expression
+    read = fs.validate_face_inputs(payload, NOW)
+    assert read["expression"] is None
+    assert fs.screen_for(stage="CORE_READY", state=rs.READY, core=read)["kind"] == "stopped"
 
 
 @pytest.mark.parametrize('reason', ['low_light', 'overexposed'])

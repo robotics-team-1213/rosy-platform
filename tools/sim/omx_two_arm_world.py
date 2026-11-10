@@ -20,6 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 os.environ.setdefault("MUJOCO_GL", "egl")
 import mujoco  # noqa: E402
 import numpy as np  # noqa: E402
+import omx_physics as physics  # noqa: E402
 import omx_two_arm_kin as kin  # noqa: E402
 import omx_two_arm_sites as sites  # noqa: E402
 import palletizing_gripper as jaw  # noqa: E402
@@ -31,6 +32,9 @@ PREFIX = {"arm_a": "a_", "arm_b": "b_"}
 WRIST_ASSETS = sites.ISAAC / "assets/omx_wrist_camera_b"  # link5 parts in mm, as stacking_scene.WRIST_PARTS draws them in Isaac
 WRIST_PARTS = ("link5_gripper", "gripper_plate_F6", "b16-u16-span-D-holder-assembly")
 FPS = 15
+# the cell as its top camera sees it (median pixels of the 11-09 top frame): yellow table, white plates with dark lane pads, light-blue ship
+COLOURS = dict(floor=[.45, .5, .55, 1], table=[.74, .64, .35, 1], belt=[.2, .25, .28, 1], plate=[.88, .89, .9, 1], pad=[.08, .09, .1, 1],
+               ship=[.6, .85, .97, 1], container=[.91, .47, .22, 1], wall=[.6, .84, 1., 1])  # wall: the room behind the cell in the side frame (11-09)
 
 
 def prism(polygon, z0, z1):
@@ -55,6 +59,7 @@ def camera_axes(eye, focus, up):
 class World:
     def __init__(self, layout=None, wrist=None, cone="elliptic", **choices):
         self.layout = layout or sites.Layout(**choices)
+        self.physics = physics.Physics(self.layout.choices["physics"])
         self.wrist = wrist or self.layout.choices["wrist_camera"]
         self.cone = cone
         self.meshes = tempfile.TemporaryDirectory()
@@ -98,15 +103,17 @@ class World:
         spec.option.enableflags |= mujoco.mjtEnableBit.mjENBL_MULTICCD  # a convex mesh against a box gives ONE contact point otherwise: boxes on the deck rocked and crept
         spec.option.cone, spec.option.impratio = (mujoco.mjtCone.mjCONE_PYRAMIDAL if self.cone == "pyramidal" else mujoco.mjtCone.mjCONE_ELLIPTIC), 10
         spec.visual.global_.offwidth, spec.visual.global_.offheight = 1280, 960
+        spec.add_texture(name="room", type=mujoco.mjtTexture.mjTEXTURE_SKYBOX, builtin=mujoco.mjtBuiltin.mjBUILTIN_FLAT,
+                         rgb1=COLOURS["wall"][:3], rgb2=COLOURS["wall"][:3], width=8, height=8)  # past the floor the side camera saw black
         spec.default.geom.solref, spec.default.geom.solimp = [.002, 1], [.95, .99, .001, .5, 2]
         world, box = spec.worldbody, mujoco.mjtGeom.mjGEOM_BOX
         f = L.fixture
         wc, ws = f["workplate_center_m"], f["workplate_size_m"]
-        world.add_geom(name="floor", type=mujoco.mjtGeom.mjGEOM_PLANE, size=[2, 2, .1], rgba=[.3, .3, .3, 1])
-        world.add_geom(name="table", type=box, size=[ws[0] / 2, ws[1] / 2, ws[2] / 2], pos=wc, rgba=[.55, .5, .42, 1])
-        bx = sites.BELT_STOP_X
-        world.add_geom(name="belt", type=box, size=[.15, .0425, .002], pos=[bx + .15, f["pickup_center_m"][1], L.belt_top - .002], rgba=[.15, .15, .15, 1])
-        world.add_geom(name="belt_stop", type=box, size=[.002, .0425, .004], pos=[bx, f["pickup_center_m"][1], L.belt_top + .004], rgba=[.6, .6, .6, 1])
+        world.add_geom(name="floor", type=mujoco.mjtGeom.mjGEOM_PLANE, size=[2, 2, .1], rgba=COLOURS["floor"])
+        world.add_geom(name="table", type=box, size=[ws[0] / 2, ws[1] / 2, ws[2] / 2], pos=wc, rgba=COLOURS["table"])
+        bx, by = L.belt_stop_x, L.belt_y
+        world.add_geom(name="belt", type=box, size=[.15, .0425, .002], pos=[bx + .15, by, L.belt_top - .002], rgba=COLOURS["belt"])
+        world.add_geom(name="belt_stop", type=box, size=[.002, .0425, .004], pos=[bx, by, L.belt_top + .004], rgba=[.6, .6, .6, 1])
         for arm, a in L.arms.items():  # the 12 mm base plate under each arm (size ASSUMED 120 mm square, visual only)
             world.add_geom(name=f"{PREFIX[arm]}plate", type=box, size=[.06, .06, .006], pos=[*a.base[:2], a.base[2] - .006], contype=0, conaffinity=0, rgba=[.2, .2, .2, 1])
         self._ship(spec)
@@ -114,13 +121,16 @@ class World:
         r08 = c["ship_source"] == "r08-berth"
         if r08:
             spec.add_mesh(name="container", file=self._asset("container_1x3_v3"), scale=[.001] * 3)
+        phys = self.physics
+        held = phys.container()
         for k, (cid, _) in enumerate(L.containers()):
             body = world.add_body(name=cid, pos=[-1.4, 1.0 + .1 * k, .05])
             body.add_freejoint(name=cid)
-            body.add_geom(name=cid, type=box, size=[s / 2 for s in L.box], mass=.016, condim=4, friction=[1, .005, .0001], rgba=[.85, .35, .08, 0 if r08 else 1])
+            body.add_geom(name=cid, type=box, size=[s / 2 for s in L.box], mass=held["mass"], condim=4, friction=held["friction"], priority=held.get("priority", 0),
+                          rgba=[.85, .35, .08, 0 if r08 else 1])
             if r08:  # the printed body with its doors, drawn over the collision box (body x 0..90, the box centre at 45, 14.99, 16.2 mm)
                 body.add_geom(type=mujoco.mjtGeom.mjGEOM_MESH, meshname="container", pos=[-L.box[0] / 2, -L.box[1] / 2, -L.box[2] / 2],
-                              contype=0, conaffinity=0, density=0, rgba=[.88, .48, .16, 1])
+                              contype=0, conaffinity=0, density=0, rgba=COLOURS["container"])
         for arm, p in PREFIX.items():
             for k, (finger, side) in enumerate((("link6", 1), ("link7", -1))):
                 for part in spec.body(p + finger).geoms:
@@ -131,12 +141,9 @@ class World:
                                                quat=[math.cos(angle / 2), 0, 0, math.sin(angle / 2)], mass=.004, rgba=[0, 0, 0, 0])
             for joint in spec.joints:
                 if joint.name.startswith(p):
-                    joint.damping, joint.armature = .3, .01
+                    physics.apply_joint(joint, phys.joint(arm, joint.name[len(p):]))
             for name in JOINTS:
-                force = .2 if name == "gripper_joint_1" else 2.0
-                spec.add_actuator(name=p + name, target=p + name, trntype=mujoco.mjtTrn.mjTRN_JOINT, gaintype=mujoco.mjtGain.mjGAIN_FIXED,
-                                  gainprm=[40.0] + [0] * 9, biastype=mujoco.mjtBias.mjBIAS_AFFINE, biasprm=[0, -40.0, -6.3] + [0] * 7,
-                                  forcelimited=mujoco.mjtLimited.mjLIMITED_TRUE, forcerange=[-force, force])
+                physics.add_actuator(spec, p + name, phys.joint(arm, name))
             for parent, child in self.pairs[arm]:
                 spec.add_exclude(bodyname1=parent, bodyname2=child)
             spec.add_exclude(bodyname1=p + "link6", bodyname2=p + "link7")
@@ -200,7 +207,7 @@ class World:
         x0, y0, z0 = sites.ship_cell(L, 0, 0)
         turn = [0, 0, 0, 1]  # ship x runs to -x of the fixture frame
         mesh = mujoco.mjtGeom.mjGEOM_MESH
-        for name, rgba in (("hull", [.09, .15, .29, 1]), ("house", [.9, .94, .94, 1]), ("quay", [.88, .48, .16, 1])):
+        for name, rgba in (("hull", COLOURS["ship"]), ("house", COLOURS["ship"]), ("quay", [.88, .48, .16, 1])):
             spec.add_mesh(name=f"ship_{name}", file=self._asset(name), scale=[.001] * 3)
             world.add_geom(name=f"ship_{name}", type=mesh, meshname=f"ship_{name}", pos=[x0, y0, z0], quat=turn, contype=0, conaffinity=0, rgba=rgba)
         for name in ("cx_bow", "cx_house"):
@@ -241,9 +248,11 @@ class World:
         spec.add_mesh(name="wall_end", uservert=wall(section(length / 2), width + 2 * (catch + rim), False))
         for tag, plate in L.plates.items():
             spec.add_mesh(name=f"deck_{tag}", uservert=prism(plate["outline"], deck_z - S["deck_t"], deck_z))
-            colour = [.64, .86, .91, 1]
-            spec.worldbody.add_geom(name=f"deck_{tag}", type=mujoco.mjtGeom.mjGEOM_MESH, meshname=f"deck_{tag}", rgba=[.08, .15, .29, 1])
+            colour = COLOURS["plate"]
+            spec.worldbody.add_geom(name=f"deck_{tag}", type=mujoco.mjtGeom.mjGEOM_MESH, meshname=f"deck_{tag}", rgba=colour)
             for i, (xy, yaw) in enumerate(plate["lanes"], 1):
+                spec.worldbody.add_geom(name=f"lane{tag}{i}", type=mujoco.mjtGeom.mjGEOM_BOX, pos=[*xy, deck_z + .0003], size=[length / 2, width / 2, .0003],
+                                        quat=[math.cos(yaw / 2), 0, 0, math.sin(yaw / 2)], contype=0, conaffinity=0, rgba=COLOURS["pad"])
                 for mesh, turn in (("wall_side", 0), ("wall_side", math.pi), ("wall_end", 0), ("wall_end", math.pi)):
                     a = yaw + turn
                     spec.worldbody.add_geom(name=f"w{tag}{i}{mesh[5]}{int(turn > 0)}", type=mujoco.mjtGeom.mjGEOM_MESH, meshname=mesh,
@@ -254,13 +263,14 @@ class World:
     # -- state ---------------------------------------------------------------------------------------------------------------
     def _bind(self):
         m = self.model
-        self.q, self.dof, self.act, self.mimic, self.link5, self.arm_dof = {}, {}, {}, {}, {}, {}
+        self.q, self.dof, self.act, self.mimic, self.link5, self.arm_dof, self.hold_dof = {}, {}, {}, {}, {}, {}, {}
         for arm, p in PREFIX.items():
             self.q[arm] = np.array([m.joint(p + n).qposadr[0] for n in JOINTS])
             self.act[arm] = np.array([m.actuator(p + n).id for n in JOINTS])
             self.mimic[arm] = m.joint(p + "gripper_joint_2").qposadr[0]
             self.link5[arm] = m.body(p + "link5").id
             self.arm_dof[arm] = np.array([m.joint(p + n).dofadr[0] for n in (*JOINTS, "gripper_joint_2")])
+            self.hold_dof[arm] = self.physics.hold_dofs(m, p)
         self.box_q = {c: m.joint(c).qposadr[0] for c, _ in self.layout.containers()}
         self.box_v = {c: m.joint(c).dofadr[0] for c, _ in self.layout.containers()}
         self.substeps = round(1 / FPS / m.opt.timestep)
@@ -286,18 +296,21 @@ class World:
         else:
             s = self.layout.sites[site]
             lift = .0005 + .001 * s.get("layer", 0) if lift is None else lift  # a stack dropped in at once must not start in exact contact (it was ejected)
+            if not any(jitter):  # equal boxes stacked exactly in line get a false ~35 mm box-box contact and fly off (seed 0, 11-09): stagger tiers 0.1 mm
+                jitter = (.0001 * (-1) ** s.get("layer", 0), 0., 0.)
             yaw = s["yaw"] + jitter[2]
             pose = [s["xy"][0] + jitter[0], s["xy"][1] + jitter[1], s["z"] + lift, math.cos(yaw / 2), 0, 0, math.sin(yaw / 2)]
         data.qpos[self.box_q[cid]:self.box_q[cid] + 7] = pose
         data.qvel[self.box_v[cid]:self.box_v[cid] + 6] = 0
 
     def advance(self, data, targets, frames=1):
-        """Command {arm: 6 joint targets} for `frames` frames; ideal gravity compensation on both arms (real servos sag: shortcut)."""
+        """Command {arm: 6 joint targets} for `frames` frames; ideal gravity compensation on the physics candidate's held joints
+        (every arm joint by default; registers: the I-gain joints only)."""
         for arm, t in targets.items():
             data.ctrl[self.act[arm]] = t
         for _ in range(self.substeps * frames):
             for arm in PREFIX:
-                data.qfrc_applied[self.arm_dof[arm]] = data.qfrc_bias[self.arm_dof[arm]]
+                data.qfrc_applied[self.hold_dof[arm]] = data.qfrc_bias[self.hold_dof[arm]]
             mujoco.mj_step(self.model, data)
 
     def pose(self, data, cid):

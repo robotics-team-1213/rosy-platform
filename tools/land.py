@@ -58,6 +58,7 @@ import land_events  # noqa: E402  (rosy-land-events.jsonl: what each landing did
 import land_browser  # noqa: E402  (the browser tier in file-level chunks)
 import land_selection  # noqa: E402  (selection with this caller's Stop and helper seams)
 import land_mainred  # noqa: E402  (D-889 addendum 2: a NEW that main already fails alike may be carried)
+import land_precheck  # noqa: E402  (the cheap gates alone, before land_async makes a ticket)
 import land_batch  # noqa: E402  (waiting landings behind a turn land as one batch)
 from land_checks import ahead_of_origin, tmp_dir  # noqa: E402
 from land_merge import (ADR_GAPS, ADR_LOG, conflict_stages, landed_gaps, plan, stale_adr_rows,  # noqa: E402,F401  (auto-resolve)
@@ -71,7 +72,7 @@ SCANNER_DIR = "deploy/robot/pinky_pro/release"  # its scanner; admission runs it
 SAFETY = "tools/harness/safety_review.py"  # D-430 5: the rule CI's scope job enforces
 # Every child gets UTF-8 stdio (Korean paths and log text on a cp949 console).
 ENV = {**os.environ, "PYTHONUTF8": "1"}
-
+RENORMALIZE = ("-X", "renormalize")  # merges clean CRLF->LF per side first: line endings alone never conflict (11-09)
 
 TURN_CAP_S = 1200  # D-889 26 (20 min): the acquired turn's budget; expiry yields at safe boundaries (land_prepare.again)
 TURN_MAX_S = 1800  # user decision 2026-11-02: every acquired turn yields, even without a waiter
@@ -109,7 +110,7 @@ def lines(cwd: Path, *args: str) -> list[str]:
 def merge(wt: Path, main_sha: str, branch: str, python: str, dry_run: bool, source: str = "main") -> list[str]:
     """Merge main_sha (``source``: a batch member's tip, land_batch.py) into HEAD; return the auto-resolved paths."""
     if dry_run:
-        tree = git(wt, "merge-tree", "--write-tree", "--no-messages", "HEAD", main_sha, check=False)
+        tree = git(wt, "merge-tree", "--write-tree", "--no-messages", *RENORMALIZE, "HEAD", main_sha, check=False)
         conflicts = conflict_stages(tree.stdout) if tree.returncode == 1 else {}
         resolved, manual = plan(wt, conflicts, ("HEAD", main_sha))
         print(f"[plan] merge main {main_sha[:10]}: "
@@ -117,7 +118,7 @@ def merge(wt: Path, main_sha: str, branch: str, python: str, dry_run: bool, sour
         if manual:
             raise Stop("merge would conflict outside the auto-resolvable set:\n  " + "\n  ".join(manual))
         return sorted(resolved)
-    result = git(wt, "merge", "--no-edit", "--no-commit", "-m",
+    result = git(wt, "merge", *RENORMALIZE, "--no-edit", "--no-commit", "-m",
                  f"Merge branch '{source}' into {branch}", main_sha, check=False)
     if result.returncode == 0 and git(wt, "rev-parse", "--verify", "MERGE_HEAD", check=False).returncode != 0:
         return []
@@ -264,12 +265,12 @@ def secret_scan(wt: Path, main_sha: str) -> None:
     finally:
         sys.path.remove(str(release))
         sys.dont_write_bytecode = kept
-    changed = out(wt, "diff", "--name-only", "--diff-filter=d", main_sha, "HEAD").splitlines()
+    changed = out(wt, "diff", "--name-only", "--diff-filter=d", f"{main_sha}...HEAD").splitlines()
     findings = scanner.scan_files([wt / p for p in changed], root=wt, public_provenance=scanner.load_public_provenance(
         release / "public_provenance.json"))
     if findings:
-        raise Stop("secret scan (test_no_secrets_in_tracked_files) failed; a git id needs the word `commit` before it"
-                   " on its line, or 10 characters:\n" + "\n".join(str(f) for f in findings[:20]))
+        raise Stop("secret scan (test_no_secrets_in_tracked_files) failed (a full git id that exists in"
+                   " this repository is excused; other high-entropy text is not):\n" + "\n".join(str(f) for f in findings[:20]))
 
 
 def record_only(path: str) -> bool:
@@ -402,7 +403,9 @@ def rounds(args, wt: Path, branch: str, main_co: Path, python: str, qdir, ticket
             print(f"== round {round_no}: main {main_sha[:10]}, branch {branch}")
             land_events.emit("round", round=round_no, main=main_sha)
             if git(wt, "merge-base", "--is-ancestor", main_sha, "HEAD", check=False).returncode != 0:
+                began = time.monotonic()
                 resolved = merge(wt, main_sha, branch, python, args.dry_run)
+                land_events.emit("merged", round=round_no, seconds=round(time.monotonic() - began), resolved=resolved)
                 summary.append(f"round {round_no}: merged main {main_sha[:10]}"
                                + (f", auto-resolved {resolved}" if resolved else ""))
             candidate = out(wt, "rev-parse", "HEAD")  # the commit the checks below vouch for
@@ -550,9 +553,19 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--no-cache", action="store_true", help="rerun every invocation (no land_cache.py reuse)")
     parser.add_argument("--queue-timeout", type=float, default=0, help="minutes to wait in the queue (0: no limit)")
     parser.add_argument("--no-queue", action="store_true", help="incident only: land without waiting in the queue")
+    parser.add_argument("--precheck", action="store_true", help="run the cheap gates only (land_async does this first)")
     parser.add_argument("--urgent", default="", metavar="REASON",
                         help="the user's words: pass waiting tickets (one at a time, D-889 addendum 5)")
+    parser.add_argument("--mixed", default="", metavar="REASON", help="the user's words: gate or safety paths with product")
     args = parser.parse_args(argv)
+    if args.precheck:
+        try:
+            land_precheck.precheck(sys.modules[__name__], Path(out(Path.cwd(), "rev-parse", "--show-toplevel")), sys.executable,
+                                   args.mixed)
+            return 0
+        except Stop as exc:
+            print(f"[land] STOP: {exc}", file=sys.stderr)
+            return 1
     if not land_selection.configure(sys.modules[__name__], args):
         return 2
     try:

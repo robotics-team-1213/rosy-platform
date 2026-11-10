@@ -4,7 +4,8 @@
   python tools/land_stats.py [--days 7] [--json]
 
 Per day (local time): landings and stops, queue wait p50/p90 (minutes from entering the queue to the turn),
-turn p50/p90 (minutes from the turn to landed or stop), and per judged invocation the share that were new
+turn p50/p90 (minutes from the turn to landed or stop), the stages (D-889 addendum 32: pretest and FULL from
+``prepared``, merge of main from ``merged``, minutes) and how many commits behind main a change was queued (``async``), and per judged invocation the share that were new
 failures, load-flaky, or gave no usable verdict (lost host, interrupted). The batch-landing decision waits
 for the new-failure share to stay at or under 10 %. Confirmed failed ids (``failure`` events) split by cause:
 ``shared`` (the same id failed for two or more branches within WINDOW: main or a host, tooling's to fix),
@@ -29,6 +30,7 @@ import land_events  # noqa: E402
 WINDOW = 6 * 3600  # seconds within which one id failing for two branches counts as shared
 REPEAT_ROWS = 10
 TIMING_KEYS = ("queued_s", "wait_s", "run_s")
+STAGES = ("pretest", "full", "merge", "behind")  # minutes, minutes, minutes, commits
 
 
 def percentile(values: list[float], q: float) -> float | None:
@@ -78,7 +80,8 @@ def repeat(rows: list[dict], candidates: str, quarantine: str) -> list[dict]:
 def daily(rows: list[dict]) -> dict[str, dict]:
     days: dict[str, dict] = defaultdict(lambda: {"landed": 0, "stopped": 0, "waits": [], "turns": [],
                                                  "tests": defaultdict(int), "prepares": [],
-                                                 "causes": defaultdict(int), "timing": defaultdict(list)})
+                                                 "causes": defaultdict(int), "timing": defaultdict(list),
+                                                 "stages": defaultdict(list)})
     turn_at: dict[int, float] = {}
     for row in rows:
         day = days[time.strftime("%Y-%m-%d", time.localtime(row["t"]))]
@@ -92,6 +95,11 @@ def daily(rows: list[dict]) -> dict[str, dict]:
                 day["turns"].append((row["t"] - turn_at.pop(pid)) / 60)
         elif event == "prepared":
             day["prepares"].append(row.get("seconds", 0) / 60)
+            day["stages"]["full" if row.get("tier") == "full" else "pretest"].append(row.get("seconds", 0) / 60)
+        elif event == "merged":
+            day["stages"]["merge"].append(row.get("seconds", 0) / 60)
+        elif event == "async":
+            day["stages"]["behind"].append(row.get("behind", 0))
         elif event == "tests":
             day["tests"][row.get("verdict", "?")] += 1
             for key in TIMING_KEYS:  # land_checks.timing: per invocation, absent before 2026-10-31
@@ -112,6 +120,8 @@ def daily(rows: list[dict]) -> dict[str, dict]:
                      "unusable_share": share("unusable"),
                      **{f"failed_{c}": day["causes"][c] for c in ("shared", "host", "branch")},
                      **{f"{k}_{q}": percentile(day["timing"][k], v) for k in TIMING_KEYS
+                        for q, v in (("p50", .5), ("p90", .9))},
+                     **{f"{k}_{q}": percentile(day["stages"][k], v) for k in STAGES
                         for q, v in (("p50", .5), ("p90", .9))}}
     return out
 
@@ -162,6 +172,11 @@ def main(argv=None) -> int:
         print("\nper invocation s p50/p90   queued (round start->job start)  wait (host room)  run")
         for name, d in timed.items():
             print(f"{name}  " + "  ".join(f"{fmt(d[k + '_p50']):>6}/{fmt(d[k + '_p90']):<6}" for k in TIMING_KEYS))
+    staged = {name: d for name, d in stats.items() if any(d[k + "_p50"] is not None for k in STAGES)}
+    if staged:
+        print("\nstage p50/p90   pretest min  FULL min  merge min  behind main (commits, at queue time)")
+        for name, d in staged.items():
+            print(f"{name}  " + "  ".join(f"{fmt(d[k + '_p50']):>6}/{fmt(d[k + '_p90']):<6}" for k in STAGES))
     read = lambda path: path.read_text(encoding="utf-8") if path.is_file() else ""  # noqa: E731
     top = repeat(rows, read(Path(common) / "rosy-flaky-candidates.txt"), read(Path(common).parent / "test/flaky_quarantine.txt"))
     if top:
