@@ -59,12 +59,15 @@ def hook(config: dict, cell, target: dict, write_library):
         pick = dict(target["pick"], x=round(target["pick"]["x"] + dx_mm / 1000, 4), y=round(target["pick"]["y"] + dy_mm / 1000, 4))
         return write_library(config, pick, target["place"], work / "reach-replan.json")
 
+    tcp_x_m = config.get("tcp_x_m")
+    if tcp_x_m is None:
+        return lambda: correct(cell, (target["pick"]["x"], target["pick"]["y"]), replan, params)
     return lambda: correct(
         cell,
         (target["pick"]["x"], target["pick"]["y"]),
         replan,
         params,
-        fk=lambda s: fk_xy(s, config.get("tcp_x_m")),
+        fk=lambda s: fk_xy(s, tcp_x_m),
     )
 
 
