@@ -27,6 +27,7 @@ import os
 import re
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -157,26 +158,36 @@ def _overlap(a: str, b: str) -> bool:
     return a == b or a.startswith(b + "/") or b.startswith(a + "/")
 
 
+_delta_lock = threading.RLock()
+_delta_memo: dict[tuple, list[str] | None] = {}
+
+
 def _delta_paths(wt: Path, base: str, head: str, python: str, select) -> list[str] | None:
     """Paths the selector picks for base..head; None when narrow reuse is not sound there."""
-    if _git(wt, "merge-base", "--is-ancestor", base, head).returncode != 0:
-        return None
-    status = _git(wt, "diff", "--name-status", "--no-renames", base, head)
-    rows = [row.split("\t") for row in status.stdout.splitlines() if row]
-    if status.returncode or any(r[0] not in ("M", "A") or r[-1] in LISTS for r in rows):
-        return None
-    print(f"[cache] selecting for {base[:10]}..{head[:10]} to see what it touches", flush=True)
-    try:
-        invocations, full = select(wt, base, python, head=head)
-    except Exception as exc:  # a selector failure only means no narrow reuse
-        print(f"[cache] selector failed ({exc}); no narrow reuse from {base[:10]}")
-        return None
-    if full:
-        invocations = _landed_full(wt, base, head, python, select)
-        if invocations is None:
+    key = (str(wt), base, head, python, id(select), id(_git), id(_landed_full))
+    with _delta_lock:
+        if key in _delta_memo:
+            return _delta_memo[key]
+        if _git(wt, "merge-base", "--is-ancestor", base, head).returncode != 0:
             return None
-    picked = [_paths(inv) for inv in invocations]
-    return None if None in picked else [p for paths in picked for p in paths]
+        status = _git(wt, "diff", "--name-status", "--no-renames", base, head)
+        rows = [row.split("\t") for row in status.stdout.splitlines() if row]
+        if status.returncode or any(r[0] not in ("M", "A") or r[-1] in LISTS for r in rows):
+            return None
+        print(f"[cache] selecting for {base[:10]}..{head[:10]} to see what it touches", flush=True)
+        try:
+            invocations, full = select(wt, base, python, head=head)
+        except Exception as exc:  # a selector failure only means no narrow reuse
+            print(f"[cache] selector failed ({exc}); no narrow reuse from {base[:10]}")
+            return None
+        if full:
+            invocations = _landed_full(wt, base, head, python, select)
+            if invocations is None:
+                _delta_memo[key] = None
+                return None
+        picked = [_paths(inv) for inv in invocations]
+        _delta_memo[key] = None if None in picked else [p for paths in picked for p in paths]
+        return _delta_memo[key]
 
 
 def reach(wt: Path, base: str, head: str, python: str = sys.executable) -> list[str] | None:
