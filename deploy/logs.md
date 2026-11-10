@@ -4819,6 +4819,7 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 ## 2026-11-10 · uncommitted · fix(site): VACUUM temp를 대상 옆 디렉터리로 두어 fleet-backup 컨테이너에서 실물 크기에도 돌게 한다
 - 변경: 독립 검토(게시 전, publish 파이프라인)가 지적한 fleet-backup 컨테이너 결함 — 읽기 전용 rootfs·32MB tmpfs /tmp에서 665MB급 백업본 VACUUM이 SQLITE_FULL로 실패하고 main() 순서상 prune까지 건너뛴다(시험 fixture는 KB급이라 못 잡음). `vacuum_database`가 `SQLITE_TMPDIR`(사용자가 이미 줬으면 존중)를 대상 파일 옆 디렉터리로 지정한다 — 백업 bind·DB 볼륨 모두 그 경로는 쓰기 가능. stuck 사고 보고서가 sighting_audit를 captured_at으로 조인한다는 보존 주의문을 주석·README에 추가(90일 지난 에피소드는 camera 열만 열화, 깨지지 않음).
 - 시험: 원격 시험으로 확인 뒤 착지(아래 행에 결과 추가).
+- 시험(원격 ai, VACUUM temp 커밋): test_site_db_maintenance.py·test_site_ledger_backup_deploy.py 59 passed, known_failures NEW 0(2026-11-10).
 - 증거: 독립 검토 보고(발견 1·2)와 R fleet.sqlite3 실측 665MB, `Rosy/docs/workspace-records/2026-11-10/fleet-hub-comm-check.md`.
 - gate 변화: 없음.
 
