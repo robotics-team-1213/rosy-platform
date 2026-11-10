@@ -228,3 +228,21 @@ def test_the_belt_request_asks_for_one_tape_reading_that_tells_the_two_belts_apa
                                      camera=round(math.dist(axis, (.205, -.037)) * 1000))
     assert abs(req["candidates"]["camera"] - req["candidates"]["sim"]) > 2 * req["tolerance"]  # one reading decides
     assert req["id"] == "belt-end-20261109-0428" and req["gap"] == "G-30" and image.exists()
+
+
+def test_a_moved_top_camera_is_caught_on_the_far_band(tmp_path, monkeypatch):
+    import omx_cell_anchor as anchor
+    rng = np.random.default_rng(0)
+    scene = (rng.random((540, 720)) * 255).astype(np.uint8)
+    scene = cv2.GaussianBlur(scene, (0, 0), 2)  # texture ORB can match, like the far table, belt and floor
+    still = cv2.cvtColor(scene[30:510, 40:680], cv2.COLOR_GRAY2BGR)
+    shifted = cv2.cvtColor(scene[30:510, 52:692], cv2.COLOR_GRAY2BGR)  # the camera turned: the view slid 12 px
+    assert not anchor.moved(anchor.motion(still, still.copy()))
+    m = anchor.motion(still, shifted)
+    assert anchor.moved(m) and abs(m["dx_px"] + 12) < 1.5
+    monkeypatch.setenv("ROSY_REAL2SIM_FRAMES", str(tmp_path / "frames"))
+    path = tmp_path / "top.jpg"
+    cv2.imwrite(str(path), still)
+    name = anchor.remember(path)
+    assert name == anchor.digest(path) and anchor.reference(name).read_bytes() == path.read_bytes()
+    assert anchor.reference("sha256:" + "0" * 64) is None

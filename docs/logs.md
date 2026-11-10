@@ -14691,3 +14691,23 @@ osy-d395-s1d\`.
 - 증거: `test_recheck_runs_a_legacy_browser_red_with_the_opt_in`, 로컬 `test_land_mainred*`·`test_land_nightly` 27 passed.
 - gate 변화: 없음.
 - CE: 해당 없음 — 원인과 규칙이 코드와 회귀 시험에 남는다.
+
+## 2026-11-09 · uncommitted · fix(git): `* text=auto`로 텍스트는 늘 LF로 저장
+
+- 변경: `.gitattributes` 첫 규칙 `* text=auto`. autocrlf를 끄고 커밋해도 텍스트는 LF로 들어간다. 체크아웃은 그대로 core.autocrlf를 따른다. 뒤 규칙(`-text`, `eol=lf`)이 우선한다.
+- 근거: `tools/land_mainred.py`가 10-27부터 CRLF로 저장돼 LF 브랜치마다 전체 충돌(fix/eol-guard가 두 파일 정규화·검사·병합 처리). main 488dab2970에서 `git add --renormalize .`가 바꾸는 파일은 그 두 개뿐이었다.
+- 증거: 원격 `.gitattributes`를 읽는 시험.
+- gate 변화: 없음.
+- CE: 기존 교훈 갱신은 fix/eol-guard에 있다(`docs/solutions/workflow-issues/autocrlf-false-commit-a-rewrites-tree-to-crlf-2026-11-01.md`).
+
+## 2026-11-10 · uncommitted · docs: D-1010 사이트 지도 프레임 결속 ADR
+- 변경: ADR D-1010과 ADR Log 행, API Reference v1.383(활성 지도 본문 검증 거절 코드, trip detail.goal_frame, MAP_FRAME_MISMATCH 보류 이유, pose map_id).
+- 이유: Fleet R 등에서 지도를 따올 때 틀린 지도·틀린 좌표계를 쓰지 않게(사용자 2026-11-10 원문 ADR에 인용).
+- 증거: ADR D-1010 본문과 ADR Log 행, API Reference v1.383 행.
+- gate 변화: 없음(SOURCE만).
+
+## 2026-11-10 · uncommitted · docs: D-1010 독립 검토 반영 — 3·6항과 한계 갱신
+- 변경: ADR D-1010 3항(증명 없는 free 목표 정지, 같은 map_id 증명일 때만 충전 폴백, poses_in_robot_frame 포트 선언)·6항(모르는 map_id는 교차 판정에 안 씀, 마지막 확인값 대체와 로그)·한계(충전 결속 요건, 구형 기체 보류)·검증 갱신. 제목·상태 불변.
+- 이유: 2026-11-10 독립 검토 지적의 결정 근거를 ADR 본문에 남기기 위해서(D-1010은 이 브랜치의 미착지 ADR이라 제자리 갱신).
+- 증거: ADR D-1010 본문.
+- gate 변화: 없음(SOURCE만).

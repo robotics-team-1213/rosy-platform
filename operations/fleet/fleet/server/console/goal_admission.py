@@ -54,6 +54,13 @@ def untrusted_blocker_hold(untrusted: str, intended: Sequence) -> QueueDecision:
                          dispatch_attempted=True, cancel_confirmed=True)
 
 
+def map_frame_hold(other: str, route: Sequence) -> QueueDecision:
+    """전송 후(D-1010): 서로 다른 지도 프레임의 경로는 한 격자에서 비교할 수 없다 — 취소하고 대기열에."""
+    return QueueDecision(reason="MAP_FRAME_MISMATCH", blocked_by=other,
+                         waiting_on=(other,), route=tuple(route),
+                         dispatch_attempted=True, cancel_confirmed=True)
+
+
 def standing_hold(blocked_by: str, standing: Sequence, reason: str,
                   route: Sequence) -> QueueDecision:
     """전송 후(_make_room): 길을 막은 선 로봇들이 비켜서는 동안 이동자는 세워 둔다."""

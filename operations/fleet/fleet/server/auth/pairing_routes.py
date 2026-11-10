@@ -134,6 +134,7 @@ def install_pairing_routes(app: FastAPI, service: PairingService, *, sync_token:
     def pairing_approve(request_id: str, body: ApproveBody, principal=Depends(named_operator)) -> dict:
         try:
             return service.approve(request_id, code=body.code, source_id=body.source_id,
+                                   replace_credential_id=body.replace_credential_id,
                                    principal_id=principal.principal_id)
         except PairingError as exc:
             raise _refusal(exc) from None
