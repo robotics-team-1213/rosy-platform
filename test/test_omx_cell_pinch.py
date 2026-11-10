@@ -64,3 +64,14 @@ def test_a_turned_camera_and_a_wrong_sized_box_are_refused():
     assert moved["verdict"] == "refuse" and "camera moved" in moved["why"]
     long_box = Arm(0, width_px=200)  # 40 mm across where a 20 mm box was planned
     assert cell_pinch.check(long_box, "wrist", HSV, 0.0, GAP_MM, 20.0, long_box.redescend)["why"].startswith("box width")
+
+
+def test_white_fingers_and_dark_fingers_both_measure_inner_pad_gaps():
+    # White v2.1 fingers (arm_a / arm_b) with dark background shadows
+    img = np.full((480, 640, 3), 140, np.uint8)
+    cv2.rectangle(img, (270, 300), (369, 440), (0, 180, 0), -1)  # 100 px green box in middle
+    for x in (150, 440):  # white finger pads in front of the box (inner gap 240 px -> 0.2 mm/px)
+        cv2.rectangle(img, (x, 360), (x + 49, 479), (235, 235, 235), -1)
+    seen_w = cell_pinch.measure(img, HSV, GAP_MM, 20.0, params={"wrist.finger_color": 2})
+    assert seen_w["found"] and seen_w["between"] and seen_w["sized"] and seen_w["finger_color"] == "white"
+    assert seen_w["width_mm"] == pytest.approx(20, abs=1) and seen_w["gap_left_mm"] == pytest.approx(14, abs=1)

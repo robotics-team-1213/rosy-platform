@@ -20,13 +20,14 @@ STRATEGY = {
     "beside": ["other_axis", "narrow_jaws", "wrist_align", "ask_person"],
     "surface": ["probe_surface", "ask_person"],
     "empty": ["observe_again", "wrist_align", "other_axis", "ask_person"],
+    "unstable_grasp": ["wrist_align", "other_axis", "observe_again", "ask_person"],
     "unknown": ["observe_again", "ask_person"],
 }
 
 
 # How a whole attempt ended (cell_auto_pick.run_auto's result) -> what cell_recovery changes before the next one.
 ATTEMPT_CAUSES = (("stopped: released", "lift_stall"), ("stopped: holding", "held_stop"), ("stopped: still holding", "stuck_in_jaws"),
-                  ("stopped: misaligned", "misaligned"), ("stopped: placed", "not_seen_placed"), ("stopped: no usable", "no_room"),
+                  ("stopped: misaligned", "misaligned"), ("stopped: reinserted", "unstable_grasp"), ("stopped: placed", "not_seen_placed"), ("stopped: no usable", "no_room"),
                   ("stopped: pivot", "calibrate"), ("stopped: no clear pivot", "calibrate"),
                   *((f"stopped: {c} -> ", "contact") for c in STRATEGY))  # the strategy table already ended at a person
 RECOVERY = {
@@ -36,6 +37,7 @@ RECOVERY = {
     "no_room": ["push_clear", "observe_again", "ask_person"],
     "no_progress": ["push_clear", "observe_again", "ask_person"],
     "misaligned": ["observe_again", "push_clear", "ask_person"],
+    "unstable_grasp": ["observe_again", "push_clear", "ask_person"],
     "scene_moved": ["observe_again", "push_clear", "ask_person"],  # the top camera saw the pile change: plan from what is there now
     "not_seen_placed": ["observe_again", "ask_person"],
     "held_stop": ["ask_person"],  # a box may still be in the jaws
