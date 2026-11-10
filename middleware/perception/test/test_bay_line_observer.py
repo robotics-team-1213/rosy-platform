@@ -24,8 +24,10 @@ LINE_TOTAL_M = 0.65
 
 
 def observer(**kw):
-    return BayLineObserver(mount=MOUNT, hfov_rad=HFOV, width=W, height=H,
-                           line_total_m=LINE_TOTAL_M, **kw)
+    args = dict(mount=MOUNT, hfov_rad=HFOV, width=W, height=H,
+                line_total_m=LINE_TOTAL_M)
+    args.update(kw)
+    return BayLineObserver(**args)
 
 
 def render(offset_m, heading_rad, south_of_camera_m, *, carpet=105, tape_dim=1.0):
@@ -52,8 +54,8 @@ def render(offset_m, heading_rad, south_of_camera_m, *, carpet=105, tape_dim=1.0
                                  height_m=MOUNT.height_m)
             if px is not None:
                 u, v = int(round(px[0])), int(round(px[1]))
-                if 0 <= v < H and 0 <= u < W:
-                    frame[v, u] = tape
+                # A tape has width: paint a patch so the mask sees one component.
+                frame[max(0, v - 2):v + 3, max(0, u - 2):u + 3] = tape
     return frame
 
 
