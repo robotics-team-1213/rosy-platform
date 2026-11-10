@@ -35,21 +35,14 @@ def rodrigues(rvec: np.ndarray) -> np.ndarray:
     return np.eye(3) + math.sin(theta) * K + (1.0 - math.cos(theta)) * (K @ K)
 
 
-def perturbed_camera_dict(
-    base_cam: dict[str, Any],
-    eye_shift_m: tuple[float, float, float] = (0.0, 0.0, 0.0),
-    focus_shift_m: tuple[float, float, float] = (0.0, 0.0, 0.0),
-    roll_deg: float = 0.0,
-) -> dict[str, Any]:
+def perturbed_camera_dict(base_cam: dict[str, Any], eye_shift_m: tuple[float, float, float] = (0.0, 0.0, 0.0),
+                          focus_shift_m: tuple[float, float, float] = (0.0, 0.0, 0.0), roll_deg: float = 0.0) -> dict[str, Any]:
     """Return a copy of `base_cam` with shifted `eye`, shifted `focus`, and rolled `up` vector."""
     eye = np.array(base_cam["eye"], float) + np.asarray(eye_shift_m, float)
     focus = np.array(base_cam["focus"], float) + np.asarray(focus_shift_m, float)
-    fwd = focus - eye
-    fwd /= np.linalg.norm(fwd)
-    up0 = np.array(base_cam["up"], float)
-    up0 = up0 - fwd * (up0 @ fwd)
-    up0 /= np.linalg.norm(up0)
-    up = rodrigues(fwd * math.radians(roll_deg)) @ up0
+    fwd = (focus - eye) / np.linalg.norm(focus - eye)
+    up0 = np.array(base_cam["up"], float) - fwd * (np.array(base_cam["up"], float) @ fwd)
+    up = rodrigues(fwd * math.radians(roll_deg)) @ (up0 / np.linalg.norm(up0))
     return dict(base_cam, eye=eye.tolist(), focus=focus.tolist(), up=up.tolist())
 
 
@@ -98,7 +91,7 @@ def container_blobs(bgr: np.ndarray) -> list[tuple[str, np.ndarray]]:
     lab_u8 = cv2.cvtColor(bgr, cv2.COLOR_BGR2Lab)
     clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
     l_eq = clahe.apply(lab_u8[..., 0])
-    ab_smooth = cv2.bilateralFilter(lab_u8, d=5, sigmaColor=18, sigmaSpace=5)[..., 1:3].astype(np.float32)
+    ab_smooth = cv2.bilateralFilter(lab_u8, d=5, sigmaColor=9, sigmaSpace=5)[..., 1:3].astype(np.float32)
     gx = cv2.Scharr(ab_smooth, cv2.CV_32F, 1, 0)
     gy = cv2.Scharr(ab_smooth, cv2.CV_32F, 0, 1)
     g_ab = np.max(gx * gx + gy * gy, axis=-1)
@@ -152,14 +145,16 @@ def _raw_plus_end_and_width(
         use_yaw = r2s.fold(expected_yaw)
         u_along = np.array([math.cos(use_yaw), math.sin(use_yaw)])
         u_across = np.array([-math.sin(use_yaw), math.cos(use_yaw)])
+        cut_lo = cut_hi = False
+        t0 = 0.0
         if expected_xy is not None:
             t0 = float(np.asarray(expected_xy, float) @ u_across)
-            t_all = pts @ u_across
-            if float(np.ptp(t_all)) > 0.044:
-                grid = np.linspace(t0 - 0.024, t0 + 0.024, 17)
-                t_mode = float(max(grid, key=lambda tc: int(np.count_nonzero(np.abs(t_all - tc) <= 0.015))))
-                keep = np.abs(t_all - t_mode) <= 0.021
-                if int(np.count_nonzero(keep)) >= 20:
+            rel_t = (pts - np.asarray(expected_xy, float)) @ u_across
+            if float(np.ptp(rel_t)) > 0.048:
+                cut_lo = float(np.percentile(rel_t, 2)) < -0.032
+                cut_hi = float(np.percentile(rel_t, 98)) > 0.032
+                keep = np.abs(rel_t) <= 0.034
+                if int(np.count_nonzero(keep)) >= 25:
                     pts, px = pts[keep], px[keep]
         s = pts @ u_along
         t = pts @ u_across
@@ -167,10 +162,17 @@ def _raw_plus_end_and_width(
         front = s >= (float(np.max(s)) - min(0.035, max(0.015, 0.75 * s_span)))
         t_front = t[front] if int(np.count_nonzero(front)) >= 12 else t
         t_lo, t_hi = float(np.percentile(t_front, 2)), float(np.percentile(t_front, 98))
-        raw_w = t_hi - t_lo
+        raw_w = ref_w if (cut_lo and cut_hi) else (t_hi - t_lo)
         c_approx = float(np.mean(s)) * u_along + 0.5 * (t_lo + t_hi) * u_across
         d_eye = (cam.eye[0] - c_approx[0]) * u_across[0] + (cam.eye[1] - c_approx[1]) * u_across[1]
-        t_center = ((t_lo + 0.5 * ref_w) if d_eye >= 0.0 else (t_hi - 0.5 * ref_w)) if raw_w > ref_w else 0.5 * (t_lo + t_hi)
+        if cut_lo and cut_hi:
+            t_center = t0
+        elif cut_lo:
+            t_center = t_hi - 0.5 * ref_w
+        elif cut_hi:
+            t_center = t_lo + 0.5 * ref_w
+        else:
+            t_center = ((t_lo + 0.5 * ref_w) if d_eye >= 0.0 else (t_hi - 0.5 * ref_w)) if raw_w > ref_w else 0.5 * (t_lo + t_hi)
         mid_band = np.abs(t - t_center) <= ref_w * 0.42
         s_band = s[mid_band] if int(np.count_nonzero(mid_band)) >= 8 else s
         s_max, s_min = float(np.percentile(s_band, 99)), float(np.percentile(s_band, 1))
@@ -193,16 +195,8 @@ def _raw_plus_end_and_width(
     return xy, yaw, (sz[0], raw_w), plus_xy, px
 
 
-def _box_on_plane(
-    cam: r2s.Camera,
-    px: np.ndarray,
-    top_z: float,
-    box_l: float,
-    box_w: float,
-    img_h: int = 480,
-    expected_yaw: float | None = None,
-    expected_xy: Any = None,
-) -> tuple[tuple[float, float], float, tuple[float, float]]:
+def _box_on_plane(cam: r2s.Camera, px: np.ndarray, top_z: float, box_l: float, box_w: float,
+                  img_h: int = 480, expected_yaw: float | None = None, expected_xy: Any = None) -> tuple[tuple[float, float], float, tuple[float, float]]:
     """Back-project contour pixels `px` onto `top_z`, correcting side-wall overhang and bottom-clipped (`row 479`) length."""
     xy, yaw, sz_raw, plus_xy, px_used = _raw_plus_end_and_width(cam, px, top_z, box_w, expected_yaw, expected_xy)
     if sz_raw[1] < 0.021:  # reject thin side-wall slivers of occluded lower-tier (l0) containers
@@ -249,22 +243,12 @@ def _measure_belt_fiducial(belt_uv: np.ndarray, cam: r2s.Camera, layout: Any) ->
     if len(outer) < 20:
         outer = pts
     end_x = float(np.percentile(outer[:, 0], 1))
-    return dict(
-        end_x=end_x,
-        y_at_pick=y_at_pick,
-        yaw=dyaw,
-        dx=end_x - (layout.belt_stop_x + BELT_STOP_EDGE_OFFSET_M),
-        dy=y_at_pick - layout.belt_y,
-        dyaw=dyaw,
-    )
+    return dict(end_x=end_x, y_at_pick=y_at_pick, yaw=dyaw,
+                dx=end_x - (layout.belt_stop_x + BELT_STOP_EDGE_OFFSET_M), dy=y_at_pick - layout.belt_y, dyaw=dyaw)
 
 
-def _extract_anchors(
-    bgr: np.ndarray,
-    layout: Any,
-    cam_nom: r2s.Camera,
-    here: dict[str, str] | None = None,
-) -> tuple[list[dict[str, Any]], np.ndarray | None]:
+def _extract_anchors(bgr: np.ndarray, layout: Any, cam_nom: r2s.Camera,
+                     here: dict[str, str] | None = None) -> tuple[list[dict[str, Any]], np.ndarray | None]:
     """Extract unclipped `+x` end keypoints of temporary-plate lanes (pads + seated containers) and dark belt pixels."""
     import cv2
 
@@ -287,13 +271,16 @@ def _extract_anchors(
     occupied_lanes: set[tuple[str, int]] = set(lane_top_z.keys())
     raw_seated: dict[tuple[str, int], dict[str, Any]] = {}
     for _, px in c_blobs:
+        area_px = float(cv2.contourArea(px))
+        if area_px < 220.0 or (area_px / max(1.0, float(cv2.contourArea(cv2.convexHull(px))))) < 0.72:
+            continue
         xy_rough, yaw_r, sz_r = r2s.rect(cam_nom.to_plane(px, pad_z + box_h))
         if xy_rough[0] > 0.02 or abs(xy_rough[1]) < 0.065 or sz_r[1] < 0.021:
             continue
         tag = "a" if xy_rough[1] < 0.0 else "b"
         lanes = [(k, layout.sites[f"tmp-{tag}-{k}"]["xy"], r2s.fold(layout.sites[f"tmp-{tag}-{k}"]["yaw"])) for k in (1, 2, 3)]
         if sz_r[1] > 0.048:
-            cand_lanes = lanes
+            cand_lanes = [ln for ln in lanes if ln[0] != 2]
         else:
             yaw_lanes = [ln for ln in lanes if abs(r2s.fold(yaw_r - ln[2])) < math.radians(11.0)]
             cand_lanes = [min(yaw_lanes or lanes, key=lambda ln: math.dist(xy_rough, ln[1]))]
@@ -307,10 +294,10 @@ def _extract_anchors(
                 if math.dist(plus_xy, true_plus) < 0.072:
                     occupied_lanes.add((tag, k))
                     prev = raw_seated.get((tag, k))
-                    if prev is None or len(px_u) > prev["area"]:
+                    if prev is None or area_px > prev["area"]:
                         raw_seated[(tag, k)] = dict(
                             tag=tag, lane=k, plus_xy=plus_xy, yaw=yaw, true_plus=true_plus,
-                            true_yaw=true_yaw, z=z_top, area=len(px_u), partial=False,
+                            true_yaw=true_yaw, z=z_top, area=area_px, partial=False,
                         )
 
     raw_pads: dict[str, list[dict[str, Any]]] = {"a": [], "b": []}
@@ -420,8 +407,8 @@ def calibrate_top_camera(bgr: np.ndarray, layout: Any, here: dict[str, str] | No
         reg = np.array([p[0] * 0.15, p[1] * 0.15, p[2] * 0.30, p[3] * 0.15, p[4] * 0.15, p[5] * 0.15])
         return np.concatenate([anchor_errors(cam), reg])
 
-    lo = np.array([-0.035, -0.035, -0.025, -0.06, -0.06, -0.08])
-    hi = np.array([0.035, 0.035, 0.025, 0.06, 0.06, 0.08])
+    lo = np.array([-0.042, -0.042, -0.025, -0.06, -0.06, -0.08])
+    hi = np.array([0.042, 0.042, 0.025, 0.06, 0.06, 0.08])
     p = np.zeros(6, dtype=float)
     r = objective(p)
     cost = float(r @ r)
