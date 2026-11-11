@@ -11,6 +11,7 @@ Anything matching nothing is `unmatched` and never a grasp target: measurement v
 from __future__ import annotations
 
 import argparse
+import copy
 import json
 import math
 import sys
@@ -26,16 +27,32 @@ import cell_params as prm  # noqa: E402
 SCHEMA = "rosy.omx-object-catalog.v1"
 SPLIT_FILL, SPLIT_AXIS_DEG = prm.default("objects.split_fill"), prm.default("objects.split_axis_deg")  # a split piece must fill its rectangle and lie parallel to the others
 CHROMA, LIGHT, MIN_PX = (prm.default(f"objects.{k}") for k in ("chroma", "light", "min_px"))  # Lab (OpenCV 0-255) chroma and lightness steps; smallest blob in pixels
+_CATALOG_CACHE: dict[tuple[str, int, int], list] = {}
 
 
 def load_catalog(path) -> list:
-    data = json.loads(Path(path).read_text())
+    p = Path(path)
+    key = None
+    try:
+        resolved = p.resolve()
+        st = resolved.stat()
+        key = (str(resolved), st.st_mtime_ns, st.st_size)
+        cached = _CATALOG_CACHE.get(key)
+        if cached is not None:
+            return copy.deepcopy(cached)
+    except OSError:
+        key = None
+    data = json.loads(p.read_text())
     if data.get("schema") != SCHEMA:
         raise ValueError(f"not a {SCHEMA} file")
     for o in data["objects"]:
-        for key in ("id", "length_mm", "width_mm", "top_height_mm", "tolerance_mm", "grasp"):
-            if key not in o:
-                raise ValueError(f"catalogue entry {o.get('id')!r} lacks {key}")
+        for k in ("id", "length_mm", "width_mm", "top_height_mm", "tolerance_mm", "grasp"):
+            if k not in o:
+                raise ValueError(f"catalogue entry {o.get('id')!r} lacks {k}")
+    if key is not None:
+        if len(_CATALOG_CACHE) >= 32:
+            _CATALOG_CACHE.clear()
+        _CATALOG_CACHE[key] = copy.deepcopy(data["objects"])
     return data["objects"]
 
 
@@ -60,7 +77,7 @@ def foreground(img, roi, chroma: float | None = None, light: float | None = None
     chroma = prm.get(params, "objects.chroma", CHROMA) if chroma is None else chroma
     light = prm.get(params, "objects.light", LIGHT) if light is None else light
     x0, y0, x1, y1 = roi
-    lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB).astype(np.int16)[y0:y1, x0:x1]
+    lab = cv2.cvtColor(img[y0:y1, x0:x1], cv2.COLOR_BGR2LAB).astype(np.int16)
     colours = np.atleast_2d(np.asarray(surface_lab, float)) if surface_lab is not None else [np.median(lab.reshape(-1, 3), axis=0)]
     far = np.ones(lab.shape[:2], bool)
     for bg in colours:  # background when close to any of the site's surfaces, or a shadow on one
@@ -340,11 +357,13 @@ def object_mask(img, roi, hsv, surface_px=None, params=None):
     mask = cv2.inRange(hsv_img, np.array(hsv[0]), np.array(hsv[1]))
     frac = prm.get(params, "objects.top_v_frac")
     if frac and mask.any():  # top faces only: a side face is the same green, darker by the same ratio in any light
-        n, labels = cv2.connectedComponents(mask)  # (day: top V 186, side 137; at night, V capped by the exposure limit: 59 / ~40)
+        n, labels, stats, _ = cv2.connectedComponentsWithStats(mask)  # (day: top V 186, side 137; at night, V capped by the exposure limit: 59 / ~40)
         v = hsv_img[..., 2]
         for i in range(1, n):
-            blob = labels == i
-            mask[blob & (v < frac * np.percentile(v[blob], 90))] = 0
+            bx, by, bw, bh = (int(stats[i, k]) for k in (cv2.CC_STAT_LEFT, cv2.CC_STAT_TOP, cv2.CC_STAT_WIDTH, cv2.CC_STAT_HEIGHT))
+            blob = labels[by:by + bh, bx:bx + bw] == i
+            sub_v = v[by:by + bh, bx:bx + bw]
+            mask[by:by + bh, bx:bx + bw][blob & (sub_v < frac * np.percentile(sub_v[blob], 90))] = 0
     if surface_px:
         keep = np.zeros_like(mask)
         cv2.fillPoly(keep, [np.asarray(surface_px, np.int32) - [x0, y0]], 255)
@@ -381,6 +400,7 @@ def detect(img, roi, record: dict, camera: dict, catalog: list, surface_z: float
             else foreground(img, roi, params=params, surface_px=surface_px, surface_lab=surface_lab))
     n, labels, stats, _ = cv2.connectedComponentsWithStats(seen)
     out = []
+    v_roi = None
     for i in range(1, n):
         if stats[i, cv2.CC_STAT_AREA] < prm.get(params, "objects.min_px", MIN_PX):
             continue
@@ -401,8 +421,9 @@ def detect(img, roi, record: dict, camera: dict, catalog: list, surface_z: float
             # top_v_frac off for the whole site (it thinned a belt box at the frame edge) let a 2-cell lying across
             # the Pinky tray read 56 x 41.5 mm with its side face (2026-10-30); only a blob that matches nothing is
             # measured again on its brighter part, and kept only when that matches
-            v = cv2.cvtColor(img[y0:roi[3], x0:roi[2]], cv2.COLOR_BGR2HSV)[..., 2]
-            top = (blob & (v >= retry * np.percentile(v[blob], 90))).astype(np.uint8)
+            if v_roi is None:
+                v_roi = cv2.cvtColor(img[y0:roi[3], x0:roi[2]], cv2.COLOR_BGR2HSV)[..., 2]
+            top = (blob & (v_roi >= retry * np.percentile(v_roi[blob], 90))).astype(np.uint8)
             top = cv2.morphologyEx(top, cv2.MORPH_OPEN, np.ones((int(prm.get(params, "objects.open_px")),) * 2, np.uint8))
             if top.sum() >= prm.get(params, "objects.min_px", MIN_PX):
                 again = _measure_blob(np.column_stack(np.nonzero(top))[:, ::-1] + [x0, y0], record, camera, catalog, surface_z, params, img)

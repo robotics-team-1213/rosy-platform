@@ -297,6 +297,37 @@ def _sync_manifest_file(registry: dict, path: Path) -> list:
     return changed
 
 
+def sync_readiness(registry: dict, profile: dict) -> tuple[dict, list]:
+    """Keep each readiness camera's device aligned with its preview unit's role in the registry."""
+    by_role = {c["role"]: c["device"] for c in registry["cameras"]}
+    changed, cameras = [], {}
+    for role, spec in profile.get("cameras", {}).items():
+        unit = spec.get("unit", role)
+        want = by_role.get(unit)
+        if want and spec.get("device") != want:
+            changed.append({"role": role, "unit": unit, "from": spec.get("device"), "to": want})
+            cameras[role] = {**spec, "device": want}
+        else:
+            cameras[role] = dict(spec)
+    return {**profile, "cameras": cameras}, changed
+
+
+def _sync_readiness_file(registry: dict, path: Path) -> list:
+    if not path.is_file() or not os.access(path, os.W_OK):
+        return []
+    try:
+        profile = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    updated, changed = sync_readiness(registry, profile)
+    if changed:
+        tmp = path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(updated, indent=2) + "\n", encoding="utf-8")
+        os.chmod(tmp, path.stat().st_mode)
+        os.replace(tmp, path)
+    return changed
+
+
 def _names() -> dict:
     out = {}
     for link in glob.glob("/dev/v4l/by-id/*") + [p for p in glob.glob("/dev/v4l/by-path/*") if "usbv2" not in p]:
@@ -368,6 +399,10 @@ def main(argv=None) -> int:
     plan["learned"], plan["proposals"] = learned, proposals
     if learned:  # the bridge's copy is the user's; the site's /etc copy needs 'manifest --apply' with root
         plan["manifest"] = _sync_manifest_file(registry, args.manifest)
+    if args.apply:
+        readiness = _sync_readiness_file(registry, args.env_dir / "omx-camera-readiness.json")
+        if readiness:
+            plan["readiness"] = readiness
     running = lambda role: subprocess.run(["systemctl", "--user", "is-active", "--quiet",  # noqa: E731
                                            f"rosy-omx-camera@{role}.service"]).returncode == 0
     plan["present"] = [c["role"] for c in registry["cameras"] if c["role"] not in plan["waiting"]]
