@@ -19,6 +19,7 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+import charge_bay_return as cbr  # noqa: E402
 import slam_pickup_pipeline as spp  # noqa: E402
 
 
@@ -214,3 +215,57 @@ def test_normalize_swarm_pose_frame_populates_missing_map_id():
     norm = spp.normalize_swarm_pose_frame(raw, "occupancy:9774014e8781")
     assert norm["payload"]["map_id"] == "occupancy:9774014e8781"
     assert raw["payload"]["map_id"] is None
+
+
+def test_select_empty_charge_bay_skips_occupied_and_map_blocked_bays():
+    bays = cbr.parse_charge_bays("C1:0.0,0.0,0.0;C2:0.25,0.0,0.0;C3:0.50,0.0,0.0")
+    # 10x10 grid at 0.1m resolution, origin (-0.2, -0.2); C2 (0.25, 0.0) -> cell (4, 2) blocked
+    grid = [0] * 100
+    grid[2 * 10 + 4] = 100
+    map_payload = {"width": 10, "height": 10, "resolution": 0.1, "origin": {"x": -0.2, "y": -0.2, "yaw": 0.0}, "data": grid}
+
+    # Peer robot occupies C1 (0.0, 0.0), map blocks C2 (0.25, 0.0) -> C3 (0.50, 0.0) is selected!
+    chosen, statuses = cbr.select_empty_charge_bay(bays, occupied_poses=[(0.02, -0.01)], map_payload=map_payload, clearance_m=0.05)
+    assert chosen is not None and chosen.id == "C3"
+    assert [s["state"] for s in statuses] == ["occupied_by_robot", "blocked_on_map", "selected"]
+
+
+def test_low_battery_triggers_automatic_return_to_empty_charging_bay():
+    goals: list[dict] = []
+
+    def fake_api(path: str, body: dict | None = None, token: str | None = None):
+        if path == "/api/v1/navigation/approval/navigation-start":
+            return {"approval": {"valid": True}}
+        if path == "/api/v1/system/capabilities":
+            return {"navigation": {"goal_navigation": True}}
+        if path == "/api/v1/power/health":
+            return {"battery": {"evidence": "fresh", "percent": 34.1, "filtered_voltage": 7.53, "level": "ok"}}
+        if path == "/api/v1/robot/state":
+            last = goals[-1] if goals else {"x": 0.0, "y": 0.0, "theta": 0.0}
+            return {"navigation": "ARRIVED", "pose": last, "odom_pose": last, "velocity": {"linear": 0.0, "angular": 0.0}}
+        if path == "/api/v1/map":
+            return {"width": 20, "height": 20, "resolution": 0.05, "origin": {"x": -0.5, "y": -0.5, "yaw": 0.0}, "data": [0] * 400}
+        if path == "/api/v1/navigation/goal":
+            goals.append(body)
+            return {"navigation": "NAVIGATING", "goal": body}
+        if path == "/api/v1/navigation/state":
+            return {"navigation": "ARRIVED", "map_id": "occupancy:9774014e8781", "operation": {"result": "SUCCEEDED"}}
+        return {}
+
+    # C1 (0.0, 0.0) is occupied by peer b8xy at (0.01, 0.0); threshold 40% triggers charge return to empty bay C2 (0.22, 0.0)
+    cfg = spp.PickupNav2Config(
+        pickup_x=0.45,
+        pickup_y=0.0,
+        pickup_yaw=0.0,
+        return_home=False,
+        charge_go_percent=40.0,
+        occupied_poses=((0.01, 0.0),),
+    )
+    out = spp.dispatch_pickup_and_return(fake_api, "tok-1", cfg=cfg, sleep_fn=lambda _: None)
+
+    assert out["charge_return"]["low_battery"] is True
+    assert out["charge_return"]["dispatched"] is True
+    assert out["charge_return"]["selected_bay"]["id"] == "C2"
+    assert goals == [{"x": 0.45, "y": 0.0, "theta": 0.0}, {"x": 0.22, "y": 0.0, "theta": 0.0}]
+    assert out["charge_return"]["charge_outcome"]["navigation"] == "ARRIVED"
+

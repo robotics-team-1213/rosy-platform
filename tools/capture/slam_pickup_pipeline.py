@@ -4,18 +4,6 @@
                             [--map-name mapping_45_loop] [--slam-forward-m 0.22] [--slam-turn-rad 6.283]
                             [--pickup-x 0.45] [--pickup-y 0.0] [--pickup-yaw 0.0] [--pickup-dwell-s 2.0]
                             [--return-home] [--skip-slam]
-
-Stages:
-1. Preflight & Safety Guard (`preflight_judge`, `verify_preflight_sensors`):
-   - Verify battery >= 7.0 V, fresh LiDAR scan & odometry, E-Stop inactive, and `PINKY_PRO` LiDAR clearance.
-   - Suspend `rosy-os-update.timer` during active SLAM/Nav2 run.
-2. Stage 1 — 360-deg SLAM Mapping (`start_standalone_slam`, `drive_slam_loop_steps`, `install_site_map_files`):
-   - Drive forward excursion (`+slam_forward_m`), 360-deg (`2 * pi` rad) scan rotation, and reverse to origin.
-   - Save `/var/lib/rosy/maps/<map_name>.{yaml,pgm}` and install `/var/lib/rosy/maps/site.{yaml,pgm}` (`0640`).
-3. Stage 2 — Nav2 Autonomous Pickup Dispatch (`dispatch_pickup_and_return`, `normalize_swarm_pose_frame`):
-   - Start `rosy-navigation` via `POST /api/v1/navigation/approval/navigation-start`, navigate to pickup zone, dwell, and optionally return home.
-4. Stage 3 — Deterministic Stop (`deterministic_stop` in `finally`):
-   - Cancel active goals, send 3x zero velocity in `MANUAL`, enter `IDLE`, verify `robot_still`, and restore `rosy-io.service` + `rosy-os-update.timer`.
 """
 
 from __future__ import annotations
@@ -39,11 +27,15 @@ from typing import Callable
 import yaml
 
 HERE = Path(__file__).resolve().parent
+if str(HERE) not in sys.path:
+    sys.path.insert(0, str(HERE))
 if len(HERE.parents) > 1 and (HERE.parents[1] / "contracts" / "foundation").is_dir():
-    REPO = HERE.parents[1]
-    if str(REPO / "contracts" / "foundation") not in sys.path:
-        sys.path.insert(0, str(REPO / "contracts" / "foundation"))
+    sys.path.insert(0, str(HERE.parents[1] / "contracts" / "foundation"))
 
+from charge_bay_return import (  # noqa: E402
+    DEFAULT_CHARGE_BAYS, DEFAULT_GO_PERCENT, DEFAULT_GO_VOLTAGE_V,
+    ChargeBaySpec, dispatch_low_battery_charge_return, parse_charge_bays,
+)
 from core_common.robot_body import PINKY_PRO  # noqa: E402
 
 LINEAR_MPS = 0.04
@@ -83,6 +75,10 @@ class PickupNav2Config:
     home_yaw: float = 0.0
     goal_timeout_s: float = 35.0
     ready_timeout_s: float = 45.0
+    charge_go_percent: float = DEFAULT_GO_PERCENT
+    charge_go_voltage_v: float = DEFAULT_GO_VOLTAGE_V
+    charge_bays: tuple[ChargeBaySpec, ...] = DEFAULT_CHARGE_BAYS
+    occupied_poses: tuple[tuple[float, float], ...] = ()
 
 
 def stop_threshold_m(linear_mps: float = LINEAR_MPS, margin_m: float = PATH_MARGIN_M, body=PINKY_PRO) -> float:
@@ -253,10 +249,18 @@ def wait_for_nav2_ready(
         caps = api("/api/v1/system/capabilities", None, token) or {}
         st = api("/api/v1/robot/state", None, token) or {}
         if (caps.get("navigation") or {}).get("goal_navigation") and st.get("pose") is not None:
-            m = api("/api/v1/map", None, token) or {}
+            m: dict = {}
+            for _ in range(8):
+                try:
+                    m = api("/api/v1/map", None, token) or {}
+                    if m.get("width"):
+                        break
+                except Exception:
+                    pass
+                sleep_fn(0.5)
+            sleep_fn(1.5)
             return {
-                "ready_after_s": i + 1,
-                "pose": st.get("pose"),
+                "ready_after_s": i + 1, "pose": st.get("pose"),
                 "map": {k: m.get(k) for k in ("width", "height", "resolution", "origin")},
             }
     raise RuntimeError(f"Nav2 failed to become ready within {timeout_s}s")
@@ -277,12 +281,9 @@ def wait_for_nav2_goal(
         status = nst.get("navigation") or rst.get("navigation")
         if status in ("ARRIVED", "FAILED", "CANCELED", "ABORTED"):
             return {
-                "navigation": status,
-                "result": (nst.get("operation") or {}).get("result"),
-                "map_id": nst.get("map_id"),
-                "pose": rst.get("pose"),
-                "odom_pose": rst.get("odom_pose"),
-                "velocity": rst.get("velocity"),
+                "navigation": status, "result": (nst.get("operation") or {}).get("result"),
+                "map_id": nst.get("map_id"), "pose": rst.get("pose"),
+                "odom_pose": rst.get("odom_pose"), "velocity": rst.get("velocity"),
                 "elapsed_s": round(clock_fn() - t0, 2),
             }
     raise TimeoutError("Nav2 goal did not reach terminal state within timeout")
@@ -311,13 +312,17 @@ def dispatch_pickup_and_return(
         home_outcome = wait_for_nav2_goal(api, token, timeout_s=cfg.goal_timeout_s, clock_fn=clock_fn, sleep_fn=sleep_fn)
         if home_outcome["navigation"] != "ARRIVED":
             raise RuntimeError(f"Return-home navigation did not arrive: {home_outcome}")
+
+    charge_return = dispatch_low_battery_charge_return(
+        api, token,
+        wait_goal_fn=lambda a, t, timeout_s=cfg.goal_timeout_s: wait_for_nav2_goal(a, t, timeout_s=timeout_s, clock_fn=clock_fn, sleep_fn=sleep_fn),
+        bays=cfg.charge_bays, occupied_poses=cfg.occupied_poses,
+        go_percent=cfg.charge_go_percent, go_voltage_v=cfg.charge_go_voltage_v, goal_timeout_s=cfg.goal_timeout_s,
+    )
     return {
         "approval_valid": (nav_start.get("approval") or {}).get("valid"),
-        "nav2_ready": ready_info,
-        "pickup_goal": pickup_goal,
-        "pickup_dispatch": pickup_dispatch,
-        "pickup_outcome": pickup_outcome,
-        "home_outcome": home_outcome,
+        "nav2_ready": ready_info, "pickup_goal": pickup_goal, "pickup_dispatch": pickup_dispatch,
+        "pickup_outcome": pickup_outcome, "home_outcome": home_outcome, "charge_return": charge_return,
     }
 
 
@@ -360,12 +365,9 @@ def deterministic_stop(
         return getattr(res, "stdout", "").strip()
 
     return {
-        "mode": st.get("mode"),
-        "navigation": st.get("navigation"),
-        "velocity": {"linear": lin, "angular": ang},
-        "robot_still_verified": still,
-        "pose": st.get("pose"),
-        "odom_pose": st.get("odom_pose"),
+        "mode": st.get("mode"), "navigation": st.get("navigation"),
+        "velocity": {"linear": lin, "angular": ang}, "robot_still_verified": still,
+        "pose": st.get("pose"), "odom_pose": st.get("odom_pose"),
         "services": {
             "rosy-io.service": _unit_state("rosy-io.service"),
             "rosy-navigation.service": _unit_state("rosy-navigation.service"),
@@ -453,6 +455,7 @@ def run_slam_loop_and_save(
     ns: str,
     map_name: str,
     cfg: SlamLoopConfig = SlamLoopConfig(),
+    standalone: bool = True,
 ) -> dict:
     import rclpy
     from nav_msgs.msg import Odometry
@@ -512,44 +515,63 @@ def run_slam_loop_and_save(
         raise RuntimeError(f"SLAM map save failed: {saved.stdout}")
 
     site_meta = install_site_map_files(map_base)
-    subprocess.run(["systemctl", "stop", "rosy-standalone-slam"], capture_output=True)
-    subprocess.run(["systemctl", "reset-failed", "rosy-standalone-slam"], capture_output=True)
+    if standalone:
+        subprocess.run(["systemctl", "stop", "rosy-standalone-slam"], capture_output=True)
+        subprocess.run(["systemctl", "reset-failed", "rosy-standalone-slam"], capture_output=True)
     result = {**loop_result, "saved_map": map_name, "site_yaml": site_meta}
     print(json.dumps({"stage": "slam_mapping_complete", "data": result}), flush=True)
     return result
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--base-url", default="https://rosy-pinky-y8xs.local:8080")
-    parser.add_argument("--ca-file", default="/etc/rosy/tls/ca.pem")
-    parser.add_argument("--map-name", default="mapping_45_20261111_loop")
-    parser.add_argument("--slam-forward-m", type=float, default=0.22)
-    parser.add_argument("--slam-turn-rad", type=float, default=6.283)
-    parser.add_argument("--skip-slam", action="store_true")
-    parser.add_argument("--pickup-x", type=float, default=0.45)
-    parser.add_argument("--pickup-y", type=float, default=0.0)
-    parser.add_argument("--pickup-yaw", type=float, default=0.0)
-    parser.add_argument("--pickup-dwell-s", type=float, default=2.0)
-    parser.add_argument("--return-home", action="store_true")
-    args = parser.parse_args(argv)
+    p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    p.add_argument("--base-url", default="https://rosy-pinky-y8xs.local:8080")
+    p.add_argument("--ca-file", default="/etc/rosy/tls/ca.pem")
+    p.add_argument("--map-name", default="mapping_45_20261111_loop")
+    p.add_argument("--slam-forward-m", type=float, default=0.22)
+    p.add_argument("--slam-turn-rad", type=float, default=6.283)
+    p.add_argument("--skip-slam", action="store_true")
+    p.add_argument("--pickup-x", type=float, default=0.45)
+    p.add_argument("--pickup-y", type=float, default=0.0)
+    p.add_argument("--pickup-yaw", type=float, default=0.0)
+    p.add_argument("--pickup-dwell-s", type=float, default=2.0)
+    p.add_argument("--return-home", action="store_true")
+    p.add_argument("--charge-go-percent", type=float, default=DEFAULT_GO_PERCENT)
+    p.add_argument("--charge-go-voltage-v", type=float, default=DEFAULT_GO_VOLTAGE_V)
+    p.add_argument("--charge-bays", default="", help="Charging bays 'C1:x,y,yaw;C2:x,y,yaw' or 'site'")
+    p.add_argument("--occupied-pose", action="append", default=[], help="Occupied peer pose 'x,y' to avoid")
+    args = p.parse_args(argv)
 
+    occupied = tuple((float(s.split(",")[0]), float(s.split(",")[1])) for s in args.occupied_pose if "," in s)
     env = dict(line.split("=", 1) for line in pathlib.Path("/etc/rosy/runtime.env").read_text(encoding="utf-8").splitlines() if "=" in line and not line.startswith("#"))
-    ns = env["ROSY_NAMESPACE"]
+    ns, backend = env["ROSY_NAMESPACE"], env.get("ROSY_NAVIGATION_BACKEND", "localization")
     api = make_api_client(args.base_url, args.ca_file)
     token = pair_operator_token(api)
 
     try:
         subprocess.run(["systemctl", "stop", "rosy-os-update.timer"], check=True)
         if not args.skip_slam:
-            subprocess.run(["systemctl", "stop", "rosy-navigation.service"], capture_output=True)
-            subprocess.run(["systemctl", "reset-failed", "rosy-navigation.service"], capture_output=True)
-            subprocess.run(["systemctl", "start", "rosy-io.service"], check=True)
-            time.sleep(2.0)
-            start_standalone_slam(ns)
-            run_slam_loop_and_save(api, token, ns, map_name=args.map_name, cfg=SlamLoopConfig(forward_m=args.slam_forward_m, turn_rad=args.slam_turn_rad))
+            if backend == "slam":
+                api("/api/v1/navigation/approval/navigation-start", {}, token)
+                wait_for_nav2_ready(api, token)
+            else:
+                subprocess.run(["systemctl", "stop", "rosy-navigation.service"], capture_output=True)
+                subprocess.run(["systemctl", "reset-failed", "rosy-navigation.service"], capture_output=True)
+                subprocess.run(["systemctl", "start", "rosy-io.service"], check=True)
+                time.sleep(2.0)
+                start_standalone_slam(ns)
+            run_slam_loop_and_save(
+                api, token, ns, map_name=args.map_name,
+                cfg=SlamLoopConfig(forward_m=args.slam_forward_m, turn_rad=args.slam_turn_rad),
+                standalone=(backend != "slam"),
+            )
 
-        nav_cfg = PickupNav2Config(pickup_x=args.pickup_x, pickup_y=args.pickup_y, pickup_yaw=args.pickup_yaw, pickup_dwell_s=args.pickup_dwell_s, return_home=args.return_home)
+        nav_cfg = PickupNav2Config(
+            pickup_x=args.pickup_x, pickup_y=args.pickup_y, pickup_yaw=args.pickup_yaw,
+            pickup_dwell_s=args.pickup_dwell_s, return_home=args.return_home,
+            charge_go_percent=args.charge_go_percent, charge_go_voltage_v=args.charge_go_voltage_v,
+            charge_bays=parse_charge_bays(args.charge_bays), occupied_poses=occupied,
+        )
         nav_result = dispatch_pickup_and_return(api, token, cfg=nav_cfg)
         print(json.dumps({"stage": "nav2_pickup_pipeline_complete", "data": nav_result}), flush=True)
         return 0
