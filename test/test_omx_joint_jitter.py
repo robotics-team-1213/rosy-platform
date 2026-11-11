@@ -87,3 +87,23 @@ def test_replay_pairs_a_trace_with_its_health_log_and_reports_flagged_and_envelo
     assert arm["joints"]["elbow_flex"]["hold"]["flips_hz"][-1] >= 3
     assert arm["joints"]["shoulder_pan"]["hold"]["std"][-1] < 0.01
     assert jitter_replay.main(["--trace", str(tmp_path / "trace-*.jsonl"), "--json", str(tmp_path / "o.json")]) == 0
+
+
+def test_live_window_and_active_chunk_damping_and_arm_s_replay(tmp_path):
+    from omx_adapter.motion_profile import TemporalChunkEnsembler
+
+    assert jitter_replay.ARMS.get("FF070726") == "arm_s" and jitter_replay.ARMS.get("00FB51A1") == "arm_s"
+    assert jj.live_window(trace(0.5, 4.0, 0.6))["shaking"] is False  # under MIN_TICKS
+    shaky = jj.live_window(trace(1.5, 5.0, 0.6, move=True))
+    assert shaky["shaking"] is True and shaky["max_std"] >= 0.3 and shaky["flagged"][0]["joint"] == "elbow_flex"
+    calm = jj.live_window(trace(1.5, 0.0, 0.0, move=True))
+    assert calm["shaking"] is False and calm["flagged"] == []
+
+    ens = TemporalChunkEnsembler(coeff=0.08, vmax=5.0, fps=30)
+    current = [0.0, -30.0, 20.0, 45.0, 0.0, 55.0]
+    next_target = [0.0, -29.8, 20.0, 45.0, 0.0, 55.0]
+    lookahead = [[0.0, -29.6, 20.0, 45.0, 0.0, 55.0], [0.0, -29.4, 20.0, 45.0, 0.0, 55.0]]
+    damped = jj.damp_step(ens, current, next_target, lookahead)
+    assert -30.0 <= damped[1] <= -29.6 and damped[5] == 55.0
+    final = jj.damp_step(ens, damped, [0.0, -29.0, 20.0, 45.0, 0.0, 55.0], [])
+    assert final[1] == -29.0
