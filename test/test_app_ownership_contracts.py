@@ -9,17 +9,17 @@ import sys
 from types import SimpleNamespace
 
 import pytest
-from core_features.safety_gate.limits import SpeedLimits
 import yaml
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 ROOT = Path(__file__).resolve().parents[1]
-for relative in ("middleware/core/api", "middleware/core/services", "middleware/core/events"):
+for relative in ("middleware/core/api", "middleware/core/services", "middleware/core/events", "operations/fleet"):
     path = str(ROOT / relative)
     if path not in sys.path:
         sys.path.insert(0, path)
 
+from core_features.safety_gate.limits import SpeedLimits  # noqa: E402
 from core_api_web.api.errors import register_exception_handlers  # noqa: E402
 from core_api_web.api.v1 import safety  # noqa: E402
 from core_api_web.api.v1.auth import auth_router  # noqa: E402
