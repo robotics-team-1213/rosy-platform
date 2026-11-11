@@ -14797,3 +14797,18 @@ osy-d395-s1d\`.
 - 변경: 없음 — 앞 항목의 원격 시험 결과만 기록한다.
 - 증거: 원격 rosy 호스트(커밋 86cb36c738)에서 `test/test_formation_lane_sim.py`·`test/test_fleet_trips.py`·`test/test_route_drive.py` 16 passed, 0 failed, exit 0. `test/known_failures.py` 비교 0 new. `rosy_harness.py lint` 0 errors.
 - gate 변화: 없음.
+
+## 2026-11-11 · uncommitted · fix(test): 착지 관문 두 건 — swarm 단위 small 표시 제거, OMX 프로파일 해시 시험 캐시 분리
+- 변경: `test/architecture/size_units.txt`에서 `drive/behaviors/swarm`의 `small` 표시를 뗀다(D-766 3: 단위가 1000줄 바닥에 닿았고 표시 제거가 규칙이 정한 길이다. D-559 복귀 주석 포함 1020줄). `test/test_omx_session_caps_layers.py`의 프로파일 동일성 시험이 같은 경로를 즉시 다시 써 `cell_robot_profile.load`의 (경로, mtime_ns, 크기) 캐시에 첫 해시가 걸리는 것을, 서로 다른 파일 이름으로 갈라 고친다(2026-11-11 착지에서 묶음·단독 모두 실패, main에서는 우연히 통과).
+- 증거: 원격 시험 결과는 다음 커밋에 기록한다.
+- gate 변화: 없음.
+
+## 2026-11-11 · 477da4687d · docs(test): 착지 관문 수정 검증
+- 변경: 없음 — 앞 항목의 원격 시험 결과만 기록한다.
+- 증거: 원격 ai 호스트(커밋 477da4687d)에서 `test/test_omx_session_caps_layers.py`·`test/architecture/test_module_structure.py` 58 passed, 0 failed, exit 0. `test/known_failures.py` 비교 0 new. `rosy_harness.py lint` 0 errors.
+- gate 변화: 없음.
+
+## 2026-11-11 · uncommitted · docs(solutions): OMX 프로파일 해시 시험의 mtime 캐시 충돌 교훈 기록
+- 변경: `docs/solutions/test-failures/same-path-rewrite-hits-cell-robot-profile-mtime-cache-2026-11-11.md` 신규 — 착지 관문이 브랜치 탓으로 분류했던 NEW 실패의 실제 원인(`cell_robot_profile.load`의 (경로, mtime, 크기) 캐시가 같은 길이의 즉시 재작성과 충돌)과 재발 방지를 남긴다.
+- 증거: 착지 로그 alone-pre-pre-28-2.txt 실패·main 통과, 수정 후 원격 58 passed(커밋 477da4687d 기록 항 참조).
+- gate 변화: 없음.

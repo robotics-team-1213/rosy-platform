@@ -109,4 +109,4 @@
 - 2026-11-11 · uncommitted · fix(world): peer 앵커는 D-989 자동 위치 차단을 풀지도 걸지도 않는다 (D-1017)
 - 2026-11-11 · 184e7d0e11 · docs(fleet): D-1017 원격 시험 결과 기록
 - 2026-11-11 · uncommitted · D-1017 peer 위치 공유로 지도 자세 앵커 보강
-- 2026-11-11 · uncommitted · test(fleet): 카메라 초안 패널 실제 Chromium 종단 시험 + 미리보기 503 처리
+- 2026-11-11 · uncommitted · test(fleet): trail_twist 4-튜플 호출자 정리

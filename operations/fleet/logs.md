@@ -5499,6 +5499,13 @@
 - 근거: 원격 브라우저 시험 — 신규 2건+기존 site-map 스위트 103/103 exit 0, 변이 실행 RED/복원 GREEN 기록(camdraft20-22).
 - gate 변화: 없음.
 
+## 2026-11-11 · uncommitted · test(fleet): trail_twist 4-튜플 호출자 정리
+
+- 변경: `test/test_trail_anchor_e2e.py` — `trail_twist` 가 `(linear, angular, reason, off)` 를 돌려주는 계약에 맞춰 언팩을 고쳤다(`core_features` 쪽 D-559 복귀 변경). 이 파일이 유일한 외부 호출자다.
+- 증거: `python -m py_compile` 통과. 시험 실행은 커밋 SHA 로 원격에서 요청한다.
+- gate 변화: 없음.
+- CE: 해당 없음 — 계약 변경에 딸린 호출자 정리다.
+
 ## 2026-11-11 · uncommitted · D-1017 peer 위치 공유로 지도 자세 앵커 보강
 
 - 변경: `GET /api/fleet/robots/{robot_id}/map-pose`가 상태 스냅숏의 `peers`(v1.359 `PeerRow`) 행을 네 번째 앵커로 쓴다. `MapPoseTracker.add_peer`는 로스터·`LOCALIZED`·유한 pose·`age_s ≤ peer_lease_s`(기본 6 s)·활성 지도 일치를 요구하고, 마지막 카메라 sighting 10 s 안이면 `CAMERA_RECENT`, 운영자 핀이 10 s 안이면 `PIN_FRESH`, 더 새 표본이 있으면 `NOT_NEWER`로 거절한다. 받아들인 표본은 `kind=peer` sighting으로 기존 표본 규칙(첫 앵커·2 일치 복구)을 그대로 타므로 첫 peer 앵커는 DEGRADED다. `MapPose.last_sighting_age_s`를 더하고 콘솔 카드가 300 s 넘으면 `카메라 N분 침묵`을 붙인다(2026-11-11 관측: 30일 침묵 카메라가 화면에서 사라졌다). 사이트 설정 `fleet.map_pose.peer_lease_s`·`peer_after_camera_s`. 로봇 계약·envelope 변경 없음. API Ref v1.388, ADR D-1017.

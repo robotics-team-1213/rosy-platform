@@ -23,13 +23,13 @@ def site(tmp_path, **changes):
     return path
 
 
-def profile(tmp_path, caps, servo):
+def profile(tmp_path, caps, servo, name="profile.json"):
     profiles = importlib.import_module("cell_robot_profile")
     robot = {"type": "omx_follower", "id": "arm-a", "port": "/dev/serial/by-id/fixture-a", "cameras": {}}
     document = {"schema": profiles.SCHEMA, "device_id": "fixture-device-a", "instance_id": "arm-a",
                 "robot_config_sha256": profiles.digest(robot), "operating_envelope_path": "review.json",
                 "work_dir": "work", **({"servo": servo} if servo is not None else {})}
-    path = tmp_path / "profile.json"
+    path = tmp_path / name
     path.write_text(json.dumps(document))
     return path
 
@@ -72,9 +72,12 @@ def test_merged_values_keep_the_guard_ranges(caps, tmp_path):
 
 
 def test_the_servo_is_part_of_the_profile_identity(caps, tmp_path):
+    # Two names, not a rewrite of one file: load() caches by (path, mtime_ns, size) and {"i": 50}
+    # vs {"i": 60} serializes to the same size, so a same-tick rewrite hits the cache and
+    # returns the first hash (seen 2026-11-11: batch and alone both failed on the lab host).
     profiles = importlib.import_module("cell_robot_profile")
-    before = profiles.load(profile(tmp_path, caps, {"14": {"i": 50}}))["binding"]["profile_sha256"]
-    after = profiles.load(profile(tmp_path, caps, {"14": {"i": 60}}))["binding"]["profile_sha256"]
+    before = profiles.load(profile(tmp_path, caps, {"14": {"i": 50}}, name="i50.json"))["binding"]["profile_sha256"]
+    after = profiles.load(profile(tmp_path, caps, {"14": {"i": 60}}, name="i60.json"))["binding"]["profile_sha256"]
     assert before != after
 
 
