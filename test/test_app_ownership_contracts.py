@@ -90,11 +90,11 @@ def core(monkeypatch):
 ])
 def test_robot_persistent_settings_reject_before_touching_the_owner(core, token, status):
     client, services, writes = core
-    response = client.put("/api/v1/safety/limits", json={"manual_linear": 0.2}, headers=_headers(token))
+    response = client.put("/api/v1/safety/limits", json={"fleet_loss_policy": "HOLD"}, headers=_headers(token))
     assert response.status_code == status
     assert response.json()["error"]["code"] == ("UNAUTHORIZED" if status == 401 else "FORBIDDEN")
     assert writes == []
-    assert services.safety.limits.manual_linear == 0.3
+    assert services.safety.fleet_loss_policy == "STOP"
 
 
 def test_robot_administrator_persists_through_the_existing_owner(core):
