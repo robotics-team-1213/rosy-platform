@@ -190,6 +190,22 @@ surfaces:
         reason: 경기장 녹색이 곧 바탕인 고정 표면(D-359 §3.3)의 경기장 팔레트 한 블록 — 캔버스도 이 블록을 읽는다
     baseline: docs/validation/uiux-surfaces-2026-09-26/captures/games-play-1280x800.png
 
+  - id: calibration
+    title_prefix: Rosy Calibration
+    api_owners: [Calibration]
+    path: applications/calibration/web
+    themes: [dark, light]
+    surface: site
+    medium: web
+    ports:
+      - {port: 8776, source: applications/calibration/calibration_web.py}
+    audience: 관제 PC 옆 셀 작업자 — 줄자·감독 시험으로 실측 요청에 답하는 사람 (D-951 덧붙임·D-1004)
+    role: Rosy Calibration — 셀 보정이 사람에게 묻는 실측 요청을 보여 주고 답을 받는다. 답은 후보 판정일 뿐 셀 값을 쓰지 않는다. 로그인한 세션이 보고, calibration.operate가 답한다 (D-951·D-1004).
+    owns: [calibration-request-answer]
+    grammar: procedure
+    contracts: [shared_controls, typography_focus, dialog]
+    baseline_reason: 최초 구현이다. 관제 PC 실제 backend 브라우저 캡처와 D-153 검토로 기준선을 확정한다(D-1004 수용은 별도).
+
   - id: control-diagnostic
     path: middleware/perception/web
     themes: [dark]
