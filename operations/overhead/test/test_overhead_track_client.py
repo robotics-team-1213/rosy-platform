@@ -53,7 +53,7 @@ def test_publish_retries_once_on_a_dropped_pooled_connection():
     payload = OverheadDetectionsPayload.model_validate(CASES["ok_two_detections"]["payload"])
     assert _run(handler, lambda client: client.publish(payload))["accepted"] is True
     assert len(calls) == 2
-    assert b"source-secret" not in request.content
+    assert b"source-secret" not in calls[0].content
 
 
 def test_rejection_carries_the_fleet_code():
