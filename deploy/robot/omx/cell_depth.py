@@ -28,23 +28,43 @@ RAISED_MM = (18.0, 120.0)  # what stands up from the table: containers, stacks (
 def points(depth, focal: float = FOCAL_PX):
     """(h, w, 3) camera-frame points in mm; zero depth (no return) stays zero."""
     h, w = depth.shape
-    ys, xs = np.mgrid[0:h, 0:w]
     z = depth.astype(float)
-    return np.dstack([(xs - w / 2) * z / focal, (ys - h / 2) * z / focal, z])
+    z_f = z / focal
+    return np.dstack([(np.arange(w) - w / 2)[None, :] * z_f, (np.arange(h) - h / 2)[:, None] * z_f, z])
 
 
 def _ransac(pts, tol_mm: float, tries: int, rng):
     """(unit normal, a point on it), inlier count: the plane with the most points within `tol_mm`."""
-    best, count = None, -1
+    normals, points_a = [], []
     for _ in range(tries):
         a, b, c = pts[rng.choice(len(pts), 3, replace=False)]
-        n = np.cross(b - a, c - a)
-        if np.linalg.norm(n) < 1e-9:
+        u, v = b - a, c - a
+        nx = float(u[1] * v[2] - u[2] * v[1])
+        ny = float(u[2] * v[0] - u[0] * v[2])
+        nz = float(u[0] * v[1] - u[1] * v[0])
+        norm = (nx * nx + ny * ny + nz * nz) ** 0.5
+        if norm < 1e-9:
             continue
-        n = n / np.linalg.norm(n)
-        k = int((np.abs((pts - a) @ n) < tol_mm).sum())
-        if k > count:
-            best, count = (n if n[2] < 0 else -n, a), k
+        inv = -1.0 / norm if nz > 0 else 1.0 / norm
+        normals.append((nx * inv, ny * inv, nz * inv))
+        points_a.append(a)
+    if not normals:
+        return None, -1
+    best, count = None, -1
+    n_mat = np.asarray(normals, float)
+    a_mat = np.asarray(points_a, float)
+    offsets = np.sum(a_mat * n_mat, axis=1)
+    for start in range(0, len(n_mat), 32):
+        nb = n_mat[start:start + 32]
+        ob = offsets[start:start + 32]
+        diff = pts @ nb.T
+        np.subtract(diff, ob, out=diff)
+        np.abs(diff, out=diff)
+        counts = (diff < tol_mm).sum(axis=0)
+        idx = int(np.argmax(counts))
+        if int(counts[idx]) > count:
+            count = int(counts[idx])
+            best = (nb[idx], a_mat[start + idx])
     return best, count
 
 
@@ -53,15 +73,19 @@ def table_plane(depth, tol_mm: float = PLANE_MM, tries: int = 400, seed: int = 0
     surface about 60 mm under the table, sometimes larger than it: of the two largest parallel planes the higher one is
     the table when it holds `share` of the larger's points (2026-11-01: the pallet read 75 mm in one frame, 10 in the
     next, as the plane flipped between them)."""
-    pts = points(depth)[depth > 0][::7]
+    h, w = depth.shape
+    ys, xs = np.nonzero(depth > 0)
+    ys, xs = ys[::7], xs[::7]
+    z = depth[ys, xs].astype(float)
+    pts = np.column_stack(((xs - w / 2) * (z / FOCAL_PX), (ys - h / 2) * (z / FOCAL_PX), z))
     rng = np.random.default_rng(seed)
     (n, a), k = _ransac(pts, tol_mm, tries, rng)
-    rest = pts[np.abs((pts - a) @ n) >= tol_mm]
+    rest = pts[np.abs(pts @ n - float(a @ n)) >= tol_mm]
     if len(rest) >= 3:
         (n2, a2), k2 = _ransac(rest, tol_mm, tries, rng)
         if k2 >= share * k and (a2 - a) @ n > 5 * tol_mm and abs(n2 @ n) > 0.98:
             n, a = n2, a2
-    near = pts[np.abs((pts - a) @ n) < tol_mm]
+    near = pts[np.abs(pts @ n - float(a @ n)) < tol_mm]
     _, _, vt = np.linalg.svd(np.c_[near, np.ones(len(near))], full_matrices=False)
     normal, offset = vt[-1][:3], vt[-1][3]
     scale = np.linalg.norm(normal)
@@ -74,7 +98,11 @@ def table_plane(depth, tol_mm: float = PLANE_MM, tries: int = 400, seed: int = 0
 def height_map(depth, plane) -> np.ndarray:
     """mm above the table plane; NaN where the camera had no return."""
     normal, offset = plane
-    return np.where(depth > 0, points(depth) @ normal + offset, np.nan)
+    h, w = depth.shape
+    ray_dot = ((np.arange(w) - w / 2) * (normal[0] / FOCAL_PX))[None, :] + (
+        (np.arange(h) - h / 2) * (normal[1] / FOCAL_PX) + normal[2]
+    )[:, None]
+    return np.where(depth > 0, depth * ray_dot + offset, np.nan)
 
 
 def align(object_mask, heights, scales=np.arange(0.55, 0.86, 0.01), step: int = 2) -> tuple[np.ndarray, float]:
@@ -123,22 +151,36 @@ def align_edges(colour, heights, scales=np.arange(0.55, 0.86, 0.01), reach: int 
     grey = colour if colour.ndim == 2 else cv2.cvtColor(colour, cv2.COLOR_BGR2GRAY)
     ys, xs = np.nonzero(cv2.Canny(cv2.GaussianBlur(grey, (5, 5), 0), 40, 120))
     pts = np.c_[xs, ys].astype(float)[::3]
-    dist = cv2.distanceTransform((depth_edges == 0).astype(np.uint8), cv2.DIST_L2, 3)
+    dist = np.minimum(cv2.distanceTransform((depth_edges == 0).astype(np.uint8), cv2.DIST_L2, 3), 15.0)
     h, w = heights.shape
+    min_ok = int(np.ceil(0.7 * len(pts)))
 
-    def cost(s, tx, ty):
-        u, v = pts[:, 0] * s + tx, pts[:, 1] * s + ty
-        ok = (u >= 0) & (u < w - 1) & (v >= 0) & (v < h - 1)
-        if not len(pts) or ok.mean() < 0.7:
-            return float("inf")
-        return float(np.mean(np.minimum(dist[v[ok].astype(int), u[ok].astype(int)], 15.0)))
+    def search_scale(s, tx_range, ty_range):
+        if not len(pts):
+            return (float("inf"), s, tx_range[0], ty_range[0])
+        u0, v0 = pts[:, 0] * s, pts[:, 1] * s
+        ui0, vi0 = np.floor(u0).astype(int), np.floor(v0).astype(int)
+        best_s = (float("inf"), s, tx_range[0], ty_range[0])
+        for tx in tx_range:
+            ok_u = (u0 >= -tx) & (u0 < w - 1 - tx)
+            if int(ok_u.sum()) < min_ok:
+                continue
+            ui = ui0 + tx
+            for ty in ty_range:
+                ok = ok_u & (v0 >= -ty) & (v0 < h - 1 - ty)
+                k = int(ok.sum())
+                if k >= min_ok:
+                    c_val = float(dist[vi0[ok] + ty, ui[ok]].sum()) / k
+                    if c_val < best_s[0]:
+                        best_s = (c_val, s, tx, ty)
+        return best_s
 
-    best = min((cost(s, tx, ty), s, tx, ty) for s in scales  # shifts within `reach` px of a centred view
-               for tx in range(int(w * (1 - s) / 2) - reach, int(w * (1 - s) / 2) + reach + 1, 3)
-               for ty in range(int(h * (1 - s) / 2) - reach, int(h * (1 - s) / 2) + reach + 1, 3))
+    best = min(search_scale(s, range(int(w * (1 - s) / 2) - reach, int(w * (1 - s) / 2) + reach + 1, 3),
+                            range(int(h * (1 - s) / 2) - reach, int(h * (1 - s) / 2) + reach + 1, 3))
+               for s in scales)
     _, s, tx, ty = best
-    c, s, tx, ty = min((cost(s2, tx2, ty2), s2, tx2, ty2) for s2 in np.arange(s - 0.01, s + 0.011, 0.002)
-                       for tx2 in range(tx - 3, tx + 4) for ty2 in range(ty - 3, ty + 4))
+    c, s, tx, ty = min(search_scale(s2, range(tx - 3, tx + 4), range(ty - 3, ty + 4))
+                       for s2 in np.arange(s - 0.01, s + 0.011, 0.002))
     return np.float32([[s, 0, tx], [0, s, ty]]), c
 
 
