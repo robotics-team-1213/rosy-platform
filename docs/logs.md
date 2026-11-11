@@ -14755,3 +14755,8 @@ osy-d395-s1d\`.
 - 변경: `tools/sim/formation_lane.py` — 무장 직후 리더의 `/ws/swarm/pose`(릴레이가 전달하는 바로 그 스트림)를 구독하고 매 0.5 s 팔로워의 `/api/v1/swarm/state`(trail leader_s·progress·hold_reason·stream_age)를 `swarm.jsonl`에 남긴다. 순수 함수 `analyze_swarm`이 같은 물리적 간격을 팔로워 관점과 Gazebo 참값으로 각각 잰 `frame_disagree`와 리더 표본의 도약 초과(`reference_stream` 교량 한계 0.3 m 기준)를 result.json의 `swarm` 항에 더한다. 다음 SIM 실행이 run 8의 열린 질문(어느 프레임이 거짓말했나)에 답한다. 시험 `test/test_formation_lane_sim.py` 3건.
 - 증거: 호스트 직접 호출로 새 시험 3건 통과(프레임 일치 0, 0.5 m 허위 관점 검출, 0.4 m 리더 도약 검출). 원격 시험 결과는 다음 커밋에 기록한다.
 - gate 변화: 없음. SIM은 LOCAL 근거다(D-91).
+
+## 2026-11-11 · 86cb36c738 · docs(sim): 편대 SIM 계측 변경 검증
+- 변경: 없음 — 앞 항목의 원격 시험 결과만 기록한다.
+- 증거: 원격 rosy 호스트(커밋 86cb36c738)에서 `test/test_formation_lane_sim.py`·`test/test_fleet_trips.py`·`test/test_route_drive.py` 16 passed, 0 failed, exit 0. `test/known_failures.py` 비교 0 new. `rosy_harness.py lint` 0 errors.
+- gate 변화: 없음.
