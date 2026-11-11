@@ -9,7 +9,10 @@ All zone readers must run this protocol together; old readers ignore occupancy r
 """
 from __future__ import annotations
 
-import fcntl
+try:
+    import fcntl
+except ImportError:  # Windows test hosts without POSIX flock
+    fcntl = None  # type: ignore[assignment]
 import json
 import os
 import re

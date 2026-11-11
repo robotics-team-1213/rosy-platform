@@ -37,7 +37,10 @@ from __future__ import annotations
 
 import argparse
 import contextlib
-import fcntl
+try:
+    import fcntl
+except ImportError:  # Windows test hosts without POSIX flock
+    fcntl = None  # type: ignore[assignment]
 import re
 import json
 import math

@@ -354,8 +354,8 @@
 
 ## 최근 기록
 
+- 2026-11-11 · uncommitted · docs: 게시 검증 체크포인트 — 2026-11-11 착지분 무캐시 FULL 근거 확보
 - 2026-11-11 · uncommitted · docs(solutions): 고정 단일 소스 시험 다운로드가 MAIN-RED로 위장하는 교훈 기록
 - 2026-11-11 · 98e73632b6 · docs(test): RAUC 폴백 계약 수정 검증
 - 2026-11-11 · uncommitted · fix(test): RAUC 폴백이 기존 진단 계약을 지키게 — URL당 3회·진단에 URL 없음·폴백 신규 시험
 - 2026-11-11 · uncommitted · fix(test): 고정 RAUC 패키지 다운로드에 미러 폴백 — 아카이브 장애가 FULL 등급 전체를 쓰러뜨렸다
-- 2026-11-11 · uncommitted · docs(solutions): OMX 프로파일 해시 시험의 mtime 캐시 충돌 교훈 기록

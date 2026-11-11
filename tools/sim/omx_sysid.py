@@ -88,12 +88,12 @@ def ramp_ticks(rows):
 
 
 def recorded_arm(folder):
-    """arm_a / arm_b from an episode's task.json "io" (chunk-io-a / chunk-io-b, recorded from 2026-11-08), else None."""
+    """arm_a / arm_b / arm_s from an episode's task.json "io" (chunk-io-a / chunk-io-b / chunk-io-s, recorded from 2026-11-08), else None."""
     try:
         io = str(json.loads((Path(folder) / "task.json").read_text()).get("io") or "")
     except (OSError, ValueError):
         return None
-    return {"a": "arm_a", "b": "arm_b"}.get(io.rstrip("/")[-1:]) if "chunk-io-" in io else None
+    return {"a": "arm_a", "b": "arm_b", "s": "arm_s"}.get(io.rstrip("/")[-1:]) if "chunk-io-" in io else None
 
 
 class Episodes:

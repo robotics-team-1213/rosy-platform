@@ -350,7 +350,7 @@ class Runner:
             if self.pace_last is not None:  # the hold ended: what is left is this pose's droop
                 self.pace_floor = max(self.pace_floor, self.lag)
             raw_target = self.queue.pop(0)
-            if self.jitter["shaking"]:
+            if self.jitter["shaking"] or (self.pace_last is not None and self.queue):
                 self.target = joint_jitter.damp_step(self.ensembler, self.target or raw_target, raw_target, self.queue)
                 self.damped_ticks += 1
             else:

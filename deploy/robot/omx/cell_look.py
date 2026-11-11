@@ -26,6 +26,7 @@ import time
 import cell_finger_room as fr
 import cell_params as prm
 import cell_pivot
+import joint_jitter
 
 
 def tcp_from_mark(mark_raw, yaw_deg: float, region: dict):
@@ -60,7 +61,7 @@ def look(cell, config: dict, record: dict, site: str, target: dict, write_librar
         why = f"no room to open the jaws for the mark: {room} mm free each side, {need:.0f} needed"
         return out("skipped" if fallback else "refuse", why=why)
     for i in range(int(prm.get(params, "look.max_iter")) + 1):
-        status = cell.act("state")
+        status = joint_jitter.settled_state(cell, params)
         state, commanded = status.get("state"), status.get("target")
         if state is None or commanded is None:
             return out("refuse", why="no arm state")
