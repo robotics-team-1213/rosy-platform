@@ -79,6 +79,26 @@ def test_push_library_loads_in_the_runner_with_a_level_slow_slide(tmp_path):
     assert all(f[5] == PLAN["grip_closed"] for f in slide)
 
 
+def test_a_friction_sweep_turns_only_the_pan_and_repeats_through_air(tmp_path):
+    """omx_sysid.py friction reads shoulder_pan's PWM, contact pass minus air pass: nothing else may move in the sweep."""
+    lib = cpu.push_library(PLAN, (0.15, -0.02), (0.15, 0.025), -14.4, 0.054, 0.010, friction=True)
+    path = tmp_path / "friction.json"
+    path.write_text(json.dumps(lib))
+    slide = chunk_runner.load_library(path)["chunks"]["slide_push"]
+    assert lib["chunks"]["slide_air"] == lib["chunks"]["slide_push"]
+    assert all(f[1:] == slide[0][1:] for f in slide)  # lift, elbow, wrist, roll and jaws held
+    pans = [f[0] for f in slide]
+    assert pans[0] != pans[-1] and all(b - a == pytest.approx(pans[1] - pans[0], abs=2e-3) for a, b in zip(pans, pans[1:]))
+    assert "slide_air" not in cpu.push_library(PLAN, (0.15, -0.02), (0.15, 0.025), -14.4, 0.054, 0.010)["chunks"]
+
+
+def test_a_friction_run_sweeps_twice_from_the_same_start():
+    cell = Scripted()
+    assert cpu.run_push(cell, Path("lib.json"), friction=True)["result"] == "pushed"
+    assert cell.sent[1:] == ["goto above_push", "run descend_push", "run slide_push", "run lift_push",
+                             "goto above_push", "run descend_push", "run slide_air", "run lift_push", "park"]
+
+
 class Scripted:
     def __init__(self, answers=None):
         self.answers, self.sent = answers or {}, []

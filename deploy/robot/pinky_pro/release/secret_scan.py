@@ -24,6 +24,7 @@ import csv
 import hashlib
 import json
 import re
+import subprocess
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
@@ -127,8 +128,26 @@ def load_public_provenance(path: Path) -> frozenset[tuple[str, str, str]]:
     return frozenset(result)
 
 
+def git_object_in(root: Path):
+    """Predicate: is this 40/64-hex string an object in ``root``'s repository? Cached; false without git."""
+    seen: dict[str, bool] = {}
+
+    def known(value: str) -> bool:
+        if not re.fullmatch(r"(?:[0-9a-f]{40}|[0-9a-f]{64})", value):
+            return False
+        if value not in seen:
+            try:
+                seen[value] = subprocess.run(["git", "cat-file", "-e", value + "^{object}"], cwd=root,
+                                             capture_output=True, timeout=20).returncode == 0
+            except (OSError, subprocess.SubprocessError):
+                seen[value] = False
+        return seen[value]
+    return known
+
+
 def scan_text(path: str, text: str, *,
-              public_provenance: frozenset[tuple[str, str, str]] = frozenset()) -> list[Finding]:
+              public_provenance: frozenset[tuple[str, str, str]] = frozenset(),
+              is_git_object=lambda value: False) -> list[Finding]:
     """Return every suspected secret in ``text``.
 
     Split out from file walking so tests can prove the matchers fire on a
@@ -281,6 +300,8 @@ def scan_text(path: str, text: str, *,
             # inside any prose mentioning it, silently disabling this matcher.
             if _INTEGRITY_CONTEXT.search(line):
                 continue
+            if is_git_object(value):  # a real object id is public history, whatever word precedes it
+                continue
             findings.append(Finding(path, number, "high-entropy-token", stripped[:120]))
             break
 
@@ -356,6 +377,7 @@ def scan_files(
     """Scan each readable text file, reporting paths relative to ``root``."""
     excluded = set(DEFAULT_EXCLUDED_NAMES) | set(excluded_names)
     findings: list[Finding] = []
+    is_git_object = git_object_in(root)
 
     for path in paths:
         if path.name in excluded or path.suffix.lower() in DEFAULT_EXCLUDED_SUFFIXES:
@@ -382,7 +404,7 @@ def scan_files(
         in_fixtures = relative.startswith(FIXTURE_ROOT) or "/test/" in f"/{relative}"
         prose_quotes = KNOWN_PROSE_QUOTES.get(relative, frozenset())
         findings.extend(
-            f for f in scan_text(relative, text, public_provenance=public_provenance)
+            f for f in scan_text(relative, text, public_provenance=public_provenance, is_git_object=is_git_object)
             if not (in_fixtures and any(fixture in f.excerpt for fixture in KNOWN_FIXTURES))
             and not any(quote in f.excerpt for quote in prose_quotes)
         )

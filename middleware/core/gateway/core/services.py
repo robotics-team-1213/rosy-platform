@@ -12,6 +12,7 @@ from typing import Any, Optional
 from core_common.capability import Capability
 from core_features.calibration import CalibrationSessionManager
 from core.trip_lease import TripLeaseManager, build_trip_lease  # D-541
+from core.person_request import PersonRequestHolder
 from core_features.command.approval_trials import ApprovalTrials
 from core_features.command.arbitration import Mode, ModeMachine, SourceRegistry
 from core_features.command.manager import CommandManager, Twist
@@ -134,6 +135,7 @@ class CoreServices:
     localization: Optional[LocalizationAssist] = None  # D-395 P2-1 (ros_bridge ingests)
     # Peer pose sharing (docs/plans/2026-11-04-peer-pose-sharing-design.md).
     peers: PeersManager = field(default_factory=lambda: PeersManager(now=time.monotonic))
+    person_request: PersonRequestHolder = field(default_factory=PersonRequestHolder)  # D-721 Amendment
     peer_beacon: Optional[BeaconSender] = None
     loc_mission: Optional[LocalizationMission] = None  # D-395 P2-7 (ros_bridge ticks)
     fleet_loss: Optional[FleetLossMonitor] = None  # SAF-003 D-419 (ros_bridge ticks)
@@ -323,6 +325,8 @@ class CoreServices:
         fleet_loss = build_fleet_loss(config, events=events, fleet_agent=fleet_agent, nav=nav,
                                       safety=safety, localization=localization)
 
+        maps = MapSnapshotStore()
+        nav.costmap_provider = lambda: maps.get_costmap("global")  # D-1009 route pass points
         return cls(config=config, identity=identity, profile=profile, capability=capability, fleet_agent=fleet_agent,
                    events=events, state=state, registry=registry, modes=modes,
                    command=command, safety=safety, advisory_feed=advisory_feed,
@@ -333,7 +337,7 @@ class CoreServices:
                    vision=vision,
                    readiness=readiness,
                    power=power, battery=battery, docking=docking, swarm=swarm,
-                   runtime_probe=runtime_probe, host_files=HostFileExchange(), maps=MapSnapshotStore(),
+                   runtime_probe=runtime_probe, host_files=HostFileExchange(), maps=maps,
                    audit=audit, calibration=calibration, trip_lease=trip_lease,
                    adapter_registry=adapter_registry, pilot_recording=PilotRecordingGuard(events=events),
                    dock_feed=dock_feed, station_docking=station_docking, localization=localization, loc_mission=loc_mission,

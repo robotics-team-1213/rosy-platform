@@ -1858,3 +1858,10 @@
 - 재발 방지: 새 홀더가 `SPLIT_CODE_PREFIXES`에서 빠지면 실패하는 시험을 `test/test_model_review_release.py`에 추가했다.
 - gate 변화: 없음. 소스 배치만 바뀜. 로봇 이미지 빌드와 실물 기동은 미실행이다.
 - CE: 해당 없음.
+
+## 2026-11-11 · 1e35310e23 · feat(sim,perception): 261026 bay world generator and pink paint wiring (D-1013 gate b)
+- 변경: `map/map_world_261026/scripts/build_world.py` 신규 생성기 — 루프 도색은 측정 CAD `road_lines.stl`의 y ≤ 0.20 부분집합(2026-10-31 천장 정합 수락 분량)으로 `meshes/road_lines_loop.stl`, 주차 구역은 그래프 v7의 분홍 유도선·칸 세로선(visual)과 칸별 레일·받침 collision. 생성물 `worlds/map_world_261026.world`·`README.md`. `sensors/line_observation/line_observer_node.py`에 paint_source 'pink' 분기(상태 없음, 흰 페인트 폴백 없음). 시험 `test_map_world_261026_scene.py` 5건
+- 증거: 원격 pytest(ai PC) 4파일 14 passed, exit 0 (run 1e35310e23-a2f4a9, 첫 실행 1e35310e23 2실패는 시험 코드 경계 오차·pose 요소 읽기 오류로 1e35310e23에서 수정)
+- gate 변화: 없음
+- 결정: D-1013 9항 (b)의 기반 슬라이스. 칸 pit-in 코어 접근(approach "line")과 Gazebo 실구동 검증은 다음 브랜치
+- 교훈: 없음

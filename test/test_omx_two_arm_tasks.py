@@ -167,6 +167,8 @@ def test_the_photo_plates_stand_where_the_top_camera_saw_them():
 
 
 def test_a_lane_under_the_ship_hull_is_blocked_and_refused(layout, data):
+    assert not any(s.get("blocked") for s in layout.sites.values())  # the plates where the 11-08 top frame sees them clear the hull
+    layout = sites.Layout(temp_lanes="fan", temp_radius_m=.200, ship_centre_y_m=.007)  # plate v11 on its bridge, the ship as estimated before
     """Plate v11 where its bridge seats it reaches 20 mm over the estimated r08 hull at arm_b (MuJoCo: the container sat 5 mm up, 7 deg
     tilted on lane 1). Such a lane is no place until the base plate yaw and the ship are measured."""
     assert {n for n, s in layout.sites.items() if s.get("blocked")} == {"tmp-b-1", "tmp-b-1-l1", "tmp-b-1-l2"}  # every tier of that lane
@@ -175,7 +177,7 @@ def test_a_lane_under_the_ship_hull_is_blocked_and_refused(layout, data):
 
 
 def test_temp_lanes_follow_the_scad_fan_and_point_at_the_arm():
-    layout = sites.Layout(temp_lanes="fan", ship_source="fixture-studs")
+    layout = sites.Layout(temp_lanes="fan", temp_radius_m=.200, ship_source="fixture-studs")
     width, length, flare, fan, angles = sites.lane_geometry(.200)
     assert width == pytest.approx(.0308) and length == pytest.approx(.096) and math.degrees(fan) == pytest.approx(17.3, abs=.1) and angles[1] == 0
     assert layout.choices["temp_lanes"] == "fan" and layout.choices["temp_radius_m"] == .200  # plate v11 on its bridge (Confluence 23233175)
@@ -287,3 +289,47 @@ def test_a_temporary_lane_stacks_three_tiers_on_something(layout):
     tasks.validate(layout, dict(supply=[], start=start, name="t", steps=stacked))
     assert "taken from under" in refused(layout, dict(supply=[], start=start, name="t", steps=stacked + [
         dict(id="c", container="bar-9", **{"from": "tmp-b-2"}, to="ship-h1r2-l2", arm="arm_b")]))
+
+
+def test_stack_and_cell_stack_divide_into_three_validated_tier_stages(layout, data):
+    """Both belt stacking and cell-plate stacking split into 1단 (l0), 2단 (l1), and 3단 (l2), each starting on the lower tiers."""
+    assert len(tasks.validate(layout, tasks.get_task(layout, "cell-stack", data))) == 9
+    for base in ("stack", "cell-stack"):
+        seen = {}
+        for tier in tasks.TIERS:
+            sub = tasks.get_task(layout, f"{base}-t{tier}", data)
+            assert sub["tier"] == tier and sub["layer"] == tier - 1 and len(sub["steps"]) == 3
+            assert all(layout.sites[s["to"]]["layer"] == tier - 1 for s in sub["steps"])
+            for c, s in seen.items():
+                assert sub["start"][c] == s  # earlier tiers stand underneath this tier
+            assert len(tasks.validate(layout, sub, data)) == 3
+            for s in sub["steps"]:
+                seen[s["container"]] = s["to"]
+    t2 = tasks.get_task(layout, "cell-stack-t2", data)
+    assert [s["from"] for s in t2["steps"]] == ["tmp-a-2", "tmp-a-1", "tmp-b-2"]
+    for snap in ("deploy/robot/omx/sim/cell_snapshots/20261108-2257.json",
+                 "deploy/robot/omx/sim/cell_snapshots/20261110-1231.json"):
+        snap_layout = sites.Layout(cell_snapshot=snap, temp_lanes="snapshot", ship_pose="snapshot", belt_pose="snapshot")
+        snap_records = tasks.validate(snap_layout, tasks.get_task(snap_layout, "cell-stack", data))
+        assert len(snap_records) == 9 and not any(r["roll_below_floor"] for r in snap_records)
+
+
+def test_skewed_belt_containers_across_all_three_tiers_have_valid_ik_chains(data):
+    """Every skewed/offset belt arrival in Teacher.SKEW_CASES across tiers 1..3 (s1..s9) solves cleanly without mid-air 180 deg flips."""
+    import omx_two_arm_teacher as teacher_mod
+
+    L = sites.Layout(temp_lanes="photo-20261110", ship_pose="photo-20261110", belt_pose="photo-20261110",
+                     arm_bases="plate-centre", container_colours="multi")
+    assert L.choices["container_colours"] == "multi"
+    task = tasks.get_task(L, "stack", data)
+    here = {}
+    belt_xy, belt_yaw = L.sites["belt"]["xy"], L.sites["belt"]["yaw"]
+    for i, step in enumerate(task["steps"]):
+        dx, dy, yaw_deg = teacher_mod.Teacher.SKEW_CASES[i % len(teacher_mod.Teacher.SKEW_CASES)]
+        pick = ((belt_xy[0] + dx, belt_xy[1] + dy), belt_yaw + math.radians(yaw_deg))
+        wps = tasks.waypoints(L, step, here, pick=pick)
+        arm = L.sim_arms[step["arm"]]
+        ok, q_app, path, note = tasks.solve_chain(arm, wps, arm.home, roll_floor=L.roll_floor)
+        assert ok and len(path) > 0, f"{step['id']} ({step['arm']}) failed at skew {(dx, dy, yaw_deg)}: {note}"
+        here[step["container"]] = step["to"]
+

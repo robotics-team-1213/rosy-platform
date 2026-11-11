@@ -111,19 +111,66 @@ def measure(mm) -> dict:
             "long_axis_deg": round((ang + 90) % 180 - 90, 1)}
 
 
-def _fits(m: dict, o: dict, k: int = 1, strict: bool = False, gap_mm: float = 0.0, stagger_mm: float = 0.0) -> bool:
+def _colour_set(spec) -> set:
+    if not spec:
+        return set()
+    items = spec.split(",") if isinstance(spec, str) else spec
+    return {str(c).strip().lower() for c in items if str(c).strip()}
+
+
+def colour_name(hsv) -> str:
+    """Human-readable colour name from OpenCV HSV (H in 0..179, S and V in 0..255)."""
+    h, s, v = float(hsv[0]), float(hsv[1]), float(hsv[2])
+    if s < 35:
+        return "black" if v < 65 else ("white" if v > 200 else "grey")
+    for hi, name in ((8, "red"), (22, "orange"), (35, "yellow"), (88, "green"), (135, "blue"), (165, "purple")):
+        if h < hi:
+            return name
+    return "red"
+
+
+def colour_tag(img, px) -> dict:
+    """Median OpenCV HSV and colour name of image pixels `px` (N x 2 [x, y])."""
+    if img is None or len(px) == 0:
+        return {}
+    pts = np.asarray(px, int)
+    xs = np.clip(pts[:, 0], 0, img.shape[1] - 1)
+    ys = np.clip(pts[:, 1], 0, img.shape[0] - 1)
+    hsv_px = cv2.cvtColor(img[ys, xs].reshape(-1, 1, 3), cv2.COLOR_BGR2HSV).reshape(-1, 3)
+    med = [int(round(float(v))) for v in np.median(hsv_px, axis=0)]
+    return {"colour": colour_name(med), "hsv": med}
+
+
+def want_reason(want: dict | None, o: dict) -> str | None:
+    """None when `o` satisfies `want` ({'object': ..., 'colour': ...}), else why it was filtered out."""
+    if not want:
+        return None
+    objs = _colour_set(want.get("object") or want.get("objects"))
+    if objs and str(o.get("object") or "").lower() not in objs:
+        return f"wanted object {','.join(sorted(objs))}, got {o.get('object')}"
+    cols = _colour_set(want.get("colour") or want.get("color") or want.get("colours"))
+    if cols and str(o.get("colour") or "").lower() not in cols:
+        return f"wanted colour {','.join(sorted(cols))}, got {o.get('colour')}"
+    return None
+
+
+def _fits(m: dict, o: dict, k: int = 1, strict: bool = False, gap_mm: float = 0.0, stagger_mm: float = 0.0,
+          colour: str | None = None) -> bool:
     # lengths come in whole cells, so a lone blob's length may stray up to half a cell; the real top camera read a
     # 60 mm container 47-56 mm long (dark end frames drop out of the mask) while its 30 mm width held within 9
     # (2026-10-28). Pieces split from a merged blob stay strict: with the loose length a tangled cluster's
     # piece matched and would have become a grasp target.
+    allowed = _colour_set(o.get("colours") or o.get("colour"))
+    if allowed and colour and colour.lower() not in allowed:
+        return False
     t = o["tolerance_mm"]  # k side by side: k widths plus up to k - 1 gaps of gap_mm (the ship plate's 6 mm cells)
     return (-t <= m["width_mm"] - k * o["width_mm"] <= (k - 1) * gap_mm + t
             and abs(m["length_mm"] - o["length_mm"]) <= (t if strict else o.get("length_tolerance_mm", t)) + stagger_mm)
 
 
-def match(m: dict, catalog: list, strict: bool = False):
-    """The nearest entry within tolerance, or None."""
-    ok = [o for o in catalog if _fits(m, o, strict=strict)]
+def match(m: dict, catalog: list, strict: bool = False, colour: str | None = None):
+    """The nearest entry within tolerance (and optional colour constraint), or None."""
+    ok = [o for o in catalog if _fits(m, o, strict=strict, colour=colour or m.get("colour"))]
     return min(ok, key=lambda o: abs(m["width_mm"] - o["width_mm"]) + abs(m["length_mm"] - o["length_mm"])) if ok else None
 
 
@@ -134,14 +181,15 @@ def _strips(mm, m: dict, k: int):
     return [(across >= edges[i]) & (across <= edges[i + 1]) for i in range(k)]
 
 
-def classify(mm, catalog: list, px_mm2: float | None = None, params=None) -> list:
+def classify(mm, catalog: list, px_mm2: float | None = None, params=None, px=None, img=None) -> list:
     """One blob's arm-mm points -> results: matched objects (a wide blob split into strips) or one unmatched.
     `px_mm2`: the area of one pixel in mm, to check that each strip fills its own rectangle. A wide blob is
     split only into parallel strips that each match a catalogue entry and fill their rectangle; anything else
     is tangled (2026-10-28: two side by side plus a third touching at an angle gave a 25 degree axis and wrong
     pieces) and is never a grasp target."""
-    m = measure(mm)
-    o = match(m, catalog)
+    tag = colour_tag(img, px) if img is not None and px is not None else {}
+    m = {**measure(mm), **tag}
+    o = match(m, catalog, colour=tag.get("colour"))
     if o:
         return [{**m, "object": o["id"], "grasp": o["grasp"], "matched": True}]
     # a row put back by hand: one box 15 mm along from the others made the row's blob 16 mm longer than a box
@@ -158,8 +206,9 @@ def classify(mm, catalog: list, px_mm2: float | None = None, params=None) -> lis
                 if not _fits(row, o, k, strict=True, gap_mm=gap, stagger_mm=stagger if k >= 3 else 0.0):
                     continue
                 feasible = True
-                strips = [(g, measure(mm[g])) for g in _strips(mm, row, k)]
-                found = [(match(s, catalog, strict=True), s, g) for g, s in strips]
+                strips = [(g, {**measure(mm[g]), **(colour_tag(img, px[g]) if img is not None and px is not None and len(px) == len(mm) else tag)})
+                          for g in _strips(mm, row, k)]
+                found = [(match(s, catalog, strict=True, colour=s.get("colour")), s, g) for g, s in strips]
                 ok = all(e for e, _, _ in found) and (k < 3 or len({e["id"] for e, _, _ in found}) == 1) and all(
                     abs((s["long_axis_deg"] - row["long_axis_deg"] + 90) % 180 - 90) <= prm.get(params, "objects.split_axis_deg", SPLIT_AXIS_DEG)
                     and (px_mm2 is None or g.sum() * px_mm2 >= prm.get(params, "objects.split_fill", SPLIT_FILL) * s["length_mm"] * s["width_mm"])
@@ -213,18 +262,62 @@ def _px_mm2(px, mm) -> float | None:
     return None if a_px < 1 else cv2.contourArea(cv2.convexHull(np.asarray(mm, np.float32))) / a_px
 
 
-def _measure_blob(px, record: dict, camera: dict, catalog: list, surface_z: float, params) -> list:
+def _measure_blob(px, record: dict, camera: dict, catalog: list, surface_z: float, params, img=None) -> list:
     """One blob's image pixels -> classify results. Blob height is unknown before matching, so each catalogue top
     height is tried and the tallest-first full match kept; a blob matching none is measured at the first height."""
     best = None
     for h in sorted({o["top_height_mm"] for o in catalog}, reverse=True):
         top = top_face(px.astype(float), h, camera, surface_z, params)
         mm = to_mm(top, record, camera, surface_z + h / 1000.0)
-        res = classify(mm, catalog, _px_mm2(top, mm), params)
+        res = classify(mm, catalog, _px_mm2(top, mm), params, top, img)
         if all(r["matched"] for r in res):
             return res
         best = best or res
     return best
+
+
+def enroll(img, roi, record: dict, camera: dict, object_id: str, surface_z: float = 0.0, top_height_mm: float = 30.0,
+           kind: str | None = None, mass_kg: float | None = None, tolerance_mm: float = 9.0, params=None,
+           surface_px=None, surface_lab=None) -> dict:
+    """Measure the largest isolated foreground blob in `roi` and return a `rosy.omx-object-catalog.v1` entry dict."""
+    x0, y0, _, _ = roi
+    seen = foreground(img, roi, params=params, surface_px=surface_px, surface_lab=surface_lab)
+    n, labels, stats, _ = cv2.connectedComponentsWithStats(seen)
+    valid = [i for i in range(1, n) if stats[i, cv2.CC_STAT_AREA] >= prm.get(params, "objects.min_px", MIN_PX)]
+    if not valid:
+        raise ValueError("no foreground object found in the ROI to enroll")
+    best_i = max(valid, key=lambda i: stats[i, cv2.CC_STAT_AREA])
+    px = np.column_stack(np.nonzero(labels == best_i))[:, ::-1] + [x0, y0]
+    top = top_face(px.astype(float), top_height_mm, camera, surface_z, params)
+    mm = to_mm(top, record, camera, surface_z + top_height_mm / 1000.0)
+    m, tag = measure(mm), colour_tag(img, top)
+    entry = {
+        "id": object_id,
+        "kind": kind or f"{tag.get('colour', 'custom')} object",
+        "length_mm": m["length_mm"],
+        "width_mm": m["width_mm"],
+        "top_height_mm": round(float(top_height_mm), 1),
+        "tolerance_mm": round(float(tolerance_mm), 1),
+        "length_tolerance_mm": round(max(float(tolerance_mm), 0.2 * m["length_mm"]), 1),
+        **({"colour": tag["colour"]} if "colour" in tag else {}),
+        "grasp": {"close_across": "short_side", "jaw_axis_deg_from_long": 90},
+    }
+    if mass_kg is not None:
+        entry["mass_kg"] = round(float(mass_kg), 4)
+    return entry
+
+
+def save_catalog_entry(path, entry: dict) -> list:
+    """Insert or replace `entry` (by `id`) in a `rosy.omx-object-catalog.v1` file and return the updated list."""
+    p = Path(path)
+    data = json.loads(p.read_text(encoding="utf-8")) if p.exists() else {"schema": SCHEMA, "objects": []}
+    if data.get("schema") != SCHEMA:
+        raise ValueError(f"not a {SCHEMA} file")
+    objs = [entry if o.get("id") == entry["id"] else o for o in data.get("objects", [])]
+    if not any(o.get("id") == entry["id"] for o in objs):
+        objs.append(entry)
+    p.write_text(json.dumps({"schema": SCHEMA, "objects": objs}, indent=2), encoding="utf-8")
+    return load_catalog(p)
 
 
 def colour_mask(img, roi, hsv):
@@ -293,10 +386,10 @@ def detect(img, roi, record: dict, camera: dict, catalog: list, surface_z: float
             continue
         blob = labels == i
         pieces = [blob]
-        found = _measure_blob(np.column_stack(np.nonzero(blob))[:, ::-1] + [x0, y0], record, camera, catalog, surface_z, params)
+        found = _measure_blob(np.column_stack(np.nonzero(blob))[:, ::-1] + [x0, y0], record, camera, catalog, surface_z, params, img)
         if not all(r["matched"] for r in found) and prm.get(params, "objects.split_touching"):
             parts = cell_split.split_touching(blob, prm.get(params, "objects.split_peak_frac"), prm.get(params, "objects.min_px", MIN_PX))
-            measured = [_measure_blob(np.column_stack(np.nonzero(q))[:, ::-1] + [x0, y0], record, camera, catalog, surface_z, params)
+            measured = [_measure_blob(np.column_stack(np.nonzero(q))[:, ::-1] + [x0, y0], record, camera, catalog, surface_z, params, img)
                         for q in parts]
             if parts and any(r["matched"] for res in measured for r in res):
                 pieces, found = parts, None
@@ -312,7 +405,7 @@ def detect(img, roi, record: dict, camera: dict, catalog: list, surface_z: float
             top = (blob & (v >= retry * np.percentile(v[blob], 90))).astype(np.uint8)
             top = cv2.morphologyEx(top, cv2.MORPH_OPEN, np.ones((int(prm.get(params, "objects.open_px")),) * 2, np.uint8))
             if top.sum() >= prm.get(params, "objects.min_px", MIN_PX):
-                again = _measure_blob(np.column_stack(np.nonzero(top))[:, ::-1] + [x0, y0], record, camera, catalog, surface_z, params)
+                again = _measure_blob(np.column_stack(np.nonzero(top))[:, ::-1] + [x0, y0], record, camera, catalog, surface_z, params, img)
                 if all(r["matched"] for r in again):
                     found = [{**r, "top_retry": retry} for r in again]
         if found is not None:
@@ -328,6 +421,10 @@ def main(argv=None) -> int:
     ap.add_argument("--roi", type=int, nargs=4, required=True, metavar=("X0", "Y0", "X1", "Y1"))
     ap.add_argument("--catalog", required=True)
     ap.add_argument("--surface-z", type=float, default=0.0, help="surface height in metres (default 0)")
+    ap.add_argument("--enroll", help="enroll the largest isolated object in ROI under this catalogue ID")
+    ap.add_argument("--top-height-mm", type=float, default=30.0, help="with --enroll: object top height in mm (default 30)")
+    ap.add_argument("--mass-kg", type=float, help="with --enroll: enrolled empty mass in kg (D-935)")
+    ap.add_argument("--write-catalog", action="store_true", help="with --enroll: write the entry into --catalog")
     a = ap.parse_args(argv)
     img = cv2.imread(a.image)
     if img is None:
@@ -335,7 +432,14 @@ def main(argv=None) -> int:
         return 2
     rec = json.loads(Path(a.map).read_text())
     rec = rec.get("record", rec)
-    found = detect(img, a.roi, rec, json.loads(Path(a.camera).read_text()), load_catalog(a.catalog), a.surface_z)
+    cam = json.loads(Path(a.camera).read_text())
+    if a.enroll:
+        entry = enroll(img, a.roi, rec, cam, a.enroll, a.surface_z, a.top_height_mm, mass_kg=a.mass_kg)
+        if a.write_catalog:
+            save_catalog_entry(a.catalog, entry)
+        print(json.dumps({"enrolled": entry, "written": bool(a.write_catalog)}, indent=1))
+        return 0
+    found = detect(img, a.roi, rec, cam, load_catalog(a.catalog), a.surface_z)
     print(json.dumps({"objects": found, "grasp_targets": [o for o in found if o["matched"]]}, indent=1))
     return 0
 

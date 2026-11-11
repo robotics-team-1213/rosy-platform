@@ -54,6 +54,8 @@ SCENARIOS = [
      "actions": ["observe_again", "done"]},
     {"name": "hover refused, seen again", "rounds": [("stopped: misaligned", False, True), ("placed", False, True)], "result": "placed", "actions": ["observe_again", "done"]},
     {"name": "placed but not seen", "rounds": [("stopped: placed", False, True), ("placed", False, True)], "result": "placed", "actions": ["observe_again", "done"]},
+    {"name": "reinserted: the grasp was unstable, look again", "rounds": [("stopped: reinserted", False, True), ("placed", False, True)],
+     "result": "placed", "actions": ["observe_again", "done"]},
     {"name": "attempts ran out", "rounds": [("stopped: 2 attempts", False, True), ("placed", False, True)], "result": "placed", "actions": ["push_clear", "done"]},
     {"name": "pivot stopped", "rounds": [("stopped: pivot: stopped", False, True)], "result": "ask a person: calibrate", "actions": ["ask_person"]},
     {"name": "no clear point to pivot", "rounds": [("stopped: no clear pivot point", False, True)], "result": "ask a person: calibrate", "actions": ["ask_person"]},

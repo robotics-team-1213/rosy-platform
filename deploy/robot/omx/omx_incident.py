@@ -83,10 +83,28 @@ def keep_hold(arm: str, reason: str, incident_ids=(), source="local") -> None:
                                           "since": time.strftime("%Y%m%dT%H%M%S")}))
 
 
-def link_for(arm: str):
-    """The Fleet channel of this arm from the environment, or None (not configured or not usable here)."""
+def _bridge_environ() -> dict[str, str]:
     import os
 
+    env = dict(os.environ)
+    if env.get("ROSY_WORKCELL_OBSERVATIONS"):
+        return env
+    env_path = env.get("ROSY_OBSERVATION_BRIDGE_ENV")
+    if not env_path and not env.get("ROSY_OMX_HOME"):
+        candidate = Path.home() / ".config/rosy/omx-observation-bridge.env"
+        if candidate.is_file():
+            env_path = str(candidate)
+    if env_path and Path(env_path).is_file():
+        for raw in Path(env_path).read_text(encoding="utf-8", errors="replace").splitlines():
+            line = raw.strip()
+            if line and not line.startswith("#") and "=" in line:
+                k, v = line.split("=", 1)
+                env.setdefault(k.strip(), v.strip().strip('"').strip("'"))
+    return env
+
+
+def link_for(arm: str):
+    """The Fleet channel of this arm from the environment, or None (not configured or not usable here)."""
     here = Path(__file__).resolve()
     for extra in (here.parents[3] / "contracts/foundation", here.parents[3] / "operations/overhead"):
         if extra.is_dir() and str(extra) not in sys.path:
@@ -94,7 +112,7 @@ def link_for(arm: str):
     try:
         from workcell_observation_bridge import ArmIncidentLink
 
-        return ArmIncidentLink.from_environment(arm, os.environ)
+        return ArmIncidentLink.from_environment(arm, _bridge_environ())
     except (ImportError, OSError, ValueError) as exc:
         print(f"fleet incident link unavailable: {type(exc).__name__}: {str(exc)[:120]}")
         return None
@@ -103,6 +121,17 @@ def link_for(arm: str):
 def label_box(arm: str) -> list[Path]:
     """Unsent label-only reports (a guard stop a person names the cause of): they never hold the arm or block a session."""
     return sorted(incidents_dir().joinpath("labels").glob(f"{arm}-*.json"))
+
+
+def _effectively_held(answer) -> bool:
+    """True when Fleet's hold answer reflects a holding incident (guards against pre-2026-11-08 Fleet servers that
+    returned held=True for a single 'reported for a person's cause, the arm is not held' label-only report)."""
+    if answer is None or not answer.held:
+        return False
+    reason = str(answer.reason or "").strip()
+    if reason.startswith("1 open arm incident(s):") and reason.endswith("reported for a person's cause, the arm is not held"):
+        return False
+    return True
 
 
 def send(arm: str, link, paths=None) -> bool:
@@ -118,7 +147,7 @@ def send(arm: str, link, paths=None) -> bool:
             return False
         path.unlink()
         upload_evidence(path.with_name(path.stem + ".evidence"), reply, link)
-        if reply.hold.held:  # a label-only report alone leaves the arm free
+        if _effectively_held(reply.hold):  # a label-only report alone leaves the arm free
             keep_hold(arm, reply.hold.reason or "arm incident not cleared", reply.hold.incident_ids, "fleet")
     return True
 
@@ -179,7 +208,7 @@ def refuse_if_held(arm: str | None, link=None) -> None:
             answer = link.hold()
         except Exception as exc:
             print(f"fleet hold unreachable: {type(exc).__name__}: {str(exc)[:120]}")
-    if answer is not None and answer.held:
+    if _effectively_held(answer):
         keep_hold(arm, answer.reason or "arm incident not cleared", answer.incident_ids, "fleet")
         raise SystemExit(f"{arm} held for a person: {answer.reason} (clear it in the Fleet console)")
     if answer is not None and sent:
@@ -267,8 +296,20 @@ def facts(session: dict, home=None, arm: str | None = None) -> dict:
                        or stills_of(arm, session.get("started", 0)))}
 
 
+def software_stop(f: dict) -> str | None:
+    """The shared rule (core_common, so Fleet's hold judges the same facts); not importable here: hold, as before."""
+    try:
+        from core_common.protocol.arm_incidents import software_stop as rule
+    except ImportError:
+        return None
+    return rule(f)
+
+
 def decide(f: dict) -> dict:
     """Measurement first: (chosen actions, hold or not, why). Returns {"actions", "hold", "reason", "offered"}."""
+    released = software_stop(f)
+    if released:  # the guard's own stop on a folded arm that followed its command: listed for a cause, not held
+        return {"actions": [], "hold": False, "offered": [], "reason": released}
     signs = bool(f["latched"] or f["windup_hits"] or f["flagged"] or not f["safe_end"])
     if not signs and f.get("stops"):  # the recovery handled it; a person still names what stopped it
         return {"actions": [], "hold": False, "offered": [],
@@ -279,8 +320,10 @@ def decide(f: dict) -> dict:
                    and all(r.get("caught") for r in f["flagged"]))
     if caught_only:  # the runner already let go where the jaws pinched: a note, not a hold
         return {"actions": [], "hold": False, "offered": [], "reason": "jaws caught and reopened by the runner"}
-    off = all(int(v) == 0 for v in f["torque_after"].values()) and bool(f["torque_after"])
-    rebootable = [m for m, l in f["latched"].items() if l["hw_error"] and not int(l["hw_error"]) & ~REBOOTABLE]
+    off = bool(f["torque_after"]) and all(isinstance(v, int) and not isinstance(v, bool) and v == 0
+                                          for v in f["torque_after"].values())
+    rebootable = [m for m, l in f["latched"].items()
+                  if isinstance(l.get("hw_error"), int) and l["hw_error"] and not int(l["hw_error"]) & ~REBOOTABLE]
     offered = ["reboot_latched"] if rebootable and len(rebootable) == len(f["latched"]) and off and f["folded"] else []
     why = []
     if f["latched"]:
@@ -292,6 +335,13 @@ def decide(f: dict) -> dict:
     if not offered and f["latched"]:
         why.append("no automatic reboot: " + ("torque not confirmed OFF" if not off else
                                                "arm not folded at home" if not f["folded"] else "a latch that is not load or supply"))
+    if not why and not f["safe_end"]:
+        if not off:
+            why.append("torque not confirmed OFF")
+        if f.get("caps_restored"):
+            why.append("caps not confirmed restored")
+        if not why:
+            why.append("unsafe session end")
     return {"actions": offered, "hold": True, "offered": offered,
             "reason": "; ".join(why) + "; a person checks the arm (jaws, contacts, wedged objects) before torque ON"}
 
@@ -347,7 +397,7 @@ def handle(session_path: Path, arm: str, act=None, decisions=Path("decisions.jso
         "stage": "incident", "facts": {k: f[k] for k in ("latched", "folded", "windup_hits", "flagged", "safe_end")},
         "options": d["offered"] + ["hold_for_person"], "chosen": d["actions"] + (["hold_for_person"] if d["hold"] else []),
         "by": "measurement", "reason": d["reason"], "frames": f["frames"], "arm_id": arm, "t": round(time.time(), 3)})
-    if d["hold"] or f.get("stops"):  # if Fleet cannot be reached a held arm's next session is still refused
+    if d["hold"] or f.get("stops") or software_stop(f):  # if Fleet cannot be reached a held arm's next session is still refused
         sid = session.get("motor_health_session")
         try:
             sid = str(uuid.UUID(str(sid)))
@@ -416,6 +466,65 @@ def reboot_latched(device: str):
     return act
 
 
+def default_token_file() -> Path | None:
+    """Discover the single operator bearer token in ~/.config/rosy/*-operator-*.token when not passed explicitly."""
+    import os
+
+    if os.environ.get("ROSY_OPERATOR_TOKEN_FILE"):
+        return Path(os.environ["ROSY_OPERATOR_TOKEN_FILE"]).expanduser()
+    cfg_dir = Path.home() / ".config/rosy"
+    matches = sorted(cfg_dir.glob("*-operator-*.token")) if cfg_dir.is_dir() else []
+    return matches[0] if len(matches) == 1 else None
+
+
+def status(arm: str, link=None) -> dict:
+    """Return local and Fleet hold state for `arm`."""
+    link = link or link_for(arm)
+    local_reason = held(arm)
+    fleet_held, fleet_ids, fleet_reason = None, [], None
+    if link is not None:
+        try:
+            ans = link.hold()
+            fleet_held, fleet_ids, fleet_reason = _effectively_held(ans), list(ans.incident_ids), ans.reason
+        except Exception as exc:
+            fleet_reason = f"unreachable: {type(exc).__name__}: {str(exc)[:120]}"
+    return {"arm": arm, "local_held": bool(local_reason), "local_reason": local_reason,
+            "unsent_outbox": len(outbox(arm)), "fleet_held": fleet_held,
+            "incident_ids": fleet_ids, "fleet_reason": fleet_reason}
+
+
+def clear(arm, note, token_file=None, link=None, *, cause=None, basis=None) -> int:
+    """Clear every open incident of one arm as the named operator whose token this is, then lift the local hold."""
+    if not note.strip():
+        raise SystemExit("a note of what was checked is required")
+    token_file = token_file or default_token_file()
+    if token_file is None or not Path(token_file).is_file():
+        raise SystemExit("an operator --token-file (chmod 600) is required")
+    token_file = Path(token_file)
+    if token_file.stat().st_mode & 0o077:
+        raise SystemExit(f"{token_file} must be readable by its owner only (chmod 600)")
+    link = link or link_for(arm)
+    if link is None:
+        raise SystemExit(f"{arm}: no Fleet channel configured on this PC (source the observation bridge env)")
+    token = token_file.read_text(encoding="utf-8").strip()
+    answer = link.hold()
+    cleared = list(answer.incident_ids)
+    for incident_id in cleared:
+        if cause is not None or basis is not None:
+            try:
+                answer = link.clear(incident_id, note, token, cause=cause, basis=basis)
+            except OSError as exc:
+                if getattr(exc, "code", None) != 422:
+                    raise
+                answer = link.clear(incident_id, note, token)
+        else:
+            answer = link.clear(incident_id, note, token)
+    print(json.dumps({"arm": arm, "cleared": cleared, "held": answer.held,
+                      **({"cause": cause} if cause else {}), **({"basis": basis} if basis else {})}))
+    refuse_if_held(arm, link)  # Fleet's "not held" lifts the local hold file too
+    return 0
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -423,7 +532,20 @@ def main(argv=None):
     h.add_argument("--session", type=Path, default=Path("session.json"))
     h.add_argument("--arm", required=True)
     h.add_argument("--device", help="follower by-id path: reboots an allowed latch (no motion)")
+    s = sub.add_parser("status", help="check local and Fleet hold state for this arm")
+    s.add_argument("--arm", required=True)
+    c = sub.add_parser("clear", help="a named operator clears this arm's open incidents over the Fleet API")
+    c.add_argument("--arm", required=True)
+    c.add_argument("--note", required=True, help="what the person checked on the arm")
+    c.add_argument("--token-file", type=Path, help="the operator's own Fleet bearer (0600); defaults to ~/.config/rosy/*-operator-*.token")
+    c.add_argument("--cause", help="optional structured stop cause (API v1.375)")
+    c.add_argument("--basis", help="optional cause basis: repeat, measured, seen, unknown (API v1.375)")
     args = parser.parse_args(argv)
+    if args.command == "status":
+        print(json.dumps(status(args.arm)))
+        return 0
+    if args.command == "clear":
+        return clear(args.arm, args.note, args.token_file, cause=args.cause, basis=args.basis)
     from joint_tune import session_lock
 
     lock = session_lock(args.arm)  # a by-hand run never overlaps a recording session of the same arm

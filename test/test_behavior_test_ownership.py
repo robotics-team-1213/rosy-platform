@@ -27,6 +27,8 @@ KNOWN_EXTERNAL_BEHAVIOR_TESTS = frozenset({
     "middleware/core/gateway/test/test_core_logic.py",
     "middleware/core/gateway/test/test_domain_model.py",
     "middleware/core/gateway/test/test_evidence.py",
+    # D-922 bridge admission consumes the real model-status store; pure policy tests live in services/test.
+    "middleware/core/gateway/test/test_expression_bridge.py",
     "middleware/core/gateway/test/test_fleet_agent.py",
     "middleware/core/gateway/test/test_fleet_agent_mdns.py",
     "middleware/core/gateway/test/test_initial_pose.py",
@@ -80,6 +82,7 @@ KNOWN_EXTERNAL_BEHAVIOR_TESTS = frozenset({
     # D-986 HTTP-to-CORE seam: the approval routes drive the real ApprovalTrials through the gateway.
     "middleware/core/gateway/test/test_navigation_approval_api.py",
     "middleware/core/gateway/test/test_navigation_readiness.py",
+    "middleware/core/gateway/test/test_navigation_route.py",  # D-1009 route drive through the REST gate and the bridge goal builder
     # D-890 public HTTP /do -> real CORE Home reservation; Waypoint is fixture setup.
     "middleware/core/gateway/test/test_intent_home_epoch.py",
     # D-732 actual CORE API/manager wiring and native callback/stop ownership seams.
@@ -121,6 +124,7 @@ KNOWN_EXTERNAL_BEHAVIOR_TESTS = frozenset({
     "middleware/core/gateway/test/test_traffic_policy_bridge_contract.py",
     "middleware/core/gateway/test/test_vision_preview.py",
     "test/test_footprint_profiles.py",
+    "test/test_nav2_behavior_trees.py",  # D-1009 behavior trees and the launch params that point at them
     "test/test_nav2_profile_limits.py",
     "test/test_robot_runtime.py",
     # feat/lane-network-junctions, written 2026-09-23..24 alongside D-184's

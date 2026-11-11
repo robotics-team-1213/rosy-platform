@@ -31,6 +31,7 @@ DEPLOY_FILES = (
     "compose.account.yaml", "Caddyfile.account",
     "compose.account-backup.yaml", "rosy-account-backup.service", "rosy-account-backup.timer",
     "rosy-account-backup-check.service", "rosy-account-backup-check.timer",
+    "account_tls_renew.py", "account-tls.env.example", "rosy-site-account-tls-renew.service", "rosy-site-account-tls-renew.timer",  # D-1001: R renews from the signed release
     "sign_candidate.py", "verify_candidate.py",
 )
 DOC_FILES = ("docs/reference/site-lan-discovery-profile.md",)
@@ -46,7 +47,7 @@ MIRRORED_IMAGES = {
 # sources are copied whole, so ignored files under any of them could reach the
 # Docker daemon or an image. Python caches and egg-info carry no secrets.
 _HARMLESS_IGNORED = ("__pycache__/", ".pytest_cache/", ".egg-info/")
-_COPIED_BY = ("Dockerfile.fleet", "Dockerfile.vision", "Dockerfile.account")
+_COPIED_BY = ("Dockerfile.fleet", "Dockerfile.vision", "Dockerfile.account", "Dockerfile.monitoring")
 _PARSED_COPY_FLAGS = ("--chown=", "--chmod=")
 Runner = Callable[..., subprocess.CompletedProcess]
 
@@ -234,6 +235,7 @@ def build_candidate(root: Path, output_dir: Path, *, runner: Runner = subprocess
     services = {
         "fleet": (site / "Dockerfile.fleet", root),
         "account": (site / "Dockerfile.account", root),
+        "monitoring": (site / "Dockerfile.monitoring", root),  # D-1001
         "vision": (site / "Dockerfile.vision", root),
         "proxy": (site / "Dockerfile.proxy", site),
     }

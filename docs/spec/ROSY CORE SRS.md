@@ -440,7 +440,7 @@ Command Manager는 모든 cmd_vel에 상한 클리핑을 적용한다.
 | 단계 | 기본 임계값 | 동작 |
 |---|---|---|
 | Warning | 20% | `battery.low` 경고 이벤트 발행, 상태 표시 |
-| Critical | 10% | 설정 정책 실행: `RETURN_HOME` 또는 `STOP` + `battery.critical` 이벤트 |
+| Critical | 10% | 설정 정책 실행: `RETURN_HOME` 또는 `STOP` + `battery.critical` 이벤트. 로봇 몸은 LCD를 끄고 부저로 충전을 요구한다(D-502) |
 | Deep | 5% | 모터 정지 → 유예 후 호스트 정상 종료 + `battery.deep` 이벤트 (D-27) |
 
 임계값과 정책은 설정으로 변경 가능해야 하며, Critical 정책 실행은 감사 로그에 기록된다.
@@ -461,9 +461,10 @@ CORE는 `${ROSY_DATA_PATH}/battery-shutdown-request.json`에 요청을 기록한
 삭제되므로 유예 중 충전을 시작하면 셧다운은 철회된다.
 
 **배터리 정지의 해제 (D-502).** Critical `STOP`, 보낼 수 없는 `RETURN_HOME`, Deep의
-모터 정지는 모두 SAF-001 E-Stop이다. 모드는 EMERGENCY가 되고, 해제는 SAF-001과 같이
-Administrator의 `POST /api/v1/safety/release`뿐이다. 전압이 회복되어도 스스로 풀리지
-않는다. 해제는 정책을 끄지 않으며 Deep이 이어지면 다시 정지한다. 배터리 입력의
+모터 정지는 모두 SAF-001 E-Stop이다. 모드는 EMERGENCY가 된다. 잔량 단계가 OK로 회복되고
+이번 표본도 경고 임계 위이면 스스로 풀려 IDLE이 되며, 새 명령이 있어야 움직인다.
+그 전에는 Administrator의 `POST /api/v1/safety/release`로 풀 수 있다. 배터리 정지 위에 다른
+정지가 걸리면 그 래치를 넘겨받아 스스로 풀리지 않는다. 해제는 정책을 끄지 않으며 Deep이 이어지면 다시 정지한다. 배터리 입력의
 결측·낡음(`missing`/`stale`)은 `GET /safety/state`와 `GET /sensors/battery`에 드러난다.
 
 **저배터리 표시.** 경보 표시는 근접 정보창과 무관하게 동작해야 한다. Warning은
@@ -569,6 +570,14 @@ Navigation 중 다음 조건이 지속되면 자동으로 Goal을 취소하고 �
   제한된 로컬 복귀·재탐색·동일 차로 검증을 먼저 수행한다. 선이 보임만으로
   재개하지 않으며, 로컬 후보 소진 후에 Fleet 지원을 요청한다. 구현·장치 수용은 별도다.
 - 차선 추종 중 최고 속도는 0.10 m/s로 고정한다(SAF-004 상한과 별도의 모드 캡).
+
+### NAV-008 경로 주행 (pass/stop 점)
+
+한 요청으로 순서 있는 점 목록을 주행해야 한다(`POST /api/v1/navigation/route`, D-1009). 각 점은 `pass`(서지 않고 지나감) 또는 `stop`(멈춤)이고 마지막 점은 `stop`이다.
+
+- 경로는 stop 점마다 잘려, 구간마다 Nav2 액션 하나를 보낸다. pass 점이 있는 구간은 `NavigateThroughPoses`, 없으면 `NavigateToPose`다. 구간이 끝나면 CORE가 같은 주행 run 안에서 다음 구간을 보낸다. 경로 하나가 소유권·상관 식별자·목표 임대 하나이며 구간 사이에 `NAVIGATION_ACTIVE`가 나오지 않는다.
+- 전역 코스트맵에서 막힘이거나 지도 밖인 pass 점은 건너뛴다. 구간이 실패했는데 앞에 pass 점이 남았으면 그 첫 점을 건너뛰고 구간을 다시 보낸다. stop 점은 건너뛰지 않는다. pass 점이 없는 구간의 실패와 NAV-006은 경로를 `FAILED`로 끝낸다.
+- 취소·E-Stop·임대 만료·속도 한도·최종 `cmd_vel` 단독 발행(D-2)은 단일 목표와 같다. 진행(현재 구간, 남은 점, 건너뛴 점)은 `GET /api/v1/navigation/state`의 `route`로 읽는다.
 
 ## 10.1 Swarm 지원 (로봇측 군집 모드)
 

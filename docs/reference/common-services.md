@@ -40,6 +40,19 @@ Account의 로그인·프로필·관리 화면 소스는 `applications/fleet/web
 | `vision` | 천장 영상에서 현장 관측을 만드는 업무 생산자다 |
 | `control-unit-peer` | 관제 계층 연결에만 쓰는 peer 프록시다(D-850, D-960) |
 
+## 배치와 장애 격리
+
+[D-1001](../adr/D-1001-common-logic-placement-on-r.md)의 결정이다. 공통 실행 서비스는 R 호스트의 서명된 `rosy-site` 프로젝트에서 서비스마다 자기 컨테이너·이미지·상태 볼륨·메모리 한도를 갖고, Fleet 프로세스·이미지·상태에 얹지 않는다. Media는 별도 프로젝트 `rosy-media`다. `test/architecture/test_common_placement.py`가 확인한다.
+
+| 서비스 | 프로젝트 | 이미지 | R 상태(2026-11-09) | 예외·남은 일 |
+|---|---|---|---|---|
+| `account` | `rosy-site` | `rosy-site-account` | 실행 중 | 없음 |
+| `monitoring` | `rosy-site` | `rosy-site-monitoring` | 실행 중 | 전용 이미지(D-1001 이행 2) |
+| `proxy` | `rosy-site` | `rosy-site-proxy` | 실행 중 | `mem_limit` 부채 |
+| `media`, `media-gateway` | `rosy-media` | `rosy-site-media`, `rosy-site-proxy` | 미배치 | D-994 §5 부하 관측·방화벽 뒤 |
+
+Fleet에 남는 공통 성격 기능은 카메라 페어링·로봇 등록·기계 자격 digest·미리보기 grant 서명 사용·host-control·알림 outbox이며 이유는 D-1001 결정 4가 정본이다. 사람 신원은 Account에 있고 Fleet은 수신기로만 쓴다.
+
 ## 기능별 공통화 결정
 
 아래는 [D-997](../adr/D-997-common-function-ownership-and-failure-contracts.md)의 확정 설계다. 위 실행 서비스·Compose 목록과 달리 구현·배포 목록이 아니다. 기존 owner·프로세스·DB·폴더·자격·API는 실제 전환 검증 전까지 유지한다. 현재 소스는 이 저장소의 실제 경로를 기능별 대표로 적는다. `(목표, 미생성)`은 D-997이 정한 전환 뒤 경로가 아직 만들어지지 않았다는 뜻이다. `test/architecture/test_common_services.py`가 경로 존재와 목표 표시를 확인한다.
@@ -76,4 +89,5 @@ Monitoring은 허용된 상태·읽기 사본, Media는 영상 세션·위임·�
 2. 둘 이상의 앱이 같은 코드를 쓰면 공용 코드 위치에 둔다. 전역 utils 패키지는 만들지 않는다.
 3. 자기 데이터와 수명이 필요하면 실행 서비스로 제안하고 ADR을 쓴다.
 4. 현장 Compose에 서비스를 더하면 위 표 중 하나에 적는다. `test/architecture/test_common_services.py`가 확인한다.
-5. 이름이 같아도 의미가 다르면 합치지 않는다. 사람 자격과 기계 자격을 합치지 않는다.
+5. 공통 실행 서비스는 Fleet 프로세스·이미지·상태에 얹지 않고 자기 컨테이너로 둔다([D-1001](../adr/D-1001-common-logic-placement-on-r.md)).
+6. 이름이 같아도 의미가 다르면 합치지 않는다. 사람 자격과 기계 자격을 합치지 않는다.

@@ -427,6 +427,7 @@ def test_a_session_that_ends_mid_chunk_says_so_in_its_last_status(bus_dead):
     last = status[-1]
     assert last["command"] == "run approach_pinky" and last["ok"] is False
     assert last["fault"].startswith("session ended: ValueError: wrist_flex: following error")
+    assert last["fault"].endswith("command=3344, current=3287")  # the measurement a release rule reads stays whole
 
 
 class SlowWrist(Robot):
@@ -448,7 +449,7 @@ class SlowWrist(Robot):
 
 
 def test_pacing_and_idle_thresholds_come_from_the_params_a_runner_is_given(monkeypatch):
-    monkeypatch.setattr(m, "STRAIN_LAG", 99.0)  # without pacing or the strain hold, the guard stops it
+    monkeypatch.setattr(m.runner_strain, "STRAIN_LAG", 99.0)  # without pacing or the strain hold, the guard stops it
     lift = library()
     lift["chunks"]["approach_pinky"] = [[0.0, -60.0, 50.0, 45.0 + 0.15 * k, 10.0, 46.6] for k in range(1, 101)]
     robot, status, clock, queue = SlowWrist(), [], [0.0], ["run approach_pinky", "stop"]
@@ -469,7 +470,7 @@ def test_pacing_and_idle_thresholds_come_from_the_params_a_runner_is_given(monke
 def test_a_lagging_joint_holds_the_next_frame_until_it_catches_up_before_the_guard_stops(monkeypatch, paced):
     if not paced:  # neither pacing nor the strain hold: the guard stops it
         monkeypatch.setattr(m, "PACE_LAG", 99.0)
-        monkeypatch.setattr(m, "STRAIN_LAG", 99.0)
+        monkeypatch.setattr(m.runner_strain, "STRAIN_LAG", 99.0)
     lift = library()
     lift["chunks"]["approach_pinky"] = [[0.0, -60.0, 50.0, 45.0 + 0.15 * k, 10.0, 46.6] for k in range(1, 101)]
     robot, status, clock, queue = SlowWrist(), [], [0.0], ["run approach_pinky", "stop"]
@@ -511,6 +512,34 @@ def test_a_steady_droop_is_not_waited_out_frame_by_frame():
     done = by_command(status, "run approach_pinky")[0]
     assert done["ok"] and done["paced_ticks"] <= 3  # one look at a lag that does not shrink, then on
     assert clock[0] < 100 / 30 + m.SETTLE_S + 1  # 2026-10-28: one frame per 3 s took a park past 300 s
+    # Even when steady droop under a held box is 2.15 units (> SETTLE_TOL 2.0), once the body is still it settles immediately
+    status2, clock2, queue2 = [], [0.0], ["run approach_pinky", "stop"]
+    r2 = m.Runner(DroopingWrist(droop=2.15), lift, fps=30, status=status2.append, clock=lambda: clock2[0],
+                  sleep=lambda s: clock2.__setitem__(0, clock2[0] + 1 / 30))
+    r2.run(lambda: [queue2.pop(0)] if queue2 and not r2.chunk else [])
+    done2 = by_command(status2, "run approach_pinky")[0]
+    assert done2["ok"] and done2["settled"] and clock2[0] < 100 / 30 + 0.5
+
+
+def test_chain_streams_consecutive_chunks_without_inter_chunk_stop():
+    lib = library()
+    lib["chunks"]["home"] = [HOME]
+    lib["chunks"]["above_place"] = [[-3.0, -16.0, 9.0, 48.0, 5.0, 46.6]]
+    lib["chunks"]["descend_place"] = [[-3.0, -16.0 + 0.2 * k, 9.0 + 0.2 * k, 48.0, 5.0, 46.6] for k in range(1, 16)]
+    robot = Robot()
+    status = run_with(robot, lib, ["chain goto above_place ; run descend_place ; park", "stop"])
+    done = by_command(status, "run goto above_place ; run descend_place ; park")[0]
+    assert done["ok"] and done["settled"] and done["state"][:5] == pytest.approx(HOME[:5])
+
+
+def test_local_hover_reapproach_up_to_16_units_flows_directly_without_climbing_to_transit():
+    # 2026-11-10: a 12-24 mm feel/reach shift at hover changed elbow_flex by 9.6-13.5 units (> 8.0) and folded to TRANSIT (-27)
+    hover_a = [-32.5, -2.5, -3.5, 45.2, 54.4, 56.58]
+    hover_b = [-39.2, 5.2, -13.1, 47.0, 47.8, 56.58]  # max body delta = 9.6 units
+    path = m.transit_path(hover_a, hover_b, 48.8, fps=30)
+    assert min(f[1] for f in path) >= -3.0  # stays at hover height instead of climbing to TRANSIT (-27.0)
+    assert min(f[5] for f in path) >= 56.5  # jaws stay open instead of closing to 48.8 and reopening
+    assert len(path) <= 120  # ~3.6 seconds direct flow, not 25 seconds (760 frames) via TRANSIT
 
 
 def test_the_library_contract_is_enforced(tmp_path):
@@ -708,6 +737,88 @@ def test_a_lag_that_keeps_rising_while_the_joint_pushes_holds_with_torque_on_the
     assert by_command(status, "run park")[0]["ok"] is True and by_command(status, "run park")[0]["fault"] is None
 
 
+def test_a_jog_path_whose_wrist_strains_holds_with_torque_on_then_retreats_along_the_jogs():
+    # arm_a 2026-11-09 15:09: coordinated jogs toward a reach; wrist_flex rose to PWM 300 of 300 with no chunk
+    # running, so nothing watched below the guard, whose overload cut dropped the extended arm
+    robot = Straining(lambda n: min(2.8, max(0.0, 0.05 * (n - 40))), pwm=300, joint=3)
+    status, clock, ticks = [], [0.0], [0]
+    queue = ["jog shoulder_lift.pos 3 wrist_flex.pos 3"] * 6 + ["retreat", "park", "stop"]
+    r = m.Runner(robot, goto_library(), fps=30, status=status.append, clock=lambda: clock[0],
+                 sleep=lambda s: clock.__setitem__(0, clock[0] + 1 / 30))
+
+    def lines():
+        ticks[0] += 1
+        while queue and queue[0].startswith("jog") and r.fault:
+            queue.pop(0)  # never jog past a hold
+        if not queue or r.chunk or ticks[0] % 20:
+            return []
+        if queue[0] == "retreat":
+            robot.lag = lambda n: 0.0  # backing off: the wrist follows again
+        return [queue.pop(0)]
+
+    r.run(lines)
+    held = by_command(status, "run jog")[0]
+    assert held["ok"] is False and held["contact"] is True and "wrist_flex" in held["fault"]
+    assert held["target"][3] == pytest.approx(held["state"][3], abs=0.01)  # held where it was, torque on
+    jogs = len([s for s in status if s["command"].startswith("jog") and s["ok"]])
+    assert 1 <= jogs < 6  # the hold came before the path's end
+    assert by_command(status, "run retreat")[0]["ok"] is True
+    back = by_command(status, "run retreat")[0]["state"]
+    assert back[1] == pytest.approx(HOME[1], abs=0.5) and back[3] == pytest.approx(HOME[3], abs=0.5)  # where the jogs began
+    assert by_command(status, "run park")[0]["ok"] is True and by_command(status, "run park")[0]["fault"] is None
+
+
+def test_an_overload_hold_by_the_guard_sheds_with_lift_and_elbow_then_parks_once_released():
+    # 2026-11-09 panel: the guard freezes an overloaded joint with torque on (motion.held) instead of cutting torque;
+    # the runner stops pushing, moves only the XL430 lift and elbow toward the fold, and parks after the release
+    robot = Robot()
+    robot.pos = [40.0, -10.0, 0.0, 60.0, 70.0, 46.6]  # reached out, like arm_a at 15:09
+    released = []
+    robot.motion = type("Motion", (), {"held": {}, "effort_pwm": {"wrist_flex": 300}, "pwm_limits": {"wrist_flex": 300},
+                                       "release_hold": lambda self: (released.append(clock[0]), self.held.clear())})()
+    status, clock, ticks, during = [], [0.0], [0], []
+    r = m.Runner(robot, goto_library(), fps=30, status=status.append, clock=lambda: clock[0],
+                 sleep=lambda s: clock.__setitem__(0, clock[0] + 1 / 30))
+
+    def lines():
+        ticks[0] += 1
+        if ticks[0] == 5:
+            robot.motion.held = {"wrist_flex": {"since": clock[0], "temp": 30, "clear_since": None}}
+        if 5 < ticks[0] <= 30:
+            during.append(list(r.target))
+        if ticks[0] == 30:
+            robot.motion.effort_pwm = {"wrist_flex": 120}  # the shed took the load off the wrist
+        return {10: ["park"], 60: ["park"]}.get(ticks[0]) or (["stop"] if ticks[0] > 60 and not r.chunk else [])
+
+    r.run(lines)
+    held = [s for s in status if "overload-hold on wrist_flex" in (s.get("fault") or "")][0]
+    assert held["command"] == "fault" and held["contact"] is True
+    refused = [s for s in status if s["command"] == "park" and not s["ok"]]
+    assert refused and "shedding" in refused[0]["error"]  # no park while the guard still holds
+    first, last = during[0], during[-1]
+    assert [first[i] for i in (0, 3, 4)] == [last[i] for i in (0, 3, 4)] == [40.0, 60.0, 70.0]  # pan and wrist stay
+    assert abs(last[1] - HOME[1]) < abs(first[1] - HOME[1]) and abs(last[2] - HOME[2]) < abs(first[2] - HOME[2])
+    assert len(released) == 1 and 30 / 30 + 0.5 - 0.1 <= released[0] < 60 / 30  # asked once, after 0.5 s off the cap
+    assert by_command(status, "run park")[0]["ok"] is True and by_command(status, "run park")[0]["fault"] is None
+
+
+def test_the_shed_moves_only_lift_and_elbow_toward_home_and_stops_a_joint_at_its_own_lag():
+    target, home = [40.0, -10.0, 0.0, 60.0, 70.0, 46.6], HOME
+    sent = {n: v for n, v in zip(m.NAMES, target)}
+    out = m.runner_strain.shed(target, target, sent, home, 1.0)
+    assert out[1] == -11.0 and out[2] == 1.0 and [out[i] for i in (0, 3, 4, 5)] == [40.0, 60.0, 70.0, 46.6]
+    lagging = list(target)
+    lagging[1] += m.STRAIN_LAG  # the lift no longer follows: it stops shedding, the elbow goes on
+    out = m.runner_strain.shed(target, lagging, sent, home, 1.0)
+    assert out[1] == -10.0 and out[2] == 1.0
+
+
+def test_plain_jogs_that_follow_are_not_strain():
+    status = run_with(Straining(lambda n: 0.3, pwm=300, joint=3), goto_library(),
+                      ["jog wrist_flex.pos 3", "jog wrist_flex.pos -3", "stop"])
+    assert not by_command(status, "run jog") and all(s["ok"] for s in status if s["command"].startswith("jog"))
+
+
 @pytest.mark.parametrize("lag, pwm", [
     (lambda n: 2.0, 500),                                # a steady travel lag, even past STRAIN_LAG, is not strain
     (lambda n: min(2.5, max(0.0, 0.05 * (n - 30))), 100),  # rising but hardly pushing: the guard's PWM is low
@@ -856,6 +967,36 @@ def test_a_park_with_something_in_the_jaws_holds_instead_of_folding_it_home():
     assert held["ok"] is False and "jaws" in held["error"] and held["contact"] is True
 
 
+def test_a_park_carrying_a_grasped_box_folds_home_without_a_caught_jaw_hold():
+    """2026-11-10 Trial 3: FOLDED parks after grasp_pick + lift_pick with the container held in the jaws."""
+    lib = library()
+    lib["chunks"]["home"] = [HOME]
+    robot = Robot(object_at=53.8)
+    robot.pos[5], robot.bus = 55.6, Bus(pwm={"gripper": 65536 - 255}, current={"gripper": 239})
+    status = run_with(robot, lib, ["run approach_pinky", "run grasp_pinky", "park", "stop"])
+    grasped = by_command(status, "run grasp_pinky")[0]
+    folded = by_command(status, "run park")[0]
+    assert grasped["ok"] is True and grasped["holding"] is True
+    assert folded["ok"] is True and folded["settled"] is True
+
+
+def test_a_box_that_slips_out_during_lift_pick_reports_holding_false():
+    class SlippingRobot(Robot):
+        def send_action(self, action):
+            if len(self.sent) > 22:
+                self.object_at = None
+            return super().send_action(action)
+
+    lib = library()
+    lib["chunks"]["home"] = [HOME]
+    lib["chunks"]["lift_pick"] = [[18.0, -60.0, 50.0, 45.0, 10.0, 46.6] for _ in range(10)]
+    robot = SlippingRobot(object_at=53.8)
+    robot.pos[5], robot.bus = 55.6, Bus(pwm={"gripper": 65536 - 255}, current={"gripper": 239})
+    status = run_with(robot, lib, ["run approach_pinky", "run grasp_pinky", "run lift_pick", "stop"])
+    assert by_command(status, "run grasp_pinky")[0]["holding"] is True
+    assert by_command(status, "run lift_pick")[0]["holding"] is False
+
+
 def test_a_closing_grip_that_catches_something_reopens_where_it_was():
     """arm_b 2026-11-03 13:27: a jaw-mark close caught a box edge and the park later folded the box home."""
     robot = Robot(object_at=55.0)
@@ -916,3 +1057,111 @@ def test_main_passes_the_passively_connected_session_caps_to_startup_and_later_l
     assert [phase for phase, _, _ in checked] == ["startup", "load"]
     assert set(approved) <= set(reads) and checked[0][2] is checked[1][2]
     assert "hold" in checked[1][1]["chunks"] and not robot.sent
+
+
+def test_guarded_wrapper_reuses_motion_last_present_to_avoid_duplicate_tick_bus_reads():
+    from types import SimpleNamespace
+
+    obs_calls = []
+
+    class RawRobot:
+        bus = None
+
+        def get_observation(self):
+            obs_calls.append("raw")
+            return dict(zip(m.NAMES, HOME))
+
+    class Motion:
+        last_present = None
+
+        def send(self, action):
+            self.last_present = dict(action)
+            return dict(action)
+
+    guarded = m.Guarded(RawRobot(), Motion())
+    # First standalone get_observation calls the underlying robot
+    assert guarded.get_observation()["shoulder_pan.pos"] == 0.0 and obs_calls == ["raw"]
+    # After send_action, get_observation consumes motion.last_present without another bus read
+    guarded.send_action({name: float(i) for i, name in enumerate(m.NAMES)})
+    assert guarded.get_observation()["shoulder_lift.pos"] == 1.0 and obs_calls == ["raw"]
+    assert guarded.motion.last_present is None
+
+
+def test_read_health_uses_retry_on_real_dynamixel_bus():
+    from types import SimpleNamespace
+
+    calls = []
+
+    class RealBus:
+        model_ctrl_table = {}
+
+        def sync_read(self, name, *, normalize=True, num_retry=0):
+            calls.append((name, normalize, num_retry))
+            return {joint: 40 for joint in m.MOTORS}
+
+    r = m.Runner(SimpleNamespace(bus=RealBus()), library(), fps=30, status=lambda _: None)
+    health = r.read_health()
+    assert health["temp_c"] == [40] * 6
+    assert calls == [
+        ("Present_PWM", False, 2),
+        ("Present_Current", False, 2),
+        ("Present_Temperature", False, 2),
+    ]
+
+
+def test_state_query_ahead_of_motion_command_does_not_delay_chunk_start_by_a_tick():
+    robot, status, clock = Robot(), [], [0.0]
+    batches = [["state", "run approach_pinky"], ["stop"]]
+    r = m.Runner(robot, library(), fps=30, status=status.append, clock=lambda: clock[0],
+                 sleep=lambda s: clock.__setitem__(0, clock[0] + 1 / 30))
+    r.run(lambda: batches.pop(0) if batches and not r.chunk else [])
+    assert by_command(status, "state")[0]["ok"] is True
+    assert by_command(status, "run approach_pinky")[0]["ok"] is True
+    # Only the 10 chunk frames + settle ticks, without wasting an extra idle tick on the leading `state`
+    assert robot.sent[0]["shoulder_pan.pos"] == 0.0 and robot.sent[1]["shoulder_pan.pos"] == 2.0
+
+
+def test_splice_command_transitions_active_chunk_in_flight_without_stopping():
+    robot, status, clock = Robot(), [], [0.0]
+    lib = library()
+    lib["chunks"]["approach_pinky"] = [[k * 0.15, -60.0, 50.0, 45.0, 10.0, 46.6] for k in range(1, 31)]
+    lib["chunks"]["follow_up"] = [[1.5 + k * 0.15, -60.0 + k * 0.1, 50.0, 45.0, 10.0, 46.6] for k in range(1, 21)]
+    sent_splice = [False]
+
+    def lines():
+        if clock[0] == 0.0:
+            return ["run approach_pinky"]
+        if not sent_splice[0] and len(robot.sent) == 5:
+            sent_splice[0] = True
+            return ["splice follow_up rel"]
+        if sent_splice[0] and not r.chunk:
+            return ["stop"]
+        return []
+
+    r = m.Runner(robot, lib, fps=30, status=status.append, clock=lambda: clock[0],
+                 sleep=lambda s: clock.__setitem__(0, clock[0] + 1 / 30))
+    r.run(lines)
+    done = next(s for s in status if s["command"] == "run approach_pinky -> follow_up")
+    assert done["ok"] is True and done["settled"] is True
+    assert done["state"][1] == pytest.approx(-58.0, abs=0.5)
+
+
+def test_retime_keeps_acceleration_within_amax_and_park_folds_through_transit_without_stopping():
+    from omx_adapter.motion_profile import retime
+
+    origin = [0.0, -20.0, 30.0, 45.0, 0.0, 46.6]
+    raw = [[0.0, -20.0 + k * 0.4, 30.0, 45.0, 0.0, 46.6] for k in range(1, 21)]
+    retimed = [origin] + retime(raw, 30, vmax=3.0, amax=m.GUARD_ACCEL_UNITS_S2, start=origin)
+    vel = [(b[1] - a[1]) * 30 for a, b in zip(retimed, retimed[1:])]
+    acc = [abs(b - a) * 30 for a, b in zip(vel, vel[1:])]
+    assert max(acc) <= m.GUARD_ACCEL_UNITS_S2 + 0.05  # true half-cosine ramp duration, not pi/2 * amax
+
+    start = [-2.1, 1.4, 15.8, 39.8, 86.2, 46.6]
+    home = [0.8, -62.2, 53.1, 51.6, 86.2, 46.6]
+    park = [start] + m.park_path(start, home, 46.6, 30)
+    lift_v = [-(b[1] - a[1]) * 30 for a, b in zip(park, park[1:])]
+    # Does not come to a dead stop at TRANSIT (-27.0) and finishes well under 28 s (<= 840 frames at 30 Hz)
+    mid_v = [v for p, v in zip(park[1:], lift_v) if -30.0 <= p[1] <= -24.0]
+    assert min(mid_v) > 0.5 and len(park) < 840
+
+

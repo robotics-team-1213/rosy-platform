@@ -138,6 +138,10 @@ class PathRecorder:
     def knows(self, robot_id: str) -> bool:
         return robot_id in set(self._roster())
 
+    def robot_ids(self) -> list[str]:
+        """The roster this recorder writes points for (one track per robot)."""
+        return sorted(set(self._roster()))
+
     async def run(self) -> None:
         while True:
             try:

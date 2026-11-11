@@ -51,3 +51,36 @@ def test_only_finished_tasks_make_a_round_pass():
     assert policy.outcome(dict(whole=[dict(completed=True), dict(completed=True)])) == dict(status="passed")
     for whole in ([dict(completed=True), dict(completed=False)], []):
         assert policy.outcome(dict(whole=whole))["status"] == "failed"
+
+def test_pipeline_stages_connect_mujoco_gazebo_and_isaac_roles():
+    layout = sites.Layout(container_colours="multi")
+    eval_rows = [
+        dict(
+            task="stack",
+            step="s1",
+            container="bar-1",
+            arm="arm_b",
+            source="belt",
+            target="stand_t1_r1",
+            result="pass",
+            lifted=True,
+            belt_skew=dict(dx_mm=6.0, dy_mm=5.0, dyaw_deg=8.0),
+            vision_pick=dict(colour="orange", seen_xy=[0.166, 0.169], seen_yaw_deg=-82.0, xy_err_mm=1.2, yaw_err_deg=1.1),
+            xy_mm=0.4,
+            yaw_deg=0.0,
+        )
+    ]
+    score = policy.summarise(eval_rows, [dict(task="stack", seed=1, total=1, passed=1, completed=True)])
+    gazebo_report = dict(failures=[], shape=[240, 320], camera_hz=5.0, stop=dict(accepted=True, cancel_acknowledged=True, travel_before_rad=0.05, travel_after_rad=0.001))
+    isaac_report = dict(sha="b" * 40, rows=[dict(id="mujoco-handoff-s1-bar-1", expect="completed", run_id="isaac-01", status="SUCCEEDED", result="completed", matches=True, judgement=dict(result="completed"))])
+    stages = policy.pipeline_stages(score, layout, eval_rows, pick_vision=True, belt_skew=True, gazebo_report=gazebo_report, isaac_report=isaac_report)
+    assert list(stages)[:2] == ["mujoco", "isaac"]
+    assert stages["mujoco"]["status"] == "passed" and stages["mujoco"]["stage_order"] == 1
+    assert stages["mujoco"]["role"] == "stage1_geometry_vision_and_act_policy"
+    assert stages["mujoco"]["pick_vision"] is True and stages["mujoco"]["belt_skew"] is True
+    assert stages["isaac"]["status"] == "passed" and stages["isaac"]["stage_order"] == 2
+    assert stages["isaac"]["role"] == "stage2_physx_contact_pad_slip_and_seating"
+    assert len(stages["isaac"]["handoff"]["stage_2_isaac"]["single_arm_cases"]) == 1
+    assert stages["isaac"]["handoff"]["stage_1_mujoco"]["colours_seen"] == ["orange"]
+    assert stages["gazebo"]["status"] == "passed" and stages["gazebo"]["stage_order"] is None
+    assert stages["gazebo"]["track"] == "ros2_execution_contract" and stages["gazebo"]["role"] == "ros2_interface_conformance"

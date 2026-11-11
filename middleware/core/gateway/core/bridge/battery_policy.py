@@ -38,14 +38,33 @@ from __future__ import annotations
 import contextlib
 import math
 
+from core_features.command.arbitration import Mode
 from core_features.power.battery import BatteryLevel
+
+
+#: A reading above this is a broken sensor, not a charged pack: a stuck ADC must not end a stop.
+#: shortcut: fixed for the 2S pack (8.4 V full, 8.78 V read on the charger), so another pack just keeps
+#: the administrator release; derive it from the battery curve when one ships.
+MAX_PLAUSIBLE_PACK_V = 9.5
+
+
+def _release_recovered_stop(services) -> None:
+    """D-502: end a stop only the battery holds. The robot stays IDLE until a new command."""
+    safety = services.safety
+    if not safety.release_recovered_battery_stop():
+        return
+    services.modes.release_emergency()
+    services.state.set_estop(False)
+    if safety.estop:  # a person's stop arrived between those lines; put EMERGENCY back over it
+        services.state.set_estop(True, safety.estop_source)
+        services.modes.transition(Mode.EMERGENCY)
 
 
 def apply_voltage(services, voltage: float) -> None:
     """Run one battery reading through the policy chain.
 
     `services` is the `CoreServices` container; only `battery`, `state`,
-    `power`, `safety` and `nav` are touched, plus `docking`.
+    `power`, `safety`, `modes` and `nav` are touched, plus `docking`.
     """
     if not math.isfinite(voltage):
         return
@@ -60,13 +79,17 @@ def apply_voltage(services, voltage: float) -> None:
     # D-502: the battery return comes back only when the debounced level is OK
     # (exit hysteresis and samples) and this reading is above warning: the level
     # lags the first readings after a fall, which must not re-enable it.
-    if (battery.level is BatteryLevel.OK
-            and percent > services.safety.battery_policy.warning_percent):
+    recovered = (battery.level is BatteryLevel.OK
+                 and percent > services.safety.battery_policy.warning_percent)
+    if recovered:
         services.safety.battery_return_suppressed = False
 
     services.state.set_battery(percent, voltage)
     services.state.set_battery_status(battery.status())
     services.power.on_battery_alert(battery.level.value)
+
+    if recovered and voltage <= MAX_PLAUSIBLE_PACK_V:
+        _release_recovered_stop(services)
 
     if battery.level is BatteryLevel.DEEP:
         services.safety.trigger_estop("battery_deep")

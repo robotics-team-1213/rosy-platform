@@ -102,6 +102,8 @@ def test_approve_confirm_read_revoke_and_discard_old_source_response(console_url
                                                         'buffer': json.dumps(bundle).encode()})
         page.locator('#measured-p95').fill('0.01')
         page.locator('#measured-max').fill('0.02')
+        # The bundle is parsed asynchronously after the file change; approve stays disabled until it is accepted.
+        expect(page.locator('#measured-approve')).to_be_enabled()
         page.locator('#measured-approve').click()
         page.wait_for_function("document.querySelector('#measured-state').textContent.includes('저장')")
         assert page.locator('#measured-confirm').is_disabled()

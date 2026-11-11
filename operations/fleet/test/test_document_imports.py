@@ -92,9 +92,12 @@ OWN = {
         "localization-badge.js",
         "power-health-view.js",
         "charge-bays-view.js",  # D-941: read-only charge bay plan
+        "person-request.js",  # D-721 Amendment: 사람 부탁 queue row
+        "station-recovery.js",  # D-721 Amendment: station recovery request row
         "platoon-view.js",  # D-941: read-only loop gaps
         "state-age.js",
         "motion-source.js",  # why a robot moves, from proving facts only
+        "planning-stall.js",  # a plan that never ends: Nav2 did not answer
     },
     "install.js": {
         "device-profiles.js", "device-care.js",  # Metadata and care editing stay in Installation.
@@ -129,6 +132,8 @@ OWN = {
         "site-map-teach.js",
         "site-map-survey.js",
         "site-map-camera.js",
+        "site-map-reality.js",  # map vs D-594 drive: report and one draft correction
+        "site-map-bands.js",  # D-766 split: the four crosswalk waiting-band buttons
         "site-map-sources.js",  # Map profile selection and read-only camera-plane presentation.
         "site-map-edit.js",  # D-655: pure draft edits belong to the map editor document
         "subnav-screens.js",  # D-926 3: sub-nav moves between screens

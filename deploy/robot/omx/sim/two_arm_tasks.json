@@ -90,6 +90,86 @@
     }
    ]
   },
+  "cell-stack": {
+   "supply": [],
+   "start": {
+    "bar-1": "tmp-a-2-l1",
+    "bar-2": "tmp-a-1-l1",
+    "bar-3": "tmp-b-2-l1",
+    "bar-4": "tmp-a-2",
+    "bar-5": "tmp-a-1",
+    "bar-6": "tmp-b-2",
+    "bar-7": "ship-stern-l0",
+    "bar-8": "tmp-a-3",
+    "bar-9": "tmp-b-3"
+   },
+   "_note": "Stack the nine containers already on the cell's temporary plates and stern bay into hold 1 tier by tier: 1단 (l0: c1..c3), 2단 (l1: c4..c6 from tmp-a-1, tmp-a-2, tmp-b-2), 3단 (l2: c7..c9).",
+   "steps": [
+    {
+     "id": "c1",
+     "container": "bar-1",
+     "from": "tmp-a-2-l1",
+     "to": "ship-h1r1-l0",
+     "arm": "arm_a"
+    },
+    {
+     "id": "c2",
+     "container": "bar-2",
+     "from": "tmp-a-1-l1",
+     "to": "ship-h1r0-l0",
+     "arm": "arm_a"
+    },
+    {
+     "id": "c3",
+     "container": "bar-3",
+     "from": "tmp-b-2-l1",
+     "to": "ship-h1r2-l0",
+     "arm": "arm_b"
+    },
+    {
+     "id": "c4",
+     "container": "bar-4",
+     "from": "tmp-a-2",
+     "to": "ship-h1r1-l1",
+     "arm": "arm_a"
+    },
+    {
+     "id": "c5",
+     "container": "bar-5",
+     "from": "tmp-a-1",
+     "to": "ship-h1r0-l1",
+     "arm": "arm_a"
+    },
+    {
+     "id": "c6",
+     "container": "bar-6",
+     "from": "tmp-b-2",
+     "to": "ship-h1r2-l1",
+     "arm": "arm_b"
+    },
+    {
+     "id": "c7",
+     "container": "bar-7",
+     "from": "ship-stern-l0",
+     "to": "ship-h1r1-l2",
+     "arm": "arm_b"
+    },
+    {
+     "id": "c8",
+     "container": "bar-8",
+     "from": "tmp-a-3",
+     "to": "ship-h1r0-l2",
+     "arm": "arm_a"
+    },
+    {
+     "id": "c9",
+     "container": "bar-9",
+     "from": "tmp-b-3",
+     "to": "ship-h1r2-l2",
+     "arm": "arm_b"
+    }
+   ]
+  },
   "rehandle": {
    "supply": [],
    "start": {
@@ -217,21 +297,21 @@
      "id": "m1",
      "container": "bar-5",
      "from": "ship-h1r0-l1",
-     "to": "tmp-b-2",
+     "to": "tmp-b-1",
      "arm": "arm_b"
     },
     {
      "id": "m2",
      "container": "bar-2",
      "from": "ship-h1r0-l0",
-     "to": "tmp-b-3",
+     "to": "tmp-b-2",
      "arm": "arm_b",
      "outbound": true
     },
     {
      "id": "m3",
      "container": "bar-5",
-     "from": "tmp-b-2",
+     "from": "tmp-b-1",
      "to": "ship-h1r0-l0",
      "arm": "arm_b"
     },
@@ -246,7 +326,7 @@
      "id": "m5",
      "container": "bar-9",
      "from": "ship-h1r2-l2",
-     "to": "tmp-b-3",
+     "to": "tmp-b-2",
      "arm": "arm_b"
     },
     {
@@ -274,7 +354,7 @@
     {
      "id": "m9",
      "container": "bar-9",
-     "from": "tmp-b-3",
+     "from": "tmp-b-2",
      "to": "ship-h1r2-l1",
      "arm": "arm_b"
     }

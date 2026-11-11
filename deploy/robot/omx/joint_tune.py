@@ -57,7 +57,7 @@ WRITES = {"torque": (64, 1), "goal_current": (102, 2), "profile_acc": (108, 4), 
           "goal_pos": (116, 4), "pwm_limit": (36, 2), "current_limit": (38, 2), "p_gain": (84, 2),
           "i_gain": (82, 2)}
 READS = {"model": (0, 2), "mode": (11, 1), "drive_mode": (10, 1), "hw_error": (70, 1), "moving": (122, 1),
-         "present_load": (126, 2), "present_pos": (132, 4),
+         "present_load": (126, 2), "present_pos": (132, 4), "d_gain": (80, 2),
          **WRITES}
 #: commissioning resting caps; every run starts from and ends at these (D-770)
 BASELINE = {"pwm_limit": 20, "current_limit": 50}

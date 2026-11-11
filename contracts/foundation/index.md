@@ -38,8 +38,8 @@
 
 ## 최근 기록
 
+- 2026-11-09 · e94b732208 · D-922 추가 결정 — Pinky 상황 표정 8종
+- 2026-11-09 · 3d550f49ce · D-922 구현 검증 및 기록 항목 정정
+- 2026-11-09 · 79ebad2111 · D-922 Pinky 표정·시선·후면 LED 구현
 - 2026-11-08 · uncommitted · test: 설치 시험의 core_common 버전 기대값을 0.0.3으로
 - 2026-11-08 · uncommitted · refactor(foundation): 기록의 비밀 필드 이름 판별 공용화
-- 2026-11-08 · uncommitted · D-998 foundation 배포 버전 정합성
-- 2026-11-08 · uncommitted · D-998 알림 전달 계약과 채널 adapter 추출
-- 2026-11-06 · uncommitted · feat(fleet): 관제 수동 모드 전환
