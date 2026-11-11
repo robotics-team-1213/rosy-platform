@@ -29,6 +29,7 @@ from fleet.hub.hub import HubError
 from fleet.server.console_view import CapabilityDisplay
 from fleet.server.monitoring_routes import cached_projection, install_monitoring_routes
 from fleet.server.http_errors import http_error
+from fleet.server.speed_limit_routes import install_speed_limit_routes
 from fleet.server.station_recovery_routes import install_station_recovery_routes
 from fleet.server.identity import IdentityError, IdentityService
 from fleet.stuck.board import LineStuckBoard
@@ -331,6 +332,8 @@ def install_console_routes(app, *, console, sightings, require_viewer,
         except (HubError, RobotApiError, OSError, httpx.HTTPError) as exc:
             raise http_error(exc) from exc
         return {"robot_id": robot_id, "actor_id": getattr(principal, "principal_id", None), "result": result}
+
+    install_speed_limit_routes(app, console=console, require_operator=require_operator, named_guard=named_guard)
 
     @app.get("/api/fleet/line-stuck", dependencies=read_guard, tags=["line-stuck"])
     async def line_stuck_pending() -> dict:

@@ -5446,8 +5446,24 @@
 - 결정: 신규 ADR 없음(권한·소유 변경 없음, 초안 저장 경로 재사용). API Reference v1.384.
 
 
+## 2026-11-10 · uncommitted · refactor: 관제 단위 id CELL-A → ARM-CELL 별칭 수용과 원장 마이그레이션 (D-1011)
+- 변경: `control_unit_config.py` `UNIT_IDENTIFIER_ALIASES`·`canonical_unit_id`, `unit()` 별칭 해석. `load_control_unit` peers key 별칭(이중 정의 거절 유지), 이웃 service principal 별칭. routes의 `peer_id`·stop `parent`·information `reader`/`scope` 정규화. `ControlUnitStops` ingress 정규화. `ControlUnitStore` identity 충돌 전 멱등 재작성 + 감사 행. 시험 기대값 `ARM-CELL`/`arm-cell`로, 신규 `test_control_unit_identifier_rename.py`.
+- 증거: 원격 시험 로그는 착지 시점의 실행 기록을 따른다(이 행 작성 시점 미실행).
+- gate 변화: 없음. 현장 전환·수용은 별도.
+
+## 2026-11-10 · uncommitted · fix: 관제 단위 개명의 접두사 확인·origin 정규화·감사 행 조건 (D-1011)
+- 변경: `control_unit_stop_routes.py` `parent`와 `control_unit_information_routes.py` `reader`가 principal_id를 자르기 전 `control-unit:` 접두사를 확인(정지·정보 경로 모두). stop snapshot/reconcile 경로의 origin 매개변수 `canonical_unit_id` 정규화. `control_unit_store.py` 마이그레이션이 재작성한 행이 있을 때만 감사 테이블·행 생성.
+- 증거: `test_integrated_control_http_pipeline.py` 위조 principal 403 시험, `test_control_unit_identifier_rename.py` origin 정규화·새 DB 무감사 시험. 원격 실행 기록은 착지 시점.
+- gate 변화: 없음.
+
 ## 2026-11-11 · uncommitted · docs(fleet): 지도-실제 대조 독립 검토 반영 - 판정 대상 우선순위·근거 결정 번호 정정
 - 변경: API Reference v1.384(절·경로 표)와 설계 문서의 판정 대상을 「활성 지도(없으면 초안)」에서 「초안(없으면 활성 지도)」로 바로잡았다(judged_map 구현과 일치). 허용 오차 0.15 m의 근거 결정 번호 D-455를 D-494(max_jump_m)로 정정(설계 §3·§8, map_reality.py docstring). site-map.js 붙은 import 줄 분리(동작 불변).
 - 이유: 독립 검토(2026-11-11) 발견 — 문서가 코드와 반대를 말했고 결정 번호가 틀렸다. 코드·보안·계약 등록은 지적 없음.
 - 근거: 독립 검토 보고(2532b95683..778ee4e8f4, 2026-11-11), py_compile·node --check 통과.
+- gate 변화: 없음.
+
+## 2026-11-11 · uncommitted · D-1016 등록 로봇 30일 비활동 «삭제 예정» 표시
+
+- 변경: `GET /api/fleet/enrollment/robots` 행에 `last_activity_at`·`days_idle`·`removal_pending`을 더했다(읽기 시점 계산, DB 상태·전이 불변). 마지막 활동은 마지막 수용 CORE 이벤트(`CoreEventStore.last_received_times`, `fleet/observe/events.py` 소유)와 등록 행 마지막 기록 가운데 늦은 쪽이며, 임계값은 사이트 설정 `fleet.enrollment.idle_removal_days`(기본 30, 1..3650, `console_site_config._enrollment_config`). 표시는 무엇도 해제하지 않는다 — 비활성은 토큰 만료, 해제는 이름 있는 운영자 unenroll 그대로(D-456). API Ref v1.386, ADR D-1016.
+- 증거: 원격 시험 exit 0 / NEW 0 — 763608decb에서 test_enrollment_service·test_core_event_store·test_enrollment_api·test_cli·test_module_structure(known_failures 0 new). 콘솔 표시 node 시험 enrollment.test.mjs 8 pass. D-766 분할(enrollment_inputs·enrollment_idle, 라칫 행 845→819)로 enrollment.py 819줄·cli.py 757줄 유지. 첫 두 차례 RED는 가짜 시계와 저장소 실시계 스탬프의 영역 충돌로, 미래 스탬프 무시 규칙으로 바로잡았다.
 - gate 변화: 없음.
