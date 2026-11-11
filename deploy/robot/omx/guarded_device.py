@@ -3,7 +3,7 @@
 
 Owns the joint/bus constants and the passive connect / torque-off / close / sample
 checks. `guarded_native` imports these back, so every existing importer
-(`bimanual_native`, `cell_envelope`, `chunk_runner`, tests) is unchanged.
+(`cell_envelope`, `chunk_runner`, tests) is unchanged.
 """
 from __future__ import annotations
 
