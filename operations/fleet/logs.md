@@ -5451,3 +5451,17 @@
 - 이유: 독립 검토(2026-11-11) 발견 — 문서가 코드와 반대를 말했고 결정 번호가 틀렸다. 코드·보안·계약 등록은 지적 없음.
 - 근거: 독립 검토 보고(2532b95683..778ee4e8f4, 2026-11-11), py_compile·node --check 통과.
 - gate 변화: 없음.
+
+
+## 2026-11-11 · uncommitted · feat(fleet): 카메라로 초안 만들기·카메라까지 겹친 대조 (v1.385)
+- 변경: Vision에 `draft-map` 제안 보기(정사 평면에서 차로·구역 후보, 지도 페인트 불필요; `rosy_vision/draft_map.py`, `ingest.py`·`ingest_proposals.py` 라우트). Fleet에 `POST /api/fleet/site-map/draft-from-camera`(후보→SiteMap 검증된 초안 본문, 쓰기 없음; `site_map_camera_source.py`)와 `POST /api/fleet/site-map/reality-check`(camera_lanes 삼각측량 `camera:{verdict,reason}`; `map_reality.compare` 확장). apply는 `drive_outlier`면 409로 나쁜 주행 기록에 지도를 끌어맞추지 않는다. 화면은 「카메라로 초안 만들기」 절(`site-map-camera-draft.js`)과 대조 패널의 「카메라까지 겹쳐 대조」. 계약 등록(기능 매트릭스·HTTP 영수증·문서 임포트·탭·PINNED_CONFIRMS) 포함.
+- 이유: 사용자 요청(2026-11-11) — 카메라 데이터가 첫 초안을 자동으로 만들고, 카메라가 틀어져도 지도를 계속 보정. 책임은 안 1(계산 Vision·판정 Fleet, 사용자 확정). 브라우저가 Fleet lease로 Vision 파생 JSON을 직접 가져오는 D-375 확립 패턴을 따름(서버→Vision 클라이언트 없음).
+- 근거: 원격 시험 test_draft_map_route.py(6건+이웃 68건), test_site_map_camera_draft.py(5건), test_map_reality.py+test_site_map_reality_api.py(27건), 문서·매트릭스 15건 전부 exit 0. 설계 docs/plans/2026-11-11-camera-draft-map-design.md.
+- gate 변화: 없음(SOURCE만, 장치·현장 수용 별도).
+
+
+## 2026-11-11 · uncommitted · test(fleet): 카메라 초안 패널 실제 Chromium 종단 시험 + 미리보기 503 처리
+- 변경: `test_site_map_camera_draft_browser.py`(opt-in) — 실제 앱+실제 preview lease 라우트(vision_lease_secret로 구성)에서 Vision draft-map 읽기만 same-origin 스텁: 접속만으로 카메라 목록 충전(C1 회귀), 프레임→Fleet 조립→운영자 PUT 초안→SVG 렌더까지 한 흐름, 카메라 삼각측량 camera_drift→agree 전환(C2 회귀). 카메라 패널은 `/api/fleet/vision/sources`가 503(미구성)이면 재시도하지 않고 '카메라 미리보기가 꺼져 있습니다' 안내(무한 503 루프 수정). 변이 증명 완료(목록 충전 비활성화 → RED → 복원 → GREEN).
+- 이유: 사용자 요청(2026-11-11) — 실제로 잘 동작하는지 보고 개선. 정적 시험이 못 잡는 UI 연결(C1·C2)은 실제 브라우저만 잡는다.
+- 근거: 원격 브라우저 시험 — 신규 2건+기존 site-map 스위트 103/103 exit 0, 변이 실행 RED/복원 GREEN 기록(camdraft20-22).
+- gate 변화: 없음.

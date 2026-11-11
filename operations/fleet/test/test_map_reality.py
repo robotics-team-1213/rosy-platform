@@ -137,3 +137,48 @@ def test_transform_map_moves_the_frame_and_keeps_the_geometry():
     assert moved["survey"]["revision"] == "s1"          # evidence rows stay bound to it
     assert moved["edges"][0]["evidence"]["reference_revision"] == "s1"
     SiteMap.model_validate(moved)                       # the caller's re-validation passes
+
+
+def _camera(y: float, *, x0: float = 0.0, x1: float = 12.0) -> list[list[float]]:
+    return _drive(x0, x1, y)
+
+
+def test_camera_agrees_with_the_drive_and_the_map():
+    report = compare(_map(), [_drive(0, 12, 0.0)], camera_lanes=[_camera(0.0)])
+    assert report["camera"] == {"verdict": "agree",
+                                "reason": "the map, the camera and the drive all agree"}
+
+
+def test_a_map_off_the_drive_with_the_camera_on_it_says_map_offset():
+    report = compare(_map(), [_drive(0, 12, 0.3)], camera_lanes=[_camera(0.3)])
+    assert report["fit"]["accepted"] is True            # the drive alone already says: move the map
+    assert report["camera"]["verdict"] == "map_offset"
+
+
+def test_a_camera_off_the_agreeing_map_and_drive_says_camera_drift():
+    report = compare(_map(), [_drive(0, 12, 0.0)], camera_lanes=[_camera(0.4)])
+    assert report["camera"]["verdict"] == "camera_drift"
+
+
+def test_a_drive_off_the_agreeing_map_and_camera_says_drive_outlier_and_offers_no_correction():
+    report = compare(_map(), [_drive(0, 12, 0.4)], camera_lanes=[_camera(0.0)])
+    assert report["camera"]["verdict"] == "drive_outlier"
+    # the drive-only fit may still accept; the apply route must refuse on this camera verdict
+
+
+def test_a_camera_within_tolerance_of_the_map_but_off_the_drive_is_not_camera_drift():
+    # map y=0, drive y=-0.1, camera y=+0.1: each pair within 0.15 except camera-drive (0.2) —
+    # the camera still agrees with the map, so blaming the camera would send a fine camera to recalibration
+    report = compare(_map(), [_drive(0, 12, -0.1)], camera_lanes=[_camera(0.1)])
+    assert report["camera"]["verdict"] == "unknown"
+
+
+def test_camera_candidates_without_a_drive_name_the_missing_evidence():
+    report = compare(_map(), [], camera_lanes=[_camera(0.0)])
+    assert report["verdict"] == "no_evidence"
+    assert report["camera"]["verdict"] == "no_evidence_drive"
+
+
+def test_no_camera_lanes_leave_the_report_camera_null():
+    report = compare(_map(), [_drive(0, 12, 0.0)])
+    assert report["camera"] is None          # the field is additive: null without camera evidence

@@ -8,7 +8,7 @@ Errors use ``{"detail": {"code", "detail"}}`` like ``/trip``. Nothing here talks
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Callable, Optional
+from typing import TYPE_CHECKING, Annotated, Callable, Optional
 
 import yaml
 from fastapi import Depends, HTTPException, Query, Request, Path
@@ -16,8 +16,12 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from fleet.map_reality import compare, transform_map
 from fleet.server.site_auth import SitePrincipal
+from fleet.server.site_map_camera_source import CameraDraftError, CameraDraftRequest, camera_draft
 from fleet.server.site_map_store import SiteMapError
 from fleet.site_map import MapProfileInfo, SiteMap, crosswalks_from_lane_graph
+
+#: camera candidate points arrive over the wire; Infinity/NaN must refuse, not crash the judge
+FiniteXY = tuple[Annotated[float, Field(allow_inf_nan=False)], Annotated[float, Field(allow_inf_nan=False)]]
 
 if TYPE_CHECKING:
     from fleet.server.path_history import PathRecorder
@@ -45,11 +49,23 @@ class ProfileRequest(DraftRequest, MapProfileInfo):
     name: str = Field(min_length=1, max_length=64, pattern=r"\S")
 
 
+class RealityCheckRequest(BaseModel):
+    """The read-only check with the camera as a second witness (Vision's draft-map lanes)."""
+
+    model_config = ConfigDict(extra="forbid")
+    last_s: float = Field(default=DEFAULT_WINDOW_S, gt=0, le=MAX_WINDOW_S)
+    robot_id: Optional[str] = Field(default=None, min_length=1, max_length=64)
+    camera_lanes: Optional[list[list[FiniteXY]]] = Field(
+        default=None, min_length=1, max_length=200)
+
+
 class RealityApplyRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     expected_revision: str = Field(min_length=1, max_length=64)
     last_s: float = Field(default=DEFAULT_WINDOW_S, gt=0, le=MAX_WINDOW_S)
     robot_id: Optional[str] = Field(default=None, min_length=1, max_length=64)
+    camera_lanes: Optional[list[list[FiniteXY]]] = Field(
+        default=None, min_length=1, max_length=200)
 
 
 def invalid_errors(exc: ValidationError) -> list[dict]:
@@ -121,10 +137,11 @@ def install_site_map_routes(app, *, site_maps, route_active, read_guard, require
                 tracks.append([[point["x"], point["y"]] for point in points])
         return tracks, robots, until - last_s, until
 
-    def judge(last_s: float, robot_id: Optional[str]) -> tuple[dict, dict]:
+    def judge(last_s: float, robot_id: Optional[str], camera_lanes: Optional[list] = None
+              ) -> tuple[dict, dict]:
         body, source, revision = judged_map()
         tracks, robots, since, until = evidence(last_s, robot_id)
-        report = compare(SiteMap.model_validate(body), tracks)
+        report = compare(SiteMap.model_validate(body), tracks, camera_lanes=camera_lanes)
         report["map"] = {"source": source, "revision": revision}
         report["evidence"] = {**report["evidence"], "robots": robots, "since": since, "until": until,
                               "limit": "newest 5000 points per robot"}
@@ -203,11 +220,42 @@ def install_site_map_routes(app, *, site_maps, route_active, read_guard, require
         except SiteMapError as exc:
             raise fail(exc) from exc
 
+    @app.post("/api/fleet/site-map/draft-from-camera", tags=["site-map"])
+    async def site_map_camera_draft(request: Request,
+                                    principal: SitePrincipal = Depends(require_named_operator)) -> dict:
+        """Vision's draft-map candidates as a save-ready draft body; nothing is written."""
+        try:
+            body = CameraDraftRequest.model_validate_json(await _bounded_body(request))
+        except ValidationError as exc:
+            raise HTTPException(status_code=422, detail={"code": "SITE_MAP_CAMERA_INVALID",
+                                                         "detail": {"errors": invalid_errors(exc)}}) from exc
+        try:
+            return camera_draft(body)
+        except CameraDraftError as exc:
+            raise HTTPException(status_code=422, detail={"code": "SITE_MAP_CAMERA_INVALID",
+                                                         "detail": {"message": str(exc)}}) from exc
+
     @app.get("/api/fleet/site-map/reality-check", dependencies=read_guard, tags=["site-map"])
     def site_map_reality_check(last_s: float = Query(DEFAULT_WINDOW_S, gt=0, le=MAX_WINDOW_S),
                                robot_id: Optional[str] = Query(None, min_length=1, max_length=64)) -> dict:
         """Does the map match where robots actually drove (D-594 path history)? Reads only."""
         report, _ = judge(last_s, robot_id)
+        return report
+
+    @app.post("/api/fleet/site-map/reality-check", dependencies=read_guard, tags=["site-map"])
+    async def site_map_reality_check_with_camera(request: Request) -> dict:
+        """The same check with the camera as a second witness (Vision's draft-map lanes).
+
+        The browser fetched the candidates from Vision with a Fleet-issued lease (the D-375
+        pattern) and posts them here; the report's ``camera`` verdict says whose word is the
+        odd one out among map·camera·drive. Reads only.
+        """
+        try:
+            body = RealityCheckRequest.model_validate_json(await _bounded_body(request))
+        except ValidationError as exc:
+            raise HTTPException(status_code=422, detail={"code": "SITE_MAP_INVALID",
+                                                         "detail": {"errors": invalid_errors(exc)}}) from exc
+        report, _ = judge(body.last_s, body.robot_id, body.camera_lanes)
         return report
 
     @app.post("/api/fleet/site-map/reality-check/apply", tags=["site-map"])
@@ -219,7 +267,12 @@ def install_site_map_routes(app, *, site_maps, route_active, read_guard, require
             raise site_map_error(409, "SITE_MAP_NO_DRAFT", "save the draft to correct first")
         if draft["revision"] != body.expected_revision:
             raise site_map_error(409, "SITE_MAP_DRAFT_CHANGED", "another operator changed the draft; reload first")
-        report, _ = judge(body.last_s, body.robot_id)
+        report, _ = judge(body.last_s, body.robot_id, body.camera_lanes)
+        camera = report.get("camera") or {}
+        if camera.get("verdict") == "drive_outlier":
+            raise site_map_error(409, "SITE_MAP_NO_CORRECTION",
+                                 f"{camera.get('reason')} (the camera agrees with the map; "
+                                 "check the drive recording instead of moving the map)")
         fit = report["fit"] or {}                      # None when the window had no drive at all
         if not fit.get("accepted"):
             raise site_map_error(409, "SITE_MAP_NO_CORRECTION",

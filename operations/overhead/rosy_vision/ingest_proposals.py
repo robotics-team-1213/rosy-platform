@@ -15,9 +15,11 @@ from dataclasses import dataclass
 from typing import Mapping
 
 import cv2
+import numpy as np
 from websockets.http11 import Headers, Response
 
-from rosy_vision import map_worker
+from rosy_vision import draft_map, map_worker
+from rosy_vision import rectify
 from rosy_vision.field_detect import DETECTOR_VERSION, FieldDetection, detect_field_jpeg
 from rosy_vision.map_register import REGISTER_VERSION, RegistrationResult
 
@@ -158,6 +160,65 @@ async def _map_proposal_response(self, source: str, frame: LatestFrame) -> Respo
         "X-Frame-Seq": str(frame.header.seq),
         "X-Frame-Age-Ms": str(round(age * 1000)),
         "X-Proposal-State": state,
+    })
+
+
+async def proposal_response(server, view: str, source: str, frame: LatestFrame) -> Response:
+    """Dispatch the operator-review proposals by view name (D-375 map fit, draft-map candidates)."""
+    if view == "map-proposal":
+        return await _map_proposal_response(server, source, frame)
+    return await _draft_map_response(server, source, frame)
+
+
+async def _draft_map_response(self, source: str, frame: LatestFrame) -> Response:
+    """The draft-map proposal: lane and zone candidates read from the map plane.
+
+    Needs only the source's approved tracking calibration record (the D-560 plane warp);
+    the D-375 site-map paint config is not consulted. The result is operator-review
+    material — it never touches sightings, ``CameraMap`` or a map document.
+    """
+    reported = self._plane_records.get(source)
+    if reported is not None:
+        record, map_id = reported
+        try:
+            plane = await asyncio.to_thread(
+                rectify.map_plane_jpeg, frame.jpeg, record, source_id=source, map_id=map_id,
+                lens=self.source_lens(source))
+        except (ValueError, cv2.error):
+            return _http_response(422, b"draft map warp failed\n",
+                                  extra={"X-Frame-State": "detection-error"})
+    else:
+        plane = None
+    if plane is None:
+        return _http_response(409, b"map plane unavailable\n",
+                              extra={"X-Frame-State": "plane-unavailable"})
+    try:
+        image = cv2.imdecode(np.frombuffer(plane.jpeg, np.uint8), cv2.IMREAD_COLOR)
+        result = await asyncio.to_thread(draft_map.detect_draft_map, image, plane.bounds_m,
+                                         plane.px_per_m, plane.valid_mask)
+    except (ValueError, cv2.error):
+        return _http_response(422, b"draft map detection failed\n",
+                              extra={"X-Frame-State": "detection-error"})
+    age = max(0.0, time.time() - frame.captured_at)
+    body = {
+        "source": source,
+        "frame_seq": frame.header.seq,
+        "frame_age_ms": round(age * 1000),
+        "map_frame": "map",
+        "plane": {"bounds_m": list(plane.bounds_m), "px_per_m": plane.px_per_m,
+                  "calibration_revision": plane.revision,
+                  "width": plane.size[0], "height": plane.size[1]},
+        "lanes": result["lanes"],
+        "zones": result["zones"],
+        "reason": result["reason"],
+        "detector": {"version": draft_map.DRAFT_MAP_VERSION},
+    }
+    return _http_response(200, (json.dumps(body, separators=(",", ":")) + "\n").encode(), extra={
+        "Content-Type": "application/json", "Cache-Control": "no-store",
+        "X-Frame-Seq": str(frame.header.seq),
+        "X-Frame-Age-Ms": str(round(age * 1000)),
+        "X-Frame-Calibration": str(plane.revision),
+        "X-Proposal-State": "current",
     })
 
 

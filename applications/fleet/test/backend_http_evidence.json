@@ -1834,6 +1834,22 @@
         "test_apply_moves_the_draft_onto_the_drive"
       ],
       "source_revision": "a2f1cd146c276af8a79515836ce129a565f7eb94"
+    },
+    "POST:/api/fleet/site-map/draft-from-camera": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_site_map_camera_draft.py",
+        "test_the_camera_draft_becomes_a_valid_map_body"
+      ],
+      "source_revision": "6a3a9c215ef402855837306d30a7b21a032bc222"
+    },
+    "POST:/api/fleet/site-map/reality-check": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_site_map_reality_api.py",
+        "test_a_post_with_camera_candidates_carries_the_camera_verdict"
+      ],
+      "source_revision": "6a3a9c215ef402855837306d30a7b21a032bc222"
     }
   }
 }
