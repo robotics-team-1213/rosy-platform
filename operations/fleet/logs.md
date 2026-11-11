@@ -5498,3 +5498,10 @@
 - 이유: 사용자 요청(2026-11-11) — 실제로 잘 동작하는지 보고 개선. 정적 시험이 못 잡는 UI 연결(C1·C2)은 실제 브라우저만 잡는다.
 - 근거: 원격 브라우저 시험 — 신규 2건+기존 site-map 스위트 103/103 exit 0, 변이 실행 RED/복원 GREEN 기록(camdraft20-22).
 - gate 변화: 없음.
+
+## 2026-11-11 · uncommitted · test(fleet): trail_twist 4-튜플 호출자 정리
+
+- 변경: `test/test_trail_anchor_e2e.py` — `trail_twist` 가 `(linear, angular, reason, off)` 를 돌려주는 계약에 맞춰 언팩을 고쳤다(`core_features` 쪽 D-559 복귀 변경). 이 파일이 유일한 외부 호출자다.
+- 증거: `python -m py_compile` 통과. 시험 실행은 커밋 SHA 로 원격에서 요청한다.
+- gate 변화: 없음.
+- CE: 해당 없음 — 계약 변경에 딸린 호출자 정리다.
