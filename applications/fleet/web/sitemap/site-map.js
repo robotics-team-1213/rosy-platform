@@ -17,6 +17,7 @@ import {createTeachPanel} from '/console/assets/site-map-teach.js';
 import {createSurveyPanel} from '/console/assets/site-map-survey.js';
 import {createCameraMapPanel} from '/console/assets/site-map-camera.js';
 import {createRealityPanel} from '/console/assets/site-map-reality.js';
+import {createCameraDraftPanel} from '/console/assets/site-map-camera-draft.js';
 import {installBandEditing} from '/console/assets/site-map-bands.js';
 import {createMapAuthoring} from '/console/assets/map-authoring.js';
 import {drawFacilities, svgElement as el} from '/console/assets/map-editor.js';
@@ -50,6 +51,10 @@ const reality = createRealityPanel({request, guarded, reason: () => operatorReas
   draft: () => state.draft, dirty: () => state.dirty, robots: () => state.robots,
   reload: async () => { await load(); $('map-source').value = 'draft'; clearPlan(); },
   notice, gate, status});
+const cameraDraft = createCameraDraftPanel({request, guarded, reason: () => operatorReason(),
+  draft: () => state.draft, dirty: () => state.dirty,
+  reload: async () => { await load(); $('map-source').value = 'draft'; clearPlan(); },
+  notice, gate, status, sync: syncButtons});
 const authoring = createMapAuthoring({request, svg: $('site-map-svg'), map: shown, draft: () => state.working,
   source: () => $('map-source').value, view: () => state.view, reason: operatorReason, dirty: () => state.dirty,
   begin: () => { survey.cancel(); clearPlane(); $('trip-pick').checked = false; state.band = null; },
@@ -220,6 +225,7 @@ function select(selection) {
 function syncButtons() {
   authoring.sync();
   cameraMap.sync();
+  cameraDraft.sync();
   reality.sync();
   survey.sync();
   const reason = operatorReason();

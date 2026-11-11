@@ -1123,7 +1123,7 @@ def test_a_store_written_before_the_uid_binding_is_reused_once_and_rebound(write
 
 # Release 005: the same reader reported serial 000000000207, then an empty
 # Get-Disk SerialNumber after a replug, while its USBSTOR instance ID kept it.
-USBSTOR = "USBSTOR\DISK&VEN_GENERIC&PROD_STORAGE_DEVICE&REV_0207\{}&GL&23:PERPROS"
+USBSTOR = r"USBSTOR\DISK&VEN_GENERIC&PROD_STORAGE_DEVICE&REV_0207\{}&GL&23:PERPROS"
 
 
 @pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
@@ -1138,7 +1138,7 @@ def test_an_empty_serial_falls_back_to_the_usb_instance_id(writer_case):
 
 
 @pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
-@pytest.mark.parametrize("unique_id", [USBSTOR.format("7") + "&0", "SCSI\DISK&VEN_X\FIXTURE-SD-0007&0", ""],
+@pytest.mark.parametrize("unique_id", [USBSTOR.format("7") + "&0", r"SCSI\DISK&VEN_X\FIXTURE-SD-0007&0", ""],
                          ids=["windows-generated", "not-usbstor", "absent"])
 def test_no_serial_is_invented_from_an_id_that_does_not_carry_one(writer_case, unique_id):
     _inventory(writer_case, _disk(Number=1, SerialNumber="", UniqueId=unique_id))
@@ -1151,7 +1151,7 @@ def test_no_serial_is_invented_from_an_id_that_does_not_carry_one(writer_case, u
 
 # Release 005: after a replug the same reader reported an empty Get-Disk
 # SerialNumber; its USBSTOR instance ID still carried 000000000207.
-READER_ID = "USBSTOR\DISK&VEN_GENERIC&PROD_STORAGE_DEVICE&REV_0207\FIXTURE-SD-0007&GL&23:PERPROS"
+READER_ID = r"USBSTOR\DISK&VEN_GENERIC&PROD_STORAGE_DEVICE&REV_0207\FIXTURE-SD-0007&GL&23:PERPROS"
 
 
 @pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required")
@@ -1169,8 +1169,8 @@ def test_an_empty_serial_falls_back_to_the_usb_instance_serial(writer_case):
 @pytest.mark.parametrize(
     "unique_id",
     [
-        "USBSTOR\DISK&VEN_GENERIC&PROD_STORAGE_DEVICE&REV_0207\7&2A3B4C5D&0:PERPROS",  # Windows-invented
-        "SCSI\DISK&VEN_NVME\FIXTURE-SD-0007&0",  # not a USB mass-storage ID
+        r"USBSTOR\DISK&VEN_GENERIC&PROD_STORAGE_DEVICE&REV_0207\7&2A3B4C5D&0:PERPROS",  # Windows-invented
+        r"SCSI\DISK&VEN_NVME\FIXTURE-SD-0007&0",  # not a USB mass-storage ID
         "",
     ],
     ids=["generated", "not-usbstor", "empty"],
