@@ -14822,3 +14822,8 @@ osy-d395-s1d\`.
 - 변경: 앞 항목의 첫 폴백 구현이 `test_os_rauc_tool.py` 6건을 깨뜨렸다(시도 3→2, 진단문에 URL 노출 — 핀 쿼리의 비밀 누출 계약 위반). `os_rauc_fakes.py`를 고쳤다: URL당 시도는 3회 그대로, 진단은 종래의 `attempt N: <관측>` 양식(URL 미포함), 폴백 후보는 `/ubuntu/` 핀에만 붙는다. `test_os_rauc_tool.py`에 폴백 복구를 고정하는 신규 시험 1건(아카이브 3회 실패 → kernel 미러 성공, 경고에 `attempt 3: URLError`)을 추가했다.
 - 증거: 호스트 직접 호출로 세 계약 확인(평범 핀 3회 재시도·복구 경고, 항상 실패 시 시도 1-3 진단·URL 무누출, 아카이브 3회 후 미러 복구). 원격 시험 결과는 다음 커밋에 기록한다.
 - gate 변화: 없음.
+
+## 2026-11-11 · 98e73632b6 · docs(test): RAUC 폴백 계약 수정 검증
+- 변경: 없음 — 앞 항목의 원격 시험 결과만 기록한다.
+- 증거: 원격 ai 호스트(커밋 98e73632b6)에서 `test_os_rauc_tool.py`·`test_os_rauc_service.py`·`test_prepare_os_release.py` 50 passed, 0 failed, exit 0. 아카이브가 그 시각에도 접속 불능이어서 픽스처가 kernel 미러 폴백으로 실제 패키지를 받았다(종단 검증). `test/known_failures.py` 비교 0 new.
+- gate 변화: 없음.
