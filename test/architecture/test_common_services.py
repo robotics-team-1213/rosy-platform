@@ -48,3 +48,28 @@ def test_catalog_links_and_decisions_resolve():
         assert (CATALOG.parent / target).exists(), target
     for decision in set(re.findall(r'D-\d+', text)):
         assert list((ROOT / 'docs/adr').glob(f'{decision}-*.md')), decision
+
+
+TARGET_MARK = '(목표, 미생성)'
+D997_FUNCTIONS = {'계정·권한', '등록·앱 목록', '설정', '알림', '감사', '백업·복원', '업데이트'}
+
+
+def test_d997_function_rows_pin_existing_sources():
+    rows = {row[0]: row for row in _rows('기능별 공통화 결정')}
+    assert set(rows) == D997_FUNCTIONS
+    for name, row in rows.items():
+        sources = row[2]
+        paths = _ticks(sources)
+        assert paths, f'{name} row names no source path'
+        for path in paths:
+            if f'`{path}`{TARGET_MARK}' in sources:
+                assert not (ROOT / path).exists(), f'{path} is marked {TARGET_MARK} but exists'
+            else:
+                assert (ROOT / path).exists(), f'{name} row pins missing path {path}'
+
+
+def test_notification_delivery_stays_pre_cutover():
+    sources = next(row[2] for row in _rows('기능별 공통화 결정') if row[0] == '알림')
+    # Fleet stays the sending owner until the D-997 cutover is verified.
+    assert '`operations/fleet/fleet/incidents/notifications.py`(현재 발송 owner: Fleet)' in sources
+    assert '`operations/notifications`(전달 서비스, 전환 전·미배포, D-998)' in sources
