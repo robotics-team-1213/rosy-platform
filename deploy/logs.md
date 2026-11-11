@@ -4855,3 +4855,9 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: `robttt@100.82.51.8` 실물 벤치마크 및 원격 pytest(`ai`·`rosy`) 통과.
 - gate 변화: 없음(가드 안전 한계 5°/10°/s·토크 OFF 불변).
 - CE: 기존 교훈 갱신 — `docs/solutions/runtime-errors/omx-real-arm-jitter-tick-quantization-and-chunk-stops-2026-11-10.md`.
+
+## 2026-11-11 · uncommitted · perf(omx): 손목/집게 비전 ROI 슬라이싱, 카메라 유닛 15FPS 정렬, 프로필 캐시 방어 복사 및 실물 데몬 경로 동기화
+- 변경: (1) `cell_fingers.py`(`_dark_pads`, `_white_pads`, `on_surface_blob`)와 `cell_pinch.py`(`measure`)에서 전체 프레임 색공간 변환(`BGR2GRAY`/`BGR2HSV`/`BGR2LAB`) 및 `cv2.dilate` 대신 하단 1/3 ROI 및 블롭 바운딩 박스(12px 마진) 선(先) 슬라이싱을 적용해 `finger_offset_mm` 소요 시간을 `4.15ms -> 3.27ms`로 단축했다. (2) `cell_envelope.assess(..., library_sha256=...)`가 `Gate._load_library`의 사전 계산 해시를 재사용하고, `cell_robot_profile.load()`가 `servo`·`binding` 방어적 복사본을 반환하도록 보강했다. (3) `rosy-omx-camera@.service` 기본 FPS를 `camera_source.py`와 동일한 `${ROSY_CAMERA_MAX_FPS:-15}`로 맞추고, `robttt@100.82.51.8`의 `omx-camera-readiness.env`(`ROSY_CAMERA_PIPELINE_ROOT`) 및 라이브 데몬(`8767` `HTTP/1.1` + `ETag` `304`, `0.30ms`)을 동기화·재시작했다.
+- 증거: `robttt@100.82.51.8` 라이브 포트 `8767` `FifoCell.frame` 실측(`24.45ms -> 0.30~0.37ms`) 및 원격 pytest 통과.
+- gate 변화: 없음.
+- CE: 기존 교훈 갱신 — `docs/solutions/runtime-errors/omx-real-arm-jitter-tick-quantization-and-chunk-stops-2026-11-10.md`.

@@ -187,4 +187,22 @@ def test_target_zone_deviation_triggers_failure_and_recovery_mode():
     assert v2["recovery_mode"] is None
     assert v2["place_slot"]["zone"]["within_zone"] is True
 
+    # Case 3: Top view shows container placed horizontally (가로, horizontal_ew) when vertical (세로, yaw=-90) is required
+    top_horiz = np.full((480, 640, 3), (180, 180, 180), dtype=np.uint8)
+    top_horiz[205:227, 372:418] = (30, 120, 240)
+    v3 = cell_area_xyz.verify_stack_outcome(
+        before_side=before_side,
+        after_side=after_placed,
+        after_top=top_horiz,
+        pick={"col": 1, "tier": 1},
+        place={"col": 2, "row": 1, "tier": 3, "yaw_deg": -90.0},
+    )
+    assert v3["verified"] is False
+    assert v3["recovery_mode"] == "re_orient_and_re_place"
+    assert v3["place_slot"]["top_zone"]["orientation_class"] == "horizontal_ew"
+
+    # Case 4: Safe 180-deg pick yaw normalization keeps wrist_roll away from cable limit
+    assert cell_area_xyz.normalize_pick_yaw_deg(45.0, x_m=0.088, y_m=-0.088) == -135.0
+
+
 

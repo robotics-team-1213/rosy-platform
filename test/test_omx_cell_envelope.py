@@ -468,3 +468,21 @@ def test_runtime_context_uses_batch_sync_read_on_real_dynamixel_bus(envelope):
     assert ctx["scope"] == "hardware" and len(ctx["sha256"]) == 64
     assert len(sync_calls) == 8
     assert ("Current_Limit", ("wrist_flex", "wrist_roll", "gripper"), False, 2) in sync_calls
+
+
+def test_profile_cache_returns_defensive_copies_and_assess_reuses_library_sha256(task, envelope):
+    from cell_robot_profile import load
+
+    config, calibration, library, state = task
+    first = load(config["operating_profile_path"])
+    first["servo"]["11"] = {"mutated": True}
+    first["binding"]["device_id"] = "mutated-device"
+    second = load(config["operating_profile_path"])
+    assert "11" not in second["servo"]
+    assert second["binding"]["device_id"] != "mutated-device"
+
+    custom_sha = "f" * 64
+    assessed = envelope.assess(config, calibration, library, state, now=100.01, library_sha256=custom_sha)
+    assert assessed["library_sha256"] == custom_sha
+    unit_text = (OMX / "rosy-omx-camera@.service").read_text(encoding="utf-8")
+    assert '${ROSY_CAMERA_MAX_FPS:-15}' in unit_text

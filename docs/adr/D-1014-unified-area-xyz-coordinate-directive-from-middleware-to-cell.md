@@ -44,10 +44,16 @@
      - `build_directive(arm_id, pick, place, ...)`: `rosy-cell`에 전달할 `rosy.omx-cell-area-xyz-directive.v1` 명령 페이로드를 생성한다.
    - **셀 실행 계층 (`deploy/robot/omx/cell_area_xyz.py`)**:
      - 미들웨어의 `AreaXYZDirective`를 수신해 팔별 자동 캘리브레이션 프로필(`cell_arm_cal.py`, `arm-cal-<arm_id>.json`)을 적용하고, `grasp_planner.plan_pick`으로 Pick(`pick.effective_xyz_m`) 및 Place(`place.effective_xyz_m`) 청크 라이브러리를 생성한다.
-     - 손목 카메라(`arm_b_wrist` / `arm_s_wrist`) 기반 실시간 `(x, y)` 중앙 보정(`wrist_servo`), `schema_version = 2` 파지 안정성 심의(`cell_grasp_debate.py`, 불안정 시 `reinsert_pick` 제자리 재투입 후 재시도), `FOLDED` 안전 경유(`park`), 정밀 적층 하강(`descend_place_guard_frac = 0.26`)을 수행하여 지정된 `(area, x, y, z)`에 1단·2단·3단 컨테이너를 적층한다.
-     - 실행 중 발생한 모든 이상·재투입·보정 사례는 `cell_problem_pipeline.py`(`problem-cases.jsonl`)에 자동 기록되어 시뮬레이션 회귀 검증으로 환류된다.
+     - 손목 카메라(`arm_b_wrist` / `arm_s_wrist`) 기반 실시간 `(x, y)` 중앙 보정(`wrist_servo`), `schema_version = 2` 파지 안정성 심의(`cell_grasp_debate.py`, 불안정 시 `reinsert_pick` 제자리 재투입 후 재시도), 정밀 적층 하강(`descend_place_guard_frac = 0.28`)을 수행하여 지정된 `(area, x, y, z)`에 1단·2단·3단 컨테이너를 적층한다. 이송(transfer) 중에는 중간 `park`를 거치지 않고 상승 높이(`above_pick -> above_place`)를 유지해 파지된 컨테이너가 흔들리거나 빠지지 않도록 한다.
+     - 평행 집게의 180° 대칭성을 이용한 `normalize_pick_yaw_deg(yaw_deg, x, y)`로 가로(`0°`)·대각선(`±45°`, `50°`) 컨테이너 피킹 시 `arm_b`의 케이블 한계(`wrist_roll >= 5.0`)를 침범하지 않는 등가 집게 각도를 자동 선택하고, 안착 지점에서는 목표 각도(`세로 = -90.0°`)로 회전 정렬한다.
+     - **결정론적 다중 뷰(Side + Top) 목표 구역·방향 검증 (`verify_stack_outcome`)**:
+       - Isaac-Sim 스타일로 사전 정의된 측면(`SIDE_ROI_BY_COL_TIER[(col, tier)]`) 및 상단(`TOP_ROI_BY_COL_ROW[(col, row)]`) 2D 목표 구역 ROI 안에서 컨테이너 색상 채움률(`fill_ratio`), 중심 오차(`du_px, dv_px`), 그리고 상단 `minAreaRect` 장축/단축 비율 기반 방향(`classify_container_orientation`: `vertical_ns` 세로 / `horizontal_ew` 가로 / `diagonal` 대각선)을 코드로 직접 판정한다.
+       - 목표 구역 채움률·중심 오차 또는 목표 방향(`expected_orientation`)을 벗어나면 `task_verified = False`로 판정하고 실패 원인에 따라 복구 모드(`"re_pick_and_re_place"`, `"re_align_place_zone"`, `"re_orient_and_re_place"`)를 결정한다.
+     - 실행 중 발생한 모든 이상·재투입·보정 사례는 `cell_problem_pipeline.py`(`problem-cases.jsonl`)에 자동 기록되어 시뮬레이션(`tools/sim/omx_tier_stack_recovery_sim.py`) 회귀 검증으로 환류된다.
 
 ### 검증
 
-- 호스트·원격 단위 시험: `test/test_omx_area_xyz.py` (`AreaXYZ` 좌표 해석, 슬롯↔명시적 `xyz` 통합, D-911 경계 검증, 미들웨어 지시 생성 및 `rosy-cell` 1·2·3단 실행 검증).
-- 실물 셀(`rosy-arm-cell`, `arm_b`) 검증: 미들웨어 `AreaXYZDirective`로 `pick(area="pallet", col=3, row=1, tier=2, x=0.1935, y=-0.0030, z=0.0398)` → `place(area="pallet", col=2, row=1, tier=3, x=0.1580, y=-0.0130, z=0.0674)` 지시 후 실물 3단 적층 실행 및 카메라·텔레메트리 확인.
+- 호스트·원격 단위 및 시뮬레이션 시험:
+  - `test/test_omx_area_xyz.py`: `AreaXYZ` 좌표 해석, 슬롯↔명시적 `xyz` 통합, D-911 경계 검증, `side`+`top` 목표 구역 및 컨테이너 방향(`세로/가로/대각선`) 판정, 180° 집게 회전 정규화 검증.
+  - `test/test_omx_tier_stack_problem_recovery.py` & `tools/sim/omx_tier_stack_recovery_sim.py`: 실물 실행에서 포착된 문제 상황(이송 중 `park` 낙하, HSV 오검출, 측면 3점 보정, 가로/대각선 오방향 감지 및 재정렬, hover 집게 완전 개방 게이트) 시뮬레이션 학습·회귀 검증 (`8 passed`).
+- 실물 셀(`rosy-arm-cell`, `arm_b`) 검증: 미들웨어 `AreaXYZDirective`로 1단·2단·3단 적층 실행 및 `side`+`top` 카메라 구역·방향 검증·텔레메트리 확인.
