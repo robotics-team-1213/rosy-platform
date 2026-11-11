@@ -14770,3 +14770,8 @@ osy-d395-s1d\`.
 - 변경: 없음 — 앞 항목의 원격 시험 결과만 기록한다.
 - 증거: 원격 ai 호스트(커밋 477da4687d)에서 `test/test_omx_session_caps_layers.py`·`test/architecture/test_module_structure.py` 58 passed, 0 failed, exit 0. `test/known_failures.py` 비교 0 new. `rosy_harness.py lint` 0 errors.
 - gate 변화: 없음.
+
+## 2026-11-11 · uncommitted · docs(solutions): OMX 프로파일 해시 시험의 mtime 캐시 충돌 교훈 기록
+- 변경: `docs/solutions/test-failures/same-path-rewrite-hits-cell-robot-profile-mtime-cache-2026-11-11.md` 신규 — 착지 관문이 브랜치 탓으로 분류했던 NEW 실패의 실제 원인(`cell_robot_profile.load`의 (경로, mtime, 크기) 캐시가 같은 길이의 즉시 재작성과 충돌)과 재발 방지를 남긴다.
+- 증거: 착지 로그 alone-pre-pre-28-2.txt 실패·main 통과, 수정 후 원격 58 passed(커밋 477da4687d 기록 항 참조).
+- gate 변화: 없음.

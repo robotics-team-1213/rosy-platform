@@ -354,8 +354,8 @@
 
 ## 최근 기록
 
+- 2026-11-11 · uncommitted · docs(solutions): OMX 프로파일 해시 시험의 mtime 캐시 충돌 교훈 기록
 - 2026-11-11 · 477da4687d · docs(test): 착지 관문 수정 검증
 - 2026-11-11 · uncommitted · fix(test): 착지 관문 두 건 — swarm 단위 small 표시 제거, OMX 프로파일 해시 시험 캐시 분리
 - 2026-11-11 · 86cb36c738 · docs(sim): 편대 SIM 계측 변경 검증
 - 2026-11-11 · uncommitted · fix(sim): 편대 SIM이 팔로워 자취 관점·리더 스트림 도약을 기록한다 (D-1002 run 8 미진단)
-- 2026-11-11 · uncommitted · docs(adr,solutions): D-1015 6항 실시간 프로토콜·비전·기구학 최적화 및 실물 데몬 경로 드리프트 CE 교훈 반영
