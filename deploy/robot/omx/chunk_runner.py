@@ -39,8 +39,6 @@ import uuid
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # guarded_native, motor_health, cell_params, episode_recorder
-import inspect as _inspect
-sys.modules["chunk_runner"] = _inspect.currentframe().f_globals  # updated to module object right after import
 _ADAPTER_SRC = str(Path(__file__).resolve().parents[3] / "middleware/devices/omx/adapter")
 if _ADAPTER_SRC not in sys.path:
     sys.path.insert(0, _ADAPTER_SRC)
@@ -107,7 +105,9 @@ PWM_STOP, PWM_STOP_S, STALL_GAP, STALL_MOVE = 285, 0.5, 4.0, 0.3
 MOTORS = [n.split(".")[0] for n in NAMES]
 
 
-from chunk_runner_run import Runner  # noqa: E402  (the class, split at the 600-line cap)
+import chunk_runner_run as _crr  # noqa: E402
+_crr._CR_GLOBALS = globals()
+Runner = _crr.Runner
 
 
 class Guarded:
