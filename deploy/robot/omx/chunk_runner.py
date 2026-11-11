@@ -39,6 +39,7 @@ import uuid
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # guarded_native, motor_health, cell_params, episode_recorder
+sys.modules.setdefault("chunk_runner", sys.modules[__name__])
 _ADAPTER_SRC = str(Path(__file__).resolve().parents[3] / "middleware/devices/omx/adapter")
 if _ADAPTER_SRC not in sys.path:
     sys.path.insert(0, _ADAPTER_SRC)
