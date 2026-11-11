@@ -115,8 +115,13 @@ def shadow_of(lab, bg, params=None):
 def to_mm(pixels, record: dict, camera: dict, top_z: float):
     """Pixels of points at height top_z (m) -> arm mm: parallax down/up to the map's z_view, then the map."""
     z_view = record.get("z_view", top_z)
-    pts = np.array([cal.parallax(p, top_z, z_view, camera) for p in pixels])
-    a = np.c_[pts, np.ones(len(pts))] @ np.asarray(record["homography"], float).T
+    pts = np.asarray(pixels, float)
+    if top_z != z_view and "center_px" in camera and "height_m" in camera:
+        c = np.asarray(camera["center_px"], float)
+        scale = (camera["height_m"] - top_z) / (camera["height_m"] - z_view)
+        pts = c + (pts - c) * scale
+    h = np.asarray(record["homography"], float)
+    a = pts @ h[:, :2].T + h[:, 2]
     return a[:, :2] / a[:, 2:] * 1000.0
 
 
@@ -404,17 +409,20 @@ def detect(img, roi, record: dict, camera: dict, catalog: list, surface_z: float
     for i in range(1, n):
         if stats[i, cv2.CC_STAT_AREA] < prm.get(params, "objects.min_px", MIN_PX):
             continue
-        blob = labels == i
-        pieces = [blob]
-        found = _measure_blob(np.column_stack(np.nonzero(blob))[:, ::-1] + [x0, y0], record, camera, catalog, surface_z, params, img)
+        bx, by, bw, bh = (int(stats[i, k]) for k in (cv2.CC_STAT_LEFT, cv2.CC_STAT_TOP, cv2.CC_STAT_WIDTH, cv2.CC_STAT_HEIGHT))
+        sub_ys, sub_xs = np.nonzero(labels[by:by + bh, bx:bx + bw] == i)
+        px = np.column_stack((sub_xs + (x0 + bx), sub_ys + (y0 + by)))
+        blob = None
+        found = _measure_blob(px, record, camera, catalog, surface_z, params, img)
         if not all(r["matched"] for r in found) and prm.get(params, "objects.split_touching"):
+            blob = labels == i
             parts = cell_split.split_touching(blob, prm.get(params, "objects.split_peak_frac"), prm.get(params, "objects.min_px", MIN_PX))
-            measured = [_measure_blob(np.column_stack(np.nonzero(q))[:, ::-1] + [x0, y0], record, camera, catalog, surface_z, params, img)
-                        for q in parts]
+            part_pxs = [np.column_stack(np.nonzero(q))[:, ::-1] + [x0, y0] for q in parts]
+            measured = [_measure_blob(q_px, record, camera, catalog, surface_z, params, img) for q_px in part_pxs]
             if parts and any(r["matched"] for res in measured for r in res):
-                pieces, found = parts, None
-                for q, res in zip(parts, measured):
-                    hull = outline(np.column_stack(np.nonzero(q))[:, ::-1] + [x0, y0], res, catalog, camera, surface_z)
+                found = None
+                for q_px, res in zip(part_pxs, measured):
+                    hull = outline(q_px, res, catalog, camera, surface_z)
                     out += [{**r, "split_from": "touching", "hull_px": hull.tolist()} for r in res]
         retry = prm.get(params, "objects.side_retry_v_frac")
         if found is not None and not all(r["matched"] for r in found) and object_hsv is not None and retry:
@@ -423,6 +431,8 @@ def detect(img, roi, record: dict, camera: dict, catalog: list, surface_z: float
             # measured again on its brighter part, and kept only when that matches
             if v_roi is None:
                 v_roi = cv2.cvtColor(img[y0:roi[3], x0:roi[2]], cv2.COLOR_BGR2HSV)[..., 2]
+            if blob is None:
+                blob = labels == i
             top = (blob & (v_roi >= retry * np.percentile(v_roi[blob], 90))).astype(np.uint8)
             top = cv2.morphologyEx(top, cv2.MORPH_OPEN, np.ones((int(prm.get(params, "objects.open_px")),) * 2, np.uint8))
             if top.sum() >= prm.get(params, "objects.min_px", MIN_PX):
@@ -430,7 +440,7 @@ def detect(img, roi, record: dict, camera: dict, catalog: list, surface_z: float
                 if all(r["matched"] for r in again):
                     found = [{**r, "top_retry": retry} for r in again]
         if found is not None:
-            hull = outline(np.column_stack(np.nonzero(pieces[0]))[:, ::-1] + [x0, y0], found, catalog, camera, surface_z)
+            hull = outline(px, found, catalog, camera, surface_z)
             out += [{**r, "hull_px": hull.tolist()} for r in found]
     return out
 
