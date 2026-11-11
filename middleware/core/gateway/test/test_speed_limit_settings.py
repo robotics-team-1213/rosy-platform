@@ -8,9 +8,9 @@ from types import SimpleNamespace
 import pytest
 
 from core_features.command import approval_trials as trials_module
-from core_features.safety_gate.limits import SpeedLimits
-from core_features.safety_gate.limits import BatteryPolicy
-from core_features.safety_gate.manager import SafetyManager
+from core_features.safety.limits import SpeedLimits
+from core_features.safety.limits import BatteryPolicy
+from core_features.safety.manager import SafetyManager
 from core_api_web.api.v1 import speed_settings
 from core_api_web.api.v1.speed_settings import SpeedSettingError, sealed_speeds, validate
 
