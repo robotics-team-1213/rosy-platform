@@ -73,6 +73,51 @@ def test_a_drive_on_the_draft_lanes_reports_a_match(tmp_path):
     assert body["fit"]["accepted"] is False
 
 
+def _camera_lane(y: float) -> list[list[float]]:
+    return [[[x, y] for x in [i * 0.5 for i in range(25)]]]
+
+
+def test_a_post_with_camera_candidates_carries_the_camera_verdict(tmp_path):
+    client = _client(tmp_path)
+    _save_draft(client)
+    _seed_drive(client)                                  # the map and the drive agree
+
+    response = client.post("/api/fleet/site-map/reality-check",
+                           json={"camera_lanes": _camera_lane(0.4)}, headers=OPERATOR)
+
+    assert response.status_code == 200, response.text
+    assert response.json()["camera"]["verdict"] == "camera_drift"
+
+
+def test_infinite_camera_coordinates_are_refused_not_crashed(tmp_path):
+    client = _client(tmp_path)
+    _save_draft(client)
+    _seed_drive(client)
+
+    response = client.post("/api/fleet/site-map/reality-check",
+                           content='{"camera_lanes": [[[Infinity, Infinity], [Infinity, 0.5]]]}',
+                           headers={**OPERATOR, "Content-Type": "application/json"})
+
+    assert response.status_code == 422, response.text
+    assert response.json()["detail"]["code"] == "SITE_MAP_INVALID"
+
+
+def test_apply_refuses_when_the_camera_and_map_agree_and_only_the_drive_sits_off(tmp_path):
+    client = _client(tmp_path)
+    revision = _save_draft(client)["revision"]
+    _seed_drive(client, y=0.4)                           # the drive alone says: move the map
+
+    response = client.post("/api/fleet/site-map/reality-check/apply",
+                           json={"expected_revision": revision, "camera_lanes": _camera_lane(0.0)},
+                           headers=OPERATOR)
+
+    assert response.status_code == 409, response.text
+    body = response.json()
+    assert body["detail"]["code"] == "SITE_MAP_NO_CORRECTION"
+    assert "camera" in body["detail"]["detail"]["message"]
+    assert client.get("/api/fleet/site-map/draft", headers=OPERATOR).json()["revision"] == revision
+
+
 def test_a_viewer_cannot_apply_a_correction(tmp_path):
     client = _client(tmp_path)
     revision = _save_draft(client)["revision"]
