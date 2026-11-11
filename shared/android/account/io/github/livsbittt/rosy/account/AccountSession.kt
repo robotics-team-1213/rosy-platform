@@ -109,7 +109,7 @@ class AccountSession(private val config: AccountConfig, private val store: Accou
         require(c.getString("jti").matches(Regex("[A-Za-z0-9._-]{16,128}")))
         require(c.getLong("iat") >= 0 && c.getLong("exp") > c.getLong("iat"))
         val grants = c.getJSONArray("grants"); require(grants.length() in 1..16)
-        val allowed = if (resource.startsWith("site:")) setOf("accounts.manage", "fleet.read", "fleet.operate", "fleet.policy", "camera.manage", "games.operate", "monitoring.read", "vault.read", "vault.operate", "vault.manage",
+        val allowed = if (resource.startsWith("site:")) setOf("accounts.manage", "fleet.read", "fleet.operate", "fleet.policy", "camera.manage", "games.operate", "calibration.operate", "monitoring.read", "vault.read", "vault.operate", "vault.manage",
                 "harbor.view", "harbor.operate", "harbor.field", "harbor.admin")
             else setOf("robot.read", "robot.operate", "robot.admin")
         for (i in 0 until grants.length()) {

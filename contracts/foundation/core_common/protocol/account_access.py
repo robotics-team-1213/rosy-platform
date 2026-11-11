@@ -9,7 +9,8 @@ from pydantic import BaseModel, ConfigDict, Field, StrictInt, model_validator
 
 CAPABILITIES = {
     'site': frozenset({'accounts.manage', 'fleet.read', 'fleet.operate', 'fleet.policy',
-                       'camera.manage', 'games.operate', 'monitoring.read', 'vault.read', 'vault.operate', 'vault.manage',
+                       'camera.manage', 'games.operate', 'calibration.operate', 'monitoring.read',
+                       'vault.read', 'vault.operate', 'vault.manage',
                        # D-955 7: Harbor maps these to its own viewer/operator/field/admin groups.
                        'harbor.view', 'harbor.operate', 'harbor.field', 'harbor.admin'}),
     'robot': frozenset({'robot.read', 'robot.operate', 'robot.admin'}),
