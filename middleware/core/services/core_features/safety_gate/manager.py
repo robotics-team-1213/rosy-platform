@@ -545,8 +545,9 @@ class SafetyManager:
                 or not finite_velocity(self.limits.max_linear, self.limits.max_angular)
                 or min(max_l, max_a, self.limits.max_linear, self.limits.max_angular) < 0):
             return 0.0, 0.0
-        max_l = min(max_l, self.limits.max_linear)
-        max_a = min(max_a, self.limits.max_angular)
+        approved_l, approved_a = self.limits.approved_caps()  # D-1005, every scope
+        max_l = min(max_l, self.limits.max_linear, approved_l)
+        max_a = min(max_a, self.limits.max_angular, approved_a)
         if self._session_linear is not None:
             # 낮추기만 한다. 활동이 프로필 상한을 넘겨 달릴 수는 없다.
             max_l = min(max_l, self._session_linear)

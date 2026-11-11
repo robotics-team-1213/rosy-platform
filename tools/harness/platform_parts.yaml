@@ -1018,6 +1018,13 @@ roots:
     wave: none
     concern: other
     capability: platform
+  - path: tools/ops
+    part: tools
+    d427_target: tools/ops
+    wave: none
+    note: Host-maintenance stage scripts run by people on the lab PCs (D-1011 arm-cell rename, dry-run first); never shipped.
+    concern: other
+    capability: platform
   - path: tools/remote
     part: tools
     d427_target: tools/remote

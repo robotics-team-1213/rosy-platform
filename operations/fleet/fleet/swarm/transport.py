@@ -352,6 +352,9 @@ class HttpRobotClient(StationTransport, NavigationTransport):
         """D-596 rev 2026-10-10: ``{state: pending|shown|refused|expired, reason}``; an older CORE answers 404."""
         return await self._get(f"/api/v1/host/lamp/identify/{request_id}")
 
+    async def speed_limits(self, body: dict) -> dict:  # D-1005: CORE's operator speed settings
+        return await self._mutate("/api/v1/safety/speed-limits", body, method="PUT")
+
     async def power(self, action: str) -> dict:  # D-440 6: CORE's own power API; it keeps the interlock
         return await self._post(*{"sleep": ("/api/v1/power/mode", {"mode": "STANDBY"}),
                                   "wake": ("/api/v1/power/wake",)}[action])

@@ -110,6 +110,8 @@ KNOWN_EXTERNAL_BEHAVIOR_TESTS = frozenset({
     "middleware/core/gateway/test/test_native_execution_binding.py",
     "middleware/core/gateway/test/test_safety_stop_contention.py",
     "middleware/core/gateway/test/test_safety_stop_receipts.py",
+    # D-1005 speed-limit settings wiring through the real safety gate (branch feat/speed-limit-config).
+    "middleware/core/gateway/test/test_speed_limit_settings.py",
     "middleware/core/gateway/test/test_operational_journey.py",
     "middleware/core/gateway/test/test_power.py",
     "middleware/core/gateway/test/test_slam_reset.py",
@@ -123,7 +125,8 @@ KNOWN_EXTERNAL_BEHAVIOR_TESTS = frozenset({
     "middleware/core/gateway/test/test_traffic_policy.py",
     "middleware/core/gateway/test/test_traffic_policy_bridge_contract.py",
     "middleware/core/gateway/test/test_vision_preview.py",
-    "test/test_footprint_profiles.py",
+    "test/test_app_ownership_contracts.py",  # D-1005 app-side ownership of the speed settings
+ "test/test_footprint_profiles.py",
     "test/test_nav2_behavior_trees.py",  # D-1009 behavior trees and the launch params that point at them
     "test/test_nav2_profile_limits.py",
     "test/test_robot_runtime.py",

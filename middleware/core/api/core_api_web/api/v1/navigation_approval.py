@@ -1,11 +1,17 @@
 """D-986: navigation re-approval over REST, the one path for tools, agents and the console card."""
+import logging
+
 from fastapi import APIRouter, Depends
 
 from core_api_web.api.deps import AuthContext, CoreServicesLike, Mode, TrialRefused, get_services
 from core_api_web.api.errors import ApiError
 from core_api_web.api.v1.common import apply_mode, operator, require_calibration_owner, robot_still, viewer
 from core_api_web.api.v1.control import TeleopRequest, apply_teleop
+from core_common.config import ConfigError, patch_local_config
 from core_common.protocol.schemas import NavigationApprovalSealRequest, NavigationApprovalTrialRequest
+from core_api_web.api.v1.speed_settings import apply, sealed_speeds
+
+logger = logging.getLogger(__name__)
 
 navigation_approval_router = APIRouter(prefix="/api/v1/navigation/approval", tags=["navigation"])
 
@@ -45,7 +51,25 @@ def _refused(exc: TrialRefused) -> ApiError:
     return ApiError(exc.code, 409, exc.detail)
 
 
+def _bind_sealed_speed(svc: CoreServicesLike, data: dict) -> None:
+    """D-1005: a valid approval's measured speed bounds all driving; only a valid reply moves it."""
+    sealed = sealed_speeds(data.get("approval"))
+    limits = svc.safety.limits
+    if sealed is None or sealed == (limits.approved_linear, limits.approved_angular):
+        return
+    values = {"approved_linear": sealed[0], "approved_angular": sealed[1]}
+    changes = apply(limits, values)
+    svc.config.setdefault("safety", {}).update(values)
+    try:
+        patch_local_config({"safety": values})
+    except (ConfigError, OSError):
+        logger.warning("sealed measured speed could not be saved; it binds until CORE restarts")
+    svc.events.publish("config.changed", severity="warning", source="api",
+                       data={"key": "safety.approved_speed", "changes": changes})
+
+
 def _view(svc: CoreServicesLike, data: dict) -> dict:
+    _bind_sealed_speed(svc, data)
     return {**data, "trial": svc.approval_trials.status()}
 
 
