@@ -127,6 +127,14 @@ class CoreEventStore:
             for row in rows
         ]
 
+    def last_received_times(self) -> dict[str, str]:
+        """Latest `received_at` per robot (D-1016 enrollment idle marking reads this)."""
+        with closing(self._connect()) as connection:
+            rows = connection.execute(
+                "SELECT robot_id, MAX(received_at) FROM core_event_audit GROUP BY robot_id"
+            ).fetchall()
+        return {row[0]: row[1] for row in rows}
+
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self.path, timeout=5.0)
         connection.row_factory = sqlite3.Row

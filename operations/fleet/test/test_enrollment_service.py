@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -177,6 +177,66 @@ def test_a_401_from_the_robot_means_a_new_code_is_needed(tmp_path):
     network.cores[PINNED].token = "revoked"
     run(console.snapshot())
     assert service.listing()["robots"][0]["state"] == "needs_new_code"
+
+
+# --- idle removal marking (D-1016) -------------------------------------------------
+
+
+def _iso(epoch: float) -> str:
+    return datetime.fromtimestamp(epoch, tz=timezone.utc).isoformat()
+
+
+def test_thirty_idle_days_mark_removal_pending(tmp_path):
+    clock = Clock()
+    events: dict[str, str] = {}
+    service, *_ = _ready(tmp_path, clock=clock, last_activity=lambda: events)
+    _enroll(service)
+    events["rosy_09"] = _iso(clock.now)
+    row = service.listing()["robots"][0]
+    assert row["removal_pending"] is False and row["days_idle"] == 0
+    clock.now += 31 * 86400  # the robot never events again; the register is not written either
+    row = service.listing()["robots"][0]
+    assert row["removal_pending"] is True and row["days_idle"] == 31
+
+
+def test_a_recent_core_event_beats_the_register_stamp(tmp_path):
+    clock = Clock()
+    events: dict[str, str] = {}
+    service, *_ = _ready(tmp_path, clock=clock, last_activity=lambda: events)
+    _enroll(service)
+    clock.now += 40 * 86400
+    events["rosy_09"] = _iso(clock.now - 5 * 86400)
+    row = service.listing()["robots"][0]
+    assert row["removal_pending"] is False and row["days_idle"] == 5
+
+
+def test_the_idle_threshold_follows_the_site_config(tmp_path):
+    clock = Clock()
+    events: dict[str, str] = {}
+    service, *_ = _ready(tmp_path, clock=clock, idle_removal_s=2 * 86400.0,
+                         last_activity=lambda: events)
+    _enroll(service)
+    events["rosy_09"] = _iso(clock.now)
+    clock.now += 3 * 86400
+    assert service.listing()["robots"][0]["removal_pending"] is True
+
+
+def test_enrollment_config_reads_idle_removal_days(tmp_path):
+    from types import SimpleNamespace
+
+    from fleet.console_site_config import _idle_days
+
+    def config(text):
+        path = tmp_path / f"site-{abs(hash(text))}.yaml"
+        path.write_text(text, encoding="utf-8")
+        return SimpleNamespace(site_config=path)
+
+    assert _idle_days(SimpleNamespace(site_config=None)) == 30 * 86400.0
+    assert _idle_days(config("fleet: {}\n")) == 30 * 86400.0
+    assert _idle_days(
+        config("fleet:\n  enrollment:\n    idle_removal_days: 7\n")) == 7 * 86400.0
+    with pytest.raises(SystemExit):
+        _idle_days(config("fleet:\n  enrollment:\n    idle_removal_days: 0\n"))
 
 
 # --- pinned address --------------------------------------------------------------

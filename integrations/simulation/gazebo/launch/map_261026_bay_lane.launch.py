@@ -15,6 +15,7 @@ from gz_multi_parts import observer_steering_law
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, LogInfo, OpaqueFunction
+from launch.conditions import IfCondition
 from launch.launch_description_sources import AnyLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
@@ -63,8 +64,30 @@ def generate_launch_description():
         DeclareLaunchArgument("spawn_yaw", default_value="1.5708"),
         DeclareLaunchArgument("camera_lane_mode", default_value="keep"),
         DeclareLaunchArgument("debug_overlay", default_value="false"),
+        # D-1013: the guide line as the virtual dock (dock/observation,
+        # CAMERA_LINE) for CORE's approach="line" phases.
+        DeclareLaunchArgument("bay_observer", default_value="true"),
         DeclareLaunchArgument("core_overlay", default_value=default_core_overlay),
         simulation,
+        Node(
+            package="control",
+            executable="bay_line_observer_node",
+            name="bay_line_observer_node",
+            output="screen",
+            condition=IfCondition(LaunchConfiguration("bay_observer")),
+            parameters=[{
+                "use_sim_time": True,
+                # Same declared Gazebo geometry as the line observer
+                # (cam_tilt_deg 25, 320x180), see map_v2_fleet_lane.
+                "camera_geometry_source": "GAZEBO",
+                "camera_height_m": 0.060194,
+                "camera_pitch_rad": math.radians(25.0),
+                "camera_hfov_rad": 1.1519,
+                "camera_x_offset_m": 0.028481,
+                # Stop face -> the line's corridor-side end (unmeasured site value).
+                "line_total_m": 0.65,
+            }],
+        ),
         OpaqueFunction(function=_line_observer, kwargs={"line_config": line_config}),
         # D-601 in SIM: CORE's front preview (vision/front/status) from the
         # Gazebo camera. Display JPEG only; no road/observation.

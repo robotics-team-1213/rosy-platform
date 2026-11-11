@@ -20,6 +20,18 @@ def test_store_is_idempotent_and_uses_monotonic_audit_cursors(tmp_path):
     assert next_page[0]["audit_id"] > page[0]["audit_id"]
 
 
+def test_last_received_times_is_the_latest_event_per_robot(tmp_path):
+    store = CoreEventStore(tmp_path / "fleet.sqlite3")
+    for robot, event_id in (("rosy_01", "a-1"), ("rosy_02", "b-1"), ("rosy_01", "a-2")):
+        store.append_event({"event_id": event_id, "seq": 1, "robot_id": robot,
+                            "type": "nav.completed", "data": {}})
+
+    latest = store.last_received_times()
+
+    assert sorted(latest) == ["rosy_01", "rosy_02"]
+    assert latest["rosy_01"] >= latest["rosy_02"]  # same second; rosy_01 wrote last
+
+
 def test_store_rejects_secret_bearing_or_oversized_event_data(tmp_path):
     store = CoreEventStore(tmp_path / "fleet.sqlite3")
     base = {"event_id": "evt-1", "seq": 1, "robot_id": "rosy_01",
