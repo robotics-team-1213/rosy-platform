@@ -19,14 +19,40 @@ import numpy as np
 import cell_params as prm
 
 
+_REF_IMG_CACHE: dict[str, tuple[int, int, np.ndarray]] = {}
+_ORB_CACHE: dict = {}
+
+
+def _get_orb():
+    import cv2
+
+    orb = _ORB_CACHE.get("orb")
+    if orb is None:
+        orb = cv2.ORB_create(3000)
+        _ORB_CACHE["orb"] = orb
+    return orb
+
+
+def _get_clahe():
+    import cv2
+
+    clahe = _ORB_CACHE.get("clahe")
+    if clahe is None:
+        clahe = cv2.createCLAHE(2.0, (8, 8))
+        _ORB_CACHE["clahe"] = clahe
+    return clahe
+
+
 def motion(ref, cur, polygon_px, params=None) -> dict:
     """{"ok", "M" (2x3 image affine, rotation + translation), "inliers", "turn_deg", "why"} for the region around
     polygon_px (grown by track.around_px), contrast-equalised so a darker or brighter frame still matches."""
     import cv2
 
+    clahe = _get_clahe()
+
     def grey(img):
         g = img if img.ndim == 2 else cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        return cv2.createCLAHE(2.0, (8, 8)).apply(g)
+        return clahe.apply(g)
 
     around = prm.get(params, "track.around_px")
     x, y, w, h = cv2.boundingRect(np.asarray(polygon_px, np.int32))
@@ -35,7 +61,7 @@ def motion(ref, cur, polygon_px, params=None) -> dict:
     search = np.zeros(cur.shape[:2], np.uint8)
     reach = around + prm.get(params, "track.reach_px")
     search[max(0, y - reach):y + h + reach, max(0, x - reach):x + w + reach] = 255
-    orb = cv2.ORB_create(3000)
+    orb = _get_orb()
     k1, d1 = orb.detectAndCompute(grey(ref), mask)
     k2, d2 = orb.detectAndCompute(grey(cur), search)
     if d1 is None or d2 is None:
@@ -78,7 +104,20 @@ def follow(config: dict, site: str, cur, pixel_fn, work_dir=None) -> tuple[dict,
     if not track:
         return config, {"site": site, "tracked": False}
     ref_path = Path(track["reference"]).expanduser()
-    ref = cv2.imread(str(ref_path if ref_path.is_absolute() or work_dir is None else Path(work_dir) / ref_path))
+    full_ref = ref_path if ref_path.is_absolute() or work_dir is None else Path(work_dir) / ref_path
+    ref = None
+    try:
+        st = full_ref.stat()
+        key = str(full_ref)
+        cached = _REF_IMG_CACHE.get(key)
+        if cached is not None and cached[0] == st.st_mtime_ns and cached[1] == st.st_size:
+            ref = cached[2]
+        else:
+            ref = cv2.imread(key)
+            if ref is not None:
+                _REF_IMG_CACHE[key] = (st.st_mtime_ns, st.st_size, ref)
+    except OSError:
+        ref = cv2.imread(str(full_ref))
     if ref is None:
         return config, {"site": site, "tracked": False, "why": f"no reference frame {track['reference']}"}
     m = motion(ref, cur, track["surface_px"], config.get("params"))
