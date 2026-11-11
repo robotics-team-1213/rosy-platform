@@ -345,6 +345,7 @@ def diagnose_and_recover_pick(
     cal: dict[str, Any],
     tried_xs: list[float],
     wrist_obs: dict[str, Any] | None = None,
+    slipped_in_transfer: bool = False,
 ) -> dict[str, Any]:
     """Diagnose why a pick attempt failed (empty grasp / high z / lateral edge touch / skewed grasp) and compute the
     recovered `AreaXYZ` pick coordinates and jaw opening for the next attempt."""
@@ -357,32 +358,41 @@ def diagnose_and_recover_pick(
     cur_x, cur_y, cur_z = p_xyz[0], p_xyz[1], p_xyz[2]
     tried_xs.append(cur_x)
 
-    # 1. If wrist observation found a clear offset, shift toward it
-    if wrist_obs and wrist_obs.get("found") and 1.5 < abs(float(wrist_obs.get("along_mm", 0.0))) <= 12.0:
+    tier = int(cur_directive["pick"].get("tier") or 2)
+    min_grasp_z = {1: 0.0065 if cur_x < 0.115 else 0.0055, 2: 0.0275, 3: 0.0560}.get(tier, 0.0055)
+    new_z = cur_z
+
+    # 0. If grasp_pick held the container and it slipped during lift/transfer, keep x centered and lower z by 3.5 mm
+    if slipped_in_transfer:
+        new_x = cur_x
+        new_z = round(max(min_grasp_z, cur_z - 0.0035), 5)
+        reason = f"shallow_tip_slip_recovery: kept x={new_x}, lowered pick.z {cur_z} -> {new_z} after transfer slip"
+    # 1. If wrist observation found a clear offset (and was not already applied), shift toward it
+    elif wrist_obs and wrist_obs.get("found") and 1.5 < abs(float(wrist_obs.get("along_mm", 0.0))) <= 12.0:
         sign_along = float((cal.get("finger_sign") or {}).get("along", -1.0))
         dx_m = 0.65 * sign_along * float(wrist_obs["along_mm"]) / 1000.0
-        new_x = round(max(0.115, min(0.206, cur_x + dx_m)), 5)
+        new_x = round(max(0.055, min(0.232, cur_x + dx_m)), 5)
         reason = f"wrist_offset_recovery: along_mm={wrist_obs['along_mm']} -> x={new_x}"
     elif len(tried_xs) >= 2:
         # Bracket midpoint between previous two tried x positions
         new_x = round(0.5 * (tried_xs[-1] + tried_xs[-2]), 5)
         reason = f"bracket_midpoint_recovery: midpoint({tried_xs[-2]}, {tried_xs[-1]}) -> x={new_x}"
     else:
-        # Single-step lateral bracket: if cur_x is near canonical_x, step to canonical_x, else bracket locally by -6 mm
+        # Single-step lateral bracket: if cur_x is near canonical_x, step to canonical_x, else bracket locally
         col = int(cur_directive["pick"].get("col") or 3)
         canonical_x = {1: 0.1280, 2: 0.1580, 3: 0.1988}.get(col, cur_x)
-        if 0.002 <= abs(cur_x - canonical_x) <= 0.012:
+        if cur_x < 0.115:
+            new_x = round(max(0.055, cur_x + 0.0025), 5)
+        elif 0.002 <= abs(cur_x - canonical_x) <= 0.012:
             new_x = round(canonical_x, 5)
         else:
             new_x = round(cur_x - 0.0060 if cur_x > 0.160 else cur_x + 0.0060, 5)
         reason = f"lateral_edge_recovery: x {cur_x} -> {new_x}"
 
     # 2. If jaws closed in thin air above the container (jaw_pos < held_nominal - 1.0 and low current), lower z into grasp band
-    new_z = cur_z
-    tier = int(cur_directive["pick"].get("tier") or 2)
-    min_grasp_z = {1: 0.0055, 2: 0.0275, 3: 0.0560}.get(tier, 0.0055)
-    if jaw_pos < held_nominal - 1.0 and abs(curr_ma) < 75.0 and cur_z > min_grasp_z:
-        new_z = round(max(min_grasp_z, cur_z - 0.0095), 5)
+    if not slipped_in_transfer and jaw_pos < held_nominal - 1.0 and abs(curr_ma) < 75.0 and cur_z > min_grasp_z:
+        step_z = 0.0035 if cur_x < 0.115 else 0.0095
+        new_z = round(max(min_grasp_z, cur_z - step_z), 5)
         reason += f"; lowered pick.z {cur_z} -> {new_z} (jaws closed at {jaw_pos:.2f} with {curr_ma:.0f}mA above grasp band)"
 
     cur_directive["pick"]["effective_xyz_m"] = [new_x, cur_y, new_z]
@@ -532,6 +542,7 @@ def execute_directive(
 
         # Pre-pick target zone alignment using Side View + Wrist View
         last_wrist_obs = None
+        vision_refined_xy = False
         if exec_cfg.get("vision_refine", False) and frame_fn is not None:
             col = int(cur_directive["pick"].get("col") or 3)
             p_xyz_cur = list(cur_directive["pick"]["effective_xyz_m"])
@@ -571,6 +582,7 @@ def execute_directive(
                     cur_directive["pick"]["effective_xyz_m"] = p_xyz
                     cur_directive["pick"]["x"] = p_xyz[0]
                     cur_directive["pick"]["y"] = p_xyz[1]
+                    vision_refined_xy = True
                     lib, plan, cal = plan_library_from_directive(cur_directive, base_plan, work_dir=work_dir, kinematics_root=kinematics_root)
                     lib_path.write_text(json.dumps(lib), encoding="utf-8")
                     _run_cmd(f"load {lib_path}")
@@ -589,7 +601,7 @@ def execute_directive(
                     r_grasp={},
                     cal=cal,
                     tried_xs=tried_xs,
-                    wrist_obs=last_wrist_obs,
+                    wrist_obs=None if vision_refined_xy else last_wrist_obs,
                 )
                 recovery_log.append(rec)
                 continue
@@ -635,7 +647,7 @@ def execute_directive(
                     r_grasp=r_grasp,
                     cal=cal,
                     tried_xs=tried_xs,
-                    wrist_obs=last_wrist_obs,
+                    wrist_obs=None if vision_refined_xy else last_wrist_obs,
                 )
                 recovery_log.append(rec)
                 continue
@@ -653,7 +665,7 @@ def execute_directive(
                     r_grasp=r_grasp,
                     cal=cal,
                     tried_xs=tried_xs,
-                    wrist_obs=last_wrist_obs,
+                    wrist_obs=None if vision_refined_xy else last_wrist_obs,
                 )
                 recovery_log.append(rec)
                 continue
@@ -715,10 +727,11 @@ def execute_directive(
                 attempt=attempt,
                 cur_directive=cur_directive,
                 r_desc=r_desc,
-                r_grasp={"state": [0, 0, 0, 0, 0, 49.0], "gripper_current_ma": 0.0},
+                r_grasp=r_grasp,
                 cal=cal,
                 tried_xs=tried_xs,
-                wrist_obs=last_wrist_obs,
+                wrist_obs=None,
+                slipped_in_transfer=True,
             )
             recovery_log.append(rec)
             continue
@@ -734,7 +747,18 @@ def execute_directive(
             place=cur_directive["place"],
         )
         if not verification["verified"] and attempt + 1 < max_attempts:
-            recovery_log.append({"attempt": attempt, "reason": verification["reason"]})
+            rec = diagnose_and_recover_pick(
+                attempt=attempt,
+                cur_directive=cur_directive,
+                r_desc=r_desc,
+                r_grasp=r_grasp,
+                cal=cal,
+                tried_xs=tried_xs,
+                wrist_obs=None,
+                slipped_in_transfer=True,
+            )
+            rec["verification_reason"] = verification["reason"]
+            recovery_log.append(rec)
             continue
 
         out_final = {
