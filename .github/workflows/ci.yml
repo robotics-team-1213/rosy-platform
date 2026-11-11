@@ -149,7 +149,7 @@ jobs:
           # name==version 줄만 뽑는다.
           grep -o '^[A-Za-z0-9._-]*==[^ ]*' deploy/robot/pinky_pro/image/device-python-requirements.txt > /tmp/rosy-runtime-constraints.txt
           pip3 install --no-cache-dir --break-system-packages -c /tmp/rosy-runtime-constraints.txt \
-            flake8 httpx pyyaml jsonschema ext4 playwright==1.64.1
+            flake8 httpx==0.28.1 pyyaml jsonschema ext4 playwright==1.64.1
           # playwright is pinned: 1.65.0 (released 2026-11-09) makes select_option and friends
           # enforce the inert attribute, which turned the ui-confirm live-dialog browser contract
           # tests red overnight with no commit involved. Upgrade deliberately, with those tests.
