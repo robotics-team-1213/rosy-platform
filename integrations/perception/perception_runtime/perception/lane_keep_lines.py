@@ -48,6 +48,14 @@ CARPET_ROW_EXCESS = 20
 MIN_CONTRAST = 40
 CONTRAST_HEADROOM = 0.35
 MAX_SATURATION = 80
+#: D-1013 magenta guide tape (261026 parking mat) for the pink paint source.
+#: OpenCV H is 0-180 and magenta sits at 140-170; saturation separates the
+#: tape from pale glare and from white lane paint (which stays under
+#: MAX_SATURATION and so can share a frame with it), value keeps shadow noise out.
+PINK_H_LOW = 140
+PINK_H_HIGH = 170
+PINK_MIN_SATURATION = 80
+PINK_MIN_VALUE = 60
 #: Walls: runs brighter than this (V channel, blue tape included) that start
 #: this many rows above the horizon; bases median-filtered over this many columns.
 WALL_START_ABOVE_HORIZON_PX = 4
@@ -317,6 +325,19 @@ def drop_small_components(mask: np.ndarray) -> np.ndarray:
     keep = np.zeros(count, bool)
     keep[1:] = stats[1:, cv2.CC_STAT_AREA] >= DENOISE_MIN_AREA_PX
     return keep[labels].astype(np.uint8)
+
+
+def floor_pink_mask(bgr: np.ndarray, horizon_row: float) -> np.ndarray:
+    """uint8 0/1 mask of the magenta guide tape below the horizon (D-1013 bay pit-in).
+
+    HSV gate, not brightness: a shadow only drops V and the grey carpet keeps S
+    low, so both stay out; white lane paint stays desaturated and stays out too,
+    so both paint kinds can share one frame."""
+    hsv = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV)
+    mask = cv2.inRange(hsv, (PINK_H_LOW, PINK_MIN_SATURATION, PINK_MIN_VALUE),
+                       (PINK_H_HIGH, 255, 255))
+    mask[:max(0, min(mask.shape[0], int(math.ceil(horizon_row)) + HORIZON_MARGIN_PX))] = 0
+    return drop_small_components(mask)
 
 
 def clean_learned_mask(mask: np.ndarray, horizon_row: float) -> np.ndarray:

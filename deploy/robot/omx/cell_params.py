@@ -78,6 +78,7 @@ DEFAULTS = {
     "grasp.min_stable_current_ma": (0.0, "mA", 0.0, 600.0),
     "grasp.vision_after_grasp": (0, "flag", 0, 1),
     "grasp.reach_on_reinsert": (0, "flag", 0, 1),
+    "wrist.parallax_px": (0.0, "px", -100.0, 100.0),
     "objects.split_touching": (1, "flag", 0, 1), "objects.split_peak_frac": (0.6, "ratio", 0.3, 0.9),
     "objects.split_max": (6, "count", 2, 9), "objects.split_gap_mm": (8.0, "mm", 0, 20), "objects.split_stagger_mm": (20.0, "mm", 0, 40),
     "pivot.over_target": (0, "flag", 0, 1), "pivot.over_top_mm": (30.0, "mm", 5, 120), "pivot.over_clear_mm": (30.0, "mm", 10, 100),
@@ -144,11 +145,25 @@ def validate(data: dict) -> dict:
     return values
 
 
+_DEFAULT_VALUES = {name: spec[0] for name, spec in DEFAULTS.items()}
+_DEFAULT_SHA = hashlib.sha256(json.dumps(_DEFAULT_VALUES, sort_keys=True).encode()).hexdigest()[:12]
+_LOAD_CACHE: dict[tuple[str, int, int], tuple[dict, str]] = {}
+
+
 def load(path=None) -> dict:
     """{"values": every parameter (the file's, else the default), "sha": digest of those effective values}."""
-    chosen = validate(json.loads(Path(path).read_text(encoding="utf-8-sig"))) if path else {}
-    values = {name: chosen.get(name, spec[0]) for name, spec in DEFAULTS.items()}
-    return {"values": values, "sha": digest(values)}
+    if not path:
+        return {"values": dict(_DEFAULT_VALUES), "sha": _DEFAULT_SHA}
+    p = Path(path)
+    st = p.stat()
+    key = (str(p.resolve()), st.st_mtime_ns, st.st_size)
+    cached = _LOAD_CACHE.get(key)
+    if cached is None:
+        chosen = validate(json.loads(p.read_text(encoding="utf-8-sig")))
+        values = {name: chosen.get(name, spec[0]) for name, spec in DEFAULTS.items()}
+        cached = (values, digest(values))
+        _LOAD_CACHE[key] = cached
+    return {"values": dict(cached[0]), "sha": cached[1]}
 
 
 if __name__ == "__main__":

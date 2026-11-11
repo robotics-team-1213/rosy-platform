@@ -78,8 +78,8 @@
 
 ## 최근 기록
 
+- 2026-11-11 · uncommitted · perf(omx): 손목/집게 비전 ROI 슬라이싱, 카메라 유닛 15FPS 정렬, 프로필 캐시 방어 복사 및 실물 데몬 경로 동기화
+- 2026-11-11 · uncommitted · perf(omx): D-1015 궤적·통신·인식·기구학 전 구간 병목 제거 및 실시간 연동 최적화
 - 2026-11-10 · uncommitted · fix(omx): 재삽입(unstable_grasp) 회복 시나리오 추가 — main MAIN-RED 복구
 - 2026-11-10 · uncommitted · refactor(omx): cell_auto_pick 600줄 한도 복귀 — 순수 집기 기하를 cell_pick_geom으로 분리
-- 2026-11-10 · uncommitted · fix(site): 원장 백업 정리 대상 확대, 백업본 압축, robots.yaml 소유 규칙 문서화
-- 2026-11-10 · uncommitted · fix(site): VACUUM temp를 대상 옆 디렉터리로 두어 fleet-backup 컨테이너에서 실물 크기에도 돌게 한다
-- 2026-11-09 · uncommitted · fix(site): 현장 PC 원하는 상태에 mDNS 검색 브리지 타이머를 넣는다
+- 2026-11-10 · uncommitted · feat(omx): 실물 팔 지터링 완화 및 청크 블렌딩 파이프라인 구축

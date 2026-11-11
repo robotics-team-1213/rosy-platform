@@ -1,0 +1,40 @@
+---
+title: Real OMX arm jitter from cleared servo profiles, tick-quantized slow steps, and unblended chunk stops
+date: 2026-11-10
+category: runtime-errors
+module: deploy/robot/omx (omx-ai-follower-tuning.json, guarded_native.py, chunk_runner.py, grasp_planner.py, cell_pipeline_io.py)
+problem_type: runtime_error
+component: development_workflow
+symptoms:
+  - "Visible shaking/jittering in real OMX camera videos while MuJoCo real2sim videos remain smooth"
+  - "57-90% sent_stall (integer tick quantization stalls) on shoulder_lift/wrist_flex and 41-47 direction reversals per transit in trace-arm_b-20261110-200027.jsonl"
+  - "5 Hz loop-period ripple (p95_dt 52-60 ms on a 30 Hz loop) and 2.5 s settle pauses / 25 s full-height folds on local hover adjustments"
+root_cause: wrong_assumption
+resolution_type: code_fix
+severity: high
+tags: [omx, jitter, chunk-runner, guarded-native, motion-profile, servo-tuning]
+applies_when: "streaming 30 Hz joint targets or multi-chunk pick-and-place trajectories on real OMX followers"
+---
+
+# Smooth hardware interpolation and blended chunk streaming on real OMX arms
+
+**What happened.** Real camera videos from the 2026-11-10 OMX tier-stack runs showed visible shaking and stop-and-go pauses across transits and vertical descents, whereas the MuJoCo `real2sim` runs were completely smooth.
+
+**Root causes measured in `trace-arm_b-20261110-200027.jsonl` and `session.jsonl`.**
+1. **Cleared servo profiles (`Profile_Acceleration = 0`, `Profile_Velocity = 0`) + integer tick quantization.** `guarded_native.connect_passive` keeps a session servo profile in `PROFILE_ACC = (5, 100)` / `PROFILE_VEL = (15, 200)` only when `record_session` writes both `"acc"` and `"vel"`. Because `omx-ai-follower-tuning.json` and the site `caps.json` omitted `"acc"` and `"vel"`, every motor ran with `profile_acc = 0` and `profile_vel = 0` (step goals). At slow joint speeds (`0.1-0.3` encoder ticks per 33 ms frame), `int(v)` truncation in `guarded_native.commit` produced `57.3%-89.3%` `sent_stall` on `shoulder_lift` and `71.9%-90.5%` on `wrist_flex`, snapping by 1 tick after 3-9 stalled ticks and ringing at high P-gain (`41-47` present-position reversals per transit).
+2. **5 Hz unicast PWM read stall in `guarded_native._check_effort`.** Reading `Present_PWM` with 5 separate `follower.read("Present_PWM", name)` packets every `0.2 s` added ~18 ms of serial latency every 6th tick (`p95_dt = 52-60 ms` on a 33.3 ms loop).
+3. **Trapezoid jerk step in `motion_profile.retime`.** While `flow()` used half-cosine (`eased`) acceleration, `retime()` (used by `grasp_planner.py` for `descend_*` and `lift_*`) still used `trapezoid()`, stepping acceleration from `0` to `amax` in one tick (`110 units/s^3` jerk).
+4. **Fragmented chunk execution and local-hover full-height folding.**
+   - `transit_path` only used direct `flow()` when `max(abs(a - b)) <= 8.0`; a 12-24 mm `cell_feel` / `cell_reach` shift changed `elbow_flex` by `9.6-13.5` units, causing a full fold to `TRANSIT` (`shoulder_lift = -27`) that took `25.3 s` per retry.
+   - At the end of a loaded chunk where static gravity droop was `2.05-2.20` units (`> SETTLE_TOL = 2.0`), `chunk_runner` waited the full `SETTLE_S = 2.5 s` timeout even after the body joints had come to rest, and `FifoCell.act` added `100 ms` polling sleeps per command.
+5. **Live daemon path drift and systemd environment overrides on `robttt@100.82.51.8`.**
+   - On `robttt`, `omx_session.sh` runs from `~/rosy-omx/current`, whereas `rosy-omx-camera-view.service`, `rosy-omx-arm-status.service`, `rosy-omx-observation-bridge.service`, and `rosy-omx-camera@*.service` run from `~/.local/share/rosy/omx-devices/current`. Furthermore, `~/.config/rosy/omx-camera-readiness.env` still pointed `ROSY_CAMERA_PIPELINE_ROOT` to an older test snapshot (`~/rosy-test/omx-tools-3f7e57a0fb/deploy/robot/omx`), keeping port `8767` on legacy `HTTP/1.0` (`Connection: close`, no `ETag`) until `omx-camera-readiness.env` was aligned to `~/.local/share/rosy/omx-devices/current/deploy/robot/omx` and the user services were restarted.
+   - `deploy/robot/omx/rosy-omx-camera@.service` passed `--max-fps "${ROSY_CAMERA_MAX_FPS:-10}"`, overriding `camera_source.py`'s `15.0` FPS default back to `10` whenever `ROSY_CAMERA_MAX_FPS` was unset in `.env`.
+   - Loose `.py` copies placed directly in the parent `~/rosy-omx/` directory can shadow `~/rosy-omx/current/` when scripts are launched from `~/rosy-omx/`.
+
+**Fix.**
+- `omx-ai-follower-tuning.json`: add `"acc": 8, "vel": 20` on body motors `11..15` so every session ramps smoothly between integer-tick goals in hardware.
+- `guarded_native.py` & `motor_health.py`: read `Hardware_Error_Status` (30 Hz) and `Present_PWM` / `Present_Temperature` / `Present_Input_Voltage` / `Torque_Enable` (5 Hz) via batch `sync_read` on `DynamixelMotorsBus`, cutting per-tick serial reads from 7 packets to 2 and 5 Hz health sample reads from 30+ unicast packets to 5 `sync_read` packets.
+- `motion_profile.py`, `chunk_library.py`, `grasp_planner.py`: upgrade `retime()` to half-cosine `eased_progress`, add `blend_chunks` / `chain_path` to overlap consecutive body chunks without dead stops, and raise `transit_path`'s local-hover direct-flow threshold from `8.0` to `16.0` units.
+- `chunk_runner.py`, `cell_pipeline_io.py`, `cell_transfer.py`, `cell_auto_pick.py`, `cell_envelope.py`, `grasp_planner.py`, `leader_actuator.py`, `two_arm_pipeline.py`, `omx_incident.py`: settle immediately when the body is still within the measured droop floor (`SETTLE_TOL + min(pace_floor, 0.8)`), reuse `NativeJointMotion.last_present` in `Guarded.get_observation` and `Runner.report` to eliminate duplicate per-tick `Present_Position` bus reads, batch-read startup/seed registers (`Operating_Mode`, `Hardware_Error_Status`, `Torque_Enable`, `PWM_Limit`, PID/Profile registers) via `sync_read` in `connect_passive`, `NativeJointMotion.prepare`, `NativeJointMotion._seed`, and `cell_envelope.runtime_context`, cache `grasp_planner.load_kinematics` and `cell_envelope._code_digest` by file `stat` metadata to eliminate repeated disk I/O during mid-carry hook replans, drain leading `state`/`episode` queries in `Runner.run` without consuming the motion tick slot, add `num_retry=2` to `Runner.read_health`, share the pre-command `"state"` query between `Gate.act` and `Guarded.act`, batch `Present_PWM` via `sync_read` in `LeaderActuator.check_effort` and `two_arm_pipeline.stage_align`, support `chain <step1> ; <step2> ...`, reduce FIFO status polling sleep from `0.1 s` to `0.005 s`, and guard `omx_incident.decide` against non-integer error strings in `torque_after` on USB disconnect.
+- `commissioning_view.py`, `cell_pipeline_io.py`, `workcell_observation_bridge.py`, `arm_status_bridge.py`, `rosy-omx-camera@.service`, `cell_wrist.py`, `cell_perception.py`, `cell_fingers.py`, `cell_pinch.py`, `cell_frame.py`, `cell_marks.py`, `cell_calibration.py`, `cell_params.py`, `cell_robot_profile.py`, `kinematics.py` (D-1015): upgrade `commissioning_view` and `cell_pipeline_io` to `HTTP/1.1` Keep-Alive with `ETag` / `304 Not Modified` frame caching (`24.45 ms -> 0.30-0.37 ms` on live port `8767`) and `/stream/<label>.mjpg` MJPEG streaming, align `rosy-omx-camera@.service` default `ROSY_CAMERA_MAX_FPS` to `15` FPS, raise live status telemetry from 2 Hz to 10 Hz (`100 ms`), pool HTTPS connections with `TCP_NODELAY` in `workcell_observation_bridge`, cache `Runner._library_digest()` (`1.59 ms -> 0.00014 ms`, 11,350x speedup) and `Gate._load_library()` / `assess(..., library_sha256=...)`, slice ROI/bounding boxes before color-space conversion and `cv2.dilate` in `cell_wrist` / `cell_perception` / `cell_fingers` / `cell_pinch`, cache `ArucoDetector` in `cell_frame` / `cell_marks`, replace 2D `np.cross` with scalar 2D determinant in `cell_calibration`, return defensive copies from `cell_robot_profile.load()`, and unroll $3 \times 3$ matrix products in `kinematics.py` (`Planner.library()` `226.1 ms -> 63.2 ms`, 3.58x speedup on `robttt@100.82.51.8`).

@@ -67,6 +67,13 @@ def unknown_reason(arm, pose, min_cell):
     return None
 
 
+def gravity_pwm(arm, pose, min_cell: int = 5) -> dict[str, float]:
+    """Predicted standstill gravity-hold PWM per pitch joint when `pose` lies in a covered cell; else `{}`."""
+    if not arm or unknown_reason(arm, pose, min_cell) is not None:
+        return {}
+    return predict(arm, pose)
+
+
 def check_chunk(arm, frames, fps, params=None, caps=None):
     """{verdict, joints: {joint: {pwm, at, share}}, unknown: first reason or None} for one chunk. Every pose a
     second apart plus the last frame is judged (a hold is where the arm rests; the path between is not a hold)."""
@@ -120,6 +127,7 @@ def plan_check(path, port, params, library, caps=None):
         return None
     model = load(path)
     check = lambda lib: refuse(model, port, lib, params, caps)  # noqa: E731
+    check.arm = model["arms"].get(arm_for(model, port))
     try:
         check(library)
     except ValueError as exc:

@@ -49,8 +49,8 @@
 
 ## 최근 기록
 
+- 2026-11-10 · uncommitted · feat(omx): C2 코사인 리타이밍, 청크 경계 블렌딩 및 호버 직행 경로 개선
 - 2026-11-06 · uncommitted · D-983 두 팔 타이밍 계산
 - 2026-11-02 · a7f36cb999 · Web unification follow-up
 - 2026-11-01 · uncommitted · ROS 없는 실험실에서 빈 실행(exit 5)으로 착지를 막는 수집 가드 교체
 - 2026-11-01 · f2333e8aea · Pilot SIM 시연 기본값 프로파일
-- 2026-11-01 · d16cecb42b · 직선 IK 경로 하나로, 링크 캡슐 금지선, 안쪽 transit 후보

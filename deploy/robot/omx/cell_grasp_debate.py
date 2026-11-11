@@ -419,7 +419,23 @@ def hook(config: dict, cell, target: dict, write_library, gap_mm: float):
             decision.get("by", "measurement"),
             decision["reason"],
         )
-        if decision["verdict"] == "proceed" or decision["verdict"] == "empty":
+        if decision["verdict"] == "proceed":
+            import cell_arm_cal
+
+            st_vec = status.get("state")
+            jaw_pos = float(st_vec[5]) if isinstance(st_vec, list) and len(st_vec) >= 6 and st_vec[5] is not None else None
+            decision["arm_calibration"] = cell_arm_cal.record_grasp_measurement(
+                config,
+                arm_id=config.get("arm_id", "arm_s"),
+                gripper_pos=jaw_pos,
+                gripper_current_ma=status.get("gripper_current_ma"),
+                width_mm=float(target.get("across_mm", 30.0)),
+                skew_mm=v_res.get("along_mm") if v_res.get("found") else None,
+                mm_per_px=v_res.get("mm_per_px"),
+                finger_color=finger_color if finger_color in ("dark", "white") else None,
+            )
+            return decision
+        if decision["verdict"] == "empty":
             return decision
 
         # Execute physical put-back (`run release_pick` at grasp_pick, or `run reinsert_pick` at lift_pick)
