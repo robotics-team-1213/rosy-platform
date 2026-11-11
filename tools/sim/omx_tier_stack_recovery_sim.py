@@ -276,6 +276,53 @@ def simulate_descent_and_hold_preservation() -> dict[str, Any]:
     }
 
 
+def simulate_orientation_detection_and_reorient_recovery() -> dict[str, Any]:
+    """Simulate detecting horizontal (`가로`) / diagonal (`대각선`) containers, normalizing 180-deg pick yaw so
+    `wrist_roll >= 5.0`, detecting misplaced horizontal containers via `verify_stack_outcome`, and recovering to
+    vertical (`세로`, `vertical_ns`) alignment."""
+    import cell_area_xyz
+
+    before_side = np.full((480, 640, 3), (180, 180, 180), dtype=np.uint8)
+    before_side[252:315, 155:220] = (30, 120, 240)
+    after_side = np.full((480, 640, 3), (180, 180, 180), dtype=np.uint8)
+    after_side[125:190, 232:286] = (30, 120, 240)
+
+    # 1. Misplaced horizontal (`가로`) container in TOP_ROI_BY_COL_ROW[(2, 1)] = (370, 165, 420, 270)
+    top_horizontal = np.full((480, 640, 3), (180, 180, 180), dtype=np.uint8)
+    top_horizontal[205:227, 372:418] = (30, 120, 240)  # span_u=46, span_v=22 -> horizontal_ew
+    v_horiz = cell_area_xyz.verify_stack_outcome(
+        before_side=before_side,
+        after_side=after_side,
+        after_top=top_horizontal,
+        pick={"col": 1, "tier": 1},
+        place={"col": 2, "row": 1, "tier": 3, "yaw_deg": -90.0},
+    )
+
+    # 2. Re-oriented vertical (`세로`) container in TOP_ROI_BY_COL_ROW[(2, 1)] = (370, 165, 420, 270)
+    top_vertical = np.full((480, 640, 3), (180, 180, 180), dtype=np.uint8)
+    top_vertical[172:258, 380:410] = (30, 120, 240)  # span_u=30, span_v=86 -> vertical_ns
+    v_vert = cell_area_xyz.verify_stack_outcome(
+        before_side=before_side,
+        after_side=after_side,
+        after_top=top_vertical,
+        pick={"col": 1, "tier": 1},
+        place={"col": 2, "row": 1, "tier": 3, "yaw_deg": -90.0},
+    )
+
+    # 3. 180-deg safe yaw normalization for diagonal (+45 deg -> -135 deg) and horizontal (0 deg) picks
+    safe_diag_yaw = cell_area_xyz.normalize_pick_yaw_deg(45.0, x_m=0.088, y_m=-0.088)
+    safe_horiz_yaw = cell_area_xyz.normalize_pick_yaw_deg(0.0, x_m=0.158, y_m=-0.013)
+
+    return {
+        "horizontal_detected_as_failure": v_horiz["verified"] is False,
+        "horizontal_recovery_mode": v_horiz["recovery_mode"],
+        "vertical_verified_after_reorient": v_vert["verified"] is True,
+        "vertical_orientation_class": v_vert["place_slot"]["top_zone"]["orientation_class"],
+        "safe_diag_yaw_deg": safe_diag_yaw,
+        "safe_horiz_yaw_deg": safe_horiz_yaw,
+    }
+
+
 def replay_and_verify_problem_case(case: dict[str, Any], work_dir: Path) -> dict[str, Any]:
     """Reproduce a recorded `rosy.omx-problem-case.v1` ledger entry in simulation and verify its recovery."""
     rep = case.get("sim_reproducer") or {}
@@ -286,6 +333,16 @@ def replay_and_verify_problem_case(case: dict[str, Any], work_dir: Path) -> dict
     if abs(init_off) < 2.0 and cat == "wrist_offset_or_visual_hazard":
         init_off = -6.4
 
+    if cat == "orientation_mismatch_or_jaw_lag":
+        res = simulate_orientation_detection_and_reorient_recovery()
+        passed = bool(
+            res["horizontal_detected_as_failure"]
+            and res["horizontal_recovery_mode"] == "re_orient_and_re_place"
+            and res["vertical_verified_after_reorient"]
+            and res["vertical_orientation_class"] == "vertical_ns"
+            and res["safe_diag_yaw_deg"] == -135.0
+        )
+        return {"case_id": case.get("case_id"), "category": cat, "arm_id": arm_id, "tier": tier, "verified": passed, "sim_result": res}
     if cat == "wrist_offset_or_visual_hazard":
         res = simulate_wrist_centering_loop(arm_id, initial_offset_mm=init_off, work_dir=work_dir)
         passed = bool(res["converged"] and abs(res["final_offset_mm"]) <= 1.5)

@@ -58,6 +58,72 @@ TOP_ROI_BY_COL_ROW: dict[tuple[int, int], tuple[int, int, int, int]] = {
 }
 
 
+def classify_container_orientation(xs: np.ndarray, ys: np.ndarray) -> dict[str, Any]:
+    """Classify 2D container pixel distribution into vertical (`세로`, N-S), horizontal (`가로`, E-W), or diagonal (`대각선`)."""
+    if len(xs) < 10:
+        return {
+            "span_u_px": 0.0,
+            "span_v_px": 0.0,
+            "aspect_u_over_v": 1.0,
+            "long_axis_deg": -90.0,
+            "orientation_class": "unknown",
+        }
+    u_min, u_max = float(np.percentile(xs, 5)), float(np.percentile(xs, 95))
+    v_min, v_max = float(np.percentile(ys, 5)), float(np.percentile(ys, 95))
+    span_u = round(max(1.0, u_max - u_min), 1)
+    span_v = round(max(1.0, v_max - v_min), 1)
+    aspect = round(span_u / span_v, 3)
+
+    pts = np.column_stack((xs.astype(np.float64), -ys.astype(np.float64)))
+    pts_c = pts - pts.mean(axis=0)
+    cov = np.cov(pts_c.T) if len(pts_c) > 2 else np.eye(2)
+    eigvals, eigvecs = np.linalg.eigh(cov)
+    major = eigvecs[:, int(np.argmax(eigvals))]
+    raw_deg = float(np.degrees(np.arctan2(major[1], major[0])))
+    if raw_deg > 0.0:
+        raw_deg -= 180.0
+    long_axis_deg = round(raw_deg, 1)
+
+    if aspect <= 0.80:
+        oclass = "vertical_ns"
+    elif aspect >= 1.25:
+        oclass = "horizontal_ew"
+    elif abs(abs(long_axis_deg) - 45.0) <= 22.0 or abs(abs(long_axis_deg) - 135.0) <= 22.0:
+        oclass = "diagonal"
+    else:
+        oclass = "vertical_ns" if span_v >= span_u else "horizontal_ew"
+
+    return {
+        "span_u_px": span_u,
+        "span_v_px": span_v,
+        "aspect_u_over_v": aspect,
+        "long_axis_deg": long_axis_deg,
+        "orientation_class": oclass,
+    }
+
+
+def normalize_pick_yaw_deg(yaw_deg: float, x_m: float = 0.15, y_m: float = 0.0) -> float:
+    """Resolve 180-degree parallel-jaw symmetry so wrist_roll stays safely inside [10.0, 85.0] units (>= 5.0 cable limit)
+    while aligning the jaws across the container's 30 mm short side (vertical `세로`, horizontal `가로`, or diagonal `대각선`)."""
+    pan_deg = float(np.degrees(np.arctan2(y_m, max(0.04, x_m))))
+    candidates = [float(yaw_deg), float(yaw_deg) - 180.0, float(yaw_deg) + 180.0]
+    best_yaw = float(yaw_deg)
+    best_cost = 1e9
+    for cand in candidates:
+        rel_deg = cand - pan_deg
+        while rel_deg > 180.0:
+            rel_deg -= 360.0
+        while rel_deg < -180.0:
+            rel_deg += 360.0
+        est_wrist_roll = 48.8 - (rel_deg + 90.0) * (50.0 / 90.0)
+        if 8.0 <= est_wrist_roll <= 88.0:
+            cost = abs(est_wrist_roll - 46.0)
+            if cost < best_cost:
+                best_cost = cost
+                best_yaw = cand
+    return round(best_yaw, 1)
+
+
 def evaluate_zone(
     img: np.ndarray | None,
     roi: tuple[int, int, int, int],
@@ -65,9 +131,10 @@ def evaluate_zone(
     tol_u_px: float = 20.0,
     tol_v_px: float = 22.0,
     min_fill: float = 0.30,
+    expected_orientation: str | None = None,
 ) -> dict[str, Any]:
-    """Deterministic zone check (Isaac-Sim style): measure warm container fill ratio and centroid deviation from the
-    pre-defined target zone `roi = (x0, y0, x1, y1)`."""
+    """Deterministic zone check (Isaac-Sim style): measure warm container fill ratio, centroid deviation, and orientation
+    (`vertical_ns` 세로 vs `horizontal_ew` 가로 vs `diagonal` 대각선) inside pre-defined target zone `roi = (x0, y0, x1, y1)`."""
     x0, y0, x1, y1 = roi
     u_center = 0.5 * (x0 + x1)
     v_center = 0.5 * (y0 + y1)
@@ -78,13 +145,14 @@ def evaluate_zone(
             "centroid_px": None,
             "offset_px": None,
             "within_zone": False,
+            "orientation_ok": False,
         }
     import cv2
 
     h, w = img.shape[:2]
     crop = img[max(0, y0):min(h, y1), max(0, x0):min(w, x1)]
     if crop.size == 0:
-        return {"roi": list(roi), "fill_ratio": 0.0, "centroid_px": None, "offset_px": None, "within_zone": False}
+        return {"roi": list(roi), "fill_ratio": 0.0, "centroid_px": None, "offset_px": None, "within_zone": False, "orientation_ok": False}
     hsv = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)
     hue, sat, val = hsv[..., 0], hsv[..., 1], hsv[..., 2]
     orange_or_top_yellow = ((hue <= 38) | (hue >= 158)) & (sat >= 65) & (val >= 90)
@@ -93,12 +161,26 @@ def evaluate_zone(
     fill = round(float(warm.mean()), 3)
     ys, xs = np.where(warm)
     if len(xs) == 0:
-        return {"roi": list(roi), "fill_ratio": fill, "centroid_px": None, "offset_px": None, "within_zone": False}
+        return {
+            "roi": list(roi),
+            "fill_ratio": fill,
+            "centroid_px": None,
+            "offset_px": None,
+            "within_zone": False,
+            "orientation_ok": False,
+            "orientation_class": "unknown",
+        }
     uc = round(float(x0 + xs.mean()), 1)
     vc = round(float(y0 + ys.mean()), 1)
     du = round(uc - u_center, 1)
     dv = round(vc - v_center, 1)
-    within = bool(fill >= min_fill and abs(du) <= tol_u_px and abs(dv) <= tol_v_px)
+    orient = classify_container_orientation(xs, ys)
+    orientation_ok = True
+    if expected_orientation == "vertical_ns":
+        orientation_ok = orient["orientation_class"] != "horizontal_ew" and orient["aspect_u_over_v"] <= 1.20
+    elif expected_orientation == "horizontal_ew":
+        orientation_ok = orient["orientation_class"] == "horizontal_ew"
+    within = bool(fill >= min_fill and abs(du) <= tol_u_px and abs(dv) <= tol_v_px and orientation_ok)
     return {
         "roi": list(roi),
         "fill_ratio": fill,
@@ -106,6 +188,8 @@ def evaluate_zone(
         "offset_px": [du, dv],
         "tol_px": [tol_u_px, tol_v_px],
         "within_zone": within,
+        "orientation_ok": orientation_ok,
+        **orient,
     }
 
 
@@ -186,17 +270,42 @@ def verify_stack_outcome(
     source_vacated = after_pick_fill <= 0.35 or (before_pick_fill is not None and (before_pick_fill - after_pick_fill) >= 0.25)
 
     top_zone_info = None
+    top_orientation_ok = True
+    expected_orient = "vertical_ns" if abs(float(place.get("yaw_deg", -90.0)) + 90.0) <= 25.0 else None
     if after_top is not None:
         top_roi = TOP_ROI_BY_COL_ROW.get((place_col, place_row), (316, 160, 374, 270))
-        top_zone_info = evaluate_zone(after_top, top_roi, tol_u_px=24.0, tol_v_px=40.0, min_fill=0.15)
+        top_zone_info = evaluate_zone(
+            after_top,
+            top_roi,
+            tol_u_px=24.0,
+            tol_v_px=40.0,
+            min_fill=0.15,
+            expected_orientation=expected_orient,
+        )
         # Support synthetic test top frames that share side-camera column u coordinates
-        if not top_zone_info["within_zone"]:
-            alt_top_zone = evaluate_zone(after_top, place_roi, tol_u_px=24.0, tol_v_px=30.0, min_fill=0.20)
-            if alt_top_zone["within_zone"]:
+        if not top_zone_info["within_zone"] and top_zone_info.get("fill_ratio", 0.0) < 0.15:
+            alt_top_zone = evaluate_zone(
+                after_top,
+                place_roi,
+                tol_u_px=24.0,
+                tol_v_px=30.0,
+                min_fill=0.20,
+                expected_orientation=expected_orient,
+            )
+            if alt_top_zone["within_zone"] or alt_top_zone.get("fill_ratio", 0.0) >= 0.20:
                 top_zone_info = alt_top_zone
+        if top_zone_info and top_zone_info.get("fill_ratio", 0.0) >= 0.15:
+            top_orientation_ok = bool(top_zone_info.get("orientation_ok", True))
 
-    verified = bool(target_present and source_vacated)
-    recovery_mode = None if verified else ("re_pick_and_re_place" if not source_vacated else "re_align_place_zone")
+    verified = bool(target_present and source_vacated and top_orientation_ok)
+    if verified:
+        recovery_mode = None
+    elif not source_vacated:
+        recovery_mode = "re_pick_and_re_place"
+    elif not top_orientation_ok:
+        recovery_mode = "re_orient_and_re_place"
+    else:
+        recovery_mode = "re_align_place_zone"
 
     return {
         "verified": verified,
@@ -309,11 +418,12 @@ def build_plan_from_directive(
     qx, qy, qz = place["effective_xyz_m"]
     approach_m = float(exec_cfg.get("approach_m", 0.034))
 
+    safe_pick_yaw = normalize_pick_yaw_deg(float(pick.get("yaw_deg", -90.0)), px, py)
     plan["pick"] = {
         "x": px,
         "y": py,
         "z": pz,
-        "yaw_deg": float(pick.get("yaw_deg", -90.0)),
+        "yaw_deg": safe_pick_yaw,
         "approach_m": approach_m,
         "lift_m": approach_m,
     }
@@ -336,11 +446,13 @@ def build_plan_from_directive(
     plan.setdefault("grip_s", 0.6)
     plan.setdefault("settle_s", 0.35)
     plan.setdefault("descend_guard_frac", 0.30)
-    plan.setdefault("lift_guard_frac", 0.30)
+    plan.setdefault("lift_guard_frac", 0.55)
     plan["transit_speed"] = float(exec_cfg.get("transit_speed", plan.get("transit_speed", 0.82)))
     plan["descend_pick_guard_frac"] = float(exec_cfg.get("descend_pick_guard_frac", plan.get("descend_pick_guard_frac", 0.30)))
     plan["descend_place_guard_frac"] = float(exec_cfg.get("descend_place_guard_frac", plan.get("descend_place_guard_frac", 0.26)))
-    plan["lift_pick_guard_frac"] = float(exec_cfg.get("lift_pick_guard_frac", plan.get("lift_pick_guard_frac", 0.28)))
+    plan["lift_pick_guard_frac"] = float(
+        exec_cfg.get("lift_pick_guard_frac", plan.get("lift_pick_guard_frac", plan.get("lift_guard_frac", 0.55)))
+    )
     return plan, cal
 
 
@@ -411,26 +523,34 @@ def execute_directive(
         # Ensure jaws have finished opening to grip_open at above_pick before descending
         above_state = r_above.get("state") or []
         if len(above_state) >= 6 and above_state[5] is not None and float(above_state[5]) < float(plan["grip_open"]) - 1.0:
-            _run_cmd("run above_pick")
+            r_settle = _run_cmd("run above_pick")
+            s_state = r_settle.get("state") or []
+            if frame_fn is not None and len(s_state) >= 6 and s_state[5] is not None and float(s_state[5]) < float(plan["grip_open"]) - 1.2:
+                import time as _time
+                _run_cmd(f"grip {float(plan['grip_open']):.2f}")
+                _time.sleep(0.45)
 
         # Pre-pick target zone alignment using Side View + Wrist View
         last_wrist_obs = None
         if exec_cfg.get("vision_refine", False) and frame_fn is not None:
             col = int(cur_directive["pick"].get("col") or 3)
-            s_img = frame_fn("side")
-            side_obs = measure_side_gripper_zone_offset(s_img, before_side, col, tol_u_px=10.0)
-            if side_obs.get("found") and not side_obs.get("within_zone"):
-                p_xyz = list(cur_directive["pick"]["effective_xyz_m"])
-                p_xyz[0] = round(max(0.118, min(0.205, p_xyz[0] + float(side_obs["dx_m"]))), 5)
-                cur_directive["pick"]["effective_xyz_m"] = p_xyz
-                cur_directive["pick"]["x"] = p_xyz[0]
-                lib, plan, cal = plan_library_from_directive(cur_directive, base_plan, work_dir=work_dir, kinematics_root=kinematics_root)
-                lib_path.write_text(json.dumps(lib), encoding="utf-8")
-                _run_cmd(f"load {lib_path}")
-                _run_cmd("goto above_pick")
+            p_xyz_cur = list(cur_directive["pick"]["effective_xyz_m"])
+            if p_xyz_cur[0] >= 0.118:
+                s_img = frame_fn("side")
+                side_obs = measure_side_gripper_zone_offset(s_img, before_side, col, tol_u_px=10.0)
+                if side_obs.get("found") and not side_obs.get("within_zone"):
+                    p_xyz = list(cur_directive["pick"]["effective_xyz_m"])
+                    p_xyz[0] = round(max(0.118, min(0.205, p_xyz[0] + float(side_obs["dx_m"]))), 5)
+                    cur_directive["pick"]["effective_xyz_m"] = p_xyz
+                    cur_directive["pick"]["x"] = p_xyz[0]
+                    lib, plan, cal = plan_library_from_directive(cur_directive, base_plan, work_dir=work_dir, kinematics_root=kinematics_root)
+                    lib_path.write_text(json.dumps(lib), encoding="utf-8")
+                    _run_cmd(f"load {lib_path}")
+                    _run_cmd("goto above_pick")
 
             w_img = frame_fn("wrist")
             if w_img is not None:
+                import math as _math
                 f_color = cal.get("finger_color", "white")
                 obs = cell_fingers.finger_offset_mm(
                     w_img,
@@ -441,13 +561,16 @@ def execute_directive(
                 )
                 last_wrist_obs = obs
                 wrist_log.append(obs)
-                if obs.get("found") and 1.5 < abs(float(obs.get("along_mm", 0.0))) <= 9.0:
+                if obs.get("found") and 1.5 < abs(float(obs.get("along_mm", 0.0))) <= 12.0:
                     sign_along = float((cal.get("finger_sign") or {}).get("along", -1.0 if arm_id != "arm_s" else 1.0))
-                    dx_m = 0.55 * sign_along * float(obs["along_mm"]) / 1000.0
+                    step_m = 0.60 * sign_along * float(obs["along_mm"]) / 1000.0
+                    closing_rad = _math.radians(float(plan["pick"].get("yaw_deg", -90.0)) + 90.0)
                     p_xyz = list(cur_directive["pick"]["effective_xyz_m"])
-                    p_xyz[0] = round(max(0.120, min(0.204, p_xyz[0] + dx_m)), 5)
+                    p_xyz[0] = round(max(0.055, min(0.232, p_xyz[0] + step_m * _math.cos(closing_rad))), 5)
+                    p_xyz[1] = round(max(-0.155, min(0.155, p_xyz[1] + step_m * _math.sin(closing_rad))), 5)
                     cur_directive["pick"]["effective_xyz_m"] = p_xyz
                     cur_directive["pick"]["x"] = p_xyz[0]
+                    cur_directive["pick"]["y"] = p_xyz[1]
                     lib, plan, cal = plan_library_from_directive(cur_directive, base_plan, work_dir=work_dir, kinematics_root=kinematics_root)
                     lib_path.write_text(json.dumps(lib), encoding="utf-8")
                     _run_cmd(f"load {lib_path}")

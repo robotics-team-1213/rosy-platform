@@ -33,6 +33,7 @@ CATEGORIES = (
     "descent_or_park_contact",
     "calibration_drift",
     "slip_during_lift",
+    "orientation_mismatch_or_jaw_lag",
 )
 
 
@@ -58,6 +59,8 @@ def classify_problem(
     err = str(error or "").lower()
     stage = str(fail_stage or "").lower()
     fclass = str(fail_class or "").lower()
+    if "orient" in fclass or "orient" in err or "horizontal" in err or "jaw_lag" in fclass:
+        return "orientation_mismatch_or_jaw_lag"
     if grasp_debate and grasp_debate.get("verdict") in ("reinsert_and_retry", "reinsert_and_park"):
         return "unstable_grasp_reinsert"
     if "slipped" in err or fclass == "empty_grasp":
@@ -304,6 +307,20 @@ def seed_real_hardware_problem_cases(config_or_work: dict | Path) -> list[dict[s
             telemetry={"gripper_pos": 58.12, "gripper_current_ma": 238.0, "holding": True},
             vision={"along_mm": 0.0, "across_mm": 0.0, "finger_color": "white"},
             notes="Caught by Isaac-Sim-style SIDE_ROI_BY_COL_TIER + TOP_ROI_BY_COL_ROW evaluate_zone(); fixed by removing intermediate park before goto above_place.",
+        ),
+        build_problem_case(
+            case_id="real-trial14-orientation-reorient-and-jaw-settle",
+            arm_id="arm_b",
+            tier=3,
+            site_from="pallet-l0",
+            site_to="pallet-l2",
+            category="orientation_mismatch_or_jaw_lag",
+            stage="verify_stack_outcome",
+            fail_class="re_orient_and_re_place",
+            error="container oriented horizontally/diagonally (yaw=-45..0 deg instead of -90 deg vertical_ns) or jaws still opening at 55.07 < 59.2 on descend_pick",
+            telemetry={"gripper_pos": 55.07, "gripper_current_ma": 17.0, "holding": False},
+            vision={"along_mm": -3.2, "across_mm": 0.5, "finger_color": "white"},
+            notes="Solved via classify_container_orientation (vertical_ns/horizontal_ew/diagonal), normalize_pick_yaw_deg 180-deg wrist_roll symmetry, and hover jaw-opening gate.",
         ),
     ]
     for c in cases:
