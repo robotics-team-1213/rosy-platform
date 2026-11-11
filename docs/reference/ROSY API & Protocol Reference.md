@@ -4699,6 +4699,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.386 | 2026-11-11 | Additive (D-1016, feat/enrollment-idle-removal): `GET /api/fleet/enrollment/robots` 행에 `last_activity_at`·`days_idle`·`removal_pending` 추가. 마지막 활동(마지막 수용 CORE 이벤트 또는 등록 행 마지막 기록)이 `fleet.enrollment.idle_removal_days`(기본 30, 1..3650)를 넘으면 `removal_pending: true`(«삭제 예정» 표시). 표시만 하고 무엇도 해제하지 않는다 — 해제는 기존 이름 있는 운영자 unenroll 그대로(D-456). Robot API·envelope 변경 없음 |
 | v1.384 | 2026-11-10 | Additive: 지도–실제 대조 — `GET /api/fleet/site-map/reality-check`(D-594 경로 이력으로 차로·구역 판정, `rosy.site_map_reality/1`)와 `POST .../reality-check/apply`(초안만 강체 보정, 변환은 서버 재계산, 활성 지도 불변·로봇 명령 없음). 설계 docs/plans/2026-11-10-map-reality-check.md |
 | v1.381 | 2026-11-09 | Breaking (D-1008, 한 필드 삭제): 재승인 `/trial/start`에서 `blind_zone_confirmed`와 `BLIND_ZONE_CONFIRMATION_REQUIRED`·`clearance.blind_m` 삭제. 여유 확인은 움직이는 쪽만. |
 | v1.383 | 2026-11-10 | Additive·거절 추가 (D-1010, fix/site-map-frame-binding): Fleet 활성 지도 본문이 저장 sha256과 다르면 422 `SITE_MAP_BODY_HASH_MISMATCH`(활성 지도 없이 시동). free 목표는 trip `detail.goal_frame`(활성 `map_id`·`map_version`, 기체 `robot_map_id`, 목표 프레임 `robot`/`site`)을 남기고, 활성 버전·프레임이 계획과 다르면 trip이 `map_version`·`map_frame`으로 정지. 콘솔 목표 대기 이유 `MAP_FRAME_MISMATCH`(다른 알려진 `map_id` 경로와는 비교하지 않고 보류). trip 지도 자세 뷰 `pose`에 `map_id` 추가. Robot API·envelope 1.0 변경 없음 |
