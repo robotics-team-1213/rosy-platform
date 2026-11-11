@@ -19,17 +19,28 @@ def split_touching(mask, peak_frac: float = 0.6, min_piece_px: int = 200) -> lis
     thinner than that fraction of the widest box separates them. Pieces under `min_piece_px` are dropped."""
     import cv2
 
-    blob = (np.asarray(mask) > 0).astype(np.uint8)
-    if blob.sum() < 2 * min_piece_px:
+    arr = np.asarray(mask) > 0
+    ys, xs = np.nonzero(arr)
+    if len(xs) < 2 * min_piece_px:
         return []
+    h, w = arr.shape
+    y0, y1 = max(0, int(ys.min()) - 1), min(h, int(ys.max()) + 2)
+    x0, x1 = max(0, int(xs.min()) - 1), min(w, int(xs.max()) + 2)
+    blob = arr[y0:y1, x0:x1].astype(np.uint8)
     dist = cv2.distanceTransform(blob, cv2.DIST_L2, 5)
-    n, markers = cv2.connectedComponents((dist > peak_frac * dist.max()).astype(np.uint8))
+    thresh = peak_frac * float(dist.max())
+    n, markers = cv2.connectedComponents((dist > thresh).astype(np.uint8))
     if n <= 2:  # background plus one marker: one box
         return []
     markers = markers + 1  # watershed: 0 is unknown, 1 the background
     markers[blob == 0] = 1
-    markers[(blob == 1) & (dist <= peak_frac * dist.max())] = 0
+    markers[(blob == 1) & (dist <= thresh)] = 0
     cv2.watershed(cv2.cvtColor(blob * 255, cv2.COLOR_GRAY2BGR), markers)
-    pieces = [(markers == k) & (blob == 1) for k in range(2, n + 1)]
-    pieces = [p for p in pieces if p.sum() >= min_piece_px]
+    pieces = []
+    for k in range(2, n + 1):
+        sub = (markers == k) & (blob == 1)
+        if int(sub.sum()) >= min_piece_px:
+            full = np.zeros(arr.shape, bool)
+            full[y0:y1, x0:x1] = sub
+            pieces.append(full)
     return pieces if len(pieces) >= 2 else []
