@@ -546,7 +546,12 @@ def execute_directive(
         if exec_cfg.get("vision_refine", False) and frame_fn is not None:
             col = int(cur_directive["pick"].get("col") or 3)
             p_xyz_cur = list(cur_directive["pick"]["effective_xyz_m"])
-            if p_xyz_cur[0] >= 0.118:
+            canonical_col_x = {1: 0.1280, 2: 0.1580, 3: 0.1935}.get(col, 0.1580)
+            if (
+                p_xyz_cur[0] >= 0.118
+                and abs(float(plan["pick"].get("yaw_deg", -90.0)) + 90.0) <= 5.0
+                and abs(p_xyz_cur[0] - canonical_col_x) <= 0.008
+            ):
                 s_img = frame_fn("side")
                 side_obs = measure_side_gripper_zone_offset(s_img, before_side, col, tol_u_px=10.0)
                 if side_obs.get("found") and not side_obs.get("within_zone"):
@@ -586,7 +591,12 @@ def execute_directive(
                     lib, plan, cal = plan_library_from_directive(cur_directive, base_plan, work_dir=work_dir, kinematics_root=kinematics_root)
                     lib_path.write_text(json.dumps(lib), encoding="utf-8")
                     _run_cmd(f"load {lib_path}")
-                    _run_cmd("goto above_pick")
+                    r_above2 = _run_cmd("goto above_pick")
+                    s2 = r_above2.get("state") or []
+                    if len(s2) >= 6 and s2[5] is not None and float(s2[5]) < float(plan["grip_open"]) - 1.2:
+                        import time as _time
+                        _run_cmd(f"grip {float(plan['grip_open']):.2f}")
+                        _time.sleep(0.45)
 
         r_desc = _run_cmd("run descend_pick")
         if not r_desc.get("ok"):
