@@ -5475,7 +5475,10 @@
 - gate 변화: 없음. FIELD는 실물 5대 전원·카메라 차단 재현 전까지 그대로다.
 - D-766 정정: 첫 커밋(9156c9fe93)에서 `operations/world/.../map_pose.py`가 613줄로 600줄 한도를 넘어 `test_module_structure.test_ratchet_rows_are_the_measured_counts_and_only_go_down`가 NEW로 떴다. 새 ratchet 행을 만들지 않고 같은 모듈의 D-1017 주석·docstring을 줄여 600줄로 맞췄다(동작 불변). 다음 커밋에서 remote affected 재시험.
 
-## 2026-11-11 Â· 4765747064 Â· docs(fleet): D-1017 ì›ê²© ì‹œí—˜ ê²°ê³¼ ê¸°ë¡
-- ì¦ê±°(ì›ê²©, ai@100.108.76.123, feat/peer-sighting-ingestion tip 184e7d0e11): ëŒ€ìƒ ì‹œí—˜ `test_map_pose`Â·`test_map_pose_service`Â·`test_map_pose_pin`Â·`test_map_pose_scope`Â·`operations/world/test` 155 passed. `rosy_harness.py affected --base main` 4ê°œ í˜¸ì¶œ ëª¨ë‘ exit 0, known_failures 0 new(ì•Œë ¤ì§„ flaky 1: `test_station_camera_pipeline_lifespan[lifespan]`). `test/architecture/test_module_structure.py` 600ì¤„ ê·œì¹™ ì´ˆë¡. `harness lint` 0 errors. ì½˜ì†” ì¹´ë“œ `node --test localization-badge.test.mjs` 10 pass(ë¡œì»¬ node, pytest ì•„ë‹˜).
-- CE: ë¯¸í•´ê²° â€” peer ì•µì»¤ëŠ” ì›ê²© í•¨ìˆ˜ ì‹œí—˜ê¹Œì§€ë§Œ í™•ì¸í–ˆê³  ì‹¤ë¬¼ 5ëŒ€Â·ì¹´ë©”ë¼ ì°¨ë‹¨ ìž¬í˜„ ì „ì´ë¼ êµí›ˆìœ¼ë¡œ ì“°ì§€ ì•ŠëŠ”ë‹¤.
+## 2026-11-11 · 184e7d0e11 · docs(fleet): D-1017 원격 시험 결과 기록
+
+- 변경: 없음 — 앞 항목(D-1017)의 원격 시험 결과만 기록한다(스쿼시 착지 ab49ca3e22).
+- 증거: 원격 ai@100.108.76.123, feat/peer-sighting-ingestion tip 184e7d0e11 —대상 시험 `test_map_pose`·`test_map_pose_service`·`test_map_pose_pin`·`test_map_pose_scope`·`operations/world/test` 155 passed. `rosy_harness.py affected --base main` 4개 호출 모두 exit 0, known_failures 0 new(`test_station_camera_pipeline_lifespan[lifespan]`). `test/architecture/test_module_structure.py` 600`줄 규칙 초록. `harness lint` 0 errors. `node --test localization-badge.test.mjs` 10 pass(로컬 node, pytest 아님)
+- gate 변화: 없음. FIELD는 실물 5대 전원·카메라 차단 재현 전까지 그대로다.
+- CE: 미해결 — peer 압커는 원격 함수 시험까지만 확인했고 실물 5대·카메라 차단 재현 전이라 교훈으로 쓰지 않는다
 

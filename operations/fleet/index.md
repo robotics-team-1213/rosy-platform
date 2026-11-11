@@ -105,8 +105,8 @@
 
 ## 최근 기록
 
+- 2026-11-11 · 184e7d0e11 · docs(fleet): D-1017 원격 시험 결과 기록
 - 2026-11-11 · uncommitted · D-1017 peer 위치 공유로 지도 자세 앵커 보강
 - 2026-11-11 · uncommitted · D-1016 등록 로봇 30일 비활동 «삭제 예정» 표시
 - 2026-11-11 · uncommitted · docs(fleet): 지도-실제 대조 독립 검토 반영 - 판정 대상 우선순위·근거 결정 번호 정정
 - 2026-11-10 · uncommitted · fix: 관제 단위 개명의 접두사 확인·origin 정규화·감사 행 조건 (D-1011)
-- 2026-11-10 · uncommitted · refactor: 관제 단위 id CELL-A → ARM-CELL 별칭 수용과 원장 마이그레이션 (D-1011)
