@@ -34,6 +34,7 @@ def test_deps_still_owns_the_domain_type_surface():
     text = deps.read_text(encoding="utf-8")
     for symbol in (
         "Mode",
+        "SpeedLimits",
         "NavigationError",
         "DockError",
         "LineFollowMode",
@@ -43,3 +44,7 @@ def test_deps_still_owns_the_domain_type_surface():
         "Waypoint",
     ):
         assert symbol in text, f"api/deps.py 가 라우터용 타입 {symbol} 을 실어야 한다"
+    for holder in ("action_rules", "safety_gate", "preview"):
+        assert f"core_features.{holder}" not in text, (
+            f"api/deps.py 는 설치 패키지 이름을 써야 한다 (core_features.{holder} 는 colcon install 에 없음, D-749)"
+        )
