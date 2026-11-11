@@ -5488,3 +5488,9 @@
 - 변경: 독립 검토 반영 — `map_pose.py`의 `_agrees_with_independent`에서 PEER 앵커를 비독립으로 제외하고 `_apply`의 D-989 차단 설정에서도 PEER 쌍을 제외했다. ADR D-1017 Decision 5·D-772 경계 행 갱신. `test_auto_locate_anchor.py` 2건(peer가 차단을 들지도/걸지도 않는다)·`test_map_pose.py` 1건(CAMERA_RECENT 9.99 s 거부/10.0 s 수용 경계)을 더했다. 600줄 유지.
 - 증거: 호스트 직접 호출과 `python -m py_compile` 통과. 원격 시험 결과는 다음 커밋에 기록한다.
 - gate 변화: 없음. FIELD는 실물 5대 전원·카메라 차단 재현 전까지 그대로다.
+
+## 2026-11-11 · e803458bb0 · docs(fleet): D-1017 검토 반영 변경 검증
+
+- 변경: 없음 — 앞 항목(peer 앵커 D-989 비독립 처리)의 원격 시험 결과만 기록한다.
+- 증거: 원격 rosy 호스트(커밋 e803458bb0)에서 `test_map_pose.py`·`test_auto_locate_anchor.py`·`test_map_pose_service.py`·`operations/world/test` 172 passed, 0 failed, exit 0. `test/known_failures.py` 비교 0 new. `rosy_harness.py lint` 0 errors, `map_pose.py` 600줄 유지.
+- gate 변화: 없음. FIELD는 실물 5대 전원·카메라 차단 재현 전까지 그대로다.
