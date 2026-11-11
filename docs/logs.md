@@ -14765,3 +14765,8 @@ osy-d395-s1d\`.
 - 변경: `test/architecture/size_units.txt`에서 `drive/behaviors/swarm`의 `small` 표시를 뗀다(D-766 3: 단위가 1000줄 바닥에 닿았고 표시 제거가 규칙이 정한 길이다. D-559 복귀 주석 포함 1020줄). `test/test_omx_session_caps_layers.py`의 프로파일 동일성 시험이 같은 경로를 즉시 다시 써 `cell_robot_profile.load`의 (경로, mtime_ns, 크기) 캐시에 첫 해시가 걸리는 것을, 서로 다른 파일 이름으로 갈라 고친다(2026-11-11 착지에서 묶음·단독 모두 실패, main에서는 우연히 통과).
 - 증거: 원격 시험 결과는 다음 커밋에 기록한다.
 - gate 변화: 없음.
+
+## 2026-11-11 · 477da4687d · docs(test): 착지 관문 수정 검증
+- 변경: 없음 — 앞 항목의 원격 시험 결과만 기록한다.
+- 증거: 원격 ai 호스트(커밋 477da4687d)에서 `test/test_omx_session_caps_layers.py`·`test/architecture/test_module_structure.py` 58 passed, 0 failed, exit 0. `test/known_failures.py` 비교 0 new. `rosy_harness.py lint` 0 errors.
+- gate 변화: 없음.
