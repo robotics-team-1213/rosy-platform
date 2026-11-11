@@ -79,14 +79,20 @@ def pixel_to_plane(pixel, K, dist, camera_in_base: tuple, plane_z: float):
     """The arm-frame point where the pixel's ray meets the plane z = plane_z (None if parallel or behind)."""
     import cv2
 
-    ray = cv2.undistortPoints(np.array([[pixel]], np.float64), K, dist).reshape(2)
-    d_cam = np.array([ray[0], ray[1], 1.0])
+    if not np.any(dist):
+        rx = (float(pixel[0]) - float(K[0][2])) / float(K[0][0])
+        ry = (float(pixel[1]) - float(K[1][2])) / float(K[1][1])
+    else:
+        ray = cv2.undistortPoints(np.array([[pixel]], np.float64), K, dist).reshape(2)
+        rx, ry = float(ray[0]), float(ray[1])
     R, t = camera_in_base
-    d = R @ d_cam
-    if abs(d[2]) < 1e-9:
+    dx = float(R[0][0]) * rx + float(R[0][1]) * ry + float(R[0][2])
+    dy = float(R[1][0]) * rx + float(R[1][1]) * ry + float(R[1][2])
+    dz = float(R[2][0]) * rx + float(R[2][1]) * ry + float(R[2][2])
+    if abs(dz) < 1e-9:
         return None
-    s = (plane_z - t[2]) / d[2]
-    return None if s <= 0 else t + s * d
+    s = (float(plane_z) - float(t[2])) / dz
+    return None if s <= 0 else np.array([float(t[0]) + s * dx, float(t[1]) + s * dy, float(t[2]) + s * dz])
 
 
 # --- ChArUco and printable pages (2026-10-29) ------------------------------------------------------------------------

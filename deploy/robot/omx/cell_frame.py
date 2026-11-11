@@ -83,6 +83,35 @@ def solve(obj, pix, K, dist) -> tuple:
 
 
 def project(point, K, dist, camera_in_base: tuple):
+    R_cb, t_cb = camera_in_base
+    dx = float(point[0]) - float(t_cb[0])
+    dy = float(point[1]) - float(t_cb[1])
+    dz = float(point[2]) - float(t_cb[2])
+    r0, r1, r2 = R_cb[0], R_cb[1], R_cb[2]
+    xc = float(r0[0]) * dx + float(r1[0]) * dy + float(r2[0]) * dz
+    yc = float(r0[1]) * dx + float(r1[1]) * dy + float(r2[1]) * dz
+    zc = float(r0[2]) * dx + float(r1[2]) * dy + float(r2[2]) * dz
+    x, y = xc / zc, yc / zc
+    d = np.asarray(dist, float).ravel() if not isinstance(dist, (list, tuple)) else dist
+    if len(d) <= 5:
+        k1 = float(d[0]) if len(d) > 0 else 0.0
+        k2 = float(d[1]) if len(d) > 1 else 0.0
+        p1 = float(d[2]) if len(d) > 2 else 0.0
+        p2 = float(d[3]) if len(d) > 3 else 0.0
+        k3 = float(d[4]) if len(d) > 4 else 0.0
+        if k1 or k2 or p1 or p2 or k3:
+            r2_val = x * x + y * y
+            rad = 1.0 + r2_val * (k1 + r2_val * (k2 + r2_val * k3))
+            xy2 = 2.0 * x * y
+            xd = x * rad + p1 * xy2 + p2 * (r2_val + 2.0 * x * x)
+            yd = y * rad + p1 * (r2_val + 2.0 * y * y) + p2 * xy2
+        else:
+            xd, yd = x, y
+        k_r0, k_r1 = K[0], K[1]
+        return (
+            float(k_r0[0]) * xd + float(k_r0[1]) * yd + float(k_r0[2]),
+            float(k_r1[0]) * xd + float(k_r1[1]) * yd + float(k_r1[2]),
+        )
     import cv2
 
     R, t = inverse(camera_in_base)
@@ -127,12 +156,15 @@ def learn(seen: dict, K, dist, camera_in_base: tuple, slot: int, z_m: dict, surf
             "measured": datetime.now(timezone.utc).isoformat()}
 
 
+_IDENTITY_MOTION = (np.eye(3), np.zeros(3))
+
+
 def _model(record: dict):
-    return np.array(record["K"]), np.array(record["dist"])
+    return np.asarray(record["K"], float), np.asarray(record["dist"], float)
 
 
 def _pose(p: dict) -> tuple:
-    return np.array(p["R"]), np.array(p["t"])
+    return np.asarray(p["R"], float), np.asarray(p["t"], float)
 
 
 def _known(record: dict, seen: dict, ids) -> tuple:
@@ -180,12 +212,14 @@ def update(record: dict, seen: dict) -> dict:
 def _current(record: dict, site: str) -> tuple:
     now = record.get("now") or {}
     camera = now.get("camera_in_base") or _pose(record["camera_in_base"])
-    return camera, (now.get("motion") or {}).get(site, (np.eye(3), np.zeros(3)))
+    return camera, (now.get("motion") or {}).get(site, _IDENTITY_MOTION)
 
 
 def to_arm(record: dict, site: str, pixel, z: float):
     """The arm point (x, y, z) where `pixel` meets the plane at height z of `site` as it lies now, or None."""
     camera, motion = _current(record, site)
+    if motion is _IDENTITY_MOTION:
+        return pixel_to_plane(pixel, *_model(record), camera, z)
     back = inverse(motion)  # work in the surface's setup frame, where its plane is z = const
     p = pixel_to_plane(pixel, *_model(record), compose(back, camera), z)
     return None if p is None else motion[0] @ p + motion[1]
@@ -200,8 +234,12 @@ def yaw_sign(record: dict, site: str, pixel, z: float) -> int:
 
 def to_pixel(record: dict, point, z: float):
     """Where the arm point (x, y) at height z shows in this camera now."""
-    camera, _ = _current(record, None)
-    return project([point[0], point[1], z], *_model(record), camera)
+    now = record.get("now")
+    camera = now.get("camera_in_base") if now else None
+    if camera is None:
+        cb = record["camera_in_base"]
+        camera = (cb["R"], cb["t"])
+    return project((point[0], point[1], z), record["K"], record["dist"], camera)
 
 
 def drift(record: dict) -> dict:
