@@ -25,19 +25,25 @@ def free_mm(mask, roi, pixel_fn, start, direction, across_offsets, reach_mm: flo
     reach_mm when nothing is met. Foreground running on from `start` up to own_mm is the object's own; a 1 mm gap
     does not end that run (a slightly skewed outline starts the side face a step out on one pad edge). With
     outside_blocks, what the mask does not cover (past the roi or the image) is not known free but a hit."""
-    d = np.asarray(direction, float)
-    n = np.array([-d[1], d[0]])
+    sx, sy = float(start[0]), float(start[1])
+    dx, dy = float(direction[0]) / 1000.0, float(direction[1]) / 1000.0
+    nx, ny = -dy, dx
+    h, w = mask.shape[:2]
+    rx0, ry0 = roi[0], roi[1]
     t, clear = step_mm, 0.0
     while t <= reach_mm:
         hit = False
+        tx, ty = sx + t * dx, sy + t * dy
         for s in across_offsets:
-            px = pixel_fn(tuple(np.asarray(start, float) + (t * d + s * n) / 1000))
+            px = pixel_fn((tx + s * nx, ty + s * ny))
             if px is None:
                 hit = hit or outside_blocks
                 continue
-            col, row = round(px[0]) - roi[0], round(px[1]) - roi[1]
-            inside = 1 <= row < mask.shape[0] - 1 and 1 <= col < mask.shape[1] - 1
+            col, row = round(px[0]) - rx0, round(px[1]) - ry0
+            inside = 1 <= row < h - 1 and 1 <= col < w - 1
             hit = hit or (not inside and outside_blocks) or (inside and bool(mask[row - 1:row + 2, col - 1:col + 2].any()))
+            if hit and not (clear < 2.0 and t <= own_mm):
+                return t - step_mm
         leaving = clear < 2.0
         if hit and not (leaving and t <= own_mm):
             return t - step_mm

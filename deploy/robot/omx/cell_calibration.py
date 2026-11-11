@@ -61,13 +61,51 @@ def anchored(h, pairs) -> np.ndarray:
     return out
 
 
+_INV_CACHE: dict[tuple[float, ...], tuple[tuple[float, float, float], ...]] = {}
+
+
+def _inv3x3(h) -> tuple[tuple[float, float, float], ...]:
+    r0, r1, r2 = h[0], h[1], h[2]
+    key = (*r0, *r1, *r2) if isinstance(h, (list, tuple)) else (
+        float(r0[0]), float(r0[1]), float(r0[2]),
+        float(r1[0]), float(r1[1]), float(r1[2]),
+        float(r2[0]), float(r2[1]), float(r2[2]),
+    )
+    cached = _INV_CACHE.get(key)
+    if cached is not None:
+        return cached
+    a00, a01, a02, a10, a11, a12, a20, a21, a22 = (float(v) for v in key)
+    c00 = a11 * a22 - a12 * a21
+    c01 = a02 * a21 - a01 * a22
+    c02 = a01 * a12 - a02 * a11
+    det = a00 * c00 + a10 * c01 + a20 * c02
+    if abs(det) < 1e-18:
+        inv = tuple(tuple(float(v) for v in row) for row in np.linalg.inv(np.asarray(h, float)))
+    else:
+        inv_d = 1.0 / det
+        inv = (
+            (c00 * inv_d, c01 * inv_d, c02 * inv_d),
+            ((a12 * a20 - a10 * a22) * inv_d, (a00 * a22 - a02 * a20) * inv_d, (a02 * a10 - a00 * a12) * inv_d),
+            ((a10 * a21 - a11 * a20) * inv_d, (a01 * a20 - a00 * a21) * inv_d, (a00 * a11 - a01 * a10) * inv_d),
+        )
+    if len(_INV_CACHE) >= 64:
+        _INV_CACHE.clear()
+    _INV_CACHE[key] = inv
+    return inv
+
+
 def to_arm(h, pixel) -> tuple[float, float]:
-    x, y, w = np.asarray(h, float) @ [pixel[0], pixel[1], 1.0]
-    return float(x / w), float(y / w)
+    r0, r1, r2 = h[0], h[1], h[2]
+    px, py = float(pixel[0]), float(pixel[1])
+    w = r2[0] * px + r2[1] * py + r2[2]
+    return float((r0[0] * px + r0[1] * py + r0[2]) / w), float((r1[0] * px + r1[1] * py + r1[2]) / w)
 
 
 def to_pixel(h, point) -> tuple[float, float]:
-    return to_arm(np.linalg.inv(np.asarray(h, float)), point)
+    r0, r1, r2 = _inv3x3(h)
+    px, py = float(point[0]), float(point[1])
+    w = r2[0] * px + r2[1] * py + r2[2]
+    return (r0[0] * px + r0[1] * py + r0[2]) / w, (r1[0] * px + r1[1] * py + r1[2]) / w
 
 
 def yaw_sign(h, pixel) -> int:

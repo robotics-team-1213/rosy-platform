@@ -85,11 +85,15 @@ def has_support(xy, pixel_fn, occupied, roi) -> bool:
 def footprint(xy, axis_deg: float, length_mm: float, width_mm: float, step_mm: float = 5.0) -> list:
     """Points (m) covering a box centred at xy with its long axis along axis_deg: a grid plus the outline."""
     u = math.radians(axis_deg)
-    along, across = np.array([math.cos(u), math.sin(u)]), np.array([-math.sin(u), math.cos(u)])
-    hl, hw = length_mm / 2, width_mm / 2
-    ls = np.append(np.arange(-hl, hl, step_mm), hl)
-    ws = np.append(np.arange(-hw, hw, step_mm), hw)
-    return [tuple(np.asarray(xy) + (a * along + c * across) / 1000) for a in ls for c in ws]
+    x0, y0 = float(xy[0]), float(xy[1])
+    ux, uy = math.cos(u) / 1000.0, math.sin(u) / 1000.0
+    nx, ny = -uy, ux
+    hl, hw = float(length_mm) / 2.0, float(width_mm) / 2.0
+    ls = [*np.arange(-hl, hl, step_mm).tolist(), hl]
+    ws = [*np.arange(-hw, hw, step_mm).tolist(), hw]
+    corners = {(-hl, -hw), (-hl, hw), (hl, -hw), (hl, hw)}
+    ordered = sorted(((a, c) for a in ls for c in ws), key=lambda ac: (0 if ac in corners else 1, ac[0] * ac[0] + ac[1] * ac[1]))
+    return [(x0 + a * ux + c * nx, y0 + a * uy + c * ny) for a, c in ordered]
 
 
 def why_not(points, pixel_fn, polygon_px, occupied=None, roi=None, layer: int = 0) -> str | None:
@@ -97,7 +101,7 @@ def why_not(points, pixel_fn, polygon_px, occupied=None, roi=None, layer: int = 
     a lower-tier container, else the reason."""
     import cv2
 
-    poly = np.asarray(polygon_px, np.float32)
+    poly = polygon_px if isinstance(polygon_px, np.ndarray) and polygon_px.dtype == np.float32 else np.asarray(polygon_px, np.float32)
     for p in points:
         px = pixel_fn(p)
         if px is None:
@@ -154,13 +158,16 @@ def options(config: dict, dest_site: str, place_xy, held_axis_deg: float, entry:
     offsets = sorted(((dx, dy) for dx in np.arange(-reach, reach + 1e-9, step) for dy in np.arange(-reach, reach + 1e-9, step)
                       if math.hypot(dx, dy) <= reach + 1e-9), key=lambda d: math.hypot(*d))
     found, reasons, yaws = [], set(), [base_yaw, base_yaw + 90.0, base_yaw - 90.0]
-    along = along_yaw(polygon, place_xy, held_axis_deg, base_yaw, pixel_fn)
+    poly = np.asarray(polygon, np.float32)
+    along = along_yaw(poly, place_xy, held_axis_deg, base_yaw, pixel_fn)
     if along is not None:  # 2026-10-30 dry run: a 2-cell planned diagonally across the belt, which it also fits
         yaws = [along] + [y for y in yaws if abs((y - along + 90) % 180 - 90) > 5.0]
     for yaw in yaws:
+        rel_pts = footprint((0.0, 0.0), yaw + held_axis_deg, length, width)
         for dx, dy in offsets:
-            xy = (round(place_xy[0] + dx / 1000, 4), round(place_xy[1] + dy / 1000, 4))
-            why = why_not(footprint(xy, yaw + held_axis_deg, length, width), pixel_fn, polygon, occupied, roi, layer=layer)
+            x0, y0 = round(place_xy[0] + dx / 1000, 4), round(place_xy[1] + dy / 1000, 4)
+            xy = (x0, y0)
+            why = why_not([(x0 + rx, y0 + ry) for rx, ry in rel_pts], pixel_fn, poly, occupied, roi, layer=layer)
             if why is None:
                 found.append((xy, yaw, math.hypot(dx, dy) + (0 if yaw == yaws[0] else 1000)))
                 break  # the nearest point for this yaw is enough
