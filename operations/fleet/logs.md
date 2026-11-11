@@ -5455,5 +5455,5 @@
 ## 2026-11-11 · uncommitted · D-1016 등록 로봇 30일 비활동 «삭제 예정» 표시
 
 - 변경: `GET /api/fleet/enrollment/robots` 행에 `last_activity_at`·`days_idle`·`removal_pending`을 더했다(읽기 시점 계산, DB 상태·전이 불변). 마지막 활동은 마지막 수용 CORE 이벤트(`CoreEventStore.last_received_times`, `fleet/observe/events.py` 소유)와 등록 행 마지막 기록 가운데 늦은 쪽이며, 임계값은 사이트 설정 `fleet.enrollment.idle_removal_days`(기본 30, 1..3650, `console_site_config._enrollment_config`). 표시는 무엇도 해제하지 않는다 — 비활성은 토큰 만료, 해제는 이름 있는 운영자 unenroll 그대로(D-456). API Ref v1.386, ADR D-1016.
-- 증거: 원격 시험 exit 0 / NEW 0 — ec66aa6864에서 test_enrollment_service·test_core_event_store·test_enrollment_api·test_cli(known_failures 0 new). 콘솔 표시 node 시험 enrollment.test.mjs 8 pass. 첫 두 차례 RED는 가짜 시계와 저장소 실시계 스탬프의 영역 충돌로, 미래 스탬프 무시 규칙으로 바로잡았다.
+- 증거: 원격 시험 exit 0 / NEW 0 — 763608decb에서 test_enrollment_service·test_core_event_store·test_enrollment_api·test_cli·test_module_structure(known_failures 0 new). 콘솔 표시 node 시험 enrollment.test.mjs 8 pass. D-766 분할(enrollment_inputs·enrollment_idle, 라칫 행 845→819)로 enrollment.py 819줄·cli.py 757줄 유지. 첫 두 차례 RED는 가짜 시계와 저장소 실시계 스탬프의 영역 충돌로, 미래 스탬프 무시 규칙으로 바로잡았다.
 - gate 변화: 없음.
