@@ -27,10 +27,17 @@ import numpy as np
 DPI = 300
 
 
+_ARUCO_CACHE: dict = {}
+
+
 def _dictionary():
     import cv2
 
-    return cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_250)
+    dictionary = _ARUCO_CACHE.get("dict")
+    if dictionary is None:
+        dictionary = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_250)
+        _ARUCO_CACHE["dict"] = dictionary
+    return dictionary
 
 
 def sheet(sizes_mm=(20, 25), ids=(50,), dpi: int = DPI, faces=("",)):
@@ -61,7 +68,11 @@ def find(img) -> dict:
 
     grey = img if img.ndim == 2 else cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     if hasattr(cv2.aruco, "ArucoDetector"):
-        corners, ids, _ = cv2.aruco.ArucoDetector(_dictionary(), cv2.aruco.DetectorParameters()).detectMarkers(grey)
+        detector = _ARUCO_CACHE.get("detector")
+        if detector is None:
+            detector = cv2.aruco.ArucoDetector(_dictionary(), cv2.aruco.DetectorParameters())
+            _ARUCO_CACHE["detector"] = detector
+        corners, ids, _ = detector.detectMarkers(grey)
     else:  # OpenCV 4.6 (Ubuntu 24.04's python3-opencv)
         corners, ids, _ = cv2.aruco.detectMarkers(grey, _dictionary())
     out = {}

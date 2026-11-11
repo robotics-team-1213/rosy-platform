@@ -163,7 +163,7 @@ extra = (line for filename in sys.argv[2:-1] for line in Path(filename).read_tex
 Path(sys.argv[-1]).write_text("".join(extra))
 PY
 $P install -c "$N/constraints.txt" -r "$N/site-extra.txt" pytest==9.1.1 setuptools wheel flake8 httpx pyyaml \
-  jsonschema ext4 numpy pillow playwright pytest-xdist==3.8.0
+  jsonschema ext4 numpy pillow playwright==1.64.1 pytest-xdist==3.8.0 pytest-timeout==2.4.0
 $P install --require-hashes --no-deps --only-binary=:all: \
   --platform manylinux_2_28_x86_64 --platform manylinux2014_x86_64 \
   --target "$N/receiver-crypto" -r deploy/robot/pinky_pro/image/receiver-crypto-requirements.txt

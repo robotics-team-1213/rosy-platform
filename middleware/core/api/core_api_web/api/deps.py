@@ -40,6 +40,7 @@ from core_common.protocol.line_authority import AuthorityRefused
 from core_features.localization import MissionRefused
 from core_features.maps import valid_costmap_scope
 from core_features.navigation.manager import GOAL_LEASE_MAX_S, NavigationError
+from core_features.navigation.route import MAX_POINTS, RoutePoint
 from core_features.swarm import SwarmError
 from core_features.waypoints.manager import Waypoint
 from core_features.vision import VisionFrameAdvanced, VisionPullRateLimited
@@ -57,6 +58,8 @@ __all__ = [
     "TrialRefused",
     "NavigationError",
     "GOAL_LEASE_MAX_S",
+    "MAX_POINTS",
+    "RoutePoint",
     "DockError",
     "DockInstance",
     "DockType",
@@ -126,6 +129,7 @@ class CoreServicesLike(Protocol):
     swarm: Any
     traffic_policy: Any
     trip_lease: Any
+    person_request: Any
     vision: Any
     vision_stream: Any
     waypoints: Any

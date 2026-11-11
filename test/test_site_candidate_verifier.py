@@ -200,6 +200,33 @@ def _add_account(candidate):
     return candidate
 
 
+def _add_monitoring(candidate):
+    """D-1001: the base candidate also carries Monitoring's own signed image."""
+    root, _, image_ids, _ = candidate
+    manifest = json.loads((root / 'release.json').read_text())
+    ids = _write_images_tar(root / 'images.tar', services=(*manifest['images'], 'monitoring'))
+    sbom = root / 'sbom/monitoring.spdx'
+    sbom.write_text('Monitoring SPDX fixture')
+    image_ids['monitoring'] = ids['monitoring'][0]
+    manifest['images']['monitoring'] = {'reference': f'rosy-site-monitoring:{COMMIT}',
+        'image_id': image_ids['monitoring'], 'platform': 'linux/amd64',
+        'sbom': 'sbom/monitoring.spdx', 'sbom_sha256': hashlib.sha256(sbom.read_bytes()).hexdigest()}
+    manifest['image_archive_sha256'] = hashlib.sha256((root / 'images.tar').read_bytes()).hexdigest()
+    (root / 'release.json').write_text(json.dumps(manifest))
+    return candidate
+
+
+def test_verifies_own_monitoring_image_beside_account_and_rejects_its_tampered_sbom(candidate):
+    _add_monitoring(_add_account(candidate))
+    root, _, image_ids, _ = candidate
+    summary = _verify(candidate)
+    assert summary['verified_images'] == [*SERVICES, 'account', 'monitoring']
+    assert summary['image_ids']['monitoring'] == image_ids['monitoring']
+    (root / 'sbom/monitoring.spdx').write_text('tampered Monitoring SPDX')
+    with pytest.raises(_load_verifier().CandidateVerificationError, match='monitoring'):
+        _verify(candidate)
+
+
 def test_verifies_independent_account_image_and_rejects_its_tampered_sbom(candidate):
     _add_account(candidate)
     root, _, image_ids, _ = candidate
@@ -619,4 +646,23 @@ def test_pre_monitoring_candidate_verifies_but_half_pair_does_not(candidate, rem
         assert _verify(candidate)["monitoring"] is False
     else:
         with pytest.raises(_load_verifier().CandidateVerificationError, match="required deployment file"):
+            _verify(candidate)
+
+
+@pytest.mark.parametrize("removed", ["all", "one"])
+def test_account_tls_renewal_group_is_signed_and_all_or_nothing(candidate, removed):
+    verifier = _load_verifier()
+    root = candidate[0]
+    (root / "deploy/site/account_tls_renew.py").write_text("tampered", encoding="utf-8")
+    with pytest.raises(verifier.CandidateVerificationError, match="deployment file hash mismatch"):
+        _verify(candidate)
+    manifest = json.loads((root / "release.json").read_text())
+    for name in (verifier.ACCOUNT_TLS_FILES if removed == "all" else verifier.ACCOUNT_TLS_FILES[:1]):
+        del manifest["deployment_file_sha256"][name]
+        (root / "deploy/site" / name).unlink()
+    (root / "release.json").write_text(json.dumps(manifest), encoding="utf-8")
+    if removed == "all":  # candidates signed before D-1001 still verify for rollback
+        _verify(candidate)
+    else:
+        with pytest.raises(verifier.CandidateVerificationError, match="required deployment file"):
             _verify(candidate)

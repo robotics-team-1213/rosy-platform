@@ -31,21 +31,22 @@ def observe(img, hsv_min, hsv_max, params=None, near=None) -> dict:
 
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
     mask = cv2.morphologyEx(cv2.inRange(hsv, np.array(hsv_min), np.array(hsv_max)), cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
-    n, labels, stats, _ = cv2.connectedComponentsWithStats(mask)
+    n, labels, stats, centroids_cc = cv2.connectedComponentsWithStats(mask)
     if n < 2:
         return {"found": False}
     areas = stats[1:, cv2.CC_STAT_AREA]
     sizeable = [i + 1 for i, a in enumerate(areas) if a >= 0.2 * areas.max()]
-    centroids = {i: np.array(np.nonzero(labels == i)[::-1]).mean(axis=1) for i in sizeable}
+    centroids = {i: centroids_cc[i] for i in sizeable}
     big = (min(sizeable, key=lambda i: np.hypot(*(centroids[i] - near))) if near is not None
            else int(np.argmax(areas)) + 1)
     if big not in centroids:
-        centroids[big] = np.array(np.nonzero(labels == big)[::-1]).mean(axis=1)
-    pts = np.column_stack(np.nonzero(labels == big))[:, ::-1].astype(np.float32)
+        centroids[big] = centroids_cc[big]
+    x, y, bw, bh = (int(v) for v in stats[big, :4])
+    sub_y, sub_x = np.nonzero(labels[y:y + bh, x:x + bw] == big)
+    pts = np.column_stack([sub_x + x, sub_y + y]).astype(np.float32)
     (_, _), (w, h), _ = cv2.minAreaRect(pts)
     vals, vecs = np.linalg.eigh(np.cov((pts - pts.mean(axis=0)).T))  # long axis: the principal direction
     long_axis = vecs[:, int(np.argmax(vals))]
-    x, y, bw, bh = (int(v) for v in stats[big, :4])
     edge = prm.get(params, "wrist.edge_margin_px")
     height, width = mask.shape
     return {"found": True, "cx": float(pts[:, 0].mean()), "cy": float(pts[:, 1].mean()), "area": int(areas[big - 1]),

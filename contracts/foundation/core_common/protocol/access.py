@@ -44,6 +44,8 @@ class CameraPairApprovalRequest(BaseModel):
     model_config = ConfigDict(extra='forbid')
     code: str = Field(pattern=r'^[0-9]{6}$')
     source_id: str = Field(min_length=1, max_length=32)
+    # D-999: explicit replace of the occupied source's active credential (stale UI cannot hit another).
+    replace_credential_id: str | None = Field(default=None, pattern=r'^[A-Za-z0-9_-]{1,64}$')
 
 
 class SshPairRequest(BaseModel):

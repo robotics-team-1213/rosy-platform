@@ -78,8 +78,8 @@ def transfer(cell, library: Path, hover=None, *, config=None, calibration=None, 
         if command == f"load {library}" and status.get("library_sha256") != assessment["library_sha256"]:
             return {"result": "held", "at": command, "steps": steps,
                     "envelope": {**assessment, "allowed": False, "reason": "library_changed"}}
-        if status.get("contact"):  # the runner held with torque on: back up the same path, fold home
-            for after in ("retreat", "park"):
+        if status.get("contact"):  # the runner held with torque on: back up the same path (unless shedding), fold home
+            for after in (() if "overload-hold" in (status.get("error") or "") else ("retreat",)) + ("park",):
                 steps.append({"command": after, "ok": act(after).get("ok")})
             return {"result": "contact", "at": command, "steps": steps, "error": status.get("error"),
                     "envelope": assessment}
@@ -459,7 +459,7 @@ def move(cell, config: dict, calibration: dict, source: str, dest: str, work: Pa
                 return {**out, "result": f"stopped: remap {mapped['result']}"}
             calibration["sites"][key] = out.setdefault("remapped", {})[key] = mapped["record"]
             continue
-        if decision["decision"] != "retry" or (facts.get("fault")):
+        if decision["decision"] not in ("retry", "reinsert") or (facts.get("fault")):
             return {**out, "result": f"stopped: {decision['decision']} ({facts['check']})"}
     return {**out, "result": f"stopped: {attempts} attempts"}
 
@@ -555,10 +555,10 @@ def main(argv=None):
     elif not cell.act("state").get("ok"):
         raise SystemExit("start record_session.py --chunks first: no chunk_runner answers")
     seat = None
-    if config.get("decision_model"):  # e.g. {"url": "http://127.0.0.1:11434", "model": "qwen3-vl:8b-instruct"}
+    if config.get("debate_models") or config.get("decision_model"):
         import judge_seat
 
-        seat = judge_seat.Seat(judge_seat.ollama(**config["decision_model"]), knowledge=config.get("knowledge"), params=config.get("params_path"), context=config.get("decision_context"))
+        seat = judge_seat.Seat(config.get("debate_models") or config["decision_model"], knowledge=config.get("knowledge"), params=config.get("params_path"), context=config.get("decision_context"))
     KEEP["dir"] = work / "frames"
     import cell_attempts
 

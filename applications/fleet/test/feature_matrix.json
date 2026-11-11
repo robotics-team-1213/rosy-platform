@@ -2009,6 +2009,8 @@
         "applications/fleet/web/learning.html"
       ],
       "consumers": [
+        "applications/fleet/web/person-request.js",
+        "applications/fleet/web/station-recovery.js",
         "applications/fleet/web/console-goal.js",
         "applications/fleet/web/manual-control.js",
         "applications/fleet/web/console-refresh.js",
@@ -2030,6 +2032,38 @@
       ],
       "availability": "configured capability and authorized role; see backend contract",
       "calls": [
+        {
+          "consumer": "applications/fleet/web/person-request.js",
+          "expression": "/api/fleet/person-requests?state=open",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/person-requests"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/person-request.js",
+          "expression": "/api/fleet/person-requests/${encodeURIComponent(request.id)}/answer",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/person-requests/{request_id}/answer"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/station-recovery.js",
+          "expression": "/api/fleet/station-recovery",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/station-recovery"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/station-recovery.js",
+          "expression": "/api/fleet/station-recovery/${encodeURIComponent(robotId)}/approve",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/station-recovery/{robot_id}/approve"
+          ]
+        },
         {
           "consumer": "applications/fleet/web/console-goal.js",
           "expression": "/api/fleet/robots/${encodeURIComponent(robotId)}/goal",
@@ -2263,6 +2297,74 @@
         }
       ],
       "requests": [
+        {
+          "id": "GET:/api/fleet/person-requests",
+          "method": "GET",
+          "path": "/api/fleet/person-requests",
+          "implementation": "operations/fleet/fleet/server/console/person_request_routes.py",
+          "handler": "list_person_requests",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_person_requests.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/person-requests"
+        },
+        {
+          "id": "POST:/api/fleet/person-requests/{request_id}/answer",
+          "method": "POST",
+          "path": "/api/fleet/person-requests/{request_id}/answer",
+          "implementation": "operations/fleet/fleet/server/console/person_request_routes.py",
+          "handler": "answer_person_request",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_person_requests.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/person-requests/{request_id}/answer"
+        },
+        {
+          "id": "GET:/api/fleet/station-recovery",
+          "method": "GET",
+          "path": "/api/fleet/station-recovery",
+          "implementation": "operations/fleet/fleet/server/console/station_recovery_routes.py",
+          "handler": "station_recovery_requests",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_station_recovery.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/station-recovery"
+        },
+        {
+          "id": "POST:/api/fleet/station-recovery/{robot_id}/approve",
+          "method": "POST",
+          "path": "/api/fleet/station-recovery/{robot_id}/approve",
+          "implementation": "operations/fleet/fleet/server/console/station_recovery_routes.py",
+          "handler": "station_recovery_approve",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_station_recovery.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/station-recovery/{robot_id}/approve"
+        },
         {
           "id": "POST:/api/fleet/robots/{robot_id}/estop-release",
           "method": "POST",
@@ -4142,7 +4244,7 @@
           ]
         },
         {
-          "consumer": "applications/fleet/web/sitemap/site-map.js",
+          "consumer": "applications/fleet/web/sitemap/site-map-bands.js",
           "expression": "/api/fleet/site-map/lane-graph-crosswalks",
           "resolution": "literal-or-template",
           "request_ids": [
@@ -4212,6 +4314,22 @@
           "request_ids": [
             "POST:/api/fleet/site-rules/judge"
           ]
+        },
+        {
+          "consumer": "applications/fleet/web/sitemap/site-map-reality.js",
+          "expression": "/api/fleet/site-map/reality-check",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/site-map/reality-check"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/sitemap/site-map-reality.js",
+          "expression": "/api/fleet/site-map/reality-check/apply",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/site-map/reality-check/apply"
+          ]
         }
       ],
       "requests": [
@@ -4219,7 +4337,7 @@
           "id": "GET:/api/fleet/charge-bays",
           "method": "GET",
           "path": "/api/fleet/charge-bays",
-          "implementation": "operations/fleet/fleet/server/console/console_routes.py",
+          "implementation": "operations/fleet/fleet/server/console/charge_bay_routes.py",
           "handler": "charge_bay_plan",
           "expected_statuses": [
             200
@@ -4588,6 +4706,41 @@
           ],
           "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
           "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/site-rules/judge"
+        },
+        {
+          "id": "GET:/api/fleet/site-map/reality-check",
+          "method": "GET",
+          "path": "/api/fleet/site-map/reality-check",
+          "implementation": "operations/fleet/fleet/server/sitemap/site_map_routes.py",
+          "handler": "site_map_reality_check",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_site_map_reality_api.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/site-map/reality-check"
+        },
+        {
+          "id": "POST:/api/fleet/site-map/reality-check/apply",
+          "method": "POST",
+          "path": "/api/fleet/site-map/reality-check/apply",
+          "implementation": "operations/fleet/fleet/server/sitemap/site_map_routes.py",
+          "handler": "site_map_reality_apply",
+          "expected_statuses": [
+            200,
+            409
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_site_map_reality_api.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/site-map/reality-check/apply"
         }
       ],
       "flows": [

@@ -36,7 +36,7 @@ def test_site_candidate_is_commit_tagged_and_contains_sbom_and_image_hash(tmp_pa
                  "compose.monitoring.yaml", "Caddyfile.monitoring",
                  "compose.account.yaml", "Caddyfile.account", "compose.account-backup.yaml",
                  "rosy-account-backup.service", "rosy-account-backup.timer",
-                 "rosy-account-backup-check.service", "rosy-account-backup-check.timer"):
+                 "rosy-account-backup-check.service", "rosy-account-backup-check.timer", "account_tls_renew.py", "account-tls.env.example", "rosy-site-account-tls-renew.service", "rosy-site-account-tls-renew.timer"):
         (site / name).write_text(f"fixture:{name}", encoding="utf-8")
     (site / "rosy-site-stack.service").write_text(
         "Requires=docker.service\n"
@@ -52,6 +52,7 @@ def test_site_candidate_is_commit_tagged_and_contains_sbom_and_image_hash(tmp_pa
     (site / ".env.example").write_text("ROSY_SITE_IMAGE_TAG=local\n", encoding="utf-8")
     (site / "Dockerfile.fleet").write_text("FROM ubuntu", encoding="utf-8")
     (site / "Dockerfile.account").write_text("FROM ubuntu", encoding="utf-8")
+    (site / "Dockerfile.monitoring").write_text("FROM ubuntu", encoding="utf-8")
     (site / "Dockerfile.vision").write_text("FROM ubuntu", encoding="utf-8")
     (site / "Dockerfile.proxy").write_text("FROM caddy", encoding="utf-8")
 
@@ -79,7 +80,7 @@ def test_site_candidate_is_commit_tagged_and_contains_sbom_and_image_hash(tmp_pa
     assert manifest["source_commit"] == COMMIT
     assert manifest["image_tag"] == COMMIT
     assert manifest["platform"] == "linux/amd64"
-    assert set(manifest["images"]) == {'fleet', 'vision', 'proxy', 'postgres', 'account'}
+    assert set(manifest["images"]) == {'fleet', 'vision', 'proxy', 'postgres', 'account', 'monitoring'}
     assert all(item["image_id"].startswith("sha256:") for item in manifest["images"].values())
     assert all(item["sbom_sha256"] for item in manifest["images"].values())
     assert manifest["image_archive_sha256"]
@@ -119,7 +120,7 @@ def test_site_candidate_is_commit_tagged_and_contains_sbom_and_image_hash(tmp_pa
                  "compose.monitoring.yaml", "Caddyfile.monitoring",
                  "compose.account.yaml", "Caddyfile.account",
                  "compose.account-backup.yaml", "rosy-account-backup.service", "rosy-account-backup.timer",
-                 "rosy-account-backup-check.service", "rosy-account-backup-check.timer",
+                 "rosy-account-backup-check.service", "rosy-account-backup-check.timer", "account_tls_renew.py", "account-tls.env.example", "rosy-site-account-tls-renew.service", "rosy-site-account-tls-renew.timer",
     }
     stack_unit = (output / "deploy" / "site" / "rosy-site-stack.service").read_text(
         encoding="utf-8")
@@ -175,10 +176,10 @@ def test_site_candidate_refuses_non_amd64_images_and_output_inside_checkout(tmp_
                  "pairing-sync-token.template.txt",
                  "compose.monitoring.yaml", "Caddyfile.monitoring",
                  "compose.account.yaml", "Caddyfile.account",
-                 "Dockerfile.fleet", "Dockerfile.vision", "Dockerfile.proxy", "Dockerfile.account"):
+                 "Dockerfile.fleet", "Dockerfile.vision", "Dockerfile.proxy", "Dockerfile.account", "Dockerfile.monitoring"):
         (site / name).write_text("fixture", encoding="utf-8")
     for name in ("compose.account-backup.yaml", "rosy-account-backup.service", "rosy-account-backup.timer",
-                 "rosy-account-backup-check.service", "rosy-account-backup-check.timer"):
+                 "rosy-account-backup-check.service", "rosy-account-backup-check.timer", "account_tls_renew.py", "account-tls.env.example", "rosy-site-account-tls-renew.service", "rosy-site-account-tls-renew.timer"):
         (site / name).write_text("fixture", encoding="utf-8")
     (site / "rosy-site-stack.service").write_text("fixture", encoding="utf-8")
 
@@ -222,7 +223,7 @@ def test_host_runbook_verifies_site_signature_before_docker_load():
 def _fixture_repo(root: Path) -> None:
     site = root / "deploy" / "site"
     site.mkdir(parents=True)
-    for name in (*DEPLOY_FILES, "Dockerfile.fleet", "Dockerfile.vision", "Dockerfile.proxy", "Dockerfile.account"):
+    for name in (*DEPLOY_FILES, "Dockerfile.fleet", "Dockerfile.vision", "Dockerfile.proxy", "Dockerfile.account", "Dockerfile.monitoring"):
         (site / name).write_text(f"fixture:{name}", encoding="utf-8")
     (site / ".env.example").write_text("ROSY_SITE_IMAGE_TAG=local\n", encoding="utf-8")
     for name in DOC_FILES:
@@ -261,7 +262,7 @@ def test_site_candidate_syft_sbom_keeps_the_scout_file_layout(tmp_path):
     syft_calls = [call for call in calls if call[0] == "syft"]
     assert [call[2] for call in syft_calls] == [
         f"docker:rosy-site-{service}:{COMMIT}"
-        for service in ("fleet", "account", "vision", "proxy", "postgres")]
+        for service in ("fleet", "account", "monitoring", "vision", "proxy", "postgres")]
     assert not any(call[1:2] == ["scout"] for call in calls)
     for service, row in manifest["images"].items():
         assert row["sbom"] == f"sbom/{service}.spdx"
@@ -293,7 +294,7 @@ def test_site_candidate_refuses_ignored_secret_files_in_the_proxy_build_context(
 def test_site_images_copy_only_public_repo_files():
     root = Path(__file__).resolve().parents[1]
     site = root / "deploy" / "site"
-    for name in ("Dockerfile.fleet", "Dockerfile.vision", "Dockerfile.account"):
+    for name in ("Dockerfile.fleet", "Dockerfile.vision", "Dockerfile.account", "Dockerfile.monitoring"):
         for line in (site / name).read_text(encoding="utf-8").splitlines():
             if line.split(" ", 1)[0] in {"COPY", "ADD"}:
                 assert "secrets" not in line and ".env" not in line, line

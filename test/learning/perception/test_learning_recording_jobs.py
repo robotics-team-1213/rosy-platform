@@ -15,14 +15,16 @@ import learning_recording_jobs as module
 def _setup(tmp_path, monkeypatch):
     python = tmp_path/'python'
     python.touch()
+    # The export's 5 GiB free-space gate reads the real disk; a nearly full test host must not decide these cases.
+    monkeypatch.setattr(module.shutil, 'disk_usage', lambda path: SimpleNamespace(free=1 << 40))
     monkeypatch.setattr(module.subprocess, 'run', lambda *a, **k: SimpleNamespace(returncode=0))
     process = SimpleNamespace(pid=123, returncode=None)
     process.poll = lambda: process.returncode
     process.wait = lambda **kwargs: process.returncode
     monkeypatch.setattr(module.subprocess, 'Popen', lambda *a, **k: process)
     monkeypatch.setattr(module, 'process_stamp', lambda pid, request=None: dict(pid=pid, start='1', boot='test'))
-    # the 5 GiB export check read the host's real /tmp and failed on the site PC (2026-11-08)
-    monkeypatch.setattr(module.shutil, 'disk_usage', lambda path: SimpleNamespace(free=1 << 40))
+    # The 5 GiB reserve is the host's free disk, not the fixture's; small test-PC /tmp stopped landings.
+    monkeypatch.setattr(module.shutil, 'disk_usage', lambda path: SimpleNamespace(free=1 << 50))
     jobs = Jobs(tmp_path/'recordings', str(python))
     session = dict(id=str(uuid.uuid4()), name='two wrist takes', profile_revision='a'*64,
                    export=None, study_id=None, profile=dict(cameras=[dict(

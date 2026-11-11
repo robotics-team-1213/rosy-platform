@@ -52,6 +52,7 @@ def test_help_script_works_outside_a_repository_without_writing(tmp_path, argv):
 def test_help_text_inside_a_forwarded_value_is_not_a_help_request(monkeypatch):
     argv = ["--tests", "test/example.py --help"]
     calls = []
+    monkeypatch.setattr(tool.subprocess, "call", lambda *a, **k: 0)  # land.py --precheck has its own tests
     monkeypatch.setattr(tool, "start", lambda cwd, args, now, launch: (
         calls.append(args) or ("snapshot", Path("log"))))
     assert tool.main(argv) == 0
@@ -276,16 +277,56 @@ def _dead_pid() -> int:
     return proc.pid
 
 
-def test_a_branch_already_landing_is_refused_and_replace_stops_that_lander(repo, monkeypatch):
-    """2026-10-31/11-01: the same change was queued twice and ran two pretests on the shared test PCs."""
+@pytest.mark.parametrize("flag", [[], ["--replace"]])
+def test_a_newer_head_replaces_the_branchs_live_landing(repo, monkeypatch, flag):
+    """2026-10-31/11-01: the same change was queued twice and ran two pretests; 11-09: 322 re-queues (addendum 32)."""
     main, dev = repo
-    _ticket(main, "0001", branch="land/feat/x-20261027000000")
-    with pytest.raises(SystemExit, match="already landing in 0001-1.json"):
-        tool.start(dev, ["--tests", "auto"], NOW, lambda *a: None)
+    _ticket(main, "0001", branch="land/feat/x-20261027000000")  # an older HEAD (its snapshot ref is gone here)
     stopped, launched = [], []
     monkeypatch.setattr(tool, "stop", stopped.append)
-    tool.start(dev, ["--replace", "--tests", "auto"], NOW, lambda argv, log: launched.append(argv))
+    tool.start(dev, [*flag, "--tests", "auto"], NOW, lambda argv, log: launched.append(argv))
     assert stopped == [os.getpid()] and "--replace" not in launched[0] and launched[0][-2:] == ["--tests", "auto"]
+
+
+def test_requeueing_a_head_the_live_snapshot_holds_reuses_it(repo, monkeypatch):
+    main, dev = repo
+    _git(main, "branch", "land/feat/x-20261027000000", _git(dev, "rev-parse", "HEAD"))
+    _ticket(main, "0001", branch="land/feat/x-20261027000000")
+    monkeypatch.setattr(tool, "stop", lambda pid: pytest.fail("the live landing already holds this HEAD"))
+    snap, log = tool.start(dev, ["--tests", "auto"], NOW, lambda *a: pytest.fail("a second landing started"))
+    assert snap == "land/feat/x-20261027000000" and log.name == "land-feat-x-20261027000000.log"
+    assert not _git(main, "branch", "--list", "land/feat/x-20261028044000")
+
+
+@pytest.mark.parametrize("room_after", [2, None])
+def test_a_full_queue_at_queue_time_is_polled_then_stops(repo, monkeypatch, room_after):
+    _, dev = repo
+    checks, clock = [], [0.0]
+    monkeypatch.setattr(tool._queue(), "full", lambda qdir: None if room_after and len(checks) >= room_after
+                        else checks.append(1) or "landing queue full (12/12 tickets)")
+    monkeypatch.setattr(tool.time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(tool.time, "sleep", lambda s: clock.__setitem__(0, clock[0] + s))
+    if room_after:
+        assert tool.start(dev, [], NOW, lambda *a: None)[0] == "land/feat/x-20261028044000"
+        assert clock[0] == 2 * tool.FULL_POLL_S
+    else:
+        with pytest.raises(SystemExit, match="queue full .*waited 30 min"):
+            tool.start(dev, [], NOW, lambda *a: None)
+        assert clock[0] >= tool.FULL_WAIT_S and not _git(dev, "branch", "--list", "land/*")
+
+
+def test_a_finished_landing_removes_the_older_snapshots_it_covers(repo, monkeypatch, tmp_path):
+    monkeypatch.setenv("ROSY_LAND_TMP", str(tmp_path / "rosy-land"))
+    main, dev = repo
+    old, old_log = tool.start(dev, [], NOW, lambda *a: None)
+    old_tree = old_log.parent / old_log.name.removesuffix(".log")
+    for path in old_tree.parent.glob(old_tree.name + ".*"):
+        os.utime(path, (time.time() - 7200,) * 2)  # land_gc keeps anything touched in the last hour
+    snap, log = tool.start(dev, [], NOW.replace(second=1), lambda *a: None)
+    tree = log.parent / log.name.removesuffix(".log")
+    assert tool.supervise(tree, snap, [], run=lambda argv, cwd, stdout, stderr, **kw: 1) == 1
+    assert not old_tree.exists() and not _git(main, "branch", "--list", old)
+    assert tree.exists() and _git(main, "branch", "--list", snap)  # the stopped one stays for its owner
 
 
 def test_a_branch_carried_in_a_batch_is_refused_even_with_replace_and_a_dead_ticket_is_not(repo, monkeypatch):
@@ -639,3 +680,47 @@ def test_orphans_lists_a_snapshot_whose_supervisor_died_unstopped(repo):
     assert tool.orphans(dev, now=tree.stat().st_mtime + 25 * 3600) == []  # older than a day: not a recovery
     _ticket(main, "0004", branch=snap)
     assert tool.orphans(dev, now=tree.stat().st_mtime) == []  # a live ticket still owns it
+
+
+def test_a_waiter_never_replaces_a_landing_that_started_while_it_waited(repo, monkeypatch):
+    """11-09 review: an older call sleeping on a full queue must not stop the owner's newer re-queue."""
+    main, dev = repo
+    state = {"full": True}
+
+    def full(qdir):
+        if state["full"]:
+            state["full"] = False
+            _ticket(main, "0001", branch="land/feat/x-20261028050000")  # queued meanwhile, from a newer HEAD
+            return "landing queue full (12/12 tickets)"
+        return None
+    monkeypatch.setattr(tool._queue(), "full", full)
+    monkeypatch.setattr(tool.time, "sleep", lambda s: None)
+    monkeypatch.setattr(tool, "stop", lambda pid: pytest.fail("a waiter stopped a newer landing"))
+    with pytest.raises(SystemExit, match="started while this waited"):
+        tool.start(dev, [], NOW, lambda *a: None)
+
+
+def test_a_stopped_rollup_splits_itself_from_mains_checkout(tmp_path, monkeypatch):
+    """D-889 33: a failed rollup bisects on its own; any other stopped snapshot, or the revert switch, does not."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "init", "-q", str(repo)], check=True)
+    tree = repo / ".git" / "rosy-land-wt" / "land-fix-land-rollup-20261109000000-20261109000000"
+    tree.mkdir(parents=True)
+    rollup = "land/fix/land-rollup-20261109000000-20261109000000"
+    monkeypatch.setattr(tool, "git", lambda cwd, *a, **k: str(repo / ".git"))
+    seen = []
+    launch = lambda argv, log, cwd=None: seen.append((argv[-2:], log.name, cwd))  # noqa: E731
+    tool.split_rollup(tree, rollup, launch)
+    assert seen == [], "no .members record: not a rollup land_rollup built"
+    (tree.parent / (tree.name + ".members")).write_text("[]", encoding="utf-8")
+    tool.split_rollup(tree, "land/fix/a-20261109000000", launch)
+    monkeypatch.setenv("ROSY_ROLLUP_MIXED", "0")
+    tool.split_rollup(tree, rollup, launch)
+    assert seen == []
+    monkeypatch.delenv("ROSY_ROLLUP_MIXED")
+    tool.split_rollup(tree, rollup, launch, reason="[land] STOP: landing queue full (12/12 tickets)")
+    assert seen == [], "halves would stop on the same full queue"
+    tool.split_rollup(tree, rollup, launch, reason="[land] STOP: NEW failure")
+    tool.split_rollup(tree, rollup, launch, reason="[land] STOP: NEW failure")  # a retried supervisor
+    assert seen == [(["split", tree.name], tree.name + ".split.log", repo)]

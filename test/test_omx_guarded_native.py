@@ -33,6 +33,7 @@ class Bus:
         self.fail_write = False
         self.bad_reads = 0  # corrupt status packets before a good one
         self.goals = {}
+        self.temps = dict.fromkeys(NAMES, 30)
         self.profiles = {(n, register): 1 for n in NAMES
                          for register in ('Profile_Velocity', 'Profile_Acceleration')}
 
@@ -63,6 +64,8 @@ class Bus:
             return 5 if motor == "gripper" else 4
         if register == "Hardware_Error_Status":
             return 0
+        if register == "Present_Temperature":
+            return self.temps[motor]
         if register == "Torque_Enable":
             return self.torque[motor]
         if register in ("Profile_Velocity", "Profile_Acceleration"):
@@ -768,9 +771,98 @@ def test_sustained_loaded_tracking_error_latches_before_firmware_overload(guard)
     for _ in range(10):
         follower.raw['shoulder_lift'] = int(motion.command['shoulder_lift']) - 25
         step()
-    with pytest.raises(ValueError, match=r'shoulder_lift.*overload risk.*PWM=-300.*limit=330.*duration='):
-        for _ in range(20):
+    with pytest.raises(ValueError, match=r'shoulder_lift.*overload risk.*hold timed out.*PWM=-300.*limit=330.*duration='):
+        for _ in range(120):
             follower.raw['shoulder_lift'] = int(motion.command['shoulder_lift']) - 25
+            step()
+    assert not any(follower.torque.values()) and motion.failed
+
+
+def overload_into_hold(guard, pwm=-300):
+    """A shoulder_lift stalled 25 ticks behind at the cap until the guard takes its one hold."""
+    motion, follower, leader, clock, step = phased_pair(guard)
+    effort_read(follower, pwm=pwm)
+    while 'shoulder_lift' not in motion.held:
+        follower.raw['shoulder_lift'] = int(motion.command['shoulder_lift']) - 25
+        step()
+        assert not motion.failed
+    return motion, follower, leader, clock, step
+
+
+def test_overload_holds_with_torque_on_and_the_goal_set_to_present_once(guard):
+    motion, follower, leader, clock, step = overload_into_hold(guard)
+    held_goal = motion.command['shoulder_lift']
+    assert held_goal == follower.raw['shoulder_lift'] and all(follower.torque[n] for n in guard.BODY)
+    for _ in range(20):  # the joint sags under the cap (3.5 deg); the goal must not chase it down (2026-11-09 review)
+        follower.raw['shoulder_lift'] -= 2
+        step()
+    assert motion.command['shoulder_lift'] == held_goal and not motion.failed
+
+
+def test_a_frozen_hold_still_at_the_cap_times_out_on_pwm_alone(guard):
+    # the goal sits on present, so the error-gated overload test reads 0 error and would never fire
+    motion, follower, leader, clock, step = overload_into_hold(guard)
+    started = clock[0]
+    with pytest.raises(ValueError, match=r'shoulder_lift: overload risk; hold timed out at PWM=-300 limit=330'):
+        for _ in range(200):
+            follower.raw['shoulder_lift'] = int(motion.command['shoulder_lift'])
+            step()
+    assert clock[0] - started == pytest.approx(guard.HOLD_S, abs=0.3)
+    assert not any(follower.torque.values()) and motion.failed
+
+
+def test_a_hold_never_frees_itself_and_after_release_a_second_overload_ends_the_session(guard):
+    motion, follower, leader, clock, step = overload_into_hold(guard)
+    held_goal = motion.command['shoulder_lift']
+    effort_read(follower, pwm=0)  # off the cap, same target: the joint must not resume into the stall (2026-11-09 review)
+    for _ in range(40):
+        follower.raw['shoulder_lift'] = int(motion.command['shoulder_lift'])
+        step()
+    assert 'shoulder_lift' in motion.held and motion.command['shoulder_lift'] == held_goal and not motion.failed
+    motion.release_hold()
+    assert not motion.held
+    effort_read(follower, pwm=-300)
+    with pytest.raises(ValueError, match='overload risk.*second overload on this joint'):
+        for _ in range(60):
+            follower.raw['shoulder_lift'] = int(motion.command['shoulder_lift']) - 25
+            step()
+    assert not any(follower.torque.values())
+
+
+@pytest.mark.parametrize('shed_load', [False, True])
+def test_a_hold_freezes_every_joint_unless_the_runner_sheds_load(guard, shed_load):
+    motion, follower, leader, clock, step = overload_into_hold(guard)
+    motion.shed_load = shed_load
+    effort_read(follower, pwm=0)
+    elbow = motion.command['elbow_flex']
+    for _ in range(10):  # the runner's target keeps moving on another joint
+        leader.raw['elbow_flex'] += 4
+        follower.raw['shoulder_lift'] = int(motion.command['shoulder_lift'])
+        follower.raw['elbow_flex'] = int(motion.command['elbow_flex'])
+        step()
+    assert (motion.command['elbow_flex'] != elbow) == shed_load
+    assert 'shoulder_lift' in motion.held and not motion.failed
+
+
+def test_a_held_joint_that_warms_ends_the_session(guard):
+    motion, follower, leader, clock, step = overload_into_hold(guard)
+    follower.temps['shoulder_lift'] += guard.HOLD_TEMP_RISE_C
+    with pytest.raises(ValueError, match='held joint warmed'):
+        for _ in range(10):
+            step()
+    assert not any(follower.torque.values())
+
+
+def test_an_error_inside_the_hold_watch_still_turns_torque_off(guard):
+    motion, follower, leader, clock, step = overload_into_hold(guard)
+    read = follower.read
+    def broken(register, motor, **kwargs):
+        if register == 'Present_Temperature':
+            raise ConnectionError('temperature read failed')
+        return read(register, motor, **kwargs)
+    follower.read = broken
+    with pytest.raises(ConnectionError):
+        for _ in range(10):
             step()
     assert not any(follower.torque.values()) and motion.failed
 
@@ -841,7 +933,7 @@ def test_effort_boundaries_apply_to_all_commanded_body_modes(guard, body_only, e
     motion.send(action(leader))
     effort_read(follower, pwm=pwm)
     def run():
-        for _ in range(9):
+        for _ in range(27):  # the overload test fires within 1 s, the hold then times out after HOLD_S
             clock[0] += 0.2
             follower.raw['shoulder_lift'] = int(motion.command['shoulder_lift']) - error_ticks
             motion.send(action(leader))
@@ -1033,3 +1125,72 @@ def test_teacher_recording_refuses_a_leader_teleop_and_a_non_recording(guard):
     with pytest.raises(ValueError, match="recording"):
         guard.run_native(SimpleNamespace(), Follower, Leader, teacher=True)
     assert calls == []
+
+
+def test_effort_check_uses_sync_read_on_dynamixel_bus_to_avoid_5hz_unicast_stall(guard):
+    follower, clock = Bus(), [10.0]
+    follower.model_ctrl_table = {}
+    pwm_sync_calls = []
+    original_sync = follower.sync_read
+
+    def sync_read(register, motors=None, *, normalize=True, num_retry=0):
+        if register in ("Present_PWM", "Hardware_Error_Status", "Torque_Enable", "PWM_Limit",
+                        "Operating_Mode", "Profile_Acceleration", "Profile_Velocity", "Drive_Mode"):
+            pwm_sync_calls.append((register, tuple(motors), normalize, num_retry))
+            if register == "PWM_Limit":
+                return {n: 330 for n in motors}
+            if register == "Operating_Mode":
+                return {n: 5 if n == "gripper" else 4 for n in motors}
+            if register in ("Profile_Acceleration", "Profile_Velocity"):
+                return {n: 8 if register == "Profile_Acceleration" else 20 for n in motors}
+            return {n: 0 for n in motors}
+        return original_sync(register, motors=motors, normalize=normalize, num_retry=num_retry)
+
+    follower.sync_read = sync_read
+    guard.connect_passive(SimpleNamespace(bus=follower, cameras={}), follower=True)
+    assert ("Operating_Mode", guard.NAMES, False, guard.READ_RETRY) in pwm_sync_calls
+    motion = guard.NativeJointMotion(follower, None, teacher=True, clock=lambda: clock[0])
+    here = {n + ".pos": v for n, v in follower.norm(follower.raw).items()}
+    motion.send(here)
+    clock[0] += 0.25
+    motion.send(here)
+    assert ("Hardware_Error_Status", guard.NAMES, False, guard.READ_RETRY) in pwm_sync_calls
+    assert ("PWM_Limit", guard.BODY, False, guard.READ_RETRY) in pwm_sync_calls
+    assert ("Present_PWM", guard.BODY, False, guard.READ_RETRY) in pwm_sync_calls
+    assert not any(e[:2] == ("read", "Present_PWM") for e in follower.events)
+    assert not any(e[:2] == ("read", "PWM_Limit") for e in follower.events)
+
+
+def test_teacher_mode_feedforward_tracks_streamed_ramp_without_braking_chaser_lag(guard):
+    motion, follower, clock, here = teacher(guard)
+    motion.send(here)
+    for _ in range(18):
+        clock[0] += 1 / 30
+        motion.send(here)
+    assert motion.tracking
+    # Stream a C2 eased trajectory (matching retime/flow: 0.9s ramp up, 1.0s cruise at 4.5 units/s, 0.9s ramp down).
+    streamed = dict(here)
+    lags_deg = []
+    pos = here["shoulder_pan.pos"]
+    for k in range(1, 85):
+        clock[0] += 1 / 30
+        if k <= 27:
+            v_u = 4.5 * (k / 27)
+        elif k <= 57:
+            v_u = 4.5
+        else:
+            v_u = 4.5 * max(0.0, (84 - k) / 27)
+        pos += v_u / 30
+        streamed = {**here, "shoulder_pan.pos": pos}
+        sent = motion.send(streamed)
+        follower.raw.update({n: int(v) for n, v in follower.goals.items()})
+        if 34 <= k <= 57:  # steady-state cruise at 4.5 units/s (~8.1 deg/s)
+            lags_deg.append(abs(streamed["shoulder_pan.pos"] - sent["shoulder_pan.pos"]) * 1.8)
+    # Feedforward velocity matching keeps steady-state tracking lag well under 0.5 deg (vs ~3.9 deg without v_ff)
+    assert max(lags_deg) < 0.5
+    for _ in range(8):
+        clock[0] += 1 / 30
+        sent = motion.send(streamed)
+        follower.raw.update({n: int(v) for n, v in follower.goals.items()})
+    assert sent["shoulder_pan.pos"] == pytest.approx(streamed["shoulder_pan.pos"], abs=0.1)
+

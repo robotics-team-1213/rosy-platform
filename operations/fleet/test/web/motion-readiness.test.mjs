@@ -134,6 +134,9 @@ test('an e-stop names its cause when CORE reports one (v1.342)', () => {
   assert.equal(estopCause('api:operator'), 'API 정지(operator)');
   assert.equal(estopCause('control:policy_failed'), '제어 정책(policy_failed)');
   assert.equal(estopText({safety: {estop: true, source: 'battery_policy'}}), '비상정지 중 · 배터리 보호');
+  // D-502: the promise comes from CORE; a battery source alone (older CORE) does not make it.
+  assert.equal(estopText({safety: {estop: true, source: 'battery_policy', releases_when_charged: true}}),
+    '비상정지 중 · 배터리 보호 · 충전되면 자동 해제');
   // An older CORE sends no source: the label stays as it was.
   assert.equal(estopText({safety: {estop: true}}, '비상 정지'), '비상 정지');
 });

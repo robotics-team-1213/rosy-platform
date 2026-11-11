@@ -23,6 +23,9 @@ def digest(value) -> str:
     return hashlib.sha256(raw).hexdigest()
 
 
+_CODE_DIGEST_CACHE: dict[tuple, str] = {}
+
+
 def _code_digest() -> str:
     from omx_adapter import chunk_library, coordination, motion_profile
 
@@ -33,8 +36,16 @@ def _code_digest() -> str:
         "cell_pivot.py", "cell_calibrate.py", "cell_finger_room.py", "cell_two_arm.py", "cell_coordinate.py",
         "guarded_native.py", "chunk_runner.py", "grasp_planner.py", "motion_profile.py", "teach_trajectory.py")}
     files.update({module.__name__: Path(module.__file__) for module in (chunk_library, coordination, motion_profile)})
-    return digest({name: hashlib.sha256(path.read_bytes().replace(b"\r\n", b"\n")).hexdigest()
-                   for name, path in files.items()})
+    cache_key = (
+        tuple((name, path.stat().st_mtime_ns, path.stat().st_size) for name, path in sorted(files.items())),
+        Path.read_bytes,
+    )
+    if cache_key not in _CODE_DIGEST_CACHE:
+        _CODE_DIGEST_CACHE[cache_key] = digest({
+            name: hashlib.sha256(path.read_bytes().replace(b"\r\n", b"\n")).hexdigest()
+            for name, path in files.items()
+        })
+    return _CODE_DIGEST_CACHE[cache_key]
 
 
 def runtime_context(robot_config: dict, bus, fps: int, *, operating_profile=None, params=None) -> dict:
@@ -47,16 +58,25 @@ def runtime_context(robot_config: dict, bus, fps: int, *, operating_profile=None
         from cell_params import load
 
         params = load()["values"]
+    common_regs = ("Operating_Mode", "PWM_Limit", "Position_P_Gain", "Position_I_Gain",
+                   "Position_D_Gain", "Profile_Velocity", "Profile_Acceleration")
+    use_sync = "read" not in vars(bus) and hasattr(bus, "model_ctrl_table")
+    batch: dict[str, dict[str, int]] = {}
+    if use_sync:
+        for key in common_regs:
+            batch[key] = bus.sync_read(key, list(NAMES), normalize=False, num_retry=2)
+        cur_names = [n for n in NAMES if bus.motors[n].model.startswith(("xm", "xl330"))]
+        if cur_names:
+            batch["Current_Limit"] = bus.sync_read("Current_Limit", cur_names, normalize=False, num_retry=2)
     motors = {}
     for name in NAMES:
         motor = bus.motors[name]
-        registers = ["Operating_Mode", "PWM_Limit", "Position_P_Gain", "Position_I_Gain",
-                     "Position_D_Gain", "Profile_Velocity", "Profile_Acceleration"]
+        registers = list(common_regs)
         if motor.model.startswith(("xm", "xl330")):
             registers.append("Current_Limit")
         motors[name] = {"id": motor.id, "model": motor.model,
                         "calibration": asdict(bus.calibration[name]),
-                        "registers": {key: bus.read(key, name) for key in registers}}
+                        "registers": {key: batch[key][name] if use_sync else bus.read(key, name) for key in registers}}
     return {"scope": "hardware", "session_id": uuid.uuid4().hex, "operating_profile": binding,
             "sha256": digest({"robot": robot_config, "motors": motors, "fps": fps,
                               "operating_profile": binding, "params": params, "code": _code_digest()})}
@@ -122,7 +142,8 @@ def payload_check(config: dict, conditions: dict) -> tuple[dict | None, str | No
     return facts, (None if p["kg"] <= facts["bound_kg"] else "payload_over_bound")
 
 
-def assess(config: dict, calibration: dict, library: dict, state: dict, *, now=None, sequence=SEQUENCE) -> dict:
+def assess(config: dict, calibration: dict, library: dict, state: dict, *,
+           now=None, sequence=SEQUENCE, library_sha256: str | None = None) -> dict:
     """Exact paths only: no radius shrink, spatial interpolation or automatic promotion from success."""
     out = {"schema": SCHEMA, "mode": "automatic", "status": "unverified", "allowed": False,
            "reason": "not_reviewed"}
@@ -142,15 +163,18 @@ def assess(config: dict, calibration: dict, library: dict, state: dict, *, now=N
         conditions = _conditions(config)
         import cell_params
 
+        raw_params = config.get("params")
+        effective_params = (cell_params._DEFAULT_VALUES if not raw_params
+                            else {name: cell_params.get(raw_params, name) for name in cell_params.DEFAULTS})
         conditions_sha = digest({"conditions": conditions, "calibration": calibration,
                                   "profiles": config.get("profiles"), "cameras": config.get("cameras"),
                                   "sites": config.get("sites"), "plan": config.get("plan"),
                                   "verify_tol_mm": verification_tolerance(config), "sequence": list(sequence),
-                                  "params": {name: cell_params.get(config.get("params"), name)
-                                             for name in cell_params.DEFAULTS}})
+                                  "params": effective_params})
         out.update(scope=context["scope"], runtime_sha256=context["sha256"], session_id=context["session_id"],
                    conditions=conditions, operating_profile=profile["binding"],
-                   conditions_sha256=conditions_sha, library_sha256=digest(library), client_code_sha256=_code_digest())
+                   conditions_sha256=conditions_sha, library_sha256=library_sha256 or digest(library),
+                   client_code_sha256=_code_digest())
         out["task_sha256"] = digest({key: out[key] for key in (
             "scope", "runtime_sha256", "conditions_sha256", "library_sha256", "client_code_sha256", "operating_profile")})
         out["payload"], over = payload_check(config, conditions)

@@ -41,15 +41,26 @@ def slot_ids(slot: int) -> dict:
             "surfaces": [list(range(first + 3 + 4 * k, first + 7 + 4 * k)) for k in range(3)]}
 
 
+_ARUCO_CACHE: dict = {}
+
+
 def corners(img) -> dict:
     """{id: 4x2 corner pixels} of every marker cell_marks reads (DICT_4X4_250), OpenCV's corner order."""
     import cv2
 
     grey = img if img.ndim == 2 else cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     if hasattr(cv2.aruco, "ArucoDetector"):
-        found, ids, _ = cv2.aruco.ArucoDetector(cell_marks._dictionary(), cv2.aruco.DetectorParameters()).detectMarkers(grey)
+        detector = _ARUCO_CACHE.get("detector")
+        if detector is None:
+            detector = cv2.aruco.ArucoDetector(cell_marks._dictionary(), cv2.aruco.DetectorParameters())
+            _ARUCO_CACHE["detector"] = detector
+        found, ids, _ = detector.detectMarkers(grey)
     else:  # OpenCV 4.6 (CI's Ubuntu python3-opencv), as cell_marks.find
-        found, ids, _ = cv2.aruco.detectMarkers(grey, cell_marks._dictionary())
+        dictionary = _ARUCO_CACHE.get("dict")
+        if dictionary is None:
+            dictionary = cell_marks._dictionary()
+            _ARUCO_CACHE["dict"] = dictionary
+        found, ids, _ = cv2.aruco.detectMarkers(grey, dictionary)
     return {} if ids is None else {int(i): c.reshape(4, 2).astype(np.float64) for c, i in zip(found, ids.flatten())}
 
 

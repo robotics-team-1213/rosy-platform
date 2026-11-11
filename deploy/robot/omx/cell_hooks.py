@@ -147,15 +147,18 @@ def pick_hooks(config: dict, cell, target: dict, write_library, source: str, des
 
     params, spec = config.get("params"), config.get("wrist") or {}
     gap = 30.0 + (config["plan"]["grip_open"] - prm.get(params, "gripper.held_30mm")) * prm.get(params, "gripper.gap_mm_per_unit")
+    reach = cell_reach.hook(config, cell, target, write_library)
     later = [cell_wrist_ref.ref_hook(config, cell, target, write_library, source),
              cell_fingers.finger_hook(config, cell, target, write_library, gap),
              cell_wrist.hook(config, cell, target, write_library, emit)]
-    # a look with no room to open the jaws is skipped only when one of these still measures the position
+    region = target.get("bias_region") or {}
+    calibrated_reach = (reach is not None and region.get("rms_mm") is not None
+                        and region["rms_mm"] <= prm.get(params, "look.tol_mm"))
+    # a look with no room to open the jaws is skipped when a later hook or calibrated FK reach already measures the position
     # D-996 4: the container's identity first; a mismatch parks before the descent like any other refusal
-    wrist = cell_reach.chain(guard, cell_identity.hook(config, cell, _queue_reading),
-                             cell_reach.hook(config, cell, target, write_library),
+    wrist = cell_reach.chain(guard, cell_identity.hook(config, cell, _queue_reading), reach,
                              cell_look.hook(config, cell, target, write_library, calibration, source,
-                                            fallback=any(h is not None for h in later)), *later)
+                                            fallback=any(h is not None for h in later) or calibrated_reach), *later)
     capture = None
     if prm.get(params, "wrist.ref_servo") and spec.get("hsv_min"):
         work, arm = Path(config["work_dir"]).expanduser(), config.get("arm_id", "arm_s")
@@ -164,3 +167,12 @@ def pick_hooks(config: dict, cell, target: dict, write_library, source: str, des
             target["entry"]["length_mm"] * target["entry"]["width_mm"])
     return (wrist, capture, cell_pinch.hook(config, cell, target, write_library, gap, target["entry"]["width_mm"]),
             cell_feel.feel_hook(config, cell, target, write_library))
+
+
+def grasp_debate(config: dict, cell, target: dict, write_library):
+    """Post-grasp / post-lift stability and put-back (`release_pick` / `reinsert_pick`) debate hook."""
+    import cell_grasp_debate
+
+    params = config.get("params")
+    gap = 30.0 + (config["plan"]["grip_open"] - prm.get(params, "gripper.held_30mm")) * prm.get(params, "gripper.gap_mm_per_unit")
+    return cell_grasp_debate.hook(config, cell, target, write_library, gap)

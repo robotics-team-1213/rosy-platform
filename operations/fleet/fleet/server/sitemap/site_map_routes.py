@@ -8,18 +8,26 @@ Errors use ``{"detail": {"code", "detail"}}`` like ``/trip``. Nothing here talks
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import TYPE_CHECKING, Callable, Optional
 
 import yaml
-from fastapi import Depends, HTTPException, Request, Path
+from fastapi import Depends, HTTPException, Query, Request, Path
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+from fleet.map_reality import compare, transform_map
 from fleet.server.site_auth import SitePrincipal
 from fleet.server.site_map_store import SiteMapError
 from fleet.site_map import MapProfileInfo, SiteMap, crosswalks_from_lane_graph
 
+if TYPE_CHECKING:
+    from fleet.server.path_history import PathRecorder
+
 #: A 20k-point map is about 0.5 MB of JSON; the draft body is read at most this far.
 MAX_DRAFT_BYTES = 2 * 1024 * 1024
+
+#: D-594 path history keeps 24 h; judging the default 6 h is one shift of driving.
+DEFAULT_WINDOW_S = 6 * 3600.0
+MAX_WINDOW_S = 24 * 3600.0
 
 
 class DraftRequest(BaseModel):
@@ -35,6 +43,13 @@ class ActivateRequest(BaseModel):
 
 class ProfileRequest(DraftRequest, MapProfileInfo):
     name: str = Field(min_length=1, max_length=64, pattern=r"\S")
+
+
+class RealityApplyRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    expected_revision: str = Field(min_length=1, max_length=64)
+    last_s: float = Field(default=DEFAULT_WINDOW_S, gt=0, le=MAX_WINDOW_S)
+    robot_id: Optional[str] = Field(default=None, min_length=1, max_length=64)
 
 
 def invalid_errors(exc: ValidationError) -> list[dict]:
@@ -60,7 +75,11 @@ async def _bounded_body(request: Request) -> bytes:
     return b"".join(chunks)
 
 
-def install_site_map_routes(app, *, site_maps, route_active, read_guard, require_named_operator) -> None:
+def install_site_map_routes(app, *, site_maps, route_active, read_guard, require_named_operator,
+                            paths: Optional[Callable[[], Optional["PathRecorder"]]] = None) -> None:
+    if paths is None:  # app.state.paths is wired later in create_app; read it lazily at request time
+        def paths():
+            return getattr(app.state, "paths", None)
     app.state.site_maps = site_maps
     from fleet.server.site_map_drawing_routes import install_site_map_drawing_routes
     install_site_map_drawing_routes(app, assets=site_maps.drawing_assets, read_guard=read_guard,
@@ -72,6 +91,44 @@ def install_site_map_routes(app, *, site_maps, route_active, read_guard, require
 
     def fail(exc: SiteMapError) -> HTTPException:
         return site_map_error(exc.status_code, exc.code, str(exc))
+
+    def judged_map() -> tuple[dict, str, object]:
+        """The map a correction would touch: the draft when there is one, else the active map."""
+        draft = site_maps.draft_view()
+        if draft["map"] is not None:
+            return draft["map"], "draft", draft["revision"]
+        try:
+            active = site_maps.active_view()
+        except SiteMapError as exc:  # D-1010: a tampered active row is not judged
+            raise fail(exc) from exc
+        if active is None:
+            raise site_map_error(404, "SITE_MAP_NO_MAP", "save or activate a site map first")
+        return active["map"], "active", active["version"]
+
+    def evidence(last_s: float, robot_id: Optional[str]) -> tuple[list, list[str], float, float]:
+        """Driven tracks in the map frame from D-594 path history, newest points per robot."""
+        recorder = paths()
+        if recorder is None:
+            raise site_map_error(503, "SITE_MAP_NO_PATH_HISTORY", "Fleet is not recording robot paths")
+        if robot_id is not None and not recorder.knows(robot_id):
+            raise site_map_error(404, "UNKNOWN_ROBOT", "robot is not on the roster")
+        until = recorder.wall()
+        robots = [robot_id] if robot_id is not None else recorder.robot_ids()
+        tracks = []
+        for rid in robots:
+            points, _ = recorder.store.query(rid, since=until - last_s, until=until)
+            if len(points) >= 2:  # a single point has no lane to compare with
+                tracks.append([[point["x"], point["y"]] for point in points])
+        return tracks, robots, until - last_s, until
+
+    def judge(last_s: float, robot_id: Optional[str]) -> tuple[dict, dict]:
+        body, source, revision = judged_map()
+        tracks, robots, since, until = evidence(last_s, robot_id)
+        report = compare(SiteMap.model_validate(body), tracks)
+        report["map"] = {"source": source, "revision": revision}
+        report["evidence"] = {**report["evidence"], "robots": robots, "since": since, "until": until,
+                              "limit": "newest 5000 points per robot"}
+        return report, body
 
     @app.get("/api/fleet/site-map/profiles", dependencies=read_guard, tags=["site-map"])
     def site_map_profiles() -> dict:
@@ -99,7 +156,10 @@ def install_site_map_routes(app, *, site_maps, route_active, read_guard, require
 
     @app.get("/api/fleet/site-map/active", dependencies=read_guard, tags=["site-map"])
     def site_map_active() -> dict:
-        view = site_maps.active_view()
+        try:
+            view = site_maps.active_view()
+        except SiteMapError as exc:  # D-1010: a tampered active row refuses, never a 500
+            raise site_map_error(exc.status_code, exc.code, exc.args[0]) from exc
         if view is None:
             raise site_map_error(404, "SITE_MAP_NOT_ACTIVE")
         return view
@@ -142,3 +202,40 @@ def install_site_map_routes(app, *, site_maps, route_active, read_guard, require
                                       principal_id=principal.principal_id, route_active=route_active())
         except SiteMapError as exc:
             raise fail(exc) from exc
+
+    @app.get("/api/fleet/site-map/reality-check", dependencies=read_guard, tags=["site-map"])
+    def site_map_reality_check(last_s: float = Query(DEFAULT_WINDOW_S, gt=0, le=MAX_WINDOW_S),
+                               robot_id: Optional[str] = Query(None, min_length=1, max_length=64)) -> dict:
+        """Does the map match where robots actually drove (D-594 path history)? Reads only."""
+        report, _ = judge(last_s, robot_id)
+        return report
+
+    @app.post("/api/fleet/site-map/reality-check/apply", tags=["site-map"])
+    def site_map_reality_apply(body: RealityApplyRequest,
+                               principal: SitePrincipal = Depends(require_named_operator)) -> dict:
+        """Move the draft onto the driven track. The fit is recomputed here, never sent by the browser."""
+        draft = site_maps.draft_view()
+        if draft["map"] is None:
+            raise site_map_error(409, "SITE_MAP_NO_DRAFT", "save the draft to correct first")
+        if draft["revision"] != body.expected_revision:
+            raise site_map_error(409, "SITE_MAP_DRAFT_CHANGED", "another operator changed the draft; reload first")
+        report, _ = judge(body.last_s, body.robot_id)
+        fit = report["fit"] or {}                      # None when the window had no drive at all
+        if not fit.get("accepted"):
+            raise site_map_error(409, "SITE_MAP_NO_CORRECTION",
+                                 fit.get("reason") or "; ".join(report["notes"]))
+        try:
+            corrected = SiteMap.model_validate(transform_map(draft["map"], fit))
+        except ValidationError as exc:
+            raise HTTPException(status_code=422, detail={"code": "SITE_MAP_INVALID",
+                                                         "detail": {"errors": invalid_errors(exc)}}) from exc
+        try:
+            view = site_maps.save_draft(corrected, expected_revision=body.expected_revision,
+                                        principal_id=principal.principal_id)
+        except SiteMapError as exc:
+            raise fail(exc) from exc
+        site_maps.record_event("reality_corrected", principal.principal_id,
+                               {"from_revision": body.expected_revision, "revision": view["revision"],
+                                "fit": fit, "verdict": report["verdict"],
+                                "evidence": report["evidence"]})
+        return {"draft": view, "report": report}

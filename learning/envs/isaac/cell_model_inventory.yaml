@@ -2,21 +2,28 @@
 # Learning → SIM 실험 shows this file read-only; change it by commit (this file is the one source).
 # Real-cell photos stay out of Git (public repository): register the file name here and put the file in
 # cell-photos/ beside the private SIM operator configuration on the review host.
+# Physics constants (servo gains, joint damping, container mass and friction) are candidates in cell_physics.yaml beside this file.
 schema: rosy.cell-model-inventory/1
-checked_at: '2026-11-03'
+checked_at: '2026-11-10'
 models:
   - id: gripper
     name: 그리퍼(OMX 팔레타이징 조 v2.1)
     cad: {file: omx_f_palletizing_description.zip, sha256: 672cd4813c439b826fd6f9b005d1e5fec5b74bea0a1a9c670e099335f6e47583}
     sim: none
     measured: 손가락 판 두께 약 1.1~2.0 mm, 길이 약 18 mm, 폭 40 mm, 패드 사이 29.977 mm @ 0.35 rad, TCP x 0.0740 m(원본 0.09193). 출처 URDF 메시 직접 측정
-    differs: 시뮬레이션은 아직 옛 OMX-F 조다. 교체 작업 중(계획 2026-10-31-omx-palletizing-sim-rebuild 1단계)
+    differs: 양팔 시뮬레이션(omx_two_arm_world)은 v2.1 조, TCP 0.0740을 쓴다(2026-11-09 확인). 설치된 조가 이 STL과 같은지와 터치값 0.0885는 미해명(sim2real G-22)
   - id: ship_plate
     name: 배 모양 판(본선)
     cad: {file: null, sha256: null}
     sim: reflected
     measured: 팀 CAD(KAN-108, ship_plate.py). 실물 top 영상의 돌기 격자 36 mm 6×6과 fixture가 약 1 px로 겹친다(셀 실측 2026-11-03)
     differs: 시뮬레이션은 선미를 첫 돌기 줄 뒤 16 mm, 뱃머리를 x 198 mm에서 자른다(실물은 50.6 mm 뒤·뾰족한 뱃머리)
+  - id: temp_plate
+    name: 임시 칸 판(두 장)
+    cad: {file: null, sha256: null}
+    sim: reflected
+    measured: 위 카메라 프레임에서 칸 패드·놓인 컨테이너(주황·노랑)를 판 윗면으로 되투영해 판마다 부채꼴 하나로 맞춤(omx_real2sim measure). 스냅샷 deploy/robot/omx/sim/cell_snapshots/. 2026-11-10 다리 v7 + 판 v11 실측 단계 17.0°, 반지름 203.4 mm(설계 17.3°, 200 mm), 패드 폭 30.3~31.9 mm(2026-11-08 구형 판은 단계 13.6°, 반지름 217 mm, 팔 축에서 약 146 mm)
+    differs: 판은 옮길 때마다 다시 잰다. 시뮬은 스냅샷을 선택지 temp_lanes=snapshot으로 읽는다(sim2real G-17)
   - id: workbench
     name: 작업대
     cad: {file: 261026_World.STL, sha256: dd91457a4a8d17d7fbb4fbfdb12dff9c2ae98e92e74760231c9ec08aa377f3cc}
@@ -28,7 +35,7 @@ models:
     cad: {file: 261026_World.STL, sha256: dd91457a4a8d17d7fbb4fbfdb12dff9c2ae98e92e74760231c9ec08aa377f3cc}
     sim: reflected
     measured: 폭 약 100 mm(World STL). 벨트 끝 컨테이너 윗면이 작업대보다 25.8 mm 낮다(D435 깊이 6회 중앙값, arm_b 적층 설정 2026-11-03 05:32), 곧 벨트 면은 작업대 약 56 mm·판 윗면 약 64 mm 아래
-    differs: 시뮬레이션 벨트 면은 같은 자리(x 약 0.22)에서 판 윗면 약 36 mm 아래라 실물보다 약 28 mm 높다
+    differs: 양팔 시뮬레이션은 자 측정값(작업대 아래 55 mm, CHOICES belt_height=ruler)을 쓴다(2026-11-09 확인). fixture의 벨트 면(실물보다 약 28 mm 높음)은 선택지 fixture로 남음
   - id: arm_base
     name: 팔 베이스(두 대)
     cad: {file: 261026_World.STL, sha256: dd91457a4a8d17d7fbb4fbfdb12dff9c2ae98e92e74760231c9ec08aa377f3cc}
@@ -40,7 +47,7 @@ models:
     cad: {file: null, sha256: null}
     sim: reflected
     measured: 90×30×30 mm. 무게 1칸 7.2 g, 2칸 11.79 g, 3칸 16 g(사용자 측정 2026-11-01). 사람이 놓은 기준 배치 3열 2층, 틈 약 4~5 / 2~3 mm(옆 카메라 추정)
-    differs: 시뮬레이션은 3칸 무게를 60 g으로 둔다(교체 예정)
+    differs: 시뮬레이션은 3칸 무게 16 g을 쓴다(omx_cell_sim, omx_two_arm_world, 2026-11-09 확인). 마찰은 손으로 정한 값 하나(sim2real G-25)
   - id: camera_ceiling
     name: 천장 카메라(Rosy Cam, Fleet ceiling_north)
     cad: {file: null, sha256: null}
@@ -51,8 +58,8 @@ models:
     name: 위쪽 카메라(RealSense D435)
     cad: {file: null, sha256: null}
     sim: stand_in
-    measured: 2026-11-03 640×480 컬러. 자세(fixture 좌표) (-0.041, 0.037, 0.662) m, 판 위 588 mm, 선미 쪽으로 13.1° 기움, f 615 px(D435 일반값) 돌기 25개 PnP 0.58 px
-    differs: 시뮬레이션에 같은 시점이 없다(mapped-top은 1.25 m 수직 관찰용)
+    measured: 2026-11-10 USB3 재연결 뒤 재측량(640×480 컬러). 자세(fixture 좌표) (-0.0334, 0.0493, 0.6613) m, focus (0.0804, 0.0086, 0.1762) m, up (0.9737, 0.0296, 0.226), f 615 px(다중 평면 61점 PnP 중앙값 0.74 px, p90 1.39 px, 독립 hold-out 21점 중앙값 0.92 px·최대 1.84 px; 2026-11-03 돌기 25개 PnP 0.58 px 대비 -56 px, -17 px, 2.8° 이동)
+    differs: 양팔 시뮬레이션은 이 자세로 top 카메라를 둔다(omx_two_arm_sites top_camera=2026-11-10, omx_two_arm_world). 측량 사이에는 원거리 정적 앵커(omx_cell_anchor)와 임시판 칸 크기로 확인한다(sim2real G-19)
   - id: camera_side
     name: 옆 카메라(Jieli)
     cad: {file: null, sha256: null}
@@ -62,13 +69,13 @@ models:
   - id: camera_wrist
     name: 손목 카메라 둘(Innomaker)
     cad: {file: null, sha256: null}
-    sim: none
-    measured: front가 Innomaker 1.3
-    differs: arm_a 손목 서비스는 404
+    sim: reflected
+    measured: Innomaker 1080P USB2.0(640×480, D 홀더 r06 장착). 2026-11-08·2026-11-10 실물 손목 프레임의 조 윤곽으로 팔별 렌즈 위치·시선 교점 맞춤(WRIST_PHOTO_A, WRIST_PHOTO_B)
+    differs: 양팔 시뮬레이션(omx_two_arm_world)은 D 홀더 메시와 팔별 맞춤 자세(wrist_camera=photo-20261108·photo-20261110)를 쓴다. 다자세 hand-eye는 미수행(sim2real G-24)
 # Measured cell layout: the numbers tools read (ship_stack_sites, real-cell site planning). The map may change a little;
 # re-measure and bump `revision`, keep the old one in git. Heights: work table top = 0, mm. Positions: fixture frame, m.
 layout:
-  revision: ship-cell-2026-11-03
+  revision: ship-cell-2026-11-10
   heights_mm:
     arm_b_base_plate: {value: 12, source: ruler, measured: '2026-11-03'}
     ship_plate_top: {value: 8, source: ruler, measured: '2026-11-03'}
@@ -81,9 +88,9 @@ layout:
     arm_a: {xy: [0.116, -0.164], yaw_deg: 90.0, source: 'top frame, base plate centre (no FK)'}
     arm_b: {xy: [0.104, 0.153], yaw_deg: -94.3, source: 'FK of live joint states, 3.1 px'}
   cameras:
-    top: {eye: [-0.0411, 0.0374, 0.6652], focus: [0.0722, 0.0401, 0.1783], up: [0.974, 0.0071, 0.2266], f_px: 615, residual_px: 0.58}
+    top: {eye: [-0.0334, 0.0493, 0.6613], focus: [0.0804, 0.0086, 0.1762], up: [0.9737, 0.0296, 0.226], f_px: 615, residual_px: 0.74, holdout_px: 0.92, measured: '2026-11-10'}
     side: {eye: [-0.5078, 0.0019, 0.1471], focus: [-0.0082, -0.0166, 0.1445], up: [0.0061, 0.0257, 0.9997], f_px: 950, residual_px: 2.8}
-  top_camera_parallax_centre_px: [322, 383]
+  top_camera_parallax_centre_px: [265, 383]
   evidence: docs/validation/omx-cell-survey-2026-11-03/result.md
 photos:
   - id: ceiling
@@ -122,8 +129,8 @@ person_tasks:
     why: arm_a를 실물로 움직일 수 없다
     status: open
   - task: RealSense를 USB 3.0 포트에 직결
-    why: USB 2.0이라 424×240만 나온다
-    status: open
+    why: USB 2.0이라 424×240만 나온다(2026-11-10 USB 3.0 재연결 및 위 카메라 재측량 완료)
+    status: done
   - task: 리더 팔 두 대의 짝 지정
     why: 원격 조종 기록에서 어느 팔을 따르는지 정해야 한다
     status: open

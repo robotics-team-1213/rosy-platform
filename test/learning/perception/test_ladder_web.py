@@ -64,12 +64,22 @@ def test_learned_two_arm_rounds_are_read_through_a_whitelist_and_only_their_vide
         (folder / 'artifacts' / 'other.txt').write_bytes(b'text')
         (folder / 'round.json').write_text(json.dumps(dict(
             schema=ladder_web.TWO_ARM_ROUND_SCHEMA, round_id=OLD, status='passed', stage='done', private_path='/home/secret', artifacts=['stack-seed0.mp4', '../evil.mp4', 'a.png'],
+            isaac_handoff='isaac-handoff.json',
+            stages=dict(
+                mujoco=dict(stage_order=1, track='learning_and_physics', role='stage1_geometry_vision_and_act_policy', status='passed', claim='기하·비전 정책'),
+                isaac=dict(stage_order=2, track='learning_and_physics', role='stage2_physx_contact_pad_slip_and_seating', status='pending', claim='접촉·영상'),
+                gazebo=dict(stage_order=None, track='ros2_execution_contract', role='ros2_interface_conformance', status='not_run', claim='ROS 실행 계약', reason='미실행'),
+            ),
             eval=dict(n=21, passed=8, lifted=20, per_step={'stack/s1': 3}, whole=[dict(task='stack', seed=1, total=9, passed=2, completed=False)]))), encoding='utf-8')
         (root / 'two_arm_rounds' / NEW).mkdir()
         code, data = request(base, '/api/learning/ladder/two-arm-rounds', 'reader')
         assert code == 200 and [row['round_id'] for row in data['rounds']] == [NEW, OLD]
         assert data['rounds'][0] == {'round_id': NEW, 'unreadable': True}
         assert 'private_path' not in data['rounds'][1] and data['rounds'][1]['videos'] == ['stack-seed0.mp4']
+        assert list(data['rounds'][1]['stages']) == ['mujoco', 'isaac', 'gazebo']
+        assert data['rounds'][1]['stages']['mujoco']['stage_order'] == 1 and data['rounds'][1]['stages']['isaac']['stage_order'] == 2
+        assert data['rounds'][1]['stages']['gazebo']['track'] == 'ros2_execution_contract'
+        assert data['rounds'][1]['isaac_handoff'] == 'isaac-handoff.json'
         assert data['rounds'][1]['eval']['passed'] == 8 and data['rounds'][1]['eval']['whole'][0]['passed'] == 2
         artifacts = f'/api/learning/ladder/two-arm-rounds/{OLD}/artifacts/'
         assert request(base, artifacts + 'other.txt', 'reader')[0] == 404

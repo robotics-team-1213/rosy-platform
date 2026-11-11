@@ -421,3 +421,124 @@ def test_a_broken_evidence_list_never_stops_a_start(tmp_path, monkeypatch):
     link.down = False
     oi.refuse_if_held("arm_b", link)
     assert not oi.label_box("arm_b") and not sidecar.exists() and link.evidence == []
+
+
+def test_a_named_operator_clears_over_the_api_and_the_local_hold_lifts(tmp_path, monkeypatch):
+    """2026-11-08: the person checked arm_b; the agent clears with that person's own token, not the arm's."""
+    monkeypatch.chdir(tmp_path)
+    link = Link()
+    oi.handle(session(tmp_path), "arm_b", act=lambda ids: {"rebooted": ids}, link=link)
+    assert oi.held("arm_b")
+    calls = []
+
+    def clear(incident_id, note, token):
+        calls.append((incident_id, note, token))
+        link.held = False
+        return hold(False)
+    link.clear = clear
+    token = tmp_path / "operator.token"
+    token.write_text("person-token\n")
+    token.chmod(0o644)
+    with pytest.raises(SystemExit, match="owner only"):
+        oi.clear("arm_b", "jaws empty", token, link)
+    token.chmod(0o600)
+    with pytest.raises(SystemExit, match="note"):
+        oi.clear("arm_b", "  ", token, link)
+    assert oi.clear("arm_b", "jaws empty", token, link) == 0
+    assert calls == [("a" * 32, "jaws empty", "person-token")]
+    assert oi.held("arm_b") is None
+
+
+ALIGN = ("session ended: ValueError: follower: alignment deadline exceeded; current={'shoulder_pan': 2105, 'gripper': 2034}, "
+         "target={'shoulder_pan': 2063, 'gripper': 2034}, command={'shoulder_pan': 2105.79, 'gripper': 2034.0}; last sample age=0.03")
+
+
+def test_a_software_stop_on_a_folded_arm_that_followed_its_command_is_listed_and_holds_nothing(tmp_path, monkeypatch):
+    """2026-11-09 02:21: a jog sent before the guard tracked crawled into its alignment deadline on both arms."""
+    monkeypatch.chdir(tmp_path)
+    link = Labels()
+    stop = {"command": "tick", "ok": False, "t": 150.0, "fault": ALIGN}
+    out = oi.handle(session(tmp_path, latched=False, windup=False, status=[stop]), "arm_b", link=link)
+    assert out["decision"]["hold"] is False and "alignment deadline" in out["decision"]["reason"] and out["reported"]
+    assert oi.held("arm_b") is None and link.posted[0].decision["hold"] is False
+    # the arm lagging its command (something pushed back) or an arm not folded still holds
+    for i, (other, last) in enumerate(((ALIGN.replace("2105.79", "2200.0"), HOME), (ALIGN, [20.0] + HOME[1:]))):
+        case = tmp_path / f"case{i}"
+        case.mkdir()
+        monkeypatch.chdir(case)
+        lagging = {"command": "tick", "ok": False, "t": 150.0, "fault": other}
+        assert oi.handle(session(case, latched=False, windup=False, last=last, status=[lagging]), "arm_b")["decision"]["hold"]
+
+
+def test_status_and_clear_with_cause_basis_and_env_discovery(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    env_file = tmp_path / "bridge.env"
+    env_file.write_text('ROSY_WORKCELL_OBSERVATIONS="/tmp/obs.yaml"\n# comment\nROSY_OBSERVATION_WORKCELL="cell_a"\n')
+    monkeypatch.setenv("ROSY_OBSERVATION_BRIDGE_ENV", str(env_file))
+    parsed = oi._bridge_environ()
+    assert parsed["ROSY_WORKCELL_OBSERVATIONS"] == "/tmp/obs.yaml" and parsed["ROSY_OBSERVATION_WORKCELL"] == "cell_a"
+
+    link = Link()
+    oi.handle(session(tmp_path), "arm_b", act=lambda ids: {"rebooted": ids}, link=link)
+    st = oi.status("arm_b", link)
+    assert st["local_held"] is True and st["fleet_held"] is True and st["incident_ids"] == ["a" * 32]
+
+    calls = []
+    def clear(incident_id, note, token, *, cause=None, basis=None):
+        calls.append((incident_id, note, token, cause, basis))
+        link.held = False
+        return hold(False)
+    link.clear = clear
+    token = tmp_path / "cell-a-operator-test.token"
+    token.write_text("op-token\n")
+    token.chmod(0o600)
+    monkeypatch.setenv("ROSY_OPERATOR_TOKEN_FILE", str(token))
+    assert oi.clear("arm_b", "checked home", None, link, cause="software_or_config", basis="measured") == 0
+    assert calls == [("a" * 32, "checked home", "op-token", "software_or_config", "measured")]
+    assert oi.status("arm_b", link)["fleet_held"] is False
+
+    # Pre-2026-11-08 Fleet servers return held=True for a single label-only report ("the arm is not held")
+    label_only = Hold(
+        held=True, incident_ids=["b" * 32],
+        reason="1 open arm incident(s): " + "b" * 32 + "; reported for a person's cause, the arm is not held")
+    assert oi._effectively_held(label_only) is False
+    link.hold = lambda: label_only
+    oi.refuse_if_held("arm_b", link)
+    assert oi.held("arm_b") is None
+
+    # Older Fleet servers reject cause/basis with HTTP 422; clear() retries without cause/basis
+    fallback_calls = []
+    def clear_422(incident_id, note, token, *, cause=None, basis=None):
+        fallback_calls.append((incident_id, note, token, cause, basis))
+        if cause is not None or basis is not None:
+            err = OSError("HTTP Error 422: Unprocessable Entity")
+            err.code = 422
+            raise err
+        link.held = False
+        return hold(False)
+    link.held = True
+    link.hold = lambda: hold(link.held)
+    link.clear = clear_422
+    assert oi.clear("arm_b", "checked home", None, link, cause="software_or_config", basis="seen") == 0
+    assert fallback_calls == [
+        ("a" * 32, "checked home", "op-token", "software_or_config", "seen"),
+        ("a" * 32, "checked home", "op-token", None, None),
+    ]
+
+
+def test_decide_handles_torque_after_open_error_string_without_crashing(tmp_path, monkeypatch):
+    """2026-11-10 20:06: USB disconnect during session teardown wrote {'open': 'error: ...'} to torque_after."""
+    monkeypatch.chdir(tmp_path)
+    s = session(tmp_path, latched=False, windup=False)
+    data = json.loads(s.read_text())
+    data["safe_end"] = False
+    data["torque_after"] = {"open": "error: a physically confirmed /dev/serial/by-id symlink is required"}
+    data["caps_restored"] = ["follower 11: a physically confirmed /dev/serial/by-id symlink is required"]
+    s.write_text(json.dumps(data))
+    out = oi.handle(s, "arm_b", link=Link())
+    assert out["decision"]["hold"] is True
+    assert "torque not confirmed OFF" in out["decision"]["reason"]
+    assert "caps not confirmed restored" in out["decision"]["reason"]
+
+
+

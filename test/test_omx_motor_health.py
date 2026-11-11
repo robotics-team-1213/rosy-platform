@@ -287,3 +287,23 @@ def test_a_guard_fault_keeps_its_own_record_and_the_local_camera_frames(tmp_path
     # the next session overwrites the snapshot, never the fault record
     monitor_type()(tmp_path / 'health2.jsonl').publish()
     assert json.loads(records[0].read_text())['fault'] == record['fault']
+
+
+def test_sample_uses_batch_sync_read_on_real_dynamixel_bus(tmp_path):
+    monitor = monitor_type()(tmp_path / 'health.jsonl')
+    arm = motion()
+    monitor.admit(arm)
+    arm.follower.model_ctrl_table = {}
+    sync_calls = []
+
+    def sync_read(register, motors=None, *, normalize=True, num_retry=0):
+        sync_calls.append(register)
+        val = 30 if register == 'Present_Temperature' else 118 if register == 'Present_Input_Voltage' else 1 if register == 'Torque_Enable' else 0
+        return {n: val for n in motors}
+
+    arm.follower.sync_read = sync_read
+    before_reads = len(arm.follower.reads)
+    monitor.sample(arm, dict.fromkeys(NAMES, 2028), dict.fromkeys(NAMES, 0), 10.0)
+    assert sync_calls == ['Present_Temperature', 'Present_Input_Voltage', 'Hardware_Error_Status', 'Torque_Enable']
+    # All 20 per-motor health reads across the 5 body joints use 4 sync_read packets instead of 20 unicast reads
+    assert len(arm.follower.reads) - before_reads == 0

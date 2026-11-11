@@ -27,6 +27,7 @@ import os
 import re
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -36,7 +37,7 @@ from harness import affected_exclusive
 
 CACHE = "rosy-land-cache.jsonl"
 FAILED = "rosy-land-failed.json"  # argv of invocations whose last run had a NEW failure
-MAX_LINES, KEEP = 2000, 1000
+MAX_LINES, KEEP = 20000, 15000
 NARROW_COMMITS = 3  # ancestor commits tried for narrow reuse: one selector call each
 NARROW = "reused across trees"  # land.py: a narrow reuse is not this candidate's own run (land record)
 LISTS = ("test/known_failures.py", "test/known_failures.txt", "test/flaky_quarantine.txt")
@@ -157,26 +158,36 @@ def _overlap(a: str, b: str) -> bool:
     return a == b or a.startswith(b + "/") or b.startswith(a + "/")
 
 
+_delta_lock = threading.RLock()
+_delta_memo: dict[tuple, list[str] | None] = {}
+
+
 def _delta_paths(wt: Path, base: str, head: str, python: str, select) -> list[str] | None:
     """Paths the selector picks for base..head; None when narrow reuse is not sound there."""
-    if _git(wt, "merge-base", "--is-ancestor", base, head).returncode != 0:
-        return None
-    status = _git(wt, "diff", "--name-status", "--no-renames", base, head)
-    rows = [row.split("\t") for row in status.stdout.splitlines() if row]
-    if status.returncode or any(r[0] not in ("M", "A") or r[-1] in LISTS for r in rows):
-        return None
-    print(f"[cache] selecting for {base[:10]}..{head[:10]} to see what it touches", flush=True)
-    try:
-        invocations, full = select(wt, base, python, head=head)
-    except Exception as exc:  # a selector failure only means no narrow reuse
-        print(f"[cache] selector failed ({exc}); no narrow reuse from {base[:10]}")
-        return None
-    if full:
-        invocations = _landed_full(wt, base, head, python, select)
-        if invocations is None:
+    key = (str(wt), base, head, python, id(select), id(_git), id(_landed_full))
+    with _delta_lock:
+        if key in _delta_memo:
+            return _delta_memo[key]
+        if _git(wt, "merge-base", "--is-ancestor", base, head).returncode != 0:
             return None
-    picked = [_paths(inv) for inv in invocations]
-    return None if None in picked else [p for paths in picked for p in paths]
+        status = _git(wt, "diff", "--name-status", "--no-renames", base, head)
+        rows = [row.split("\t") for row in status.stdout.splitlines() if row]
+        if status.returncode or any(r[0] not in ("M", "A") or r[-1] in LISTS for r in rows):
+            return None
+        print(f"[cache] selecting for {base[:10]}..{head[:10]} to see what it touches", flush=True)
+        try:
+            invocations, full = select(wt, base, python, head=head)
+        except Exception as exc:  # a selector failure only means no narrow reuse
+            print(f"[cache] selector failed ({exc}); no narrow reuse from {base[:10]}")
+            return None
+        if full:
+            invocations = _landed_full(wt, base, head, python, select)
+            if invocations is None:
+                _delta_memo[key] = None
+                return None
+        picked = [_paths(inv) for inv in invocations]
+        _delta_memo[key] = None if None in picked else [p for paths in picked for p in paths]
+        return _delta_memo[key]
 
 
 def reach(wt: Path, base: str, head: str, python: str = sys.executable) -> list[str] | None:
@@ -262,7 +273,9 @@ def split(wt: Path, args, invocations: list[list[str]], head: str, python: str, 
             todo.append(inv)
     if todo and args.tests in ("auto", "full") and (wt / "tools/harness/affected_tests.py").is_file():
         wanted = {tuple(inv) for inv in todo if not affected_exclusive.dedicated(inv)}
-        commits = list(dict.fromkeys(e["commit"] for e in reversed(known) if tuple(e["argv"]) in wanted))
+        ancestors = set(_git(wt, "rev-list", head).stdout.split()) - {head}
+        commits = [c for c in dict.fromkeys(e["commit"] for e in reversed(known) if tuple(e["argv"]) in wanted)
+                   if c in ancestors]
         for commit in commits[:NARROW_COMMITS]:
             # explicit FULL: only the strict rule publish_evidence recomputes, never the landed-FULL extension
             delta = (reach(wt, commit, head, python) if args.tests == "full"
