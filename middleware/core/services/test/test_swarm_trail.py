@@ -316,20 +316,23 @@ def test_off_the_trail_for_longer_than_the_hold_latches_trail_lost():
     rig.leader(0.6)
     rig.step()
     rig.pose = (0.1, 0.45, 0.0, "map", 0.0)
-    for _ in range(70):                                  # 3.5 s
+    for k in range(70):                                  # 3.5 s; the leader keeps moving
+        rig.leader(0.6 + 0.01 * k)
         rig.step()
     assert rig.hold_reason() == "trail_lost"
     assert rig.step() is None
 
 
 def test_the_tick_that_gives_up_creeps_stops_and_announces_together():
-    """복귀를 포기하는 그 틱에 서고 이벤트도 낸다 (이틀 뒤에 알면 그 틱의 정지가 설명되지 않는다)."""
+    """복귀를 포기하는 그 틱에 서고 이벤트도 낸다 (한 틱 늦게 알면 그 정지가 설명되지 않는다)."""
     rig = Rig()
     rig.follow()
     rig.leader(0.6)
     rig.step()
     rig.pose = (0.1, 0.45, 0.0, "map", 0.0)
-    for _ in range(80):
+    stopped = False
+    for k in range(80):
+        rig.leader(0.6 + 0.01 * k)
         stopped = rig.step() is None
         if stopped:
             assert rig.hold_reason() == "trail_lost"
