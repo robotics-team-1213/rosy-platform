@@ -13,10 +13,10 @@ import math
 import cell_params as prm
 
 
-def fk_xy(state: list) -> tuple:
+def fk_xy(state: list, tcp_x_m: float | None = None) -> tuple:
     from grasp_planner import load_kinematics, norm_to_rad
 
-    kin, _, _ = load_kinematics(None)
+    kin, _, _ = load_kinematics(None, tcp_x_m=tcp_x_m)
     k = kin.fk([norm_to_rad(v) for v in state[:5]])
     return k.x, k.y
 
@@ -56,10 +56,21 @@ def hook(config: dict, cell, target: dict, write_library):
     work = Path(config["work_dir"]).expanduser()
 
     def replan(dx_mm, dy_mm):
-        pick = dict(target["pick"], x=round(target["pick"]["x"] + dx_mm / 1000, 4), y=round(target["pick"]["y"] + dy_mm / 1000, 4))
+        pick = dict(base_pick, x=round(base_pick["x"] + dx_mm / 1000, 4), y=round(base_pick["y"] + dy_mm / 1000, 4))
+        target["pick"] = pick
         return write_library(config, pick, target["place"], work / "reach-replan.json")
 
-    return lambda: correct(cell, (target["pick"]["x"], target["pick"]["y"]), replan, params)
+    base_pick = dict(target["pick"])
+    tcp_x_m = config.get("tcp_x_m")
+    if tcp_x_m is None:
+        return lambda: correct(cell, (base_pick["x"], base_pick["y"]), replan, params)
+    return lambda: correct(
+        cell,
+        (base_pick["x"], base_pick["y"]),
+        replan,
+        params,
+        fk=lambda s: fk_xy(s, tcp_x_m),
+    )
 
 
 def chain(*hooks):

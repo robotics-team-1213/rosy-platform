@@ -42,9 +42,34 @@ def safety_of(wt: Path):
     return lambda path: safety_review.is_safety(path, roots, modules)
 
 
+def crlf_added(land, wt: Path, base: str, changed: list[str]) -> list[str]:
+    """Changed text files whose HEAD copy has CRLF lines that the merge base's copy did not.
+
+    tools/land_mainred.py was committed CRLF (fd9019f795) past core.autocrlf; every branch that stored it LF then
+    stopped on a whole-file conflict (2026-11-09). ``-text`` files keep their bytes and are not checked."""
+    if not changed:
+        return []
+
+    def with_cr(rev: str) -> set[str]:  # whole tree (<1 s), no path list on the command line; -I skips binary
+        found = land.git(wt, "grep", "-lI", "-e", "\r$", rev, check=False).stdout  # exit 1: no match
+        return {line.split(":", 1)[1] for line in found.splitlines() if ":" in line}
+
+    paths = sorted(with_cr("HEAD") & set(changed) - with_cr(land.out(wt, "merge-base", base, "HEAD")))
+    if not paths:
+        return []
+    attrs = land.lines(wt, "check-attr", "text", "--", *paths)  # "<path>: text: set|unset|auto|unspecified"
+    return [path for path, attr in zip(paths, attrs) if not attr.endswith(": unset")]
+
+
 def precheck(land, wt: Path, python: str, mixed_ok: str = "") -> None:
     """``land`` is tools/land.py (its Stop, gates and git helpers); raises land.Stop on the first failing gate."""
     before = land.out(wt, "rev-parse", "main")
+    changed = land.lines(wt, "diff", "--name-only", "--diff-filter=AM", f"{before}...HEAD")  # a rename: its base copy is under the old name
+    if crlf := crlf_added(land, wt, before, changed):
+        listed = " ".join(f'"{path}"' for path in crlf)
+        raise land.Stop(f"this branch adds CRLF line endings to {len(crlf)} text file(s): {', '.join(crlf[:5])}. Main"
+                        " stores text LF, and a CRLF copy conflicts as a whole file with every branch that edits it."
+                        f" Fix: git add --renormalize -- {listed} && git commit -m \"chore: LF line endings\"")
     held, product = mixed(land.lines(wt, "diff", "--name-only", f"{before}...HEAD"), safety_of(wt))
     if held and product and not mixed_ok.strip():
         raise land.Stop(f"this branch changes landing-gate tools or safety paths ({len(held)}: {', '.join(held[:5])})"

@@ -32,10 +32,10 @@ def probe_library(plan: dict, x: float, y: float, yaw: float, z_from: float, z_t
             "transit_speed": p.get("transit_speed", 0.85)}
 
 
-def fk_z(state: list) -> float:
+def fk_z(state: list, tcp_x_m: float | None = None) -> float:
     from grasp_planner import load_kinematics, norm_to_rad
 
-    kin, _, _ = load_kinematics(None)
+    kin, _, _ = load_kinematics(None, tcp_x_m)
     return kin.fk([norm_to_rad(v) for v in state[:5]]).z
 
 

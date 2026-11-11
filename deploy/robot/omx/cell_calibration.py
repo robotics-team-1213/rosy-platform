@@ -72,8 +72,10 @@ def to_pixel(h, point) -> tuple[float, float]:
 
 def yaw_sign(h, pixel) -> int:
     """+1 when a turn in the image is the same turn about the arm's z axis, -1 when the map mirrors it."""
-    origin, ex, ey = (np.asarray(to_arm(h, (pixel[0] + du, pixel[1] + dv))) for du, dv in ((0, 0), (1, 0), (0, 1)))
-    return 1 if float(np.cross(ex - origin, ey - origin)) > 0 else -1
+    ox, oy = to_arm(h, pixel)
+    ex, ey = to_arm(h, (pixel[0] + 1, pixel[1]))
+    fx, fy = to_arm(h, (pixel[0], pixel[1] + 1))
+    return 1 if (ex - ox) * (fy - oy) - (ey - oy) * (fx - ox) > 0 else -1
 
 
 def loo_error_mm(points) -> dict:

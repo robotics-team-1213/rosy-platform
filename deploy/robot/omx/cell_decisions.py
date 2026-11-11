@@ -32,8 +32,8 @@ from collections import defaultdict
 from pathlib import Path
 
 SCHEMA = "rosy.omx-cell-decision.v1"
-APPLIES = {"target": ["objects", "map"], "bias": ["map"], "closing_axis": ["grasp"], "safety": ["lift", "idle"],
-           "retry": ["grasp"], "verify": ["map"], "wrist_align": ["grasp", "map"], "failure": ["grasp", "map"], "push": ["push", "objects", "map"], "push_outcome": ["push"]}
+APPLIES = {"target": ["objects", "map"], "target_judge": ["objects", "map"], "bias": ["map"], "closing_axis": ["grasp"], "safety": ["lift", "idle"],
+           "grasp_stability": ["grasp", "lift", "safety"], "retry": ["grasp"], "verify": ["map"], "wrist_align": ["grasp", "map"], "failure": ["grasp", "map"], "push": ["push", "objects", "map"], "push_outcome": ["push"]}
 RUN = {"path": None, "knowledge": None, "n": 0, "frame": None}  # set by start(); path None = no decision rows
 
 
@@ -106,9 +106,9 @@ def after(moved: dict, better, more: bool, monitor=None):
     if moved["result"] == "placed":
         return None
     steps, at = moved["steps"], moved.get("at")
-    again = moved["result"] in ("empty", "contact") and more
+    again = moved["result"] in ("empty", "contact", "reinserted") and more
     chosen = {"retry_with": better} if again else "stop"
-    if any(s.get("holding") for s in steps) and not str(at).endswith("grasp_pick"):
+    if moved["result"] != "reinserted" and any(s.get("holding") for s in steps) and not str(at).endswith("grasp_pick"):
         sensed = next((s for s in reversed(steps) if s.get("state") and s.get("target")), {})
         gaps = [abs(a - b) for a, b in zip(sensed.get("state", [])[:5], sensed.get("target", [])[:5])]
         lag = re.search(r"by ([0-9.]+) units", str(moved.get("error") or ""))

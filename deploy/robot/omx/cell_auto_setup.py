@@ -15,6 +15,7 @@ import cell_pipeline as cp  # noqa: E402
 
 
 def load_config(path: Path) -> dict:
+    import cell_arm_cal
     import cell_perception
 
     config = json.loads(path.read_text())
@@ -22,7 +23,7 @@ def load_config(path: Path) -> dict:
                           for camera, spec in config["cameras"].items()}
     config["plan"] = json.loads(Path(config["plan_path"]).expanduser().read_text())
     config["params"] = prm.load(config.get("params_path"))["values"]  # cell-params.example.json form
-    return config
+    return cell_arm_cal.apply_to_config(config)
 
 
 def parser(doc: str) -> argparse.ArgumentParser:
@@ -32,6 +33,8 @@ def parser(doc: str) -> argparse.ArgumentParser:
     ap.add_argument("--roi", type=int, nargs=4, required=True, metavar=("X0", "Y0", "X1", "Y1"))
     ap.add_argument("--dest", required=True, help="a site name from the config, or x,y metres on the source surface")
     ap.add_argument("--from", dest="source", default="pinky")
+    ap.add_argument("--object", dest="want_object", help="only pick catalogue object ID(s), e.g. container-2 or container-1,container-3")
+    ap.add_argument("--colour", "--color", dest="want_colour", help="only pick object colour(s), e.g. yellow or orange,green")
     ap.add_argument("--dry-run", action="store_true", help="observe, choose and plan only; print JSON")
     return ap
 
@@ -39,6 +42,10 @@ def parser(doc: str) -> argparse.ArgumentParser:
 def open_cell(args, commissioning=False):
     """-> (config, cell, calibration path, work dir), with the attempts (and unless dry, decisions) logs started."""
     config = load_config(args.config)
+    if getattr(args, "want_object", None) or getattr(args, "want_colour", None):
+        config["want"] = {**config.get("want", {}),
+                          **({"object": args.want_object} if getattr(args, "want_object", None) else {}),
+                          **({"colour": args.want_colour} if getattr(args, "want_colour", None) else {})}
     if commissioning:
         config["_commissioning"] = {"person_at_switch": True}
     work = Path(config["work_dir"]).expanduser()

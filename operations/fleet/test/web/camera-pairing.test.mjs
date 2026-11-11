@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   CONFIRM_PROMPT, MESSAGES, PENDING_POLL_MS, UNAVAILABLE, canApprove, credentialActions, credentialText,
-  formatClock, formatWhen, freeSources, messageFor, queueHealthText, normalizePairingCode, pairingCodeError, remainingSeconds,
+  approveTargets, targetValue, formatClock, formatWhen, freeSources, messageFor, queueHealthText, normalizePairingCode, pairingCodeError, remainingSeconds,
   requestActions, requestText,
 } from "../../../../applications/fleet/web/devices/camera-pairing.js";
 
@@ -28,6 +28,21 @@ test("only paired sources without a credential can be chosen", () => {
   ] };
   assert.deepEqual(freeSources(listing), ["ceiling-south"]);
   assert.deepEqual(freeSources({}), []);
+});
+
+test("approve targets list free sources first, then replace options with label and credential id", () => {
+  const listing = { paired_sources: [
+    { source_id: "north", has_credential: true, replaceable: true, credential_id: "cred-aa", device_label: "SM-G991N" },
+    { source_id: "south", has_credential: false },
+    { source_id: "east", has_credential: true, replaceable: false, credential_id: "cred-bb", device_label: "x" },
+    { source_id: "west", has_credential: true, replaceable: true, credential_id: "cred-cc", device_label: "Pixel" },
+  ] };
+  assert.deepEqual(approveTargets(listing), [
+    { source: "south", replace: null, label: "south" },
+    { source: "north", replace: "cred-aa", label: "교체 · north — SM-G991N (cred-aa)" },
+    { source: "west", replace: "cred-cc", label: "교체 · west — Pixel (cred-cc)" },
+  ]);
+  assert.deepEqual(approveTargets({}), []);
 });
 
 test("remaining time counts down from the fetch and never goes negative", () => {
@@ -88,7 +103,7 @@ test("credential rows show state, approver and expiry; only live ones can be rev
 test("each refusal maps to its operator sentence; a wrong code says the tries left", () => {
   assert.match(messageFor({ code: "CODE_MISMATCH", attempts_left: 2 })[0], /남은 입력 2회/);
   assert.match(messageFor({ code: "CODE_MISMATCH", attempts_left: 0 })[0], /거절로 닫혔습니다/);
-  for (const code of ["NOT_REVEALED", "ALREADY_APPROVED", "SOURCE_NOT_PAIRED", "SOURCE_HAS_CREDENTIAL",
+  for (const code of ["NOT_REVEALED", "ALREADY_APPROVED", "SOURCE_NOT_PAIRED", "SOURCE_HAS_CREDENTIAL", "REPLACE_TARGET_CHANGED", "SOURCE_PENDING_CONFIRM",
     "UNKNOWN_SOURCE", "PAIRING_REQUEST_CLOSED", "UNKNOWN_PAIRING_REQUEST", "UNKNOWN_CREDENTIAL",
     "ALREADY_REVOKED"]) {
     assert.equal(messageFor({ code })[0], MESSAGES[code], code);
@@ -121,4 +136,10 @@ test("times read as local minutes, and an unreadable time is passed through", ()
   const row = { credential_id: "cred-1", source_id: "s", state: "active", device_label: "d",
     approved_by: "alice", approved_at: "2026-10-01T09:01:00Z", expires_at: "2027-03-30T09:01:00Z", expired: false };
   assert.doesNotMatch(credentialText(row).join(" "), /T09:01:00/);
+});
+
+test("an approve option names a free source by its id and a replace by source and credential", () => {
+  assert.equal(targetValue({ source: "ceiling_north", replace: null }), "ceiling_north");
+  assert.equal(targetValue({ source: "ceiling_north", replace: "cred-1" }), "ceiling_north#cred-1");
+  assert.notEqual(targetValue({ source: "ceiling_north", replace: null }), targetValue({ source: "ceiling_north", replace: "cred-1" }));
 });

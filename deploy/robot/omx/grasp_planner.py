@@ -52,31 +52,45 @@ def norm_to_rad(norm: float, lo: float = 0, hi: float = 4095) -> float:
     return raw * 2 * math.pi / TICKS - math.pi
 
 
-def load_kinematics(root: Path | None):
-    """The OMX-F kinematics; ROSY_OMX_TCP_X_M replaces the stock TCP (link5 x 0.09193) for another jaw.
+_KIN_CACHE: dict[tuple[str, float | None, int], tuple] = {}
+
+
+def load_kinematics(root: Path | None, tcp_x_m: float | None = None):
+    """The OMX-F kinematics; ROSY_OMX_TCP_X_M (or plan tcp_x_m) replaces the stock TCP (link5 x 0.09193) for another jaw.
     arm_b's v2.1 jaws end at 0.0740 (STL); on 2026-11-03 closed jaws over a box top went to stock-FK 12.4 mm
     without touching the 20 mm top, so the stock TCP put the real tips about 18 mm above every planned height."""
-    root = root or Path(__file__).resolve().parents[3] / "middleware/devices/omx/adapter"
-    sys.path.insert(0, str(root))
+    if root is None:
+        here = Path(__file__).resolve().parent
+        repo_adapter = Path(__file__).resolve().parents[3] / "middleware/devices/omx/adapter"
+        root = here if (here / "config/omx_f_kinematics.yaml").is_file() else repo_adapter
+    if str(root) not in sys.path:
+        sys.path.insert(0, str(root))
     from omx_adapter.kinematics import IkLimits, OmxKinematics, TopDownPose
 
-    path, tcp = root / "config/omx_f_kinematics.yaml", os.environ.get("ROSY_OMX_TCP_X_M")
+    path, tcp = root / "config/omx_f_kinematics.yaml", os.environ.get("ROSY_OMX_TCP_X_M") or tcp_x_m
+    mtime = path.stat().st_mtime_ns if path.exists() else 0
     if not tcp:
-        return OmxKinematics.load(path), IkLimits, TopDownPose
+        key = (str(path.resolve()), None, mtime)
+        if key not in _KIN_CACHE:
+            _KIN_CACHE[key] = (OmxKinematics.load(path), IkLimits, TopDownPose)
+        return _KIN_CACHE[key]
     tcp = float(tcp)
     if not (math.isfinite(tcp) and 0.05 <= tcp <= 0.12):
         raise SystemExit(f"ROSY_OMX_TCP_X_M {tcp} outside the OMX-F jaw range 0.05..0.12")
-    import yaml
+    key = (str(path.resolve()), round(tcp, 6), mtime)
+    if key not in _KIN_CACHE:
+        import yaml
 
-    document = yaml.safe_load(path.read_text(encoding="utf-8"))
-    next(j for j in document["joints"] if j["name"] == "end_effector_joint")["origin"]["xyz"][0] = tcp
-    return OmxKinematics(document), IkLimits, TopDownPose
+        document = yaml.safe_load(path.read_text(encoding="utf-8"))
+        next(j for j in document["joints"] if j["name"] == "end_effector_joint")["origin"]["xyz"][0] = tcp
+        _KIN_CACHE[key] = (OmxKinematics(document), IkLimits, TopDownPose)
+    return _KIN_CACHE[key]
 
 
 class Planner:
     def __init__(self, plan: dict, kinematics_root: Path | None = None):
         self.plan = plan
-        self.kin, IkLimits, self.TopDownPose = load_kinematics(kinematics_root)
+        self.kin, IkLimits, self.TopDownPose = load_kinematics(kinematics_root, plan.get("tcp_x_m"))
         lim = plan["limits"]
         self.limits = IkLimits(position_limits={k: tuple(v) for k, v in lim["joints_rad"].items()},
                                workspace_min_m=tuple(lim["workspace_min_m"]),
@@ -129,6 +143,18 @@ class Planner:
             return False
         return self.kin.solve_top_down(self.TopDownPose(x, y, z, math.radians(yaw_deg)), self.limits_at(x, y)).ok
 
+    def feasible(self, pick: dict | None = None, place: dict | None = None) -> bool:
+        """Fast endpoint reachability and IK pre-filter before full trajectory generation."""
+        for site in (pick or self.plan.get("pick"), place or self.plan.get("place")):
+            if not site:
+                continue
+            x, y, z, yaw = site["x"], site["y"], site["z"], site["yaw_deg"]
+            if not self.kin.solve_top_down(self.TopDownPose(x, y, z, math.radians(yaw)), self.limits_at(x, y)).ok:
+                return False
+            if not self.fits(x, y, z + MIN_STANDOFF_M, yaw):
+                return False
+        return True
+
     def line(self, start, end, speed_m_s, yaw_deg, grip, reference_q5):
         """Frames along a straight Cartesian line at `speed_m_s` and the q5 it ends at: the kinematics' shared
         line (one IK solve and FK check per frame, a yaw-twin flip refused), the same one the sim planner uses."""
@@ -147,7 +173,10 @@ class Planner:
         n = max(1, round(seconds * self.fps))
         if grip_from is None:
             return [list(frame)] * n
-        return [frame[:5] + [round(grip_from + (grip_to - grip_from) * k / n, 3)] for k in range(1, n + 1)]
+        return [
+            frame[:5] + [round(grip_from + (grip_to - grip_from) * 0.5 * (1.0 - math.cos(math.pi * k / n)), 3)]
+            for k in range(1, n + 1)
+        ]
 
     def guard_pace(self, name):
         """A fraction of the guard's pace from the plan file; above 1 would stream past what the guard allows."""
@@ -160,26 +189,31 @@ class Planner:
         """above (one frame, reached by goto) -> descend -> close/open -> lift."""
         p = self.plan
         x, y, z, yaw = target["x"], target["y"], target["z"], target["yaw_deg"]
-        above = (x, y, z + self.standoff(x, y, z, yaw, p["approach_m"]))
+        above_dz = self.standoff(x, y, z, yaw, p["approach_m"])
+        above = (x, y, z + above_dz)
         # after a release the jaws rise clear before the park closes them: 3 cm let the fingertips take the box back
         # (2026-10-28); the pick's lift can stay low for the shoulder. Either lift shrinks inside the wrist limit.
         rise = p.get("release_lift_m", p["lift_m"]) if grip_out > grip_in else p["lift_m"]
-        lifted = (x, y, z + self.standoff(x, y, z, yaw, rise))
+        lifted = above if rise == p["approach_m"] else (x, y, z + self.standoff(x, y, z, yaw, rise))
         joints = self.solve(*above, yaw, q5)
         pre = [round(rad_to_norm(q), 3) for q in joints] + [grip_in]
-        down, q5 = self.line(above, (x, y, z), p["descend_m_s"], yaw, grip_in, joints[4])
+        descend_v = float(p.get(f"descend_{name}_m_s", p["descend_m_s"]))
+        lift_v = float(p.get(f"lift_{name}_m_s", p["lift_m_s"]))
+        down, q5 = self.line(above, (x, y, z), descend_v, yaw, grip_in, joints[4])
         verb = "grasp" if grip_out < grip_in else "release"
         act = self.hold(down[-1], p["grip_s"], grip_in, grip_out) + self.hold(down[-1][:5] + [grip_out], p["settle_s"])
-        up, q5 = self.line((x, y, z), lifted, p["lift_m_s"], yaw, grip_out, q5)
+        up, q5 = self.line((x, y, z), lifted, lift_v, yaw, grip_out, q5)
         # A joint can turn faster than the Cartesian speed suggests near the wrist; the guard streams at
         # GUARD_UNITS_PER_S, so each chunk is slowed to that from where the previous one ended.
         # the vertical lines ease out of and into rest (the same IK path, a trapezoid speed); the jaws'
         # close/open keeps its own pace
         # `descend_guard_frac`: this retime, not descend_m_s, sets a descent's pace; the fastest joint tracks with lag at the cap
-        down = [[round(v, 3) for v in f] for f in retime(down, self.fps, self.guard_pace("descend_guard_frac"), start=pre)]
+        descend_pace_key = f"descend_{name}_guard_frac" if f"descend_{name}_guard_frac" in p else "descend_guard_frac"
+        lift_pace_key = f"lift_{name}_guard_frac" if f"lift_{name}_guard_frac" in p else "lift_guard_frac"
+        down = [[round(v, 3) for v in f] for f in retime(down, self.fps, self.guard_pace(descend_pace_key), start=pre)]
         act = [[round(v, 3) for v in f] for f in slow(act, self.fps, start=down[-1])]
         # `lift_guard_frac`: at 0.85 the wrist_flex fell 2.1 and 2.2 behind on the first cm of two held lifts (2026-11-07), at the strain limit
-        up = [[round(v, 3) for v in f] for f in retime(up, self.fps, self.guard_pace("lift_guard_frac"), start=act[-1])]
+        up = [[round(v, 3) for v in f] for f in retime(up, self.fps, self.guard_pace(lift_pace_key), start=act[-1])]
         return {f"above_{name}": [pre], f"descend_{name}": down, f"{verb}_{name}": act, f"lift_{name}": up}, q5
 
     def library(self):
@@ -187,9 +221,21 @@ class Planner:
         home = [round(v, 3) for v in p["home"]] + [p["grip_closed"]]
         chunks, q5 = {}, norm_to_rad(p["home"][4])
         pick, q5 = self.site("pick", p["pick"], p["grip_open"], p["grip_closed"], q5)
-        place, q5 = self.site("place", p["place"], p["grip_closed"], p["grip_open"], q5)
+        grip_release = min(float(p.get("grip_release", p["grip_open"])), float(p["grip_open"]))
+        place, q5 = self.site("place", p["place"], p["grip_closed"], grip_release, q5)
         chunks.update(pick)
         chunks.update(place)
+        grasp_end, lift_end = pick["grasp_pick"][-1], pick["lift_pick"][-1]
+        rel_act = self.hold(grasp_end, p["grip_s"], p["grip_closed"], grip_release) + self.hold(grasp_end[:5] + [grip_release], p["settle_s"])
+        rel_act = [[round(v, 3) for v in f] for f in slow(rel_act, self.fps, start=grasp_end)]
+        lift_pace_key = "lift_pick_guard_frac" if "lift_pick_guard_frac" in p else "lift_guard_frac"
+        rel_up = [[round(v, 3) for v in f] for f in retime([f[:5] + [grip_release] for f in pick["lift_pick"]],
+                                                           self.fps, self.guard_pace(lift_pace_key), start=rel_act[-1])]
+        chunks["release_pick"] = rel_act + rel_up
+        put_pace_key = "descend_place_guard_frac" if "descend_place_guard_frac" in p else "descend_guard_frac"
+        put_down = [[round(v, 3) for v in f] for f in retime([f[:5] + [p["grip_closed"]] for f in reversed(pick["lift_pick"])],
+                                                             self.fps, self.guard_pace(put_pace_key), start=lift_end)]
+        chunks["reinsert_pick"] = put_down + chunks["release_pick"]
         chunks["home"] = [home]
         for name, frames in chunks.items():
             if too_fast(frames, self.fps):
@@ -218,17 +264,26 @@ class Planner:
         bound = (self.plan.get("keep_out") or {}).get("x_max_m")
         if bound is None:
             return taught
+        seen_x: dict[tuple, float] = {}
+
+        def cached_body_x(frame) -> float:
+            key = tuple(frame[:5])
+            if key not in seen_x:
+                seen_x[key] = self.body_x(frame)
+            return seen_x[key]
+
         for name, frames in chunks.items():
-            worst = max(self.body_x(f) for f in frames)
+            worst = max(cached_body_x(f) for f in frames)
             if worst > bound:
                 raise SystemExit(f"{name}: a link (elbow, wrist or gripper) reaches x {worst:.3f} m "
                                  f"past keep_out x_max {bound} m")
-        first = None
-        for transit in [taught, *self.pulled_in_transits(taught)]:
-            worst = max(self.body_x(f) for f in self.travel(chunks, transit))
+        first = max(cached_body_x(f) for f in self.travel(chunks, taught))
+        if first <= bound:
+            return taught
+        for transit in self.pulled_in_transits(taught):
+            worst = max(cached_body_x(f) for f in self.travel(chunks, transit))
             if worst <= bound:
                 return transit
-            first = first if first is not None else worst
         raise SystemExit(f"travel: a link (elbow, wrist or gripper) reaches x {first:.3f} m past keep_out x_max "
                          f"{bound} m with the taught transit, and no pulled-in transit stays inside")
 
@@ -243,16 +298,18 @@ class Planner:
         """What chunk_runner plays for one leg from ``home``, as the teacher's four phases: its goto travel (jaws at
         the library's gripper_closed, its transit and transit_speed) and the chunks. The recorded cycle, the keep-out
         check, the native SIM teacher and Isaac all replay this, so no simulation runs another motion than the cell."""
-        from chunk_runner import transit_path
+        from omx_adapter.chunk_library import chain_path, transit_path
 
         c = library["chunks"]
         transit = {NAMES.index(k): float(v) for k, v in library.get("transit", {}).items()} or None
         travel = lambda start, goal: transit_path(start, goal, library["gripper_closed"], self.fps,  # noqa: E731
                                                   transit, library.get("transit_speed", 0.85))
-        return [("approach", travel(home, c["above_pick"][0]) + c["descend_pick"]),
+        return [("approach", chain_path([travel(home, c["above_pick"][0]), c["descend_pick"]], self.fps)),
                 ("grasp", c["grasp_pick"]),
-                ("transfer", c["lift_pick"] + travel(c["lift_pick"][-1], c["above_place"][0]) + c["descend_place"]),
-                ("release", c["release_place"] + c["lift_place"] + travel(c["lift_place"][-1], home))]
+                ("transfer", chain_path([c["lift_pick"], travel(c["lift_pick"][-1], c["above_place"][0]),
+                                         c["descend_place"]], self.fps)),
+                ("release", c["release_place"] + chain_path([c["lift_place"],
+                                                             travel(c["lift_place"][-1], home)], self.fps))]
 
     def pulled_in_transits(self, taught: dict) -> list[dict]:
         """Tool-down transits 1 cm apart from the taught one's reach toward the base, the TCP no lower than the
@@ -286,11 +343,11 @@ class Planner:
         home = list(self.plan["home"]) + [self.plan["grip_closed"]]
         return [[round(v, 3) for v in f] for _, frames in self.stream(library, home) for f in frames]
 
-    def cycle_trajectory(self, reset_s: float = 2.0) -> dict:
+    def cycle_trajectory(self, reset_s: float = 2.0, *, first_library: dict | None = None) -> dict:
         """A self-resetting cycle for record_session --replay: A carries pick -> place, B carries it back."""
         from teach_trajectory import compose
 
-        a = self.leg(self.library())
+        a = self.leg(first_library if first_library is not None else self.library())
         back = Planner(dict(self.plan, pick=self.plan["place"], place=self.plan["pick"]), self.kinematics_root)
         b = back.leg(back.library())
         source = {"planner": "grasp_planner.py top-down v1", "pick": self.plan["pick"], "place": self.plan["place"]}
@@ -304,12 +361,14 @@ def main(argv=None):
     parser.add_argument("--kinematics-root", type=Path)
     parser.add_argument("--trajectory", type=Path, help="also write a recordable A/B cycle for record_session --replay")
     args = parser.parse_args(argv)
-    library = Planner(json.loads(args.plan.read_text()), args.kinematics_root).library()
-    library = {k: v for k, v in library.items() if v is not None}
+    plan_data = json.loads(args.plan.read_text())
+    planner = Planner(plan_data, args.kinematics_root)
+    raw_library = planner.library()
+    library = {k: v for k, v in raw_library.items() if v is not None}
     args.out.write_text(json.dumps(library))
     print(json.dumps({"out": str(args.out), "chunks": {k: len(v) for k, v in library["chunks"].items()}}))
     if args.trajectory:
-        trajectory = Planner(json.loads(args.plan.read_text()), args.kinematics_root).cycle_trajectory()
+        trajectory = planner.cycle_trajectory(first_library=raw_library)
         args.trajectory.write_text(json.dumps(trajectory))
         print(json.dumps({"trajectory": str(args.trajectory), "segments": trajectory["segments"]}))
 

@@ -34,3 +34,20 @@
 - 게시는 여전히 운영 노트북의 예약 작업이 한다(D-412). 노트북이 꺼져 있으면 새 Release가 나오지 않고, 이미 나온 Release 설치는 기체가 스스로 계속한다.
 
 **기각:** 재승인 자동화(사람의 항법 승인을 없앤다), 카나리 없이 전 기체 동시 적용(깨진 릴리스가 함대 전체로 간다), OS 자동 설치(BUILD_GO·G4 수용 전).
+
+### 부록 2026-11-09: 강제 갱신 (`-ForceUpdate`)
+
+운영자가 "이 서명 릴리스를 지금 이 기체에 올려라"를 명시할 수 있다. 정본은 이 절이고 런북과 스킬 카드는 여기를 링크한다.
+
+```powershell
+deployobot\pinky_proosy-release-push.ps1 -Robot <robot> -Tarball <id>.tar.gz -ForceUpdate -ExpectReleaseId <id> -Reason "<이유>"
+```
+
+- **우회하는 것:** 기체 updater의 정책 상태, 곧 롤아웃 wave 지연, canary 순서, 그 id의 withdrawn·failed 기록. 수동 push는 updater를 거치지 않으므로 이 기록은 읽히지 않고, 기체가 그 id로 올라오면 `current`가 되어 더는 후보가 아니다. 기체 쪽 새 코드가 필요 없어 2026.10.29 이미지의 updater에서도 같다.
+- **우회하지 않는 것:** 서명 검증(PC와 기체), claim, 보정 세션 가드(`-Force`는 별개의 기존 스위치), 건강 검사와 자동 롤백, 그리고 기체 `rosy_auto_update.py precheck`가 보는 명시 hold, 다른 claim, CORE 정지 상태(MANUAL-quiet), 배터리 40% 이상 또는 충전, 상태 입력 신선도. hold는 먼저 `release-hold`로 푼다.
+- **precheck 시점:** 업로드·unpack 뒤 활성화 바로 앞이다. push 자신의 claim 사유만 걸러내고 다른 사유가 하나라도 있으면 아무것도 바꾸지 않고 사유를 보이며 멈춘다. precheck를 실행할 수 없는 기체(updater 없음)는 idle·배터리·hold를 확인할 수 없으므로 **거절**한다. 그 경우 사람이 직접 확인한 뒤 `-ForceUpdate` 없이 push한다.
+- **필수 입력:** `-ExpectReleaseId`(패키지의 id와 같아야 함)와 `-Reason`. `-Rollback`과는 함께 쓰지 못한다.
+- **기록:** `$ROSY_SCRATCH/rosy-rollout-evidence/<날짜>/rollout.jsonl`에 `event=force_update`로 요청(`requested`)과 결과(`installed`·`failed`)를 누가·언제·어느 릴리스·왜와 함께 남긴다. IP는 `<ip>`로 대체한다.
+
+기각: updater에 `apply-now` 명령 추가(10.29 기체에 닿지 않고, 안전 검사를 한 벌 더 만든다), withdrawn 기록을 지우는 명령(위 이유로 필요 없다).
+

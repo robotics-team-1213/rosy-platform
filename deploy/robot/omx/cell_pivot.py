@@ -191,11 +191,11 @@ def pivot_z_view(config: dict, site: str) -> float:
     return round(max(z_view, surface + prm.get(config.get("params"), "pivot.clear_above_m")), 4)
 
 
-def joints_tcp(state):
+def joints_tcp(state, tcp_x_m: float | None = None):
     """FK of the measured joints (planner units): x, y, z in metres and the FK yaw in degrees."""
     import grasp_planner as gp
 
-    kin = gp.load_kinematics(None)[0]
+    kin = gp.load_kinematics(None, tcp_x_m)[0]
     fk = kin.fk([gp.norm_to_rad(v) for v in state[:5]])
     return fk.x, fk.y, fk.z, math.degrees(fk.yaw)
 
@@ -253,7 +253,7 @@ def pivot_calibrate(cell, config: dict, point, yaws, calibration: dict, site: st
             log({"pivot": yaw, "mark_px": pixel})
             if state is None or pixel is None:
                 continue
-            x, y, z, fk_yaw = joints_tcp(state)
+            x, y, z, fk_yaw = joints_tcp(state, config.get("tcp_x_m"))
             marks.append(mark_to_arm(record, config, site, pixel, z))
             tcps.append((x, y, z, fk_yaw))
     finally:

@@ -103,3 +103,53 @@ def test_without_a_model_the_rules_take_the_remap_when_offered_else_retry():
     off_map = {"box_found": True, "next": "grasp", "aligned": False}
     assert m.Seat(m.rules).decide(dict(off_map, remap=True))["decision"] == "remap"
     assert m.Seat(m.rules).decide(off_map)["decision"] == "retry"
+
+
+def test_reinsert_is_offered_and_proceed_forbidden_when_grasp_is_unstable():
+    unstable = {"box_found": True, "next": "transport", "holding": True, "stable": False}
+    model = Model("reinsert")
+    row = m.Seat(model).decide(unstable)
+    assert row["schema_version"] == 2
+    assert row["decision"] == "reinsert" and row["by"] == "model"
+    assert "reinsert" in model.asked[0] and "proceed" not in model.asked[0]
+    # Without a model, rules chooses reinsert over retry when reinsert is offered
+    assert m.Seat(m.rules).decide(unstable)["decision"] == "reinsert"
+
+
+def test_cooperate_and_from_config_support_multi_model_deliberation_and_arbiter():
+    seen_prompts = []
+
+    def proposer(prompt, images, schema):
+        seen_prompts.append(prompt)
+        return {"decision": "retry", "reason": "proposer suggests retry"}
+
+    def critic_agree(prompt, images, schema):
+        seen_prompts.append(prompt)
+        return {"decision": "retry", "reason": "critic agrees on retry"}
+
+    panel = m.from_config([proposer, critic_agree])
+    row = m.Seat(panel).decide({"box_found": True, "next": "grasp", "aligned": False})
+    assert row["decision"] == "retry" and row["consensus"] is True
+    assert len(row["deliberation"]) == 2 and "Deliberation v2" in seen_prompts[1]
+
+    # Disagreement resolved by arbiter
+    def critic_disagree(prompt, images, schema):
+        return {"decision": "park", "reason": "critic prefers park"}
+
+    def arbiter(prompt, images, schema):
+        return {"decision": "reinsert", "reason": "arbiter chooses reinsert to put container back"}
+
+    panel_with_arb = m.from_config({"models": [proposer, critic_disagree], "arbiter": arbiter})
+    row2 = m.Seat(panel_with_arb).decide({"box_found": True, "next": "transport", "holding": True, "stable": False})
+    assert row2["decision"] == "reinsert" and row2["consensus"] is False
+    assert row2["deliberation"][-1]["role"] == "arbiter"
+
+
+def test_from_config_builds_heterogeneous_provider_backends():
+    zai_fn = m.from_config({"provider": "zai"})
+    assert zai_fn.__name__ == "zai:glm-5.3"
+    ollama_fn = m.from_config({"provider": "ollama", "model": "qwen3-vl:8b-instruct"})
+    assert ollama_fn.__name__ == "ollama:qwen3-vl:8b-instruct"
+    cli_fn = m.from_config({"provider": "opencode"})
+    assert cli_fn.__name__ == "opencode:zai-coding-plan/glm-5.3-flash"
+

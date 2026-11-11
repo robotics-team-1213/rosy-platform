@@ -354,8 +354,8 @@
 
 ## 최근 기록
 
+- 2026-11-11 · uncommitted · docs(adr,solutions): D-1015 6항 실시간 프로토콜·비전·기구학 최적화 및 실물 데몬 경로 드리프트 CE 교훈 반영
 - 2026-11-10 · uncommitted · fix: 독립 검토 11건 — 관제 단위 개명의 접두사·스크립트·감사·정규화 보강 (D-1011)
 - 2026-11-10 · uncommitted · refactor: 팔 셀 식별자 CELL-A/cell-a → ARM-CELL/arm-cell (D-1011)
-- 2026-11-09 · uncommitted · fix(git): `* text=auto`로 텍스트는 늘 LF로 저장
-- 2026-11-09 · uncommitted · fix(land): 옛 브라우저 MAIN-RED 기록도 opt-in으로 재확인
-- 2026-11-09 · e94b732208 · D-922 추가 결정 — Pinky 상황 표정 8종
+- 2026-11-10 · uncommitted · docs(solutions): OMX 실물 팔 지터링 및 청크 정지 원인·해결 교훈 기록
+- 2026-11-10 · uncommitted · docs: D-1010 독립 검토 반영 — 3·6항과 한계 갱신

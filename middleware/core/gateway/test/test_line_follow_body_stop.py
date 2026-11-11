@@ -16,7 +16,7 @@ import yaml
 from core.services import _line_follow_config
 from core_common.config import _deep_merge
 from core_features.line_follow.clearance import (
-    body_envelope_gap, body_path_gap, rotation_gap, ultrasonic_points)
+    body_envelope_gap, body_path_gap, rotation_sweep_gap, ultrasonic_points)
 from core_features.line_follow.manager import (
     LineFollowConfig, LineFollowManager, LineFollowMode, LineObservation)
 
@@ -109,10 +109,37 @@ def test_straight_gap_is_measured_from_the_body_front_not_the_lidar():
     assert body_path_gap(beside, linear=0.04, angular=0.0, **BODY) is None
 
 
-def test_rotation_gap_is_outside_the_urdf_rotation_radius():
-    points = [(-0.07, 0.07)]                                      # behind-left of the body
-    assert rotation_gap(points, rotation_radius_m=0.08257, reach_m=0.3) == pytest.approx(
-        math.hypot(0.07, 0.07) - 0.08257)
+SWEEP = dict(front_x_m=0.04205, rear_x_m=-0.076, half_width_m=0.05655, rotation_radius_m=0.08257,
+             horizon_m=0.30, pad_m=0.02)
+
+
+def test_rotation_sweep_counts_only_the_side_the_body_turns_into():
+    """User 2026-11-09: only the heading is guarded. A return the body turns away from does not stop the turn."""
+    ahead_right = [(0.07, -0.03)]                    # past the short front: left turn swings the rear-right around to it
+    left, right, either = (rotation_sweep_gap(ahead_right, sign=s, **SWEEP) for s in (1, -1, 0))
+    assert left == pytest.approx(0.0173, abs=1e-3) and right == pytest.approx(0.0836, abs=1e-3)
+    assert either == left                            # no heading yet: the nearer side counts
+    mirrored = [(0.07, 0.03)]
+    assert rotation_sweep_gap(mirrored, sign=-1, **SWEEP) == left and rotation_sweep_gap(mirrored, sign=1, **SWEEP) == right
+
+
+def test_rotation_sweep_ignores_what_the_body_never_reaches_and_sees_what_is_inside():
+    assert rotation_sweep_gap([(0.0, 0.20), (-0.2, 0.0)], sign=1, **SWEEP) is None
+    assert rotation_sweep_gap([(0.01, 0.01)], sign=1, **SWEEP) == 0.0       # already inside the body
+
+
+def test_rotation_sweep_edges_fail_toward_checking_both_sides():
+    ahead_right = [(0.07, -0.03)]
+    assert rotation_sweep_gap(ahead_right, sign=math.nan, **SWEEP) == rotation_sweep_gap(ahead_right, sign=0, **SWEEP)
+    assert rotation_sweep_gap(ahead_right, sign=1, **{**SWEEP, "horizon_m": 0.001}) is None   # under one step: no contact yet
+    assert rotation_sweep_gap([(math.inf, 0.0), (math.nan, 0.0)], sign=1, **SWEEP) is None
+
+
+def test_rotation_sweep_gap_is_travel_at_the_rotation_radius_within_the_horizon():
+    point = [(0.0, -0.09)]                             # beside the body: its side edge comes round after ~32 deg
+    gap = rotation_sweep_gap(point, sign=1, **SWEEP)
+    assert gap == pytest.approx(0.045, abs=2e-3)
+    assert rotation_sweep_gap(point, sign=1, **{**SWEEP, "horizon_m": gap / 2}) is None
 
 
 def test_ultrasonic_cone_points_sit_on_the_echo_arc():
@@ -140,14 +167,18 @@ def test_corner_in_place_turn_is_allowed_with_the_rotation_radius():
     m = _manager(obstacle_stop_m=0.12, obstacle_resume_m=0.17)          # 8kcn overlay values
     decision, status = _step(m, _l_corner(), error=-0.5, confidence=0.35)
     assert status.state == "TRACKING" and decision.angular > 0.0 and decision.linear == 0.0
-    assert status.body_gap_m == pytest.approx(0.11 - 0.08257, abs=1e-3)   # side wall, base origin
+    assert status.body_gap_m is None                                    # both walls lie outside the sweep (D-1008)
     assert status.stop_gap_m == pytest.approx(0.02)
 
 
-def test_in_place_turn_still_stops_when_the_sweep_would_touch():
-    m = _manager()
-    _, status = _step(m, _wall(0.10), error=-0.5, confidence=0.35)     # 0.4 mm outside the sweep
+def test_in_place_turn_stops_only_for_what_the_turn_sweeps_into():
+    """User 2026-11-09: the same return stops the left turn it swings toward and not the right turn."""
+    ahead_right = [(0.087, -0.03)]                                      # base (0.07, -0.03), LiDAR frame
+    _, status = _step(_manager(), ahead_right, error=-0.5, confidence=0.35)      # turn left
     assert (status.state, status.reason) == ("HOLD", "obstacle_ahead")
+    assert status.body_gap_m == pytest.approx(0.0173, abs=1e-3)
+    decision, status = _step(_manager(), ahead_right, error=0.5, confidence=0.35)   # turn right
+    assert status.state == "TRACKING" and decision.angular < 0.0 and decision.linear == 0.0
 
 
 def test_corner_wall_ahead_with_an_arc_turning_away_keeps_driving():
@@ -329,15 +360,15 @@ def test_a_curve_into_an_object_that_vanished_beside_the_robot_stops():
     assert _step(_manager(), [], error=-0.3, t=t, range_min=RANGE_MIN)[1].state == "TRACKING"
 
 
-def test_in_place_turn_sees_a_remembered_object_inside_the_sweep_annulus():
-    """Review M2: with range_min 0.15 the LiDAR never sees the R..R+0.02 annulus directly."""
+def test_in_place_turn_sees_a_remembered_object_inside_the_sweep():
+    """Review M2: with range_min 0.15 the LiDAR never sees this close; the object is remembered."""
     post = [(0.13, -0.068)]                                              # ends at base (0.07, -0.068)
     m = _manager()
     travelled, t = _drive_straight(m, post, scans=4, speed=0.03)
     assert _visible(post, travelled) == []
     _, status = _step(m, [], error=-0.5, confidence=0.35, t=t, range_min=RANGE_MIN)
     assert (status.reason, status.stop_gap_m) == ("obstacle_ahead", 0.02)
-    assert status.body_gap_m == pytest.approx(math.hypot(0.13 - travelled, 0.068) - 0.08257, abs=2e-3)
+    assert status.body_gap_m == pytest.approx(0.0086, abs=2e-3)         # D-1008: the left turn's sweep
     fresh = _manager()                                                   # no memory: unprotected
     assert _step(fresh, [], error=-0.5, confidence=0.35, t=t, range_min=RANGE_MIN)[1].state == "TRACKING"
 
