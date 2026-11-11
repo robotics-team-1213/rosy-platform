@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import math
 
-from core_features.safety_gate.limits import SpeedLimits
+from core_api_web.api.deps import SpeedLimits
 
 TRAVEL_RUN_CEILING_M = 0.25  # approval_trials.TRAVEL_RUN_CEILING_M; test_speed_limit_config pins the pair
 
