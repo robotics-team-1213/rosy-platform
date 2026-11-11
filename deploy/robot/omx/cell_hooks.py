@@ -16,6 +16,7 @@ from pathlib import Path
 
 import cell_feel
 import cell_fingers
+import cell_identity
 import cell_look
 import cell_params as prm
 import cell_pinch
@@ -132,6 +133,12 @@ class Checked:
         return self.cell.act(command if command == "state" else self.prefix + command)
 
 
+def _queue_reading(point, result, arm_mission_id):
+    import port_event_outbox
+
+    port_event_outbox.queue(port_event_outbox.reading(point, result, arm_mission_id=arm_mission_id))
+
+
 def pick_hooks(config: dict, cell, target: dict, write_library, source: str, dest_site: str, emit=None, calibration=None,
                guard=None):
     """(hover hook chain, after-place reference capture, after-descent pinch check, empty-grasp feel search) for one
@@ -148,7 +155,8 @@ def pick_hooks(config: dict, cell, target: dict, write_library, source: str, des
     calibrated_reach = (reach is not None and region.get("rms_mm") is not None
                         and region["rms_mm"] <= prm.get(params, "look.tol_mm"))
     # a look with no room to open the jaws is skipped when a later hook or calibrated FK reach already measures the position
-    wrist = cell_reach.chain(guard, reach,
+    # D-996 4: the container's identity first; a mismatch parks before the descent like any other refusal
+    wrist = cell_reach.chain(guard, cell_identity.hook(config, cell, _queue_reading), reach,
                              cell_look.hook(config, cell, target, write_library, calibration, source,
                                             fallback=any(h is not None for h in later) or calibrated_reach), *later)
     capture = None

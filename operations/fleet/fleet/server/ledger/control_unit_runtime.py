@@ -152,6 +152,16 @@ class ControlUnitPeers:
             suffix = "/delegations/" + path + ("/cancel" if method == "POST" else "")
         return (await self._send(unit_id, method, "/api/fleet/control-unit" + suffix, body, limit))[1]
 
+    async def port_events(self, unit_id, after_seq, limit):
+        """D-996 7: a direct child cell's port event ledger after ``after_seq``; read only, nothing else reached."""
+        self.config.topology.child(self.config.unit_id, unit_id)
+        if unit_id not in self.config.peers:
+            raise ValueError("CONTROL_UNIT_PEER_OUTSIDE_SCOPE")
+        if type(after_seq) is not int or after_seq < 0 or type(limit) is not int or not 1 <= limit <= 200:
+            raise ValueError("INVALID_CONTROL_UNIT_PEER_PATH")
+        path = f"/api/fleet/control-unit/port-events?after_seq={after_seq}&limit={limit}"
+        return (await self._send(unit_id, "GET", path, None, 1_048_576))[1]
+
     async def arm_job(self, unit_id, method, origin, delegation_id, tail, body=None):
         """D-965 relay: a delegated ARM job's evidence or rechecks, through the child's control-unit API.
 

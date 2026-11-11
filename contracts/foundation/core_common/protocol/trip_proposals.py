@@ -1,13 +1,19 @@
-"""D-908 neutral trip proposals and separate operator admission; no cargo or process fields."""
+"""D-908 neutral trip proposals and separate operator admission; no cargo or process fields.
+
+D-996 5 allows one opaque ``object_ref``: the app's own cargo code, never read by ROSY, carried into the supply arm's
+ARM_TRANSFER proposal after the trip arrives."""
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, model_validator
 
+from .arm_transfer_preflight import ArmPhysicalRef
 from .trip_jobs import RobotId, TripJobStep, TripRequestKey
 
 _Digest = Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
 _Principal = Annotated[str, Field(min_length=1, max_length=96)]
 ProposalId = Annotated[str, Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:-]*$")]
+#: trimmed, control-free and short enough to become the ARM_TRANSFER object_ref unchanged
+ObjectRef = Annotated[ArmPhysicalRef, Field(max_length=128)]
 
 
 class TripProposalCreate(BaseModel):
@@ -16,6 +22,7 @@ class TripProposalCreate(BaseModel):
     candidate_robot_ids: list[RobotId] = Field(min_length=1, max_length=8)
     request_key: TripRequestKey
     steps: list[TripJobStep] = Field(min_length=1, max_length=8)
+    object_ref: ObjectRef | None = None
 
     @model_validator(mode="after")
     def _unique(self):
@@ -43,6 +50,7 @@ class TripProposalSnapshot(BaseModel):
     dispatch_generation: int | None
     approved_by: _Principal | None
     mission_id: str | None
+    object_ref: ObjectRef | None = Field(default=None, exclude_if=lambda value: value is None)
 
     @model_validator(mode="after")
     def _admission(self):

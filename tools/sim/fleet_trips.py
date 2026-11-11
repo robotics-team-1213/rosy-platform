@@ -517,6 +517,10 @@ def fleet_console(binding_path, cli_args):
                     join(robot_id)
 
         kwargs.update(map_pose_port=port, simulation_pose_binding=asdict(binding), deployment_profile='simulation')
+        intake_file = os.environ.get('FLEET_TRIPS_INTAKE')
+        if intake_file:  # D-996: intake proposals and port events, simulation profile only (production Fleet: off)
+            intake = json.loads(Path(intake_file).read_text(encoding='utf-8'))
+            kwargs.update(intake_supply=intake['intake'], arm_transfer_installation=intake['arm_transfer_installation'])
         app = original(console, **kwargs)
         lifespan = app.router.lifespan_context
 

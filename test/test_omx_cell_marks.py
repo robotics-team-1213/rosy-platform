@@ -43,3 +43,9 @@ def test_the_print_sheet_holds_each_id_at_each_size_and_reads_back():
 def test_every_arm_slots_gripper_id_is_found_and_distinct_from_the_charuco_board():
     page = cell_marks.sheet((20,), (50, 65, 80), dpi=150)  # D-954 gripper ids of arm slots 1-3
     assert set(cell_marks.find(page)) == {50, 65, 80}
+
+
+def test_container_tags_past_100_print_once_per_face_and_read_back():
+    # D-996 6: container tags are DICT_4X4_250 100-199, roof and side; DICT_4X4_100 alone never saw them
+    page = cell_marks.sheet((12, 20), (100, 199), dpi=300, faces=("roof", "side"))
+    assert set(cell_marks.find(page)) == {100, 199}
