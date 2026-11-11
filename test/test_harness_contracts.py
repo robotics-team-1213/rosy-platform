@@ -1041,3 +1041,14 @@ def test_generated_targets_scans_plan_and_solution_frontmatter_once_across_modul
     assert "p1.md" in targets[tmp_path / "m1" / "index.md"]
     assert "Solution 1" in targets[tmp_path / "m2" / "index.md"]
 
+    adr_calls: list[int] = []
+    real_parse_adr = harness.parse_adr_log
+    monkeypatch.setattr(harness, "parse_adr_log", lambda *a, **kw: (adr_calls.append(1), real_parse_adr(*a, **kw))[1])
+    monkeypatch.setattr(harness, "_git", lambda repo, *args: "7\n" if args[:2] == ("rev-list", "--count") else None)
+    harness.generate(tmp_path)
+    adr_calls.clear()
+    _, notes = harness.lint(tmp_path)
+    assert len(adr_calls) == 1
+    assert sum("7 commits touched" in n for n in notes) == 2
+
+

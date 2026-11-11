@@ -1125,3 +1125,72 @@ def test_teacher_recording_refuses_a_leader_teleop_and_a_non_recording(guard):
     with pytest.raises(ValueError, match="recording"):
         guard.run_native(SimpleNamespace(), Follower, Leader, teacher=True)
     assert calls == []
+
+
+def test_effort_check_uses_sync_read_on_dynamixel_bus_to_avoid_5hz_unicast_stall(guard):
+    follower, clock = Bus(), [10.0]
+    follower.model_ctrl_table = {}
+    pwm_sync_calls = []
+    original_sync = follower.sync_read
+
+    def sync_read(register, motors=None, *, normalize=True, num_retry=0):
+        if register in ("Present_PWM", "Hardware_Error_Status", "Torque_Enable", "PWM_Limit",
+                        "Operating_Mode", "Profile_Acceleration", "Profile_Velocity", "Drive_Mode"):
+            pwm_sync_calls.append((register, tuple(motors), normalize, num_retry))
+            if register == "PWM_Limit":
+                return {n: 330 for n in motors}
+            if register == "Operating_Mode":
+                return {n: 5 if n == "gripper" else 4 for n in motors}
+            if register in ("Profile_Acceleration", "Profile_Velocity"):
+                return {n: 8 if register == "Profile_Acceleration" else 20 for n in motors}
+            return {n: 0 for n in motors}
+        return original_sync(register, motors=motors, normalize=normalize, num_retry=num_retry)
+
+    follower.sync_read = sync_read
+    guard.connect_passive(SimpleNamespace(bus=follower, cameras={}), follower=True)
+    assert ("Operating_Mode", guard.NAMES, False, guard.READ_RETRY) in pwm_sync_calls
+    motion = guard.NativeJointMotion(follower, None, teacher=True, clock=lambda: clock[0])
+    here = {n + ".pos": v for n, v in follower.norm(follower.raw).items()}
+    motion.send(here)
+    clock[0] += 0.25
+    motion.send(here)
+    assert ("Hardware_Error_Status", guard.NAMES, False, guard.READ_RETRY) in pwm_sync_calls
+    assert ("PWM_Limit", guard.BODY, False, guard.READ_RETRY) in pwm_sync_calls
+    assert ("Present_PWM", guard.BODY, False, guard.READ_RETRY) in pwm_sync_calls
+    assert not any(e[:2] == ("read", "Present_PWM") for e in follower.events)
+    assert not any(e[:2] == ("read", "PWM_Limit") for e in follower.events)
+
+
+def test_teacher_mode_feedforward_tracks_streamed_ramp_without_braking_chaser_lag(guard):
+    motion, follower, clock, here = teacher(guard)
+    motion.send(here)
+    for _ in range(18):
+        clock[0] += 1 / 30
+        motion.send(here)
+    assert motion.tracking
+    # Stream a C2 eased trajectory (matching retime/flow: 0.9s ramp up, 1.0s cruise at 4.5 units/s, 0.9s ramp down).
+    streamed = dict(here)
+    lags_deg = []
+    pos = here["shoulder_pan.pos"]
+    for k in range(1, 85):
+        clock[0] += 1 / 30
+        if k <= 27:
+            v_u = 4.5 * (k / 27)
+        elif k <= 57:
+            v_u = 4.5
+        else:
+            v_u = 4.5 * max(0.0, (84 - k) / 27)
+        pos += v_u / 30
+        streamed = {**here, "shoulder_pan.pos": pos}
+        sent = motion.send(streamed)
+        follower.raw.update({n: int(v) for n, v in follower.goals.items()})
+        if 34 <= k <= 57:  # steady-state cruise at 4.5 units/s (~8.1 deg/s)
+            lags_deg.append(abs(streamed["shoulder_pan.pos"] - sent["shoulder_pan.pos"]) * 1.8)
+    # Feedforward velocity matching keeps steady-state tracking lag well under 0.5 deg (vs ~3.9 deg without v_ff)
+    assert max(lags_deg) < 0.5
+    for _ in range(8):
+        clock[0] += 1 / 30
+        sent = motion.send(streamed)
+        follower.raw.update({n: int(v) for n, v in follower.goals.items()})
+    assert sent["shoulder_pan.pos"] == pytest.approx(streamed["shoulder_pan.pos"], abs=0.1)
+

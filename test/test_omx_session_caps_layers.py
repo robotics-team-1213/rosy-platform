@@ -34,12 +34,15 @@ def profile(tmp_path, caps, servo):
     return path
 
 
-def test_the_model_gives_the_loaded_elbow_and_wrist_an_i_gain(caps, tmp_path):
-    """2026-11-01: with I 0 both arms' elbow and wrist stopped short under load (TCP 12.3 mm -> 3.3 mm with I 50)."""
+def test_the_model_gives_the_loaded_elbow_and_wrist_an_i_gain_and_body_ramp_profiles(caps, tmp_path):
+    """2026-11-01 & 2026-11-10: I 50 on 13/14 closes steady load error; acc 8 / vel 20 on 11..15 ramps between whole-tick goals."""
     loaded = caps.load_caps(site(tmp_path), model=caps.model_tuning())
-    assert loaded[13] == {"pwm_limit": 600, "i_gain": 50}
-    assert loaded[14] == {"pwm_limit": 300, "current_limit": 250, "p_gain": 800, "i_gain": 50}
+    assert loaded[13] == {"pwm_limit": 600, "i_gain": 50, "profile_acc": 8, "profile_vel": 20}
+    assert loaded[14] == {"pwm_limit": 300, "current_limit": 250, "p_gain": 800, "i_gain": 50,
+                          "profile_acc": 8, "profile_vel": 20}
     assert all("i_gain" not in loaded[motor] for motor in (11, 12, 15, 16))
+    assert all(loaded[motor]["profile_acc"] == 8 and loaded[motor]["profile_vel"] == 20 for motor in (11, 12, 13, 14, 15))
+    assert "profile_acc" not in loaded[16] and "profile_vel" not in loaded[16]
 
 
 def test_the_site_file_overrides_the_model_and_the_robot_overrides_both(caps, tmp_path):

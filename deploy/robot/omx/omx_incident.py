@@ -320,8 +320,10 @@ def decide(f: dict) -> dict:
                    and all(r.get("caught") for r in f["flagged"]))
     if caught_only:  # the runner already let go where the jaws pinched: a note, not a hold
         return {"actions": [], "hold": False, "offered": [], "reason": "jaws caught and reopened by the runner"}
-    off = all(int(v) == 0 for v in f["torque_after"].values()) and bool(f["torque_after"])
-    rebootable = [m for m, l in f["latched"].items() if l["hw_error"] and not int(l["hw_error"]) & ~REBOOTABLE]
+    off = bool(f["torque_after"]) and all(isinstance(v, int) and not isinstance(v, bool) and v == 0
+                                          for v in f["torque_after"].values())
+    rebootable = [m for m, l in f["latched"].items()
+                  if isinstance(l.get("hw_error"), int) and l["hw_error"] and not int(l["hw_error"]) & ~REBOOTABLE]
     offered = ["reboot_latched"] if rebootable and len(rebootable) == len(f["latched"]) and off and f["folded"] else []
     why = []
     if f["latched"]:
@@ -333,6 +335,13 @@ def decide(f: dict) -> dict:
     if not offered and f["latched"]:
         why.append("no automatic reboot: " + ("torque not confirmed OFF" if not off else
                                                "arm not folded at home" if not f["folded"] else "a latch that is not load or supply"))
+    if not why and not f["safe_end"]:
+        if not off:
+            why.append("torque not confirmed OFF")
+        if f.get("caps_restored"):
+            why.append("caps not confirmed restored")
+        if not why:
+            why.append("unsafe session end")
     return {"actions": offered, "hold": True, "offered": offered,
             "reason": "; ".join(why) + "; a person checks the arm (jaws, contacts, wedged objects) before torque ON"}
 

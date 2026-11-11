@@ -14727,3 +14727,15 @@ osy-d395-s1d\`.
 - 이유: 2026-11-10 독립 검토 지적의 결정 근거를 ADR 본문에 남기기 위해서(D-1010은 이 브랜치의 미착지 ADR이라 제자리 갱신).
 - 증거: ADR D-1010 본문.
 - gate 변화: 없음(SOURCE만).
+
+## 2026-11-10 · uncommitted · docs(solutions): OMX 실물 팔 지터링 및 청크 정지 원인·해결 교훈 기록
+- 변경: `docs/solutions/runtime-errors/omx-real-arm-jitter-tick-quantization-and-chunk-stops-2026-11-10.md` 추가.
+- 증거: `trace-arm_b-20261110-200027.jsonl` 및 `session.jsonl` 실측치와 원격 pytest 회귀 시험.
+- gate 변화: 없음.
+- CE: 새 교훈 기록.
+
+## 2026-11-11 · uncommitted · docs(adr,solutions): D-1015 6항 실시간 프로토콜·비전·기구학 최적화 및 실물 데몬 경로 드리프트 CE 교훈 반영
+- 변경: `docs/adr/D-1015-omx-imitation-speed-parity-temporal-ensembling-and-kinodynamic-streaming.md`에 6항(실시간 카메라·통신 프로토콜 `HTTP/1.1` Keep-Alive·`ETag` `304`·MJPEG·15FPS·10Hz 상태 보고·5ms FIFO 폴링 및 비전 ROI 슬라이싱·3x3 기구학 언롤링·다이제스트 캐시)을 추가하고, `docs/solutions/runtime-errors/omx-real-arm-jitter-tick-quantization-and-chunk-stops-2026-11-10.md`에 `robttt@100.82.51.8` 라이브 데몬 경로 드리프트(`omx-camera-readiness.env`의 구 스냅샷 참조, `rosy-omx-camera@.service` `--max-fps` 기본값 불일치, 상위 디렉터리 `.py` 섀도잉) 원인과 해결을 기록했다.
+- 증거: `robttt@100.82.51.8` 라이브 포트 `8767` `HTTP/1.1` Keep-Alive + `ETag` `304`(`0.30~0.37ms`) 실측 및 원격 pytest 검증.
+- gate 변화: 없음.
+- CE: 기존 교훈 갱신 — `docs/solutions/runtime-errors/omx-real-arm-jitter-tick-quantization-and-chunk-stops-2026-11-10.md`.

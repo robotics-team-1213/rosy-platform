@@ -177,14 +177,61 @@ class ArmHealthSource:
         return self.last
 
 
+_DEFAULT_BUILD_OPENER = build_opener
+_ARM_CONNECTIONS: dict = {}
+_ARM_CONN_LOCK = threading.Lock()
+
+
 def post_arm(fleet_url, source_id, token, observation, *, context):
-    url = secure_url(fleet_url, 'https') + '/api/fleet/workcell-observations/arms/' + quote(source_id, safe='')
-    request = Request(url, data=observation.model_dump_json().encode(), method='POST',
-                      headers={'Content-Type': 'application/json', 'X-Workcell-Observation-Token': token})
-    opener = build_opener(HTTPSHandler(context=_verified(context)), _NoRedirect())
-    with opener.open(request, timeout=2) as response:
-        if response.status != 202:
-            raise OSError('observation was not accepted')
+    base = secure_url(fleet_url, 'https')
+    path = '/api/fleet/workcell-observations/arms/' + quote(source_id, safe='')
+    url = base + path
+    verified = _verified(context)
+    payload = observation.model_dump_json().encode()
+    headers = {'Content-Type': 'application/json', 'X-Workcell-Observation-Token': token,
+               'Connection': 'keep-alive'}
+    if build_opener is not _DEFAULT_BUILD_OPENER:
+        request = Request(url, data=payload, method='POST', headers=headers)
+        opener = build_opener(HTTPSHandler(context=verified), _NoRedirect())
+        with opener.open(request, timeout=2) as response:
+            if response.status != 202:
+                raise OSError('observation was not accepted')
+        return
+    import http.client
+    import socket as _socket
+
+    parsed = urlsplit(base)
+    key = (parsed.hostname, parsed.port or 443, id(verified))
+    for attempt in range(2):
+        with _ARM_CONN_LOCK:
+            conn = _ARM_CONNECTIONS.pop(key, None)
+        try:
+            if conn is None:
+                conn = http.client.HTTPSConnection(key[0], key[1], context=verified, timeout=2)
+                conn.connect()
+                if conn.sock is not None:
+                    conn.sock.setsockopt(_socket.IPPROTO_TCP, _socket.TCP_NODELAY, 1)
+            conn.request('POST', path, body=payload, headers=headers)
+            response = conn.getresponse()
+            response.read()
+            status, reason, resp_headers = response.status, response.reason, response.headers
+            with _ARM_CONN_LOCK:
+                _ARM_CONNECTIONS[key] = conn
+            if 400 <= status < 600:
+                raise HTTPError(url, status, reason, resp_headers, None)
+            if status != 202:
+                raise OSError('observation was not accepted')
+            return
+        except HTTPError:
+            raise
+        except (OSError, http.client.HTTPException):
+            try:
+                if conn is not None:
+                    conn.close()
+            except Exception:
+                pass
+            if attempt == 1:
+                raise
 
 
 def post_usb_devices(fleet_url, workcell_id, token, report, *, context):
@@ -355,6 +402,11 @@ class CameraSender:
                     additional_headers={'Authorization': f'Bearer {self.token}'},
                     open_timeout=2, close_timeout=1, max_queue=1, max_size=65536)
                 self.connection.socket.settimeout(2)
+                try:
+                    import socket as _socket
+                    self.connection.socket.setsockopt(_socket.IPPROTO_TCP, _socket.TCP_NODELAY, 1)
+                except (AttributeError, OSError):
+                    pass
                 self.connection.send(json.dumps(camera_hello(self.source_id, sample.value[1], sample.value[2])))
             # Drain config/status/demand messages so their receive queue cannot stall the socket.
             for _ in range(8):
@@ -377,7 +429,7 @@ class SourceWorker:
         while not stop.is_set():
             sample = self.source.latest()
             if sample is None or sample.sequence == last:
-                stop.wait(0.05)
+                stop.wait(0.02)
                 continue
             try:
                 self.send(sample)

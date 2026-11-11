@@ -32,19 +32,20 @@ def measure(img, hsv, gap_mm: float, width_mm: float | None = None, params=None,
     a, b, _ = pads
     axis = (b - a) / np.linalg.norm(b - a)
     across = np.array([-axis[1], axis[0]])
-    g = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    h, w = img.shape[:2]
+    y0 = 2 * h // 3
+    bot_g = cv2.cvtColor(img[y0:], cv2.COLOR_BGR2GRAY)
     hsv_img = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-    h, w = g.shape[:2]
-    ax_x, ax_y = int(np.clip(a[0], 0, w - 1)), int(np.clip(a[1], 0, h - 1))
-    is_white = mode == "white" or (mode == "auto" and g[ax_y, ax_x] > 180)
+    ax_x, ax_y = int(np.clip(a[0], 0, w - 1)), int(np.clip(a[1] - y0, 0, h - y0 - 1))
+    is_white = mode == "white" or (mode == "auto" and bot_g[ax_y, ax_x] > 180)
     if is_white:  # v2.1 white finger pads (neutral bright white or cool-LED white)
-        bot_hsv = hsv_img[2 * h // 3:]
-        pad_mask = ((g[2 * h // 3:] > 185) & (bot_hsv[:, :, 1] <= 55)) | (
+        bot_hsv = hsv_img[y0:]
+        pad_mask = ((bot_g > 185) & (bot_hsv[:, :, 1] <= 55)) | (
             (bot_hsv[:, :, 0] >= 95) & (bot_hsv[:, :, 0] <= 138) & (bot_hsv[:, :, 2] >= 140)
         )
     else:
-        pad_mask = g[2 * h // 3:] < 60
-    dark = np.argwhere(pad_mask)[:, ::-1] + (0, 2 * h // 3)
+        pad_mask = bot_g < 60
+    dark = np.argwhere(pad_mask)[:, ::-1] + (0, y0)
     mid = (a + b) / 2
     proj = (dark - mid) @ axis
     near = np.abs((dark - mid) @ across) < prm.get(params, "pinch.band_px")

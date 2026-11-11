@@ -99,8 +99,8 @@ def blobs(frame):
 
     hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
     masks = (("pad", (hsv[..., 2] < 140) & (hsv[..., 1] < 90)),
-             ("container", ((hsv[..., 0] < 22) & (hsv[..., 1] > 120) & (hsv[..., 2] > 120))
-              | ((hsv[..., 0] >= 22) & (hsv[..., 0] < 29) & (hsv[..., 1] > 140) & (hsv[..., 2] > 140))
+             ("container", ((hsv[..., 0] < 18) & (hsv[..., 1] > 120) & (hsv[..., 2] > 120))
+              | ((hsv[..., 0] >= 23) & (hsv[..., 0] < 30) & (hsv[..., 1] > 140) & (hsv[..., 2] > 140))
               | ((((hsv[..., 0] >= 35) & (hsv[..., 0] < 88)) | (hsv[..., 0] >= 135)) & (hsv[..., 1] > 110) & (hsv[..., 2] > 125))))
     for kind, m in masks:
         if kind == "pad":  # bridge the white lane label and alignment dots printed across a dark pad
@@ -130,7 +130,7 @@ def lane_blobs(frame, cam, deck_z, box_h):
     out = []
     for kind, px in blobs(frame):
         xy, yaw, size = rect(cam.to_plane(px, deck_z + (box_h if kind == "container" else 0.)))
-        if abs(size[1] - LANE[1]) > SIZE_TOL[1] + (.001 if kind == "container" else 0.) or not PARTIAL_MIN <= size[0] <= LANE[0] + SIZE_TOL[0]:
+        if abs(size[1] - LANE[1]) > SIZE_TOL[1] + (.004 if kind == "container" else 0.) or not PARTIAL_MIN <= size[0] <= LANE[0] + SIZE_TOL[0]:
             continue
         if kind == "container" and size[1] > LANE[1]:  # oblique side wall widens the contour toward the camera
             v = (-math.sin(yaw), math.cos(yaw))

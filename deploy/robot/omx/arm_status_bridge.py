@@ -99,7 +99,7 @@ def main(argv=None):
     parser.add_argument("--token-env", required=True)
     parser.add_argument("--ca-file", type=Path)
     parser.add_argument("--calibration", type=Path)
-    parser.add_argument("--period", type=float, default=0.5)
+    parser.add_argument("--period", type=float, default=0.1)
     parser.add_argument("--arm-id", help="registered arm_id: the motor-health owner and group Fleet expects")
     parser.add_argument("--health-file", type=Path, help="absolute motor-health snapshot of the runner's guard")
     args = parser.parse_args(argv)
