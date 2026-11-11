@@ -606,6 +606,14 @@
       ],
       "source_revision": "7ab88553a8b72cd03982779042df3593cc2aec40"
     },
+    "PUT:/api/fleet/robots/{robot_id}/speed-limits": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_speed_limit_routes.py",
+        "test_the_speed_goes_to_core_with_the_operator_named"
+      ],
+      "source_revision": "963497b5ef7b62a496cf65c8d29602e04c791504"
+    },
     "POST:/api/fleet/robots/{robot_id}/estop-release": {
       "status": 200,
       "test": [

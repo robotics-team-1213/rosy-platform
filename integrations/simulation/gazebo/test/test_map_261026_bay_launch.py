@@ -18,6 +18,10 @@ def test_launch_source_pins():
     assert "map_261026_core.yaml" in src
     # D-601 front preview (CAMERA_LAUNCHES membership).
     assert "sim_jpeg_relay" in src
-    # The bay pit-in docking approach (approach "line") is a later branch.
+    # D-1013: the guide line reaches CORE as dock/observation (CAMERA_LINE).
+    assert "bay_line_observer_node" in src
+    assert '"bay_observer", default_value="true"' in src
+    # The bay pit-in docking approach (approach "line") core is a separate
+    # branch; this launch only feeds observations.
     assert "dock_observer" not in src
     assert "lane_graph_path" not in src

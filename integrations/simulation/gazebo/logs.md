@@ -451,3 +451,10 @@
 - gate 변화: 없음
 - 결정: D-1013 9항 (b). 원격 Gazebo 실구동(전 흐름·S1 예정 종료 분류)은 시뮬 호스트에서 별도 기록
 - 교훈: 없음
+
+## 2026-11-11 · 76b74fd91b · feat(gz_sim): bay observer on the 261026 launch (D-1013)
+- 변경: `launch/map_261026_bay_lane.launch.py`에 `bay_observer`(기본 켬) — bay_line_observer_node를 같은 선언 Gazebo 기하(25°·320x180)로 부착, line_total_m 0.65(미실측 site 값). 핀 시험 갱신
+- 증거: 원격 pytest(ai PC) test_bay_line_observer·test_robot_literals·test_map_261026_bay_launch·test_dock_observer 21 passed 1 skip exit 0 (76b74fd91b; 오프셋 부호·테이프 두께 렌더·±π 비교는 로컬 순수 모듈 왕복으로 잡아 수정)
+- gate 변화: 없음
+- 결정: D-1013. 칸 흐름의 관측 경로가 런치에서 닫힘 — 원격 Gazebo 실구동은 다음 기록
+- 교훈: 없음

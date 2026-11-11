@@ -173,10 +173,12 @@ def monitor(profile, root, digest, duration, io):
                 observation_error = None
             except Exception as exc:
                 state, observation_error = {}, repr(exc)
-            assessment = gate.update(state)
+            view_state = {role: state.get(role) if role in state else state.get(spec.get('unit', role), {})
+                          for role, spec in profile['cameras'].items()}
+            assessment = gate.update(view_state)
             for role, spec in profile['cameras'].items():
                 plan = plans[role]
-                item = state.get(role, {})
+                item = view_state[role]
                 quality = item.get('quality') or {}
                 if role in control_errors and time.monotonic() < checks[role]:
                     unavailable(role, assessment)

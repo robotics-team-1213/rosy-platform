@@ -14745,6 +14745,17 @@ osy-d395-s1d\`.
 - gate 변화: 없음.
 - CE: 새 교훈 기록.
 
+## 2026-11-10 · uncommitted · refactor: 팔 셀 식별자 CELL-A/cell-a → ARM-CELL/arm-cell (D-1011)
+- 변경: 입력(위임 target·peers key·service principal·정지 ingress·`/units/{unit_id}`)에 구 id `CELL-A`를 별칭으로 받고 출력·저장은 새 id로. `ControlUnitStore` identity 충돌 전 멱등 원장 마이그레이션(`fleet_control_unit_identifier_events` 감사 행). 시험 기대값 교체와 신규 `test_control_unit_identifier_rename.py`. 관제 단위 배포 문서·헤더 주석 갱신, dry-run 호스트 스크립트 `tools/ops/rename_arm_cell_runtime.sh`(이 브랜치에서 실행 안 함). 재고와 결정 근거는 `docs/plans/2026-11-10-arm-cell-identifier.md`.
+- 증거: 원격 시험 로그는 착지 시점의 실행 기록을 따른다(이 행 작성 시점 미실행).
+- gate 변화: 없음.
+- 결정: D-1011 Accepted.
+
+## 2026-11-10 · uncommitted · fix: 독립 검토 11건 — 관제 단위 개명의 접두사·스크립트·감사·정규화 보강 (D-1011)
+- 변경: stop·information 경로가 service principal의 `control-unit:` 접두사를 먼저 확인(꼬리만 같은 위조 거절, 시험 추가). 정지 snapshot/reconcile 경로가 origin 경로 매개변수를 정규화(CELL-A 조회가 이행된 ARM-CELL 행에 닿음, 시험 추가). `ControlUnitStore`는 실제로 행을 고쳤을 때만 감사 행을 씀(새 DB 무기록, 시험 추가). 호스트 스크립트 `rename_arm_cell_runtime.sh` 재작성: OPERATOR_HOME(/home/robttt 기본) 기반 세션 lock(`flock -n`, 없으면 거부)·작업 lock·motor-health(`rosy.motor-health.v1`, 안전 상태만) 검사, 스택 선행 down 후 백업·볼륨 복사·모든 파일 sha256 대조, 디렉터리 이동+symlink(ln -sfn 중첩 제거), compose 키(cell_a_data/cell_a_backend)·경로 재작성과 fleet 볼륨 mount 확인, healthcheck 없으면 건강 아님, 실패 시 구 스택 자동 롤백, rm -r 제거. ADR·계획·배포 문서에 peer 이름(`peer-cell-a`)·token 파일 개명이 나중 단계임을 명시.
+- 증거: 원격 시험 로그는 착지 시점의 실행 기록을 따른다.
+- gate 변화: 없음.
+
 ## 2026-11-11 · uncommitted · docs(adr,solutions): D-1015 6항 실시간 프로토콜·비전·기구학 최적화 및 실물 데몬 경로 드리프트 CE 교훈 반영
 - 변경: `docs/adr/D-1015-omx-imitation-speed-parity-temporal-ensembling-and-kinodynamic-streaming.md`에 6항(실시간 카메라·통신 프로토콜 `HTTP/1.1` Keep-Alive·`ETag` `304`·MJPEG·15FPS·10Hz 상태 보고·5ms FIFO 폴링 및 비전 ROI 슬라이싱·3x3 기구학 언롤링·다이제스트 캐시)을 추가하고, `docs/solutions/runtime-errors/omx-real-arm-jitter-tick-quantization-and-chunk-stops-2026-11-10.md`에 `robttt@100.82.51.8` 라이브 데몬 경로 드리프트(`omx-camera-readiness.env`의 구 스냅샷 참조, `rosy-omx-camera@.service` `--max-fps` 기본값 불일치, 상위 디렉터리 `.py` 섀도잉) 원인과 해결을 기록했다.
 - 증거: `robttt@100.82.51.8` 라이브 포트 `8767` `HTTP/1.1` Keep-Alive + `ETag` `304`(`0.30~0.37ms`) 실측 및 원격 pytest 검증.

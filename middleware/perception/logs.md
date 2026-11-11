@@ -1865,3 +1865,10 @@
 - gate 변화: 없음
 - 결정: D-1013 9항 (b)의 기반 슬라이스. 칸 pit-in 코어 접근(approach "line")과 Gazebo 실구동 검증은 다음 브랜치
 - 교훈: 없음
+
+## 2026-11-11 · 76b74fd91b · feat(perception): bay line observer - pink tape to the virtual dock (D-1013)
+- 변경: `sensors/sensing/bay_line_observer.py` 신규(ROS-free) — 분홍 마스크(floor_pink_mask)를 선언 Gazebo 기하로 지면 투영·SVD 직선 적합해 선을 가상 도크로 만든다: x=멈춤면까지 잔여(남쪽 끝 거리 + site 상수 line_total_m, 원시야 밖에서 along_measured=false), y=선의 횡, yaw=칸 안쪽 축. `observers/bay_line_observer_node.py`(얇은 노드, GAZEBO+use_sim_time 아니면 fail-closed), setup.py 진입점, robot_literal_backlog 행(PINKY 기본값 가족), 시험 9건(중심·횡·방위·원시야 감쇠·무선·점·그림자 테이프·기하 거부·포장핀)
+- 증거: 원격 pytest(ai PC) test_bay_line_observer·test_robot_literals·test_map_261026_bay_launch·test_dock_observer 21 passed 1 skip exit 0 (76b74fd91b; 오프셋 부호·테이프 두께 렌더·±π 비교는 로컬 순수 모듈 왕복으로 잡아 수정)
+- gate 변화: 없음
+- 결정: D-1013 관측 반쪽. baydock 코어(approach "line")는 별도 브랜치에서 독립 리뷰 대기 중 — along_measured 플래그 소비는 그 브랜치가 잇는다
+- 교훈: 없음
