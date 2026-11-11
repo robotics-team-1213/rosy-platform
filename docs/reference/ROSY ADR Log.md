@@ -10,6 +10,7 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-1004 | Calibration 화면은 Account 로그인으로 열고, 실측 요청의 답은 calibration.operate가 한다. [전문](../adr/D-1004-calibration-screen-and-operate-capability.md) | Accepted (2026-11-09, 사용자 결정; 구현·시험, 배포·HTTPS·실계정 수용은 별도) |
 | D-1005 | 속도 한도는 서명된 상한 안에서 운영자가 정하고, 봉인된 측정 속도를 넘지 못한다. D-986의 "속도·이동 한도는 바꾸지 않는다"를 개정한다. [전문](../adr/D-1005-speed-limits-operator-settable-under-signed-ceiling.md) | Accepted (2026-11-09, 사용자 지시; 코드·호스트 시험까지, 실물 수용은 아직 없다) |
 | D-1011 | 팔 셀 식별자를 CELL-A/cell-a에서 ARM-CELL/arm-cell로 바꾼다 — 입력은 구 id를 별칭으로 받고, 원장은 감사와 함께 한 번 재작성한다. [전문](../adr/D-1011-arm-cell-identifier-rename.md) | Accepted (2026-11-10, 사용자 결정; 코드·시험·호스트 스크립트, 실제 호스트 전환·현장 수용 별도) |
 | D-1017 | peer 위치 공유로 지도 자세 앵커 보강 — 카메라·운영자 핀 뒤에서만, 첫 앵커는 DEGRADED. [전문](../adr/D-1017-peer-sighting-map-pose-anchor.md) | Proposed (2026-11-11, 사용자 지시; 구현·원격 시험, 현장 수용 없음) |
