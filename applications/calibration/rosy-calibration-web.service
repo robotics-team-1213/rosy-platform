@@ -1,0 +1,16 @@
+# Rosy Calibration screen on the OMX control PC (D-951, D-1004): loopback 8776, HTTPS in front by
+# `tailscale serve --bg --https=9449 http://127.0.0.1:8776`, Rosy Account through receiver.json.
+# Install as the cell user: ln -s <tree>/applications/calibration/rosy-calibration-web.service ~/.config/systemd/user/
+# then systemctl --user daemon-reload && systemctl --user enable --now rosy-calibration-web.
+# The tree is the one tools/remote/omx_hotfix.py deploys (~/rosy-test/omx-tools-current).
+[Unit]
+Description=Rosy Calibration screen (cell real-measurement requests)
+After=network-online.target
+
+[Service]
+ExecStart=/usr/bin/python3 %h/rosy-test/omx-tools-current/applications/calibration/calibration_web.py --store %h/.local/state/rosy/cell-requests --account-config %h/.config/rosy/calibration/receiver.json --port 8776
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=default.target
