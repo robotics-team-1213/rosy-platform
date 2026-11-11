@@ -14750,3 +14750,8 @@ osy-d395-s1d\`.
 - 증거: `robttt@100.82.51.8` 라이브 포트 `8767` `HTTP/1.1` Keep-Alive + `ETag` `304`(`0.30~0.37ms`) 실측 및 원격 pytest 검증.
 - gate 변화: 없음.
 - CE: 기존 교훈 갱신 — `docs/solutions/runtime-errors/omx-real-arm-jitter-tick-quantization-and-chunk-stops-2026-11-10.md`.
+
+## 2026-11-11 · uncommitted · fix(test): 착지 관문 두 건 — swarm 단위 small 표시 제거, OMX 프로파일 해시 시험 캐시 분리
+- 변경: `test/architecture/size_units.txt`에서 `drive/behaviors/swarm`의 `small` 표시를 뗀다(D-766 3: 단위가 1000줄 바닥에 닿았고 표시 제거가 규칙이 정한 길이다. D-559 복귀 주석 포함 1020줄). `test/test_omx_session_caps_layers.py`의 프로파일 동일성 시험이 같은 경로를 즉시 다시 써 `cell_robot_profile.load`의 (경로, mtime_ns, 크기) 캐시에 첫 해시가 걸리는 것을, 서로 다른 파일 이름으로 갈라 고친다(2026-11-11 착지에서 묶음·단독 모두 실패, main에서는 우연히 통과).
+- 증거: 원격 시험 결과는 다음 커밋에 기록한다.
+- gate 변화: 없음.
