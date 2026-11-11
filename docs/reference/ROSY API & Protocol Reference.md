@@ -61,6 +61,15 @@ TLS 검증·redirect 금지를 적용한다. 생산자는 원래 업무/발생 �
 첫 구현의 메시지는 고정 분류·불투명 식별자·시각/기한·설정된 보호 업무 링크만 쓴다.
 Fleet의 기존 상세 본문을 대체하는 전환 계약은 별도다. 원본 outbox·UNKNOWN 보존과 두 생산자 양 끝 SHA HTTP 수용 전에는 전환하지 않는다.
 
+### v1.376 항만 사건과 이송 제안의 `object_ref` (D-996)
+
+- `POST /api/fleet/trip-proposals`: 선택 필드 `object_ref`(앞뒤 공백·제어 문자 없는 1~128자)를 받는다. 업무 앱의 화물 코드이고 ROSY는 해석하지 않는다. 같은 `request_key`로 다른 `object_ref`(또는 없음)를 보내면 409다. 값이 있으면 `TripProposalSnapshot.object_ref`로 돌려주고 `request_digest`와 `proposal_digest`에 들어간다. `request_digest` = sha256(UTF-8(JSON `{"candidates":[...],"steps":[{"to":..,"via":[...]}]}`에 값이 있을 때만 `"object_ref"` 키를 더한 것, 키 정렬, 구분자 `,`·`:`, 공백 없음, ASCII 이스케이프)). 승인된 이송 job의 `request_digest`도 같은 값이다. 없으면 응답 바이트와 두 digest는 전과 같다. additive다.
+- `POST /api/fleet/workcell-observations/{workcell_id}/port-events`: 셀 PC가 `X-Workcell-Observation-Token`(그 workcell 팔 토큰 중 하나, D-807 기계 자격)으로 `PortEvent`(`core_common.protocol.port_events`, 닫힌 모델) 하나를 보낸다. kind별 필수·금지 필드는 모델이 강제한다(`received_at_intake`: `object_ref`·`intake_point`·`identity`, `stored`: `object_ref`·`slot_ref` `{area}-r{row}-c{col}-l{level}`·`identity`, `handling_failed`: `reason` `MISMATCH|UNREADABLE|LOST|DAMAGED`(+선택 `object_ref`), `release_permitted`: `vehicle_id`). `event_id`는 `sha256(workcell_id|observation_ref|kind)`이어야 한다(아니면 422 `PORT_EVENT_ID_MISMATCH`). 200 `{event_id, seq}`. 같은 사건 재전송은 같은 seq, 같은 `event_id`의 다른 사건은 409 `PORT_EVENT_CONFLICT`, 토큰 오류 401, 4 KiB 초과 413. 원장 `fleet_port_events`는 append-only이고 seq는 이 Fleet 안에서 단조 증가한다.
+- `POST /api/fleet/workcell-observations/{workcell_id}/intake-readings`: 같은 셀 토큰으로 `IntakeReading`(`observation_ref`, `point` `conveyor_end|wrist`, `state` `read|unreadable|mismatch`, `read`일 때만 `tag`, wrist만 선택 `arm_mission_id`, UTC `observed_at`)을 보낸다. 셀 PC는 태그 번호만 보내고, 셀 Fleet이 태그→`object_ref` 표와 이송 선언으로 사건을 만든다(D4). 컨베이어 끝: 공급 작업이 끝났고 아직 받지 않은 선언값과 같으면 `received_at_intake(observed)`, 다른 태그·표에 없는 태그·두 태그·두 면 불일치는 `handling_failed(MISMATCH)`, 못 읽으면 `UNREADABLE`. wrist: 불일치는 바로 `MISMATCH`, 읽은 태그는 그 A/B 작업이 슬롯 앵커 target에서 `GOAL_CONFIRMED`가 되면 `container.stored(observed)`. 같은 `observation_ref`는 한 번만 번역하고(재전송은 같은 seq), 다른 내용이면 409 `INTAKE_READING_CONFLICT`. 200 `{observation_ref, seqs}`. intake 설정이 없으면 503. 셀 토큰으로 `vehicle.release_permitted`를 보내면 422 `PORT_EVENT_KIND_NOT_ALLOWED`.
+- `GET /api/fleet/control-unit/port-events?after_seq=&limit=1..200`: 직계 부모 관제 단위의 서비스 principal(`control-unit:<parent>`)만 읽는다. 200 `PortEventLedgerPage{rows:[{seq, event}]}`. 다른 principal은 403 `CONTROL_UNIT_PARENT_ONLY`.
+- `GET /api/fleet/port-events?after=<cursor>&limit=1..200`: viewer 인증(업무 앱 service principal). 200 `PortEventPage{events, cursor, complete}`. 이 Fleet의 원장과 workcell을 가진 **직계 자식** 셀만 읽는다(손자 셀은 범위 밖). `cursor`는 불투명 문자열로, 첫 조회에서는 생략하고 받은 값을 그대로 돌려보낸다. 닿지 않은 셀이 있거나 셀 안 seq에 빈 곳이 있으면 `complete:false`이고 그 셀 위치는 빈 곳 앞에 머문다. 잘못된 cursor는 400 `PORT_EVENT_CURSOR_INVALID`.
+- 시뮬레이션 프로필에서 `create_app(intake_supply={supply_place, instance_id, intake_point, container_tags?})`(시뮬레이션 Fleet은 `FLEET_TRIPS_INTAKE` JSON `{intake, arm_transfer_installation}`; 운영 `fleet console`은 끔)이면 `object_ref`가 있는 승인된 이송이 공급 장소에서 `GOAL_CONFIRMED`가 될 때 Fleet(`fleet-intake`)이 S `ARM_TRANSFER`를 **제안**만 한다. 그 작업이 `GOAL_CONFIRMED`가 되면 `vehicle.release_permitted`(이송 로봇)를 원장에 쓴다. 정책 승인 worker는 `fleet-intake`를 승인하지 않는다(`INTAKE_NEEDS_NAMED_APPROVAL`, scope 설정에 넣으면 거절). 승인·인계 확인·가드는 그대로다.
+
 ### v1.375 OMX 팔 사건의 원인 라벨과 정지 앞뒤 사진 (D-971)
 
 - 해제 `POST .../incidents/{incident_id}/clear`가 선택 필드 `cause`(`blocked`·`wrong_position`·`snagged`·`too_fast`·`no_room`·`software_or_config`·`camera_or_map`·`other`·`unknown`)와 `basis`(`repeat`·`measured`·`seen`·`unknown`)를 받는다. 사람이 고른 원인과 그 근거(같은 동작을 다시 해 봄·측정값·사진으로 봄)다. 사건 행의 `cleared`에 `cause`·`basis`가 붙는다(없으면 null). 예전 본문 `{note}`도 그대로 받는다.
@@ -278,10 +287,14 @@ v1.292 limits. No cargo, process or business field exists on the wire.
 
 | Method/path | Input | Access/result |
 |---|---|---|
-| POST /api/fleet/trip-proposals | TripProposalCreate | existing proposer role (operator or service); 200 TripProposalResponse |
+| POST /api/fleet/trip-proposals | TripProposalCreate (optional opaque `object_ref` ≤128, v1.376) | existing proposer role (operator or service); 200 TripProposalResponse |
 | GET /api/fleet/trip-proposals?request_key=... | caller-scoped key | viewer authentication; own record only |
 | GET /api/fleet/trip-proposals/{proposal_id} | proposal ID | creator or a named site operator |
 | POST /api/fleet/trip-proposals/{proposal_id}/admit | TripProposalAdmit: expected_proposal_digest, expected_generation | named operator different from the proposer; 200 |
+| GET /api/fleet/port-events?after=&limit= | opaque cursor (D-996 7) | viewer (app service principal); 200 PortEventPage; this Fleet and direct workcell child cells only |
+| POST /api/fleet/workcell-observations/{workcell_id}/port-events | PortEvent (closed, kind-specific fields) | X-Workcell-Observation-Token of that workcell; 200 {event_id, seq}; idempotent on event_id |
+| POST /api/fleet/workcell-observations/{workcell_id}/intake-readings | IntakeReading (tag id only) | X-Workcell-Observation-Token of that workcell; 200 {observation_ref, seqs}; translated once |
+| GET /api/fleet/control-unit/port-events?after_seq=&limit= | ledger seq | direct parent control-unit service principal only; 200 PortEventLedgerPage |
 
 TripProposalResponse has exactly proposal: TripProposalSnapshot with proposal_id,
 proposal_principal_id, request_key, request_digest, proposal_digest,

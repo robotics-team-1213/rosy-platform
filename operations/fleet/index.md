@@ -105,8 +105,8 @@
 
 ## 최근 기록
 
+- 2026-11-11 · uncommitted · 컨테이너 태그 실제 크기 인쇄물 (D-996 6)
+- 2026-11-11 · uncommitted · 항만 사건 원장·R 조회·S 반입 제안 (D-996)
 - 2026-11-11 · e803458bb0 · docs(fleet): D-1017 검토 반영 변경 검증
 - 2026-11-11 · uncommitted · fix(world): peer 앵커는 D-989 자동 위치 차단을 풀지도 걸지도 않는다 (D-1017)
 - 2026-11-11 · 184e7d0e11 · docs(fleet): D-1017 원격 시험 결과 기록
-- 2026-11-11 · uncommitted · D-1017 peer 위치 공유로 지도 자세 앵커 보강
-- 2026-11-11 · uncommitted · test(fleet): trail_twist 4-튜플 호출자 정리

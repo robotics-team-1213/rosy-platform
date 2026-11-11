@@ -10,6 +10,7 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-996 | 셀 사실은 항만 사건 4개로만 Harbor에 가고, 화물 신원은 판독값으로만 맞춘다 — S load는 Fleet ARM_TRANSFER 제안, container_tag 100~199, R relay는 직계 셀만. [전문](../adr/D-996-harbor-port-events-and-intake-identity.md) | Proposed (2026-11-08, 사용자 결정 D1~D7; 시뮬레이션 프로필 구현, 실물·마커 판독률 수용 전) |
 | D-998 | 전환 전 알림 전달의 HTTP·기계 자격·독립 원장. [전문](../adr/D-998-notification-delivery-http-journal.md) | Accepted (2026-11-08, D-997 단계별 구현 지시; 배포·발송 owner 전환·실제 채널 수용 별도) |
 | D-1004 | Calibration 화면은 Account 로그인으로 열고, 실측 요청의 답은 calibration.operate가 한다. [전문](../adr/D-1004-calibration-screen-and-operate-capability.md) | Accepted (2026-11-09, 사용자 결정; 구현·시험, 배포·HTTPS·실계정 수용은 별도) |
 | D-1005 | 속도 한도는 서명된 상한 안에서 운영자가 정하고, 봉인된 측정 속도를 넘지 못한다. D-986의 "속도·이동 한도는 바꾸지 않는다"를 개정한다. [전문](../adr/D-1005-speed-limits-operator-settable-under-signed-ceiling.md) | Accepted (2026-11-09, 사용자 지시; 코드·호스트 시험까지, 실물 수용은 아직 없다) |

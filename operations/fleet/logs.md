@@ -5532,3 +5532,13 @@
 - 변경: 없음 — 앞 항목(peer 앵커 D-989 비독립 처리)의 원격 시험 결과만 기록한다.
 - 증거: 원격 rosy 호스트(커밋 e803458bb0)에서 `test_map_pose.py`·`test_auto_locate_anchor.py`·`test_map_pose_service.py`·`operations/world/test` 172 passed, 0 failed, exit 0. `test/known_failures.py` 비교 0 new. `rosy_harness.py lint` 0 errors, `map_pose.py` 600줄 유지.
 - gate 변화: 없음. FIELD는 실물 5대 전원·카메라 차단 재현 전까지 그대로다.
+
+## 2026-11-11 · uncommitted · 항만 사건 원장·R 조회·S 반입 제안 (D-996)
+- 변경: 이송 제안 `object_ref`(값이 있을 때만 request_digest에 포함), 도착한 이송의 S ARM_TRANSFER 제안(`fleet-intake`, 승인 아님), append-only `fleet_port_events` 원장과 셀 토큰 POST, 직계 부모 peer 읽기, R의 불투명 cursor 조회(닿지 않은 셀·seq 빈 곳은 complete:false).
+- 증거: 원격 pytest(시험 PC) — 보고서 참고. 실물 팔·마커 판독률은 미실시.
+- gate 변화: SOURCE. 시뮬레이션 끝까지 돌리기와 현장 수용은 별도다.
+
+## 2026-11-11 · uncommitted · 컨테이너 태그 실제 크기 인쇄물 (D-996 6)
+- 변경: `cell_print_sheets`에 `container-tags` 시트(DICT_4X4_250 100~199, 번호마다 지붕·옆면 두 장, 12 또는 20 mm, 50 mm 확인 막대)와 Cell 화면 「보정 인쇄물」의 태그 번호·크기 입력. 태그↔object_ref 표는 시트에 넣지 않는다.
+- 증거: 시트를 300 dpi로 그려 OpenCV DICT_4X4_250이 번호·크기(±0.2 mm)대로 되읽음. 한 장에 12 mm 24개, 20 mm 12개 컨테이너. 실물 인쇄·판독률은 미실시.
+- gate 변화: SOURCE. 인쇄 후 자로 확인·판독률 측정은 사람 몫이다.

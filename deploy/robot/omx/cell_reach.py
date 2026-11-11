@@ -24,13 +24,22 @@ def fk_xy(state: list, tcp_x_m: float | None = None) -> tuple:
 def correct(cell, aim_xy, replan, params=None, fk=fk_xy) -> dict:
     """{verdict: pass|refuse, dx_mm, dy_mm, total_mm, iterations}; dx/dy is the offset added to the pick."""
     tol, top = prm.get(params, "reach.tol_mm"), prm.get(params, "reach.max_mm")
+    base_samples = int(prm.get(params, "reach.samples", 1))
     dx = dy = 0.0
     rows = []
     for i in range(int(prm.get(params, "reach.max_iter")) + 1):
         status = cell.act("state")
-        x, y = fk(status["state"])
+        shaking = bool((status.get("jitter") or {}).get("shaking"))
+        n_samples = max(base_samples, 3 if shaking else 1)
+        states = [status["state"]] + [cell.act("state")["state"] for _ in range(n_samples - 1)]
+        pts = [fk(s) for s in states]
+        x = sum(p[0] for p in pts) / len(pts)
+        y = sum(p[1] for p in pts) / len(pts)
         ex, ey = 1000 * (aim_xy[0] - x), 1000 * (aim_xy[1] - y)
-        rows.append({"iteration": i, "error_mm": [round(ex, 1), round(ey, 1)]})
+        row = {"iteration": i, "error_mm": [round(ex, 1), round(ey, 1)]}
+        if n_samples > 1:
+            row["samples"] = n_samples
+        rows.append(row)
         if math.hypot(ex, ey) <= tol:
             return {"verdict": "pass", "dx_mm": round(dx, 1), "dy_mm": round(dy, 1), "total_mm": round(math.hypot(dx, dy), 1), "iterations": rows}
         if i == int(prm.get(params, "reach.max_iter")) or math.hypot(dx + ex, dy + ey) > top:

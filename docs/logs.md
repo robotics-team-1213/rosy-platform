@@ -14828,6 +14828,11 @@ osy-d395-s1d\`.
 - 증거: 원격 ai 호스트(커밋 98e73632b6)에서 `test_os_rauc_tool.py`·`test_os_rauc_service.py`·`test_prepare_os_release.py` 50 passed, 0 failed, exit 0. 아카이브가 그 시각에도 접속 불능이어서 픽스처가 kernel 미러 폴백으로 실제 패키지를 받았다(종단 검증). `test/known_failures.py` 비교 0 new.
 - gate 변화: 없음.
 
+## 2026-11-11 · uncommitted · docs(solutions): 고정 단일 소스 시험 다운로드가 MAIN-RED로 위장하는 교훈 기록
+- 변경: `docs/solutions/test-failures/pinned-single-source-test-download-reads-as-main-red-2026-11-11.md` 신규 — 외부 아카이브 장애가 코드 회귀와 같은 모양의 MAIN-RED로 나타난 사건(증상·원인·계약 보존 해결·종단 검증·재발 방지)을 남긴다.
+- 증거: 게시 FULL prepare-99120b86f6의 MAIN-RED 24개 id와 접속 행렬(github 200·아카이브 000·kernel 미러 200), 수정 후 원격 50 passed(미러 폴백 종단) — 앞 항목들에 기록됨.
+- gate 변화: 없음.
+
 ## 2026-11-11 · uncommitted · docs: 게시 검증 체크포인트 — 2026-11-11 착지분 무캐시 FULL 근거 확보
 - 변경: 없음(체크포인트 커밋). 2026-11-11 착지분(편대 자취 복귀 D-559, peer 앵커 D-1017, 편대 SIM 계측 D-1002 외)의 게시용 무캐시 FULL 기록을 이 커밋 위에 만든다.
 - 증거: `python tools/land.py --tests full --no-cache` 실행 기록으로 남는다.
