@@ -52,16 +52,17 @@ def contact_limits(start_lags: list, params=None) -> list:
     return [max(base, min(s + rise, top)) for s in start_lags]
 
 
-_CR_GLOBALS: dict = {}
+_CR_DICT_LIST: list[dict] = []
 
 
 def _cr_attr(name: str, default):
+    for d in _CR_DICT_LIST:
+        if name in d and d[name] != default:
+            return d[name]
     mod = sys.modules.get("chunk_runner")
     if mod is not None and hasattr(mod, name):
-        val = getattr(mod, name)
-        if val != default:
-            return val
-    return _CR_GLOBALS.get(name, default)
+        return getattr(mod, name)
+    return default
 
 
 class Runner:

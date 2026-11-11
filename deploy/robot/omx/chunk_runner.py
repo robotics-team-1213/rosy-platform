@@ -106,7 +106,7 @@ MOTORS = [n.split(".")[0] for n in NAMES]
 
 
 import chunk_runner_run as _crr  # noqa: E402
-_crr._CR_GLOBALS = globals()
+_crr._CR_DICT_LIST.append(globals())
 Runner = _crr.Runner
 
 
