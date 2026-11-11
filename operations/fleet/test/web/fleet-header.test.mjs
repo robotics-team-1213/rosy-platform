@@ -101,8 +101,8 @@ test("a control-unit instance is named by its unit, not the shared pairing name 
   assert.equal(nodes["fleet-name"].textContent, "rosy-site");
   showFleet({name: "rosy-site", unit: "R", root: true, online: 0, total: 0});
   assert.equal(nodes["fleet-name"].textContent, "통합관제 R");
-  showFleet({name: "rosy-site", unit: "CELL-A", root: false, online: 0, total: 0});
-  assert.equal(nodes["fleet-name"].textContent, "CELL-A");
+  showFleet({name: "rosy-site", unit: "ARM-CELL", root: false, online: 0, total: 0});
+  assert.equal(nodes["fleet-name"].textContent, "ARM-CELL");
 });
 
 test("role words are Korean; English stays out of the text", () => {

@@ -131,4 +131,3 @@ D-1004 reserved in another in-flight branch (refs/adr/D-1004), absent from this 
 D-1005 reserved in another in-flight branch (refs/adr/D-1005), absent from this D-1008 branch; remove when its ADR lands
 D-1004 reserved in another in-flight branch (refs/adr/D-1004), absent from this D-1006 branch; remove when its ADR lands
 D-1005 reserved in another in-flight branch (refs/adr/D-1005), absent from this D-1006 branch; remove when its ADR lands
-D-1011 reserved in another in-flight branch (refs/adr/D-1011), absent from this D-1012 branch; remove when its ADR lands
