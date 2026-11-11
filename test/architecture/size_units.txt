@@ -17,7 +17,7 @@ drive/behaviors/line_follow/crosswalk small
 drive/behaviors/line_follow/signal small
 drive/behaviors/localization
 drive/behaviors/docking
-drive/behaviors/swarm small
+drive/behaviors/swarm
 fleet/fleet/traffic
 account/rosy_account
 fleet/fleet/observe small
@@ -86,3 +86,4 @@ fleet/fleet/server/rightofway
 situation
 devices/omx/adapter/omx_adapter/contracts
 devices/omx/adapter/omx_adapter/real
+core/api/core_api_web/api/peer_pairing

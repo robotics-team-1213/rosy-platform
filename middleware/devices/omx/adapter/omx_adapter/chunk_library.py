@@ -33,7 +33,12 @@ def transit_path(start: list, goal: list, grip_transit: float, fps: int, transit
     turn pan/roll to the goal there, descend into the goal body pose, then set the goal's jaws.
     `transit` maps joint indexes to values (a cell profile's transit); default TRANSIT (arm S).
     `speed` is the fraction of the guard speed (a plan's transit_speed)."""
-    if start[1] >= -35.0 and goal[1] >= -35.0 and max(abs(a - b) for a, b in zip(start[:5], goal[:5])) <= 16.0:
+    if (
+        start[1] >= -35.0
+        and goal[1] >= -35.0
+        and max(abs(a - b) for a, b in zip(start[:4], goal[:4])) <= 18.0
+        and abs(start[4] - goal[4]) <= 38.0
+    ):
         return flow([list(start), list(goal[:6])], fps, speed * PARK_SPEED, blend=[False, False], blend_s=0.2,
                     rise_speed=RISE_SPEED)
     transit = TRANSIT if transit is None else transit
@@ -69,7 +74,11 @@ def chain_path(steps: list[list], fps: int, blend_s: float = 0.25) -> list:
 def park_path(start: list, home: list, closed: float, fps: int, transit: dict | None = None,
               speed: float = 0.85) -> list:
     """Close the jaws, rise, turn at that height, then descend into home (jaws stay closed)."""
-    return transit_path(start, list(home[:5]) + [closed], closed, fps, transit, speed)
+    goal = list(home[:5]) + [closed]
+    if max(abs(a - b) for a, b in zip(start[:5], goal[:5])) <= 5.0 and abs(start[5] - closed) <= 5.0:
+        return flow([list(start), goal], fps, speed * PARK_SPEED, blend=[False, False], blend_s=0.2,
+                    rise_speed=RISE_SPEED)
+    return transit_path(start, goal, closed, fps, transit, speed)
 
 
 def load_library(path: Path) -> dict:

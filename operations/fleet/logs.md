@@ -5426,6 +5426,24 @@
 - 증거: 착지 사전 시험 `test_all_supported_features_have_contracts_and_flows`가 미등록 프런트 호출 3건으로 실패했다. 원인은 이 브랜치가 새 프런트 호출을 기능표에 올리지 않은 것이며 main 탓이 아니다.
 - gate 변화: SOURCE 회귀 복구. 현장 수용은 별도다.
 
+## 2026-11-08 · uncommitted · D-998 알림 producer 비활성 경계
+- 변경: 기존 알림 worker는 동일한 공용 채널 adapter를 쓰며 outbox·최종 사건 검사·발송 owner를 유지한다. 새 producer seam은 기본 꺼짐이고 동시 활성·미수용 전환을 거절한다.
+- 증거: 기존 test_notifications/test_final_notifications와 독립 전달 시험을 커밋 SHA에서 원격으로 확인한다. 실제 채널 발송·전환은 하지 않는다.
+- gate 변화: 없음. SOURCE 회귀와 실제 전달·현장 수용을 구별한다.
+- CE: 해당 없음 — 전환 금지 이유와 범위는 D-998에 명시했다.
+
+## 2026-11-08 · uncommitted · D-998 채널 모듈 소비 버전
+- 변경: 공용 채널 adapter를 실제 제공하는 core_common>=0.0.3을 Fleet 설치 하한으로 지정했다.
+- 증거: 신규 전달·기존 Fleet 알림 회귀와 CI 입력 wheel 설치를 변경 커밋의 원격 시험으로 확인한다.
+- gate 변화: 없음. 기존 발송 owner·outbox·사건 검사는 유지한다.
+
+## 2026-11-08 · uncommitted · refactor(fleet): 감사·task의 동일 비밀 필드 판별 재사용
+
+- 변경: observe/events와 ledger/task_payloads가 foundation의 `is_credential_field`를 쓴다. list/tuple 탐색 차이·이벤트 PEM 검사·거절 오류·정렬·크기 상한을 유지하고 소비자 회귀 시험을 더했다.
+- 증거: 구현 커밋 SHA로 원격 affected 및 소비자 시험을 요청한다. 최종 결과는 디스패처 인계에 연결한다.
+- gate 변화: 없음. 원본 감사·admission·발송·설정·업데이트 권한은 그대로다.
+- CE: 해당 없음 — 처리 차이와 추출 근거는 코드·회귀 시험·카탈로그에 남는다.
+
 ## 2026-11-10 · uncommitted · fix(fleet): 사이트 지도 프레임 결속 — 활성 본문 검증과 목표·자세·경로의 프레임 거절 (D-1010)
 - 변경: SiteMapStore._active_row이 모든 읽기에서 본문 sha256을 저장값과 대조(422 SITE_MAP_BODY_HASH_MISMATCH, 시동 때 활성 지도 없이 fail closed). TripSteps._step_free는 활성 버전이 계획과 다르면 map_version으로, 변환의 현장 자세가 활성 map_id가 아니면 map_frame으로 trip을 끝내고 detail.goal_frame에 활성 map_id·버전·기체 robot_map_id·목표 프레임을 기록. pose_request.overhead_decision은 현장 자세 map_id와 기체 상태 map_id가 같을 때만 답(D-546 갭). console._goal은 알려진 다른 map_id의 선점 경로와 비교하지 않고 MAP_FRAME_MISMATCH 보류, 다른 프레임에 선 로봇은 NO_YIELD_SPACE(bay 계산 없음). pose_view에 map_id.
 - 이유: R의 site_map_versions에 map_id가 섞여 있고(1-5 map_v2_fleet, 6-7 world_261026), 틀린 지도·틀린 좌표계를 조용히 쓰면 로봇이 다른 곳으로 달린다(사용자 2026-11-10). 임시 스크립트의 최신 행 추정이 제품에 들어오지 않게 활성 정의를 한 곳에 둔다.
@@ -5446,6 +5464,16 @@
 - 결정: 신규 ADR 없음(권한·소유 변경 없음, 초안 저장 경로 재사용). API Reference v1.384.
 
 
+## 2026-11-10 · uncommitted · refactor: 관제 단위 id CELL-A → ARM-CELL 별칭 수용과 원장 마이그레이션 (D-1011)
+- 변경: `control_unit_config.py` `UNIT_IDENTIFIER_ALIASES`·`canonical_unit_id`, `unit()` 별칭 해석. `load_control_unit` peers key 별칭(이중 정의 거절 유지), 이웃 service principal 별칭. routes의 `peer_id`·stop `parent`·information `reader`/`scope` 정규화. `ControlUnitStops` ingress 정규화. `ControlUnitStore` identity 충돌 전 멱등 재작성 + 감사 행. 시험 기대값 `ARM-CELL`/`arm-cell`로, 신규 `test_control_unit_identifier_rename.py`.
+- 증거: 원격 시험 로그는 착지 시점의 실행 기록을 따른다(이 행 작성 시점 미실행).
+- gate 변화: 없음. 현장 전환·수용은 별도.
+
+## 2026-11-10 · uncommitted · fix: 관제 단위 개명의 접두사 확인·origin 정규화·감사 행 조건 (D-1011)
+- 변경: `control_unit_stop_routes.py` `parent`와 `control_unit_information_routes.py` `reader`가 principal_id를 자르기 전 `control-unit:` 접두사를 확인(정지·정보 경로 모두). stop snapshot/reconcile 경로의 origin 매개변수 `canonical_unit_id` 정규화. `control_unit_store.py` 마이그레이션이 재작성한 행이 있을 때만 감사 테이블·행 생성.
+- 증거: `test_integrated_control_http_pipeline.py` 위조 principal 403 시험, `test_control_unit_identifier_rename.py` origin 정규화·새 DB 무감사 시험. 원격 실행 기록은 착지 시점.
+- gate 변화: 없음.
+
 ## 2026-11-11 · uncommitted · docs(fleet): 지도-실제 대조 독립 검토 반영 - 판정 대상 우선순위·근거 결정 번호 정정
 - 변경: API Reference v1.384(절·경로 표)와 설계 문서의 판정 대상을 「활성 지도(없으면 초안)」에서 「초안(없으면 활성 지도)」로 바로잡았다(judged_map 구현과 일치). 허용 오차 0.15 m의 근거 결정 번호 D-455를 D-494(max_jump_m)로 정정(설계 §3·§8, map_reality.py docstring). site-map.js 붙은 import 줄 분리(동작 불변).
 - 이유: 독립 검토(2026-11-11) 발견 — 문서가 코드와 반대를 말했고 결정 번호가 틀렸다. 코드·보안·계약 등록은 지적 없음.
@@ -5457,3 +5485,60 @@
 - 변경: `GET /api/fleet/enrollment/robots` 행에 `last_activity_at`·`days_idle`·`removal_pending`을 더했다(읽기 시점 계산, DB 상태·전이 불변). 마지막 활동은 마지막 수용 CORE 이벤트(`CoreEventStore.last_received_times`, `fleet/observe/events.py` 소유)와 등록 행 마지막 기록 가운데 늦은 쪽이며, 임계값은 사이트 설정 `fleet.enrollment.idle_removal_days`(기본 30, 1..3650, `console_site_config._enrollment_config`). 표시는 무엇도 해제하지 않는다 — 비활성은 토큰 만료, 해제는 이름 있는 운영자 unenroll 그대로(D-456). API Ref v1.386, ADR D-1016.
 - 증거: 원격 시험 exit 0 / NEW 0 — 763608decb에서 test_enrollment_service·test_core_event_store·test_enrollment_api·test_cli·test_module_structure(known_failures 0 new). 콘솔 표시 node 시험 enrollment.test.mjs 8 pass. D-766 분할(enrollment_inputs·enrollment_idle, 라칫 행 845→819)로 enrollment.py 819줄·cli.py 757줄 유지. 첫 두 차례 RED는 가짜 시계와 저장소 실시계 스탬프의 영역 충돌로, 미래 스탬프 무시 규칙으로 바로잡았다.
 - gate 변화: 없음.
+
+## 2026-11-11 · uncommitted · feat(fleet): 카메라로 초안 만들기·카메라까지 겹친 대조 (v1.385)
+- 변경: Vision에 `draft-map` 제안 보기(정사 평면에서 차로·구역 후보, 지도 페인트 불필요; `rosy_vision/draft_map.py`, `ingest.py`·`ingest_proposals.py` 라우트). Fleet에 `POST /api/fleet/site-map/draft-from-camera`(후보→SiteMap 검증된 초안 본문, 쓰기 없음; `site_map_camera_source.py`)와 `POST /api/fleet/site-map/reality-check`(camera_lanes 삼각측량 `camera:{verdict,reason}`; `map_reality.compare` 확장). apply는 `drive_outlier`면 409로 나쁜 주행 기록에 지도를 끌어맞추지 않는다. 화면은 「카메라로 초안 만들기」 절(`site-map-camera-draft.js`)과 대조 패널의 「카메라까지 겹쳐 대조」. 계약 등록(기능 매트릭스·HTTP 영수증·문서 임포트·탭·PINNED_CONFIRMS) 포함.
+- 이유: 사용자 요청(2026-11-11) — 카메라 데이터가 첫 초안을 자동으로 만들고, 카메라가 틀어져도 지도를 계속 보정. 책임은 안 1(계산 Vision·판정 Fleet, 사용자 확정). 브라우저가 Fleet lease로 Vision 파생 JSON을 직접 가져오는 D-375 확립 패턴을 따름(서버→Vision 클라이언트 없음).
+- 근거: 원격 시험 test_draft_map_route.py(6건+이웃 68건), test_site_map_camera_draft.py(5건), test_map_reality.py+test_site_map_reality_api.py(27건), 문서·매트릭스 15건 전부 exit 0. 설계 docs/plans/2026-11-11-camera-draft-map-design.md.
+- gate 변화: 없음(SOURCE만, 장치·현장 수용 별도).
+
+
+## 2026-11-11 · uncommitted · test(fleet): 카메라 초안 패널 실제 Chromium 종단 시험 + 미리보기 503 처리
+- 변경: `test_site_map_camera_draft_browser.py`(opt-in) — 실제 앱+실제 preview lease 라우트(vision_lease_secret로 구성)에서 Vision draft-map 읽기만 same-origin 스텁: 접속만으로 카메라 목록 충전(C1 회귀), 프레임→Fleet 조립→운영자 PUT 초안→SVG 렌더까지 한 흐름, 카메라 삼각측량 camera_drift→agree 전환(C2 회귀). 카메라 패널은 `/api/fleet/vision/sources`가 503(미구성)이면 재시도하지 않고 '카메라 미리보기가 꺼져 있습니다' 안내(무한 503 루프 수정). 변이 증명 완료(목록 충전 비활성화 → RED → 복원 → GREEN).
+- 이유: 사용자 요청(2026-11-11) — 실제로 잘 동작하는지 보고 개선. 정적 시험이 못 잡는 UI 연결(C1·C2)은 실제 브라우저만 잡는다.
+- 근거: 원격 브라우저 시험 — 신규 2건+기존 site-map 스위트 103/103 exit 0, 변이 실행 RED/복원 GREEN 기록(camdraft20-22).
+- gate 변화: 없음.
+
+## 2026-11-11 · uncommitted · test(fleet): trail_twist 4-튜플 호출자 정리
+
+- 변경: `test/test_trail_anchor_e2e.py` — `trail_twist` 가 `(linear, angular, reason, off)` 를 돌려주는 계약에 맞춰 언팩을 고쳤다(`core_features` 쪽 D-559 복귀 변경). 이 파일이 유일한 외부 호출자다.
+- 증거: `python -m py_compile` 통과. 시험 실행은 커밋 SHA 로 원격에서 요청한다.
+- gate 변화: 없음.
+- CE: 해당 없음 — 계약 변경에 딸린 호출자 정리다.
+
+## 2026-11-11 · uncommitted · D-1017 peer 위치 공유로 지도 자세 앵커 보강
+
+- 변경: `GET /api/fleet/robots/{robot_id}/map-pose`가 상태 스냅숏의 `peers`(v1.359 `PeerRow`) 행을 네 번째 앵커로 쓴다. `MapPoseTracker.add_peer`는 로스터·`LOCALIZED`·유한 pose·`age_s ≤ peer_lease_s`(기본 6 s)·활성 지도 일치를 요구하고, 마지막 카메라 sighting 10 s 안이면 `CAMERA_RECENT`, 운영자 핀이 10 s 안이면 `PIN_FRESH`, 더 새 표본이 있으면 `NOT_NEWER`로 거절한다. 받아들인 표본은 `kind=peer` sighting으로 기존 표본 규칙(첫 앵커·2 일치 복구)을 그대로 타므로 첫 peer 앵커는 DEGRADED다. `MapPose.last_sighting_age_s`를 더하고 콘솔 카드가 300 s 넘으면 `카메라 N분 침묵`을 붙인다(2026-11-11 관측: 30일 침묵 카메라가 화면에서 사라졌다). 사이트 설정 `fleet.map_pose.peer_lease_s`·`peer_after_camera_s`. 로봇 계약·envelope 변경 없음. API Ref v1.388, ADR D-1017.
+- 증거: 호스트 함수 직접 호출로 새 시험 통과(노트북 pytest 아님, D-584). 원격 시험 결과는 다음 커밋에 기록한다.
+- gate 변화: 없음. FIELD는 실물 5대 전원·카메라 차단 재현 전까지 그대로다.
+- D-766 정정: 첫 커밋(9156c9fe93)에서 `operations/world/.../map_pose.py`가 613줄로 600줄 한도를 넘어 `test_module_structure.test_ratchet_rows_are_the_measured_counts_and_only_go_down`가 NEW로 떴다. 새 ratchet 행을 만들지 않고 같은 모듈의 D-1017 주석·docstring을 줄여 600줄로 맞췄다(동작 불변). 다음 커밋에서 remote affected 재시험.
+
+## 2026-11-11 · 184e7d0e11 · docs(fleet): D-1017 원격 시험 결과 기록
+
+- 변경: 없음 — 앞 항목(D-1017)의 원격 시험 결과만 기록한다(스쿼시 착지 ab49ca3e22).
+- 증거: 원격 ai@100.108.76.123, feat/peer-sighting-ingestion tip 184e7d0e11 —대상 시험 `test_map_pose`·`test_map_pose_service`·`test_map_pose_pin`·`test_map_pose_scope`·`operations/world/test` 155 passed. `rosy_harness.py affected --base main` 4개 호출 모두 exit 0, known_failures 0 new(`test_station_camera_pipeline_lifespan[lifespan]`). `test/architecture/test_module_structure.py` 600`줄 규칙 초록. `harness lint` 0 errors. `node --test localization-badge.test.mjs` 10 pass(로컬 node, pytest 아님)
+- gate 변화: 없음. FIELD는 실물 5대 전원·카메라 차단 재현 전까지 그대로다.
+- CE: 미해결 — peer 앵커는 원격 함수 시험까지만 확인했고 실물 5대·카메라 차단 재현 전이라 교훈으로 쓰지 않는다
+
+
+## 2026-11-11 · uncommitted · fix(world): peer 앵커는 D-989 자동 위치 차단을 풀지도 걸지도 않는다 (D-1017)
+
+- 변경: 독립 검토 반영 — `map_pose.py`의 `_agrees_with_independent`에서 PEER 앵커를 비독립으로 제외하고 `_apply`의 D-989 차단 설정에서도 PEER 쌍을 제외했다. ADR D-1017 Decision 5·D-772 경계 행 갱신. `test_auto_locate_anchor.py` 2건(peer가 차단을 들지도/걸지도 않는다)·`test_map_pose.py` 1건(CAMERA_RECENT 9.99 s 거부/10.0 s 수용 경계)을 더했다. 600줄 유지.
+- 증거: 호스트 직접 호출과 `python -m py_compile` 통과. 원격 시험 결과는 다음 커밋에 기록한다.
+- gate 변화: 없음. FIELD는 실물 5대 전원·카메라 차단 재현 전까지 그대로다.
+
+## 2026-11-11 · e803458bb0 · docs(fleet): D-1017 검토 반영 변경 검증
+
+- 변경: 없음 — 앞 항목(peer 앵커 D-989 비독립 처리)의 원격 시험 결과만 기록한다.
+- 증거: 원격 rosy 호스트(커밋 e803458bb0)에서 `test_map_pose.py`·`test_auto_locate_anchor.py`·`test_map_pose_service.py`·`operations/world/test` 172 passed, 0 failed, exit 0. `test/known_failures.py` 비교 0 new. `rosy_harness.py lint` 0 errors, `map_pose.py` 600줄 유지.
+- gate 변화: 없음. FIELD는 실물 5대 전원·카메라 차단 재현 전까지 그대로다.
+
+## 2026-11-11 · uncommitted · 항만 사건 원장·R 조회·S 반입 제안 (D-996)
+- 변경: 이송 제안 `object_ref`(값이 있을 때만 request_digest에 포함), 도착한 이송의 S ARM_TRANSFER 제안(`fleet-intake`, 승인 아님), append-only `fleet_port_events` 원장과 셀 토큰 POST, 직계 부모 peer 읽기, R의 불투명 cursor 조회(닿지 않은 셀·seq 빈 곳은 complete:false).
+- 증거: 원격 pytest(시험 PC) — 보고서 참고. 실물 팔·마커 판독률은 미실시.
+- gate 변화: SOURCE. 시뮬레이션 끝까지 돌리기와 현장 수용은 별도다.
+
+## 2026-11-11 · uncommitted · 컨테이너 태그 실제 크기 인쇄물 (D-996 6)
+- 변경: `cell_print_sheets`에 `container-tags` 시트(DICT_4X4_250 100~199, 번호마다 지붕·옆면 두 장, 12 또는 20 mm, 50 mm 확인 막대)와 Cell 화면 「보정 인쇄물」의 태그 번호·크기 입력. 태그↔object_ref 표는 시트에 넣지 않는다.
+- 증거: 시트를 300 dpi로 그려 OpenCV DICT_4X4_250이 번호·크기(±0.2 mm)대로 되읽음. 한 장에 12 mm 24개, 20 mm 12개 컨테이너. 실물 인쇄·판독률은 미실시.
+- gate 변화: SOURCE. 인쇄 후 자로 확인·판독률 측정은 사람 몫이다.

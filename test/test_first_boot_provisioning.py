@@ -176,6 +176,19 @@ def test_first_boot_uses_sd_site_identity_without_copying_one_time_pairing_secre
     assert "pairing_token" not in config["fleet"]
 
 
+def test_account_trust_from_the_card_reaches_core_auth():
+    import yaml
+    module = _module()
+    trust = {"issuer": "https://account.fixture.invalid", "public_key_sha256": ["a" * 64]}
+    bootstrap = {"endpoint": "https://fleet-a.local:8443", "trust_profile": "site-ca-2026",
+                 "pairing_required": False, "account_trust": trust}
+    config = yaml.safe_load(module.FirstBootProvisioner._merge_core_overlay(None, {"id": "card"}, bootstrap))
+    assert config["auth"]["account_trust"] == trust and config["auth"]["tokens"][0]["id"] == "card"
+    del bootstrap["account_trust"]
+    config = yaml.safe_load(module.FirstBootProvisioner._merge_core_overlay(None, {"id": "card"}, bootstrap))
+    assert "account_trust" not in config["auth"]
+
+
 def test_provisioned_local_site_reaches_private_core_config_without_a_token(tmp_path):
     module = _module()
     root, bundle = _case(tmp_path, "https://fleet-a.local:8443")

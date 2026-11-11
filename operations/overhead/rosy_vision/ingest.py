@@ -357,7 +357,7 @@ class IngestServer:
         """Serve one authorized latest-frame read directly from Vision, never from Fleet."""
         prefix = "/api/vision/sources/"
         source, _, view = path[len(prefix):].partition("/") if path.startswith(prefix) else ("", "", "")
-        if (not source or view not in ("frame", "field-proposal", "map-proposal", "measured-status")
+        if (not source or view not in ("frame", "field-proposal", "map-proposal", "draft-map", "measured-status")
                 or self.preview_signer is None):
             return _http_response(404, b"not found\n")
         bearer = authorization[len("Bearer "):] if authorization and authorization.startswith("Bearer ") else ""
@@ -386,8 +386,8 @@ class IngestServer:
             return _http_response(404, b"frame stale\n", extra={"X-Frame-State": "stale"})
         if view == "field-proposal":
             return await self._field_proposal_response(source, frame)
-        if view == "map-proposal":
-            return await self._map_proposal_response(source, frame)
+        if view in ("map-proposal", "draft-map"):
+            return await ingest_proposals.proposal_response(self, view, source, frame)
         jpeg = frame.jpeg
         if 'measured' in lease:
             from rosy_vision.measured_preview import frame_response
@@ -461,7 +461,7 @@ class IngestServer:
         return None
 
     _field_proposal_response = ingest_proposals._field_proposal_response
-    _map_proposal_response = ingest_proposals._map_proposal_response
+    _map_proposal_response = ingest_proposals._map_proposal_response  # tests drive this handler directly
 
     # -- per-connection lifecycle ------------------------------------------
 

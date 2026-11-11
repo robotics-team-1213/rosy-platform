@@ -160,13 +160,21 @@ def _round(values: Iterable[Optional[float]]) -> list[Optional[float]]:
     return [None if value is None else round(value, 4) for value in values]
 
 
-def compare(site_map, tracks: Sequence[Sequence[Point]], *, tolerance_m: float = TOLERANCE_M) -> dict:
-    """Judge ``site_map`` against driven ``tracks`` (each an ordered polyline in the map frame)."""
+def compare(site_map, tracks: Sequence[Sequence[Point]], *, tolerance_m: float = TOLERANCE_M,
+            camera_lanes: Optional[Sequence[Sequence[Point]]] = None) -> dict:
+    """Judge ``site_map`` against driven ``tracks`` (each an ordered polyline in the map frame).
+
+    ``camera_lanes`` (Vision's draft-map candidates, same frame) adds a second witness: the
+    report's ``camera`` verdict triangulates map·camera·drive — whose word is the odd one out.
+    """
     driven = [tuple(float(v) for v in point) for track in tracks for point in track]
     points = _dedupe(driven, TRACK_STEP_M)
     if len(points) < 2:
+        camera = None if camera_lanes is None else {"verdict": "no_evidence_drive",
+                                                    "reason": "no robot drive was recorded for this window"}
         return {"schema": SCHEMA, "evidence": {"tracks": len(tracks), "points": len(points)},
                 "verdict": "no_evidence", "lanes": [], "zones": [], "off_lane": None, "fit": None,
+                "camera": camera,
                 "notes": ["no robot drive was recorded for this window"]}
 
     drive = _Grid(points)
@@ -229,6 +237,36 @@ def compare(site_map, tracks: Sequence[Sequence[Point]], *, tolerance_m: float =
 
     worst = [lane["id"] for lane in lanes if lane["state"] == "uncovered"]
     entered = [zone["id"] for zone in zones if zone["state"] == "entered"]
+
+    camera = None
+    if camera_lanes is not None:
+        camera_points = _dedupe([tuple(float(v) for v in point) for lane in camera_lanes for point in lane],
+                                TRACK_STEP_M)
+        if len(camera_points) < 2:
+            camera = {"verdict": "unknown", "reason": "too few camera candidate points"}
+        else:
+            map_on_drive = before is not None and before <= tolerance_m
+            camera_on_drive = (median := _median([drive.nearest(x, y, OFF_LANE_M)[0]
+                                                  for x, y in camera_points])) is not None \
+                and median <= tolerance_m
+            camera_on_map = (gap := _median([lane_grid.nearest(x, y, OFF_LANE_M)[0]
+                                             for x, y in camera_points])) is not None and gap <= tolerance_m
+            if not map_on_drive and camera_on_drive:
+                camera = {"verdict": "map_offset",
+                          "reason": "the drive and the camera agree; the map sits off them"}
+            elif map_on_drive and not camera_on_drive and not camera_on_map:
+                camera = {"verdict": "camera_drift",
+                          "reason": "the map and the drive agree; only the camera sits off"}
+            elif not map_on_drive and not camera_on_drive and camera_on_map:
+                camera = {"verdict": "drive_outlier",
+                          "reason": "the map and the camera agree; only the drive sits off them"}
+            elif map_on_drive and camera_on_drive:
+                camera = {"verdict": "agree",
+                          "reason": "the map, the camera and the drive all agree"}
+            else:
+                camera = {"verdict": "unknown",
+                          "reason": "the map, the camera and the drive disagree in more than one pair"}
+
     verdict = ("mismatch" if entered else
                "offset" if correction is not None else   # the lanes are there, the frame is off
                "unmapped" if len(worst) > max(1, len(lanes) // 2) else
@@ -248,6 +286,7 @@ def compare(site_map, tracks: Sequence[Sequence[Point]], *, tolerance_m: float =
             "lanes": lanes,
             "zones": zones,
             "off_lane": {"points": off, "share": round(off / len(points), 3)},
+            "camera": camera,
             "fit": {"accepted": correction is not None,
                     "yaw_deg": None if correction is None else round(math.degrees(correction[0]), 3),
                     "tx_m": None if correction is None else round(correction[1], 4),

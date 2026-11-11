@@ -1165,3 +1165,31 @@ def test_retime_keeps_acceleration_within_amax_and_park_folds_through_transit_wi
     assert min(mid_v) > 0.5 and len(park) < 840
 
 
+def test_realtime_jitter_damps_active_chunk_and_waits_for_oscillation_to_settle():
+    import math
+
+    class TremorRobot(Robot):
+        def __init__(self):
+            super().__init__()
+            self.tick_idx = 0
+
+        def send_action(self, action):
+            super().send_action(action)
+            self.tick_idx += 1
+            # Tremor for the first 45 ticks (1.5 s), then calm so the settle gate releases once damped
+            if self.tick_idx <= 45:
+                self.pos[2] += 0.65 * math.sin(2 * math.pi * 5.0 * (self.tick_idx / 30.0))
+            return dict(action)
+
+    lib = library()
+    lib["chunks"]["approach_pinky"] = [[k * 0.1, -60.0, 50.0, 45.0, 10.0, 46.6] for k in range(1, 41)]
+    robot, status, clock, queue = TremorRobot(), [], [0.0], ["run approach_pinky", "stop"]
+    r = m.Runner(robot, lib, fps=30, status=status.append, clock=lambda: clock[0],
+                 sleep=lambda s: clock.__setitem__(0, clock[0] + 1 / 30))
+    r.run(lambda: [queue.pop(0)] if queue and not r.chunk else [])
+    done = by_command(status, "run approach_pinky")[0]
+    assert done["ok"] is True and done["settled"] is True
+    assert done.get("damped_ticks", 0) > 0
+    assert done["state"][0] == pytest.approx(4.0, abs=0.1)
+
+

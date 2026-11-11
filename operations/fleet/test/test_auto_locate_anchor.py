@@ -15,8 +15,8 @@ from fleet.localization.stuck_heading import reassess
 from fleet.server.auto_locate_service import AutoLocateService
 from fleet.server.map_pose_service import MapPoseService
 from fleet.server.trip_runner import TripRunner
-from rosy.world.state.projections.map_pose import (AUTO_LOCATE, DEGRADED, LOCALIZED, UNKNOWN, MapPoseConfig,
-                                                   MapPoseTracker, OdomSample, Sighting)
+from rosy.world.state.projections.map_pose import (AUTO_LOCATE, DEGRADED, LOCALIZED, PEER, UNKNOWN,
+                                                   MapPoseConfig, MapPoseTracker, OdomSample, Sighting)
 
 T0 = 1_700_000_000.0
 ON = MapPoseConfig(auto_locate_robots=("r1",))
@@ -476,3 +476,25 @@ def test_a_robot_that_is_on_gets_a_stop_on_loss_even_on_a_free_arc():
     assert runner._auto_locate_on("r1") is False
     runner._poses = object()
     assert runner._auto_locate_on("r1") is False
+
+
+def test_a_peer_anchor_cannot_lift_the_auto_locate_block():
+    """D-1017/D-989: a relayed self-pose is not independent evidence, so it cannot unblock auto-locate."""
+    tracker = localized()
+    tracker.add_odom(OdomSample(0.0, 0.0, 0.0, T0 + 4), T0 + 4)
+    tracker.add_sighting(sighting(4, x=1.3), T0 + 4, "m")            # independent disagreement: block on
+    assert tracker.auto_blocked is True
+    tracker.add_odom(OdomSample(0.0, 0.0, 0.0, T0 + 15), T0 + 15)    # the camera has been quiet 11 s
+    assert tracker.add_peer((1.3, 2.0, 0.0), T0 + 15, T0 + 15, "m", "m") is None
+    assert tracker.pose(T0 + 15, "m").anchor_source == "peer"
+    assert feed(tracker, 16, x=1.3) == "INDEPENDENT_ANCHOR_DISAGREES"
+    assert tracker.auto_blocked is True                               # only a camera/pin anchor or an operator lifts
+
+
+def test_a_disagreeing_peer_claim_does_not_block_auto_locate():
+    """D-1017/D-989: a peer jump degrades the pose like any sample but never sets the auto-locate block."""
+    tracker = localized()
+    tracker.add_odom(OdomSample(0.0, 0.0, 0.0, T0 + 15), T0 + 15)
+    assert tracker.add_peer((9.9, 9.9, 0.0), T0 + 15, T0 + 15, "m", "m") is None
+    assert tracker.pose(T0 + 15, "m").state == DEGRADED              # the jump itself still reads
+    assert tracker.auto_blocked is False

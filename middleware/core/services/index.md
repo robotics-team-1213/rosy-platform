@@ -36,8 +36,8 @@
 
 ## 최근 기록
 
+- 2026-11-11 · e91adeefcd · D-559 복귀 변경 검증
+- 2026-11-11 · uncommitted · fix(swarm): 자취 이탈 한 표본이 편대를 끝내지 않는다 (D-559 trail 복귀)
+- 2026-11-11 · 4eaf152dc6 · feat(docking): charge-bay pink guide line approach (D-1013)
 - 2026-11-09 · e94b732208 · D-922 추가 결정 — Pinky 상황 표정 8종
 - 2026-11-09 · 3d550f49ce · D-922 구현 검증 및 기록 항목 정정
-- 2026-11-09 · 79ebad2111 · D-922 Pinky 표정·시선·후면 LED 구현
-- 2026-11-07 · 92cb90111c · fix(safety): a battery stop releases itself when charged (D-502 Amendment 2026-11-07)
-- 2026-11-04 · uncommitted · feat(peers): 로봇 간 맵 위치 공유 CORE 조각 v1

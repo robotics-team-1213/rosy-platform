@@ -20,17 +20,19 @@
   <ui-topbar role="banner">
     <ui-brand href="#main" aria-label="Rosy Monitoring 홈"><b>Monitoring</b></ui-brand>
     <span data-spacer></span>
+    <a data-account-profile hidden></a>
     <ui-button kind="quiet" type="button" data-theme-cycle data-icon-only aria-label="테마 변경" data-action-icon="theme-dark"></ui-button>
   </ui-topbar>
   <main id="main" class="ui-task-page" tabindex="-1">
     <h1 class="ui-page-heading">시스템 상태</h1>
     <section class="connection" aria-labelledby="connection-heading">
       <div><h2 id="connection-heading">조회 연결</h2><p id="connection-status" role="status" aria-live="polite">등록된 조회 키로 시작하세요.</p></div>
-      <form id="login" autocomplete="off">
+      <ui-button id="account-login" kind="primary" type="button" hidden>Rosy Account로 로그인</ui-button>
+      <form id="login" autocomplete="off"><details id="key-entry" open><summary>비상 조회 키</summary>
         <label for="reader-key">조회 키</label>
         <div class="login-fields"><input id="reader-key" class="ui-field" type="password" autocomplete="off" spellcheck="false" required minlength="32" maxlength="4096" aria-describedby="key-hint"><ui-button kind="primary" type="submit">조회 시작</ui-button></div>
         <p id="key-hint" class="quiet">이 창에서만 사용합니다. 새로 열면 다시 입력하세요.</p>
-      </form>
+      </details></form>
       <ui-button id="logout" kind="quiet" type="button" disabled>로그아웃</ui-button>
     </section>
     <div id="workspace" hidden>

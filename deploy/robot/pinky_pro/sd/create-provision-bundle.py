@@ -33,6 +33,8 @@ OPTIONAL = {"operator_ssh_keys", "ap_password"}
 # D-477: the one-time tailnet join key (a secret; read from private/ by the
 # operator, never echoed), with optional tags; absent keeps the robot LAN-only.
 OPTIONAL |= {"tailscale_auth_key", "tailscale_tags"}
+# D-992: the Account issuer and keys this robot lets a site token deliver; absent keeps the old bundle shape.
+OPTIONAL |= {"account_trust"}
 
 
 def _exclusive_json(path: Path, payload: dict, mode: int) -> None:
@@ -115,6 +117,7 @@ def main(argv: list[str] | None = None) -> int:
                 if args.release_root is not None else None),
             tailscale_auth_key=request.get("tailscale_auth_key"),
             tailscale_tags=request.get("tailscale_tags"),
+            account_trust=request.get("account_trust"),
         )
         _exclusive_json(args.output, bundle, 0o600)
         _exclusive_json(args.receipt, create_provision_receipt(bundle), 0o600)

@@ -137,6 +137,15 @@ and its own encrypted local session configuration under `/etc/rosy/fleet-account
 mounted read-only at `/run/rosy-fleet-account`; its session DB belongs in Fleet's
 writable state volume. Set `ROSY_FLEET_ACCOUNT_CLIENT_CONFIG` to that receiver JSON
 and register its exact HTTPS callback and site resource in the existing authority.
+To link robots at enrollment (D-992), put `link.json` (`issuer`, `registrar_token_file`,
+`public_key_files`, the latter two relative to it), the private registrar key and the
+public keys in the same directory, set `ROSY_ACCOUNT_LINK_CONFIG=/run/rosy-fleet-account/link.json`
+and give Account the key's digest as `registrar_token_sha256`. Each robot must pin the same
+values: pass `-AccountTrustFile` to `prepare-rosy-sd.ps1` with
+`{"issuer": "...", "public_key_sha256": ["<sha256sum of each LF-ended public key file>"]}`, which a
+reimage keeps. A robot already in service needs the same mapping as `auth.account_trust` in
+its CORE overlay and a CORE restart, or an administrator's delivery; a card from an image
+older than this field refuses a bundle that carries it.
 The issuer hostname aliases the proxy on both its edge and backend networks.
 Fleet reaches Account over the shared backend with the original issuer hostname
 and TLS verification; it does not need edge-network access or host hairpin routing.
@@ -1822,11 +1831,11 @@ command does not start the services or contact robots:
 The empty-volume example below applies only to databases without Account or
 Console credential tables. Account-bearing restores require a readable current
 database whose complete credential schemas and rows match the backup. The tool
-compares `rosy_account*`, `account_oauth_*` and `fleet_console_*` tables, their
+compares `rosy_account*`, `account_oauth_*`, `account_client*` and `fleet_console_*` tables, their
 indexes and triggers using read-only SQLite snapshots, including committed WAL
 data. Differences are refused before archiving or replacing the destination.
 This includes consumed codes/refresh tokens, revoked families, changed passwords,
-disabled accounts and profiles. Even harmless differences such as session touch
+disabled accounts, profiles and the app registry. Even harmless differences such as session touch
 timestamps require retaining the current database; there is no override flag.
 
 For an isolated Account restore drill, first seed the test volume with a separate,

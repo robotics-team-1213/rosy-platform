@@ -8,7 +8,7 @@
 
 ## 실행 서비스
 
-자기 프로세스로 돌고 현장 Compose 서비스로 배치된다.
+자기 프로세스를 갖는다. 현장 Compose에 없는 준비 단계 모듈은 아래에 별도로 표시한다.
 
 | 이름 | 소스 | Compose 서비스 | 맡는 것 | 맡지 않는 것 | 계약 | 결정 |
 |---|---|---|---|---|---|---|
@@ -16,8 +16,11 @@
 | Monitoring | `operations/monitoring` | `monitoring` | 상태 수집·집계·읽기 API | 명령, host 복구 | [Monitoring API](rosy-monitoring-api.md) | D-876, D-936 |
 | Media | `operations/site_ui/media` | `media`, `media-gateway` | 영상 세션 권한, 시청 요청, 미디어 프로세스 관리 | Fleet 영상 중계, 로봇 제어, CORE 장기 자격 수신 | [D-789](../adr/D-789-six-robot-webrtc-camera-transport.md) | D-789, D-801 |
 | 현장 입구 | `deploy/site` | `proxy` | TLS 입구와 경로 전달 | 업무 판단, 계정 원장 | [site 배포 안내](../../deploy/site/README.md) | D-301, D-441 |
+| 알림 전달 (전환 전) | `operations/notifications` | 없음 (미배포) | 기계 범위별 접수·중복 대조·전달 원장·기존 채널 adapter | 업무 outbox·필요성·수신 범위 판단·장치 명령 | [모듈 안내](../../operations/notifications/README.md) | D-998 |
 
-Account의 로그인·프로필·관리 화면 소스는 `applications/fleet/web`에, Monitoring 화면 소스는 `applications/monitoring`에 있다.
+Account의 로그인·프로필·관리 화면 소스는 `applications/fleet/web`에, Monitoring 화면 소스는 `applications/monitoring`에 있다. 로봇 쪽 영상 송출 프로세스는 Media와 별도 패키지인 `middleware/media`다(D-791).
+
+사람은 앱마다 따로 로그인하지 않고 Account로 들어온다(D-955, D-990). Monitoring의 읽기 키는 수집기 사이 조회와 비상 조회에만 쓰고, Media는 짧은 미디어 위임을 검증한다.
 
 ## 공용 코드
 
@@ -54,19 +57,33 @@ Fleet에 남는 공통 성격 기능은 카메라 페어링·로봇 등록·기�
 
 ## 기능별 공통화 결정
 
-아래는 [D-997](../adr/D-997-common-function-ownership-and-failure-contracts.md)의 확정 설계다. 위 실행 서비스·Compose 목록과 달리 구현·배포 목록이 아니다. 기존 owner·프로세스·DB·폴더·자격·API는 실제 전환 검증 전까지 유지한다.
+아래는 [D-997](../adr/D-997-common-function-ownership-and-failure-contracts.md)의 확정 설계다. 위 실행 서비스·Compose 목록과 달리 구현·배포 목록이 아니다. 기존 owner·프로세스·DB·폴더·자격·API는 실제 전환 검증 전까지 유지한다. 현재 소스는 이 저장소의 실제 경로를 기능별 대표로 적는다. `(목표, 미생성)`은 D-997이 정한 전환 뒤 경로가 아직 만들어지지 않았다는 뜻이다. `test/architecture/test_common_services.py`가 경로 존재와 목표 표시를 확인한다.
 
-| 기능 | 확정한 형태 | 책임 경계 |
-|---|---|---|
-| 계정·권한 | 독립 Account | 사람 신원·세션·회수, 기계 자격·업무 admission은 별도 |
-| 등록·앱 목록 | 기존 Account 연동 등록부·장치/서비스 owner + 공통 조회 | 발견·접속 정보와 신뢰·기계 자격·장치 역할을 구별. 범용 Registry 서버 신설 없음 |
-| 설정 | 공용 검증/transaction 코드 + owner 저장·적용 | 중앙 Config DB·쓰기 서비스 신설 없음 |
-| 알림 | 독립 알림 전달 서비스로 추출하는 목표 | 현재 미구현. 첫 생산자는 Fleet 사건·Harbor 업무 HOLD. 원본 outbox·발송 직전 owner 확인·중복·UNKNOWN·단일 발송자 검증 뒤 전환 |
-| 감사 | owner 원본 + 공통 사건/수집·조회 | 중앙 Audit DB를 모든 쓰기의 필수 경로로 만들지 않음 |
-| 백업·복원 | 공통 도구·검증/receipt + owner 실행 어댑터 | 모든 볼륨·키·임의 경로를 가진 중앙 복구 서비스 신설 없음 |
-| 업데이트 | 공통 상태·검증 규약 + 배포 계열별 실행 | 서명·hold·활성화·재기동·rollback 권한은 기존 owner |
+| 기능 | 확정한 형태 | 현재 소스 | 책임 경계 |
+|---|---|---|---|
+| 계정·권한 | 독립 Account | `operations/account`(Account) | 사람 신원·세션·회수, 기계 자격·업무 admission은 별도 |
+| 등록·앱 목록 | 기존 Account 연동 등록부·장치/서비스 owner + 공통 조회 | `operations/account/rosy_account/account_authority.py`(Account 연동 등록부), `operations/fleet/fleet/server/auth`(Fleet 장치·서비스 등록), `contracts/foundation/core_common/protocol/account_client.py`(공통 조회 client) | 발견·접속 정보와 신뢰·기계 자격·장치 역할을 구별. 범용 Registry 서버 신설 없음 |
+| 설정 | 공용 검증/transaction 코드 + owner 저장·적용 | `contracts/foundation/core_common/config.py`, `contracts/foundation/core_common/config_transaction.py`(공용 코드) | 중앙 Config DB·쓰기 서비스 신설 없음 |
+| 알림 | 독립 알림 전달 서비스로 추출하는 목표 | `operations/fleet/fleet/incidents/notifications.py`(현재 발송 owner: Fleet), `operations/notifications`(전달 서비스, 전환 전·미배포, D-998) | 현재 발송은 Fleet 소유. 첫 생산자는 Fleet 사건·Harbor 업무 HOLD. 원본 outbox·발송 직전 owner 확인·중복·UNKNOWN·단일 발송자 검증 뒤 전환 |
+| 감사 | owner 원본 + 공통 사건/수집·조회 | `operations/account/rosy_account/audit.py`(Account 원본 감사) | 중앙 Audit DB를 모든 쓰기의 필수 경로로 만들지 않음 |
+| 백업·복원 | 공통 도구·검증/receipt + owner 실행 어댑터 | `deploy/site/site_db.py`(공용 스크립트, 기본은 Fleet data volume; account 백업도 같은 스크립트를 자기 DB로 실행), `deploy/site/compose.account-backup.yaml`(Account 백업·검증 서비스 owner) | 모든 볼륨·키·임의 경로를 가진 중앙 복구 서비스 신설 없음 |
+| 업데이트 | 공통 상태·검증 규약 + 배포 계열별 실행 | `deploy/site/rosy_site_autoupdate.py`(site), `deploy/robot/pinky_pro/release/updater.py`(Pinky payload), `deploy/robot/omx/omx_autoupdate.py`(OMX) | 서명·hold·활성화·재기동·rollback 권한은 기존 owner |
 
 Monitoring은 허용된 상태·읽기 사본, Media는 영상 세션·위임·프로세스 관리를 유지한다. Fleet·World·Decision·CORE·OMX와 Harbor의 원장·판단·실행은 공통화 대상이 아니다. 기능별 실패·복구·전환·검증 조건은 D-997이 정본이다.
+
+## 기계 처리 공용화 조사
+
+후속 추출은 아래 실제 구현을 먼저 대조한다. 동일한 이름보다 입력·오류·수명과 설치 묶음이 같은지 확인한다.
+
+| 후보 | 확인한 구현과 처리 |
+|---|---|
+| 감사·기록의 비밀 필드 | `fleet/observe/events.py`와 `fleet/server/ledger/task_payloads.py`의 동일한 필드 이름 정규식만 `core_common.audit_fields.is_credential_field`로 추출했다. 재귀 범위·PEM 값 검사·오류·JSON 인코딩·보관은 각 owner에 남는다. `learning/curation/pinky/fleet_observations.py`는 CLI에서 파일로 직접 실행되고 별도 설치 패키지가 아니며 foundation 경로를 설정하지 않으므로 자체 검사식을 유지한다. 완전한 마스킹이나 새 사건 schema가 아니다 |
+| Account·admission 감사 | `rosy_account/audit.py`는 HTTP 요청 메타데이터, `policy_admission_audit.py`는 정책 판정·scope revision을 기록한다. actor·correlation·revision 의미가 달라 사건 형식을 합치지 않았다 |
+| 백업·복원 | Account와 Fleet은 이미 `deploy/site/site_db.py`의 무결성·해시·결과 형식을 함께 쓴다. 검수의 `qwen_review_completion.py`는 병합 전 DB 사본과 mask 버전 receipt이고 Account `migration.py`는 자격 이관 검증이다. 같은 백업·복원 계약으로 합치지 않았다 |
+| 업데이트 | site updater는 candidate commit·switch journal·건강/rollback, Pinky `auto_update_records.py`는 release identity·hold·적용 결과를 소유한다. `tools/remote/update_status.py`는 설치 unit·이미지·파일 drift 조회다. 서로 다른 상태를 공통 updater나 성공 enum으로 바꾸지 않았다 |
+| 설정 | `core_common.config`는 기존 transaction을 쓴다. overhead `track/tuning.py`의 실패 시 경고하는 이력과 `background_blob.py`의 fsync·실패 전파 snapshot은 설정 revision transaction과 의미가 달라 원자적 교체를 합치지 않았다 |
+
+새 foundation 모듈은 기존 `setup.py`의 패키지 자동 검색에 포함되며 Fleet은 이미 `core_common`을 의존한다. 새 프로세스·DB·HTTP 계약·배포 변경은 없다.
 
 ## 새 기능을 넣을 때
 

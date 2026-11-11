@@ -5,7 +5,7 @@ from typing import Optional
 
 from core_common.protocol.schemas import SwarmFollowParams, SwarmReferenceSource
 from core_features.swarm.poses import ReferencePose, follow_goal
-from core_features.swarm.trail import Trail, TrailError
+from core_features.swarm.trail import JUMP_HOLD_S, Trail, TrailError
 
 #: SWM-002 v1: moving goal 갱신 상한. 군집 속도(<=0.2 m/s)에서 충분하고,
 #: 그 이상은 Nav2 플래너를 재시작시키기만 한다.
@@ -118,7 +118,12 @@ class SwarmReferenceStream:
         if self._ref_bad == "anchor_withheld":
             # The jump bound restarts here: a leader that drove on during a long withhold is
             # not bridged by a straight line afterwards (trail_lost), a short one still is.
-            self._trail_sample_at = self._clock()
+            # The withhold also tells us the leader was driving unseen, so the next rejected
+            # sample is a real jump, not a 10 Hz blip: expire the skip window now.
+            # One clock read: two reads can straddle a use_sim_time pause/resume.
+            now = self._clock()
+            self._trail_sample_at = now
+            self._trail_jump_at = now - JUMP_HOLD_S
         if kind is None:
             return None
         self._ref_kind = kind
@@ -140,7 +145,11 @@ class SwarmReferenceStream:
             now = self._clock()
             dt = 0.0 if self._trail_sample_at is None else now - self._trail_sample_at
             jump = 0.3 + self._safety.limits.max_linear * dt
-            if not self._trail.add(reference.x, reference.y, reference.yaw, max_jump=jump):
+            if self._trail.add(reference.x, reference.y, reference.yaw, max_jump=jump):
+                self._trail_jump_at = None
+            elif self._trail_jump_at is None:
+                self._trail_jump_at = now      # skip this sample; the next one may fit
+            elif now - self._trail_jump_at >= JUMP_HOLD_S:
                 self._trail_broken = "trail_lost"  # a jump the trail cannot bridge
         self._trail_sample_at = self._clock()
         return None

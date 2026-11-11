@@ -14,6 +14,7 @@ param(
     [string]$ReleaseId,
     [string]$FleetEndpoint,
     [string]$FleetTrustProfile,
+    [string]$AccountTrustFile,
     [string]$CountryCode = "KR",
     [string]$DeviceName,
     [string]$DeviceUid,
@@ -714,6 +715,20 @@ if ($reprovision -and $reprovision.PSObject.Properties["personalization"]) {
         $fleetSource = "reprovision"
     }
 }
+# D-992: public values naming the Account issuer this robot accepts; a reimage keeps what the receipt holds.
+$accountTrust = $null
+if ($AccountTrustFile) {
+    try {
+        $accountTrust = Get-Content -LiteralPath $AccountTrustFile -Raw | ConvertFrom-Json
+    }
+    catch {
+        Fail "AccountTrustFile is not valid JSON"
+    }
+}
+elseif ($fleetSource -eq "reprovision" -and $reprovision.personalization.fleet.PSObject.Properties["account_trust"]) {
+    # Only with the same Fleet: another site's issuer would refuse every delivery there.
+    $accountTrust = $reprovision.personalization.fleet.account_trust
+}
 if ($PlanPath -and $PlanOnly -and (Test-Path -LiteralPath $PlanPath)) {
     Fail "plan already exists and will not be overwritten"
 }
@@ -753,6 +768,11 @@ if ($PlanPath -and -not $PlanOnly) {
         }
         Set-Variable -Name $name -Value $planned
     }
+    $plannedTrust = $(if ($planKeys -ccontains "account_trust") { $reviewedPlan.account_trust } else { $null })
+    if ($AccountTrustFile -and ($accountTrust | ConvertTo-Json -Compress) -cne ($plannedTrust | ConvertTo-Json -Compress)) {
+        Fail "-AccountTrustFile contradicts the reviewed plan"
+    }
+    $accountTrust = $plannedTrust
     $robotNumberSource = [string]$reviewedPlan.robot_number_source
     $fleetSource = [string]$reviewedPlan.fleet_source
     if ($planKeys -ccontains "replace_existing_provision") {
@@ -1011,6 +1031,12 @@ if ($reviewedPlan -and $planKeys -ccontains "prior_provision_sha256" -and
         [string]$reviewedPlan.prior_provision_sha256 -cne [string]$priorProvisionHash -and -not $ResumeAfterWrite) {
     Fail "the card's prior provisioning changed since the reviewed plan"
 }
+if ($accountTrust) {
+    # Before any erase: the same check would otherwise first run when the bundle is built on a wiped card.
+    $trustCheck = "import json, sys; sys.path.insert(0, sys.argv[1]); from personalization import validate_account_trust; validate_account_trust(json.loads(sys.stdin.buffer.read().decode('utf-8-sig')))"
+    $accountTrust | ConvertTo-Json -Compress | & $PythonExe -c $trustCheck $PSScriptRoot
+    if ($LASTEXITCODE -ne 0) { Fail "account trust must hold an HTTPS issuer without a trailing slash and SHA-256 key digests" }
+}
 $plan = [ordered]@{
     mode = $(if ($PlanOnly) { "PLAN_ONLY" } else { "WRITE" })
     replace_existing_provision = [bool]$ReplaceExistingProvision
@@ -1044,6 +1070,8 @@ $plan = [ordered]@{
     operator_key_fingerprint = $operatorFingerprint
     registry_path = (Resolve-Path -LiteralPath $RegistryJson).ProviderPath
 }
+
+if ($accountTrust) { $plan["account_trust"] = $accountTrust }
 
 $secondSource = $(if ($SecondDiskInventoryJson) { $SecondDiskInventoryJson } else { $DiskInventoryJson })
 $secondDisk = Select-SafeDisk (Read-DiskInventory $secondSource) $DiskNumber
@@ -1661,6 +1689,7 @@ try {
             pairing_required = $false
         }
         if ($operatorKey) { $bundleRequest["operator_ssh_keys"] = @($operatorKey) }
+        if ($accountTrust) { $bundleRequest["account_trust"] = $accountTrust }
         $bundleRequest["ap_password"] = $apLogin
         $bundleRequest["core_api_token"] = $coreApiLogin.Value
         $bundleRequest["core_api_token_id"] = $coreApiLogin.Id

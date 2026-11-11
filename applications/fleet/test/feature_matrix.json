@@ -1073,6 +1073,22 @@
           "request_ids": [
             "GET:/api/fleet/auth/session"
           ]
+        },
+        {
+          "consumer": "applications/fleet/web/shared/fleet-header.js",
+          "expression": "/api/fleet/auth/session",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/auth/session"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/shared/fleet-header.js",
+          "expression": "/api/fleet/auth/connection",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/auth/connection"
+          ]
         }
       ],
       "requests": [
@@ -1302,6 +1318,15 @@
         },
         {
           "consumer": "applications/fleet/web/shared/account-page.js",
+          "expression": "/api/fleet/auth/clients",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/auth/clients",
+            "PATCH:/api/fleet/auth/clients/{client_id}"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/shared/account-page.js",
           "expression": "/api/fleet/auth/setup",
           "resolution": "literal-or-template",
           "request_ids": [
@@ -1336,6 +1361,40 @@
           ],
           "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
           "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/auth/accounts"
+        },
+        {
+          "id": "POST:/api/fleet/auth/clients",
+          "method": "POST",
+          "path": "/api/fleet/auth/clients",
+          "implementation": "operations/account/rosy_account/account_routes.py",
+          "handler": "create_client",
+          "expected_statuses": [
+            201
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_account_setup.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/auth/clients"
+        },
+        {
+          "id": "PATCH:/api/fleet/auth/clients/{client_id}",
+          "method": "PATCH",
+          "path": "/api/fleet/auth/clients/{client_id}",
+          "implementation": "operations/account/rosy_account/account_routes.py",
+          "handler": "update_client",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_account_setup.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#PATCH:/api/fleet/auth/clients/{client_id}"
         },
         {
           "id": "GET:/api/fleet/auth/setup",
@@ -2081,6 +2140,14 @@
           ]
         },
         {
+          "consumer": "applications/fleet/web/manual-control.js",
+          "expression": "/api/fleet/robots/${encodeURIComponent(robotId)}/speed-limits",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "PUT:/api/fleet/robots/{robot_id}/speed-limits"
+          ]
+        },
+        {
           "consumer": "applications/fleet/web/console-goal.js",
           "expression": "/api/fleet/robots/${encodeURIComponent(robotId)}/map-pin",
           "resolution": "literal-or-template",
@@ -2569,6 +2636,26 @@
           ],
           "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
           "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/robots/{robot_id}/goal"
+        },
+        {
+          "id": "PUT:/api/fleet/robots/{robot_id}/speed-limits",
+          "method": "PUT",
+          "path": "/api/fleet/robots/{robot_id}/speed-limits",
+          "implementation": "operations/fleet/fleet/server/speed_limit_routes.py",
+          "handler": "set_manual_speed",
+          "expected_statuses": [
+            200,
+            400,
+            403,
+            422
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful and refused responses",
+          "contract_tests": [
+            "operations/fleet/test/test_speed_limit_routes.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#PUT:/api/fleet/robots/{robot_id}/speed-limits"
         },
         {
           "id": "POST:/api/fleet/robots/{robot_id}/hub-link",
@@ -4330,6 +4417,54 @@
           "request_ids": [
             "POST:/api/fleet/site-map/reality-check/apply"
           ]
+        },
+        {
+          "consumer": "applications/fleet/web/sitemap/site-map-camera-draft.js",
+          "expression": "/api/fleet/vision/sources",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/vision/sources"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/sitemap/site-map-camera-draft.js",
+          "expression": "/api/fleet/vision/lease",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/vision/lease"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/sitemap/site-map-camera-draft.js",
+          "expression": "/api/fleet/site-map/draft-from-camera",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/site-map/draft-from-camera"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/sitemap/site-map-camera-draft.js",
+          "expression": "/api/fleet/site-map/draft",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/site-map/draft"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/sitemap/site-map-reality.js",
+          "expression": "/api/fleet/vision/sources",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/vision/sources"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/sitemap/site-map-reality.js",
+          "expression": "/api/fleet/vision/lease",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/vision/lease"
+          ]
         }
       ],
       "requests": [
@@ -4741,6 +4876,41 @@
           ],
           "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
           "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/site-map/reality-check/apply"
+        },
+        {
+          "id": "POST:/api/fleet/site-map/draft-from-camera",
+          "method": "POST",
+          "path": "/api/fleet/site-map/draft-from-camera",
+          "implementation": "operations/fleet/fleet/server/sitemap/site_map_routes.py",
+          "handler": "site_map_camera_draft",
+          "expected_statuses": [
+            200,
+            422
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_site_map_camera_draft.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/site-map/draft-from-camera"
+        },
+        {
+          "id": "POST:/api/fleet/site-map/reality-check",
+          "method": "POST",
+          "path": "/api/fleet/site-map/reality-check",
+          "implementation": "operations/fleet/fleet/server/sitemap/site_map_routes.py",
+          "handler": "site_map_reality_check_with_camera",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_site_map_reality_api.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/site-map/reality-check"
         }
       ],
       "flows": [

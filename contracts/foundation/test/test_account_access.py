@@ -32,8 +32,9 @@ def test_valid_signed_grant_is_bound_to_one_resource():
     assert not result.permits('robot:r1', 'robot.operate')
 
 
-@pytest.mark.parametrize('capability', ['vault.read', 'vault.operate', 'vault.manage'])
-def test_vault_signed_grants_are_site_scoped_without_inheritance(capability):
+@pytest.mark.parametrize('capability', ['vault.read', 'vault.operate', 'vault.manage',
+                                        'harbor.view', 'harbor.operate', 'harbor.field', 'harbor.admin'])
+def test_app_signed_grants_are_site_scoped_without_inheritance(capability):
     private, public = keys()
     data = {**claims(), 'aud': 'site:one', 'grants': [
         {'resource': 'site:one', 'capabilities': [capability]}]}
@@ -41,7 +42,7 @@ def test_vault_signed_grants_are_site_scoped_without_inheritance(capability):
                            issuer=data['iss'], audience='site:one', now=1001)
     assert result.permits('site:one', capability)
     assert not result.permits('site:two', capability)
-    for other in ['vault.read', 'vault.operate', 'vault.manage', 'accounts.manage', 'fleet.operate']:
+    for other in ['vault.read', 'vault.operate', 'vault.manage', 'harbor.view', 'harbor.admin', 'accounts.manage', 'fleet.operate']:
         assert result.permits('site:one', other) == (other == capability)
     for resource in ['robot:r1', 'project:p']:
         with pytest.raises(ValidationError):

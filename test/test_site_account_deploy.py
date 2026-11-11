@@ -28,6 +28,8 @@ def test_authority_and_public_app_links_have_separate_mounts():
     assert services['fleet']['environment']['ROSY_ACCOUNT_CONFIG'] == ''
     assert overlay['fleet']['environment']['ROSY_FLEET_ACCOUNT_CLIENT_CONFIG'] == (
         '${ROSY_FLEET_ACCOUNT_CLIENT_CONFIG:?set ROSY_FLEET_ACCOUNT_CLIENT_CONFIG}')
+    assert services['fleet']['environment']['ROSY_ACCOUNT_LINK_CONFIG'] == '${ROSY_ACCOUNT_LINK_CONFIG:-}'
+    assert '/etc/rosy/fleet-account:/run/rosy-fleet-account:ro' in services['fleet']['volumes']
     assert public in services['proxy']['volumes']
     assert private not in services['proxy']['volumes']
     assert private not in services['vision']['volumes']

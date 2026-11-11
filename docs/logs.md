@@ -14553,6 +14553,17 @@ osy-d395-s1d\`.
 - gate 변화: 없음. 다음 재부팅 뒤 값 유지는 아직 확인 전이다.
 - CE: 미해결 — 멈춘 원인은 가설로 남고 기록은 작업 기록에 있다.
 
+## 2026-11-07 · uncommitted · docs(common-services): Monitoring·Media 책임과 권한 사본 검사
+
+- 변경: 앱 책임 문서에 Monitoring·Media 행과 Android·foundation 공유 기반을 더했다. 카탈로그에 `middleware/media`와 서비스별 인증 차이를 적었다. Kotlin 권한 사본과 Fleet 역할 묶음이 foundation 목록과 어긋나면 `test_common_services.py`가 실패한다.
+- 증거: 원격 시험과 변이 확인은 착지 기록을 따른다.
+- gate 변화: 없음. CE: 해당 없음 — 문서 정정과 검사 추가다.
+
+## 2026-11-07 · uncommitted · docs(adr): D-990 Monitoring Account 로그인
+
+- 변경: D-990과 Log 행을 더하고 Account 프로토콜의 site capability, Monitoring API, 카탈로그의 인증 설명을 고쳤다.
+- 증거: `rosy_harness.py lint`. 원격 결과는 착지 기록을 따른다.
+- gate 변화: 없음. CE: 해당 없음 — 결정 기록이다.
 ## 2026-11-07 · uncommitted · docs(solutions): Pinky LiDAR 0°는 뒤쪽, odom은 이동 증거가 아니다
 
 - 변경: 현장 주행 스크립트 교훈에 11-07 갱신 절을 더했다. LiDAR 방향은 공용 몸체 모델 `PINKY_PRO`(URDF 값 180°)로 읽고, 진행은 odom이 아니라 LiDAR 변화로 확인한다.
@@ -14585,6 +14596,29 @@ osy-d395-s1d\`.
 - 증거: 착지 브라우저 묶음은 그 값을 주지 않아 시험이 늘 건너뛰어졌고, `land_browser.vacuous`가 건너뜀 1건으로 FULL을 멈췄다(219 passed, 1 skipped). 다른 고정 학습 시험은 브라우저 묶음 밖이라 같은 조건이 맞지 않았다.
 - gate 변화: 없음. 고정 학습 환경이 없는 시험 PC에 이 시험이 배정되면 여전히 실패한다(남은 문제). CE: 해당 없음 — 앞 수정의 되돌림.
 
+## 2026-11-08 · uncommitted · D-998 전환 전 알림 전달 계약
+- 변경: 독립 원장·기계 범위·owner 확인·유한 예산·UNKNOWN을 결정하고 API v1.377·schema·카탈로그·manifest·wheel·CI 등록을 함께 갱신했다.
+- 증거: 신규 전달 fake와 Fleet 알림 회귀는 커밋 SHA 원격 시험으로 확인한다. D-997 정본은 디스패처의 docs/r-n100-host 브랜치에 있다.
+- gate 변화: 없음. 배포·두 생산자 실제 HTTP 연결·발송 owner 교체·실제 채널 수용은 미실시다.
+- CE: 해당 없음 — 설계·검증 범위와 미수용 관문을 D-998에 기록했다.
+
+## 2026-11-08 · uncommitted · D-998 API 변경 이력 누락 수정
+- 변경: API v1.377 상세 설명·live 버전에 대응하는 변경 이력 표 행을 추가했다.
+- 증거: c1984461a8 원격 Foundation·프로토콜 회귀 1501 passed/1 NEW failed로 누락을 확인했다. test_changelog_has_a_row_for_the_live_version이 헤더와 표를 대조한다. 수정 커밋으로 같은 세 대상을 다시 원격 검증한다.
+- gate 변화: 없음. 문서 계약 정합성 수정이며 발송 owner 전환·현장 수용 근거가 아니다.
+- CE: 해당 없음 — 원인과 재발 방지가 기존 version alignment 시험에 명시돼 있다.
+
+## 2026-11-08 · uncommitted · D-998 독립 검토 반영
+- 변경: 대기 용량과 종결 이력 보관을 분리하고 채널 간격은 owner 호출 전에 다음 가능 시각으로 미룬다. 관측 시각 오차는5초 상수로 제한한다. foundation0.0.3과 소비 하한·CI pin을 정합하게 올린다.
+- 증거: 이전 head0f0bf42bbd의 프로토콜 회귀1502 passed/NEW0. 변경 범위와 프로토콜 회귀는 새 커밋에서 원격 재시험한다. api_reserve list의 v1.377 예약 사유는 D-997 independent notification delivery다.
+- gate 변화: 없음. 발송 owner 전환·배포·채널 수용은 수행하지 않는다.
+- CE: 해당 없음 — 지적·정책·검증은 D-998과 회귀 시험에 남는다.
+## 2026-11-08 · uncommitted · docs(common): D-997 기계 처리 추출 조사
+
+- 변경: 공통 서비스 카탈로그에 감사·백업·업데이트·설정의 실제 구현과 추출 여부를 기록했다. 같은 비밀 필드 이름 판별만 추출하고 서로 다른 기록·복원·활성화 계약은 유지했다.
+- 증거: source 조사와 소비자 회귀 시험에 결속한다. 원격 결과는 디스패처 인계에 남긴다.
+- gate 변화: 없음. 중앙 서비스·DB·HTTP 계약·배포는 추가하지 않았다.
+- CE: 해당 없음 — 재사용 범위와 보류 근거가 카탈로그에 있다.
 ## 2026-11-08 · uncommitted · docs(control): N100 목표 호스트와 R·owner 책임을 구분한다
 
 - 변경: D-994에 N100·16GB와 Ubuntu Server 24.04 LTS 목표, R·셀·CORE·OMX owner·공통 서비스·기명 운영자의 책임, 부하·장애·이전 수용 조건을 기록했다. 관제 배치표의 목표만 바꾸고 공통 서비스 카탈로그에서 연결했다.
@@ -14647,6 +14681,20 @@ osy-d395-s1d\`.
 - 증거: b8xy canary 트레이스백(2026-11-08 13:19Z), 수정 커밋 `3ed5a498c6`와 회귀 시험.
 - gate 변화: 없음.
 - CE: 새 교훈 기록 — 실물 기동에서만 드러난 실패라 기록.
+
+## 2026-11-08 · uncommitted · docs(reference): 카탈로그 기능별 행을 실제 owner 소스와 연결한다
+
+- 변경: 공통 서비스 카탈로그의 D-997 기능별 표에 `현재 소스` 열을 넣고 7개 기능 행을 실제 경로(Account, Account 연동 등록부·Fleet 장치 등록·공통 조회 client, `core_common` 설정·설정 transaction, Fleet `incidents/notifications.py`, Account 감사, `deploy/site/site_db.py`, site/Pinky/OMX 업데이트 도구)에 묶었다. 알림 행의 "현재 미구현"을 바로잡아 현재 발송 owner는 Fleet이고 `operations/notifications`만 `(목표, 미생성)`임을 분명히 했다.
+- 증거: 각 경로의 실제 존재와 owner를 소스·AGENTS에서 확인했고 `test/architecture/test_common_services.py`가 7개 행의 경로 존재·목표 표시를 검사한다. 변이(빠진 경로·목표 표시 제거)로 시험이 실패하는 것을 원격으로 확인했다.
+- gate 변화: 없음. 코드 추출·알림 서비스 신설·배포·실물 시험은 이 변경의 범위가 아니다.
+- CE: 해당 없음 — 문서와 구조 시험에 근거가 남는다.
+
+## 2026-11-08 · uncommitted · docs(reference): 검토 반영 — 백업 owner 경로와 알림 현재 owner 검사
+
+- 변경: 백업·복원 행에 Account 백업 owner(`deploy/site/compose.account-backup.yaml`)를 넣고 `site_db.py`를 공용 스크립트(기본은 Fleet data volume, account 백업도 같은 스크립트를 자기 DB로 실행)로 정확히 적었다. 현재 소스 열이 기능별 대표 경로만 적는다는 것을 문단에 명시했고, 시험이 알림 행의 현재 owner(Fleet `incidents/notifications.py`)를 검사한다.
+- 증거: `Dockerfile.account`·`Dockerfile.fleet`이 같은 `deploy/site/site_db.py`를 싣고 account-backup·account-backup-check 서비스가 이를 account DB로 실행한다. 변이(알림 행에서 현재 owner 경로 제거)로 새 검사가 실패하는 것을 원격으로 확인했다.
+- gate 변화: 없음. 백업·전환 구현은 바꾸지 않았다.
+- CE: 해당 없음 — 문서와 구조 시험에 근거가 남는다.
 
 ## 2026-11-08 · uncommitted · fix(remote): 현장 PC가 고정 학습 환경이 필요한 시험을 받지 않는다
 
@@ -14734,8 +14782,64 @@ osy-d395-s1d\`.
 - gate 변화: 없음.
 - CE: 새 교훈 기록.
 
+## 2026-11-10 · uncommitted · refactor: 팔 셀 식별자 CELL-A/cell-a → ARM-CELL/arm-cell (D-1011)
+- 변경: 입력(위임 target·peers key·service principal·정지 ingress·`/units/{unit_id}`)에 구 id `CELL-A`를 별칭으로 받고 출력·저장은 새 id로. `ControlUnitStore` identity 충돌 전 멱등 원장 마이그레이션(`fleet_control_unit_identifier_events` 감사 행). 시험 기대값 교체와 신규 `test_control_unit_identifier_rename.py`. 관제 단위 배포 문서·헤더 주석 갱신, dry-run 호스트 스크립트 `tools/ops/rename_arm_cell_runtime.sh`(이 브랜치에서 실행 안 함). 재고와 결정 근거는 `docs/plans/2026-11-10-arm-cell-identifier.md`.
+- 증거: 원격 시험 로그는 착지 시점의 실행 기록을 따른다(이 행 작성 시점 미실행).
+- gate 변화: 없음.
+- 결정: D-1011 Accepted.
+
+## 2026-11-10 · uncommitted · fix: 독립 검토 11건 — 관제 단위 개명의 접두사·스크립트·감사·정규화 보강 (D-1011)
+- 변경: stop·information 경로가 service principal의 `control-unit:` 접두사를 먼저 확인(꼬리만 같은 위조 거절, 시험 추가). 정지 snapshot/reconcile 경로가 origin 경로 매개변수를 정규화(CELL-A 조회가 이행된 ARM-CELL 행에 닿음, 시험 추가). `ControlUnitStore`는 실제로 행을 고쳤을 때만 감사 행을 씀(새 DB 무기록, 시험 추가). 호스트 스크립트 `rename_arm_cell_runtime.sh` 재작성: OPERATOR_HOME(/home/robttt 기본) 기반 세션 lock(`flock -n`, 없으면 거부)·작업 lock·motor-health(`rosy.motor-health.v1`, 안전 상태만) 검사, 스택 선행 down 후 백업·볼륨 복사·모든 파일 sha256 대조, 디렉터리 이동+symlink(ln -sfn 중첩 제거), compose 키(cell_a_data/cell_a_backend)·경로 재작성과 fleet 볼륨 mount 확인, healthcheck 없으면 건강 아님, 실패 시 구 스택 자동 롤백, rm -r 제거. ADR·계획·배포 문서에 peer 이름(`peer-cell-a`)·token 파일 개명이 나중 단계임을 명시.
+- 증거: 원격 시험 로그는 착지 시점의 실행 기록을 따른다.
+- gate 변화: 없음.
+
 ## 2026-11-11 · uncommitted · docs(adr,solutions): D-1015 6항 실시간 프로토콜·비전·기구학 최적화 및 실물 데몬 경로 드리프트 CE 교훈 반영
 - 변경: `docs/adr/D-1015-omx-imitation-speed-parity-temporal-ensembling-and-kinodynamic-streaming.md`에 6항(실시간 카메라·통신 프로토콜 `HTTP/1.1` Keep-Alive·`ETag` `304`·MJPEG·15FPS·10Hz 상태 보고·5ms FIFO 폴링 및 비전 ROI 슬라이싱·3x3 기구학 언롤링·다이제스트 캐시)을 추가하고, `docs/solutions/runtime-errors/omx-real-arm-jitter-tick-quantization-and-chunk-stops-2026-11-10.md`에 `robttt@100.82.51.8` 라이브 데몬 경로 드리프트(`omx-camera-readiness.env`의 구 스냅샷 참조, `rosy-omx-camera@.service` `--max-fps` 기본값 불일치, 상위 디렉터리 `.py` 섀도잉) 원인과 해결을 기록했다.
 - 증거: `robttt@100.82.51.8` 라이브 포트 `8767` `HTTP/1.1` Keep-Alive + `ETag` `304`(`0.30~0.37ms`) 실측 및 원격 pytest 검증.
 - gate 변화: 없음.
 - CE: 기존 교훈 갱신 — `docs/solutions/runtime-errors/omx-real-arm-jitter-tick-quantization-and-chunk-stops-2026-11-10.md`.
+
+## 2026-11-11 · uncommitted · fix(sim): 편대 SIM이 팔로워 자취 관점·리더 스트림 도약을 기록한다 (D-1002 run 8 미진단)
+- 변경: `tools/sim/formation_lane.py` — 무장 직후 리더의 `/ws/swarm/pose`(릴레이가 전달하는 바로 그 스트림)를 구독하고 매 0.5 s 팔로워의 `/api/v1/swarm/state`(trail leader_s·progress·hold_reason·stream_age)를 `swarm.jsonl`에 남긴다. 순수 함수 `analyze_swarm`이 같은 물리적 간격을 팔로워 관점과 Gazebo 참값으로 각각 잰 `frame_disagree`와 리더 표본의 도약 초과(`reference_stream` 교량 한계 0.3 m 기준)를 result.json의 `swarm` 항에 더한다. 다음 SIM 실행이 run 8의 열린 질문(어느 프레임이 거짓말했나)에 답한다. 시험 `test/test_formation_lane_sim.py` 3건.
+- 증거: 호스트 직접 호출로 새 시험 3건 통과(프레임 일치 0, 0.5 m 허위 관점 검출, 0.4 m 리더 도약 검출). 원격 시험 결과는 다음 커밋에 기록한다.
+- gate 변화: 없음. SIM은 LOCAL 근거다(D-91).
+
+## 2026-11-11 · 86cb36c738 · docs(sim): 편대 SIM 계측 변경 검증
+- 변경: 없음 — 앞 항목의 원격 시험 결과만 기록한다.
+- 증거: 원격 rosy 호스트(커밋 86cb36c738)에서 `test/test_formation_lane_sim.py`·`test/test_fleet_trips.py`·`test/test_route_drive.py` 16 passed, 0 failed, exit 0. `test/known_failures.py` 비교 0 new. `rosy_harness.py lint` 0 errors.
+- gate 변화: 없음.
+
+## 2026-11-11 · uncommitted · fix(test): 착지 관문 두 건 — swarm 단위 small 표시 제거, OMX 프로파일 해시 시험 캐시 분리
+- 변경: `test/architecture/size_units.txt`에서 `drive/behaviors/swarm`의 `small` 표시를 뗀다(D-766 3: 단위가 1000줄 바닥에 닿았고 표시 제거가 규칙이 정한 길이다. D-559 복귀 주석 포함 1020줄). `test/test_omx_session_caps_layers.py`의 프로파일 동일성 시험이 같은 경로를 즉시 다시 써 `cell_robot_profile.load`의 (경로, mtime_ns, 크기) 캐시에 첫 해시가 걸리는 것을, 서로 다른 파일 이름으로 갈라 고친다(2026-11-11 착지에서 묶음·단독 모두 실패, main에서는 우연히 통과).
+- 증거: 원격 시험 결과는 다음 커밋에 기록한다.
+- gate 변화: 없음.
+
+## 2026-11-11 · 477da4687d · docs(test): 착지 관문 수정 검증
+- 변경: 없음 — 앞 항목의 원격 시험 결과만 기록한다.
+- 증거: 원격 ai 호스트(커밋 477da4687d)에서 `test/test_omx_session_caps_layers.py`·`test/architecture/test_module_structure.py` 58 passed, 0 failed, exit 0. `test/known_failures.py` 비교 0 new. `rosy_harness.py lint` 0 errors.
+- gate 변화: 없음.
+
+## 2026-11-11 · uncommitted · docs(solutions): OMX 프로파일 해시 시험의 mtime 캐시 충돌 교훈 기록
+- 변경: `docs/solutions/test-failures/same-path-rewrite-hits-cell-robot-profile-mtime-cache-2026-11-11.md` 신규 — 착지 관문이 브랜치 탓으로 분류했던 NEW 실패의 실제 원인(`cell_robot_profile.load`의 (경로, mtime, 크기) 캐시가 같은 길이의 즉시 재작성과 충돌)과 재발 방지를 남긴다.
+- 증거: 착지 로그 alone-pre-pre-28-2.txt 실패·main 통과, 수정 후 원격 58 passed(커밋 477da4687d 기록 항 참조).
+- gate 변화: 없음.
+
+## 2026-11-11 · uncommitted · fix(test): 고정 RAUC 패키지 다운로드에 미러 폴백 — 아카이브 장애가 FULL 등급 전체를 쓰러뜨렸다
+- 변경: `test/os_rauc_fakes.py`의 `download_package`가 고정 URL 실패(시도 3회) 후 같은 pool 경로의 kernel.org 우분투 미러를 재시도한다. 크기·sha256 핀이 원본 무결성을 보장하므로 응답한 출처가 어느 쪽이든 그대로 검증된다.
+- 증거: 게시용 무캐시 FULL(prepare-99120b86f6)에서 24개 id가 `Pinned RAUC package unavailable`로 실패하고 전부 main에서도 실패(MAIN-RED). 시험 PC 양쪽에서 `archive.ubuntu.com`·`kr.archive.ubuntu.com` curl 000(github 200), `mirrors.edge.kernel.org`는 200. 모델 PC에서 미러 파일 sha256 `78770edf…fad7`·160646 바이트로 핀과 일치 확인.
+- gate 변화: 없음. 네트워크 장애가 코드 회귀로 보이는 MAIN-RED를 만드는 경로를 끊는 수선이다.
+
+## 2026-11-11 · uncommitted · fix(test): RAUC 폴백이 기존 진단 계약을 지키게 — URL당 3회·진단에 URL 없음·폴백 신규 시험
+- 변경: 앞 항목의 첫 폴백 구현이 `test_os_rauc_tool.py` 6건을 깨뜨렸다(시도 3→2, 진단문에 URL 노출 — 핀 쿼리의 비밀 누출 계약 위반). `os_rauc_fakes.py`를 고쳤다: URL당 시도는 3회 그대로, 진단은 종래의 `attempt N: <관측>` 양식(URL 미포함), 폴백 후보는 `/ubuntu/` 핀에만 붙는다. `test_os_rauc_tool.py`에 폴백 복구를 고정하는 신규 시험 1건(아카이브 3회 실패 → kernel 미러 성공, 경고에 `attempt 3: URLError`)을 추가했다.
+- 증거: 호스트 직접 호출로 세 계약 확인(평범 핀 3회 재시도·복구 경고, 항상 실패 시 시도 1-3 진단·URL 무누출, 아카이브 3회 후 미러 복구). 원격 시험 결과는 다음 커밋에 기록한다.
+- gate 변화: 없음.
+
+## 2026-11-11 · 98e73632b6 · docs(test): RAUC 폴백 계약 수정 검증
+- 변경: 없음 — 앞 항목의 원격 시험 결과만 기록한다.
+- 증거: 원격 ai 호스트(커밋 98e73632b6)에서 `test_os_rauc_tool.py`·`test_os_rauc_service.py`·`test_prepare_os_release.py` 50 passed, 0 failed, exit 0. 아카이브가 그 시각에도 접속 불능이어서 픽스처가 kernel 미러 폴백으로 실제 패키지를 받았다(종단 검증). `test/known_failures.py` 비교 0 new.
+- gate 변화: 없음.
+
+## 2026-11-11 · uncommitted · docs(solutions): 고정 단일 소스 시험 다운로드가 MAIN-RED로 위장하는 교훈 기록
+- 변경: `docs/solutions/test-failures/pinned-single-source-test-download-reads-as-main-red-2026-11-11.md` 신규 — 외부 아카이브 장애가 코드 회귀와 같은 모양의 MAIN-RED로 나타난 사건(증상·원인·계약 보존 해결·종단 검증·재발 방지)을 남긴다.
+- 증거: 게시 FULL prepare-99120b86f6의 MAIN-RED 24개 id와 접속 행렬(github 200·아카이브 000·kernel 미러 200), 수정 후 원격 50 passed(미러 폴백 종단) — 앞 항목들에 기록됨.
+- gate 변화: 없음.

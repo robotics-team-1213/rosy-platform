@@ -256,6 +256,10 @@ def test_enroll_measures_and_saves_a_custom_object_for_detection(tmp_path):
     orange_img = scene([(15, -20, 48, 42, 10)], colour=(30, 120, 235))
     (mismatch,) = co.detect(orange_img, ROI, RECORD, CAMERA, updated)
     assert not mismatch["matched"] and mismatch["colour"] == "orange"
+    # Cached load_catalog returns a defensive copy so caller mutation does not poison subsequent reads
+    cached = co.load_catalog(cat_path)
+    cached[0]["length_mm"] = 9999.0
+    assert co.load_catalog(cat_path)[0]["length_mm"] != 9999.0
 
 
 def test_auto_pick_choose_filters_by_wanted_colour_and_object_id(tmp_path, monkeypatch):

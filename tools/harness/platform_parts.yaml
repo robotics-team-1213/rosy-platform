@@ -690,6 +690,15 @@ roots:
     note: D-962 independent Account identity, session, grant and revocation authority. No Fleet ledger or device command authority.
     concern: other
     capability: platform
+  - path: operations/notifications
+    layout_target: operations/notifications
+    part: operations
+    d427_target: operations/notifications
+    wave: none
+    import_prefix: [rosy.notifications]
+    note: D-998 pre-cutover delivery journal and fixed-channel transport; producers retain business outboxes and last-moment validity. No deployed service or device authority.
+    concern: other
+    capability: platform
   - path: operations/monitoring
     layout_target: operations/monitoring
     part: operations
@@ -1016,6 +1025,13 @@ roots:
     part: tools
     d427_target: tools/icons
     wave: none
+    concern: other
+    capability: platform
+  - path: tools/ops
+    part: tools
+    d427_target: tools/ops
+    wave: none
+    note: Host-maintenance stage scripts run by people on the lab PCs (D-1011 arm-cell rename, dry-run first); never shipped.
     concern: other
     capability: platform
   - path: tools/remote

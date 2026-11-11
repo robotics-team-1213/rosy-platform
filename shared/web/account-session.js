@@ -18,12 +18,12 @@ function announce(key) {
 // current(): the app's account value. apply(value): store a fresh read and drop app-local
 // credentials. changed(): another identity took this origin; clear and reload.
 // failed(): optional, the probe could not confirm a session. poll: 0 leaves polling to the app.
-export function createAccountSession({current, apply, changed, failed = () => {}, poll = 10000}) {
+export function createAccountSession({current, apply, changed, failed = () => {}, poll = 10000, base = '/api/account'}) {
   let read = 0;
   async function restore() {
     const mine = ++read, previous = accountKey(current());
     try {
-      const response = await fetch('/api/account/session', {cache: 'no-store', signal: AbortSignal.timeout(5000)});
+      const response = await fetch(`${base}/session`, {cache: 'no-store', signal: AbortSignal.timeout(5000)});
       if (!response.ok) throw new Error('Account unavailable');
       const value = await response.json();
       if (mine !== read) return current();
@@ -41,7 +41,7 @@ export function createAccountSession({current, apply, changed, failed = () => {}
   // Drops reads still in flight, e.g. after a local logout.
   function invalidate() { read++; publish(null); }
   async function logout(reset, options = {}) {
-    const response = await fetch('/api/account/logout', {method: 'POST', ...options});
+    const response = await fetch(`${base}/logout`, {method: 'POST', ...options});
     reset();
     announce('');
     if (!response.ok) throw new Error(UNREVOKED);

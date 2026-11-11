@@ -7,6 +7,7 @@ import sqlite3
 from fastapi import Depends, HTTPException
 
 from core_common.protocol.integrated_control import ControlStopIngress, ControlStopReconcile, ControlStopRequest
+from fleet.server.control_unit_config import canonical_unit_id
 
 
 def install_control_stop_routes(app, service, *, authorize, require_viewer, require_named_operator):
@@ -20,7 +21,9 @@ def install_control_stop_routes(app, service, *, authorize, require_viewer, requ
     def parent(principal, origin):
         if (not service.config.accept_parent_stop or service.unit.parent is None
                 or principal.role != "service"
-                or principal.principal_id != "control-unit:" + service.unit.parent):
+                or not principal.principal_id.startswith("control-unit:")
+                or canonical_unit_id(principal.principal_id[len("control-unit:"):])
+                != service.unit.parent):  # D-1011: the parent may still present the pre-rename id
             raise HTTPException(403, detail={"code": "CONTROL_UNIT_PARENT_STOP_NOT_ENABLED"})
         ancestor = service.config.topology.unit(service.unit.parent)
         while ancestor.unit_id != origin and ancestor.parent is not None:
@@ -60,6 +63,7 @@ def install_control_stop_routes(app, service, *, authorize, require_viewer, requ
 
     @app.get(prefix + "/stops/{origin}/{identity}")
     async def read(origin: str, identity: str, principal=Depends(authorize)):
+        origin = canonical_unit_id(origin)  # D-1011: the origin row may be queried by its pre-rename id
         if principal.role == "service":
             parent(principal, origin)
         else:
@@ -68,4 +72,5 @@ def install_control_stop_routes(app, service, *, authorize, require_viewer, requ
 
     @app.post(prefix + "/stops/{origin}/{identity}/reconcile")
     async def reconcile(origin: str, identity: str, body: ControlStopReconcile, principal=Depends(human)):
-        return await execute(service.reconcile(origin, identity, body, actor_id=principal.principal_id))
+        return await execute(service.reconcile(canonical_unit_id(origin), identity, body,  # D-1011 alias
+                                               actor_id=principal.principal_id))

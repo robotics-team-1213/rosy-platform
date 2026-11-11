@@ -43,8 +43,8 @@
 
 ## 최근 기록
 
+- 2026-11-11 · uncommitted · fix: Vision→Fleet 게시 재시도 — 끊긴 풀링 연결 1회 재송
+- 2026-11-11 · uncommitted · feat(vision): draft-map 제안 - 정사 평면에서 차로·구역 후보
 - 2026-11-07 · uncommitted · feat(vision): 위치 찾기 세션 동안 카메라를 깨운다 (D-989)
 - 2026-10-28 · 6e0871b746 · Loop death watch and /readyz (fleet supervision twin)
 - 2026-10-22 · uncommitted · 작업 셀 카메라 preview-only 등록 (D-837)
-- 2026-10-19 · uncommitted · (origin #92 2026-10-17) station measured preview merge integration
-- 2026-10-19 · 0b816554c · (origin #92 2026-10-16) 설치 프로필의 카메라 측정 실행과 종료

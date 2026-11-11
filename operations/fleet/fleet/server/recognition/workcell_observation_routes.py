@@ -18,6 +18,9 @@ def assert_workcell_observation_credentials_isolated(service, *, console, princi
 
 def install_workcell_observation_routes(app, service, require_viewer, require_named_operator=None, task_service=None,
                                        authorize=None):
+    if authorize is not None:  # D-996 2/7: port events ride the same workcell machine tokens
+        from fleet.server.port_event_routes import install_port_event_routes
+        install_port_event_routes(app, service, task_service, authorize=authorize, require_viewer=require_viewer)
     incidents = None
     if service is not None and require_named_operator is not None:  # D-963
         from fleet.server.usb_camera_decisions import UsbCameraStore, install_usb_camera_routes

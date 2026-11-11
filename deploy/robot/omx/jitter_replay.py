@@ -24,7 +24,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cell_params as prm  # noqa: E402
 import joint_jitter as jj  # noqa: E402
 
-ARMS = {"FF06202D": "arm_a", "FF061D2D": "arm_b"}
+ARMS = {"FF06202D": "arm_a", "FF061D2D": "arm_b", "00FB51A1": "arm_s", "FF070726": "arm_s"}
 PCT = (50, 99, 99.9, 100)
 
 

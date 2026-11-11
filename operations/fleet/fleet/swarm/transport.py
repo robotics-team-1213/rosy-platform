@@ -327,6 +327,10 @@ class HttpRobotClient(StationTransport, NavigationTransport):
         """D-555: deliver the hub credential. ``body`` holds a secret: never log it."""
         return self._check(await self._http.put("/api/v1/fleet/link", json=body, headers=self._headers()))
 
+    async def account_receiver_put(self, body: dict) -> dict:
+        """D-992: public receiver settings for people's login on this robot."""
+        return self._check(await self._http.put("/api/v1/account/receiver", json=body, headers=self._headers()))
+
     async def fleet_link_get(self) -> dict:
         return await self._get("/api/v1/fleet/link")
 
@@ -351,6 +355,9 @@ class HttpRobotClient(StationTransport, NavigationTransport):
     async def identify_lamp_result(self, request_id: str) -> dict:
         """D-596 rev 2026-10-10: ``{state: pending|shown|refused|expired, reason}``; an older CORE answers 404."""
         return await self._get(f"/api/v1/host/lamp/identify/{request_id}")
+
+    async def speed_limits(self, body: dict) -> dict:  # D-1005: CORE's operator speed settings
+        return await self._mutate("/api/v1/safety/speed-limits", body, method="PUT")
 
     async def power(self, action: str) -> dict:  # D-440 6: CORE's own power API; it keeps the interlock
         return await self._post(*{"sleep": ("/api/v1/power/mode", {"mode": "STANDBY"}),
