@@ -19,7 +19,7 @@ for relative in ("middleware/core/api", "middleware/core/services", "middleware/
     if path not in sys.path:
         sys.path.insert(0, path)
 
-from core_features.safety_gate.limits import SpeedLimits  # noqa: E402
+from core_features.safety.limits import SpeedLimits  # noqa: E402
 from core_api_web.api.errors import register_exception_handlers  # noqa: E402
 from core_api_web.api.v1 import safety  # noqa: E402
 from core_api_web.api.v1.auth import auth_router  # noqa: E402
