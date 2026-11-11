@@ -48,8 +48,8 @@
 
 ## 최근 기록
 
+- 2026-11-11 · 76b74fd91b · feat(gz_sim): bay observer on the 261026 launch (D-1013)
 - 2026-11-11 · 1e35310e23 · feat(gz_sim): map_261026_bay_lane launch and core overlay (D-1013 gate b)
 - 2026-10-29 · 61f475246c · 라이브 뷰어 간격과 긴 결과 배치
 - 2026-10-21 · uncommitted · 라이브 뷰어 색을 공용 토큰으로
 - 2026-10-19 · uncommitted · fix(gz_sim): recover OMX workcell layout fixtures
-- 2026-10-15 · 5eb721d11 · 두 로봇 Fleet+Gazebo 차선 trip을 커밋된 구성으로

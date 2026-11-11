@@ -11,7 +11,7 @@ from urllib.parse import quote, urlsplit
 import httpx
 import yaml
 
-from fleet.server.control_unit_config import ControlUnitTopology, _identifier
+from fleet.server.control_unit_config import ControlUnitTopology, _identifier, canonical_unit_id
 
 
 @dataclass(frozen=True)
@@ -58,7 +58,9 @@ def load_control_unit(path):
     neighbors = {u.unit_id for u in topology.units.values() if u.parent == unit.unit_id}
     if unit.parent is not None:
         neighbors.add(unit.parent)
-    if not isinstance(document["peers"], dict) or set(document["peers"]) != neighbors:
+    # D-1011: a peer entry may still be keyed by the pre-rename unit id.
+    if (not isinstance(document["peers"], dict) or len(document["peers"]) != len(neighbors)
+            or {canonical_unit_id(identity) for identity in document["peers"]} != neighbors):
         raise ValueError("CONTROL_UNIT_NEIGHBOR_CONFIGURATION_MISMATCH")
     peers = {}
     for identity, entry in document["peers"].items():
@@ -97,7 +99,7 @@ def load_control_unit(path):
             raise ValueError("INVALID_CONTROL_UNIT_SERVICE_TOKEN")
         if address is not None and parsed.scheme != "https":
             raise ValueError("CONTROL_UNIT_PEER_ADDRESS_REQUIRES_TLS")
-        peers[identity] = ControlUnitPeer(str(endpoint.copy_with(path="")).rstrip("/"), token, address)
+        peers[canonical_unit_id(identity)] = ControlUnitPeer(str(endpoint.copy_with(path="")).rstrip("/"), token, address)
     # Two names on one dialed socket would share a pooled TLS connection, so the dial target is unique too.
     dialed = {(peer.address or httpx.URL(peer.url).host, httpx.URL(peer.url).port) for peer in peers.values()}
     if len({peer.url for peer in peers.values()}) != len(peers) or len(dialed) != len(peers):
@@ -227,7 +229,10 @@ def install_control_unit(app, path, *, tasks, console, principals, named_logins,
     if not principals and not named_logins:
         raise ValueError("CONTROL_UNIT_NAMED_CREDENTIALS_REQUIRED")
     config = load_control_unit(path)
-    peer_principals = {p.principal_id for p in principals.values() if p.role == "service"}
+    # D-1011: a neighbor's receiving principal may still be registered under its pre-rename id.
+    peer_principals = {"control-unit:" + canonical_unit_id(p.principal_id[len("control-unit:"):])
+                       for p in principals.values()
+                       if p.role == "service" and p.principal_id.startswith("control-unit:")}
     if any("control-unit:" + unit not in peer_principals for unit in config.peers):
         raise ValueError("CONTROL_UNIT_NEIGHBOR_PRINCIPAL_REQUIRED")
     for peer in config.peers.values():

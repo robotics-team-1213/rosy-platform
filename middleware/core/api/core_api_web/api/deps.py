@@ -30,6 +30,7 @@ from typing import Protocol
 from core_features.calibration import CalibrationSessionError
 from core_features.command.approval_trials import TrialRefused
 from core_features.command.arbitration import Mode
+from core_features.safety_gate.limits import SpeedLimits
 from core_common.protocol.trip_lease import DEFAULT_TTL_S as TRIP_LEASE_DEFAULT_TTL_S, TripLeaseError
 from core_features.diagnostics.collector import worst
 from core_features.docking.database import DockError, DockInstance, DockType
@@ -55,6 +56,7 @@ __all__ = [
     "TRIP_LEASE_DEFAULT_TTL_S",
     "TripLeaseError",
     "Mode",
+    "SpeedLimits",
     "TrialRefused",
     "NavigationError",
     "GOAL_LEASE_MAX_S",

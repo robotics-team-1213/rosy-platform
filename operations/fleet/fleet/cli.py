@@ -24,9 +24,8 @@ from fleet.server.console_builders import build_pairing as _build_pairing
 from fleet.server.context_options import activate_from_args, add_cli_arguments
 from fleet.server.sightings_config import _relax_retired_sighting_targets
 from fleet.stuck.cli_config import _ai_first, _stuck_resolver_enrolled, _realign_config
-from fleet.console_site_config import (_build_site_map, _goal_lease_ttl_s, _policy_admission_core,
-                                       _lane_compliance_config, _map_pose_config, _trip_config,
-                                       _account_login_config)
+from fleet.console_site_config import (_account_login_config, _build_site_map, _goal_lease_ttl_s, _idle_days,
+                                       _lane_compliance_config, _map_pose_config, _policy_admission_core, _trip_config)
 from fleet.traffic.config import (_traffic_authority, _traffic_signal_advice, _traffic_signals, _traffic_zones,
                                    _trip_lease, _station_recovery)
 from fleet.formation.geometry import DEFAULT_SPACING, Formation, FormationError
@@ -614,7 +613,8 @@ def run_console(args: argparse.Namespace) -> None:
             console=console, task_service=task_service, sighting_service=sighting_service,
             enrollment_store=enrollment_store, robot_key=robot_key, robot_key_error=robot_key_error,
             discovery=discovery, tls_file=getattr(args, "enrolled_tls_bindings_file", None),
-            hub_link=hub_link if enrolled_hub else None, tracking_service=tracking_service)
+            hub_link=hub_link if enrolled_hub else None, tracking_service=tracking_service,
+            last_activity=event_store.last_received_times if event_store else None, idle_removal_s=_idle_days(args))
     from fleet.server.site_lanes import parse_lane_graph_flags, unmatched_map_ids
 
     try:

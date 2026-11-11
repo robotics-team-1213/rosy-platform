@@ -11,6 +11,9 @@
 | ID | 제목 | Status |
 |---|---|---|
 | D-996 | 셀 사실은 항만 사건 4개로만 Harbor에 가고, 화물 신원은 판독값으로만 맞춘다 — S load는 Fleet ARM_TRANSFER 제안, container_tag 100~199, R relay는 직계 셀만. [전문](../adr/D-996-harbor-port-events-and-intake-identity.md) | Proposed (2026-11-08, 사용자 결정 D1~D7; 시뮬레이션 프로필 구현, 실물·마커 판독률 수용 전) |
+| D-1005 | 속도 한도는 서명된 상한 안에서 운영자가 정하고, 봉인된 측정 속도를 넘지 못한다. D-986의 "속도·이동 한도는 바꾸지 않는다"를 개정한다. [전문](../adr/D-1005-speed-limits-operator-settable-under-signed-ceiling.md) | Accepted (2026-11-09, 사용자 지시; 코드·호스트 시험까지, 실물 수용은 아직 없다) |
+| D-1011 | 팔 셀 식별자를 CELL-A/cell-a에서 ARM-CELL/arm-cell로 바꾼다 — 입력은 구 id를 별칭으로 받고, 원장은 감사와 함께 한 번 재작성한다. [전문](../adr/D-1011-arm-cell-identifier-rename.md) | Accepted (2026-11-10, 사용자 결정; 코드·시험·호스트 스크립트, 실제 호스트 전환·현장 수용 별도) |
+| D-1016 | 등록 로봇 30일 비활동 «삭제 예정» 표시 — 비활성은 토큰 만료 그대로, 해제는 이름 있는 운영자만. [전문](../adr/D-1016-enrollment-idle-removal-pending.md) | Proposed (2026-11-11, 사용자 방침; 구현·호스트 시험, 현장 수용 없음) |
 | D-1015 | OMX 모방학습 대비 실행 속도 병목과 지터링 해소를 위한 시간적 앙상블·동역학 가감속·연속 청크 스트리밍 아키텍처. [전문](../adr/D-1015-omx-imitation-speed-parity-temporal-ensembling-and-kinodynamic-streaming.md) | Accepted (2026-11-11, 사용자 지시; OMX 어댑터·가드·청크 실행기·서보 하드웨어 프로파일 구현·호스트/원격 시험·실물 팔 배포 반영) |
 | D-1014 | OMX 통합 구역·3차원 좌표(AreaXYZ) 체계 및 ROSY 미들웨어 → rosy-cell 적층 지시 계약. [전문](../adr/D-1014-unified-area-xyz-coordinate-directive-from-middleware-to-cell.md) | Accepted (2026-11-11, 사용자 확인; 미들웨어 좌표·지시 계약, rosy-cell 실행기, 호스트·실물 3단 적층 검증 포함) |
 | D-1013 | 충전 칸 pit-in·pit-out은 분홍 유도선 카메라 폐루프다 — 맵 좌표는 교차점까지, 끊김은 예측기·게이트·코스트 예산으로 막는다 (D-941·D-950 후보 채택). [전문](../adr/D-1013-charge-bay-pink-line-pit-flow.md) | Accepted (2026-11-10, 사용자 토론으로 구조 확정; 키네마틱 시뮬 게이트 통과 — 권장 이득과 구현 조건은 9항, Gazebo·실물 수용·Safety-Review는 별도) |

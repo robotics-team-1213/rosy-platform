@@ -57,12 +57,12 @@ def delegated(world, tmp_path, *, fault="healthy"):
     rows = client.app.state.arm_transfer_job_store
     ancestor = fault == "ancestor_canceled"
     units = ([{"id": "ROOT"}, {"id": "R", "parent": "ROOT"}] if ancestor else [{"id": "R"}])
-    units.append({"id": "CELL-A", "parent": "R", "resources": ["workcell:" + installed.policy.primary[0]]})
+    units.append({"id": "ARM-CELL", "parent": "R", "resources": ["workcell:" + installed.policy.primary[0]]})
     topology = ControlUnitTopology.from_mapping({"revision": "v1", "units": units})
     nodes, reads, faults = {}, [], {"disconnected": False, "blocked": False, "canceled": threading.Event()}
     for unit in units:
         unit_id = unit["id"]
-        journal = tasks if unit_id == "CELL-A" else FleetTaskStore(tmp_path / (unit_id + ".sqlite3"))
+        journal = tasks if unit_id == "ARM-CELL" else FleetTaskStore(tmp_path / (unit_id + ".sqlite3"))
 
         async def peer(target, method, path, body=None, caller=unit_id):
             if method == "GET":
@@ -70,9 +70,9 @@ def delegated(world, tmp_path, *, fault="healthy"):
                 with sqlite3.connect(tasks.path, timeout=.05) as connection:
                     connection.execute("BEGIN IMMEDIATE")
                     connection.rollback()
-                if caller == "CELL-A" and faults["disconnected"]:
+                if caller == "ARM-CELL" and faults["disconnected"]:
                     raise ConnectionError("parent unavailable")
-                if caller == "CELL-A" and faults["blocked"]:
+                if caller == "ARM-CELL" and faults["blocked"]:
                     try:
                         await asyncio.Event().wait()
                     finally:
@@ -88,20 +88,20 @@ def delegated(world, tmp_path, *, fault="healthy"):
 
         nodes[unit_id] = ControlUnitService(
             topology, ControlUnitStore(journal.path, unit_id=unit_id),
-            world.task_service if unit_id == "CELL-A" else FleetTaskService(journal, robot_ids=()),
+            world.task_service if unit_id == "ARM-CELL" else FleetTaskService(journal, robot_ids=()),
             FleetConsole([], []), peer=peer,
-            arm_jobs=lambda unit_id=unit_id: client.app.state.arm_transfer_delegate if unit_id == "CELL-A" else None)
-    client.app.state.control_unit = nodes["CELL-A"]
+            arm_jobs=lambda unit_id=unit_id: client.app.state.arm_transfer_delegate if unit_id == "ARM-CELL" else None)
+    client.app.state.control_unit = nodes["ARM-CELL"]
     origin = "ROOT" if ancestor else "R"
     request = ControlArmWorkRequest.model_validate({
-        "delegation_id": "arm-1", "target_unit": "CELL-A", "transfer": api.body(installed)})
+        "delegation_id": "arm-1", "target_unit": "ARM-CELL", "transfer": api.body(installed)})
     asyncio.run(nodes[origin].submit(request))
     if fault in {"canceled", "ancestor_canceled"}:
         nodes[origin].store.request_cancel(origin, "arm-1")
     faults["disconnected"] = fault == "disconnected"
     faults["blocked"] = fault == "blocked"
     reads.clear()
-    binding = nodes["CELL-A"].store.get(origin, "arm-1")
+    binding = nodes["ARM-CELL"].store.get(origin, "arm-1")
     proposal = rows.peek(binding["local_task_id"]) if binding["local_task_id"] else None
     return SimpleNamespace(nodes=nodes, origin=origin, request=request, proposal=proposal, reads=reads,
                            parent_canceled=faults["canceled"])
@@ -124,7 +124,7 @@ def test_named_arm_admission_requires_current_parent_chain(world, tmp_path, faul
     client, tasks, _, _ = world.rig
     proposal = context.proposal
     assert proposal is not None
-    assert not context.nodes["CELL-A"].store.get(context.origin, "arm-1")["cancel_requested"]
+    assert not context.nodes["ARM-CELL"].store.get(context.origin, "arm-1")["cancel_requested"]
     response = client.post(api.PATH + "/" + proposal["mission_id"] + "/admit",
         headers=api.headers("operator"), json={"expected_proposal_digest": proposal["proposal_digest"],
             "expected_generation": tasks.dispatch_control()["generation"]})
@@ -190,7 +190,7 @@ def test_policy_never_sees_an_unbound_delegated_proposal(world, tmp_path, monkey
     monkeypatch.setattr(rows, "create", create)
     context = delegated(world, tmp_path)
     assert observed == [context.proposal["mission_id"]]
-    assert context.nodes["CELL-A"].store.owns_task(context.proposal["mission_id"])
+    assert context.nodes["ARM-CELL"].store.owns_task(context.proposal["mission_id"])
 
 
 def test_failed_delegation_binding_rolls_back_the_physical_proposal(world, tmp_path, monkeypatch):
@@ -206,7 +206,7 @@ def test_failed_delegation_binding_rolls_back_the_physical_proposal(world, tmp_p
     assert context.proposal is None
     monkeypatch.setattr(ControlUnitStore, "bind_local", original)
     asyncio.run(context.nodes[context.origin].submit(context.request))
-    binding = context.nodes["CELL-A"].store.get(context.origin, "arm-1")
+    binding = context.nodes["ARM-CELL"].store.get(context.origin, "arm-1")
     assert rows.proposed_ids() == [(binding["local_task_id"], "control-unit:R")]
 
 
@@ -257,9 +257,9 @@ def test_legacy_unbound_parent_proposal_cannot_be_admitted(world):
 
 def test_legacy_ambiguous_parent_bindings_cannot_be_admitted(world, tmp_path):
     context = delegated(world, tmp_path)
-    child = context.nodes["CELL-A"].store
+    child = context.nodes["ARM-CELL"].store
     child.create(context.origin, "arm-2", context.request.model_dump(mode="json", include={"target_unit", "transfer"}),
-                 owner_unit="CELL-A", config_revision="v1")
+                 owner_unit="ARM-CELL", config_revision="v1")
     child.bind_local(context.origin, "arm-2", context.proposal["mission_id"])
     client, tasks, _, _ = world.rig
     response = client.post(api.PATH + "/" + context.proposal["mission_id"] + "/admit",

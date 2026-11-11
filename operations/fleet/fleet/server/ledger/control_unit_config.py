@@ -13,6 +13,14 @@ def _identifier(value, *, limit=64):
     return value
 
 
+# D-1011: the arm cell unit was CELL-A until 2026-11-10; inputs may still carry the old id.
+UNIT_IDENTIFIER_ALIASES = {"CELL-A": "ARM-CELL"}
+
+
+def canonical_unit_id(unit_id):
+    return UNIT_IDENTIFIER_ALIASES.get(unit_id, unit_id)
+
+
 @dataclass(frozen=True)
 class ControlUnit:
     unit_id: str
@@ -66,7 +74,7 @@ class ControlUnitTopology:
 
     def unit(self, unit_id):
         try:
-            return self.units[unit_id]
+            return self.units[canonical_unit_id(unit_id)]  # legacy alias accepted (D-1011)
         except (KeyError, TypeError):
             raise ValueError("UNKNOWN_CONTROL_UNIT") from None
 
