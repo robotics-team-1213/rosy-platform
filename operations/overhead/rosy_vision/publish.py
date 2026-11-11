@@ -11,7 +11,7 @@ from pydantic import TypeAdapter
 from core_common.protocol.place_markers import PlaceMarkerPayload
 from core_common.protocol.sightings import SiteSightingPayload
 from core_common.protocol.station_charging import Identifier, StationObservation
-from rosy_vision.track.fleet_client import _body
+from rosy_vision.track.fleet_client import _body, _request
 
 
 class SightingPublishError(RuntimeError):
@@ -65,8 +65,8 @@ class SightingPublisher:
 
     async def station_scope(self, robot_id):
         robot_id = TypeAdapter(Identifier).validate_python(robot_id)
-        response = await self._client.get('/api/fleet/station-observation-scope/'+robot_id,
-                                          headers={'Authorization': self._authorization})
+        response = await _request(self._client, "GET", '/api/fleet/station-observation-scope/'+robot_id,
+                                  headers={'Authorization': self._authorization})
         if not response.is_success:
             raise SightingPublishError(response.status_code, 'STATION_SCOPE_HTTP_ERROR', 'Fleet scope unavailable')
         body = response.json()
@@ -80,8 +80,8 @@ class SightingPublisher:
         return scope
 
     async def _post(self, path: str, body) -> dict[str, Any]:
-        response = await self._client.post(
-            path,
+        response = await _request(
+            self._client, "POST", path,
             json=body.model_dump(mode="json"),
             headers={"Authorization": self._authorization},
         )

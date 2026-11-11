@@ -582,3 +582,13 @@
 - Change: Fleet config `stream_wanted: true` holds the D-691 stream like a preview read; tracking alone still never asks.
 - Evidence: worker test only. No field run.
 - Gate: SOURCE.
+
+## 2026-11-11 · uncommitted · fix: Vision→Fleet 게시 재시도 — 끊긴 풀링 연결 1회 재송
+
+- 변경: `TrackClient`·`SightingPublisher`의 모든 Fleet 호출이 공유 `_request` 헬퍼를 거친다.
+  서버(코디/uvicorn)가 유휴 keep-alive 연결을 끊는 순간 겹친 요청이 `httpx.RemoteProtocolError`로
+  죽는 것을 새 연결로 1회 재시도한다(2026-11-11 R 실측 일 13회, `detections not accepted`).
+  본문은 상태 대치형이거나 Fleet 도착 2차가 stale로 거절되므로 재송이 안전하다. 스택 재시작 창의
+  `ConnectError`(pairing sync·tracking config)은 기존 주기 재시도로 자가 회복되는 그대로다.
+- 증거: 원격 시험으로 확인 뒤 갱신(시험 전 착지 없음).
+- gate 변화: 없음.

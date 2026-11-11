@@ -38,6 +38,21 @@ def test_publish_posts_the_payload_with_the_source_token_header_only():
     assert (request.method, request.url.path, request.url.query) == ("POST", "/api/fleet/detections", b"")
     assert request.headers["authorization"] == "Bearer source-secret"
     assert json.loads(request.content) == CASES["ok_two_detections"]["payload"]
+
+
+def test_publish_retries_once_on_a_dropped_pooled_connection():
+    calls = []
+
+    def handler(request):
+        calls.append(request)
+        if len(calls) == 1:
+            raise httpx.RemoteProtocolError("server disconnected without response")
+        return httpx.Response(200, json={"accepted": True, "source_id": "ceiling_north", "seq": 41,
+                                         "status": "OK"})
+
+    payload = OverheadDetectionsPayload.model_validate(CASES["ok_two_detections"]["payload"])
+    assert _run(handler, lambda client: client.publish(payload))["accepted"] is True
+    assert len(calls) == 2
     assert b"source-secret" not in request.content
 
 

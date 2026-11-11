@@ -40,6 +40,41 @@ def test_publisher_sends_only_derived_sighting_with_source_token_header():
     assert b"source-secret" not in request.content
 
 
+def test_publisher_retries_once_on_a_dropped_pooled_connection():
+    calls = []
+
+    def handler(request):
+        calls.append(request)
+        if len(calls) == 1:
+            raise httpx.RemoteProtocolError("server disconnected without response")
+        return httpx.Response(200, json={"source_id": "ceiling_north", "seq": 17})
+
+    async def run():
+        async with SightingPublisher(
+            "http://127.0.0.1:8090", "source-secret",
+            transport=httpx.MockTransport(handler),
+        ) as publisher:
+            return await publisher.publish(_sighting())
+
+    assert asyncio.run(run()) == {"source_id": "ceiling_north", "seq": 17}
+    assert len(calls) == 2 and calls[0].url.path == calls[1].url.path
+
+
+def test_publisher_raises_when_the_connection_drops_twice():
+    def handler(_request):
+        raise httpx.RemoteProtocolError("server disconnected without response")
+
+    async def run():
+        async with SightingPublisher(
+            "http://127.0.0.1:8090", "source-secret",
+            transport=httpx.MockTransport(handler),
+        ) as publisher:
+            await publisher.publish(_sighting())
+
+    with pytest.raises(httpx.RemoteProtocolError):
+        asyncio.run(run())
+
+
 @pytest.mark.parametrize("status,code", [(401, "SIGHTING_UNAUTHORIZED"), (409, "SIGHTING_STALE")])
 def test_publisher_surfaces_contract_error_code(status, code):
     def handler(_request):
