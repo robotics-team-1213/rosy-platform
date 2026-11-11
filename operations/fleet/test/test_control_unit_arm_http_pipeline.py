@@ -24,10 +24,10 @@ from test_physical_transfer_store import admit, installation, rig  # noqa: F401
 
 MANIFEST = {"revision": "v1", "units": [
     {"id": "R", "resources": ["robot:p1"]},
-    {"id": "CELL-A", "parent": "R", "resources": ["workcell:w-1"]}]}
+    {"id": "ARM-CELL", "parent": "R", "resources": ["workcell:w-1"]}]}
 TOKENS = [("harbor-token", "harbor", "service"), ("other-token", "other-app", "service"),
           ("op-token", "operator-2", "operator"), ("peer-R", "control-unit:R", "service"),
-          ("peer-CELL-A", "control-unit:CELL-A", "service")]
+          ("peer-ARM-CELL", "control-unit:ARM-CELL", "service")]
 HARBOR, OTHER, OPERATOR = ({"Authorization": "Bearer " + t} for t in ("harbor-token", "other-token", "op-token"))
 JOBS = "http://R/api/fleet/arm-transfers/jobs"
 
@@ -42,9 +42,9 @@ def site(tmp_path, rig):
     path, _, _, store = rig
     topology = ControlUnitTopology.from_mapping(MANIFEST)
     principals = {sha256(t.encode()).hexdigest(): SitePrincipal(i, r) for t, i, r in TOKENS}
-    paths = {"R": tmp_path / "r.db", "CELL-A": path}
+    paths = {"R": tmp_path / "r.db", "ARM-CELL": path}
     nodes, apps = {}, {}
-    for unit, jobs in [("R", None), ("CELL-A", DelegatedArmJobs(store, None))]:
+    for unit, jobs in [("R", None), ("ARM-CELL", DelegatedArmJobs(store, None))]:
         robots = {r[6:] for r in topology.unit(unit).resources if r.startswith("robot:")}
         tasks = FleetTaskService(FleetTaskStore(paths[unit]), robot_ids=robots)
         node = ControlUnitService(topology, ControlUnitStore(paths[unit], unit_id=unit), tasks,
@@ -63,18 +63,18 @@ def site(tmp_path, rig):
             return await httpx.ASGITransport(app=apps[request.url.host.upper()]).handle_async_request(request)
 
     # Starting the cell's task service closes dispatch, as on a real restart; reopen it like the rig did.
-    cell = nodes["CELL-A"].tasks.store
+    cell = nodes["ARM-CELL"].tasks.store
     control = cell.rearm_dispatch(expected_generation=cell.dispatch_control()["generation"], actor_id="operator-1")
     network = httpx.AsyncClient(transport=Network())
     for unit, node in nodes.items():
-        peer = "CELL-A" if unit == "R" else "R"
+        peer = "ARM-CELL" if unit == "R" else "R"
         node.peer = ControlUnitPeers(ControlUnitConfig(unit, topology, {peer: ControlUnitPeer(
             "http://" + peer, "peer-" + unit)}), network)
     return nodes, network, store, control
 
 
 async def refresh(nodes):
-    await nodes["CELL-A"].refresh()
+    await nodes["ARM-CELL"].refresh()
     await nodes["R"].refresh()
 
 
@@ -92,14 +92,14 @@ def test_app_proposal_reaches_the_cell_store_and_only_the_cell_admit_approves(tm
             again = await network.post(JOBS, headers=HARBOR, json=body)
             assert again.json()["job"]["mission_id"] == job["mission_id"]
 
-            delegation = nodes["CELL-A"].store.list()[0]
+            delegation = nodes["ARM-CELL"].store.list()[0]
             refused = await network.post(
-                f"http://CELL-A/api/fleet/control-unit/delegations/R/{delegation['delegation_id']}/approve",
+                f"http://ARM-CELL/api/fleet/control-unit/delegations/R/{delegation['delegation_id']}/approve",
                 headers=OPERATOR, json={"expected_revision": delegation["revision"]})
             assert refused.status_code == 409 and refused.json()["detail"]["code"] == "CONTROL_UNIT_ARM_ADMIT_AT_CELL"
             assert (await network.get(JOBS + "/" + job["mission_id"], headers=OTHER)).status_code == 403
 
-            checked_at = await nodes["CELL-A"].check_arm_admission(job["mission_id"])
+            checked_at = await nodes["ARM-CELL"].check_arm_admission(job["mission_id"])
             admit(store, cell_job, control, delegation_checked_at=checked_at)
             await refresh(nodes)
             read = await network.get(JOBS + "/" + job["mission_id"], headers=HARBOR)
@@ -197,15 +197,15 @@ def test_cancel_after_admit_before_prepare_durably_blocks_a_later_dispatch(tmp_p
         nodes, network, store, control = site(tmp_path, rig)
         executor = PhysicalTransferExecution(store)
         port = Port(store, [NOW])
-        dispatcher = PhysicalTransferDispatcher(executor, port, nodes["CELL-A"].tasks.store,
+        dispatcher = PhysicalTransferDispatcher(executor, port, nodes["ARM-CELL"].tasks.store,
                                                deployment_profile="simulation")
-        nodes["CELL-A"].arm_jobs().observation = SimpleNamespace(
+        nodes["ARM-CELL"].arm_jobs().observation = SimpleNamespace(
             execution=executor, dispatcher=dispatcher, receipt=lambda _: None)
         async with network:
             created = await network.post(JOBS, headers=HARBOR, json=transfer(installation, "cancel-before-prepare"))
             assert created.status_code == 200, created.text
             mission_id = created.json()["job"]["mission_id"]
-            checked_at = await nodes["CELL-A"].check_arm_admission(mission_id)
+            checked_at = await nodes["ARM-CELL"].check_arm_admission(mission_id)
             assert admit(store, store.peek(mission_id), control, delegation_checked_at=checked_at)["status"] == "READY"
             with pytest.raises(KeyError):
                 executor.snapshot(mission_id)
@@ -215,8 +215,8 @@ def test_cancel_after_admit_before_prepare_durably_blocks_a_later_dispatch(tmp_p
                                               json={"reason": "withdraw before preparation"})
                 assert canceled.status_code == 200, canceled.text
                 await refresh(nodes)
-                row = nodes["CELL-A"].store.list()[0]
-                persisted = ControlUnitStore(nodes["CELL-A"].store.path, unit_id="CELL-A")
+                row = nodes["ARM-CELL"].store.list()[0]
+                persisted = ControlUnitStore(nodes["ARM-CELL"].store.path, unit_id="ARM-CELL")
                 assert persisted.get(row["origin_id"], row["delegation_id"])["cancel_requested"] is True
                 with pytest.raises(MissionConflict):
                     dispatcher.prepare(mission_id)

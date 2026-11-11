@@ -115,6 +115,7 @@ setup(
             'record_session = control.record_session:main',
             'line_observer_overrides = control.line_observer_overrides:main',
             'dock_observer_node = control.dock_observer_node:main',
+            'bay_line_observer_node = control.bay_line_observer_node:main',
             'road_observer_node = control.road_observer_node:main',
             'obstacle_observer_node = control.obstacle_observer_node:main',
             'watch_node = control.watch_node:main',
