@@ -42,6 +42,7 @@ def test_the_pad_sends_the_robots_live_limit_and_says_it(console_url):
         page.mouse.down()
         page.wait_for_timeout(300)
         page.mouse.up()
+        page.wait_for_timeout(250)
         assert any(row["linear"] == 0 and row["angular"] == 0.5 for row in sent), sent
         assert sent[-1] == {"do": "move", "robot": "rosy_45", "linear": 0, "angular": 0}
         assert not errors
@@ -63,6 +64,7 @@ def test_a_sealed_measured_speed_is_what_the_pad_shows_and_sends(console_url):
         page.mouse.down()
         page.wait_for_timeout(300)
         page.mouse.up()
+        page.wait_for_timeout(250)
         assert any(row["linear"] == 0.02 for row in sent) and all(abs(row["linear"]) <= 0.02 for row in sent), sent
         browser.close()
 
