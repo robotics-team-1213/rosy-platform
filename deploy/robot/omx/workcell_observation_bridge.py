@@ -278,6 +278,19 @@ def get_arm_hold(fleet_url, source_id, token, *, context):
         return ArmIncidentHold.model_validate_json(response.read(16385))
 
 
+def post_workcell(fleet_url, workcell_id, token, tail, body, *, context):
+    """D-996: one intake reading (tail 'intake-readings') or port event ('port-events') of this workcell; a resend of
+    the same body is the same ledger row."""
+    url = (secure_url(fleet_url, 'https') + '/api/fleet/workcell-observations/' + quote(workcell_id, safe='')
+           + '/' + tail)
+    request = Request(url, data=body.model_dump_json().encode(), method='POST',
+                      headers={'Content-Type': 'application/json', 'X-Workcell-Observation-Token': token})
+    with build_opener(HTTPSHandler(context=_verified(context)), _NoRedirect()).open(request, timeout=10) as response:
+        if response.status != 200:
+            raise OSError(tail + ' was not accepted')
+        return json.loads(response.read(4097))
+
+
 def clear_arm_incident(fleet_url, source_id, operator_token, incident_id, note, *, context, cause=None, basis=None):
     """D-971: a named operator's clear over the API; the operator's own bearer, never the arm's source token."""
     payload = {'note': note, **({'cause': cause} if cause else {}), **({'basis': basis} if basis else {})}
@@ -309,11 +322,17 @@ class ArmIncidentLink:
         token = environ.get(arm.token_env) if arm else None
         if (not token or not hmac.compare_digest(sha256(token.encode()).hexdigest(), arm.credential_sha256)):
             raise ValueError('arm credential missing or fingerprint mismatch')
-        return cls(environ[names[2]], arm.source_id, token,
+        link = cls(environ[names[2]], arm.source_id, token,
                    context=ssl.create_default_context(cafile=environ.get('ROSY_OBSERVATION_CA_FILE') or None))
+        link.workcell_id = environ[names[1]]  # D-996: port events go out under the workcell, not the arm
+        return link
 
     def post(self, report):
         return post_arm_incident(self.fleet_url, self.source_id, self.token, report, context=self.context)
+
+    def post_intake_reading(self, reading):
+        return post_workcell(self.fleet_url, self.workcell_id, self.token, 'intake-readings', reading,
+                             context=self.context)
 
     def post_evidence(self, incident_id, frame):
         return post_arm_incident_evidence(self.fleet_url, self.source_id, self.token, incident_id, frame, context=self.context)
