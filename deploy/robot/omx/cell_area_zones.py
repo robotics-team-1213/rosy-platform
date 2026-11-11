@@ -3,10 +3,9 @@
 
 Split out of `cell_area_xyz.py` at its 600-line cap (D-766 2, the
 `runner_strain.py` precedent): the side/top ROI tables, the Isaac-Sim-style
-zone evaluation, the side-view gripper offset, task outcome verification and
-the missed-grasp recovery diagnosis. `cell_area_xyz` imports these names back
-so every existing importer is unchanged. Stdlib + numpy only (cv2 lazily,
-as before).
+zone evaluation, the side-view gripper offset, and task outcome verification.
+Closed-loop pick recovery and live top/side perception live in `cell_area_recovery.py`
+and are re-exported here unchanged.
 """
 from __future__ import annotations
 
@@ -18,18 +17,18 @@ import numpy as np
 # modelled after Isaac Sim target volume checks: if fill_ratio or centroid offset exceeds tolerance, mark as
 # failure (`verified = False`) and enter `recovery_mode`.
 SIDE_ROI_BY_COL_TIER: dict[tuple[int, int], tuple[int, int, int, int]] = {
-    (1, 1): (175, 252, 225, 315),
-    (1, 2): (175, 190, 225, 252),
-    (1, 3): (175, 120, 225, 190),
-    (2, 1): (226, 252, 296, 315),
-    (2, 2): (226, 190, 296, 252),
-    (2, 3): (226, 120, 296, 195),
-    (3, 1): (295, 252, 365, 315),
-    (3, 2): (295, 190, 365, 252),
-    (3, 3): (295, 120, 365, 190),
+    (1, 1): (160, 232, 224, 265),
+    (1, 2): (160, 175, 224, 232),
+    (1, 3): (160, 115, 224, 175),
+    (2, 1): (224, 241, 294, 275),
+    (2, 2): (224, 176, 294, 240),
+    (2, 3): (224, 112, 294, 180),
+    (3, 1): (330, 248, 415, 315),
+    (3, 2): (330, 185, 415, 248),
+    (3, 3): (330, 120, 415, 185),
 }
 
-SIDE_COL_CENTER_U: dict[int, float] = {1: 205.0, 2: 254.0, 3: 300.0}
+SIDE_COL_CENTER_U: dict[int, float] = {1: 205.0, 2: 254.0, 3: 330.0}
 SIDE_M_PER_PX: float = 0.00070  # Measured 3-point calibration on rosy-arm-cell side camera (u=190->0.1280m, u=232->0.1551m, u=264->0.1796m)
 
 TOP_ROI_BY_COL_ROW: dict[tuple[int, int], tuple[int, int, int, int]] = {
@@ -94,17 +93,21 @@ def normalize_pick_yaw_deg(yaw_deg: float, x_m: float = 0.15, y_m: float = 0.0) 
     best_yaw = float(yaw_deg)
     best_cost = 1e9
     for cand in candidates:
-        rel_deg = cand - pan_deg
+        rel_deg = pan_deg - cand
         while rel_deg > 180.0:
             rel_deg -= 360.0
         while rel_deg < -180.0:
             rel_deg += 360.0
-        est_wrist_roll = 48.8 - (rel_deg + 90.0) * (50.0 / 90.0)
+        est_wrist_roll = rel_deg * (100.0 / 180.0)
         if 8.0 <= est_wrist_roll <= 88.0:
-            cost = abs(est_wrist_roll - 46.0)
+            cost = abs(est_wrist_roll - 48.1)
             if cost < best_cost:
                 best_cost = cost
                 best_yaw = cand
+    while best_yaw > 180.0:
+        best_yaw -= 360.0
+    while best_yaw <= -180.0:
+        best_yaw += 360.0
     return round(best_yaw, 1)
 
 
@@ -245,6 +248,16 @@ def verify_stack_outcome(
     before_place_zone = evaluate_zone(before_side, place_roi) if before_side is not None else {"fill_ratio": 0.0}
     after_place_zone = evaluate_zone(after_side, place_roi, tol_u_px=20.0, tol_v_px=24.0, min_fill=0.30)
 
+    if not after_place_zone["within_zone"] and after_side is not None and place_tier >= 2:
+        live_base = perceive_live_base(before_top if before_top is not None else after_top, before_side if before_side is not None else after_side, preferred_col=place_col)
+        dyn_side_roi = (live_base.get("side_roi_by_tier") or {}).get(place_tier)
+        if dyn_side_roi is not None:
+            dyn_after = evaluate_zone(after_side, dyn_side_roi, tol_u_px=22.0, tol_v_px=24.0, min_fill=0.28)
+            dyn_before = evaluate_zone(before_side, dyn_side_roi) if before_side is not None else {"fill_ratio": 0.0}
+            if dyn_after["within_zone"] or dyn_after["fill_ratio"] > after_place_zone["fill_ratio"]:
+                after_place_zone = dyn_after
+                before_place_zone = dyn_before
+
     before_pick_fill = before_pick_zone.get("fill_ratio")
     after_pick_fill = float(after_pick_zone["fill_ratio"])
     before_place_fill = float(before_place_zone.get("fill_ratio") or 0.0)
@@ -252,6 +265,18 @@ def verify_stack_outcome(
 
     target_present = bool(after_place_zone["within_zone"] and (after_place_fill - before_place_fill) >= 0.20)
     source_vacated = after_pick_fill <= 0.35 or (before_pick_fill is not None and (before_pick_fill - after_pick_fill) >= 0.25)
+    if not source_vacated and after_top is not None:
+        pick_row = int(pick.get("row") or 1)
+        pick_top_roi = (
+            (355, 40, 415, 160)
+            if str(pick.get("area_id") or "") == "belt"
+            else TOP_ROI_BY_COL_ROW.get((pick_col, pick_row))
+        )
+        if pick_top_roi is not None:
+            before_pick_top = evaluate_zone(before_top, pick_top_roi)["fill_ratio"] if before_top is not None else None
+            after_pick_top = evaluate_zone(after_top, pick_top_roi)["fill_ratio"]
+            if after_pick_top <= 0.25 or (before_pick_top is not None and (before_pick_top - after_pick_top) >= 0.18):
+                source_vacated = True
 
     top_zone_info = None
     top_orientation_ok = True
@@ -266,7 +291,13 @@ def verify_stack_outcome(
             min_fill=0.15,
             expected_orientation=expected_orient,
         )
-        # Support synthetic test top frames that share side-camera column u coordinates
+        if not top_zone_info["within_zone"]:
+            live_base_top = perceive_live_base(after_top, after_side, preferred_col=place_col)
+            dyn_top_roi = live_base_top.get("top_roi")
+            if dyn_top_roi is not None:
+                dyn_top_info = evaluate_zone(after_top, dyn_top_roi, tol_u_px=24.0, tol_v_px=40.0, min_fill=0.15, expected_orientation=expected_orient)
+                if dyn_top_info["within_zone"] or dyn_top_info.get("fill_ratio", 0.0) > top_zone_info.get("fill_ratio", 0.0):
+                    top_zone_info = dyn_top_info
         if not top_zone_info["within_zone"] and top_zone_info.get("fill_ratio", 0.0) < 0.15:
             alt_top_zone = evaluate_zone(
                 after_top,
@@ -320,76 +351,9 @@ def verify_stack_outcome(
     }
 
 
-def diagnose_and_recover_pick(
-    *,
-    attempt: int,
-    cur_directive: dict[str, Any],
-    r_desc: dict[str, Any],
-    r_grasp: dict[str, Any],
-    cal: dict[str, Any],
-    tried_xs: list[float],
-    wrist_obs: dict[str, Any] | None = None,
-    slipped_in_transfer: bool = False,
-) -> dict[str, Any]:
-    """Diagnose why a pick attempt failed (empty grasp / high z / lateral edge touch / skewed grasp) and compute the
-    recovered `AreaXYZ` pick coordinates and jaw opening for the next attempt."""
-    state = r_grasp.get("state") or r_desc.get("state") or []
-    jaw_pos = float(state[5]) if len(state) >= 6 and state[5] is not None else 49.0
-    curr_ma = float(r_grasp.get("gripper_current_ma") or 0.0)
-    held_nominal = float(cal.get("held_30mm", 54.3))
-
-    p_xyz = list(cur_directive["pick"]["effective_xyz_m"])
-    cur_x, cur_y, cur_z = p_xyz[0], p_xyz[1], p_xyz[2]
-    tried_xs.append(cur_x)
-
-    tier = int(cur_directive["pick"].get("tier") or 2)
-    min_grasp_z = {1: 0.0065 if cur_x < 0.115 else 0.0055, 2: 0.0275, 3: 0.0560}.get(tier, 0.0055)
-    new_z = cur_z
-
-    # 0. If grasp_pick held the container and it slipped during lift/transfer, keep x centered and lower z by 3.5 mm
-    if slipped_in_transfer:
-        new_x = cur_x
-        new_z = round(max(min_grasp_z, cur_z - 0.0035), 5)
-        reason = f"shallow_tip_slip_recovery: kept x={new_x}, lowered pick.z {cur_z} -> {new_z} after transfer slip"
-    # 1. If wrist observation found a clear offset (and was not already applied), shift toward it
-    elif wrist_obs and wrist_obs.get("found") and 1.5 < abs(float(wrist_obs.get("along_mm", 0.0))) <= 12.0:
-        sign_along = float((cal.get("finger_sign") or {}).get("along", -1.0))
-        dx_m = 0.65 * sign_along * float(wrist_obs["along_mm"]) / 1000.0
-        new_x = round(max(0.055, min(0.232, cur_x + dx_m)), 5)
-        reason = f"wrist_offset_recovery: along_mm={wrist_obs['along_mm']} -> x={new_x}"
-    elif len(tried_xs) >= 2:
-        # Bracket midpoint between previous two tried x positions
-        new_x = round(0.5 * (tried_xs[-1] + tried_xs[-2]), 5)
-        reason = f"bracket_midpoint_recovery: midpoint({tried_xs[-2]}, {tried_xs[-1]}) -> x={new_x}"
-    else:
-        # Single-step lateral bracket: if cur_x is near canonical_x, step to canonical_x, else bracket locally
-        col = int(cur_directive["pick"].get("col") or 3)
-        canonical_x = {1: 0.1280, 2: 0.1580, 3: 0.1988}.get(col, cur_x)
-        if cur_x < 0.115:
-            new_x = round(max(0.055, cur_x + 0.0025), 5)
-        elif 0.002 <= abs(cur_x - canonical_x) <= 0.012:
-            new_x = round(canonical_x, 5)
-        else:
-            new_x = round(cur_x - 0.0060 if cur_x > 0.160 else cur_x + 0.0060, 5)
-        reason = f"lateral_edge_recovery: x {cur_x} -> {new_x}"
-
-    # 2. If jaws closed in thin air above the container (jaw_pos < held_nominal - 1.0 and low current), lower z into grasp band
-    if not slipped_in_transfer and jaw_pos < held_nominal - 1.0 and abs(curr_ma) < 75.0 and cur_z > min_grasp_z:
-        step_z = 0.0035 if cur_x < 0.115 else 0.0095
-        new_z = round(max(min_grasp_z, cur_z - step_z), 5)
-        reason += f"; lowered pick.z {cur_z} -> {new_z} (jaws closed at {jaw_pos:.2f} with {curr_ma:.0f}mA above grasp band)"
-
-    cur_directive["pick"]["effective_xyz_m"] = [new_x, cur_y, new_z]
-    cur_directive["pick"]["x"] = new_x
-    cur_directive["pick"]["z"] = new_z
-    exec_cfg = dict(cur_directive.get("execution") or {})
-    exec_cfg["grip_open_override"] = min(59.2, float(exec_cfg.get("grip_open_override") or cal.get("grip_open_30mm", 58.22)) + 0.5)
-    cur_directive["execution"] = exec_cfg
-    return {
-        "attempt": attempt,
-        "fail_jaw_pos": jaw_pos,
-        "fail_current_ma": curr_ma,
-        "recovered_pick_xyz_m": [new_x, cur_y, new_z],
-        "grip_open_override": exec_cfg["grip_open_override"],
-        "reason": reason,
-    }
+from cell_area_recovery import (  # noqa: E402,F401  (re-exported: existing importers are unchanged)
+    diagnose_and_recover_pick,
+    perceive_live_base,
+    perceive_live_pick_candidates,
+    top_pixel_to_arm_xy_vanishing,
+)

@@ -82,8 +82,11 @@ def check(cell, camera: str, hsv, closing_deg: float, gap_mm: float, width_mm, r
     along = np.array([math.cos(c), math.sin(c)])
     dx = dy = 0.0
     rows, last = [], None
+    n_samples = max(1, int(prm.get(params, "reach.samples", 1)))
     for i in range(int(prm.get(params, "pinch.max_iter")) + 1):
-        seen = measure(cell.frame(camera), hsv, gap_mm, width_mm, params, color=color)
+        views = [measure(cell.frame(camera), hsv, gap_mm, width_mm, params, color=color) for _ in range(n_samples)]
+        with_shift = [v for v in views if "shift_mm" in v]
+        seen = sorted(with_shift, key=lambda v: v["shift_mm"])[len(with_shift) // 2] if len(with_shift) > 1 else views[0]
         rows.append({"iteration": i, **seen})
         if not seen["found"]:
             return {"verdict": "refuse", "why": seen["why"], "dx_mm": dx, "dy_mm": dy, "iterations": rows}

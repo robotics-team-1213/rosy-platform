@@ -147,3 +147,50 @@ def damp_step(ensembler, current: list, next_target: list, lookahead: list) -> l
         ensembler.reset(current)
     ensembler.push([list(current), list(next_target), *[list(f) for f in lookahead[:3]]])
     return ensembler.step(next_target)
+
+
+def settled_state(cell, params=None) -> dict:
+    """Read `cell.act('state')`, averaging `reach.samples` (or 3 when `jitter.shaking` is True) samples on `state[:5]`."""
+    status = cell.act("state")
+    state = status.get("state") if isinstance(status, dict) else None
+    if not isinstance(state, (list, tuple)) or len(state) < 5 or not isinstance(state[0], (int, float)):
+        return status
+    samples = int(prm.get(params, "reach.samples", 1))
+    if samples < 3 and (status.get("jitter") or {}).get("shaking"):
+        samples = 3
+    if samples <= 1:
+        return status
+    states = [list(state)]
+    for _ in range(samples - 1):
+        nxt = (cell.act("state") or {}).get("state")
+        if isinstance(nxt, (list, tuple)) and len(nxt) >= 5 and isinstance(nxt[0], (int, float)):
+            states.append(list(nxt))
+    if len(states) > 1:
+        avg = [sum(float(s[j]) for s in states) / len(states) for j in range(5)] + list(state[5:])
+        return {**status, "state": avg, "samples": len(states)}
+    return status
+
+
+def suppress_tremor(frames: list[list[float]], *, coeff: float = 0.12, vmax: float = 5.0, fps: int = 30,
+                    amax: float = 5.0, deadband: float = 0.12) -> list[list[float]]:
+    """Filter high-frequency policy/IK tremor (3-10 Hz) across a trajectory chunk using a symmetric zero-lag
+    7-tap period-averaging notch filter while preserving the exact start and end poses."""
+    n = len(frames)
+    if n <= 2:
+        return [list(f) for f in frames]
+
+    # Symmetric zero-lag 7-tap boxcar filter on body joints (exact on linear ramps, >90% attenuation at 4-5 Hz)
+    out: list[list[float]] = [list(frames[0])]
+    for i in range(1, n - 1):
+        row = list(frames[i])
+        half = min(3, i, n - 1 - i)
+        span = 2 * half + 1
+        for j in range(min(5, len(row))):
+            val = sum(float(frames[i + k][j]) for k in range(-half, half + 1)) / span
+            if deadband > 0.0 and abs(val - out[-1][j]) < deadband * 0.25:
+                val = out[-1][j]
+            row[j] = val
+        out.append(row)
+    out.append(list(frames[-1]))
+    return out
+

@@ -205,4 +205,166 @@ def test_target_zone_deviation_triggers_failure_and_recovery_mode():
     assert cell_area_xyz.normalize_pick_yaw_deg(45.0, x_m=0.088, y_m=-0.088) == -135.0
 
 
+def test_parallel_sim_precheck_and_multistage_task_plan(tmp_path: Path):
+    import numpy as np
+
+    d_t2 = build_directive(
+        arm_id="arm_b",
+        directive_id="stage1-tier2",
+        pick={"area": "pallet", "col": 1, "row": 1, "tier": 1, "x": 0.1214, "y": -0.0219, "z": 0.0085, "yaw_deg": -90.0, "apply_bias": False},
+        place={"area": "pallet", "col": 2, "row": 1, "tier": 2, "x": 0.1605, "y": -0.0060, "z": 0.0390, "yaw_deg": -90.0, "apply_bias": False},
+    )
+    d_t3 = build_directive(
+        arm_id="arm_b",
+        directive_id="stage2-tier3",
+        pick={"area": "pallet", "col": 2, "row": 2, "tier": 1, "x": 0.1536, "y": -0.0948, "z": 0.0085, "yaw_deg": 47.3, "apply_bias": False},
+        place={"area": "pallet", "col": 2, "row": 1, "tier": 3, "x": 0.1605, "y": -0.0060, "z": 0.0685, "yaw_deg": -90.0, "apply_bias": False},
+    )
+
+    pre = cell_area_xyz.sim_precheck_and_optimize_directive(d_t3, SAMPLE_BASE_PLAN, work_dir=tmp_path)
+    assert pre["ok"] is True
+    assert pre["normalized_pick_yaw_deg"] == -132.7
+    assert pre["clearance_lift_m"] >= 0.085
+    assert pre["wrist_roll_range_units"][0] >= 44.0
+
+    stage_state = {"stage": 0}
+
+    def fake_act(cmd: str) -> dict:
+        if cmd == "run grasp_pick":
+            return {"ok": True, "holding": True, "gripper_current_ma": 152, "state": [0.0, 0.0, 0.0, 0.0, 48.0, 54.6]}
+        if cmd in ("run lift_pick", "goto above_place"):
+            return {"ok": True, "holding": True, "gripper_current_ma": 148, "state": [0.0, 0.0, 0.0, 0.0, 48.0, 54.5]}
+        if cmd == "run release_place":
+            stage_state["stage"] += 1
+        return {"ok": True, "state": [0.0, 0.0, 0.0, 0.0, 48.0, 58.2]}
+
+    def fake_frame(role: str):
+        img = np.full((480, 640, 3), (180, 180, 180), dtype=np.uint8)
+        if role == "side":
+            if stage_state["stage"] == 0:
+                img[252:315, 175:225] = (30, 120, 240)
+            elif stage_state["stage"] == 1:
+                img[190:252, 226:296] = (30, 120, 240)
+            else:
+                img[190:252, 226:296] = (30, 120, 240)
+                img[120:195, 226:296] = (30, 120, 240)
+        elif role == "top":
+            img[170:260, 380:410] = (30, 120, 240)
+        return img
+
+    plan_res = cell_area_xyz.execute_task_plan(
+        [
+            {"stage_id": "tier2", "candidates": [d_t2]},
+            {"stage_id": "tier3", "candidates": [d_t2, d_t3]},
+        ],
+        base_plan=SAMPLE_BASE_PLAN,
+        work_dir=tmp_path,
+        act_fn=fake_act,
+        frame_fn=fake_frame,
+        parallel_sim=True,
+    )
+    assert plan_res["task_verified"] is True
+    assert plan_res["stages_completed"] == 2
+    assert set(plan_res["used_candidates"]) == {"stage1-tier2", "stage2-tier3"}
+
+
+def test_live_perception_vanishing_projection_base_and_candidates():
+    import numpy as np
+    import cell_area_zones as caz
+
+    # 1. Vanishing point (322, 383) projection reproduces the verified physical transfer points within <= 2.0 mm
+    p0_x, p0_y = caz.top_pixel_to_arm_xy_vanishing(305.4, 222.9, h_top_m=0.030)
+    p1_x, p1_y = caz.top_pixel_to_arm_xy_vanishing(353.9, 220.6, h_top_m=0.030)
+    p2_x, p2_y = caz.top_pixel_to_arm_xy_vanishing(428.6, 217.5, h_top_m=0.030)
+    p3_x, p3_y = caz.top_pixel_to_arm_xy_vanishing(463.5, 225.7, h_top_m=0.030)
+    assert abs(p0_x - 0.1155) <= 0.0020 and abs(p0_y - (-0.0130)) <= 0.0030
+    assert abs(p1_x - 0.1486) <= 0.0020 and abs(p1_y - (-0.0120)) <= 0.0020
+    assert abs(p2_x - 0.1942) <= 0.0020 and abs(p2_y - (-0.0100)) <= 0.0020
+    assert abs(p3_x - 0.2150) <= 0.0020 and abs(p3_y - (-0.0150)) <= 0.0020
+
+    # 2. Live base container perception (Yellow container in top + side views)
+    top_img = np.full((480, 640, 3), (180, 180, 180), dtype=np.uint8)
+    side_img = np.full((480, 640, 3), (180, 180, 180), dtype=np.uint8)
+    top_img[190:250, 338:370] = (20, 210, 230)
+    side_img[252:288, 185:232] = (20, 210, 230)
+    live_base = caz.perceive_live_base(top_img, side_img, preferred_col=2)
+    assert live_base["found"] is True
+    assert 0.140 <= live_base["arm_xy"][0] <= 0.155
+    assert 2 in live_base["side_roi_by_tier"] and 3 in live_base["side_roi_by_tier"]
+
+    # 3. Live pickable orange container candidates perception (Row 1 + Belt + Row 2 horizontal)
+    # Add orange container in Row 1 (u=290..322, v=190..255) and Belt (u=368..400, v=45..110)
+    top_img[190:255, 290:322] = (25, 110, 240)
+    top_img[45:110, 368:400] = (25, 110, 240)
+    cands = caz.perceive_live_pick_candidates(top_img)
+    areas = {c["area"] for c in cands}
+    assert "pallet" in areas
+    assert "belt" in areas
+
+
+def test_calculus_grasp_dynamics_stiffness_and_slip_derivatives():
+    import cell_arm_cal
+
+    # 1. Empty closure in air: jaw reaches near-closed deadband (49.2)
+    r_empty = {"ok": True, "holding": False, "gripper_current_ma": 34.0, "state": [0, 0, 0, 0, 48.0, 49.2]}
+    d_empty = cell_arm_cal.evaluate_grasp_dynamics(r_empty, closed=48.8, open_pos=57.85)
+    assert d_empty["holding"] is False
+    assert d_empty["regime"] == "empty_closure"
+
+    # 2. Fluctuating low current (42 mA < static 65 mA) but physical 30mm jaw arrest (q=53.6) -> holding=True
+    r_low_curr = {"ok": True, "holding": False, "gripper_current_ma": 42.0, "state": [0, 0, 0, 0, 48.0, 53.6]}
+    d_low = cell_arm_cal.evaluate_grasp_dynamics(r_low_curr, closed=48.8, open_pos=57.85, baseline_current_ma=65.0)
+    assert d_low["holding"] is True
+    assert d_low["regime"] == "stable_hold"
+    assert cell_arm_cal.infer_holding(r_low_curr, closed=48.8, min_current_ma=65.0) is True
+
+    # 3. Elastic pad settling during lift (55.68 -> 54.29 -> 54.25): NOT a slip!
+    r_g1 = {"ok": True, "holding": True, "gripper_current_ma": 155.0, "state": [0, 0, 0, 0, 48.0, 55.68]}
+    r_l1 = {"ok": True, "holding": True, "gripper_current_ma": 132.0, "state": [0, 0, 0, 0, 48.0, 54.29]}
+    r_a1 = {"ok": True, "holding": True, "gripper_current_ma": 128.0, "state": [0, 0, 0, 0, 48.0, 54.25]}
+    d_settle = cell_arm_cal.evaluate_grasp_dynamics(r_g1, r_lift=r_l1, r_above_place=r_a1, closed=48.8, open_pos=57.85)
+    assert d_settle["holding"] is True
+    assert d_settle["regime"] == "elastic_settle"
+    assert d_settle["d2q_settle"] > 0.0
+
+    # 4. True slip collapse during lift (52.31 -> 49.18): dq_lift = -3.13u collapses into deadband
+    r_g2 = {"ok": True, "holding": True, "gripper_current_ma": 144.0, "state": [0, 0, 0, 0, 48.0, 52.31]}
+    r_l2 = {"ok": True, "holding": False, "gripper_current_ma": 88.0, "state": [0, 0, 0, 0, 48.0, 49.18]}
+    d_slip = cell_arm_cal.evaluate_grasp_dynamics(r_g2, r_lift=r_l2, closed=48.8, open_pos=57.85)
+    assert d_slip["holding"] is False
+    assert d_slip["regime"] == "slip_collapse"
+    assert d_slip["dq_lift"] < -3.0
+
+
+def test_ship_z_search_recovery_and_contact_z_clearance():
+    import cell_area_zones
+
+    directive = {
+        "pick": {"area": "ship", "col": 1, "tier": 1, "x": 0.165, "y": -0.145, "z": 0.004, "effective_xyz_m": [0.165, -0.145, 0.004], "yaw_deg": 0.0},
+        "execution": {},
+    }
+    rec_empty = cell_area_zones.diagnose_and_recover_pick(
+        attempt=0,
+        cur_directive=directive,
+        r_desc={"ok": True},
+        r_grasp={"ok": True, "state": [0, 0, 0, 0, 0, 49.5], "gripper_current_ma": 40.0},
+        cal={"held_30mm": 54.0},
+        tried_xs=[],
+    )
+    assert rec_empty["recovered_pick_xyz_m"][2] < 0.004
+
+    rec_contact = cell_area_zones.diagnose_and_recover_pick(
+        attempt=1,
+        cur_directive=directive,
+        r_desc={"ok": False, "contact_z": 0.012},
+        r_grasp={},
+        cal={"held_30mm": 54.0},
+        tried_xs=[0.165],
+    )
+    assert rec_contact["recovered_pick_xyz_m"][2] == pytest.approx(0.016)
+
+
+
+
+
 

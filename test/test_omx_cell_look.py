@@ -169,3 +169,23 @@ def test_pick_hooks_skips_crowded_look_when_reach_and_calibrated_bias_region_alr
     wrist_uncal, _, _, _ = cell_hooks.pick_hooks(cfg, Mute(), target_uncal, None, "pallet", "pallet-l1", calibration=cal)
     assert wrist_uncal()["verdict"] == "refuse"
 
+
+def test_settled_state_averages_three_samples_when_jitter_shaking(monkeypatch):
+    import joint_jitter
+
+    class ShakyLookArm:
+        def __init__(self):
+            self.rows = [
+                {"ok": True, "state": [10.0, -20.0, 30.0, 40.0, 50.0, 56.0], "target": [10.0, -20.0, 30.0, 40.0, 50.0, 56.0], "jitter": {"shaking": True}},
+                {"ok": True, "state": [13.0, -23.0, 30.0, 40.0, 50.0, 56.0], "target": [10.0, -20.0, 30.0, 40.0, 50.0, 56.0], "jitter": {"shaking": True}},
+                {"ok": True, "state": [7.0, -17.0, 30.0, 40.0, 50.0, 56.0], "target": [10.0, -20.0, 30.0, 40.0, 50.0, 56.0], "jitter": {"shaking": False}},
+            ]
+
+        def act(self, cmd):
+            assert cmd == "state"
+            return self.rows.pop(0)
+
+    out = joint_jitter.settled_state(ShakyLookArm())
+    assert out["samples"] == 3
+    assert out["state"][:2] == pytest.approx([10.0, -20.0])
+
