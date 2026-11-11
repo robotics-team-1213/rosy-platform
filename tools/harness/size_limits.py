@@ -64,6 +64,7 @@ STANDALONE = {
     "rosy-palletizing": "operations/processes/palletizing",
     "rosy-world": "operations/world",
     "rosy-monitoring": "operations/monitoring",
+    "rosy-notifications": "operations/notifications",
     "rosy-monitoring-web": "applications/monitoring",
     "rosy-calibration": "applications/calibration",  # D-1004 screen server and page
     "rosy-cam": "operations/site_ui/cam",

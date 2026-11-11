@@ -145,6 +145,20 @@ def test_receipt_cannot_be_promoted_to_unverified_execution_result(
     assert store.history("task-1") == history_before
 
 
+def test_task_payload_validation_keeps_owner_specific_rules():
+    from fleet.server.task_payloads import safe_json
+
+    with pytest.raises(ValueError, match="task records cannot contain credential fields"):
+        safe_json({"nested": ({"API-Key": "hidden"},)})
+    # Task payloads encode tuples, but do not inspect string values for PEM keys.
+    pem_header = "-----BEGIN " + "PRIVATE KEY-----"
+    assert safe_json({"z": (1,), "a": pem_header}) == (
+        '{"a":"' + pem_header + '","z":[1]}'
+    )
+    with pytest.raises(ValueError, match="task data must be finite JSON"):
+        safe_json({"value": float("nan")})
+
+
 def test_task_store_refuses_credentials_and_oversized_evidence(tmp_path):
     store = FleetTaskStore(tmp_path / "fleet.sqlite3")
     args = {"task_id": "task-safe", "robot_id": "rosy_01", "task_type": "navigate",

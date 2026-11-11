@@ -707,6 +707,7 @@ def test_a_literal_that_looks_like_an_event_is_either_emitted_or_declared():
         "pi.power": "D-247 hardware.json 장치 id (D-260 core_common.robot_state 할 일 규칙)",
         "network.status": "호스트 에이전트 명령 (host_agent ALLOWLIST, emit 아님)",
         "release.status": "호스트 에이전트 명령 (host_agent ALLOWLIST, emit 아님)",
+        "discord.com": "D-661 Discord 웹훅 호스트 이름 (core_common.notification_channels, emit 아님)",
     }
     names = {site.name for site in emitted()}
 

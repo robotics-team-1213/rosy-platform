@@ -5426,6 +5426,24 @@
 - 증거: 착지 사전 시험 `test_all_supported_features_have_contracts_and_flows`가 미등록 프런트 호출 3건으로 실패했다. 원인은 이 브랜치가 새 프런트 호출을 기능표에 올리지 않은 것이며 main 탓이 아니다.
 - gate 변화: SOURCE 회귀 복구. 현장 수용은 별도다.
 
+## 2026-11-08 · uncommitted · D-998 알림 producer 비활성 경계
+- 변경: 기존 알림 worker는 동일한 공용 채널 adapter를 쓰며 outbox·최종 사건 검사·발송 owner를 유지한다. 새 producer seam은 기본 꺼짐이고 동시 활성·미수용 전환을 거절한다.
+- 증거: 기존 test_notifications/test_final_notifications와 독립 전달 시험을 커밋 SHA에서 원격으로 확인한다. 실제 채널 발송·전환은 하지 않는다.
+- gate 변화: 없음. SOURCE 회귀와 실제 전달·현장 수용을 구별한다.
+- CE: 해당 없음 — 전환 금지 이유와 범위는 D-998에 명시했다.
+
+## 2026-11-08 · uncommitted · D-998 채널 모듈 소비 버전
+- 변경: 공용 채널 adapter를 실제 제공하는 core_common>=0.0.3을 Fleet 설치 하한으로 지정했다.
+- 증거: 신규 전달·기존 Fleet 알림 회귀와 CI 입력 wheel 설치를 변경 커밋의 원격 시험으로 확인한다.
+- gate 변화: 없음. 기존 발송 owner·outbox·사건 검사는 유지한다.
+
+## 2026-11-08 · uncommitted · refactor(fleet): 감사·task의 동일 비밀 필드 판별 재사용
+
+- 변경: observe/events와 ledger/task_payloads가 foundation의 `is_credential_field`를 쓴다. list/tuple 탐색 차이·이벤트 PEM 검사·거절 오류·정렬·크기 상한을 유지하고 소비자 회귀 시험을 더했다.
+- 증거: 구현 커밋 SHA로 원격 affected 및 소비자 시험을 요청한다. 최종 결과는 디스패처 인계에 연결한다.
+- gate 변화: 없음. 원본 감사·admission·발송·설정·업데이트 권한은 그대로다.
+- CE: 해당 없음 — 처리 차이와 추출 근거는 코드·회귀 시험·카탈로그에 남는다.
+
 ## 2026-11-10 · uncommitted · fix(fleet): 사이트 지도 프레임 결속 — 활성 본문 검증과 목표·자세·경로의 프레임 거절 (D-1010)
 - 변경: SiteMapStore._active_row이 모든 읽기에서 본문 sha256을 저장값과 대조(422 SITE_MAP_BODY_HASH_MISMATCH, 시동 때 활성 지도 없이 fail closed). TripSteps._step_free는 활성 버전이 계획과 다르면 map_version으로, 변환의 현장 자세가 활성 map_id가 아니면 map_frame으로 trip을 끝내고 detail.goal_frame에 활성 map_id·버전·기체 robot_map_id·목표 프레임을 기록. pose_request.overhead_decision은 현장 자세 map_id와 기체 상태 map_id가 같을 때만 답(D-546 갭). console._goal은 알려진 다른 map_id의 선점 경로와 비교하지 않고 MAP_FRAME_MISMATCH 보류, 다른 프레임에 선 로봇은 NO_YIELD_SPACE(bay 계산 없음). pose_view에 map_id.
 - 이유: R의 site_map_versions에 map_id가 섞여 있고(1-5 map_v2_fleet, 6-7 world_261026), 틀린 지도·틀린 좌표계를 조용히 쓰면 로봇이 다른 곳으로 달린다(사용자 2026-11-10). 임시 스크립트의 최신 행 추정이 제품에 들어오지 않게 활성 정의를 한 곳에 둔다.
