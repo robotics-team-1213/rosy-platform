@@ -1,4 +1,5 @@
 // Map vs where robots actually drove (D-594 path history): report only, and one draft correction.
+import {CAMERA_VERDICT_TEXT} from '/console/assets/site-map-camera-draft.js';
 import {confirmIrreversible} from '/common/ui.js';
 
 const VERDICT = {
@@ -52,12 +53,42 @@ export function createRealityPanel(host) {
     fillRobots();
     const reason = host.reason();
     host.gate('reality-check', reason);
+    host.gate('reality-camera', reason);
     host.gate('reality-apply', reason || (host.dirty() ? '수정한 초안을 먼저 저장하세요' : '')
       || (!host.draft()?.revision ? '초안을 먼저 저장하세요' : '')
       || (!report ? '먼저 대조하세요' : !report.fit?.accepted ? '적용할 보정이 없습니다' : ''));
-    host.status('reality-verdict', describe(),
+    host.status('reality-verdict', describe() + (cameraVerdict ? ` · 카메라: ${CAMERA_VERDICT_TEXT(cameraVerdict)}` : ''),
       report ? (report.verdict === 'match' ? 'ready' : 'pending') : 'empty');
   }
+  let cameraVerdict = null;
+  async function cameraLanes() {  // the browser fetches Vision's candidates with a Fleet lease (D-375 pattern)
+    const sources = (await host.request('/api/fleet/vision/sources')).sources || [];
+    const source = sources[0];
+    if (!source) throw new Error('연결된 카메라가 없습니다.');
+    const issued = await host.request('/api/fleet/vision/lease', {method: 'POST',
+      headers: {'Content-Type': 'application/json'}, body: JSON.stringify({source_id: source})});
+    const path = issued.frame_path.replace(/\/frame$/, '/draft-map');
+    const response = await fetch(path, {credentials: 'omit', redirect: 'error',
+      headers: {Authorization: `Bearer ${issued.lease}`}, cache: 'no-store'});
+    if (response.status === 429) throw new Error('Vision이 프레임을 읽는 중입니다. 잠시 뒤 다시 누르세요.');
+    if (!response.ok) throw new Error(response.status === 409
+      ? '승인된 추적 보정이 있는 카메라가 없습니다.' : `Vision 응답 ${response.status}`);
+    return response.json();
+  }
+  $('reality-camera').addEventListener('click', () => host.guarded(async () => {
+    if (host.reason()) return;
+    cameraVerdict = null;
+    const proposal = await cameraLanes();
+    const robot = $('reality-robot').value;
+    report = await host.request('/api/fleet/site-map/reality-check', {method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({last_s: Number($('reality-window').value),
+        ...(robot ? {robot_id: robot} : {}),
+        camera_lanes: proposal.lanes.map(lane => lane.polyline_m)})});
+    cameraVerdict = report.camera?.verdict || null;
+    sync();
+    host.notice(cameraVerdict ? CAMERA_VERDICT_TEXT(cameraVerdict) : '카메라 판정 없이 대조했습니다.');
+  }));
   function query() {
     const robot = $('reality-robot').value;
     return `last_s=${encodeURIComponent($('reality-window').value)}${robot ? `&robot_id=${encodeURIComponent(robot)}` : ''}`;

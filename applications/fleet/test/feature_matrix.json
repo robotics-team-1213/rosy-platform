@@ -4417,6 +4417,54 @@
           "request_ids": [
             "POST:/api/fleet/site-map/reality-check/apply"
           ]
+        },
+        {
+          "consumer": "applications/fleet/web/sitemap/site-map-camera-draft.js",
+          "expression": "/api/fleet/vision/sources",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/vision/sources"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/sitemap/site-map-camera-draft.js",
+          "expression": "/api/fleet/vision/lease",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/vision/lease"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/sitemap/site-map-camera-draft.js",
+          "expression": "/api/fleet/site-map/draft-from-camera",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/site-map/draft-from-camera"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/sitemap/site-map-camera-draft.js",
+          "expression": "/api/fleet/site-map/draft",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/site-map/draft"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/sitemap/site-map-reality.js",
+          "expression": "/api/fleet/vision/sources",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/vision/sources"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/sitemap/site-map-reality.js",
+          "expression": "/api/fleet/vision/lease",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/vision/lease"
+          ]
         }
       ],
       "requests": [
@@ -4828,6 +4876,41 @@
           ],
           "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
           "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/site-map/reality-check/apply"
+        },
+        {
+          "id": "POST:/api/fleet/site-map/draft-from-camera",
+          "method": "POST",
+          "path": "/api/fleet/site-map/draft-from-camera",
+          "implementation": "operations/fleet/fleet/server/sitemap/site_map_routes.py",
+          "handler": "site_map_camera_draft",
+          "expected_statuses": [
+            200,
+            422
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_site_map_camera_draft.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/site-map/draft-from-camera"
+        },
+        {
+          "id": "POST:/api/fleet/site-map/reality-check",
+          "method": "POST",
+          "path": "/api/fleet/site-map/reality-check",
+          "implementation": "operations/fleet/fleet/server/sitemap/site_map_routes.py",
+          "handler": "site_map_reality_check_with_camera",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_site_map_reality_api.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/site-map/reality-check"
         }
       ],
       "flows": [

@@ -7,7 +7,7 @@ from hashlib import sha256
 from fastapi.testclient import TestClient
 
 from fakes import FakeRobot
-from rosy.world.state.projections.map_pose import BRIDGED, DEGRADED, LOCALIZED, UNKNOWN, MapPoseConfig
+from rosy.world.state.projections.map_pose import BRIDGED, DEGRADED, LOCALIZED, PEER, UNKNOWN, MapPoseConfig
 from fleet.server.app import create_app
 from fleet.server.console import FleetConsole
 from fleet.server.map_pose_service import MapPoseService
@@ -103,6 +103,38 @@ def test_service_uses_the_site_config_limits():
     wall.now = T0 + 0.5
     service.observe_state("r1", state(wall.now, x=0.3))
     assert service.arbitrated_pose("r1").state == DEGRADED
+
+
+# --- D-1017 peer rows in the state snapshot ------------------------------------------------
+
+def peer(x=1.0, y=2.0, yaw=0.0, age_s=0.5, robot="r1", map_id="site-v1", kind=LOCALIZED):
+    return {"robot_id": robot, "pose": {"x": x, "y": y, "yaw": yaw}, "age_s": age_s,
+            "map_id": map_id, "localization_state": kind}
+
+
+def test_state_snapshot_peer_rows_anchor_a_robot_the_camera_has_not_seen():
+    """D-1017: one robot's claim about another answers while Rosy Cam is blind."""
+    wall = Wall()
+    service = MapPoseService(lambda: ["r1"], wall=wall, map_id=lambda: "site-v1")
+    service.observe_state("r1", state(T0 - 1.0))
+    service.observe_state("r1", dict(state(T0), peers=[peer()]))
+    pose = service.arbitrated_pose("r1")
+    assert (pose.anchor_source, pose.state) == (PEER, DEGRADED)   # a first anchor is not confirmed
+    assert abs(pose.x - 1.0) < 1e-6 and abs(pose.y - 2.0) < 1e-6
+
+
+def test_peer_rows_are_ignored_unless_localized_known_and_on_the_active_map():
+    wall = Wall()
+    service = MapPoseService(lambda: ["r1"], wall=wall, map_id=lambda: "site-v1")
+    service.observe_state("r1", state(T0 - 1.0))
+    service.observe_state("r1", dict(state(T0), peers=[
+        peer(robot="r9"),                        # not on the roster
+        peer(kind=DEGRADED),                     # not a localized claim
+        peer(map_id="other"),                    # another map frame
+        peer(age_s=7.0),                         # past the peers-table lease
+        {"robot_id": "r1", "pose": {"x": "1", "y": 2, "yaw": 0}, "age_s": 0.0},   # malformed
+    ]))
+    assert service.arbitrated_pose("r1").state == UNKNOWN
 
 
 # --- app wiring ---------------------------------------------------------------------------

@@ -11,14 +11,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Mapping
 
+from core_common.audit_fields import is_credential_field
 from fleet.server.sqlite_policy import configure_connection, enable_wal
 
 MAX_EVENT_BYTES = 64 * 1024
-_SENSITIVE_FIELD = re.compile(
-    r"(?:passwo?rd|passwd|psk|passphrase|secret|token|credential|authorization|"
-    r"api[_-]?key|private[_-]?key|bearer)",
-    re.IGNORECASE,
-)
 _PRIVATE_KEY = re.compile(r"-----BEGIN (?:[A-Z0-9 ]+ )?PRIVATE KEY-----")
 
 
@@ -29,7 +25,7 @@ class EventRejected(ValueError):
 def _contains_sensitive_field(value: object) -> bool:
     if isinstance(value, Mapping):
         return any(
-            _SENSITIVE_FIELD.search(str(key)) or _contains_sensitive_field(child)
+            is_credential_field(key) or _contains_sensitive_field(child)
             for key, child in value.items()
         )
     if isinstance(value, list):

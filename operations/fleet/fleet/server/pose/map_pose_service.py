@@ -22,7 +22,7 @@ from fastapi import Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
 from fleet.hub.hub import HubError
-from rosy.world.state.projections.map_pose import (MapPose, MapPoseConfig, MapPoseTracker,
+from rosy.world.state.projections.map_pose import (LOCALIZED, MapPose, MapPoseConfig, MapPoseTracker,
                                          odom_from_snapshot, sighting_from_row)
 from fleet.swarm.transport import RobotApiError
 
@@ -161,7 +161,12 @@ class MapPoseService:
     def _observe_state(self, robot_id: str, state: Optional[Mapping]) -> None:
         if not self._source_scopes.unqualified(robot_id):
             return
-        if not isinstance(state, Mapping) or state.get("odom_pose") is None:
+        if not isinstance(state, Mapping):
+            return
+        peers = state.get("peers")
+        if isinstance(peers, list):
+            self._observe_peers(peers)
+        if state.get("odom_pose") is None:
             return                  # a robot before D-494 2: nothing to count
         tracker = self._tracker(robot_id)
         if tracker is None:
@@ -171,6 +176,28 @@ class MapPoseService:
             tracker.refuse_odom("malformed")
         else:
             tracker.add_odom(sample, self._wall())
+
+    def _observe_peers(self, rows: Iterable[Mapping]) -> None:
+        """D-1017: poses other robots report about this site's robots (`StateSnapshot.peers`).
+        A LOCALIZED claim anchors its robot only while the camera and a fresh operator pin
+        are quiet; `MapPoseTracker.add_peer` refuses everything else."""
+        now = self._wall()
+        active = self.active_map_id()
+        for row in rows:
+            if not isinstance(row, Mapping):
+                continue
+            robot_id, pose = row.get("robot_id"), row.get("pose")
+            if (not isinstance(robot_id, str) or not isinstance(pose, Mapping)
+                    or row.get("localization_state") != LOCALIZED):
+                continue
+            values = (pose.get("x"), pose.get("y"), pose.get("yaw"), row.get("age_s", 0.0))
+            if not all(isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
+                       for v in values) or row.get("age_s", 0.0) < 0:
+                continue
+            tracker = self._tracker(robot_id)
+            if tracker is not None:
+                tracker.add_peer((float(pose["x"]), float(pose["y"]), float(pose["yaw"])),
+                                 now - float(row["age_s"]), now, row.get("map_id"), active)
 
     async def state(self, robot_id: str, max_age_s: float = TRIP_READ_AGE_S, after: int = 0) -> Mapping:
         """D-760 8: the robot's REST state, one read per robot shared by every Fleet loop (app.py
