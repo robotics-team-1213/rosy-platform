@@ -41,14 +41,20 @@ def _call(run, argv, limit):
     return result.stdout
 
 
+def _is_pid1(row: dict) -> bool:
+    if row.get("_PID") == "1" and row.get("_UID") == "0" and row.get("_COMM") == "systemd":
+        return True
+    return (row.get("_TRANSPORT") == "kernel" and row.get("SYSLOG_PID") == "1"
+            and row.get("SYSLOG_IDENTIFIER") == "systemd" and "_PID" not in row and "_UID" not in row)
+
+
 def _journal(raw: str, boot_id: str) -> None:
     using = re.compile(r"Using hardware watchdog '" + re.escape(IDENTITY) + r"', version [0-9a-f]+, device /dev/watchdog0")
     opened = armed = False
     previous = -1
     for line in raw.splitlines():
         row = json.loads(line, object_pairs_hook=_pairs)
-        if (not isinstance(row, dict) or row.get("_BOOT_ID") != boot_id.replace("-", "")
-                or row.get("_PID") != "1" or row.get("_UID") != "0" or row.get("_COMM") != "systemd"):
+        if not isinstance(row, dict) or row.get("_BOOT_ID") != boot_id.replace("-", "") or not _is_pid1(row):
             raise ValueError("watchdog journal is not from this boot's PID1")
         stamp, message = row.get("__MONOTONIC_TIMESTAMP"), row.get("MESSAGE")
         if not isinstance(stamp, str) or not re.fullmatch(r"[0-9]{1,20}", stamp) or int(stamp) <= previous:
@@ -106,7 +112,8 @@ def observe(root: Path = Path("/"), *, run=_run) -> dict:
                 or not re.fullmatch(r"255(?:[. -].*)?", properties["Version"])):
             raise ValueError("effective PID1 watchdog configuration or supported version differs")
         journal = _call(run, ["/usr/bin/journalctl", "--boot=" + facts["boot_id"].replace("-", ""),
-            "--output=json", "--no-pager", "-n", "64", "--grep=watchdog|Watchdog", "_PID=1"], 262144)
+            "--output=json", "--no-pager", "--grep=watchdog|Watchdog", "_PID=1", "+",
+            "_TRANSPORT=kernel", "SYSLOG_PID=1", "SYSLOG_IDENTIFIER=systemd"], 262144)
         _journal(journal, facts["boot_id"])
         return dict(schema_version=1, boot_id=facts["boot_id"], device="/dev/watchdog0",
                     identity=IDENTITY, timeout_seconds=10, kernel_open_timeout_seconds=180)

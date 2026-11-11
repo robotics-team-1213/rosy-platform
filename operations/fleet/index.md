@@ -107,6 +107,6 @@
 
 - 2026-11-11 · uncommitted · test(fleet): 카메라 초안 패널 실제 Chromium 종단 시험 + 미리보기 503 처리
 - 2026-11-11 · uncommitted · feat(fleet): 카메라로 초안 만들기·카메라까지 겹친 대조 (v1.385)
+- 2026-11-11 · uncommitted · D-1016 등록 로봇 30일 비활동 «삭제 예정» 표시
 - 2026-11-11 · uncommitted · docs(fleet): 지도-실제 대조 독립 검토 반영 - 판정 대상 우선순위·근거 결정 번호 정정
-- 2026-11-10 · uncommitted · feat(fleet): 지도–실제 대조와 초안 강체 보정
-- 2026-11-10 · uncommitted · fix(fleet): D-1010 독립 검토 반영 — 증명 없는 free 목표 정지·모르는 프레임 교차 판정 배제·변조 DB 시동 생존 (D-1010)
+- 2026-11-10 · uncommitted · fix: 관제 단위 개명의 접두사 확인·origin 정규화·감사 행 조건 (D-1011)
