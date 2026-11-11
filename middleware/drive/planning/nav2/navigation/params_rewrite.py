@@ -21,6 +21,12 @@ def write_prefixed_nav2_params(
 ) -> str:
     params = yaml.safe_load(Path(source).read_text(encoding="utf-8"))
     prefix = f"{namespace}/" if namespace else ""
+    # D-1009: our behavior trees ship beside params/ (share/navigation/behavior_trees); a source without them keeps Nav2's stock trees.
+    trees = Path(source).resolve().parent.parent / "behavior_trees"
+    bt = params.get("bt_navigator", {}).get("ros__parameters")
+    if bt is not None and trees.is_dir():
+        bt["default_nav_to_pose_bt_xml"] = str(trees / "rosy_navigate_to_pose.xml")
+        bt["default_nav_through_poses_bt_xml"] = str(trees / "rosy_navigate_through_poses.xml")
     if footprint_points is not None:
         footprint = json.dumps(
             [[float(point[0]), float(point[1])] for point in footprint_points],

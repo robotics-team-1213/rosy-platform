@@ -1013,3 +1013,42 @@ def test_generate_rejects_unsafe_targets_before_writing_any_output(tmp_path, mon
         harness.generate(repo)
     assert first.read_text(encoding="utf-8") == "original\n"
     assert not unsafe.exists()
+
+
+def test_generated_targets_scans_plan_and_solution_frontmatter_once_across_modules(tmp_path, monkeypatch):
+    (tmp_path / "tools" / "harness").mkdir(parents=True)
+    (tmp_path / "tools" / "harness" / "harness.yaml").write_text(
+        "adr_log: docs/reference/ROSY ADR Log.md\nstatus: STATUS.md\n"
+        "modules:\n  - {name: m1, path: m1}\n  - {name: m2, path: m2}\n", encoding="utf-8",
+    )
+    (tmp_path / "docs" / "reference").mkdir(parents=True)
+    (tmp_path / "docs" / "reference" / "ROSY ADR Log.md").write_text(GOOD_ADR, encoding="utf-8")
+    (tmp_path / "docs" / "plans").mkdir(parents=True)
+    plan = tmp_path / "docs" / "plans" / "p1.md"
+    plan.write_text("---\nmodule: m1\n---\n# Plan 1\n", encoding="utf-8")
+    (tmp_path / "docs" / "solutions").mkdir(parents=True)
+    sol = tmp_path / "docs" / "solutions" / "s1.md"
+    sol.write_text("---\nmodule: m2\ntitle: Solution 1\n---\n# Sol\n", encoding="utf-8")
+    for mod in ("m1", "m2"):
+        (tmp_path / mod).mkdir()
+        (tmp_path / mod / "progress.md").write_text(GOOD_PROGRESS.replace("module: sample", f"module: {mod}"), encoding="utf-8")
+        (tmp_path / mod / "logs.md").write_text(GOOD_LOG, encoding="utf-8")
+    calls: list[Path] = []
+    real_fm = harness._optional_frontmatter
+    monkeypatch.setattr(harness, "_optional_frontmatter", lambda p: (calls.append(p), real_fm(p))[1])
+    targets = harness.generated_targets(tmp_path)
+    assert calls.count(plan) == 1 and calls.count(sol) == 1
+    assert "p1.md" in targets[tmp_path / "m1" / "index.md"]
+    assert "Solution 1" in targets[tmp_path / "m2" / "index.md"]
+
+    adr_calls: list[int] = []
+    real_parse_adr = harness.parse_adr_log
+    monkeypatch.setattr(harness, "parse_adr_log", lambda *a, **kw: (adr_calls.append(1), real_parse_adr(*a, **kw))[1])
+    monkeypatch.setattr(harness, "_git", lambda repo, *args: "7\n" if args[:2] == ("rev-list", "--count") else None)
+    harness.generate(tmp_path)
+    adr_calls.clear()
+    _, notes = harness.lint(tmp_path)
+    assert len(adr_calls) == 1
+    assert sum("7 commits touched" in n for n in notes) == 2
+
+

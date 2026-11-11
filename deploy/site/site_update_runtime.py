@@ -16,14 +16,14 @@ import subprocess
 if __package__:
     from .site_update_io import (
         ACCOUNT_OVERLAY, COMPANIONS, PROJECT, SERVICES, STACK_UNIT, Rejected,
-        Transient, allowed_overlays, companion_services, functional_inventory, functional_reason,
+        Transient, active_services, allowed_overlays, companion_services, functional_inventory, functional_reason,
         read_env,
     )
     from .verify_candidate import CandidateVerificationError, verified_services
 else:  # pragma: no cover - installed host CLI
     from site_update_io import (
         ACCOUNT_OVERLAY, COMPANIONS, PROJECT, SERVICES, STACK_UNIT, Rejected,
-        Transient, allowed_overlays, companion_services, functional_inventory, functional_reason,
+        Transient, active_services, allowed_overlays, companion_services, functional_inventory, functional_reason,
         read_env,
     )
     from verify_candidate import CandidateVerificationError, verified_services
@@ -69,6 +69,9 @@ def containers_reason(rows, commit: str, accepted: dict, run, services=SERVICES,
     independent = 'account' in services or 'account' in accepted or 'account' in (image_references or {})
     if independent and (not accepted.get('account') or not (image_references or {}).get('account')):
         return 'account signed image identity proof is incomplete'
+    own_monitoring = 'monitoring' in services or 'monitoring' in accepted or 'monitoring' in (image_references or {})
+    if own_monitoring and (not accepted.get('monitoring') or not (image_references or {}).get('monitoring')):
+        return 'monitoring signed image identity proof is incomplete'
     if any(isinstance(row, dict) and row.get('Service') in SERVICES
            and row['Service'] not in services for row in rows):
         return 'runtime contains a managed service outside the signed candidate'
@@ -83,7 +86,7 @@ def containers_reason(rows, commit: str, accepted: dict, run, services=SERVICES,
              or (image_references is not None and set(image_references) != set(services)))):
         return 'account legacy signed inventory proof is incomplete'
     for service in (*services, *sorted(companions - set(services))):
-        owner = 'account' if service == 'account' and independent else COMPANIONS.get(service, service)
+        owner = service if service in services else COMPANIONS.get(service, service)
         matches = [row for row in rows if isinstance(row, dict) and row.get('Service') == service]
         if len(matches) != 1:
             return f'{service} needs exactly one running container'
@@ -194,7 +197,7 @@ class SiteRuntimeIO:
         if inventory is None:
             return 'runtime has no verified service-set proof'
         overlays = allowed_overlays(env)
-        services = tuple(s for s in inventory if s != 'account' or ACCOUNT_OVERLAY[1] in overlays)
+        services = active_services(inventory, overlays)
         try:
             out = self._compose(env, "ps", "--all", "--format", "json").stdout.strip()
         except Transient as error:
@@ -236,8 +239,8 @@ class SiteRuntimeIO:
         self.check_overrides(env, commit, folder=folder, env_file=self.paths.env_backup,
                              services=outgoing)
         # Account remains an optional overlay across old Fleet-owned and new independent images.
-        outgoing = tuple(s for s in outgoing if s != 'account')
-        incoming = tuple(s for s in incoming if s != 'account')
+        outgoing = tuple(s for s in outgoing if s not in ('account', 'monitoring'))  # D-1001: optional overlays
+        incoming = tuple(s for s in incoming if s not in ('account', 'monitoring'))
         if outgoing == incoming:
             return
         if set(outgoing) - set(incoming) != {'postgres'}:

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import rclpy
+import signal
 from rclpy.node import Node
 import json
 import math
@@ -424,6 +425,9 @@ def main(args=None):
     except KeyboardInterrupt:
         pass
     finally:
+        # A repeat SIGINT/SIGTERM must not abort the torque-off below.
+        for signum in (signal.SIGINT, signal.SIGTERM):
+            signal.signal(signum, signal.SIG_IGN)
         if node is not None:
             if getattr(node, 'motor_ready_pub', None) is not None:
                 try:

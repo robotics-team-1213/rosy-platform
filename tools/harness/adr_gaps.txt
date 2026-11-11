@@ -117,8 +117,18 @@ D-996 reserved in another in-flight branch (refs/adr/D-996), absent from this D-
 
 D-988 reserved in another in-flight branch (refs/adr/D-988), absent from this D-989 branch; remove when its ADR lands
 D-998 reserved in another in-flight branch (refs/adr/D-998), absent from this D-1004 branch; remove when its ADR lands
-D-999 reserved in another in-flight branch (refs/adr/D-999), absent from this D-1004 branch; remove when its ADR lands
 D-1000 reserved in another in-flight branch (refs/adr/D-1000), absent from this D-1004 branch; remove when its ADR lands
-D-1001 reserved in another in-flight branch (refs/adr/D-1001), absent from this D-1004 branch; remove when its ADR lands
-D-1002 reserved in another in-flight branch (refs/adr/D-1002), absent from this D-1004 branch; remove when its ADR lands
-D-1003 reserved in another in-flight branch (refs/adr/D-1003), absent from this D-1004 branch; remove when its ADR lands
+D-998 reserved in another in-flight branch (refs/adr/D-998), absent from this D-1001 branch; remove when its ADR lands
+D-1000 reserved in another in-flight branch (refs/adr/D-1000), absent from this D-1001 branch; remove when its ADR lands
+
+D-998 reserved in another in-flight branch (refs/adr/D-998), absent from this D-1002 branch; remove when its ADR lands
+
+
+D-1000 reserved in another in-flight branch (refs/adr/D-1000), absent from this D-1002 branch; remove when its ADR lands
+
+D-998 reserved in another in-flight branch (refs/adr/D-998), absent from this D-999 branch; remove when its ADR lands
+D-998 reserved in another in-flight branch (refs/adr/D-998), absent from this D-1003 branch; remove when its ADR lands
+D-1000 reserved in another in-flight branch (refs/adr/D-1000), absent from this D-1003 branch; remove when its ADR lands
+D-1005 reserved in another in-flight branch (refs/adr/D-1005), absent from this D-1008 branch; remove when its ADR lands
+D-1005 reserved in another in-flight branch (refs/adr/D-1005), absent from this D-1006 branch; remove when its ADR lands
+D-1011 reserved in another in-flight branch (refs/adr/D-1011), absent from this D-1012 branch; remove when its ADR lands

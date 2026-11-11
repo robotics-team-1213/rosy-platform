@@ -261,6 +261,8 @@ published here.
   A hold always expires (at most 168 h). The reason allows letters, digits, space and
   `. , : _ / ( ) + = @ -`. A held robot still stages the release.
 - Audit lines go to `$ROSY_SCRATCH/rosy-rollout-evidence/<date>/rollout.jsonl`.
+- **Force update (D-985 addendum).** `rosy-release-push.ps1 -Robot <robot> -Tarball <P>\<id>.tar.gz -ForceUpdate -ExpectReleaseId <id> -Reason "<why>"` installs a named signed release now: no wave, canary or withdrawn record applies, but the robot's updater `precheck` (hold, claim, idle, battery) runs right before the switch and refuses with reasons. What it bypasses and what it never does: [D-985 addendum 2026-11-09](../../../docs/adr/D-985-pinky-always-self-updates-to-latest-payload.md).
+
 - **Use a manual push (steps 5-6) when** the robot has no updater yet (its first D-412
   release arrives by push), it is offline from GitHub, you need a release on one robot only,
   or you are rolling back. The push takes the same claim as the updater

@@ -75,7 +75,7 @@ class NativeGazeboMapPosePort:
         self.binding, self.config = binding, MapPoseConfig()
         self._gather_core, self._wall, self._mono = gather_core, wall, monotonic
         self._robots = {robot.robot_id: robot for robot in binding.robots}
-        self._samples, self._core, self._failed, self._refreshing = {}, {}, {}, {}
+        self._samples, self._core, self._failed, self._refreshing, self._states = {}, {}, {}, {}, {}
         self._history = {robot_id: deque() for robot_id in self._robots}
         self._clock = None
         self._active_map = None
@@ -128,6 +128,7 @@ class NativeGazeboMapPosePort:
 
     def _fail(self, robot_id, reason):
         self._failed.setdefault(robot_id, reason)
+        self._states.pop(robot_id, None)  # D-1003: a revoked pose leaves no snapshot to pair with
         return False
 
     def observe_clock(self, stamp_ns):
@@ -240,6 +241,12 @@ class NativeGazeboMapPosePort:
                 self._fail(robot_id, 'core_snapshot_invalid_or_stale')
                 return
             self._core[robot_id] = core
+            self._states[robot_id] = state  # D-1003: the snapshot this pose pairs with
+
+    def state(self, robot_id):
+        """D-1003: the CORE snapshot the newest refresh accepted (its map-frame pose), or None."""
+        with self._lock:
+            return self._states.get(robot_id) if self._current(robot_id) is not None else None
 
     def _current(self, robot_id):
         if (self._active_map is not None

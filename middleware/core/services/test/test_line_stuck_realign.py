@@ -141,6 +141,18 @@ def test_pivot_at_a_turn_spot_turns_on_odom_through_the_ir_centre_and_closes_on_
     assert rig.results()[-1]["result"] == "recovered" and rig.m.status().stuck is None
 
 
+def test_pivot_is_judged_only_on_the_side_it_turns_into():
+    """User 2026-11-09 (D-1008): a return the left pivot swings toward refuses it; its mirror image does not."""
+    toward = Rig()
+    toward.extra = ((0.07, -0.03),)
+    toward.feed()
+    _refused(toward, "turn_blocked")
+    away = Rig()
+    away.extra = ((0.07, 0.03),)
+    away.feed()
+    assert away.realign() == "realign"
+
+
 def test_pivot_off_a_turn_spot_and_malformed_answers_are_refused():
     rig = Rig()
     _refused(rig, "realign_kind", turn_spot=False)

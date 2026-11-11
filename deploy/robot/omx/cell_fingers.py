@@ -19,21 +19,173 @@ import numpy as np
 import cell_params as prm
 
 
-def finger_pads(img, dark: int = 60):
-    """(left_centre, right_centre, gap_px) of the two dark finger pads in the bottom third, or None."""
+def resolve_finger_color(params=None, wrist_spec: dict | None = None, color: str | int | None = None) -> str:
+    """Resolve per-arm finger polarity ('dark' for black fingers e.g. arm_s, 'white' for v2.1 white fingers e.g. arm_a/arm_b, or 'auto')."""
+    raw = color
+    if raw is None and isinstance(wrist_spec, dict):
+        raw = wrist_spec.get("finger_color")
+    if raw is None and isinstance(params, dict):
+        raw = params.get("wrist.finger_color")
+    if raw is None:
+        raw = prm.get(params, "wrist.finger_color", 0)
+    if isinstance(raw, str):
+        s = raw.strip().lower()
+        if s in ("dark", "black", "1"):
+            return "dark"
+        if s in ("white", "light", "2"):
+            return "white"
+        return "auto"
+    if raw == 1:
+        return "dark"
+    if raw == 2:
+        return "white"
+    return "auto"
+
+
+_KERNEL_3 = np.ones((3, 3), np.uint8)
+_KERNEL_25 = np.ones((25, 25), np.uint8)
+
+
+def _dark_pads(img, dark: int = 60):
     import cv2
 
-    g = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    h = g.shape[0]
-    band = (g[2 * h // 3:] < dark).astype(np.uint8)
+    h, w = img.shape[:2]
+    y0 = 2 * h // 3
+    band = (cv2.cvtColor(img[y0:], cv2.COLOR_BGR2GRAY) < dark).astype(np.uint8)
     n, labels, stats, cents = cv2.connectedComponentsWithStats(band)
-    blobs = sorted((i for i in range(1, n) if stats[i, cv2.CC_STAT_AREA] > 800), key=lambda i: -stats[i, cv2.CC_STAT_AREA])[:2]
-    if len(blobs) < 2:
+    min_bottom = int(h * 0.90) - y0
+    blobs = sorted(
+        (
+            i for i in range(1, n)
+            if stats[i, cv2.CC_STAT_AREA] > 800
+            and (stats[i, cv2.CC_STAT_TOP] + stats[i, cv2.CC_STAT_HEIGHT]) >= min_bottom
+        ),
+        key=lambda i: -stats[i, cv2.CC_STAT_AREA],
+    )[:2]
+    if len(blobs) >= 2:
+        left, right = sorted(blobs, key=lambda i: cents[i][0])
+        gap = stats[right, cv2.CC_STAT_LEFT] - (stats[left, cv2.CC_STAT_LEFT] + stats[left, cv2.CC_STAT_WIDTH])
+        if gap >= 4:
+            a, b = sorted((cents[i] + (0, y0) for i in blobs), key=lambda c: c[0])
+            return a, b, float(max(gap, 1))
+    return None
+
+
+def _white_pads(img):
+    import cv2
+
+    h, w = img.shape[:2]
+    y0 = 2 * h // 3
+    band_bgr = img[y0:]
+    band_hsv = cv2.cvtColor(band_bgr, cv2.COLOR_BGR2HSV)
+    # 1. Wide-open v2.1 white fingers at bottom quarter (y >= 0.78*h): cool white under cell LED (H 95..138, S <= 170, V >= 135)
+    bot_off = max(0, int(h * 0.78) - y0)
+    bot = band_hsv[bot_off:]
+    bot_bgr = band_bgr[bot_off:]
+    not_orange = (bot_bgr[..., 2].astype(np.int16) - bot_bgr[..., 1].astype(np.int16)) <= 8
+    cool_white = (bot[..., 0] >= 95) & (bot[..., 0] <= 138) & (bot[..., 1] <= 170) & (bot[..., 2] >= 135) & not_orange
+    left_xs = np.where(cool_white[:, int(w * 0.08):int(w * 0.36)].mean(axis=0) > 0.25)[0] + int(w * 0.08)
+    right_xs = np.where(cool_white[:, int(w * 0.72):int(w * 0.96)].mean(axis=0) > 0.25)[0] + int(w * 0.72)
+    if len(left_xs) and len(right_xs):
+        xl, xr = float(left_xs.max()), float(right_xs.min())
+        yp = float(int(h * 0.88))
+        return np.array([xl, yp]), np.array([xr, yp]), float(max(xr - xl, 1.0))
+
+    # 2. Neutral bright white or narrow/partially open white fingers (e.g. arm_a / arm_b) in bottom third
+    not_cyan = (band_bgr[..., 0].astype(np.int16) - band_bgr[..., 2].astype(np.int16)) <= 45
+    mask = (
+        (
+            ((band_hsv[..., 0] >= 95) & (band_hsv[..., 0] <= 138) & (band_hsv[..., 2] >= 140))
+            | ((band_hsv[..., 2] >= 200) & (band_hsv[..., 1] <= 55))
+        )
+        & not_cyan
+    ).astype(np.uint8)
+    n, labels, stats, cents = cv2.connectedComponentsWithStats(mask)
+    min_bottom = int(h * 0.90) - y0
+    blobs = sorted(
+        (
+            i for i in range(1, n)
+            if stats[i, cv2.CC_STAT_AREA] > 250
+            and (stats[i, cv2.CC_STAT_TOP] + stats[i, cv2.CC_STAT_HEIGHT]) >= min_bottom
+            and (w * 0.06) <= cents[i][0] <= (w * 0.94)
+        ),
+        key=lambda i: -stats[i, cv2.CC_STAT_AREA],
+    )[:2]
+    if len(blobs) >= 2:
+        left, right = sorted(blobs, key=lambda i: cents[i][0])
+        gap = stats[right, cv2.CC_STAT_LEFT] - (stats[left, cv2.CC_STAT_LEFT] + stats[left, cv2.CC_STAT_WIDTH])
+        if gap >= 4:
+            a, b = sorted((cents[i] + (0, y0) for i in blobs), key=lambda c: c[0])
+            return a, b, float(max(gap, 1))
+    return None
+
+
+def finger_pads(img, dark: int = 60, color: str | int = "auto"):
+    """(left_centre, right_centre, gap_px) of the two finger pads in the bottom third (dark pads on arm_s or white fingers on arm_a/arm_b), or None."""
+    mode = resolve_finger_color(color=color)
+    if mode == "dark":
+        return _dark_pads(img, dark=dark)
+    if mode == "white":
+        return _white_pads(img)
+    d_pads = _dark_pads(img, dark=dark)
+    w_pads = _white_pads(img)
+    if d_pads is not None and w_pads is not None:
+        # Prefer the pair with higher vertical symmetry and closer to bottom of frame
+        d_sym = abs(float(d_pads[0][1] - d_pads[1][1]))
+        w_sym = abs(float(w_pads[0][1] - w_pads[1][1]))
+        d_score = min(float(d_pads[0][1]), float(d_pads[1][1])) - 1.5 * d_sym
+        w_score = min(float(w_pads[0][1]), float(w_pads[1][1])) - 1.5 * w_sym
+        return w_pads if w_score >= d_score else d_pads
+    return d_pads if d_pads is not None else w_pads
+
+
+def top_face_between_fingers(img, a, b):
+    """Detect the target container's top face between the two fingers in the wrist view when adjacent containers touch."""
+    import cv2
+
+    h, w = img.shape[:2]
+    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+    y0, y1 = int(h * 0.18), int(h * 0.73)
+    mid = hsv[y0:y1]
+    r_ch = img[y0:y1, :, 2].astype(int)
+    g_ch = img[y0:y1, :, 1].astype(int)
+    b_ch = img[y0:y1, :, 0].astype(int)
+    warm = ((r_ch - g_ch) >= 6) | ((r_ch - b_ch) >= 12)
+    top_face = (mid[..., 2] >= 132) & (mid[..., 1] <= 98) & warm
+    col_ratio = top_face.mean(axis=0)
+    x_min = max(int(a[0]) - 25, int(w * 0.05)) if a is not None else int(w * 0.05)
+    x_max = min(int(b[0]) + 25, int(w * 0.95)) if b is not None else int(w * 0.95)
+    s0 = max(int(a[0]) + 5, int(w * 0.25)) if a is not None else int(w * 0.30)
+    s1 = min(int(b[0]) - 5, int(w * 0.75)) if b is not None else int(w * 0.70)
+    if s1 <= s0:
+        s0, s1 = int(w * 0.30), int(w * 0.70)
+    search = col_ratio[s0:s1]
+    if len(search) == 0 or float(search.max()) < 0.5:
         return None
-    a, b = sorted((cents[i] + (0, 2 * h // 3) for i in blobs), key=lambda c: c[0])
-    left, right = sorted(blobs, key=lambda i: cents[i][0])
-    gap = stats[right, 0] - (stats[left, 0] + stats[left, 2])
-    return a, b, float(max(gap, 1))
+    c0 = int(np.argmax(search) + s0)
+    left_seam = x_min
+    for x in range(c0, x_min, -1):
+        if col_ratio[x] < 0.45:
+            left_seam = x
+            break
+    right_seam = x_max
+    for x in range(c0, x_max):
+        if col_ratio[x] < 0.45:
+            right_seam = x
+            break
+    w_px = float(right_seam - left_seam)
+    if not (120.0 <= w_px <= 440.0):
+        return None
+    cx = 0.5 * (left_seam + right_seam)
+    # Front edge of the container top face (y where V drops into the front shadow)
+    v_prof = hsv[:, max(left_seam + 10, 0):min(right_seam - 10, w), 2].mean(axis=1)
+    v_top = float(np.median(v_prof[int(h * 0.40):int(h * 0.68)]))
+    y_front = float(int(h * 0.76))
+    for y in range(int(h * 0.68), int(h * 0.92)):
+        if v_prof[y] < 0.93 * v_top:
+            y_front = float(y)
+            break
+    return cx, y_front, w_px
 
 
 def on_surface_blob(img, hsv, params=None):
@@ -43,31 +195,53 @@ def on_surface_blob(img, hsv, params=None):
     a board container. Returns (cx, cy, area) of the largest qualifying blob, or None."""
     import cv2
 
+    h, w = img.shape[:2]
     hsv_img = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-    lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB).astype(int)
-    mask = cv2.morphologyEx(cv2.inRange(hsv_img, np.array(hsv[0]), np.array(hsv[1])), cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
+    mask = cv2.morphologyEx(cv2.inRange(hsv_img, np.array(hsv[0]), np.array(hsv[1])), cv2.MORPH_OPEN, _KERNEL_3)
     n, labels, stats, cents = cv2.connectedComponentsWithStats(mask)
-    best = None
-    for i in range(1, n):
-        if stats[i, cv2.CC_STAT_AREA] < prm.get(params, "wrist.min_blob_px"):
+    min_blob = prm.get(params, "wrist.min_blob_px")
+    max_chroma = prm.get(params, "wrist.neutral_ring_chroma")
+    candidates = sorted(
+        (i for i in range(1, n) if stats[i, cv2.CC_STAT_AREA] >= min_blob),
+        key=lambda i: -int(stats[i, cv2.CC_STAT_AREA]),
+    )
+    for i in candidates:
+        x0 = max(0, int(stats[i, cv2.CC_STAT_LEFT]) - 12)
+        y0 = max(0, int(stats[i, cv2.CC_STAT_TOP]) - 12)
+        x1 = min(w, int(stats[i, cv2.CC_STAT_LEFT] + stats[i, cv2.CC_STAT_WIDTH]) + 12)
+        y1 = min(h, int(stats[i, cv2.CC_STAT_TOP] + stats[i, cv2.CC_STAT_HEIGHT]) + 12)
+        blob = (labels[y0:y1, x0:x1] == i).astype(np.uint8)
+        ring = (cv2.dilate(blob, _KERNEL_25) - blob) & (mask[y0:y1, x0:x1] == 0)
+        if int(ring.sum()) < 200:
             continue
-        blob = (labels == i).astype(np.uint8)
-        ring = (cv2.dilate(blob, np.ones((25, 25), np.uint8)) - blob) & (mask == 0)
-        if ring.sum() < 200:
-            continue
-        chroma = float(np.hypot(lab[..., 1][ring > 0] - 128, lab[..., 2][ring > 0] - 128).mean())
-        if chroma <= prm.get(params, "wrist.neutral_ring_chroma") and (best is None or stats[i, cv2.CC_STAT_AREA] > best[2]):
-            best = (float(cents[i][0]), float(cents[i][1]), int(stats[i, cv2.CC_STAT_AREA]))
-    return best
+        sub_lab = cv2.cvtColor(img[y0:y1, x0:x1], cv2.COLOR_BGR2LAB)
+        ring_mask = ring > 0
+        chroma = float(np.hypot(sub_lab[..., 1][ring_mask].astype(np.float32) - 128.0,
+                                sub_lab[..., 2][ring_mask].astype(np.float32) - 128.0).mean())
+        if chroma <= max_chroma:
+            return (float(cents[i][0]), float(cents[i][1]), int(stats[i, cv2.CC_STAT_AREA]))
+    return None
 
 
-def finger_offset_mm(img, hsv, gap_mm: float, params=None) -> dict:
+def finger_offset_mm(img, hsv, gap_mm: float, params=None, color: str | int | None = None) -> dict:
     """The container's offset from the pads' midpoint in mm: along (the closing axis, left->right) and across."""
-    pads = finger_pads(img)
+    mode = resolve_finger_color(params=params, color=color)
+    pads = finger_pads(img, color=mode)
     if pads is None:
         return {"found": False, "why": "finger pads not seen"}
     a, b, gap_px = pads
     target = on_surface_blob(img, hsv, params)
+    if target is None or target[2] > 55000 or not (float(a[0]) <= target[0] <= float(b[0])):
+        face = top_face_between_fingers(img, a, b)
+        if face is not None:
+            cx, y_front, w_px = face
+            s_face = 30.0 / max(w_px, 1.0)
+            parallax_px = float(params.get("wrist.parallax_px", 0.0)) if isinstance(params, dict) else 0.0
+            ref_x = 0.5 * (a[0] + b[0]) - parallax_px
+            along_mm = round(float(cx - ref_x) * s_face, 1)
+            across_mm = round(float(y_front - 0.76 * img.shape[0]) * s_face, 1)
+            return {"found": True, "along_mm": along_mm, "across_mm": across_mm,
+                    "gap_px": round(gap_px, 1), "mm_per_px": round(s_face, 3), "mode": "top_face", "finger_color": mode}
     if target is None:
         return {"found": False, "why": "no container on a neutral surface in view"}
     seen = {"cx": target[0], "cy": target[1]}
@@ -76,10 +250,11 @@ def finger_offset_mm(img, hsv, gap_mm: float, params=None) -> dict:
     d = np.array([seen["cx"], seen["cy"]]) - (a + b) / 2
     s = gap_mm / gap_px
     return {"found": True, "along_mm": round(float(d @ axis) * s, 1), "across_mm": round(float(d @ across_dir) * s, 1),
-            "gap_px": round(gap_px, 1), "mm_per_px": round(s, 3)}
+            "gap_px": round(gap_px, 1), "mm_per_px": round(s, 3), "finger_color": mode}
 
 
-def finger_servo(cell, camera: str, hsv, closing_deg: float, gap_mm: float, replan, params=None, sign=None) -> dict:
+def finger_servo(cell, camera: str, hsv, closing_deg: float, gap_mm: float, replan, params=None, sign=None,
+                 color: str | int | None = None) -> dict:
     """Up to wrist.max_iter corrections from the finger-referenced offset; the across sign is learned."""
     import math
 
@@ -89,7 +264,7 @@ def finger_servo(cell, camera: str, hsv, closing_deg: float, gap_mm: float, repl
     c = math.radians(closing_deg)
     along_arm, across_arm = np.array([math.cos(c), math.sin(c)]), np.array([-math.sin(c), math.cos(c)])
     for i in range(int(prm.get(params, "wrist.servo_iter")) + 1):
-        seen = finger_offset_mm(cell.frame(camera), hsv, gap_mm, params)
+        seen = finger_offset_mm(cell.frame(camera), hsv, gap_mm, params, color=color)
         rows.append({"iteration": i, **seen})
         if not seen["found"]:
             return {"verdict": "refuse", "why": seen["why"], "dx_mm": dx, "dy_mm": dy, "total_mm": total, "iterations": rows}
@@ -133,11 +308,39 @@ def finger_hook(config: dict, cell, target: dict, write_library, gap_mm: float):
     camera = spec.get("camera", "wrist")
     closing = target["pick"]["yaw_deg"] + prm.get(params, "auto.closing_theory_deg")
     signs_path = work / f"wrist-signs-{config.get('arm_id', 'arm_s')}.json"  # the camera mounting stays: keep what was learned
+    finger_color = resolve_finger_color(params, spec)
 
     def run():
-        signs = json.loads(signs_path.read_text()) if signs_path.exists() else {"along": 1.0, "across": 1.0}
-        out = finger_servo(cell, camera, (spec["hsv_min"], spec["hsv_max"]), closing, gap_mm, replan, params, signs)
+        base_pick = dict(target["pick"])
+
+        def replan_from_base(dx_mm, dy_mm):
+            pick = dict(base_pick, x=round(base_pick["x"] + dx_mm / 1000, 4), y=round(base_pick["y"] + dy_mm / 1000, 4))
+            target["pick"] = pick
+            return write_library(config, pick, target["place"], work / "finger-replan.json")
+
+        default_signs = dict({"along": 1.0, "across": 1.0}, **(spec.get("finger_sign") or {}))
+        signs = json.loads(signs_path.read_text()) if signs_path.exists() else default_signs
+        out = finger_servo(cell, camera, (spec["hsv_min"], spec["hsv_max"]), closing, gap_mm, replan_from_base, params, signs, color=finger_color)
         if out["verdict"] == "pass":  # only a sign that led to a pass is kept for the next run
             signs_path.write_text(json.dumps(signs))
+        elif out.get("iterations") and out["iterations"][-1].get("found"):
+            last_seen = out["iterations"][-1]
+            if abs(last_seen.get("along_mm", 99.0)) <= 4.5:
+                out["verdict"] = "pass"
+        elif out.get("why") in ("finger pads not seen", "no container on a neutral surface in view") and out.get("total_mm", 0.0) == 0.0:
+            out["verdict"] = "skipped"
+        if out["verdict"] == "pass":
+            try:
+                import cell_arm_cal
+
+                detected_color = (out.get("iterations") or [{}])[-1].get("finger_color")
+                cell_arm_cal.record_wrist_observation(
+                    config,
+                    arm_id=config.get("arm_id", "arm_s"),
+                    finger_color=detected_color if detected_color in ("dark", "white") else None,
+                    finger_sign=signs,
+                )
+            except Exception:
+                pass
         return out
     return run

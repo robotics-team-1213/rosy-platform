@@ -42,3 +42,52 @@ def test_a_full_range_through_mains_landed_commits_keeps_untouched_passes(repos,
     assert (todo, bool(done)) == (([], True) if reused else ([["pkg/test"]], False))
     assert ((f"{fix}^", fix, False) in asked) == own_fix, "each own commit of the branch is selected by itself"
     assert any(b == base and landed for b, _, landed in asked) == (not (own_fix and own_full))
+
+
+def test_narrow_reuse_skips_non_ancestor_sibling_commits_in_shared_cache(cached):
+    """Non-ancestor commits from concurrent worktrees must not consume the NARROW_COMMITS budget."""
+    wt, _, _ = cached
+    commit(wt, {"tools/harness/affected_tests.py": ""}, "harness")
+    ancestor = git(wt, "rev-parse", "HEAD")
+    land.land_cache.record(wt, ancestor, git(wt, "rev-parse", "HEAD^{tree}"), "env1", ["pkg/test"], Path("log"))
+    for n in range(land.land_cache.NARROW_COMMITS + 2):
+        land.land_cache.record(wt, f"{n + 1:040x}", f"{n + 100:040x}", "env1", ["pkg/test"], Path("log"))
+    commit(wt, {"pkg/b.py": "y = 1\n"}, "delta")
+    asked = []
+    select = lambda wt_, base, python, head=None: (asked.append(base) or [["other/test"]], None)
+    args = land.argparse.Namespace(tests="auto", no_cache=False)
+    done, todo, _ = land.land_cache.split(wt, args, [["pkg/test"]], git(wt, "rev-parse", "HEAD"), sys.executable,
+                                          select)
+    assert todo == [] and len(done) == 1 and asked == [ancestor]
+    # A second split on the same range (e.g. gpre and pre threads) reuses the memoized delta paths.
+    done2, todo2, _ = land.land_cache.split(wt, args, [["pkg/test"]], git(wt, "rev-parse", "HEAD"), sys.executable,
+                                            select)
+    assert todo2 == [] and len(done2) == 1 and asked == [ancestor]
+
+
+def test_generate_records_handles_title_with_unhashable_frontmatter_dict(tmp_path):
+    """07571bd128 passed fm: dict as the second argument of _title(p, fm); lru_cache must not hash the dict."""
+    import land_merge
+
+    (tmp_path / "tools" / "harness").mkdir(parents=True)
+    (tmp_path / "docs").mkdir(parents=True)
+    script = tmp_path / land.HARNESS
+    script.write_text(
+        "from pathlib import Path\n"
+        "def _optional_frontmatter(p): return {'title': 'T'}\n"
+        "def _title(p, meta=None):\n"
+        "    meta = _optional_frontmatter(p) if meta is None else meta\n"
+        "    return meta.get('title') or p.stem\n"
+        "def generated_targets(repo):\n"
+        "    p = repo / 'docs/index.md'\n"
+        "    return {p: _title(p, {'title': 'FromDict'}) + '/' + _title(p, {}) + '\\n'}\n"
+        "def generate(repo):\n"
+        "    targets = generated_targets(repo)\n"
+        "    for p, text in targets.items(): p.write_text(text, encoding='utf-8')\n"
+        "    return list(targets)\n",
+        encoding="utf-8",
+    )
+    written = land_merge.generate_records(tmp_path, sys.executable, land.HARNESS)
+    assert written == ["docs/index.md"]
+    assert (tmp_path / "docs/index.md").read_text(encoding="utf-8") == "FromDict/T\n"
+

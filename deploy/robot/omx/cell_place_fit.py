@@ -17,6 +17,70 @@ import numpy as np
 
 import cell_params as prm
 
+TIERS = (1, 2, 3)  # 1단 (l0, layer 0), 2단 (l1, layer 1), 3단 (l2, layer 2)
+
+
+def tier_step_m(site: dict, catalog: list | None = None) -> float:
+    """Vertical step (m) per tier: the site's `tier_step_m`, else the catalogue container height, else 0.03 m."""
+    if "tier_step_m" in site:
+        return float(site["tier_step_m"])
+    heights = [e["top_height_mm"] / 1000 for e in (catalog or ()) if e.get("top_height_mm")]
+    return heights[0] if heights else 0.03
+
+
+def with_tiers(config: dict, calibration: dict | None = None, catalog: list | None = None) -> tuple[dict, dict | None]:
+    """Expand every site `<name>` that has `surface_z` into `<name>-l0` (1단), `<name>-l1` (2단), `<name>-l2` (3단)
+    sharing `<name>`'s map (`tier_of`), so 1단/2단/3단 pick and place need no duplicate config files."""
+    sites = dict(config.get("sites") or {})
+    cal_sites = dict(calibration["sites"]) if isinstance(calibration, dict) and "sites" in calibration else None
+    for name, site in list(sites.items()):
+        if "surface_z" not in site or any(name.endswith(f"-l{k}") for k in (0, 1, 2)):
+            continue
+        step = tier_step_m(site, catalog)
+        base_z = site["surface_z"] - site.get("layer", 0) * step
+        map_key = site.get("map_from", name)
+        for layer in (0, 1, 2):
+            tname = f"{name}-l{layer}"
+            if tname not in sites:
+                z0 = round(base_z + layer * step, 4)
+                tsite = {**site, "layer": layer, "tier": layer + 1, "surface_z": z0, "tier_of": name}
+                tsite.pop("tier_step_m", None)
+                if "z" in site:
+                    tsite["z"] = round(site["z"] + (z0 - site["surface_z"]), 4)
+                sites[tname] = tsite
+            if cal_sites is not None and tname not in cal_sites and map_key in cal_sites:
+                cal_sites[tname] = cal_sites[map_key]
+    out_cal = {**calibration, "sites": cal_sites} if cal_sites is not None else calibration
+    return {**config, "sites": sites}, out_cal
+
+
+def with_tier_biases(config: dict, bias_data: dict) -> dict:
+    """Share saved bias regions between a base site and its `-l0/-l1/-l2` tier sites (`tier_of` / `map_from`)."""
+    regions = list(bias_data.get("regions") or [])
+    have = {(r.get("site"), tuple(r.get("point_m") or ())) for r in regions}
+    for name, site in (config.get("sites") or {}).items():
+        base = site.get("tier_of") or site.get("map_from")
+        if not base:
+            continue
+        for r in list(regions):
+            if r.get("site") in (base, name):
+                for target in (base, name):
+                    key = (target, tuple(r.get("point_m") or ()))
+                    if key not in have:
+                        regions.append({**r, "site": target})
+                        have.add(key)
+    return {**bias_data, "regions": regions}
+
+
+def has_support(xy, pixel_fn, occupied, roi) -> bool:
+    """True when the lower tier's container shows in `occupied` (roi-relative) under `xy`."""
+    px = pixel_fn(xy)
+    if px is None:
+        return False
+    col, row = round(px[0]) - roi[0], round(px[1]) - roi[1]
+    patch = occupied[max(0, row - 1):min(occupied.shape[0], row + 2), max(0, col - 1):min(occupied.shape[1], col + 2)]
+    return bool(patch.size and patch.any())
+
 
 def footprint(xy, axis_deg: float, length_mm: float, width_mm: float, step_mm: float = 5.0) -> list:
     """Points (m) covering a box centred at xy with its long axis along axis_deg: a grid plus the outline."""
@@ -28,8 +92,9 @@ def footprint(xy, axis_deg: float, length_mm: float, width_mm: float, step_mm: f
     return [tuple(np.asarray(xy) + (a * along + c * across) / 1000) for a in ls for c in ws]
 
 
-def why_not(points, pixel_fn, polygon_px, occupied=None, roi=None) -> str | None:
-    """None when every point maps inside the polygon and off the occupied mask (roi-relative), else the reason."""
+def why_not(points, pixel_fn, polygon_px, occupied=None, roi=None, layer: int = 0) -> str | None:
+    """None when every point maps inside the polygon and (at layer 0) off the occupied mask or (at layer > 0) stands on
+    a lower-tier container, else the reason."""
     import cv2
 
     poly = np.asarray(polygon_px, np.float32)
@@ -39,10 +104,14 @@ def why_not(points, pixel_fn, polygon_px, occupied=None, roi=None) -> str | None
             return "no map at the destination"
         if cv2.pointPolygonTest(poly, (float(px[0]), float(px[1])), False) < 0:
             return "does not fit on the surface"
-        if occupied is not None and roi is not None:
+        if layer == 0 and occupied is not None and roi is not None:
             col, row = round(px[0]) - roi[0], round(px[1]) - roi[1]
             if 0 <= row < occupied.shape[0] and 0 <= col < occupied.shape[1] and occupied[row, col]:
                 return "something is already there"
+    if layer > 0 and occupied is not None and roi is not None:
+        centre = tuple(np.mean(points, axis=0))
+        if not has_support(centre, pixel_fn, occupied, roi) or sum(has_support(p, pixel_fn, occupied, roi) for p in points) < 0.6 * len(points):
+            return "nothing under it at the lower tier"
     return None
 
 
@@ -73,9 +142,12 @@ def options(config: dict, dest_site: str, place_xy, held_axis_deg: float, entry:
     """([(xy, place_yaw_deg), ...] nearest first, None) or ([], why). held_axis_deg: the box's long axis relative to
     the tool yaw, so at a place yaw Y it lies along Y + held_axis_deg. No surface_px: the configured point as is."""
     site, p = config["sites"][dest_site], config.get("params")
+    layer = int(site.get("layer", site.get("tier", 1) - 1))
     polygon = site.get("surface_px")
     base_yaw = site["yaw_deg"]
     if polygon is None:
+        if layer > 0 and occupied is not None and roi is not None and not has_support(place_xy, pixel_fn, occupied, roi):
+            return [], "nothing under it at the lower tier"
         return [(tuple(place_xy), base_yaw)], None
     margin, reach, step = (prm.get(p, k) for k in ("place.margin_mm", "place.search_mm", "place.step_mm"))
     length, width = entry["length_mm"] + 2 * margin, entry["width_mm"] + 2 * margin
@@ -88,7 +160,7 @@ def options(config: dict, dest_site: str, place_xy, held_axis_deg: float, entry:
     for yaw in yaws:
         for dx, dy in offsets:
             xy = (round(place_xy[0] + dx / 1000, 4), round(place_xy[1] + dy / 1000, 4))
-            why = why_not(footprint(xy, yaw + held_axis_deg, length, width), pixel_fn, polygon, occupied, roi)
+            why = why_not(footprint(xy, yaw + held_axis_deg, length, width), pixel_fn, polygon, occupied, roi, layer=layer)
             if why is None:
                 found.append((xy, yaw, math.hypot(dx, dy) + (0 if yaw == yaws[0] else 1000)))
                 break  # the nearest point for this yaw is enough

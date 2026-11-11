@@ -125,3 +125,17 @@ def test_the_runner_recorder_has_no_camera_thread_and_the_pipeline_session_count
     rec.command(["save"])
     result = session.finish()
     assert result["frames"]["top"] == 2 and result["kept"] is True
+
+
+def test_recorder_buffers_ticks_in_memory_and_flushes_at_episode_close(tmp_path):
+    folder = episode(tmp_path, "buffered")
+    rec = er.Recorder()
+    rec.command(["start", str(folder)])
+    for k in range(5):
+        rec.tick([float(k)] * 6, [float(k + 1)] * 6)
+    # No per-tick disk write syscall occurred during the 30 Hz loop
+    assert (folder / "ticks.jsonl").read_text() == ""
+    rec.command(["save"])
+    rows = [json.loads(line) for line in (folder / "ticks.jsonl").read_text().splitlines()]
+    assert len(rows) == 5 and rows[-1]["state"][0] == 4.0 and rows[-1]["action"][0] == 5.0
+

@@ -1,4 +1,4 @@
-"""Rebuild the eight D-504 assets using the installed character renderer."""
+"""Rebuild every D-504 face asset (character.NAMES) using the installed character renderer."""
 from pathlib import Path
 
 from emotion.character import NAMES, frame
