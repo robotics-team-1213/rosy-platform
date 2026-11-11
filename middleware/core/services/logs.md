@@ -1910,3 +1910,12 @@
 - 증거: e94b732208 다음 커밋(시험 기대 갱신)에서 원격 집중 시험 1907 passed, 1 skipped; known_failures NEW 0.
 - gate 변화: 없음. 호스트 렌더·시험은 실물 LCD 판독·ARM64·DEVICE/FIELD 수용이 아니다.
 - CE: 해당 없음 — 설계 판단은 ADR 추가 결정과 회귀 시험에 남는다.
+
+## 2026-11-11 · uncommitted · fix(swarm): 자취 이탈 한 표본이 편대를 끝내지 않는다 (D-559 trail 복귀)
+
+- 변경: `trail.py` — `trail_twist` 가 `(linear, angular, reason, off)` 4-튜플을 돌려준다. 자취에서 0.30 m 넘게 벗어나도 1.0 m 안쪽이면 `trail_rejoin` 으로 돌아오고(최소 0.10 m/s, 가속 한계 0.5 m/s² 유지), 리더 꼬리 0.25 m 안쪽이면 밀지 않고 그 자리에 선다. `manager.py` — 이탈이 `LOST_HOLD_S`(3.0 s) 이어질 때만 `trail_lost` 로 래치하고, 포기하는 그 틱에 사유를 확정해 정지와 `swarm.hold` 이벤트를 함께 낸다. `reference_stream.py` — 건너뜀 한도를 넘은 리더 표본은 한 번 버리고 `JUMP_HOLD_S`(1.0 s) 동안 계속 거절될 때만 래치, `anchor_withheld` 뒤에는 그 창을 미리 만료(정지 표본 뒤 첫 표본이 곧 판정).
+- 증거: `python -m py_compile` 통과, `test_swarm_trail.py` 를 4-튜플·복귀 바닥·가속 한계·포기 틱 이벤트에 맞춰 갱신. 원격 시험 결과는 커밋 SHA 로 다음 항목에 기록한다. 증상 근거는 `Rosy/docs/workspace-records/2026-11-09/formation-driving/README.md:64`(run 8, 팔로워 0.70 m 이탈 후 영구 정지)다.
+- 범위: 로봇 측 자취 추종만. Fleet 릴레이·세션·세션 소유 규칙은 바꾸지 않는다.
+- 한계: Gazebo 재현과 실물 편대 주행은 확인하지 못했다(기체 전원 꺼짐, 시험 호스트 여유 부족). API Ref v1.387 은 `trail_lost` 발생 조건 문장만 고친다.
+- gate 변화: 없음. 호스트 시험은 실물 편대 주행·DEVICE/FIELD 수용을 입증하지 않는다.
+- CE: 미해결 — 원인(영구 래치)과 수정은 코드로 확인했지만 실물·시뮬 재현으로 닫기 전이다. 재현되면 `docs/solutions/` 에 기록한다.

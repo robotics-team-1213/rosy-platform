@@ -45,8 +45,8 @@ def run(path, follower=(-GAP, 0.0, 0.0), extra_s=8.0):
     for k in range(len(path) + round(extra_s / DT)):
         if k < len(path):
             assert trail.add(*path[k])
-        linear, angular, reason = trail_twist(trail, fx, fy, fyaw, gap=GAP, max_speed=0.2,
-                                              max_angular=MAX_W, prev_linear=linear, dt=DT)
+        linear, angular, reason, _ = trail_twist(trail, fx, fy, fyaw, gap=GAP, max_speed=0.2,
+                                                 max_angular=MAX_W, prev_linear=linear, dt=DT)
         outputs.append((linear, angular, reason))
         fx += linear * math.cos(fyaw) * DT
         fy += linear * math.sin(fyaw) * DT
@@ -114,10 +114,20 @@ def test_a_reversing_leader_adds_no_trail_and_the_follower_stops():
 CRUMB_SLACK = 0.04
 
 
-def test_far_off_the_trail_holds_as_lost():
+def test_off_the_trail_creeps_back_and_far_off_holds_as_lost():
+    """이탈은 서서 기다리지 않는다: 1 m 안쪽이면 앞으로 나가며 붙고, 그보다 멀면 선다."""
     trail = Trail((0.0, 0.0), (0.6, 0.0))
-    linear, angular, reason = trail_twist(trail, 0.1, 0.4, 0.0, gap=0.3, max_speed=0.2,
-                                          max_angular=MAX_W, prev_linear=0.0, dt=DT)
+    # 정지 상태에서 복귀를 시작하면 가속 한계(0.5 m/s² × 50 ms)부터다 — 0.10 으로 튀지 않는다.
+    linear, angular, reason, off = trail_twist(trail, 0.1, 0.4, 0.0, gap=0.3, max_speed=0.2,
+                                               max_angular=MAX_W, prev_linear=0.0, dt=DT)
+    assert (reason, round(off, 2)) == ("trail_rejoin", 0.4)
+    assert linear == pytest.approx(0.5 * DT) and angular < 0.0      # turning back
+    # gap 제어가 그만큼 못 가라고 해도 복귀 중에는 0.10 m/s 를 바닥으로 둔다.
+    linear, _, reason, _ = trail_twist(trail, 0.1, 0.4, 0.0, gap=0.48, max_speed=0.2,
+                                       max_angular=MAX_W, prev_linear=0.1, dt=DT)
+    assert (linear, reason) == (pytest.approx(0.1), "trail_rejoin")
+    linear, angular, reason, _ = trail_twist(trail, 0.1, 1.4, 0.0, gap=0.3, max_speed=0.2,
+                                             max_angular=MAX_W, prev_linear=0.0, dt=DT)
     assert (linear, angular, reason) == (0.0, 0.0, "trail_lost")
 
 
@@ -257,17 +267,75 @@ def test_a_leader_too_far_to_join_ends_the_follow():
                for t, d in rig.events.published)
 
 
-def test_a_leader_jump_latches_trail_lost():
-    """10 Hz samples: a 0.5 m step is a relocalisation, not driving (bound 0.3 m + ceiling x dt)."""
+def test_one_leader_jump_sample_is_skipped_and_the_trail_continues():
+    """10 Hz 표본 하나의 0.5 m 튐은 재지역화 잡음일 수 있다 — 버리고 다음 표본을 받는다."""
     rig = Rig()
     rig.follow()
     rig.leader(1.0)
     rig.clock.advance(0.1)
-    rig.leader(1.5)
-    assert rig.step() is None
-    rig.leader(1.55)
-    assert rig.step() is None
+    rig.leader(1.5)                                      # a jump: skipped, not bridged
+    assert rig.step() is not None and rig.hold_reason() is None
+    rig.leader(1.03)                                     # the next sample fits the trail
+    assert rig.step() is not None and rig.hold_reason() is None
+
+
+def test_a_sustained_leader_jump_latches_trail_lost():
+    """계속 튀면 자취를 이을 수 없다: 1 s 동안 모든 표본이 빗나가면 세운다."""
+    rig = Rig()
+    rig.follow()
+    rig.leader(1.0)
+    for k in range(1, 14):                               # 1.3 s at 10 Hz, every sample rejected
+        rig.clock.advance(0.1)
+        rig.leader(1.5 + 0.005 * k)
+        rig.step()
+    assert rig.sent[-1] is None
     assert rig.hold_reason() == "trail_lost"
+
+
+def test_off_the_trail_recovers_without_an_operator_reform():
+    """이탈 한 번이 대형을 영구 정지시키지 않는다 (2026-11-11 formation-lane run 8)."""
+    rig = Rig()
+    rig.follow()
+    rig.leader(0.6)
+    assert rig.step()[0] > 0
+    rig.pose = (0.1, 0.45, 0.0, "map", 0.0)              # pushed off its own path
+    twist = rig.step()
+    assert twist is not None and 0.0 < twist[0] <= 0.1 and twist[1] < 0.0
+    assert rig.hold_reason() is None
+    rig.leader(0.7)
+    rig.pose = (0.2, 0.02, 0.0, "map", 0.0)              # back on the trail
+    rig.leader(0.8)
+    assert rig.step()[0] > 0.0
+    assert rig.hold_reason() is None
+
+
+def test_off_the_trail_for_longer_than_the_hold_latches_trail_lost():
+    """3 s 동안 못 붙으면 기하가 아니다 — 운영자가 다시 세워야 한다."""
+    rig = Rig()
+    rig.follow()
+    rig.leader(0.6)
+    rig.step()
+    rig.pose = (0.1, 0.45, 0.0, "map", 0.0)
+    for _ in range(70):                                  # 3.5 s
+        rig.step()
+    assert rig.hold_reason() == "trail_lost"
+    assert rig.step() is None
+
+
+def test_the_tick_that_gives_up_creeps_stops_and_announces_together():
+    """복귀를 포기하는 그 틱에 서고 이벤트도 낸다 (이틀 뒤에 알면 그 틱의 정지가 설명되지 않는다)."""
+    rig = Rig()
+    rig.follow()
+    rig.leader(0.6)
+    rig.step()
+    rig.pose = (0.1, 0.45, 0.0, "map", 0.0)
+    for _ in range(80):
+        stopped = rig.step() is None
+        if stopped:
+            assert rig.hold_reason() == "trail_lost"
+            break
+    assert stopped
+    assert [d["reason"] for n, d in rig.events.published if n == "swarm.hold"] == ["trail_lost"]
 
 
 def test_after_a_stream_gap_the_jump_bound_grows_with_time():

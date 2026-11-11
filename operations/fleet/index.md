@@ -105,8 +105,8 @@
 
 ## 최근 기록
 
+- 2026-11-11 · uncommitted · test(fleet): trail_twist 4-튜플 호출자 정리
 - 2026-11-11 · uncommitted · D-1016 등록 로봇 30일 비활동 «삭제 예정» 표시
 - 2026-11-11 · uncommitted · docs(fleet): 지도-실제 대조 독립 검토 반영 - 판정 대상 우선순위·근거 결정 번호 정정
 - 2026-11-10 · uncommitted · fix: 관제 단위 개명의 접두사 확인·origin 정규화·감사 행 조건 (D-1011)
 - 2026-11-10 · uncommitted · refactor: 관제 단위 id CELL-A → ARM-CELL 별칭 수용과 원장 마이그레이션 (D-1011)
-- 2026-11-10 · uncommitted · feat(fleet): 지도–실제 대조와 초안 강체 보정

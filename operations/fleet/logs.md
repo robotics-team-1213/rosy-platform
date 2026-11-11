@@ -5467,3 +5467,10 @@
 - 변경: `GET /api/fleet/enrollment/robots` 행에 `last_activity_at`·`days_idle`·`removal_pending`을 더했다(읽기 시점 계산, DB 상태·전이 불변). 마지막 활동은 마지막 수용 CORE 이벤트(`CoreEventStore.last_received_times`, `fleet/observe/events.py` 소유)와 등록 행 마지막 기록 가운데 늦은 쪽이며, 임계값은 사이트 설정 `fleet.enrollment.idle_removal_days`(기본 30, 1..3650, `console_site_config._enrollment_config`). 표시는 무엇도 해제하지 않는다 — 비활성은 토큰 만료, 해제는 이름 있는 운영자 unenroll 그대로(D-456). API Ref v1.386, ADR D-1016.
 - 증거: 원격 시험 exit 0 / NEW 0 — 763608decb에서 test_enrollment_service·test_core_event_store·test_enrollment_api·test_cli·test_module_structure(known_failures 0 new). 콘솔 표시 node 시험 enrollment.test.mjs 8 pass. D-766 분할(enrollment_inputs·enrollment_idle, 라칫 행 845→819)로 enrollment.py 819줄·cli.py 757줄 유지. 첫 두 차례 RED는 가짜 시계와 저장소 실시계 스탬프의 영역 충돌로, 미래 스탬프 무시 규칙으로 바로잡았다.
 - gate 변화: 없음.
+
+## 2026-11-11 · uncommitted · test(fleet): trail_twist 4-튜플 호출자 정리
+
+- 변경: `test/test_trail_anchor_e2e.py` — `trail_twist` 가 `(linear, angular, reason, off)` 를 돌려주는 계약에 맞춰 언팩을 고쳤다(`core_features` 쪽 D-559 복귀 변경). 이 파일이 유일한 외부 호출자다.
+- 증거: `python -m py_compile` 통과. 시험 실행은 커밋 SHA 로 원격에서 요청한다.
+- gate 변화: 없음.
+- CE: 해당 없음 — 계약 변경에 딸린 호출자 정리다.
