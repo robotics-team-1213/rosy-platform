@@ -1911,6 +1911,12 @@
 - gate 변화: 없음. 호스트 렌더·시험은 실물 LCD 판독·ARM64·DEVICE/FIELD 수용이 아니다.
 - CE: 해당 없음 — 설계 판단은 ADR 추가 결정과 회귀 시험에 남는다.
 
+## 2026-11-11 · 4eaf152dc6 · feat(docking): charge-bay pink guide line approach (D-1013)
+- 변경: `docking/bay_phases.py` 신규 — 칸 접안 상태머신(스테이징 교차점 → 제자리 180° → 캐스터 정착 크립 + 두 번 일치 → 게이트·코스트·스캔 사다리가 붙은 후진 폐루프(ω=−(8·횡+0.6·방위)) → 접촉 3중 판정(진행 멈춤·슬립 발산·거리 상한) → 전압 1소스 D-941 숫자). `manager.py` 훅 5곳(순증가 0, 래칫 771 유지), `model.py` 설정 15키, `database.py` approach "line", `feed.py` CAMERA_LINE 소스, `detector.py` camera_line 선택. 시험 `test_docking_bay.py` 14건(명목 ±3cm·±3° 9, 이웃선 점프·선 상실 사다리·정지 그림·무전압·소스 선택)
+- 증거: 원격 pytest(ai PC) 도킹 전판 269 passed exit 0(4eaf152dc6). 첫 실행 5실패 중 1건은 제품 버그(슬립 창이 매 프레임 재앵커돼 발산 불감) — "선 모양이 움직일 때만 재앵커"로 수정 뒤 통과
+- gate 변화: 없음
+- 결정: D-1013 Decision 1–6·8의 구현. bay_line_observer_node(카메라→CAMERA_LINE 관측)와 LINE_FOLLOW→DOCKING 이음새·Gazebo 실구동은 다음 브랜치
+- 교훈: 없음
 ## 2026-11-11 · uncommitted · fix(swarm): 자취 이탈 한 표본이 편대를 끝내지 않는다 (D-559 trail 복귀)
 
 - 변경: `trail.py` — `trail_twist` 가 `(linear, angular, reason, off)` 4-튜플을 돌려준다. 자취에서 0.30 m 넘게 벗어나도 1.0 m 안쪽이면 `trail_rejoin` 으로 돌아오고(최소 0.10 m/s, 가속 한계 0.5 m/s² 유지), 리더 꼬리 0.25 m 안쪽이면 밀지 않고 그 자리에 선다. `manager.py` — 이탈이 `LOST_HOLD_S`(3.0 s) 이어질 때만 `trail_lost` 로 래치하고, 포기하는 그 틱에 사유를 확정해 정지와 `swarm.hold` 이벤트를 함께 낸다. `reference_stream.py` — 건너뜀 한도를 넘은 리더 표본은 한 번 버리고 `JUMP_HOLD_S`(1.0 s) 동안 계속 거절될 때만 래치, `anchor_withheld` 뒤에는 그 창을 미리 만료(정지 표본 뒤 첫 표본이 곧 판정).

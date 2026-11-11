@@ -185,9 +185,8 @@ def fingertip_point(img):
     row of the pads), or None."""
     import cv2
 
-    g = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    h = g.shape[0]
-    band = (g[2 * h // 3:] < 60).astype(np.uint8)
+    h = img.shape[0]
+    band = (cv2.cvtColor(img[2 * h // 3:], cv2.COLOR_BGR2GRAY) < 60).astype(np.uint8)
     n, labels, stats, _ = cv2.connectedComponentsWithStats(band)
     blobs = sorted((i for i in range(1, n) if stats[i, cv2.CC_STAT_AREA] > 800), key=lambda i: -stats[i, cv2.CC_STAT_AREA])[:2]
     if len(blobs) < 2:

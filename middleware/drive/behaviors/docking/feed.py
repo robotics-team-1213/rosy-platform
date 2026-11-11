@@ -21,7 +21,8 @@ from core_features.docking.detector import DockObservation
 
 SOURCE = "CAMERA_TAG"
 LIDAR_V = "LIDAR_V"   # rear dock V marker (D-950 follow-up), from dock_lidar_observer_node
-SOURCES = (SOURCE, LIDAR_V)
+CAMERA_LINE = "CAMERA_LINE"  # charge-bay pink guide line (D-1013), from bay_line_observer_node
+SOURCES = (SOURCE, LIDAR_V, CAMERA_LINE)
 
 
 def _finite(value) -> float:
@@ -47,7 +48,7 @@ class DockObservationFeed:
         source = payload.get("source") if isinstance(payload, dict) else None
         try:
             if source not in SOURCES:
-                raise ValueError("not a CAMERA_TAG or LIDAR_V dock observation")
+                raise ValueError("not a CAMERA_TAG, LIDAR_V or CAMERA_LINE dock observation")
             if type(payload.get("visible")) is not bool:
                 raise ValueError("visible must be a boolean")
             stamp = _finite(payload.get("stamp"))

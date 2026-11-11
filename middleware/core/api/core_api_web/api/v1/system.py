@@ -248,8 +248,8 @@ def capabilities(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depen
         ("lane", svc.line_follow is not None),
         ("free", (data.get("navigation") or {}).get("goal_navigation") is True)) if on)
     data["controls"] = pinky_controls(provides=_drive_provides(svc, data),
-                                      max_linear=limits.manual_linear,
-                                      max_angular=limits.manual_angular,
+                                      max_linear=min(limits.manual_linear, limits.approved_caps()[0]),
+                                      max_angular=min(limits.manual_angular, limits.approved_caps()[1]),
                                       autonomy=("line",) if svc.line_follow is not None else (),
                                       robot_kind=_robot_kind(svc),
                                       drive_modes=drive_modes,
