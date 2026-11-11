@@ -14648,6 +14648,11 @@ osy-d395-s1d\`.
 - gate 변화: 실패만 있는 브라우저 묶음은 다른 묶음과 같은 판정을 받는다(NEW면 멈추고, LOAD-FLAKY면 계속).
 - CE: 해당 없음 — 원인과 규칙이 코드와 회귀 시험에 남는다.
 
+## 2026-11-08 · uncommitted · fix(land): 공백·`\u` 이스케이프가 든 매개변수 시험 id는 함수 단위로 다시 돌린다
+- 변경: `land_checks._ids`가 매개변수 부분에 공백이나 `\`가 있는 NEW id를 `path::test` 함수 id로 바꾸고 중복을 없앤다
+- 증거: feat/control-unit-remote-peer 착지가 `test_fleet_estop_partial_and_unknown_are_visible_on_phone[response1-비…-index.html]`를 혼자 다시 돌리다 "no tests ran"(exit 4)으로 판정 없이 멈췄고, main 대조도 같은 이유로 판정이 없었다
+- gate 변화: 없음
+
 ## 2026-11-08 · uncommitted · docs(solutions): rclpy Node 비공개 이름 충돌 교훈
 - 변경: `docs/solutions/runtime-errors/ros-node-subclass-must-not-reuse-rclpy-private-names-2026-11-08.md` — battery_publisher가 `self._clock`으로 rclpy 시계를 가려 릴리스 175에서 기동 직후 죽은 일과, 스텁 시험이 이를 못 보는 이유.
 - 증거: b8xy canary 트레이스백(2026-11-08 13:19Z), 수정 커밋 `3ed5a498c6`와 회귀 시험.
@@ -14698,3 +14703,50 @@ osy-d395-s1d\`.
 - 증거: `test_recheck_runs_a_legacy_browser_red_with_the_opt_in`, 로컬 `test_land_mainred*`·`test_land_nightly` 27 passed.
 - gate 변화: 없음.
 - CE: 해당 없음 — 원인과 규칙이 코드와 회귀 시험에 남는다.
+
+## 2026-11-09 · uncommitted · fix(git): `* text=auto`로 텍스트는 늘 LF로 저장
+
+- 변경: `.gitattributes` 첫 규칙 `* text=auto`. autocrlf를 끄고 커밋해도 텍스트는 LF로 들어간다. 체크아웃은 그대로 core.autocrlf를 따른다. 뒤 규칙(`-text`, `eol=lf`)이 우선한다.
+- 근거: `tools/land_mainred.py`가 10-27부터 CRLF로 저장돼 LF 브랜치마다 전체 충돌(fix/eol-guard가 두 파일 정규화·검사·병합 처리). main 488dab2970에서 `git add --renormalize .`가 바꾸는 파일은 그 두 개뿐이었다.
+- 증거: 원격 `.gitattributes`를 읽는 시험.
+- gate 변화: 없음.
+- CE: 기존 교훈 갱신은 fix/eol-guard에 있다(`docs/solutions/workflow-issues/autocrlf-false-commit-a-rewrites-tree-to-crlf-2026-11-01.md`).
+
+## 2026-11-09 · uncommitted · fix(land): CRLF를 들이는 브랜치 거절, 병합은 -X renormalize
+
+- 원인: `tools/land_mainred.py`·`test/test_land_mainred_flow.py`가 생성 커밋(fd9019f795, 10-27)부터 CRLF였고, safer autocrlf가 이후 수정마다 CRLF를 유지했다. LF로 저장한 브랜치는 파일 전체가 충돌해 착지가 멈췄다.
+- 변경: 두 파일을 LF로 정규화. `land_precheck.crlf_added`가 바뀐 텍스트 파일에 CRLF를 새로 들이는 브랜치를 거절하고 `git add --renormalize` 명령을 알려 준다(`-text` 제외). `land.py` 병합·미리보기, `land_prepare` 대기 미리보기, `land_full` FULL 재사용 확인이 `-X renormalize`로 병합한다.
+- 증거: 원격 `test_land_precheck`·`test_land_mainred*`·`test_land_prepare`·`test_land_full` 92 passed(90669a4d31).
+- gate 변화: precheck에 줄 끝 검사 추가.
+- CE: 기존 교훈 갱신 — `docs/solutions/workflow-issues/autocrlf-false-commit-a-rewrites-tree-to-crlf-2026-11-01.md`.
+
+## 2026-11-09 · uncommitted · feat(fleet): 현장 차로 편대 미션 — 리더 Nav2 trip + FOR-004 TRAIL 팔로워 (D-1002)
+
+- 변경: `fleet.server.formation_mission`(차로 적합성 `lane_fit`, 무장 → 리더 trip job 구성, 리더 lease 해제로 미션 종료) + `/api/fleet/formation/mission` 세 경로(v1.378), `tools/sim/formation_lane.py` Gazebo 시나리오(map_v2_fleet, Nav2 리더, TRAIL 팔로워, 리더 급정지·팔로워 상실 주입, 참값 채점), ADR D-1002.
+- 증거: 설계자·비평자 토론(A 리더-팔로워 vs B 독립 trip 편대 vs C 가상 강체). 호스트 시험 `test_formation_mission.py`는 시험 PC 실행 결과로, SIM은 `docs/validation/formation-lane-sim-2026-11-09/`로 기록한다. 실물 수용 없음.
+- gate 변화: 없음(SIM·device_trial 프로필에서만 라우트가 선다).
+- CE: 해당 없음 — 판단은 ADR에, 수치는 검증 기록에 남는다.
+
+## 2026-11-10 · uncommitted · docs: D-1010 사이트 지도 프레임 결속 ADR
+- 변경: ADR D-1010과 ADR Log 행, API Reference v1.383(활성 지도 본문 검증 거절 코드, trip detail.goal_frame, MAP_FRAME_MISMATCH 보류 이유, pose map_id).
+- 이유: Fleet R 등에서 지도를 따올 때 틀린 지도·틀린 좌표계를 쓰지 않게(사용자 2026-11-10 원문 ADR에 인용).
+- 증거: ADR D-1010 본문과 ADR Log 행, API Reference v1.383 행.
+- gate 변화: 없음(SOURCE만).
+
+## 2026-11-10 · uncommitted · docs: D-1010 독립 검토 반영 — 3·6항과 한계 갱신
+- 변경: ADR D-1010 3항(증명 없는 free 목표 정지, 같은 map_id 증명일 때만 충전 폴백, poses_in_robot_frame 포트 선언)·6항(모르는 map_id는 교차 판정에 안 씀, 마지막 확인값 대체와 로그)·한계(충전 결속 요건, 구형 기체 보류)·검증 갱신. 제목·상태 불변.
+- 이유: 2026-11-10 독립 검토 지적의 결정 근거를 ADR 본문에 남기기 위해서(D-1010은 이 브랜치의 미착지 ADR이라 제자리 갱신).
+- 증거: ADR D-1010 본문.
+- gate 변화: 없음(SOURCE만).
+
+## 2026-11-10 · uncommitted · docs(solutions): OMX 실물 팔 지터링 및 청크 정지 원인·해결 교훈 기록
+- 변경: `docs/solutions/runtime-errors/omx-real-arm-jitter-tick-quantization-and-chunk-stops-2026-11-10.md` 추가.
+- 증거: `trace-arm_b-20261110-200027.jsonl` 및 `session.jsonl` 실측치와 원격 pytest 회귀 시험.
+- gate 변화: 없음.
+- CE: 새 교훈 기록.
+
+## 2026-11-11 · uncommitted · docs(adr,solutions): D-1015 6항 실시간 프로토콜·비전·기구학 최적화 및 실물 데몬 경로 드리프트 CE 교훈 반영
+- 변경: `docs/adr/D-1015-omx-imitation-speed-parity-temporal-ensembling-and-kinodynamic-streaming.md`에 6항(실시간 카메라·통신 프로토콜 `HTTP/1.1` Keep-Alive·`ETag` `304`·MJPEG·15FPS·10Hz 상태 보고·5ms FIFO 폴링 및 비전 ROI 슬라이싱·3x3 기구학 언롤링·다이제스트 캐시)을 추가하고, `docs/solutions/runtime-errors/omx-real-arm-jitter-tick-quantization-and-chunk-stops-2026-11-10.md`에 `robttt@100.82.51.8` 라이브 데몬 경로 드리프트(`omx-camera-readiness.env`의 구 스냅샷 참조, `rosy-omx-camera@.service` `--max-fps` 기본값 불일치, 상위 디렉터리 `.py` 섀도잉) 원인과 해결을 기록했다.
+- 증거: `robttt@100.82.51.8` 라이브 포트 `8767` `HTTP/1.1` Keep-Alive + `ETag` `304`(`0.30~0.37ms`) 실측 및 원격 pytest 검증.
+- gate 변화: 없음.
+- CE: 기존 교훈 갱신 — `docs/solutions/runtime-errors/omx-real-arm-jitter-tick-quantization-and-chunk-stops-2026-11-10.md`.

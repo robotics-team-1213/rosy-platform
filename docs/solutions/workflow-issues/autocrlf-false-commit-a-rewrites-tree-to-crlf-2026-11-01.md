@@ -55,3 +55,29 @@ The rebuilt branch (5 files, +23/-1) landed on local main as 093ef30c2b.
 A repo-wide `* text=auto eol=lf` would make this impossible, but needs a
 renormalization commit across the tree and a check against byte-compared
 fixtures; it is a separate decision.
+
+## Update 2026-11-09: one CRLF blob stays CRLF, then conflicts as a whole file
+
+`tools/land_mainred.py` and `test/test_land_mainred_flow.py` were born CRLF in
+their creation commit (a555e421fe -> fd9019f795, 2026-10-27): every file that
+commit added was CRLF, every file it modified was LF, which fits a commit made
+with `core.autocrlf` off (the path above). The reflog is gone, so the exact
+command is not proven.
+
+Nothing noticed for two weeks because git's "safer autocrlf" never normalizes a
+blob that is already CRLF in the index: with `core.autocrlf=true` (or
+`text=auto`) every later edit (c0390e7ba5, 7ee8cf0ffa, ...) kept the file CRLF.
+On 2026-11-09 two branches stored it LF; each then differed from main on every
+line and the landing stopped with "not in the auto-resolvable set".
+
+- Guard: `land_precheck.crlf_added` refuses a branch whose changed text files
+  gain CRLF lines the merge base did not have (`-text` files excluded) and
+  prints `git add --renormalize -- <paths>`.
+- Merge: `land.py` (merge and preview), `land_prepare` (wait preview) and
+  `land_full` (FULL-reuse check) merge with `-X renormalize`, so a
+  line-ending-only difference no longer conflicts.
+- `* text=auto` in `.gitattributes` (separate branch, it is a product path)
+  normalizes on commit even with `autocrlf` off. Measured scope on main
+  488dab2970: `git add --renormalize .` changed only the two files above.
+- Check: `git ls-files --eol | grep i/crlf` lists the CRLF blobs; anything not
+  `attr/-text` is a bug.

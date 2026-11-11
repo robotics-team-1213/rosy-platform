@@ -51,6 +51,8 @@ from cell_calibrate import learn_bias, self_calibrate  # noqa: E402,F401  (calib
 import cell_pipeline as cp  # noqa: E402
 from cell_observe import keep, predicted_pixel, wrap90  # noqa: E402
 from cell_auto_setup import load_config  # noqa: E402,F401  (cell_align and cell_replay call auto.load_config)
+from cell_pick_geom import (grasp_depth, surface_z, parse_dest, grasp_yaw, across,  # noqa: E402,F401 - moved there
+                            jaw_open_for, reachable_ends)  # (D-766 split); names kept for callers and tests
 
 CLOSING = "gripper.closing_axis_offset_deg"
 TEMP_STOP_C, PWM_FRACTION = prm.default("auto.temp_stop_c"), prm.default("auto.pwm_fraction")
@@ -87,8 +89,8 @@ class Monitor:
         self.last = {"reason": reason, **why}  # the rule, joint and values the safety decision row keeps
         return reason
 
-    def check(self) -> str | None:
-        state = self.cell.act("state")
+    def check(self, state: dict | None = None) -> str | None:
+        state = self.cell.act("state") if state is None else state
         if not state.get("ok") or state.get("fault"):
             return self.stop(f"runner: {state.get('fault') or state.get('error')}", rule="runner fault")
         if state.get("t") and time.time() - state["t"] > self.stale_s:
@@ -104,7 +106,7 @@ class Monitor:
         """A joint at its own cap fraction AND not moving for the window is blocked; at the cap alone is normal
         while lifting (the elbow saturates leaving home), so a moving joint never trips this."""
         frac, window = prm.get(self.params, "auto.pwm_fraction", PWM_FRACTION), prm.get(self.params, "auto.pwm_window_s")
-        still, now, last, self.last_pos = prm.get(self.params, "auto.pwm_move_units"), self.clock(), self.last_pos,             (list(pos) if pos is not None else None)
+        still, now, last, self.last_pos = prm.get(self.params, "auto.pwm_move_units"), self.clock(), self.last_pos, (list(pos) if pos is not None else None)
         # the gripper squeezes at its cap while holding a box, still by design (2026-10-28 floor->belt run aborted
         # at home on 300/300); its load is the grasp verdict's and the temperature watch's, not a stall
         for i, v in enumerate(pwm[:5]):
@@ -122,12 +124,17 @@ class Guarded:
     """A cell whose every motion command is preceded by the safety check; a failed check parks and raises."""
 
     def __init__(self, cell, config: dict):
-        self.cell, self.monitor = cell, Monitor(cell, config)
+        self.cell, self.monitor, self._last_state = cell, Monitor(cell, config), None
 
     def act(self, command: str) -> dict:
-        words = command.split()
+        if command == "state":
+            state = self.cell.act("state")
+            self._last_state = (self.monitor.clock(), state)
+            return state
+        words, cached = command.split(), self._last_state
+        self._last_state = None
         if (words[3] if words[0] == "checked" else words[0]) not in ("park", "state", "retreat"):  # Gate's form
-            reason = self.monitor.check()
+            reason = self.monitor.check(cached[1] if cached and self.monitor.clock() - cached[0] <= 0.1 else None)
             if reason:
                 cd.emit("safety", {**self.monitor.last, "command": command}, ["continue", "park and stop"], "park and stop", "rule", reason)
                 self.cell.act("park")
@@ -138,35 +145,10 @@ class Guarded:
         return self.cell.frame(camera)
 
 
-def grasp_depth(config: dict, site: str) -> float:
-    """How far under the object's top this site grips. A site whose grip the arm cannot reach at the default states
-    its own (`grasp_depth_m`): the same grip height then also sets the release height, so the box lands flat."""
-    return config["sites"][site].get("grasp_depth_m", prm.get(config.get("params"), "auto.grasp_depth_m", 0.015))
-
-
-def surface_z(config: dict, site: str) -> float:
-    """The site's surface height (m), which every auto-pick site must state: the grasp height is computed from
-    it (catalogue top height - grasp depth), never taken from the site's `z`, which is the taught cube grasp
-    height. A site giving only its surface as `z` (a floor at 0.006) was once planned at the surface itself."""
-    s = config["sites"][site]
-    if "surface_z" not in s:
-        raise SystemExit(f"site {site!r}: auto pick needs `surface_z` (the surface height in metres)")
-    depth = grasp_depth(config, site)
-    if "z" in s and s["z"] < s["surface_z"] + depth - 1e-9:
-        raise SystemExit(f"site {site!r}: z {s['z']} is below surface_z {s['surface_z']} + grasp depth {depth}")
-    return s["surface_z"]
-
-
-def parse_dest(config: dict, source: str, dest: str):
-    """A site name, or 'x,y' metres on the source surface -> (site, (x, y))."""
-    if dest in config["sites"]:
-        return dest, tuple(config["sites"][dest]["place"])
-    return source, tuple(float(v) for v in dest.split(","))
-
-
 def observe(cell, config: dict, calibration: dict, site: str, roi, catalog: list):
     import cv2
 
+    config, calibration = cell_place_fit.with_tiers(config, calibration, catalog)
     record = cell_pivot.map_record(calibration, site)
     if record is None:
         return None, None, [], f"no map for {site}"
@@ -177,12 +159,13 @@ def observe(cell, config: dict, calibration: dict, site: str, roi, catalog: list
                                   config.get("params"), poly, lab, obj.get("hsv"))
     for o in objects:
         o["raw_m"] = [c / 1000 + d for c, d in zip(o["centre_mm"], config["sites"][site].get("grip_offset_m", (0.0, 0.0)))]  # a site may grip off centre
-    # the finger-side mask is not clipped to the site polygon: a container on the next surface (the board beside the
-    # floor) still meets an open finger (2026-10-29: the jaws came down on a 2-cell on the board, contact at z 0.040)
-    near = cell_objects.foreground(img, roi, params=config.get("params"), surface_lab=lab)
+    near = cell_objects.foreground(img, roi, params=config.get("params"), surface_lab=lab)  # not clipped to site polygon: adjacent surface objects still meet open fingers
     for poly in config["sites"][site].get("markings_px", []):  # flat floor markings (a white line) are no obstacle
         cv2.fillPoly(near, [np.asarray(poly, np.int32) - [roi[0], roi[1]]], 0)
-    return img, object_sized(near, config.get("params")) | cell_objects.colour_mask(img, roi, obj.get("hsv")), objects, None
+    mask = object_sized(near, config.get("params")) | cell_objects.colour_mask(img, roi, obj.get("hsv"))
+    for poly in config["sites"][site].get("markings_px", []):
+        cv2.fillPoly(mask, [np.asarray(poly, np.int32) - [roi[0], roi[1]]], 0)
+    return img, mask, objects, None
 
 
 def object_sized(mask, params=None):
@@ -201,51 +184,11 @@ def finger_room(mask, roi, pixel_fn, o: dict, closing_deg: float | None = None, 
     return fr.jaw_margin(fr.own_removed(mask, roi, pixel_fn, o), roi, pixel_fn, o, closing_deg, params)
 
 
-def grasp_yaw(config: dict, site: str, o: dict, entry: dict, offset) -> float:
-    """Tool yaw (deg) for a closing-axis candidate. The jaws close along tool y = yaw + offset, and must close
-    across the object (long axis + jaw_axis_deg_from_long); yaw and yaw + 180 are the same grasp, the one
-    nearest the site's own yaw is taken. A square object is only squared up to the site yaw."""
-    base = config["sites"][site]["yaw_deg"]
-    if offset is None:
-        return round(base + max(-10.0, min(10.0, wrap90(o["long_axis_deg"] - base))), 1)
-    yaw = o["long_axis_deg"] + entry["grasp"].get("jaw_axis_deg_from_long", 90) - offset
-    return round(base + (yaw - base + 90) % 180 - 90, 1)
-
-
-def across(entry: dict) -> float:
-    """The object's size between the jaws: its width when they close across the long axis (jaw_axis_deg_from_long 90),
-    its length when they close along it (0): a 90 mm 3-cell held by its ends needs a 90 mm gap, not 30 (2026-11-04)."""
-    return entry["width_mm"] if entry.get("grasp", {}).get("jaw_axis_deg_from_long", 90) % 180 == 90 else entry["length_mm"]
-
-
-def jaw_open_for(width_mm: float, params=None, margin_mm: float | None = None) -> float:
-    """The jaw value whose finger gap is the object width plus a margin each side. Measured 2026-10-29 from the wrist
-    view: about 10.4 mm of gap per unit, 30 mm held at 52.3. Opening to 62 put the fingers ~40 mm out, onto the 2-cells
-    standing next to the box; 56 put a finger on the board edge."""
-    g = lambda name: prm.get(params, name)  # noqa: E731
-    margin = g("auto.jaw_margin_mm") if margin_mm is None else margin_mm  # less where a neighbour is near (finger_room)
-    value = g("gripper.held_30mm") + (width_mm + 2 * margin - 30.0) / g("gripper.gap_mm_per_unit")
-    if value > g("gripper.open_max"):  # clamped, the fingers would come down on the object (2026-11-04)
-        raise SystemExit(f"a {width_mm:.0f} mm object needs the jaws at {value:.1f}, past gripper.open_max {g('gripper.open_max')}")
-    return round(max(value, g("gripper.held_30mm") + 0.5), 2)
-
-
-def reachable_ends(o: dict, entry: dict, params=None) -> list:
-    """Grasp points shifted along a long box's axis, toward the arm's base first: grasp.end_frac of the way from
-    the middle to where the jaws would reach the box's end. A square box has none."""
-    reach = prm.get(params, "grasp.end_frac") * (entry["length_mm"] - entry["width_mm"]) / 2000
-    if reach <= 0 or "grasp_shift_mm" in o or across(entry) == entry["length_mm"]:
-        return []  # an end is not shifted again; jaws holding a box by its ends must straddle it, centred (2026-11-04)
-    u = math.radians(o["long_axis_deg"])
-    ends = [dict(o, raw_m=[o["raw_m"][0] + k * reach * math.cos(u), o["raw_m"][1] + k * reach * math.sin(u)],
-                 grasp_shift_mm=round(1000 * k * reach, 1)) for k in (1, -1)]
-    return sorted(ends, key=lambda e: math.hypot(*e["raw_m"]))
-
-
 def plan_pick(config: dict, site: str, dest_site: str, place_xy, o: dict, entry: dict, offset, bias_mm, work: Path,
               yaw: float | None = None, place_yaw: float | None = None):
     """Library for one candidate: grasp 15 mm below the top, approach 40 mm above it (else 20), the yaw and its
     180 degree twin tried in turn. Returns (library path, pick, place, approach_m, yaw) or an error string."""
+    config = cell_place_fit.with_tiers(config, catalog=[entry])[0]
     cell_pivot.validate_bias({"point_m": o["raw_m"], "bias_mm": bias_mm}, config.get("params"))
     height = entry["top_height_mm"] / 1000 - grasp_depth(config, site)
     x, y = (o["raw_m"][0] - bias_mm[0] / 1000, o["raw_m"][1] - bias_mm[1] / 1000)
@@ -275,7 +218,7 @@ def after_failure(config: dict, site: str, target: dict, moved: dict, wrist_on: 
     contact_z = None
     if contact is not None:
         from cell_surface import fk_z
-        contact_z = round(fk_z(contact["state"]), 4)
+        contact_z = round(fk_z(contact["state"], config.get("tcp_x_m")), 4)
     surface = surface_z(config, site)
     diag = cell_diagnose.diagnose(moved["result"], contact_z, surface, surface + target["entry"]["top_height_mm"] / 1000,
                                   target["pick"]["z"], config.get("params"))
@@ -299,6 +242,7 @@ def square_entry(entries: dict, o: dict) -> bool:
 def choose(cell, config, calibration, site, dest_site, place_xy, roi, objects, mask, catalog, bias_data, choices, work,
            failed_yaws=(), dest_view=None):
     """Ordered usable targets: [{object, plan...}], and why the others were refused."""
+    config, calibration = cell_place_fit.with_tiers(config, calibration, catalog)
     entries, usable, refused = {e["id"]: e for e in catalog}, [], []
     pixel_fn = lambda p: predicted_pixel(config, calibration, site, p)  # noqa: E731
     p = config.get("params")
@@ -309,6 +253,8 @@ def choose(cell, config, calibration, site, dest_site, place_xy, roi, objects, m
             why = "tangled blob"
         elif not o["matched"]:
             why = "no catalogue match"
+        elif (w := cell_objects.want_reason(config.get("want"), o)):
+            why = w
         elif px is None or not (roi[0] + 12 <= px[0] <= roi[2] - 12 and roi[1] + 12 <= px[1] <= roi[3] - 12):
             why = "not inside the camera view"
         elif not square_entry(entries, o):
@@ -322,7 +268,7 @@ def choose(cell, config, calibration, site, dest_site, place_xy, roi, objects, m
             if room["margin_mm"] is None:
                 why = f"no finger room: {room['free_mm'][0]} / {room['free_mm'][1]} mm free beside it"
         if why:
-            refused.append({"centre_mm": o["centre_mm"], "object": o.get("object"), "why": why})
+            refused.append({"centre_mm": o["centre_mm"], "object": o.get("object"), "colour": o.get("colour"), "why": why})
             continue
         entry = entries[o["object"]]
         square = abs(entry["length_mm"] - entry["width_mm"]) < 1e-6
@@ -422,6 +368,7 @@ def run_auto(cell, config, calibration, calibration_path, catalog, roi, source, 
              dry_run=False, sleep=time.sleep, log=print, attempts=None) -> dict:
     """One object from `source` to `dest`; up to `attempts` grasps (the second with the better candidate)."""
     work, out = Path(work), {"from": source, "to": dest, "attempts": []}
+    config, calibration = cell_place_fit.with_tiers(config, calibration, catalog)
     if source not in config["sites"]:  # the --from default (pinky) on a cell without one was a bare KeyError
         return {**out, "result": f"refused: source {source!r} is not a site in the config"}
     if dest in config["sites"] and "place" not in config["sites"][dest]:  # the board: taken from, never put on
@@ -433,11 +380,11 @@ def run_auto(cell, config, calibration, calibration_path, catalog, roi, source, 
             return {**out, "result": f"refused: {site}: {out[f'track_{site}'].get('why')}"}
         roi = config["sites"][site]["auto_roi"] if site == source else roi
     dest_site, place_xy = parse_dest(config, source, dest)
-    droi = config["sites"][dest_site].get("auto_roi") or (roi if dest_site == source else None)
+    droi = config["sites"][dest_site].get("auto_roi") or (roi if dest_site == source or config["sites"][dest_site].get("layer", 0) > 0 else None)
     guarded = None if dry_run else Guarded(cell, config)
     if guarded is not None and not cell.act("state").get("ok"):
         return {"result": "refused", "error": "start record_session.py --chunks first: no chunk_runner answers"}
-    bias_data = cell_pivot.load_bias(cell_pivot.bias_path(calibration_path), config.get("params"))
+    bias_data = cell_place_fit.with_tier_biases(config, cell_pivot.load_bias(cell_pivot.bias_path(calibration_path), config.get("params")))
     episode, failed_yaws, dest_view = None, [], None
     if droi is not None and dest_site != source:  # what is already on the destination (cell_place_fit)
         _, dmask, _, derr = observe(cell, config, calibration, dest_site, droi, catalog)
@@ -450,11 +397,9 @@ def run_auto(cell, config, calibration, calibration_path, catalog, roi, source, 
             usable, refused = choose(cell, config, calibration, source, dest_site, place_xy, roi, objects, mask, catalog,
                                      bias_data, choices, work, failed_yaws, dest_view) if not error else ([], [])
             cd.target(objects, usable, refused)
-            if usable and config.get("decision_model"):  # the model orders what the measurement kept, or vetoes all
-                import cell_pick_judge
-                import judge_seat
-
-                judged = cell_pick_judge.ask(judge_seat.ollama(**config["decision_model"]), img, usable)
+            if usable and (config.get("debate_models") or config.get("decision_model")):  # the model orders what the measurement kept, or vetoes all
+                import cell_pick_judge  # noqa: E401
+                judged = cell_pick_judge.ask(config.get("debate_models") or config["decision_model"], img, usable)
                 cd.emit("target_judge", {"candidates": len(usable)}, list(range(len(usable))) + [-1], judged["choice"],
                         judged["by"], judged["reason"])
                 usable = [usable[i] for i in judged["order"]]
@@ -472,6 +417,7 @@ def run_auto(cell, config, calibration, calibration_path, catalog, roi, source, 
             pivot_cell = guarded if not dry_run and "_commissioning" in config else None
             bias_data, problem = self_calibrate(pivot_cell, config, calibration, calibration_path, source,
                                                 target["object"]["raw_m"], objects, work, bias_data, sleep, log)
+            bias_data = cell_place_fit.with_tier_biases(config, bias_data)
             cd.bias(known, problem, target["object"]["raw_m"])
             if problem and not dry_run:
                 tried["locate"] = {"found": True, "arm_m": target["object"]["raw_m"]}
@@ -493,7 +439,8 @@ def run_auto(cell, config, calibration, calibration_path, catalog, roi, source, 
                                "object": o["object"], "long_axis_deg": o["long_axis_deg"]}
             tried["grasp_yaw"] = {"choice": target["offset"], "yaw_deg": target["pick"]["yaw_deg"]}
             tried["plan"] = {"pick": target["pick"], "place": target["place"]}
-            tried["auto"] = {"object": o["object"], "closing_axis_offset_deg": target["offset"], "bias_mm": target["bias_mm"],
+            tried["auto"] = {"object": o["object"], **({"colour": o["colour"]} if "colour" in o else {}),
+                             "closing_axis_offset_deg": target["offset"], "bias_mm": target["bias_mm"],
                              "bias_region": target["bias_region"], "approach_m": target["approach_m"]}
             cd.closing(target["offset"], choices.data["values"].get(CLOSING, []), o["object"])
             row.update(chosen=tried["auto"], plan=tried["plan"], pivot_needed=problem, long_axis_deg=o["long_axis_deg"])
@@ -517,13 +464,15 @@ def run_auto(cell, config, calibration, calibration_path, catalog, roi, source, 
             guard = cell_scene_guard.hook(guarded, config, guarded.frame("top"), roi, predicted_pixel(config, calibration, source, (0.0, 0.0)),
                                           predicted_pixel(config, calibration, source, o["raw_m"]))
             wrist, capture, pinch, feel = cell_hooks.pick_hooks(same, gate, target, cp.write_library, source, dest_site, cd.emit, calibration, guard)
+            grasp_check = cell_hooks.grasp_debate(same, gate, target, cp.write_library)
             moved = transfer_folded(gate, target["library"], wrist=wrist, after_place=capture, pinch=pinch, feel=feel,
-                                    sequence=sequence, lift_stall=cell_hooks.lift_stall(cell, config, sleep), at_stop=cell_hooks.stills(cell, config))
+                                    sequence=sequence, lift_stall=cell_hooks.lift_stall(cell, config, sleep),
+                                    at_stop=cell_hooks.stills(cell, config), grasp_check=grasp_check)
             tried["envelope"] = gate.assessment
             tried["wrist"] = (moved.get("wrist") or next((s for s in moved["steps"] if s.get("command") == "wrist"), None)
                               or ("disabled or uncalibrated" if wrist is None else None))
             tried["transfer"] = moved
-            if moved["result"] == "empty" or (moved["result"] == "contact" and moved.get("at") in ("run descend_pick", "run grasp_pick")):
+            if moved["result"] in ("empty", "reinserted") or (moved["result"] == "contact" and moved.get("at") in ("run descend_pick", "run grasp_pick")):
                 decided = after_failure(config, source, target, moved, wrist is not None, failed_yaws)
                 tried["diagnosis"] = decided
                 if decided["chosen"] in ("ask_person", "probe_surface"):
@@ -532,8 +481,8 @@ def run_auto(cell, config, calibration, calibration_path, catalog, roi, source, 
                     cell_attempts.record(config, calibration, source, dest, attempt, tried, t0, choices)
                     return {**out, "result": f"stopped: {decided['cause']} -> {decided['chosen']}"}
             held = moved["result"] == "placed" or any(s.get("holding") for s in moved["steps"])
-            if target["offset"] is not None and moved["result"] in ("placed", "empty", "contact"):
-                choices.outcome(CLOSING, target["offset"], held, f"{moved['result']} at yaw {target['pick']['yaw_deg']}")
+            if target["offset"] is not None and moved["result"] in ("placed", "empty", "contact", "reinserted"):
+                choices.outcome(CLOSING, target["offset"], moved["result"] == "placed", f"{moved['result']} at yaw {target['pick']['yaw_deg']}")
                 choices.save()
             if moved["result"] == "placed":
                 place_xy = (target["place"]["x"], target["place"]["y"])  # where it was put (cell_place_fit may move it)
@@ -554,12 +503,28 @@ def run_auto(cell, config, calibration, calibration_path, catalog, roi, source, 
             episode = None
             cd.after(moved, choices.best(CLOSING), attempt + 1 < attempts, guarded.monitor)
             cell_attempts.record(config, calibration, source, dest, attempt, tried, t0, choices)
+            try:
+                import cell_problem_pipeline
+                cell_problem_pipeline.capture_from_attempt(
+                    config,
+                    {
+                        "from": source,
+                        "dest": dest,
+                        "result": moved["result"],
+                        "fail_stage": moved.get("at"),
+                        "why": moved.get("error"),
+                        "grasp_debate": moved.get("grasp_debate"),
+                        "wrist": moved.get("wrist"),
+                    },
+                )
+            except Exception:
+                pass
             if moved["result"] == "placed" and tried["verify"]["inside"]:
                 return {**out, "result": "placed"}
             grasped = any(s.get("command") == "run grasp_pick" and s.get("holding") for s in moved["steps"])
             if moved["result"] == "contact" and grasped:  # stopped while carrying: in the jaws unless released (cell_recovery goes on)
                 return {**out, "result": f"stopped: {'released' if moved.get('released') else 'holding'} after a stop at {moved['at']}"}
-            if moved["result"] not in ("empty", "contact"):  # a fault, a refusal or a misplaced object: a person looks
+            if moved["result"] not in ("empty", "contact", "reinserted"):  # a fault, a refusal or a misplaced object: a person looks
                 if moved["result"] in ("fault", "refused"):
                     cp.fold(cell, sleep)
                 return {**out, "result": f"stopped: {moved['result']}"}

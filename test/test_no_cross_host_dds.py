@@ -33,6 +33,18 @@ def _files():
                     yield path
 
 
+INVENTORY = "deploy/hosts/services.yaml"
+# D-852 inventory entries that say the unit must be off declare absence, they do not run a bridge.
+_DECLARED_OFF = re.compile(r"run:\s*[\"']off[\"']")
+
+
+def _runtime_text(relative, text):
+    """The inventory lists installed-but-off units by name; only its non-off lines can enable one."""
+    if relative != INVENTORY:
+        return text
+    return "\n".join(line for line in text.splitlines() if not _DECLARED_OFF.search(line))
+
+
 def _violations(text):
     return [label for pattern, label in FORBIDDEN if pattern.search(text)]
 
@@ -40,8 +52,9 @@ def _violations(text):
 def test_no_runtime_file_widens_dds_beyond_the_host():
     found = []
     for path in _files():
-        text = path.read_text(encoding="utf-8", errors="ignore")
-        found += [f"{path.relative_to(ROOT)}: {label}" for label in _violations(text)]
+        relative = path.relative_to(ROOT).as_posix()
+        text = _runtime_text(relative, path.read_text(encoding="utf-8", errors="ignore"))
+        found += [f"{relative}: {label}" for label in _violations(text)]
     assert not found, found
 
 
@@ -72,6 +85,15 @@ def test_every_cyclone_profile_binds_loopback_only():
     "ROS_STATIC_PEERS=10.0.0.5", "ENV ROS_LOCALHOST_ONLY=0", "ros2 launch rosbridge_server x"])
 def test_guard_catches_cross_host_settings(text):
     assert _violations(text)
+
+
+def test_inventory_exempts_only_declared_off_units():
+    off = '    pinky-rosbridge-d12.service: {run: "off", channel: external}'
+    on = "    pinky-rosbridge-d12.service: {run: active, channel: external}"
+    assert not _violations(_runtime_text(INVENTORY, off))
+    assert _violations(_runtime_text(INVENTORY, on))
+    assert _violations(_runtime_text(INVENTORY, off + "\n" + on))
+    assert _violations(_runtime_text("deploy/other.yaml", off))
 
 
 @pytest.mark.parametrize("text", [

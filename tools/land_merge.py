@@ -37,11 +37,20 @@ def generate_records(wt: Path, python: str, harness: str) -> list[str]:
     if not script.is_relative_to(root) or ".git" in script.relative_to(root).parts:
         raise ValueError("harness must belong to the worktree")
     program = """
-import json, runpy, sys
+import functools, json, runpy, sys
 from pathlib import Path
 repo, script = Path(sys.argv[1]).resolve(), Path(sys.argv[2])
 sys.path.insert(0, str(script.parent))
 namespace = runpy.run_path(str(script))
+if "generated_targets" in namespace:
+    if "_optional_frontmatter" in namespace:
+        namespace["generated_targets"].__globals__["_optional_frontmatter"] = functools.lru_cache(maxsize=None)(namespace["_optional_frontmatter"])
+    if "_title" in namespace:
+        _orig_title = namespace["_title"]
+        _cached_title = functools.lru_cache(maxsize=None)(lambda p: _orig_title(p))
+        namespace["generated_targets"].__globals__["_title"] = (
+            lambda p, meta=None: meta["title"] if isinstance(meta, dict) and isinstance(meta.get("title"), str) else _cached_title(p)
+        )
 targets = namespace["generated_targets"](repo)
 for path in targets:
     resolved = path.resolve()
@@ -49,6 +58,8 @@ for path in targets:
             or ".git" in resolved.relative_to(repo).parts
             or (resolved.exists() and not resolved.is_file())):
         raise ValueError("unsafe generated target: " + str(path))
+if "generate" in namespace:
+    namespace["generate"].__globals__["generated_targets"] = lambda _repo, _t=targets: _t
 written = namespace["generate"](repo)
 print(json.dumps({"targets": [p.resolve().relative_to(repo).as_posix() for p in targets],
                   "written": [p.resolve().relative_to(repo).as_posix() for p in written]}))

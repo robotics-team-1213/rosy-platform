@@ -3,7 +3,7 @@ import '/commands.js';
 const $=id=>document.getElementById(id);
 let token='', manager=false, busy=false, configured=false, running=false, twoArmRunning=false, selected=null, bestId=null;
 const STATUS={passed:'✓ 통과',failed:'✕ 실패',blocked:'⊘ 막힘',not_run:'– 실행 안 함',pending:'… 대기',running:'▶ 실행 중',unknown:'? 알 수 없음'};
-const STAGE={mujoco:'MuJoCo',gazebo:'Gazebo',isaac:'Isaac'};
+const STAGE={mujoco:'Stage 1 · MuJoCo',isaac:'Stage 2 · Isaac',gazebo:'ROS 계약 · Gazebo'};
 const COMPARE={better:'더 좋음 (평가 구간이 겹치지 않고 위쪽)',worse:'더 나쁨 (평가 구간이 겹치지 않고 아래쪽)',
   unclear:'차이 불명확 — 아직 정할 수 없습니다',current:'현재 비교 기준입니다'};
 const TWO_ARM={stack:'3×3×3 적층',rehandle:'임시 칸 재취급'};
@@ -47,6 +47,7 @@ function stageLine(name,stage){
   const line=el('div',undefined,'ladder-stage');line.dataset.status=stage.status;
   const head=el('div');head.append(el('b',STAGE[name]+' '),el('span',STATUS[stage.status]||STATUS.unknown));line.append(head);
   line.append(el('small','말할 수 있는 범위: '+(stage.claim||'기록 없음')));
+  if(stage.status==='pending'&&stage.result?.prepared_cases?.length)line.append(el('small',`핸드오프 준비 완료: ${stage.result.prepared_cases.length}건 (${stage.scenario||'isaac'})`));
   if(stage.status==='blocked'||stage.status==='not_run')line.append(el('small','이유: '+(stage.reason||'이유가 기록되지 않았습니다.')));
   return line;
 }
@@ -59,6 +60,7 @@ function twoArmCard(row){
   if(row.unreadable){item.append(el('h3',row.run_id),el('p','이 실행 기록을 읽을 수 없습니다.'));return item;}
   const line=el('div',undefined,'ladder-stage');line.dataset.status=row.status;line.append(el('span',STATUS[row.status]||STATUS.unknown));
   item.append(el('h3',`${TWO_ARM[row.task]||row.task} · 시드 ${row.seed ?? '?'}`),el('p',row.created_at||'시각 기록 없음','quiet'),line);
+  if(row.stages)for(const name of Object.keys(STAGE))if(row.stages[name])item.append(stageLine(name,row.stages[name]));
   if(row.steps!=null)item.append(el('p',`단계 통과 ${row.steps_pass ?? '?'} / ${row.steps} · 최종 위치 ${row.final_ok ?? '?'} / ${row.final_total ?? '?'}`));
   if(row.reason)item.append(el('p','이유: '+row.reason));
   for(const step of row.failed_steps)item.append(el('p',`실패 ${step.step} (${step.arm}): ${step.reason||step.result}`));
@@ -112,6 +114,7 @@ function twoArmRoundCard(row){
   if(row.unreadable){item.append(el('h3',row.round_id),el('p','이 라운드 기록을 읽을 수 없습니다.'));return item;}
   const line=el('div',undefined,'ladder-stage');line.dataset.status=row.status;line.append(el('span',STATUS[row.status]||STATUS.unknown));
   item.append(el('h3',`학습 모델 · ${row.round_id}`),el('p',row.created_at||'시각 기록 없음','quiet'),line);
+  if(row.stages)for(const name of Object.keys(STAGE))if(row.stages[name])item.append(stageLine(name,row.stages[name]));
   if(row.status==='running')item.append(el('p',`진행 중: ${TWO_ARM_STAGE[row.stage]||row.stage}`));
   if(row.reason)item.append(el('p','이유: '+row.reason));
   if(row.data.episodes!=null)item.append(el('p',`시연 ${row.data.episodes}단계 · ${row.data.frames}프레임 · 학습 ${row.recipe.steps}스텝`));
@@ -205,11 +208,11 @@ function detail(data){
     data.best_round_id?compare:el('p','아직 비교 기준이 없습니다. 첫 판단이 기준이 됩니다.'),
     ...(round.paired?[pairedLine(round)]:[]),
     ...(round.same_seeds===false?[el('p','평가 시드가 달라 숫자 비교가 거칠 수 있습니다. 같은 시드로 다시 평가한 값이 필요합니다.','quiet')]:[]),
-    el('h3','Gazebo 계약 점검'),
+    el('h3','Stage 2 · Isaac 접촉·안착 실행 참조'),
+    el('p',isaac.run_id?`실행 ${isaac.run_id} · 결과 ${isaac.result ?? '기록 없음'}`:'연결된 Isaac 실행이 없습니다.'),
+    el('h3','별도 트랙 · Gazebo 계약 점검'),
     gazebo.contract?list([`백엔드 ${gazebo.contract.backend ?? '?'} · ${gazebo.contract.passed?'통과':'통과하지 못함'}`,
       ...Object.entries(gazebo.contract.checks||{}).map(([key,value])=>`${key}: ${value}`)]):el('p','계약 점검 기록이 없습니다.'),
-    el('h3','Isaac 실행 참조'),
-    el('p',isaac.run_id?`실행 ${isaac.run_id} · 결과 ${isaac.result ?? '기록 없음'}`:'연결된 Isaac 실행이 없습니다.'),
     el('h3','그림'),images(round),
     ...(data.decisions.length?[el('h3','이 라운드의 판단 기록'),list(data.decisions.map(row=>
       `${row.at} · ${row.by} · ${row.verdict==='replace'?'기준으로 바꿈':'기준 유지'} · ${row.note}`))]:[]));

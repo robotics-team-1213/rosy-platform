@@ -6,7 +6,7 @@
 # Keys: package names, units, and files relative to the colcon root (repo root for deploy/tools/
 # learning). Regenerate the measured rows: python test/architecture/test_module_structure.py
 748 core/events/core_events/events/audit.py
-867 core/gateway/core/bridge/ros_bridge.py
+864 core/gateway/core/bridge/ros_bridge.py
 641 deploy/robot/pinky_pro/native/rosy-hw-probe.py
 862 deploy/robot/pinky_pro/native/rosy-ssh-access.py
 686 deploy/robot/pinky_pro/release/updater.py

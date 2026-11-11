@@ -52,6 +52,15 @@ class SiteResolverTest {
     }
 
     @Test
+    fun otherHostsListsOnlyOtherNamesOncePerNameAndOnlyForAPinnedLink() {
+        val ads = listOf(seen("rosy-site.local", "192.168.1.5"), seen("new-host.local", "192.168.1.6", name = "a"),
+            seen("NEW-HOST.local.", "192.168.1.6", name = "b"), seen("bad name", "10.0.0.1", name = "c"), seen("third.local", "10.0.0.2", name = "d"))
+        assertEquals(listOf("new-host.local", "third.local"), SiteResolver(site, FakeBrowser(ads)).otherHosts().map { it.tlsHost.lowercase().trimEnd('.') })
+        assertTrue(SiteResolver(site.copy(caPin = null), FakeBrowser(ads)).otherHosts().isEmpty())
+        assertTrue(SiteResolver(site.copy(tlsHost = null, manualHost = "192.168.1.10"), FakeBrowser(ads)).otherHosts().isEmpty())
+    }
+
+    @Test
     fun notDiscoveredWithoutAManualAddress() {
         val route = SiteResolver(site, FakeBrowser(emptyList())).resolve()
         assertEquals(SiteRoute.NotDiscovered("rosy-site.local"), route)

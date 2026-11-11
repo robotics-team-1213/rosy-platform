@@ -208,6 +208,17 @@ def test_a_jaw_tcp_from_the_environment_moves_the_tip_and_a_wild_one_is_refused(
     monkeypatch.setenv("ROSY_OMX_TCP_X_M", "0.3")
     with pytest.raises(SystemExit, match="jaw range"):
         m.load_kinematics(None)
+    monkeypatch.delenv("ROSY_OMX_TCP_X_M", raising=False)
+    from_plan = m.Planner(dict(PLAN, tcp_x_m=0.0885)).kin.fk(q)
+    assert abs(math.dist((stock.x, stock.y, stock.z), (from_plan.x, from_plan.y, from_plan.z)) - (0.09193 - 0.0885)) < 1e-6
+
+
+def test_descent_to_exact_workspace_floor_with_40mm_approach_does_not_underflow():
+    """2026-11-10 real2sim: 0.045 + (0.005 - 0.045) * 1.0 was 0.0049999999999999975 < workspace_min_m[2] (0.005)."""
+    pick = {"x": 0.1269, "y": -0.1082, "z": 0.005, "yaw_deg": -80.9}
+    planner = m.Planner(dict(PLAN, tcp_x_m=0.0885, approach_m=0.04, pick=pick))
+    lib = planner.library()
+    assert lib["source"]["reach"]["pick"]["approach_m"] == pytest.approx(0.04, abs=1e-3)
 
 
 @pytest.mark.parametrize("name", ["descend_guard_frac", "lift_guard_frac"])
@@ -216,3 +227,23 @@ def test_a_pace_past_the_guard_or_at_nothing_is_refused(name):
     for bad in (1.2, 0, -0.5):
         with pytest.raises(ValueError, match=name):
             m.Planner({**PLAN, name: bad}).guard_pace(name)
+
+
+def test_load_kinematics_caches_parsed_kinematics_and_deduplicates_sys_path():
+    before_len = len(sys.path)
+    kin1, _, _ = m.load_kinematics(None, 0.0885)
+    kin2, _, _ = m.load_kinematics(None, 0.0885)
+    assert kin1 is kin2
+    assert len(sys.path) <= before_len + 1
+
+
+def test_feasible_pre_filters_endpoints_and_hold_eases_gripper_smoothly():
+    planner = m.Planner(PLAN)
+    assert planner.feasible() is True
+    assert planner.feasible(pick=dict(PLAN["pick"], x=0.45, y=0.45)) is False
+    # Half-cosine gripper hold starts and ends with smaller steps than its midpoint peak
+    frames = planner.hold([0.0] * 5 + [56.0], 1.0, grip_from=56.0, grip_to=46.0)
+    steps = [abs(b[5] - a[5]) for a, b in zip([[0.0] * 5 + [56.0]] + frames, frames)]
+    assert steps[0] < max(steps) * 0.5 and steps[-1] < max(steps) * 0.5
+    assert frames[-1][5] == 46.0
+

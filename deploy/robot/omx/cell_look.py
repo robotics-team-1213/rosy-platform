@@ -64,7 +64,8 @@ def look(cell, config: dict, record: dict, site: str, target: dict, write_librar
         state, commanded = status.get("state"), status.get("target")
         if state is None or commanded is None:
             return out("refuse", why="no arm state")
-        x, y, z, yaw = cell_pivot.joints_tcp(state)
+        tcp_kw = {"tcp_x_m": config["tcp_x_m"]} if config.get("tcp_x_m") is not None else {}
+        x, y, z, yaw = cell_pivot.joints_tcp(state, **tcp_kw)
         bias = region.get("bias_mm", [0.0, 0.0])
         expected = []
         for f in fingers:
@@ -87,7 +88,7 @@ def look(cell, config: dict, record: dict, site: str, target: dict, write_librar
         if i == int(prm.get(params, "look.max_iter")) or total + off > prm.get(params, "look.max_total_mm"):
             return out("refuse", why=f"box still {off:.0f} mm from the jaws")
         total += off
-        cx, cy, _, _ = cell_pivot.joints_tcp(commanded)  # what the runner was told; the arm stands short of it
+        cx, cy, _, _ = cell_pivot.joints_tcp(commanded, **tcp_kw)  # what the runner was told; the arm stands short of it
         target["pick"] = dict(target["pick"], x=round(cx + d[0], 4), y=round(cy + d[1], 4))
         library = write_library(config, target["pick"], target["place"], work / name)
         if not all(cell.act(c).get("ok") for c in (f"load {library}", goto)):

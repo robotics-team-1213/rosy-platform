@@ -103,7 +103,7 @@ def trials(robot, tmp_path):
 def drive(robot, trials, direction, cause, *, hold_s=1.5, surface="floor"):
     robot.scene_moves = True
     robot.scan["ranges"] = robot.room()
-    trials.start(direction, cause, OWNER, test_surface=surface, blind_zone_confirmed=True)
+    trials.start(direction, cause, OWNER, test_surface=surface)
     held = 0.0
     while held < hold_s:
         trials.hold(OWNER, robot.send)
@@ -262,11 +262,11 @@ def test_a_scan_that_shows_no_room_refuses_the_trial(robot, trials, change, code
     assert refused.value.code == code and not trials.active
 
 
-def test_a_blank_scan_behind_refuses_reverse_even_when_confirmed(robot, trials):
+def test_a_blank_scan_behind_refuses_reverse(robot, trials):
     for ranges in ([math.inf] * 360, [math.nan] * 360):
         robot.scan.update(ranges=ranges)
         with pytest.raises(TrialRefused) as refused:
-            trials.start("reverse", "button_release", OWNER, test_surface="lifted", blind_zone_confirmed=True)
+            trials.start("reverse", "button_release", OWNER, test_surface="lifted")
         assert refused.value.code == "CLEARANCE_UNKNOWN"
 
 
@@ -298,16 +298,16 @@ def with_obstacle(scan_, beam, distance):
 def test_a_clear_real_scene_passes_despite_returns_on_the_body(index, direction):
     sample = real_scans()[index]
     assert any(r < sample["range_min"] for r in sample["ranges"])
-    assert require_clearance(sample, PINKY, direction, True, 100.0)
+    assert require_clearance(sample, PINKY, direction, 100.0)
 
 
 @pytest.mark.parametrize("direction,beam,body_m", [("forward", FORWARD_BEAM, 0.059), ("reverse", REAR_BEAM, 0.059)])
 def test_a_real_obstacle_at_the_limit_still_refuses(direction, beam, body_m):
     need = TRAVEL_CAP_M + RUN_MARGIN_M
     sample = real_scans()[0]
-    assert require_clearance(with_obstacle(sample, beam, body_m + need + 0.005), PINKY, direction, True, 100.0)
+    assert require_clearance(with_obstacle(sample, beam, body_m + need + 0.005), PINKY, direction, 100.0)
     with pytest.raises(TrialRefused) as refused:
-        require_clearance(with_obstacle(sample, beam, body_m + need - 0.005), PINKY, direction, True, 100.0)
+        require_clearance(with_obstacle(sample, beam, body_m + need - 0.005), PINKY, direction, 100.0)
     assert refused.value.code == "CLEARANCE_TOO_SMALL"
 
 
@@ -315,20 +315,20 @@ def test_a_real_obstacle_at_the_limit_still_refuses(direction, beam, body_m):
 def test_a_minimum_range_reaching_past_the_body_fails_closed(direction):
     sample = {**real_scans()[0], "range_min": 0.06}
     with pytest.raises(TrialRefused, match="outside the body"):
-        require_clearance(sample, PINKY, direction, True, 100.0)
+        require_clearance(sample, PINKY, direction, 100.0)
 
 
 def test_an_outline_that_cannot_be_read_fails_closed():
     outline = SimpleNamespace(**{**vars(PINKY), "body_front_x_m": None})
     with pytest.raises(TrialRefused) as refused:
-        require_clearance(real_scans()[0], outline, "forward", True, 100.0)
+        require_clearance(real_scans()[0], outline, "forward", 100.0)
     assert refused.value.code == "CLEARANCE_UNKNOWN"
 
 
 def test_a_scanner_covered_by_the_robot_itself_sees_nothing():
     sample = {**real_scans()[0], "ranges": [0.04] * 720}
     with pytest.raises(TrialRefused) as refused:
-        require_clearance(sample, PINKY, "forward", True, 100.0)
+        require_clearance(sample, PINKY, "forward", 100.0)
     assert refused.value.code == "CLEARANCE_UNKNOWN"
 
 
@@ -347,7 +347,7 @@ def ranged(fill, beam, good):
 @pytest.mark.parametrize("fill", [0.0, math.inf, math.nan, 0.03])
 def test_a_few_seeing_beams_among_no_returns_or_self_returns_refuse(direction, beam, good, fill):
     with pytest.raises(TrialRefused) as refused:
-        require_clearance(ranged(fill, beam - good // 2, good), PINKY, direction, True, 100.0)
+        require_clearance(ranged(fill, beam - good // 2, good), PINKY, direction, 100.0)
     assert refused.value.code == "CLEARANCE_UNKNOWN"
 
 
@@ -355,7 +355,7 @@ def test_a_few_seeing_beams_among_no_returns_or_self_returns_refuse(direction, b
 def test_a_scan_of_only_zero_or_inf_refuses(direction, beam):
     for fill in (0.0, math.inf):
         with pytest.raises(TrialRefused) as refused:
-            require_clearance(ranged(fill, beam, 0), PINKY, direction, True, 100.0)
+            require_clearance(ranged(fill, beam, 0), PINKY, direction, 100.0)
         assert refused.value.code == "CLEARANCE_UNKNOWN"
 
 
@@ -365,14 +365,46 @@ def test_the_seeing_floor_counts_the_whole_sector_even_when_the_rest_is_the_body
     beam = REAR_BEAM if direction == "reverse" else FORWARD_BEAM
     few = sector_beams // 4 - 2
     with pytest.raises(TrialRefused) as refused:
-        require_clearance(ranged(0.03, beam - few // 2, few), PINKY, direction, True, 100.0)
+        require_clearance(ranged(0.03, beam - few // 2, few), PINKY, direction, 100.0)
     assert refused.value.code == "CLEARANCE_UNKNOWN"
     enough = sector_beams // 4 + 2
-    assert require_clearance(ranged(0.03, beam - enough // 2, enough), PINKY, direction, True, 100.0)
+    assert require_clearance(ranged(0.03, beam - enough // 2, enough), PINKY, direction, 100.0)
+
+
+@pytest.mark.parametrize("beam", [REAR_BEAM, 180, 540])
+def test_forward_ignores_what_is_behind_and_beside(beam):
+    sample = with_obstacle(real_scans()[0], beam, 0.07)
+    assert require_clearance(sample, PINKY, "forward", 100.0)
+
+
+@pytest.mark.parametrize("beam", [FORWARD_BEAM, 180, 540])
+def test_reverse_ignores_what_is_ahead_and_beside(beam):
+    sample = with_obstacle(real_scans()[0], beam, 0.07)
+    assert require_clearance(sample, PINKY, "reverse", 100.0)
+
+
+def test_reverse_still_refuses_what_is_behind_and_forward_what_is_ahead():
+    for direction, beam in (("reverse", REAR_BEAM), ("forward", FORWARD_BEAM)):
+        with pytest.raises(TrialRefused) as refused:
+            require_clearance(with_obstacle(real_scans()[0], beam, 0.07), PINKY, direction, 100.0)
+        assert refused.value.code == "CLEARANCE_TOO_SMALL"
+
+
+@pytest.mark.parametrize("direction,beam,refused", [("ccw", 689, True), ("cw", 689, False),
+                                                    ("cw", 31, True), ("ccw", 31, False)])
+def test_a_turn_is_judged_only_on_the_side_it_swings_into(direction, beam, refused):
+    """A return 0.11 m from the LiDAR, 16 deg off the nose: one turn swings the body into it, the other away."""
+    sample = with_obstacle(real_scans()[0], beam, 0.111)
+    if refused:
+        with pytest.raises(TrialRefused) as caught:
+            require_clearance(sample, PINKY, direction, 100.0)
+        assert caught.value.code == "CLEARANCE_TOO_SMALL"
+    else:
+        assert require_clearance(sample, PINKY, direction, 100.0)
 
 
 def test_forward_asks_no_person_while_the_body_covers_the_minimum_range():
-    assert require_clearance(real_scans()[0], PINKY, "forward", False, 100.0)
+    assert require_clearance(real_scans()[0], PINKY, "forward", 100.0)
 
 
 def test_rotation_needs_room_beyond_the_turning_circle(robot, trials):
@@ -382,20 +414,20 @@ def test_rotation_needs_room_beyond_the_turning_circle(robot, trials):
     assert refused.value.code == "CLEARANCE_TOO_SMALL"
 
 
-def test_reverse_always_needs_a_person_for_what_the_lidar_cannot_see(robot, trials):
-    with pytest.raises(TrialRefused) as refused:
-        trials.start("reverse", "button_release", OWNER, test_surface="lifted")
-    assert refused.value.code == "BLIND_ZONE_CONFIRMATION_REQUIRED"
+def test_reverse_asks_no_person_and_still_needs_the_room_behind(robot, trials):
+    """User 2026-11-09: no blind-zone confirmation; the rear is the heading of a reverse trial, so it must be clear."""
+    trials.start("reverse", "button_release", OWNER, test_surface="lifted")
+    trials.abort("test")
     robot.scan.update(ranges=[0.10] * 360)
     with pytest.raises(TrialRefused) as refused:
-        trials.start("reverse", "button_release", OWNER, test_surface="lifted", blind_zone_confirmed=True)
+        trials.start("reverse", "button_release", OWNER, test_surface="lifted")
     assert refused.value.code == "CLEARANCE_TOO_SMALL"
 
 
 def test_an_unknown_body_outline_fails_closed(robot):
     body = SimpleNamespace(**{**vars(BODY), "body_stop_known": False})
     with pytest.raises(TrialRefused) as refused:
-        require_clearance(robot.scan, body, "forward", False, robot.now)
+        require_clearance(robot.scan, body, "forward", robot.now)
     assert refused.value.code == "CLEARANCE_UNKNOWN"
 
 
@@ -577,6 +609,15 @@ def test_speed_is_not_the_callers_to_choose(api):
     client, _, _, headers = api
     assert client.post("/api/v1/navigation/approval/trial/start", headers=headers["person-a"],
                        json={"direction": "forward", "stop_cause": "button_release", "test_surface": "floor", "linear": 0.5}).status_code == 400
+
+
+def test_the_blind_zone_confirmation_is_gone_from_the_request(api):
+    """User 2026-11-09: no field to confirm the rear by eye; a reverse trial starts on the scan alone."""
+    client, _, _, headers = api
+    url = "/api/v1/navigation/approval/trial/start"
+    body = {"direction": "reverse", "stop_cause": "button_release", "test_surface": "floor"}
+    assert client.post(url, headers=headers["person-a"], json={**body, "blind_zone_confirmed": True}).status_code == 400
+    assert client.post(url, headers=headers["person-a"], json=body).status_code == 200
 
 
 def test_a_hold_goes_through_the_teleop_checks(api):

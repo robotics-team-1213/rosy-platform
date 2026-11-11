@@ -1,5 +1,5 @@
 # Optional independent ROSY Monitoring (D-876, D-936). Append after pairing/omx/workcell and
-# before Account. It reuses the signed Fleet image but runs its own process, state and keys:
+# before Account. It runs its own signed image (D-1001), process, state and keys:
 # Fleet stopping never stops it, and the proxy never waits for it.
 # Configuration and keys are private host files outside the candidate/config tree.
 x-rosy-site:
@@ -7,7 +7,7 @@ x-rosy-site:
 
 services:
   monitoring:
-    image: rosy-site-fleet:${ROSY_SITE_IMAGE_TAG:-local}
+    image: rosy-site-monitoring:${ROSY_SITE_IMAGE_TAG:-local}
     command:
       - --
       - python3

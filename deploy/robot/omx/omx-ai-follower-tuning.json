@@ -2,11 +2,17 @@
   "schema": "rosy.omx-servo-tuning.v1",
   "model": "omx_ai_follower",
   "motors": {
-    "13": {"i": 50},
-    "14": {"i": 50}
+    "11": {"acc": 8, "vel": 20},
+    "12": {"acc": 8, "vel": 20},
+    "13": {"i": 50, "acc": 8, "vel": 20},
+    "14": {"i": 50, "acc": 8, "vel": 20},
+    "15": {"acc": 8, "vel": 20}
   },
   "evidence": {
-    "13": "2026-11-01 both arms, elbow I 0 -> 50: steady error +1.52 -> +0.06, left arm belt-end TCP 12.3 -> 3.3 mm (D-951 5)",
-    "14": "2026-11-01 both arms, wrist_flex I 0 -> 50: steady error -0.41 -> +0.03 and -0.52 -> +0.02 (D-951 5)"
+    "11": "2026-10-27 & 2026-11-10: acc 8 (171.7 deg/s^2) / vel 20 (27.5 deg/s >= 2.7x 10 deg/s stream cap, lag <= 0.29 deg) ramps between whole-tick goals instead of snapping on 57-90% tick-quantization stalls",
+    "12": "2026-10-27 & 2026-11-10: shoulder_lift P=1600 snapped on 1-tick steps after 3-9 tick stalls (sent_stall 57-89% in descend) when profile_acc/vel cleared to 0; acc 8 / vel 20 interpolates whole-tick goals in hardware",
+    "13": "2026-11-01 both arms, elbow I 0 -> 50: steady error +1.52 -> +0.06, left arm belt-end TCP 12.3 -> 3.3 mm (D-951 5); acc 8 / vel 20 eliminates whole-tick step-response ringing (41-42 reversals per transit)",
+    "14": "2026-11-01 both arms, wrist_flex I 0 -> 50: steady error -0.41 -> +0.03 and -0.52 -> +0.02 (D-951 5); acc 8 / vel 20 eliminates whole-tick step-response ringing (46-47 reversals per transit)",
+    "15": "2026-10-27 & 2026-11-10: acc 8 / vel 20 ramps wrist_roll between whole-tick goals within guarded_native.PROFILE_ACC/VEL"
   }
 }

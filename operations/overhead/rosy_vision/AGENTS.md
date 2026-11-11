@@ -26,6 +26,7 @@ Python package for Rosy Vision: receive-only `rosy-overhead/1` WebSocket ingest 
 | `rectify.py` | Display-only lens/plane rectification for preview (D-318) |
 | `field_detect.py` | Field boundary proposal for operator review (D-360) |
 | `map_register.py`, `map_worker.py` | D-375 lane-paint map registration proposal, run in a separate low-priority process |
+| `correspondence.py` | D-1007 offline robot pose/marker correspondences to a review-only calibration candidate (not wired to Fleet) |
 | `cli.py` | `rosy-vision` entry point (`receive` etc.) |
 
 ## For AI Agents

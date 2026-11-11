@@ -91,6 +91,42 @@ class Arm:
         return tau
 
 
+def point_tri(p, a, b, c):
+    """Distance from points p (n,3) to triangles (a,b,c) (t,3): (n,t), Ericson's closest-point regions."""
+    p = p[:, None, :]
+    ab, ac, ap = b - a, c - a, p - a
+    d1, d2 = (ab * ap).sum(-1), (ac * ap).sum(-1)
+    bp = p - b
+    d3, d4 = (ab * bp).sum(-1), (ac * bp).sum(-1)
+    cp = p - c
+    d5, d6 = (ab * cp).sum(-1), (ac * cp).sum(-1)
+    va, vb, vc = d3 * d6 - d5 * d4, d5 * d2 - d1 * d6, d1 * d4 - d3 * d2
+    denom = np.where(va + vb + vc == 0, 1e-12, va + vb + vc)
+    v, wgt = vb / denom, vc / denom
+    q = a + ab * v[..., None] + ac * wgt[..., None]  # interior
+    for cond, val in (
+        ((d1 <= 0) & (d2 <= 0), a + 0 * p),
+        ((d3 >= 0) & (d4 <= d3), b + 0 * p),
+        ((d6 >= 0) & (d5 <= d6), c + 0 * p),
+        ((vc <= 0) & (d1 >= 0) & (d3 <= 0), a + ab * (d1 / np.where(d1 - d3 == 0, 1e-12, d1 - d3))[..., None]),
+        ((vb <= 0) & (d2 >= 0) & (d6 <= 0), a + ac * (d2 / np.where(d2 - d6 == 0, 1e-12, d2 - d6))[..., None]),
+        ((va <= 0) & ((d4 - d3) >= 0) & ((d5 - d6) >= 0),
+         b + (c - b) * ((d4 - d3) / np.where((d4 - d3) + (d5 - d6) == 0, 1e-12, (d4 - d3) + (d5 - d6)))[..., None])):
+        q = np.where(cond[..., None], val, q)
+    return np.linalg.norm(p - q, axis=-1)
+
+
+def surface_mm(points, verts, faces, reach=.03):
+    """Nearest distance (mm) from points to a mesh's surface (triangles within `reach` of the points' box). Vertex to
+    vertex is not enough near a base: its flat faces have vertices up to 11 mm apart (2026-11-09)."""
+    a, b, c = verts[faces[:, 0]], verts[faces[:, 1]], verts[faces[:, 2]]
+    lo, hi = points.min(0) - reach, points.max(0) + reach
+    near = np.all((np.minimum(np.minimum(a, b), c) <= hi) & (np.maximum(np.maximum(a, b), c) >= lo), axis=1)
+    if not near.any():
+        return 1e3 * reach
+    return float(min(point_tri(points[k:k + 200], a[near], b[near], c[near]).min() for k in range(0, len(points), 200)) * 1000)
+
+
 SMOOTH_S = .2  # measured positions are encoder ticks: differentiate a 0.2 s moving average, not the raw readings
 
 

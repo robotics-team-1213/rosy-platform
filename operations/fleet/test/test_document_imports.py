@@ -132,6 +132,8 @@ OWN = {
         "site-map-teach.js",
         "site-map-survey.js",
         "site-map-camera.js",
+        "site-map-reality.js",  # map vs D-594 drive: report and one draft correction
+        "site-map-bands.js",  # D-766 split: the four crosswalk waiting-band buttons
         "site-map-sources.js",  # Map profile selection and read-only camera-plane presentation.
         "site-map-edit.js",  # D-655: pure draft edits belong to the map editor document
         "subnav-screens.js",  # D-926 3: sub-nav moves between screens

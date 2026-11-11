@@ -104,6 +104,10 @@ export function queuedReason(queued) {
     return `${who} 가 비켜서기를 기다리는 중 — 물러나면 자동 출발합니다`;
   }
   if (queued.reason === "LOCALIZATION_UNTRUSTED") return untrustedQueuedReason(who);
+  if (queued.reason === "MAP_FRAME_MISMATCH") {
+    return `${who} 가 다른 지도 프레임에 있어 경로를 함께 판단할 수 없습니다 — `
+      + `${who} 의 지도를 맞춘 뒤 다시 시도하세요`;
+  }
   if (queued.reason === "YIELDED") {
     return `${who} 가 지나가기를 기다리는 중 — 지나가면 제 미션으로 돌아갑니다`;
   }

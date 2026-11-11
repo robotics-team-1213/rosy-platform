@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 from uuid import UUID
@@ -17,7 +19,7 @@ from core_api_web.api.v1.common import (
     stop_ends_trip_lease,
     viewer,
 )
-from core_api_web.api.deps import GOAL_LEASE_MAX_S, AuthContext, get_services, CoreServicesLike
+from core_api_web.api.deps import GOAL_LEASE_MAX_S, MAX_POINTS, AuthContext, RoutePoint, get_services, CoreServicesLike
 from core_api_web.api.errors import ApiError
 from core_api_web.api.grants import NAVIGATE, check_grant
 from core_api_web.api.v1.localization import send_decision
@@ -54,9 +56,8 @@ class GoalLeaseRequest(BaseModel):
     ttl_s: float = Field(gt=0, le=GOAL_LEASE_MAX_S, allow_inf_nan=False)
 
 
-@navigation_router.post("/navigation/goal")
-def navigation_goal(body: GoalRequest, auth: AuthContext = Depends(operator),
-                    svc: CoreServicesLike = Depends(get_services)):
+def _goal_gates(body, auth: AuthContext, svc: CoreServicesLike) -> None:
+    """Everything a goal or a route must pass before the mode changes."""
     if body.lease_ttl_s is not None and body.correlation_id is None:  # D-550 10, before any mode change
         raise ApiError("VALIDATION_ERROR", 400, "lease_ttl_s needs a correlation_id")
     require_manual_released(svc)
@@ -69,6 +70,12 @@ def navigation_goal(body: GoalRequest, auth: AuthContext = Depends(operator),
                            "stop the selected line-follow mode before accepting a navigation goal")
     TaskKind.NAVIGATE.require(svc.capability)
     require_kept(svc, "navigation.goal_navigation")
+
+
+@navigation_router.post("/navigation/goal")
+def navigation_goal(body: GoalRequest, auth: AuthContext = Depends(operator),
+                    svc: CoreServicesLike = Depends(get_services)):
+    _goal_gates(body, auth, svc)
     with localized_start(svc):
         spec = svc.nav.resolve_goal(x=body.x, y=body.y, yaw=body.yaw, waypoint=body.waypoint)
         token = svc.nav.reserve_goal(expected_boot_id=body.expected_boot_id,
@@ -85,6 +92,47 @@ def navigation_goal(body: GoalRequest, auth: AuthContext = Depends(operator),
         "accepted": True,
         "mode": svc.modes.mode.value,
         "goal": {"x": spec.x, "y": spec.y, "yaw": spec.yaw},
+        "operation": receipt[0].model_dump(mode="json"),
+    }
+
+
+class RoutePointRequest(BaseModel):
+    x: float = Field(allow_inf_nan=False)
+    y: float = Field(allow_inf_nan=False)
+    yaw: float | None = Field(default=None, allow_inf_nan=False)
+    #: "pass": drive through without stopping. "stop": halt here. Unspecified means stop.
+    kind: Literal["pass", "stop"] = "stop"
+
+
+class RouteRequest(BaseModel):
+    points: list[RoutePointRequest] = Field(min_length=1, max_length=MAX_POINTS)
+    correlation_id: str | None = Field(default=None, min_length=1, max_length=128)
+    lease_ttl_s: float | None = Field(default=None, gt=0, le=GOAL_LEASE_MAX_S, allow_inf_nan=False)
+    expected_boot_id: UUID | None = None
+    expected_owner_generation: int | None = Field(default=None, ge=0, strict=True)
+
+
+@navigation_router.post("/navigation/route")
+def navigation_route(body: RouteRequest, auth: AuthContext = Depends(operator),
+                     svc: CoreServicesLike = Depends(get_services)):
+    """NAV-008 (D-1009): an ordered route of pass/stop points as one navigation owner and one lease."""
+    _goal_gates(body, auth, svc)
+    points = [RoutePoint(p.x, p.y, p.kind, p.yaw) for p in body.points]
+    with localized_start(svc):
+        token = svc.nav.reserve_goal(expected_boot_id=body.expected_boot_id,
+                                     expected_owner_generation=body.expected_owner_generation)
+        receipt = []
+        try:
+            enter_navigation_mode(svc, auth)
+            svc.nav.route(points, source=f"api:{auth.role}", correlation_id=body.correlation_id,
+                          lease_ttl_s=body.lease_ttl_s, lease_owner=auth.token_id, reservation=token,
+                          receipt_sink=receipt.append)
+        finally:
+            svc.nav.release_goal_reservation(token)
+    return {
+        "accepted": True,
+        "mode": svc.modes.mode.value,
+        "route": svc.nav.route_status(),
         "operation": receipt[0].model_dump(mode="json"),
     }
 
@@ -158,6 +206,7 @@ def navigation_state(_: AuthContext = Depends(viewer), svc: CoreServicesLike = D
     return {
         **svc.nav.native_readback(run_id),
         "navigation": svc.nav.nav_state.value,
+        "route": svc.nav.route_status(),
         "mapping_active": svc.nav.mapping_active,
         "map_id": svc.state.map_id,
         "readiness": {

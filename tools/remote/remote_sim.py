@@ -2,7 +2,7 @@
 
     python tools/remote/remote_sim.py --check
     python tools/remote/remote_sim.py [--host HOST|ROLE] [--sha REV] [--log-dir DIR] [--minutes N]
-                                      swarm_bench|map_v2_runner|fleet_trips [-- <bench args>]
+                                      swarm_bench|map_v2_runner|fleet_trips|route_drive [-- <bench args>]
     python tools/remote/remote_sim.py [...] cmd -- <shell command>
 
 Use ``--durable`` for a long command that must survive an observer's SSH loss. The same
@@ -138,6 +138,9 @@ ros2 run gz_sim swarm_bench.py --robots "$Y" --out "$OUT/swarm_bench.csv" "$@"
 """,
     # Two robots + Fleet on map_v2_fleet, one lane trip each; exit 0 only when both arrive.
     "fleet_trips": r"""python3 tools/sim/fleet_trips.py --out "$OUT/trips" "$@"
+""",
+    # D-1009: CORE routes with pass/stop points on one Nav2 robot; exit 0 only when every route's stops match.
+    "route_drive": r"""python3 tools/sim/route_drive.py --out "$OUT/route" "$@"
 """,
 }
 

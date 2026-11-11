@@ -75,6 +75,9 @@ class TripRunner(TripAdmission, TripProgress, TripSteps, TripReplan):
         #: D-1003: the pose port's robot snapshot (the read its map pose came from); free goals go out in the
         #: robot's own Nav2 map frame. A port without one (test plants) keeps the site frame as is.
         self._robot_state = getattr(poses, "state", None)
+        #: D-1010: a port without robot snapshots (D-1003 6) may declare its poses and the robot's
+        #: goals one frame; an undeclared port proves nothing, so an unproven free goal stops the trip.
+        self._poses_in_robot_frame = bool(getattr(poses, "poses_in_robot_frame", False))
         #: Start admission reads the robot's battery evidence here (``{"battery", "age_s"}``). None: no source,
         #: so every start is refused TRIP_BATTERY_UNCONFIRMED (fail closed; there is no bypass default).
         self._battery = battery

@@ -585,7 +585,7 @@ def test_console_wires_d341_pairing_only_with_tls(tmp_path, monkeypatch):
     assert listing.status_code == 200 and listing.json()["credentials"] == []
     pending = client.get("/api/fleet/pairing/v1/pending",
                          headers={"Authorization": "Bearer operator-secret"}).json()
-    assert pending["paired_sources"] == [{"source_id": "ceiling_north", "has_credential": False}]
+    assert pending["paired_sources"] == [{"source_id": "ceiling_north", "has_credential": False, "credential_id": None, "device_label": None, "replaceable": False}]
     assert pending["site_ca_fingerprint"] == pairing.site_fingerprint(
         (tmp_path / "site-ca.crt").read_text(encoding="utf-8"))
     assert pairing.der_sha256((tmp_path / "leaf-only.crt").read_text(encoding="utf-8")) == pairing.der_sha256(

@@ -28,8 +28,8 @@ def first(wt: Path, args, invocations: list[list[str]], logdir: Path, round_no: 
     """
     if args.tests not in ("auto", "full"):
         return []
-    guards = [g for g in GUARDS if (wt / g).exists()]
     paths = [p.rstrip("/") for inv in invocations for p in inv]
+    guards = [g for g in GUARDS if (wt / g).exists() and (str(round_no) != "pre" or g not in paths)]
     batch = [] if not guards or all(any(p == g or p.startswith(g + "/") for g in guards) for p in paths) else [guards]
     quick = argparse.Namespace(**{**vars(args), "node": False})
     branch = subprocess.run(["git", "-C", str(wt), "rev-parse", "--abbrev-ref", "HEAD"], capture_output=True,

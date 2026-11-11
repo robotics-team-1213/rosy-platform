@@ -1,0 +1,21 @@
+runtime:
+  mode: simulation
+
+network:
+  api_host: 127.0.0.1
+  api_port: 8080
+
+# Single-robot launch without a road observer: keep the policy disabled.
+traffic_policy:
+  mode: DISABLED
+  map_id: map_world_261026
+  scene_revision: road-scene-v1
+
+vision:
+  preview_max_bytes: 512000
+  preview_stale_after_s: 2.0
+  preview_min_pull_interval_s: 0.4
+
+# D-1013 gate (b) keeps the bay pit-in docking approach (approach: "line")
+# unimplemented: no dock seed here. This launch validates the pink guide-tape
+# observation path (keep mode, paint_source pink) on the 261026 world.

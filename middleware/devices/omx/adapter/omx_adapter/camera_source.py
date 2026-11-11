@@ -107,7 +107,7 @@ def main():
     parser.add_argument('--topic', required=True)
     parser.add_argument('--frame-id', required=True)
     # The registered topic-shaped key addresses local IPC, never DDS.
-    parser.add_argument('--max-fps', type=float, default=10.0)
+    parser.add_argument('--max-fps', type=float, default=15.0)
     args = parser.parse_args()
     if not 0 < args.max_fps <= 30:
         parser.error('--max-fps must be in (0, 30]')
