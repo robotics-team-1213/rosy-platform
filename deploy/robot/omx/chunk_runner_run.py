@@ -58,7 +58,9 @@ _CR_GLOBALS: dict = {}
 def _cr_attr(name: str, default):
     mod = sys.modules.get("chunk_runner")
     if mod is not None and hasattr(mod, name):
-        return getattr(mod, name)
+        val = getattr(mod, name)
+        if val != default:
+            return val
     return _CR_GLOBALS.get(name, default)
 
 
