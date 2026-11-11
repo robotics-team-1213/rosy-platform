@@ -89,8 +89,8 @@ class Monitor:
         self.last = {"reason": reason, **why}  # the rule, joint and values the safety decision row keeps
         return reason
 
-    def check(self) -> str | None:
-        state = self.cell.act("state")
+    def check(self, state: dict | None = None) -> str | None:
+        state = self.cell.act("state") if state is None else state
         if not state.get("ok") or state.get("fault"):
             return self.stop(f"runner: {state.get('fault') or state.get('error')}", rule="runner fault")
         if state.get("t") and time.time() - state["t"] > self.stale_s:
@@ -106,7 +106,7 @@ class Monitor:
         """A joint at its own cap fraction AND not moving for the window is blocked; at the cap alone is normal
         while lifting (the elbow saturates leaving home), so a moving joint never trips this."""
         frac, window = prm.get(self.params, "auto.pwm_fraction", PWM_FRACTION), prm.get(self.params, "auto.pwm_window_s")
-        still, now, last, self.last_pos = prm.get(self.params, "auto.pwm_move_units"), self.clock(), self.last_pos,             (list(pos) if pos is not None else None)
+        still, now, last, self.last_pos = prm.get(self.params, "auto.pwm_move_units"), self.clock(), self.last_pos, (list(pos) if pos is not None else None)
         # the gripper squeezes at its cap while holding a box, still by design (2026-10-28 floor->belt run aborted
         # at home on 300/300); its load is the grasp verdict's and the temperature watch's, not a stall
         for i, v in enumerate(pwm[:5]):
@@ -124,12 +124,17 @@ class Guarded:
     """A cell whose every motion command is preceded by the safety check; a failed check parks and raises."""
 
     def __init__(self, cell, config: dict):
-        self.cell, self.monitor = cell, Monitor(cell, config)
+        self.cell, self.monitor, self._last_state = cell, Monitor(cell, config), None
 
     def act(self, command: str) -> dict:
-        words = command.split()
+        if command == "state":
+            state = self.cell.act("state")
+            self._last_state = (self.monitor.clock(), state)
+            return state
+        words, cached = command.split(), self._last_state
+        self._last_state = None
         if (words[3] if words[0] == "checked" else words[0]) not in ("park", "state", "retreat"):  # Gate's form
-            reason = self.monitor.check()
+            reason = self.monitor.check(cached[1] if cached and self.monitor.clock() - cached[0] <= 0.1 else None)
             if reason:
                 cd.emit("safety", {**self.monitor.last, "command": command}, ["continue", "park and stop"], "park and stop", "rule", reason)
                 self.cell.act("park")
@@ -498,6 +503,22 @@ def run_auto(cell, config, calibration, calibration_path, catalog, roi, source, 
             episode = None
             cd.after(moved, choices.best(CLOSING), attempt + 1 < attempts, guarded.monitor)
             cell_attempts.record(config, calibration, source, dest, attempt, tried, t0, choices)
+            try:
+                import cell_problem_pipeline
+                cell_problem_pipeline.capture_from_attempt(
+                    config,
+                    {
+                        "from": source,
+                        "dest": dest,
+                        "result": moved["result"],
+                        "fail_stage": moved.get("at"),
+                        "why": moved.get("error"),
+                        "grasp_debate": moved.get("grasp_debate"),
+                        "wrist": moved.get("wrist"),
+                    },
+                )
+            except Exception:
+                pass
             if moved["result"] == "placed" and tried["verify"]["inside"]:
                 return {**out, "result": "placed"}
             grasped = any(s.get("command") == "run grasp_pick" and s.get("holding") for s in moved["steps"])

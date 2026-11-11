@@ -15,6 +15,7 @@ import cell_pipeline as cp  # noqa: E402
 
 
 def load_config(path: Path) -> dict:
+    import cell_arm_cal
     import cell_perception
 
     config = json.loads(path.read_text())
@@ -22,7 +23,7 @@ def load_config(path: Path) -> dict:
                           for camera, spec in config["cameras"].items()}
     config["plan"] = json.loads(Path(config["plan_path"]).expanduser().read_text())
     config["params"] = prm.load(config.get("params_path"))["values"]  # cell-params.example.json form
-    return config
+    return cell_arm_cal.apply_to_config(config)
 
 
 def parser(doc: str) -> argparse.ArgumentParser:

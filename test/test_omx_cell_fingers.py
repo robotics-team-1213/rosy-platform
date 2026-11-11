@@ -119,3 +119,45 @@ def test_per_arm_finger_color_distinguishes_arm_s_black_pads_and_arm_a_arm_b_whi
     assert out_auto["found"] and abs(out_auto["along_mm"]) < 2.0
     out_w = cf.finger_offset_mm(img_ab, HSV, 48.0, params={"wrist.finger_color": 2})
     assert out_w["found"] and out_w["finger_color"] == "white" and abs(out_w["along_mm"]) < 2.0
+
+
+def test_per_arm_auto_calibration_profile_persistence_and_infer_holding(tmp_path):
+    import cell_arm_cal as ac
+
+    prof_s = ac.load(tmp_path, "arm_s")
+    prof_b = ac.load(tmp_path, "arm_b")
+    assert prof_s["finger_color"] == "dark" and prof_b["finger_color"] == "white"
+
+    updated = ac.record_grasp_measurement(
+        tmp_path,
+        arm_id="arm_b",
+        gripper_pos=54.26,
+        gripper_current_ma=119.0,
+        width_mm=30.0,
+        skew_mm=-0.8,
+        mm_per_px=0.08,
+        finger_color="white",
+    )
+    assert updated["samples"] == 1
+    assert updated["held_30mm"] == pytest.approx(54.26, abs=0.05)
+    assert 70 <= updated["hold_current_ma"] <= 90
+    assert updated["grip_open_30mm"] >= 58.0
+    assert (tmp_path / "arm-cal-arm_b.json").exists()
+
+    cfg = {
+        "arm_id": "arm_b",
+        "work_dir": str(tmp_path),
+        "params": {},
+        "plan": {"hold_current_ma": 140, "grip_open": 56.2, "grip_release": 56.1},
+        "wrist": {},
+    }
+    ac.apply_to_config(cfg)
+    assert cfg["params"]["wrist.finger_color"] == 2
+    assert cfg["params"]["gripper.held_30mm"] == pytest.approx(54.26, abs=0.05)
+    assert cfg["plan"]["hold_current_ma"] == updated["hold_current_ma"]
+    assert cfg["plan"]["grip_open"] == updated["grip_open_30mm"]
+
+    status = {"holding": False, "gripper_current_ma": 119, "state": [0.0, 0.0, 0.0, 0.0, 0.0, 54.26]}
+    assert ac.infer_holding(status, closed=48.8) is True
+    assert ac.infer_holding({"holding": False, "gripper_current_ma": 15, "state": [0, 0, 0, 0, 0, 49.1]}, closed=48.8) is False
+

@@ -22,12 +22,28 @@ class Gate:
     def __init__(self, cell, config: dict, calibration: dict, *, sequence=cp.SEQUENCE):
         self.cell, self.config, self.calibration, self.assessment = cell, config, calibration, None
         self.sequence, self.source, self.home = sequence, {}, None
+        self._lib_cache: dict[tuple[str, int, int], tuple[dict, str]] = {}
         # two arms, one pallet (cell_zones): a reach claims its zone before it moves and frees it once folded home
         self.zones = Zones(config, calibration) if config.get("zone_side") else None
 
-    def _assess(self, library) -> dict:
-        return assess(self.config, self.calibration, json.loads(Path(library).read_text()), self.cell.act("state"),
-                      sequence=self.sequence)
+    def _load_library(self, library) -> tuple[dict, str]:
+        if isinstance(library, dict):
+            return library, digest(library)
+        p = Path(library)
+        st = p.stat()
+        key = (str(p), st.st_mtime_ns, st.st_size)
+        cached = self._lib_cache.get(key)
+        if cached is None:
+            loaded = json.loads(p.read_text())
+            cached = (loaded, digest(loaded))
+            self._lib_cache[key] = cached
+        return cached
+
+    def _assess(self, library, state: dict | None = None) -> dict:
+        loaded, lib_sha = self._load_library(library)
+        return assess(self.config, self.calibration, loaded,
+                      self.cell.act("state") if state is None else state,
+                      sequence=self.sequence, library_sha256=lib_sha)
 
     def open(self, library, before_motion) -> dict | None:
         """None when the carry may start (the intent is written first); else the held envelope."""
@@ -44,37 +60,40 @@ class Gate:
     def act(self, command: str) -> dict:
         if command == "state":
             return self.cell.act(command)
+        state, recovering = self.cell.act("state"), command.split()[0] in ("retreat", "park")
+        lib_sha = None
         if command.startswith("load "):
-            library = json.loads(Path(command[5:]).read_text())
+            library, lib_sha = self._load_library(command[5:])
             self.source = library.get("source") or {}
             # The unchanged reviewed carry already owns its durable pending intent.
             identical = (self.assessment["mode"] == "automatic"
                          and digest([self.config, self.calibration, self.sequence]) == self.scope_sha
-                         and digest(json.loads(Path(command[5:]).read_text())) == self.assessment["library_sha256"])
+                         and lib_sha == self.assessment["library_sha256"])
             if not identical:
-                fresh = self._assess(command[5:])
+                fresh = self._assess(library, state=state)
                 if not fresh["allowed"] or fresh["mode"] != self.assessment["mode"]:
                     return {"ok": False, "error": f"held: {fresh['reason']}", "envelope": fresh}
                 fresh["session_id"] = self.assessment["session_id"]
                 self.assessment = fresh
-        state, recovering = self.cell.act("state"), command.split()[0] in ("retreat", "park")
         if not same_session(state, self.assessment, recovering=recovering):
             faulted = state.get("fault") and same_session(state, self.assessment, recovering=True)
             return {"ok": False, "error": "held: fault" if faulted else "held: session_changed"}
         a = self.assessment
         if self.zones:
             self.zones.bind(a.get("operating_profile"), a["session_id"])
-        target = {"goto above_pick": "pick", "goto above_place": "place"}.get(command)
-        if self.zones and target:
-            xy = self.source.get(target) or {}
-            allowed, why = self.zones.enter((xy["x"], xy["y"])) if "x" in xy else (False, f"library names no {target} point")
-            if not allowed:
-                return {"ok": False, "error": f"held: zone: {why}"}
+        sub_commands = [s.strip() for s in command[6:].split(";") if s.strip()] if command.startswith("chain ") else [command]
+        for sub in sub_commands:
+            target = {"goto above_pick": "pick", "goto above_place": "place"}.get(sub)
+            if self.zones and target:
+                xy = self.source.get(target) or {}
+                allowed, why = self.zones.enter((xy["x"], xy["y"])) if "x" in xy else (False, f"library names no {target} point")
+                if not allowed:
+                    return {"ok": False, "error": f"held: zone: {why}"}
         status = self.cell.act(f"checked {a['session_id']} {a['library_sha256']} {command}")
         if command.startswith("load ") and status.get("ok"):
             self.home = ((library.get("chunks", {}).get("home") or [None])[-1]
-                         if digest(library) == a["library_sha256"] else None)
-        if self.zones and command == "park":
+                         if lib_sha == a["library_sha256"] else None)
+        if self.zones and sub_commands and sub_commands[-1] == "park":
             from chunk_runner import SETTLE_TOL
 
             present, home = status.get("state"), self.home
@@ -175,6 +194,12 @@ def _transfer(cell, library, closed, wrist, after_place, pinch, feel, sequence, 
                 return {"result": "misaligned", "at": "pinch", "pinch": seen, "steps": steps}
         if command == "run lift_place" and status.get("ok") and after_place is not None:
             after_place()  # hover over the box just placed: the wrist reference for 'centred' (cell_wrist_ref)
+        if command in ("run grasp_pick", "run lift_pick") and not status.get("holding"):
+            import cell_arm_cal
+
+            if cell_arm_cal.infer_holding(status, closed=closed if closed is not None else 48.8):
+                status["holding"] = True
+                status["holding_inferred"] = True
         if command == "run grasp_pick" and not status.get("holding") and feel is not None:
             status = feel(run)  # cell_feel: an empty grasp feels again, shifted along the closing axis
             if status.get("contact") or not status.get("ok"):

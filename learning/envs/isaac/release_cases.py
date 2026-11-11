@@ -153,18 +153,22 @@ for _name, _offset in (('y060', .0006), ('y080', .0008)):
     FIXTURE_OVERRIDES[f'nominal-palletizing-v21-ship-{_name}-c2-seat-g315'] = dict(_base, seat_replace=dict(SEAT_REPLACE))
 # 2026-11-10 MuJoCo -> Isaac two-stage pipeline: Stage 1 (MuJoCo) screens vision-guided skewed belt picks and 3-tier IK/collision;
 # Stage 2 (Isaac) confirms PhysX contact, finger-pad slip and stud/pocket seating under the measured 2026-11-10 cell geometry and skew jitter.
+REAL_CAMERAS_20261110 = dict(
+    top=dict(eye=[-.0334, .0493, .6613], focus=[.0804, .0086, .1762], up=[.9737, .0296, .226], f_px=615., width=640, height=480),
+    side=dict(eye=[-.5078, .0019, .1471], focus=[-.0082, -.0166, .1445], up=[.0061, .0257, .9997], f_px=950., width=640, height=480),
+)
 FIXTURE_OVERRIDES['nominal-palletizing-v21-ship-surveyed-skew-20261110'] = dict(
     FIXTURE_OVERRIDES['nominal-palletizing-v21-ship-surveyed'],
     planning_scene='surveyed-cell-20261110-skew-vision',
     arm_bases_m=[[.116, -.164, .072], [.107, .164, .072]],
     arm_base_yaws_rad=[math.pi/2, -math.pi/2],
+    leveling_centers_m=[[.116-.17, -.164, .072], [.107-.17, .164, .072]],
+    leveling_vias_m=[[-.004, -.084, .212], [-.004, .084, .212]],
     cargo_colors_rgb=[[.91, .47, .22], [.18, .72, .24], [.88, .14, .28]],
     infeed_jitter_xy_m=[.002, .002],
     infeed_yaw_jitter_rad=.02,
     release_gap_m=.0315,
-    stack_release_clearance_m=.002,
-    release_offset_m=[0., .0004],
-    release_yaw_rad=math.radians(.5),
     seat_replace=dict(SEAT_REPLACE),
     wrist_camera=dict(WRIST_CAMERA_B),
+    real_cameras=dict(REAL_CAMERAS_20261110),
 )
