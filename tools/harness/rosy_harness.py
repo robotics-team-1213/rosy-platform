@@ -14,8 +14,8 @@ ROS-free: standard library plus PyYAML, so it runs on Windows hosts and in CI.
 from __future__ import annotations
 
 import argparse
+from concurrent.futures import ThreadPoolExecutor
 import datetime as dt
-import hashlib
 import os
 import re
 import subprocess
@@ -328,17 +328,16 @@ def is_append_only(old: str, new: str) -> bool:
             "ffaaae6e3e9186866372a176a17d23985ff2f795028e6d524719942006b88cc2"  # corrected aid block SHA256
         ),
     }
-    new_hashes = {hashlib.sha256(block.encode("utf-8")).hexdigest() for block in new_blocks}
+    new_hashes = {sha256(block.encode("utf-8")).hexdigest() for block in new_blocks}
     for block in old_blocks:
         if block in new_blocks:
             continue
-        corrected_hash = provenance_reconciliations.get(hashlib.sha256(block.encode("utf-8")).hexdigest())
+        block_hash = sha256(block.encode("utf-8")).hexdigest()
+        corrected_hash = provenance_reconciliations.get(block_hash)
         if corrected_hash is not None and corrected_hash in new_hashes:
             continue
-        repaired_hash = KNOWN_LOG_ENCODING_REPAIRS.get(sha256(block.encode("utf-8")).hexdigest())
-        if repaired_hash is not None and any(
-            sha256(candidate.encode("utf-8")).hexdigest() == repaired_hash for candidate in new_blocks
-        ):
+        repaired_hash = KNOWN_LOG_ENCODING_REPAIRS.get(block_hash)
+        if repaired_hash is not None and repaired_hash in new_hashes:
             continue
         lines = block.splitlines()
         replacement = evidence_reconciliations.get(lines[0])
@@ -528,10 +527,10 @@ def render_brief(repo: Path) -> str:
     return "\n".join(lines) + "\n"
 
 
-def generated_targets(repo: Path) -> dict[Path, str]:
+def generated_targets(repo: Path, adr: AdrLog | None = None) -> dict[Path, str]:
     config = load_config(repo)
     adr_path = repo / config["adr_log"]
-    adr = parse_adr_log(adr_path.read_text(encoding="utf-8"), repo / "docs" / "adr")
+    adr = parse_adr_log(adr_path.read_text(encoding="utf-8"), repo / "docs" / "adr") if adr is None else adr
     plan_docs = [(p, _optional_frontmatter(p)) for p in (repo / "docs" / "plans").glob("*.md")]
     sol_docs = [(p, _optional_frontmatter(p)) for p in (repo / "docs" / "solutions").rglob("*.md") if p.name != "AGENTS.md"]
     targets = {repo / m["path"] / "index.md": render_module_index(repo, m, adr, adr_path, plan_docs, sol_docs) for m in config["modules"]}
@@ -543,9 +542,9 @@ def generated_targets(repo: Path) -> dict[Path, str]:
     return targets
 
 
-def check_generated(repo: Path) -> list[str]:
+def check_generated(repo: Path, adr: AdrLog | None = None) -> list[str]:
     try:
-        targets = generated_targets(repo)
+        targets = generated_targets(repo, adr)
     except (ValueError, OSError, yaml.YAMLError) as exc:
         return [f"cannot render: {exc}"]
     return _check_records(repo, targets)
@@ -715,7 +714,7 @@ def lint(repo: Path) -> tuple[list[str], list[str]]:
     refs, note = _history_refs(repo)
     if note:
         warnings.append(note)
-    moved_roots = _moved_roots(repo)
+    moved_roots, stale = _moved_roots(repo), []
     log_rels = [f"{m['path']}/logs.md" for m in config["modules"]]
     unchanged = {r: set(t.splitlines()) - set(d.splitlines())
                  if (t := _git(repo, "ls-tree", "--name-only", r, "--", *log_rels)) is not None
@@ -747,14 +746,15 @@ def lint(repo: Path) -> tuple[list[str], list[str]]:
         if commit == UNCOMMITTED:
             warnings.append(f"{name}: last_verified is an uncommitted tree; re-verify and record the commit")
         elif isinstance(commit, str):
-            count = _git(repo, "rev-list", "--count", f"{commit}..HEAD", "--", module["path"])
-            threshold = int(config.get("stale_after_commits", 5))
-            if count is None:
-                warnings.append(f"{name}: last_verified commit {commit} not found in git history")
-            elif int(count) > threshold:
-                warnings.append(f"{name}: {count.strip()} commits touched {module['path']} since last_verified {commit}")
-
-    errors += [f"generated: {p}" for p in check_generated(repo)]
+            stale.append((name, module["path"], commit))
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        counts = list(pool.map(lambda s: _git(repo, "rev-list", "--count", f"{s[2]}..HEAD", "--", s[1]), stale))
+    for (name, path, commit), count in zip(stale, counts):
+        if count is None:
+            warnings.append(f"{name}: last_verified commit {commit} not found in git history")
+        elif int(count) > int(config.get("stale_after_commits", 5)):
+            warnings.append(f"{name}: {count.strip()} commits touched {path} since last_verified {commit}")
+    errors += [f"generated: {p}" for p in check_generated(repo, adr)]
     return errors, warnings
 
 
