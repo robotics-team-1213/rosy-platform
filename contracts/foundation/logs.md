@@ -1145,6 +1145,31 @@
 - gate 변화: SOURCE 변경. 로봇·장치 수용 없음.
 - 교훈: CE 해당 없음 — 최종 코드와 시험이 판단을 보존한다. 실물·운영 수용은 아니다.
 
+## 2026-11-08 · uncommitted · D-998 알림 전달 계약과 채널 adapter 추출
+- 변경: DeliveryRequest/Receipt/OwnerReply와 D-661 고정 채널 전송을 공용화했다. Fleet의 사건 검사·원장은 유지한다.
+- 증거: 독립 전달 서비스 시험과 기존 Fleet 알림 회귀를 커밋 SHA의 원격 시험으로 요청한다. 아직 실제 채널 수용 근거는 없다.
+- gate 변화: 없음. ARTIFACT/DEVICE/FIELD와 발송 owner 전환은 별도다.
+- CE: 해당 없음 — 의미가 같은 adapter만 추출하는 경계는 D-998과 회귀 시험에 남는다.
+
+## 2026-11-08 · uncommitted · D-998 foundation 배포 버전 정합성
+- 변경: 신규 채널 모듈·httpx 의존을 제공하는 core_common을0.0.3으로 올리고 setup.py/package.xml·소비 하한·CI 설치 pin을 함께 맞췄다.
+- 증거: 변경 전0f0bf42bbd Foundation·프로토콜 회귀1502 passed/NEW0. 변경 후 동일 회귀와 소비자 wheel 설치를 새 커밋의 원격 시험에서 확인한다.
+- gate 변화: 없음. 배포·실물 수용은 별도다.
+
+## 2026-11-08 · uncommitted · refactor(foundation): 기록의 비밀 필드 이름 판별 공용화
+
+- 변경: D-997 적용 2단계로 Fleet 감사·task 기록의 동일 정규식만 `core_common.audit_fields.is_credential_field`로 모았다. 재귀·PEM 검사·오류·writer는 각 소비자가 유지한다. 기존 setup 패키지 자동 검색과 Fleet core_common 의존성을 재사용한다.
+- 증거: 시험 선행 커밋 `daacc77040` 원격 RED 24 실패(새 모듈 없음), known_failures 대조 24 NEW. 구현 SHA의 원격 affected와 소비자 회귀 결과는 디스패처 인계에 남긴다.
+- gate 변화: 없음. HTTP schema·배포·실물 수용은 바꾸지 않았다.
+- CE: 해당 없음 — 같은 의미의 범위와 남긴 차이는 코드·회귀 시험·공통 서비스 카탈로그로 재현된다.
+
+## 2026-11-08 · uncommitted · test: 설치 시험의 core_common 버전 기대값을 0.0.3으로
+
+- 변경: D-998에서 core_common을 0.0.3으로 올렸는데 perception·world 설치 시험 두 곳이 정확히 0.0.2를 기대해 착지(land-feat-d997-land-20261108040352)가 NEW로 멈췄다. 기대값만 0.0.3으로 맞췄다. 같은 변경이 rosy-execution 의존을 `>=0.0.2`로, Fleet 하한을 `>=0.0.3`으로 바꿨으므로 플랫폼 설치 시험의 기대도 그 표기로 맞췄다.
+- 증거: 멈춘 착지 run-pre-18 `AssertionError: ('foundation version', '0.0.3')`, main은 통과. 수정 뒤 두 시험의 원격 결과는 커밋 시험에 남긴다.
+- gate 변화: 없음.
+- CE: 해당 없음 — 버전을 올릴 때 정확한 버전을 기대하는 시험이 함께 실패하는 평범한 누락이다.
+
 ## 2026-11-09 · 79ebad2111 · D-922 Pinky 표정·시선·후면 LED 구현
 
 - 변경: 검증된 감지 입력의 시간·중복·세대 처리, 방향성 눈인사, 300초 일반 대기의 졸린 휴식, 공통 얼굴·LED 의도와 기존 안전·정보·전력 표시 우선권을 연결했다.

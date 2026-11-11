@@ -32,6 +32,35 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 - `GET /api/fleet/formation/mission` (viewer): `{active, mission_id, leader, members, formation, spacing, max_speed, spacing_floor, lane_width_m, state RUNNING|ENDED, end_reason, formation_status}`; 미션이 없으면 `{active: false}`. `mission_id`는 리더 TRIP job의 것이다. 팔로워 상실(FOR-004 HOLD → 리더 `navigation/cancel` → job 행 HOLD)이나 리더 도착(행 `GOAL_CONFIRMED`)으로 리더 job 행이 READY·RUNNING을 떠나면 `ENDED`, `end_reason`은 세션 사유 또는 `leader_job_ended`.
 - `POST /api/fleet/formation/mission/stop` (`operator`): 세션을 풀고 리더 항법을 취소한다. TRIP 단계 장부가 열리지 않은 배포 프로필에는 이 세 경로가 없다.
 
+### v1.377 독립 알림 전달 접수 (D-998, 전환 전)
+
+독립 `rosy-notifications` 서비스의 표면이다. CORE/Fleet에 mount하거나 현장 TLS 경로를 추가하지 않는다.
+등록된 설치 단위 기계 bearer만 허용하며 사람·장치 토큰을 쓰지 않는다. worker 기본 꺼짐, 기존 Fleet 발송이 정본이다.
+
+| 경로 | 계약 |
+|---|---|
+| `POST /api/notifications/v1/deliveries` | `DeliveryRequest` 접수. 동일 생산자·notification_id·본문은 기존 `DeliveryReceipt`(200), 본문 충돌409. 생산자/채널 범위 위반403, 미등록 자격401, 예산 초과429, 시간/본문 검증422,4096 bytes 초과413 |
+| `GET /api/notifications/v1/deliveries/{notification_id}` | 인증된 생산자 자신의 `DeliveryReceipt`만 조회(200). 없거나 다른 생산자 건이면404 |
+
+`DeliveryRequest`는 추가 키 금지다. 필수 필드는 `producer`(`fleet` 또는 `harbor`), `notification_id`, `channel`(등록 key),
+`kind`(Fleet `OPEN`/`CLOSED`/`FINAL_REVIEW`, Harbor `HOLD`), `subject_id`, `occurrence_id`, `revision`, `classification`,
+`observed_at`, `expires_at`다. 식별자/분류는 `[A-Za-z0-9_.:-]{1,96}`, 시각은 유한 UTC epoch seconds다.
+접수는 관측≤현재+5초와 현재<만료≤관측+생산자 TTL을 검사한다. 작은 시계 차이만 허용하고 원래 시각·identity는 보존한다. URL·수신자·본문 자유 텍스트·토큰·원본 자료는 받지 않는다.
+한 notification_id는 한 채널 건이며 생산자는 원래 발생 identity에 채널을 결속하고 재접수에도 같은 본문을 쓴다.
+
+`DeliveryReceipt`는 `producer`, `notification_id`, `state`, `attempts`만 반환한다. state는 `PENDING`, `RETRY`, `SENDING`,
+`SENT`, `UNKNOWN`, `EXPIRED`, `SUPERSEDED`, `FAILED`다. SENT는 provider 수락이며 읽음·인수·해결을 뜻하지 않는다.
+UNKNOWN은 자동 재전송하지 않는다. 종결 기록7일 보관·생산자별 비종결 대기 최대1000건/전체 신규 접수 분당20건이며 더 작은 승인 예산이 가능하다. 종결 기록은 대기 용량을 소비하지 않는다.
+Fleet 예산은60초/3회/600초, Harbor 예산은 보호 설정으로 명시한다(D-998 상한 이내).
+
+발송 직전 서비스는 보호 설정의 owner URL에 요청 DTO 전체를 POST한다. 별도 machine bearer와3초 timeout,
+TLS 검증·redirect 금지를 적용한다. 생산자는 원래 업무/발생 회차/revision/현재 수신 범위를 검증해
+`DeliveryOwnerReply`(`notification_id`, `revision`, `valid: bool`)를 반환한다.
+불일치·단절·오류는 PENDING, false는 SUPERSEDED, 만료는 EXPIRED이고 어느 경우도 보내지 않는다.
+생산자 callback의 실제 URL·보호 화면 URL은 공개 요청으로 선택하지 않으며 각 생산자 구현 변경이 소유한다.
+첫 구현의 메시지는 고정 분류·불투명 식별자·시각/기한·설정된 보호 업무 링크만 쓴다.
+Fleet의 기존 상세 본문을 대체하는 전환 계약은 별도다. 원본 outbox·UNKNOWN 보존과 두 생산자 양 끝 SHA HTTP 수용 전에는 전환하지 않는다.
+
 ### v1.375 OMX 팔 사건의 원인 라벨과 정지 앞뒤 사진 (D-971)
 
 - 해제 `POST .../incidents/{incident_id}/clear`가 선택 필드 `cause`(`blocked`·`wrong_position`·`snagged`·`too_fast`·`no_room`·`software_or_config`·`camera_or_map`·`other`·`unknown`)와 `basis`(`repeat`·`measured`·`seen`·`unknown`)를 받는다. 사람이 고른 원인과 그 근거(같은 동작을 다시 해 봄·측정값·사진으로 봄)다. 사건 행의 `cleared`에 `cause`·`basis`가 붙는다(없으면 null). 예전 본문 `{note}`도 그대로 받는다.
@@ -4720,6 +4749,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 | v1.380 | 2026-11-09 | Additive (D-1006, feat/adaptive-map-calibration): `GET /api/fleet/tracking` 출처 행에 `calibration_health` — 승인 교정과 Vision 맞춤의 건강 상태(거부·응답 없음 포함, 없으면 null). 새 엔드포인트 없음. 선택 게이트(`ROSY_FLEET_CALIBRATION_GATE=1`, 기본 꺼짐)가 켜지면 `drifting`·`mismatch`에서 `approved_record` sighting이 409 `CALIBRATION_MISMATCH`. Robot API·envelope 1.0 변경 없음 |
 | v1.379 | 2026-11-09 | Corrective + Additive (D-1005): `PUT /api/v1/safety/speed-limits`(operator) — 수동·시험 속도와 시험 이동 거리를 서명 상한(프로필 0.20 m/s, 0.80 rad/s; 시험 달리는 거리 0.25 m) 안에서 설정. `GET /safety/state`의 `limits`에 `approved_linear/angular`·`effective_manual_linear/angular`·`trial_linear/angular/travel_m`. **Corrective**: `PUT /safety/limits`의 `manual_linear/angular`가 상한 초과를 깎지 않고 400으로 거절한다. 봉인된 측정 속도가 있으면 수동·항법·Fleet 이동 속도 모두 그 값 이하로 제한(`controls.base.max_*` 포함). `GET /robot/state`에 `speed_limits`(실효 수동 한도 `manual_*`, 설정값 `set_*`, 봉인 `approved_*`, 상한 `max_*`). `PUT /safety/limits`는 manual 속도만 담으면 operator도 쓸 수 있다. `PUT /safety/speed-limits`는 선택 `operator_name`을 받는다. `config.changed` key에 `safety.speed_limits`·`safety.approved_speed`, payload에 `by`·`changes`. 항법 승인 상태의 `approval`에 `measured_linear_mps`·`measured_angular_rps`. |
 | v1.378 | 2026-11-09 | Additive (D-1002): 편대 미션 `POST/GET /api/fleet/formation/mission`, `POST .../mission/stop` — 차로 적합성 → 팔로워 무장 → 리더 TRIP job 한 행; 리더 job 행이 HOLD·GOAL_CONFIRMED가 되면 `ENDED`. 새 스키마 없음. |
+| v1.377 | 2026-11-08 | D-998 독립 알림 전달의 기계 범위별 접수·조회, 중복/충돌·owner 확인·유한 예산·UNKNOWN 계약. 기존 Fleet 발송 owner 전환·배포는 별도. |
 | v1.375 | 2026-11-08 | Additive (D-971): 팔 사건 해제의 `cause`·`basis`, 정지 앞뒤 사진 `POST/GET .../incidents/{id}/evidence`, 보류하지 않는 보고(`decision.hold: false`), `GET .../arm-incidents/labelled`. |
 | v1.374 | 2026-11-07 | Additive: Account 가입·권한 요청(D-993) — 공개 `POST /api/fleet/auth/access-requests`와 관리자 목록·승인·거절. |
 | v1.369 | 2026-11-07 | Additive (D-989): `GET`·`POST /api/fleet/auto-locate`, detections config `stream_wanted`. 사이트 설정 `fleet.map_pose.auto_locate_robots`(기본 빈 목록)에 든 로봇만 map pose `anchor_source:"auto_locate"`를 낸다 |
