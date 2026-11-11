@@ -141,6 +141,7 @@ export function rowText(row) {
     lines.push(`로봇에 토큰이 남아 있음(만료 ${row.expires_at || "알 수 없음"}) — 로봇 대시보드에서 회수 가능`);
   }
   if (row.state === "needs_new_code") lines.push("로봇 화면의 새 코드로 다시 등록하세요.");
+  if (row.removal_pending) lines.push(`삭제 예정(${row.days_idle}일 비활동) — 운영자 확인 뒤 해제`);
   if (row.legacy_lifetime && row.state !== "pending_logout") {
     lines.push("이 이미지는 사이트 수명을 모름 — 7일 뒤 새 코드 필요");
   }
