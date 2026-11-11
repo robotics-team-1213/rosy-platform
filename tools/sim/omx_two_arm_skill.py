@@ -156,6 +156,8 @@ def isolated(driver, name, seed, skill, zero_error_deg, lag, physics=False):
 
 
 def options(parser):
+    parser.add_argument("--pick-vision", action="store_true", help="infer belt pick pose from top camera")
+    parser.add_argument("--belt-skew", action="store_true", help="spawn skewed/offset containers on belt")
     parser.add_argument("--skill", choices=sorted(SKILLS), help="learn and judge only this part of each step; the teacher's IK does the rest")
     parser.add_argument("--zero-error-deg", type=float, default=0., help="per-seed joint-zero calibration error, uniform within +-deg (the twin fit found up to 4)")
     parser.add_argument("--servo-lag", action="store_true", help="per-seed per-joint servo lag in the measured 0.10-0.34 s")
@@ -163,6 +165,20 @@ def options(parser):
 
 
 def argv(args):
-    """The sub-skill options again, for a child process of the round."""
+    """The sub-skill and vision/skew options again, for a child process of the round."""
+    vision = [*(["--pick-vision"] if getattr(args, "pick_vision", False) else []), *(["--belt-skew"] if getattr(args, "belt_skew", False) else [])]
     flags = [*(["--servo-lag"] if args.servo_lag else []), *(["--physics-ranges"] if args.physics_ranges else [])]
-    return ["--skill", args.skill, "--zero-error-deg", str(args.zero_error_deg), *flags] if args.skill else []
+    return [*(["--skill", args.skill, "--zero-error-deg", str(args.zero_error_deg), *flags] if args.skill else []), *vision]
+
+
+def pipeline_stages(score, layout, eval_rows, *, pick_vision=False, belt_skew=False, gazebo_report=None, isaac_report=None, skill=None):
+    import omx_ladder as ladder
+    import omx_two_arm_policy as policy
+    verdict = policy.outcome(score, skill)
+    handoff = teaching.isaac_handoff(dict(task="two-arm-policy", completed=verdict["status"] == "passed", steps=score["n"], steps_pass=score["passed"], rows=eval_rows), layout)
+    gz = ladder.judge_gazebo_contract(gazebo_report) if gazebo_report else dict(status="not_run", claim="ROS 실행 계약", contract=None, artifacts=[], reason="별도 ROS 2 실행 계약 점검(omx_backend_conformance.py)을 이 라운드에서 실행하지 않았습니다.")
+    return dict(
+        mujoco=dict(stage_order=1, track="learning_and_physics", status=verdict["status"], role="stage1_geometry_vision_and_act_policy", claim="기하·비전 정책(Stage 1): 4카메라+12관절 입력 ACT 추론 및 도달·순서·충돌 검증(D-947)", pick_vision=bool(pick_vision), belt_skew=bool(belt_skew), eval=score, reason=verdict.get("reason")),
+        isaac=dict(stage_order=2, track="learning_and_physics", role="stage2_physx_contact_pad_slip_and_seating", handoff=handoff, **(ladder.judge_isaac_stage(isaac_report if isaac_report else handoff))),
+        gazebo=dict(stage_order=None, track="ros2_execution_contract", role="ros2_interface_conformance", **gz),
+    )

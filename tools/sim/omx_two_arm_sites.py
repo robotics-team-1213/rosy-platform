@@ -32,18 +32,28 @@ CHOICES = dict(
     ship_stern_x_m=.155,     # r08: stern end x, bow toward -x as the printed ship lay in the 11-07 top photo; ASSUMED at the table's belt edge (r08 not placed yet)
     ship_centre_y_m=-.014,   # r08: hull centreline y, the middle row of the 11-08 top frame (rows +25/-14/-56 mm; was .007, the 11-07 photo's hull
                              # edges). Its x reading (holds 25 mm toward the belt) would put the stern over the belt end: x stays
-    wrist_camera="photo-20261108",  # "photo-20261108": WRIST_PHOTO, fitted to arm_b's real wrist frame; "v21-b": the team's printed D holder r06
-                             # (palletizing_gripper.WRIST_CAMERA_B); both draw and collide link5 as the D parts; "stock" (omx-ai-stock, ROBOTIS STEP) or "none"; arm_a ASSUMED the same mount
+    wrist_camera="photo-20261108",  # "photo-20261108": WRIST_PHOTO (fitted to arm_b); "photo-20261110": WRIST_PHOTO_A on arm_a, WRIST_PHOTO on arm_b (G-24);
+                             # "v21-b": the team's printed D holder r06 (palletizing_gripper.WRIST_CAMERA_B); "stock" or "none"
     tcp_x_arm_b=.0740,       # URDF/STL v2.1 jaw (tip 74.1 mm from the pivot); a touch gave .0885 but that rests on an unchecked table height (OPEN, 14.5 mm FK offset)
     tcp_x_arm_a=.0740,       # same jaw, not confirmed on arm_a separately
     sim_tcp_x_m=.0740,       # the MuJoCo pads are the repo's v2.1 STL, whose TCP is .0740: the teacher grasps with this one (STL may not match the installed jaws)
     roll_floor_norm=-18.,    # usable wrist roll floor in the norm unit (coordinator): a step whose joint5 goes below it is flagged
-    belt_pose="fixture",     # "fixture": BELT_STOP_X and the fixture's pickup line; "snapshot": the belt strip measured in cell_snapshot's top frame
-    ship_pose="assumed",     # "assumed": ship_stern_x_m and ship_centre_y_m above; "snapshot": the hull fitted in cell_snapshot's top frame
+    arm_bases="surveyed",    # "surveyed": fixture_case bases (arm_b FK, arm_a plate centre); "plate-centre": top-frame base plate centres (G-21); "snapshot"
+    belt_pose="fixture",     # "fixture": BELT_STOP_X and the fixture's pickup line; "photo-20261110" or "snapshot": belt strip in the top frame
+    ship_pose="assumed",     # "assumed": ship_stern_x_m and ship_centre_y_m above; "photo-20261110" or "snapshot": hull fitted in the top frame
     cell_snapshot=None,      # with temp_lanes="snapshot": a rosy.omx-cell-snapshot.v1 file (omx_real2sim.py measure), the lanes the top camera saw then
+    top_camera="2026-11-10", # "2026-11-10": resurveyed top camera (cell_model_inventory.yaml); "2026-11-03": initial stud-grid PnP
+    container_colours="orange",  # "orange": standard v3 containers; "multi": cycle orange/green/red/purple across containers
     physics="design",        # a candidate of learning/envs/isaac/cell_physics.yaml (omx_physics.py): servo gains, joint damping, container mass and friction
     wait_pose="side")        # where an arm waits between steps: "side" = home folded but turned to the belt end, out of the middle band
                              # (D-983: the folded home points its jaw at the middle, and arm_a brushed arm_b's jaw at the stand); "home"
+TOP_CAMERA_20261110 = dict(eye=[-.0334, .0493, .6613], focus=[.0804, .0086, .1762], up=[.9737, .0296, .226],
+                           f_px=615., width=640, height=480)
+ARM_BASES_PLATE_CENTRE = dict(arm_a=((.116, -.164), 90.), arm_b=((.107, .164), -90.))  # G-21: top-frame base plate centres vs arm_b FK (.104, .153)
+TEMP_LANES_PHOTO_1110 = dict(a=[((-.0842, -.2271), 17.2), ((-.0933, -.1676), .2), ((-.0846, -.1081), -16.8)],
+                             b=[((-.0818, .1073), 16.9), ((-.0906, .1668), -.1), ((-.0817, .2263), -17.1)])
+SHIP_PHOTO_1110 = dict(stern_x_m=.178, centre_y_m=-.001)
+BELT_PHOTO_1110 = dict(end_x_m=.2115, centre_y_m=-.0226)
 # Lane centre (x, y) m and long-axis yaw deg, lanes numbered as printed on the plates. Dark pads in the surveyed top camera, back-projected to the plate top;
 # the pads measured 89 x 30 mm against the 90 x 30 container. tmp-a-3 lay under a container: from lanes 1 and 2, its visible end agrees within 0.1 deg.
 # The plates are loose: measure again when one moves.
@@ -76,6 +86,7 @@ STERN = dict(boxes=((0., 50., -65., 65., 6.), (0., 6.5, -65., 65., 11.), (43.5, 
 # jaw opening fitted too, IoU 0.15 -> 0.68): 16 mm higher and 8 mm to the side of the D r06 CAD, the axis meeting the jaw axis 25 mm further
 # out, about the same 34 deg down. One frame at one pose: lens height and aim trade off; refit on frames at other poses.
 WRIST_PHOTO = dict(lens_m=[.0338, .008, .0671], axis_hit_x_m=.1328)
+WRIST_PHOTO_A = dict(lens_m=[.0528, .005, .0641], axis_hit_x_m=.145)  # arm_a 2026-11-10 wrist frame jaw silhouette fit (IoU 0.18 -> 0.39, G-24)
 TEMP_TIERS = 3  # plate v11: 3 lanes x 3 tiers (Confluence 15368863); tier 0 keeps the lane's name, tier k is "<lane>-l<k>"
 R08_TIERS = 3 # the cell stacks three high (user, 11-08); the slot map lists tiers 82 and 84, the third sits one container (32.4 mm) higher
 R08_STACK = tuple((f"bar-{3 * layer + k + 1}", f"ship-h1r{row}-l{layer}", arm) for layer in range(R08_TIERS)
@@ -234,19 +245,32 @@ class Layout:
         self.choices = dict(CHOICES, **choices)
         c = self.choices
         self.fixture = f = fx.container_fixture(layers=3, case=c["fixture_case"])
+        if c["top_camera"] == "2026-11-10" and ("top_camera" in choices or c["temp_lanes"] != "photo-20261107"):
+            f["real_cameras"] = dict(f["real_cameras"], top=dict(TOP_CAMERA_20261110))
         self.table_z = f["workplate_center_m"][2] + f["workplate_size_m"][2] / 2
         self.deck_z = ship_plate.top_z(f)
         self.arms, self.sim_arms, self.plates = {}, {}, {}
         self.roll_floor = float(kin.norm_to_rad(c["roll_floor_norm"]))
         for k, name in enumerate(ARMS):
             z = self.table_z + .012 if c["base_z"] == "measured" else f["arm_bases_m"][k][2]
+            xy, yaw_rad = f["arm_bases_m"][k][:2], f["arm_base_yaws_rad"][k]
+            if c["arm_bases"] == "plate-centre":
+                xy, yaw_deg = ARM_BASES_PLATE_CENTRE[name]
+                yaw_rad = math.radians(yaw_deg)
+            elif c["arm_bases"] == "snapshot":
+                ab = (load_snapshot(c["cell_snapshot"])["items"].get("arm_bases") or {}).get("plate_centre", {}).get(name)
+                if not ab or "xy" not in ab:
+                    raise ValueError(f"snapshot {c['cell_snapshot']}: no arm_bases for {name}")
+                xy, yaw_rad = tuple(ab["xy"]), math.radians(ab["yaw_deg"])
             for table, tcp in ((self.arms, c["tcp_x_" + name[-5:]]), (self.sim_arms, c["sim_tcp_x_m"])):
-                table[name] = arm = kin.Arm(name, (*f["arm_bases_m"][k][:2], z), f["arm_base_yaws_rad"][k], tcp_x=tcp)
+                table[name] = arm = kin.Arm(name, (*xy, z), yaw_rad, tcp_x=tcp)
                 arm.wait = wait_pose(arm, c["wait_pose"])
         belt_top = self.table_z - .055 if c["belt_height"] == "ruler" else f["pickup_center_m"][2] - .015
         self.belt_top = belt_top
         self.belt_stop_x, self.belt_y = BELT_STOP_X, f["pickup_center_m"][1]
-        if c["belt_pose"] == "snapshot":
+        if c["belt_pose"] == "photo-20261110":
+            self.belt_stop_x, self.belt_y = BELT_PHOTO_1110["end_x_m"], BELT_PHOTO_1110["centre_y_m"]
+        elif c["belt_pose"] == "snapshot":
             belt = load_snapshot(c["cell_snapshot"])["items"].get("belt") or {}
             if "end_x_m" not in belt:
                 raise ValueError(f"snapshot {c['cell_snapshot']}: no measured belt ({belt.get('error', 'item missing')})")
@@ -254,7 +278,9 @@ class Layout:
         self.box = CONTAINER[c["ship_source"]]
         pick_x = self.belt_stop_x + f["pickup_center_m"][0] - BELT_STOP_X  # the container waits as far past the stop as in the fixture
         self.sites = {"belt": dict(kind="belt", xy=(pick_x, self.belt_y), z=belt_top + self.box[2] / 2 + .0005, yaw=0.)}
-        if c["ship_pose"] == "snapshot":
+        if c["ship_pose"] == "photo-20261110":
+            c["ship_stern_x_m"], c["ship_centre_y_m"] = SHIP_PHOTO_1110["stern_x_m"], SHIP_PHOTO_1110["centre_y_m"]
+        elif c["ship_pose"] == "snapshot":
             ship = load_snapshot(c["cell_snapshot"])["items"].get("ship") or {}
             if "stern_x_m" not in ship:
                 raise ValueError(f"snapshot {c['cell_snapshot']}: no measured ship ({ship.get('error', 'item missing')})")
@@ -273,7 +299,8 @@ class Layout:
                 lanes = snapshot_lanes(c["cell_snapshot"], tag)
                 centre = lanes[1][0]
             else:
-                photo = TEMP_LANES_PHOTO_1108 if c["temp_lanes"] == "photo-20261108" else TEMP_LANES_PHOTO
+                photo = (TEMP_LANES_PHOTO_1110 if c["temp_lanes"] == "photo-20261110"
+                         else TEMP_LANES_PHOTO_1108 if c["temp_lanes"] == "photo-20261108" else TEMP_LANES_PHOTO)
                 lanes = [(xy, math.radians(yaw)) for xy, yaw in photo[tag]]
                 centre = lanes[1][0]
             self.plates[tag] = dict(arm=name, centre=centre, lanes=lanes, outline=plate_outline(lanes, c["temp_radius_m"]))

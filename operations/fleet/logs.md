@@ -5437,3 +5437,17 @@
 - 이유: 독립 검토(2026-11-10) 중간 지적 1·2·3 — LOCALIZED가 아니면 SiteFrameMismatch 검사가 안 돌아 현장 좌표가 그대로 나가고, 한쪽 map_id가 None이면 "비교 가능"으로 읽히며, 변조 DB가 첫 가져오기에서 프로세스를 죽일 수 있었다.
 - 근거: test_site_map_frame_safety.py(LOCALIZED 아님·상태 None·스냅숏 없는 포트 정지, 같은 map_id 증명 폴백, import 생존), test_server_traffic.py(map_id 없음 보류, 마지막 확인값 대체·로그), test_trip_robot_frame_goal.py(변환 짝 없음 정지로 갱신).
 - gate 변화: 없음(SOURCE만, 기체·현장 수용 별도).
+
+## 2026-11-10 · uncommitted · feat(fleet): 지도–실제 대조와 초안 강체 보정
+- 변경: 신규 순수 모듈 `fleet/map_reality.py`(`rosy.site_map_reality/1` 보고서: 차로 matched/offset/uncovered, 제외 구역·횡단보도 entered/used, 지도 밖 주행, ICP 강체 fit). `site_map_routes.py`에 `GET /api/fleet/site-map/reality-check`(읽기 권한, `last_s` 기본 6 h·최대 24 h, `robot_id` 선택)와 `POST .../reality-check/apply`(이름 있는 운영자, 409 `SITE_MAP_NO_DRAFT`/`SITE_MAP_DRAFT_CHANGED`/`SITE_MAP_NO_CORRECTION`, 422 `SITE_MAP_INVALID`) 추가. apply의 변환은 브라우저가 보내지 않고 서버가 같은 근거 창으로 재계산해 초안에만 적용하고 사건 `reality_corrected`를 남긴다. 활성 지도·로봇은 불변. 경로 기록은 `install_site_map_routes`가 요청 때 `app.state.paths`를 늦게 읽는다(app.py 불변). 화면은 `site-map-reality.js`(지도 만들기 흐름의 「지도–실제 대조」 절)와 `assets.json`·서브내비·`site-map.js` 연결. D-766 한도 초과로 횡단보도 대기 띠 네 단추를 `site-map-bands.js`로 분리해 `site-map.js`를 576줄로 내렸다(동작 변경 없음).
+- 이유: 사용자 요청(2026-11-10) — Fleet이 보는 지도가 실제와 같은지 판정하고 선·구역 일치를 보고 처리한다. 근거는 이미 서버에 있는 D-594 경로 이력만 쓴다(카메라 가져오기는 브라우저 쪽, SLAM 정합은 오프라인 도구라 범위 밖 — `docs/plans/2026-11-10-map-reality-check.md`). 허용 오차 0.15 m는 D-455 `max_jump_m`과 같은 값을 재사용하고, 판정 사다리는 `offset`을 `unmapped`보다 먼저 본다(한 방향으로 밀린 지도는 안 달린 차로처럼 보인다).
+- 근거: `test_map_reality.py`(순수 8건), `test_site_map_reality_api.py`(HTTP 6건: 409 세 종·적용 뒤 리비전 증가·활성 불변·사건 기록), `test_document_imports.py`·`test_doc_tabs.py` 허용 목록. 원격 시험 기록은 커밋 메시지와 작업 기록에.
+- gate 변화: 없음(SOURCE만, 기체·현장 수용 별도).
+- 결정: 신규 ADR 없음(권한·소유 변경 없음, 초안 저장 경로 재사용). API Reference v1.384.
+
+
+## 2026-11-11 · uncommitted · docs(fleet): 지도-실제 대조 독립 검토 반영 - 판정 대상 우선순위·근거 결정 번호 정정
+- 변경: API Reference v1.384(절·경로 표)와 설계 문서의 판정 대상을 「활성 지도(없으면 초안)」에서 「초안(없으면 활성 지도)」로 바로잡았다(judged_map 구현과 일치). 허용 오차 0.15 m의 근거 결정 번호 D-455를 D-494(max_jump_m)로 정정(설계 §3·§8, map_reality.py docstring). site-map.js 붙은 import 줄 분리(동작 불변).
+- 이유: 독립 검토(2026-11-11) 발견 — 문서가 코드와 반대를 말했고 결정 번호가 틀렸다. 코드·보안·계약 등록은 지적 없음.
+- 근거: 독립 검토 보고(2532b95683..778ee4e8f4, 2026-11-11), py_compile·node --check 통과.
+- gate 변화: 없음.

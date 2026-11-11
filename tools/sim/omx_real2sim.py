@@ -51,7 +51,7 @@ PARTIAL_MIN = .040           # a lane-wide pad at least this long is a lane cut 
 CHANGED = (.003, 3.)         # m, deg: a lane moved more than this is a changed item; 3 deg is the pocket's own yaw
                              # tolerance (SCAD yaw_tol_deg), above one plate's frame-to-frame jitter (1.4 deg, 2026-11-09)
 STAGGER_S = 45
-GAPS = {"temp_plates": "G-17", "ship": "G-18", "camera": "G-19", "belt": "G-30"}  # sim2real registry rows each item reports to (D-480)
+GAPS = {"temp_plates": "G-17", "ship": "G-18", "camera": "G-19", "arm_bases": "G-21", "belt": "G-30"}  # sim2real registry rows each item reports to (D-480)
 PY = "MUJOCO_GL=egl $HOME/rosy-test/venvs/sim-mujoco/bin/python"
 SNAP_CHOICES = lambda path: ["--choice", f"cell_snapshot={path}", "--choice", "temp_lanes=snapshot", "--choice", "ship_pose=snapshot",
                                 "--choice", "belt_pose=snapshot"]
@@ -93,14 +93,18 @@ class Camera:
 
 
 def blobs(frame):
-    """(kind, outline pixels) of dark pads (low value, low saturation) and orange containers in a BGR frame. The outline is
-    the filled blob's outside, so the white lane numbers printed on a pad do not bend its axis."""
+    """(kind, outline pixels) of dark pads (low value, low saturation) and orange or yellow containers in a BGR frame. The
+    outline is the filled blob's outside, so the white lane numbers printed on a pad do not bend its axis."""
     import cv2
 
     hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-    masks = {"pad": (hsv[..., 2] < 140) & (hsv[..., 1] < 90),
-             "container": (hsv[..., 0] < 22) & (hsv[..., 1] > 120) & (hsv[..., 2] > 120)}
-    for kind, m in masks.items():
+    masks = (("pad", (hsv[..., 2] < 140) & (hsv[..., 1] < 90)),
+             ("container", ((hsv[..., 0] < 18) & (hsv[..., 1] > 120) & (hsv[..., 2] > 120))
+              | ((hsv[..., 0] >= 23) & (hsv[..., 0] < 30) & (hsv[..., 1] > 140) & (hsv[..., 2] > 140))
+              | ((((hsv[..., 0] >= 35) & (hsv[..., 0] < 88)) | (hsv[..., 0] >= 135)) & (hsv[..., 1] > 110) & (hsv[..., 2] > 125))))
+    for kind, m in masks:
+        if kind == "pad":  # bridge the white lane label and alignment dots printed across a dark pad
+            m = cv2.morphologyEx(m.astype(np.uint8), cv2.MORPH_CLOSE, np.ones((9, 9), np.uint8))
         m = cv2.morphologyEx(m.astype(np.uint8), cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
         for c in cv2.findContours(m, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)[0]:
             if cv2.contourArea(c) >= 150:
@@ -125,12 +129,20 @@ def lane_blobs(frame, cam, deck_z, box_h):
     still hold, its centre along the lane does not."""
     out = []
     for kind, px in blobs(frame):
-        z = deck_z + (box_h if kind == "container" else 0.)
-        xy, yaw, size = rect(cam.to_plane(px, z))
-        if abs(size[1] - LANE[1]) > SIZE_TOL[1] or not PARTIAL_MIN <= size[0] <= LANE[0] + SIZE_TOL[0]:
+        xy, yaw, size = rect(cam.to_plane(px, deck_z + (box_h if kind == "container" else 0.)))
+        if abs(size[1] - LANE[1]) > SIZE_TOL[1] + (.004 if kind == "container" else 0.) or not PARTIAL_MIN <= size[0] <= LANE[0] + SIZE_TOL[0]:
             continue
+        if kind == "container" and size[1] > LANE[1]:  # oblique side wall widens the contour toward the camera
+            v = (-math.sin(yaw), math.cos(yaw))
+            sh = (.5 if (cam.eye[0] - xy[0]) * v[0] + (cam.eye[1] - xy[1]) * v[1] >= 0 else -.5) * (size[1] - LANE[1])
+            xy, size = (xy[0] - sh * v[0], xy[1] - sh * v[1]), (size[0], LANE[1])
+        at_bottom = int(px[:, 1].max()) >= frame.shape[0] - 2 and int(px[:, 1].min()) > 2
+        if at_bottom and size[0] < LANE[0]:  # v11 plates on bridge v7 reach row 479: the +x end inside the frame gives the centre
+            sh = (LANE[0] - size[0]) / 2
+            xy = (xy[0] - sh * math.cos(yaw), xy[1] - sh * math.sin(yaw))
+            size = (LANE[0] if size[0] >= LANE[0] - SIZE_TOL[0] else size[0], size[1])
         partial = size[0] < LANE[0] - SIZE_TOL[0]
-        if not partial or kind == "pad":
+        if not partial or kind == "pad" or at_bottom:
             out.append(dict(kind=kind, xy=xy, yaw=yaw, size=size, partial=partial))
     return out
 
@@ -227,8 +239,8 @@ def measure_temp_plates(frame, layout, prev=None):
     expected = {t: (*layout.sites[f"tmp-{t}-2"]["xy"], fold(layout.sites[f"tmp-{t}-2"]["yaw"])) for t in "ab"}
     for t, ls in (prev or {}).get("plates", {}).items():
         expected[t] = (*ls[1]["xy"], math.radians(ls[1]["yaw_deg"]))
-    shape = prev and prev.get("shape")
-    for t in ("" if shape else "ab"):
+    shape = None
+    for t in "ab":
         clean = sorted((b for b in found if b["kind"] == "pad" and math.dist(b["xy"], expected[t][:2]) < .14
                         and np.abs(np.subtract(b["size"], LANE)).max() < .003), key=lambda b: b["xy"][1])
         if len(clean) >= 2:
@@ -237,6 +249,7 @@ def measure_temp_plates(frame, layout, prev=None):
             if shape:
                 shape["from"] = f"plate {t}, two clean pads"
                 break
+    shape = shape or (prev and prev.get("shape"))
     if not shape:
         return dict(plates={t: dict(error="no plate shape: no previous snapshot and no plate with two clean pads") for t in "ab"},
                     shape=None, camera_check=None)
@@ -430,12 +443,13 @@ def measure(run, prev_path=None, camera_moved_ok=False):
             raise SystemExit(f"top camera moved since the previous snapshot ({m}): re-survey it (G-19, calibration step 3) "
                              "before measuring; --camera-moved-ok measures anyway")
     items = {"temp_plates": lambda: measure_temp_plates(top, layout, prev and prev["items"]["temp_plates"]),
-             "ship": lambda: measure_ship(top, layout),
-             "belt": lambda: measure_belt(top, layout)}
+             "ship": lambda: measure_ship(top, layout), "belt": lambda: measure_belt(top, layout)}
     with ThreadPoolExecutor() as pool:  # items are independent; more join here (belt end, arm bases) as they get measurers
         done = {k: pool.submit(f) for k, f in items.items()}
         results = {k: f.result() for k, f in done.items()}
     tp = results["temp_plates"]
+    ab = dict(fk={n: dict(xy=[round(v, 4) for v in a.base[:2]], yaw_deg=round(math.degrees(a.yaw), 1)) for n, a in layout.arms.items()},
+              plate_centre={n: dict(xy=list(xy), yaw_deg=yaw) for n, (xy, yaw) in sites.ARM_BASES_PLATE_CENTRE.items()})
     snap = dict(schema=SCHEMA, taken_at=json.loads((run / "capture.json").read_text())["taken_at"] if (run / "capture.json").exists() else None,
                 frames={c: "sha256:" + hashlib.sha256(p.read_bytes()).hexdigest() for c, p in frames.items()},
                 camera=dict(top=layout.fixture["real_cameras"]["top"]), camera_motion=camera_motion,
@@ -443,7 +457,7 @@ def measure(run, prev_path=None, camera_moved_ok=False):
                                             seen={t: p["seen"] for t, p in tp["plates"].items() if "lanes" in p},
                                             errors={t: p["error"] for t, p in tp["plates"].items() if "error" in p},
                                             shape=tp["shape"], camera_check=tp["camera_check"]),
-                           ship=results["ship"], belt=results["belt"]))
+                           ship=results["ship"], belt=results["belt"], arm_bases=ab))
     (run / "snapshot.json").write_text(json.dumps(snap, indent=1), encoding="utf-8")
     cv2.imwrite(str(run / "overlay.png"), overlay(top, layout, tp["plates"], results["ship"], results["belt"]))
     return snap

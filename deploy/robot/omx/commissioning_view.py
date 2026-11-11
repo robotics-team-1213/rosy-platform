@@ -117,11 +117,15 @@ class ObservationStore:
         return result
 
     def image(self, source, *, now=None, wall=None):
+        return self.image_with_meta(source, now=now, wall=wall)[0]
+
+    def image_with_meta(self, source, *, now=None, wall=None):
         now = time.monotonic() if now is None else now
         wall = time.time() if wall is None else wall
         with self._lock:
             sample = self._samples.get(source)
-            return sample[2] if self._metadata(sample, now, wall)["fresh"] else None
+            meta = self._metadata(sample, now, wall)
+            return (sample[2] if meta["fresh"] else None), meta
 
 
 PAGE = '''<!doctype html><html lang="ko"><meta charset="utf-8">
@@ -226,7 +230,7 @@ async function refresh() {
     document.getElementById("connection").textContent = "연결 끊김";
     for (const key of cameras) document.getElementById(key).hidden = true;
     for (const key of jointKeys) jointElement(key).textContent = "최신 피드백 없음";
-  } finally { setTimeout(refresh, 500); }
+  } finally { setTimeout(refresh, 120); }
 }
 for (const key of cameras) document.getElementById(key).onerror = () => {
   document.getElementById(key).hidden = true;
@@ -273,18 +277,23 @@ def make_server(store, *, port=8766):
     page = PAGE.replace("__CAMERA_PANELS__", panels).replace("__ARM_PANELS__", feedback)
 
     class Handler(BaseHTTPRequestHandler):
+        protocol_version = "HTTP/1.1"
+
         def log_message(self, *args):
             pass
 
-        def reply(self, code, body=b"", content_type="text/plain"):
+        def reply(self, code, body=b"", content_type="text/plain", *, extra_headers=None):
             self.send_response(code)
             self.send_header("Content-Type", content_type)
             self.send_header("Content-Length", str(len(body)))
             self.send_header("Cache-Control", "no-store")
             self.send_header("X-Content-Type-Options", "nosniff")
             self.send_header("Content-Security-Policy", "default-src 'self'; img-src 'self' blob:; frame-ancestors 'none'; object-src 'none'")
+            for k, v in (extra_headers or {}).items():
+                self.send_header(k, v)
             self.end_headers()
-            self.wfile.write(body)
+            if body:
+                self.wfile.write(body)
 
         def do_POST(self):
             self.reply(405)
@@ -306,8 +315,51 @@ def make_server(store, *, port=8766):
             elif path == "/state.json":
                 self.reply(200, json.dumps(store.snapshot(), allow_nan=False).encode(), "application/json")
             elif path in {f"/frame/{label}.jpg" for label in store.cameras}:
-                body = store.image(path.split("/")[2].split(".")[0])
-                self.reply(200 if body else 503, body or b"no fresh frame", "image/jpeg" if body else "text/plain")
+                label = path.split("/")[2].split(".")[0]
+                body, meta = store.image_with_meta(label)
+                if not body:
+                    self.reply(503, b"no fresh frame", "text/plain")
+                    return
+                etag = f'"{meta["sequence"]}"'
+                headers = {"X-Frame-Seq": str(meta["sequence"]),
+                           "X-Source-Stamp": f"{meta['source_stamp']:.6f}",
+                           "ETag": etag}
+                if self.headers.get("If-None-Match") == etag:
+                    self.reply(304, b"", "image/jpeg", extra_headers=headers)
+                else:
+                    self.reply(200, body, "image/jpeg", extra_headers=headers)
+            elif path in {f"/stream/{label}.mjpg" for label in store.cameras}:
+                label = path.split("/")[2].split(".")[0]
+                body = store.image(label)
+                if not body:
+                    self.reply(503, b"no fresh frame", "text/plain")
+                    return
+                self.close_connection = True
+                self.send_response(200)
+                self.send_header("Content-Type", "multipart/x-mixed-replace; boundary=frame")
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("X-Content-Type-Options", "nosniff")
+                self.send_header("Connection", "close")
+                self.end_headers()
+                last_seq = None
+                while True:
+                    snap = store.snapshot()
+                    cam = snap["cameras"].get(label, {})
+                    frame = store.image(label)
+                    if not frame or not cam.get("fresh"):
+                        break
+                    if cam.get("sequence") != last_seq:
+                        last_seq = cam.get("sequence")
+                        part = (b"--frame\r\nContent-Type: image/jpeg\r\nContent-Length: "
+                                + str(len(frame)).encode() + b"\r\n\r\n" + frame + b"\r\n")
+                        try:
+                            self.wfile.write(part)
+                            self.wfile.flush()
+                        except OSError:
+                            break
+                    if self.headers.get("X-Max-Frames") == "1":
+                        break
+                    time.sleep(0.05)
             else:
                 self.reply(404)
 
@@ -358,7 +410,7 @@ def main():
     try:
         while True:
             consume_native(store)
-            time.sleep(.05)
+            time.sleep(.025)
     except KeyboardInterrupt:
         pass
     finally:

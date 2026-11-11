@@ -360,6 +360,13 @@ def test_bridge_builds_through_poses_only_for_a_leg_with_pass_points(monkeypatch
     monkeypatch.setitem(sys.modules, "nav2_msgs.action",
                         types.SimpleNamespace(NavigateThroughPoses=Through, NavigateToPose=ToPose))
     sys.modules.pop("core.bridge.nav_goal", None)
+    # test_bridge_timers imports ros_bridge against its permissive stubs, which
+    # imports this module and leaves the parent package attribute bound to that
+    # copy (a bare sys.modules.pop does not free it — same trap its own header
+    # notes); the attribute has to go too or the from-import returns the stale
+    # module and PoseStamped() is its headerless dummy.
+    import core.bridge
+    monkeypatch.delattr(core.bridge, "nav_goal", raising=False)
     from core.bridge import nav_goal
     from core_features.navigation.manager import NavGoalSpec
 

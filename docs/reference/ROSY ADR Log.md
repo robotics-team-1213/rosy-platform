@@ -10,6 +10,9 @@
 
 | ID | 제목 | Status |
 |---|---|---|
+| D-1015 | OMX 모방학습 대비 실행 속도 병목과 지터링 해소를 위한 시간적 앙상블·동역학 가감속·연속 청크 스트리밍 아키텍처. [전문](../adr/D-1015-omx-imitation-speed-parity-temporal-ensembling-and-kinodynamic-streaming.md) | Accepted (2026-11-11, 사용자 지시; OMX 어댑터·가드·청크 실행기·서보 하드웨어 프로파일 구현·호스트/원격 시험·실물 팔 배포 반영) |
+| D-1014 | OMX 통합 구역·3차원 좌표(AreaXYZ) 체계 및 ROSY 미들웨어 → rosy-cell 적층 지시 계약. [전문](../adr/D-1014-unified-area-xyz-coordinate-directive-from-middleware-to-cell.md) | Accepted (2026-11-11, 사용자 확인; 미들웨어 좌표·지시 계약, rosy-cell 실행기, 호스트·실물 3단 적층 검증 포함) |
+| D-1013 | 충전 칸 pit-in·pit-out은 분홍 유도선 카메라 폐루프다 — 맵 좌표는 교차점까지, 끊김은 예측기·게이트·코스트 예산으로 막는다 (D-941·D-950 후보 채택). [전문](../adr/D-1013-charge-bay-pink-line-pit-flow.md) | Accepted (2026-11-10, 사용자 토론으로 구조 확정; 키네마틱 시뮬 게이트 통과 — 권장 이득과 구현 조건은 9항, Gazebo·실물 수용·Safety-Review는 별도) |
 | D-1009 | CORE는 pass/stop 점 경로를 한 번에 받아 stop 점에서만 서고, 막힘은 이동을 유지하며 재계획한다. [전문](../adr/D-1009-core-route-drive-pass-and-stop.md) | Accepted (2026-11-10, 사용자 지시; SOURCE·Gazebo SIM까지, 기체 적용·실물 주행 없음, Fleet 연동은 다음 단계) |
 | D-1008 | 몸 주변 안전지대는 실제 진행 방향만 지킨다: 후진 사람 확인 삭제, 제자리 회전은 몸이 돌아 들어가는 쪽만. [전문](../adr/D-1008-heading-only-safety-zone.md) | Accepted (2026-11-09, 사용자 지시; CORE 구현·호스트 시험, 하드웨어 worker 회전 게이트와 실물 적용은 별도) |
 | D-1007 | 카메라 위치에 관계없이 맞추기의 첫 걸음 — 로봇 대응점으로 검토용 보정 후보(유효 구역=대응점 껍질)를 만든다, 오프라인·적용 없음. [전문](../adr/D-1007-robot-driven-calibration-candidates.md) | Accepted (2026-11-09, 사용자 지시; SOURCE·호스트 시험까지, 현장 수용 없음) |
@@ -984,6 +987,7 @@
 | D-915 | Immutable physical evidence export with measured joint provenance | Accepted |
 | D-916 | Atomic raw source stamps on validated OMX joint snapshots | Accepted |
 | D-945 | 모든 표면이 같은 뼈대를 쓰는 자리 규칙 | Accepted |
+| D-1012 | OMX 시뮬레이션·학습 파이프라인은 Stage 1(MuJoCo 기하·비전·ACT 학습) → Stage 2(Isaac Sim PhysX 접촉·슬립·안착 확증) 직렬 2단계로 잇고, Gazebo는 별도 ROS 2 실행 계약 점검 트랙으로 분리한다 | Accepted (2026-11-10, 사용자 결정; 코드·단위 시험 반영, 실물 수용 별도) |
 
 ## D-628 — CORE Drive 출력과 복구의 현재 근거
 

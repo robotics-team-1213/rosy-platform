@@ -34,7 +34,7 @@ from perception_runtime.perception.lane import ( IRLineCalibration, LaneBetweenK
 from perception_runtime.perception.lane_bev import LaneEdgeFollower, pose_if_fresh
 from perception_runtime.perception.lane_boundaries import LaneBoundaryTracker
 from perception_runtime.perception.lane_keep import LaneKeeper, clean_learned_mask, denoise_white_mask
-from perception_runtime.perception.lane_keep_lines import HORIZON_MARGIN_PX, drop_small_components
+from perception_runtime.perception.lane_keep_lines import HORIZON_MARGIN_PX, drop_small_components, floor_pink_mask
 from perception_runtime.perception.learned.drivable_paint import boundary_paint, lateral_px_per_m
 from .sensing.perception.drivable.drivable_keep import keep_step, scan_summary
 from .sensing.perception.evidence_mode import EvidenceModes
@@ -338,8 +338,8 @@ class LineObserverNode(Node, RouteFollowerInput):
     def _build_paint_worker(self):
         """D-408: the learned paint source runs the lane model off the camera thread."""
         source = str(self.get_parameter('paint_source').value)
-        if source not in ('threshold', 'denoise', 'learned'):
-            raise ValueError(f"paint_source must be threshold, denoise or learned, got {source!r}")
+        if source not in ('threshold', 'denoise', 'learned', 'pink'):
+            raise ValueError(f"paint_source must be threshold, denoise, learned or pink, got {source!r}")
         if source != 'learned':
             return None
         from .sensing.perception.learned.paint_worker import TARGETS, LearnedPaintWorker
@@ -372,10 +372,11 @@ class LineObserverNode(Node, RouteFollowerInput):
     def _paint_for(self, frame, ground, stamp=None):
         """(paint mask or None, source actually used) for one keep frame (D-408, D-611)."""
         source = str(self.get_parameter('paint_source').value)
+        if source == 'pink':
+            return floor_pink_mask(frame, ground.horizon_row), 'pink'  # D-1013: no white fallback
         if source == 'threshold' or ground is None:
             self._drop_learned_paint()
-            self._evidence_modes.choose_lane(
-                armed=False, model_fresh=False, learned_ok=False, denoise_ok=False)
+            self._evidence_modes.choose_lane(armed=False, model_fresh=False, learned_ok=False, denoise_ok=False)
             return None, 'threshold'
         if source == 'learned' and self._paint_worker is not None:
             every_n = int(self.get_parameter('learned_paint_every_n').value)
@@ -405,8 +406,7 @@ class LineObserverNode(Node, RouteFollowerInput):
             if chosen == 'learned' and mask is not None:
                 return mask, 'learned_drivable' if self._paint_worker.used_paint_kind == 'drivable' else 'learned'
             return denoise_white_mask(frame, ground.horizon_row), 'denoise_fallback'
-        self._evidence_modes.choose_lane(
-            armed=False, model_fresh=False, learned_ok=False, denoise_ok=True, unarmed='denoise')
+        self._evidence_modes.choose_lane(armed=False, model_fresh=False, learned_ok=False, denoise_ok=True, unarmed='denoise')
         return denoise_white_mask(frame, ground.horizon_row), (
             'denoise' if source == 'denoise' else 'denoise_fallback')
 

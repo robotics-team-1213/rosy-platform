@@ -230,3 +230,43 @@ def test_the_page_loads_nothing_from_elsewhere_and_never_writes_file_text_as_mar
     text = page.decode("utf-8")
     assert status == 200 and "innerHTML" not in text and "http://" not in text and "https://" not in text
     assert "frame-ancestors 'none'" in dict(headers)["Content-Security-Policy"]
+
+
+def test_attempts_and_incidents_endpoints_serve_tier_history_and_clear_hold(path, tmp_path, monkeypatch):
+    import omx_incident
+
+    attempts_file = tmp_path / "attempts.jsonl"
+    attempts_file.write_text(json.dumps({
+        "attempt_id": "20261110T080443Z-001", "t_utc": "2026-11-10T08:04:43Z",
+        "from": "ship", "to": "pallet-l1", "tier": 2, "object": "1-cell", "outcome": "placed",
+        "holding": True, "gripper_current_ma": 239, "verify": {"inside": True},
+    }) + "\n", encoding="utf-8")
+
+    cleared = []
+    monkeypatch.setattr(omx_incident, "status", lambda arm: {
+        "arm": arm, "held": not bool(cleared), "reason": None if cleared else "open hold",
+        "incident_ids": [] if cleared else ["a" * 32],
+    })
+    monkeypatch.setattr(omx_incident, "clear", lambda arm, note, cause=None, basis=None: cleared.append((arm, note, cause, basis)))
+
+    running = web.make_server(files(path), 0, attempts={"tier": attempts_file}, incident_arms=["arm_b"])
+    threading.Thread(target=running.serve_forever, daemon=True).start()
+    try:
+        st, body, _ = call(running, "GET", "/attempts.json")
+        rows = json.loads(body)[0]["rows"]
+        assert st == 200 and len(rows) == 1 and rows[0]["tier"] == 2 and rows[0]["gripper_current_ma"] == 239
+
+        st, body, _ = call(running, "GET", "/incidents.json")
+        inc = json.loads(body)[0]
+        assert st == 200 and inc["arm"] == "arm_b" and inc["held"] is True
+
+        st, body, _ = call(running, "POST", "/incidents/clear",
+                           json.dumps({"arm": "arm_b", "note": "확인 완료", "cause": "operator_verified", "basis": "direct_observation"}),
+                           {"X-Cell-Params": "1"})
+        after = json.loads(body)
+        assert st == 200 and after["held"] is False
+        assert cleared == [("arm_b", "확인 완료", "operator_verified", "direct_observation")]
+    finally:
+        running.shutdown()
+        running.server_close()
+

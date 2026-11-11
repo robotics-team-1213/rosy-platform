@@ -462,6 +462,14 @@
       "path": "sitemap/site-map-camera.js",
       "media_type": "application/javascript"
     },
+    "site-map-reality.js": {
+      "path": "sitemap/site-map-reality.js",
+      "media_type": "application/javascript"
+    },
+    "site-map-bands.js": {
+      "path": "sitemap/site-map-bands.js",
+      "media_type": "application/javascript"
+    },
     "edit-history.js": {
       "path": "sitemap/edit-history.js",
       "media_type": "application/javascript"

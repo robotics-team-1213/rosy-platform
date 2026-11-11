@@ -21,10 +21,12 @@ SCHEMA = 'rosy.omx-sim-stack-plan/1'
 # The surveyed scenes (cell survey 2026-11-03, D-947 2) are candidates beside the CAD one, not a replacement.
 _CAD_BASES = (([.08,-.165,.072], math.pi/2), ([.08,.165,.072], -math.pi/2))
 _SURVEYED_BASES = (([.116,-.164,.072], math.pi/2), ([.104,.153,.072], math.radians(-94.3)))
+_SURVEYED_SKEW_BASES = (([.116,-.164,.072], math.pi/2), ([.107,.164,.072], -math.pi/2))
 SCENES = {'cad-stage1-lower-belt-v1': (_CAD_BASES, (.040, .077)),
           'surveyed-bases-20261103': (_SURVEYED_BASES, (.040, .077)),
           # belt 28 mm below the CAD face: only the corridor floor drops; its top stays where a TCP counts as low
-          'surveyed-cell-20261103': (_SURVEYED_BASES, (.040-.028, .077))}
+          'surveyed-cell-20261103': (_SURVEYED_BASES, (.040-.028, .077)),
+          'surveyed-cell-20261110-skew-vision': (_SURVEYED_SKEW_BASES, (.040-.028, .077))}
 
 
 def vector(value, count):

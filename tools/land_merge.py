@@ -43,9 +43,14 @@ repo, script = Path(sys.argv[1]).resolve(), Path(sys.argv[2])
 sys.path.insert(0, str(script.parent))
 namespace = runpy.run_path(str(script))
 if "generated_targets" in namespace:
-    for fn in ("_optional_frontmatter", "_title"):
-        if fn in namespace:
-            namespace["generated_targets"].__globals__[fn] = functools.lru_cache(maxsize=None)(namespace[fn])
+    if "_optional_frontmatter" in namespace:
+        namespace["generated_targets"].__globals__["_optional_frontmatter"] = functools.lru_cache(maxsize=None)(namespace["_optional_frontmatter"])
+    if "_title" in namespace:
+        _orig_title = namespace["_title"]
+        _cached_title = functools.lru_cache(maxsize=None)(lambda p: _orig_title(p))
+        namespace["generated_targets"].__globals__["_title"] = (
+            lambda p, meta=None: meta["title"] if isinstance(meta, dict) and isinstance(meta.get("title"), str) else _cached_title(p)
+        )
 targets = namespace["generated_targets"](repo)
 for path in targets:
     resolved = path.resolve()

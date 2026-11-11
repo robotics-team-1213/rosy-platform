@@ -19,8 +19,16 @@ def test_move_and_swap_plans_and_bad_tasks_are_rejected():
     assert tr.carries(task(kind="move", **{"from": "pinky", "to": "belt"}), SITES) == [("pinky", "belt")]
     assert tr.carries(task(kind="swap", a="pinky", b="belt", buffer="floor"), SITES) == [
         ("pinky", "floor"), ("belt", "pinky"), ("floor", "belt")]
+    tiered = {s: {"auto_roi": [0, 0, 10, 10], "surface_z": 0.0} for s in ("pinky", "belt", "floor")}
+    assert tr.carries(task(kind="stack", **{"from": "pinky", "to": "belt"}), tiered) == [
+        ("pinky", "belt-l0"), ("pinky", "belt-l1"), ("pinky", "belt-l2")]
+    assert tr.carries(task(kind="stack", **{"from": "pinky", "to": "belt"}, tier=2), tiered) == [("pinky", "belt-l1")]
+    assert tr.carries(task(kind="unstack", **{"from": "belt", "to": "pinky"}), tiered) == [
+        ("belt-l2", "pinky"), ("belt-l1", "pinky"), ("belt-l0", "pinky")]
+    assert tr.carries(task(kind="move", **{"from": "pinky", "to": "belt"}, from_tier=2, to_tier=3), tiered) == [
+        ("pinky-l1", "belt-l2")]
     for bad in (task(kind="swap", a="pinky", b="belt", buffer="belt"), task(kind="move", **{"from": "pinky", "to": "moon"}),
-                task(kind="fly"), {"kind": "move"}):
+                task(kind="stack", **{"from": "pinky", "to": "belt"}, tier=4), task(kind="fly"), {"kind": "move"}):
         try:
             tr.carries(bad, SITES)
         except (ValueError, KeyError):

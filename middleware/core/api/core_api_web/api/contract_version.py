@@ -4,4 +4,4 @@
 `**Version:**` header of docs/reference/ROSY API & Protocol Reference.md. Feature tests do not pin the version.
 """
 
-CONTRACT = "ROSY-API-REF-001 v1.383"
+CONTRACT = "ROSY-API-REF-001 v1.384"

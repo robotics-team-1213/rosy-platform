@@ -4244,7 +4244,7 @@
           ]
         },
         {
-          "consumer": "applications/fleet/web/sitemap/site-map.js",
+          "consumer": "applications/fleet/web/sitemap/site-map-bands.js",
           "expression": "/api/fleet/site-map/lane-graph-crosswalks",
           "resolution": "literal-or-template",
           "request_ids": [
@@ -4313,6 +4313,22 @@
           "resolution": "literal-or-template",
           "request_ids": [
             "POST:/api/fleet/site-rules/judge"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/sitemap/site-map-reality.js",
+          "expression": "/api/fleet/site-map/reality-check",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/site-map/reality-check"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/sitemap/site-map-reality.js",
+          "expression": "/api/fleet/site-map/reality-check/apply",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/site-map/reality-check/apply"
           ]
         }
       ],
@@ -4690,6 +4706,41 @@
           ],
           "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
           "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/site-rules/judge"
+        },
+        {
+          "id": "GET:/api/fleet/site-map/reality-check",
+          "method": "GET",
+          "path": "/api/fleet/site-map/reality-check",
+          "implementation": "operations/fleet/fleet/server/sitemap/site_map_routes.py",
+          "handler": "site_map_reality_check",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_site_map_reality_api.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/site-map/reality-check"
+        },
+        {
+          "id": "POST:/api/fleet/site-map/reality-check/apply",
+          "method": "POST",
+          "path": "/api/fleet/site-map/reality-check/apply",
+          "implementation": "operations/fleet/fleet/server/sitemap/site_map_routes.py",
+          "handler": "site_map_reality_apply",
+          "expected_statuses": [
+            200,
+            409
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_site_map_reality_api.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/site-map/reality-check/apply"
         }
       ],
       "flows": [

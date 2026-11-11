@@ -229,14 +229,42 @@ def metrics(rows, extra, arms):
                 extra_transports=len(extra))
 
 
-def stack_moves(layout, can):
-    """장치: the stack plan's containers come one by one on the conveyor, each to its site (Harbor's 장치 order), arm left open."""
-    moves, here = [], {}
+CELL_STACK_START = {
+    "bar-1": "tmp-a-2-l1", "bar-2": "tmp-a-1-l1", "bar-3": "tmp-b-2-l1",
+    "bar-4": "tmp-a-2", "bar-5": "tmp-a-1", "bar-6": "tmp-b-2",
+    "bar-7": "ship-stern-l0", "bar-8": "tmp-a-3", "bar-9": "tmp-b-3",
+}
+
+
+def tier_start(layout, tier: int | None = None, start: dict | None = None) -> dict:
+    """Start state before `tier` (1 = 1단/l0, 2 = 2단/l1, 3 = 3단/l2): earlier tiers are already seated on the ship."""
+    here = dict(start or {})
+    if tier is not None:
+        for c, s, _ in layout.plan_order():
+            if layout.sites[s]["layer"] < tier - 1:
+                here[c] = s
+    return here
+
+
+def stack_moves(layout, can, tier: int | None = None, start: dict | None = None):
+    """장치: the stack plan's containers go to their ship sites (from the conveyor when `start` is None, else from their sites in `start`);
+    with `tier` in (1, 2, 3), only that tier (1단/2단/3단) is moved, standing on the lower tiers."""
+    moves, here = [], dict(start or {})
     for c, s, _ in layout.plan_order():
-        moves.append(dict(cargo_id=c, source="belt", destination=s, primary_arm=None, alternate_arms=[], phase_label="장치",
-                          arms=sorted(can("belt", s, here))))
-        here[c] = s
+        layer = layout.sites[s]["layer"]
+        src = here.get(c, "belt")
+        if tier is None or layer == tier - 1:
+            others = {k: v for k, v in here.items() if k != c}
+            moves.append(dict(cargo_id=c, source=src, destination=s, primary_arm=None, alternate_arms=[], phase_label="장치",
+                              tier=layer + 1, arms=sorted(can(src, s, others))))
+        if tier is None or layer <= tier - 1:
+            here[c] = s
     return moves
+
+
+def cell_stack_moves(layout, can, tier: int | None = None):
+    """Stack the nine containers already placed on the cell's temporary plates and stern bay into hold 1 (optionally one tier)."""
+    return stack_moves(layout, can, tier=tier, start=CELL_STACK_START)
 
 
 def outbound_requests(layout):
@@ -270,14 +298,17 @@ def plan_outbound(layout, arms, can, reorder=False):
     return moves, holds
 
 
-def compare(layout, scenario, can=None):
+def compare(layout, scenario, can=None, tier: int | None = None):
     can = can or validator_can(layout)
     out = {}
     for mode, arms in MODES.items():
         result = {}
         if scenario in ("stack", "both", "all"):
-            rows, extra = schedule(layout, stack_moves(layout, can), arms)
-            result["stack"] = dict(metrics(rows, extra, arms), timeline=rows, extra=extra)
+            rows, extra = schedule(layout, stack_moves(layout, can, tier=tier), arms)
+            result["stack" if tier is None else f"stack-t{tier}"] = dict(metrics(rows, extra, arms), timeline=rows, extra=extra)
+        if scenario in ("cell-stack",):
+            rows, extra = schedule(layout, cell_stack_moves(layout, can, tier=tier), arms)
+            result["cell-stack" if tier is None else f"cell-stack-t{tier}"] = dict(metrics(rows, extra, arms), timeline=rows, extra=extra)
         for name in [n for n in ("outbound", "rearrange") if scenario in (n, "all") or scenario == "both" and n == "outbound"]:
             moves, holds = plan_outbound(layout, arms, can, reorder=name == "rearrange")
             rows, extra = schedule(layout, moves, arms)
@@ -315,23 +346,30 @@ def replay_tasks(layout, result):
                                   after_pick=[f"m{prev[-1]['move']}"] if row["source"] == "belt" and prev else [],
                                   zones=row["zones"], planned_start_s=row["start"], **outbound(row)))
             steps.sort(key=lambda st: (st["planned_start_s"], st["id"]))
-            stack = name == "stack"
-            out[f"{name}-{mode.replace(' ', '-')}"] = dict(
-                name=f"{name} {mode}", supply=[c for c, _, _ in layout.plan_order()] if stack else [],
-                start={} if stack else {c: s for c, s, _ in layout.plan_order()}, steps=steps)
+            tier = int(name[-1]) if len(name) > 2 and name[-2:] in ("t1", "t2", "t3") else None
+            base = name[:-3] if tier is not None else name
+            if base == "stack":
+                start, supply = tier_start(layout, tier), [row["cargo_id"] for row in belt]
+            elif base == "cell-stack":
+                start, supply = tier_start(layout, tier, CELL_STACK_START), []
+            else:
+                start, supply = {c: s for c, s, _ in layout.plan_order()}, []
+            out[f"{name}-{mode.replace(' ', '-')}"] = dict(name=f"{name} {mode}", supply=supply, start=start, steps=steps)
     return out
 
 
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     p.add_argument("command", choices=["compare"])
-    p.add_argument("--scenario", default="both", choices=["stack", "outbound", "rearrange", "both", "all"], help="both: stack and outbound; all: also rearrange")
+    p.add_argument("--scenario", default="both", choices=["stack", "cell-stack", "outbound", "rearrange", "both", "all"],
+                   help="both: stack and outbound; all: also rearrange")
+    p.add_argument("--tier", type=int, choices=[1, 2, 3], help="stack only tier 1 (1단/l0), 2 (2단/l1), or 3 (3단/l2)")
     p.add_argument("--out")
     p.add_argument("--replay-dir", help="write one teacher task JSON per scenario and mode here (omx_two_arm_teacher.py run plan --plan FILE)")
     p.add_argument("--choice", action="append", help="key=value override of omx_two_arm_sites.CHOICES (e.g. a measured cell snapshot)")
     a = p.parse_args(argv)
     layout = sites_mod.Layout(**sites_mod.parse_choices(a.choice))
-    result = compare(layout, a.scenario)
+    result = compare(layout, a.scenario, tier=a.tier)
     if a.replay_dir:
         Path(a.replay_dir).mkdir(parents=True, exist_ok=True)
         for name, task in replay_tasks(layout, result).items():

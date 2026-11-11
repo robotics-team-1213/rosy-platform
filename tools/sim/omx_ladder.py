@@ -138,11 +138,110 @@ def new_round(root: Path, parent: str | None, cell: dict, source_sha: str, recip
     return dict(schema=SCHEMA, round_id=new_round_id(), created_at=datetime.now().astimezone().isoformat(timespec="seconds"),
                 parent_round_id=parent, source_sha=source_sha, scene=cell["scene"], recipe=recipe,
                 data=dict(episodes=episodes, from_failures=from_failures),
-                stages=dict(mujoco=dict(status="pending", claim="기하: 도달·순서·충돌", eval=None, artifacts=[], reason=None),
-                            gazebo=dict(status="not_run", claim="ROS 실행 계약", contract=None, artifacts=[],
-                                        reason="이 라운드에서 실행하지 않았습니다."),
-                            isaac=dict(status="not_run", claim="접촉·영상", run_id=None, result=None, artifacts=[],
-                                       reason="단일 팔 Isaac 케이스가 아직 없습니다. v13 작업 뒤에 연결합니다.")))
+                stages=dict(mujoco=dict(stage_order=1, track="learning_and_physics", status="pending", claim="기하: 도달·순서·충돌", eval=None, artifacts=[], reason=None),
+                            isaac=dict(stage_order=2, track="learning_and_physics", status="not_run", claim="접촉·영상", scenario="arm-s-cell-case", run_id=None, result=None, artifacts=[],
+                                       reason="Stage 1(MuJoCo) 뒤 Stage 2(Isaac 접촉·안착 스위트, cell_case_suite.py)를 아직 실행하지 않았습니다."),
+                            gazebo=dict(stage_order=None, track="ros2_execution_contract", status="not_run", claim="ROS 실행 계약", contract=None, artifacts=[],
+                                        reason="별도 ROS 2 실행 계약 점검(omx_backend_conformance.py)을 이 라운드에서 실행하지 않았습니다.")))
+
+
+def judge_gazebo_contract(samples_or_report: dict | Path, *, shape: tuple[int, int] = (240, 320), camera_hz: float = 5.0) -> dict:
+    """Judge Gazebo's D-866 §2 ROS 2 execution contract from raw conformance samples or a saved conformance report."""
+    data = json.loads(Path(samples_or_report).read_text(encoding="utf-8")) if isinstance(samples_or_report, (str, Path)) else dict(samples_or_report)
+    if "failures" in data:
+        failures = list(data["failures"])
+        shape = tuple(data.get("shape") or shape)
+        camera_hz = float(data.get("camera_hz") or camera_hz)
+    else:
+        import omx_backend_conformance as conformance
+        failures = conformance.check(data, shape=shape, camera_hz=camera_hz)
+    return dict(status="passed" if not failures else "failed", claim="ROS 실행 계약",
+                contract=dict(shape=list(shape), camera_hz=camera_hz, failures=failures,
+                              stop=data.get("stop"), object_drift_mm=data.get("object_drift_mm")),
+                artifacts=[], reason=None if not failures else "; ".join(failures))
+
+
+def judge_isaac_stage(suite_or_report: dict | Path, *, scenario: str = "arm-s-cell-case") -> dict:
+    """Judge or stage Isaac Sim's D-872 / D-947 contact & vision confirmation from a suite report, single report, 3-tier container stack report, or MuJoCo handoff."""
+    data = json.loads(Path(suite_or_report).read_text(encoding="utf-8")) if isinstance(suite_or_report, (str, Path)) else dict(suite_or_report)
+    ok_results = {"placed", "success", "completed"}
+    if "suite" in data and "container_stack" in data:
+        s_judge = judge_isaac_stage(data["suite"], scenario="arm-s-cell-case")
+        c_judge = judge_isaac_stage(data["container_stack"], scenario="omx-map-container-stack")
+        passed = s_judge["status"] == "passed" and c_judge["status"] == "passed"
+        reasons = [r for r in (s_judge.get("reason"), c_judge.get("reason")) if r]
+        return dict(status="passed" if passed else "failed", claim="접촉·영상", scenario="arm-s-cell-case+omx-map-container-stack",
+                    run_id=c_judge.get("run_id") or s_judge.get("run_id"),
+                    result=dict(suite=s_judge["result"], container_stack=c_judge["result"]),
+                    artifacts=list(dict.fromkeys([*s_judge.get("artifacts", []), *c_judge.get("artifacts", [])])),
+                    reason=None if passed else "; ".join(reasons))
+    if data.get("schema") == "rosy.omx-container-stack/1" or ("trials" in data and "task_success" in data):
+        trials = data.get("trials") or [{}]
+        layers = trials[0].get("layers") or []
+        fixture = data.get("fixture") or {}
+        placed = sum("opened_sample" in l for l in layers)
+        planned = len(fixture.get("row_order", [0, 1, 2])) * int(fixture.get("layers", 3))
+        passed = bool(data.get("task_success"))
+        err = trials[0].get("error") or ("; ".join(trials[0].get("failures") or []) if trials[0].get("failures") else None)
+        return dict(status="passed" if passed else "failed", claim="접촉·영상", scenario="omx-map-container-stack",
+                    run_id=data.get("run_id"),
+                    result=dict(task_success=passed, placed=placed, planned=planned, layers=fixture.get("layers", 3),
+                                case=fixture.get("case"), error=err),
+                    artifacts=[], reason=None if passed else f"Isaac 3단 적재 실패({placed}/{planned}): {err or 'task_success=False'}")
+    if "rows" in data:
+        rows = data["rows"]
+        bad = [r["id"] for r in rows if r.get("matches") is False or r.get("judgement") is None
+               or (r.get("expect") is None and (r.get("judgement") or {}).get("result") not in ok_results)]
+        passed = bool(rows) and not bad
+        return dict(status="passed" if passed else "failed", claim="접촉·영상", scenario=scenario,
+                    run_id=rows[-1].get("run_id") if rows else None,
+                    result=dict(total=len(rows), matched=sum(r.get("matches") is True for r in rows),
+                                measured=sum(r.get("expect") is None and r.get("judgement") is not None for r in rows),
+                                failed_cases=bad),
+                    artifacts=[], reason=None if passed else (f"Isaac 불일치/미판정: {', '.join(bad)}" if bad else "Isaac 실행 결과가 비어 있습니다."))
+    if "judgement" in data:
+        judgement = data["judgement"] or {}
+        passed = judgement.get("result") in ok_results
+        return dict(status="passed" if passed else "failed", claim="접촉·영상", scenario=scenario,
+                    run_id=data.get("run_id"), result=judgement, artifacts=[],
+                    reason=None if passed else f"Isaac 판정 실패: {judgement.get('result')}")
+    s2 = data.get("stage_2_isaac") or {}
+    cases = data.get("cases") or s2.get("single_arm_cases") or []
+    return dict(status="pending" if cases else "not_run", claim="접촉·영상", scenario=scenario,
+                run_id=None, result=dict(prepared_cases=[c.get("id") for c in cases],
+                                         two_arm_scenario=s2.get("two_arm_scenario"),
+                                         two_arm_config=s2.get("two_arm_config")), artifacts=[],
+                reason=None if cases else "전달할 Isaac 케이스가 없습니다.")
+
+
+def run_isaac_stage(run: Path, sha: str, python: str, mode: str, only: list[str] | None = None) -> dict | Path | None:
+    """Execute Stage 2 Isaac Sim (cell_case_suite and/or 3-tier omx-map-container-stack) from Stage 1's handoff."""
+    suite_report = stack_report = None
+    suite_file = run / "isaac-suite.json"
+    handoff_file = run / "isaac-handoff.json"
+    if mode in ("suite", "both") and suite_file.is_file():
+        out_dir = run / "isaac-runs"
+        only_args = [arg for cid in (only or []) for arg in ("--only", cid)]
+        subprocess.run([python, str(ROOT / "deploy/robot/omx/cell_case_suite.py"), "--suite", str(suite_file),
+                        "--sha", sha, "--out", str(out_dir), *only_args], check=False)
+        if (out_dir / "suite-report.json").is_file():
+            suite_report = json.loads((out_dir / "suite-report.json").read_text(encoding="utf-8"))
+    if mode in ("container-stack", "both") and handoff_file.is_file():
+        s2 = (json.loads(handoff_file.read_text(encoding="utf-8")).get("stage_2_isaac") or {})
+        cfg = s2.get("two_arm_config") or dict(seed=0, layers=3, case="nominal-palletizing-v21-ship-surveyed-skew-20261110")
+        out_dir = run / "isaac-container-stack"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        cfg_file = out_dir / "config.json"
+        cfg_file.write_text(json.dumps(cfg), encoding="utf-8")
+        subprocess.run([python, str(ROOT / "tools/remote/remote_isaac.py"), "run", "--scenario",
+                        s2.get("two_arm_scenario", "omx-map-container-stack"), "--config", str(cfg_file),
+                        "--sha", sha, "--out", str(out_dir / "run")], check=False)
+        found = next((out_dir / "run").rglob("mapped-stack-report.json"), None)
+        if found and found.is_file():
+            stack_report = json.loads(found.read_text(encoding="utf-8"))
+    if mode == "both" and suite_report is not None and stack_report is not None:
+        return dict(suite=suite_report, container_stack=stack_report)
+    return stack_report if mode == "container-stack" else suite_report
 
 
 def parent_on_same_seeds(python: str, sim: str, cell: str, model: Path, episodes: int, base: int, run: Path, environment: dict) -> dict | None:
@@ -204,6 +303,10 @@ def run_round(args) -> int:
     best = parent and parent_on_same_seeds(args.python, sim, args.cell, root / "rounds" / parent / "train/checkpoints/last/pretrained_model",
                                            args.eval_episodes, base, run, environment)
     row["comparison"] = dict(against=parent, same_seeds=bool(best), parent_eval=best, result="unclear" if parent and not best else compare(evaluation, best))
+    if getattr(args, "gazebo_report", None):
+        row["stages"]["gazebo"] = judge_gazebo_contract(args.gazebo_report)
+    if getattr(args, "isaac_report", None):
+        row["stages"]["isaac"] = judge_isaac_stage(args.isaac_report)
     write_round(root, row)
     print(json.dumps(dict(round_id=row["round_id"], eval=evaluation, comparison=row["comparison"]), ensure_ascii=False))
     return 0
@@ -219,8 +322,14 @@ def run_two_arm(args) -> int:
     file = run / "run.json"
     file.write_text(json.dumps(record), encoding="utf-8")
     teacher = str(Path(__file__).with_name("omx_two_arm_teacher.py"))
+    extra = [*(["--pick-vision"] if getattr(args, "pick_vision", False) else []),
+             *(["--belt-skew"] if getattr(args, "belt_skew", False) else []),
+             *[arg for item in (getattr(args, "choice", None) or []) for arg in ("--choice", item)]]
+    handoff_file = run / "isaac-handoff.json"
+    if extra or getattr(args, "isaac_handoff", False) or getattr(args, "run_isaac", None):
+        extra += ["--isaac-handoff", str(handoff_file)]
     with (run / "run.log").open("w", encoding="utf-8") as log:
-        code = subprocess.run([args.python, teacher, "run", args.task, "--seed", str(args.seed), "--out", str(run), "--video", "--frames", str(run / "artifacts")],
+        code = subprocess.run([args.python, teacher, "run", args.task, "--seed", str(args.seed), "--out", str(run), "--video", "--frames", str(run / "artifacts"), *extra],
                               env=dict(os.environ, MUJOCO_GL="egl", PYTHONUNBUFFERED="1"), stdout=log, stderr=subprocess.STDOUT).returncode
     out = run / f"{args.task}-elliptic-seed{args.seed}.json"
     if out.exists():
@@ -230,9 +339,31 @@ def run_two_arm(args) -> int:
                       failed_steps=[dict(step=row["step"], arm=row["arm"], result=row["result"], reason=row.get("reason")) for row in result["rows"] if row["result"] != "pass"])
     else:
         record.update(status="failed", reason=f"종료 코드 {code}. run.log를 보세요.")
+    if handoff_file.exists():
+        record["isaac_handoff"] = handoff_file.name
+        suite_file = run / "isaac-suite.json"
+        cell_cases = ROOT / "deploy/robot/omx/cell_cases.py"
+        if cell_cases.is_file():
+            subprocess.run([args.python, str(cell_cases), "--mujoco-handoff", str(handoff_file), "--out", str(suite_file)],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            if suite_file.exists():
+                record["isaac_suite"] = suite_file.name
+    isaac_report = getattr(args, "isaac_report", None)
+    if not isaac_report and getattr(args, "run_isaac", None) and record["status"] == "passed":
+        isaac_report = run_isaac_stage(run, record["source_sha"], args.python, args.run_isaac, getattr(args, "isaac_only", None))
+    if getattr(args, "gazebo_report", None) or isaac_report or handoff_file.exists():
+        record["stages"] = dict(
+            mujoco=dict(stage_order=1, track="learning_and_physics", status=record["status"], claim="기하: 도달·순서·충돌", steps_pass=record.get("steps_pass"), steps=record.get("steps")),
+            isaac=dict(stage_order=2, track="learning_and_physics", **(judge_isaac_stage(isaac_report if isaac_report else handoff_file)
+            if (isaac_report or handoff_file.exists()) else dict(
+                status="not_run", claim="접촉·영상", scenario="arm-s-cell-case", run_id=None, result=None, artifacts=[], reason="이 실행에서 Isaac 핸드오프를 생성하지 않았습니다."))),
+            gazebo=dict(stage_order=None, track="ros2_execution_contract", **(judge_gazebo_contract(args.gazebo_report) if getattr(args, "gazebo_report", None) else dict(
+                status="not_run", claim="ROS 실행 계약", contract=None, artifacts=[], reason="별도 ROS 2 실행 계약 점검을 이 실행에서 수행하지 않았습니다."))),
+        )
     record["views"] = sorted(path.name for path in (run / "artifacts").glob("*.png"))
     record["finished_at"] = datetime.now().astimezone().isoformat(timespec="seconds")
     file.write_text(json.dumps(record, ensure_ascii=False), encoding="utf-8")
+    print(json.dumps({k: record.get(k) for k in ("run_id", "status", "steps_pass", "steps", "isaac_handoff", "isaac_suite", "stages")}, ensure_ascii=False))
     return 0 if record["status"] == "passed" else 1
 
 
@@ -299,12 +430,23 @@ def main(argv=None) -> int:
     one.add_argument("--eval-episodes", type=int, default=50)
     one.add_argument("--steps", type=int, default=RECIPE["steps"])
     one.add_argument("--lr", type=float, default=RECIPE["optimizer_lr"])
+    one.add_argument("--gazebo-report", help="Gazebo ROS 2 conformance report or samples JSON (D-866 §2)")
+    one.add_argument("--isaac-report", help="Isaac Sim cell_case_suite report, single report, or handoff JSON (D-872)")
     two = commands.add_parser("two-arm")
     two.add_argument("--root", required=True)
     two.add_argument("--python", default=sys.executable)
     two.add_argument("--task", required=True, choices=["stack", "rehandle"])
     two.add_argument("--seed", type=int, default=0)
     two.add_argument("--source-sha", help="the commit this copy came from, when the folder has no Git")
+    two.add_argument("--pick-vision", action="store_true", help="infer belt pick pose from top camera")
+    two.add_argument("--belt-skew", action="store_true", help="spawn skewed/offset containers on belt")
+    two.add_argument("--choice", action="append", help="key=value override of omx_two_arm_sites.CHOICES")
+    two.add_argument("--isaac-handoff", action="store_true", help="emit Stage-2 Isaac Sim case suite from MuJoCo picks")
+    two.add_argument("--run-isaac", nargs="?", const="suite", choices=["suite", "container-stack", "both"],
+                     help="automatically run Stage-2 Isaac Sim (cell_case_suite and/or 3-tier omx-map-container-stack)")
+    two.add_argument("--isaac-only", action="append", help="case id filter passed to cell_case_suite.py with --run-isaac")
+    two.add_argument("--gazebo-report", help="Gazebo ROS 2 conformance report or samples JSON (D-866 §2)")
+    two.add_argument("--isaac-report", help="Isaac Sim cell_case_suite report or single report JSON (D-872)")
     both = commands.add_parser("two-arm-compare")
     both.add_argument("--root", required=True)
     both.add_argument("--python", default=sys.executable)

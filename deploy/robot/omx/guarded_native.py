@@ -5,7 +5,11 @@
 (rosy_replay trajectory). It streams with the body-only profile (1 deg/s until aligned, then
 10 deg/s, 10 deg/s^2) over all six joints under the same seed, following-error, effort, hardware
 and monitor rules. The gripper is current-limited (mode 5) and stops on the box by design, so it is
-the one joint without a following-error bound."""
+the one joint without a following-error bound.
+
+Device bring-up helpers and the shared joint/bus constants live in `guarded_device.py`
+(split at the 600-line cap, D-766 2) and are re-exported here unchanged.
+"""
 from __future__ import annotations
 
 import importlib
@@ -13,119 +17,11 @@ import math
 import sys
 import time
 
-TURN = 4096
-TICKS_PER_DEGREE = TURN / 360
-MAX_GAP_S = 0.5
-MAX_STEP_S = 0.1
-# one corrupt status packet on the shared hub ended three arm S sessions on 2026-10-27, once with the arm low;
-# a read is safe to repeat, and a bus that is really gone still fails after the retries
-READ_RETRY = 2
-#: A torque-off servo follows its Present_Position with Goal_Position, so a seed write is
-#: replaced within one sample and the readback can be one tick away from the next pose read.
-SEED_TOLERANCE_TICKS = 1
-BODY = ("shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll")
-NAMES = (*BODY, "gripper")
-#: PWM_Limit admitted per body joint: the XL430 base, shoulder and elbow carry the arm at reach up to
-#: record_session's XL430_PWM_MAX (2026-10-26: 78 % of 300 at 0.23 m); the XL330 wrist stays at 400.
-PWM_ADMIT_MAX = {"shoulder_pan": 600, "shoulder_lift": 600, "elbow_flex": 600, "wrist_flex": 400, "wrist_roll": 400}
-#: Session servo profile (record_session caps "acc"/"vel", raw X-series units: 21.46 deg/s^2, 1.374 deg/s) kept at
-#: connect so the servo ramps between the whole-tick goals instead of snapping to each (2026-10-27: arm S shook on
-#: 1-2 tick steps). Velocity >= 20.6 deg/s, twice the 10 deg/s this guard streams at most, so it never slows a stream;
-#: acceleration >= 107 deg/s^2 adds a steady lag of v^2/2a <= 0.47 deg at 10 deg/s (0.06 at RISE_SPEED 3.6 deg/s)
-#: against the 5 deg following-error bound. Anything else is cleared to 0 (step goals) as before.
-PROFILE_ACC, PROFILE_VEL = (5, 100), (15, 200)
-PROFILE = {"Profile_Acceleration": PROFILE_ACC, "Profile_Velocity": PROFILE_VEL}
-#: Overload hold (2026-11-09 panel, after arm_a dropped extended when this guard cut torque on a wrist overload): the
-#: first overload on a joint sets that joint's goal to where it stands, once, and keeps torque on. While any joint is
-#: held every joint's command is frozen, so a runner that knows nothing of holds cannot carry the arm into a pose no
-#: one checked; a runner built with `shed_load=True` may move the other joints to shed the load (cell_unwedge style).
-#: A hold ends only by `release_hold()`, which that runner calls once its targets no longer push into the stall. The
-#: watch is PWM alone, since a frozen goal zeroes the error: at 90 % of the cap for HOLD_S, a temperature rise of
-#: HOLD_TEMP_RISE_C, a second overload on the joint in the session, or a failed read in the watch (temperature is read
-#: each 0.2 s on held joints) ends the session with torque off as before. HOLD_S: no body joint has sat at the cap past
-#: 3 s without a stop, and the one recorded latch (elbow wind-up, hw error 32) came after about 18 s.
-HOLD_S, HOLD_TEMP_RISE_C = 3.0, 3
-
-
-def torque_off(bus):
-    """One failed motor must not prevent attempts on the remaining motors."""
-    errors = []
-    for name in bus.motors:
-        try:
-            bus.disable_torque(name, num_retry=2)
-        except Exception as exc:
-            errors.append(exc)
-    if errors:
-        raise RuntimeError(f"torque OFF not confirmed: {errors}")
-
-
-def close_device(device):
-    failures = []
-    try:
-        if device.bus.is_connected:
-            try:
-                torque_off(device.bus)
-            except BaseException as exc:
-                failures.append(exc)
-            try:
-                device.bus.disconnect()
-            except BaseException as exc:
-                failures.append(exc)
-    finally:
-        for camera in getattr(device, "cameras", {}).values():
-            if camera.is_connected:
-                camera.disconnect()
-    if failures:
-        # one message, not the last failure: the first is usually the cause
-        raise RuntimeError("; ".join(str(failure) for failure in failures))
-
-
-def connect_passive(device, *, follower):
-    """Never call vendor configure/calibrate: those enable torque or write EEPROM."""
-    bus = device.bus
-    try:
-        bus.connect()  # installed SDK handshake verifies each ID/model
-        torque_off(bus)
-        if not bus.calibration or not bus.is_calibrated:
-            raise ValueError("calibration mismatch; commission with torque OFF before use")
-        for name in NAMES:
-            calibration = bus.calibration[name]
-            if calibration.range_min >= calibration.range_max:
-                raise ValueError(f"{name}: invalid calibrated range")
-            if name in BODY and (calibration.drive_mode != 0 or calibration.homing_offset != 0):
-                raise ValueError(f"{name}: unsupported body calibration")
-            if bus.read("Operating_Mode", name) != (5 if name == "gripper" else 4):
-                raise ValueError(f"{name}: expected commissioned mode 4 body / 5 gripper")
-            if bus.read("Hardware_Error_Status", name) or bus.read("Torque_Enable", name):
-                raise ValueError(f"{name}: error or torque is ON")
-            if follower and not (all(low <= bus.read(r, name) <= high for r, (low, high) in PROFILE.items())
-                                 and not bus.read("Drive_Mode", name) & 4):  # bit 2: time-based, other units
-                for register in PROFILE:
-                    bus.write(register, name, 0)
-                    if bus.read(register, name) != 0:
-                        raise ValueError(f"{name}: {register} readback mismatch")
-        for camera in getattr(device, "cameras", {}).values():
-            camera.connect()
-    except BaseException as exc:
-        try:
-            close_device(device)
-        except BaseException as close_exc:
-            # A latched motor error makes the closing torque-OFF fail too. Without this the
-            # close error replaced the handshake error and the receipt named the wrong cause.
-            if isinstance(exc, Exception):
-                raise RuntimeError(f"{exc}; the close after it also failed: {close_exc}") from exc
-        raise
-
-
-def finite_values(values, names):
-    if set(values) != set(names) or any(not isinstance(v, (int, float)) or not math.isfinite(v)
-                                        for v in values.values()):
-        raise ValueError("missing or non-finite joint sample")
-
-
-def normalized(bus, raw):
-    values = bus._normalize({bus.motors[n].id: v for n, v in raw.items()})
-    return {n + ".pos": values[bus.motors[n].id] for n in raw}
+from guarded_device import (  # noqa: E402,F401  (re-exported: existing importers unchanged)
+    BODY, HOLD_S, HOLD_TEMP_RISE_C, MAX_GAP_S, MAX_STEP_S, NAMES, PROFILE, PROFILE_ACC,
+    PROFILE_VEL, PWM_ADMIT_MAX, READ_RETRY, SEED_TOLERANCE_TICKS, TICKS_PER_DEGREE, TURN,
+    close_device, connect_passive, finite_values, normalized, torque_off,
+)
 
 
 class NativeJointMotion:
@@ -154,6 +50,8 @@ class NativeJointMotion:
         # joint -> hold state; joints that already used their one hold (per session: a later stall there goes to off)
         self.held, self.held_once, self.shed_load = {}, set(), shed_load
         self.last_effort_time = None
+        self.last_present = None
+        self.prev_target = None
         self.alignment_deadline = None
         self.monitor = monitor
         self.monitor_admitted = False
@@ -196,6 +94,7 @@ class NativeJointMotion:
         current = self.follower.sync_read("Present_Position", normalize=False, num_retry=READ_RETRY)
         finite_values(leader, NAMES)
         finite_values(current, NAMES)
+        self.last_present = normalized(self.follower, current)
         if self.body_only and self.follower.read("Torque_Enable", "gripper"):
             raise ValueError("passive gripper torque must remain OFF")
         if self.command is not None:
@@ -231,15 +130,18 @@ class NativeJointMotion:
                 raise ValueError(f"{name}: target outside follower calibrated range")
         if not self.body_only and abs(target["gripper"] - current["gripper"]) >= 100 * TICKS_PER_DEGREE - 1e-9:
             raise ValueError("gripper motor travel >=100 degrees; align manually with torque OFF")
-        for name in NAMES:
-            if self.follower.read("Hardware_Error_Status", name):
-                raise ValueError(f"{name}: hardware error")
+        self._check_hardware_errors()
         if self.pwm_limits is None:
+            use_sync = "read" not in vars(self.follower) and hasattr(self.follower, "model_ctrl_table")
+            torques = (self.follower.sync_read("Torque_Enable", list(BODY), normalize=False, num_retry=READ_RETRY)
+                       if use_sync else None)
+            raw_limits = (self.follower.sync_read("PWM_Limit", list(BODY), normalize=False, num_retry=READ_RETRY)
+                          if use_sync else None)
             limits = {}
             for name in BODY:
-                if self.follower.read("Torque_Enable", name):
+                if (torques[name] if torques is not None else self.follower.read("Torque_Enable", name)):
                     raise ValueError(f"{name}: PWM_Limit admission requires torque OFF")
-                limit = self.follower.read("PWM_Limit", name)
+                limit = raw_limits[name] if raw_limits is not None else self.follower.read("PWM_Limit", name)
                 if not isinstance(limit, (int, float)) or not math.isfinite(limit) or not 0 < limit <= PWM_ADMIT_MAX[name]:
                     raise ValueError(f"{name}: invalid PWM_Limit {limit}")
                 limits[name] = limit
@@ -258,22 +160,38 @@ class NativeJointMotion:
             deadline = started + min(105, max(5, max(abs(target[n] - current[n]) for n in BODY)
                                                / TICKS_PER_DEGREE + 5))
             current = self._seed({n: current[n] for n in self.active}, target, started)
-            return {"started": started, "seed": current, "alignment_deadline": deadline}
+            return {"started": started, "seed": current, "alignment_deadline": deadline, "target": dict(target)}
         elapsed = min(now - self.last_time, MAX_STEP_S)
         if self.body_only or self.teacher:
             command, state = self._body_command(target, current, elapsed, now)
-            return {"started": started, "command": command, "time": now, "body_state": state}
+            return {"started": started, "command": command, "time": now, "body_state": state, "target": dict(target)}
         step = elapsed * TICKS_PER_DEGREE  # one degree/second, independent of loop frequency
         frozen = self.frozen()
         command = {n: self.command[n] if n in frozen else self.command[n] + max(-step, min(step, target[n] - self.command[n]))
                    for n in self.active}
         return {"started": started, "command": command, "time": now}
 
+    def _check_hardware_errors(self):
+        if "read" not in vars(self.follower) and hasattr(self.follower, "model_ctrl_table"):
+            errors = self.follower.sync_read("Hardware_Error_Status", list(NAMES), normalize=False, num_retry=READ_RETRY)
+            for name in NAMES:
+                if errors[name]:
+                    raise ValueError(f"{name}: hardware error")
+            return
+        for name in NAMES:
+            if self.follower.read("Hardware_Error_Status", name):
+                raise ValueError(f"{name}: hardware error")
+
+    def _read_body_pwm(self):
+        if "read" not in vars(self.follower) and hasattr(self.follower, "model_ctrl_table"):
+            return self.follower.sync_read("Present_PWM", list(BODY), normalize=False, num_retry=READ_RETRY)
+        return {name: self.follower.read("Present_PWM", name) for name in BODY}
+
     def _check_effort(self, current, started):
         before = self.clock()
         if self.last_effort_time is not None and before - self.last_effort_time < 0.2 - 1e-9:
             return
-        pwm = {name: self.follower.read("Present_PWM", name) for name in BODY}
+        pwm = self._read_body_pwm()
         finite_values(pwm, BODY)
         if self.monitor is not None:
             self.monitor.sample(self, current, pwm, self.clock())
@@ -369,6 +287,11 @@ class NativeJointMotion:
             error = target[name] - self.command[name]
             # Leave enough distance for this step and subsequent braking; moving targets may still be passed.
             brake = math.sqrt((acceleration * elapsed) ** 2 + 2 * acceleration * abs(error)) - acceleration * elapsed
+            if self.teacher and tracking and self.prev_target is not None and elapsed > 0:
+                v_ff = (target[name] - self.prev_target[name]) / elapsed
+                if error * v_ff > 0:
+                    reach = min(abs(error) / elapsed, math.sqrt(min(limit, abs(v_ff)) ** 2 + 2 * acceleration * abs(error)))
+                    brake = max(brake, reach)
             desired = math.copysign(min(limit, brake), error)
             change = max(-acceleration * elapsed, min(acceleration * elapsed, desired - self.velocity[name]))
             velocity[name] = self.velocity[name] + change
@@ -394,12 +317,15 @@ class NativeJointMotion:
             else:
                 self.follower.enable_torque()
             self.command = dict(prepared["seed"])
+            self.prev_target = dict(prepared.get("target") or self.command)
             self.alignment_deadline = prepared["alignment_deadline"]
             self.last_time = self.clock()
             return normalized(self.follower, self.command)
         goals = {n: int(v) for n, v in prepared["command"].items()}
         self.follower.sync_write("Goal_Position", goals, normalize=False)
         self.command = prepared["command"]
+        if "target" in prepared:
+            self.prev_target = dict(prepared["target"])
         self.last_time = prepared["time"]
         if "body_state" in prepared:
             was_tracking = self.tracking
@@ -417,6 +343,7 @@ class NativeJointMotion:
         and the previous exact check aborted `align` before any motion. The write is kept so a
         register left far away is still caught, and a gap above one tick still refuses the seed.
         """
+        use_sync = "read" not in vars(self.follower) and hasattr(self.follower, "model_ctrl_table")
         origin = dict(current)
         for _ in range(3):
             self.follower.sync_write("Goal_Position", current, normalize=False)
@@ -425,13 +352,19 @@ class NativeJointMotion:
             detail = f"initial goal readback mismatch: expected={current}, readback={goals}, fresh={fresh}"
             finite_values(goals, self.active)
             finite_values(fresh, self.active)
+            hw_errs = (self.follower.sync_read("Hardware_Error_Status", list(self.active), normalize=False, num_retry=READ_RETRY)
+                       if use_sync else None)
+            torques = (self.follower.sync_read("Torque_Enable", list(self.active), normalize=False, num_retry=READ_RETRY)
+                       if use_sync else None)
             for name in self.active:
                 calibration = self.follower.calibration[name]
                 if not calibration.range_min <= fresh[name] <= calibration.range_max:
                     raise ValueError(f"{name}: seed outside calibrated range; {detail}")
                 if abs(target[name] - fresh[name]) >= 100 * TICKS_PER_DEGREE - 1e-9:
                     raise ValueError(f"{name}: seed difference >=100 degrees; {detail}")
-                if self.follower.read("Hardware_Error_Status", name) or self.follower.read("Torque_Enable", name):
+                err = hw_errs[name] if hw_errs is not None else self.follower.read("Hardware_Error_Status", name)
+                tq = torques[name] if torques is not None else self.follower.read("Torque_Enable", name)
+                if err or tq:
                     raise ValueError(f"{name}: seed hardware error or torque ON; {detail}")
             if not 0 <= self.clock() - started <= MAX_GAP_S:
                 raise ValueError(f"stale seed transaction (>0.5 seconds); {detail}")
@@ -439,6 +372,7 @@ class NativeJointMotion:
                    or abs(fresh[n] - origin[n]) > SEED_TOLERANCE_TICKS for n in self.active):
                 raise ValueError(detail)
             if all(abs(goals[n] - fresh[n]) <= SEED_TOLERANCE_TICKS for n in self.active):
+                self.last_present = normalized(self.follower, fresh)
                 return goals
             current = fresh
         raise ValueError(detail)
