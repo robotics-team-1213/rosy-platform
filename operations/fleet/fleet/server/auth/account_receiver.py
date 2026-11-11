@@ -187,11 +187,12 @@ def install_account_receiver(app, *, config):
             return JSONResponse({**common, 'authenticated': False}, status_code=401, headers=NO_STORE)
         principal = principal_from_claims(claims)
         profile = await invoke(client.profile, cookie) if not authorization else None
+        apps = await invoke(client.apps, cookie) if not authorization else []
         return JSONResponse({**common, 'authenticated': True, 'principal_id': principal.principal_id,
             'role': principal.role, 'account_id': claims.sub, 'site_resource': claims.aud,
             'session_family': claims.sid, 'revision': claims.rev, 'password_change_required': False,
             'expires_at': datetime.fromtimestamp(claims.exp, timezone.utc).isoformat(), 'profile': profile,
-            'grants': [g.model_dump() for g in claims.grants]}, headers=NO_STORE)
+            'apps': apps, 'grants': [g.model_dump() for g in claims.grants]}, headers=NO_STORE)
 
     @app.post('/api/fleet/auth/login')
     def password_login():

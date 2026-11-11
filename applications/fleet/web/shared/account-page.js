@@ -27,9 +27,9 @@ function status(text, state = 'ready') {
 function clearSecrets() { $('account-password').value = ''; $('account-reset-password').value = ''; }
 function fail(error) {
   clearSecrets();
-  $('account-setup').hidden = true; $('account-clients').replaceChildren();
-  $('account-setup-state').textContent = '';
   if ([401, 403].includes(error.status) || error.code === 'ACCOUNT_CHANGED') {
+    $('account-setup').hidden = true; $('account-clients').replaceChildren();
+    $('account-setup-state').textContent = '';
     $('account-content').hidden = true; $('account-login').hidden = false;
     // Without this the login page sees a valid session and returns here at once, to the same refusal.
     if (error.status === 403) $('account-login').href = '/console/login?return=%2Fconsole%2Faccounts&error=access_denied';
@@ -38,7 +38,7 @@ function fail(error) {
   } else if (error.status === 409) {
     $('account-actions').hidden = true;
     status('다른 관리자가 변경했습니다. 현재 상태를 다시 조회하고 수정 내용을 확인하세요.', 'warning');
-  } else status(error.status === 422 ? '입력값을 확인하세요. 마지막 관리자와 비밀번호 조건도 확인하세요.'
+  } else status(error.status === 422 ? '입력값을 확인하세요. 마지막 관리자와 비밀번호 조건, 앱 식별자 중복과 https 복귀 주소도 확인하세요.'
     : '처리 결과를 확인하지 못했습니다. 현재 상태를 다시 조회하세요.', 'warning');
 }
 async function identity() {
@@ -192,11 +192,20 @@ async function setup() {
     $('account-setup-state').textContent = result.configured
       ? `통합 로그인 설정 적용됨 · ${result.issuer}`
       : '통합 로그인이 아직 설정되지 않았습니다. 서버 설치 안내에 따라 활성화하세요.';
+    const manages = canManageAccounts(after);
     for (const client of result.clients) {
       const item = document.createElement('li');
-      item.textContent = `${client.client_id} · ${client.resources.join(', ')} · 복귀 주소: ${client.redirect_uris.join(', ')}`;
+      item.append(`${client.label} (${client.client_id}) · ${client.enabled ? '사용 중' : '정지됨'} · ${client.resources.join(', ')} · 복귀 주소: ${client.redirect_uris.join(', ')}`);
+      if (manages && result.configured) {
+        const toggle = document.createElement('ui-button');
+        toggle.setAttribute('kind', 'quiet');
+        toggle.textContent = client.enabled ? '정지' : '다시 사용';
+        toggle.addEventListener('click', () => changeClient(client, {enabled: !client.enabled}));
+        item.append(' ', toggle);
+      }
       $('account-clients').append(item);
     }
+    $('client-form').hidden = !(manages && result.configured);
     $('account-setup').hidden = false; $('account-login').hidden = true;
     if (canManageAccounts(after)) {
       await perform(async () => { await load(); status('관리할 계정을 선택하거나 새 계정을 만드세요.'); });
@@ -206,6 +215,25 @@ async function setup() {
     }
   } catch (error) { fail(error); }
 }
+const clientsEndpoint = '/api/fleet/auth/clients';
+function lines(id) { return $(id).value.split('\n').map(line => line.trim()).filter(Boolean); }
+function changeClient(client, changes) {
+  perform(async () => {
+    await request(`${clientsEndpoint}/${encodeURIComponent(client.client_id)}`,
+      {method:'PATCH', headers: {'Content-Type': 'application/json'}, body:JSON.stringify({revision:client.revision, ...changes})});
+    await setup();
+    status(changes.enabled === false ? `${client.client_id} 앱을 정지했습니다. 이 앱의 로그인과 세션 확인이 곧 멈춥니다.` : `${client.client_id} 앱을 변경했습니다.`);
+  });
+}
+$('client-form').addEventListener('submit', event => { event.preventDefault(); $('client-add').click(); });
+$('client-add').addEventListener('click', () => perform(async () => {
+  await request(clientsEndpoint, {method:'POST', headers: {'Content-Type': 'application/json'}, body:JSON.stringify({
+    client_id:$('client-id').value.trim(), label:$('client-label').value.trim() || $('client-id').value.trim(),
+    home_url:$('client-home').value.trim(), redirect_uris:lines('client-redirects'), resources:lines('client-resources')})});
+  $('client-form').reset();
+  await setup();
+  status('앱을 등록했습니다. 그 앱에서 로그인해 확인하세요.');
+}));
 $('account-setup-reload').addEventListener('click', setup);
 setup();
 

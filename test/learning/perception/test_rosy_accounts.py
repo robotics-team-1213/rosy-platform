@@ -96,7 +96,8 @@ def test_http_mutation_from_previous_account_is_refused(accounts, tmp_path):
         aud='project:one',permits=lambda *args:True) for name in ['alice','bob']}
     receiver = SimpleNamespace(resource='project:one',resolve_session_id=records.get,retry_revocations=lambda:None,
         profile_url='https://account.test/console/profile',
-        profile_session_id=lambda sid: {'account_id':records[sid].sub,'login':'member','display_name':'Member'})
+        profile_session_id=lambda sid: {'account_id':records[sid].sub,'login':'member','display_name':'Member'},
+        apps_session_id=lambda sid: [])
     managed = RosyAccounts(accounts.db_path,accounts.key_path,config,receiver=receiver)
     request = partial(legacy_request, cookie_name='rosy_learning_session_' + sha256(b'one\0').hexdigest()[:24])
     (tmp_path/'workspace').mkdir()
@@ -129,7 +130,8 @@ def test_account_grant_admits_without_learning_invitation(accounts, tmp_path):
     from review_app import make_server
     record = SimpleNamespace(sub='central-carol', aud='project:one', permits=lambda resource, cap: cap == 'learning.view')
     receiver = SimpleNamespace(resource='project:one', resolve_session_id=lambda sid: record, retry_revocations=lambda: None,
-        profile_url='https://account.test/console/profile', profile_session_id=lambda sid: None)
+        profile_url='https://account.test/console/profile', profile_session_id=lambda sid: None,
+        apps_session_id=lambda sid: [])
     config = accounts.config()
     config['users'] = []
     managed = RosyAccounts(accounts.db_path, accounts.key_path, config, receiver=receiver)

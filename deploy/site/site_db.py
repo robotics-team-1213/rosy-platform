@@ -282,7 +282,7 @@ def _guard_account_restore(source: Path, destination: Path) -> None:
     def schema(db):
         return [row for row in db.execute(
             "SELECT type,name,tbl_name,sql FROM sqlite_master ORDER BY type,name"
-        ) if row[2].startswith(("rosy_account", "account_oauth_", "fleet_console_"))]
+        ) if row[2].startswith(("rosy_account", "account_oauth_", "account_client", "fleet_console_"))]
 
     try:
         with closing(sqlite3.connect(_database_uri(source), uri=True, timeout=5.0)) as saved:

@@ -184,6 +184,7 @@ class Collaboration:
                 profile = self.receiver.profile_session_id(principal['_session_id'])
                 public['profile'] = profile if profile and profile['account_id'] == principal['account_id'] else None
                 public['profile_url'] = self.receiver.profile_url
+                public['apps'] = self.receiver.apps_session_id(principal['_session_id'])
             handler.send(dict(public, token=token, connections=self.accounts.connections(principal)))
             return True
         if path == '/api/learning/imports':

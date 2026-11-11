@@ -32,6 +32,7 @@
     "ui-wiring.js": "text/javascript",
     "task-chooser.css": "text/css",
     "account-profile.js": "text/javascript",
+    "account-apps.css": "text/css",
     "account-session.js": "text/javascript",
     "control-dom.js": "text/javascript",
     "form-controls.js": "text/javascript",

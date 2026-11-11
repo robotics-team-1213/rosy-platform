@@ -26,6 +26,7 @@ FastAPI surface for ROSY-API-REF-001. Factory builds the app, serves `/dashboard
 | Directory | Purpose |
 |-----------|---------|
 | `v1/` | REST routers (see `v1/AGENTS.md`) |
+| `peer_pairing/` | D456 receiver approval and key-proof session owner (routes, service, repository, TLS anchor, peer crypto); its own D-766 size unit |
 
 ## For AI Agents
 

@@ -57,19 +57,35 @@ class Collector:
             await asyncio.sleep(max(0.1, 5.0 - (time.monotonic() - started)))
 
 
-def create_app(collector: Collector, *, web_root: Path | None = None):
+def create_app(collector: Collector, *, web_root: Path | None = None, account=None):
     @asynccontextmanager
     async def lifespan(app):
         task = asyncio.create_task(collector.run())
         collector.task = task
+        revocations = asyncio.create_task(account_routes.retry_revocations(account)) if account else None
         try:
             yield
         finally:
             task.cancel()
+            if revocations:
+                revocations.cancel()
+                await asyncio.gather(revocations, return_exceptions=True)
             await asyncio.gather(task, return_exceptions=True)
             collector.store.close()
 
+    # Imported only when configured: the native wheel has no Account dependency.
+    account_routes = None
+    if account:
+        from . import account_routes
     app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
+    if account:
+        from core_common.protocol.account_client import AccountUnavailable
+        app.add_exception_handler(AccountUnavailable, lambda _request, _error_value: _error(503, 'MONITORING_ACCOUNT'))
+        account_routes.install_account_routes(app, account)
+    else:
+        @app.get('/api/monitoring/v1/account/session')
+        async def account_disabled():
+            return JSONResponse({'enabled': False, 'authenticated': False, 'can_read': False})
 
     @app.middleware('http')
     async def private_responses(request, call_next):
@@ -80,8 +96,11 @@ def create_app(collector: Collector, *, web_root: Path | None = None):
         response.headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self'; style-src 'self'; object-src 'none'; frame-ancestors 'none'"
         return response
 
-    def principal(request):
+    async def principal(request):
         values = request.headers.getlist('authorization')
+        if not values and account:
+            return await account_routes.account_reader(account, collector.config.site_id,
+                                                       request.cookies.get(account_routes.COOKIE, ''))
         if len(values) != 1 or not values[0].startswith('Bearer '):
             return None
         return collector.credentials.authorize(values[0][7:])
@@ -93,13 +112,13 @@ def create_app(collector: Collector, *, web_root: Path | None = None):
 
     @app.get('/api/monitoring/v1/snapshot')
     async def snapshot(request: Request):
-        reader = principal(request)
+        reader = await principal(request)
         if reader is None:
             return _error(401, 'MONITORING_AUTH')
         if set(request.query_params) - {'site_id'}:
             return _error(400, 'MONITORING_QUERY')
         sites = frozenset(request.query_params.getlist('site_id')) or reader.sites
-        if not sites <= reader.sites:
+        if not sites or not sites <= reader.sites:
             return _error(403, 'MONITORING_SCOPE')
         if collector.storage_failures:
             return _error(503, 'MONITORING_STORAGE')
@@ -113,7 +132,7 @@ def create_app(collector: Collector, *, web_root: Path | None = None):
 
     @app.get('/api/monitoring/v1/sites/{site_id}/events')
     async def events(site_id: str, request: Request):
-        reader = principal(request)
+        reader = await principal(request)
         if reader is None:
             return _error(401, 'MONITORING_AUTH')
         if site_id not in reader.sites:

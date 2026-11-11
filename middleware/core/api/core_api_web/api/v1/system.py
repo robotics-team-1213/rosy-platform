@@ -305,6 +305,8 @@ def capabilities(_: AuthContext = Depends(viewer), svc: CoreServicesLike = Depen
     # `fleet_link_provisioning` (D-555 3, v1.161 additive): PUT/DELETE /fleet/link exists (TLS
     # listener only). Top level, not in `controls`: a robot without a drive pairs too.
     data["fleet_link_provisioning"] = getattr(svc, "fleet_agent", None) is not None
+    # `account_receiver_provisioning` (D-992, v1.373 additive): PUT /account/receiver exists (TLS listener only).
+    data["account_receiver_provisioning"] = True
     # `motion.rotate_to` (D-603, v1.194 additive): POST /motion/rotate_to turns in place to a heading.
     data["motion"] = {"rotate_to": getattr(svc, "loc_mission", None) is not None}
     return data

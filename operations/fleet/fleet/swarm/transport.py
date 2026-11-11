@@ -327,6 +327,10 @@ class HttpRobotClient(StationTransport, NavigationTransport):
         """D-555: deliver the hub credential. ``body`` holds a secret: never log it."""
         return self._check(await self._http.put("/api/v1/fleet/link", json=body, headers=self._headers()))
 
+    async def account_receiver_put(self, body: dict) -> dict:
+        """D-992: public receiver settings for people's login on this robot."""
+        return self._check(await self._http.put("/api/v1/account/receiver", json=body, headers=self._headers()))
+
     async def fleet_link_get(self) -> dict:
         return await self._get("/api/v1/fleet/link")
 

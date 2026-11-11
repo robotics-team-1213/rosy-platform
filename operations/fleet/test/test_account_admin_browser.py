@@ -130,7 +130,8 @@ def test_account_administration_uses_real_ledger(tmp_path, managed):
                 assert bob["enabled"] is False and bob["revision"] == 6
                 assert bob["grants"] == [
                     {"resource": "site:test-site", "capabilities": [
-                        "fleet.read", "fleet.operate", "games.operate", "vault.read", "vault.operate", "vault.manage"]},
+                        "fleet.read", "fleet.operate", "games.operate", "monitoring.read", "harbor.view", "harbor.operate", "harbor.field",
+                        "vault.read", "vault.operate", "vault.manage"]},
                     {"resource": "robot:*", "capabilities": ["robot.read", "robot.operate"]},
                     {"resource": "project:*", "capabilities": ["learning.view", "learning.edit", "learning.import"]}]
                 assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
@@ -143,3 +144,71 @@ def test_account_administration_uses_real_ledger(tmp_path, managed):
         worker.join(timeout=20)
         listener.close()
         assert not worker.is_alive()
+
+
+def test_manager_registers_and_stops_an_app_in_the_page(tmp_path):
+    from playwright.sync_api import expect, sync_playwright
+    from test_account_setup import attach_authority, CALLBACK
+    base, tasks = _app(tmp_path)
+    app = create_app(base.state.console, task_service=tasks, site_users={},
+                     site_logins=_accounts(role='policy-admin'),
+                     web_common=default_web_common(), start_task_dispatcher=False)
+    app.state.password_sessions.bootstrap_accounts("alice", "test-site")
+    authority = attach_authority(app)
+    listener = safe_listener()
+    origin = f"http://localhost:{listener.getsockname()[1]}"
+    server = uvicorn.Server(uvicorn.Config(app, log_level="error", timeout_graceful_shutdown=3, log_config=None))
+    worker = threading.Thread(target=server.run, kwargs={"sockets": [listener]}, daemon=True)
+    worker.start()
+    try:
+        deadline = time.monotonic() + 20
+        while not server.started and worker.is_alive() and time.monotonic() < deadline:
+            time.sleep(0.02)
+        assert server.started
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(headless=True)
+            try:
+                page = browser.new_page(viewport={"width": 390, "height": 844})
+                page.goto(origin + "/console/login?return=%2Fconsole%2Faccounts")
+                page.locator("[data-login=login]").fill("alice")
+                page.locator("[data-login=password]").fill("correct horse")
+                page.locator("[data-login=submit]").click()
+                expect(page.locator("#account-clients")).to_contain_text("pilot")
+                expect(page.locator("#client-form")).to_be_visible()
+                page.locator("#client-id").fill("monitoring")
+                page.locator("#client-redirects").fill(CALLBACK)
+                page.locator("#client-resources").fill("site:test-site")
+                page.locator("#client-add").click()
+                row = page.locator("#account-clients li", has_text="monitoring")
+                expect(row).to_contain_text("사용 중")
+                assert "monitoring" in authority.clients
+                row.locator("ui-button").click()
+                expect(row).to_contain_text("정지됨")
+                assert "monitoring" not in authority.clients
+                # A refused registration keeps the list and what was typed, and Enter does not leave the page.
+                page.locator("#client-id").fill("second")
+                page.locator("#client-redirects").fill("http://not-https.example.test/cb")
+                page.locator("#client-resources").fill("site:test-site")
+                page.locator("#client-id").press("Enter")
+                expect(page.locator("#client-id")).to_have_value("second")
+                page.locator("#client-add").click()
+                expect(page.locator("#account-status")).to_contain_text("입력값을 확인하세요")
+                expect(page.locator("#account-setup")).to_be_visible()
+                expect(page.locator("#client-id")).to_have_value("second")
+                expect(page.locator("#account-clients")).to_contain_text("pilot")
+                assert "second" not in authority.clients
+                # The console header offers the same list. This embedded fixture's session has no list of its own.
+                def session_with_apps(route):
+                    response = route.fetch()
+                    route.fulfill(response=response, json={**response.json(), "authenticated": True, "apps": [
+                        {"client_id": "monitoring", "label": "상태 조회", "home_url": "https://site.example.test/monitoring/"}]})
+                page.route("**/api/fleet/auth/session", session_with_apps)
+                page.goto(origin + "/console")
+                expect(page.locator("#fleet-account [data-account-apps] a")).to_have_attribute("href", "https://site.example.test/monitoring/")
+                assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+            finally:
+                browser.close()
+    finally:
+        server.should_exit = True
+        worker.join(15)
+        listener.close()

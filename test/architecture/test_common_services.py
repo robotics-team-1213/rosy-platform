@@ -50,6 +50,27 @@ def test_catalog_links_and_decisions_resolve():
         assert list((ROOT / 'docs/adr').glob(f'{decision}-*.md')), decision
 
 
+def _capabilities():
+    source = (ROOT / 'contracts/foundation/core_common/protocol/account_access.py').read_text(encoding='utf-8')
+    return {kind: set(re.findall(r"'([a-z]+\.[a-z]+)'", re.search(rf"'{kind}': frozenset\(\{{(.*?)\}}\)", source, re.S)[1]))
+            for kind in ('site', 'robot', 'project')}
+
+
+def test_android_capability_copy_equals_the_foundation_lists():
+    # Kotlin cannot import the Python contract, so a new capability would otherwise reject tokens only on Android.
+    source = (ROOT / 'shared/android/account/io/github/livsbittt/rosy/account/AccountSession.kt').read_text(encoding='utf-8')
+    site, robot = re.search(r'val allowed = if .*?setOf\((.*?)\)\s+else setOf\((.*?)\)', source, re.S).groups()
+    capabilities = _capabilities()
+    assert set(re.findall(r'"([a-z.]+)"', site)) == capabilities['site']
+    assert set(re.findall(r'"([a-z.]+)"', robot)) == capabilities['robot']
+
+
+def test_fleet_role_bundles_name_only_real_capabilities():
+    source = (ROOT / 'applications/fleet/web/shared/account-permissions.js').read_text(encoding='utf-8')
+    named = set(re.findall(r"'((?:accounts|fleet|camera|games|vault|robot|learning)\.[a-z]+)'", source))
+    assert named and named <= set().union(*_capabilities().values())
+
+
 TARGET_MARK = '(목표, 미생성)'
 D997_FUNCTIONS = {'계정·권한', '등록·앱 목록', '설정', '알림', '감사', '백업·복원', '업데이트'}
 

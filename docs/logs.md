@@ -14553,6 +14553,17 @@ osy-d395-s1d\`.
 - gate 변화: 없음. 다음 재부팅 뒤 값 유지는 아직 확인 전이다.
 - CE: 미해결 — 멈춘 원인은 가설로 남고 기록은 작업 기록에 있다.
 
+## 2026-11-07 · uncommitted · docs(common-services): Monitoring·Media 책임과 권한 사본 검사
+
+- 변경: 앱 책임 문서에 Monitoring·Media 행과 Android·foundation 공유 기반을 더했다. 카탈로그에 `middleware/media`와 서비스별 인증 차이를 적었다. Kotlin 권한 사본과 Fleet 역할 묶음이 foundation 목록과 어긋나면 `test_common_services.py`가 실패한다.
+- 증거: 원격 시험과 변이 확인은 착지 기록을 따른다.
+- gate 변화: 없음. CE: 해당 없음 — 문서 정정과 검사 추가다.
+
+## 2026-11-07 · uncommitted · docs(adr): D-990 Monitoring Account 로그인
+
+- 변경: D-990과 Log 행을 더하고 Account 프로토콜의 site capability, Monitoring API, 카탈로그의 인증 설명을 고쳤다.
+- 증거: `rosy_harness.py lint`. 원격 결과는 착지 기록을 따른다.
+- gate 변화: 없음. CE: 해당 없음 — 결정 기록이다.
 ## 2026-11-07 · uncommitted · docs(solutions): Pinky LiDAR 0°는 뒤쪽, odom은 이동 증거가 아니다
 
 - 변경: 현장 주행 스크립트 교훈에 11-07 갱신 절을 더했다. LiDAR 방향은 공용 몸체 모델 `PINKY_PRO`(URDF 값 180°)로 읽고, 진행은 odom이 아니라 LiDAR 변화로 확인한다.

@@ -18,7 +18,9 @@
 | 현장 입구 | `deploy/site` | `proxy` | TLS 입구와 경로 전달 | 업무 판단, 계정 원장 | [site 배포 안내](../../deploy/site/README.md) | D-301, D-441 |
 | 알림 전달 (전환 전) | `operations/notifications` | 없음 (미배포) | 기계 범위별 접수·중복 대조·전달 원장·기존 채널 adapter | 업무 outbox·필요성·수신 범위 판단·장치 명령 | [모듈 안내](../../operations/notifications/README.md) | D-998 |
 
-Account의 로그인·프로필·관리 화면 소스는 `applications/fleet/web`에, Monitoring 화면 소스는 `applications/monitoring`에 있다.
+Account의 로그인·프로필·관리 화면 소스는 `applications/fleet/web`에, Monitoring 화면 소스는 `applications/monitoring`에 있다. 로봇 쪽 영상 송출 프로세스는 Media와 별도 패키지인 `middleware/media`다(D-791).
+
+사람은 앱마다 따로 로그인하지 않고 Account로 들어온다(D-955, D-990). Monitoring의 읽기 키는 수집기 사이 조회와 비상 조회에만 쓰고, Media는 짧은 미디어 위임을 검증한다.
 
 ## 공용 코드
 

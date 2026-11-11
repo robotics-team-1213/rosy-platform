@@ -37,6 +37,8 @@ def merge_core_overlay(text: str | None, record: dict, fleet_bootstrap: dict | N
         raise ValueError("CORE config overlay already holds another API credential")
     # D-193 5: the card's credential is listed (and whoami answers) as `card`.
     overlay["auth"] = {**auth, "tokens": [{**record, "source": "card"}]}
+    if fleet_bootstrap and fleet_bootstrap.get("account_trust"):
+        overlay["auth"]["account_trust"] = fleet_bootstrap["account_trust"]  # D-992, validated with the bundle
     if fleet_bootstrap:
         try:
             endpoint = urlsplit(fleet_bootstrap.get("endpoint", ""))
