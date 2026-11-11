@@ -33,6 +33,10 @@ SCHEMA = "rosy.cell-request.v1"
 KINDS = ("measure", "check")
 
 
+class AlreadyAnswered(ValueError):
+    """A second answer to one request (the screen answers 409)."""
+
+
 def store() -> Path:
     return Path(os.environ.get("ROSY_CELL_REQUESTS", Path.home() / ".local/state/rosy/cell-requests"))
 
@@ -110,7 +114,7 @@ def answer(request_id: str, by: str, value: float | None = None, result: str | N
     root = root or store()
     req = load(request_id, root)
     if req["status"] != "open":
-        raise ValueError(f"request {request_id} is already {req['status']}")
+        raise AlreadyAnswered(f"request {request_id} is already {req['status']}")
     if not by.strip():
         raise ValueError("an answer names who measured or checked")
     if req["kind"] == "measure":
@@ -132,8 +136,13 @@ def listing(root: Path | None = None, everything: bool = False) -> list[dict]:
     root = root or store()
     if not root.exists():
         return []
-    rows = [json.loads(p.read_text(encoding="utf-8")) for p in sorted(root.glob("*.json"))]
-    return [r for r in rows if r.get("schema") == SCHEMA and (everything or r["status"] == "open")]
+    rows = []
+    for p in sorted(root.glob("*.json")):
+        try:
+            rows.append(json.loads(p.read_text(encoding="utf-8")))
+        except (OSError, ValueError):  # one unreadable file must not hide every other request; it stays for a person to see
+            print(f"cell_requests: skipped unreadable {p.name}", file=sys.stderr)
+    return [r for r in rows if isinstance(r, dict) and r.get("schema") == SCHEMA and (everything or r.get("status") == "open")]
 
 
 def main(argv=None) -> int:

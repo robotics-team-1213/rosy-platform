@@ -219,6 +219,7 @@ FENCED = [
     ("post", "/api/v1/docking/undock", None),
     ("post", "/api/v1/power/mode", {"mode": "STANDBY"}),
     ("put", "/api/v1/safety/limits", {"manual_linear": 0.05}),
+    ("put", "/api/v1/safety/speed-limits", {"manual_linear": 0.05}),
     ("post", "/api/v1/host/release/install", {"release_id": "2026.10.01-001", "confirmed": True}),
     ("post", "/api/v1/host/release/rollback", {"confirmed": True}),
     ("post", "/api/v1/host/reboot", {"confirmed": True}),

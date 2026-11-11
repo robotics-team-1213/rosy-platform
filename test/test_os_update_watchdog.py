@@ -227,3 +227,21 @@ def test_trial_watchdog_observation_requires_current_boot_journal(tmp_path, monk
     for row in logs:
         row["_BOOT_ID"] = TRIAL_BOOT.replace("-", "")
     assert module.observe(root, run=trial_run)["boot_id"] == TRIAL_BOOT
+
+
+def test_early_boot_kmsg_pid1_watchdog_journal_and_chronological_grep_flags(tmp_path, monkeypatch):
+    module, root, _, logs, calls, run = _watchdog(tmp_path, monkeypatch)
+    boot_hex = SOURCE_BOOT.replace("-", "")
+    logs[:] = [
+        dict(_BOOT_ID=boot_hex, _TRANSPORT="kernel", SYSLOG_PID="1", SYSLOG_IDENTIFIER="systemd",
+             __MONOTONIC_TIMESTAMP="100", MESSAGE=f"Using hardware watchdog '{IDENTITY}', version 0, device /dev/watchdog0"),
+        dict(_BOOT_ID=boot_hex, _TRANSPORT="kernel", SYSLOG_PID="1", SYSLOG_IDENTIFIER="systemd",
+             __MONOTONIC_TIMESTAMP="101", MESSAGE="Watchdog running with a timeout of 10s."),
+    ]
+    result = module.admit(root, run=run)
+    assert result["boot_id"] == SOURCE_BOOT
+    j_argv = calls[-1]
+    assert "-n" not in j_argv and "+" in j_argv and "_TRANSPORT=kernel" in j_argv
+    logs[1]["SYSLOG_PID"] = "2"
+    with pytest.raises(ValueError, match="OS_WATCHDOG_HOLD"):
+        module.admit(root, run=run)

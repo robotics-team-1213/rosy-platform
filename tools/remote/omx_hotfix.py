@@ -8,7 +8,7 @@
       its exit code. Records the sha in <dir>/omx-hotfix-sha for deploy.
   deploy --sha <sha> --tested-log <dir>/run-1.txt [--host user@host]
       Refuses unless that log came from `test` for this sha and its last pytest summary passed
-      without failures or errors. Unpacks `git archive` of deploy/robot, the OMX adapter and contracts/foundation plus
+      without failures or errors. Unpacks `git archive` of deploy/robot, the OMX adapter, contracts/foundation and the Calibration app plus
       REVISION into ~/rosy-test/omx-tools-<sha10>/ (skipped when its REVISION already matches),
       then switches ~/rosy-test/omx-tools-current to it atomically. Prints folder and old target.
   status [--host user@host]
@@ -32,7 +32,9 @@ HOST_ENV = "OMX_HOTFIX_HOST"
 # <tree>/contracts/foundation on PYTHONPATH like the omx_autoupdate tree
 # rosy_vision: omx_incident's Fleet link imports the observation bridge, which needs it (D-971); without it every
 # session's incident stayed local ("No module named 'rosy_vision'", 2026-11-04)
-PATHS = ("deploy/robot", "middleware/devices/omx/adapter", "contracts/foundation", "operations/overhead/rosy_vision")
+# applications/calibration: the Calibration screen (D-1004) runs on this PC beside the cell's request store and cameras
+PATHS = ("deploy/robot", "middleware/devices/omx/adapter", "contracts/foundation", "operations/overhead/rosy_vision",
+         "applications/calibration")
 LINK = "omx-tools-current"
 SHA_FILE = "omx-hotfix-sha"
 SSH = ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", "-o", "ServerAliveInterval=15"]

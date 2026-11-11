@@ -26,10 +26,15 @@ except ImportError:  # host contract tests on Windows
 
 
 sys.dont_write_bytecode = True
-MAX_LINEAR_MPS = 0.03
-MAX_ANGULAR_RPS = 0.10
-MAX_TRAVEL_M = 0.10
-MAX_STOP_LATENCY_S = 0.65
+# D-1005: the signed ceiling is the profile's hardware limit (test_speed_limit_config pins it to
+# profile.*.yaml). A trial may be measured at any speed up to it; the sealed speed then bounds driving.
+CEILING_LINEAR_MPS = 0.20
+CEILING_ANGULAR_RPS = 0.80
+MAX_TRAVEL_M = 0.10  # a trial that does not name its own travel_cap_m
+TRAVEL_CEILING_M = 0.40
+MEASURED_OVERSHOOT = 1.5  # measured speed may exceed the request by at most this factor
+LEGACY_LINEAR_MPS, LEGACY_ANGULAR_RPS = 0.03, 0.10  # the old fixed envelope: still the allowance for an idle axis
+MAX_STOP_LATENCY_S = 0.65  # canonical; commissioning_session.py keeps a pinned copy
 ZERO_EPSILON = 0.001
 # Encoder quantization on the stationary Pinky has produced up to 0.00065 m/s
 # and 0.0135 rad/s in CORE state. Keep command purity separate from measured
@@ -157,6 +162,13 @@ def _validate_preflight(raw):
 
 
 def _validate_trial(raw, direction, cause):
+    if isinstance(raw, dict) and "travel_cap_m" in raw:
+        raw = dict(raw)
+        travel_cap = _number(raw.pop("travel_cap_m"), "travel cap")
+        if not 0 < travel_cap <= TRAVEL_CEILING_M:
+            raise ValueError("trial travel cap is outside the signed ceiling")
+    else:
+        travel_cap = MAX_TRAVEL_M
     _object(raw, (
         "direction", "stop_cause", "requested_linear_mps",
         "requested_angular_rps", "stop_requested_at", "samples",
@@ -165,8 +177,10 @@ def _validate_trial(raw, direction, cause):
         raise ValueError("trial direction or stop cause differs from manifest")
     linear = _number(raw["requested_linear_mps"], "requested linear speed")
     angular = _number(raw["requested_angular_rps"], "requested angular speed")
-    if abs(linear) > MAX_LINEAR_MPS or abs(angular) > MAX_ANGULAR_RPS:
+    if abs(linear) > CEILING_LINEAR_MPS or abs(angular) > CEILING_ANGULAR_RPS:
         raise ValueError("requested speed exceeds the commissioning envelope")
+    allowed_linear = min(CEILING_LINEAR_MPS, max(abs(linear) * MEASURED_OVERSHOOT, LEGACY_LINEAR_MPS))
+    allowed_angular = min(CEILING_ANGULAR_RPS, max(abs(angular) * MEASURED_OVERSHOOT, LEGACY_ANGULAR_RPS))
     if direction == "forward" and not (linear > ZERO_EPSILON and abs(angular) <= ZERO_EPSILON):
         raise ValueError("forward trial command has the wrong direction")
     if direction == "reverse" and not (linear < -ZERO_EPSILON and abs(angular) <= ZERO_EPSILON):
@@ -188,7 +202,7 @@ def _validate_trial(raw, direction, cause):
         x = _number(sample["x"], "odom x")
         y = _number(sample["y"], "odom y")
         yaw = _number(sample["yaw"], "odom yaw")
-        if abs(vx) > MAX_LINEAR_MPS or abs(wz) > MAX_ANGULAR_RPS:
+        if abs(vx) > allowed_linear or abs(wz) > allowed_angular:
             raise ValueError("measured speed exceeds the commissioning envelope")
         observed.append((t, vx, wz, x, y, yaw))
     if any(a[0] >= b[0] for a, b in zip(observed, observed[1:])):
@@ -230,9 +244,15 @@ def _validate_trial(raw, direction, cause):
         raise ValueError("counterclockwise odom direction was not observed")
     travel = sum(math.hypot(current[3] - previous[3], current[4] - previous[4])
                  for previous, current in zip(observed, observed[1:]))
-    if travel > MAX_TRAVEL_M:
-        raise ValueError("trial travel exceeds 10 cm")
+    if travel > travel_cap:
+        raise ValueError(f"trial travel exceeds {travel_cap * 100:g} cm")
     return latency
+
+
+def trial_peak(raw):
+    """(linear m/s, angular rad/s): the fastest this validated trial was commanded or seen moving."""
+    return (max([abs(raw["requested_linear_mps"])] + [abs(s["linear"]) for s in raw["samples"]]),
+            max([abs(raw["requested_angular_rps"])] + [abs(s["angular"]) for s in raw["samples"]]))
 
 
 def validate_candidate(root, bundle, evidence_dir, *, carried=False):
@@ -279,6 +299,7 @@ def validate_candidate(root, bundle, evidence_dir, *, carried=False):
     if not isinstance(trials, list) or len(trials) != len(required):
         raise ValueError(f"G4 requires {'eight' if schema == 1 else 'five'} trials")
     seen = set()
+    measured = [0.0, 0.0]
     files = {preflight["evidence_file"]}
     digests = {preflight["sha256"]}
     for trial in trials:
@@ -293,10 +314,12 @@ def validate_candidate(root, bundle, evidence_dir, *, carried=False):
             raise ValueError("G4 trials must use distinct raw evidence")
         raw, _ = _read_evidence(evidence_dir, trial["evidence_file"], trial["sha256"])
         _validate_trial(raw, *key)
+        measured = [max(a, b) for a, b in zip(measured, trial_peak(raw))]
         files.add(trial["evidence_file"])
         digests.add(trial["sha256"])
         seen.add(key)
-    return {"ready": True, "trials": len(seen), "release_id": device["release_id"]}
+    return {"ready": True, "trials": len(seen), "release_id": device["release_id"],
+            "measured_linear_mps": round(measured[0], 6), "measured_angular_rps": round(measured[1], 6)}
 
 
 def motion_fingerprint(root):
@@ -379,6 +402,8 @@ def approve(root, bundle, evidence_dir, *, reviewer=None):
         "bundle_sha256": _sha256(bundle_bytes),
         "approved_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "motion_fingerprint": motion_fingerprint(root),
+        "measured_linear_mps": result["measured_linear_mps"],
+        "measured_angular_rps": result["measured_angular_rps"],
     }
     if bundle["schema_version"] == 1:
         common["reviewer"] = reviewer
@@ -407,6 +432,7 @@ def check(root=Path("/"), *, runtime_mode=None):
     bundle = _read_json(bundle_path)
     review = None
     carried = False
+    sealed_all = []
     for kind in ("hardware", "navigation"):
         path = approvals / f"{kind}.approved"
         if path.is_symlink() or not path.is_file() or path.stat().st_size == 0:
@@ -418,6 +444,10 @@ def check(root=Path("/"), *, runtime_mode=None):
         marker = _read_json(path)
         # Markers sealed before D-986 have no fingerprint and can never carry.
         fingerprint = marker.pop("motion_fingerprint", None) if isinstance(marker, dict) else None
+        # D-1005: sealed measured speeds; a marker without them is bound by nothing but the old limits.
+        sealed = ((marker.pop("measured_linear_mps", None), marker.pop("measured_angular_rps", None))
+                  if isinstance(marker, dict) else (None, None))
+        sealed_all.append(sealed)
         marker = _object(marker, (*marker_fields, "reviewer")
                          if bundle.get("schema_version") == 1 else (*marker_fields, "operator"),
                          f"{kind} approval")
@@ -445,6 +475,12 @@ def check(root=Path("/"), *, runtime_mode=None):
             raise ValueError("hardware and navigation approvals require the same review")
         review = marker_review
     result = validate_candidate(root, bundle, approvals / "g4-evidence", carried=carried)
+    if len(set(sealed_all)) != 1:
+        raise ValueError("hardware and navigation approvals seal different measured speeds")
+    if sealed_all[0] == (None, None):
+        result = {**result, "measured_linear_mps": None, "measured_angular_rps": None}
+    elif sealed_all[0] != (result["measured_linear_mps"], result["measured_angular_rps"]):
+        raise ValueError("approval measured speed differs from its raw evidence")
     if carried:
         result = {**result, "measured_release_id": bundle["release_id"], "release_id": device["release_id"]}
     return result

@@ -36,6 +36,7 @@ export function roleGrants(role, siteResource) {
 export const CAPABILITIES = {
   site: {'accounts.manage': '계정 관리', 'fleet.read': '관제 조회', 'fleet.operate': '관제 조작',
     'fleet.policy': '관제 정책', 'camera.manage': '카메라 관리', 'games.operate': '게임 조작',
+    'calibration.operate': '보정 실측 답',
     'vault.read': 'Vault 조회', 'vault.operate': 'Vault 조작', 'vault.manage': 'Vault 장부 정리'},
   robot: {'robot.read': '로봇 조회', 'robot.operate': '로봇 조작', 'robot.admin': '로봇 관리'},
   project: {'learning.view': '학습 조회', 'learning.edit': '학습 편집', 'learning.approve': '학습 승인',
