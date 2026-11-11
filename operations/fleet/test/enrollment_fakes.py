@@ -167,7 +167,8 @@ def scan_row(address: str = PINNED, name: str = NAME, hostname: str | None = Non
             "address": host, "port": int(port)}
 
 
-def build(tmp_path, cores: dict[str, FakeCore], *, static=(), key=KEY, clock=None):
+def build(tmp_path, cores: dict[str, FakeCore], *, static=(), key=KEY, clock=None,
+          **service_kwargs):
     network = Network(cores)
     endpoints = [RobotEndpoint(robot.robot_id, f"http://10.0.0.{i + 1}:8080", f"rest-{i}")
                  for i, robot in enumerate(static)]
@@ -178,5 +179,6 @@ def build(tmp_path, cores: dict[str, FakeCore], *, static=(), key=KEY, clock=Non
     discovery = DiscoveryStore()
     store = EnrollmentStore(tmp_path / "fleet.sqlite3")
     service = EnrollmentService(store, roster, key=key, fleet_name="site-a", discovery=discovery,
-                                transport=httpx.MockTransport(network), clock=clock or Clock())
+                                transport=httpx.MockTransport(network), clock=clock or Clock(),
+                                **service_kwargs)
     return service, network, console, discovery, store, tasks

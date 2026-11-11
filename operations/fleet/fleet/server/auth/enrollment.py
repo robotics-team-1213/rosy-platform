@@ -17,7 +17,6 @@ No request is ever retried automatically.
 from __future__ import annotations
 
 import asyncio
-import ipaddress
 import logging
 import re
 import time
@@ -27,6 +26,8 @@ from typing import Any, Callable, Optional
 
 import httpx
 
+from fleet.server.auth.enrollment_idle import IDLE_REMOVAL_S, IdlePolicy
+from fleet.server.auth.enrollment_inputs import normalize_code, parse_manual_address
 from fleet.server.discovery import is_rfc1918
 from fleet.server.enrollment_errors import EnrollmentError  # noqa: F401  (re-exported)
 from fleet.server.enrollment_hub import HubLinkMixin
@@ -37,46 +38,14 @@ from fleet.swarm.transport import HttpRobotClient, RobotApiError
 
 _LOG = logging.getLogger(__name__)
 
-CODE_ALPHABET = frozenset("23456789ABCDEFGHJKMNPQRSTUVWXYZ")
-CODE_LENGTH = 8
-DEFAULT_PORT = 8080
 #: The only requests allowed to a pinned address whose identity is in doubt.
 STOP_PATHS = frozenset({"/api/v1/safety/stop", "/api/v1/navigation/cancel",
                         "/api/v1/swarm/cancel"})
 SITE_WARN_S = 14 * 86400.0
 LEGACY_WARN_S = 48 * 3600.0
 SITE_LIFETIME_S = 90 * 86400.0
+
 _AVAHI_SUFFIX = re.compile(r"^(?P<base>.+)-\d+$")
-#: The console applies the same RFC 1918 rule before sending (web/enrollment.js).
-_RFC1918 = tuple(ipaddress.ip_network(net) for net in
-                 ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"))
-
-
-def normalize_code(text: object) -> str:
-    """Drop spaces and hyphens, uppercase, check the alphabet before any robot call."""
-    if not isinstance(text, str):
-        raise EnrollmentError("bad_format", 400, "a screen code is 8 characters like ABCD-EFGH")
-    code = "".join(ch for ch in text if ch not in " -\t").upper()
-    if len(code) != CODE_LENGTH or any(ch not in CODE_ALPHABET for ch in code):
-        raise EnrollmentError("bad_format", 400, "a screen code is 8 characters like ABCD-EFGH")
-    return code
-
-
-def parse_manual_address(text: object) -> str:
-    """Private LAN IPv4[:port] only; `.local`, hostnames and public addresses are refused."""
-    if not isinstance(text, str) or not text.strip():
-        raise EnrollmentError("bad_address", 400, "enter the robot's private LAN IPv4 address, optionally with :port")
-    host, _, port_text = text.strip().partition(":")
-    try:
-        ip = ipaddress.ip_address(host)
-        port = int(port_text) if port_text else DEFAULT_PORT
-    except ValueError:
-        raise EnrollmentError("bad_address", 400,
-                              "enter the robot's private LAN IPv4 address, optionally with :port") from None
-    if (ip.version != 4 or not any(ip in net for net in _RFC1918)
-            or not 1 <= port <= 65535):
-        raise EnrollmentError("bad_address", 400, "only private LAN IPv4 addresses are accepted")
-    return f"{ip}:{port}"
 
 
 def _seconds_between(start: object, end: object) -> float | None:
@@ -195,8 +164,10 @@ class EnrollmentService(HubLinkMixin, SafetyReleaseMixin):
                  key_error: str | None = None, fleet_name: str = "rosy-site",
                  discovery=None, transport: httpx.AsyncBaseTransport | None = None,
                  tls_bindings=None, hub_link: dict | None = None, account_link=None,
-                 clock: Callable[[], float] = time.time) -> None:
+                 clock: Callable[[], float] = time.time, last_activity=None,
+                 idle_removal_s: float = IDLE_REMOVAL_S) -> None:
         self._store = store
+        self._idle = IdlePolicy(last_activity, idle_removal_s)  # D-1016 shown-only marking
         #: D-555: {expected_hostname, ca_pem} robots get with a hub credential; None = unavailable.
         self._hub_link = hub_link
         self._account_link = account_link
@@ -328,8 +299,10 @@ class EnrollmentService(HubLinkMixin, SafetyReleaseMixin):
 
     def listing(self) -> dict:
         now = self._clock()
+        rows = self._store.rows()
+        idle = self._idle.facts(rows, now)
         robots = []
-        for row in self._store.rows():
+        for row in rows:
             if (row["state"] == "active" and row["fleet_expires_at"] is not None
                     and now >= row["fleet_expires_at"]):
                 row["state"] = "needs_new_code"  # shown only; the client records it on use
@@ -347,6 +320,7 @@ class EnrollmentService(HubLinkMixin, SafetyReleaseMixin):
                 "legacy_lifetime": row["source"] != "pair-site",
                 "lifetime_shortened": (row["source"] == "pair-site" and lifetime is not None
                                        and lifetime < SITE_LIFETIME_S - 86400.0),
+                **idle[row["robot_id"]],  # D-1016: shown only; unenroll stays a named operator's call (D-456)
                 **self._hub_fields(row),
             })
         return {"available": self.available, "unavailable_reason": self.unavailable_reason,
