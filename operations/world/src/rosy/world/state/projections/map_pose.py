@@ -56,6 +56,7 @@ SIGHTING, BRIDGED = "sighting", "bridged"
 OPERATOR_PIN = "operator_pin"
 #: D-989: the robot's map pose through the transform fitted to the camera's LED-confirmed track.
 AUTO_LOCATE = "auto_locate"
+PEER = "peer"               # D-1017: another robot's relayed self-pose claim (non-independent)
 #: D-989: an auto-locate feed older than this (its tick stalled or died) reads DEGRADED at read time.
 AUTO_FEED_MAX_S = 3.0
 #: D-989: a blocked robot's sample may lift its block only with a camera confirmation this fresh.
@@ -112,12 +113,17 @@ class MapPoseConfig:
     max_anchor_age_s: float = 10.0
     #: D-989: robots whose ALIGNED auto-locate transform may anchor; none by default.
     auto_locate_robots: tuple = ()
+    #: D-1017: a peer claim older than this at ingest is refused (1 Hz beacon, 5 s table, relay).
+    peer_lease_s: float = 6.0
+    #: D-1017: a peer claim this close behind the newest camera sighting is skipped.
+    peer_after_camera_s: float = 10.0
 
     def __post_init__(self) -> None:
         upper = {"max_dead_reckon_m": 20.0, "max_jump_m": 2.0, "max_jump_deg": 180.0,
                  "max_odom_age_s": 30.0, "max_pair_s": 1.0, "max_interp_gap_s": 5.0,
                  "sighting_lease_s": 5.0, "max_odom_future_s": 5.0, "max_speed_mps": 10.0,
-                 "max_bridge_turn_deg": 3600.0, "max_turn_rate_dps": 3600.0, "max_anchor_age_s": 600.0}
+                 "max_bridge_turn_deg": 3600.0, "max_turn_rate_dps": 3600.0, "max_anchor_age_s": 600.0,
+                 "peer_lease_s": 30.0, "peer_after_camera_s": 600.0}
         if (not isinstance(self.auto_locate_robots, tuple)
                 or not all(isinstance(r, str) and r for r in self.auto_locate_robots)):
             raise ValueError("fleet.map_pose.auto_locate_robots must be a list of robot ids")
@@ -189,6 +195,8 @@ class MapPose:
     anchor_source: Optional[str] = None
     #: D-593: summed |odom heading change| since the anchor (deg), the turn twin of `dead_reckon_m`.
     bridge_turn_deg: float = 0.0
+    #: D-1017: age of the newest camera sighting (None: none ever), shown on the operator card.
+    last_sighting_age_s: Optional[float] = None
 
 
 def wrap_angle(angle: float) -> float:
@@ -280,6 +288,7 @@ class MapPoseTracker:
         self._filtered_map_id = 0
         self._newest_sighting: Optional[float] = None
         self._newest_auto: Optional[float] = None
+        self._newest_peer: Optional[float] = None
         self._auto_blocked = False
         self._auto_camera_at: Optional[float] = None   # wall time of the last camera confirmation
         self._auto_camera_odom: Optional[tuple[float, float]] = None   # odom (path, turn) at that time
@@ -453,11 +462,35 @@ class MapPoseTracker:
     def allow_auto_locate(self) -> None:
         self._auto_blocked = False
 
+    def add_peer(self, pose: Pose, at: float, now: float, map_id: Optional[str],
+                 active_map_id: Optional[str]) -> Optional[str]:
+        """D-1017: a peer claim anchors only while the camera and a fresh pin are quiet; None when taken."""
+        if not _finite(*pose, at, now):
+            return "POSE_INVALID"
+        if map_id is None or map_id != active_map_id:
+            return "MAP_NOT_ACTIVE"
+        if not -MAX_SIGHTING_FUTURE_S <= now - at <= self.config.peer_lease_s:
+            return "STALE_SAMPLE"
+        if self._newest_sighting is not None and at - self._newest_sighting < self.config.peer_after_camera_s:
+            return "CAMERA_RECENT"
+        if (self._anchor is not None and self._anchor.kind == OPERATOR_PIN
+                and 0.0 <= at - self._anchor.captured_at <= self.config.max_anchor_age_s):
+            return "PIN_FRESH"
+        if self._newest_peer is not None and at <= self._newest_peer:
+            return "NOT_NEWER"
+        self._newest_peer = at
+        self._pending.append(Sighting(self.robot_id, pose[0], pose[1], _wrap(pose[2]), at, None,
+                                      map_id, PEER))
+        self._resolve(now)
+        return None
+
     def pose(self, now: float, active_map_id: Optional[str] = None, auto_locate: bool = False) -> MapPose:
         cfg = self.config
         self._resolve(now)
         diag = {"odom_refused": self._refused, "odom_refused_reason": self._refused_reason,
-                "sightings_filtered_map_id": self._filtered_map_id}
+                "sightings_filtered_map_id": self._filtered_map_id,
+                "last_sighting_age_s": (None if self._newest_sighting is None
+                                        else max(0.0, now - self._newest_sighting))}
         latest = self._odom[-1] if self._odom else None
         anchor = self._anchor
         hidden = anchor is not None and anchor.kind == AUTO_LOCATE and not auto_locate

@@ -5467,3 +5467,15 @@
 - 변경: `GET /api/fleet/enrollment/robots` 행에 `last_activity_at`·`days_idle`·`removal_pending`을 더했다(읽기 시점 계산, DB 상태·전이 불변). 마지막 활동은 마지막 수용 CORE 이벤트(`CoreEventStore.last_received_times`, `fleet/observe/events.py` 소유)와 등록 행 마지막 기록 가운데 늦은 쪽이며, 임계값은 사이트 설정 `fleet.enrollment.idle_removal_days`(기본 30, 1..3650, `console_site_config._enrollment_config`). 표시는 무엇도 해제하지 않는다 — 비활성은 토큰 만료, 해제는 이름 있는 운영자 unenroll 그대로(D-456). API Ref v1.386, ADR D-1016.
 - 증거: 원격 시험 exit 0 / NEW 0 — 763608decb에서 test_enrollment_service·test_core_event_store·test_enrollment_api·test_cli·test_module_structure(known_failures 0 new). 콘솔 표시 node 시험 enrollment.test.mjs 8 pass. D-766 분할(enrollment_inputs·enrollment_idle, 라칫 행 845→819)로 enrollment.py 819줄·cli.py 757줄 유지. 첫 두 차례 RED는 가짜 시계와 저장소 실시계 스탬프의 영역 충돌로, 미래 스탬프 무시 규칙으로 바로잡았다.
 - gate 변화: 없음.
+
+## 2026-11-11 · uncommitted · D-1017 peer 위치 공유로 지도 자세 앵커 보강
+
+- 변경: `GET /api/fleet/robots/{robot_id}/map-pose`가 상태 스냅숏의 `peers`(v1.359 `PeerRow`) 행을 네 번째 앵커로 쓴다. `MapPoseTracker.add_peer`는 로스터·`LOCALIZED`·유한 pose·`age_s ≤ peer_lease_s`(기본 6 s)·활성 지도 일치를 요구하고, 마지막 카메라 sighting 10 s 안이면 `CAMERA_RECENT`, 운영자 핀이 10 s 안이면 `PIN_FRESH`, 더 새 표본이 있으면 `NOT_NEWER`로 거절한다. 받아들인 표본은 `kind=peer` sighting으로 기존 표본 규칙(첫 앵커·2 일치 복구)을 그대로 타므로 첫 peer 앵커는 DEGRADED다. `MapPose.last_sighting_age_s`를 더하고 콘솔 카드가 300 s 넘으면 `카메라 N분 침묵`을 붙인다(2026-11-11 관측: 30일 침묵 카메라가 화면에서 사라졌다). 사이트 설정 `fleet.map_pose.peer_lease_s`·`peer_after_camera_s`. 로봇 계약·envelope 변경 없음. API Ref v1.388, ADR D-1017.
+- 증거: 호스트 함수 직접 호출로 새 시험 통과(노트북 pytest 아님, D-584). 원격 시험 결과는 다음 커밋에 기록한다.
+- gate 변화: 없음. FIELD는 실물 5대 전원·카메라 차단 재현 전까지 그대로다.
+- D-766 정정: 첫 커밋(9156c9fe93)에서 `operations/world/.../map_pose.py`가 613줄로 600줄 한도를 넘어 `test_module_structure.test_ratchet_rows_are_the_measured_counts_and_only_go_down`가 NEW로 떴다. 새 ratchet 행을 만들지 않고 같은 모듈의 D-1017 주석·docstring을 줄여 600줄로 맞췄다(동작 불변). 다음 커밋에서 remote affected 재시험.
+
+## 2026-11-11 Â· 4765747064 Â· docs(fleet): D-1017 ì›ê²© ì‹œí—˜ ê²°ê³¼ ê¸°ë¡
+- ì¦ê±°(ì›ê²©, ai@100.108.76.123, feat/peer-sighting-ingestion tip 184e7d0e11): ëŒ€ìƒ ì‹œí—˜ `test_map_pose`Â·`test_map_pose_service`Â·`test_map_pose_pin`Â·`test_map_pose_scope`Â·`operations/world/test` 155 passed. `rosy_harness.py affected --base main` 4ê°œ í˜¸ì¶œ ëª¨ë‘ exit 0, known_failures 0 new(ì•Œë ¤ì§„ flaky 1: `test_station_camera_pipeline_lifespan[lifespan]`). `test/architecture/test_module_structure.py` 600ì¤„ ê·œì¹™ ì´ˆë¡. `harness lint` 0 errors. ì½˜ì†” ì¹´ë“œ `node --test localization-badge.test.mjs` 10 pass(ë¡œì»¬ node, pytest ì•„ë‹˜).
+- CE: ë¯¸í•´ê²° â€” peer ì•µì»¤ëŠ” ì›ê²© í•¨ìˆ˜ ì‹œí—˜ê¹Œì§€ë§Œ í™•ì¸í–ˆê³  ì‹¤ë¬¼ 5ëŒ€Â·ì¹´ë©”ë¼ ì°¨ë‹¨ ìž¬í˜„ ì „ì´ë¼ êµí›ˆìœ¼ë¡œ ì“°ì§€ ì•ŠëŠ”ë‹¤.
+
