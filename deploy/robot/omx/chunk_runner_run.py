@@ -22,26 +22,41 @@ _ADAPTER_SRC = str(Path(__file__).resolve().parents[3] / "middleware/devices/omx
 if _ADAPTER_SRC not in sys.path:
     sys.path.insert(0, _ADAPTER_SRC)
 from omx_adapter.chunk_library import (  # noqa: E402
-    NAMES, PARK_SPEED, RISE_SPEED, TRANSIT, TemporalChunkEnsembler, chain_path,
-    park_path, receding_horizon_splice, too_fast, transit_path,
+    GUARD_UNITS_PER_S, NAMES, PARK_SPEED, RISE_SPEED, TRANSIT, TemporalChunkEnsembler, chain_path,
+    load_library, park_path, receding_horizon_splice, too_fast, transit_path,
 )
 from omx_adapter.motion_profile import GUARD_ACCEL_UNITS_S2, smooth  # noqa: E402
+from cell_envelope import digest  # noqa: E402
 import cell_params as prm  # noqa: E402
 from episode_recorder import Recorder  # noqa: E402
 import joint_push  # noqa: E402
-import chunk_runner as _cr  # noqa: E402  (late binding: the pace constants are patched there)
+import runner_strain  # noqa: E402
 
-SETTLE_TOL = _cr.SETTLE_TOL
-SETTLE_S = _cr.SETTLE_S
-EMPTY_MARGIN = _cr.EMPTY_MARGIN
-JOG_MAX = _cr.JOG_MAX
-REL_MAX = _cr.REL_MAX
-FOLLOW_STOP = _cr.FOLLOW_STOP
-FOLLOW_STOP_S = _cr.FOLLOW_STOP_S
-HEALTH_PERIOD_S = _cr.HEALTH_PERIOD_S
-CONTACT_LAG = _cr.CONTACT_LAG
-CONTACT_TICKS = _cr.CONTACT_TICKS
-contact_limits = _cr.contact_limits
+JOG_MAX = 5.0
+FOLLOW_STOP, FOLLOW_STOP_S = 25.0, 1.0
+SETTLE_TOL, SETTLE_S, EMPTY_MARGIN = 3.0, 3.0, 2.0
+REL_MAX = 20.0
+HEALTH_PERIOD_S = 1.0
+CONTACT_LAG, CONTACT_TICKS = prm.default("runner.contact_lag"), prm.default("runner.contact_ticks")
+CONTACT_CHUNKS = ("descend", "grasp", "release")
+PACE_LAG, PACE_RISE, PACE_MAX_S = (prm.default(f"runner.{k}") for k in ("pace_lag", "pace_rise", "pace_max_s"))
+IDLE_PARK_S, IDLE_STOP_S, IDLE_RETRY_S = (prm.default(f"runner.idle_{k}_s") for k in ("park", "stop", "retry"))
+TEMP_STOP = 65
+PWM_STOP, PWM_STOP_S, STALL_GAP, STALL_MOVE = 285, 0.5, 4.0, 0.3
+MOTORS = [n.split(".")[0] for n in NAMES]
+
+
+def contact_limits(start_lags: list, params=None) -> list:
+    base = prm.get(params, "runner.contact_lag", CONTACT_LAG)
+    rise, top = prm.get(params, "runner.contact_rise"), prm.get(params, "runner.contact_loaded_max")
+    return [max(base, min(s + rise, top)) for s in start_lags]
+
+
+def _cr_attr(name: str, default):
+    mod = sys.modules.get("chunk_runner")
+    if isinstance(mod, dict):
+        return mod.get(name, default)
+    return getattr(mod, name, default) if mod is not None else default
 
 
 class Runner:
@@ -309,8 +324,8 @@ class Runner:
         return runner_strain.strained(self, sent, present)
 
     def tick(self) -> None:
-        pace_lag, pace_rise = (prm.get(self.params, "runner.pace_lag", _cr.PACE_LAG),
-                            prm.get(self.params, "runner.pace_rise", _cr.PACE_RISE))
+        pace_lag, pace_rise = (prm.get(self.params, "runner.pace_lag", _cr_attr("PACE_LAG", PACE_LAG)),
+                            prm.get(self.params, "runner.pace_rise", _cr_attr("PACE_RISE", PACE_RISE)))
         if self.lag < pace_lag:
             self.pace_floor = 0.0
         shrinking = self.pace_last is None or self.lag < self.pace_last - 0.01
