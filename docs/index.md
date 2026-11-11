@@ -354,8 +354,8 @@
 
 ## 최근 기록
 
+- 2026-11-11 · uncommitted · fix(test): RAUC 폴백이 기존 진단 계약을 지키게 — URL당 3회·진단에 URL 없음·폴백 신규 시험
 - 2026-11-11 · uncommitted · fix(test): 고정 RAUC 패키지 다운로드에 미러 폴백 — 아카이브 장애가 FULL 등급 전체를 쓰러뜨렸다
 - 2026-11-11 · uncommitted · docs(solutions): OMX 프로파일 해시 시험의 mtime 캐시 충돌 교훈 기록
 - 2026-11-11 · 477da4687d · docs(test): 착지 관문 수정 검증
 - 2026-11-11 · uncommitted · fix(test): 착지 관문 두 건 — swarm 단위 small 표시 제거, OMX 프로파일 해시 시험 캐시 분리
-- 2026-11-11 · 86cb36c738 · docs(sim): 편대 SIM 계측 변경 검증

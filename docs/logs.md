@@ -14817,3 +14817,8 @@ osy-d395-s1d\`.
 - 변경: `test/os_rauc_fakes.py`의 `download_package`가 고정 URL 실패(시도 3회) 후 같은 pool 경로의 kernel.org 우분투 미러를 재시도한다. 크기·sha256 핀이 원본 무결성을 보장하므로 응답한 출처가 어느 쪽이든 그대로 검증된다.
 - 증거: 게시용 무캐시 FULL(prepare-99120b86f6)에서 24개 id가 `Pinned RAUC package unavailable`로 실패하고 전부 main에서도 실패(MAIN-RED). 시험 PC 양쪽에서 `archive.ubuntu.com`·`kr.archive.ubuntu.com` curl 000(github 200), `mirrors.edge.kernel.org`는 200. 모델 PC에서 미러 파일 sha256 `78770edf…fad7`·160646 바이트로 핀과 일치 확인.
 - gate 변화: 없음. 네트워크 장애가 코드 회귀로 보이는 MAIN-RED를 만드는 경로를 끊는 수선이다.
+
+## 2026-11-11 · uncommitted · fix(test): RAUC 폴백이 기존 진단 계약을 지키게 — URL당 3회·진단에 URL 없음·폴백 신규 시험
+- 변경: 앞 항목의 첫 폴백 구현이 `test_os_rauc_tool.py` 6건을 깨뜨렸다(시도 3→2, 진단문에 URL 노출 — 핀 쿼리의 비밀 누출 계약 위반). `os_rauc_fakes.py`를 고쳤다: URL당 시도는 3회 그대로, 진단은 종래의 `attempt N: <관측>` 양식(URL 미포함), 폴백 후보는 `/ubuntu/` 핀에만 붙는다. `test_os_rauc_tool.py`에 폴백 복구를 고정하는 신규 시험 1건(아카이브 3회 실패 → kernel 미러 성공, 경고에 `attempt 3: URLError`)을 추가했다.
+- 증거: 호스트 직접 호출로 세 계약 확인(평범 핀 3회 재시도·복구 경고, 항상 실패 시 시도 1-3 진단·URL 무누출, 아카이브 3회 후 미러 복구). 원격 시험 결과는 다음 커밋에 기록한다.
+- gate 변화: 없음.
