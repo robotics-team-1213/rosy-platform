@@ -14812,3 +14812,8 @@ osy-d395-s1d\`.
 - 변경: `docs/solutions/test-failures/same-path-rewrite-hits-cell-robot-profile-mtime-cache-2026-11-11.md` 신규 — 착지 관문이 브랜치 탓으로 분류했던 NEW 실패의 실제 원인(`cell_robot_profile.load`의 (경로, mtime, 크기) 캐시가 같은 길이의 즉시 재작성과 충돌)과 재발 방지를 남긴다.
 - 증거: 착지 로그 alone-pre-pre-28-2.txt 실패·main 통과, 수정 후 원격 58 passed(커밋 477da4687d 기록 항 참조).
 - gate 변화: 없음.
+
+## 2026-11-11 · uncommitted · docs: 게시 검증 체크포인트 — 2026-11-11 착지분 무캐시 FULL 근거 확보
+- 변경: 없음(체크포인트 커밋). 2026-11-11 착지분(편대 자취 복귀 D-559, peer 앵커 D-1017, 편대 SIM 계측 D-1002 외)의 게시용 무캐시 FULL 기록을 이 커밋 위에 만든다.
+- 증거: `python tools/land.py --tests full --no-cache` 실행 기록으로 남는다.
+- gate 변화: 없음.
