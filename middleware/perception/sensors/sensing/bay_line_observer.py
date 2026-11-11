@@ -24,8 +24,11 @@ import math
 import cv2
 import numpy as np
 
-from perception_runtime.perception.lane_keep_lines import floor_pink_mask
-
+#: HSV bounds for magenta guide tape (OpenCV H 140-170, S >= 80, V >= 60).
+PINK_HSV_LOW = (140, 80, 60)
+PINK_HSV_HIGH = (170, 255, 255)
+HORIZON_MARGIN_PX = 3
+MIN_COMPONENT_AREA_PX = 40
 #: The mask must paint at least this many pixels before the line exists.
 MIN_MASK_PIXELS = 60
 #: Confidence saturates at this many mask pixels (a tape-width line at 0.3 m).
@@ -97,8 +100,13 @@ class BayLineObserver:
     def observe(self, frame: np.ndarray, stamp: float) -> dict:
         hrow = horizon_row(self._w, self._h, self._hfov, self._mount.pitch_rad,
                            self._mount.height_m)
-        mask = floor_pink_mask(frame, hrow)
-        ys, xs = np.nonzero(mask)
+        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+        raw = cv2.inRange(hsv, PINK_HSV_LOW, PINK_HSV_HIGH)
+        raw[:max(0, min(raw.shape[0], int(math.ceil(hrow)) + HORIZON_MARGIN_PX))] = 0
+        count, labels, stats, _ = cv2.connectedComponentsWithStats(raw, connectivity=8)
+        keep = np.zeros(count, bool)
+        keep[1:] = stats[1:, cv2.CC_STAT_AREA] >= MIN_COMPONENT_AREA_PX
+        ys, xs = np.nonzero(keep[labels])
         if len(xs) < MIN_MASK_PIXELS:
             return self._payload(stamp, False)
         points = []
