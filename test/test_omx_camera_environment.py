@@ -189,3 +189,43 @@ def test_monitor_does_not_restore_a_previous_dark_epoch_best_into_a_bright_scene
     assert all(not event['photometric_ready'] for event in events)
     assert len({event['run_id'] for event in events}) == 1
     assert all(current[role] == original for role in cameras)
+
+
+def test_monitor_reads_viewer_observation_keyed_by_unit_when_role_alias_differs(monkeypatch, tmp_path):
+    """When commissioning_view keys the wrist stream by unit ('arm_a_wrist') instead of 'front', readiness reaches READY."""
+    import io
+    import json
+    from types import SimpleNamespace
+    env, runtime, quality = load('camera_environment'), load('camera_readiness'), load('camera_quality')
+    monkeypatch.setitem(sys.modules, 'camera_quality', quality)
+    clock = [0.]
+    monkeypatch.setattr(env, 'time', SimpleNamespace(monotonic=lambda: clock[0],
+        time=lambda: 1000+clock[0], time_ns=lambda: int((1000+clock[0])*1e9),
+        sleep=lambda dt: clock.__setitem__(0, clock[0]+dt)))
+    cameras = {
+        'top': dict(device='top', candidates=[dict(auto_exposure=1, exposure_time_absolute=166)]),
+        'front': dict(device='front', unit='arm_a_wrist', candidates=[dict(auto_exposure=1, exposure_time_absolute=156)]),
+    }
+    original = dict(auto_exposure=3, exposure_time_absolute=166)
+    baseline = {'cameras': {role: dict(original=dict(original), identity=role, unit=spec.get('unit', role), producer={})
+                            for role, spec in cameras.items()}}
+
+    def response(*args, **kwargs):
+        seq = int(clock[0]*10)+1
+        obs = dict(fresh=True, source_stamp=1000+clock[0], sequence=seq,
+                   quality=dict(policy=quality.POLICY, usable=True, condition='NORMAL',
+                                mean_intensity=120, spatial_contrast=80, clipped_fraction=0))
+        return io.BytesIO(json.dumps({'read_only': True, 'top': obs, 'arm_a_wrist': obs}).encode())
+
+    monkeypatch.setattr(env.urllib.request, 'urlopen', response)
+    backend = SimpleNamespace(prepare=lambda *a: baseline, identity=lambda d: d,
+        producer=lambda unit, device: {}, get_controls=lambda d, names: dict(original),
+        write_control=lambda *a: None, restore_controls=runtime.restore_controls,
+        apply_candidate=runtime.apply_candidate, save=runtime.save, append_event=runtime.append_event,
+        restore=lambda root: None, control_intent=runtime.control_intent,
+        validate_device_controls=lambda *a: None, reserve_budget=lambda root: None,
+        BudgetExhausted=runtime.BudgetExhausted)
+    env.monitor(dict(viewer_url='http://127.0.0.1:8767', cameras=cameras), tmp_path, 'test-profile', 0.6, backend)
+    events = [json.loads(line) for line in (tmp_path/'environment.jsonl').read_text().splitlines()]
+    assert events[-1]['state'] == 'READY' and events[-1]['photometric_ready'] is True
+    assert events[-1]['environment']['front']['state'] == 'NORMAL'

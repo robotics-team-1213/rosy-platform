@@ -66,12 +66,13 @@ def jaw_blobs(closed, opened, params=None) -> list:
     # in 2-3 pieces of 72-260 px, none reaching min_blob (2026-11-02); the merge only groups, the area is the changed px
     merge = int(prm.get(params, "pivot.merge_px"))
     grouped = cv2.dilate(mask, np.ones((2 * merge + 1, 2 * merge + 1), np.uint8)) if merge else mask
-    n, labels, _, _ = cv2.connectedComponentsWithStats(grouped)
+    n, labels, stats, _ = cv2.connectedComponentsWithStats(grouped)
     blobs = []
     for i in range(1, n):
-        ys, xs = np.nonzero((labels == i) & (mask > 0))
+        x0, y0, bw, bh = (int(stats[i, k]) for k in (cv2.CC_STAT_LEFT, cv2.CC_STAT_TOP, cv2.CC_STAT_WIDTH, cv2.CC_STAT_HEIGHT))
+        ys, xs = np.nonzero((labels[y0:y0 + bh, x0:x0 + bw] == i) & (mask[y0:y0 + bh, x0:x0 + bw] > 0))
         if len(xs) >= prm.get(params, "pivot.min_blob", MIN_BLOB) and np.ptp(xs) < max_blob and np.ptp(ys) < max_blob:
-            blobs.append((float(xs.mean()), float(ys.mean()), int(len(xs))))
+            blobs.append((float(xs.mean()) + x0, float(ys.mean()) + y0, int(len(xs))))
     return blobs
 
 
@@ -83,12 +84,13 @@ def jaw_centre(closed, opened, params=None) -> list:
 
     mask = _changed_mask(closed, opened, prm.get(params, "pivot.diff_px", DIFF_PX))
     merge = int(prm.get(params, "jaw_centre.merge_px"))
-    n, labels = cv2.connectedComponents(cv2.dilate(mask, np.ones((2 * merge + 1, 2 * merge + 1), np.uint8)))
+    n, labels, stats, _ = cv2.connectedComponentsWithStats(cv2.dilate(mask, np.ones((2 * merge + 1, 2 * merge + 1), np.uint8)))
     sides = []
     for i in range(1, n):
-        ys, xs = np.nonzero((labels == i) & (mask > 0))
+        x0, y0, bw, bh = (int(stats[i, k]) for k in (cv2.CC_STAT_LEFT, cv2.CC_STAT_TOP, cv2.CC_STAT_WIDTH, cv2.CC_STAT_HEIGHT))
+        ys, xs = np.nonzero((labels[y0:y0 + bh, x0:x0 + bw] == i) & (mask[y0:y0 + bh, x0:x0 + bw] > 0))
         if len(xs) >= prm.get(params, "jaw_centre.min_side_px"):
-            sides.append((float(xs.mean()), float(ys.mean()), len(xs)))
+            sides.append((float(xs.mean()) + x0, float(ys.mean()) + y0, len(xs)))
     pairs = [(a, b) for k, a in enumerate(sides) for b in sides[k + 1:]
              if prm.get(params, "jaw_centre.gap_lo_px") <= math.dist(a[:2], b[:2]) <= prm.get(params, "jaw_centre.gap_hi_px")]
     if not pairs:

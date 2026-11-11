@@ -53,7 +53,8 @@ class DockType(BaseModel):
     staging: bool = True                # False: Nav2 스테이징 없이 진입 회전부터
     # pose: 도크 좌표계 정렬 접근. rear: 후진 충전소(D-950 후속) — LiDAR V 표지로 레일 입구
     # 밖에서 맞추고 레일 안은 각속도 0 으로 곧게 후진한다(`rear_phases.py`).
-    approach: Literal["bearing", "pose", "rear"] = "bearing"
+    # line: 충전 칸 분홍 유도선(D-1013) — 선을 가상 도크로 보고 후진 폐루프로 맞춘다(`bay_phases.py`).
+    approach: Literal["bearing", "pose", "rear", "line"] = "bearing"
     settle: Literal["agent", "pose"] = "agent"         # pose: 접점 없이 포즈로 정착
     tag_offset_m: Optional[float] = None  # 주차점 → 태그 중심, 도크 축 방향 (pose 접근)
     acquire_creep_m: float = 0.0        # 태그가 안 보일 때 주차점 쪽으로 기어갈 거리
@@ -109,6 +110,17 @@ class DockType(BaseModel):
             raise ValueError("rail_entry_m must be positive and short of staging_offset_m")
         if self.rear_align_tolerance_m <= 0.0 or self.rear_align_tolerance_rad <= 0.0:
             raise ValueError("rear alignment tolerances must be positive")
+        return self
+
+    @model_validator(mode="after")
+    def _line_is_consistent(self) -> "DockType":
+        # 칸 유도선(D-1013): 선 관측은 CAMERA_LINE 소스의 dock/observation 으로 온다.
+        if self.approach != "line":
+            return self
+        if self.detector != "camera_line":
+            raise ValueError("a line approach needs the camera_line detector")
+        if not self.staging or self.settle != "agent":
+            raise ValueError("a line approach stages by Nav2 and settles by charge")
         return self
 
 
