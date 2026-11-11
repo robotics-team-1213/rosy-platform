@@ -586,3 +586,14 @@ def test_a_silent_camera_stays_visible_as_a_sighting_age():
     tr.add_sighting(Sighting('r1', 0.0, 0.0, 0.0, T0, 0.9, 'a'), T0)
     assert tr.pose(T0 + 30, 'a').last_sighting_age_s == pytest.approx(30.0)
 
+
+def test_a_camera_sighting_holds_the_peer_anchor_back_for_exactly_ten_seconds():
+    """The CAMERA_RECENT gate is pinned on both sides: 9.99 s still refuses, 10.0 s sharp accepts."""
+    tr = MapPoseTracker('r1')
+    tr.add_odom(odom(0), T0)
+    tr.add_sighting(Sighting('r1', 0.0, 0.0, 0.0, T0, 0.9, 'a'), T0)
+    tr.add_odom(odom(10), T0 + 9.99)
+    assert tr.add_peer((0.0, 0.0, 0.0), T0 + 9.99, T0 + 9.99, 'a', 'a') == 'CAMERA_RECENT'
+    tr.add_odom(odom(10), T0 + 10.0)
+    assert tr.add_peer((0.0, 0.0, 0.0), T0 + 10.0, T0 + 10.0, 'a', 'a') is None
+

@@ -23,7 +23,7 @@
 2. **받아들인 peer 표본은 기존 표본 규칙을 그대로 탄다.** `Sighting(kind=PEER)`로 pending에 들어가 odom과 짝지어지고, 첫 앵커·점프·2 일치 복구 규칙이 카메라 sighting과 같다. 따라서 첫 peer 앵커는 `DEGRADED`이고, 2 표본이 맞아야 `LOCALIZED`다. 새 상태기계·새 판정기를 만들지 않는다.
 3. **`source`/`anchor_source`에 `peer`를 추가한다.** 라우트 응답은 `asdict`라 필드 추가가 없고, 콘솔 카드는 `로봇 보고`로 이름을 붙인다.
 4. **침묵하는 카메라를 화면에 남긴다.** `MapPose.last_sighting_age_s`(마지막 수락 sighting의 나이, 없으면 null)를 응답에 더하고, 카드가 300 s를 넘으면 `카메라 N분 침묵`을 덧붙인다. 30 s에 사라지는 sighting 칩과 달리 이 줄은 계속 남는다.
-5. **경계.** peer 앵커는 자동 위치 차단(D-989)을 풀지 않고, D-472 신원 확인을 대신하지 않으며, 운영자 핀을 덮지 않는다. trip·교통·`/route`의 권한 규칙은 바꾸지 않는다 — trip 시작은 여전히 `LOCALIZED` 지도 자세를 요구하고, 그 자세의 출처는 `anchor_source`로 남는다.
+5. **경계.** peer 앵커는 독립 증거가 아니므로 자동 위치 차단(D-989)을 풀지도 걸지도 않는다(차단은 카메라 sighting·운영자 핀과의 불일치만 걸고 해제는 신선한 독립 앵커 일치나 운영자만 한다). D-472 신원 확인을 대신하지 않으며, 운영자 핀을 덮지 않는다. trip·교통·`/route`의 권한 규칙은 바꾸지 않는다 — trip 시작은 여전히 `LOCALIZED` 지도 자세를 요구하고, 그 자세의 출처는 `anchor_source`로 남는다.
 6. **로봇 계약을 바꾸지 않는다.** `PeerRow`·`StateSnapshot.peers`는 v1.359 그대로 소비만 한다. peer 공유가 꺼진 현장(`peers: null`)에서는 이 경로가 아무 일도 하지 않는다.
 
 ### Consequences
@@ -32,11 +32,12 @@
 - peer 앵커는 카메라보다 **늦고 거칠다**(1 Hz, `age_s` 근사, 중계 지연). 그래서 카메라 최근 10 s 안에는 쓰지 않는다. 카메라가 살아 있는 현장의 자세 품질은 그대로다.
 - 잘못된 자기 위치를 가진 로봇은 이웃의 앵커를 틀리게 할 수 있다. 완화: `LOCALIZED` 주장만, 2 표본 일치, 점프 검사, 활성 지도 일치, `peer` 출처 표시. 남는 위험은 D-488 3이 이미 받아들인 "로봇 자기 보고"와 같은 급이다.
 - `peer_lease_s`가 짧으면 로봇이 3대 미만인 현장에서 이 경로가 거의 안 쓰인다. 늘리는 것은 사이트 설정 한 줄이다(`fleet.map_pose.peer_lease_s`, 최대 30 s).
+- peer 행은 자격 없는(비-scope) 로봇의 하트비트 스냅숏 경로로만 들어온다. D-772 scope 경로는 peer 행을 중계하지 않으므로 전 로봇이 scope에 묶인 현장에서는 이 경로가 조용해지고, 반대로 scope 로봇을 가리키는 peer 행은 scope 검사 없이 앵커에 닿을 수 있다(자격 소비자는 `anchor_source == 'sighting'` 요구가 그대로다). scope 경로의 peer 중계 여부는 D-772와 다시 맞춘 후속이다.
 - `last_sighting_age_s`는 읽기 시점 계산값이라 감사·원장에 남지 않는다.
 
 ### 검증 (Validation / Transition)
 
-- 호스트(원격 D-584): `operations/fleet/test/test_map_pose.py`(peer 앵커·거절 사유 전체·첫 앵커 DEGRADED·2 표본 LOCALIZED·`last_sighting_age_s`), `test_map_pose_service.py`(`_observe_peers` — 로스터·`LOCALIZED`·지도·lease·형식 필터), `operations/fleet/test/web/localization-badge.test.mjs`(`peer` 이름·카메라 침묵 줄).
+- 호스트(원격 D-584): `operations/fleet/test/test_map_pose.py`(peer 앵커·거절 사유 전체·`CAMERA_RECENT` 9.99 s/10.0 s 경계·첫 앵커 DEGRADED·2 표본 LOCALIZED·`last_sighting_age_s`), `test_auto_locate_anchor.py`(peer 앵커가 D-989 차단을 풀지도 걸지도 않음), `test_map_pose_service.py`(`_observe_peers` — 로스터·`LOCALIZED`·지도·lease·형식 필터), `operations/fleet/test/web/localization-badge.test.mjs`(`peer` 이름·카메라 침묵 줄).
 - 실물: 기체 5대가 모두 켜진 뒤 카메라 sighting을 끊고 peer 앵커로 trip이 서는지 1회 확인한다(사람 몫). FIELD 게이트는 그대로다.
 
 ### References

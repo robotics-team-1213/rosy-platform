@@ -23,7 +23,7 @@ newest odom sample (fresh within `max_odom_age_s`), reads LOCALIZED at once and 
 under the same limits as a sighting anchor (`max_dead_reckon_m`, `max_bridge_turn_deg`,
 `max_anchor_age_s`). The next sighting is checked against it like any anchor: a disagreement
 beyond `max_jump_m` / `max_jump_deg` reads DEGRADED. Sightings captured before the pin are dropped.
-`anchor_source` names the anchor kind (`sighting` | `operator_pin` | `auto_locate`).
+`anchor_source` names the anchor kind (`sighting` | `operator_pin` | `auto_locate` | `peer`).
 
 Auto locate (D-989, opt-in per robot, `MapPoseConfig.auto_locate_robots`): the caller feeds a robot's
 own map pose through a camera-fitted transform like a sighting. It never replaces a fresh sighting or
@@ -37,9 +37,9 @@ Path and turn are summed per received sample (chord, |dyaw|), so they are lower 
 depend on the odom rate; the trip loop refreshes odom at 2 Hz or faster (D-494 appendix).
 
 Times are UTC epoch seconds: sighting `captured_at` and odom `stamp` (CORE wall clock on odom
-arrival; an ISO string is also read). The
-caller passes `now`; no clock, no transport. Only trip execution reads this pose: `/route`
-(D-463), D-395 and traffic keep `trusted_map_pose`. D-457 markerless tracking is not an input.
+arrival; an ISO string is also read). The caller passes `now`; no clock, no transport.
+Only trip execution reads this pose: `/route` (D-463), D-395 and traffic keep
+`trusted_map_pose`. D-457 markerless tracking is not an input.
 """
 
 from __future__ import annotations
@@ -440,8 +440,8 @@ class MapPoseTracker:
 
     def _agrees_with_independent(self, pose: Pose, now: float, camera_age_s: float) -> bool:
         anchor = self._anchor
-        if (anchor is None or anchor.kind == AUTO_LOCATE or not self._odom or camera_age_s > AUTO_UNBLOCK_CAMERA_S
-                or not 0.0 <= now - anchor.captured_at <= self.config.max_anchor_age_s):
+        if (anchor is None or anchor.kind in (AUTO_LOCATE, PEER) or not self._odom or camera_age_s >
+                AUTO_UNBLOCK_CAMERA_S or not 0.0 <= now - anchor.captured_at <= self.config.max_anchor_age_s):
             return False
         predicted = compose(anchor.map_pose, relative(anchor.odom.pose, self._odom[-1].pose))
         return (math.dist(predicted[:2], pose[:2]) <= self.config.max_jump_m
@@ -553,8 +553,7 @@ class MapPoseTracker:
         cfg = self.config
         seen = (sighting.x, sighting.y, sighting.yaw)
         anchor = self._anchor
-        if (anchor is not None and anchor.kind != AUTO_LOCATE
-                and sighting.captured_at < anchor.captured_at):
+        if anchor is not None and anchor.kind != AUTO_LOCATE and sighting.captured_at < anchor.captured_at:
             return                            # D-593: seen before the operator pin it would undo
         if anchor is not None and anchor.map_id != sighting.map_id:
             anchor = None                     # another map frame: start over from this sighting
@@ -572,7 +571,8 @@ class MapPoseTracker:
             still = path <= STILL_PATH_M and turn <= STILL_TURN_RAD
             stretched = (path > cfg.max_dead_reckon_m or turn > math.radians(cfg.max_bridge_turn_deg)
                          or (sighting.captured_at - anchor.captured_at > cfg.max_anchor_age_s and not still))
-            if sighting.kind != anchor.kind and AUTO_LOCATE in (sighting.kind, anchor.kind):
+            if (sighting.kind != anchor.kind and AUTO_LOCATE in (sighting.kind, anchor.kind)
+                    and PEER not in (sighting.kind, anchor.kind)):
                 self._auto_blocked = self._auto_blocked or jumped   # D-989: independent evidence says no
                 if sighting.kind == AUTO_LOCATE:
                     if jumped:

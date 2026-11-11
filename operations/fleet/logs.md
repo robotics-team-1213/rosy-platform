@@ -5480,5 +5480,11 @@
 - 변경: 없음 — 앞 항목(D-1017)의 원격 시험 결과만 기록한다(스쿼시 착지 ab49ca3e22).
 - 증거: 원격 ai@100.108.76.123, feat/peer-sighting-ingestion tip 184e7d0e11 —대상 시험 `test_map_pose`·`test_map_pose_service`·`test_map_pose_pin`·`test_map_pose_scope`·`operations/world/test` 155 passed. `rosy_harness.py affected --base main` 4개 호출 모두 exit 0, known_failures 0 new(`test_station_camera_pipeline_lifespan[lifespan]`). `test/architecture/test_module_structure.py` 600`줄 규칙 초록. `harness lint` 0 errors. `node --test localization-badge.test.mjs` 10 pass(로컬 node, pytest 아님)
 - gate 변화: 없음. FIELD는 실물 5대 전원·카메라 차단 재현 전까지 그대로다.
-- CE: 미해결 — peer 압커는 원격 함수 시험까지만 확인했고 실물 5대·카메라 차단 재현 전이라 교훈으로 쓰지 않는다
+- CE: 미해결 — peer 앵커는 원격 함수 시험까지만 확인했고 실물 5대·카메라 차단 재현 전이라 교훈으로 쓰지 않는다
 
+
+## 2026-11-11 · uncommitted · fix(world): peer 앵커는 D-989 자동 위치 차단을 풀지도 걸지도 않는다 (D-1017)
+
+- 변경: 독립 검토 반영 — `map_pose.py`의 `_agrees_with_independent`에서 PEER 앵커를 비독립으로 제외하고 `_apply`의 D-989 차단 설정에서도 PEER 쌍을 제외했다. ADR D-1017 Decision 5·D-772 경계 행 갱신. `test_auto_locate_anchor.py` 2건(peer가 차단을 들지도/걸지도 않는다)·`test_map_pose.py` 1건(CAMERA_RECENT 9.99 s 거부/10.0 s 수용 경계)을 더했다. 600줄 유지.
+- 증거: 호스트 직접 호출과 `python -m py_compile` 통과. 원격 시험 결과는 다음 커밋에 기록한다.
+- gate 변화: 없음. FIELD는 실물 5대 전원·카메라 차단 재현 전까지 그대로다.
