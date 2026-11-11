@@ -29,6 +29,7 @@ from omx_adapter.motion_profile import GUARD_ACCEL_UNITS_S2, smooth  # noqa: E40
 from cell_envelope import digest  # noqa: E402
 import cell_params as prm  # noqa: E402
 from episode_recorder import Recorder  # noqa: E402
+import joint_jitter  # noqa: E402
 import joint_push  # noqa: E402
 import runner_strain  # noqa: E402
 
@@ -93,6 +94,9 @@ class Runner:
         self._lib_digest_cache: tuple[int, str] | None = None
         self.trend: list = []  # load-bearing joints' lags over the last STRAIN_TICKS ticks of a chunk
         self.trace = None      # called every tick with what was commanded and where the arm was (jitter)
+        self.jitter_buf, self.damped_ticks = [], 0
+        self.jitter = {"shaking": False, "max_std": 0.0, "max_flips_hz": 0.0, "max_p2p": 0.0, "flagged": []}
+        self.ensembler = TemporalChunkEnsembler(coeff=0.08, vmax=GUARD_UNITS_PER_S, fps=fps)
 
     def _library_digest(self) -> str:
         lib = self.library
@@ -111,6 +115,8 @@ class Runner:
         if hasattr(self.trace, "flush"):
             self.trace.flush()
         state = self.present() if present is None else present
+        if self.jitter["shaking"] and "jitter" not in fields:
+            fields["jitter"] = self.jitter
         self.status(dict(fields, state=[round(v, 2) for v in state],
                          target=[round(v, 2) for v in self.target], health=self.health, fault=self.fault,
                          operating_context=self.operating_context, library_sha256=self._library_digest(),
@@ -162,9 +168,9 @@ class Runner:
             if getattr(getattr(self.robot, "motion", None), "held", None) and verb != "state":
                 raise ValueError("the guard holds an overloaded joint: the runner is shedding its load first")
             soft = (self.fault or "").startswith("contact")
-            if self.fault and verb not in ("park", "state") and not (soft and verb in ("retreat", "jog")):
+            if self.fault and verb not in ("park", "state") and not (soft and verb in ("retreat", "jog", "grip")):
                 raise ValueError(f"fault ({self.fault}): only park, state or stop"
-                                 + (", or retreat/jog after a contact" if soft else ""))
+                                 + (", or retreat/jog/grip after a contact" if soft else ""))
             if verb == "splice" and len(words) in (2, 3) and words[2:] in ([], ["rel"]):
                 frames = self.library["chunks"].get(words[1])
                 if frames is None:
@@ -290,7 +296,9 @@ class Runner:
             elif verb == "retreat" and len(words) == 1:
                 if not self.retreat_frames:
                     raise ValueError("nothing to retreat along")
-                self.queue, self.retreat_frames = self.retreat_frames, []
+                keep_open = self.target[5] > float(self.library["gripper_closed"]) + EMPTY_MARGIN
+                self.queue = [f[:5] + [self.target[5]] for f in self.retreat_frames] if keep_open else self.retreat_frames
+                self.retreat_frames = []
                 self.chunk, self.settle_since, self.played = "retreat", None, []
                 return True
             elif verb == "load" and len(words) == 2:
@@ -341,16 +349,29 @@ class Runner:
         elif self.queue:
             if self.pace_last is not None:  # the hold ended: what is left is this pose's droop
                 self.pace_floor = max(self.pace_floor, self.lag)
-            self.target, self.paced, self.pace_last = self.queue.pop(0), 0, None
+            raw_target = self.queue.pop(0)
+            if self.jitter["shaking"]:
+                self.target = joint_jitter.damp_step(self.ensembler, self.target or raw_target, raw_target, self.queue)
+                self.damped_ticks += 1
+            else:
+                self.ensembler.reset(raw_target)
+                self.target = raw_target
+            self.paced, self.pace_last = 0, None
             if self.chunk is not None:
                 self.played.append(list(self.target))
         self.trend = [] if self.chunk is None and not self.jog_path else self.trend
         sent = self.robot.send_action(dict(zip(NAMES, self.target)))
         present = self.present()
+        full_sent = isinstance(sent, dict) and all(n in sent for n in NAMES)
+        self.jitter_buf.append({"t": self.clock(), "chunk": self.chunk, "target": list(self.target),
+                                "sent": [float(sent[n]) for n in NAMES] if full_sent else None, "present": list(present)})
+        if len(self.jitter_buf) > max(60, round(2.0 * self.fps) + 2):
+            del self.jitter_buf[:-max(60, round(2.0 * self.fps) + 2)]
+        self.jitter = joint_jitter.live_window(self.jitter_buf, self.params)
         if self.trace:  # load: the 1 Hz health reading, once, on the tick after it (cell_why: what a stop pressed with)
-            full, load = isinstance(sent, dict) and all(n in sent for n in NAMES), self.__dict__.pop("load_new", None)
+            load = self.__dict__.pop("load_new", None)
             self.trace({"t": round(self.clock(), 4), "chunk": self.chunk, "target": [round(v, 3) for v in self.target],
-                        "sent": [round(float(sent[n]), 3) for n in NAMES] if full else None, "present": [round(v, 3) for v in present],
+                        "sent": [round(float(sent[n]), 3) for n in NAMES] if full_sent else None, "present": [round(v, 3) for v in present],
                         "pwm": getattr(getattr(self.robot, "motion", None), "effort_pwm", None) or {}, **({"load": load} if load else {})})
         self.recorder.tick(present, [sent.get(n, t) if isinstance(sent, dict) else t for n, t in zip(NAMES, self.target)])
         if isinstance(sent, dict):
@@ -442,11 +463,12 @@ class Runner:
                           and max(abs(a - b) for a, b in zip(present[:5], self.last_body)) < 0.08
                           and error <= SETTLE_TOL + min(self.pace_floor, 0.8))
             self.last_body = list(present[:5])
-            settled = error <= SETTLE_TOL or body_still
+            settled = (error <= SETTLE_TOL or body_still) and not self.jitter["shaking"]
             if (settled and (gripper_still or not grasp)) or now - self.settle_since >= SETTLE_S:
                 fields = dict(command=f"run {self.chunk}", ok=True, settled=settled,
-                              paced_ticks=self.paced_ticks, peak_lag=round(self.peak_lag, 2), over_ticks=self.over_ticks)
-                self.paced_ticks, self.pace_floor, self.peak_lag, self.over_ticks = 0, 0.0, 0.0, 0
+                              paced_ticks=self.paced_ticks, peak_lag=round(self.peak_lag, 2), over_ticks=self.over_ticks,
+                              **({"damped_ticks": self.damped_ticks} if self.damped_ticks else {}))
+                self.paced_ticks, self.pace_floor, self.peak_lag, self.over_ticks, self.damped_ticks = 0, 0.0, 0.0, 0, 0
                 if (self.chunk == "park" or self.chunk.endswith("; park")) and settled:  # torque goes OFF from here: only when really home
                     self.home_since = now
                 backed_out = self.chunk == "retreat" and settled
@@ -532,8 +554,8 @@ class Runner:
             if self.live and self.ticks % max(1, self.fps // 10) == 0:
                 self.live({"t": round(time.time(), 3), "state": [round(v, 2) for v in (getattr(self, "last_present", None) or self.present())],
                            "target": [round(v, 2) for v in self.target], "chunk": self.chunk,
-                           "lag": round(self.lag, 2),
-                           "fault": self.fault, "health": self.health})
+                           "lag": round(self.lag, 2), "fault": self.fault, "health": self.health,
+                           **({"jitter": self.jitter} if self.jitter["shaking"] else {})})
             self.sleep(max(0.0, period - (self.clock() - started)))
 
 

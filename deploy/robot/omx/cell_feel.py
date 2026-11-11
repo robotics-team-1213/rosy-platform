@@ -26,24 +26,49 @@ def feel_hook(config: dict, cell, target: dict, write_library):
     work = Path(config["work_dir"]).expanduser()
     c = math.radians(target["pick"]["yaw_deg"] + prm.get(params, "auto.closing_theory_deg"))
     step = prm.get(params, "feel.step_mm")
+    z_step = prm.get(params, "feel.z_step_mm")
+    site_z = float(((config.get("sites") or {}).get(target["pick"].get("site"), {}) or {}).get("surface_z", -0.030))
+    z_min = float((config.get("plan") or {}).get("workspace_min_m", [0.0, 0.0, site_z + 0.005])[2])
     offsets = [k * step * sgn for k in (1, 2, 3) for sgn in (1, -1)][:int(prm.get(params, "feel.tries"))]
+    candidates = ([(0.0, -z_step), (0.0, -round(1.6 * z_step, 1))] + [(off, -z_step) for off in offsets]
+                  if z_step > 0 else [(off, 0.0) for off in offsets])[:max(int(prm.get(params, "feel.tries")), 1 if z_step > 0 else 0)]
 
     def search(run):
+        import cell_arm_cal
+
         status = {"ok": True, "holding": False}
-        for k, off in enumerate(offsets):
+        for k, (off, dz_mm) in enumerate(candidates):
             pick = dict(target["pick"], x=round(target["pick"]["x"] + off * math.cos(c) / 1000, 4),
-                        y=round(target["pick"]["y"] + off * math.sin(c) / 1000, 4))
+                        y=round(target["pick"]["y"] + off * math.sin(c) / 1000, 4),
+                        z=max(z_min, round(target["pick"]["z"] + dz_mm / 1000, 4)))
             library = write_library(config, pick, target["place"], work / f"feel-{k}.json")
             reach = cell_reach.hook(config, cell, dict(target, pick=pick), write_library)
             for command in ("run lift_pick", f"load {library}", "goto above_pick", "reach", "run descend_pick", "run grasp_pick"):
                 if command == "reach":
                     if reach is not None and reach()["verdict"] == "refuse":
-                        return {"ok": False, "error": "reach correction refused", "feel_mm": off}
+                        if z_step > 0:
+                            continue
+                        return {"ok": False, "error": "reach correction refused", "feel_mm": off, "feel_dz_mm": dz_mm}
                     continue
                 status = run(command)
+                if command == "run descend_pick" and status.get("contact") and status.get("state") and z_step > 0:
+                    import grasp_planner as gp
+
+                    plan_cfg = config.get("plan") or {}
+                    kin = gp.load_kinematics(plan_cfg.get("urdf_path"), tcp_x_m=plan_cfg.get("tcp_x_m"))[0]
+                    contact_z = kin.fk([gp.norm_to_rad(v) for v in status["state"][:5]]).z
+                    run("retreat")
+                    pick = dict(pick, z=max(z_min, round(contact_z + 0.004, 4)))
+                    library = write_library(config, pick, target["place"], work / f"feel-{k}-contact.json")
+                    for retry_cmd in (f"load {library}", "goto above_pick", "run descend_pick"):
+                        status = run(retry_cmd)
+                        if status.get("contact") or not status.get("ok"):
+                            break
                 if status.get("contact") or not status.get("ok"):
-                    return {**status, "feel_mm": off}
+                    return {**status, "feel_mm": off, "feel_dz_mm": dz_mm}
+            if not status.get("holding") and "plan" in config:
+                cell_arm_cal.infer_holding(status, closed=config["plan"]["grip_closed"])
             if status.get("holding"):
-                return {**status, "feel_mm": off}
+                return {**status, "feel_mm": off, "feel_dz_mm": dz_mm}
         return status
     return search

@@ -68,3 +68,108 @@ def test_real_problem_ledger_capture_and_sim_replay_verification_pipeline(tmp_pa
     assert report["total_cases"] >= 5
     assert report["passed_cases"] == report["total_cases"]
 
+
+def test_online_imitation_and_reinforcement_learning_residual_policy_loop(tmp_path: Path):
+    cfg = {"_work": tmp_path, "arm_id": "arm_b"}
+    # Episode 1: empty grasp at (0.1100, -0.0250, 0.0085), recovery refined to (0.1130, -0.0240, 0.0055)
+    ep1 = {
+        "result": "empty",
+        "task_verified": False,
+        "pick": {"area": "pallet", "col": 1, "row": 1, "tier": 1, "x": 0.1100, "y": -0.0250, "z": 0.0085, "yaw_deg": -90.0},
+        "place": {"area": "pallet", "col": 2, "row": 1, "tier": 2, "x": 0.1430, "y": -0.0200, "z": 0.0390, "yaw_deg": -90.0},
+        "recovery": [{"recovered_pick_xyz_m": [0.1130, -0.0240, 0.0055]}],
+        "steps": [{"command": "run grasp_pick", "holding": False}],
+    }
+    r1 = cpp.update_il_rl_from_run(cfg, ep1)
+    assert r1["reward"] == -0.5
+    assert r1["il_demos"] == 1
+    assert r1["bucket"] == "pallet_left"
+    assert r1["residual"]["dx_m"] > 0.0
+    assert r1["residual"]["dz_m"] < 0.0
+
+    # Episode 2: apply learned IL/RL residual to a new directive in pallet_left, then succeed!
+    directive = {
+        "directive_id": "next-ep-col1",
+        "pick": {"area": "pallet", "col": 1, "row": 1, "tier": 1, "x": 0.1100, "y": -0.0250, "z": 0.0085, "yaw_deg": -90.0},
+        "place": {"area": "pallet", "col": 2, "row": 1, "tier": 2, "x": 0.1430, "y": -0.0200, "z": 0.0390, "yaw_deg": -90.0},
+    }
+    updated = cpp.apply_learned_il_rl_residual(cfg, directive)
+    assert updated["pick"]["x"] > 0.1100
+    assert updated["pick"]["z"] < 0.0085
+
+    ep2 = {
+        "result": "placed",
+        "task_verified": True,
+        "pick": updated["pick"],
+        "place": updated["place"],
+        "steps": [
+            {"command": "run grasp_pick", "holding": True},
+            {"command": "run release_place", "holding": False},
+        ],
+    }
+    r2 = cpp.update_il_rl_from_run(cfg, ep2)
+    assert r2["reward"] == 2.0
+    assert r2["il_demos"] == 2
+    assert r2["rl_episodes"] == 2
+
+
+def test_cell_reach_multisample_jitter_averaging_and_feel_z_step_search(tmp_path: Path):
+    import cell_feel
+    import cell_reach
+
+    class ShakyCell:
+        def __init__(self):
+            self.states = [
+                {"ok": True, "state": [0.105, 0.0, 0.0, 0.0, 0.0, 55.0], "jitter": {"shaking": True}},
+                {"ok": True, "state": [0.095, 0.0, 0.0, 0.0, 0.0, 55.0], "jitter": {"shaking": True}},
+                {"ok": True, "state": [0.100, 0.0, 0.0, 0.0, 0.0, 55.0], "jitter": {"shaking": False}},
+            ]
+
+        def act(self, cmd):
+            if cmd == "state":
+                return self.states.pop(0)
+            return {"ok": True}
+
+    res = cell_reach.correct(
+        ShakyCell(),
+        (0.100, 0.0),
+        lambda dx, dy: tmp_path / "r.json",
+        fk=lambda s: (s[0], s[1]),
+    )
+    assert res["verdict"] == "pass"
+    assert res["iterations"][0]["samples"] == 3
+    assert res["iterations"][0]["error_mm"] == [0.0, 0.0]
+
+    class FeelCell:
+        def __init__(self):
+            self.calls = []
+            self.grasp_try = 0
+
+        def act(self, cmd):
+            self.calls.append(cmd)
+            if cmd == "run grasp_pick":
+                self.grasp_try += 1
+                return {"ok": True, "holding": self.grasp_try >= 1, "state": [0, 0, 0, 0, 0, 52.3]}
+            return {"ok": True, "state": [0, 0, 0, 0, 0, 55.0]}
+
+    cfg = {
+        "work_dir": str(tmp_path),
+        "params": {"feel.enabled": 1, "feel.tries": 3, "feel.step_mm": 10.0, "feel.z_step_mm": 8.0, "reach.enabled": 0},
+        "sites": {"ship": {"surface_z": -0.025}},
+    }
+    target = {"pick": {"site": "ship", "x": 0.17, "y": -0.15, "z": 0.008, "yaw_deg": 0.0}, "place": {"x": 0.14, "y": 0.12, "z": 0.02, "yaw_deg": 0.0}}
+    planned_zs = []
+
+    def write_lib(_c, pick, _place, path):
+        planned_zs.append(pick["z"])
+        path.write_text("{}")
+        return path
+
+    fc = FeelCell()
+    hook = cell_feel.feel_hook(cfg, fc, target, write_lib)
+    out = hook(fc.act)
+    assert out["holding"] is True
+    assert planned_zs == [0.0]  # 0.008 - 0.008 = 0.0 m Z-step tried first!
+
+
+

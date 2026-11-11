@@ -110,3 +110,40 @@ def shaking(trace=(), health=(), params=None):
         if w["joint"] != "gripper" and w["pwm_std"] >= g("pwm_std") and w["pwm_flips_hz"] >= g("pwm_flips_hz"):
             hits.append((w["joint"], f"{w['joint']} hold: PWM std {w['pwm_std']:.0f}, {w['pwm_flips_hz']:.1f} sign changes/s"))
     return hits
+
+
+def live_window(rows, params=None) -> dict:
+    """Real-time rolling jitter check over the latest contiguous tick window (>= MIN_TICKS)."""
+    buf: list = []
+    for r in reversed(rows):
+        if buf and buf[-1]["t"] - r["t"] > MAX_GAP_S:
+            break
+        buf.append(r)
+        if buf[0]["t"] - r["t"] >= WINDOW_S:
+            break
+    if len(buf) < MIN_TICKS:
+        return {"shaking": False, "max_std": 0.0, "max_flips_hz": 0.0, "max_p2p": 0.0, "flagged": []}
+    buf.reverse()
+    wins = trace_windows(buf, window_s=buf[-1]["t"] - buf[0]["t"] + 1e-6)
+    if not wins:
+        return {"shaking": False, "max_std": 0.0, "max_flips_hz": 0.0, "max_p2p": 0.0, "flagged": []}
+    hits = shaking(trace=wins, params=params)
+    body = [w for w in wins if w["joint"] != "gripper"] or wins
+    return {
+        "shaking": bool(hits),
+        "max_std": round(max(w["std"] for w in body), 3),
+        "max_flips_hz": round(max(w["flips_hz"] for w in body), 2),
+        "max_p2p": round(max(w["p2p"] for w in body), 3),
+        "flagged": [{"joint": j, "reason": reason} for j, reason in hits],
+    }
+
+
+def damp_step(ensembler, current: list, next_target: list, lookahead: list) -> list:
+    """Smooth `next_target` through `ensembler` over the upcoming chunk horizon while preserving the final endpoint."""
+    if not lookahead:
+        ensembler.reset(next_target)
+        return list(next_target)
+    if getattr(ensembler, "_last", None) is None:
+        ensembler.reset(current)
+    ensembler.push([list(current), list(next_target), *[list(f) for f in lookahead[:3]]])
+    return ensembler.step(next_target)
