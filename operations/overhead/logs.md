@@ -582,3 +582,11 @@
 - Change: Fleet config `stream_wanted: true` holds the D-691 stream like a preview read; tracking alone still never asks.
 - Evidence: worker test only. No field run.
 - Gate: SOURCE.
+
+
+## 2026-11-11 · uncommitted · feat(vision): draft-map 제안 - 정사 평면에서 차로·구역 후보
+- 변경: `draft-map` 보기 추가(`GET /api/vision/sources/{id}/draft-map`). 승인된 추적 보정 레코드만 있으면 D-375 지도 페인트 설정 없이, 프레임을 map 평면으로 정사(D-560)해 밝은 페인트 스트로크를 차로 중심선(minAreaRect 장축, 곧은 스트로크 가정), 채색 영역을 제외 구역 후보로 읽어 map 좌표로 돌려준다. 제안 전용 — 관측·CameraMap·지도 문서에 안 쓴다. 보는 사람마다 초당 1회.
+- 이유: 카메라→지도 초안 파이프라인(2026-11-11 사용자 요청, 설계 docs/plans/2026-11-11-camera-draft-map-design.md)의 계산 담당. 계산은 Vision, 판정·승인은 Fleet(안 1).
+- 시험: 원격 test_draft_map_route.py + 이웃(test_map_proposal_route·test_map_plane·test_ingest) exit 0.
+- 증거: 원격 실행 기록 run-1(68 passed [100%], 2026-11-11), py_compile·관측 검출 직접 실행 확인.
+- gate 변화: 없음.
