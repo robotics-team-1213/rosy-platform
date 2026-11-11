@@ -14812,3 +14812,8 @@ osy-d395-s1d\`.
 - 변경: `docs/solutions/test-failures/same-path-rewrite-hits-cell-robot-profile-mtime-cache-2026-11-11.md` 신규 — 착지 관문이 브랜치 탓으로 분류했던 NEW 실패의 실제 원인(`cell_robot_profile.load`의 (경로, mtime, 크기) 캐시가 같은 길이의 즉시 재작성과 충돌)과 재발 방지를 남긴다.
 - 증거: 착지 로그 alone-pre-pre-28-2.txt 실패·main 통과, 수정 후 원격 58 passed(커밋 477da4687d 기록 항 참조).
 - gate 변화: 없음.
+
+## 2026-11-11 · uncommitted · fix(test): 고정 RAUC 패키지 다운로드에 미러 폴백 — 아카이브 장애가 FULL 등급 전체를 쓰러뜨렸다
+- 변경: `test/os_rauc_fakes.py`의 `download_package`가 고정 URL 실패(시도 3회) 후 같은 pool 경로의 kernel.org 우분투 미러를 재시도한다. 크기·sha256 핀이 원본 무결성을 보장하므로 응답한 출처가 어느 쪽이든 그대로 검증된다.
+- 증거: 게시용 무캐시 FULL(prepare-99120b86f6)에서 24개 id가 `Pinned RAUC package unavailable`로 실패하고 전부 main에서도 실패(MAIN-RED). 시험 PC 양쪽에서 `archive.ubuntu.com`·`kr.archive.ubuntu.com` curl 000(github 200), `mirrors.edge.kernel.org`는 200. 모델 PC에서 미러 파일 sha256 `78770edf…fad7`·160646 바이트로 핀과 일치 확인.
+- gate 변화: 없음. 네트워크 장애가 코드 회귀로 보이는 MAIN-RED를 만드는 경로를 끊는 수선이다.
