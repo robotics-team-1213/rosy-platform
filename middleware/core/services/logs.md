@@ -1919,3 +1919,9 @@
 - 한계: Gazebo 재현과 실물 편대 주행은 확인하지 못했다(기체 전원 꺼짐, 시험 호스트 여유 부족). API Ref v1.387 은 `trail_lost` 발생 조건 문장만 고친다.
 - gate 변화: 없음. 호스트 시험은 실물 편대 주행·DEVICE/FIELD 수용을 입증하지 않는다.
 - CE: 미해결 — 원인(영구 래치)과 수정은 코드로 확인했지만 실물·시뮬 재현으로 닫기 전이다. 재현되면 `docs/solutions/` 에 기록한다.
+
+## 2026-11-11 · e91adeefcd · D-559 복귀 변경 검증
+
+- 변경: 앞 항목의 시험 두 개(래치 시험·포기 틱 시험)가 리더 표본을 끊어 `stream_lost` 가 먼저 서던 것을 고쳤다. 시험 루프가 리더 표본을 계속 보낸다.
+- 증거: e91adeefcd 원격 시험 exit 0 — test_swarm_trail·test_swarm_trail_anchor·test_swarm_trail_obstacle·test_swarm·gateway test_swarm_stream·test_swarm_integration·test_swarm_api·operations/fleet test_trail_anchor_e2e 165 passed, `known_failures` 0 new·0 known·0 flaky. AI PC(`ai@100.108.76.123`), env 157a16177778fcdd. 첫 원격 시도는 `test_swarm_api.py` 경로를 services 로 잘못 적어 0 수집(exit 5)이었다.
+- gate 변화: 없음. 호스트 시험은 실물 편대 주행·DEVICE/FIELD 수용을 입증하지 않는다.
