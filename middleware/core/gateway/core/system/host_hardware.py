@@ -12,6 +12,7 @@ import time
 from typing import Any, Optional
 
 from core_common import robot_state
+from core_common.face_screen import _flag
 
 MAX_HARDWARE_BYTES = 64 * 1024
 MAX_DEVICES = 64
@@ -272,10 +273,6 @@ def _number(value: Any) -> Optional[float]:
     if not isinstance(value, (int, float)) or isinstance(value, bool) or not math.isfinite(value):
         return None
     return float(value)
-
-
-def _flag(value: Any) -> Optional[bool]:
-    return value if isinstance(value, bool) else None
 
 
 def _name(value: Any) -> Optional[str]:
