@@ -96,10 +96,30 @@ export function chargeBayRows(plan) {
       const [text, status] = CELL_PHASE[phase] || [phase, "neutral"];
       const task = tasks.filter((entry) => entry.cell_id === id)
         .sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))[0] || null;
+      const hs = task?.health_summary || {};
+      const stopHealth = task?.hardware_telemetry?.stop_event?.health || {};
+      const maxTemp = hs.max_temp_c ?? (Array.isArray(stopHealth.temp_c) && stopHealth.temp_c.length ? Math.max(...stopHealth.temp_c) : null);
+      const maxCur = hs.max_current_ma ?? (Array.isArray(stopHealth.current_ma) && stopHealth.current_ma.length ? Math.max(...stopHealth.current_ma) : null);
+      const substage = hs.substage || (task?.status === "RUNNING" ? "Grasp → Lift → Place 실행 중" : (task?.status === "COMPLETED" ? "Fold Home 완료" : "대기"));
+      const healthParts = [
+        maxTemp != null ? `온도 ${maxTemp}°C` : "",
+        maxCur != null ? `전류 ${maxCur}mA` : "",
+        substage,
+      ].filter(Boolean);
+      const quickControls = [
+        ...(id === "cell_s" ? [{label: "자동 감지·복구 셔틀", preset: "s3_auto_recover_or_shuttle"}] : []),
+        ...(task && (task.status === "QUEUED" || task.status === "RUNNING")
+          ? [{label: "작업 취소", cancelTaskId: task.task_id}]
+          : []),
+        ...(task && (task.status === "COMPLETED" || task.status === "CANCELLED" || task.status === "ABORTED")
+          ? [{label: "재실행", retryTaskId: task.task_id}]
+          : []),
+      ];
       return {
         kind: "omx", id, cameraUrl: `/api/fleet/pipeline/cell-camera/${id}`,
         title: id === "cell_s" ? "cell_s · S3 하역 셔틀 (arm_s)" : "cell_ab · S5 팔레트 적재 (arm_a·arm_b)",
-        phase, status, text, task, buttons: CELL_BUTTONS[id],
+        phase, status, text, task, healthText: healthParts.join(" · "),
+        buttons: CELL_BUTTONS[id], quickControls,
       };
     }),
     ...(plan?.actions?.length ? plan.actions.map((action) => action.robot_id) : ["rosy_42", "rosy_45", "rosy_46"])
@@ -110,7 +130,14 @@ export function chargeBayRows(plan) {
         return {kind: "pinky", id: robot_id, robot_id,
           cameraUrl: "/api/fleet/pipeline/cell-camera/pinky", title: `Pinky AMR · ${robot_id}`,
           status: rawAction?.blocked_by_cell || rawAction?.action === "wait" ? "warn" : "neutral",
-          text: action?.text || "작업 정보 없음", buttons: PINKY_BUTTONS};
+          text: action?.text || "작업 정보 없음",
+          healthText: "케이블 보호 미세이동 (최대 1.5cm · 0.02m/s)",
+          buttons: PINKY_BUTTONS,
+          quickControls: [
+            {label: "미세 전진 1.5cm", pinkyAction: "micro_forward_2cm"},
+            {label: "미세 후진 1.5cm", pinkyAction: "micro_reverse_2cm"},
+            {label: "즉시 정지", pinkyAction: "stop_now"},
+          ]};
       }),
   ];
   return { bays, actions, cells, summary, cards };
@@ -167,12 +194,13 @@ export function createChargeBaysView({ scope, el, call, auth }) {
       const status = document.createElement("p");
       status.append(tag(card.text, card.status));
       const task = document.createElement("p");
-      task.textContent = card.task ? `${card.task.task_id} · ${card.task.status} · ${card.task.arm_id || "—"}` : "";
+      const taskBase = card.task ? `${card.task.task_id} · ${card.task.status} · ${card.task.arm_id || "—"}` : "";
+      task.textContent = [taskBase, card.healthText || ""].filter(Boolean).join(" | ");
       const buttons = document.createElement("div");
       buttons.className = "omx-card-actions";
-      for (const choice of card.buttons) {
+      for (const choice of [...(card.buttons || []), ...(card.quickControls || [])]) {
         const button = document.createElement("ui-button");
-        button.setAttribute("kind", "quiet");
+        button.setAttribute("kind", choice.cancelTaskId ? "irreversible" : "quiet");
         button.setAttribute("type", "button");
         button.setAttribute("data-work-read", "");
         button.textContent = choice.label;
@@ -180,11 +208,17 @@ export function createChargeBaysView({ scope, el, call, auth }) {
           if (auth.locked || button.hasAttribute("disabled")) return;
           button.setAttribute("disabled", "");
           try {
-            await call(choice.preset ? "/api/fleet/pipeline/cell-tasks" : "/api/fleet/pipeline/pinky-tasks", {
-              method: "POST", headers: {"Content-Type": "application/json"},
-              body: JSON.stringify(choice.preset ? {preset: choice.preset} :
-                {robot_id: card.robot_id, action: choice.pinkyAction}),
-            });
+            if (choice.cancelTaskId) {
+              await call(`/api/fleet/pipeline/cell-tasks/${choice.cancelTaskId}/cancel`, {method: "POST"});
+            } else if (choice.retryTaskId) {
+              await call(`/api/fleet/pipeline/cell-tasks/${choice.retryTaskId}/retry`, {method: "POST"});
+            } else {
+              await call(choice.preset ? "/api/fleet/pipeline/cell-tasks" : "/api/fleet/pipeline/pinky-tasks", {
+                method: "POST", headers: {"Content-Type": "application/json"},
+                body: JSON.stringify(choice.preset ? {preset: choice.preset} :
+                  {robot_id: card.robot_id, action: choice.pinkyAction, cable_guard_micro: true}),
+              });
+            }
             await refresh();
           } catch (error) {
             hint.textContent = `작업 요청 실패: ${error.message}`;

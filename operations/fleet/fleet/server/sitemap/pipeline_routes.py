@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import inspect
+import json
+import os
 import time
 import uuid
 from pathlib import Path
@@ -15,6 +17,38 @@ from fleet.pipeline.cell_fleet_contract import contract_spec_dict, validate_boun
 from fleet.site_rules import SiteRules
 
 
+def _storage_dir() -> Path:
+    var_lib = Path("/var/lib/rosy")
+    if var_lib.is_dir() and os.access(var_lib, os.W_OK):
+        d = var_lib / "pipeline"
+        d.mkdir(parents=True, exist_ok=True)
+        return d
+    return Path("/tmp")
+
+
+def _enrich_task_health(task: dict) -> dict:
+    stop_ev = ((task.get("hardware_telemetry") or {}).get("stop_event") or {})
+    health = stop_ev.get("health") or {}
+    temps = health.get("temp_c") or []
+    currents = health.get("current_ma") or []
+    status = task.get("status") or "QUEUED"
+    if status == "COMPLETED":
+        substage = "Fold Home 완료" if stop_ev.get("folded") else "Place 완료"
+    elif status == "RUNNING":
+        substage = "Grasp → Lift → Place 실행 중"
+    elif status in ("CANCELLED", "ABORTED"):
+        substage = "작업 취소·중단 (인터락 해제)"
+    else:
+        substage = "큐 대기 (Approach 준비)"
+    task["health_summary"] = {
+        "max_temp_c": max(temps) if temps else None,
+        "max_current_ma": max(currents) if currents else None,
+        "substage": substage,
+        "folded": bool(stop_ev.get("folded", False)),
+    }
+    return task
+
+
 def install_pipeline_routes(app, *, console=None, site_maps=None, read_guard=()) -> None:
     if getattr(app.state, "_pipeline_routes_installed", False):
         return
@@ -22,6 +56,37 @@ def install_pipeline_routes(app, *, console=None, site_maps=None, read_guard=())
     app.state.omx_cell_states = getattr(app.state, "omx_cell_states", None) or {}
     app.state.omx_cell_tasks = getattr(app.state, "omx_cell_tasks", None) or {}
     app.state.pinky_tasks = getattr(app.state, "pinky_tasks", None) or {}
+    app.state.detected_displaced_site = getattr(app.state, "detected_displaced_site", None)
+
+    ledger_path = _storage_dir() / "rosy-pipeline-ledger.json"
+    if not os.environ.get("PYTEST_CURRENT_TEST") and ledger_path.is_file():
+        try:
+            saved = json.loads(ledger_path.read_text(encoding="utf-8"))
+            app.state.omx_cell_states.update(saved.get("omx_cell_states") or {})
+            app.state.omx_cell_tasks.update(saved.get("omx_cell_tasks") or {})
+            app.state.pinky_tasks.update(saved.get("pinky_tasks") or {})
+            app.state.detected_displaced_site = saved.get("detected_displaced_site")
+        except Exception:
+            pass
+
+    def _save_ledger() -> None:
+        if os.environ.get("PYTEST_CURRENT_TEST"):
+            return
+        try:
+            ledger_path.write_text(
+                json.dumps(
+                    {
+                        "omx_cell_states": app.state.omx_cell_states,
+                        "omx_cell_tasks": app.state.omx_cell_tasks,
+                        "pinky_tasks": app.state.pinky_tasks,
+                        "detected_displaced_site": app.state.detected_displaced_site,
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+        except Exception:
+            pass
 
     def _maps():
         return site_maps if site_maps is not None else getattr(app.state, "site_maps", None)
@@ -99,6 +164,7 @@ def install_pipeline_routes(app, *, console=None, site_maps=None, read_guard=())
 
     CELL_TASK_PRESETS: dict[str, dict] = {
         "s3_shuttle": {"preset": "s3_shuttle", "label": "S3 셔틀 (arm_s: Pinky -> Belt)", "cell_id": "cell_s", "arm_id": "arm_s", "src_site": "pinky", "dst_site": "belt", "tier": 1, "displaced_to": None},
+        "s3_auto_recover_or_shuttle": {"preset": "s3_auto_recover_or_shuttle", "label": "S3 자동 감지·복구 셔틀 (arm_s: Auto ROI -> Belt)", "cell_id": "cell_s", "arm_id": "arm_s", "src_site": "pinky", "dst_site": "belt", "tier": 1, "displaced_to": "auto"},
         "s3_recover_belt_far": {"preset": "s3_recover_belt_far", "label": "S3 이탈 복구 (arm_s: Belt-Far -> Belt)", "cell_id": "cell_s", "arm_id": "arm_s", "src_site": "pinky", "dst_site": "belt", "tier": 1, "displaced_to": "belt_far"},
         "s3_recover_floor_front": {"preset": "s3_recover_floor_front", "label": "S3 바닥 복구 (arm_s: Floor-Front -> Belt)", "cell_id": "cell_s", "arm_id": "arm_s", "src_site": "pinky", "dst_site": "belt", "tier": 1, "displaced_to": "floor_front"},
         "s5_tier1_arm_a": {"preset": "s5_tier1_arm_a", "label": "S5 적재 1층 (arm_a: Belt -> Pallet L0)", "cell_id": "cell_ab", "arm_id": "arm_a", "src_site": "belt", "dst_site": "pallet-l0", "tier": 1, "displaced_to": None},
@@ -106,6 +172,16 @@ def install_pipeline_routes(app, *, console=None, site_maps=None, read_guard=())
         "s5_tier3_arm_a": {"preset": "s5_tier3_arm_a", "label": "S5 적재 3층 (arm_a: Belt -> Pallet L2)", "cell_id": "cell_ab", "arm_id": "arm_a", "src_site": "belt", "dst_site": "pallet-l2", "tier": 3, "displaced_to": None},
         "full_s3_to_s5_pipeline": {"preset": "full_s3_to_s5_pipeline", "label": "연속 파이프라인 (S3 셔틀 -> S5 1·2층 적재)", "steps": ["s3_shuttle", "s5_tier1_arm_a", "s5_tier2_arm_b"]},
     }
+
+    @app.post("/api/fleet/pipeline/displaced-detection", dependencies=read_guard)
+    async def report_displaced_detection(request: Request):
+        body = await request.json()
+        site = body.get("displaced_to")
+        if site not in (None, "", "belt_far", "floor_front"):
+            raise HTTPException(422, detail={"code": "INVALID_DISPLACED_SITE"})
+        app.state.detected_displaced_site = site or None
+        _save_ledger()
+        return {"ok": True, "detected_displaced_site": app.state.detected_displaced_site}
 
     def _enqueue_one_task(active, spec: dict) -> dict:
         cell_id = str(spec.get("cell_id") or "cell_s")
@@ -115,7 +191,13 @@ def install_pipeline_routes(app, *, console=None, site_maps=None, read_guard=())
         task_id = str(spec.get("task_id") or f"cell-task-{uuid.uuid4().hex[:8]}")
         tier = int(spec.get("tier", 1))
         default_arm = "arm_s" if cell_id == "cell_s" else ("arm_a" if tier % 2 == 1 else "arm_b")
-        task = {
+        raw_disp = spec.get("displaced_to")
+        if raw_disp == "auto" or (raw_disp is None and cell_id == "cell_s" and app.state.detected_displaced_site):
+            resolved_disp = app.state.detected_displaced_site or "belt_far"
+            app.state.detected_displaced_site = None
+        else:
+            resolved_disp = raw_disp or None
+        task = _enrich_task_health({
             "task_id": task_id,
             "cell_id": cell_id,
             "arm_id": str(spec.get("arm_id") or default_arm),
@@ -124,7 +206,9 @@ def install_pipeline_routes(app, *, console=None, site_maps=None, read_guard=())
             "src_site": str(spec.get("src_site") or ("pinky" if cell_id == "cell_s" else "belt")),
             "dst_site": str(spec.get("dst_site") or ("belt" if cell_id == "cell_s" else f"pallet-l{max(0, min(2, tier - 1))}")),
             "tier": tier,
-            "displaced_to": spec.get("displaced_to") or None,
+            "displaced_to": resolved_disp,
+            "auto_recovered": bool(raw_disp == "auto" or resolved_disp),
+            "cable_guard_micro": bool(spec.get("cable_guard_micro", True)),
             "preset": spec.get("preset"),
             "pose": {
                 "x": float(spec.get("x", station.station_xy[0])),
@@ -133,8 +217,9 @@ def install_pipeline_routes(app, *, console=None, site_maps=None, read_guard=())
             },
             "status": "QUEUED",
             "created_at": round(time.time(), 3),
-        }
+        })
         app.state.omx_cell_tasks[task_id] = task
+        _save_ledger()
         return task
 
     @app.post("/api/fleet/pipeline/cell-tasks", dependencies=read_guard)
@@ -162,7 +247,7 @@ def install_pipeline_routes(app, *, console=None, site_maps=None, read_guard=())
     @app.get("/api/fleet/pipeline/cell-tasks", dependencies=read_guard)
     async def list_cell_tasks(cell_id: str | None = None, status: str | None = None):
         active = active_map()
-        all_tasks = list(app.state.omx_cell_tasks.values())
+        all_tasks = [_enrich_task_health(t) for t in app.state.omx_cell_tasks.values()]
         tasks = list(all_tasks)
         if cell_id is not None:
             tasks = [t for t in tasks if t["cell_id"] == cell_id]
@@ -183,7 +268,14 @@ def install_pipeline_routes(app, *, console=None, site_maps=None, read_guard=())
             "completed": sum(1 for t in all_tasks if t["status"] == "COMPLETED"),
             "aborted": sum(1 for t in all_tasks if t["status"] in ("ABORTED", "CANCELLED")),
         }
-        return {"tasks": tasks, "summary": summary, "cells": cells_info, "presets": list(CELL_TASK_PRESETS.values())}
+        return {
+            "tasks": tasks,
+            "summary": summary,
+            "cells": cells_info,
+            "presets": list(CELL_TASK_PRESETS.values()),
+            "detected_displaced_site": app.state.detected_displaced_site,
+            "pinky_tasks": list(app.state.pinky_tasks.values()),
+        }
 
     @app.post("/api/fleet/pipeline/cell-tasks/{task_id}/cancel", dependencies=read_guard)
     async def cancel_cell_task(task_id: str):
@@ -200,23 +292,56 @@ def install_pipeline_routes(app, *, console=None, site_maps=None, read_guard=())
         app.state.omx_cell_states[cell_id] = {**state, "docked_robot": robot}
         task["status"] = "CANCELLED"
         task["completed_at"] = round(time.time(), 3)
+        _enrich_task_health(task)
+        _save_ledger()
         return {"ok": True, "task": task, "gate": res["gate"]}
+
+    @app.post("/api/fleet/pipeline/cell-tasks/{task_id}/retry", dependencies=read_guard)
+    async def retry_cell_task(task_id: str):
+        active = active_map()
+        orig = app.state.omx_cell_tasks.get(task_id)
+        if orig is None:
+            raise HTTPException(404, detail={"code": "UNKNOWN_TASK"})
+        new_id = f"{task_id}-retry-{uuid.uuid4().hex[:4]}"
+        retried = _enqueue_one_task(
+            active,
+            {
+                "task_id": new_id,
+                "cell_id": orig["cell_id"],
+                "arm_id": orig["arm_id"],
+                "robot_id": orig["robot_id"],
+                "robot_kind": orig["robot_kind"],
+                "src_site": orig["src_site"],
+                "dst_site": orig["dst_site"],
+                "tier": orig["tier"],
+                "displaced_to": orig.get("displaced_to"),
+                "preset": orig.get("preset"),
+            },
+        )
+        return {"ok": True, "task": retried, "retried_from": task_id}
 
     @app.post("/api/fleet/pipeline/pinky-tasks", dependencies=read_guard)
     async def create_pinky_task(request: Request):
         active = active_map()
         body = await request.json()
-        robot_id = str(body.get("robot_id") or "rosy_42")
+        robot_id = str(body.get("robot_id") or "rosy_46")
         action = str(body.get("action") or "dock_s3")
         task_id = str(body.get("task_id") or f"pinky-task-{uuid.uuid4().hex[:8]}")
+        cable_guard = bool(body.get("cable_guard_micro", True))
+        max_step_m = min(0.02, float(body.get("max_step_m", 0.015))) if cable_guard else float(body.get("max_step_m", 0.10))
+        max_speed_mps = min(0.02, float(body.get("max_speed_mps", 0.02))) if cable_guard else float(body.get("max_speed_mps", 0.08))
         stations = resolve_omx_cells(active[1], active[2])
         spawned_cell_task = None
+        v_cmd = 0.0
+        duration_s = 0.0
         if action in ("dock_s3", "dock_and_unload_s3"):
             st = stations["cell_s"]
             docked = {"robot_id": robot_id, "robot_kind": "pinky", "pose": {"x": st.station_xy[0], "y": st.station_xy[1], "yaw": 0.0},
                       "wheel_brake_locked": True, "bed_ready": True, "v_cmd_mps": 0.0}
             app.state.omx_cell_states["cell_s"] = {"phase": "CLAIMED", "tier": 1, "robot_id": robot_id, "docked_robot": docked}
             target_place = "S3"
+            v_cmd = max_speed_mps
+            duration_s = round(max_step_m / max(0.005, max_speed_mps), 2)
             if action == "dock_and_unload_s3":
                 spawned_cell_task = _enqueue_one_task(active, {**CELL_TASK_PRESETS["s3_shuttle"], "robot_id": robot_id})
         elif action == "dock_s5":
@@ -225,37 +350,64 @@ def install_pipeline_routes(app, *, console=None, site_maps=None, read_guard=())
                       "wheel_brake_locked": True, "bed_ready": True, "v_cmd_mps": 0.0}
             app.state.omx_cell_states["cell_ab"] = {"phase": "CLAIMED", "tier": 1, "robot_id": robot_id, "docked_robot": docked}
             target_place = "S5"
+            v_cmd = max_speed_mps
+            duration_s = round(max_step_m / max(0.005, max_speed_mps), 2)
+        elif action == "micro_forward_2cm":
+            target_place = "MICRO_FWD_1.5CM"
+            v_cmd = max_speed_mps
+            duration_s = 0.35
+        elif action == "micro_reverse_2cm":
+            target_place = "MICRO_REV_1.5CM"
+            v_cmd = -max_speed_mps
+            duration_s = 0.35
+        elif action == "stop_now":
+            target_place = "HOLD_STOP"
+            v_cmd = 0.0
+            duration_s = 0.0
         elif action in ("charge_c1", "charge_c2"):
             target_place = "C1" if action == "charge_c1" else "C2"
+            v_cmd = max_speed_mps
+            duration_s = 0.35
         else:
             for cid, cstate in list(app.state.omx_cell_states.items()):
                 if cstate.get("robot_id") == robot_id:
                     cstate["phase"] = "RELEASED"
             target_place = "S1"
+            v_cmd = max_speed_mps
+            duration_s = 0.35
         ptask = {
             "task_id": task_id,
             "robot_id": robot_id,
             "action": action,
             "target_place": target_place,
+            "cable_guard_micro": cable_guard,
+            "max_step_m": max_step_m,
+            "v_cmd_mps": v_cmd,
+            "duration_s": duration_s,
             "spawned_cell_task_id": spawned_cell_task["task_id"] if spawned_cell_task else None,
-            "status": "COMPLETED",
+            "status": "QUEUED" if body.get("await_hardware") else "COMPLETED",
             "created_at": round(time.time(), 3),
         }
         app.state.pinky_tasks[task_id] = ptask
+        _save_ledger()
         return {"ok": True, "pinky_task": ptask, "spawned_cell_task": spawned_cell_task}
 
     @app.get("/api/fleet/pipeline/pinky-tasks", dependencies=read_guard)
-    async def list_pinky_tasks(robot_id: str | None = None):
+    async def list_pinky_tasks(robot_id: str | None = None, status: str | None = None):
         tasks = list(app.state.pinky_tasks.values())
         if robot_id is not None:
             tasks = [t for t in tasks if t["robot_id"] == robot_id]
+        if status is not None:
+            tasks = [t for t in tasks if t["status"] == status]
         return {"tasks": tasks}
 
     @app.get("/api/fleet/pipeline/cell-camera/{view_id}")
     async def cell_camera_preview(view_id: str):
-        snap_file = Path(f"/tmp/rosy-cell-cam-{view_id}.jpg")
-        if snap_file.is_file():
-            return Response(content=snap_file.read_bytes(), media_type="image/jpeg", headers={"Cache-Control": "no-store"})
+        safe_id = "".join(c for c in view_id if c.isalnum() or c in ("_", "-"))[:32] or "cell_s"
+        for base in (_storage_dir(), Path("/tmp")):
+            snap_file = base / f"rosy-cell-cam-{safe_id}.jpg"
+            if snap_file.is_file():
+                return Response(content=snap_file.read_bytes(), media_type="image/jpeg", headers={"Cache-Control": "no-store"})
         tasks = [t for t in app.state.omx_cell_tasks.values() if view_id.startswith(t["cell_id"]) or view_id == "pinky"]
         last = tasks[-1] if tasks else {}
         stop_ev = ((last.get("hardware_telemetry") or {}).get("stop_event") or {})
@@ -287,8 +439,10 @@ def install_pipeline_routes(app, *, console=None, site_maps=None, read_guard=())
         raw = await request.body()
         if not raw:
             raise HTTPException(400, detail={"code": "EMPTY_IMAGE"})
+        target = _storage_dir() / f"rosy-cell-cam-{safe_id}.jpg"
+        target.write_bytes(raw)
         Path(f"/tmp/rosy-cell-cam-{safe_id}.jpg").write_bytes(raw)
-        return {"ok": True, "view_id": safe_id, "bytes": len(raw)}
+        return {"ok": True, "view_id": safe_id, "bytes": len(raw), "persisted": str(target)}
 
     @app.post("/api/fleet/pipeline/cell-tasks/claim", dependencies=read_guard)
     async def claim_cell_task(request: Request):
@@ -320,6 +474,8 @@ def install_pipeline_routes(app, *, console=None, site_maps=None, read_guard=())
         app.state.omx_cell_states[cell_id] = {**state, "docked_robot": robot}
         task["status"] = "RUNNING"
         task["claimed_at"] = round(time.time(), 3)
+        _enrich_task_health(task)
+        _save_ledger()
         handoff = {
             **res["handoff"],
             "arm_id": task["arm_id"],
@@ -363,6 +519,8 @@ def install_pipeline_routes(app, *, console=None, site_maps=None, read_guard=())
         task["receipt"] = body.get("receipt") or state
         task["stage_result"] = body.get("stage_result")
         task["hardware_telemetry"] = body.get("hardware_telemetry")
+        _enrich_task_health(task)
+        _save_ledger()
         return {"ok": True, "task": task, "gate": res["gate"]}
 
     @app.post("/api/fleet/pipeline/evaluate", dependencies=read_guard)

@@ -183,6 +183,22 @@ def test_cell_tasks_assign_claim_and_complete_lifecycle():
         "svg" in cam_resp.headers["content-type"] or "jpeg" in cam_resp.headers["content-type"]
     )
 
+    retried = client.post(f"/api/fleet/pipeline/cell-tasks/{chained['tasks'][0]['task_id']}/retry").json()
+    assert retried["ok"] is True and retried["task"]["status"] == "QUEUED"
+
+    det = client.post("/api/fleet/pipeline/displaced-detection", json={"displaced_to": "floor_front"}).json()
+    assert det["ok"] is True and det["detected_displaced_site"] == "floor_front"
+    auto_t = client.post("/api/fleet/pipeline/cell-tasks", json={"preset": "s3_auto_recover_or_shuttle"}).json()
+    assert auto_t["task"]["displaced_to"] == "floor_front" and auto_t["task"]["auto_recovered"] is True
+
+    micro_resp = client.post(
+        "/api/fleet/pipeline/pinky-tasks",
+        json={"robot_id": "rosy_46", "action": "micro_forward_2cm", "cable_guard_micro": True},
+    ).json()
+    assert micro_resp["ok"] is True
+    assert micro_resp["pinky_task"]["max_step_m"] <= 0.02
+    assert abs(micro_resp["pinky_task"]["v_cmd_mps"]) <= 0.02
+
 
 
 

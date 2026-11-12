@@ -135,15 +135,30 @@ export function visualCardSpecs(body = {}) {
     return matches.length ? matches[matches.length - 1] : null;
   };
   const formatTaskMeta = task => {
-    if (!task) return {last_task: '대기 중 (최근 태스크 없음)', folded_state: 'folded: true (홈 대기)'};
+    if (!task) return {last_task: '대기 중 (최근 태스크 없음)', folded_state: 'folded: true (홈 대기)', task_id: null, status: null};
     const stopEv = task.hardware_telemetry?.stop_event || {};
+    const hs = task.health_summary || {};
+    const health = stopEv.health || {};
+    const maxTemp = hs.max_temp_c ?? (Array.isArray(health.temp_c) && health.temp_c.length ? Math.max(...health.temp_c) : null);
+    const maxCur = hs.max_current_ma ?? (Array.isArray(health.current_ma) && health.current_ma.length ? Math.max(...health.current_ma) : null);
+    const healthTxt = [maxTemp != null ? `${maxTemp}°C` : '', maxCur != null ? `${maxCur}mA` : '', hs.substage || ''].filter(Boolean).join(' · ');
     const stateArr = Array.isArray(stopEv.state) ? stopEv.state.map(v => Number(v).toFixed(1)).join(', ') : '';
+    const baseFold = stopEv.folded === true
+      ? `홈 복귀 완료 (folded: true${stateArr ? ` · [${stateArr}]` : ''})`
+      : stateArr ? `[${stateArr}]` : '실행/대기';
     return {
+      task_id: task.task_id,
+      status: task.status || 'QUEUED',
       last_task: `${task.task_id} · ${task.arm_id} · ${task.status || 'QUEUED'}`,
-      folded_state: stopEv.folded === true
-        ? `홈 복귀 완료 (folded: true${stateArr ? ` · [${stateArr}]` : ''})`
-        : stateArr ? `[${stateArr}]` : '실행/대기',
+      folded_state: [baseFold, healthTxt].filter(Boolean).join(' · '),
     };
+  };
+  const taskControlButtons = meta => {
+    if (!meta?.task_id) return [];
+    if (meta.status === 'QUEUED' || meta.status === 'RUNNING') {
+      return [{label: '작업 취소', cancelTaskId: meta.task_id}];
+    }
+    return [{label: '재실행', retryTaskId: meta.task_id}];
   };
   const s3Gate = cells.cell_s?.gate || {};
   const s5Gate = cells.cell_ab?.gate || {};
@@ -160,8 +175,10 @@ export function visualCardSpecs(body = {}) {
       ...s3Meta,
       buttons: [
         {label: 'S3 셔틀 (Pinky→Belt)', preset: 's3_shuttle'},
+        {label: '자동 감지·복구 셔틀', preset: 's3_auto_recover_or_shuttle'},
         {label: 'Belt-Far 이탈 복구', preset: 's3_recover_belt_far'},
         {label: 'Floor-Front 바닥 복구', preset: 's3_recover_floor_front'},
+        ...taskControlButtons(s3Meta),
       ],
     },
     {
@@ -176,20 +193,24 @@ export function visualCardSpecs(body = {}) {
         {label: '2층 적재 (arm_b)', preset: 's5_tier2_arm_b'},
         {label: '3층 적재 (arm_a)', preset: 's5_tier3_arm_a'},
         {label: 'S3→S5 연속 실행', preset: 'full_s3_to_s5_pipeline'},
+        ...taskControlButtons(s5Meta),
       ],
     },
     {
       id: 'pinky',
-      robot_id: lastPinky?.robot_id || 'rosy_42',
-      title: `Pinky AMR · ${lastPinky?.robot_id || 'rosy_42'} 도킹·배차`,
+      robot_id: lastPinky?.robot_id || 'rosy_46',
+      title: `Pinky AMR · ${lastPinky?.robot_id || 'rosy_46'} 도킹·배차 (케이블 보호 ≤1.5cm)`,
       cameraUrl: '/api/fleet/pipeline/cell-camera/pinky',
       phase: lastPinky?.target_place ? `위치 ${lastPinky.target_place}` : (s3Gate.docked_robot?.robot_id ? `S3 도킹 (${s3Gate.docked_robot.robot_id})` : 'READY'),
       amr_motion_inhibited: Boolean(s3Gate.amr_motion_inhibited || s5Gate.amr_motion_inhibited),
-      last_task: lastPinky ? `${lastPinky.task_id} · ${lastPinky.action} -> ${lastPinky.target_place}` : 'S3 도킹 및 하역 준비 완료',
-      folded_state: s3Gate.amr_motion_inhibited ? 'AMR 이동 잠금 (팔 작업 중)' : '주행 가능 (인터락 해제)',
+      last_task: lastPinky ? `${lastPinky.task_id} · ${lastPinky.action} -> ${lastPinky.target_place}` : 'S3 도킹 및 미세이동 준비 완료',
+      folded_state: s3Gate.amr_motion_inhibited ? 'AMR 이동 잠금 (팔 작업 중)' : '케이블 보호 미세이동 모드 (최대 1.5cm · 0.02m/s)',
       buttons: [
         {label: 'S3 도킹+하역', pinkyAction: 'dock_and_unload_s3'},
         {label: 'S3 도킹', pinkyAction: 'dock_s3'},
+        {label: '미세 전진 1.5cm', pinkyAction: 'micro_forward_2cm'},
+        {label: '미세 후진 1.5cm', pinkyAction: 'micro_reverse_2cm'},
+        {label: '즉시 정지', pinkyAction: 'stop_now'},
         {label: '충전소(C1)', pinkyAction: 'charge_c1'},
         {label: '출구(S1) 출발', pinkyAction: 'depart_s1'},
       ],
@@ -398,7 +419,7 @@ export function createReal2SimPipeline({request, $, isOperator = () => false}) {
       actions.className = 'cell-visual-actions';
       for (const b of card.buttons) {
         const btn = document.createElement('ui-button');
-        btn.setAttribute('kind', 'quiet');
+        btn.setAttribute('kind', b.cancelTaskId ? 'irreversible' : 'quiet');
         btn.setAttribute('type', 'button');
         btn.textContent = b.label;
         if (b.preset) {
@@ -406,7 +427,11 @@ export function createReal2SimPipeline({request, $, isOperator = () => false}) {
           btn.addEventListener('click', () => runQuickPreset(b.preset));
         } else if (b.pinkyAction) {
           btn.dataset.pinkyQuickAction = b.pinkyAction;
-          btn.addEventListener('click', () => runPinkyQuickAction(card.robot_id || 'rosy_42', b.pinkyAction));
+          btn.addEventListener('click', () => runPinkyQuickAction(card.robot_id || 'rosy_46', b.pinkyAction));
+        } else if (b.cancelTaskId) {
+          btn.addEventListener('click', () => cancelOrRetryTask(b.cancelTaskId, 'cancel'));
+        } else if (b.retryTaskId) {
+          btn.addEventListener('click', () => cancelOrRetryTask(b.retryTaskId, 'retry'));
         }
         actions.append(btn);
       }
@@ -414,6 +439,21 @@ export function createReal2SimPipeline({request, $, isOperator = () => false}) {
       article.append(thumb, head, meta, actions);
       return article;
     }));
+  }
+
+  async function cancelOrRetryTask(taskId, op) {
+    const current = ++generation;
+    const verb = op === 'cancel' ? '취소' : '재실행';
+    if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `태스크(${taskId}) ${verb} 요청 중입니다.`;
+    try {
+      await request(`${CELL_TASKS_PATH}/${taskId}/${op}`, {method: 'POST'});
+      if (current !== generation) return;
+      await refreshCellTasks(current);
+      if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `태스크(${taskId}) ${verb} 완료`;
+    } catch (error) {
+      if (current !== generation) return;
+      if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `태스크 ${verb} 실패: ${error.message}`;
+    }
   }
 
   async function runQuickPreset(preset) {

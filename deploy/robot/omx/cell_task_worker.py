@@ -25,10 +25,41 @@ ensure_omx_paths()
 
 DEFAULT_PREP_DIR = Path("/home/robttt/rosy-test/omx-record-prep-20261019")
 ARM_WRAPPERS: dict[str, tuple[str, str, float]] = {
-    "arm_s": ("s", "with-session-arm-s-live.sh", -3.5),
-    "arm_a": ("a", "with-session-arm-a-par.sh", -3.5),
-    "arm_b": ("b", "with-session-arm-b-par.sh", -3.5),
+    "arm_s": ("s", "with-session-arm-s-live.sh", -1.0),
+    "arm_a": ("a", "with-session-arm-a-par.sh", -1.0),
+    "arm_b": ("b", "with-session-arm-b-par.sh", -1.0),
 }
+
+
+def upload_latest_camera_snapshots(fleet_r_url: str, token: str, prep_dir: Path = DEFAULT_PREP_DIR) -> dict[str, int]:
+    """Upload the freshest top/wrist JPEG snapshots from rosy-arm-cell to Fleet-R camera endpoints."""
+    ctx = ssl._create_unverified_context()
+    base = fleet_r_url.rstrip("/")
+    rec_dir = prep_dir / "live-recovery-s-20261112"
+    candidates = sorted(
+        [p for p in list(rec_dir.glob("*.jpg")) + list(Path("/tmp").glob("*.jpg")) if p.is_file() and p.stat().st_size > 1000],
+        key=lambda p: p.stat().st_mtime,
+        reverse=True,
+    )
+    top_img = next((p for p in candidates if "top" in p.name), candidates[0] if candidates else None)
+    wrist_img = next((p for p in candidates if "wrist" in p.name), top_img)
+    uploaded: dict[str, int] = {}
+    for view_id, img_path in (("cell_s", top_img), ("cell_ab", wrist_img), ("pinky", top_img)):
+        if img_path is None:
+            continue
+        try:
+            raw = img_path.read_bytes()
+            req = Request(
+                f"{base}/api/fleet/pipeline/cell-camera/{view_id}",
+                data=raw,
+                method="POST",
+                headers={"Authorization": f"Bearer {token}", "Content-Type": "image/jpeg"},
+            )
+            with urlopen(req, context=ctx, timeout=10):
+                uploaded[view_id] = len(raw)
+        except Exception:
+            pass
+    return uploaded
 
 
 def make_default_request_fn(fleet_r_url: str, token: str) -> Callable[[str, str, dict[str, Any] | None], dict[str, Any]]:
@@ -164,7 +195,9 @@ def main() -> None:
         arm_id = str(handoff.get("arm_id") or ("arm_s" if handoff.get("cell_id") == "cell_s" else "arm_a"))
         if args.dry_run_hw:
             return {"arm": arm_id, "events_count": 1, "stop_event": {"command": "stop", "ok": True, "folded": True}}
-        return execute_live_hardware_arm(arm_id, prep_dir=prep_dir)
+        res = execute_live_hardware_arm(arm_id, prep_dir=prep_dir)
+        upload_latest_camera_snapshots(args.fleet_r_url, token, prep_dir=prep_dir)
+        return res
 
     while True:
         try:
