@@ -166,6 +166,7 @@ def dependencies(bundle, digest, direct):
     if set(manifest) != {'wheels'} or type(manifest['wheels']) is not dict or not 1 <= len(manifest['wheels']) <= 100:
         raise ValueError('DEPENDENCY_MANIFEST_REQUIRED')
     resolved = {}
+    hashes = {}
     lines = []
     for name, expected in manifest['wheels'].items():
         if not re.fullmatch('[A-Za-z0-9_.+-]+[.]whl', name):
@@ -184,13 +185,19 @@ def dependencies(bundle, digest, direct):
         if package in resolved:
             raise ValueError('DEPENDENCY_DUPLICATE_REFUSED')
         resolved[package] = version
-        lines.append(f'{package}=={version} --hash=sha256:{expected}\n')
+        hashes[package] = expected
+    extras = {}
     for line in direct.decode().splitlines():
         if not line or line.startswith('#'):
             continue
-        match = re.fullmatch(r'([A-Za-z0-9_.-]+)(?:\[[A-Za-z0-9_.-]+(?:,[A-Za-z0-9_.-]+)*\])?==([A-Za-z0-9_.+!-]+)', line)
-        if not match or resolved.get(re.sub('[-_.]+', '-', match[1]).lower()) != match[2]:
+        match = re.fullmatch(r'([A-Za-z0-9_.-]+)(?:\[([A-Za-z0-9_.-]+(?:,[A-Za-z0-9_.-]+)*)\])?==([A-Za-z0-9_.+!-]+)', line)
+        if not match or resolved.get(re.sub('[-_.]+', '-', match[1]).lower()) != match[3]:
             raise ValueError('DEPENDENCY_DIRECT_PIN_MISMATCH')
+        if match[2]:
+            extras.setdefault(re.sub('[-_.]+', '-', match[1]).lower(), set()).update(match[2].split(','))
+    for package, version in resolved.items():
+        selected = '[' + ','.join(sorted(extras[package])) + ']' if package in extras else ''
+        lines.append(f'{package}{selected}=={version} --hash=sha256:{hashes[package]}\n')
     return ''.join(sorted(lines)).encode()
 
 
