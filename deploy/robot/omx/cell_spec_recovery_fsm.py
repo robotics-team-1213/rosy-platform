@@ -17,7 +17,7 @@ FAILURE_CODES: tuple[str, ...] = (
     "S7_DESCEND_OR_GRASP_CONTACT", "S7_PRIOR_LEG_FAILED_INTERLOCK", "S8_EMPTY_PICK_ZONE_REDIRECT",
     "S9_DISPLACED_CONTAINER_BELT_FAR", "S9_FLOOR_DROPPED_AND_S10_WRIST_CORRIDOR_MISALIGNED",
     "S10_DISPLACED_CONTAINER_FLOOR_FRONT", "S10_WRIST_CORRIDOR_MISALIGNED",
-    "S11_EMPTY_JAW_CLOSURE_AIR_GRASP", "S12_WEDGED_OR_RIM_BITE",
+    "S11_EMPTY_JAW_CLOSURE_AIR_GRASP", "S12_WEDGED_OR_RIM_BITE", "S13_BELT_BASE_TRENCH_OR_RAIL_WEDGE",
 )
 CELL_S_EXTENDED_ZONES: dict[str, dict[str, Any]] = {
     "pinky_tray": {"site": "pinky", "top_roi_px": (10, 40, 260, 240), "grasp_pose_units": [66.929, -5.845, 29.839, 39.243, 111.797], "hover_pose_units": [66.929, -24.0, 22.0, 39.243, 111.797], "xyz_m": (0.0535, 0.1720, 0.0200), "yaw_deg": -85.0},
@@ -224,6 +224,10 @@ def select_recovery_skill(
             return _skill_res("L2", "recenter_on_temp", code, temp_area="temp_plate_b", lane=2)
         return _skill_res("L3", "abort_safe_hold", code, ask_person=True)
 
+    if code == "S13_BELT_BASE_TRENCH_OR_RAIL_WEDGE":
+        if int(level_tried) == 0:
+            return _skill_res("L2", "trench_extract_and_inward_belt_realign", code, safe_belt_x_mm=134.0, safe_belt_z_mm=55.0)
+        return _skill_res("L3", "redirect_pick_to_pinky_tray", code, fallback_zone="pinky_tray")
     if code == "S8_EMPTY_PICK_ZONE_REDIRECT":
         return _skill_res("L2", "redirect_pick_to_pinky_tray", code, fallback_zone="pinky_tray")
     if code in ("S9_FLOOR_DROPPED_AND_S10_WRIST_CORRIDOR_MISALIGNED", "S11_EMPTY_JAW_CLOSURE_AIR_GRASP"):

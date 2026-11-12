@@ -255,12 +255,8 @@ class FleetModelPipeline:
         }
 
     def prestage_cell_ab_handover(
-        self,
-        *,
-        tier: int = 1,
-        arm_id: str | None = None,
-        belt_obs: tuple[dict[str, float], dict[str, float]] | None = None,
-        lead_time_s: float = 0.25,
+        self, *, tier: int = 1, arm_id: str | None = None,
+        belt_obs: tuple[dict[str, float], dict[str, float]] | None = None, lead_time_s: float = 0.25,
     ) -> dict[str, Any]:
         """Pre-solve and pre-stage Cell AB (`arm_a`/`arm_b`) `belt -> pallet` directive in parallel while
         Cell S (`arm_s`) executes its upstream `pinky -> belt` transfer."""
@@ -281,21 +277,11 @@ class FleetModelPipeline:
             "place": {**dst_spec, "yaw_deg": -90.0, "effective_xyz_m": [dst_spec["x"], dst_spec["y"], dst_spec["z"]]},
         }
         pre = sim_precheck_and_optimize_directive(cand, self.base_plan, work_dir=self.work_dir)
-        return {
-            "arm_id": target_arm,
-            "tier": int(tier),
-            "ok": bool(pre.get("ok")) and (intercept is None or bool(intercept.get("ok"))),
-            "intercept": intercept,
-            "precheck": pre,
-        }
+        return {"arm_id": target_arm, "tier": int(tier), "ok": bool(pre.get("ok")) and (intercept is None or bool(intercept.get("ok"))), "intercept": intercept, "precheck": pre}
 
     def run_fleet_mission(
-        self,
-        *,
-        shuttle_cycles: int = 3,
-        stack_tiers: tuple[int, ...] = (1, 2),
-        systematic_bias_m: tuple[float, float] = (0.0045, -0.0038),
-        handover_tol_mm: float = 8.0,
+        self, *, shuttle_cycles: int = 3, stack_tiers: tuple[int, ...] = (1, 2),
+        systematic_bias_m: tuple[float, float] = (0.0045, -0.0038), handover_tol_mm: float = 8.0,
     ) -> dict:
         """Execute a full Fleet multi-cell mission with Pipelined Handover Barrier."""
         stages = []
@@ -305,16 +291,10 @@ class FleetModelPipeline:
             prestage_futs = [pool.submit(self.prestage_cell_ab_handover, tier=t) for t in stack_tiers]
             for cyc in range(shuttle_cycles):
                 for src, dst in (("pinky", "belt"), ("belt", "pinky")):
-                    stages.append(
-                        self.run_fleet_stage(
-                            arm_id="arm_s",
-                            src_site=src,
-                            dst_site=dst,
-                            stage_id=f"cell-s-c{cyc+1}-{idx}-{src}-to-{dst}",
-                            yaw_deg=-85.0,
-                            systematic_bias_m=systematic_bias_m,
-                        )
-                    )
+                    stages.append(self.run_fleet_stage(
+                        arm_id="arm_s", src_site=src, dst_site=dst,
+                        stage_id=f"cell-s-c{cyc+1}-{idx}-{src}-to-{dst}", yaw_deg=-85.0, systematic_bias_m=systematic_bias_m,
+                    ))
                     idx += 1
             prestaged_handovers = [f.result() for f in prestage_futs]
 
@@ -331,12 +311,8 @@ class FleetModelPipeline:
                 break
             arm_ab = "arm_a" if tier % 2 == 1 else "arm_b"
             st_res = self.run_fleet_stage(
-                arm_id=arm_ab,
-                src_site="belt",
-                dst_site=f"pallet-l{tier-1}",
-                stage_id=f"cell-ab-t{tier}-{arm_ab}",
-                yaw_deg=-90.0,
-                systematic_bias_m=(0.0012, -0.0010),
+                arm_id=arm_ab, src_site="belt", dst_site=f"pallet-l{tier-1}",
+                stage_id=f"cell-ab-t{tier}-{arm_ab}", yaw_deg=-90.0, systematic_bias_m=(0.0012, -0.0010),
             )
             st_res["handover_prestaged"] = True
             stages.append(st_res)
@@ -365,28 +341,14 @@ class FleetModelPipeline:
         return run_contract_handoff_stage(self, handoff, stage_id=stage_id, tier=tier)
 
     def execute_remote_fleet_r_handoff(
-        self,
-        *,
-        fleet_r_url: str,
-        token: str = "",
-        cell_id: str = "cell_s",
-        robot_id: str = "rosy_01",
+        self, *, fleet_r_url: str, token: str = "", cell_id: str = "cell_s", robot_id: str = "rosy_01",
         pose_xy_yaw: tuple[float, float, float] = (0.6987, -0.2512, 3.14159),
-        stage_id: str = "remote-s3-pinky-to-belt",
-        tier: int = 1,
-        request_fn=None,
+        stage_id: str = "remote-s3-pinky-to-belt", tier: int = 1, request_fn=None,
     ) -> dict[str, Any]:
         """Hold the Fleet-R bed-zone gate while the local OMX stage runs."""
         return execute_remote_fleet_r_handoff(
-            self,
-            fleet_r_url=fleet_r_url,
-            token=token,
-            cell_id=cell_id,
-            robot_id=robot_id,
-            pose_xy_yaw=pose_xy_yaw,
-            stage_id=stage_id,
-            tier=tier,
-            request_fn=request_fn,
+            self, fleet_r_url=fleet_r_url, token=token, cell_id=cell_id, robot_id=robot_id,
+            pose_xy_yaw=pose_xy_yaw, stage_id=stage_id, tier=tier, request_fn=request_fn,
         )
 
     def dispatch_and_execute_fleet_r_cell_task(self, **kwargs) -> dict[str, Any]:

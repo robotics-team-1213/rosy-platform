@@ -240,11 +240,7 @@ def execute_live_hardware_arm(
 
     lines = status_file.read_text(errors="replace").splitlines()[n0:] if status_file.exists() else []
     events = [json.loads(l) for l in lines if l.strip().startswith("{")]
-    return {
-        "arm": arm_id,
-        "events_count": len(events),
-        "stop_event": stop_ev,
-    }
+    return {"arm": arm_id, "events_count": len(events), "stop_event": stop_ev}
 
 
 def emergency_stop_arms(prep_dir: Path = DEFAULT_PREP_DIR) -> list[str]:
@@ -286,12 +282,7 @@ def inspect_camera_frame_telemetry(prep_dir: Path = DEFAULT_PREP_DIR, cell_id: s
         intrusion_score = round(min(1.0, max(0.02, dark_frac * 1.5 + clipped_frac * 1.2 + (0.4 if condition != "NORMAL" else 0.0))), 3)
     except Exception:
         pass
-    return {
-        "cell_id": cell_id,
-        "intrusion_score": intrusion_score,
-        "condition": condition,
-        "snapshot_bytes": snap_bytes,
-    }
+    return {"cell_id": cell_id, "intrusion_score": intrusion_score, "condition": condition, "snapshot_bytes": snap_bytes}
 
 
 def poll_and_execute_once(
@@ -330,29 +321,15 @@ def poll_and_execute_once(
         else:
             omx_res = pipeline.run_contract_handoff_stage(handoff, stage_id=task_id, tier=tier)
             hw_tel = live_act_fn(handoff) if callable(live_act_fn) else None
-        done = request_fn(
-            "POST",
-            f"/api/fleet/pipeline/cell-tasks/{task_id}/complete",
-            {
-                "phase": omx_res["receipt"]["phase"],
-                "goal_evidence_digest": omx_res["receipt"]["goal_evidence_digest"],
-                "reason": omx_res["receipt"]["reason"],
-                "receipt": omx_res["receipt"],
-                "stage_result": omx_res["stage_result"],
-                "hardware_telemetry": hw_tel,
-            },
-        )
-        completed_runs.append(
-            {
-                "task_id": task_id,
-                "cell_id": cell_id,
-                "arm_id": handoff.get("arm_id"),
-                "task": done["task"],
-                "claim_gate": claimed["gate"],
-                "release_gate": done["gate"],
-                "omx_result": omx_res,
-            }
-        )
+        done = request_fn("POST", f"/api/fleet/pipeline/cell-tasks/{task_id}/complete", {
+            "phase": omx_res["receipt"]["phase"], "goal_evidence_digest": omx_res["receipt"]["goal_evidence_digest"],
+            "reason": omx_res["receipt"]["reason"], "receipt": omx_res["receipt"],
+            "stage_result": omx_res["stage_result"], "hardware_telemetry": hw_tel,
+        })
+        completed_runs.append({
+            "task_id": task_id, "cell_id": cell_id, "arm_id": handoff.get("arm_id"), "task": done["task"],
+            "claim_gate": claimed["gate"], "release_gate": done["gate"], "omx_result": omx_res,
+        })
     return completed_runs
 
 
@@ -390,20 +367,10 @@ def main() -> None:
             runs = poll_and_execute_once(pipeline, request_fn=req_fn, live_act_fn=_hw_act)
             for r in runs:
                 stop_ev = (r["task"].get("hardware_telemetry") or {}).get("stop_event") or {}
-                print(
-                    json.dumps(
-                        {
-                            "event": "task_completed",
-                            "task_id": r["task_id"],
-                            "cell_id": r["cell_id"],
-                            "arm_id": r["arm_id"],
-                            "status": r["task"]["status"],
-                            "folded": stop_ev.get("folded"),
-                            "state": stop_ev.get("state"),
-                        }
-                    ),
-                    flush=True,
-                )
+                print(json.dumps({
+                    "event": "task_completed", "task_id": r["task_id"], "cell_id": r["cell_id"], "arm_id": r["arm_id"],
+                    "status": r["task"]["status"], "folded": stop_ev.get("folded"), "state": stop_ev.get("state"),
+                }), flush=True)
         except Exception as exc:
             print(json.dumps({"event": "poll_error", "error": repr(exc)}), flush=True)
         if args.once:
