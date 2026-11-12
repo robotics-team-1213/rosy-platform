@@ -436,12 +436,61 @@ def run(args):
             lock.unlink(missing_ok=True)
     robots = result.get('robots') or {}
     result['pass'] = len(robots) == len(requests) and all(row['arrived'] for row in robots.values())
+    if args.learned_paint_target == 'drivable':
+        result['model_evidence'] = drivable_evidence(
+            out / 'observations.jsonl', args.model_revision, requests)
+        result['pass'] = result['pass'] and result['model_evidence']['pass']
     (out / 'result.json').write_text(json.dumps(result, indent=2, default=str), encoding='utf-8')
     print(json.dumps({k: result.get(k) for k in ('core_ready', 'localized', 'camera')}))
     print(json.dumps({ns: dict(states=row['states'], moved_m=row['moved_m'], short_m=row['short_m'], via_m=row['via_m'])
                       for ns, row in robots.items()}))
     print('[fleet-trips]', 'PASS' if result['pass'] else 'FAIL', out / 'result.json', flush=True)
     return 0 if result['pass'] else 1
+
+
+def drivable_evidence(path, revision, robots):
+    """Require the requested model in keep_debug while the driven robot moves."""
+    commands = {ns: [] for ns in robots}
+    keeps = {ns: [] for ns in robots}
+    if not path.is_file():
+        return {'pass': False, 'reason': 'recorder output missing'}
+    for line in path.open(encoding='utf-8'):
+        try:
+            row = json.loads(line)
+            topic, message, wall = row['topic'], row['message'], row['wall']
+            for ns in robots:
+                if topic == f'/{ns}/cmd_vel':
+                    linear = message['linear']
+                    angular = message['angular']
+                    if abs(linear['x']) > 0.001 or abs(angular['z']) > 0.001:
+                        commands[ns].append(wall)
+                elif topic == f'/{ns}/line/keep_debug':
+                    keeps[ns].append((wall, message))
+        except (KeyError, TypeError, ValueError):
+            continue
+    evidence = {}
+    for ns in robots:
+        during = [message for wall, message in keeps[ns]
+                  if commands[ns] and commands[ns][0] <= wall <= commands[ns][-1]]
+        matched = sum(message.get('paint_source_used') == 'learned_drivable'
+                      and message.get('paint_model_revision') == revision for message in during
+                      if isinstance(message, dict))
+        wrong_revision = sum(message.get('paint_source_used') == 'learned_drivable'
+                             and message.get('paint_model_revision') not in (None, revision) for message in during
+                             if isinstance(message, dict))
+        unknown_revision = sum(message.get('paint_source_used') == 'learned_drivable'
+                               and message.get('paint_model_revision') is None for message in during
+                               if isinstance(message, dict))
+        fallback = sum(message.get('paint_source_used') == 'denoise_fallback' for message in during
+                       if isinstance(message, dict))
+        evidence[ns] = {'pass': len(during) >= 10 and matched / len(during) >= 0.99
+                        and wrong_revision == 0,
+                        'moving_commands': len(commands[ns]), 'moving_keep_debug': len(during),
+                        'matched_revision': matched, 'wrong_revision': wrong_revision,
+                        'unknown_revision_frames': unknown_revision, 'fallback_frames': fallback,
+                        'pure_model': matched == len(during)}
+    return {'pass': all(row['pass'] for row in evidence.values()),
+            'expected_revision': revision, 'robots': evidence}
 
 
 def fleet_console(binding_path, cli_args):
@@ -586,6 +635,21 @@ def main(argv=None):
         parser.error('--nav runs the two straight trips only')
     if args.learned_paint_target == 'drivable' and not args.learned_lane_pointer:
         parser.error('--learned-paint-target drivable needs --learned-lane-pointer')
+    if args.learned_paint_target == 'drivable' and not args.record:
+        parser.error('--learned-paint-target drivable needs --record for model evidence')
+    if args.learned_lane_pointer:
+        pointer = Path(args.learned_lane_pointer)
+        try:
+            model = Path(pointer.read_text(encoding='utf-8').strip())
+        except (OSError, UnicodeError) as exc:
+            parser.error(f'learned model pointer unreadable: {exc}')
+        if not model.is_dir() or not (model / 'model_manifest.json').is_file():
+            parser.error(f'learned model pointer has no model manifest: {model}')
+        if args.learned_paint_target == 'drivable':
+            try:
+                args.model_revision = json.loads((model / 'model_manifest.json').read_text(encoding='utf-8'))['model_revision']
+            except (OSError, ValueError, KeyError) as exc:
+                parser.error(f'learned model manifest has no revision: {exc}')
     return run(args)
 
 

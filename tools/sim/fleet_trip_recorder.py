@@ -9,11 +9,29 @@ import time
 MAX_FRAMES = 6000
 
 
+def image_bgr(msg):
+    """Decode the simulator's raw camera image without ROS cv_bridge's NumPy ABI."""
+    import cv2
+    import numpy as np
+
+    channels = {'bgr8': 3, 'rgb8': 3, 'bgra8': 4, 'rgba8': 4, 'mono8': 1}
+    count = channels.get(msg.encoding)
+    if count is None or msg.step < msg.width * count:
+        raise ValueError(f'unsupported camera encoding: {msg.encoding}')
+    raw = np.frombuffer(msg.data, dtype=np.uint8)
+    if raw.size != msg.height * msg.step:
+        raise ValueError('camera image byte count does not match step and height')
+    image = raw.reshape(msg.height, msg.step)[:, :msg.width * count].reshape(
+        msg.height, msg.width, count)
+    convert = {'rgb8': cv2.COLOR_RGB2BGR, 'rgba8': cv2.COLOR_RGBA2BGR,
+               'bgra8': cv2.COLOR_BGRA2BGR, 'mono8': cv2.COLOR_GRAY2BGR}
+    return cv2.cvtColor(image, convert[msg.encoding]) if msg.encoding in convert else image
+
+
 def record_observations(out, robots):
     """Read-only diagnostic trace; received samples do not prove lossless frame coverage."""
     import rclpy
     import cv2
-    from cv_bridge import CvBridge
     from rclpy.qos import QoSProfile, ReliabilityPolicy
     from rosidl_runtime_py.convert import message_to_ordereddict
     from std_msgs.msg import String, UInt16MultiArray
@@ -24,7 +42,6 @@ def record_observations(out, robots):
     rclpy.init(args=[])
     node = rclpy.create_node('fleet_trip_recorder')
     qos = QoSProfile(depth=100, reliability=ReliabilityPolicy.BEST_EFFORT)
-    bridge = CvBridge()
     images = Path(out).parent / 'frames'
     images.mkdir()
     captured = {ns: 0 for ns in robots}
@@ -42,7 +59,7 @@ def record_observations(out, robots):
                         folder = images / ns
                         folder.mkdir(exist_ok=True)
                         path = folder / f'{captured[ns]:06d}.png'
-                        if not cv2.imwrite(str(path), bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')):
+                        if not cv2.imwrite(str(path), image_bgr(msg)):
                             raise RuntimeError('camera evidence write failed')
                         value.update(image_file=path.relative_to(Path(out).parent).as_posix(),
                                      sha256=hashlib.sha256(path.read_bytes()).hexdigest())
