@@ -917,11 +917,41 @@ def test_arm_s_zones_wrist_corridor_jaw_gate_and_crane_lift_waypoints():
     assert wps[1]["max_step"] == pytest.approx(0.045)
 
 
+def test_situation_aware_object_realignment_pipeline_and_rail_safe_retract(tmp_path):
+    import numpy as np
+    import cell_realignment_pipeline as crp
 
+    # 1. 2D wrist camera pose & principal-axis yaw estimation
+    wrist_img = np.full((480, 640, 3), (40, 215, 235), dtype=np.uint8)
+    wrist_img[155:235, 385:505] = (20, 95, 240)  # Eccentric right (+wx -> -dx_mm)
+    pose_ecc = crp.estimate_wrist_object_pose_2d(wrist_img)
+    assert pose_ecc["detected"] is True
+    assert pose_ecc["corridor_centered"] is False
+    assert pose_ecc["dx_mm"] < -10.0
 
+    wrist_centered = np.full((480, 640, 3), (40, 215, 235), dtype=np.uint8)
+    wrist_centered[165:245, 265:385] = (20, 95, 240)
+    pose_ctr = crp.estimate_wrist_object_pose_2d(wrist_centered)
+    assert pose_ctr["detected"] is True
+    assert pose_ctr["corridor_centered"] is True
+    assert abs(pose_ctr["dx_mm"]) <= 1.0
 
+    # 2. Rail-safe (elbow-first) and belt-safe (constant wrist_flex) retract waypoints
+    rail_wps = crp.compile_rail_and_belt_safe_standby_waypoints([-26.89, 17.9, -6.13, 54.33, 17.46, 49.16])
+    assert rail_wps[0]["phase"] == "elbow_first_rail_clear"
+    assert rail_wps[0]["pose"][1] == pytest.approx(17.9)
+    assert rail_wps[0]["pose"][2] <= -18.0
 
+    belt_wps = crp.compile_rail_and_belt_safe_standby_waypoints([-22.98, -11.55, 37.73, 44.27, 22.1, 59.32])
+    assert belt_wps[0]["phase"] == "belt_lift_off_constant_wrist"
+    assert belt_wps[0]["pose"][3] == pytest.approx(44.27)
+    assert belt_wps[0]["pose"][1] <= -22.0
+    assert belt_wps[0]["pose"][2] <= 14.0
 
-
-
+    # 3. Closed-loop 7-situation object re-alignment pipeline + online IWR feedback
+    report = crp.run_closed_loop_realignment_pipeline(tmp_path)
+    assert report["total_situations"] == 7
+    assert report["all_passed"] is True
+    assert len(report["results"]) == 7
+    assert (tmp_path / "realignment-pipeline-report.json").exists()
 

@@ -272,7 +272,7 @@ def audit_arm_s_zones_and_wrist_corridor(
         zone_occ = {
             "pinky_tray": _orange_ratio(top[100:200, 100:230]),
             "pinky_front_floor": _orange_ratio(top[210:285, 100:230]),
-            "belt_center": _orange_ratio(top[110:190, 380:500]),
+            "belt_center": max(_orange_ratio(top[110:190, 380:500]), _orange_ratio(top[40:125, 340:485])),
             "belt_far": _orange_ratio(top[105:190, 525:638]),
         }
         if wrist_img is not None and hasattr(wrist_img, "ndim") and wrist_img.ndim == 3 and wrist_img.shape[:2] == (480, 640):
@@ -292,9 +292,9 @@ def audit_arm_s_zones_and_wrist_corridor(
 
     target_top_occ = float(zone_occ.get(target_zone, 0.0))
     corridor_centered = (w_occ >= 0.18) and (sum(1 for s in subs if s >= 0.12) >= 2)
-    matched = (corridor_centered and (target_top_occ >= 0.14 or isinstance(zone_occ_or_top, dict))) if use_wrist else (target_top_occ >= 0.14)
+    matched = (corridor_centered and (target_top_occ >= 0.11 or isinstance(zone_occ_or_top, dict))) if use_wrist else (target_top_occ >= 0.11)
     pickable = ("pinky_tray", "belt_center", "belt_far")
-    alternatives = [z for z in pickable if z != target_zone and float(zone_occ.get(z, 0.0)) >= 0.14]
+    alternatives = [z for z in pickable if z != target_zone and float(zone_occ.get(z, 0.0)) >= 0.11]
 
     if matched:
         code, skill = None, "proceed_nominal"
