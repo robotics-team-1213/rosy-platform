@@ -29,14 +29,27 @@ from signing import (  # via test/conftest.py
 )
 
 ROOT = Path(__file__).resolve().parents[1]
+_SIGNING_MIRRORS = (
+    "signing",
+    "deploy.site.candidate_signing",
+    "perception_runtime.perception.learned.signature",
+)
+
+
+def _import_signing_mirror(module_name: str):
+    import importlib
+    import sys
+
+    perception_root = str(ROOT / "integrations" / "perception")
+    if perception_root not in sys.path:
+        sys.path.insert(0, perception_root)
+    return importlib.import_module(module_name)
 
 
 @pytest.mark.parametrize("layout", ["cmd/git.exe", "mingw64/bin/git.exe"])
-@pytest.mark.parametrize("module_name", ["signing", "deploy.site.candidate_signing"])
+@pytest.mark.parametrize("module_name", _SIGNING_MIRRORS)
 def test_git_openssl_candidates_follow_the_installation(monkeypatch, tmp_path, layout, module_name):
-    import importlib
-
-    module = importlib.import_module(module_name)
+    module = _import_signing_mirror(module_name)
     root = tmp_path / "custom-git"
     git = root / layout
     monkeypatch.setattr(module.shutil, "which", lambda name: str(git))
@@ -45,6 +58,18 @@ def test_git_openssl_candidates_follow_the_installation(monkeypatch, tmp_path, l
     assert str(root / r"usr\bin") in candidates
     assert str(root / r"mingw64\bin") in candidates
     assert str(tmp_path / "programs" / "Git" / r"usr\bin") in candidates
+
+
+@pytest.mark.parametrize("layout", ["cmd/git.exe", "mingw64/bin/git.exe", None])
+def test_git_for_windows_dirs_parity_across_signing_mirrors(monkeypatch, tmp_path, layout):
+    git = str(tmp_path / "custom-git" / layout) if layout else None
+    monkeypatch.setenv("ProgramFiles", str(tmp_path / "programs"))
+    results = []
+    for name in _SIGNING_MIRRORS:
+        module = _import_signing_mirror(name)
+        monkeypatch.setattr(module.shutil, "which", lambda _name: git)
+        results.append(module._git_for_windows_dirs())
+    assert results[0] == results[1] == results[2]
 
 
 def test_openssl_is_available():
@@ -61,11 +86,9 @@ def test_openssl_is_available():
     )
 
 
-@pytest.mark.parametrize("module_name", ["signing", "deploy.site.candidate_signing"])
+@pytest.mark.parametrize("module_name", _SIGNING_MIRRORS)
 def test_git_shim_at_drive_root_keeps_program_files_fallback(monkeypatch, tmp_path, module_name):
-    import importlib
-
-    module = importlib.import_module(module_name)
+    module = _import_signing_mirror(module_name)
     git = Path(Path.cwd().anchor) / "git.exe"
     monkeypatch.setattr(module.shutil, "which", lambda name: str(git))
     monkeypatch.setenv("ProgramFiles", str(tmp_path / "programs"))
