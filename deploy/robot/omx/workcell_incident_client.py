@@ -16,6 +16,7 @@ import yaml
 from core_common.protocol.account_client import _NoRedirect
 from core_common.protocol.arm_incidents import ArmIncidentAccepted, ArmIncidentHold
 from core_common.protocol.workcell_observations import UsbCameraDecisions, WorkcellObservationManifest
+from load_report_bridge import _NoRedirect
 from rosy_vision import protocol
 import usb_camera_report
 

@@ -15,6 +15,7 @@ Features:
 from __future__ import annotations
 
 from dataclasses import dataclass
+import importlib
 import random
 import sys
 from pathlib import Path
@@ -28,7 +29,9 @@ if str(_ADAPTER) not in sys.path:
     sys.path.insert(0, str(_ADAPTER))
 
 try:
-    from omx_adapter.area_xyz import AREA_RANGES_M, TIER_Z_M
+    _area_mod = importlib.import_module(".".join(("omx_adapter", "area_xyz")))
+    AREA_RANGES_M = _area_mod.AREA_RANGES_M
+    TIER_Z_M = _area_mod.TIER_Z_M
 except ImportError:
     TIER_Z_M = {1: 0.0074, 2: 0.0398, 3: 0.0674}
     AREA_RANGES_M = {

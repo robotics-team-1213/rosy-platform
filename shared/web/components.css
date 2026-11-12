@@ -1,55 +1,11 @@
-/* 브라우저 표면이 같이 쓰는 조작 부품. 색·크기·간격은 tokens.css만 읽는다.
- * 레이아웃(어디 놓을지)은 각 표면 시트에 남긴다.
- * 요소: ui-button, ui-field, ui-tag, ui-text, ui-status, ui-actions.
- *
- * 필드(D-359 §5.1): 제품 화면의 입력·선택·체크는 네이티브 요소에 class="ui-field"를
- * 단다. <ui-field> 감싸개도 같은 얼굴을 그리지만, 화면의 폼 제출·<label> 연결·
- * JS가 이미 네이티브 요소를 직접 쥐고 있어 감싸개로 바꾸면 마크업과 핸들러가 크게
- * 흔들린다. 체크·라디오는 상자를 그리지 않고, 감싸는 <label class="ui-check">가
- * 48px 누름 면이 된다.
- */
-
-/* One rule for every surface: `hidden` always hides. A surface `display` rule would otherwise
- * outrank the browser's own [hidden] style, so surfaces wrote ~60 per-element copies. Show with
- * `:not([hidden])` selectors, never by overriding this. */
 [hidden] { display: none !important; }
-a { color: var(--text-primary); text-underline-offset: 0.2em; } /* 칠하지 않은 링크가 브라우저 파랑·보라로 남지 않게; 클래스 규칙이 이긴다 */
-/* Native disclosure keeps its marker and keyboard/expanded semantics. */
-.ui-page-heading {
-  margin: 0;
-  font: var(--weight-strong) var(--text-title)/var(--leading-label) var(--body);
-}
-.ui-section-heading {
-  margin: 0;
-  font: var(--weight-medium) var(--text-body)/var(--leading-body) var(--body);
-}
-.ui-disclosure-row {
-  box-sizing: border-box;
-  min-height: var(--target-secondary);
-  padding: var(--inset-button);
-  color: var(--text-primary);
-  background: var(--surface-canvas);
-  border: 1px solid var(--control-line);
-  border-radius: var(--radius-button);
-  font: var(--weight-label) var(--text-label)/var(--leading-control) var(--body);
-  text-align: start;
-  cursor: pointer;
-}
-.ui-disclosure-row:focus-visible {
-  outline: var(--focus-ring-width) solid var(--focus-ring);
-  outline-offset: var(--focus-ring-offset);
-}
-.ui-disclosure-row:disabled, .ui-disclosure-row[aria-disabled="true"] {
-  color: var(--text-secondary);
-  border-style: dashed;
-  border-color: var(--surface-line);
-  cursor: not-allowed;
-}
-.ui-disclosure-name {
-  font: var(--weight-label) var(--text-body)/var(--leading-control) var(--body);
-}
-
-/* Occupancy legend swatches. The surface places the row. Cost matches the cell map.js paints. */
+a { color: var(--text-primary); text-underline-offset: 0.2em; }
+.ui-page-heading { margin: 0; font: var(--weight-strong) var(--text-title)/var(--leading-label) var(--body); }
+.ui-section-heading { margin: 0; font: var(--weight-medium) var(--text-body)/var(--leading-body) var(--body); }
+.ui-disclosure-row { box-sizing: border-box; min-height: var(--target-secondary); padding: var(--inset-button); color: var(--text-primary); background: var(--surface-canvas); border: 1px solid var(--control-line); border-radius: var(--radius-button); font: var(--weight-label) var(--text-label)/var(--leading-control) var(--body); text-align: start; cursor: pointer; }
+.ui-disclosure-row:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset); }
+.ui-disclosure-row:disabled, .ui-disclosure-row[aria-disabled="true"] { color: var(--text-secondary); border-style: dashed; border-color: var(--surface-line); cursor: not-allowed; }
+.ui-disclosure-name { font: var(--weight-label) var(--text-body)/var(--leading-control) var(--body); }
 .ui-legend i[data-swatch="free"],
 .ui-legend [data-swatch="free"]::before { background: var(--raster-free); }
 .ui-legend i[data-swatch="uncertain"],
@@ -66,610 +22,132 @@ a { color: var(--text-primary); text-underline-offset: 0.2em; } /* 칠하지 않
 .ui-legend [data-swatch="robot"]::before { background: var(--ink); }
 .ui-legend i[data-swatch="goal"],
 .ui-legend [data-swatch="goal"]::before { background: var(--series-goal); }
-
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
-}
-
-/* D-405 — 인라인 아이콘의 공용 크기·색. 새 크기 척도를 만들지 않고 글자 척도의
- * value 단계를 재사용한다. 색은 currentColor(자리의 글자 토큰을 상속한다).
- * 아이콘 폰트·외부 에셋은 쓰지 않는다(D-75 정신) — 인라인 SVG만. */
-.ui-icon {
-  display: inline-block;
-  width: var(--text-value);
-  height: var(--text-value);
-  flex: none;
-}
-
-/* D-641 — 라벨은 접근성 트리에 남고 조작의 의미·선택 상태는 원래 요소가 소유한다. */
-[data-icon-only] > .ui-icon-label {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
-  border: 0;
-}
-.ui-tooltip {
-  position: fixed;
-  pointer-events: none;
-  left: attr(data-ui-tip-x px, 0px);
-  top: attr(data-ui-tip-y px, 0px);
-  z-index: 2002;
-  max-width: min(32ch, calc(100vw - var(--space-4)));
-  padding: var(--inset-tooltip);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-control);
-  background: var(--surface-raised);
-  color: var(--text-primary);
-  font: var(--weight-regular) var(--text-label)/var(--leading-copy) var(--body);
-  overflow-wrap: anywhere;
-}
-
-.skip-link {
-  position: fixed;
-  z-index: 1000;
-  top: var(--space-2);
-  left: var(--space-2);
-  padding: var(--inset-skip-link);
-  color: var(--text-primary);
-  background: var(--surface-canvas);
-  border: var(--focus-ring-width) solid var(--focus-ring);
-  border-radius: var(--radius-button);
-  transform: translateY(-150%);
-}
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+.ui-icon { display: inline-block; width: var(--text-value); height: var(--text-value); flex: none; }
+[data-icon-only] > .ui-icon-label { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+.ui-tooltip { position: fixed; pointer-events: none; left: attr(data-ui-tip-x px, 0px); top: attr(data-ui-tip-y px, 0px); z-index: 2002; max-width: min(32ch, calc(100vw - var(--space-4))); padding: var(--inset-tooltip); border: 1px solid var(--border-strong); border-radius: var(--radius-control); background: var(--surface-raised); color: var(--text-primary); font: var(--weight-regular) var(--text-label)/var(--leading-copy) var(--body); overflow-wrap: anywhere; }
+.skip-link { position: fixed; z-index: 1000; top: var(--space-2); left: var(--space-2); padding: var(--inset-skip-link); color: var(--text-primary); background: var(--surface-canvas); border: var(--focus-ring-width) solid var(--focus-ring); border-radius: var(--radius-button); transform: translateY(-150%); }
 .skip-link:focus-visible { transform: none; }
-
-/* D-359 US-008 — 자간 토큰은 라틴 대문자용이다. 자기 글자에 한글이 있는 요소는
-   ui.js가 data-hangul을 달고, 여기서 자간을 0으로 둔다. 토큰을 0으로 다시 정의하므로
-   더 구체적인 선택자의 `letter-spacing: var(--track-*)`도 0으로 풀린다. 아래
-   letter-spacing은 자간을 선언하지 않고 부모 값을 물려받는 요소용이다(여기서 0). */
-/* 등폭 가족도 라틴·숫자용이다. 등폭 글꼴에는 한글이 없어 대체 글꼴로 그려지고, 등폭 칸의
-   띄어쓰기(한글 폭의 약 0.6배)만 남아 자간이 0이어도 "점유  지도"처럼 떠 보였다. 한글을
-   가진 요소는 본문 가족으로 그린다. */
-[data-hangul] {
-  --mono: var(--body);
-  --track-label: 0;
-  --track-wide: 0;
-  --track-state: 0;
-  letter-spacing: var(--track-state);
-}
-
-/* D-359 §5.4·§5.5 — 모든 표면이 받는 기본. 한국어는 어절에서 끊고, 칸을 넘치는
-   긴 기계 값만 접는다. `anywhere`가 아니라 `break-word`다: anywhere는 최소 내용 폭을
-   글자 하나로 줄여 좁은 flex 줄의 짧은 라벨(접속·어둡게·시계)을 음절 사이에서 꺾었다
-   (US-004 1366px 캡처). 넘침 방지는 같고 라벨 폭은 그대로다.
-   키보드 포커스 링은 네이티브 조작(링크·입력·요약)에도 같다.
-   :where()는 명시도가 0이라 표면이 제 포커스 자리를 정하면 그쪽이 이긴다. */
-body {
-  word-break: keep-all;
-  overflow-wrap: break-word;
-}
-
-:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
-  outline: var(--focus-ring-width) solid var(--focus-ring);
-  outline-offset: var(--focus-ring-offset);
-}
-
-ui-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  box-sizing: border-box;
-  gap: var(--gap-button-content);
-  min-width: var(--target-secondary);
-  min-height: var(--target-secondary);
-  margin: 0;
-  padding: 0 var(--inset-button);
-  border: 1px solid var(--control-line);
-  border-radius: var(--radius-button);
-  color: var(--text-primary);
-  background: transparent;
-  font: var(--weight-label) var(--text-label)/var(--leading-control) var(--body);
-  text-align: center;
-  cursor: pointer;
-  user-select: none;
-}
-
-ui-button[kind="primary"] {
-  padding: 0 var(--inset-button-primary);
-  border-color: transparent;
-  color: var(--button-primary-ink);
-  background: var(--button-primary-bg);
-  font-weight: var(--weight-label);
-}
-
+[data-hangul] { --mono: var(--body); --track-label: 0; --track-wide: 0; --track-state: 0; letter-spacing: var(--track-state); }
+body { word-break: keep-all; overflow-wrap: break-word; }
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset); }
+ui-button { display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; gap: var(--gap-button-content); min-width: var(--target-secondary); min-height: var(--target-secondary); margin: 0; padding: 0 var(--inset-button); border: 1px solid var(--control-line); border-radius: var(--radius-button); color: var(--text-primary); background: transparent; font: var(--weight-label) var(--text-label)/var(--leading-control) var(--body); text-align: center; cursor: pointer; user-select: none; }
+ui-button[kind="primary"] { padding: 0 var(--inset-button-primary); border-color: transparent; color: var(--button-primary-ink); background: var(--button-primary-bg); font-weight: var(--weight-label); }
 ui-button[kind="quiet"],
-a.docs-link {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0 var(--inset-button);
-  border: 1px solid var(--control-line);
-  border-radius: var(--radius-button);
-  color: var(--nominal-quiet);
-  background: transparent;
-  font: var(--weight-label) var(--text-label)/var(--leading-control) var(--body);
-  text-decoration: none;
-  cursor: pointer;
-}
-
+a.docs-link { display: inline-flex; align-items: center; justify-content: center; padding: 0 var(--inset-button); border: 1px solid var(--control-line); border-radius: var(--radius-button); color: var(--nominal-quiet); background: transparent; font: var(--weight-label) var(--text-label)/var(--leading-control) var(--body); text-decoration: none; cursor: pointer; }
 a.docs-link { box-sizing: border-box; min-width: var(--target-secondary); min-height: var(--target-secondary); }
-
-a.docs-link:hover {
-  color: var(--text-primary);
-  border-color: var(--ink);
-}
-
-ui-button[kind="irreversible"] {
-  padding: var(--inset-button-irreversible);
-  border-color: transparent;
-  color: var(--button-irreversible-ink);
-  background: var(--button-irreversible-bg);
-  font: var(--weight-label) var(--text-label)/var(--leading-control) var(--body);
-}
-
-ui-button[kind="segment"] {
-  border: 0;
-  border-radius: 0;
-  color: var(--nominal-quiet);
-  background: transparent;
-  font: var(--weight-label) var(--text-label)/var(--leading-flat) var(--mono);
-  letter-spacing: var(--track-state);
-}
-
+a.docs-link:hover { color: var(--text-primary); border-color: var(--ink); }
+ui-button[kind="irreversible"] { padding: var(--inset-button-irreversible); border-color: transparent; color: var(--button-irreversible-ink); background: var(--button-irreversible-bg); font: var(--weight-label) var(--text-label)/var(--leading-control) var(--body); }
+ui-button[kind="segment"] { border: 0; border-radius: 0; color: var(--nominal-quiet); background: transparent; font: var(--weight-label) var(--text-label)/var(--leading-flat) var(--mono); letter-spacing: var(--track-state); }
 ui-button[kind="segment"][aria-pressed="true"],
 ui-button[kind="segment"][aria-selected="true"],
-ui-button[kind="segment"].active {
-  color: var(--text-primary);
-  background: var(--ground-card-2);
-  border-color: transparent;
-  font-weight: var(--weight-strong);
-}
-
-ui-button[kind="quiet"].arming {
-  color: var(--button-primary-ink);
-  background: var(--button-primary-bg);
-  border-color: transparent;
-  font-weight: var(--weight-strong);
-}
-
+ui-button[kind="segment"].active { color: var(--text-primary); background: var(--ground-card-2); border-color: transparent; font-weight: var(--weight-strong); }
+ui-button[kind="quiet"].arming { color: var(--button-primary-ink); background: var(--button-primary-bg); border-color: transparent; font-weight: var(--weight-strong); }
 ui-button[kind="toggle"].active,
 ui-button[kind="toggle"][aria-pressed="true"],
-ui-button[kind="toggle"][data-active="true"] {
-  color: var(--button-primary-ink);
-  background: var(--series-primary);
-  border-color: transparent;
-  font-weight: var(--weight-strong);
-}
-
-/* 누르는 동안만 도는 자동 진행(D-344): 대기는 초록 테두리, 누르는 동안은 초록 채움. */
-ui-button[kind="toggle"][tone="good"] {
-  color: var(--status-good);
-  border-color: var(--status-good);
-}
-
-ui-button[kind="toggle"][tone="good"].active {
-  color: var(--button-primary-ink);
-  background: var(--status-good);
-  border-color: transparent;
-  font-weight: var(--weight-strong);
-}
-
+ui-button[kind="toggle"][data-active="true"] { color: var(--button-primary-ink); background: var(--series-primary); border-color: transparent; font-weight: var(--weight-strong); }
+ui-button[kind="toggle"][tone="good"] { color: var(--status-good); border-color: var(--status-good); }
+ui-button[kind="toggle"][tone="good"].active { color: var(--button-primary-ink); background: var(--status-good); border-color: transparent; font-weight: var(--weight-strong); }
 ui-button[data-size="secondary"] { min-height: var(--target-secondary); }
 ui-button[data-size="primary"] { min-height: var(--target-primary); }
 ui-button[data-size="irreversible"] { min-height: var(--target-irreversible); }
-
 ui-button[kind="toggle"] small,
-ui-button[kind="irreversible"] small {
-  display: block;
-}
-
-/* small은 각주다 — 종류가 크기를 지정하지 않아도 계단 안에 든다(D-203).
-   UA 기본값(smaller)은 16px 맥락에서 13.33px을 만들고, 14px 맥락에서는
-   11.67px을 만든다. 둘 다 닫힌 여섯 단계 밖이다. */
-ui-button small {
-  font: var(--weight-medium) var(--text-micro)/var(--leading-label) var(--body);
-}
-
+ui-button[kind="irreversible"] small { display: block; }
+ui-button small { font: var(--weight-medium) var(--text-micro)/var(--leading-label) var(--body); }
 ui-button[kind="toggle"].active small,
 ui-button[kind="toggle"][aria-pressed="true"] small,
-ui-button[kind="toggle"][data-active="true"] small {
-  color: var(--button-primary-ink);
-}
-
-ui-button[data-kind-missing] {
-  outline: var(--contract-mark-width) solid var(--status-crit);
-}
-
-ui-button[data-size-missing] {
-  outline: var(--contract-mark-width) solid var(--status-crit);
-}
-
+ui-button[kind="toggle"][data-active="true"] small { color: var(--button-primary-ink); }
+ui-button[data-kind-missing] { outline: var(--contract-mark-width) solid var(--status-crit); }
+ui-button[data-size-missing] { outline: var(--contract-mark-width) solid var(--status-crit); }
 ui-button[disabled] { cursor: not-allowed; }
-
-ui-button[disabled]:is(:not([reason]), [reason=""]):not([aria-pressed="true"], [aria-selected="true"]) { opacity: var(--disabled-opacity); } /* 눌린 칸은 지금 값이라 흐리지 않는다. */
-
-/* D-359 §5.4 — 상태는 종류마다 여기서 그린다. 움직임 없이(D-220) 선과 면만 바뀐다.
-   비활성은 hover·active를 받지 않는다. 채움 종류(주 명령·불가역·눌림)는 누르는
-   동안 바탕색 안쪽 테를 얻는다. 표면은 눌림을 outline이나 status 색으로 덧칠하지
-   않고 aria-pressed="true"를 단다. */
-ui-button:is([kind="quiet"], [kind="segment"], [kind="toggle"]):not([disabled], [aria-pressed="true"], [aria-selected="true"], [data-active="true"], .active, .arming):hover {
-  color: var(--text-primary);
-  border-color: var(--ink);
-}
-
-ui-button:is([kind="quiet"], [kind="segment"], [kind="toggle"]):not([disabled], [aria-pressed="true"], [aria-selected="true"], [data-active="true"], .active, .arming):active {
-  color: var(--text-primary);
-  background: var(--ground-card-2);
-}
-
-ui-button[kind="primary"]:not([disabled]):hover {
-  background: color-mix(in oklab, var(--button-primary-bg) 88%, var(--ground));
-}
-
-ui-button[kind="irreversible"]:not([disabled]):hover {
-  border-color: var(--ink);
-}
-
-ui-button:is([kind="primary"], [kind="irreversible"], [aria-pressed="true"], [aria-selected="true"], [data-active="true"], .active, .arming):not([disabled]):active {
-  box-shadow: inset 0 0 0 var(--focus-ring-width) var(--ground);
-}
-
-/* 비활성 사유(D-359 §5.3). ui.js가 reason 속성을 버튼 안의 <small data-reason>으로
-   그리고 aria-describedby로 잇는다. 사유가 있는 비활성은 흐리지 않는다 — 흐리면
-   사유 글자까지 읽히지 않는다. 대신 채움을 빼고 점선 테와 조용한 글자로 말한다. */
-/* 아이콘과 이름은 한 줄에 남고 사유만 아래 줄로 내려간다. 사유를 숨긴 자리에서도 단추 얼굴이 이웃과 같다. */
-ui-button[reason]:not([reason=""]) { display: inline-grid; grid-template-columns: auto auto; justify-content: center; align-items: center; row-gap: 0; } /* 폭 = 가장 넓은 줄(줄바꿈 flex는 합이라 단추가 넓어진다) */
+ui-button[disabled]:is(:not([reason]), [reason=""]):not([aria-pressed="true"], [aria-selected="true"]) { opacity: var(--disabled-opacity); }
+ui-button:is([kind="quiet"], [kind="segment"], [kind="toggle"]):not([disabled], [aria-pressed="true"], [aria-selected="true"], [data-active="true"], .active, .arming):hover { color: var(--text-primary); border-color: var(--ink); }
+ui-button:is([kind="quiet"], [kind="segment"], [kind="toggle"]):not([disabled], [aria-pressed="true"], [aria-selected="true"], [data-active="true"], .active, .arming):active { color: var(--text-primary); background: var(--ground-card-2); }
+ui-button[kind="primary"]:not([disabled]):hover { background: color-mix(in oklab, var(--button-primary-bg) 88%, var(--ground)); }
+ui-button[kind="irreversible"]:not([disabled]):hover { border-color: var(--ink); }
+ui-button:is([kind="primary"], [kind="irreversible"], [aria-pressed="true"], [aria-selected="true"], [data-active="true"], .active, .arming):not([disabled]):active { box-shadow: inset 0 0 0 var(--focus-ring-width) var(--ground); }
+ui-button[reason]:not([reason=""]) { display: inline-grid; grid-template-columns: auto auto; justify-content: center; align-items: center; row-gap: 0; }
 ui-button[reason]:not([reason=""]) > small[data-reason] { grid-column: 1 / -1; text-align: center; }
-
-ui-button[disabled][reason]:not([reason=""]) {
-  color: var(--text-secondary);
-  background: transparent;
-  border-color: var(--surface-line);
-  border-style: dashed;
-}
-
-/* [kind]까지 적는 이유: 불가역 채움의 `ui-button[kind="irreversible"] small`(ink-on-crit)보다
-   앞서야 한다. 사유는 채움이 없는 비활성에 붙으므로 늘 조용한 잉크다(US-007 밝게 캡처). */
+ui-button[disabled][reason]:not([reason=""]) { color: var(--text-secondary); background: transparent; border-color: var(--surface-line); border-style: dashed; }
 ui-button > small[data-reason],
-ui-button[kind] > small[data-reason] {
-  display: block;
-  max-width: 100%;
-  color: var(--text-secondary);
-  font: var(--weight-medium) var(--text-micro)/var(--leading-label) var(--body);
-  white-space: normal;
-}
-
-input.ui-field[type="file"]::file-selector-button { /* 브라우저 기본 대신 조용한 단추 얼굴 */ margin-inline-end: var(--gap-section); padding: var(--inset-chip); color: var(--button-secondary-ink); background: var(--button-secondary-bg); border: 1px solid var(--control-line); border-radius: var(--radius-control); font: inherit; cursor: pointer; }
+ui-button[kind] > small[data-reason] { display: block; max-width: 100%; color: var(--text-secondary); font: var(--weight-medium) var(--text-micro)/var(--leading-label) var(--body); white-space: normal; }
+input.ui-field[type="file"]::file-selector-button { margin-inline-end: var(--gap-section); padding: var(--inset-chip); color: var(--button-secondary-ink); background: var(--button-secondary-bg); border: 1px solid var(--control-line); border-radius: var(--radius-control); font: inherit; cursor: pointer; }
 ui-button:focus-visible,
 ui-field:focus-visible,
 ui-field input:focus-visible,
 input.ui-field:focus-visible,
 select.ui-field:focus-visible,
-textarea.ui-field:focus-visible {
-  outline: var(--focus-ring-width) solid var(--focus-ring);
-  outline-offset: var(--focus-ring-offset);
-}
-
-ui-button[kind="irreversible"] span {
-  display: block;
-  font: inherit;
-  letter-spacing: var(--track-state);
-}
-
-ui-button[kind="irreversible"] small {
-  display: block;
-  margin-top: var(--gap-button-detail);
-  color: var(--button-irreversible-ink);
-  font: var(--weight-medium) var(--text-label)/var(--leading-label) var(--body);
-}
-
+textarea.ui-field:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset); }
+ui-button[kind="irreversible"] span { display: block; font: inherit; letter-spacing: var(--track-state); }
+ui-button[kind="irreversible"] small { display: block; margin-top: var(--gap-button-detail); color: var(--button-irreversible-ink); font: var(--weight-medium) var(--text-label)/var(--leading-label) var(--body); }
 ui-field,
 input.ui-field,
 select.ui-field,
-textarea.ui-field {
-  display: inline-flex;
-  align-items: center;
-  box-sizing: border-box;
-  min-height: var(--target-secondary);
-  margin: 0;
-  padding: 0 var(--inset-field);
-  border: 1px solid var(--field-line);
-  border-radius: var(--radius-control);
-  color: var(--text-primary);
-  background: var(--field-bg);
-  font: var(--weight-regular) var(--text-body)/var(--leading-control) var(--body);
-  font-variant-numeric: tabular-nums;
-}
-
+textarea.ui-field { display: inline-flex; align-items: center; box-sizing: border-box; min-height: var(--target-secondary); margin: 0; padding: 0 var(--inset-field); border: 1px solid var(--field-line); border-radius: var(--radius-control); color: var(--text-primary); background: var(--field-bg); font: var(--weight-regular) var(--text-body)/var(--leading-control) var(--body); font-variant-numeric: tabular-nums; }
 ui-field { width: 100%; }
-
 input.ui-field,
 select.ui-field,
-textarea.ui-field {
-  min-width: 0;
-  max-width: 100%;
-}
-
+textarea.ui-field { min-width: 0; max-width: 100%; }
 input.ui-field:disabled:not([type="checkbox"]),
 select.ui-field:disabled,
-textarea.ui-field:disabled {
-  cursor: not-allowed;
-  opacity: var(--disabled-opacity);
-}
-
+textarea.ui-field:disabled { cursor: not-allowed; opacity: var(--disabled-opacity); }
 .ui-field::placeholder,
 ui-field input::placeholder { color: var(--nominal-quiet); }
-
-input.ui-field[readonly] {
-  color: var(--nominal-quiet);
-  border-style: dashed;
-}
-
+input.ui-field[readonly] { color: var(--nominal-quiet); border-style: dashed; }
 input.ui-field:user-invalid,
-input.ui-field[aria-invalid="true"] {
-  border-color: var(--field-invalid);
-}
-
-input.ui-field:is([type="checkbox"], [type="radio"]) {
-  flex: none;
-  width: var(--space-5);
-  height: var(--space-5);
-  min-height: 0;
-  padding: 0;
-  border: 0;
-  background: none;
-  accent-color: var(--focus-ring);
-}
-
-/* D-359 US-008 — 체크 상자는 토큰으로 그린다. Chromium의 네이티브 비활성 체크는
-   accent-color를 버리고 고정 회색으로 그려 light 바닥 위 1.2:1, dark 1.8:1이었다
-   (Fleet 대형 포함 로봇, RUNNING 중). 테와 체크는 늘 3:1 이상인 잉크다: 켜짐
-   `--focus-ring`, 비활성은 흐리게 하지 않고 `--ink-quiet`로 바꾼다. */
-input.ui-field[type="checkbox"] {
-  appearance: none;
-  display: inline-grid;
-  place-content: center;
-  margin: 0;
-  color: var(--focus-ring);
-  border: var(--focus-ring-width) solid var(--ink-quiet);
-  border-radius: var(--radius-control);
-  cursor: pointer;
-}
-input.ui-field[type="checkbox"]::before {
-  content: "";
-  width: var(--space-3);
-  height: var(--space-3);
-  background: currentColor;
-  clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%);
-  visibility: hidden;
-}
+input.ui-field[aria-invalid="true"] { border-color: var(--field-invalid); }
+input.ui-field:is([type="checkbox"], [type="radio"]) { flex: none; width: var(--space-5); height: var(--space-5); min-height: 0; padding: 0; border: 0; background: none; accent-color: var(--focus-ring); }
+input.ui-field[type="checkbox"] { appearance: none; display: inline-grid; place-content: center; margin: 0; color: var(--focus-ring); border: var(--focus-ring-width) solid var(--ink-quiet); border-radius: var(--radius-control); cursor: pointer; }
+input.ui-field[type="checkbox"]::before { content: ""; width: var(--space-3); height: var(--space-3); background: currentColor; clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%); visibility: hidden; }
 input.ui-field[type="checkbox"]:checked { border-color: currentColor; }
 input.ui-field[type="checkbox"]:checked::before { visibility: visible; }
-/* US-009 — 꺼진 빈 상자가 켜진 빈 상자와 똑같이 보였다. 비활성 테는 점선이다(사유 있는
-   비활성 버튼·unavailable 증거와 같은 어휘). 색은 그대로 `--ink-quiet`라 3:1을 지키고 흐리지 않는다. */
-input.ui-field[type="checkbox"]:disabled {
-  color: var(--text-secondary);
-  border-style: dashed;
-  cursor: not-allowed;
-}
-
-.ui-check {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--gap-button-content);
-  min-height: var(--target-secondary);
-  cursor: pointer;
-}
-
+input.ui-field[type="checkbox"]:disabled { color: var(--text-secondary); border-style: dashed; cursor: not-allowed; }
+.ui-check { display: inline-flex; align-items: center; gap: var(--gap-button-content); min-height: var(--target-secondary); cursor: pointer; }
 ui-field input,
 ui-field select,
-ui-field textarea {
-  width: 100%;
-  min-height: var(--target-secondary);
-  margin: 0;
-  padding: 0;
-  border: 0;
-  color: inherit;
-  background: transparent;
-  font: inherit;
-}
-
-ui-field[invalid] {
-  border-color: var(--field-invalid);
-}
-
-ui-tag {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--gap-field-label);
-  min-height: var(--space-6);
-  padding: var(--inset-tag);
-  border: 1px solid var(--surface-line);
-  border-radius: var(--radius-flag);
-  color: var(--nominal-quiet);
-  background: transparent;
-  font: var(--weight-label) var(--text-label)/var(--leading-flat) var(--mono);
-  letter-spacing: var(--track-state);
-  white-space: nowrap;
-}
-
-/* D-461: task-first workspace compositions. Opt-in; no existing surface override. */
-.ui-workspace-bar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--gap-workspace);
-  padding-block: var(--inset-workspace-bar);
-}
+ui-field textarea { width: 100%; min-height: var(--target-secondary); margin: 0; padding: 0; border: 0; color: inherit; background: transparent; font: inherit; }
+ui-field[invalid] { border-color: var(--field-invalid); }
+ui-tag { display: inline-flex; align-items: center; gap: var(--gap-field-label); min-height: var(--space-6); padding: var(--inset-tag); border: 1px solid var(--surface-line); border-radius: var(--radius-flag); color: var(--nominal-quiet); background: transparent; font: var(--weight-label) var(--text-label)/var(--leading-flat) var(--mono); letter-spacing: var(--track-state); white-space: nowrap; }
+.ui-workspace-bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--gap-workspace); padding-block: var(--inset-workspace-bar); }
 .ui-workspace-bar > [data-spacer] { flex: 1; }
 .ui-workspace-bar .ui-field { min-width: 0; }
-.ui-task-row {
-  padding-block: var(--inset-task-row);
-  border-top: 1px solid var(--surface-line);
-  min-width: 0;
-}
-.ui-task-heading {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--gap-workspace);
-}
-.ui-task-heading h3 {
-  margin: 0;
-  font: var(--weight-strong) var(--text-title)/var(--leading-body) var(--body);
-  overflow-wrap: anywhere;
-}
+.ui-task-row { padding-block: var(--inset-task-row); border-top: 1px solid var(--surface-line); min-width: 0; }
+.ui-task-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--gap-workspace); }
+.ui-task-heading h3 { margin: 0; font: var(--weight-strong) var(--text-title)/var(--leading-body) var(--body); overflow-wrap: anywhere; }
 .ui-task-meta { color: var(--text-secondary); font-size: var(--text-label); }
 .ui-task-next { max-width: 70ch; line-height: var(--leading-copy); }
 .ui-task-row details { margin-top: var(--inset-workspace-bar); }
 .ui-task-row summary { cursor: pointer; color: var(--text-secondary); }
 .ui-task-row p { overflow-wrap: anywhere; }
 .ui-task-row details > :not(summary) { margin-top: var(--gap-task-detail); }
-
-/* 상태 어휘: neutral(조용한 글자) · active(정상 진행 — 색이 아니라 ink, D-82) ·
-   warn(글자) · crit(채움). active는 D-359 §5.2에서 Fleet `.tag.nav/.ok`와
-   dashboard `[data-status="OK"]` 사본을 받으려고 더했다. */
-ui-tag[status="active"] {
-  color: var(--nominal);
-  border-color: currentColor;
-}
-
-ui-tag[status="warn"] {
-  color: var(--status-warn);
-  border-color: var(--status-warn);
-}
-
-ui-tag[status="crit"] {
-  color: var(--text-on-danger);
-  border-color: transparent;
-  background: var(--status-crit);
-}
-
-/* D-668: values inside one summary control retain state without nested pill outlines. */
-ui-tag[variant="inline"] {
-  min-height: 0;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-}
+ui-tag[status="active"] { color: var(--nominal); border-color: currentColor; }
+ui-tag[status="warn"] { color: var(--status-warn); border-color: var(--status-warn); }
+ui-tag[status="crit"] { color: var(--text-on-danger); border-color: transparent; background: var(--status-crit); }
+ui-tag[variant="inline"] { min-height: 0; padding: 0; border: 0; border-radius: 0; background: transparent; }
 ui-tag[variant="inline"][status="crit"] { color: var(--text-primary); }
-ui-tag[variant="inline"][status="crit"]::before {
-  content: "";
-  width: var(--space-2);
-  height: var(--space-2);
-  border-radius: var(--radius-flag);
-  background: var(--status-crit);
-}
-
-ui-text {
-  font: var(--weight-medium) var(--text-body)/var(--leading-body) var(--body);
-  color: var(--text-primary);
-}
-
-ui-text[scale="unit"] {
-  font: var(--weight-medium) var(--text-micro)/var(--leading-control) var(--mono);
-  letter-spacing: var(--track-label);
-  color: var(--nominal-quiet);
-}
-
-ui-text[scale="label"] {
-  font: var(--weight-label) var(--text-label)/var(--leading-control) var(--body);
-  letter-spacing: var(--track-label);
-  text-transform: uppercase;
-  color: var(--nominal-quiet);
-}
-
-ui-text[scale="value"] {
-  font: var(--weight-emphasis) var(--text-value)/var(--leading-dense) var(--mono);
-  font-variant-numeric: tabular-nums;
-  color: var(--text-primary);
-}
-
-ui-text[scale="title"] {
-  font: var(--weight-strong) var(--text-title)/var(--leading-control) var(--body);
-  color: var(--text-primary);
-}
-
-ui-text[scale="display"] {
-  font: var(--weight-emphasis) var(--text-display)/var(--leading-flat) var(--mono);
-  font-variant-numeric: tabular-nums;
-  color: var(--text-primary);
-}
-
-ui-status {
-  display: block;
-  min-width: 0;
-  color: var(--nominal-quiet);
-  font: var(--weight-medium) var(--text-body)/var(--leading-body) var(--body);
-  overflow-wrap: anywhere;
-}
-
-:root {
-  scrollbar-color: var(--ground-card-2) var(--ground);
-  scrollbar-width: thin;
-}
-
-ui-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: end;
-  gap: var(--gap-actions);
-}
-
-/* Native form elements keep submission and label behavior; the shared classes
-   provide only field grouping and responsive placement. */
-.ui-form {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: end;
-  gap: var(--gap-form);
-}
-
-.ui-field-label {
-  display: grid;
-  gap: var(--gap-field-label);
-  min-width: min(100%, 10rem);
-}
-
+ui-tag[variant="inline"][status="crit"]::before { content: ""; width: var(--space-2); height: var(--space-2); border-radius: var(--radius-flag); background: var(--status-crit); }
+ui-text { font: var(--weight-medium) var(--text-body)/var(--leading-body) var(--body); color: var(--text-primary); }
+ui-text[scale="unit"] { font: var(--weight-medium) var(--text-micro)/var(--leading-control) var(--mono); letter-spacing: var(--track-label); color: var(--nominal-quiet); }
+ui-text[scale="label"] { font: var(--weight-label) var(--text-label)/var(--leading-control) var(--body); letter-spacing: var(--track-label); text-transform: uppercase; color: var(--nominal-quiet); }
+ui-text[scale="value"] { font: var(--weight-emphasis) var(--text-value)/var(--leading-dense) var(--mono); font-variant-numeric: tabular-nums; color: var(--text-primary); }
+ui-text[scale="title"] { font: var(--weight-strong) var(--text-title)/var(--leading-control) var(--body); color: var(--text-primary); }
+ui-text[scale="display"] { font: var(--weight-emphasis) var(--text-display)/var(--leading-flat) var(--mono); font-variant-numeric: tabular-nums; color: var(--text-primary); }
+ui-status { display: block; min-width: 0; color: var(--nominal-quiet); font: var(--weight-medium) var(--text-body)/var(--leading-body) var(--body); overflow-wrap: anywhere; }
+:root { scrollbar-color: var(--ground-card-2) var(--ground); scrollbar-width: thin; }
+ui-actions { display: flex; flex-wrap: wrap; align-items: end; gap: var(--gap-actions); }
+.ui-form { display: flex; flex-wrap: wrap; align-items: end; gap: var(--gap-form); }
+.ui-field-label { display: grid; gap: var(--gap-field-label); min-width: min(100%, 10rem); }
 .ui-form input,
 .ui-form select,
 .ui-form textarea,
 .ui-actions input { max-width: 100%; }
-
-.ui-readout {
-  display: grid;
-  grid-template-columns: minmax(7rem, 1fr) 2fr;
-  gap: var(--gap-readout);
-}
-
+.ui-readout { display: grid; grid-template-columns: minmax(7rem, 1fr) 2fr; gap: var(--gap-readout); }
 .ui-readout dt { color: var(--nominal-quiet); }
 .ui-readout dd { margin: 0; font-variant-numeric: tabular-nums; }
-
 .ui-readback { min-width: 0; display: grid; gap: var(--gap-readback); }
 .ui-readback > h3,
 .ui-readback > h4 { margin: 0; }
-
-/* D-359 §6.3 — 공용 부품은 뷰포트가 아니라 자기 칸에 반응한다. 칸(container-type:
-   inline-size)은 표면이 정한다. 22rem은 폰 한 열(320px 뷰포트의 거터 안쪽)과 좁은 조작
-   칸을 가르는 칸 폭이다 — 1366px 콘솔의 감지·조작 열(약 23–25rem)은 두 열을 지킨다.
-   칸이 없는 곳에서는 넓은 배치(줄바꿈하는 행)가 그대로 남는다. */
 .ui-readout dd { min-width: 0; overflow-wrap: anywhere; }
-
 @container (width < 22rem) {
   .ui-form { align-items: stretch; flex-direction: column; }
   .ui-form > * { width: 100%; }
@@ -678,265 +156,52 @@ ui-actions {
   ui-actions { align-items: stretch; flex-direction: column; }
   ui-actions > * { width: 100%; }
 }
-
 ui-status[state="warning"],
 ui-status[state="error"],
 ui-status[state="unavailable"],
-ui-status[state="forbidden"] {
-  color: var(--status-warn);
-}
-
-ui-status[data-state-missing] {
-  outline: var(--contract-mark-width) solid var(--status-crit);
-  outline-offset: var(--contract-mark-offset);
-}
-
-ui-head {
-  display: flex;
-  align-items: baseline;
-  gap: var(--gap-heading);
-  width: 100%;
-  min-width: 0;
-}
-
-ui-head [data-rule] {
-  flex: 1;
-  border-top: 1px solid var(--surface-line);
-}
-
-ui-grid {
-  display: grid;
-  gap: 1px;
-  width: 100%;
-  background: var(--surface-line);
-}
-
+ui-status[state="forbidden"] { color: var(--status-warn); }
+ui-status[data-state-missing] { outline: var(--contract-mark-width) solid var(--status-crit); outline-offset: var(--contract-mark-offset); }
+ui-head { display: flex; align-items: baseline; gap: var(--gap-heading); width: 100%; min-width: 0; }
+ui-head [data-rule] { flex: 1; border-top: 1px solid var(--surface-line); }
+ui-grid { display: grid; gap: 1px; width: 100%; background: var(--surface-line); }
 ui-grid[columns="2"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 ui-grid[columns="3"] { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 ui-grid[columns="4"] { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-
-ui-grid > * {
-  display: grid;
-  gap: var(--gap-grid-cell);
-  min-width: 0;
-  padding: var(--inset-grid-cell);
-  background: var(--surface-flat);
-}
-
-ui-chip {
-  display: inline-flex;
-  align-items: center;
-  padding: var(--inset-chip);
-  border: 1px solid var(--surface-line);
-  border-radius: var(--radius-control);
-  color: var(--text-primary);
-  background: var(--scrim);
-  font: var(--weight-label) var(--text-label)/var(--leading-control) var(--mono);
-  letter-spacing: var(--track-label);
-}
-
-ui-triage {
-  display: flex;
-  align-items: center;
-  gap: var(--gap-triage);
-  width: 100%;
-  margin: 0;
-  color: var(--text-primary);
-  font: var(--weight-emphasis) var(--text-body)/var(--leading-control) var(--body);
-}
-
-ui-triage::before {
-  content: "";
-  flex: none;
-  width: var(--space-2);
-  height: var(--space-2);
-  border-radius: var(--radius-flag);
-  background: var(--line-quiet);
-}
-
+ui-grid > * { display: grid; gap: var(--gap-grid-cell); min-width: 0; padding: var(--inset-grid-cell); background: var(--surface-flat); }
+ui-chip { display: inline-flex; align-items: center; padding: var(--inset-chip); border: 1px solid var(--surface-line); border-radius: var(--radius-control); color: var(--text-primary); background: var(--scrim); font: var(--weight-label) var(--text-label)/var(--leading-control) var(--mono); letter-spacing: var(--track-label); }
+ui-triage { display: flex; align-items: center; gap: var(--gap-triage); width: 100%; margin: 0; color: var(--text-primary); font: var(--weight-emphasis) var(--text-body)/var(--leading-control) var(--body); }
+ui-triage::before { content: ""; flex: none; width: var(--space-2); height: var(--space-2); border-radius: var(--radius-flag); background: var(--line-quiet); }
 ui-triage[status="warn"]::before { background: var(--status-warn); }
 ui-triage[status="crit"]::before { background: var(--status-crit); }
-
-ui-triage small {
-  margin-left: auto;
-  color: var(--nominal-quiet);
-  font: var(--weight-medium) var(--text-label)/var(--leading-label) var(--body);
-}
-
-ui-evidence {
-  display: inline-flex;
-  align-items: center;
-  color: var(--text-primary);
-  font: var(--weight-medium) var(--text-label)/var(--leading-label) var(--body);
-}
-
+ui-triage small { margin-left: auto; color: var(--nominal-quiet); font: var(--weight-medium) var(--text-label)/var(--leading-label) var(--body); }
+ui-evidence { display: inline-flex; align-items: center; color: var(--text-primary); font: var(--weight-medium) var(--text-label)/var(--leading-label) var(--body); }
 ui-evidence[state="fresh"] { color: var(--nominal-quiet); }
-
 ui-evidence[state="delayed"],
 ui-evidence[state="disconnected"] { color: var(--nominal-quiet); }
-
-ui-evidence[state="unavailable"] {
-  padding: var(--inset-evidence-unavailable);
-  border: 1px dashed var(--surface-line);
-  border-radius: var(--radius-control);
-  color: var(--nominal-quiet);
-}
-
-ui-evidence[data-state-missing] {
-  outline: var(--contract-mark-width) solid var(--status-crit);
-}
-
-/* 화면 틀. 다음 페이지는 template.html 을 복사해서 이 안에 내용을 넣는다. */
-
-ui-shell {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-height: 100dvh;
-  color: var(--text-primary);
-  background: var(--surface-canvas);
-  font-family: var(--body);
-  font-size: var(--text-body);
-}
-
-ui-shell[data-grammar-missing] {
-  outline: var(--contract-mark-width) solid var(--status-crit);
-}
-
-/* D-466 — 머리의 자리는 brand, cluster, estop이다. cluster 안의 순서는 표면이 정한다.
-   64rem 미만은 두 줄(이름·상태 / 화면 전환)이고 비상 정지는 두 줄을 차지한다.
-   30rem 미만은 그 두 줄의 여백과 부제만 줄인다. 새 머리 격자는 만들지 않는다. */
-ui-topbar {
-  box-sizing: border-box;
-  display: flex;
-  align-items: center;
-  gap: var(--gap-topbar);
-  position: sticky;
-  z-index: 10;
-  top: 0;
-  min-height: var(--appbar-height); /* D-741 앱 바 64px. Pilot 주행·Android 셸만 --topbar-height(D-741 부기) */
-  padding: var(--inset-topbar);
-  border-bottom: 1px solid var(--surface-line);
-  background: var(--surface-recessed);
-}
-
-ui-shell[grammar="focal"] ui-topbar {
-  align-items: flex-end;
-  padding: var(--inset-topbar-focal);
-}
-
+ui-evidence[state="unavailable"] { padding: var(--inset-evidence-unavailable); border: 1px dashed var(--surface-line); border-radius: var(--radius-control); color: var(--nominal-quiet); }
+ui-evidence[data-state-missing] { outline: var(--contract-mark-width) solid var(--status-crit); }
+ui-shell { display: flex; flex-direction: column; flex: 1; min-height: 100dvh; color: var(--text-primary); background: var(--surface-canvas); font-family: var(--body); font-size: var(--text-body); }
+ui-shell[data-grammar-missing] { outline: var(--contract-mark-width) solid var(--status-crit); }
+ui-topbar { box-sizing: border-box; display: flex; align-items: center; gap: var(--gap-topbar); position: sticky; z-index: 10; top: 0; min-height: var(--appbar-height); padding: var(--inset-topbar); border-bottom: 1px solid var(--surface-line); background: var(--surface-recessed); }
+ui-shell[grammar="focal"] ui-topbar { align-items: flex-end; padding: var(--inset-topbar-focal); }
 ui-topbar [data-spacer],
 ui-topbar .spacer { flex: 1; }
-
-/* D-466 — 절차 작업을 고르는 열. 폭은 부모 격자의 --sidebar-track이다.
-   64rem 미만에서 레일을 숨기는 규칙은 task-chooser.css가 유지한다. */
-.ui-sidebar {
-  min-width: 0;
-  align-content: start;
-}
-
-ui-brand {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  color: var(--text-primary);
-}
-
-ui-brand a {
-  display: flex;
-  align-items: center;
-  gap: var(--gap-brand);
-  color: inherit;
-  text-decoration: none;
-}
-
+.ui-sidebar { min-width: 0; align-content: start; }
+ui-brand { display: flex; flex-direction: column; min-width: 0; color: var(--text-primary); }
+ui-brand a { display: flex; align-items: center; gap: var(--gap-brand); color: inherit; text-decoration: none; }
 ui-brand a:hover b,
 ui-brand a:hover small { text-decoration: underline; text-underline-offset: 0.2em; }
-
 ui-brand a:focus-visible { outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
-
-/* 워드마크는 한 줄이다. 표면이 이름 칸에 `container-type: inline-size`를 주면 칸 폭에 맞게
-   줄어든다(상한 title). 14cqi는 가장 긴 표면 이름이 그 칸 안에 들어가는 계수다.
-   컨테이너가 없으면 cqi는 작은 뷰포트 폭을 따르므로 넓은 창에서는 늘 title이다. */
-ui-brand b {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--gap-brand);
-  color: var(--brand-rose);
-  font: var(--weight-strong) var(--text-title)/var(--leading-dense) var(--body);
-  font-size: var(--brand-wordmark-size);
-  letter-spacing: var(--track-wide);
-  white-space: nowrap;
-}
-
-ui-brand b::before {
-  content: "";
-  flex: 0 0 1em;
-  width: 1em;
-  height: 1em;
-  background: currentColor;
-  mask: url("brand/mark.svg") center / contain no-repeat;
-}
-
-ui-brand small {
-  color: var(--nominal-quiet);
-  font: var(--weight-medium) var(--text-micro)/var(--leading-control) var(--mono);
-  letter-spacing: var(--track-label);
-}
-
-ui-section {
-  display: flex;
-  flex-direction: column;
-  gap: var(--gap-section);
-  min-width: 0;
-}
-
-/* D-359 US-008 — 빈 상태 줄은 칸을 차지하지 않는다. 0px 높이여도 flex 항목이라 gap이
-   붙었고, /setup 웨이포인트는 빈 저장·목록 상태 줄 둘이 짧은 목록 위에 빈 칸을 만들었다.
-   display: contents는 상자만 없애고 요소는 접근성 트리에 남겨 aria-live가 계속 알린다. */
+ui-brand b { display: inline-flex; align-items: center; gap: var(--gap-brand); color: var(--brand-rose); font: var(--weight-strong) var(--text-title)/var(--leading-dense) var(--body); font-size: var(--brand-wordmark-size); letter-spacing: var(--track-wide); white-space: nowrap; }
+ui-brand b::before { content: ""; flex: 0 0 1em; width: 1em; height: 1em; background: currentColor; mask: url("brand/mark.svg") center / contain no-repeat; }
+ui-brand small { color: var(--nominal-quiet); font: var(--weight-medium) var(--text-micro)/var(--leading-control) var(--mono); letter-spacing: var(--track-label); }
+ui-section { display: flex; flex-direction: column; gap: var(--gap-section); min-width: 0; }
 ui-section > [role="status"]:empty { display: contents; }
-
-/* D-371 — 대화상자는 모두 ui.js openLiveDialog()로 연다(비모달 show()). top layer가
-   아니라서 가운데 고정과 쌓임은 여기서 준다(`.ui-live-dialog`). 스크림은 ::backdrop이
-   아니라 형제 div이고, ui.js가 정지 컨트롤(`[data-always-live]`) 자리에 clip-path 구멍을
-   낸다 — 정지는 대화상자가 열려 있어도 보이고 눌린다. 목록 삭제 확인(`.ui-confirm`)은
-   대상 문장 하나와 취소·실행 두 버튼뿐이다. */
-.ui-confirm-scrim {
-  position: fixed;
-  z-index: 2000;
-  inset: 0;
-  background: var(--scrim);
-}
-.ui-confirm-scrim[data-clip] {
-  clip-path: attr(data-clip type(*), none);
-}
-
+.ui-confirm-scrim { position: fixed; z-index: 2000; inset: 0; background: var(--scrim); }
+.ui-confirm-scrim[data-clip] { clip-path: attr(data-clip type(*), none); }
 dialog.ui-live-dialog,
-dialog.ui-confirm {
-  position: fixed;
-  z-index: 2001;
-  inset: 0;
-  margin: auto;
-  box-sizing: border-box;
-  max-width: min(28rem, calc(100vw - 2 * var(--space-4)));
-  padding: var(--inset-dialog);
-  border: 1px solid var(--surface-line);
-  border-radius: var(--radius-panel);
-  color: var(--text-primary);
-  background: var(--surface-raised);
-}
-
-dialog.ui-confirm p {
-  margin: 0 0 var(--gap-dialog);
-  font: var(--weight-label) var(--text-body)/var(--leading-copy) var(--body);
-}
-
+dialog.ui-confirm { position: fixed; z-index: 2001; inset: 0; margin: auto; box-sizing: border-box; max-width: min(28rem, calc(100vw - 2 * var(--space-4))); padding: var(--inset-dialog); border: 1px solid var(--surface-line); border-radius: var(--radius-panel); color: var(--text-primary); background: var(--surface-raised); }
+dialog.ui-confirm p { margin: 0 0 var(--gap-dialog); font: var(--weight-label) var(--text-body)/var(--leading-copy) var(--body); }
 dialog.ui-confirm ui-actions { justify-content: flex-end; }
-
-ui-empty {
-  margin: 0;
-  color: var(--nominal-quiet);
-  font: var(--weight-medium) var(--text-label)/var(--leading-copy) var(--body);
-}
-/* Account context stays outside command bars and wraps long display names. */
+ui-empty { margin: 0; color: var(--nominal-quiet); font: var(--weight-medium) var(--text-label)/var(--leading-copy) var(--body); }
 [data-account-profile] { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }

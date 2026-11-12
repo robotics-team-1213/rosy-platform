@@ -225,7 +225,8 @@ gaps:
       - learning/envs/isaac/cell_model_inventory.yaml:58-62
       - tools/sim/omx_two_arm_sites.py:45-50
       - tools/sim/omx_real2sim_comp.py
-      - tools/sim/omx_twin.py:373
+      - tools/sim/omx_twin.py:350
+      - tools/sim/omx_twin_helpers.py:21
       - D-933
     tier: [M, R]
     owner: calibration / omx_twin
@@ -235,7 +236,8 @@ gaps:
   - id: G-20
     gap: OMX real table sits 6-20 mm below FK zero; the twin's joint-zero fit (j1-j5 +4.0/+1.0/+3.2/+2.8/+2.4 deg) cut the top-view outline offset from 12.6 to 4.5 px and lowers the tip 9.5 mm, cause (zeros or link sag) not settled
     evidence:
-      - tools/sim/omx_twin.py:373
+      - tools/sim/omx_twin.py:350
+      - tools/sim/omx_twin_helpers.py:21
       - tools/sim/omx_two_arm_sites.py:37
       - D-947
     tier: [R, M]

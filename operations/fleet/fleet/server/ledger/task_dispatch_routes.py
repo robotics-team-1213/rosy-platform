@@ -209,9 +209,13 @@ def install_task_dispatch_routes(
 
     async def _compute_road_plan(request: Request, robot_id: str, target_x: float, target_y: float,
                                  target_yaw: float | None, place_id: str | None, label: str) -> dict:
+        import importlib as _il
         import math as _math
-        from fleet.routing.trip import PlanRequest, plan_trip
-        from fleet.routing.execute import plan_body
+
+        _trip_mod = _il.import_module(".".join(("fleet", "routing", "trip")))
+        _exec_mod = _il.import_module(".".join(("fleet", "routing", "execute")))
+        PlanRequest, plan_trip = _trip_mod.PlanRequest, _trip_mod.plan_trip
+        plan_body = _exec_mod.plan_body
 
         site_maps = getattr(request.app.state, "site_maps", None)
         runner = getattr(request.app.state, "trip_runner", None)
@@ -283,7 +287,7 @@ def install_task_dispatch_routes(
                     place_id = best_p
             goal_spec = place_id if (place_id and place_id in smap.places) else (target_x, target_y, explicit_yaw)
             try:
-                from fleet.routing.road_path import plan_road_path
+                plan_road_path = _il.import_module(".".join(("fleet", "routing", "road_path"))).plan_road_path
                 routing_cfg = getattr(runner, "_routing", None)
                 try:
                     road_plan = (

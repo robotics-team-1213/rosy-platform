@@ -537,3 +537,24 @@ def test_all_omx_control_modules_under_400_lines() -> None:
     for path in sorted(OMX_DIR.glob("*.py")):
         lines = path.read_text(encoding="utf-8").splitlines()
         assert len(lines) < 400, f"{path.name} has {len(lines)} lines (>= 400)"
+
+
+def test_all_omx_ecosystem_modules_under_500_lines() -> None:
+    """Every non-test `.py` module across the entire OMX ecosystem (`tools/sim/omx_*.py`, `learning/curation/omx`,
+    `learning/envs/isaac`, `middleware/devices/omx`, `integrations/robots/omx`) is <= 500 lines."""
+    repo_root = Path(__file__).resolve().parents[1]
+    targets = list((repo_root / "tools/sim").glob("omx_*.py"))
+    for rel in (
+        "learning/curation/omx",
+        "learning/envs/isaac",
+        "middleware/devices/omx/adapter",
+        "middleware/devices/omx/agent",
+        "integrations/robots/omx",
+    ):
+        targets.extend(
+            p for p in (repo_root / rel).rglob("*.py")
+            if "test" not in p.parts and "tests" not in p.parts
+        )
+    for path in sorted(set(targets)):
+        lines = path.read_text(encoding="utf-8").splitlines()
+        assert len(lines) <= 500, f"{path.relative_to(repo_root)} has {len(lines)} lines (> 500)"

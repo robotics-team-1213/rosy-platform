@@ -28,7 +28,7 @@ applies_when: "스크립트로 Gazebo SDF(.world) 파일을 생성하고 xml.etr
 ## 검증 근거
 
 - `pytest -q middleware/perception/test/test_map_world_261026_scene.py` (5 passed).
-- `ai@100.108.76.123`에서 Gazebo Sim v8.15.0(`gz_multi.launch.py`, `world_name:=map_world_261026.world`, `robots:=3`) 기동 및 3대 로봇(`rosy_01`, `rosy_02`, `rosy_03`) 스폰·주행(`tools/sim/bay_departure_sim.py`) 통과 확인.
+- `ai@<model-pc-tailscale-ip>`에서 Gazebo Sim v8.15.0(`gz_multi.launch.py`, `world_name:=map_world_261026.world`, `robots:=3`) 기동 및 3대 로봇(`rosy_01`, `rosy_02`, `rosy_03`) 스폰·주행(`tools/sim/bay_departure_sim.py`) 통과 확인.
 
 ## 다음에 적용할 조건
 

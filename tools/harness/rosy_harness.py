@@ -15,15 +15,11 @@ from __future__ import annotations
 
 import argparse
 from concurrent.futures import ThreadPoolExecutor
-import datetime as dt
+from hashlib import sha256
 import os
-import re
+from pathlib import Path
 import subprocess
 import sys
-from dataclasses import dataclass
-from hashlib import sha256
-from pathlib import Path
-from urllib.parse import quote
 
 import yaml
 
@@ -32,139 +28,51 @@ import perception_gaps  # noqa: E402
 import sim2real  # noqa: E402
 from log_validation import LOG_FIELDS, LOG_FIELD_ALIASES, validate_entries  # noqa: E402,F401
 from generated_records import _normalize, check as _check_records, write as _write_records  # noqa: E402
+from rosy_harness_helpers import (  # noqa: E402,F401
+    ADR_BODY_HEADING,
+    ADR_INDEX_ROW,
+    COMMIT,
+    CONFIG,
+    CONFLICT_MARKER,
+    FENCE,
+    GATES,
+    GENERATED_MARK,
+    HarnessError,
+    KNOWN_LEGACY_HEADINGS,
+    KNOWN_LOG_ENCODING_REPAIRS,
+    LOG_HEADING,
+    LOGICAL_MODULE,
+    RECENT_LOGS,
+    REQUIRED_PROGRESS,
+    STATES,
+    UNCOMMITTED,
+    AdrLog,
+    LogEntry,
+    _adr_number,
+    _link,
+    _log_entry_blocks,
+    _moved_owner,
+    _moved_roots,
+    _names_module,
+    _read_log,
+    _read_progress,
+    _scan_log,
+    find_conflict_markers,
+    find_mojibake,
+    load_config,
+    parse_adr_log,
+    parse_log,
+    render_brief,
+    render_status,
+    split_frontmatter,
+    validate_log,
+    validate_progress,
+)
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import worktrees  # noqa: E402  (D-761: tools/worktrees.py, the .worktrees/ cap warning)
 from adr_gaps import (  # noqa: E402,F401
     ADR_GAPS, ADR_ID, load_adr_gaps, parse_adr_gaps, reservation_warnings, reserved_adrs, validate_adr_log,
 )
-
-CONFIG = Path("tools") / "harness" / "harness.yaml"
-GATES = ("SOURCE", "LOCAL", "ROS-SIM", "ARTIFACT", "DEVICE", "FIELD")
-STATES = ("GO", "HOLD", "PARKED", "N/A")
-REQUIRED_PROGRESS = ("module", "owner", "last_verified", "gates")
-RECENT_LOGS = 5
-UNCOMMITTED = "uncommitted"
-
-# Historical reference data is separate from the generic harness implementation.
-KNOWN_LOG_ENCODING_REPAIRS = yaml.safe_load(
-    Path(__file__).with_name("log_repairs.yaml").read_text(encoding="utf-8"))
-
-COMMIT = re.compile(rf"^(?:[0-9a-f]{{7,40}}|{UNCOMMITTED})$")
-LOGICAL_MODULE = re.compile(r"^M\d{2}$")
-LOG_HEADING = re.compile(rf"^## (\d{{4}}-\d{{2}}-\d{{2}}) · ([0-9a-f]{{7,40}}|{UNCOMMITTED}) · (\S.*)$")
-FENCE = re.compile(r"^(```|~~~)")
-CONFLICT_MARKER = re.compile(r"^(<<<<<<<|=======|>>>>>>>)( |$)")
-ADR_INDEX_ROW = re.compile(r"^\| (D-\d+) \| ([^|]+?) \| ([^|]+?) \|\s*$", re.MULTILINE)
-# D-36 was recorded as "## D-36: title (date)"; accept that form rather than rewrite the log.
-ADR_BODY_HEADING = re.compile(r"^## (D-\d+):? (.+)$", re.MULTILINE)
-
-# The 2026-09-19 domain-regroup session landed four log entries in a
-# pre-harness heading shape (`## YYYY-MM-DD: subject`). logs.md is append-only
-# and the history gate (is_append_only) makes reformatting committed lines a
-# violation, so these exact lines are excused by name — the same pattern as
-# secret_scan.py's KNOWN_FIXTURES and the same reasoning as ADR_BODY_HEADING's
-# optional colon. New headings must still match LOG_HEADING.
-#
-# The 2026-09-20 fleet session's D-131 phases 2-3 entry was swept into a
-# concurrent commit and is missing the literal `- 변경:` bullet; editing it
-# in place would violate the same history gate, so it is excused by exact
-# name too. Same class of defect: a committed line that cannot be reformed.
-KNOWN_LEGACY_HEADINGS = frozenset({
-    # 193d54401 omitted the commit field; retain history and append canonical evidence.
-    "## 2026-10-12 · 대화 요청 상태와 잠금 사유 보완",
-    "## 2026-10-12 · D-693 계약 설명 정렬",
-    # 823847295 committed these two entries without the standard field labels; the
-    # follow-up entries appended on 2026-10-09 carry 변경/증거/gate 변화.
-    "## 2026-10-09 · uncommitted · fix(pilot): 승인 코드 입력칸이 한글 키보드에서 깨졌다",
-    "## 2026-10-09 · uncommitted · fix(core): 화면 코드 승인이 실기에서 항상 409였다 (D-483)",
-    # Committed D-509 merge-fix entries used English field labels; preserve the blocks.
-    "## 2026-10-08 \u00b7 uncommitted \u00b7 docs(api): v1.124 version pin",
-    "## 2026-10-08 \u00b7 uncommitted \u00b7 fix(fleet): D-509 power health at state response",
-    # Already committed before the missing commit placeholder was detected.
-    "## 2026-10-07 · uiux/pilot-empty-copy · Pilot 로봇 미발견 안내 줄바꿈",
-    # Both committed D-441 bodies survive the 6333f89/518edcf80 merge.
-    # The latter adds a gate line; history checks still protect both bodies.
-    "## 2026-10-04 · uncommitted · site(D-441): automatic site stack updates",
-    "## 2026-09-26 - prepare selected OMX-AI workcell target",
-    "## 2026-09-19: Core 패키지 모듈화 (Level 3 Phase 1)",
-    "## 2026-09-19: Core 패키지 모듈화 (Level 3 Phase 2 & 3)",
-    "## 2026-09-19: Core 패키지 모듈화 완료 (Level 3 Phase 4 & 5)",
-    "## 2026-09-19: Fleet 도메인 폴더명 변경 (site)",
-    "## 2026-09-20 · uncommitted · feat(fleet): Robot Selection lands (FOR-001) and the gather bench puts a number on N (D-131 phases 2-3)",
-    "## 2026-09-20 · uncommitted · test(fleet): the sim runs end-to-end and the console exposes two real defects (D-131 phase 1 LOCAL evidence)",
-    "## 2026-09-20 · uncommitted · chore(fleet): relay diagnosis fields exposed; live iteration deferred to D-83 (environment)",
-    "## 2026-09-20 · uncommitted · fix(fleet): defect (a) resolved in the live sim — relay delivers, no early HOLD (D-132 validated)",
-    # These 2026-09-28 dashboard entries are already committed with the
-    # parallel-session `date - owner - summary` heading form. logs.md is
-    # append-only, so preserve the original records and allowlist their exact
-    # headings; the identity-feedback entry also lacks the three standard
-    # field labels, so the canonical follow-up entry records the evidence.
-    # Preserve the committed latest-main role G2 rerun heading as well.
-    "## 2026-09-28 - uiux/device-refresh-access - rerun latest-main role G2",
-    "## 2026-09-28 - uiux/mobile-acceptance - test: verify localization pending action state",
-    "## 2026-09-28 - uiux/device-security-feedback-evidence - fix: clear stale token list after mutation refresh failure",
-    "## 2026-09-28 - uiux/host-console-readback-evidence - verify independent readbacks and mode feedback",
-    "## 2026-09-28 - uiux/console-teleop-feedback-evidence - verify readiness and action feedback",
-    "## 2026-09-28 - uiux/host-console-readback-evidence - verify line-follow and docking feedback",
-    "## 2026-09-28 - uiux/host-console-readback-evidence - verify console map feedback",
-    "## 2026-09-28 - uiux/host-console-readback-evidence - verify device hardware refresh feedback",
-    "## 2026-09-28 - uiux/host-console-readback-evidence - verify identity editor polling",
-    "## 2026-09-28 - uiux/device-refresh-access - check hardware permission hint reachability",
-    "## 2026-09-28 · uncommitted · test(device): verify identity draft and hardware action feedback at two widths",
-    # 2026-09-22 road-world entries committed with a bare date heading
-    # (e0e6397); the history gate forbids reforming them in place.
-    "## 2026-09-22",
-    # This committed candidate-smoke entry predates the current heading schema;
-    # retain its evidence block unchanged and validate the follow-up entry normally.
-    "## 2026-09-27 · docs(validation): record merged-main site candidate smoke",
-    # Preserve a committed pre-schema log entry without rewriting its history.
-    "## 2026-09-27 ? docs(validation): record merged-main site candidate smoke",
-    # Preserve both append-only versions created by the concurrent log merge.
-    "## 2026-09-26 \u00b7 uncommitted \u00b7 docs(adr): propose D-282 per-hardware ROS ownership",
-    # Preserve both append-only versions created by the concurrent log merge.
-    "## 2026-09-26 \u00b7 uncommitted \u00b7 OMX \ub2e8\uc77c \uc18c\uc720\uc790 ROS-SIM \ud6c4\uc18d\uacfc \uc774\uc804 \uc808\ucc28",
-    # The T2/T3 entry was committed (fbeffae9) with a commit-range token in
-    # the hash slot; the history gate forbids reforming it in place, so the
-    # exact heading is excused and the canonical entry above records the work.
-    "## 2026-09-29 · 5545ce37..uncommitted · feat(fleet): land policy evidence config and store (T2/T3)",
-    # Two pilot entries were committed (72802f30, 35efb5ba) with two hashes in the
-    # hash slot and without the evidence/gate labels; the history gate forbids
-    # reforming them, and their evidence and gate lines live in the entries' prose.
-    "## 2026-09-29 · 72802f30·895786cf · feat: 실물 차선 자동 주행(D-349 보조 자율)",
-    "## 2026-09-29 · 35efb5ba · feat(core): 차선 추종 앞 물체 정지(LiDAR, D-349 §11)",
-    # The D-392 P3 fleet entry reached main with a `date - summary` heading;
-    # the history gate forbids reforming it in place.
-    "## 2026-10-01 - D-392 P3 closed model-tool catalog",
-})
-
-GENERATED_MARK = (
-    "<!-- GENERATED by tools/harness/rosy_harness.py generate. "
-    "Edit progress.md, logs.md, or the ADR log instead. -->"
-)
-
-
-class HarnessError(ValueError):
-    """A harness record cannot be read at all."""
-
-
-def _adr_number(adr_id: str) -> int:
-    return int(adr_id.split("-")[1])
-
-
-# --- frontmatter -----------------------------------------------------------
-
-
-def split_frontmatter(text: str) -> tuple[dict, str]:
-    text = _normalize(text)
-    if not text.startswith("---\n"):
-        raise HarnessError("missing YAML frontmatter")
-    end = text.find("\n---\n", 4)
-    if end < 0:
-        raise HarnessError("unterminated YAML frontmatter")
-    meta = yaml.safe_load(text[4:end]) or {}
-    if not isinstance(meta, dict):
-        raise HarnessError("frontmatter is not a mapping")
-    return meta, text[end + len("\n---\n"):].lstrip("\n")
 
 
 def _optional_frontmatter(path: Path) -> dict:
@@ -173,131 +81,6 @@ def _optional_frontmatter(path: Path) -> dict:
     except (ValueError, OSError, yaml.YAMLError):
         return {}
     return meta
-
-
-# --- progress.md -----------------------------------------------------------
-
-
-def validate_progress(meta: dict, known_adrs: set[str] | None = None) -> list[str]:
-    errors = [f"missing field: {key}" for key in REQUIRED_PROGRESS if key not in meta]
-
-    if "last_verified" in meta:
-        verified = meta["last_verified"]
-        if not isinstance(verified, dict):
-            errors.append("last_verified must map commit and date")
-        else:
-            commit = verified.get("commit")
-            if not isinstance(commit, str) or not COMMIT.match(commit):
-                errors.append(f"last_verified.commit must be a quoted 7-40 hex commit or {UNCOMMITTED!r}")
-            if not isinstance(verified.get("date"), dt.date):
-                errors.append("last_verified.date must be YYYY-MM-DD")
-
-    gates = meta.get("gates")
-    if "gates" in meta and not isinstance(gates, dict):
-        errors.append("gates must be a mapping")
-        gates = {}
-    gates = gates or {}
-    if "gates" in meta:
-        errors += [f"missing gate: {g} (write N/A when the profile excludes it)" for g in GATES if g not in gates]
-    for name, gate in gates.items():
-        if name not in GATES:
-            errors.append(f"unknown gate: {name}")
-            continue
-        if not isinstance(gate, dict):
-            errors.append(f"{name}: gate must be a mapping")
-            continue
-        state = gate.get("state")
-        if state not in STATES:
-            errors.append(f"{name}: unknown state {state!r}")
-        elif state == "GO":
-            errors += [f"{name}: GO requires {field}" for field in ("evidence", "cmd") if not gate.get(field)]
-        elif state == "HOLD" and not gate.get("blocker"):
-            errors.append(f"{name}: HOLD requires blocker")
-
-    for adr_id in meta.get("adrs") or []:
-        if not isinstance(adr_id, str) or not ADR_ID.match(adr_id):
-            errors.append(f"malformed ADR id: {adr_id}")
-        elif known_adrs is not None and adr_id not in known_adrs:
-            errors.append(f"unknown ADR: {adr_id}")
-
-    for logical in meta.get("logical_modules") or []:
-        if not isinstance(logical, str) or not LOGICAL_MODULE.match(logical):
-            errors.append(f"malformed logical module: {logical}")
-
-    return errors
-
-
-# --- logs.md ---------------------------------------------------------------
-
-
-@dataclass(frozen=True)
-class LogEntry:
-    date: str
-    commit: str
-    summary: str
-    body: str
-
-    @property
-    def heading(self) -> str:
-        return f"## {self.date} · {self.commit} · {self.summary}"
-
-
-def _scan_log(text: str) -> tuple[list[LogEntry], list[str]]:
-    entries: list[LogEntry] = []
-    errors: list[str] = []
-    current: tuple[str, str, str] | None = None
-    body: list[str] = []
-    in_fence = False
-
-    def close() -> None:
-        if current is not None:
-            entries.append(LogEntry(*current, body="\n".join(body)))
-
-    for number, line in enumerate(_normalize(text).split("\n"), start=1):
-        if FENCE.match(line):
-            in_fence = not in_fence
-        if in_fence or FENCE.match(line) or not line.startswith("## "):
-            if current is not None:
-                body.append(line)
-            continue
-        close()
-        body = []
-        match = LOG_HEADING.match(line)
-        if line in KNOWN_LEGACY_HEADINGS:
-            # A concurrent merge can leave two committed bodies under one
-            # historical heading. Exact allowlisted headings stay untouched.
-            current = None
-        elif match:
-            current = match.groups()
-        else:
-            current = None
-            errors.append(f"line {number}: malformed heading {line!r}")
-    close()
-    return entries, errors
-
-
-def parse_log(text: str) -> list[LogEntry]:
-    return _scan_log(text)[0]
-
-
-def validate_log(text: str) -> list[str]:
-    return validate_entries(*_scan_log(text), KNOWN_LEGACY_HEADINGS)
-
-
-def _log_entry_blocks(text: str) -> set:
-    """`## ` 헤딩 단위로 로그를 항목 블록으로 분해한다(정규화·양끝 여백 제거)."""
-    blocks: set = set()
-    current: list = []
-    for line in _normalize(text).split("\n"):
-        if line.startswith("## "):
-            if current:
-                blocks.add("\n".join(current).strip())
-            current = [line]
-        elif current:
-            current.append(line)
-    if current:
-        blocks.add("\n".join(current).strip())
-    return blocks
 
 
 def is_append_only(old: str, new: str) -> bool:
@@ -349,52 +132,6 @@ def is_append_only(old: str, new: str) -> bool:
     return True
 
 
-# --- ADR log ---------------------------------------------------------------
-
-
-@dataclass(frozen=True)
-class AdrLog:
-    index: dict[str, tuple[str, str]]
-    bodies: dict[str, str]
-    duplicates: tuple[str, ...] = ()
-    #: D-n appearing in more than one index row (D-346: dict collapse hid these).
-    index_duplicates: tuple[str, ...] = ()
-
-
-def parse_adr_log(text: str, adr_dir: Path | None = None) -> AdrLog:
-    text = _normalize(text)
-    if adr_dir and adr_dir.is_dir():
-        for p in adr_dir.glob("*.md"):
-            text += "\n\n" + _normalize(p.read_text(encoding="utf-8"))
-    first_body = ADR_BODY_HEADING.search(text)
-    index_text = text[: first_body.start()] if first_body else text
-    index: dict[str, tuple[str, str]] = {}
-    index_duplicates: list[str] = []
-    for m in ADR_INDEX_ROW.finditer(index_text):
-        if m.group(1) in index:
-            index_duplicates.append(m.group(1))
-        index[m.group(1)] = (m.group(2).strip(), m.group(3).strip())
-    bodies: dict[str, str] = {}
-    duplicates: list[str] = []
-    for match in ADR_BODY_HEADING.finditer(text):
-        if match.group(1) in bodies:
-            duplicates.append(match.group(1))
-        bodies[match.group(1)] = match.group(2).strip()
-    return AdrLog(index=index, bodies=bodies, duplicates=tuple(duplicates),
-                  index_duplicates=tuple(index_duplicates))
-
-
-# --- rendering -------------------------------------------------------------
-
-
-def load_config(repo: Path) -> dict:
-    return yaml.safe_load((repo / CONFIG).read_text(encoding="utf-8"))
-
-
-def _link(from_dir: Path, target: Path) -> str:
-    return quote(os.path.relpath(target, from_dir).replace(os.sep, "/"), safe="/-._~")
-
-
 def _title(path: Path, meta: dict | None = None) -> str:
     meta = _optional_frontmatter(path) if meta is None else meta
     if isinstance(meta.get("title"), str):
@@ -405,34 +142,11 @@ def _title(path: Path, meta: dict | None = None) -> str:
     return path.stem
 
 
-def _names_module(meta: dict, name: str) -> bool:
-    modules = meta.get("modules") or []
-    return meta.get("module") == name or (isinstance(modules, list) and name in modules)
-
-
-def _read_progress(repo: Path, module: dict) -> dict:
-    path = repo / module["path"] / "progress.md"
-    try:
-        meta, _ = split_frontmatter(path.read_text(encoding="utf-8"))
-    except FileNotFoundError as exc:
-        raise HarnessError(f"{module['name']}: missing progress.md") from exc
-    except (yaml.YAMLError, UnicodeDecodeError) as exc:
-        raise HarnessError(f"{module['name']}: unreadable progress.md: {exc}") from exc
-    return meta
-
-
-def _read_log(repo: Path, module: dict) -> list[LogEntry]:
-    path = repo / module["path"] / "logs.md"
-    return parse_log(path.read_text(encoding="utf-8")) if path.is_file() else []
-
-
 def render_module_index(repo: Path, module: dict, adr: AdrLog, adr_log_path: Path,
                         plan_docs: list | None = None, solution_docs: list | None = None) -> str:
     base = repo / module["path"]
     meta = _read_progress(repo, module)
     name = module["name"]
-    # Titles only: an ADR's status changes (Proposed -> Accepted) must not make
-    # every module index stale on an unrelated commit. Status lives in the log.
     lines = [
         GENERATED_MARK,
         f"# {name} index",
@@ -471,62 +185,6 @@ def render_module_index(repo: Path, module: dict, adr: AdrLog, adr_log_path: Pat
     return "\n".join(lines) + "\n"
 
 
-def render_status(repo: Path, config: dict) -> str:
-    status_dir = (repo / config["status"]).parent
-    lines = [
-        GENERATED_MARK,
-        "# Rosy OS module status",
-        "",
-        "각 모듈 `progress.md`의 gate 스냅샷을 모은 것이다. 계약은 SRS·API·ADR이 우선한다.",
-        "",
-        "| 모듈 | owner | last verified | " + " | ".join(GATES) + " |",
-        "|---|---|---|" + "---|" * len(GATES),
-    ]
-    blockers: list[str] = []
-    for module in config["modules"]:
-        meta = _read_progress(repo, module)
-        gates = meta.get("gates") or {}
-        verified = meta.get("last_verified") or {}
-        cells = [str((gates.get(g) or {}).get("state", "—")) for g in GATES]
-        link = _link(status_dir, repo / module["path"] / "progress.md")
-        lines.append(
-            f"| [{module['name']}]({link}) | {meta.get('owner', '?')} | "
-            f"{verified.get('commit', '?')} ({verified.get('date', '?')}) | " + " | ".join(cells) + " |"
-        )
-        for gate in GATES:
-            if (gates.get(gate) or {}).get("state") == "HOLD":
-                blockers.append(f"- {module['name']} {gate}: {gates[gate].get('blocker')}")
-    lines += ["", "## HOLD blockers", ""] + (blockers or ["- 없음"])
-    return "\n".join(lines) + "\n"
-
-
-def render_brief(repo: Path) -> str:
-    """Short session-start context: every module's gates and the record loop."""
-    config = load_config(repo)
-    lines = ["[Rosy OS module harness, ADR D-61] 모듈 gate (각 progress.md 기준, 계약은 SRS·API·ADR 우선):"]
-    for module in config["modules"]:
-        try:
-            meta = _read_progress(repo, module)
-        except HarnessError as exc:
-            lines.append(f"- {module['name']}: {exc}")
-            continue
-        # One malformed record must not blank the brief; it is what the brief should show.
-        problems = validate_progress(meta)
-        if problems:
-            lines.append(f"- {module['name']} ({module['path']}): invalid progress.md ({len(problems)} errors: {problems[0]})")
-            continue
-        gates = meta.get("gates") or {}
-        cells = " ".join(f"{g}={(gates.get(g) or {}).get('state', '—')}" for g in GATES)
-        commit = (meta.get("last_verified") or {}).get("commit", "?")
-        lines.append(f"- {module['name']} ({module['path']}, verified {commit}): {cells}")
-    lines += [
-        "작업 순서: 모듈 progress.md·index.md 읽기 → 변경 → logs.md에 항목 추가 → gate가 바뀌면 progress.md 덮어쓰기"
-        " → `python tools/harness/rosy_harness.py generate` → `lint`.",
-        "HOLD blocker 전체: STATUS.md",
-    ]
-    return "\n".join(lines) + "\n"
-
-
 def generated_targets(repo: Path, adr: AdrLog | None = None) -> dict[Path, str]:
     config = load_config(repo)
     adr_path = repo / config["adr_log"]
@@ -554,9 +212,6 @@ def generate(repo: Path) -> list[Path]:
     return _write_records(repo, generated_targets(repo))
 
 
-# --- lint ------------------------------------------------------------------
-
-
 def _git(repo: Path, *args: str) -> str | None:
     try:
         result = subprocess.run(
@@ -567,33 +222,10 @@ def _git(repo: Path, *args: str) -> str | None:
     return result.stdout if result.returncode == 0 else None
 
 
-def find_conflict_markers(text: str) -> list[int]:
-    """1-based line numbers of git conflict markers at the start of a line."""
-    return [number for number, line in enumerate(_normalize(text).split("\n"), start=1) if CONFLICT_MARKER.match(line)]
-
-
-def find_mojibake(text: str) -> list[int]:
-    """1-based line numbers with '??' runs — a codepage ate the Korean (D-346).
-
-    PowerShell redirects write the active console codepage, so a Korean title
-    committed through ``>`` lands as literal question marks. Calibrated on the
-    D-336 and D-140 ADR index rows this exact failure produced.
-    """
-    return [number for number, line in enumerate(text.split("\n"), start=1)
-            if "??" in line]
-
-
 def _history_refs(repo: Path) -> tuple[list[str], str | None]:
-    """Refs whose committed logs must survive: the CI base, the merge base, and HEAD.
-
-    Comparing with HEAD alone only catches uncommitted edits; a rewritten entry
-    that was already committed on the branch is caught against a base. A CI base
-    that does not resolve (40 zeros on a new branch, an unfetched pre-force-push
-    commit) widens to the merge base with a note instead of skipping silently.
-    """
+    """Refs whose committed logs must survive: the CI base, the merge base, and HEAD."""
     note = None
     refs: list[str] = []
-    # CI sends an empty string when neither a PR base nor a previous push exists.
     requested = os.environ.get("HARNESS_BASE_REF") or None
     if requested:
         resolvable = set(requested) != {"0"} and _git(repo, "rev-parse", "--verify", "--quiet", f"{requested}^{{commit}}")
@@ -601,7 +233,6 @@ def _history_refs(repo: Path) -> tuple[list[str], str | None]:
             refs.append(requested)
         else:
             note = f"HARNESS_BASE_REF {requested[:12]} does not resolve; compared with the origin/main merge base"
-    # Local main too: it runs ahead of origin/main between publishes (D-868), and an unpublished entry lost a line (2026-11-01)
     refs += [b.strip() for t in ("origin/main", "main") if (b := _git(repo, "merge-base", "HEAD", t)) and b.strip()]
     if not refs:
         missing = "append-only base unavailable (no origin/main or shallow clone); compared with HEAD only"
@@ -609,29 +240,10 @@ def _history_refs(repo: Path) -> tuple[list[str], str | None]:
     return list(dict.fromkeys([*refs, "HEAD"])), note
 
 
-def _moved_roots(repo: Path) -> list[dict]:
-    """D-427 manifest roots that record their pre-move path as ``legacy``."""
-    manifest = repo / "tools" / "harness" / "platform_parts.yaml"
-    if not manifest.is_file():
-        return []
-    roots = (yaml.safe_load(manifest.read_text(encoding="utf-8")) or {}).get("roots") or []
-    return [root for root in roots if root.get("legacy")]
-
-
-def _moved_owner(module_path: str, moved_roots: list[dict]) -> dict | None:
-    owners = [root for root in moved_roots
-              if module_path == root["path"] or module_path.startswith(root["path"] + "/")]
-    return max(owners, key=lambda root: len(root["path"]), default=None)
-
-
 def _append_only_findings(repo: Path, refs: list[str], name: str, module_path: str, text: str,
                           moved_roots: list[dict]) -> tuple[list[str], list[str]]:
     """Errors for edited committed log entries, and a warning when a module inside a
-    moved root has no history to compare with (e.g. a rename git did not detect).
-
-    A warning, not an error: a module created after the base ref inside a moved
-    root has no history either, and that is legitimate.
-    """
+    moved root has no history to compare with (e.g. a rename git did not detect)."""
     errors: list[str] = []
     warnings: list[str] = []
     for ref in refs:
@@ -647,12 +259,7 @@ def _append_only_findings(repo: Path, refs: list[str], name: str, module_path: s
 
 
 def _committed_log(repo: Path, ref: str, module_path: str, moved_roots: list[dict]) -> str | None:
-    """``logs.md`` of a module as committed at ``ref``, following a D-427 move.
-
-    Right after a move the ref has no file at the new path, which would skip the
-    append-only check. A module at a moved root is read at its ``legacy`` path; a
-    module nested deeper in one follows its rename in git history.
-    """
+    """``logs.md`` of a module as committed at ``ref``, following a D-427 move."""
     rel = f"{module_path}/logs.md"
     committed = _git(repo, "show", f"{ref}:{rel}")
     if committed is not None:
@@ -762,7 +369,6 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("command", choices=("generate", "lint", "brief", "affected"))
     parser.add_argument("--repo", type=Path, default=Path(__file__).resolve().parents[2])
-    # D-436 `affected`: change-scoped test selection (tools/harness/affected_tests.py).
     parser.add_argument("--base", default="main", help="affected: diff base ref (merge base with HEAD)")
     parser.add_argument("--head", help="affected: diff base...HEAD for this commit only, ignoring the"
                                        " working tree (the pre-push hook's pushed sha)")
