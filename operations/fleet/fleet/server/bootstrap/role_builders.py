@@ -337,7 +337,7 @@ def install_mission_and_channel_surfaces(app, *, policy_admission_core, mission_
                                          channel_config, site_logins, other_tokens, arm_transfer_observer, sightings,
                                          policy_evidence, conversation_config, channel_model_config, site_maps,
                                          assistant_config, authorize, vision_signer, vision_sources,
-                                         require_camera_viewer):
+                                         require_camera_viewer, local_stop_fanout, cancel_pending):
     proposal_create = proposal_resolve = mission_admit = None
     if mission_service is not None:
         proposal_create, proposal_resolve, mission_admit = install_mission_routes(
@@ -370,6 +370,12 @@ def install_mission_and_channel_surfaces(app, *, policy_admission_core, mission_
         console=console, secret_owners=(sightings, policy_evidence), proposals=proposal_store,
         proposal_create=proposal_create, proposal_resolve=proposal_resolve, cell_prepare=cell_prepare,
         mission_admit=mission_admit, cell_service_id=cell_app_service_id)
+    from fleet.server.intent_routes import install_intent_routes
+    install_intent_routes(
+        app, console=console, task_service=task_service, require_operator=require_operator,
+        require_named_operator=require_named_operator,
+        robot_busy=lambda robot: "trip" if trip_runner.robot_busy(robot) else engaged(console, robot),
+        operator_guard=operator_guard, local_stop_fanout=local_stop_fanout, cancel_pending=cancel_pending)
     from ..channel.conversation.runtime import install_conversation_routes
     install_conversation_routes(app, conversation_config, channel_model_config, site_maps, task_service,
                                 require_operator, read_guard)

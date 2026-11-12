@@ -34,7 +34,6 @@ from fleet.server.credential_isolation import assert_credentials_isolated
 from fleet.server.execution_profile_routes import install_execution_profile_routes
 from fleet.server.goal_evidence_service import GoalEvidenceService
 from fleet.server.ingest_routes import address_reasons, install_discovery_routes
-from fleet.server.intent_routes import install_intent_routes
 from fleet.server.lane_compliance_service import PERIOD_S as LANE_COMPLIANCE_PERIOD_S
 from fleet.server.lane_route_routes import RouteRequest  # noqa: F401 — RouteRequest 재수출 (D-463)
 from fleet.server.loop_supervision import FLEET_LOOP_NAMES, LoopSupervisor, start_fleet_loops
@@ -57,7 +56,6 @@ from fleet.server.task_dispatch_routes import (  # noqa: F401 — GoalRequest �
     install_task_dispatch_routes,
 )
 from fleet.server.task_service import FleetTaskService
-from fleet.server.trip_guard import engaged
 from fleet.server.vision_preview_routes import VisionLeaseRequest, configure_vision_previews  # noqa: F401
 from .bootstrap.role_builders import (
     build_mission_and_cell_runtime,
@@ -399,13 +397,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         sightings=sightings, policy_evidence=policy_evidence, conversation_config=conversation_config,
         channel_model_config=channel_model_config, site_maps=site_maps, assistant_config=assistant_config,
         authorize=authorize, vision_signer=vision_signer, vision_sources=vision_sources,
-        require_camera_viewer=require_camera_viewer)
-
-    install_intent_routes(
-        app, console=console, task_service=task_service, require_operator=require_operator,
-        require_named_operator=require_named_operator,
-        robot_busy=lambda robot: "trip" if trip_runner.robot_busy(robot) else engaged(console, robot),
-        operator_guard=operator_guard,
+        require_camera_viewer=require_camera_viewer,
         local_stop_fanout=partial(fanout_local_omx_stops, configured_omx, stop_transport, targets=stop_targets),
         cancel_pending=partial(cancel_pending_task_queue, task_service, console))
 
