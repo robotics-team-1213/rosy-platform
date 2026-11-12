@@ -36,7 +36,7 @@ class Departure(_Section):
     merge_max_wait_s: float = Field(default=MERGE_MAX_WAIT_S, ge=1.0, le=60.0)
     #: Fewer blocks per robot would admit more robots on a loop, so 3 is the floor.
     blocks_per_robot: int = Field(default=HELD_PER_ROBOT, ge=HELD_PER_ROBOT, le=MAX_HELD_PER_ROBOT, strict=True)
-    order: Literal["fair"] = "fair"
+    order: Literal["fair", "exit_nearest"] = "fair"
 
 
 class WhenFull(_Section):
@@ -47,6 +47,7 @@ class WhenFull(_Section):
 class Return(_Section):
     go_percent: float = Field(default=GO_PERCENT, ge=GO_PERCENT, le=MAX_GO_PERCENT)
     leave_percent: float = Field(default=LEAVE_PERCENT, ge=MIN_LEAVE_PERCENT, le=100.0)
+    exit_place: Optional[str] = Field(default=None, min_length=1, max_length=64)
     when_full: Optional[WhenFull] = None
 
     @model_validator(mode="after")
@@ -102,4 +103,6 @@ class SiteRules(_Section):
         names = {stop.place for stop in self.stops}
         if self.return_.when_full is not None:
             names.add(self.return_.when_full.wait_at)
+        if self.return_.exit_place is not None:
+            names.add(self.return_.exit_place)
         return names

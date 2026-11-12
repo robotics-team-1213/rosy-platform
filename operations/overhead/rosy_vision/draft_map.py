@@ -28,6 +28,32 @@ def _to_metres(points_px: np.ndarray, bounds_m, px_per_m: float) -> list[list[fl
 def detect_draft_map(plane_bgr: np.ndarray, bounds_m, px_per_m: float,
                      valid: np.ndarray | None = None) -> dict:
     """``{lanes:[{polyline_m, width_px}], zones:[{polygon_m, kind}], reason}`` on one plane."""
+    try:
+        from rosy_vision.world_261026_auto import auto_calibrate_and_trace_world_261026
+        fit = auto_calibrate_and_trace_world_261026(plane_bgr)
+    except Exception:
+        fit = None
+    if fit is not None and fit.get("edges"):
+        lanes = [
+            {
+                "polyline_m": [[round(float(p[0]), 4), round(float(p[1]), 4)] for p in edge["polyline"]],
+                "width_px": round(float(edge.get("width_m", 0.18)) * float(px_per_m), 1),
+                "id": edge["id"],
+                "name": edge.get("name") or edge["id"],
+                "from_id": edge["from"],
+                "to_id": edge["to"],
+                "direction": edge.get("direction", "one_way"),
+            }
+            for edge in fit["edges"]
+        ]
+        return {
+            "lanes": lanes,
+            "zones": [],
+            "places": fit.get("places") or [],
+            "edges": fit.get("edges") or [],
+            "map_id": "world_261026",
+            "reason": "ok",
+        }
     seen = np.ones(plane_bgr.shape[:2], bool) if valid is None else valid
     gray = cv2.cvtColor(plane_bgr, cv2.COLOR_BGR2GRAY)
     hsv = cv2.cvtColor(plane_bgr, cv2.COLOR_BGR2HSV)

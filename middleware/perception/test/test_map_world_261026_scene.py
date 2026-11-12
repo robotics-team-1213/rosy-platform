@@ -53,7 +53,10 @@ def test_pink_guide_is_visual_only_and_complete():
 
 def test_each_bay_has_rails_and_a_stop_bar_with_collision():
     root = ET.parse(WORLD).getroot()
-    bays = root.findall(".//model[@name='bay_guide']")
+    models = root.findall(".//model")
+    names = [m.attrib["name"] for m in models]
+    assert len(names) == len(set(names)), f"Duplicate SDF model names break gz-sim: {names}"
+    bays = [m for m in models if m.attrib["name"].startswith("bay_guide_")]
     assert len(bays) == 3
     for bay in bays:
         assert len(bay.findall(".//collision")) == 3

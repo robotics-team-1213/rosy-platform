@@ -28,8 +28,14 @@ class CameraDraftError(ValueError):
 
 class CameraLane(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    polyline_m: list[tuple[float, float]] = Field(min_length=2, max_length=32)
+    polyline_m: list[tuple[float, float]] = Field(min_length=2, max_length=128)
     width_px: float = Field(gt=0.0, le=10000.0)
+    id: str | None = Field(default=None, max_length=64)
+    name: str | None = Field(default=None, max_length=120)
+    from_id: str | None = Field(default=None, max_length=64)
+    to_id: str | None = Field(default=None, max_length=64)
+    direction: Literal["one_way", "two_way"] | None = None
+    speed_cap_mps: float | None = Field(default=None, gt=0.0, le=5.0)
 
 
 class CameraZone(BaseModel):
@@ -58,6 +64,9 @@ class CameraDraftRequest(BaseModel):
     detector: CameraDetector
     lanes: list[CameraLane] = Field(default_factory=list, max_length=200)
     zones: list[CameraZone] = Field(default_factory=list, max_length=50)
+    places: list[dict] | None = None
+    edges: list[dict] | None = None
+    map_id: str | None = Field(default=None, max_length=64)
 
 
 def _finite(points) -> None:
@@ -69,7 +78,58 @@ def camera_draft(body: CameraDraftRequest) -> dict:
     """``{map, provenance}``; raises :class:`CameraDraftError` when nothing usable arrives."""
     revision = f"camera-{body.plane.calibration_revision}"
     note = f"{body.source_id} {body.detector.version} {body.plane.calibration_revision}"
-    evidence = {"source": "camera", "status": "observed", "reference_revision": revision, "note": note}
+    evidence = {"source": "camera", "status": "reviewed", "reference_revision": revision, "note": note}
+    min_x, min_y, max_x, max_y = body.plane.bounds_m
+
+    # Fast path: when Vision's world_261026 tracer provides structured places & edges directly
+    if body.places and body.edges:
+        traced_edges = []
+        for edge in body.edges:
+            pts = edge.get("polyline") or []
+            _finite(pts)
+            traced_edges.append({
+                "id": edge["id"],
+                "name": edge.get("name") or edge["id"],
+                "from": edge["from"],
+                "to": edge["to"],
+                "polyline": [[round(float(p[0]), 4), round(float(p[1]), 4)] for p in pts],
+                "width_m": float(edge.get("width_m", 0.18)),
+                "direction": edge.get("direction", "one_way"),
+                "drive_mode": edge.get("drive_mode", "lane"),
+                "speed_cap_mps": float(edge.get("speed_cap_mps", IMPORT_SPEED_CAP_MPS)),
+                "evidence": dict(evidence),
+            })
+        draft = {
+            "schema": "rosy.site_map/1",
+            "map_id": body.map_id or "world_261026",
+            "places": body.places,
+            "edges": traced_edges,
+            "facilities": [],
+            "survey": {
+                "revision": revision,
+                "origin": [0.0, 0.0],
+                "heading_rad": 0.0,
+                "scale_source": "measured",
+                "measured_distance_m": 2.44,
+                "description": f"카메라 자동 실측 초안 ({note})"[:1000],
+            },
+        }
+        try:
+            checked = SiteMap.model_validate(draft)
+        except ValidationError as exc:
+            raise CameraDraftError(f"the assembled draft does not validate: {exc.error_count()} errors") from exc
+        return {
+            "map": checked.body(),
+            "provenance": {
+                "source_id": body.source_id,
+                "calibration_revision": body.plane.calibration_revision,
+                "detector_version": body.detector.version,
+                "lanes": len(traced_edges),
+                "zones": 0,
+                "skipped": [],
+            },
+        }
+
     places: list[dict] = []
     edges: list[dict] = []
     skipped: list[dict] = []

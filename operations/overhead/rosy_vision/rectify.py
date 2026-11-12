@@ -117,9 +117,33 @@ def map_plane_jpeg(jpeg: bytes, record: Mapping | None, *, source_id: str, map_i
     map_to_plane = np.array([[ppm, 0.0, -min_x * ppm - 0.5],
                              [0.0, -ppm, max_y * ppm - 0.5],
                              [0.0, 0.0, 1.0]])
+    u, v = np.meshgrid(np.arange(out_w), np.arange(out_h))
+    if map_id == "world_261026":
+        from rosy_vision.world_261026_auto import (
+            auto_calibrate_and_trace_world_261026,
+            get_latest_lens_model,
+            warp_undistorted_map_plane,
+        )
+        model = get_latest_lens_model(width, height)
+        if model is None:
+            auto_calibrate_and_trace_world_261026(image)
+            model = get_latest_lens_model(width, height)
+        if model is not None:
+            K, D, _ = model
+            image_to_plane = map_to_plane @ np.asarray(calibration.image_to_map, dtype=float).reshape(3, 3)
+            plane, valid = warp_undistorted_map_plane(
+                image, image_to_plane, out_w, out_h, K, D, fill_bgr=PLANE_FILL_BGR
+            )
+            hatch = np.where(((u + v) // 8) % 2 == 0, 24, 40).astype(np.uint8)
+            plane[~valid] = hatch[~valid, None]
+            return MapPlane(
+                jpeg=_encode(plane), bounds_m=(min_x, min_y, max_x, max_y), px_per_m=ppm,
+                size=(out_w, out_h), revision=calibration.revision,
+                image_to_plane=tuple(float(val) for val in image_to_plane.reshape(-1)),
+                valid_mask=valid,
+            )
     image_to_plane = map_to_plane @ np.asarray(calibration.image_to_map, dtype=float).reshape(3, 3)
     inverse = np.linalg.inv(image_to_plane)
-    u, v = np.meshgrid(np.arange(out_w), np.arange(out_h))
     raw = inverse @ np.stack((u.ravel(), v.ravel(), np.ones(u.size)))
     # Homography scale has no sign: compare with the approved track's centre ray.
     centre = map_to_plane @ np.array([(b[0] + b[2])/2, (b[1] + b[3])/2, 1.])

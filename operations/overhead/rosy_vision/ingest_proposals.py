@@ -190,26 +190,47 @@ async def _draft_map_response(self, source: str, frame: LatestFrame) -> Response
     else:
         plane = None
     if plane is None:
-        return _http_response(409, b"map plane unavailable\n",
-                              extra={"X-Frame-State": "plane-unavailable"})
-    try:
-        image = cv2.imdecode(np.frombuffer(plane.jpeg, np.uint8), cv2.IMREAD_COLOR)
-        result = await asyncio.to_thread(draft_map.detect_draft_map, image, plane.bounds_m,
-                                         plane.px_per_m, plane.valid_mask)
-    except (ValueError, cv2.error):
-        return _http_response(422, b"draft map detection failed\n",
-                              extra={"X-Frame-State": "detection-error"})
+        raw_img = cv2.imdecode(np.frombuffer(frame.jpeg, np.uint8), cv2.IMREAD_COLOR)
+        if raw_img is None:
+            return _http_response(409, b"map plane unavailable\n",
+                                  extra={"X-Frame-State": "plane-unavailable"})
+        try:
+            result = await asyncio.to_thread(draft_map.detect_draft_map, raw_img,
+                                             (-1.22, -0.61, 1.22, 0.61), 400.0, None)
+        except (ValueError, cv2.error):
+            return _http_response(422, b"draft map detection failed\n",
+                                  extra={"X-Frame-State": "detection-error"})
+        if result.get("map_id") != "world_261026":
+            return _http_response(409, b"map plane unavailable\n",
+                                  extra={"X-Frame-State": "plane-unavailable"})
+        plane_meta = {"bounds_m": [-1.22, -0.61, 1.22, 0.61], "px_per_m": 400.0,
+                      "calibration_revision": "world_261026-auto",
+                      "width": raw_img.shape[1], "height": raw_img.shape[0]}
+        cal_rev = "world_261026-auto"
+    else:
+        try:
+            image = cv2.imdecode(np.frombuffer(plane.jpeg, np.uint8), cv2.IMREAD_COLOR)
+            result = await asyncio.to_thread(draft_map.detect_draft_map, image, plane.bounds_m,
+                                             plane.px_per_m, plane.valid_mask)
+        except (ValueError, cv2.error):
+            return _http_response(422, b"draft map detection failed\n",
+                                  extra={"X-Frame-State": "detection-error"})
+        plane_meta = {"bounds_m": list(plane.bounds_m), "px_per_m": plane.px_per_m,
+                      "calibration_revision": plane.revision,
+                      "width": plane.size[0], "height": plane.size[1]}
+        cal_rev = str(plane.revision)
     age = max(0.0, time.time() - frame.captured_at)
     body = {
         "source": source,
         "frame_seq": frame.header.seq,
         "frame_age_ms": round(age * 1000),
         "map_frame": "map",
-        "plane": {"bounds_m": list(plane.bounds_m), "px_per_m": plane.px_per_m,
-                  "calibration_revision": plane.revision,
-                  "width": plane.size[0], "height": plane.size[1]},
+        "plane": plane_meta,
         "lanes": result["lanes"],
         "zones": result["zones"],
+        **({"places": result["places"]} if "places" in result else {}),
+        **({"edges": result["edges"]} if "edges" in result else {}),
+        **({"map_id": result["map_id"]} if "map_id" in result else {}),
         "reason": result["reason"],
         "detector": {"version": draft_map.DRAFT_MAP_VERSION},
     }
@@ -217,7 +238,7 @@ async def _draft_map_response(self, source: str, frame: LatestFrame) -> Response
         "Content-Type": "application/json", "Cache-Control": "no-store",
         "X-Frame-Seq": str(frame.header.seq),
         "X-Frame-Age-Ms": str(round(age * 1000)),
-        "X-Frame-Calibration": str(plane.revision),
+        "X-Frame-Calibration": cal_rev,
         "X-Proposal-State": "current",
     })
 

@@ -105,3 +105,10 @@ worlds:
     spawn_x: 0.36
     spawn_y: 0.64
     spawn_spacing: 0.28
+  map_world_261026.world:
+    world_source: package://control/map/map_world_261026/worlds/map_world_261026.world
+    map: package://control/map/map_world_261026/maps/map_world_261026.yaml
+    inflation_radius: 0.08
+    spawn_x: -0.414
+    spawn_y: 0.470
+    spawn_spacing: 0.224

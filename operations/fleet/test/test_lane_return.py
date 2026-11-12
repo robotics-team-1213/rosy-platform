@@ -228,3 +228,62 @@ def test_site_example_lap_builds_on_map_v5():
     kinds = [f[1] for f in lap.features]
     assert lap is not None and cfg.guide_context is False
     assert kinds.count("crosswalk") == 2 and kinds.count("ring_entry") == 2 and 7.0 < lap.length_m < 7.8
+
+
+def test_bay_reverse_docking_centerline_evaluation_and_cue():
+    from fleet.localization.lane_compliance import evaluate_bay_dock
+    bay_site = SiteMap.model_validate({
+        "places": [
+            {"id": "P2", "name": "P2", "x": -0.190, "y": 0.025, "kind": "junction"},
+            {"id": "C2", "name": "C2", "x": -0.190, "y": 0.470, "kind": "charge", "yaw": -1.5708},
+        ],
+        "edges": [
+            {"id": "bay_2", "from": "P2", "to": "C2", "polyline": [[-0.190, 0.025], [-0.190, 0.470]],
+             "direction": "two_way", "width_m": 0.18, "speed_cap_mps": 0.05},
+        ],
+    })
+    bay_graph = build_graph(bay_site)
+
+    # 1. At P2 facing east along the bar (0 rad): needs 90 deg turn before backing in
+    entry = evaluate_bay_dock(-0.190, 0.035, 0.0, 0.0, bay_graph)
+    assert entry is not None and entry["verdict"] == "TURN_AT_ENTRY" and entry["bay_id"] == "C2"
+
+    # 2. Backing in aligned along centerline (yaw = -pi/2 facing P2, rear moving +y toward C2)
+    aligned = classify(-0.186, 0.250, -math.pi / 2, math.pi / 2, bay_graph)
+    assert aligned.state == ON_LANE and abs(aligned.turn_deg) < 1.0   # two_way rev arc matched, not +180 deg
+    assert aligned.docking is not None
+    assert aligned.docking["verdict"] == "BACKING_ALIGNED"
+    assert aligned.docking["bay_id"] == "C2" and aligned.docking["edge_id"] == "bay_2"
+    assert abs(aligned.docking["offset_m"] - (-0.004)) < 1e-4
+    assert aligned.docking["steer_cmd_rad_s"] > 0.0                  # steers back toward centerline
+
+    # 3. Moderate lateral drift (20 mm) -> BACKING_DRIFT with continuous P correction
+    drift = evaluate_bay_dock(-0.210, 0.250, -math.pi / 2, math.pi / 2, bay_graph)
+    assert drift["verdict"] == "BACKING_DRIFT" and drift["offset_m"] > 0.015 and drift["steer_cmd_rad_s"] < 0.0
+
+    # 4. Excessive drift (35 mm) or twist (12 deg) -> RETRY_FROM_P
+    retry = evaluate_bay_dock(-0.225, 0.300, -math.pi / 2, math.pi / 2, bay_graph)
+    assert retry["verdict"] == "RETRY_FROM_P"
+    skew = evaluate_bay_dock(-0.190, 0.300, -math.pi / 2 + math.radians(12.0), math.pi / 2, bay_graph)
+    assert skew["verdict"] == "RETRY_FROM_P"
+
+    # 5. Reached C2 contact stop (to_end_m <= 25 mm) while aligned -> CONTACT_STOP
+    stop = evaluate_bay_dock(-0.188, 0.455, -math.pi / 2 + math.radians(1.5), math.pi / 2, bay_graph)
+    assert stop["verdict"] == "CONTACT_STOP" and stop["to_end_m"] <= 0.025
+
+    # 6. Monitor sends docking evaluation in lane-cue even while ON_LANE
+    clock = [200.0]
+    client = Client()
+    poses = Poses(MapPose(-0.188, 0.455, -math.pi / 2, "LOCALIZED", "sighting", 0.0, 0.1, map_id="m", odom_stamp=9.0))
+
+    class BayMaps:
+        def active(self):
+            return (16, bay_site, bay_graph, None)
+
+    monitor = LaneComplianceMonitor(lambda: ["r1"], poses=poses, site_maps=BayMaps(),
+                                    config=LaneComplianceConfig(off_map_pad_m=0.5),
+                                    wall=lambda: clock[0], clients=lambda: {"r1": client})
+    for _ in range(4):
+        asyncio.run(monitor.tick())
+        clock[0] += 0.5
+    assert client.sent and client.sent[-1].get("docking", {}).get("verdict") == "CONTACT_STOP"

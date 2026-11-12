@@ -119,3 +119,94 @@
 
 .robot-line:focus-visible, .robot-fold:focus-visible {
   outline: var(--focus-ring-width) solid var(--focus-ring); outline-offset: var(--focus-ring-offset-outer); }
+
+.quick-control-panel { margin: 0.55rem 0; padding: 0.65rem 0.75rem; border: 1px solid var(--border-default, #2a3444); border-radius: 8px; background: var(--surface-raised, rgba(16, 24, 36, 0.55)); display: flex; flex-direction: column; gap: 0.55rem; }
+.quick-header-line { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; flex-wrap: wrap; }
+.quick-title { font-size: 0.86rem; }
+.quick-chip-row { display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: center; }
+.tracker-box { border-top: 1px solid var(--border-subtle, #2a3444); padding-top: 0.5rem; display: flex; flex-direction: column; gap: 0.45rem; }
+.tracker-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.4rem; }
+.tracker-tabs { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+.roi-row { display: flex; align-items: center; gap: 0.65rem; flex-wrap: wrap; }
+.anchor-roi-img { width: 148px; height: 148px; object-fit: cover; border-radius: 6px; border: 1px solid #00e5ff; background: #0d131a; }
+.roi-meta { flex: 1; min-width: 180px; display: flex; flex-direction: column; gap: 0.25rem; }
+.roi-status-text { margin: 0; }
+.omx-cell-summary { color: #00e5ff; }
+
+/* 지도 오버레이 표시 켜기·끄기 툴바 */
+.map-overlay-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0 0.45rem;
+  border-bottom: 1px solid var(--border-subtle, #222c3a);
+  margin-bottom: 0.35rem;
+}
+.map-overlay-toggles [data-layer-toggle][aria-pressed="true"] {
+  border-color: #00e5ff;
+  color: #e6faff;
+  background: rgba(0, 229, 255, 0.12);
+}
+.map-overlay-toggles [data-layer-toggle][aria-pressed="false"] {
+  opacity: 0.55;
+}
+
+/* 지도 위 로봇·OMX-AI·장소 마우스 호버 상세 인스펙터 카드 */
+.map-stage { position: relative; }
+.map-hover-card {
+  position: absolute;
+  left: 0.75rem;
+  bottom: 0.75rem;
+  z-index: 12;
+  max-width: min(430px, calc(100% - 1.5rem));
+  padding: 0.65rem 0.8rem;
+  border-radius: 8px;
+  border: 1px solid #00e5ff;
+  background: rgba(11, 16, 24, 0.94);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.38rem;
+  font-size: 0.78rem;
+}
+.map-hover-card[hidden] { display: none; }
+.hover-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  padding-bottom: 0.3rem;
+}
+.hover-card-head strong {
+  font-family: var(--mono);
+  font-size: 0.83rem;
+  color: #00e5ff;
+}
+.hover-card-grid {
+  margin: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.2rem 0.6rem;
+  align-items: baseline;
+}
+.hover-card-grid dt {
+  color: var(--text-secondary, #95a5b8);
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+.hover-card-grid dd {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 0.76rem;
+  color: var(--text-primary, #f0f6fc);
+}
+.hover-card-foot {
+  margin: 0.15rem 0 0;
+  padding-top: 0.25rem;
+  border-top: 1px dashed rgba(255, 255, 255, 0.12);
+  font-size: 0.71rem;
+  color: #8ce99a;
+}

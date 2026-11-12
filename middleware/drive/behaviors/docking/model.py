@@ -111,3 +111,4 @@ class DockingConfig:
     bay_settle_baseline_s: float = 2.0  # 멈춘 뒤 기준 전압을 잡기 전 대기
     bay_charge_rise_v: float = 0.05     # D-941: 20 s 안 +0.05 V(도크 계측 없음)
     bay_charge_confirm_s: float = 20.0
+    bay_fleet_eval_weight: float = 0.35  # 관제(Fleet) 서브픽셀 중심선 평가 보정 가중치

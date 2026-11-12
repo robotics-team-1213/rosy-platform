@@ -169,3 +169,210 @@ def test_the_route_shows_the_active_maps_bays_and_never_dispatches():
     app.state.charge_bays.observe = lambda now, robots, bays: seen.append(([r.robot_id for r in robots], bays))
     asyncio.run(app.state.charge_bays_tick())    # the background loop's step, no page open
     assert seen == [(["rosy_60"], [Bay("C1", -0.414, 0.47)])]
+
+
+def test_centerline_evaluation_flags_misaligned_dock_for_immediate_reseat():
+    import math
+    from fleet.routing.graph import build_graph
+    from fleet.site_map import SiteMap
+
+    site = SiteMap.model_validate({
+        "schema": "rosy.site_map/1", "map_id": "bays_eval",
+        "places": [{"id": "P1", "name": "칸 앞", "x": -0.414, "y": 0.022},
+                   {"id": "C1", "name": "충전 칸", "x": -0.414, "y": 0.470, "kind": "charge", "yaw": -1.5708}],
+        "edges": [{"id": "bay_1", "from": "P1", "to": "C1", "polyline": [[-0.414, 0.022], [-0.414, 0.470]],
+                   "direction": "two_way", "width_m": 0.18, "speed_cap_mps": 0.05}]})
+    graph = build_graph(site)
+    bays = ChargeBays()
+
+    # Arrived at C1 but skewed by 12 deg -> immediate reseat (misaligned_on_bay), no 30s wait
+    skewed = RobotView("a", True, 14.0, 7.40, (-0.414, 0.460), False, -math.pi / 2 + math.radians(12.0))
+    bays.observe(0.0, [skewed], BAYS[:1])
+    plan = bays.plan([skewed], BAYS[:1], graph=graph)
+    act = actions(plan)["a"]
+    assert act["action"] == "reseat" and act["reason"] == "misaligned_on_bay"
+    assert act["docking"]["verdict"] == "RETRY_FROM_P"
+
+    # Re-aligned at C1 within tolerance -> connecting (CONTACT_STOP)
+    aligned = RobotView("a", True, 14.0, 7.40, (-0.414, 0.460), False, -math.pi / 2 + math.radians(1.0))
+    bays.observe(2.0, [aligned], BAYS[:1])
+    plan_ok = bays.plan([aligned], BAYS[:1], graph=graph)
+    act_ok = actions(plan_ok)["a"]
+    assert act_ok["action"] == "stay" and act_ok["reason"] == "connecting"
+    assert act_ok["docking"]["verdict"] == "CONTACT_STOP"
+
+
+def _world_261026_charge_graph():
+    from fleet.routing.graph import build_graph
+    from fleet.site_map import SiteMap
+
+    site = SiteMap.model_validate({
+        "schema": "rosy.site_map/1",
+        "map_id": "world_261026",
+        "places": [
+            {"id": "C1", "name": "충전 1", "x": -0.414, "y": 0.47, "kind": "charge", "yaw": -1.5708},
+            {"id": "C2", "name": "충전 2", "x": -0.190, "y": 0.47, "kind": "charge", "yaw": -1.5708},
+            {"id": "C3", "name": "충전 3", "x": 0.032, "y": 0.47, "kind": "charge", "yaw": -1.5708},
+            {"id": "P1", "name": "칸 1 앞", "x": -0.414, "y": 0.022},
+            {"id": "P2", "name": "칸 2 앞", "x": -0.190, "y": 0.022},
+            {"id": "P3", "name": "칸 3 앞", "x": 0.032, "y": 0.022},
+            {"id": "S1", "name": "충전 출구 정지선", "x": -0.687, "y": -0.126},
+            {"id": "S2", "name": "충전 입구 정지선", "x": 0.18, "y": -0.126},
+            {"id": "J_in", "name": "충전 입구 분기", "x": 0.18, "y": -0.312},
+            {"id": "J_out", "name": "충전 출구 합류", "x": -0.687, "y": -0.266},
+        ],
+        "edges": [
+            {"id": "bay_1", "from": "P1", "to": "C1", "polyline": [[-0.414, 0.022], [-0.414, 0.47]],
+             "direction": "two_way", "width_m": 0.18, "speed_cap_mps": 0.05},
+            {"id": "bay_2", "from": "P2", "to": "C2", "polyline": [[-0.190, 0.022], [-0.190, 0.47]],
+             "direction": "two_way", "width_m": 0.18, "speed_cap_mps": 0.05},
+            {"id": "bay_3", "from": "P3", "to": "C3", "polyline": [[0.032, 0.022], [0.032, 0.47]],
+             "direction": "two_way", "width_m": 0.18, "speed_cap_mps": 0.05},
+            {"id": "bar_32", "from": "P3", "to": "P2", "polyline": [[0.032, 0.022], [-0.190, 0.022]],
+             "direction": "one_way", "width_m": 0.18, "speed_cap_mps": 0.06},
+            {"id": "bar_21", "from": "P2", "to": "P1", "polyline": [[-0.190, 0.022], [-0.414, 0.022]],
+             "direction": "one_way", "width_m": 0.18, "speed_cap_mps": 0.06},
+            {"id": "park_in", "from": "J_in", "to": "P3",
+             "polyline": [[0.18, -0.312], [0.18, -0.126], [0.11, 0.022], [0.032, 0.022]],
+             "direction": "one_way", "width_m": 0.18, "speed_cap_mps": 0.08},
+            {"id": "park_out", "from": "P1", "to": "S1",
+             "polyline": [[-0.414, 0.022], [-0.60, 0.022], [-0.687, -0.126]],
+             "direction": "one_way", "width_m": 0.18, "speed_cap_mps": 0.08},
+            {"id": "exit_merge", "from": "S1", "to": "J_out",
+             "polyline": [[-0.687, -0.126], [-0.687, -0.266]],
+             "direction": "one_way", "width_m": 0.18, "speed_cap_mps": 0.08},
+        ],
+    })
+    return site, build_graph(site, version=16)
+
+
+def test_road_path_follows_road_polylines_and_sequential_exit_nearest_departure():
+    import math
+    from fleet.routing.road_path import plan_road_path
+
+    _site, graph = _world_261026_charge_graph()
+    # 1. Road-constrained Nav2 path from J_in to C1 follows park_in -> bar_32 -> bar_21 -> bay_1
+    approach = plan_road_path(graph, (0.18, -0.312, math.pi / 2), "C1")
+    assert approach.edges == ("park_in", "bar_32", "bar_21", "bay_1")
+    assert approach.places == ("P3", "P2", "P1", "C1")
+    assert len(approach.waypoints_site) >= 8
+
+    # 2. Sequential departure: 3 robots in C1, C2, C3 finish charging simultaneously.
+    # Even if C3 connected earliest, exit_nearest releases C1 (0.783 m to S1) first,
+    # then C2 (1.007 m), then C3 (1.229 m).
+    bays = ChargeBays(rate_pct_per_min=10.0)
+    r1 = RobotView("rosy_01", True, 50.0, 7.40, (-0.414, 0.47), False, -math.pi / 2)
+    r2 = RobotView("rosy_02", True, 50.0, 7.40, (-0.190, 0.47), False, -math.pi / 2)
+    r3 = RobotView("rosy_03", True, 50.0, 7.40, (0.032, 0.47), False, -math.pi / 2)
+    bays.observe(0.0, [r1, r2, r3], BAYS)
+    # Connect r3 first (t=1), r2 second (t=2), r1 third (t=3)
+    bays.observe(1.0, [r1, r2, RobotView("rosy_03", True, 50.0, 7.50, r3.pose, False, r3.yaw)], BAYS)
+    bays.observe(2.0, [r1, RobotView("rosy_02", True, 50.0, 7.50, r2.pose, False, r2.yaw),
+                       RobotView("rosy_03", True, 50.0, 7.50, r3.pose, False, r3.yaw)], BAYS)
+    bays.observe(3.0, [RobotView("rosy_01", True, 50.0, 7.50, r1.pose, False, r1.yaw),
+                       RobotView("rosy_02", True, 50.0, 7.50, r2.pose, False, r2.yaw),
+                       RobotView("rosy_03", True, 50.0, 7.50, r3.pose, False, r3.yaw)], BAYS)
+    # At t=300s, all 3 are at 100% (>= 80% leave_percent)
+    charged_views = [
+        RobotView("rosy_01", True, 50.0, 7.50, r1.pose, False, r1.yaw),
+        RobotView("rosy_02", True, 50.0, 7.50, r2.pose, False, r2.yaw),
+        RobotView("rosy_03", True, 50.0, 7.50, r3.pose, False, r3.yaw),
+    ]
+    bays.observe(300.0, charged_views, BAYS)
+    plan1 = bays.plan(charged_views, BAYS, graph=graph)
+    act1 = actions(plan1)
+    assert act1["rosy_01"]["action"] == "leave" and act1["rosy_01"]["exit_rank"] == 1, (
+        [(k, v.get("action"), v.get("reason"), v.get("exit_rank")) for k, v in act1.items()],
+        plan1.get("corridor"),
+    )
+    assert act1["rosy_02"]["action"] == "stay" and act1["rosy_02"]["reason"] == "queued_for_exit"
+    assert act1["rosy_02"]["ahead"] == ["rosy_01"] and act1["rosy_02"]["exit_rank"] == 2
+    assert act1["rosy_03"]["action"] == "stay" and act1["rosy_03"]["reason"] == "queued_for_exit"
+    assert act1["rosy_03"]["ahead"] == ["rosy_01", "rosy_02"] and act1["rosy_03"]["exit_rank"] == 3
+    assert plan1["corridor"]["granted_robot_ids"] == ["rosy_01"]
+    assert [s["bay"] for s in plan1["corridor"]["station_order"]] == ["C1", "C2", "C3"]
+
+    # Step 2: rosy_01 leaves C1 and is moving on park_out (-0.50, 0.022) toward S1.
+    # Even after LEAVE_CONFIRM_S (t=305s), while rosy_01 is still in the corridor, rosy_02 and rosy_03 wait (corridor_busy).
+    moving_r1 = [
+        RobotView("rosy_01", True, 85.0, 7.45, (-0.50, 0.022), False, math.pi),
+        charged_views[1],
+        charged_views[2],
+    ]
+    bays.observe(301.0, moving_r1, BAYS)
+    bays.observe(305.0, moving_r1, BAYS)
+    plan2 = bays.plan(moving_r1, BAYS, graph=graph)
+    act2 = actions(plan2)
+    assert plan2["corridor"]["active_departing"] == ["rosy_01"]
+    assert act2["rosy_02"]["action"] == "stay" and act2["rosy_02"]["reason"] == "corridor_busy"
+    assert act2["rosy_03"]["action"] == "stay" and act2["rosy_03"]["reason"] == "corridor_busy"
+
+    # Step 3: rosy_01 clears S1 onto J_out (-0.687, -0.266). Now rosy_02 (C2) is granted leave, rosy_03 waits!
+    cleared_r1 = [
+        RobotView("rosy_01", True, 85.0, 7.45, (-0.687, -0.266), False, -math.pi / 2),
+        charged_views[1],
+        charged_views[2],
+    ]
+    bays.observe(306.0, cleared_r1, BAYS)
+    plan3 = bays.plan(cleared_r1, BAYS, graph=graph)
+    act3 = actions(plan3)
+    assert plan3["corridor"]["active_departing"] == []
+    assert act3["rosy_02"]["action"] == "leave" and act3["rosy_02"]["ahead"] == []
+    assert act3["rosy_03"]["action"] == "stay" and act3["rosy_03"]["reason"] == "queued_for_exit"
+    assert act3["rosy_03"]["ahead"] == ["rosy_02"]
+
+    # Step 4: rosy_02 leaves C2 and clears S1 -> rosy_03 (C3) is granted leave!
+    cleared_r2 = [
+        cleared_r1[0],
+        RobotView("rosy_02", True, 85.0, 7.45, (-0.687, -0.266), False, -math.pi / 2),
+        charged_views[2],
+    ]
+    bays.observe(307.0, cleared_r2, BAYS)
+    bays.observe(311.0, cleared_r2, BAYS)
+    plan4 = bays.plan(cleared_r2, BAYS, graph=graph)
+    act4 = actions(plan4)
+    assert act4["rosy_03"]["action"] == "leave" and act4["rosy_03"]["ahead"] == []
+    assert act4["rosy_03"]["departure_route"]["edges"] == ["bay_3", "bar_32", "bar_21", "park_out"]
+
+
+def test_road_nav2_http_route_dispatches_along_road_polyline(tmp_path):
+    from hashlib import sha256
+    from fastapi.testclient import TestClient
+    from fakes import FakeRobot
+    from fleet.server.app import create_app
+    from fleet.server.console import FleetConsole
+    from fleet.server.site_map_store import SiteMapStore
+    from fleet.server.task_service import FleetTaskService
+    from fleet.server.task_store import FleetTaskStore
+    from fleet.swarm.robots import RobotEndpoint
+
+    site, _graph = _world_261026_charge_graph()
+    store = SiteMapStore(tmp_path / "tasks.sqlite")
+    draft = store.save_draft(site, expected_revision=None, principal_id="op")
+    store.activate(expected_revision=draft["revision"], principal_id="op", route_active=False)
+
+    bot = FakeRobot(
+        "rosy_60",
+        state={
+            "robot_id": "rosy_60",
+            "pose": {"x": 0.18, "y": -0.312, "yaw": 1.5708},
+            "localization": {"state": "LOCALIZED", "pose_frame": "map"},
+        },
+    )
+    users = {sha256(b"op").hexdigest(): {"principal_id": "bob", "role": "operator"}}
+    console = FleetConsole([RobotEndpoint("rosy_60", "http://x", "t")], [bot])
+    tasks = FleetTaskService(FleetTaskStore(tmp_path / "tasks.sqlite"), robot_ids={"rosy_60"})
+    client = TestClient(create_app(console, task_service=tasks, site_users=users, site_maps=store))
+    auth = {"Authorization": "Bearer op", "Idempotency-Key": "road-nav2-test-1"}
+
+    res = client.post(
+        "/api/fleet/robots/rosy_60/road-nav2",
+        headers=auth,
+        json={"x": -0.414, "y": 0.47, "yaw": -1.5708, "place_id": "C1", "label": "충전 1"},
+    )
+    assert res.status_code == 200
+    body = res.json()
+    assert body["dispatched"] is True and (body["accepted"] or body["queued"])
+    assert body["edges"] == ["park_in", "bar_32", "bar_21", "bay_1"]
+    assert body["places"] == ["P3", "P2", "P1", "C1"]
+    assert len(body["waypoints_site"]) >= 8

@@ -47,3 +47,35 @@ test('an empty bay that cannot be called free says so', () => {
   assert.equal(rows.bays[0].text, '확인 불가 · 비어 있다고 볼 수 없음');
   assert.match(rows.actions[0].text, /칸이 비었는지 확인 불가/);
 });
+
+test('centerline docking evaluation and misaligned reseat render in Korean', () => {
+  const rows = chargeBayRows({
+    bays: [{ bay: 'C1', state: 'arrived', robot_id: 'rosy_60' }],
+    actions: [{
+      robot_id: 'rosy_60', action: 'reseat', bay: 'C1', arrived_percent: 14,
+      reason: 'misaligned_on_bay',
+      docking: { verdict: 'RETRY_FROM_P', offset_m: 0.034, yaw_err_deg: 11.2 },
+    }],
+  });
+  assert.match(rows.actions[0].text, /중심선 정렬 불량 · 전진 후 재접안 필요/);
+  assert.match(rows.actions[0].text, /이탈 · 재정렬 필요 34mm 11\.2°/);
+});
+
+test('OMX cell gates and cell-blocked actions render in Korean', () => {
+  const rows = chargeBayRows({
+    actions: [{ robot_id: 'rosy_60', action: 'wait', reason: 'locked_by_cell',
+      blocked_by_cell: true, cell_id: 'cell_s' }],
+    omx_cells: {
+      cell_s: { station: { station_place: 'S3' }, gate: {
+        phase: 'ARM_IN_BED_ZONE', robot_id: 'rosy_60', amr_motion_inhibited: true,
+      } },
+      cell_ab: { station: { station_place: 'S5' }, gate: { phase: 'IDLE' } },
+    },
+  });
+  assert.deepEqual(rows.cells, [
+    { id: 'cell_s', text: 'OMX 작업 중 · AMR 잠금 · S3 · rosy_60', status: 'active' },
+    { id: 'cell_ab', text: '대기 중 · S5', status: 'neutral' },
+  ]);
+  assert.match(rows.actions[0].text, /OMX 셀 작업 중 구동 잠금/);
+  assert.match(rows.actions[0].text, /OMX 셀\(cell_s\) 잠금/);
+});

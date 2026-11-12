@@ -73,3 +73,7 @@ contracts/learning/src/rosy/contracts/learning/artifacts.py
 contracts/learning/src/rosy/contracts/learning/pinky.py
 operations/fleet/fleet/traffic/lane_traffic.py
 middleware/perception/observers/bay_line_observer_node.py
+operations/fleet/fleet/pipeline/__init__.py
+operations/fleet/fleet/pipeline/omx_cell_policy.py
+operations/fleet/fleet/pipeline/orchestrator.py
+operations/fleet/fleet/pipeline/pinky_policy.py

@@ -289,3 +289,68 @@ def test_feed_and_detector_selection_carry_the_camera_line_source():
     assert type(detector).__name__ == "FeedDetector"
     detector.start()                    # the manager starts its detector on acquire
     assert detector.relative_pose() is not None
+
+
+def test_fleet_centerline_evaluation_guides_reverse_and_triggers_contact_when_camera_drops():
+    """When Pinky's onboard camera loses the pink line mid-bay, Fleet's real-time centerline
+    evaluation (BACKING_ALIGNED / BACKING_DRIFT -> CONTACT_STOP) guides it to DOCKED."""
+    p = a_bay(max_retries=1)
+    p.world.arrival_error = (0.02, math.radians(-2.5))
+    p.manager.dock()
+    p.detector.dead_in_phase = DockPhase.ALIGNING
+    t0 = p.clock.now
+    k = 0
+    while p.clock.now - t0 < 120.0:
+        if k % 4 == 0:
+            p.detector.capture()
+        if p.manager.phase is DockPhase.ALIGNING:
+            x, y, yaw = p.world.pose
+            to_end_m = max(0.0, -DOCKED_ALONG - x)
+            yaw_err_deg = math.degrees(math.atan2(math.sin(yaw - math.pi), math.cos(yaw - math.pi)))
+            verdict = "CONTACT_STOP" if to_end_m <= 1e-6 and abs(y) <= NECK[1] else (
+                "BACKING_ALIGNED" if abs(y) <= 0.015 else "BACKING_DRIFT")
+            p.manager._bay_phases.observe_fleet_docking({
+                "bay_id": "C1", "edge_id": "bay_1", "verdict": verdict,
+                "s_m": round(0.45 - to_end_m, 4), "to_end_m": round(to_end_m, 4),
+                "offset_m": round(y, 4), "rear_offset_m": round(y, 4),
+                "yaw_err_deg": round(yaw_err_deg, 2), "steer_cmd_rad_s": 0.0,
+            })
+        p.manager.tick()
+        if done(p.manager):
+            break
+        p.world.step()
+        p.clock.now += DT
+        k += 1
+    assert p.manager.state is DockState.DOCKED
+    assert abs(p.world.pose[1]) <= NECK[1] + 1e-9
+
+
+def test_fleet_retry_verdict_triggers_immediate_backoff_and_realign():
+    """When Fleet judges RETRY_FROM_P (off-centerline drift), Pinky immediately backs off to P_i and retries."""
+    p = a_bay(max_retries=2)
+    p.manager.dock()
+    injected = False
+    phases = []
+    t0 = p.clock.now
+    k = 0
+    while p.clock.now - t0 < 160.0:
+        if k % 4 == 0:
+            p.detector.capture()
+        if p.manager.phase is DockPhase.ALIGNING and not injected:
+            injected = True
+            p.manager._bay_phases.observe_fleet_docking({
+                "bay_id": "C1", "edge_id": "bay_1", "verdict": "RETRY_FROM_P",
+                "s_m": 0.20, "to_end_m": 0.25, "offset_m": 0.042, "rear_offset_m": 0.048,
+                "yaw_err_deg": 11.0, "steer_cmd_rad_s": -0.5,
+            })
+        p.manager.tick()
+        ph = p.manager.phase.value if p.manager.phase else None
+        if not phases or phases[-1] != ph:
+            phases.append(ph)
+        if done(p.manager):
+            break
+        p.world.step()
+        p.clock.now += DT
+        k += 1
+    assert "backoff" in phases
+    assert p.manager.state is DockState.DOCKED

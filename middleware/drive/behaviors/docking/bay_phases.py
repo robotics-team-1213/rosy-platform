@@ -55,12 +55,22 @@ class BayPhases:
         self._backoff = False
         self._last_tick: Optional[float] = None
         self._baseline_v: Optional[float] = None
+        self._fleet_cue: Optional[tuple[float, dict]] = None
 
     # --- 매니저가 부르는 자리 ---------------------------------------------------
 
     def active(self) -> bool:
         dock_type = self._h._type()
         return dock_type is not None and dock_type.approach == "line"
+
+    def observe_fleet_docking(self, cue: Optional[dict], now: Optional[float] = None) -> bool:
+        """관제(Fleet)가 추출한 충전소 서브픽셀 중심선 평가(offset_m, yaw_err_deg, to_end_m, verdict) 수신."""
+        with self._h._lock:
+            if cue is None or not isinstance(cue, dict) or not self.active():
+                return False
+            at = self._h.now() if now is None else float(now)
+            self._fleet_cue = (at, dict(cue))
+            return True
 
     def docked_confirm(self, status, voltage, now):
         """DOCKED 유지 중 충전 확인: 칸은 여기 전압 1소스, 나머지는 후진형 규칙에 위임."""
@@ -192,6 +202,8 @@ class BayPhases:
             return
         dt = now - self._last_tick if self._last_tick is not None else 0.0
         self._ingest_observation(dt)
+        if self._apply_fleet_evaluation(now) is not None:
+            return
         speed = cfg.bay_reverse_speed
         if self._scan_s is not None:
             # 스캔은 정지 상태에서 천천히 ±bay_scan_rad — 회전 중 병진이 흐르면 눈감고 접촉한다.
@@ -288,6 +300,10 @@ class BayPhases:
     def _tick_settling(self, now: float) -> None:
         """전압 1소스(D-941): 멈춘 뒤 2 s 기준, 20 s 안 +0.05 V 상승."""
         h, cfg = self._h, self._h._cfg
+        cue = self._fresh_fleet_cue(now)
+        if cue is not None and cue.get("verdict") == "RETRY_FROM_P":
+            h._retry("fleet bay contact misaligned")
+            return
         voltage = getattr(h._battery, "voltage", None) if h._battery is not None else None
         valid = voltage is not None and math.isfinite(float(voltage))
         if self._baseline_v is None and valid and now - h._phase_since >= cfg.bay_settle_baseline_s:
@@ -323,6 +339,42 @@ class BayPhases:
 
     # --- 보조 -----------------------------------------------------------------
 
+    def _fresh_fleet_cue(self, now: float) -> Optional[dict]:
+        if self._fleet_cue is None:
+            return None
+        at, cue = self._fleet_cue
+        if not (0.0 <= now - at <= self._h._cfg.detector_lost_grace_s):
+            return None
+        return cue
+
+    def _apply_fleet_evaluation(self, now: float) -> Optional[str]:
+        """관제 중심선 평가 반영: RETRY_FROM_P 재시도, CONTACT_STOP 정지, BACKING_* 실시간 조향 보정."""
+        cue = self._fresh_fleet_cue(now)
+        if cue is None:
+            return None
+        verdict = cue.get("verdict")
+        if verdict == "RETRY_FROM_P":
+            self._stop()
+            self._h._retry("fleet bay centerline misaligned")
+            return "retry"
+        if verdict == "CONTACT_STOP":
+            self._begin_settling()
+            return "contact"
+        if verdict in ("BACKING_ALIGNED", "BACKING_DRIFT"):
+            f_lat = float(cue.get("offset_m", 0.0))
+            f_head = math.radians(float(cue.get("yaw_err_deg", 0.0)))
+            w = self._h._cfg.bay_fleet_eval_weight
+            if self._est is not None and self._no_obs_s == 0.0:
+                lat, head = self._est
+                self._est = ((1.0 - w) * lat + w * f_lat, _wrap(head + w * _wrap(f_head - head)))
+            else:
+                self._est = (f_lat, f_head)
+                self._no_obs_s = 0.0
+                self._scan_s = None
+                self._resync = False
+                self._h._last_seen_at = now
+        return None
+
     def _reset_line_state(self) -> None:
         self._est = None
         self._no_obs_s = 0.0
@@ -336,6 +388,7 @@ class BayPhases:
         self._slip = None
         self._backoff = False
         self._turn_target = None
+        self._fleet_cue = None
 
     def _odometry(self):
         pose = getattr(self._h.executor, "odometry_pose", None) if self._h.executor else None

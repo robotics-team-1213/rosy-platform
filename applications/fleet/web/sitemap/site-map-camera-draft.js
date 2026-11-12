@@ -60,7 +60,10 @@ export function createCameraDraftPanel(host) {
         body: JSON.stringify({source_id: proposal.source, plane: {
           bounds_m: proposal.plane.bounds_m, px_per_m: proposal.plane.px_per_m,
           calibration_revision: proposal.plane.calibration_revision},
-          detector: proposal.detector, lanes: proposal.lanes, zones: proposal.zones})});
+          detector: proposal.detector, lanes: proposal.lanes, zones: proposal.zones,
+          ...(proposal.places ? {places: proposal.places} : {}),
+          ...(proposal.edges ? {edges: proposal.edges} : {}),
+          ...(proposal.map_id ? {map_id: proposal.map_id} : {})})});
       const {map, provenance} = made;
       if (!map.edges.length && !map.facilities.length) {
         throw new Error('이 프레임에서 차로·구역 후보를 찾지 못했습니다. 카메라 각도·조명을 확인하세요.');

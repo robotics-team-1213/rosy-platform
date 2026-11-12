@@ -97,6 +97,61 @@ def run_contract_handoff_stage(
     }
 
 
+def execute_remote_fleet_r_handoff(
+    pipeline,
+    *,
+    fleet_r_url: str,
+    token: str = "",
+    cell_id: str = "cell_s",
+    robot_id: str = "rosy_01",
+    pose_xy_yaw: tuple[float, float, float] = (0.68, -0.2528, 3.14159),
+    stage_id: str = "remote-s3-pinky-to-belt",
+    tier: int = 1,
+    request_fn: Callable[[str, str, dict[str, Any] | None], dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Hold the Fleet-R bed-zone gate while the local OMX stage runs."""
+    if request_fn is None:
+        import ssl
+        from urllib.request import Request, urlopen
+
+        def request_fn(method: str, path: str, body: dict[str, Any] | None) -> dict[str, Any]:
+            data = json.dumps(body).encode("utf-8") if body is not None else None
+            request = Request(
+                f"{fleet_r_url.rstrip('/')}{path}", data=data, method=method,
+                headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+            )
+            with urlopen(request, context=ssl._create_unverified_context(), timeout=15) as response:
+                return json.load(response)
+
+    body = {
+        "cell_id": cell_id, "robot_id": robot_id, "robot_kind": "pinky",
+        "x": float(pose_xy_yaw[0]), "y": float(pose_xy_yaw[1]), "yaw": float(pose_xy_yaw[2]),
+        "wheel_brake_locked": True, "bed_ready": True, "v_cmd_mps": 0.0,
+        "phase": "ARM_IN_BED_ZONE", "tier": int(tier),
+    }
+    claim_resp = request_fn("POST", "/api/fleet/pipeline/cell-handoff", body)
+    assert claim_resp["gate"]["amr_motion_inhibited"] is True
+    cb_locked = request_fn("GET", "/api/fleet/charge-bays", None)
+    status_locked = request_fn("GET", "/api/fleet/pipeline/status", None)
+    assert cb_locked["omx_cells"][cell_id]["gate"]["amr_motion_inhibited"] is True
+    assert status_locked["omx_cell_layer"]["cells"][cell_id]["gate"]["amr_motion_inhibited"] is True
+
+    omx_res = pipeline.run_contract_handoff_stage(claim_resp["handoff"], stage_id=stage_id, tier=tier)
+    receipt = omx_res["receipt"]
+    release_resp = request_fn("POST", "/api/fleet/pipeline/cell-handoff", {
+        **body, "phase": receipt["phase"], "stage_id": stage_id,
+        "goal_evidence_digest": receipt["goal_evidence_digest"], "reason": receipt["reason"],
+    })
+    assert release_resp["gate"]["amr_motion_inhibited"] is False
+    assert release_resp["gate"]["amr_can_depart"] is True
+    return {
+        "fleet_r_url": fleet_r_url, "claim_gate": claim_resp["gate"],
+        "charge_bays_locked": cb_locked.get("omx_cells", {}).get(cell_id, {}).get("gate"),
+        "omx_receipt": receipt, "release_gate": release_resp["gate"],
+    }
+
+
+
 def execute_task_plan(
     stages: list[dict[str, Any]],
     *,

@@ -112,141 +112,141 @@
       </link>
     </model>
 
-    <model name="bay_guide">
+    <model name="bay_guide_1">
       <static>true</static>
       <pose>-0.4140 0 0 0 0 0</pose>
       <link name="link">
         <collision name="rail_left_col">
-          <pose>-0.5040 0.4775 0.0075 0 0 0</pose>
+          <pose>-0.0900 0.4775 0.0075 0 0 0</pose>
           <geometry><box><size>0.0080 0.1550 0.0150</size></box></geometry>
           <surface><friction><ode><mu>0.3</mu><mu2>0.3</mu2></ode></friction></surface>
         </collision>
         <visual name="rail_left_vis">
-          <pose>-0.5040 0.4775 0.0075 0 0 0</pose>
+          <pose>-0.0900 0.4775 0.0075 0 0 0</pose>
           <geometry><box><size>0.0080 0.1550 0.0150</size></box></geometry>
           <material><ambient>0.85 0.55 0.15 1</ambient><diffuse>0.85 0.55 0.15 1</diffuse></material>
         </visual>
         <collision name="rail_right_col">
-          <pose>-0.3240 0.4775 0.0075 0 0 0</pose>
+          <pose>0.0900 0.4775 0.0075 0 0 0</pose>
           <geometry><box><size>0.0080 0.1550 0.0150</size></box></geometry>
           <surface><friction><ode><mu>0.3</mu><mu2>0.3</mu2></ode></friction></surface>
         </collision>
         <visual name="rail_right_vis">
-          <pose>-0.3240 0.4775 0.0075 0 0 0</pose>
+          <pose>0.0900 0.4775 0.0075 0 0 0</pose>
           <geometry><box><size>0.0080 0.1550 0.0150</size></box></geometry>
           <material><ambient>0.85 0.55 0.15 1</ambient><diffuse>0.85 0.55 0.15 1</diffuse></material>
         </visual>
         <collision name="stop_bar_col">
-          <pose>-0.4140 0.5550 0.0075 0 0 0</pose>
+          <pose>0.0000 0.5550 0.0075 0 0 0</pose>
           <geometry><box><size>0.1800 0.0080 0.0150</size></box></geometry>
           <surface><friction><ode><mu>0.3</mu><mu2>0.3</mu2></ode></friction></surface>
         </collision>
         <visual name="stop_bar_vis">
-          <pose>-0.4140 0.5550 0.0075 0 0 0</pose>
+          <pose>0.0000 0.5550 0.0075 0 0 0</pose>
           <geometry><box><size>0.1800 0.0080 0.0150</size></box></geometry>
           <material><ambient>0.85 0.55 0.15 1</ambient><diffuse>0.85 0.55 0.15 1</diffuse></material>
         </visual>
         <visual name="border_left">
-          <pose>-0.5080 0.3950 0.0012 0 0 1.570796</pose>
+          <pose>-0.0940 0.3950 0.0012 0 0 1.570796</pose>
           <geometry><plane><normal>0 0 1</normal><size>0.3100 0.0120</size></plane></geometry>
           <material><ambient>0.15 0.75 0.25 1</ambient><diffuse>0.15 0.75 0.25 1</diffuse></material>
         </visual>
         <visual name="border_right">
-          <pose>-0.3200 0.3950 0.0012 0 0 1.570796</pose>
+          <pose>0.0940 0.3950 0.0012 0 0 1.570796</pose>
           <geometry><plane><normal>0 0 1</normal><size>0.3100 0.0120</size></plane></geometry>
           <material><ambient>0.15 0.75 0.25 1</ambient><diffuse>0.15 0.75 0.25 1</diffuse></material>
         </visual>
       </link>
     </model>
 
-    <model name="bay_guide">
+    <model name="bay_guide_2">
       <static>true</static>
       <pose>-0.1900 0 0 0 0 0</pose>
       <link name="link">
         <collision name="rail_left_col">
-          <pose>-0.2800 0.4775 0.0075 0 0 0</pose>
+          <pose>-0.0900 0.4775 0.0075 0 0 0</pose>
           <geometry><box><size>0.0080 0.1550 0.0150</size></box></geometry>
           <surface><friction><ode><mu>0.3</mu><mu2>0.3</mu2></ode></friction></surface>
         </collision>
         <visual name="rail_left_vis">
-          <pose>-0.2800 0.4775 0.0075 0 0 0</pose>
+          <pose>-0.0900 0.4775 0.0075 0 0 0</pose>
           <geometry><box><size>0.0080 0.1550 0.0150</size></box></geometry>
           <material><ambient>0.85 0.55 0.15 1</ambient><diffuse>0.85 0.55 0.15 1</diffuse></material>
         </visual>
         <collision name="rail_right_col">
-          <pose>-0.1000 0.4775 0.0075 0 0 0</pose>
+          <pose>0.0900 0.4775 0.0075 0 0 0</pose>
           <geometry><box><size>0.0080 0.1550 0.0150</size></box></geometry>
           <surface><friction><ode><mu>0.3</mu><mu2>0.3</mu2></ode></friction></surface>
         </collision>
         <visual name="rail_right_vis">
-          <pose>-0.1000 0.4775 0.0075 0 0 0</pose>
+          <pose>0.0900 0.4775 0.0075 0 0 0</pose>
           <geometry><box><size>0.0080 0.1550 0.0150</size></box></geometry>
           <material><ambient>0.85 0.55 0.15 1</ambient><diffuse>0.85 0.55 0.15 1</diffuse></material>
         </visual>
         <collision name="stop_bar_col">
-          <pose>-0.1900 0.5550 0.0075 0 0 0</pose>
+          <pose>0.0000 0.5550 0.0075 0 0 0</pose>
           <geometry><box><size>0.1800 0.0080 0.0150</size></box></geometry>
           <surface><friction><ode><mu>0.3</mu><mu2>0.3</mu2></ode></friction></surface>
         </collision>
         <visual name="stop_bar_vis">
-          <pose>-0.1900 0.5550 0.0075 0 0 0</pose>
+          <pose>0.0000 0.5550 0.0075 0 0 0</pose>
           <geometry><box><size>0.1800 0.0080 0.0150</size></box></geometry>
           <material><ambient>0.85 0.55 0.15 1</ambient><diffuse>0.85 0.55 0.15 1</diffuse></material>
         </visual>
         <visual name="border_left">
-          <pose>-0.2840 0.3950 0.0012 0 0 1.570796</pose>
+          <pose>-0.0940 0.3950 0.0012 0 0 1.570796</pose>
           <geometry><plane><normal>0 0 1</normal><size>0.3100 0.0120</size></plane></geometry>
           <material><ambient>0.15 0.75 0.25 1</ambient><diffuse>0.15 0.75 0.25 1</diffuse></material>
         </visual>
         <visual name="border_right">
-          <pose>-0.0960 0.3950 0.0012 0 0 1.570796</pose>
+          <pose>0.0940 0.3950 0.0012 0 0 1.570796</pose>
           <geometry><plane><normal>0 0 1</normal><size>0.3100 0.0120</size></plane></geometry>
           <material><ambient>0.15 0.75 0.25 1</ambient><diffuse>0.15 0.75 0.25 1</diffuse></material>
         </visual>
       </link>
     </model>
 
-    <model name="bay_guide">
+    <model name="bay_guide_3">
       <static>true</static>
       <pose>0.0320 0 0 0 0 0</pose>
       <link name="link">
         <collision name="rail_left_col">
-          <pose>-0.0580 0.4775 0.0075 0 0 0</pose>
+          <pose>-0.0900 0.4775 0.0075 0 0 0</pose>
           <geometry><box><size>0.0080 0.1550 0.0150</size></box></geometry>
           <surface><friction><ode><mu>0.3</mu><mu2>0.3</mu2></ode></friction></surface>
         </collision>
         <visual name="rail_left_vis">
-          <pose>-0.0580 0.4775 0.0075 0 0 0</pose>
+          <pose>-0.0900 0.4775 0.0075 0 0 0</pose>
           <geometry><box><size>0.0080 0.1550 0.0150</size></box></geometry>
           <material><ambient>0.85 0.55 0.15 1</ambient><diffuse>0.85 0.55 0.15 1</diffuse></material>
         </visual>
         <collision name="rail_right_col">
-          <pose>0.1220 0.4775 0.0075 0 0 0</pose>
+          <pose>0.0900 0.4775 0.0075 0 0 0</pose>
           <geometry><box><size>0.0080 0.1550 0.0150</size></box></geometry>
           <surface><friction><ode><mu>0.3</mu><mu2>0.3</mu2></ode></friction></surface>
         </collision>
         <visual name="rail_right_vis">
-          <pose>0.1220 0.4775 0.0075 0 0 0</pose>
+          <pose>0.0900 0.4775 0.0075 0 0 0</pose>
           <geometry><box><size>0.0080 0.1550 0.0150</size></box></geometry>
           <material><ambient>0.85 0.55 0.15 1</ambient><diffuse>0.85 0.55 0.15 1</diffuse></material>
         </visual>
         <collision name="stop_bar_col">
-          <pose>0.0320 0.5550 0.0075 0 0 0</pose>
+          <pose>0.0000 0.5550 0.0075 0 0 0</pose>
           <geometry><box><size>0.1800 0.0080 0.0150</size></box></geometry>
           <surface><friction><ode><mu>0.3</mu><mu2>0.3</mu2></ode></friction></surface>
         </collision>
         <visual name="stop_bar_vis">
-          <pose>0.0320 0.5550 0.0075 0 0 0</pose>
+          <pose>0.0000 0.5550 0.0075 0 0 0</pose>
           <geometry><box><size>0.1800 0.0080 0.0150</size></box></geometry>
           <material><ambient>0.85 0.55 0.15 1</ambient><diffuse>0.85 0.55 0.15 1</diffuse></material>
         </visual>
         <visual name="border_left">
-          <pose>-0.0620 0.3950 0.0012 0 0 1.570796</pose>
+          <pose>-0.0940 0.3950 0.0012 0 0 1.570796</pose>
           <geometry><plane><normal>0 0 1</normal><size>0.3100 0.0120</size></plane></geometry>
           <material><ambient>0.15 0.75 0.25 1</ambient><diffuse>0.15 0.75 0.25 1</diffuse></material>
         </visual>
         <visual name="border_right">
-          <pose>0.1260 0.3950 0.0012 0 0 1.570796</pose>
+          <pose>0.0940 0.3950 0.0012 0 0 1.570796</pose>
           <geometry><plane><normal>0 0 1</normal><size>0.3100 0.0120</size></plane></geometry>
           <material><ambient>0.15 0.75 0.25 1</ambient><diffuse>0.15 0.75 0.25 1</diffuse></material>
         </visual>

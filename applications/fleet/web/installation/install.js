@@ -328,6 +328,7 @@ async function refreshAuthorization(renewed = false, credentialChange = false) {
     showSession(identity, {credentialChange});
     applyRole();
     await Promise.allSettled([
+      call("/api/fleet/site-map").then((sm) => { view.siteMap = sm; fieldView.render(); }).catch(() => {}),
       cameraPairing.refresh({ credentials: true }),
       cameraPeer.refresh(),
       usbCamera.refresh(),

@@ -269,6 +269,93 @@ class ReturnSample:
     #: rev 6: the nearest arc and the distance along it (for the lap context).
     arc_id: Optional[str] = None
     s_m: Optional[float] = None
+    #: D-1013 / D-941: Fleet's charging-bay centerline evaluation while on or entering a bay edge.
+    docking: Optional[dict] = None
+
+
+#: Nominal distance from base_link to rear charging contacts on Pinky (m, D-1013 / body_rear_x_m).
+BAY_REAR_CONTACT_M = 0.076
+#: Lateral offset thresholds on the extracted sub-pixel bay centerline (m).
+BAY_ALIGNED_OFFSET_M = 0.015
+BAY_DRIFT_MAX_OFFSET_M = 0.028
+BAY_CONTACT_MAX_OFFSET_M = 0.020
+#: Heading error thresholds relative to reverse-in target heading tangent + pi (deg).
+BAY_ALIGNED_YAW_DEG = 4.0
+BAY_DRIFT_MAX_YAW_DEG = 8.0
+BAY_CONTACT_MAX_YAW_DEG = 5.0
+BAY_TURN_ENTRY_S_M = 0.08
+BAY_TURN_ENTRY_YAW_DEG = 25.0
+#: Remaining distance along bay centerline to C_i where contact stop triggers (m).
+BAY_CONTACT_STOP_M = 0.025
+#: Continuous P gains for Fleet centerline steering recommendation (rad/(s*m), rad/(s*rad), rad/s).
+BAY_GAIN_LATERAL = 8.0
+BAY_GAIN_HEADING = 0.6
+BAY_MAX_STEER_RAD_S = 0.5
+
+
+def _bay_inward_arcs(graph) -> list:
+    if graph is None:
+        return []
+    places = getattr(graph, "places", None) or {}
+    return [
+        arc for arc in graph.arcs.values()
+        if getattr(arc, "forward", True)
+        and (getattr(places.get(arc.end_place), "kind", None) == "charge"
+             or str(arc.edge_id).startswith("bay_"))
+    ]
+
+
+def evaluate_bay_dock(x: float, y: float, yaw: Optional[float],
+                      travel: Optional[float] = None, graph=None) -> Optional[dict]:
+    """Evaluate reverse-in docking alignment against the active site map's extracted bay centerlines."""
+    bay_arcs = _bay_inward_arcs(graph)
+    if not bay_arcs:
+        return None
+    projected = [(arc, *arc.project(x, y)) for arc in bay_arcs]
+    arc, dist, s, tangent = min(projected, key=lambda item: item[1])
+    if dist > arc.width_m / 2.0:
+        return None
+    px, py, _ = arc.point_at(s)
+    left = math.cos(tangent) * (y - py) - math.sin(tangent) * (x - px)
+    offset_m = math.copysign(dist, left)
+    to_end_m = max(0.0, arc.length_m - s)
+    target_yaw = _wrap(tangent + math.pi)
+    yaw_err_rad = 0.0 if yaw is None else _wrap(yaw - target_yaw)
+    yaw_err_deg = math.degrees(yaw_err_rad)
+    rear_offset_m = offset_m + BAY_REAR_CONTACT_M * math.sin(yaw_err_rad)
+    converging = (offset_m * yaw_err_rad) < 0.0 and abs(yaw_err_deg) <= 16.0 and to_end_m > 0.12
+    max_yaw_deg = 16.0 if converging else BAY_DRIFT_MAX_YAW_DEG
+    if s <= BAY_TURN_ENTRY_S_M and yaw is not None and abs(yaw_err_deg) > BAY_TURN_ENTRY_YAW_DEG:
+        verdict = "TURN_AT_ENTRY"
+    elif to_end_m <= BAY_CONTACT_STOP_M:
+        if (abs(offset_m) <= BAY_CONTACT_MAX_OFFSET_M
+                and abs(rear_offset_m) <= BAY_CONTACT_MAX_OFFSET_M + 0.004
+                and (yaw is None or abs(yaw_err_deg) <= BAY_CONTACT_MAX_YAW_DEG)):
+            verdict = "CONTACT_STOP"
+        else:
+            verdict = "RETRY_FROM_P"
+    elif (abs(offset_m) > BAY_DRIFT_MAX_OFFSET_M
+          or abs(rear_offset_m) > BAY_DRIFT_MAX_OFFSET_M + 0.008
+          or (yaw is not None and s > BAY_TURN_ENTRY_S_M and abs(yaw_err_deg) > max_yaw_deg)):
+        verdict = "RETRY_FROM_P"
+    elif (abs(offset_m) <= BAY_ALIGNED_OFFSET_M
+          and (yaw is None or abs(yaw_err_deg) <= BAY_ALIGNED_YAW_DEG)):
+        verdict = "BACKING_ALIGNED"
+    else:
+        verdict = "BACKING_DRIFT"
+    steer = -(BAY_GAIN_LATERAL * offset_m + BAY_GAIN_HEADING * yaw_err_rad)
+    steer_cmd = max(-BAY_MAX_STEER_RAD_S, min(BAY_MAX_STEER_RAD_S, steer))
+    return {
+        "bay_id": arc.end_place,
+        "edge_id": arc.edge_id,
+        "verdict": verdict,
+        "s_m": round(s, 4),
+        "to_end_m": round(to_end_m, 4),
+        "offset_m": round(offset_m, 4),
+        "rear_offset_m": round(rear_offset_m, 4),
+        "yaw_err_deg": round(yaw_err_deg, 2),
+        "steer_cmd_rad_s": round(steer_cmd, 4),
+    }
 
 
 def map_bounds(graph, pad_m: float) -> Optional[tuple]:
@@ -295,8 +382,12 @@ def classify(x: float, y: float, yaw: Optional[float], travel: Optional[float], 
         bounds = map_bounds(graph, config.off_map_pad_m)
     if not arcs or bounds is None or not (bounds[0] <= x <= bounds[2] and bounds[1] <= y <= bounds[3]):
         return ReturnSample(OFF_MAP)
+    facing = yaw if yaw is not None else travel   # D-587 marker yaw first (±5 deg), else motion
     projected = [(arc, *arc.project(x, y)) for arc in arcs]
-    arc, dist, s, tangent = min(projected, key=lambda item: item[1])
+    arc, dist, s, tangent = min(
+        projected,
+        key=lambda item: (round(item[1], 6), 0.0 if facing is None else abs(_wrap(item[3] - facing))),
+    )
     px, py, _ = arc.point_at(s)
     left = math.cos(tangent) * (y - py) - math.sin(tangent) * (x - px)
     offset = math.copysign(dist, left)
@@ -308,7 +399,6 @@ def classify(x: float, y: float, yaw: Optional[float], travel: Optional[float], 
         state = ON_LINE
     else:
         state = OFF_LANE
-    facing = yaw if yaw is not None else travel   # D-587 marker yaw first (±5 deg), else motion
     if config.wrong_way and facing is not None and state != OFF_LANE:
         # Every lane under the body runs against the robot: wrong way. At a junction a lane
         # within 90 deg is always under the body, so turning there is not.
@@ -336,11 +426,14 @@ def classify(x: float, y: float, yaw: Optional[float], travel: Optional[float], 
              "curvature_1pm": round(_wrap(t_ahead - tangent) / config.guide_ahead_m, 3),
              "to_end_m": round(max(0.0, arc.length_m - s), 3), "next_place_id": arc.end_place,
              "ring": arc.edge_id.startswith("ring")}   # ponytail: ring edges are named ring*; a map flag if not
+    docking = evaluate_bay_dock(x, y, yaw, travel, graph) if arc.edge_id.startswith("bay_") or getattr(
+        (getattr(graph, "places", None) or {}).get(arc.end_place), "kind", None) == "charge" or getattr(
+        (getattr(graph, "places", None) or {}).get(arc.start_place), "kind", None) == "charge" else None
     return ReturnSample(state, arc.edge_id, round(offset, 4), side,
                         None if bearing is None else round(bearing, 1), round(math.degrees(tangent), 1),
                         None if turn is None else round(turn, 1), (round(ex, 4), round(ey, 4)), crossing, ahead,
                         guide, any(math.hypot(x - sx, y - sy) <= config.turn_spot_tolerance_m
-                                   for sx, sy in config.turn_spots), arc.id, round(s, 4))
+                                   for sx, sy in config.turn_spots), arc.id, round(s, 4), docking)
 
 
 #: Walk step along the lane for the crosswalk zone (m); the zone is this coarse.

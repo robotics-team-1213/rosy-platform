@@ -11,6 +11,7 @@ motion — the lanes are drawn, never driven.
 from __future__ import annotations
 
 import hashlib
+import json
 import math
 import re
 import struct
@@ -160,10 +161,12 @@ def site_lanes_payload(lanes: Mapping[str | None, dict], sources: Sequence) -> d
     if not lanes:
         return None
     maps = []
+    default_map_id = sources[0].map_id if len({s.map_id for s in sources}) == 1 else None
     for map_id, graph in lanes.items():
+        effective_map_id = map_id if map_id is not None else default_map_id
         source_ids = [source.source_id for source in sources
-                      if map_id is None or source.map_id == map_id]
-        entry = {"map_id": map_id, "frame": "map", "units": "m", "source_ids": source_ids,
+                      if effective_map_id is None or source.map_id == effective_map_id]
+        entry = {"map_id": effective_map_id, "frame": "map", "units": "m", "source_ids": source_ids,
                  "polylines": [], "paint_triangles": [], **graph}
         xs = [v for tri in entry["paint_triangles"] for v in tri[0::2]]
         ys = [v for tri in entry["paint_triangles"] for v in tri[1::2]]
@@ -173,3 +176,52 @@ def site_lanes_payload(lanes: Mapping[str | None, dict], sources: Sequence) -> d
                                  "max_x": max(bounds["max_x"], *xs), "max_y": max(bounds["max_y"], *ys)}
         maps.append(entry)
     return {"maps": maps}
+
+
+def active_site_lanes_payload(maps_store, lanes_body: dict | None, sources: Sequence) -> dict | None:
+    """Resolve dynamic site lanes payload from active site map store, or fallback to static lanes_body."""
+    active = maps_store.active() if maps_store is not None else None
+    if active is None:
+        return lanes_body
+    _, active_map, _, _ = active
+    default_map_id = sources[0].map_id if len({s.map_id for s in sources}) == 1 else "world_261026"
+    eff_map_id = active_map.map_id if active_map.map_id and active_map.map_id != "site" else default_map_id
+    source_ids = [s.source_id for s in sources if s.map_id == eff_map_id] or [s.source_id for s in sources]
+    polylines = [
+        {
+            "id": edge.id,
+            "kind": "segment",
+            "closed": False,
+            "points": [[round(float(p[0]), 4), round(float(p[1]), 4)] for p in edge.polyline],
+        }
+        for edge in active_map.edges
+    ]
+    poly_raw = json.dumps(polylines, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    lane_sha = hashlib.sha256(poly_raw).hexdigest()
+    base_entry = (lanes_body.get("maps") or [{}])[0] if lanes_body else {}
+    paint_triangles = base_entry.get("paint_triangles") or []
+    paint_sha = base_entry.get("paint_sha256")
+    xs = [p[0] for line in polylines for p in line["points"]] + [v for tri in paint_triangles for v in tri[0::2]]
+    ys = [p[1] for line in polylines for p in line["points"]] + [v for tri in paint_triangles for v in tri[1::2]]
+    if eff_map_id == "world_261026":
+        bounds_m = {"min_x": -1.22, "min_y": -0.61, "max_x": 1.22, "max_y": 0.61}
+    elif xs and ys:
+        bounds_m = {"min_x": min(xs), "min_y": min(ys), "max_x": max(xs), "max_y": max(ys)}
+    else:
+        bounds_m = {"min_x": -1.22, "min_y": -0.61, "max_x": 1.22, "max_y": 0.61}
+    return {
+        "maps": [
+            {
+                "map_id": eff_map_id,
+                "frame": "map",
+                "units": "m",
+                "source_ids": source_ids,
+                "polylines": polylines,
+                "paint_triangles": paint_triangles,
+                "bounds_m": bounds_m,
+                "lane_graph_sha256": lane_sha,
+                **({"paint_sha256": paint_sha} if paint_sha else {}),
+            }
+        ]
+    }
+

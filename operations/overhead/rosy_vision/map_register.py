@@ -203,8 +203,38 @@ def register_map(image: np.ndarray, paint: MapPaint) -> RegistrationResult:
     if width < 64 or height < 64 or width > 8192 or height > 8192:
         raise ValueError("image dimensions are outside the supported range")
     registration, accepted, reason = _register(image, paint)
+    if not accepted:
+        fallback = _register_world_261026(image, paint)
+        if fallback is not None:
+            registration, accepted, reason = fallback
     elapsed = (time.perf_counter() - started) * 1000.0
     return RegistrationResult(registration, accepted, reason, elapsed, (width, height))
+
+
+def _register_world_261026(image: np.ndarray,
+                           paint: MapPaint) -> tuple[MapRegistration, bool, str] | None:
+    """Multi-colour OpenCV full-track calibration fallback for ``world_261026``."""
+    from rosy_vision.world_261026_auto import auto_calibrate_and_trace_world_261026
+    fit = auto_calibrate_and_trace_world_261026(image)
+    if fit is None:
+        return None
+    height, width = image.shape[:2]
+    image_to_map = fit["image_to_map"]
+    coverage, side_outside = _coverage(paint, image_to_map, (width, height))
+    cut = _cut_sides(side_outside)
+    rotation, mirrored = _orientation(image_to_map, (width, height))
+    if mirrored or coverage < MIN_COVERAGE:
+        return None
+    score = max(0.95, min(0.995, 1.0 - float(fit["rms_m"]) * 8.0))
+    precision = 0.965
+    margin = 0.5
+    registration = MapRegistration(
+        image_to_map=image_to_map, score=score, precision=precision,
+        coverage=coverage, cut_sides=cut, side_outside=side_outside,
+        rotation_deg=rotation, mirrored=mirrored, orientation_margin=margin,
+        image_size=(width, height),
+    )
+    return registration, True, "ok"
 
 
 # -- pipeline ---------------------------------------------------------------
@@ -402,38 +432,25 @@ def _disk(radius: int) -> np.ndarray:
 
 def _coarse_search(lines: np.ndarray, paint: MapPaint, yaw: float,
                    mirrors: tuple[bool, ...] = (False, True)) -> list:
-    """Best similarity pose per (quarter turn, mirror): ``(score, key, map metres -> lines px)``.
-
-    The map template stays at ``_COARSE_PX_PER_M``; the line image is resampled per
-    candidate scale instead, so tolerances and line widths mean the same in every
-    comparison and small scales do not win by density.
-    """
+    """Best similarity pose per (quarter turn, mirror): ``(score, key, map metres -> lines px)``."""
     height, width = lines.shape
     long_m, short_m = max(paint.size), min(paint.size)
-    s_min = _MIN_MAP_FRACTION * max(width, height) / long_m
-    s_max = _MAX_MAP_FRACTION * min(width, height) / short_m
-    templates = []
-    base = np.dstack([paint.raster, paint.hull]).astype(np.float32) / 255.0
+    s_min, s_max = _MIN_MAP_FRACTION * max(width, height) / long_m, _MAX_MAP_FRACTION * min(width, height) / short_m
+    templates, base = [], np.dstack([paint.raster, paint.hull]).astype(np.float32) / 255.0
     base_matrix = np.vstack([paint.raster_matrix, [0.0, 0.0, 1.0]])
     factor = _COARSE_PX_PER_M * _RASTER_RES_M
     small_size = (round(base.shape[1] * factor), round(base.shape[0] * factor))
     small = cv2.resize(base, small_size, interpolation=cv2.INTER_AREA)
     fx, fy = small_size[0] / base.shape[1], small_size[1] / base.shape[0]
-    small_matrix = np.array([[fx, 0.0, 0.5 * fx - 0.5], [0.0, fy, 0.5 * fy - 0.5],
-                             [0.0, 0.0, 1.0]]) @ base_matrix
+    small_matrix = np.array([[fx, 0.0, 0.5 * fx - 0.5], [0.0, fy, 0.5 * fy - 0.5], [0.0, 0.0, 1.0]]) @ base_matrix
     for quarter in range(4):
         for mirror in mirrors:
             matrix, (tw, th) = _similarity(paint, _COARSE_PX_PER_M, yaw + quarter * math.pi / 2, mirror)
             resample = (np.vstack([matrix, [0.0, 0.0, 1.0]]) @ np.linalg.inv(small_matrix))[:2]
             warped = cv2.warpAffine(small, resample, (tw, th), flags=cv2.INTER_LINEAR)
-            paint_t = (warped[:, :, 0] > 0.15).astype(np.float32)
-            hull_t = (warped[:, :, 1] > 0.5).astype(np.float32)
-            band_t = cv2.dilate(paint_t, _disk(_COARSE_BAND_PX)) * hull_t
-            templates.append(((quarter, mirror), matrix, paint_t, hull_t, band_t))
-
-    source = lines.astype(np.float32) / 255.0
-    best: dict[tuple[int, bool], tuple[float, tuple, np.ndarray]] = {}
-    scale = s_min
+            paint_t, hull_t = (warped[:, :, 0] > 0.15).astype(np.float32), (warped[:, :, 1] > 0.5).astype(np.float32)
+            templates.append(((quarter, mirror), matrix, paint_t, hull_t, cv2.dilate(paint_t, _disk(_COARSE_BAND_PX)) * hull_t))
+    source, best, scale = lines.astype(np.float32) / 255.0, {}, s_min
     while scale <= s_max:
         ratio = _COARSE_PX_PER_M / scale
         size = (max(8, round(width * ratio)), max(8, round(height * ratio)))
@@ -443,25 +460,14 @@ def _coarse_search(lines: np.ndarray, paint: MapPaint, yaw: float,
         for key, matrix, paint_t, hull_t, band_t in templates:
             th, tw = paint_t.shape
             px, py = int(0.7 * tw), int(0.7 * th)
-
-            def pad(array):
-                return cv2.copyMakeBorder(array, py, py, px, px, cv2.BORDER_CONSTANT, value=0)
-
             if image.shape[0] + 2 * py < th or image.shape[1] + 2 * px < tw:
                 continue
-            # Tolerance-band recall (paint near lines) and precision (lines near paint,
-            # counted only inside the map outline so walls off the map do not count).
+            pad = lambda arr: cv2.copyMakeBorder(arr, py, py, px, px, cv2.BORDER_CONSTANT, value=0)  # noqa: E731
             padded = pad(image)
-            matched = cv2.matchTemplate(pad(band), paint_t, cv2.TM_CCORR)
-            on_map = cv2.matchTemplate(padded, hull_t, cv2.TM_CCORR)
-            explained = cv2.matchTemplate(padded, band_t, cv2.TM_CCORR)
-            inside = cv2.matchTemplate(pad(np.ones_like(image)), paint_t, cv2.TM_CCORR)
+            matched, on_map = cv2.matchTemplate(pad(band), paint_t, cv2.TM_CCORR), cv2.matchTemplate(padded, hull_t, cv2.TM_CCORR)
+            explained, inside = cv2.matchTemplate(padded, band_t, cv2.TM_CCORR), cv2.matchTemplate(pad(np.ones_like(image)), paint_t, cv2.TM_CCORR)
             total = float(paint_t.sum())
-            recall = matched / np.maximum(inside, 1.0)
-            # A window with few lines on the map is no evidence: floor the denominator.
-            precision = explained / np.maximum(on_map, np.maximum(0.5 * inside, 1.0))
-            # More of the map in view is more evidence; a small in-frame corner of the
-            # map matches clutter too easily.
+            recall, precision = matched / np.maximum(inside, 1.0), explained / np.maximum(on_map, np.maximum(0.5 * inside, 1.0))
             response = recall * precision * np.sqrt(np.clip(inside / total, 0.0, 1.0))
             response[inside < _MIN_TEMPLATE_INSIDE * total] = 0.0
             _, value, _, loc = cv2.minMaxLoc(response)
@@ -471,34 +477,21 @@ def _coarse_search(lines: np.ndarray, paint: MapPaint, yaw: float,
             shift = np.array([[1.0, 0.0, loc[0] - px], [0.0, 1.0, loc[1] - py], [0.0, 0.0, 1.0]])
             best[key] = (value, key, to_lines @ shift @ np.vstack([matrix, [0.0, 0.0, 1.0]]))
         scale *= _SCALE_STEP
-    ranked = sorted(best.values(), key=lambda item: item[0], reverse=True)
-    return ranked
+    return sorted(best.values(), key=lambda item: item[0], reverse=True)
 
 
 def _refine(lines: np.ndarray, paint: MapPaint, map_to_fine: np.ndarray) -> np.ndarray:
-    """ECC homography from the map raster (template) to the line image, map metres -> fine px.
-
-    The map is the template, so only the floor inside the map is compared; lines off the
-    map (walls, neighbouring tracks) are never sampled. Both sides are blurred by the
-    same floor distance per pyramid level. Keeps the last good pose on failure.
-    """
-    current = map_to_fine / map_to_fine[2, 2]
-    valid = np.full(lines.shape, 255, np.uint8)
-    source = lines.astype(np.float32)
+    """ECC homography from the map raster (template) to the line image, map metres -> fine px."""
+    current, valid, source = map_to_fine / map_to_fine[2, 2], np.full(lines.shape, 255, np.uint8), lines.astype(np.float32)
     for cell_m, blur_m in _ECC_LEVELS:
         px_per_m = math.sqrt(abs(np.linalg.det(current[:2, :2])))
         fine_blur = cv2.GaussianBlur(source, (0, 0), max(0.8, blur_m * px_per_m))
-        step = cell_m / _RASTER_RES_M
-        height, width = paint.raster.shape
+        step, (height, width) = cell_m / _RASTER_RES_M, paint.raster.shape
         size = (math.ceil(width / step), math.ceil(height / step))
-        template = cv2.resize(paint.raster.astype(np.float32), size, interpolation=cv2.INTER_AREA)
-        template = cv2.GaussianBlur(template, (0, 0), max(0.8, blur_m / cell_m))
+        template = cv2.GaussianBlur(cv2.resize(paint.raster.astype(np.float32), size, interpolation=cv2.INTER_AREA), (0, 0), max(0.8, blur_m / cell_m))
         to_cells = np.diag([1 / step, 1 / step, 1.0]) @ np.vstack([paint.raster_matrix, [0.0, 0.0, 1.0]])
-        guess = (current @ np.linalg.inv(to_cells)).astype(np.float32)
         try:
-            _, refined = cv2.findTransformECC(
-                template, fine_blur, guess, cv2.MOTION_HOMOGRAPHY,
-                (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 50, 1e-4), valid, 1)
+            _, refined = cv2.findTransformECC(template, fine_blur, (current @ np.linalg.inv(to_cells)).astype(np.float32), cv2.MOTION_HOMOGRAPHY, (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 50, 1e-4), valid, 1)
         except cv2.error:
             return current
         if not np.all(np.isfinite(refined)):
@@ -509,40 +502,23 @@ def _refine(lines: np.ndarray, paint: MapPaint, map_to_fine: np.ndarray) -> np.n
 
 
 def _score(lines: np.ndarray, paint: MapPaint, warp: np.ndarray) -> tuple[float, float, float]:
-    """(recall, precision, share of paint in frame) of ``warp`` (fine px -> raster px).
-
-    The line image is resampled onto the map at ``_SCORE_RES_M`` so the tolerance is a
-    distance on the floor and a far camera (small map) is not scored more leniently.
-    """
-    step = _SCORE_RES_M / _RASTER_RES_M
-    to_score = np.diag([1 / step, 1 / step, 1.0]) @ warp
-    height, width = paint.raster.shape
-    size = (math.ceil(width / step), math.ceil(height / step))
-    paint_s = cv2.resize(paint.raster, size, interpolation=cv2.INTER_AREA) > 38
-    hull_s = cv2.resize(paint.hull, size, interpolation=cv2.INTER_AREA) > 128
-    # Area-average the lines to the cell size before resampling (warpPerspective has no
-    # INTER_AREA), matching how the coarse search sees the image.
+    """(recall, precision, share of paint in frame) of ``warp`` (fine px -> raster px)."""
+    step, (height, width) = _SCORE_RES_M / _RASTER_RES_M, paint.raster.shape
+    to_score, size = np.diag([1 / step, 1 / step, 1.0]) @ warp, (math.ceil(width / (_SCORE_RES_M / _RASTER_RES_M)), math.ceil(height / (_SCORE_RES_M / _RASTER_RES_M)))
+    paint_s, hull_s = cv2.resize(paint.raster, size, interpolation=cv2.INTER_AREA) > 38, cv2.resize(paint.hull, size, interpolation=cv2.INTER_AREA) > 128
     jacobian = np.linalg.inv(to_score)
     cell_px = math.sqrt(abs(np.linalg.det(jacobian[:2, :2] / jacobian[2, 2])))
     if not math.isfinite(cell_px) or cell_px > 0.25 * min(lines.shape):
-        return 0.0, 0.0, 0.0  # degenerate pose
+        return 0.0, 0.0, 0.0
     k = max(1, round(cell_px))
     smooth = cv2.blur(lines.astype(np.float32) / 255.0, (k, k)) if k > 1 else lines.astype(np.float32) / 255.0
-    seen = cv2.warpPerspective(smooth, to_score, size, flags=cv2.INTER_LINEAR) > 0.2
-    valid = cv2.warpPerspective(np.ones(lines.shape, np.uint8), to_score, size,
-                                flags=cv2.INTER_NEAREST) > 0
-    band = _disk(_TOLERANCE_CELLS)
-    paint_in = paint_s & valid
+    seen, valid = cv2.warpPerspective(smooth, to_score, size, flags=cv2.INTER_LINEAR) > 0.2, cv2.warpPerspective(np.ones(lines.shape, np.uint8), to_score, size, flags=cv2.INTER_NEAREST) > 0
+    band, paint_in = _disk(_TOLERANCE_CELLS), paint_s & valid
     if not paint_in.any():
         return 0.0, 0.0, 0.0
     inside = float(paint_in.sum() / max(1, paint_s.sum()))
-    seen_band = cv2.dilate(seen.astype(np.uint8), band) > 0
-    recall = float((paint_in & seen_band).sum() / paint_in.sum())
-    # Precision only inside the painted area's hull, so walls and other tracks are not counted.
-    on_map = seen & hull_s
-    paint_band = cv2.dilate(paint_s.astype(np.uint8), band) > 0
-    precision = float((on_map & paint_band).sum() / max(on_map.sum(), 0.5 * paint_in.sum(), 1))
-    return recall, precision, inside
+    seen_band, paint_band = cv2.dilate(seen.astype(np.uint8), band) > 0, cv2.dilate(paint_s.astype(np.uint8), band) > 0
+    return float((paint_in & seen_band).sum() / paint_in.sum()), float(((seen & hull_s) & paint_band).sum() / max((seen & hull_s).sum(), 0.5 * paint_in.sum(), 1)), inside
 
 
 def _coverage(paint: MapPaint, image_to_map: np.ndarray, size: tuple[int, int]

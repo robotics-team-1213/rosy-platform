@@ -27,6 +27,7 @@ class _Body(BaseModel):
 class Waiter(_Body):
     robot_id: str = Field(min_length=1, max_length=64)
     waiting_s: float = Field(default=0.0, ge=0.0, le=86400.0, allow_inf_nan=False)
+    exit_distance_m: Optional[float] = Field(default=None, ge=0.0, le=1000.0, allow_inf_nan=False)
     in_zone: bool = False
     localized: bool = True
 
@@ -71,18 +72,31 @@ def _answer(verdict: str, reason: str, **detail) -> dict:
 
 
 def judge_departure(rules: SiteRules, state: Departure) -> dict:
-    """Who is granted the contested unit first: the same fair order ``blocks.step`` sorts by."""
+    """Who is granted the contested unit first: fair order (blocks.step) or exit_nearest order."""
     subject = next((r for r in state.robots if r.robot_id == state.robot_id), None)
     if subject is None:
         return _answer("refuse", "unknown_robot")
     if not subject.localized:  # the table gives no new grant to a robot without a pose
         return _answer("wait", "pose_unknown")
     merge = rules.departure.merge_max_wait_s
-    ranked = sorted((r for r in state.robots if r.localized),
-                    key=lambda r: grant_order_key(r.robot_id, -r.waiting_s, 0.0, r.in_zone, merge))
+    if rules.departure.order == "exit_nearest":
+        ranked = sorted(
+            (r for r in state.robots if r.localized),
+            key=lambda r: (
+                0 if r.in_zone else 1,
+                round(r.exit_distance_m, 4) if r.exit_distance_m is not None else 1e9,
+                -r.waiting_s,
+                r.robot_id,
+            ),
+        )
+    else:
+        ranked = sorted((r for r in state.robots if r.localized),
+                        key=lambda r: grant_order_key(r.robot_id, -r.waiting_s, 0.0, r.in_zone, merge))
     rank = [r.robot_id for r in ranked].index(state.robot_id)
     detail = {"rank": rank + 1, "capacity": state.capacity, "merge_max_wait_s": merge,
-              "past_merge_bound": subject.waiting_s >= merge}
+              "order": rules.departure.order, "past_merge_bound": subject.waiting_s >= merge}
+    if subject.exit_distance_m is not None:
+        detail["exit_distance_m"] = subject.exit_distance_m
     if rank < state.capacity:
         return _answer("go", "first_in_order", **detail)
     return _answer("wait", "queued_behind", ahead=[r.robot_id for r in ranked[:rank]], **detail)

@@ -26,7 +26,11 @@ from cell_control_core import (
     predict_moving_belt_intercept,
     sim_precheck_and_optimize_directive,
 )
-from cell_fleet_handoff import execute_task_plan, run_contract_handoff_stage  # noqa: F401  (re-exported)
+from cell_fleet_handoff import (  # noqa: F401  (re-exported)
+    execute_remote_fleet_r_handoff,
+    execute_task_plan,
+    run_contract_handoff_stage,
+)
 
 ensure_omx_paths()
 
@@ -306,3 +310,29 @@ class FleetModelPipeline:
     ) -> dict[str, Any]:
         """Execute an OMX workcell stage under `rosy.fleet-r-cell-contract.v1` and emit a `CellToFleetRReceipt`."""
         return run_contract_handoff_stage(self, handoff, stage_id=stage_id, tier=tier)
+
+    def execute_remote_fleet_r_handoff(
+        self,
+        *,
+        fleet_r_url: str,
+        token: str = "",
+        cell_id: str = "cell_s",
+        robot_id: str = "rosy_01",
+        pose_xy_yaw: tuple[float, float, float] = (0.68, -0.2528, 3.14159),
+        stage_id: str = "remote-s3-pinky-to-belt",
+        tier: int = 1,
+        request_fn=None,
+    ) -> dict[str, Any]:
+        """Hold the Fleet-R bed-zone gate while the local OMX stage runs."""
+        return execute_remote_fleet_r_handoff(
+            self,
+            fleet_r_url=fleet_r_url,
+            token=token,
+            cell_id=cell_id,
+            robot_id=robot_id,
+            pose_xy_yaw=pose_xy_yaw,
+            stage_id=stage_id,
+            tier=tier,
+            request_fn=request_fn,
+        )
+

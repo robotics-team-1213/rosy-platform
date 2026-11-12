@@ -36,7 +36,7 @@ from fleet.stuck.board import LineStuckBoard
 from fleet.stuck.reports import LineStuckAnswerLog
 from fleet.incidents.handoff import judgment_revision
 from fleet.server.site_auth import SitePrincipal
-from fleet.server.site_lanes import site_lanes_payload
+from fleet.server.site_lanes import active_site_lanes_payload, site_lanes_payload
 from fleet.server.platoon_geometry import PlatoonGeometry
 from fleet.swarm.transport import RobotApiError
 from fleet.traffic import rule_m
@@ -276,21 +276,22 @@ def install_console_routes(app, *, console, sightings, require_viewer,
                                                          "message": "no site camera geometry configured"})
         return site_map
 
-    # D-375: lane geometry for the console map-fit overlay. Drawn only, never driven. The files
-    # and sources are fixed for the process, so the body (~100 kB) is built once at start-up.
+    # D-375: lane geometry for the console map-fit overlay. Drawn only, never driven.
     lanes_body = site_lanes_payload(site_lanes or {}, sightings.sources if sightings is not None else ())
-    lanes_json = json.dumps(lanes_body, separators=(",", ":")).encode() if lanes_body else b""
-    lanes_etag = f'"{hashlib.sha256(lanes_json).hexdigest()[:32]}"'
 
     @app.get("/api/fleet/site-lanes", dependencies=read_guard, tags=["sightings"])
     async def fleet_site_lanes(request: Request) -> Response:
-        if lanes_body is None:
+        sources = sightings.sources if sightings is not None else ()
+        current_body = active_site_lanes_payload(getattr(app.state, "site_maps", None), lanes_body, sources)
+        if current_body is None:
             raise HTTPException(status_code=404, detail={"code": "NO_SITE_LANES",
                                                          "message": "no site lane graph configured"})
-        headers = {"Cache-Control": "private, no-cache", "ETag": lanes_etag}
-        if request.headers.get("If-None-Match") == lanes_etag:
+        payload_bytes = json.dumps(current_body, separators=(",", ":")).encode()
+        etag = f'"{hashlib.sha256(payload_bytes).hexdigest()[:32]}"'
+        headers = {"Cache-Control": "private, no-cache", "ETag": etag}
+        if request.headers.get("If-None-Match") == etag:
             return Response(status_code=304, headers=headers)
-        return Response(lanes_json, media_type="application/json", headers=headers)
+        return Response(payload_bytes, media_type="application/json", headers=headers)
 
     @app.get("/api/fleet/map", dependencies=read_guard, tags=["fleet"])
     async def fleet_map() -> dict:
