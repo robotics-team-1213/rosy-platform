@@ -719,3 +719,20 @@ def test_fresh_backup_remains_restorable_after_account_audit_retention(tmp_path,
         assert db.execute("SELECT COUNT(*) FROM rosy_account_audit").fetchone()[0] == 2
     site_db.vacuum_database(database)
     assert site_db.inspect_database(database, quick_check=False)["auto_vacuum"] == "incremental"
+
+
+def test_cli_prune_uses_stored_retention_and_archive_watermark(tmp_path):
+    database = tmp_path / "fleet.sqlite3"
+    _retention_database(database)
+    with closing(sqlite3.connect(database)) as db, db:
+        db.execute("CREATE TABLE fleet_db_settings (key TEXT PRIMARY KEY, value_int INTEGER NOT NULL, updated_at TEXT NOT NULL)")
+        db.execute("INSERT INTO fleet_db_settings VALUES ('history_retention_days', 0, 'now')")
+        db.execute("CREATE TABLE fleet_api_audit (created_at TEXT NOT NULL)")
+        db.executemany("INSERT INTO fleet_api_audit VALUES ('2000-01-01')", [(), ()])
+        db.execute("CREATE TABLE fleet_audit_flush (kind TEXT PRIMARY KEY, last_rowid INTEGER NOT NULL, flushed_at TEXT NOT NULL)")
+        db.execute("INSERT INTO fleet_audit_flush VALUES ('fleet_api_audit', 1, 'now')")
+    removed = prune_ledger(database)
+    assert removed["fleet_task_history"] == 0
+    assert removed["fleet_api_audit"] == 1
+    with closing(sqlite3.connect(database)) as db:
+        assert db.execute("SELECT rowid FROM fleet_api_audit").fetchall() == [(2,)]
