@@ -170,12 +170,14 @@ def openai_chat(url="https://api.z.ai/api/coding/paas/v4/chat/completions", mode
 
 
 def cli_model(kind="opencode", model="zai-coding-plan/glm-5.3-flash", timeout=20, cli_version="2.0.22"):
-    """CLI-backed decision model (`opencode` or `claude`) aligned with `rosy.decision.deliberation.providers.cli`."""
+    """CLI-backed decision model (`opencode`, `codex`, or `claude`) aligned with `rosy.decision.deliberation.providers.cli`."""
     def ask(prompt, images, schema):
         full_prompt = prompt + (f"\nReply with JSON matching schema: {json.dumps(schema)}" if schema else "")
         if kind == "claude":
             argv = ["claude", "--bare", "-p", "--tools", "", "--output-format", "json",
                     "--json-schema", json.dumps(schema or {}), "--model", model, "--max-turns", "1"]
+        elif kind == "codex":
+            argv = ["codex", "exec", "--skip-git-repo-check", "-m", model, full_prompt]
         else:
             mode = "--pure" if cli_version == "1.18.35" else "--standalone"
             argv = ["opencode", "run", mode, "--format", "json", "--model", model]
@@ -185,6 +187,8 @@ def cli_model(kind="opencode", model="zai-coding-plan/glm-5.3-flash", timeout=20
         raw = proc.stdout.decode("utf-8", errors="replace")
         if kind == "claude":
             return json.loads(raw)["structured_output"]
+        if kind == "codex":
+            return _extract_json(raw)
         texts = [json.loads(line)["part"]["text"] for line in raw.splitlines()
                  if line.strip() and json.loads(line).get("type") == "text"]
         return _extract_json(texts[-1] if texts else raw)
@@ -285,7 +289,7 @@ def from_config(spec):
         return cooperate([from_config(item) for item in spec if item is not None])
     if isinstance(spec, str):
         s = spec.strip()
-        if s.startswith(("zai:", "glm:", "openai:")):
+        if s.startswith(("zai:", "glm:", "openai:", "opencode:", "codex:", "claude:")):
             prov, model = s.split(":", 1)
             spec = {"provider": prov, "model": model}
         elif s.startswith("ollama:"):
@@ -310,10 +314,12 @@ def from_config(spec):
         if provider in ("zai", "glm"):
             kw.setdefault("model", "glm-5.3")
         return openai_chat(**kw)
-    if provider in ("opencode", "claude"):
+    if provider in ("opencode", "codex", "claude"):
         kw = {k: spec[k] for k in ("model", "timeout", "cli_version") if k in spec}
         if provider == "opencode":
             kw.setdefault("model", "zai-coding-plan/glm-5.3-flash")
+        elif provider == "codex":
+            kw.setdefault("model", "gpt-5-codex")
         return cli_model(kind=provider, **kw)
     # Legacy dict `{"url": ..., "model": ...}` without explicit `provider`
     kw = {k: spec[k] for k in ("url", "model", "timeout") if k in spec}

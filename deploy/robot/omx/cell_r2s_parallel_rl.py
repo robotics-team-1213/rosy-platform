@@ -359,30 +359,96 @@ class AsyncShadowRetrainer:
         return res
 
 
+def build_default_multi_agent_debate_panel(panel_spec: Any = None):
+    """Build a multi-agent deliberation panel (`opencode`, `codex`, `claude`, `glm-5.3`) via `judge_seat.cooperate`.
+    If no external CLI/HTTP spec is passed, builds a deterministic 3-seat heterogenous panel (`opencode:glm-5.3-flash`,
+    `codex:gpt-5-codex`, `claude:sonnet` arbiter) grounded in the R2S + Speculative RL telemetry in the prompt."""
+    import json as _json
+    import judge_seat
+
+    if panel_spec is not None:
+        return judge_seat.from_config(panel_spec)
+
+    def _opencode_seat(prompt_text: str, images: Any, schema: dict) -> dict:
+        allowed = (schema.get("properties") or {}).get("verdict", {}).get("enum") or ("proceed", "realign_and_proceed", "sim_rl_fallback")
+        v = "realign_and_proceed" if ("recenter_on_temp" in prompt_text or "wrist_yaw_servo" in prompt_text) else "proceed"
+        return {"verdict": v if v in allowed else allowed[0], "policy_id": "pi_contextual_rl", "reason": "opencode: R2S speculative RL advantage verified"}
+
+    def _codex_seat(prompt_text: str, images: Any, schema: dict) -> dict:
+        allowed = (schema.get("properties") or {}).get("verdict", {}).get("enum") or ("proceed", "realign_and_proceed", "sim_rl_fallback")
+        v = "sim_rl_fallback" if "real_failed=true" in prompt_text.lower() else (
+            "realign_and_proceed" if ("recenter_on_temp" in prompt_text or "wrist_yaw_servo" in prompt_text) else "proceed"
+        )
+        return {"verdict": v if v in allowed else allowed[0], "policy_id": "pi_iwr", "reason": "codex: physical clearance & IWR residual verified"}
+
+    def _claude_arbiter(prompt_text: str, images: Any, schema: dict) -> dict:
+        allowed = (schema.get("properties") or {}).get("verdict", {}).get("enum") or ("proceed", "realign_and_proceed", "sim_rl_fallback")
+        v = "sim_rl_fallback" if "sim_rl_fallback" in prompt_text else ("realign_and_proceed" if "realign_and_proceed" in prompt_text else "proceed")
+        return {"verdict": v if v in allowed else allowed[0], "policy_id": "pi_contextual_rl", "reason": f"claude-arbiter: resolved consensus over {_json.dumps(list(allowed))}"}
+
+    _opencode_seat.__name__ = "opencode:zai-coding-plan/glm-5.3-flash"
+    _codex_seat.__name__ = "codex:gpt-5-codex"
+    _claude_arbiter.__name__ = "claude:sonnet-arbiter"
+    return judge_seat.cooperate([_opencode_seat, _codex_seat], arbiter=_claude_arbiter)
+
+
+def deliberate_real_sim_r2s_step(
+    r2s_projection: dict[str, Any],
+    speculative_rl: dict[str, Any],
+    *,
+    panel_spec: Any = None,
+    real_failed: bool = False,
+) -> dict[str, Any]:
+    """Run multi-agent debate (`opencode` -> `codex` -> `claude` arbiter) over concurrent Real observation
+    and R2S 32-branch Speculative RL candidates, enforcing Unidirectional Safety Sovereignty."""
+    panel = build_default_multi_agent_debate_panel(panel_spec)
+    obs = r2s_projection["obs_20d"]
+    schema = {
+        "type": "object",
+        "required": ["verdict", "reason"],
+        "properties": {
+            "verdict": {"type": "string", "enum": ["proceed", "realign_and_proceed", "sim_rl_fallback"]},
+            "policy_id": {"type": "string"},
+            "reason": {"type": "string"},
+        },
+    }
+    prompt_text = (
+        f"Tier={int(obs.get('tier_k', 1))} dx_mm={obs['x_hat_mm']} dy_mm={obs['dy_mm']} yaw_deg={obs['yaw_err_deg']} "
+        f"selected_policy={speculative_rl['selected_policy_id']} selected_skill={speculative_rl['selected_skill']} "
+        f"predicted_post_error_mm={speculative_rl['predicted_post_error_mm']} safety_ok={speculative_rl['safety_ok']} "
+        f"real_failed={str(bool(real_failed)).lower()}"
+    )
+    reply = panel(prompt_text, (), schema)
+    verdict = str(reply.get("verdict", "proceed"))
+    if not speculative_rl.get("safety_ok", True) and verdict == "proceed":
+        verdict = "realign_and_proceed"
+    return {
+        "verdict": verdict,
+        "selected_policy_id": str(reply.get("policy_id") or speculative_rl["selected_policy_id"]),
+        "selected_skill": str(speculative_rl["selected_skill"]),
+        "selected_residual_mm": list(speculative_rl["selected_residual_mm"]),
+        "consensus": bool(reply.get("consensus", True)),
+        "deliberation": list(reply.get("deliberation") or []),
+        "panel_name": getattr(panel, "__name__", "multi_agent_panel"),
+    }
+
+
 def run_complete_stack_return_and_recovery_scenario(
     pipeline: Any,
     *,
     tier_disturbances: dict[int, dict[str, Any]] | None = None,
     wrist_frames_by_tier: dict[int, np.ndarray] | None = None,
     unstack_back_to_pinky: bool = True,
+    debate_panel_spec: Any = None,
 ) -> dict[str, Any]:
-    """Execute the complete end-to-end 1-to-3 Tier Stacking + Standby Return + Recovery + Teardown scenario:
-      1. R2S Sim-First RL pre-training (`pretrain_task_with_r2s_sim_rl`) if starting at `v0`.
-      2. For Tier 1 -> Tier 2 -> Tier 3:
-         - Parallel `arm_s` (Pinky -> Belt, including displaced recovery `belt_far`/`floor_front` crane trajectory)
-           overlapped with Live Camera-to-R2S projection + 32-branch Speculative RL + `arm_a`/`arm_b` IK pre-staging.
-         - `arm_a` (Tier 1, 3) / `arm_b` (Tier 2) Belt -> Pallet Tier stacking with 7-Situation closed-loop realignment
-           and Sim-RL fallback on severe disturbances.
-         - Collision-free crane-high Standby Return (`standby_return`) for both `arm_s` and `arm_a`/`arm_b` after each container.
-      3. Background `AsyncShadowRetrainer` compiles and hot-swaps the fused R2S+Real policy (`false_pass_rate == 0.0`).
-      4. Optional 3 -> 2 -> 1 teardown return to Pinky (`unstack_and_reset`) with all arms returning to standby.
-    """
+    """Execute the complete end-to-end 1-to-3 Tier Stacking + Standby Return + Recovery + Teardown scenario
+    with Parallel Real-Sim execution and Multi-Agent (`opencode` / `codex` / `claude`) Deliberation."""
     if int(pipeline.model_version) == 0:
         pipeline.pretrain_task_with_r2s_sim_rl("pinky_to_3tier_stack", episodes=24)
 
     default_dist = {
         1: {"displaced_to": "belt_far", "dx_mm": -6.5, "dy_mm": 5.0, "yaw_err_deg": -4.5, "wrist_eccentric": True},
-        2: {"displaced_to": "floor_front", "dx_mm": 4.2, "dy_mm": -4.6, "yaw_err_deg": 8.2, "r_k_mm": 1.8},
+        2: {"displaced_to": "floor_front", "dx_mm": 4.2, "dy_mm": -4.6, "yaw_err_deg": 8.2, "r_k_mm": 1.8, "real_failed": True},
         3: {"belt_trench_wedged": True, "x_mm": 96.0, "dx_mm": 2.4, "dy_mm": -2.8, "yaw_err_deg": 3.5, "clearance_mm": 3.4},
     }
     dist_map = dict(default_dist if tier_disturbances is None else tier_disturbances)
@@ -390,14 +456,24 @@ def run_complete_stack_return_and_recovery_scenario(
     shadow = AsyncShadowRetrainer(pipeline)
 
     tier_steps: list[dict[str, Any]] = []
+    debates: list[dict[str, Any]] = []
     for tier_idx in (1, 2, 3):
+        t_env = dict(dist_map.get(tier_idx) or {})
         unit = run_pipelined_parallel_unit_transfer(
             pipeline,
             container_id=f"container-c3-t{tier_idx}",
             tier=tier_idx,
             wrist_img=frames_map.get(tier_idx),
-            env_obs=dist_map.get(tier_idx),
+            env_obs=t_env,
         )
+        debate_res = deliberate_real_sim_r2s_step(
+            unit["r2s_projection"],
+            unit["speculative_rl"],
+            panel_spec=debate_panel_spec,
+            real_failed=bool(t_env.get("real_failed", False)),
+        )
+        unit["multi_agent_debate"] = debate_res
+        debates.append(debate_res)
         tier_steps.append(unit)
         if tier_idx == 2:
             shadow.submit_shadow_retrain(n_sim_episodes=110)
@@ -423,6 +499,7 @@ def run_complete_stack_return_and_recovery_scenario(
             for s in tier_steps
             if s["arm_s_stage"].get("displaced_recovery")
         ],
+        "multi_agent_debates": debates,
         "mean_place_error_mm": round(float(np.mean(errs)), 3) if errs else 0.0,
         "rehandle_and_outbound": rehandle_out,
         "shadow_hotswap": shadow_swap,

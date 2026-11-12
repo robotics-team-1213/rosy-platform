@@ -573,6 +573,14 @@ def test_complete_1to3_tier_stack_standby_return_recovery_and_pinky_teardown(tmp
     assert [u["tier"] for u in out["teardown_return_to_pinky"]["unstack_steps"]] == [3, 2, 1]
     assert out["teardown_return_to_pinky"]["arms_at_standby"] == {"arm_s": True, "arm_a": True, "arm_b": True}
     assert out["active_model_version"] >= 2
+    assert len(out["multi_agent_debates"]) == 3
+    assert "opencode:" in out["multi_agent_debates"][0]["panel_name"]
+    assert "codex:" in out["multi_agent_debates"][0]["panel_name"]
+    assert any(r["role"] == "arbiter" for r in out["multi_agent_debates"][1]["deliberation"])
+    import judge_seat
+    assert judge_seat.from_config("codex:gpt-5-codex").__name__ == "codex:gpt-5-codex"
+    assert judge_seat.from_config("opencode:zai-coding-plan/glm-5.3-flash").__name__ == "opencode:zai-coding-plan/glm-5.3-flash"
+
 
 
 
