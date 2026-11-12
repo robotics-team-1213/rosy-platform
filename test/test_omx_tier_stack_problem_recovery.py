@@ -286,6 +286,85 @@ def test_cell_s_displaced_container_belt_far_and_floor_front_handoff_recovery(tm
             assert rsim.replay_and_verify_problem_case(row, tmp_path)["verified"] is True
 
 
+def test_cell_task_worker_event_driven_hw_and_parallel_handoff(tmp_path: Path, monkeypatch) -> None:
+    """Verify `cell_task_worker` replaces blind sleeps in `execute_live_hardware_arm` with event-driven
+    status-line acknowledgment (`_wait_cmd`), uploads snapshots from `live-*` directories in parallel,
+    and overlaps `run_contract_handoff_stage` with `live_act_fn` in `poll_and_execute_once`."""
+    import json
+    import time
+    import cell_fleet_pipeline as cfp
+    import cell_task_worker as ctw
+
+    io_dir = tmp_path / "chunk-io-s"
+    io_dir.mkdir(parents=True)
+    status_file = io_dir / "chunk-status.jsonl"
+    (tmp_path / "chunks-arm-s-inplace-live.json").write_text("{}", encoding="utf-8")
+
+    def _fake_check_output(*a, **k) -> str:
+        status_file.write_text(
+            "\n".join(
+                [
+                    json.dumps({"command": "state", "ok": True}),
+                    json.dumps({"command": "load chunks-arm-s-inplace-live.json", "ok": True}),
+                    json.dumps({"command": "jog shoulder_pan.pos -1.0", "ok": True}),
+                    json.dumps({"command": "stop", "ok": True, "folded": True}),
+                ]
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        return "session up\n"
+
+    monkeypatch.setattr(ctw.subprocess, "check_output", _fake_check_output)
+    t0 = time.monotonic()
+    hw_out = ctw.execute_live_hardware_arm("arm_s", prep_dir=tmp_path)
+    elapsed_s = time.monotonic() - t0
+    assert hw_out["arm"] == "arm_s"
+    assert hw_out["events_count"] == 4
+    assert hw_out["stop_event"]["folded"] is True
+    assert elapsed_s < 0.4
+
+    realign_dir = tmp_path / "live-realignment-pipeline-s-20261113"
+    realign_dir.mkdir(parents=True)
+    (realign_dir / "top_frame.jpg").write_bytes(b"\xff\xd8" + b"x" * 1500)
+    (realign_dir / "wrist_frame.jpg").write_bytes(b"\xff\xd8" + b"y" * 1600)
+
+    class _DummyResp:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    monkeypatch.setattr(ctw, "urlopen", lambda req, **kw: _DummyResp())
+    up = ctw.upload_latest_camera_snapshots("https://fleet.local:8443", "tok", prep_dir=tmp_path)
+    assert set(up.keys()) == {"cell_s", "cell_ab", "pinky"}
+    assert up["cell_s"] == 1502 and up["cell_ab"] == 1602
+
+    pipe = cfp.FleetModelPipeline(tmp_path / "pipe")
+
+    def _req(method: str, path: str, body):
+        if method == "GET":
+            return {"tasks": [{"task_id": "t-par-1", "cell_id": "cell_s", "tier": 1}]}
+        if path.endswith("/claim"):
+            return {
+                "claimed": True,
+                "gate": {"amr_motion_inhibited": True},
+                "handoff": {
+                    "handoff_lease_id": "lease-par-1",
+                    "cell_id": "cell_s",
+                    "wheel_brake_locked": True,
+                    "bed_ready": True,
+                    "v_cmd_mps": 0.0,
+                },
+            }
+        return {"gate": {"amr_motion_inhibited": False}, "task": {"status": "COMPLETED", "hardware_telemetry": body["hardware_telemetry"]}}
+
+    runs = ctw.poll_and_execute_once(pipe, request_fn=_req, live_act_fn=lambda h: hw_out, prep_dir=tmp_path)
+    assert len(runs) == 1 and runs[0]["task"]["status"] == "COMPLETED"
+
+
+
 
 
 

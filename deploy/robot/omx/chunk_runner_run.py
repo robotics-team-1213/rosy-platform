@@ -20,50 +20,20 @@ _ADAPTER_SRC = str(Path(__file__).resolve().parents[3] / "middleware/devices/omx
 if _ADAPTER_SRC not in sys.path:
     sys.path.insert(0, _ADAPTER_SRC)
 from omx_adapter.chunk_library import (  # noqa: E402, F401
-    GUARD_UNITS_PER_S,
-    NAMES,
-    PARK_SPEED,
-    RISE_SPEED,
-    TRANSIT,
-    TemporalChunkEnsembler,
-    chain_path,
-    load_library,
-    park_path,
-    receding_horizon_splice,
-    too_fast,
-    transit_path,
+    GUARD_UNITS_PER_S, NAMES, PARK_SPEED, RISE_SPEED, TRANSIT, TemporalChunkEnsembler,
+    chain_path, load_library, park_path, receding_horizon_splice, too_fast, transit_path,
 )
 from omx_adapter.motion_profile import GUARD_ACCEL_UNITS_S2, smooth  # noqa: E402, F401
 from cell_envelope import digest  # noqa: E402
 import cell_params as prm  # noqa: E402
 from chunk_runner_commands import EMPTY_MARGIN, dispatch_runner_command  # noqa: E402
 from chunk_runner_guards import (  # noqa: E402, F401
-    CONTACT_LAG,
-    CONTACT_TICKS,
-    JOG_MAX,
-    MOTORS,
-    PWM_STOP,
-    PWM_STOP_S,
-    REL_MAX,
-    SETTLE_TOL,
-    STALL_GAP,
-    STALL_MOVE,
-    TEMP_STOP,
-    build_chain_segments,
-    build_jog_target,
-    build_splice_frames,
-    check_motor_thermal_and_stall,
-    contact_limits,
-    evaluate_adaptive_contact_guard,
-    read_motor_health,
+    CONTACT_LAG, CONTACT_TICKS, JOG_MAX, MOTORS, PWM_STOP, PWM_STOP_S, REL_MAX, SETTLE_TOL,
+    STALL_GAP, STALL_MOVE, TEMP_STOP, build_chain_segments, build_jog_target, build_splice_frames,
+    check_motor_thermal_and_stall, contact_limits, evaluate_adaptive_contact_guard, read_motor_health,
 )
 from chunk_runner_settle import (  # noqa: E402, F401
-    IDLE_PARK_S,
-    IDLE_RETRY_S,
-    IDLE_STOP_S,
-    SETTLE_S,
-    check_chunk_settled,
-    check_runner_idle,
+    IDLE_PARK_S, IDLE_RETRY_S, IDLE_STOP_S, SETTLE_S, check_chunk_settled, check_runner_idle,
 )
 from episode_recorder import Recorder  # noqa: E402
 import joint_jitter  # noqa: E402

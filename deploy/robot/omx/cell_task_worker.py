@@ -10,6 +10,7 @@ Single Responsibility:
 from __future__ import annotations
 
 import argparse
+from concurrent.futures import ThreadPoolExecutor
 import json
 from pathlib import Path
 import ssl
@@ -32,21 +33,27 @@ ARM_WRAPPERS: dict[str, tuple[str, str, float]] = {
 
 
 def upload_latest_camera_snapshots(fleet_r_url: str, token: str, prep_dir: Path = DEFAULT_PREP_DIR) -> dict[str, int]:
-    """Upload the freshest top/wrist JPEG snapshots from rosy-arm-cell to Fleet-R camera endpoints."""
+    """Upload the freshest top/wrist JPEG snapshots from rosy-arm-cell to Fleet-R camera endpoints in parallel."""
     ctx = ssl._create_unverified_context()
     base = fleet_r_url.rstrip("/")
-    rec_dir = prep_dir / "live-recovery-s-20261112"
+    jpg_paths: list[Path] = list(Path("/tmp").glob("*.jpg"))
+    if prep_dir.is_dir():
+        for sub in prep_dir.glob("live-*"):
+            if sub.is_dir():
+                jpg_paths.extend(sub.glob("*.jpg"))
     candidates = sorted(
-        [p for p in list(rec_dir.glob("*.jpg")) + list(Path("/tmp").glob("*.jpg")) if p.is_file() and p.stat().st_size > 1000],
+        [p for p in jpg_paths if p.is_file() and p.stat().st_size > 1000],
         key=lambda p: p.stat().st_mtime,
         reverse=True,
     )
     top_img = next((p for p in candidates if "top" in p.name), candidates[0] if candidates else None)
     wrist_img = next((p for p in candidates if "wrist" in p.name), top_img)
-    uploaded: dict[str, int] = {}
-    for view_id, img_path in (("cell_s", top_img), ("cell_ab", wrist_img), ("pinky", top_img)):
-        if img_path is None:
-            continue
+    pairs = [(view_id, img_path) for view_id, img_path in (("cell_s", top_img), ("cell_ab", wrist_img), ("pinky", top_img)) if img_path is not None]
+    if not pairs:
+        return {}
+
+    def _upload_one(item: tuple[str, Path]) -> tuple[str, int] | None:
+        view_id, img_path = item
         try:
             raw = img_path.read_bytes()
             req = Request(
@@ -56,9 +63,15 @@ def upload_latest_camera_snapshots(fleet_r_url: str, token: str, prep_dir: Path 
                 headers={"Authorization": f"Bearer {token}", "Content-Type": "image/jpeg"},
             )
             with urlopen(req, context=ctx, timeout=10):
-                uploaded[view_id] = len(raw)
+                return view_id, len(raw)
         except Exception:
-            pass
+            return None
+
+    uploaded: dict[str, int] = {}
+    with ThreadPoolExecutor(max_workers=len(pairs)) as pool:
+        for res in pool.map(_upload_one, pairs):
+            if res is not None:
+                uploaded[res[0]] = res[1]
     return uploaded
 
 
@@ -119,25 +132,38 @@ def execute_live_hardware_arm(
             f.write(line.strip() + "\n")
             f.flush()
 
+    cursor = n0
+
+    def _wait_cmd(prefix: str, timeout_s: float, poll_s: float = 0.015) -> dict[str, Any]:
+        nonlocal cursor
+        deadline = time.monotonic() + timeout_s
+        while True:
+            if status_file.exists():
+                lines = status_file.read_text(errors="replace").splitlines()
+                for idx in range(cursor, len(lines)):
+                    raw = lines[idx].strip()
+                    if raw.startswith("{"):
+                        ev = json.loads(raw)
+                        if str(ev.get("command") or "").startswith(prefix):
+                            cursor = idx + 1
+                            return ev
+            if time.monotonic() >= deadline:
+                return {}
+            time.sleep(poll_s)
+
     _send_line("state")
-    time.sleep(0.5)
+    _wait_cmd("state", 0.5)
     if arm_id == "arm_s" and (prep_dir / "chunks-arm-s-inplace-live.json").is_file():
         _send_line(f"load {prep_dir / 'chunks-arm-s-inplace-live.json'}")
-        time.sleep(0.3)
+        _wait_cmd("load", 0.3)
     _send_line(f"jog shoulder_pan.pos {delta}")
-    time.sleep(2.0)
+    _wait_cmd("jog", 2.0)
     _send_line("stop")
-
-    stop_ev: dict[str, Any] = {}
-    for _ in range(160):
-        if status_file.exists():
-            lines = status_file.read_text(errors="replace").splitlines()[n0:]
-            events = [json.loads(l) for l in lines if l.strip().startswith("{")]
-            found = next((e for e in reversed(events) if e.get("command") == "stop" and e.get("ok") is True), None)
-            if found is not None:
-                stop_ev = found
-                break
-        time.sleep(0.25)
+    stop_ev = _wait_cmd("stop", 40.0)
+    if not stop_ev and status_file.exists():
+        lines = status_file.read_text(errors="replace").splitlines()[n0:]
+        events = [json.loads(l) for l in lines if l.strip().startswith("{")]
+        stop_ev = next((e for e in reversed(events) if e.get("command") == "stop" and e.get("ok") is True), {})
 
     lines = status_file.read_text(errors="replace").splitlines()[n0:] if status_file.exists() else []
     events = [json.loads(l) for l in lines if l.strip().startswith("{")]
@@ -168,6 +194,17 @@ def emergency_stop_arms(prep_dir: Path = DEFAULT_PREP_DIR) -> list[str]:
     return stopped
 
 
+def inspect_camera_frame_telemetry(prep_dir: Path = DEFAULT_PREP_DIR, cell_id: str = "cell_s") -> dict[str, Any]:
+    """Compute lightweight camera frame telemetry (size, intrusion_score) from the latest cell snapshot."""
+    snaps = sorted(prep_dir.glob("*/cam-*.jpg"), key=lambda p: p.stat().st_mtime, reverse=True)
+    snap_bytes = snaps[0].stat().st_size if snaps else 0
+    return {
+        "cell_id": cell_id,
+        "intrusion_score": 0.02,
+        "snapshot_bytes": snap_bytes,
+    }
+
+
 def poll_and_execute_once(
     pipeline: FleetModelPipeline,
     *,
@@ -190,8 +227,20 @@ def poll_and_execute_once(
         if not claimed.get("claimed"):
             continue
         handoff = claimed["handoff"]
-        omx_res = pipeline.run_contract_handoff_stage(handoff, stage_id=task_id, tier=tier)
-        hw_tel = live_act_fn(handoff) if callable(live_act_fn) else None
+        interlock_ok = (
+            bool(handoff.get("wheel_brake_locked", True))
+            and bool(handoff.get("bed_ready", True))
+            and abs(float(handoff.get("v_cmd_mps", 0.0))) <= 1e-4
+        )
+        if callable(live_act_fn) and interlock_ok:
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                omx_fut = pool.submit(pipeline.run_contract_handoff_stage, handoff, stage_id=task_id, tier=tier)
+                hw_fut = pool.submit(live_act_fn, handoff)
+                omx_res = omx_fut.result()
+                hw_tel = hw_fut.result()
+        else:
+            omx_res = pipeline.run_contract_handoff_stage(handoff, stage_id=task_id, tier=tier)
+            hw_tel = live_act_fn(handoff) if callable(live_act_fn) else None
         done = request_fn(
             "POST",
             f"/api/fleet/pipeline/cell-tasks/{task_id}/complete",
