@@ -67,6 +67,14 @@ SCENARIOS = [
     {"name": "D-911 hold", "rounds": [("held: not reviewed", False, True)], "result": "ask a person: other", "actions": ["ask_person"]},
     {"name": "learns: a look that never helped loses its place", "teach": [("stopped: misaligned", False, True), ("stopped: fault", False, True)],
      "rounds": [("stopped: misaligned", False, True), ("placed", False, True)], "result": "placed", "actions": ["push_clear", "done"]},
+    {"name": "S6 unseated cone: seat nudge clears and places", "rounds": [("stopped: unseated_cone: +2.0 mm", False, True), ("placed", False, True)],
+     "result": "placed", "actions": ["push_clear", "done"]},
+    {"name": "S2 toppled stack: hard stop in carry (S-Temp or person)", "rounds": [("stopped: toppled: r_k=-11 mm", False, True)],
+     "result": "ask a person: s2_toppled_or_slumped", "actions": ["ask_person"]},
+    {"name": "S4 shallow pinch: observe again and re-pick", "rounds": [("stopped: shallow_pinch: I=62 mA", False, True), ("placed", False, True)],
+     "result": "placed", "actions": ["observe_again", "done"]},
+    {"name": "S3 packed column: push clears finger clearance", "rounds": [("stopped: packed_column: clear_x=3.5 mm", False, True), ("placed", False, True)],
+     "result": "placed", "actions": ["push_clear", "done"]},
 ]
 
 

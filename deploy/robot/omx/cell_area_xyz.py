@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """`rosy-cell` executor for unified `AreaXYZ` directives from ROSY middleware (D-1014), with closed-loop grasp failure
-recovery and multi-view (`top` + `side`) post-place task outcome verification.
+recovery, 6-Gate Execution Interlock (`cell_spec_recovery_fsm`), and multi-view (`top` + `side`) post-place verification.
 
 Single Responsibility:
   - Closed-loop pick-transfer-place state machine (`execute_directive`) for 5/6/7-DOF arms.
@@ -9,7 +9,6 @@ Single Responsibility:
 """
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any, Callable
 
@@ -24,16 +23,40 @@ ensure_omx_paths()
 from omx_adapter.area_xyz import DIRECTIVE_SCHEMA, coerce_area_xyz  # noqa: E402
 from cell_area_vision_align import _jaw_pos, refine_pick_pose_at_hover, settle_above_pick_jaws  # noqa: E402,F401
 from cell_area_zones import (  # noqa: E402,F401  (re-exported: existing importers are unchanged)
-    SIDE_COL_CENTER_U, SIDE_M_PER_PX, SIDE_ROI_BY_COL_TIER, TOP_ROI_BY_COL_ROW,
+    SIDE_COL_CENTER_U, SIDE_M_PER_PX, SIDE_ROI_BY_COL_TIER, TEMP_PLATE_TOP_ROI_BY_LANE, TOP_ROI_BY_COL_ROW,
     classify_container_orientation, diagnose_and_recover_pick, evaluate_zone,
-    measure_side_gripper_zone_offset, normalize_pick_yaw_deg, verify_stack_outcome, warm_container_ratio,
+    measure_side_gripper_zone_offset, normalize_pick_yaw_deg, verify_stack_outcome,
+    verify_stack_outcome_z_mm, warm_container_ratio,
 )
 import cell_arm_cal  # noqa: E402
 import cell_fingers  # noqa: E402,F401
 from cell_fleet_pipeline import execute_task_plan  # noqa: E402,F401  (re-exported)
 import cell_grasp_debate as cgd  # noqa: E402
 import cell_problem_pipeline as cpp  # noqa: E402
+from cell_spec_recovery_fsm import (  # noqa: E402,F401
+    compile_recenter_on_temp_directives, evaluate_execution_gate, select_recovery_skill,
+)
+from cell_z_profile import (  # noqa: E402,F401
+    calibrate_z_profile_mm, capture_top_depth_z16, default_z_profile_mm, judge_z_axis_alignment_mm,
+    measure_ik_tracking_mm, measure_side_gripper_pose_mm, perceive_slot_z_mm, perceive_visual_distance_mm,
+)
 import grasp_planner  # noqa: E402,F401
+
+
+def _build_vision_judge(last_wrist_obs: dict[str, Any] | None, max_skew_mm: float) -> dict[str, Any]:
+    if isinstance(last_wrist_obs, dict) and last_wrist_obs.get("found"):
+        along_mm = round(float(last_wrist_obs.get("along_mm") or 0.0), 2)
+        across_mm = round(float(last_wrist_obs.get("across_mm") or 0.0), 2)
+        skew_ok = abs(along_mm) <= float(max_skew_mm)
+        return {
+            "status": "measured", "ok": skew_ok, "found": True,
+            "along_mm": along_mm, "across_mm": across_mm,
+            "verdict": "proceed" if skew_ok else "reinsert",
+            "class": "centered" if skew_ok else "unstable_skewed",
+            "confidence": 0.85 if skew_ok else 0.88,
+            "why": f"wrist skew along={along_mm}mm across={across_mm}mm (max={max_skew_mm}mm)",
+        }
+    return {"status": "skipped", "ok": True, "along_mm": 0.0, "across_mm": 0.0}
 
 
 def execute_directive(
@@ -48,9 +71,12 @@ def execute_directive(
 ) -> dict[str, Any]:
     """Execute a `rosy.omx-cell-area-xyz-directive.v1` directive on `rosy-cell`, recovering from missed/skewed grasps and
     verifying physical task completion via `verify_stack_outcome`."""
+    import json
+
     work_dir.mkdir(parents=True, exist_ok=True)
     arm_id = str(directive.get("arm_id") or "arm_b")
     from cell_directive_compiler import _clone
+
     cur_directive = _clone(directive)
     cur_directive["pick"] = coerce_area_xyz(cur_directive["pick"])
     cur_directive["place"] = coerce_area_xyz(cur_directive["place"])
@@ -60,6 +86,7 @@ def execute_directive(
     wrist_log: list[dict[str, Any]] = []
     debate_log: list[dict[str, Any]] = []
     recovery_log: list[dict[str, Any]] = []
+    gate_trace: list[dict[str, Any]] = []
     tried_xs: list[float] = []
 
     before_side = frame_fn("side") if frame_fn is not None else None
@@ -95,7 +122,7 @@ def execute_directive(
             r_load = _run_cmd(f"load {lib_path}")
             if not r_load.get("ok"):
                 return {"directive_id": cur_directive.get("directive_id"), "result": "fault", "at": "load",
-                        "pick": cur_directive["pick"], "place": cur_directive["place"], "steps": steps_log}
+                        "pick": cur_directive["pick"], "place": cur_directive["place"], "gate_trace": gate_trace, "steps": steps_log}
 
         r_above = _run_cmd("goto above_pick")
         if not r_above.get("ok"):
@@ -103,7 +130,7 @@ def execute_directive(
             r_above = _run_cmd("goto above_pick")
             if not r_above.get("ok"):
                 return {"directive_id": cur_directive.get("directive_id"), "result": "contact", "at": "goto above_pick",
-                        "pick": cur_directive["pick"], "place": cur_directive["place"], "steps": steps_log}
+                        "pick": cur_directive["pick"], "place": cur_directive["place"], "gate_trace": gate_trace, "steps": steps_log}
 
         above_shaking = settle_above_pick_jaws(r_above, plan, _run_cmd, steps_log)
         lib, plan, cal, last_wrist_obs, vision_refined_xy = refine_pick_pose_at_hover(
@@ -114,15 +141,19 @@ def execute_directive(
 
         r_desc = _run_cmd("run descend_pick")
         if not r_desc.get("ok"):
+            g_desc = evaluate_execution_gate("at_grasp", r_step=r_desc)
+            gate_trace.append(g_desc)
             if attempt + 1 < max_attempts:
                 _safe_recover_hover(float(plan["grip_open"]), park_after=False)
                 rec = diagnose_and_recover_pick(attempt=attempt, cur_directive=cur_directive, r_desc=r_desc, r_grasp={},
                                                 cal=cal, tried_xs=tried_xs, wrist_obs=None if vision_refined_xy else last_wrist_obs)
+                rec["recovery_skill"] = select_recovery_skill("S7_DESCEND_OR_GRASP_CONTACT", level_tried=attempt)
                 recovery_log.append(rec)
                 continue
             _safe_recover_hover(float(plan["grip_open"]), park_after=not bool(exec_cfg.get("stay_in_hover", False)))
             return {"directive_id": cur_directive.get("directive_id"), "result": "contact", "at": "run descend_pick",
-                    "pick": cur_directive["pick"], "place": cur_directive["place"], "recovery": recovery_log, "steps": steps_log}
+                    "pick": cur_directive["pick"], "place": cur_directive["place"], "gate_trace": gate_trace,
+                    "recovery": recovery_log, "steps": steps_log}
 
         r_grasp = _run_cmd("run grasp_pick")
         state = r_grasp.get("state") or []
@@ -130,6 +161,8 @@ def execute_directive(
         curr_ma = r_grasp.get("gripper_current_ma")
         closed_pos = float(cal.get("grip_closed", 48.8))
         open_pos = float(plan.get("grip_open", 57.85))
+        g_at_grasp = evaluate_execution_gate("at_grasp", r_step=r_grasp, gripper_pos=jaw_pos, current_ma=curr_ma)
+        gate_trace.append(g_at_grasp)
         grasp_dynamics = cell_arm_cal.evaluate_grasp_dynamics(
             r_grasp, closed=closed_pos, open_pos=open_pos,
             held_30mm=float(cal.get("held_30mm", 53.5)), baseline_current_ma=float(cal.get("hold_current_ma", 80.0)),
@@ -144,11 +177,11 @@ def execute_directive(
                 "gripper.closed": float(cal.get("grip_closed", 48.8)),
                 "grasp.shallow_tol_units": float(exec_cfg.get("shallow_tol_units", 2.2)),
                 "grasp.wedged_tol_units": float(exec_cfg.get("wedged_tol_units", 2.5)),
-                "grasp.max_skew_mm": 5.5,
+                "grasp.max_skew_mm": float(exec_cfg.get("max_skew_mm", 5.5)),
                 "wrist.finger_color": 2 if cal.get("finger_color") == "white" else 1,
             }
             t_judge = cgd.telemetry_judge(state, holding, params, current_ma=curr_ma)
-            v_judge = {"status": "skipped", "ok": True, "along_mm": 0.0, "across_mm": 0.0}
+            v_judge = _build_vision_judge(None if vision_refined_xy else last_wrist_obs, float(params["grasp.max_skew_mm"]))
             d_res = cgd.debate_and_decide(stage="run grasp_pick", telemetry=t_judge, vision=v_judge,
                                           reinsert_count=attempt, max_reinsert=max_attempts - 1, models=[])
             debate_log.append(d_res)
@@ -158,6 +191,10 @@ def execute_directive(
                     _safe_recover_hover(float(plan["grip_open"]), park_after=False)
                 rec = diagnose_and_recover_pick(attempt=attempt, cur_directive=cur_directive, r_desc=r_desc, r_grasp=r_grasp,
                                                 cal=cal, tried_xs=tried_xs, wrist_obs=None if vision_refined_xy else last_wrist_obs)
+                rec["recovery_skill"] = select_recovery_skill(
+                    str(g_at_grasp.get("failure_code") or "S4_SHALLOW_OR_SLIPPED_LIFT"),
+                    dx_mm=float(v_judge.get("along_mm") or 0.0), dy_mm=float(v_judge.get("across_mm") or 0.0), level_tried=attempt,
+                )
                 recovery_log.append(rec)
                 continue
 
@@ -168,6 +205,9 @@ def execute_directive(
                     _safe_recover_hover(float(plan["grip_open"]), park_after=False)
                 rec = diagnose_and_recover_pick(attempt=attempt, cur_directive=cur_directive, r_desc=r_desc, r_grasp=r_grasp,
                                                 cal=cal, tried_xs=tried_xs, wrist_obs=None if vision_refined_xy else last_wrist_obs)
+                rec["recovery_skill"] = select_recovery_skill(
+                    str(g_at_grasp.get("failure_code") or "S4_EMPTY_AIR_CLOSE"), level_tried=attempt,
+                )
                 recovery_log.append(rec)
                 continue
             if not r_rel.get("ok"):
@@ -176,7 +216,7 @@ def execute_directive(
                 _run_cmd("park")
             out_empty = {"directive_id": cur_directive.get("directive_id"), "result": "empty", "task_verified": False,
                          "at": "run grasp_pick", "pick": cur_directive["pick"], "place": cur_directive["place"],
-                         "recovery": recovery_log, "steps": steps_log}
+                         "gate_trace": gate_trace, "recovery": recovery_log, "steps": steps_log}
             cpp.capture_from_attempt({"_work": work_dir, "arm_id": arm_id}, out_empty)
             return out_empty
 
@@ -198,6 +238,11 @@ def execute_directive(
             if chunk_cmd in ("run lift_pick", "goto above_place"):
                 if chunk_cmd == "run lift_pick":
                     r_lift_step = r_step
+                    gate_trace.append(evaluate_execution_gate(
+                        "lift_verify", r_step=r_lift_step,
+                        gripper_pos=_jaw_pos(r_lift_step.get("state") or []),
+                        current_ma=r_lift_step.get("gripper_current_ma"),
+                    ))
                     grasp_dynamics = cell_arm_cal.evaluate_grasp_dynamics(r_grasp, r_lift=r_lift_step, closed=closed_pos, open_pos=open_pos)
                 else:
                     grasp_dynamics = cell_arm_cal.evaluate_grasp_dynamics(r_grasp, r_lift=r_lift_step, r_above_place=r_step, closed=closed_pos, open_pos=open_pos)
@@ -234,7 +279,7 @@ def execute_directive(
                 if chunk_cmd not in ("run lift_place", "park"):
                     out_err = {"directive_id": cur_directive.get("directive_id"), "result": "contact", "task_verified": False,
                                "at": chunk_cmd, "error": r_step.get("error"), "pick": cur_directive["pick"],
-                               "place": cur_directive["place"], "recovery": recovery_log, "steps": steps_log}
+                               "place": cur_directive["place"], "gate_trace": gate_trace, "recovery": recovery_log, "steps": steps_log}
                     cpp.capture_from_attempt({"_work": work_dir, "arm_id": arm_id}, out_err)
                     return out_err
 
@@ -248,12 +293,13 @@ def execute_directive(
                     exec_cfg["vision_refine"] = False
                 rec = diagnose_and_recover_pick(attempt=attempt, cur_directive=cur_directive, r_desc=r_desc, r_grasp=r_grasp,
                                                 cal=cal, tried_xs=tried_xs, wrist_obs=None, slipped_in_transfer=True)
+                rec["recovery_skill"] = select_recovery_skill("S4_SHALLOW_OR_SLIPPED_LIFT", level_tried=attempt)
                 recovery_log.append(rec)
                 continue
             out_slip = {"schema": DIRECTIVE_SCHEMA, "directive_id": cur_directive.get("directive_id"), "arm_id": arm_id,
                         "result": "slipped_in_transfer", "task_verified": False, "grasp_dynamics": grasp_dynamics,
-                        "pick": cur_directive["pick"], "place": cur_directive["place"], "recovery": recovery_log,
-                        "wrist": wrist_log, "steps": steps_log}
+                        "pick": cur_directive["pick"], "place": cur_directive["place"], "gate_trace": gate_trace,
+                        "recovery": recovery_log, "wrist": wrist_log, "steps": steps_log}
             cpp.capture_from_attempt({"_work": work_dir, "arm_id": arm_id}, out_slip)
             return out_slip
 
@@ -268,6 +314,7 @@ def execute_directive(
             rec = diagnose_and_recover_pick(attempt=attempt, cur_directive=cur_directive, r_desc=r_desc, r_grasp=r_grasp,
                                             cal=cal, tried_xs=tried_xs, wrist_obs=None, slipped_in_transfer=True)
             rec["verification_reason"] = verification["reason"]
+            rec["recovery_skill"] = select_recovery_skill("S4_SHALLOW_OR_SLIPPED_LIFT", level_tried=attempt)
             recovery_log.append(rec)
             continue
 
@@ -277,12 +324,12 @@ def execute_directive(
             "task_verified": verification["verified"], "verification": verification,
             "pick": cur_directive["pick"], "place": cur_directive["place"],
             "gripper_pos": jaw_pos, "gripper_current_ma": curr_ma, "grasp_dynamics": grasp_dynamics,
-            "calibration": updated_cal, "recovery": recovery_log, "wrist": wrist_log,
-            "grasp_debate": debate_log, "steps": steps_log,
+            "gate_trace": gate_trace, "calibration": updated_cal, "recovery": recovery_log,
+            "wrist": wrist_log, "grasp_debate": debate_log, "steps": steps_log,
         }
         if not verification["verified"]:
             cpp.capture_from_attempt({"_work": work_dir, "arm_id": arm_id}, out_final)
         return out_final
 
     return {"directive_id": cur_directive.get("directive_id"), "result": "stopped", "task_verified": False,
-            "recovery": recovery_log, "steps": steps_log}
+            "gate_trace": gate_trace, "recovery": recovery_log, "steps": steps_log}
