@@ -41,6 +41,7 @@ TIER_SURFACE_Z_MM: dict[int, float] = {1: 0.0, 2: 30.0, 3: 60.0}
 TIER_TOP_Z_MM: dict[int, float] = {1: 30.0, 2: 62.4, 3: 94.8}
 TIER_MID_Z_MM: dict[int, float] = {1: 15.0, 2: 45.0, 3: 75.0}
 DEFAULT_SIDE_TIER_V_PX: dict[int, tuple[float, float]] = {1: (252.0, 315.0), 2: (190.0, 252.0), 3: (120.0, 190.0)}
+_CAM_OPT_LOCAL = (math.cos(math.radians(38.0)), 0.0, -math.sin(math.radians(38.0)))
 
 
 def resolve_container_spec(object_id: str | None = "C3") -> dict[str, Any]:
@@ -91,7 +92,17 @@ def _rot_x(a: float) -> tuple[tuple[float, float, float], ...]:
 
 
 def _matmul(a: Sequence[Sequence[float]], b: Sequence[Sequence[float]]) -> tuple[tuple[float, float, float], ...]:
-    return tuple(tuple(sum(a[i][k] * b[k][j] for k in range(3)) for j in range(3)) for i in range(3))
+    a00, a01, a02 = a[0]
+    a10, a11, a12 = a[1]
+    a20, a21, a22 = a[2]
+    b00, b01, b02 = b[0]
+    b10, b11, b12 = b[1]
+    b20, b21, b22 = b[2]
+    return (
+        (a00 * b00 + a01 * b10 + a02 * b20, a00 * b01 + a01 * b11 + a02 * b21, a00 * b02 + a01 * b12 + a02 * b22),
+        (a10 * b00 + a11 * b10 + a12 * b20, a10 * b01 + a11 * b11 + a12 * b21, a10 * b02 + a11 * b12 + a12 * b22),
+        (a20 * b00 + a21 * b10 + a22 * b20, a20 * b01 + a21 * b11 + a22 * b21, a20 * b02 + a21 * b12 + a22 * b22),
+    )
 
 
 def _matvec(a: Sequence[Sequence[float]], v: Sequence[float]) -> tuple[float, float, float]:
@@ -100,6 +111,22 @@ def _matvec(a: Sequence[Sequence[float]], v: Sequence[float]) -> tuple[float, fl
 
 def _add3(a: Sequence[float], b: Sequence[float]) -> list[float]:
     return [round(float(a[0] + b[0]), 3), round(float(a[1] + b[1]), 3), round(float(a[2] + b[2]), 3)]
+
+
+def _fk_tcp_xyz_mm(
+    joints: Sequence[float], *, unit: str = "rad", tcp_x_mm: float = 74.1,
+    joint_zero_offset_deg: Sequence[float] = (0.0, 0.0, 0.0, 0.0, 0.0), table_z_offset_mm: float = 0.0,
+) -> list[float]:
+    if len(joints) < 5:
+        raise ValueError("fk_landmarks_mm requires at least 5 joint values (joint1..joint5)")
+    q_rad = [(math.radians(float(joints[i]) * 1.8) if unit == "norm" else (math.radians(float(joints[i])) if unit == "deg" else float(joints[i]))) - math.radians(float(joint_zero_offset_deg[i] if i < len(joint_zero_offset_deg) else 0.0)) for i in range(5)]
+    p_j1, r1 = [-11.25, 0.0, 34.0 + float(table_z_offset_mm)], _rot_z(q_rad[0])
+    p_j2, r2 = _add3(p_j1, _matvec(r1, (0.0, 0.0, 63.5))), _matmul(r1, _rot_y(q_rad[1]))
+    p_j3, r3 = _add3(p_j2, _matvec(r2, (41.5, 0.0, 113.15))), _matmul(r2, _rot_y(q_rad[2]))
+    p_j4, r4 = _add3(p_j3, _matvec(r3, (162.0, 0.0, 0.0))), _matmul(r3, _rot_y(q_rad[3]))
+    p_j5, r5 = _add3(p_j4, _matvec(r4, (28.7, 0.0, 0.0))), _matmul(r4, _rot_x(q_rad[4]))
+    p_tcp = _add3(p_j5, _matvec(r5, (float(tcp_x_mm), 0.0, 0.0)))
+    return [round(float(v), 3) for v in p_tcp]
 
 
 def fk_landmarks_mm(
@@ -117,7 +144,7 @@ def fk_landmarks_mm(
     p_j5, r5 = _add3(p_j4, _matvec(r4, (28.7, 0.0, 0.0))), _matmul(r4, _rot_x(q_rad[4]))
     p_pivot, p_tcp = _add3(p_j5, _matvec(r5, (29.5, 0.0, 0.0))), _add3(p_j5, _matvec(r5, (float(tcp_x_mm), 0.0, 0.0)))
     p_tcp_stock, p_tcp_legacy, p_wrist_cam = _add3(p_j5, _matvec(r5, (91.93, 0.0, 0.0))), _add3(p_j5, _matvec(r5, (88.5, 0.0, 0.0))), _add3(p_j5, _matvec(r5, (36.24, 0.0, 45.84)))
-    cam_opt_world = _matvec(r5, (math.cos(math.radians(38.0)), 0.0, -math.sin(math.radians(38.0))))
+    cam_opt_world = _matvec(r5, _CAM_OPT_LOCAL)
     landmarks = {
         "base_bottom": [0.0, 0.0, round(z0, 3)], "base_plate_top": [0.0, 0.0, round(13.0 + z0, 3)],
         "servo_mount_top": [0.0, 0.0, round(32.0 + z0, 3)], "link1_top": [-11.25, 0.0, round(57.5 + z0, 3)],
@@ -136,7 +163,7 @@ def fk_landmarks_mm(
 
 
 def fk_tcp_z_mm_from_joints_rad(joints_rad: Sequence[float], *, tcp_x_mm: float = 74.1, table_z_offset_mm: float = 0.0) -> float:
-    return float(fk_landmarks_mm(joints_rad, unit="rad", tcp_x_mm=tcp_x_mm, table_z_offset_mm=table_z_offset_mm)["landmarks_z_mm"]["tcp"])
+    return float(_fk_tcp_xyz_mm(joints_rad, unit="rad", tcp_x_mm=tcp_x_mm, table_z_offset_mm=table_z_offset_mm)[2])
 
 
 def reconcile_tcp_z_mm(z_plan_mm: float, *, plan_tcp_x_mm: float = 88.5, physical_tcp_x_mm: float = 74.1, table_fk_offset_mm: float = -8.3) -> dict[str, float]:
@@ -293,16 +320,19 @@ class SimRealTwin:
         if not frames or not ref:
             return {"max_lateral_bow_mm": 0.0, "terminal_error_norm_mm": 0.0, "terminal_error_xyz_mm": [0.0, 0.0, 0.0]}
         q, u, max_lat_bow, max_x_bow, sim_xyz, ideal_xyz = [float(v) for v in frames[0][:5]], [float(v) for v in frames[0][:5]], 0.0, 0.0, [], []
+        complete_twin = len(self.lag_frames) >= 5 and len(self.deadband_units) >= 5
+        alpha = [1.0 / (1.0 + max(0.0, self.lag_frames[j])) for j in range(5)] if complete_twin else []
+        deadband = [max(0.0, self.deadband_units[j]) for j in range(5)] if complete_twin else []
         for k, f in enumerate(frames):
             r_k = [float(v) for v in f[:5]]
             if k > 0:
                 for j in range(5):
-                    u[j] += (1.0 / (1.0 + max(0.0, self.lag_frames[j]))) * (r_k[j] - u[j])
-                    err, db = u[j] - q[j], max(0.0, self.deadband_units[j])
+                    u[j] += (alpha[j] if complete_twin else 1.0 / (1.0 + max(0.0, self.lag_frames[j]))) * (r_k[j] - u[j])
+                    err, db = u[j] - q[j], deadband[j] if complete_twin else max(0.0, self.deadband_units[j])
                     if abs(err) > db:
                         q[j] = u[j] - (db if err > 0.0 else -db)
-            fk_sim = fk_landmarks_mm(q, unit="norm", tcp_x_mm=tcp_x_mm)["tcp_xyz_mm"]
-            fk_ref = fk_landmarks_mm([float(v) for v in ref[min(k, len(ref) - 1)][:5]], unit="norm", tcp_x_mm=tcp_x_mm)["tcp_xyz_mm"]
+            fk_sim = _fk_tcp_xyz_mm(q, unit="norm", tcp_x_mm=tcp_x_mm)
+            fk_ref = _fk_tcp_xyz_mm([float(v) for v in ref[min(k, len(ref) - 1)][:5]], unit="norm", tcp_x_mm=tcp_x_mm)
             sim_xyz.append(fk_sim)
             ideal_xyz.append(fk_ref)
             max_lat_bow, max_x_bow = max(max_lat_bow, math.hypot(fk_sim[0] - fk_ref[0], fk_sim[1] - fk_ref[1])), max(max_x_bow, abs(fk_sim[0] - fk_ref[0]))

@@ -23,6 +23,7 @@ from omx_adapter.z_profile import (  # noqa: E402
 )
 
 SNAPSHOT_DEFAULT_PATH = HERE / "sim" / "cell_snapshots" / "20261112-0254.json"
+_SNAPSHOT_CACHE: dict[tuple[Path, int, int], dict[str, Any]] = {}
 
 DEFAULT_SHUTTLE_BASE_PLAN: dict[str, Any] = {
     "fps": 30, "home": [0.76, -62.25, 52.92, 51.7, 44.71],
@@ -73,7 +74,7 @@ def perceive_live_pick_candidates(
         for col_idx in (1, 2, 3):
             obs = czp.perceive_slot_z_mm(side_frame, top_frame, col=col_idx, row=1, tier=1, z_profile=z_profile)
             if obs.get("found"):
-                col_z_obs[col_idx] = czp.perceive_slot_z_mm(side_frame, top_frame, col=col_idx, row=1, tier=int(obs["inferred_tier"]), z_profile=z_profile)
+                col_z_obs[col_idx] = obs if int(obs["inferred_tier"]) == 1 else czp.perceive_slot_z_mm(side_frame, top_frame, col=col_idx, row=1, tier=int(obs["inferred_tier"]), z_profile=z_profile)
     if top_frame is None or not hasattr(top_frame, "ndim") or top_frame.ndim != 3:
         for col_idx, obs in col_z_obs.items():
             px, py = PALLET_SLOTS_XY_M[(col_idx, 1)]
@@ -82,9 +83,10 @@ def perceive_live_pick_candidates(
         return candidates
     import cv2
 
-    hsv = cv2.cvtColor(top_frame, cv2.COLOR_BGR2HSV)
+    top_roi = top_frame[155:290, 280:530]
+    hsv = cv2.cvtColor(top_roi, cv2.COLOR_BGR2HSV)
     om = (((hsv[..., 0] <= 36) | (hsv[..., 0] >= 168)) & (hsv[..., 1] >= 115) & (hsv[..., 2] >= 130)).astype(np.uint8)
-    num, labels, stats, _ = cv2.connectedComponentsWithStats(om[155:290, 280:530])
+    num, labels, stats, _ = cv2.connectedComponentsWithStats(om)
     for k in range(1, num):
         x, y, w, h_px, area = stats[k]
         if area < 900:
@@ -116,7 +118,12 @@ def load_snapshot_bundle(snapshot_id_or_path: str | Path = "20261112-0254", *, s
         cand = base_dir / f"{str(snapshot_id_or_path).removesuffix('.json')}.json"
     if not cand.exists():
         cand = SNAPSHOT_DEFAULT_PATH
-    data = json.loads(cand.read_text(encoding="utf-8"))
+    stat = cand.stat()
+    cache_key = (cand.resolve(), stat.st_mtime_ns, stat.st_size)
+    data = _SNAPSHOT_CACHE.get(cache_key)
+    if data is None:
+        data = json.loads(cand.read_text(encoding="utf-8"))
+        _SNAPSHOT_CACHE[cache_key] = data
     plates = (((data.get("items") or {}).get("temp_plates") or {}).get("plates") or {})
     default_column_observations = {
         1: {"col": 1, "row": 1, "expected_tier": 1, "side_top_z_mm": 24.8, "depth_top_z_mm": 35.2, "measured_top_z_mm": 24.8, "valid_depth_ratio": 0.92, "tilt_deg": 12.5},

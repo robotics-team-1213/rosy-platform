@@ -82,7 +82,7 @@ def observe_subzones_2d(
                     (hsv[..., 0] >= 35) & (hsv[..., 0] <= 85) & (hsv[..., 1] >= 20) & (hsv[..., 2] >= 90)
                 )
                 top_occ = float(warm.mean())
-                _, xs_w = np.where(warm)
+                xs_w = np.nonzero(warm)[1]
                 if len(xs_w) >= 8:
                     dy_mm = (float(np.median(xs_w)) - 0.5 * crop_t.shape[1]) * (30.0 / max(12.0, float(crop_t.shape[1])))
 

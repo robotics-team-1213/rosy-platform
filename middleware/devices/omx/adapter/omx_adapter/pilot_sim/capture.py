@@ -257,10 +257,15 @@ class PilotSimCapture:
                            if a['accepted_sim_time_ns'] <= metadata.capture_time_ns), None)
             if metadata.sequence == self._last_frame_sequence or action is None:
                 return
-            past = [s for s in states if s[0] <= metadata.capture_time_ns]
-            selected = max(past, key=lambda s: s[0]) if past else None
-            watermark = max((s[0] for s in states), default=None)
-            age = time.monotonic()-max(s[3] for s in states) if states else None
+            selected, watermark, max_received = None, None, None
+            for state in states:
+                if state[0] <= metadata.capture_time_ns and (selected is None or state[0] > selected[0]):
+                    selected = state
+                if watermark is None or state[0] > watermark:
+                    watermark = state[0]
+                if max_received is None or state[3] > max_received:
+                    max_received = state[3]
+            age = time.monotonic() - max_received if states else None
             diagnostic = {'capture_time_ns': metadata.capture_time_ns,
                           'state_time_ns': selected[0] if selected else None,
                           'latest_state_time_ns': watermark, 'live_state_age_s': age,

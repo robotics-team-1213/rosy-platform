@@ -34,7 +34,7 @@ def detect_side_self_profile_landmarks(side_img: np.ndarray | None, *, datum_z_o
     if side_img is None or not hasattr(side_img, "shape") or len(side_img.shape) != 3 or side_img.shape[1] < 580 or side_img.shape[0] < 400:
         return []
     import cv2
-    ys, _ = np.where(cv2.cvtColor(side_img, cv2.COLOR_BGR2GRAY)[200:395, 500:570] < 60)
+    ys, _ = np.where(cv2.cvtColor(side_img[200:395, 500:570], cv2.COLOR_BGR2GRAY) < 60)
     if len(ys) < 400 or not (345.0 <= (v_datum := float(200.0 + np.percentile(ys, 98))) <= 390.0):
         return []
     mm_per_px, v_base_bottom = 90.0 / 175.0, v_datum + float(datum_z_offset_mm) / (90.0 / 175.0)
@@ -47,13 +47,13 @@ def fit_visual_datum_line(side_img: np.ndarray | None, *, datum_z_offset_mm: flo
     prof, col_bottoms, v_robot_base_px = SideViewZProfile(datum_z_offset_mm=0.0, k1=-0.055, k2=0.010), {}, None
     if side_img is not None and hasattr(side_img, "shape") and len(side_img.shape) == 3 and side_img.shape[1] >= 580:
         import cv2
-        ys_b, _ = np.where(cv2.cvtColor(side_img, cv2.COLOR_BGR2GRAY)[200:395, 500:570] < 60)
+        ys_b, _ = np.where(cv2.cvtColor(side_img[200:395, 500:570], cv2.COLOR_BGR2GRAY) < 60)
         if len(ys_b) >= 400:
             v_robot_base_px = round(prof.undistort_uv(535.0, 200.0 + float(np.percentile(ys_b, 98)))[1], 1)
-        hsv = cv2.cvtColor(side_img, cv2.COLOR_BGR2HSV)
+        hsv = cv2.cvtColor(side_img[180:388, 173:377], cv2.COLOR_BGR2HSV)
         sat_c = (hsv[..., 0] >= 4) & (hsv[..., 0] <= 36) & (hsv[..., 1] >= 110) & (hsv[..., 2] >= 140)
         for c_idx, (u0, u1) in SIDE_COL_U_BOUNDS.items():
-            rows = np.where(sat_c[180:388, u0:u1].sum(axis=1) >= 24)[0]
+            rows = np.where(sat_c[:, u0 - 173:u1 - 173].sum(axis=1) >= 24)[0]
             if len(rows) >= 12:
                 col_bottoms[c_idx] = round(prof.undistort_uv(0.5 * (u0 + u1), 180.0 + float(rows[-1]))[1], 1)
     slope = max(-0.04, min(0.04, round((col_bottoms[2] - col_bottoms[1]) / 66.5, 5))) if (1 in col_bottoms and 2 in col_bottoms) else 0.0
@@ -234,9 +234,10 @@ def perceive_slot_z_mm(
             hue, sat, val = hsv[..., 0], hsv[..., 1], hsv[..., 2]
             sat_c = (hue >= 4) & (hue <= 34) & (sat >= 115) & (val >= 145)
             warm = sat_c if int(sat_c.sum()) >= 200 else ((((hue <= 38) | (hue >= 158)) & (sat >= 65) & (val >= 90)) | ((hue >= 35) & (hue <= 75) & (sat >= 16) & (sat <= 115) & (val >= 140) & (val <= 228)))
-            valid_rows = np.where(warm.sum(axis=1) >= 28)[0]
+            row_sums = warm.sum(axis=1)
+            valid_rows = np.where(row_sums >= 28)[0]
             if len(valid_rows) < 8:
-                valid_rows = np.where(warm.sum(axis=1) >= 12)[0]
+                valid_rows = np.where(row_sums >= 12)[0]
             if len(valid_rows) >= 8:
                 v_exp_rel = side_prof.z_mm_to_v(expected_top_z_mm) - v0
                 tier_rows = valid_rows[(valid_rows >= v_exp_rel - 28.0) & (valid_rows <= v_exp_rel + 32.0)]
@@ -298,12 +299,14 @@ def measure_side_gripper_pose_mm(
     """(B) Measure both horizontal (`u_px -> dx_mm`) and vertical (`v_px -> gripper_z_mm, dz_mm`) gripper pose in Side View."""
     if side_img is None or before_side is None or not hasattr(side_img, "shape") or side_img.shape != before_side.shape:
         return {"found": False, "target_u_px": target_u_px}
-    ys, xs = np.where(np.linalg.norm(side_img[70:165, 160:390].astype(np.float32) - before_side[70:165, 160:390].astype(np.float32), axis=2) > 32.0)
+    diff = side_img[70:165, 160:390].astype(np.int32) - before_side[70:165, 160:390].astype(np.int32)
+    ys, xs = np.where((diff[..., 0] * diff[..., 0] + diff[..., 1] * diff[..., 1] + diff[..., 2] * diff[..., 2]) > 1024)
     if len(xs) < 40:
         return {"found": False, "target_u_px": target_u_px}
-    side_prof, tip_mask = SideViewZProfile.from_dict((z_profile or {}).get("side_view")), (ys >= float(np.percentile(ys, 65)))
+    p65, p90 = np.percentile(ys, (65, 90))
+    side_prof, tip_mask = SideViewZProfile.from_dict((z_profile or {}).get("side_view")), (ys >= p65)
     u_gripper = round(float(160.0 + np.median(xs[tip_mask] if int(tip_mask.sum()) >= 10 else xs)), 1)
-    v_gripper_tip, v_gripper_center = round(float(70.0 + np.percentile(ys, 90)), 1), round(float(70.0 + np.median(ys)), 1)
+    v_gripper_tip, v_gripper_center = round(float(70.0 + p90), 1), round(float(70.0 + np.median(ys)), 1)
     du_px, dx_m, gripper_z_mm = round(target_u_px - u_gripper, 1), round((target_u_px - u_gripper) * float(u_m_per_px), 5), side_prof.v_to_z_mm(v_gripper_tip)
     fk_z_mm = float(fk_landmarks_mm(joint_state_deg[:5], unit="deg")["landmarks_z_mm"]["jaw_tip"]) if (joint_state_deg is not None and len(joint_state_deg) >= 5) else None
     ref_z_mm = float(expected_z_mm) if expected_z_mm is not None else fk_z_mm
