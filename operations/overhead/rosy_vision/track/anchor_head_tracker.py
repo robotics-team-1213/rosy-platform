@@ -22,38 +22,16 @@ SIGHTING_MIN_INTERVAL_S = 0.22
 
 @dataclass
 class TargetAnchor:
-    target_id: str
-    kind: str  # "pinky" | "omx_ai"
-    label: str
-    base_x: float
-    base_y: float
-    base_yaw: float
-    reach_m: float = 0.28
-    zoom: int = 4
-    marker_id: int | None = None
-    updated_at: float = 0.0
+    target_id: str; kind: str; label: str; base_x: float; base_y: float; base_yaw: float
+    reach_m: float = 0.28; zoom: int = 4; marker_id: int | None = None; updated_at: float = 0.0
 
 
 @dataclass
 class TrackedHeadState:
-    target_id: str
-    kind: str
-    label: str
-    base_x: float
-    base_y: float
-    base_yaw: float
-    head_x: float
-    head_y: float
-    head_yaw: float
-    extension_m: float
-    vx: float = 0.0
-    vy: float = 0.0
-    speed_mps: float = 0.0
-    moving: bool = False
-    confidence: float = 0.0
-    zoom: int = 4
-    reach_m: float = 0.28
-    captured_at: float = 0.0
+    target_id: str; kind: str; label: str; base_x: float; base_y: float; base_yaw: float
+    head_x: float; head_y: float; head_yaw: float; extension_m: float
+    vx: float = 0.0; vy: float = 0.0; speed_mps: float = 0.0; moving: bool = False
+    confidence: float = 0.0; zoom: int = 4; reach_m: float = 0.28; captured_at: float = 0.0
     roi_jpeg: bytes | None = field(default=None, repr=False)
 
     def to_dict(self) -> dict:
@@ -86,6 +64,8 @@ class AnchorHeadTracker:
     def __init__(self) -> None:
         self._lock = threading.Lock()
         self._anchors: dict[str, TargetAnchor] = default_anchors()
+        self._home_anchors: dict[str, TargetAnchor] = default_anchors()
+        self._enrolled_robots: set[str] = {"rosy_45", "rosy_46"}
         self._states: dict[str, TrackedHeadState] = {}
         self._last_sighting_at: dict[str, float] = {}
 
@@ -96,6 +76,8 @@ class AnchorHeadTracker:
         anchors_cfg = config.get("anchors") if isinstance(config.get("anchors"), Sequence) else ()
         occupied_cfg = config.get("occupied") if isinstance(config.get("occupied"), Sequence) else ()
         with self._lock:
+            if robot_markers:
+                self._enrolled_robots = {str(k) for k in robot_markers.keys()}
             for rid, mid in robot_markers.items():
                 if rid in self._anchors and isinstance(mid, int):
                     self._anchors[rid].marker_id = mid
@@ -119,11 +101,16 @@ class AnchorHeadTracker:
                 label = str(item.get("label") or tid)
                 existing = self._anchors.get(tid)
                 if existing is None or updated_at >= existing.updated_at:
-                    self._anchors[tid] = TargetAnchor(
+                    new_anc = TargetAnchor(
                         target_id=tid, kind=kind, label=label, base_x=bx, base_y=by, base_yaw=byaw,
                         reach_m=max(0.12, min(0.80, reach)), zoom=max(2, min(6, zoom)),
                         marker_id=robot_markers.get(tid, existing.marker_id if existing else None),
                         updated_at=updated_at,
+                    )
+                    self._anchors[tid] = new_anc
+                    self._home_anchors[tid] = TargetAnchor(
+                        target_id=tid, kind=kind, label=label, base_x=bx, base_y=by, base_yaw=byaw,
+                        reach_m=new_anc.reach_m, zoom=new_anc.zoom, marker_id=new_anc.marker_id, updated_at=updated_at,
                     )
                     if (existing is None or math.hypot(bx - existing.base_x, by - existing.base_y) > 0.03
                             or abs(_wrap_angle(byaw - existing.base_yaw)) > 0.08):
@@ -139,6 +126,8 @@ class AnchorHeadTracker:
                             anc = self._anchors[rid]
                             if math.hypot(ox - anc.base_x, oy - anc.base_y) > 0.04:
                                 anc.base_x, anc.base_y = ox, oy
+                                if rid in self._home_anchors:
+                                    self._home_anchors[rid].base_x, self._home_anchors[rid].base_y = ox, oy
                     except (KeyError, TypeError, ValueError):
                         pass
 
@@ -160,6 +149,7 @@ class AnchorHeadTracker:
 
         with self._lock:
             anchors = list(self._anchors.values())
+            enrolled_robots = set(self._enrolled_robots)
         omx_anchors = [a for a in anchors if a.kind == "omx_ai"]
         pinky_anchors = [a for a in anchors if a.kind == "pinky"]
 
@@ -178,6 +168,7 @@ class AnchorHeadTracker:
         ]
 
         new_sightings: list[SiteSightingPayload] = []
+        matched_dets: list[Detection] = []
         for anchor in pinky_anchors:
             st, matched_det = self._track_pinky_target(
                 image, captured_at, anchor, filtered_detections, img_to_map, map_to_img,
@@ -194,11 +185,10 @@ class AnchorHeadTracker:
                         d for d in filtered_detections
                         if d.marker_id is not None or math.hypot(d.x - st.base_x, d.y - st.base_y) > 0.14
                     ]
-                    if not any(d.marker_id == matched_det.marker_id for d in filtered_detections if matched_det.marker_id is not None):
-                        filtered_detections.insert(0, matched_det)
+                    matched_dets.append(matched_det)
                 last_sent = self._last_sighting_at.get(anchor.target_id, 0.0)
-                if (anchor.target_id not in already_sighted and st.confidence >= 0.45
-                        and captured_at - last_sent >= SIGHTING_MIN_INTERVAL_S):
+                if (anchor.target_id in enrolled_robots and anchor.target_id not in already_sighted
+                        and st.confidence >= 0.45 and captured_at - last_sent >= SIGHTING_MIN_INTERVAL_S):
                     self._last_sighting_at[anchor.target_id] = captured_at
                     new_sightings.append(SiteSightingPayload(
                         robot_id=anchor.target_id, x=round(st.base_x, 4), y=round(st.base_y, 4), yaw=round(st.head_yaw, 4),
@@ -206,6 +196,9 @@ class AnchorHeadTracker:
                         processor_revision=processor_revision, quality=round(st.confidence, 3),
                         corner_marker_ids=None, calibration_source="approved_record",
                     ))
+        for md in reversed(matched_dets):
+            if not any(d.marker_id == md.marker_id for d in filtered_detections if md.marker_id is not None):
+                filtered_detections.insert(0, md)
 
         updated_result = DetectorResult(tuple(filtered_detections), "OK") if result.status == "OK" or filtered_detections else result
         return updated_result, tuple(new_sightings), self.snapshot_list()
@@ -326,18 +319,21 @@ class AnchorHeadTracker:
     ) -> tuple[TrackedHeadState | None, Detection | None]:
         with self._lock:
             prev = self._states.get(anchor.target_id)
+            home = self._home_anchors.get(anchor.target_id, anchor)
         ref_x = prev.base_x if prev is not None else anchor.base_x
         ref_y = prev.base_y if prev is not None else anchor.base_y
         ref_yaw = prev.head_yaw if prev is not None else anchor.base_yaw
 
-        best_blob, best_dist = None, 0.16
+        best_blob, best_dist = None, 0.14
         for det in detections:
+            if det.marker_id is not None and det.marker_id != anchor.marker_id:
+                continue
             d = math.hypot(det.x - ref_x, det.y - ref_y)
             if d < best_dist:
                 best_dist, best_blob = d, det
 
-        center_x = best_blob.x if best_blob is not None else ref_x
-        center_y = best_blob.y if best_blob is not None else ref_y
+        center_x = best_blob.x if best_blob is not None else home.base_x
+        center_y = best_blob.y if best_blob is not None else home.base_y
         shrink = 1.0 if camera_pose is None else (camera_pose[2] - ROBOT_TOP_HEIGHT_M) / camera_pose[2]
         proj_x = center_x if camera_pose is None else camera_pose[0] + (center_x - camera_pose[0]) / shrink
         proj_y = center_y if camera_pose is None else camera_pose[1] + (center_y - camera_pose[1]) / shrink
@@ -395,7 +391,7 @@ class AnchorHeadTracker:
                                 rx, ry = geometry.parallax_correct((rx, ry), camera_pose, ROBOT_TOP_HEIGHT_M)
                             except ValueError:
                                 pass
-                        if math.hypot(rx - ref_x, ry - ref_y) <= 0.16:
+                        if abs(rx - home.base_x) <= 0.055 and abs(ry - home.base_y) <= 0.065:
                             measured_x, measured_y = rx, ry
                 angle_img = 0.5 * math.atan2(2.0 * m["mu11"], m["mu20"] - m["mu02"])
                 du, dv = math.cos(angle_img) * 12.0, math.sin(angle_img) * 12.0
@@ -410,9 +406,9 @@ class AnchorHeadTracker:
                     measured_yaw = _blend_angle(ref_yaw, cand_yaw, 0.15)
 
         if 0.02 <= measured_y <= 0.49:
-            nearest_bay_x = min((-0.4184, -0.1896, 0.0322), key=lambda bx: abs(measured_x - bx))
-            if abs(measured_x - nearest_bay_x) <= 0.095:
-                measured_x = 0.72 * nearest_bay_x + 0.28 * measured_x
+            target_bay_x = home.base_x if best_blob is None else min((-0.4184, -0.1896, 0.0322), key=lambda bx: abs(measured_x - bx))
+            if abs(measured_x - target_bay_x) <= 0.095:
+                measured_x = 0.72 * target_bay_x + 0.28 * measured_x
                 if abs(_wrap_angle(measured_yaw - (-1.5708))) <= 0.65:
                     measured_yaw = _blend_angle(measured_yaw, -1.5708, 0.55)
         elif 0.55 <= measured_x <= 0.85 and -0.34 <= measured_y <= -0.16:
