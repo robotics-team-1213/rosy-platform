@@ -29,6 +29,8 @@ STRATEGY = {
 ATTEMPT_CAUSES = (("stopped: released", "lift_stall"), ("stopped: holding", "held_stop"), ("stopped: still holding", "stuck_in_jaws"),
                   ("stopped: misaligned", "misaligned"), ("stopped: reinserted", "unstable_grasp"), ("stopped: placed", "not_seen_placed"), ("stopped: no usable", "no_room"),
                   ("stopped: pivot", "calibrate"), ("stopped: no clear pivot", "calibrate"),
+                  ("stopped: unseated_cone", "s6_unseated_cone"), ("stopped: toppled", "s2_toppled_or_slumped"),
+                  ("stopped: shallow_pinch", "s4_shallow_pinch"), ("stopped: packed_column", "s3_packed_no_clearance"),
                   *((f"stopped: {c} -> ", "contact") for c in STRATEGY))  # the strategy table already ended at a person
 RECOVERY = {
     # the order is the first guess; cell_recovery reorders by what really worked (cell_choices), never past this list
@@ -40,6 +42,10 @@ RECOVERY = {
     "unstable_grasp": ["observe_again", "push_clear", "ask_person"],
     "scene_moved": ["observe_again", "push_clear", "ask_person"],  # the top camera saw the pile change: plan from what is there now
     "not_seen_placed": ["observe_again", "ask_person"],
+    "s6_unseated_cone": ["push_clear", "observe_again", "ask_person"],
+    "s2_toppled_or_slumped": ["ask_person"],  # toppled/slumped stack requires S-Temp evacuation or person, never blind in-place retry
+    "s4_shallow_pinch": ["observe_again", "push_clear", "ask_person"],
+    "s3_packed_no_clearance": ["push_clear", "observe_again", "ask_person"],
     "held_stop": ["ask_person"],  # a box may still be in the jaws
     "stuck_in_jaws": ["ask_person"],
     # named apart so the ledger counts them: 13 calibrate and 35 descent stops in the 110 real attempts up to 2026-11-07

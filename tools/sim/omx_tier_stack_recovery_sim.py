@@ -83,6 +83,30 @@ def replay_and_verify_problem_case(case: dict[str, Any], work_dir: Path) -> dict
             and res["infer_holding_overrides_uncalibrated_threshold"]
         )
         return {"case_id": case.get("case_id"), "category": cat, "arm_id": arm_id, "tier": tier, "verified": passed, "sim_result": res}
+    if cat in ("s2_toppled_or_slumped", "s6_unseated_cone"):
+        from omx_adapter.z_profile import TIER_TOP_Z_MM, evaluate_signed_tier_residual_mm
+        import cell_spec_recovery_fsm as csrf
+
+        exp_top = float(TIER_TOP_Z_MM.get(tier, 62.4))
+        z_top_mm = float(rep.get("z_top_mm", (exp_top - 14.79) if cat == "s2_toppled_or_slumped" else (exp_top + 1.75)))
+        dz_ts_mm = float(rep.get("dz_top_side_mm", 3.5 if cat == "s2_toppled_or_slumped" else 1.2))
+        tilt_deg = float(rep.get("tilt_deg", 35.0 if cat == "s2_toppled_or_slumped" else 3.0))
+        spec_id = str(rep.get("spec_id") or "C3")
+        z_judge = evaluate_signed_tier_residual_mm(
+            z_top_mm, tier, dz_top_side_mm=dz_ts_mm, tilt_deg=tilt_deg, spec_id=spec_id,
+        )
+        rec_skill = csrf.select_recovery_skill(
+            str(z_judge["failure_code"] or "PASS"),
+            gate_ok=bool(z_judge["gate_ok"]),
+            r_k_mm=float(z_judge["r_k_mm"]),
+            tilt_deg=tilt_deg,
+        )
+        expected_code = "S2_TOPPLED_OR_SLUMPED" if cat == "s2_toppled_or_slumped" else "S6_UNSEATED_CONE"
+        passed = bool(z_judge["verdict"] == "FAIL" and z_judge["failure_code"] == expected_code and rec_skill["skill"] != "proceed")
+        return {
+            "case_id": case.get("case_id"), "category": cat, "arm_id": arm_id, "tier": tier,
+            "verified": passed, "sim_result": {"z_judge": z_judge, "recovery_skill": rec_skill},
+        }
     # calibration_drift
     w_res = simulate_wrist_centering_loop(arm_id, initial_offset_mm=init_off if abs(init_off) >= 2.0 else 5.8, work_dir=work_dir)
     g_res = simulate_grasp_debate_reinsert_and_retry(arm_id, tier=tier, work_dir=work_dir)
@@ -224,8 +248,41 @@ def simulate_sim2real_jitter_z_and_dynamics(out_dir: Path) -> dict[str, Any]:
     }
 
 
+def simulate_temp_plate_123_tier_z_loop_and_archive(out_dir: Path) -> dict[str, Any]:
+    """Verify OMX-AI self-profile Z-mm calibration (A), live Z-mm perception (B), Sim-to-Real twin compensation,
+    and 1-2-3 tier Temp-Plate shuttle recovery loop with problem ledger archiving."""
+    from omx_adapter.z_profile import SimRealTwin, fk_landmarks_mm
+    import cell_z_shuttle as czs
+
+    fk_zero = fk_landmarks_mm([0.0, 0.0, 0.0, 0.0, 0.0], unit="deg")
+    loop_res = czs.execute_temp_plate_123_tier_recovery_loop(
+        {"arm_id": "arm_b"}, dry_run=True, inject_t2_z_mismatch=True, work_dir=out_dir,
+    )
+    twin = SimRealTwin()
+    raw_down = [[0.0, -35.0 + 0.8 * k, 32.0 - 0.9 * k, 45.0 + 0.2 * k, 0.0, 58.2] for k in range(25)]
+    raw_hold = [list(raw_down[-1][:5]) + [49.2] for _ in range(14)]
+    raw_lift = [[0.0, raw_down[-1][1] - 0.8 * k, raw_down[-1][2] + 0.9 * k, raw_down[-1][3] - 0.2 * k, 0.0, 49.2] for k in range(25)]
+    comp = twin.compensate_vertical_triplet(raw_down, raw_hold, raw_lift)
+    twin_improved = comp["after_sim"]["terminal_error_norm_mm"] < comp["before_sim"]["terminal_error_norm_mm"]
+    return {
+        "fk_landmarks_verified": fk_zero["landmarks_z_mm"]["joint2"] == 97.5 and fk_zero["landmarks_z_mm"]["base_plate_top"] == 13.0,
+        "temp_plate_123_loop": loop_res,
+        "sim_real_twin_compensation": {
+            "before_terminal_err_mm": comp["before_sim"]["terminal_error_norm_mm"],
+            "after_terminal_err_mm": comp["after_sim"]["terminal_error_norm_mm"],
+            "improved": bool(twin_improved),
+        },
+        "all_verified": bool(loop_res["ok"] and loop_res["archived_problem_cases"] >= 1 and twin_improved),
+    }
+
+
+simulate_z_profile_and_temp_plate_123_loop = simulate_temp_plate_123_tier_z_loop_and_archive
+
+
 def run_full_problem_recovery_simulation(out_dir: Path) -> dict[str, Any]:
     """Run all tier (1단/2단/3단) and multi-arm (`arm_s`, `arm_a`, `arm_b`) problem-recovery simulations."""
+    import omx_failsafe_synth_sim as ofss
+
     out_dir.mkdir(parents=True, exist_ok=True)
     wrist_results = []
     debate_results = []
@@ -251,6 +308,8 @@ def run_full_problem_recovery_simulation(out_dir: Path) -> dict[str, Any]:
                 )
             )
     descent_hold = simulate_descent_and_hold_preservation()
+    z_loop_123 = simulate_temp_plate_123_tier_z_loop_and_archive(out_dir)
+    fast_learning = ofss.run_fast_learning_pipeline(out_dir=out_dir)
     ledger_replay = replay_and_verify_ledger(out_dir)
     sim2real_loop = simulate_sim2real_jitter_z_and_dynamics(out_dir)
     cal_files = {
@@ -268,6 +327,8 @@ def run_full_problem_recovery_simulation(out_dir: Path) -> dict[str, Any]:
             and descent_hold["holding_preserved_on_descend_place_contact"]
             and descent_hold["holding_cleared_when_jaws_empty"]
             and descent_hold["infer_holding_overrides_uncalibrated_threshold"]
+            and z_loop_123["all_verified"]
+            and fast_learning["all_verified"]
             and ledger_replay["all_verified"]
             and sim2real_loop["all_ok"]
         ),
@@ -276,6 +337,8 @@ def run_full_problem_recovery_simulation(out_dir: Path) -> dict[str, Any]:
         "wrist_centering": wrist_results,
         "grasp_debate_reinsert_recovery": debate_results,
         "descent_and_hold_preservation": descent_hold,
+        "temp_plate_123_tier_z_loop": z_loop_123,
+        "failsafe_fast_learning": fast_learning,
         "problem_ledger_replay": ledger_replay,
         "sim2real_jitter_z_and_dynamics": sim2real_loop,
         "persisted_arm_calibrations": cal_files,
@@ -308,7 +371,9 @@ __all__ = [
     "simulate_grasp_debate_reinsert_and_retry",
     "simulate_orientation_detection_and_reorient_recovery",
     "simulate_sim2real_jitter_z_and_dynamics",
+    "simulate_temp_plate_123_tier_z_loop_and_archive",
     "simulate_wrist_centering_loop",
+    "simulate_z_profile_and_temp_plate_123_loop",
 ]
 
 

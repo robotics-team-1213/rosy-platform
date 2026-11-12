@@ -4,7 +4,8 @@
 Single Responsibility:
   - Loads, applies, updates via EMA, and persists per-arm calibration profiles (`profile_path`,
     `default_profile`, `load`, `save`, `apply_to_config`, `record_wrist_observation`,
-    `record_grasp_measurement`).
+    `record_z_profile`, `record_tactile_z_trim`, `calibrate_z_from_touchdowns`,
+    `record_sim_real_twin`, `record_grasp_measurement`).
   - Calculus & trend-based grasp/slip dynamics analysis (`evaluate_grasp_dynamics`, `infer_holding`)
     lives in `cell_grasp_dynamics.py` and is re-exported here for backward compatibility.
 """
@@ -30,11 +31,13 @@ _CAL_CACHE: dict[str, tuple[int, int, dict[str, Any]]] = {}
 
 def _copy_profile(prof: dict[str, Any]) -> dict[str, Any]:
     out = dict(prof)
-    if isinstance(out.get("finger_sign"), dict):
-        out["finger_sign"] = dict(out["finger_sign"])
+    for k in ("finger_sign", "z_profile_mm", "sim_real_twin"):
+        if isinstance(out.get(k), dict):
+            out[k] = json.loads(json.dumps(out[k]))
     if isinstance(out.get("history"), list):
         out["history"] = [dict(h) if isinstance(h, dict) else h for h in out["history"]]
     return out
+
 
 ARM_DEFAULTS: dict[str, dict[str, Any]] = {
     "arm_s": {
@@ -95,6 +98,27 @@ def default_profile(arm_id: str = "arm_s") -> dict[str, Any]:
         **base,
         "grip_open_30mm": open_30,
         "grip_release_30mm": round(max(held + 1.8, open_30 - 0.6), 2),
+        "z_profile_mm": {
+            "base_plate_top_z_mm": 13.0,
+            "joint2_shoulder_z_mm": 97.5,
+            "tcp_v21_x_mm": 74.1,
+            "legacy_plan_tcp_x_mm": 88.5,
+            "table_fk_offset_mm": -8.3,
+            "tactile_z_trim_mm": 0.0,
+            "side_view": {"v_z0_px": 315.0, "mm_per_px_z": 0.46875, "u_mm_per_px": 0.70},
+            "top_depth": {
+                "cad_plate_top_mm": 13.0,
+                "measured_plate_top_mm": 13.0,
+                "depth_scale": 1.0,
+                "pallet_surface_mm": 0.0,
+            },
+        },
+        "sim_real_twin": {
+            "lag_frames": [0.45, 1.05, 1.68, 1.25, 0.55],
+            "deadband_units": [0.04, 0.36, 0.48, 0.14, 0.22],
+            "lead_gain": 0.85,
+            "samples": 0,
+        },
         "samples": 0,
         "updated_at": None,
         "history": [],
@@ -207,6 +231,86 @@ def record_wrist_observation(
             changed = True
     if changed or not profile_path(config_or_work, arm_id).exists():
         save(config_or_work, prof, arm_id)
+    return prof
+
+
+def record_z_profile(
+    config_or_work: dict | Path,
+    z_profile_mm: dict[str, Any],
+    *,
+    arm_id: str | None = None,
+) -> dict[str, Any]:
+    """Persist the OMX-AI self-profile-anchored Z-mm calibration (`z_profile_mm`) into `arm-cal-<arm_id>.json`."""
+    prof = load(config_or_work, arm_id)
+    cur = dict(prof.get("z_profile_mm") or {})
+    cur.update(z_profile_mm)
+    prof["z_profile_mm"] = cur
+    save(config_or_work, prof, arm_id)
+    return prof
+
+
+def record_tactile_z_trim(
+    config_or_work: dict | Path,
+    tactile_dz_mm: float,
+    *,
+    arm_id: str | None = None,
+) -> dict[str, Any]:
+    """Update the closed-loop tactile Z datum trim (`tactile_z_trim_mm`) via EMA in `z_profile_mm`."""
+    prof = load(config_or_work, arm_id)
+    cur = dict(prof.get("z_profile_mm") or {})
+    old_trim = float(cur.get("tactile_z_trim_mm", 0.0))
+    new_trim = round(max(-5.0, min(5.0, 0.65 * old_trim + 0.35 * float(tactile_dz_mm))), 2)
+    cur["tactile_z_trim_mm"] = new_trim
+    prof["z_profile_mm"] = cur
+    save(config_or_work, prof, arm_id)
+    return prof
+
+
+def calibrate_z_from_touchdowns(
+    config_or_work: dict | Path,
+    touchdowns: list[dict[str, Any] | float],
+    *,
+    arm_id: str | None = None,
+) -> dict[str, Any]:
+    """Calibrate `tactile_z_trim_mm` and `table_fk_offset_mm` from guarded tactile touchdown observations in `mm`."""
+    prof = load(config_or_work, arm_id)
+    cur = dict(prof.get("z_profile_mm") or {})
+    residuals: list[float] = []
+    for item in touchdowns:
+        if isinstance(item, (int, float)):
+            residuals.append(float(item))
+        elif isinstance(item, dict):
+            if "dz_mm" in item and item["dz_mm"] is not None:
+                residuals.append(float(item["dz_mm"]))
+            elif "measured_z_mm" in item and "expected_z_mm" in item:
+                residuals.append(float(item["measured_z_mm"]) - float(item["expected_z_mm"]))
+            elif "touchdown_z_mm" in item:
+                residuals.append(float(item["touchdown_z_mm"]) - float(item.get("expected_z_mm", 0.0)))
+    if not residuals:
+        return prof
+    mean_dz = sum(residuals) / len(residuals)
+    old_trim = float(cur.get("tactile_z_trim_mm", 0.0))
+    new_trim = round(max(-5.0, min(5.0, 0.50 * old_trim + 0.50 * mean_dz)), 2)
+    cur["tactile_z_trim_mm"] = new_trim
+    cur["touchdown_samples"] = int(cur.get("touchdown_samples", 0)) + len(residuals)
+    cur["table_fk_offset_mm"] = round(-8.3 + new_trim, 2)
+    prof["z_profile_mm"] = cur
+    save(config_or_work, prof, arm_id)
+    return prof
+
+
+def record_sim_real_twin(
+    config_or_work: dict | Path,
+    sim_real_twin: dict[str, Any],
+    *,
+    arm_id: str | None = None,
+) -> dict[str, Any]:
+    """Persist the Sim-to-Real / Real-to-Sim digital twin parameters (`sim_real_twin`) into `arm-cal-<arm_id>.json`."""
+    prof = load(config_or_work, arm_id)
+    cur = dict(prof.get("sim_real_twin") or {})
+    cur.update(sim_real_twin)
+    prof["sim_real_twin"] = cur
+    save(config_or_work, prof, arm_id)
     return prof
 
 

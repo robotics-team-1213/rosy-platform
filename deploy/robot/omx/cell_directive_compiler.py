@@ -123,12 +123,50 @@ def plan_library_from_directive(
     work_dir: Path | None = None,
     kinematics_root: Path | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
-    """Build and solve the top-down chunk library for a middleware `AreaXYZ` directive."""
+    """Build and solve the top-down chunk library for a middleware `AreaXYZ` directive, with anti-jitter settle tails
+    and Sim-to-Real phase-lead + static deadband trajectory pre-compensation."""
+    from omx_adapter.z_profile import SimRealTwin
     import grasp_planner
 
     plan, cal = build_plan_from_directive(directive, base_plan, work_dir=work_dir)
     planner = grasp_planner.Planner(plan, kinematics_root or ADAPTER_ROOT)
     lib = {k: v for k, v in planner.library().items() if v is not None}
+    exec_cfg = dict(directive.get("execution") or {})
+    if exec_cfg.get("anti_jitter_settle", True) and "chunks" in lib:
+        chunks = lib["chunks"]
+        for k in ("above_pick", "above_place"):
+            if chunks.get(k):
+                chunks[k] = list(chunks[k]) + [list(chunks[k][-1])] * 8
+        for k in ("descend_pick", "descend_place", "lift_pick", "lift_place"):
+            if chunks.get(k):
+                chunks[k] = list(chunks[k]) + [list(chunks[k][-1])] * 10
+    if exec_cfg.get("sim_real_compensate", True) and "chunks" in lib:
+        chunks = lib["chunks"]
+        arm_id = str(directive.get("arm_id") or "arm_b")
+        tcp_x_mm = 91.93 if arm_id == "arm_s" else 74.1
+        fps = int(lib.get("fps", 30))
+        twin = SimRealTwin.from_dict(cal.get("sim_real_twin"))
+        ideal_pick_end = list(chunks["descend_pick"][-1]) if chunks.get("descend_pick") else None
+        ideal_place_end = list(chunks["descend_place"][-1]) if chunks.get("descend_place") else None
+        comp_pick = twin.compensate_vertical_triplet(
+            chunks["descend_pick"], chunks["grasp_pick"], chunks["lift_pick"], fps=fps, tcp_x_mm=tcp_x_mm,
+        )
+        comp_place = twin.compensate_vertical_triplet(
+            chunks["descend_place"], chunks["release_place"], chunks["lift_place"], fps=fps, tcp_x_mm=tcp_x_mm,
+        )
+        chunks["descend_pick"], chunks["grasp_pick"], chunks["lift_pick"] = comp_pick["down"], comp_pick["hold"], comp_pick["lift"]
+        chunks["descend_place"], chunks["release_place"], chunks["lift_place"] = comp_place["down"], comp_place["hold"], comp_place["lift"]
+        plan["sim_real_prediction"] = {
+            "twin": twin.to_dict(),
+            "ideal_pick_end": ideal_pick_end,
+            "ideal_place_end": ideal_place_end,
+            "pick_uncompensated": comp_pick.get("before_sim"),
+            "pick_compensated": comp_pick.get("after_sim"),
+            "pick_terminal_offset_units": comp_pick.get("terminal_offset_units"),
+            "place_uncompensated": comp_place.get("before_sim"),
+            "place_compensated": comp_place.get("after_sim"),
+            "place_terminal_offset_units": comp_place.get("terminal_offset_units"),
+        }
     return lib, plan, cal
 
 
