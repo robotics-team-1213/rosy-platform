@@ -586,6 +586,14 @@ def main(argv=None):
         parser.error('--nav runs the two straight trips only')
     if args.learned_paint_target == 'drivable' and not args.learned_lane_pointer:
         parser.error('--learned-paint-target drivable needs --learned-lane-pointer')
+    if args.learned_lane_pointer:
+        pointer = Path(args.learned_lane_pointer)
+        try:
+            model = Path(pointer.read_text(encoding='utf-8').strip())
+        except (OSError, UnicodeError) as exc:
+            parser.error(f'learned model pointer unreadable: {exc}')
+        if not model.is_dir() or not (model / 'model_manifest.json').is_file():
+            parser.error(f'learned model pointer has no model manifest: {model}')
     return run(args)
 
 

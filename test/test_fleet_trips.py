@@ -77,6 +77,20 @@ def test_remote_sim_runs_the_bench_and_installs_the_fleet_and_learned_inputs():
     assert 'ROSY_LEARNED_SITE="$PYDEPS/learned"' in rs.INNER
 
 
+def test_drivable_run_refuses_a_missing_model_before_start(tmp_path, monkeypatch, capsys):
+    m = _module()
+    monkeypatch.setattr(m, 'run', lambda _args: pytest.fail('simulation started without a model'))
+    pointer = tmp_path / 'paint-pointer.txt'
+    for content in (None, str(tmp_path / 'removed-model')):
+        if content is not None:
+            pointer.write_text(content, encoding='utf-8')
+        with pytest.raises(SystemExit) as error:
+            m.main(['--out', str(tmp_path / 'run'), '--learned-lane-pointer', str(pointer),
+                    '--learned-paint-target', 'drivable'])
+        assert error.value.code == 2
+    assert 'no model manifest' in capsys.readouterr().err
+
+
 def test_every_lap_scenario_starts_and_ends_on_the_lap_route():
     import math
     import sys
