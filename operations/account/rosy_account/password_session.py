@@ -21,45 +21,39 @@ from fastapi import HTTPException, Request
 
 from core_common.protocol.account_access import same_origin
 from rosy_account.db_policy import configure_connection, enable_wal
+from rosy_account.password_session_helpers import (
+    ABSOLUTE_S,
+    ADDRESS_FAILURES_PER_MINUTE,
+    COOKIE,
+    IDLE_S,
+    LOGIN_FAILURES_PER_MINUTE,
+    REMEMBER_S,
+    CurrentPasswordIncorrect,
+    LoginRateLimited,
+    SessionStorageUnavailable,
+    StalePasswordCheck,
+    _AUTH_DB_TIMEOUT_S,
+    _CACHE_MAX,
+    _CACHE_S,
+    _MAX_TRACKED,
+    _RATE_WINDOW_S,
+    _SCRYPT_SLOTS,
+    _SCRYPT_WAIT_S,
+    _TOUCH_EVERY_S,
+    _digest,
+    _storage_unavailable,
+    accounts_active_on_disk,
+    init_legacy_session_tables,
+    install_password_routes,
+    resolve_legacy_principal,
+    rotate_legacy_password,
+)
 from rosy_account.principal import SitePrincipal, legacy_grants
 from rosy_account.site_users import _LOGIN, hash_password, verify_password
-
-COOKIE = "rosy_fleet_session"
-IDLE_S = 12 * 3600.0
-REMEMBER_S = 30 * 86400.0
-ABSOLUTE_S = 30 * 86400.0
-ADDRESS_FAILURES_PER_MINUTE = 5
-LOGIN_FAILURES_PER_MINUTE = 10
-_RATE_WINDOW_S = 60.0
-_TOUCH_EVERY_S = 60.0  # sliding-expiry writes at most once a minute per session, not per poll
-_MAX_TRACKED = 1024
-_AUTH_DB_TIMEOUT_S = 5.0  # D-962: WAL readers do not queue behind writers; this backstops a stuck one
-_CACHE_S = 60.0  # a cookie validated this recently authenticates from memory
-_CACHE_MAX = 256
-_SCRYPT_WAIT_S = 1.0
-#: Each scrypt holds about 33 MiB; at most two run at once.
-_SCRYPT_SLOTS = threading.BoundedSemaphore(2)
-
-
-def _digest(text: str) -> str:
-    return sha256(text.encode("utf-8")).hexdigest()
 
 
 def _iso(epoch: float) -> str:
     return datetime.fromtimestamp(epoch, timezone.utc).isoformat(timespec="seconds")
-
-
-class SessionStorageUnavailable(Exception):
-    """The sessions table could not be read or written."""
-
-class LoginRateLimited(Exception):
-    """Too many failed logins, or too many password checks already running."""
-
-class StalePasswordCheck(Exception):
-    """The credential changed after verification, or this is not an initial session."""
-
-class CurrentPasswordIncorrect(Exception):
-    """The valid session remains usable after an incorrect current password."""
 
 
 class PasswordSessions:
@@ -77,26 +71,7 @@ class PasswordSessions:
         self._dummy_hash = hash_password(secrets.token_urlsafe(16))
         from rosy_account.account_ledger import AccountLedger
         self._ledger = AccountLedger(self)
-        with closing(self._connect(timeout=10)) as db, db:
-            enable_wal(db)
-            db.execute("""CREATE TABLE IF NOT EXISTS fleet_console_sessions (
-                session_sha256 TEXT PRIMARY KEY, login TEXT NOT NULL, principal_id TEXT NOT NULL, role TEXT NOT NULL,
-                password_sha256 TEXT NOT NULL, created_at REAL NOT NULL, last_used_at REAL NOT NULL, remember INTEGER NOT NULL)""")
-            db.execute("CREATE TABLE IF NOT EXISTS fleet_console_passwords (login TEXT PRIMARY KEY, source_sha256 TEXT NOT NULL, password_scrypt TEXT NOT NULL)")
-            db.execute("CREATE TABLE IF NOT EXISTS fleet_console_profiles (login TEXT PRIMARY KEY, principal_id TEXT NOT NULL, display_name TEXT NOT NULL)")
-            if accounts_bootstrap is not None and not self._ledger.active:
-                self.bootstrap_accounts(*accounts_bootstrap)
-            if self._ledger.active:
-                self._required = {}
-                return
-            for row in db.execute("SELECT * FROM fleet_console_passwords").fetchall():
-                if self._sources.get(row["login"]) == row["source_sha256"]:
-                    self._logins[row["login"]]["password_scrypt"] = row["password_scrypt"]
-                else:
-                    db.execute("DELETE FROM fleet_console_sessions WHERE login = ?", (row["login"],))
-                    db.execute("DELETE FROM fleet_console_passwords WHERE login = ?", (row["login"],))
-        self._required = {login: (verify_password(login, account["password_scrypt"]) or verify_password(login + "!", account["password_scrypt"]))
-                          for login, account in self._logins.items()}
+        init_legacy_session_tables(self, accounts_bootstrap, verify_password)
 
     def bootstrap_accounts(self, admin_login: str, site_id: str) -> None:
         self._ledger.bootstrap(admin_login, site_id)
@@ -126,15 +101,7 @@ class PasswordSessions:
 
     @staticmethod
     def accounts_active(path) -> bool:
-        if not Path(path).is_file():
-            return False
-        try:
-            with closing(sqlite3.connect(path, timeout=_AUTH_DB_TIMEOUT_S)) as db:
-                if not db.execute("SELECT 1 FROM sqlite_master WHERE name='rosy_account_authority'").fetchone():
-                    return False
-                return db.execute("SELECT 1 FROM rosy_account_authority WHERE singleton=1").fetchone() is not None
-        except sqlite3.Error:
-            raise SessionStorageUnavailable() from None
+        return accounts_active_on_disk(path)
 
     def list_accounts(self, value: str):
         return self._ledger.list_accounts(value)
@@ -285,60 +252,7 @@ class PasswordSessions:
         self._refresh_authority()
         if self._ledger.active:
             return self._ledger.change_password(value, password, current_password)
-        with self._lock:
-            cached = self._cache.get(_digest(value))
-            checked_hash = self._logins[cached["login"]]["password_scrypt"] if cached else None
-        # A cold cookie is validated before taking the current credential snapshot.
-        if checked_hash is None:
-            if self.principal(value) is None:
-                raise StalePasswordCheck()
-            with self._lock:
-                cached = self._cache.get(_digest(value))
-                if cached is None:
-                    raise StalePasswordCheck()
-                checked_hash = self._logins[cached["login"]]["password_scrypt"]
-        if not _SCRYPT_SLOTS.acquire(timeout=_SCRYPT_WAIT_S):
-            raise LoginRateLimited()
-        try:
-            current_ok = current_password is None or verify_password(current_password, checked_hash)
-            same_password = verify_password(password, checked_hash)
-            encoded = hash_password(password)
-        finally:
-            _SCRYPT_SLOTS.release()
-        with self._lock:
-            now, key = self._clock(), _digest(value)
-            replacement = secrets.token_urlsafe(32)
-            try:
-                with closing(self._connect()) as db, db:
-                    db.execute("BEGIN IMMEDIATE")
-                    row = db.execute("SELECT * FROM fleet_console_sessions WHERE session_sha256 = ?", (key,)).fetchone()
-                    if (row is None or self._tombstoned(key) or self._expiry(row, now) is None
-                            or row["password_sha256"] != _digest(checked_hash)):
-                        raise StalePasswordCheck()
-                    login = row["login"]
-                    if not self._required[login] and current_password is None:
-                        raise ValueError("current password required")
-                    if not current_ok:
-                        raise CurrentPasswordIncorrect()
-                    if password in (login, login + "!") or same_password or not 8 <= len(password) <= 1024:
-                        raise ValueError("invalid new password")
-                    db.execute("INSERT OR REPLACE INTO fleet_console_passwords VALUES (?,?,?)",
-                               (login, self._sources[login], encoded))
-                    db.execute("DELETE FROM fleet_console_sessions WHERE login = ?", (login,))
-                    fresh = {**dict(row), "password_sha256": _digest(encoded),
-                             "created_at": now, "last_used_at": now}
-                    db.execute("INSERT INTO fleet_console_sessions VALUES (?,?,?,?,?,?,?,?)", (
-                        _digest(replacement), login, fresh["principal_id"], fresh["role"],
-                        fresh["password_sha256"], now, now, fresh["remember"]))
-            except sqlite3.Error:
-                raise SessionStorageUnavailable() from None
-            self._logins[login] = {**self._logins[login], "password_scrypt": encoded}
-            self._required[login] = False
-            for cached_key in [k for k, cached in self._cache.items() if cached["login"] == login]:
-                self._forget(cached_key, revoked=True)
-            self._forget(key, revoked=True)
-            self._remember(_digest(replacement), fresh, now)
-            return replacement, bool(fresh["remember"])
+        return rotate_legacy_password(self, value, password, current_password, verify_password_fn=verify_password)
 
     def profile(self, value: str, display_name: Optional[str] = None) -> dict:
         self._refresh_authority()
@@ -422,43 +336,7 @@ class PasswordSessions:
                 raise
         if self._ledger.active:
             return self._ledger.principal(value, allow_stale)
-        key = _digest(value)
-        now = self._clock()
-        with self._lock:
-            cached = dict(self._cache[key]) if key in self._cache else None
-            if self._tombstoned(key):
-                return None
-        if cached is None or now - cached["validated_at"] >= _CACHE_S:
-            try:
-                with closing(self._connect()) as db:
-                    found = db.execute("SELECT * FROM fleet_console_sessions WHERE session_sha256 = ?",
-                                       (key,)).fetchone()
-            except sqlite3.Error:
-                if not (allow_stale and cached is not None):
-                    raise SessionStorageUnavailable() from None
-                found = None  # e-stop on the stale cache entry; it stays stale for everything else
-            else:
-                if found is None:
-                    self._forget(key)
-                    return None
-                cached = {name: found[name] for name in (
-                    "login", "principal_id", "role", "password_sha256", "created_at", "last_used_at",
-                    "remember")}
-                cached["validated_at"] = now
-        if self._expiry(cached, now) is None:
-            self._forget(key)
-            self._best_effort("DELETE FROM fleet_console_sessions WHERE session_sha256 = ?", (key,))
-            return None
-        if now - cached["last_used_at"] >= _TOUCH_EVERY_S and self._best_effort(
-                "UPDATE fleet_console_sessions SET last_used_at = ? WHERE session_sha256 = ?", (now, key)):
-            cached["last_used_at"] = now
-        self._remember(key, cached, cached["validated_at"])
-        with self._lock:
-            expiry = self._expiry(cached, now)
-            if self._tombstoned(key) or expiry is None:
-                return None  # logged out while this request was in flight
-            return SitePrincipal(cached["principal_id"], cached["role"], self._required[cached["login"]],
-                                 grants=legacy_grants(self._logins.get(cached["login"], {}))), _iso(expiry)
+        return resolve_legacy_principal(self, value, allow_stale, iso_fn=_iso)
 
     def revoke(self, value: str) -> None:
         key = _digest(value)
@@ -485,13 +363,3 @@ class PasswordSessions:
             return None
         request.state.site_auth_expires_at = found[1]
         return found[0]
-
-
-def _storage_unavailable() -> HTTPException:
-    return HTTPException(status_code=503, detail={"code": "SESSION_STORAGE_UNAVAILABLE", "message": "console session storage is unavailable"})
-
-
-def install_password_routes(app, *, sessions: Optional[PasswordSessions], authorize, task_service, trust_forwarded: bool) -> None:
-    """Preserve the session module entry point while HTTP routes live separately."""
-    from rosy_account.password_routes import install_password_routes as install
-    install(app, sessions=sessions, authorize=authorize, task_service=task_service, trust_forwarded=trust_forwarded)

@@ -24,6 +24,16 @@ from core_common.protocol.schemas import LineStuckPrecondition, SwarmFollowParam
 from fleet.swarm.robots import RobotEndpoint, ws_url
 from fleet.swarm.station_transport import StationTransport
 from fleet.swarm.navigation_transport import NavigationTransport
+from fleet.swarm.transport_helpers import (
+    _WebsocketSink,
+    _as_event,
+    _as_text,
+    build_stuck_decision_body,
+    check_response,
+    fetch_front_frame,
+    fetch_localization_candidates,
+    open_robot_socket,
+)
 
 log = logging.getLogger(__name__)
 # websockets dumps every frame at DEBUG, including the first-frame auth token.
@@ -70,60 +80,6 @@ def _rejection(robot_id: str, exc: BaseException) -> Optional["RobotApiError"]:
     return None
 
 
-def _as_text(frame) -> Optional[str]:
-    """WS 프레임 → 텍스트. 디코딩 불가면 None (버린다)."""
-    if isinstance(frame, str):
-        return frame
-    try:
-        return bytes(frame).decode("utf-8")
-    except (TypeError, UnicodeDecodeError):
-        return None
-
-
-def _as_event(frame) -> Optional[dict]:
-    """이벤트 프레임 → dict. JSON 이 아니거나 객체가 아니면 None (버린다)."""
-    text = _as_text(frame)
-    if text is None:
-        return None
-    try:
-        event = json.loads(text)
-    except (TypeError, ValueError):
-        return None
-    return event if isinstance(event, dict) else None
-
-
-class _WebsocketSink:
-    def __init__(self, ws, robot_id: str) -> None:
-        self._ws = ws
-        self._robot_id = robot_id
-
-    def _reason(self, exc: BaseException) -> BaseException:
-        return _rejection(self._robot_id, exc) or exc
-
-    async def send(self, frame: str) -> None:
-        # With first-message auth a wrong token is a 4401 close after accept, so the
-        # refusal surfaces here or in wait_closed(), not when the socket opens.
-        from websockets.exceptions import ConnectionClosed
-
-        try:
-            await self._ws.send(frame)
-        except ConnectionClosed as exc:
-            raise self._reason(exc) from exc
-
-    async def wait_closed(self) -> BaseException:
-        from websockets.exceptions import ConnectionClosed
-
-        try:
-            async for _ in self._ws:
-                pass   # the reference socket carries nothing back; drain until close
-        except ConnectionClosed as exc:
-            return self._reason(exc)
-        return ConnectionError("reference socket closed by robot")
-
-    async def close(self) -> None:
-        await self._ws.close()
-
-
 class HttpRobotClient(StationTransport, NavigationTransport):
     def __init__(self, endpoint: RobotEndpoint, *, http: Optional[httpx.AsyncClient] = None,
                  timeout_s: float = 5.0) -> None:
@@ -144,27 +100,7 @@ class HttpRobotClient(StationTransport, NavigationTransport):
         return {"Authorization": f"Bearer {self._ep.token}"}
 
     def _check(self, resp: httpx.Response) -> dict:
-        if resp.status_code < 400:
-            if not resp.content:
-                return {}
-            try:
-                data = resp.json()
-            except ValueError as exc:
-                raise RobotApiError(self.robot_id, resp.status_code, "BAD_RESPONSE",
-                                    f"expected a JSON object, got {resp.text[:120]!r}") from exc
-            if not isinstance(data, dict):
-                raise RobotApiError(self.robot_id, resp.status_code, "BAD_RESPONSE",
-                                    f"expected a JSON object, got {type(data).__name__}")
-            return data
-        code, message, detail = f"HTTP_{resp.status_code}", resp.text, None
-        try:
-            err = resp.json().get("error") or {}
-            code = str(err.get("code") or code)
-            message = str(err.get("message") or message)
-            detail = err.get("detail") if isinstance(err.get("detail"), dict) else None
-        except (ValueError, AttributeError):
-            pass
-        raise RobotApiError(self.robot_id, resp.status_code, code, message, detail)
+        return check_response(self.robot_id, resp)
 
     async def _get(self, path: str) -> dict:
         return self._check(await self._http.get(path, headers=self._headers()))
@@ -277,29 +213,10 @@ class HttpRobotClient(StationTransport, NavigationTransport):
                                   before_submit: Callable[[], Awaitable[bool]] | None = None,
                                   realign: dict | None = None) -> dict:
         """D-407 §2: one stuck answer. YIELD carries one checked segment (D-453)."""
-        if before_submit is not None and (expected_stuck is None or not callable(before_submit)):
-            raise ValueError("conditional request and explicit submission guard required")
-        body: dict = {"stuck_id": stuck_id, "decision": decision}
-        if expected_stuck is not None:
-            if decision != "BACK_AND_RETRY":
-                raise ValueError("expected_stuck belongs to BACK_AND_RETRY")
-            body["expected_stuck"] = LineStuckPrecondition.model_validate(expected_stuck).model_dump()
-            current = await self.line_follow()
-            stuck = current.get("stuck")
-            if not isinstance(stuck, dict) or stuck.get("conditional_back") is not True:
-                raise RobotApiError(self.robot_id, 409, "STUCK_DECISION_REFUSED",
-                                    "conditional back is unsupported by CORE")
-        if yield_m is not None:
-            body["yield_m"] = yield_m
-        if yield_turn_rad is not None:
-            body["yield_turn_rad"] = yield_turn_rad
-        if realign is not None:
-            if decision != "REALIGN":
-                raise ValueError("realign body requires REALIGN decision")
-            body["realign"] = realign
-        # D-724: the owner binds final admission and its durable claim after the capability await.
-        if before_submit is not None and await before_submit() is not True:
-            raise RobotApiError(self.robot_id, 409, "STUCK_DECISION_REFUSED", "final submission guard refused")
+        body = await build_stuck_decision_body(
+            self, stuck_id, decision, yield_m=yield_m, yield_turn_rad=yield_turn_rad,
+            expected_stuck=expected_stuck, before_submit=before_submit, realign=realign,
+        )
         return await self._post("/api/v1/line-follow/stuck/decision", body)
 
     async def front_status(self) -> dict:
@@ -308,20 +225,7 @@ class HttpRobotClient(StationTransport, NavigationTransport):
 
     async def front_frame(self, *, overlay: bool = True) -> tuple[bytes, dict]:
         """D-577 8: one fresh front-camera JPEG (the status' sequence) and that status."""
-        status = await self.front_status()
-        if not status.get("available") or not status.get("sequence"):
-            raise RobotApiError(self.robot_id, 404, "CAMERA_FRAME_UNAVAILABLE",
-                                "front camera preview is missing or stale")
-        params = {"sequence": status["sequence"]}
-        if not overlay:
-            if not status.get("raw_available") or not status.get("raw_sequence"):
-                raise RobotApiError(self.robot_id, 404, "CAMERA_FRAME_UNAVAILABLE", "raw front frame unavailable")
-            params = {"sequence": status["raw_sequence"], "overlay": "false"}
-        resp = await self._http.get("/api/v1/vision/front/frame", params=params,
-                                    headers=self._headers())
-        if resp.status_code >= 400:
-            self._check(resp)
-        return resp.content, status if overlay else {**status, "overlay": "none", "sequence": status["raw_sequence"]}
+        return await fetch_front_frame(self, overlay=overlay)
 
     async def fleet_link_put(self, body: dict) -> dict:
         """D-555: deliver the hub credential. ``body`` holds a secret: never log it."""
@@ -366,19 +270,8 @@ class HttpRobotClient(StationTransport, NavigationTransport):
     # --- D-395 localization (contract §2) -------------------------------------------
 
     async def localization_candidates(self) -> Optional[CandidateReport]:
-        """The robot's latest candidate report, or None when it is not in CANDIDATES.
-
-        Any 404 is "no candidates": CORE answers NO_CANDIDATES, and a CORE without
-        the route has none to give either."""
-        resp = await self._http.get("/api/v1/localization/candidates", headers=self._headers())
-        if resp.status_code == 404:
-            return None
-        body = self._check(resp)
-        try:
-            return CandidateReport.model_validate(body)
-        except ValidationError as exc:
-            raise RobotApiError(self.robot_id, resp.status_code, "BAD_RESPONSE",
-                                f"not a candidate report: {exc.error_count()} errors") from exc
+        """The robot's latest candidate report, or None when it is not in CANDIDATES."""
+        return await fetch_localization_candidates(self)
 
     async def localization_request(self) -> Optional[dict]:
         """D-546 5: the robot's open "where am I" request, or None (404 `NO_REQUEST`, or a CORE
@@ -424,34 +317,8 @@ class HttpRobotClient(StationTransport, NavigationTransport):
         return ws_url(self._ep.base_url, "/ws/events", types=",".join(types))
 
     async def _open_socket(self, url: str):
-        """Connect and authenticate with the first frame, not ``?token=`` (D-370 S7).
-
-        CORE's ``_authorize`` waits for ``{"type": "auth", "token": ...}`` when the
-        URL has no token; a wrong token closes the socket with 4401 afterwards.
-        """
-        import websockets
-        from websockets.exceptions import ConnectionClosed
-
-        from fleet.swarm.discovery_transport import resolve_robot
-        context = self._socket_context()
-        options = {'ssl': context} if context else {}
-        if self._ep.discovery:
-            address, port = await resolve_robot(self._ep)
-            from urllib.parse import urlsplit
-            options.update(host=address, port=port, server_hostname=urlsplit(url).hostname)
-            await self._socket_admission(address, port)
-        ws = await websockets.connect(url, proxy=None, logger=_ws_log, **options)
-        try:
-            self._socket_auth_admission()
-            await ws.send(json.dumps({"type": "auth", "token": self._ep.token}))
-        except ConnectionClosed:
-            # Already closed by the robot: reading the socket surfaces the close
-            # code (4401/4403 -> RobotApiError) and any frames sent before it.
-            pass
-        except BaseException:
-            await ws.close()
-            raise
-        return ws
+        """Connect and authenticate with the first frame, not ``?token=`` (D-370 S7)."""
+        return await open_robot_socket(self, url, _ws_log)
 
     async def _socket_admission(self, address: str, port: int) -> None:
         """Enrolled clients may require identity admission before the auth frame."""

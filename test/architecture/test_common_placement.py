@@ -102,6 +102,11 @@ def test_machine_credential_code_never_imports_the_human_account_service():
 
 
 def test_common_service_sources_do_not_import_fleet():
-    for folder in (ROOT / 'operations/account/rosy_account', ROOT / 'operations/monitoring/src'):
+    for folder in (
+        ROOT / 'operations/account/rosy_account',
+        ROOT / 'operations/monitoring/src',
+        ROOT / 'operations/site_ui/media/src',
+        ROOT / 'operations/notifications/src',
+    ):
         for path in _py(folder):
             assert not any(m == 'fleet' or m.startswith('fleet.') for m in _imports(path)), path
