@@ -78,6 +78,7 @@ def test_remote_sim_runs_the_bench_and_installs_the_fleet_and_learned_inputs():
 
 
 def test_drivable_run_refuses_a_missing_model_before_start(tmp_path, monkeypatch, capsys):
+    monkeypatch.syspath_prepend(str(SCRIPT.parent))
     m = _module()
     monkeypatch.setattr(m, 'run', lambda _args: pytest.fail('simulation started without a model'))
     pointer = tmp_path / 'paint-pointer.txt'
