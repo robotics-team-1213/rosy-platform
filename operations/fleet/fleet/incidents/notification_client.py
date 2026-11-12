@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
+import re
 from typing import Any, Mapping
 from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
@@ -10,6 +12,41 @@ from urllib.request import Request, urlopen
 
 def should_run_embedded_notification_worker(remote_url: str | None) -> bool:
     return not remote_url or not remote_url.strip()
+
+
+def delivery_notification_id(row: Mapping[str, Any]) -> str:
+    return f"fleet-{row['event_id']}-{row['channel']}-{str(row['route_hash'])[:16]}"
+
+
+def build_delivery_request(row: Mapping[str, Any], facts: Mapping[str, Any] | None = None) -> dict[str, Any]:
+    if facts is None:
+        facts = json.loads(row['payload'])
+    raw_revision = str(row['judgment_revision'])
+    revision = (
+        raw_revision
+        if re.fullmatch(r'[A-Za-z0-9_.:-]{1,96}', raw_revision)
+        else hashlib.sha256(raw_revision.encode('utf-8')).hexdigest()
+    )
+    raw_classification = str(
+        facts.get('necessity') or facts.get('action_credit') or facts.get('reason') or row['kind']
+    )
+    classification = (
+        raw_classification
+        if re.fullmatch(r'[A-Za-z0-9_.:-]{1,96}', raw_classification)
+        else str(row['kind'])
+    )
+    return {
+        'producer': 'fleet',
+        'notification_id': delivery_notification_id(row),
+        'channel': str(row['channel']),
+        'kind': str(row['kind']),
+        'subject_id': str(row['robot_id']),
+        'occurrence_id': str(row['stuck_id']),
+        'revision': revision,
+        'classification': classification,
+        'observed_at': float(facts.get('observed_at', row['created_at'])),
+        'expires_at': float(row['expires_at']),
+    }
 
 
 class RemoteNotificationSink:
