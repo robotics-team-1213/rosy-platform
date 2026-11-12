@@ -266,6 +266,44 @@ def execute_remote_fleet_r_handoff(
     }
 
 
+def dispatch_and_execute_fleet_r_cell_task(
+    pipeline, *, fleet_r_url: str, token: str = "", cell_id: str = "cell_s", arm_id: str | None = None,
+    robot_id: str = "rosy_01", src_site: str = "pinky", dst_site: str = "belt", tier: int = 1,
+    displaced_to: str | None = None, task_id: str | None = None,
+    pose_xy_yaw: tuple[float, float, float] = (0.68, -0.2528, 0.0),
+    live_act_fn: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
+    request_fn: Callable[[str, str, dict[str, Any] | None], dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Assign a task on Fleet-R (`/api/fleet/pipeline/cell-tasks`), claim it on the OMX cell, execute the stage, and complete it."""
+    if request_fn is None:
+        import ssl
+        from urllib.request import Request, urlopen
+
+        def request_fn(method: str, path: str, body: dict[str, Any] | None) -> dict[str, Any]:
+            data = json.dumps(body).encode("utf-8") if body is not None else None
+            req = Request(f"{fleet_r_url.rstrip('/')}{path}", data=data, method=method,
+                          headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"})
+            with urlopen(req, context=ssl._create_unverified_context(), timeout=20) as resp:
+                return json.load(resp)
+
+    created = request_fn("POST", "/api/fleet/pipeline/cell-tasks", {
+        "task_id": task_id, "cell_id": cell_id, "arm_id": arm_id, "robot_id": robot_id,
+        "src_site": src_site, "dst_site": dst_site, "tier": int(tier), "displaced_to": displaced_to,
+        "x": float(pose_xy_yaw[0]), "y": float(pose_xy_yaw[1]), "yaw": float(pose_xy_yaw[2]),
+    })["task"]
+    claimed = request_fn("POST", "/api/fleet/pipeline/cell-tasks/claim", {"cell_id": cell_id, "task_id": created["task_id"]})
+    assert claimed["claimed"] is True and claimed["gate"]["amr_motion_inhibited"] is True
+    omx_res = pipeline.run_contract_handoff_stage(claimed["handoff"], stage_id=created["task_id"], tier=tier)
+    hw_tel = live_act_fn(claimed["handoff"]) if callable(live_act_fn) else None
+    done = request_fn("POST", f"/api/fleet/pipeline/cell-tasks/{created['task_id']}/complete", {
+        "phase": omx_res["receipt"]["phase"], "goal_evidence_digest": omx_res["receipt"]["goal_evidence_digest"],
+        "reason": omx_res["receipt"]["reason"], "receipt": omx_res["receipt"],
+        "stage_result": omx_res["stage_result"], "hardware_telemetry": hw_tel,
+    })
+    assert done["gate"]["amr_motion_inhibited"] is False and done["task"]["status"] == "COMPLETED"
+    return {"task": done["task"], "claim_gate": claimed["gate"], "release_gate": done["gate"], "omx_result": omx_res}
+
+
 
 def execute_task_plan(
     stages: list[dict[str, Any]],

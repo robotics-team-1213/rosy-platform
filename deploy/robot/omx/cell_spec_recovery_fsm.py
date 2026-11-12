@@ -1,32 +1,14 @@
 #!/usr/bin/env python3
-"""Round 2 Consensus 6-Gate Execution Interlock & S1~S7 Alignment/Recovery Skill FSM (`cell_spec_recovery_fsm.py`).
-
-Single Responsibility:
-  - Evaluates the 6 execution interlock gates (`pre_grasp`, `at_grasp`, `lift_verify`,
-    `pre_place`, `post_release`, `leg_transition`) with explicit `PASS` | `FAIL` | `UNKNOWN` verdicts
-    and canonical `S1..S7` failure codes (`evaluate_execution_gate`).
-  - Selects the exact L0/L1/L2/L3 recovery skill primitive (`reobserve_shift`, `seat_nudge`,
-    `reinsert_pick`, `wrist_yaw_servo`, `push_align_side`, `push_align_end`, `free_push`,
-    `recenter_on_temp`, `clear_neighbor_then_pick`, `abort_safe_hold`) using the Round 2
-    consensus numerical decision boundaries (`select_recovery_skill`).
-  - Compiles the 2-leg `S-Temp` fixture-assisted re-centering directives (`compile_recenter_on_temp_directives`)
-    routing through `temp_plate_b` radial lanes `R1..R3` (`-141.3°`, `-159.6°`, `-0.1°`).
-"""
+"""Round 2 Consensus 6-Gate Execution Interlock & S1~S12 Alignment/Recovery Skill FSM (`cell_spec_recovery_fsm.py`)."""
 from __future__ import annotations
 
 from typing import Any
 import uuid
-
 import numpy as np
-
 from omx_adapter.area_xyz import DIRECTIVE_SCHEMA, build_directive, coerce_area_xyz, resolve_area_xyz
 
 FSM_SCHEMA = "rosy.omx-spec-recovery-fsm.v1"
-
-GATE_NAMES: tuple[str, ...] = (
-    "pre_grasp", "at_grasp", "lift_verify", "pre_place", "post_release", "leg_transition",
-)
-
+GATE_NAMES: tuple[str, ...] = ("pre_grasp", "at_grasp", "lift_verify", "pre_place", "post_release", "leg_transition")
 FAILURE_CODES: tuple[str, ...] = (
     "S1_POSE_OFFSET_OR_YAW", "S2_TOPPLED_OR_SLUMPED", "S3_PACKED_NO_CLEARANCE",
     "S4_EMPTY_AIR_CLOSE", "S4_SHALLOW_OR_SLIPPED_LIFT", "S5_VIEW_OR_GATE_MISMATCH",
@@ -36,25 +18,14 @@ FAILURE_CODES: tuple[str, ...] = (
     "S10_DISPLACED_CONTAINER_FLOOR_FRONT", "S10_WRIST_CORRIDOR_MISALIGNED",
     "S11_EMPTY_JAW_CLOSURE_AIR_GRASP", "S12_WEDGED_OR_RIM_BITE",
 )
-
 CELL_S_EXTENDED_ZONES: dict[str, dict[str, Any]] = {
     "pinky_tray": {"site": "pinky", "top_roi_px": (10, 40, 260, 240), "grasp_pose_units": [66.929, -5.845, 29.839, 39.243, 111.797], "hover_pose_units": [66.929, -24.0, 22.0, 39.243, 111.797], "xyz_m": (0.0535, 0.1720, 0.0200), "yaw_deg": -85.0},
     "belt_center": {"site": "belt", "top_roi_px": (240, 90, 460, 270), "grasp_pose_units": [4.966, -15.337, 36.168, 43.330, 46.846], "hover_pose_units": [4.966, -27.0, 22.0, 43.330, 46.846], "xyz_m": (0.1250, -0.0550, 0.0250), "yaw_deg": -85.0},
     "belt_far": {"site": "belt_far", "top_roi_px": (320, 110, 620, 290), "grasp_pose_units": [-27.685, 6.725, -2.289, 45.649, 17.882], "hover_pose_units": [-27.685, -27.0, 22.0, 45.649, 17.882], "xyz_m": (0.1850, -0.0950, 0.0250), "yaw_deg": -85.0},
     "floor_front": {"site": "floor_front", "top_roi_px": (60, 180, 280, 420), "grasp_pose_units": [44.121, 9.500, 14.200, 38.000, 88.242], "hover_pose_units": [44.121, -27.0, 22.0, 38.000, 88.242], "xyz_m": (0.0950, 0.0980, 0.0080), "yaw_deg": -85.0},
 }
-
-TEMP_PLATE_B_LANES_XY_YAW: dict[int, tuple[float, float, float]] = {
-    1: (0.1163, -0.1452, -141.3),
-    2: (0.0584, -0.1567, -159.6),
-    3: (-0.0004, -0.1521, -0.1),
-}
-
-TEMP_PLATE_A_LANES_XY_YAW: dict[int, tuple[float, float, float]] = {
-    1: (-0.0681, 0.1841, -3.1),
-    2: (-0.0109, 0.1729, -18.7),
-    3: (0.0419, 0.1465, -34.4),
-}
+TEMP_PLATE_B_LANES_XY_YAW: dict[int, tuple[float, float, float]] = {1: (0.1163, -0.1452, -141.3), 2: (0.0584, -0.1567, -159.6), 3: (-0.0004, -0.1521, -0.1)}
+TEMP_PLATE_A_LANES_XY_YAW: dict[int, tuple[float, float, float]] = {1: (-0.0681, 0.1841, -3.1), 2: (-0.0109, 0.1729, -18.7), 3: (0.0419, 0.1465, -34.4)}
 
 
 def _extract_jaw(r_step: dict[str, Any] | None, gripper_pos: float | None) -> float | None:

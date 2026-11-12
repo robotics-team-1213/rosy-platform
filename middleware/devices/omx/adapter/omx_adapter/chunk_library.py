@@ -81,8 +81,14 @@ def park_path(start: list, home: list, closed: float, fps: int, transit: dict | 
               speed: float = 0.85) -> list:
     """Close the jaws, rise, turn at that height, then descend into home (jaws stay closed)."""
     goal = list(home[:5]) + [closed]
-    if max(abs(a - b) for a, b in zip(start[:5], goal[:5])) <= 5.0 and abs(start[5] - closed) <= 5.0:
-        return flow([list(start), goal], fps, speed * PARK_SPEED, blend=[False, False], blend_s=0.2,
+    if (
+        max(abs(a - b) for a, b in zip(start[:5], goal[:5])) <= 5.0 and abs(start[5] - closed) <= 5.0
+    ) or (
+        start[1] <= -50.0
+        and max(abs(a - b) for a, b in zip(start[1:4], goal[1:4])) <= 10.0
+        and abs(start[0] - goal[0]) <= 12.0
+    ):
+        return flow([list(start), goal], fps, 0.5 * speed * PARK_SPEED, blend=[False, False], blend_s=0.2,
                     rise_speed=RISE_SPEED)
     return transit_path(start, goal, closed, fps, transit, speed)
 

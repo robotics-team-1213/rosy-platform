@@ -119,3 +119,44 @@ def test_cell_handoff_persists_state_across_status_and_charge_bays(tmp_path):
     assert bays["omx_cells"]["cell_s"]["gate"]["amr_motion_inhibited"] is False
     assert not any(a.get("blocked_by_cell") for a in bays["actions"])
 
+
+def test_cell_tasks_assign_claim_and_complete_lifecycle():
+    site_map = _map()
+    graph = build_graph(site_map)
+    maps = SimpleNamespace(active=lambda: (1, site_map, graph, None),
+                           rules=SimpleNamespace(active_rules=lambda: None))
+    app = FastAPI()
+    app.state.site_maps = maps
+    install_pipeline_routes(app, site_maps=maps)
+    client = TestClient(app)
+
+    created = client.post("/api/fleet/pipeline/cell-tasks", json={
+        "task_id": "fleet-r-cell-s-01",
+        "cell_id": "cell_s",
+        "arm_id": "arm_s",
+        "robot_id": "pinky_1",
+        "src_site": "pinky",
+        "dst_site": "belt",
+        "displaced_to": "belt_far",
+        "tier": 1,
+    })
+    assert created.status_code == 200 and created.json()["task"]["status"] == "QUEUED"
+
+    listed = client.get("/api/fleet/pipeline/cell-tasks", params={"cell_id": "cell_s", "status": "QUEUED"}).json()
+    assert len(listed["tasks"]) == 1 and listed["tasks"][0]["task_id"] == "fleet-r-cell-s-01"
+
+    claimed = client.post("/api/fleet/pipeline/cell-tasks/claim", json={"cell_id": "cell_s"}).json()
+    assert claimed["claimed"] is True and claimed["gate"]["amr_motion_inhibited"] is True
+    assert claimed["handoff"]["displaced_to"] == "belt_far"
+
+    done = client.post("/api/fleet/pipeline/cell-tasks/fleet-r-cell-s-01/complete", json={
+        "phase": "RELEASED",
+        "goal_evidence_digest": "sha256:1234567890abcdef",
+        "reason": "TRANSFER_CONFIRMED",
+        "hardware_telemetry": {"folded": True, "final_state": [0.0, -58.0, 50.0, 50.0, -5.0, 58.1]},
+    }).json()
+    assert done["ok"] is True and done["task"]["status"] == "COMPLETED"
+    assert done["gate"]["amr_motion_inhibited"] is False
+    assert done["task"]["hardware_telemetry"]["folded"] is True
+
+

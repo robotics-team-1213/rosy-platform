@@ -28,6 +28,7 @@ from cell_control_core import (
 )
 from cell_fleet_handoff import (  # noqa: F401  (re-exported)
     build_crane_recovery_trajectory,
+    dispatch_and_execute_fleet_r_cell_task,
     execute_remote_fleet_r_handoff,
     execute_task_plan,
     run_contract_handoff_stage,
@@ -379,4 +380,9 @@ class FleetModelPipeline:
             tier=tier,
             request_fn=request_fn,
         )
+
+    def dispatch_and_execute_fleet_r_cell_task(self, **kwargs) -> dict[str, Any]:
+        """Assign, claim, execute, and complete a task on Fleet-R (`/api/fleet/pipeline/cell-tasks`)."""
+        return dispatch_and_execute_fleet_r_cell_task(self, **kwargs)
+
 

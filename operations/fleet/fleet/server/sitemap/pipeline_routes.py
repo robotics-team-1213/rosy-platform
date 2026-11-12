@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import inspect
+import time
+import uuid
 from types import SimpleNamespace
 
 from fastapi import HTTPException, Request
@@ -16,6 +18,7 @@ def install_pipeline_routes(app, *, console=None, site_maps=None, read_guard=())
         return
     app.state._pipeline_routes_installed = True
     app.state.omx_cell_states = getattr(app.state, "omx_cell_states", None) or {}
+    app.state.omx_cell_tasks = getattr(app.state, "omx_cell_tasks", None) or {}
 
     def _maps():
         return site_maps if site_maps is not None else getattr(app.state, "site_maps", None)
@@ -55,9 +58,11 @@ def install_pipeline_routes(app, *, console=None, site_maps=None, read_guard=())
                 robots.append(SimpleNamespace(robot_id=docked["robot_id"], kind=docked["robot_kind"],
                                               online=True, pose=(pose["x"], pose["y"]), yaw=pose["yaw"]))
                 known_ids.add(docked["robot_id"])
-        return evaluate_fleet_pipeline(active[1], active[2], robots, bays,
-                                       charge_bays=charge_bays, site_rules=rules(),
-                                       cell_states=getattr(app.state, "omx_cell_states", None))
+        out = evaluate_fleet_pipeline(active[1], active[2], robots, bays,
+                                      charge_bays=charge_bays, site_rules=rules(),
+                                      cell_states=getattr(app.state, "omx_cell_states", None))
+        out["omx_cell_tasks"] = list(app.state.omx_cell_tasks.values())
+        return out
 
     @app.get("/api/fleet/pipeline/contract", dependencies=read_guard)
     async def pipeline_contract():
@@ -87,6 +92,121 @@ def install_pipeline_routes(app, *, console=None, site_maps=None, read_guard=())
         app.state.omx_cell_states[body["cell_id"]] = {**state, "robot_id": body["robot_id"],
                                                        "docked_robot": robot}
         return res
+
+    @app.post("/api/fleet/pipeline/cell-tasks", dependencies=read_guard)
+    async def create_cell_task(request: Request):
+        active = active_map()
+        body = await request.json()
+        cell_id = str(body.get("cell_id") or "cell_s")
+        station = resolve_omx_cells(active[1], active[2]).get(cell_id)
+        if station is None:
+            raise HTTPException(404, detail={"code": "UNKNOWN_CELL"})
+        task_id = str(body.get("task_id") or f"cell-task-{uuid.uuid4().hex[:8]}")
+        default_arm = "arm_s" if cell_id == "cell_s" else ("arm_a" if int(body.get("tier", 1)) % 2 == 1 else "arm_b")
+        task = {
+            "task_id": task_id,
+            "cell_id": cell_id,
+            "arm_id": str(body.get("arm_id") or default_arm),
+            "robot_id": str(body.get("robot_id") or "rosy_01"),
+            "robot_kind": str(body.get("robot_kind") or "pinky"),
+            "src_site": str(body.get("src_site") or ("pinky" if cell_id == "cell_s" else "belt")),
+            "dst_site": str(body.get("dst_site") or ("belt" if cell_id == "cell_s" else f"pallet-l{max(0, min(2, int(body.get('tier', 1)) - 1))}")),
+            "tier": int(body.get("tier", 1)),
+            "displaced_to": body.get("displaced_to"),
+            "pose": {
+                "x": float(body.get("x", station.station_xy[0])),
+                "y": float(body.get("y", station.station_xy[1])),
+                "yaw": float(body.get("yaw", 0.0)),
+            },
+            "status": "QUEUED",
+            "created_at": round(time.time(), 3),
+        }
+        app.state.omx_cell_tasks[task_id] = task
+        return {"ok": True, "task": task}
+
+    @app.get("/api/fleet/pipeline/cell-tasks", dependencies=read_guard)
+    async def list_cell_tasks(cell_id: str | None = None, status: str | None = None):
+        tasks = list(app.state.omx_cell_tasks.values())
+        if cell_id is not None:
+            tasks = [t for t in tasks if t["cell_id"] == cell_id]
+        if status is not None:
+            tasks = [t for t in tasks if t["status"] == status]
+        return {"tasks": tasks}
+
+    @app.post("/api/fleet/pipeline/cell-tasks/claim", dependencies=read_guard)
+    async def claim_cell_task(request: Request):
+        active = active_map()
+        body = await request.json()
+        cell_id = str(body.get("cell_id") or "cell_s")
+        req_id = body.get("task_id")
+        candidates = [
+            t for t in app.state.omx_cell_tasks.values()
+            if t["cell_id"] == cell_id and t["status"] == "QUEUED" and (req_id is None or t["task_id"] == req_id)
+        ]
+        if not candidates:
+            return {"claimed": False, "task": None}
+        task = candidates[0]
+        station = resolve_omx_cells(active[1], active[2]).get(cell_id)
+        if station is None:
+            raise HTTPException(404, detail={"code": "UNKNOWN_CELL"})
+        robot = {
+            "robot_id": task["robot_id"],
+            "robot_kind": task["robot_kind"],
+            "pose": dict(task["pose"]),
+            "wheel_brake_locked": True,
+            "bed_ready": True,
+            "v_cmd_mps": 0.0,
+        }
+        state = {"phase": "ARM_IN_BED_ZONE", "tier": task["tier"], "robot_id": task["robot_id"], "stage_id": task["task_id"]}
+        res = evaluate_omx_cell_station(station, docked_robot=robot, cell_state=state,
+                                        map_version=getattr(active[2], "version", None))
+        app.state.omx_cell_states[cell_id] = {**state, "docked_robot": robot}
+        task["status"] = "RUNNING"
+        task["claimed_at"] = round(time.time(), 3)
+        handoff = {
+            **res["handoff"],
+            "arm_id": task["arm_id"],
+            "src_site": task["src_site"],
+            "dst_site": task["dst_site"],
+            "displaced_to": task.get("displaced_to"),
+        }
+        return {"claimed": True, "task": task, "handoff": handoff, "gate": res["gate"]}
+
+    @app.post("/api/fleet/pipeline/cell-tasks/{task_id}/complete", dependencies=read_guard)
+    async def complete_cell_task(task_id: str, request: Request):
+        active = active_map()
+        task = app.state.omx_cell_tasks.get(task_id)
+        if task is None:
+            raise HTTPException(404, detail={"code": "UNKNOWN_TASK"})
+        body = await request.json()
+        cell_id = task["cell_id"]
+        station = resolve_omx_cells(active[1], active[2]).get(cell_id)
+        phase = str(body.get("phase") or "RELEASED")
+        robot = {
+            "robot_id": task["robot_id"],
+            "robot_kind": task["robot_kind"],
+            "pose": dict(task["pose"]),
+            "wheel_brake_locked": True,
+            "bed_ready": True,
+            "v_cmd_mps": 0.0,
+        }
+        state = {
+            "phase": phase,
+            "tier": task["tier"],
+            "robot_id": task["robot_id"],
+            "stage_id": task_id,
+            "goal_evidence_digest": body.get("goal_evidence_digest"),
+            "reason": body.get("reason", "TRANSFER_CONFIRMED"),
+        }
+        res = evaluate_omx_cell_station(station, docked_robot=robot, cell_state=state,
+                                        map_version=getattr(active[2], "version", None))
+        app.state.omx_cell_states[cell_id] = {**state, "docked_robot": robot}
+        task["status"] = "COMPLETED" if phase == "RELEASED" else "ABORTED"
+        task["completed_at"] = round(time.time(), 3)
+        task["receipt"] = body.get("receipt") or state
+        task["stage_result"] = body.get("stage_result")
+        task["hardware_telemetry"] = body.get("hardware_telemetry")
+        return {"ok": True, "task": task, "gate": res["gate"]}
 
     @app.post("/api/fleet/pipeline/evaluate", dependencies=read_guard)
     async def pipeline_evaluate(request: Request):
