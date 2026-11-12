@@ -43,6 +43,9 @@ SKILLS: tuple[str, ...] = (
     "push_align_end", "free_push", "seat_nudge", "reinsert_pick",
     "recenter_on_temp", "clear_neighbor_then_pick", "abort_safe_hold",
 )
+_CLASS_TO_IDX = {c: i for i, c in enumerate(CLASSES)}
+_SKILL_TO_IDX = {s: i for i, s in enumerate(SKILLS)}
+_SKILL_SET = frozenset(SKILLS)
 
 RESIDUAL_BOUNDS: dict[str, tuple[float, float]] = {
     "dx_mm": (-8.0, 8.0),
@@ -56,12 +59,14 @@ def extract_feature_vector_20d(obs: dict[str, Any]) -> np.ndarray:
     spec_id = str(obs.get("spec_id", "C3")).upper()
     is_c1, is_c2 = (1.0 if spec_id == "C1" else 0.0), (1.0 if spec_id == "C2" else 0.0)
     is_c3 = 1.0 if (spec_id == "C3" or (is_c1 == 0.0 and is_c2 == 0.0)) else 0.0
-    dz_default = abs(float(obs.get("z_top_mm", 0.0)) - float(obs.get("z_side_mm", 0.0)))
+    dz_top_side_mm = obs.get("dz_top_side_mm")
+    if dz_top_side_mm is None:
+        dz_top_side_mm = abs(float(obs.get("z_top_mm", 0.0)) - float(obs.get("z_side_mm", 0.0)))
     vec = [
         is_c1, is_c2, is_c3, float(obs.get("tier_k", 1.0)),
         float(obs.get("x_hat_mm", 0.0)), float(obs.get("sigma_x_mm", 1.0)),
         float(obs.get("dy_mm", 0.0)), float(obs.get("yaw_err_deg", 0.0)),
-        float(obs.get("r_k_mm", 0.0)), float(obs.get("dz_top_side_mm", dz_default)),
+        float(obs.get("r_k_mm", 0.0)), float(dz_top_side_mm),
         float(obs.get("area_ratio", 1.0)), float(obs.get("tilt_deg", 0.0)),
         float(obs.get("valid_depth_ratio", 1.0)),
         float(obs.get("clear_pos_x_mm", 20.0)), float(obs.get("clear_neg_x_mm", 20.0)),
@@ -80,8 +85,10 @@ def rule_guard_verdict(obs: dict[str, Any]) -> dict[str, Any]:
         code = "S2_TOPPLED_OR_SLUMPED" if (r_k_mm <= -4.0 or tilt_deg > 10.0) else "S7_CONTACT"
         return {"verdict": "FAIL", "failure_code": code, "source": "rule_guard"}
 
-    dz_default = abs(float(obs.get("z_top_mm", 0.0)) - float(obs.get("z_side_mm", 0.0)))
-    dz_top_side_mm = float(obs.get("dz_top_side_mm", dz_default))
+    dz_top_side_mm = obs.get("dz_top_side_mm")
+    if dz_top_side_mm is None:
+        dz_top_side_mm = abs(float(obs.get("z_top_mm", 0.0)) - float(obs.get("z_side_mm", 0.0)))
+    dz_top_side_mm = float(dz_top_side_mm)
     if (
         float(obs.get("valid_depth_ratio", 1.0)) < 0.80
         or dz_top_side_mm > 8.0
@@ -164,14 +171,19 @@ class ResidualFailureClassifier:
         self.scale = np.where(std > 1e-6, std, 1.0)
         Z = (X_mat - self.mean) / self.scale
 
-        c2i = {c: i for i, c in enumerate(self.classes)}
-        y_idx = np.array([c2i[c] if isinstance(c, str) else int(c) for c in y], dtype=np.int64)
+        class_to_idx = _CLASS_TO_IDX if self.classes == CLASSES else {c: i for i, c in enumerate(self.classes)}
+        y_idx = np.array([class_to_idx[c] if isinstance(c, str) else int(c) for c in y], dtype=np.int64)
         Y_onehot = np.eye(len(self.classes), dtype=np.float64)[y_idx]
 
         w = np.ones(n, dtype=np.float64) if sample_weight is None else np.asarray(sample_weight, dtype=np.float64).copy()
         is_fail = y_idx != 0
         w = np.where(is_fail, w * float(false_pass_weight), w)
         w = w / max(np.mean(w), 1e-8)
+        fail_rows = np.flatnonzero(is_fail)
+        fail_cols = y_idx[fail_rows]
+        fp_scale = float(false_pass_weight) - 1.0
+        w_col = w[:, None]
+        inv_n = 1.0 / n
 
         self.W = np.zeros((Z.shape[1], len(self.classes)), dtype=np.float64)
         self.b = np.zeros(len(self.classes), dtype=np.float64)
@@ -180,13 +192,12 @@ class ResidualFailureClassifier:
 
         for _ in range(int(epochs)):
             probs = _softmax(Z @ self.W + self.b)
-            diff = (probs - Y_onehot) * w[:, None]
-            fp_push = np.where(is_fail, probs[:, 0] * (float(false_pass_weight) - 1.0), 0.0)
-            diff[:, 0] += fp_push
-            for c_idx in range(1, len(self.classes)):
-                mask_c = y_idx == c_idx
-                diff[mask_c, c_idx] -= fp_push[mask_c]
-            self.W -= lr * ((Z.T @ diff) / n + l2 * self.W)
+            diff = (probs - Y_onehot) * w_col
+            if fp_scale != 0.0 and fail_rows.size:
+                fp_push = probs[fail_rows, 0] * fp_scale
+                diff[fail_rows, 0] += fp_push
+                diff[fail_rows, fail_cols] -= fp_push
+            self.W -= lr * ((Z.T @ diff) * inv_n + l2 * self.W)
             self.b -= lr * np.mean(diff, axis=0)
 
         self.fitted = True
@@ -195,7 +206,7 @@ class ResidualFailureClassifier:
     def predict(self, obs_or_x: dict[str, Any] | np.ndarray | list[float]) -> dict[str, Any]:
         x = self._to_matrix(obs_or_x)[0]
         z = (x - self.mean) / self.scale
-        probs = _softmax((z @ self.W + self.b)[None, :])[0]
+        probs = _softmax(z @ self.W + self.b)
         prob_map = {c: float(round(probs[i], 6)) for i, c in enumerate(self.classes)}
         pass_prob = float(probs[0])
         best_fail_class = self.classes[int(np.argmax(probs[1:]) + 1)]
@@ -249,6 +260,10 @@ class InterventionWeightedLearner:
 
     def __init__(self, skills: tuple[str, ...] = SKILLS, human_weight: float = 5.0, normal_weight: float = 1.0):
         self.skills = tuple(skills)
+        self._skill_to_idx = _SKILL_TO_IDX if self.skills == SKILLS else {s: i for i, s in enumerate(self.skills)}
+        self._skill_set = _SKILL_SET if self.skills == SKILLS else frozenset(self.skills)
+        if len(self._skill_set) != len(self.skills):
+            self._skill_to_idx = {s: self.skills.index(s) for s in self._skill_set}
         self.human_weight = float(human_weight)
         self.normal_weight = float(normal_weight)
         self.mean = np.zeros(len(FEATURE_NAMES_20D), dtype=np.float64)
@@ -272,7 +287,7 @@ class InterventionWeightedLearner:
         weight: float | None = None,
     ) -> None:
         x = extract_feature_vector_20d(obs_or_x) if isinstance(obs_or_x, dict) else np.asarray(obs_or_x, dtype=np.float64)
-        s_idx = self.skills.index(skill) if skill in self.skills else 0
+        s_idx = self._skill_to_idx[skill] if skill in self._skill_set else 0
         dx = float(np.clip(residual_offset[0], *RESIDUAL_BOUNDS["dx_mm"]))
         dy = float(np.clip(residual_offset[1], *RESIDUAL_BOUNDS["dy_mm"]))
         dyaw = float(np.clip(residual_offset[2], *RESIDUAL_BOUNDS["dyaw_deg"]))
@@ -296,6 +311,8 @@ class InterventionWeightedLearner:
         Y_res = np.vstack(self.buffer_res)
         w = np.asarray(self.buffer_w, dtype=np.float64)
         w_norm = w / max(np.mean(w), 1e-8)
+        w_col = w_norm[:, None]
+        inv_n = 1.0 / n
 
         self.W_skill = np.zeros((Z.shape[1], len(self.skills)), dtype=np.float64)
         self.b_skill = np.zeros(len(self.skills), dtype=np.float64)
@@ -304,13 +321,13 @@ class InterventionWeightedLearner:
 
         for _ in range(int(epochs)):
             probs = _softmax(Z @ self.W_skill + self.b_skill)
-            diff_s = (probs - Y_onehot) * w_norm[:, None]
-            self.W_skill -= lr * ((Z.T @ diff_s) / n + l2 * self.W_skill)
+            diff_s = (probs - Y_onehot) * w_col
+            self.W_skill -= lr * ((Z.T @ diff_s) * inv_n + l2 * self.W_skill)
             self.b_skill -= lr * np.mean(diff_s, axis=0)
 
             err_r = (Z @ self.W_res + self.b_res) - Y_res
-            huber_grad = np.where(np.abs(err_r) <= huber_delta, err_r, huber_delta * np.sign(err_r)) * w_norm[:, None]
-            self.W_res -= lr * ((Z.T @ huber_grad) / n + l2 * self.W_res)
+            huber_grad = np.where(np.abs(err_r) <= huber_delta, err_r, huber_delta * np.sign(err_r)) * w_col
+            self.W_res -= lr * ((Z.T @ huber_grad) * inv_n + l2 * self.W_res)
             self.b_res -= lr * np.mean(huber_grad, axis=0)
 
         self.fitted = True

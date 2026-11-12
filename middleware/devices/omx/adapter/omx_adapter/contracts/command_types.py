@@ -270,8 +270,7 @@ class TrajectoryCommand:
             raise ValueError("trajectory point times must be strictly increasing")
         if not math.isclose(points[-1].time_from_start_s, duration, rel_tol=0.0, abs_tol=1e-9):
             raise ValueError("duration_s must equal the final trajectory point time")
-        final_positions = dict(zip(names, points[-1].positions))
-        if final_positions != dict(normalized):
+        if points[-1].positions != tuple(normalized[name] for name in names):
             raise ValueError("command positions must match the final trajectory point")
         object.__setattr__(self, "trajectory_points", points)
 

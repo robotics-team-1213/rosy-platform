@@ -158,9 +158,10 @@ def error_deg(cell, episodes, values, gravity_comp, every=1):
         cell, gravity_comp = _Compensated(cell, gravity_comp), bool(gravity_comp)
     set_constants(cell, values)
     kp = [row.get("kp", cell.model.actuator_gainprm[cell.act[j], 0]) for j, row in enumerate(values)]  # unfitted: the candidate's own
+    kp_arr = np.array(kp)
     out = []
     for _, ticks, real in episodes:
-        sim = twin.track(cell, ticks, np.array(kp), gravity_comp)  # sets kp again; the other constants stay as set here
+        sim = twin.track(cell, ticks, kp_arr, gravity_comp)  # sets kp again; the other constants stay as set here
         out.append(np.degrees(sim - real)[::every])
     return np.concatenate(out)
 
@@ -197,7 +198,7 @@ class Residual:
     def jac(self, x):
         import numpy as np
         f0 = self.last[1] if self.last[0] is not None and np.array_equal(self.last[0], x) else self.fun(x)
-        shifted = [x + self.step * np.eye(len(x))[i] for i in range(len(x))]
+        shifted = [x[:i].tolist() + [float(x[i] + self.step)] + x[i + 1:].tolist() for i in range(len(x))]
         tasks = [(unpack(s, self.keys), n, EVERY) for s in shifted for n in self.names]
         parts = list(self.pool.map(_job, tasks))
         k = len(self.names)

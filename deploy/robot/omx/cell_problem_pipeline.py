@@ -324,14 +324,34 @@ _SEED_SPECS: tuple[tuple[str, str, int, str, str, str, str, str, str, tuple[floa
 
 def seed_real_hardware_problem_cases(config_or_work: dict | Path) -> list[dict[str, Any]]:
     """Seed canonical real-hardware problem situations (Trials 1-17, including S2 toppled and S6 unseated cone)."""
+    path = ledger_path(config_or_work)
+    existing_ids: set[str] = set()
+    if path.exists():
+        for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+            if line.strip():
+                try:
+                    row = json.loads(line)
+                    if isinstance(row, dict) and row.get("case_id"):
+                        existing_ids.add(str(row["case_id"]))
+                except ValueError:
+                    continue
+    new_cases = []
     for cid, arm, tier, s_from, s_to, cat, stg, fcls, err, (g_pos, g_cur, held), (al_mm, ac_mm, f_col) in _SEED_SPECS:
+        if cid in existing_ids:
+            continue
         c = build_problem_case(
             case_id=cid, arm_id=arm, tier=tier, site_from=s_from, site_to=s_to, category=cat,
             stage=stg, fail_class=fcls, error=err,
             telemetry={"gripper_pos": g_pos, "gripper_current_ma": g_cur, "holding": held},
             vision={"along_mm": al_mm, "across_mm": ac_mm, "finger_color": f_col},
         )
-        record_problem_case(config_or_work, c)
+        new_cases.append(c)
+        existing_ids.add(cid)
+    if new_cases:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as fh:
+            for case in new_cases:
+                fh.write(json.dumps(case, ensure_ascii=False) + "\n")
     return load_ledger(config_or_work)
 
 

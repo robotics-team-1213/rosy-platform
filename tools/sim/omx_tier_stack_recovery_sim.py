@@ -45,6 +45,12 @@ from omx_tier_stack_recovery_helpers import (  # noqa: E402
     simulate_orientation_detection_and_reorient_recovery,
     simulate_wrist_centering_loop,
 )
+_OSC_TRACE_36 = tuple(
+    {"t": k * 0.033, "chunk": "hold", "target": [0.0] * 6, "sent": [0.0] * 6,
+     "present": [0.0, (-1) ** k * 1.2, (-1) ** k * 0.8, 0.0, 0.0, 48.0]}
+    for k in range(36)
+)
+_ARM_AREA_SPEC = {"arm_s": ("pinky", 0.008), "arm_a": ("ship", 0.004), "arm_b": ("pallet", 0.012)}
 
 
 def replay_and_verify_problem_case(case: dict[str, Any], work_dir: Path) -> dict[str, Any]:
@@ -166,19 +172,13 @@ def simulate_sim2real_jitter_z_and_dynamics(out_dir: Path) -> dict[str, Any]:
 
     def _verify_arm(arm_id: str) -> dict[str, Any]:
         # 1. Real-time rolling jitter window + active chunk damping + multi-sample settled_state
-        osc = [
-            {"t": k * 0.033, "chunk": "hold", "target": [0.0] * 6, "sent": [0.0] * 6,
-             "present": [0.0, (-1) ** k * 1.2, (-1) ** k * 0.8, 0.0, 0.0, 48.0]}
-            for k in range(36)
-        ]
-        win = jj.live_window(osc)
+        win = jj.live_window(_OSC_TRACE_36)
         ens = TemporalChunkEnsembler()
         cur = [0.0, 0.0, 0.0, 0.0, 0.0, 48.0]
         nxt = [0.0, 4.0, 2.0, 0.0, 0.0, 48.0]
         cmd_damped = jj.damp_step(ens, cur, nxt, [[0.0, 1.0, 0.5, 0.0, 0.0, 48.0], [0.0, 2.0, 1.0, 0.0, 0.0, 48.0]])
         # 2. 3D Z-axis pick recovery on area corresponding to arm
-        area = {"arm_s": "pinky", "arm_a": "ship", "arm_b": "pallet"}[arm_id]
-        z_nom = {"pinky": 0.008, "ship": 0.004, "pallet": 0.012}[area]
+        area, z_nom = _ARM_AREA_SPEC[arm_id]
         directive = {
             "arm_id": arm_id,
             "pick": {"area": area, "col": 1, "tier": 1, "x": 0.165, "y": -0.145 if arm_id != "arm_b" else 0.02, "z": z_nom,

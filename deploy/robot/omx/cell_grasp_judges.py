@@ -271,26 +271,47 @@ def pre_grasp_scene_judge(
     import cv2
 
     h, w = top_img.shape[:2]
-    hsv_img = cv2.cvtColor(top_img, cv2.COLOR_BGR2HSV)
-    mask = cv2.inRange(hsv_img, np.asarray(hsv[0], np.uint8), np.asarray(hsv[1], np.uint8))
+    lo_u8 = np.asarray(hsv[0], np.uint8)
+    hi_u8 = np.asarray(hsv[1], np.uint8)
+
+    def clipped_roi(roi):
+        return max(0, int(roi[0])), max(0, int(roi[1])), min(w, int(roi[2])), min(h, int(roi[3]))
+
+    slot_boxes = {name: clipped_roi(roi) for name, roi in (slot_rois or {}).items()}
+    floor_box = clipped_roi(floor_roi) if floor_roi is not None else None
+    valid_boxes = [
+        box for box in (*slot_boxes.values(), floor_box)
+        if box is not None and box[2] > box[0] and box[3] > box[1]
+    ]
+    if valid_boxes:
+        ux0 = min(box[0] for box in valid_boxes)
+        uy0 = min(box[1] for box in valid_boxes)
+        ux1 = max(box[2] for box in valid_boxes)
+        uy1 = max(box[3] for box in valid_boxes)
+        hsv_img = cv2.cvtColor(top_img[uy0:uy1, ux0:ux1], cv2.COLOR_BGR2HSV)
+        mask = cv2.inRange(hsv_img, lo_u8, hi_u8)
+
+    def _roi_stats(box):
+        x0, y0, x1, y1 = box
+        if x1 <= x0 or y1 <= y0:
+            return 0.0, None
+        sub_u8 = mask[y0 - uy0:y1 - uy0, x0 - ux0:x1 - ux0]
+        ratio = round(cv2.countNonZero(sub_u8) / ((x1 - x0) * (y1 - y0)), 4)
+        if ratio < min_orange_ratio:
+            return ratio, None
+        ys, xs = np.nonzero(sub_u8)
+        return ratio, [round(float(xs.mean()) + x0, 1), round(float(ys.mean()) + y0, 1)]
+
     occupancy: dict[str, float] = {}
     centroids_px: dict[str, list[float]] = {}
-    for name, roi in (slot_rois or {}).items():
-        x0, y0, x1, y1 = max(0, int(roi[0])), max(0, int(roi[1])), min(w, int(roi[2])), min(h, int(roi[3]))
-        if x1 <= x0 or y1 <= y0:
-            occupancy[name] = 0.0
-            continue
-        sub = mask[y0:y1, x0:x1] > 0
-        ratio = round(float(sub.mean()), 4)
+    for name, box in slot_boxes.items():
+        ratio, centroid = _roi_stats(box)
         occupancy[name] = ratio
-        if ratio >= min_orange_ratio:
-            ys, xs = np.nonzero(sub)
-            centroids_px[name] = [round(float(xs.mean()) + x0, 1), round(float(ys.mean()) + y0, 1)]
+        if centroid is not None:
+            centroids_px[name] = centroid
     floor_ratio = 0.0
-    if floor_roi is not None:
-        fx0, fy0, fx1, fy1 = max(0, int(floor_roi[0])), max(0, int(floor_roi[1])), min(w, int(floor_roi[2])), min(h, int(floor_roi[3]))
-        if fx1 > fx0 and fy1 > fy0:
-            floor_ratio = round(float((mask[fy0:fy1, fx0:fx1] > 0).mean()), 4)
+    if floor_box is not None:
+        floor_ratio, _ = _roi_stats(floor_box)
     req_ratio = occupancy.get(requested_slot, 0.0)
     if req_ratio >= min_orange_ratio:
         return {

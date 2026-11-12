@@ -32,6 +32,11 @@ TIERS = (
     {"tier": 2, "site": "pallet-l1", "z_m": 0.0398, "above_z_m": 0.0798},
     {"tier": 3, "site": "pallet-l2", "z_m": 0.0674, "above_z_m": 0.1074},
 )
+_DEFAULT_ORANGE_HSV = ([5, 110, 110], [25, 255, 255])
+_BASE_WRIST_FRAME_PLAIN = np.full((480, 640, 3), 140, dtype=np.uint8)
+_BASE_WRIST_FRAME_CYAN = _BASE_WRIST_FRAME_PLAIN.copy()
+_BASE_WRIST_FRAME_CYAN[350:480, 0:38] = (235, 225, 165)
+_BASE_WRIST_FRAME_CYAN[350:480, 602:640] = (235, 225, 165)
 
 
 def render_synthetic_wrist_frame(
@@ -44,12 +49,7 @@ def render_synthetic_wrist_frame(
 ) -> np.ndarray:
     """Synthesize a 480x640 BGR wrist-camera frame with realistic cell visual hazards."""
     h, w = 480, 640
-    # Neutral floor / pallet background
-    img = np.full((h, w, 3), (140, 140, 140), dtype=np.uint8)
-    if with_cyan_corners:
-        # Bright cyan pallet corners at bottom-left and bottom-right (a hazard for naive white-pad thresholds)
-        img[350:480, 0:38] = (235, 225, 165)
-        img[350:480, 602:640] = (235, 225, 165)
+    img = (_BASE_WRIST_FRAME_CYAN if with_cyan_corners else _BASE_WRIST_FRAME_PLAIN).copy()
 
     # Target 30 mm orange container top face under wrist LEDs (width = 250 px = 30 mm -> 0.12 mm/px)
     c_mid = int(round(320.0 + box_offset_px))
@@ -97,7 +97,7 @@ def simulate_wrist_centering_loop(
         "wrist.servo_step_gain": 0.85,
         "wrist.servo_pass_mm": 1.5,
     }
-    hsv = ([5, 110, 110], [25, 255, 255])
+    hsv = _DEFAULT_ORANGE_HSV
     gap_mm = 36.0
     mm_per_px = 30.0 / 250.0
 
@@ -163,7 +163,7 @@ def simulate_grasp_debate_reinsert_and_retry(
         "grasp.max_skew_mm": 4.5,
         "wrist.finger_color": 2 if f_color == "white" else 1,
     }
-    hsv = ([5, 110, 110], [25, 255, 255])
+    hsv = _DEFAULT_ORANGE_HSV
     signs = {"along": 1.0, "across": 1.0}
 
     # Attempt 1: off-center grasp (-6.8 mm lateral skew + edge pinch at held_nominal + 2.4 units)

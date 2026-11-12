@@ -210,13 +210,18 @@ def synthesize_failsafe_dataset(
     train_episodes = [ep for ep in episodes if ep["scene_id"] in train_scene_set]
     val_episodes = [ep for ep in episodes if ep["scene_id"] not in train_scene_set]
 
-    X_train = np.vstack([extract_feature_vector_20d(ep) for ep in train_episodes])
+    X_train = (np.vstack([extract_feature_vector_20d(ep) for ep in train_episodes]) if train_episodes
+               else np.zeros((0, len(FEATURE_NAMES_20D)), dtype=np.float64))
     y_train = [str(ep["label"]) for ep in train_episodes]
-    X_val = np.vstack([extract_feature_vector_20d(ep) for ep in val_episodes])
+    X_val = (np.vstack([extract_feature_vector_20d(ep) for ep in val_episodes]) if val_episodes
+             else np.zeros((0, len(FEATURE_NAMES_20D)), dtype=np.float64))
     y_val = [str(ep["label"]) for ep in val_episodes]
 
-    spec_counts = {s: sum(1 for ep in episodes if ep["spec_id"] == s) for s in specs}
-    regime_counts = {r: sum(1 for ep in episodes if ep["label"] == r) for r in regimes}
+    spec_counts = {s: 0 for s in specs}
+    regime_counts = {r: 0 for r in regimes}
+    for ep in episodes:
+        spec_counts[ep["spec_id"]] += 1
+        regime_counts[ep["label"]] += 1
 
     return {
         "schema": "omx-failsafe-synth-dataset-v1",
@@ -315,8 +320,8 @@ def run_fast_learning_pipeline(
     val_false_pass = 0
     val_failure_total = 0
     val_correct = 0
-    for ep in val_eps:
-        combined = clf.evaluate_with_guard(ep)
+    for idx, ep in enumerate(val_eps):
+        combined = combine_verdicts(rule_guard_verdict(ep), clf.predict(ds["X_val"][idx]))
         true_label = str(ep["label"])
         pred_code = combined["failure_code"] or "PASS"
         if pred_code == true_label:

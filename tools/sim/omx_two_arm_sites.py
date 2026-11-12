@@ -4,6 +4,8 @@ Every number comes from an existing module (mapped_stack_fixture, ship_plate, pa
 temp_slot_plate v11 SCAD parameters (Confluence 15368863 and set page 23233175: the bridge v7 seats each plate 200 mm from its arm, toward -x). Where CAD and
 a measurement both exist the choice is a named entry of CHOICES (D-947 2: candidates compared by results, nothing silently overwritten).
 """
+import copy
+import functools
 import json
 import math
 from pathlib import Path
@@ -116,15 +118,23 @@ WRIST_PHOTO = dict(lens_m=[.0338, .008, .0671], axis_hit_x_m=.1328)
 WRIST_PHOTO_A = dict(lens_m=[.0528, .005, .0641], axis_hit_x_m=.145)  # arm_a 2026-11-10 wrist frame jaw silhouette fit (IoU 0.18 -> 0.39, G-24)
 TEMP_TIERS = 3  # plate v11: 3 lanes x 3 tiers (Confluence 15368863); tier 0 keeps the lane's name, tier k is "<lane>-l<k>"
 R08_TIERS = 3 # the cell stacks three high (user, 11-08); the slot map lists tiers 82 and 84, the third sits one container (32.4 mm) higher
+R08_TIER_STEP = 32.4
 R08_STACK = tuple((f"bar-{3 * layer + k + 1}", f"ship-h1r{row}-l{layer}", arm) for layer in range(R08_TIERS)
                   for k, (row, arm) in enumerate(((1, "arm_b"), (0, "arm_a"), (2, "arm_b"))))
+_WAIT_POSE_CACHE: dict[tuple, np.ndarray] = {}
+_SNAPSHOT_CACHE: dict[tuple[str, int, int], dict] = {}
 
 
 def wait_pose(arm, kind):
     """Joints an arm waits in: the folded home, or ("side") the same fold with joint1 turned a quarter so the jaw points at the belt end
     (+x) and nothing of the arm stays in the middle band between the arms."""
+    key = (arm.name, tuple(arm.limits[4]), tuple(arm.home), kind,
+           tuple(arm.base), arm.yaw, tuple(arm.tcp))
+    if key in _WAIT_POSE_CACHE:
+        return _WAIT_POSE_CACHE[key].copy()
     if kind == "home":
-        return arm.home.copy()
+        _WAIT_POSE_CACHE[key] = arm.home.copy()
+        return _WAIT_POSE_CACHE[key].copy()
     import palletizing_gripper as jaw
     turned = [arm.home.copy() for _ in (1, -1)]
     for q, sign in zip(turned, (1, -1)):
@@ -139,7 +149,8 @@ def wait_pose(arm, kind):
         R, p = arm.link_poses(np.r_[q[:4], r, q[5:]])[4]
         return abs((p + R @ lens)[1])
     q[4] = max(rolls, key=outward)
-    return q
+    _WAIT_POSE_CACHE[key] = q.copy()
+    return q.copy()
 
 
 def ship_cell(layout, x_mm, y_mm, z_mm=0.):
@@ -148,9 +159,8 @@ def ship_cell(layout, x_mm, y_mm, z_mm=0.):
     return c["ship_stern_x_m"] - x_mm / 1000, c["ship_centre_y_m"] - y_mm / 1000, layout.table_z + z_mm / 1000
 
 
-def r08_sites(layout):
-    """1x3 sites of the berthed r08 ship from its slot map: one per hold, row and tier, the mean of the three 1x1 cells.
-    Rows are numbered by fixture y (r0 nearest arm_a, as the stud plate's rows); layer 0, 1, 2 are tiers 82, 84 and 86 (R08_TIERS)."""
+@functools.lru_cache(maxsize=1)
+def _r08_slot_groups():
     records = json.loads((SHIP_ASSETS / "slots.json").read_text(encoding="utf-8"))["tier_records"]
     cells = {}
     for r in records:
@@ -158,16 +168,26 @@ def r08_sites(layout):
     rows = sorted({y for _, y, _ in cells}, reverse=True)  # fixture y ascends as ship y descends
     tiers = sorted({t for _, _, t in cells})
     holds = sorted({m for m, _, _ in cells})
-    out = {}
+    groups = []
     for (module, y, tier), group in cells.items():
         assert len(group) == 3, (module, y, tier)
         if tier != tiers[0]:
             continue
         h, row = holds.index(module) + 1, rows.index(y)
-        x, cy, z = ship_cell(layout, sum(g["x_mm"] for g in group) / 3, y, group[0]["z_mm"])
+        groups.append((h, row, sum(g["x_mm"] for g in group) / 3.0, y, group[0]["z_mm"],
+                       tuple(tuple(g["id"][:4] + str(tier + 2 * layer) for g in group) for layer in range(R08_TIERS))))
+    return tuple(groups)
+
+
+def r08_sites(layout):
+    """1x3 sites of the berthed r08 ship from its slot map: one per hold, row and tier, the mean of the three 1x1 cells.
+    Rows are numbered by fixture y (r0 nearest arm_a, as the stud plate's rows); layer 0, 1, 2 are tiers 82, 84 and 86 (R08_TIERS)."""
+    out = {}
+    for h, row, mean_x_mm, y, z0_mm, layered_slot_ids in _r08_slot_groups():
+        x, cy, z = ship_cell(layout, mean_x_mm, y, z0_mm)
         for layer in range(R08_TIERS):
             out[f"ship-h{h}r{row}-l{layer}"] = dict(kind="ship", xy=(x, cy), z=z + layout.box[2] * (layer + .5), yaw=0., row=row, layer=layer,
-                                                    stack=f"h{h}r{row}", slots=[g["id"][:4] + str(tier + 2 * layer) for g in group])
+                                                    stack=f"h{h}r{row}", slots=list(layered_slot_ids[layer]))
     # The stern bay, kept low (the low kit: no funnel tile, nothing standing in it), is one more ship place: one 1x3 across the beam that
     # both arms reach. The outbound place is a lane of a temporary plate (set page 23233175, 2026-11-08), not this bay.
     x, cy, z = ship_cell(layout, STERN_BAY["x"], 0, STERN_BAY["floor"])
@@ -214,7 +234,14 @@ def parse_choices(items):
 def load_snapshot(path):
     if not path:
         raise ValueError('a "snapshot" choice needs cell_snapshot=PATH')
-    return json.loads((Path(__file__).resolve().parents[2] / path).read_text(encoding="utf-8"))  # a relative path is from the repo root
+    resolved = (Path(__file__).resolve().parents[2] / path).resolve()  # a relative path is from the repo root
+    if resolved.exists():
+        stat = resolved.stat()
+        key = (str(resolved), stat.st_mtime_ns, stat.st_size)
+        if key not in _SNAPSHOT_CACHE:
+            _SNAPSHOT_CACHE[key] = json.loads(resolved.read_text(encoding="utf-8"))
+        return copy.deepcopy(_SNAPSHOT_CACHE[key])
+    return json.loads(resolved.read_text(encoding="utf-8"))
 
 
 def snapshot_lanes(path, tag):
