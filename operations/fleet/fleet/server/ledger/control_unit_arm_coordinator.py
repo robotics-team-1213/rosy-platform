@@ -15,6 +15,10 @@ def is_arm_request(request):
     return isinstance(request, ControlArmTransferCandidate) or (isinstance(request, dict) and "transfer" in request)
 
 
+def is_direct_child_arm_owner(row) -> bool:
+    return row["owner_unit"] == row["request"]["target_unit"]
+
+
 def direct_child_unit_ids(control, *, resource_prefix: str | None = None) -> list[str]:
     me = control.unit.unit_id
     return sorted(u.unit_id for u in control.topology.units.values()
@@ -23,8 +27,9 @@ def direct_child_unit_ids(control, *, resource_prefix: str | None = None) -> lis
 
 
 class ControlUnitArmCoordinator:
-    def __init__(self, service):
+    def __init__(self, service, *, allow_intermediate_hop: bool = False):
         self._service = service
+        self._allow_intermediate_hop = allow_intermediate_hop
 
     @staticmethod
     def _key(row):
@@ -64,6 +69,20 @@ class ControlUnitArmCoordinator:
     async def arm_detail(self, origin, identity, kind, *, key=None, principal_id=None):
         """D-965: evidence or a recheck of the ARM job this cell bound to the delegation; never a new action."""
         row = self._service.store.get(origin, identity)
+        if (self._allow_intermediate_hop and is_arm_request(row["request"])
+                and row["owner_unit"] != self._service.unit.unit_id
+                and row["owner_unit"] in direct_child_unit_ids(self._service)):
+            method, tail, body = (
+                ("GET", "physical-evidence", None) if kind == "evidence"
+                else ("POST", "rechecks", {"recheck_key": key}) if kind == "request_recheck"
+                else ("GET", f"rechecks/{key}", None))
+            reply = await self._service.peer.arm_job(row["owner_unit"], method, origin, identity, tail, body)
+            if isinstance(reply, tuple):
+                status, value = reply
+                if status >= 400:
+                    raise ValueError((value.get("detail") or {}).get("code") or "CONTROL_UNIT_ARM_JOB_NOT_BOUND")
+                return value
+            return reply
         if (row["owner_unit"] != self._service.unit.unit_id
                 or not is_arm_request(row["request"]) or not row["local_task_id"]):
             raise ValueError("CONTROL_UNIT_ARM_JOB_NOT_BOUND")

@@ -215,3 +215,112 @@ def test_control_unit_arm_coordinator_preserves_depth_one_and_cell_admit_boundar
     assert callable(require_write_origin) and callable(call_arm_transfer_domain)
     assert hasattr(ControlUnitArmCoordinator, "check_arm_admission")
 
+
+def test_arm_relay_depth_two_projects_job_and_receipt_while_guarding_direct_child_hop(tmp_path):
+    from contextlib import closing
+    import sqlite3
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from core_common.protocol.control_units import ControlArmIngressRequest, ControlArmWorkRequest
+    from fleet.server.arm_transfer_relay_routes import delegation_id, install_arm_transfer_relay_routes
+    from fleet.server.control_unit_arm_coordinator import ControlUnitArmCoordinator, is_direct_child_arm_owner
+    from fleet.server.control_unit_service import ControlUnitService
+
+    manifest = {"revision": "v1", "units": [
+        {"id": "R"}, {"id": "A", "parent": "R"},
+        {"id": "A1", "parent": "A", "resources": ["workcell:arm_a1"]}]}
+    topology = ControlUnitTopology.from_mapping(manifest)
+    digest = "a" * 64
+    transfer = {"request_key": "harbor:move-depth2", "workcell_id": "arm_a1", "instance_id": "arm_a1",
+                "object_ref": "box-1", "source": "slot-1", "target": "slot-2"}
+    job_row = {"mission_id": "physical-1", "action_kind": "ARM_TRANSFER",
+               "proposal_principal_id": "control-unit:A", "request_key": "control:depth2",
+               "request_digest": digest, "proposal_digest": digest,
+               "transfer": {k: v for k, v in transfer.items() if k != "request_key"},
+               "resource_policy_digest": digest, "status": "GOAL_CONFIRMED",
+               "authority_epoch": 1, "dispatch_generation": 1, "approved_by": "op-a1", "reason": None}
+    receipt_row = {
+        "receipt_id": "r-depth2", "mission_id": "physical-1", "action_id": "act-1",
+        "attempt_id": "att-1", "request_digest": digest,
+        "workcell_id": "arm_a1", "instance_id": "arm_a1",
+        "policy_digest": digest, "evidence_digest": digest,
+        "object_ref": "box-1", "source": "slot-1", "target": "slot-2",
+        "authority_epoch": 1, "dispatch_generation": 1,
+        "validated_at_ns": 2, "physical_status": "AT_TARGET_AND_CLEAR",
+    }
+    nodes, forwarded = {}, []
+
+    class LeafJobs:
+        def create(self, *, principal, request_key, request, bind=None):
+            with closing(sqlite3.connect(tmp_path / "A1.db")) as conn, conn:
+                conn.row_factory = sqlite3.Row
+                bind(conn, "physical-1")
+            return job_row
+
+        def view(self, mission_id):
+            return dict(job_row) if mission_id == "physical-1" else None
+
+        def receipt(self, mission_id):
+            return dict(receipt_row) if mission_id == "physical-1" else None
+
+    for unit_id in ("R", "A", "A1"):
+        path = tmp_path / (unit_id + ".db")
+        tasks = FleetTaskService(FleetTaskStore(path), robot_ids=set())
+
+        async def call_peer(unit, method, route, body=None, *, sender=unit_id):
+            node = nodes[unit]
+            if route == "inbox":
+                return await node.receive(
+                    ControlArmIngressRequest.model_validate(body),
+                    parent_id=sender,
+                    principal=SimpleNamespace(principal_id="control-unit:" + sender, role="service"))
+            origin, identity = route.split("/")
+            return await node.read(origin, identity, for_child=sender if method == "GET" else None)
+
+        class Peer:
+            def __init__(self, fn):
+                self._fn = fn
+
+            async def __call__(self, *args, **kwargs):
+                return await self._fn(*args, **kwargs)
+
+            async def arm_job(self, unit, method, origin, identity, tail, body=None):
+                forwarded.append((unit, method, origin, identity, tail, body))
+                return 200, {"forwarded_to": unit, "tail": tail}
+
+        nodes[unit_id] = ControlUnitService(
+            topology, ControlUnitStore(path, unit_id=unit_id), tasks, Console(),
+            peer=Peer(call_peer), arm_jobs=(lambda: LeafJobs()) if unit_id == "A1" else (lambda: None))
+
+    harbor = SimpleNamespace(principal_id="harbor", role="service")
+    app = FastAPI()
+    install_arm_transfer_relay_routes(app, control=nodes["R"], require_viewer=lambda: harbor,
+                                      require_proposer=lambda: harbor)
+    client = TestClient(app)
+    created = client.post("/api/fleet/arm-transfers/jobs", json=transfer)
+    assert created.status_code == 200, created.text
+    identity = delegation_id("harbor", transfer["request_key"])
+    root_row = nodes["R"].store.get("R", identity)
+    child_row = nodes["A"].store.get("R", identity)
+    assert root_row["owner_unit"] == "A" and root_row["request"]["target_unit"] == "A1"
+    assert not is_direct_child_arm_owner(root_row)
+    assert is_direct_child_arm_owner(child_row)
+
+    assert client.get("/api/fleet/arm-transfers/jobs/physical-1").status_code == 200
+    receipt_res = client.get("/api/fleet/arm-transfers/jobs/physical-1/physical-receipt")
+    assert receipt_res.status_code == 200 and receipt_res.json()["receipt"]["receipt_id"] == "r-depth2"
+
+    ev_res = client.get("/api/fleet/arm-transfers/jobs/physical-1/physical-evidence")
+    assert ev_res.status_code == 409 and ev_res.json()["detail"]["code"] == "ARM_TRANSFER_RELAY_DEPTH"
+    rc_res = client.post("/api/fleet/arm-transfers/jobs/physical-1/rechecks", json={"recheck_key": "rk-1"})
+    assert rc_res.status_code == 409 and rc_res.json()["detail"]["code"] == "ARM_TRANSFER_RELAY_DEPTH"
+    assert forwarded == []
+
+    with pytest.raises(ValueError, match="CONTROL_UNIT_ARM_JOB_NOT_BOUND"):
+        asyncio.run(ControlUnitArmCoordinator(nodes["R"]).arm_detail("R", identity, "evidence"))
+    hop = ControlUnitArmCoordinator(nodes["R"], allow_intermediate_hop=True)
+    assert asyncio.run(hop.arm_detail("R", identity, "evidence")) == {
+        "forwarded_to": "A", "tail": "physical-evidence"}
+    assert forwarded == [("A", "GET", "R", identity, "physical-evidence", None)]
+
+
