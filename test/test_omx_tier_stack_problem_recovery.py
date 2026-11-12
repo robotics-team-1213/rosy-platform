@@ -419,6 +419,65 @@ def test_mode_c_sim_real_co_learning_3tier_stack_reset_and_multitask_lifecycle(t
     assert (tmp_path / "fleet_colearn/sim-real-colearn-lifecycle-report.json").is_file()
 
 
+def test_r2s_sim_rl_pretraining_fallback_and_continuous_fusion(tmp_path: Path) -> None:
+    """Verify R2S-anchored Sim-First RL Pre-Training, Sim-RL Fallback on severe/real failure,
+    and Continuous R2S Sim + Real Bayesian Model Fusion:
+    1) Loads existing R2S snapshot (`20261112-1838`, `rosy.omx-cell-snapshot.v1`).
+    2) Pre-trains contextual RL residuals (`rl-policy.json`) + IWR + 20-D classifier in R2S Simulation
+       before first real execution, immediately reducing first-round real placement error vs cold-start.
+    3) Triggers `sim_rl_fallback_on_real_failure` when a real step hits a severe disturbance, solving it in Sim first.
+    4) Continuously fuses R2S Sim-RL and Real policies (`fuse_r2s_sim_and_real_models`, `alpha_real` + `beta_sim == 1.0`).
+    """
+    import cell_fleet_pipeline as cfp
+    from cell_sim_real_co_learning import SimRealCoLearningPipeline, load_r2s_snapshot_context
+
+    snap = load_r2s_snapshot_context("20261112-1838")
+    assert snap["schema"] == "rosy.omx-cell-snapshot.v1"
+    assert snap["snapshot_id"] == "20261112-1838"
+    assert snap["fixation_variant"] == "v16-modular"
+
+    # Cold-start first-stack baseline error (no R2S Sim-RL pretraining)
+    cold_pipe = SimRealCoLearningPipeline(tmp_path / "cold")
+    cold_stack = cold_pipe.run_task("pinky_to_3tier_stack")
+
+    # R2S Sim-First RL Pre-trained pipeline
+    r2s_pipe = SimRealCoLearningPipeline(tmp_path / "r2s_pretrained")
+    pre = r2s_pipe.pretrain_task_with_r2s_sim_rl("pinky_to_3tier_stack", episodes=24)
+    assert pre["ok"] is True
+    assert pre["r2s_snapshot_id"] == "20261112-1838"
+    assert pre["rl_updates"] >= 48
+    assert r2s_pipe.model_version == 1
+    assert (tmp_path / "r2s_pretrained/rl-policy.json").is_file()
+
+    pretrained_stack = r2s_pipe.run_task("pinky_to_3tier_stack")
+    assert pretrained_stack["completed"] is True
+    # Sim-first RL pre-training immediately lowers first-run real placement error compared to cold-start
+    assert pretrained_stack["mean_place_error_mm"] < cold_stack["mean_place_error_mm"]
+
+    # Sim-RL fallback on a real step failure / severe disturbance solves in Sim first then succeeds on real
+    r2s_pipe.reset_scenario_and_board(mode="unstack_only")
+    step_fb = r2s_pipe.execute_unit_transfer_with_inner_loop(
+        container_id="container-c3-fallback",
+        tier=2,
+        disturbance={"real_failed": True, "dx_mm": -10.5, "dy_mm": 7.2, "yaw_err_deg": -8.5, "wrist_eccentric": True},
+    )
+    assert step_fb["verified"] is True
+    assert step_fb["sim_rl_fallback"] is not None
+    assert step_fb["sim_rl_fallback"]["sim_solved"] is True
+
+    # Continuous R2S Sim-RL + Real fusion across lifecycle rounds
+    fleet_pipe = cfp.FleetModelPipeline(tmp_path / "fleet_r2s_fusion")
+    fused_lifecycle = fleet_pipe.run_sim_real_co_learning_lifecycle(rounds=2, pretrain_sim_rl=True)
+    assert fused_lifecycle["completed"] is True
+    assert fused_lifecycle["r2s_pretrain"]["ok"] is True
+    fusion = fused_lifecycle["r2s_fusion"]
+    assert fusion["snapshot_id"] == "20261112-1838"
+    assert fusion["alpha_real"] > 0.0 and fusion["beta_sim"] > 0.0
+    assert abs((fusion["alpha_real"] + fusion["beta_sim"]) - 1.0) < 1e-4
+    assert fusion["sim_rl_updates"] > 0 and fusion["real_updates"] > 0
+
+
+
 
 
 
