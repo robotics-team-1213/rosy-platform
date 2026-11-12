@@ -238,6 +238,37 @@ def test_lookup_cache_expires_and_dhcp_address_changes(monkeypatch):
         pool.executor.shutdown(wait=True)
 
 
+def test_failed_lookup_is_cached_for_failure_ttl_to_prevent_avahi_head_of_line_blocking(monkeypatch):
+    import fleet.swarm.discovery_transport as transport
+    now = [0.0]
+    finished = threading.Event()
+    calls = []
+
+    def lookup(*args):
+        calls.append(args)
+        if len(calls) == 1:
+            raise socket.gaierror(8, 'offline')
+        return [_addr('192.168.1.50')]
+
+    monkeypatch.setattr(transport.socket, 'getaddrinfo', lookup)
+    pool = transport._HostLookups(clock=lambda: now[0])
+    try:
+        first = pool.get('offline.local', 8443)
+        first.add_done_callback(lambda _: finished.set())
+        with pytest.raises(ValueError, match='not_discovered'):
+            first.result(timeout=1)
+        assert finished.wait(1)
+        now[0] = 5.0
+        assert pool.get('offline.local', 8443) is first
+        assert len(calls) == 1
+        now[0] = 10.01
+        assert pool.get('offline.local', 8443).result(timeout=1) == '192.168.1.50'
+        assert len(calls) == 2
+    finally:
+        pool.executor.shutdown(wait=True)
+
+
+
 def test_advertised_name_does_not_fall_back_to_host_lookup(monkeypatch):
     def lookup(*args, **kwargs):
         raise AssertionError('host lookup')

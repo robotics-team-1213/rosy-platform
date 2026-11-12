@@ -166,6 +166,12 @@ def locate_fleet(expected_hostname: str, ca_file: Path, *,
         candidates = []
         records = (cache or get_shared_cache()).wait(SERVICE_TYPE, timeout_s=3)
         same_host = [r for r in records if r.host.lower().rstrip('.') == hostname]
+        if cache is None and not same_host:
+            from core_common.discover import _via_avahi
+            extra = _via_avahi(SERVICE_TYPE, 3.0) or ()
+            if extra:
+                records = (*records, *extra)
+                same_host = [r for r in records if r.host.lower().rstrip('.') == hostname]
         for row in same_host:
             if not row.addresses or not isinstance(classify(
                     SERVICE_TYPE, row.host, None, row.port, list(row.txt)), Accepted) \

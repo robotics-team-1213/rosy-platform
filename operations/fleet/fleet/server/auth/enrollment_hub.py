@@ -30,7 +30,7 @@ class HubLinkMixin:
         return {"hub_linked": bool(row.get("hub_digest")), "hub_host": row.get("hub_host"),
                 "hub_online": bool(row.get("hub_digest")) and self._hub_online(row["robot_id"]),
                 "hub_state": self._hub_state(row),
-                "hub_linkable": self._hub_link is not None and self._tls_client(row["robot_id"]) is not None,
+                "hub_linkable": self._hub_link is not None and self._tls_client(row["robot_id"], row=row) is not None,
                 "account_link": (self._account_link.states.get(row["robot_id"], "unknown")
                                  if self._account_link else None)}
 
@@ -67,10 +67,10 @@ class HubLinkMixin:
         """One hub-link change per robot at a time (store, PUT and rollback stay together)."""
         return self._hub_locks.setdefault(robot_id, asyncio.Lock())
 
-    def _tls_client(self, robot_id: str):
+    def _tls_client(self, robot_id: str, row: dict | None = None):
         """The enrolled client when the TLS fence and binding hold, else None (never raises)."""
         try:
-            row = self._store.get(robot_id)
+            row = self._store.get(robot_id) if row is None else row
             if row is None or not self._tls_bound(robot_id):
                 return None
             self._tls_fence(row)
