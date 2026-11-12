@@ -87,9 +87,26 @@ def test_drivable_run_refuses_a_missing_model_before_start(tmp_path, monkeypatch
             pointer.write_text(content, encoding='utf-8')
         with pytest.raises(SystemExit) as error:
             m.main(['--out', str(tmp_path / 'run'), '--learned-lane-pointer', str(pointer),
-                    '--learned-paint-target', 'drivable'])
+                    '--learned-paint-target', 'drivable', '--record'])
         assert error.value.code == 2
     assert 'no model manifest' in capsys.readouterr().err
+
+
+def test_drivable_evidence_requires_the_model_during_motion(tmp_path):
+    import json
+    m = _module()
+    trace = tmp_path / 'observations.jsonl'
+    assert not m.drivable_evidence(trace, 'rev', ['rosy_01'])['pass']
+    rows = [dict(wall=1.0, topic='/rosy_01/cmd_vel', message=dict(linear=dict(x=0.1), angular=dict(z=0))),
+            *(dict(wall=1.1 + i / 10, topic='/rosy_01/line/keep_debug',
+                   message=dict(paint_source_used='learned_drivable', paint_model_revision='rev')) for i in range(10)),
+            dict(wall=2.1, topic='/rosy_01/cmd_vel', message=dict(linear=dict(x=0.1), angular=dict(z=0)))]
+    trace.write_text('\n'.join(json.dumps(row) for row in rows), encoding='utf-8')
+    assert m.drivable_evidence(trace, 'rev', ['rosy_01'])['pass']
+    assert not m.drivable_evidence(trace, 'rev', ['rosy_01', 'rosy_02'])['pass']
+    rows[5]['message']['paint_source_used'] = 'denoise_fallback'
+    trace.write_text('\n'.join(json.dumps(row) for row in rows), encoding='utf-8')
+    assert not m.drivable_evidence(trace, 'rev', ['rosy_01'])['pass']
 
 
 def test_every_lap_scenario_starts_and_ends_on_the_lap_route():
