@@ -8,8 +8,7 @@ from fleet._source_layout import SERVER_HOLDERS
 SERVER = Path(__file__).resolve().parents[1] / "fleet" / "server"
 ACCOUNT = SERVER.parents[2] / "account" / "rosy_account"
 ACCOUNT_ALIASES = frozenset({
-    "account_authority", "account_authority_routes", "account_config", "account_ledger",
-    "account_routes", "password_routes", "password_session", "site_users",
+    "account_authority", "password_session", "site_users",
 })
 
 

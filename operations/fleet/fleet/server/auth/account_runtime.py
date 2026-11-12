@@ -1,5 +1,5 @@
 """Fleet Account mode composition; authority compatibility and external receiver stay exclusive."""
-from fleet.server.password_session import PasswordSessions, install_password_routes
+from rosy_account.password_session import PasswordSessions, install_password_routes
 from fleet.server.development_session import install_development_routes
 from fleet.server.site_auth import parse_site_principals
 
@@ -11,8 +11,8 @@ def configure_account_sessions(app, *, console, task_service, site_users, site_l
     if account_client_config is not None and (account_config is not None or accounts_bootstrap is not None):
         raise ValueError("Fleet Account receiver cannot own an Account authority or bootstrap")
     if account_config is not None:
-        from fleet.server.account_config import load_account_config
-        from fleet.server.account_authority import AccountAuthority
+        from rosy_account.account_config import load_account_config
+        from rosy_account.account_authority import AccountAuthority
         settings = load_account_config(account_config)
         admin = settings.pop("bootstrap_admin_login", None)
         site_id = settings.pop("site_id")
@@ -47,7 +47,7 @@ def configure_account_sessions(app, *, console, task_service, site_users, site_l
     if authority is not None:
         if password_sessions._ledger.site_id != site_id:
             raise ValueError("Account configured site does not match the activated authority")
-        from fleet.server.account_authority_routes import install_account_authority_routes
+        from rosy_account.account_authority_routes import install_account_authority_routes
         install_account_authority_routes(app, sessions=password_sessions, authority=authority)
     return principals
 

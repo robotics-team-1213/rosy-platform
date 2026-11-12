@@ -537,3 +537,66 @@ def test_add_service_ownership_failure_preserves_original_registry(tmp_path, mon
     assert "ownership refused" in capsys.readouterr().err
     assert path.read_bytes() == original
     _no_temp_files_left(tmp_path)
+
+
+def test_deploy_site_users_and_rosy_account_site_users_schema_parity(tmp_path):
+    from rosy_account.site_users import hash_password, load_site_accounts, verify_password
+
+    encoded = hash_password("correct-horse-battery")
+    valid_doc = {
+        "users": [
+            {
+                "principal_id": "op-1",
+                "role": "operator",
+                "login": "op1",
+                "password_scrypt": encoded,
+                "policy_admin": True,
+            },
+            _entry("viewer-1", "viewer", "tok-1"),
+        ]
+    }
+    path = tmp_path / "users.yaml"
+    path.write_text(yaml.safe_dump(valid_doc, sort_keys=False), encoding="utf-8")
+
+    normalized = validate_users_document(valid_doc)
+    tokens, logins = load_site_accounts(path)
+    assert len(normalized) == 2
+    assert len(tokens) == 1 and len(logins) == 1
+    assert logins["op1"]["principal_id"] == "op-1"
+    assert logins["op1"]["policy_admin"] is True
+    assert verify_password("correct-horse-battery", logins["op1"]["password_scrypt"])
+
+    for bad_entry in (
+        {"principal_id": "op-1", "role": "superadmin", "login": "op1", "password_scrypt": encoded},
+        {"principal_id": "svc-1", "role": "service", "login": "svc1", "password_scrypt": encoded},
+        {"principal_id": "op-1", "role": "operator", "login": "op1",
+         "password_scrypt": encoded.replace("scrypt$32768$", "scrypt$8192$", 1)},
+        {"principal_id": "op-1", "role": "operator", "login": "op1",
+         "password_scrypt": encoded.replace("scrypt$32768$", "scrypt$32769$", 1)},
+        {"principal_id": "op-1", "role": "operator", "login": "op1",
+         "password_scrypt": encoded.replace("scrypt$32768$8$1$", "scrypt$32768$17$1$", 1)},
+        {"principal_id": "op-1", "role": "operator", "login": "op1",
+         "password_scrypt": encoded.replace("scrypt$32768$8$1$", "scrypt$32768$8$5$", 1)},
+        {"principal_id": "op-1", "role": "operator", "login": "op1",
+         "password_scrypt": "scrypt$16$8$1$aaaa$bbbb"},
+    ):
+        bad_doc = {"users": [bad_entry]}
+        bad_path = tmp_path / "bad.yaml"
+        bad_path.write_text(yaml.safe_dump(bad_doc, sort_keys=False), encoding="utf-8")
+        with pytest.raises(SiteUsersError):
+            validate_users_document(bad_doc)
+        with pytest.raises(ValueError):
+            load_site_accounts(bad_path)
+
+    dup_login_doc = {
+        "users": [
+            {"principal_id": "op-1", "role": "operator", "login": "dup", "password_scrypt": encoded},
+            {"principal_id": "op-2", "role": "viewer", "login": "dup", "password_scrypt": encoded},
+        ]
+    }
+    dup_path = tmp_path / "dup.yaml"
+    dup_path.write_text(yaml.safe_dump(dup_login_doc, sort_keys=False), encoding="utf-8")
+    with pytest.raises(SiteUsersError):
+        validate_users_document(dup_login_doc)
+    with pytest.raises(ValueError):
+        load_site_accounts(dup_path)
