@@ -5,20 +5,19 @@ import {createDrawingImport, rasterMapPoint} from '/console/assets/drawing-impor
 import {createMapEditor, svgElement} from '/console/assets/map-editor.js';
 import {createExtractionPanel} from '/console/assets/extraction-review.js';
 import {siteMapErrorText} from '/console/assets/site-map-model.js';
+import {ensureSurvey} from '/console/assets/site-map-edit.js';
+import {fetchMapPlane} from '/console/assets/vision-view.js';
 
 const $ = id => document.getElementById(id);
 export function createMapAuthoring(host) {
   const history = createEditHistory(null);
   let projection = null, loadingHash = null, cacheController = null, rasterUrl = null;
   const message = text => { $('drawing-status').textContent = text; };
-  const changed = next => { history.apply(next); host.changed(history.current()); };
+  const changed = next => { ensureSurvey(next); history.apply(next); host.changed(history.current()); };
   const importer = createDrawingImport({request: host.request, map: host.draft,
     replaceDraft: next => { changed(next); },
-    confirmDiscard: () => !host.dirty() || confirmIrreversible({
-      message: '도면 기준을 바꾸고 검토 상태를 초기화할까요? 그린 요소는 보존합니다.',
-      action: '도면 기준 바꾸기', opener: $('drawing-register')})});
-  const editReason = () => host.reason() || (host.source() !== 'draft' ? '직접 편집은 초안에서 하세요'
-    : !host.map()?.survey ? '먼저 도면을 맞추거나 조사 초안을 만드세요' : '');
+    confirmDiscard: () => true});
+  const editReason = () => host.reason() || (!host.draft() && !host.map() ? '먼저 도면을 맞추거나 조사 초안을 만드세요' : '');
   const editor = createMapEditor({svg: host.svg, map: host.map, view: host.view, changed, reason: editReason});
   const extraction = createExtractionPanel({request: host.request, changed,
     context: () => ({draft: host.draft(), epoch: host.epoch(), projection, reason: editReason()}), render: host.render});
@@ -64,9 +63,68 @@ export function createMapAuthoring(host) {
     if (result) message('맞춤 완료 · 도면은 배경이며 그린 요소는 초안에 보존했습니다. 현장 기준을 다시 검토하세요');
   }));
   $('drawing-cancel').addEventListener('click', () => { importer.cancel(); message('도면 요청을 취소했습니다. 초안은 그대로입니다'); });
+  if ($('drawing-from-camera')) {
+    $('drawing-from-camera').addEventListener('click', () => act(async () => {
+      host.begin();
+      const sourceId = $('plane-source')?.value || $('camera-draft-source')?.value || 'ceiling_north';
+      $('extract-status').textContent = `카메라(${sourceId}) 평면 영상을 도면으로 등록하고 선·윤곽을 추출하는 중…`;
+      let imgBlob = null, minX = -1.22, maxY = 0.61, ppm = 400, widthPx = 976, heightPx = 488;
+      try {
+        const got = await fetchMapPlane(host.request, sourceId, null, AbortSignal.timeout(8000));
+        if (got.state === 'live' && got.blob) {
+          imgBlob = got.blob;
+          const url = URL.createObjectURL(got.blob);
+          try {
+            const img = new Image(); img.src = url; await img.decode();
+            widthPx = img.naturalWidth || 976; heightPx = img.naturalHeight || 488;
+            if (got.plane) {
+              minX = Number.isFinite(got.plane.min_x) ? got.plane.min_x : -1.22;
+              maxY = Number.isFinite(got.plane.max_y) ? got.plane.max_y : 0.61;
+              ppm = Number.isFinite(got.plane.ppm) && got.plane.ppm > 0 ? got.plane.ppm : widthPx / 2.44;
+            }
+          } finally { URL.revokeObjectURL(url); }
+        }
+      } catch {}
+      if (!imgBlob) {
+        message('보정된 카메라 평면 영상을 가져올 수 없습니다. 먼저 카메라 설치·보정을 확인하세요');
+        return;
+      }
+      const ext = imgBlob.type === 'image/png' ? 'png' : 'jpg';
+      const file = new File([imgBlob], `${sourceId}_plane.${ext}`, {type: imgBlob.type || 'image/jpeg'});
+      const uploaded = await importer.load(file);
+      if (!uploaded) return;
+      const reg = await importer.register({
+        source_origin_px: [0, 0],
+        meters_per_pixel: 1 / ppm,
+        map_origin_m: [minX, maxY],
+        heading_rad: 0,
+      }, {
+        measured_distance_m: Number((widthPx / ppm).toFixed(3)),
+        description: `보정 카메라(${sourceId}) 평면 자동 맞춤 (${widthPx}×${heightPx} px, ${Math.round(ppm)} px/m)`,
+      });
+      if (reg) {
+        if (rasterUrl) URL.revokeObjectURL(rasterUrl);
+        rasterUrl = URL.createObjectURL(imgBlob);
+        loadingHash = reg.projection_sha256;
+        projection = reg;
+        $('extract-x0').value = 0; $('extract-y0').value = 0;
+        $('extract-x1').value = reg.width_px || widthPx; $('extract-y1').value = reg.height_px || heightPx;
+        sync();
+        host.render();
+        $('extract-run').click();
+      }
+    }));
+  }
   for (const field of $('drawing-tools').querySelectorAll('input:not([type=file]), select'))
     field.addEventListener('input', importer.cancelRegistration);
   $('editor-enabled').addEventListener('change', () => { host.begin(); editor.cancel(); host.render(); });
+  $('editor-kind').addEventListener('change', () => {
+    if ($('editor-kind').value !== 'select' && !$('editor-enabled').checked) {
+      $('editor-enabled').checked = true;
+    }
+    if ($('editor-enabled').checked) host.begin();
+    editor.cancel(); host.render();
+  });
   const step = operation => {
     if (editReason()) { host.notice(editReason()); return; }
     editor.cancel(); host.changed(history[operation]());
@@ -105,6 +163,7 @@ export function createMapAuthoring(host) {
       ['editor-undo', editReason() || (!history.canUndo() ? '실행 취소할 변경이 없습니다' : '')],
       ['editor-redo', editReason() || (!history.canRedo() ? '다시 실행할 변경이 없습니다' : '')],
       ['drawing-file', host.reason()],
+      ...($('drawing-from-camera') ? [['drawing-from-camera', host.reason()]] : []),
     ]) {
       $(id).disabled = Boolean(reason);
       if (reason) $(id).setAttribute('reason', reason); else $(id).removeAttribute('reason');

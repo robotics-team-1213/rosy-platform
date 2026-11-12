@@ -91,6 +91,7 @@ def plan_pick(
     cell_pivot.validate_bias({"point_m": o["raw_m"], "bias_mm": bias_mm}, config.get("params"))
     height = entry["top_height_mm"] / 1000 - grasp_depth(config, site)
     x, y = (o["raw_m"][0] - bias_mm[0] / 1000, o["raw_m"][1] - bias_mm[1] / 1000)
+    dz = float(o.get("dz_m", 0.0)) + float(config["sites"][site].get("z_offset_m", 0.0)) - (bias_mm[2] / 1000 if len(bias_mm) >= 3 else 0.0)
     yaw0, error = (grasp_yaw(config, site, o, entry, offset) if yaw is None else yaw), "no plan"
     cp_mod = _parent_attr("cp", cp)
     for approach in (config["plan"]["approach_m"], prm.get(config.get("params"), "auto.approach_near_m", 0.020)):
@@ -98,7 +99,7 @@ def plan_pick(
             pick = {
                 "x": round(x, 4),
                 "y": round(y, 4),
-                "z": round(surface_z(config, site) + height, 4),
+                "z": round(surface_z(config, site) + height + dz, 4),
                 "yaw_deg": yaw_try,
             }
             s = config["sites"][dest_site]

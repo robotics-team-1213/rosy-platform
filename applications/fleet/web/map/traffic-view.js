@@ -97,11 +97,13 @@ export function drawTraffic(ctx, toPoint, pxPerM, { view, el, css, colorOf, draw
     }
     ctx.restore();
   }
-  if (drawChip && ctx) {
+  if (drawChip && ctx && view.layers?.labels !== false) {
     for (const zone of drawing.zones) {
       if (!zone.anchor) continue;
+      const isOccupiedOrQueued = !String(zone.label || "").startsWith("점유 0/") || !String(zone.label || "").endsWith("대기 0");
+      if (!isOccupiedOrQueued && !view.layers?.trafficLabels) continue;
       const p = toPoint(zone.anchor.x, zone.anchor.y);
-      drawChip(ctx, null, p.x, p.y, `${zone.unit} · ${zone.label}`);  // equal sentences on two zones need their names
+      drawChip(ctx, null, p.x, p.y, `${zone.unit} · ${zone.label}`);
     }
   }
   window.__trafficLayer = { bands: drawing.bands.length, zones: drawing.zones.length, ticks: drawing.ticks.length,

@@ -77,6 +77,7 @@ fleet/web/calibration
 fleet/web/sitemap
 fleet/web/installation
 fleet/web/map
+fleet/web/cell
 fleet/fleet/server/tracking
 fleet/fleet/server/evidence
 fleet/fleet/server/sitemap

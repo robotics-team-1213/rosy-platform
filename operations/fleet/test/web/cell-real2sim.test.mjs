@@ -1,0 +1,117 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+
+import {
+  REAL2SIM_PATH,
+  EVALUATE_PATH,
+  RUNS_PATH,
+  PROMOTE_PATH,
+  readoutPairs,
+  loopRows,
+  stageRows,
+  sysidRows,
+  surveyRows,
+  runRows,
+} from "../../../../applications/fleet/web/cell/cell-real2sim.js";
+
+test("real2sim routes point to the cell-app pipeline endpoints", () => {
+  assert.equal(REAL2SIM_PATH, "/api/fleet/cell-app/real2sim-pipeline");
+  assert.equal(EVALUATE_PATH, "/api/fleet/cell-app/real2sim-pipeline/evaluate");
+  assert.equal(RUNS_PATH, "/api/fleet/cell-app/real2sim-pipeline/runs");
+  assert.equal(PROMOTE_PATH, "/api/fleet/cell-app/real2sim-pipeline/promote-physics");
+});
+
+test("readoutPairs, loopRows, stageRows, sysidRows, surveyRows, and runRows format the pipeline", () => {
+  const sample = {
+    active: {
+      id: "20261110-1231",
+      camera_check: {pads: 3, worst_mm: [0.0, 1.9], within_3mm: true},
+      ship_fixation: {
+        berth_kit: "v16-modular",
+        arm_a_gap_dy_mm: 26.75,
+        arm_b_gap_dy_mm: 28.75,
+        nominal_spacer_dy_mm: 39.0,
+        belt_to_stopper_flat_mm: 26.0,
+        stopper_drop_mm: 20.0,
+        within_v16_yaw_budget: true,
+      },
+    },
+    cad_inventory: {
+      revision: "ship-cell-2026-11-12",
+      mesh_count: 14,
+      berth_kit: "v16-modular",
+      temp_bridge: "v7",
+      temp_plate: "v11",
+    },
+    sysid_summary: {
+      twin_camera_outline_px: 2.8,
+      twin_camera_limit_px: 3.0,
+      best_fit_id: "fit-servo-run3",
+      best_holdout_rms_deg: 0.41,
+      fits: [
+        {
+          id: "fit-servo-run3",
+          arm: "arm_b",
+          base: "registers-20261109",
+          keys: ["frictionloss", "damping"],
+          episodes_hold: 11,
+          base_hold_mean_deg: 0.448,
+          fitted_hold_mean_deg: 0.41,
+          ok: true,
+          verdict: "held-out mean 0.448 -> 0.410 deg over 11 episodes",
+        },
+      ],
+      next_experiments: [
+        {
+          constant: "arm_a.joint1.kp",
+          relative_width: 11.0,
+          known: "assumed",
+          experiment: "servo: fit on recorded episodes",
+        },
+      ],
+    },
+    runs: [
+      {
+        run_id: "r2s-20261110-1231-001",
+        status: "QUEUED",
+        snapshot_id: "20261110-1231",
+        berth_kit: "v16-modular",
+        physics: "servo-antijitter-20261112",
+        rerun_stages: ["rehandle", "stack"],
+        cli_command: "python3 tools/sim/omx_real2sim.py pipeline ...",
+      },
+    ],
+    diff: {changed: {temp_plates: ["a-1 12 mm"]}, rerun: ["rehandle", "stack"], gaps: ["G-17"]},
+    loop_steps: [
+      {step: "1", direction: "real", title: "관측 (Capture)", tool: "omx_real2sim.py capture", status: "ready", summary: "ok"},
+    ],
+    stages: [
+      {stage: "mujoco", stage_order: 1, track: "learning_and_physics", role: "stage1", rerun: ["stack"], flags: ["--cam-jitter"]},
+      {stage: "isaac", stage_order: 2, track: "learning_and_physics", role: "stage2", release_case: "nominal-palletizing-v21-ship-r08-berth-v16", isaac_handoff: {schema: "rosy.omx-isaac-handoff.v1"}},
+    ],
+  };
+  const pairs = readoutPairs(sample);
+  assert.equal(pairs.length, 6);
+  assert.match(pairs[0][1], /STL 14개/);
+  assert.match(pairs[1][1], /26\.75 mm/);
+  assert.match(pairs[2][1], /하향 20 mm/);
+  assert.match(pairs[4][1], /0\.41° \(fit-servo-run3\)/);
+  const lRows = loopRows(sample);
+  assert.equal(lRows.length, 1);
+  assert.equal(lRows[0][3], "정상 · 준비됨");
+  const sRows = stageRows(sample);
+  assert.equal(sRows.length, 2);
+  assert.equal(sRows[0][0], "Stage 1");
+  assert.equal(sRows[1][0], "Stage 2");
+  assert.match(sRows[1][4], /rosy\.omx-isaac-handoff\.v1/);
+  const fRows = sysidRows(sample);
+  assert.equal(fRows.length, 1);
+  assert.equal(fRows[0][0], "fit-servo-run3");
+  assert.equal(fRows[0][4], "통과 (승격 가능)");
+  const eRows = surveyRows(sample);
+  assert.equal(eRows.length, 1);
+  assert.equal(eRows[0][0], "arm_a.joint1.kp");
+  const rRows = runRows(sample);
+  assert.equal(rRows.length, 1);
+  assert.equal(rRows[0][0], "r2s-20261110-1231-001");
+});

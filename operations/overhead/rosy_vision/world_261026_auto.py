@@ -441,19 +441,31 @@ def auto_calibrate_and_trace_world_261026(img: np.ndarray) -> dict | None:
     s1_x = round(float(np.polyval(leg_l_poly, s1_y)), 4)
     s2_y = y_top_line(0.280)
     s2_x = round(float(np.polyval(leg_r_poly, s2_y)), 4)
-    s3_x, s3_y = 0.680, y_up(0.680)
+
+    u0_s3, u1_s3 = int((0.64 - min_x) * ppm), int((0.75 - min_x) * ppm)
+    v0_s3, v1_s3 = int((max_y - (-0.15)) * ppm), int((max_y - (-0.35)) * ppm)
+    ys_s3, xs_s3 = np.nonzero(yellow_p[v0_s3:v1_s3, u0_s3:u1_s3])
+    s3_x = round(float(px_to_map(np.median(xs_s3) + u0_s3, 0)[0]), 4) if len(xs_s3) >= 15 else 0.6987
+    s3_y = y_up(s3_x)
+
+    u0_s4, u1_s4 = int((0.10 - min_x) * ppm), int((0.22 - min_x) * ppm)
+    v0_s4, v1_s4 = int((max_y - (-0.40)) * ppm), int((max_y - (-0.54)) * ppm)
+    ys_s4, xs_s4 = np.nonzero(yellow_p[v0_s4:v1_s4, u0_s4:u1_s4])
+    s4_x = round(float(px_to_map(np.median(xs_s4) + u0_s4, 0)[0]), 4) if len(xs_s4) >= 15 else 0.1562
+    s4_y = y_lo(s4_x)
 
     u0_s5, u1_s5 = int((0.86 - min_x) * ppm), int((0.97 - min_x) * ppm)
     v0_s5, v1_s5 = int((max_y - (-0.41)) * ppm), int((max_y - (-0.54)) * ppm)
     ys_s5, xs_s5 = np.nonzero((white_p | yellow_p)[v0_s5:v1_s5, u0_s5:u1_s5])
-    s5_x = round(float(px_to_map(np.median(xs_s5) + u0_s5, 0)[0]), 4) if len(xs_s5) >= 15 else 0.903
+    s5_x = round(float(px_to_map(np.median(xs_s5) + u0_s5, 0)[0]), 4) if len(xs_s5) >= 15 else 0.9212
     s5_y = y_lo(s5_x)
 
     places = [
-        {"id": "S1", "kind": "stop", "name": "S1 주차장 출구 정지점", "x": s1_x, "y": s1_y, "yaw": None},
-        {"id": "S2", "kind": "stop", "name": "S2 주차장 입구 정지점", "x": s2_x, "y": s2_y, "yaw": None},
-        {"id": "S3", "kind": "stop", "name": "S3 위 차선 정지점", "x": s3_x, "y": s3_y, "yaw": None},
-        {"id": "S5", "kind": "stop", "name": "S5 U턴 전 정지점", "x": s5_x, "y": s5_y, "yaw": None},
+        {"id": "S1", "kind": "stop", "name": "S1 주차장 출구·수동 적재 정지선", "x": s1_x, "y": s1_y, "yaw": None},
+        {"id": "S2", "kind": "stop", "name": "S2 주차장 입구 정지선", "x": s2_x, "y": s2_y, "yaw": None},
+        {"id": "S3", "kind": "stop", "name": "S3 상단 하역 정지선 (cell_s)", "x": s3_x, "y": s3_y, "yaw": None},
+        {"id": "S4", "kind": "stop", "name": "S4 하단 중앙 대기 정지선", "x": s4_x, "y": s4_y, "yaw": None},
+        {"id": "S5", "kind": "stop", "name": "S5 하단 U턴 전 대기 정지선", "x": s5_x, "y": s5_y, "yaw": None},
         {"id": "J_in", "kind": "junction", "name": "주차장 입구 분기", "x": s2_x, "y": y_up(s2_x), "yaw": None},
         {"id": "J_out", "kind": "junction", "name": "주차장 출구 합류", "x": s1_x, "y": y_up(s1_x), "yaw": None},
         {"id": "P1", "kind": "junction", "name": "칸 1 앞", "x": bay_P[0][0], "y": bay_P[0][1], "yaw": None},
@@ -475,22 +487,27 @@ def auto_calibrate_and_trace_world_261026(img: np.ndarray) -> dict | None:
 
     upper_east_xs = np.linspace(s3_x, s2_x, 6)
     upper_west_xs = np.linspace(s2_x, s1_x, 10)
-    lower_xs = np.linspace(-0.85, s5_x, 14)
+    lower_west_xs = np.linspace(-0.85, s4_x, 9)
+    lower_east_xs = np.linspace(s4_x, s5_x, 7)
 
     edges = [
         {"id": "loop_right", "from": "S5", "to": "S3", "direction": "one_way", "drive_mode": "lane", "name": "오른쪽 U턴",
          "polyline": [[s5_x, s5_y], *_elliptic_arc(0.926, y_r_mid, 0.131, ry_r, -math.pi / 2, math.pi), [s3_x, s3_y]],
          "robot_kinds": None, "speed_cap_mps": 0.15, "width_m": 0.2},
-        {"id": "upper_east", "from": "S3", "to": "J_in", "direction": "one_way", "drive_mode": "lane", "name": "위 차선 (적재 쪽)",
+        {"id": "upper_east", "from": "S3", "to": "J_in", "direction": "one_way", "drive_mode": "lane", "name": "위 차선 (하역 후 분기)",
          "polyline": [[round(float(x), 4), y_up(float(x))] for x in upper_east_xs],
          "robot_kinds": None, "speed_cap_mps": 0.15, "width_m": 0.2},
-        {"id": "upper_west", "from": "J_in", "to": "J_out", "direction": "one_way", "drive_mode": "lane", "name": "위 차선 (주차장 앞)",
+        {"id": "upper_west", "from": "J_in", "to": "J_out", "direction": "one_way", "drive_mode": "lane", "name": "위 차선 (주차장 앞 순환)",
          "polyline": [[round(float(x), 4), y_up(float(x))] for x in upper_west_xs],
          "robot_kinds": None, "speed_cap_mps": 0.15, "width_m": 0.2},
-        {"id": "loop_left", "from": "J_out", "to": "S5", "direction": "one_way", "drive_mode": "lane",
-         "name": "왼쪽 U턴·아래 차선 (S4 감속 포함)",
+        {"id": "loop_left", "from": "J_out", "to": "S4", "direction": "one_way", "drive_mode": "lane",
+         "name": "왼쪽 U턴·아래 서쪽 차선 (S4 정지선까지)",
          "polyline": [[s1_x, y_up(s1_x)], *_elliptic_arc(-0.926, y_l_mid, 0.131, ry_l, math.pi / 2, math.pi),
-                      *[[round(float(x), 4), y_lo(float(x))] for x in lower_xs]],
+                      *[[round(float(x), 4), y_lo(float(x))] for x in lower_west_xs]],
+         "robot_kinds": None, "speed_cap_mps": 0.15, "width_m": 0.2},
+        {"id": "lower_east", "from": "S4", "to": "S5", "direction": "one_way", "drive_mode": "lane",
+         "name": "아래 동쪽 차선 (S4 -> S5 정지선)",
+         "polyline": [[round(float(x), 4), y_lo(float(x))] for x in lower_east_xs],
          "robot_kinds": None, "speed_cap_mps": 0.15, "width_m": 0.2},
         {"id": "park_gate_in", "from": "J_in", "to": "S2", "direction": "one_way", "drive_mode": "lane", "name": "주차장 진입",
          "polyline": [[s2_x, y_up(s2_x)], [s2_x, s2_y]],

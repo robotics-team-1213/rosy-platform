@@ -28,8 +28,55 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
   const css = (name) => window.RosyPalette.cssColor(name);
   const font = (role, displayScale = 1) => window.RosyPalette.canvasFont(role, "mono", displayScale);
   const GRID = { UNKNOWN: -1, FREE_MAX: 25, OCCUPIED_MIN: 65 };
-  // D-360 레이어 토글(field-view.js 가 view.layers 를 채운다). 값이 없으면 모두 켠다.
+  // D-360 레이어 토글. 기본은 모두 켜고, 상단 #map-overlay-toggles 버튼으로 전체 또는 개별 층을 즉시 켜고 끈다.
+  if (!view.layers) {
+    view.layers = { poses: true, omx: true, lanes: true, traffic: true, labels: true, site: true, grid: true, sightings: true, tracking: true };
+  }
   const layerOn = (key) => view.layers?.[key] !== false;
+  const toggleBar = el("map-overlay-toggles");
+  if (toggleBar) {
+    const syncToggleButtons = () => {
+      const subKeys = ["poses", "omx", "lanes", "traffic", "labels"];
+      const anyOn = subKeys.some((k) => view.layers[k] !== false);
+      for (const btn of toggleBar.querySelectorAll("[data-layer-toggle]")) {
+        const k = btn.dataset.layerToggle;
+        if (k === "all") {
+          btn.setAttribute("aria-pressed", String(anyOn));
+          btn.textContent = anyOn ? "전체 표시 켬" : "전체 표시 끔";
+        } else {
+          btn.setAttribute("aria-pressed", String(view.layers[k] !== false));
+        }
+      }
+      const legacyTraffic = el("traffic-toggle");
+      if (legacyTraffic) {
+        legacyTraffic.setAttribute("aria-pressed", String(view.layers.traffic !== false));
+        legacyTraffic.textContent = view.layers.traffic !== false ? "교통 켬" : "교통 끔";
+      }
+    };
+    scope.listen(toggleBar, "click", (event) => {
+      const btn = event.target.closest("[data-layer-toggle]");
+      if (!btn) return;
+      const key = btn.dataset.layerToggle;
+      if (key === "all") {
+        const subKeys = ["poses", "omx", "lanes", "traffic", "labels", "site", "grid", "sightings", "tracking"];
+        const nextVal = !["poses", "omx", "lanes", "traffic", "labels"].some((k) => view.layers[k] !== false);
+        for (const k of subKeys) view.layers[k] = nextVal;
+      } else {
+        view.layers[key] = !(view.layers[key] !== false);
+      }
+      syncToggleButtons();
+      draw();
+    });
+    const legacyTraffic = el("traffic-toggle");
+    if (legacyTraffic) {
+      scope.listen(legacyTraffic, "click", () => {
+        view.layers.traffic = !(view.layers.traffic !== false);
+        syncToggleButtons();
+        draw();
+      });
+    }
+    syncToggleButtons();
+  }
   const {
     CHIP_GAP, chipFontSize, drawChip, flushChips, resetChips, addMarker, cellOf, activeCall, labelImportant,
     drawFormationOverlay, drawMediation, drawSighting, drawCameraTracking, sitePolygons, tracePolygon, drawCrosswalks,
@@ -164,7 +211,9 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
     }
     ctx.restore();
 
-    drawMapDatum(ctx, toPx, bounds, {css});
+    if (layerOn("site") && layerOn("labels")) {
+      drawMapDatum(ctx, toPx, bounds, {css});
+    }
 
     const activeMap = view.activeSiteMap?.map;
     if (layerOn("lanes") && view.siteMap.maps.some(row => row.map_id === activeMap?.map_id)) {
@@ -182,16 +231,37 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
         });
         ctx.stroke();
       }
-      // The place's own id, as trips, the API and a floor sticker name it; a list position shifts on every edit.
+      // Distinct semantic place markers: C1~C3 (charging bays), S1~S5 (stations), P1~P3 / J_* (junctions)
       for (const place of activeMap.places || []) {
+        const pid = String(place.id);
         const p = toPx(place.x, place.y);
-        ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, Math.PI * 2); ctx.fill();
-        ctx.fillText(String(place.id), p.x + 8, p.y - 8);
+        const isCharger = pid.startsWith("C");
+        const isStation = pid.startsWith("S");
+        const isHovered = view.hoverEntity?.kind === "place" && view.hoverEntity.id === place.id;
+        ctx.save();
+        if (isCharger) {
+          ctx.beginPath(); ctx.arc(p.x, p.y, 5.5, 0, Math.PI * 2);
+          ctx.fillStyle = css("--surface-recessed"); ctx.fill();
+          ctx.lineWidth = 2; ctx.strokeStyle = css("--series-goal"); ctx.stroke();
+          ctx.beginPath(); ctx.arc(p.x, p.y, 2.2, 0, Math.PI * 2);
+          ctx.fillStyle = css("--series-goal"); ctx.fill();
+        } else if (isStation) {
+          ctx.beginPath(); ctx.arc(p.x, p.y, 4.5, 0, Math.PI * 2);
+          ctx.fillStyle = css("--status-warn"); ctx.fill();
+          ctx.lineWidth = 1.4; ctx.strokeStyle = css("--surface-recessed"); ctx.stroke();
+        } else {
+          ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
+          ctx.fillStyle = css("--ink-quiet"); ctx.fill();
+        }
+        ctx.restore();
+        if ((layerOn("labels") && (isCharger || isStation)) || isHovered) {
+          ctx.fillText(pid, p.x + 7, p.y - 6);
+        }
       }
       ctx.restore();
     }
     drawCrosswalks(ctx, toPx, 1.5);
-    drawTrails(ctx, view, toPx, 1.5, call);
+    if (layerOn("poses")) drawTrails(ctx, view, toPx, 1.5, call);
     traffic(ctx, toPx, t.scale);
     drawCameraTracking(ctx, toPx, Math.max(14, t.scale * 0.09), 2);
     guide(ctx, toPx);
@@ -206,8 +276,11 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
   // D-536: 로봇 몸체 원·방향·불확실성 고리와 안내 목표. "로봇" 층을 따른다.
   const guide = (ctx, toPoint) => {
     // Guide chips start with the robot id ("rosy_01 · ±0.05 m"): exceptions and the selected robot always show.
-    const chip = (c, g, x, y, text, tone) => drawChip(c, g, x, y, text, tone, labelImportant(String(text).split(" · ")[0]));
-    drawGuide(ctx, toPoint, { guide: view.guide, css, colorOf, drawChip: chip, on: layerOn("poses") });
+    const focusedRobotId = view.focusRobot || view.selected || null;
+    const chip = (c, g, x, y, text, tone) => drawChip(c, g, x, y, text, tone,
+      Boolean(focusedRobotId && String(text).includes(focusedRobotId)) || labelImportant(String(text).split(" · ")[0]));
+    drawGuide(ctx, toPoint, { guide: view.guide, css, colorOf, drawChip: chip, on: layerOn("poses"), focusedRobotId, view });
+
     drawSignalLamps(ctx, toPoint, { view, css, on: layerOn("traffic") });  // D-525 rev 3: above the robots
   };
 
@@ -256,7 +329,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
               + (view.trackingDrift ? " · 카메라 교정 어긋남 — 맵 고정 다시 필요" : "") : "")
           + callLabel;
         el("map-canvas").setAttribute("aria-label",
-          `천장 카메라 사이트 지도 — ${describeSightings()}${callLabel}. 이 지도에서는 목표를 지정할 수 없습니다.`
+          `천장 카메라 사이트 지도 — ${describeSightings()}${callLabel}. 로봇 선택 후 지도를 클릭하여 목표를 지정하세요.`
           + (view.trackingDrift ? " 카메라 교정이 어긋난 것 같습니다. 그림은 수락된 보정 그대로이며 맵 고정을 다시 하세요." : ""));
       }
       return;

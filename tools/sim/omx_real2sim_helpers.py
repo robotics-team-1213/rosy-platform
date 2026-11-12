@@ -46,7 +46,7 @@ def blobs(frame):
     import cv2
 
     hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-    masks = (("pad", (hsv[..., 2] < 140) & (hsv[..., 1] < 90)),
+    masks = (("pad", ((hsv[..., 2] < 140) & (hsv[..., 1] < 90)) | ((hsv[..., 2] < 95) & (hsv[..., 1] < 100))),
              ("container", ((hsv[..., 0] < 18) & (hsv[..., 1] > 120) & (hsv[..., 2] > 120))
               | ((hsv[..., 0] >= 23) & (hsv[..., 0] < 30) & (hsv[..., 1] > 140) & (hsv[..., 2] > 140))
               | ((((hsv[..., 0] >= 35) & (hsv[..., 0] < 88)) | (hsv[..., 0] >= 135)) & (hsv[..., 1] > 110) & (hsv[..., 2] > 125))))
@@ -248,15 +248,33 @@ def measure_ship(frame, layout):
     outside); the containers are orange (hue under 18: the yellow table is 21)."""
     import cv2
 
-    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-    m = cv2.inRange(hsv, (90, 70, 200), (110, 160, 255)) | cv2.inRange(hsv, (0, 120, 150), (17, 255, 255))
-    m = cv2.morphologyEx(m, cv2.MORPH_CLOSE, np.ones((9, 9), np.uint8))
-    n, lab, stats, _ = cv2.connectedComponentsWithStats(m)
-    if n < 2:
-        return dict(error="no hull-coloured area in the top frame")
-    blob = (lab == 1 + int(np.argmax(stats[1:, cv2.CC_STAT_AREA]))).astype(np.uint8)
-    blob = cv2.drawContours(np.zeros_like(blob), cv2.findContours(blob, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[0], -1, 1, -1)
     cam = Camera(layout.fixture["real_cameras"]["top"], frame.shape[:2])
+    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+    blue = cv2.inRange(hsv, (90, 70, 200), (110, 160, 255))
+    orange = cv2.inRange(hsv, (0, 120, 150), (17, 255, 255))
+    _, deck_mm = hull_outline()
+    ship_z = layout.table_z + deck_mm / 1000
+    ys, xs = np.nonzero(blue)
+    if len(xs) >= 5000:
+        pts = cam.to_plane(np.stack([xs, ys], 1), ship_z)
+        keep = (pts[:, 0] > -.17) & (pts[:, 0] < .20) & (np.abs(pts[:, 1]) < .085)
+        if int(keep.sum()) >= 5000:
+            blue_ship = np.zeros_like(blue)
+            blue_ship[ys[keep], xs[keep]] = 255
+            blue_ship = cv2.morphologyEx(blue_ship, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
+            chull = cv2.convexHull(np.column_stack(np.nonzero(blue_ship))[:, ::-1].astype(np.int32))
+            blob = cv2.fillConvexPoly(np.zeros_like(blue), chull, 1)
+        else:
+            blob = None
+    else:
+        blob = None
+    if blob is None:
+        m = cv2.morphologyEx(blue | orange, cv2.MORPH_CLOSE, np.ones((9, 9), np.uint8))
+        n, lab, stats, _ = cv2.connectedComponentsWithStats(m)
+        if n < 2:
+            return dict(error="no hull-coloured area in the top frame")
+        blob = (lab == 1 + int(np.argmax(stats[1:, cv2.CC_STAT_AREA]))).astype(np.uint8)
+        blob = cv2.drawContours(np.zeros_like(blob), cv2.findContours(blob, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[0], -1, 1, -1)
 
     def iou(pose):
         hull = cv2.fillPoly(np.zeros_like(blob), [np.round(ship_polygon(cam, layout, pose)).astype(np.int32)], 1)
@@ -300,6 +318,37 @@ def measure_belt(frame, layout):
     return dict(end_x_m=round(end, 4), centre_y_m=round(float(np.median(far[:, 1])), 4), width_m=round(width, 4))
 
 
+def measure_ship_fixation(ship, belt, layout):
+    """Evaluate Confluence v16 berth-modular spacer-bridge gaps (arm_a/arm_b PR33_C02_BASE inner walls to r08 hull sides),
+    2.0 cm downward concave belt stopper clearance, and yaw budget against the measured ship and belt."""
+    if not ship or "error" in ship:
+        return dict(error="ship not measured", **layout.ship_fixation())
+    fix = layout.ship_fixation(ship_yaw_deg=ship.get("yaw_deg", 0.0))
+    spec = sites.BERTH_V16_SPEC
+    hull_half_w = spec["hull_half_beam_mm"] / 1000.0
+    cy = float(ship.get("centre_y_m", layout.choices["ship_centre_y_m"]))
+    stern_x = float(ship.get("stern_x_m", layout.choices["ship_stern_x_m"]))
+    base_inner = spec["base_inner_from_axis_mm"] / 1000.0
+    a_inner_y = float(layout.arms["arm_a"].base[1]) + base_inner
+    b_inner_y = float(layout.arms["arm_b"].base[1]) - base_inner
+    stopper = spec["belt_concave_stopper"]
+    stopper_flat_x = stern_x - stopper["x_back_mm"] / 1000.0
+    stopper_tip_x = stern_x - stopper["x_front_mm"] / 1000.0
+    belt_end_x = float(belt["end_x_m"]) if belt and "error" not in belt and "end_x_m" in belt else float(layout.belt_stop_x)
+    fix.update(
+        nominal_spacer_dy_mm=fix["spacer_dy_nominal_mm"],
+        stopper_drop_mm=stopper["drop_mm"],
+        measured_stern_x_m=round(stern_x, 4),
+        measured_centre_y_m=round(cy, 4),
+        arm_a_gap_dy_mm=round(((cy - hull_half_w) - a_inner_y) * 1000.0, 2),
+        arm_b_gap_dy_mm=round((b_inner_y - (cy + hull_half_w)) * 1000.0, 2),
+        stopper_flat_x_m=round(stopper_flat_x, 4),
+        stopper_tip_x_m=round(stopper_tip_x, 4),
+        belt_to_stopper_flat_mm=round((belt_end_x - stopper_flat_x) * 1000.0, 2),
+    )
+    return fix
+
+
 def overlay(frame, layout, plates, ship=None, belt=None):
     import cv2
 
@@ -323,4 +372,11 @@ def overlay(frame, layout, plates, ship=None, belt=None):
     if ship and "error" not in ship:
         pose = (ship["stern_x_m"], ship["centre_y_m"], math.radians(ship["yaw_deg"]))
         cv2.polylines(img, [np.round(ship_polygon(cam, layout, pose)).astype(np.int32)], True, (255, 0, 255), 1)
+        hull_half_w = sites.BERTH_V16_SPEC["hull_half_beam_mm"] / 1000.0
+        base_inner = sites.BERTH_V16_SPEC["base_inner_from_axis_mm"] / 1000.0
+        for name, sign in (("arm_a", -1.0), ("arm_b", 1.0)):
+            bx, by, _ = layout.arms[name].base
+            p0 = cam.project((bx, by - sign * base_inner, layout.table_z + 0.013))
+            p1 = cam.project((bx, ship["centre_y_m"] + sign * hull_half_w, layout.table_z + 0.013))
+            cv2.line(img, tuple(int(v) for v in p0), tuple(int(v) for v in p1), (255, 220, 0), 1)
     return img

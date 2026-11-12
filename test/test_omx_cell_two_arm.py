@@ -285,3 +285,34 @@ def test_jaws_that_took_the_box_back_are_not_a_placed_box():
     cells = {"a": Standing([0.0] * 5 + [20.5]), "b": Standing([0.0] * 5 + [30.0])}
     assert two.still_holding(cells, {"a": LIBRARY, "b": LIBRARY}) == ["b"]
     assert two.still_holding({"a": Standing(None), "b": Standing([0.0] * 6)}, {"a": LIBRARY, "b": LIBRARY}) == ["a"]
+
+
+def test_execute_accepts_inferred_holding_and_away_from_home_filters_single_tick_jitter():
+    events = []
+    cells = cells_of(events)
+    cells["a"].holding = False
+    orig_act = cells["a"].act
+
+    def act_with_jaw_arrest(command):
+        res = orig_act(command)
+        if command == "run grasp_pick":
+            res = {**res, "holding": False, "state": [0.0, 0.0, 0.0, 0.0, 0.0, 42.0], "gripper_closed": 20.0}
+        return res
+
+    cells["a"].act = act_with_jaw_arrest
+    commands = {"a": [["run grasp_pick"], ["run lift_pick"]], "b": [["goto b0"], ["goto b1"]]}
+    steps = [{"a": 0, "b": 0}, {"a": 1, "b": 1}]
+    result = two.execute(cells, commands, steps, log=lambda row: None)
+    assert result["failed"] is None and "run lift_pick" in cells["a"].commands
+
+    home = [0.0, -60.0, 50.0, 50.0, 45.0, 20.0]
+    spike = [0.0, -60.0, 55.0, 50.0, 45.0, 20.0]
+    seq = iter([spike, home, home])
+
+    class JitterAt:
+        def act(self, command):
+            return {"ok": True, "state": next(seq, home)}
+
+    libraries = {n: {"chunks": {"home": [home]}} for n in "ab"}
+    assert two.away_from_home({"a": JitterAt(), "b": Standing(home)}, libraries) == []
+

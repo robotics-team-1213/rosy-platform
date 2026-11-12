@@ -16,13 +16,13 @@ from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
 
 from fakes import FakeRobot
-from fleet.server import site_users as site_users_module
+from rosy_account import site_users as site_users_module
 from fleet.server.app import create_app
 from fleet.server.console import FleetConsole
-from fleet.server import password_session as password_session_module
-from fleet.server.password_session import COOKIE, LoginRateLimited, PasswordSessions
+from rosy_account import password_session as password_session_module
+from rosy_account.password_session import COOKIE, LoginRateLimited, PasswordSessions
 from fleet.server.site_auth import SitePrincipal, build_authorize, build_role_guards
-from fleet.server.site_users import hash_password, load_site_accounts, load_site_users, verify_password
+from rosy_account.site_users import hash_password, load_site_accounts, load_site_users, verify_password
 from fleet.server.task_service import FleetTaskService
 from fleet.server.task_store import FleetTaskStore
 from fleet.swarm.robots import RobotEndpoint

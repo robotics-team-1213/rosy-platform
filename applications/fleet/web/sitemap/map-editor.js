@@ -62,20 +62,32 @@ export function createMapEditor({svg, map, view, changed, reason}) {
     const kind = $('editor-kind').value;
     if (kind === 'select') throw new Error('그릴 요소 종류를 먼저 고르세요');
     if (points.length >= 32) throw new Error('요소의 꼭짓점은 최대 32개입니다');
-    points.push(value); redo = [];
-    if (kind === 'park') finish(); else sync();
+    const pt = [Math.round(value[0] * 1000) / 1000, Math.round(value[1] * 1000) / 1000];
+    if (points.length && Math.hypot(points.at(-1)[0] - pt[0], points.at(-1)[1] - pt[1]) < 0.005) return;
+    points.push(pt); redo = [];
+    if (kind === 'park') finish();
+    else {
+      sync();
+      message(`점 ${points.length}개 찍음 (${pt[0]}, ${pt[1]} m) — 계속 찍거나 [그리기 완료] / Enter / 더블클릭으로 완성하세요`);
+    }
   }
   function finish() {
     const kind = $('editor-kind').value;
     const id = `e_${randomUUID().replaceAll('-', '').slice(0, 12)}`;
-    const element = {id, kind, name: $('editor-name').value, geometry: points,
+    const rawName = $('editor-name').value.trim();
+    const defaultName = (!rawName || rawName === '새 요소')
+      ? (kind === 'park' ? `장소 ${(map()?.places?.length || 0) + 1}`
+        : kind === 'road' ? `도로 ${(map()?.edges?.length || 0) + 1}`
+        : `구역 ${(map()?.facilities?.length || 0) + 1}`)
+      : rawName;
+    const element = {id, kind, name: defaultName, geometry: points,
       from: $('editor-from').value, to: $('editor-to').value,
       width_m: Number($('editor-width').value), direction: $('editor-direction').value};
     const next = appendSurveyElement(map(), element);
     selected = {key: kind === 'road' ? 'edges' : kind === 'park' ? 'places' : 'facilities', id};
     selectedVertex = 0; points = []; redo = [];
     changed(next);
-    message('초안에 그렸습니다. 저장·검토·활성화는 각각 별도입니다');
+    message('초안에 그렸습니다. [초안 저장]을 누르면 서버 초안에 저장됩니다');
   }
   function cancel() { points = []; redo = []; drag = null; selected = null; sync(); }
   function erase(vertexOnly = false) {
@@ -107,6 +119,9 @@ export function createMapEditor({svg, map, view, changed, reason}) {
     svg.querySelector('#editor-layer')?.remove();
     options('editor-from', (siteMap?.places || []).map(p => [p.id, p.name]));
     options('editor-to', (siteMap?.places || []).map(p => [p.id, p.name]));
+    if ($('editor-from').value && $('editor-to').value === $('editor-from').value && (siteMap?.places?.length || 0) > 1) {
+      $('editor-to').value = siteMap.places.find(p => p.id !== $('editor-from').value)?.id || $('editor-to').value;
+    }
     options('editor-element', [['', '요소 선택'], ...rows().map(r => [`${r.key}:${r.id}`, r.name || r.id])]);
     options('editor-join-target', [['', '연결할 다음 도로'], ...(siteMap?.edges || [])
       .filter(e => e.id !== selected?.id).map(e => [e.id, e.name || e.id])]);
@@ -215,7 +230,15 @@ export function createMapEditor({svg, map, view, changed, reason}) {
     const next = joinRoads(map(), row.id, $('editor-join-target').value);
     selectedVertex = 0; changed(next); message('선택한 두 도로를 연결했습니다. 중간 장소는 유지되며 연결 관계를 다시 검토하세요');
   }));
-  const listeners = [[svg, 'click', click, true], [svg, 'pointerdown', down], [svg, 'pointermove', move],
+  function dblclick(event) {
+    if (!enabled() || $('editor-kind').value === 'select') return;
+    const minPts = $('editor-kind').value === 'exclusion' ? 3 : 2;
+    if (points.length >= minPts) {
+      event.preventDefault(); event.stopImmediatePropagation();
+      act(finish);
+    }
+  }
+  const listeners = [[svg, 'click', click, true], [svg, 'dblclick', dblclick, true], [svg, 'pointerdown', down], [svg, 'pointermove', move],
     [svg, 'pointerup', up], [svg, 'pointercancel', () => { drag = null; sync(); }], [document, 'keydown', key, true]];
   for (const [target, name, handler, capture] of listeners) target.addEventListener(name, handler, capture);
   return {sync, cancel, drawing: () => Boolean(points.length || redo.length),

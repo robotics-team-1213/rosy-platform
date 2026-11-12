@@ -30,10 +30,12 @@ import threading
 import time
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import cell_arm_cal  # noqa: E402
 from cell_coordinate import FOLDED, ITEM, command_frames, rigid_of, segments_of  # noqa: E402
 from cell_pipeline_io import fold  # noqa: E402
 from cell_scene_guard import scene_moved  # noqa: E402
 from grasp_planner import load_kinematics, norm_to_rad  # noqa: E402
+import joint_jitter  # noqa: E402
 from omx_adapter.coordination import Segment, clearance, moved, plan, ready, thinned  # noqa: E402
 from omx_adapter.swept_volume import capsules  # noqa: E402
 
@@ -107,7 +109,7 @@ def execute(cells: dict, commands: dict, steps: list, fail_at=None, log=print, c
                     fail(name, segment, status.get("error"))
                     return
                 last[name] = send
-                if send == "run grasp_pick" and not status.get("holding"):
+                if send == "run grasp_pick" and not (status.get("holding") or cell_arm_cal.infer_holding(status)):
                     fail(name, segment, "empty grasp")
                     return
             with changed:
@@ -156,7 +158,7 @@ def safe_fold(cells: dict, libraries: dict, kin, rigids: dict, tips: dict, margi
     from cell_transfer import STILL_HOLDING_UNITS
 
     moved_out = moved_out or {}
-    states = {n: cells[n].act("state").get("state") for n in ORDER}
+    states = {n: joint_jitter.settled_state(cells[n]).get("state") for n in ORDER}
     if any(s is None for s in states.values()):
         return {"folded": False, "person_needed": "no arm state"}
     here, sweep, exits = {}, {}, {}
@@ -209,8 +211,13 @@ def away_from_home(cells: dict, libraries: dict) -> list:
     """The arms not folded home: `route` plans from home, so a schedule from anywhere else was never cleared."""
     away = []
     for n in ORDER:
-        state = cells[n].act("state").get("state")
+        state = joint_jitter.settled_state(cells[n]).get("state")
         home = libraries[n]["chunks"]["home"][-1]
+        if state is not None and max(abs(a - b) for a, b in zip(state[:5], home[:5])) > 2.0:
+            recheck = joint_jitter.settled_state(cells[n], {"reach": {"samples": 2}}).get("state")
+            if recheck is not None:
+                arm_dof = max(5, len(state) - 1)
+                state = [(float(state[j]) + 2.0 * float(recheck[j])) / 3.0 for j in range(arm_dof)] + list(recheck[arm_dof:])
         if state is None or max(abs(a - b) for a, b in zip(state[:5], home[:5])) > 2.0:
             away.append(n)
     return away
@@ -220,7 +227,7 @@ def still_holding(cells: dict, libraries: dict) -> list:
     """Arms whose jaws did not close home: the park took the box back, and "placed" would be wrong (2026-10-28)."""
     from cell_transfer import STILL_HOLDING_UNITS
 
-    states = {n: cells[n].act("state").get("state") for n in ORDER}
+    states = {n: joint_jitter.settled_state(cells[n]).get("state") for n in ORDER}
     return [n for n in ORDER if states[n] is None or states[n][5] > libraries[n]["gripper_closed"] + STILL_HOLDING_UNITS]  # unread: not placed
 
 

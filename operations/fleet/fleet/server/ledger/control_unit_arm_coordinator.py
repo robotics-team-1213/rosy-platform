@@ -15,6 +15,13 @@ def is_arm_request(request):
     return isinstance(request, ControlArmTransferCandidate) or (isinstance(request, dict) and "transfer" in request)
 
 
+def direct_child_unit_ids(control, *, resource_prefix: str | None = None) -> list[str]:
+    me = control.unit.unit_id
+    return sorted(u.unit_id for u in control.topology.units.values()
+                  if u.parent == me and (
+                      resource_prefix is None or any(r.startswith(resource_prefix) for r in u.resources)))
+
+
 class ControlUnitArmCoordinator:
     def __init__(self, service):
         self._service = service

@@ -139,14 +139,16 @@ def step(driver, teacher, data, plan, here, skill):
                 first_contact_phase=teacher.first)
 
 
-def isolated(driver, name, seed, skill, zero_error_deg, lag, physics=False):
+def isolated(driver, name, seed, skill, zero_error_deg, lag, physics=False, *, compensate_zero=False):
     """Each step of a task from the plan's nominal state with its own errors, the sub-skill judged alone."""
     task = tasks.get_task(driver.layout, name)
     here, rows = dict(task.get("start", {})), []
     with driver.torch.inference_mode():
         for plan in task["steps"]:
-            teacher = teaching.Teacher(driver.world, seed=seed + len(rows))
+            teacher = teaching.Teacher(driver.world, seed=seed + len(rows), pick_vision=getattr(driver, "pick_vision", False),
+                                       belt_skew=getattr(driver, "belt_skew", False), cam_jitter=getattr(driver, "cam_jitter", False))
             disturb(teacher, seed + len(rows), zero_error_deg, lag, physics)
+            teacher.compensate_zero = bool(compensate_zero)
             data = teacher.fresh(here)  # step_gen brings a belt container in itself
             rows.append(dict(step(driver, teacher, data, plan, here, skill), task=name, seed=seed))
             print(json.dumps(rows[-1], default=str), flush=True)
@@ -158,6 +160,8 @@ def isolated(driver, name, seed, skill, zero_error_deg, lag, physics=False):
 def options(parser):
     parser.add_argument("--pick-vision", action="store_true", help="infer belt pick pose from top camera")
     parser.add_argument("--belt-skew", action="store_true", help="spawn skewed/offset containers on belt")
+    parser.add_argument("--cam-jitter", action="store_true", help="perturb physical top camera pose and self-calibrate online")
+    parser.add_argument("--compensate-zero", action="store_true", help="calibrate and compensate joint-zero error online (G-20)")
     parser.add_argument("--skill", choices=sorted(SKILLS), help="learn and judge only this part of each step; the teacher's IK does the rest")
     parser.add_argument("--zero-error-deg", type=float, default=0., help="per-seed joint-zero calibration error, uniform within +-deg (the twin fit found up to 4)")
     parser.add_argument("--servo-lag", action="store_true", help="per-seed per-joint servo lag in the measured 0.10-0.34 s")
@@ -166,7 +170,10 @@ def options(parser):
 
 def argv(args):
     """The sub-skill and vision/skew options again, for a child process of the round."""
-    vision = [*(["--pick-vision"] if getattr(args, "pick_vision", False) else []), *(["--belt-skew"] if getattr(args, "belt_skew", False) else [])]
+    vision = [*(["--pick-vision"] if getattr(args, "pick_vision", False) else []),
+              *(["--belt-skew"] if getattr(args, "belt_skew", False) else []),
+              *(["--cam-jitter"] if getattr(args, "cam_jitter", False) else []),
+              *(["--compensate-zero"] if getattr(args, "compensate_zero", False) else [])]
     flags = [*(["--servo-lag"] if args.servo_lag else []), *(["--physics-ranges"] if args.physics_ranges else [])]
     return [*(["--skill", args.skill, "--zero-error-deg", str(args.zero_error_deg), *flags] if args.skill else []), *vision]
 

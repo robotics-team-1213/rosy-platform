@@ -9,7 +9,7 @@ import pytest
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives import serialization
 
-from fleet.server.account_authority import AccountAuthority
+from rosy_account.account_authority import AccountAuthority
 
 ISSUER = 'https://account.example.test'
 CALLBACK = 'https://robot.example.test/account/callback'

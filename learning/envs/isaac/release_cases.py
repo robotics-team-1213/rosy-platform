@@ -171,4 +171,16 @@ FIXTURE_OVERRIDES['nominal-palletizing-v21-ship-surveyed-skew-20261110'] = dict(
     seat_replace=dict(SEAT_REPLACE),
     wrist_camera=dict(WRIST_CAMERA_B),
     real_cameras=dict(REAL_CAMERAS_20261110),
+    berth_kit='v16-modular',
+    temp_bridge='v7',
+    ship_stern_x_m=.178,
+    ship_centre_y_m=-.001,
+    ship_spacer_dy_mm=39.,
+    ship_spacer_dx_mm=0.,
+    ship_stern_hook_mm=0.,
+)
+FIXTURE_OVERRIDES['nominal-palletizing-v21-ship-r08-berth-v16'] = dict(
+    FIXTURE_OVERRIDES['nominal-palletizing-v21-ship-surveyed-skew-20261110'],
+    ship_stern_x_m=.155,
+    ship_centre_y_m=0.,
 )

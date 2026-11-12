@@ -92,8 +92,9 @@ def standard(demos: list, fps: int, dwell_s: float = 1.0) -> tuple[list, int, li
         events = gripper_events(actions, fps)
         if len(events) != TRANSITIONS:
             continue
-        moving = [i for i in range(1, len(actions)) if max(abs(p - q) for p, q in zip(actions[i], actions[i - 1])) * fps > 3]
-        end = max(events[-1] + 1, min(len(actions), (moving[-1] if moving else len(actions)) + fps // 2))
+        last_moving = next((i for i in range(len(actions) - 1, 0, -1)
+                            if max(abs(p - q) for p, q in zip(actions[i], actions[i - 1])) * fps > 3), len(actions))
+        end = max(events[-1] + 1, min(len(actions), last_moving + fps // 2))
         bounds = [0, *events, end]
         cut.append([actions[a:b] for a, b in zip(bounds, bounds[1:]) if b > a])
         used.append(index)
@@ -115,20 +116,22 @@ def standard(demos: list, fps: int, dwell_s: float = 1.0) -> tuple[list, int, li
 def chunk_library(actions: list, fps: int, cuts: list, source: dict) -> dict:
     """Named chunks cut from one taught cycle at consecutive times, so each chunk ends where the next
     begins (chunk_runner refuses a chunk that starts far from the held target)."""
-    chunks, previous = {}, None
+    chunks, previous, last_frame = {}, None, None
     for name, start_s, end_s in cuts:
         start, end = round(start_s * fps), round(end_s * fps)
         if not 0 <= start < end <= len(actions) or (previous is not None and start != previous):
             raise ValueError(f"chunk {name}: cuts must be consecutive and inside the demonstration")
-        frames = slow(actions[start:end], fps, start=chunks[list(chunks)[-1]][-1] if chunks else None)
+        frames = slow(actions[start:end], fps, start=last_frame)
         chunks[name], previous = [[round(v, 3) for v in f] for f in frames], end
+        last_frame = chunks[name][-1]
     return {"schema": "rosy.omx-chunk-library.v1", "names": NAMES, "fps": fps, "chunks": chunks,
             "gripper_closed": min(f[GRIPPER] for f in actions), "source": source}
 
 
 def load(path: Path, *, fps: int) -> dict:
     """A validated trajectory; record_session refuses anything else before the follower is touched."""
-    trajectory = json.loads(Path(path).read_text())
+    raw = Path(path).read_bytes()
+    trajectory = json.loads(raw)
     if trajectory.get("schema") != SCHEMA or trajectory.get("names") != NAMES or trajectory.get("fps") != fps:
         raise SystemExit(f"replay trajectory needs schema {SCHEMA}, the six follower names and fps {fps}")
     frames, segments = trajectory.get("frames"), trajectory.get("segments", {})
@@ -141,7 +144,7 @@ def load(path: Path, *, fps: int) -> dict:
     (a0, a1), (r0, r1), (b0, b1) = (segments.get(k, [0, 0]) for k in ("A", "reset", "B"))
     if not (a0 == 0 < a1 == r0 < r1 == b0 < b1 == len(frames) and a1 - a0 == b1 - b0):
         raise SystemExit("replay segments must be A, reset, B of equal-length episodes covering every frame")
-    trajectory["sha256"] = hashlib.sha256(Path(path).read_bytes()).hexdigest()
+    trajectory["sha256"] = hashlib.sha256(raw).hexdigest()
     return trajectory
 
 

@@ -26,11 +26,12 @@ def _to_metres(points_px: np.ndarray, bounds_m, px_per_m: float) -> list[list[fl
 
 
 def detect_draft_map(plane_bgr: np.ndarray, bounds_m, px_per_m: float,
-                     valid: np.ndarray | None = None) -> dict:
+                     valid: np.ndarray | None = None,
+                     raw_bgr: np.ndarray | None = None) -> dict:
     """``{lanes:[{polyline_m, width_px}], zones:[{polygon_m, kind}], reason}`` on one plane."""
     try:
         from rosy_vision.world_261026_auto import auto_calibrate_and_trace_world_261026
-        fit = auto_calibrate_and_trace_world_261026(plane_bgr)
+        fit = auto_calibrate_and_trace_world_261026(raw_bgr if raw_bgr is not None else plane_bgr)
     except Exception:
         fit = None
     if fit is not None and fit.get("edges"):
@@ -82,9 +83,10 @@ def detect_draft_map(plane_bgr: np.ndarray, bounds_m, px_per_m: float,
                             "width_px": round(float(stroke_px), 1)})
             else:
                 corners = cv2.boxPoints(box)
-                out.append({"polygon_m": sorted(_to_metres(corners, bounds_m, px_per_m)),
+                poly_m = _to_metres(corners, bounds_m, px_per_m)
+                out.append({"polygon_m": poly_m,
                             "kind": "exclusion"})
     lanes.sort(key=lambda lane: lane["polyline_m"])
-    zones.sort(key=lambda zone: zone["polygon_m"])
+    zones.sort(key=lambda zone: zone["polygon_m"][0] if zone["polygon_m"] else [0.0, 0.0])
     return {"lanes": lanes, "zones": zones,
             "reason": "ok" if lanes or zones else "nothing detected"}

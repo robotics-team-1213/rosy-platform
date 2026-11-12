@@ -183,6 +183,8 @@ def infer_holding(
     open_pos: float = 57.85,
 ) -> bool:
     """True when the follower jaws physically stopped on an object and maintain grasp equilibrium."""
+    if isinstance(status, dict) and status.get("gripper_closed") is not None and closed == 48.8:
+        closed = float(status["gripper_closed"])
     if prev_grasp is not None or prev_lift is not None:
         dyn = evaluate_grasp_dynamics(
             prev_grasp or status,

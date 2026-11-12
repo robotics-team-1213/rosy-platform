@@ -169,6 +169,20 @@
      "yaw_deg": -90.0
     }
    }
+  },
+  "ship_fixation": {
+   "berth_kit": "v16-modular",
+   "temp_bridge": "v7",
+   "nominal_spacer_dy_mm": 39.0,
+   "spacer_dx_mm": 0.0,
+   "stern_hook_mm": 0.0,
+   "arm_a_gap_dy_mm": 26.75,
+   "arm_b_gap_dy_mm": 28.75,
+   "stopper_flat_x_m": 0.1855,
+   "stopper_tip_x_m": 0.1945,
+   "belt_to_stopper_flat_mm": 26.0,
+   "stopper_drop_mm": 20.0,
+   "within_v16_yaw_budget": true
   }
  }
 }

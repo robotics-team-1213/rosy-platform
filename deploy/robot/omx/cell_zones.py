@@ -19,21 +19,22 @@ import re
 import time
 from pathlib import Path
 
-import numpy as np
-
 import cell_calibration as cal
 import cell_params as prm
 from collection_store import sync_directory
 
 SCHEMA = "rosy.omx-zone-occupancy.v1"
+_ID_RE = re.compile(r"[A-Za-z0-9_.-]{1,128}")
+_SHA256_RE = re.compile(r"[0-9a-f]{64}")
+_SESSION_RE = re.compile(r"[0-9a-f]{32}")
 
 
 def valid_owner(owner):
     return (isinstance(owner, dict)
             and set(owner) == {"device_id", "instance_id", "robot_config_sha256", "profile_sha256"}
-            and all(isinstance(owner[k], str) and re.fullmatch(r"[A-Za-z0-9_.-]{1,128}", owner[k])
+            and all(isinstance(owner[k], str) and _ID_RE.fullmatch(owner[k])
                     for k in ("device_id", "instance_id"))
-            and all(isinstance(owner[k], str) and re.fullmatch(r"[0-9a-f]{64}", owner[k])
+            and all(isinstance(owner[k], str) and _SHA256_RE.fullmatch(owner[k])
                     for k in ("robot_config_sha256", "profile_sha256")))
 
 
@@ -58,7 +59,7 @@ class Zones:
 
     def bind(self, owner, session_id):
         if (not valid_owner(owner) or not isinstance(session_id, str)
-                or re.fullmatch(r"[0-9a-f]{32}", session_id) is None):
+                or _SESSION_RE.fullmatch(session_id) is None):
             raise ValueError("zone occupancy needs the verified operating profile and session")
         if self.held and (owner != self.owner or session_id != self.session_id):
             raise ValueError("zone owner changed while occupied")
@@ -69,7 +70,7 @@ class Zones:
         site = (self.calibration.get("sites") or {}).get(self.site)
         if not site or "homography" not in site:
             return None
-        u = cal.to_pixel(np.array(site["homography"]), tuple(xy))[0]
+        u = cal.to_pixel(site["homography"], xy)[0]
         split, middle = prm.get(self.params, "zone.split_px"), prm.get(self.params, "zone.middle_px")
         return "middle" if abs(u - split) <= middle else "left" if u < split else "right"
 
@@ -142,7 +143,7 @@ class Zones:
                 record = json.loads(os.read(fd, 4096))
                 if (set(record) == {"schema", "owner", "session_id"} and record["schema"] == SCHEMA
                         and valid_owner(record["owner"]) and record["owner"] == self.owner
-                        and isinstance(record["session_id"], str) and re.fullmatch(r"[0-9a-f]{32}", record["session_id"])):
+                        and isinstance(record["session_id"], str) and _SESSION_RE.fullmatch(record["session_id"])):
                     os.ftruncate(fd, 0)
                     os.fsync(fd)
             except (ValueError, TypeError):

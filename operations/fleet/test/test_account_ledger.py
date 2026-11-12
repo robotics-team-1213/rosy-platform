@@ -6,8 +6,8 @@ from hashlib import sha256
 
 import pytest
 
-from fleet.server.password_session import PasswordSessions, SessionStorageUnavailable, StalePasswordCheck
-from fleet.server.site_users import hash_password
+from rosy_account.password_session import PasswordSessions, SessionStorageUnavailable, StalePasswordCheck
+from rosy_account.site_users import hash_password
 from test_password_session import _accounts, _app, _client, _login, TYPED, ORIGIN
 
 

@@ -57,7 +57,7 @@ WARN_AVAIL_PCT = int(os.environ.get("GUARD_WARN_AVAIL_PCT", "10"))
 # D-991: a nightly reboot skips while work runs; up this long, the skips are reported (never a forced reboot).
 REBOOT_OVERDUE_S = int(os.environ.get("GUARD_REBOOT_OVERDUE_S", str(3 * 86400)))
 # D-885: a disk-low lab PC gets one clean-storage request per gap; the site PC keeps product data.
-LAB_PCS = ("ai", "model")
+LAB_PCS = ("ai", "model", "cell", "arm-cell")
 CLEAN_GAP_S = int(os.environ.get("GUARD_CLEAN_GAP_S", "21600"))
 # The site PC reads its own headroom with the same forced command the other PCs answer.
 LOCAL_HEALTH = os.environ.get("GUARD_LOCAL_HEALTH", "/usr/local/sbin/rosy-host-guard-remote")
@@ -162,7 +162,7 @@ def plus_minutes(hhmm: str, minutes: int) -> str:
 
 def recovery_report(value):
     """An old, incomplete or corrupt cache is unavailable evidence, never a healthy report."""
-    if not isinstance(value, dict) or value.get("role") not in ("site", "model", "ai"):
+    if not isinstance(value, dict) or value.get("role") not in ("site", "model", "ai", "cell"):
         return None
     stamp = value.get("time")
     if type(stamp) not in (int, float) or not 0 < stamp < float("inf"):
@@ -238,7 +238,7 @@ def check_pc(name: str, target: str, quiet: str, entry: dict) -> None:
     disk_low, memory_low, memory = resources["disk_low"], resources["memory_low"], resources["memory"]
     try:
         recovery = recovery_report(json.loads(ssh(target, "recovery") or "null"))
-        if recovery and (name not in ("site", "model", "ai") or recovery["role"] == name):
+        if recovery and (name not in ("site", "model", "ai", "cell") or recovery["role"] == name):
             entry["recovery"] = recovery
     except (ValueError, TypeError):
         pass  # Older hosts may not provide recovery yet; resource recovery keeps its existing policy.
@@ -249,7 +249,8 @@ def check_pc(name: str, target: str, quiet: str, entry: dict) -> None:
     if down:
         reasons.append("down " + ",".join(down))
     high_load = load > cores * MAX_LOAD_PER_CORE
-    if disk_low and name in LAB_PCS and time.time() - entry.get("last_clean_request", 0) >= CLEAN_GAP_S:
+    is_lab_pc = name in LAB_PCS or name.startswith("cell-")
+    if disk_low and is_lab_pc and time.time() - entry.get("last_clean_request", 0) >= CLEAN_GAP_S:
         # D-885: the rosy-ops service decides what goes; a refusal (older PC) waits the same gap.
         entry["last_clean_request"] = int(time.time())
         remote_action(name, target, "clean-storage", f"disk low {disk}")

@@ -470,6 +470,51 @@ def test_servo_antijitter_physics_candidate_and_compensator_jitter_z_sag():
     assert float(p_comp[2]) > 0.018
 
 
+def test_v16_berth_modular_cad_assets_and_ship_fixation_geometry():
+    source = json.loads((sites.SHIP_ASSETS / "SOURCE.json").read_text(encoding="utf-8"))
+    for name in (
+        "hull",
+        "house",
+        "berth_v16_cradle",
+        "berth_v16_bridges",
+        "berth_v16_stopper",
+        "omx_base_plate_a",
+        "omx_base_plate_b",
+        "temp_slot_bridge_a",
+        "temp_slot_bridge_b",
+        "temp_slot_plate_v11",
+        "container_1x3_v3",
+    ):
+        assert name in source["meshes"] and (sites.SHIP_ASSETS / f"{name}.stl").is_file()
+    lay = sites.Layout(
+        arm_bases="plate-centre",
+        ship_pose="berth-v16",
+        berth_kit="v16-modular",
+        temp_bridge="v7",
+        ship_spacer_dy_mm=39.0,
+        ship_stern_hook_mm=5.0,
+    )
+    fix = lay.ship_fixation(ship_yaw_deg=0.12)
+    assert fix["berth_kit"] == "v16-modular" and fix["temp_bridge"] == "v7"
+    assert fix["arm_a_gap_dy_mm"] == pytest.approx(27.75, abs=0.5)
+    assert fix["arm_b_gap_dy_mm"] == pytest.approx(27.75, abs=0.5)
+    assert fix["stern_hook_mm"] == pytest.approx(5.0)
+    assert fix["within_v16_yaw_budget"] is True
+    snap_fix = r2s.measure_ship_fixation(
+        dict(stern_x_m=0.178, centre_y_m=-0.001, yaw_deg=0.15),
+        dict(end_x_m=0.2115, centre_y_m=-0.0226, width_m=0.0885),
+        lay,
+    )
+    assert "arm_b_gap_dy_mm" in snap_fix and "belt_to_stopper_flat_mm" in snap_fix
+    snap_20261110 = r2s.ROOT / "deploy/robot/omx/sim/cell_snapshots/20261110-1231.json"
+    bundle = r2s.run_pipeline(snap_20261110)
+    assert bundle["schema"] == "rosy.omx-real2sim-pipeline.v1"
+    assert bundle["stages"][0]["stage"] == "mujoco" and bundle["stages"][0]["stage_order"] == 1
+    assert bundle["stages"][1]["stage"] == "isaac" and bundle["stages"][1]["stage_order"] == 2
+    assert bundle["stages"][1]["isaac_handoff"]["schema"] == "rosy.omx-isaac-handoff.v1"
+
+
+
 
 
 

@@ -64,7 +64,7 @@ function operatorControls() {
     .filter(control => !control.closest(".ui-task-chooser")
       && !control.closest("#device-profiles")
       && !control.closest("#peer-picker")
-      && !["discovery-retry", "camera-confirm-close", "enroll-cancel", "camera-approve-cancel"].includes(control.id));
+      && !["discovery-retry", "camera-confirm-close", "enroll-cancel", "camera-approve-cancel", "camera-manual-draw"].includes(control.id));
 }
 
 function applyRole() {

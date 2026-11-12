@@ -32,7 +32,7 @@ try:
     _area_mod = importlib.import_module(".".join(("omx_adapter", "area_xyz")))
     AREA_RANGES_M = _area_mod.AREA_RANGES_M
     TIER_Z_M = _area_mod.TIER_Z_M
-except ImportError:
+except (ImportError, AttributeError):
     TIER_Z_M = {1: 0.0074, 2: 0.0398, 3: 0.0674}
     AREA_RANGES_M = {
         "pallet": (0.095, 0.245, -0.145, 0.060, 0.005, 0.115),
