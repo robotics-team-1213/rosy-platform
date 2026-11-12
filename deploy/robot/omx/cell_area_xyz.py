@@ -256,9 +256,12 @@ def execute_directive(
         tactile_or_full_place = False
         r_lift_step = None
         stay_hover = bool(exec_cfg.get("stay_in_hover", False))
-        place_seq = ("run lift_pick", "goto above_place", "run descend_place", "run release_place", "run lift_place") + (() if stay_hover else ("park",))
+        post_place = ("chain run lift_place ; park",) if exec_cfg.get("chain_post_place", False) and not stay_hover else ("run lift_place",) + (() if stay_hover else ("park",))
+        place_seq = ("run lift_pick", "goto above_place", "run descend_place", "run release_place") + post_place
         for chunk_cmd in place_seq:
             r_step = _run_cmd(chunk_cmd)
+            if chunk_cmd == "chain run lift_place ; park" and r_step.get("ok"):
+                steps_log.extend(({**r_step, "command": cmd, "synthetic": True} for cmd in ("run lift_place", "park")))
             if chunk_cmd in ("run lift_pick", "goto above_place"):
                 if chunk_cmd == "run lift_pick":
                     r_lift_step = r_step
@@ -312,7 +315,7 @@ def execute_directive(
             if not r_step.get("ok"):
                 if chunk_cmd != "park":
                     _safe_recover_hover(float(plan["grip_open"]), park_after=not stay_hover)
-                if chunk_cmd not in ("run lift_place", "park"):
+                if chunk_cmd not in ("run lift_place", "park", "chain run lift_place ; park"):
                     out_err = {"directive_id": cur_directive.get("directive_id"), "result": "contact", "task_verified": False,
                                "at": chunk_cmd, "error": r_step.get("error"), "pick": cur_directive["pick"],
                                "place": cur_directive["place"], "gate_trace": gate_trace, "recovery": recovery_log, "steps": steps_log}
@@ -341,6 +344,10 @@ def execute_directive(
             cpp.capture_from_attempt({"_work": work_dir, "arm_id": arm_id}, out_slip)
             return out_slip
 
+        if frame_fn is not None and not stay_hover and steps_log and steps_log[-1].get("t") is not None:
+            import time as _time
+
+            _time.sleep(float(exec_cfg.get("camera_settle_s", 0.06)))
         after_side = frame_fn("side") if (frame_fn is not None and not stay_hover) else None
         after_top = frame_fn("top") if (frame_fn is not None and not stay_hover) else None
         verification = verify_stack_outcome(before_side=before_side, after_side=after_side, before_top=before_top,

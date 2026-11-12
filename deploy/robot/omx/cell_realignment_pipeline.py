@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from omx_adapter.motion_profile import compile_smooth_chunk
 
 from cell_fast_learner import (
     InterventionWeightedLearner,
@@ -100,24 +101,32 @@ def compile_rail_and_belt_safe_standby_waypoints(
     cur = [round(float(v), 3) for v in cur_pose[:6]]
     cur[5] = max(48.2, cur[5])
     stby = list(standby_pose) if standby_pose is not None else [0.0, -27.0, 18.0, 46.0, -5.0, 58.1]
+    grip_u = round(float(stby[5]), 3)
 
     if cur[1] > -5.0:
-        elbow_up = [cur[0], cur[1], round(min(-18.0, cur[2] - 10.0), 3), round(max(54.0, cur[3]), 3), cur[4], 58.5]
-        lift_mid = [cur[0], round(min(4.0, cur[1]), 3), -16.0, 52.0, cur[4], 58.5]
-        crane_high = [cur[0], -27.0, 18.0, 46.0, cur[4], 58.5]
-        return [
+        elbow_up = [cur[0], cur[1], round(min(-18.0, cur[2] - 10.0), 3), round(max(54.0, cur[3]), 3), cur[4], grip_u]
+        lift_mid = [cur[0], round(min(4.0, cur[1]), 3), -16.0, 52.0, cur[4], grip_u]
+        crane_high = [cur[0], -27.0, 18.0, 46.0, cur[4], grip_u]
+        phases = [
             {"phase": "elbow_first_rail_clear", "pose": elbow_up, "max_step": 0.030},
             {"phase": "crane_lift_mid", "pose": lift_mid, "max_step": 0.018},
             {"phase": "crane_high", "pose": crane_high, "max_step": 0.021},
             {"phase": "standby_pan", "pose": stby, "max_step": 0.045},
         ]
-    belt_lift_off = [cur[0], round(min(-22.0, cur[1]), 3), round(min(14.0, cur[2]), 3), cur[3], cur[4], 58.5]
-    crane_high = [cur[0], -27.0, 18.0, 46.0, cur[4], 58.5]
-    return [
-        {"phase": "belt_lift_off_constant_wrist", "pose": belt_lift_off, "max_step": 0.025},
-        {"phase": "crane_high", "pose": crane_high, "max_step": 0.025},
-        {"phase": "standby_pan", "pose": stby, "max_step": 0.045},
-    ]
+    else:
+        belt_lift_off = [cur[0], round(min(-22.0, cur[1]), 3), round(min(14.0, cur[2]), 3), cur[3], cur[4], grip_u]
+        crane_high = [cur[0], -27.0, 18.0, 46.0, cur[4], grip_u]
+        phases = [
+            {"phase": "belt_lift_off_constant_wrist", "pose": belt_lift_off, "max_step": 0.025},
+            {"phase": "crane_high", "pose": crane_high, "max_step": 0.025},
+            {"phase": "standby_pan", "pose": stby, "max_step": 0.045},
+        ]
+    previous = cur
+    for phase in phases:
+        phase["smooth_frames"] = compile_smooth_chunk([previous, phase["pose"]])
+        previous = phase["pose"]
+    phases[0]["combined_smooth_frames"] = compile_smooth_chunk([cur] + [phase["pose"] for phase in phases])
+    return phases
 
 
 def diagnose_and_compile_realignment_plan(

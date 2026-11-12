@@ -57,6 +57,9 @@ class FifoCell:
         self._http_conns: dict[tuple[str, int], http.client.HTTPConnection] = {}
         self._frame_cache: dict[str, tuple[str, np.ndarray]] = {}
         self._file_digest_cache: dict[tuple[str, int, int], str] = {}
+        self._cached_state: dict | None = None
+        self._cached_state_mono: float = 0.0
+        self.state_cache_ttl_s: float = 0.35
 
     def _cached_library_digest(self, path_str: str) -> str:
         from cell_envelope import digest
@@ -70,33 +73,48 @@ class FifoCell:
             self._file_digest_cache[key] = cached
         return cached
 
-    def checked(self, command: str, assessment: dict) -> dict:
-        return self.act(f"checked {assessment['session_id']} {assessment['library_sha256']} {command}")
+    def checked(self, command: str, assessment: dict, timeout: float | None = None) -> dict:
+        return self._send(f"checked {assessment['session_id']} {assessment['library_sha256']} {command}", timeout)
 
-    def act(self, command: str) -> dict:
-        if self.operating_profile is not None and command not in ("state", "stop") and not command.startswith("checked "):
+    def act(self, command: str, timeout: float | None = None) -> dict:
+        if (self.operating_profile is not None and command != "state"
+                and not command.startswith(("stop", "checked "))):
             from cell_envelope import _state_current
 
-            state = self.act("state")
+            if command.startswith("load "):
+                self._cached_state = None
+            state = (self._cached_state if self._cached_state is not None
+                     and time.monotonic() - self._cached_state_mono <= self.state_cache_ttl_s
+                     else self.act("state", timeout=min(timeout or self.timeout_s, 5.0)))
             context = state.get("operating_context") or {}
             if not _state_current(state, time.time()) or context.get("operating_profile") != self.operating_profile:
+                self._cached_state = None
                 return {"ok": False, "fault": "profile_mismatch", "error": "live follower differs from selected profile"}
             try:
                 revision = (self._cached_library_digest(command.split(" ", 1)[1])
                             if command.startswith("load ") else state["library_sha256"])
             except (OSError, ValueError, KeyError):
+                self._cached_state = None
                 return {"ok": False, "fault": "profile_library_unavailable", "error": "cannot bind this command library"}
-            command = f"checked {context['session_id']} {revision} {command}"
+            self._cached_state = state
+            self._cached_state_mono = time.monotonic()
+            result = self.checked(command, {"session_id": context["session_id"], "library_sha256": revision}, timeout)
+            if not result.get("ok") or result.get("fault") or command.startswith("load "):
+                self._cached_state = None
+            return result
+        return self._send(command, timeout)
+
+    def _send(self, command: str, timeout: float | None = None) -> dict:
         expected = command.split(" ", 3)[-1] if command.startswith("checked ") else command
         status_path = self.io / "chunk-status.jsonl"
         start = status_path.stat().st_size if status_path.exists() else 0
         try:  # non-blocking: never hand a command to a later runner
-            fd = os.open(self.io / "chunk-cmd", os.O_WRONLY | os.O_NONBLOCK)
+            fd = os.open(self.io / "chunk-cmd", os.O_WRONLY | getattr(os, "O_NONBLOCK", 0))
         except OSError:
             return {"ok": False, "error": "chunk_runner is not running", "fault": "no runner"}
         os.write(fd, (command + "\n").encode())
         os.close(fd)
-        deadline = time.monotonic() + self.timeout_s
+        deadline = time.monotonic() + (self.timeout_s if timeout is None else timeout)
         while time.monotonic() < deadline:
             if status_path.exists():
                 with status_path.open() as stream:

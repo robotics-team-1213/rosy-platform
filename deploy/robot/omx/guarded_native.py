@@ -78,6 +78,7 @@ class NativeJointMotion:
         self.last_alignment_report = None
         self.last_time = None
         self.command = None
+        self.sent = None
         self.failed = False
         self.pwm_limits = None
         self.effort_pwm = {}
@@ -332,8 +333,16 @@ class NativeJointMotion:
             self.alignment_deadline = prepared["alignment_deadline"]
             self.last_time = self.clock()
             return normalized(self.follower, self.command)
-        goals = {n: int(v) for n, v in prepared["command"].items()}
+        goals = {}
+        for n, v in prepared["command"].items():
+            tick = int(v)
+            if (self.teacher and self.sent is not None and n in BODY and n in self.sent
+                    and abs(self.velocity.get(n, 0.0)) < 0.25
+                    and abs(tick - self.sent[n]) == 1 and abs(v - self.sent[n]) < 0.75):
+                tick = self.sent[n]
+            goals[n] = tick
         self.follower.sync_write("Goal_Position", goals, normalize=False)
+        self.sent = goals
         self.command = prepared["command"]
         if "target" in prepared:
             self.prev_target = dict(prepared["target"])

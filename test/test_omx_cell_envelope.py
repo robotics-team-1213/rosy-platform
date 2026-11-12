@@ -437,6 +437,32 @@ def test_supervised_fifo_motion_cannot_bypass_the_selected_device(tmp_path, task
         assert result["ok"] and sent == ["state", f"checked fixture-session {'a' * 64} jog shoulder_pan.pos 1"]
 
 
+def test_fifo_reuses_recent_valid_state_and_invalidates_on_load(tmp_path, task, monkeypatch):
+    import time
+
+    transport = importlib.import_module("cell_pipeline_io")
+    state = copy.deepcopy(task[3])
+    selected = copy.deepcopy(state["operating_context"]["operating_profile"])
+    state.update(t=time.time(), command="state", library_sha256="a" * 64)
+    cell = transport.FifoCell(tmp_path, {}, operating_profile=selected)
+    sent = []
+
+    def send(command, timeout=None):
+        sent.append(command)
+        return state if command == "state" else {"ok": True, "command": command}
+
+    monkeypatch.setattr(cell, "_send", send)
+    monkeypatch.setattr(cell, "_cached_library_digest", lambda path: "b" * 64)
+    assert cell.act("jog shoulder_pan.pos 1")["ok"]
+    assert cell.act("jog shoulder_pan.pos 1")["ok"]
+    assert sent.count("state") == 1
+    assert cell.act("load plan.json")["ok"]
+    assert cell._cached_state is None
+    assert sent.count("state") == 2
+    assert cell.act("jog shoulder_pan.pos 1")["ok"]
+    assert sent.count("state") == 3
+
+
 def test_shipped_envelope_and_condition_templates_cannot_enable_automatic_motion(task, envelope):
     document = json.loads((OMX / "cell-envelope.example.json").read_text())
     assert document["schema"] == envelope.SCHEMA and document["reviews"] == []
