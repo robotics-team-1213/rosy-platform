@@ -57,6 +57,9 @@ class LineStuckAnswerLog:
                     connection.execute(
                         f"ALTER TABLE fleet_line_stuck_answers ADD COLUMN {column} TEXT")
             connection.execute(
+                "CREATE INDEX IF NOT EXISTS fleet_line_stuck_answers_stuck "
+                "ON fleet_line_stuck_answers(robot_id, stuck_id, answer_id)")
+            connection.execute(
                 """CREATE TABLE IF NOT EXISTS fleet_line_stuck_episodes (
                        robot_id TEXT NOT NULL, stuck_id TEXT NOT NULL,
                        source TEXT NOT NULL DEFAULT 'fleet_poll',
@@ -103,12 +106,18 @@ class LineStuckAnswerLog:
                     value['request'].get('case_id'), value['request'].get('owner'))
         with closing(self._connect()) as connection, connection:
             previous = connection.execute("SELECT recorded_at, assessment FROM fleet_judgment_records WHERE robot_id=? ORDER BY judgment_id DESC LIMIT 1", (robot_id,)).fetchone()
-            if previous is None or signature(json.loads(previous['assessment'])) != signature(receipt) or now - previous['recorded_at'] >= 60:
+            record_due = (
+                previous is None
+                or signature(json.loads(previous['assessment'])) != signature(receipt)
+                or now - previous['recorded_at'] >= 60
+            )
+            if record_due:
                 connection.execute("INSERT INTO fleet_judgment_records(robot_id, recorded_at, assessment) VALUES (?, ?, ?)", (robot_id, now, body))
             connection.execute("INSERT INTO fleet_judgment_current VALUES (?, ?, ?) ON CONFLICT(robot_id) DO UPDATE SET recorded_at=excluded.recorded_at, assessment=excluded.assessment", (robot_id, now, body))
             self.notifications.enqueue(connection, receipt)
-            connection.execute("DELETE FROM fleet_judgment_records WHERE recorded_at < ?", (now - 7 * 86400,))
-            connection.execute("DELETE FROM fleet_judgment_current WHERE recorded_at < ?", (now - 7 * 86400,))
+            if record_due:
+                connection.execute("DELETE FROM fleet_judgment_records WHERE recorded_at < ?", (now - 7 * 86400,))
+                connection.execute("DELETE FROM fleet_judgment_current WHERE recorded_at < ?", (now - 7 * 86400,))
 
     def judgments(self, limit: int = 100) -> list[dict]:
         if type(limit) is not int or not 1 <= limit <= 1000:

@@ -85,6 +85,8 @@ class FleetTaskStore(TaskSchemaMigrations, TaskDispatchControl, TaskDispatchQueu
                     created_at TEXT NOT NULL,
                     UNIQUE(request_id, event_type)
                 );
+                CREATE INDEX IF NOT EXISTS fleet_api_audit_created
+                    ON fleet_api_audit(created_at);
                 CREATE TABLE IF NOT EXISTS fleet_robot_reservations (
                     robot_id TEXT PRIMARY KEY,
                     task_id TEXT NOT NULL UNIQUE REFERENCES fleet_tasks(task_id),

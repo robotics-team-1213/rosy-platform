@@ -57,6 +57,8 @@ class CoreEventStore:
                 );
                 CREATE INDEX IF NOT EXISTS core_event_audit_robot_cursor
                     ON core_event_audit(robot_id, audit_id);
+                CREATE INDEX IF NOT EXISTS core_event_audit_received
+                    ON core_event_audit(received_at);
                 """
             )
         if os.name != "nt":
