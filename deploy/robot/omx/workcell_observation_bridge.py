@@ -19,13 +19,14 @@ import threading
 import time
 from urllib.error import HTTPError
 from urllib.parse import quote, urlsplit
-from urllib.request import HTTPRedirectHandler, HTTPSHandler, Request, build_opener
+from urllib.request import HTTPSHandler, Request, build_opener
 from uuid import uuid4
 
 import yaml
 
 from core_common.motor_health import read_motor_health_snapshot  # noqa: F401
 from core_common.observation_snapshot import SnapshotChannel, interrupt_on_termination  # noqa: F401
+from core_common.protocol.account_client import _NoRedirect
 from core_common.protocol.arm_incidents import ArmIncidentAccepted, ArmIncidentHold  # noqa: F401
 from core_common.protocol.motor_health import MotorHealthResponse  # noqa: F401
 from core_common.protocol.workcell_observations import (  # noqa: F401
@@ -63,11 +64,6 @@ from workcell_observation_sources import (  # noqa: E402,F401
     source_stamp,
 )
 _REGISTER_WOB_GLOBALS(globals())
-
-
-class _NoRedirect(HTTPRedirectHandler):
-    def redirect_request(self, req, fp, code, msg, headers, newurl):
-        return None
 
 
 _DEFAULT_BUILD_OPENER = build_opener
