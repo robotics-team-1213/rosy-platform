@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import math
 import uuid
+from functools import partial
 from typing import Any, Callable, Optional
 
 from fastapi import Depends, Header, Request
@@ -24,6 +25,7 @@ from .berth_parking_helpers import (
     centerline_axial_gaps,
     infer_bay_id,
 )
+from .task_dispatch_helpers import compute_road_plan as _compute_road_plan
 
 __all__ = [
     "BAY_DOCK_SPECS",
@@ -45,8 +47,10 @@ def install_berth_parking_routes(
     read_guard,
     operator_guard,
     require_operator,
-    compute_road_plan: Callable,
+    compute_road_plan: Callable | None = None,
 ) -> None:
+    if compute_road_plan is None:
+        compute_road_plan = partial(_compute_road_plan, console)
     @app.get("/api/fleet/robots/{robot_id}/road-nav2/plan", dependencies=read_guard, tags=["fleet"])
     async def fleet_road_nav2_plan(
         robot_id: str, request: Request,

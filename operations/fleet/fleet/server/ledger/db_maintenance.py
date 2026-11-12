@@ -10,6 +10,7 @@ from typing import Any
 
 from fleet.server.audit_archive import AuditArchiver
 from fleet.server.sqlite_policy import configure_connection, enable_wal, set_wal_autocheckpoint
+from fleet.server.task_store import prune_expired_task_history
 
 DEFAULT_DB_SETTINGS = {
     "history_retention_days": 30, "audit_retention_days": 90,
@@ -162,10 +163,7 @@ def prune_expired_online(store_path: Path | str, settings: Mapping[str, Any], *,
 
             history = cutoff("history_retention_days")
             if history and {"fleet_task_history", "fleet_tasks"} <= tables:
-                deleted["fleet_task_history"] = conn.execute(
-                    "DELETE FROM fleet_task_history WHERE task_id IN (SELECT task_id FROM fleet_tasks "
-                    "WHERE status IN ('COMPLETED','FAILED','CANCELED','EXPIRED') AND updated_at < ?)",
-                    (history,)).rowcount
+                deleted["fleet_task_history"] = prune_expired_task_history(conn, history)
             audit = cutoff("audit_retention_days")
             if audit and "device_pairing_audit" in tables:
                 deleted["device_pairing_audit"] = conn.execute("DELETE FROM device_pairing_audit WHERE at < ?",

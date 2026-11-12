@@ -25,7 +25,6 @@ _WRITE = re.compile(r"\b(?:INSERT(?:\s+OR\s+\w+)?\s+INTO|REPLACE\s+INTO|UPDATE|D
 #: module (relative to operations/fleet/fleet) -> the ledger tables it writes, measured 2026-10-19 on local main.
 KNOWN_WRITERS = {
     "server/ledger/task_store.py": {"fleet_tasks", "fleet_task_history", "fleet_robot_reservations"},
-    "server/ledger/db_maintenance.py": {"fleet_task_history"},
     "server/ledger/task_dispatch_control.py": {"fleet_tasks", "fleet_robot_reservations", "fleet_action_claims"},
     "server/ledger/task_dispatch_queue.py": {"fleet_tasks", "fleet_robot_reservations", "fleet_action_claims"},
     "server/ledger/control_stop_store.py": {"fleet_control_stops", "fleet_control_stop_deliveries"},
@@ -53,7 +52,6 @@ KNOWN_WRITERS = {
 #: exceptions, so none has an expiry; a writer that should move under another owner says so here.
 WRITER_REASONS = {
     "server/ledger/task_store.py": "task ledger owner: creates tasks, appends history, cancels queued tasks",
-    "server/ledger/db_maintenance.py": "task ledger retention: trims terminal fleet_task_history rows (D-346)",
     "server/ledger/task_dispatch_control.py": "dispatch authority: rearm/abort and release task resources",
     "server/ledger/task_dispatch_queue.py": "queue admission: claims the next task and its robot reservation",
     "server/ledger/control_stop_store.py": "control-unit stop journal and local latch owner (D-862)",

@@ -49,6 +49,7 @@ from fleet.server.site_auth import (
     install_mutation_audit,
 )
 from fleet.server.static_routes import install_static_routes
+from fleet.server.berth_parking_routes import install_berth_parking_routes
 from fleet.server.task_dispatch_routes import (  # noqa: F401 — GoalRequest 재수출: test_task_contract_docs 참조
     GoalRequest,
     cancel_pending_task_queue,
@@ -372,6 +373,9 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         stop_transport=stop_transport, stop_targets=stop_targets, require_viewer=require_viewer,
         require_operator=require_operator, require_named_operator=require_named_operator,
         read_guard=read_guard, operator_guard=operator_guard, drive_cancel=drive_cancel)
+    install_berth_parking_routes(
+        app, console=console, task_service=task_service, read_guard=read_guard,
+        operator_guard=operator_guard, require_operator=require_operator)
 
     trip_runner = install_trip_and_map_surfaces(
         app, console=console, console_token=console_token, task_service=task_service,
