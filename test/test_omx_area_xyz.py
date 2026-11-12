@@ -862,6 +862,62 @@ def test_crane_standby_transition_and_multi_zone_redirect():
     assert redir["place"]["col"] == 2
 
 
+def test_arm_s_zones_wrist_corridor_jaw_gate_and_crane_lift_waypoints():
+    import numpy as np
+    import cell_spec_recovery_fsm as csrf
+
+    # 1. Yellow table pad (H=22 in HSV, BGR=(40, 215, 235)) is ignored; real orange C3 (BGR=(20, 95, 240)) is detected
+    top_img = np.full((480, 640, 3), (40, 215, 235), dtype=np.uint8)
+    wrist_img = np.full((480, 640, 3), (40, 215, 235), dtype=np.uint8)
+
+    # SC1: belt_center empty -> S8_EMPTY_PICK_ZONE_REDIRECT
+    aud_sc1 = csrf.audit_arm_s_zones_and_wrist_corridor(top_img, wrist_img, expected_zone="belt_center")
+    assert aud_sc1["passed"] is False
+    assert aud_sc1["failure_code"] == "S8_EMPTY_PICK_ZONE_REDIRECT"
+    assert csrf.select_recovery_skill(aud_sc1["failure_code"])["skill"] == "redirect_pick_to_pinky_tray"
+
+    # SC2: Container dropped on pinky_front_floor + visible in wrist left_outside, jaw corridor empty -> S9 & S10
+    top_sc2 = top_img.copy()
+    top_sc2[215:280, 105:225] = (20, 95, 240)
+    wrist_sc2 = wrist_img.copy()
+    wrist_sc2[100:360, 25:175] = (20, 95, 240)
+    aud_sc2 = csrf.audit_arm_s_zones_and_wrist_corridor(
+        top_sc2, wrist_sc2, expected_zone="pinky_tray", require_wrist_corridor=True
+    )
+    assert aud_sc2["passed"] is False
+    assert aud_sc2["failure_code"] == "S9_FLOOR_DROPPED_AND_S10_WRIST_CORRIDOR_MISALIGNED"
+    assert csrf.select_recovery_skill(aud_sc2["failure_code"])["skill"] == "redirect_pick_to_belt_far"
+
+    # SC3: Real C3 container on belt_far + centered in wrist jaw corridor -> PASS
+    top_sc3 = top_img.copy()
+    top_sc3[110:185, 530:635] = (20, 95, 240)
+    wrist_sc3 = wrist_img.copy()
+    wrist_sc3[140:370, 215:435] = (20, 95, 240)
+    aud_sc3 = csrf.audit_arm_s_zones_and_wrist_corridor(
+        top_sc3, wrist_sc3, expected_zone="belt_far", require_wrist_corridor=True
+    )
+    assert aud_sc3["passed"] is True
+    assert aud_sc3["failure_code"] is None
+    assert aud_sc3["wrist_corridor"]["corridor_centered"] is True
+
+    # 2. Jaw telemetry gate: empty air (<51.0), valid 30mm C3 hold (51.0..57.2), wedged/rim bite (>57.2)
+    assert csrf.audit_grasp_jaw_gate(48.82)["failure_code"] == "S11_EMPTY_JAW_CLOSURE_AIR_GRASP"
+    assert csrf.audit_grasp_jaw_gate(54.19)["passed"] is True
+    assert csrf.audit_grasp_jaw_gate(57.85)["failure_code"] == "S12_WEDGED_OR_RIM_BITE"
+
+    # 3. Crane lift waypoints from full extension (b_far) cap upward shoulder_lift step to 0.021 (0.63 u/s)
+    wps = csrf.compile_crane_lift_waypoints(
+        [-27.685, 6.538, -9.91, 53.457, 17.882, 46.5],
+        [0.0, -27.0, 18.0, 46.0, -5.0, 46.5],
+        full_extension=True,
+    )
+    assert len(wps) == 2
+    assert wps[0]["max_step"] == pytest.approx(0.021)
+    assert wps[0]["pose"][1] == pytest.approx(-16.0)
+    assert wps[1]["max_step"] == pytest.approx(0.045)
+
+
+
 
 
 

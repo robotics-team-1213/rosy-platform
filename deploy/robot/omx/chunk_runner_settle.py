@@ -76,7 +76,10 @@ def check_chunk_settled(runner, present: list[float], error: float, now: float, 
                 if threshold is not None:
                     fields["holding"] = by_position and current >= threshold
             runner.holding = bool(fields["holding"])
-        elif runner.holding and runner.chunk in ("lift_pick", "park", "goto above_place", "descend_place"):
+        elif runner.holding and (
+            runner.chunk in ("lift_pick", "park", "goto above_place", "descend_place")
+            or runner.chunk.startswith(("lift_pick", "goto above_place", "descend_place"))
+        ):
             runner.holding = present[5] > runner.target[5] + empty_margin
             fields["holding"] = runner.holding
         runner.chunk, runner.last_grip, runner.last_body = None, None, None
