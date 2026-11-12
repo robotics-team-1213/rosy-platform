@@ -13,7 +13,6 @@ from collections.abc import Sequence
 from contextlib import closing
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from itertools import zip_longest
 from pathlib import Path
 
 DEFAULT_DATABASE = Path("/var/lib/rosy/fleet.sqlite3")
@@ -175,6 +174,7 @@ def vacuum_database(path: Path | str) -> dict:
     os.environ.setdefault("SQLITE_TMPDIR", str(target.parent))
     try:
         with closing(sqlite3.connect(target, timeout=30.0)) as db:
+            db.execute("PRAGMA auto_vacuum=INCREMENTAL")
             db.execute("VACUUM")
     except sqlite3.Error as exc:
         raise DatabaseError("vacuum failed") from exc
@@ -209,6 +209,42 @@ def verify_database(path: Path | str) -> str:
     if rows != [("ok",)]:
         raise DatabaseError("database integrity check failed")
     return "ok"
+
+
+def inspect_database(path: Path | str, *, quick_check: bool = True) -> dict:
+    database = Path(path)
+    if not database.is_file() or database.stat().st_size == 0:
+        raise DatabaseError("database is missing or empty")
+    try:
+        with closing(sqlite3.connect(_database_uri(database), uri=True, timeout=5.0)) as conn:
+            conn.execute("PRAGMA query_only=ON")
+            if quick_check and conn.execute("PRAGMA quick_check").fetchall() != [("ok",)]:
+                raise DatabaseError("database quick check failed")
+            pragma = lambda name: conn.execute(f"PRAGMA {name}").fetchone()[0]
+            tables = {}
+            for (name,) in conn.execute("SELECT name FROM sqlite_master WHERE type='table' "
+                                        "AND name NOT LIKE 'sqlite_%' ORDER BY name"):
+                table = '"' + name.replace('"', '""') + '"'
+                columns = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
+                stamp = next((column for column in ("updated_at", "created_at", "received_at",
+                                                     "recorded_at", "at") if column in columns), None)
+                newest = 'MAX("' + stamp + '")' if stamp else "NULL"
+                count, latest = conn.execute(f"SELECT COUNT(*), {newest} FROM {table}").fetchone()
+                tables[name] = {"rows": int(count), "newest_at": latest}
+            wal = Path(f"{database}-wal")
+            return {"path": str(database), "size_bytes": database.stat().st_size,
+                    "wal_bytes": wal.stat().st_size if wal.is_file() else 0,
+                    "journal_mode": str(pragma("journal_mode")).lower(),
+                    "page_size": int(pragma("page_size")), "page_count": int(pragma("page_count")),
+                    "freelist_count": int(pragma("freelist_count")),
+                    "auto_vacuum": {0: "none", 1: "full", 2: "incremental"}.get(
+                        int(pragma("auto_vacuum")), "unknown"),
+                    "quick_check": "ok" if quick_check else None, "tables": tables,
+                    "component_migrations": {row[0]: int(row[1]) for row in conn.execute(
+                        "SELECT component, version FROM fleet_component_migrations ORDER BY component")}
+                    if "fleet_component_migrations" in tables else {}}
+    except sqlite3.Error as exc:
+        raise DatabaseError("database inspection failed") from exc
 
 
 def _copy_database(source: Path, destination: Path) -> None:
@@ -277,7 +313,7 @@ def _rollback_name(target: Path) -> Path:
     return target.with_name(f"{target.name}.pre-restore-{stamp}.sqlite3")
 
 
-def _guard_account_restore(source: Path, destination: Path) -> None:
+def _guard_account_restore(source: Path, destination: Path) -> tuple[dict, bool]:
     """A stale whole-DB restore must not undo credential changes or token consumption."""
     def schema(db):
         return [row for row in db.execute(
@@ -291,11 +327,12 @@ def _guard_account_restore(source: Path, destination: Path) -> None:
             if not destination.exists():
                 if saved_schema:
                     raise DatabaseError("Account security state needs a readable current database")
-                return
+                return {}, False
             with closing(sqlite3.connect(_database_uri(destination), uri=True, timeout=5.0)) as current:
                 current.execute("BEGIN")
                 if saved_schema != schema(current):
                     raise DatabaseError("Account security state schema differs; restore refused")
+                audits, wipe_sessions = {}, False
                 for kind, name, _, _ in saved_schema:
                     if kind != "table":
                         continue
@@ -303,9 +340,26 @@ def _guard_account_restore(source: Path, destination: Path) -> None:
                     columns = len(saved.execute(f"SELECT * FROM {table} LIMIT 0").description)
                     query = f"SELECT * FROM {table} ORDER BY " + ",".join(
                         str(index) for index in range(1, columns + 1))
-                    if any(left != right for left, right in zip_longest(
-                            saved.execute(query), current.execute(query))):
+                    old, now = list(saved.execute(query)), list(current.execute(query))
+                    if name in ("rosy_account_sessions", "fleet_console_sessions"):
+                        if not {row[0] for row in old} <= {row[0] for row in now}:
+                            raise DatabaseError("Account security state differs; restore refused")
+                        wipe_sessions |= old != now
+                        continue
+                    if name in ("rosy_account_audit", "account_client_audit"):
+                        old = list(saved.execute(f"SELECT rowid,* FROM {table} ORDER BY rowid"))
+                        now = list(current.execute(f"SELECT rowid,* FROM {table} ORDER BY rowid"))
+                        if now[:len(old)] != old:
+                            raise DatabaseError("Account security state differs; restore refused")
+                        audits[name] = now[len(old):]
+                        continue
+                    if name.startswith("account_oauth_"):
+                        if not set(old) <= set(now):
+                            raise DatabaseError("Account security state differs; restore refused")
+                        continue
+                    if old != now:
                         raise DatabaseError("Account security state differs; restore refused")
+                return audits, wipe_sessions
     except sqlite3.Error as exc:
         raise DatabaseError("Account security state could not be verified") from exc
 
@@ -339,7 +393,21 @@ def restore_database(
         _copy_database(source_path, temporary)
         verify_database(temporary)
         _private_mode(temporary)
-        _guard_account_restore(temporary, destination_path)
+        audits, wipe_sessions = _guard_account_restore(temporary, destination_path)
+        if wipe_sessions or any(audits.values()):
+            with closing(sqlite3.connect(temporary)) as restored, restored:
+                if wipe_sessions:
+                    for table in ("rosy_account_sessions", "fleet_console_sessions"):
+                        if any(row[1] == table for row in restored.execute(
+                                "SELECT type,name FROM sqlite_master WHERE type='table'")):
+                            restored.execute(f"DELETE FROM {table}")
+                for name, rows in audits.items():
+                    if rows:
+                        restored.executemany(f"INSERT INTO {name} (rowid," +
+                                             ",".join('"' + column[1].replace('"', '""') + '"'
+                                                      for column in restored.execute(f"PRAGMA table_info({name})")) +
+                                             ") VALUES (" + ",".join("?" for _ in rows[0]) + ")", rows)
+            verify_database(temporary)
         if destination_path.exists():
             rollback = _rollback_name(destination_path)
             backup_database(destination_path, rollback)
@@ -420,6 +488,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                              "backup (default 90; 0 disables)")
     verify = commands.add_parser("verify", help="run SQLite integrity_check")
     verify.add_argument("--path", type=Path, required=True)
+    inspect = commands.add_parser("inspect", help="read live SQLite database statistics")
+    inspect.add_argument("--path", type=Path, default=DEFAULT_DATABASE)
+    inspect.add_argument("--no-quick-check", action="store_true")
+    inspect.add_argument("--json", action="store_true")
     compact = commands.add_parser(
         "compact", help="VACUUM the database in place (quarterly, maintenance window)")
     compact.add_argument("--path", type=Path, default=DEFAULT_DATABASE)
@@ -472,6 +544,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             checkpointed = checkpoint_wal(args.source)
         elif args.command == "verify":
             print(json.dumps({"path": str(args.path), "integrity": verify_database(args.path)}))
+            return 0
+        elif args.command == "inspect":
+            print(json.dumps(inspect_database(args.path, quick_check=not args.no_quick_check)))
             return 0
         elif args.command == "compact":
             if not args.assume_stopped:

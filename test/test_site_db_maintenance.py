@@ -299,8 +299,8 @@ def test_restore_validates_source_before_touching_current_database(tmp_path):
 
 
 @pytest.mark.parametrize("table", [
-    "rosy_account_authority", "rosy_accounts", "rosy_account_sessions", "rosy_account_audit",
-    "fleet_console_sessions", "fleet_console_passwords", "fleet_console_profiles",
+    "rosy_account_authority", "rosy_accounts", "account_clients",
+    "fleet_console_passwords", "fleet_console_profiles",
     "account_oauth_codes", "account_oauth_refresh", "account_oauth_access",
 ])
 def test_restore_refuses_changed_account_security_state(tmp_path, table):
@@ -399,6 +399,67 @@ def test_account_restore_observes_committed_wal_changes(tmp_path):
         with pytest.raises(DatabaseError, match="Account security state"):
             restore_database(source, target, replace=True, assume_stopped=True)
         assert db.execute("SELECT spent FROM account_oauth_refresh").fetchone() == (1,)
+
+
+def test_inspect_reads_committed_wal_rows_and_never_writes(tmp_path, capsys):
+    database = tmp_path / "fleet.sqlite3"
+    with closing(sqlite3.connect(database)) as db:
+        db.execute("PRAGMA journal_mode=WAL")
+        db.execute("CREATE TABLE events (created_at TEXT)")
+        db.execute("INSERT INTO events VALUES ('2026-11-12')")
+        db.execute("CREATE TABLE fleet_component_migrations (component TEXT, version INTEGER)")
+        db.execute("INSERT INTO fleet_component_migrations VALUES ('world', 3)")
+        db.commit()
+        wal = Path(f"{database}-wal")
+        before = (database.read_bytes(), wal.read_bytes())
+        assert site_db.main(["inspect", "--path", str(database), "--json"]) == 0
+        report = json.loads(capsys.readouterr().out)
+        assert report["tables"]["events"] == {"rows": 1, "newest_at": "2026-11-12"}
+        assert report["component_migrations"] == {"world": 3}
+        assert report["journal_mode"] == "wal" and report["quick_check"] == "ok"
+        assert report["wal_bytes"] == len(before[1]) > 0
+        assert "wal_checkpoint" not in report
+        assert (database.read_bytes(), wal.read_bytes()) == before
+        assert site_db.inspect_database(database, quick_check=False)["quick_check"] is None
+        assert (database.read_bytes(), wal.read_bytes()) == before
+
+
+def test_restore_allows_post_backup_login_and_audit_drift(tmp_path):
+    source, target = tmp_path / "backup.sqlite3", tmp_path / "fleet.sqlite3"
+    _database(target, "before")
+    with closing(sqlite3.connect(target)) as db, db:
+        db.execute("CREATE TABLE rosy_account_sessions (session_sha256 TEXT PRIMARY KEY)")
+        db.execute("CREATE TABLE fleet_console_sessions (session_sha256 TEXT PRIMARY KEY, last_used_at REAL)")
+        db.execute("CREATE TABLE rosy_account_audit (operation TEXT)")
+        db.execute("INSERT INTO rosy_account_sessions VALUES ('old-account')")
+        db.execute("INSERT INTO fleet_console_sessions VALUES ('old-console', 1)")
+        db.execute("INSERT INTO rosy_account_audit VALUES ('old')")
+    backup_database(target, source)
+    with closing(sqlite3.connect(target)) as db, db:
+        db.execute("UPDATE records SET value='current'")
+        db.execute("INSERT INTO rosy_account_sessions VALUES ('new-account')")
+        db.execute("UPDATE fleet_console_sessions SET last_used_at=2")
+        db.execute("INSERT INTO rosy_account_audit VALUES ('new')")
+    restore_database(source, target, replace=True, assume_stopped=True)
+    with closing(sqlite3.connect(target)) as db:
+        assert db.execute("SELECT value FROM records").fetchone() == ("before",)
+        assert db.execute("SELECT * FROM rosy_account_sessions").fetchall() == []
+        assert db.execute("SELECT * FROM fleet_console_sessions").fetchall() == []
+        assert db.execute("SELECT operation FROM rosy_account_audit ORDER BY rowid").fetchall() == [
+            ("old",), ("new",)]
+
+
+def test_restore_refuses_diverged_account_audit(tmp_path):
+    source, target = tmp_path / "backup.sqlite3", tmp_path / "fleet.sqlite3"
+    _database(target, "before")
+    with closing(sqlite3.connect(target)) as db, db:
+        db.execute("CREATE TABLE rosy_account_audit (operation TEXT)")
+        db.execute("INSERT INTO rosy_account_audit VALUES ('old')")
+    backup_database(target, source)
+    with closing(sqlite3.connect(target)) as db, db:
+        db.execute("UPDATE rosy_account_audit SET operation='changed'")
+    with pytest.raises(DatabaseError, match="Account security state"):
+        restore_database(source, target, replace=True, assume_stopped=True)
 
 
 def test_restore_does_not_leave_old_wal_sidecars_on_restored_target(tmp_path):
@@ -656,3 +717,5 @@ def test_fresh_backup_remains_restorable_after_account_audit_retention(tmp_path,
     assert restored.integrity == "ok"
     with closing(sqlite3.connect(database)) as db:
         assert db.execute("SELECT COUNT(*) FROM rosy_account_audit").fetchone()[0] == 2
+    site_db.vacuum_database(database)
+    assert site_db.inspect_database(database, quick_check=False)["auto_vacuum"] == "incremental"
