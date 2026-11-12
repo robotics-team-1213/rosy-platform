@@ -84,6 +84,17 @@ def check_chunk_settled(runner, present: list[float], error: float, now: float, 
             fields["holding"] = runner.holding
         runner.chunk, runner.last_grip, runner.last_body = None, None, None
         runner.report(**fields, present=present)
+        stop_cmd = getattr(runner, "_stop_after_park", None)
+        if stop_cmd:
+            runner._stop_after_park = None
+            runner._stopped = True
+            runner.report(
+                command=stop_cmd,
+                ok=True,
+                folded=settled,
+                reason="folded home before stop, torque goes OFF",
+                present=present,
+            )
 
 
 def check_runner_idle(runner, cr_attr) -> bool:

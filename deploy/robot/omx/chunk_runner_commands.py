@@ -22,9 +22,11 @@ if _ADAPTER_SRC not in sys.path:
 from omx_adapter.chunk_library import GUARD_UNITS_PER_S, NAMES, load_library, park_path, transit_path  # noqa: E402
 from omx_adapter.motion_profile import retime  # noqa: E402
 from cell_envelope import digest  # noqa: E402
+import cell_params as prm  # noqa: E402
 from chunk_runner_guards import (  # noqa: E402
     JOG_MAX,
     REL_MAX,
+    SETTLE_TOL,
     build_chain_segments,
     build_jog_target,
     build_splice_frames,
@@ -57,6 +59,43 @@ def dispatch_runner_command(runner, line: str) -> bool:
         runner.grip_from = runner.grip_from if verb in ("state", "grip", "episode") else None
         runner.jog_path = runner.jog_path if verb in ("jog", "state", "episode") else []
         if verb == "stop":
+            fold_on_stop = words[1:] == ["fold"] or (
+                words[1:] != ["now"]
+                and prm.get(
+                    runner.params,
+                    "runner.fold_on_stop",
+                    bool(runner.operating_context and runner.operating_context.get("scope") == "hardware"),
+                )
+            )
+            home = runner.library.get("chunks", {}).get("home") if fold_on_stop else None
+            held = getattr(getattr(runner.robot, "motion", None), "held", None)
+            hard_fault = bool(runner.fault and not runner.fault.startswith("contact"))
+            if (
+                home
+                and runner.target is not None
+                and not held
+                and not hard_fault
+                and not getattr(runner, "_stop_after_park", None)
+            ):
+                present = getattr(runner, "last_present", None) or runner.present()
+                gap = max(
+                    max(abs(a - b) for a, b in zip(runner.target[:5], home[-1][:5])),
+                    max(abs(a - b) for a, b in zip(present[:5], home[-1][:5])),
+                )
+                if gap > SETTLE_TOL:
+                    transit = {NAMES.index(k): float(v) for k, v in runner.library.get("transit", {}).items()} or None
+                    grip_park = runner.target[5] if not runner.holding else float(runner.library["gripper_closed"])
+                    runner.queue = park_path(
+                        list(present[:5]) + [runner.target[5]],
+                        home[-1],
+                        grip_park,
+                        runner.fps,
+                        transit,
+                        runner.library.get("transit_speed", 0.85),
+                    )
+                    runner.chunk, runner.settle_since, runner.played = "park", None, []
+                    runner.trend, runner.pace_floor, runner._stop_after_park = [], 0.0, line
+                    return True
             runner.report(command=line, ok=True)
             return False
         if verb == "episode":
