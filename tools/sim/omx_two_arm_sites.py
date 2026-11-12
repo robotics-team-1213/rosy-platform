@@ -44,10 +44,34 @@ CHOICES = dict(
     cell_snapshot=None,      # with temp_lanes="snapshot": a rosy.omx-cell-snapshot.v1 file (omx_real2sim.py measure), the lanes the top camera saw then
     top_camera="2026-11-10", # "2026-11-10": resurveyed top camera (cell_model_inventory.yaml); "2026-11-03": initial stud-grid PnP
     container_colours="orange",  # "orange": standard v3 containers; "multi": cycle orange/green/red/purple across containers
+    berth_kit="v16-modular", # "v16-modular": integral U-cradles + OMX base-plate spacer bridges + 2 cm concave belt stopper (Confluence 23592971/23234388); "v15-quay": loose quay fenders
+    ship_spacer_dy_mm=39.0,  # v16 berth-spacer-bridge-a/b lateral gap step between PR33_C02_BASE inner wall and r08 hull side (35 / 39 / 43 mm)
+    ship_spacer_dx_mm=0.0,   # v16 berth-spacer-bridge-a/b fore-aft socket step (-8 / 0 / +8 mm)
+    ship_stern_hook_mm=0.0,  # v16 berth-stern-hook-set table-edge setback (0 / 5 / 10 mm)
+    temp_bridge="v7",        # "v7": temp_slot_bridge_a/b 3-prong alignment bridges on PR33_C02_BASE (Confluence 23232928/23233175); "none"
     physics="design",        # a candidate of learning/envs/isaac/cell_physics.yaml (omx_physics.py): servo gains, joint damping, container mass and friction
     wait_pose="side")        # where an arm waits between steps: "side" = home folded but turned to the belt end, out of the middle band
                              # (D-983: the folded home points its jaw at the middle, and arm_a brushed arm_b's jaw at the stand); "home"
+BERTH_V16_SPEC = dict(
+    berth_kit="v16-modular",
+    confluence_pages=("23592971", "23234388", "23233175"),
+    lift_mm=3.0,
+    hull_half_beam_mm=65.0,
+    hull_in_cradle_clearance_mm=0.20,
+    base_inner_from_axis_mm=71.25,
+    base_front_from_axis_mm=75.0,
+    base_hole_from_axis_x_mm=62.5,
+    spacer_dy_nominal_mm=39.0,
+    spacer_dy_steps_mm=(35.0, 39.0, 43.0),
+    spacer_dx_steps_mm=(-8.0, 0.0, 8.0),
+    stern_hook_steps_mm=(0.0, 5.0, 10.0),
+    repeatability_rss_mm=0.32,
+    max_hull_yaw_deg=0.19,
+    belt_concave_stopper=dict(drop_mm=20.0, mouth_mm=62.0, flat_mm=44.0, depth_mm=9.0, wall_mm=3.5, x_back_mm=-7.5, x_front_mm=-16.5),
+)
 TOP_CAMERA_20261110 = dict(eye=[-.0334, .0493, .6613], focus=[.0804, .0086, .1762], up=[.9737, .0296, .226],
+                           f_px=615., width=640, height=480)
+TOP_CAMERA_20261112 = dict(eye=[-.056, .075, .6429], focus=[.0437, .0687, .1762], up=[.9735, .0674, .2185],
                            f_px=615., width=640, height=480)
 ARM_BASES_PLATE_CENTRE = dict(arm_a=((.116, -.164), 90.), arm_b=((.107, .164), -90.))  # G-21: top-frame base plate centres vs arm_b FK (.104, .153)
 TEMP_LANES_PHOTO_1110 = dict(a=[((-.0842, -.2271), 17.2), ((-.0933, -.1676), .2), ((-.0846, -.1081), -16.8)],
@@ -245,7 +269,9 @@ class Layout:
         self.choices = dict(CHOICES, **choices)
         c = self.choices
         self.fixture = f = fx.container_fixture(layers=3, case=c["fixture_case"])
-        if c["top_camera"] == "2026-11-10" and ("top_camera" in choices or c["temp_lanes"] != "photo-20261107"):
+        if c["top_camera"] == "2026-11-12":
+            f["real_cameras"] = dict(f["real_cameras"], top=dict(TOP_CAMERA_20261112))
+        elif c["top_camera"] == "2026-11-10" and ("top_camera" in choices or c["temp_lanes"] != "photo-20261107"):
             f["real_cameras"] = dict(f["real_cameras"], top=dict(TOP_CAMERA_20261110))
         self.table_z = f["workplate_center_m"][2] + f["workplate_size_m"][2] / 2
         self.deck_z = ship_plate.top_z(f)
@@ -280,6 +306,11 @@ class Layout:
         self.sites = {"belt": dict(kind="belt", xy=(pick_x, self.belt_y), z=belt_top + self.box[2] / 2 + .0005, yaw=0.)}
         if c["ship_pose"] == "photo-20261110":
             c["ship_stern_x_m"], c["ship_centre_y_m"] = SHIP_PHOTO_1110["stern_x_m"], SHIP_PHOTO_1110["centre_y_m"]
+        elif c["ship_pose"] == "berth-v16":
+            y_inner_a = self.arms["arm_a"].base[1] + BERTH_V16_SPEC["base_inner_from_axis_mm"] / 1000.0
+            y_inner_b = self.arms["arm_b"].base[1] - BERTH_V16_SPEC["base_inner_from_axis_mm"] / 1000.0
+            c["ship_centre_y_m"] = round((y_inner_a + y_inner_b) / 2.0, 4)
+            c["ship_stern_x_m"] = round(.155 + (float(c["ship_spacer_dx_mm"]) - float(c["ship_stern_hook_mm"])) / 1000.0, 4)
         elif c["ship_pose"] == "snapshot":
             ship = load_snapshot(c["cell_snapshot"])["items"].get("ship") or {}
             if "stern_x_m" not in ship:
@@ -334,3 +365,38 @@ class Layout:
     def hold_z(self, site):
         """TCP height that centres a held container on the site."""
         return self.sites[site]["z"] + self.hold_below
+
+    def ship_fixation(self, ship_yaw_deg=0.0):
+        """v16 berth-modular fixation geometry between OMX-AI base plates (PR33_C02_BASE), r08 hull, and concave belt stopper."""
+        c = self.choices
+        spec = BERTH_V16_SPEC
+        hb = spec["hull_half_beam_mm"] / 1000.0
+        bi = spec["base_inner_from_axis_mm"] / 1000.0
+        y_hull_port = c["ship_centre_y_m"] - hb
+        y_hull_star = c["ship_centre_y_m"] + hb
+        y_inner_a = self.arms["arm_a"].base[1] + bi
+        y_inner_b = self.arms["arm_b"].base[1] - bi
+        gap_a_mm = round((y_hull_port - y_inner_a) * 1000.0, 2)
+        gap_b_mm = round((y_inner_b - y_hull_star) * 1000.0, 2)
+        steps = spec["spacer_dy_steps_mm"]
+        step_a = min(steps, key=lambda s: abs(s - gap_a_mm))
+        step_b = min(steps, key=lambda s: abs(s - gap_b_mm))
+        stopper = spec["belt_concave_stopper"]
+        x_stopper_flat = round(c["ship_stern_x_m"] - stopper["x_back_mm"] / 1000.0, 4)
+        x_stopper_tip = round(c["ship_stern_x_m"] - stopper["x_front_mm"] / 1000.0, 4)
+        return dict(
+            berth_kit=c.get("berth_kit", "v16-modular"),
+            temp_bridge=c.get("temp_bridge", "v7"),
+            spacer_dy_nominal_mm=float(c.get("ship_spacer_dy_mm", 39.0)),
+            spacer_dx_mm=float(c.get("ship_spacer_dx_mm", 0.0)),
+            stern_hook_mm=float(c.get("ship_stern_hook_mm", 0.0)),
+            arm_a_gap_dy_mm=gap_a_mm,
+            arm_b_gap_dy_mm=gap_b_mm,
+            nearest_spacer_step_mm=dict(arm_a=step_a, arm_b=step_b),
+            hull_yaw_deg=round(float(ship_yaw_deg), 2),
+            within_v16_yaw_budget=abs(float(ship_yaw_deg)) <= spec["max_hull_yaw_deg"] + 0.5,
+            stopper_flat_x_m=x_stopper_flat,
+            stopper_tip_x_m=x_stopper_tip,
+            belt_to_stopper_flat_mm=round((self.belt_stop_x - x_stopper_flat) * 1000.0, 1),
+            repeatability_rss_mm=spec["repeatability_rss_mm"],
+        )

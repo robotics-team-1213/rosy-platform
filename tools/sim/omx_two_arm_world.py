@@ -114,8 +114,20 @@ class World:
         bx, by = L.belt_stop_x, L.belt_y
         world.add_geom(name="belt", type=box, size=[.15, .0425, .002], pos=[bx + .15, by, L.belt_top - .002], rgba=COLOURS["belt"])
         world.add_geom(name="belt_stop", type=box, size=[.002, .0425, .004], pos=[bx, by, L.belt_top + .004], rgba=[.6, .6, .6, 1])
-        for arm, a in L.arms.items():  # the 12 mm base plate under each arm (size ASSUMED 120 mm square, visual only)
-            world.add_geom(name=f"{PREFIX[arm]}plate", type=box, size=[.06, .06, .006], pos=[*a.base[:2], a.base[2] - .006], contype=0, conaffinity=0, rgba=[.2, .2, .2, 1])
+        for arm, a in L.arms.items():  # OMX-AI PR33_C02_BASE (150x120x13 mm) + front-center silver clamp + bridge v7
+            tag = arm[-1]
+            bp_mesh = f"omx_base_plate_{tag}"
+            spec.add_mesh(name=bp_mesh, file=self._asset(bp_mesh), scale=[.001] * 3)
+            world.add_geom(name=f"{PREFIX[arm]}plate", type=mujoco.mjtGeom.mjGEOM_MESH, meshname=bp_mesh,
+                           pos=[a.base[0], a.base[1], L.table_z], contype=0, conaffinity=0, rgba=[.16, .17, .19, 1])
+            clamp_dy = .01125 if tag == "a" else -.01125
+            world.add_geom(name=f"{PREFIX[arm]}clamp", type=box, size=[.015, .0275, .0012],
+                           pos=[a.base[0] - .060, a.base[1] + clamp_dy, L.table_z + .0142], contype=0, conaffinity=0, rgba=[.78, .81, .84, 1])
+            if c.get("temp_bridge", "v7") == "v7":
+                br_mesh = f"temp_slot_bridge_{tag}"
+                spec.add_mesh(name=br_mesh, file=self._asset(br_mesh), scale=[.001] * 3)
+                world.add_geom(name=f"{PREFIX[arm]}bridge", type=mujoco.mjtGeom.mjGEOM_MESH, meshname=br_mesh,
+                               pos=[a.base[0], a.base[1], L.table_z], contype=0, conaffinity=0, rgba=[.92, .68, .22, 1])
         self._ship(spec)
         self._temp(spec)
         r08 = c["ship_source"] == "r08-berth"
@@ -212,7 +224,16 @@ class World:
         x0, y0, z0 = sites.ship_cell(L, 0, 0)
         turn = [0, 0, 0, 1]  # ship x runs to -x of the fixture frame
         mesh = mujoco.mjtGeom.mjGEOM_MESH
-        for name, rgba in (("hull", COLOURS["ship"]), ("house", COLOURS["ship"]), ("quay", [.88, .48, .16, 1])):
+        visuals = [("hull", COLOURS["ship"]), ("house", COLOURS["ship"])]
+        if L.choices.get("berth_kit", "v16-modular") == "v16-modular":
+            visuals += [
+                ("berth_v16_cradle", [.88, .48, .16, 1]),
+                ("berth_v16_bridges", [.92, .68, .22, 1]),
+                ("berth_v16_stopper", [.22, .62, .52, 1]),
+            ]
+        else:
+            visuals.append(("quay", [.88, .48, .16, 1]))
+        for name, rgba in visuals:
             spec.add_mesh(name=f"ship_{name}", file=self._asset(name), scale=[.001] * 3)
             world.add_geom(name=f"ship_{name}", type=mesh, meshname=f"ship_{name}", pos=[x0, y0, z0], quat=turn, contype=0, conaffinity=0, rgba=rgba)
         for name in ("cx_bow", "cx_house"):
@@ -251,10 +272,22 @@ class World:
         deck_z = L.deck_z
         spec.add_mesh(name="wall_side", uservert=wall(section(width / 2), length + 2 * (catch + rim), True))
         spec.add_mesh(name="wall_end", uservert=wall(section(length / 2), width + 2 * (catch + rim), False))
+        spec.add_mesh(name="temp_slot_plate_v11", file=self._asset("temp_slot_plate_v11"), scale=[.001] * 3)
         for tag, plate in L.plates.items():
             spec.add_mesh(name=f"deck_{tag}", uservert=prism(plate["outline"], deck_z - S["deck_t"], deck_z))
             colour = COLOURS["plate"]
             spec.worldbody.add_geom(name=f"deck_{tag}", type=mujoco.mjtGeom.mjGEOM_MESH, meshname=f"deck_{tag}", rgba=colour)
+            mid_xy, mid_yaw = plate["lanes"][1]
+            spec.worldbody.add_geom(
+                name=f"plate_stl_{tag}",
+                type=mujoco.mjtGeom.mjGEOM_MESH,
+                meshname="temp_slot_plate_v11",
+                pos=[*mid_xy, deck_z - S["deck_t"]],
+                quat=[math.cos(mid_yaw / 2), 0, 0, math.sin(mid_yaw / 2)],
+                contype=0,
+                conaffinity=0,
+                rgba=colour,
+            )
             for i, (xy, yaw) in enumerate(plate["lanes"], 1):
                 spec.worldbody.add_geom(name=f"lane{tag}{i}", type=mujoco.mjtGeom.mjGEOM_BOX, pos=[*xy, deck_z + .0003], size=[length / 2, width / 2, .0003],
                                         quat=[math.cos(yaw / 2), 0, 0, math.sin(yaw / 2)], contype=0, conaffinity=0, rgba=COLOURS["pad"])
@@ -262,8 +295,6 @@ class World:
                     a = yaw + turn
                     spec.worldbody.add_geom(name=f"w{tag}{i}{mesh[5]}{int(turn > 0)}", type=mujoco.mjtGeom.mjGEOM_MESH, meshname=mesh,
                                             pos=[*xy, deck_z], quat=[math.cos(a / 2), 0, 0, math.sin(a / 2)], rgba=colour)
-        if L.choices["temp_source"] == "stl":
-            raise NotImplementedError("temp_source=stl: pass the downloaded STL as a visual mesh here; collision stays the SCAD shape")
 
     # -- state ---------------------------------------------------------------------------------------------------------------
     def _bind(self):

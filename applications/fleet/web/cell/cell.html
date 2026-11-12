@@ -125,6 +125,59 @@
       <div class="ui-table-scroll" role="region" aria-labelledby="catalog-heading" tabindex="0"><table id="catalog-table" class="ui-data-table" aria-label="물체 카탈로그" hidden><thead><tr><th scope="col">물체</th><th scope="col">크기 mm</th><th scope="col">빈 무게</th><th scope="col">잰 시각·출처</th><th scope="col">운반</th></tr></thead><tbody id="catalog-rows"></tbody></table></div>
       <ui-text id="catalog-status" role="status" aria-live="polite">접속하면 물체 카탈로그를 확인할 수 있습니다.</ui-text>
     </ui-section>
+    <ui-section aria-labelledby="real2sim-heading">
+      <ui-head><h2 class="ui-section-heading" id="real2sim-heading">실물↔시뮬 파이프라인 (Real-to-Sim / Sim-to-Real)</h2></ui-head>
+      <ui-text>실물 탑뷰 스냅샷, Confluence CAD(r08 선체 · v16 선박 고정 키트 · 2 cm 하향 오목 벨트 스토퍼 · PR33_C02_BASE · v7 다리 · v11 판), 쌍둥이(Twin)·SysID 물리 상수 맞춤, 그리고 Stage 1(MuJoCo) → Stage 2(Isaac Sim) 직렬 검증 파이프라인 상태를 한곳에서 확인·평가하고 실행 큐에 등록합니다.</ui-text>
+      <div class="scope">
+        <label for="real2sim-snapshot">활성 스냅샷<select class="ui-field" id="real2sim-snapshot" aria-label="활성 스냅샷"></select></label>
+        <label for="real2sim-prev">비교 기준 스냅샷<select class="ui-field" id="real2sim-prev" aria-label="비교 기준 스냅샷"></select></label>
+        <label for="real2sim-berth-kit">선박 고정 키트<select class="ui-field" id="real2sim-berth-kit" aria-label="선박 고정 키트"><option value="v16-modular">v16-modular (Confluence 일체형 크래들·스페이서·2cm 스토퍼)</option><option value="legacy-plate">legacy-plate (구형 돌기 판)</option></select></label>
+        <label for="real2sim-spacer-dy">스페이서 간격 Δy (mm)<select class="ui-field" id="real2sim-spacer-dy" aria-label="스페이서 간격"><option value="39" selected>39 mm (공칭)</option><option value="35">35 mm</option><option value="43">43 mm</option></select></label>
+        <label for="real2sim-stern-hook">선미 훅 오프셋 (mm)<select class="ui-field" id="real2sim-stern-hook" aria-label="선미 훅 오프셋"><option value="0" selected>0 mm</option><option value="5">5 mm</option><option value="10">10 mm</option></select></label>
+        <label for="real2sim-physics">물리 상수 후보<select class="ui-field" id="real2sim-physics" aria-label="물리 상수 후보"><option value="servo-antijitter-20261112">servo-antijitter-20261112</option><option value="servo-friction-20261109">servo-friction-20261109</option><option value="twin-kp-20261109">twin-kp-20261109</option><option value="design">design</option></select></label>
+        <label for="real2sim-fit-id">SysID 검증 리포트<select class="ui-field" id="real2sim-fit-id" aria-label="SysID 검증 리포트"><option value="fit-servo-run3">fit-servo-run3</option></select></label>
+        <label for="real2sim-promote-name">승격 후보 이름<input class="ui-field" id="real2sim-promote-name" placeholder="예: servo-friction-v2" autocomplete="off" aria-label="승격 후보 이름"></label>
+      </div>
+      <div class="actions">
+        <ui-button id="real2sim-refresh" kind="quiet" type="button">파이프라인 새로고침</ui-button>
+        <ui-button id="real2sim-evaluate" kind="primary" type="button" disabled>Stage 1→2 핸드오프 평가</ui-button>
+        <ui-button id="real2sim-run" kind="primary" type="button" disabled>파이프라인 실행 큐 등록</ui-button>
+        <ui-button id="real2sim-promote" kind="quiet" type="button" disabled>SysID 물리 후보 승격</ui-button>
+      </div>
+      <ui-text id="real2sim-status" role="status" aria-live="polite">접속하면 실물↔시뮬 파이프라인 상태를 확인할 수 있습니다.</ui-text>
+      <dl id="real2sim-figures" class="ui-readout" data-form="strip" aria-label="실물-시뮬 정합 요약" hidden></dl>
+      <div class="ui-table-scroll" role="region" aria-labelledby="real2sim-heading" tabindex="0">
+        <table id="real2sim-loop-table" class="ui-data-table" aria-label="7단계 실물-시뮬 반복 루프" hidden>
+          <thead><tr><th scope="col">단계</th><th scope="col">항목</th><th scope="col">도구</th><th scope="col">상태</th><th scope="col">측정·검증 근거</th></tr></thead>
+          <tbody id="real2sim-loop-rows"></tbody>
+        </table>
+      </div>
+      <div class="ui-table-scroll" role="region" aria-labelledby="real2sim-heading" tabindex="0">
+        <table id="real2sim-stage-table" class="ui-data-table" aria-label="시뮬레이션 트랙 및 단계" hidden>
+          <thead><tr><th scope="col">순서</th><th scope="col">시뮬레이터</th><th scope="col">트랙</th><th scope="col">역할</th><th scope="col">대상 단계·핸드오프</th></tr></thead>
+          <tbody id="real2sim-stage-rows"></tbody>
+        </table>
+      </div>
+      <div class="ui-table-scroll" role="region" aria-labelledby="real2sim-heading" tabindex="0">
+        <table id="real2sim-sysid-table" class="ui-data-table" aria-label="쌍둥이 및 물리 상수 맞춤(SysID) 검증 결과" hidden>
+          <thead><tr><th scope="col">Fit ID</th><th scope="col">팔 / 기준</th><th scope="col">맞춤 상수</th><th scope="col">보류 RMS (deg)</th><th scope="col">판정</th><th scope="col">근거</th></tr></thead>
+          <tbody id="real2sim-sysid-rows"></tbody>
+        </table>
+      </div>
+      <div class="ui-table-scroll" role="region" aria-labelledby="real2sim-heading" tabindex="0">
+        <table id="real2sim-survey-table" class="ui-data-table" aria-label="다음 물리 상수 실험 우선순위 (omx_sysid survey)" hidden>
+          <thead><tr><th scope="col">상수</th><th scope="col">불확실도 폭</th><th scope="col">현재 출처</th><th scope="col">권장 실험 (D-911)</th></tr></thead>
+          <tbody id="real2sim-survey-rows"></tbody>
+        </table>
+      </div>
+      <div class="ui-table-scroll" role="region" aria-labelledby="real2sim-heading" tabindex="0">
+        <table id="real2sim-runs-table" class="ui-data-table" aria-label="파이프라인 실행 큐 및 이력" hidden>
+          <thead><tr><th scope="col">실행 ID</th><th scope="col">상태</th><th scope="col">스냅샷·설정</th><th scope="col">재실행 단계</th><th scope="col">원격 실행 명령</th></tr></thead>
+          <tbody id="real2sim-runs-rows"></tbody>
+        </table>
+      </div>
+      <details><summary class="ui-disclosure-row">Stage 2 Isaac Sim 핸드오프 명세 (rosy.omx-isaac-handoff.v1)</summary><pre id="real2sim-handoff" aria-label="Isaac Sim 핸드오프 JSON"></pre></details>
+    </ui-section>
     <ui-section aria-labelledby="saved-heading"><ui-head><h2 class="ui-section-heading" id="saved-heading">저장된 문서</h2></ui-head><ui-text>저장된 레시피와 셀을 선택하거나 아래에서 새 문서를 준비하세요.</ui-text><ui-status id="saved-status" state="unavailable">접속하면 저장된 문서를 확인할 수 있습니다.</ui-status><ul id="saved" hidden></ul></ui-section>
     <div class="documents">
       <ui-section aria-labelledby="recipe-heading">

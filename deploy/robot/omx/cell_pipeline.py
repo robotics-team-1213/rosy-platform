@@ -94,7 +94,7 @@ def transfer(cell, library: Path, hover=None, *, config=None, calibration=None, 
                 act("park")
                 return {"result": "misaligned", "at": command, "hover": seen, "steps": steps,
                         "envelope": assessment}
-        if command == "run grasp_pick" and not status.get("holding"):
+        if command == "run grasp_pick" and not (status.get("holding") or __import__("cell_arm_cal").infer_holding(status)):
             for after in ("run lift_pick", "park"):
                 steps.append({"command": after, "ok": act(after).get("ok")})
             return {"result": "empty", "at": command, "hover": seen, "steps": steps, "envelope": assessment}

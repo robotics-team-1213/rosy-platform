@@ -14,8 +14,8 @@
 |---|---|---|---|---|---|
 | 1 관측 | 실물 | 카메라 4대 프레임, 관절 상태 | `omx_real2sim.py capture` | `RUN/frames/` | 없음 |
 | 2 측정 | real→sim | 항목마다 병렬로 재서 스냅샷 하나 | `omx_real2sim.py measure --prev` | `snapshot.json`, `overlay.png` | 겹침 그림 확인 |
-| 3 차이 | real→sim | 바뀐 항목 → 다시 돌릴 단계와 레지스트리 행 | `omx_real2sim.py diff` | `changed`, `rerun`, `gaps` | 없음 |
-| 4 시뮬 | sim | 바뀐 단계만, 두 시험 PC에서 병렬 | `omx_real2sim.py sim` | `sim.json`, 단계별 결과 | 없음 |
+| 3 차이 | real→sim | 바뀐 항목 → 다시 돌릴 단계와 레지스트리 행 | `omx_real2sim.py diff` / `omx_real2sim.py pipeline` | `changed`, `rerun`, `gaps` | 없음 |
+| 4 시뮬 | sim | 바뀐 단계만, Stage 1(MuJoCo) → Stage 2(Isaac Sim 핸드오프) 직렬 파이프라인 | `omx_real2sim.py sim` / `pipeline`, `/console/cell` (`cell_real2sim.py`) | `sim.json`, `pipeline.json`, `rosy.omx-isaac-handoff.v1` | 없음 |
 | 5 실물 시도 | sim→real | 시뮬에서 통과한 계획을 감독 시험으로 | 셀 파이프라인, 에피소드 기록 | 에피소드 | 전원 스위치 옆에서 지켜보기(D-911) |
 | 6 대조 | sim→real | 실물 에피소드를 쌍둥이에 재생(추종·시야), Isaac 사례와 실물 결과 비교 | `omx_twin.py batch`/`report`, `cell_case_suite.py` | 쌍둥이 보고서, 사례 결과 | 없음 |
 | 6b 상수 맞춤 | real→sim | 실물 기록으로 물리 상수를 맞추고, 보류 에피소드에서 나아진 것만 후보로 올린다. `next`가 다음에 잴 상수와 실험을 고른다 | `omx_sysid.py servo`/`friction`/`promote`/`next`, 실험 `cell_step.py`·`cell_push.py --friction` | `fit.json`·`friction.json`, `cell_physics.yaml`의 새 후보(`--choice physics=<이름>`) | 실험 때만 전원 스위치 옆(D-911) |

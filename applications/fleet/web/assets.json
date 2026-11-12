@@ -82,6 +82,10 @@
       "path": "cell/cell-object-catalog.js",
       "media_type": "application/javascript"
     },
+    "cell-real2sim.js": {
+      "path": "cell/cell-real2sim.js",
+      "media_type": "application/javascript"
+    },
     "motor-health-view.js": {
       "path": "motor-health-view.js",
       "media_type": "application/javascript"

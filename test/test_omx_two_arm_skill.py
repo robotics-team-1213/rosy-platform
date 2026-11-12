@@ -74,8 +74,15 @@ def test_physics_ranges_draw_measured_constants_only_and_the_fitted_zero_offset_
     assert zero["arm_b"][5] == 0 and all(0 <= e <= np.radians(o) for e, o in zip(zero["arm_b"][:5], offsets))
 
 
+def _require_mujoco():
+    try:
+        import mujoco  # noqa: F401
+    except Exception as exc:
+        pytest.skip(str(exc))
+
+
 def test_fresh_applies_a_seeds_servo_and_gives_the_next_teacher_the_candidates_own():
-    pytest.importorskip("mujoco")
+    _require_mujoco()
     import omx_two_arm_world as tw
     world = tw.World(sites.Layout())
     a = skills.teaching.Teacher(world, seed=1003)
@@ -93,3 +100,19 @@ def test_collects_per_step_errors_never_reuse_an_evaluation_seed():
     lowest_collect = policy.STEP_ERROR_SEED_BASE + 100 * policy.TRAIN_SEED_BASE
     assert lowest_collect > highest_eval
     assert skills.draw_errors(lowest_collect, 4.)["arm_a"].tolist() != skills.draw_errors(lowest_collect + 1, 4.)["arm_a"].tolist()
+
+
+def test_skill_argv_forwards_cam_jitter_and_compensate_zero():
+    import argparse
+    ap = argparse.ArgumentParser()
+    skills.options(ap)
+    args = ap.parse_args(["--skill", "grasp", "--zero-error-deg", "4", "--cam-jitter", "--compensate-zero"])
+    forwarded = skills.argv(args)
+    assert "--cam-jitter" in forwarded and "--compensate-zero" in forwarded
+    _require_mujoco()
+    import omx_two_arm_world as tw
+    world = tw.World(sites.Layout())
+    t = skills.teaching.Teacher(world, seed=3, belt_skew=True)
+    skew = t.skew_for()
+    assert "jitter" in skew and len(skew["jitter"]) == 3
+

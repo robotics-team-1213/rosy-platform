@@ -132,8 +132,9 @@ def follow(config: dict, site: str, cur, pixel_fn, work_dir=None) -> tuple[dict,
     c = pixel_fn((place[0], place[1] + 0.01))
     mirrored = np.linalg.det(np.array([[b[0] - a[0], c[0] - a[0]], [b[1] - a[1], c[1] - a[1]]])) < 0
     turn = -m["turn_deg"] if mirrored else m["turn_deg"]  # the arm frame turns the other way when the view is mirrored
+    auto_roi = [round(min(xs)) - pad, round(min(ys)) - pad, round(max(xs)) + pad, round(max(ys)) + pad]
     moved = dict(s, surface_px=polygon, place=[round(place[0], 4), round(place[1], 4)], start=[round(place[0], 4), round(place[1], 4)],
-                 auto_roi=[round(min(xs)) - pad, round(min(ys)) - pad, round(max(xs)) + pad, round(max(ys)) + pad],
+                 auto_roi=auto_roi, **({"detect_roi": auto_roi} if "detect_roi" in s else {}),
                  yaw_deg=round(track.get("yaw_deg", s["yaw_deg"]) + turn, 1))
     return dict(config, sites=dict(config["sites"], **{site: moved})), {
         "site": site, "tracked": True, "inliers": m["inliers"], "turn_deg": round(m["turn_deg"], 1),

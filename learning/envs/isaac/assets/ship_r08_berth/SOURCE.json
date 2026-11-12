@@ -1,6 +1,6 @@
 {
- "source": "Rosy/docs/research/ship-modular-2026-11-03: compact-ship-r08 (v15) + ship-berth, containers v3 body + real_door.py",
- "frame": "ship: x stern->bow, y port, z table, mm; container: body x 0..90 (doors +x), z 0..34.4",
+ "source": "Rosy/docs/research/ship-modular-2026-11-03: compact-ship-r08 (v15) + ship-berth (v15 quay & v16 berth-modular + belt-concave-stopper), rosy-modeling/parts/omx-temp-slot (bridge v7 + plate v11) + PR33_C02_BASE, containers v3 body + real_door.py",
+ "frame": "ship: x stern->bow, y port, z table, mm; arm_base/bridge: fixture axes at joint1 on table, mm; plate_v11: fixture axes at lane-2 on table, mm; container: body x 0..90 (doors +x), z 0..34.4",
  "meshes": {
   "hull": {
    "faces": 25028,
@@ -44,6 +44,126 @@
      291.0,
      86.0,
      13.0
+    ]
+   ]
+  },
+  "berth_v16_cradle": {
+   "faces": 1102,
+   "bounds_mm": [
+    [
+     -4.0,
+     -86.2,
+     0.0
+    ],
+    [
+     291.0,
+     86.2,
+     13.0
+    ]
+   ]
+  },
+  "berth_v16_bridges": {
+   "faces": 1096,
+   "bounds_mm": [
+    [
+     -8.0,
+     -122.0,
+     2.5
+    ],
+    [
+     124.0,
+     122.0,
+     16.8
+    ]
+   ]
+  },
+  "berth_v16_stopper": {
+   "faces": 68,
+   "bounds_mm": [
+    [
+     -16.5,
+     -41.5,
+     -20.0
+    ],
+    [
+     -1.55,
+     41.5,
+     12.0
+    ]
+   ]
+  },
+  "omx_base_plate_a": {
+   "faces": 8850,
+   "bounds_mm": [
+    [
+     -75.0,
+     -48.75,
+     0.0
+    ],
+    [
+     75.0,
+     71.25,
+     32.0
+    ]
+   ]
+  },
+  "omx_base_plate_b": {
+   "faces": 8850,
+   "bounds_mm": [
+    [
+     -75.0,
+     -71.25,
+     0.0
+    ],
+    [
+     75.0,
+     48.75,
+     32.0
+    ]
+   ]
+  },
+  "temp_slot_bridge_a": {
+   "faces": 1676,
+   "bounds_mm": [
+    [
+     -127.73,
+     -50.0,
+     6.81
+    ],
+    [
+     -54.5,
+     69.25,
+     16.8
+    ]
+   ]
+  },
+  "temp_slot_bridge_b": {
+   "faces": 1676,
+   "bounds_mm": [
+    [
+     -127.73,
+     -69.25,
+     6.81
+    ],
+    [
+     -54.5,
+     50.0,
+     16.8
+    ]
+   ]
+  },
+  "temp_slot_plate_v11": {
+   "faces": 11564,
+   "bounds_mm": [
+    [
+     -56.0,
+     -99.5,
+     0.0
+    ],
+    [
+     81.27,
+     99.5,
+     14.6
     ]
    ]
   },

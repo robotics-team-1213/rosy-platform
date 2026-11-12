@@ -114,6 +114,99 @@ def install_cell_app_routes(app, *, mission_service, compiler, service_id, princ
         except ValueError as exc:
             raise HTTPException(422, detail={"code": "CELL_OBJECT_CATALOG_INVALID", "message": str(exc)}) from exc
 
+    runs_file = store.path.parent / "real2sim-runs.json" if store is not None else None
+
+    @app.get("/api/fleet/cell-app/real2sim-pipeline", dependencies=[Depends(require_viewer)])
+    def real2sim_pipeline(
+        snapshot: str | None = None,
+        prev: str | None = None,
+        berth_kit: str = "v16-modular",
+        ship_spacer_dy_mm: float = 39.0,
+        ship_stern_hook_mm: float = 0.0,
+    ):
+        """Read-only Real-to-Sim / Sim-to-Real pipeline status, snapshot diff, CAD inventory, and Stage 1->2 handoff."""
+        from fleet.server.cell_real2sim import view as r2s_view
+
+        try:
+            return r2s_view(
+                snapshot,
+                prev,
+                berth_kit=berth_kit,
+                ship_spacer_dy_mm=ship_spacer_dy_mm,
+                ship_stern_hook_mm=ship_stern_hook_mm,
+                runs_path=runs_file,
+            )
+        except OSError as exc:
+            raise HTTPException(503, detail={"code": "CELL_REAL2SIM_UNAVAILABLE", "message": str(exc)}) from exc
+        except KeyError as exc:
+            raise HTTPException(404, detail={"code": "CELL_REAL2SIM_NOT_FOUND", "message": str(exc)}) from exc
+        except ValueError as exc:
+            raise HTTPException(422, detail={"code": "CELL_REAL2SIM_INVALID", "message": str(exc)}) from exc
+
+    @app.post("/api/fleet/cell-app/real2sim-pipeline/evaluate", dependencies=[Depends(require_named_operator)])
+    def real2sim_evaluate(body: dict):
+        """Evaluate a snapshot or layout configuration and return the Stage 1 (MuJoCo) -> Stage 2 (Isaac Sim) handoff."""
+        from fleet.server.cell_real2sim import view as r2s_view
+
+        if not isinstance(body, dict):
+            raise HTTPException(422, detail={"code": "CELL_REAL2SIM_INVALID", "message": "JSON object required"})
+        try:
+            return r2s_view(
+                body.get("snapshot_id"),
+                body.get("prev_id"),
+                custom_snapshot=body.get("snapshot"),
+                berth_kit=str(body.get("berth_kit") or "v16-modular"),
+                ship_spacer_dy_mm=float(body.get("ship_spacer_dy_mm", 39.0)),
+                ship_stern_hook_mm=float(body.get("ship_stern_hook_mm", 0.0)),
+                compensate_zero=bool(body.get("compensate_zero", True)),
+                cam_jitter=bool(body.get("cam_jitter", True)),
+                physics=str(body.get("physics") or "twin-kp-20261109"),
+                runs_path=runs_file,
+            )
+        except OSError as exc:
+            raise HTTPException(503, detail={"code": "CELL_REAL2SIM_UNAVAILABLE", "message": str(exc)}) from exc
+        except KeyError as exc:
+            raise HTTPException(404, detail={"code": "CELL_REAL2SIM_NOT_FOUND", "message": str(exc)}) from exc
+        except (ValueError, TypeError) as exc:
+            raise HTTPException(422, detail={"code": "CELL_REAL2SIM_INVALID", "message": str(exc)}) from exc
+
+    @app.post("/api/fleet/cell-app/real2sim-pipeline/runs")
+    def real2sim_queue_run(body: dict, principal=Depends(require_named_operator)):
+        """Queue and record a Stage 1 (MuJoCo) -> Stage 2 (Isaac Sim) pipeline execution bundle."""
+        from fleet.server.cell_real2sim import queue_pipeline_run
+
+        if not isinstance(body, dict):
+            raise HTTPException(422, detail={"code": "CELL_REAL2SIM_INVALID", "message": "JSON object required"})
+        actor = getattr(principal, "principal_id", None) or "operator"
+        try:
+            return queue_pipeline_run(body, actor_id=actor, runs_path=runs_file)
+        except OSError as exc:
+            raise HTTPException(503, detail={"code": "CELL_REAL2SIM_UNAVAILABLE", "message": str(exc)}) from exc
+        except KeyError as exc:
+            raise HTTPException(404, detail={"code": "CELL_REAL2SIM_NOT_FOUND", "message": str(exc)}) from exc
+        except (ValueError, TypeError) as exc:
+            raise HTTPException(422, detail={"code": "CELL_REAL2SIM_INVALID", "message": str(exc)}) from exc
+
+    @app.post("/api/fleet/cell-app/real2sim-pipeline/promote-physics")
+    def real2sim_promote_physics(body: dict, principal=Depends(require_named_operator)):
+        """Validate a SysID fit via verdict() and promote it into cell_physics.yaml as a named candidate."""
+        from fleet.server.cell_real2sim import promote_physics_candidate
+
+        if not isinstance(body, dict):
+            raise HTTPException(422, detail={"code": "CELL_REAL2SIM_INVALID", "message": "JSON object required"})
+        actor = getattr(principal, "principal_id", None) or "operator"
+        try:
+            return promote_physics_candidate(
+                str(body.get("fit_id") or ""),
+                str(body.get("candidate_name") or ""),
+                actor_id=actor,
+                custom_fit=body.get("fit"),
+            )
+        except KeyError as exc:
+            raise HTTPException(404, detail={"code": "CELL_REAL2SIM_NOT_FOUND", "message": str(exc)}) from exc
+        except (ValueError, TypeError) as exc:
+            raise HTTPException(422, detail={"code": "CELL_REAL2SIM_INVALID", "message": str(exc)}) from exc
+
     @app.get("/api/fleet/cell-app/documents/{kind}/{identifier}", dependencies=[Depends(require_viewer)])
     def document_read(kind: str, identifier: str):
         return read(kind, identifier)
