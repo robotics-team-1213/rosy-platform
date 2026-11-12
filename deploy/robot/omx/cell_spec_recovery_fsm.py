@@ -37,7 +37,44 @@ FAILURE_CODES: tuple[str, ...] = (
     "S6_UNSEATED_CONE",
     "S7_DESCEND_OR_GRASP_CONTACT",
     "S7_PRIOR_LEG_FAILED_INTERLOCK",
+    "S9_DISPLACED_CONTAINER_BELT_FAR",
+    "S10_DISPLACED_CONTAINER_FLOOR_FRONT",
 )
+
+CELL_S_EXTENDED_ZONES: dict[str, dict[str, Any]] = {
+    "pinky_tray": {
+        "site": "pinky",
+        "top_roi_px": (10, 40, 260, 240),
+        "grasp_pose_units": [66.929, -5.845, 29.839, 39.243, 111.797],
+        "hover_pose_units": [66.929, -24.0, 22.0, 39.243, 111.797],
+        "xyz_m": (0.0535, 0.1720, 0.0200),
+        "yaw_deg": -85.0,
+    },
+    "belt_center": {
+        "site": "belt",
+        "top_roi_px": (240, 90, 460, 270),
+        "grasp_pose_units": [4.966, -15.337, 36.168, 43.330, 46.846],
+        "hover_pose_units": [4.966, -27.0, 22.0, 43.330, 46.846],
+        "xyz_m": (0.1250, -0.0550, 0.0250),
+        "yaw_deg": -85.0,
+    },
+    "belt_far": {
+        "site": "belt_far",
+        "top_roi_px": (320, 110, 620, 290),
+        "grasp_pose_units": [-27.685, 6.725, -2.289, 45.649, 17.882],
+        "hover_pose_units": [-27.685, -27.0, 22.0, 45.649, 17.882],
+        "xyz_m": (0.1850, -0.0950, 0.0250),
+        "yaw_deg": -85.0,
+    },
+    "floor_front": {
+        "site": "floor_front",
+        "top_roi_px": (60, 180, 280, 420),
+        "grasp_pose_units": [44.121, 9.500, 14.200, 38.000, 88.242],
+        "hover_pose_units": [44.121, -27.0, 22.0, 38.000, 88.242],
+        "xyz_m": (0.0950, 0.0980, 0.0080),
+        "yaw_deg": -85.0,
+    },
+}
 
 TEMP_PLATE_B_LANES_XY_YAW: dict[int, tuple[float, float, float]] = {
     1: (0.1163, -0.1452, -141.3),
@@ -181,9 +218,45 @@ def select_recovery_skill(
     temp_slot_free: bool = True,
     neighbor_removable: bool = True,
     level_tried: int = 0,
+    target_site: str = "pinky",
 ) -> dict[str, Any]:
     """Select the L0/L1/L2/L3 recovery skill primitive using Round 2 consensus numerical decision boundaries."""
     code = str(failure_code or "").strip()
+
+    if code == "S9_DISPLACED_CONTAINER_BELT_FAR":
+        norm_target = str(target_site or "pinky").strip().lower()
+        skill_name = (
+            "recover_from_belt_far_to_belt_center"
+            if norm_target in ("belt", "belt_center")
+            else "recover_from_belt_far_to_pinky"
+        )
+        return _skill_res(
+            "L2",
+            skill_name,
+            code,
+            displaced_zone="belt_far",
+            target_site=norm_target,
+            grasp_pose_units=list(CELL_S_EXTENDED_ZONES["belt_far"]["grasp_pose_units"]),
+            crane_shoulder_lift=-27.0,
+            crane_elbow_flex=22.0,
+            max_step=0.032,
+            lift_before_pan=True,
+        )
+
+    if code == "S10_DISPLACED_CONTAINER_FLOOR_FRONT":
+        norm_target = str(target_site or "pinky").strip().lower()
+        return _skill_res(
+            "L2",
+            "recover_from_floor_front_to_pinky",
+            code,
+            displaced_zone="floor_front",
+            target_site=norm_target,
+            grasp_pose_units=list(CELL_S_EXTENDED_ZONES["floor_front"]["grasp_pose_units"]),
+            crane_shoulder_lift=-27.0,
+            crane_elbow_flex=22.0,
+            max_step=0.032,
+            lift_before_pan=True,
+        )
 
     if code in ("S5_VIEW_OR_GATE_MISMATCH", "S5_X_BIMODAL_AMBIGUOUS", "S5_HEIGHT_ANOMALY") or not gate_ok or 2.0 * float(sigma_x_mm) > 5.0:
         if int(level_tried) == 0:

@@ -434,6 +434,8 @@ def test_round6_single_responsibility_splits_and_ndof_judges(tmp_path: Path) -> 
     assert vhb.run_3tier_hybrid_plan is vhs.run_3tier_hybrid_plan
     assert cfp.execute_task_plan is cfh.execute_task_plan
     assert cfp.run_contract_handoff_stage is cfh.run_contract_handoff_stage
+    assert cfp.scan_cell_s_extended_zones is cfh.scan_cell_s_extended_zones
+    assert cfp.build_crane_recovery_trajectory is cfh.build_crane_recovery_trajectory
     assert pct.build_probe_grant is pctg.build_probe_grant
     assert pct.evaluate_placement is pctg.evaluate_placement
 
@@ -558,3 +560,4 @@ def test_all_omx_ecosystem_modules_under_500_lines() -> None:
     for path in sorted(set(targets)):
         lines = path.read_text(encoding="utf-8").splitlines()
         assert len(lines) <= 500, f"{path.relative_to(repo_root)} has {len(lines)} lines (> 500)"
+

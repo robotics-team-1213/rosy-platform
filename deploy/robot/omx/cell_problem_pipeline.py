@@ -31,6 +31,8 @@ CATEGORIES = (
     "z_profile_or_temp_plate_alignment",
     "s2_toppled_or_slumped",
     "s6_unseated_cone",
+    "s9_displaced_container_belt_far",
+    "s10_displaced_container_floor_front",
 )
 
 
@@ -55,6 +57,10 @@ def classify_problem(
     err = str(error or "").lower()
     stage = str(fail_stage or "").lower()
     fclass = str(fail_class or "").lower()
+    if "s9_displaced" in fclass or "belt_far" in fclass or "belt_far" in err:
+        return "s9_displaced_container_belt_far"
+    if "s10_displaced" in fclass or "floor_front" in fclass or "floor_front" in err:
+        return "s10_displaced_container_floor_front"
     if "s2" in fclass or "topple" in fclass or "topple" in err or "slump" in err:
         return "s2_toppled_or_slumped"
     if "s6" in fclass or "unseated" in fclass or "unseated" in err or "seat_nudge" in fclass:

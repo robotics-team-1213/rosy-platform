@@ -27,9 +27,11 @@ from cell_control_core import (
     sim_precheck_and_optimize_directive,
 )
 from cell_fleet_handoff import (  # noqa: F401  (re-exported)
+    build_crane_recovery_trajectory,
     execute_remote_fleet_r_handoff,
     execute_task_plan,
     run_contract_handoff_stage,
+    scan_cell_s_extended_zones,
 )
 
 ensure_omx_paths()
@@ -42,7 +44,17 @@ class FleetModelPipeline:
 
     SITE_COORDS = {
         "pinky": {"area": "pinky", "x": 0.0535, "y": 0.1720, "z": 0.0200, "yaw_deg": -85.0, "tier": 1},
+        "pinky_tray": {"area": "pinky", "x": 0.0535, "y": 0.1720, "z": 0.0200, "yaw_deg": -85.0, "tier": 1},
         "belt": {"area": "belt", "x": 0.1250, "y": -0.0550, "z": 0.0250, "yaw_deg": -85.0, "tier": 1},
+        "belt_center": {"area": "belt", "x": 0.1250, "y": -0.0550, "z": 0.0250, "yaw_deg": -85.0, "tier": 1},
+        "belt_far": {
+            "area": "belt_far", "x": 0.1850, "y": -0.0950, "z": 0.0250, "yaw_deg": -85.0, "tier": 1,
+            "joint_pose_units": [-27.685, 6.725, -2.289, 45.649, 17.882],
+        },
+        "floor_front": {
+            "area": "floor_front", "x": 0.0950, "y": 0.0980, "z": 0.0080, "yaw_deg": -85.0, "tier": 1,
+            "joint_pose_units": [44.121, 9.500, 14.200, 38.000, 88.242],
+        },
         "pallet-l0": {"area": "pallet", "col": 2, "row": 1, "tier": 1, "x": 0.1580, "y": -0.0130, "z": 0.0085, "yaw_deg": -90.0},
         "pallet-l1": {"area": "pallet", "col": 2, "row": 1, "tier": 2, "x": 0.1580, "y": -0.0130, "z": 0.0390, "yaw_deg": -90.0},
         "pallet-l2": {"area": "pallet", "col": 2, "row": 1, "tier": 3, "x": 0.1580, "y": -0.0130, "z": 0.0674, "yaw_deg": -90.0},
@@ -72,6 +84,10 @@ class FleetModelPipeline:
         tilt_rpy_deg: tuple[float, float, float] | None = None,
         elbow_swivel_psi_rad: float | None = None,
         obstacle_xy_m: tuple[float, float] | None = None,
+        wrist_occ: float | None = None,
+        top_frame: Any = None,
+        zone_occ: dict[str, float] | None = None,
+        displaced_to: str | None = None,
     ) -> dict:
         import cell_fingers as cf
         import cell_problem_pipeline as cpp
@@ -83,6 +99,33 @@ class FleetModelPipeline:
         if arm_id == "arm_s":
             src_spec["yaw_deg"] = float(yaw_deg)
             dst_spec["yaw_deg"] = float(yaw_deg)
+
+        displaced_recovery = None
+        if arm_id == "arm_s" and any(v is not None for v in (wrist_occ, top_frame, zone_occ, displaced_to)):
+            scan = scan_cell_s_extended_zones(
+                top_frame,
+                wrist_occ=0.0 if wrist_occ is None else float(wrist_occ),
+                zone_occ=zone_occ,
+                displaced_to=displaced_to,
+                intended_site=src_site,
+                target_site=dst_site,
+            )
+            if scan.get("displaced"):
+                disp_zone = str(scan["displaced_zone"])
+                src_spec = dict(self.SITE_COORDS.get(disp_zone, src_spec))
+                src_spec["yaw_deg"] = float(yaw_deg)
+                case = cpp.build_problem_case(
+                    arm_id=arm_id,
+                    tier=1,
+                    site_from=disp_zone,
+                    site_to=dst_site,
+                    stage="pre_grasp",
+                    fail_class=str(scan["failure_code"]),
+                    error=f"displaced container recovered via {scan['recovery_trajectory']}",
+                    telemetry={"holding": True, "recovery_succeeded": True},
+                )
+                cpp.record_problem_case(self.work_dir, case)
+                displaced_recovery = {**scan, "problem_case_id": case["case_id"]}
 
         directive = {
             "schema": "rosy.omx-cell-area-xyz-directive.v1",
@@ -199,6 +242,7 @@ class FleetModelPipeline:
             "damped_endpoint_exact": damped_frames[-1] == transit_frames[-1],
             "dof": int(dof),
             "multi_dof_ik": multi_dof_info,
+            "displaced_recovery": displaced_recovery,
         }
 
     def prestage_cell_ab_handover(
