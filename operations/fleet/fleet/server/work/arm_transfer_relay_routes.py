@@ -72,7 +72,7 @@ def install_arm_transfer_relay_routes(app, *, control, require_viewer, require_p
         return await call_arm_transfer_domain(operation, value_error_is_conflict=True)
 
     async def forward(row, method, tail, body=None):
-        if not is_direct_child_arm_owner(row):
+        if not is_direct_child_arm_owner(row) and not getattr(control, "allow_intermediate_arm_hop", False):
             # shortcut: forwards reach the direct child only; a deeper cell needs each hop to relay too.
             raise HTTPException(409, detail={"code": "ARM_TRANSFER_RELAY_DEPTH"})
         projected(row)

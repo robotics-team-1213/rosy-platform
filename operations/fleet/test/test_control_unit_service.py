@@ -263,6 +263,15 @@ def test_arm_relay_depth_two_projects_job_and_receipt_while_guarding_direct_chil
         def receipt(self, mission_id):
             return dict(receipt_row) if mission_id == "physical-1" else None
 
+        def evidence(self, mission_id):
+            return {"mission_id": mission_id, "evidence": {"status": "AT_TARGET_AND_CLEAR"}}
+
+        def request_recheck(self, mission_id, key, *, principal_id=None):
+            return {"mission_id": mission_id, "recheck_key": key, "principal_id": principal_id, "status": "QUEUED"}
+
+        def read_recheck(self, mission_id, key):
+            return {"mission_id": mission_id, "recheck_key": key, "status": "CONFIRMED"}
+
     for unit_id in ("R", "A", "A1"):
         path = tmp_path / (unit_id + ".db")
         tasks = FleetTaskService(FleetTaskStore(path), robot_ids=set())
@@ -278,19 +287,28 @@ def test_arm_relay_depth_two_projects_job_and_receipt_while_guarding_direct_chil
             return await node.read(origin, identity, for_child=sender if method == "GET" else None)
 
         class Peer:
-            def __init__(self, fn):
+            def __init__(self, fn, sender_id):
                 self._fn = fn
+                self._sender = sender_id
 
             async def __call__(self, *args, **kwargs):
                 return await self._fn(*args, **kwargs)
 
             async def arm_job(self, unit, method, origin, identity, tail, body=None):
                 forwarded.append((unit, method, origin, identity, tail, body))
-                return 200, {"forwarded_to": unit, "tail": tail}
+                node = nodes[unit]
+                if not node.allow_intermediate_arm_hop and unit != "A1":
+                    return 200, {"forwarded_to": unit, "tail": tail}
+                kind, key = (
+                    ("evidence", None) if tail == "physical-evidence"
+                    else ("request_recheck", (body or {}).get("recheck_key")) if method == "POST" and tail == "rechecks"
+                    else ("read_recheck", tail.split("/", 1)[1]))
+                return 200, await node.arm_detail(origin, identity, kind, key=key,
+                                                  principal_id="control-unit:" + self._sender)
 
         nodes[unit_id] = ControlUnitService(
             topology, ControlUnitStore(path, unit_id=unit_id), tasks, Console(),
-            peer=Peer(call_peer), arm_jobs=(lambda: LeafJobs()) if unit_id == "A1" else (lambda: None))
+            peer=Peer(call_peer, unit_id), arm_jobs=(lambda: LeafJobs()) if unit_id == "A1" else (lambda: None))
 
     harbor = SimpleNamespace(principal_id="harbor", role="service")
     app = FastAPI()
@@ -322,5 +340,30 @@ def test_arm_relay_depth_two_projects_job_and_receipt_while_guarding_direct_chil
     assert asyncio.run(hop.arm_detail("R", identity, "evidence")) == {
         "forwarded_to": "A", "tail": "physical-evidence"}
     assert forwarded == [("A", "GET", "R", identity, "physical-evidence", None)]
+
+    forwarded.clear()
+    for uid in ("R", "A"):
+        nodes[uid] = ControlUnitService(
+            topology, nodes[uid].store, nodes[uid].tasks, Console(),
+            peer=nodes[uid].peer, arm_jobs=nodes[uid].arm_jobs, allow_intermediate_arm_hop=True)
+        assert nodes[uid].allow_intermediate_arm_hop is True
+    app = FastAPI()
+    install_arm_transfer_relay_routes(app, control=nodes["R"], require_viewer=lambda: harbor,
+                                      require_proposer=lambda: harbor)
+    client = TestClient(app)
+    ev_hop = client.get("/api/fleet/arm-transfers/jobs/physical-1/physical-evidence")
+    assert ev_hop.status_code == 200 and ev_hop.json() == {
+        "mission_id": "physical-1", "evidence": {"status": "AT_TARGET_AND_CLEAR"}}
+    rc_hop = client.post("/api/fleet/arm-transfers/jobs/physical-1/rechecks", json={"recheck_key": "rk-1"})
+    assert rc_hop.status_code == 200 and rc_hop.json() == {
+        "mission_id": "physical-1", "recheck_key": "rk-1", "principal_id": "control-unit:A", "status": "QUEUED"}
+    rc_read = client.get("/api/fleet/arm-transfers/jobs/physical-1/rechecks/rk-1")
+    assert rc_read.status_code == 200 and rc_read.json() == {
+        "mission_id": "physical-1", "recheck_key": "rk-1", "status": "CONFIRMED"}
+    assert [(u, m, t) for u, m, _, _, t, _ in forwarded] == [
+        ("A", "GET", "physical-evidence"), ("A1", "GET", "physical-evidence"),
+        ("A", "POST", "rechecks"), ("A1", "POST", "rechecks"),
+        ("A", "GET", "rechecks/rk-1"), ("A1", "GET", "rechecks/rk-1"),
+    ]
 
 

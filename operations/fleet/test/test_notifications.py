@@ -629,3 +629,60 @@ def test_cutover_delivery_producer_and_http_owner_route_end_to_end(tmp_path):
         asyncio.run(http.aclose())
 
 
+def test_create_app_wires_notification_owner_route_and_remote_sink(tmp_path):
+    import time
+    from fastapi.testclient import TestClient
+    from fakes import FakeRobot
+    from fleet.server.app import create_app
+    from fleet.server.task_service import FleetTaskService
+    from fleet.server.task_store import FleetTaskStore
+    from test_line_stuck_api import _console
+
+    owner_token = 'd' * 40
+    sink = RemoteNotificationSink('https://notifications.example', bearer_token='t' * 40)
+    config = NotificationConfig(
+        'https://fleet.example/console',
+        (Channel('discord', DISCORD),),
+        remote_url='https://notifications.example',
+        owner_token=owner_token,
+        remote_sink=sink,
+    )
+    assert 'private_token' not in repr(config) and owner_token not in repr(config)
+    assert config == NotificationConfig('https://fleet.example/console', (Channel('discord', DISCORD),))
+
+    tasks = FleetTaskService(FleetTaskStore(tmp_path / 'tasks.sqlite3'), robot_ids={'pinky'})
+    app = create_app(_console(FakeRobot('pinky')), task_service=tasks, notification_config=config,
+                     start_task_dispatcher=False)
+    assert app.state.notification_worker.sink is sink
+
+    client = TestClient(app)
+    unauth = client.post('/api/fleet/notifications/owner-check', json={})
+    assert unauth.status_code == 401
+    assert unauth.json() == {'code': 'NOTIFICATION_OWNER_UNAUTHORIZED'}
+
+    payload = {
+        'producer': 'fleet',
+        'notification_id': 'fleet-1-discord-abcd1234',
+        'channel': 'discord',
+        'kind': 'CLOSED',
+        'subject_id': 'pinky',
+        'occurrence_id': 'case-1',
+        'revision': 'cleared',
+        'classification': 'UNVERIFIED',
+        'observed_at': 100.0,
+        'expires_at': time.time() + 600.0,
+    }
+    ok = client.post(
+        '/api/fleet/notifications/owner-check',
+        json=payload,
+        headers={'Authorization': f'Bearer {owner_token}'},
+    )
+    assert ok.status_code == 200
+    assert ok.json() == {
+        'notification_id': 'fleet-1-discord-abcd1234',
+        'revision': 'cleared',
+        'valid': True,
+    }
+
+
+

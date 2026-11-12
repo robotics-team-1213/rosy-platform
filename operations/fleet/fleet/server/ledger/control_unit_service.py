@@ -18,7 +18,8 @@ from fleet.swarm.transport import RobotApiError
 
 
 class ControlUnitService:
-    def __init__(self, topology, store, tasks, console, *, peer, arm_jobs=lambda: None):
+    def __init__(self, topology, store, tasks, console, *, peer, arm_jobs=lambda: None,
+                 allow_intermediate_arm_hop: bool = False):
         self.topology, self.store = topology, store
         self.tasks, self.console, self.peer = tasks, console, peer
         self.arm_jobs = arm_jobs
@@ -33,7 +34,11 @@ class ControlUnitService:
         self._fresh_at = {}
         self._stale = {(row["origin_id"], row["delegation_id"]) for row in active
                        if row["owner_unit"] != self.unit.unit_id}
-        self._arm = ControlUnitArmCoordinator(self)
+        self._arm = ControlUnitArmCoordinator(self, allow_intermediate_hop=allow_intermediate_arm_hop)
+
+    @property
+    def allow_intermediate_arm_hop(self) -> bool:
+        return self._arm._allow_intermediate_hop
 
     def _key(self, row):
         return row["origin_id"], row["delegation_id"]

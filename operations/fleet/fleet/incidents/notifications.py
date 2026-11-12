@@ -11,7 +11,7 @@ import re
 import time
 import uuid
 from contextlib import closing
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.parse import urlencode, urlsplit
 
@@ -31,6 +31,9 @@ from fleet.incidents.notification_client import (
 class NotificationConfig:
     console_url: str
     channels: tuple[Channel, ...]
+    remote_url: str | None = field(default=None, compare=False)
+    owner_token: str | None = field(default=None, repr=False, compare=False)
+    remote_sink: RemoteNotificationSink | None = field(default=None, repr=False, compare=False)
 
     def __post_init__(self):
         if not isinstance(self.console_url, str):

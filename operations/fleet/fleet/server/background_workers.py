@@ -22,8 +22,12 @@ def start_notification_worker(app, config):
     import httpx
     from fleet.incidents.notifications import NotificationWorker
     client = httpx.AsyncClient(trust_env=False)
-    task = asyncio.create_task(NotificationWorker(app.state.line_stuck._log.notifications, config, client,
-        board=app.state.line_stuck, snapshot=app.state.fleet_gather).run())
+    worker = NotificationWorker(
+        app.state.line_stuck._log.notifications, config, client,
+        board=app.state.line_stuck, snapshot=app.state.fleet_gather,
+        sink=getattr(config, "remote_sink", None))
+    app.state.notification_worker = worker
+    task = asyncio.create_task(worker.run())
     return client, task
 
 

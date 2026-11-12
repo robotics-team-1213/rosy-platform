@@ -30,6 +30,7 @@ class ControlUnitConfig:
     share_information_with_parent: bool = False
     accept_parent_stop: bool = False
     tls_context: ssl.SSLContext | None = field(default=None, repr=False)
+    allow_intermediate_arm_hop: bool = False
 
 
 def load_control_unit(path):
@@ -40,11 +41,11 @@ def load_control_unit(path):
         raise ValueError("CONTROL_UNIT_CONFIGURATION_TOO_LARGE")
     document = yaml.safe_load(data)
     required = {"unit_id", "manifest", "peers"}
-    optional = {"share_information_with_parent", "accept_parent_stop", "tls_ca_file"}
+    optional = {"share_information_with_parent", "accept_parent_stop", "allow_intermediate_arm_hop", "tls_ca_file"}
     if (not isinstance(document, dict) or not required <= set(document)
             or set(document) - required - optional):
         raise ValueError("INVALID_CONTROL_UNIT_CONFIGURATION")
-    for flag in ("share_information_with_parent", "accept_parent_stop"):
+    for flag in ("share_information_with_parent", "accept_parent_stop", "allow_intermediate_arm_hop"):
         if type(document.get(flag, False)) is not bool:
             raise ValueError("INVALID_CONTROL_UNIT_OPT_IN")
     tls_context = None
@@ -108,7 +109,8 @@ def load_control_unit(path):
         raise ValueError("CONTROL_UNIT_SERVICE_CREDENTIAL_NOT_ISOLATED")
     return ControlUnitConfig(unit.unit_id, topology, MappingProxyType(peers),
                              document.get("share_information_with_parent", False),
-                             document.get("accept_parent_stop", False), tls_context)
+                             document.get("accept_parent_stop", False), tls_context,
+                             document.get("allow_intermediate_arm_hop", False))
 
 
 class ControlUnitPeers:
@@ -250,7 +252,8 @@ def install_control_unit(app, path, *, tasks, console, principals, named_logins,
     store = ControlUnitStore(tasks.store.path, unit_id=config.unit_id)
     # ARM routes install after this; read their store when a delegated arm proposal arrives (D-965).
     service = ControlUnitService(config.topology, store, tasks, console, peer=None,
-                                 arm_jobs=lambda: getattr(app.state, "arm_transfer_delegate", None))
+                                 arm_jobs=lambda: getattr(app.state, "arm_transfer_delegate", None),
+                                 allow_intermediate_arm_hop=config.allow_intermediate_arm_hop)
     http = httpx.AsyncClient(verify=config.tls_context or True, trust_env=False,
                              follow_redirects=False, timeout=3.0)
     service.peer = ControlUnitPeers(config, http)

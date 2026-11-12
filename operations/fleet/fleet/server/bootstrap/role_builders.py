@@ -183,6 +183,15 @@ def install_pose_and_stuck_runtime(app, *, console, console_token, hub, sighting
         tracking=tracking, identity=identity, station_recovery=station_recovery, require_proposer=require_proposer)
     if app.state.line_stuck._log is not None:
         app.state.line_stuck._log.notifications.config = notification_config
+        if notification_config is not None:
+            from fleet.incidents.notifications import NotificationWorker
+            app.state.notification_worker = NotificationWorker(
+                app.state.line_stuck._log.notifications, notification_config, None,
+                board=app.state.line_stuck, sink=getattr(notification_config, "remote_sink", None))
+            if getattr(notification_config, "owner_token", None):
+                from fleet.incidents.notification_client import install_notification_owner_routes
+                install_notification_owner_routes(
+                    app, app.state.notification_worker, owner_token=notification_config.owner_token)
     app.state.ai_facts = install_ai_routes(app, read_guard=read_guard, authorize=authorize, db_path=db_path, acting=ai_facts_acting)
     app.state.line_stuck.ai_view = app.state.ai_facts.robot_view
     app.state.ai_first = ai_first or AiFirst()
