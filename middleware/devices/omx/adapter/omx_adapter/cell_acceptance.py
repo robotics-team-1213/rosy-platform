@@ -168,7 +168,7 @@ class CellAcceptanceStore:
             raise CellAcceptanceRefused("cell must be a JSON object")
         text = json.dumps(cell, sort_keys=True, separators=(",", ":"), allow_nan=False)
         document = json.loads(text)
-        sha256 = canonical_sha256(document)
+        sha256 = hashlib.sha256(text.encode("utf-8")).hexdigest()
         try:
             validated = self.validator.validate_cell(document)
         except (TypeError, ValueError) as exc:
@@ -211,7 +211,7 @@ class CellAcceptanceStore:
             raise CellAcceptanceRefused("recipe must be a JSON object")
         text = json.dumps(recipe, sort_keys=True, separators=(",", ":"), allow_nan=False)
         document = json.loads(text)
-        sha256 = canonical_sha256(document)
+        sha256 = hashlib.sha256(text.encode("utf-8")).hexdigest()
         with self._lock, closing(self._connect()) as connection:
             cell_row = self._cell_row(connection)
             if cell_row is None:

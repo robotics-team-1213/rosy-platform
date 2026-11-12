@@ -55,6 +55,8 @@ class ArmCommandOwner:
         if wall_monotonic is not None and config.enabled and config.wall_clock_bound_factor is None:
             raise ValueError("a separate wall clock requires config.wall_clock_bound_factor")
         self.config = config
+        self._joint_name_set = frozenset(config.joint_names)
+        self._allowed_owner_set = frozenset(config.allowed_owners)
         self._action_port = action_port
         self._monotonic = monotonic
         self._wall = wall_monotonic
@@ -222,7 +224,7 @@ class ArmCommandOwner:
             if self._joint_state is not None and snapshot.received_at < self._joint_state.received_at:
                 self._enter_hold("owner_clock_jumped_back")
                 return False
-            if set(snapshot.positions) != set(self.config.joint_names):
+            if set(snapshot.positions) != self._joint_name_set:
                 self._enter_hold("joint_state_joint_map_mismatch")
                 return False
             if snapshot.calibration_revision != self.config.calibration_revision:
@@ -272,7 +274,7 @@ class ArmCommandOwner:
                 return self._decision(False, "instance_mismatch", command_id)
             if command.session_id != self.session_id:
                 return self._decision(False, "session_mismatch", command_id)
-            if command.owner not in self.config.allowed_owners:
+            if command.owner not in self._allowed_owner_set:
                 return self._decision(False, "owner_not_allowed", command_id)
             if command.calibration_revision != self.config.calibration_revision:
                 return self._decision(False, "calibration_mismatch", command_id)
@@ -298,7 +300,7 @@ class ArmCommandOwner:
                     return self._decision(False, "start_state_outside_tolerance", command_id)
             if command.duration_s > self.config.max_goal_duration_s:
                 return self._decision(False, "duration_limit", command_id)
-            if set(command.positions) != set(self.config.joint_names):
+            if set(command.positions) != self._joint_name_set:
                 return self._decision(False, "joint_map_mismatch", command_id)
             points = command.trajectory_points
             if len(points) > 1 and (
@@ -309,21 +311,25 @@ class ArmCommandOwner:
                 point.velocities is None or point.accelerations is None for point in points
             ):
                 return self._decision(False, "trajectory_derivatives_missing", command_id)
+            position_limits = tuple((name, *self.config.position_limits[name])
+                                    for name in command.joint_names)
+            velocity_limits = (None if self.config.velocity_limits is None else
+                               tuple(self.config.velocity_limits[name] for name in command.joint_names))
+            acceleration_limits = (None if self.config.acceleration_limits is None else
+                                   tuple(self.config.acceleration_limits[name] for name in command.joint_names))
             for point in points:
-                for name, position in zip(command.joint_names, point.positions):
-                    lower, upper = self.config.position_limits[name]
+                for (_, lower, upper), position in zip(position_limits, point.positions):
                     if position < lower or position > upper:
                         return self._decision(False, "joint_limit", command_id)
                 for values, limits, reason in (
-                    (point.velocities, self.config.velocity_limits, "velocity_limit"),
-                    (point.accelerations, self.config.acceleration_limits, "acceleration_limit"),
+                    (point.velocities, velocity_limits, "velocity_limit"),
+                    (point.accelerations, acceleration_limits, "acceleration_limit"),
                 ):
                     if values is None:
                         continue
                     if limits is None:
                         return self._decision(False, "trajectory_rate_limits_missing", command_id)
-                    if any(abs(value) > limits[name]
-                           for name, value in zip(command.joint_names, values)):
+                    if any(abs(value) > limit for value, limit in zip(values, limits)):
                         return self._decision(False, reason, command_id)
             if self._control_admission is not None and not self._control_admission.check_command(command):
                 return self._decision(False, "control_seat_fenced", command_id)

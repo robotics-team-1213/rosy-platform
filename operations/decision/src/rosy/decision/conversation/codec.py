@@ -8,15 +8,12 @@ from typing import Literal
 from core_common.intent import interpret
 from core_common.protocol.peer_pairing import Strict
 from pydantic import Field, FiniteFloat, model_validator
-from rosy.decision.deliberation import canonical
+from rosy.decision.deliberation.contracts.billing import digest
 from .preprocessing import DISCORD_REVISION, VERSION, InferenceUsage, control_issue, prepare, resolve_reference
 
 
 MODEL = 'qwen3-vl:8b-instruct'
 MODEL_DIGEST = '0533d74300e4f9bc367d675d4e64ffd073d50ff16a2b4096cc2e8a1cf8c96319'
-
-
-def digest(value):return hashlib.sha256(canonical(value).encode()).hexdigest()
 
 
 class Profile(Strict):

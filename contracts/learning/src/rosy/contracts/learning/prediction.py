@@ -8,6 +8,7 @@ import hashlib
 import json
 import math
 from .digest import is_sha256_hex
+from .omx import _finite
 
 ARTIFACT_SCHEMA = 'rosy.world-model-artifact.v1'
 VERDICTS = ('NO_OBJECTION', 'HOLD', 'REJECT', 'ABSTAIN')
@@ -19,10 +20,6 @@ MAX_HORIZON = 10
 def _require(value, message):
     if not value:
         raise ValueError('prediction: ' + message)
-
-
-def _finite(value):
-    return type(value) in (int, float) and math.isfinite(value)
 
 
 def _text(value):

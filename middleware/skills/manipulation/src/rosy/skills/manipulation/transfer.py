@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-import math
 from typing import Protocol
 
+from rosy.contracts.skill.invocation import _finite
 from rosy.skills.api import SkillContract, SkillInvocation
 
 SKILL_ID = "pallet.transfer"
@@ -41,13 +41,6 @@ _INPUTS = frozenset({
     "destination_approach_z_base_m", "carry_z_base_m",
 })
 _POSE_FIELDS = frozenset({"x_m", "y_m", "z_m", "yaw_rad"})
-
-
-def _finite(value: object, field: str) -> float:
-    if (isinstance(value, bool) or not isinstance(value, (int, float))
-            or not math.isfinite(value)):
-        raise ValueError(f"{field} must be a finite number")
-    return float(value)
 
 
 def _identifier(value: object, field: str) -> str:

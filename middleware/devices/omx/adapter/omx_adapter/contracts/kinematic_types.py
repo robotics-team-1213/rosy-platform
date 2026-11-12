@@ -7,6 +7,7 @@ from typing import Mapping
 
 
 ARM_JOINTS = ("joint1", "joint2", "joint3", "joint4", "joint5")
+_ARM_JOINT_SET = frozenset(ARM_JOINTS)
 
 IK_OK = "OK"
 IK_OUTSIDE_WORKSPACE = "OUTSIDE_WORKSPACE"
@@ -55,6 +56,11 @@ class TopDownPose:
     yaw: float
 
     def __post_init__(self) -> None:
+        if (type(self.x) is float and type(self.y) is float
+                and type(self.z) is float and type(self.yaw) is float
+                and math.isfinite(self.x) and math.isfinite(self.y)
+                and math.isfinite(self.z) and math.isfinite(self.yaw)):
+            return
         for name in ("x", "y", "z", "yaw"):
             object.__setattr__(self, name, _finite(name, getattr(self, name)))
 
@@ -81,7 +87,7 @@ class IkLimits:
     singularity_radius_m: float
 
     def __post_init__(self) -> None:
-        if set(self.position_limits) != set(ARM_JOINTS):
+        if set(self.position_limits) != _ARM_JOINT_SET:
             raise ValueError("IK limits must cover exactly joint1..joint5")
         for name, (lower, upper) in self.position_limits.items():
             if not (_finite(name, lower) < _finite(name, upper)):

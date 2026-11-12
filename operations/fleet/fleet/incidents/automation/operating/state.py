@@ -1,18 +1,14 @@
 """Current owner evidence and signed epochs in the existing Fleet database."""
 from dataclasses import asdict
-import hashlib
 import json
 
 from rosy.contracts.learning import seal
 from rosy.contracts.learning.incident_operation import APPROVE, REVOKE, verify_operation_receipt, validate_operation_receipt, validate_operation_binding
 from rosy.decision.deliberation import canonical, identifier
+from rosy.decision.deliberation.contracts.billing import digest
 from rosy.decision.deliberation.profiles import ModelProfile, incident_profiles
 from ..store import IncidentCaseStore
 from .candidates import RecoveryCandidates
-
-
-def digest(value):
-    return hashlib.sha256(canonical(value).encode()).hexdigest()
 
 
 class OperationalState:

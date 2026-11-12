@@ -466,3 +466,30 @@ def test_shipped_units_wire_the_pairing_switch():
     stack = (SITE_DIR / "rosy-site-stack.service").read_text(encoding="utf-8")
     # unbraced $VAR is zero words when empty, so "off" adds nothing to up and down
     assert stack.count(" $ROSY_SITE_PAIRING_COMPOSE ") == 2
+
+
+def test_no_redirect_handlers_never_follow_redirects():
+    extra_paths = (
+        str(ROOT / "contracts/foundation"),
+        str(ROOT / "operations/site_ui/media/src"),
+        str(ROOT / "middleware/media/src"),
+        str(ROOT / "integrations/robots/omx/src"),
+    )
+    for path in extra_paths:
+        sys.path.insert(0, path)
+    try:
+        from core_common.protocol.account_client import _NoRedirect as AccountNoRedirect
+        from rosy.integrations.robots.omx.core_arm_client import _NoRedirect as ArmNoRedirect
+        from rosy_media.backend import _NoRedirect as MediaBackendNoRedirect
+        from rosy_media_edge.whip import _NoRedirect as WhipNoRedirect
+    finally:
+        for _ in extra_paths:
+            sys.path.pop(0)
+
+    for cls in (AccountNoRedirect, MediaBackendNoRedirect, WhipNoRedirect, ArmNoRedirect):
+        handler = cls()
+        for code in (301, 302, 303, 307, 308):
+            assert handler.redirect_request(
+                None, None, code, "redirect", {}, "https://example.invalid",
+            ) is None
+
