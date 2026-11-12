@@ -501,3 +501,13 @@ def test_situation_aware_object_realignment_pipeline_and_rail_safe_retract(tmp_p
     assert s11_loop["trace"][0]["situation"] == "SIT_7_POST_GRASP_OR_ZONE_OBSTRUCTION"
     assert s11_loop["trace"][1]["passed"] is True
 
+    # 5. Belt-to-base trench extraction & inward-safe belt placement clamp (x_mm >= 134.0, z_mm >= 55.0)
+    safe_place = crp.clamp_belt_safe_place_pose_mm(123.4, -39.9, 48.0)
+    assert safe_place["x_mm"] == pytest.approx(134.0)
+    assert safe_place["z_mm"] == pytest.approx(55.0)
+    assert safe_place["rail_clearance_mm"] == pytest.approx(5.0)
+    assert safe_place["trench_rolloff_prevented"] is True
+    assert report["trench_to_inward_belt_demo"]["passed"] is True
+    assert report["trench_to_inward_belt_demo"]["final_strategy"] == "trench_extract_and_inward_belt_realign"
+
+
