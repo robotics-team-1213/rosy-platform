@@ -103,8 +103,7 @@ class CellStackGuard:
 
         peak_torque = max(torque_samples)
         final_settle_torque = torque_samples[-1]
-        diffs = [b - a for a, b in zip(torque_samples, torque_samples[1:])]
-        max_surge = max(diffs, default=0.0)
+        max_surge = max((torque_samples[i + 1] - torque_samples[i] for i in range(len(torque_samples) - 1)), default=0.0)
 
         if peak_torque > self.cfg.jam_torque_threshold:
             return (

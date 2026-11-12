@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import glob
+import itertools
 import json
 import re
 import statistics
@@ -177,15 +178,13 @@ def check_jaws(arm, device, closed_values, health_logs, params):
 
     tail, gap, share = serial_tail(device), prm.get(params, "upkeep.jaw_gap"), prm.get(params, "windup.jaw_pwm")
     for path in sorted(health_logs, key=lambda p: -Path(p).stat().st_mtime):
-        first = next(
-            iter(jr.rows_of(path, lambda r: r.get("event") == "sample" and len(r.get("motors", [])) in (6, 7, 8))),
-            None,
-        )
+        it = iter(jr.rows_of(path, lambda r: r.get("event") == "sample" and len(r.get("motors", [])) in (6, 7, 8)))
+        first = next(it, None)
         if first is None or serial_tail(first["motors"][0]["usb_port"]) != tail:
             continue
         found = {value: [] for value in closed_values}
         last = None
-        for r in jr.rows_of(path, lambda r: r.get("event") == "sample" and len(r.get("motors", [])) in (6, 7, 8)):
+        for r in itertools.chain([first], it):
             g = next((m for m in r["motors"] if m["joint"] == "gripper"), r["motors"][-1])
             command, present = grip_units(g["command_raw"]), grip_units(g["present_raw"])
             for value, hits in found.items():
@@ -225,7 +224,8 @@ def check_jaw_open(traces, params):
         ]
         if not grip:
             continue
-        want, reached = min(max(s for s, _ in grip), open_max), max(p for _, p in grip)
+        max_sent, max_present = map(max, zip(*grip))  # both maxima in one pass over the trace
+        want, reached = min(max_sent, open_max), max_present
         if reached < want - gap:
             return row(
                 "jaw open",
