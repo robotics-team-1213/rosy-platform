@@ -1,16 +1,20 @@
 """Team notifications use the incident journal, never a motion/provider tool outbox."""
 
 import asyncio
+import io
 import json
 import logging
 import sqlite3
 import threading
 from contextlib import closing
+from types import SimpleNamespace
 
 import httpx
 import pytest
 
 from fleet.incidents.notifications import Channel, NotificationConfig, NotificationWorker
+from fleet.incidents.notification_client import RemoteNotificationSink, should_run_embedded_notification_worker
+from fleet.server.background_workers import start_notification_worker
 from fleet.stuck.board import LineStuckBoard
 from fleet.stuck.reports import LineStuckAnswerLog
 from test_judgment_receipts import row
@@ -19,6 +23,42 @@ from test_judgment_receipts import row
 DISCORD = 'https://discord.com/api/webhooks/123/private_token'
 SLACK = 'https://hooks.slack.com/services/T1/B1/private_token'
 TELEGRAM = 'https://api.telegram.org/bot123:private_token/sendMessage'
+
+
+def test_remote_notification_sink_disables_embedded_worker_and_posts_events(monkeypatch):
+    assert should_run_embedded_notification_worker(None)
+    assert should_run_embedded_notification_worker('  ')
+    assert not should_run_embedded_notification_worker('https://notifications.example')
+
+    requests = []
+
+    class FakeOpener:
+        def open(self, request, *, timeout):
+            requests.append((request, timeout))
+            return io.BytesIO(b'{"notification_id": "n-1", "state": "PENDING"}')
+
+    sink = RemoteNotificationSink('https://notifications.example/', bearer_token='tok-1', opener=FakeOpener())
+    assert sink.submit_delivery({'notification_id': 'n-1', 'channel': 'discord'}) == {
+        'notification_id': 'n-1', 'state': 'PENDING',
+    }
+    assert sink.read_delivery('n-1') == {'notification_id': 'n-1', 'state': 'PENDING'}
+    assert [request.full_url for request, _ in requests] == [
+        'https://notifications.example/api/notifications/v1/deliveries',
+        'https://notifications.example/api/notifications/v1/deliveries/n-1',
+    ]
+    assert json.loads(requests[0][0].data) == {'notification_id': 'n-1', 'channel': 'discord'}
+    assert requests[0][0].get_method() == 'POST'
+    assert requests[1][0].get_method() == 'GET'
+    assert all(request.get_header('Authorization') == 'Bearer tok-1' and timeout == 5.0
+               for request, timeout in requests)
+
+    monkeypatch.setattr(asyncio, 'create_task', lambda _: pytest.fail('embedded worker started'))
+    assert start_notification_worker(None, SimpleNamespace(remote_url='https://notifications.example')) == (None, None)
+    monkeypatch.setenv('ROSY_NOTIFICATIONS_URL', 'https://notifications.example')
+    assert start_notification_worker(None, SimpleNamespace()) == (None, None)
+
+    with pytest.raises(ValueError):
+        RemoteNotificationSink('file:///tmp/notifications')
 
 
 def _setup(tmp_path, kinds=('discord',)):
