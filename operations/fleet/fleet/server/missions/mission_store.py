@@ -13,16 +13,9 @@ from contextlib import closing, nullcontext
 from pathlib import Path
 from typing import Any, Mapping
 
-from core_common.protocol.schemas import (
-    DeviceActionPhaseReceipt, MISSION_EVENT_DETAIL_MAX_BYTES,
-)
-
-from .dispatch_admission import release as release_dispatch_claims
-from .dispatch_admission import reserve as reserve_dispatch_claims
-from .mission_store_helpers import (
+from core_common.protocol.schemas import MISSION_EVENT_DETAIL_MAX_BYTES
+from fleet.server.mission_store_queries import (
     MissionConflict,
-    MissionStoreHelpersMixin,
-    _ensure_mission_schema,
     _json,
     _json_utf8_size,
     _nonempty,
@@ -30,17 +23,17 @@ from .mission_store_helpers import (
     _phase_event_key,
 )
 from rosy.execution.site.goal_evidence import GoalEvidence, GoalPredicate
+
+from .dispatch_admission import release as release_dispatch_claims, reserve as reserve_dispatch_claims
+from .mission_store_helpers import (
+    MissionStoreHelpersMixin, _check_action_result, _check_step_start_claims,
+    _confirm_phase_transition, _ensure_mission_schema, _load_phase_attempt, _prepare_phase_entry,
+)
 from .sqlite_policy import configure_connection, enable_wal
 
 __all__ = [
-    "MISSION_EVENT_DETAIL_MAX_BYTES",
-    "MissionConflict",
-    "MissionStore",
-    "_json",
-    "_json_utf8_size",
-    "_nonempty",
-    "_now",
-    "_phase_event_key",
+    "MISSION_EVENT_DETAIL_MAX_BYTES", "MissionConflict", "MissionStore",
+    "_json", "_json_utf8_size", "_nonempty", "_now", "_phase_event_key",
 ]
 
 
@@ -69,9 +62,7 @@ class MissionStore(MissionStoreHelpersMixin):
         workcell_id = _nonempty("workcell_id", workcell_id, limit=96)
         instance_id = _nonempty("instance_id", instance_id, limit=96)
         if supersedes_mission_id is not None:
-            supersedes_mission_id = _nonempty(
-                "supersedes_mission_id", supersedes_mission_id,
-            )
+            supersedes_mission_id = _nonempty("supersedes_mission_id", supersedes_mission_id)
             if supersedes_mission_id == mission_id:
                 raise ValueError("a Mission cannot supersede itself")
         if action_kind != "PICK_PLACE":
@@ -116,15 +107,13 @@ class MissionStore(MissionStoreHelpersMixin):
                  workcell_id, instance_id, plan_json, predicate_json,
                  supersedes_mission_id, now, now),
             )
-            row = db.execute("SELECT * FROM fleet_missions WHERE mission_id=?",
-                             (mission_id,)).fetchone()
+            row = db.execute("SELECT * FROM fleet_missions WHERE mission_id=?", (mission_id,)).fetchone()
             self._event(
                 db, event_source="fleet_mission", source_event_id=f"proposal:{mission_id}",
                 mission=row, event_type="MISSION_PROPOSED", state="PROPOSED",
                 actor_id=principal_id, detail={"request_digest": digest},
             )
-            row = db.execute("SELECT * FROM fleet_missions WHERE mission_id=?",
-                             (mission_id,)).fetchone()
+            row = db.execute("SELECT * FROM fleet_missions WHERE mission_id=?", (mission_id,)).fetchone()
             if owns_transaction:
                 db.commit()
         return {"mission": self._row(row), "created": True}
@@ -181,6 +170,7 @@ class MissionStore(MissionStoreHelpersMixin):
         if (type(expected_authority_epoch) is not int or expected_authority_epoch < 0
                 or type(expected_generation) is not int or expected_generation < 0):
             raise ValueError("authority epoch and generation must be non-negative integers")
+        grant = None
         action_grant_json = None
         if action_grant is not None:
             if not isinstance(action_grant, Mapping):
@@ -194,39 +184,12 @@ class MissionStore(MissionStoreHelpersMixin):
                 raise ValueError("Action grant identity or fence does not match Mission start")
             action_grant_json = _json(grant)
         now = _now()
-        rejected_reason = None
         with closing(self._connect()) as connection:
             connection.execute("BEGIN IMMEDIATE")
-            row = connection.execute("SELECT * FROM fleet_missions WHERE mission_id=?",
-                                     (mission_id,)).fetchone()
-            if row is None:
-                raise KeyError(mission_id)
-            control = connection.execute(
-                "SELECT authority_epoch, generation, dispatch_enabled "
-                "FROM fleet_dispatch_control WHERE control_id=1"
-            ).fetchone()
-            if row["status"] != "READY":
-                raise MissionConflict("only a READY Mission step may start")
-            if (not control["dispatch_enabled"]
-                    or control["authority_epoch"] != expected_authority_epoch
-                    or control["generation"] != expected_generation
-                    or row["authority_epoch"] != expected_authority_epoch
-                    or row["dispatch_generation"] != expected_generation):
-                rejected_reason = "Fleet authority or stop generation changed before Mission step submission"
-            else:
-                resources = json.loads(row["resources_json"] or "[]")
-                expected_keys = {f"{kind}:{resource}" for kind, resource in resources}
-                claims = connection.execute(
-                    """SELECT resource_key FROM fleet_action_claims WHERE owner_kind='mission'
-                       AND owner_id=? AND generation=? AND phase='CLAIMED'""",
-                    (mission_id, expected_generation),
-                ).fetchall()
-                if {claim["resource_key"] for claim in claims} != expected_keys:
-                    rejected_reason = "Mission resource claim is no longer complete"
+            row, control, rejected_reason, reason_code = _check_step_start_claims(
+                connection, mission_id, expected_authority_epoch, expected_generation,
+            )
             if rejected_reason:
-                reason_code = ("FLEET_FENCE_CHANGED_BEFORE_SUBMISSION"
-                               if "generation" in rejected_reason
-                               else "MISSION_RESOURCE_CLAIM_LOST")
                 connection.execute(
                     "UPDATE fleet_missions SET status='HOLD', reason=?, updated_at=? WHERE mission_id=?",
                     (reason_code, now, mission_id),
@@ -264,8 +227,7 @@ class MissionStore(MissionStoreHelpersMixin):
                     action_id=action_id, attempt_id=attempt_id,
                     detail={"authority_epoch": expected_authority_epoch,
                             "dispatch_generation": expected_generation,
-                            "request_digest": (grant.get("request_digest")
-                                               if action_grant is not None else None)},
+                            "request_digest": grant.get("request_digest") if grant is not None else None},
                 )
             updated = connection.execute("SELECT * FROM fleet_missions WHERE mission_id=?",
                                          (mission_id,)).fetchone()
@@ -277,50 +239,23 @@ class MissionStore(MissionStoreHelpersMixin):
     def record_action_result(self, mission_id: str, *, event_id: str, action_id: str,
                              attempt_id: str, outcome: str,
                              result: Mapping[str, Any]) -> dict[str, Any]:
-        if outcome not in {"SUCCEEDED", "FAILED", "UNKNOWN", "HOLD"}:
-            raise ValueError("unsupported terminal Action outcome")
-        if not isinstance(result, Mapping):
-            raise ValueError("Action result must be a JSON object")
-        detail = {"outcome": outcome, "result": dict(result)}
-        detail_json = _json(detail)
         now = _now()
         with closing(self._connect()) as connection:
             connection.execute("BEGIN IMMEDIATE")
-            row = connection.execute("SELECT * FROM fleet_missions WHERE mission_id=?",
-                                     (mission_id,)).fetchone()
-            if row is None:
-                raise KeyError(mission_id)
-            duplicate = connection.execute(
-                "SELECT * FROM fleet_mission_events WHERE event_source='device_action' AND source_event_id=?",
-                (event_id,),
-            ).fetchone()
-            if duplicate is not None:
-                if (duplicate["mission_id"] != mission_id or duplicate["action_id"] != action_id
-                        or duplicate["attempt_id"] != attempt_id
-                        or duplicate["event_type"] != "ACTION_TERMINAL_RESULT"
-                        or duplicate["detail_json"] != detail_json):
-                    raise MissionConflict("device Action event ID was reused with different evidence")
+            row, is_duplicate, detail, target_state, reason, reconcile = _check_action_result(
+                connection, mission_id, event_id=event_id, action_id=action_id,
+                attempt_id=attempt_id, outcome=outcome, result=result,
+            )
+            if is_duplicate:
                 connection.commit()
                 return self._row(row)
-            reconciling_hold = (row["status"] == "HOLD" and row["reconciliation_pending"])
-            if ((row["status"] != "RUNNING" and not reconciling_hold)
-                    or row["action_id"] != action_id or row["attempt_id"] != attempt_id):
-                raise MissionConflict("Action result does not match the active Mission attempt")
-            late_success_requires_goal = reconciling_hold and outcome == "SUCCEEDED"
-            target_state = ("HOLD" if late_success_requires_goal else
-                            "ACTION_SUCCEEDED" if outcome == "SUCCEEDED" else "HOLD")
-            reason = ("LATE_SUCCESS_REQUIRES_INDEPENDENT_GOAL_EVIDENCE"
-                      if late_success_requires_goal else
-                      None if outcome == "SUCCEEDED" else f"ACTION_{outcome}")
             connection.execute(
                 "UPDATE fleet_missions SET status=?, reason=?, updated_at=? WHERE mission_id=?",
                 (target_state, reason, now, mission_id),
             )
             connection.execute(
                 "UPDATE fleet_missions SET reconciliation_pending=? WHERE mission_id=?",
-                (1 if outcome == "UNKNOWN" and result.get("reason") in {
-                    "LOCAL_ACTION_SUBMIT_OUTCOME_UNKNOWN", "LOCAL_ACTION_READBACK_UNKNOWN"
-                } else 0, mission_id),
+                (reconcile, mission_id),
             )
             self._event(
                 connection, event_source="device_action", source_event_id=event_id,
@@ -338,55 +273,16 @@ class MissionStore(MissionStoreHelpersMixin):
                                       dispatch_generation: int,
                                       phases: list[Mapping[str, Any]]) -> dict[str, Any]:
         """Atomically append idempotent, attempt-fenced local phase snapshots."""
-        if type(authority_epoch) is not int or type(dispatch_generation) is not int:
-            raise ValueError("phase receipt fence must be integer-valued")
-        if not isinstance(phases, list) or len(phases) > 4:
-            raise ValueError("phase summaries must be a bounded list")
-        phases = [DeviceActionPhaseReceipt.model_validate(phase).model_dump(mode="json")
-                  for phase in phases]
         with closing(self._connect()) as connection:
             connection.execute("BEGIN IMMEDIATE")
-            row = connection.execute(
-                "SELECT * FROM fleet_missions WHERE mission_id=?", (mission_id,),
-            ).fetchone()
-            if row is None:
-                raise KeyError(mission_id)
-            if (row["action_id"] != action_id or row["attempt_id"] != attempt_id
-                    or row["authority_epoch"] != authority_epoch
-                    or row["dispatch_generation"] != dispatch_generation
-                    or row["status"] not in {
-                        "RUNNING", "ACTION_SUCCEEDED", "HOLD", "GOAL_CONFIRMED",
-                    }):
-                raise MissionConflict("phase receipt does not match the active Mission attempt")
-
-            prior_rows = connection.execute(
-                "SELECT * FROM fleet_mission_events WHERE mission_id=? AND action_id=? "
-                "AND attempt_id=? AND event_source='device_action_phase' ORDER BY event_id",
-                (mission_id, action_id, attempt_id),
-            ).fetchall()
-            latest: dict[int, dict[str, Any]] = {}
-            for prior in prior_rows:
-                detail = json.loads(prior["detail_json"])
-                ordinal = detail["ordinal"]
-                if (ordinal not in latest or detail["source_journal_event_id"]
-                        > latest[ordinal]["detail"]["source_journal_event_id"]):
-                    latest[ordinal] = {"detail": detail}
-
-            for phase in phases:
-                if not isinstance(phase, Mapping):
-                    raise ValueError("phase snapshot must be an object")
-                ordinal = phase.get("ordinal")
-                source_event_id = phase.get("journal_event_id")
-                if (type(ordinal) is not int or not 0 <= ordinal < 4
-                        or type(source_event_id) is not int or source_event_id < 1):
-                    raise ValueError("phase snapshot identity is invalid")
-                detail = {
-                    "phase_id": phase["phase_id"], "ordinal": ordinal,
-                    "state": phase["state"], "observed_at": phase["observed_at"],
-                    "source_journal_event_id": source_event_id,
-                }
-                event_key = _phase_event_key(
-                    mission_id, action_id, attempt_id, ordinal, source_event_id,
+            row, latest, validated_phases = _load_phase_attempt(
+                connection, mission_id, action_id=action_id, attempt_id=attempt_id,
+                authority_epoch=authority_epoch, dispatch_generation=dispatch_generation,
+                phases=phases,
+            )
+            for phase in validated_phases:
+                ordinal, source_event_id, event_key, detail = _prepare_phase_entry(
+                    mission_id, action_id, attempt_id, phase,
                 )
                 self._event(
                     connection, event_source="device_action_phase",
@@ -395,30 +291,9 @@ class MissionStore(MissionStoreHelpersMixin):
                     actor_id="device-action", action_id=action_id,
                     attempt_id=attempt_id, detail=detail,
                 )
-                previous = latest.get(ordinal)
-                if previous is not None:
-                    previous_id = previous["detail"]["source_journal_event_id"]
-                    if source_event_id <= previous_id:
-                        continue
-                    allowed_next = {
-                        "SUBMITTING": {"ACCEPTED", "RUNNING", "CANCEL_REQUESTED",
-                                       "UNKNOWN", "SUCCEEDED", "FAILED", "CANCELED"},
-                        "ACCEPTED": {"RUNNING", "CANCEL_REQUESTED", "UNKNOWN",
-                                     "SUCCEEDED", "FAILED", "CANCELED"},
-                        "RUNNING": {"CANCEL_REQUESTED", "UNKNOWN", "SUCCEEDED",
-                                    "FAILED", "CANCELED"},
-                        "CANCEL_REQUESTED": {"UNKNOWN", "SUCCEEDED", "FAILED", "CANCELED"},
-                    }
-                    prior_state = previous["detail"]["state"]
-                    if (prior_state not in allowed_next
-                            or phase["state"] not in allowed_next[prior_state]
-                            and phase["state"] != prior_state):
-                        raise MissionConflict("phase receipt regresses or changes a terminal phase")
-                if ordinal > 0:
-                    previous_phase = latest.get(ordinal - 1)
-                    if previous_phase is None or previous_phase["detail"]["state"] != "SUCCEEDED":
-                        raise MissionConflict("phase receipt skips an unconfirmed prior phase")
-                latest[ordinal] = {"detail": detail}
+                _confirm_phase_transition(
+                    latest, ordinal, source_event_id, phase["state"], detail,
+                )
             updated = connection.execute(
                 "SELECT * FROM fleet_missions WHERE mission_id=?", (mission_id,),
             ).fetchone()

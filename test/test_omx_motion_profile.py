@@ -145,7 +145,7 @@ def test_compile_smooth_chunk_crane_corner_respects_guard_and_keeps_moving():
     assert max(acceleration) <= m.GUARD_ACCEL_UNITS_S2 + 0.1
     assert max(-v[1] for v in velocity) <= 2.6 + 1e-6
     assert min(max(abs(a - b) for a, b in zip(frame, lift)) for frame in frames) < 1.0
-    assert min(max(abs(v) for v in velocity[10:-10])) > 0.05
+    assert min(max(abs(v) for v in row) for row in velocity[10:-10]) > 0.05
 
 
 def test_upgrade_linear_chunk_compresses_and_softens_corners():

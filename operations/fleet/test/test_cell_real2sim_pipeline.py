@@ -48,7 +48,7 @@ def test_real2sim_pipeline_reads_snapshots_cad_inventory_sysid_and_stages(tmp_pa
     assert body["schema"] == SCHEMA
     assert len(body["snapshots"]) >= 3
     assert body["active"]["id"] == "20261112-1838"
-    assert body["previous"]["id"] == "20261110-1231"
+    assert body["previous"]["id"] == "20261112-0254"
     fix = body["active"]["ship_fixation"]
     assert fix["berth_kit"] == "v16-modular"
     assert fix["temp_bridge"] == "v7"
