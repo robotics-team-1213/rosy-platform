@@ -350,7 +350,7 @@ def _in_process_notification_service(tmp_path, now, worker_ref, webhook_requests
 
     def provider(request):
         webhook_requests.append(request)
-        return httpx.Response(200, json={'id': 'remote-777'})
+        return httpx.Response(200, json={'id': '777'})
 
     http = httpx.AsyncClient(transport=httpx.MockTransport(provider))
     journal = Journal(tmp_path / 'remote_notifications.sqlite3')
