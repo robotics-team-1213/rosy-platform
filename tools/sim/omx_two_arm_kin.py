@@ -14,6 +14,16 @@ ROOT = Path(__file__).resolve().parents[2]
 URDF = ROOT / "learning/envs/isaac/assets/omx_f_palletizing_description/urdf/omx_f_palletizing.urdf"
 CELL_EXAMPLE = ROOT / "deploy/robot/omx/sim/ladder-cell.example.json"  # plan.home and plan.limits: the same numbers as cell_profile.yaml
 JOINTS = ("joint1", "joint2", "joint3", "joint4", "joint5")
+_REG_EYE6 = 1e-4 * np.eye(6)  # ik's damped-least-squares regulariser, built once
+_CHAIN_CACHE = {}  # (resolved path, mtime_ns, size) -> (chain, tcp): every Arm() shares one URDF parse
+_PLAN_VALUES_CACHE = {}  # same-key cache for the cell file's plan block
+
+
+def _stat_key(path):
+    """(resolved path, mtime_ns, size): a cache key that still sees the file change."""
+    p = Path(path)
+    st = p.stat()
+    return str(p.resolve()), st.st_mtime_ns, st.st_size
 
 
 def norm_to_rad(value):
@@ -31,20 +41,32 @@ def _rot(axis, angle):
 
 
 def chain(urdf=URDF):
-    """(origin, axis) of joint1..5 and the TCP point in link5, all read from the URDF."""
-    root = ET.parse(urdf).getroot()
-    vec = lambda joint, tag: np.array([float(v) for v in joint.find(tag).get("xyz").split()])  # noqa: E731
-    joints = {j.get("name"): j for j in root.iter("joint")}
-    return [(vec(joints[n], "origin"), vec(joints[n], "axis")) for n in JOINTS], vec(joints["end_effector_joint"], "origin")
+    """(origin, axis) of joint1..5 and the TCP point in link5, all read from the URDF; unit axes, copies of the cached parse."""
+    key = _stat_key(urdf)
+    if key not in _CHAIN_CACHE:
+        root = ET.parse(key[0]).getroot()
+        vec = lambda joint, tag: np.array([float(v) for v in joint.find(tag).get("xyz").split()])  # noqa: E731
+        joints = {j.get("name"): j for j in root.iter("joint")}
+        pairs = []
+        for n in JOINTS:
+            origin, axis = vec(joints[n], "origin"), vec(joints[n], "axis")
+            pairs.append((origin, axis / np.linalg.norm(axis)))  # normalised once here, so _rot divides by exactly 1
+        _CHAIN_CACHE[key] = (pairs, vec(joints["end_effector_joint"], "origin"))
+    pairs, tcp = _CHAIN_CACHE[key]
+    return [(o.copy(), a.copy()) for o, a in pairs], tcp.copy()
 
 
 def plan_values(path=CELL_EXAMPLE):
-    """(home joints rad with the gripper, limits (5, 2)) from the cell file's plan block."""
-    plan = json.loads(Path(path).read_text(encoding="utf-8"))["plan"]
-    home = np.append(norm_to_rad(plan["home"]), 1.0)
-    limits = np.array([plan["limits"]["joints_rad"][n] for n in JOINTS])
-    limits[:, 0] = np.minimum(limits[:, 0], home[:5])  # the real park pose sits past the nominal joint2 limit
-    return home, limits
+    """(home joints rad with the gripper, limits (5, 2)) from the cell file's plan block; copies of the cached parse."""
+    key = _stat_key(path)
+    if key not in _PLAN_VALUES_CACHE:
+        plan = json.loads(Path(key[0]).read_text(encoding="utf-8"))["plan"]
+        home = np.append(norm_to_rad(plan["home"]), 1.0)
+        limits = np.array([plan["limits"]["joints_rad"][n] for n in JOINTS])
+        limits[:, 0] = np.minimum(limits[:, 0], home[:5])  # the real park pose sits past the nominal joint2 limit
+        _PLAN_VALUES_CACHE[key] = (home, limits)
+    home, limits = _PLAN_VALUES_CACHE[key]
+    return home.copy(), limits.copy()
 
 
 class Arm:
@@ -56,6 +78,7 @@ class Arm:
         if tcp_x is not None:
             self.tcp = np.array([tcp_x, self.tcp[1], self.tcp[2]])
         self.home, self.limits = plan_values(cell)
+        self._limits_low, self._limits_high = self.limits.T  # ik's clip bounds, unpacked once
         self.R0 = _rot([0, 0, 1], self.yaw)
 
     def frames(self, q):
@@ -67,27 +90,56 @@ class Arm:
             points.append(p.copy())
         return points, p + R @ self.tcp, R
 
-    def residual(self, q, pos, across):
-        _, here, R = self.frames(q)
+    def _tcp_and_R(self, q):
+        """residual's half of frames(): the TCP point and link5's rotation, without the joint-origin points list."""
+        R, p = self.R0, self.base
+        for (origin, axis), angle in zip(self.chain, q[:5]):
+            p = p + R @ origin
+            R = R @ _rot(axis, angle)
+        return p + R @ self.tcp, R
+
+    def _res_vec(self, here, R, across):
+        """The residual 6-vector [here, .3 * (tool-down + jaws square to `across`)], np.cross unrolled into components."""
         side = R[:, 1] if R[:, 1] @ across >= 0 else -R[:, 1]  # the jaw closes across the box either way round
-        return here, np.concatenate([here, .3 * (np.cross(R[:, 0], [0, 0, -1.0]) + np.cross(side, across))])
+        c0 = side[1] * across[2] - side[2] * across[1]  # cross(side, across)
+        c1 = side[2] * across[0] - side[0] * across[2]
+        c2 = side[0] * across[1] - side[1] * across[0]
+        return np.concatenate([here, .3 * np.array([-R[1, 0] + c0, R[0, 0] + c1, c2])])  # cross(R[:, 0], [0, 0, -1]) = (-R10, R00, 0)
+
+    def residual(self, q, pos, across):
+        here, R = self._tcp_and_R(q)
+        return here, self._res_vec(here, R, across)
 
     def ik(self, q, pos, yaw, iterations=80, tol=2e-4):
         """Tool pointing down at pos, jaws closing across a container of long-axis yaw; returns (q, position error m, orientation error)."""
         q, pos = np.array(q, float).copy(), np.asarray(pos, float)
         across = np.array([-math.sin(yaw), math.cos(yaw), 0.])
+        chain, tcp = self.chain, self.tcp
         for _ in range(iterations):
-            here, r0 = self.residual(q, pos, across)
+            R_local, p_before, R_before = [], [], []
+            R, p = self.R0, self.base
+            for k, ((origin, axis), angle) in enumerate(zip(chain, q[:5])):
+                R_local.append(_rot(axis, angle))  # the 5 local rotations, shared by this step and every FD column below
+                p_before.append(p)
+                R_before.append(R)
+                p = p + R @ origin
+                R = R @ R_local[k]
+            here = p + R @ tcp
+            r0 = self._res_vec(here, R, across)
             err = np.concatenate([pos - here, -r0[3:]])
             if np.linalg.norm(err[:3]) < tol and np.linalg.norm(err[3:]) < .01 * .3:
                 break
             J = np.zeros((6, 5))
             for k in range(5):
-                dq = q.copy()
-                dq[k] += 1e-6
-                J[:, k] = (self.residual(dq, pos, across)[1] - r0) / 1e-6
-            step = J.T @ np.linalg.solve(J @ J.T + 1e-4 * np.eye(6), err)
-            q[:5] = np.clip(q[:5] + np.clip(step, -.2, .2), *self.limits.T)
+                origin_k, axis_k = chain[k]
+                R = R_before[k] @ _rot(axis_k, q[k] + 1e-6)  # one perturbed joint; the suffix multiplies the shared locals
+                p = p_before[k] + R_before[k] @ origin_k
+                for j in range(k + 1, 5):
+                    p = p + R @ chain[j][0]
+                    R = R @ R_local[j]
+                J[:, k] = (self._res_vec(p + R @ tcp, R, across) - r0) / 1e-6
+            step = J.T @ np.linalg.solve(J @ J.T + _REG_EYE6, err)
+            q[:5] = np.clip(q[:5] + np.clip(step, -.2, .2), self._limits_low, self._limits_high)
         here, r0 = self.residual(q, pos, across)
         return q, float(np.linalg.norm(pos - here)), float(np.linalg.norm(r0[3:]) / .3)
 

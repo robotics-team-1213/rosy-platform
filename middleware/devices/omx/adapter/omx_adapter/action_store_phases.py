@@ -20,6 +20,14 @@ class InvalidActionTransition(ValueError):
 
 
 _TERMINAL = {"SUCCEEDED", "FAILED"}
+_HEX_DIGITS = frozenset("0123456789abcdef")
+_PHASE_OUTCOMES = frozenset({"SUCCEEDED", "FAILED", "CANCELED"})
+_SUBMIT_ALLOW_STATES = frozenset({"SUBMITTING", "ACCEPTED", "RUNNING"})
+_RUNNING_ALLOW_STATES = frozenset({"ACCEPTED", "RUNNING"})
+_ACTIVE_ALLOW_STATES = frozenset({"ACCEPTED", "RUNNING", "CANCEL_REQUESTED", "UNKNOWN", "HOLD"})
+_TERMINAL_PHASE_ALLOW_STATES = frozenset({"ACCEPTED", "RUNNING", "CANCEL_REQUESTED", "UNKNOWN"})
+_CANCEL_ACK_PHASE_STATES = frozenset({"CANCEL_REQUESTED", "UNKNOWN"})
+_UNKNOWN_OR_HOLD = frozenset({"UNKNOWN", "HOLD"})
 
 
 def _utc_now() -> str:
@@ -60,14 +68,14 @@ class _ActionPhaseOps:
             raise ValueError("ordinal must be a non-negative integer")
         command_digest = _nonempty("command_digest", command_digest, maximum=64)
         if (len(command_digest) != 64
-                or any(char not in "0123456789abcdef" for char in command_digest)):
+                or any(char not in _HEX_DIGITS for char in command_digest)):
             raise ValueError("command_digest must be a lowercase SHA-256 hex digest")
         now = _utc_now()
         with closing(self._connect()) as connection:
             connection.execute("BEGIN IMMEDIATE")
             action = self._require_attempt(
                 connection, action_id, attempt_id,
-                {"SUBMITTING", "ACCEPTED", "RUNNING"},
+                _SUBMIT_ALLOW_STATES,
             )
             previous = connection.execute(
                 "SELECT * FROM omx_action_phases WHERE action_id=? AND attempt_id=? "
@@ -130,7 +138,7 @@ class _ActionPhaseOps:
         with closing(self._connect()) as connection:
             connection.execute("BEGIN IMMEDIATE")
             action = self._require_attempt(
-                connection, action_id, attempt_id, {"ACCEPTED", "RUNNING"},
+                connection, action_id, attempt_id, _RUNNING_ALLOW_STATES,
             )
             phase = connection.execute(
                 "SELECT * FROM omx_action_phases WHERE action_id=? AND attempt_id=? AND phase_id=?",
@@ -246,7 +254,7 @@ class _ActionPhaseOps:
         now = _utc_now()
         with closing(self._connect()) as connection:
             connection.execute("BEGIN IMMEDIATE")
-            action = self._require_attempt(connection, action_id, attempt_id, {"UNKNOWN", "HOLD"})
+            action = self._require_attempt(connection, action_id, attempt_id, _UNKNOWN_OR_HOLD)
             phase = self._require_phase(connection, action_id, attempt_id, phase_id, {"UNKNOWN"})
             if phase["driver_goal_id"] not in {None, driver_goal_id}:
                 raise InvalidActionTransition("late ROS acceptance UUID conflicts with the phase journal")
@@ -282,7 +290,7 @@ class _ActionPhaseOps:
         now = _utc_now()
         with closing(self._connect()) as connection:
             connection.execute("BEGIN IMMEDIATE")
-            action = self._require_attempt(connection, action_id, attempt_id, {"UNKNOWN", "HOLD"})
+            action = self._require_attempt(connection, action_id, attempt_id, _UNKNOWN_OR_HOLD)
             phase = self._require_phase(connection, action_id, attempt_id, phase_id, {"UNKNOWN"})
             if phase["driver_goal_id"] != driver_goal_id:
                 raise InvalidActionTransition("late cancel UUID does not match the held phase")
@@ -313,7 +321,7 @@ class _ActionPhaseOps:
                              phase_id: str) -> dict[str, Any]:
         return self._transition_phase(
             action_id, attempt_id, phase_id=phase_id,
-            allowed={"ACCEPTED", "RUNNING"}, target="CANCEL_REQUESTED",
+            allowed=_RUNNING_ALLOW_STATES, target="CANCEL_REQUESTED",
             event_type="ACTION_PHASE_CANCEL_REQUESTED",
         )
 
@@ -327,10 +335,10 @@ class _ActionPhaseOps:
             connection.execute("BEGIN IMMEDIATE")
             action = self._require_attempt(
                 connection, action_id, attempt_id,
-                {"ACCEPTED", "RUNNING", "CANCEL_REQUESTED", "UNKNOWN", "HOLD"},
+                _ACTIVE_ALLOW_STATES,
             )
             phase = self._require_phase(
-                connection, action_id, attempt_id, phase_id, {"CANCEL_REQUESTED", "UNKNOWN"},
+                connection, action_id, attempt_id, phase_id, _CANCEL_ACK_PHASE_STATES,
             )
             connection.execute(
                 """UPDATE omx_action_phases SET cancel_acknowledged=?, updated_at=?
@@ -346,7 +354,7 @@ class _ActionPhaseOps:
             )
             updated = self._require_phase(
                 connection, action_id, attempt_id, phase_id,
-                {"CANCEL_REQUESTED", "UNKNOWN"},
+                _CANCEL_ACK_PHASE_STATES,
             )
             connection.commit()
         return self._phase_dict(updated)
@@ -355,7 +363,7 @@ class _ActionPhaseOps:
                               driver_goal_id: str, outcome: str, result_source: str,
                               result_observed_at: str,
                               result: Mapping[str, Any]) -> dict[str, Any]:
-        if outcome not in {"SUCCEEDED", "FAILED", "CANCELED"}:
+        if outcome not in _PHASE_OUTCOMES:
             raise ValueError("phase outcome must be SUCCEEDED, FAILED, or CANCELED")
         phase_id = _nonempty("phase_id", phase_id, maximum=96)
         driver_goal_id = _nonempty("driver_goal_id", driver_goal_id)
@@ -369,11 +377,11 @@ class _ActionPhaseOps:
             connection.execute("BEGIN IMMEDIATE")
             action = self._require_attempt(
                 connection, action_id, attempt_id,
-                {"ACCEPTED", "RUNNING", "CANCEL_REQUESTED", "UNKNOWN", "HOLD"},
+                _ACTIVE_ALLOW_STATES,
             )
             phase = self._require_phase(
                 connection, action_id, attempt_id, phase_id,
-                {"ACCEPTED", "RUNNING", "CANCEL_REQUESTED", "UNKNOWN"},
+                _TERMINAL_PHASE_ALLOW_STATES,
             )
             if phase["driver_goal_id"] != driver_goal_id:
                 raise InvalidActionTransition("ROS goal identity does not match Action phase")

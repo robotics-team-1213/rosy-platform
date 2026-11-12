@@ -39,6 +39,22 @@ class PickPlaceState(str, Enum):
     ACTION_SUCCEEDED = "ACTION_SUCCEEDED"
     HOLD = "HOLD"
 
+_OBJECT_HELD_STATES = frozenset({
+    PickPlaceState.VERIFY_HOLD, PickPlaceState.TRANSFER,
+    PickPlaceState.RELEASE, PickPlaceState.VERIFY_RELEASE,
+})
+_RECOVER_HELD_STATES = _OBJECT_HELD_STATES | {PickPlaceState.GRASP}
+_LEGACY_EVIDENCE_KEYS = frozenset({
+    "cell_grant", "destination_object_id", "source_observation_id", "destination_observation_id",
+})
+_HOLDABLE_PARENT_STATES = frozenset({"SUBMITTING", "ACCEPTED", "RUNNING", "CANCEL_REQUESTED", "UNKNOWN"})
+_NEXT_STATE_AFTER_ARM_RESULT = {
+    PickPlaceState.APPROACH: PickPlaceState.GRASP,
+    PickPlaceState.GRASP: PickPlaceState.VERIFY_HOLD,
+    PickPlaceState.TRANSFER: PickPlaceState.RELEASE,
+    PickPlaceState.RELEASE: PickPlaceState.VERIFY_RELEASE,
+}
+
 
 @dataclass(frozen=True)
 class ArmActionResult:
@@ -173,10 +189,7 @@ class PickPlaceTransaction:
     @property
     def object_held(self) -> bool:
         return (self._recovered_object_may_be_held
-                or self.state in {
-                    PickPlaceState.VERIFY_HOLD, PickPlaceState.TRANSFER,
-                    PickPlaceState.RELEASE, PickPlaceState.VERIFY_RELEASE,
-                }
+                or self.state in _OBJECT_HELD_STATES
                 or (self.hold_receipt is not None and self.release_receipt is None))
 
     def _hold(self, reason: str) -> None:
@@ -215,14 +228,7 @@ class PickPlaceTransaction:
             self._hold("driver_result_unconfirmed")
             raise TransactionError("driver result is not an explicit successful final result")
         self.last_result_id = result.result_id
-        if self.state is PickPlaceState.APPROACH:
-            self.state = PickPlaceState.GRASP
-        elif self.state is PickPlaceState.GRASP:
-            self.state = PickPlaceState.VERIFY_HOLD
-        elif self.state is PickPlaceState.TRANSFER:
-            self.state = PickPlaceState.RELEASE
-        else:
-            self.state = PickPlaceState.VERIFY_RELEASE
+        self.state = _NEXT_STATE_AFTER_ARM_RESULT[self.state]
         return self.state
 
     def verify_gripper_held(self, observation: GripperObservation, *, now: float,
@@ -320,8 +326,7 @@ class PickPlaceTransaction:
         arm_grant = None
         if "arm_grant" in snapshot or "action_kind" in snapshot:
             if (snapshot.get("action_kind") != "ARM_TRANSFER" or "arm_grant" not in snapshot
-                    or set(snapshot) & {"cell_grant", "destination_object_id",
-                                        "source_observation_id", "destination_observation_id"}):
+                    or set(snapshot) & _LEGACY_EVIDENCE_KEYS):
                 raise ValueError("neutral transaction requires its own tag and grant without legacy evidence")
             arm_grant = FleetArmTransferGrant.model_validate(snapshot["arm_grant"])
             for name in ("action_id", "attempt_id", "workcell_id", "instance_id"):
@@ -376,9 +381,7 @@ class PickPlaceTransaction:
         recovered.release_receipt = None
         recovered._recovered_object_may_be_held = (
             snapshot.get("object_held") is True
-            or state in {PickPlaceState.GRASP, PickPlaceState.VERIFY_HOLD,
-                         PickPlaceState.TRANSFER, PickPlaceState.RELEASE,
-                         PickPlaceState.VERIFY_RELEASE}
+            or state in _RECOVER_HELD_STATES
         )
         recovered.last_result_id = snapshot.get("last_result_id")
         if (arm_grant is None and state is PickPlaceState.ACTION_SUCCEEDED
@@ -439,9 +442,7 @@ class PickPlaceWorkflowJournal:
             )
         except Exception:
             parent = self.recorder.parent()
-            if parent is not None and parent["state"] in {
-                "SUBMITTING", "ACCEPTED", "RUNNING", "CANCEL_REQUESTED", "UNKNOWN",
-            }:
+            if parent is not None and parent["state"] in _HOLDABLE_PARENT_STATES:
                 self._force_hold("ACTION_COMPLETION_UNCERTAIN")
             raise
         return receipt
@@ -476,9 +477,7 @@ class PickPlaceWorkflowJournal:
     def _hold_action(self) -> None:
         reason = self.transaction.hold_reason or "WORKFLOW_HOLD"
         parent = self.recorder.parent()
-        if parent is not None and parent["state"] in {
-            "SUBMITTING", "ACCEPTED", "RUNNING", "CANCEL_REQUESTED", "UNKNOWN",
-        }:
+        if parent is not None and parent["state"] in _HOLDABLE_PARENT_STATES:
             self.recorder.hold(reason=reason)
 
     def _force_hold(self, reason: str) -> None:

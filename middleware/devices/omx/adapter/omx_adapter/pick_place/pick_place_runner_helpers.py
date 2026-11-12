@@ -118,6 +118,17 @@ def _validate_runner_init(
             raise ValueError("start-state tolerances must be finite and non-negative")
         normalized_tolerances[name] = numeric
     runner.start_state_tolerances = normalized_tolerances
+    runner._phase_joint_sets = {
+        phase.phase_id: frozenset(phase.joint_names) for phase in plan.phases
+    }
+    runner._tolerances_by_phase = {
+        phase.phase_id: {
+            **normalized_tolerances,
+            **(runner._cell_profile.phase_start_state_tolerance_rad.get(phase.phase_id, {})
+               if runner._cell_profile is not None else {}),
+        }
+        for phase in plan.phases
+    }
     runner.max_joint_state_age_s = max_state_age
 
     if (recorder.action_id != grant.action_id

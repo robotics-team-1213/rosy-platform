@@ -18,10 +18,9 @@ Durations are the teacher's segment times (TIMING), the same yardstick for every
 """
 import argparse
 import json
+import math
 from pathlib import Path
 import sys
-
-import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import omx_two_arm_sites as sites_mod  # noqa: E402
@@ -93,6 +92,7 @@ def harbor_moves(layout, state, request, can, avoid=()):
     blockers = sorted((c for c, s in state.items() if stack_key(layout, s) == key and (layout.sites[s].get("layer", 0) > base or reorder and c == target)),
                       key=lambda c: -layout.sites[state[c]]["layer"])
     failures = []
+    plan_sites = planning_sites(layout)  # built once, shared by finish() and every recursive temp_spots call below
 
     def step(cur, cargo, b, phase):
         a, here = cur[cargo], {c: s for c, s in cur.items() if c != cargo}
@@ -111,7 +111,7 @@ def harbor_moves(layout, state, request, can, avoid=()):
         above it reversed): only the bottom needs the far arm, the rest stays with the near arm on its own side, so the two rows overlap."""
         if reorder:
             return put(cur, moves, [(c, seat(i), "복귀") for i, c in enumerate(blockers[-1:] + blockers[:-1])])
-        lanes = sorted(s for s in planning_sites(layout) if layout.sites[s]["kind"] == "temp" and layout.sites[s]["layer"] == 0  # Pinky takes it off an empty lane
+        lanes = sorted(s for s in plan_sites if layout.sites[s]["kind"] == "temp" and layout.sites[s]["layer"] == 0  # Pinky takes it off an empty lane
                        and s not in cur.values() and s not in avoid)
         if not lanes:
             failures.append("NO_FREE_OUTBOUND_LANE")
@@ -134,7 +134,7 @@ def harbor_moves(layout, state, request, can, avoid=()):
             return finish(cur, moves)
         cargo = blockers[i]
         occupied = set(cur.values()) - {cur[cargo]}  # it does not hold itself up
-        options = sorted((t for t in temp_spots(layout, occupied, set(avoid)) if stack_key(layout, t) != key),
+        options = sorted((t for t in temp_spots(layout, occupied, set(avoid), plan_sites) if stack_key(layout, t) != key),
                          key=lambda t: zone(layout, t) != zone(layout, cur[cargo]))
         for t in options[:REORDER_WIDTH] if reorder else options:  # shortcut: a reorder tries the first places only (three levels of every place took >10 min on the validator), widen if a plan Harbor would find is missed
             m = step(cur, cargo, t, "재취급")
@@ -147,11 +147,11 @@ def harbor_moves(layout, state, request, can, avoid=()):
     return (moves, None) if moves else (None, failures[0] if failures else "NO_LEGAL_PLAN")
 
 
-def temp_spots(layout, occupied, avoid=frozenset()):
+def temp_spots(layout, occupied, avoid=frozenset(), names=None):
     """Temporary places in Harbor's order: the free temporary lane tiers on something (bottom tier first), then free ship sites standing
-    on an occupied one (another 장치 칸)."""
+    on an occupied one (another 장치 칸). `names` reuses a caller's planning_sites(list)."""
     used = occupied | avoid
-    names = planning_sites(layout)
+    names = planning_sites(layout) if names is None else names
     spots = [s for s in names for v in [layout.sites[s]] if v["kind"] in ("temp", "ship") and s not in used
              and (v["layer"] == 0 or layout.stack_at.get((v["stack"], v["layer"] - 1)) in occupied)]
     return sorted(spots, key=lambda s: (layout.sites[s]["kind"] != "temp", layout.sites[s]["layer"], s))
@@ -159,8 +159,9 @@ def temp_spots(layout, occupied, avoid=frozenset()):
 
 def duration(layout, a, b):
     """(pick, carry, place) seconds."""
-    xy = lambda s: np.array(layout.sites[s]["xy"])  # noqa: E731
-    return TIMING["pick"], float(np.linalg.norm(xy(a) - xy(b))) / TIMING["speed"], TIMING["place"]
+    ax, ay = layout.sites[a]["xy"]
+    bx, by = layout.sites[b]["xy"]
+    return TIMING["pick"], math.hypot(ax - bx, ay - by) / TIMING["speed"], TIMING["place"]
 
 
 def schedule(layout, moves, arms, belt_arrivals=None):
