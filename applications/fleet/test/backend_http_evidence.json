@@ -1879,6 +1879,30 @@
         "test_a_post_with_camera_candidates_carries_the_camera_verdict"
       ],
       "source_revision": "6a3a9c215ef402855837306d30a7b21a032bc222"
+    },
+    "GET:/api/fleet/admin/db-status": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_db_status.py",
+        "test_db_status_reports_sqlite_postgres_and_backups_without_leaking_paths"
+      ],
+      "source_revision": "ec9ff6df75955d79b15f7fcbf96ebef2f76aa923"
+    },
+    "PUT:/api/fleet/admin/db-settings": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_db_maintenance_and_selftest.py",
+        "test_db_settings_validation_persistence_and_connection_autocheckpoint"
+      ],
+      "source_revision": "ec9ff6df75955d79b15f7fcbf96ebef2f76aa923"
+    },
+    "POST:/api/fleet/admin/db-maintenance": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_db_maintenance_and_selftest.py",
+        "test_db_maintenance_self_test_and_fk_violation_detection"
+      ],
+      "source_revision": "ec9ff6df75955d79b15f7fcbf96ebef2f76aa923"
     }
   }
 }

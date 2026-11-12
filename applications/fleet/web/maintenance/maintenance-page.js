@@ -3,6 +3,7 @@ import {createFleetClient} from '/common/fleet-client.js';
 import {confirmIrreversible} from '/common/ui.js';
 import {bindEstop, bindTopbarToggle, showSession, showSignedOut, tickClock, watchFleet} from '/console/assets/fleet-header.js';
 import {createHostServices} from '/console/assets/host-services.js';
+import {createDbMaintenance} from '/console/assets/db-maintenance.js';
 
 // A development or token session lives in this tab's storage, not a cookie (same as the other work pages).
 const token = sessionStorage.getItem('rosy-console-token') || '';
@@ -17,11 +18,13 @@ const call = (url, options) => request(url, options && {
   method: options.method, headers: {'Content-Type': 'application/json'}, body: JSON.stringify(options.body),
 });
 const view = createHostServices({root: document.getElementById('host-services'), call, confirmIrreversible});
+const dbRoot = document.getElementById('db-maintenance');
+const dbView = dbRoot ? createDbMaintenance({root: dbRoot, call}) : null;
 
 async function start() {
   try {
     showSession(await request('/api/fleet/auth/session'));
-    await view.refresh();
+    await Promise.all([view.refresh(), dbView ? dbView.refresh() : Promise.resolve()]);
   } catch (error) {
     if (error.status === 401) {
       document.getElementById('maintenance-login').hidden = false;
@@ -29,6 +32,11 @@ async function start() {
     }
     return;
   }
-  setInterval(() => { if (!document.hidden) view.refresh().catch(() => {}); }, 30000);
+  setInterval(() => {
+    if (!document.hidden) {
+      view.refresh().catch(() => {});
+      if (dbView) dbView.refresh().catch(() => {});
+    }
+  }, 30000);
 }
 start();

@@ -4984,6 +4984,7 @@
         "applications/fleet/web/devices/device-discovery.js",
         "applications/fleet/web/devices/enrollment.js",
         "applications/fleet/web/maintenance/host-services.js",
+        "applications/fleet/web/maintenance/db-maintenance.js",
         "applications/fleet/web/installation/install-line.js",
         "applications/fleet/web/installation/install.js",
         "applications/fleet/web/installation/peer-picker.js"
@@ -5105,9 +5106,90 @@
           "request_ids": [
             "GET:/api/fleet/updates"
           ]
+        },
+        {
+          "consumer": "applications/fleet/web/maintenance/db-maintenance.js",
+          "expression": "/api/fleet/admin/db-status",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/admin/db-status"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/maintenance/db-maintenance.js",
+          "expression": "/api/fleet/admin/db-settings",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "PUT:/api/fleet/admin/db-settings"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/maintenance/db-maintenance.js",
+          "expression": "/api/fleet/admin/db-maintenance",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/admin/db-maintenance"
+          ]
         }
       ],
       "requests": [
+        {
+          "id": "GET:/api/fleet/admin/db-status",
+          "method": "GET",
+          "path": "/api/fleet/admin/db-status",
+          "implementation": "operations/fleet/fleet/server/ledger/db_status.py",
+          "handler": "db_status",
+          "expected_statuses": [
+            200,
+            403
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response and authorization refusal",
+          "contract_tests": [
+            "operations/fleet/test/test_db_status.py",
+            "operations/fleet/test/test_db_maintenance_and_selftest.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/admin/db-status"
+        },
+        {
+          "id": "PUT:/api/fleet/admin/db-settings",
+          "method": "PUT",
+          "path": "/api/fleet/admin/db-settings",
+          "implementation": "operations/fleet/fleet/server/ledger/db_status.py",
+          "handler": "update_settings",
+          "expected_statuses": [
+            200,
+            403,
+            422
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response, validation error, and authorization refusal",
+          "contract_tests": [
+            "operations/fleet/test/test_db_maintenance_and_selftest.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#PUT:/api/fleet/admin/db-settings"
+        },
+        {
+          "id": "POST:/api/fleet/admin/db-maintenance",
+          "method": "POST",
+          "path": "/api/fleet/admin/db-maintenance",
+          "implementation": "operations/fleet/fleet/server/ledger/db_status.py",
+          "handler": "run_maintenance",
+          "expected_statuses": [
+            200,
+            403,
+            422
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response, validation error, and authorization refusal",
+          "contract_tests": [
+            "operations/fleet/test/test_db_maintenance_and_selftest.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/admin/db-maintenance"
+        },
         {
           "id": "DELETE:/api/fleet/enrollment/robots/{robot_id}",
           "method": "DELETE",

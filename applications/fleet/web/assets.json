@@ -202,6 +202,10 @@
       "path": "maintenance/host-services.js",
       "media_type": "application/javascript"
     },
+    "db-maintenance.js": {
+      "path": "maintenance/db-maintenance.js",
+      "media_type": "application/javascript"
+    },
     "host-health.js": {
       "path": "shared/host-health.js",
       "media_type": "application/javascript"
