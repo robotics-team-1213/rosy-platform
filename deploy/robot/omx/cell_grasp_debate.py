@@ -237,10 +237,22 @@ def hook(config: dict, cell, target: dict, write_library, gap_mm: float):
     knowledge = config.get("knowledge")
     decision_ctx = cd.context(config["decision_context"]) if config.get("decision_context") else ""
 
-    state_tracker = {"reinsert_count": 0, "last_along_mm": None}
+    state_tracker = {"reinsert_count": 0, "last_along_mm": None, "signs_cache": None}
+
+    def _load_signs() -> dict:
+        try:
+            st = signs_path.stat()
+        except OSError:
+            return dict(default_signs)
+        cached = state_tracker["signs_cache"]
+        if cached is not None and cached[0] == st.st_mtime_ns and cached[1] == st.st_size:
+            return dict(cached[2])
+        loaded = json.loads(signs_path.read_text())
+        state_tracker["signs_cache"] = (st.st_mtime_ns, st.st_size, loaded)
+        return dict(loaded)
 
     def check(stage: str, status: dict, run_cmd) -> dict:
-        signs = json.loads(signs_path.read_text()) if signs_path.exists() else dict(default_signs)
+        signs = _load_signs()
         current_ma = status.get("gripper_current_ma")
         if current_ma is None:
             cur_list = (status.get("health") or {}).get("current_ma")

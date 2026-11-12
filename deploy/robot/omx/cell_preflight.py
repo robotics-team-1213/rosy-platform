@@ -64,22 +64,43 @@ def ready(frame, config: dict, run=subprocess.run, wait=time.sleep) -> list:
     return [f"{name}: {why}" for name, ok, why in lights({c: frame(c) for c in config["cameras"]}, params) if not ok]
 
 
+_ORB = None
+_BF = None
+_REF_ORB_CACHE: dict = {}
+
+
 def camera_shift_px(reference, current) -> dict:
     """Largest displacement of the image grid between the map's reference frame and now (ORB + RANSAC homography)."""
     import cv2
     import numpy as np
 
-    orb = cv2.ORB_create(3000)
-    k1, d1 = orb.detectAndCompute(reference, None)
-    k2, d2 = orb.detectAndCompute(current, None)
+    global _ORB, _BF
+    if _ORB is None:
+        _ORB = cv2.ORB_create(3000)
+        _BF = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
+    h, w = reference.shape[:2]
+    sig = (id(reference), h, w, int(reference[0, 0]), int(reference[h >> 1, w >> 1]), int(reference[-1, -1]))
+    cached = _REF_ORB_CACHE.get(sig)
+    if cached is not None and cached[0] is reference:
+        pts1, d1 = cached[1], cached[2]
+    else:
+        k1, d1 = _ORB.detectAndCompute(reference, None)
+        pts1 = np.float32([kp.pt for kp in k1]) if k1 else None
+        _REF_ORB_CACHE.clear()
+        _REF_ORB_CACHE[sig] = (reference, pts1, d1)
+    if reference is current or (current.shape == reference.shape and np.array_equal(reference, current)):
+        if d1 is None:
+            return {"ok": False, "why": "no features"}
+        return {"ok": True, "max_px": 0.0, "inliers": int(len(pts1))}
+    k2, d2 = _ORB.detectAndCompute(current, None)
     if d1 is None or d2 is None:
         return {"ok": False, "why": "no features"}
-    matches = sorted(cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True).match(d1, d2), key=lambda m: m.distance)[:600]
+    matches = sorted(_BF.match(d1, d2), key=lambda m: m.distance)[:600]
     if len(matches) < 30:
         return {"ok": False, "why": f"{len(matches)} matches"}
-    H, inliers = cv2.findHomography(np.float32([k1[m.queryIdx].pt for m in matches]),
-                                    np.float32([k2[m.trainIdx].pt for m in matches]), cv2.RANSAC, 3.0)
-    h, w = reference.shape[:2]
+    q_idx = [m.queryIdx for m in matches]
+    p2 = np.float32([k2[m.trainIdx].pt for m in matches])
+    H, inliers = cv2.findHomography(pts1[q_idx], p2, cv2.RANSAC, 3.0)
     grid = np.float32([[[x, y]] for x in (0.1 * w, 0.5 * w, 0.9 * w) for y in (0.1 * h, 0.5 * h, 0.9 * h)])
     moved = np.linalg.norm(cv2.perspectiveTransform(grid, H) - grid, axis=2)
     return {"ok": True, "max_px": round(float(moved.max()), 1), "inliers": int(inliers.sum())}

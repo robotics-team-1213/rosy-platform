@@ -43,10 +43,26 @@ def validate(data: dict) -> list[dict]:
     return data["entries"]
 
 
+_KNOWLEDGE_CACHE: dict[str, tuple[int, int, dict]] = {}
+
+
 def load(path) -> dict:
     """{"entries", "sha"}: the validated file and a digest of its bytes (rows say which knowledge they ran with)."""
-    raw = Path(path).read_bytes()
-    return {"entries": validate(json.loads(raw)), "sha": hashlib.sha256(raw).hexdigest()[:12]}
+    p = Path(path)
+    try:
+        st = p.stat()
+    except OSError:
+        raw = p.read_bytes()
+        return {"entries": validate(json.loads(raw)), "sha": hashlib.sha256(raw).hexdigest()[:12]}
+    key = str(p)
+    cached = _KNOWLEDGE_CACHE.get(key)
+    if cached is not None and cached[0] == st.st_mtime_ns and cached[1] == st.st_size:
+        doc = cached[2]
+        return {"entries": [dict(e) for e in doc["entries"]], "sha": doc["sha"]}
+    raw = p.read_bytes()
+    doc = {"entries": validate(json.loads(raw)), "sha": hashlib.sha256(raw).hexdigest()[:12]}
+    _KNOWLEDGE_CACHE[key] = (st.st_mtime_ns, st.st_size, doc)
+    return {"entries": [dict(e) for e in doc["entries"]], "sha": doc["sha"]}
 
 
 def select(knowledge, facts: dict, limit: int = 6, chars: int = 300) -> list[dict]:
