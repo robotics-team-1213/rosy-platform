@@ -276,6 +276,25 @@ export function buildQuickControlPanel({
     const isFocusedArm = view.focusAnchorId === def.target_id;
     const armCard = nodeWithText("div", `omx-cell-card${isFocusedArm ? " selected" : ""}`);
     armCard.dataset.omxId = def.target_id;
+    armCard.tabIndex = 0;
+    const selectThisArm = () => {
+      view.focusAnchorId = def.target_id;
+      if (typeof window !== "undefined" && typeof window.dispatchEvent === "function") {
+        window.dispatchEvent(new CustomEvent("rosy:inspect-target", { detail: { targetId: def.target_id } }));
+      }
+      render();
+      void refreshRoiPreview();
+    };
+    armCard.addEventListener("click", scope.guard((ev) => {
+      if (ev.target?.closest?.("ui-button, button")) return;
+      selectThisArm();
+    }));
+    armCard.addEventListener("keydown", scope.guard((ev) => {
+      if (ev.key === "Enter" || ev.key === " ") {
+        ev.preventDefault();
+        selectThisArm();
+      }
+    }));
     const armTop = nodeWithText("div", "omx-cell-top");
     armTop.append(nodeWithText("strong", "omx-cell-title", `🦾 ${def.shortLabel}`), tag(liveAnc.cell_status || "CELL-A ONLINE", "ok"));
     armCard.appendChild(armTop);
@@ -311,12 +330,15 @@ export function buildQuickControlPanel({
     callRobotBtn.title = `${def.shortLabel} 연계 정류장 ${def.stationName}(${def.stationId})으로 ${robot.robot_id} 즉시 호출·배차`;
     callRobotBtn.addEventListener("click", scope.guard(() => {
       view.focusAnchorId = def.target_id; view.selected = robot.robot_id; view.focusRobot = robot.robot_id;
+      if (typeof window !== "undefined" && typeof window.dispatchEvent === "function") {
+        window.dispatchEvent(new CustomEvent("rosy:inspect-target", { detail: { targetId: def.target_id } }));
+      }
       el("map-stage").dataset.view = "map"; el("birdseye-toggle")?.setAttribute("aria-pressed", "false");
       view.dispatchGoalToPoint?.({ x: def.stationX, y: def.stationY }, `${def.shortLabel} 연계 ${def.stationName}`, def.stationId);
     }));
-    const focusCamBtn = nodeWithText("ui-button", "", "🔍 4x 카메라");
+    const focusCamBtn = nodeWithText("ui-button", "", "🔍 카메라·제어 연동");
     focusCamBtn.setAttribute("kind", "toggle"); focusCamBtn.setAttribute("aria-pressed", isFocusedArm ? "true" : "false"); focusCamBtn.type = "button";
-    focusCamBtn.addEventListener("click", scope.guard(() => { view.focusAnchorId = def.target_id; render(); void refreshRoiPreview(); }));
+    focusCamBtn.addEventListener("click", scope.guard(() => { selectThisArm(); }));
     armActions.append(callRobotBtn, focusCamBtn);
     armCard.appendChild(armActions);
     omxGrid.appendChild(armCard);
@@ -336,7 +358,14 @@ export function buildQuickControlPanel({
     const isCurrent = anc.target_id === activeAnchor.target_id;
     const tab = nodeWithText("ui-button", "", anc.kind === "omx_ai" ? `🦾 ${anc.target_id.toUpperCase()} (${anc.zoom || 4}x)` : `🤖 ${anc.target_id} (${anc.zoom || 3}x)`);
     tab.setAttribute("kind", "toggle"); tab.type = "button"; tab.setAttribute("aria-pressed", isCurrent ? "true" : "false");
-    tab.addEventListener("click", scope.guard(() => { view.focusAnchorId = anc.target_id; render(); void refreshRoiPreview(); }));
+    tab.addEventListener("click", scope.guard(() => {
+      view.focusAnchorId = anc.target_id;
+      if (typeof window !== "undefined" && typeof window.dispatchEvent === "function") {
+        window.dispatchEvent(new CustomEvent("rosy:inspect-target", { detail: { targetId: anc.target_id } }));
+      }
+      render();
+      void refreshRoiPreview();
+    }));
     targetTabs.appendChild(tab);
   }
   const isPinningAnchor = view.anchorPinTarget === activeAnchor.target_id;
@@ -351,20 +380,81 @@ export function buildQuickControlPanel({
   trackerHead.append(targetTabs, pinAnchorBtn);
   trackerBox.appendChild(trackerHead);
 
+  const camViewsForAnchor = activeAnchor.target_id === "arm_a"
+    ? [
+        { id: "arm_a_wrist", label: "arm_a 손목", url: "/api/fleet/pipeline/cell-camera/arm_a_wrist" },
+        { id: "top", label: "S5 상단", url: "/api/fleet/pipeline/cell-camera/top" },
+        { id: "side", label: "셀 측면", url: "/api/fleet/pipeline/cell-camera/side" },
+      ]
+    : activeAnchor.target_id === "arm_b"
+    ? [
+        { id: "arm_b_wrist", label: "arm_b 손목", url: "/api/fleet/pipeline/cell-camera/arm_b_wrist" },
+        { id: "top", label: "S5 상단", url: "/api/fleet/pipeline/cell-camera/top" },
+        { id: "side", label: "셀 측면", url: "/api/fleet/pipeline/cell-camera/side" },
+      ]
+    : activeAnchor.target_id === "arm_s"
+    ? [
+        { id: "arm_s_wrist", label: "arm_s 손목", url: "/api/fleet/pipeline/cell-camera/arm_s_wrist" },
+        { id: "arm_s_top", label: "S3 상단", url: "/api/fleet/pipeline/cell-camera/arm_s_top" },
+        { id: "side", label: "셀 측면", url: "/api/fleet/pipeline/cell-camera/side" },
+      ]
+    : [
+        { id: "pinky", label: "S3 도킹 뷰", url: "/api/fleet/pipeline/cell-camera/pinky" },
+        { id: "side", label: "측면 도킹", url: "/api/fleet/pipeline/cell-camera/side" },
+        { id: "arm_s_top", label: "S3 상단", url: "/api/fleet/pipeline/cell-camera/arm_s_top" },
+      ];
+  view.trackerCamByTarget = view.trackerCamByTarget || {};
+  const chosenCamId = view.trackerCamByTarget[activeAnchor.target_id] || camViewsForAnchor[0].id;
+  const chosenCam = camViewsForAnchor.find((c) => c.id === chosenCamId) || camViewsForAnchor[0];
+
   const roiRow = nodeWithText("div", "roi-row"), roiImg = document.createElement("img");
   roiImg.id = "anchor-roi-img"; roiImg.className = "anchor-roi-img"; roiImg.alt = `${activeAnchor.target_id} 확대 헤드 추적 영상`;
   const existingUrl = roiObjectUrls.get(activeAnchor.target_id);
   if (existingUrl) roiImg.src = existingUrl;
   else void refreshRoiPreview();
+  const liveCellImg = document.createElement("img");
+  liveCellImg.id = "anchor-cell-live-img";
+  liveCellImg.className = "anchor-roi-img omx-inspector-cam";
+  liveCellImg.dataset.baseUrl = chosenCam.url;
+  liveCellImg.src = `${chosenCam.url}?t=${Date.now()}`;
+  liveCellImg.alt = `${activeAnchor.target_id} ${chosenCam.label} 실시간 카메라`;
+  liveCellImg.loading = "lazy";
   const roiMeta = nodeWithText("div", "roi-meta"), statusText = nodeWithText("p", "hint roi-status-text");
   statusText.id = "anchor-roi-status";
   const deg = typeof activeAnchor.head_yaw === "number" ? `${Math.round((activeAnchor.head_yaw * 180) / Math.PI)}°` : "—";
   statusText.textContent = `${activeAnchor.target_id.toUpperCase()} · ${activeAnchor.zoom || 4}x 실시간 추적 · BASE (${Number(activeAnchor.base_x).toFixed(2)}, ${Number(activeAnchor.base_y).toFixed(2)}) → HEAD (${Number(activeAnchor.head_x ?? activeAnchor.base_x).toFixed(2)}, ${Number(activeAnchor.head_y ?? activeAnchor.base_y).toFixed(2)}) ${deg}`;
   const descText = nodeWithText("small", "hint roi-sub-text", activeAnchor.kind === "omx_ai"
-    ? `CELL-A 관절(${activeAnchor.joints_summary || "6축 정상"}) + 천장 카메라 4x 확대 헤드 추적`
-    : "천장 카메라 3x 확대 차체·전면 헤드(HEAD) 각도 연속 추적 및 도로 주행 연동");
-  roiMeta.append(statusText, descText);
-  roiRow.append(roiImg, roiMeta);
+    ? `CELL-A 관절(${activeAnchor.joints_summary || "6축 정상"}) + 실시간 ${chosenCam.label} 카메라 연동`
+    : `천장 카메라 3x 추적 + 실시간 ${chosenCam.label} 카메라 연동`);
+  const lensRow = nodeWithText("div", "tracker-tabs");
+  for (const cv of camViewsForAnchor) {
+    const lBtn = nodeWithText("ui-button", "", `📷 ${cv.label}`);
+    lBtn.setAttribute("kind", cv.id === chosenCam.id ? "primary" : "quiet");
+    lBtn.setAttribute("data-work-read", "");
+    lBtn.type = "button";
+    lBtn.addEventListener("click", scope.guard(() => {
+      view.trackerCamByTarget[activeAnchor.target_id] = cv.id;
+      liveCellImg.dataset.baseUrl = cv.url;
+      liveCellImg.src = `${cv.url}?t=${Date.now()}`;
+      if (typeof window !== "undefined" && typeof window.dispatchEvent === "function") {
+        window.dispatchEvent(new CustomEvent("rosy:inspect-target", { detail: { targetId: activeAnchor.target_id, camId: cv.id } }));
+      }
+      render();
+    }));
+    lensRow.appendChild(lBtn);
+  }
+  const openFullInspectorBtn = nodeWithText("ui-button", "", "🔍 우측 인스펙터 열기");
+  openFullInspectorBtn.setAttribute("kind", "quiet");
+  openFullInspectorBtn.setAttribute("data-work-read", "");
+  openFullInspectorBtn.type = "button";
+  openFullInspectorBtn.addEventListener("click", scope.guard(() => {
+    if (typeof window !== "undefined" && typeof window.dispatchEvent === "function") {
+      window.dispatchEvent(new CustomEvent("rosy:inspect-target", { detail: { targetId: activeAnchor.target_id, scroll: true } }));
+    }
+  }));
+  lensRow.appendChild(openFullInspectorBtn);
+  roiMeta.append(statusText, descText, lensRow);
+  roiRow.append(roiImg, liveCellImg, roiMeta);
   trackerBox.appendChild(roiRow);
   quickPanel.appendChild(trackerBox);
   return quickPanel;
@@ -377,6 +467,10 @@ export function buildOmxSummaries({ view, scope, el, openCard, nodeWithText, tag
     const isSelected = view.focusAnchorId === def.target_id;
     const node = nodeWithText("article", `robot-summary omx-summary s${(idx + 1) % (view.colors?.length || 3)}${isSelected ? " selected" : ""}`);
     node.dataset.robotId = def.target_id; node.tabIndex = -1;
+    node.addEventListener("click", scope.guard((ev) => {
+      if (ev.target?.closest?.("ui-button, button")) return;
+      openCard(def.target_id);
+    }));
     const line = nodeWithText("div", "robot-line");
     line.append(nodeWithText("b", "ui-disclosure-name", `🦾 ${def.shortLabel}`));
     const btnGroup = nodeWithText("div", "omx-summary-btns");

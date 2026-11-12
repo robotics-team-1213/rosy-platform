@@ -5,7 +5,7 @@ import { readFile } from 'node:fs/promises';
 const source = new URL('../../../../applications/fleet/web/charge-bays-view.js', import.meta.url);
 const gate = new URL('../../../../applications/fleet/web/shared/poll-gate.js', import.meta.url);
 const code = (await readFile(source, 'utf8')).replace('/console/assets/poll-gate.js', gate.href);
-const { chargeBayRows } = await import(`data:text/javascript,${encodeURIComponent(code)}`);
+const { chargeBayRows, inspectorTargetsFromRows } = await import(`data:text/javascript,${encodeURIComponent(code)}`);
 
 const plan = {
   thresholds: { go_percent: 15, leave_percent: 80, rate_pct_per_min: null },
@@ -127,4 +127,13 @@ test('pipeline cards carry cell telemetry and one-click robot actions without ch
   assert.ok(rows.cards[2].quickControls.some(c => c.cableGuardToggle === true));
   assert.deepEqual(chargeBayRows({}).cards.filter(c => c.robot_id).map(c => c.robot_id),
     ['rosy_42', 'rosy_45', 'rosy_46']);
+
+  const targets = inspectorTargetsFromRows(rows);
+  assert.deepEqual(targets.map(t => t.id), ['arm_s', 'arm_a', 'arm_b', 'cell_s', 'cell_ab', 'rosy_60', 'rosy_40']);
+  assert.equal(targets[0].cameraViews[0].id, 'arm_s_wrist');
+  assert.equal(targets[1].cameraViews[0].id, 'arm_a_wrist');
+  assert.equal(targets[2].cameraViews[0].id, 'arm_b_wrist');
+  assert.ok(targets[0].quickControls.some(c => c.clearArmHold === 'arm_s'));
+  assert.ok(targets[1].quickControls.some(c => c.clearArmHold === 'arm_a'));
+  assert.ok(targets[2].quickControls.some(c => c.clearArmHold === 'arm_b'));
 });

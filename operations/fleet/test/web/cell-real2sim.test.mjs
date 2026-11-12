@@ -16,6 +16,7 @@ import {
   cellTaskSummaryPairs,
   cellTaskRows,
   visualCardSpecs,
+  inspectorSpecs,
 } from "../../../../applications/fleet/web/cell/cell-real2sim.js";
 
 test("real2sim routes point to the cell-app pipeline endpoints", () => {
@@ -188,4 +189,27 @@ test("readoutPairs, loopRows, stageRows, sysidRows, surveyRows, and runRows form
   assert.ok(vCards[0].buttons.some(b => b.humanSafetyCell === "cell_s"));
   assert.ok(vCards[0].buttons.some(b => b.zoneId === "EXP_S3_BELT"));
   assert.ok(vCards[2].buttons.some(b => b.cableGuardToggle === true));
+
+  const iSpecs = inspectorSpecs({
+    cells: {
+      cell_s: {gate: {phase: "CLAIMED", amr_motion_inhibited: true}},
+      cell_ab: {gate: {phase: "RELEASED", amr_motion_inhibited: false}},
+    },
+    arm_holds: {arm_b: {held: true, reason: "alignment deadline exceeded"}},
+    tasks: [
+      {
+        task_id: "live-e2e-cell-s-arm-s-v3",
+        cell_id: "cell_s",
+        arm_id: "arm_s",
+        status: "COMPLETED",
+        hardware_telemetry: {stop_event: {folded: true, state: [0.0, -58.0, 50.0, 50.0, -5.0, 58.1]}},
+      },
+    ],
+  });
+  assert.deepEqual(iSpecs.map(s => s.id), ["arm_s", "arm_a", "arm_b", "cell_s", "cell_ab", "rosy_46", "rosy_45", "rosy_42"]);
+  assert.equal(iSpecs[0].cameraViews[0].id, "arm_s_wrist");
+  assert.equal(iSpecs[1].cameraViews[0].id, "arm_a_wrist");
+  assert.equal(iSpecs[2].cameraViews[0].id, "arm_b_wrist");
+  assert.match(iSpecs[0].telemetryRows[1][1], /folded=true/);
+  assert.match(iSpecs[2].telemetryRows[3][1], /홀드 활성/);
 });

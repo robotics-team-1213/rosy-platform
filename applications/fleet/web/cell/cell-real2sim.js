@@ -317,10 +317,142 @@ export function visualCardSpecs(body = {}) {
   ];
 }
 
+export function inspectorSpecs(body = {}) {
+  const cards = visualCardSpecs(body);
+  const s3Card = cards.find(c => c.id === 'cell_s') || {};
+  const s5Card = cards.find(c => c.id === 'cell_ab') || {};
+  const pinkyCard = cards.find(c => c.id === 'pinky') || {};
+  const tasks = Array.isArray(body?.tasks) ? body.tasks : [];
+  const lastForArm = armId => {
+    const matches = tasks.filter(t => t.arm_id === armId);
+    return matches.length ? matches[matches.length - 1] : null;
+  };
+  const armJointSnapshot = (armId, fallbackText) => {
+    const t = lastForArm(armId);
+    const stopEv = t?.hardware_telemetry?.stop_event || {};
+    const stateArr = Array.isArray(stopEv.state) ? stopEv.state.map(v => Number(v).toFixed(1)).join(', ') : '';
+    if (stateArr) {
+      return `${t.task_id} · folded=${Boolean(stopEv.folded)} · [${stateArr}] (완료 스냅샷)`;
+    }
+    return fallbackText || 'folded: true · 홈 대기 (완료 스냅샷)';
+  };
+  const armHolds = body?.arm_holds || {};
+  const holdText = armId => armHolds[armId]?.held
+    ? `홀드 활성 (${armHolds[armId].reason || '점검 필요'})`
+    : '정상 (홀드 없음)';
+  const pinkyButtonsFor = robotId => (pinkyCard.buttons || []).map(b => ({
+    ...b,
+    robot_id: robotId,
+    ...(b.decisionSubject ? {decisionSubject: robotId} : {}),
+  }));
+  return [
+    {
+      id: 'arm_s',
+      shortTab: '🦾 arm_s (S3)',
+      title: '🦾 OMX-AI #3 · arm_s (cell_s · S3 하역 셔틀)',
+      badge: `${s3Card.phase || 'IDLE'} · AMR 잠금 ${s3Card.amr_motion_inhibited ? 'ON' : 'OFF'}`,
+      cameraViews: [
+        {id: 'arm_s_wrist', label: 'arm_s 손목(근접)', url: '/api/fleet/pipeline/cell-camera/arm_s_wrist'},
+        {id: 'arm_s_top', label: 'S3 상단(탑뷰)', url: '/api/fleet/pipeline/cell-camera/arm_s_top'},
+        {id: 'side', label: '측면·도킹(side)', url: '/api/fleet/pipeline/cell-camera/side'},
+        {id: 'pinky', label: 'S3 도킹 뷰', url: '/api/fleet/pipeline/cell-camera/pinky'},
+      ],
+      telemetryRows: [
+        ['셀 위상 · 잠금', `${s3Card.phase || 'IDLE'} · AMR 잠금 ${s3Card.amr_motion_inhibited ? 'ON' : 'OFF'}`],
+        ['관절 스냅샷', armJointSnapshot('arm_s', s3Card.folded_state)],
+        ['최근 태스크', s3Card.last_task || '대기 중'],
+        ['팔 홀드 · 안전', holdText('arm_s')],
+      ],
+      buttons: (s3Card.buttons || []).map(b => b.clearArmHold ? {...b, clearArmHold: 'arm_s'} : b),
+    },
+    {
+      id: 'arm_a',
+      shortTab: '🦾 arm_a (S5)',
+      title: '🦾 OMX-AI #1 · arm_a (cell_ab · S5 1·3층 적재)',
+      badge: `${s5Card.phase || 'IDLE'} · AMR 잠금 ${s5Card.amr_motion_inhibited ? 'ON' : 'OFF'}`,
+      cameraViews: [
+        {id: 'arm_a_wrist', label: 'arm_a 손목(근접)', url: '/api/fleet/pipeline/cell-camera/arm_a_wrist'},
+        {id: 'top', label: 'S5 상단(탑뷰)', url: '/api/fleet/pipeline/cell-camera/top'},
+        {id: 'side', label: '측면(side)', url: '/api/fleet/pipeline/cell-camera/side'},
+        {id: 'arm_b_wrist', label: 'arm_b 손목(교차)', url: '/api/fleet/pipeline/cell-camera/arm_b_wrist'},
+      ],
+      telemetryRows: [
+        ['셀 위상 · 잠금', `${s5Card.phase || 'IDLE'} · AMR 잠금 ${s5Card.amr_motion_inhibited ? 'ON' : 'OFF'}`],
+        ['관절 스냅샷', armJointSnapshot('arm_a', s5Card.folded_state)],
+        ['최근 태스크', s5Card.last_task || '대기 중'],
+        ['팔 홀드 · 안전', holdText('arm_a')],
+      ],
+      buttons: (s5Card.buttons || []).map(b => b.clearArmHold ? {...b, label: '팔 홀드 점검·해제 (arm_a)', clearArmHold: 'arm_a'} : b),
+    },
+    {
+      id: 'arm_b',
+      shortTab: '🦾 arm_b (S5)',
+      title: '🦾 OMX-AI #2 · arm_b (cell_ab · S5 2층 적재 · 반출)',
+      badge: `${s5Card.phase || 'IDLE'} · AMR 잠금 ${s5Card.amr_motion_inhibited ? 'ON' : 'OFF'}`,
+      cameraViews: [
+        {id: 'arm_b_wrist', label: 'arm_b 손목(근접)', url: '/api/fleet/pipeline/cell-camera/arm_b_wrist'},
+        {id: 'top', label: 'S5 상단(탑뷰)', url: '/api/fleet/pipeline/cell-camera/top'},
+        {id: 'side', label: '측면(side)', url: '/api/fleet/pipeline/cell-camera/side'},
+        {id: 'arm_a_wrist', label: 'arm_a 손목(교차)', url: '/api/fleet/pipeline/cell-camera/arm_a_wrist'},
+      ],
+      telemetryRows: [
+        ['셀 위상 · 잠금', `${s5Card.phase || 'IDLE'} · AMR 잠금 ${s5Card.amr_motion_inhibited ? 'ON' : 'OFF'}`],
+        ['관절 스냅샷', armJointSnapshot('arm_b', s5Card.folded_state)],
+        ['최근 태스크', s5Card.last_task || '대기 중'],
+        ['팔 홀드 · 안전', holdText('arm_b')],
+      ],
+      buttons: (s5Card.buttons || []).map(b => b.clearArmHold ? {...b, label: '팔 홀드 점검·해제 (arm_b)', clearArmHold: 'arm_b'} : b),
+    },
+    {
+      id: 'cell_s',
+      shortTab: '📦 cell_s',
+      title: s3Card.title || 'cell_s · S3 하역 셔틀 (arm_s)',
+      badge: `${s3Card.phase || 'IDLE'} · AMR 잠금 ${s3Card.amr_motion_inhibited ? 'ON' : 'OFF'}`,
+      cameraViews: s3Card.cameraViews || [],
+      telemetryRows: [
+        ['셀 위상 · 잠금', `${s3Card.phase || 'IDLE'} · AMR 잠금 ${s3Card.amr_motion_inhibited ? 'ON' : 'OFF'}`],
+        ['관절 · 상태', s3Card.folded_state || '대기 중'],
+        ['최근 태스크', s3Card.last_task || '대기 중'],
+      ],
+      buttons: s3Card.buttons || [],
+    },
+    {
+      id: 'cell_ab',
+      shortTab: '📦 cell_ab',
+      title: s5Card.title || 'cell_ab · S5 팔레트 적재 (arm_a · arm_b)',
+      badge: `${s5Card.phase || 'IDLE'} · AMR 잠금 ${s5Card.amr_motion_inhibited ? 'ON' : 'OFF'}`,
+      cameraViews: s5Card.cameraViews || [],
+      telemetryRows: [
+        ['셀 위상 · 잠금', `${s5Card.phase || 'IDLE'} · AMR 잠금 ${s5Card.amr_motion_inhibited ? 'ON' : 'OFF'}`],
+        ['관절 · 상태', s5Card.folded_state || '대기 중'],
+        ['최근 태스크', s5Card.last_task || '대기 중'],
+      ],
+      buttons: s5Card.buttons || [],
+    },
+    ...['rosy_46', 'rosy_45', 'rosy_42'].map(rid => ({
+      id: rid,
+      robot_id: rid,
+      shortTab: `🤖 ${rid}`,
+      title: `🤖 Pinky AMR · ${rid} 도킹·배차 (${body?.cable_tangled !== false ? '케이블 보호 ≤1.5cm' : '정상 주행'})`,
+      badge: pinkyCard.phase || 'READY',
+      cameraViews: pinkyCard.cameraViews || [],
+      telemetryRows: [
+        ['도킹 · 위치', pinkyCard.phase || 'READY'],
+        ['주행 · 안전 모드', pinkyCard.folded_state || '케이블 보호 미세이동 모드'],
+        ['최근 배차', pinkyCard.last_task || 'S3 도킹 및 미세이동 준비 완료'],
+      ],
+      buttons: pinkyButtonsFor(rid),
+    })),
+  ];
+}
+
 export function createReal2SimPipeline({request, $, isOperator = () => false}) {
   const status = $('real2sim-status');
   let generation = 0;
   const selectedCameraByCard = {};
+  let selectedInspectorTarget = 'arm_s';
+  const selectedInspectorCamByTarget = {};
+  let lastCellTasksBody = null;
   let liveStreamOn = true;
   let pausedStamp = Date.now();
   let liveStreamTimer = null;
@@ -344,6 +476,13 @@ export function createReal2SimPipeline({request, $, isOperator = () => false}) {
     const wall = $('cell-camera-matrix');
     if (wall && typeof wall.querySelectorAll === 'function') {
       for (const img of wall.querySelectorAll('img')) {
+        const base = img.dataset.baseUrl || img.src.split('?')[0];
+        img.src = `${base}?t=${stamp}`;
+      }
+    }
+    const inspector = $('omx-right-inspector');
+    if (inspector && typeof inspector.querySelectorAll === 'function') {
+      for (const img of inspector.querySelectorAll('img.omx-inspector-cam')) {
         const base = img.dataset.baseUrl || img.src.split('?')[0];
         img.src = `${base}?t=${stamp}`;
       }
@@ -530,14 +669,181 @@ export function createReal2SimPipeline({request, $, isOperator = () => false}) {
     }
   }
 
+  function selectInspectorTarget(targetId, preferredCamId = null) {
+    if (!targetId) return;
+    const normalized = targetId === 'pinky' ? 'rosy_46' : targetId;
+    selectedInspectorTarget = normalized;
+    if (preferredCamId) {
+      selectedInspectorCamByTarget[normalized] = preferredCamId;
+    }
+    if (lastCellTasksBody) {
+      renderVisualCards(lastCellTasksBody);
+      renderRightInspector(lastCellTasksBody);
+    }
+  }
+
+  if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+    window.addEventListener('rosy:inspect-target', ev => {
+      const targetId = ev?.detail?.targetId;
+      const camId = ev?.detail?.camId || null;
+      if (targetId) selectInspectorTarget(targetId, camId);
+    });
+  }
+
+  function bindActionButton(btn, b, fallbackRobotId = 'rosy_46') {
+    const targetRobotId = b.robot_id || fallbackRobotId;
+    if (b.decisionSubject) {
+      btn.dataset.decisionSubject = b.decisionSubject;
+      btn.addEventListener('click', ev => { ev.stopPropagation(); void runDecisionGate(b.decisionSubject); });
+    } else if (b.visionCheckCell) {
+      btn.dataset.visionCheckCell = b.visionCheckCell;
+      btn.addEventListener('click', ev => { ev.stopPropagation(); void runVisionAutoCheck(b.visionCheckCell); });
+    } else if (b.cableGuardToggle) {
+      btn.dataset.cableGuardToggle = 'true';
+      btn.addEventListener('click', ev => { ev.stopPropagation(); void toggleCableGuard(); });
+    } else if (b.clearArmHold) {
+      btn.dataset.clearArmHold = b.clearArmHold;
+      btn.addEventListener('click', ev => { ev.stopPropagation(); void runClearArmHold(b.clearArmHold); });
+    } else if (b.humanSafetyCell) {
+      btn.dataset.humanSafetyCell = b.humanSafetyCell;
+      btn.addEventListener('click', ev => { ev.stopPropagation(); void runHumanSafetyGate(b.humanSafetyCell, b.humanDetected, targetRobotId); });
+    } else if (b.zoneId) {
+      btn.dataset.zoneId = b.zoneId;
+      btn.addEventListener('click', ev => { ev.stopPropagation(); void runStationZoneDispatch(b.zoneId, targetRobotId); });
+    } else if (b.preset) {
+      btn.dataset.cellQuickPreset = b.preset;
+      btn.addEventListener('click', ev => { ev.stopPropagation(); void runQuickPreset(b.preset); });
+    } else if (b.pinkyAction) {
+      btn.dataset.pinkyQuickAction = b.pinkyAction;
+      btn.addEventListener('click', ev => { ev.stopPropagation(); void runPinkyQuickAction(targetRobotId, b.pinkyAction); });
+    } else if (b.cancelTaskId) {
+      btn.addEventListener('click', ev => { ev.stopPropagation(); void cancelOrRetryTask(b.cancelTaskId, 'cancel'); });
+    } else if (b.retryTaskId) {
+      btn.addEventListener('click', ev => { ev.stopPropagation(); void cancelOrRetryTask(b.retryTaskId, 'retry'); });
+    }
+  }
+
+  function renderRightInspector(body) {
+    const panel = $('omx-right-inspector');
+    if (!panel) return;
+    const specs = inspectorSpecs(body);
+    const activeSpec = specs.find(s => s.id === selectedInspectorTarget) || specs[0];
+    if (!activeSpec) return;
+
+    const tabs = document.createElement('div');
+    tabs.className = 'omx-inspector-tabs';
+    for (const s of specs) {
+      const tab = document.createElement('ui-button');
+      tab.setAttribute('kind', s.id === activeSpec.id ? 'primary' : 'quiet');
+      tab.setAttribute('type', 'button');
+      tab.dataset.inspectTarget = s.id;
+      tab.textContent = s.shortTab;
+      tab.addEventListener('click', () => selectInspectorTarget(s.id));
+      tabs.append(tab);
+    }
+
+    const head = document.createElement('div');
+    head.className = 'omx-inspector-head';
+    const title = document.createElement('strong');
+    title.textContent = activeSpec.title;
+    const badge = document.createElement('span');
+    badge.className = 'cell-visual-badge';
+    badge.textContent = activeSpec.badge;
+    head.append(title, badge);
+
+    const camViews = activeSpec.cameraViews || [];
+    const activeCamId = selectedInspectorCamByTarget[activeSpec.id] || camViews[0]?.id || 'arm_s_top';
+    const activeCam = camViews.find(v => v.id === activeCamId) || camViews[0] || {id: activeCamId, label: activeCamId, url: `/api/fleet/pipeline/cell-camera/${activeCamId}`};
+    const camMap = new Map((body?.cameras || []).map(c => [c.id, c]));
+    const formatQuality = viewId => {
+      const c = camMap.get(viewId) || camMap.get(viewId === 'cell_s' ? 'arm_s_top' : (viewId === 'cell_ab' ? 'top' : viewId));
+      if (!c) return 'LIVE 스트림 연동';
+      return [
+        c.fresh !== false ? 'LIVE' : 'STALE',
+        c.sequence != null ? `seq #${c.sequence}` : '',
+        c.condition || '',
+        c.mean_intensity != null ? `밝기 ${c.mean_intensity}` : '',
+        c.spatial_contrast != null ? `대비 ${c.spatial_contrast}` : '',
+      ].filter(Boolean).join(' · ');
+    };
+
+    const stage = document.createElement('div');
+    stage.className = 'omx-inspector-stage';
+    const mainCam = document.createElement('img');
+    mainCam.className = 'omx-inspector-main-cam omx-inspector-cam';
+    mainCam.dataset.baseUrl = activeCam.url;
+    mainCam.src = `${activeCam.url}?t=${activeCameraStamp()}`;
+    mainCam.alt = `${activeSpec.title} 메인 카메라`;
+    mainCam.tabIndex = 0;
+    mainCam.addEventListener('click', () => mainCam.classList.toggle('focused'));
+
+    const qualLine = document.createElement('span');
+    qualLine.className = 'cell-visual-badge';
+    qualLine.textContent = `🎥 [${activeCam.label}] ${formatQuality(activeCam.id)}`;
+
+    const pipGrid = document.createElement('div');
+    pipGrid.className = 'omx-inspector-pip-grid';
+    for (const v of camViews) {
+      const pip = document.createElement('div');
+      pip.className = `omx-inspector-pip${v.id === activeCam.id ? ' active' : ''}`;
+      pip.tabIndex = 0;
+      const pImg = document.createElement('img');
+      pImg.className = 'omx-inspector-cam';
+      pImg.dataset.baseUrl = v.url;
+      pImg.src = `${v.url}?t=${activeCameraStamp()}`;
+      pImg.alt = v.label;
+      pImg.loading = 'lazy';
+      const pLbl = document.createElement('small');
+      pLbl.textContent = `📷 ${v.label}`;
+      pip.append(pImg, pLbl);
+      pip.addEventListener('click', () => {
+        selectedInspectorCamByTarget[activeSpec.id] = v.id;
+        renderRightInspector(body);
+      });
+      pipGrid.append(pip);
+    }
+    stage.append(mainCam, qualLine, pipGrid);
+
+    const readout = document.createElement('dl');
+    readout.className = 'omx-inspector-readout';
+    for (const [k, v] of (activeSpec.telemetryRows || [])) {
+      const dt = document.createElement('dt');
+      dt.textContent = k;
+      const dd = document.createElement('dd');
+      dd.textContent = v;
+      readout.append(dt, dd);
+    }
+
+    const actions = document.createElement('div');
+    actions.className = 'omx-inspector-actions';
+    for (const b of (activeSpec.buttons || [])) {
+      const btn = document.createElement('ui-button');
+      btn.setAttribute('kind', b.cancelTaskId ? 'irreversible' : 'quiet');
+      btn.setAttribute('type', 'button');
+      btn.textContent = b.label;
+      bindActionButton(btn, b, activeSpec.robot_id || 'rosy_46');
+      actions.append(btn);
+    }
+
+    panel.replaceChildren(tabs, head, stage, readout, actions);
+  }
+
   function renderVisualCards(body) {
     const wrap = $('cell-visual-cards');
     if (!wrap) return;
     const cards = visualCardSpecs(body);
     wrap.replaceChildren(...cards.map(card => {
       const article = document.createElement('article');
-      article.className = 'cell-visual-card';
+      const isSelected = selectedInspectorTarget === card.id
+        || (card.id === 'cell_s' && selectedInspectorTarget === 'arm_s')
+        || (card.id === 'cell_ab' && (selectedInspectorTarget === 'arm_a' || selectedInspectorTarget === 'arm_b'))
+        || (card.id === 'pinky' && selectedInspectorTarget.startsWith('rosy_'));
+      article.className = `cell-visual-card${isSelected ? ' selected-inspector' : ''}`;
       article.dataset.cardId = card.id;
+      article.addEventListener('click', () => {
+        const defaultTarget = card.id === 'cell_s' ? 'arm_s' : (card.id === 'cell_ab' ? 'arm_a' : (card.robot_id || 'rosy_46'));
+        selectInspectorTarget(defaultTarget, selectedCameraByCard[card.id] || null);
+      });
 
       const activeViewId = selectedCameraByCard[card.id] || card.cameraViews?.[0]?.id || card.id;
       const activeView = (card.cameraViews || []).find(v => v.id === activeViewId) || {url: card.cameraUrl};
@@ -586,7 +892,8 @@ export function createReal2SimPipeline({request, $, isOperator = () => false}) {
         pill.setAttribute('type', 'button');
         pill.dataset.cameraView = v.id;
         pill.textContent = `📷 ${v.label}`;
-        pill.addEventListener('click', () => {
+        pill.addEventListener('click', ev => {
+          ev.stopPropagation();
           selectedCameraByCard[card.id] = v.id;
           thumb.dataset.baseUrl = v.url;
           thumb.src = `${v.url}?t=${Date.now()}`;
@@ -596,6 +903,12 @@ export function createReal2SimPipeline({request, $, isOperator = () => false}) {
               child.setAttribute('kind', child === pill ? 'primary' : 'quiet');
             }
           }
+          const targetForView = v.id.startsWith('arm_a') ? 'arm_a'
+            : v.id.startsWith('arm_b') ? 'arm_b'
+            : (v.id.startsWith('arm_s') || card.id === 'cell_s') ? 'arm_s'
+            : card.id === 'cell_ab' ? 'cell_ab'
+            : (card.robot_id || 'rosy_46');
+          selectInspectorTarget(targetForView, v.id);
         });
         camSwitcher.append(pill);
       }
@@ -618,40 +931,29 @@ export function createReal2SimPipeline({request, $, isOperator = () => false}) {
 
       const actions = document.createElement('div');
       actions.className = 'cell-visual-actions';
+      const inspectTargets = card.id === 'cell_s'
+        ? [['arm_s', '🔍 우측 연동: arm_s']]
+        : card.id === 'cell_ab'
+        ? [['arm_a', '🔍 우측 연동: arm_a'], ['arm_b', '🔍 우측 연동: arm_b']]
+        : [['rosy_46', '🔍 우측 연동: rosy_46'], ['rosy_45', '🔍 rosy_45'], ['rosy_42', '🔍 rosy_42']];
+      for (const [tId, tLabel] of inspectTargets) {
+        const iBtn = document.createElement('ui-button');
+        iBtn.setAttribute('kind', selectedInspectorTarget === tId ? 'primary' : 'quiet');
+        iBtn.setAttribute('type', 'button');
+        iBtn.dataset.inspectTarget = tId;
+        iBtn.textContent = tLabel;
+        iBtn.addEventListener('click', ev => {
+          ev.stopPropagation();
+          selectInspectorTarget(tId);
+        });
+        actions.append(iBtn);
+      }
       for (const b of card.buttons) {
         const btn = document.createElement('ui-button');
         btn.setAttribute('kind', b.cancelTaskId ? 'irreversible' : 'quiet');
         btn.setAttribute('type', 'button');
         btn.textContent = b.label;
-        if (b.decisionSubject) {
-          btn.dataset.decisionSubject = b.decisionSubject;
-          btn.addEventListener('click', () => runDecisionGate(b.decisionSubject));
-        } else if (b.visionCheckCell) {
-          btn.dataset.visionCheckCell = b.visionCheckCell;
-          btn.addEventListener('click', () => runVisionAutoCheck(b.visionCheckCell));
-        } else if (b.cableGuardToggle) {
-          btn.dataset.cableGuardToggle = 'true';
-          btn.addEventListener('click', () => toggleCableGuard());
-        } else if (b.clearArmHold) {
-          btn.dataset.clearArmHold = b.clearArmHold;
-          btn.addEventListener('click', () => runClearArmHold(b.clearArmHold));
-        } else if (b.humanSafetyCell) {
-          btn.dataset.humanSafetyCell = b.humanSafetyCell;
-          btn.addEventListener('click', () => runHumanSafetyGate(b.humanSafetyCell, b.humanDetected, card.robot_id || 'rosy_46'));
-        } else if (b.zoneId) {
-          btn.dataset.zoneId = b.zoneId;
-          btn.addEventListener('click', () => runStationZoneDispatch(b.zoneId, card.robot_id || 'rosy_46'));
-        } else if (b.preset) {
-          btn.dataset.cellQuickPreset = b.preset;
-          btn.addEventListener('click', () => runQuickPreset(b.preset));
-        } else if (b.pinkyAction) {
-          btn.dataset.pinkyQuickAction = b.pinkyAction;
-          btn.addEventListener('click', () => runPinkyQuickAction(card.robot_id || 'rosy_46', b.pinkyAction));
-        } else if (b.cancelTaskId) {
-          btn.addEventListener('click', () => cancelOrRetryTask(b.cancelTaskId, 'cancel'));
-        } else if (b.retryTaskId) {
-          btn.addEventListener('click', () => cancelOrRetryTask(b.retryTaskId, 'retry'));
-        }
+        bindActionButton(btn, b, card.robot_id || 'rosy_46');
         actions.append(btn);
       }
 
@@ -697,6 +999,16 @@ export function createReal2SimPipeline({request, $, isOperator = () => false}) {
       meta.textContent = qualParts.join(' · ');
       card.addEventListener('click', () => {
         card.classList.toggle('focused');
+        const camTargetMap = {
+          arm_s_top: 'arm_s',
+          arm_s_wrist: 'arm_s',
+          top: 'cell_ab',
+          side: 'rosy_46',
+          arm_a_wrist: 'arm_a',
+          arm_b_wrist: 'arm_b',
+          pinky: 'rosy_46',
+        };
+        selectInspectorTarget(camTargetMap[cam.id] || 'arm_s', cam.id);
       });
       card.addEventListener('keydown', ev => {
         if (ev.key === 'Enter' || ev.key === ' ') {
@@ -958,8 +1270,10 @@ export function createReal2SimPipeline({request, $, isOperator = () => false}) {
   }
 
   function renderCellTasks(body) {
+    lastCellTasksBody = body;
     renderVisualCards(body);
     renderCameraMatrix(body);
+    renderRightInspector(body);
     const pairs = cellTaskSummaryPairs(body);
     const figs = $('cell-tasks-figures');
     if (figs) {

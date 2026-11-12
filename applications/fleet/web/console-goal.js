@@ -456,10 +456,13 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
       const world = canvasWorld(event);
       if (!world) return;
       for (const r of view.guide?.robots || []) {
-        if (r.pose && Math.hypot(r.pose.x - world.x, r.pose.y - world.y) <= 0.10 && view.focusRobot !== r.robot_id) {
+        if (r.pose && Math.hypot(r.pose.x - world.x, r.pose.y - world.y) <= 0.10) {
           onSelectRobot(r.robot_id);
           view.focusAnchorId = r.robot_id;
-          log(`${r.robot_id} 선택됨 · 현재 위치 (${r.pose.x.toFixed(2)}, ${r.pose.y.toFixed(2)}) m — 이동할 목적지를 지도에서 찍으세요`, "good");
+          if (typeof window !== "undefined" && typeof window.dispatchEvent === "function") {
+            window.dispatchEvent(new CustomEvent("rosy:inspect-target", { detail: { targetId: r.robot_id } }));
+          }
+          log(`${r.robot_id} 선택됨 · 우측 카메라·제어 인스펙터 연동 완료 — 이동할 목적지를 지도에서 찍으세요`, "good");
           render();
           return;
         }
@@ -470,7 +473,11 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
           const dHead = Math.hypot((anc.head_x ?? anc.base_x) - world.x, (anc.head_y ?? anc.base_y) - world.y);
           if (Math.min(dBase, dHead) <= 0.13) {
             view.focusAnchorId = anc.target_id;
-            log(`${anc.label} 선택됨 · 4x 확대 헤드 추적 뷰 활성화`, "good");
+            onSelectRobot(anc.target_id);
+            if (typeof window !== "undefined" && typeof window.dispatchEvent === "function") {
+              window.dispatchEvent(new CustomEvent("rosy:inspect-target", { detail: { targetId: anc.target_id } }));
+            }
+            log(`${anc.label} 선택됨 · 우측 실시간 손목·상단 카메라 및 제어 인스펙터 연동 활성화`, "good");
             render();
             return;
           }

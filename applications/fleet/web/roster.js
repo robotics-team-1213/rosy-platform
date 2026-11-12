@@ -27,8 +27,11 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
   const summary = createRosterSummary({scope, view, openCard, render, attentionItems, motorHealth});
   const { roiObjectUrls, refreshRoiPreview } = createRoiPoller({ scope, view, call });
   function openCard(robotId) {
-    if (typeof robotId === "string" && robotId.startsWith("arm_")) {
-      view.focusAnchorId = robotId;
+    if (typeof window !== "undefined" && robotId && typeof window.dispatchEvent === "function") {
+      window.dispatchEvent(new CustomEvent("rosy:inspect-target", { detail: { targetId: robotId } }));
+    }
+    if (typeof robotId === "string" && (robotId.startsWith("arm_") || robotId.startsWith("cell_"))) {
+      view.focusAnchorId = robotId === "cell_s" ? "arm_s" : (robotId === "cell_ab" ? "arm_a" : robotId);
       const onlineRobot = view.robots.find((r) => r.online) || view.robots[0];
       if (onlineRobot && !view.focusRobot) {
         view.focusRobot = onlineRobot.robot_id;

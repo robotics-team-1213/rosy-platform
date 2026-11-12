@@ -203,10 +203,15 @@
         <ui-button id="cell-live-stream-toggle" kind="quiet" type="button">실시간 카메라 자동갱신 (ON · 2초)</ui-button>
       </div>
       <ui-text id="cell-tasks-status" role="status" aria-live="polite">접속하면 OMX 셀(cell_s · cell_ab) 태스크 큐와 실물 실행 상태를 확인할 수 있습니다.</ui-text>
-      <div id="cell-visual-cards" class="cell-visual-card-grid" aria-label="OMX 셀 및 핑키 실시간 카메라·제어 카드"></div>
-      <details id="cell-camera-matrix-panel" open><summary class="ui-disclosure-row">실시간 6채널 로봇·셀 멀티 카메라 월 (arm_s · arm_a · arm_b · Pinky 도킹 · 클릭하여 확대)</summary>
-        <div id="cell-camera-matrix" class="cell-camera-wall" aria-label="실시간 6채널 로봇·셀 카메라 월"></div>
-      </details>
+      <div class="cell-split-workspace" id="cell-split-workspace">
+        <div class="cell-split-main">
+          <div id="cell-visual-cards" class="cell-visual-card-grid" aria-label="OMX 셀 및 핑키 실시간 카메라·제어 카드"></div>
+          <details id="cell-camera-matrix-panel" open><summary class="ui-disclosure-row">실시간 6채널 로봇·셀 멀티 카메라 월 (arm_s · arm_a · arm_b · Pinky 도킹 · 클릭 시 우측 인스펙터 연동 및 확대)</summary>
+            <div id="cell-camera-matrix" class="cell-camera-wall" aria-label="실시간 6채널 로봇·셀 카메라 월"></div>
+          </details>
+        </div>
+        <aside id="omx-right-inspector" class="omx-right-inspector" aria-label="선택한 로봇·OMX AI 실시간 카메라 및 제어 인스펙터"></aside>
+      </div>
       <dl id="cell-tasks-figures" class="ui-readout" data-form="strip" aria-label="OMX 셀 및 태스크 요약" hidden></dl>
       <div class="ui-table-scroll" role="region" aria-labelledby="real2sim-heading" tabindex="0">
         <table id="cell-tasks-table" class="ui-data-table" aria-label="OMX 셀 태스크 실행 원장" hidden>

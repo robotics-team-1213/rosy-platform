@@ -197,15 +197,88 @@ export function chargeBayRows(plan) {
   return { bays, actions, cells, summary, cards };
 }
 
+export function inspectorTargetsFromRows(rows) {
+  const cards = rows?.cards || [];
+  const s3 = cards.find((c) => c.id === "cell_s") || {};
+  const s5 = cards.find((c) => c.id === "cell_ab") || {};
+  const pinkyCards = cards.filter((c) => c.kind === "pinky");
+  return [
+    {
+      id: "arm_s",
+      shortTab: "🦾 arm_s (S3)",
+      title: "🦾 OMX-AI #3 · arm_s (cell_s · S3 하역 셔틀)",
+      status: s3.status || "neutral",
+      text: s3.text || "대기 중",
+      healthText: s3.healthText || "folded: true (홈 대기)",
+      task: s3.task || null,
+      robot_id: "rosy_46",
+      cameraViews: [
+        {id: "arm_s_wrist", label: "arm_s 손목", url: "/api/fleet/pipeline/cell-camera/arm_s_wrist"},
+        {id: "arm_s_top", label: "S3 상단", url: "/api/fleet/pipeline/cell-camera/arm_s_top"},
+        {id: "side", label: "측면", url: "/api/fleet/pipeline/cell-camera/side"},
+        {id: "pinky", label: "S3 도킹 뷰", url: "/api/fleet/pipeline/cell-camera/pinky"},
+      ],
+      buttons: s3.buttons || CELL_BUTTONS.cell_s,
+      quickControls: (s3.quickControls || []).map((c) => c.clearArmHold ? {...c, clearArmHold: "arm_s"} : c),
+    },
+    {
+      id: "arm_a",
+      shortTab: "🦾 arm_a (S5)",
+      title: "🦾 OMX-AI #1 · arm_a (cell_ab · S5 1·3층 적재)",
+      status: s5.status || "neutral",
+      text: s5.text || "대기 중",
+      healthText: s5.healthText || "folded: true (홈 대기)",
+      task: s5.task || null,
+      robot_id: "rosy_46",
+      cameraViews: [
+        {id: "arm_a_wrist", label: "arm_a 손목", url: "/api/fleet/pipeline/cell-camera/arm_a_wrist"},
+        {id: "top", label: "S5 상단", url: "/api/fleet/pipeline/cell-camera/top"},
+        {id: "side", label: "측면", url: "/api/fleet/pipeline/cell-camera/side"},
+        {id: "arm_b_wrist", label: "arm_b 손목", url: "/api/fleet/pipeline/cell-camera/arm_b_wrist"},
+      ],
+      buttons: s5.buttons || CELL_BUTTONS.cell_ab,
+      quickControls: (s5.quickControls || []).map((c) => c.clearArmHold ? {...c, clearArmHold: "arm_a"} : c),
+    },
+    {
+      id: "arm_b",
+      shortTab: "🦾 arm_b (S5)",
+      title: "🦾 OMX-AI #2 · arm_b (cell_ab · S5 2층 적재·반출)",
+      status: s5.status || "neutral",
+      text: s5.text || "대기 중",
+      healthText: s5.healthText || "folded: true (홈 대기)",
+      task: s5.task || null,
+      robot_id: "rosy_46",
+      cameraViews: [
+        {id: "arm_b_wrist", label: "arm_b 손목", url: "/api/fleet/pipeline/cell-camera/arm_b_wrist"},
+        {id: "top", label: "S5 상단", url: "/api/fleet/pipeline/cell-camera/top"},
+        {id: "side", label: "측면", url: "/api/fleet/pipeline/cell-camera/side"},
+        {id: "arm_a_wrist", label: "arm_a 손목", url: "/api/fleet/pipeline/cell-camera/arm_a_wrist"},
+      ],
+      buttons: s5.buttons || CELL_BUTTONS.cell_ab,
+      quickControls: (s5.quickControls || []).map((c) => c.clearArmHold ? {...c, clearArmHold: "arm_b"} : c),
+    },
+    ...(s3.id ? [{...s3, shortTab: "📦 cell_s"}] : []),
+    ...(s5.id ? [{...s5, shortTab: "📦 cell_ab"}] : []),
+    ...pinkyCards.map((p) => ({
+      ...p,
+      shortTab: `🤖 ${p.robot_id}`,
+    })),
+  ];
+}
+
 export function createChargeBaysView({ scope, el, call, auth }) {
   const state = el("charge-bays-state");
   const list = el("charge-bay-rows");
   const hint = el("charge-bays-hint");
+  const inspector = typeof el === "function" ? el("omx-right-inspector") : null;
   let inFlight = false;
   let unavailable = false;
   let liveStreamOn = true;
   let pausedStamp = Date.now();
   const selectedCamByCard = {};
+  let activeInspectorId = "arm_s";
+  const selectedInspectorCam = {};
+  let lastRows = null;
 
   function currentCamStamp() {
     if (liveStreamOn) pausedStamp = Date.now();
@@ -214,13 +287,35 @@ export function createChargeBaysView({ scope, el, call, auth }) {
 
   if (typeof window !== "undefined" && typeof window.setInterval === "function") {
     window.setInterval(() => {
-      if (!liveStreamOn || !list || typeof list.querySelectorAll !== "function") return;
+      if (!liveStreamOn) return;
       const stamp = currentCamStamp();
-      for (const img of list.querySelectorAll("img.cell-cam-thumb")) {
-        const base = img.dataset.baseUrl || img.src.split("?")[0];
-        img.src = `${base}?t=${stamp}`;
+      if (list && typeof list.querySelectorAll === "function") {
+        for (const img of list.querySelectorAll("img.cell-cam-thumb")) {
+          const base = img.dataset.baseUrl || img.src.split("?")[0];
+          img.src = `${base}?t=${stamp}`;
+        }
+      }
+      if (typeof document !== "undefined" && typeof document.querySelectorAll === "function") {
+        for (const img of document.querySelectorAll("img.omx-inspector-cam")) {
+          const base = img.dataset.baseUrl || img.src.split("?")[0];
+          img.src = `${base}?t=${stamp}`;
+        }
       }
     }, 2000);
+  }
+
+  if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+    window.addEventListener("rosy:inspect-target", (ev) => {
+      const targetId = ev?.detail?.targetId;
+      const camId = ev?.detail?.camId;
+      if (!targetId) return;
+      activeInspectorId = targetId === "pinky" ? "rosy_46" : targetId;
+      if (camId) selectedInspectorCam[activeInspectorId] = camId;
+      if (lastRows) renderInspector(lastRows);
+      if (ev?.detail?.scroll && inspector?.scrollIntoView) {
+        inspector.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      }
+    });
   }
 
   function tag(text, status) {
@@ -230,7 +325,156 @@ export function createChargeBaysView({ scope, el, call, auth }) {
     return t;
   }
 
+  async function executeChoice(choice, card, button) {
+    if (auth.locked || button.hasAttribute("disabled")) return;
+    button.setAttribute("disabled", "");
+    try {
+      if (choice.cancelTaskId) {
+        await call(`/api/fleet/pipeline/cell-tasks/${choice.cancelTaskId}/cancel`, {method: "POST"});
+      } else if (choice.retryTaskId) {
+        await call(`/api/fleet/pipeline/cell-tasks/${choice.retryTaskId}/retry`, {method: "POST"});
+      } else if (choice.visionCheckCell) {
+        await call("/api/fleet/pipeline/vision-auto-check", {
+          method: "POST", headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({cell_id: choice.visionCheckCell, robot_id: card.robot_id || "rosy_46"}),
+        });
+      } else if (choice.cableGuardToggle) {
+        await call("/api/fleet/pipeline/cable-guard", {
+          method: "POST", headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({toggle: true, robot_id: card.robot_id || "rosy_46"}),
+        });
+      } else if (choice.clearArmHold) {
+        await call("/api/fleet/pipeline/arm-holds/clear", {
+          method: "POST", headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({
+            arm_id: choice.clearArmHold,
+            note: "Fleet 콘솔 카메라로 홈 복귀(folded: true) 확인 후 홀드 해제",
+          }),
+        });
+      } else if (choice.humanSafetyCell) {
+        await call("/api/fleet/pipeline/human-safety-gate", {
+          method: "POST", headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({
+            cell_id: choice.humanSafetyCell,
+            human_detected: choice.humanDetected,
+            robot_id: card.robot_id || "rosy_46",
+          }),
+        });
+      } else if (choice.zoneId) {
+        await call("/api/fleet/pipeline/station-zones/dispatch", {
+          method: "POST", headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({zone_id: choice.zoneId, robot_id: card.robot_id || "rosy_46"}),
+        });
+      } else if (choice.decisionSubject) {
+        await call("/api/fleet/pipeline/decision-gate", {
+          method: "POST", headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({subject_id: choice.decisionSubject, auto_execute: true}),
+        });
+      } else {
+        await call(choice.preset ? "/api/fleet/pipeline/cell-tasks" : "/api/fleet/pipeline/pinky-tasks", {
+          method: "POST", headers: {"Content-Type": "application/json"},
+          body: JSON.stringify(choice.preset ? {preset: choice.preset} :
+            {robot_id: card.robot_id || "rosy_46", action: choice.pinkyAction}),
+        });
+      }
+      await refresh();
+    } catch (error) {
+      hint.textContent = `작업 요청 실패: ${error.message}`;
+      hint.hidden = false;
+    } finally {
+      button.removeAttribute("disabled");
+    }
+  }
+
+  function renderInspector(rows) {
+    if (!inspector) return;
+    if (!rows?.cards?.length) {
+      inspector.replaceChildren();
+      return;
+    }
+    const targets = inspectorTargetsFromRows(rows);
+    const active = targets.find((t) => t.id === activeInspectorId) || targets[0];
+    if (!active) return;
+
+    const tabs = document.createElement("div");
+    tabs.className = "omx-inspector-tabs";
+    for (const t of targets) {
+      const btn = document.createElement("ui-button");
+      btn.setAttribute("kind", t.id === active.id ? "primary" : "quiet");
+      btn.setAttribute("type", "button");
+      btn.setAttribute("data-work-read", "");
+      btn.dataset.inspectTarget = t.id;
+      btn.textContent = t.shortTab;
+      btn.addEventListener("click", () => {
+        activeInspectorId = t.id;
+        renderInspector(rows);
+      });
+      tabs.append(btn);
+    }
+
+    const head = document.createElement("div");
+    head.className = "omx-inspector-head";
+    const titleEl = document.createElement("strong");
+    titleEl.textContent = active.title;
+    head.append(titleEl, tag(active.text || "대기 중", active.status || "neutral"));
+
+    const camViews = active.cameraViews || [];
+    const activeCamId = selectedInspectorCam[active.id] || camViews[0]?.id || "arm_s_top";
+    const activeCam = camViews.find((v) => v.id === activeCamId) || camViews[0] || {id: activeCamId, label: activeCamId, url: active.cameraUrl};
+
+    const mainImg = document.createElement("img");
+    mainImg.className = "omx-inspector-main-cam omx-inspector-cam";
+    mainImg.dataset.baseUrl = activeCam.url;
+    mainImg.src = `${activeCam.url}?t=${currentCamStamp()}`;
+    mainImg.alt = `${active.title} 실시간 메인 카메라`;
+    mainImg.loading = "lazy";
+    mainImg.tabIndex = 0;
+    mainImg.addEventListener("click", () => mainImg.classList.toggle("focused"));
+
+    const pipGrid = document.createElement("div");
+    pipGrid.className = "omx-inspector-pip-grid";
+    for (const v of camViews) {
+      const pip = document.createElement("div");
+      pip.className = `omx-inspector-pip${v.id === activeCam.id ? " active" : ""}`;
+      const pImg = document.createElement("img");
+      pImg.className = "omx-inspector-cam";
+      pImg.dataset.baseUrl = v.url;
+      pImg.src = `${v.url}?t=${currentCamStamp()}`;
+      pImg.alt = v.label;
+      pImg.loading = "lazy";
+      const pLbl = document.createElement("small");
+      pLbl.textContent = `📷 ${v.label}`;
+      pip.append(pImg, pLbl);
+      pip.addEventListener("click", () => {
+        selectedInspectorCam[active.id] = v.id;
+        renderInspector(rows);
+      });
+      pipGrid.append(pip);
+    }
+
+    const meta = document.createElement("p");
+    meta.className = "omx-inspector-meta";
+    const taskBase = active.task ? `${active.task.task_id} · ${active.task.status} · ${active.task.arm_id || "—"}` : "";
+    meta.textContent = [taskBase, active.healthText || ""].filter(Boolean).join(" | ");
+
+    const actions = document.createElement("div");
+    actions.className = "omx-card-actions";
+    for (const choice of [...(active.buttons || []), ...(active.quickControls || [])]) {
+      const button = document.createElement("ui-button");
+      button.setAttribute("kind", choice.cancelTaskId ? "irreversible" : "quiet");
+      button.setAttribute("type", "button");
+      button.setAttribute("data-work-read", "");
+      button.textContent = choice.label;
+      button.addEventListener("click", () => executeChoice(choice, active, button));
+      actions.append(button);
+    }
+
+    inspector.replaceChildren(tabs, head, mainImg, pipGrid, meta, actions);
+  }
+
   function show(rows, note) {
+    lastRows = rows;
+    renderInspector(rows);
     list.replaceChildren();
     const cellItems = new Map();
     const robotItems = new Map();
@@ -256,6 +500,11 @@ export function createChargeBaysView({ scope, el, call, auth }) {
       if (li.parentNode !== list) list.append(li);
       const article = document.createElement("article");
       article.className = "omx-dense-card";
+      article.addEventListener("click", (ev) => {
+        if (ev.target?.closest?.("ui-button, button, img")) return;
+        activeInspectorId = card.id === "cell_s" ? "arm_s" : (card.id === "cell_ab" ? "arm_a" : card.id);
+        renderInspector(rows);
+      });
       const activeCamId = selectedCamByCard[card.id] || card.cameraViews?.[0]?.id;
       const activeCam = (card.cameraViews || []).find((v) => v.id === activeCamId) || {url: card.cameraUrl};
       const camera = document.createElement("img");
@@ -265,7 +514,11 @@ export function createChargeBaysView({ scope, el, call, auth }) {
       camera.className = "cell-cam-thumb";
       camera.alt = `${card.title} 카메라`;
       camera.tabIndex = 0;
-      camera.addEventListener("click", () => camera.classList.toggle("focused"));
+      camera.addEventListener("click", () => {
+        camera.classList.toggle("focused");
+        activeInspectorId = card.id === "cell_s" ? "arm_s" : (card.id === "cell_ab" ? "arm_a" : card.id);
+        renderInspector(rows);
+      });
       camera.addEventListener("keydown", (ev) => {
         if (ev.key === "Enter" || ev.key === " ") {
           ev.preventDefault();
@@ -283,6 +536,7 @@ export function createChargeBaysView({ scope, el, call, auth }) {
         const camBtn = document.createElement("ui-button");
         camBtn.setAttribute("kind", v.id === activeCamId ? "primary" : "quiet");
         camBtn.setAttribute("type", "button");
+        camBtn.setAttribute("data-work-read", "");
         camBtn.textContent = `📷 ${v.label}`;
         camBtn.addEventListener("click", () => {
           selectedCamByCard[card.id] = v.id;
@@ -293,12 +547,20 @@ export function createChargeBaysView({ scope, el, call, auth }) {
               ch.setAttribute("kind", ch === camBtn ? "primary" : "quiet");
             }
           }
+          const targetId = v.id.startsWith("arm_a") ? "arm_a"
+            : v.id.startsWith("arm_b") ? "arm_b"
+            : (v.id.startsWith("arm_s") || card.id === "cell_s") ? "arm_s"
+            : card.id;
+          activeInspectorId = targetId;
+          selectedInspectorCam[targetId] = v.id;
+          renderInspector(rows);
         });
         camBar.append(camBtn);
       }
       const streamBtn = document.createElement("ui-button");
       streamBtn.setAttribute("kind", "quiet");
       streamBtn.setAttribute("type", "button");
+      streamBtn.setAttribute("data-work-read", "");
       streamBtn.dataset.streamToggle = "true";
       streamBtn.textContent = liveStreamOn ? "자동갱신 ON(2초)" : "자동갱신 일시정지";
       streamBtn.addEventListener("click", () => {
@@ -319,66 +581,7 @@ export function createChargeBaysView({ scope, el, call, auth }) {
         button.setAttribute("type", "button");
         button.setAttribute("data-work-read", "");
         button.textContent = choice.label;
-        button.addEventListener("click", async () => {
-          if (auth.locked || button.hasAttribute("disabled")) return;
-          button.setAttribute("disabled", "");
-          try {
-            if (choice.cancelTaskId) {
-              await call(`/api/fleet/pipeline/cell-tasks/${choice.cancelTaskId}/cancel`, {method: "POST"});
-            } else if (choice.retryTaskId) {
-              await call(`/api/fleet/pipeline/cell-tasks/${choice.retryTaskId}/retry`, {method: "POST"});
-            } else if (choice.visionCheckCell) {
-              await call("/api/fleet/pipeline/vision-auto-check", {
-                method: "POST", headers: {"Content-Type": "application/json"},
-                body: JSON.stringify({cell_id: choice.visionCheckCell, robot_id: card.robot_id || "rosy_46"}),
-              });
-            } else if (choice.cableGuardToggle) {
-              await call("/api/fleet/pipeline/cable-guard", {
-                method: "POST", headers: {"Content-Type": "application/json"},
-                body: JSON.stringify({toggle: true, robot_id: card.robot_id || "rosy_46"}),
-              });
-            } else if (choice.clearArmHold) {
-              await call("/api/fleet/pipeline/arm-holds/clear", {
-                method: "POST", headers: {"Content-Type": "application/json"},
-                body: JSON.stringify({
-                  arm_id: choice.clearArmHold,
-                  note: "Fleet 콘솔 카메라로 홈 복귀(folded: true) 확인 후 홀드 해제",
-                }),
-              });
-            } else if (choice.humanSafetyCell) {
-              await call("/api/fleet/pipeline/human-safety-gate", {
-                method: "POST", headers: {"Content-Type": "application/json"},
-                body: JSON.stringify({
-                  cell_id: choice.humanSafetyCell,
-                  human_detected: choice.humanDetected,
-                  robot_id: card.robot_id || "rosy_46",
-                }),
-              });
-            } else if (choice.zoneId) {
-              await call("/api/fleet/pipeline/station-zones/dispatch", {
-                method: "POST", headers: {"Content-Type": "application/json"},
-                body: JSON.stringify({zone_id: choice.zoneId, robot_id: card.robot_id || "rosy_46"}),
-              });
-            } else if (choice.decisionSubject) {
-              await call("/api/fleet/pipeline/decision-gate", {
-                method: "POST", headers: {"Content-Type": "application/json"},
-                body: JSON.stringify({subject_id: choice.decisionSubject, auto_execute: true}),
-              });
-            } else {
-              await call(choice.preset ? "/api/fleet/pipeline/cell-tasks" : "/api/fleet/pipeline/pinky-tasks", {
-                method: "POST", headers: {"Content-Type": "application/json"},
-                body: JSON.stringify(choice.preset ? {preset: choice.preset} :
-                  {robot_id: card.robot_id, action: choice.pinkyAction}),
-              });
-            }
-            await refresh();
-          } catch (error) {
-            hint.textContent = `작업 요청 실패: ${error.message}`;
-            hint.hidden = false;
-          } finally {
-            button.removeAttribute("disabled");
-          }
-        });
+        button.addEventListener("click", () => executeChoice(choice, card, button));
         buttons.append(button);
       }
       details.append(title, camBar, status, task, buttons);
