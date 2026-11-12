@@ -197,5 +197,95 @@ def test_cell_reach_multisample_jitter_averaging_and_feel_z_step_search(tmp_path
     assert target2["pick"]["z"] == 0.006  # contact_z (0.002) + 0.004 m
 
 
+def test_cell_s_displaced_container_belt_far_and_floor_front_handoff_recovery(tmp_path: Path) -> None:
+    """Verify OMX Cell S (`arm_s`) displaced-container (`belt_far` / `floor_front`) top-camera detection,
+    `S9_DISPLACED_CONTAINER_BELT_FAR` / `S10_DISPLACED_CONTAINER_FLOOR_FRONT` classification, crane-lift
+    trajectories (`shoulder_lift -> -27.0`, `elbow_flex -> 22.0`, `max_step <= 0.032` before panning),
+    and automatic `CellToFleetRReceipt` (`phase: 'RELEASED'`, `reason: 'TRANSFER_CONFIRMED'`) completion."""
+    import numpy as np
+    import cell_fleet_handoff as cfh
+    import cell_fleet_pipeline as cfp
+    import cell_spec_recovery_fsm as csrf
+
+    # 1. Top-camera scan detects empty pick (`wrist_occ < 0.14`) and locates container in `belt_far`
+    top_belt_far = np.full((480, 640, 3), (40, 40, 40), dtype=np.uint8)
+    top_belt_far[150:250, 400:540] = (20, 120, 245)  # Warm orange container inside `belt_far` ROI (320, 110, 620, 290)
+    scan_bf_pinky = cfh.scan_cell_s_extended_zones(
+        top_belt_far, wrist_occ=0.05, intended_site="pinky", target_site="pinky",
+    )
+    assert scan_bf_pinky["pick_empty"] is True
+    assert scan_bf_pinky["zones_scanned"] == ["belt_far", "floor_front", "pinky_tray", "belt_center"]
+    assert scan_bf_pinky["displaced"] is True
+    assert scan_bf_pinky["displaced_zone"] == "belt_far"
+    assert scan_bf_pinky["failure_code"] == "S9_DISPLACED_CONTAINER_BELT_FAR"
+    assert scan_bf_pinky["recovery_trajectory"] == "recover_from_belt_far_to_pinky"
+    traj_bf = scan_bf_pinky["trajectory"]
+    assert traj_bf["grasp_pose_units"] == [-27.685, 6.725, -2.289, 45.649, 17.882]
+    assert traj_bf["crane_shoulder_lift"] == -27.0
+    assert traj_bf["crane_elbow_flex"] == 22.0
+    assert traj_bf["max_step"] <= 0.032
+    assert traj_bf["lift_before_pan"] is True
+    lift_wp = next(w for w in traj_bf["waypoints"] if w["phase"] == "crane_lift_vertical")
+    assert lift_wp["pose_units"][0] == -27.685 and lift_wp["pose_units"][1] == -27.0 and lift_wp["pose_units"][2] == 22.0
+
+    # 2. `belt_far` -> `belt_center` trajectory selection when target is `belt`
+    scan_bf_belt = cfh.scan_cell_s_extended_zones(
+        top_belt_far, wrist_occ=0.02, intended_site="belt", target_site="belt",
+    )
+    assert scan_bf_belt["failure_code"] == "S9_DISPLACED_CONTAINER_BELT_FAR"
+    assert scan_bf_belt["recovery_trajectory"] == "recover_from_belt_far_to_belt_center"
+
+    # 3. Top-camera scan locates displaced container on `floor_front` and selects `recover_from_floor_front_to_pinky`
+    top_floor = np.full((480, 640, 3), (40, 40, 40), dtype=np.uint8)
+    top_floor[220:360, 100:230] = (20, 120, 245)  # Warm orange container inside `floor_front` ROI (60, 180, 280, 420)
+    scan_ff = cfh.scan_cell_s_extended_zones(
+        top_floor, wrist_occ=0.03, intended_site="pinky", target_site="pinky",
+    )
+    assert scan_ff["displaced"] is True
+    assert scan_ff["displaced_zone"] == "floor_front"
+    assert scan_ff["failure_code"] == "S10_DISPLACED_CONTAINER_FLOOR_FRONT"
+    assert scan_ff["recovery_trajectory"] == "recover_from_floor_front_to_pinky"
+    assert csrf.select_recovery_skill("S10_DISPLACED_CONTAINER_FLOOR_FRONT")["skill"] == "recover_from_floor_front_to_pinky"
+
+    # 4. Fleet-to-Cell handoff automatically recovers `belt_far` and `floor_front` and emits RELEASED receipt
+    pipe = cfp.FleetModelPipeline(tmp_path)
+    base_handoff = {
+        "handoff_lease_id": "cell_s:pinky_1:displaced",
+        "cell_id": "cell_s",
+        "station_place": "S3",
+        "robot_id": "pinky_1",
+        "wheel_brake_locked": True,
+        "bed_ready": True,
+        "v_cmd_mps": 0.0,
+    }
+    res_bf = pipe.run_contract_handoff_stage(
+        {**base_handoff, "wrist_occ": 0.04, "top_frame": top_belt_far, "src_site": "pinky", "dst_site": "belt"},
+        stage_id="handoff-s3-recover-belt-far",
+    )
+    assert res_bf["receipt"]["phase"] == "RELEASED"
+    assert res_bf["receipt"]["reason"] == "TRANSFER_CONFIRMED"
+    assert res_bf["receipt"]["goal_evidence_digest"].startswith("sha256:")
+    assert res_bf["stage_result"]["displaced_recovery"]["failure_code"] == "S9_DISPLACED_CONTAINER_BELT_FAR"
+    assert res_bf["stage_result"]["displaced_recovery"]["recovery_trajectory"] == "recover_from_belt_far_to_belt_center"
+
+    res_ff = pipe.run_contract_handoff_stage(
+        {**base_handoff, "wrist_occ": 0.01, "top_frame": top_floor, "src_site": "pinky", "dst_site": "pinky"},
+        stage_id="handoff-s3-recover-floor-front",
+    )
+    assert res_ff["receipt"]["phase"] == "RELEASED"
+    assert res_ff["receipt"]["reason"] == "TRANSFER_CONFIRMED"
+    assert res_ff["stage_result"]["displaced_recovery"]["failure_code"] == "S10_DISPLACED_CONTAINER_FLOOR_FRONT"
+    assert res_ff["stage_result"]["displaced_recovery"]["recovery_trajectory"] == "recover_from_floor_front_to_pinky"
+
+    ledger_rows = cpp.load_ledger(tmp_path)
+    cats = {r["category"] for r in ledger_rows}
+    assert "s9_displaced_container_belt_far" in cats
+    assert "s10_displaced_container_floor_front" in cats
+    for row in ledger_rows:
+        if row["category"] in ("s9_displaced_container_belt_far", "s10_displaced_container_floor_front"):
+            assert rsim.replay_and_verify_problem_case(row, tmp_path)["verified"] is True
+
+
+
 
 

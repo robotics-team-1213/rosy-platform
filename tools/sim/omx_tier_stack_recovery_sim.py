@@ -107,6 +107,22 @@ def replay_and_verify_problem_case(case: dict[str, Any], work_dir: Path) -> dict
             "case_id": case.get("case_id"), "category": cat, "arm_id": arm_id, "tier": tier,
             "verified": passed, "sim_result": {"z_judge": z_judge, "recovery_skill": rec_skill},
         }
+    if cat in ("s9_displaced_container_belt_far", "s10_displaced_container_floor_front"):
+        import cell_fleet_handoff as cfh
+
+        disp_zone = "belt_far" if cat == "s9_displaced_container_belt_far" else "floor_front"
+        scan = cfh.scan_cell_s_extended_zones(
+            wrist_occ=0.04, displaced_to=disp_zone, intended_site="pinky", target_site=str(case.get("site_to") or "pinky"),
+        )
+        traj = scan.get("trajectory") or {}
+        passed = bool(
+            scan.get("displaced")
+            and scan.get("displaced_zone") == disp_zone
+            and traj.get("crane_shoulder_lift") == -27.0
+            and traj.get("crane_elbow_flex") == 22.0
+            and float(traj.get("max_step", 1.0)) <= 0.032
+        )
+        return {"case_id": case.get("case_id"), "category": cat, "arm_id": arm_id, "tier": tier, "verified": passed, "sim_result": scan}
     # calibration_drift
     w_res = simulate_wrist_centering_loop(arm_id, initial_offset_mm=init_off if abs(init_off) >= 2.0 else 5.8, work_dir=work_dir)
     g_res = simulate_grasp_debate_reinsert_and_retry(arm_id, tier=tier, work_dir=work_dir)

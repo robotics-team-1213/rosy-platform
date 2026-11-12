@@ -38,8 +38,7 @@ def detect_side_self_profile_landmarks(side_img: np.ndarray | None, *, datum_z_o
     if len(ys) < 400 or not (345.0 <= (v_datum := float(200.0 + np.percentile(ys, 98))) <= 390.0):
         return []
     mm_per_px, v_base_bottom = 90.0 / 175.0, v_datum + float(datum_z_offset_mm) / (90.0 / 175.0)
-    return [(round(v_base_bottom, 1), 0.0), (round(v_datum, 1), round(float(datum_z_offset_mm), 2)),
-            (round(v_base_bottom - 13.0 / mm_per_px, 1), 13.0), (round(v_base_bottom - 97.5 / mm_per_px, 1), 97.5)]
+    return [(round(v_base_bottom, 1), 0.0), (round(v_datum, 1), round(float(datum_z_offset_mm), 2)), (round(v_base_bottom - 13.0 / mm_per_px, 1), 13.0), (round(v_base_bottom - 97.5 / mm_per_px, 1), 97.5)]
 
 
 def fit_visual_datum_line(side_img: np.ndarray | None, *, datum_z_offset_mm: float | None = None, tactile_z_trim_mm: float = 0.0) -> dict[str, Any]:
@@ -60,16 +59,12 @@ def fit_visual_datum_line(side_img: np.ndarray | None, *, datum_z_offset_mm: flo
     v_pallet_ref = col_bottoms.get(2, col_bottoms.get(1))
     visual_datum_z_mm = round(max(-4.0, min(6.0, ((v_robot_base_px + slope * (272.0 - 535.0)) - v_pallet_ref) * (90.0 / 175.0))), 2) if (v_robot_base_px is not None and v_pallet_ref is not None) else 0.0
     eff_datum_mm = round(float(datum_z_offset_mm) if datum_z_offset_mm is not None else (visual_datum_z_mm + float(tactile_z_trim_mm)), 2)
-    return {"datum_z_offset_mm": eff_datum_mm, "visual_datum_z_mm": visual_datum_z_mm, "tactile_z_trim_mm": round(float(tactile_z_trim_mm), 2),
-            "v_robot_base_px": v_robot_base_px, "k1": -0.055, "k2": 0.010, "col_bottom_v_px": col_bottoms, "datum_slope_v_per_u": slope}
+    return {"datum_z_offset_mm": eff_datum_mm, "visual_datum_z_mm": visual_datum_z_mm, "tactile_z_trim_mm": round(float(tactile_z_trim_mm), 2), "v_robot_base_px": v_robot_base_px, "k1": -0.055, "k2": 0.010, "col_bottom_v_px": col_bottoms, "datum_slope_v_per_u": slope}
 
 
 def default_z_profile_mm(arm_id: str = "arm_b") -> dict[str, Any]:
     """Return the canonical OMX-AI self-profile-anchored Z-mm calibration dictionary for an arm."""
-    return {"schema": Z_PROFILE_SCHEMA, "arm_id": arm_id, "cad_profile_mm": dict(OMX_AI_PROFILE_MM),
-            "side_view": SideViewZProfile().to_dict(), "top_depth": TopDepthZProfile().to_dict(),
-            "tier_grasp_z_mm": dict(TIER_GRASP_Z_MM), "tier_surface_z_mm": dict(TIER_SURFACE_Z_MM), "tier_top_z_mm": dict(TIER_TOP_Z_MM),
-            "joint_zero_offset_deg": list(OMX_AI_PROFILE_MM["default_joint_zero_offset_deg"]), "table_fk_offset_mm": float(OMX_AI_PROFILE_MM["default_table_fk_offset_mm"])}
+    return {"schema": Z_PROFILE_SCHEMA, "arm_id": arm_id, "cad_profile_mm": dict(OMX_AI_PROFILE_MM), "side_view": SideViewZProfile().to_dict(), "top_depth": TopDepthZProfile().to_dict(), "tier_grasp_z_mm": dict(TIER_GRASP_Z_MM), "tier_surface_z_mm": dict(TIER_SURFACE_Z_MM), "tier_top_z_mm": dict(TIER_TOP_Z_MM), "joint_zero_offset_deg": list(OMX_AI_PROFILE_MM["default_joint_zero_offset_deg"]), "table_fk_offset_mm": float(OMX_AI_PROFILE_MM["default_table_fk_offset_mm"])}
 
 
 def _aligned_depth_heights(top_depth: np.ndarray, top_colour: np.ndarray | None = None, z_profile: dict[str, Any] | None = None) -> tuple[np.ndarray, np.ndarray, float]:
