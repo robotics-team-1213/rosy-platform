@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from omx_output_paths import in_source_checkout
 import camera_reference
 from native_capture import ACTION, SCHEMA as CAPTURE_SCHEMA, redacted as _redacted
-from native_environment import ROLES, _events, _roles, seal_environment
+from native_environment import ROLES, _events, _number, _roles, seal_environment
 from native_review import (JOINTS, dataset_files, inspect_dataset, inspect_frames, load_dataset,
                            static_episodes, write_json)
 from collection_intake_helpers import (  # noqa: F401
@@ -41,10 +41,6 @@ from collection_intake_helpers import (  # noqa: F401
     _vector,
     validate_session,
 )
-
-
-def _number(value):
-    return type(value) in (int, float) and math.isfinite(value)
 
 
 def prepare(sessions, output, repo_id, *, completed_only=False, camera_references=None):
