@@ -286,3 +286,250 @@ def test_usb_recovery_pipeline_camera_symlinks_and_12v_hardfault_diagnosis(tmp_p
         assert r_tq["ok"] is True and r_tq["verdict"] == "torque_off_confirmed"
     except OSError:
         pass
+
+
+def test_camera_invariant_top_belt_and_occlusion_gate():
+    import cv2
+    import cell_camera_invariant as cci
+    import cell_grasp_judges as cgj
+
+    # 1. Arm occlusion gate: rejects belt discovery when arm is extended over belt if require_arm_clear=True
+    assert cci.is_arm_clear_of_belt([0.0, -27.0, 18.0, 46.0, -5.0, 58.1]) is True
+    assert cci.is_arm_clear_of_belt([0.0, -58.0, 50.0, 50.0, -5.0, 58.1]) is True
+    assert cci.is_arm_clear_of_belt([-8.9, -14.7, 22.8, 42.0, 38.3, 54.1]) is False
+
+    # 2. Synthetic top frame with tilted conveyor belt (12 deg tilt) + glare-shifted red-orange container (H=175)
+    #    + yellow table glare (H=26, low Lab a*) + off-belt floor container
+    top = np.full((480, 640, 3), (150, 150, 145), dtype=np.uint8)
+    # Yellow worktable region (BGR ~ (90, 210, 220) -> Hue ~ 26, low redness)
+    top[220:470, 220:550] = (95, 210, 220)
+
+    # Draw tilted dark conveyor belt strip centered at (430, 100), length=340, width=110, angle=12 deg
+    belt_rect = ((430.0, 100.0), (340.0, 110.0), 12.0)
+    belt_pts = np.int32(cv2.boxPoints(belt_rect))
+    cv2.fillConvexPoly(top, belt_pts, (42, 42, 40))
+
+    # Draw glare-shifted red-orange container on the belt at (360, 85), size (75, 26), angle=12 deg
+    # BGR=(35, 45, 235) has HSV Hue ~ 178 (wraparound red-orange) and high Lab a*
+    c_rect = ((360.0, 85.0), (75.0, 26.0), 12.0)
+    c_pts = np.int32(cv2.boxPoints(c_rect))
+    cv2.fillConvexPoly(top, c_pts, (35, 45, 235))
+
+    # Draw a knocked-off container on the floor at (140, 310)
+    f_rect = ((140.0, 310.0), (80.0, 28.0), -35.0)
+    cv2.fillConvexPoly(top, np.int32(cv2.boxPoints(f_rect)), (25, 95, 240))
+
+    blocked = cci.detect_top_containers_invariant(
+        top,
+        joint_state_norm=[-8.9, -14.7, 22.8, 42.0, 38.3, 54.1],
+        require_arm_clear=True,
+    )
+    assert blocked["found"] is False and blocked["verdict"] == "arm_occluding_belt"
+
+    inv = cci.detect_top_containers_invariant(
+        top,
+        joint_state_norm=[0.0, -27.0, 18.0, 46.0, -5.0, 58.1],
+        require_arm_clear=True,
+    )
+    assert inv["found"] is True
+    assert inv["belt_frame"]["found"] is True
+    assert abs(inv["belt_frame"]["angle_deg"] - 12.0) <= 4.0
+    assert len(inv["containers"]) == 1
+    assert len(inv["floor_containers"]) == 1
+    c0 = inv["containers"][0]
+    assert 0.15 <= c0["u_along_belt"] <= 0.45
+    assert 0.25 <= c0["v_across_belt"] <= 0.75
+    assert abs(c0["yaw_rel_belt_deg"]) <= 6.0
+
+    # Verify pre_grasp_scene_judge with camera_invariant=True recovers even when fixed slot_rois miss completely!
+    broken_rois = {"b_far": (520, 200, 620, 260), "b_shifted": (280, 200, 380, 260)}
+    scene_res = cgj.pre_grasp_scene_judge(
+        top,
+        broken_rois,
+        "b_far",
+        camera_invariant=True,
+    )
+    assert scene_res["verdict"] in ("retarget_slot", "proceed")
+    assert scene_res["centroid_px"] is not None
+    assert abs(scene_res["centroid_px"][0] - 360.0) <= 6.0
+
+
+def test_wrist_fingers_anchor_pca_continuity_and_border_clip_gate():
+    import cv2
+    import cell_camera_invariant as cci
+
+    # 1. Verify PCA major-axis angle continuity across -90, 0, +90 deg without minAreaRect 90-deg axis-swap jumps
+    for true_deg in (-75.0, -30.0, 0.0, 35.0, 80.0):
+        canvas = np.zeros((300, 300), dtype=np.uint8)
+        rect = ((150.0, 150.0), (140.0, 42.0), true_deg)
+        cv2.fillConvexPoly(canvas, np.int32(cv2.boxPoints(rect)), 255)
+        ys, xs = np.where(canvas > 0)
+        est_deg, _, _, aspect = cci.pca_major_axis_angle_deg(np.column_stack([xs, ys]))
+        expected_deg = true_deg if true_deg >= 0 else true_deg + 180.0
+        err = cci.wrap_half_turn_deg(est_deg - expected_deg)
+        assert abs(err) <= 3.0
+        assert aspect >= 2.5
+
+    # 2. Synthetic wrist frame with white 3D-printed fingers tilted by +8 deg + unclipped skewed container
+    wrist = np.full((480, 640, 3), (60, 60, 60), dtype=np.uint8)
+    # Left white finger at (170, 390), right white finger at (470, 432) -> finger closing angle ~ +8 deg
+    cv2.fillConvexPoly(wrist, np.array([[90, 340], [210, 340], [215, 479], [85, 479]], np.int32), (235, 235, 235))
+    cv2.fillConvexPoly(wrist, np.array([[430, 382], [550, 382], [555, 479], [425, 479]], np.int32), (235, 235, 235))
+
+    anchor = cci.detect_wrist_fingers_anchor(wrist, finger_color="white")
+    assert anchor["found"] is True
+    assert 310.0 <= anchor["finger_mid_x"] <= 330.0
+    assert 4.0 <= anchor["finger_angle_deg"] <= 12.0
+
+    # Add unclipped orange container centered at (355, 220), major=280px, minor=110px, tilted 28 deg from vertical
+    # (major axis at 90 + 28 = 118 deg)
+    c_rect = ((355.0, 220.0), (280.0, 110.0), 118.0)
+    cv2.fillConvexPoly(wrist, np.int32(cv2.boxPoints(c_rect)), (25, 95, 240))
+    obb = cci.detect_wrist_container_obb(wrist, anchor)
+    assert obb["found"] is True
+    assert obb["clipped_border"] is False
+    assert obb["roll_reliable"] is True
+    assert abs(obb["delta_wrist_roll_deg"]) >= 12.0
+    assert 0.22 <= obb["mm_per_px"] <= 0.25
+
+    # 3. Border-clipped container (x_max >= 638) -> freezes delta_wrist_roll_deg == 0.0 (translate first!)
+    wrist_clipped = np.full((480, 640, 3), (60, 60, 60), dtype=np.uint8)
+    cv2.rectangle(wrist_clipped, (520, 140), (639, 340), (25, 95, 240), thickness=-1)
+    obb_clip = cci.detect_wrist_container_obb(wrist_clipped, anchor)
+    assert obb_clip["found"] is True
+    assert obb_clip["clipped_border"] is True
+    assert obb_clip["roll_reliable"] is False
+    assert obb_clip["delta_wrist_roll_deg"] == 0.0
+    assert obb_clip["along_mm"] > 10.0
+
+
+def test_broyden_ibvs_camera_rotation_convergence_and_strain_safe_roll():
+    import math
+    import cell_camera_invariant as cci
+
+    # Suppose the physical wrist camera is twisted by +25 deg relative to nominal kinematic closing_rad=0
+    state = cci.init_wrist_jacobian(minor_axis_px=250.0, shoulder_pan_rad=0.0, wrist_roll_rad=0.0)
+    true_rot = math.radians(25.0)
+    c, s = math.cos(true_rot), math.sin(true_rot)
+    j_true = 1.15 * (np.array([[c, -s], [s, c]]) @ state.j_0)
+
+    # 1. Sub-threshold step (< 3.0 mm) and outlier contact kick (> 40.0 mm) are rejected
+    j_before = state.j_hat.copy()
+    cci.update_broyden_jacobian(state, [1.2, 0.5], [10.0, 5.0])
+    assert state.last_update_status == "rejected_step_norm"
+    assert np.allclose(state.j_hat, j_before)
+
+    cci.update_broyden_jacobian(state, [45.0, 20.0], [300.0, 100.0])
+    assert state.last_update_status == "rejected_step_norm"
+
+    # 2. Adversarial observation trying to rotate by 75 deg and scale by 3.0x is clamped to <= 35 deg and <= 1.6x
+    adv_rot = math.radians(75.0)
+    ca, sa = math.cos(adv_rot), math.sin(adv_rot)
+    dp_valid = np.array([8.0, 0.0])
+    de_adv = 3.0 * (np.array([[ca, -sa], [sa, ca]]) @ (state.j_0 @ dp_valid))
+    cci.update_broyden_jacobian(state, dp_valid, de_adv)
+    rel = state.j_hat @ np.linalg.inv(state.j_0)
+    u_svd, s_svd, vt_svd = np.linalg.svd(rel)
+    r_pol = u_svd @ vt_svd
+    phi_est = abs(math.degrees(math.atan2(r_pol[1, 0], r_pol[0, 0])))
+    assert phi_est <= 35.01
+    assert float(np.mean(s_svd)) <= 1.601
+
+    # 3. Closed-loop IBVS simulation under +25 deg camera mount rotation: converges within 3 steps
+    #    and never exceeds MAX_WRIST_ROLL_STEP_RAD (0.045 rad)
+    state2 = cci.init_wrist_jacobian(minor_axis_px=250.0, shoulder_pan_rad=0.0, wrist_roll_rad=0.0)
+    e_px = np.array([65.0, -40.0], dtype=np.float64)
+    ang_deg = 125.0  # 35 deg error from 90 deg vertical
+    for _ in range(4):
+        cmd = cci.compute_ibvs_step(state2, e_px, ang_deg, max_step_mm=12.0)
+        assert abs(cmd["dq5_rad"]) <= cci.MAX_WRIST_ROLL_STEP_RAD + 1e-6
+        dp = np.array([cmd["dx_mm"], cmd["dy_mm"]])
+        e_px = e_px + j_true @ dp
+        ang_deg = ang_deg - math.degrees(cmd["dq5_rad"])
+    assert float(np.hypot(e_px[0], e_px[1])) < 12.0
+
+    # 4. Online Eye-to-Hand top extrinsic calibrator updates datum offset and rejects >45mm outliers
+    cal = cci.TopExtrinsicCalibrator(
+        affine_2x2=np.array([[0.0, -0.0007], [-0.00095, 0.0]]),
+        offset_xy=np.array([0.175, 0.373]),
+    )
+    r_out = cci.update_top_extrinsic_offset(cal, [400.0, 75.0], [0.250, -0.007])
+    assert r_out["updated"] is False and r_out["reason"] == "outlier_rejected"
+    r_in = cci.update_top_extrinsic_offset(cal, [400.0, 75.0], [0.132, -0.015])
+    assert r_in["updated"] is True
+
+
+def test_multi_arm_a_b_s_camera_invariant_depth_and_remount_self_healing():
+    import math
+    import cv2
+    import cell_camera_invariant as cci
+    import cell_fingers
+    import cell_realignment_pipeline as crp
+
+    # 1. Per-arm wrist camera & finger configuration for arm_a, arm_b, and arm_s
+    cfg_a = cci.resolve_wrist_camera_mount_config("arm_a")
+    cfg_b = cci.resolve_wrist_camera_mount_config("arm_b")
+    cfg_s = cci.resolve_wrist_camera_mount_config("arm_s")
+    assert cfg_a["finger_color"] == "white" and cfg_a["gap_mm"] == 44.0 and cfg_a["sign_along"] == -1.0
+    assert cfg_b["finger_color"] == "white" and cfg_b["gap_mm"] == 44.0 and cfg_b["sign_along"] == -1.0
+    assert cfg_s["finger_color"] == "dark" and cfg_s["gap_mm"] == 36.0 and cfg_s["sign_along"] == 1.0
+
+    # 2. Monocular container depth & pick-Z estimator distinguishes floor/worktable vs elevated conveyor belt
+    z_floor = cci.estimate_container_z_from_wrist_obb(
+        {"found": True, "minor_axis_px": 240.0, "eff_minor_axis_px": 240.0},
+        z_hover_m=0.086,
+        x_cur_m=0.110,
+    )
+    assert z_floor["valid"] is True
+    assert z_floor["surface_class"] == "floor_or_worktable"
+    assert 0.005 <= z_floor["z_pick_m"] <= 0.018
+    assert z_floor["recommended_x_m"] == 0.116  # prevents elbow_flex saturation at low z near base
+
+    z_belt = cci.estimate_container_z_from_wrist_obb(
+        {"found": True, "minor_axis_px": 310.0, "eff_minor_axis_px": 310.0},
+        z_hover_m=0.088,
+        x_cur_m=0.130,
+    )
+    assert z_belt["valid"] is True
+    assert z_belt["surface_class"] == "conveyor_belt_or_tier1"
+    assert 0.040 <= z_belt["z_pick_m"] <= 0.056
+
+    # 3. Online 180-deg remounted camera self-healing (allow_remount_snap=True on divergence)
+    state_ab = cci.init_wrist_jacobian(minor_axis_px=260.0, shoulder_pan_rad=0.0, wrist_roll_rad=0.0, arm_id="arm_a")
+    # Simulate a wrist camera mounted 180 deg upside-down relative to nominal J_0
+    j_flipped = -1.0 * state_ab.j_0
+    e_px = np.array([50.0, -30.0], dtype=np.float64)
+    # Step 0 moves in the wrong direction because camera is 180-deg flipped; Step 1 detects divergence and snaps SO(2)!
+    for _ in range(5):
+        cmd = cci.compute_ibvs_step(state_ab, e_px, 90.0, max_step_mm=10.0, allow_remount_snap=True)
+        dp = np.array([cmd["dx_mm"], cmd["dy_mm"]])
+        e_px = e_px + j_flipped @ dp
+    assert float(np.hypot(e_px[0], e_px[1])) < 12.0
+
+    # 4. Unified cell_fingers.resolve_wrist_servo_offset and cell_realignment_pipeline.estimate_wrist_object_pose_2d
+    wrist_img = np.full((480, 640, 3), (45, 45, 45), dtype=np.uint8)
+    # White v2.1 fingers for arm_a / arm_b
+    cv2.fillConvexPoly(wrist_img, np.array([[95, 340], [215, 340], [215, 479], [95, 479]], np.int32), (235, 235, 235))
+    cv2.fillConvexPoly(wrist_img, np.array([[425, 340], [545, 340], [545, 479], [425, 479]], np.int32), (235, 235, 235))
+    # Orange container on dark belt (no bright neutral surface around it!) tilted by 15 deg
+    c_rect = ((345.0, 225.0), (260.0, 115.0), 105.0)
+    cv2.fillConvexPoly(wrist_img, np.int32(cv2.boxPoints(c_rect)), (25, 95, 240))
+
+    f_res = cell_fingers.resolve_wrist_servo_offset(wrist_img, {"finger_color": "white"}, structural_fallback=False)
+    assert f_res["found"] is True
+    assert "delta_wrist_roll_deg" in f_res
+    assert abs(f_res["delta_wrist_roll_deg"] - 15.0) <= 5.0
+
+    r2s_pkt = cci.compute_r2s_s2r_sync_packet(
+        arm_id="arm_a",
+        top_img=None,
+        wrist_img=wrist_img,
+        q_real_norm=[0.0, -27.0, 18.0, 46.0, -5.0, 58.0],
+        q_sim_norm=[0.2, -26.8, 18.1, 45.9, -5.0, 58.0],
+    )
+    assert r2s_pkt["r2s_synced"] is True
+    assert r2s_pkt["wrist_obb"]["found"] is True
+    assert r2s_pkt["ibvs_cmd"] is not None
+
+
+

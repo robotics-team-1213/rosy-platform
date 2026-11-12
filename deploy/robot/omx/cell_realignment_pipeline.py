@@ -113,7 +113,7 @@ def compile_rail_and_belt_safe_standby_waypoints(
             {"phase": "crane_high", "pose": crane_high, "max_step": 0.021},
             {"phase": "standby_pan", "pose": stby, "max_step": 0.045},
         ]
-    else:
+    elif cur[1] > -22.0:
         belt_lift_off = [cur[0], round(min(-22.0, cur[1]), 3), round(min(14.0, cur[2]), 3), cur[3], cur[4], grip_u]
         crane_high = [cur[0], -27.0, 18.0, 46.0, cur[4], grip_u]
         phases = [
@@ -121,6 +121,8 @@ def compile_rail_and_belt_safe_standby_waypoints(
             {"phase": "crane_high", "pose": crane_high, "max_step": 0.025},
             {"phase": "standby_pan", "pose": stby, "max_step": 0.045},
         ]
+    else:
+        phases = [{"phase": "standby_unfold", "pose": stby, "max_step": 0.045}]
     previous = cur
     for phase in phases:
         phase["smooth_frames"] = compile_smooth_chunk([previous, phase["pose"]])

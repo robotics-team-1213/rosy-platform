@@ -182,26 +182,40 @@ def resolve_wrist_servo_offset(
     *,
     structural_fallback: bool = True,
     prefer_structural: bool = False,
+    camera_invariant_obb: bool = True,
     hsv=([5, 95, 110], [32, 255, 255]),
 ) -> dict:
-    """Unified wrist offset resolver combining pad-referenced `finger_offset_mm` with color-agnostic
-    `structural_container_between_fingers` fallback (or preference)."""
+    """Unified wrist offset resolver combining pad-referenced `finger_offset_mm`, color-agnostic
+    `structural_container_between_fingers`, and camera-invariant PCA/OBB `detect_wrist_container_obb`."""
     cal_map = cal or {}
     f_color = resolve_finger_color(color=cal_map.get("finger_color", "white"))
     is_dark = f_color == "dark"
+    gap_mm = 36.0 if is_dark else 44.0
     obs = {"found": False, "why": "skipped_hsv"} if prefer_structural else finger_offset_mm(
         img,
         hsv,
-        gap_mm=36.0 if is_dark else 44.0,
+        gap_mm=gap_mm,
         params={"wrist.finger_color": 1 if is_dark else (2 if f_color == "white" else 0)},
         color=f_color,
     )
+    obb_obs = None
+    if camera_invariant_obb and img is not None and hasattr(img, "shape") and img.size > 0:
+        try:
+            from cell_camera_invariant import detect_wrist_container_obb, detect_wrist_fingers_anchor
+
+            f_anchor = detect_wrist_fingers_anchor(img, finger_color=f_color)
+            if not f_anchor.get("found"):
+                f_anchor = detect_wrist_fingers_anchor(img, finger_color="auto")
+            obb_obs = detect_wrist_container_obb(img, f_anchor, hsv_range=hsv, gap_mm=gap_mm)
+        except Exception:
+            obb_obs = None
+
     if (not obs.get("found") or prefer_structural) and structural_fallback:
         s_obs = structural_container_between_fingers(img)
         if s_obs and s_obs.get("is_container_shape"):
             pad_along = obs.get("along_mm") if obs.get("found") else None
             agree_mm = round(abs(float(pad_along) - float(s_obs["dx_mm"])), 2) if pad_along is not None else None
-            return {
+            out = {
                 "found": True,
                 "along_mm": s_obs["dx_mm"],
                 "across_mm": s_obs["dy_mm"],
@@ -214,6 +228,43 @@ def resolve_wrist_servo_offset(
                 "view_agreement_mm": agree_mm,
                 "views_consistent": True if agree_mm is None else bool(agree_mm <= 6.0),
             }
+            if obb_obs and obb_obs.get("found"):
+                for k in (
+                    "theta_container_deg",
+                    "finger_angle_deg",
+                    "delta_wrist_roll_deg",
+                    "roll_reliable",
+                    "minor_axis_px",
+                    "major_axis_px",
+                    "center_px",
+                    "finger_anchor",
+                ):
+                    out[k] = obb_obs.get(k)
+            return out
+
+    if obs.get("found") and obb_obs and obb_obs.get("found"):
+        for k in (
+            "theta_container_deg",
+            "finger_angle_deg",
+            "delta_wrist_roll_deg",
+            "roll_reliable",
+            "minor_axis_px",
+            "major_axis_px",
+            "center_px",
+            "clipped_border",
+            "finger_anchor",
+        ):
+            obs.setdefault(k, obb_obs.get(k))
+        return obs
+
+    if not obs.get("found") and obb_obs and obb_obs.get("found"):
+        return {
+            **obb_obs,
+            "dx_mm": obb_obs["along_mm"],
+            "dy_mm": obb_obs["across_mm"],
+            "mode": "invariant_obb",
+            "finger_color": (obb_obs.get("finger_anchor") or {}).get("finger_color", f_color),
+        }
     return obs
 
 

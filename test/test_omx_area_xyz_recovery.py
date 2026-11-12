@@ -433,6 +433,8 @@ def test_arm_s_zones_wrist_corridor_jaw_gate_and_crane_lift_waypoints():
     assert csrf.audit_grasp_jaw_gate(48.82)["failure_code"] == "S11_EMPTY_JAW_CLOSURE_AIR_GRASP"
     assert csrf.audit_grasp_jaw_gate(54.19)["passed"] is True
     assert csrf.audit_grasp_jaw_gate(57.85)["failure_code"] == "S12_WEDGED_OR_RIM_BITE"
+    assert csrf.select_recovery_skill("S13_BELT_BASE_TRENCH_OR_RAIL_WEDGE", level_tried=0)["skill"] == "trench_extract_and_inward_belt_realign"
+    assert csrf.select_recovery_skill("S13_BELT_BASE_TRENCH_OR_RAIL_WEDGE", level_tried=1)["skill"] == "redirect_pick_to_pinky_tray"
 
     # 3. Crane lift waypoints from full extension (b_far) cap upward shoulder_lift step to 0.021 (0.63 u/s)
     wps = csrf.compile_crane_lift_waypoints(

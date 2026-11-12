@@ -256,12 +256,14 @@ def council_deliberate(
 
 def pre_grasp_scene_judge(
     top_img,
-    slot_rois: dict[str, tuple[int, int, int, int] | list[int]],
+    slot_rois: dict[str, tuple[int, int, int, int] | list[int]] | None,
     requested_slot: str,
     *,
     hsv: tuple[list[int], list[int]] | list[list[int]] = ([5, 95, 110], [32, 255, 255]),
     min_orange_ratio: float = 0.015,
     floor_roi: tuple[int, int, int, int] | list[int] | None = None,
+    camera_invariant: bool = False,
+    slot_u_centers: dict[str, float] | None = None,
 ) -> dict:
     """Pre-grasp scene occupancy & target localization gate on the top camera frame.
     Verifies whether `requested_slot` actually holds an orange container before descending;
@@ -320,17 +322,34 @@ def pre_grasp_scene_judge(
     floor_ratio = 0.0
     if floor_box is not None:
         floor_ratio, _ = _roi_stats(floor_box)
+    if camera_invariant or not slot_boxes:
+        from cell_camera_invariant import detect_top_containers_invariant
+
+        inv = detect_top_containers_invariant(top_img, slot_u_centers=slot_u_centers, requested_slot=requested_slot, hsv_range=hsv)
+        if inv.get("found") and inv.get("containers"):
+            containers = inv["containers"]
+            matched = [c for c in containers if c.get("slot") == requested_slot]
+            best = matched[0] if matched else containers[0]
+            return {
+                "verdict": "proceed" if matched else "retarget_slot",
+                "class": "slot_occupied_invariant" if matched else "slot_empty_retargeted_invariant",
+                "slot": requested_slot, "retarget_slot": None if matched else best["slot"],
+                "occupancy": occupancy, "centroid_px": best["centroid_px"],
+                "u_along_belt": best["u_along_belt"], "v_across_belt": best["v_across_belt"],
+                "yaw_rel_belt_deg": best["yaw_rel_belt_deg"], "belt_frame": inv.get("belt_frame"),
+                "floor_ratio": floor_ratio,
+                "reason": (
+                    f"camera-invariant belt frame matched {requested_slot!r} at u={best['u_along_belt']:.3f}"
+                    if matched else f"camera-invariant belt frame retargeted {requested_slot!r} -> {best['slot']!r} at u={best['u_along_belt']:.3f}"
+                ),
+            }
+
     req_ratio = occupancy.get(requested_slot, 0.0)
     if req_ratio >= min_orange_ratio:
         return {
-            "verdict": "proceed",
-            "class": "slot_occupied",
-            "slot": requested_slot,
-            "retarget_slot": None,
-            "occupancy": occupancy,
-            "centroid_px": centroids_px.get(requested_slot),
-            "floor_ratio": floor_ratio,
-            "reason": f"requested slot {requested_slot!r} occupied (ratio={req_ratio:.4f})",
+            "verdict": "proceed", "class": "slot_occupied", "slot": requested_slot, "retarget_slot": None,
+            "occupancy": occupancy, "centroid_px": centroids_px.get(requested_slot),
+            "floor_ratio": floor_ratio, "reason": f"requested slot {requested_slot!r} occupied (ratio={req_ratio:.4f})",
         }
     alt_slots = sorted(
         ((s, r) for s, r in occupancy.items() if s != requested_slot and r >= min_orange_ratio),
@@ -339,28 +358,18 @@ def pre_grasp_scene_judge(
     if alt_slots:
         best_slot, best_ratio = alt_slots[0]
         return {
-            "verdict": "retarget_slot",
-            "class": "slot_empty_retargeted",
-            "slot": requested_slot,
-            "retarget_slot": best_slot,
-            "occupancy": occupancy,
-            "centroid_px": centroids_px.get(best_slot),
-            "floor_ratio": floor_ratio,
+            "verdict": "retarget_slot", "class": "slot_empty_retargeted", "slot": requested_slot, "retarget_slot": best_slot,
+            "occupancy": occupancy, "centroid_px": centroids_px.get(best_slot), "floor_ratio": floor_ratio,
             "reason": f"requested slot {requested_slot!r} is empty (ratio={req_ratio:.4f}); retargeting to occupied slot {best_slot!r} (ratio={best_ratio:.4f})",
         }
     return {
         "verdict": "abort_empty_scene",
         "class": "knocked_off_to_floor" if floor_ratio >= min_orange_ratio else "all_slots_empty",
-        "slot": requested_slot,
-        "retarget_slot": None,
-        "occupancy": occupancy,
-        "centroid_px": None,
-        "floor_ratio": floor_ratio,
-        "person_needed": True,
+        "slot": requested_slot, "retarget_slot": None, "occupancy": occupancy, "centroid_px": None,
+        "floor_ratio": floor_ratio, "person_needed": True,
         "reason": (
             f"requested slot {requested_slot!r} is empty and containers are on the floor (floor_ratio={floor_ratio:.4f})"
-            if floor_ratio >= min_orange_ratio
-            else f"all candidate slots {list(occupancy)} are empty"
+            if floor_ratio >= min_orange_ratio else f"all candidate slots {list(occupancy)} are empty"
         ),
     }
 
