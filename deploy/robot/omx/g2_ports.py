@@ -6,6 +6,8 @@ from pathlib import Path
 import re
 import threading
 
+_ACTION_ID_RE = re.compile(r"[A-Za-z0-9_-]+\Z")
+
 
 def fresh_evidence(path):
     path = Path(path).resolve()
@@ -63,7 +65,7 @@ class StagingTransport:
         from core_common.protocol.schemas import FleetCellTransferGrant
         if not isinstance(grant, FleetCellTransferGrant) or grant.cell_transfer.item != "box":
             raise ValueError("G2 stages only typed Fleet-issued box grants")
-        if not re.fullmatch(r"[A-Za-z0-9_-]+", grant.action_id):
+        if not _ACTION_ID_RE.fullmatch(grant.action_id):
             raise ValueError("unsafe model identity")
         intent = self.directory / (grant.action_id + ".intent.json")
         with self.lock:

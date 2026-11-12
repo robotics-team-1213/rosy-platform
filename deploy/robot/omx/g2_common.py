@@ -1,5 +1,6 @@
 """Private, simulation-only G2 composition configuration; no production entrypoint."""
 from hashlib import sha256
+from io import BytesIO
 import json
 from pathlib import Path
 import sys
@@ -61,9 +62,17 @@ def canonical_digest(value):
                              allow_nan=False).encode()).hexdigest()
 
 
+def _copy_json_value(value):
+    if isinstance(value, dict):
+        return {key: _copy_json_value(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_copy_json_value(item) for item in value]
+    return value
+
+
 def box_only_document(original):
     """Explicit derived scenario: original sheets and human checkpoint remain untested."""
-    value = json.loads(json.dumps(original))
+    value = _copy_json_value(original)
     value.pop("slip_sheet", None)
     for layer in value["layers"]:
         layer.pop("slip_sheet_below", None)
@@ -73,7 +82,8 @@ def box_only_document(original):
 
 def prepare_world(source, destination):
     """Remove only initial loose demo items before any grants, preserve cell geometry."""
-    tree = ET.parse(source)
+    source_bytes = Path(source).read_bytes()
+    tree = ET.ElementTree(ET.fromstring(source_bytes))
     world = tree.getroot().find("world")
     if world is None or world.attrib.get("name") != "omx_cell_workcell":
         raise ValueError("unexpected simulation world identity")
@@ -84,11 +94,13 @@ def prepare_world(source, destination):
             world.remove(model)
     if set(removed) != {"infeed_block", "slip_sheet_0"}:
         raise ValueError("canonical initial loose items changed; review required")
-    destination = Path(destination)
-    with destination.open("xb") as stream:
-        tree.write(stream, encoding="utf-8", xml_declaration=True)
-    return {"source_sha256": sha256(Path(source).read_bytes()).hexdigest(),
-            "derived_sha256": sha256(destination.read_bytes()).hexdigest(),
+    buffer = BytesIO()
+    tree.write(buffer, encoding="utf-8", xml_declaration=True)
+    dest_bytes = buffer.getvalue()
+    with Path(destination).open("xb") as stream:
+        stream.write(dest_bytes)
+    return {"source_sha256": sha256(source_bytes).hexdigest(),
+            "derived_sha256": sha256(dest_bytes).hexdigest(),
             "removed_before_grants": removed, "sim_aid": True}
 
 

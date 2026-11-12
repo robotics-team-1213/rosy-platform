@@ -28,32 +28,40 @@ def _trapezoid_points(samples: Sequence[Sequence[float]], names: Sequence[str],
     """
     n = len(samples) - 1
     ds = 1.0 / n
+    inv_ds = float(n)
+    inv_ds2 = inv_ds * inv_ds
     dims = range(len(names))
     first = []
     second = []
+    g1 = [0.0] * len(names)
+    g2 = [0.0] * len(names)
+    zeros = (0.0,) * len(names)
     for i in range(n + 1):
         lo, hi = max(i - 1, 0), min(i + 1, n)
-        first.append([(samples[hi][j] - samples[lo][j]) / ((hi - lo) * ds) for j in dims])
+        first_row = [(samples[hi][j] - samples[lo][j]) * (inv_ds / (hi - lo)) for j in dims]
         if 0 < i < n:
-            second.append([(samples[i + 1][j] - 2 * samples[i][j] + samples[i - 1][j]) / (ds * ds)
-                           for j in dims])
+            second_row = [(samples[i + 1][j] - 2 * samples[i][j] + samples[i - 1][j]) * inv_ds2
+                          for j in dims]
         else:
-            second.append([0.0 for _ in dims])
-    g1 = [max(abs(row[j]) for row in first) for j in dims]
-    g2 = [max(abs(row[j]) for row in second) for j in dims]
+            second_row = zeros
+        first.append(first_row)
+        second.append(second_row)
+        for j in dims:
+            g1[j] = max(g1[j], abs(first_row[j]))
+            g2[j] = max(g2[j], abs(second_row[j]))
     # Plan below the owner's limits; see planning_limit_fraction in the profile.
     fraction = profile.planning_limit_fraction
-    v_max = {name: profile.velocity_limits[name] * fraction for name in names}
-    a_max = {name: profile.acceleration_limits[name] * fraction for name in names}
+    v_max = [profile.velocity_limits[name] * fraction for name in names]
+    a_max = [profile.acceleration_limits[name] * fraction for name in names]
     s_dot = math.inf
-    for j, name in enumerate(names):
+    for j in dims:
         if g1[j] > 0:
-            s_dot = min(s_dot, v_max[name] / g1[j])
+            s_dot = min(s_dot, v_max[j] / g1[j])
         if g2[j] > 0:
             # Curvature may use at most half of the acceleration budget.
-            s_dot = min(s_dot, math.sqrt(a_max[name] / (2.0 * g2[j])))
-    s_ddot = min((a_max[name] - g2[j] * s_dot * s_dot) / g1[j]
-                 for j, name in enumerate(names) if g1[j] > 0)
+            s_dot = min(s_dot, math.sqrt(a_max[j] / (2.0 * g2[j])))
+    s_ddot = min((a_max[j] - g2[j] * s_dot * s_dot) / g1[j]
+                 for j in dims if g1[j] > 0)
     if s_dot * s_dot / s_ddot >= 1.0:
         accel_time = math.sqrt(1.0 / s_ddot)
         s_dot = s_ddot * accel_time
@@ -79,9 +87,9 @@ def _trapezoid_points(samples: Sequence[Sequence[float]], names: Sequence[str],
         points.append(JointTrajectoryPoint(
             time_from_start_s=start_time + t,
             positions=tuple(samples[i]),
-            velocities=tuple(first[i][j] * rate for j in dims) if i < n else tuple(0.0 for _ in dims),
+            velocities=tuple(first[i][j] * rate for j in dims) if i < n else zeros,
             accelerations=(tuple(first[i][j] * accel + second[i][j] * rate * rate for j in dims)
-                           if i < n else tuple(0.0 for _ in dims)),
+                           if i < n else zeros),
         ))
     return points
 
@@ -230,7 +238,7 @@ class AnalyticTransferPlanner:
             reference = start_arm[4] if end_reference_q5 is None else end_reference_q5
             end = self._solve(TopDownPose(x1, y1, z1, target_yaw), limits, reference)
             yaw_delta = (end[0] - end[4]) - yaw0
-        distance = math.dist((x0, y0, z0), (x1, y1, z1))
+        distance = math.hypot(x1 - x0, y1 - y0, z1 - z0)
         count = max(math.ceil(distance / profile.cartesian_step_m - 1e-9),
                     math.ceil(abs(yaw_delta) / profile.angular_step_rad - 1e-9))
         try:
