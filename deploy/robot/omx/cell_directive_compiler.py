@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence
 
 HERE = Path(__file__).resolve().parent
 ADAPTER_ROOT = HERE.parents[2] / "middleware/devices/omx/adapter"
@@ -205,3 +205,56 @@ def sim_precheck_and_optimize_directive(
         "wrist_roll_range_units": [round(min(rolls), 2), round(max(rolls), 2)] if rolls else [45.2, 48.8],
         "calibration_samples": int(cal.get("samples", 0)),
     }
+
+
+def build_crane_standby_transition(
+    start_pose: Sequence[float],
+    standby_pose: Sequence[float],
+    *,
+    lift_step: float = 0.032,
+    pan_step: float = 0.045,
+) -> list[dict[str, Any]]:
+    """Decompose an extended pick/place return into a 2-phase crane-lift (`elbow_flex` fold + `shoulder_lift` rise
+    at `lift_step`, then `shoulder_pan` rotation at `pan_step`) so panning never occurs under full moment arm."""
+    s = [float(v) for v in start_pose]
+    b = [float(v) for v in standby_pose]
+    if abs(s[0] - b[0]) <= 3.0 and s[1] <= -22.0:
+        return [{"phase": "crane_direct_standby", "pose": b, "max_step": round(float(pan_step), 4)}]
+    folded_lift = round(min(-27.0, b[1]), 2)
+    folded_elbow = round(max(22.0, b[2], s[2] + 10.0), 2)
+    fold_pose = [round(s[0], 2), folded_lift, folded_elbow, round(b[3], 2), round(s[4], 2), round(b[5], 2)]
+    return [
+        {"phase": "crane_lift_fold", "pose": fold_pose, "max_step": round(float(lift_step), 4)},
+        {"phase": "crane_pan_standby", "pose": b, "max_step": round(float(pan_step), 4)},
+    ]
+
+
+def redirect_place_on_zone_obstruction(
+    directive: dict[str, Any],
+    *,
+    obstructed_zones: Sequence[str] = (),
+    fallback_zones: Sequence[str] = ("temp_plate_b", "temp_plate_a", "pallet"),
+    lane: int = 1,
+    tier: int = 1,
+) -> dict[str, Any]:
+    """Redirect `directive['place']` to the first clear zone in `fallback_zones` when the target zone is obstructed."""
+    from omx_adapter.area_xyz import coerce_area_xyz, resolve_area_xyz
+
+    out = _clone(directive)
+    place = coerce_area_xyz(out["place"])
+    cur_area = str(place.get("area") or "")
+    blocked = {str(z) for z in obstructed_zones}
+    if cur_area not in blocked:
+        out["place"] = place
+        out["redirected"] = False
+        return out
+    for candidate in fallback_zones:
+        cand_area = str(candidate)
+        if cand_area not in blocked:
+            out["place"] = resolve_area_xyz(cand_area, col=int(lane), row=1, tier=int(tier))
+            out["redirected"] = True
+            out["redirected_from_area"] = cur_area
+            out["redirected_to_area"] = cand_area
+            return out
+    raise ValueError(f"All fallback zones {list(fallback_zones)} are obstructed ({sorted(blocked)})")
+

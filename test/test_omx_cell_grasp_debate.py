@@ -151,10 +151,74 @@ def test_three_agent_council_deliberates_partial_grasp_and_post_lift_slip():
     assert d_lift["dz_mm"] <= -2.2
     assert "Override static proceed" in d_lift["council_debate"][1]["reason"]
 
-    # 3. Fast release_pick and reinsert_pick execution speed check (down from >650 / >900 frames at 0.18x guard)
+    # 3. Longitudinal end-grab on 1x3 container (across_mm = -18.75mm) permits up to 16.0mm centroid shift in one retry
+    v_end_grab = {
+        "verdict": "reinsert",
+        "class": "unstable_partial_bite",
+        "found": True,
+        "along_mm": 4.5,
+        "across_mm": -18.75,
+        "bite_ratio": 0.36,
+        "dx_mm": -13.4,
+        "dy_mm": 4.2,
+        "dz_mm": -2.2,
+        "reason": "longitudinal end grab",
+    }
+    d_end = cgd.debate_and_decide("run grasp_pick", t_ok, v_end_grab, kinesthetic=k_ok, reinsert_count=0, max_reinsert=2)
+    assert d_end["verdict"] == "reinsert_and_retry"
+    assert d_end["dx_mm"] == -13.4 and d_end["dy_mm"] == 4.2
+
+    # 4. Fast release_pick and reinsert_pick execution speed check (down from >650 / >900 frames at 0.18x guard)
     plan = dict(PLAN, grip_open=56.58, grip_release=56.10, grip_closed=48.8, grip_s=0.50, settle_s=0.25)
     lib = gp.Planner(plan).library()
     assert len(lib["chunks"]["release_pick"]) <= 240
     assert len(lib["chunks"]["reinsert_pick"]) <= 380
+
+
+def test_empty_air_grasp_unclosed_jaw_and_pre_grasp_scene_retargeting():
+    import cv2
+
+    params = {
+        "gripper.held_30mm": 52.3,
+        "gripper.closed": 48.8,
+        "gripper.open": 57.2,
+        "grasp.shallow_tol_units": 1.2,
+        "grasp.wedged_tol_units": 0.7,
+    }
+    # 1. Empty air grasp (jaw = 48.82 on arm_s when Pinky/belt slot was empty) -> verdict="empty", class="empty_air_grasp"
+    air = cgd.telemetry_judge([39.0, -4.13, 13.16, 40.71, -13.89, 48.82], True, params, current_ma=14.0)
+    assert air["verdict"] == "empty" and air["class"] == "empty_air_grasp"
+    d_air = cgd.debate_and_decide("run grasp_pick", air, {"verdict": "proceed", "class": "unseen", "found": False})
+    assert d_air["verdict"] == "empty" and d_air["recovery_chunk"] is None
+
+    # 2. Unclosed open jaw (jaw = 58.1 with low current when runner did not execute grasp) -> verdict="empty", class="unclosed_open_jaw"
+    unclosed = cgd.telemetry_judge([-9.1, -16.7, 13.8, 39.2, -16.4, 58.1], True, params, current_ma=12.0)
+    assert unclosed["verdict"] == "empty" and unclosed["class"] == "unclosed_open_jaw"
+
+    # 3. Vision judge rejects grey belt + yellow housing edge texture when no orange container is in view
+    belt_img = np.full((480, 640, 3), (125, 128, 128), dtype=np.uint8)
+    cv2.rectangle(belt_img, (210, 30), (430, 380), (40, 215, 235), -1)  # yellow housing/sticker (B=40, G=215, R=235 -> yellow, not orange)
+    v_belt = cgd.vision_judge(belt_img, ([5, 110, 110], [22, 255, 255]), 36.0, 0.0, params=params)
+    assert v_belt["found"] is False and v_belt["class"] == "unseen"
+
+    # 4. Pre-grasp scene judge detects empty requested slot and retargets to occupied belt_far slot or flags knocked-off floor stack
+    top_img = np.full((480, 640, 3), (110, 110, 110), dtype=np.uint8)
+    slot_rois = {
+        "pinky": (140, 210, 260, 390),
+        "belt_mid": (270, 120, 420, 280),
+        "belt_far": (460, 120, 610, 280),
+    }
+    floor_roi = (10, 280, 130, 470)
+    # Put an orange container at belt_far (BGR=(20, 110, 240) -> HSV=(14, 234, 240))
+    cv2.rectangle(top_img, (500, 160), (570, 230), (20, 110, 240), -1)
+    retarget = cgd.pre_grasp_scene_judge(top_img, slot_rois, "belt_mid", floor_roi=floor_roi)
+    assert retarget["verdict"] == "retarget_slot" and retarget["retarget_slot"] == "belt_far"
+
+    # When belt_far is also empty and containers are knocked onto the floor beside Pinky -> abort_empty_scene (knocked_off_to_floor)
+    top_knocked = np.full((480, 640, 3), (110, 110, 110), dtype=np.uint8)
+    cv2.rectangle(top_knocked, (30, 320), (110, 430), (20, 110, 240), -1)
+    aborted = cgd.pre_grasp_scene_judge(top_knocked, slot_rois, "pinky", floor_roi=floor_roi)
+    assert aborted["verdict"] == "abort_empty_scene" and aborted["class"] == "knocked_off_to_floor" and aborted["person_needed"] is True
+
 
 

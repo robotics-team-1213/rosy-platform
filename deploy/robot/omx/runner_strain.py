@@ -18,13 +18,13 @@ STRAIN_LAG, STRAIN_RISE, STRAIN_TICKS, STRAIN_PWM, STRAIN_NET_PWM = 2.2, 0.25, 6
 # A blocked wrist roll pushes at low PWM (arm_a dead at 28 % of its cap, 4 times on 2026-11-01), so the PWM test
 # never fires. Its travel lag saws up to ~1.6 going negative while it keeps moving (arm_b's "stalls" at -13 and 9.89,
 # 8 of 8, 2026-11-06), so a rising lag holds at ROLL_BLOCK_LAG only once ROLL_STILL_TICKS show it still, or at STRAIN_LAG.
-ROLL_BLOCK_LAG, ROLL_STILL, ROLL_STILL_TICKS = 1.5, 0.3, 15
+ROLL_BLOCK_LAG, ROLL_STILL, ROLL_STILL_TICKS, ROLL_BLOCK_PWM = 1.5, 0.3, 15, 0.20
 SHED = ("shoulder_lift", "elbow_flex")
 
 
 def strained(runner, sent, present):
     """(motor, lag, pwm, cap) of a load-bearing joint whose lag keeps rising while it pushes, or of a wrist roll
-    that stopped moving with its lag rising past ROLL_BLOCK_LAG at any PWM; else None."""
+    that stopped moving with its lag rising past ROLL_BLOCK_LAG (with at least ROLL_BLOCK_PWM effort, or past STRAIN_LAG); else None."""
     lags = [abs(present[i] - sent[n]) if n in sent else 0.0 for i, n in enumerate(NAMES[:5])]
     runner.trend = (runner.trend + [[*lags, present[4]]])[-(ROLL_STILL_TICKS + 1):]
     if len(runner.trend) <= STRAIN_TICKS:
@@ -44,8 +44,13 @@ def strained(runner, sent, present):
             return motor, lags[i], pwm.get(motor), limits.get(motor)
     path = [row[5] for row in runner.trend]
     still = len(path) > ROLL_STILL_TICKS and max(path) - min(path) < ROLL_STILL
+    roll_pushing = (
+        MOTORS[4] not in pwm
+        or MOTORS[4] not in limits
+        or abs(pwm[MOTORS[4]]) >= ROLL_BLOCK_PWM * limits[MOTORS[4]]
+    )
     if (first[4] < middle[4] < lags[4] and lags[4] >= ROLL_BLOCK_LAG and lags[4] - first[4] >= STRAIN_RISE
-            and (still or lags[4] >= STRAIN_LAG)):
+            and ((still and roll_pushing) or lags[4] >= STRAIN_LAG)):
         return MOTORS[4], lags[4], pwm.get(MOTORS[4]), limits.get(MOTORS[4])
     return None
 

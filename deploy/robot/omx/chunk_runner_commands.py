@@ -19,7 +19,8 @@ _ADAPTER_SRC = str(Path(__file__).resolve().parents[3] / "middleware/devices/omx
 if _ADAPTER_SRC not in sys.path:
     sys.path.insert(0, _ADAPTER_SRC)
 
-from omx_adapter.chunk_library import NAMES, load_library, park_path, transit_path  # noqa: E402
+from omx_adapter.chunk_library import GUARD_UNITS_PER_S, NAMES, load_library, park_path, transit_path  # noqa: E402
+from omx_adapter.motion_profile import retime  # noqa: E402
 from cell_envelope import digest  # noqa: E402
 from chunk_runner_guards import (  # noqa: E402
     JOG_MAX,
@@ -97,7 +98,7 @@ def dispatch_runner_command(runner, line: str) -> bool:
             if words[1].startswith("release"):
                 runner.holding = False
             runner.chunk, runner.settle_since, runner.played, runner.contact_ticks = words[1], None, [], 0
-            runner.contact_start = None
+            runner.contact_start, runner.trend, runner.pace_floor = None, [], 0.0
             return True
         if verb == "jog" and len(words) >= 3 and len(words) % 2 == 1:
             present = runner.present()
@@ -117,6 +118,7 @@ def dispatch_runner_command(runner, line: str) -> bool:
                 runner.library.get("transit_speed", 0.85),
             )
             runner.chunk, runner.settle_since, runner.played = f"goto {words[1]}", None, []
+            runner.trend, runner.pace_floor = [], 0.0
             return True
         elif verb == "park" and len(words) == 1:
             home = runner.library["chunks"].get("home")
@@ -132,12 +134,14 @@ def dispatch_runner_command(runner, line: str) -> bool:
                 runner.library.get("transit_speed", 0.85),
             )
             runner.chunk, runner.settle_since, runner.played = "park", None, []
+            runner.trend, runner.pace_floor = [], 0.0
             return True
         elif verb == "chain" and len(words) >= 2:
             runner.queue, runner.chunk, release = build_chain_segments(runner.library, words, runner.target, runner.fps)
             if release:
                 runner.holding = False
             runner.settle_since, runner.played, runner.contact_ticks, runner.contact_start = None, [], 0, None
+            runner.trend, runner.pace_floor = [], 0.0
             return True
         elif verb == "grip" and len(words) == 2:
             to = max(float(runner.library["gripper_closed"]), min(100.0, float(words[1])))
@@ -150,11 +154,17 @@ def dispatch_runner_command(runner, line: str) -> bool:
             if not runner.retreat_frames:
                 raise ValueError("nothing to retreat along")
             keep_open = runner.target[5] > float(runner.library["gripper_closed"]) + EMPTY_MARGIN
-            runner.queue = (
-                [f[:5] + [runner.target[5]] for f in runner.retreat_frames] if keep_open else runner.retreat_frames
-            )
+            raw = [f[:5] + [runner.target[5]] for f in runner.retreat_frames] if keep_open else list(runner.retreat_frames)
+            if len(raw) > 25 and runner.target is not None:
+                best_i = min(
+                    range(min(len(raw) - 1, 20)),
+                    key=lambda i: max(abs(a - b) for a, b in zip(raw[i][:5], runner.target[:5])),
+                )
+                raw = retime(raw[best_i:], runner.fps, 0.65 * GUARD_UNITS_PER_S, start=runner.target)
+            runner.queue = raw
             runner.retreat_frames = []
             runner.chunk, runner.settle_since, runner.played = "retreat", None, []
+            runner.trend, runner.pace_floor = [], 0.0
             return True
         elif verb == "load" and len(words) == 2:
             try:

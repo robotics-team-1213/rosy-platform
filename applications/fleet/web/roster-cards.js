@@ -241,6 +241,27 @@ export function buildQuickControlPanel({
   }
   quickPanel.appendChild(chipRow);
 
+  const defaultBay = robot.robot_id === "rosy_45" ? "C2" : robot.robot_id === "rosy_42" ? "C3" : "C1";
+  const berthRow = nodeWithText("div", "quick-chip-row berth-control-row");
+  for (const [bId, bMode, bLabel, bTitle] of [
+    [defaultBay, "forward_and_berth_park", `⬆️→⚓ ${defaultBay} 출차 후 접안 파킹`, `${defaultBay}에서 +0.20m 전진 출차 후 레일 내부 무조향(ω=0) 직진 후진 접안 파킹`],
+    ["C1", "berth_park", "⚓ C1 접안", "충전 베이 C1 (bay_c1) 역방향 접안 모드 파킹"],
+    ["C2", "berth_park", "⚓ C2 접안", "충전 베이 C2 (bay_c2) 역방향 접안 모드 파킹"],
+    ["C3", "berth_park", "⚓ C3 접안", "충전 베이 C3 (bay_c3) 역방향 접안 모드 파킹"],
+  ]) {
+    const bBtn = nodeWithText("ui-button", "", bLabel);
+    bBtn.setAttribute("kind", selGoal?.placeId === bId && selGoal?.status === "BERTHING" ? "toggle" : "quiet");
+    bBtn.type = "button"; bBtn.title = bTitle;
+    bBtn.dataset.berthBay = bId; bBtn.dataset.berthMode = bMode;
+    bBtn.addEventListener("click", scope.guard(() => {
+      view.selected = robot.robot_id; view.focusRobot = robot.robot_id;
+      el("map-stage").dataset.view = "map"; el("birdseye-toggle")?.setAttribute("aria-pressed", "false");
+      view.dispatchBerthPark?.(robot.robot_id, bId, bMode);
+    }));
+    berthRow.appendChild(bBtn);
+  }
+  quickPanel.appendChild(berthRow);
+
   const omxSection = nodeWithText("div", "omx-fleet-section");
   const omxHead = nodeWithText("div", "quick-header-line");
   omxHead.append(

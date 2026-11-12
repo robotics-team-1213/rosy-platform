@@ -285,8 +285,10 @@ def infer_frame_dof(frame: Sequence[float]) -> int:
 
 
 from cell_directive_compiler import (  # noqa: E402, F401
+    build_crane_standby_transition,
     build_plan_from_directive,
     plan_library_from_directive,
+    redirect_place_on_zone_obstruction,
     sim_precheck_and_optimize_directive,
 )
 try:

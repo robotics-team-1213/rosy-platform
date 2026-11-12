@@ -137,16 +137,19 @@ def structural_container_between_fingers(img, a=None, b=None) -> dict | None:
             y_front = float(y)
             break
 
-    # Reject empty recessed gray tray pocket (low chroma + recessed shadow at top compared to raised lower rim)
+    # Reject empty recessed gray tray pocket or empty belt/housing texture (low chroma or yellow sticker edge)
     chroma = float(
         np.hypot(
             strip_lab[int(h * 0.05):int(h * 0.35), :, 1] - 128.0,
             strip_lab[int(h * 0.05):int(h * 0.35), :, 2] - 128.0,
         ).mean()
     )
+    a_top_mean = float(strip_lab[int(h * 0.05):int(h * 0.35), :, 1].mean()) - 128.0
+    b_top_mean = float(strip_lab[int(h * 0.05):int(h * 0.35), :, 2].mean()) - 128.0
     l_top_mean = float(row_l[int(h * 0.08):int(h * 0.28)].mean())
     l_bot_mean = float(row_l[int(h * 0.62):int(h * 0.86)].mean())
-    empty_recessed_tray = bool(chroma < 6.0 and (l_bot_mean - l_top_mean) > 15.0)
+    yellow_housing = bool(b_top_mean > 14.0 and a_top_mean < 4.0)
+    empty_recessed_tray = bool(chroma < 8.5 or yellow_housing or (chroma < 12.0 and (l_bot_mean - l_top_mean) > 15.0))
 
     wall_strength = float(
         0.5

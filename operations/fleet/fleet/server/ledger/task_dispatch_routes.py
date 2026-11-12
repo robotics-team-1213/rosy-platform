@@ -23,6 +23,7 @@ from fleet.server.cancel_all import DriveCancelFence, cancel_all_driving
 from fleet.server.http_errors import http_error
 from fleet.server.site_auth import SitePrincipal
 from fleet.server.owner_recovery_routes import install_owner_recovery_routes
+from fleet.server.ledger.berth_parking_routes import install_berth_parking_routes
 from fleet.server.task_store import IdempotencyConflict, InvalidTaskTransition
 from fleet.swarm.transport import RobotApiError
 
@@ -370,56 +371,11 @@ def install_task_dispatch_routes(
             "formation": {"active": bool(formation_view.get("active")), "leader": formation_view.get("leader")},
         }
 
-    @app.get("/api/fleet/robots/{robot_id}/road-nav2/plan", dependencies=read_guard, tags=["fleet"])
-    async def fleet_road_nav2_plan(
-        robot_id: str, request: Request,
-        x: float = 0.0, y: float = 0.0, yaw: Optional[float] = None,
-        place_id: Optional[str] = None, label: str = "",
-    ) -> dict:
-        plan = await _compute_road_plan(request, robot_id, float(x), float(y), yaw, place_id, label)
-        return {"planned": True, "dispatched": False, **plan}
-
-    @app.post("/api/fleet/robots/{robot_id}/road-nav2", dependencies=operator_guard, tags=["fleet"])
-    async def fleet_road_nav2(
-        robot_id: str, request: Request,
-        idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
-        principal: SitePrincipal = Depends(require_operator),
-    ) -> dict:
-        import uuid as _uuid
-
-        body = await request.json()
-        target_x = float(body.get("x", 0.0))
-        target_y = float(body.get("y", 0.0))
-        target_yaw = float(body.get("yaw")) if body.get("yaw") is not None else None
-        place_id = body.get("place_id") or None
-        label = str(body.get("label") or "")
-
-        plan = await _compute_road_plan(request, robot_id, target_x, target_y, target_yaw, place_id, label)
-        final_nav2 = plan["target_nav2"]
-        dispatch_res = {}
-        req_key = idempotency_key or _uuid.uuid4().hex
-        try:
-            if task_service is not None:
-                task = await task_service.submit_navigation(
-                    robot_id=robot_id, x=final_nav2["x"], y=final_nav2["y"], yaw=final_nav2["yaw"],
-                    source="operator", actor_id=principal.principal_id, request_key=req_key,
-                )
-                dispatch_res = {"accepted": task["status"] in ("ACCEPTED", "QUEUED"), "task": task}
-            else:
-                res = await console.goal(robot_id, final_nav2["x"], final_nav2["y"], final_nav2["yaw"])
-                dispatch_res = {"accepted": True, "receipt": res}
-        except Exception as exc:
-            try:
-                res = await console.goal(robot_id, final_nav2["x"], final_nav2["y"], final_nav2["yaw"])
-                dispatch_res = {"accepted": True, "receipt": res}
-            except Exception:
-                dispatch_res = {"accepted": True, "simulated_dispatch": True, "note": str(exc)}
-
-        return {
-            "dispatched": True,
-            **plan,
-            **dispatch_res,
-        }
+    install_berth_parking_routes(
+        app, console=console, task_service=task_service,
+        read_guard=read_guard, operator_guard=operator_guard,
+        require_operator=require_operator, compute_road_plan=_compute_road_plan,
+    )
 
     @app.post("/api/fleet/robots/{robot_id}/goal", tags=["fleet"])
     async def fleet_goal(

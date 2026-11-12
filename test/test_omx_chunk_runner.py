@@ -535,11 +535,16 @@ def test_chain_streams_consecutive_chunks_without_inter_chunk_stop():
 def test_local_hover_reapproach_up_to_16_units_flows_directly_without_climbing_to_transit():
     # 2026-11-10: a 12-24 mm feel/reach shift at hover changed elbow_flex by 9.6-13.5 units (> 8.0) and folded to TRANSIT (-27)
     hover_a = [-32.5, -2.5, -3.5, 45.2, 54.4, 56.58]
-    hover_b = [-39.2, 5.2, -13.1, 47.0, 47.8, 56.58]  # max body delta = 9.6 units
+    hover_b = [-39.2, 5.2, -13.1, 47.0, 47.8, 56.58]  # max body delta = 9.6 units, |delta_pan| = 6.7 <= 15.0
     path = m.transit_path(hover_a, hover_b, 48.8, fps=30)
     assert min(f[1] for f in path) >= -3.0  # stays at hover height instead of climbing to TRANSIT (-27.0)
     assert min(f[5] for f in path) >= 56.5  # jaws stay open instead of closing to 48.8 and reopening
     assert len(path) <= 120  # ~3.6 seconds direct flow, not 25 seconds (760 frames) via TRANSIT
+    # Cross-zone pan (> 15.0 units, e.g. belt pan -9.1 -> Pinky pan +38.2) MUST climb to high-clearance TRANSIT (-27.0)
+    belt_low = [-9.1, -16.7, 13.8, 39.2, -16.4, 56.58]
+    pinky_low = [38.2, -5.5, 6.2, 41.0, -13.9, 56.58]
+    cross_path = m.transit_path(belt_low, pinky_low, 48.8, fps=30)
+    assert min(f[1] for f in cross_path) <= -26.0  # rises to TRANSIT (-27.0) before sweeping across Pinky stack
 
 
 def test_the_library_contract_is_enforced(tmp_path):
@@ -1191,5 +1196,38 @@ def test_realtime_jitter_damps_active_chunk_and_waits_for_oscillation_to_settle(
     assert done["ok"] is True and done["settled"] is True
     assert done.get("damped_ticks", 0) > 0
     assert done["state"][0] == pytest.approx(4.0, abs=0.1)
+
+
+def test_wrist_roll_low_pwm_cable_tension_below_strain_lag_is_not_a_block():
+    # 2026-11-12 arm_s live run: wrist_roll (p_gain=400, i_gain=0) sat at 1.8 units lag with PWM -44 of 300 (14.6 %)
+    # from USB camera cable tension at the end of a move; below ROLL_BLOCK_PWM (20 %) and STRAIN_LAG (2.2) it is not blocked.
+    robot = Straining(lambda n: min(1.85, max(0.0, 0.05 * (n - 30))), pwm=44, joint=4)
+    status = run_with(robot, goto_library(), ["goto approach_pinky", "stop"])
+    done = by_command(status, "run goto approach_pinky")[0]
+    assert done["ok"] is True and done["fault"] is None
+
+
+def test_long_chunk_retreat_trims_unreached_lead_frames_and_retimes_smoothly():
+    lib = descend_library()
+    lib["chunks"]["descend_pick"] = [[0.0, -60.0 + k * 0.4, 50.0, 45.0, 10.0, 46.6] for k in range(40)]
+    robot = Pressing(after=30)
+    status, clock, queue = [], [0.0], ["run descend_pick", "retreat", "stop"]
+    r = m.Runner(robot, lib, fps=30, status=status.append, clock=lambda: clock[0],
+                 sleep=lambda s: clock.__setitem__(0, clock[0] + 1 / 30))
+
+    def lines():
+        if queue and not r.chunk:
+            if queue[0] == "retreat":
+                robot.stuck = None
+            return [queue.pop(0)]
+        return []
+
+    r.run(lines)
+    contact = by_command(status, "run descend_pick")[0]
+    assert contact["contact"] is True
+    ret = by_command(status, "run retreat")[0]
+    assert ret["ok"] is True and ret["fault"] is None
+    assert ret["state"][1] == pytest.approx(-60.0, abs=0.5)
+
 
 

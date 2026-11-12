@@ -36,6 +36,7 @@ def transit_path(start: list, goal: list, grip_transit: float, fps: int, transit
     if (
         start[1] >= -35.0
         and goal[1] >= -35.0
+        and abs(start[0] - goal[0]) <= 15.0
         and max(abs(a - b) for a, b in zip(start[:4], goal[:4])) <= 24.0
         and abs(start[4] - goal[4]) <= 45.0
     ):
@@ -44,7 +45,7 @@ def transit_path(start: list, goal: list, grip_transit: float, fps: int, transit
     if transit is None:
         transit = (
             {1: max(TRANSIT[1], min(start[1], goal[1], -16.0) - 5.0), 2: TRANSIT[2], 3: TRANSIT[3]}
-            if start[1] > -22.0 and goal[1] > -22.0
+            if start[1] > -22.0 and goal[1] > -22.0 and abs(start[0] - goal[0]) <= 15.0
             else TRANSIT
         )
     waypoints = [list(start)]

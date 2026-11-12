@@ -13,8 +13,9 @@ from pathlib import Path
 from typing import Any, Callable
 
 from cell_control_core import (  # noqa: F401  (re-exported: existing importers are unchanged)
-    ADAPTER_ROOT, HERE, apply_wrist_xy_step, build_plan_from_directive, ensure_omx_paths,
-    evaluate_tactile_place_compliance, plan_library_from_directive, predict_moving_belt_intercept,
+    ADAPTER_ROOT, HERE, apply_wrist_xy_step, build_crane_standby_transition, build_plan_from_directive,
+    ensure_omx_paths, evaluate_tactile_place_compliance, plan_library_from_directive,
+    predict_moving_belt_intercept, redirect_place_on_zone_obstruction,
     sim_precheck_and_optimize_directive,
 )
 
@@ -268,9 +269,10 @@ def execute_directive(
                     grasp_dynamics = cell_arm_cal.evaluate_grasp_dynamics(r_grasp, r_lift=r_lift_step, closed=closed_pos, open_pos=open_pos)
                     if exec_cfg.get("grasp_deliberation", True) and r_step.get("ok"):
                         k_lift = cgd.kinesthetic_judge(r_grasp, r_lift=r_lift_step, grasp_dynamics=grasp_dynamics, params=params)
-                        if k_lift.get("verdict") == "reinsert":
+                        v_lift = cgd.vision_judge(frame_fn("wrist"), dict(exec_cfg.get("wrist_hsv") or cell_fingers.GREEN_HSV), 36.0 if cal.get("finger_color") == "dark" else 44.0, float(plan["pick"].get("yaw_deg", -90.0)) + 90.0, sign=exec_cfg.get("wrist_sign"), params=params, color=exec_cfg.get("object_color")) if (frame_fn is not None and exec_cfg.get("vision_after_grasp", False)) else v_judge
+                        if k_lift.get("verdict") == "reinsert" or v_lift.get("verdict") == "reinsert":
                             d_lift_res = cgd.debate_and_decide(
-                                stage="run lift_pick", telemetry=t_judge, vision=v_judge, kinesthetic=k_lift,
+                                stage="run lift_pick", telemetry=t_judge, vision=v_lift, kinesthetic=k_lift,
                                 reinsert_count=attempt, max_reinsert=max_attempts - 1, models=exec_cfg.get("debate_models") or [],
                             )
                             debate_log.append(d_lift_res)

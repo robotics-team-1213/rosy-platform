@@ -155,6 +155,7 @@ class Runner:
         self.target = list(present[:5]) + [self.target[5]]
         self.fault, self.holding = reason, bool(self.holding and present[5] > self.target[5] + EMPTY_MARGIN)
         self.chunk, self.played, self.jog_path = None, [], []
+        self.pace_floor, self.paced, self.pace_last, self.trend = 0.0, 0, None, []
         if chunk == "park":
             self.last_input = self.clock()
         self.report(

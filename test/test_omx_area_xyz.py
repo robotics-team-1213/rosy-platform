@@ -828,6 +828,40 @@ def test_slot_matrix_identity_wrong_slot_trench_reorient_and_12_scenarios(tmp_pa
     assert (tmp_path / "scenario-recovery-dataset.json").exists()
 
 
+def test_crane_standby_transition_and_multi_zone_redirect():
+    """Verify 2-phase crane-lift fold+pan transition and automatic fallback zone redirect on obstruction."""
+    pinky_pick = [39.15, -4.32, 8.03, 48.03, -13.36, 58.0]
+    standby = [0.0, -27.0, 18.0, 46.0, -5.0, 58.1]
+    phases = cell_area_xyz.build_crane_standby_transition(pinky_pick, standby, lift_step=0.032, pan_step=0.045)
+    assert len(phases) == 2
+    assert phases[0]["phase"] == "crane_lift_fold"
+    assert phases[0]["pose"][0] == pytest.approx(39.15)
+    assert phases[0]["pose"][1] <= -27.0
+    assert phases[0]["pose"][2] >= 22.0
+    assert phases[0]["max_step"] == pytest.approx(0.032)
+    assert phases[1]["phase"] == "crane_pan_standby"
+    assert phases[1]["pose"] == standby
+    assert phases[1]["max_step"] == pytest.approx(0.045)
+
+    directive = {
+        "arm_id": "arm_s",
+        "pick": {"area": "pinky", "col": 2, "row": 1, "tier": 1},
+        "place": {"area": "belt", "col": 2, "row": 1, "tier": 1},
+    }
+    redir = cell_area_xyz.redirect_place_on_zone_obstruction(
+        directive,
+        obstructed_zones=("belt",),
+        fallback_zones=("temp_plate_b", "pallet"),
+        lane=2,
+        tier=1,
+    )
+    assert redir["redirected"] is True
+    assert redir["redirected_from_area"] == "belt"
+    assert redir["redirected_to_area"] == "temp_plate_b"
+    assert redir["place"]["area"] == "temp_plate_b"
+    assert redir["place"]["col"] == 2
+
+
 
 
 

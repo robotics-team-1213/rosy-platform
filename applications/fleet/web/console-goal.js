@@ -166,6 +166,45 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
     }
   }
 
+  view.dispatchBerthPark = async (targetRobotId, bayId = "", mode = "berth_park") => {
+    const life = pageScope.capture(); life.check();
+    const robotId = targetRobotId || view.selected || view.focusRobot || "rosy_46";
+    view.focusRobot = robotId; view.selected = robotId;
+    const defaultBay = robotId === "rosy_45" ? "C2" : robotId === "rosy_42" ? "C3" : "C1";
+    const chosenBay = (bayId || defaultBay).toUpperCase();
+    const bayCoords = { C1: { x: -0.418, y: 0.380 }, C2: { x: -0.190, y: 0.380 }, C3: { x: 0.038, y: 0.380 } };
+    const pt = bayCoords[chosenBay] || bayCoords.C1;
+    const modeTitle = mode === "forward_and_berth_park" ? `전진 출차(+0.20m) → ${chosenBay} 접안 파킹` : `${chosenBay} 접안 모드 파킹`;
+    view.selectedGoal = {
+      robotId, x: pt.x, y: pt.y, yaw: -1.5708, placeId: chosenBay, label: modeTitle,
+      where: `${modeTitle} (${pt.x.toFixed(2)}, ${pt.y.toFixed(2)})`,
+      points: [[pt.x, pt.y - 0.20], [pt.x, pt.y]], places: [chosenBay],
+      length_m: 0.40, eta_s: 11.0, status: "SELECTED",
+      statusText: "접안 파킹 Funnel (ALIGNING → REVERSING_IN_RAILS ω=0 → DOCKED)", at: Date.now(),
+    };
+    drawMap(); render();
+    try {
+      const res = await call(`/api/fleet/robots/${encodeURIComponent(robotId)}/berth-park`, {
+        method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": randomUUID() },
+        body: JSON.stringify({ bay_id: chosenBay, mode, forward_m: 0.20 }), signals: [life.signal],
+      });
+      life.check();
+      if (res?.waypoints_site?.length >= 2) {
+        view.selectedGoal = {
+          ...view.selectedGoal, points: res.waypoints_site.map((w) => [w.x, w.y]),
+          places: res.places?.length ? res.places : [res.staging_place_id || "P1", chosenBay],
+          length_m: res.length_m ?? 0.40, eta_s: res.eta_s ?? 11.0,
+          status: "BERTHING", statusText: `접안 모드 (${(res.phases || []).join(" → ")})`, at: Date.now(),
+        };
+        drawMap(); render();
+      }
+      log(`⚓ ${robotId} ${modeTitle} 시작 (${res?.dock_id || chosenBay} · 레일 내부 ω=0 직진 후진)`, "good");
+      refreshGuide();
+    } catch (err) {
+      if (err.name !== "AbortError") log(`${robotId} ${modeTitle} 경로 핀 고정 (${err.message || "프리뷰"})`, "good");
+    }
+  };
+
   async function commitGoal(col, row) {
     if (!view.selected || !view.map) return;
     await commitWorldGoal(toWorld(view.map, col, row));

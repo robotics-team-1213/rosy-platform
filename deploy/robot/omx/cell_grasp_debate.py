@@ -30,6 +30,7 @@ from cell_grasp_judges import (  # noqa: F401  (re-exported)
     glm_backend,
     kinesthetic_judge,
     load_zai_key,
+    pre_grasp_scene_judge,
     telemetry_judge,
     vision_judge,
 )

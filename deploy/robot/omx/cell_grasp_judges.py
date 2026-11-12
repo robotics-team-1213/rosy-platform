@@ -86,6 +86,11 @@ def telemetry_judge(state: list | None, holding: bool | None, params=None, curre
     closing_stroke = max(0.35, open_pos - jaw)
     k_contact = round(max(0.0, (abs(float(current_ma)) if current_ma is not None else 80.0) - 18.0) / closing_stroke, 2)
     base = {"jaw_units": jaw, "held_30mm_units": held_30, "error_units": err, "current_ma": current_ma, "k_contact_ma_per_unit": k_contact}
+    empty_margin = float(prm.get(params, "grasp.empty_margin_units", 0.85))
+    if jaw <= closed + empty_margin:
+        return {**base, "verdict": "empty", "class": "empty_air_grasp", "dz_mm": 0.0, "reason": f"jaws closed to {jaw}u <= closed+{empty_margin:.2f}u ({closed + empty_margin:.2f}u): empty air grasp"}
+    if jaw >= open_pos - 0.5 and (current_ma is None or abs(float(current_ma)) < 45.0):
+        return {**base, "verdict": "empty", "class": "unclosed_open_jaw", "dz_mm": 0.0, "reason": f"jaws remained open at {jaw}u >= {open_pos - 0.5:.2f}u without squeeze load: grasp did not close"}
     if err < -shallow_tol:
         return {**base, "verdict": "reinsert", "class": "unstable_shallow", "dz_mm": -2.5, "reason": f"jaws closed {abs(err):.2f} units past nominal 30mm ({jaw} < {held_30 - shallow_tol:.2f}): shallow corner pinch"}
     if err > wedged_tol:
@@ -111,7 +116,16 @@ def vision_judge(
         return {"verdict": "proceed", "class": "no_frame", "found": False, "dx_mm": 0.0, "dy_mm": 0.0, "dz_mm": 0.0, "reason": "wrist frame not provided"}
     seen = cell_fingers.finger_offset_mm(wrist_img, hsv, gap_mm, params, color=color) if hsv is not None else {"found": False}
     if not seen.get("found") or (seen.get("mode") == "top_face" and float(seen.get("gap_px", 0.0)) < 120.0):
-        struct = structural_container_between_fingers(wrist_img)
+        shape_mode = bool(isinstance(params, dict) and (params.get("objects.ignore_colour") or params.get("wrist.shape_mode")))
+        allow_struct = hsv is None or shape_mode
+        if not allow_struct and isinstance(hsv, (list, tuple)) and len(hsv) == 2 and hsv[0] is not None:
+            import cv2
+
+            h_w, w_w = wrist_img.shape[:2]
+            roi_hsv = cv2.cvtColor(wrist_img[int(h_w * 0.05):int(h_w * 0.72), int(w_w * 0.12):int(w_w * 0.88)], cv2.COLOR_BGR2HSV)
+            orange_ratio = float((cv2.inRange(roi_hsv, np.asarray(hsv[0], np.uint8), np.asarray(hsv[1], np.uint8)) > 0).mean())
+            allow_struct = orange_ratio >= float(prm.get(params, "wrist.min_orange_ratio", 0.025))
+        struct = structural_container_between_fingers(wrist_img) if allow_struct else None
         if struct and struct.get("is_container_shape"):
             seen = {
                 "found": True,
@@ -137,7 +151,7 @@ def vision_judge(
     across_mm = raw_across_mm if (prm.get(params, "wrist.servo_across") or partial_bite) else 0.0
     gain = float(prm.get(params, "wrist.servo_gain", 0.85))
     step = gain * (sign.get("along", -1.0) * along_mm * along_arm + sign.get("across", 1.0) * across_mm * across_arm)
-    max_step = float(prm.get(params, "wrist.max_step_mm", 8.0))
+    max_step = float(prm.get(params, "wrist.max_step_mm", 16.0 if partial_bite else 8.0))
     if float(np.hypot(*step)) > max_step:
         step = step / float(np.hypot(*step)) * max_step
     dx_mm, dy_mm = round(float(step[0]), 2), round(float(step[1]), 2)
@@ -225,7 +239,8 @@ def council_deliberate(
     else:
         crit_reason = f"Kinesthetic critic ({kinesthetic.get('class')}): {kinesthetic.get('reason')}"
     crit_entry = {"role": "critique", "seat": "kinesthetic_critic", "verdict": crit_verdict, "dx_mm": round(crit_dx, 2), "dy_mm": round(crit_dy, 2), "dz_mm": round(crit_dz, 2), "reason": crit_reason}
-    arb_dx, arb_dy, arb_dz = round(float(np.clip(crit_dx, -8.0, 8.0)), 2), round(float(np.clip(crit_dy, -8.0, 8.0)), 2), round(float(np.clip(crit_dz, -4.5, 2.0)), 2)
+    xy_bound = 16.0 if (vision.get("class") == "unstable_partial_bite" or abs(float(vision.get("across_mm") or 0.0)) > 7.5) else 8.0
+    arb_dx, arb_dy, arb_dz = round(float(np.clip(crit_dx, -xy_bound, xy_bound)), 2), round(float(np.clip(crit_dy, -xy_bound, xy_bound)), 2), round(float(np.clip(crit_dz, -4.5, 2.0)), 2)
     arb_entry = {
         "role": "arbiter",
         "seat": "consensus_arbiter",
@@ -237,6 +252,88 @@ def council_deliberate(
         "reason": f"Council consensus={crit_verdict}: shift=[{arb_dx}, {arb_dy}, {arb_dz}]mm ({telemetry.get('class')}/{vision.get('class')}/{kinesthetic.get('class')})",
     }
     return [prop_entry, crit_entry, arb_entry], arb_dx, arb_dy, arb_dz
+
+
+def pre_grasp_scene_judge(
+    top_img,
+    slot_rois: dict[str, tuple[int, int, int, int] | list[int]],
+    requested_slot: str,
+    *,
+    hsv: tuple[list[int], list[int]] | list[list[int]] = ([5, 95, 110], [32, 255, 255]),
+    min_orange_ratio: float = 0.015,
+    floor_roi: tuple[int, int, int, int] | list[int] | None = None,
+) -> dict:
+    """Pre-grasp scene occupancy & target localization gate on the top camera frame.
+    Verifies whether `requested_slot` actually holds an orange container before descending;
+    if empty, scans alternate reachable slots (`retarget_slot`) or detects knocked-off floor containers (`abort_empty_scene`)."""
+    if top_img is None or not hasattr(top_img, "shape") or top_img.size == 0:
+        return {"verdict": "proceed", "class": "no_top_frame", "slot": requested_slot, "occupancy": {}, "reason": "top frame not provided"}
+    import cv2
+
+    h, w = top_img.shape[:2]
+    hsv_img = cv2.cvtColor(top_img, cv2.COLOR_BGR2HSV)
+    mask = cv2.inRange(hsv_img, np.asarray(hsv[0], np.uint8), np.asarray(hsv[1], np.uint8))
+    occupancy: dict[str, float] = {}
+    centroids_px: dict[str, list[float]] = {}
+    for name, roi in (slot_rois or {}).items():
+        x0, y0, x1, y1 = max(0, int(roi[0])), max(0, int(roi[1])), min(w, int(roi[2])), min(h, int(roi[3]))
+        if x1 <= x0 or y1 <= y0:
+            occupancy[name] = 0.0
+            continue
+        sub = mask[y0:y1, x0:x1] > 0
+        ratio = round(float(sub.mean()), 4)
+        occupancy[name] = ratio
+        if ratio >= min_orange_ratio:
+            ys, xs = np.nonzero(sub)
+            centroids_px[name] = [round(float(xs.mean()) + x0, 1), round(float(ys.mean()) + y0, 1)]
+    floor_ratio = 0.0
+    if floor_roi is not None:
+        fx0, fy0, fx1, fy1 = max(0, int(floor_roi[0])), max(0, int(floor_roi[1])), min(w, int(floor_roi[2])), min(h, int(floor_roi[3]))
+        if fx1 > fx0 and fy1 > fy0:
+            floor_ratio = round(float((mask[fy0:fy1, fx0:fx1] > 0).mean()), 4)
+    req_ratio = occupancy.get(requested_slot, 0.0)
+    if req_ratio >= min_orange_ratio:
+        return {
+            "verdict": "proceed",
+            "class": "slot_occupied",
+            "slot": requested_slot,
+            "retarget_slot": None,
+            "occupancy": occupancy,
+            "centroid_px": centroids_px.get(requested_slot),
+            "floor_ratio": floor_ratio,
+            "reason": f"requested slot {requested_slot!r} occupied (ratio={req_ratio:.4f})",
+        }
+    alt_slots = sorted(
+        ((s, r) for s, r in occupancy.items() if s != requested_slot and r >= min_orange_ratio),
+        key=lambda item: -item[1],
+    )
+    if alt_slots:
+        best_slot, best_ratio = alt_slots[0]
+        return {
+            "verdict": "retarget_slot",
+            "class": "slot_empty_retargeted",
+            "slot": requested_slot,
+            "retarget_slot": best_slot,
+            "occupancy": occupancy,
+            "centroid_px": centroids_px.get(best_slot),
+            "floor_ratio": floor_ratio,
+            "reason": f"requested slot {requested_slot!r} is empty (ratio={req_ratio:.4f}); retargeting to occupied slot {best_slot!r} (ratio={best_ratio:.4f})",
+        }
+    return {
+        "verdict": "abort_empty_scene",
+        "class": "knocked_off_to_floor" if floor_ratio >= min_orange_ratio else "all_slots_empty",
+        "slot": requested_slot,
+        "retarget_slot": None,
+        "occupancy": occupancy,
+        "centroid_px": None,
+        "floor_ratio": floor_ratio,
+        "person_needed": True,
+        "reason": (
+            f"requested slot {requested_slot!r} is empty and containers are on the floor (floor_ratio={floor_ratio:.4f})"
+            if floor_ratio >= min_orange_ratio
+            else f"all candidate slots {list(occupancy)} are empty"
+        ),
+    }
 
 
 def _normalize_models(models) -> list:

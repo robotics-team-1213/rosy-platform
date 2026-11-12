@@ -91,6 +91,17 @@ followed, and they blocked the remap and the grasp by the ends.
 - **Not shown:** that the new rule stops a real block in time on the arm. Only the tests cover it. The arm_a stops of
   2026-11-01 were real (a container against the jaws, pan stalling with the roll).
 
+## Correction 2 (2026-11-12, arm_s live test): `ROLL_BLOCK_PWM = 0.20` and `retreat` lead-frame trim
+
+During the 2026-11-12 fast pick-and-debate live run on `arm_s`, `start_to_partial` rotated `wrist_roll` from `+28.0` to `-8.13` and stopped near the end of the trajectory (`present = -6.30, target = -8.13, lag = 1.83 units`) with `contact: wrist_roll lag 1.8 units at PWM -44 of 300`, followed on `retreat` by `ValueError: shoulder_pan: following error >5 motor degrees`.
+
+- **Why `wrist_roll` held at `PWM = -44` (`14.6%` of cap):** Motor 15 (`XL330`) runs with `p_gain = 400, i_gain = 0`. A `1.8 unit` (`~3.2°`) error produces only `PWM = -44 of 300` (`14.6%`), where proportional torque exactly balances USB wrist-camera cable torsion + gear stiction, so `wrist_roll` sits still (`still = True`) at the tail of a long sweep without hitting any obstacle. True blocked-roll incidents (e.g. the 2026-11-01 `arm_a` jaws-against-container stops) reached `PWM = 82 of 300` (`27.3%`) or kept climbing past `STRAIN_LAG` (`2.2 units`).
+- **Why `retreat` tripped the guard (`shoulder_pan >5°`):** `Runner.hold()` saved `self.played[::-1]` as `retreat_frames` where `self.played[-1]` was `1.6 units` ahead of `present` (`self.target`), and left `self.pace_floor = 1.86` and idle `self.trend` rows intact. When `retreat` started, it jumped `+1.6 units` forward to `played[-1]` and reversed a 270-frame trajectory at full speed without acceleration ramping.
+- **Fixes (`runner_strain.py`, `chunk_runner_run.py`, `chunk_runner_commands.py`):**
+  1. Added `ROLL_BLOCK_PWM = 0.20` (`60 of 300`): the `still` check at `1.5 <= lag < STRAIN_LAG` triggers only when `abs(pwm[4]) / max(1, cap[4]) >= ROLL_BLOCK_PWM`, while `lag >= STRAIN_LAG` (`2.2 units`) still holds unconditionally.
+  2. Reset `pace_floor, paced, pace_last, trend` on `hold()` and at the start of every `run`/`goto`/`park`/`chain`/`retreat`.
+  3. In `retreat`, when `len(raw) > 25`, trim unreached leading frames ahead of `runner.target` (`present`) and pass `raw[best_i:]` through `retime(..., 0.65 * GUARD_UNITS_PER_S, start=runner.target)` so `retreat` smoothly accelerates backward from `present`.
+
 Before calling a joint stuck, plot present against sent after the hold. A joint that keeps moving was not stopped by anything.
 
 ## Next time

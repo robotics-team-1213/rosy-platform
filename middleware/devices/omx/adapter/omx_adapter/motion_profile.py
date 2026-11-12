@@ -153,9 +153,15 @@ def flow(waypoints: list, fps: int, vmax: float, blend: list, blend_s: float,
     for i, (a, b) in enumerate(zip(waypoints, waypoints[1:])):
         delta = [y - x for x, y in zip(a, b)]
         # stretch the rising lift's distance so the shared profile moves it no faster than rise_speed;
-        # once at/above transit (a[1] <= -27) and folding the elbow into home (b[2] - a[2] >= 15), the CoM is over the base
-        eff_rise = (max(rise_speed, min(vmax, 3.5))
-                    if rise_speed and a[1] <= -27.0 and b[1] < a[1] and b[2] - a[2] >= 15.0 else rise_speed)
+        # once at/above transit (a[1] <= -16) and folding the elbow into home (b[2] - a[2] >= 12), the CoM is over the base,
+        # and from hover poses (-16 < a[1] <= 0) the arm is already clear of deep reach torque.
+        eff_rise = (
+            max(rise_speed, min(vmax, 3.8))
+            if rise_speed and a[1] <= -16.0 and b[1] < a[1] and b[2] - a[2] >= 12.0
+            else max(rise_speed, min(vmax, 2.8))
+            if rise_speed and -16.0 < a[1] <= 0.0 and b[1] < a[1]
+            else rise_speed
+        )
         span = max(abs(d) * (vmax / eff_rise if eff_rise and j == 1 and d < 0 and vmax > eff_rise else 1.0)
                    for j, d in enumerate(delta))
         if span <= 1e-9:

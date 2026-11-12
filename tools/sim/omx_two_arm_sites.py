@@ -44,16 +44,16 @@ CHOICES = dict(
     cell_snapshot=None,      # with temp_lanes="snapshot": a rosy.omx-cell-snapshot.v1 file (omx_real2sim.py measure), the lanes the top camera saw then
     top_camera="2026-11-10", # "2026-11-10": resurveyed top camera (cell_model_inventory.yaml); "2026-11-03": initial stud-grid PnP
     container_colours="orange",  # "orange": standard v3 containers; "multi": cycle orange/green/red/purple across containers
-    berth_kit="v17-modular-tight", # "v17-modular-tight": 193-195 mm tight U-cradles (stern+mid+bow side cheeks, 24x8.4 mm big key-socket, HULL_CLR=0.12 mm) + OMX base-plate spacer bridges + 2 cm concave belt stopper (Confluence 23592971/23234388); "v15-quay": loose quay fenders
-    ship_spacer_dy_mm=32.0,  # v17 berth-spacer-bridge-a/b lateral gap between PR33_C02_BASE inner wall (|y|=96.5~97.5 mm, 193~195 mm span) and r08 hull side (|y|=65.0 mm): 31.5 / 32.0 / 32.5 mm
-    ship_spacer_dx_mm=0.0,   # v17 berth-spacer-bridge-a/b fore-aft alignment (-6 / 0 / +6 mm)
-    ship_stern_hook_mm=0.0,  # v17 berth-stern-hook-set table-edge setback (0 / 5 / 10 mm)
+    berth_kit="v18-modular-adjustable", # "v18-modular-adjustable": 190-200 mm adjustable tight U-cradles (stern+mid+bow side cheeks, 24x13.4 mm adjustable socket + reversible gauge sleeves & 1:10 wedges, HULL_CLR=0.12 mm) + OMX base-plate spacer bridges + 2 cm concave belt stopper (Confluence 23592971/23234388); "v15-quay": loose quay fenders
+    ship_spacer_dy_mm=32.5,  # v18 berth-spacer-bridge-a/b lateral gap between PR33_C02_BASE inner wall (|y|=95.0~100.0 mm, 190~200 mm span) and r08 hull side (|y|=65.0 mm): 30.0..35.0 mm
+    ship_spacer_dx_mm=0.0,   # v18 berth-spacer-bridge-a/b fore-aft alignment (-2 / 0 / +2 mm)
+    ship_stern_hook_mm=0.0,  # v18 berth-stern-hook-set table-edge setback (0 / 5 / 10 mm)
     temp_bridge="v7",        # "v7": temp_slot_bridge_a/b 3-prong alignment bridges on PR33_C02_BASE (Confluence 23232928/23233175); "none"
     physics="design",        # a candidate of learning/envs/isaac/cell_physics.yaml (omx_physics.py): servo gains, joint damping, container mass and friction
     wait_pose="side")        # where an arm waits between steps: "side" = home folded but turned to the belt end, out of the middle band
                              # (D-983: the folded home points its jaw at the middle, and arm_a brushed arm_b's jaw at the stand); "home"
 BERTH_V16_SPEC = dict(
-    berth_kit="v17-modular-tight",
+    berth_kit="v18-modular-adjustable",
     confluence_pages=("23592971", "23234388", "23233175"),
     lift_mm=3.0,
     hull_half_beam_mm=65.0,
@@ -61,12 +61,12 @@ BERTH_V16_SPEC = dict(
     base_inner_from_axis_mm=71.25,
     base_front_from_axis_mm=75.0,
     base_hole_from_axis_x_mm=62.5,
-    base_plate_inner_span_mm=(193.0, 194.0, 195.0),
-    spacer_dy_nominal_mm=32.0,
-    spacer_dy_steps_mm=(31.5, 32.0, 32.5),
-    spacer_dx_steps_mm=(-6.0, 0.0, 6.0),
+    base_plate_inner_span_mm=(190.0, 192.0, 194.0, 195.0, 196.0, 198.0, 200.0),
+    spacer_dy_nominal_mm=32.5,
+    spacer_dy_steps_mm=(30.0, 31.0, 32.0, 32.5, 33.0, 34.0, 35.0),
+    spacer_dx_steps_mm=(-2.0, 0.0, 2.0),
     stern_hook_steps_mm=(0.0, 5.0, 10.0),
-    big_key_socket_mm=(24.0, 8.4),
+    big_key_socket_mm=(24.0, 13.4),
     repeatability_rss_mm=0.22,
     max_hull_yaw_deg=0.07,
     belt_concave_stopper=dict(drop_mm=20.0, mouth_mm=62.0, flat_mm=44.0, depth_mm=9.0, wall_mm=3.5, x_back_mm=-7.5, x_front_mm=-16.5),
@@ -76,6 +76,7 @@ TOP_CAMERA_20261110 = dict(eye=[-.0334, .0493, .6613], focus=[.0804, .0086, .176
 TOP_CAMERA_20261112 = dict(eye=[-.056, .075, .6429], focus=[.0437, .0687, .1762], up=[.9735, .0674, .2185],
                            f_px=615., width=640, height=480)
 ARM_BASES_PLATE_CENTRE = dict(arm_a=((.116, -.164), 90.), arm_b=((.107, .164), -90.))  # G-21: top-frame base plate centres vs arm_b FK (.104, .153)
+ARM_BASES_MEASURED_194 = dict(arm_a=((.091, -.16825), 90.), arm_b=((.091, .16825), -90.))  # 193-195 mm (194.0 mm nominal) inner gap between PR33_C02_BASE plates (|y_bp|=97.0 mm -> |y_arm|=168.25 mm)
 TEMP_LANES_PHOTO_1110 = dict(a=[((-.0842, -.2271), 17.2), ((-.0933, -.1676), .2), ((-.0846, -.1081), -16.8)],
                              b=[((-.0818, .1073), 16.9), ((-.0906, .1668), -.1), ((-.0817, .2263), -17.1)])
 SHIP_PHOTO_1110 = dict(stern_x_m=.178, centre_y_m=-.001)
@@ -285,6 +286,15 @@ class Layout:
             if c["arm_bases"] == "plate-centre":
                 xy, yaw_deg = ARM_BASES_PLATE_CENTRE[name]
                 yaw_rad = math.radians(yaw_deg)
+            elif c["arm_bases"] == "measured-194":
+                xy, yaw_deg = ARM_BASES_MEASURED_194[name]
+                yaw_rad = math.radians(yaw_deg)
+            elif str(c["arm_bases"]).startswith("span-"):
+                span_mm = float(str(c["arm_bases"]).split("-", 1)[1])
+                y_arm_m = (span_mm / 2.0 + BERTH_V16_SPEC["base_inner_from_axis_mm"]) / 1000.0
+                sgn = -1.0 if name == "arm_a" else +1.0
+                xy = (.091, sgn * y_arm_m)
+                yaw_rad = math.radians(90.0 if name == "arm_a" else -90.0)
             elif c["arm_bases"] == "snapshot":
                 ab = (load_snapshot(c["cell_snapshot"])["items"].get("arm_bases") or {}).get("plate_centre", {}).get(name)
                 if not ab or "xy" not in ab:
