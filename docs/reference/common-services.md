@@ -39,6 +39,8 @@ Account의 로그인·프로필·관리 화면 소스는 `applications/fleet/web
 | `fleet` | 현장 조정과 Mission 원장을 소유한다 |
 | `fleet-backup` | Fleet 상태의 백업이다 |
 | `postgres` | Fleet만 쓰는 파생 문맥·로그 저장소다 |
+| `pg-backup` | postgres 파생 문맥 저장소의 백업이다 |
+| `pg-backup-check` | postgres 백업의 신선도·무결성 검사다 |
 | `vision` | 천장 영상에서 현장 관측을 만드는 업무 생산자다 |
 | `control-unit-peer` | 관제 계층 연결에만 쓰는 peer 프록시다(D-850, D-960) |
 

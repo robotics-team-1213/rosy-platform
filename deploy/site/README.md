@@ -243,6 +243,38 @@ These jobs perform no restore. Never replace a live Account database with an
 older backup after password, grant, session or revocation changes; recovery needs
 an explicit reviewed procedure preserving the later security state.
 
+#### Site PostgreSQL context backups
+
+Protect the D-796 context mirror with `rosy-pg-backup.timer` and
+`rosy-pg-backup-check.timer`. The opt-in units reuse the sealed mirrored
+`rosy-site-postgres` image from the verified candidate and the standalone
+`compose.pg-backup.yaml`; never append that file to `ROSY_SITE_PAIRING_COMPOSE`.
+The backup job dumps `rosy_context` from `postgres:5432` as
+`${ROSY_SITE_POSTGRES_USER:-rosy}` with `pg_dump -Fc` into a temporary `.tmp`
+file, verifies it with `pg_restore --list`, stores it mode0600 as
+`postgres-backup-<UTC timestamp>.dump` and prunes to the newest fourteen. The
+check job accepts only dumps younger than 48 hours and re-verifies the newest
+one with `pg_restore --list` every six hours. Both run as the image's postgres
+UID/GID70 with no privileges, pulls or build definitions, on the internal site
+network only.
+
+```sh
+sudo install -d -o 70 -g 70 -m 0700 /var/backups/rosy-pg
+for unit in rosy-pg-backup.service rosy-pg-backup.timer \
+            rosy-pg-backup-check.service rosy-pg-backup-check.timer; do
+  sudo install -m 0644 /opt/rosy/candidate/deploy/site/$unit /etc/systemd/system/$unit
+done
+sudo systemctl daemon-reload
+sudo systemctl start rosy-pg-backup.service
+sudo systemctl start rosy-pg-backup-check.service
+sudo systemctl enable --now rosy-pg-backup.timer rosy-pg-backup-check.timer
+```
+
+`ROSY_PG_BACKUP_DIR` may select another approved protected directory in
+`site.env`; provision it with the same ownership/mode before running the jobs.
+The database is an advisory mirror only (D-796): the Fleet SQLite ledger stays
+the source of truth, and these jobs perform no restore.
+
 ### Initial in-process Account activation (D-757, historical compatibility)
 
 Prepare `/etc/rosy/account/authority.json` and its signing key outside the checkout.

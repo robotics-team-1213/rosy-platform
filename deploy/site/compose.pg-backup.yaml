@@ -1,0 +1,72 @@
+# Opt-in maintenance only; never append this file to ROSY_SITE_PAIRING_COMPOSE.
+# Reuses the sealed mirrored postgres image (D-796); no pull, no build.
+x-pg-maintenance: &pg-maintenance
+  image: rosy-site-postgres:${ROSY_SITE_IMAGE_TAG:?set ROSY_SITE_IMAGE_TAG}
+  pull_policy: never
+  entrypoint: [sh, -eu, -c]
+  # UID/GID of the postgres user inside the official postgres:16-alpine image.
+  user: "70:70"
+  read_only: true
+  tmpfs: ["/tmp:rw,noexec,nosuid,size=32m"]
+  security_opt: [no-new-privileges:true]
+  cap_drop: [ALL]
+  mem_limit: 512m
+  networks: [site_backend]
+  secrets:
+    - postgres_password
+  environment:
+    PGHOST: postgres
+    PGPORT: "5432"
+    PGDATABASE: rosy_context
+    PGUSER: ${ROSY_SITE_POSTGRES_USER:-rosy}
+    PGPASSFILE: /tmp/.pgpass
+  logging:
+    driver: json-file
+    options: {max-size: "20m", max-file: "3"}
+
+services:
+  pg-backup:
+    <<: *pg-maintenance
+    profiles: [backup]
+    command:
+      - |
+        umask 077
+        printf '*:*:*:*:%s\n' "$$(cat /run/secrets/postgres_password)" > /tmp/.pgpass
+        stamp=$$(date -u +%Y%m%dT%H%M%SZ)
+        tmp=/backup/postgres-backup-$$stamp.dump.tmp
+        pg_dump -Fc -f "$$tmp"
+        pg_restore --list "$$tmp" >/dev/null
+        chmod 0600 "$$tmp"
+        mv "$$tmp" /backup/postgres-backup-$$stamp.dump
+        ls -1 /backup/postgres-backup-*.dump | sort -r | tail -n +15 \
+          | while read -r old; do rm -f "$$old"; done
+    volumes:
+      - type: bind
+        source: ${ROSY_PG_BACKUP_DIR:-/var/backups/rosy-pg}
+        target: /backup
+        bind: {create_host_path: false}
+  pg-backup-check:
+    <<: *pg-maintenance
+    profiles: [backup-check]
+    command:
+      - |
+        newest=$$(ls -1 /backup/postgres-backup-*.dump | sort | tail -n 1)
+        age=$$(( ($$(date -u +%s) - $$(date -u -r "$$newest" +%s)) / 3600 ))
+        [ "$$age" -lt 48 ] || { echo "newest postgres backup is $$age h old (max 48)"; exit 1; }
+        pg_restore --list "$$newest" >/dev/null
+        echo "postgres backup ok: $$newest ($$age h old)"
+    volumes:
+      - type: bind
+        source: ${ROSY_PG_BACKUP_DIR:-/var/backups/rosy-pg}
+        target: /backup
+        read_only: true
+        bind: {create_host_path: false}
+
+networks:
+  site_backend:
+    external: true
+    name: rosy-site_site_backend
+
+secrets:
+  postgres_password:
+    file: ${ROSY_SITE_SECRETS_DIR:?set ROSY_SITE_SECRETS_DIR}/postgres_password
