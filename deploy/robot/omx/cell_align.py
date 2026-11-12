@@ -45,6 +45,7 @@ def free_push(objects: list, mask, roi, to_px, params, miss_mm: float, surface_p
     (boxes of a row stand flush). The narrow push (one 20 mm finger pad leading, cell_push --narrow) is tried first:
     it fits inside a 30 mm face, so its lane clears a neighbour 4 mm away where the 42 mm face cannot (2026-11-02).
     None when no direction and offset leaves the path clear."""
+    poly = np.asarray(surface_px, np.float32) if surface_px else None
     for o, narrow in ((o, n) for o in objects for n in (True, False)):
         face, back = cell_push.jaw_shape(params, narrow)
         gap = prm.get(params, "push.gap_mm") + back
@@ -58,8 +59,8 @@ def free_push(objects: list, mask, roi, to_px, params, miss_mm: float, surface_p
         for sign in (1, -1):
             for off in sorted({s * k for k in range(int(most) + 1) for s in (1, -1)}, key=lambda v: (abs(v), v)):
                 at = c + side * off / 1000
-                if not cell_push.path_clear(mask, roi, to_px, at, sign * along, length / 2, mm, gap, surface_px,
-                                            face + miss_mm, width / 2, 2 * back):
+                if not cell_push.path_clear(mask, roi, to_px, at, sign * along, length / 2, mm, gap, poly,
+                                            face + miss_mm, width / 2, 2 * back, stop_on_first=True):
                     return {"object": o.get("object"), "centre_mm": o["centre_mm"], "at": [round(v, 4) for v in at],
                             "along_deg": round(math.degrees(math.atan2(*(sign * along)[::-1])), 1),
                             "offset_mm": round(float(off), 1), "mm": mm, "half_mm": length / 2, "half_width_mm": width / 2,

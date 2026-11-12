@@ -24,8 +24,11 @@ NAMES = ["shoulder_pan.pos", "shoulder_lift.pos", "elbow_flex.pos", "wrist_flex.
 
 
 def _keepalive_fetcher():
-    """HTTP keep-alive fetcher for localhost/LAN camera services so 30 Hz polling reuses TCP sockets."""
+    """HTTP keep-alive fetcher for localhost/LAN camera services so 30 Hz polling reuses TCP sockets and ETag/304."""
+    import socket
+
     conns: dict[tuple[str, str], http.client.HTTPConnection] = {}
+    etag_cache: dict[str, tuple[str, bytes]] = {}
 
     def fetch(url: str) -> bytes:
         parsed = urllib.parse.urlsplit(url)
@@ -33,6 +36,10 @@ def _keepalive_fetcher():
             return urllib.request.urlopen(url, timeout=1).read()
         key = (parsed.scheme, parsed.netloc)
         path = (parsed.path or "/") + (f"?{parsed.query}" if parsed.query else "")
+        cached = etag_cache.get(url)
+        headers = {"Connection": "keep-alive"}
+        if cached is not None:
+            headers["If-None-Match"] = cached[0]
         for attempt in range(2):
             conn = conns.get(key)
             if conn is None:
@@ -40,11 +47,21 @@ def _keepalive_fetcher():
                 conn = cls(parsed.netloc, timeout=1)
                 conns[key] = conn
             try:
-                conn.request("GET", path, headers={"Connection": "keep-alive"})
+                conn.request("GET", path, headers=headers)
+                if conn.sock is not None:
+                    try:
+                        conn.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+                    except OSError:
+                        pass
                 resp = conn.getresponse()
                 data = resp.read()
+                if resp.status == 304 and cached is not None:
+                    return cached[1]
                 if resp.status >= 400:
                     raise OSError(f"HTTP Error {resp.status}: {resp.reason}")
+                etag = resp.getheader("ETag")
+                if etag:
+                    etag_cache[url] = (etag, data)
                 return data
             except (OSError, http.client.HTTPException):
                 try:
@@ -223,12 +240,20 @@ def convert(episodes: Path, root: Path, repo_id: str, fps: int, image_names: dic
         ticks = [json.loads(line) for line in (folder / "ticks.jsonl").read_text().splitlines() if line]
         frames = {name: [json.loads(line) for line in (folder / f"{name}.jsonl").read_text().splitlines() if line]
                   for name in image_names}
+        last_rgb: dict[str, tuple[int, np.ndarray]] = {}
         for row, seqs in aligned(ticks, frames):
             frame = {"observation.state": np.asarray(row["state"], np.float32),
                      "action": np.asarray(row["action"], np.float32), "task": task}
             for name, feature in image_names.items():
-                img = cv2.imread(str(folder / name / f"{seqs[name]:06d}.jpg"))
-                frame[f"observation.images.{feature}"] = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                seq = seqs[name]
+                prev = last_rgb.get(name)
+                if prev is not None and prev[0] == seq:
+                    rgb = prev[1]
+                else:
+                    img = cv2.imread(str(folder / name / f"{seq:06d}.jpg"))
+                    rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                    last_rgb[name] = (seq, rgb)
+                frame[f"observation.images.{feature}"] = rgb
             ds.add_frame(frame)
         ds.save_episode()
     ds.finalize()

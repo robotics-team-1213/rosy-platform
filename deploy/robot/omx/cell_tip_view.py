@@ -31,14 +31,22 @@ def to_cell(tcp, base: dict) -> np.ndarray:
     return np.array([base["xy"][0] + c * x - s * y, base["xy"][1] + s * x + c * y, base["z"] + z])
 
 
+def _cross3(a, b) -> np.ndarray:
+    return np.array([
+        a[1] * b[2] - a[2] * b[1],
+        a[2] * b[0] - a[0] * b[2],
+        a[0] * b[1] - a[1] * b[0],
+    ], float)
+
+
 def project(camera: dict, point, size=(640, 480)) -> tuple[float, float]:
     """Pinhole with the principal point at the centre, as learning/envs/isaac/test/test_container_stack.py."""
     eye = np.asarray(camera["eye"], float)
     forward = np.asarray(camera["focus"], float) - eye
     forward /= np.linalg.norm(forward)
-    right = np.cross(forward, camera["up"])
+    right = _cross3(forward, camera["up"])
     right /= np.linalg.norm(right)
-    down = np.cross(forward, right)
+    down = _cross3(forward, right)
     d = np.asarray(point, float) - eye
     return size[0] / 2 + camera["f_px"] * d @ right / (d @ forward), size[1] / 2 + camera["f_px"] * d @ down / (d @ forward)
 

@@ -54,7 +54,8 @@ def jaw_shape(params, narrow: bool) -> tuple[float, float]:
 
 
 def path_clear(mask, roi, to_px, centre_raw, d, half_mm: float, push_mm: float, gap_mm: float,
-               surface_px=None, lane_mm: float = 0.0, width_half_mm: float | None = None, tail_mm: float = 0.0) -> list:
+               surface_px=None, lane_mm: float = 0.0, width_half_mm: float | None = None, tail_mm: float = 0.0,
+               stop_on_first: bool = False) -> list:
     """Foreground pixels where the jaws go down (behind) or where the object's front sweeps (ahead); [] is clear.
     The object itself is skipped: ahead starts a gap past its top face (its side face shows below the top face in
     the top view, facts 28), and the side samples stay 6 mm inside its width (a neighbouring surface's edge, such
@@ -62,33 +63,48 @@ def path_clear(mask, roi, to_px, centre_raw, d, half_mm: float, push_mm: float, 
     there by construction, and the jaws went down onto the raised Pinky tray's edge that way (2026-10-28)."""
     import cv2
 
-    poly = np.asarray(surface_px, np.float32) if surface_px else None
-    side = np.array([-d[1], d[0]])
-    c, hits = np.asarray(centre_raw, float), []
+    poly = (
+        surface_px
+        if isinstance(surface_px, np.ndarray) and surface_px.dtype == np.float32
+        else (np.asarray(surface_px, np.float32) if surface_px is not None and len(surface_px) else None)
+    )
+    dx, dy = float(d[0]), float(d[1])
+    sx, sy = -dy, dx
+    cx, cy = float(centre_raw[0]), float(centre_raw[1])
+    hits = []
     across = half_mm if width_half_mm is None else width_half_mm  # a long box pushed along its length is narrower across
-    checks = [("behind", c - d * (half_mm + gap_mm + t) / 1000 + side * s / 1000) for s in (-6, 0, 6)
-              for t in np.arange(0.0, tail_mm + 1, 4.0)]  # a trailing finger goes down tail_mm further back
+    checks = [("behind", (cx + (-dx * (half_mm + gap_mm + t) + sx * s) / 1000.0, cy + (-dy * (half_mm + gap_mm + t) + sy * s) / 1000.0))
+              for s in (-6.0, 0.0, 6.0) for t in np.arange(0.0, tail_mm + 1, 4.0)]  # a trailing finger goes down tail_mm further back
+    ahead_s = (-across + 6.0, 0.0, across - 6.0)
     for t in np.arange(half_mm + gap_mm, half_mm + push_mm + 4, 4.0):
-        checks += [("ahead", c + d * t / 1000 + side * s / 1000) for s in (-across + 6, 0, across - 6)]
+        checks += [("ahead", (cx + (dx * t + sx * s) / 1000.0, cy + (dy * t + sy * s) / 1000.0)) for s in ahead_s]
     # the closed jaws' face is wider than a container and the map is off by some mm: what stands beside the lane the jaws
     # travel is dragged along (2026-11-01: a column pushed out of a packed row took both neighbours 19 mm away with it)
     # a lane inside the box's own width (one finger pad leading) meets only the box: no sample on its own pixels
-    for t in np.arange(-(half_mm + gap_mm), push_mm - half_mm + 1, 4.0) if lane_mm > across else ():
-        # the whole band from just past the box's side to the lane's edge: a sample at the edge alone jumped a neighbour
-        band = [*np.arange(across + 4.0, lane_mm, 4.0), lane_mm]
-        checks += [("beside", c + d * t / 1000 + side * k * s / 1000) for s in band for k in (-1, 1)]
+    if lane_mm > across:
+        band = [*np.arange(across + 4.0, lane_mm, 4.0), float(lane_mm)]
+        for t in np.arange(-(half_mm + gap_mm), push_mm - half_mm + 1, 4.0):
+            # the whole band from just past the box's side to the lane's edge: a sample at the edge alone jumped a neighbour
+            checks += [("beside", (cx + (dx * t + sx * k * s) / 1000.0, cy + (dy * t + sy * k * s) / 1000.0))
+                       for s in band for k in (-1, 1)]
+    rx0, ry0 = roi[0], roi[1]
+    mh, mw = mask.shape[0], mask.shape[1]
     for where, p in checks:
         px = to_px(p)
         if px is None:
             hits.append((where, "off the map"))
-            continue
-        x, y = int(round(px[0])) - roi[0], int(round(px[1])) - roi[1]
-        if poly is not None and cv2.pointPolygonTest(poly, (float(px[0]), float(px[1])), False) < 0:
-            hits.append((where, "off the surface"))
-        elif not (0 <= y < mask.shape[0] and 0 <= x < mask.shape[1]):
-            hits.append((where, "outside the view"))
-        elif mask[y, x]:
-            hits.append((where, [round(v * 1000, 1) for v in p]))
+        else:
+            x, y = int(round(px[0])) - rx0, int(round(px[1])) - ry0
+            if poly is not None and cv2.pointPolygonTest(poly, (float(px[0]), float(px[1])), False) < 0:
+                hits.append((where, "off the surface"))
+            elif not (0 <= y < mh and 0 <= x < mw):
+                hits.append((where, "outside the view"))
+            elif mask[y, x]:
+                hits.append((where, [round(v * 1000, 1) for v in p]))
+            else:
+                continue
+        if stop_on_first:
+            return hits
     return hits
 
 
