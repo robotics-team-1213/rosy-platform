@@ -23,12 +23,31 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import sys
 import time
 from pathlib import Path
 from typing import Any
 
-from fleet.charge_bays import Bay, ChargeBays, RobotView, bays_from_map
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+for _rel in (
+    "operations/fleet",
+    "operations/world/src",
+    "deploy/robot/omx",
+    "middleware/devices/omx/adapter",
+    "contracts/foundation",
+    "contracts/motion/src",
+    "contracts/learning/src",
+):
+    _p = str(_REPO_ROOT / _rel)
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
+
+from fleet._source_layout import bootstrap_sources  # noqa: E402
+
+bootstrap_sources()
+
+from fleet.charge_bays import Bay, ChargeBays, RobotView, bays_from_map  # noqa: E402
 from fleet.routing.cost import wrap
 from fleet.routing.graph import Graph, build_graph
 from fleet.routing.road_path import plan_road_path
@@ -42,9 +61,9 @@ SPAWNS: dict[str, tuple[float, float, float]] = {
 }
 
 POST_EXIT_GOALS: dict[str, str | tuple[float, float]] = {
-    "rosy_01": (-0.3050, -0.4749),
-    "rosy_02": (-0.7138, -0.4750),
-    "rosy_03": "J_out",
+    "rosy_01": "S3",
+    "rosy_02": "S5",
+    "rosy_03": "S4",
 }
 
 
@@ -54,12 +73,13 @@ def build_world_261026_site_map() -> tuple[SiteMap, Graph, list[Bay]]:
             "schema": "rosy.site_map/1",
             "map_id": "world_261026",
             "places": [
-                {"id": "S1", "kind": "stop", "name": "S1 주차장 출구 정지점", "x": -0.68, "y": -0.1393},
-                {"id": "S2", "kind": "stop", "name": "S2 주차장 입구 정지점", "x": 0.3088, "y": -0.1393},
-                {"id": "S3", "kind": "stop", "name": "S3 위 차선 정지점", "x": 0.68, "y": -0.2528},
-                {"id": "S5", "kind": "stop", "name": "S5 U턴 전 정지점", "x": 0.9212, "y": -0.4776},
+                {"id": "S1", "kind": "stop", "name": "S1 주차장 출구·수동 적재 정지선", "x": -0.6763, "y": -0.1383},
+                {"id": "S2", "kind": "stop", "name": "S2 주차장 입구 정지선", "x": 0.3088, "y": -0.1377},
+                {"id": "S3", "kind": "stop", "name": "S3 상단 하역 정지선 (cell_s)", "x": 0.6987, "y": -0.2512},
+                {"id": "S4", "kind": "stop", "name": "S4 하단 중앙 대기 정지선", "x": 0.1562, "y": -0.4754},
+                {"id": "S5", "kind": "stop", "name": "S5 하단 U턴 전 대기 정지선", "x": 0.9212, "y": -0.4776},
                 {"id": "J_in", "kind": "junction", "name": "주차장 입구 분기", "x": 0.3088, "y": -0.2518},
-                {"id": "J_out", "kind": "junction", "name": "주차장 출구 합류", "x": -0.68, "y": -0.2505},
+                {"id": "J_out", "kind": "junction", "name": "주차장 출구 합류", "x": -0.6763, "y": -0.2505},
                 {"id": "P1", "kind": "junction", "name": "칸 1 앞", "x": -0.4184, "y": 0.0264},
                 {"id": "P2", "kind": "junction", "name": "칸 2 앞", "x": -0.1896, "y": 0.0256},
                 {"id": "P3", "kind": "junction", "name": "칸 3 앞", "x": 0.0322, "y": 0.0249},
@@ -69,29 +89,32 @@ def build_world_261026_site_map() -> tuple[SiteMap, Graph, list[Bay]]:
             ],
             "edges": [
                 {"direction": "one_way", "drive_mode": "lane", "from": "S5", "id": "loop_right", "name": "오른쪽 U턴",
-                 "polyline": [[0.9212, -0.4776], [0.926, -0.4777], [0.9599, -0.4739], [0.9915, -0.4627], [1.0186, -0.4449], [1.0394, -0.4216], [1.0525, -0.3946], [1.057, -0.3656], [1.0525, -0.3366], [1.0394, -0.3095], [1.0186, -0.2863], [0.9915, -0.2685], [0.9599, -0.2573], [0.926, -0.2535], [0.68, -0.2528]],
+                 "polyline": [[0.9212, -0.4776], [0.926, -0.4777], [0.9599, -0.4739], [0.9915, -0.4627], [1.0186, -0.4449], [1.0394, -0.4216], [1.0525, -0.3946], [1.057, -0.3656], [1.0525, -0.3366], [1.0394, -0.3095], [1.0186, -0.2863], [0.9915, -0.2685], [0.9599, -0.2573], [0.926, -0.2535], [0.6987, -0.2512]],
                  "speed_cap_mps": 0.15, "to": "S3", "width_m": 0.2},
-                {"direction": "one_way", "drive_mode": "lane", "from": "S3", "id": "upper_east", "name": "위 차선 (적재 쪽)",
-                 "polyline": [[0.68, -0.2528], [0.6058, -0.2526], [0.5315, -0.2524], [0.4573, -0.2522], [0.383, -0.252], [0.3088, -0.2518]],
+                {"direction": "one_way", "drive_mode": "lane", "from": "S3", "id": "upper_east", "name": "위 차선 (하역 후 분기)",
+                 "polyline": [[0.6987, -0.2512], [0.6207, -0.2513], [0.5427, -0.2514], [0.4648, -0.2516], [0.3868, -0.2517], [0.3088, -0.2518]],
                  "speed_cap_mps": 0.15, "to": "J_in", "width_m": 0.2},
-                {"direction": "one_way", "drive_mode": "lane", "from": "J_in", "id": "upper_west", "name": "위 차선 (주차장 앞)",
-                 "polyline": [[0.3088, -0.2518], [0.1989, -0.2516], [0.0891, -0.2514], [-0.0208, -0.2512], [-0.1307, -0.251], [-0.2405, -0.2509], [-0.3504, -0.2508], [-0.4603, -0.2506], [-0.5701, -0.2506], [-0.68, -0.2505]],
+                {"direction": "one_way", "drive_mode": "lane", "from": "J_in", "id": "upper_west", "name": "위 차선 (주차장 앞 순환)",
+                 "polyline": [[0.3088, -0.2518], [0.1993, -0.2516], [0.0899, -0.2514], [-0.0196, -0.2512], [-0.129, -0.251], [-0.2385, -0.2509], [-0.3479, -0.2508], [-0.4574, -0.2506], [-0.5668, -0.2506], [-0.6763, -0.2505]],
                  "speed_cap_mps": 0.15, "to": "J_out", "width_m": 0.2},
-                {"direction": "one_way", "drive_mode": "lane", "from": "J_out", "id": "loop_left", "name": "왼쪽 U턴·아래 차선",
-                 "polyline": [[-0.68, -0.2505], [-0.926, -0.2505], [-0.9599, -0.2543], [-0.9915, -0.2656], [-1.0186, -0.2834], [-1.0394, -0.3067], [-1.0525, -0.3338], [-1.057, -0.3629], [-1.0525, -0.392], [-1.0394, -0.4191], [-1.0186, -0.4424], [-0.9915, -0.4602], [-0.9599, -0.4715], [-0.926, -0.4753], [-0.85, -0.4752], [-0.7138, -0.475], [-0.5775, -0.4749], [-0.4413, -0.4749], [-0.305, -0.4749], [-0.1688, -0.475], [-0.0325, -0.4751], [0.1037, -0.4753], [0.24, -0.4755], [0.3762, -0.4758], [0.5125, -0.4762], [0.6487, -0.4766], [0.785, -0.4771], [0.9212, -0.4776]],
+                {"direction": "one_way", "drive_mode": "lane", "from": "J_out", "id": "loop_left", "name": "왼쪽 U턴·아래 서쪽 차선 (S4 정지선까지)",
+                 "polyline": [[-0.6763, -0.2505], [-0.926, -0.2505], [-0.9599, -0.2543], [-0.9915, -0.2656], [-1.0186, -0.2834], [-1.0394, -0.3067], [-1.0525, -0.3338], [-1.057, -0.3629], [-1.0525, -0.392], [-1.0394, -0.4191], [-1.0186, -0.4424], [-0.9915, -0.4602], [-0.9599, -0.4715], [-0.926, -0.4753], [-0.85, -0.4752], [-0.7242, -0.475], [-0.5985, -0.4749], [-0.4727, -0.4749], [-0.3469, -0.4749], [-0.2211, -0.475], [-0.0954, -0.4751], [0.0304, -0.4753], [0.1562, -0.4754]],
+                 "speed_cap_mps": 0.15, "to": "S4", "width_m": 0.2},
+                {"direction": "one_way", "drive_mode": "lane", "from": "S4", "id": "lower_east", "name": "아래 동쪽 차선 (S4 -> S5 정지선)",
+                 "polyline": [[0.1562, -0.4754], [0.2837, -0.4757], [0.4112, -0.476], [0.5387, -0.4763], [0.6662, -0.4767], [0.7937, -0.4771], [0.9212, -0.4776]],
                  "speed_cap_mps": 0.15, "to": "S5", "width_m": 0.2},
                 {"direction": "one_way", "drive_mode": "lane", "from": "J_in", "id": "park_gate_in", "name": "주차장 진입",
-                 "polyline": [[0.3088, -0.2518], [0.3088, -0.1393]], "speed_cap_mps": 0.08, "to": "S2", "width_m": 0.15},
+                 "polyline": [[0.3088, -0.2518], [0.3088, -0.1377]], "speed_cap_mps": 0.08, "to": "S2", "width_m": 0.15},
                 {"direction": "one_way", "drive_mode": "lane", "from": "S2", "id": "park_in", "name": "분홍 유도선 (입구)",
-                 "polyline": [[0.3088, -0.1393], [0.2636, -0.048], [0.2279, 0.0242], [0.0322, 0.0249]], "speed_cap_mps": 0.08, "to": "P3", "width_m": 0.15},
+                 "polyline": [[0.3088, -0.1377], [0.2636, -0.048], [0.2279, 0.0242], [0.0322, 0.0249]], "speed_cap_mps": 0.08, "to": "P3", "width_m": 0.15},
                 {"direction": "one_way", "drive_mode": "lane", "from": "P3", "id": "bar_32", "name": "분홍 유도선",
                  "polyline": [[0.0322, 0.0249], [-0.1896, 0.0256]], "speed_cap_mps": 0.08, "to": "P2", "width_m": 0.15},
                 {"direction": "one_way", "drive_mode": "lane", "from": "P2", "id": "bar_21", "name": "분홍 유도선",
                  "polyline": [[-0.1896, 0.0256], [-0.4184, 0.0264]], "speed_cap_mps": 0.08, "to": "P1", "width_m": 0.15},
                 {"direction": "one_way", "drive_mode": "lane", "from": "P1", "id": "park_out", "name": "분홍 유도선 (출구)",
-                 "polyline": [[-0.4184, 0.0264], [-0.5969, 0.0271], [-0.6344, -0.048], [-0.68, -0.1393]], "speed_cap_mps": 0.08, "to": "S1", "width_m": 0.15},
+                 "polyline": [[-0.4184, 0.0264], [-0.5969, 0.0271], [-0.6344, -0.048], [-0.6763, -0.1383]], "speed_cap_mps": 0.08, "to": "S1", "width_m": 0.15},
                 {"direction": "one_way", "drive_mode": "lane", "from": "S1", "id": "park_gate_out", "name": "주차장 합류",
-                 "polyline": [[-0.68, -0.1393], [-0.68, -0.2505]], "speed_cap_mps": 0.08, "to": "J_out", "width_m": 0.15},
+                 "polyline": [[-0.6763, -0.1383], [-0.6763, -0.2505]], "speed_cap_mps": 0.08, "to": "J_out", "width_m": 0.15},
                 {"direction": "two_way", "drive_mode": "lane", "from": "P1", "id": "bay_1", "name": "칸 1 (후진 진입)",
                  "polyline": [[-0.4184, 0.0264], [-0.4188, 0.1728], [-0.4193, 0.3236], [-0.4197, 0.47]], "speed_cap_mps": 0.05, "to": "C1", "width_m": 0.18},
                 {"direction": "two_way", "drive_mode": "lane", "from": "P2", "id": "bay_2", "name": "칸 2 (후진 진입)",
@@ -101,7 +124,7 @@ def build_world_261026_site_map() -> tuple[SiteMap, Graph, list[Bay]]:
             ],
         }
     )
-    graph = build_graph(site, version=16)
+    graph = build_graph(site, version=119)
     return site, graph, bays_from_map(site)
 
 
@@ -151,12 +174,20 @@ def run_s3_cell_contract_handoff(
 
     from fleet.pipeline.orchestrator import evaluate_fleet_pipeline
 
-    route = plan_road_path(graph, (-0.3050, -0.4749, 0.0), "S3", step_m=0.10)
-    assert "loop_left" in route.edges and "loop_right" in route.edges, route.edges
+    route = plan_road_path(graph, (-0.6763, -0.1383, -math.pi / 2), "S3", step_m=0.10)
+    assert ["park_gate_out", "loop_left", "lower_east", "loop_right"] == list(route.edges), route.edges
+    assert ["J_out", "S4", "S5", "S3"] == list(route.places), route.places
+
+    # 3-robot orange stop-line formation during S3 unloading:
+    # rosy_01 at S3 (0.6987, -0.2512), rosy_02 waiting at S5 (0.9212, -0.4776), rosy_03 waiting at S4 (0.1562, -0.4754)
     robot = SimpleNamespace(robot_id=robot_id, kind="pinky", online=True,
-                             pose=(0.68, -0.2528), yaw=3.14159)
+                             pose=(0.6987, -0.2512), yaw=3.14159, percent=76.0, voltage=7.44)
+    r2_s5 = SimpleNamespace(robot_id="rosy_02", kind="pinky", online=True,
+                            pose=(0.9212, -0.4776), yaw=0.0, percent=12.0, voltage=6.82)
+    r3_s4 = SimpleNamespace(robot_id="rosy_03", kind="pinky", online=True,
+                            pose=(0.1562, -0.4754), yaw=0.0, percent=14.0, voltage=6.88)
     held = evaluate_fleet_pipeline(
-        site, graph, [robot], bays,
+        site, graph, [robot, r2_s5, r3_s4], bays,
         cell_states={"cell_s": {"phase": "ARM_IN_BED_ZONE", "robot_id": robot_id}},
     )
     cell = held["omx_cell_layer"]["cells"]["cell_s"]
@@ -177,20 +208,49 @@ def run_s3_cell_contract_handoff(
     assert receipt["amr_motion_inhibited"] is False, receipt
     assert receipt["goal_evidence_digest"].startswith("sha256:"), receipt
 
+    # Selective Pit-In vs Continuous Loop at J_in (0.3088, -0.2518):
+    # - rosy_01 (76% > 15%) continues circulating on main loop (J_in -> J_out -> S1 manual load zone -> S4 -> S5 -> S3)
+    # - rosy_02 (12% <= 15%) & rosy_03 (14% <= 15%) are routed by ChargeBays into J_in -> S2 -> P_i -> C_i
+    cb = ChargeBays()
+    r1_jin = SimpleNamespace(robot_id=robot_id, kind="pinky", online=True,
+                             pose=(0.3088, -0.2518), yaw=3.14159, percent=76.0, voltage=7.44)
+    r2_jin = SimpleNamespace(robot_id="rosy_02", kind="pinky", online=True,
+                             pose=(0.3088, -0.2518), yaw=3.14159, percent=12.0, voltage=6.82)
     released = evaluate_fleet_pipeline(
-        site, graph, [robot], bays,
-        goals_by_robot={robot_id: "J_in"},
+        site, graph, [r1_jin, r2_jin], bays,
+        charge_bays=cb,
+        goals_by_robot={robot_id: "J_out"},
         cell_states={"cell_s": {"phase": "RELEASED", "robot_id": robot_id}},
     )
     released_cell = released["omx_cell_layer"]["cells"]["cell_s"]
     released_entry = released["robot_layer"]["robots"][0]
+    pit_in_entry = released["robot_layer"]["robots"][1]
     assert released_cell["gate"]["amr_motion_inhibited"] is False
     assert released_entry["road_command"]["v_cmd_mps"] > 0.0
+    assert released_entry["road_trip"]["places"] == ["J_in", "J_out"]
+    assert pit_in_entry["bay_decision"]["action"] == "go"
+    assert "S2" in pit_in_entry["road_trip"]["places"]
     result = {
         "s3_route_edges": list(route.edges),
+        "s3_route_places": list(route.places),
+        "stop_lines": held["site_layer"]["stop_lines"],
         "inhibited_gate": cell["gate"],
         "omx_receipt": receipt,
         "released_v_cmd_mps": released_entry["road_command"]["v_cmd_mps"],
+        "selective_pit_in": {
+            "circulating_robot": {
+                "robot_id": robot_id,
+                "percent": 76.0,
+                "places": released_entry["road_trip"]["places"],
+                "next_manual_load_stop": "S1",
+            },
+            "pit_in_robot": {
+                "robot_id": "rosy_02",
+                "percent": 12.0,
+                "bay": pit_in_entry["bay_decision"]["bay"],
+                "places": pit_in_entry["road_trip"]["places"],
+            },
+        },
     }
     if fleet_r_url or request_fn is not None:
         result["remote_fleet_r_handoff"] = FleetModelPipeline(Path(work_dir)).execute_remote_fleet_r_handoff(
@@ -356,10 +416,24 @@ def run_gazebo_simulation(timeout_s: float = 75.0) -> dict[str, Any]:
     assert depart_order == ["rosy_01", "rosy_02", "rosy_03"], f"Expected C1->C2->C3 order, got {depart_order}"
     assert len(finished) == 3, f"Not all robots finished road route: {result}"
     assert max_cross_track_m <= 0.09, f"Robot left road corridor: max_cross_track_m={max_cross_track_m}"
-    result["cell_contract_handoff"] = run_s3_cell_contract_handoff(_site, graph, bays)
+    result["cell_contract_handoff"] = run_s3_cell_contract_handoff(
+        _site,
+        graph,
+        bays,
+        fleet_r_url=os.environ.get("FLEET_R_URL") or None,
+        fleet_r_token=os.environ.get("FLEET_R_TOKEN", ""),
+    )
     return result
 
 
 if __name__ == "__main__":
-    out = run_gazebo_simulation()
+    if "--pure" in sys.argv:
+        _site, _graph, _bays = build_world_261026_site_map()
+        out = run_s3_cell_contract_handoff(
+            _site, _graph, _bays,
+            fleet_r_url=os.environ.get("FLEET_R_URL") or None,
+            fleet_r_token=os.environ.get("FLEET_R_TOKEN", ""),
+        )
+    else:
+        out = run_gazebo_simulation()
     print(json.dumps(out, ensure_ascii=False, indent=2))

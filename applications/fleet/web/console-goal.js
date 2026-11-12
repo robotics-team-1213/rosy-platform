@@ -1,6 +1,5 @@
 import {randomUUID} from "/console/assets/uuid.js";
-// 지도 위 목표 지정과 운영자 핀(D-201·D-224·D-593). 캔버스 찍기·방향키 커서·확인 뒤 보내기를 가진다.
-// 셸(console.js)이 그리기(render)와 지도 뷰를 건넨다(D-798 3.2).
+// 지도 위 목표 지정과 운영자 핀(D-201·D-224·D-593). 셸(console.js)이 그리기(render)와 지도 뷰를 건넨다(D-798 3.2).
 import { motionCommandReason } from "./motion-readiness.js";
 import { pinPrefill } from "./localization-badge.js";
 import { roadPolylineBetween } from "/console/assets/guide-layer.js";
@@ -8,12 +7,9 @@ import { roadPolylineBetween } from "/console/assets/guide-layer.js";
 export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call, render, confirmedAction, namedReason,
   toWorld, refreshGuide, queuedReason, drawMap = () => {}, onSelectRobot = () => {} }) {
   function disarmGoal(reason) {
-    view.selected = null;
-    view.cursor = null;
-    view.hoverWorld = null;
+    view.selected = null; view.cursor = null; view.hoverWorld = null;
     const canvas = el("map-canvas");
-    canvas.classList.add("idle");
-    canvas.tabIndex = -1;
+    canvas.classList.add("idle"); canvas.tabIndex = -1;
     if (reason) log(reason, "bad");
   }
 
@@ -24,63 +20,41 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
     if (!cards.length) return;
     const active = document.activeElement;
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-      event.preventDefault();
-      inbox.select("status");
+      event.preventDefault(); inbox.select("status");
       const idx = cards.indexOf(active);
-      const next = idx < 0
-        ? cards[event.key === "ArrowDown" ? 0 : cards.length - 1]
+      const next = idx < 0 ? cards[event.key === "ArrowDown" ? 0 : cards.length - 1]
         : cards[(idx + (event.key === "ArrowDown" ? 1 : -1) + cards.length) % cards.length];
       next.focus();
     } else if (event.key === "Enter" && cards.includes(active)) {
       const choose = active.querySelector("ui-button[data-select-robot-id]");
       if (choose && !choose.disabled) { event.preventDefault(); choose.click(); }
     } else if (event.key === "Escape" && view.selected) {
-      const robotId = view.selected;
-      disarmGoal("목표 지정 취소");
-      render();
-      focusGoalButton(robotId);
+      const robotId = view.selected; disarmGoal("목표 지정 취소"); render(); focusGoalButton(robotId);
     }
   });
 
   function makeSvgBar(pct, tone = "good") {
-    const clamped = Math.max(0, Math.min(100, Math.round(Number.isFinite(pct) ? pct : 0)));
-    const ns = "http://www.w3.org/2000/svg";
-    const svg = document.createElementNS(ns, "svg");
-    svg.setAttribute("class", "gauge-svg");
-    svg.setAttribute("viewBox", "0 0 100 7");
-    svg.setAttribute("preserveAspectRatio", "none");
-    const bg = document.createElementNS(ns, "rect");
-    bg.setAttribute("class", "gauge-bg");
-    bg.setAttribute("x", "0"); bg.setAttribute("y", "0"); bg.setAttribute("width", "100"); bg.setAttribute("height", "7"); bg.setAttribute("rx", "3.5");
-    const fill = document.createElementNS(ns, "rect");
-    fill.setAttribute("class", `gauge-fill ${tone}`);
-    fill.setAttribute("x", "0"); bg.setAttribute("y", "0"); fill.setAttribute("width", String(clamped)); fill.setAttribute("height", "7"); fill.setAttribute("rx", "3.5");
-    svg.append(bg, fill);
-    return svg;
+    const clamped = Math.max(0, Math.min(100, Math.round(Number.isFinite(pct) ? pct : 0))), ns = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(ns, "svg"), bg = document.createElementNS(ns, "rect"), fill = document.createElementNS(ns, "rect");
+    svg.setAttribute("class", "gauge-svg"); svg.setAttribute("viewBox", "0 0 100 7"); svg.setAttribute("preserveAspectRatio", "none");
+    bg.setAttribute("class", "gauge-bg"); bg.setAttribute("x", "0"); bg.setAttribute("y", "0"); bg.setAttribute("width", "100"); bg.setAttribute("height", "7"); bg.setAttribute("rx", "3.5");
+    fill.setAttribute("class", `gauge-fill ${tone}`); fill.setAttribute("x", "0"); bg.setAttribute("y", "0"); fill.setAttribute("width", String(clamped)); fill.setAttribute("height", "7"); fill.setAttribute("rx", "3.5");
+    svg.append(bg, fill); return svg;
   }
 
   async function commitWorldGoal(point, placeLabel = "", placeId = "") {
-    const life = pageScope.capture();
-    life.check();
+    const life = pageScope.capture(); life.check();
     if (!point || !Number.isFinite(point.x) || !Number.isFinite(point.y)) return;
     const robotId = view.selected || view.focusRobot || view.robots.find((r) => r.online)?.robot_id || "rosy_46";
-    view.focusRobot = robotId;
-    view.selected = robotId;
+    view.focusRobot = robotId; view.selected = robotId;
     const selectedRobot = view.robots.find((robot) => robot.robot_id === robotId);
     const guideRow = (view.guide?.robots || []).find((r) => r.robot_id === robotId);
     const curPose = guideRow?.pose || selectedRobot?.state?.pose || { x: -0.411, y: 0.350, yaw: -1.5708 };
-    const yaw = curPose && Number.isFinite(curPose.x) && Number.isFinite(curPose.y)
-      ? Math.atan2(point.y - curPose.y, point.x - curPose.x) : 0;
+    const yaw = curPose && Number.isFinite(curPose.x) && Number.isFinite(curPose.y) ? Math.atan2(point.y - curPose.y, point.x - curPose.x) : 0;
     const where = placeLabel ? `${placeLabel} (${point.x.toFixed(2)}, ${point.y.toFixed(2)})` : `(${point.x.toFixed(2)}, ${point.y.toFixed(2)})`;
-
-    // 1. Immediately lock Selected Destination Pin (🎯) + client-side snapped road polyline so click ALWAYS pins on map
-    const siteMapObj = view.activeSiteMap?.map;
-    const localRoad = curPose ? roadPolylineBetween(siteMapObj, curPose, point) : null;
-    const initialPts = localRoad?.points?.length >= 2
-      ? localRoad.points : (curPose ? [[curPose.x, curPose.y], [point.x, point.y]] : [[point.x, point.y]]);
-    const initialLen = typeof localRoad?.length_m === "number"
-      ? localRoad.length_m : (curPose ? Math.hypot(point.x - curPose.x, point.y - curPose.y) : 0);
-
+    const siteMapObj = view.activeSiteMap?.map, localRoad = curPose ? roadPolylineBetween(siteMapObj, curPose, point) : null;
+    const initialPts = localRoad?.points?.length >= 2 ? localRoad.points : (curPose ? [[curPose.x, curPose.y], [point.x, point.y]] : [[point.x, point.y]]);
+    const initialLen = typeof localRoad?.length_m === "number" ? localRoad.length_m : (curPose ? Math.hypot(point.x - curPose.x, point.y - curPose.y) : 0);
     view.selectedGoal = {
       robotId, x: point.x, y: point.y, yaw, placeId: placeId || null,
       label: placeLabel || `좌표 (${point.x.toFixed(2)}, ${point.y.toFixed(2)})`,
@@ -89,12 +63,9 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
       statusText: "목표 핀 고정 · 도로 경로 확정", at: Date.now(),
     };
     view.lastDispatchedGoal = { robotId, x: point.x, y: point.y, yaw, label: where, at: Date.now() };
-    drawMap();
-    render();
+    drawMap(); render();
 
-    // 2. If viewer mode or robot safety blocks motion, still fetch server-side road plan and keep target pinned on map
-    const canDispatch = !view.stateUnavailable && auth.role === "operator"
-      && selectedRobot?.online && selectedRobot.state?.safety?.estop === false;
+    const canDispatch = !view.stateUnavailable && auth.role === "operator" && selectedRobot?.online && selectedRobot.state?.safety?.estop === false;
     if (!canDispatch) {
       try {
         const qs = new URLSearchParams({
@@ -105,18 +76,13 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
         life.check();
         if (planRes?.waypoints_site?.length >= 2) {
           view.selectedGoal = {
-            ...view.selectedGoal,
-            points: planRes.waypoints_site.map((w) => [w.x, w.y]),
-            places: planRes.places || view.selectedGoal.places,
-            length_m: planRes.length_m ?? view.selectedGoal.length_m,
-            eta_s: planRes.eta_s ?? view.selectedGoal.eta_s,
-            status: "PREVIEW",
-            statusText: auth.role !== "operator" ? "목표 핀 고정 (운영자 로그인 시 출발)" : "목표 핀 고정 (안전 확인 대기)",
-            at: Date.now(),
+            ...view.selectedGoal, points: planRes.waypoints_site.map((w) => [w.x, w.y]),
+            places: planRes.places || view.selectedGoal.places, length_m: planRes.length_m ?? view.selectedGoal.length_m,
+            eta_s: planRes.eta_s ?? view.selectedGoal.eta_s, status: "PREVIEW",
+            statusText: auth.role !== "operator" ? "목표 핀 고정 (운영자 로그인 시 출발)" : "목표 핀 고정 (안전 확인 대기)", at: Date.now(),
           };
           view.activeRoadPlan = { robotId, ...planRes, at: Date.now() };
-          drawMap();
-          render();
+          drawMap(); render();
         }
       } catch (_planErr) { /* Keep local road pin visible */ }
       log(`${robotId} → ${where} 목표 핀 및 도로 경로(${view.selectedGoal.length_m.toFixed(2)}m)가 지도에 고정되었습니다.`, "good");
@@ -126,12 +92,8 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
     try {
       try {
         const roadRes = await call(`/api/fleet/robots/${encodeURIComponent(robotId)}/road-nav2`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "Idempotency-Key": randomUUID() },
-          body: JSON.stringify({
-            x: Number(point.x.toFixed(4)), y: Number(point.y.toFixed(4)), yaw: Number(yaw.toFixed(4)),
-            place_id: placeId || null, label: placeLabel || "",
-          }),
+          method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": randomUUID() },
+          body: JSON.stringify({ x: Number(point.x.toFixed(4)), y: Number(point.y.toFixed(4)), yaw: Number(yaw.toFixed(4)), place_id: placeId || null, label: placeLabel || "" }),
           signals: [life.signal],
         });
         life.check();
@@ -139,17 +101,14 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
           view.activeRoadPlan = { robotId, ...roadRes, at: Date.now() };
           view.selectedGoal = {
             ...view.selectedGoal,
-            points: Array.isArray(roadRes.waypoints_site) && roadRes.waypoints_site.length >= 2
-              ? roadRes.waypoints_site.map((w) => [w.x, w.y]) : view.selectedGoal.points,
+            points: Array.isArray(roadRes.waypoints_site) && roadRes.waypoints_site.length >= 2 ? roadRes.waypoints_site.map((w) => [w.x, w.y]) : view.selectedGoal.points,
             places: roadRes.places?.length ? roadRes.places : view.selectedGoal.places,
             length_m: typeof roadRes.length_m === "number" ? roadRes.length_m : view.selectedGoal.length_m,
             eta_s: typeof roadRes.eta_s === "number" ? roadRes.eta_s : view.selectedGoal.eta_s,
             status: "MOVING", statusText: "도로 주행 명령 하달됨", at: Date.now(),
           };
-          drawMap();
-          render();
-          const viaStr = Array.isArray(roadRes.places) && roadRes.places.length
-            ? roadRes.places.join(" → ") : `${roadRes.waypoints_site?.length || 1}개 도로 경유점`;
+          drawMap(); render();
+          const viaStr = Array.isArray(roadRes.places) && roadRes.places.length ? roadRes.places.join(" → ") : `${roadRes.waypoints_site?.length || 1}개 도로 경유점`;
           const lenStr = typeof roadRes.length_m === "number" ? ` · ${roadRes.length_m.toFixed(2)}m` : "";
           const formStr = roadRes.formation?.active ? ` · 편대(${roadRes.formation.role || "active"})` : "";
           log(`🎯 ${robotId} → ${where} 목표 핀 고정 및 도로 관제+Nav2 주행 시작 (${viaStr}${lenStr}${formStr})`, "good");
@@ -161,8 +120,7 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
         try {
           const plan = await call("/api/fleet/trips/plan", {
             method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ robot_id: robotId, goal: { place_id: placeId }, mode: "once" }),
-            signals: [life.signal],
+            body: JSON.stringify({ robot_id: robotId, goal: { place_id: placeId }, mode: "once" }), signals: [life.signal],
           });
           life.check();
           if (plan?.plan_id) {
@@ -178,19 +136,15 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
         } catch (_tripErr) { /* Fall through to direct goal dispatch */ }
       }
       const result = await call(`/api/fleet/robots/${encodeURIComponent(robotId)}/goal`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "Idempotency-Key": randomUUID() },
-        body: JSON.stringify({ x: Number(point.x.toFixed(4)), y: Number(point.y.toFixed(4)), yaw: Number(yaw.toFixed(4)) }),
-        signals: [life.signal],
+        method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": randomUUID() },
+        body: JSON.stringify({ x: Number(point.x.toFixed(4)), y: Number(point.y.toFixed(4)), yaw: Number(yaw.toFixed(4)) }), signals: [life.signal],
       });
       life.check();
       const task = result && result.task ? result.task : null;
       if (task && task.status === "QUEUED") {
         view.pendingTasks[robotId] = task;
-        const why = task.reason || result.reason || "READY";
-        const blockedBy = task.waiting_on?.length ? ` · ${task.waiting_on.join(", ")}` : "";
-        const position = task.queue_position ? `#${task.queue_position}` : "순번 대기";
-        log(`${robotId} task ${task.task_id} QUEUED · ${position} · ${why}${blockedBy} · 취소 가능`, "good");
+        const why = task.reason || result.reason || "READY", blockedBy = task.waiting_on?.length ? ` · ${task.waiting_on.join(", ")}` : "";
+        log(`${robotId} task ${task.task_id} QUEUED · ${task.queue_position ? `#${task.queue_position}` : "순번 대기"} · ${why}${blockedBy} · 취소 가능`, "good");
         return;
       }
       if (task && task.status === "UNKNOWN") {
@@ -204,15 +158,11 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
       }
       if (task) delete view.pendingTasks[robotId];
       const receipt = task ? task.receipt : result;
-      if (receipt && receipt.queued) {
-        log(`${robotId} → ${where} ${queuedReason(result)}`, receipt.reason === "NO_YIELD_SPACE" ? "bad" : "");
-      } else {
-        log(`${robotId} → ${where} 즉시 이동 명령 하달`, "good");
-      }
+      if (receipt && receipt.queued) log(`${robotId} → ${where} ${queuedReason(result)}`, receipt.reason === "NO_YIELD_SPACE" ? "bad" : "");
+      else log(`${robotId} → ${where} 즉시 이동 명령 하달`, "good");
       refreshGuide();
     } catch (err) {
-      if (err.name === "AbortError") return;
-      log(`${robotId} 목표 이동 거절 — ${err.message}`, "bad");
+      if (err.name !== "AbortError") log(`${robotId} 목표 이동 거절 — ${err.message}`, "bad");
     }
   }
 
@@ -298,7 +248,7 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
       bars.push(["📐 팔 뻗음", `${extM.toFixed(2)}/${reachM.toFixed(2)}m (${reachPct}%)`, reachPct, "info"]);
       bars.push(["⚙️ 서보 버스", anc.motor_summary || "12.0V · 31°C (100%)", 100, "good"]);
       bars.push(["🔍 4x 추적", `신뢰도 ${confPct}%`, confPct, "good"]);
-      footer = "클릭 시 우측 셀 상세 카드 열기 · rosy_46 연계 정류장 즉시 호출 가능";
+      footer = `클릭 시 우측 셀 상세 카드 열기 · ${view.selected || view.focusRobot || "rosy_46"} 연계 정류장 즉시 호출 가능`;
     } else if (entity.kind === "place") {
       const pl = entity.place, siteMapObj = view.activeSiteMap?.map;
       const edges = (siteMapObj?.edges || []).filter((e) => e.from === pl.id || e.to === pl.id);

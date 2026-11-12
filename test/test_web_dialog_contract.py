@@ -62,7 +62,6 @@ PINNED_CONFIRMS = {
     "applications/fleet/web/work/policy-page.js": 1,  # D-793 one shared confirm helper for every decision
     # 전체 주행 취소 runs at once since 2026-10-10 (D-540 6, user decision). D-798 3.2 split the shell:
     "applications/fleet/web/console.js": 2,  # Channel and neutral ARM review use the same confirmedAction owner.
-    "applications/fleet/web/console-goal.js": 2,  # map goal send; D-593 operator pin asks first
     "applications/fleet/web/console-refresh.js": 1,  # dispatch rearm
     "applications/fleet/web/manual-control.js": 1,  # selected robot's fixed MANUAL transition
     "applications/fleet/web/devices/enrollment.js": 2,  # unenroll + D-555 forced hub revoke
@@ -71,7 +70,6 @@ PINNED_CONFIRMS = {
     "applications/fleet/web/shared/account-page.js": 2,  # role bundle replaces grants; rejecting an access request (D-993)
     # Activation and profile replacement; D-655 camera replacement moved to its controller.
     "applications/fleet/web/sitemap/site-map.js": 2,
-    "applications/fleet/web/sitemap/map-authoring.js": 1,  # replace drawing reference while retaining geometry
     "applications/fleet/web/sitemap/site-map-camera.js": 1,
     "applications/fleet/web/sitemap/site-map-camera-draft.js": 1,  # replace the draft with the camera draft (v1.385)
     "applications/fleet/web/sitemap/site-map-reality.js": 1,  # apply the rigid reality correction to the draft (v1.384)

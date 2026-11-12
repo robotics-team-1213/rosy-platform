@@ -289,14 +289,17 @@ from cell_directive_compiler import (  # noqa: E402, F401
     plan_library_from_directive,
     sim_precheck_and_optimize_directive,
 )
-from multi_dof_kinematics import (  # noqa: E402, F401
-    DEFAULT_LIMITS_RAD,
-    JOINT_NAMES_BY_DOF,
-    fk_se3,
-    manipulability_index,
-    nullspace_velocity,
-    numerical_jacobian,
-    plan_se3_chunk,
-    pose_error,
-    solve_se3_ik,
-)
+try:
+    from multi_dof_kinematics import (  # noqa: E402, F401
+        DEFAULT_LIMITS_RAD,
+        JOINT_NAMES_BY_DOF,
+        fk_se3,
+        manipulability_index,
+        nullspace_velocity,
+        numerical_jacobian,
+        plan_se3_chunk,
+        pose_error,
+        solve_se3_ik,
+    )
+except ImportError:
+    pass

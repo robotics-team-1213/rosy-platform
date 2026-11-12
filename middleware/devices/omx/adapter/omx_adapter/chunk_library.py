@@ -36,12 +36,17 @@ def transit_path(start: list, goal: list, grip_transit: float, fps: int, transit
     if (
         start[1] >= -35.0
         and goal[1] >= -35.0
-        and max(abs(a - b) for a, b in zip(start[:4], goal[:4])) <= 18.0
-        and abs(start[4] - goal[4]) <= 38.0
+        and max(abs(a - b) for a, b in zip(start[:4], goal[:4])) <= 24.0
+        and abs(start[4] - goal[4]) <= 45.0
     ):
-        return flow([list(start), list(goal[:6])], fps, speed * PARK_SPEED, blend=[False, False], blend_s=0.2,
+        return flow([list(start), list(goal[:6])], fps, speed * PARK_SPEED, blend=[False, False], blend_s=0.25,
                     rise_speed=RISE_SPEED)
-    transit = TRANSIT if transit is None else transit
+    if transit is None:
+        transit = (
+            {1: max(TRANSIT[1], min(start[1], goal[1], -16.0) - 5.0), 2: TRANSIT[2], 3: TRANSIT[3]}
+            if start[1] > -22.0 and goal[1] > -22.0
+            else TRANSIT
+        )
     waypoints = [list(start)]
     waypoints.append(waypoints[-1][:5] + [grip_transit])
     waypoints.append([transit.get(i, v) for i, v in enumerate(waypoints[-1])])

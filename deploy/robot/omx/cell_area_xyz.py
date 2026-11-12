@@ -75,13 +75,13 @@ def execute_directive(
         _run_cmd(f"grip {min(57.85, float(grip_open_val)):.2f}")
         if steps_log and steps_log[-1].get("t") is not None:
             import time as _time
-            _time.sleep(0.55)
+            _time.sleep(0.20)
         r_ab = _run_cmd("goto above_pick")
         if park_after or not r_ab.get("ok"):
             if steps_log and steps_log[-1].get("t") is not None:
                 import time as _time
                 _run_cmd("grip 55.80")
-                _time.sleep(0.35)
+                _time.sleep(0.20)
             _run_cmd("park")
 
     for attempt in range(max_attempts):
@@ -138,26 +138,63 @@ def execute_directive(
             cell_arm_cal.infer_holding(r_grasp, closed=closed_pos, open_pos=open_pos) or bool(grasp_dynamics.get("holding"))
         )
 
+        d_res = None
+        params = {
+            "gripper.held_30mm": float(cal.get("held_30mm", 54.3)),
+            "gripper.closed": float(cal.get("grip_closed", 48.8)),
+            "gripper.open": open_pos,
+            "grasp.shallow_tol_units": float(exec_cfg.get("shallow_tol_units", 2.2)),
+            "grasp.wedged_tol_units": float(exec_cfg.get("wedged_tol_units", 2.5)),
+            "grasp.max_skew_mm": float(exec_cfg.get("max_skew_mm", 5.5)),
+            "grasp.max_across_skew_mm": float(exec_cfg.get("max_across_skew_mm", 7.5)),
+            "wrist.finger_color": 2 if cal.get("finger_color") == "white" else 1,
+        }
+        t_judge = cgd.telemetry_judge(state, holding, params, current_ma=curr_ma)
+        v_judge: dict[str, Any] = {"verdict": "proceed", "class": "skipped", "status": "skipped", "ok": True, "found": False, "along_mm": 0.0, "across_mm": 0.0, "dx_mm": 0.0, "dy_mm": 0.0, "dz_mm": 0.0, "reason": "skipped"}
+        if frame_fn is not None and exec_cfg.get("vision_after_grasp", False):
+            w_after = frame_fn("wrist")
+            if w_after is not None:
+                closing_deg = float(plan["pick"].get("yaw_deg", -90.0)) + 90.0
+                gap_mm = 36.0 if cal.get("finger_color") == "dark" else 44.0
+                v_judge = cgd.vision_judge(
+                    w_after,
+                    ([5, 95, 110], [32, 255, 255]),
+                    gap_mm,
+                    closing_deg,
+                    dict(cal.get("finger_sign") or {"along": -1.0, "across": 1.0}),
+                    params,
+                    color=cal.get("finger_color"),
+                )
         if exec_cfg.get("grasp_deliberation", True) and jaw_pos is not None:
-            params = {
-                "gripper.held_30mm": float(cal.get("held_30mm", 54.3)),
-                "gripper.closed": float(cal.get("grip_closed", 48.8)),
-                "grasp.shallow_tol_units": float(exec_cfg.get("shallow_tol_units", 2.2)),
-                "grasp.wedged_tol_units": float(exec_cfg.get("wedged_tol_units", 2.5)),
-                "grasp.max_skew_mm": 5.5,
-                "wrist.finger_color": 2 if cal.get("finger_color") == "white" else 1,
-            }
-            t_judge = cgd.telemetry_judge(state, holding, params, current_ma=curr_ma)
-            v_judge = {"status": "skipped", "ok": True, "along_mm": 0.0, "across_mm": 0.0}
-            d_res = cgd.debate_and_decide(stage="run grasp_pick", telemetry=t_judge, vision=v_judge,
-                                          reinsert_count=attempt, max_reinsert=max_attempts - 1, models=[])
+            k_judge = (
+                cgd.kinesthetic_judge(r_grasp, grasp_dynamics=grasp_dynamics, params=params)
+                if holding
+                else {"verdict": "proceed", "class": "unmeasured", "dq_lift": 0.0, "dz_mm": 0.0, "reason": "pre_lift"}
+            )
+            d_res = cgd.debate_and_decide(
+                stage="run grasp_pick",
+                telemetry=t_judge,
+                vision=v_judge,
+                kinesthetic=k_judge,
+                reinsert_count=attempt,
+                max_reinsert=max_attempts - 1,
+                models=exec_cfg.get("debate_models") or [],
+            )
             debate_log.append(d_res)
             if d_res["verdict"] == "reinsert_and_retry" and attempt + 1 < max_attempts:
                 r_rel = _run_cmd("run release_pick") if r_grasp.get("ok") else {"ok": False}
                 if not r_rel.get("ok"):
                     _safe_recover_hover(float(plan["grip_open"]), park_after=False)
-                rec = diagnose_and_recover_pick(attempt=attempt, cur_directive=cur_directive, r_desc=r_desc, r_grasp=r_grasp,
-                                                cal=cal, tried_xs=tried_xs, wrist_obs=None if vision_refined_xy else last_wrist_obs)
+                rec = diagnose_and_recover_pick(
+                    attempt=attempt,
+                    cur_directive=cur_directive,
+                    r_desc=r_desc,
+                    r_grasp=r_grasp,
+                    cal=cal,
+                    tried_xs=tried_xs,
+                    wrist_obs=None if vision_refined_xy else last_wrist_obs,
+                    debate_decision=d_res,
+                )
                 recovery_log.append(rec)
                 continue
 
@@ -166,8 +203,16 @@ def execute_directive(
             if attempt + 1 < max_attempts:
                 if not r_rel.get("ok"):
                     _safe_recover_hover(float(plan["grip_open"]), park_after=False)
-                rec = diagnose_and_recover_pick(attempt=attempt, cur_directive=cur_directive, r_desc=r_desc, r_grasp=r_grasp,
-                                                cal=cal, tried_xs=tried_xs, wrist_obs=None if vision_refined_xy else last_wrist_obs)
+                rec = diagnose_and_recover_pick(
+                    attempt=attempt,
+                    cur_directive=cur_directive,
+                    r_desc=r_desc,
+                    r_grasp=r_grasp,
+                    cal=cal,
+                    tried_xs=tried_xs,
+                    wrist_obs=None if vision_refined_xy else last_wrist_obs,
+                    debate_decision=d_res,
+                )
                 recovery_log.append(rec)
                 continue
             if not r_rel.get("ok"):
@@ -188,6 +233,8 @@ def execute_directive(
         )
 
         slipped_in_transfer = False
+        reinsert_at_lift = False
+        d_lift_res = None
         held_at_above_place = False
         tactile_or_full_place = False
         r_lift_step = None
@@ -199,6 +246,23 @@ def execute_directive(
                 if chunk_cmd == "run lift_pick":
                     r_lift_step = r_step
                     grasp_dynamics = cell_arm_cal.evaluate_grasp_dynamics(r_grasp, r_lift=r_lift_step, closed=closed_pos, open_pos=open_pos)
+                    if exec_cfg.get("grasp_deliberation", True) and r_step.get("ok"):
+                        k_lift = cgd.kinesthetic_judge(r_grasp, r_lift=r_lift_step, grasp_dynamics=grasp_dynamics, params=params)
+                        if k_lift.get("verdict") == "reinsert":
+                            d_lift_res = cgd.debate_and_decide(
+                                stage="run lift_pick",
+                                telemetry=t_judge,
+                                vision=v_judge,
+                                kinesthetic=k_lift,
+                                reinsert_count=attempt,
+                                max_reinsert=max_attempts - 1,
+                                models=exec_cfg.get("debate_models") or [],
+                            )
+                            debate_log.append(d_lift_res)
+                            if d_lift_res["verdict"] == "reinsert_and_retry" and attempt + 1 < max_attempts:
+                                _run_cmd("run reinsert_pick")
+                                reinsert_at_lift = True
+                                break
                 else:
                     grasp_dynamics = cell_arm_cal.evaluate_grasp_dynamics(r_grasp, r_lift=r_lift_step, r_above_place=r_step, closed=closed_pos, open_pos=open_pos)
                 if not grasp_dynamics.get("holding") and not cell_arm_cal.infer_holding(
@@ -223,7 +287,7 @@ def execute_directive(
                         _run_cmd(f"grip {float(plan['grip_release']):.2f}")
                         if frame_fn is not None and not stay_hover:
                             import time as _time
-                            _time.sleep(0.55)
+                            _time.sleep(0.20)
                         _run_cmd("retreat")
                         if not stay_hover:
                             _run_cmd("park")
@@ -238,16 +302,25 @@ def execute_directive(
                     cpp.capture_from_attempt({"_work": work_dir, "arm_id": arm_id}, out_err)
                     return out_err
 
-        if slipped_in_transfer:
+        if reinsert_at_lift or slipped_in_transfer:
             if attempt + 1 < max_attempts:
-                if vision_refined_xy:
+                if vision_refined_xy and not reinsert_at_lift:
                     cur_directive["pick"]["effective_xyz_m"][0] = orig_pick_xyz[0]
                     cur_directive["pick"]["effective_xyz_m"][1] = orig_pick_xyz[1]
                     cur_directive["pick"]["x"] = orig_pick_xyz[0]
                     cur_directive["pick"]["y"] = orig_pick_xyz[1]
                     exec_cfg["vision_refine"] = False
-                rec = diagnose_and_recover_pick(attempt=attempt, cur_directive=cur_directive, r_desc=r_desc, r_grasp=r_grasp,
-                                                cal=cal, tried_xs=tried_xs, wrist_obs=None, slipped_in_transfer=True)
+                rec = diagnose_and_recover_pick(
+                    attempt=attempt,
+                    cur_directive=cur_directive,
+                    r_desc=r_desc,
+                    r_grasp=r_grasp,
+                    cal=cal,
+                    tried_xs=tried_xs,
+                    wrist_obs=None,
+                    slipped_in_transfer=True,
+                    debate_decision=d_lift_res,
+                )
                 recovery_log.append(rec)
                 continue
             out_slip = {"schema": DIRECTIVE_SCHEMA, "directive_id": cur_directive.get("directive_id"), "arm_id": arm_id,

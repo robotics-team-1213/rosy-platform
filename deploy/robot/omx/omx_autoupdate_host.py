@@ -9,7 +9,10 @@ Single Responsibility:
 """
 from __future__ import annotations
 
-import fcntl
+try:
+    import fcntl
+except ImportError:
+    fcntl = None  # type: ignore[assignment]
 import io
 import json
 import os

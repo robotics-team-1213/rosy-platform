@@ -103,7 +103,7 @@ export function createRoiPoller({ scope, view, call }) {
     return roiLease.pending;
   }
   async function refreshRoiPreview() {
-    if (document.hidden || roiPollInFlight) return;
+    if (document.hidden || roiPollInFlight || !view.anchors?.length) return;
     const img = document.getElementById("anchor-roi-img");
     const statusNode = document.getElementById("anchor-roi-status");
     const targetId = view.focusAnchorId || view.focusRobot || "rosy_46";

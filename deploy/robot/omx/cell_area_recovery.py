@@ -24,11 +24,12 @@ def diagnose_and_recover_pick(
     tried_xs: list[float],
     wrist_obs: dict[str, Any] | None = None,
     slipped_in_transfer: bool = False,
+    debate_decision: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Diagnose why a pick attempt failed (empty grasp / high z / lateral edge touch / skewed grasp) and compute the
+    """Diagnose why a pick attempt failed (empty grasp / high z / lateral edge touch / skewed or partial grasp) and compute the
     recovered `AreaXYZ` pick coordinates and jaw opening for the next attempt."""
     state = r_grasp.get("state") or r_desc.get("state") or []
-    jaw_pos = float(state[5]) if len(state) >= 6 and state[5] is not None else 49.0
+    jaw_pos = float(state[-1] if len(state) in (6, 7, 8) else state[5]) if len(state) >= 6 and state[5] is not None else 49.0
     curr_ma = float(r_grasp.get("gripper_current_ma") or 0.0)
     held_nominal = float(cal.get("held_30mm", 54.3))
 
@@ -48,10 +49,29 @@ def diagnose_and_recover_pick(
     pick_yaw = float(cur_directive["pick"].get("yaw_deg", -90.0))
     is_horiz = abs(abs(pick_yaw) - 90.0) > 45.0
     desc_contact = bool((r_desc and not r_desc.get("ok")) or (r_grasp and not r_grasp.get("ok")))
-    if slipped_in_transfer:
+    deb_dx = float((debate_decision or {}).get("dx_mm") or 0.0)
+    deb_dy = float((debate_decision or {}).get("dy_mm") or 0.0)
+    deb_dz = float((debate_decision or {}).get("dz_mm") or 0.0)
+    has_debate_shift = bool(
+        isinstance(debate_decision, dict)
+        and (
+            ((debate_decision.get("vision") or {}).get("found") and (abs(deb_dx) >= 0.4 or abs(deb_dy) >= 0.4))
+            or ((debate_decision.get("kinesthetic") or {}).get("verdict") == "reinsert")
+        )
+    )
+    if has_debate_shift and not desc_contact:
+        from cell_control_core import clamp_workspace_xy
+
+        arm_id = str(cur_directive.get("arm_id") or "arm_b")
+        new_x, new_y = clamp_workspace_xy(cur_x + deb_dx / 1000.0, cur_y + deb_dy / 1000.0, arm_id=arm_id)
+        if deb_dz < 0.0:
+            new_z = round(max(min_grasp_z, cur_z + deb_dz / 1000.0), 5)
+        reason = f"council_debate_partial_grasp_recovery: shift=({deb_dx},{deb_dy},{deb_dz})mm -> xyz=({new_x},{new_y},{new_z})"
+    elif slipped_in_transfer:
         if is_live:
             new_x = round(cur_x + (0.0018 if cur_x < 0.135 else -0.0012), 5)
-        new_z = round(max(min_grasp_z, cur_z - 0.0008), 5)
+        dz_step = min(-0.0008, deb_dz / 1000.0) if deb_dz < 0.0 else -0.0008
+        new_z = round(max(min_grasp_z, cur_z + dz_step), 5)
         reason = f"shallow_tip_slip_recovery: shifted x={new_x}, lowered pick.z {cur_z} -> {new_z} after transfer slip"
     elif area_name in ("belt", "beltend"):
         new_x, new_z = round(cur_x + (0.0020 if desc_contact else -0.0020), 5), round(max(min_grasp_z, cur_z + (0.0030 if desc_contact else -0.0020)), 5)

@@ -82,12 +82,12 @@ def build_plan_from_directive(
     plan["lift_m"] = actual_lift_m
     default_rel_lift = max(0.042, place_approach_m + 0.014) if arm_id == "arm_s" else place_approach_m
     plan["release_lift_m"] = float(exec_cfg.get("release_lift_m", default_rel_lift))
-    plan.setdefault("descend_m_s", 0.015)
-    plan.setdefault("lift_m_s", 0.025)
-    plan["grip_s"] = float(exec_cfg.get("grip_s", 0.8))
-    plan["settle_s"] = float(exec_cfg.get("settle_s", max(1.65, float(plan.get("settle_s", 1.65)))))
-    plan.setdefault("descend_guard_frac", 0.36)
-    plan.setdefault("lift_guard_frac", 0.55)
+    plan.setdefault("descend_m_s", 0.025)
+    plan.setdefault("lift_m_s", 0.032)
+    plan["grip_s"] = float(exec_cfg.get("grip_s", 0.50))
+    plan["settle_s"] = float(exec_cfg.get("settle_s", min(0.25, float(plan.get("settle_s", 0.25)))))
+    plan.setdefault("descend_guard_frac", 0.55)
+    plan.setdefault("lift_guard_frac", 0.65)
     if arm_id == "arm_b" and "limits" in plan and "joints_rad" in plan["limits"]:
         plan["limits"]["joints_rad"]["joint5"] = [0.16, 2.89]
     if "limits" in plan and float(pz) < float(plan["limits"]["workspace_min_m"][2]):
@@ -100,19 +100,19 @@ def build_plan_from_directive(
         plan["limits"]["low_zones"] = lz
     rl_speed_scale = max(0.70, min(1.25, float(exec_cfg.get("rl_speed_scale", 1.0))))
     plan["rl_speed_scale"] = round(rl_speed_scale, 3)
-    base_transit = float(exec_cfg.get("transit_speed", plan.get("transit_speed", 0.82)))
+    base_transit = float(exec_cfg.get("transit_speed", plan.get("transit_speed", 0.85)))
     if "transit_speed" not in exec_cfg and rl_speed_scale != 1.0:
         base_transit = round(min(1.0, max(0.50, base_transit * rl_speed_scale)), 4)
         plan["lift_m_s"] = round(min(0.040, max(0.015, float(plan["lift_m_s"]) * rl_speed_scale)), 4)
     plan["transit_speed"] = base_transit
     plan["descend_pick_guard_frac"] = float(
-        exec_cfg.get("descend_pick_guard_frac", plan.get("descend_pick_guard_frac", 0.36))
+        exec_cfg.get("descend_pick_guard_frac", max(0.50, float(plan.get("descend_pick_guard_frac", 0.55))))
     )
     plan["descend_place_guard_frac"] = float(
-        exec_cfg.get("descend_place_guard_frac", plan.get("descend_place_guard_frac", 0.28))
+        exec_cfg.get("descend_place_guard_frac", max(0.45, float(plan.get("descend_place_guard_frac", 0.48))))
     )
     plan["lift_pick_guard_frac"] = float(
-        exec_cfg.get("lift_pick_guard_frac", plan.get("lift_pick_guard_frac", plan.get("lift_guard_frac", 0.55)))
+        exec_cfg.get("lift_pick_guard_frac", max(0.60, float(plan.get("lift_pick_guard_frac", plan.get("lift_guard_frac", 0.65)))))
     )
     return plan, cal
 

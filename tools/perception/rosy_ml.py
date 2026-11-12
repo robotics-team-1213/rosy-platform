@@ -56,7 +56,6 @@ import operator_ssh  # noqa: E402
 import slot_cli  # noqa: E402
 import store  # noqa: E402
 from rosy_ml_helpers import (  # noqa: E402, F401
-    LEARNED_SITE,
     MODELS_DIR,
     MODELS_OWNER,
     SITE_TOKEN_FILE,
@@ -82,6 +81,8 @@ from rosy_ml_helpers import (  # noqa: E402, F401
     core_base,
     load_config,
 )
+
+LEARNED_SITE = "/opt/rosy/learned-perception/site-packages"
 
 
 def _utcnow() -> dt.datetime:

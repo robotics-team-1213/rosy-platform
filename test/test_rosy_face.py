@@ -31,8 +31,9 @@ AP_VALUE = "Kx7" + "mQ2vR9tLpZq"
 
 def _load(name: str, path: Path):
     # D-260: the display imports core_common.robot_state from the release; here, the source tree.
-    if str(FOUNDATION) not in sys.path:
-        sys.path.insert(0, str(FOUNDATION))
+    for extra in (FOUNDATION, ROOT / "middleware/robot_ui/face"):
+        if str(extra) not in sys.path:
+            sys.path.insert(0, str(extra))
     sys.path.insert(0, str(path.parent))
     spec = importlib.util.spec_from_file_location(name, path)
     module = importlib.util.module_from_spec(spec)

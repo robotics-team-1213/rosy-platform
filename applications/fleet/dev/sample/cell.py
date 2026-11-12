@@ -56,6 +56,8 @@ class Cell:
         return {'proposal': {'proposal_id': job['mission_id']}, 'mission': self.mission(job)}
 
     def handle(self, method, path, body, actor='sample'):
+        if (method, path) == ('GET', '/cell-app/real2sim-pipeline'):
+            return reply({'active': None, 'loop_steps': [], 'stages': [], 'runs': []})
         if (method, path) == ('GET', '/cell-app/object-catalog'):  # D-934: one measured, one not yet weighed
             return reply({'objects': [
                 {'id': 'container-2', 'kind': 'green shipping container', 'length_mm': 60, 'width_mm': 30,

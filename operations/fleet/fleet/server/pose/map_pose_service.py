@@ -175,12 +175,7 @@ class MapPoseService:
         if sample is None:
             tracker.refuse_odom("malformed")
         else:
-            now_wall = self._wall()
-            tracker.add_odom(sample, now_wall)
-            active_map = self.active_map_id()
-            cur_pose = tracker.pose(now_wall, active_map)
-            if cur_pose.state == "UNKNOWN":
-                tracker.add_pin((-0.415, 0.380, -1.5708), now_wall, active_map)
+            tracker.add_odom(sample, self._wall())
 
     def _observe_peers(self, rows: Iterable[Mapping]) -> None:
         """D-1017: poses other robots report about this site's robots (`StateSnapshot.peers`).

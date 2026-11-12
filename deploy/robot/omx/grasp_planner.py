@@ -190,7 +190,9 @@ class Planner:
         lift_v = float(p.get(f"lift_{name}_m_s", p["lift_m_s"]))
         down, q5 = self.line(above, (x, y, z), descend_v, yaw, grip_in, joints[4])
         verb = "grasp" if grip_out < grip_in else "release"
-        act = self.hold(down[-1], p["grip_s"], grip_in, grip_out) + self.hold(down[-1][:5] + [grip_out], p["settle_s"])
+        act_grip_s = float(p["grip_s"]) if verb == "grasp" else float(p.get("release_grip_s", min(float(p["grip_s"]), 0.45)))
+        act_settle_s = float(p["settle_s"]) if verb == "grasp" else float(p.get("release_settle_s", min(float(p["settle_s"]), 0.12)))
+        act = self.hold(down[-1], act_grip_s, grip_in, grip_out) + self.hold(down[-1][:5] + [grip_out], act_settle_s)
         up, q5 = self.line((x, y, z), lifted, lift_v, yaw, grip_out, q5)
         # A joint can turn faster than the Cartesian speed suggests near the wrist; the guard streams at
         # GUARD_UNITS_PER_S, so each chunk is slowed to that from where the previous one ended.
@@ -215,14 +217,16 @@ class Planner:
         chunks.update(pick)
         chunks.update(place)
         grasp_end, lift_end = pick["grasp_pick"][-1], pick["lift_pick"][-1]
-        rel_act = self.hold(grasp_end, p["grip_s"], p["grip_closed"], grip_release) + self.hold(grasp_end[:5] + [grip_release], p["settle_s"])
+        rel_grip_s = float(p.get("release_grip_s", min(float(p["grip_s"]), 0.45)))
+        rel_settle_s = float(p.get("release_settle_s", min(float(p["settle_s"]), 0.12)))
+        rel_act = self.hold(grasp_end, rel_grip_s, p["grip_closed"], grip_release) + self.hold(grasp_end[:5] + [grip_release], rel_settle_s)
         rel_act = [[round(v, 3) for v in f] for f in slow(rel_act, self.fps, start=grasp_end)]
         lift_pace_key = "lift_pick_guard_frac" if "lift_pick_guard_frac" in p else "lift_guard_frac"
-        rel_up_pace = min(0.18 * GUARD_UNITS_PER_S, self.guard_pace(lift_pace_key))
+        rel_up_pace = min(0.75 * GUARD_UNITS_PER_S, self.guard_pace(lift_pace_key))
         rel_up = [[round(v, 3) for v in f] for f in retime([f[:5] + [grip_release] for f in pick["lift_pick"]],
                                                            self.fps, rel_up_pace, start=rel_act[-1])]
         chunks["release_pick"] = rel_act + rel_up
-        put_pace_key = "descend_place_guard_frac" if "descend_place_guard_frac" in p else "descend_guard_frac"
+        put_pace_key = "descend_pick_guard_frac" if "descend_pick_guard_frac" in p else "descend_guard_frac"
         put_down = [[round(v, 3) for v in f] for f in retime([f[:5] + [p["grip_closed"]] for f in reversed(pick["lift_pick"])],
                                                              self.fps, self.guard_pace(put_pace_key), start=lift_end)]
         chunks["reinsert_pick"] = put_down + chunks["release_pick"]

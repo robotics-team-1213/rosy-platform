@@ -105,3 +105,56 @@ def test_hook_executes_reinsert_pick_replans_and_retries_on_unstable_lift(tmp_pa
     # Default glm_backend points to glm-5.3 via judge_seat.openai_chat
     assert cgd.glm_backend().__name__ == "zai:glm-5.3"
 
+
+def test_three_agent_council_deliberates_partial_grasp_and_post_lift_slip():
+    params = {
+        "gripper.held_30mm": 54.3,
+        "gripper.closed": 48.8,
+        "gripper.open": 57.85,
+        "grasp.shallow_tol_units": 1.2,
+        "grasp.wedged_tol_units": 0.7,
+        "grasp.max_skew_mm": 4.0,
+        "grasp.max_across_skew_mm": 7.5,
+        "grasp.min_bite_ratio": 0.42,
+    }
+    # 1. Partial edge bite: static jaw width is 54.2 (nominal 30mm), but wrist vision sees shallow/edge bite
+    t_ok = cgd.telemetry_judge([0, 0, 0, 0, 0, 54.2], True, params, current_ma=135.0)
+    assert t_ok["verdict"] == "proceed"
+    v_partial = {
+        "verdict": "reinsert",
+        "class": "unstable_partial_bite",
+        "found": True,
+        "along_mm": 2.0,
+        "across_mm": 9.8,
+        "bite_ratio": 0.34,
+        "dx_mm": -3.2,
+        "dy_mm": 5.4,
+        "dz_mm": -2.2,
+        "reason": "partial edge bite",
+    }
+    k_ok = cgd.kinesthetic_judge({"ok": True, "holding": True, "state": [0, 0, 0, 0, 0, 54.2], "gripper_current_ma": 135.0}, params=params)
+    d_edge = cgd.debate_and_decide("run grasp_pick", t_ok, v_partial, kinesthetic=k_ok, reinsert_count=0, max_reinsert=2)
+    assert d_edge["verdict"] == "reinsert_and_retry"
+    assert d_edge["recovery_chunk"] == "run release_pick"
+    assert (d_edge["dx_mm"], d_edge["dy_mm"], d_edge["dz_mm"]) == (-3.2, 5.4, -2.2)
+    assert [r["role"] for r in d_edge["council_debate"]] == ["proposal", "critique", "arbiter"]
+
+    # 2. Post-lift fingertip slip: telemetry and vision looked ok at grasp, but lifting caused dq_lift = -1.35u partial slip
+    r_grasp = {"ok": True, "holding": True, "state": [0, 0, 0, 0, 0, 53.35], "gripper_current_ma": 115.0}
+    r_lift = {"ok": True, "holding": True, "state": [0, 0, 0, 0, 0, 51.95], "gripper_current_ma": 78.0}
+    k_slip = cgd.kinesthetic_judge(r_grasp, r_lift=r_lift, params=params)
+    assert k_slip["verdict"] == "reinsert" and k_slip["class"] == "unstable_partial_slip"
+    v_skip = {"verdict": "proceed", "class": "no_frame", "found": False, "dx_mm": 0.0, "dy_mm": 0.0, "dz_mm": 0.0, "reason": "no_frame"}
+    d_lift = cgd.debate_and_decide("run lift_pick", t_ok, v_skip, kinesthetic=k_slip, reinsert_count=0, max_reinsert=2)
+    assert d_lift["verdict"] == "reinsert_and_retry"
+    assert d_lift["recovery_chunk"] == "run reinsert_pick"
+    assert d_lift["dz_mm"] <= -2.2
+    assert "Override static proceed" in d_lift["council_debate"][1]["reason"]
+
+    # 3. Fast release_pick and reinsert_pick execution speed check (down from >650 / >900 frames at 0.18x guard)
+    plan = dict(PLAN, grip_open=56.58, grip_release=56.10, grip_closed=48.8, grip_s=0.50, settle_s=0.25)
+    lib = gp.Planner(plan).library()
+    assert len(lib["chunks"]["release_pick"]) <= 240
+    assert len(lib["chunks"]["reinsert_pick"]) <= 380
+
+

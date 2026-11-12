@@ -12,6 +12,8 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from .proposal_store_helpers import (  # noqa: F401
+    ModelToolCall,
+    ModelToolResult,
     ProposalConflict,
     ProposalRejected,
     _ALLOWED_FIELDS,

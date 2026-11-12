@@ -3,11 +3,12 @@
 
 Single Responsibility:
   - Multi-agent deliberation (`debate_and_decide`) across Telemetry (Agent 1), Wrist-Vision (Agent 2),
-    and Model Seats (Agent 3..N) under `judge_seat.measured` safety sovereignty.
+    Kinesthetic Critic (Agent 3), and Model Seats under `judge_seat.measured` safety sovereignty.
   - Post-grasp / post-lift physical put-back (`release_pick` / `reinsert_pick`) and replan hook (`hook`).
 
-Individual Agent 1 (`telemetry_judge`), Agent 2 (`vision_judge`), and consensus evidence weighting
-live in `cell_grasp_judges.py` and are re-exported here for backward compatibility.
+Individual Agent 1 (`telemetry_judge`), Agent 2 (`vision_judge`), Agent 3 (`kinesthetic_judge`),
+`council_deliberate`, and consensus evidence weighting live in `cell_grasp_judges.py` and are
+re-exported here for backward compatibility.
 """
 from __future__ import annotations
 
@@ -25,7 +26,9 @@ from cell_grasp_judges import (  # noqa: F401  (re-exported)
     _jaw_value,
     _normalize_models,
     compute_consensus_evidence_weight,
+    council_deliberate,
     glm_backend,
+    kinesthetic_judge,
     load_zai_key,
     telemetry_judge,
     vision_judge,
@@ -42,18 +45,20 @@ def debate_and_decide(
     max_reinsert: int = 1,
     models: list | tuple | dict = (),
     *,
+    kinesthetic: dict | None = None,
     images: list | tuple = (),
     knowledge=None,
     context: str = "",
     il_confidence: float | None = None,
     shape_score: float | None = None,
 ) -> dict:
-    """Cross-check Telemetry (Agent 1) + Wrist Vision (Agent 2) + Model Deliberation (Agent 3..N).
+    """Cross-check Telemetry (Agent 1) + Wrist Vision (Agent 2) + Kinesthetic Critic (Agent 3) + Model Deliberation.
 
     Uses `judge_seat.measured` for precondition sovereignty (`next='transport'`, `holding=True`, `stable=not unstable`),
     injects `cell_knowledge` and `cell_decisions.context` background, and runs `proposal -> critique -> arbiter`
-    deliberation across any configured model backends.
+    deliberation across the 3-seat sensor council and any configured model backends.
     """
+    kinesthetic = kinesthetic or {"verdict": "proceed", "class": "unmeasured", "dq_lift": 0.0, "dz_mm": 0.0, "reason": "not provided"}
     if telemetry.get("verdict") == "empty":
         return {
             "schema_version": SCHEMA_VERSION,
@@ -63,20 +68,31 @@ def debate_and_decide(
             "recovery_chunk": None,
             "dx_mm": 0.0,
             "dy_mm": 0.0,
+            "dz_mm": 0.0,
             "telemetry": telemetry,
             "vision": vision,
+            "kinesthetic": kinesthetic,
+            "council_debate": [],
             "debate": [],
             "reason": telemetry.get("reason", "empty grasp"),
         }
 
     recovery_chunk = "run release_pick" if stage == "run grasp_pick" else "run reinsert_pick"
-    dx_mm = float(vision.get("dx_mm", 0.0))
-    dy_mm = float(vision.get("dy_mm", 0.0))
-    # When telemetry sees a shallow/wedged grasp but wrist vision had no frame, nudge 2.0 mm toward container center
-    if telemetry.get("verdict") == "reinsert" and abs(dx_mm) < 0.2 and abs(dy_mm) < 0.2:
-        dx_mm = 2.0 if (telemetry.get("error_units") or 0.0) < 0 else -2.0
+    council_rounds, dx_mm, dy_mm, dz_mm = council_deliberate(
+        stage,
+        telemetry,
+        vision,
+        kinesthetic,
+        reinsert_count=reinsert_count,
+        max_reinsert=max_reinsert,
+        recovery_chunk=recovery_chunk,
+    )
 
-    unstable = telemetry.get("verdict") == "reinsert" or vision.get("verdict") == "reinsert"
+    unstable = (
+        telemetry.get("verdict") == "reinsert"
+        or vision.get("verdict") == "reinsert"
+        or kinesthetic.get("verdict") == "reinsert"
+    )
     seat_facts = {
         "box_found": True,
         "next": "lift" if stage == "run grasp_pick" else "transport",
@@ -99,12 +115,12 @@ def debate_and_decide(
 
     if not unstable:
         rule_verdict = "proceed"
-        rule_reason = f"{telemetry.get('reason')}; {vision.get('reason')}"
+        rule_reason = f"{telemetry.get('reason')}; {vision.get('reason')}; {kinesthetic.get('reason')}"
     elif reinsert_count < max_reinsert:
         rule_verdict = "reinsert_and_retry"
         rule_reason = (
-            f"unstable grasp at {stage} ({telemetry.get('class')}/{vision.get('class')}): "
-            f"put back via {recovery_chunk} and re-pick shifted by [{dx_mm}, {dy_mm}] mm"
+            f"unstable/partial grasp at {stage} ({telemetry.get('class')}/{vision.get('class')}/{kinesthetic.get('class')}): "
+            f"put back via {recovery_chunk} and re-pick shifted by [{dx_mm}, {dy_mm}, {dz_mm}] mm"
         )
     else:
         rule_verdict = "reinsert_and_park"
@@ -148,9 +164,11 @@ def debate_and_decide(
             f"Seat measured facts: {json.dumps(seat_facts)} (forbidden decisions: {sorted(seat_forbidden)})\n"
             f"Agent 1 (Telemetry): {json.dumps(telemetry)}\n"
             f"Agent 2 (Wrist Vision): {json.dumps(vision)}\n"
-            f"Rule baseline: {{'verdict': {rule_verdict!r}, 'dx_mm': {dx_mm}, 'dy_mm': {dy_mm}, 'reason': {rule_reason!r}}}\n"
+            f"Agent 3 (Kinesthetic Critic): {json.dumps(kinesthetic)}\n"
+            f"Council rounds: {json.dumps(council_rounds)}\n"
+            f"Rule baseline: {{'verdict': {rule_verdict!r}, 'dx_mm': {dx_mm}, 'dy_mm': {dy_mm}, 'dz_mm': {dz_mm}, 'reason': {rule_reason!r}}}\n"
             f"Prior deliberation rounds: {json.dumps(debate_log)}\n"
-            f"Allowed verdicts: {allowed}. Note: if Agent 1 or Agent 2 flagged 'reinsert', 'proceed' is forbidden by safety invariant. "
+            f"Allowed verdicts: {allowed}. Note: if Agent 1, Agent 2, or Agent 3 flagged 'reinsert', 'proceed' is forbidden by safety invariant. "
             'Reply with JSON only: {"verdict": ..., "dx_mm": ..., "dy_mm": ..., "reason": ...}.'
         )
         try:
@@ -160,36 +178,31 @@ def debate_and_decide(
                 m_verdict = "reinsert_and_retry" if reinsert_count < max_reinsert else "reinsert_and_park"
             elif m_verdict in ("park", "abort"):
                 m_verdict = "reinsert_and_park"
-            # Measured safety invariant: a model cannot override a measured unstable grasp into 'proceed'
             if (unstable or "proceed" in seat_forbidden) and m_verdict == "proceed":
                 m_verdict = rule_verdict
             if m_verdict not in allowed:
                 m_verdict = rule_verdict
             m_dx = float(np.clip(float(ans.get("dx_mm", dx_mm)), -8.0, 8.0))
             m_dy = float(np.clip(float(ans.get("dy_mm", dy_mm)), -8.0, 8.0))
+            m_dz = float(np.clip(float(ans.get("dz_mm", dz_mm)), -4.5, 2.0))
             entry = {
                 "role": role,
                 "model": getattr(model_fn, "__name__", "model"),
                 "verdict": m_verdict,
                 "dx_mm": round(m_dx, 2),
                 "dy_mm": round(m_dy, 2),
+                "dz_mm": round(m_dz, 2),
                 "reason": str(ans.get("reason", ""))[:240],
             }
             if "deliberation" in ans:
                 entry["sub_deliberation"] = ans["deliberation"]
             debate_log.append(entry)
             final_verdict = m_verdict
-            dx_mm, dy_mm = entry["dx_mm"], entry["dy_mm"]
+            dx_mm, dy_mm, dz_mm = entry["dx_mm"], entry["dy_mm"], entry["dz_mm"]
             final_reason = entry["reason"] or rule_reason
             by = "model"
         except Exception as exc:
-            debate_log.append(
-                {
-                    "role": role,
-                    "model": getattr(model_fn, "__name__", "model"),
-                    "error": str(exc)[:120],
-                }
-            )
+            debate_log.append({"role": role, "model": getattr(model_fn, "__name__", "model"), "error": str(exc)[:120]})
 
     verdicts_seen = [d["verdict"] for d in debate_log if "verdict" in d]
     consensus = len(set(verdicts_seen)) <= 1
@@ -207,8 +220,11 @@ def debate_and_decide(
         "recovery_chunk": None if final_verdict == "proceed" else recovery_chunk,
         "dx_mm": round(dx_mm, 2),
         "dy_mm": round(dy_mm, 2),
+        "dz_mm": round(dz_mm, 2),
         "telemetry": telemetry,
         "vision": vision,
+        "kinesthetic": kinesthetic,
+        "council_debate": council_rounds,
         "debate": debate_log,
         "reason": final_reason,
     }
@@ -237,7 +253,7 @@ def hook(config: dict, cell, target: dict, write_library, gap_mm: float):
     knowledge = config.get("knowledge")
     decision_ctx = cd.context(config["decision_context"]) if config.get("decision_context") else ""
 
-    state_tracker = {"reinsert_count": 0, "last_along_mm": None, "signs_cache": None}
+    state_tracker = {"reinsert_count": 0, "last_along_mm": None, "signs_cache": None, "last_grasp_status": None}
 
     def _load_signs() -> dict:
         try:
@@ -258,7 +274,14 @@ def hook(config: dict, cell, target: dict, write_library, gap_mm: float):
             cur_list = (status.get("health") or {}).get("current_ma")
             if isinstance(cur_list, list) and len(cur_list) >= 6:
                 current_ma = cur_list[-1] if len(cur_list) in (6, 7, 8) else cur_list[5]
+        if stage == "run grasp_pick":
+            state_tracker["last_grasp_status"] = status
         t_res = telemetry_judge(status.get("state"), status.get("holding"), params, current_ma=current_ma)
+        k_res = (
+            kinesthetic_judge(state_tracker["last_grasp_status"] or status, r_lift=status, params=params)
+            if stage == "run lift_pick" and state_tracker["last_grasp_status"] is not None
+            else {"verdict": "proceed", "class": "unmeasured", "dq_lift": 0.0, "dz_mm": 0.0, "reason": "single_stage"}
+        )
         wrist_img, images_b64 = None, ()
         if hsv is not None and stage == "run grasp_pick" and prm.get(params, "grasp.vision_after_grasp", 0):
             try:
@@ -286,6 +309,7 @@ def hook(config: dict, cell, target: dict, write_library, gap_mm: float):
             reinsert_count=state_tracker["reinsert_count"],
             max_reinsert=max_reinsert,
             models=models,
+            kinesthetic=k_res,
             images=images_b64,
             knowledge=knowledge,
             context=decision_ctx,

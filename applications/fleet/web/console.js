@@ -197,17 +197,7 @@ const { cancelAllNotice, refreshDispatchControl, pathSample, paintSitePath, refr
 
 // --- 로봇 목록 --------------------------------------------------------------
 
-let renderQueued = false;
 function render() {
-  if (renderQueued) return;
-  renderQueued = true;
-  requestAnimationFrame(() => {
-    renderQueued = false;
-    renderNow();
-  });
-}
-
-function renderNow() {
   // 지도 캔버스는 무장(목표 선택·위치 찍기)했을 때만 누를 수 있는 단추다 — role이 무장 상태를 따라간다.
   // 해제하면 뷰가 소유한 role로 돌린다(사이트 뷰는 img). 계층이 부여한 값을 덮어쓰지 않는다(WCAG 4.1.2).
   const goalCanvas = el("map-canvas");
@@ -444,41 +434,23 @@ chargeBays.refresh();
 platoon.refresh();
 stationRecovery.refresh();
 personRequests.refresh();
-// 각 요소별 우선순위·변화 빈도에 따라 차등 분리된 비동기 폴링 스케줄 (Thundering-Herd 방지)
-// 1. 고속 실시간 계층 (활성 로봇 상태 · 지도 자세 · 비전 헤드 추적)
-pageScope.interval(() => { if (!document.hidden) refreshState(); }, 650);
-pageScope.timeout(() => pageScope.interval(() => { if (!document.hidden) mapView.refreshGuide(); }, 700), 150);
-pageScope.timeout(() => pageScope.interval(() => { if (!document.hidden) trackingView.refresh(); }, 750), 300);
-
-// 2. 중속 영상·관측·교통 계층
-pageScope.timeout(() => pageScope.interval(() => { if (!document.hidden) visionView.refreshFrame(); }, 950), 220);
-pageScope.timeout(() => pageScope.interval(() => { if (!document.hidden) mapView.refreshSightings(); }, 1350), 420);
-pageScope.timeout(() => pageScope.interval(() => {
-  if (!document.hidden) mapView.refreshTraffic();
-}, 1600), 520);
-pageScope.timeout(() => pageScope.interval(() => {
-  if (!document.hidden && !auth.locked) refreshDispatchControl();
-}, 2800), 640);
-
-// 3. 저속 배경·인프라 계층 (필요할 때만 최소 주기로 갱신)
-pageScope.timeout(() => pageScope.interval(() => {
-  if (!document.hidden && !auth.locked) { stationRecovery.refresh(); personRequests.refresh(); }
-}, 5500), 800);
-pageScope.timeout(() => pageScope.interval(() => {
-  if (!document.hidden) signals.presence();
-}, 6000), 950);
-pageScope.timeout(() => pageScope.interval(() => {
-  if (!document.hidden) mapView.refresh();
-}, 8000), 1100);
-pageScope.timeout(() => pageScope.interval(() => {
-  if (!document.hidden) { chargeBays.refresh(); platoon.refresh(); }
-}, 9000), 1300);
-pageScope.timeout(() => pageScope.interval(() => {
-  if (!document.hidden && !auth.locked) { formation.refreshFormation(); workView.refresh(); }
-}, 9500), 1500);
-pageScope.timeout(() => pageScope.interval(() => {
-  if (!document.hidden) { refreshHealthz(); refreshDiscovery(); refreshRobotApps(); }
-}, 12000), 1750);
+pageScope.interval(() => { if (!auth.locked) formation.refreshFormation(); }, MAP_MS);
+pageScope.interval(refreshState, STATE_MS);
+pageScope.interval(() => { if (!auth.locked) workView.refresh(); }, MAP_MS);
+pageScope.interval(refreshHealthz, STATE_MS);
+pageScope.interval(() => signals.presence(), STATE_MS);
+pageScope.interval(() => { if (!auth.locked) refreshDispatchControl(); }, STATE_MS);
+pageScope.interval(refreshDiscovery, MAP_MS);
+pageScope.interval(refreshRobotApps, MAP_MS);
+pageScope.interval(() => mapView.refresh(), MAP_MS);
+pageScope.interval(() => chargeBays.refresh(), MAP_MS);
+pageScope.interval(() => { if (!auth.locked) { stationRecovery.refresh(); personRequests.refresh(); } }, STATE_MS);
+pageScope.interval(() => platoon.refresh(), MAP_MS);
+pageScope.interval(() => mapView.refreshSightings(), STATE_MS);
+pageScope.interval(() => mapView.refreshTraffic(), STATE_MS);
+pageScope.interval(() => mapView.refreshGuide(), STATE_MS);  // D-536
+pageScope.interval(() => trackingView.refresh(), TRACKING_MS);
+pageScope.interval(() => visionView.refreshFrame(), 1500);
 
 
 pageScope.onResume(() => {

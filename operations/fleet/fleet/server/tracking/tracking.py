@@ -14,13 +14,13 @@ from fleet.server.sightings import SightingSource
 from fleet.server.tracking_calibration import TrackingCalibrationStore, build_record
 from fleet.server.tracking_match import GATE_M, Pose, Seen, Track, better, match
 
-DETECTION_LEASE_S = 2.5
+DETECTION_LEASE_S = 1.0
 MAX_FUTURE_S = 0.05
 STATE_FRESH_S = 2.0
 FPS_WINDOW_S = 3.0
-REGION_MARGIN_M = 0.02
-ROBOT_RADIUS_M = 0.052  # Pinky Pro true physical radius (~5.2 cm; chassis ~11cm x 9.5cm)
-OWN_POSE_EXTRA_M = 0.03
+REGION_MARGIN_M = 0.03
+ROBOT_RADIUS_M = 0.0826
+OWN_POSE_EXTRA_M = 0.05
 MAX_BRIDGE_EXTRA_M = 0.3
 LAST_SEEN_S = 60.0
 
@@ -80,7 +80,11 @@ class TrackingService:
         now_init = self._clock()
         self._anchors: dict[str, dict] = {
             "rosy_46": {"target_id": "rosy_46", "kind": "pinky", "label": "rosy-pinky-b8xy (rosy_46)",
-                        "base_x": -0.415, "base_y": 0.380, "base_yaw": -1.5708, "reach_m": 0.18, "zoom": 3, "updated_at": now_init},
+                        "base_x": -0.4184, "base_y": 0.380, "base_yaw": -1.5708, "reach_m": 0.18, "zoom": 3, "updated_at": now_init},
+            "rosy_45": {"target_id": "rosy_45", "kind": "pinky", "label": "rosy-pinky-y8xs (rosy_45)",
+                        "base_x": -0.1896, "base_y": 0.380, "base_yaw": -1.5708, "reach_m": 0.18, "zoom": 3, "updated_at": now_init},
+            "rosy_42": {"target_id": "rosy_42", "kind": "pinky", "label": "rosy-pinky-geg6 (rosy_42)",
+                        "base_x": 0.6987, "base_y": -0.2512, "base_yaw": 3.1416, "reach_m": 0.18, "zoom": 3, "updated_at": now_init},
             "arm_a": {"target_id": "arm_a", "kind": "omx_ai", "label": "OMX-AI #1 (북동 상차 · Arm A)",
                       "base_x": 0.551, "base_y": 0.365, "base_yaw": -1.5708, "reach_m": 0.28, "zoom": 4, "updated_at": now_init},
             "arm_b": {"target_id": "arm_b", "kind": "omx_ai", "label": "OMX-AI #2 (동북 상차 · Arm B)",
@@ -90,47 +94,6 @@ class TrackingService:
         }
         self._anchor_states: dict[str, dict] = {}
         self._omx_cells: dict[str, dict] = {}
-        self._omx_poller_started = False
-
-    def _ensure_omx_poller(self) -> None:
-        if self._omx_poller_started:
-            return
-        self._omx_poller_started = True
-        import json as _json
-        import ssl as _ssl
-        import threading as _threading
-        import urllib.request as _urllib
-        hosts = {
-            "arm_a": "https://rosy-omx-a.local:8092/api/cell/status",
-            "arm_b": "https://rosy-omx-b.local:8092/api/cell/status",
-            "arm_s": "https://rosy-omx-s.local:8092/api/cell/status",
-        }
-
-        def _loop():
-            ctx = _ssl._create_unverified_context()
-            while True:
-                for tid, url in hosts.items():
-                    try:
-                        req = _urllib.Request(url, headers={"Accept": "application/json"})
-                        with _urllib.urlopen(req, context=ctx, timeout=1.2) as r:
-                            data = _json.loads(r.read().decode("utf-8", "ignore"))
-                            pose = data.get("pose_deg") or {}
-                            servos = data.get("servos") or {}
-                            joints_str = " ".join(f"{k}:{round(float(pose[k]))}°" for k in ("j1", "j2", "j3", "j4", "gripper")
-                                                  if k in pose and isinstance(pose[k], (int, float)))
-                            self._omx_cells[tid] = {
-                                "reachable": True, "state": data.get("state", "IDLE"),
-                                "torque": data.get("torque", True), "pose_deg": pose, "joints_summary": joints_str,
-                                "servos": {"responding": servos.get("responding", 6), "total": servos.get("total", 6),
-                                           "max_temp_c": servos.get("max_temp_c"), "min_voltage_v": servos.get("min_voltage_v")},
-                                "updated_at": time.time(),
-                            }
-                    except Exception:
-                        if not self._omx_cells.get(tid):
-                            self._omx_cells[tid] = {"reachable": False, "state": "VISION_4X"}
-                time.sleep(2.5)
-
-        _threading.Thread(target=_loop, name="omx-cell-poller", daemon=True).start()
 
     @property
     def enabled(self) -> bool:
@@ -160,7 +123,7 @@ class TrackingService:
                   "calibration": record.to_dict() if usable else None,
                   "relearn_seq": self._sources[source.source_id].relearn_seq,
                   "robot_markers": dict(source.robot_markers),
-                  "occupied": self.occupied(source)[0], "anchors": self.anchor_configs()}
+                  "occupied": self.occupied(source)[0]}
         if self.identity is not None:
             config["identity_challenge"] = self.identity.challenge_for(source.source_id)
             config["identity_challenges"] = self.identity.challenges_for(source.source_id)
@@ -344,21 +307,6 @@ class TrackingService:
                         duplicates.add(index)
                 seen = [d for index, d in enumerate(seen) if index not in duplicates]
             rows, extra = match([rid for rid in source.robot_ids if rid not in measured], poses, seen, self.gate_m)
-            fixed_rows, extra_list = [], list(extra)
-            for r in rows:
-                if r.status != "MATCHED" and r.robot_id in self._states:
-                    p = poses.get(r.robot_id)
-                    if extra_list:
-                        det = extra_list.pop(0)
-                        off = 0.0 if p is None else math.hypot(det.x - p.x, det.y - p.y)
-                        fixed_rows.append(Track(r.robot_id, "MATCHED", off, det, p or Pose(det.x, det.y, True)))
-                    elif p is not None:
-                        fixed_rows.append(Track(r.robot_id, "MATCHED", 0.0, Seen(p.x, p.y, 0.16, 0.98), p))
-                    else:
-                        fixed_rows.append(r)
-                else:
-                    fixed_rows.append(r)
-            rows, extra = fixed_rows, extra_list
             for rid, marker in measured.items():
                 pose = poses[rid]
                 offset = None if pose is None else math.hypot(marker.x - pose.x, marker.y - pose.y)
@@ -376,11 +324,8 @@ class TrackingService:
                             "footprint_m": item.footprint_m, "score": item.score, "marker_id": marker_id}
                            for marker_id, item in sorted(unassigned.items()))
         robots = [_render(tracks[rid], track_source[rid]) for rid in sorted(tracks)]
-        self._ensure_omx_poller()
-        snap_anchors = self.anchors_snapshot(now)
         return {"ts": now, "lease_s": self.lease_s, "gate_m": self.gate_m, "use": "display-only",
-                "sources": sources_out, "robots": robots, "unknown": unknown,
-                "anchors": snap_anchors["targets"], "omx_cells": dict(self._omx_cells)}
+                "sources": sources_out, "robots": robots, "unknown": unknown}
 
     def anchor_configs(self) -> list[dict]:
         return [dict(item) for item in self._anchors.values()]
@@ -495,32 +440,26 @@ class TrackingService:
 
     def _pose(self, robot_id: str, map_id: str, now: float) -> Optional[Pose]:
         entry = self._states.get(robot_id)
-        if entry is not None and 0.0 <= now - entry[1] <= self.state_fresh_s:
-            state = entry[0]
-            if state.get("map_id") == map_id:
-                localization = state.get("localization")
-                verified = False
-                if localization is None or (isinstance(localization, Mapping)
-                        and localization.get("pose_frame") == "map"
-                        and localization.get("state") == "LOCALIZED"):
-                    verified = localization is not None
-                    pose = state.get("pose")
-                    try:
-                        x, y = float(pose["x"]), float(pose["y"])
-                        if math.isfinite(x) and math.isfinite(y):
-                            return Pose(x, y, verified)
-                    except (KeyError, TypeError, ValueError):
-                        pass
-        if self.map_pose is not None and entry is not None and 0.0 <= now - entry[1] <= self.state_fresh_s * 3:
-            mp = self.map_pose(robot_id)
-            if (mp is not None and getattr(mp, "state", "UNKNOWN") in ("LOCALIZED", "DEGRADED")
-                    and getattr(mp, "map_id", None) in (None, map_id)
-                    and _finite(getattr(mp, "x", None), getattr(mp, "y", None))):
-                return Pose(float(mp.x), float(mp.y), getattr(mp, "state", "") == "LOCALIZED")
-        anc = self._anchors.get(robot_id)
-        if anc is not None and robot_id in self._states:
-            return Pose(float(anc["base_x"]), float(anc["base_y"]), True)
-        return None
+        if entry is None or not 0.0 <= now - entry[1] <= self.state_fresh_s:
+            return None
+        state = entry[0]
+        if state.get("map_id") != map_id:
+            return None
+        localization = state.get("localization")
+        verified = False
+        if localization is not None:
+            if (not isinstance(localization, Mapping) or localization.get("pose_frame") != "map"
+                    or localization.get("state") != "LOCALIZED"):
+                return None
+            verified = True
+        pose = state.get("pose")
+        try:
+            x, y = float(pose["x"]), float(pose["y"])
+        except (KeyError, TypeError, ValueError):
+            return None
+        if not (math.isfinite(x) and math.isfinite(y)):
+            return None
+        return Pose(x, y, verified)
 
     @staticmethod
     def _trim(state: _SourceState, now: float) -> None:

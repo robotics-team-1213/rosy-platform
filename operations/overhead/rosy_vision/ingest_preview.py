@@ -13,7 +13,7 @@ import cv2
 from websockets.http11 import Headers, Response
 from core_common.protocol.vision_preview import PreviewRectification, VisionLeaseError
 from .field_detect import DETECTOR_VERSION, FieldDetection, detect_field_jpeg
-from . import map_worker
+from . import map_worker, preview_plane
 from .map_register import REGISTER_VERSION, RegistrationResult
 from .rectify import MapPlane, crop_map_plane, map_plane_jpeg, plane_observed_fraction, rectify_jpeg
 
@@ -143,7 +143,7 @@ async def _preview_response(self, path: str, authorization: str | None) -> Respo
             elif not settings.is_identity:
                 rectified_header = "true"
             if rectified_header != "false":
-                jpeg = rectify_jpeg(frame.jpeg, settings)
+                jpeg = await preview_plane.rectified_jpeg(self, source, frame, settings)
         except (TypeError, ValueError, cv2.error):
             return _http_response(422, b"rectification failed\n",
                                   extra={"X-Frame-State": "rectification-error"})

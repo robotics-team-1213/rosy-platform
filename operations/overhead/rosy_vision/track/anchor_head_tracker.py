@@ -57,32 +57,27 @@ class TrackedHeadState:
     roi_jpeg: bytes | None = field(default=None, repr=False)
 
     def to_dict(self) -> dict:
-        return {
-            "target_id": self.target_id, "kind": self.kind, "label": self.label,
-            "base_x": round(self.base_x, 4), "base_y": round(self.base_y, 4), "base_yaw": round(self.base_yaw, 4),
-            "head_x": round(self.head_x, 4), "head_y": round(self.head_y, 4), "head_yaw": round(self.head_yaw, 4),
-            "extension_m": round(self.extension_m, 4), "speed_mps": round(self.speed_mps, 4),
-            "moving": bool(self.moving), "confidence": round(self.confidence, 3),
-            "zoom": int(self.zoom), "reach_m": round(self.reach_m, 3), "captured_at": round(self.captured_at, 3),
-        }
+        return {"target_id": self.target_id, "kind": self.kind, "label": self.label, "base_x": round(self.base_x, 4),
+                "base_y": round(self.base_y, 4), "base_yaw": round(self.base_yaw, 4), "head_x": round(self.head_x, 4),
+                "head_y": round(self.head_y, 4), "head_yaw": round(self.head_yaw, 4), "extension_m": round(self.extension_m, 4),
+                "speed_mps": round(self.speed_mps, 4), "moving": bool(self.moving), "confidence": round(self.confidence, 3),
+                "zoom": int(self.zoom), "reach_m": round(self.reach_m, 3), "captured_at": round(self.captured_at, 3)}
 
 
 def default_anchors() -> dict[str, TargetAnchor]:
     now = time.time()
     return {
-        "rosy_46": TargetAnchor("rosy_46", "pinky", "rosy-pinky-b8xy (rosy_46)", -0.415, 0.380, -1.5708, 0.18, 3, 46, now),
+        "rosy_46": TargetAnchor("rosy_46", "pinky", "rosy-pinky-b8xy (rosy_46)", -0.4184, 0.380, -1.5708, 0.18, 3, 46, now),
+        "rosy_45": TargetAnchor("rosy_45", "pinky", "rosy-pinky-y8xs (rosy_45)", -0.1896, 0.380, -1.5708, 0.18, 3, 45, now),
+        "rosy_42": TargetAnchor("rosy_42", "pinky", "rosy-pinky-geg6 (rosy_42)", 0.6987, -0.2512, 3.1416, 0.18, 3, 42, now),
         "arm_a": TargetAnchor("arm_a", "omx_ai", "OMX-AI #1 (북동 상차 · Arm A)", 0.551, 0.365, -1.5708, 0.28, 4, None, now),
         "arm_b": TargetAnchor("arm_b", "omx_ai", "OMX-AI #2 (동북 상차 · Arm B)", 0.956, 0.370, -1.5708, 0.28, 4, None, now),
         "arm_s": TargetAnchor("arm_s", "omx_ai", "OMX-AI #3 (동남 분류 · Arm S)", 0.960, -0.035, 3.1416, 0.28, 4, None, now),
     }
 
 
-def _wrap_angle(angle: float) -> float:
-    return math.atan2(math.sin(angle), math.cos(angle))
-
-
-def _blend_angle(a: float, b: float, weight_b: float) -> float:
-    return _wrap_angle(a + weight_b * _wrap_angle(b - a))
+def _wrap_angle(angle: float) -> float: return math.atan2(math.sin(angle), math.cos(angle))
+def _blend_angle(a: float, b: float, weight_b: float) -> float: return _wrap_angle(a + weight_b * _wrap_angle(b - a))
 
 
 class AnchorHeadTracker:
@@ -197,7 +192,7 @@ class AnchorHeadTracker:
                 if matched_det is not None:
                     filtered_detections = [
                         d for d in filtered_detections
-                        if d.marker_id is not None or math.hypot(d.x - st.base_x, d.y - st.base_y) > 0.22
+                        if d.marker_id is not None or math.hypot(d.x - st.base_x, d.y - st.base_y) > 0.14
                     ]
                     if not any(d.marker_id == matched_det.marker_id for d in filtered_detections if matched_det.marker_id is not None):
                         filtered_detections.insert(0, matched_det)
@@ -335,7 +330,7 @@ class AnchorHeadTracker:
         ref_y = prev.base_y if prev is not None else anchor.base_y
         ref_yaw = prev.head_yaw if prev is not None else anchor.base_yaw
 
-        best_blob, best_dist = None, 0.42
+        best_blob, best_dist = None, 0.16
         for det in detections:
             d = math.hypot(det.x - ref_x, det.y - ref_y)
             if d < best_dist:
@@ -415,11 +410,15 @@ class AnchorHeadTracker:
                     measured_yaw = _blend_angle(ref_yaw, cand_yaw, 0.15)
 
         if 0.02 <= measured_y <= 0.49:
-            nearest_bay_x = min((-0.415, -0.190, 0.032), key=lambda bx: abs(measured_x - bx))
+            nearest_bay_x = min((-0.4184, -0.1896, 0.0322), key=lambda bx: abs(measured_x - bx))
             if abs(measured_x - nearest_bay_x) <= 0.095:
                 measured_x = 0.72 * nearest_bay_x + 0.28 * measured_x
                 if abs(_wrap_angle(measured_yaw - (-1.5708))) <= 0.65:
                     measured_yaw = _blend_angle(measured_yaw, -1.5708, 0.55)
+        elif 0.55 <= measured_x <= 0.85 and -0.34 <= measured_y <= -0.16:
+            measured_y = 0.72 * (-0.2512) + 0.28 * measured_y
+            if abs(_wrap_angle(measured_yaw - math.pi)) <= 0.65:
+                measured_yaw = _blend_angle(measured_yaw, math.pi, 0.55)
 
         min_x, min_y, max_x, max_y = track_bounds_m
         measured_x, measured_y = max(min_x, min(max_x, measured_x)), max(min_y, min(max_y, measured_y))

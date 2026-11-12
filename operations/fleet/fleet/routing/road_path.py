@@ -192,7 +192,7 @@ def plan_road_path(
     last_err: PlanError | None = None
     targets = _goal_targets(graph, goal)
     for dist_m, cx, cy, cyaw in candidates:
-        if best_plan is not None and dist_m > best_dist + 0.02:
+        if best_plan is not None and dist_m > best_dist + 0.03:
             break
         cand_pose = (cx, cy, cyaw)
         for target in targets:
@@ -206,14 +206,12 @@ def plan_road_path(
             )
             try:
                 plan = plan_trip(graph, req, config)
-                if best_plan is None or plan.eta_s + 0.05 < best_plan.eta_s:
+                if best_plan is None or plan.eta_s + 0.25 < best_plan.eta_s:
                     best_plan = plan
                     best_dist = dist_m
                 break
             except PlanError as exc:
                 last_err = exc
-        if best_plan is not None and syaw is not None and math.isfinite(syaw):
-            break
 
     if best_plan is None:
         raise last_err or PlanError("TRIP_NO_ROUTE", {"segment": 0, "unblock_would_help": False})

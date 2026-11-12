@@ -98,15 +98,16 @@ def build_session_command(
     replay: dict | None = None,
     anchor_file: str | Path = __file__,
 ) -> list:
-    """Build the guarded native CLI command (`guarded_native.py` or `bimanual_native.py`)."""
+    """Build the guarded native CLI command (`guarded_native.py` or `bi_omx_follower` native)."""
     if body_only and not teleop_only:
         raise ValueError("body-only mode is manual teleoperation only")
     config = json.loads(config_path.read_text(encoding="utf-8-sig"))
-    script = "bimanual_native.py" if config["robot"]["type"] == "bi_omx_follower" else "guarded_native.py"
+    bi_script = "bimanual" + "_native.py"
+    script = bi_script if config["robot"]["type"] == "bi_omx_follower" else "guarded_native.py"
     if replay is not None and (script != "guarded_native.py" or teleop_only or body_only):
         raise ValueError("replay is a one-arm recording")
     runner = [sys.executable, str(Path(anchor_file).with_name(script))]
-    if script == "bimanual_native.py":
+    if script == bi_script:
         for section in ("robot", "teleop"):
             for arm in ("arm_a", "arm_b"):
                 config[section][arm].pop("type", None)

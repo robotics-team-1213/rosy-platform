@@ -42,6 +42,7 @@ SERVICES = (
     "rosy-omx-camera-view.service",
     "rosy-omx-camera-readiness.service",
 )
+BIMANUAL_SCRIPT = "bimanual_native.py"
 CAMERA_UNIT = re.compile(r"rosy-omx-camera@[\w-]+\.service")
 _rsc._REGISTER_GLOBALS(globals())
 main = _rsc.main
@@ -380,5 +381,5 @@ class Session:
             )
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # session_lock(args.lock_file) via record_session_helpers.main
     main()

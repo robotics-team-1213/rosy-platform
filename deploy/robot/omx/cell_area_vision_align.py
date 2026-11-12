@@ -45,7 +45,7 @@ def settle_above_pick_jaws(
             import time as _time
 
             run_cmd(f"grip {float(plan['grip_open']):.2f}")
-            _time.sleep(min(1.05, max(0.55, (float(plan["grip_open"]) - s_jaw) / 4.0)))
+            _time.sleep(min(0.30, max(0.12, (float(plan["grip_open"]) - s_jaw) / 8.0)))
     return above_shaking
 
 

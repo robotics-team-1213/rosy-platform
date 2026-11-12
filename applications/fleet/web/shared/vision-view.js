@@ -96,6 +96,7 @@ export function createPlaneFeed({ scope, visionView, onChange, now = Date.now })
     if (busy || now() < retryAt) return;
     busy = true;
     const life = scope.capture(), startedGeneration = generation, requestedAt = now();
+    let changed = false;
     try {
       const got = await visionView.fetchPlane();
       if (got.state === "plane-unavailable") { retryAt = now() + PLANE_RETRY_MS; changed = drop(); return; }
@@ -108,13 +109,14 @@ export function createPlaneFeed({ scope, visionView, onChange, now = Date.now })
         URL.revokeObjectURL(url); if (!decoded) retryAt = now() + PLANE_ERROR_MS; return;
       }
       const ageMs = got.ageMs + now() - requestedAt;
-      if (!Number.isFinite(ageMs) || ageMs < 0 || ageMs > FRAME_LATE_MS) { URL.revokeObjectURL(url); drop(); return; }
+      if (!Number.isFinite(ageMs) || ageMs < 0 || ageMs > FRAME_LATE_MS) { URL.revokeObjectURL(url); changed = drop(); return; }
       if (!planeFitsImage(got.plane, image.naturalWidth, image.naturalHeight)) {
-        URL.revokeObjectURL(url); retryAt = now() + PLANE_RETRY_MS; drop(); return;
+        URL.revokeObjectURL(url); retryAt = now() + PLANE_RETRY_MS; changed = drop(); return;
       }
       drop();
       frame = { image, url, source: got.source, plane: got.plane, calibrationRevision: got.calibrationRevision, observedFraction: got.observedFraction, ageMs };
-      cancelExpiry = scope.timeout(() => { drop(); onChange(); }, Math.max(0, FRAME_LATE_MS - ageMs) || 0);
+      changed = true;
+      cancelExpiry = scope.timeout(() => { if (drop()) onChange(); }, Math.max(0, FRAME_LATE_MS - ageMs) || 0);
     } catch (error) {
       if (error.name !== "AbortError") retryAt = now() + PLANE_ERROR_MS;
     } finally {
