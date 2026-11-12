@@ -20,11 +20,7 @@ TIER1_IN_FLIGHT: set[str] = set()   # empty: console.py landed at 634 lines (202
 #: Tier 2 (D-949 2): 800-999 lines. The next change that edits one of these splits it first.
 TIER2_QUEUE: set[str] = set()   # empty: all 800-999 product files split below 500 lines (2026-11-12)
 #: D-949 3: test files over their 1,500-line limit, split by screen or subject in follow-up work.
-TEST_QUEUE = {
-    "test/test_fleet_console_browser.py", "test/test_dashboard_browser.py", "test/test_sd_writer_contract.py",
-    "middleware/robot_ui/pilot/test/test_pilot_browser.py", "test/test_rosy_face.py",
-    "operations/fleet/test/test_trip_runner.py", "middleware/core/events/test/test_audit.py",
-}
+TEST_QUEUE: set[str] = set()   # empty: all oversized test files split/compacted below 1,500 lines (2026-11-12)
 #: D-949 4: size units over 10,000 lines; each needs a dated split plan before it is cut.
 UNIT_QUEUE = set()  # control: back under 10,000 after the 2026-11-07 holder split (D-766 #109)
 
@@ -39,6 +35,10 @@ def _kind(key: str) -> str:
 
 def _rows(kind: str, low: int, high: float = float("inf")) -> set[str]:
     return {key for key, count in RATCHET.items() if _kind(key) == kind and low <= count < high}
+
+
+def test_no_product_file_remains_in_the_ratchet():
+    assert _rows("product", size_limits.FILE_LIMIT + 1) == set()
 
 
 def test_no_product_file_of_1000_lines_or_more_stays_in_the_ratchet():
