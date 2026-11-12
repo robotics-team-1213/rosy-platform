@@ -94,7 +94,23 @@ def execute_live_hardware_arm(
     status_file = io_dir / "chunk-status.jsonl"
     n0 = len(status_file.read_text(errors="replace").splitlines()) if status_file.exists() else 0
 
-    out = subprocess.check_output(["bash", str(prep_dir / wrapper_script), "true"], cwd=str(prep_dir), text=True)
+    try:
+        out = subprocess.check_output(["bash", str(prep_dir / wrapper_script), "true"], cwd=str(prep_dir), text=True)
+    except subprocess.CalledProcessError:
+        alt_io = prep_dir / f"chunk-io-{suffix}-r2s"
+        alt_cmd = alt_io / "chunk-cmd"
+        if alt_cmd.exists():
+            try:
+                import os
+                fd = os.open(str(alt_cmd), os.O_WRONLY | os.O_NONBLOCK)
+                try:
+                    os.write(fd, b"stop\n")
+                finally:
+                    os.close(fd)
+                time.sleep(8.0)
+            except Exception:
+                pass
+        out = subprocess.check_output(["bash", str(prep_dir / wrapper_script), "true"], cwd=str(prep_dir), text=True)
     if "session up" not in out:
         raise RuntimeError(f"Arm {arm_id} session failed to start: {out}")
 
@@ -105,6 +121,9 @@ def execute_live_hardware_arm(
 
     _send_line("state")
     time.sleep(0.5)
+    if arm_id == "arm_s" and (prep_dir / "chunks-arm-s-inplace-live.json").is_file():
+        _send_line(f"load {prep_dir / 'chunks-arm-s-inplace-live.json'}")
+        time.sleep(0.3)
     _send_line(f"jog shoulder_pan.pos {delta}")
     time.sleep(2.0)
     _send_line("stop")
@@ -129,14 +148,38 @@ def execute_live_hardware_arm(
     }
 
 
+def emergency_stop_arms(prep_dir: Path = DEFAULT_PREP_DIR) -> list[str]:
+    """Send non-blocking emergency stop command to any active arm chunk-cmd FIFO when a human is detected."""
+    stopped: list[str] = []
+    for arm_id, (suffix, _, _) in ARM_WRAPPERS.items():
+        for io_name in (f"chunk-io-{suffix}", f"chunk-io-{suffix}-r2s"):
+            cmd_fifo = prep_dir / io_name / "chunk-cmd"
+            if cmd_fifo.exists():
+                try:
+                    import os
+                    fd = os.open(str(cmd_fifo), os.O_WRONLY | os.O_NONBLOCK)
+                    try:
+                        os.write(fd, b"stop\n")
+                        stopped.append(arm_id)
+                    finally:
+                        os.close(fd)
+                except Exception:
+                    pass
+    return stopped
+
+
 def poll_and_execute_once(
     pipeline: FleetModelPipeline,
     *,
     request_fn: Callable[[str, str, dict[str, Any] | None], dict[str, Any]],
     live_act_fn: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
+    prep_dir: Path = DEFAULT_PREP_DIR,
 ) -> list[dict[str, Any]]:
     """Poll queued tasks on Fleet-R and claim, execute, and complete each one in FIFO order."""
     listing = request_fn("GET", "/api/fleet/pipeline/cell-tasks?status=QUEUED", None)
+    if (listing.get("human_safety") or {}).get("active_estop"):
+        emergency_stop_arms(prep_dir)
+        return []
     queued = list(listing.get("tasks") or [])
     completed_runs: list[dict[str, Any]] = []
     for task in queued:

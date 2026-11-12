@@ -86,10 +86,14 @@ def install_charge_bay_routes(app, console, gathered, read_guard):
                                                 "cell_id": cid})
                 else:
                     act.update(blocked_by_cell=True, cell_id=cid, reason="locked_by_cell")
+        hd = getattr(app.state, "human_detected", None) or {"cell_s": False, "cell_ab": False, "all": False}
         return {"map_version": active[0],
                 "contract_version": CONTRACT_VERSION, "omx_cells": cell_evals,
                 "omx_cell_tasks": list((getattr(app.state, "omx_cell_tasks", None) or {}).values()),
                 "pinky_tasks": list((getattr(app.state, "pinky_tasks", None) or {}).values()),
+                "pipeline_decisions": list((getattr(app.state, "pipeline_decisions", None) or [])[-20:]),
+                "cable_tangled": getattr(app.state, "cable_tangled", True),
+                "human_safety": {"human_detected": dict(hd), "active_estop": any(bool(v) for v in hd.values())},
                 **plan_out}
     install_pipeline_routes(app, console=console, site_maps=getattr(app.state, "site_maps", None), read_guard=read_guard)
     return bay_inputs

@@ -114,6 +114,11 @@ test('pipeline cards carry cell telemetry and one-click robot actions without ch
   assert.equal(rows.cards[2].robot_id, 'rosy_60');
   assert.deepEqual(rows.cards[2].buttons.map(b => b.pinkyAction),
     ['dock_and_unload_s3', 'dock_s3', 'charge_c1', 'depart_s1']);
+  assert.equal(rows.cards[0].quickControls[0].decisionSubject, 'cell_s');
+  assert.equal(rows.cards[0].quickControls[1].humanSafetyCell, 'cell_s');
+  assert.equal(rows.cards[0].quickControls[2].zoneId, 'EXP_S3_BELT');
+  assert.equal(rows.cards[2].quickControls[0].decisionSubject, 'rosy_60');
+  assert.equal(rows.cards[2].quickControls[1].zoneId, 'STG_C2');
   assert.deepEqual(chargeBayRows({}).cards.filter(c => c.robot_id).map(c => c.robot_id),
     ['rosy_42', 'rosy_45', 'rosy_46']);
 });

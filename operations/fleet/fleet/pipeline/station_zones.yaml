@@ -1,0 +1,58 @@
+schema: rosy.station-zones.v1
+site_id: world_261026
+staging_bays:
+  - id: STG_C2
+    place_id: C2
+    name: "임시칸 1 (C2 대기 구역)"
+    kind: staging
+    x: 0.35
+    y: -0.25
+    yaw_deg: 0.0
+    speed_cap_mps: 0.02
+    max_step_m: 0.015
+  - id: STG_S3_WAIT
+    place_id: S3
+    name: "임시칸 2 (S3 진입 전 대기칸)"
+    kind: staging
+    x: 0.58
+    y: -0.2512
+    yaw_deg: 0.0
+    speed_cap_mps: 0.02
+    max_step_m: 0.015
+export_stations:
+  - id: EXP_S1
+    place_id: S1
+    name: "반출대 1 (S1 주 반출 게이트)"
+    kind: export
+    cell_id: cell_ab
+    arm_id: arm_a
+    src_site: belt
+    dst_site: pallet
+    tier: 1
+    x: 0.9212
+    y: -0.4776
+    yaw_deg: -90.0
+  - id: EXP_S5_PALLET
+    place_id: S5
+    name: "반출대 2 (S5 팔레트 반출대)"
+    kind: export
+    cell_id: cell_ab
+    arm_id: arm_b
+    src_site: belt
+    dst_site: pallet
+    tier: 2
+    x: 0.9212
+    y: -0.4776
+    yaw_deg: -90.0
+  - id: EXP_S3_BELT
+    place_id: S3
+    name: "반출대 3 (S3 컨베이어 반출대)"
+    kind: export
+    cell_id: cell_s
+    arm_id: arm_s
+    src_site: pinky
+    dst_site: belt
+    tier: 1
+    x: 0.6987
+    y: -0.2512
+    yaw_deg: -85.0

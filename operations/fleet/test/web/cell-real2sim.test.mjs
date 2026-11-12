@@ -176,4 +176,9 @@ test("readoutPairs, loopRows, stageRows, sysidRows, surveyRows, and runRows form
   assert.equal(vCards[1].id, "cell_ab");
   assert.equal(vCards[2].id, "pinky");
   assert.equal(vCards[2].buttons[0].pinkyAction, "dock_and_unload_s3");
+  assert.equal(vCards[2].buttons[1].decisionSubject, "rosy_42");
+  assert.equal(vCards[2].buttons[2].zoneId, "STG_C2");
+  assert.equal(vCards[0].buttons[1].decisionSubject, "cell_s");
+  assert.ok(vCards[0].buttons.some(b => b.humanSafetyCell === "cell_s"));
+  assert.ok(vCards[0].buttons.some(b => b.zoneId === "EXP_S3_BELT"));
 });

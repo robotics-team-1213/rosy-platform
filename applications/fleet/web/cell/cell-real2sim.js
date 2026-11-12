@@ -6,6 +6,9 @@ export const RUNS_PATH = '/api/fleet/cell-app/real2sim-pipeline/runs';
 export const PROMOTE_PATH = '/api/fleet/cell-app/real2sim-pipeline/promote-physics';
 export const CELL_TASKS_PATH = '/api/fleet/pipeline/cell-tasks';
 export const PINKY_TASKS_PATH = '/api/fleet/pipeline/pinky-tasks';
+export const DECISION_GATE_PATH = '/api/fleet/pipeline/decision-gate';
+export const HUMAN_SAFETY_PATH = '/api/fleet/pipeline/human-safety-gate';
+export const STATION_ZONES_DISPATCH_PATH = '/api/fleet/pipeline/station-zones/dispatch';
 
 const STATUS_LABEL = {
   ready: '정상 · 준비됨',
@@ -134,14 +137,24 @@ export function visualCardSpecs(body = {}) {
     const matches = tasks.filter(t => t.cell_id === cellId);
     return matches.length ? matches[matches.length - 1] : null;
   };
-  const formatTaskMeta = task => {
-    if (!task) return {last_task: '대기 중 (최근 태스크 없음)', folded_state: 'folded: true (홈 대기)', task_id: null, status: null};
+  const decisions = body?.decisions || {};
+  const formatTaskMeta = (task, subjectId) => {
+    const dec = decisions[subjectId] || task?.decision || null;
+    const decTxt = dec ? `Decision: ${dec.choice} (${dec.reason})` : '';
+    if (!task) {
+      return {
+        last_task: '대기 중 (최근 태스크 없음)',
+        folded_state: ['folded: true (홈 대기)', decTxt].filter(Boolean).join(' · '),
+        task_id: null,
+        status: null,
+      };
+    }
     const stopEv = task.hardware_telemetry?.stop_event || {};
     const hs = task.health_summary || {};
     const health = stopEv.health || {};
     const maxTemp = hs.max_temp_c ?? (Array.isArray(health.temp_c) && health.temp_c.length ? Math.max(...health.temp_c) : null);
     const maxCur = hs.max_current_ma ?? (Array.isArray(health.current_ma) && health.current_ma.length ? Math.max(...health.current_ma) : null);
-    const healthTxt = [maxTemp != null ? `${maxTemp}°C` : '', maxCur != null ? `${maxCur}mA` : '', hs.substage || ''].filter(Boolean).join(' · ');
+    const healthTxt = [maxTemp != null ? `${maxTemp}°C` : '', maxCur != null ? `${maxCur}mA` : '', hs.substage || '', decTxt].filter(Boolean).join(' · ');
     const stateArr = Array.isArray(stopEv.state) ? stopEv.state.map(v => Number(v).toFixed(1)).join(', ') : '';
     const baseFold = stopEv.folded === true
       ? `홈 복귀 완료 (folded: true${stateArr ? ` · [${stateArr}]` : ''})`
@@ -155,16 +168,22 @@ export function visualCardSpecs(body = {}) {
   };
   const taskControlButtons = meta => {
     if (!meta?.task_id) return [];
-    if (meta.status === 'QUEUED' || meta.status === 'RUNNING') {
+    if (meta.status === 'QUEUED' || meta.status === 'RUNNING' || meta.status === 'PAUSED_HUMAN') {
       return [{label: '작업 취소', cancelTaskId: meta.task_id}];
     }
     return [{label: '재실행', retryTaskId: meta.task_id}];
   };
   const s3Gate = cells.cell_s?.gate || {};
   const s5Gate = cells.cell_ab?.gate || {};
-  const s3Meta = formatTaskMeta(lastForCell('cell_s'));
-  const s5Meta = formatTaskMeta(lastForCell('cell_ab'));
+  const s3Meta = formatTaskMeta(lastForCell('cell_s'), 'cell_s');
+  const s5Meta = formatTaskMeta(lastForCell('cell_ab'), 'cell_ab');
   const lastPinky = pinkyTasks.length ? pinkyTasks[pinkyTasks.length - 1] : null;
+  const pinkyId = lastPinky?.robot_id || 'rosy_46';
+  const pinkyDec = decisions[pinkyId] || lastPinky?.decision || null;
+  const hs = body?.human_safety || {};
+  const s3Human = Boolean(hs.human_detected?.cell_s || hs.active_estop || s3Gate.phase === 'HUMAN_HOLD');
+  const s5Human = Boolean(hs.human_detected?.cell_ab || hs.active_estop || s5Gate.phase === 'HUMAN_HOLD');
+  const anyHuman = Boolean(hs.active_estop || s3Human || s5Human);
   return [
     {
       id: 'cell_s',
@@ -175,9 +194,16 @@ export function visualCardSpecs(body = {}) {
       ...s3Meta,
       buttons: [
         {label: 'S3 셔틀 (Pinky→Belt)', preset: 's3_shuttle'},
+        {label: '상황 판단·자동 실행 (Decision)', decisionSubject: 'cell_s'},
         {label: '자동 감지·복구 셔틀', preset: 's3_auto_recover_or_shuttle'},
         {label: 'Belt-Far 이탈 복구', preset: 's3_recover_belt_far'},
         {label: 'Floor-Front 바닥 복구', preset: 's3_recover_floor_front'},
+        {label: '반출대3 반출 (YAML: EXP_S3_BELT)', zoneId: 'EXP_S3_BELT'},
+        {
+          label: s3Human ? '사람 이탈 · 자동 재개' : '사람 감지 비상정지 (E-Stop)',
+          humanSafetyCell: 'cell_s',
+          humanDetected: !s3Human,
+        },
         ...taskControlButtons(s3Meta),
       ],
     },
@@ -190,29 +216,48 @@ export function visualCardSpecs(body = {}) {
       ...s5Meta,
       buttons: [
         {label: '1층 적재 (arm_a)', preset: 's5_tier1_arm_a'},
+        {label: '상황 판단·자동 실행 (Decision)', decisionSubject: 'cell_ab'},
         {label: '2층 적재 (arm_b)', preset: 's5_tier2_arm_b'},
         {label: '3층 적재 (arm_a)', preset: 's5_tier3_arm_a'},
         {label: 'S3→S5 연속 실행', preset: 'full_s3_to_s5_pipeline'},
+        {label: '반출대2 반출 (YAML: EXP_S5_PALLET)', zoneId: 'EXP_S5_PALLET'},
+        {
+          label: s5Human ? '사람 이탈 · 자동 재개' : '사람 감지 비상정지 (E-Stop)',
+          humanSafetyCell: 'cell_ab',
+          humanDetected: !s5Human,
+        },
         ...taskControlButtons(s5Meta),
       ],
     },
     {
       id: 'pinky',
-      robot_id: lastPinky?.robot_id || 'rosy_46',
-      title: `Pinky AMR · ${lastPinky?.robot_id || 'rosy_46'} 도킹·배차 (케이블 보호 ≤1.5cm)`,
+      robot_id: pinkyId,
+      title: `Pinky AMR · ${pinkyId} 도킹·배차 (케이블 보호 ≤1.5cm)`,
       cameraUrl: '/api/fleet/pipeline/cell-camera/pinky',
       phase: lastPinky?.target_place ? `위치 ${lastPinky.target_place}` : (s3Gate.docked_robot?.robot_id ? `S3 도킹 (${s3Gate.docked_robot.robot_id})` : 'READY'),
       amr_motion_inhibited: Boolean(s3Gate.amr_motion_inhibited || s5Gate.amr_motion_inhibited),
       last_task: lastPinky ? `${lastPinky.task_id} · ${lastPinky.action} -> ${lastPinky.target_place}` : 'S3 도킹 및 미세이동 준비 완료',
-      folded_state: s3Gate.amr_motion_inhibited ? 'AMR 이동 잠금 (팔 작업 중)' : '케이블 보호 미세이동 모드 (최대 1.5cm · 0.02m/s)',
+      folded_state: [
+        anyHuman ? '사람 감지 비상정지 (HUMAN_HOLD · 이탈 시 자동 재개)' : (s3Gate.amr_motion_inhibited ? 'AMR 이동 잠금 (팔 작업 중)' : '케이블 보호 미세이동 모드 (최대 1.5cm · 0.02m/s)'),
+        pinkyDec ? `Decision: ${pinkyDec.choice} (${pinkyDec.reason})` : '',
+      ].filter(Boolean).join(' · '),
       buttons: [
         {label: 'S3 도킹+하역', pinkyAction: 'dock_and_unload_s3'},
+        {label: '상황 판단·자동 실행 (Decision)', decisionSubject: pinkyId},
+        {label: '임시칸1 이동 (YAML: STG_C2)', zoneId: 'STG_C2'},
+        {label: '임시칸2 이동 (YAML: STG_S3_WAIT)', zoneId: 'STG_S3_WAIT'},
+        {label: '반출대1 이동 (YAML: EXP_S1)', zoneId: 'EXP_S1'},
         {label: 'S3 도킹', pinkyAction: 'dock_s3'},
         {label: '미세 전진 1.5cm', pinkyAction: 'micro_forward_2cm'},
         {label: '미세 후진 1.5cm', pinkyAction: 'micro_reverse_2cm'},
         {label: '즉시 정지', pinkyAction: 'stop_now'},
         {label: '충전소(C1)', pinkyAction: 'charge_c1'},
         {label: '출구(S1) 출발', pinkyAction: 'depart_s1'},
+        {
+          label: anyHuman ? '사람 이탈 · 자동 재개' : '사람 감지 비상정지 (E-Stop)',
+          humanSafetyCell: 'all',
+          humanDetected: !anyHuman,
+        },
       ],
     },
   ];
@@ -422,7 +467,16 @@ export function createReal2SimPipeline({request, $, isOperator = () => false}) {
         btn.setAttribute('kind', b.cancelTaskId ? 'irreversible' : 'quiet');
         btn.setAttribute('type', 'button');
         btn.textContent = b.label;
-        if (b.preset) {
+        if (b.decisionSubject) {
+          btn.dataset.decisionSubject = b.decisionSubject;
+          btn.addEventListener('click', () => runDecisionGate(b.decisionSubject));
+        } else if (b.humanSafetyCell) {
+          btn.dataset.humanSafetyCell = b.humanSafetyCell;
+          btn.addEventListener('click', () => runHumanSafetyGate(b.humanSafetyCell, b.humanDetected, card.robot_id || 'rosy_46'));
+        } else if (b.zoneId) {
+          btn.dataset.zoneId = b.zoneId;
+          btn.addEventListener('click', () => runStationZoneDispatch(b.zoneId, card.robot_id || 'rosy_46'));
+        } else if (b.preset) {
           btn.dataset.cellQuickPreset = b.preset;
           btn.addEventListener('click', () => runQuickPreset(b.preset));
         } else if (b.pinkyAction) {
@@ -439,6 +493,72 @@ export function createReal2SimPipeline({request, $, isOperator = () => false}) {
       article.append(thumb, head, meta, actions);
       return article;
     }));
+  }
+
+  async function runHumanSafetyGate(cellId, humanDetected, robotId) {
+    const current = ++generation;
+    const actionTxt = humanDetected ? '사람 감지 비상정지(HUMAN_HOLD)' : '사람 이탈 · 작업 자동 재개';
+    if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `${actionTxt} (${cellId}) 처리 중입니다.`;
+    try {
+      const res = await request(HUMAN_SAFETY_PATH, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({cell_id: cellId, human_detected: humanDetected, robot_id: robotId}),
+      });
+      if (current !== generation) return;
+      await refreshCellTasks(current);
+      if ($('cell-tasks-status')) {
+        const detail = humanDetected
+          ? `일시정지 태스크 ${(res.paused_tasks || []).length}건`
+          : `자동 재개 태스크 ${(res.resumed_tasks || []).length}건`;
+        $('cell-tasks-status').textContent = `${actionTxt} 완료 (${detail})`;
+      }
+    } catch (error) {
+      if (current !== generation) return;
+      if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `${actionTxt} 실패: ${error.message}`;
+    }
+  }
+
+  async function runStationZoneDispatch(zoneId, robotId) {
+    const current = ++generation;
+    if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `YAML 구역(${zoneId}) 이동/반출 태스크를 즉시 실행하는 중입니다.`;
+    try {
+      const res = await request(STATION_ZONES_DISPATCH_PATH, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({zone_id: zoneId, robot_id: robotId}),
+      });
+      if (current !== generation) return;
+      await refreshCellTasks(current);
+      if ($('cell-tasks-status')) {
+        const spawned = res.spawned_cell_task ? ` + 셀 태스크(${res.spawned_cell_task.task_id})` : '';
+        $('cell-tasks-status').textContent = `YAML 구역(${zoneId}) 실행 완료 -> ${res.pinky_task?.target_place || '—'}${spawned}`;
+      }
+    } catch (error) {
+      if (current !== generation) return;
+      if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `YAML 구역(${zoneId}) 실행 실패: ${error.message}`;
+    }
+  }
+
+  async function runDecisionGate(subjectId) {
+    const current = ++generation;
+    if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `Decision Gate(${subjectId}) 상황을 판단하고 자동 실행하는 중입니다.`;
+    try {
+      const res = await request(DECISION_GATE_PATH, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({subject_id: subjectId, auto_execute: true}),
+      });
+      if (current !== generation) return;
+      await refreshCellTasks(current);
+      if ($('cell-tasks-status')) {
+        const d = res.decision || {};
+        $('cell-tasks-status').textContent = `Decision(${subjectId}): ${d.choice || '—'} (${d.reason || ''}) -> 자동 실행 완료`;
+      }
+    } catch (error) {
+      if (current !== generation) return;
+      if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `Decision Gate 실행 실패: ${error.message}`;
+    }
   }
 
   async function cancelOrRetryTask(taskId, op) {

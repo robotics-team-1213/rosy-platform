@@ -198,6 +198,66 @@ def test_cell_tasks_assign_claim_and_complete_lifecycle():
     assert micro_resp["ok"] is True
     assert micro_resp["pinky_task"]["max_step_m"] <= 0.02
     assert abs(micro_resp["pinky_task"]["v_cmd_mps"]) <= 0.02
+    assert micro_resp["decision"]["schema"] == "rosy.omx-cell-decision.v1"
+
+    dec_arm = client.post(
+        "/api/fleet/pipeline/decision-gate",
+        json={"subject_id": "cell_s", "domain": "arm_target", "displaced_to": "floor_front", "auto_execute": True},
+    ).json()
+    assert dec_arm["ok"] is True
+    assert dec_arm["decision"]["choice"] == "object_reacquire"
+    assert dec_arm["executed"]["task"]["displaced_to"] == "floor_front"
+
+    dec_pinky = client.post(
+        "/api/fleet/pipeline/decision-gate",
+        json={"subject_id": "rosy_46", "domain": "line_follow", "tangled": True, "auto_execute": True},
+    ).json()
+    assert dec_pinky["ok"] is True
+    assert dec_pinky["decision"]["choice"] == "back_and_retry"
+    assert dec_pinky["decision"]["recommended_action"] == "micro_forward_2cm"
+    assert dec_pinky["executed"]["pinky_task"]["max_step_m"] <= 0.02
+
+    # Human safety E-Stop -> pause queued tasks -> block claim -> human clears -> auto-resume
+    estop_on = client.post(
+        "/api/fleet/pipeline/human-safety-gate",
+        json={"cell_id": "cell_s", "human_detected": True, "robot_id": "rosy_46"},
+    ).json()
+    assert estop_on["ok"] is True and estop_on["active_estop"] is True
+    assert len(estop_on["paused_tasks"]) >= 1
+    assert estop_on["pinky_estop"]["v_cmd_mps"] == 0.0
+
+    blocked_claim = client.post("/api/fleet/pipeline/cell-tasks/claim", json={"cell_id": "cell_s"}).json()
+    assert blocked_claim["claimed"] is False and blocked_claim["blocked_by_human"] is True
+
+    estop_off = client.post(
+        "/api/fleet/pipeline/human-safety-gate",
+        json={"cell_id": "cell_s", "human_detected": False, "robot_id": "rosy_46"},
+    ).json()
+    assert estop_off["ok"] is True and estop_off["active_estop"] is False
+    assert set(estop_off["resumed_tasks"]) == set(estop_on["paused_tasks"])
+
+    # YAML station zones (staging_bays + export_stations) & immediate dispatch
+    zones = client.get("/api/fleet/pipeline/station-zones").json()
+    assert zones["ok"] is True and zones["schema"] == "rosy.station-zones.v1"
+    assert any(z["id"] == "STG_C2" for z in zones["staging_bays"])
+    assert any(z["id"] == "EXP_S5_PALLET" for z in zones["export_stations"])
+
+    stg_disp = client.post(
+        "/api/fleet/pipeline/station-zones/dispatch",
+        json={"zone_id": "STG_C2", "robot_id": "rosy_46"},
+    ).json()
+    assert stg_disp["ok"] is True and stg_disp["zone"]["kind"] == "staging"
+    assert stg_disp["pinky_task"]["max_step_m"] <= 0.02
+
+    exp_disp = client.post(
+        "/api/fleet/pipeline/station-zones/dispatch",
+        json={"zone_id": "EXP_S5_PALLET", "robot_id": "rosy_46"},
+    ).json()
+    assert exp_disp["ok"] is True and exp_disp["zone"]["kind"] == "export"
+    assert exp_disp["spawned_cell_task"]["cell_id"] == "cell_ab"
+    assert exp_disp["spawned_cell_task"]["arm_id"] == "arm_b"
+
+
 
 
 

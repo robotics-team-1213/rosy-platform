@@ -13,10 +13,10 @@ FLEET_CELL_AUTHORITY = (
     'pallet_tier_stacking', 'arm_claim_grant',
 )
 HANDOFF_PHASES = (
-    'IDLE', 'ARRIVED', 'CLAIMED', 'ARM_IN_BED_ZONE', 'TRANSFER_DONE',
+    'IDLE', 'ARRIVED', 'CLAIMED', 'ARM_IN_BED_ZONE', 'HUMAN_HOLD', 'TRANSFER_DONE',
     'RELEASED', 'ABORTED',
 )
-INHIBIT_MOTION_PHASES = frozenset({'CLAIMED', 'ARM_IN_BED_ZONE'})
+INHIBIT_MOTION_PHASES = frozenset({'CLAIMED', 'ARM_IN_BED_ZONE', 'HUMAN_HOLD'})
 
 
 @dataclass(frozen=True)
@@ -64,8 +64,10 @@ def evaluate_handoff_gate(
     receipt: CellToFleetRReceipt | None,
 ) -> dict[str, Any]:
     """Evaluate cell entry and Fleet-R departure from the shared bed zone."""
+    human_hold = bool(receipt is not None and receipt.phase == 'HUMAN_HOLD')
     cell_can_claim = bool(
-        handoff is not None
+        not human_hold
+        and handoff is not None
         and handoff.wheel_brake_locked
         and handoff.bed_ready
         and abs(handoff.v_cmd_mps) <= 1e-4

@@ -29,6 +29,7 @@ const BAY_STATE = Object.freeze({
 const CELL_PHASE = Object.freeze({
   IDLE: ["대기 중", "neutral"], CLAIMED: ["인수됨 · 정지 확인", "warn"],
   ARM_IN_BED_ZONE: ["OMX 작업 중 · AMR 잠금", "active"],
+  HUMAN_HOLD: ["사람 감지 비상정지 · 작업 일시중지", "warn"],
   RELEASED: ["인계 완료 · 출발 가능", "neutral"], ABORTED: ["작업 중단 · 점검 필요", "warn"],
 });
 const ACTION = Object.freeze({
@@ -101,14 +102,29 @@ export function chargeBayRows(plan) {
       const maxTemp = hs.max_temp_c ?? (Array.isArray(stopHealth.temp_c) && stopHealth.temp_c.length ? Math.max(...stopHealth.temp_c) : null);
       const maxCur = hs.max_current_ma ?? (Array.isArray(stopHealth.current_ma) && stopHealth.current_ma.length ? Math.max(...stopHealth.current_ma) : null);
       const substage = hs.substage || (task?.status === "RUNNING" ? "Grasp → Lift → Place 실행 중" : (task?.status === "COMPLETED" ? "Fold Home 완료" : "대기"));
+      const dec = plan?.decisions?.[id] || task?.decision || null;
       const healthParts = [
         maxTemp != null ? `온도 ${maxTemp}°C` : "",
         maxCur != null ? `전류 ${maxCur}mA` : "",
         substage,
+        dec ? `Decision: ${dec.choice} (${dec.reason})` : "",
       ].filter(Boolean);
+      const humanEstop = Boolean(
+        plan?.human_safety?.human_detected?.[id] || plan?.human_safety?.active_estop || phase === "HUMAN_HOLD"
+      );
       const quickControls = [
+        {label: "상황 판단·자동 실행 (Decision)", decisionSubject: id},
+        {
+          label: humanEstop ? "사람 이탈 · 작업 자동 재개" : "사람 감지 비상정지 (E-Stop)",
+          humanSafetyCell: id,
+          humanDetected: !humanEstop,
+        },
+        {
+          label: id === "cell_s" ? "반출대3 반출(YAML)" : "반출대2 반출(YAML)",
+          zoneId: id === "cell_s" ? "EXP_S3_BELT" : "EXP_S5_PALLET",
+        },
         ...(id === "cell_s" ? [{label: "자동 감지·복구 셔틀", preset: "s3_auto_recover_or_shuttle"}] : []),
-        ...(task && (task.status === "QUEUED" || task.status === "RUNNING")
+        ...(task && (task.status === "QUEUED" || task.status === "RUNNING" || task.status === "PAUSED_HUMAN")
           ? [{label: "작업 취소", cancelTaskId: task.task_id}]
           : []),
         ...(task && (task.status === "COMPLETED" || task.status === "CANCELLED" || task.status === "ABORTED")
@@ -127,16 +143,29 @@ export function chargeBayRows(plan) {
       .map((robot_id) => {
         const action = actions.find((row) => row.robot === robot_id);
         const rawAction = plan?.actions?.find((entry) => entry.robot_id === robot_id);
+        const dec = plan?.decisions?.[robot_id] || null;
+        const anyEstop = Boolean(plan?.human_safety?.active_estop);
         return {kind: "pinky", id: robot_id, robot_id,
           cameraUrl: "/api/fleet/pipeline/cell-camera/pinky", title: `Pinky AMR · ${robot_id}`,
-          status: rawAction?.blocked_by_cell || rawAction?.action === "wait" ? "warn" : "neutral",
+          status: anyEstop || rawAction?.blocked_by_cell || rawAction?.action === "wait" ? "warn" : "neutral",
           text: action?.text || "작업 정보 없음",
-          healthText: "케이블 보호 미세이동 (최대 1.5cm · 0.02m/s)",
+          healthText: dec
+            ? `Decision: ${dec.choice} (${dec.reason})`
+            : "Decision: back_and_retry (선 꼬임 보호 · 최대 1.5cm · 0.02m/s)",
           buttons: PINKY_BUTTONS,
           quickControls: [
+            {label: "상황 판단·자동 실행 (Decision)", decisionSubject: robot_id},
+            {label: "임시칸 이동(C2·YAML)", zoneId: "STG_C2"},
+            {label: "임시칸 이동(S3·YAML)", zoneId: "STG_S3_WAIT"},
+            {label: "반출대 이동(S1·YAML)", zoneId: "EXP_S1"},
             {label: "미세 전진 1.5cm", pinkyAction: "micro_forward_2cm"},
             {label: "미세 후진 1.5cm", pinkyAction: "micro_reverse_2cm"},
             {label: "즉시 정지", pinkyAction: "stop_now"},
+            {
+              label: anyEstop ? "사람 이탈 · 자동 재개" : "사람 감지 비상정지",
+              humanSafetyCell: "all",
+              humanDetected: !anyEstop,
+            },
           ]};
       }),
   ];
@@ -212,11 +241,30 @@ export function createChargeBaysView({ scope, el, call, auth }) {
               await call(`/api/fleet/pipeline/cell-tasks/${choice.cancelTaskId}/cancel`, {method: "POST"});
             } else if (choice.retryTaskId) {
               await call(`/api/fleet/pipeline/cell-tasks/${choice.retryTaskId}/retry`, {method: "POST"});
+            } else if (choice.humanSafetyCell) {
+              await call("/api/fleet/pipeline/human-safety-gate", {
+                method: "POST", headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({
+                  cell_id: choice.humanSafetyCell,
+                  human_detected: choice.humanDetected,
+                  robot_id: card.robot_id || "rosy_46",
+                }),
+              });
+            } else if (choice.zoneId) {
+              await call("/api/fleet/pipeline/station-zones/dispatch", {
+                method: "POST", headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({zone_id: choice.zoneId, robot_id: card.robot_id || "rosy_46"}),
+              });
+            } else if (choice.decisionSubject) {
+              await call("/api/fleet/pipeline/decision-gate", {
+                method: "POST", headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({subject_id: choice.decisionSubject, auto_execute: true}),
+              });
             } else {
               await call(choice.preset ? "/api/fleet/pipeline/cell-tasks" : "/api/fleet/pipeline/pinky-tasks", {
                 method: "POST", headers: {"Content-Type": "application/json"},
                 body: JSON.stringify(choice.preset ? {preset: choice.preset} :
-                  {robot_id: card.robot_id, action: choice.pinkyAction, cable_guard_micro: true}),
+                  {robot_id: card.robot_id, action: choice.pinkyAction}),
               });
             }
             await refresh();
