@@ -26,7 +26,6 @@ import yaml
 
 from core_common.motor_health import read_motor_health_snapshot  # noqa: F401
 from core_common.observation_snapshot import SnapshotChannel, interrupt_on_termination  # noqa: F401
-from core_common.protocol.account_client import _NoRedirect
 from core_common.protocol.arm_incidents import ArmIncidentAccepted, ArmIncidentHold  # noqa: F401
 from core_common.protocol.motor_health import MotorHealthResponse  # noqa: F401
 from core_common.protocol.workcell_observations import (  # noqa: F401
@@ -37,6 +36,7 @@ from core_common.protocol.workcell_observations import (  # noqa: F401
 from rosy_vision import protocol
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from load_report_bridge import _NoRedirect  # noqa: E402
 import usb_camera_report  # noqa: E402,F401
 from workcell_incident_client import (  # noqa: E402,F401
     ArmIncidentLink,

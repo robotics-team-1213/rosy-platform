@@ -93,15 +93,18 @@ def link_for(arm: str):
         return ArmIncidentLink.from_environment(arm, env)
     except (ImportError, OSError, ValueError) as exc:
         if arm in (env.get("ROSY_ARM_STATUS_ARM_ID"), env.get("ROSY_ARM_STATUS_SOURCE_ID")) and env.get("ROSY_ARM_S_TOKEN"):
-            import ssl
-            from workcell_observation_bridge import ArmIncidentLink
+            try:
+                import ssl
+                from workcell_observation_bridge import ArmIncidentLink
 
-            return ArmIncidentLink(
-                env["ROSY_ARM_STATUS_FLEET_URL"],
-                env["ROSY_ARM_STATUS_SOURCE_ID"],
-                env["ROSY_ARM_S_TOKEN"],
-                context=ssl.create_default_context(cafile=env.get("ROSY_ARM_STATUS_CA_FILE") or None),
-            )
+                return ArmIncidentLink(
+                    env["ROSY_ARM_STATUS_FLEET_URL"],
+                    env["ROSY_ARM_STATUS_SOURCE_ID"],
+                    env["ROSY_ARM_S_TOKEN"],
+                    context=ssl.create_default_context(cafile=env.get("ROSY_ARM_STATUS_CA_FILE") or None),
+                )
+            except (ImportError, OSError, ValueError) as inner_exc:
+                exc = inner_exc
         print(f"fleet incident link unavailable: {type(exc).__name__}: {str(exc)[:120]}")
         return None
 
