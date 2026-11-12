@@ -64,6 +64,13 @@ def install_pipeline_routes(app, *, console=None, site_maps=None, read_guard=())
     app.state.detected_displaced_site = getattr(app.state, "detected_displaced_site", None)
     app.state.cable_tangled = getattr(app.state, "cable_tangled", True)
     app.state.human_detected = getattr(app.state, "human_detected", None) or {"cell_s": False, "cell_ab": False, "all": False}
+    app.state.cell_camera_quality = getattr(app.state, "cell_camera_quality", None) or {}
+    app.state.arm_holds = getattr(app.state, "arm_holds", None) or {
+        "arm_s": {"arm": "arm_s", "held": False, "reason": None, "incident_ids": []},
+        "arm_a": {"arm": "arm_a", "held": False, "reason": None, "incident_ids": []},
+        "arm_b": {"arm": "arm_b", "held": False, "reason": None, "incident_ids": []},
+    }
+    app.state.pending_clear_arms = getattr(app.state, "pending_clear_arms", None) or {}
 
     ledger_path = _storage_dir() / "rosy-pipeline-ledger.json"
     zones_override_path = _storage_dir() / "station_zones.yaml"
@@ -433,6 +440,7 @@ def install_pipeline_routes(app, *, console=None, site_maps=None, read_guard=())
                 "export_stations": zones_data["export_stations"],
             },
             "cameras": _camera_catalog(),
+            "arm_holds": dict(app.state.arm_holds),
             "decisions": list(app.state.pipeline_decisions[-20:]),
             "pinky_tasks": list(app.state.pinky_tasks.values()),
         }
@@ -965,6 +973,8 @@ def install_pipeline_routes(app, *, console=None, site_maps=None, read_guard=())
                     break
             mtime = round(snap_file.stat().st_mtime, 3) if snap_file else None
             size_b = snap_file.stat().st_size if snap_file else 0
+            q_info = (app.state.cell_camera_quality or {}).get(cid) or (app.state.cell_camera_quality or {}).get(fb or "") or {}
+            q_meta = q_info.get("quality") or {}
             rows.append({
                 "id": cid,
                 "label": spec["label"],
@@ -973,9 +983,66 @@ def install_pipeline_routes(app, *, console=None, site_maps=None, read_guard=())
                 "url": f"/api/fleet/pipeline/cell-camera/{cid}",
                 "bytes": size_b,
                 "updated_at": mtime,
-                "fresh": bool(mtime and (now - mtime) < 30.0),
+                "fresh": bool(q_info.get("fresh")) if "fresh" in q_info else bool(mtime and (now - mtime) < 30.0),
+                "sequence": q_info.get("sequence"),
+                "receipt_age_s": q_info.get("receipt_age_s"),
+                "condition": q_meta.get("condition") or ("NORMAL" if size_b > 0 else "UNKNOWN"),
+                "mean_intensity": round(float(q_meta["mean_intensity"]), 1) if q_meta.get("mean_intensity") is not None else None,
+                "spatial_contrast": round(float(q_meta["spatial_contrast"]), 1) if q_meta.get("spatial_contrast") is not None else None,
+                "usable": bool(q_meta.get("usable", size_b > 0)),
             })
         return rows
+
+    @app.post("/api/fleet/pipeline/cell-quality", dependencies=read_guard)
+    async def ingest_cell_quality(request: Request):
+        body = await request.json()
+        cams = body.get("cameras")
+        if isinstance(cams, dict):
+            for k, v in cams.items():
+                if isinstance(v, dict):
+                    app.state.cell_camera_quality[str(k)] = v
+        holds = body.get("arm_holds")
+        if isinstance(holds, dict):
+            for arm_id in ("arm_s", "arm_a", "arm_b"):
+                if isinstance(holds.get(arm_id), dict):
+                    h = holds[arm_id]
+                    if arm_id in app.state.pending_clear_arms:
+                        continue
+                    app.state.arm_holds[arm_id] = {
+                        "arm": arm_id,
+                        "held": bool(h.get("local_held") or h.get("fleet_held") or h.get("held")),
+                        "reason": h.get("local_reason") or h.get("fleet_reason") or h.get("reason"),
+                        "incident_ids": list(h.get("incident_ids") or []),
+                    }
+        pending = dict(app.state.pending_clear_arms)
+        app.state.pending_clear_arms.clear()
+        return {
+            "ok": True,
+            "schema": "rosy.pipeline.cell-quality.v1",
+            "cameras_updated": len(app.state.cell_camera_quality),
+            "arm_holds": app.state.arm_holds,
+            "pending_clear_arms": pending,
+        }
+
+    @app.post("/api/fleet/pipeline/arm-holds/clear", dependencies=read_guard)
+    async def clear_pipeline_arm_holds(request: Request):
+        body = await request.json()
+        target = str(body.get("arm_id") or body.get("cell_id") or "all")
+        note = str(body.get("note") or "verified folded home and cleared hold from Fleet console").strip()
+        if not note:
+            raise HTTPException(400, detail={"code": "EMPTY_CLEAR_NOTE"})
+        if target == "cell_s":
+            arms = ["arm_s"]
+        elif target == "cell_ab":
+            arms = ["arm_a", "arm_b"]
+        elif target in ("arm_s", "arm_a", "arm_b"):
+            arms = [target]
+        else:
+            arms = ["arm_s", "arm_a", "arm_b"]
+        for a in arms:
+            app.state.arm_holds[a] = {"arm": a, "held": False, "reason": None, "incident_ids": [], "last_cleared_note": note}
+            app.state.pending_clear_arms[a] = note
+        return {"ok": True, "cleared_arms": arms, "note": note, "arm_holds": app.state.arm_holds}
 
     @app.get("/api/fleet/pipeline/cameras", dependencies=read_guard)
     async def list_pipeline_cameras():

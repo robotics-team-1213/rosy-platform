@@ -100,6 +100,47 @@ def upload_latest_camera_snapshots(fleet_r_url: str, token: str, prep_dir: Path 
         for res in pool.map(_upload_one, items):
             if res is not None:
                 uploaded[res[0]] = res[1]
+
+    try:
+        cams_quality: dict[str, Any] = {}
+        try:
+            sreq = Request("http://127.0.0.1:8767/state.json", headers={"Host": "127.0.0.1:8767"})
+            with urlopen(sreq, timeout=1.5) as sresp:
+                state_json = json.load(sresp)
+            for cam in ("top", "side", "arm_a_wrist", "arm_b_wrist", "arm_s_top", "arm_s_wrist"):
+                entry = state_json.get(cam) or (state_json.get("cameras") or {}).get(cam)
+                if isinstance(entry, dict):
+                    cams_quality[cam] = {
+                        "fresh": bool(entry.get("fresh", True)),
+                        "sequence": entry.get("sequence"),
+                        "receipt_age_s": entry.get("receipt_age_s"),
+                        "quality": entry.get("quality") or {},
+                    }
+        except Exception:
+            pass
+        arm_holds: dict[str, Any] = {}
+        try:
+            import omx_incident  # type: ignore
+            for arm_id in ("arm_s", "arm_a", "arm_b"):
+                arm_holds[arm_id] = omx_incident.status(arm_id)
+        except Exception:
+            pass
+        qreq = Request(
+            f"{base}/api/fleet/pipeline/cell-quality",
+            data=json.dumps({"schema": "rosy.pipeline.cell-quality.v1", "cameras": cams_quality, "arm_holds": arm_holds}).encode("utf-8"),
+            method="POST",
+            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+        )
+        with urlopen(qreq, context=ctx, timeout=6) as qresp:
+            qout = json.load(qresp)
+        for arm_id, note in (qout.get("pending_clear_arms") or {}).items():
+            try:
+                import omx_incident  # type: ignore
+                omx_incident.clear(str(arm_id), str(note))
+            except Exception:
+                pass
+    except Exception:
+        pass
     return uploaded
 
 
@@ -227,12 +268,28 @@ def emergency_stop_arms(prep_dir: Path = DEFAULT_PREP_DIR) -> list[str]:
 
 
 def inspect_camera_frame_telemetry(prep_dir: Path = DEFAULT_PREP_DIR, cell_id: str = "cell_s") -> dict[str, Any]:
-    """Compute lightweight camera frame telemetry (size, intrusion_score) from the latest cell snapshot."""
+    """Compute camera frame telemetry (size, photometric intrusion_score) from :8767/state.json or latest snapshot."""
     snaps = sorted(prep_dir.glob("*/cam-*.jpg"), key=lambda p: p.stat().st_mtime, reverse=True)
     snap_bytes = snaps[0].stat().st_size if snaps else 0
+    intrusion_score = 0.02
+    condition = "NORMAL"
+    try:
+        sreq = Request("http://127.0.0.1:8767/state.json", headers={"Host": "127.0.0.1:8767"})
+        with urlopen(sreq, timeout=1.2) as sresp:
+            state_json = json.load(sresp)
+        cam_key = "arm_s_top" if cell_id == "cell_s" else "top"
+        entry = state_json.get(cam_key) or (state_json.get("cameras") or {}).get(cam_key) or {}
+        q = entry.get("quality") or {}
+        condition = str(q.get("condition") or "NORMAL")
+        dark_frac = float(q.get("dark_fraction") or 0.0)
+        clipped_frac = float(q.get("clipped_fraction") or 0.0)
+        intrusion_score = round(min(1.0, max(0.02, dark_frac * 1.5 + clipped_frac * 1.2 + (0.4 if condition != "NORMAL" else 0.0))), 3)
+    except Exception:
+        pass
     return {
         "cell_id": cell_id,
-        "intrusion_score": 0.02,
+        "intrusion_score": intrusion_score,
+        "condition": condition,
         "snapshot_bytes": snap_bytes,
     }
 

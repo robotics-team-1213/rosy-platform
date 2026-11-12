@@ -288,6 +288,36 @@ def test_cell_tasks_assign_claim_and_complete_lifecycle():
     assert any(c["id"] == "arm_a_wrist" for c in cams["cameras"])
     assert any(c["id"] == "arm_b_wrist" for c in cams["cameras"])
 
+    q_res = client.post(
+        "/api/fleet/pipeline/cell-quality",
+        json={
+            "schema": "rosy.pipeline.cell-quality.v1",
+            "cameras": {
+                "arm_s_top": {
+                    "fresh": True,
+                    "sequence": 148001,
+                    "receipt_age_s": 0.02,
+                    "quality": {"condition": "NORMAL", "mean_intensity": 112.4, "spatial_contrast": 106.8, "usable": True},
+                }
+            },
+            "arm_holds": {
+                "arm_b": {"local_held": True, "local_reason": "alignment deadline exceeded", "incident_ids": ["inc-01"]}
+            },
+        },
+    ).json()
+    assert q_res["ok"] is True and q_res["arm_holds"]["arm_b"]["held"] is True
+
+    cams_after = client.get("/api/fleet/pipeline/cameras").json()
+    arm_s_cam = next(c for c in cams_after["cameras"] if c["id"] == "arm_s_top")
+    assert arm_s_cam["sequence"] == 148001 and arm_s_cam["mean_intensity"] == 112.4
+
+    clr = client.post(
+        "/api/fleet/pipeline/arm-holds/clear",
+        json={"arm_id": "cell_ab", "note": "verified folded home on camera"},
+    ).json()
+    assert clr["ok"] is True and clr["arm_holds"]["arm_b"]["held"] is False
+
+
 
 
 

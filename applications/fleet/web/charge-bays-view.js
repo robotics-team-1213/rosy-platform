@@ -103,10 +103,14 @@ export function chargeBayRows(plan) {
       const maxCur = hs.max_current_ma ?? (Array.isArray(stopHealth.current_ma) && stopHealth.current_ma.length ? Math.max(...stopHealth.current_ma) : null);
       const substage = hs.substage || (task?.status === "RUNNING" ? "Grasp → Lift → Place 실행 중" : (task?.status === "COMPLETED" ? "Fold Home 완료" : "대기"));
       const dec = plan?.decisions?.[id] || task?.decision || null;
+      const armHolds = plan?.arm_holds || {};
+      const cellHeldArms = (id === "cell_s" ? ["arm_s"] : ["arm_a", "arm_b"]).filter((a) => armHolds[a]?.held);
+      const holdTxt = cellHeldArms.length ? `홀드(${cellHeldArms.join("/")})` : "";
       const healthParts = [
         maxTemp != null ? `온도 ${maxTemp}°C` : "",
         maxCur != null ? `전류 ${maxCur}mA` : "",
         substage,
+        holdTxt,
         dec ? `Decision: ${dec.choice} (${dec.reason})` : "",
       ].filter(Boolean);
       const humanEstop = Boolean(
@@ -124,6 +128,7 @@ export function chargeBayRows(plan) {
           zoneId: id === "cell_s" ? "EXP_S3_BELT" : "EXP_S5_PALLET",
         },
         {label: "비전 자동 점검", visionCheckCell: id},
+        {label: cellHeldArms.length ? "팔 홀드 해제(확인됨)" : "팔 홀드 점검·해제", clearArmHold: id},
         ...(id === "cell_s" ? [{label: "자동 감지·복구 셔틀", preset: "s3_auto_recover_or_shuttle"}] : []),
         ...(task && (task.status === "QUEUED" || task.status === "RUNNING" || task.status === "PAUSED_HUMAN")
           ? [{label: "작업 취소", cancelTaskId: task.task_id}]
@@ -198,7 +203,25 @@ export function createChargeBaysView({ scope, el, call, auth }) {
   const hint = el("charge-bays-hint");
   let inFlight = false;
   let unavailable = false;
+  let liveStreamOn = true;
+  let pausedStamp = Date.now();
   const selectedCamByCard = {};
+
+  function currentCamStamp() {
+    if (liveStreamOn) pausedStamp = Date.now();
+    return pausedStamp;
+  }
+
+  if (typeof window !== "undefined" && typeof window.setInterval === "function") {
+    window.setInterval(() => {
+      if (!liveStreamOn || !list || typeof list.querySelectorAll !== "function") return;
+      const stamp = currentCamStamp();
+      for (const img of list.querySelectorAll("img.cell-cam-thumb")) {
+        const base = img.dataset.baseUrl || img.src.split("?")[0];
+        img.src = `${base}?t=${stamp}`;
+      }
+    }, 2000);
+  }
 
   function tag(text, status) {
     const t = document.createElement("ui-tag");
@@ -236,10 +259,21 @@ export function createChargeBaysView({ scope, el, call, auth }) {
       const activeCamId = selectedCamByCard[card.id] || card.cameraViews?.[0]?.id;
       const activeCam = (card.cameraViews || []).find((v) => v.id === activeCamId) || {url: card.cameraUrl};
       const camera = document.createElement("img");
-      camera.src = `${activeCam.url}?t=${Date.now()}`;
+      camera.dataset.baseUrl = activeCam.url;
+      camera.src = `${activeCam.url}?t=${currentCamStamp()}`;
       camera.loading = "lazy";
       camera.className = "cell-cam-thumb";
       camera.alt = `${card.title} 카메라`;
+      camera.tabIndex = 0;
+      camera.addEventListener("click", () => camera.classList.toggle("focused"));
+      camera.addEventListener("keydown", (ev) => {
+        if (ev.key === "Enter" || ev.key === " ") {
+          ev.preventDefault();
+          camera.classList.toggle("focused");
+        } else if (ev.key === "Escape") {
+          camera.classList.remove("focused");
+        }
+      });
       const details = document.createElement("div");
       const title = document.createElement("strong");
       title.textContent = card.title;
@@ -252,13 +286,26 @@ export function createChargeBaysView({ scope, el, call, auth }) {
         camBtn.textContent = `📷 ${v.label}`;
         camBtn.addEventListener("click", () => {
           selectedCamByCard[card.id] = v.id;
+          camera.dataset.baseUrl = v.url;
           camera.src = `${v.url}?t=${Date.now()}`;
           for (const ch of camBar.children || []) {
-            ch.setAttribute("kind", ch === camBtn ? "primary" : "quiet");
+            if (!ch.dataset.streamToggle) {
+              ch.setAttribute("kind", ch === camBtn ? "primary" : "quiet");
+            }
           }
         });
         camBar.append(camBtn);
       }
+      const streamBtn = document.createElement("ui-button");
+      streamBtn.setAttribute("kind", "quiet");
+      streamBtn.setAttribute("type", "button");
+      streamBtn.dataset.streamToggle = "true";
+      streamBtn.textContent = liveStreamOn ? "자동갱신 ON(2초)" : "자동갱신 일시정지";
+      streamBtn.addEventListener("click", () => {
+        liveStreamOn = !liveStreamOn;
+        streamBtn.textContent = liveStreamOn ? "자동갱신 ON(2초)" : "자동갱신 일시정지";
+      });
+      camBar.append(streamBtn);
       const status = document.createElement("p");
       status.append(tag(card.text, card.status));
       const task = document.createElement("p");
@@ -289,6 +336,14 @@ export function createChargeBaysView({ scope, el, call, auth }) {
               await call("/api/fleet/pipeline/cable-guard", {
                 method: "POST", headers: {"Content-Type": "application/json"},
                 body: JSON.stringify({toggle: true, robot_id: card.robot_id || "rosy_46"}),
+              });
+            } else if (choice.clearArmHold) {
+              await call("/api/fleet/pipeline/arm-holds/clear", {
+                method: "POST", headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({
+                  arm_id: choice.clearArmHold,
+                  note: "Fleet 콘솔 카메라로 홈 복귀(folded: true) 확인 후 홀드 해제",
+                }),
               });
             } else if (choice.humanSafetyCell) {
               await call("/api/fleet/pipeline/human-safety-gate", {

@@ -118,6 +118,7 @@ test('pipeline cards carry cell telemetry and one-click robot actions without ch
   assert.equal(rows.cards[0].quickControls[1].humanSafetyCell, 'cell_s');
   assert.equal(rows.cards[0].quickControls[2].zoneId, 'EXP_S3_BELT');
   assert.equal(rows.cards[0].quickControls[3].visionCheckCell, 'cell_s');
+  assert.equal(rows.cards[0].quickControls[4].clearArmHold, 'cell_s');
   assert.equal(rows.cards[0].cameraViews.length, 3);
   assert.equal(rows.cards[1].cameraViews.length, 4);
   assert.equal(rows.cards[2].cameraViews.length, 3);

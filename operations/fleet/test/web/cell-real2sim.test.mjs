@@ -183,6 +183,8 @@ test("readoutPairs, loopRows, stageRows, sysidRows, surveyRows, and runRows form
   assert.equal(vCards[0].cameraViews.length, 3);
   assert.equal(vCards[1].cameraViews.length, 4);
   assert.equal(vCards[2].cameraViews.length, 4);
+  assert.ok(vCards[0].buttons.some(b => b.clearArmHold === "cell_s"));
+  assert.ok(vCards[1].buttons.some(b => b.clearArmHold === "cell_ab"));
   assert.ok(vCards[0].buttons.some(b => b.humanSafetyCell === "cell_s"));
   assert.ok(vCards[0].buttons.some(b => b.zoneId === "EXP_S3_BELT"));
   assert.ok(vCards[2].buttons.some(b => b.cableGuardToggle === true));

@@ -96,6 +96,7 @@ def install_charge_bay_routes(app, console, gathered, read_guard):
                 "pipeline_decisions": list((getattr(app.state, "pipeline_decisions", None) or [])[-20:]),
                 "cable_tangled": getattr(app.state, "cable_tangled", True),
                 "human_safety": {"human_detected": dict(hd), "active_estop": any(bool(v) for v in hd.values())},
+                "arm_holds": dict(getattr(app.state, "arm_holds", None) or {}),
                 "station_zones": {
                     "schema": zones_data["schema"],
                     "site_id": zones_data["site_id"],

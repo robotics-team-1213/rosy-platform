@@ -12,6 +12,7 @@ export const STATION_ZONES_PATH = '/api/fleet/pipeline/station-zones';
 export const STATION_ZONES_DISPATCH_PATH = '/api/fleet/pipeline/station-zones/dispatch';
 export const CABLE_GUARD_PATH = '/api/fleet/pipeline/cable-guard';
 export const VISION_CHECK_PATH = '/api/fleet/pipeline/vision-auto-check';
+export const ARM_HOLDS_CLEAR_PATH = '/api/fleet/pipeline/arm-holds/clear';
 
 const STATUS_LABEL = {
   ready: '정상 · 준비됨',
@@ -187,6 +188,12 @@ export function visualCardSpecs(body = {}) {
   const s3Human = Boolean(hs.human_detected?.cell_s || hs.active_estop || s3Gate.phase === 'HUMAN_HOLD');
   const s5Human = Boolean(hs.human_detected?.cell_ab || hs.active_estop || s5Gate.phase === 'HUMAN_HOLD');
   const anyHuman = Boolean(hs.active_estop || s3Human || s5Human);
+  const armHolds = body?.arm_holds || {};
+  const s3Hold = armHolds.arm_s?.held ? `홀드(arm_s: ${armHolds.arm_s.reason || '점검 필요'})` : '';
+  const s5HoldArms = ['arm_a', 'arm_b'].filter(a => armHolds[a]?.held);
+  const s5Hold = s5HoldArms.length ? `홀드(${s5HoldArms.join('/')})` : '';
+  if (s3Hold) s3Meta.folded_state = [s3Meta.folded_state, s3Hold].filter(Boolean).join(' · ');
+  if (s5Hold) s5Meta.folded_state = [s5Meta.folded_state, s5Hold].filter(Boolean).join(' · ');
   const cableTangled = body?.cable_tangled !== false;
   const stationZones = body?.station_zones || {};
   const extraExportForCell = (cellId, defaultIds) =>
@@ -226,6 +233,7 @@ export function visualCardSpecs(body = {}) {
           humanSafetyCell: 'cell_s',
           humanDetected: !s3Human,
         },
+        {label: s3Hold ? '팔 홀드 해제 (arm_s · 확인됨)' : '팔 홀드 점검·해제 (arm_s)', clearArmHold: 'cell_s'},
         ...taskControlButtons(s3Meta),
       ],
     },
@@ -256,6 +264,7 @@ export function visualCardSpecs(body = {}) {
           humanSafetyCell: 'cell_ab',
           humanDetected: !s5Human,
         },
+        {label: s5Hold ? '팔 홀드 해제 (arm_a/b · 확인됨)' : '팔 홀드 점검·해제 (arm_a/b)', clearArmHold: 'cell_ab'},
         ...taskControlButtons(s5Meta),
       ],
     },
@@ -547,11 +556,30 @@ export function createReal2SimPipeline({request, $, isOperator = () => false}) {
         if (ev.key === 'Enter' || ev.key === ' ') {
           ev.preventDefault();
           thumb.classList.toggle('focused');
+        } else if (ev.key === 'Escape') {
+          thumb.classList.remove('focused');
         }
       });
 
       const camSwitcher = document.createElement('div');
       camSwitcher.className = 'cell-cam-switcher';
+      const camMap = new Map((body?.cameras || []).map(c => [c.id, c]));
+      const formatCamQuality = viewId => {
+        const c = camMap.get(viewId) || camMap.get(viewId === 'cell_s' ? 'arm_s_top' : (viewId === 'cell_ab' ? 'top' : viewId));
+        if (!c) return '';
+        return [
+          c.fresh !== false ? 'LIVE' : 'STALE',
+          c.sequence != null ? `#${c.sequence}` : '',
+          c.condition || '',
+          c.mean_intensity != null ? `밝기 ${c.mean_intensity}` : '',
+        ].filter(Boolean).join(' · ');
+      };
+      const camQualityBadge = document.createElement('span');
+      camQualityBadge.className = 'cell-visual-badge';
+      camQualityBadge.textContent = formatCamQuality(activeViewId);
+      thumb.addEventListener('error', () => {
+        camQualityBadge.textContent = '프레임 수신 재시도 중';
+      });
       for (const v of (card.cameraViews || [])) {
         const pill = document.createElement('ui-button');
         pill.setAttribute('kind', v.id === activeViewId ? 'primary' : 'quiet');
@@ -562,11 +590,17 @@ export function createReal2SimPipeline({request, $, isOperator = () => false}) {
           selectedCameraByCard[card.id] = v.id;
           thumb.dataset.baseUrl = v.url;
           thumb.src = `${v.url}?t=${Date.now()}`;
+          camQualityBadge.textContent = formatCamQuality(v.id);
           for (const child of camSwitcher.children || []) {
-            child.setAttribute('kind', child === pill ? 'primary' : 'quiet');
+            if (child.tagName === 'UI-BUTTON') {
+              child.setAttribute('kind', child === pill ? 'primary' : 'quiet');
+            }
           }
         });
         camSwitcher.append(pill);
+      }
+      if (camQualityBadge.textContent) {
+        camSwitcher.append(camQualityBadge);
       }
 
       const head = document.createElement('div');
@@ -598,6 +632,9 @@ export function createReal2SimPipeline({request, $, isOperator = () => false}) {
         } else if (b.cableGuardToggle) {
           btn.dataset.cableGuardToggle = 'true';
           btn.addEventListener('click', () => toggleCableGuard());
+        } else if (b.clearArmHold) {
+          btn.dataset.clearArmHold = b.clearArmHold;
+          btn.addEventListener('click', () => runClearArmHold(b.clearArmHold));
         } else if (b.humanSafetyCell) {
           btn.dataset.humanSafetyCell = b.humanSafetyCell;
           btn.addEventListener('click', () => runHumanSafetyGate(b.humanSafetyCell, b.humanDetected, card.robot_id || 'rosy_46'));
@@ -649,7 +686,15 @@ export function createReal2SimPipeline({request, $, isOperator = () => false}) {
       img.alt = cam.label;
       img.loading = 'lazy';
       const meta = document.createElement('pre');
-      meta.textContent = `${cam.topic || ''} · ${cam.fresh !== false ? 'LIVE (실시간 수신)' : '스냅샷'}`;
+      const qualParts = [
+        cam.topic || '',
+        cam.fresh !== false ? 'LIVE (실시간 수신)' : 'STALE (스냅샷)',
+        cam.sequence != null ? `seq #${cam.sequence}` : '',
+        cam.condition ? `상태 ${cam.condition}` : '',
+        cam.mean_intensity != null ? `밝기 ${cam.mean_intensity}` : '',
+        cam.spatial_contrast != null ? `대비 ${cam.spatial_contrast}` : '',
+      ].filter(Boolean);
+      meta.textContent = qualParts.join(' · ');
       card.addEventListener('click', () => {
         card.classList.toggle('focused');
       });
@@ -657,9 +702,35 @@ export function createReal2SimPipeline({request, $, isOperator = () => false}) {
         if (ev.key === 'Enter' || ev.key === ' ') {
           ev.preventDefault();
           card.classList.toggle('focused');
+        } else if (ev.key === 'Escape') {
+          card.classList.remove('focused');
         }
       });
-      card.append(h4, img, meta);
+      const camQuickMap = {
+        arm_s_top: {label: '▶ S3 셔틀 실행', preset: 's3_shuttle'},
+        arm_s_wrist: {label: '▶ 자동 복구 셔틀', preset: 's3_auto_recover_or_shuttle'},
+        top: {label: '▶ S3→S5 연속 실행', preset: 'full_s3_to_s5_pipeline'},
+        side: {label: '▶ S3 도킹+하역', pinkyAction: 'dock_and_unload_s3'},
+        arm_a_wrist: {label: '▶ 1층 적재 (arm_a)', preset: 's5_tier1_arm_a'},
+        arm_b_wrist: {label: '▶ 2층 적재 (arm_b)', preset: 's5_tier2_arm_b'},
+        pinky: {label: '▶ 임시칸1 이동 (STG_C2)', zoneId: 'STG_C2'},
+      };
+      const qAct = camQuickMap[cam.id];
+      if (qAct) {
+        const actBtn = document.createElement('ui-button');
+        actBtn.setAttribute('kind', 'quiet');
+        actBtn.setAttribute('type', 'button');
+        actBtn.textContent = qAct.label;
+        actBtn.addEventListener('click', ev => {
+          ev.stopPropagation();
+          if (qAct.preset) void runQuickPreset(qAct.preset);
+          else if (qAct.pinkyAction) void runPinkyQuickAction('rosy_46', qAct.pinkyAction);
+          else if (qAct.zoneId) void runStationZoneDispatch(qAct.zoneId, 'rosy_46');
+        });
+        card.append(h4, img, meta, actBtn);
+      } else {
+        card.append(h4, img, meta);
+      }
       return card;
     }));
   }
@@ -749,6 +820,29 @@ export function createReal2SimPipeline({request, $, isOperator = () => false}) {
     } catch (error) {
       if (current !== generation) return;
       if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `선 꼬임 보호 전환 실패: ${error.message}`;
+    }
+  }
+
+  async function runClearArmHold(cellOrArmId) {
+    const current = ++generation;
+    if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `팔 홀드(${cellOrArmId}) 점검 및 해제를 요청하는 중입니다.`;
+    try {
+      const res = await request(ARM_HOLDS_CLEAR_PATH, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          arm_id: cellOrArmId,
+          note: 'Fleet 콘솔 카메라로 홈 복귀(folded: true) 및 간섭 없음 확인 후 홀드 해제',
+        }),
+      });
+      if (current !== generation) return;
+      await refreshCellTasks(current);
+      if ($('cell-tasks-status')) {
+        $('cell-tasks-status').textContent = `팔 홀드 해제 완료: ${(res.cleared_arms || []).join(', ')}`;
+      }
+    } catch (error) {
+      if (current !== generation) return;
+      if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `팔 홀드 해제 실패: ${error.message}`;
     }
   }
 
