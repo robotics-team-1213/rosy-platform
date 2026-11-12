@@ -7,7 +7,6 @@ The target appears only after a complete locked snapshot; an existing target is 
 import argparse
 from contextlib import contextmanager
 import ctypes
-import hashlib
 import json
 import os
 from pathlib import Path
@@ -20,15 +19,12 @@ from urllib.parse import urlparse
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'learning/curation/perception'))
 from job_state import JobError
+from review_authority import _sha
 
 
 # Format pinned: migrated state input_signature hashes these bytes; test_canonical_hash_formats.
 def _canonical(value):
     return json.dumps(value, sort_keys=True, allow_nan=False).encode()
-
-
-def _sha(raw):
-    return hashlib.sha256(raw).hexdigest()
 
 
 def _pairs(items):

@@ -11,16 +11,17 @@ from __future__ import annotations
 
 import argparse
 import base64
-import hashlib
 import html
 import json
 import re
+import sys
 import zipfile
 from pathlib import Path, PureWindowsPath
 
-
-def digest(data):
-    return hashlib.sha256(data).hexdigest()
+CURATION_DIR = Path(__file__).resolve().parent
+if str(CURATION_DIR) not in sys.path:
+    sys.path.insert(0, str(CURATION_DIR))
+from review_authority import _sha as digest
 
 
 def bound(root, name):
