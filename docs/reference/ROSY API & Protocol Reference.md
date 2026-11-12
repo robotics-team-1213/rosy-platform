@@ -5,9 +5,19 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.385
+**Version:** v1.389
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.389 Fleet database maintenance status
+
+`GET /api/fleet/admin/db-status` requires a cookie-authenticated human Account session
+with `accounts.manage` and a same-origin `Origin` when supplied. Other callers receive
+403 `ACCOUNT_ADMIN_REQUIRED`. The no-store response reports Fleet SQLite journal mode,
+file and WAL sizes, page and freelist counts, fragmentation percentage, component
+migrations and newest timestamps by table; PostgreSQL reachability and database size;
+and Fleet backup count and newest age in hours. An absent store or sink reports
+`configured: false`. Paths, connection details and raw errors are never returned.
 
 ### v1.385 카메라로 초안 만들기·카메라까지 겹친 대조
 

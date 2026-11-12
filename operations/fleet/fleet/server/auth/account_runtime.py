@@ -2,6 +2,7 @@
 from rosy_account.password_session import PasswordSessions, install_password_routes
 from fleet.server.development_session import install_development_routes
 from fleet.server.site_auth import parse_site_principals
+from fleet.server.db_status import install_db_status_routes
 
 
 def configure_account_sessions(app, *, console, task_service, site_users, site_logins,
@@ -59,3 +60,7 @@ def install_account_login_routes(app, *, sessions, authorize, task_service, deve
     if account_client_config is None:
         install_password_routes(app, sessions=sessions, authorize=authorize, task_service=task_service,
                                 trust_forwarded=trust_forwarded)
+    install_db_status_routes(
+        app, store_path=task_service.store.path if task_service is not None else None,
+        authorize=authorize,
+    )
