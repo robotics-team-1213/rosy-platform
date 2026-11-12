@@ -199,10 +199,10 @@ class Runner:
                 self.pace_floor = max(self.pace_floor, self.lag)
             raw_target = self.queue.pop(0)
             if self.jitter.get("shaking") or (self.pace_last is not None and self.queue):
-                self._damp_cooldown = 4 if self.queue else 0
+                if self.jitter.get("shaking") and self.queue:
+                    self._damp_cooldown = 3
                 self.target = joint_jitter.damp_step(
                     self.ensembler, self.target or raw_target, raw_target, self.queue[:4],
-                    vmax=GUARD_UNITS_PER_S, fps=self.fps,
                 )
                 self.damped_ticks += 1
             elif self._damp_cooldown > 0 and self.queue:
