@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 FIELD_REPORT_TTL_S = 5.0
-_FRAME_INTERVAL_S = 0.2
+_FRAME_INTERVAL_S = 0.05
 _FIELD_PROPOSAL_INTERVAL_S = 1.0
 _FIELD_DETECT_INTERVAL_S = 1.0
 _MAP_REGISTER_INTERVAL_S = 1.0
@@ -66,6 +66,21 @@ async def _preview_response(self, path: str, authorization: str | None) -> Respo
     """Serve one authorized latest-frame read directly from Vision, never from Fleet."""
     prefix = "/api/vision/sources/"
     source, _, view = path[len(prefix):].partition("/") if path.startswith(prefix) else ("", "", "")
+    if source and view.startswith("roi/"):
+        target_id = view[len("roi/"):].strip("/").split("?")[0]
+        tracker = getattr(self, "anchor_tracker", None)
+        if not target_id or tracker is None:
+            return _http_response(404, b"roi tracker unavailable\n")
+        self.hold_stream(source)
+        roi_jpeg, roi_at = tracker.roi_jpeg(target_id)
+        if not roi_jpeg:
+            return _http_response(404, b"roi unavailable\n")
+        return _http_response(200, roi_jpeg, extra={
+            "Content-Type": "image/jpeg",
+            "Cache-Control": "no-store",
+            "X-Frame-Captured-At": str(roi_at),
+            "X-Target-Id": target_id,
+        })
     if (not source or view not in ("frame", "field-proposal", "map-proposal")
             or self.preview_signer is None):
         return _http_response(404, b"not found\n")
@@ -76,10 +91,13 @@ async def _preview_response(self, path: str, authorization: str | None) -> Respo
         return _http_response(401, b"unauthorized\n")
     # A missing, stale, or rate-limited frame is still a request (D-691).
     self.hold_stream(source)
+
     if view == "map-proposal" and self.map_paint is None:
         return _http_response(404, b"site map paint not configured\n")
     if view == "frame":
-        limited = self._rate_limited((str(lease["sub"]), source), _FRAME_INTERVAL_S)
+        rect_mode = (str(lease["rectification"].get("mode", "raw"))
+                     if isinstance(lease.get("rectification"), Mapping) else "raw")
+        limited = self._rate_limited((str(lease["sub"]), source, rect_mode), _FRAME_INTERVAL_S)
     else:
         limited = self._rate_limited((str(lease["sub"]), source, view), _FIELD_PROPOSAL_INTERVAL_S)
     if limited is not None:

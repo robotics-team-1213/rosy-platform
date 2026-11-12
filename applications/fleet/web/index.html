@@ -196,9 +196,17 @@
         <label for="map-display-mode">표시</label>
         <select class="ui-field" id="map-display-mode" aria-label="지도 표시 방식">
           <option value="coordinates">2D 좌표·선</option>
-          <option value="overlay">교정 영상 + 좌표</option>
+          <option value="overlay" selected>교정 영상 + 좌표</option>
           <option value="camera">원본 영상만</option>
         </select>
+      </div>
+      <div class="map-overlay-toggles" id="map-overlay-toggles" role="group" aria-label="지도 오버레이 표시 켜기·끄기">
+        <ui-button kind="quiet" type="button" data-layer-toggle="all" aria-pressed="true" title="모든 지도 오버레이를 한 번에 끄거나 켭니다">전체 표시 켬</ui-button>
+        <ui-button kind="quiet" type="button" data-layer-toggle="poses" aria-pressed="true" title="핑키 로봇 몸체·방향·도로 주행 경로 표시">로봇·경로</ui-button>
+        <ui-button kind="quiet" type="button" data-layer-toggle="omx" aria-pressed="true" title="OMX-AI 로봇팔 베이스·헤드 추적 표시">OMX-AI</ui-button>
+        <ui-button kind="quiet" type="button" data-layer-toggle="lanes" aria-pressed="true" title="도로 중심선과 충전소·정류장 장소 표시">도로·장소</ui-button>
+        <ui-button kind="quiet" type="button" data-layer-toggle="traffic" aria-pressed="true" title="차로 점유·신호·구역 테두리 표시">교통·점유</ui-button>
+        <ui-button kind="quiet" type="button" data-layer-toggle="labels" aria-pressed="true" title="지도 위 이름·상태 텍스트 칩 표시 (꺼도 마우스 호버 시 상세 카드가 표시됩니다)">라벨</ui-button>
       </div>
       <details id="map-options" class="map-options">
         <summary class="ui-disclosure-row">지도 표시·경로 옵션</summary>
@@ -239,6 +247,7 @@
         <div id="device-watch" class="device-watch">
           <ui-button kind="segment" id="watch-ceiling" type="button" aria-pressed="true" aria-controls="map-birdseye">천장</ui-button>
         </div>
+        <div id="map-hover-card" class="map-hover-card" role="status" aria-live="polite" hidden></div>
       </div>
       </div>
       <details id="map-readouts" class="map-readouts">

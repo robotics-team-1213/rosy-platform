@@ -115,9 +115,9 @@ export function roadPolylineBetween(siteMap, startPose, targetXY) {
     if (gp.dist < minGoalDist) minGoalDist = gp.dist;
     snaps.push({ edge: e, sp, gp });
   }
-  if (!snaps.length || minGoalDist > 0.35) return null;
-  const startCands = snaps.filter((s) => s.sp.dist <= minStartDist + 0.06);
-  const goalCands = snaps.filter((s) => s.gp.dist <= minGoalDist + 0.06);
+  if (!snaps.length || minGoalDist > 1.5) return null;
+  const startCands = snaps.filter((s) => s.sp.dist <= minStartDist + 0.08);
+  const goalCands = snaps.filter((s) => s.gp.dist <= minGoalDist + 0.08);
 
   const adj = new Map();
   const addArc = (u, v, cost, poly, place) => {
@@ -229,6 +229,13 @@ export function drawGuide(ctx, toPoint, { guide, css, colorOf, drawChip, on, foc
   const omxOn = view?.layers?.omx !== false;
   const hovered = view?.hoverEntity || null;
 
+  const primaryCol = css("--series-primary");
+  const warnCol = css("--status-warn");
+  const goalCol = css("--series-goal");
+  const inkCol = css("--ink");
+  const recessedCol = css("--surface-recessed");
+  const scrimCol = css("--scrim-solid");
+
   // 1. Draw anchored OMX-AI arms (base anchor + 4x zoomed tracked head/gripper vector)
   const anchors = omxOn && Array.isArray(view?.anchors) ? view.anchors : [];
   for (const anc of anchors) {
@@ -238,7 +245,7 @@ export function drawGuide(ctx, toPoint, { guide, css, colorOf, drawChip, on, foc
     const reachPx = Math.max(14, scaleAt(anc.base_x, anc.base_y, anc.reach_m || 0.28));
     const isHoveredOmx = hovered?.kind === "omx_ai" && hovered.id === anc.target_id;
     const isSelectedOmx = isHoveredOmx || view?.focusAnchorId === anc.target_id || view?.anchorPinTarget === anc.target_id;
-    const armColor = isSelectedOmx ? "#00e5ff" : "#ffb300";
+    const armColor = isSelectedOmx ? primaryCol : warnCol;
     ctx.save();
     // Workspace reach circle (subtle unless hovered/selected)
     ctx.beginPath();
@@ -252,7 +259,7 @@ export function drawGuide(ctx, toPoint, { guide, css, colorOf, drawChip, on, foc
     ctx.globalAlpha = 1;
     // Base anchor square
     const bs = isSelectedOmx ? 6.5 : 4.5;
-    ctx.fillStyle = "#18202c";
+    ctx.fillStyle = recessedCol;
     ctx.strokeStyle = armColor;
     ctx.lineWidth = 2;
     ctx.beginPath();
@@ -269,10 +276,10 @@ export function drawGuide(ctx, toPoint, { guide, css, colorOf, drawChip, on, foc
     // Distal Head / Gripper marker + orientation tip
     ctx.beginPath();
     ctx.arc(headP.x, headP.y, isSelectedOmx ? 5.5 : 4, 0, Math.PI * 2);
-    ctx.fillStyle = "#00e5ff";
+    ctx.fillStyle = primaryCol;
     ctx.fill();
     ctx.lineWidth = 1.5;
-    ctx.strokeStyle = "#ffffff";
+    ctx.strokeStyle = inkCol;
     ctx.stroke();
     if (typeof anc.head_yaw === "number") {
       const hTip = ahead(anc.head_x ?? anc.base_x, anc.head_y ?? anc.base_y, anc.head_yaw, 0.055);
@@ -280,7 +287,7 @@ export function drawGuide(ctx, toPoint, { guide, css, colorOf, drawChip, on, foc
       ctx.moveTo(headP.x, headP.y);
       ctx.lineTo(hTip.x, hTip.y);
       ctx.lineWidth = 1.8;
-      ctx.strokeStyle = "#00e5ff";
+      ctx.strokeStyle = primaryCol;
       ctx.stroke();
     }
     ctx.restore();
@@ -293,77 +300,147 @@ export function drawGuide(ctx, toPoint, { guide, css, colorOf, drawChip, on, foc
     }
   }
 
-  // 1b. Draw active Road + Nav2 planned trajectory strictly along lane_graph.yaml polylines
+  // 1b. Draw locked Selected Goal Pin (🎯) + Active Road + Nav2 trajectory strictly along lane_graph.yaml polylines
+  const selectedGoal = on ? view?.selectedGoal : null;
   const roadPlan = on ? view?.activeRoadPlan : null;
   const siteMapObj = view?.activeSiteMap?.map;
-  if (roadPlan && Array.isArray(roadPlan.waypoints_site) && roadPlan.waypoints_site.length >= 2 && Date.now() - (roadPlan.at || 0) < 45000) {
-    const planRobot = (guide?.robots || []).find((r) => r.robot_id === roadPlan.robotId);
-    const lastRaw = roadPlan.waypoints_site[roadPlan.waypoints_site.length - 1];
-    const lx = Array.isArray(lastRaw) ? lastRaw[0] : lastRaw.x;
-    const ly = Array.isArray(lastRaw) ? lastRaw[1] : lastRaw.y;
-    if (planRobot?.pose && Date.now() - (roadPlan.at || 0) > 2500 && Math.hypot(planRobot.pose.x - lx, planRobot.pose.y - ly) < 0.065) {
-      view.activeRoadPlan = null;
-    } else {
-      const densePts = expandWaypointsOnRoad(siteMapObj, roadPlan.waypoints_site);
-      if (densePts.length >= 2) {
-        ctx.save();
-        ctx.beginPath();
-        densePts.forEach(([wx, wy], idx) => {
-          const pt = toPoint(wx, wy);
-          if (idx === 0) ctx.moveTo(pt.x, pt.y);
-          else ctx.lineTo(pt.x, pt.y);
-        });
-        ctx.lineWidth = 3.0;
-        ctx.strokeStyle = "#00e5ff";
-        ctx.lineJoin = "round";
-        ctx.lineCap = "round";
-        ctx.setLineDash([7, 4]);
-        ctx.stroke();
-        ctx.setLineDash([]);
+  const activeRouteSource = selectedGoal || roadPlan;
+  if (activeRouteSource && Date.now() - (activeRouteSource.at || 0) < 120000) {
+    const planRobotId = activeRouteSource.robotId || focusedRobotId || "rosy_46";
+    const planRobot = (guide?.robots || []).find((r) => r.robot_id === planRobotId);
+    const rawWaypoints = roadPlan?.waypoints_site?.length >= 2
+      ? roadPlan.waypoints_site
+      : (selectedGoal?.points?.length >= 2 ? selectedGoal.points : null);
+    let densePts = rawWaypoints ? expandWaypointsOnRoad(siteMapObj, rawWaypoints) : [];
+    if (densePts.length < 2 && planRobot?.pose && typeof activeRouteSource.x === "number") {
+      const fallbackRoad = roadPolylineBetween(siteMapObj, planRobot.pose, activeRouteSource);
+      densePts = fallbackRoad?.points?.length >= 2
+        ? fallbackRoad.points
+        : [[planRobot.pose.x, planRobot.pose.y], [activeRouteSource.x, activeRouteSource.y]];
+    }
+    const goalX = typeof selectedGoal?.x === "number" ? selectedGoal.x : (densePts.length ? densePts[densePts.length - 1][0] : null);
+    const goalY = typeof selectedGoal?.y === "number" ? selectedGoal.y : (densePts.length ? densePts[densePts.length - 1][1] : null);
+    if (planRobot?.pose && goalX !== null && Date.now() - (activeRouteSource.at || 0) > 3500 && Math.hypot(planRobot.pose.x - goalX, planRobot.pose.y - goalY) < 0.055) {
+      if (selectedGoal) selectedGoal.statusText = "도착 완료";
+    }
+    const routeColor = selectedGoal?.status === "PREVIEW" ? warnCol : goalCol;
+    ctx.save();
+    if (densePts.length >= 2) {
+      // High-contrast dark halo underneath selected road polyline
+      ctx.beginPath();
+      densePts.forEach(([wx, wy], idx) => {
+        const pt = toPoint(wx, wy);
+        if (idx === 0) ctx.moveTo(pt.x, pt.y);
+        else ctx.lineTo(pt.x, pt.y);
+      });
+      ctx.lineWidth = 5.4;
+      ctx.strokeStyle = scrimCol;
+      ctx.lineJoin = "round";
+      ctx.lineCap = "round";
+      ctx.stroke();
 
-        // Directional flow chevrons every ~0.35 m along the road polyline
-        let distAcc = 0;
-        for (let i = 0; i < densePts.length - 1; i++) {
-          const [x0, y0] = densePts[i], [x1, y1] = densePts[i + 1];
-          const segM = Math.hypot(x1 - x0, y1 - y0);
-          distAcc += segM;
-          if (distAcc >= 0.35) {
-            distAcc = 0;
-            const p0 = toPoint(x0, y0), p1 = toPoint(x1, y1);
-            const ang = Math.atan2(p0.y - p1.y, p0.x - p1.x);
-            ctx.beginPath();
-            for (const turn of [-0.55, 0.55]) {
-              ctx.moveTo(p1.x, p1.y);
-              ctx.lineTo(p1.x + Math.cos(ang + turn) * 6, p1.y + Math.sin(ang + turn) * 6);
-            }
-            ctx.lineWidth = 2;
-            ctx.strokeStyle = "#00e5ff";
-            ctx.stroke();
-          }
-        }
+      // Main locked road trajectory line
+      ctx.beginPath();
+      densePts.forEach(([wx, wy], idx) => {
+        const pt = toPoint(wx, wy);
+        if (idx === 0) ctx.moveTo(pt.x, pt.y);
+        else ctx.lineTo(pt.x, pt.y);
+      });
+      ctx.lineWidth = 3.2;
+      ctx.strokeStyle = routeColor;
+      ctx.lineJoin = "round";
+      ctx.lineCap = "round";
+      ctx.stroke();
 
-        // Draw start & goal markers
-        const endIndices = [0, densePts.length - 1];
-        for (const idx of endIndices) {
-          const [wx, wy] = densePts[idx];
-          const pt = toPoint(wx, wy);
+      // Directional flow chevrons every ~0.32 m along the road polyline
+      let distAcc = 0;
+      for (let i = 0; i < densePts.length - 1; i++) {
+        const [x0, y0] = densePts[i], [x1, y1] = densePts[i + 1];
+        const segM = Math.hypot(x1 - x0, y1 - y0);
+        distAcc += segM;
+        if (distAcc >= 0.32) {
+          distAcc = 0;
+          const p0 = toPoint(x0, y0), p1 = toPoint(x1, y1);
+          const ang = Math.atan2(p0.y - p1.y, p0.x - p1.x);
           ctx.beginPath();
-          ctx.arc(pt.x, pt.y, idx === densePts.length - 1 ? 5 : 3.5, 0, Math.PI * 2);
-          ctx.fillStyle = "#00e5ff";
-          ctx.fill();
-          ctx.lineWidth = 1.5;
-          ctx.strokeStyle = "#101824";
+          for (const turn of [-0.55, 0.55]) {
+            ctx.moveTo(p1.x, p1.y);
+            ctx.lineTo(p1.x + Math.cos(ang + turn) * 6.5, p1.y + Math.sin(ang + turn) * 6.5);
+          }
+          ctx.lineWidth = 2.2;
+          ctx.strokeStyle = inkCol;
           ctx.stroke();
         }
-        if (labelsOn) {
-          const [lastWx, lastWy] = densePts[densePts.length - 1];
-          const lastPt = toPoint(lastWx, lastWy);
-          const placesStr = Array.isArray(roadPlan.places) && roadPlan.places.length ? roadPlan.places.join("→") : "도로경로";
-          drawChip(ctx, null, lastPt.x, lastPt.y - 16, `🛣️ ${placesStr}`, "");
+      }
+
+      // Draw start dot on road
+      const [sx, sy] = densePts[0];
+      const sPt = toPoint(sx, sy);
+      ctx.beginPath();
+      ctx.arc(sPt.x, sPt.y, 4, 0, Math.PI * 2);
+      ctx.fillStyle = routeColor;
+      ctx.fill();
+      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = recessedCol;
+      ctx.stroke();
+    }
+
+    // Draw unmistakable Selected Target Bullseye Pin (🎯) at the clicked coordinate
+    if (goalX !== null && goalY !== null) {
+      const gp = toPoint(goalX, goalY);
+      if (densePts.length >= 2) {
+        const [lastRx, lastRy] = densePts[densePts.length - 1];
+        if (Math.hypot(lastRx - goalX, lastRy - goalY) > 0.02) {
+          const lPt = toPoint(lastRx, lastRy);
+          ctx.beginPath();
+          ctx.moveTo(lPt.x, lPt.y);
+          ctx.lineTo(gp.x, gp.y);
+          ctx.setLineDash([4, 3]);
+          ctx.lineWidth = 2.2;
+          ctx.strokeStyle = routeColor;
+          ctx.stroke();
+          ctx.setLineDash([]);
         }
-        ctx.restore();
+      }
+      // Outer bullseye target ring
+      ctx.beginPath();
+      ctx.arc(gp.x, gp.y, 10.5, 0, Math.PI * 2);
+      ctx.globalAlpha = 0.18;
+      ctx.fillStyle = routeColor;
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.lineWidth = 2.4;
+      ctx.strokeStyle = routeColor;
+      ctx.stroke();
+      // Crosshair ticks around the target pin
+      ctx.beginPath();
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        ctx.moveTo(gp.x + dx * 7, gp.y + dy * 7);
+        ctx.lineTo(gp.x + dx * 14, gp.y + dy * 14);
+      }
+      ctx.lineWidth = 2.0;
+      ctx.strokeStyle = routeColor;
+      ctx.stroke();
+      // Inner bullseye dot
+      ctx.beginPath();
+      ctx.arc(gp.x, gp.y, 4.5, 0, Math.PI * 2);
+      ctx.fillStyle = routeColor;
+      ctx.fill();
+      ctx.lineWidth = 1.6;
+      ctx.strokeStyle = inkCol;
+      ctx.stroke();
+
+      if (labelsOn) {
+        const placesList = roadPlan?.places?.length ? roadPlan.places : selectedGoal?.places;
+        const viaStr = Array.isArray(placesList) && placesList.length ? ` · ${placesList.join("→")}` : "";
+        const lenVal = roadPlan?.length_m ?? selectedGoal?.length_m;
+        const lenStr = typeof lenVal === "number" ? ` · ${lenVal.toFixed(2)}m` : "";
+        const statusStr = selectedGoal?.statusText ? ` · ${selectedGoal.statusText}` : "";
+        const goalTitle = selectedGoal?.label || `(${goalX.toFixed(2)}, ${goalY.toFixed(2)})`;
+        drawChip(ctx, null, gp.x, gp.y - 18, `🎯 ${goalTitle}${lenStr}${viaStr}${statusStr}`, "good");
       }
     }
+    ctx.restore();
   }
 
   // 1c. Highlight hovered place node on map
@@ -372,7 +449,7 @@ export function drawGuide(ctx, toPoint, { guide, css, colorOf, drawChip, on, foc
     ctx.save();
     ctx.beginPath();
     ctx.arc(pp.x, pp.y, 9, 0, Math.PI * 2);
-    ctx.strokeStyle = "#00e5ff";
+    ctx.strokeStyle = primaryCol;
     ctx.lineWidth = 2.2;
     ctx.stroke();
     ctx.restore();
@@ -393,7 +470,7 @@ export function drawGuide(ctx, toPoint, { guide, css, colorOf, drawChip, on, foc
       ctx.beginPath();
       ctx.arc(p.x, p.y, r + 4, 0, Math.PI * 2);
       ctx.lineWidth = 2.2;
-      ctx.strokeStyle = isHoveredRobot ? "#00e5ff" : colour;
+      ctx.strokeStyle = isHoveredRobot ? primaryCol : colour;
       ctx.stroke();
     }
     // Tight uncertainty ring (body + 2cm camera tolerance)
@@ -415,7 +492,7 @@ export function drawGuide(ctx, toPoint, { guide, css, colorOf, drawChip, on, foc
     ctx.globalAlpha = row.online ? 1 : 0.45;
     if (row.pose.state !== "LOCALIZED") ctx.setLineDash([3, 2]);
     ctx.lineWidth = isFocused ? 2.5 : (alert ? 2.2 : 1.8);
-    ctx.strokeStyle = isHoveredRobot ? "#00e5ff" : (alert || colour);
+    ctx.strokeStyle = isHoveredRobot ? primaryCol : (alert || colour);
     ctx.stroke();
     ctx.setLineDash([]);
 
@@ -425,7 +502,7 @@ export function drawGuide(ctx, toPoint, { guide, css, colorOf, drawChip, on, foc
       ctx.moveTo(p.x, p.y);
       ctx.lineTo(tip.x, tip.y);
       ctx.lineWidth = 2.4;
-      ctx.strokeStyle = "#00e5ff";
+      ctx.strokeStyle = primaryCol;
       ctx.lineCap = "round";
       ctx.stroke();
       const back = Math.atan2(p.y - tip.y, p.x - tip.x);
@@ -438,34 +515,37 @@ export function drawGuide(ctx, toPoint, { guide, css, colorOf, drawChip, on, foc
     }
 
     // Live hover trajectory preview line from focused Pinky to cursor strictly along road graph
-    if (isFocused && view?.hoverWorld && !view?.pinning && !view?.anchorPinTarget && hovered?.kind !== "pinky" && hovered?.kind !== "omx_ai") {
+    const nearSelectedGoal = selectedGoal && view?.hoverWorld && Math.hypot(selectedGoal.x - view.hoverWorld.x, selectedGoal.y - view.hoverWorld.y) < 0.06;
+    if (isFocused && view?.hoverWorld && !nearSelectedGoal && !view?.pinning && !view?.anchorPinTarget && hovered?.kind !== "pinky" && hovered?.kind !== "omx_ai") {
       const hw = view.hoverWorld;
       const roadHover = roadPolylineBetween(siteMapObj, row.pose, hw);
       if (roadHover && roadHover.points.length >= 2 && roadHover.length_m > 0.03) {
+        ctx.save();
+        ctx.globalAlpha = 0.58;
         ctx.beginPath();
         roadHover.points.forEach(([wx, wy], idx) => {
           const pt = toPoint(wx, wy);
           if (idx === 0) ctx.moveTo(pt.x, pt.y);
           else ctx.lineTo(pt.x, pt.y);
         });
-        ctx.setLineDash([5, 4]);
-        ctx.lineWidth = 2.2;
+        ctx.setLineDash([4, 4]);
+        ctx.lineWidth = 1.7;
         ctx.lineJoin = "round";
-        ctx.strokeStyle = "#00e5ff";
+        ctx.strokeStyle = primaryCol;
         ctx.stroke();
         ctx.setLineDash([]);
-        const endPt = roadHover.points[roadHover.points.length - 1];
-        const hp = toPoint(endPt[0], endPt[1]);
+        const hp = toPoint(hw.x, hw.y);
         ctx.beginPath();
-        ctx.arc(hp.x, hp.y, 4.5, 0, Math.PI * 2);
-        ctx.strokeStyle = "#00e5ff";
-        ctx.lineWidth = 2;
+        ctx.arc(hp.x, hp.y, 4, 0, Math.PI * 2);
+        ctx.strokeStyle = primaryCol;
+        ctx.lineWidth = 1.6;
         ctx.stroke();
+        ctx.restore();
         if (labelsOn) {
           const viaTxt = roadHover.places?.length ? ` · ${roadHover.places.join("→")}` : "";
           const hoverLabel = hw.place
-            ? `${hw.place.id} (${roadHover.length_m.toFixed(2)}m${viaTxt})`
-            : `${roadHover.length_m.toFixed(2)}m${viaTxt}`;
+            ? `미리보기: ${hw.place.id} (${roadHover.length_m.toFixed(2)}m${viaTxt})`
+            : `클릭 시 목표 고정 (${roadHover.length_m.toFixed(2)}m${viaTxt})`;
           drawChip(ctx, null, hp.x, hp.y - 14, hoverLabel, "");
         }
       }
@@ -506,5 +586,3 @@ export function drawGuide(ctx, toPoint, { guide, css, colorOf, drawChip, on, foc
   }
   window.__guideLayer = { robots: marks.length, findings: guide.robots.reduce((n, r) => n + (r.findings || []).length, 0) };
 }
-
-

@@ -4,6 +4,23 @@ import {PLACE_KINDS} from './site-map-model.js';
 function copy(map) { return JSON.parse(JSON.stringify(map)); }
 function category(kind) { return PLACE_KINDS.includes(kind) ? 'places' : kind === 'road' ? 'edges' : 'facilities'; }
 
+export function ensureSurvey(map) {
+  if (!map) return map;
+  if (!map.survey) {
+    map.survey = {
+      revision: map.drawing?.projection_sha256 || map.map_id || 'world_261026',
+      origin: [0, 0],
+      heading_rad: 0,
+      scale_source: 'measured',
+      measured_distance_m: 2.44,
+      description: '현장 기본 기준 (2.44×1.22 m)',
+      reviewed: false,
+      review_note: '',
+    };
+  }
+  return map;
+}
+
 export function createSurveyDraft(mapId, reference) {
   if (!/^[A-Za-z0-9_.-]{1,64}$/.test(mapId) || !/^[A-Za-z0-9_.-]{1,64}$/.test(reference.revision || ''))
     throw new Error('지도 ID와 기준 버전을 확인하세요');
@@ -22,7 +39,7 @@ export function createSurveyDraft(mapId, reference) {
 }
 
 export function appendSurveyElement(map, item) {
-  if (!map?.survey) throw new Error('조사 기준이 있는 초안을 먼저 만드세요');
+  if (!map) throw new Error('조사 기준이 있는 초안을 먼저 만드세요');
   const {id, name, kind, geometry} = item;
   if (!/^[A-Za-z0-9_.-]{1,32}$/.test(id) || typeof name !== 'string' || name.length > 64
       || (kind !== 'road' && !name.trim()))
@@ -31,7 +48,7 @@ export function appendSurveyElement(map, item) {
       || !geometry.every(p => Array.isArray(p) && p.length === 2
         && p.every(v => Number.isFinite(v) && Math.abs(v) <= 1000)))
     throw new Error('지도에서 위치를 찍거나 유한한 좌표를 입력하세요');
-  const next = copy(map);
+  const next = ensureSurvey(copy(map));
   next.survey = {...next.survey, reviewed: false, review_note: ''};
   if ((next[category(kind)] || []).some(row => row.id === id))
     throw new Error('이미 쓰는 요소 ID입니다');
@@ -41,16 +58,41 @@ export function appendSurveyElement(map, item) {
     const [x, y] = geometry[0];
     next.places.push({id, name: name.trim(), kind, x, y, ...(Number.isFinite(item.yaw) ? {yaw: item.yaw} : {})});
   } else if (kind === 'road') {
-    const start = next.places.find(p => p.id === item.from), end = next.places.find(p => p.id === item.to);
-    if (!start || !end || start.id === end.id || geometry.length < 2)
-      throw new Error('서로 다른 시작·끝 장소와 도로 선을 지정하세요');
+    if (geometry.length < 2) throw new Error('도로 선은 두 점 이상 찍으세요');
+    const nearestPlace = (pt, excludeId = null) => {
+      let best = null, bestDist = 0.18;
+      for (const p of next.places) {
+        if (p.id === excludeId) continue;
+        const d = Math.hypot(p.x - pt[0], p.y - pt[1]);
+        if (d <= bestDist) { bestDist = d; best = p; }
+      }
+      return best;
+    };
+    const makeJunction = (pt, label) => {
+      let n = 1;
+      while (next.places.some(p => p.id === `P_draw_${n}`)) n++;
+      const pid = `P_draw_${n}`;
+      const place = {id: pid, name: `${label} ${n}`, kind: 'junction',
+        x: Math.round(pt[0] * 1000) / 1000, y: Math.round(pt[1] * 1000) / 1000};
+      next.places.push(place);
+      return place;
+    };
+    let start = next.places.find(p => p.id === item.from);
+    let end = next.places.find(p => p.id === item.to);
+    if (!start || (end && start.id === end.id)) {
+      start = nearestPlace(geometry[0], end?.id) || makeJunction(geometry[0], '교차점');
+    }
+    if (!end || start.id === end.id) {
+      end = nearestPlace(geometry.at(-1), start.id) || makeJunction(geometry.at(-1), '교차점');
+    }
     if (!(item.width_m > 0 && item.width_m <= 10) || !Number.isFinite(item.width_m)
         || !['one_way', 'two_way'].includes(item.direction)) throw new Error('차로 폭과 통행 방향을 확인하세요');
-    if (Math.hypot(geometry[0][0] - start.x, geometry[0][1] - start.y) > .05
-        || Math.hypot(geometry.at(-1)[0] - end.x, geometry.at(-1)[1] - end.y) > .05)
-      throw new Error('도로 선의 양 끝을 지정한 장소에 맞추세요');
-    next.edges.push({id, ...(name.trim() ? {name: name.trim()} : {}), from: start.id, to: end.id, polyline: [[start.x, start.y], ...geometry.slice(1, -1), [end.x, end.y]],
-      width_m: item.width_m, direction: item.direction, drive_mode: 'lane', speed_cap_mps: .03,
+    const startSnap = Math.hypot(geometry[0][0] - start.x, geometry[0][1] - start.y) <= 0.15;
+    const endSnap = Math.hypot(geometry.at(-1)[0] - end.x, geometry.at(-1)[1] - end.y) <= 0.15;
+    const mid = geometry.slice(startSnap ? 1 : 0, endSnap ? -1 : geometry.length).slice(0, 30);
+    const poly = [[start.x, start.y], ...mid, [end.x, end.y]];
+    next.edges.push({id, ...(name.trim() ? {name: name.trim()} : {}), from: start.id, to: end.id, polyline: poly,
+      width_m: item.width_m, direction: item.direction, drive_mode: 'lane', speed_cap_mps: .2,
       evidence: {source: 'operator', status: 'observed', reference_revision: next.survey.revision, note: ''}});
   } else if (['traffic_signal', 'stop_line', 'landmark', 'exclusion'].includes(kind)) {
     const required = {traffic_signal: 1, stop_line: 2, landmark: 1}[kind];
@@ -67,8 +109,8 @@ export function appendSurveyElement(map, item) {
 }
 
 export function reviewSurveyDraft(map, note) {
-  if ((!map?.survey && !map?.edges?.some(e => e.evidence)) || !note?.trim() || note.length > 1000) throw new Error('좌표 기준과 도로를 확인한 검토 근거를 적으세요');
-  const next = copy(map);
+  if (!map || !note?.trim() || note.length > 1000) throw new Error('좌표 기준과 도로를 확인한 검토 근거를 적으세요');
+  const next = (!map.survey && map.edges?.some(e => e.evidence)) ? copy(map) : ensureSurvey(copy(map));
   if (next.survey) next.survey = {...next.survey, reviewed: true, review_note: note.trim()};
   for (const edge of [...next.edges, ...(next.facilities || [])]) {
     if (next.facilities?.includes(edge) && !edge.evidence) continue;

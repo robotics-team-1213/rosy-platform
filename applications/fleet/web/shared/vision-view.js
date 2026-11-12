@@ -1,7 +1,7 @@
 const NO_SOURCE = "관제 카메라 인증 후 영상을 불러옵니다.";
 const DEFAULT_RECTIFICATION = Object.freeze({ fx: 1, fy: 1, cx: 0.5, cy: 0.5, k1: 0, k2: 0, p1: 0, p2: 0, k3: 0, corners: [[0, 0], [1, 0], [1, 1], [0, 1]], output_aspect: 0 });
 const AUTO_RECTIFICATION = Object.freeze({ mode: "auto" }), MAP_RECTIFICATION = Object.freeze({ mode: "map" });
-export const FRAME_LATE_MS = 10000;
+export const FRAME_LATE_MS = 3000;
 export function parsePlaneHeader(value) {
   const parts = String(value ?? "").split(",").map((part) => part.trim());
   if (parts.length !== 5 || parts.some((part) => part === "")) return null;
@@ -37,7 +37,6 @@ export async function fetchMapPlane(call, source, held, signal) {
   if (path.origin !== location.origin || path.username || path.password) throw new Error("영상 주소를 확인하세요.");
   const response = await fetch(path, { signal, credentials: "omit", redirect: "error", cache: "no-store", headers: { Authorization: `Bearer ${lease.lease}` } });
   if (response.status === 409 && response.headers.get("X-Frame-State") === "plane-unavailable") return { state: "plane-unavailable", lease };
-  if (response.status === 429) return { state: "rate-limited", status: 429, lease };
   if (!response.ok) return { state: "error", status: response.status, lease: response.status === 401 || response.status === 403 ? null : lease };
   const plane = parsePlaneHeader(response.headers.get("X-Frame-Plane"));
   if (response.headers.get("X-Frame-Rectified") !== "map" || !plane) return { state: "plane-unavailable", lease };
@@ -97,32 +96,25 @@ export function createPlaneFeed({ scope, visionView, onChange, now = Date.now })
     if (busy || now() < retryAt) return;
     busy = true;
     const life = scope.capture(), startedGeneration = generation, requestedAt = now();
-    let changed = false;
     try {
       const got = await visionView.fetchPlane();
       if (got.state === "plane-unavailable") { retryAt = now() + PLANE_RETRY_MS; changed = drop(); return; }
       if (got.state === "rate-limited") { retryAt = now() + 260; return; }
       if (got.state !== "live") { retryAt = now() + PLANE_ERROR_MS; return; }
-      const ageMs = got.ageMs + now() - requestedAt;
-      if (!Number.isFinite(ageMs) || ageMs < 0 || ageMs > FRAME_LATE_MS) { changed = drop(); return; }
-      if (frame && got.seq && frame.seq === got.seq && frame.source === got.source && frame.calibrationRevision === got.calibrationRevision) {
-        frame.ageMs = ageMs; cancelExpiry();
-        cancelExpiry = scope.timeout(() => { if (drop()) onChange(); }, Math.max(0, FRAME_LATE_MS - ageMs) || 0);
-        return;
-      }
       const url = URL.createObjectURL(got.blob), image = new Image();
       image.src = url;
       const decoded = await image.decode().then(() => true, () => false);
       if (!life.current() || startedGeneration !== generation || !decoded) {
         URL.revokeObjectURL(url); if (!decoded) retryAt = now() + PLANE_ERROR_MS; return;
       }
+      const ageMs = got.ageMs + now() - requestedAt;
+      if (!Number.isFinite(ageMs) || ageMs < 0 || ageMs > FRAME_LATE_MS) { URL.revokeObjectURL(url); drop(); return; }
       if (!planeFitsImage(got.plane, image.naturalWidth, image.naturalHeight)) {
-        URL.revokeObjectURL(url); retryAt = now() + PLANE_RETRY_MS; changed = drop(); return;
+        URL.revokeObjectURL(url); retryAt = now() + PLANE_RETRY_MS; drop(); return;
       }
       drop();
-      frame = { image, url, source: got.source, seq: got.seq || null, plane: got.plane, calibrationRevision: got.calibrationRevision, observedFraction: got.observedFraction, ageMs };
-      changed = true;
-      cancelExpiry = scope.timeout(() => { if (drop()) onChange(); }, Math.max(0, FRAME_LATE_MS - ageMs) || 0);
+      frame = { image, url, source: got.source, plane: got.plane, calibrationRevision: got.calibrationRevision, observedFraction: got.observedFraction, ageMs };
+      cancelExpiry = scope.timeout(() => { drop(); onChange(); }, Math.max(0, FRAME_LATE_MS - ageMs) || 0);
     } catch (error) {
       if (error.name !== "AbortError") retryAt = now() + PLANE_ERROR_MS;
     } finally {
@@ -141,8 +133,7 @@ export function createVisionView({ scope, el, call, isActive = () => true, rawOn
   const profileFields = [...adjustments.querySelectorAll("[data-rect]")], cornerFields = [...adjustments.querySelectorAll("[data-corner]")];
   const profileFieldsets = [...adjustments.querySelectorAll("fieldset")], cornerModes = el("vision-corner-modes") || absentPanel();
   const cornerHint = el("vision-corner-hint") || absentPanel(), adjustmentState = el("vision-adjustment-state") || absentPanel(), proposalPolygon = el("vision-proposal-polygon");
-  let lease = null, leaseExpiresAt = 0, planeLease = null, objectUrl = null, lastFrameKey = "", lastDecodedImage = null;
-  let busy = false, previewLifetime = new AbortController(), lastSourcesAt = 0, refreshTimer = null;
+  let lease = null, leaseExpiresAt = 0, planeLease = null, objectUrl = null, lastFrameKey = "", lastDecodedImage = null, busy = false, previewLifetime = new AbortController(), lastSourcesAt = 0, refreshTimer = null;
   let viewMode = rawOnly ? "raw" : "adjusted", draggingPointerId = null, proposalCorners = null;
   let currentLens = null, currentLensInfo = null, selectedSource = "", sourceAvailable = false, availableSources = [];
   const frameListeners = [];
@@ -334,11 +325,11 @@ export function createVisionView({ scope, el, call, isActive = () => true, rawOn
         return;
       }
       const seq = response.headers.get("X-Frame-Seq"), nextKey = seq ? `${source}:${seq}:${rectifiedHeader || "false"}` : "";
-      const metaText = `${new Date().toLocaleTimeString("ko-KR", { hour12: false })} · ${source} · sequence ${seq || "?"} · age ${response.headers.get("X-Frame-Age-Ms") || "?"} ms · ${rectified ? "화면 보정" : "원본"}${lens ? ` · ${LENS_NAMES[lens.kind]} ${lens.focal_mm} mm` : ""}`;
       if (nextKey && nextKey === lastFrameKey && lastDecodedImage && objectUrl) {
         const frameAge = Number(response.headers.get("X-Frame-Age-Ms")) + Date.now() - requestedAt;
         if (Number.isFinite(frameAge) && frameAge <= FRAME_LATE_MS) {
-          status.textContent = badge.label; status.setAttribute("status", badge.kind); el("vision-meta").textContent = metaText;
+          status.textContent = badge.label; status.setAttribute("status", badge.kind);
+          el("vision-meta").textContent = `${new Date().toLocaleTimeString("ko-KR", { hour12: false })} · ${source} · sequence ${seq} · age ${response.headers.get("X-Frame-Age-Ms") || "?"} ms · ${rectified ? "화면 보정" : "원본"}${lens ? ` · ${LENS_NAMES[lens.kind]} ${lens.focal_mm} mm` : ""}`;
           for (const listener of frameListeners) listener({ image: lastDecodedImage, previewElement: image, rectified, source, seq, url: objectUrl, lens: currentLensInfo, ageMs: frameAge, state: badge.state });
           cancelFrameExpiry(); cancelFrameExpiry = scope.timeout(() => showState("영상 만료", "warn", "새 프레임을 기다립니다."), Math.max(0, FRAME_LATE_MS - frameAge));
           return;
@@ -362,7 +353,7 @@ export function createVisionView({ scope, el, call, isActive = () => true, rawOn
       image.src = nextUrl; image.hidden = false; stage.hidden = false; updateCornerOverlay();
       frame.dataset.state = "online"; frame.dataset.editing = String(viewMode === "raw" && !rawOnly);
       cornerOverlay.toggleAttribute("hidden", viewMode !== "raw" || rawOnly);
-      el("vision-meta").textContent = metaText;
+      el("vision-meta").textContent = `${new Date().toLocaleTimeString("ko-KR", { hour12: false })} · ${source} · sequence ${seq || "?"} · age ${response.headers.get("X-Frame-Age-Ms") || "?"} ms · ${rectified ? "화면 보정" : "원본"}${lens ? ` · ${LENS_NAMES[lens.kind]} ${lens.focal_mm} mm` : ""}`;
       for (const listener of frameListeners) listener({ image: nextImage, previewElement: image, rectified, source, seq, url: nextUrl, lens: currentLensInfo, ageMs: frameAge, state: badge.state });
       cancelFrameExpiry(); cancelFrameExpiry = scope.timeout(() => showState("영상 만료", "warn", "새 프레임을 기다립니다."), Math.max(0, FRAME_LATE_MS - frameAge));
     } catch (error) {

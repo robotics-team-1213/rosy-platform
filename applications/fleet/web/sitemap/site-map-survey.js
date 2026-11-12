@@ -58,12 +58,11 @@ export function createSurveyPanel(host) {
       gate('element-id', ''); $('element-id').value = `e_${randomUUID().replaceAll('-', '').slice(0, 12)}`;
       $('element-points').textContent = '찍은 좌표 없음'; $('element-pick').setAttribute('aria-pressed', 'false');
     }
-    const draftReason = reason || (host.source() !== 'draft' ? '초안 보기로 바꾸세요' : '') || (!map?.survey ? '조사 기준이 있는 초안을 만드세요' : '');
+    const draftReason = reason || (!map ? '조사 기준이 있는 초안을 만드세요' : '');
     if (picking && (draftReason || mapId !== map?.map_id)) { picking = false; $('element-pick').setAttribute('aria-pressed', 'false'); }
     gate('survey-new', reason);
     for (const id of ['element-pick', 'element-point', 'element-clear', 'element-save']) gate(id, draftReason);
-    gate('survey-review', reason || (host.source() !== 'draft' ? '초안 보기로 바꾸세요' : '')
-      || (!map?.survey && !map?.edges?.some(e => e.evidence) ? '검토할 조사 또는 관측 도로가 없습니다' : ''));
+    gate('survey-review', reason || (!map ? '검토할 조사 또는 관측 도로가 없습니다' : ''));
     options('element-from', [['', '시작 장소 선택'], ...(map?.places || []).map(p => [p.id, p.name])]);
     options('element-to', [['', '끝 장소 선택'], ...(map?.places || []).map(p => [p.id, p.name])]);
     options('element-lanes', (map?.edges || []).map(e => [e.id, `${e.id} · ${e.from} → ${e.to}`]));
@@ -104,18 +103,20 @@ export function createSurveyPanel(host) {
     });
   });
   $('element-pick').addEventListener('click', () => act(() => {
+    host.begin();
     picking = !picking; mapId = host.map().map_id;
-    if (picking) host.begin();
     geometry(); message(picking ? '지도에서 위치를 찍으세요. 좌표 입력으로도 점을 추가할 수 있습니다.' : '점 찍기를 마쳤습니다.');
   }));
-  $('element-point').addEventListener('click', () => act(() => addPoint(number('element-x'), number('element-y'))));
+  $('element-point').addEventListener('click', () => act(() => { host.begin(); addPoint(number('element-x'), number('element-y')); }));
   $('element-clear').addEventListener('click', () => act(clear));
   $('element-endpoints').addEventListener('click', () => act(() => {
+    host.begin();
     const map = host.map(), a = map.places.find(p => p.id === $('element-from').value), b = map.places.find(p => p.id === $('element-to').value);
     if (!a || !b || a.id === b.id) throw new Error('서로 다른 시작·끝 장소를 고르세요');
     points = [[a.x, a.y], [b.x, b.y]]; geometry(); message('선택한 두 장소 사이의 직선입니다. 실제 도로 모양을 확인하고 추가하세요.');
   }));
   $('element-load').addEventListener('click', () => act(() => {
+    host.begin();
     const row = rows().find(r => `${r.category}:${r.id}` === $('element-existing').value);
     if (!row) return;
     editing = true; editingKind = row.kind; picking = false; points = row.geometry.map(p => [...p]);
@@ -133,18 +134,22 @@ export function createSurveyPanel(host) {
     geometry(); message('기존 요소를 불러왔습니다. ID는 유지됩니다. 수정 후 다시 검토하세요.');
   }));
   $('element-delete').addEventListener('click', async () => {
-    if (host.reason() || host.source() !== 'draft') return;
+    if (host.reason()) return;
+    host.begin();
     const selected = $('element-existing').value, [category, id] = selected.split(':');
     if (!id || !await confirmIrreversible({message: '선택한 요소를 초안에서 삭제할까요? 연결된 도로·시설이 있으면 거절합니다.', action: '초안 요소 삭제', opener: $('element-delete')})) return;
     act(() => { host.changed(removeSurveyElement(host.map(), id, category)); clear(); message('초안 요소를 삭제했습니다. 변경 내용을 저장하세요.'); });
   });
   $('element-save').addEventListener('click', () => act(() => {
-    if (host.source() !== 'draft') return;
+    host.begin();
     if (editing && $('element-kind').value !== editingKind) throw new Error('기존 요소의 종류를 유지하세요');
     const stop = $('element-stop').value;
-    const item = {id: $('element-id').value, name: $('element-name').value, kind: $('element-kind').value, geometry: points,
+    const kind = $('element-kind').value;
+    const rawName = $('element-name').value.trim();
+    const name = rawName || (kind === 'road' ? '' : `${KINDS[kind] || kind} ${(rows().length || 0) + 1}`);
+    const item = {id: $('element-id').value, name, kind, geometry: points,
       from: $('element-from').value, to: $('element-to').value, width_m: number('element-width'), direction: $('element-direction').value,
-      yaw: $('element-kind').value === 'start' ? number('element-yaw') * Math.PI / 180 : undefined,
+      yaw: kind === 'start' ? number('element-yaw') * Math.PI / 180 : undefined,
       signal_id: $('element-signal-id').value, signal_kind: $('element-signal-kind').value,
       approaches: [...$('element-lanes').selectedOptions].flatMap(o => {
         const existing = editing && !approachEdited ? loadedApproaches.filter(a => a.edge_id === o.value) : [];
@@ -154,7 +159,7 @@ export function createSurveyPanel(host) {
     clear(); message('요소를 초안에 반영했습니다. 저장·검토·활성화는 각각 별도입니다.');
   }));
   $('survey-review').addEventListener('click', () => act(() => {
-    if (host.source() !== 'draft') return;
+    host.begin();
     host.changed(reviewSurveyDraft(host.map(), $('survey-review-note').value));
     message('검토 근거를 초안에 반영했습니다. 초안을 저장한 뒤 활성화를 선택하세요.');
   }));

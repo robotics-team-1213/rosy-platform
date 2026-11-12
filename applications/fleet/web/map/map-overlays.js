@@ -223,6 +223,9 @@ export function createMapOverlays({ view, css, font, layerOn, worldToCell, color
 
   // 카메라 관측 1건: 점선 고리 + 방향 선. toPoint 는 map m → 현재 ctx 좌표, size 는 같은 단위.
   function drawSighting(ctx, s, toPoint, size, lineWidth) {
+    if (layerOn("poses") && (view.guide?.robots || []).some((r) => r.robot_id === s.robot_id && r.pose && Math.hypot(r.pose.x - s.x, r.pose.y - s.y) < 0.18)) {
+      return;
+    }
     const { x: cx, y: cy } = toPoint(s.x, s.y);
     ctx.save();
     ctx.globalAlpha = s.state === "delayed" ? 0.4 : 1;
@@ -230,19 +233,21 @@ export function createMapOverlays({ view, css, font, layerOn, worldToCell, color
     ctx.lineWidth = lineWidth;
     ctx.setLineDash([lineWidth * 2, lineWidth * 1.5]);
     ctx.beginPath();
-    ctx.arc(cx, cy, size * 0.8, 0, Math.PI * 2);
+    ctx.arc(cx, cy, size * 0.55, 0, Math.PI * 2);
     ctx.stroke();
     ctx.setLineDash([]);
     ctx.beginPath();
     ctx.moveTo(cx, cy);
     // 방향도 같은 toPoint 로 그린다 — 카메라 영상(호모그래피·D-513 7 회전)에서도 지도 방향이 맞다.
-    const ahead = toPoint(s.x + 0.1 * Math.cos(s.yaw), s.y + 0.1 * Math.sin(s.yaw));
+    const ahead = toPoint(s.x + 0.07 * Math.cos(s.yaw), s.y + 0.07 * Math.sin(s.yaw));
     const span = Math.hypot(ahead.x - cx, ahead.y - cy) || 1;
-    ctx.lineTo(cx + (ahead.x - cx) / span * size * 1.4, cy + (ahead.y - cy) / span * size * 1.4);
+    ctx.lineTo(cx + (ahead.x - cx) / span * size * 0.95, cy + (ahead.y - cy) / span * size * 0.95);
     ctx.stroke();
     ctx.restore();
-    drawChip(ctx, null, cx, cy + size * 1.9, sightingLabel(s), s.state === "delayed" ? "warn" : undefined,
-      labelImportant(s.robot_id));
+    if (layerOn("labels")) {
+      drawChip(ctx, null, cx, cy + size * 1.4, sightingLabel(s), s.state === "delayed" ? "warn" : undefined,
+        labelImportant(s.robot_id));
+    }
   }
 
   // D-457 관제 카메라 추적: 카메라 위치 고리 + 자가보고 위치까지 선 + 차이 칩. 0.15 m 초과는 주황,
@@ -253,6 +258,9 @@ export function createMapOverlays({ view, css, font, layerOn, worldToCell, color
     ctx.save();
     ctx.lineWidth = lineWidth;
     for (const row of tracking.robots) {
+      if (!row.warn && layerOn("poses") && (view.guide?.robots || []).some((r) => r.robot_id === row.robotId && r.pose && Math.hypot(r.pose.x - row.camera.x, r.pose.y - row.camera.y) < 0.18)) {
+        continue;
+      }
       const cam = toPoint(row.camera.x, row.camera.y);
       const pose = row.pose ? toPoint(row.pose.x, row.pose.y) : null;
       ctx.strokeStyle = css(row.warn ? "--status-warn" : "--series-primary");
@@ -265,13 +273,15 @@ export function createMapOverlays({ view, css, font, layerOn, worldToCell, color
       }
       ctx.setLineDash([]);
       ctx.beginPath();
-      ctx.arc(cam.x, cam.y, size * 0.9, 0, Math.PI * 2);
+      ctx.arc(cam.x, cam.y, size * 0.6, 0, Math.PI * 2);
       ctx.stroke();
       const markers = new Set((view.siteMap?.maps || []).flatMap((map) => map.sources || [])
         .map((source) => source.robot_markers?.[row.robotId]).filter(Number.isInteger));
       const label = row.measured && !row.pose && markers.size === 1
         ? `ArUco ${[...markers][0]}` : offsetLabel(row);
-      drawChip(ctx, null, cam.x, cam.y - size * 1.8, label, row.warn ? "warn" : undefined, labelImportant(row.robotId));
+      if (layerOn("labels")) {
+        drawChip(ctx, null, cam.x, cam.y - size * 1.4, label, row.warn ? "warn" : undefined, labelImportant(row.robotId));
+      }
     }
     // D-600: 배경이 아직 못 본 바닥은 빗금 원 — 로봇이 비키면 Vision 이 채운다.
     ctx.strokeStyle = css("--ink-quiet");
