@@ -30,6 +30,7 @@ from cell_fleet_pipeline import FleetModelPipeline
 import cell_problem_pipeline as cpp
 from cell_realignment_pipeline import (
     clamp_belt_safe_place_pose_mm,
+    compile_rail_and_belt_safe_standby_waypoints,
     run_iterative_fail_recovery_loop,
 )
 from cell_slot_matrix_audit import build_empty_pallet_board
@@ -131,6 +132,11 @@ class SimRealCoLearningPipeline:
                 "via": "belt", "to": "pinky", "ab_result": ab_res["result"], "s_result": s_res["result"],
             })
 
+        standby_returns = {
+            "arm_s": compile_rail_and_belt_safe_standby_waypoints([0.0, 2.0, -8.0, 52.0, -5.0, 58.1]),
+            "arm_a": compile_rail_and_belt_safe_standby_waypoints([12.0, -10.0, 12.0, 48.0, 0.0, 58.1]),
+            "arm_b": compile_rail_and_belt_safe_standby_waypoints([-12.0, -10.0, 12.0, 48.0, 0.0, 58.1]),
+        }
         self.board_state = {
             "pinky_supply_queue": [f"container-c3-{i + 1}" for i in range(int(containers_count))],
             "belt_slot": None,
@@ -138,6 +144,7 @@ class SimRealCoLearningPipeline:
             "temp_plate_a": {1: None, 2: None, 3: None},
             "temp_plate_b": {1: None, 2: None, 3: None},
             "pallet_boards": {t: build_empty_pallet_board(tier=t) for t in (1, 2, 3)},
+            "arms_at_standby": {"arm_s": True, "arm_a": True, "arm_b": True},
             "last_reset_mode": mode,
             "last_reset_at": round(time.time(), 3),
         }
@@ -157,7 +164,9 @@ class SimRealCoLearningPipeline:
 
         return {
             "ok": True, "mode": mode, "unstacked_count": len(unstack_steps),
-            "unstack_steps": unstack_steps, "pinky_supply_ready": len(self.board_state["pinky_supply_queue"]),
+            "unstack_steps": unstack_steps, "standby_returns": standby_returns,
+            "arms_at_standby": dict(self.board_state["arms_at_standby"]),
+            "pinky_supply_ready": len(self.board_state["pinky_supply_queue"]),
             "stacked_tiers": list(self.board_state["stacked_tiers"]), "model_version": self.model_version,
         }
 
@@ -281,6 +290,11 @@ class SimRealCoLearningPipeline:
         self.board_state["pallet_boards"][tier_idx]["slots"]["C2_R1"].update({
             "occ_ratio": 0.94, "z_top_mm": TIER_NOMINAL_Z_MM[tier_idx], "spec_id": "C3", "container_id": container_id,
         })
+        arm_s_return = compile_rail_and_belt_safe_standby_waypoints([0.0, 4.0, -10.0, 54.0, -5.0, 58.1])
+        arm_ab_return = compile_rail_and_belt_safe_standby_waypoints(
+            [12.0 if arm_ab == "arm_a" else -12.0, -12.0, 14.0, 48.0, 0.0, 58.1]
+        )
+        self.board_state["arms_at_standby"] = {"arm_s": True, "arm_a": True, "arm_b": True}
         ep_record = {
             **obs_20d, "container_id": container_id, "tier": tier_idx, "arm_ab": arm_ab,
             "label": "PASS" if not needs_realign else str(
@@ -295,7 +309,9 @@ class SimRealCoLearningPipeline:
         return {
             "container_id": container_id, "tier": tier_idx, "arm_s_stage": s_stage, "arm_ab_stage": ab_stage,
             "safe_belt_place": safe_belt, "guard_verdict": guard_verdict, "needs_realignment": needs_realign,
-            "realignment": realignment_res, "sim_rl_fallback": sim_fallback_res, "place_error_mm": float(ab_stage["place_error_mm"]),
+            "realignment": realignment_res, "sim_rl_fallback": sim_fallback_res,
+            "standby_return": {"arm_s": arm_s_return, "arm_ab": arm_ab_return, "returned_to_standby": True},
+            "place_error_mm": float(ab_stage["place_error_mm"]),
             "model_version_used": self.model_version, "verified": bool(realignment_res["passed"]) if realignment_res else True,
         }
 
@@ -392,4 +408,11 @@ class SimRealCoLearningPipeline:
         from cell_r2s_parallel_rl import run_pipelined_parallel_unit_transfer
 
         return run_pipelined_parallel_unit_transfer(self, container_id=container_id, tier=tier, wrist_img=wrist_img, env_obs=env_obs)
+
+    def run_complete_stack_return_and_recovery(self, **kwargs: Any) -> dict[str, Any]:
+        """Execute full 1->2->3 tier stacking + standby return + 7-Situation/displaced recovery + 3->2->1 teardown to Pinky."""
+        from cell_r2s_parallel_rl import run_complete_stack_return_and_recovery_scenario
+
+        return run_complete_stack_return_and_recovery_scenario(self, **kwargs)
+
 

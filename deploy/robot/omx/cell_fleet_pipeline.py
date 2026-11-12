@@ -372,3 +372,11 @@ class FleetModelPipeline:
         co_pipe = SimRealCoLearningPipeline(self.work_dir)
         return co_pipe.run_learning_lifecycle(rounds=rounds, pretrain_sim_rl=pretrain_sim_rl, tasks_per_round=tasks_per_round)
 
+    def run_complete_stack_return_and_recovery(self, **kwargs: Any) -> dict[str, Any]:
+        """Run full 1->2->3 tier stacking + standby return + 7-Situation/displaced recovery + 3->2->1 teardown to Pinky."""
+        from cell_sim_real_co_learning import SimRealCoLearningPipeline
+
+        co_pipe = SimRealCoLearningPipeline(self.work_dir)
+        return co_pipe.run_complete_stack_return_and_recovery(**kwargs)
+
+

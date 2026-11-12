@@ -547,6 +547,35 @@ def test_zero_bottleneck_live_camera_to_r2s_parallel_speculative_rl_and_async_sh
     assert pipe.model_version == 2
 
 
+def test_complete_1to3_tier_stack_standby_return_recovery_and_pinky_teardown(tmp_path: Path) -> None:
+    """Verify end-to-end execution of:
+    1) 1단 -> 2단 -> 3단 stacking (`arm_s` Pinky->Belt + `arm_a`/`arm_b` Belt->Tier 1..3) with R2S speculative RL,
+    2) Displaced container crane recovery (`belt_far`, `floor_front`) and 7-Situation closed-loop realignment,
+    3) Collision-free crane-high Standby Return (`standby_return`) for all arms after every container placement,
+    4) Rehandle on temp plate & outbound extraction + background Shadow model hot-swap,
+    5) Complete 3 -> 2 -> 1 teardown return back to Pinky (`teardown_return_to_pinky`) with all arms at standby.
+    """
+    import cell_fleet_pipeline as cfp
+
+    fleet_pipe = cfp.FleetModelPipeline(tmp_path / "full_e2e")
+    out = fleet_pipe.run_complete_stack_return_and_recovery(unstack_back_to_pinky=True)
+    assert out["completed"] is True
+    assert out["tiers_stacked_before_teardown"] == [1, 2, 3]
+    assert out["all_arms_returned_to_standby"] is True
+    assert set(out["displaced_recoveries_verified"]) == {
+        "S9_DISPLACED_CONTAINER_BELT_FAR",
+        "S10_DISPLACED_CONTAINER_FLOOR_FRONT",
+    }
+    assert out["rehandle_and_outbound"]["completed"] is True
+    assert out["shadow_hotswap"]["promoted"] is True
+    assert out["shadow_hotswap"]["false_pass_rate"] == 0.0
+    assert out["teardown_return_to_pinky"]["unstacked_count"] == 3
+    assert [u["tier"] for u in out["teardown_return_to_pinky"]["unstack_steps"]] == [3, 2, 1]
+    assert out["teardown_return_to_pinky"]["arms_at_standby"] == {"arm_s": True, "arm_a": True, "arm_b": True}
+    assert out["active_model_version"] >= 2
+
+
+
 
 
 

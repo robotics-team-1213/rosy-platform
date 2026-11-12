@@ -357,3 +357,77 @@ class AsyncShadowRetrainer:
         res = self._future.result(timeout=timeout_s)
         self._future = None
         return res
+
+
+def run_complete_stack_return_and_recovery_scenario(
+    pipeline: Any,
+    *,
+    tier_disturbances: dict[int, dict[str, Any]] | None = None,
+    wrist_frames_by_tier: dict[int, np.ndarray] | None = None,
+    unstack_back_to_pinky: bool = True,
+) -> dict[str, Any]:
+    """Execute the complete end-to-end 1-to-3 Tier Stacking + Standby Return + Recovery + Teardown scenario:
+      1. R2S Sim-First RL pre-training (`pretrain_task_with_r2s_sim_rl`) if starting at `v0`.
+      2. For Tier 1 -> Tier 2 -> Tier 3:
+         - Parallel `arm_s` (Pinky -> Belt, including displaced recovery `belt_far`/`floor_front` crane trajectory)
+           overlapped with Live Camera-to-R2S projection + 32-branch Speculative RL + `arm_a`/`arm_b` IK pre-staging.
+         - `arm_a` (Tier 1, 3) / `arm_b` (Tier 2) Belt -> Pallet Tier stacking with 7-Situation closed-loop realignment
+           and Sim-RL fallback on severe disturbances.
+         - Collision-free crane-high Standby Return (`standby_return`) for both `arm_s` and `arm_a`/`arm_b` after each container.
+      3. Background `AsyncShadowRetrainer` compiles and hot-swaps the fused R2S+Real policy (`false_pass_rate == 0.0`).
+      4. Optional 3 -> 2 -> 1 teardown return to Pinky (`unstack_and_reset`) with all arms returning to standby.
+    """
+    if int(pipeline.model_version) == 0:
+        pipeline.pretrain_task_with_r2s_sim_rl("pinky_to_3tier_stack", episodes=24)
+
+    default_dist = {
+        1: {"displaced_to": "belt_far", "dx_mm": -6.5, "dy_mm": 5.0, "yaw_err_deg": -4.5, "wrist_eccentric": True},
+        2: {"displaced_to": "floor_front", "dx_mm": 4.2, "dy_mm": -4.6, "yaw_err_deg": 8.2, "r_k_mm": 1.8},
+        3: {"belt_trench_wedged": True, "x_mm": 96.0, "dx_mm": 2.4, "dy_mm": -2.8, "yaw_err_deg": 3.5, "clearance_mm": 3.4},
+    }
+    dist_map = dict(default_dist if tier_disturbances is None else tier_disturbances)
+    frames_map = dict(wrist_frames_by_tier or {})
+    shadow = AsyncShadowRetrainer(pipeline)
+
+    tier_steps: list[dict[str, Any]] = []
+    for tier_idx in (1, 2, 3):
+        unit = run_pipelined_parallel_unit_transfer(
+            pipeline,
+            container_id=f"container-c3-t{tier_idx}",
+            tier=tier_idx,
+            wrist_img=frames_map.get(tier_idx),
+            env_obs=dist_map.get(tier_idx),
+        )
+        tier_steps.append(unit)
+        if tier_idx == 2:
+            shadow.submit_shadow_retrain(n_sim_episodes=110)
+
+    rehandle_out = pipeline.run_task("rehandle_and_outbound")
+    shadow_swap = shadow.poll_and_commit(wait=True, timeout_s=10.0)
+    stacked_snapshot = list(pipeline.board_state.get("stacked_tiers") or [])
+    teardown_res = pipeline.reset_scenario_and_board(mode="unstack_only") if unstack_back_to_pinky else None
+    errs = [float(s["place_error_mm"]) for s in tier_steps]
+
+    return {
+        "schema": SCHEMA,
+        "completed": bool(
+            all(s["verified"] and s["standby_return"]["returned_to_standby"] for s in tier_steps)
+            and stacked_snapshot == [1, 2, 3]
+            and rehandle_out["completed"]
+            and (teardown_res is None or (teardown_res["ok"] and teardown_res["unstacked_count"] == 3))
+        ),
+        "tiers_stacked_before_teardown": stacked_snapshot,
+        "all_arms_returned_to_standby": all(s["standby_return"]["returned_to_standby"] for s in tier_steps),
+        "displaced_recoveries_verified": [
+            (s["arm_s_stage"].get("displaced_recovery") or {}).get("failure_code")
+            for s in tier_steps
+            if s["arm_s_stage"].get("displaced_recovery")
+        ],
+        "mean_place_error_mm": round(float(np.mean(errs)), 3) if errs else 0.0,
+        "rehandle_and_outbound": rehandle_out,
+        "shadow_hotswap": shadow_swap,
+        "teardown_return_to_pinky": teardown_res,
+        "active_model_version": pipeline.model_version,
+        "tier_steps": tier_steps,
+    }
+
