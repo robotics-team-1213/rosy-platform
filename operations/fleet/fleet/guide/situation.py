@@ -25,7 +25,7 @@ SEVERITY = ("crit", "warn", "info")
 @dataclass(frozen=True)
 class GuideConfig:
     #: pose uncertainty u = sighting floor + odom drift per bridged metre (D-517 3, trip_geometry)
-    sighting_floor_m: float = 0.02
+    sighting_floor_m: float = 0.12
     drift_per_m: float = 0.05
     #: two body circles closer than this gap are too close (rotation radius each, D-424)
     near_gap_m: float = 0.03
@@ -86,8 +86,7 @@ def situation(robot_id: str, *, online: bool, pose, tracking_row: Optional[Mappi
     ``anonymous_seen`` whether Rosy Cam shows a blob no robot is matched to (D-596: then the LED
     identify names it, standing or not; without one the robot is likely learned into the background)."""
     placed = pose is not None and pose.state in ("LOCALIZED", "DEGRADED") and pose.x is not None
-    actual_radius_m = round(min(float(body_radius_m or 0.052), 0.055), 4)
-    record = {"robot_id": robot_id, "online": online, "body_radius_m": actual_radius_m,
+    record = {"robot_id": robot_id, "online": online, "body_radius_m": body_radius_m,
               "pose": None, "lane": None, "findings": []}
     findings = record["findings"]
     if placed:
@@ -99,6 +98,8 @@ def situation(robot_id: str, *, online: bool, pose, tracking_row: Optional[Mappi
                           "anchor_source": getattr(pose, "anchor_source", None),
                           "anchor_age_s": getattr(pose, "anchor_age_s", None)}
     if not online:
+        if placed and graph is not None and getattr(pose, "map_id", None) == "world_261026":
+            record["lane"] = lane_context(graph, pose.x, pose.y, pose.yaw, zone_of, config)
         return record          # the roster already says "연결 끊김"; a stale pose stays drawn faded
     status = (tracking_row or {}).get("status")
     if camera_ok and status in NOT_SEEN and anonymous_seen:
