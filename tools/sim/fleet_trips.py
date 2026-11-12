@@ -36,6 +36,7 @@ import urllib.request
 from pathlib import Path
 
 import yaml
+from fleet_trip_recorder import cyclone_profile, drivable_evidence
 
 REPO = Path(__file__).resolve().parents[2]
 GAZEBO = REPO / 'integrations/simulation/gazebo'
@@ -104,21 +105,6 @@ def nav_site_map(base):
                    exit_yaw=turn(p.get('exit_yaw'))) for p in base['places']]
     edges = [dict(e, drive_mode='free', polyline=[list(to_site(q)) for q in e['polyline']]) for e in base['edges']]
     return {**base, 'places': places, 'edges': edges, 'crosswalks': []}
-
-
-def cyclone_profile(root, nav=False):
-    """The localhost DDS profile; --nav adds two Nav2 stacks, past Cyclone's default 9 automatic participant indexes
-    on a unicast-only loopback (run 1: amcl, planner_server and loc_assist died with "no free participant index").
-    120 indexes use 240 ports, inside one domain's 250-port stride."""
-    base = REPO / 'middleware/devices/pinky/bringup/config/cyclonedds_localhost.xml'
-    if not nav:
-        return base
-    discovery = ('    <Discovery>\n      <ParticipantIndex>auto</ParticipantIndex>\n'
-                 '      <MaxAutoParticipantIndex>120</MaxAutoParticipantIndex>\n    </Discovery>\n')
-    xml = base.read_text(encoding='utf-8').replace('    </General>\n', '    </General>\n' + discovery, 1)
-    assert '<MaxAutoParticipantIndex>' in xml
-    (root / 'cyclonedds_nav.xml').write_text(xml, encoding='utf-8')
-    return root / 'cyclonedds_nav.xml'
 
 
 def plan_trips(graph):
@@ -436,6 +422,10 @@ def run(args):
             lock.unlink(missing_ok=True)
     robots = result.get('robots') or {}
     result['pass'] = len(robots) == len(requests) and all(row['arrived'] for row in robots.values())
+    if args.learned_paint_target == 'drivable':
+        result['model_evidence'] = drivable_evidence(
+            out / 'observations.jsonl', args.model_revision, requests)
+        result['pass'] = result['pass'] and result['model_evidence']['pass']
     (out / 'result.json').write_text(json.dumps(result, indent=2, default=str), encoding='utf-8')
     print(json.dumps({k: result.get(k) for k in ('core_ready', 'localized', 'camera')}))
     print(json.dumps({ns: dict(states=row['states'], moved_m=row['moved_m'], short_m=row['short_m'], via_m=row['via_m'])
@@ -586,6 +576,21 @@ def main(argv=None):
         parser.error('--nav runs the two straight trips only')
     if args.learned_paint_target == 'drivable' and not args.learned_lane_pointer:
         parser.error('--learned-paint-target drivable needs --learned-lane-pointer')
+    if args.learned_paint_target == 'drivable' and not args.record:
+        parser.error('--learned-paint-target drivable needs --record for model evidence')
+    if args.learned_lane_pointer:
+        pointer = Path(args.learned_lane_pointer)
+        try:
+            model = Path(pointer.read_text(encoding='utf-8').strip())
+        except (OSError, UnicodeError) as exc:
+            parser.error(f'learned model pointer unreadable: {exc}')
+        if not model.is_dir() or not (model / 'model_manifest.json').is_file():
+            parser.error(f'learned model pointer has no model manifest: {model}')
+        if args.learned_paint_target == 'drivable':
+            try:
+                args.model_revision = json.loads((model / 'model_manifest.json').read_text(encoding='utf-8'))['model_revision']
+            except (OSError, ValueError, KeyError) as exc:
+                parser.error(f'learned model manifest has no revision: {exc}')
     return run(args)
 
 
