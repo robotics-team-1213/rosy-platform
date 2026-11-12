@@ -30,13 +30,16 @@ def deg(raw):
 def replay(paths, params=None):
     arms = {}
     for path in paths:
-        rows = []
+        samples, faults = [], []
         for line in Path(path).read_text(errors="replace").splitlines():
             try:
-                rows.append(json.loads(line))
+                r = json.loads(line)
             except ValueError:
                 continue  # a log cut mid-line by a killed session
-        samples = [r for r in rows if r.get("event") == "sample" and len(r.get("motors", [])) == 6]
+            if r.get("event") == "sample" and len(r.get("motors", [])) == 6:
+                samples.append(r)
+            elif r.get("event") == "fault":
+                faults.append(r)
         if not samples:
             continue
         port = samples[0]["motors"][0]["usb_port"].rsplit("_", 1)[-1].split("-")[0][-8:]
@@ -50,8 +53,9 @@ def replay(paths, params=None):
                 window = []
             arm["hours"] += (r["sample_time"] - last) / 3600 if window else 0
             last, motors = r["sample_time"], r["motors"]
-            window = (window + [([deg(m["command_raw"]) for m in motors], [deg(m["present_raw"]) for m in motors],
-                                 [m["pwm"] for m in motors])])[-jp.REST_SAMPLES:]
+            window.append(([deg(m["command_raw"]) for m in motors], [deg(m["present_raw"]) for m in motors],
+                           [m["pwm"] for m in motors]))
+            del window[:-jp.REST_SAMPLES]
             limits = {m["joint"]: m.get("pwm_limit") for m in motors}
             hit = jp.pushing(window, limits, params=params)
             if hit and armed:
@@ -63,13 +67,14 @@ def replay(paths, params=None):
                     up = jp.windup(target, present, pwm)
                     env["rise"] = max(env["rise"], up)
                     if up:  # the largest normal wind-ups, with the PWM they reached: the margin both gates keep
-                        env["top"] = sorted(env["top"] + [{"rise": up, "pwm": abs(pwm[-1]), "cap": limits.get(motor),
-                                                           "session": session, "t": round(last - t0, 1)}],
-                                            key=lambda w: -w["rise"])[:3]
+                        if len(env["top"]) < 3 or up > env["top"][-1]["rise"]:
+                            env["top"] = sorted(env["top"] + [{"rise": up, "pwm": abs(pwm[-1]), "cap": limits.get(motor),
+                                                               "session": session, "t": round(last - t0, 1)}],
+                                                key=lambda w: -w["rise"])[:3]
                     if max(present) - min(present) < jp.STILL:
                         env["pwm"] = max(env["pwm"], abs(pwm[-1]))
             armed = not hit
-        arm["faults"] += [{"session": session, "fault": str(r.get("fault"))[:120]} for r in rows if r.get("event") == "fault"]
+        arm["faults"] += [{"session": session, "fault": str(r.get("fault"))[:120]} for r in faults]
     for arm in arms.values():
         arm["hours"] = round(arm["hours"], 1)
     return arms

@@ -18,10 +18,10 @@ MOTORS = ("shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_ro
 def windup(target, present, pwm):
     """The |PWM| rise of one joint over equal-length sample lists when it is still, short of a still target and
     climbs every sample; else 0."""
-    effort = [abs(v) for v in pwm]
-    if (max(target) - min(target) < STILL and max(present) - min(present) < STILL
-            and abs(target[-1] - present[-1]) >= REST_GAP and all(a < b for a, b in zip(effort, effort[1:]))):
-        return effort[-1] - effort[0]
+    if (abs(target[-1] - present[-1]) >= REST_GAP
+            and all(abs(pwm[k]) < abs(pwm[k + 1]) for k in range(len(pwm) - 1))
+            and max(target) - min(target) < STILL and max(present) - min(present) < STILL):
+        return abs(pwm[-1]) - abs(pwm[0])
     return 0
 
 
@@ -31,13 +31,14 @@ def pushing(samples, limits=None, jaws=False, params=None):
     cap = lambda motor: (limits or {}).get(motor) or 300  # noqa: E731  the session baseline cap
     rise, share, jaw_share = (prm.get(params, f"windup.{k}") for k in ("rest_rise", "rest_pwm", "jaw_pwm"))
     window = samples[-REST_SAMPLES:]
-    for i, motor in enumerate(MOTORS[:4]):
-        if len(window) < REST_SAMPLES:
-            break
-        target, present, pwm = ([s[k][i] for s in window] for k in range(3))
-        if windup(target, present, pwm) >= rise and abs(pwm[-1]) >= share * cap(motor):
-            return motor, (f"{motor} still {abs(target[-1] - present[-1]):.1f} units short, PWM winding up "
-                           f"{abs(pwm[0])} -> {abs(pwm[-1])} of {cap(motor)}: pushing against something")
+    if len(samples) >= REST_SAMPLES:
+        for i, motor in enumerate(MOTORS[:4]):
+            if abs(window[-1][2][i]) < share * cap(motor):
+                continue
+            target, present, pwm = ([s[k][i] for s in window] for k in range(3))
+            if windup(target, present, pwm) >= rise:
+                return motor, (f"{motor} still {abs(target[-1] - present[-1]):.1f} units short, PWM winding up "
+                               f"{abs(pwm[0])} -> {abs(pwm[-1])} of {cap(motor)}: pushing against something")
     if jaws and len(samples) >= 2:
         (_, before, pwm0), (target, present, pwm1) = samples[-2:]
         gap = abs(present[5] - target[5])
