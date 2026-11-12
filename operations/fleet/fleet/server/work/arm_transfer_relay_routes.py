@@ -7,8 +7,7 @@ rechecks go through the cell's control-unit API for that delegation (peer creden
 from hashlib import sha256
 import sqlite3
 
-import httpx
-from fastapi import Depends, HTTPException, Request
+from fastapi import Depends, HTTPException
 from fastapi.responses import JSONResponse
 
 from core_common.protocol.arm_transfer import ArmActionId
@@ -16,8 +15,11 @@ from core_common.protocol.arm_transfer_jobs import ArmTransferJobCreate, ArmTran
 from core_common.protocol.arm_transfer_observations import ArmTransferCancelRequest, ArmTransferPhysicalReceiptResponse
 from core_common.protocol.arm_transfer_recheck import ArmTransferRecheckCreate
 from core_common.protocol.control_units import ControlArmWorkRequest
-from fleet.swarm.transport import RobotApiError
-from core_common.protocol.account_access import same_origin
+from fleet.server.arm_transfer_http import (
+    call_arm_transfer_domain,
+    require_write_origin,
+    unavailable_arm_transfer_error,
+)
 
 
 def delegation_id(principal_id, request_key):
@@ -27,17 +29,8 @@ def delegation_id(principal_id, request_key):
 def install_arm_transfer_relay_routes(app, *, control, require_viewer, require_proposer):
     path = "/api/fleet/arm-transfers/jobs"
     origin = control.unit.unit_id
-
-    def write_origin(request: Request):
-        if request.headers.get("origin") is not None and not same_origin(request):
-            raise HTTPException(403, detail={"code": "ARM_TRANSFER_JOB_FORBIDDEN"})
-
-    def unavailable(row=None):
-        detail = {"code": "ARM_TRANSFER_JOB_UNAVAILABLE"}
-        if row is not None:  # what this unit last saw, for operators; never a current job state
-            detail["last_projection"] = {"status": row["status"], "updated_at": row["updated_at"],
-                                         "job_status": row["result"].get("job", {}).get("status")}
-        return HTTPException(503, detail=detail)
+    write_origin = require_write_origin
+    unavailable = unavailable_arm_transfer_error
 
     def target(workcell_id):
         resource = "workcell:" + workcell_id
@@ -75,14 +68,7 @@ def install_arm_transfer_relay_routes(app, *, control, require_viewer, require_p
         return row
 
     async def call(operation):
-        try:
-            return await operation
-        except KeyError:
-            raise HTTPException(404, detail={"code": "ARM_TRANSFER_JOB_NOT_FOUND"}) from None
-        except ValueError:
-            raise HTTPException(409, detail={"code": "ARM_TRANSFER_JOB_CONFLICT"}) from None
-        except (ConnectionError, OSError, sqlite3.Error, RobotApiError, httpx.HTTPError):
-            raise unavailable() from None
+        return await call_arm_transfer_domain(operation, value_error_is_conflict=True)
 
     async def forward(row, method, tail, body=None):
         if row["owner_unit"] != row["request"]["target_unit"]:
