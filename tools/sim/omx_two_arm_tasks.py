@@ -5,6 +5,7 @@ container sits where, and checks every step before anything moves: the source ho
 free and supported, a temporary plate never holds more than its lanes, both ends and the carry between them are reachable by the step's arm
 inside the plan's joint limits, and the moving arm keeps clear of the other arm parked at home. Geometry only (D-947).
 """
+import copy
 import json
 import math
 from pathlib import Path
@@ -23,6 +24,8 @@ RELEASE_DROP_UPPER = RELEASE_DROP  # onto a container too (a lower drop was only
 LINK_MARGIN = .004      # link3 and link4 (the wrist) must clear every standing container by this much; MuJoCo: failures sat at -3 to -6 mm, passes at +8 mm or more
 CAPACITY = 3 * sites_mod.TEMP_TIERS  # containers per temporary plate: 3 lanes (3 x 1 each), 3 tiers (plate v11)
 TIERS = (1, 2, 3)       # 1단 (layer 0), 2단 (layer 1), 3단 (layer 2)
+_TASK_LOAD_CACHE = {}  # (resolved path, mtime_ns, size) -> parsed task file; load() hands out deep copies
+_CLEARANCE_T = np.linspace(0, 1, 8)[:, None]  # clearance()'s capsule sample parameters, shared by every call
 
 
 class PlanRefused(ValueError):
@@ -34,7 +37,13 @@ class PlanRefused(ValueError):
 
 
 def load(path=TASK_FILE):
-    return json.loads(Path(path).read_text(encoding="utf-8"))
+    """The task file dict, as a deep copy of the cached parse (callers mutate their task dicts)."""
+    p = Path(path)
+    st = p.stat()
+    key = (str(p.resolve()), st.st_mtime_ns, st.st_size)
+    if key not in _TASK_LOAD_CACHE:
+        _TASK_LOAD_CACHE[key] = json.loads(p.read_text(encoding="utf-8"))
+    return copy.deepcopy(_TASK_LOAD_CACHE[key])
 
 
 def wrap_pi(angle):
@@ -63,10 +72,12 @@ def waypoints(layout, step, here, pick=None, drop=RELEASE_DROP, drop_upper=RELEA
 def clearance(moving, idle_pose, q_path, idle):
     """Smallest centreline distance between the moving arm along q_path and the idle arm parked at idle_pose (capsule stand-in)."""
     def points(arm, q):
-        seg = arm.segments(q)
-        return np.vstack([seg[i] + (seg[i + 1] - seg[i]) * t for i in range(len(seg) - 1) for t in np.linspace(0, 1, 8)])
+        seg = np.asarray(arm.segments(q))[:, None, :]  # base, j1..j5, TCP, one column per segment
+        a, b = seg[:-1], seg[1:]
+        return (a + (b - a) * _CLEARANCE_T).reshape(-1, 3)  # 8 samples per segment, by broadcast
     fixed = points(idle, idle_pose)
-    return min(float(np.linalg.norm(points(moving, q)[:, None] - fixed[None], axis=2).min()) for q in q_path)
+    best = min(((points(moving, q)[:, None, :] - fixed) ** 2).sum(axis=2).min() for q in q_path)
+    return math.sqrt(best)  # one sqrt at the end: the smallest squared distance wins
 
 
 def solve_chain(arm, wps, q0, samples=12, roll_floor=None, branch="best"):
@@ -118,19 +129,27 @@ def solve_chain(arm, wps, q0, samples=12, roll_floor=None, branch="best"):
 def link_clearance(layout, arm, path, here):
     """Smallest distance (m) from the link3 and link4 meshes along the joint path to any container standing on a site in `here`
     (container name -> site): vertex samples of the real URDF meshes against the container boxes (layout.box). Negative means inside."""
-    boxes = [(np.array([*layout.sites[s]["xy"], layout.sites[s]["z"]]), layout.sites[s]["yaw"]) for s in here.values() if s != "belt"]
+    half_box = np.asarray(layout.box, float) * .5
+    boxes = [(np.array([*layout.sites[s]["xy"], layout.sites[s]["z"]]), math.cos(-layout.sites[s]["yaw"]), math.sin(-layout.sites[s]["yaw"]))
+             for s in here.values() if s != "belt"]  # centres and rotation precomputed once, not per link per q
     points = {n: kin.link_points(n) for n in ("link3", "link4")}
     best = 1e9
     for q in path:
+        poses = arm.link_poses(q)  # link3 and link4 share this one pass
         for i, name in ((2, "link3"), (3, "link4")):
-            R, p = arm.link_poses(q)[i]
+            R, p = poses[i]
             world = points[name] @ R.T + p
-            for c, yaw in boxes:
+            for c, cs, sn in boxes:
                 d = world - c
-                cs, sn = math.cos(-yaw), math.sin(-yaw)
-                local = np.stack([cs * d[:, 0] - sn * d[:, 1], sn * d[:, 0] + cs * d[:, 1], d[:, 2]], 1)
-                q_ = np.abs(local) - np.array(layout.box) / 2
-                best = min(best, float((np.linalg.norm(np.maximum(q_, 0), axis=1) + np.minimum(q_.max(1), 0)).min()))
+                local = np.empty_like(d)
+                local[:, 0] = cs * d[:, 0] - sn * d[:, 1]
+                local[:, 1] = sn * d[:, 0] + cs * d[:, 1]
+                local[:, 2] = d[:, 2]
+                q_ = np.abs(local) - half_box
+                gx, gy, gz = np.maximum(q_[:, 0], 0), np.maximum(q_[:, 1], 0), np.maximum(q_[:, 2], 0)
+                m = float((np.sqrt(gx * gx + gy * gy + gz * gz) + np.minimum(q_.max(1), 0)).min())
+                if m < best:
+                    best = m
     return best
 
 

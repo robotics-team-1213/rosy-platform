@@ -13,7 +13,7 @@ import sqlite3
 import uuid
 from contextlib import closing
 from pathlib import Path
-from typing import Any, Mapping
+from typing import AbstractSet, Any, Mapping
 
 from .action_store_phases import _ActionPhaseOps
 from .action_store_readback import ActionStoreReadback, _nonempty
@@ -21,6 +21,13 @@ from .action_store_workflow import _ActionWorkflowOps
 from .managed_transfer_scope import initialize_journal
 from .action_store_phases import (  # noqa: F401  re-exported public names
     ActionConflict, InvalidActionTransition, _TERMINAL, _json, _utc_now)
+
+_CAMERA_BLIND_KINDS = frozenset({"CELL_TRANSFER", "ARM_TRANSFER"})
+_TERMINAL_ALLOW_STATES = frozenset({"ACCEPTED", "RUNNING", "CANCEL_REQUESTED", "UNKNOWN", "HOLD"})
+_HOLD_ALLOW_STATES = frozenset({"SUBMITTING", "ACCEPTED", "RUNNING", "CANCEL_REQUESTED", "UNKNOWN"})
+_RECOVER_UNRESOLVED_STATES = frozenset({"SUBMITTING", "ACCEPTED", "RUNNING", "CANCEL_REQUESTED"})
+_HELD_WORKFLOW_STATES = frozenset({"VERIFY_HOLD", "TRANSFER", "RELEASE", "VERIFY_RELEASE", "HOLD"})
+_FAILED_OR_CANCELED = frozenset({"FAILED", "CANCELED"})
 
 
 class ActionStore(_ActionPhaseOps, _ActionWorkflowOps, ActionStoreReadback):
@@ -148,7 +155,7 @@ class ActionStore(_ActionPhaseOps, _ActionWorkflowOps, ActionStoreReadback):
         request_key = _nonempty("request_key", request_key, maximum=160)
         action_kind = _nonempty("action_kind", action_kind, maximum=48)
         configuration_revision = _nonempty("configuration_revision", configuration_revision)
-        if action_kind in {"CELL_TRANSFER", "ARM_TRANSFER"}:
+        if action_kind in _CAMERA_BLIND_KINDS:
             # This tagged action is camera blind; its durable request has no
             # observation revision. Keep the existing NOT NULL column without
             # inventing an observation identifier.
@@ -316,7 +323,7 @@ class ActionStore(_ActionPhaseOps, _ActionWorkflowOps, ActionStoreReadback):
         with closing(self._connect()) as connection:
             connection.execute("BEGIN IMMEDIATE")
             row = self._require_attempt(connection, action_id, attempt_id,
-                                        {"ACCEPTED", "RUNNING", "CANCEL_REQUESTED", "UNKNOWN", "HOLD"})
+                                        _TERMINAL_ALLOW_STATES)
             if row["driver_goal_id"] not in {None, driver_goal_id}:
                 raise InvalidActionTransition("driver goal identity does not match Action attempt")
             connection.execute(
@@ -345,7 +352,7 @@ class ActionStore(_ActionPhaseOps, _ActionWorkflowOps, ActionStoreReadback):
             connection.execute("BEGIN IMMEDIATE")
             action = self._require_attempt(
                 connection, action_id, attempt_id,
-                {"SUBMITTING", "ACCEPTED", "RUNNING", "CANCEL_REQUESTED", "UNKNOWN"},
+                _HOLD_ALLOW_STATES,
             )
             connection.execute(
                 "UPDATE omx_actions SET state='HOLD', reason=?, updated_at=? WHERE action_id=?",
@@ -380,7 +387,7 @@ class ActionStore(_ActionPhaseOps, _ActionWorkflowOps, ActionStoreReadback):
             connection.commit()
         return self._dict(updated)
 
-    def _transition(self, action_id: str, attempt_id: str, *, allowed: set[str],
+    def _transition(self, action_id: str, attempt_id: str, *, allowed: AbstractSet[str],
                     target: str, event_type: str, detail: object,
                     driver_goal_id: str | None = None) -> dict[str, Any]:
         now = _utc_now()
@@ -405,7 +412,7 @@ class ActionStore(_ActionPhaseOps, _ActionWorkflowOps, ActionStoreReadback):
 
     @staticmethod
     def _require_attempt(connection: sqlite3.Connection, action_id: str,
-                         attempt_id: str, allowed: set[str]) -> sqlite3.Row:
+                         attempt_id: str, allowed: AbstractSet[str]) -> sqlite3.Row:
         action_id = _nonempty("action_id", action_id)
         attempt_id = _nonempty("attempt_id", attempt_id)
         row = connection.execute("SELECT * FROM omx_actions WHERE action_id=?",
@@ -442,11 +449,7 @@ class ActionStore(_ActionPhaseOps, _ActionWorkflowOps, ActionStoreReadback):
                     "WHERE action_id=? AND attempt_id=? ORDER BY ordinal",
                     (row["action_id"], row["attempt_id"]),
                 ).fetchall()
-                phases = connection.execute(
-                    """SELECT * FROM omx_action_phases WHERE action_id=? AND attempt_id=?
-                       AND state IN ('SUBMITTING', 'ACCEPTED', 'RUNNING', 'CANCEL_REQUESTED')""",
-                    (row["action_id"], row["attempt_id"]),
-                ).fetchall()
+                phases = [p for p in all_phases if p["state"] in _RECOVER_UNRESOLVED_STATES]
                 for phase in phases:
                     connection.execute(
                         """UPDATE omx_action_phases SET state='UNKNOWN', reason=?, updated_at=?
@@ -475,11 +478,10 @@ class ActionStore(_ActionPhaseOps, _ActionWorkflowOps, ActionStoreReadback):
                 refs = workflow.get("evidence_refs", {})
                 if not isinstance(refs, Mapping):
                     refs = {}
-                held_states = {"VERIFY_HOLD", "TRANSFER", "RELEASE", "VERIFY_RELEASE", "HOLD"}
                 object_may_be_held = (
                     workflow.get("object_may_be_held") is True
-                    or workflow_state in held_states
-                    or any(phase["ordinal"] > 0 and phase["state"] not in {"FAILED", "CANCELED"}
+                    or workflow_state in _HELD_WORKFLOW_STATES
+                    or any(phase["ordinal"] > 0 and phase["state"] not in _FAILED_OR_CANCELED
                            for phase in all_phases)
                 )
                 hold_refs = dict(refs)

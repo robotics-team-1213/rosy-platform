@@ -120,10 +120,7 @@ class PickPlaceRunner(_PickPlaceGoalEventMixin):
     def _tolerances(self, phase: PlannedMotionPhase) -> dict[str, float]:
         """Caller tolerances; for CELL_TRANSFER the accepted profile's after-grasp per-joint
         overrides replace them for that phase (C3b A5), never the plan's own claim."""
-        tolerances = dict(self.start_state_tolerances)
-        if self._cell_profile is not None:
-            tolerances.update(self._cell_profile.phase_start_state_tolerance_rad.get(phase.phase_id, {}))
-        return tolerances
+        return dict(self._tolerances_by_phase[phase.phase_id])
 
     @property
     def active_phase_id(self) -> str | None:
@@ -133,7 +130,7 @@ class PickPlaceRunner(_PickPlaceGoalEventMixin):
     def _command_digest(self, command: TrajectoryCommand, phase: PlannedMotionPhase,
                         plan: ResolvedPickPlacePlan | CellTransferPlan,
                         state: ExecutionStateSnapshot) -> str:
-        return phase_command_digest(command, phase, plan, state, self._tolerances(phase))
+        return phase_command_digest(command, phase, plan, state, self._tolerances_by_phase[phase.phase_id])
 
     def current_submission_digest(self, command):
         """Only the exact synchronous command on its submitting thread has this capability."""
@@ -152,7 +149,7 @@ class PickPlaceRunner(_PickPlaceGoalEventMixin):
             raise ValueError("phase start state is stale or from the future")
         if state.sequence <= self._last_command_state_sequence:
             raise ValueError("phase start state sequence did not advance")
-        if set(state.joint_positions) != set(phase.joint_names):
+        if state.joint_positions.keys() != self._phase_joint_sets[phase.phase_id]:
             raise ValueError("phase start state joint map does not match the plan")
         if (state.calibration_revision != phase.calibration_revision
                 or state.transform_revision != phase.transform_revision
@@ -324,8 +321,9 @@ class PickPlaceRunner(_PickPlaceGoalEventMixin):
                     self._process_ros_goal_event(event)
         if result.get("reason") == "STOP_GENERATION_FENCED":
             return result
-        phase_rows = self.recorder.phases()
-        recorded = next((row for row in phase_rows if row["phase_id"] == phase.phase_id), None)
+        if overflow or pending:
+            phase_rows = self.recorder.phases()
+            recorded = next((row for row in phase_rows if row["phase_id"] == phase.phase_id), None)
         action = self.recorder.parent()
         if recorded is None or action is None:
             self.recorder.hold(reason="PHASE_ACCEPTANCE_RECORDING_UNKNOWN")
