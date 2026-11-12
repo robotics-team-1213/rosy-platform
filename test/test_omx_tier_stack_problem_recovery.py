@@ -364,6 +364,62 @@ def test_cell_task_worker_event_driven_hw_and_parallel_handoff(tmp_path: Path, m
     assert len(runs) == 1 and runs[0]["task"]["status"] == "COMPLETED"
 
 
+def test_mode_c_sim_real_co_learning_3tier_stack_reset_and_multitask_lifecycle(tmp_path: Path) -> None:
+    """Verify Mode C Dual-Loop Sim-Real Co-Learning pipeline:
+    1) Step-by-step `arm_s` (Pinky -> Belt/Container) and `arm_a`/`arm_b` 1단 -> 2단 -> 3단 stacking (`pinky_to_3tier_stack`).
+    2) Deterministic physical & board teardown / reset (`unstack_and_reset`: 3 -> 2 -> 1 back to Pinky, `unstack_only` vs `full_reset`).
+    3) Inner-Loop immediate IWR/IL-RL updates + Outer-Loop Sim+Real retraining, Safety Sovereignty gate (`false_pass_rate == 0.0`),
+       and hot-swap (`v0 -> v1 -> v2`) with error reduction across diverse tasks from cold-start to convergence.
+    """
+    import cell_fleet_pipeline as cfp
+    from cell_sim_real_co_learning import SUPPORTED_TASKS, SimRealCoLearningPipeline
+
+    co = SimRealCoLearningPipeline(tmp_path / "colearn")
+    assert co.model_version == 0
+    assert (tmp_path / "colearn/models/active-model.json").is_file()
+    assert set(SUPPORTED_TASKS) == {
+        "pinky_to_3tier_stack",
+        "unstack_and_reset",
+        "rehandle_and_outbound",
+        "displaced_and_7situation_recovery",
+    }
+
+    # 1. Run 1-to-3 tier stacking scenario (`arm_s` Pinky->Belt + `arm_a`/`arm_b` Tier 1..3)
+    stack_r1 = co.run_task("pinky_to_3tier_stack")
+    assert stack_r1["completed"] is True
+    assert stack_r1["tiers_stacked"] == [1, 2, 3]
+    assert [s["arm_ab_stage"]["arm_id"] for s in stack_r1["steps"]] == ["arm_a", "arm_b", "arm_a"]
+    assert all(s["arm_s_stage"]["arm_id"] == "arm_s" for s in stack_r1["steps"])
+
+    # 2. Outer-loop Sim+Real retrain and model hot-swap (v0 -> v1)
+    swap_1 = co.run_outer_sim_retrain_and_hotswap(n_sim_episodes=120)
+    assert swap_1["promoted"] is True
+    assert swap_1["previous_version"] == 0 and swap_1["active_version"] == 1
+    assert swap_1["false_pass_rate"] == 0.0
+    assert swap_1["confluence_27197547_blocked"] is True
+    assert swap_1["ledger_all_verified"] is True
+
+    # 3. Reset scenario & board (`unstack_only` unstacks 3->2->1 back to Pinky while keeping v1 model)
+    reset_res = co.run_task("unstack_and_reset")
+    assert reset_res["completed"] is True
+    assert reset_res["reset_result"]["unstacked_count"] == 3
+    assert [u["tier"] for u in reset_res["reset_result"]["unstack_steps"]] == [3, 2, 1]
+    assert co.board_state["stacked_tiers"] == []
+    assert co.model_version == 1
+
+    # 4. Full start-to-finish multi-task learning lifecycle via FleetModelPipeline
+    fleet_pipe = cfp.FleetModelPipeline(tmp_path / "fleet_colearn")
+    lifecycle = fleet_pipe.run_sim_real_co_learning_lifecycle(rounds=2)
+    assert lifecycle["completed"] is True
+    assert lifecycle["initial_model_version"] == 0
+    assert lifecycle["final_model_version"] == 2
+    assert lifecycle["error_improved"] is True
+    assert lifecycle["final_mean_place_error_mm"] < lifecycle["initial_mean_place_error_mm"]
+    assert lifecycle["final_reset"]["stacked_tiers"] == []
+    assert (tmp_path / "fleet_colearn/sim-real-colearn-lifecycle-report.json").is_file()
+
+
+
 
 
 

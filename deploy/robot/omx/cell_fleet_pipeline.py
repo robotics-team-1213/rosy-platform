@@ -392,3 +392,20 @@ class FleetModelPipeline:
     def dispatch_and_execute_fleet_r_cell_task(self, **kwargs) -> dict[str, Any]:
         """Assign, claim, execute, and complete a task on Fleet-R (`/api/fleet/pipeline/cell-tasks`)."""
         return dispatch_and_execute_fleet_r_cell_task(self, **kwargs)
+
+    def run_sim_real_co_learning_lifecycle(
+        self,
+        *,
+        rounds: int = 3,
+        tasks_per_round: tuple[str, ...] = (
+            "pinky_to_3tier_stack",
+            "rehandle_and_outbound",
+            "displaced_and_7situation_recovery",
+        ),
+    ) -> dict[str, Any]:
+        """Run the Mode C Dual-Loop Sim-Real Co-Learning, 1-to-3 Tier Stacking, Reset, and Hot-Swap pipeline."""
+        from cell_sim_real_co_learning import SimRealCoLearningPipeline
+
+        co_pipe = SimRealCoLearningPipeline(self.work_dir)
+        return co_pipe.run_learning_lifecycle(rounds=rounds, tasks_per_round=tasks_per_round)
+
