@@ -188,7 +188,7 @@ def dependencies(bundle, digest, direct):
     for line in direct.decode().splitlines():
         if not line or line.startswith('#'):
             continue
-        match = re.fullmatch('([A-Za-z0-9_.-]+)==([A-Za-z0-9_.+!-]+)', line)
+        match = re.fullmatch(r'([A-Za-z0-9_.-]+)(?:\[[A-Za-z0-9_.-]+(?:,[A-Za-z0-9_.-]+)*\])?==([A-Za-z0-9_.+!-]+)', line)
         if not match or resolved.get(re.sub('[-_.]+', '-', match[1]).lower()) != match[2]:
             raise ValueError('DEPENDENCY_DIRECT_PIN_MISMATCH')
     return ''.join(sorted(lines)).encode()
