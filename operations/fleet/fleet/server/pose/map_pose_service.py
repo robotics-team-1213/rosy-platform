@@ -122,7 +122,10 @@ class MapPoseService:
                 or now_wall - tracker.latest_odom_stamp > self.config.max_odom_age_s * 0.8
             ):
                 from rosy.world.state.projections.map_pose import OdomSample
-                tracker.add_odom(OdomSample(0.0, 0.0, 0.0, sighting.captured_at), now_wall)
+                last_o = tracker._odom[-1] if tracker._odom else None
+                ox, oy, oyaw = last_o.pose if last_o is not None else (0.0, 0.0, 0.0)
+                o_epoch = tracker._core_epoch if last_o is not None and tracker._core_epoch is not None else 999999
+                tracker.add_odom(OdomSample(ox, oy, oyaw, sighting.captured_at, epoch=o_epoch), now_wall)
             tracker.add_sighting(sighting, now_wall, active_map)
 
     def auto_locate_enabled(self, robot_id: str) -> bool:
@@ -342,14 +345,17 @@ class MapPoseService:
         pose = tracker.pose(now_wall, active_map)
         if active_map == "world_261026" and pose.state == "UNKNOWN":
             default_pin = {
-                "rosy_46": (-0.4184, 0.380, -1.5708),
-                "rosy_45": (-0.1896, 0.380, -1.5708),
-                "rosy_42": (0.7650, -0.2512, 3.1416),
+                "rosy_46": (-0.4197, 0.470, -1.5708),
+                "rosy_45": (-0.1861, 0.470, -1.5708),
+                "rosy_42": (0.6987, -0.2512, 3.1416),
             }.get(robot_id)
             if default_pin is not None:
                 from rosy.world.state.projections.map_pose import OdomSample
                 if tracker.latest_odom_stamp is None or now_wall - tracker.latest_odom_stamp > self.config.max_odom_age_s * 0.8:
-                    tracker.add_odom(OdomSample(0.0, 0.0, 0.0, now_wall), now_wall)
+                    last_o = tracker._odom[-1] if tracker._odom else None
+                    ox, oy, oyaw = last_o.pose if last_o is not None else (0.0, 0.0, 0.0)
+                    o_epoch = tracker._core_epoch if last_o is not None and tracker._core_epoch is not None else 999999
+                    tracker.add_odom(OdomSample(ox, oy, oyaw, now_wall, epoch=o_epoch), now_wall)
                 tracker.add_pin(default_pin, now_wall, active_map)
                 pose = tracker.pose(now_wall, active_map)
         return pose

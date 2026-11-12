@@ -33,6 +33,8 @@ def test_compact_bay_dock_specs_invariants():
         assert 0.0 < spec["rail_entry_m"] < spec["staging_offset_m"]
         assert spec["rail_entry_m"] == 0.085
         assert spec["staging_offset_m"] == 0.20
+        assert spec["bay_pose"]["y"] == 0.470
+        assert spec["stop_face_rg_m"] > 0.0
 
 
 def test_berth_parking_status_and_dispatch_routes():
@@ -90,3 +92,11 @@ def test_berth_parking_status_and_dispatch_routes():
     assert rbody["in_rail_angular_rad_s"] == 0.0
     assert rbody["phases"] == ["FORWARD_UNDOCK", "ALIGNING", "REVERSING_IN_RAILS", "SETTLING", "DOCKED"]
     assert len(rbody["waypoints_site"]) == 4
+
+    scen = client.post("/api/fleet/scenario/bay-departure", json={"execute_physical": False})
+    assert scen.status_code == 200
+    sbody = scen.json()
+    assert sbody["depart_order"] == ["rosy_46", "rosy_45", "rosy_42"]
+    assert sbody["live_robots"]["rosy_46"]["site_pose"]["y"] == 0.470
+    assert sbody["live_robots"]["rosy_45"]["site_pose"]["y"] == 0.470
+    assert sbody["cell_contract_handoff"]["stop_place_id"] == "S3"

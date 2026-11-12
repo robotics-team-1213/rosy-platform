@@ -38,9 +38,9 @@ class TrackedHeadState:
 def default_anchors() -> dict[str, TargetAnchor]:
     now = time.time()
     return {
-        "rosy_46": TargetAnchor("rosy_46", "pinky", "rosy-pinky-b8xy (rosy_46)", -0.4184, 0.380, -1.5708, 0.18, 3, 46, now),
-        "rosy_45": TargetAnchor("rosy_45", "pinky", "rosy-pinky-y8xs (rosy_45)", -0.1896, 0.380, -1.5708, 0.18, 3, 45, now),
-        "rosy_42": TargetAnchor("rosy_42", "pinky", "rosy-pinky-geg6 (rosy_42)", 0.7650, -0.2512, 3.1416, 0.18, 3, 42, now),
+        "rosy_46": TargetAnchor("rosy_46", "pinky", "rosy-pinky-b8xy (rosy_46)", -0.4197, 0.470, -1.5708, 0.18, 3, 46, now),
+        "rosy_45": TargetAnchor("rosy_45", "pinky", "rosy-pinky-y8xs (rosy_45)", -0.1861, 0.470, -1.5708, 0.18, 3, 45, now),
+        "rosy_42": TargetAnchor("rosy_42", "pinky", "rosy-pinky-geg6 (rosy_42)", 0.6987, -0.2512, 3.1416, 0.18, 3, 42, now),
         "arm_a": TargetAnchor("arm_a", "omx_ai", "OMX-AI #1 (북동 상차 · Arm A)", 0.551, 0.365, -1.5708, 0.28, 4, None, now),
         "arm_b": TargetAnchor("arm_b", "omx_ai", "OMX-AI #2 (동북 상차 · Arm B)", 0.956, 0.370, -1.5708, 0.28, 4, None, now),
         "arm_s": TargetAnchor("arm_s", "omx_ai", "OMX-AI #3 (동남 분류 · Arm S)", 0.960, -0.035, 3.1416, 0.28, 4, None, now),
@@ -186,7 +186,7 @@ class AnchorHeadTracker:
                     new_sightings.append(SiteSightingPayload(
                         robot_id=anchor.target_id, x=round(st.base_x, 4), y=round(st.base_y, 4), yaw=round(st.head_yaw, 4),
                         captured_at=captured_at, seq=seq, map_id=map_id, calibration_revision=calibration.revision,
-                        processor_revision=processor_revision, quality=round(st.confidence, 3),
+                        processor_revision=processor_revision, quality=round(max(0.55, st.confidence), 3),
                         corner_marker_ids=None, calibration_source="approved_record",
                     ))
         for md in reversed(matched_dets):
