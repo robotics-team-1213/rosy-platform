@@ -115,6 +115,9 @@ def test_drivable_evidence_requires_the_model_during_motion(tmp_path):
     trace.write_text('\n'.join(json.dumps(row) for row in rows), encoding='utf-8')
     evidence = m.drivable_evidence(trace, 'rev', ['rosy_01'])['robots']['rosy_01']
     assert evidence['pass'] and not evidence['pure_model'] and evidence['fallback_frames'] == 1
+    samples[5]['message'] = dict(paint_source_used='learned_drivable', paint_model_revision='other')
+    trace.write_text('\n'.join(json.dumps(row) for row in rows), encoding='utf-8')
+    assert not m.drivable_evidence(trace, 'rev', ['rosy_01'])['pass']
 
 
 def test_every_lap_scenario_starts_and_ends_on_the_lap_route():
