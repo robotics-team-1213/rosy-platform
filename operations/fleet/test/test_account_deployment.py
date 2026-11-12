@@ -7,12 +7,12 @@ import pytest
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives import serialization
 
-from fleet.server.account_authority import AccountAuthority
+from rosy_account.account_authority import AccountAuthority
 from fleet.server.app import create_app
 from test_account_ledger import activated, cookie
 from test_account_authority import ISSUER, CALLBACK, get_code, exchange
 from test_password_session import _app, _accounts, _client, _login
-from fleet.server.password_session import COOKIE
+from rosy_account.password_session import COOKIE
 
 
 def config(tmp_path):
@@ -57,7 +57,7 @@ def test_explicit_configuration_wires_authority_and_survives_yaml_removal(tmp_pa
 
 
 def test_authority_configuration_accepts_public_rotation_overlap(tmp_path):
-    from fleet.server.account_config import load_account_config
+    from rosy_account.account_config import load_account_config
     path, data, private = config(tmp_path)
     public = tmp_path/'old-public.pem'
     public.write_bytes(serialization.load_pem_private_key(private, None).public_key().public_bytes(
@@ -97,7 +97,7 @@ def test_managed_session_exports_capabilities_and_serves_admin_document(tmp_path
 
 
 def test_private_config_rejects_unknown_fields_and_unprotected_key(tmp_path):
-    from fleet.server.account_config import load_account_config
+    from rosy_account.account_config import load_account_config
     path, data, _ = config(tmp_path)
     path.write_text(json.dumps({**data, "allow_all": True}))
     with pytest.raises(ValueError):
@@ -110,7 +110,7 @@ def test_private_config_rejects_unknown_fields_and_unprotected_key(tmp_path):
 
 
 def test_authority_configuration_rejects_public_key_before_activation(tmp_path):
-    from fleet.server.account_config import load_account_config
+    from rosy_account.account_config import load_account_config
     from pathlib import Path
     path, data, _ = config(tmp_path)
     public = Ed25519PrivateKey.generate().public_key().public_bytes(
@@ -126,7 +126,7 @@ def test_real_sql_refresh_replay_revocation_survives_reopen(tmp_path):
     form = urlencode({"grant_type": "refresh_token", "client_id": "robot-app", "refresh_token": token["refresh_token"]})
     assert authority.token(form)[2] == 200
     assert authority.token(form)[2] == 400
-    from fleet.server.password_session import PasswordSessions
+    from rosy_account.password_session import PasswordSessions
     reopened = PasswordSessions(sessions.path, {})
     assert reopened.principal(value) is None
     assert authority.introspect(token["access_token"]) == {"active": False}

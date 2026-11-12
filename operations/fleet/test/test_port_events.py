@@ -10,7 +10,14 @@ from pydantic import ValidationError
 import pytest
 
 from core_common.protocol.port_events import PortEvent, event_id
-from fleet.server.port_event_routes import contiguous, decode_cursor, install_port_event_routes, read_page
+from fleet.server.control_unit_arm_coordinator import direct_child_unit_ids
+from fleet.server.port_event_routes import (
+    contiguous,
+    decode_cursor,
+    install_port_event_routes,
+    read_page,
+    workcell_children,
+)
 from fleet.server.port_event_store import PortEventConflict, PortEventStore
 from fleet.server.site_auth import SitePrincipal
 
@@ -97,6 +104,14 @@ def control(ledgers):
              "cell-c": SimpleNamespace(unit_id="cell-c", parent="cell-a", resources=("workcell:deep",)),
              "plain": SimpleNamespace(unit_id="plain", parent="R", resources=("robot:rosy_02",))}
     return SimpleNamespace(unit=units["R"], topology=SimpleNamespace(units=units), peer=FakePeer(ledgers))
+
+
+def test_workcell_children_includes_depth_1_direct_children_and_excludes_depth_2_grandchildren():
+    unit = control({})
+    assert direct_child_unit_ids(unit) == ["cell-a", "cell-b", "plain"]
+    assert direct_child_unit_ids(unit, resource_prefix="workcell:") == ["cell-a", "cell-b"]
+    assert workcell_children(unit) == ["cell-a", "cell-b"]
+    assert "cell-c" not in workcell_children(unit)
 
 
 def test_r_reads_direct_workcell_children_with_an_opaque_cursor_and_marks_unreached_cells():

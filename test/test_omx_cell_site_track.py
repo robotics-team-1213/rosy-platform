@@ -51,3 +51,14 @@ def test_follow_writes_the_moved_site_and_a_blank_frame_is_refused(tmp_path):
 
 def test_raw_at_inverts_the_map():
     assert st.raw_at(PX, PX((0.031, 0.177))) == pytest.approx((0.031, 0.177), abs=1e-6)
+
+
+def test_follow_updates_detect_roi_when_present(tmp_path):
+    cv2.imwrite(str(tmp_path / "ref.jpg"), robot())
+    config = {"params": None, "sites": {"pinky": {"yaw_deg": -67.8, "place": [0.0, 0.2], "start": [0.0, 0.2],
+              "detect_roi": [100, 100, 260, 260], "track": {
+                  "reference": "ref.jpg", "surface_px": POLY, "place_px": [320, 240], "yaw_deg": -67.8}}}}
+    moved, report = st.follow(config, "pinky", robot(dx=22), PX, tmp_path)
+    assert report["tracked"]
+    assert moved["sites"]["pinky"]["detect_roi"] == moved["sites"]["pinky"]["auto_roi"]
+

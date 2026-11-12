@@ -1,9 +1,5 @@
 #!/usr/bin/env python3
-"""Publish normalized white-line evidence from IR reflectance or camera frames.
-
-This node owns no motion output. CORE chooses exactly one source and remains
-the sole final ``cmd_vel`` publisher (D-143).
-"""
+"""Publish normalized white-line evidence from IR reflectance or camera frames."""
 
 import json
 import math
@@ -12,54 +8,52 @@ import cv2
 import numpy as np
 import rclpy
 import yaml
-from rclpy.node import Node
-from rclpy.parameter import Parameter
-from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy, qos_profile_sensor_data
 from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
 from rcl_interfaces.msg import ParameterDescriptor
+from rclpy.node import Node
+from rclpy.parameter import Parameter
+from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy, qos_profile_sensor_data
 from sensor_msgs.msg import CompressedImage, Image, LaserScan
 from std_msgs.msg import String, UInt16MultiArray
 
-from .core_law_input import configure_drivable_law, refresh_drivable_law
 from . import executor_choice
-from .route_context_input import RouteContextInput, bend_expected
-from .lane_route_guide_input import LaneRouteGuideInput, subscribe_route_guide
-from perception_runtime.keep_odom_veto import OdomVetoLaneKeeper
 from .calibrated_values import calibrated
-from perception_runtime.perception.camera_ground import ( nominal_ground_plane, simulation_ground_allowed, simulation_ground_plane, )
-from perception_runtime.perception.image_frame import image_msg_to_frame
+from .core_law_input import configure_drivable_law, refresh_drivable_law
+from .lane_route_guide_input import LaneRouteGuideInput, subscribe_route_guide
+from .line_observer_helpers import LineObserverHelpersMixin, build_ir_calibration, encode_debug_overlay_msg, load_nominal_camera_profile
+from .route_context_input import RouteContextInput, bend_expected
+from .route_followers import RouteFollowerInput
 from .sensing.perception.camera_visibility import visibility_reason
-from perception_runtime.perception.lane import ( IRLineCalibration, LaneBetweenKeeper, LaneCornerTracker, detect_ir_line, detect_lane_centre, LaneObservation, detect_lane_error, line_observation_payload, )
+from .sensing.perception.drivable.drivable_keep import keep_step, scan_summary
+from .sensing.perception.evidence_mode import EvidenceModes
+from .sensing.perception.lane_containment import PAINT_HALF_WIDTH_M, containment_payload, geometry_error, paint_half_width
+from .sensing.perception.lane_debug import keep_debug_payload, next_publish_due, render_debug
+from .sensing.perception.learned.paint_motion import OdomHistory, mask_homography, warp_mask
+from perception_runtime.keep_odom_veto import OdomVetoLaneKeeper
+from perception_runtime.perception.camera_ground import nominal_ground_plane, simulation_ground_allowed, simulation_ground_plane
+from perception_runtime.perception.image_frame import image_msg_to_frame
+from perception_runtime.perception.lane import (
+    IRLineCalibration, LaneBetweenKeeper, LaneCornerTracker, LaneObservation,
+    detect_ir_line, detect_lane_centre, detect_lane_error, line_observation_payload,
+)
 from perception_runtime.perception.lane_bev import LaneEdgeFollower, pose_if_fresh
 from perception_runtime.perception.lane_boundaries import LaneBoundaryTracker
 from perception_runtime.perception.lane_keep import LaneKeeper, clean_learned_mask, denoise_white_mask
 from perception_runtime.perception.lane_keep_lines import HORIZON_MARGIN_PX, drop_small_components, floor_pink_mask
 from perception_runtime.perception.learned.drivable_paint import boundary_paint, lateral_px_per_m
-from .sensing.perception.drivable.drivable_keep import keep_step, scan_summary
-from .sensing.perception.evidence_mode import EvidenceModes
-from .sensing.perception.learned.paint_motion import OdomHistory, mask_homography, warp_mask
-from .sensing.perception.lane_debug import keep_debug_payload, next_publish_due, render_debug
-from .sensing.perception.lane_containment import PAINT_HALF_WIDTH_M, containment_payload, geometry_error, paint_half_width
-from .route_followers import RouteFollowerInput
 
-#: Fixed at startup: the edge follower and odom subscription are built from these once (a change runs the wrong pipeline).
 _READ_ONLY = ParameterDescriptor(read_only=True)
-#: 'keep' mode: a gap between camera frames longer than this resets the keeper.
 KEEP_MAX_FRAME_GAP_S = 0.5
+COMMANDED_PIVOT_LINEAR_MPS = 1e-3
+KEEP_CMD_STALE_WARN_FRAMES = 30
 
 
-COMMANDED_PIVOT_LINEAR_MPS = 1e-3   # a pivot commands v exactly 0; slow keep steering commands ~0.01 m/s
-KEEP_CMD_STALE_WARN_FRAMES = 30     # 'keep': frames in a row with a stale received command before one warning
-
-
-#: A spin in place, judged on CORE's commanded (v, w): |w| over half D-495's 0.3 rad/s turn floor, |v| near 0.
-#: Not on odom: a slow keep corner (cmd v 0.0188) reads vx ~0.001 (D-507 r4b).
 def _spinning_in_place(twist):
     return twist is not None and abs(twist[1]) > 0.15 and abs(twist[0]) < COMMANDED_PIVOT_LINEAR_MPS
 
 
-class LineObserverNode(Node, RouteFollowerInput):
+class LineObserverNode(LineObserverHelpersMixin, Node, RouteFollowerInput):
     def __init__(self):
         super().__init__('line_observer_node')
         self.declare_parameter('ir_calibration_enabled', False)
@@ -73,191 +67,103 @@ class LineObserverNode(Node, RouteFollowerInput):
         self.declare_parameter('camera_washed_fraction', 0.4)
         self.declare_parameter('camera_min_pixels', 80)
         self.declare_parameter('require_camera_controls_stable', True)
-        # 'line' follows one bright line; 'lane' keeps the centre between two boundary lines; 'edge_left'
-        # holds the lane's left boundary a half-width off in bird's-eye view (bends, arcs). Both lane
-        # modes need a metric ground plane, edge_left also odometry (fail-closed without).
-        # 'centre' follows the centre line between both boundaries (fallback ladder).
-        # 'between' keeps the midpoint of the two boundary lines in image space (no ground plane, no odometry).
-        # 'keep' keeps the lane middle from ground-plane boundary lines found per frame: the real-robot
-        # lane keeper (D-364 §2), on camera_ground_source NOMINAL + allow_nominal_ground, or GAZEBO.
-        # 'route_a'/'route_b' are the junction prototypes: route-driven
-        # manoeuvres over the centre-line tracker (A) and planned-route
-        # pursuit from a paint-localised pose (B). 'route_ab' is their
-        # hybrid: A's manoeuvres placed by B's paint-localised pose. All
-        # need lane_graph_path/route/route_start; fail closed without them.
-        # D-408: keep-mode paint source: threshold (default) | denoise | learned (+ denoise fallback).
         self.declare_parameter('paint_source', 'threshold', _READ_ONLY)
         self.declare_parameter('learned_lane_pointer', '', _READ_ONLY)
-        # D-597: what of the learned model's output becomes paint: its lane_marking classes (default), or
-        # the boundaries of the drivable way through its drivable class (lane_marking when it has none).
         self.declare_parameter('learned_paint_target', 'lane_marking', _READ_ONLY)
         self.declare_parameter('learned_paint_stale_s', 0.6, _READ_ONLY)
-        # D-408 CPU: infer on every Nth keep frame (the mask is reused in between), on 1 thread.
         self.declare_parameter('learned_paint_every_n', 2, _READ_ONLY)
         self.declare_parameter('learned_paint_threads', 1, _READ_ONLY)
-        # Turning moves the image between frames: above this |odom wz| (or with no fresh odom) the
-        # mask is not reused (cadence 1: every frame infers, a late mask falls back to denoise).
         self.declare_parameter('learned_paint_reuse_max_wz', 0.15)
-        # D-570: move an older mask to this frame by the odometry between the two frame stamps
-        # (ground-plane homography); within these bounds the turn-rate rule above does not apply.
         self.declare_parameter('learned_paint_motion_compensation', False, _READ_ONLY)
         self.declare_parameter('learned_paint_max_age_s', 0.9, _READ_ONLY)
         self.declare_parameter('learned_paint_max_dxy_m', 0.10, _READ_ONLY)
         self.declare_parameter('learned_paint_max_dyaw_rad', 0.40, _READ_ONLY)
-        # D-588: drop learned lane pixels the model put on a wall; a model without a wall class is
-        # not used (denoise fallback) while this is on.
         self.declare_parameter('learned_paint_floor_gate', True, _READ_ONLY)
         self.declare_parameter('camera_lane_mode', 'line', _READ_ONLY)
         self.declare_parameter('lane_half_width_m', 0.0925)
         self.declare_parameter('lane_paint_half_width_m', PAINT_HALF_WIDTH_M, _READ_ONLY)
         self.declare_parameter('camera_roi_bottom_fraction', 1.0)
-        # 'between' only: bottom band start (keeps white walls out), lane width as a frame fraction until both are seen.
         self.declare_parameter('camera_between_roi_top_fraction', 0.6)
         self.declare_parameter('camera_between_lane_width_fraction', 0.6, _READ_ONLY)
         self.declare_parameter('camera_ground_source', 'PINKY')
         self.declare_parameter('allow_simulation_ground', False)
-        # D-364 §3: estimated floor geometry for the real camera. Two opt-ins, and
-        # the evidence is labelled NOMINAL so CORE accepts it only under a driver hold.
         self.declare_parameter('allow_nominal_ground', False, _READ_ONLY)
         self.declare_parameter('nominal_camera_profile_path', '', _READ_ONLY)
-        # D-397 operator layer: a finite value wins over the URDF-nominal file and an
-        # accepted camera_profile record; NaN (default) = no override.
         self.declare_parameter('camera_pitch_rad_override', math.nan, _READ_ONLY)
         self.declare_parameter('camera_height_m_override', math.nan, _READ_ONLY)
-        self.declare_parameter('camera_pitch_uncertainty_rad_override', math.nan, _READ_ONLY)  # record bands,
-        self.declare_parameter('camera_height_uncertainty_m_override', math.nan, _READ_ONLY)   # D-491 amendment
-        self.declare_parameter('crosswalk_uncertainty_enabled', False, _READ_ONLY)  # D-573 6: CORE must know the field
+        self.declare_parameter('camera_pitch_uncertainty_rad_override', math.nan, _READ_ONLY)
+        self.declare_parameter('camera_height_uncertainty_m_override', math.nan, _READ_ONLY)
+        self.declare_parameter('crosswalk_uncertainty_enabled', False, _READ_ONLY)
         self.declare_parameter('gazebo_camera_height_m', 0.0)
         self.declare_parameter('gazebo_camera_pitch_rad', 0.0)
         self.declare_parameter('gazebo_camera_hfov_rad', 0.0)
         self.declare_parameter('gazebo_camera_max_range_m', 0.6)
-        # Lane mode only: odometry-bounded 90 deg corner turning; off by default, never leaves FOLLOW without odometry.
         self.declare_parameter('lane_corner_turning', False, _READ_ONLY)
-        self.declare_parameter('lane_odom_veto_enabled', False, _READ_ONLY)  # D-556 candidate: off = D-364 keeper
+        self.declare_parameter('lane_odom_veto_enabled', False, _READ_ONLY)
         self.declare_parameter('camera_x_offset_m', 0.0)
         self.declare_parameter('debug_overlay', False, _READ_ONLY)
         self.declare_parameter('debug_overlay_max_hz', 5.0)
         self.declare_parameter('debug_lane_graph', '')
-        # route_a/route_b/route_ab only. route and route_start are declared by type, not value: an
-        # empty Python list default cannot be typed, and the config file's own empty-list override
-        # (line_follow.yaml) needs a declared element type (string / double) to resolve against.
         self.declare_parameter('lane_graph_path', '', _READ_ONLY)
         self.declare_parameter('route', Parameter.Type.STRING_ARRAY, _READ_ONLY)
         self.declare_parameter('route_start', Parameter.Type.DOUBLE_ARRAY, _READ_ONLY)
 
-        self._ir_calibration = self._ir_calibration_revision = None
+        self._ir_calibration = self._ir_calibration_revision = self._simulation_ground_key = self._simulation_ground = None
+        self._nominal_profile_cache = self._ground_error = None
         self._camera_controls_stable = False
-        self._simulation_ground_key = self._simulation_ground = None
-        self._nominal_profile_cache = None
-        self._ground_error = None
         self._paint_half_width_m = paint_half_width(self.get_parameter('lane_paint_half_width_m').value)
         self._odom_pose = self._odom_stamp = self._odom_twist = self._cmd_twist = self._cmd_stamp = None
-        self._corner_tracker = LaneCornerTracker(
-            camera_x_offset_m=float(self.get_parameter('camera_x_offset_m').value))
+        cam_x = float(self.get_parameter('camera_x_offset_m').value)
+        self._corner_tracker = LaneCornerTracker(camera_x_offset_m=cam_x)
         self._edge_follower = LaneEdgeFollower(
-            camera_x_offset_m=float(self.get_parameter('camera_x_offset_m').value),
-            corner_handoff=bool(self.get_parameter('lane_corner_turning').value))
-        self._centre_tracker = LaneBoundaryTracker(
-            camera_x_offset_m=float(self.get_parameter('camera_x_offset_m').value))
+            camera_x_offset_m=cam_x, corner_handoff=bool(self.get_parameter('lane_corner_turning').value))
+        self._centre_tracker = LaneBoundaryTracker(camera_x_offset_m=cam_x)
         self._between_keeper = LaneBetweenKeeper(
-            default_lane_width_fraction=float(
-                self.get_parameter('camera_between_lane_width_fraction').value))
+            default_lane_width_fraction=float(self.get_parameter('camera_between_lane_width_fraction').value))
         self._keep_last_stamp, self._cmd_stale_frames = None, 0
         self._lane_keeper = (OdomVetoLaneKeeper if self.get_parameter('lane_odom_veto_enabled').value else LaneKeeper)(
             camera_x_offset_m=float(self.get_parameter('camera_x_offset_m').value),
             corner_turning=bool(self.get_parameter('lane_corner_turning').value), paint_half_width_m=self._paint_half_width_m)
-        self._route_context_input = RouteContextInput()
-        self._paint_worker = self._build_paint_worker()
-        self._evidence_modes = EvidenceModes()
-        # D-597 amendment 2: with the drivable target, keep steers from the way itself.
+        self._route_context_input, self._paint_worker, self._evidence_modes = RouteContextInput(), self._build_paint_worker(), EvidenceModes()
         configure_drivable_law(self, _READ_ONLY)
-        self._wall_ahead, self._lane_guide = None, LaneRouteGuideInput()
-        self._odom_history = OdomHistory()
-        self._route_follower = None
+        self._wall_ahead, self._lane_guide, self._odom_history, self._route_follower = None, LaneRouteGuideInput(), OdomHistory(), None
         camera_lane_mode = str(self.get_parameter('camera_lane_mode').value)
         if camera_lane_mode in ('route_a', 'route_b', 'route_ab'):
             self._route_follower = self._build_route_follower(camera_lane_mode)
         self._debug_pub = self._debug_last_s = self._debug_graph = None
         if bool(self.get_parameter('debug_overlay').value):
-            self._debug_pub = self.create_publisher(
-                CompressedImage, 'line/debug/compressed', 2)
+            self._debug_pub = self.create_publisher(CompressedImage, 'line/debug/compressed', 2)
             path = str(self.get_parameter('debug_lane_graph').value)
             if path:
-                # A missing or malformed graph must never fail startup
-                # (D-143: this node still owes CORE line/observation); the
-                # map panel just goes without a route overlay.
                 try:
                     with open(path, encoding='utf-8') as handle:
                         self._debug_graph = yaml.safe_load(handle)
                 except (OSError, yaml.YAMLError) as exc:
                     self.get_logger().warning(
-                        f'debug_lane_graph {path!r} could not be loaded, '
-                        f'map panel will show no route: {exc}')
+                        f'debug_lane_graph {path!r} could not be loaded, map panel will show no route: {exc}')
                     self._debug_graph = None
-        if bool(self.get_parameter('ir_calibration_enabled').value):
-            self._ir_calibration = IRLineCalibration(
-                black=tuple(self.get_parameter('ir_black').value),
-                white=tuple(self.get_parameter('ir_white').value),
-                min_span=float(self.get_parameter('ir_min_span').value),
-            )
-            self._ir_calibration_revision = self._ir_calibration.revision
+        self._ir_calibration, self._ir_calibration_revision = build_ir_calibration(self)
 
         self.observation_pub = self.create_publisher(String, 'line/observation', 10)
-        # D-364: the keep lane keeper's decision bundle (strategy, boundaries,
-        # target) per frame, for the pilot overlay and exact closed-loop replay.
-        # Observation only; CORE does not read it.
         self._keep_debug_pub = self.create_publisher(String, 'line/keep_debug', 10)
-        self.create_subscription(
-            UInt16MultiArray, 'ir_sensor/range', self._on_ir, qos_profile_sensor_data)
-        self.create_subscription(
-            Image, 'camera/front', self._on_camera, qos_profile_sensor_data)
+        self.create_subscription(UInt16MultiArray, 'ir_sensor/range', self._on_ir, qos_profile_sensor_data)
+        self.create_subscription(Image, 'camera/front', self._on_camera, qos_profile_sensor_data)
         controls_qos = QoSProfile(
-            depth=1, reliability=ReliabilityPolicy.RELIABLE,
-            durability=DurabilityPolicy.TRANSIENT_LOCAL)
-        self.create_subscription(
-            String, 'camera/controls', self._on_camera_controls, controls_qos)
+            depth=1, reliability=ReliabilityPolicy.RELIABLE, durability=DurabilityPolicy.TRANSIENT_LOCAL)
+        self.create_subscription(String, 'camera/controls', self._on_camera_controls, controls_qos)
         mode = str(self.get_parameter('camera_lane_mode').value)
         if mode in ('lane', 'edge_left', 'centre', 'keep', 'route_a', 'route_b', 'route_ab'):
-            self.create_subscription(
-                Odometry, 'odom', self._on_odom, qos_profile_sensor_data)
-        if mode == 'keep':   # read only: CORE stays the sole final cmd_vel publisher (D-18, D-143)
+            self.create_subscription(Odometry, 'odom', self._on_odom, qos_profile_sensor_data)
+        if mode == 'keep':
             self.create_subscription(Twist, 'cmd_vel', self._on_cmd_vel, 10)
-            if self._drivable_required:   # D-597 amendment 2: a wall beyond the model's view
+            if self._drivable_required:
                 self.create_subscription(LaserScan, 'scan', self._on_scan, qos_profile_sensor_data)
                 subscribe_route_guide(self, String)
             route_qos = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE,
                                    durability=DurabilityPolicy.VOLATILE)
-            self.create_subscription(
-                String, 'line/route_context', self._on_route_context, route_qos)
+            self.create_subscription(String, 'line/route_context', self._on_route_context, route_qos)
         if self._ir_calibration is None:
-            self.get_logger().warning(
-                'IR line calibration disabled; IR_LINE will remain fail-closed')
-
-    def _nominal_profile(self):
-        if self._nominal_profile_cache is None:
-            path = str(self.get_parameter('nominal_camera_profile_path').value)
-            try:
-                with open(path, encoding='utf-8') as handle:
-                    self._nominal_profile_cache = yaml.safe_load(handle) or {}
-            except (OSError, yaml.YAMLError) as exc:
-                self.get_logger().warning(
-                    f'nominal camera profile unreadable ({exc}); no NOMINAL ground',
-                    throttle_duration_sec=5.0)
-                self._nominal_profile_cache = {}
-            # An operator-accepted camera_profile record wins over the file (D-47 addendum).
-            override = {key: float(self.get_parameter(f'camera_{key}_override').value)
-                        for key in ('pitch_rad', 'height_m')}
-            override = {k: v for k, v in override.items() if math.isfinite(v)}
-            self._nominal_profile_cache, source, intervals = calibrated(
-                'camera_profile', self._nominal_profile_cache, static_source=path or 'no profile file',
-                override=override, with_intervals=True)
-            # D-468: the stated error of this geometry (record bands or nominal bounds), else None.
-            bands = {k: float(self.get_parameter(f'camera_{k}_override').value)
-                     for k in ('pitch_uncertainty_rad', 'height_uncertainty_m')}
-            self._ground_error = geometry_error(self._nominal_profile_cache, intervals, overridden=override,
-                                                override_bounds=bands if all(map(math.isfinite, bands.values())) else None)
-            self.get_logger().info(f'camera profile from {source}; geometry error {self._ground_error}')
-        return self._nominal_profile_cache
+            self.get_logger().warning('IR line calibration disabled; IR_LINE will remain fail-closed')
 
     def _camera_mode_uses_ground(self) -> bool:
         return str(self.get_parameter('camera_lane_mode').value) in (
@@ -273,10 +179,8 @@ class LineObserverNode(Node, RouteFollowerInput):
             key = ('NOMINAL', int(width), int(height))
             if key != self._simulation_ground_key:
                 self._simulation_ground = nominal_ground_plane(
-                    source=source,
-                    allowed=bool(self.get_parameter('allow_nominal_ground').value),
-                    width_px=width, height_px=height,
-                    profile=self._nominal_profile())
+                    source=source, allowed=bool(self.get_parameter('allow_nominal_ground').value),
+                    width_px=width, height_px=height, profile=self._nominal_profile())
                 self._simulation_ground_key = key
             return self._simulation_ground
         plane = dict(source=source,
@@ -291,20 +195,15 @@ class LineObserverNode(Node, RouteFollowerInput):
             self._simulation_ground_key = key
         return self._simulation_ground
 
-    def _stamp(self) -> float:
-        return self.get_clock().now().nanoseconds * 1e-9
-
     def _publish(self, source, observation, *, stamp=None, quality=None, containment=None,
                  route_context_seq=None) -> None:
-        if source == 'CAMERA_LINE' and getattr(self._lane_keeper, 'side_conflict_hold', False):  # D-556 rule 2: latched
+        if source == 'CAMERA_LINE' and getattr(self._lane_keeper, 'side_conflict_hold', False):
             observation, containment, quality = None, None, quality or dict(valid=False, reason='odom_side_conflict')
         payload = line_observation_payload(
             source, self._stamp() if stamp is None else stamp, observation,
             ir_calibrated=(source == 'IR_LINE' and self._ir_calibration is not None),
-            calibration_revision=(self._ir_calibration_revision
-                                  if source == 'IR_LINE' else None),
-            ground=(self._ground_label()
-                    if source == 'CAMERA_LINE' and self._camera_mode_uses_ground() else None),
+            calibration_revision=(self._ir_calibration_revision if source == 'IR_LINE' else None),
+            ground=(self._ground_label() if source == 'CAMERA_LINE' and self._camera_mode_uses_ground() else None),
         )
         if quality is not None:
             payload['quality'] = quality
@@ -314,29 +213,7 @@ class LineObserverNode(Node, RouteFollowerInput):
             payload['route_context_seq'] = route_context_seq
         self.observation_pub.publish(String(data=json.dumps(payload, sort_keys=True)))
 
-    def _on_route_context(self, msg: String) -> None:
-        self._route_context_input.receive(msg.data)
-
-    def _on_ir(self, msg: UInt16MultiArray) -> None:
-        observation = None
-        if self._ir_calibration is not None:
-            try:
-                observation = detect_ir_line(
-                    list(msg.data), self._ir_calibration,
-                    min_white=float(self.get_parameter('ir_min_white').value),
-                    min_contrast=float(self.get_parameter('ir_min_contrast').value),
-                )
-            except ValueError as exc:
-                self.get_logger().warning(f'invalid IR line sample: {exc}')
-        self._publish('IR_LINE', observation)
-
-    def destroy_node(self):
-        if self._paint_worker is not None:
-            self._paint_worker.close()
-        return super().destroy_node()
-
     def _build_paint_worker(self):
-        """D-408: the learned paint source runs the lane model off the camera thread."""
         source = str(self.get_parameter('paint_source').value)
         if source not in ('threshold', 'denoise', 'learned', 'pink'):
             raise ValueError(f"paint_source must be threshold, denoise, learned or pink, got {source!r}")
@@ -359,21 +236,19 @@ class LineObserverNode(Node, RouteFollowerInput):
         slot = ModelSlot(pointer, opener=lambda folder: LaneSegModel.open(
             folder, threads=threads, allow_spinning=False, floor_gate=floor_gate,
             paint_target=target)) if pointer else None
-        return LearnedPaintWorker(slot,
-                                  stale_s=float(self.get_parameter('learned_paint_stale_s').value),
-                                  warn=self.get_logger().warning, target=target)
+        return LearnedPaintWorker(
+            slot, stale_s=float(self.get_parameter('learned_paint_stale_s').value),
+            warn=self.get_logger().warning, target=target)
 
     def _drop_learned_paint(self):
-        """Forget a learned mask and the D-611 latch. The next fresh mask is paint at once."""
         if self._paint_worker is not None:
             self._paint_worker.reset()
         self._evidence_modes.reset()
 
     def _paint_for(self, frame, ground, stamp=None):
-        """(paint mask or None, source actually used) for one keep frame (D-408, D-611)."""
         source = str(self.get_parameter('paint_source').value)
         if source == 'pink':
-            return floor_pink_mask(frame, ground.horizon_row), 'pink'  # D-1013: no white fallback
+            return floor_pink_mask(frame, ground.horizon_row), 'pink'
         if source == 'threshold' or ground is None:
             self._drop_learned_paint()
             self._evidence_modes.choose_lane(armed=False, model_fresh=False, learned_ok=False, denoise_ok=False)
@@ -384,7 +259,6 @@ class LineObserverNode(Node, RouteFollowerInput):
             wz = pose_if_fresh(self._odom_twist and self._odom_twist[1], self._odom_stamp, stamp)
             if wz is None or abs(wz) > float(self.get_parameter('learned_paint_reuse_max_wz').value):
                 reuse_n = 1
-            # D-570: with fresh odometry the warped path replaces the turn-rate rule; without it, today's rule.
             compensate = bool(self.get_parameter('learned_paint_motion_compensation').value)
             motion = self._paint_motion(ground) if compensate and wz is not None else None
             mask = self._paint_worker.mask_for(
@@ -399,49 +273,18 @@ class LineObserverNode(Node, RouteFollowerInput):
             reuse = self._paint_worker.reuse
             if compensate and motion is None and reuse and reuse['paint_warp_skipped'] == 'off':
                 reuse['paint_warp_skipped'] = 'no_odom'
-            # D-611: one missing mask falls back immediately. Returning takes two fresh frames,
-            # so a mask that lands every other frame does not swap the paint each time.
             chosen = self._evidence_modes.choose_lane(
                 armed=True, model_fresh=mask is not None, learned_ok=mask is not None, denoise_ok=True)
             if chosen == 'learned' and mask is not None:
                 return mask, 'learned_drivable' if self._paint_worker.used_paint_kind == 'drivable' else 'learned'
             return denoise_white_mask(frame, ground.horizon_row), 'denoise_fallback'
         self._evidence_modes.choose_lane(armed=False, model_fresh=False, learned_ok=False, denoise_ok=True, unarmed='denoise')
-        return denoise_white_mask(frame, ground.horizon_row), (
-            'denoise' if source == 'denoise' else 'denoise_fallback')
-
-    def _paint_motion(self, ground):
-        """motion(mask, src_stamp, dst_stamp) for the paint worker (D-570): the mask warped by the
-        odometry between the two stamps, or why not (no_odom / motion_bound)."""
-        cut = max(0, int(math.ceil(ground.horizon_row)) + HORIZON_MARGIN_PX)
-
-        def motion(mask, src_stamp, dst_stamp):
-            src, dst = self._odom_history.pose_at(src_stamp), self._odom_history.pose_at(dst_stamp)
-            if src is None or dst is None:
-                return 'no_odom'
-            moved = mask_homography(
-                ground, self._lane_keeper._x_offset, src, dst, mask.shape, cut,
-                max_dxy_m=float(self.get_parameter('learned_paint_max_dxy_m').value),
-                max_dyaw_rad=float(self.get_parameter('learned_paint_max_dyaw_rad').value))
-            if isinstance(moved, str):
-                return moved
-            homography, dxy, dyaw = moved
-            # resampling can split tape into specks: drop them like clean_learned_mask does
-            return drop_small_components(warp_mask(mask, homography, cut)), dxy, dyaw
-        return motion
+        return denoise_white_mask(frame, ground.horizon_row), ('denoise' if source == 'denoise' else 'denoise_fallback')
 
     def _on_camera(self, msg: Image) -> None:
-        observation = None
-        frame = None
-        mode = None
-        ground = None
-        quality = None
-        route_context_seq = None
-        if (bool(self.get_parameter(
-                'require_camera_controls_stable').value)
-                and not self._camera_controls_stable):
-            self._publish('CAMERA_LINE', None, stamp=(
-                float(msg.header.stamp.sec) + float(msg.header.stamp.nanosec) * 1e-9))
+        observation = frame = mode = ground = quality = route_context_seq = None
+        if bool(self.get_parameter('require_camera_controls_stable').value) and not self._camera_controls_stable:
+            self._publish('CAMERA_LINE', None, stamp=float(msg.header.stamp.sec) + float(msg.header.stamp.nanosec) * 1e-9)
             self._keep_last_stamp = None
             self._drop_learned_paint()
             return
@@ -454,8 +297,7 @@ class LineObserverNode(Node, RouteFollowerInput):
                 self._keep_last_stamp = None
                 self._drop_learned_paint()
                 source_stamp = float(msg.header.stamp.sec) + float(msg.header.stamp.nanosec) * 1e-9
-                self._publish('CAMERA_LINE', None, stamp=source_stamp,
-                              quality=dict(valid=False, reason=reason))
+                self._publish('CAMERA_LINE', None, stamp=source_stamp, quality=dict(valid=False, reason=reason))
                 self._publish_debug(msg, frame, None)
                 return
             mode = str(self.get_parameter('camera_lane_mode').value)
@@ -463,27 +305,18 @@ class LineObserverNode(Node, RouteFollowerInput):
                 self._drop_learned_paint()
             if mode == 'line':
                 observation = detect_lane_error(
-                    frame,
-                    bright_threshold=int(self.get_parameter('camera_bright_threshold').value),
+                    frame, bright_threshold=int(self.get_parameter('camera_bright_threshold').value),
                     roi_top_fraction=float(self.get_parameter('camera_roi_top_fraction').value),
                     washed_fraction=float(self.get_parameter('camera_washed_fraction').value),
-                    min_pixels=int(self.get_parameter('camera_min_pixels').value),
-                )
+                    min_pixels=int(self.get_parameter('camera_min_pixels').value))
             elif mode == 'between':
                 observation = self._between_keeper.update(
-                    frame,
-                    bright_threshold=int(self.get_parameter('camera_bright_threshold').value),
-                    roi_top_fraction=float(
-                        self.get_parameter('camera_between_roi_top_fraction').value),
-                    washed_fraction=float(self.get_parameter('camera_washed_fraction').value),
-                )
+                    frame, bright_threshold=int(self.get_parameter('camera_bright_threshold').value),
+                    roi_top_fraction=float(self.get_parameter('camera_between_roi_top_fraction').value),
+                    washed_fraction=float(self.get_parameter('camera_washed_fraction').value))
             elif mode == 'keep':
                 refresh_drivable_law(self)
-                # A camera gap (or the first keep frame of this node) starts the keeper afresh: sides and steering
-                # from before the gap may belong to another place. So does a commanded spin in place (D-507: its
-                # swept view latched the flip hold).
-                image_stamp = (float(msg.header.stamp.sec)
-                               + float(msg.header.stamp.nanosec) * 1e-9)
+                image_stamp = float(msg.header.stamp.sec) + float(msg.header.stamp.nanosec) * 1e-9
                 route_context = self._route_context_input.for_frame(image_stamp)
                 route_context_seq = route_context.seq if route_context is not None else None
                 bend_rules = bend_expected(route_context)
@@ -495,8 +328,6 @@ class LineObserverNode(Node, RouteFollowerInput):
                         or not 0.0 <= image_stamp - self._keep_last_stamp <= KEEP_MAX_FRAME_GAP_S
                         or _spinning_in_place(cmd)):
                     self._lane_keeper.reset()
-                    # D-597 amendment 2: the drivable way is steered from directly (odometry moves its target,
-                    # latest_way drops it after stale_s), so a gap or a pivot keeps the mask and the pivot latch.
                     if self._paint_worker is not None and self._drivable_steer is None:
                         self._drop_learned_paint()
                 self._keep_last_stamp = image_stamp
@@ -504,107 +335,85 @@ class LineObserverNode(Node, RouteFollowerInput):
                 paint, paint_used = self._paint_for(frame, ground, image_stamp)
                 observation = self._lane_keeper.update(
                     frame, ground, paint_mask=paint,
-                    crosswalk_mask=(self._paint_worker.used_crosswalk  # D-597 amendment: D-491 extent
-                                    if paint_used == 'learned_drivable' else None),
+                    crosswalk_mask=(self._paint_worker.used_crosswalk if paint_used == 'learned_drivable' else None),
                     lane_half_width_m=float(self.get_parameter('lane_half_width_m').value),
-                    pose=pose_if_fresh(self._odom_pose, self._odom_stamp, image_stamp),  # D-556: LaneKeeper ignores it
+                    pose=pose_if_fresh(self._odom_pose, self._odom_stamp, image_stamp),
                     bend_expected=bend_rules)
                 if self._drivable_required and self._drivable_steer is None:
-                    # A missing authoritative law cannot fall through to another steering law.
                     observation = None
                     self._lane_keeper.last.update(strategy='none', reason='core_steering_law_unavailable')
-                elif self._drivable_steer is not None:   # D-597 amendments 2-3
+                elif self._drivable_steer is not None:
                     try:
                         step, decided = keep_step(
                             self._drivable_steer, self._paint_worker, self._lane_keeper.last, ground,
                             self._lane_keeper._x_offset, float(self.get_parameter('lane_half_width_m').value),
-                            self._odom_history.pose_at, image_stamp, self._wall_ahead, self._lane_guide.for_frame(image_stamp), guide_generation=self._lane_guide.generation)
-                    except Exception as exc:  # noqa: BLE001 - a steering bug holds the robot, never kills the node
+                            self._odom_history.pose_at, image_stamp, self._wall_ahead,
+                            self._lane_guide.for_frame(image_stamp), guide_generation=self._lane_guide.generation)
+                    except Exception as exc:  # noqa: BLE001
                         self.get_logger().error(f'drivable steer failed: {exc!r}', throttle_duration_sec=5.0)
                         self._drivable_steer.reset()
                         step, decided = None, True
                     observation = None if step is None else LaneObservation(error=step[0], confidence=step[1])
                     paint_used = 'learned_drivable' if decided else paint_used
                 bundle = keep_debug_payload(
-                              self._lane_keeper.last, ground, self._lane_keeper._x_offset,
-                              paint_source_used=paint_used,
-                              paint_source_requested=str(self.get_parameter('paint_source').value),
-                              paint_model_revision=(self._paint_worker.used_model_revision
-                                                    if paint_used in ('learned', 'learned_drivable')
-                                                    and self._paint_worker is not None else None),
-                              paint_target_requested=(self._paint_worker.target
-                                                      if self._paint_worker is not None else None),
-                              paint_drivable=(self._paint_worker.used_drivable
-                                              if self._paint_worker is not None else None),
-                              paint_floor_gate=(bool(self.get_parameter('learned_paint_floor_gate').value)
-                                                if self._paint_worker is not None else None),
-                              paint_last_error=(self._paint_worker.last_error
-                                                if self._paint_worker is not None else None),
-                              **((self._paint_worker.reuse or {}) if self._paint_worker is not None else {}),
-                              image_size=[frame.shape[1], frame.shape[0]],
-                              camera_geometry_source=str(self.get_parameter('camera_ground_source').value).upper(),
-                              evidence_mode=self._evidence_modes.lane,
-                              evidence_rows=self._evidence_modes.rows(
-                                  crosswalk=self._lane_keeper.last.get('crosswalk') is not None,
-                                  stop_line=False, obstacle=False),
-                              corner_turning=bool(self.get_parameter('lane_corner_turning').value),
-                              ground=self._ground_label(), stamp=image_stamp,
-                              route_context_v=1,
-                              route_context_seq=route_context.seq if route_context is not None else None,
-                              route_context_effect={'bend_rules': True} if bend_rules else None)
+                    self._lane_keeper.last, ground, self._lane_keeper._x_offset,
+                    paint_source_used=paint_used,
+                    paint_source_requested=str(self.get_parameter('paint_source').value),
+                    paint_model_revision=(self._paint_worker.used_model_revision
+                                          if paint_used in ('learned', 'learned_drivable') and self._paint_worker is not None else None),
+                    paint_target_requested=(self._paint_worker.target if self._paint_worker is not None else None),
+                    paint_drivable=(self._paint_worker.used_drivable if self._paint_worker is not None else None),
+                    paint_floor_gate=(bool(self.get_parameter('learned_paint_floor_gate').value) if self._paint_worker is not None else None),
+                    paint_last_error=(self._paint_worker.last_error if self._paint_worker is not None else None),
+                    **((self._paint_worker.reuse or {}) if self._paint_worker is not None else {}),
+                    image_size=[frame.shape[1], frame.shape[0]],
+                    camera_geometry_source=str(self.get_parameter('camera_ground_source').value).upper(),
+                    evidence_mode=self._evidence_modes.lane,
+                    evidence_rows=self._evidence_modes.rows(
+                        crosswalk=self._lane_keeper.last.get('crosswalk') is not None, stop_line=False, obstacle=False),
+                    corner_turning=bool(self.get_parameter('lane_corner_turning').value),
+                    ground=self._ground_label(), stamp=image_stamp, route_context_v=1,
+                    route_context_seq=route_context.seq if route_context is not None else None,
+                    route_context_effect={'bend_rules': True} if bend_rules else None)
                 self._keep_debug_pub.publish(String(data=json.dumps(bundle, default=float)))
             elif mode in ('lane', 'edge_left', 'centre', 'route_a', 'route_b', 'route_ab'):
-                if (mode in ('route_a', 'route_b', 'route_ab')
-                        and self._route_follower is not None
+                if (mode in ('route_a', 'route_b', 'route_ab') and self._route_follower is not None
                         and not simulation_ground_allowed(
                             source=self.get_parameter('camera_ground_source').value,
                             simulation_enabled=self.get_parameter('allow_simulation_ground').value,
                             use_sim_time=self.get_parameter('use_sim_time').value)):
-                    # A geometry change invalidates the static map/odom anchor.
-                    # Require a fresh node instead of reviving stale memory.
                     self._route_follower = None
-                    self.get_logger().warning(
-                        f'{mode} simulation context changed; route follower revoked', once=True)
+                    self.get_logger().warning(f'{mode} simulation context changed; route follower revoked', once=True)
                 ground = self._ground(frame.shape[1], frame.shape[0])
                 lane_kwargs = dict(
                     bright_threshold=int(self.get_parameter('camera_bright_threshold').value),
                     lane_half_width_m=float(self.get_parameter('lane_half_width_m').value),
                     roi_top_fraction=float(self.get_parameter('camera_roi_top_fraction').value),
-                    roi_bottom_fraction=float(
-                        self.get_parameter('camera_roi_bottom_fraction').value),
-                    washed_fraction=float(self.get_parameter('camera_washed_fraction').value),
-                )
+                    roi_bottom_fraction=float(self.get_parameter('camera_roi_bottom_fraction').value),
+                    washed_fraction=float(self.get_parameter('camera_washed_fraction').value))
                 if mode == 'centre':
-                    image_stamp = (float(msg.header.stamp.sec)
-                                   + float(msg.header.stamp.nanosec) * 1e-9)
+                    image_stamp = float(msg.header.stamp.sec) + float(msg.header.stamp.nanosec) * 1e-9
                     observation = self._centre_tracker.update(
-                        image_stamp,
-                        pose_if_fresh(self._odom_pose, self._odom_stamp, image_stamp),
+                        image_stamp, pose_if_fresh(self._odom_pose, self._odom_stamp, image_stamp),
                         frame, ground, **lane_kwargs)
                 elif mode == 'edge_left':
-                    image_stamp = (float(msg.header.stamp.sec)
-                                   + float(msg.header.stamp.nanosec) * 1e-9)
+                    image_stamp = float(msg.header.stamp.sec) + float(msg.header.stamp.nanosec) * 1e-9
                     observation = self._edge_follower.update(
-                        image_stamp,
-                        pose_if_fresh(self._odom_pose, self._odom_stamp, image_stamp),
+                        image_stamp, pose_if_fresh(self._odom_pose, self._odom_stamp, image_stamp),
                         frame, ground, **lane_kwargs)
                 elif mode in ('route_a', 'route_b', 'route_ab'):
                     if self._route_follower is not None:
-                        image_stamp = (float(msg.header.stamp.sec)
-                                       + float(msg.header.stamp.nanosec) * 1e-9)
+                        image_stamp = float(msg.header.stamp.sec) + float(msg.header.stamp.nanosec) * 1e-9
                         observation = self._route_follower.update(
-                            image_stamp,
-                            pose_if_fresh(self._odom_pose, self._odom_stamp, image_stamp),
+                            image_stamp, pose_if_fresh(self._odom_pose, self._odom_stamp, image_stamp),
                             frame, ground, **lane_kwargs)
                         if mode == 'route_a' and self._route_follower.last.get('reason') == 'washed':
                             observation = None
                             quality = dict(valid=False, reason='overexposed')
                 elif bool(self.get_parameter('lane_corner_turning').value):
-                    image_stamp = (float(msg.header.stamp.sec)
-                                   + float(msg.header.stamp.nanosec) * 1e-9)
+                    image_stamp = float(msg.header.stamp.sec) + float(msg.header.stamp.nanosec) * 1e-9
                     observation = self._corner_tracker.update(
-                        image_stamp,
-                        pose_if_fresh(self._odom_pose, self._odom_stamp, image_stamp),
+                        image_stamp, pose_if_fresh(self._odom_pose, self._odom_stamp, image_stamp),
                         frame, ground, **lane_kwargs)
                 else:
                     observation = detect_lane_centre(frame, ground, **lane_kwargs)
@@ -613,8 +422,7 @@ class LineObserverNode(Node, RouteFollowerInput):
         except ValueError as exc:
             observation = None
             self.get_logger().warning(f'invalid camera line frame: {exc}')
-        source_stamp = (float(msg.header.stamp.sec)
-                        + float(msg.header.stamp.nanosec) * 1e-9)
+        source_stamp = float(msg.header.stamp.sec) + float(msg.header.stamp.nanosec) * 1e-9
         containment = None
         if mode == 'keep' and observation is not None:
             containment = containment_payload(
@@ -629,70 +437,38 @@ class LineObserverNode(Node, RouteFollowerInput):
         self._publish_debug(msg, frame, observation)
 
     def _publish_debug(self, msg, frame, observation) -> None:
-        """Observation only: a picture of the decision just published.
-
-        Never allowed to take line/observation down with it (D-143): any
-        render or encode failure here is caught, logged (throttled), and
-        skipped, so this frame's overlay is lost but every later
-        line/observation still publishes."""
-        if self._debug_pub is None or frame is None:
-            return
+        if self._debug_pub is None or frame is None: return
         stamp = float(msg.header.stamp.sec) + float(msg.header.stamp.nanosec) * 1e-9
-        max_hz = float(self.get_parameter('debug_overlay_max_hz').value)
-        if not next_publish_due(self._debug_last_s, stamp, max_hz):
-            return
+        if not next_publish_due(self._debug_last_s, stamp, float(self.get_parameter('debug_overlay_max_hz').value)): return
         self._debug_last_s = stamp
         mode = str(self.get_parameter('camera_lane_mode').value)
         follower = {
-            'centre': self._centre_tracker,
-            'edge_left': self._edge_follower,
-            'route_a': self._route_follower,
-            'route_b': self._route_follower,
+            'centre': self._centre_tracker, 'edge_left': self._edge_follower,
+            'route_a': self._route_follower, 'route_b': self._route_follower,
             'route_ab': self._route_follower,
         }.get(mode)
-        if follower is None:
-            return
+        if follower is None: return
         try:
             image = render_debug(
                 frame, follower, observation, mode=mode,
                 pose=pose_if_fresh(self._odom_pose, self._odom_stamp, stamp),
                 graph=self._debug_graph,
                 bright_threshold=int(self.get_parameter('camera_bright_threshold').value))
-            ok, data = cv2.imencode('.jpg', image, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
-            if not ok:
-                return
-            out = CompressedImage()
-            out.header = msg.header
-            out.format = 'jpeg; overlay=lane-debug-v1'
-            out.data = data.tobytes()
-            self._debug_pub.publish(out)
-        except Exception as exc:  # noqa: BLE001 - the overlay must never be fatal.
-            self.get_logger().warning(
-                f'debug overlay render/publish failed: {exc}', throttle_duration_sec=5.0)
+            if (out := encode_debug_overlay_msg(msg.header, image)) is not None:
+                self._debug_pub.publish(out)
+        except Exception as exc:  # noqa: BLE001
+            self.get_logger().warning(f'debug overlay render/publish failed: {exc}', throttle_duration_sec=5.0)
 
     def _on_odom(self, msg: Odometry) -> None:
-        pose = msg.pose.pose
-        q = pose.orientation
-        yaw = math.atan2(2.0 * (q.w * q.z + q.x * q.y),
-                         1.0 - 2.0 * (q.y * q.y + q.z * q.z))
+        pose, q = msg.pose.pose, msg.pose.pose.orientation
+        yaw = math.atan2(2.0 * (q.w * q.z + q.x * q.y), 1.0 - 2.0 * (q.y * q.y + q.z * q.z))
         self._odom_pose = (float(pose.position.x), float(pose.position.y), yaw)
-        # The header stamp, not arrival time: edge_left compares it with the image stamp (dead or delayed odom is no pose).
         self._odom_twist = (float(msg.twist.twist.linear.x), float(msg.twist.twist.angular.z))
-        self._odom_stamp = (float(msg.header.stamp.sec)
-                            + float(msg.header.stamp.nanosec) * 1e-9)
+        self._odom_stamp = float(msg.header.stamp.sec) + float(msg.header.stamp.nanosec) * 1e-9
         self._odom_history.add(self._odom_stamp, *self._odom_pose)
 
-    def _on_scan(self, msg: LaserScan) -> None:
-        ahead, side, front = scan_summary(msg.ranges, msg.angle_min, msg.angle_increment, msg.range_min, msg.range_max)
-        self._wall_ahead = (ahead, float(msg.header.stamp.sec) + float(msg.header.stamp.nanosec) * 1e-9, side, front)
-
-    def _on_cmd_vel(self, msg: Twist) -> None:   # Twist has no header: stamped on arrival (node clock, sim time in SIM)
+    def _on_cmd_vel(self, msg: Twist) -> None:
         self._cmd_twist, self._cmd_stamp = (msg.linear.x, msg.angular.z), self.get_clock().now().nanoseconds * 1e-9
-
-    def _on_camera_controls(self, msg: String) -> None:
-        summary = str(msg.data)
-        self._camera_controls_stable = (
-            summary.startswith('exposure=') or summary.startswith('v4l2 exposure='))
 
 
 def main():

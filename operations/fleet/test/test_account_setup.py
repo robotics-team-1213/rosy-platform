@@ -11,7 +11,7 @@ CALLBACK = 'https://pilot.example.test/account/callback'
 
 
 def attach_authority(app):
-    from fleet.server.account_authority import AccountAuthority
+    from rosy_account.account_authority import AccountAuthority
     pem = Ed25519PrivateKey.generate().private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
                                                      serialization.NoEncryption())
     sessions = app.state.password_sessions
@@ -53,7 +53,7 @@ def test_managed_setup_uses_live_grant_and_only_public_registration(tmp_path):
                                            'resources': ['robot:fixture'], 'label': 'pilot', 'home_url': '',
                                            'enabled': True, 'revision': 1}]}
     assert 'PRIVATE' not in response.text and 'private_key' not in response.text
-    from fleet.server.password_session import COOKIE
+    from rosy_account.password_session import COOKIE
     sessions.revoke(client.cookies.get(COOKIE))
     assert client.get(PATH, headers=ORIGIN).status_code == 401
 
@@ -82,7 +82,7 @@ def test_manager_registers_and_stops_a_client_without_restart(tmp_path):
 
 
 def test_registry_refuses_non_managers_and_an_unconfigured_authority(tmp_path):
-    from fleet.server.password_session import COOKIE
+    from rosy_account.password_session import COOKIE
     app, _ = _app(tmp_path)
     sessions = app.state.password_sessions
     sessions.bootstrap_accounts('alice', 'test-site')
@@ -107,7 +107,7 @@ def test_managed_policy_role_without_account_grant_cannot_read_setup(tmp_path):
     sessions.bootstrap_accounts('alice', 'test-site')
     client = _client(app)
     assert _login(client).status_code == 204
-    from fleet.server.password_session import COOKIE
+    from rosy_account.password_session import COOKIE
     manager = client.cookies.get(COOKIE)
     sessions.create_account(manager, login='bob', principal_id='bob', role='policy-admin',
                             password=TYPED, grants=[])

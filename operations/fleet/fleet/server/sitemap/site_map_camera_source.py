@@ -163,14 +163,19 @@ def camera_draft(body: CameraDraftRequest) -> dict:
                       "width_m": min(MAX_WIDTH_M, max(MIN_WIDTH_M, lane.width_px / body.plane.px_per_m)),
                       "direction": "two_way", "drive_mode": "lane",
                       "speed_cap_mps": IMPORT_SPEED_CAP_MPS, "evidence": dict(evidence)})
+    facilities = []
     for index, zone in enumerate(body.zones):
         _finite(zone.polygon_m)
-    if not kept and not body.zones:
+        cand_fac = {"id": f"cam-zone{index}", "name": f"카메라 구역 {index + 1}",
+                    "kind": zone.kind, "geometry": [list(point) for point in zone.polygon_m],
+                    "evidence": dict(evidence)}
+        try:
+            SiteMap.model_validate({"schema": "rosy.site_map/1", "map_id": "site", "places": [], "edges": [], "facilities": [cand_fac]})
+            facilities.append(cand_fac)
+        except ValidationError:
+            skipped.append({"index": index, "reason": "degenerate exclusion polygon"})
+    if not kept and not facilities:
         raise CameraDraftError("no usable lane or zone candidate")
-    facilities = [{"id": f"cam-zone{index}", "name": f"카메라 구역 {index + 1}",
-                   "kind": zone.kind, "geometry": [list(point) for point in zone.polygon_m],
-                   "evidence": dict(evidence)}
-                  for index, zone in enumerate(body.zones)]
     min_x, min_y, max_x, max_y = body.plane.bounds_m
     draft = {"schema": "rosy.site_map/1", "map_id": "site", "places": places, "edges": edges,
              "facilities": facilities,

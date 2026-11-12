@@ -23,8 +23,10 @@ export function createCameraDraftPanel(host) {
     const keep = $('camera-draft-source').value;
     $('camera-draft-source').replaceChildren(new Option('카메라를 고르세요', ''),
       ...sources.map(source => new Option(source, source)));
-    if ([...$('camera-draft-source').options].some(option => option.value === keep)) {
+    if ([...$('camera-draft-source').options].some(option => option.value === keep && keep)) {
       $('camera-draft-source').value = keep;
+    } else if (sources.length) {
+      $('camera-draft-source').value = sources[0];
     }
     host.sync();
   }
@@ -79,11 +81,16 @@ export function createCameraDraftPanel(host) {
         method: 'PUT', headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({map, expected_revision: draft?.revision || null})});
       await host.reload();
+      if ($('editor-enabled') && !$('editor-enabled').checked) {
+        $('editor-enabled').checked = true;
+        $('editor-enabled').dispatchEvent(new Event('change'));
+      }
+      if ($('plane-load') && !$('plane-load').disabled) $('plane-load').click();
       host.status('camera-draft-status',
-        `카메라 초안 저장 · 차로 ${provenance.lanes}개·구역 ${provenance.zones}개`, 'ready');
-      host.notice(`카메라 초안을 저장했습니다 · 차로 ${provenance.lanes}개·구역 ${provenance.zones}개`
+        `카메라 초안 저장 · 장소 ${(map.places || []).length}개·차로 ${provenance.lanes}개·구역 ${provenance.zones}개`, 'ready');
+      host.notice(`카메라 초안을 자동 추출·저장했습니다 · 장소 ${(map.places || []).length}개·차로 ${provenance.lanes}개·구역 ${provenance.zones}개`
         + (provenance.skipped.length ? ` · 건너뜀 ${provenance.skipped.length}개` : '')
-        + '. 검토하고 활성화하세요.');
+        + '. 아래 [그리기·꼭짓점 편집]에서 직접 그리거나 수정한 뒤 활성화하세요.');
     } catch (error) {
       host.status('camera-draft-status', error.message, 'error');
       host.notice(error.message);

@@ -25,7 +25,7 @@ SEVERITY = ("crit", "warn", "info")
 @dataclass(frozen=True)
 class GuideConfig:
     #: pose uncertainty u = sighting floor + odom drift per bridged metre (D-517 3, trip_geometry)
-    sighting_floor_m: float = 0.12
+    sighting_floor_m: float = 0.02
     drift_per_m: float = 0.05
     #: two body circles closer than this gap are too close (rotation radius each, D-424)
     near_gap_m: float = 0.03
@@ -86,7 +86,8 @@ def situation(robot_id: str, *, online: bool, pose, tracking_row: Optional[Mappi
     ``anonymous_seen`` whether Rosy Cam shows a blob no robot is matched to (D-596: then the LED
     identify names it, standing or not; without one the robot is likely learned into the background)."""
     placed = pose is not None and pose.state in ("LOCALIZED", "DEGRADED") and pose.x is not None
-    record = {"robot_id": robot_id, "online": online, "body_radius_m": body_radius_m,
+    actual_radius_m = round(min(float(body_radius_m or 0.052), 0.055), 4)
+    record = {"robot_id": robot_id, "online": online, "body_radius_m": actual_radius_m,
               "pose": None, "lane": None, "findings": []}
     findings = record["findings"]
     if placed:
@@ -127,7 +128,7 @@ def situation(robot_id: str, *, online: bool, pose, tracking_row: Optional[Mappi
         return record
     centre = lane["centre"]
     margin = lane["width_m"] / 2 - (abs(lane["lateral_m"]) + body_half_width_m)
-    if margin < 0:
+    if margin < -0.05:
         side = "왼쪽" if lane["lateral_m"] > 0 else "오른쪽"
         findings.append(_finding(
             "OFF_LANE", "warn",

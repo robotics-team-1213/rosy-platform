@@ -3,7 +3,7 @@ import json
 
 import pytest
 
-from fleet.server.password_session import PasswordSessions
+from rosy_account.password_session import PasswordSessions
 from test_account_ledger import activated, cookie
 from test_password_session import _accounts
 

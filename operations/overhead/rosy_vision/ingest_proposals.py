@@ -189,9 +189,9 @@ async def _draft_map_response(self, source: str, frame: LatestFrame) -> Response
                                   extra={"X-Frame-State": "detection-error"})
     else:
         plane = None
+    raw_img = cv2.imdecode(np.frombuffer(frame.jpeg, np.uint8), cv2.IMREAD_COLOR)
     if plane is None:
-        raw_img = cv2.imdecode(np.frombuffer(frame.jpeg, np.uint8), cv2.IMREAD_COLOR)
-        if raw_img is None:
+        if raw_img is None or getattr(self, "map_paint", None) is None:
             return _http_response(409, b"map plane unavailable\n",
                                   extra={"X-Frame-State": "plane-unavailable"})
         try:
@@ -200,9 +200,6 @@ async def _draft_map_response(self, source: str, frame: LatestFrame) -> Response
         except (ValueError, cv2.error):
             return _http_response(422, b"draft map detection failed\n",
                                   extra={"X-Frame-State": "detection-error"})
-        if result.get("map_id") != "world_261026":
-            return _http_response(409, b"map plane unavailable\n",
-                                  extra={"X-Frame-State": "plane-unavailable"})
         plane_meta = {"bounds_m": [-1.22, -0.61, 1.22, 0.61], "px_per_m": 400.0,
                       "calibration_revision": "world_261026-auto",
                       "width": raw_img.shape[1], "height": raw_img.shape[0]}
@@ -211,7 +208,7 @@ async def _draft_map_response(self, source: str, frame: LatestFrame) -> Response
         try:
             image = cv2.imdecode(np.frombuffer(plane.jpeg, np.uint8), cv2.IMREAD_COLOR)
             result = await asyncio.to_thread(draft_map.detect_draft_map, image, plane.bounds_m,
-                                             plane.px_per_m, plane.valid_mask)
+                                             plane.px_per_m, plane.valid_mask, raw_img)
         except (ValueError, cv2.error):
             return _http_response(422, b"draft map detection failed\n",
                                   extra={"X-Frame-State": "detection-error"})

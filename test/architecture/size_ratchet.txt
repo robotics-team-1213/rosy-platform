@@ -5,37 +5,3 @@
 # in a commit with a Safety-Review: trailer, expiring at most 7 days after that commit (D-766 8).
 # Keys: package names, units, and files relative to the colcon root (repo root for deploy/tools/
 # learning). Regenerate the measured rows: python test/architecture/test_module_structure.py
-748 core/events/core_events/events/audit.py
-641 deploy/robot/pinky_pro/native/rosy-hw-probe.py
-686 deploy/robot/pinky_pro/release/updater.py
-771 drive/behaviors/docking/manager.py
-630 drive/behaviors/traffic_policy/manager.py
-757 fleet/fleet/cli.py
-752 fleet/fleet/server/app.py
-790 fleet/fleet/server/cell/cell_job_store.py
-634 fleet/fleet/server/console/console.py
-797 fleet/fleet/server/evidence/proposal_store.py
-755 fleet/web/line-stuck.js
-606 fleet/web/shared/site-map-model.js
-788 fleet/web/shared/vision-view.js
-678 learning/curation/perception/lane_derived_drivable.py
-629 learning/registry/perception/deliver.py
-1533 middleware/core/events/test/test_audit.py
-2553 middleware/robot_ui/pilot/test/test_pilot_browser.py
-1732 operations/fleet/test/test_trip_runner.py
-717 overhead/rosy_vision/ingest.py
-632 overhead/rosy_vision/track/background_blob.py
-771 perception/perception_runtime/perception/lane.py
-712 perception/perception_runtime/perception/lane_bev.py
-712 perception/sensors/line_observation/line_observer_node.py
-732 robot_ui/pilot/screens/drive.js
-709 simulation/gazebo/scripts/lane_live_view.py
-791 site_ui/cam/app/src/main/java/io/github/livsbittt/rosy/cam/camera/CameraController.kt
-3049 test/test_dashboard_browser.py
-3755 test/test_fleet_console_browser.py
-2484 test/test_rosy_face.py
-2720 test/test_sd_writer_contract.py
-609 tools/device_test/run.py
-703 tools/device_twin/scenarios.py
-749 tools/perception/rosy_ml.py
-659 tools/release/publish_payload_release.py

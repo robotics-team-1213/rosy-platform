@@ -129,6 +129,7 @@ KNOWN_EXTERNAL_BEHAVIOR_TESTS = frozenset({
  "test/test_footprint_profiles.py",
     "test/test_nav2_behavior_trees.py",  # D-1009 behavior trees and the launch params that point at them
     "test/test_nav2_profile_limits.py",
+    "test/test_omx_demonstration.py",
     "test/test_robot_runtime.py",
     # feat/lane-network-junctions, written 2026-09-23..24 alongside D-184's
     # acceptance and brought in by the main merge. They drive CORE's own

@@ -258,3 +258,50 @@ def add_ship_plate(stage, fixture):
         UsdGeom.Xformable(dot).AddTranslateOp().Set(Gf.Vec3d(x, y, top))
         UsdPhysics.MeshCollisionAPI.Apply(dot.GetPrim()).CreateApproximationAttr('convexHull')
         collider(dot)
+    if fixture.get('berth_kit') == 'v16-modular':
+        add_cell_structures(stage, fixture)
+
+
+def add_cell_structures(stage, fixture):
+    """Add the surveyed CAD cell structures (PR33_C02_BASE, bridge v7, plate v11, and r08 + v16 berth-modular cradles/spacer bridges/concave stopper)."""
+    import math
+    from pathlib import Path
+    from pxr import Gf, UsdGeom, Vt
+    from palletizing_gripper import _triangles
+    assets = Path(__file__).resolve().parent / 'assets/ship_r08_berth'
+    table_z = fixture['workplate_center_m'][2] + fixture['workplate_size_m'][2] / 2
+    root = UsdGeom.Xform.Define(stage, '/World/CellStructures')
+
+    def place_stl(prim_path, stl_name, pos_m, yaw_rad=0., rgb=(.5, .72, .85)):
+        tris = _triangles(assets / f'{stl_name}.stl')
+        mesh = UsdGeom.Mesh.Define(stage, prim_path)
+        mesh.CreatePointsAttr(Vt.Vec3fArray([Gf.Vec3f(t[3*i]/1e3, t[3*i+1]/1e3, t[3*i+2]/1e3) for t in tris for i in range(3)]))
+        mesh.CreateFaceVertexCountsAttr(Vt.IntArray([3]*len(tris)))
+        mesh.CreateFaceVertexIndicesAttr(Vt.IntArray(list(range(3*len(tris)))))
+        mesh.CreateSubdivisionSchemeAttr('none')
+        mesh.CreateDisplayColorAttr(Vt.Vec3fArray([Gf.Vec3f(*rgb)]))
+        xf = UsdGeom.XformCommonAPI(mesh.GetPrim())
+        xf.SetTranslate(Gf.Vec3d(*pos_m))
+        if yaw_rad:
+            xf.SetRotate(Gf.Vec3f(0., 0., math.degrees(yaw_rad)))
+        return mesh
+
+    for idx, tag in enumerate(('a', 'b')):
+        bx, by, _ = fixture['arm_bases_m'][idx]
+        place_stl(f'/World/CellStructures/BasePlate_{tag}', f'omx_base_plate_{tag}', (bx, by, table_z), 0., (.16, .17, .19))
+        if fixture.get('temp_bridge', 'v7') == 'v7':
+            place_stl(f'/World/CellStructures/TempBridge_{tag}', f'temp_slot_bridge_{tag}', (bx, by, table_z), 0., (.92, .68, .22))
+        plate_xy = (bx - .200, by)
+        place_stl(f'/World/CellStructures/TempPlate_{tag}', 'temp_slot_plate_v11', (plate_xy[0], plate_xy[1], table_z), 0., (.52, .69, .79))
+
+    stern_x = fixture.get('ship_stern_x_m', .178)
+    centre_y = fixture.get('ship_centre_y_m', -.001)
+    for name, rgb in (
+        ('hull', (.50, .72, .85)),
+        ('house', (.50, .72, .85)),
+        ('berth_v16_cradle', (.88, .48, .16)),
+        ('berth_v16_bridges', (.92, .68, .22)),
+        ('berth_v16_stopper', (.22, .62, .52)),
+    ):
+        place_stl(f'/World/CellStructures/Ship_{name}', name, (stern_x, centre_y, table_z), math.pi, rgb)
+    return root

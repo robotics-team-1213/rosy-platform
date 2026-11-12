@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 import pytest
 
 from core_common.protocol.account_client import AccountClient, AccountUnavailable
-from fleet.server.account_authority import AccountAuthority
+from rosy_account.account_authority import AccountAuthority
 from fleet.server.account_receiver import COOKIE, FLOW_COOKIE, install_account_receiver
 from fleet.server.site_auth import build_authorize, build_role_guards
 

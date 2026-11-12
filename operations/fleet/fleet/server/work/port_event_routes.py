@@ -16,6 +16,7 @@ from fastapi import Depends, Header, HTTPException, Query, Request, Response
 from pydantic import ValidationError
 
 from core_common.protocol.port_events import IntakeReading, PortEvent, PortEventLedgerPage, PortEventPage
+from fleet.server.control_unit_arm_coordinator import direct_child_unit_ids
 from .port_event_store import PortEventConflict, PortEventStore
 
 PORT_EVENT_BODY_BYTES = 4096
@@ -50,9 +51,7 @@ def contiguous(rows: list, after: int) -> tuple[list, bool]:
 
 
 def workcell_children(control) -> list[str]:
-    me = control.unit.unit_id
-    return sorted(u.unit_id for u in control.topology.units.values()
-                  if u.parent == me and any(r.startswith("workcell:") for r in u.resources))
+    return direct_child_unit_ids(control, resource_prefix="workcell:")
 
 
 async def read_page(store, control, cursor: str | None, limit: int) -> dict:

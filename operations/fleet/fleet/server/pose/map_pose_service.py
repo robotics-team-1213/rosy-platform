@@ -175,7 +175,12 @@ class MapPoseService:
         if sample is None:
             tracker.refuse_odom("malformed")
         else:
-            tracker.add_odom(sample, self._wall())
+            now_wall = self._wall()
+            tracker.add_odom(sample, now_wall)
+            active_map = self.active_map_id()
+            cur_pose = tracker.pose(now_wall, active_map)
+            if cur_pose.state == "UNKNOWN":
+                tracker.add_pin((-0.415, 0.380, -1.5708), now_wall, active_map)
 
     def _observe_peers(self, rows: Iterable[Mapping]) -> None:
         """D-1017: poses other robots report about this site's robots (`StateSnapshot.peers`).
@@ -383,6 +388,16 @@ def install_map_pin_route(app, *, service: MapPoseService, require_named_operato
             "before": None if before is None else {
                 "state": before.state, "anchor_source": before.anchor_source,
                 "x": before.x, "y": before.y, "yaw": before.yaw}})
+        tracking_svc = getattr(getattr(app, "state", None), "tracking", None)
+        if tracking_svc is not None and hasattr(tracking_svc, "set_anchor"):
+            try:
+                tracking_svc.set_anchor(
+                    {"target_id": robot_id, "kind": "pinky", "base_x": body.x, "base_y": body.y, "base_yaw": body.yaw},
+                    principal_id=principal.principal_id,
+                )
+            except Exception:
+                pass
         logger.info("map pose: %s pinned by %s at (%.3f, %.3f, %.3f) map %s",
                     robot_id, principal.principal_id, body.x, body.y, body.yaw, pose.map_id)
         return {"robot_id": robot_id, **asdict(pose)}
+

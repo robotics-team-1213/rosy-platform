@@ -32,6 +32,7 @@ from collections import defaultdict
 from pathlib import Path
 
 SCHEMA = "rosy.omx-cell-decision.v1"
+_CODE_NAME = Path(__file__).resolve().parents[3].name
 APPLIES = {"target": ["objects", "map"], "target_judge": ["objects", "map"], "bias": ["map"], "closing_axis": ["grasp"], "safety": ["lift", "idle"],
            "grasp_stability": ["grasp", "lift", "safety"], "retry": ["grasp"], "verify": ["map"], "wrist_align": ["grasp", "map"], "failure": ["grasp", "map"], "push": ["push", "objects", "map"], "push_outcome": ["push"]}
 RUN = {"path": None, "knowledge": None, "n": 0, "frame": None}  # set by start(); path None = no decision rows
@@ -69,7 +70,7 @@ def emit(stage: str, facts: dict, options: list, chosen, by: str, reason: str, a
         "stage": stage, "facts": facts, "options": options, "chosen": chosen, "by": by, "reason": reason,
         "frames": [RUN["frame"]] if RUN["frame"] else [], "knowledge_ids": [e["id"] for e in notes],
         "knowledge_sha": RUN["knowledge"] and RUN["knowledge"]["sha"], "params_sha": ca.RUN["params_sha"], "arm_id": ca.RUN["arm_id"],
-        "code": Path(__file__).resolve().parents[3].name, "t": round(time.time(), 3)})
+        "code": _CODE_NAME, "t": round(time.time(), 3)})
     return f"{ca.RUN['run_id']}-d{RUN['n']:03d}"
 
 

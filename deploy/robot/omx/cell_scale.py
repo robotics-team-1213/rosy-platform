@@ -32,6 +32,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cell_params as prm  # noqa: E402
 
 CELL_W, CELL_H = 40, 70  # one digit after rectifying, px
+_PERSP_CACHE = {}
 # segment bands in a digit as fractions (x0, y0, x1, y1, horizontal): a top, b top-right, c bottom-right, d bottom,
 # e bottom-left, f top-left, g middle. A band is wider than the stroke; what counts is how much of its length a
 # stroke covers, so stroke width and a small offset do not matter (thin 18 px strokes half-filled a tight box).
@@ -51,8 +52,25 @@ def read_display(img, spec: dict, params=None) -> float | None:
 
     digits = int(spec["digits"])
     w, h = CELL_W * digits, CELL_H
-    M = cv2.getPerspectiveTransform(np.float32(spec["display_px"]), np.float32([[0, 0], [w, 0], [w, h], [0, h]]))
-    grey = img if img.ndim == 2 else cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    src = np.float32(spec["display_px"])
+    height, width = img.shape[:2]
+    x0 = min(width, max(0, int(np.floor(src[:, 0].min())) - 2))
+    y0 = min(height, max(0, int(np.floor(src[:, 1].min())) - 2))
+    x1 = max(0, min(width, int(np.ceil(src[:, 0].max())) + 3))
+    y1 = max(0, min(height, int(np.ceil(src[:, 1].max())) + 3))
+    if x0 >= x1 or y0 >= y1:
+        x0 = y0 = 0
+        x1, y1 = width, height
+    src_shifted = src - np.float32([x0, y0])
+    key = (tuple(map(tuple, src_shifted.tolist())), w, h)
+    M = _PERSP_CACHE.get(key)
+    if M is None:
+        M = cv2.getPerspectiveTransform(src_shifted, np.float32([[0, 0], [w, 0], [w, h], [0, h]]))
+        if len(_PERSP_CACHE) >= 64:
+            _PERSP_CACHE.clear()
+        _PERSP_CACHE[key] = M
+    roi = img[y0:y1, x0:x1]
+    grey = roi if img.ndim == 2 else cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
     flat = cv2.GaussianBlur(cv2.warpPerspective(grey, M, (w, h), flags=cv2.INTER_CUBIC), (3, 3), 0)
     _, on = cv2.threshold(flat, 0, 1, (cv2.THRESH_BINARY_INV if spec.get("dark_digits", True) else cv2.THRESH_BINARY)
                           + cv2.THRESH_OTSU)

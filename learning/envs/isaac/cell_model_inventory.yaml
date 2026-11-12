@@ -4,7 +4,7 @@
 # cell-photos/ beside the private SIM operator configuration on the review host.
 # Physics constants (servo gains, joint damping, container mass and friction) are candidates in cell_physics.yaml beside this file.
 schema: rosy.cell-model-inventory/1
-checked_at: '2026-11-10'
+checked_at: '2026-11-12'
 models:
   - id: gripper
     name: 그리퍼(OMX 팔레타이징 조 v2.1)
@@ -13,17 +13,17 @@ models:
     measured: 손가락 판 두께 약 1.1~2.0 mm, 길이 약 18 mm, 폭 40 mm, 패드 사이 29.977 mm @ 0.35 rad, TCP x 0.0740 m(원본 0.09193). 출처 URDF 메시 직접 측정
     differs: 양팔 시뮬레이션(omx_two_arm_world)은 v2.1 조, TCP 0.0740을 쓴다(2026-11-09 확인). 설치된 조가 이 STL과 같은지와 터치값 0.0885는 미해명(sim2real G-22)
   - id: ship_plate
-    name: 배 모양 판(본선)
-    cad: {file: null, sha256: null}
+    name: 본선(r08 v15) 및 모듈형 접안·고정 구조(v16 berth-modular)
+    cad: {file: berth_v16_cradle.stl, sha256: null}
     sim: reflected
-    measured: 팀 CAD(KAN-108, ship_plate.py). 실물 top 영상의 돌기 격자 36 mm 6×6과 fixture가 약 1 px로 겹친다(셀 실측 2026-11-03)
-    differs: 시뮬레이션은 선미를 첫 돌기 줄 뒤 16 mm, 뱃머리를 x 198 mm에서 자른다(실물은 50.6 mm 뒤·뾰족한 뱃머리)
+    measured: Confluence 23592971·23234388 정격 선박 r08(v15, 316×130 mm, 3 mm 부양) + v16 모듈형 일체형 접안 요람(berth-cradle-stern/mid/bow) + OMX 받침판 간격 브리지(berth-spacer-bridge-a/b, 정격 Δy 39.0 mm [35/39/43 mm], Δx -8/0/+8 mm, 반복 정밀도 RSS ±0.32 mm, 최대 선수미 회전 ±0.19°) + 선미 탁자 끝 후크(0/5/10 mm) + 2 cm 하향 박형 컨베이어 오목 스토퍼(berth-belt-concave-stopper, 입구 62 mm·평면 44 mm·깊이 9 mm). 구형 돌기 격자 판(KAN-108, ship_plate.py)도 호환 지원
+    differs: MuJoCo(omx_two_arm_world)와 Isaac(stacking_scene) 모두 r08 선체·선실·v16 일체형 요람·받침판 간격 브리지·2 cm 하향 오목 벨트 스토퍼 메시를 반영한다(berth_kit=v16-modular, sim2real G-18)
   - id: temp_plate
-    name: 임시 칸 판(두 장)
-    cad: {file: null, sha256: null}
+    name: 임시 칸 판(v11 두 장) 및 3-프롱 정렬 브리지(v7)
+    cad: {file: temp_slot_plate_v11.stl, sha256: null}
     sim: reflected
-    measured: 위 카메라 프레임에서 칸 패드·놓인 컨테이너(주황·노랑)를 판 윗면으로 되투영해 판마다 부채꼴 하나로 맞춤(omx_real2sim measure). 스냅샷 deploy/robot/omx/sim/cell_snapshots/. 2026-11-10 다리 v7 + 판 v11 실측 단계 17.0°, 반지름 203.4 mm(설계 17.3°, 200 mm), 패드 폭 30.3~31.9 mm(2026-11-08 구형 판은 단계 13.6°, 반지름 217 mm, 팔 축에서 약 146 mm)
-    differs: 판은 옮길 때마다 다시 잰다. 시뮬은 스냅샷을 선택지 temp_lanes=snapshot으로 읽는다(sim2real G-17)
+    measured: Confluence 23233175·15368863·23232928 판 v11(남색 바닥+하늘색 유도벽 2색 분리, F1~F4 기준점, 설계 반지름 200 mm·단계 17.34°) + 정렬 브리지 v7(temp_slot_bridge_a/b.stl, PR33_C02_BASE 양끝 Ø13 카운터보어 결합 3-프롱 소켓). 위 카메라 프레임에서 칸 패드·컨테이너를 되투영해 맞춤(omx_real2sim measure, 2026-11-10 실측 단계 17.0°, 반지름 203.4 mm)
+    differs: MuJoCo·Isaac 모두 판 v11 STL(소켓 귀 3곳·F1~F4 포함)과 브리지 v7 STL을 함께 그리며, 스냅샷(temp_lanes=snapshot) 또는 브리지 정격(temp_lanes=fan, radius=0.200)을 선택지로 읽는다(sim2real G-17)
   - id: workbench
     name: 작업대
     cad: {file: 261026_World.STL, sha256: dd91457a4a8d17d7fbb4fbfdb12dff9c2ae98e92e74760231c9ec08aa377f3cc}
@@ -37,11 +37,11 @@ models:
     measured: 폭 약 100 mm(World STL). 벨트 끝 컨테이너 윗면이 작업대보다 25.8 mm 낮다(D435 깊이 6회 중앙값, arm_b 적층 설정 2026-11-03 05:32), 곧 벨트 면은 작업대 약 56 mm·판 윗면 약 64 mm 아래
     differs: 양팔 시뮬레이션은 자 측정값(작업대 아래 55 mm, CHOICES belt_height=ruler)을 쓴다(2026-11-09 확인). fixture의 벨트 면(실물보다 약 28 mm 높음)은 선택지 fixture로 남음
   - id: arm_base
-    name: 팔 베이스(두 대)
-    cad: {file: 261026_World.STL, sha256: dd91457a4a8d17d7fbb4fbfdb12dff9c2ae98e92e74760231c9ec08aa377f3cc}
+    name: 팔 베이스(OMX-AI PR33_C02_BASE 두 대)
+    cad: {file: omx_base_plate_b.stl, sha256: null}
     sim: reflected
-    measured: 두 베이스 중심 사이 약 330 mm(World STL). 셀 실측 2026-11-03(surveyed) arm_b 관절 1 기준 (0.104, 0.153) m, yaw -94.3°(FK 맞춤 3.1 px), 받침 판 중심 arm_b (0.107, 0.164)·arm_a (0.116, -0.164)
-    differs: 실물 받침이 fixture (0.08, ±0.165)보다 선미 쪽(+x)으로 24~36 mm, arm_b는 중심선 쪽으로 12 mm. fixture는 CAD 값 유지, 채택은 도달·충돌 비교 뒤(D-947 2)
+    measured: 벤더 CAD(PR33_C02_BASE, 150×120×13 mm, 앞쪽 중앙 은색 사다리꼴 금속 클램프 + 양끝 Ø13 카운터보어 x=+38.75/-61.25 mm, 안쪽 벽 관절축에서 71.25 mm). 셀 실측 2026-11-03(surveyed) arm_b 관절 1 기준 (0.104, 0.153) m, yaw -94.3°(FK 맞춤 3.1 px), 받침 판 중심 arm_b (0.107, 0.164)·arm_a (0.116, -0.164)
+    differs: MuJoCo·Isaac 모두 120×120 임시 상자 대신 실제 PR33_C02_BASE(150×120×13 mm) 메시와 앞쪽 중앙 은색 고정 클램프를 표시한다(sim2real G-21)
   - id: container
     name: 컨테이너
     cad: {file: null, sha256: null}
@@ -75,7 +75,7 @@ models:
 # Measured cell layout: the numbers tools read (ship_stack_sites, real-cell site planning). The map may change a little;
 # re-measure and bump `revision`, keep the old one in git. Heights: work table top = 0, mm. Positions: fixture frame, m.
 layout:
-  revision: ship-cell-2026-11-10
+  revision: ship-cell-2026-11-12
   heights_mm:
     arm_b_base_plate: {value: 12, source: ruler, measured: '2026-11-03'}
     ship_plate_top: {value: 8, source: ruler, measured: '2026-11-03'}
@@ -83,6 +83,20 @@ layout:
     leveling_spot_table: {value: 0, source: assumed, note: 'table top; the 170 entered was the plate-centre-to-bow distance'}
     belt_end_surface: {value: -55, source: ruler, measured: '2026-11-03', check: 'D435 depth put it about -56'}
     container: {value: 30, source: ruler, measured: '2026-11-03'}
+  ship_fixation:
+    berth_kit: v16-modular
+    confluence_pages: ['23592971', '23234388', '23233175']
+    lift_mm: 3.0
+    hull_half_beam_mm: 65.0
+    hull_in_cradle_clearance_mm: 0.20
+    spacer_dy_nominal_mm: 39.0
+    spacer_dy_steps_mm: [35.0, 39.0, 43.0]
+    spacer_dx_steps_mm: [-8.0, 0.0, 8.0]
+    stern_hook_steps_mm: [0.0, 5.0, 10.0]
+    repeatability_rss_mm: 0.32
+    max_hull_yaw_deg: 0.19
+    belt_concave_stopper: {drop_mm: 20.0, mouth_mm: 62.0, flat_mm: 44.0, depth_mm: 9.0, wall_mm: 3.5}
+    temp_bridge: {version: v7, seat_r_mm: 200.0, fan_step_deg: 17.34, repeatability_rss_mm: 0.65}
   plate_centre_to_bow_mm: {value: [170, 220], source: user estimate, note: 'bow narrows to a point over this stretch; CAD 198-244'}
   arm_bases_m:
     arm_a: {xy: [0.116, -0.164], yaw_deg: 90.0, source: 'top frame, base plate centre (no FK)'}

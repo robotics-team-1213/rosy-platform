@@ -14,7 +14,7 @@ from fakes import FakeRobot
 from fleet.server.app import create_app
 from fleet.server.console import FleetConsole
 from fleet.server.development_session import DevelopmentSessions
-from fleet.server.site_users import hash_password
+from rosy_account.site_users import hash_password
 from test_fleet_header_browser import _fleet
 from fleet.server.task_service import FleetTaskService
 from fleet.server.task_store import FleetTaskStore

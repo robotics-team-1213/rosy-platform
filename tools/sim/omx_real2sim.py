@@ -52,6 +52,7 @@ from omx_real2sim_helpers import (  # noqa: E402, F401
     lane_blobs,
     measure_belt,
     measure_ship,
+    measure_ship_fixation,
     measure_temp_plates,
     overlay,
     place,
@@ -67,7 +68,7 @@ VIEWER = "http://127.0.0.1:8767/frame/{}.jpg"  # rosy-omx-camera-view on the sit
 CAMERAS = ("top", "side", "arm_a_wrist", "arm_b_wrist")
 CHANGED = (.003, 3.)         # m, deg: a lane moved more than this is a changed item; 3 deg is the pocket's own yaw
 STAGGER_S = 45
-GAPS = {"temp_plates": "G-17", "ship": "G-18", "camera": "G-19", "arm_bases": "G-21", "belt": "G-30"}  # sim2real registry rows each item reports to (D-480)
+GAPS = {"temp_plates": "G-17", "ship": "G-18", "ship_fixation": "G-18", "camera": "G-19", "arm_bases": "G-21", "belt": "G-30"}  # sim2real registry rows each item reports to (D-480)
 PY = "MUJOCO_GL=egl $HOME/rosy-test/venvs/sim-mujoco/bin/python"
 SNAP_CHOICES = lambda path: ["--choice", f"cell_snapshot={path}", "--choice", "temp_lanes=snapshot", "--choice", "ship_pose=snapshot",  # noqa: E731
                              "--choice", "belt_pose=snapshot"]
@@ -144,11 +145,20 @@ def measure(run, prev_path=None, camera_moved_ok=False):
         if camera_motion.get("moved") and not camera_moved_ok:
             raise SystemExit(f"top camera moved since the previous snapshot ({m}): re-survey it (G-19, calibration step 3) "
                              "before measuring; --camera-moved-ok measures anyway")
-    items = {"temp_plates": lambda: measure_temp_plates(top, layout, prev and prev["items"]["temp_plates"]),
-             "ship": lambda: measure_ship(top, layout), "belt": lambda: measure_belt(top, layout)}
+    tp_first = measure_temp_plates(top, layout, prev and prev["items"]["temp_plates"])
+    worst_first = (tp_first.get("camera_check") or {}).get("worst_mm") or [99.0]
+    if max(worst_first) > 3.0:
+        alt_layout = sites.Layout(top_camera="2026-11-12")
+        tp_alt = measure_temp_plates(top, alt_layout, prev and prev["items"]["temp_plates"])
+        worst_alt = (tp_alt.get("camera_check") or {}).get("worst_mm") or [99.0]
+        if max(worst_alt) <= 3.0 or max(worst_alt) < max(worst_first):
+            layout = alt_layout
+            tp_first = tp_alt
+    items = {"ship": lambda: measure_ship(top, layout), "belt": lambda: measure_belt(top, layout)}
     with ThreadPoolExecutor() as pool:  # items are independent; more join here (belt end, arm bases) as they get measurers
         done = {k: pool.submit(f) for k, f in items.items()}
         results = {k: f.result() for k, f in done.items()}
+    results["temp_plates"] = tp_first
     tp = results["temp_plates"]
     ab = dict(fk={n: dict(xy=[round(v, 4) for v in a.base[:2]], yaw_deg=round(math.degrees(a.yaw), 1)) for n, a in layout.arms.items()},
               plate_centre={n: dict(xy=list(xy), yaw_deg=yaw) for n, (xy, yaw) in sites.ARM_BASES_PLATE_CENTRE.items()})
@@ -159,7 +169,8 @@ def measure(run, prev_path=None, camera_moved_ok=False):
                                             seen={t: p["seen"] for t, p in tp["plates"].items() if "lanes" in p},
                                             errors={t: p["error"] for t, p in tp["plates"].items() if "error" in p},
                                             shape=tp["shape"], camera_check=tp["camera_check"]),
-                           ship=results["ship"], belt=results["belt"], arm_bases=ab))
+                           ship=results["ship"], belt=results["belt"], arm_bases=ab,
+                           ship_fixation=measure_ship_fixation(results["ship"], results["belt"], layout)))
     (run / "snapshot.json").write_text(json.dumps(snap, indent=1), encoding="utf-8")
     cv2.imwrite(str(run / "overlay.png"), overlay(top, layout, tp["plates"], results["ship"], results["belt"]))
     return snap
@@ -191,9 +202,15 @@ def diff(old, new):
         d = math.dist((sa["stern_x_m"], sa["centre_y_m"]), (sb["stern_x_m"], sb["centre_y_m"]))
         if d > CHANGED[0] or abs(sb["yaw_deg"] - sa["yaw_deg"]) > SHIP_CHANGED_DEG:
             changed["ship"] = [f"{d * 1000:.0f} mm {abs(sb['yaw_deg'] - sa['yaw_deg']):.1f} deg"]
+    fa, fb = old["items"].get("ship_fixation"), new["items"].get("ship_fixation")
+    if fa and fb and "error" not in fa and "error" not in fb:
+        d_gap = max(abs(float(fb.get("arm_a_gap_dy_mm", 0)) - float(fa.get("arm_a_gap_dy_mm", 0))),
+                    abs(float(fb.get("arm_b_gap_dy_mm", 0)) - float(fa.get("arm_b_gap_dy_mm", 0))))
+        if d_gap > CHANGED[0] * 1000 or fa.get("berth_kit") != fb.get("berth_kit"):
+            changed["ship_fixation"] = [f"spacer gap {d_gap:.1f} mm ({fb.get('berth_kit', 'v16-modular')})"]
     if old.get("camera") != new.get("camera"):
         changed["camera"] = ["top camera model"]
-    rerun = sorted(STAGES) if "camera" in changed else sorted(s for s, (items, *_) in STAGES.items() if items & set(changed))
+    rerun = sorted(STAGES) if "camera" in changed else sorted(s for s, (items, *_) in STAGES.items() if items & (set(changed) | ({"ship"} if "ship_fixation" in changed else set())))
     return changed, rerun
 
 
@@ -255,6 +272,83 @@ def report(out):
     return "\n".join(lines)
 
 
+def run_pipeline(run, prev_path=None, camera_moved_ok=False, extra_choices=()):
+    """End-to-end Real-to-Sim -> Stage 1 (MuJoCo) -> Stage 2 (Isaac Sim handoff) pipeline evaluation."""
+    target = Path(run)
+    if target.is_dir():
+        snap = measure(target, prev_path, camera_moved_ok=camera_moved_ok)
+        snap_path = target / "snapshot.json"
+    else:
+        snap = json.loads(target.read_text(encoding="utf-8"))
+        snap_path = target
+    layout = sites.Layout(**sites.parse_choices(extra_choices))
+    if "ship_fixation" not in snap.get("items", {}):
+        snap.setdefault("items", {})["ship_fixation"] = measure_ship_fixation(
+            snap["items"].get("ship"), snap["items"].get("belt"), layout
+        )
+    snaps_dir = ROOT / "deploy/robot/omx/sim/cell_snapshots"
+    if not prev_path and snaps_dir.is_dir():
+        candidates = sorted(p for p in snaps_dir.glob("*.json") if p.resolve() != snap_path.resolve())
+        if candidates:
+            prev_path = candidates[-1]
+    changed, rerun = ({}, sorted(STAGES))
+    if prev_path and Path(prev_path).exists():
+        old = json.loads(Path(prev_path).read_text(encoding="utf-8"))
+        if "ship_fixation" not in old.get("items", {}):
+            old.setdefault("items", {})["ship_fixation"] = measure_ship_fixation(
+                old["items"].get("ship"), old["items"].get("belt"), layout
+            )
+        changed, rerun = diff(old, snap)
+    rel = snap_path.resolve().relative_to(ROOT).as_posix() if snap_path.resolve().is_relative_to(ROOT) else snap_path.name
+    fix = snap["items"].get("ship_fixation") or layout.ship_fixation()
+    handoff = dict(
+        schema="rosy.omx-isaac-handoff.v1",
+        snapshot=rel,
+        release_case="nominal-palletizing-v21-ship-r08-berth-v16",
+        berth_kit=fix.get("berth_kit", "v16-modular"),
+        temp_bridge=fix.get("temp_bridge", "v7"),
+        ship_fixation=fix,
+        compensate_zero=True,
+        cam_jitter=True,
+    )
+    bundle = dict(
+        schema="rosy.omx-real2sim-pipeline.v1",
+        snapshot=rel,
+        previous=str(prev_path) if prev_path else None,
+        changed=changed,
+        rerun=rerun or ["stack"],
+        gaps=sorted({GAPS[i] for i in changed if i in GAPS}),
+        stages=[
+            dict(
+                stage="mujoco",
+                stage_order=1,
+                track="learning_and_physics",
+                role="stage1_geometry_vision_and_act_policy",
+                rerun=rerun or ["stack"],
+                commands={n: stage_body(n, rel, extra_choices) for n in (rerun or ["stack"])},
+            ),
+            dict(
+                stage="isaac",
+                stage_order=2,
+                track="learning_and_physics",
+                role="stage2_physx_contact_pad_slip_and_seating",
+                release_case=handoff["release_case"],
+                isaac_handoff=handoff,
+            ),
+            dict(
+                stage="gazebo",
+                stage_order=None,
+                track="ros2_execution_contract",
+                role="ros2_interface_conformance",
+            ),
+        ],
+        ship_fixation=fix,
+    )
+    if target.is_dir():
+        (target / "pipeline.json").write_text(json.dumps(bundle, indent=1), encoding="utf-8")
+    return bundle
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -268,6 +362,9 @@ def main(argv=None):
     r = sub.add_parser("report"); r.add_argument("out")
     q = sub.add_parser("request"); q.add_argument("item", choices=["belt"]); q.add_argument("run")
     q.add_argument("--store", help="request store, default cell_requests.store() (ROSY_CELL_REQUESTS)")
+    pl = sub.add_parser("pipeline"); pl.add_argument("run"); pl.add_argument("--prev")
+    pl.add_argument("--camera-moved-ok", action="store_true")
+    pl.add_argument("--choice", action="append", default=[])
     a = p.parse_args(argv)
     if a.cmd == "capture":
         if not a.site:
@@ -292,6 +389,8 @@ def main(argv=None):
         req, image = belt_request(a.run)
         made = cell_requests.open_request(req, image, Path(a.store) if a.store else None)
         print(json.dumps(dict(id=made["id"], candidates=made["candidates"], unit=made["unit"]), ensure_ascii=False))
+    elif a.cmd == "pipeline":
+        print(json.dumps(run_pipeline(a.run, a.prev, a.camera_moved_ok, a.choice), indent=1))
     else:
         print(report(a.out))
     return 0

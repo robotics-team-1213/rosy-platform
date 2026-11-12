@@ -9,7 +9,7 @@ import {confirmIrreversible} from '/common/ui.js';
 import {bindEstop, bindTopbarToggle, showSession, showSignedOut, tickClock, watchFleet} from '/console/assets/fleet-header.js';
 import {PLACE_KINDS, PLACE_KIND_LABEL, actionRows, arrowMarks, fitView, planIsCurrent, planPolylines, siteMapErrorText, viewTurnOf, editViewTurn, planTrip, tripRefusalText, planSummaryText, tripPoseReason, robotMapPose} from '/console/assets/site-map-model.js';
 import {tripStatusText} from '/console/assets/trip-display.js';
-import {editEdge, editPlace} from '/console/assets/site-map-edit.js';
+import {editEdge, editPlace, ensureSurvey} from '/console/assets/site-map-edit.js';
 import {bindScreens} from '/console/assets/subnav-screens.js';
 import '/console/assets/file-picker.js';
 import {guideMarks, poseLabel} from '/console/assets/guide-layer.js';
@@ -37,29 +37,20 @@ const teach = createTeachPanel({request, role: () => state.role, draft: () => st
   places: () => shown()?.places || [], render: () => render(),
   reload: async () => { await load(); $('map-source').value = 'draft'; render(); }});
 const survey = createSurveyPanel({map: () => shown(), source: () => $('map-source').value, view: () => state.view,
-  render: () => render(),
-  reason: () => operatorReason(), hasDraft: () => Boolean(state.dirty || state.draft?.revision),
-  begin: () => { clearPlane(); $('trip-pick').checked = false; state.band = null; },
-  changed: map => { state.working = map; state.dirty = true; $('map-source').value = 'draft';
-    clearPlane(); state.selected = null; state.band = null; clearPlan(); updatePlaneSources(); }});
+  render: () => render(), reason: () => operatorReason(), hasDraft: () => Boolean(state.dirty || state.draft?.revision),
+  begin: () => { if ($('map-source').value !== 'draft') $('map-source').value = 'draft'; if (state.working) ensureSurvey(state.working); clearPlane(); $('trip-pick').checked = false; state.band = null; updatePlaneSources(); },
+  changed: map => { state.working = ensureSurvey(map); state.dirty = true; $('map-source').value = 'draft'; clearPlane(); state.selected = null; state.band = null; clearPlan(); updatePlaneSources(); }});
 
-const cameraMap = createCameraMapPanel({request, guarded, reason: () => operatorReason(),
-  context: () => [state.working, state.sessionEpoch],
-  draft: () => state.draft, dirty: () => state.dirty, notice,
-  reload: async () => { await load(); $('map-source').value = 'draft'; clearPlan(); }});
-const reality = createRealityPanel({request, guarded, reason: () => operatorReason(),
-  draft: () => state.draft, dirty: () => state.dirty, robots: () => state.robots,
-  reload: async () => { await load(); $('map-source').value = 'draft'; clearPlan(); },
-  notice, gate, status});
-const cameraDraft = createCameraDraftPanel({request, guarded, reason: () => operatorReason(),
-  draft: () => state.draft, dirty: () => state.dirty,
-  reload: async () => { await load(); $('map-source').value = 'draft'; clearPlan(); },
-  notice, gate, status, sync: syncButtons});
+const cameraMap = createCameraMapPanel({request, guarded, reason: () => operatorReason(), context: () => [state.working, state.sessionEpoch],
+  draft: () => state.draft, dirty: () => state.dirty, notice, reload: async () => { await load(); $('map-source').value = 'draft'; clearPlan(); }});
+const reality = createRealityPanel({request, guarded, reason: () => operatorReason(), draft: () => state.draft, dirty: () => state.dirty, robots: () => state.robots,
+  reload: async () => { await load(); $('map-source').value = 'draft'; clearPlan(); }, notice, gate, status});
+const cameraDraft = createCameraDraftPanel({request, guarded, reason: () => operatorReason(), draft: () => state.draft, dirty: () => state.dirty,
+  reload: async () => { await load(); $('map-source').value = 'draft'; clearPlan(); }, notice, gate, status, sync: syncButtons});
 const authoring = createMapAuthoring({request, svg: $('site-map-svg'), map: shown, draft: () => state.working,
   source: () => $('map-source').value, view: () => state.view, reason: operatorReason, dirty: () => state.dirty,
-  begin: () => { survey.cancel(); clearPlane(); $('trip-pick').checked = false; state.band = null; },
-  changed: map => { state.working = map; state.dirty = true; $('map-source').value = 'draft';
-    state.selected = null; state.band = null; updatePlaneSources(); clearPlan(); },
+  begin: () => { survey.cancel(); if ($('map-source').value !== 'draft') $('map-source').value = 'draft'; if (state.working) ensureSurvey(state.working); clearPlane(); $('trip-pick').checked = false; state.band = null; updatePlaneSources(); },
+  changed: map => { state.working = ensureSurvey(map); state.dirty = true; $('map-source').value = 'draft'; state.selected = null; state.band = null; updatePlaneSources(); clearPlan(); },
   render, notice, epoch: () => state.sessionEpoch});
 
 for (const kind of PLACE_KINDS) $('place-kind').append(new Option(PLACE_KIND_LABEL[kind], kind));
@@ -264,19 +255,38 @@ function syncButtons() {
 }
 
 // D-540 4: one read line and the robot layer; operating a trip is the 관제 card's (D-540 3).
+let lastPollSig = '';
 async function pollRobots() {
   if (state.loadState === 'ready' && !document.hidden) {  // a background tab does not keep reading trips and guide
-    try {
-      state.open = (await request('/api/fleet/trips')).open || [];
+    const [tripsRes, guideRes] = await Promise.allSettled([
+      request('/api/fleet/trips'),
+      request('/api/fleet/guide'),
+    ]);
+    if (tripsRes.status === 'fulfilled') {
+      state.open = tripsRes.value.open || [];
       status('trip-run', state.open.length ? `이 지도로 운행 중 · ${state.open.map(trip => tripStatusText(trip, state.active?.map)).join(' / ')}`
         : '진행 중인 운행 없음', state.open.length ? 'pending' : 'empty');
-    } catch (error) {
-      status('trip-run', `운행 상태 확인 불가 · ${siteMapErrorText(error)}`, 'error');
+    } else {
+      status('trip-run', `운행 상태 확인 불가 · ${siteMapErrorText(tripsRes.reason)}`, 'error');
     }
-    try { state.guide = await request('/api/fleet/guide'); state.guideUnavailable = false; }
-    catch (error) { state.guide = null; state.guideUnavailable = error.status !== 404; }
-    drawRobots();
-    syncButtons();
+    if (guideRes.status === 'fulfilled') {
+      state.guide = guideRes.value;
+      state.guideUnavailable = false;
+    } else {
+      state.guide = null;
+      state.guideUnavailable = guideRes.reason?.status !== 404;
+    }
+    const nextSig = JSON.stringify([
+      state.guideUnavailable,
+      (state.open || []).map(t => [t.trip_id, t.state, t.next_place]),
+      (state.guide?.robots || []).map(r => [r.robot_id, r.online, r.worst,
+        r.pose ? [Math.round((r.pose.x || 0) * 50), Math.round((r.pose.y || 0) * 50), Math.round((r.pose.yaw || 0) * 20)] : null]),
+    ]);
+    if (nextSig !== lastPollSig) {
+      lastPollSig = nextSig;
+      drawRobots();
+      syncButtons();
+    }
   }
   setTimeout(pollRobots, ROBOT_POLL_MS);
 }
@@ -299,8 +309,8 @@ async function load() {
   state.active = active;
   state.robots = robots;
   state.draft = draft;
-  state.working = draft.map ? draft.map
-    : (active ? JSON.parse(JSON.stringify(active.map)) : null);
+  state.working = ensureSurvey(draft.map ? draft.map
+    : (active ? JSON.parse(JSON.stringify(active.map)) : null));
   state.dirty = false;
   state.loadState = 'ready';
   try { calibrations = (await request('/api/fleet/calibrations')).calibrations || []; }
@@ -308,7 +318,9 @@ async function load() {
   updatePlaneSources();
   $('trip-place').replaceChildren(...(state.active?.map.places || [])
     .map((place, index) => new Option(`${index + 1} ${place.name}${place.name === place.id ? '' : ` (${place.id})`}`, place.id)));
-  $('trip-robot').replaceChildren(...robots.map(robot => {
+  const activeRobots = robots.filter(r => r.online || r.link === 'degraded');
+  const visibleRobots = activeRobots.length ? activeRobots : robots;
+  $('trip-robot').replaceChildren(...visibleRobots.map(robot => {
     const safety = robot.state?.safety?.estop;
     const stateLabel = !robot.online ? '연결 끊김' : safety === true ? '비상 정지'
       : safety === false ? '' : '정지 상태 미확인';
@@ -316,7 +328,7 @@ async function load() {
     option.dataset.online = robot.online ? 'true' : 'false';
     return option;
   }));
-  teach.robots(robots);
+  teach.robots(visibleRobots);
   if (state.robotsError) status('trip-summary', '경로 미리보기 불가 · 로봇 상태 확인 불가. 다시 접속하세요.', 'error');
   else if (!robots.length) status('trip-summary', '경로 미리보기 불가 · 등록된 로봇이 없습니다. 관리자에게 로봇 등록을 요청하세요.', 'empty');
   else if (!robots.some(robot => robot.online)) status('trip-summary', '경로 미리보기 불가 · 연결된 로봇이 없습니다. 로봇 연결을 확인하세요.', 'empty');
@@ -553,7 +565,11 @@ tickClock();
 setInterval(tickClock, 1000);
 watchFleet(request);
 const screens = bindScreens({nav: document.querySelector('.ui-subnav-nav'), home: 'map-heading', stage: 'map-heading',
-  groups: {'survey-heading': ['survey-heading', 'drawing-heading']}, label: document.getElementById('site-map-screen')});
+  groups: {'map-heading': ['map-heading', 'camera-draft-heading', 'drawing-heading', 'survey-heading'],
+    'survey-heading': ['survey-heading', 'drawing-heading', 'camera-draft-heading'],
+    'camera-draft-heading': ['camera-draft-heading', 'drawing-heading', 'survey-heading'],
+    'edit-heading': ['edit-heading', 'drawing-heading', 'survey-heading', 'camera-draft-heading']},
+  label: document.getElementById('site-map-screen')});
 // The map legend promises that picking a place or lane on the view screen opens it for editing.
 $('site-map-svg').addEventListener('click', event => {
   if (screens.current() === 'map-heading' && event.target.closest('[data-place], [data-edge], [data-crosswalk]')) location.hash = '#edit-heading';

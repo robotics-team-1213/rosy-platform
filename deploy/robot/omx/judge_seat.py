@@ -35,16 +35,8 @@ SCHEMA_VERSION = 2
 DECISIONS = ("proceed", "retry", "reinsert", "remap", "park", "abort")
 PRECONDITION = {"grasp": "aligned", "lift": "holding", "transport": "stable"}
 CONSERVATIVE_ORDER = (
-    "abort",
-    "park",
-    "reinsert_and_park",
-    "reinsert",
-    "reinsert_and_retry",
-    "remap",
-    "retry",
-    "unknown",
-    -1,
-    "proceed",
+    "abort", "park", "reinsert_and_park", "reinsert", "reinsert_and_retry",
+    "remap", "retry", "unknown", -1, "proceed",
 )
 
 
@@ -82,6 +74,9 @@ def _extract_json(text: str) -> dict:
     return json.loads(text)
 
 
+_AUTH_CACHE = {}  # (path, mtime_ns, size) -> key or None: auth.json is read and parsed once per change
+
+
 def _resolve_api_key(api_key: str | None = None, api_key_env: str | None = None, provider: str = "zai") -> str | None:
     if api_key:
         return api_key.strip()
@@ -91,15 +86,27 @@ def _resolve_api_key(api_key: str | None = None, api_key_env: str | None = None,
             return os.environ[env_name].strip()
     if provider in ("zai", "glm", "opencode"):
         auth_path = Path.home() / ".local/share/opencode/auth.json"
+        try:
+            st = auth_path.stat()
+            cache_key = (str(auth_path), st.st_mtime_ns, st.st_size)
+        except OSError:
+            cache_key = None  # no file yet: nothing to cache, is_file() below stays cheap
+        if cache_key is not None and cache_key in _AUTH_CACHE:
+            return _AUTH_CACHE[cache_key]
+        key_found = None
         if auth_path.is_file():
             try:
                 data = json.loads(auth_path.read_text(encoding="utf-8"))
                 for p_key in ("zai-coding-plan", provider):
                     key = (data.get(p_key) or {}).get("key")
                     if isinstance(key, str) and key.strip():
-                        return key.strip()
+                        key_found = key.strip()
+                        break
             except Exception:
                 pass
+        if cache_key is not None:
+            _AUTH_CACHE[cache_key] = key_found
+        return key_found
     return None
 
 

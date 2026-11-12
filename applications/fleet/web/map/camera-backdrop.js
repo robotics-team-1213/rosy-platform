@@ -37,17 +37,17 @@ const topDownCache = new Map();
 function drawCameraTopDown(ctx, frame, calibration, bounds, toPx, width, height, dpr, rot = 0) {
   const image = frame.image;
   const key = [calibration.source_id, calibration.map_id, calibration.calibration_revision,
-    ...calibration.map_to_image, width, height, dpr, rot,
+    frame.seq || "", ...calibration.map_to_image, width, height, dpr, rot,
     bounds.min_x, bounds.max_x, bounds.min_y, bounds.max_y].join("|");
   let cached = topDownCache.get(key);
-  if (!cached || cached.frame !== frame) {
+  if (!cached || cached.image !== image) {
     const off = document.createElement("canvas");
     off.width = Math.round(width * dpr);
     off.height = Math.round(height * dpr);
     const octx = off.getContext("2d");
     octx.scale(dpr, dpr);
     warpOnto(octx, image, calibration.map_to_image, bounds, toPx);
-    cached = { frame, canvas: off };
+    cached = { frame, image, canvas: off };
     topDownCache.set(key, cached);
     if (topDownCache.size > 2) topDownCache.delete(topDownCache.keys().next().value);
   }
@@ -178,16 +178,22 @@ export function createCameraBackdrop({ scope, el, view, draw }) {
       if (frame.state !== "live" || !fresh(frame)) {
         lastFrame = null; setCameraFrame(null); setLive(null); planes.refresh(false); return;
       }
+      const prevSeq = cameraFrame?.seq;
+      const prevSource = cameraFrame?.source;
       lastFrame = frame;
       // D-631: the before-correction picture keeps the camera's original orientation.
       (frame.previewElement || frame.image)?.closest?.(".vision-frame")?.setAttribute("data-turn", "0");
-      setCameraFrame(frame);
-      showFrame();
-      // Ask Vision only when the site view can draw it (no grid map, a site map, a calibration on it).
-      planes.refresh(!view.map && planeCalibrationsFor(calibrations, view.siteMap, frame.source).length > 0);
+      const wantPlane = !view.map && planeCalibrationsFor(calibrations, view.siteMap, frame.source).length > 0;
+      if (!prevSeq || prevSeq !== frame.seq || prevSource !== frame.source) {
+        setCameraFrame(frame);
+        showFrame();
+      } else {
+        cameraFrame = frame;
+      }
+      planes.refresh(wantPlane, frame.seq);
       cancelMapCameraExpiry = scope.timeout(() => {
         lastFrame = null; setCameraFrame(null); setLive(null); planes.refresh(false);
-      }, Math.max(0, 3000 - frame.ageMs));
+      }, Math.max(0, FRESH_MS - frame.ageMs));
     })));
   }
   return { calibration, usesPlane, setCalibrations, drawTopDown, setCameraFrame, bindCamera };

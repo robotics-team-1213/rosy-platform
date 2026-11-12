@@ -26,14 +26,27 @@ from cell_pick_geom import surface_z  # noqa: E402
 TEMP_STOP_C, PWM_FRACTION = prm.default("auto.temp_stop_c"), prm.default("auto.pwm_fraction")
 
 
+_CAPS_CACHE = {}  # (path, mtime_ns, size) -> caps; every Guarded builds a Monitor, the caps file does not change per pick
+
+
 def session_caps(config: dict):
     """PWM cap of each follower joint (IDs 11..16 in order) from the record session's caps file, else None."""
     path = (config.get("record") or {}).get("caps")
     try:
-        raw = json.loads(Path(path).expanduser().read_text(encoding="utf-8"))
-        return [raw[k]["pwm"] for k in sorted(raw, key=int)]
-    except (TypeError, OSError, ValueError, KeyError):
+        p = Path(path).expanduser()
+        key = (str(p), p.stat().st_mtime_ns, p.stat().st_size)
+    except (TypeError, OSError):
         return None
+    if key not in _CAPS_CACHE:
+        try:
+            raw = json.loads(p.read_text(encoding="utf-8"))
+            caps = [raw[k]["pwm"] for k in sorted(raw, key=int)]
+        except (ValueError, KeyError, OSError):
+            return None
+        if len(_CAPS_CACHE) >= 16:
+            _CAPS_CACHE.pop(next(iter(_CAPS_CACHE)))
+        _CAPS_CACHE[key] = caps
+    return _CAPS_CACHE[key]
 
 
 class Aborted(Exception):
@@ -142,7 +155,11 @@ def object_sized(mask, params=None):
 
     n, labels, stats, _ = cv2.connectedComponentsWithStats(mask)
     big = [i for i in range(1, n) if stats[i, cv2.CC_STAT_AREA] > prm.get(params, "objects.surface_min_px")]
-    return np.where(np.isin(labels, big), 0, mask).astype(mask.dtype)
+    if not big:  # nothing to drop: no lookup over the whole frame
+        return mask.copy()
+    keep_lut = np.ones(n, dtype=bool)
+    keep_lut[big] = False
+    return np.where(keep_lut[labels], mask, 0).astype(mask.dtype)
 
 
 def finger_room(mask, roi, pixel_fn, o: dict, closing_deg: float | None = None, params=None) -> dict:

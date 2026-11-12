@@ -649,7 +649,7 @@ def test_console_development_mode_needs_both_the_flag_and_the_deployment(
         tmp_path, monkeypatch, deployment, mode, expected):
     # D-473 1: a missing or mismatched setting never falls back to development mode.
     monkeypatch.setenv("ROSY_DEPLOYMENT", deployment)
-    from fleet.server.site_users import hash_password
+    from rosy_account.site_users import hash_password
     users_file = tmp_path / "site-users.yaml"
     users_file.write_text(yaml.safe_dump({"users": [{"login": "alice", "principal_id": "alice",
                             "role": "operator", "password_scrypt": hash_password("correct horse")}]}), encoding="utf-8")

@@ -134,8 +134,19 @@ class Choices:
 
     def ranked(self, name: str, values: list) -> list:
         """The values by the same record as best(); equal records keep the given order, untried ones included."""
+        lookup, unhashable = {}, []
+        for candidate in self.data["values"].get(name, []):
+            try:
+                lookup.setdefault(candidate["value"], candidate)
+            except TypeError:
+                unhashable.append(candidate)
+
         def record(value):
-            c = self._find(name, value) or {"ok": 0, "tries": 0}
+            try:
+                c = lookup.get(value)
+            except TypeError:
+                c = next((candidate for candidate in unhashable if candidate["value"] == value), None)
+            c = c or {"ok": 0, "tries": 0}
             return -(c["ok"] + 1) / (c["tries"] + 2)
         return sorted(values, key=record)
 

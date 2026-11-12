@@ -21,9 +21,9 @@ schema: rosy.host-services/1
 # images: Docker repositories a role may keep (role and placement: Harbor ADR 0021, D-960). update_status reports any
 # other repository and more than three tags of one, so test and rollback builds do not pile up on a host again.
 images:
-  model: [harborlogi, ghcr.io/robotics-team-1213/harborlogi, nginx, ros, rosy-omx-g2, rosy-omx-pilot, rosy-omx-probe, rosy-omx-workstation]
-  site: [rosy-site-account, rosy-site-fleet, rosy-site-postgres, rosy-site-proxy, rosy-site-vision]  # account: D-962 independent service
-  # rosy-arm-cell: CELL-A runs the site fleet/vision/proxy images; postgres stays until the R fallback cleanup
+  model: [ros, rosy-omx-g2, rosy-omx-pilot, rosy-omx-probe, rosy-omx-workstation]
+  site: [harborlogi, ghcr.io/robotics-team-1213/harborlogi, nginx, rosy-site-account, rosy-site-fleet, rosy-site-postgres, rosy-site-proxy, rosy-site-vision]  # account: D-962 independent service; Harbor moved from model PC to fleet-r (ADR 0021 / D-994)
+  # arm-cell (role cell): runs the cell fleet/vision/proxy images; postgres stays until the R fallback cleanup
   omx: [rosy-site-fleet, rosy-site-postgres, rosy-site-proxy, rosy-site-vision]
 roles:
   model:
@@ -73,10 +73,10 @@ roles:
     pinky-backend.service: {run: "off", channel: external, note: "Pinky stack from ~/.local/bin, outside this repository; stopped and disabled 2026-10-26 (user approval): its SQLite WAL wrote ~1.8 MB/s nonstop during test I/O contention", doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
     rosy-v13-ai-gpu-restore-20261106.service: {run: "off", channel: retired, note: "one approved GPU window, ended 2026-11-06", doc: docs/adr/D-958-lab-compute-ledger-one-admission-gpu-slot-pausable-services.md}
     rosy-v13-ai-gpu-restore-20261106.timer: {run: "off", channel: retired, doc: docs/adr/D-958-lab-compute-ledger-one-admission-gpu-slot-pausable-services.md}
-    pinky-frontend.service: {run: active, channel: external, doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
+    pinky-frontend.service: {run: "off", channel: external, note: "Pinky stack from ~/.local/bin (pinky-stack.sh frontend), stopped and disabled 2026-11-12: pinky-backend was retired 2026-10-26 and Pinky Console runs on the robot and fleetR", doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
     pinky-rosbridge-d12.service: {run: "off", channel: external, note: "Pinky stack from ~/.local/bin (pinky-stack.sh rosbridge-d12), installed and inactive on 2026-11-08", doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
     pinky-rosbridge-d13.service: {run: "off", channel: external, note: "Pinky stack from ~/.local/bin (pinky-stack.sh rosbridge-d13), installed and inactive on 2026-11-08", doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
-    pinky-r2-watch.service: {run: active, channel: external, doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
+    pinky-r2-watch.service: {run: "off", channel: external, note: "Legacy robot_2 watcher for the retired pinky-backend stack; stopped and disabled 2026-11-12", doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
     pinky-v13-training.service: {run: oneshot, channel: external, doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
     pinky-nav2.service: {run: "off", channel: external, note: "DDS unit; cleanup needs D-530 6 joint consent", doc: docs/adr/D-805-host-update-channels-and-site-freeze.md}
     rosy-ai-gpu-watchdog.service: {run: oneshot, channel: copy, template: deploy/ai_pc/rosy-ai-gpu-watchdog.service, doc: deploy/ai_pc/README.md}

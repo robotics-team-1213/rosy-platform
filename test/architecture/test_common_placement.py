@@ -14,8 +14,9 @@ NO_MEM_LIMIT = {'fleet', 'vision', 'postgres', 'fleet-backup', 'proxy', 'control
                 'media-gateway', 'account-backup', 'account-backup-check'}  # sizes follow the D-994 24 h run
 FORBIDDEN_MOUNTS = ('docker.sock', '/etc/rosy/fleet', 'host-control', 'sighting_data', 'vision_state', 'pg_data')
 # 4-line re-exports of rosy_account; the implementation lives in Account (D-962).
-FLEET_ACCOUNT_SHELLS = ('account_authority', 'account_authority_routes', 'account_config', 'account_ledger',
-                        'account_routes', 'password_routes', 'password_session', 'site_users')
+FLEET_ACCOUNT_SHELLS = ('site_users',)
+DELETED_ACCOUNT_SHELLS = ('account_authority', 'account_authority_routes', 'account_config', 'account_ledger',
+                          'account_routes', 'password_routes', 'password_session')
 FLEET_AUTH = ROOT / 'operations/fleet/fleet/server/auth'
 
 
@@ -34,16 +35,19 @@ def _sources(spec):
 
 def _imports(path):
     names = set()
-    for node in ast.walk(ast.parse(path.read_text(encoding='utf-8'))):
+    for node in ast.walk(ast.parse(path.read_text(encoding='utf-8-sig'))):
         if isinstance(node, ast.Import):
             names.update(alias.name for alias in node.names)
         elif isinstance(node, ast.ImportFrom) and node.module and not node.level:
             names.add(node.module)
+            names.update(f'{node.module}.{alias.name}' for alias in node.names)
     return names
 
 
 def _py(folder):
-    return [path for path in folder.rglob('*.py') if '__pycache__' not in path.parts]
+    return [path for path in folder.rglob('*.py')
+            if not any(part.startswith('.') or part in ('__pycache__', 'build', 'install', 'log')
+                       for part in path.relative_to(folder).parts)]
 
 
 def test_common_services_are_hardened_and_isolated_from_fleet_state():
@@ -80,6 +84,16 @@ def test_fleet_account_files_are_reexport_shells():
     for name in FLEET_ACCOUNT_SHELLS:
         text = (FLEET_AUTH / f'{name}.py').read_text(encoding='utf-8')
         assert 'sys.modules[__name__]' in text and len(text.splitlines()) <= 6, name
+    for name in DELETED_ACCOUNT_SHELLS:
+        assert not (FLEET_AUTH / f'{name}.py').exists(), name
+    all_shells = (*FLEET_ACCOUNT_SHELLS, *DELETED_ACCOUNT_SHELLS)
+    forbidden = {f'fleet.server.{name}' for name in all_shells} | {f'fleet.server.auth.{name}' for name in all_shells}
+    for path in _py(ROOT / 'operations/fleet/fleet'):
+        assert not (_imports(path) & forbidden), path
+    deleted = {f'fleet.server.{name}' for name in DELETED_ACCOUNT_SHELLS} | {
+        f'fleet.server.auth.{name}' for name in DELETED_ACCOUNT_SHELLS}
+    for path in _py(ROOT):
+        assert not (_imports(path) & deleted), path
 
 
 def test_machine_credential_code_never_imports_the_human_account_service():

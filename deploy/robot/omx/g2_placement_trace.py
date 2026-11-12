@@ -60,9 +60,9 @@ class PlacementTrace:
             return
         measured = pose(measured)
         baseline = record['baseline']
-        distance = math.dist([measured[key] for key in POSE_KEYS[:3]], [baseline[key] for key in POSE_KEYS[:3]])
-        angular = max(abs(math.atan2(math.sin(measured[key]-baseline[key]),
-                                     math.cos(measured[key]-baseline[key]))) for key in POSE_KEYS[3:])
+        distance = math.hypot(measured['x_m']-baseline['x_m'], measured['y_m']-baseline['y_m'],
+                              measured['z_m']-baseline['z_m'])
+        angular = max(abs(math.remainder(measured[key]-baseline[key], math.tau)) for key in POSE_KEYS[3:])
         sample = dict(observed_at=number(wall), steady_at=number(steady),
                       sim_clock=None if sim_clock is None else number(sim_clock), pose=measured,
                       translation_m=distance, max_euler_delta_rad=angular)

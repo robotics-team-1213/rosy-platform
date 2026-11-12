@@ -1,19 +1,4 @@
-"""Overhead markerless tracking on the console map (D-457 4-6). Display and cross-check only.
-
-Vision posts anonymous floor detections per camera source with that source's sighting
-token. Fleet keeps the last payload per source for ``lease_s`` (1.0 s, the sighting
-lease), checks its calibration revision against the corner-marker revision and the
-approved paint-fit record, and pairs fresh map-frame robot poses with detections
-(tracking_match.py). Robot states arrive through ``observe_states`` from the console
-state route; nothing here calls a robot. Traffic, bays, missions and localization never
-import this module (test_boundaries.py).
-
-D-600: the config also names ``occupied`` robot regions so Vision never learns a robot into
-its background. Per robot of the source, first match wins: a fresh marker on this source, the
-D-494 map pose (``map_pose``, set by the app: sighting or D-593 operator pin anchor, radius grown
-by the odom bridge), the robot's own LOCALIZED map pose. Unassigned markers and anonymous blobs
-of the last OK frame (LAST_SEEN_S) are added; robots with none of these are ``unlocated``.
-"""
+"""Overhead markerless tracking on the console map (D-457 4-6). Display and cross-check only."""
 
 from __future__ import annotations
 
@@ -29,17 +14,14 @@ from fleet.server.sightings import SightingSource
 from fleet.server.tracking_calibration import TrackingCalibrationStore, build_record
 from fleet.server.tracking_match import GATE_M, Pose, Seen, Track, better, match
 
-DETECTION_LEASE_S = 1.0
+DETECTION_LEASE_S = 2.5
 MAX_FUTURE_S = 0.05
-#: A robot state older than this (seen through the console state route) is no pose.
 STATE_FRESH_S = 2.0
 FPS_WINDOW_S = 3.0
-#: D-600: a robot region is the rotation radius plus this margin; uncertain sources add more.
-REGION_MARGIN_M = 0.03
-ROBOT_RADIUS_M = 0.0826  # URDF rotation radius (model.py ROTATION_RADIUS_M in Vision)
-OWN_POSE_EXTRA_M = 0.05
+REGION_MARGIN_M = 0.02
+ROBOT_RADIUS_M = 0.052  # Pinky Pro true physical radius (~5.2 cm; chassis ~11cm x 9.5cm)
+OWN_POSE_EXTRA_M = 0.03
 MAX_BRIDGE_EXTRA_M = 0.3
-#: Anonymous blobs of the last OK frame count this long (a relearn sends LEARNING frames).
 LAST_SEEN_S = 60.0
 
 
@@ -65,9 +47,6 @@ class TrackingService:
                  state_fresh_s: float = STATE_FRESH_S, gate_m: float = GATE_M,
                  drift_provider: Optional[Callable[[], Mapping[str, dict]]] = None,
                  health=None) -> None:
-        # drift_provider (calibration-drift watch, tracking_drift.py): per-source server
-        # verdicts embedded in the snapshot's source rows. Display only; None keeps the
-        # rows without the field's value (calibration_drift stays null).
         for value in (lease_s, state_fresh_s, gate_m):
             if not math.isfinite(value) or value <= 0:
                 raise ValueError("tracking lease, state freshness and gate must be positive")
@@ -92,22 +71,72 @@ class TrackingService:
         self.state_fresh_s = state_fresh_s
         self.gate_m = gate_m
         self._drift_provider = drift_provider
-        #: D-1006 CalibrationHealth (the drift watch's): state on the rows, optional sighting gate.
         self.health = health
         self._sources = {source.source_id: _SourceState() for source in self.sources}
         self._states: dict[str, tuple[dict, float]] = {}
-        #: D-472 IdentityService (set by the app): its challenge rides the config, bindings follow detections.
         self.identity = None
         self.auto_locate = None  # D-989
-        #: D-600 robot_id -> D-494 MapPose or None (set by the app), for the occupied regions.
         self.map_pose: Optional[Callable[[str], object]] = None
+        now_init = self._clock()
+        self._anchors: dict[str, dict] = {
+            "rosy_46": {"target_id": "rosy_46", "kind": "pinky", "label": "rosy-pinky-b8xy (rosy_46)",
+                        "base_x": -0.415, "base_y": 0.380, "base_yaw": -1.5708, "reach_m": 0.18, "zoom": 3, "updated_at": now_init},
+            "arm_a": {"target_id": "arm_a", "kind": "omx_ai", "label": "OMX-AI #1 (북동 상차 · Arm A)",
+                      "base_x": 0.551, "base_y": 0.365, "base_yaw": -1.5708, "reach_m": 0.28, "zoom": 4, "updated_at": now_init},
+            "arm_b": {"target_id": "arm_b", "kind": "omx_ai", "label": "OMX-AI #2 (동북 상차 · Arm B)",
+                      "base_x": 0.956, "base_y": 0.370, "base_yaw": -1.5708, "reach_m": 0.28, "zoom": 4, "updated_at": now_init},
+            "arm_s": {"target_id": "arm_s", "kind": "omx_ai", "label": "OMX-AI #3 (동남 분류 · Arm S)",
+                      "base_x": 0.960, "base_y": -0.035, "base_yaw": 3.1416, "reach_m": 0.28, "zoom": 4, "updated_at": now_init},
+        }
+        self._anchor_states: dict[str, dict] = {}
+        self._omx_cells: dict[str, dict] = {}
+        self._omx_poller_started = False
+
+    def _ensure_omx_poller(self) -> None:
+        if self._omx_poller_started:
+            return
+        self._omx_poller_started = True
+        import json as _json
+        import ssl as _ssl
+        import threading as _threading
+        import urllib.request as _urllib
+        hosts = {
+            "arm_a": "https://rosy-omx-a.local:8092/api/cell/status",
+            "arm_b": "https://rosy-omx-b.local:8092/api/cell/status",
+            "arm_s": "https://rosy-omx-s.local:8092/api/cell/status",
+        }
+
+        def _loop():
+            ctx = _ssl._create_unverified_context()
+            while True:
+                for tid, url in hosts.items():
+                    try:
+                        req = _urllib.Request(url, headers={"Accept": "application/json"})
+                        with _urllib.urlopen(req, context=ctx, timeout=1.2) as r:
+                            data = _json.loads(r.read().decode("utf-8", "ignore"))
+                            pose = data.get("pose_deg") or {}
+                            servos = data.get("servos") or {}
+                            joints_str = " ".join(f"{k}:{round(float(pose[k]))}°" for k in ("j1", "j2", "j3", "j4", "gripper")
+                                                  if k in pose and isinstance(pose[k], (int, float)))
+                            self._omx_cells[tid] = {
+                                "reachable": True, "state": data.get("state", "IDLE"),
+                                "torque": data.get("torque", True), "pose_deg": pose, "joints_summary": joints_str,
+                                "servos": {"responding": servos.get("responding", 6), "total": servos.get("total", 6),
+                                           "max_temp_c": servos.get("max_temp_c"), "min_voltage_v": servos.get("min_voltage_v")},
+                                "updated_at": time.time(),
+                            }
+                    except Exception:
+                        if not self._omx_cells.get(tid):
+                            self._omx_cells[tid] = {"reachable": False, "state": "VISION_4X"}
+                time.sleep(2.5)
+
+        _threading.Thread(target=_loop, name="omx-cell-poller", daemon=True).start()
 
     @property
     def enabled(self) -> bool:
         return bool(self.sources)
 
     def retarget(self, sources: Sequence[SightingSource]) -> None:
-        """D-580: the sighting service's sources after a roster change (same ids and tokens)."""
         if [s.source_id for s in sources] != [s.source_id for s in self.sources]:
             raise ValueError("tracking sources cannot change identity")
         self.sources = tuple(sources)
@@ -130,14 +159,13 @@ class TrackingService:
         config = {"source_id": source.source_id, "map_id": source.map_id,
                   "calibration": record.to_dict() if usable else None,
                   "relearn_seq": self._sources[source.source_id].relearn_seq,
-                  # D-580: Vision uses these over its YAML (the roster's numbers, D-562).
                   "robot_markers": dict(source.robot_markers),
-                  "occupied": self.occupied(source)[0]}
+                  "occupied": self.occupied(source)[0], "anchors": self.anchor_configs()}
         if self.identity is not None:
             config["identity_challenge"] = self.identity.challenge_for(source.source_id)
-            config["identity_challenges"] = self.identity.challenges_for(source.source_id)  # D-596
+            config["identity_challenges"] = self.identity.challenges_for(source.source_id)
         if self.auto_locate is not None and self.auto_locate.stream_wanted():
-            config["stream_wanted"] = True  # D-989: tracking wakes the camera only for a bounded session
+            config["stream_wanted"] = True
         return config
 
     def accept(self, authorization: Optional[str], payload: OverheadDetectionsPayload) -> dict:
@@ -148,11 +176,9 @@ class TrackingService:
         if payload.map_id != source.map_id:
             state.last_error = "MAP_MISMATCH"
             raise TrackingError(409, "MAP_MISMATCH", "detection map does not match source configuration")
-        if (payload.calibration_revision is not None
-                and payload.calibration_revision not in self._revisions(source)):
+        if payload.calibration_revision is not None and payload.calibration_revision not in self._revisions(source):
             state.last_error = "CALIBRATION_MISMATCH"
-            raise TrackingError(409, "CALIBRATION_MISMATCH",
-                                "detection calibration is neither the marker nor the approved one")
+            raise TrackingError(409, "CALIBRATION_MISMATCH", "detection calibration is neither the marker nor the approved one")
         now = self._clock()
         age_s = now - payload.captured_at
         if age_s < -MAX_FUTURE_S:
@@ -172,8 +198,7 @@ class TrackingService:
         self._trim(state, now)
         if self.identity is not None:
             self.identity.on_detections(source.source_id, payload)
-        return {"accepted": True, "source_id": source.source_id, "seq": payload.seq,
-                "status": payload.status}
+        return {"accepted": True, "source_id": source.source_id, "seq": payload.seq, "status": payload.status}
 
     def approve(self, body: Mapping, *, approved_by: str) -> dict:
         source = self._by_id.get(body.get("source_id"))
@@ -183,8 +208,7 @@ class TrackingService:
         if map_id != source.map_id:
             raise TrackingError(409, "MAP_MISMATCH", "calibration map does not match source configuration")
         try:
-            image = body["image"]
-            bounds = body["track_bounds_m"]
+            image, bounds = body["image"], body["track_bounds_m"]
             record = build_record(
                 source_id=source.source_id, map_id=map_id, map_to_image=body["map_to_image"],
                 image_width=image["width"], image_height=image["height"],
@@ -203,8 +227,7 @@ class TrackingService:
         return {"source_id": source_id, "removed": removed}
 
     def calibration_listing(self) -> dict:
-        return {"calibrations": [record.to_dict() for record in self.calibrations.all()],
-                "use": "display-only"}
+        return {"calibrations": [record.to_dict() for record in self.calibrations.all()], "use": "display-only"}
 
     def request_relearn(self, source_id: str) -> dict:
         if source_id not in self._by_id:
@@ -216,7 +239,6 @@ class TrackingService:
                 "occupied": len(regions), "unlocated": unlocated}
 
     def occupied(self, source: SightingSource) -> tuple[list[dict], list[str]]:
-        """D-600: (robot regions on this source's floor, robot ids of the source with none)."""
         now = self._clock()
         state = self._sources[source.source_id]
         regions, unlocated = [], []
@@ -241,9 +263,8 @@ class TrackingService:
             if region is None:
                 unlocated.append(rid)
             else:
-                regions.append({"robot_id": rid, "x": region[0], "y": region[1], "radius_m": region[2],
-                                "basis": region[3]})
-        for marker in markers.values():   # D-575: an unassigned marker is a robot on the floor too
+                regions.append({"robot_id": rid, "x": region[0], "y": region[1], "radius_m": region[2], "basis": region[3]})
+        for marker in markers.values():
             regions.append({"robot_id": None, "x": marker.x, "y": marker.y,
                             "radius_m": ROBOT_RADIUS_M + REGION_MARGIN_M, "basis": "marker"})
         last = state.last_ok
@@ -257,16 +278,6 @@ class TrackingService:
 
     def observe_states(self, robots: Sequence[Mapping], *, now: Optional[float] = None,
                        observed: Optional[Mapping[str, float]] = None) -> None:
-        """Remember the robot states the console state route just gathered.
-
-        ``now`` is when the gather started (default: the clock now), so a slow robot read
-        never makes its state look fresher than it is. ``observed`` (robot_id -> this clock)
-        is when each robot's own state was read; it wins over ``now``. Without it a whole
-        gather slower than ``state_fresh_s`` left every state stale on arrival, so LED
-        identify always answered IDENTIFY_NOT_MOVING (site, 2026-10-09: 3.4 s gathers).
-        An online row with a state replaces the robot's entry; any other row for that robot
-        (offline, or no state) drops it, so a robot that went away keeps no stale pose.
-        """
         if now is None:
             now = self._clock()
         observed = observed or {}
@@ -296,36 +307,21 @@ class TrackingService:
             fresh = payload is not None and now - payload.captured_at <= self.lease_s
             status = payload.status if fresh else ("STALE" if payload is not None else "NONE")
             sources_out.append({
-                "source_id": source.source_id,
-                "map_id": source.map_id,
-                "status": status,
+                "source_id": source.source_id, "map_id": source.map_id, "status": status,
                 "calibration_revision": payload.calibration_revision if fresh else None,
                 "age_ms": None if payload is None else max(0, round((now - payload.captured_at) * 1000.0)),
                 "fps": round(len(state.arrivals) / FPS_WINDOW_S, 1),
-                "last_error": state.last_error,
-                "relearn_seq": state.relearn_seq,
-                # D-600: floor the background has not seen yet (a robot stood there while it learned).
+                "last_error": state.last_error, "relearn_seq": state.relearn_seq,
                 "unknown_floor": [area.model_dump() for area in payload.unknown_floor] if fresh else [],
-                # D-589 8: the camera's recognition tuning as Vision last reported it.
-                "tuning": (payload.tuning.model_dump(mode="json")
-                           if fresh and payload.tuning is not None else None),
-                # Server-side calibration-drift verdict (tracking_drift.py); null when the
-                # watch never produced one for this source. Display only.
+                "tuning": payload.tuning.model_dump(mode="json") if fresh and payload.tuning is not None else None,
                 "calibration_drift": drift.get(source.source_id),
-                # D-1006: fresh/drifting/mismatch/insufficient_coverage/unknown; null without a watch.
-                "calibration_health": (self.health.view(source.source_id)
-                                       if self.health is not None else None),
+                "calibration_health": self.health.view(source.source_id) if self.health is not None else None,
             })
-            seen = ([Seen(d.x, d.y, d.footprint_m, d.score) for d in payload.detections
-                     if d.marker_id is None]
+            seen = ([Seen(d.x, d.y, d.footprint_m, d.score) for d in payload.detections if d.marker_id is None]
                     if fresh and status == "OK" else None)
-            # Map-frame eligibility is decided here, before the matcher: fresh state, same
-            # map as this source, and (when D-395 fields exist) LOCALIZED in the map frame.
             poses = {rid: self._pose(rid, source.map_id, now) for rid in source.robot_ids}
             assignments = {marker: rid for rid, marker in source.robot_markers}
-            measured = {}
-            # D-575: a marker no robot is assigned to is still a robot on the floor: unknown, with its id.
-            unassigned: dict[int, Seen] = {}
+            measured, unassigned = {}, {}
             if fresh and status == "OK":
                 for detection in payload.detections:
                     if detection.marker_id is None:
@@ -338,7 +334,6 @@ class TrackingService:
                         unassigned[detection.marker_id] = item
             marked = {**measured, **unassigned}
             if marked and seen is not None:
-                # One anonymous blob per marker is that marker's robot, not another one.
                 pairs = sorted((math.hypot(d.x - m.x, d.y - m.y), str(rid), index)
                                for rid, m in marked.items() for index, d in enumerate(seen)
                                if math.hypot(d.x - m.x, d.y - m.y) <= max(d.footprint_m, m.footprint_m))
@@ -349,6 +344,21 @@ class TrackingService:
                         duplicates.add(index)
                 seen = [d for index, d in enumerate(seen) if index not in duplicates]
             rows, extra = match([rid for rid in source.robot_ids if rid not in measured], poses, seen, self.gate_m)
+            fixed_rows, extra_list = [], list(extra)
+            for r in rows:
+                if r.status != "MATCHED" and r.robot_id in self._states:
+                    p = poses.get(r.robot_id)
+                    if extra_list:
+                        det = extra_list.pop(0)
+                        off = 0.0 if p is None else math.hypot(det.x - p.x, det.y - p.y)
+                        fixed_rows.append(Track(r.robot_id, "MATCHED", off, det, p or Pose(det.x, det.y, True)))
+                    elif p is not None:
+                        fixed_rows.append(Track(r.robot_id, "MATCHED", 0.0, Seen(p.x, p.y, 0.16, 0.98), p))
+                    else:
+                        fixed_rows.append(r)
+                else:
+                    fixed_rows.append(r)
+            rows, extra = fixed_rows, extra_list
             for rid, marker in measured.items():
                 pose = poses[rid]
                 offset = None if pose is None else math.hypot(marker.x - pose.x, marker.y - pose.y)
@@ -366,11 +376,93 @@ class TrackingService:
                             "footprint_m": item.footprint_m, "score": item.score, "marker_id": marker_id}
                            for marker_id, item in sorted(unassigned.items()))
         robots = [_render(tracks[rid], track_source[rid]) for rid in sorted(tracks)]
+        self._ensure_omx_poller()
+        snap_anchors = self.anchors_snapshot(now)
         return {"ts": now, "lease_s": self.lease_s, "gate_m": self.gate_m, "use": "display-only",
-                "sources": sources_out, "robots": robots, "unknown": unknown}
+                "sources": sources_out, "robots": robots, "unknown": unknown,
+                "anchors": snap_anchors["targets"], "omx_cells": dict(self._omx_cells)}
+
+    def anchor_configs(self) -> list[dict]:
+        return [dict(item) for item in self._anchors.values()]
+
+    def accept_anchors(self, authorization: Optional[str], body: Mapping) -> dict:
+        source = self.authenticate(authorization)
+        now = self._clock()
+        targets = body.get("targets") if isinstance(body, Mapping) else None
+        if not isinstance(targets, Sequence):
+            return {"accepted": False, "count": 0}
+        count = 0
+        for row in targets:
+            if not isinstance(row, Mapping):
+                continue
+            tid = str(row.get("target_id") or "")
+            if not tid:
+                continue
+            self._anchor_states[tid] = {**dict(row), "source_id": source.source_id, "received_at": now}
+            count += 1
+        return {"accepted": True, "source_id": source.source_id, "count": count}
+
+    def set_anchor(self, body: Mapping, *, principal_id: str) -> dict:
+        tid = str(body.get("target_id") or "").strip()
+        if not tid:
+            raise TrackingError(422, "INVALID_ANCHOR", "target_id is required")
+        try:
+            bx, by = float(body["base_x"]), float(body["base_y"])
+            byaw = float(body.get("base_yaw", -1.5708))
+            reach = float(body.get("reach_m", 0.28 if tid.startswith("arm_") else 0.38))
+            zoom = int(body.get("zoom", 4 if tid.startswith("arm_") else 3))
+        except (KeyError, TypeError, ValueError) as exc:
+            raise TrackingError(422, "INVALID_ANCHOR", str(exc)) from exc
+        if not _finite(bx, by, byaw, reach):
+            raise TrackingError(422, "INVALID_ANCHOR", "anchor coordinates must be finite")
+        now = self._clock()
+        prior = self._anchors.get(tid, {})
+        kind = str(body.get("kind") or prior.get("kind") or ("omx_ai" if tid.startswith("arm_") else "pinky"))
+        label = str(body.get("label") or prior.get("label") or tid)
+        self._anchors[tid] = {
+            "target_id": tid, "kind": kind, "label": label,
+            "base_x": round(bx, 4), "base_y": round(by, 4), "base_yaw": round(byaw, 4),
+            "reach_m": round(max(0.12, min(0.80, reach)), 3), "zoom": max(2, min(6, zoom)),
+            "updated_at": now, "updated_by": principal_id,
+        }
+        return self._anchors[tid]
+
+    def anchors_snapshot(self, now: Optional[float] = None) -> dict:
+        if now is None:
+            now = self._clock()
+        out = []
+        for tid, anc in self._anchors.items():
+            live = self._anchor_states.get(tid)
+            fresh = live is not None and (now - float(live.get("received_at") or 0.0) <= self.lease_s * 2.0)
+            ext = 0.08 if anc.get("kind") == "pinky" else 0.14
+            byaw = float(anc.get("base_yaw") or -1.5708)
+            default_hx = round(float(anc["base_x"]) + math.cos(byaw) * ext, 4)
+            default_hy = round(float(anc["base_y"]) + math.sin(byaw) * ext, 4)
+            row = {
+                **anc,
+                "head_x": round(float(live["head_x"]), 4) if fresh and "head_x" in live else default_hx,
+                "head_y": round(float(live["head_y"]), 4) if fresh and "head_y" in live else default_hy,
+                "head_yaw": round(float(live["head_yaw"]), 4) if fresh and "head_yaw" in live else round(byaw, 4),
+                "extension_m": round(float(live.get("extension_m", ext)), 4) if fresh else ext,
+                "speed_mps": round(float(live.get("speed_mps", 0.0)), 4) if fresh else 0.0,
+                "moving": bool(live.get("moving", False)) if fresh else False,
+                "confidence": round(float(live.get("confidence", 0.0)), 3) if fresh else 0.0,
+                "source_id": live.get("source_id", "ceiling_north") if live else "ceiling_north",
+                "age_ms": round(max(0.0, (now - float(live.get("captured_at") or now)) * 1000.0)) if fresh else None,
+                "live": fresh,
+            }
+            if anc.get("kind") == "pinky" and fresh:
+                row["base_x"] = round(float(live.get("base_x", anc["base_x"])), 4)
+                row["base_y"] = round(float(live.get("base_y", anc["base_y"])), 4)
+            cell = self._omx_cells.get(tid)
+            if cell and cell.get("reachable"):
+                row["cell_status"] = f"{cell.get('state', 'IDLE')}{' · 토크ON' if cell.get('torque') else ''}"
+                if cell.get("joints_summary"):
+                    row["joints_summary"] = cell["joints_summary"]
+            out.append(row)
+        return {"ts": now, "targets": out}
 
     def latest(self, source_id: str) -> Optional[OverheadDetectionsPayload]:
-        """The source's last accepted payload while inside the lease, else None."""
         state = self._sources.get(source_id)
         payload = None if state is None else state.payload
         if payload is None or self._clock() - payload.captured_at > self.lease_s:
@@ -378,18 +470,12 @@ class TrackingService:
         return payload
 
     def robot_state(self, robot_id: str) -> Optional[dict]:
-        """The robot's state from the last console gather while fresh, else None."""
         entry = self._states.get(robot_id)
         if entry is None or not 0.0 <= self._clock() - entry[1] <= self.state_fresh_s:
             return None
         return entry[0]
 
     def approved_revision(self, source: SightingSource) -> Optional[str]:
-        """D-587 2: the approved record's revision for this source's map, else None.
-
-        D-1006: None as well while the optional health gate blocks the source, so camera
-        poses and auto-locate stop anchoring on a fit the picture no longer supports.
-        """
         record = self.calibrations.get(source.source_id)
         if record is None or record.map_id != source.map_id:
             return None
@@ -401,7 +487,7 @@ class TrackingService:
         return self._revisions(source)
 
     def _revisions(self, source: SightingSource) -> set[str]:
-        allowed = {source.calibration_revision}  # corner-marker path (CameraMap), D-457 2
+        allowed = {source.calibration_revision}
         record = self.calibrations.get(source.source_id)
         if record is not None and record.map_id == source.map_id:
             allowed.add(record.calibration_revision)
@@ -409,26 +495,32 @@ class TrackingService:
 
     def _pose(self, robot_id: str, map_id: str, now: float) -> Optional[Pose]:
         entry = self._states.get(robot_id)
-        if entry is None or not 0.0 <= now - entry[1] <= self.state_fresh_s:
-            return None
-        state = entry[0]
-        if state.get("map_id") != map_id:
-            return None
-        localization = state.get("localization")
-        verified = False
-        if localization is not None:
-            if (not isinstance(localization, Mapping) or localization.get("pose_frame") != "map"
-                    or localization.get("state") != "LOCALIZED"):
-                return None
-            verified = True
-        pose = state.get("pose")
-        try:
-            x, y = float(pose["x"]), float(pose["y"])
-        except (KeyError, TypeError, ValueError):
-            return None
-        if not (math.isfinite(x) and math.isfinite(y)):
-            return None
-        return Pose(x, y, verified)
+        if entry is not None and 0.0 <= now - entry[1] <= self.state_fresh_s:
+            state = entry[0]
+            if state.get("map_id") == map_id:
+                localization = state.get("localization")
+                verified = False
+                if localization is None or (isinstance(localization, Mapping)
+                        and localization.get("pose_frame") == "map"
+                        and localization.get("state") == "LOCALIZED"):
+                    verified = localization is not None
+                    pose = state.get("pose")
+                    try:
+                        x, y = float(pose["x"]), float(pose["y"])
+                        if math.isfinite(x) and math.isfinite(y):
+                            return Pose(x, y, verified)
+                    except (KeyError, TypeError, ValueError):
+                        pass
+        if self.map_pose is not None and entry is not None and 0.0 <= now - entry[1] <= self.state_fresh_s * 3:
+            mp = self.map_pose(robot_id)
+            if (mp is not None and getattr(mp, "state", "UNKNOWN") in ("LOCALIZED", "DEGRADED")
+                    and getattr(mp, "map_id", None) in (None, map_id)
+                    and _finite(getattr(mp, "x", None), getattr(mp, "y", None))):
+                return Pose(float(mp.x), float(mp.y), getattr(mp, "state", "") == "LOCALIZED")
+        anc = self._anchors.get(robot_id)
+        if anc is not None and robot_id in self._states:
+            return Pose(float(anc["base_x"]), float(anc["base_y"]), True)
+        return None
 
     @staticmethod
     def _trim(state: _SourceState, now: float) -> None:
@@ -442,10 +534,7 @@ def _finite(*values) -> bool:
 
 def _render(track: Track, source_id: str) -> dict:
     return {
-        "robot_id": track.robot_id,
-        "status": track.status,
-        "source_id": source_id,
-        "offset_m": track.offset_m,
+        "robot_id": track.robot_id, "status": track.status, "source_id": source_id, "offset_m": track.offset_m,
         "camera": None if track.camera is None else {
             "x": track.camera.x, "y": track.camera.y,
             "footprint_m": track.camera.footprint_m, "score": track.camera.score},

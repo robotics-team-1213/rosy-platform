@@ -183,10 +183,19 @@ def detection(found: dict) -> dict:
 def hover_check(cell, config: dict, calibration: dict, site: str) -> dict:
     """Right above the box, before descending: does the wrist camera see the box where it sat in the
     hovers over boxes placed at known points (learned in calibration)? Unknown until learned."""
+    import statistics
     import cell_perception as cp
 
+    samples = max(1, int(((config.get("params") or {}).get("reach") or {}).get("samples", 1)))
     img = cell.frame("wrist")
     box = cp.wrist_box(img, config["profiles"]["top"])
+    if samples > 1:
+        boxes = [b for b in [box, *(cp.wrist_box(cell.frame("wrist"), config["profiles"]["top"]) for _ in range(samples - 1))] if b.get("found")]
+        if boxes:
+            box = {**boxes[-1], "found": True,
+                   "cx": round(statistics.median(b["cx"] for b in boxes), 1),
+                   "cy": round(statistics.median(b["cy"] for b in boxes), 1),
+                   "area": round(statistics.median(b["area"] for b in boxes), 1)}
     seen = {k: box.get(k) for k in ("found", "cx", "cy", "area", "tilt")}
     seen["frame"] = keep(f"hover-{site}-wrist", img)
     learned = (calibration["sites"].get(site) or {}).get("wrist")

@@ -203,3 +203,15 @@ def test_standalone_unit_admits_and_cancels_its_own_work_without_any_peer(tmp_pa
     canceled = asyncio.run(service.cancel("A", "job-1"))
     assert canceled["delegation"]["status"] == "CANCELED"
     assert tasks.store.get_task(task_id)["status"] == "CANCELED"
+
+
+def test_control_unit_arm_coordinator_preserves_depth_one_and_cell_admit_boundary(tmp_path):
+    from pathlib import Path
+    from fleet.server.arm_transfer_http import call_arm_transfer_domain, require_write_origin
+    from fleet.server.control_unit_arm_coordinator import ControlUnitArmCoordinator
+
+    app_py = Path(__file__).resolve().parents[1] / "fleet/server/app.py"
+    assert len(app_py.read_text(encoding="utf-8").splitlines()) <= 480
+    assert callable(require_write_origin) and callable(call_arm_transfer_domain)
+    assert hasattr(ControlUnitArmCoordinator, "check_arm_admission")
+

@@ -13,6 +13,7 @@ from pathlib import Path
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from cell_calibration import _inv3x3  # noqa: E402
 from grasp_planner import load_kinematics, norm_to_rad  # noqa: E402
 from omx_adapter.chunk_library import NAMES, park_path, transit_path  # noqa: E402
 from omx_adapter.coordination import Segment, clearance, moved, plan, rendezvous, rigid_between, thinned  # noqa: E402
@@ -58,18 +59,21 @@ def segments_of(library: dict, kin, rigid: tuple, piece_s: float = 0.0, home_pan
     return out
 
 
+_GRID_PTS_A = tuple((x, y, 1.0) for x in (0.05, 0.1, 0.15, 0.2) for y in (-0.05, 0.05, 0.1, 0.15))
+
+
 def rigid_of(cal_a: dict, cal_b: dict, site_a: str, site_b: str) -> tuple:
     """arm_a's frame to arm_b's, through the top camera both maps share (a homography maps a pixel to the arm's x, y)."""
     import numpy as np
 
-    h_a, h_b = (np.array(c["sites"][s]["homography"]) for c, s in ((cal_a, site_a), (cal_b, site_b)))
-    to_pixel_a = np.linalg.inv(h_a)
-    pairs = []
-    for point in [(x, y) for x in (0.05, 0.1, 0.15, 0.2) for y in (-0.05, 0.05, 0.1, 0.15)]:
-        u = to_pixel_a @ np.array([*point, 1.0])
-        v = h_b @ (u / u[2])
-        pairs.append((point, tuple((v / v[2])[:2])))
-    return rigid_between([p for p, _ in pairs], [q for _, q in pairs])
+    to_pixel_a = np.array(_inv3x3(cal_a["sites"][site_a]["homography"]))
+    h_b = np.array(cal_b["sites"][site_b]["homography"])
+    pts_a = np.asarray(_GRID_PTS_A, dtype=float)
+    pixels = pts_a @ to_pixel_a.T
+    pixels /= pixels[:, 2:3]
+    pts_b = pixels @ h_b.T
+    pts_b = pts_b[:, :2] / pts_b[:, 2:3]
+    return rigid_between(pts_a[:, :2], pts_b)
 
 
 def main(argv=None):

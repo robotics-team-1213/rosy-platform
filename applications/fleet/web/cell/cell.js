@@ -11,12 +11,13 @@ import {bindScreens} from '/console/assets/subnav-screens.js';
 import '/console/assets/file-picker.js';
 import {bindPrintSheets} from '/console/assets/cell-print-sheets.js';
 import {createObjectCatalog} from '/console/assets/cell-object-catalog.js';
+import {createReal2SimPipeline} from '/console/assets/cell-real2sim.js';
 import {createCellLine, createPlanFigures} from '/console/assets/cell-line.js';
 
 const $ = id => document.getElementById(id);
 // D-926 3: each Cell step is its own screen; the first one shows the live cell, its calibration printouts and the saved documents.
 bindScreens({nav: document.querySelector('.ui-subnav-nav'), home: 'saved-heading', mark: 'step',
-  groups: {'saved-heading': ['observation-heading', 'print-heading', 'catalog-heading', 'saved-heading']}, label: document.getElementById('cell-screen')});
+  groups: {'saved-heading': ['observation-heading', 'print-heading', 'catalog-heading', 'real2sim-heading', 'saved-heading']}, label: document.getElementById('cell-screen')});
 const channelQuery = new URL(location.href).searchParams, channelRequested = channelQuery.has('channel_request');
 const channelId = channelQuery.get('channel_request'), channelPath = `/api/fleet/channel-requests/${encodeURIComponent(channelId)}`;
 let channelReceipt = null, channelReview = null;
@@ -45,78 +46,48 @@ $('console-token').value = stored;
 const request = createFleetClient({credential: () => $('console-token').value, origin: location.origin});
 const observations = createCellObservation({request, root: $('workcell-observations'), credential: () => $('console-token').value});
 const catalog = createObjectCatalog({request, $});
+const real2sim = createReal2SimPipeline({request, $, isOperator: () => role === 'operator' && !busy});
 createCellLine({root: $('cell-line'), $});
 createPlanFigures({root: $('plan-figures'), $});
 bindPrintSheets({request, $});
-window.addEventListener('pagehide', event => {
-  catalog.clear();
-  event.persisted ? observations.clear() : observations.dispose();
-});
+window.addEventListener('pagehide', event => { catalog.clear(); real2sim.clear(); event.persisted ? observations.clear() : observations.dispose(); });
 window.addEventListener('pageshow', event => { if (event.persisted) connect(); });
-bindEstop(request);
-bindTopbarToggle();
-tickClock();
-setInterval(tickClock, 1000);
-watchFleet(request);
+bindEstop(request); bindTopbarToggle(); tickClock(); setInterval(tickClock, 1000); watchFleet(request);
 $('console-token').addEventListener('keydown', event => { if (event.key === 'Enter') $('token-save').click(); });
 let editEpoch = 0;
 async function api(path, options) {
-  const epoch = editEpoch;
-  const result = await request(path, options);
+  const epoch = editEpoch, result = await request(path, options);
   if (epoch !== editEpoch) throw new Error('입력 또는 계정이 바뀌었습니다. 현재 문서와 작업 상태를 다시 확인하세요.');
   return result;
 }
 const revisions = new Map();
-let previewRefs = null;
-let role = null;
-let busy = false;
-let cellServiceUnavailable = false;
-let job = null;
-let jobGeneration = null;
-let layoutData = null;
+let previewRefs = null, role = null, busy = false, cellServiceUnavailable = false, job = null, jobGeneration = null, layoutData = null;
 const commands = ['recipe-save', 'cell-save', 'compile', 'propose', 'admit', 'reconcile', 'resume', 'cancel'];
 const jobActionLabels = {admit: '실행 승인', reconcile: '실제 상태를 대조', resume: '재승인', cancel: '취소'};
 function clearJobSnapshot(summary = '작업 ID로 상태를 확인하세요.') {
-  job = null; jobGeneration = null;
-  $('job-state').textContent = '';
-  $('job-summary').textContent = summary;
+  job = null; jobGeneration = null; $('job-state').textContent = ''; $('job-summary').textContent = summary;
   $('step-progress').replaceChildren(); $('sheet-progress').replaceChildren();
 }
 function invalidate() {
   previewRefs = null; layoutData = null;
-  $('summary').setAttribute('state', 'unavailable');
-  $('summary').textContent = '저장한 레시피와 셀을 기준으로 계획을 계산합니다.';
+  $('summary').setAttribute('state', 'unavailable'); $('summary').textContent = '저장한 레시피와 셀을 기준으로 계획을 계산합니다.';
   $('preview').textContent = ''; $('layout').replaceChildren(); $('layout-layer').replaceChildren(); $('layout-preview').hidden = true; refreshControls();
 }
 function clearSession() {
-  observations.clear();
-  catalog.clear();
-  channelReceipt = channelReview = null;
+  observations.clear(); catalog.clear(); real2sim.clear(); channelReceipt = channelReview = null;
   $('cell-channel-original').textContent = ''; $('cell-channel-request').hidden = true;
-  role = null; cellServiceUnavailable = false; clearJobSnapshot(); invalidate();
-  revisions.clear();
-  for (const kind of ['recipe', 'cell']) {
-    $(kind + '-revision').setAttribute('state', 'empty');
-    $(kind + '-revision').textContent = '저장 전';
-  }
-  $('proposal').textContent = '';
-  $('saved').hidden = true;
-  $('saved-status').hidden = false;
-  $('saved-status').setAttribute('state', 'unavailable');
-  $('saved-status').textContent = '접속하면 저장된 문서를 확인할 수 있습니다.';
+  role = null; cellServiceUnavailable = false; clearJobSnapshot(); invalidate(); revisions.clear();
+  for (const kind of ['recipe', 'cell']) { $(kind + '-revision').setAttribute('state', 'empty'); $(kind + '-revision').textContent = '저장 전'; }
+  $('proposal').textContent = ''; $('saved').hidden = true; $('saved-status').hidden = false;
+  $('saved-status').setAttribute('state', 'unavailable'); $('saved-status').textContent = '접속하면 저장된 문서를 확인할 수 있습니다.';
 }
 const scopeFilled = () => $('workcell').value.trim() && $('instance').value.trim();
 for (const id of ['workcell', 'instance']) $(id).addEventListener('input', () => refreshControls());
 function refreshControls() {
   for (const field of document.querySelectorAll('input, textarea, select')) {
-    field.disabled = busy;
-    field.setAttribute('reason', busy ? '요청 처리 중 · 입력 잠시 잠금' : '');
-    field.setAttribute('aria-describedby', 'notice');
+    field.disabled = busy; field.setAttribute('reason', busy ? '요청 처리 중 · 입력 잠시 잠금' : ''); field.setAttribute('aria-describedby', 'notice');
   }
-  for (const control of document.querySelectorAll('[data-document-edit]')) {
-    control.disabled = busy;
-    control.setAttribute('reason', busy ? '요청 처리 중' : '');
-  }
+  for (const control of document.querySelectorAll('[data-document-edit]')) { control.disabled = busy; control.setAttribute('reason', busy ? '요청 처리 중' : ''); }
   for (const id of ['token-save', 'recipe-load', 'cell-load', 'read-job', 'new-proposal']) {
     const unavailable = cellServiceUnavailable && ['recipe-load', 'cell-load', 'read-job'].includes(id);
     const sessionPending = !role && ['recipe-load', 'cell-load', 'read-job'].includes(id);
@@ -125,11 +96,7 @@ function refreshControls() {
     $(id).setAttribute('reason', busy ? '요청 처리 중' : unavailable ? '팔레트 적재 서비스 구성 확인 필요' : sessionPending ? '접속 상태 확인 필요' : channelBlocked ? '연결된 대화 요청의 검토 필요' : '');
   }
   for (const id of commands) {
-    if (cellServiceUnavailable) {
-      $(id).disabled = true;
-      $(id).setAttribute('reason', '팔레트 적재 서비스 구성 확인 필요');
-      continue;
-    }
+    if (cellServiceUnavailable) { $(id).disabled = true; $(id).setAttribute('reason', '팔레트 적재 서비스 구성 확인 필요'); continue; }
     const sheetBlocked = id === 'resume' && job?.operator_checkpoints?.some(row => row.status === 'WAITING_ACCESS');
     const needsJob = id in jobActionLabels;
     const jobAllowed = !needsJob || (job && job.mission_id === $('mission-id').value &&
@@ -139,50 +106,39 @@ function refreshControls() {
     let reason = '';
     if (!allowed) {
       reason = id === 'propose' && !scopeFilled() ? '작업 셀 ID와 실행 인스턴스 ID를 입력하세요' : '저장 후 미리보기 필요';
-      if (needsJob && !jobAllowed) reason = job?.mission_id === $('mission-id').value
-        ? `현재 작업 상태에서는 ${jobActionLabels[id]}할 수 없습니다` : '작업 상태를 먼저 확인하세요';
+      if (needsJob && !jobAllowed) reason = job?.mission_id === $('mission-id').value ? `현재 작업 상태에서는 ${jobActionLabels[id]}할 수 없습니다` : '작업 상태를 먼저 확인하세요';
       if (sheetBlocked) reason = '작업자 간지 삽입 확인 대기';
       if (role !== 'operator') reason = OPERATOR_REASON;
       if (busy) reason = '요청 처리 중';
     }
-    $(id).disabled = !allowed;
-    $(id).setAttribute('reason', reason);
+    $(id).disabled = !allowed; $(id).setAttribute('reason', reason);
   }
 }
 async function action(fn) {
   if (busy) return;
   const focused = document.activeElement;
-  busy = true; refreshControls();
-  $('notice').textContent = '요청 처리 중 · 입력 잠시 잠금';
+  busy = true; refreshControls(); $('notice').textContent = '요청 처리 중 · 입력 잠시 잠금';
   try { await fn(); } catch (error) {
     if (error.code === 'CELL_APP_UNCONFIGURED') cellServiceUnavailable = true;
     if (error.status === 401 || error.status === 403) clearSession();
-    // A 403 here is one Cell action refused, not a lost session: the words change, the E-stop stays live.
     if (error.status === 403 && error.code !== 'PASSWORD_CHANGE_REQUIRED') showSignedOut({refused: false});
     if (error.status === 401 || error.code === 'PASSWORD_CHANGE_REQUIRED') { showSignedOut(); loginForm.refresh(true); }
     else if (error.status === 409) clearJobSnapshot();
-    $('notice').textContent = error.code === 'PASSWORD_CHANGE_REQUIRED'
-      ? '첫 로그인 비밀번호 변경이 필요합니다 · 우상단 비밀번호 변경을 누르세요.'
-      : error.status === 403
-      ? '이 계정에는 팔레트 적재 작업 권한이 없습니다. 운영자 토큰을 확인하고 다시 접속하세요.'
-      : error.code === 'CELL_APP_UNCONFIGURED'
-        ? '팔레트 적재 작업을 사용할 수 없습니다. 사이트 설치 담당자에게 팔레트 적재 서비스 구성을 확인해 달라고 요청하세요.'
-        : error instanceof SyntaxError ? '문서가 올바른 JSON이 아닙니다. 형식을 확인한 뒤 다시 저장하세요.'
-        : error.message;
-  if (error.status === 401 || error.status === 403) $('notice').scrollIntoView({block: 'center'});
-  }
-  finally {
+    $('notice').textContent = error.code === 'PASSWORD_CHANGE_REQUIRED' ? '첫 로그인 비밀번호 변경이 필요합니다 · 우상단 비밀번호 변경을 누르세요.'
+      : error.status === 403 ? '이 계정에는 팔레트 적재 작업 권한이 없습니다. 운영자 토큰을 확인하고 다시 접속하세요.'
+      : error.code === 'CELL_APP_UNCONFIGURED' ? '팔레트 적재 작업을 사용할 수 없습니다. 사이트 설치 담당자에게 팔레트 적재 서비스 구성을 확인해 달라고 요청하세요.'
+      : error instanceof SyntaxError ? '문서가 올바른 JSON이 아닙니다. 형식을 확인한 뒤 다시 저장하세요.' : error.message;
+    if (error.status === 401 || error.status === 403) $('notice').scrollIntoView({block: 'center'});
+  } finally {
     busy = false; refreshControls();
-    if (document.activeElement === document.body && focused?.isConnected && !focused.disabled
-        && focused.getClientRects().length) focused.focus({preventScroll: true});
+    if (document.activeElement === document.body && focused?.isConnected && !focused.disabled && focused.getClientRects().length) focused.focus({preventScroll: true});
   }
 }
 function post(path, body) { return api(path, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)}); }
 function references() {
   const result = {};
   for (const kind of ['recipe', 'cell']) {
-    const id = $(kind + '-id').value;
-    const revision = revisions.get(kind);
+    const id = $(kind + '-id').value, revision = revisions.get(kind);
     if (!revision || revision.id !== id || revision.text !== $(kind + '-document').value) throw new Error('문서를 먼저 저장하거나 불러오세요.');
     result[kind + '_id'] = id; result[kind + '_digest'] = revision.digest;
   }
@@ -190,13 +146,9 @@ function references() {
 }
 async function list() {
   const saved = $('saved'), status = $('saved-status');
-  saved.hidden = true;
-  status.hidden = false;
-  status.setAttribute('state', 'pending');
-  status.textContent = '저장된 문서를 확인하는 중입니다.';
+  saved.hidden = true; status.hidden = false; status.setAttribute('state', 'pending'); status.textContent = '저장된 문서를 확인하는 중입니다.';
   let result;
-  try { result = await api('/api/fleet/cell-app/documents'); cellServiceUnavailable = false; }
-  catch (error) {
+  try { result = await api('/api/fleet/cell-app/documents'); cellServiceUnavailable = false; } catch (error) {
     status.setAttribute('state', 'error');
     status.textContent = error.code === 'CELL_APP_UNCONFIGURED'
       ? '팔레트 적재 서비스 구성을 확인해야 문서를 열 수 있습니다. 사이트 설치 담당자에게 문의하세요.'
@@ -204,44 +156,27 @@ async function list() {
     throw error;
   }
   saved.replaceChildren(...result.documents.map(item => {
-    const li = document.createElement('li');
-    const name = document.createElement('strong');
+    const li = document.createElement('li'), name = document.createElement('strong'), time = document.createElement('time'), open = document.createElement('ui-button'), label = document.createElement('div');
     name.textContent = `${item.kind === 'recipe' ? '레시피' : '셀 문서'} · ${item.id}`;
-    const time = document.createElement('time');
     time.dateTime = item.updated_at;
     const date = new Date(item.updated_at);
-    time.textContent = Number.isNaN(date.getTime()) ? '수정 시각 확인 불가'
-      : `수정 ${date.toLocaleString('ko-KR', {dateStyle: 'medium', timeStyle: 'short'})}`;
-    const open = document.createElement('ui-button');
-    open.setAttribute('kind', 'quiet');
-    open.textContent = '열기';
-    open.addEventListener('click', () => {
-      $(item.kind + '-id').value = item.id;
-      location.hash = `#${item.kind}-heading`;
-      $(item.kind + '-load').click();
-    });
-    const label = document.createElement('div');
-    label.append(name, time);
-    li.append(label, open);
-    return li;
+    time.textContent = Number.isNaN(date.getTime()) ? '수정 시각 확인 불가' : `수정 ${date.toLocaleString('ko-KR', {dateStyle: 'medium', timeStyle: 'short'})}`;
+    open.setAttribute('kind', 'quiet'); open.textContent = '열기';
+    open.addEventListener('click', () => { $(item.kind + '-id').value = item.id; location.hash = `#${item.kind}-heading`; $(item.kind + '-load').click(); });
+    label.append(name, time); li.append(label, open); return li;
   }));
-  saved.hidden = result.documents.length === 0;
-  status.hidden = false;
+  saved.hidden = result.documents.length === 0; status.hidden = false;
   status.setAttribute('state', result.documents.length ? 'ready' : 'empty');
   const checkedAt = new Date().toLocaleString('ko-KR', {dateStyle: 'medium', timeStyle: 'short'});
-  status.textContent = result.documents.length
-    ? `문서 목록을 마지막으로 받은 시각: ${checkedAt}`
+  status.textContent = result.documents.length ? `문서 목록을 마지막으로 받은 시각: ${checkedAt}`
     : `저장된 문서가 없습니다. 위에서 레시피와 셀 문서를 작성하고 저장하세요. 문서 목록을 마지막으로 받은 시각: ${checkedAt}`;
 }
 function loaded(kind, revision) {
   const text = JSON.stringify(revision.document, null, 2);
-  $(kind + '-document').value = text;
-  revisions.set(kind, {...revision, text});
-  $(kind + '-revision').setAttribute('state', 'ready');
-  $(kind + '-revision').textContent = `저장된 버전 ${revision.digest.slice(0, 12)}`;
+  $(kind + '-document').value = text; revisions.set(kind, {...revision, text});
+  $(kind + '-revision').setAttribute('state', 'ready'); $(kind + '-revision').textContent = `저장된 버전 ${revision.digest.slice(0, 12)}`;
   invalidate();
-  if (kind === 'recipe') recipeFields(revision.document);
-  else cellFields(revision.document);
+  if (kind === 'recipe') recipeFields(revision.document); else cellFields(revision.document);
 }
 function cellFields(cell) {
   structuredFields('cell', cell);
@@ -374,7 +309,7 @@ function connect(credentialChange = false) {
   return action(async () => {
   const session = await api('/api/fleet/session'); role = session.role;
   showSession(session, {credentialChange, focusOrigin});
-  observations.clear(); void observations.refresh(); void catalog.refresh();
+  observations.clear(); void observations.refresh(); void catalog.refresh(); void real2sim.refresh();
   loginForm.refresh(false);
   await list();
   if (channelRequested) {

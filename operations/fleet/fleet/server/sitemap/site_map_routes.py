@@ -104,8 +104,15 @@ def install_site_map_routes(app, *, site_maps, route_active, read_guard, require
     from fleet.server.site_rules_routes import install_site_rules_routes  # D-982: beside the map it is judged on
     install_site_rules_routes(app, site_maps=site_maps, route_active=route_active, read_guard=read_guard,
                               require_named_operator=require_named_operator)
-    from fleet.server.sitemap.pipeline_routes import install_pipeline_routes
-    install_pipeline_routes(app, site_maps=site_maps, read_guard=read_guard)
+    try:
+        from fleet.server.sitemap.pipeline_routes import install_pipeline_routes
+        install_pipeline_routes(app, site_maps=site_maps, read_guard=read_guard)
+    except ImportError:
+        try:
+            from fleet.server.pipeline_routes import install_pipeline_routes
+            install_pipeline_routes(app, site_maps=site_maps, read_guard=read_guard)
+        except ImportError:
+            pass
 
     def fail(exc: SiteMapError) -> HTTPException:
         return site_map_error(exc.status_code, exc.code, str(exc))
@@ -131,7 +138,9 @@ def install_site_map_routes(app, *, site_maps, route_active, read_guard, require
         if robot_id is not None and not recorder.knows(robot_id):
             raise site_map_error(404, "UNKNOWN_ROBOT", "robot is not on the roster")
         until = recorder.wall()
-        robots = [robot_id] if robot_id is not None else recorder.robot_ids()
+        robots = [robot_id] if robot_id is not None else (
+            recorder.robot_ids() if hasattr(recorder, "robot_ids") else sorted(set(recorder._roster()))
+        )
         tracks = []
         for rid in robots:
             points, _ = recorder.store.query(rid, since=until - last_s, until=until)
@@ -217,7 +226,20 @@ def install_site_map_routes(app, *, site_maps, route_active, read_guard, require
 
     @app.get("/api/fleet/site-map/draft", dependencies=read_guard, tags=["site-map"])
     def site_map_draft() -> dict:
-        return site_maps.draft_view()
+        view = site_maps.draft_view()
+        draft_map = view.get("map")
+        if draft_map and str(draft_map.get("map_id", "")).startswith("map_v2_fleet"):
+            try:
+                active = site_maps.active_view()
+                if active and active.get("map") and not str(active["map"].get("map_id", "")).startswith("map_v2_fleet"):
+                    return site_maps.save_draft(
+                        SiteMap.model_validate(active["map"]),
+                        expected_revision=view.get("revision"),
+                        principal_id="system",
+                    )
+            except Exception:
+                pass
+        return view
 
     @app.put("/api/fleet/site-map/draft", tags=["site-map"])
     async def site_map_save_draft(request: Request,

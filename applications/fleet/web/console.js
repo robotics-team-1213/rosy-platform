@@ -124,10 +124,10 @@ const confirmedAction = createConfirmedAction({scope: pageScope, identity: () =>
 const connectionView = createConnectionView({scope: pageScope, el});
 
 function operatorControls() {
-  // 화면 테마(data-theme-choice)와 천장 구석 보기(#watch-ceiling)는 표시 선호라 권한과 무관하다(D-359 §2.5).
+  // 화면 테마(data-theme-choice)와 천장 구석 보기(#watch-ceiling), 지도 오버레이 토글([data-layer-toggle])은 표시 선호라 권한과 무관하다(D-359 §2.5).
   // 머리 토글(#topbar-more)은 접힌 칸을 여는 표시 조작이다(§6.4). 비상 정지는 fleet-header.js 규칙 하나다(D-540 2).
   return document.querySelectorAll(
-    "ui-button:not(#estop):not([data-auth-focus]):not([data-select-robot-id]):not([data-work-read]):not(#arm-transfer-recovery-request):not(#fleet-inbox):not(#token-save):not(#topbar-more):not([data-login]):not(#vision-refresh):not(#log-clear):not(#birdseye-toggle):not(#watch-ceiling):not(#traffic-toggle):not([data-theme-choice]):not([data-theme-cycle]):not([data-context-tab]), main input:not(#arm-transfer-id), main select:not(#vision-source):not(#robot-choice):not([data-work-read])");
+    "ui-button:not(#estop):not([data-auth-focus]):not([data-select-robot-id]):not([data-work-read]):not([data-layer-toggle]):not(#arm-transfer-recovery-request):not(#fleet-inbox):not(#token-save):not(#topbar-more):not([data-login]):not(#vision-refresh):not(#log-clear):not(#birdseye-toggle):not(#watch-ceiling):not(#traffic-toggle):not([data-theme-choice]):not([data-theme-cycle]):not([data-context-tab]), main input:not(#arm-transfer-id), main select:not(#vision-source):not(#robot-choice):not(#map-display-mode):not([data-work-read])");
 }
 
 const view = {
@@ -188,16 +188,30 @@ const assistant = createAssistantPanel({scope: pageScope, call, el, readSelectio
 // 목표 해제와 카드 열기는 아래에서 만들어지므로 부를 때 찾는다.
 const { cancelAllNotice, refreshDispatchControl, pathSample, paintSitePath, refreshHealthz, refreshState } = createConsoleRefresh({
   pageScope, el, view, auth, call, fleetApi, log, render, confirmedAction, dispatchGate, resetRobotApps,
-  disarmGoal: (reason) => disarmGoal(reason), openCard: (robotId) => roster.openCard(robotId) });
+  disarmGoal: (reason) => disarmGoal(reason),
+  openCard: (robotId) => roster.openCard(robotId),
+  onFastTick: () => { manualControl.update(); mapView.draw(); },
+});
+
 
 
 // --- 로봇 목록 --------------------------------------------------------------
 
+let renderQueued = false;
 function render() {
+  if (renderQueued) return;
+  renderQueued = true;
+  requestAnimationFrame(() => {
+    renderQueued = false;
+    renderNow();
+  });
+}
+
+function renderNow() {
   // 지도 캔버스는 무장(목표 선택·위치 찍기)했을 때만 누를 수 있는 단추다 — role이 무장 상태를 따라간다.
   // 해제하면 뷰가 소유한 role로 돌린다(사이트 뷰는 img). 계층이 부여한 값을 덮어쓰지 않는다(WCAG 4.1.2).
   const goalCanvas = el("map-canvas");
-  if (view.selected || view.pinning) goalCanvas.setAttribute("role", "button");
+  if (view.selected || view.pinning || view.focusRobot) goalCanvas.setAttribute("role", "button");
   else if (goalCanvas.getAttribute("role") === "button") {
     if (!view.map && view.siteMap) goalCanvas.setAttribute("role", "img");
     else goalCanvas.removeAttribute("role");
@@ -209,12 +223,16 @@ function render() {
   const focusedId = focusedCard?.dataset.robotId;
   const focusedButton = focusedCard && focused !== focusedCard
     ? [...focusedCard.querySelectorAll("ui-button, button")].indexOf(focused) : -1;
-  // D-540 3 — every robot has a card; a nominal one is one line (roster.card decides). Exceptions first
-  // (D-201); the colour index stays the robot's own.
-  if (view.robots.length) {
-    const order = [...view.robots.keys()].sort((a, b) =>
-      roster.needsAttention(view.robots[b]) - roster.needsAttention(view.robots[a]));
-    roster.place(rosterBox, order.map((index) => roster.summary(view.robots[index], index)));
+  // 활성화된(온라인) 로봇을 우선 표시하며, 온라인 로봇이 있을 때는 활성 로봇만 리스트업한다.
+  const hasOnline = view.robots.some(r => r.online || r.link === "degraded");
+  const visibleIndices = [...view.robots.keys()].filter(i => !hasOnline || view.robots[i].online || view.robots[i].link === "degraded");
+  if (visibleIndices.length) {
+    const order = visibleIndices.sort((a, b) =>
+      (Number(Boolean(view.robots[b].online)) - Number(Boolean(view.robots[a].online)))
+      || (roster.needsAttention(view.robots[b]) - roster.needsAttention(view.robots[a])));
+    const robotRows = order.map((index) => roster.summary(view.robots[index], index));
+    const omxRows = typeof roster.omxSummaries === "function" ? roster.omxSummaries() : [];
+    roster.place(rosterBox, [...robotRows, ...omxRows]);
   } else {
     const message = auth.locked ? "관제에 접속하면 등록 로봇과 연결 상태를 확인할 수 있습니다."
       : view.stateUnavailable ? "Fleet 상태를 확인할 수 없습니다. 연결을 확인하세요."
@@ -260,11 +278,9 @@ function render() {
     ? mapView.toWorld(view.map, view.cursor.col, view.cursor.row) : null;
   const nextHint = point
     ? `${view.selected} 목표 (${point.x.toFixed(2)}, ${point.y.toFixed(2)}) m · 방향키로 이동, Enter로 확인, Escape로 취소`
-    : view.map
-      ? "로봇 카드의 목표 지정을 누른 뒤 지도를 찍으면 그 로봇에게만 목표가 갑니다."
-      : view.siteMap
-        ? "천장 카메라 관측 전용 지도입니다. 목표 지정은 로봇 지도가 수신되면 사용할 수 있습니다."
-        : "지도가 수신되면 로봇의 목표 지정을 사용할 수 있습니다.";
+    : view.map || view.siteMap
+      ? "활성 로봇을 선택한 뒤 지도(또는 목적지 장소)를 찍으면 즉시 해당 위치로 이동합니다."
+      : "지도가 수신되면 로봇의 목표 지정을 사용할 수 있습니다.";
   if (hint.textContent !== nextHint) hint.textContent = nextHint;
   refreshDiagnostics();
 }
@@ -278,11 +294,16 @@ function resetRobotApps() { deviceDirectory.resetRobotApps(); }
 
 // 로스터 키보드·지도 목표 지정·운영자 핀은 console-goal.js 팩토리가 가진다(D-798 3.2).
 // 지도 좌표와 큐 사유는 아래의 mapView·roster가 답하므로 부를 때 찾는다.
-const { disarmGoal, focusGoalButton, clearPinStart } = createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
+const { disarmGoal, focusGoalButton, commitWorldGoal, clearPinStart } = createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
   render, confirmedAction, namedReason,
   toWorld: (grid, col, row) => mapView.toWorld(grid, col, row),
   refreshGuide: () => mapView.refreshGuide?.(),
-  queuedReason: (result) => roster.queuedReason(result) });
+  queuedReason: (result) => roster.queuedReason(result),
+  drawMap: () => mapView.draw(),
+  onSelectRobot: (robotId) => roster.openCard(robotId),
+});
+view.dispatchGoalToPoint = (point, placeLabel = "", placeId = "") => commitWorldGoal(point, placeLabel, placeId);
+
 
 // 전체 정지는 한 번의 누름으로 즉시 실행된다(D-413 — 비상 정지는 확인 없는 비상 출구.
 // D-371이 대화상자 위에서 살아 있게 한 이유를 끝까지 밀었다: 어떤 사위에도 즉시 눌린다).
@@ -337,7 +358,9 @@ view.openLeaderTrip = (robotId) => { inbox.select("status"); roster.openTrip(rob
 function paintMove() {
   const pick = el("work-move-robot"), box = el("work-move-form");
   el("work-move").hidden = el("work-new-move-item").hidden || el("work-new-move").getAttribute("aria-pressed") !== "true";
-  const id = placeOptions(pick, view.robots.map(row => ({id: row.robot_id})), pick.value, row => view.robotNames?.[row.id] || row.id);
+  const activeRows = view.robots.filter(row => row.online || row.link === "degraded");
+  const rows = activeRows.length > 0 ? activeRows : view.robots;
+  const id = placeOptions(pick, rows.map(row => ({id: row.robot_id})), pick.value, row => view.robotNames?.[row.id] || row.id);
   const robot = view.stateUnavailable ? null : view.robots.find(row => row.robot_id === id);  // as roster.js
   el("work-move-state").textContent = robot ? cardTripLine(view, id) : "";
   if (!el("work-move").hidden) roster.paintTrip(box, id);
@@ -421,23 +444,42 @@ chargeBays.refresh();
 platoon.refresh();
 stationRecovery.refresh();
 personRequests.refresh();
-pageScope.interval(() => { if (!auth.locked) formation.refreshFormation(); }, MAP_MS);
-pageScope.interval(refreshState, STATE_MS);
-pageScope.interval(() => { if (!auth.locked) workView.refresh(); }, MAP_MS);
-pageScope.interval(refreshHealthz, STATE_MS);
-pageScope.interval(() => signals.presence(), STATE_MS);
-pageScope.interval(() => { if (!auth.locked) refreshDispatchControl(); }, STATE_MS);
-pageScope.interval(refreshDiscovery, MAP_MS);
-pageScope.interval(refreshRobotApps, MAP_MS);
-pageScope.interval(() => mapView.refresh(), MAP_MS);
-pageScope.interval(() => chargeBays.refresh(), MAP_MS);
-pageScope.interval(() => { if (!auth.locked) { stationRecovery.refresh(); personRequests.refresh(); } }, STATE_MS);
-pageScope.interval(() => platoon.refresh(), MAP_MS);
-pageScope.interval(() => mapView.refreshSightings(), STATE_MS);
-pageScope.interval(() => mapView.refreshTraffic(), STATE_MS);
-pageScope.interval(() => mapView.refreshGuide(), STATE_MS);  // D-536
-pageScope.interval(() => trackingView.refresh(), TRACKING_MS);
-pageScope.interval(() => visionView.refreshFrame(), 1500);
+// 각 요소별 우선순위·변화 빈도에 따라 차등 분리된 비동기 폴링 스케줄 (Thundering-Herd 방지)
+// 1. 고속 실시간 계층 (활성 로봇 상태 · 지도 자세 · 비전 헤드 추적)
+pageScope.interval(() => { if (!document.hidden) refreshState(); }, 650);
+pageScope.timeout(() => pageScope.interval(() => { if (!document.hidden) mapView.refreshGuide(); }, 700), 150);
+pageScope.timeout(() => pageScope.interval(() => { if (!document.hidden) trackingView.refresh(); }, 750), 300);
+
+// 2. 중속 영상·관측·교통 계층
+pageScope.timeout(() => pageScope.interval(() => { if (!document.hidden) visionView.refreshFrame(); }, 950), 220);
+pageScope.timeout(() => pageScope.interval(() => { if (!document.hidden) mapView.refreshSightings(); }, 1350), 420);
+pageScope.timeout(() => pageScope.interval(() => {
+  if (!document.hidden) mapView.refreshTraffic();
+}, 1600), 520);
+pageScope.timeout(() => pageScope.interval(() => {
+  if (!document.hidden && !auth.locked) refreshDispatchControl();
+}, 2800), 640);
+
+// 3. 저속 배경·인프라 계층 (필요할 때만 최소 주기로 갱신)
+pageScope.timeout(() => pageScope.interval(() => {
+  if (!document.hidden && !auth.locked) { stationRecovery.refresh(); personRequests.refresh(); }
+}, 5500), 800);
+pageScope.timeout(() => pageScope.interval(() => {
+  if (!document.hidden) signals.presence();
+}, 6000), 950);
+pageScope.timeout(() => pageScope.interval(() => {
+  if (!document.hidden) mapView.refresh();
+}, 8000), 1100);
+pageScope.timeout(() => pageScope.interval(() => {
+  if (!document.hidden) { chargeBays.refresh(); platoon.refresh(); }
+}, 9000), 1300);
+pageScope.timeout(() => pageScope.interval(() => {
+  if (!document.hidden && !auth.locked) { formation.refreshFormation(); workView.refresh(); }
+}, 9500), 1500);
+pageScope.timeout(() => pageScope.interval(() => {
+  if (!document.hidden) { refreshHealthz(); refreshDiscovery(); refreshRobotApps(); }
+}, 12000), 1750);
+
 
 pageScope.onResume(() => {
   visionView.reset();
