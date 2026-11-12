@@ -15,13 +15,9 @@ import yaml
 
 from core_common.protocol.arm_incidents import ArmIncidentAccepted, ArmIncidentHold
 from core_common.protocol.workcell_observations import UsbCameraDecisions, WorkcellObservationManifest
+from load_report_bridge import _NoRedirect
 from rosy_vision import protocol
 import usb_camera_report
-
-
-class _NoRedirect(HTTPRedirectHandler):
-    def redirect_request(self, req, fp, code, msg, headers, newurl):
-        return None
 
 
 def secure_url(value, scheme):

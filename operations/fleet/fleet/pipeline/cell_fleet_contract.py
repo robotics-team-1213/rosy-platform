@@ -1,4 +1,4 @@
-﻿"""Authority and handoff contract between site AMR Fleet and OMX Workcell Fleet."""
+"""Authority and handoff contract between site AMR Fleet and OMX Workcell Fleet."""
 
 from dataclasses import asdict, dataclass
 from typing import Any, Iterable

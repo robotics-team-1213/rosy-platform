@@ -1,8 +1,6 @@
-// 빌드 없는 공용 조작 부품. 그림자는 쓰지 않는다 — 자식 글자와 기존 리스너가
-// 요소 자체에 남는다. 색과 크기는 components.css 가 tokens.css 로 그린다.
 import { createConfirmIrreversible } from "./confirmation.js";
 import { disjointRectangles } from "./live-dialog-geometry.js";
-import "./ui-wiring.js";  // document-level wiring: theme cycle button, Enter submits a form
+import "./ui-wiring.js";
 const KINDS = ["primary", "quiet", "irreversible", "segment", "toggle"];
 const BUTTON_SIZES = ["secondary", "primary", "irreversible"];
 const KIND_SIZES = { primary: "primary", irreversible: "irreversible" };
@@ -10,341 +8,137 @@ let reasonSerial = 0;
 
 class UiButton extends HTMLElement {
   static formAssociated = true;
-
-  static get observedAttributes() {
-    return ["disabled", "kind", "size", "reason"];
-  }
-
+  static get observedAttributes() { return ["disabled", "kind", "size", "reason"]; }
   constructor() {
     super();
     this._internals = this.attachInternals();
-    this._onKey = (event) => {
-      if (event.key !== " " && event.key !== "Enter") return;
-      if (event.target !== this) return;
-      event.preventDefault();
-      this.click();
-    };
+    this._onKey = (event) => { if ((event.key === " " || event.key === "Enter") && event.target === this) { event.preventDefault(); this.click(); } };
     this._onClick = (event) => {
-      if (this.disabled) {
-        event.preventDefault();
-        event.stopImmediatePropagation();
-        return;
-      }
-      if (this.type === "submit" && this._internals.form) {
-        event.preventDefault();
-        this._internals.form.requestSubmit();
-      }
+      if (this.disabled) { event.preventDefault(); event.stopImmediatePropagation(); return; }
+      if (this.type === "submit" && this._internals.form) { event.preventDefault(); this._internals.form.requestSubmit(); }
     };
   }
-
   connectedCallback() {
-    if (!KINDS.includes(this.getAttribute("kind"))) {
-      this.setAttribute("data-kind-missing", "true");
-    }
+    if (!KINDS.includes(this.getAttribute("kind"))) this.setAttribute("data-kind-missing", "true");
     if (!this.hasAttribute("type")) this.setAttribute("type", "button");
     if (!this.hasAttribute("role")) this.setAttribute("role", "button");
-    this._sync();
-    this.addEventListener("keydown", this._onKey);
-    this.addEventListener("click", this._onClick, true);
+    this._sync(); this.addEventListener("keydown", this._onKey); this.addEventListener("click", this._onClick, true);
   }
-
-  disconnectedCallback() {
-    this.removeEventListener("keydown", this._onKey);
-    this.removeEventListener("click", this._onClick, true);
-  }
-
-  attributeChangedCallback() {
-    this._sync();
-  }
-
-  get disabled() {
-    return this.hasAttribute("disabled");
-  }
-
-  set disabled(value) {
-    this.toggleAttribute("disabled", Boolean(value));
-  }
-
-  get type() {
-    return this.getAttribute("type") || "button";
-  }
-
-  set type(value) {
-    this.setAttribute("type", value || "button");
-  }
-
-  /** D-359 §5.3 — 왜 누를 수 없는지. 빈 값은 속성을 지운다. title은 사유가 아니다
-   *  (터치에서 보이지 않는다). */
-  get reason() {
-    return this.getAttribute("reason") || "";
-  }
-
-  set reason(value) {
-    if (value) this.setAttribute("reason", String(value));
-    else this.removeAttribute("reason");
-  }
-
+  disconnectedCallback() { this.removeEventListener("keydown", this._onKey); this.removeEventListener("click", this._onClick, true); }
+  attributeChangedCallback() { this._sync(); }
+  get disabled() { return this.hasAttribute("disabled"); }
+  set disabled(value) { this.toggleAttribute("disabled", Boolean(value)); }
+  get type() { return this.getAttribute("type") || "button"; }
+  set type(value) { this.setAttribute("type", value || "button"); }
+  get reason() { return this.getAttribute("reason") || ""; }
+  set reason(value) { if (value) this.setAttribute("reason", String(value)); else this.removeAttribute("reason"); }
   _sync() {
-    const kind = this.getAttribute("kind");
-    const size = this.getAttribute("size") || KIND_SIZES[kind] || "secondary";
+    const kind = this.getAttribute("kind"), size = this.getAttribute("size") || KIND_SIZES[kind] || "secondary", off = this.disabled;
     this.dataset.size = BUTTON_SIZES.includes(size) ? size : "secondary";
-    if (BUTTON_SIZES.includes(size)) delete this.dataset.sizeMissing;
-    else this.dataset.sizeMissing = "true";
-    const off = this.disabled;
+    if (BUTTON_SIZES.includes(size)) delete this.dataset.sizeMissing; else this.dataset.sizeMissing = "true";
     this.tabIndex = off || this.matches('[role="tab"][aria-selected="false"]') ? -1 : 0;
-    this.setAttribute("aria-disabled", off ? "true" : "false");
-    this._syncReason();
+    this.setAttribute("aria-disabled", off ? "true" : "false"); this._syncReason();
   }
-
-  // 사유는 버튼 안의 <small data-reason>이다(toggle·irreversible의 small 세부와 같은
-  // 자리). 이름에서 빠지도록 aria-hidden이고, aria-describedby가 설명으로 읽는다.
-  // 화면이 textContent로 글자를 갈아도 사유가 따라 붙도록 자식 목록을 지켜본다.
   _syncReason() {
-    const text = (this.getAttribute("reason") || "").trim();
-    const node = this._reasonNode;
-    if (!text) {
-      this._reasonWatch?.disconnect();
-      if (node) {
-        node.remove();
-        this._describe(node.id, false);
-      }
-      return;
-    }
+    const text = (this.getAttribute("reason") || "").trim(), node = this._reasonNode;
+    if (!text) { this._reasonWatch?.disconnect(); if (node) { node.remove(); this._describe(node.id, false); } return; }
     if (!node) {
-      this._reasonNode = document.createElement("small");
-      this._reasonNode.dataset.reason = "";
-      this._reasonNode.id = `ui-reason-${++reasonSerial}`;
-      this._reasonNode.setAttribute("aria-hidden", "true");
+      this._reasonNode = document.createElement("small"); this._reasonNode.dataset.reason = "";
+      this._reasonNode.id = `ui-reason-${++reasonSerial}`; this._reasonNode.setAttribute("aria-hidden", "true");
     }
     const reason = this._reasonNode;
     if (reason.textContent !== text) reason.textContent = text;
     if (reason.parentNode !== this) this.append(reason);
     this._describe(reason.id, true);
-    if (!this._reasonWatch) {
-      this._reasonWatch = new MutationObserver(() => {
-        if (this.getAttribute("reason") && reason.parentNode !== this) this.append(reason);
-      });
-    }
+    if (!this._reasonWatch) this._reasonWatch = new MutationObserver(() => { if (this.getAttribute("reason") && reason.parentNode !== this) this.append(reason); });
     this._reasonWatch.observe(this, { childList: true });
   }
-
   _describe(id, on) {
     const ids = (this.getAttribute("aria-describedby") || "").split(/\s+/).filter((item) => item && item !== id);
     if (on) ids.push(id);
-    if (ids.length) this.setAttribute("aria-describedby", ids.join(" "));
-    else this.removeAttribute("aria-describedby");
+    if (ids.length) this.setAttribute("aria-describedby", ids.join(" ")); else this.removeAttribute("aria-describedby");
   }
 }
-
 class UiField extends HTMLElement {
   connectedCallback() {
     if (this.querySelector("input, select, textarea")) return;
     const input = document.createElement("input");
-    for (const name of ["type", "name", "placeholder", "autocomplete", "value", "required", "aria-label",
-                        "autocapitalize", "autocorrect", "spellcheck", "inputmode"]) {
+    for (const name of ["type", "name", "placeholder", "autocomplete", "value", "required", "aria-label", "autocapitalize", "autocorrect", "spellcheck", "inputmode"]) {
       if (this.hasAttribute(name)) input.setAttribute(name, this.getAttribute(name));
     }
     if (this.hasAttribute("invalid")) input.setAttribute("aria-invalid", "true");
     this.append(input);
   }
-
-  get input() {
-    return this.querySelector("input, select, textarea");
-  }
-
-  get value() {
-    return this.input ? this.input.value : "";
-  }
-
-  set value(next) {
-    if (this.input) this.input.value = next;
-  }
-
-  get disabled() {
-    return this.hasAttribute("disabled");
-  }
-
-  set disabled(value) {
-    this.toggleAttribute("disabled", Boolean(value));
-    if (this.input) this.input.disabled = Boolean(value);
-  }
-
-  focus() {
-    this.input?.focus();
-  }
+  get input() { return this.querySelector("input, select, textarea"); }
+  get value() { return this.input ? this.input.value : ""; }
+  set value(next) { if (this.input) this.input.value = next; }
+  get disabled() { return this.hasAttribute("disabled"); }
+  set disabled(value) { this.toggleAttribute("disabled", Boolean(value)); if (this.input) this.input.disabled = Boolean(value); }
+  focus() { this.input?.focus(); }
 }
-
-class UiTag extends HTMLElement {
-  connectedCallback() {
-    if (!this.hasAttribute("status")) this.setAttribute("status", "neutral");
-  }
-}
-
-class UiText extends HTMLElement {
-  connectedCallback() {
-    if (!this.hasAttribute("scale")) this.setAttribute("scale", "body");
-  }
-}
-
+class UiTag extends HTMLElement { connectedCallback() { if (!this.hasAttribute("status")) this.setAttribute("status", "neutral"); } }
+class UiText extends HTMLElement { connectedCallback() { if (!this.hasAttribute("scale")) this.setAttribute("scale", "body"); } }
 const EVIDENCE = ["fresh", "delayed", "disconnected", "unavailable"];
 const MARKS = ["neutral", "warn", "crit"];
-
 class UiHead extends HTMLElement {
   connectedCallback() {
     if (this.querySelector("[data-rule]")) return;
-    const rule = document.createElement("span");
-    rule.dataset.rule = "";
-    rule.setAttribute("aria-hidden", "true");
-    const last = this.lastElementChild;
-    if (last && this.children.length > 1) this.insertBefore(rule, last);
-    else this.append(rule);
+    const rule = document.createElement("span"), last = this.lastElementChild;
+    rule.dataset.rule = ""; rule.setAttribute("aria-hidden", "true");
+    if (last && this.children.length > 1) this.insertBefore(rule, last); else this.append(rule);
   }
 }
-
-class UiGrid extends HTMLElement {
-  connectedCallback() {
-    if (!this.hasAttribute("columns")) this.setAttribute("columns", "3");
-  }
-}
-
+class UiGrid extends HTMLElement { connectedCallback() { if (!this.hasAttribute("columns")) this.setAttribute("columns", "3"); } }
 class UiChip extends HTMLElement {}
-
-class UiTriage extends HTMLElement {
-  connectedCallback() {
-    if (!MARKS.includes(this.getAttribute("status"))) {
-      this.setAttribute("status", "neutral");
-    }
-  }
-}
-
+class UiTriage extends HTMLElement { connectedCallback() { if (!MARKS.includes(this.getAttribute("status"))) this.setAttribute("status", "neutral"); } }
 const GRAMMARS = ["spatial", "exception", "focal", "procedure"];
-
-class UiShell extends HTMLElement {
-  connectedCallback() {
-    if (!GRAMMARS.includes(this.getAttribute("grammar"))) {
-      this.setAttribute("data-grammar-missing", "true");
-    }
-  }
-}
-
+class UiShell extends HTMLElement { connectedCallback() { if (!GRAMMARS.includes(this.getAttribute("grammar"))) this.setAttribute("data-grammar-missing", "true"); } }
 class UiTopbar extends HTMLElement {}
-
 class UiBrand extends HTMLElement {
-  // D-335: href를 주면 자식을 하나의 링크로 감싼다. aria-label은 링크로
-  // 옮겨 접근성 이름이 한 곳에만 붙는다. href가 없으면 평문 브랜드다.
   connectedCallback() {
     const href = this.getAttribute("href");
     if (!href || this.querySelector("a")) return;
-    const link = document.createElement("a");
+    const link = document.createElement("a"), label = this.getAttribute("aria-label");
     link.setAttribute("href", href);
-    const label = this.getAttribute("aria-label");
-    if (label) {
-      link.setAttribute("aria-label", label);
-      this.removeAttribute("aria-label");
-    }
+    if (label) { link.setAttribute("aria-label", label); this.removeAttribute("aria-label"); }
     while (this.firstChild) link.append(this.firstChild);
     this.append(link);
   }
 }
-
-class UiSection extends HTMLElement {
-  connectedCallback() {
-    if (!this.hasAttribute("role")) this.setAttribute("role", "region");
-  }
-}
-
+class UiSection extends HTMLElement { connectedCallback() { if (!this.hasAttribute("role")) this.setAttribute("role", "region"); } }
 class UiEmpty extends HTMLElement {}
-
 class UiActions extends HTMLElement {}
-
 const STATUS_STATES = ["pending", "empty", "ready", "warning", "error", "unavailable", "forbidden"];
-
 class UiStatus extends HTMLElement {
   static get observedAttributes() { return ["state"]; }
-
   connectedCallback() {
     if (!this.hasAttribute("role")) this.setAttribute("role", "status");
     if (!this.hasAttribute("aria-live")) this.setAttribute("aria-live", "polite");
     this._syncState();
   }
-
   attributeChangedCallback() { this._syncState(); }
-
   _syncState() {
     const state = this.getAttribute("state") || "pending";
-    if (STATUS_STATES.includes(state)) {
-      this.dataset.state = state;
-      delete this.dataset.stateMissing;
-    } else {
-      delete this.dataset.state;
-      this.dataset.stateMissing = "true";
-    }
+    if (STATUS_STATES.includes(state)) { this.dataset.state = state; delete this.dataset.stateMissing; }
+    else { delete this.dataset.state; this.dataset.stateMissing = "true"; }
   }
 }
-
-class UiEvidence extends HTMLElement {
-  connectedCallback() {
-    if (!EVIDENCE.includes(this.getAttribute("state"))) {
-      this.setAttribute("data-state-missing", "true");
-    }
-  }
-}
-
+class UiEvidence extends HTMLElement { connectedCallback() { if (!EVIDENCE.includes(this.getAttribute("state"))) this.setAttribute("data-state-missing", "true"); } }
 for (const [name, ctor] of [
-  ["ui-button", UiButton],
-  ["ui-field", UiField],
-  ["ui-text", UiText],
-  ["ui-tag", UiTag],
-  ["ui-head", UiHead],
-  ["ui-grid", UiGrid],
-  ["ui-chip", UiChip],
-  ["ui-triage", UiTriage],
-  ["ui-evidence", UiEvidence],
-  ["ui-shell", UiShell],
-  ["ui-topbar", UiTopbar],
-  ["ui-brand", UiBrand],
-  ["ui-section", UiSection],
-  ["ui-empty", UiEmpty],
-  ["ui-actions", UiActions],
-  ["ui-status", UiStatus],
-]) {
-  if (!customElements.get(name)) customElements.define(name, ctor);
-}
+  ["ui-button", UiButton], ["ui-field", UiField], ["ui-text", UiText], ["ui-tag", UiTag], ["ui-head", UiHead], ["ui-grid", UiGrid], ["ui-chip", UiChip], ["ui-triage", UiTriage],
+  ["ui-evidence", UiEvidence], ["ui-shell", UiShell], ["ui-topbar", UiTopbar], ["ui-brand", UiBrand], ["ui-section", UiSection], ["ui-empty", UiEmpty], ["ui-actions", UiActions], ["ui-status", UiStatus],
+]) { if (!customElements.get(name)) customElements.define(name, ctor); }
 
-// D-371 — 목록 행의 되돌릴 수 없는 행동은 조용한 `삭제…`로 시작해 여기로 온다.
-// 대화상자가 대상을 이름으로 묻고(D-218 어휘), 위험 채움은 실행 버튼 하나뿐이다.
-// 취소·Esc는 false, 실행은 true. 닫히면 포커스는 누른 행 버튼으로 돌아간다. 목록은
-// 대화상자가 열린 동안 폴링으로 다시 그려질 수 있어 opener는 함수로도 받는다
-// (닫힐 때 불러 지금 화면에 있는 그 행의 버튼을 찾는다).
 export const confirmIrreversible = createConfirmIrreversible(openLiveDialog);
-
-// 모든 대화상자는 비모달이다(2026-09-30 US-010 측정: showModal()은 문서 전체를 inert로
-// 만들어 비상 정지까지 막았다 — D-280 원칙 2 위반). 그래서 모달은 여기서 흉내 낸다:
-// * `[data-always-live]`(각 표면 마크업이 정지 컨트롤에 단다)와 대화상자만 살리고
-//   나머지 가지에 inert를 건다. 폴링이 새로 붙인 노드도 MutationObserver가 다시 건다.
-// * 스크림(`--scrim`)은 정지 컨트롤 자리에 구멍을 낸다(clip-path) — 보이고 눌린다.
-// * Esc는 취소, Tab은 대화상자 안의 컨트롤 → 보이는 정지 컨트롤을 돈다. 정지에는
-//   단축키가 없으므로 새로 만들지 않고 포커스 순환에 넣었다.
-// * 정지를 누르면 정지는 제 할 일을 하고 대화상자는 취소("cancel")로 닫힌다.
-// * 마크업에 있던 대화상자는 열린 동안 body 끝으로 옮겨(조상의 쌓임 맥락을 벗어남)
-//   닫히면 제자리로 돌아간다. 만들어 넘긴 대화상자는 닫히면 지운다.
-// aria-modal은 달지 않는다: 달면 보조기기가 살아 있는 정지를 못 찾는다(inert가 나머지를 숨긴다).
-// 반환한 close(value)는 즉시 정리한다. native close도 같은 정리를 거친다.
 const ALWAYS_LIVE = "[data-always-live]";
 const DIALOG_FOCUSABLE = "input:not([type=hidden]), select, textarea, button, ui-button, a[href], [tabindex]:not([tabindex='-1'])";
 
 export function openLiveDialog(dialog, { initialFocus = null, opener = document.activeElement, onClose } = {}) {
   dialog.classList.add("ui-live-dialog");
   const home = dialog.isConnected ? { parent: dialog.parentNode, next: dialog.nextSibling } : null;
-  const scrim = document.createElement("div");
-  scrim.className = "ui-confirm-scrim";
-  scrim.setAttribute("aria-hidden", "true");
-
-  const inerted = new Set();
+  const scrim = document.createElement("div"); scrim.className = "ui-confirm-scrim"; scrim.setAttribute("aria-hidden", "true");
+  const inerted = new Set(), liveNodes = () => [...document.querySelectorAll(ALWAYS_LIVE)], shown = (node) => node.getClientRects().length > 0 && !node.disabled;
   let byStop = false, finished = false;
-  const liveNodes = () => [...document.querySelectorAll(ALWAYS_LIVE)];
-  const shown = (node) => node.getClientRects().length > 0 && !node.disabled;
-  // 살릴 노드(정지·대화상자)의 조상 사슬만 타고 내려가며 곁가지를 inert로 만든다.
   const seal = () => {
     const keep = [...liveNodes(), dialog];
     const walk = (parent) => {
@@ -352,197 +146,104 @@ export function openLiveDialog(dialog, { initialFocus = null, opener = document.
         const holds = keep.some((node) => child === node || child.contains(node));
         if (holds && inerted.has(child)) { child.inert = false; inerted.delete(child); }
         if (holds) { if (!keep.includes(child)) walk(child); continue; }
-        if (child === scrim || child.inert) continue;
-        child.inert = true;
-        inerted.add(child);
+        if (child !== scrim && !child.inert) { child.inert = true; inerted.add(child); }
       }
     };
     walk(document.body);
   };
-  // 겹치는 정지 컨트롤도 교집합이 다시 덮이지 않도록 서로 겹치지 않는 구멍을 낸다.
   const punch = () => {
-    const holes = disjointRectangles(liveNodes().filter(node => node.getClientRects().length > 0).map(node => node.getBoundingClientRect()), innerWidth, innerHeight).map(r => {
-      return `0 0, ${r.left}px ${r.top}px, ${r.right}px ${r.top}px, ${r.right}px ${r.bottom}px, ${r.left}px ${r.bottom}px, ${r.left}px ${r.top}px`;
-    });
-    const polygon = holes.length
-      ? `polygon(evenodd, 0 0, 100% 0, 100% 100%, 0 100%, ${holes.join(", ")}, 0 0)`
-      : "";
-    if (polygon) scrim.setAttribute("data-clip", polygon);
-    else scrim.removeAttribute("data-clip");
+    const holes = disjointRectangles(liveNodes().filter(node => node.getClientRects().length > 0).map(node => node.getBoundingClientRect()), innerWidth, innerHeight).map(
+      r => `0 0, ${r.left}px ${r.top}px, ${r.right}px ${r.top}px, ${r.right}px ${r.bottom}px, ${r.left}px ${r.bottom}px, ${r.left}px ${r.top}px`
+    );
+    const polygon = holes.length ? `polygon(evenodd, 0 0, 100% 0, 100% 100%, 0 100%, ${holes.join(", ")}, 0 0)` : "";
+    if (polygon) scrim.setAttribute("data-clip", polygon); else scrim.removeAttribute("data-clip");
   };
   const observer = new MutationObserver(() => { seal(); punch(); });
   const onKey = (event) => {
-    if (event.key === "Escape") {
-      event.preventDefault();
-      close("cancel");
-      return;
-    }
+    if (event.key === "Escape") { event.preventDefault(); close("cancel"); return; }
     if (event.key !== "Tab") return;
     const ring = [...dialog.querySelectorAll(DIALOG_FOCUSABLE)].filter(shown).concat(liveNodes().filter(shown));
     if (!ring.length) return;
-    const at = ring.findIndex((node) => node === document.activeElement || node.contains(document.activeElement));
-    event.preventDefault();
-    const step = event.shiftKey ? -1 : 1;
-    ring[at < 0 ? 0 : (at + step + ring.length) % ring.length].focus();
+    const at = ring.findIndex((node) => node === document.activeElement || node.contains(document.activeElement)), step = event.shiftKey ? -1 : 1;
+    event.preventDefault(); ring[at < 0 ? 0 : (at + step + ring.length) % ring.length].focus();
   };
-  // 캡처 단계에서 표시만 하고 막지 않는다 — 정지 자신의 click 처리기는 그대로 돈다.
-  const onClick = (event) => {
-    if (!event.target.closest?.(ALWAYS_LIVE)) return;
-    byStop = true;
-    close("cancel");
-  };
-
+  const onClick = (event) => { if (event.target.closest?.(ALWAYS_LIVE)) { byStop = true; close("cancel"); } };
   const finish = () => {
     if (finished) return;
-    finished = true;
-    dialog.removeEventListener("close", onNativeClose);
-    observer.disconnect();
-    document.removeEventListener("keydown", onKey, true);
-    document.removeEventListener("click", onClick, true);
-    removeEventListener("resize", punch);
-    removeEventListener("scroll", punch, true);
+    finished = true; dialog.removeEventListener("close", onNativeClose); observer.disconnect();
+    document.removeEventListener("keydown", onKey, true); document.removeEventListener("click", onClick, true);
+    removeEventListener("resize", punch); removeEventListener("scroll", punch, true);
     for (const node of inerted) node.inert = false;
-    inerted.clear();
-    scrim.remove();
-    if (home?.parent.isConnected) home.parent.insertBefore(dialog, home.next?.parentNode === home.parent ? home.next : null);
-    else dialog.remove();
-    if (!byStop) {
-      const back = typeof opener === "function" ? opener() : opener;
-      if (back?.isConnected && typeof back.focus === "function") back.focus();
-    }
+    inerted.clear(); scrim.remove();
+    if (home?.parent.isConnected) home.parent.insertBefore(dialog, home.next?.parentNode === home.parent ? home.next : null); else dialog.remove();
+    if (!byStop) { const back = typeof opener === "function" ? opener() : opener; if (back?.isConnected && typeof back.focus === "function") back.focus(); }
     onClose?.(dialog.returnValue, { byStop });
   };
   const close = value => { if (finished) return; if (dialog.open) dialog.close(value); finish(); };
   const onNativeClose = () => { if (!dialog.open) finish(); };
-  dialog.addEventListener("close", onNativeClose);
-  document.body.append(scrim, dialog);
-  seal();
-  punch();
+  dialog.addEventListener("close", onNativeClose); document.body.append(scrim, dialog); seal(); punch();
   observer.observe(document.body, { childList: true, subtree: true });
-  document.addEventListener("keydown", onKey, true);
-  document.addEventListener("click", onClick, true);
-  addEventListener("resize", punch);
-  addEventListener("scroll", punch, { capture: true, passive: true });
-  dialog.returnValue = "";
-  dialog.show();
+  document.addEventListener("keydown", onKey, true); document.addEventListener("click", onClick, true);
+  addEventListener("resize", punch); addEventListener("scroll", punch, { capture: true, passive: true });
+  dialog.returnValue = ""; dialog.show();
   (initialFocus || [...dialog.querySelectorAll(DIALOG_FOCUSABLE)].find(shown))?.focus();
   return close;
 }
 
-// D-359 §4 — 캔버스 색·글꼴. 캔버스는 CSS 변수를 못 쓰므로 여기서 한 번 풀어
-// 캐시한다. 토큰은 hex·oklch·color-mix 무엇이든 될 수 있어서 글자로 파싱하지
-// 않는다: 숨은 탐침 요소의 계산된 color(Chromium은 color-mix를 `color(srgb …)`나
-// `oklab(…)`으로 준다)를 1×1 캔버스에 칠해 sRGB 바이트로 되읽는다.
-// 테마가 바뀌면(`rosy:theme`) 캐시를 비운다 — 다시 그리는 일은 각 캔버스가 한다.
-// 캔버스 파일은 `window.RosyPalette`로 부른다(camera-capture.js는 Node에서도
-// import되므로 이 모듈을 정적으로 끌어올 수 없다, D-75 번들러 없음).
-const colourCache = new Map();
-const fontCache = new Map();
-let colourProbe = null;
-let colourRaster = null;
-let colourSheet = null;
-
+const colourCache = new Map(), fontCache = new Map();
+let colourProbe = null, colourRaster = null, colourSheet = null;
 function probeColourValue(name) {
   if (name.startsWith("--")) return /^--[A-Za-z0-9_-]+$/.test(name) ? `var(${name})` : "";
-  if (!name || /[{};<>\\]|\/\*|\*\//.test(name)) return "";
-  return name;
+  return !name || /[{};<>\\]|\/\*|\*\//.test(name) ? "" : name;
 }
-
 function paintColourProbe(value) {
-  if (!colourSheet) {
-    colourSheet = new CSSStyleSheet();
-    document.adoptedStyleSheets = [...document.adoptedStyleSheets, colourSheet];
-  }
+  if (!colourSheet) { colourSheet = new CSSStyleSheet(); document.adoptedStyleSheets = [...document.adoptedStyleSheets, colourSheet]; }
   colourSheet.replaceSync(`[data-rosy-colour-probe] { color: ${value}; }`);
 }
-
 function probeElement() {
   if (!colourProbe || !colourProbe.isConnected) {
-    colourProbe = document.createElement("span");
-    colourProbe.hidden = true;
-    colourProbe.setAttribute("aria-hidden", "true");
-    colourProbe.dataset.rosyColourProbe = "";
-    document.documentElement.append(colourProbe);
+    colourProbe = document.createElement("span"); colourProbe.hidden = true;
+    colourProbe.setAttribute("aria-hidden", "true"); colourProbe.dataset.rosyColourProbe = ""; document.documentElement.append(colourProbe);
   }
   return colourProbe;
 }
-
 function rasterContext() {
-  if (!colourRaster) {
-    const canvas = document.createElement("canvas");
-    canvas.width = 1;
-    canvas.height = 1;
-    colourRaster = canvas.getContext("2d", { willReadFrequently: true });
-  }
+  if (!colourRaster) { const canvas = document.createElement("canvas"); canvas.width = canvas.height = 1; colourRaster = canvas.getContext("2d", { willReadFrequently: true }); }
   return colourRaster;
 }
-
-/** `--token` 또는 CSS 색 → [r, g, b, a] (r·g·b 0–255, a 0–1). 못 풀면 투명. */
 export function readColour(name) {
   if (colourCache.has(name)) return colourCache.get(name);
-  const isToken = name.startsWith("--");
+  const declared = name.startsWith("--") ? getComputedStyle(document.documentElement).getPropertyValue(name).trim() : name, painted = probeColourValue(name);
   let rgba = [0, 0, 0, 0];
-  const declared = isToken
-    ? getComputedStyle(document.documentElement).getPropertyValue(name).trim()
-    : name;
-  const painted = probeColourValue(name);
   if (declared && painted) {
-    const probe = probeElement();
-    paintColourProbe(painted);
-    const resolved = getComputedStyle(probe).color;
-    const ctx = rasterContext();
-    ctx.clearRect(0, 0, 1, 1);
-    ctx.fillStyle = resolved;
-    ctx.fillRect(0, 0, 1, 1);
-    const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data;
-    rgba = [r, g, b, Math.round((a / 255) * 1000) / 1000];
+    const probe = probeElement(), ctx = rasterContext(); paintColourProbe(painted);
+    ctx.clearRect(0, 0, 1, 1); ctx.fillStyle = getComputedStyle(probe).color; ctx.fillRect(0, 0, 1, 1);
+    const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data; rgba = [r, g, b, Math.round((a / 255) * 1000) / 1000];
   }
-  colourCache.set(name, rgba);
-  return rgba;
+  colourCache.set(name, rgba); return rgba;
 }
-
-/** 이름 배열이나 {키: 이름} 표를 받아 같은 키의 [r, g, b, a] 표를 준다. */
 export function readPalette(names) {
-  const entries = Array.isArray(names) ? names.map((name) => [name, name]) : Object.entries(names);
   const palette = {};
-  for (const [key, name] of entries) palette[key] = readColour(name);
+  for (const [key, name] of (Array.isArray(names) ? names.map((name) => [name, name]) : Object.entries(names))) palette[key] = readColour(name);
   return palette;
 }
-
-/** 캔버스 fillStyle/strokeStyle 용 `rgba(…)` 글자. */
-export function cssColor(name) {
-  const [r, g, b, a] = readColour(name);
-  return `rgba(${r}, ${g}, ${b}, ${a})`;
-}
-
-/** Canvas typography reads the same role and family as DOM text; scale is raster geometry. */
+export function cssColor(name) { const [r, g, b, a] = readColour(name); return `rgba(${r}, ${g}, ${b}, ${a})`; }
 export function canvasTextSize(role = "micro") {
-  if (!["micro", "label", "body", "value", "title", "display"].includes(role)) {
-    throw new TypeError(`Unknown canvas text role: ${role}`);
-  }
+  if (!["micro", "label", "body", "value", "title", "display"].includes(role)) throw new TypeError(`Unknown canvas text role: ${role}`);
   if (fontCache.has(`size:${role}`)) return fontCache.get(`size:${role}`);
-  if (!getComputedStyle(document.documentElement).getPropertyValue(`--text-${role}`).trim()) {
-    throw new Error(`Missing canvas text token: --text-${role}`);
-  }
-  const probe = document.createElement("span");
-  probe.hidden = true;
-  probe.dataset.rosyFontProbe = "";
-  const sheet = new CSSStyleSheet();
+  if (!getComputedStyle(document.documentElement).getPropertyValue(`--text-${role}`).trim()) throw new Error(`Missing canvas text token: --text-${role}`);
+  const probe = document.createElement("span"), sheet = new CSSStyleSheet();
+  probe.hidden = true; probe.dataset.rosyFontProbe = "";
   sheet.replaceSync(`[data-rosy-font-probe] { font-size: var(--text-${role}); }`);
-  document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet];
-  document.documentElement.append(probe);
-  const size = parseFloat(getComputedStyle(probe).fontSize);
-  probe.remove();
+  document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet]; document.documentElement.append(probe);
+  const size = parseFloat(getComputedStyle(probe).fontSize); probe.remove();
   document.adoptedStyleSheets = document.adoptedStyleSheets.filter((entry) => entry !== sheet);
   if (!Number.isFinite(size) || size <= 0) throw new Error(`Missing canvas text token: --text-${role}`);
-  fontCache.set(`size:${role}`, size);
-  return size;
+  fontCache.set(`size:${role}`, size); return size;
 }
-
 export function canvasFont(role = "micro", family = "body", displayScale = 1) {
-  const size = canvasTextSize(role);
+  const size = canvasTextSize(role), scale = Number(displayScale);
   if (!["body", "mono"].includes(family)) throw new TypeError(`Unknown canvas font family: ${family}`);
-  const scale = Number(displayScale);
   if (!Number.isFinite(scale) || scale <= 0) throw new RangeError("Canvas display scale must be positive");
   if (!fontCache.has(family)) {
     const stack = getComputedStyle(document.documentElement).getPropertyValue(`--${family}`).trim();
@@ -550,57 +251,25 @@ export function canvasFont(role = "micro", family = "body", displayScale = 1) {
   }
   return `${Math.max(1, Math.round(size * scale))}px ${fontCache.get(family)}`;
 }
-
-export function clearPalette() {
-  colourCache.clear();
-  fontCache.clear();
-}
-
+export function clearPalette() { colourCache.clear(); fontCache.clear(); }
 document.addEventListener("rosy:theme", clearPalette);
 window.RosyPalette = { readColour, readPalette, cssColor, canvasFont, canvasTextSize, clear: clearPalette };
 
-// D-359 US-008 — 자간 토큰은 라틴 대문자 라벨용이다. 한글은 음절 하나가 이미 한
-// 글자 칸이라 0.06–0.12em을 더하면 "점유  지도"처럼 띄어 읽힌다. 페이지가 모두
-// lang="ko"라 :lang()으로는 가를 수 없고 글자는 실행 중에 바뀐다. 그래서 자기
-// 글자(직계 텍스트 노드)에 한글이 있는 요소에 `data-hangul`을 달고,
-// components.css가 그 요소의 자간 토큰과 letter-spacing을 0으로 둔다.
-// 섞인 글("COLUMN 종대")도 0이다 — 한 요소 안에서 글자별 자간은 CSS로 못 준다.
 const HANGUL = /[ᄀ-ᇿ㄰-㆏가-힯]/;
-
 function markHangul(element) {
   if (!(element instanceof Element)) return;
-  let hangul = false;
-  for (const node of element.childNodes) {
-    if (node.nodeType === Node.TEXT_NODE && HANGUL.test(node.data)) {
-      hangul = true;
-      break;
-    }
-  }
+  const hangul = [...element.childNodes].some((node) => node.nodeType === Node.TEXT_NODE && HANGUL.test(node.data));
   if (element.hasAttribute("data-hangul") !== hangul) element.toggleAttribute("data-hangul", hangul);
 }
-
-function markHangulTree(root) {
-  if (!(root instanceof Element)) return;
-  markHangul(root);
-  for (const element of root.querySelectorAll("*")) markHangul(element);
-}
-
-const hangulObserver = new MutationObserver((records) => {
+function markHangulTree(root) { if (root instanceof Element) { markHangul(root); for (const element of root.querySelectorAll("*")) markHangul(element); } }
+new MutationObserver((records) => {
   for (const record of records) {
-    if (record.type === "characterData") {
-      markHangul(record.target.parentElement);
-      continue;
-    }
-    markHangul(record.target);
-    for (const node of record.addedNodes) markHangulTree(node);
+    if (record.type === "characterData") { markHangul(record.target.parentElement); continue; }
+    markHangul(record.target); for (const node of record.addedNodes) markHangulTree(node);
   }
-});
-hangulObserver.observe(document.documentElement, { childList: true, characterData: true, subtree: true });
+}).observe(document.documentElement, { childList: true, characterData: true, subtree: true });
 markHangulTree(document.documentElement);
 
-// Shared labeled action icons. Keep handlers and button semantics on the original element.
-// A string draws one stroke. An array draws one path per entry so a filled mark can sit
-// on a stroked outline. .sr-only stays a screen-reader label and is not copied into the visible span.
 export function actionIcon(button, name) {
   const paths = {
     fleet: "M9 9h6v6H9zM3 3h4v4H3zM17 3h4v4h-4zM3 17h4v4H3zM17 17h4v4h-4zM7 7l2 2M15 9l2-2M7 17l2-2M15 15l2 2",
@@ -619,30 +288,12 @@ export function actionIcon(button, name) {
     tools: "M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94z",
     settings: "M21 4h-7M10 4H3M21 12h-9M8 12H3M21 20h-5M12 20H3M14 2v4M8 10v4M16 18v4",
     "theme-dark": "M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z",
-    "theme-light": [
-      {d: "M12,8 A4,4 0 1,1 12,16 A4,4 0 1,1 12,8 Z"},
-      {d: "M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8"},
-    ],
-    "theme-system": [
-      {d: "M5 4H19A2 2 0 0 1 21 6V14A2 2 0 0 1 19 16H5A2 2 0 0 1 3 14V6A2 2 0 0 1 5 4Z"},
-      {d: "M8.5 20h7M12 16v4"},
-    ],
-    estop: [
-      {d: "M12 2 19.1 4.9 22 12 19.1 19.1 12 22 4.9 19.1 2 12 4.9 4.9Z"},
-      {d: "M9 8H15A1 1 0 0 1 16 9V15A1 1 0 0 1 15 16H9A1 1 0 0 1 8 15V9A1 1 0 0 1 9 8Z", fill: "currentColor", stroke: "none"},
-    ],
-    pose: [
-      {d: "M12,5 A7,7 0 1,1 12,19 A7,7 0 1,1 12,5 Z"},
-      {d: "M12 2v3M12 19v3M2 12h3M19 12h3"},
-    ],
-    yaw: [
-      {d: "M12,3 A9,9 0 1,1 12,21 A9,9 0 1,1 12,3 Z"},
-      {d: "m15.5 8.5-2.1 4.9-4.9 2.1 2.1-4.9z"},
-    ],
-    battery: [
-      {d: "M4.5 8H16.5A1.5 1.5 0 0 1 18 9.5V14.5A1.5 1.5 0 0 1 16.5 16H4.5A1.5 1.5 0 0 1 3 14.5V9.5A1.5 1.5 0 0 1 4.5 8Z"},
-      {d: "M21 10.5v3M6.5 10.5v3M10 10.5v3M13.5 10.5v3"},
-    ],
+    "theme-light": [{d: "M12,8 A4,4 0 1,1 12,16 A4,4 0 1,1 12,8 Z"}, {d: "M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8"}],
+    "theme-system": [{d: "M5 4H19A2 2 0 0 1 21 6V14A2 2 0 0 1 19 16H5A2 2 0 0 1 3 14V6A2 2 0 0 1 5 4Z"}, {d: "M8.5 20h7M12 16v4"}],
+    estop: [{d: "M12 2 19.1 4.9 22 12 19.1 19.1 12 22 4.9 19.1 2 12 4.9 4.9Z"}, {d: "M9 8H15A1 1 0 0 1 16 9V15A1 1 0 0 1 15 16H9A1 1 0 0 1 8 15V9A1 1 0 0 1 9 8Z", fill: "currentColor", stroke: "none"}],
+    pose: [{d: "M12,5 A7,7 0 1,1 12,19 A7,7 0 1,1 12,5 Z"}, {d: "M12 2v3M12 19v3M2 12h3M19 12h3"}],
+    yaw: [{d: "M12,3 A9,9 0 1,1 12,21 A9,9 0 1,1 12,3 Z"}, {d: "m15.5 8.5-2.1 4.9-4.9 2.1 2.1-4.9z"}],
+    battery: [{d: "M4.5 8H16.5A1.5 1.5 0 0 1 18 9.5V14.5A1.5 1.5 0 0 1 16.5 16H4.5A1.5 1.5 0 0 1 3 14.5V9.5A1.5 1.5 0 0 1 4.5 8Z"}, {d: "M21 10.5v3M6.5 10.5v3M10 10.5v3M13.5 10.5v3"}],
     safety: "M12 3l7 3v5c0 4.4-3 7.5-7 9-4-1.5-7-4.6-7-9V6z",
     back: "M15 5l-7 7 7 7",
     refresh: "M20 7v5h-5M4 17v-5h5M6 7a7 7 0 0 1 12-1l2 2M18 17a7 7 0 0 1-12 1l-2-2",
@@ -678,32 +329,18 @@ export function actionIcon(button, name) {
   const spec = paths[name];
   if (!spec) throw new RangeError(`Unknown action icon: ${name}`);
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  for (const [key, value] of Object.entries({viewBox: "0 0 24 24", fill: "none", stroke: "currentColor",
-    "stroke-width": "2", "stroke-linecap": "round", "stroke-linejoin": "round", class: "ui-icon", "aria-hidden": "true", focusable: "false"})) svg.setAttribute(key, value);
+  for (const [key, value] of Object.entries({viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", "stroke-width": "2", "stroke-linecap": "round", "stroke-linejoin": "round", class: "ui-icon", "aria-hidden": "true", focusable: "false"})) svg.setAttribute(key, value);
   for (const part of Array.isArray(spec) ? spec : [{d: spec}]) {
-    const path = document.createElementNS(svg.namespaceURI, "path");
-    path.setAttribute("d", part.d);
-    if (part.fill) path.setAttribute("fill", part.fill);
-    if (part.stroke) path.setAttribute("stroke", part.stroke);
-    svg.append(path);
+    const path = document.createElementNS(svg.namespaceURI, "path"); path.setAttribute("d", part.d);
+    if (part.fill) path.setAttribute("fill", part.fill); if (part.stroke) path.setAttribute("stroke", part.stroke); svg.append(path);
   }
-  const details = [...button.querySelectorAll(":scope > small")];
-  const quiet = [...button.querySelectorAll(":scope > .sr-only")];
-  const visible = [...button.childNodes].filter(node => node.nodeType === 3 ||
-    (node.nodeType === 1 && !node.matches(".ui-icon, small, .sr-only"))).map(node => node.textContent).join("").trim();
+  const details = [...button.querySelectorAll(":scope > small")], quiet = [...button.querySelectorAll(":scope > .sr-only")];
+  const visible = [...button.childNodes].filter(node => node.nodeType === 3 || (node.nodeType === 1 && !node.matches(".ui-icon, small, .sr-only"))).map(node => node.textContent).join("").trim();
   const children = [svg];
-  if (visible) {
-    const label = document.createElement("span");
-    label.className = "ui-icon-label";
-    label.textContent = visible;
-    children.push(label);
-  }
+  if (visible) { const label = document.createElement("span"); label.className = "ui-icon-label"; label.textContent = visible; children.push(label); }
   button.replaceChildren(...children, ...quiet, ...details);
   const label = button.getAttribute("aria-label") || visible || quiet.map(node => node.textContent).join(" ").trim();
-  if (button.hasAttribute("data-icon-only")) {
-    if (!label) throw new TypeError("아이콘 단독 조작에는 접근성 이름이 필요합니다");
-  }
-  // 기존 title 설명도 키보드에서 제공한다. 명시 설명과 원래 이름·라벨은 보존한다.
+  if (button.hasAttribute("data-icon-only") && !label) throw new TypeError("아이콘 단독 조작에는 접근성 이름이 필요합니다");
   if (!button.hasAttribute("data-ui-tooltip")) {
     const explanation = button.getAttribute("title") || ((button.hasAttribute("data-icon-only") || !visible) ? label : "");
     if (explanation) button.setAttribute("data-ui-tooltip", explanation);
@@ -711,38 +348,28 @@ export function actionIcon(button, name) {
   return button;
 }
 
-// D-641: 공용 설명은 문서 위에 띄워 가로 탐색의 overflow에도 잘리지 않는다.
-// 이름과 선택 상태는 원래 조작에 남고 설명은 명령이나 권한을 만들지 않는다.
 let tooltip, tooltipOwner, tooltipHover, tooltipFocus, tooltipDismissed;
 function hideTooltip() {
   if (tooltipOwner) {
     const ids = (tooltipOwner.getAttribute("aria-describedby") || "").split(/\s+/).filter(id => id && id !== "rosy-shared-tooltip");
-    if (ids.length) tooltipOwner.setAttribute("aria-describedby", ids.join(" "));
-    else tooltipOwner.removeAttribute("aria-describedby");
+    if (ids.length) tooltipOwner.setAttribute("aria-describedby", ids.join(" ")); else tooltipOwner.removeAttribute("aria-describedby");
   }
-  if (tooltip) tooltip.hidden = true;
-  tooltipOwner = null;
+  if (tooltip) tooltip.hidden = true; tooltipOwner = null;
 }
-function tooltipTarget(node) {
-  return node instanceof Element ? node.closest("[data-ui-tooltip]") : null;
-}
+function tooltipTarget(node) { return node instanceof Element ? node.closest("[data-ui-tooltip]") : null; }
 function tooltipOwnerVisible(owner) {
-  return owner?.isConnected && !owner.closest("[hidden], [inert], [aria-hidden='true']") &&
-    owner.getClientRects().length && getComputedStyle(owner).visibility !== "hidden";
+  return owner?.isConnected && !owner.closest("[hidden], [inert], [aria-hidden='true']") && owner.getClientRects().length && getComputedStyle(owner).visibility !== "hidden";
 }
 function overTooltip(event) {
   if (!tooltip || tooltip.hidden) return false;
   const box = tooltip.getBoundingClientRect();
-  return event.clientX >= box.left && event.clientX <= box.right &&
-    event.clientY >= box.top && event.clientY <= box.bottom;
+  return event.clientX >= box.left && event.clientX <= box.right && event.clientY >= box.top && event.clientY <= box.bottom;
 }
 function placeTooltip() {
   if (!tooltip || tooltip.hidden) return;
   if (!tooltipOwnerVisible(tooltipOwner)) { hideTooltip(); return; }
-  const rect = tooltipOwner.getBoundingClientRect(), box = tooltip.getBoundingClientRect();
-  const inset = parseFloat(getComputedStyle(tooltip).paddingTop);
-  const x = Math.max(inset, Math.min(innerWidth - box.width - inset, rect.left + (rect.width - box.width) / 2));
-  const below = rect.bottom + inset;
+  const rect = tooltipOwner.getBoundingClientRect(), box = tooltip.getBoundingClientRect(), inset = parseFloat(getComputedStyle(tooltip).paddingTop);
+  const x = Math.max(inset, Math.min(innerWidth - box.width - inset, rect.left + (rect.width - box.width) / 2)), below = rect.bottom + inset;
   const y = Math.max(inset, below + box.height <= innerHeight - inset ? below : rect.top - box.height - inset);
   for (const [axis, value] of [["x", x], ["y", y]]) {
     const key = `data-ui-tip-${axis}`, next = value.toFixed(2);
@@ -751,64 +378,30 @@ function placeTooltip() {
 }
 function showTooltip() {
   const owner = tooltipHover || tooltipFocus;
-  if (!tooltipOwnerVisible(owner) || owner === tooltipDismissed || !owner.getAttribute("data-ui-tooltip")?.trim()) {
-    hideTooltip();
-    return;
-  }
+  if (!tooltipOwnerVisible(owner) || owner === tooltipDismissed || !owner.getAttribute("data-ui-tooltip")?.trim()) { hideTooltip(); return; }
   if (!tooltip) {
-    tooltip = document.createElement("div");
-    tooltip.className = "ui-tooltip";
-    tooltip.id = "rosy-shared-tooltip";
-    tooltip.setAttribute("role", "tooltip");
-    document.body.append(tooltip);
+    tooltip = document.createElement("div"); tooltip.className = "ui-tooltip"; tooltip.id = "rosy-shared-tooltip";
+    tooltip.setAttribute("role", "tooltip"); document.body.append(tooltip);
   }
   if (tooltipOwner !== owner) hideTooltip();
-  tooltipOwner = owner;
-  tooltip.textContent = owner.getAttribute("data-ui-tooltip");
+  tooltipOwner = owner; tooltip.textContent = owner.getAttribute("data-ui-tooltip");
   const ids = new Set((owner.getAttribute("aria-describedby") || "").split(/\s+/).filter(Boolean));
-  ids.add(tooltip.id);
-  owner.setAttribute("aria-describedby", [...ids].join(" "));
-  tooltip.hidden = false;
-  placeTooltip();
+  ids.add(tooltip.id); owner.setAttribute("aria-describedby", [...ids].join(" ")); tooltip.hidden = false; placeTooltip();
 }
 document.addEventListener("pointerover", event => {
   if (overTooltip(event)) return;
   const owner = tooltipTarget(event.target);
-  if (owner !== tooltipHover) {
-    tooltipHover = owner;
-    if (owner !== tooltipFocus) tooltipDismissed = null;
-    showTooltip();
-  }
+  if (owner !== tooltipHover) { tooltipHover = owner; if (owner !== tooltipFocus) tooltipDismissed = null; showTooltip(); }
 });
-document.addEventListener("pointerout", event => {
-  if (!tooltipHover || tooltipHover.contains(event.relatedTarget) || overTooltip(event)) return;
-  tooltipHover = null; showTooltip();
-});
-// Hoverable descriptions must not take pointer events from the controls below.
-document.addEventListener("pointermove", event => {
-  if (tooltipHover && !tooltipHover.contains(event.target) && !overTooltip(event)) {
-    tooltipHover = null; showTooltip();
-  }
-});
-document.addEventListener("focusin", event => {
-  tooltipFocus = tooltipTarget(event.target); tooltipDismissed = null; showTooltip();
-});
+document.addEventListener("pointerout", event => { if (tooltipHover && !tooltipHover.contains(event.relatedTarget) && !overTooltip(event)) { tooltipHover = null; showTooltip(); } });
+document.addEventListener("pointermove", event => { if (tooltipHover && !tooltipHover.contains(event.target) && !overTooltip(event)) { tooltipHover = null; showTooltip(); } });
+document.addEventListener("focusin", event => { tooltipFocus = tooltipTarget(event.target); tooltipDismissed = null; showTooltip(); });
 document.addEventListener("focusout", () => { tooltipFocus = null; tooltipDismissed = null; showTooltip(); });
-document.addEventListener("click", event => {
-  const owner = tooltipTarget(event.target);
-  if (owner) { tooltipDismissed = owner; hideTooltip(); }
-}, true);
-document.addEventListener("keydown", event => {
-  if (event.key === "Escape" && tooltip && !tooltip.hidden) {
-    tooltipDismissed = tooltipOwner; hideTooltip();
-  }
-});
+document.addEventListener("click", event => { const owner = tooltipTarget(event.target); if (owner) { tooltipDismissed = owner; hideTooltip(); } }, true);
+document.addEventListener("keydown", event => { if (event.key === "Escape" && tooltip && !tooltip.hidden) { tooltipDismissed = tooltipOwner; hideTooltip(); } });
 window.addEventListener("resize", placeTooltip);
 document.addEventListener("scroll", placeTooltip, true);
-new MutationObserver(placeTooltip).observe(document.documentElement, {
-  subtree: true, childList: true, attributes: true, attributeFilter: ["hidden", "inert", "class", "aria-hidden"],
-});
-
+new MutationObserver(placeTooltip).observe(document.documentElement, { subtree: true, childList: true, attributes: true, attributeFilter: ["hidden", "inert", "class", "aria-hidden"] });
 for (const button of document.querySelectorAll("[data-action-icon]")) {
   if (!button.querySelector(":scope > .ui-icon")) actionIcon(button, button.getAttribute("data-action-icon"));
 }

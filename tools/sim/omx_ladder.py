@@ -171,47 +171,36 @@ def judge_isaac_stage(suite_or_report: dict | Path, *, scenario: str = "arm-s-ce
         passed = s_judge["status"] == "passed" and c_judge["status"] == "passed"
         reasons = [r for r in (s_judge.get("reason"), c_judge.get("reason")) if r]
         return dict(status="passed" if passed else "failed", claim="접촉·영상", scenario="arm-s-cell-case+omx-map-container-stack",
-                    run_id=c_judge.get("run_id") or s_judge.get("run_id"),
-                    result=dict(suite=s_judge["result"], container_stack=c_judge["result"]),
-                    artifacts=list(dict.fromkeys([*s_judge.get("artifacts", []), *c_judge.get("artifacts", [])])),
-                    reason=None if passed else "; ".join(reasons))
+                    run_id=c_judge.get("run_id") or s_judge.get("run_id"), result=dict(suite=s_judge["result"], container_stack=c_judge["result"]),
+                    artifacts=list(dict.fromkeys([*s_judge.get("artifacts", []), *c_judge.get("artifacts", [])])), reason=None if passed else "; ".join(reasons))
     if data.get("schema") == "rosy.omx-container-stack/1" or ("trials" in data and "task_success" in data):
-        trials = data.get("trials") or [{}]
+        trials, fixture = data.get("trials") or [{}], data.get("fixture") or {}
         layers = trials[0].get("layers") or []
-        fixture = data.get("fixture") or {}
-        placed = sum("opened_sample" in l for l in layers)
-        planned = len(fixture.get("row_order", [0, 1, 2])) * int(fixture.get("layers", 3))
+        placed, planned = sum("opened_sample" in l for l in layers), len(fixture.get("row_order", [0, 1, 2])) * int(fixture.get("layers", 3))
         passed = bool(data.get("task_success"))
         err = trials[0].get("error") or ("; ".join(trials[0].get("failures") or []) if trials[0].get("failures") else None)
-        return dict(status="passed" if passed else "failed", claim="접촉·영상", scenario="omx-map-container-stack",
-                    run_id=data.get("run_id"),
-                    result=dict(task_success=passed, placed=placed, planned=planned, layers=fixture.get("layers", 3),
-                                case=fixture.get("case"), error=err),
+        return dict(status="passed" if passed else "failed", claim="접촉·영상", scenario="omx-map-container-stack", run_id=data.get("run_id"),
+                    result=dict(task_success=passed, placed=placed, planned=planned, layers=fixture.get("layers", 3), case=fixture.get("case"), error=err),
                     artifacts=[], reason=None if passed else f"Isaac 3단 적재 실패({placed}/{planned}): {err or 'task_success=False'}")
     if "rows" in data:
         rows = data["rows"]
         bad = [r["id"] for r in rows if r.get("matches") is False or r.get("judgement") is None
                or (r.get("expect") is None and (r.get("judgement") or {}).get("result") not in ok_results)]
         passed = bool(rows) and not bad
-        return dict(status="passed" if passed else "failed", claim="접촉·영상", scenario=scenario,
-                    run_id=rows[-1].get("run_id") if rows else None,
+        return dict(status="passed" if passed else "failed", claim="접촉·영상", scenario=scenario, run_id=rows[-1].get("run_id") if rows else None,
                     result=dict(total=len(rows), matched=sum(r.get("matches") is True for r in rows),
-                                measured=sum(r.get("expect") is None and r.get("judgement") is not None for r in rows),
-                                failed_cases=bad),
+                                measured=sum(r.get("expect") is None and r.get("judgement") is not None for r in rows), failed_cases=bad),
                     artifacts=[], reason=None if passed else (f"Isaac 불일치/미판정: {', '.join(bad)}" if bad else "Isaac 실행 결과가 비어 있습니다."))
     if "judgement" in data:
         judgement = data["judgement"] or {}
         passed = judgement.get("result") in ok_results
-        return dict(status="passed" if passed else "failed", claim="접촉·영상", scenario=scenario,
-                    run_id=data.get("run_id"), result=judgement, artifacts=[],
-                    reason=None if passed else f"Isaac 판정 실패: {judgement.get('result')}")
+        return dict(status="passed" if passed else "failed", claim="접촉·영상", scenario=scenario, run_id=data.get("run_id"), result=judgement,
+                    artifacts=[], reason=None if passed else f"Isaac 판정 실패: {judgement.get('result')}")
     s2 = data.get("stage_2_isaac") or {}
     cases = data.get("cases") or s2.get("single_arm_cases") or []
-    return dict(status="pending" if cases else "not_run", claim="접촉·영상", scenario=scenario,
-                run_id=None, result=dict(prepared_cases=[c.get("id") for c in cases],
-                                         two_arm_scenario=s2.get("two_arm_scenario"),
-                                         two_arm_config=s2.get("two_arm_config")), artifacts=[],
-                reason=None if cases else "전달할 Isaac 케이스가 없습니다.")
+    return dict(status="pending" if cases else "not_run", claim="접촉·영상", scenario=scenario, run_id=None,
+                result=dict(prepared_cases=[c.get("id") for c in cases], two_arm_scenario=s2.get("two_arm_scenario"), two_arm_config=s2.get("two_arm_config")),
+                artifacts=[], reason=None if cases else "전달할 Isaac 케이스가 없습니다.")
 
 
 def run_isaac_stage(run: Path, sha: str, python: str, mode: str, only: list[str] | None = None) -> dict | Path | None:
