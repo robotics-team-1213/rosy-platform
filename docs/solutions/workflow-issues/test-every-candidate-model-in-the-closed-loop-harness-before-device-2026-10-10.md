@@ -1,6 +1,7 @@
 ---
 title: Test every candidate model in the SIM closed loop before the device; per-frame IoU hides wall false positives
 date: 2026-10-10
+last_updated: 2026-11-12
 category: workflow-issues
 module: SIM closed-loop harness, learned paint candidates
 problem_type: workflow_issue
@@ -30,3 +31,9 @@ Per-frame IoU looked acceptable for both candidates. Closed-loop SIM runs with o
 ## Evidence
 
 SIM runs on the model PC (not the laptop); `keep_debug` fields `paint_source_used`, `paint_model_revision`.
+
+### 2026-11-12: arrival alone gave a false model PASS
+
+The Fleet lap reached its destination while the recorder's ROS `cv_bridge` image callback crashed against NumPy 2. Its `.ready` file existed, but no camera frames or `keep_debug` survived. The arrival result therefore said nothing about the model. The recorder now decodes raw ROS images without `cv_bridge`; the drivable run requires recorded `keep_debug` during nonzero `cmd_vel`, at least 99% `learned_drivable`, and the requested revision on every learned frame. It reports fallback frames and whether the run was pure model. A missing trace fails the run. This gate is still a lane lap check, not a charging-bay pit-out or field acceptance.
+
+On the model PC, the first corrected trace had 1,496 matching observations of 1,500 during motion and four fallback frames. The strict all-frame gate correctly rejected a claim of pure model use; the later 99% gate retains those four frames in the result instead of hiding them. See `tools/sim/fleet_trips.py`, `tools/sim/fleet_trip_recorder.py`, and the 2026-11-12 workspace record for the raw run paths.
