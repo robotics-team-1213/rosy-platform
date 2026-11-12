@@ -17,26 +17,8 @@ import time
 ROOT=Path(__file__).resolve().parents[3]
 sys.path.insert(0,str(ROOT/'contracts/learning/src'))
 from rosy.contracts.learning import validate_policy
+from rosy.contracts.learning.inference import InferenceObservation, InferenceResult, _ns, _text, _vector
 from rosy.contracts.learning.omx import WRIST, camera_role
-
-
-def _text(value):
-    if not isinstance(value,str) or not value or value!=value.strip():raise ValueError('trimmed identity required')
-
-
-def _ns(value):
-    if type(value) is not int or not 0<=value<2**63:raise ValueError('integer owner-monotonic nanoseconds required')
-
-
-def _vector(values,size=None,positive=False):
-    values=tuple(values)
-    if (not values or (size is not None and len(values)!=size)
-            or any(type(v) not in (float,int) or not math.isfinite(v) or (positive and v<=0) for v in values)):
-        raise ValueError('finite numerical vector with declared dimensions required')
-    return values
-
-
-from rosy.contracts.learning.inference import InferenceObservation, InferenceResult
 
 
 def image_key(doc):

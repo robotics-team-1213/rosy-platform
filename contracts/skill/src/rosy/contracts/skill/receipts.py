@@ -7,6 +7,8 @@ from datetime import datetime
 import re
 from typing import Protocol
 
+from .invocation import _identifier
+
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 
 
@@ -23,11 +25,6 @@ class _ReceiptLike(Protocol):
     state: object
     journal_event_id: int
     observed_at: datetime
-
-
-def _identifier(value: str, field: str) -> None:
-    if not isinstance(value, str) or not value or value != value.strip():
-        raise ValueError(f"{field} must be a non-empty trimmed string")
 
 
 @dataclass(frozen=True)
