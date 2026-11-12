@@ -52,9 +52,9 @@ def _place_xy(site_map: Any, graph: Any, place_id: str, fallback: tuple[float, f
 
 def resolve_omx_cells(site_map: Any = None, graph: Any = None) -> dict[str, OmxWorkcellStation]:
     stations = (
-        OmxWorkcellStation("cell_s", "S3", _place_xy(site_map, graph, "S3", (0.68, -0.2528)),
+        OmxWorkcellStation("cell_s", "S3", _place_xy(site_map, graph, "S3", (0.6987, -0.2512)),
                            ("arm_s",), "shuttle_pinky_belt", "pinky", "belt", -85.0, 1),
-        OmxWorkcellStation("cell_ab", "S5", _place_xy(site_map, graph, "S5", (0.68, -0.4767)),
+        OmxWorkcellStation("cell_ab", "S5", _place_xy(site_map, graph, "S5", (0.9212, -0.4776)),
                            ("arm_a", "arm_b"), "stack_belt_pallet", "belt", "pallet", -90.0, 3),
     )
     return {station.cell_id: station for station in stations}

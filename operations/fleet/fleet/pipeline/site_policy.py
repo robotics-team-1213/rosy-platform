@@ -29,6 +29,10 @@ class SiteZonePolicy:
     merge_out_place: str | None
     corridor_rule: CorridorRule | None
     zone_speed_caps_mps: Mapping[str, float]
+    stop_lines: Mapping[str, Mapping[str, Any]] = field(default_factory=dict)
+    unload_station_place: str | None = None
+    manual_load_place: str | None = None
+    loop_hold_places: tuple[str, ...] = ()
     _charge_bay_edges: tuple[str, ...] = field(default=(), repr=False, compare=False)
 
     def classify_edge_zone(self, edge_id: str) -> str:
@@ -78,9 +82,22 @@ class SiteZonePolicy:
             "exit_gate_place": self.exit_gate_place,
             "merge_in_place": self.merge_in_place,
             "merge_out_place": self.merge_out_place,
+            "unload_station_place": self.unload_station_place,
+            "manual_load_place": self.manual_load_place,
+            "loop_hold_places": list(self.loop_hold_places),
+            "stop_lines": {k: dict(v) for k, v in self.stop_lines.items()},
             "zone_speed_caps_mps": dict(self.zone_speed_caps_mps),
             "corridor": corridor,
         }
+
+
+_DEFAULT_STOP_ROLES: dict[str, str] = {
+    "S1": "pit_out_manual_load",
+    "S2": "pit_in_stop",
+    "S3": "omx_cell_s_unload",
+    "S4": "lower_center_hold",
+    "S5": "pre_uturn_hold",
+}
 
 
 def resolve_site_policy(
@@ -99,23 +116,52 @@ def resolve_site_policy(
                 if arc.edge_id not in bay_edges:
                     bay_edges.append(arc.edge_id)
     places = graph.places if graph is not None else {}
+    rule_stops = {
+        s.place: {
+            "site_rule_role": getattr(s, "role", None),
+            "release": getattr(s, "release", "external"),
+            "hold_s": getattr(s, "hold_s", None) or getattr(s, "duration_s", None),
+            "timeout_s": getattr(s, "timeout_s", None),
+        }
+        for s in (getattr(site_rules, "stops", None) or ())
+        if getattr(s, "place", None)
+    }
+    stop_lines: dict[str, dict[str, Any]] = {}
+    for pid, pnode in sorted(places.items()):
+        if getattr(pnode, "kind", None) == "stop" or pid in _DEFAULT_STOP_ROLES:
+            r_meta = rule_stops.get(pid, {})
+            default_hold = 3.0 if pid in ("S1", "S3") else 1.5
+            stop_lines[pid] = {
+                "id": pid,
+                "x": round(float(pnode.x), 4),
+                "y": round(float(pnode.y), 4),
+                "role": _DEFAULT_STOP_ROLES.get(pid) or r_meta.get("site_rule_role") or "stop",
+                "site_rule_role": r_meta.get("site_rule_role"),
+                "release": r_meta.get("release", "external"),
+                "hold_s": float(r_meta.get("hold_s") or default_hold),
+            }
     caps = {
         "charge_bay": 0.05,
         "charge_corridor": 0.08,
         "main_loop": float(site_rules.formation.max_speed_mps)
         if site_rules and site_rules.formation.max_speed_mps else 0.15,
     }
+    exit_gate = rule.exit_place if rule else ("S1" if "S1" in places else None)
     return SiteZonePolicy(
         site_id=site_map.map_id if site_map is not None else "site",
         map_version=graph.version if graph is not None else None,
         charge_bays=tuple(bay.id for bay in bays),
         bay_staging_places=staging,
         entry_gate_place="S2" if "S2" in places else None,
-        exit_gate_place=rule.exit_place if rule else ("S1" if "S1" in places else None),
+        exit_gate_place=exit_gate,
         merge_in_place="J_in" if "J_in" in places else None,
         merge_out_place="J_out" if "J_out" in places else None,
         corridor_rule=rule,
         zone_speed_caps_mps=caps,
+        stop_lines=stop_lines,
+        unload_station_place="S3" if "S3" in places else None,
+        manual_load_place=exit_gate,
+        loop_hold_places=tuple(p for p in ("S4", "S5") if p in places),
         _charge_bay_edges=tuple(bay_edges),
     )
 

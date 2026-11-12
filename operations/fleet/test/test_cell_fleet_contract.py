@@ -1,4 +1,4 @@
-from dataclasses import FrozenInstanceError
+﻿from dataclasses import FrozenInstanceError
 from pathlib import Path
 import sys
 from types import SimpleNamespace
@@ -85,7 +85,12 @@ def test_end_to_end_bay_departure_to_s3_omx_cell_contract_handoff(tmp_path):
     site, graph, bays = build_world_261026_site_map()
     result = run_s3_cell_contract_handoff(site, graph, bays, work_dir=str(tmp_path))
     assert 'loop_left' in result['s3_route_edges']
+    assert 'lower_east' in result['s3_route_edges']
     assert 'loop_right' in result['s3_route_edges']
+    assert result['s3_route_places'] == ['J_out', 'S4', 'S5', 'S3']
+    assert sorted(result['stop_lines']) == ['S1', 'S2', 'S3', 'S4', 'S5']
+    assert result['selective_pit_in']['circulating_robot']['places'] == ['J_in', 'J_out']
+    assert 'S2' in result['selective_pit_in']['pit_in_robot']['places']
     assert result['inhibited_gate']['amr_motion_inhibited'] is True
     assert result['omx_receipt']['phase'] == 'RELEASED'
     assert result['omx_receipt']['amr_motion_inhibited'] is False
@@ -95,6 +100,7 @@ def test_end_to_end_bay_departure_to_s3_omx_cell_contract_handoff(tmp_path):
 
 def test_remote_fleet_r_cross_pc_handoff_lifecycle(tmp_path):
     repo_root = Path(__file__).resolve().parents[3]
+    assert (repo_root / "tools/sim/bay_departure_sim.py").is_file()
     if str(repo_root) not in sys.path:
         sys.path.insert(0, str(repo_root))
     from tools.sim.bay_departure_sim import build_world_261026_site_map, run_s3_cell_contract_handoff

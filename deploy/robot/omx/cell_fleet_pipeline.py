@@ -318,7 +318,7 @@ class FleetModelPipeline:
         token: str = "",
         cell_id: str = "cell_s",
         robot_id: str = "rosy_01",
-        pose_xy_yaw: tuple[float, float, float] = (0.68, -0.2528, 3.14159),
+        pose_xy_yaw: tuple[float, float, float] = (0.6987, -0.2512, 3.14159),
         stage_id: str = "remote-s3-pinky-to-belt",
         tier: int = 1,
         request_fn=None,
