@@ -13,7 +13,12 @@ import httpx
 import pytest
 
 from fleet.incidents.notifications import Channel, NotificationConfig, NotificationWorker
-from fleet.incidents.notification_client import RemoteNotificationSink, should_run_embedded_notification_worker
+from fleet.incidents.notification_client import (
+    RemoteNotificationSink,
+    build_delivery_request,
+    delivery_notification_id,
+    should_run_embedded_notification_worker,
+)
 from fleet.stuck.board import LineStuckBoard
 from fleet.stuck.reports import LineStuckAnswerLog
 from test_judgment_receipts import row
@@ -320,3 +325,159 @@ def test_closure_outbox_failure_rolls_back_episode_close(tmp_path):
                           close_reason='cleared', held_s_max=None, attempts_max=None)
     assert log.episodes()[0]['closed_at'] is None
     assert log.notifications.rows()[0]['state'] == 'PENDING'
+
+
+def _in_process_notification_service(tmp_path, now, worker_ref, webhook_requests):
+    import hashlib
+    from fastapi.testclient import TestClient
+    from rosy.notifications.api import create_app
+    from rosy.notifications.config import Producer
+    from rosy.notifications.journal import Journal
+    from rosy.notifications.service import DeliveryService
+
+    token = 'f' * 40
+    channels = {'discord': Channel('discord', DISCORD)}
+    profiles = {
+        'fleet': Producer(
+            'fleet',
+            hashlib.sha256(token.encode('utf-8')).hexdigest(),
+            frozenset(['discord']),
+            'https://fleet.example/owner-check',
+            'c' * 40,
+            'https://fleet.example/console',
+        ),
+    }
+
+    def provider(request):
+        webhook_requests.append(request)
+        return httpx.Response(200, json={'id': 'remote-777'})
+
+    http = httpx.AsyncClient(transport=httpx.MockTransport(provider))
+    journal = Journal(tmp_path / 'remote_notifications.sqlite3')
+
+    async def owner_check(profile, request):
+        return await worker_ref[0].verify_delivery_owner(profile, request)
+
+    service = DeliveryService(journal, channels, profiles, http, owner_check=owner_check, clock=lambda: now[0])
+    client = TestClient(create_app(service))
+
+    class TestClientOpener:
+        def open(self, request, *, timeout):
+            path = request.selector
+            headers = {key: value for key, value in request.header_items()}
+            response = client.request(request.get_method(), path, content=request.data, headers=headers)
+            if response.status_code >= 400:
+                raise OSError(f'HTTP {response.status_code}')
+            return io.BytesIO(response.content)
+
+    sink = RemoteNotificationSink('https://notifications.example', bearer_token=token, opener=TestClientOpener())
+    return service, journal, http, sink
+
+
+def test_forward_once_preserves_identity_and_delivers_single_external_webhook(tmp_path):
+    now, log, board, config = _setup(tmp_path)
+    observe(board, 100.0)
+    webhook_requests = []
+    worker_ref = [None]
+    service, journal, remote_http, sink = _in_process_notification_service(tmp_path, now, worker_ref, webhook_requests)
+    try:
+        async def forward_and_deliver():
+            async with httpx.AsyncClient(
+                transport=httpx.MockTransport(lambda _: pytest.fail('Fleet must not send direct webhook on cutover'))
+            ) as fleet_http:
+                worker = NotificationWorker(
+                    log.notifications, config, fleet_http, board=board, clock=lambda: now[0], sink=sink
+                )
+                worker_ref[0] = worker
+                await worker.forward_once()
+                await worker.run_once()
+                await service.run_once()
+
+        asyncio.run(forward_and_deliver())
+        [outbox_row] = log.notifications.rows()
+        with closing(log._connect()) as connection:
+            full_row = dict(connection.execute('SELECT * FROM fleet_notification_outbox').fetchone())
+        expected_id = delivery_notification_id(full_row)
+        expected_request = build_delivery_request(full_row)
+        assert outbox_row['state'] == 'SENT'
+        assert outbox_row['last_code'] == 'REMOTE_ACCEPTED'
+        assert outbox_row['provider_id'] == expected_id
+
+        receipt = journal.read('fleet', expected_id)
+        assert receipt.state == 'SENT' and receipt.attempts == 1
+        with journal.connect() as db:
+            stored = dict(
+                db.execute(
+                    'SELECT * FROM deliveries WHERE producer=? AND notification_id=?',
+                    ('fleet', expected_id),
+                ).fetchone()
+            )
+        assert stored['channel'] == 'discord'
+        assert stored['route_hash'] == config.channels[0].fingerprint
+        assert json.loads(stored['body']) == expected_request
+        assert len(webhook_requests) == 1
+        sent_payload = json.loads(webhook_requests[0].content)
+        assert 'ROSY OPEN · INTERVENE' in sent_payload['content']
+        assert 'pinky · case-1' in sent_payload['content']
+    finally:
+        journal.close()
+        asyncio.run(remote_http.aclose())
+
+
+@pytest.mark.parametrize('change,expected_state', [
+    ('closed', 'SUPERSEDED'),
+    ('claimed', 'SUPERSEDED'),
+    ('expired', 'EXPIRED'),
+    ('post_dequeue_expired', 'EXPIRED'),
+])
+def test_forward_once_blocks_closed_claimed_or_expired_incidents_before_service(tmp_path, monkeypatch, change, expected_state):
+    now, log, board, config = _setup(tmp_path)
+    observe(board, 100.0)
+    if change == 'closed':
+        observe(board, 100.0, None)
+    elif change == 'claimed':
+        log.handoff.claim('pinky', 'case-1', board.judgment_view('pinky'), 'alice', now=100.0)
+    elif change == 'expired':
+        now[0] = 701.0
+    elif change == 'post_dequeue_expired':
+        original = log.notifications.claim_due
+
+        def advance(*args):
+            result = original(*args)
+            if result is not None:
+                now[0] = 701.0
+                observe(board, now[0])
+            return result
+
+        monkeypatch.setattr(log.notifications, 'claim_due', advance)
+
+    webhook_requests = []
+    worker_ref = [None]
+    service, journal, remote_http, sink = _in_process_notification_service(tmp_path, now, worker_ref, webhook_requests)
+    try:
+        async def forward():
+            async with httpx.AsyncClient(
+                transport=httpx.MockTransport(lambda _: pytest.fail('Fleet must not send direct webhook'))
+            ) as fleet_http:
+                worker = NotificationWorker(
+                    log.notifications, config, fleet_http, board=board, clock=lambda: now[0], sink=sink
+                )
+                worker_ref[0] = worker
+                await worker.forward_once()
+                await service.run_once()
+
+        asyncio.run(forward())
+        open_row = next(item for item in log.notifications.rows() if item['kind'] == 'OPEN')
+        assert open_row['state'] == expected_state
+        with journal.connect() as db:
+            open_deliveries = [
+                json.loads(item['body'])
+                for item in db.execute('SELECT body FROM deliveries').fetchall()
+                if json.loads(item['body'])['kind'] == 'OPEN'
+            ]
+        assert open_deliveries == []
+        assert not any('ROSY OPEN' in json.loads(req.content)['content'] for req in webhook_requests)
+    finally:
+        journal.close()
+        asyncio.run(remote_http.aclose())
+
