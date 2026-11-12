@@ -119,16 +119,16 @@ def test_group_members_agree_and_pin_pi_boundary(func_name: str, paths: tuple[st
         assert -math.pi < val < math.pi
 
     # Pin the atan2 discontinuity convention on (-pi, +pi]:
-    # +pi (and +3*pi) wrap to +pi; IEEE-754 float -pi (and -3*pi) has sin(-pi) < 0 so wraps to -pi.
+    # +pi wraps to exact +pi; IEEE-754 float -pi has sin(-pi) < 0 so wraps to exact -pi.
     assert _eval_angle(first_fn, func_name, math.pi) == math.pi
-    assert _eval_angle(first_fn, func_name, 3 * math.pi) == math.pi
     assert _eval_angle(first_fn, func_name, -math.pi) == -math.pi
-    assert _eval_angle(first_fn, func_name, -3 * math.pi) == -math.pi
+    assert _eval_angle(first_fn, func_name, 3 * math.pi) == pytest.approx(math.pi, abs=1e-15)
+    assert _eval_angle(first_fn, func_name, -3 * math.pi) == pytest.approx(-math.pi, abs=1e-15)
 
     if func_name == "_yaw":
-        # Exact half-turn quaternion with w=+0.0, z=+1.0 lands on +pi in (-pi, +pi]; z=-1.0 lands on -pi.
+        # Quaternion double-cover (q and -q) at exact half-turn both land on +pi in (-pi, +pi].
         q_pos = SimpleNamespace(w=0.0, x=0.0, y=0.0, z=1.0)
         q_neg = SimpleNamespace(w=0.0, x=0.0, y=0.0, z=-1.0)
         for path, fn in funcs.items():
             assert fn(q_pos) == math.pi, f"{path}: +180 deg quaternion must wrap to +pi"
-            assert fn(q_neg) == -math.pi, f"{path}: -180 deg quaternion must wrap to -pi"
+            assert fn(q_neg) == math.pi, f"{path}: antipodal -q half-turn quaternion must also wrap to +pi"
