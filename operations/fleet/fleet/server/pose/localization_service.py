@@ -1,39 +1,11 @@
 """Fleet localization service (D-395 Phase 2 P2-6, contract §3): poll, arbitrate, post.
 
-Every 0.5 s it reads each robot's `/robot/state` (D-760 8: the shared read, at most 0.5 s old). For a robot in CANDIDATES it reads
-`/localization/candidates`, builds the arbiter `Context` (anchored LOCALIZED map-frame
-peers, see `_track_provenance`, the reference squares and slots from `lane_rules.yaml`, and an overhead sighting no
-older than 300 ms) and posts the arbiter's decision. While CORE runs a mission for the
-robot (`GET /localization/mission` says `running`) and for 1 s after it ends, Fleet
-neither arbitrates nor decides for it. It also runs the §9 monitor
-(`POST /localization/suspect`) and times the escalation ladder. Monitor evidence comes from
-CANDIDATES reports and from the unmapped objects in each LOCALIZED anchor's status, placed
-from the anchor's reported pose (S1 R1), so a mirror lock shows while every robot is LOCALIZED.
+Every 0.5 s it reads each robot's `/robot/state` (D-760 8), arbitrates CANDIDATES reports,
+runs the §9 monitor (`POST /localization/suspect`), times the P2-7 escalation ladder, and
+answers D-546 pose requests via `localization_pose_helpers`.
 
-**Overhead sightings are off by default.** D-257 §5 still says a sighting does not
-enter robot localization; D-395 only *proposes* to amend that, and the amendment is
-not accepted. `overhead_cue=True` (CLI `--localization-overhead-cue`) feeds sightings
-to the arbiter and the monitor for sim/bench work; leave it off on a live site.
-
-Ladder missions (P2-7): at 10 s `rotate_in_place`, at 45 s `to_square` (when a square
-is known; CORE refuses it as `unsupported` today) then `lane_to_stopline`, at 120 s
-`needs_human` (console badge "위치 확인 필요"). A rung CORE answers `busy` (the previous
-mission still running) is asked again every 2 s while the ladder stays on it. The ladder
-clock stops, and no rung or retry goes out, while the arbiter may still decide the robot's
-open request (`Arbiter.pending`) or the robot reports `reason: checking`, for at most
-30 s per episode (S1 re-run R2, R6). CORE drives every mission; Fleet only
-asks (D-2, D-369).
-
-Pose requests (D-546 5-6, proposed): a robot whose line follow holds in `lane_return_*` may have
-an open request at `GET /localization/request`. Fleet answers in order: the overhead map pose
-(`MapPoseService`, LOCALIZED and anchored by a fresh sighting; `pose_request_overhead`, default on),
-the D-395 arbiter when the robot has candidates, `resolve_pose_with_model` (not built), then
-`needs_human` (console badge). An answer is the existing decision POST; it is repeated after
-`pose_request.RETRY_S` while the request stays open, and an expired request is ignored.
-
-Before a mission Fleet holds the robots near the mover through the
-console's traffic keep-out (`traffic_hold`), and it never asks a LOCALIZED robot or one
-that predates D-395.
+**Overhead sightings are off by default.** D-257 §5 says a sighting does not enter robot
+localization; `overhead_cue=True` (`--localization-overhead-cue`) is for sim/bench work only.
 """
 
 from __future__ import annotations
@@ -49,9 +21,13 @@ import yaml
 
 from core_common.protocol.localization import (CHECKING, DecisionSource, LocalizationDecision,
                                                LocState)
-from fleet.localization import cues, pose_request, service_logic, trust
+from fleet.localization import cues, service_logic, trust
 from fleet.localization.arbiter import Arbiter, Context
 from fleet.localization.service_logic import Ladder, Monitor
+from fleet.server.localization_pose_helpers import (
+    check_reached_unconfirmed, forget_removed_robots, fresh_overhead_sighting,
+    handle_pose_request, observe_pose_from_anchors, track_anchor_provenance,
+)
 from fleet.swarm import read_spread, transport
 
 logger = logging.getLogger("fleet.localization")
@@ -253,63 +229,7 @@ class LocalizationService:
     # --- steps ----------------------------------------------------------------------
 
     async def _pose_request(self, rid: str, client: transport.RobotClient, state: Mapping, now: float) -> None:
-        """D-546 6: answer the robot's open pose request: overhead, arbiter, model, then a human."""
-        reason = str(((state.get("line_follow") or {}).get("reason")) or "")
-        if not reason.startswith("lane_return_") or reason == "lane_return_corridor_verified":
-            self._pose_req.pop(rid, None)               # lane_return let go or verified: new episode
-            self._pose_tries.pop(rid, None)
-            return
-        try:
-            request = await self._bounded(client.localization_request())
-        except Exception as exc:
-            logger.debug("localization: %s pose request unreadable: %s", rid, exc)
-            return
-        if request is None:
-            asked = self._pose_req.get(rid)
-            if asked is None or not asked.get("failed"):
-                self._pose_req.pop(rid, None)           # closed: the next one starts afresh
-            return
-        if not pose_request.is_live(request):
-            return                                      # older than its ttl: ignored, never answered
-        asked = self._pose_req.get(rid)
-        if asked is not None:
-            if asked["state"] == "needs_human" and asked.get("failed"):
-                return                                  # sticky until lane_return lets go
-            if asked["request_id"] == request.get("request_id"):
-                if asked["state"] == "needs_human" or now - asked["at"] < pose_request.RETRY_S:
-                    return
-        tries = self._pose_tries.get(rid, 0)           # kept across close/reopen until the episode ends
-        if tries >= pose_request.MAX_ANSWERS:           # answered and still open: it keeps failing
-            logger.warning("localization: %s pose request still open after %d answers: needs_human",
-                           rid, tries)
-            self._pose_req[rid] = {"request_id": request.get("request_id"), "at": now, "by": None,
-                                   "state": "needs_human", "tries": tries, "failed": True}
-            return
-        pose = self._overhead_pose(rid) if self._overhead_pose is not None and self.pose_request_overhead else None
-        robot_map = state.get("map_id") if isinstance(state, Mapping) else None
-        decision = pose_request.overhead_decision(request, pose, robot_map_id=robot_map)
-        if decision is not None:
-            by = "overhead"
-        else:
-            status = trust.status_of(state)
-            if (status is not None and status.state is LocState.CANDIDATES
-                    and self._arbiter.pending(rid, status.request_id)):
-                by = "arbiter"                          # the arbiter decides it (tick runs it)
-            else:
-                decision = pose_request.resolve_pose_with_model(request, state)
-                by = None if decision is None else "model"
-        if decision is not None:
-            await self._post_decision(rid, client, decision,
-                                      (decision.pose.x, decision.pose.y, decision.pose.yaw), now)
-        if by is not None:
-            tries += 1                                   # the arbiter's answer counts as well
-            self._pose_tries[rid] = tries
-        record = {"request_id": request.get("request_id"), "at": now, "by": by,
-                  "state": "answered" if by else "needs_human", "tries": tries}
-        if by is None and (asked is None or asked["state"] != "needs_human"):
-            logger.warning("localization: %s pose request %s (%s) has no Fleet answer: needs_human",
-                           rid, request.get("request_id"), request.get("reason"))
-        self._pose_req[rid] = record
+        await handle_pose_request(self, rid, client, state, now)
 
     def _decision_pending(self, rid: str, status) -> bool:
         """S1 re-run R2/R6: the ladder waits while a decision may still come for the robot's
@@ -323,49 +243,12 @@ class LocalizationService:
 
     def _track_provenance(self, states: Mapping[str, dict], localized: Mapping[str, cues.Pose],
                           now: float) -> None:
-        """Anchors (S1 finding 3): LOCALIZED at the pose of a Fleet decision that a world
-        cue, `source: human` or anchored peers carried. The track is 180-degree symmetric,
-        so robots mirrored together agree with each other; only an anchor may be a peer.
-        A decision whose POST timed out counts when the robot reaches its pose (`_reached`).
-
-        Provenance resets when the robot is seen outside LOCALIZED (an unreadable poll
-        keeps it) and when its pose jumps while LOCALIZED (a pose injected past Fleet).
-        A robot first seen LOCALIZED, or LOCALIZED away from the decided pose, has
-        unknown provenance and is not an anchor until it re-localizes."""
-        for rid in states:
-            pose = localized.get(rid)
-            previous = self._localized_at.get(rid)
-            if pose is None:
-                self._anchors.discard(rid)
-                self._localized_at.pop(rid, None)
-                continue
-            self._localized_at[rid] = (pose, now)
-            if previous is None:
-                decided = self._pending.pop(rid, None)
-                unconfirmed = self._unconfirmed.pop(rid, None)
-                if decided is not None and not service_logic.disagrees(decided, pose):
-                    self._anchors.add(rid)
-                    logger.info("localization: %s LOCALIZED by a Fleet decision: anchor", rid)
-                elif unconfirmed is not None and self._reached(unconfirmed, pose, now):
-                    self._anchors.add(rid)
-                    logger.info("localization: %s LOCALIZED at timed-out decision %s: confirmed, "
-                                "anchor", rid, unconfirmed[0])
-                else:
-                    logger.info("localization: %s LOCALIZED without a Fleet-known decision: "
-                                "not an anchor, not a peer", rid)
-            elif rid in self._anchors and service_logic.jumped(previous[0], pose, now - previous[1]):
-                self._anchors.discard(rid)
-                logger.warning("localization: %s pose jumped while LOCALIZED: no longer an anchor", rid)
+        track_anchor_provenance(self, states, localized, now)
 
     @staticmethod
     def _reached(unconfirmed: tuple, pose: cues.Pose, now: float) -> bool:
-        """A timed-out decision is confirmed by the robot's first LOCALIZED pose: soon enough,
-        close enough, and carried by cues that anchor (S1 run 3 T2)."""
-        _, decided, anchoring, sent = unconfirmed
-        return (now - sent <= UNCONFIRMED_S
-                and math.dist(decided[:2], pose[:2]) <= UNCONFIRMED_M
-                and abs(cues.wrap(pose[2] - decided[2])) <= UNCONFIRMED_YAW_RAD
-                and anchoring)
+        return check_reached_unconfirmed(unconfirmed, pose, now, unconfirmed_s=UNCONFIRMED_S,
+                                         unconfirmed_m=UNCONFIRMED_M, unconfirmed_yaw_rad=UNCONFIRMED_YAW_RAD)
 
     def anchors(self) -> set:
         """Robots whose LOCALIZED pose Fleet can trace to a world cue (tests, console)."""
@@ -458,25 +341,7 @@ class LocalizationService:
 
     def _observe_from_anchors(self, states: Mapping[str, dict], localized: Mapping[str, cues.Pose],
                               anchors: Mapping[str, cues.Pose], observations: dict, now: float) -> None:
-        """D-395 rev. 4 §5 follow-up (S1 R1): a LOCALIZED anchor's status carries what its
-        lidar sees; placed from its reported map pose, it is evidence about every other
-        LOCALIZED robot. Anchors only: a mirror-locked robot places a correct one on its
-        twin, and an observer is never evidence about itself. Each (anchor, objects_stamp)
-        is one observation, fresh for REPORT_FRESH_S after Fleet first saw it."""
-        for rid, pose in anchors.items():
-            status = trust.status_of(states.get(rid))
-            if status is None or status.objects_stamp is None:
-                self._objects_seen.pop(rid, None)
-                continue
-            seen = self._objects_seen.get(rid)
-            if seen is None or seen[0] != status.objects_stamp:
-                seen = self._objects_seen[rid] = (status.objects_stamp, now)
-            if now - seen[1] > service_logic.REPORT_FRESH_S:
-                continue
-            targets = {o: p for o, p in localized.items() if o != rid}
-            for target, observed in service_logic.peer_observations(
-                    status.unmapped_objects, pose, targets).items():
-                observations.setdefault(target, []).append((("objects", rid, status.objects_stamp), observed))
+        observe_pose_from_anchors(self, states, localized, anchors, observations, now)
 
     async def _watch(self, localized: Mapping[str, cues.Pose], observations: Mapping[str, list],
                      now: float) -> None:
@@ -553,40 +418,7 @@ class LocalizationService:
                 return
 
     def _sighting(self, rid: str, now: float) -> Optional[cues.Sighting]:
-        """A fresh (<= 300 ms) overhead sighting, only while the D-257 flag is on."""
-        if not self.overhead_cue or self._sightings is None:
-            return None
-        for row in self._sightings.snapshot().get("sightings", ()):
-            if row.get("robot_id") != rid:
-                continue
-            try:
-                age = self._wall() - float(row["captured_at"])
-                x, y, yaw = float(row["x"]), float(row["y"]), float(row["yaw"])
-            except (KeyError, TypeError, ValueError):
-                return None
-            if not 0.0 <= age <= cues.OVERHEAD_FRESH_S:
-                return None
-            return cues.Sighting(x, y, yaw, captured_at=now - age)
-        return None
+        return fresh_overhead_sighting(self, rid, now)
 
     def _forget_removed(self, current: set) -> None:
-        for rid in self._known - current:
-            self._monitor.forget(rid)
-            self._ladder.forget(rid)
-            self._last_good.pop(rid, None)
-            self._last_decision.pop(rid, None)
-            self._last_mission.pop(rid, None)
-            self._last_report.pop(rid, None)
-            self._busy_rung.pop(rid, None)
-            self._unsupported.pop(rid, None)
-            self._report_seen.pop(rid, None)
-            self._objects_seen.pop(rid, None)
-            self._mission_running.discard(rid)
-            self._quiet_until.pop(rid, None)
-            self._anchors.discard(rid)
-            self._pending.pop(rid, None)
-            self._unconfirmed.pop(rid, None)
-            self._localized_at.pop(rid, None)
-            self._pose_req.pop(rid, None)
-            self._pose_tries.pop(rid, None)
-        self._known = current
+        forget_removed_robots(self, current)
