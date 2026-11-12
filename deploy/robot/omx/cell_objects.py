@@ -112,87 +112,39 @@ def shadow_of(lab, bg, params=None):
     return darker & (k > 0.2) & (k < 1.15) & (resid < tol)
 
 
-def to_mm(pixels, record: dict, camera: dict, top_z: float):
-    """Pixels of points at height top_z (m) -> arm mm: parallax down/up to the map's z_view, then the map."""
-    z_view = record.get("z_view", top_z)
-    pts = np.asarray(pixels, float)
-    if top_z != z_view and "center_px" in camera and "height_m" in camera:
-        c = np.asarray(camera["center_px"], float)
-        scale = (camera["height_m"] - top_z) / (camera["height_m"] - z_view)
-        pts = c + (pts - c) * scale
-    h = np.asarray(record["homography"], float)
-    a = pts @ h[:, :2].T + h[:, 2]
-    return a[:, :2] / a[:, 2:] * 1000.0
-
-
-def measure(mm) -> dict:
-    (cx, cy), (w, h), ang = cv2.minAreaRect(np.asarray(mm, np.float32))
-    if w < h:
-        w, h, ang = h, w, ang + 90.0
-    return {"centre_mm": [round(cx, 1), round(cy, 1)], "length_mm": round(w, 1), "width_mm": round(h, 1),
-            "long_axis_deg": round((ang + 90) % 180 - 90, 1)}
-
-
-def _colour_set(spec) -> set:
-    if not spec:
-        return set()
-    items = spec.split(",") if isinstance(spec, str) else spec
-    return {str(c).strip().lower() for c in items if str(c).strip()}
-
-
-def colour_name(hsv) -> str:
-    """Human-readable colour name from OpenCV HSV (H in 0..179, S and V in 0..255)."""
-    h, s, v = float(hsv[0]), float(hsv[1]), float(hsv[2])
-    if s < 35:
-        return "black" if v < 65 else ("white" if v > 200 else "grey")
-    for hi, name in ((8, "red"), (22, "orange"), (35, "yellow"), (88, "green"), (135, "blue"), (165, "purple")):
-        if h < hi:
-            return name
-    return "red"
-
-
-def colour_tag(img, px) -> dict:
-    """Median OpenCV HSV and colour name of image pixels `px` (N x 2 [x, y])."""
-    if img is None or len(px) == 0:
-        return {}
-    pts = np.asarray(px, int)
-    xs = np.clip(pts[:, 0], 0, img.shape[1] - 1)
-    ys = np.clip(pts[:, 1], 0, img.shape[0] - 1)
-    hsv_px = cv2.cvtColor(img[ys, xs].reshape(-1, 1, 3), cv2.COLOR_BGR2HSV).reshape(-1, 3)
-    med = [int(round(float(v))) for v in np.median(hsv_px, axis=0)]
-    return {"colour": colour_name(med), "hsv": med}
-
-
-def want_reason(want: dict | None, o: dict) -> str | None:
-    """None when `o` satisfies `want` ({'object': ..., 'colour': ...}), else why it was filtered out."""
-    if not want:
-        return None
-    objs = _colour_set(want.get("object") or want.get("objects"))
-    if objs and str(o.get("object") or "").lower() not in objs:
-        return f"wanted object {','.join(sorted(objs))}, got {o.get('object')}"
-    cols = _colour_set(want.get("colour") or want.get("color") or want.get("colours"))
-    if cols and str(o.get("colour") or "").lower() not in cols:
-        return f"wanted colour {','.join(sorted(cols))}, got {o.get('colour')}"
-    return None
+from cell_object_pose import (  # noqa: E402, F401
+    _colour_set,
+    _px_mm2,
+    colour_name,
+    colour_tag,
+    container_structure,
+    decision_ai_verify,
+    measure,
+    outline,
+    to_mm,
+    top_face,
+    want_reason,
+)
 
 
 def _fits(m: dict, o: dict, k: int = 1, strict: bool = False, gap_mm: float = 0.0, stagger_mm: float = 0.0,
-          colour: str | None = None) -> bool:
+          colour: str | None = None, ignore_colour: bool = False) -> bool:
     # lengths come in whole cells, so a lone blob's length may stray up to half a cell; the real top camera read a
     # 60 mm container 47-56 mm long (dark end frames drop out of the mask) while its 30 mm width held within 9
     # (2026-10-28). Pieces split from a merged blob stay strict: with the loose length a tangled cluster's
     # piece matched and would have become a grasp target.
-    allowed = _colour_set(o.get("colours") or o.get("colour"))
-    if allowed and colour and colour.lower() not in allowed:
-        return False
+    if not ignore_colour:
+        allowed = _colour_set(o.get("colours") or o.get("colour"))
+        if allowed and "any" not in allowed and "*" not in allowed and colour and colour.lower() not in allowed:
+            return False
     t = o["tolerance_mm"]  # k side by side: k widths plus up to k - 1 gaps of gap_mm (the ship plate's 6 mm cells)
     return (-t <= m["width_mm"] - k * o["width_mm"] <= (k - 1) * gap_mm + t
             and abs(m["length_mm"] - o["length_mm"]) <= (t if strict else o.get("length_tolerance_mm", t)) + stagger_mm)
 
 
-def match(m: dict, catalog: list, strict: bool = False, colour: str | None = None):
+def match(m: dict, catalog: list, strict: bool = False, colour: str | None = None, ignore_colour: bool = False):
     """The nearest entry within tolerance (and optional colour constraint), or None."""
-    ok = [o for o in catalog if _fits(m, o, strict=strict, colour=colour or m.get("colour"))]
+    ok = [o for o in catalog if _fits(m, o, strict=strict, colour=colour or m.get("colour"), ignore_colour=ignore_colour)]
     return min(ok, key=lambda o: abs(m["width_mm"] - o["width_mm"]) + abs(m["length_mm"] - o["length_mm"])) if ok else None
 
 
@@ -210,8 +162,10 @@ def classify(mm, catalog: list, px_mm2: float | None = None, params=None, px=Non
     is tangled (2026-10-28: two side by side plus a third touching at an angle gave a 25 degree axis and wrong
     pieces) and is never a grasp target."""
     tag = colour_tag(img, px) if img is not None and px is not None else {}
-    m = {**measure(mm), **tag}
-    o = match(m, catalog, colour=tag.get("colour"))
+    struct = {"structure": container_structure(img, px)} if px is not None else {}
+    ignore_col = bool(params.get("objects.ignore_colour")) if isinstance(params, dict) else False
+    m = {**measure(mm), **tag, **struct}
+    o = match(m, catalog, colour=tag.get("colour"), ignore_colour=ignore_col)
     if o:
         return [{**m, "object": o["id"], "grasp": o["grasp"], "matched": True}]
     # a row put back by hand: one box 15 mm along from the others made the row's blob 16 mm longer than a box
@@ -225,12 +179,12 @@ def classify(mm, catalog: list, px_mm2: float | None = None, params=None, px=Non
             for row in (m, turned):
                 # shortcut: the stagger only for rows of 3+ that all read the same entry; at 2 a tangled cluster's
                 # pieces passed it (test_two_side_by_side_pieces_split_but_a_tangled_cluster_is_never_a_target)
-                if not _fits(row, o, k, strict=True, gap_mm=gap, stagger_mm=stagger if k >= 3 else 0.0):
+                if not _fits(row, o, k, strict=True, gap_mm=gap, stagger_mm=stagger if k >= 3 else 0.0, ignore_colour=ignore_col):
                     continue
                 feasible = True
                 strips = [(g, {**measure(mm[g]), **(colour_tag(img, px[g]) if img is not None and px is not None and len(px) == len(mm) else tag)})
                           for g in _strips(mm, row, k)]
-                found = [(match(s, catalog, strict=True, colour=s.get("colour")), s, g) for g, s in strips]
+                found = [(match(s, catalog, strict=True, colour=s.get("colour"), ignore_colour=ignore_col), s, g) for g, s in strips]
                 ok = all(e for e, _, _ in found) and (k < 3 or len({e["id"] for e, _, _ in found}) == 1) and all(
                     abs((s["long_axis_deg"] - row["long_axis_deg"] + 90) % 180 - 90) <= prm.get(params, "objects.split_axis_deg", SPLIT_AXIS_DEG)
                     and (px_mm2 is None or g.sum() * px_mm2 >= prm.get(params, "objects.split_fill", SPLIT_FILL) * s["length_mm"] * s["width_mm"])
@@ -245,43 +199,6 @@ def classify(mm, catalog: list, px_mm2: float | None = None, params=None, px=Non
     if feasible:
         return [{**m, "object": None, "grasp": None, "matched": False, "tangled": True}]
     return [{**m, "object": None, "grasp": None, "matched": False}]
-
-
-def top_face(px, height_mm: float, camera: dict, surface_z: float, params=None):
-    """The top camera also sees an object's side faces: a 30 mm cube at the image edge measured 44 x 39 mm
-    (2026-10-28). The blob is the top face swept toward the principal point by r*h/(H-h) px (r the radius of
-    the blob's inner edge, H the camera above the surface), so the top face is the blob eroded by that sweep."""
-    if "center_px" not in camera or "height_m" not in camera:
-        return px
-    c = np.asarray(camera["center_px"], float)
-    h, big_h = height_mm / 1000.0, camera["height_m"] - surface_z
-    radial = px - c
-    d = float(np.linalg.norm(radial.mean(axis=0)))
-    if d < 1e-6 or big_h <= h:
-        return px
-    u = radial.mean(axis=0) / d
-    sweep = float((radial @ u).min()) * h / (big_h - h)
-    n = int(math.ceil(sweep))
-    if n < 1:
-        return px
-    lo = px.min(axis=0).astype(int) - n - 1
-    size = (px.max(axis=0).astype(int) - lo + n + 2)[::-1]
-    mask = np.zeros(size, np.uint8)
-    mask[(px[:, 1] - lo[1]).astype(int), (px[:, 0] - lo[0]).astype(int)] = 255
-    kernel = np.zeros((2 * n + 1, 2 * n + 1), np.uint8)  # offsets from a pixel toward the principal point
-    cv2.line(kernel, (n, n), (round(n - sweep * u[0]), round(n - sweep * u[1])), 1, 1)
-    eroded = cv2.erode(mask, kernel, anchor=(n, n))
-    ys, xs = np.nonzero(eroded)
-    keep = np.column_stack([xs, ys]) + lo
-    return keep.astype(float) if len(keep) >= prm.get(params, "objects.min_px", MIN_PX) else px
-
-
-def _px_mm2(px, mm) -> float | None:
-    """Area of one pixel in arm mm (the map is affine, so the hulls' ratio is its determinant)."""
-    if len(px) < 5:
-        return None
-    a_px = cv2.contourArea(cv2.convexHull(px.astype(np.float32)))
-    return None if a_px < 1 else cv2.contourArea(cv2.convexHull(np.asarray(mm, np.float32))) / a_px
 
 
 def _measure_blob(px, record: dict, camera: dict, catalog: list, surface_z: float, params, img=None) -> list:
@@ -376,19 +293,6 @@ def object_mask(img, roi, hsv, surface_px=None, params=None):
     o, c = (int(prm.get(params, f"objects.{k}")) for k in ("open_px", "close_px"))
     mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, np.ones((o, o), np.uint8))
     return cv2.morphologyEx(mask, cv2.MORPH_CLOSE, np.ones((c, c), np.uint8))
-
-
-def outline(px, results: list, catalog: list, camera: dict, surface_z: float):
-    """Convex outline of an object's own image area: the pixels found plus where their tops meet the surface, so the
-    side faces the camera sees belong to the object. With detection on the top face only (objects.hsv,
-    top_v_frac) a 2-cell's own side face read as a neighbour and closed the finger gap (2026-10-29)."""
-    pts = np.asarray(px, float)
-    heights = [o["top_height_mm"] for o in catalog if o["id"] in {r.get("object") for r in results}] or [o["top_height_mm"] for o in catalog]
-    if "center_px" in camera and "height_m" in camera:
-        c, big_h = np.asarray(camera["center_px"], float), camera["height_m"] - surface_z
-        base = c + (pts - c) * (big_h - max(heights) / 1000.0) / big_h
-        pts = np.vstack([pts, base])
-    return cv2.convexHull(pts.astype(np.int32)).reshape(-1, 2)
 
 
 def detect(img, roi, record: dict, camera: dict, catalog: list, surface_z: float = 0.0, params=None,

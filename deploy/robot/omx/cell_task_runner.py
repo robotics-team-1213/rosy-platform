@@ -48,6 +48,16 @@ def carries(task: dict, sites: dict) -> list:
         if len({a, b, buf}) < 3:
             raise ValueError("swap needs two sites and a distinct free buffer site")
         plan = [(a, buf), (b, a), (buf, b)]
+    elif task["kind"] == "shuttle":
+        a, b = task["a"], task["b"]
+        if a == b:
+            raise ValueError("shuttle needs two distinct sites")
+        cycles = int(task.get("cycles") or 1)
+        if cycles < 1:
+            raise ValueError("shuttle cycles must be >= 1")
+        plan = [pair for _ in range(cycles) for pair in ((a, b), (b, a))]
+        if task.get("legs") is not None:
+            plan = plan[: max(1, int(task["legs"]))]
     elif task["kind"] in ("stack", "unstack"):
         tiers = [task["tier"]] if "tier" in task else list(task.get("tiers") or cell_place_fit.TIERS)
         if not tiers or any(t not in cell_place_fit.TIERS for t in tiers):
@@ -108,6 +118,9 @@ def run_task(task: dict, config_path: Path, catalog: Path, log_dir: Path, prefli
         if step["result"] != "placed":  # a stop mid-swap leaves the objects where the last carry put them: a person looks
             return {**out, "status": "stopped", "why": f"{src} -> {dst}: {step['result']}", "ended": time.time()}
     return {**out, "status": "done", "ended": time.time()}
+
+
+from cell_fleet_pipeline import FleetModelPipeline  # noqa: E402,F401  (re-exported)
 
 
 def main(argv=None):

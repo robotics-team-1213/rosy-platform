@@ -189,3 +189,43 @@ def test_settled_state_averages_three_samples_when_jitter_shaking(monkeypatch):
     assert out["samples"] == 3
     assert out["state"][:2] == pytest.approx([10.0, -20.0])
 
+
+def test_pivot_calibrate_uses_settled_state_when_shaking(tmp_path, monkeypatch):
+    class ShakyPivotArm:
+        def __init__(self):
+            self.commands = []
+            self.state_idx = 0
+
+        def act(self, cmd):
+            self.commands.append(cmd)
+            if cmd == "state":
+                self.state_idx += 1
+                # Oscillates +3 / -3 / 0 around [10, -20, 30, 40, 50, 56]
+                delta = (3.0, -3.0, 0.0)[(self.state_idx - 1) % 3]
+                return {"ok": True, "state": [10.0 + delta, -20.0 - delta, 30.0, 40.0, 50.0, 56.0], "jitter": {"shaking": True}}
+            return {"ok": True, "state": [0.0] * 6}
+
+    seen_states = []
+    monkeypatch.setattr(cell_pivot, "write_library", lambda *a, **k: tmp_path / "p.json", raising=False)
+    import cell_pipeline as cp
+    monkeypatch.setattr(cp, "write_library", lambda *a, **k: tmp_path / "p.json")
+    monkeypatch.setattr(cell_pivot, "mark_jaws", lambda *a, **k: (320.0, 240.0))
+    monkeypatch.setattr(cell_pivot, "mark_to_arm", lambda *a, **k: (0.12, 0.15))
+    monkeypatch.setattr(cell_pivot, "fold", lambda *a, **k: None)
+    monkeypatch.setattr(cell_pivot, "joints_tcp", lambda state, *a, **k: seen_states.append(list(state[:2])) or (0.10, 0.15, 0.08, 0.0))
+
+    cfg = {
+        "plan": {"approach_m": 0.03, "home": [0.0] * 5},
+        "coarse": {"z_view": 0.08},
+        "sites": {"floor": {"z": 0.0, "surface_z": 0.0}},
+        "cameras": {"top": {"height_m": 0.65, "center_px": [320, 240]}},
+        "pivot": {"geometry": {"radius_mm": 20.0, "phase_deg": 0.0}},
+    }
+    cal = {"sites": {"floor~coarse": {"homography": [[1, 0, 0], [0, 1, 0], [0, 0, 1]]}}}
+    res = cell_pivot.pivot_calibrate(ShakyPivotArm(), cfg, (0.10, 0.15), [0.0, 45.0], cal, "floor", tmp_path, sleep=lambda _: None, log=lambda _: None)
+    assert res["result"] == "calibrated"
+    assert len(seen_states) == 2
+    assert seen_states[0] == pytest.approx([10.0, -20.0])
+    assert seen_states[1] == pytest.approx([10.0, -20.0])
+
+

@@ -1,245 +1,36 @@
 #!/usr/bin/env python3
 """Keep the OMX cell's native tools at the newest green main, switching only while the cell is idle.
 
-Native (D-246): the device owners run on the host, so updates are release directories plus one
-atomic `current` symlink, not containers. One run (a user systemd timer calls it every few minutes):
-
-1. read the newest commit of the tracked branch (anonymous HTTPS for the public code repository);
-2. trust gate: every required check completed successfully and was reported by GitHub Actions; the
-   commit descends from the installed one (a force-push back to old code is refused); optionally
-   GitHub must show it as a verified signed commit (`require_verified_commit`);
-3. unpack only the configured paths of that commit into `releases/<sha12>` and write `RELEASE`;
-4. environment: one venv per sha256 of the release's `requirements-cell.lock` (`envs/<hash12>`),
-   built with `base_python` before the idle gate and reused while the lock is unchanged; the release
-   is smoke-checked with that venv (its tools import);
-5. switch only when the cell is idle: no recording session holds `session.lock`, no process has the
-   follower or leader serial device open, and every follower motor reports torque OFF; otherwise the
-   prepared release waits for the next run. With `observers` ({unit, device, health} per follower),
-   the active torque-OFF observer may be the bus's only owner and its fresh motor-health snapshot
-   (within `observer_max_age_s`, default 10 s) is the torque evidence;
-6. move `current` and `current-env` atomically, re-run the smoke check through them, and roll back on
-   failure;
-7. keep the newest `keep` releases and the venvs they use (always the current and previous ones).
-
-`"kind": "service"` (D-805, e.g. the AI PC's rosy-situation) reuses the same steps for a host service:
-`paths` and `smoke` come from the config, `lock` may be null (a `--system-site-packages` venv with
-nothing installed), there is no cell to be idle, and after the switch the listed user `units` are
-restarted and must stay active `settle` seconds, otherwise the previous release is linked and restarted.
-Before each restart the `unit_files` (release paths) are copied from `current` into the user unit folder
-and systemd reloads them, so a unit edit on main reaches the host and a rollback brings the old unit back.
-
-A service may also need the idle cell (D-871: cameras, torque-OFF observers and the observation bridge):
-`"idle_gate": "cell"` with the cell's `devices`, `follower_device` and/or `observers` holds the cell's
-`session_lock` (default `~/rosy-omx/session.lock`) and switches only under the same idle rule as step 5.
-The lock is released after the smoke check and before the restart, because the observer's own start
-guard takes it. `"system_site_packages": true` builds the lock's venv over the host Python's packages
-(the observers need the system ROS `rclpy`); `"uv": "~/.local/bin/uv"` builds it with uv for a host Python
-without `ensurepip`. `"sequential": true` stops the units one by one in reverse order and starts them in
-order (camera readiness restores its controls only after the cameras settle).
-
-Every step is one JSON line on stdout and the state is in `state.json`. Stopping updates:
-`systemctl --user disable --now rosy-omx-autoupdate.timer`. Release signing (D-441) remains a later step: until then trust rests on
-branch protection of main, the Actions-reported checks and the ancestry rule.
-
-  omx_autoupdate.py --config ~/.config/rosy/omx-autoupdate.json run [--dry-run]
-  omx_autoupdate.py --config ... status | rollback
+Single Responsibility:
+  - Atomic Release State Machine & Rollback Controller (`Updater`), configuration validator (`load_config`),
+    and CLI entrypoint (`main`).
+  - Host Git/GitHub/Venv/Systemd/Bus I/O Adapter (`Host`, `DEFAULT_PATHS`, `LOCK`, `SMOKE`, `log`)
+    lives in `omx_autoupdate_host.py` and is re-exported here for backward compatibility.
 """
 from __future__ import annotations
 
 import argparse
 import fcntl
 import hashlib
-import io
 import json
 import os
-import shutil
-import subprocess
-import sys
-import tarfile
-import time
-import urllib.request
 from pathlib import Path
+import shutil
+import subprocess  # noqa: F401  (re-exported for test monkeypatching)
+import sys
+import time  # noqa: F401  (re-exported for test monkeypatching)
 
-DEFAULT_PATHS = ("deploy/robot/omx", "contracts/foundation", "middleware/devices/omx/adapter",
-                 "operations/overhead/rosy_vision",  # omx_incident's Fleet link (D-971)
-                 "integrations/robots/omx", "learning/curation/omx", "test/test_omx_joint_tune.py",
-                 "test/test_omx_record_session.py")
-LOCK = "deploy/robot/omx/requirements-cell.lock"
-SMOKE = ("import sys; sys.path.insert(0, 'deploy/robot/omx'); "
-         "import joint_tune, record_session, record_config, omx_autoupdate; print('smoke ok')")
+_HERE = str(Path(__file__).resolve().parent)
+if _HERE not in sys.path:
+    sys.path.insert(0, _HERE)
 
-
-def log(**row):
-    row["t"] = round(time.time(), 3)
-    print(json.dumps(row, default=str), flush=True)
-
-
-class Host:
-    """Everything that touches git, GitHub, processes and devices; replaced by fakes in tests."""
-
-    def __init__(self, cfg: dict) -> None:
-        self.cfg = cfg
-
-    def remote_head(self) -> str:
-        out = subprocess.run(["git", "ls-remote", self.cfg["repo_url"], f"refs/heads/{self.cfg['branch']}"],
-                             capture_output=True, text=True, timeout=60, check=True).stdout.split()
-        return out[0]
-
-    def checks(self, sha: str) -> dict:
-        url = f"https://api.github.com/repos/{self.cfg['github_repo']}/commits/{sha}/check-runs?per_page=100"
-        request = urllib.request.Request(url, headers={"Accept": "application/vnd.github+json"})
-        runs = json.load(urllib.request.urlopen(request, timeout=30))["check_runs"]
-        return {run["name"]: (run["status"], run["conclusion"], (run.get("app") or {}).get("slug"))
-                for run in runs}
-
-    def _api(self, path: str) -> dict:
-        request = urllib.request.Request(f"https://api.github.com/repos/{self.cfg['github_repo']}/{path}",
-                                         headers={"Accept": "application/vnd.github+json"})
-        return json.load(urllib.request.urlopen(request, timeout=30))
-
-    def descends(self, base: str, head: str) -> bool:
-        return self._api(f"compare/{base}...{head}")["status"] in {"ahead", "identical"}
-
-    def verified(self, sha: str) -> bool:
-        return bool(self._api(f"commits/{sha}")["commit"]["verification"]["verified"])
-
-    def build_env(self, lock: Path | None, target: Path) -> None:
-        if lock is None:  # a service on the host's own packages
-            make = ([os.path.expanduser(self.cfg["uv"]), "venv", "-q", "--python", self.cfg["base_python"]]
-                    if self.cfg.get("uv") else [self.cfg["base_python"], "-m", "venv"])
-            subprocess.run([*make, "--system-site-packages", str(target)], check=True, timeout=300)
-            return
-        system = ["--system-site-packages"] if self.cfg.get("system_site_packages") else []
-        if self.cfg.get("uv"):  # the Fleet PC's system Python 3.14 has no ensurepip (python3-venv), 2026-10-25
-            subprocess.run([os.path.expanduser(self.cfg["uv"]), "venv", "-q", "--python", self.cfg["base_python"],
-                            *system, str(target)], check=True, timeout=300)
-            subprocess.run([os.path.expanduser(self.cfg["uv"]), "pip", "install", "-q", "--python",
-                            str(target / "bin" / "python"), "-r", str(lock)], check=True, timeout=3000)
-            return
-        subprocess.run([self.cfg["base_python"], "-m", "venv", *system, str(target)], check=True, timeout=300)
-        subprocess.run([str(target / "bin" / "python"), "-m", "pip", "install", "--no-input", "-q", "-r", str(lock)],
-                       check=True, timeout=3000)
-
-    def running(self, units) -> list:
-        """The units to restart: all, or with `restart_running_only` the active ones, so a unit stopped by
-        hand (an observer stopped for the real owner) stays stopped."""
-        if not self.cfg.get("restart_running_only"):
-            return list(units)
-        return [u for u in units
-                if subprocess.run(["systemctl", "--user", "is-active", "--quiet", u], timeout=30).returncode == 0]
-
-    def restart(self, units) -> bool:
-        """Restart the service units and report whether all are still active after `settle` seconds."""
-        complete = True
-        try:
-            if self.cfg.get("unit_files"):  # the live release's own unit files, so unit edits on main arrive too
-                unit_dir = Path(self.cfg.get("unit_dir", "~/.config/systemd/user")).expanduser()
-                for name in self.cfg["unit_files"]:
-                    try:
-                        shutil.copyfile(Path(self.cfg["root"]) / "current" / name, unit_dir / Path(name).name)
-                    except OSError:  # an older release (rollback target) may lack one: keep going, still restart
-                        complete = False
-                        log(step="unit_file_missing", file=name)
-                try:
-                    subprocess.run(["systemctl", "--user", "daemon-reload"], timeout=60)
-                except subprocess.SubprocessError:  # still restart on what systemd has
-                    complete = False
-            if not units:
-                return complete
-            if self.cfg.get("sequential"):
-                # One at a time: stop in reverse order, then start in order. Restarted together, camera
-                # readiness restored its V4L2 controls while the cameras reopened, then refused to start
-                # (Fleet PC 2026-10-25).
-                for verb, ordered in (("stop", reversed(units)), ("start", units)):
-                    for unit in ordered:
-                        if subprocess.run(["systemctl", "--user", verb, unit], timeout=120).returncode != 0:
-                            return False
-            elif subprocess.run(["systemctl", "--user", "restart", *units], timeout=120).returncode != 0:
-                return False
-            time.sleep(self.cfg.get("settle", 10))
-            # one by one: `is-active` with several units succeeds when any one of them is active
-            active = all(subprocess.run(["systemctl", "--user", "is-active", "--quiet", unit],
-                                        timeout=30).returncode == 0 for unit in units)
-            return complete and active  # forward: a release missing its unit file fails
-        except (OSError, subprocess.SubprocessError):  # systemctl missing or timed out
-            return False
-
-    def archive(self, sha: str, paths, target: Path) -> None:
-        mirror = Path(self.cfg["root"]) / "mirror.git"
-        if not mirror.exists():
-            subprocess.run(["git", "init", "--bare", "-q", str(mirror)], check=True)
-        # main() holds update.lock, so no other git process uses this mirror: a lock here is left by a
-        # fetch that was killed (AI PC 10-20: shallow.lock blocked every run for three days).
-        for stale in mirror.glob("*.lock"):
-            stale.unlink()
-        subprocess.run(["git", "-C", str(mirror), "fetch", "-q", "--depth", "1", self.cfg["repo_url"], sha],
-                       check=True, timeout=600)
-        data = subprocess.run(["git", "-C", str(mirror), "archive", "--format=tar", sha, *paths],
-                              capture_output=True, check=True, timeout=600).stdout
-        with tarfile.open(fileobj=io.BytesIO(data)) as tar:
-            tar.extractall(target, filter="data")
-
-    def smoke(self, release: Path, python: Path) -> bool:
-        done = subprocess.run([str(python), "-c", self.cfg.get("smoke", SMOKE)], cwd=release, capture_output=True,
-                              text=True, timeout=120)
-        return done.returncode == 0 and "smoke ok" in done.stdout
-
-    def hold_session(self):
-        """Take the cell's session lock (the one joint_tune and record_session hold) and keep it for the
-        whole switch, so no session can start between the idle check and the smoke check."""
-        lock = Path(self.cfg.get("session_lock") or Path(self.cfg["root"]) / "session.lock")
-        lock.parent.mkdir(parents=True, exist_ok=True)
-        handle = lock.open("a")
-        try:
-            fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
-            handle.close()
-            return None
-        return handle
-
-    def _observer_pid(self, unit: str) -> str | None:
-        shown = subprocess.run(["systemctl", "--user", "show", unit, "-p", "ActiveState", "-p", "MainPID"],
-                               capture_output=True, text=True, timeout=10).stdout
-        props = dict(line.split("=", 1) for line in shown.splitlines() if "=" in line)
-        return props["MainPID"] if props.get("ActiveState") == "active" and props.get("MainPID", "0") != "0" else None
-
-    def device_in_use(self) -> bool:
-        # A configured torque-OFF observer may hold its follower bus permanently; any other owner is a session.
-        observed = {os.path.realpath(o["device"]): o["unit"] for o in self.cfg.get("observers", [])}
-        for device in self.cfg["devices"]:
-            resolved = os.path.realpath(device)
-            found = subprocess.run(["fuser", resolved], capture_output=True, text=True)
-            if found.returncode == 0:
-                owners = found.stdout.split()
-                if resolved not in observed or owners != [self._observer_pid(observed[resolved])]:
-                    return True
-        return False
-
-    def follower_torque_off(self, release: Path, python: Path) -> bool:
-        observers = self.cfg.get("observers")
-        if observers:
-            return all(self._observed_torque_off(o) for o in observers)
-        code = ("import sys; sys.path.insert(0, 'deploy/robot/omx'); from joint_tune import SerialBus, FOLLOWER; "
-                f"bus = SerialBus({self.cfg['follower_device']!r}, 0)\n"
-                "try:\n    on = []\n    for m in FOLLOWER:\n        bus.motor = m\n        on.append(bus.read('torque'))\n"
-                "finally:\n    bus.close()\nprint('torque', sum(on))")
-        done = subprocess.run([str(python), "-c", code], cwd=release, capture_output=True, text=True,
-                              timeout=60)
-        return done.returncode == 0 and done.stdout.strip() == "torque 0"
-
-    def _observed_torque_off(self, observer: dict) -> bool:
-        """The observer's own fresh motor-health snapshot: every expected motor reports torque OFF."""
-        try:
-            health = json.loads(Path(observer["health"]).read_text(encoding="utf-8"))
-            motors = health["motors"]
-            fresh = time.time() - float(health["observed_at"]) <= float(self.cfg.get("observer_max_age_s", 10))
-            return (fresh and isinstance(motors, list) and len(motors) == health["expected_motor_count"] > 0
-                    and all(m.get("torque_enabled") is False for m in motors))
-        except (OSError, ValueError, KeyError, TypeError):
-            return False
-
-    def follower_missing(self) -> bool:
-        return not self.cfg.get("observers") and not os.path.exists(self.cfg["follower_device"])
+from omx_autoupdate_host import (  # noqa: E402,F401  (re-exported)
+    DEFAULT_PATHS,
+    LOCK,
+    SMOKE,
+    Host,
+    log,
+)
 
 
 class Updater:
@@ -293,8 +84,6 @@ class Updater:
             self.envs.mkdir(parents=True, exist_ok=True)
             self.host.build_env(lock, staging)
             os.replace(staging, target)
-            # A venv is not relocatable: console scripts keep "#!<staging>/bin/python" (2026-10-24:
-            # lerobot-teleoperate failed with ENOENT on the missing envs/<hash>.tmp interpreter).
             old, new = str(staging).encode(), str(target).encode()
             for script in (target / "bin").iterdir():
                 if script.is_file() and not script.is_symlink() and old in (data := script.read_bytes()):
@@ -307,12 +96,11 @@ class Updater:
 
     def idle(self, release: Path, env: str) -> str | None:
         if self.cfg.get("kind") == "service" and self.cfg.get("idle_gate") != "cell":
-            # no cell; the restart and its health check guard the switch
             return None
         if self.host.device_in_use():
             return "device_in_use"
         if getattr(self.host, "follower_missing", lambda: False)():
-            return "follower_device_missing"  # a replaced board, not a powered arm: fix follower_device
+            return "follower_device_missing"
         if not self.host.follower_torque_off(release, self.python(env)):
             return "follower_torque_not_off"
         return None
@@ -339,7 +127,7 @@ class Updater:
         if name == state["current"]:
             log(step="up_to_date", release=name)
             return "up_to_date"
-        if name == state.get("failed"):  # do not refetch a release that failed until main moves on
+        if name == state.get("failed"):
             log(step="known_bad", release=name)
             return "known_bad"
         refused = self.trusted(sha, state)
@@ -352,7 +140,7 @@ class Updater:
                 log(step="would_prepare", release=name)
                 return "would_prepare"
             staging = self.releases / f"{name}.tmp"
-            for leftover in self.releases.glob("*.tmp"):  # failed preparations of this or older releases
+            for leftover in self.releases.glob("*.tmp"):
                 shutil.rmtree(leftover, ignore_errors=True)
             staging.mkdir()
             self.host.archive(sha, self.cfg["paths"], staging)
@@ -391,18 +179,18 @@ class Updater:
             log(step="would_switch", release=name)
             return "would_switch"
         previous, previous_env = state["current"], state.get("env")
-        # A first install may replace a hand-made `current` (deploy-situation.sh); put it back on failure.
-        before = {link: os.readlink(self.root / link) for link in ("current", "current-env")
-                  if (self.root / link).is_symlink()}
+        before = {
+            link: os.readlink(self.root / link)
+            for link in ("current", "current-env")
+            if (self.root / link).is_symlink()
+        }
         self.link(name, env)
         smoked = self.host.smoke(self.root / "current", self.root / "current-env" / "bin" / "python")
-        if not smoked:  # still under the lock: no session sees the broken release in current
+        if not smoked:
             self.relink(previous, previous_env, before)
-        # Chosen after the smoke check, right before the restart, and reused by the rollback: a unit stopped
-        # by hand meanwhile stays stopped.
         units = self.host.running(self.cfg.get("units", []))
         released = self.cfg.get("idle_gate") == "cell"
-        if released:  # rosy-omx-observer@ refuses to start while anyone holds the cell lock, this updater included
+        if released:
             session.close()
         if not (smoked and self.host.restart(units)):
             if smoked:
@@ -410,12 +198,12 @@ class Updater:
             self.host.restart(units)
             log(step="rolled_back", release=name, to=previous)
             retaken = self.host.hold_session() if released and smoked else True
-            if retaken is None:  # a session started after the release: the release was not at fault
+            if retaken is None:
                 log(step="deferred", release=name, reason="session_started_during_restart")
                 return "deferred"
             if released and smoked:
                 retaken.close()
-            state["failed"] = name  # do not retry it every run until main moves on
+            state["failed"] = name
             state["history"].append({"release": name, "result": "rolled_back", "at": time.time()})
             self.save(state)
             return "rolled_back"
@@ -429,7 +217,7 @@ class Updater:
     def relink(self, previous, previous_env, before) -> None:
         if previous:
             self.link(previous, previous_env)
-        else:  # first install: what was there before, or no current pointing at a broken release
+        else:
             self.unlink()
             for link, target in before.items():
                 (self.root / link).symlink_to(target)
@@ -453,20 +241,27 @@ class Updater:
                 self.host.restart(units)
         finally:
             session.close()
-        if self.cfg.get("idle_gate") == "cell":  # after the release, as in switch()
+        if self.cfg.get("idle_gate") == "cell":
             self.host.restart(units)
-        # current_sha is dropped: after a manual rollback the next forward update is not refused as older
-        state.update(current=state["previous"], previous=state["current"], env=state["previous_env"],
-                     previous_env=state["env"], current_sha=None)
+        state.update(
+            current=state["previous"],
+            previous=state["current"],
+            env=state["previous_env"],
+            previous_env=state["env"],
+            current_sha=None,
+        )
         self.save(state)
         log(step="rolled_back_manually", release=state["current"])
         return "rolled_back"
 
     def cleanup(self, state: dict) -> None:
         keep = {state["current"], state["previous"]}
-        names = sorted((p for p in self.releases.iterdir() if p.is_dir() and not p.name.endswith(".tmp")),
-                       key=lambda p: p.stat().st_mtime, reverse=True)
-        for path in names[self.cfg["keep"]:]:
+        names = sorted(
+            (p for p in self.releases.iterdir() if p.is_dir() and not p.name.endswith(".tmp")),
+            key=lambda p: p.stat().st_mtime,
+            reverse=True,
+        )
+        for path in names[self.cfg["keep"] :]:
             if path.name not in keep:
                 shutil.rmtree(path, ignore_errors=True)
         used = {state.get("env"), state.get("previous_env")}
@@ -482,18 +277,21 @@ def load_config(path: Path) -> dict:
     cfg.setdefault("paths", list(DEFAULT_PATHS))
     cfg.setdefault("keep", 3)
     cfg["root"] = os.path.expanduser(cfg.get("root", "~/rosy-omx"))
-    if cfg.get("kind") == "service":  # its own paths, smoke and root; never the cell's session lock
-        missing = [k for k in ("repo_url", "github_repo", "base_python", "paths", "smoke", "units", "root")
-                   if not cfg.get(k)]
+    if cfg.get("kind") == "service":
+        missing = [
+            k
+            for k in ("repo_url", "github_repo", "base_python", "paths", "smoke", "units", "root")
+            if not cfg.get(k)
+        ]
         cfg.setdefault("lock", None)
-        if cfg.get("idle_gate") == "cell":  # the cell's own lock and idle evidence, not this root's
+        if cfg.get("idle_gate") == "cell":
             missing += [k for k in ("devices",) if not cfg.get(k)]
             if not cfg.get("observers") and not cfg.get("follower_device"):
                 missing.append("observers or follower_device")
             sessions = os.environ.get("ROSY_OMX_HOME") or os.path.join(os.path.expanduser("~"), "rosy-omx")
             cfg.setdefault("session_lock", os.path.join(os.path.expanduser(sessions), "session.lock"))
         elif cfg.get("idle_gate") is not None:
-            raise SystemExit("idle_gate must be \"cell\" or absent")
+            raise SystemExit('idle_gate must be "cell" or absent')
         if missing or not cfg["required_checks"] or cfg["keep"] < 2:
             raise SystemExit(f"config needs {missing or 'required_checks and keep >= 2'}")
         return cfg
@@ -501,7 +299,7 @@ def load_config(path: Path) -> dict:
     if missing or not cfg["required_checks"] or cfg["keep"] < 2:
         raise SystemExit(f"config needs {missing or 'required_checks and keep >= 2'}")
     sessions = os.environ.get("ROSY_OMX_HOME") or os.path.join(os.path.expanduser("~"), "rosy-omx")
-    if os.path.realpath(os.path.expanduser(sessions)) != os.path.realpath(cfg["root"]):  # == joint_tune.lock_root()
+    if os.path.realpath(os.path.expanduser(sessions)) != os.path.realpath(cfg["root"]):
         raise SystemExit(f"root must be {sessions}, where joint_tune and record_session take session.lock")
     return cfg
 
@@ -515,7 +313,7 @@ def main(argv=None):
     cfg = load_config(args.config)
     Path(cfg["root"]).mkdir(parents=True, exist_ok=True)
     with (Path(cfg["root"]) / "update.lock").open("a") as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX)  # one updater at a time
+        fcntl.flock(lock, fcntl.LOCK_EX)
         updater = Updater(cfg, Host(cfg))
         if args.command == "status":
             print(json.dumps(updater.state(), indent=2))

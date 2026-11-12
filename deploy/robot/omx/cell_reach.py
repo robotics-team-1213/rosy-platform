@@ -28,17 +28,23 @@ def correct(cell, aim_xy, replan, params=None, fk=fk_xy) -> dict:
     dx = dy = 0.0
     rows = []
     for i in range(int(prm.get(params, "reach.max_iter")) + 1):
-        status = cell.act("state")
+        status = cell.act("state") or {}
+        if status.get("state") is None:
+            return {"verdict": "refuse", "why": "no arm state", "dx_mm": round(dx, 1), "dy_mm": round(dy, 1), "total_mm": round(math.hypot(dx, dy), 1), "iterations": rows}
         shaking = bool((status.get("jitter") or {}).get("shaking"))
         n_samples = max(base_samples, 3 if shaking else 1)
-        states = [status["state"]] + [cell.act("state")["state"] for _ in range(n_samples - 1)]
+        states = [status["state"]]
+        for _ in range(n_samples - 1):
+            nxt = (cell.act("state") or {}).get("state")
+            if nxt is not None:
+                states.append(nxt)
         pts = [fk(s) for s in states]
         x = sum(p[0] for p in pts) / len(pts)
         y = sum(p[1] for p in pts) / len(pts)
         ex, ey = 1000 * (aim_xy[0] - x), 1000 * (aim_xy[1] - y)
         row = {"iteration": i, "error_mm": [round(ex, 1), round(ey, 1)]}
-        if n_samples > 1:
-            row["samples"] = n_samples
+        if len(states) > 1:
+            row["samples"] = len(states)
         rows.append(row)
         if math.hypot(ex, ey) <= tol:
             return {"verdict": "pass", "dx_mm": round(dx, 1), "dy_mm": round(dy, 1), "total_mm": round(math.hypot(dx, dy), 1), "iterations": rows}
@@ -63,23 +69,22 @@ def hook(config: dict, cell, target: dict, write_library):
     from pathlib import Path
 
     work = Path(config["work_dir"]).expanduser()
-
-    def replan(dx_mm, dy_mm):
-        pick = dict(base_pick, x=round(base_pick["x"] + dx_mm / 1000, 4), y=round(base_pick["y"] + dy_mm / 1000, 4))
-        target["pick"] = pick
-        return write_library(config, pick, target["place"], work / "reach-replan.json")
-
-    base_pick = dict(target["pick"])
     tcp_x_m = config.get("tcp_x_m")
-    if tcp_x_m is None:
-        return lambda: correct(cell, (base_pick["x"], base_pick["y"]), replan, params)
-    return lambda: correct(
-        cell,
-        (base_pick["x"], base_pick["y"]),
-        replan,
-        params,
-        fk=lambda s: fk_xy(s, tcp_x_m),
-    )
+    fk_fn = fk_xy if tcp_x_m is None else (lambda s: fk_xy(s, tcp_x_m))
+
+    def run():
+        base_pick = dict(target["pick"])
+
+        def replan(dx_mm, dy_mm):
+            pick = dict(base_pick, x=round(base_pick["x"] + dx_mm / 1000, 4), y=round(base_pick["y"] + dy_mm / 1000, 4))
+            target["pick"] = pick
+            return write_library(config, pick, target["place"], work / "reach-replan.json")
+
+        if tcp_x_m is None:
+            return correct(cell, (base_pick["x"], base_pick["y"]), replan, params)
+        return correct(cell, (base_pick["x"], base_pick["y"]), replan, params, fk=fk_fn)
+
+    return run
 
 
 def chain(*hooks):

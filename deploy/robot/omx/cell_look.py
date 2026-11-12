@@ -82,8 +82,11 @@ def look(cell, config: dict, record: dict, site: str, target: dict, write_librar
         tcp = tcp_from_mark(cell_pivot.mark_to_arm(record, config, site, pixel, z), yaw, fingers[k])
         d = (box[0] - tcp[0], box[1] - tcp[1])
         off = 1000 * math.hypot(*d)
-        rows.append({"look": i, "mark_px": [round(v, 1) for v in pixel], "finger": k, "fk_m": [round(x, 4), round(y, 4)],
-                     "box_minus_tcp_mm": [round(1000 * d[0], 1), round(1000 * d[1], 1)]})
+        row = {"look": i, "mark_px": [round(v, 1) for v in pixel], "finger": k, "fk_m": [round(x, 4), round(y, 4)],
+               "box_minus_tcp_mm": [round(1000 * d[0], 1), round(1000 * d[1], 1)]}
+        if status.get("samples", 1) > 1:
+            row["samples"] = status["samples"]
+        rows.append(row)
         if off <= (prm.get(params, "look.tol_mm") if tol_mm is None else tol_mm):
             return out("pass")
         if i == int(prm.get(params, "look.max_iter")) or total + off > prm.get(params, "look.max_total_mm"):

@@ -54,95 +54,23 @@ from cell_auto_setup import load_config  # noqa: E402,F401  (cell_align and cell
 from cell_pick_geom import (grasp_depth, surface_z, parse_dest, grasp_yaw, across,  # noqa: E402,F401 - moved there
                             jaw_open_for, reachable_ends)  # (D-766 split); names kept for callers and tests
 
+from cell_auto_safety import (  # noqa: E402, F401
+    PWM_FRACTION,
+    TEMP_STOP_C,
+    Aborted,
+    Guarded,
+    Monitor,
+    after_failure,
+    close_episode,
+    finger_room,
+    object_sized,
+    open_episode,
+    score_pick_candidate,
+    session_caps,
+    square_entry,
+)
+
 CLOSING = "gripper.closing_axis_offset_deg"
-TEMP_STOP_C, PWM_FRACTION = prm.default("auto.temp_stop_c"), prm.default("auto.pwm_fraction")
-
-
-def session_caps(config: dict):
-    """PWM cap of each follower joint (IDs 11..16 in order) from the record session's caps file, else None. The
-    caps differ per joint (shoulder_lift and elbow_flex 600, the rest 300): one cap for all called a 54 % load
-    114 % and aborted a good lift (2026-10-28)."""
-    path = (config.get("record") or {}).get("caps")
-    try:
-        raw = json.loads(Path(path).expanduser().read_text(encoding="utf-8"))
-        return [raw[k]["pwm"] for k in sorted(raw, key=int)]
-    except (TypeError, OSError, ValueError, KeyError):
-        return None
-
-
-class Aborted(Exception):
-    pass
-
-
-class Monitor:
-    """Reads the runner's live state before each command; a reason string means stop."""
-
-    def __init__(self, cell, config: dict, clock=time.time):
-        s = config.get("safety", {})
-        self.cell, self.stale_s, self.clock = cell, s.get("stale_s", 5.0), clock
-        self.caps, self.fallback_cap = session_caps(config), s.get("pwm_cap", 300)
-        self.params, self.near_since, self.last_pos, self.last = config.get("params"), {}, None, {}
-        self.last_pwm = None  # PWM of the last check, kept for the transport-stop decision row
-        self.temp_c = s.get("temp_stop_c", prm.get(self.params, "auto.temp_stop_c", TEMP_STOP_C))
-
-    def stop(self, reason: str, **why) -> str:
-        self.last = {"reason": reason, **why}  # the rule, joint and values the safety decision row keeps
-        return reason
-
-    def check(self, state: dict | None = None) -> str | None:
-        state = self.cell.act("state") if state is None else state
-        if not state.get("ok") or state.get("fault"):
-            return self.stop(f"runner: {state.get('fault') or state.get('error')}", rule="runner fault")
-        if state.get("t") and time.time() - state["t"] > self.stale_s:
-            return self.stop("stale live state", rule="stale state", value=round(time.time() - state["t"], 1), limit=self.stale_s)
-        health = state.get("health") or {}
-        self.last_pwm = list(health.get("pwm") or [])
-        if max(health.get("temp_c") or [0]) >= self.temp_c:
-            return self.stop(f"motor temperature {max(health['temp_c'])} C", rule="motor temperature",
-                             value=max(health["temp_c"]), limit=self.temp_c)
-        return self.pwm_stall(health.get("pwm") or [], state.get("state"))
-
-    def pwm_stall(self, pwm: list, pos) -> str | None:
-        """A joint at its own cap fraction AND not moving for the window is blocked; at the cap alone is normal
-        while lifting (the elbow saturates leaving home), so a moving joint never trips this."""
-        frac, window = prm.get(self.params, "auto.pwm_fraction", PWM_FRACTION), prm.get(self.params, "auto.pwm_window_s")
-        still, now, last, self.last_pos = prm.get(self.params, "auto.pwm_move_units"), self.clock(), self.last_pos, (list(pos) if pos is not None else None)
-        # the gripper squeezes at its cap while holding a box, still by design (2026-10-28 floor->belt run aborted
-        # at home on 300/300); its load is the grasp verdict's and the temperature watch's, not a stall
-        for i, v in enumerate(pwm[:5]):
-            cap = self.caps[i] if self.caps and i < len(self.caps) else self.fallback_cap
-            moved = pos is not None and last is not None and i < len(pos) and abs(pos[i] - last[i]) >= still
-            if abs(v) < frac * cap or moved:
-                self.near_since.pop(i, None)
-            elif now - self.near_since.setdefault(i, now) >= window:
-                return self.stop(f"joint {i + 1} PWM {abs(v)} is {abs(v) / cap:.0%} of its cap {cap} and has not moved for {window} s",
-                                 rule="pwm stall", joint=i + 1, value=abs(v), cap=cap, fraction=frac, window_s=window)
-        return None
-
-
-class Guarded:
-    """A cell whose every motion command is preceded by the safety check; a failed check parks and raises."""
-
-    def __init__(self, cell, config: dict):
-        self.cell, self.monitor, self._last_state = cell, Monitor(cell, config), None
-
-    def act(self, command: str) -> dict:
-        if command == "state":
-            state = self.cell.act("state")
-            self._last_state = (self.monitor.clock(), state)
-            return state
-        words, cached = command.split(), self._last_state
-        self._last_state = None
-        if (words[3] if words[0] == "checked" else words[0]) not in ("park", "state", "retreat"):  # Gate's form
-            reason = self.monitor.check(cached[1] if cached and self.monitor.clock() - cached[0] <= 0.1 else None)
-            if reason:
-                cd.emit("safety", {**self.monitor.last, "command": command}, ["continue", "park and stop"], "park and stop", "rule", reason)
-                self.cell.act("park")
-                raise Aborted(reason)
-        return self.cell.act(command)
-
-    def frame(self, camera: str):
-        return self.cell.frame(camera)
 
 
 def observe(cell, config: dict, calibration: dict, site: str, roi, catalog: list):
@@ -166,22 +94,6 @@ def observe(cell, config: dict, calibration: dict, site: str, roi, catalog: list
     for poly in config["sites"][site].get("markings_px", []):
         cv2.fillPoly(mask, [np.asarray(poly, np.int32) - [roi[0], roi[1]]], 0)
     return img, mask, objects, None
-
-
-def object_sized(mask, params=None):
-    """Only object-sized blobs: a whole surface in view (the board, a tray edge) is not what an open finger meets."""
-    import cv2
-
-    n, labels, stats, _ = cv2.connectedComponentsWithStats(mask)
-    big = [i for i in range(1, n) if stats[i, cv2.CC_STAT_AREA] > prm.get(params, "objects.surface_min_px")]
-    return np.where(np.isin(labels, big), 0, mask).astype(mask.dtype)
-
-
-def finger_room(mask, roi, pixel_fn, o: dict, closing_deg: float | None = None, params=None) -> dict:
-    """Free mm on each closing side and the jaw margin that fits (cell_finger_room); margin None means no room."""
-    import cell_finger_room as fr
-
-    return fr.jaw_margin(fr.own_removed(mask, roi, pixel_fn, o), roi, pixel_fn, o, closing_deg, params)
 
 
 def plan_pick(config: dict, site: str, dest_site: str, place_xy, o: dict, entry: dict, offset, bias_mm, work: Path,
@@ -209,34 +121,6 @@ def plan_pick(config: dict, site: str, dest_site: str, place_xy, o: dict, entry:
             except SystemExit as exc:
                 error = str(exc)[:160]
     return error
-
-
-def after_failure(config: dict, site: str, target: dict, moved: dict, wrist_on: bool, failed_yaws: list) -> dict:
-    """Diagnose a failed pick from the contact pose and choose the next change from the strategy table; the choice is
-    a decision row (cell_diagnose). 'other_axis' marks the yaw as failed so the next choice turns 90 degrees."""
-    contact = next((s for s in moved["steps"] if s.get("contact") and s.get("state")), None)
-    contact_z = None
-    if contact is not None:
-        from cell_surface import fk_z
-        contact_z = round(fk_z(contact["state"], config.get("tcp_x_m")), 4)
-    surface = surface_z(config, site)
-    diag = cell_diagnose.diagnose(moved["result"], contact_z, surface, surface + target["entry"]["top_height_mm"] / 1000,
-                                  target["pick"]["z"], config.get("params"))
-    can = {"observe_again"} | ({"wrist_align"} if wrist_on else set())
-    square = abs(target["entry"]["length_mm"] - target["entry"]["width_mm"]) < 1e-6
-    if square and not any(abs(wrap90(target["pick"]["yaw_deg"] + 90 - f)) <= 5.0 for f in failed_yaws):
-        can.add("other_axis")
-    actions = cell_diagnose.next_actions(diag["cause"], can)
-    chosen = actions[0]
-    if chosen in ("other_axis", "observe_again", "wrist_align"):
-        failed_yaws.append(target["pick"]["yaw_deg"])
-    cd.emit("failure", diag["facts"], actions, chosen, "rule", f"cause {diag['cause']}")
-    return {"cause": diag["cause"], "facts": diag["facts"], "options": actions, "chosen": chosen}
-
-
-def square_entry(entries: dict, o: dict) -> bool:
-    e = entries.get(o.get("object"))
-    return bool(e) and abs(e["length_mm"] - e["width_mm"]) < 1e-6
 
 
 def choose(cell, config, calibration, site, dest_site, place_xy, roi, objects, mask, catalog, bias_data, choices, work,
@@ -339,29 +223,6 @@ def verify_placed(cell, config, calibration, dest_site, place_xy, roi, catalog, 
 
 
 from cell_transfer import FOLDED, STILL_HOLDING_UNITS, Gate, transfer_folded  # noqa: E402,F401 - moved there; names kept
-
-
-def open_episode(cell, config: dict, source: str, dest: str, object_id: str):
-    """A raw training episode around one carry (episode_recorder.py), when config["episodes"] names a root."""
-    spec = config.get("episodes")
-    if not spec:
-        return None
-    folder = Path(spec["root"]).expanduser() / f"{time.strftime('%Y%m%d-%H%M%S')}-{source}-to-{dest}"
-    folder.mkdir(parents=True, exist_ok=True)
-    task = spec.get("tasks", {}).get(f"{source}->{dest}") or f"Pick the green container from the {source} and place it on the {dest}."
-    (folder / "task.json").write_text(json.dumps({"task": task, "object": object_id, "cameras": spec["cameras"], "io": str(config.get("io", "")),
-                                                  "payload": config.get("_payload")}))  # D-935: the load; io: which arm (one episode root)
-    if not cell.act(f"episode start {folder}").get("ok"):
-        return None
-    import episode_recorder
-    return episode_recorder.CameraSession(folder, spec["cameras"])  # frames here, never in the arm runner
-
-
-def close_episode(cell, episode, keep: bool, why: str = "") -> None:
-    """A confirmed carry is saved; any other ending is kept as a labelled failure with why (learning needs both)."""
-    if episode is not None:
-        cell.act("episode save" if keep else f"episode fail {' '.join(why.split()) or 'unconfirmed'}")
-        episode.finish()
 
 
 def run_auto(cell, config, calibration, calibration_path, catalog, roi, source, dest, work: Path, choices,

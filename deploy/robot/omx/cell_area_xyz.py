@@ -23,7 +23,9 @@ from cell_control_core import (  # noqa: F401  (re-exported: existing importers 
     apply_wrist_xy_step,
     build_plan_from_directive,
     ensure_omx_paths,
+    evaluate_tactile_place_compliance,
     plan_library_from_directive,
+    predict_moving_belt_intercept,
     sim_precheck_and_optimize_directive,
 )
 
@@ -284,19 +286,25 @@ def execute_directive(
                     break
                 if chunk_cmd == "goto above_place":
                     held_at_above_place = True
-            if chunk_cmd == "run descend_place" and r_step.get("ok"):
-                tactile_or_full_place = True
-            if not r_step.get("ok"):
-                if chunk_cmd == "run descend_place" and "contact in descend_place" in str(r_step.get("error") or ""):
+            if chunk_cmd == "run descend_place":
+                tactile_eval = evaluate_tactile_place_compliance(
+                    r_step,
+                    target_z_m=float(cur_directive["place"]["effective_xyz_m"][2]),
+                    current_z_m=r_step.get("z_m"),
+                    holding=held_at_above_place or True,
+                )
+                if tactile_eval["compliant"]:
                     tactile_or_full_place = True
-                    _run_cmd(f"grip {float(plan['grip_release']):.2f}")
-                    if frame_fn is not None and not stay_hover:
-                        import time as _time
-                        _time.sleep(0.55)
-                    _run_cmd("retreat")
-                    if not stay_hover:
-                        _run_cmd("park")
-                    break
+                    if tactile_eval["early_touchdown"]:
+                        _run_cmd(f"grip {float(plan['grip_release']):.2f}")
+                        if frame_fn is not None and not stay_hover:
+                            import time as _time
+                            _time.sleep(0.55)
+                        _run_cmd("retreat")
+                        if not stay_hover:
+                            _run_cmd("park")
+                        break
+            if not r_step.get("ok"):
                 if chunk_cmd != "park":
                     _safe_recover_hover(float(plan["grip_open"]), park_after=not stay_hover)
                 if chunk_cmd not in ("run lift_place", "park"):

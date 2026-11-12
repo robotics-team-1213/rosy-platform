@@ -15,6 +15,16 @@ import math
 import cell_params as prm
 
 MOTORS = ("shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll", "gripper")
+MOTORS_BY_DOF = {
+    5: MOTORS,
+    6: ("shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_yaw", "wrist_roll", "gripper"),
+    7: ("shoulder_pan", "shoulder_lift", "elbow_roll", "elbow_flex", "wrist_flex", "wrist_yaw", "wrist_roll", "gripper"),
+}
+
+
+def motors_for_frame_len(frame_len: int) -> tuple[str, ...]:
+    """Return the `(dof + 1)` joint name tuple (ending with `'gripper'`) for 5-DOF (6), 6-DOF (7), or 7-DOF (8) frames."""
+    return MOTORS_BY_DOF.get(max(5, int(frame_len) - 1), MOTORS)
 WINDOW_S = 2.0         # trace window length
 MIN_TICKS = 30         # fewer ticks in a window: not judged
 MAX_GAP_S = 0.2        # a pause in the trace ends the window
@@ -58,7 +68,9 @@ def trace_windows(rows, window_s=WINDOW_S):
         if buf and (r is None or r["t"] - buf[-1]["t"] > MAX_GAP_S or r["t"] - buf[0]["t"] >= window_s):
             if len(buf) >= MIN_TICKS:
                 dur = buf[-1]["t"] - buf[0]["t"]
-                for i, joint in enumerate(MOTORS):
+                f_len = len((buf[0]["sent"] or buf[0]["target"]))
+                joint_names = motors_for_frame_len(f_len)
+                for i, joint in enumerate(joint_names[:f_len]):
                     sent = [(b["sent"] or b["target"])[i] for b in buf]
                     present = [b["present"][i] for b in buf]
                     res = _residual(sent, present)
@@ -166,31 +178,51 @@ def settled_state(cell, params=None) -> dict:
         if isinstance(nxt, (list, tuple)) and len(nxt) >= 5 and isinstance(nxt[0], (int, float)):
             states.append(list(nxt))
     if len(states) > 1:
-        avg = [sum(float(s[j]) for s in states) / len(states) for j in range(5)] + list(state[5:])
+        arm_dof = max(5, len(state) - 1)
+        avg = [sum(float(s[j]) for s in states) / len(states) for j in range(arm_dof)] + list(state[arm_dof:])
         return {**status, "state": avg, "samples": len(states)}
     return status
 
 
 def suppress_tremor(frames: list[list[float]], *, coeff: float = 0.12, vmax: float = 5.0, fps: int = 30,
-                    amax: float = 5.0, deadband: float = 0.12) -> list[list[float]]:
-    """Filter high-frequency policy/IK tremor (3-10 Hz) across a trajectory chunk using a symmetric zero-lag
-    7-tap period-averaging notch filter while preserving the exact start and end poses."""
+                    amax: float = 5.0, deadband: float = 0.12, dof: int | None = None) -> list[list[float]]:
+    """Filter high-frequency policy/IK tremor (3-10 Hz) across an N-DOF (`dof in {5, 6, 7}`) trajectory chunk
+    using a symmetric zero-lag 7-tap period-averaging notch filter plus forward-backward endpoint-pinned velocity
+    envelope clamping on arm joints `[:arm_dof]` while preserving the gripper and exact start/end poses."""
     n = len(frames)
     if n <= 2:
         return [list(f) for f in frames]
+    arm_dof = int(dof) if dof is not None else max(1, len(frames[0]) - 1)
 
-    # Symmetric zero-lag 7-tap boxcar filter on body joints (exact on linear ramps, >90% attenuation at 4-5 Hz)
+    # 1. Symmetric zero-lag 7-tap boxcar filter on body joints (exact on linear ramps, >90% attenuation at 4-5 Hz)
     out: list[list[float]] = [list(frames[0])]
     for i in range(1, n - 1):
         row = list(frames[i])
         half = min(3, i, n - 1 - i)
         span = 2 * half + 1
-        for j in range(min(5, len(row))):
+        for j in range(min(arm_dof, len(row))):
             val = sum(float(frames[i + k][j]) for k in range(-half, half + 1)) / span
             if deadband > 0.0 and abs(val - out[-1][j]) < deadband * 0.25:
                 val = out[-1][j]
             row[j] = val
         out.append(row)
     out.append(list(frames[-1]))
+
+    # 2. Forward-backward endpoint-pinned velocity envelope bound (honors vmax/fps when chord is feasible)
+    if vmax > 0.0 and fps > 0:
+        dt = 1.0 / float(fps)
+        step_cap = float(vmax) * dt
+        for j in range(min(arm_dof, len(out[0]))):
+            chord_step = abs(float(out[-1][j]) - float(out[0][j])) / max(1, n - 1)
+            eff_cap = max(step_cap, chord_step * 1.05)
+            for i in range(1, n - 1):
+                lo_f = float(out[i - 1][j]) - eff_cap
+                hi_f = float(out[i - 1][j]) + eff_cap
+                rem = n - 1 - i
+                lo_b = float(out[-1][j]) - rem * eff_cap
+                hi_b = float(out[-1][j]) + rem * eff_cap
+                lo, hi = max(lo_f, lo_b), min(hi_f, hi_b)
+                if lo <= hi:
+                    out[i][j] = min(max(float(out[i][j]), lo), hi)
     return out
 

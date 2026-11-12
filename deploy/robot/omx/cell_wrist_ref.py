@@ -54,10 +54,20 @@ def top_offset_mm(ref: dict, area: float, footprint_mm2: float | None = None):
     return round(ref["scale_mm"] * (math.sqrt(ref["area"] * ratio / area) - 1), 1)
 
 
+def _median_blob(cell, camera: str, hsv, params=None):
+    n_samples = max(1, int(prm.get(params, "reach.samples", 1)))
+    blobs = [b for _ in range(n_samples) if (b := on_surface_blob(cell.frame(camera), hsv, params)) is not None]
+    if not blobs:
+        return None
+    if len(blobs) == 1:
+        return blobs[0]
+    return (float(np.median([b[0] for b in blobs])), float(np.median([b[1] for b in blobs])), int(round(float(np.median([b[2] for b in blobs])))))
+
+
 def ref_servo(cell, camera: str, hsv, ref: dict, replan, params=None, J=None) -> dict:
     """Move the hover until the container sits at the reference pixel. Returns verdict, offset dx/dy (mm), J."""
     def seen():
-        b = on_surface_blob(cell.frame(camera), hsv, params)
+        b = _median_blob(cell, camera, hsv, params)
         return None if b is None else np.array(b[:2])
 
     def hover(dx, dy):
@@ -116,35 +126,38 @@ def ref_hook(config: dict, cell, target: dict, write_library, site: str):
     if not prm.get(params, "wrist.ref_servo") or not spec.get("hsv_min") or not (path.exists() or estimate):
         return None
     hsv = (spec["hsv_min"], spec["hsv_max"])
-
-    def replan(dx_mm, dy_mm, dz_mm=0.0):
-        pick = dict(target["pick"], x=round(target["pick"]["x"] + dx_mm / 1000, 4), y=round(target["pick"]["y"] + dy_mm / 1000, 4),
-                    z=round(target["pick"]["z"] + dz_mm / 1000, 4))
-        return write_library(config, pick, target["place"], work / "ref-replan.json")
-
-    def hover(dx_mm, dy_mm, dz_mm=0.0):
-        return all(cell.act(c).get("ok") for c in (f"load {replan(dx_mm, dy_mm, dz_mm)}", "goto above_pick"))
-
     camera, entry = spec.get("camera", "wrist"), target.get("entry") or {}
     footprint = entry.get("length_mm", 0) * entry.get("width_mm", 0) or None
 
-    def height_check(ref, out):
-        """At the reference pixel: the container top's height offset from its area, recorded only (the descent is
-        unchanged). A saved reference without a scale gets one from a single rise probe, kept with J."""
-        b0 = on_surface_blob(cell.frame(camera), hsv, params)
-        if b0 is None:
-            return ref
-        if "scale_mm" not in ref and path.exists():
-            up = prm.get(params, "wrist.z_probe_mm")
-            b1 = on_surface_blob(cell.frame(camera), hsv, params) if hover(out["dx_mm"], out["dy_mm"], up) else None
-            if not hover(out["dx_mm"], out["dy_mm"]):
-                out.update(verdict="refuse", why="not back at the hover after the height probe")
-                return ref
-            ref = dict(ref, scale_mm=b1 and scale_height(b0[2], b1[2], up))
-        out["top_offset_mm"] = top_offset_mm(ref, b0[2], footprint)
-        return ref
-
     def run():
+        base_pick = dict(target["pick"])
+
+        def replan(dx_mm, dy_mm, dz_mm=0.0):
+            pick = dict(base_pick, x=round(base_pick["x"] + dx_mm / 1000, 4), y=round(base_pick["y"] + dy_mm / 1000, 4),
+                        z=round(base_pick["z"] + dz_mm / 1000, 4))
+            if dz_mm == 0.0:
+                target["pick"] = pick
+            return write_library(config, pick, target["place"], work / "ref-replan.json")
+
+        def hover(dx_mm, dy_mm, dz_mm=0.0):
+            return all(cell.act(c).get("ok") for c in (f"load {replan(dx_mm, dy_mm, dz_mm)}", "goto above_pick"))
+
+        def height_check(ref, out):
+            """At the reference pixel: the container top's height offset from its area, recorded only (the descent is
+            unchanged). A saved reference without a scale gets one from a single rise probe, kept with J."""
+            b0 = _median_blob(cell, camera, hsv, params)
+            if b0 is None:
+                return ref
+            if "scale_mm" not in ref and path.exists():
+                up = prm.get(params, "wrist.z_probe_mm")
+                b1 = _median_blob(cell, camera, hsv, params) if hover(out["dx_mm"], out["dy_mm"], up) else None
+                if not hover(out["dx_mm"], out["dy_mm"]):
+                    out.update(verdict="refuse", why="not back at the hover after the height probe")
+                    return ref
+                ref = dict(ref, scale_mm=b1 and scale_height(b0[2], b1[2], up))
+            out["top_offset_mm"] = top_offset_mm(ref, b0[2], footprint)
+            return ref
+
         ref = json.loads(path.read_text()) if path.exists() else estimate_reference(cell, camera, hsv, lambda mm: hover(0.0, 0.0, mm), params)
         if ref is None:
             return {"verdict": "refuse", "why": "no wrist reference (estimate failed)", "dx_mm": 0.0, "dy_mm": 0.0, "total_mm": 0.0}
@@ -164,7 +177,7 @@ def capture_reference(cell, camera: str, hsv, work: Path, arm: str, site: str, p
                       footprint_mm2: float | None = None) -> dict | None:
     """Right after the arm itself placed a container and hovers above it again: where it appears = 'centred'.
     J and the hover's height scale belong to the arm and the hover, not the container, so they carry over."""
-    b = on_surface_blob(cell.frame(camera), hsv, params)
+    b = _median_blob(cell, camera, hsv, params)
     if b is None:
         return None
     ref = {"u": round(b[0], 1), "v": round(b[1], 1), "area": b[2], "footprint_mm2": footprint_mm2,

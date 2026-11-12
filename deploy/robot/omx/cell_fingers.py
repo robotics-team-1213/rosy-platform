@@ -17,6 +17,13 @@ from pathlib import Path
 import numpy as np
 
 import cell_params as prm
+from cell_finger_container import (
+    _KERNEL_3,
+    _KERNEL_25,
+    on_surface_blob,
+    structural_container_between_fingers,
+    top_face_between_fingers,
+)
 
 
 def resolve_finger_color(params=None, wrist_spec: dict | None = None, color: str | int | None = None) -> str:
@@ -139,90 +146,6 @@ def finger_pads(img, dark: int = 60, color: str | int = "auto"):
     return d_pads if d_pads is not None else w_pads
 
 
-def top_face_between_fingers(img, a, b):
-    """Detect the target container's top face between the two fingers in the wrist view when adjacent containers touch."""
-    import cv2
-
-    h, w = img.shape[:2]
-    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-    y0, y1 = int(h * 0.18), int(h * 0.73)
-    mid = hsv[y0:y1]
-    r_ch = img[y0:y1, :, 2].astype(int)
-    g_ch = img[y0:y1, :, 1].astype(int)
-    b_ch = img[y0:y1, :, 0].astype(int)
-    warm = ((r_ch - g_ch) >= 6) | ((r_ch - b_ch) >= 12)
-    top_face = (mid[..., 2] >= 132) & (mid[..., 1] <= 98) & warm
-    col_ratio = top_face.mean(axis=0)
-    x_min = max(int(a[0]) - 25, int(w * 0.05)) if a is not None else int(w * 0.05)
-    x_max = min(int(b[0]) + 25, int(w * 0.95)) if b is not None else int(w * 0.95)
-    s0 = max(int(a[0]) + 5, int(w * 0.25)) if a is not None else int(w * 0.30)
-    s1 = min(int(b[0]) - 5, int(w * 0.75)) if b is not None else int(w * 0.70)
-    if s1 <= s0:
-        s0, s1 = int(w * 0.30), int(w * 0.70)
-    search = col_ratio[s0:s1]
-    if len(search) == 0 or float(search.max()) < 0.5:
-        return None
-    c0 = int(np.argmax(search) + s0)
-    left_seam = x_min
-    for x in range(c0, x_min, -1):
-        if col_ratio[x] < 0.45:
-            left_seam = x
-            break
-    right_seam = x_max
-    for x in range(c0, x_max):
-        if col_ratio[x] < 0.45:
-            right_seam = x
-            break
-    w_px = float(right_seam - left_seam)
-    if not (120.0 <= w_px <= 440.0):
-        return None
-    cx = 0.5 * (left_seam + right_seam)
-    # Front edge of the container top face (y where V drops into the front shadow)
-    v_prof = hsv[:, max(left_seam + 10, 0):min(right_seam - 10, w), 2].mean(axis=1)
-    v_top = float(np.median(v_prof[int(h * 0.40):int(h * 0.68)]))
-    y_front = float(int(h * 0.76))
-    for y in range(int(h * 0.68), int(h * 0.92)):
-        if v_prof[y] < 0.93 * v_top:
-            y_front = float(y)
-            break
-    return cx, y_front, w_px
-
-
-def on_surface_blob(img, hsv, params=None):
-    """The container standing on a neutral surface (floor, tray, belt: grey/white/black), not one on a coloured
-    neighbour surface (the orange board): the ring just outside each green blob decides. On 13 recorded hover frames
-    (2026-10-29) the target's ring chroma was 6-20 and the board's containers 21-53; the nearest blob to the pads was
-    a board container. Returns (cx, cy, area) of the largest qualifying blob, or None."""
-    import cv2
-
-    h, w = img.shape[:2]
-    hsv_img = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-    mask = cv2.morphologyEx(cv2.inRange(hsv_img, np.array(hsv[0]), np.array(hsv[1])), cv2.MORPH_OPEN, _KERNEL_3)
-    n, labels, stats, cents = cv2.connectedComponentsWithStats(mask)
-    min_blob = prm.get(params, "wrist.min_blob_px")
-    max_chroma = prm.get(params, "wrist.neutral_ring_chroma")
-    candidates = sorted(
-        (i for i in range(1, n) if stats[i, cv2.CC_STAT_AREA] >= min_blob),
-        key=lambda i: -int(stats[i, cv2.CC_STAT_AREA]),
-    )
-    for i in candidates:
-        x0 = max(0, int(stats[i, cv2.CC_STAT_LEFT]) - 12)
-        y0 = max(0, int(stats[i, cv2.CC_STAT_TOP]) - 12)
-        x1 = min(w, int(stats[i, cv2.CC_STAT_LEFT] + stats[i, cv2.CC_STAT_WIDTH]) + 12)
-        y1 = min(h, int(stats[i, cv2.CC_STAT_TOP] + stats[i, cv2.CC_STAT_HEIGHT]) + 12)
-        blob = (labels[y0:y1, x0:x1] == i).astype(np.uint8)
-        ring = (cv2.dilate(blob, _KERNEL_25) - blob) & (mask[y0:y1, x0:x1] == 0)
-        if int(ring.sum()) < 200:
-            continue
-        sub_lab = cv2.cvtColor(img[y0:y1, x0:x1], cv2.COLOR_BGR2LAB)
-        ring_mask = ring > 0
-        chroma = float(np.hypot(sub_lab[..., 1][ring_mask].astype(np.float32) - 128.0,
-                                sub_lab[..., 2][ring_mask].astype(np.float32) - 128.0).mean())
-        if chroma <= max_chroma:
-            return (float(cents[i][0]), float(cents[i][1]), int(stats[i, cv2.CC_STAT_AREA]))
-    return None
-
-
 def finger_offset_mm(img, hsv, gap_mm: float, params=None, color: str | int | None = None) -> dict:
     """The container's offset from the pads' midpoint in mm: along (the closing axis, left->right) and across."""
     mode = resolve_finger_color(params=params, color=color)
@@ -251,6 +174,48 @@ def finger_offset_mm(img, hsv, gap_mm: float, params=None, color: str | int | No
     s = gap_mm / gap_px
     return {"found": True, "along_mm": round(float(d @ axis) * s, 1), "across_mm": round(float(d @ across_dir) * s, 1),
             "gap_px": round(gap_px, 1), "mm_per_px": round(s, 3), "finger_color": mode}
+
+
+def resolve_wrist_servo_offset(
+    img,
+    cal: dict | None = None,
+    *,
+    structural_fallback: bool = True,
+    prefer_structural: bool = False,
+    hsv=([5, 95, 110], [32, 255, 255]),
+) -> dict:
+    """Unified wrist offset resolver combining pad-referenced `finger_offset_mm` with color-agnostic
+    `structural_container_between_fingers` fallback (or preference)."""
+    cal_map = cal or {}
+    f_color = resolve_finger_color(color=cal_map.get("finger_color", "white"))
+    is_dark = f_color == "dark"
+    obs = {"found": False, "why": "skipped_hsv"} if prefer_structural else finger_offset_mm(
+        img,
+        hsv,
+        gap_mm=36.0 if is_dark else 44.0,
+        params={"wrist.finger_color": 1 if is_dark else (2 if f_color == "white" else 0)},
+        color=f_color,
+    )
+    if (not obs.get("found") or prefer_structural) and structural_fallback:
+        s_obs = structural_container_between_fingers(img)
+        if s_obs and s_obs.get("is_container_shape"):
+            pad_along = obs.get("along_mm") if obs.get("found") else None
+            agree_mm = round(abs(float(pad_along) - float(s_obs["dx_mm"])), 2) if pad_along is not None else None
+            return {
+                "found": True,
+                "along_mm": s_obs["dx_mm"],
+                "across_mm": s_obs["dy_mm"],
+                "dx_mm": s_obs["dx_mm"],
+                "dy_mm": s_obs["dy_mm"],
+                "clipped_border": s_obs.get("clipped_border", False),
+                "is_container_shape": True,
+                "mode": "structural",
+                "mm_per_px": s_obs.get("mm_per_px"),
+                "view_agreement_mm": agree_mm,
+                "views_consistent": True if agree_mm is None else bool(agree_mm <= 6.0),
+            }
+    return obs
+
 
 
 def finger_servo(cell, camera: str, hsv, closing_deg: float, gap_mm: float, replan, params=None, sign=None,
@@ -297,7 +262,8 @@ def finger_servo(cell, camera: str, hsv, closing_deg: float, gap_mm: float, repl
 def finger_hook(config: dict, cell, target: dict, write_library, gap_mm: float):
     """The finger-referenced alignment as a hover hook (wrist.finger_servo), or None."""
     params, spec = config.get("params"), config.get("wrist") or {}
-    if not prm.get(params, "wrist.finger_servo") or not spec.get("hsv_min"):
+    shape_mode = bool(spec.get("shape_mode")) or (isinstance(params, dict) and bool(params.get("objects.ignore_colour")))
+    if not prm.get(params, "wrist.finger_servo") or (not spec.get("hsv_min") and not shape_mode):
         return None
     work = Path(config["work_dir"]).expanduser()
 
@@ -320,7 +286,8 @@ def finger_hook(config: dict, cell, target: dict, write_library, gap_mm: float):
 
         default_signs = dict({"along": 1.0, "across": 1.0}, **(spec.get("finger_sign") or {}))
         signs = json.loads(signs_path.read_text()) if signs_path.exists() else default_signs
-        out = finger_servo(cell, camera, (spec["hsv_min"], spec["hsv_max"]), closing, gap_mm, replan_from_base, params, signs, color=finger_color)
+        hsv_pair = (spec["hsv_min"], spec["hsv_max"]) if spec.get("hsv_min") and not spec.get("shape_mode") else None
+        out = finger_servo(cell, camera, hsv_pair, closing, gap_mm, replan_from_base, params, signs, color=finger_color)
         if out["verdict"] == "pass":  # only a sign that led to a pass is kept for the next run
             signs_path.write_text(json.dumps(signs))
         elif out.get("iterations") and out["iterations"][-1].get("found"):

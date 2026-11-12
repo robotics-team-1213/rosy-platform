@@ -75,3 +75,30 @@ def test_white_fingers_and_dark_fingers_both_measure_inner_pad_gaps():
     seen_w = cell_pinch.measure(img, HSV, GAP_MM, 20.0, params={"wrist.finger_color": 2})
     assert seen_w["found"] and seen_w["between"] and seen_w["sized"] and seen_w["finger_color"] == "white"
     assert seen_w["width_mm"] == pytest.approx(20, abs=1) and seen_w["gap_left_mm"] == pytest.approx(14, abs=1)
+
+
+def test_pinch_hook_propagates_updated_pick_from_latest_target(tmp_path):
+    class HookCell:
+        def __init__(self):
+            self.offset_px = -110.0
+            self.commands = []
+
+        def frame(self, camera):
+            return frame(self.offset_px, 100)
+
+        def act(self, cmd):
+            self.commands.append(cmd)
+            if cmd == "run descend_pick":
+                self.offset_px = 0.0
+            return {"ok": True}
+
+    target = {"pick": {"x": 0.120, "y": -0.050, "z": 0.010, "yaw_deg": -90.0}, "place": {"x": 0.15, "y": 0.0, "z": 0.02, "yaw_deg": -90.0}}
+    cfg = {"params": {"pinch.enabled": 1}, "wrist": {"hsv_min": HSV[0], "hsv_max": HSV[1]}, "work_dir": str(tmp_path), "arm_id": "arm_b"}
+    cell = HookCell()
+    fn = cell_pinch.hook(cfg, cell, target, lambda _c, p, _pl, path: path, GAP_MM, 20.0)
+    # Simulate an upstream hover hook (e.g. cell_reach / cell_wrist) shifting target["pick"]["x"] before pinch runs
+    target["pick"] = dict(target["pick"], x=0.125)
+    out = fn()
+    assert out["verdict"] == "pass"
+    assert target["pick"]["x"] == pytest.approx(0.125 + out["dx_mm"] / 1000.0, abs=1e-4)
+

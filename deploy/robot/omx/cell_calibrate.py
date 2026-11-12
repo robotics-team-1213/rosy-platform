@@ -62,7 +62,8 @@ def stale(check: dict) -> list:
     """The steps a check result asks for, in dependency order (a moved camera makes every bias and region stale)."""
     if check.get("camera_moved") or check.get("missing_map"):  # an arm new to the cell has no map yet (arm_a, 2026-11-03)
         return ["remap", "regions"] + [f"pivot-near {t}" for t in check.get("targets", [])]
-    steps = [f"pivot-near {t}" for t in check.get("missing_bias", [])]
+    steps = ["consensus-repair"] if check.get("consensus_repairable") else []
+    steps += [f"pivot-near {t}" for t in check.get("missing_bias", [])]
     steps += [f"surface {s}" for s in check.get("missing_surface", [])]
     return steps
 
@@ -89,6 +90,14 @@ def check(config: dict, calibration: dict, targets: list, frame, params=None) ->
         if not cell_pivot.bias_at(bias, site, xy, reach_mm=prm.get(params, "calibrate.bias_near_mm"), params=params):
             out["missing_bias"].append(f"{site}:{xy[0]},{xy[1]}")
     out["missing_map"] = [s for s in map_sites(config) if s not in calibration.get("sites", {})]
+    for s in map_sites(config):
+        rec = (calibration.get("sites") or {}).get(s) or {}
+        if rec.get("loo_error_mm") and not map_agrees(rec, params) and len(rec.get("points") or []) >= 5:
+            pts = [(tuple(p["pixel"]), tuple(p["arm_m"])) for p in rec["points"]]
+            kept = consensus(pts, prm.get(params, "calibrate.consensus_px"))
+            if enough_agree(len(kept), len(pts)) and cal.loo_error_mm(kept)["max"] <= prm.get(params, "calibrate.max_loo_mm"):
+                out["consensus_repairable"] = True
+                break
     for name, site in config["sites"].items():
         if "surface_z" not in site:
             out["missing_surface"].append(name)
@@ -280,6 +289,11 @@ def self_calibrate(cell, config, calibration, calibration_path, site, target_xy,
     if not points:
         if cell_pivot.bias_at(bias_data, site, target_xy, params=p):
             return bias_data, None  # a farther region is still better than none
+        rec = cell_pivot.map_record(calibration, site) or {}
+        if rec.get("loo_error_mm") and map_agrees(rec, p):
+            inliers = [tuple(pt["arm_m"]) for pt in (rec.get("points") or [])]
+            if inliers and 1000 * min(math.dist(q, target_xy) for q in inliers) <= prm.get(p, "pivot.bias_reach_mm", cell_pivot.BIAS_REACH_MM):
+                return bias_data, None  # map was fitted near the target and agrees within max_loo_mm
         return bias_data, "no clear pivot point within reach of the object"
     chosen = min(points, key=lambda q: math.dist(q, target_xy))
     if any(r["site"] == site and math.dist(r["point_m"], chosen) <= 0.010 for r in bias_data["regions"]):
@@ -369,6 +383,18 @@ def main(argv=None):
             done.append({"remap": record["loo_error_mm"]})
         elif step == "regions":
             continue  # moved with the remap above
+        elif step == "consensus-repair":
+            for s in map_sites(config):
+                rec = (calibration.get("sites") or {}).get(s) or {}
+                pts = [(tuple(p["pixel"]), tuple(p["arm_m"])) for p in (rec.get("points") or [])]
+                if len(pts) >= 5:
+                    kept = consensus(pts, prm.get(config.get("params"), "calibrate.consensus_px"))
+                    if enough_agree(len(kept), len(pts)):
+                        rec["homography"] = cal.fit(kept).round(9).tolist()
+                        rec["points"] = [{"pixel": list(p), "arm_m": list(a)} for p, a in kept]
+                        rec["loo_error_mm"] = cal.loo_error_mm(kept)
+            cal_path.write_text(json.dumps(calibration))
+            done.append({"consensus-repair": calibration["sites"][map_sites(config)[0]]["loo_error_mm"]})
         elif step.startswith("pivot-near"):
             site, xy = step.split()[1].split(":")
             near = tuple(float(v) for v in xy.split(","))

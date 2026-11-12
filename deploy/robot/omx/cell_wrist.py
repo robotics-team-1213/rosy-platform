@@ -109,8 +109,9 @@ def judge(obs: dict, band: dict, params=None, total_mm: float = 0.0) -> dict:
 
 
 def median_view(cell, camera: str, hsv, params, frames: int = 3, near=None) -> dict:
-    """Three frames; any frame without the container makes the view not found (a hand or a shadow passing)."""
-    seen = [observe(cell.frame(camera), hsv[0], hsv[1], params, near) for _ in range(frames)]
+    """Three (or reach.samples) frames; any frame without the container makes the view not found (a hand or a shadow passing)."""
+    n_frames = max(int(frames), int(prm.get(params, "reach.samples", 1)))
+    seen = [observe(cell.frame(camera), hsv[0], hsv[1], params, near) for _ in range(n_frames)]
     if not all(s.get("found") for s in seen):
         return {"found": False}
     med = {k: float(np.median([s[k] for s in seen])) for k in ("cx", "cy", "area", "axis_deg", "fill")}
@@ -157,10 +158,16 @@ def hook(config: dict, cell, target: dict, write_library, emit=None):
     if band is None:
         return None
     work = Path(config["work_dir"]).expanduser()
-
-    def replan(dx_mm, dy_mm):
-        pick = dict(target["pick"], x=round(target["pick"]["x"] + dx_mm / 1000, 4), y=round(target["pick"]["y"] + dy_mm / 1000, 4))
-        return write_library(config, pick, target["place"], work / "wrist-replan.json")
-
     camera = (config.get("arms", {}).get(config.get("arm_id", "arm_s"), {}) or {}).get("wrist_camera", spec.get("camera", "wrist"))
-    return lambda: align(cell, camera, band, (spec["hsv_min"], spec["hsv_max"]), replan, params, emit)
+
+    def run():
+        base_pick = dict(target["pick"])
+
+        def replan(dx_mm, dy_mm):
+            pick = dict(base_pick, x=round(base_pick["x"] + dx_mm / 1000, 4), y=round(base_pick["y"] + dy_mm / 1000, 4))
+            target["pick"] = pick
+            return write_library(config, pick, target["place"], work / "wrist-replan.json")
+
+        return align(cell, camera, band, (spec["hsv_min"], spec["hsv_max"]), replan, params, emit)
+
+    return run

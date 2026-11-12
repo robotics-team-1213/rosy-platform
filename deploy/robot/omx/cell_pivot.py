@@ -250,7 +250,9 @@ def pivot_calibrate(cell, config: dict, point, yaws, calibration: dict, site: st
                 status = cell.act(command)
                 if not status.get("ok"):
                     return {"result": "stopped", "at": command, "error": status.get("error")}
-            state = cell.act("state").get("state")
+            import joint_jitter
+
+            state = (joint_jitter.settled_state(cell, config.get("params")) or {}).get("state")
             pixel = mark_jaws(cell, config, sleep)
             log({"pivot": yaw, "mark_px": pixel})
             if state is None or pixel is None:

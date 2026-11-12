@@ -1,120 +1,36 @@
 #!/usr/bin/env python3
 """Rosy Cell C3b: CELL_TRANSFERs in Gazebo through the single OMX owner (ROS-SIM only).
 
-Run inside the container started by run_cell_sim.sh (docker exec). This process IS the one
-owner process of the workcell (D-403 §8): it builds ArmCommandOwner from the simulation cell
-profile (sim-time owner clock with a wall-clock bound), plans with
-AnalyticCellTransferPlanner, executes with PickPlaceRunner through
-/arm_controller/follow_joint_trajectory, judges the gripper with gripper_contract, and reads
-each block's Gazebo model pose before and after.
-
-C3 probe workarounds are gone: no rebinding port, no feedback filter, no widened arm
-tolerance, no grasp-depth flag, no probe-side hold re-check (the owner window, bounded
-feedback journaling, profile tolerances, recipe grasp_depth and the runner do it).
-
-What remains, labelled in the evidence:
-* SIM AID: the world's DetachableJoint attaches a block to link5 only after the gripper
-  readback proved a hold, and detaches it right before release (operator decision: no
-  friction-grasp tuning). Repeat transfers spawn the next block at the infeed (sim staging).
-* SIM GRIPPER SENSOR: gripper_joint_1 position. Held = the finger stopped at least half the
-  squeeze margin above the width-matched close target; open = within 0.05 rad of open.
-* C4 scope, not motion: the validated CELL_TRANSFER grant is built locally, not approved by
-  Fleet, and the diagnostic stop fence is always open. This is not Fleet-path acceptance.
+Single Responsibility:
+  - Runs the Gazebo ROS-SIM single-owner `CELL_TRANSFER` probe loop (`main`), driving
+    `RosArmCommandRuntime`, `AnalyticCellTransferPlanner`, and `PickPlaceRunner`.
+  - Validated `FleetCellTransferGrant` construction (`build_probe_grant`), journal row creation
+    (`create_probe_action`), and 6-DOF block placement evaluation (`evaluate_placement`) live in
+    `probe_cell_transfer_grant.py` and are re-exported here unchanged.
 """
-
 from __future__ import annotations
 
 import argparse
+from datetime import datetime, timezone
 import json
-import math
 import os
+from pathlib import Path
 import sys
 import threading
 import time
-from datetime import datetime, timedelta, timezone
-from pathlib import Path
 
 REPO = Path(os.environ.get("ROSY_SIM_REPO", "/repo"))
-# Appended, not prepended: every other import would otherwise stat the (slow) bind mount first.
-for _part in ("contracts/foundation", "middleware/devices/omx/adapter",
-              "operations/processes/cell", "operations/processes/palletizing/src",
-              "middleware/robot_execution/local/src", "contracts/skill/src",
-              "deploy/robot/omx"):
+for _part in ("contracts/foundation", "middleware/devices/omx/adapter", "operations/processes/cell",
+              "operations/processes/palletizing/src", "middleware/robot_execution/local/src",
+              "contracts/skill/src", "deploy/robot/omx"):
     sys.path.append(str(REPO / _part))
 
-WORKCELL_ID, INSTANCE_ID = "omx_cell_sim", "omx_cell_sim_01"
-CALIBRATION = "omx-f-gazebo-only-v1"
-TRANSFORM = "gz-world-is-link0-v1"
-OPEN_TOL_RAD = 0.05
-# Acceptance for one placement (C3b brief): upright, xy <= 5 mm, yaw <= 0.05 rad mod pi,
-# block top within 2 mm of the expected top.
-PLACE_TOL = {"xy_m": 0.005, "yaw_rad": 0.05, "top_z_m": 0.002, "tilt_rad": 0.05}
-
+from cell_sim_tools import SimAid, model_pose, refuse_second_owner, sha256_lf, spawn_infeed_block  # noqa: E402
 from instance_names import names_from_environment  # noqa: E402
-from cell_sim_tools import (  # noqa: E402
-    SimAid, model_pose, refuse_second_owner, sha256_lf, spawn_infeed_block,
+from probe_cell_transfer_grant import (  # noqa: E402,F401  (re-exported)
+    CALIBRATION, INSTANCE_ID, OPEN_TOL_RAD, PLACE_TOL, TRANSFORM, WORKCELL_ID,
+    build_probe_grant, create_probe_action, evaluate_placement,
 )
-
-
-def build_probe_grant(job, cell, *, transfer_index, profile_revision, now, action_id):
-    """Validated diagnostic authority; no RGB-D placeholders or Fleet approval claim."""
-    from core_common.protocol.schemas import FleetCellTransferGrant
-    from omx_adapter.action_api import action_grant_digest
-
-    moves = [step for step in job.steps if step.kind != "pallet_done"]
-    if (isinstance(transfer_index, bool) or not isinstance(transfer_index, int)
-            or not 0 <= transfer_index < len(moves) // 2):
-        raise ValueError("transfer index must identify one compiled pair")
-    pick, place = moves[2 * transfer_index:2 * transfer_index + 2]
-    if pick.kind != "pick" or place.kind != "place" or (pick.item, pick.pallet, pick.layer) != (
-            place.item, place.pallet, place.layer):
-        raise ValueError("transfer must be a matching compiled pick/place pair")
-    value = {
-        "mission_id": "c3b-mission", "step_id": f"c3b-step-{transfer_index}",
-        "action_id": action_id, "attempt_id": "attempt-1", "request_digest": "0" * 64,
-        "workcell_id": WORKCELL_ID, "instance_id": INSTANCE_ID, "action_kind": "CELL_TRANSFER",
-        "cell_transfer": {
-            "job_id": "c3b-omx-sim", "recipe_sha256": job.recipe_hash, "cell_sha256": job.cell_hash,
-            "step_index": transfer_index, "item": pick.item, "pallet": pick.pallet, "layer": pick.layer,
-            "frame": "robot_base", "home": vars(cell.home), "pick": vars(pick.target),
-            "place": vars(place.target), "pick_approach_z": pick.approach_z,
-            "place_approach_z": place.approach_z, "carry_z": job.carry_z,
-        },
-        "capability_revision": "cell-transfer-sim-v1", "config_revision": profile_revision,
-        "authority_epoch": 1, "dispatch_generation": 1,
-        "issued_at": now, "expires_at": now + timedelta(minutes=30),
-    }
-    value["request_digest"] = action_grant_digest(value)
-    return FleetCellTransferGrant.model_validate(value)
-
-
-def create_probe_action(store, grant):
-    """Use the Cell journal shape: observation_id is empty, never synthetic RGB-D."""
-    return store.create_action(
-        workcell_id=grant.workcell_id, instance_id=grant.instance_id, principal_id="c3b-probe",
-        request_key=grant.action_id, action_id=grant.action_id, action_kind=grant.action_kind,
-        configuration_revision=grant.config_revision, observation_id="",
-        owner_generation=grant.dispatch_generation, payload=grant.model_dump(mode="json"),
-    )
-
-
-def evaluate_placement(pose, target, *, height_m, grasp_depth_m):
-    """Recheck every object's pose, including uprightness and height, after later motion."""
-    from omx_adapter.kinematics import wrap_angle
-
-    yaw_error = wrap_angle(pose["yaw"] - target["yaw"])
-    if abs(yaw_error) > math.pi / 2:
-        yaw_error = wrap_angle(yaw_error - math.pi)
-    error = {
-        "xy_m": math.hypot(pose["x"] - target["x"], pose["y"] - target["y"]),
-        "dx_m": pose["x"] - target["x"], "dy_m": pose["y"] - target["y"],
-        "top_z_m": pose["z"] + height_m / 2 - (target["z"] + grasp_depth_m),
-        "yaw_rad_mod_pi": yaw_error, "tilt_rad": math.hypot(pose["roll"], pose["pitch"]),
-    }
-    ok = (error["xy_m"] <= PLACE_TOL["xy_m"] and abs(error["top_z_m"]) <= PLACE_TOL["top_z_m"]
-          and abs(error["yaw_rad_mod_pi"]) <= PLACE_TOL["yaw_rad"]
-          and error["tilt_rad"] <= PLACE_TOL["tilt_rad"])
-    return error, ok
 
 
 def main() -> int:
@@ -123,10 +39,8 @@ def main() -> int:
     parser.add_argument("--recipe", default=str(REPO / "operations/processes/cell/examples/omx_sim/recipe.yaml"))
     parser.add_argument("--profile", default=str(REPO / "deploy/robot/omx/sim/cell_profile.yaml"))
     parser.add_argument("--world", default=str(REPO / "integrations/simulation/gazebo/worlds/omx_cell_workcell_sim_aid.sdf"))
-    parser.add_argument("--transfers", default="3",
-                        help="comma-separated Job transfer indices, run in this order")
-    parser.add_argument("--journal-dir", default="/tmp/rosy-cell-c3b",
-                        help="SQLite phase journal (overlay /tmp: C3 needed tmpfs, C3b must not)")
+    parser.add_argument("--transfers", default="3", help="comma-separated Job transfer indices, run in this order")
+    parser.add_argument("--journal-dir", default="/tmp/rosy-cell-c3b", help="SQLite phase journal")
     parser.add_argument("--out", required=True, help="directory for the JSON evidence")
     args = parser.parse_args()
 
@@ -176,8 +90,7 @@ def main() -> int:
     close_q = profile.gripper_close_for_width(box.width)
     contact_q = profile.gripper_contact_for_width(box.width)
     held_threshold = (contact_q - close_q) / 2
-    sensor_revision = (f"omx-sim-gripper-joint-position-v2:held>=close{close_q:.4f}+{held_threshold:.4f}"
-                       f":open+-{OPEN_TOL_RAD}")
+    sensor_revision = f"omx-sim-gripper-joint-position-v2:held>=close{close_q:.4f}+{held_threshold:.4f}:open+-{OPEN_TOL_RAD}"
     evidence: dict = {
         "schema": "rosy.cell-c3b-transfer-probe.v1",
         "labelled": {
@@ -219,24 +132,21 @@ def main() -> int:
 
     rclpy.init()
     node = Node("rosy_cell_c3b_probe", parameter_overrides=[Parameter("use_sim_time", value=True)])
-    config = profile.arm_command_config(workcell_id=WORKCELL_ID, instance_id=INSTANCE_ID,
-                                        calibration_revision=CALIBRATION)
+    config = profile.arm_command_config(workcell_id=WORKCELL_ID, instance_id=INSTANCE_ID, calibration_revision=CALIBRATION)
     runtime = RosArmCommandRuntime(
-        node, config, joint_state_topic=names.joint_state_topic,
-        trajectory_action=names.trajectory_action, owner_clock="sim",
+        node, config, joint_state_topic=names.joint_state_topic, trajectory_action=names.trajectory_action,
+        owner_clock="sim",
         on_goal_event=lambda event: (event.kind == "RUNNING_FEEDBACK") or log(
             "ros_goal_event", event=event.kind, command=event.command_id, phase=event.phase_id,
             status=event.status, result_code=event.result_code),
     )
-    clock = runtime.monotonic  # sim time, the owner's clock
+    clock = runtime.monotonic
     raw: dict = {}
-    # Observation only (velocities for settling); the owner has its own subscription.
     node.create_subscription(JointState, names.joint_state_topic, lambda m: raw.update(msg=m),
                              qos_profile_sensor_data, callback_group=ReentrantCallbackGroup())
     executor = OwnerMultiThreadedExecutor(num_threads=4)
     executor.add_node(node)
-    spinner = threading.Thread(target=executor.spin, daemon=True)
-    spinner.start()
+    threading.Thread(target=executor.spin, daemon=True).start()
 
     def raw_state() -> dict:
         msg = raw["msg"]
@@ -271,7 +181,6 @@ def main() -> int:
         return "timeout"
 
     def gripper_observation(expect: str) -> GripperObservation:
-        """SIM GRIPPER SENSOR (labelled): finger position against the width-matched target."""
         js = runtime.latest_joint_state
         q = js.positions[profile.gripper_joint]
         if expect == "held":
@@ -282,7 +191,7 @@ def main() -> int:
         return GripperObservation(WORKCELL_ID, INSTANCE_ID, sensor_revision, js.sequence, js.received_at,
                                   "OPEN" if is_open else "UNKNOWN", False if is_open else None, None, 1)
 
-    class ProbeFence:  # C4 scope: no Fleet stop producer in C3
+    class ProbeFence:
         def run_if_open(self, *, authority_epoch, dispatch_generation, fleet_fence_current, operation):
             if not fleet_fence_current():
                 raise LocalStopBlocked("fleet fence is not current")
@@ -292,10 +201,7 @@ def main() -> int:
             return True
 
     aid = SimAid()
-
-    def sim_rtf(sim_s: float, wall_s: float) -> float | None:
-        return round(sim_s / wall_s, 3) if wall_s > 0 else None
-
+    sim_rtf = lambda sim_s, wall_s: round(sim_s / wall_s, 3) if wall_s > 0 else None
     exit_code = 1
     try:
         start = time.monotonic()
@@ -305,20 +211,16 @@ def main() -> int:
             time.sleep(0.1)
         evidence["joint_state_initial"] = raw_state()
 
-        # 1. Home with the gripper open: one joint-space goal through the same owner, with the
-        #    owner start window (A1) instead of an exact joint-state sequence.
         home = TopDownPose(cell.home.x, cell.home.y, cell.home.z, cell.home.yaw)
         home_q = kin.solve_top_down(home, profile.ik_limits()).joints
-        target = dict(zip(ARM_JOINTS, home_q))
-        target[profile.gripper_joint] = profile.gripper_open
+        target = dict(zip(ARM_JOINTS, home_q), **{profile.gripper_joint: profile.gripper_open})
         current = runtime.latest_joint_state
         delta = max(abs(target[n] - current.positions[n]) for n in config.joint_names)
         duration = max(3.0, 2.0 * delta / (min(profile.velocity_limits.values()) * profile.planning_limit_fraction))
         command = TrajectoryCommand(
             workcell_id=WORKCELL_ID, instance_id=INSTANCE_ID, command_id=f"c3b-home-{int(time.time())}",
             session_id=runtime.owner.session_id, owner="rule_based", positions=target, duration_s=duration,
-            source_state_sequence=current.sequence, calibration_revision=CALIBRATION,
-            joint_names=config.joint_names,
+            source_state_sequence=current.sequence, calibration_revision=CALIBRATION, joint_names=config.joint_names,
             expected_start_state_positions={n: current.positions[n] for n in config.joint_names},
             start_state_tolerances={n: profile.start_state_tolerance_rad for n in config.joint_names},
         )
@@ -336,9 +238,7 @@ def main() -> int:
         if state != "ready":
             raise RuntimeError(f"owner after home: {state} {runtime.last_terminal_decision}")
 
-        # Grasp geometry only as the accepted recipe (by hash) defines it (review minor 5).
-        accepted_items = {"box": {"grasp_width_m": box.width, "grasp_depth_m": box.grasp_depth,
-                                  "height_m": box.height}}
+        accepted_items = {"box": {"grasp_width_m": box.width, "grasp_depth_m": box.grasp_depth, "height_m": box.height}}
         planner = AnalyticCellTransferPlanner(
             kin, accepted_cell_sha256=lambda: job.cell_hash, monotonic=clock,
             accepted_item_geometry=lambda sha, item: accepted_items.get(item) if sha == job.recipe_hash else None)
@@ -349,13 +249,12 @@ def main() -> int:
                             "pick": vars(pick.target), "layer": place.layer, "pallet": place.pallet}
             evidence["transfers"].append(record)
             if run_no:
-                # Stage the next block at the infeed (sim staging, labelled).
                 top = cell.station_pose(recipe.pick_station)
                 record["spawn"] = spawn_infeed_block(block, (top[0], top[1], top[2] - box.height / 2), top[3],
                                                      (box.length, box.width, box.height), box.mass_kg)
                 time.sleep(2.0)
             aid.watch(block)
-            aid._robot_entity_id()  # resolve once, before any motion
+            aid._robot_entity_id()
             record["block_pose_initial"] = model_pose(block)
 
             request = CellTransferRequest(
@@ -380,23 +279,21 @@ def main() -> int:
                                       now=now, action_id=f"c3b-action-{index}-{time.time_ns()}")
             store = ActionStore(Path(args.journal_dir) / f"{grant.action_id}.sqlite3")
             create_probe_action(store, grant)
-            store.begin_submission(grant.action_id, expected_generation=grant.dispatch_generation,
-                                   attempt_id=grant.attempt_id)
+            store.begin_submission(grant.action_id, expected_generation=grant.dispatch_generation, attempt_id=grant.attempt_id)
             recorder = ActionPhaseRecorder(store, action_id=grant.action_id, attempt_id=grant.attempt_id)
             runner = PickPlaceRunner(
                 recorder, grant, plan,
                 command_for_phase=lambda phase, grant=grant: TrajectoryCommand(
-                    workcell_id=WORKCELL_ID, instance_id=INSTANCE_ID,
-                    command_id=f"{grant.action_id}-{phase.phase_id}", session_id=runtime.owner.session_id,
-                    owner="rule_based", positions=dict(zip(phase.joint_names, phase.points[-1].positions)),
-                    duration_s=phase.points[-1].time_from_start_s,
-                    source_state_sequence=phase.source_state_sequence, calibration_revision=CALIBRATION,
-                    joint_names=phase.joint_names, trajectory_points=phase.points, phase_id=phase.phase_id,
+                    workcell_id=WORKCELL_ID, instance_id=INSTANCE_ID, command_id=f"{grant.action_id}-{phase.phase_id}",
+                    session_id=runtime.owner.session_id, owner="rule_based",
+                    positions=dict(zip(phase.joint_names, phase.points[-1].positions)),
+                    duration_s=phase.points[-1].time_from_start_s, source_state_sequence=phase.source_state_sequence,
+                    calibration_revision=CALIBRATION, joint_names=phase.joint_names,
+                    trajectory_points=phase.points, phase_id=phase.phase_id,
                 ),
                 goal_port=RosArmPhaseGoalPort(runtime), submission_fence=ProbeFence(),
                 phase_gate=lambda phase_id: True,
-                current_fence=lambda epoch, gen, grant=grant: (epoch, gen) == (grant.authority_epoch,
-                                                                                grant.dispatch_generation),
+                current_fence=lambda epoch, gen, grant=grant: (epoch, gen) == (grant.authority_epoch, grant.dispatch_generation),
                 current_execution_state=snapshot, start_state_tolerances=profile.start_state_tolerances(),
                 max_joint_state_age_s=profile.max_joint_state_age_s, monotonic=clock, cell_profile=profile,
                 gripper_readback=lambda: gripper_observation("held"), held_object_id=pick.item,
@@ -414,29 +311,23 @@ def main() -> int:
                     record["phases"][pid] = {"submit_error": f"{type(exc).__name__}: {exc}",
                                              "cause": repr(exc.__cause__), "journal": recorder.phases(),
                                              "parent": recorder.parent(),
-                                             "gripper_joint_1": runtime.latest_joint_state.positions.get(
-                                                 profile.gripper_joint)}
+                                             "gripper_joint_1": runtime.latest_joint_state.positions.get(profile.gripper_joint)}
                     log("phase_submit_failed", transfer=index, phase=pid, error=str(exc), cause=repr(exc.__cause__))
                     raise
                 owner_state = wait_owner_idle(config.action_timeout_s * config.wall_clock_bound_factor + 30)
                 row = next((r for r in recorder.phases() if r["phase_id"] == pid), None)
                 settled = settle()
                 wall_s, sim_s = time.monotonic() - t0, clock() - s0
-                result = row.get("result") if row else None
                 entry = {"planned_s": phase.points[-1].time_from_start_s, "wall_s": wall_s, "sim_s": sim_s,
                          "rtf": sim_rtf(sim_s, wall_s), "owner": owner_state,
                          "owner_decision": repr(runtime.last_terminal_decision),
-                         "journal_state": row and row["state"], "journal_result": result,
+                         "journal_state": row and row["state"], "journal_result": row.get("result") if row else None,
                          "gripper_joint_1": settled["positions"].get(profile.gripper_joint),
                          "gripper_joint_2": settled["positions"].get("gripper_joint_2"),
-                         "gripper_target": phase.points[-1].positions[-1],
-                         "block_pose": model_pose(block),
-                         # Earlier blocks of this run: any change is a neighbour disturbance.
-                         "placed_blocks": {t["block_model"]: model_pose(t["block_model"])
-                                           for t in evidence["transfers"][:-1]}}
+                         "gripper_target": phase.points[-1].positions[-1], "block_pose": model_pose(block),
+                         "placed_blocks": {t["block_model"]: model_pose(t["block_model"]) for t in evidence["transfers"][:-1]}}
                 following = next((p for p in plan.phases if p.ordinal == phase.ordinal + 1), None)
                 if following is not None:
-                    # Readback minus the next phase's planned start: wrist deflection under load (A5).
                     entry["next_start_deviation_rad"] = {
                         name: settled["positions"][name] - expected
                         for name, expected in zip(following.joint_names, following.start_state_positions)}
@@ -455,17 +346,15 @@ def main() -> int:
                         entry["hold_rejected"] = str(exc)
                         recorder.hold(reason="GRIPPER_HOLD_NOT_PROVEN")
                         raise
-                    # SIM AID: triggered only by a readback that already proved the hold.
                     record["sim_aid_attach_after_hold"] = aid.attach(block)
                     if not record["sim_aid_attach_after_hold"]["confirmed"]:
                         recorder.hold(reason="SIM_AID_ATTACH_UNCONFIRMED")
                         raise RuntimeError("sim aid attach was not confirmed")
                     time.sleep(1.0)
                     after = settle()
-                    entry["after_attach"] = {
-                        "gripper_joint_1": after["positions"].get(profile.gripper_joint),
-                        "gripper_joint_2": after["positions"].get("gripper_joint_2"),
-                        "block_pose": model_pose(block)}
+                    entry["after_attach"] = {"gripper_joint_1": after["positions"].get(profile.gripper_joint),
+                                             "gripper_joint_2": after["positions"].get("gripper_joint_2"),
+                                             "block_pose": model_pose(block)}
                 if pid == "transfer":
                     entry["gripper_observation_before_release"] = vars(gripper_observation("held"))
                 if pid == "release":
@@ -476,35 +365,26 @@ def main() -> int:
 
             time.sleep(1.0)
             final = model_pose(block)
-            error, placement_ok = evaluate_placement(final, vars(place.target), height_m=box.height,
-                                                     grasp_depth_m=box.grasp_depth)
+            error, placement_ok = evaluate_placement(final, vars(place.target), height_m=box.height, grasp_depth_m=box.grasp_depth)
             record["block_pose_final"] = final
-            # Re-judge every earlier block: a later transfer may have pushed it.
             record["placed_blocks_after"] = {}
             for earlier in evidence["transfers"][:-1]:
                 pose = model_pose(earlier["block_model"])
-                target = earlier["place"]
-                prior_error, prior_ok = evaluate_placement(pose, target, height_m=box.height,
-                                                          grasp_depth_m=box.grasp_depth)
-                record["placed_blocks_after"][earlier["block_model"]] = {
-                    "pose": pose, **prior_error, "placement_ok": prior_ok}
-            record["placement_error"] = error
-            record["placement_ok"] = placement_ok
+                prior_error, prior_ok = evaluate_placement(pose, earlier["place"], height_m=box.height, grasp_depth_m=box.grasp_depth)
+                record["placed_blocks_after"][earlier["block_model"]] = {"pose": pose, **prior_error, "placement_ok": prior_ok}
+            record["placement_error"], record["placement_ok"] = error, placement_ok
             record["journal"] = {"parent": recorder.parent(), "phases": recorder.phases()}
             log("placement", transfer=index, ok=record["placement_ok"], **error)
             save()
             if not record["placement_ok"]:
                 break
         evidence["placement_tolerance"] = PLACE_TOL
-        undisturbed = all(entry["placement_ok"]
-                          for entry in evidence["transfers"][-1].get("placed_blocks_after", {}).values())
+        undisturbed = all(entry["placement_ok"] for entry in evidence["transfers"][-1].get("placed_blocks_after", {}).values())
         evidence["earlier_blocks_undisturbed"] = undisturbed
-        exit_code = 0 if all(t.get("placement_ok") for t in evidence["transfers"]) and undisturbed and \
-            len(evidence["transfers"]) == len(indices) else 2
+        exit_code = 0 if all(t.get("placement_ok") for t in evidence["transfers"]) and undisturbed and len(evidence["transfers"]) == len(indices) else 2
     except Exception as exc:
         evidence["failure"] = f"{type(exc).__name__}: {exc}"
-        log("failure", error=evidence["failure"], owner=runtime.owner.state,
-            decision=repr(runtime.last_terminal_decision))
+        log("failure", error=evidence["failure"], owner=runtime.owner.state, decision=repr(runtime.last_terminal_decision))
     finally:
         evidence["owner_final"] = {"state": runtime.owner.state, "last": repr(runtime.last_terminal_decision)}
         save()

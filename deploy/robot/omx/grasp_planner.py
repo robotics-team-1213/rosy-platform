@@ -24,12 +24,12 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # chunk_runner, teach_trajectory
+from cell_control_core import TICKS, norm_to_rad, rad_to_norm  # noqa: E402,F401  (re-exported)
 from teach_trajectory import GUARD_UNITS_PER_S, slow, too_fast  # noqa: E402
 from motion_profile import retime  # noqa: E402
 
 NAMES = ["shoulder_pan.pos", "shoulder_lift.pos", "elbow_flex.pos", "wrist_flex.pos", "wrist_roll.pos",
          "gripper.pos"]
-TICKS = 4096
 TOOL_DOWN_TOL = math.radians(1.0)
 POS_TOL = 0.0015     # m between the requested and the FK position of every frame
 REACH_MARGIN_M = 0.008  # wrist distance kept inside l1 + l2 at the travel end points of a site
@@ -39,17 +39,6 @@ MAX_JOINT_STEP_RAD = 0.25  # between two frames; the sim profile's max_waypoint_
 # cell and replace (2026-10-27: a TCP-only keep-out let the wrist and gripper hit the wall behind the belt).
 # It is the keep-out radius of the wrist-TCP capsule; the other links use swept_volume.LINK_RADIUS_M.
 BODY_MARGIN_M = 0.035
-
-
-def rad_to_norm(rad: float, lo: float = 0, hi: float = 4095) -> float:
-    """LeRobot body-joint normalization (RANGE_M100_100) of a Dynamixel angle, tick 2048 = 0 rad."""
-    raw = (rad + math.pi) * TICKS / (2 * math.pi)
-    return (min(max(raw, lo), hi) - lo) / (hi - lo) * 200 - 100
-
-
-def norm_to_rad(norm: float, lo: float = 0, hi: float = 4095) -> float:
-    raw = (norm + 100) / 200 * (hi - lo) + lo
-    return raw * 2 * math.pi / TICKS - math.pi
 
 
 _KIN_CACHE: dict[tuple[str, float | None, int], tuple] = {}
@@ -229,8 +218,9 @@ class Planner:
         rel_act = self.hold(grasp_end, p["grip_s"], p["grip_closed"], grip_release) + self.hold(grasp_end[:5] + [grip_release], p["settle_s"])
         rel_act = [[round(v, 3) for v in f] for f in slow(rel_act, self.fps, start=grasp_end)]
         lift_pace_key = "lift_pick_guard_frac" if "lift_pick_guard_frac" in p else "lift_guard_frac"
+        rel_up_pace = min(0.18 * GUARD_UNITS_PER_S, self.guard_pace(lift_pace_key))
         rel_up = [[round(v, 3) for v in f] for f in retime([f[:5] + [grip_release] for f in pick["lift_pick"]],
-                                                           self.fps, self.guard_pace(lift_pace_key), start=rel_act[-1])]
+                                                           self.fps, rel_up_pace, start=rel_act[-1])]
         chunks["release_pick"] = rel_act + rel_up
         put_pace_key = "descend_place_guard_frac" if "descend_place_guard_frac" in p else "descend_guard_frac"
         put_down = [[round(v, 3) for v in f] for f in retime([f[:5] + [p["grip_closed"]] for f in reversed(pick["lift_pick"])],

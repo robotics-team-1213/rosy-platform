@@ -1,27 +1,26 @@
 #!/usr/bin/env python3
 """Per-arm automatic calibration and profile persistence (`arm-cal-<arm_id>.json`).
 
-Each OMX arm (`arm_s`, `arm_a`, `arm_b`) can have different finger hardware (e.g., dark flat pads on `arm_s` vs
-curved white v2.1 fingers on `arm_a`/`arm_b`), different wrist-camera-to-jaw optical parallax (`parallax_px`),
-different follower gripper stop positions on a 30 mm container (`held_30mm`), and different holding currents
-(`hold_current_ma`).
-
-This module automatically:
-1. Loads the per-arm calibration profile (`arm-cal-<arm_id>.json`) into `config["params"]`, `config["plan"]`, and
-   `config["wrist"]` during setup (`apply_to_config`).
-2. Auto-detects and persists finger polarity (`dark` vs `white`), wrist servo axis signs (`finger_sign`), and
-   camera-to-fingertip parallax (`parallax_px`).
-3. Auto-calibrates and persists `held_30mm`, `hold_current_ma`, `grip_open_30mm`, and `grip_release_30mm` via
-   exponential moving average (EMA) whenever a real grasp is measured, and infers holding when an uncalibrated plan
-   threshold (`hold_current_ma`) is higher than the physical holding current.
+Single Responsibility:
+  - Loads, applies, updates via EMA, and persists per-arm calibration profiles (`profile_path`,
+    `default_profile`, `load`, `save`, `apply_to_config`, `record_wrist_observation`,
+    `record_grasp_measurement`).
+  - Calculus & trend-based grasp/slip dynamics analysis (`evaluate_grasp_dynamics`, `infer_holding`)
+    lives in `cell_grasp_dynamics.py` and is re-exported here for backward compatibility.
 """
 from __future__ import annotations
 
 import json
-import time
 from pathlib import Path
+import time
 from typing import Any
 
+from cell_grasp_dynamics import (  # noqa: F401  (re-exported)
+    _extract_arm_load_ma,
+    _extract_jaw_and_current,
+    evaluate_grasp_dynamics,
+    infer_holding,
+)
 import cell_params as prm
 
 SCHEMA = "rosy.omx-arm-calibration.v1"
@@ -111,7 +110,11 @@ def load(config_or_work: dict | Path, arm_id: str | None = None) -> dict[str, An
 
 def save(config_or_work: dict | Path, profile: dict[str, Any], arm_id: str | None = None) -> Path:
     """Persist the per-arm calibration profile atomically."""
-    arm = arm_id or profile.get("arm_id") or (config_or_work.get("arm_id", "arm_s") if isinstance(config_or_work, dict) else "arm_s")
+    arm = (
+        arm_id
+        or profile.get("arm_id")
+        or (config_or_work.get("arm_id", "arm_s") if isinstance(config_or_work, dict) else "arm_s")
+    )
     profile = dict(profile, schema=SCHEMA, arm_id=arm, updated_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()))
     path = profile_path(config_or_work, arm)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -131,7 +134,9 @@ def apply_to_config(config: dict[str, Any]) -> dict[str, Any]:
     if cal.get("samples", 0) > 0:
         params["gripper.held_30mm"] = round(float(cal["held_30mm"]), 2)
         params["auto.jaw_margin_mm"] = round(float(cal["jaw_margin_mm"]), 2)
-        params["auto.jaw_margin_max_mm"] = round(max(float(params.get("auto.jaw_margin_max_mm", 8.0)), float(cal["jaw_margin_mm"]) + 0.5), 2)
+        params["auto.jaw_margin_max_mm"] = round(
+            max(float(params.get("auto.jaw_margin_max_mm", 8.0)), float(cal["jaw_margin_mm"]) + 0.5), 2
+        )
     config["params"] = params
 
     plan = dict(config.get("plan") or {})
@@ -173,7 +178,11 @@ def record_wrist_observation(
         prof["finger_sign"] = cur
     if parallax_px is not None:
         old_p = float(prof.get("parallax_px", 0.0))
-        new_p = round(0.7 * old_p + 0.3 * float(parallax_px), 1) if prof.get("samples", 0) > 0 else round(float(parallax_px), 1)
+        new_p = (
+            round(0.7 * old_p + 0.3 * float(parallax_px), 1)
+            if prof.get("samples", 0) > 0
+            else round(float(parallax_px), 1)
+        )
         if abs(new_p - old_p) >= 0.2:
             prof["parallax_px"] = new_p
             changed = True
@@ -214,7 +223,6 @@ def record_grasp_measurement(
     if finger_color in ("dark", "white"):
         prof["finger_color"] = finger_color
     is_white = prof.get("finger_color") == "white"
-    # Curved v2.1 white fingertips need ~9.5..9.8 mm nominal pad margin (~3.9 units above held_30mm) so tips clear 30 mm top face
     margin = float(prof.get("jaw_margin_mm", 9.8 if is_white else 6.0))
     if is_white and margin < 8.5:
         margin = 9.8
@@ -229,31 +237,16 @@ def record_grasp_measurement(
 
     prof["samples"] = n + 1
     hist = list(prof.get("history") or [])
-    hist.append({
-        "t": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        "gripper_pos": round(float(gripper_pos), 2),
-        "gripper_current_ma": round(float(gripper_current_ma), 1) if gripper_current_ma is not None else None,
-        "held_30mm": held,
-        "hold_current_ma": prof["hold_current_ma"],
-        "skew_mm": round(float(skew_mm), 2) if skew_mm is not None else None,
-    })
+    hist.append(
+        {
+            "t": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "gripper_pos": round(float(gripper_pos), 2),
+            "gripper_current_ma": round(float(gripper_current_ma), 1) if gripper_current_ma is not None else None,
+            "held_30mm": held,
+            "hold_current_ma": prof["hold_current_ma"],
+            "skew_mm": round(float(skew_mm), 2) if skew_mm is not None else None,
+        }
+    )
     prof["history"] = hist[-MAX_HISTORY:]
     save(config_or_work, prof, arm_id)
     return prof
-
-
-def infer_holding(status: dict[str, Any], closed: float = 48.8, min_units_above_closed: float = 3.8, min_current_ma: float = 65.0) -> bool:
-    """True when the follower jaws physically stopped on an object above `closed + min_units_above_closed` with holding current,
-    even if the runner's `hold_current_ma` threshold was set higher than the physical current."""
-    if status.get("holding") is True:
-        return True
-    state = status.get("state")
-    if not isinstance(state, list) or len(state) < 6 or state[5] is None:
-        return False
-    jaw = float(state[5])
-    if jaw < float(closed) + float(min_units_above_closed):
-        return False
-    curr = status.get("gripper_current_ma")
-    if curr is not None and abs(float(curr)) < float(min_current_ma):
-        return False
-    return True

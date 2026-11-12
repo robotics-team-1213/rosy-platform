@@ -78,8 +78,8 @@
 
 ## 최근 기록
 
+- 2026-11-12 · uncommitted · feat(omx): 호버·하강·캘리브레이션 훅 간 `target["pick"]` 전파 및 다중 프레임 지터 정밀 보정
 - 2026-11-11 · uncommitted · perf(omx): 손목/집게 비전 ROI 슬라이싱, 카메라 유닛 15FPS 정렬, 프로필 캐시 방어 복사 및 실물 데몬 경로 동기화
 - 2026-11-11 · uncommitted · perf(omx): D-1015 궤적·통신·인식·기구학 전 구간 병목 제거 및 실시간 연동 최적화
 - 2026-11-10 · uncommitted · fix(omx): 재삽입(unstable_grasp) 회복 시나리오 추가 — main MAIN-RED 복구
 - 2026-11-10 · uncommitted · refactor(omx): cell_auto_pick 600줄 한도 복귀 — 순수 집기 기하를 cell_pick_geom으로 분리
-- 2026-11-10 · uncommitted · feat(omx): 실물 팔 지터링 완화 및 청크 블렌딩 파이프라인 구축

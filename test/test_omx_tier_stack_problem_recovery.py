@@ -170,6 +170,32 @@ def test_cell_reach_multisample_jitter_averaging_and_feel_z_step_search(tmp_path
     out = hook(fc.act)
     assert out["holding"] is True
     assert planned_zs == [0.0]  # 0.008 - 0.008 = 0.0 m Z-step tried first!
+    assert target["pick"]["z"] == 0.0
+
+    # Contact recovery with explicit contact_z updates pick.z to contact_z + 4 mm and propagates to target["pick"]
+    class ContactFeelCell:
+        def __init__(self):
+            self.desc_count = 0
+
+        def act(self, cmd):
+            if cmd == "run descend_pick":
+                self.desc_count += 1
+                if self.desc_count == 1:
+                    return {"ok": False, "contact": True, "contact_z": 0.002}
+                return {"ok": True, "state": [0, 0, 0, 0, 0, 55.0]}
+            if cmd == "run grasp_pick":
+                return {"ok": True, "holding": True, "state": [0, 0, 0, 0, 0, 53.5]}
+            return {"ok": True, "state": [0, 0, 0, 0, 0, 55.0]}
+
+    target2 = {"pick": {"site": "ship", "x": 0.17, "y": -0.15, "z": 0.008, "yaw_deg": 0.0}, "place": {"x": 0.14, "y": 0.12, "z": 0.02, "yaw_deg": 0.0}}
+    cfc = ContactFeelCell()
+    hook2 = cell_feel.feel_hook(cfg, cfc, target2, write_lib)
+    target2["pick"] = dict(target2["pick"], x=0.175)  # upstream hover shift before feel runs
+    out2 = hook2(cfc.act)
+    assert out2["holding"] is True
+    assert target2["pick"]["x"] == 0.175
+    assert target2["pick"]["z"] == 0.006  # contact_z (0.002) + 0.004 m
+
 
 
 

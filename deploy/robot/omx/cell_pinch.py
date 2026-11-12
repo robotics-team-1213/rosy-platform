@@ -119,14 +119,17 @@ def hook(config: dict, cell, target: dict, write_library, gap_mm: float, width_m
     mount_path = work / f"pinch-mount-{config.get('arm_id', 'arm_s')}.json"
     finger_color = resolve_finger_color(params, spec)
 
-    def redescend(dx_mm, dy_mm):
-        pick = dict(target["pick"], x=round(target["pick"]["x"] + dx_mm / 1000, 4), y=round(target["pick"]["y"] + dy_mm / 1000, 4))
-        library = write_library(config, pick, target["place"], work / "pinch-replan.json")
-        return all(cell.act(c).get("ok") for c in ("run lift_pick", f"load {library}", "goto above_pick", "run descend_pick"))
-
     def run():
+        base_pick = dict(target["pick"])
+
+        def redescend(dx_mm, dy_mm):
+            pick = dict(base_pick, x=round(base_pick["x"] + dx_mm / 1000, 4), y=round(base_pick["y"] + dy_mm / 1000, 4))
+            target["pick"] = pick
+            library = write_library(config, pick, target["place"], work / "pinch-replan.json")
+            return all(cell.act(c).get("ok") for c in ("run lift_pick", f"load {library}", "goto above_pick", "run descend_pick"))
+
         sign = json.loads(signs_path.read_text()) if signs_path.exists() else {"along": 1.0}
-        closing = target["pick"]["yaw_deg"] + prm.get(params, "auto.closing_theory_deg")
+        closing = base_pick["yaw_deg"] + prm.get(params, "auto.closing_theory_deg")
         mount = json.loads(mount_path.read_text())["pads"] if mount_path.exists() else None
         out = check(cell, spec.get("camera", "wrist"), (spec["hsv_min"], spec["hsv_max"]), closing, gap_mm, width_mm,
                     redescend, params, sign, mount, color=finger_color)
