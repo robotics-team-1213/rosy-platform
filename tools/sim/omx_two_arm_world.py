@@ -225,7 +225,7 @@ class World:
         turn = [0, 0, 0, 1]  # ship x runs to -x of the fixture frame
         mesh = mujoco.mjtGeom.mjGEOM_MESH
         visuals = [("hull", COLOURS["ship"]), ("house", COLOURS["ship"])]
-        if L.choices.get("berth_kit", "v16-modular") == "v16-modular":
+        if L.choices.get("berth_kit", "v17-modular-tight") in ("v16-modular", "v17-modular-tight"):
             visuals += [
                 ("berth_v16_cradle", [.88, .48, .16, 1]),
                 ("berth_v16_bridges", [.92, .68, .22, 1]),

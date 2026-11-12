@@ -84,7 +84,7 @@ class TrackingService:
             "rosy_45": {"target_id": "rosy_45", "kind": "pinky", "label": "rosy-pinky-y8xs (rosy_45)",
                         "base_x": -0.1896, "base_y": 0.380, "base_yaw": -1.5708, "reach_m": 0.18, "zoom": 3, "updated_at": now_init},
             "rosy_42": {"target_id": "rosy_42", "kind": "pinky", "label": "rosy-pinky-geg6 (rosy_42)",
-                        "base_x": 0.6987, "base_y": -0.2512, "base_yaw": 3.1416, "reach_m": 0.18, "zoom": 3, "updated_at": now_init},
+                        "base_x": 0.7650, "base_y": -0.2512, "base_yaw": 3.1416, "reach_m": 0.18, "zoom": 3, "updated_at": now_init},
             "arm_a": {"target_id": "arm_a", "kind": "omx_ai", "label": "OMX-AI #1 (북동 상차 · Arm A)",
                       "base_x": 0.551, "base_y": 0.365, "base_yaw": -1.5708, "reach_m": 0.28, "zoom": 4, "updated_at": now_init},
             "arm_b": {"target_id": "arm_b", "kind": "omx_ai", "label": "OMX-AI #2 (동북 상차 · Arm B)",

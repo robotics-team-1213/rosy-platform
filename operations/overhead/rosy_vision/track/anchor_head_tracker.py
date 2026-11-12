@@ -4,20 +4,13 @@ from __future__ import annotations
 
 from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass, field
-import math
-import threading
-import time
-
-import cv2
-import numpy as np
-
+import math, threading, time
+import cv2, numpy as np
 from core_common.protocol.sightings import SiteSightingPayload
 from rosy_vision.track import geometry
 from rosy_vision.track.model import Calibration, Detection, DetectorResult, ROBOT_TOP_HEIGHT_M
 
-OMX_HEAD_HEIGHT_M = 0.11
-PINKY_HEAD_OFFSET_M = 0.055
-SIGHTING_MIN_INTERVAL_S = 0.22
+OMX_HEAD_HEIGHT_M, PINKY_HEAD_OFFSET_M, SIGHTING_MIN_INTERVAL_S = 0.11, 0.055, 0.22
 
 
 @dataclass
@@ -47,7 +40,7 @@ def default_anchors() -> dict[str, TargetAnchor]:
     return {
         "rosy_46": TargetAnchor("rosy_46", "pinky", "rosy-pinky-b8xy (rosy_46)", -0.4184, 0.380, -1.5708, 0.18, 3, 46, now),
         "rosy_45": TargetAnchor("rosy_45", "pinky", "rosy-pinky-y8xs (rosy_45)", -0.1896, 0.380, -1.5708, 0.18, 3, 45, now),
-        "rosy_42": TargetAnchor("rosy_42", "pinky", "rosy-pinky-geg6 (rosy_42)", 0.6987, -0.2512, 3.1416, 0.18, 3, 42, now),
+        "rosy_42": TargetAnchor("rosy_42", "pinky", "rosy-pinky-geg6 (rosy_42)", 0.7650, -0.2512, 3.1416, 0.18, 3, 42, now),
         "arm_a": TargetAnchor("arm_a", "omx_ai", "OMX-AI #1 (북동 상차 · Arm A)", 0.551, 0.365, -1.5708, 0.28, 4, None, now),
         "arm_b": TargetAnchor("arm_b", "omx_ai", "OMX-AI #2 (동북 상차 · Arm B)", 0.956, 0.370, -1.5708, 0.28, 4, None, now),
         "arm_s": TargetAnchor("arm_s", "omx_ai", "OMX-AI #3 (동남 분류 · Arm S)", 0.960, -0.035, 3.1416, 0.28, 4, None, now),
@@ -324,13 +317,18 @@ class AnchorHeadTracker:
         ref_y = prev.base_y if prev is not None else anchor.base_y
         ref_yaw = prev.head_yaw if prev is not None else anchor.base_yaw
 
-        best_blob, best_dist = None, 0.14
+        best_blob, best_dist = None, 0.35
         for det in detections:
-            if det.marker_id is not None and det.marker_id != anchor.marker_id:
-                continue
-            d = math.hypot(det.x - ref_x, det.y - ref_y)
-            if d < best_dist:
-                best_dist, best_blob = d, det
+            if det.marker_id is not None:
+                if det.marker_id != anchor.marker_id:
+                    continue
+                d = math.hypot(det.x - ref_x, det.y - ref_y)
+                if d < best_dist:
+                    best_dist, best_blob = d, det
+            else:
+                d_home = math.hypot(det.x - home.base_x, det.y - home.base_y)
+                if d_home <= 0.045 and d_home < best_dist:
+                    best_dist, best_blob = d_home, det
 
         center_x = best_blob.x if best_blob is not None else home.base_x
         center_y = best_blob.y if best_blob is not None else home.base_y
@@ -405,16 +403,17 @@ class AnchorHeadTracker:
                         cand_yaw = _wrap_angle(cand_yaw + math.pi)
                     measured_yaw = _blend_angle(ref_yaw, cand_yaw, 0.15)
 
-        if 0.02 <= measured_y <= 0.49:
-            target_bay_x = home.base_x if best_blob is None else min((-0.4184, -0.1896, 0.0322), key=lambda bx: abs(measured_x - bx))
+        has_marker = best_blob is not None and best_blob.marker_id is not None
+        if not has_marker:
+            measured_x = 0.85 * home.base_x + 0.15 * measured_x
+            measured_y = 0.85 * home.base_y + 0.15 * measured_y
+            measured_yaw = _blend_angle(measured_yaw, home.base_yaw, 0.75)
+        elif 0.02 <= measured_y <= 0.49:
+            target_bay_x = min((-0.4184, -0.1896, 0.0322), key=lambda bx: abs(measured_x - bx))
             if abs(measured_x - target_bay_x) <= 0.095:
                 measured_x = 0.72 * target_bay_x + 0.28 * measured_x
                 if abs(_wrap_angle(measured_yaw - (-1.5708))) <= 0.65:
                     measured_yaw = _blend_angle(measured_yaw, -1.5708, 0.55)
-        elif 0.55 <= measured_x <= 0.85 and -0.34 <= measured_y <= -0.16:
-            measured_y = 0.72 * (-0.2512) + 0.28 * measured_y
-            if abs(_wrap_angle(measured_yaw - math.pi)) <= 0.65:
-                measured_yaw = _blend_angle(measured_yaw, math.pi, 0.55)
 
         min_x, min_y, max_x, max_y = track_bounds_m
         measured_x, measured_y = max(min_x, min(max_x, measured_x)), max(min_y, min(max_y, measured_y))

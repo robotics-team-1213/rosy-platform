@@ -84,10 +84,14 @@ def build_plan_from_directive(
     plan["release_lift_m"] = float(exec_cfg.get("release_lift_m", default_rel_lift))
     plan.setdefault("descend_m_s", 0.025)
     plan.setdefault("lift_m_s", 0.032)
-    plan["grip_s"] = float(exec_cfg.get("grip_s", 0.50))
-    plan["settle_s"] = float(exec_cfg.get("settle_s", min(0.25, float(plan.get("settle_s", 0.25)))))
-    plan.setdefault("descend_guard_frac", 0.55)
-    plan.setdefault("lift_guard_frac", 0.65)
+    plan["grip_s"] = float(exec_cfg.get("grip_s", 0.45))
+    plan["settle_s"] = float(exec_cfg.get("settle_s", min(0.18, float(plan.get("settle_s", 0.18)))))
+    plan["descend_guard_frac"] = float(
+        exec_cfg.get("descend_guard_frac", max(0.60, float(plan.get("descend_guard_frac", 0.60))))
+    )
+    plan["lift_guard_frac"] = float(
+        exec_cfg.get("lift_guard_frac", max(0.70, float(plan.get("lift_guard_frac", 0.70))))
+    )
     if arm_id == "arm_b" and "limits" in plan and "joints_rad" in plan["limits"]:
         plan["limits"]["joints_rad"]["joint5"] = [0.16, 2.89]
     if "limits" in plan and float(pz) < float(plan["limits"]["workspace_min_m"][2]):
@@ -106,13 +110,13 @@ def build_plan_from_directive(
         plan["lift_m_s"] = round(min(0.040, max(0.015, float(plan["lift_m_s"]) * rl_speed_scale)), 4)
     plan["transit_speed"] = base_transit
     plan["descend_pick_guard_frac"] = float(
-        exec_cfg.get("descend_pick_guard_frac", max(0.50, float(plan.get("descend_pick_guard_frac", 0.55))))
+        exec_cfg.get("descend_pick_guard_frac", max(0.60, float(plan.get("descend_pick_guard_frac", 0.60))))
     )
     plan["descend_place_guard_frac"] = float(
-        exec_cfg.get("descend_place_guard_frac", max(0.45, float(plan.get("descend_place_guard_frac", 0.48))))
+        exec_cfg.get("descend_place_guard_frac", max(0.55, float(plan.get("descend_place_guard_frac", 0.55))))
     )
     plan["lift_pick_guard_frac"] = float(
-        exec_cfg.get("lift_pick_guard_frac", max(0.60, float(plan.get("lift_pick_guard_frac", plan.get("lift_guard_frac", 0.65)))))
+        exec_cfg.get("lift_pick_guard_frac", max(0.70, float(plan.get("lift_pick_guard_frac", plan.get("lift_guard_frac", 0.70)))))
     )
     return plan, cal
 
@@ -136,10 +140,10 @@ def plan_library_from_directive(
         chunks = lib["chunks"]
         for k in ("above_pick", "above_place"):
             if chunks.get(k):
-                chunks[k] = list(chunks[k]) + [list(chunks[k][-1])] * 8
+                chunks[k] = list(chunks[k]) + [list(chunks[k][-1])] * 2
         for k in ("descend_pick", "descend_place", "lift_pick", "lift_place"):
             if chunks.get(k):
-                chunks[k] = list(chunks[k]) + [list(chunks[k][-1])] * 10
+                chunks[k] = list(chunks[k]) + [list(chunks[k][-1])] * 3
     if exec_cfg.get("sim_real_compensate", True) and "chunks" in lib:
         chunks = lib["chunks"]
         arm_id = str(directive.get("arm_id") or "arm_b")

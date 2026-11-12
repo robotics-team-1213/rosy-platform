@@ -4,8 +4,8 @@ x-pg-maintenance: &pg-maintenance
   image: rosy-site-postgres:${ROSY_SITE_IMAGE_TAG:?set ROSY_SITE_IMAGE_TAG}
   pull_policy: never
   entrypoint: [sh, -eu, -c]
-  # UID/GID of the postgres user inside the official postgres:16-alpine image.
-  user: "70:70"
+  # UID 70 (postgres inside postgres:16-alpine) + GID 10001 (rosy-fleet, reader of 0440 postgres_password secret).
+  user: "70:10001"
   read_only: true
   tmpfs: ["/tmp:rw,noexec,nosuid,size=32m"]
   security_opt: [no-new-privileges:true]

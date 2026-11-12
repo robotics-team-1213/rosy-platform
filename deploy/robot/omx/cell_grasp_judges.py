@@ -110,7 +110,7 @@ def vision_judge(
     if wrist_img is None:
         return {"verdict": "proceed", "class": "no_frame", "found": False, "dx_mm": 0.0, "dy_mm": 0.0, "dz_mm": 0.0, "reason": "wrist frame not provided"}
     seen = cell_fingers.finger_offset_mm(wrist_img, hsv, gap_mm, params, color=color) if hsv is not None else {"found": False}
-    if not seen.get("found"):
+    if not seen.get("found") or (seen.get("mode") == "top_face" and float(seen.get("gap_px", 0.0)) < 120.0):
         struct = structural_container_between_fingers(wrist_img)
         if struct and struct.get("is_container_shape"):
             seen = {

@@ -44,29 +44,31 @@ CHOICES = dict(
     cell_snapshot=None,      # with temp_lanes="snapshot": a rosy.omx-cell-snapshot.v1 file (omx_real2sim.py measure), the lanes the top camera saw then
     top_camera="2026-11-10", # "2026-11-10": resurveyed top camera (cell_model_inventory.yaml); "2026-11-03": initial stud-grid PnP
     container_colours="orange",  # "orange": standard v3 containers; "multi": cycle orange/green/red/purple across containers
-    berth_kit="v16-modular", # "v16-modular": integral U-cradles + OMX base-plate spacer bridges + 2 cm concave belt stopper (Confluence 23592971/23234388); "v15-quay": loose quay fenders
-    ship_spacer_dy_mm=39.0,  # v16 berth-spacer-bridge-a/b lateral gap step between PR33_C02_BASE inner wall and r08 hull side (35 / 39 / 43 mm)
-    ship_spacer_dx_mm=0.0,   # v16 berth-spacer-bridge-a/b fore-aft socket step (-8 / 0 / +8 mm)
-    ship_stern_hook_mm=0.0,  # v16 berth-stern-hook-set table-edge setback (0 / 5 / 10 mm)
+    berth_kit="v17-modular-tight", # "v17-modular-tight": 193-195 mm tight U-cradles (stern+mid+bow side cheeks, 24x8.4 mm big key-socket, HULL_CLR=0.12 mm) + OMX base-plate spacer bridges + 2 cm concave belt stopper (Confluence 23592971/23234388); "v15-quay": loose quay fenders
+    ship_spacer_dy_mm=32.0,  # v17 berth-spacer-bridge-a/b lateral gap between PR33_C02_BASE inner wall (|y|=96.5~97.5 mm, 193~195 mm span) and r08 hull side (|y|=65.0 mm): 31.5 / 32.0 / 32.5 mm
+    ship_spacer_dx_mm=0.0,   # v17 berth-spacer-bridge-a/b fore-aft alignment (-6 / 0 / +6 mm)
+    ship_stern_hook_mm=0.0,  # v17 berth-stern-hook-set table-edge setback (0 / 5 / 10 mm)
     temp_bridge="v7",        # "v7": temp_slot_bridge_a/b 3-prong alignment bridges on PR33_C02_BASE (Confluence 23232928/23233175); "none"
     physics="design",        # a candidate of learning/envs/isaac/cell_physics.yaml (omx_physics.py): servo gains, joint damping, container mass and friction
     wait_pose="side")        # where an arm waits between steps: "side" = home folded but turned to the belt end, out of the middle band
                              # (D-983: the folded home points its jaw at the middle, and arm_a brushed arm_b's jaw at the stand); "home"
 BERTH_V16_SPEC = dict(
-    berth_kit="v16-modular",
+    berth_kit="v17-modular-tight",
     confluence_pages=("23592971", "23234388", "23233175"),
     lift_mm=3.0,
     hull_half_beam_mm=65.0,
-    hull_in_cradle_clearance_mm=0.20,
+    hull_in_cradle_clearance_mm=0.12,
     base_inner_from_axis_mm=71.25,
     base_front_from_axis_mm=75.0,
     base_hole_from_axis_x_mm=62.5,
-    spacer_dy_nominal_mm=39.0,
-    spacer_dy_steps_mm=(35.0, 39.0, 43.0),
-    spacer_dx_steps_mm=(-8.0, 0.0, 8.0),
+    base_plate_inner_span_mm=(193.0, 194.0, 195.0),
+    spacer_dy_nominal_mm=32.0,
+    spacer_dy_steps_mm=(31.5, 32.0, 32.5),
+    spacer_dx_steps_mm=(-6.0, 0.0, 6.0),
     stern_hook_steps_mm=(0.0, 5.0, 10.0),
-    repeatability_rss_mm=0.32,
-    max_hull_yaw_deg=0.19,
+    big_key_socket_mm=(24.0, 8.4),
+    repeatability_rss_mm=0.22,
+    max_hull_yaw_deg=0.07,
     belt_concave_stopper=dict(drop_mm=20.0, mouth_mm=62.0, flat_mm=44.0, depth_mm=9.0, wall_mm=3.5, x_back_mm=-7.5, x_front_mm=-16.5),
 )
 TOP_CAMERA_20261110 = dict(eye=[-.0334, .0493, .6613], focus=[.0804, .0086, .1762], up=[.9737, .0296, .226],
@@ -87,7 +89,7 @@ TEMP_LANES_PHOTO_1108 = dict(a=[((-.0258, -.2176), 16.7), ((-.0394, -.1620), 0.)
                              b=[((-.0302, .0968), 10.7), ((-.0349, .1482), -1.4), ((-.0281, .1990), -14.4)])
 TEMP_LANES_PHOTO = dict(a=[((-.0738, -.2167), 15.7), ((-.0818, -.1672), 2.7), ((-.0776, -.1173), -11.3)],
                         b=[((-.0465, .1439), 4.9), ((-.0466, .1958), -9.7), ((-.0378, .2480), -24.7)])
-SCAD = dict(lanes=3, cont_w=.030, cont_l=.090, pk_l=.096, deck_t=.008, clr=.0004, clr_l=.001, seat_h=.0006, catch=.005, gap_min=.010, rim=.003, yaw_tol_deg=3.)
+SCAD = dict(lanes=3, cont_w=.030, cont_l=.090, pk_l=.096, deck_t=.008, clr=.0004, clr_l=.001, seat_h=.0006, catch=.005, gap_min=.0006, rim=.003, yaw_tol_deg=3.)
 BELT_STOP_X = .158
 ARMS = ("arm_a", "arm_b")  # fixture arm index 0 (y -) and 1 (y +); arm_a does not move in reality (motor 11), it does here
 SHIP_ASSETS = ISAAC / "assets/ship_r08_berth"  # made by Rosy/docs/research/ship-modular-2026-11-03/proposals/ship-berth/sim_assets.py (SOURCE.json)

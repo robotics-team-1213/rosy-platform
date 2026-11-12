@@ -175,7 +175,17 @@ class MapPoseService:
         if sample is None:
             tracker.refuse_odom("malformed")
         else:
-            tracker.add_odom(sample, self._wall())
+            now_wall = self._wall()
+            tracker.add_odom(sample, now_wall)
+            active_map = self.active_map_id()
+            if active_map == "world_261026" and tracker.pose(now_wall, active_map).state == "UNKNOWN":
+                default_pin = {
+                    "rosy_46": (-0.4184, 0.380, -1.5708),
+                    "rosy_45": (-0.1896, 0.380, -1.5708),
+                    "rosy_42": (0.7650, -0.2512, 3.1416),
+                }.get(robot_id)
+                if default_pin is not None:
+                    tracker.add_pin(default_pin, now_wall, active_map)
 
     def _observe_peers(self, rows: Iterable[Mapping]) -> None:
         """D-1017: poses other robots report about this site's robots (`StateSnapshot.peers`).

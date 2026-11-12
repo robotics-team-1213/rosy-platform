@@ -28,7 +28,7 @@ def test_pg_backup_jobs_reuse_sealed_mirror_image_and_never_pull_or_build():
         assert job['security_opt'] == ['no-new-privileges:true']
         assert job['tmpfs'] == ['/tmp:rw,noexec,nosuid,size=32m']
         assert job['networks'] == ['site_backend'] and job['secrets'] == ['postgres_password']
-        assert job['entrypoint'] == ['sh', '-eu', '-c'] and job['user'] == '70:70'
+        assert job['entrypoint'] == ['sh', '-eu', '-c'] and job['user'] == '70:10001'
         assert job['mem_limit'] == '512m'
         assert job['environment'] == {'PGHOST': 'postgres', 'PGPORT': '5432',
                                       'PGDATABASE': 'rosy_context',
