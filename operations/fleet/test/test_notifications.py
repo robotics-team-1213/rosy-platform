@@ -14,7 +14,6 @@ import pytest
 
 from fleet.incidents.notifications import Channel, NotificationConfig, NotificationWorker
 from fleet.incidents.notification_client import RemoteNotificationSink, should_run_embedded_notification_worker
-from fleet.server.background_workers import start_notification_worker
 from fleet.stuck.board import LineStuckBoard
 from fleet.stuck.reports import LineStuckAnswerLog
 from test_judgment_receipts import row
@@ -52,10 +51,13 @@ def test_remote_notification_sink_disables_embedded_worker_and_posts_events(monk
     assert all(request.get_header('Authorization') == 'Bearer tok-1' and timeout == 5.0
                for request, timeout in requests)
 
-    monkeypatch.setattr(asyncio, 'create_task', lambda _: pytest.fail('embedded worker started'))
-    assert start_notification_worker(None, SimpleNamespace(remote_url='https://notifications.example')) == (None, None)
+    worker = NotificationWorker(None, SimpleNamespace(remote_url='https://notifications.example'), None, board=None)
+    monkeypatch.setattr(worker, 'run_once', lambda: pytest.fail('embedded worker ran'))
+    asyncio.run(worker.run())
     monkeypatch.setenv('ROSY_NOTIFICATIONS_URL', 'https://notifications.example')
-    assert start_notification_worker(None, SimpleNamespace()) == (None, None)
+    env_worker = NotificationWorker(None, SimpleNamespace(), None, board=None)
+    monkeypatch.setattr(env_worker, 'run_once', lambda: pytest.fail('embedded worker ran'))
+    asyncio.run(env_worker.run())
 
     with pytest.raises(ValueError):
         RemoteNotificationSink('file:///tmp/notifications')

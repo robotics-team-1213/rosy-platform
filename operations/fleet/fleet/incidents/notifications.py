@@ -20,6 +20,7 @@ from core_common.notification_channels import Channel, send_channel
 
 from fleet.incidents.handoff import judgment_revision
 from fleet.incidents.final_review import final_current, final_facts, managed_case
+from fleet.incidents.notification_client import should_run_embedded_notification_worker
 
 
 @dataclass(frozen=True)
@@ -246,6 +247,10 @@ class NotificationWorker:
                                     provider_id=provider_id, retry_after=retry_after)
 
     async def run(self):
+        if not should_run_embedded_notification_worker(
+            getattr(self.config, 'remote_url', None) or os.environ.get('ROSY_NOTIFICATIONS_URL')
+        ):
+            return
         while True:
             try:
                 await self.run_once()

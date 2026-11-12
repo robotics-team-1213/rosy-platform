@@ -4,12 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 import sqlite3
 import time
 from typing import TYPE_CHECKING
-
-from fleet.incidents.notification_client import should_run_embedded_notification_worker
 
 if TYPE_CHECKING:
     from fleet.server.cancel_all import DriveCancelFence
@@ -20,8 +17,7 @@ _LOG = logging.getLogger(__name__)
 
 
 def start_notification_worker(app, config):
-    remote_url = getattr(config, 'remote_url', None) or os.environ.get('ROSY_NOTIFICATIONS_URL')
-    if config is None or not should_run_embedded_notification_worker(remote_url):
+    if config is None:
         return None, None
     import httpx
     from fleet.incidents.notifications import NotificationWorker
