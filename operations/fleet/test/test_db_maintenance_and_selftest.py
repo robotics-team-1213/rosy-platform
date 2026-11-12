@@ -104,6 +104,7 @@ def test_flush_and_archive_watermark_guard(tmp_path):
     flushed = run_db_maintenance_action(path, "flush-audit", context_log=archive.context_log)
     assert flushed["ok"] is True and flushed["pending_rows"] == 0
     assert len(archive.rows) == 2
+    assert run_db_maintenance_action(path, "self-test", context_log=archive.context_log)["checks"]["audit_archive"]["ok"]
     with closing(sqlite3.connect(path)) as db:
         db.execute("UPDATE fleet_api_audit SET created_at='2000-01-01'")
         db.execute("UPDATE fleet_audit_flush SET last_rowid=1 WHERE kind='fleet_api_audit'")

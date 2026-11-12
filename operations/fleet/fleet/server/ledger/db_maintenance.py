@@ -133,7 +133,16 @@ def run_db_self_test(store_path: Path | str | None, *, context_log: Any = None,
                     and SETTING_BOUNDS[key][0] <= settings[key] <= SETTING_BOUNDS[key][1] for key in SETTING_BOUNDS)
         checks["migrations_and_settings"] = {"ok": valid, "applied_count": applied}
     archive = read_audit_archive_status(path, context_log=context_log)
-    pg_status = context_log.status() if archive["configured"] and hasattr(context_log, "status") else {}
+    pg_status = {}
+    if archive["configured"]:
+        try:
+            if hasattr(context_log, "status"):
+                pg_status = context_log.status()
+            else:
+                context_log._connect_and(lambda connection: connection.execute("SELECT 1"))
+                pg_status = {"ok": True}
+        except Exception:
+            pg_status = {"ok": False}
     checks["audit_archive"] = {**archive, "ok": not archive["configured"] or bool(pg_status.get("ok"))}
     return {"action": "self-test", "ok": all(check["ok"] for check in checks.values()), "checks": checks}
 
