@@ -53,6 +53,9 @@ def _clip(poly, cutoff):
     return result
 
 
+_VERTEX_CACHE: dict[str, tuple[set, list, list]] = {}
+
+
 def _meshes(directory, require_sdk_transforms):
     result, hashes = [], {}
     for name, pivot, multiplier, expected in _MESHES:
@@ -63,14 +66,23 @@ def _meshes(directory, require_sdk_transforms):
         if sha256(data).hexdigest() != expected:
             raise ValueError('UNSUPPORTED: finger mesh geometry differs from reviewed asset')
         hashes[name] = expected
-        count = struct.unpack_from('<I', data, 80)[0]
-        if len(data) != 84+50*count:
-            raise ValueError('UNSUPPORTED: unexpected STL encoding')
-        vertices = set(tuple(v*.001 for v in struct.unpack_from('<fff', data, 84+50*i+12+12*j))
-                       for i in range(count) for j in range(3))
-        if max(math.hypot(x, y) for x, y, z in vertices) > .12:
-            raise ValueError('UNSUPPORTED: finger exceeds angular sampling radius')
-        result.append((vertices, pivot, multiplier))
+        cached = _VERTEX_CACHE.get(expected)
+        if cached is None:
+            count = struct.unpack_from('<I', data, 80)[0]
+            if len(data) != 84+50*count:
+                raise ValueError('UNSUPPORTED: unexpected STL encoding')
+            vertices = set(tuple(v*.001 for v in struct.unpack_from('<fff', data, 84+50*i+12+12*j))
+                           for i in range(count) for j in range(3))
+            if max(math.hypot(x, y) for x, y, z in vertices) > .12:
+                raise ValueError('UNSUPPORTED: finger exceeds angular sampling radius')
+            xy_hull = _hull([(x, y) for x, y, _ in vertices])
+            by_z: dict[float, list[tuple[float, float]]] = {}
+            for x, y, z in vertices:
+                by_z.setdefault(z, []).append((x, y))
+            xz_verts = [(x, y, z) for z, pts in by_z.items() for x, y in _hull(pts)]
+            cached = (vertices, xy_hull, xz_verts)
+            _VERTEX_CACHE[expected] = cached
+        result.append((cached[0], cached[1], cached[2], pivot, multiplier))
     transforms = {}
     for name, expected in _TRANSFORMS.items():
         if name != 'omx_f.urdf' and not require_sdk_transforms:
@@ -120,15 +132,14 @@ def check_clearance(job, profile, mesh_directory, *, box, require_sdk_transforms
     cutoffs = {current['z']+.09193-(prior['z']+.015)-angular_pad
                for index, current in enumerate(targets) for prior in targets[:index]}
     envelopes = {cutoff: None for cutoff in cutoffs}
-    for vertices, pivot, multiplier in meshes:
+    for _, xy_hull, xz_verts, pivot, multiplier in meshes:
         for index in range(intervals+1):
             angle = multiplier*(low+(high-low)*index/intervals)
-            points = [(.0295+math.cos(angle)*x-math.sin(angle)*y,
-                       pivot+math.sin(angle)*x+math.cos(angle)*y+.0016, z) for x, y, z in vertices]
+            c, s = math.cos(angle), math.sin(angle)
             # Projections of the convex hull give conservative slab-restricted AABBs.
             # The expanded cutoff and XY inflation cover between-sample angular motion.
-            x_projection = _hull([(x, z) for x, y, z in points])
-            y_projection = _hull([(x, y) for x, y, z in points])
+            x_projection = _hull([(.0295+c*x-s*y, z) for x, y, z in xz_verts])
+            y_projection = _hull([(.0295+c*x-s*y, pivot+s*x+c*y+.0016) for x, y in xy_hull])
             for cutoff in cutoffs:
                 xs, ys = _clip(x_projection, cutoff), _clip(y_projection, cutoff)
                 if not xs or not ys:
