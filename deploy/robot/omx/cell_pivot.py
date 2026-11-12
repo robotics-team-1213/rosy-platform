@@ -33,13 +33,14 @@ SCHEMA = "rosy.omx-cell-bias.v1"
 STILL_PX, DIFF_PX, MIN_BLOB, MAX_BLOB, FOLLOW_PX, AGREE_PX = (
     prm.default(f"pivot.{k}") for k in ("still_px", "diff_px", "min_blob", "max_blob", "follow_px", "agree_px"))
 BIAS_REACH_MM = prm.default("pivot.bias_reach_mm")  # a region's bias is trusted this far from its pivot point
+_KERNEL_3X3 = np.ones((3, 3), np.uint8)
 
 
 def _changed_mask(a, b, threshold: int = DIFF_PX):  # the 3x3 opening is fixed: noise removal, not a decision
     import cv2
 
     diff = cv2.absdiff(cv2.cvtColor(a, cv2.COLOR_BGR2GRAY), cv2.cvtColor(b, cv2.COLOR_BGR2GRAY))
-    return cv2.morphologyEx((diff > threshold).astype(np.uint8) * 255, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
+    return cv2.morphologyEx((diff > threshold).astype(np.uint8) * 255, cv2.MORPH_OPEN, _KERNEL_3X3)
 
 
 def settled_frame(cell, sleep=time.sleep, clock=time.monotonic, limit_s: float | None = None, params=None):
@@ -67,11 +68,14 @@ def jaw_blobs(closed, opened, params=None) -> list:
     merge = int(prm.get(params, "pivot.merge_px"))
     grouped = cv2.dilate(mask, np.ones((2 * merge + 1, 2 * merge + 1), np.uint8)) if merge else mask
     n, labels, stats, _ = cv2.connectedComponentsWithStats(grouped)
+    min_blob = prm.get(params, "pivot.min_blob", MIN_BLOB)
     blobs = []
     for i in range(1, n):
+        if int(stats[i, cv2.CC_STAT_AREA]) < min_blob:  # the grouped blob's area bounds its own mask px: skip early
+            continue
         x0, y0, bw, bh = (int(stats[i, k]) for k in (cv2.CC_STAT_LEFT, cv2.CC_STAT_TOP, cv2.CC_STAT_WIDTH, cv2.CC_STAT_HEIGHT))
         ys, xs = np.nonzero((labels[y0:y0 + bh, x0:x0 + bw] == i) & (mask[y0:y0 + bh, x0:x0 + bw] > 0))
-        if len(xs) >= prm.get(params, "pivot.min_blob", MIN_BLOB) and np.ptp(xs) < max_blob and np.ptp(ys) < max_blob:
+        if len(xs) >= min_blob and np.ptp(xs) < max_blob and np.ptp(ys) < max_blob:
             blobs.append((float(xs.mean()) + x0, float(ys.mean()) + y0, int(len(xs))))
     return blobs
 
@@ -85,14 +89,18 @@ def jaw_centre(closed, opened, params=None) -> list:
     mask = _changed_mask(closed, opened, prm.get(params, "pivot.diff_px", DIFF_PX))
     merge = int(prm.get(params, "jaw_centre.merge_px"))
     n, labels, stats, _ = cv2.connectedComponentsWithStats(cv2.dilate(mask, np.ones((2 * merge + 1, 2 * merge + 1), np.uint8)))
+    min_side = prm.get(params, "jaw_centre.min_side_px")
+    gap_lo, gap_hi = prm.get(params, "jaw_centre.gap_lo_px"), prm.get(params, "jaw_centre.gap_hi_px")
     sides = []
     for i in range(1, n):
+        if int(stats[i, cv2.CC_STAT_AREA]) < min_side:  # the grouped blob's area bounds its own mask px: skip early
+            continue
         x0, y0, bw, bh = (int(stats[i, k]) for k in (cv2.CC_STAT_LEFT, cv2.CC_STAT_TOP, cv2.CC_STAT_WIDTH, cv2.CC_STAT_HEIGHT))
         ys, xs = np.nonzero((labels[y0:y0 + bh, x0:x0 + bw] == i) & (mask[y0:y0 + bh, x0:x0 + bw] > 0))
-        if len(xs) >= prm.get(params, "jaw_centre.min_side_px"):
+        if len(xs) >= min_side:
             sides.append((float(xs.mean()) + x0, float(ys.mean()) + y0, len(xs)))
     pairs = [(a, b) for k, a in enumerate(sides) for b in sides[k + 1:]
-             if prm.get(params, "jaw_centre.gap_lo_px") <= math.dist(a[:2], b[:2]) <= prm.get(params, "jaw_centre.gap_hi_px")]
+             if gap_lo <= math.dist(a[:2], b[:2]) <= gap_hi]
     if not pairs:
         return []
     a, b = max(pairs, key=lambda q: q[0][2] + q[1][2])
@@ -307,14 +315,27 @@ def validate_bias(region: dict, params=None) -> None:
         raise ValueError("bias refused: magnitude is past pivot.max_bias_mm")
 
 
+_BIAS_CACHE = {}  # (path, mtime_ns, size, max_bias_mm) -> validated bias file
+
+
 def load_bias(path, params=None) -> dict:
     path = Path(path)
+    try:
+        st = path.stat()
+        key = (str(path), st.st_mtime_ns, st.st_size, prm.get(params, "pivot.max_bias_mm"))
+    except OSError:
+        key = None
+    if key in _BIAS_CACHE:
+        data = _BIAS_CACHE[key]
+        return {**data, "regions": list(data["regions"])}  # a copy: callers rebind regions (save_bias) without touching the cache
     data = json.loads(path.read_text()) if path.exists() else {"schema": SCHEMA, "regions": []}
     if data.get("schema") != SCHEMA:
         raise SystemExit(f"{path}: not a {SCHEMA} file")
     for region in data["regions"]:
         validate_bias(region, params)
-    return data
+    if key is not None:
+        _BIAS_CACHE[key] = data
+    return {**data, "regions": list(data["regions"])}
 
 
 def save_bias(path, bias: dict, params=None) -> None:
@@ -326,6 +347,7 @@ def save_bias(path, bias: dict, params=None) -> None:
     tmp = Path(path).with_suffix(".tmp")
     tmp.write_text(json.dumps(data, indent=1))
     tmp.replace(path)
+    _BIAS_CACHE.clear()
 
 
 def bias_at(data: dict, site: str, point_m, reach_mm: float | None = None, params=None):

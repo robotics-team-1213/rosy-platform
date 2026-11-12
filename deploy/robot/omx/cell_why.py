@@ -82,7 +82,8 @@ def _lag(r, j):
 
 def _peak(rows, j) -> float:
     """The command's fastest 5-tick stretch on joint j: the speed a baseline is kept at."""
-    return max((abs(b["sent"][j] - a["sent"][j]) / (b["t"] - a["t"]) for a, b in zip(rows, rows[5:]) if b["t"] > a["t"]), default=0.0)
+    return max((abs(rows[k + 5]["sent"][j] - rows[k]["sent"][j]) / (rows[k + 5]["t"] - rows[k]["t"])
+                for k in range(len(rows) - 5) if rows[k + 5]["t"] > rows[k]["t"]), default=0.0)
 
 
 def _load(rows, j) -> dict:
@@ -118,7 +119,8 @@ def learn(rows: list, path: Path) -> dict:
     for chunk, joints in free_runs(rows).items():
         for joint, runs in joints.items():
             have = kept.setdefault(chunk, {}).setdefault(joint, [])
-            have += [r for r in runs if r[2] not in {h[2] for h in have}]
+            seen_t = {h[2] for h in have}
+            have += [r for r in runs if r[2] not in seen_t]
             # shortcut: the newest KEEP_RUNS per chunk and joint (2 days gave 170 transit runs); keep the fastest instead
             # if old fast runs start to matter
             del have[:-KEEP_RUNS]

@@ -21,6 +21,8 @@ import numpy as np
 import cell_params as prm
 
 SCHEMA = "rosy.omx-wrist-cal.v1"
+_KERNEL_3X3 = np.ones((3, 3), np.uint8)
+_CAL_CACHE = {}  # (path, mtime_ns, size) -> parsed cal json; hook() runs for every pick
 
 
 def observe(img, hsv_min, hsv_max, params=None, near=None) -> dict:
@@ -30,7 +32,7 @@ def observe(img, hsv_min, hsv_max, params=None, near=None) -> dict:
     import cv2
 
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-    mask = cv2.morphologyEx(cv2.inRange(hsv, np.array(hsv_min), np.array(hsv_max)), cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
+    mask = cv2.morphologyEx(cv2.inRange(hsv, np.array(hsv_min), np.array(hsv_max)), cv2.MORPH_OPEN, _KERNEL_3X3)
     n, labels, stats, centroids_cc = cv2.connectedComponentsWithStats(mask)
     if n < 2:
         return {"found": False}
@@ -45,12 +47,12 @@ def observe(img, hsv_min, hsv_max, params=None, near=None) -> dict:
     sub_y, sub_x = np.nonzero(labels[y:y + bh, x:x + bw] == big)
     pts = np.column_stack([sub_x + x, sub_y + y]).astype(np.float32)
     (_, _), (w, h), _ = cv2.minAreaRect(pts)
-    vals, vecs = np.linalg.eigh(np.cov((pts - pts.mean(axis=0)).T))  # long axis: the principal direction
-    long_axis = vecs[:, int(np.argmax(vals))]
+    d = pts - pts.mean(axis=0)
+    c_xx, c_xy, c_yy = (float(np.mean(d[:, 0] * d[:, 0])), float(np.mean(d[:, 0] * d[:, 1])), float(np.mean(d[:, 1] * d[:, 1])))
     edge = prm.get(params, "wrist.edge_margin_px")
     height, width = mask.shape
     return {"found": True, "cx": float(pts[:, 0].mean()), "cy": float(pts[:, 1].mean()), "area": int(areas[big - 1]),
-            "axis_deg": float(np.degrees(np.arctan2(long_axis[1], long_axis[0])) % 180),
+            "axis_deg": float(np.degrees(0.5 * math.atan2(2 * c_xy, c_xx - c_yy)) % 180),  # covariance's principal axis, closed form
             "fill": float(areas[big - 1] / max(w * h, 1.0)),
             "blobs": 1 + sum(1 for i in sizeable if i != big and np.hypot(*(centroids[i] - centroids[big])) <= 1.2 * max(bw, bh)),
             "cut": x <= edge or y <= edge or x + bw >= width - edge or y + bh >= height - edge}
@@ -144,6 +146,18 @@ def align(cell, camera: str, band: dict, hsv, replan, params=None, emit=None) ->
             "iterations": rows}
 
 
+def _load_cal(path: Path) -> dict:
+    """The parsed cal file, {} when missing, cached by content stamp."""
+    try:
+        st = path.stat()
+    except OSError:
+        return {}
+    key = (str(path), st.st_mtime_ns, st.st_size)
+    if key not in _CAL_CACHE:
+        _CAL_CACHE[key] = json.loads(path.read_text())
+    return _CAL_CACHE[key]
+
+
 def hook(config: dict, cell, target: dict, write_library, emit=None):
     """The callable transfer_folded runs after `goto above_pick`, or None (disabled, or this arm/yaw is uncalibrated:
     the pick runs as before and the attempt row says why)."""
@@ -151,7 +165,7 @@ def hook(config: dict, cell, target: dict, write_library, emit=None):
     if not prm.get(params, "wrist.enabled") or not spec.get("cal_path"):
         return None
     path = Path(spec["cal_path"]).expanduser()
-    cal = json.loads(path.read_text()) if path.exists() else {}
+    cal = _load_cal(path)
     if cal and cal.get("schema") != SCHEMA:
         raise SystemExit(f"{path}: not a {SCHEMA} file")
     band = band_for(cal, config.get("arm_id", "arm_s"), target["pick"]["yaw_deg"])

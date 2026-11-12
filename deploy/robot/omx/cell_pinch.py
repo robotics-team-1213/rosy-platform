@@ -34,33 +34,44 @@ def measure(img, hsv, gap_mm: float, width_mm: float | None = None, params=None,
     across = np.array([-axis[1], axis[0]])
     h, w = img.shape[:2]
     y0 = 2 * h // 3
+    band_px = prm.get(params, "pinch.band_px")
     bot_g = cv2.cvtColor(img[y0:], cv2.COLOR_BGR2GRAY)
-    hsv_img = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
     ax_x, ax_y = int(np.clip(a[0], 0, w - 1)), int(np.clip(a[1] - y0, 0, h - y0 - 1))
     is_white = mode == "white" or (mode == "auto" and bot_g[ax_y, ax_x] > 180)
+    bot_hsv = None
     if is_white:  # v2.1 white finger pads (neutral bright white or cool-LED white)
-        bot_hsv = hsv_img[y0:]
+        bot_hsv = cv2.cvtColor(img[y0:], cv2.COLOR_BGR2HSV)  # the pads only show in the lower third
         pad_mask = ((bot_g > 185) & (bot_hsv[:, :, 1] <= 55)) | (
             (bot_hsv[:, :, 0] >= 95) & (bot_hsv[:, :, 0] <= 138) & (bot_hsv[:, :, 2] >= 140)
         )
     else:
         pad_mask = bot_g < 60
-    dark = np.argwhere(pad_mask)[:, ::-1] + (0, y0)
     mid = (a + b) / 2
-    proj = (dark - mid) @ axis
-    near = np.abs((dark - mid) @ across) < prm.get(params, "pinch.band_px")
+    dy, dx = np.nonzero(pad_mask)  # per-axis 1D: no (N, 2) coordinate array
+    rx, ry = dx - mid[0], dy + y0 - mid[1]
+    proj, across_d = rx * axis[0] + ry * axis[1], rx * across[0] + ry * across[1]
+    near = np.abs(across_d) < band_px
     left_in = proj[near & (proj < 0)].max() if (near & (proj < 0)).any() else None
     right_in = proj[near & (proj > 0)].min() if (near & (proj > 0)).any() else None
     if left_in is None or right_in is None or right_in - left_in < 10:
         return {"found": False, "why": "pad inner edges not found"}
     s = gap_mm / float(right_in - left_in)
-    green = np.argwhere(cv2.inRange(hsv_img, np.array(hsv[0]), np.array(hsv[1])) > 0)[:, ::-1]
-    band = green[np.abs((green - mid) @ across) < prm.get(params, "pinch.band_px")]
-    if len(band) < 50:
+    if abs(float(across[1])) > 0.1:
+        y_half = (max(abs(float(mid[0])), abs(float(w - 1 - mid[0]))) * abs(float(across[0])) + float(band_px)) / abs(float(across[1]))
+        gy0 = max(0, int(math.floor(float(mid[1]) - y_half)))
+        gy1 = min(h, int(math.ceil(float(mid[1]) + y_half)) + 1)
+    else:
+        gy0, gy1 = 0, h
+    hsv_band = bot_hsv[gy0 - y0:gy1 - y0] if (bot_hsv is not None and gy0 >= y0) else cv2.cvtColor(img[gy0:gy1], cv2.COLOR_BGR2HSV)
+    gy, gx = np.nonzero(cv2.inRange(hsv_band, np.asarray(hsv[0], dtype=np.uint8), np.asarray(hsv[1], dtype=np.uint8)))
+    gy = gy + gy0
+    in_band = np.abs((gx - mid[0]) * across[0] + (gy - mid[1]) * across[1]) < band_px
+    gx, gy = gx[in_band], gy[in_band]
+    if len(gx) < 50:
         return {"found": True, "between": False, "why": "no box at the pads' height", "mm_per_px": round(s, 3),
                 "pads": [[round(float(v), 1) for v in a], [round(float(v), 1) for v in b]], "finger_color": "white" if is_white else "dark"}
-    gp = (band - mid) @ axis
-    lo, hi = np.percentile(gp, 0.5), np.percentile(gp, 99.5)
+    gp = (gx - mid[0]) * axis[0] + (gy - mid[1]) * axis[1]
+    lo, hi = np.percentile(gp, (0.5, 99.5))
     out = {"found": True, "pads": [[round(float(v), 1) for v in a], [round(float(v), 1) for v in b]], "gap_left_mm": round(float(lo - left_in) * s, 1), "gap_right_mm": round(float(right_in - hi) * s, 1),
            "width_mm": round(float(hi - lo) * s, 1), "shift_mm": round(float((lo + hi) / 2) * s, 1), "mm_per_px": round(s, 3),
            "finger_color": "white" if is_white else "dark"}
