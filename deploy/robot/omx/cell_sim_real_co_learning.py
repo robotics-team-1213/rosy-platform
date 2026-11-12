@@ -579,3 +579,13 @@ class SimRealCoLearningPipeline:
         }
         (self.work_dir / "sim-real-colearn-lifecycle-report.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
         return report
+
+    def run_pipelined_r2s_rl_unit(
+        self, *, container_id: str, tier: int, wrist_img: Any = None, env_obs: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Run one zero-bottleneck unit transfer overlapping `arm_s` physical motion with live camera-to-R2S projection,
+        parallel 4-policy speculative RL rollout, and `arm_ab` IK pre-staging."""
+        from cell_r2s_parallel_rl import run_pipelined_parallel_unit_transfer
+
+        return run_pipelined_parallel_unit_transfer(self, container_id=container_id, tier=tier, wrist_img=wrist_img, env_obs=env_obs)
+

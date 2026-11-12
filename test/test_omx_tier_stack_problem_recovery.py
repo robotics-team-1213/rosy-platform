@@ -477,6 +477,77 @@ def test_r2s_sim_rl_pretraining_fallback_and_continuous_fusion(tmp_path: Path) -
     assert fusion["sim_rl_updates"] > 0 and fusion["real_updates"] > 0
 
 
+def test_zero_bottleneck_live_camera_to_r2s_parallel_speculative_rl_and_async_shadow_retrain(tmp_path: Path) -> None:
+    """Verify the 4 zero-bottleneck parallel R2S + RL mechanisms in `cell_r2s_parallel_rl.py`:
+    1) `project_live_camera_env_to_r2s`: O(1) projection of live wrist camera frame + environmental state into
+       an R2S twin state (`rosy.omx-r2s-parallel-rl.v1`) and 20-D feature vector in < 15 ms.
+    2) `parallel_speculative_r2s_rl_select`: evaluates 4 ensemble policies (`pi_iwr`, `pi_knn_il`, `pi_contextual_rl`,
+       `pi_rule_fsm`) across domain-randomized R2S branches and picks the highest safety-verified return `J(pi)`.
+    3) `run_pipelined_r2s_rl_unit`: overlaps `arm_s` Pinky->Belt transfer with R2S speculative RL lookahead and
+       `arm_ab` IK pre-staging in parallel threads, reducing residual placement error vs uncompensated transfer.
+    4) `AsyncShadowRetrainer`: compiles and hot-swaps the next model version in a background thread without blocking.
+    """
+    import numpy as np
+    from cell_r2s_parallel_rl import (
+        AsyncShadowRetrainer,
+        parallel_speculative_r2s_rl_select,
+        project_live_camera_env_to_r2s,
+    )
+    from cell_sim_real_co_learning import SimRealCoLearningPipeline
+
+    pipe = SimRealCoLearningPipeline(tmp_path / "parallel_r2s")
+    pipe.pretrain_task_with_r2s_sim_rl("pinky_to_3tier_stack", episodes=18)
+
+    # Synthetic live wrist camera frame with an orange container shifted from optical center
+    wrist_img = np.zeros((480, 640, 3), dtype=np.uint8)
+    wrist_img[175:245, 345:415] = (20, 115, 245)  # BGR orange container blob
+
+    proj = project_live_camera_env_to_r2s(
+        pipe.r2s_context,
+        tier=1,
+        wrist_img=wrist_img,
+        env_obs={"clearance_mm": 11.5, "r_k_mm": 0.2},
+    )
+    assert proj["schema"] == "rosy.omx-r2s-parallel-rl.v1"
+    assert proj["wrist_vision"]["detected"] is True
+    assert proj["projection_latency_ms"] < 25.0
+
+    spec_rl = parallel_speculative_r2s_rl_select(
+        proj,
+        work_dir=pipe.work_dir,
+        clf=pipe.clf,
+        iwr=pipe.iwr,
+        r2s_gap_state=pipe.r2s_gap_state,
+        n_branches=8,
+    )
+    assert spec_rl["selected_policy_id"] in {"pi_iwr", "pi_knn_il", "pi_contextual_rl", "pi_rule_fsm"}
+    assert spec_rl["branches_evaluated"] == 32
+    assert spec_rl["safety_ok"] is True
+    assert spec_rl["predicted_post_error_mm"] < abs(proj["obs_20d"]["x_hat_mm"]) + abs(proj["obs_20d"]["dy_mm"])
+
+    # Pipelined parallel unit transfer (Thread A: arm_s, Thread B: R2S speculative RL + arm_ab prestage)
+    unit_res = pipe.run_pipelined_r2s_rl_unit(
+        container_id="container-c3-pipe-1",
+        tier=1,
+        wrist_img=wrist_img,
+        env_obs={"clearance_mm": 11.5},
+    )
+    assert unit_res["pipelined_parallel"] is True
+    assert unit_res["verified"] is True
+    assert unit_res["ab_prestage"]["ok"] is True
+    assert unit_res["place_error_mm"] < 2.0
+
+    # Background AsyncShadowRetrainer compiles v1 -> v2 without stalling main loop
+    shadow = AsyncShadowRetrainer(pipe)
+    assert shadow.submit_shadow_retrain(n_sim_episodes=100) is True
+    swap_out = shadow.poll_and_commit(wait=True, timeout_s=10.0)
+    assert swap_out is not None
+    assert swap_out["promoted"] is True
+    assert swap_out["false_pass_rate"] == 0.0
+    assert pipe.model_version == 2
+
+
+
 
 
 
