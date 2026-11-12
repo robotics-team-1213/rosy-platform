@@ -14,6 +14,56 @@ import time
 from typing import Any
 
 LEDGER_FILENAME = "problem-cases.jsonl"
+_IL_CACHE: dict[str, tuple[int, int, dict[str, list[tuple[float, float, float, float, float, float]]]]] = {}
+_RL_CACHE: dict[str, tuple[int, int, dict[str, Any]]] = {}
+
+
+def _load_il_demos_by_bucket(il_path: Path) -> dict[str, list[tuple[float, float, float, float, float, float]]]:
+    try:
+        st = il_path.stat()
+    except OSError:
+        return {}
+    key = str(il_path)
+    cached = _IL_CACHE.get(key)
+    if cached is not None and cached[0] == st.st_mtime_ns and cached[1] == st.st_size:
+        return cached[2]
+    by_bucket: dict[str, list[tuple[float, float, float, float, float, float]]] = {}
+    for line in il_path.read_text(encoding="utf-8", errors="replace").splitlines():
+        if not line.strip():
+            continue
+        try:
+            row = json.loads(line)
+        except ValueError:
+            continue
+        if float(row.get("reward") or 0.0) <= 0.0:
+            continue
+        b = str(row.get("bucket") or "")
+        st_vec = row.get("state") or []
+        act = row.get("expert_action_xyz") or []
+        if b and len(st_vec) >= 3 and len(act) >= 3:
+            sx, sy, sz = float(st_vec[0]), float(st_vec[1]), float(st_vec[2])
+            by_bucket.setdefault(b, []).append((sx, sy, sz, float(act[0]) - sx, float(act[1]) - sy, float(act[2]) - sz))
+    _IL_CACHE[key] = (st.st_mtime_ns, st.st_size, by_bucket)
+    return by_bucket
+
+
+def _load_rl_state(rl_path: Path) -> dict[str, Any]:
+    try:
+        st = rl_path.stat()
+    except OSError:
+        return {}
+    key = str(rl_path)
+    cached = _RL_CACHE.get(key)
+    if cached is not None and cached[0] == st.st_mtime_ns and cached[1] == st.st_size:
+        return cached[2]
+    try:
+        state = json.loads(rl_path.read_text(encoding="utf-8"))
+        if isinstance(state, dict):
+            _RL_CACHE[key] = (st.st_mtime_ns, st.st_size, state)
+            return state
+    except Exception:
+        pass
+    return {}
 
 
 def _resolve_work_dir(config_or_work: dict | Path) -> Path:
@@ -64,27 +114,16 @@ def knn_il_residual(
 
     work = _resolve_work_dir(config_or_work)
     il_path = work / "il-demos.jsonl"
-    if not il_path.exists() or len(query_xyz) < 3:
+    if len(query_xyz) < 3:
+        return None
+    rows = _load_il_demos_by_bucket(il_path).get(bucket)
+    if not rows:
         return None
     qx, qy, qz = float(query_xyz[0]), float(query_xyz[1]), float(query_xyz[2])
-    candidates: list[tuple[float, float, float, float]] = []
-    for line in il_path.read_text(encoding="utf-8", errors="replace").splitlines():
-        if not line.strip():
-            continue
-        try:
-            row = json.loads(line)
-        except ValueError:
-            continue
-        if row.get("bucket") != bucket or float(row.get("reward") or 0.0) <= 0.0:
-            continue
-        st = row.get("state") or []
-        act = row.get("expert_action_xyz") or []
-        if len(st) >= 3 and len(act) >= 3:
-            sx, sy, sz = float(st[0]), float(st[1]), float(st[2])
-            d2 = (qx - sx) ** 2 + (qy - sy) ** 2 + (qz - sz) ** 2
-            candidates.append((d2, float(act[0]) - sx, float(act[1]) - sy, float(act[2]) - sz))
-    if not candidates:
-        return None
+    candidates = [
+        ((qx - sx) ** 2 + (qy - sy) ** 2 + (qz - sz) ** 2, dx, dy, dz)
+        for sx, sy, sz, dx, dy, dz in rows
+    ]
     candidates.sort(key=lambda item: item[0])
     top_k = candidates[: max(1, int(k))]
     two_s2 = 2.0 * max(sigma_m, 1e-4) ** 2
@@ -146,6 +185,7 @@ def update_il_rl_from_run(config_or_work: dict | Path, run_res: dict[str, Any]) 
         }
         with il_path.open("a", encoding="utf-8") as fh:
             fh.write(json.dumps(demo) + "\n")
+        _IL_CACHE.pop(str(il_path), None)
     if il_path.exists():
         il_count = sum(1 for _ in il_path.open("r", encoding="utf-8"))
 
@@ -210,6 +250,7 @@ def update_il_rl_from_run(config_or_work: dict | Path, run_res: dict[str, Any]) 
         rl_state.setdefault("place_tiers", {})[place_tier_key] = t_info
 
     rl_path.write_text(json.dumps(rl_state, indent=2), encoding="utf-8")
+    _RL_CACHE.pop(str(rl_path), None)
     return {"il_demos": il_count, "rl_episodes": rl_state["episodes"], "bucket": bucket, "reward": reward, "residual": b_info}
 
 
@@ -218,10 +259,10 @@ def apply_learned_il_rl_residual(config_or_work: dict | Path, directive: dict[st
     work = _resolve_work_dir(config_or_work)
     rl_path = work / "rl-policy.json"
     il_path = work / "il-demos.jsonl"
-    if not rl_path.exists() and not il_path.exists():
+    rl_state = _load_rl_state(rl_path)
+    if not rl_state and not _load_il_demos_by_bucket(il_path):
         return directive
     try:
-        rl_state = json.loads(rl_path.read_text(encoding="utf-8")) if rl_path.exists() else {}
         bucket = _zone_bucket(directive.get("pick") or {})
         b_info = (rl_state.get("buckets") or {}).get(bucket)
         max_xy = 0.0080 if bucket in ("pinky_horiz", "belt") else 0.0015

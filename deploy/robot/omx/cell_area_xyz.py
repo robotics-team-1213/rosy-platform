@@ -50,7 +50,8 @@ def execute_directive(
     verifying physical task completion via `verify_stack_outcome`."""
     work_dir.mkdir(parents=True, exist_ok=True)
     arm_id = str(directive.get("arm_id") or "arm_b")
-    cur_directive = json.loads(json.dumps(directive))
+    from cell_directive_compiler import _clone
+    cur_directive = _clone(directive)
     cur_directive["pick"] = coerce_area_xyz(cur_directive["pick"])
     cur_directive["place"] = coerce_area_xyz(cur_directive["place"])
     orig_pick_xyz = list(cur_directive["pick"]["effective_xyz_m"])

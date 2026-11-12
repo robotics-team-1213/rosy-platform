@@ -187,6 +187,12 @@ def perceive_live_base(
     return out
 
 
+def _orange_mask(crop: np.ndarray, cv2) -> np.ndarray:
+    hsv = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)
+    h, s, v = hsv[..., 0], hsv[..., 1], hsv[..., 2]
+    return (((h <= 18) | (h >= 168)) & (s >= 145) & (v >= 130)).astype(np.uint8)
+
+
 def perceive_live_pick_candidates(top_frame: np.ndarray | None) -> list[dict[str, Any]]:
     """Detect all pickable orange containers from the live `top` frame, automatically splitting adjacent
     containers into individual `~38 px` columns and computing live `(x, y, z, yaw_deg)`."""
@@ -195,32 +201,43 @@ def perceive_live_pick_candidates(top_frame: np.ndarray | None) -> list[dict[str
     import cv2
     from cell_area_zones import classify_container_orientation
 
-    hsv = cv2.cvtColor(top_frame, cv2.COLOR_BGR2HSV)
-    om = (((hsv[..., 0] <= 18) | (hsv[..., 0] >= 168)) & (hsv[..., 1] >= 145) & (hsv[..., 2] >= 130)).astype(np.uint8)
     candidates: list[dict[str, Any]] = []
 
-    num, labels, stats, _ = cv2.connectedComponentsWithStats(om[155:290, 280:530])
+    om_r1 = _orange_mask(top_frame[155:290, 280:530], cv2)
+    num, labels, stats, cents = cv2.connectedComponentsWithStats(om_r1)
     for k in range(1, num):
         x, y, w, h_px, area = stats[k]
         if area < 900:
             continue
         n_cols = max(1, int(round(w / 38.0)))
-        for c in range(n_cols):
-            cx0, cx1 = x + c * 38, min(x + w, x + (c + 1) * 38)
-            if cx1 <= cx0:
-                continue
-            ys, xs = np.where(labels[:, cx0:cx1] == k)
-            if len(xs) < 200:
-                continue
-            u, v = 280.0 + cx0 + 0.5 * float(cx1 - cx0), 155.0 + float(ys.mean())
+        if n_cols == 1:
+            u = 280.0 + float(x) + 0.5 * float(w)
+            v = 155.0 + float(cents[k][1])
             px, py = top_pixel_to_arm_xy_vanishing(u, v, h_top_m=0.030)
             col_idx = 1 if u < 355.0 else (2 if u < 410.0 else 3)
             pz = 0.0085 if u < 335.0 else 0.0064
             candidates.append(
-                {"label": f"live_r1_u{int(round(u))}_c{c+1}", "area": "pallet", "col": col_idx, "row": 1, "tier": 1, "u_px": round(u, 1), "v_px": round(v, 1), "x": px, "y": py, "z": pz, "yaw_deg": -90.0, "isolated": n_cols == 1}
+                {"label": f"live_r1_u{int(round(u))}_c1", "area": "pallet", "col": col_idx, "row": 1, "tier": 1, "u_px": round(u, 1), "v_px": round(v, 1), "x": px, "y": py, "z": pz, "yaw_deg": -90.0, "isolated": True}
+            )
+            continue
+        sub_labels = labels[y : y + h_px]
+        for c in range(n_cols):
+            cx0, cx1 = x + c * 38, min(x + w, x + (c + 1) * 38)
+            if cx1 <= cx0:
+                continue
+            ys, xs = np.where(sub_labels[:, cx0:cx1] == k)
+            if len(xs) < 200:
+                continue
+            u, v = 280.0 + cx0 + 0.5 * float(cx1 - cx0), 155.0 + float(y) + float(ys.mean())
+            px, py = top_pixel_to_arm_xy_vanishing(u, v, h_top_m=0.030)
+            col_idx = 1 if u < 355.0 else (2 if u < 410.0 else 3)
+            pz = 0.0085 if u < 335.0 else 0.0064
+            candidates.append(
+                {"label": f"live_r1_u{int(round(u))}_c{c+1}", "area": "pallet", "col": col_idx, "row": 1, "tier": 1, "u_px": round(u, 1), "v_px": round(v, 1), "x": px, "y": py, "z": pz, "yaw_deg": -90.0, "isolated": False}
             )
 
-    ys_b, xs_b = np.where(om[35:148, 355:415] > 0)
+    om_b = _orange_mask(top_frame[35:148, 355:415], cv2)
+    ys_b, xs_b = np.where(om_b > 0)
     if len(xs_b) >= 350:
         u_b, v_b = 355.0 + float(xs_b.mean()), 35.0 + float(ys_b.mean())
         bx, by = top_pixel_to_arm_xy_vanishing(u_b, v_b, h_top_m=0.030)
@@ -228,7 +245,8 @@ def perceive_live_pick_candidates(top_frame: np.ndarray | None) -> list[dict[str
             {"label": f"live_belt_u{int(round(u_b))}", "area": "belt", "col": 2, "row": 1, "tier": 1, "u_px": round(u_b, 1), "v_px": round(v_b, 1), "x": bx, "y": by, "z": -0.0285, "yaw_deg": -90.0, "isolated": True}
         )
 
-    ys_h, xs_h = np.where(om[365:468, 310:448] > 0)
+    om_h = _orange_mask(top_frame[365:468, 310:448], cv2)
+    ys_h, xs_h = np.where(om_h > 0)
     if len(xs_h) >= 300:
         u_h, v_h = 310.0 + float(xs_h.mean()), 365.0 + float(ys_h.mean())
         hx, hy = top_pixel_to_arm_xy_vanishing(u_h, v_h, h_top_m=0.030)

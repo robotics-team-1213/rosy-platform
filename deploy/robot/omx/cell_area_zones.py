@@ -9,6 +9,7 @@ and are re-exported here unchanged.
 """
 from __future__ import annotations
 
+import math
 from typing import Any
 
 import numpy as np
@@ -51,18 +52,20 @@ def classify_container_orientation(xs: np.ndarray, ys: np.ndarray) -> dict[str, 
             "long_axis_deg": -90.0,
             "orientation_class": "unknown",
         }
-    u_min, u_max = float(np.percentile(xs, 5)), float(np.percentile(xs, 95))
-    v_min, v_max = float(np.percentile(ys, 5)), float(np.percentile(ys, 95))
-    span_u = round(max(1.0, u_max - u_min), 1)
-    span_v = round(max(1.0, v_max - v_min), 1)
+    u5, u95 = np.percentile(xs, [5, 95])
+    v5, v95 = np.percentile(ys, [5, 95])
+    span_u = round(max(1.0, float(u95 - u5)), 1)
+    span_v = round(max(1.0, float(v95 - v5)), 1)
     aspect = round(span_u / span_v, 3)
 
-    pts = np.column_stack((xs.astype(np.float64), -ys.astype(np.float64)))
-    pts_c = pts - pts.mean(axis=0)
-    cov = np.cov(pts_c.T) if len(pts_c) > 2 else np.eye(2)
-    eigvals, eigvecs = np.linalg.eigh(cov)
-    major = eigvecs[:, int(np.argmax(eigvals))]
-    raw_deg = float(np.degrees(np.arctan2(major[1], major[0])))
+    xf = xs.astype(np.float64)
+    yf = -ys.astype(np.float64)
+    dx = xf - xf.mean()
+    dy = yf - yf.mean()
+    sxx = float(np.dot(dx, dx))
+    syy = float(np.dot(dy, dy))
+    sxy = float(np.dot(dx, dy))
+    raw_deg = math.degrees(0.5 * math.atan2(2.0 * sxy, sxx - syy))
     if raw_deg > 0.0:
         raw_deg -= 180.0
     long_axis_deg = round(raw_deg, 1)
@@ -192,14 +195,15 @@ def measure_side_gripper_zone_offset(
     target_u = float(SIDE_COL_CENTER_U.get(col, 326.9))
     if side_img is None or before_side is None or not hasattr(side_img, "shape") or side_img.shape != before_side.shape:
         return {"found": False, "target_u_px": target_u}
-    diff = np.linalg.norm(
-        side_img[70:165, 160:390].astype(np.float32) - before_side[70:165, 160:390].astype(np.float32),
-        axis=2,
-    ) > 32.0
+    d = side_img[70:165, 160:390].astype(np.int32) - before_side[70:165, 160:390].astype(np.int32)
+    diff = d[:, :, 0] * d[:, :, 0] + d[:, :, 1] * d[:, :, 1] + d[:, :, 2] * d[:, :, 2] > 1024
     ys, xs = np.where(diff)
     if len(xs) < 40:
         return {"found": False, "target_u_px": target_u}
-    u_gripper = round(float(160.0 + np.median(xs)), 1)
+    n = len(xs)
+    mid = n >> 1
+    med_x = float(np.partition(xs, mid)[mid]) if (n & 1) else 0.5 * float(np.partition(xs, (mid - 1, mid))[mid - 1] + np.partition(xs, (mid - 1, mid))[mid])
+    u_gripper = round(160.0 + med_x, 1)
     du_px = round(target_u - u_gripper, 1)
     dx_m = round(du_px * SIDE_M_PER_PX, 5)
     return {

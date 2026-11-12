@@ -76,6 +76,16 @@ def sample_age(sample, wall, monotonic):
     return max(0, source_age, receipt_age)
 
 
+def _copy_value(value):
+    if isinstance(value, (bytes, str, int, float, type(None))):
+        return value
+    if isinstance(value, tuple) and all(isinstance(x, (bytes, str, int, float, type(None))) for x in value):
+        return value
+    if isinstance(value, dict) and all(isinstance(v, (int, float, str, bool, type(None))) for v in value.values()):
+        return dict(value)
+    return deepcopy(value)
+
+
 class LatestSource:
     def __init__(self, *, wall=time.time, monotonic=time.monotonic):
         self.wall, self.monotonic = wall, monotonic
@@ -94,7 +104,7 @@ class LatestSource:
             sample_age(candidate, self.wall(), self.monotonic())
             if self._sample and stamp <= self._sample.captured_at:
                 return False
-            self._sample = Sample(stamp, candidate.received_at, candidate.sequence, deepcopy(value))
+            self._sample = Sample(stamp, candidate.received_at, candidate.sequence, _copy_value(value))
             return True
 
     def latest(self):
@@ -105,13 +115,21 @@ class LatestSource:
                 sample_age(self._sample, self.wall(), self.monotonic())
             except ValueError:
                 return None
-            return deepcopy(self._sample)
+            s = self._sample
+            return Sample(
+                s.captured_at,
+                s.received_at,
+                s.sequence,
+                _copy_value(s.value),
+                deepcopy(s.motor_health) if s.motor_health is not None else None,
+            )
 
 
 class NativeSource(LatestSource):
     def __init__(self, channel, *, joint_names=None):
         super().__init__()
         self.channel, self.joint_names = SnapshotChannel(channel), joint_names
+        self._joint_name_set = set(joint_names) if joint_names is not None else None
 
     def latest(self):
         sample = self.channel.read()
@@ -125,7 +143,7 @@ class NativeSource(LatestSource):
                     if sample["kind"] != "joints":
                         raise ValueError("arm channel must carry joint positions")
                     value = json.loads(sample["payload"])
-                    if not isinstance(value, dict) or set(value) != set(self.joint_names):
+                    if not isinstance(value, dict) or set(value) != self._joint_name_set:
                         raise ValueError("joint observation must match registered arm")
                     value = ArmObservation(
                         epoch="0" * 32, sequence=1, captured_at=sample["captured_at"], positions=value

@@ -25,6 +25,16 @@ import cell_params as prm
 
 SCHEMA = "rosy.omx-arm-calibration.v1"
 MAX_HISTORY = 20
+_CAL_CACHE: dict[str, tuple[int, int, dict[str, Any]]] = {}
+
+
+def _copy_profile(prof: dict[str, Any]) -> dict[str, Any]:
+    out = dict(prof)
+    if isinstance(out.get("finger_sign"), dict):
+        out["finger_sign"] = dict(out["finger_sign"])
+    if isinstance(out.get("history"), list):
+        out["history"] = [dict(h) if isinstance(h, dict) else h for h in out["history"]]
+    return out
 
 ARM_DEFAULTS: dict[str, dict[str, Any]] = {
     "arm_s": {
@@ -94,17 +104,25 @@ def default_profile(arm_id: str = "arm_s") -> dict[str, Any]:
 def load(config_or_work: dict | Path, arm_id: str | None = None) -> dict[str, Any]:
     """Load the per-arm calibration profile, merging with per-arm defaults if missing or partial."""
     arm = arm_id or (config_or_work.get("arm_id", "arm_s") if isinstance(config_or_work, dict) else "arm_s")
-    prof = default_profile(arm)
     path = profile_path(config_or_work, arm)
-    if path.exists():
-        try:
-            saved = json.loads(path.read_text(encoding="utf-8"))
-            if isinstance(saved, dict) and saved.get("schema") == SCHEMA:
-                for k, v in saved.items():
-                    if v is not None:
-                        prof[k] = v
-        except (OSError, ValueError):
-            pass
+    try:
+        st = path.stat()
+    except OSError:
+        return default_profile(arm)
+    key = f"{path}:{arm}"
+    cached = _CAL_CACHE.get(key)
+    if cached is not None and cached[0] == st.st_mtime_ns and cached[1] == st.st_size:
+        return _copy_profile(cached[2])
+    prof = default_profile(arm)
+    try:
+        saved = json.loads(path.read_text(encoding="utf-8"))
+        if isinstance(saved, dict) and saved.get("schema") == SCHEMA:
+            for k, v in saved.items():
+                if v is not None:
+                    prof[k] = v
+            _CAL_CACHE[key] = (st.st_mtime_ns, st.st_size, _copy_profile(prof))
+    except (OSError, ValueError):
+        pass
     return prof
 
 
@@ -119,6 +137,7 @@ def save(config_or_work: dict | Path, profile: dict[str, Any], arm_id: str | Non
     path = profile_path(config_or_work, arm)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(profile, indent=2), encoding="utf-8")
+    _CAL_CACHE.pop(f"{path}:{arm}", None)
     return path
 
 

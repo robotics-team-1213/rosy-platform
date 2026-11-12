@@ -16,6 +16,14 @@ HERE = Path(__file__).resolve().parent
 ADAPTER_ROOT = HERE.parents[2] / "middleware/devices/omx/adapter"
 
 
+def _clone(obj: Any) -> Any:
+    if isinstance(obj, dict):
+        return {k: _clone(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_clone(v) for v in obj]
+    return obj
+
+
 def build_plan_from_directive(
     directive: dict[str, Any],
     base_plan: dict[str, Any],
@@ -32,7 +40,7 @@ def build_plan_from_directive(
     place = coerce_area_xyz(directive["place"])
     exec_cfg = dict(directive.get("execution") or {})
 
-    plan = json.loads(json.dumps(base_plan))
+    plan = _clone(base_plan)
     px, py, pz = pick["effective_xyz_m"]
     qx, qy, qz = place["effective_xyz_m"]
     approach_m = float(exec_cfg.get("approach_m", 0.032 if float(pz) < 0.020 else 0.028))
@@ -136,7 +144,7 @@ def sim_precheck_and_optimize_directive(
     from omx_adapter.area_xyz import coerce_area_xyz
     from cell_area_zones import normalize_pick_yaw_deg
 
-    opt = json.loads(json.dumps(directive))
+    opt = _clone(directive)
     opt["pick"] = coerce_area_xyz(opt["pick"])
     opt["place"] = coerce_area_xyz(opt["place"])
     px, py, _ = opt["pick"]["effective_xyz_m"]
