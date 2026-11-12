@@ -179,7 +179,7 @@ def test_a_low_disk_never_restarts_or_reboots(tmp_path, answer):
     assert row["resources"]["gpu"] is None and _actions(tmp_path) == []
 
 
-@pytest.mark.parametrize("name", ["ai", "model"])
+@pytest.mark.parametrize("name", ["ai", "model", "cell", "arm-cell", "cell-b"])
 def test_a_low_lab_disk_gets_one_clean_request_per_gap(tmp_path, name):
     """D-885: ask the lab PC's rosy-ops storage service once, then wait GUARD_CLEAN_GAP_S."""
     conf = f"{name} pc op@{name} 05:50-06:20\n"
