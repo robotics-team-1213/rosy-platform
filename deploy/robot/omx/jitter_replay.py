@@ -28,6 +28,14 @@ ARMS = {"FF06202D": "arm_a", "FF061D2D": "arm_b", "00FB51A1": "arm_s", "FF070726
 PCT = (50, 99, 99.9, 100)
 
 
+def _pcts(values):
+    if not values:
+        return [None for _ in PCT]
+    s = sorted(values)
+    n = len(s)
+    return [round(s[min(n - 1, int(p / 100 * n))], 3) for p in PCT]
+
+
 def pct(values, p):
     values = sorted(values)
     return round(values[min(len(values) - 1, int(p / 100 * len(values)))], 3) if values else None
@@ -92,7 +100,7 @@ def replay(trace_paths, health_paths=(), params=None):
         arm["trace_h"], arm["health_h"] = round(arm["trace_h"], 3), round(arm["health_h"], 1)
         for joint, kinds in arm["joints"].items():
             arm["joints"][joint] = {
-                kind: {"windows": len(ws), **{m: [pct([w[m] for w in ws], p) for p in PCT]
+                kind: {"windows": len(ws), **{m: _pcts([w[m] for w in ws])
                                               for m in (("pwm_std", "pwm_flips_hz") if kind == "pwm" else ("std", "flips_hz", "p2p"))},
                        "worst": [{k: (round(v, 2) if isinstance(v, float) else v) for k, v in w.items()}
                                  for w in sorted(ws, key=lambda w: -w.get("std", w.get("pwm_std")))[:3]]}

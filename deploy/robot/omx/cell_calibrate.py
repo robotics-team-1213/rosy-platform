@@ -50,6 +50,26 @@ MAP_POINTS = [
 ]  # the 2026-10-28 remap grid
 
 
+_REF_GRAY_CACHE: dict[str, tuple[int, int, np.ndarray]] = {}
+
+
+def _load_ref_gray(path: Path):
+    import cv2
+
+    try:
+        st = path.stat()
+    except OSError:
+        return None
+    key = str(path)
+    cached = _REF_GRAY_CACHE.get(key)
+    if cached is not None and cached[0] == st.st_mtime_ns and cached[1] == st.st_size:
+        return cached[2]
+    img = cv2.imread(key, cv2.IMREAD_GRAYSCALE)
+    if img is not None:
+        _REF_GRAY_CACHE[key] = (st.st_mtime_ns, st.st_size, img)
+    return img
+
+
 def stale(check: dict) -> list:
     """The steps a check result asks for, in dependency order."""
     if check.get("camera_moved") or check.get("missing_map"):
@@ -67,10 +87,12 @@ def check(config: dict, calibration: dict, targets: list, frame, params=None) ->
 
     out = {"targets": [f"{s}:{x},{y}" for s, (x, y) in targets], "missing_bias": [], "missing_surface": []}
     ref = (config.get("preflight") or {}).get("reference_top")
-    if ref and Path(ref).expanduser().exists():
+    ref_path = Path(ref).expanduser() if ref else None
+    ref_gray = _load_ref_gray(ref_path) if (ref_path and ref_path.exists()) else None
+    if ref_gray is not None:
         shift = cell_preflight.camera_shift_px(
-            cv2.imread(str(Path(ref).expanduser()), cv2.IMREAD_GRAYSCALE),
-            cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY),
+            ref_gray,
+            frame if frame.ndim == 2 else cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY),
         )
         out["camera_shift"] = shift
         out["camera_moved"] = not shift["ok"] or shift["max_px"] > prm.get(params, "calibrate.max_shift_px")
@@ -116,17 +138,42 @@ def predicted(marks: list, point) -> list | None:
 
 def consensus(marks: list, tol_px: float) -> list:
     """The largest set of marks one affine map explains."""
-    best, px = list(marks), np.array([m for m, _ in marks], float)
-    arm = np.array([[a[0], a[1], 1.0] for _, a in marks])
-    size = 0
-    for triple in itertools.combinations(range(len(marks)), 3):
-        if np.linalg.matrix_rank(arm[list(triple)], tol=1e-3) < 3:
-            continue
-        coef = np.linalg.solve(arm[list(triple)], px[list(triple)])
-        inliers = np.hypot(*(arm @ coef - px).T) <= tol_px
-        if inliers.sum() > size:
-            size, best = int(inliers.sum()), [m for m, keep in zip(marks, inliers) if keep]
-    return best
+    n = len(marks)
+    if n < 3:
+        return list(marks)
+    ax = np.array([a[0] for _, a in marks], dtype=np.float64)
+    ay = np.array([a[1] for _, a in marks], dtype=np.float64)
+    pu = np.array([m[0] for m, _ in marks], dtype=np.float64)
+    pv = np.array([m[1] for m, _ in marks], dtype=np.float64)
+    idx = np.array(list(itertools.combinations(range(n), 3)), dtype=np.intp)
+    i, j, k = idx[:, 0], idx[:, 1], idx[:, 2]
+    dx1, dy1 = ax[j] - ax[i], ay[j] - ay[i]
+    dx2, dy2 = ax[k] - ax[i], ay[k] - ay[i]
+    det = dx1 * dy2 - dx2 * dy1
+    span = np.maximum(np.hypot(dx1, dy1), np.hypot(dx2, dy2))
+    valid = np.abs(det) > np.maximum(1e-6, 1e-3 * span)
+    if not valid.any():
+        return list(marks)
+    i, j, k = i[valid], j[valid], k[valid]
+    dx1, dy1, dx2, dy2 = dx1[valid], dy1[valid], dx2[valid], dy2[valid]
+    inv_det = 1.0 / det[valid]
+    du1, dv1 = pu[j] - pu[i], pv[j] - pv[i]
+    du2, dv2 = pu[k] - pu[i], pv[k] - pv[i]
+    au = (dy2 * du1 - dy1 * du2) * inv_det
+    bu = (-dx2 * du1 + dx1 * du2) * inv_det
+    av = (dy2 * dv1 - dy1 * dv2) * inv_det
+    bv = (-dx2 * dv1 + dx1 * dv2) * inv_det
+    rx = ax[None, :] - ax[i, None]
+    ry = ay[None, :] - ay[i, None]
+    eu = pu[i, None] + au[:, None] * rx + bu[:, None] * ry - pu[None, :]
+    ev = pv[i, None] + av[:, None] * rx + bv[:, None] * ry - pv[None, :]
+    inliers = (eu * eu + ev * ev) <= (tol_px * tol_px)
+    counts = inliers.sum(axis=1)
+    best_idx = int(np.argmax(counts))
+    if counts[best_idx] == 0:
+        return list(marks)
+    mask = inliers[best_idx]
+    return [m for m, keep in zip(marks, mask) if keep]
 
 
 def enough_agree(kept: int, seen: int) -> bool:

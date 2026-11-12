@@ -10,6 +10,7 @@ Two signals, because they see different frequencies:
 The thresholds are cell_params (`jitter.*`), measured with jitter_replay.py over the field logs; rerun it on new logs
 before changing them.
 """
+import itertools
 import math
 
 import cell_params as prm
@@ -49,14 +50,41 @@ def _flips(values, band):
 
 def _residual(sent, present):
     e = [p - s for p, s in zip(present, sent)]
-    acc = [0.0]
-    for v in e:
-        acc.append(acc[-1] + v)
+    acc = [0.0, *itertools.accumulate(e)]
     half = SMOOTH // 2
+    n = len(e)
+    return [v - (acc[min(n, i + half + 1)] - acc[max(0, i - half)]) / (min(n, i + half + 1) - max(0, i - half)) for i, v in enumerate(e)]
+
+
+def _eval_trace_buf(buf):
+    n = len(buf)
+    dur = buf[-1]["t"] - buf[0]["t"]
+    t0, chunk = buf[0]["t"], buf[0]["chunk"]
+    sents = [b["sent"] or b["target"] for b in buf]
+    presents = [b["present"] for b in buf]
+    f_len = len(sents[0])
+    joint_names = motors_for_frame_len(f_len)
+    half = SMOOTH // 2
+    inv_n = 1.0 / n
+    inv_dur = 1.0 / dur
     out = []
-    for i, v in enumerate(e):
-        lo, hi = max(0, i - half), min(len(e), i + half + 1)
-        out.append(v - (acc[hi] - acc[lo]) / (hi - lo))
+    for i, joint in enumerate(joint_names[:f_len]):
+        sent = [s[i] for s in sents]
+        present = [p[i] for p in presents]
+        e = [p - s for p, s in zip(present, sent)]
+        acc = [0.0, *itertools.accumulate(e)]
+        res = [v - (acc[min(n, k + half + 1)] - acc[max(0, k - half)]) / (min(n, k + half + 1) - max(0, k - half)) for k, v in enumerate(e)]
+        out.append({
+            "t": t0,
+            "chunk": chunk,
+            "joint": joint,
+            "still": max(sent) - min(sent) < STILL,
+            "p2p": max(present) - min(present),
+            "lag": max(-min(e), max(e)),
+            "at": sum(present) * inv_n,
+            "std": math.sqrt(sum(v * v for v in res) * inv_n),
+            "flips_hz": _flips(res, DEADBAND) * inv_dur,
+        })
     return out
 
 
@@ -64,21 +92,10 @@ def trace_windows(rows, window_s=WINDOW_S):
     """rows: trace dicts (t, chunk, target, sent, present), oldest first. One dict per window and joint:
     {t, chunk, joint, still, p2p, lag, at (mean present), std, flips_hz}. `sent` falls back to `target` when the runner could not read it."""
     out, buf = [], []
-    for r in list(rows) + [None]:
+    for r in itertools.chain(rows, (None,)):
         if buf and (r is None or r["t"] - buf[-1]["t"] > MAX_GAP_S or r["t"] - buf[0]["t"] >= window_s):
             if len(buf) >= MIN_TICKS:
-                dur = buf[-1]["t"] - buf[0]["t"]
-                f_len = len((buf[0]["sent"] or buf[0]["target"]))
-                joint_names = motors_for_frame_len(f_len)
-                for i, joint in enumerate(joint_names[:f_len]):
-                    sent = [(b["sent"] or b["target"])[i] for b in buf]
-                    present = [b["present"][i] for b in buf]
-                    res = _residual(sent, present)
-                    out.append({"t": buf[0]["t"], "chunk": buf[0]["chunk"], "joint": joint,
-                                "still": max(sent) - min(sent) < STILL, "p2p": max(present) - min(present),
-                                "lag": max(abs(a - b) for a, b in zip(present, sent)), "at": sum(present) / len(present),
-                                "std": math.sqrt(sum(v * v for v in res) / len(res)),
-                                "flips_hz": _flips(res, DEADBAND) / dur})
+                out.extend(_eval_trace_buf(buf))
             buf = []
         if r is not None and (not buf or r["t"] - buf[-1]["t"] <= MAX_GAP_S):
             buf.append(r)
@@ -111,16 +128,23 @@ def health_windows(samples, size=HEALTH_WINDOW):
 
 def shaking(trace=(), health=(), params=None):
     """(joint, reason) for every trace/health window above the jitter.* thresholds, in input order."""
-    g = lambda name: prm.get(params, f"jitter.{name}")  # noqa: E731
     hits = []
-    for w in trace:
-        kind = "hold" if w["still"] else "move"
-        if w["std"] >= g(f"{kind}_std") and w["flips_hz"] >= g(f"{kind}_flips_hz"):
-            hits.append((w["joint"], f"{w['joint']} {kind}: present swings {w['std']:.2f} units (std) around the command, "
-                                     f"{w['flips_hz']:.1f} crossings/s"))
-    for w in health:  # the gripper dithers holding a box (std up to 29, 2.8 flips/s): only the trace judges it
-        if w["joint"] != "gripper" and w["pwm_std"] >= g("pwm_std") and w["pwm_flips_hz"] >= g("pwm_flips_hz"):
-            hits.append((w["joint"], f"{w['joint']} hold: PWM std {w['pwm_std']:.0f}, {w['pwm_flips_hz']:.1f} sign changes/s"))
+    if trace:
+        h_std, h_flips = prm.get(params, "jitter.hold_std"), prm.get(params, "jitter.hold_flips_hz")
+        m_std, m_flips = prm.get(params, "jitter.move_std"), prm.get(params, "jitter.move_flips_hz")
+        for w in trace:
+            if w["still"]:
+                if w["std"] >= h_std and w["flips_hz"] >= h_flips:
+                    hits.append((w["joint"], f"{w['joint']} hold: present swings {w['std']:.2f} units (std) around the command, "
+                                             f"{w['flips_hz']:.1f} crossings/s"))
+            elif w["std"] >= m_std and w["flips_hz"] >= m_flips:
+                hits.append((w["joint"], f"{w['joint']} move: present swings {w['std']:.2f} units (std) around the command, "
+                                         f"{w['flips_hz']:.1f} crossings/s"))
+    if health:  # the gripper dithers holding a box (std up to 29, 2.8 flips/s): only the trace judges it
+        p_std, p_flips = prm.get(params, "jitter.pwm_std"), prm.get(params, "jitter.pwm_flips_hz")
+        for w in health:
+            if w["joint"] != "gripper" and w["pwm_std"] >= p_std and w["pwm_flips_hz"] >= p_flips:
+                hits.append((w["joint"], f"{w['joint']} hold: PWM std {w['pwm_std']:.0f}, {w['pwm_flips_hz']:.1f} sign changes/s"))
     return hits
 
 
@@ -136,7 +160,7 @@ def live_window(rows, params=None) -> dict:
     if len(buf) < MIN_TICKS:
         return {"shaking": False, "max_std": 0.0, "max_flips_hz": 0.0, "max_p2p": 0.0, "flagged": []}
     buf.reverse()
-    wins = trace_windows(buf, window_s=buf[-1]["t"] - buf[0]["t"] + 1e-6)
+    wins = _eval_trace_buf(buf)
     if not wins:
         return {"shaking": False, "max_std": 0.0, "max_flips_hz": 0.0, "max_p2p": 0.0, "flagged": []}
     hits = shaking(trace=wins, params=params)

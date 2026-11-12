@@ -27,30 +27,61 @@ def _parent_attr(name: str, default):
     return default
 
 
+_CLEAR_GRID_CACHE: dict[float, list[tuple[float, float, float]]] = {}
+
+
+def _clear_offsets(max_mm: float) -> list[tuple[float, float, float]]:
+    cached = _CLEAR_GRID_CACHE.get(max_mm)
+    if cached is not None:
+        return cached
+    out = sorted(
+        (math.hypot(float(dx), float(dy)), float(dx), float(dy))
+        for dx in np.arange(-max_mm, max_mm + 1, 5.0)
+        for dy in np.arange(-max_mm, max_mm + 1, 5.0)
+        if math.hypot(float(dx), float(dy)) <= max_mm
+    )
+    _CLEAR_GRID_CACHE[max_mm] = out
+    return out
+
+
 def clear_point(
     near_xy, mask, roi, inside, to_px, radius_px: int = 36, max_mm: float = 72.0, reach_m: float = 0.23
 ):
     """The nearest arm point to near_xy whose pivot circle (radius_px around its pixel) is empty in the mask and fully
     on the surface (inside: full-image 0/1 array), within max_mm and reach. None when there is none."""
-    best = None
-    for dx in np.arange(-max_mm, max_mm + 1, 5.0):
-        for dy in np.arange(-max_mm, max_mm + 1, 5.0):
-            d = math.hypot(dx, dy)
-            p = (near_xy[0] + dx / 1000, near_xy[1] + dy / 1000)
-            if d > max_mm or math.hypot(*p) > reach_m or (best and d >= best[0]):
-                continue
-            px = to_px(p)
-            if px is None:
-                continue
-            x, y, r = int(round(px[0])), int(round(px[1])), radius_px
-            if x - r < roi[0] or y - r < roi[1] or x + r >= roi[2] or y + r >= roi[3]:
-                continue
-            if (
-                inside[y - r : y + r, x - r : x + r].min() == 1
-                and not mask[y - r - roi[1] : y + r - roi[1], x - r - roi[0] : x + r - roi[0]].any()
-            ):
-                best = (d, [round(p[0], 4), round(p[1], 4)])
-    return best and best[1]
+    nx, ny = float(near_xy[0]), float(near_xy[1])
+    rx0, ry0, rx1, ry1 = roi[0], roi[1], roi[2], roi[3]
+    r = radius_px
+    r1 = r - 1
+    reach_sq = reach_m * reach_m
+    for _, dx, dy in _clear_offsets(float(max_mm)):
+        px_m, py_m = nx + dx * 0.001, ny + dy * 0.001
+        if px_m * px_m + py_m * py_m > reach_sq:
+            continue
+        px = to_px((px_m, py_m))
+        if px is None:
+            continue
+        x, y = int(round(px[0])), int(round(px[1]))
+        if x - r < rx0 or y - r < ry0 or x + r >= rx1 or y + r >= ry1:
+            continue
+        if not (inside[y - r, x - r] and inside[y - r, x + r1] and inside[y + r1, x - r] and inside[y + r1, x + r1]):
+            continue
+        my, mx = y - ry0, x - rx0
+        if (
+            mask[my, mx]
+            or mask[my - r, mx - r]
+            or mask[my - r, mx + r1]
+            or mask[my + r1, mx - r]
+            or mask[my + r1, mx + r1]
+            or mask[my - r, mx]
+            or mask[my + r1, mx]
+            or mask[my, mx - r]
+            or mask[my, mx + r1]
+        ):
+            continue
+        if not mask[my - r : my + r, mx - r : mx + r].any() and inside[y - r : y + r, x - r : x + r].min() == 1:
+            return [round(px_m, 4), round(py_m, 4)]
+    return None
 
 
 def map_agrees(record: dict, params=None) -> bool:
