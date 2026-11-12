@@ -20,6 +20,7 @@ from fleet.server.arm_transfer_http import (
     require_write_origin,
     unavailable_arm_transfer_error,
 )
+from fleet.server.control_unit_arm_coordinator import is_direct_child_arm_owner
 
 
 def delegation_id(principal_id, request_key):
@@ -71,7 +72,7 @@ def install_arm_transfer_relay_routes(app, *, control, require_viewer, require_p
         return await call_arm_transfer_domain(operation, value_error_is_conflict=True)
 
     async def forward(row, method, tail, body=None):
-        if row["owner_unit"] != row["request"]["target_unit"]:
+        if not is_direct_child_arm_owner(row):
             # shortcut: forwards reach the direct child only; a deeper cell needs each hop to relay too.
             raise HTTPException(409, detail={"code": "ARM_TRANSFER_RELAY_DEPTH"})
         projected(row)

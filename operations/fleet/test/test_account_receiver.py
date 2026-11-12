@@ -294,3 +294,32 @@ def test_receiver_rejects_machine_principal_shared_with_human_login(receiver, tm
     logins = {'alice': {'principal_id': 'health-check', 'role': 'viewer', 'password_scrypt': 'unused'}}
     with pytest.raises(ValueError):
         _machine_receiver_app(tmp_path, users, logins)
+
+
+def test_receiver_separates_embedded_authority_routes_and_filters_human_site_users(receiver, tmp_path):
+    from hashlib import sha256
+    from fleet.server.account_runtime import (
+        _configure_legacy_embedded_authority,
+        _filter_receiver_machine_principals,
+    )
+    assert _configure_legacy_embedded_authority(None, None, None) == (None, None, None)
+    users = {
+        sha256(b'human-viewer-token').hexdigest(): {'principal_id': 'alice', 'role': 'viewer'},
+        sha256(b'machine-viewer-token').hexdigest(): {'principal_id': 'health-check', 'role': 'viewer', 'machine': True},
+        sha256(b'service-token').hexdigest(): {'principal_id': 'harbor', 'role': 'service'},
+        sha256(b'ai-observer-token').hexdigest(): {'principal_id': 'ai-pc', 'role': 'ai_observer'},
+    }
+    app = _machine_receiver_app(tmp_path, users)
+    assert app.state.account_authority is None
+    route_paths = {getattr(route, 'path', '') for route in app.routes}
+    assert not any(p.startswith('/api/fleet/accounts') for p in route_paths)
+    assert '/api/fleet/auth/authorize' not in route_paths
+    assert '/api/fleet/auth/token' not in route_paths
+    assert '/api/fleet/auth/keys' not in route_paths
+    client = TestClient(app, base_url=BASE)
+    assert client.get('/api/fleet/accounts').status_code == 404
+    assert client.get('/api/fleet/state', headers={'Authorization': 'Bearer human-viewer-token'}).status_code == 401
+    for token in ('machine-viewer-token', 'service-token', 'ai-observer-token'):
+        assert client.get('/api/fleet/state', headers={'Authorization': 'Bearer ' + token}).status_code == 200
+    assert callable(_filter_receiver_machine_principals)
+
