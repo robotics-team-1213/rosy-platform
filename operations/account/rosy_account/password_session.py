@@ -20,6 +20,7 @@ from typing import Callable, Mapping, Optional
 from fastapi import HTTPException, Request
 
 from core_common.protocol.account_access import same_origin
+from rosy_account.db_policy import configure_connection, enable_wal
 from rosy_account.principal import SitePrincipal, legacy_grants
 from rosy_account.site_users import _LOGIN, hash_password, verify_password
 
@@ -32,7 +33,7 @@ LOGIN_FAILURES_PER_MINUTE = 10
 _RATE_WINDOW_S = 60.0
 _TOUCH_EVERY_S = 60.0  # sliding-expiry writes at most once a minute per session, not per poll
 _MAX_TRACKED = 1024
-_AUTH_DB_TIMEOUT_S = 1.0  # an auth read never waits out a long writer
+_AUTH_DB_TIMEOUT_S = 5.0  # D-962: WAL readers do not queue behind writers; this backstops a stuck one
 _CACHE_S = 60.0  # a cookie validated this recently authenticates from memory
 _CACHE_MAX = 256
 _SCRYPT_WAIT_S = 1.0
@@ -85,6 +86,7 @@ class PasswordSessions:
         from rosy_account.account_ledger import AccountLedger
         self._ledger = AccountLedger(self)
         with closing(self._connect(timeout=10)) as db, db:
+            enable_wal(db)
             db.execute("""CREATE TABLE IF NOT EXISTS fleet_console_sessions (
                 session_sha256 TEXT PRIMARY KEY, login TEXT NOT NULL,
                 principal_id TEXT NOT NULL, role TEXT NOT NULL, password_sha256 TEXT NOT NULL,
@@ -195,7 +197,7 @@ class PasswordSessions:
     def _connect(self, *, timeout: float = _AUTH_DB_TIMEOUT_S) -> sqlite3.Connection:
         db = sqlite3.connect(self.path, timeout=timeout)
         db.row_factory = sqlite3.Row
-        return db
+        return configure_connection(db)
 
     def _hits(self, key: tuple[str, str], now: float) -> deque[float]:
         if len(self._failures) > _MAX_TRACKED:

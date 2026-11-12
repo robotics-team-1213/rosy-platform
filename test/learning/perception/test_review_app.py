@@ -540,3 +540,14 @@ def test_source_box_without_bbox_is_a_usage_error_naming_the_field(tmp_path, mon
     code, err = run_main(monkeypatch, capsys, '--state', tmp_path / 'state', '--source', source,
                          '--human', human, '--images', images)
     assert code == 2 and 'Traceback' not in err and 'bbox_xyxy' in err
+
+
+def test_review_store_runs_in_wal_mode_and_supports_read_only_uri(tmp_path):
+    store = open_store(tmp_path)
+    with store.connect() as db:
+        assert db.execute('PRAGMA journal_mode').fetchone()[0].lower() == 'wal'
+        assert db.execute('PRAGMA foreign_keys').fetchone()[0] == 1
+    reader = ReviewStore.read_only(store.state)
+    with reader.connect() as db:
+        assert db.execute('PRAGMA query_only').fetchone()[0] == 1
+        assert reader.list_frames() == store.list_frames()

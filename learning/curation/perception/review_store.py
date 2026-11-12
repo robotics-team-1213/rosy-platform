@@ -40,6 +40,8 @@ class ReviewStore:
         self.lock = threading.RLock()
         self.db = self.state / 'reviews.sqlite3'
         with self.connect() as db:
+            db.execute('PRAGMA journal_mode=WAL')
+            db.execute('PRAGMA synchronous=NORMAL')
             db.executescript('''CREATE TABLE IF NOT EXISTS frames (
                 id INTEGER PRIMARY KEY, source TEXT NOT NULL, review TEXT NOT NULL,
                 status TEXT NOT NULL, version INTEGER NOT NULL);
@@ -117,6 +119,12 @@ class ReviewStore:
     def connect(self):
         db = sqlite3.connect(self.uri or self.db, timeout=30, uri=self.uri is not None)
         db.row_factory = sqlite3.Row
+        db.execute('PRAGMA foreign_keys=ON')
+        if self.uri is not None:  # read_only(): never journal-mode changes or writes
+            db.execute('PRAGMA query_only=ON')
+        else:
+            db.execute('PRAGMA busy_timeout=30000')
+            db.execute('PRAGMA synchronous=NORMAL')
         try:
             with db:
                 yield db

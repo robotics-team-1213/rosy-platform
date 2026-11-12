@@ -1,6 +1,7 @@
 """D-757 durable human accounts and live revocation, without robot commands."""
 import sqlite3
 import json
+from contextlib import closing
 from hashlib import sha256
 
 import pytest
@@ -438,3 +439,28 @@ def test_managed_own_profile_exposes_exact_grants(tmp_path):
     sessions = activated(tmp_path)
     value = cookie(sessions)
     assert sessions.profile(value)['grants'] == sessions.account_context(value)['grants']
+
+
+def test_account_db_enables_wal_and_foreign_keys(tmp_path):
+    sessions = activated(tmp_path)
+    with closing(sqlite3.connect(sessions.path)) as db:
+        assert db.execute("PRAGMA journal_mode").fetchone()[0].lower() == "wal"
+    with closing(sessions._connect()) as db:
+        assert db.execute("PRAGMA foreign_keys").fetchone()[0] == 1
+        assert db.execute("PRAGMA busy_timeout").fetchone()[0] == 5000
+
+
+def test_account_read_survives_concurrent_audit_writer(tmp_path):
+    sessions = activated(tmp_path)
+    account_id = sessions.account_context(cookie(sessions))["account_id"]
+    writer = sqlite3.connect(sessions.path, timeout=5)
+    writer.execute("BEGIN IMMEDIATE")
+    writer.execute("INSERT INTO rosy_account_audit (actor_account_id,target_account_id,operation,"
+                   "previous_revision,next_revision,created_at) VALUES (?,?,?,?,?,?)",
+                   (account_id, account_id, "migrate", 0, 1, 0.0))
+    try:
+        assert sessions._ledger.account("alice")["account_id"] == account_id
+        assert sessions.check("local", "alice", TYPED) is not None
+    finally:
+        writer.rollback()
+        writer.close()
