@@ -195,41 +195,6 @@ def select_recovery_skill(
     if code == "S10_DISPLACED_CONTAINER_FLOOR_FRONT":
         return _skill_res("L2", "recover_from_floor_front_to_pinky", code, displaced_zone="floor_front", target_site=norm_target, grasp_pose_units=list(CELL_S_EXTENDED_ZONES["floor_front"]["grasp_pose_units"]), crane_shoulder_lift=-27.0, crane_elbow_flex=22.0, max_step=0.032, lift_before_pan=True)
 
-    if code == "S9_DISPLACED_CONTAINER_BELT_FAR":
-        norm_target = str(target_site or "pinky").strip().lower()
-        skill_name = (
-            "recover_from_belt_far_to_belt_center"
-            if norm_target in ("belt", "belt_center")
-            else "recover_from_belt_far_to_pinky"
-        )
-        return _skill_res(
-            "L2",
-            skill_name,
-            code,
-            displaced_zone="belt_far",
-            target_site=norm_target,
-            grasp_pose_units=list(CELL_S_EXTENDED_ZONES["belt_far"]["grasp_pose_units"]),
-            crane_shoulder_lift=-27.0,
-            crane_elbow_flex=22.0,
-            max_step=0.032,
-            lift_before_pan=True,
-        )
-
-    if code == "S10_DISPLACED_CONTAINER_FLOOR_FRONT":
-        norm_target = str(target_site or "pinky").strip().lower()
-        return _skill_res(
-            "L2",
-            "recover_from_floor_front_to_pinky",
-            code,
-            displaced_zone="floor_front",
-            target_site=norm_target,
-            grasp_pose_units=list(CELL_S_EXTENDED_ZONES["floor_front"]["grasp_pose_units"]),
-            crane_shoulder_lift=-27.0,
-            crane_elbow_flex=22.0,
-            max_step=0.032,
-            lift_before_pan=True,
-        )
-
     if code in ("S5_VIEW_OR_GATE_MISMATCH", "S5_X_BIMODAL_AMBIGUOUS", "S5_HEIGHT_ANOMALY") or not gate_ok or 2.0 * float(sigma_x_mm) > 5.0:
         if int(level_tried) == 0:
             return _skill_res("L0", "reobserve_shift", code, shift_xy_mm=[4.0, 0.0], wrist_samples=3)
