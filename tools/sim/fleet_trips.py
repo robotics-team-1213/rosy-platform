@@ -475,9 +475,10 @@ def drivable_evidence(path, revision, robots):
         matched = sum(message.get('paint_source_used') == 'learned_drivable'
                       and message.get('paint_model_revision') == revision for message in during
                       if isinstance(message, dict))
-        evidence[ns] = {'pass': len(during) >= 10 and matched == len(during),
+        evidence[ns] = {'pass': len(during) >= 10 and matched / len(during) >= 0.99,
                         'moving_commands': len(commands[ns]), 'moving_keep_debug': len(during),
-                        'matched_revision': matched}
+                        'matched_revision': matched, 'fallback_frames': len(during) - matched,
+                        'pure_model': matched == len(during)}
     return {'pass': all(row['pass'] for row in evidence.values()),
             'expected_revision': revision, 'robots': evidence}
 

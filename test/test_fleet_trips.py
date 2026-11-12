@@ -107,6 +107,14 @@ def test_drivable_evidence_requires_the_model_during_motion(tmp_path):
     rows[5]['message']['paint_source_used'] = 'denoise_fallback'
     trace.write_text('\n'.join(json.dumps(row) for row in rows), encoding='utf-8')
     assert not m.drivable_evidence(trace, 'rev', ['rosy_01'])['pass']
+    samples = [dict(wall=1.1 + i / 100, topic='/rosy_01/line/keep_debug',
+                    message=dict(paint_source_used='learned_drivable', paint_model_revision='rev'))
+               for i in range(100)]
+    samples[5]['message']['paint_source_used'] = 'denoise_fallback'
+    rows = rows[:1] + samples + rows[-1:]
+    trace.write_text('\n'.join(json.dumps(row) for row in rows), encoding='utf-8')
+    evidence = m.drivable_evidence(trace, 'rev', ['rosy_01'])['robots']['rosy_01']
+    assert evidence['pass'] and not evidence['pure_model'] and evidence['fallback_frames'] == 1
 
 
 def test_every_lap_scenario_starts_and_ends_on_the_lap_route():
