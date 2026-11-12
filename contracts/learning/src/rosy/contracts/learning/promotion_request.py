@@ -5,8 +5,8 @@ Learning's review evidence encoding, not `fleet_export.encoded`. Validation prov
 never approves, stages or deploys anything.
 """
 import json
-import math
 import re
+from .pinky import _number
 
 SCHEMA = 'rosy.learning.promotion-request/1'
 HUMAN = ['human_reviewed_eval']
@@ -27,10 +27,6 @@ def _fields(value, keys, where):
 
 def _text(value, limit):
     return isinstance(value, str) and 0 < len(value) <= limit
-
-
-def _number(value):
-    return type(value) in (int, float) and math.isfinite(value)
 
 
 def _count(value):
