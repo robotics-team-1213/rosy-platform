@@ -113,9 +113,12 @@ class Teacher:
         cmd = np.append(q_target[:5], grip)
         z_off = (self.zero_error[arm][:5] - (self.servo_comp.zero_est[arm] if self.servo_comp is not None else 0.)) if (not self.privileged and arm in self.zero_error) else 0.
         check_tcp = self.privileged or self.compensate_zero
+        arm_q_idx = self.world.q[arm][:5]
+        arm_dof_idx = self.world.arm_dof[arm][:5]
+        target5 = q_target[:5] + z_off
         for _ in range(round(max_s * FPS)):
-            q_err = float(np.max(np.abs((q_target[:5] + z_off) - self.q_now(data, arm)[:5])))
-            q_vel = float(np.max(np.abs(data.qvel[self.world.arm_dof[arm][:5]])))
+            q_err = float(np.max(np.abs(target5 - data.qpos[arm_q_idx])))
+            q_vel = float(np.max(np.abs(data.qvel[arm_dof_idx])))
             tcp_ok = not check_tcp or pos_target is None or float(np.linalg.norm(self.world.tcp(data, arm)[0] - pos_target)) <= .0012
             if self.servo_comp.is_settled(arm, q_err, q_vel, tcp_ok) if self.servo_comp is not None else (q_err <= .0045 and q_vel <= .02 and tcp_ok):
                 break
@@ -128,10 +131,12 @@ class Teacher:
             q_end = ik_arm.ik(q, p_to + shift(p_to, yaw_to, q) if shift is not None else p_to, yaw_to, 20)[0]
             seconds = self.servo_comp.pace_seconds(ik_arm.name, q, q_end, seconds)
         n, worst = max(1, round(seconds * FPS)), 0.
+        dp = p_to - p_from
+        dyaw = yaw_to - yaw_from
         for i in range(1, n + 1):
             s = i / n
             s = s * s * (3 - 2 * s)
-            pos, yaw = p_from + s * (p_to - p_from), yaw_from + s * (yaw_to - yaw_from)
+            pos, yaw = p_from + s * dp, yaw_from + s * dyaw
             if shift is not None:
                 pos = pos + shift(pos, yaw, q)
             q, err, rot = ik_arm.ik(q, pos, yaw, 30)

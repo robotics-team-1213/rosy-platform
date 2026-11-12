@@ -116,7 +116,7 @@ class VlaHandoverBroker:
 
     def check_decision_precondition(self, facts: dict[str, Any]) -> Optional[dict[str, Any]]:
         """Runs `judge_seat.measured(facts)` sovereign precondition check before/during handover."""
-        norm_facts = dict(facts)
+        norm_facts = dict(facts) if "box_found" not in facts or ("grasp_stable" in facts and "stable" not in facts) else facts
         if "box_found" not in norm_facts:
             norm_facts["box_found"] = True
         if "grasp_stable" in norm_facts and "stable" not in norm_facts:

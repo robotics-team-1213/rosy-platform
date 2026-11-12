@@ -221,4 +221,68 @@ def test_empty_air_grasp_unclosed_jaw_and_pre_grasp_scene_retargeting():
     assert aborted["verdict"] == "abort_empty_scene" and aborted["class"] == "knocked_off_to_floor" and aborted["person_needed"] is True
 
 
+def test_usb_recovery_pipeline_camera_symlinks_and_12v_hardfault_diagnosis(tmp_path):
+    import cell_usb_recovery as cur
 
+    v4l_dir = tmp_path / "v4l"
+    v4l_dir.mkdir()
+    jieli_target = v4l_dir / "usb-Jieli_Technology_USB_Composite_Device-video-index0"
+    wrist_target = v4l_dir / "usb-Innomaker_Innomaker-U20CAM-720P_SN0001-video-index0"
+    jieli_target.write_text("video4")
+    wrist_target.write_text("video2")
+
+    cam_res = cur.restore_camera_symlinks(v4l_dir)
+    assert cam_res["ok"] is True
+    assert set(cam_res["restored"]) == {"rosy-arm_s_jieli", "rosy-arm_s_wrist"}
+
+    decoded = cur.decode_port_status(0x0103, 0x0010)
+    assert decoded["connected"] is True and decoded["enabled"] is True and decoded["powered"] is True and decoded["c_reset"] is True
+
+    # Tier 4 last-resort host reboot safety checks: blocked by policy or by active session-arm_a.lock
+    lock_dir = tmp_path / "locks"
+    lock_dir.mkdir()
+    r_disabled = cur.schedule_last_resort_host_reboot(allow_host_reboot=False, lock_dir=lock_dir)
+    assert r_disabled["ok"] is False and r_disabled["verdict"] == "reboot_skipped_policy_disabled"
+
+    (lock_dir / "session-arm_a.lock").write_text("111676")
+    r_blocked = cur.schedule_last_resort_host_reboot(allow_host_reboot=True, lock_dir=lock_dir)
+    assert r_blocked["ok"] is False and r_blocked["verdict"] == "reboot_blocked_by_active_arm"
+    assert "session-arm_a.lock" in r_blocked["active_other_locks"]
+
+    (lock_dir / "session-arm_a.lock").unlink()
+    called = []
+
+    class _DummyRes:
+        returncode = 0
+        stderr = ""
+
+    def _fake_run(cmd, **_kw):
+        called.append(cmd)
+        return _DummyRes()
+
+    r_ok = cur.schedule_last_resort_host_reboot(allow_host_reboot=True, lock_dir=lock_dir, run_fn=_fake_run)
+    assert r_ok["ok"] is True and r_ok["verdict"] == "host_reboot_initiated"
+    assert called == [["sudo", "-n", "systemctl", "reboot"]]
+
+    # Emergency torque OFF helper: handles offline serial gracefully and confirms torque=0 via injected bus_factory
+    r_offline = cur.emergency_torque_off_arm(tmp_path / "missing-serial")
+    assert r_offline["ok"] is False and r_offline["verdict"] == "port_unavailable_torque_already_unpowered_or_dropped"
+
+    fake_serial = tmp_path / "fake-serial"
+    target_tty = tmp_path / "ttyACM1"
+    target_tty.write_text("tty")
+    try:
+        fake_serial.symlink_to(target_tty.name)
+        r_tq = cur.emergency_torque_off_arm(
+            fake_serial,
+            bus_factory=lambda path, mids, baud: {
+                "ok": True,
+                "verdict": "torque_off_confirmed",
+                "serial_path": path,
+                "torques": {m: 0 for m in mids},
+                "reason": "all follower motors confirmed torque OFF",
+            },
+        )
+        assert r_tq["ok"] is True and r_tq["verdict"] == "torque_off_confirmed"
+    except OSError:
+        pass

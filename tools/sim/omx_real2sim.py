@@ -103,9 +103,10 @@ def belt_request(run, layout=None):
     px = lambda x, y, z: tuple(int(round(v)) for v in cam.project((x, y, z)))  # noqa: E731
     origin = px(*axis, layout.table_z)
     for (name, xy), colour in zip(points.items(), ((0, 200, 0), (0, 0, 255))):
-        cv2.line(frame, origin, px(*xy, layout.belt_top), colour, 2)
-        cv2.circle(frame, px(*xy, layout.belt_top), 5, colour, -1)
-        cv2.putText(frame, f"{name} {predicted[name]} mm", (px(*xy, layout.belt_top)[0] + 6, px(*xy, layout.belt_top)[1] - 6),
+        pt = px(*xy, layout.belt_top)
+        cv2.line(frame, origin, pt, colour, 2)
+        cv2.circle(frame, pt, 5, colour, -1)
+        cv2.putText(frame, f"{name} {predicted[name]} mm", (pt[0] + 6, pt[1] - 6),
                     cv2.FONT_HERSHEY_SIMPLEX, .45, colour, 1)
     cv2.circle(frame, origin, 6, (255, 0, 255), -1)
     image = run / "belt-request.png"
@@ -162,7 +163,8 @@ def measure(run, prev_path=None, camera_moved_ok=False):
     tp = results["temp_plates"]
     ab = dict(fk={n: dict(xy=[round(v, 4) for v in a.base[:2]], yaw_deg=round(math.degrees(a.yaw), 1)) for n, a in layout.arms.items()},
               plate_centre={n: dict(xy=list(xy), yaw_deg=yaw) for n, (xy, yaw) in sites.ARM_BASES_PLATE_CENTRE.items()})
-    snap = dict(schema=SCHEMA, taken_at=json.loads((run / "capture.json").read_text())["taken_at"] if (run / "capture.json").exists() else None,
+    cap_file = run / "capture.json"
+    snap = dict(schema=SCHEMA, taken_at=json.loads(cap_file.read_text(encoding="utf-8"))["taken_at"] if cap_file.exists() else None,
                 frames={c: "sha256:" + hashlib.sha256(p.read_bytes()).hexdigest() for c, p in frames.items()},
                 camera=dict(top=layout.fixture["real_cameras"]["top"]), camera_motion=camera_motion,
                 items=dict(temp_plates=dict(plates={t: p["lanes"] for t, p in tp["plates"].items() if "lanes" in p},

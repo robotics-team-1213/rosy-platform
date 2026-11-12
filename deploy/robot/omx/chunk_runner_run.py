@@ -74,6 +74,7 @@ FOLLOW_STOP, FOLLOW_STOP_S = 25.0, 1.0
 HEALTH_PERIOD_S = 1.0
 CONTACT_CHUNKS = ("descend", "grasp", "release")
 PACE_LAG, PACE_RISE, PACE_MAX_S = (prm.default(f"runner.{k}") for k in ("pace_lag", "pace_rise", "pace_max_s"))
+_BODY_NAMES = tuple(NAMES[:5])
 
 _CR_DICT_LIST: list[dict] = []
 
@@ -230,7 +231,7 @@ class Runner:
         self.recorder.tick(present, [sent.get(n, t) if isinstance(sent, dict) else t for n, t in zip(NAMES, self.target)])
         if isinstance(sent, dict):
             self.lag = max(
-                (abs(present[i] - sent[name]) for i, name in enumerate(NAMES[:5]) if name in sent),
+                (abs(present[i] - sent[name]) for i, name in enumerate(_BODY_NAMES) if name in sent),
                 default=0.0,
             )
             if self.chunk is not None:
@@ -260,13 +261,17 @@ class Runner:
             and self.chunk is not None
             and self.chunk.startswith(CONTACT_CHUNKS)
         ):
-            lags = [abs(present[i] - sent[name]) if name in sent else 0.0 for i, name in enumerate(NAMES[:5])]
-            if self.contact_start is None:
-                self.contact_start = contact_limits(lags, self.params)
-            lag = max(lags)
-            over = any(v > limit for v, limit in zip(lags, self.contact_start))
-            self.contact_ticks = self.contact_ticks + 1 if over else 0
-            if self.contact_ticks >= prm.get(self.params, "runner.contact_ticks", CONTACT_TICKS):
+            lags = [abs(present[i] - sent[name]) if name in sent else 0.0 for i, name in enumerate(_BODY_NAMES)]
+            prev_sent = (self.jitter_buf[-2].get("sent") or self.jitter_buf[-2].get("target")) if len(self.jitter_buf) >= 2 else None
+            step_delta_fps = (
+                max(abs(float(sent[name]) - float(prev_sent[i])) for i, name in enumerate(_BODY_NAMES) if name in sent) * self.fps
+                if prev_sent
+                else 0.0
+            )
+            self.contact_start, self.contact_ticks, tripped, lag = evaluate_adaptive_contact_guard(
+                lags, self.contact_start, self.contact_ticks, self.params, step_delta_units=step_delta_fps
+            )
+            if tripped:
                 self.hold(present, f"contact in {self.chunk}: a joint lagged the command by {lag:.1f} units")
         elif (
             isinstance(sent, dict)

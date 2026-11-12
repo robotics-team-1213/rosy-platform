@@ -31,6 +31,11 @@ POSE_SCHEMA = "rosy.omx-two-arm-poses/1"
 ALIGN_TOLERANCE_DEG = 2.5
 #: The highest position gain a run may ask for; the servo accepts 0..16383.
 GAIN_MAX = 2000
+_BODY_SET = frozenset(BODY)
+_CAP_KEYS = frozenset(("pwm", "current"))
+_GAIN_KEYS = frozenset(("p", "i"))
+_PI_REGISTERS = (("p", "Position_P_Gain"), ("i", "Position_I_Gain"))
+_FOLLOWER_MODEL_NAMES = dict(zip(FOLLOWER_MODELS, guarded_native.NAMES))
 
 
 class Arm:
@@ -82,12 +87,12 @@ def validate_config(config: dict) -> None:
     if not isinstance(overrides, dict):
         raise ValueError("follower_caps.per_joint must be an object keyed by body joint")
     for name, values in overrides.items():
-        if name not in BODY:
+        if name not in _BODY_SET:
             raise ValueError(f"follower_caps.per_joint names no body joint: {name}")
         if not isinstance(values, dict) or not values:
             raise ValueError(f"follower_caps.per_joint.{name} must set pwm and/or current")
         for register, value in values.items():
-            if register not in ("pwm", "current"):
+            if register not in _CAP_KEYS:
                 raise ValueError(f"follower_caps.per_joint.{name} may only set pwm and current")
             if not isinstance(value, int) or isinstance(value, bool):
                 raise ValueError(f"follower_caps.per_joint.{name}.{register} must be an integer")
@@ -101,12 +106,12 @@ def validate_config(config: dict) -> None:
         if not isinstance(gains, dict):
             raise ValueError(f"{section}.per_joint must be an object keyed by body joint")
         for name, values in gains.items():
-            if name not in BODY:
+            if name not in _BODY_SET:
                 raise ValueError(f"{section}.per_joint names no body joint: {name}")
             if not isinstance(values, dict) or not values:
                 raise ValueError(f"{section}.per_joint.{name} must set p and/or i")
             for register, value in values.items():
-                if register not in ("p", "i"):
+                if register not in _GAIN_KEYS:
                     raise ValueError(f"{section}.per_joint.{name} may only set p and i")
                 if not isinstance(value, int) or isinstance(value, bool):
                     raise ValueError(f"{section}.per_joint.{name}.{register} must be an integer")
@@ -116,7 +121,7 @@ def validate_config(config: dict) -> None:
     if not isinstance(gravity, dict):
         raise ValueError("leader_gravity_ticks.per_joint must be an object keyed by body joint")
     for name, ticks in gravity.items():
-        if name not in BODY:
+        if name not in _BODY_SET:
             raise ValueError(f"leader_gravity_ticks.per_joint names no body joint: {name}")
         if not isinstance(ticks, int) or isinstance(ticks, bool):
             raise ValueError(f"leader_gravity_ticks.per_joint.{name} must be an integer of ticks")
@@ -190,9 +195,8 @@ def follower_gains(config: dict) -> dict:
     The gains are RAM registers, so a run sets them with torque OFF and restores them.
     The OMX-AI model's P and I tuning (session_caps, D-951 6) sits under the config's own.
     """
-    names = dict(zip(FOLLOWER_MODELS, guarded_native.NAMES))
-    model = {names[motor]: {k: v for k, v in tuning.items() if k in ("p", "i")}
-             for motor, tuning in model_tuning().items() if names[motor] in BODY}
+    model = {_FOLLOWER_MODEL_NAMES[motor]: {k: v for k, v in tuning.items() if k in _GAIN_KEYS}
+             for motor, tuning in model_tuning().items() if _FOLLOWER_MODEL_NAMES[motor] in _BODY_SET}
     own = _per_joint_gains(config, "follower_gains")
     merged = {name: {**model.get(name, {}), **own.get(name, {})} for name in BODY}
     return {name: values for name, values in merged.items() if values}
@@ -222,7 +226,7 @@ def _per_joint_gains(config: dict, section: str) -> dict:
 def follower_gain_state(arm: Arm) -> dict:
     """The P and I position gains every Follower body joint holds before the run."""
     return {name: {key: arm.follower_bus.read(register, name)
-                   for key, register in (("p", "Position_P_Gain"), ("i", "Position_I_Gain"))}
+                   for key, register in _PI_REGISTERS}
             for name in BODY}
 
 
@@ -236,7 +240,7 @@ def set_follower_gains(arm: Arm, gains: dict) -> None:
     for name, values in gains.items():
         if arm.follower_bus.read("Torque_Enable", name):
             raise ValueError(f"{arm.arm_id} follower {name}: the gains need torque OFF")
-        for key, register in (("p", "Position_P_Gain"), ("i", "Position_I_Gain")):
+        for key, register in _PI_REGISTERS:
             if key not in values:
                 continue
             arm.follower_bus.write(register, name, values[key])
@@ -248,7 +252,7 @@ def restore_follower_gains(arm: Arm, saved: dict, applied: dict) -> list[str]:
     """Write back only the gain registers the run changed; a failure never skips the rest."""
     failures = []
     for name, values in applied.items():
-        for key, register in (("p", "Position_P_Gain"), ("i", "Position_I_Gain")):
+        for key, register in _PI_REGISTERS:
             if key not in values:
                 continue
             try:

@@ -29,23 +29,6 @@ CRANE_LIFT_ELBOW_UNITS: float = 22.0
 CRANE_MAX_STEP_CAP: float = 0.032
 
 
-def _measure_orange_occ_in_roi(top_frame: Any, roi: tuple[int, int, int, int]) -> float:
-    if top_frame is None or not hasattr(top_frame, "shape") or len(top_frame.shape) != 3:
-        return 0.0
-    import cv2
-    import numpy as np
-
-    h, w = top_frame.shape[:2]
-    x0, y0, x1, y1 = max(0, int(roi[0])), max(0, int(roi[1])), min(w, int(roi[2])), min(h, int(roi[3]))
-    crop = top_frame[y0:y1, x0:x1]
-    if crop.size == 0:
-        return 0.0
-    hsv = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)
-    hue, sat, val = hsv[..., 0], hsv[..., 1], hsv[..., 2]
-    mask = ((hue <= 25) | (hue >= 165)) & (sat >= 90) & (val >= 90)
-    return round(float(np.mean(mask)), 4)
-
-
 def build_crane_recovery_trajectory(
     trajectory_name: str, *, max_step: float = CRANE_MAX_STEP_CAP,
 ) -> dict[str, Any]:
@@ -87,10 +70,23 @@ def scan_cell_s_extended_zones(
     and emit a deterministic failure/recovery classification + crane-lift trajectory."""
     norm_pick = "belt_center" if str(intended_site).strip().lower() in ("belt", "belt_center") else "pinky_tray"
     resolved_target = str(target_site or intended_site or "pinky").strip().lower()
-    occ_map: dict[str, float] = {
-        z: _measure_orange_occ_in_roi(top_frame, CELL_S_EXTENDED_ZONES[z]["top_roi_px"])
-        for z in EXTENDED_RECOVERY_ZONE_ORDER
-    }
+    occ_map: dict[str, float] = dict.fromkeys(EXTENDED_RECOVERY_ZONE_ORDER, 0.0)
+    if top_frame is not None and hasattr(top_frame, "shape") and len(top_frame.shape) == 3 and top_frame.shape[2] == 3:
+        import cv2
+        import numpy as np
+
+        h, w = top_frame.shape[:2]
+        rois = {z: (max(0, int(r[0])), max(0, int(r[1])), min(w, int(r[2])), min(h, int(r[3])))
+                for z in EXTENDED_RECOVERY_ZONE_ORDER for r in (CELL_S_EXTENDED_ZONES[z]["top_roi_px"],)}
+        ux0, uy0 = min(r[0] for r in rois.values()), min(r[1] for r in rois.values())
+        ux1, uy1 = max(r[2] for r in rois.values()), max(r[3] for r in rois.values())
+        if ux1 > ux0 and uy1 > uy0:
+            hsv = cv2.cvtColor(top_frame[uy0:uy1, ux0:ux1], cv2.COLOR_BGR2HSV)
+            hue, sat, val = hsv[..., 0], hsv[..., 1], hsv[..., 2]
+            mask = ((hue <= 25) | (hue >= 165)) & (sat >= 90) & (val >= 90)
+            for z, (x0, y0, x1, y1) in rois.items():
+                if x1 > x0 and y1 > y0:
+                    occ_map[z] = round(float(np.mean(mask[y0 - uy0:y1 - uy0, x0 - ux0:x1 - ux0])), 4)
     if isinstance(zone_occ, dict):
         for k, v in zone_occ.items():
             key = "pinky_tray" if k == "pinky" else ("belt_center" if k == "belt" else str(k))

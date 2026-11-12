@@ -13,6 +13,7 @@ Single Responsibility:
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
+from copy import deepcopy
 import json
 import math
 from pathlib import Path
@@ -36,6 +37,7 @@ from cell_fleet_handoff import (  # noqa: F401  (re-exported)
 )
 
 ensure_omx_paths()
+_DEFAULT_BASE_PLAN: dict[str, Any] | None = None
 
 
 class FleetModelPipeline:
@@ -65,9 +67,12 @@ class FleetModelPipeline:
         self.work_dir = Path(work_dir)
         self.work_dir.mkdir(parents=True, exist_ok=True)
         if base_plan is None:
-            base_plan = json.loads((HERE / "grasp-plan.example.json").read_text(encoding="utf-8"))
-            base_plan["limits"]["workspace_min_m"] = [-0.05, -0.28, 0.002]
-            base_plan["limits"]["workspace_max_m"] = [0.28, 0.28, 0.26]
+            global _DEFAULT_BASE_PLAN
+            if _DEFAULT_BASE_PLAN is None:
+                _DEFAULT_BASE_PLAN = json.loads((HERE / "grasp-plan.example.json").read_text(encoding="utf-8"))
+                _DEFAULT_BASE_PLAN["limits"]["workspace_min_m"] = [-0.05, -0.28, 0.002]
+                _DEFAULT_BASE_PLAN["limits"]["workspace_max_m"] = [0.28, 0.28, 0.26]
+            base_plan = deepcopy(_DEFAULT_BASE_PLAN)
         self.base_plan = base_plan
 
     def run_fleet_stage(
@@ -182,10 +187,13 @@ class FleetModelPipeline:
 
         raw_trace, damped_trace = [], []
         noisy_frames = []
+        omega_dt = 2.0 * math.pi * 4.5 / 30.0
+        inv_30 = 1.0 / 30.0
+        n_frames = len(transit_frames)
         for k, f in enumerate(transit_frames):
             tremor = (
-                policy_tremor_amp * math.sin(2.0 * math.pi * 4.5 * (k / 30.0))
-                if 0 < k < len(transit_frames) - 1
+                policy_tremor_amp * math.sin(omega_dt * k)
+                if 0 < k < n_frames - 1
                 else 0.0
             )
             row = list(f)
@@ -193,7 +201,7 @@ class FleetModelPipeline:
             noisy_frames.append(row)
         damped_frames = jj.suppress_tremor(noisy_frames, coeff=0.14, vmax=5.0, fps=30, amax=5.0, deadband=0.12)
         for k, (target_f, raw_f, damp_f) in enumerate(zip(transit_frames, noisy_frames, damped_frames)):
-            t = 100.0 + k / 30.0
+            t = 100.0 + k * inv_30
             raw_trace.append({"t": t, "chunk": "transit", "target": target_f, "sent": target_f, "present": raw_f})
             damped_trace.append({"t": t, "chunk": "transit", "target": target_f, "sent": target_f, "present": damp_f})
 
@@ -384,5 +392,3 @@ class FleetModelPipeline:
     def dispatch_and_execute_fleet_r_cell_task(self, **kwargs) -> dict[str, Any]:
         """Assign, claim, execute, and complete a task on Fleet-R (`/api/fleet/pipeline/cell-tasks`)."""
         return dispatch_and_execute_fleet_r_cell_task(self, **kwargs)
-
-

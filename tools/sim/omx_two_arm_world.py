@@ -7,6 +7,7 @@ capacity, D-947). Contact and friction numbers are not results.
 
     MUJOCO_GL=egl python tools/sim/omx_two_arm_world.py render OUT_DIR      # scene PNGs to compare with reality
 """
+import functools
 import json
 import math
 import os
@@ -35,6 +36,26 @@ FPS = 15
 # the cell as its cameras see it (2026-11-10 top/side frames, G-29): yellow table, light-blue v11 plates with dark lane pads, light-blue ship
 COLOURS = dict(floor=[.37, .43, .37, 1], table=[.58, .47, .21, 1], belt=[.16, .21, .24, 1], plate=[.52, .69, .79, 1], pad=[.08, .09, .1, 1],
                ship=[.50, .72, .85, 1], container=[.91, .47, .22, 1], wall=[.6, .84, 1., 1])  # wall: the room behind the cell in the side frame (11-09)
+
+
+@functools.lru_cache(maxsize=1)
+def _parsed_two_arm_urdf_template():
+    text = jaw.URDF.read_text(encoding="utf-8")
+    text = re.sub(r"<(gazebo|ros2_control)\b.*?</\1>", "", text, flags=re.S)
+    for pattern in (r'<joint name="end_effector_joint".*?</joint>', r'<link name="end_effector_link">.*?</link>',
+                    r'<joint name="world_fixed".*?</joint>', r'<link name="world"/>'):
+        text = re.sub(pattern, "", text, flags=re.S)
+    inner = re.search(r"<robot\b[^>]*>(.*)</robot>", text, flags=re.S).group(1)
+    arms = {}
+    for arm, p in PREFIX.items():
+        body = re.sub(r'(<(?:link|joint)\s+name=")', r"\1" + p, inner)
+        body = re.sub(r'(<(?:parent|child)\s+link=")', r"\1" + p, body)
+        body = re.sub(r'(<mimic\s+joint=")', r"\1" + p, body)
+        pairs = tuple(re.findall(r'<joint\s[^>]*>.*?<parent link="([^"]+)"/>\s*<child link="([^"]+)"/>', body, flags=re.S))
+        mesh_names = tuple(set(re.findall(r"package://[a-z_]+/meshes/omx_f/([^\"]+)", body)))
+        body = re.sub(r"package://[a-z_]+/meshes/omx_f/", p, body)
+        arms[arm] = body, pairs, mesh_names
+    return arms
 
 
 def prism(polygon, z0, z1):
@@ -73,23 +94,15 @@ class World:
 
     # -- model ---------------------------------------------------------------------------------------------------------------
     def _urdf(self):
-        text = jaw.URDF.read_text(encoding="utf-8")
-        text = re.sub(r"<(gazebo|ros2_control)\b.*?</\1>", "", text, flags=re.S)
-        for pattern in (r'<joint name="end_effector_joint".*?</joint>', r'<link name="end_effector_link">.*?</link>',
-                        r'<joint name="world_fixed".*?</joint>', r'<link name="world"/>'):
-            text = re.sub(pattern, "", text, flags=re.S)
-        inner = re.search(r"<robot\b[^>]*>(.*)</robot>", text, flags=re.S).group(1)
         out = ['<link name="world"/>']
+        arms = _parsed_two_arm_urdf_template()
         for arm, p in PREFIX.items():
-            body = re.sub(r'(<(?:link|joint)\s+name=")', r"\1" + p, inner)
-            body = re.sub(r'(<(?:parent|child)\s+link=")', r"\1" + p, body)
-            body = re.sub(r'(<mimic\s+joint=")', r"\1" + p, body)
-            self.pairs[arm] = re.findall(r'<joint\s[^>]*>.*?<parent link="([^"]+)"/>\s*<child link="([^"]+)"/>', body, flags=re.S)
-            for name in set(re.findall(r"package://[a-z_]+/meshes/omx_f/([^\"]+)", body)):
+            body, pairs, mesh_names = arms[arm]
+            self.pairs[arm] = list(pairs)
+            for name in mesh_names:
                 for folder in MESHES:
                     if (folder / name).exists():
                         shutil.copy(folder / name, Path(self.meshes.name) / (p + name))
-            body = re.sub(r"package://[a-z_]+/meshes/omx_f/", "" + p, body)
             a = self.layout.arms[arm]
             out.append(f'<joint name="{p}mount" type="fixed"><parent link="world"/><child link="{p}link0"/>'
                        f'<origin xyz="{a.base[0]} {a.base[1]} {a.base[2]}" rpy="0 0 {a.yaw}"/></joint>{body}')

@@ -289,7 +289,15 @@ def pre_grasp_scene_judge(
         ux1 = max(box[2] for box in valid_boxes)
         uy1 = max(box[3] for box in valid_boxes)
         hsv_img = cv2.cvtColor(top_img[uy0:uy1, ux0:ux1], cv2.COLOR_BGR2HSV)
-        mask = cv2.inRange(hsv_img, lo_u8, hi_u8)
+        if int(lo_u8[0]) <= 6 and int(hi_u8[0]) >= 25:
+            lo_wrap = np.asarray([168, max(60, int(lo_u8[1]) - 30), max(60, int(lo_u8[2]) - 40)], np.uint8)
+            hi_wrap = np.asarray([180, int(hi_u8[1]), int(hi_u8[2])], np.uint8)
+            lo_low = np.asarray([0, max(60, int(lo_u8[1]) - 30), max(60, int(lo_u8[2]) - 40)], np.uint8)
+            mask = cv2.bitwise_or(cv2.inRange(hsv_img, lo_low, hi_u8), cv2.inRange(hsv_img, lo_wrap, hi_wrap))
+            if int(lo_u8[1]) < 60 or int(lo_u8[2]) < 60:
+                mask = cv2.bitwise_or(mask, cv2.inRange(hsv_img, lo_u8, hi_u8))
+        else:
+            mask = cv2.inRange(hsv_img, lo_u8, hi_u8)
 
     def _roi_stats(box):
         x0, y0, x1, y1 = box

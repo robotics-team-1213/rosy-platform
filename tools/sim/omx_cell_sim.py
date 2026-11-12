@@ -13,6 +13,7 @@ Geometry here decides reach, order and collisions. Contact and vision numbers do
 """
 import argparse
 import contextlib
+import functools
 import json
 import math
 import os
@@ -41,6 +42,18 @@ MESHES = (ISAAC / "assets/open_manipulator_description/meshes/omx_f", ISAAC / "a
 TRAIN_XY, TRAIN_YAW = .015, .08
 EVAL_XY, EVAL_YAW = .02, .12  # wider than the data: interpolation alone must not count as success
 TASK = "move the container from the pallet to the ship slot"
+_EYE6_REG = 1e-4 * np.eye(6)
+_DOWN_Z = np.array([0.0, 0.0, -1.0])
+
+
+@functools.lru_cache(maxsize=1)
+def _parsed_cell_urdf():
+    urdf = URDF.read_text(encoding="utf-8")
+    tcp = tuple(float(x) for x in re.search(r'name="end_effector_joint".*?<origin[^>]*xyz="([^"]+)"', urdf, flags=re.S).group(1).split())
+    urdf = re.sub(r"<(gazebo|ros2_control)\b.*?</\1>", "", urdf, flags=re.S)
+    urdf = re.sub(r"package://[a-z_]+/meshes/omx_f/", "", urdf)
+    pairs = tuple(re.findall(r'<joint\s[^>]*>.*?<parent link="([^"]+)"/>\s*<child link="([^"]+)"/>', urdf, flags=re.S))
+    return urdf, pairs, tcp
 
 
 def norm_to_rad(value):
@@ -86,10 +99,8 @@ class Cell:
         return max(self.place["surface_z"], self.pick["surface_z"]) if inside else self.place["surface_z"]
 
     def _build(self):
-        urdf = URDF.read_text(encoding="utf-8")
-        urdf = re.sub(r"<(gazebo|ros2_control)\b.*?</\1>", "", urdf, flags=re.S)
-        urdf = re.sub(r"package://[a-z_]+/meshes/omx_f/", "", urdf)
-        self.pairs = re.findall(r'<joint\s[^>]*>.*?<parent link="([^"]+)"/>\s*<child link="([^"]+)"/>', urdf, flags=re.S)
+        urdf, pairs, _ = _parsed_cell_urdf()
+        self.pairs = list(pairs)
         self.meshes = tempfile.TemporaryDirectory()
         for folder in MESHES:
             for mesh in folder.glob("*.stl"):
@@ -142,7 +153,7 @@ class Cell:
 
     def _bind(self):
         model = self.model
-        self.tcp = np.array([float(x) for x in re.search(r'name="end_effector_joint".*?<origin[^>]*xyz="([^"]+)"', URDF.read_text(encoding="utf-8"), flags=re.S).group(1).split()])
+        self.tcp = np.array(_parsed_cell_urdf()[2])
         self.qadr = np.array([model.joint(n).qposadr[0] for n in JOINTS])
         self.dof = np.array([model.joint(n).dofadr[0] for n in JOINTS])
         self.act = np.array([model.actuator(n).id for n in JOINTS])
@@ -153,6 +164,8 @@ class Cell:
         self.box_q = model.joint("box").qposadr[0]
         self.substeps = round(1 / FPS / model.opt.timestep)
         self.scratch = mujoco.MjData(model)
+        self._jacp = np.zeros((3, model.nv))
+        self._jacr = np.zeros((3, model.nv))
         self.renderer = mujoco.Renderer(model, *SHAPE)
         self.show_link5 = mujoco.MjvOption()
         self.show_link5.geomgroup[3] = 1
@@ -161,7 +174,9 @@ class Cell:
         """Tool down at pos, fingers closing across the box width at yaw, inside the plan's joint limits."""
         model, data, q = self.model, self.scratch, q.copy()
         across = np.array([-math.sin(yaw), math.cos(yaw), 0])
-        jacp, jacr = np.zeros((3, model.nv)), np.zeros((3, model.nv))
+        jacp, jacr = self._jacp, self._jacr
+        jacp.fill(0.0)
+        jacr.fill(0.0)
         for _ in range(iterations):
             data.qpos[self.qadr[:5]] = q[:5]
             mujoco.mj_kinematics(model, data)
@@ -170,10 +185,10 @@ class Cell:
             here = data.xpos[self.link5] + R @ self.tcp
             mujoco.mj_jac(model, data, jacp, jacr, here, self.link5)
             side = R[:, 1] if R[:, 1] @ across >= 0 else -R[:, 1]
-            turn = np.cross(R[:, 0], [0, 0, -1.0]) + np.cross(side, across)
+            turn = np.cross(R[:, 0], _DOWN_Z) + np.cross(side, across)
             J = np.vstack([jacp[:, self.dof[:5]], .3 * jacr[:, self.dof[:5]]])
             error = np.concatenate([pos - here, .3 * turn])
-            q[:5] = np.clip(q[:5] + np.clip(J.T @ np.linalg.solve(J @ J.T + 1e-4 * np.eye(6), error), -.2, .2), *self.limits.T)
+            q[:5] = np.clip(q[:5] + np.clip(J.T @ np.linalg.solve(J @ J.T + _EYE6_REG, error), -.2, .2), *self.limits.T)
             if np.linalg.norm(pos - here) < 2e-4 and np.linalg.norm(turn) < .01:
                 break
         return q
