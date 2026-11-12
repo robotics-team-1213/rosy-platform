@@ -551,3 +551,13 @@ def test_review_store_runs_in_wal_mode_and_supports_read_only_uri(tmp_path):
     with reader.connect() as db:
         assert db.execute('PRAGMA query_only').fetchone()[0] == 1
         assert reader.list_frames() == store.list_frames()
+
+
+def test_review_store_registers_workspace_in_configured_registry(tmp_path, monkeypatch):
+    registry = tmp_path / 'registry' / 'review-workspaces.json'
+    monkeypatch.setenv('ROSY_REVIEW_WORKSPACES_FILE', str(registry))
+    store = open_store(tmp_path)
+    ReviewStore(store.state)
+    assert json.loads(registry.read_text(encoding='utf-8')) == {
+        'workspaces': [str(store.state.resolve())]
+    }

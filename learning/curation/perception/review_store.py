@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import sqlite3
 import threading
@@ -58,10 +59,7 @@ class ReviewStore:
                     raise ValueError('existing workspace: restart with --state only; imports never overwrite reviews')
                 if object_classes is not None and object_classes.get('sha256') != class_sets.object_set(self)['sha256']:
                     raise ValueError('workspace object classes differ; do not reinterpret labels')
-                review_masks.configure(self)
-                review_evidence.configure(self)
-                return
-            if empty_eval:
+            elif empty_eval:
                 if any(x is not None for x in (source, human, images)):
                     raise ValueError('empty evaluation workspace has no training inputs')
                 if object_classes is not None:
@@ -69,51 +67,64 @@ class ReviewStore:
                 db.execute("INSERT INTO metadata VALUES ('initialized','true')")
                 db.execute("INSERT INTO metadata VALUES ('workspace_kind','evaluation')")
                 db.commit()
-                review_masks.configure(self)
-                review_evidence.configure(self)
-                return
-            if empty_training:
+            elif empty_training:
                 if any(x is not None for x in (source, human, images)):
                     raise ValueError('empty training workspace has no initial inputs')
                 class_sets.bind_object_set(self, object_classes or class_sets.legacy_object_set(), db)
                 db.execute("INSERT INTO metadata VALUES ('initialized','true')")
                 db.execute("INSERT INTO metadata VALUES ('workspace_kind','training')")
                 db.commit()
-                review_masks.configure(self)
-                review_evidence.configure(self)
-                return
-            if source is None or human is None or images is None:
-                raise ValueError('first start requires source, human and images')
-            # Existing receiver validates hashes, dimensions, boxes and the complete import.
-            validation = self.state / ('import-' + uuid.uuid4().hex)
-            record = object_classes or class_sets.legacy_object_set()
-            classes = tuple(c['name'] for c in record['classes'])
-            review_return.receive_review(source, human, images, validation, classes=classes)
-            # One transaction: the binding commits or rolls back with the frame rows.
-            db.execute('BEGIN IMMEDIATE')
-            class_sets.bind_object_set(self, record, db)
-            originals = review_return._parse(Path(source).read_bytes())
-            reviews = review_return._parse(Path(human).read_bytes())
-            for index, row in originals.items():
-                review = reviews.get(index, {'index': index, 'image_sha256': row['image_sha256'],
-                    'boxes': row.get('objects', row.get('boxes', [])),
-                    'review_status': 'pending_human', 'complete_frame_review': False})
-                status = ('excluded' if review.get('disposition') == 'excluded_by_user' else
-                          'approved' if review['review_status'] == 'approved' and
-                          review['complete_frame_review'] is True else 'pending')
-                if status == 'excluded':
-                    review.update(review_status='pending_human', complete_frame_review=False)
-                suffix = Path(row['image']).suffix.lower()
-                frozen = validation / 'inputs' / 'images' / f'{index:06d}{suffix}'
-                row = dict(row, image=frozen.relative_to(self.state).as_posix())
-                self.validate_boxes(row, review['boxes'], classes=classes)
-                db.execute('INSERT INTO frames VALUES (?,?,?,?,1)',
-                           (index, json.dumps(row), json.dumps(review), status))
-                db.execute('INSERT INTO events(frame,action,version,review) VALUES (?,?,?,?)',
-                           (index, 'import', 1, json.dumps(review)))
-            db.execute("INSERT INTO metadata VALUES ('initialized','true')")
+            else:
+                if source is None or human is None or images is None:
+                    raise ValueError('first start requires source, human and images')
+                # Existing receiver validates hashes, dimensions, boxes and the complete import.
+                validation = self.state / ('import-' + uuid.uuid4().hex)
+                record = object_classes or class_sets.legacy_object_set()
+                classes = tuple(c['name'] for c in record['classes'])
+                review_return.receive_review(source, human, images, validation, classes=classes)
+                # One transaction: the binding commits or rolls back with the frame rows.
+                db.execute('BEGIN IMMEDIATE')
+                class_sets.bind_object_set(self, record, db)
+                originals = review_return._parse(Path(source).read_bytes())
+                reviews = review_return._parse(Path(human).read_bytes())
+                for index, row in originals.items():
+                    review = reviews.get(index, {'index': index, 'image_sha256': row['image_sha256'],
+                        'boxes': row.get('objects', row.get('boxes', [])),
+                        'review_status': 'pending_human', 'complete_frame_review': False})
+                    status = ('excluded' if review.get('disposition') == 'excluded_by_user' else
+                              'approved' if review['review_status'] == 'approved' and
+                              review['complete_frame_review'] is True else 'pending')
+                    if status == 'excluded':
+                        review.update(review_status='pending_human', complete_frame_review=False)
+                    suffix = Path(row['image']).suffix.lower()
+                    frozen = validation / 'inputs' / 'images' / f'{index:06d}{suffix}'
+                    row = dict(row, image=frozen.relative_to(self.state).as_posix())
+                    self.validate_boxes(row, review['boxes'], classes=classes)
+                    db.execute('INSERT INTO frames VALUES (?,?,?,?,1)',
+                               (index, json.dumps(row), json.dumps(review), status))
+                    db.execute('INSERT INTO events(frame,action,version,review) VALUES (?,?,?,?)',
+                               (index, 'import', 1, json.dumps(review)))
+                db.execute("INSERT INTO metadata VALUES ('initialized','true')")
         review_masks.configure(self)
         review_evidence.configure(self)
+        self._register_workspace()
+
+    def _register_workspace(self):
+        target = os.environ.get('ROSY_REVIEW_WORKSPACES_FILE')
+        if not target and ('PYTEST_CURRENT_TEST' in os.environ or str(self.state).startswith('/tmp/')):
+            return
+        path = Path(target) if target else Path.home() / '.config/rosy/review-workspaces.json'
+        try:
+            data = json.loads(path.read_text(encoding='utf-8')) if path.is_file() else {}
+            items = list(data.get('workspaces', [])) if isinstance(data, dict) else []
+            if str(self.state) not in items:
+                items.append(str(self.state))
+                path.parent.mkdir(parents=True, exist_ok=True)
+                tmp = path.with_suffix('.json.tmp')
+                tmp.write_text(json.dumps({'workspaces': items}, indent=2) + '\n', encoding='utf-8')
+                tmp.replace(path)
+        except (OSError, ValueError):
+            pass
 
     @contextmanager
     def connect(self):

@@ -109,6 +109,8 @@ class Tasks:
     def _db(self):
         db = sqlite3.connect(self.db_path, timeout=30)
         try:
+            for p in ('journal_mode=WAL', 'synchronous=NORMAL', 'foreign_keys=ON', 'busy_timeout=5000'):
+                db.execute(f'PRAGMA {p}')
             db.execute('BEGIN IMMEDIATE')
             yield db
             db.commit()

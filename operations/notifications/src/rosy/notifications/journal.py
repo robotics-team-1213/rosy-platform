@@ -48,6 +48,8 @@ class Journal:
     @contextmanager
     def connect(self):
         with closing(sqlite3.connect(self.path, timeout=5)) as db, db:
+            for p in ('journal_mode=WAL', 'synchronous=NORMAL', 'foreign_keys=ON', 'busy_timeout=5000'):
+                db.execute(f'PRAGMA {p}')
             db.row_factory = sqlite3.Row
             yield db
 
