@@ -9,6 +9,7 @@ if it is off, re-plan the pick by that offset and hover again (feedforward), up 
 from __future__ import annotations
 
 import math
+import time
 
 import cell_params as prm
 
@@ -21,7 +22,7 @@ def fk_xy(state: list, tcp_x_m: float | None = None) -> tuple:
     return k.x, k.y
 
 
-def correct(cell, aim_xy, replan, params=None, fk=fk_xy) -> dict:
+def correct(cell, aim_xy, replan, params=None, fk=fk_xy, sleep=time.sleep) -> dict:
     """{verdict: pass|refuse, dx_mm, dy_mm, total_mm, iterations}; dx/dy is the offset added to the pick."""
     tol, top = prm.get(params, "reach.tol_mm"), prm.get(params, "reach.max_mm")
     base_samples = int(prm.get(params, "reach.samples", 1))
@@ -35,6 +36,8 @@ def correct(cell, aim_xy, replan, params=None, fk=fk_xy) -> dict:
         n_samples = max(base_samples, 3 if shaking else 1)
         states = [status["state"]]
         for _ in range(n_samples - 1):
+            if sleep is not None and status.get("t") is not None:
+                sleep(0.015)
             nxt = (cell.act("state") or {}).get("state")
             if nxt is not None:
                 states.append(nxt)

@@ -172,6 +172,19 @@ def test_keep_out_counts_the_elbow_capsule_not_only_the_gripper(planned):
         assert planner.body_x(frame) >= max(points[0][0], points[1][0], points[2][0]) + LINK_RADIUS_M - 1e-12
 
 
+def test_keep_out_reuses_capsules_when_only_wrist_roll_changes(monkeypatch):
+    planner = m.Planner(dict(PLAN, keep_out={"x_max_m": 0.30}))
+    frame = list(PLAN["home"]) + [PLAN["grip_open"]]
+    rolled = frame.copy()
+    rolled[4] += 10.0
+    calls = []
+    monkeypatch.setattr(planner, "body_x", lambda f: calls.append(f) or 0.20)
+    monkeypatch.setattr(planner, "travel", lambda chunks, transit: [frame, rolled])
+
+    planner.keep_out({"home": [frame, rolled]})
+    assert len(calls) == 1
+
+
 FAR_TRANSIT = {"shoulder_lift.pos": -15.0, "elbow_flex.pos": 5.0, "wrist_flex.pos": 46.0}
 
 

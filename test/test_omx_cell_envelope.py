@@ -390,19 +390,25 @@ def test_fifo_checked_command_accepts_the_runners_inner_command_ack(tmp_path, en
     status = tmp_path / "chunk-status.jsonl"
     status.write_text("")
     sent = []
+    completed = {"command": "load plan.json", "ok": True,
+                 "operating_context": {"session_id": "fixture-session"},
+                 "library_sha256": "a" * 64, "fault": None}
 
     def write(fd, payload):
         sent.append(payload.decode().strip())
         with status.open("a") as stream:
-            stream.write(json.dumps({"command": "load plan.json", "ok": True}) + "\n")
+            stream.write(json.dumps(completed) + "\n")
         return len(payload)
 
     monkeypatch.setattr(transport.os, "open", lambda *a, **kw: 42)
     monkeypatch.setattr(transport.os, "write", write)
     monkeypatch.setattr(transport.os, "close", lambda fd: None)
-    result = transport.FifoCell(tmp_path, {}).checked("load plan.json", {
+    cell = transport.FifoCell(tmp_path, {})
+    result = cell.checked("load plan.json", {
         "session_id": "fixture-session", "library_sha256": "a" * 64})
     assert result["ok"]
+    assert cell._cached_state == completed
+    assert cell._cached_state_mono > 0
     assert sent == [f"checked fixture-session {'a' * 64} load plan.json"]
 
 
@@ -446,14 +452,24 @@ def test_fifo_reuses_recent_valid_state_and_invalidates_on_load(tmp_path, task, 
     state.update(t=time.time(), command="state", library_sha256="a" * 64)
     cell = transport.FifoCell(tmp_path, {}, operating_profile=selected)
     sent = []
+    clock = [100.0]
+    monkeypatch.setattr(transport.time, "monotonic", lambda: clock[0])
+    completed = dict(state, command="jog shoulder_pan.pos 1")
 
     def send(command, timeout=None):
         sent.append(command)
-        return state if command == "state" else {"ok": True, "command": command}
+        if command == "state":
+            return state
+        if command.endswith("jog shoulder_pan.pos 1"):
+            clock[0] += cell.state_cache_ttl_s + 1
+            return completed
+        return {"ok": True, "command": command}
 
     monkeypatch.setattr(cell, "_send", send)
     monkeypatch.setattr(cell, "_cached_library_digest", lambda path: "b" * 64)
     assert cell.act("jog shoulder_pan.pos 1")["ok"]
+    assert cell._cached_state is completed
+    assert cell._cached_state_mono == clock[0]
     assert cell.act("jog shoulder_pan.pos 1")["ok"]
     assert sent.count("state") == 1
     assert cell.act("load plan.json")["ok"]

@@ -261,7 +261,7 @@ class Planner:
         seen_x: dict[tuple, float] = {}
 
         def cached_body_x(frame) -> float:
-            key = tuple(frame[:5])
+            key = tuple(round(float(v), 2) for v in frame[:4])
             if key not in seen_x:
                 seen_x[key] = self.body_x(frame)
             return seen_x[key]

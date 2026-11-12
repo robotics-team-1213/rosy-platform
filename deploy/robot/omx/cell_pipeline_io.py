@@ -99,7 +99,12 @@ class FifoCell:
             self._cached_state = state
             self._cached_state_mono = time.monotonic()
             result = self.checked(command, {"session_id": context["session_id"], "library_sha256": revision}, timeout)
-            if not result.get("ok") or result.get("fault") or command.startswith("load "):
+            if not result.get("ok") or result.get("fault"):
+                self._cached_state = None
+            elif result.get("operating_context") and result.get("library_sha256"):
+                self._cached_state = result
+                self._cached_state_mono = time.monotonic()
+            elif command.startswith("load "):
                 self._cached_state = None
             return result
         return self._send(command, timeout)
@@ -125,6 +130,10 @@ class FifoCell:
                         start = stream.tell()
                         row = json.loads(line)
                         if row.get("command") in (expected, "run " + expected) or row.get("fault"):
+                            if (row.get("ok") and not row.get("fault")
+                                    and row.get("operating_context") and row.get("library_sha256")):
+                                self._cached_state = row
+                                self._cached_state_mono = time.monotonic()
                             return row
             time.sleep(0.005)
         return {"ok": False, "error": f"no status within {self.timeout_s} s"}
