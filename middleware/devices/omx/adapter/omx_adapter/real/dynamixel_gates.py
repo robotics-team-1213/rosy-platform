@@ -26,10 +26,12 @@ STOP_TEST_MIN_PRE_STOP_RAD_S = 0.12
 # "Stopped" = joint1 slower than this over a 100 ms window: two encoder ticks, not the 0.1 rad/s
 # V-016 bound (that one is the speed still allowed at the end of the window).
 JOINT1_STILL_RAD_S = 0.03
+_SCALAR_TYPES = (int, float)
+_GRASP_KEYS = frozenset({"position_rad", "current_ma", "stable_rad", "samples", "period_s"})
 
 
 def _finite(value: object) -> bool:
-    return type(value) in (int, float) and math.isfinite(value)
+    return type(value) in _SCALAR_TYPES and math.isfinite(value)
 
 
 def _within(value: object, bound: float) -> bool:
@@ -122,17 +124,16 @@ class Tracking:
 
 
 def _validate_grasp(spec: object) -> None:
-    keys = {"position_rad", "current_ma", "stable_rad", "samples", "period_s"}
-    if not isinstance(spec, Mapping) or set(spec) != keys:
+    if not isinstance(spec, Mapping) or set(spec) != _GRASP_KEYS:
         raise ValueError("grasp_check needs position_rad/current_ma/stable_rad/samples/period_s")
     for key in ("position_rad", "current_ma"):
         pair = spec[key]
         if (not isinstance(pair, (list, tuple)) or len(pair) != 2
-                or not all(type(v) in (int, float) and math.isfinite(v) for v in pair)
+                or not all(type(v) in _SCALAR_TYPES and math.isfinite(v) for v in pair)
                 or not pair[0] < pair[1]):
             raise ValueError(f"grasp_check.{key} needs a finite [min, max]")
     if (spec["current_ma"][0] <= 0 or type(spec["samples"]) is not int
             or not 2 <= spec["samples"] <= 1000
-            or not all(type(spec[k]) in (int, float) and math.isfinite(spec[k]) and spec[k] > 0
+            or not all(type(spec[k]) in _SCALAR_TYPES and math.isfinite(spec[k]) and spec[k] > 0
                        for k in ("stable_rad", "period_s"))):
         raise ValueError("grasp_check needs positive current/stability/period and samples 2..1000")

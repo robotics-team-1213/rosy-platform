@@ -31,6 +31,11 @@ from omx_real2sim_comp_helpers import (  # noqa: E402, F401
     rodrigues,
 )
 
+_OPT_LO = np.array([-0.042, -0.042, -0.025, -0.06, -0.06, -0.08])
+_OPT_HI = np.array([0.042, 0.042, 0.025, 0.06, 0.06, 0.08])
+_REG_WEIGHTS = np.array([0.15, 0.15, 0.30, 0.15, 0.15, 0.15])
+_DAMP_EYE6 = 2e-3 * np.eye(6)
+
 
 def calibrate_top_camera(bgr: np.ndarray, layout: Any, here: dict[str, str] | None = None) -> tuple[r2s.Camera, dict[str, Any]]:
     """Estimate online 6-DoF top-camera extrinsic correction from visible cell anchors (`+x` lane ends + belt)."""
@@ -41,8 +46,9 @@ def calibrate_top_camera(bgr: np.ndarray, layout: Any, here: dict[str, str] | No
     belt_nom = _measure_belt_fiducial(belt_uv, cam_nom, layout) if belt_uv is not None else None
     w_belt = 2.0
     if belt_nom is not None and len(pads) >= 2:
-        p_dx = float(np.median([cam_nom.to_plane(p["uv_plus"], p["z"])[0][0] - p["true_plus"][0] for p in pads]))
-        p_dy = float(np.median([cam_nom.to_plane(p["uv_plus"], p["z"])[0][1] - p["true_plus"][1] for p in pads]))
+        xy_plus = [cam_nom.to_plane(p["uv_plus"], p["z"])[0] for p in pads]
+        p_dx = float(np.median([xy[0] - p["true_plus"][0] for xy, p in zip(xy_plus, pads)]))
+        p_dy = float(np.median([xy[1] - p["true_plus"][1] for xy, p in zip(xy_plus, pads)]))
         if math.hypot(belt_nom["dx"] - p_dx, belt_nom["dy"] - p_dy) > 0.018:
             w_belt = 0.0
     n_anchors = len(pads) + int(belt_nom is not None)
@@ -50,11 +56,13 @@ def calibrate_top_camera(bgr: np.ndarray, layout: Any, here: dict[str, str] | No
         return cam_nom, dict(moved=False, anchors_used=0, raw_err_mm=0.0, cal_err_mm=0.0,
                              belt_residual=dict(dx=0.0, dy=0.0, dyaw=0.0), plate_residuals={})
 
+    pad_uv_pairs = [np.vstack((pad["uv_plus"], pad["uv_in"])) for pad in pads]
+
     def anchor_errors(cam: r2s.Camera) -> list[float]:
         errs: list[float] = []
-        for pad in pads:
-            xy_p = cam.to_plane(pad["uv_plus"], pad["z"])[0]
-            xy_i = cam.to_plane(pad["uv_in"], pad["z"])[0]
+        for pad, uv_pair in zip(pads, pad_uv_pairs):
+            xy_pair = cam.to_plane(uv_pair, pad["z"])
+            xy_p, xy_i = xy_pair[0], xy_pair[1]
             yaw = r2s.fold(math.atan2(xy_p[1] - xy_i[1], xy_p[0] - xy_i[0]))
             w_pos = 0.4 if pad["partial"] else 1.0
             errs.extend([w_pos * (xy_p[0] - pad["true_plus"][0]), w_pos * (xy_p[1] - pad["true_plus"][1]), 0.045 * r2s.fold(yaw - pad["true_yaw"])])
@@ -74,11 +82,9 @@ def calibrate_top_camera(bgr: np.ndarray, layout: Any, here: dict[str, str] | No
 
     def objective(p: np.ndarray) -> np.ndarray:
         cam = _camera_from_params(base_cam, size, p)
-        reg = np.array([p[0] * 0.15, p[1] * 0.15, p[2] * 0.30, p[3] * 0.15, p[4] * 0.15, p[5] * 0.15])
-        return np.concatenate([anchor_errors(cam), reg])
+        return np.concatenate([anchor_errors(cam), _REG_WEIGHTS * p])
 
-    lo = np.array([-0.042, -0.042, -0.025, -0.06, -0.06, -0.08])
-    hi = np.array([0.042, 0.042, 0.025, 0.06, 0.06, 0.08])
+    lo, hi = _OPT_LO, _OPT_HI
     p = np.zeros(6, dtype=float)
     r = objective(p)
     cost = float(r @ r)
@@ -89,7 +95,7 @@ def calibrate_top_camera(bgr: np.ndarray, layout: Any, here: dict[str, str] | No
             dp = p.copy()
             dp[j] += eps
             J[:, j] = (objective(dp) - r) / eps
-        step = -np.linalg.solve(J.T @ J + 2e-3 * np.eye(6), J.T @ r)
+        step = -np.linalg.solve(J.T @ J + _DAMP_EYE6, J.T @ r)
         if float(np.linalg.norm(step)) < 1e-5:
             break
         improved = False
@@ -111,8 +117,11 @@ def calibrate_top_camera(bgr: np.ndarray, layout: Any, here: dict[str, str] | No
     for tag in ("a", "b"):
         tp = [pad for pad in pads if pad["tag"] == tag and not pad["partial"]]
         if tp:
-            dxs = [float(cam_cal.to_plane(pad["uv_plus"], pad["z"])[0][0] - pad["true_plus"][0]) for pad in tp]
-            dys = [float(cam_cal.to_plane(pad["uv_plus"], pad["z"])[0][1] - pad["true_plus"][1]) for pad in tp]
+            dxs, dys = [], []
+            for pad in tp:
+                xy = cam_cal.to_plane(pad["uv_plus"], pad["z"])[0]
+                dxs.append(float(xy[0] - pad["true_plus"][0]))
+                dys.append(float(xy[1] - pad["true_plus"][1]))
             plate_res[tag] = dict(dx=float(np.median(dxs)), dy=float(np.median(dys)))
     return cam_cal, dict(
         moved=True, anchors_used=n_anchors, raw_err_mm=round(raw_err_mm, 2), cal_err_mm=round(cal_err_mm, 2),
@@ -169,6 +178,8 @@ class ServoCompensator:
         self.world, self.fps = world, fps
         self.trim: dict[str, np.ndarray] = {arm: np.zeros(5) for arm in world.q}
         self.zero_est: dict[str, np.ndarray] = {arm: np.zeros(5) for arm in world.q}
+        self._hold_sets: dict[str, frozenset[int]] = (
+            {arm: frozenset(int(d) for d in world.hold_dof[arm]) for arm in world.q} if hasattr(world, "hold_dof") else {})
         self.prev_ref: dict[str, np.ndarray] = {}
         self.prev_cmd: dict[str, np.ndarray] = {}
         self.err_hist: dict[str, list[np.ndarray]] = {arm: [] for arm in world.q}
@@ -246,7 +257,7 @@ class ServoCompensator:
             qvel = data.qvel[dofs]
             kp = np.maximum(m.actuator_gainprm[acts, 0], 1.0)
             force = m.actuator_forcerange[acts, 1]
-            hold_set = set(int(d) for d in self.world.hold_dof[arm])
+            hold_set = self._hold_sets.get(arm, frozenset())
 
             grav_ff = np.array([0.0 if int(d) in hold_set else float(data.qfrc_bias[d]) / kp[j] for j, d in enumerate(dofs)])
             prev = self.prev_ref.get(arm, t[:5])

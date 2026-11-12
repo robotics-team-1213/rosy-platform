@@ -17,6 +17,8 @@ from __future__ import annotations
 from typing import Any
 import uuid
 
+import numpy as np
+
 from omx_adapter.area_xyz import DIRECTIVE_SCHEMA, build_directive, coerce_area_xyz, resolve_area_xyz
 
 FSM_SCHEMA = "rosy.omx-spec-recovery-fsm.v1"
@@ -259,13 +261,18 @@ def select_recovery_skill(
     return _skill_res("L3", "abort_safe_hold", code or "UNKNOWN_FAILURE", ask_person=True)
 
 
+def _orange_mask(roi: np.ndarray) -> np.ndarray:
+    b = roi[..., 0].astype(np.int16)
+    g = roi[..., 1].astype(np.int16)
+    r = roi[..., 2].astype(np.int16)
+    rb = r - b
+    return (r >= 105) & (4 * rb >= r) & ((r - g) >= 25) & (25 * (g - b) <= 14 * rb)
+
+
 def _orange_ratio(roi: Any) -> float:
     if roi is None or not hasattr(roi, "ndim") or roi.ndim != 3 or roi.size == 0:
         return 0.0
-    b, g, r = roi[..., 0].astype(float), roi[..., 1].astype(float), roi[..., 2].astype(float)
-    rb = r - b
-    mask = (r >= 105.0) & (rb >= 0.25 * r) & ((r - g) >= 25.0) & ((g - b) <= 0.56 * rb)
-    return round(float(mask.mean()), 4)
+    return round(float(_orange_mask(roi).mean()), 4)
 
 
 def audit_arm_s_zones_and_wrist_corridor(
@@ -297,7 +304,15 @@ def audit_arm_s_zones_and_wrist_corridor(
             "belt_center": _orange_ratio(top[110:190, 380:500]),
             "belt_far": _orange_ratio(top[105:190, 525:638]),
         }
-        if wrist_img is not None and hasattr(wrist_img, "ndim") and wrist_img.ndim == 3:
+        if wrist_img is not None and hasattr(wrist_img, "ndim") and wrist_img.ndim == 3 and wrist_img.shape[:2] == (480, 640):
+            w_mask = _orange_mask(wrist_img[135:375, 210:440])
+            z_top = round(float(w_mask[:80].mean()), 4)
+            z_mid = round(float(w_mask[80:160].mean()), 4)
+            z_bot = round(float(w_mask[160:240].mean()), 4)
+            subs = [z_top, z_mid, z_bot]
+            w_occ = round(float(w_mask.mean()), 4)
+            l_occ, r_occ = _orange_ratio(wrist_img[95:365, 20:180]), _orange_ratio(wrist_img[95:365, 460:620])
+        elif wrist_img is not None and hasattr(wrist_img, "ndim") and wrist_img.ndim == 3:
             subs = [_orange_ratio(wrist_img[135:215, 210:440]), _orange_ratio(wrist_img[215:295, 210:440]), _orange_ratio(wrist_img[295:375, 210:440])]
             w_occ = _orange_ratio(wrist_img[135:375, 210:440])
             l_occ, r_occ = _orange_ratio(wrist_img[95:365, 20:180]), _orange_ratio(wrist_img[95:365, 460:620])

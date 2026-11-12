@@ -36,6 +36,8 @@ LOOSE_XY_MM = 20.0
 RECIPE = dict(policy="act", steps=20000, batch_size=8, chunk_size=30, n_action_steps=8, optimizer_lr=1e-5)
 TRAIN_SEED_BASE = 1000
 EVAL_SEED_STRIDE = 1000  # every round evaluates seeds no earlier round used
+_ISAAC_OK_RESULTS = frozenset({"placed", "success", "completed"})
+_BLOCKED_OR_NOT_RUN = frozenset({"blocked", "not_run"})
 
 
 def judge(xy_err_mm: float, yaw_err_deg: float, z_err_mm: float, tilt_deg: float, peak_lift_m: float) -> dict:
@@ -95,7 +97,7 @@ def write_round(root: Path, row: dict) -> Path:
     for name, stage in row["stages"].items():
         if stage["status"] not in STATUSES:
             raise ValueError(f"{name}: unknown status")
-        if stage["status"] in {"blocked", "not_run"} and not stage.get("reason"):
+        if stage["status"] in _BLOCKED_OR_NOT_RUN and not stage.get("reason"):
             raise ValueError(f"{name}: {stage['status']} needs a reason")
     path = root / "rounds" / row["round_id"] / "round.json"
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -164,7 +166,7 @@ def judge_gazebo_contract(samples_or_report: dict | Path, *, shape: tuple[int, i
 def judge_isaac_stage(suite_or_report: dict | Path, *, scenario: str = "arm-s-cell-case") -> dict:
     """Judge or stage Isaac Sim's D-872 / D-947 contact & vision confirmation from a suite report, single report, 3-tier container stack report, or MuJoCo handoff."""
     data = json.loads(Path(suite_or_report).read_text(encoding="utf-8")) if isinstance(suite_or_report, (str, Path)) else dict(suite_or_report)
-    ok_results = {"placed", "success", "completed"}
+    ok_results = _ISAAC_OK_RESULTS
     if "suite" in data and "container_stack" in data:
         s_judge = judge_isaac_stage(data["suite"], scenario="arm-s-cell-case")
         c_judge = judge_isaac_stage(data["container_stack"], scenario="omx-map-container-stack")

@@ -23,6 +23,9 @@ from middleware.devices.omx.adapter.omx_adapter.z_profile import (
 PALLET_SLOTS_3X2: tuple[tuple[int, int], ...] = (
     (1, 1), (1, 2), (2, 1), (2, 2), (3, 1), (3, 2)
 )
+_PALLET_SLOT_ITEMS: tuple[tuple[int, int, str], ...] = tuple(
+    (c, r, f"C{c}_R{r}") for c, r in PALLET_SLOTS_3X2
+)
 TRENCH_ZONES: tuple[str, ...] = ("trench_1_2", "trench_2_3", "front_gap")
 CANONICAL_SLOT_YAW_DEG: float = -90.0
 
@@ -50,12 +53,12 @@ def _make_dir(
 def build_empty_pallet_board(tier: int = 1) -> dict[str, Any]:
     """Create a baseline 3×2 pallet slot board + trench sensors + temp_plate_b lanes."""
     slots = {
-        _slot_key(col, row): {
+        key: {
             "col": col, "row": row, "tier": int(tier), "occ_ratio": 0.0, "z_top_mm": 0.0,
             "yaw_deg": CANONICAL_SLOT_YAW_DEG, "dx_mm": 0.0, "dy_mm": 0.0, "tilt_deg": 0.0,
             "clearance_mm": 12.0, "spec_id": None, "perched_subzone_x_mm": 0.0,
         }
-        for col, row in PALLET_SLOTS_3X2
+        for col, row, key in _PALLET_SLOT_ITEMS
     }
     trenches = {tz: {"occ_ratio": 0.0, "z_top_mm": 0.0, "yaw_deg": CANONICAL_SLOT_YAW_DEG, "tilt_deg": 0.0} for tz in TRENCH_ZONES}
     return {"slots": slots, "trenches": trenches, "gripper_load_ratio": 0.0}
@@ -81,8 +84,7 @@ def audit_slot_matrix_identity(
     a_trenches = after_board.get("trenches", {})
 
     delta_occ: dict[str, float] = {}
-    for col, row in PALLET_SLOTS_3X2:
-        k = _slot_key(col, row)
+    for col, row, k in _PALLET_SLOT_ITEMS:
         b_occ = float(b_slots.get(k, {}).get("occ_ratio", 0.0))
         a_occ = float(a_slots.get(k, {}).get("occ_ratio", 0.0))
         delta_occ[k] = round(a_occ - b_occ, 4)

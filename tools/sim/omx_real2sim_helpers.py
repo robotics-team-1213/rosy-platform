@@ -15,6 +15,9 @@ LANE = (.090, .030)          # printed pad = container footprint, m
 SIZE_TOL = (.012, .007)      # a blob within this of LANE is a lane
 PARTIAL_MIN = .040           # a lane-wide pad at least this long is a lane cut short at one end
 BELT_MIN_PX = 2000           # the belt strip is about 11,500 px in the 640x480 top frame
+_KERNEL_3X3 = np.ones((3, 3), np.uint8)
+_KERNEL_5X5 = np.ones((5, 5), np.uint8)
+_KERNEL_9X9 = np.ones((9, 9), np.uint8)
 
 
 class Camera:
@@ -52,8 +55,8 @@ def blobs(frame):
               | ((((hsv[..., 0] >= 35) & (hsv[..., 0] < 88)) | (hsv[..., 0] >= 135)) & (hsv[..., 1] > 110) & (hsv[..., 2] > 125))))
     for kind, m in masks:
         if kind == "pad":  # bridge the white lane label and alignment dots printed across a dark pad
-            m = cv2.morphologyEx(m.astype(np.uint8), cv2.MORPH_CLOSE, np.ones((9, 9), np.uint8))
-        m = cv2.morphologyEx(m.astype(np.uint8), cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
+            m = cv2.morphologyEx(m.astype(np.uint8), cv2.MORPH_CLOSE, _KERNEL_9X9)
+        m = cv2.morphologyEx(m.astype(np.uint8), cv2.MORPH_OPEN, _KERNEL_3X3)
         for c in cv2.findContours(m, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)[0]:
             if cv2.contourArea(c) >= 150:
                 yield kind, c.reshape(-1, 2)
@@ -238,8 +241,11 @@ def ship_polygon(cam, layout, pose):
     """Image polygon of the hull deck at (stern x, centre y, yaw rad); the bow points -x as omx_two_arm_sites.r08_to_fixture."""
     outline, deck = hull_outline()
     c, s = math.cos(pose[2]), math.sin(pose[2])
-    return np.array([cam.project((pose[0] - c * x / 1000 + s * y / 1000, pose[1] - s * x / 1000 - c * y / 1000, layout.table_z + deck / 1000))
-                     for x, y in outline])
+    local = outline @ np.array([[-c, -s], [s, -c]]) / 1000.0
+    world = np.hstack((local + (pose[0], pose[1]), np.full((len(outline), 1), layout.table_z + deck / 1000)))
+    d = world - cam.eye
+    d_fwd = d @ cam.fwd
+    return np.column_stack((cam.w * 0.5 + cam.f * (d @ cam.right) / d_fwd, cam.h * 0.5 - cam.f * (d @ cam.up) / d_fwd))
 
 
 def measure_ship(frame, layout):
@@ -261,7 +267,7 @@ def measure_ship(frame, layout):
         if int(keep.sum()) >= 5000:
             blue_ship = np.zeros_like(blue)
             blue_ship[ys[keep], xs[keep]] = 255
-            blue_ship = cv2.morphologyEx(blue_ship, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
+            blue_ship = cv2.morphologyEx(blue_ship, cv2.MORPH_OPEN, _KERNEL_3X3)
             chull = cv2.convexHull(np.column_stack(np.nonzero(blue_ship))[:, ::-1].astype(np.int32))
             blob = cv2.fillConvexPoly(np.zeros_like(blue), chull, 1)
         else:
@@ -269,16 +275,30 @@ def measure_ship(frame, layout):
     else:
         blob = None
     if blob is None:
-        m = cv2.morphologyEx(blue | orange, cv2.MORPH_CLOSE, np.ones((9, 9), np.uint8))
+        m = cv2.morphologyEx(blue | orange, cv2.MORPH_CLOSE, _KERNEL_9X9)
         n, lab, stats, _ = cv2.connectedComponentsWithStats(m)
         if n < 2:
             return dict(error="no hull-coloured area in the top frame")
         blob = (lab == 1 + int(np.argmax(stats[1:, cv2.CC_STAT_AREA]))).astype(np.uint8)
         blob = cv2.drawContours(np.zeros_like(blob), cv2.findContours(blob, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[0], -1, 1, -1)
 
+    blob_u8 = (blob != 0).astype(np.uint8)
+    blob_area = int(cv2.countNonZero(blob_u8))
+    hull_buf = np.empty_like(blob_u8)
+    and_buf = np.empty_like(blob_u8)
+    iou_cache: dict[tuple[float, float, float], float] = {}
+
     def iou(pose):
-        hull = cv2.fillPoly(np.zeros_like(blob), [np.round(ship_polygon(cam, layout, pose)).astype(np.int32)], 1)
-        return (hull & blob).sum() / max((hull | blob).sum(), 1)
+        key = (round(pose[0], 6), round(pose[1], 6), round(pose[2], 6))
+        if key in iou_cache:
+            return iou_cache[key]
+        hull_buf.fill(0)
+        cv2.fillPoly(hull_buf, [np.round(ship_polygon(cam, layout, pose)).astype(np.int32)], 1)
+        cv2.bitwise_and(hull_buf, blob_u8, dst=and_buf)
+        inter = int(cv2.countNonZero(and_buf))
+        union = int(cv2.countNonZero(hull_buf)) + blob_area - inter
+        iou_cache[key] = inter / max(union, 1)
+        return iou_cache[key]
 
     x0, y0 = layout.choices["ship_stern_x_m"], layout.choices["ship_centre_y_m"]
     best = max(((x, y, 0.) for x in np.arange(x0 - .06, x0 + .06, .004) for y in np.arange(y0 - .05, y0 + .05, .004)), key=iou)
@@ -300,7 +320,7 @@ def measure_belt(frame, layout):
 
     cam = Camera(layout.fixture["real_cameras"]["top"], frame.shape[:2])
     hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-    dark = cv2.morphologyEx(((hsv[..., 2] < 95) & (hsv[..., 1] < 110)).astype(np.uint8), cv2.MORPH_OPEN, np.ones((5, 5), np.uint8))
+    dark = cv2.morphologyEx(((hsv[..., 2] < 95) & (hsv[..., 1] < 110)).astype(np.uint8), cv2.MORPH_OPEN, _KERNEL_5X5)
     n, lab, stats, _ = cv2.connectedComponentsWithStats(dark)
     best = None
     for i in range(1, n):

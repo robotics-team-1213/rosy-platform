@@ -13,16 +13,19 @@ import omx_real2sim as r2s  # noqa: E402
 
 BELT_STOP_EDGE_OFFSET_M = 0.0080  # 2 mm belt_stop half-width + 3 mm perspective occlusion of 8 mm stop + 3 mm 1st-percentile offset
 DEFAULT_CAM_JITTER = dict(eye_shift_m=(0.012, -0.010, 0.008), focus_shift_m=(0.015, -0.012, 0.0), roll_deg=1.2)
+_EYE3 = np.eye(3)
+_KERNEL_3X3 = np.ones((3, 3), np.uint8)
+_KERNEL_5X5 = np.ones((5, 5), np.uint8)
 
 
 def rodrigues(rvec: np.ndarray) -> np.ndarray:
     """3x3 rotation matrix from a 3-vector axis-angle `rvec` (rad)."""
-    theta = float(np.linalg.norm(rvec))
+    theta = math.sqrt(float(rvec[0] * rvec[0] + rvec[1] * rvec[1] + rvec[2] * rvec[2]))
     if theta < 1e-12:
-        return np.eye(3)
+        return _EYE3.copy()
     k = rvec / theta
     K = np.array([[0.0, -k[2], k[1]], [k[2], 0.0, -k[0]], [-k[1], k[0], 0.0]])
-    return np.eye(3) + math.sin(theta) * K + (1.0 - math.cos(theta)) * (K @ K)
+    return _EYE3 + math.sin(theta) * K + (1.0 - math.cos(theta)) * (K @ K)
 
 
 def perturbed_camera_dict(base_cam: dict[str, Any], eye_shift_m: tuple[float, float, float] = (0.0, 0.0, 0.0),
@@ -73,31 +76,37 @@ def container_blobs(bgr: np.ndarray) -> list[tuple[str, np.ndarray]]:
     hsv = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV)
     h, s = hsv[..., 0], hsv[..., 1]
     v = np.maximum(hsv[..., 2], l_eq)
-    kernel = np.ones((3, 3), np.uint8)
     chromatic = (s > 80) & (v > 70)
     cut_u8 = (chromatic & (~edge_cut)).astype(np.uint8)
     n_cc, lab_cc, stats_cc, _ = cv2.connectedComponentsWithStats(cut_u8)
-    bg_mask = np.zeros_like(cut_u8, dtype=bool)
-    for idx in range(1, n_cc):
-        if stats_cc[idx, cv2.CC_STAT_AREA] > 6000:
-            bg_mask |= (lab_cc == idx)
-    if np.any(bg_mask):
+    keep_bg = np.zeros(n_cc, dtype=bool)
+    if n_cc > 1:
+        keep_bg[1:] = stats_cc[1:, cv2.CC_STAT_AREA] > 6000
+    if np.any(keep_bg):
+        bg_mask = keep_bg[lab_cc]
         bg_ab = np.median(ab_smooth[bg_mask], axis=0)
-        ab_dist = np.hypot(ab_smooth[..., 0] - bg_ab[0], ab_smooth[..., 1] - bg_ab[1])
-        bg_bleed = bg_mask | (ab_dist < 6.5)
+        da = ab_smooth[..., 0] - bg_ab[0]
+        db = ab_smooth[..., 1] - bg_ab[1]
+        not_bg_bleed = ~(bg_mask | (da * da + db * db < 42.25))
+        not_bg_mask = ~bg_mask
+        colour_masks = (
+            ("red", (((h < 6) | (h >= 160)) & (s > 85) & (v > 75))),
+            ("orange", ((h >= 6) & (h < 22) & (s > 85) & (v > 75) & not_bg_bleed)),
+            ("yellow", ((h >= 19) & (h < 34) & (s > 110) & (v > 95) & not_bg_bleed)),
+            ("green", ((h >= 35) & (h < 88) & (s > 80) & (v > 75) & not_bg_mask)),
+            ("purple", ((h >= 125) & (h < 160) & (s > 75) & (v > 75) & not_bg_mask)),
+        )
     else:
-        bg_bleed = np.zeros_like(bg_mask)
-
-    colour_masks = (
-        ("red", (((h < 6) | (h >= 160)) & (s > 85) & (v > 75))),
-        ("orange", ((h >= 6) & (h < 22) & (s > 85) & (v > 75) & (~bg_bleed))),
-        ("yellow", ((h >= 19) & (h < 34) & (s > 110) & (v > 95) & (~bg_bleed))),
-        ("green", ((h >= 35) & (h < 88) & (s > 80) & (v > 75) & (~bg_mask))),
-        ("purple", ((h >= 125) & (h < 160) & (s > 75) & (v > 75) & (~bg_mask))),
-    )
+        colour_masks = (
+            ("red", (((h < 6) | (h >= 160)) & (s > 85) & (v > 75))),
+            ("orange", ((h >= 6) & (h < 22) & (s > 85) & (v > 75))),
+            ("yellow", ((h >= 19) & (h < 34) & (s > 110) & (v > 95))),
+            ("green", ((h >= 35) & (h < 88) & (s > 80) & (v > 75))),
+            ("purple", ((h >= 125) & (h < 160) & (s > 75) & (v > 75))),
+        )
     out: list[tuple[str, np.ndarray]] = []
     for col, mask in colour_masks:
-        m = cv2.morphologyEx(mask.astype(np.uint8), cv2.MORPH_OPEN, kernel)
+        m = cv2.morphologyEx(mask.astype(np.uint8), cv2.MORPH_OPEN, _KERNEL_3X3)
         for c in cv2.findContours(m, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)[0]:
             if cv2.contourArea(c) >= 110:
                 out.append((col, c.reshape(-1, 2)))
@@ -320,7 +329,7 @@ def _extract_anchors(bgr: np.ndarray, layout: Any, cam_nom: r2s.Camera,
                                         true_yaw=item["true_yaw"], partial=False, z=z_top))
 
     hsv = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV)
-    dark = cv2.morphologyEx(((hsv[..., 2] < 95) & (hsv[..., 1] < 110)).astype(np.uint8), cv2.MORPH_OPEN, np.ones((5, 5), np.uint8))
+    dark = cv2.morphologyEx(((hsv[..., 2] < 95) & (hsv[..., 1] < 110)).astype(np.uint8), cv2.MORPH_OPEN, _KERNEL_5X5)
     n, lab, stats, _ = cv2.connectedComponentsWithStats(dark)
     belt_uv: np.ndarray | None = None
     for i in range(1, n):

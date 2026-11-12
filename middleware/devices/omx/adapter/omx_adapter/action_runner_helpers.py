@@ -16,6 +16,10 @@ from .phase_recorder import ActionPhaseRecorder
 # driver path admits. CELL_TRANSFER runs through the phase runner only (D-402 §3).
 PHASE_RUNNER_KINDS = frozenset({"PICK_PLACE", "CELL_TRANSFER", "ARM_TRANSFER"})
 DIRECT_DRIVER_KINDS = frozenset({"PICK_PLACE"})
+_RECORDER_MINT_STATES = frozenset({
+    "SUBMITTING", "ACCEPTED", "RUNNING", "CANCEL_REQUESTED", "UNKNOWN", "HOLD",
+})
+_UNRESOLVED_CANCEL_STATES = frozenset({"ACCEPTED", "RUNNING"})
 ActionGrant = FleetActionGrant | FleetCellTransferGrant | FleetArmTransferGrant
 
 
@@ -221,9 +225,7 @@ class _ActionRunnerPhaseOps:
                 or action["instance_id"] != grant.instance_id
                 or action["owner_generation"] != grant.dispatch_generation):
             raise PermissionError("stored Action identity does not match the validated grant")
-        if action["state"] not in {
-            "SUBMITTING", "ACCEPTED", "RUNNING", "CANCEL_REQUESTED", "UNKNOWN", "HOLD",
-        }:
+        if action["state"] not in _RECORDER_MINT_STATES:
             raise InvalidActionTransition("terminal Action cannot mint a phase recorder")
         return ActionPhaseRecorder(
             self.store, action_id=grant.action_id, attempt_id=grant.attempt_id,
@@ -241,7 +243,7 @@ class _ActionRunnerPhaseOps:
         for action in self.store.unresolved_actions(workcell_id=self.workcell_id):
             if action["principal_id"] != principal_id:
                 continue
-            if action["state"] not in {"ACCEPTED", "RUNNING"}:
+            if action["state"] not in _UNRESOLVED_CANCEL_STATES:
                 continue
             try:
                 receipts.append(self.cancel(

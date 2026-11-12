@@ -29,6 +29,12 @@ from .managed_transfer_scope import validate_transfer_owner
 from .phase_recorder import ActionPhaseRecorder
 
 _LOG = logging.getLogger(__name__)
+_SHARED_ADMISSION_KINDS = frozenset({"CELL_TRANSFER", "ARM_TRANSFER"})
+_HOLD_ON_START_FAILURE_STATES = frozenset({
+    "SUBMITTING", "ACCEPTED", "RUNNING", "CANCEL_REQUESTED", "UNKNOWN",
+})
+_ACTIVE_PHASE_STATES = frozenset({"ACCEPTED", "RUNNING"})
+_HOLD_ON_CANCEL_STATES = frozenset({"ACCEPTED", "RUNNING", "CANCEL_REQUESTED"})
 
 
 class ActionRunner(_ActionRunnerPhaseOps):
@@ -160,7 +166,7 @@ class ActionRunner(_ActionRunnerPhaseOps):
             # Fail closed before any journal row: unknown kinds never reach the driver.
             raise PermissionError(f"action kind {grant.action_kind!r} has no admitted executor")
         self._validate(grant)
-        if grant.action_kind in {"CELL_TRANSFER", "ARM_TRANSFER"} and self.control_admission is None:
+        if grant.action_kind in _SHARED_ADMISSION_KINDS and self.control_admission is None:
             raise PermissionError(f"{grant.action_kind} requires shared control admission")
         if isinstance(grant, FleetArmTransferGrant):
             validate_transfer_owner(self.control_admission, grant)
@@ -216,9 +222,7 @@ class ActionRunner(_ActionRunnerPhaseOps):
                 # The receipt says only START_UNKNOWN; the cause must still reach the owner's log.
                 _LOG.exception("phase runner start failed for %s", grant.action_id)
                 current = self.store.get_action(grant.action_id)
-                if current is not None and current["state"] in {
-                    "SUBMITTING", "ACCEPTED", "RUNNING", "CANCEL_REQUESTED", "UNKNOWN",
-                }:
+                if current is not None and current["state"] in _HOLD_ON_START_FAILURE_STATES:
                     self.store.hold_action(
                         grant.action_id, grant.attempt_id,
                         reason="PHASE_RUNNER_START_UNKNOWN",
@@ -329,14 +333,14 @@ class ActionRunner(_ActionRunnerPhaseOps):
                 return self._receipt(held, created=False,
                                      reason="PHASE_CANCEL_DURING_SUBMISSION")
             active = next((phase for phase in reversed(phases)
-                           if phase["state"] in {"ACCEPTED", "RUNNING"}), None)
+                           if phase["state"] in _ACTIVE_PHASE_STATES), None)
             if active is not None:
                 self.cancel_phase(
                     action_id, attempt_id, phase_id=active["phase_id"], peer_uid=peer_uid,
                 )
                 current = self.store.get_action(action_id)
                 return self._receipt(current or action, created=False)
-            if action["state"] in {"ACCEPTED", "RUNNING", "CANCEL_REQUESTED"}:
+            if action["state"] in _HOLD_ON_CANCEL_STATES:
                 held = self.store.hold_action(
                     action_id, attempt_id, reason="PHASE_CANCEL_TARGET_UNAVAILABLE",
                 )
