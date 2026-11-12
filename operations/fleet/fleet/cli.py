@@ -433,7 +433,7 @@ def run_console(args: argparse.Namespace) -> None:
     users_file = getattr(args, "users_file", None)
     site_users = site_logins = None
     if users_file is not None:
-        from fleet.server.site_users import load_site_accounts
+        from rosy_account.site_users import load_site_accounts
 
         site_users, site_logins = load_site_accounts(users_file)
     tasks_db = getattr(args, "tasks_db", None)

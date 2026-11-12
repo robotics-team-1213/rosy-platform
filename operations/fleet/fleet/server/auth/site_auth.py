@@ -133,7 +133,7 @@ def build_authorize(console_token: Optional[str],
                 if hmac.compare_digest(supplied_digest, token_digest):
                     matched = principal
             if matched is not None and password_sessions is not None:
-                from fleet.server.password_session import SessionStorageUnavailable, _storage_unavailable
+                from rosy_account.password_session import SessionStorageUnavailable, _storage_unavailable
                 try:
                     if password_sessions.migrated_principal(matched.principal_id):
                         matched = None

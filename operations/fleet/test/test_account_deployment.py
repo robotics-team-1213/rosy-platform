@@ -57,7 +57,7 @@ def test_explicit_configuration_wires_authority_and_survives_yaml_removal(tmp_pa
 
 
 def test_authority_configuration_accepts_public_rotation_overlap(tmp_path):
-    from fleet.server.account_config import load_account_config
+    from rosy_account.account_config import load_account_config
     path, data, private = config(tmp_path)
     public = tmp_path/'old-public.pem'
     public.write_bytes(serialization.load_pem_private_key(private, None).public_key().public_bytes(
@@ -97,7 +97,7 @@ def test_managed_session_exports_capabilities_and_serves_admin_document(tmp_path
 
 
 def test_private_config_rejects_unknown_fields_and_unprotected_key(tmp_path):
-    from fleet.server.account_config import load_account_config
+    from rosy_account.account_config import load_account_config
     path, data, _ = config(tmp_path)
     path.write_text(json.dumps({**data, "allow_all": True}))
     with pytest.raises(ValueError):
@@ -110,7 +110,7 @@ def test_private_config_rejects_unknown_fields_and_unprotected_key(tmp_path):
 
 
 def test_authority_configuration_rejects_public_key_before_activation(tmp_path):
-    from fleet.server.account_config import load_account_config
+    from rosy_account.account_config import load_account_config
     from pathlib import Path
     path, data, _ = config(tmp_path)
     public = Ed25519PrivateKey.generate().public_key().public_bytes(

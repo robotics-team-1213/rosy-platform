@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from test_account_authority import authority, ISSUER, CALLBACK, CHALLENGE
-from fleet.server.account_authority_routes import install_account_authority_routes
+from rosy_account.account_authority_routes import install_account_authority_routes
 from fleet.server.password_session import COOKIE, StalePasswordCheck
 
 
