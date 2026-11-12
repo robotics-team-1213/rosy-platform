@@ -3,11 +3,8 @@ from dataclasses import dataclass
 from datetime import datetime
 import math
 
+from core_common.calibration_store import _real as finite
 from core_common.robot_body import nominal_body_for
-
-
-def finite(value):
-    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
 
 
 @dataclass(frozen=True)

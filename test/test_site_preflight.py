@@ -284,6 +284,61 @@ def test_vendored_ca_check_agrees_with_core_common_on_site_link_vectors():
     assert compared >= 5
 
 
+def test_site_preflight_and_site_link_der_tlv_and_children_parity():
+    sys.path.insert(0, str(ROOT / "contracts/foundation"))
+    try:
+        from core_common.protocol import site_link
+    finally:
+        sys.path.pop(0)
+    module = _module()
+
+    valid_sequences = [
+        b"\x30\x00",
+        b"\x30\x03\x01\x01\xff",
+        b"\x30\x06\x01\x01\xff\x02\x01\x00",
+        b"\x30\x81\x80" + (b"\x04\x02ab" * 32),
+        b"\x30\x82\x01\x00" + (b"\x04\x02ab" * 64),
+    ]
+    for data in valid_sequences:
+        tlv_preflight = module._tlv(data, 0, len(data))
+        tlv_contract = site_link._tlv(data, 0, len(data))
+        assert tlv_preflight == tlv_contract
+        _, start, end = tlv_preflight
+        assert module._children(data, start, end) == site_link._children(data, start, end)
+
+    # Non-minimal long-form length with small payload is accepted identically by both minimal walkers.
+    non_minimal = b"\x04\x81\x01a"
+    assert module._tlv(non_minimal, 0, len(non_minimal)) == site_link._tlv(non_minimal, 0, len(non_minimal))
+
+    invalid_tlv_inputs = [
+        b"",                                        # truncated tag/length header
+        b"\x30",                                    # truncated length byte
+        b"\x30\x80",                                # indefinite length (count == 0)
+        b"\x30\x85\x00\x00\x00\x00\x01\x00",        # >4-byte long-form length (count > 4)
+        b"\x30\x82\x01",                            # truncated long-form length bytes
+        b"\x30\x04\x01\x01",                        # truncated content (short form)
+        b"\x04\x81\x04abc",                         # truncated content (long form)
+    ]
+    for bad in invalid_tlv_inputs:
+        with pytest.raises(module._DerError) as exc_preflight:
+            module._tlv(bad, 0, len(bad))
+        with pytest.raises(site_link._DerError) as exc_contract:
+            site_link._tlv(bad, 0, len(bad))
+        assert str(exc_preflight.value) == str(exc_contract.value)
+
+    invalid_children_inputs = [
+        b"\x01\x01\xff\x02",                        # trailing 1-byte tag after valid child
+        b"\x01\x01\xff\x02\x02\x00",                # truncated second child
+        b"\x01\x01\xff\x30\x80",                    # indefinite-length second child
+    ]
+    for bad in invalid_children_inputs:
+        with pytest.raises(module._DerError) as exc_preflight:
+            module._children(bad, 0, len(bad))
+        with pytest.raises(site_link._DerError) as exc_contract:
+            site_link._children(bad, 0, len(bad))
+        assert str(exc_preflight.value) == str(exc_contract.value)
+
+
 # --- review fixes: systemd unit forms, env file syntax, every Caddy site block ---
 
 def test_unit_continuation_prefix_and_bare_dollar_var_expand_like_systemd(tmp_path):

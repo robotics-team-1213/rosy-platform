@@ -2,9 +2,7 @@
 
 import math
 
-
-def _finite(value):
-    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+from core_common.calibration_store import _real as _finite
 
 
 def reassess(pose, view, *, now, map_id, map_version):
