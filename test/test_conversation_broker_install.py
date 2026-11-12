@@ -339,6 +339,10 @@ def test_offline_wheel_closure_binds_metadata_and_direct_requirements(tmp_path,m
     (tmp_path/'dependencies.json').write_bytes(doc)
     lock = m.dependencies(tmp_path,m.sha(doc),b'demo==1.0\n')
     assert lock == ('demo==1.0 --hash=sha256:'+m.sha(raw)+'\n').encode()
+    assert m.dependencies(tmp_path,m.sha(doc),b'demo[binary,pool]==1.0\n') == lock
+    for malformed in (b'demo[]==1.0\n', b'demo[binary,]==1.0\n', b'demo[binary]==2.0\n'):
+        with pytest.raises(ValueError,match='DEPENDENCY'):
+            m.dependencies(tmp_path,m.sha(doc),malformed)
     with pytest.raises(ValueError,match='DEPENDENCY'):
         m.dependencies(tmp_path,m.sha(doc),b'demo==2.0\n')
     (tmp_path/'wheels/demo-1.0-py3-none-any.whl').write_bytes(b'tampered')
