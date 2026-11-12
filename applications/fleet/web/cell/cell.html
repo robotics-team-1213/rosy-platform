@@ -176,6 +176,34 @@
           <tbody id="real2sim-runs-rows"></tbody>
         </table>
       </div>
+      <div class="scope" aria-label="OMX 셀 실시간 태스크 할당 및 제어">
+        <label for="cell-task-preset">원클릭 태스크 프리셋<select class="ui-field" id="cell-task-preset" aria-label="원클릭 태스크 프리셋">
+          <option value="s3_shuttle">S3 셔틀 (arm_s: Pinky -> Belt)</option>
+          <option value="s3_recover_belt_far">S3 이탈 복구 (arm_s: Belt-Far -> Belt)</option>
+          <option value="s3_recover_floor_front">S3 바닥 복구 (arm_s: Floor-Front -> Belt)</option>
+          <option value="s5_tier1_arm_a">S5 적재 1층 (arm_a: Belt -> Pallet L0)</option>
+          <option value="s5_tier2_arm_b">S5 적재 2층 (arm_b: Belt -> Pallet L1)</option>
+          <option value="s5_tier3_arm_a">S5 적재 3층 (arm_a: Belt -> Pallet L2)</option>
+          <option value="full_s3_to_s5_pipeline">연속 파이프라인 (S3 셔틀 -> S5 1·2층 적재)</option>
+        </select></label>
+        <label for="cell-task-cell">작업 셀<select class="ui-field" id="cell-task-cell" aria-label="작업 셀"><option value="cell_s">cell_s (S3 · arm_s)</option><option value="cell_ab">cell_ab (S5 · arm_a / arm_b)</option></select></label>
+        <label for="cell-task-arm">실행 팔<select class="ui-field" id="cell-task-arm" aria-label="실행 팔"><option value="arm_s">arm_s</option><option value="arm_a">arm_a</option><option value="arm_b">arm_b</option></select></label>
+        <label for="cell-task-tier">적재 층 (Tier)<select class="ui-field" id="cell-task-tier" aria-label="적재 층"><option value="1">1층 (Tier 1)</option><option value="2">2층 (Tier 2)</option><option value="3">3층 (Tier 3)</option></select></label>
+        <label for="cell-task-displaced">이탈 용기 복구 위치<select class="ui-field" id="cell-task-displaced" aria-label="이탈 용기 복구 위치"><option value="">없음 (정위치)</option><option value="belt_far">belt_far (벨트 원거리 이탈)</option><option value="floor_front">floor_front (전방 바닥 낙하)</option></select></label>
+      </div>
+      <div class="actions">
+        <ui-button id="cell-task-refresh" kind="quiet" type="button">셀 태스크 새로고침</ui-button>
+        <ui-button id="cell-task-preset-run" kind="primary" type="button" disabled>프리셋 태스크 즉시 실행</ui-button>
+        <ui-button id="cell-task-create" kind="quiet" type="button" disabled>맞춤 태스크 큐 등록</ui-button>
+      </div>
+      <ui-text id="cell-tasks-status" role="status" aria-live="polite">접속하면 OMX 셀(cell_s · cell_ab) 태스크 큐와 실물 실행 상태를 확인할 수 있습니다.</ui-text>
+      <dl id="cell-tasks-figures" class="ui-readout" data-form="strip" aria-label="OMX 셀 및 태스크 요약" hidden></dl>
+      <div class="ui-table-scroll" role="region" aria-labelledby="real2sim-heading" tabindex="0">
+        <table id="cell-tasks-table" class="ui-data-table" aria-label="OMX 셀 태스크 실행 원장" hidden>
+          <thead><tr><th scope="col">태스크 ID</th><th scope="col">셀 / 팔</th><th scope="col">경로 · 복구</th><th scope="col">상태</th><th scope="col">실물 홈 복귀 (folded · 엔코더)</th></tr></thead>
+          <tbody id="cell-tasks-rows"></tbody>
+        </table>
+      </div>
       <details><summary class="ui-disclosure-row">Stage 2 Isaac Sim 핸드오프 명세 (rosy.omx-isaac-handoff.v1)</summary><pre id="real2sim-handoff" aria-label="Isaac Sim 핸드오프 JSON"></pre></details>
     </ui-section>
     <ui-section aria-labelledby="saved-heading"><ui-head><h2 class="ui-section-heading" id="saved-heading">저장된 문서</h2></ui-head><ui-text>저장된 레시피와 셀을 선택하거나 아래에서 새 문서를 준비하세요.</ui-text><ui-status id="saved-status" state="unavailable">접속하면 저장된 문서를 확인할 수 있습니다.</ui-status><ul id="saved" hidden></ul></ui-section>

@@ -6,12 +6,15 @@ import {
   EVALUATE_PATH,
   RUNS_PATH,
   PROMOTE_PATH,
+  CELL_TASKS_PATH,
   readoutPairs,
   loopRows,
   stageRows,
   sysidRows,
   surveyRows,
   runRows,
+  cellTaskSummaryPairs,
+  cellTaskRows,
 } from "../../../../applications/fleet/web/cell/cell-real2sim.js";
 
 test("real2sim routes point to the cell-app pipeline endpoints", () => {
@@ -19,6 +22,7 @@ test("real2sim routes point to the cell-app pipeline endpoints", () => {
   assert.equal(EVALUATE_PATH, "/api/fleet/cell-app/real2sim-pipeline/evaluate");
   assert.equal(RUNS_PATH, "/api/fleet/cell-app/real2sim-pipeline/runs");
   assert.equal(PROMOTE_PATH, "/api/fleet/cell-app/real2sim-pipeline/promote-physics");
+  assert.equal(CELL_TASKS_PATH, "/api/fleet/pipeline/cell-tasks");
 });
 
 test("readoutPairs, loopRows, stageRows, sysidRows, surveyRows, and runRows format the pipeline", () => {
@@ -114,4 +118,35 @@ test("readoutPairs, loopRows, stageRows, sysidRows, surveyRows, and runRows form
   const rRows = runRows(sample);
   assert.equal(rRows.length, 1);
   assert.equal(rRows[0][0], "r2s-20261110-1231-001");
+
+  const tSummary = cellTaskSummaryPairs({
+    summary: {total: 3, queued: 1, running: 1, completed: 1},
+    cells: {
+      cell_s: {gate: {phase: "ARM_IN_BED_ZONE", amr_motion_inhibited: true}},
+      cell_ab: {gate: {phase: "RELEASED", amr_motion_inhibited: false}},
+    },
+  });
+  assert.equal(tSummary.length, 3);
+  assert.match(tSummary[0][1], /전체 3건/);
+  assert.match(tSummary[1][1], /AMR 잠금 ON/);
+
+  const tRows = cellTaskRows({
+    tasks: [
+      {
+        task_id: "live-e2e-cell-s-arm-s-v3",
+        cell_id: "cell_s",
+        arm_id: "arm_s",
+        src_site: "pinky",
+        dst_site: "belt",
+        tier: 1,
+        displaced_to: "belt_far",
+        status: "COMPLETED",
+        hardware_telemetry: {stop_event: {folded: true, state: [-0.07, -58.53, 50.96, 50.28, -4.71, 49.38]}},
+      },
+    ],
+  });
+  assert.equal(tRows.length, 1);
+  assert.equal(tRows[0][0], "live-e2e-cell-s-arm-s-v3");
+  assert.match(tRows[0][2], /복구: belt_far/);
+  assert.match(tRows[0][4], /folded: true/);
 });

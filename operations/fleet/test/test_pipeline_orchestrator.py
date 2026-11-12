@@ -159,4 +159,19 @@ def test_cell_tasks_assign_claim_and_complete_lifecycle():
     assert done["gate"]["amr_motion_inhibited"] is False
     assert done["task"]["hardware_telemetry"]["folded"] is True
 
+    chained = client.post("/api/fleet/pipeline/cell-tasks", json={"preset": "full_s3_to_s5_pipeline", "task_id": "chain-01"}).json()
+    assert chained["ok"] is True and len(chained["tasks"]) == 3
+    assert [t["arm_id"] for t in chained["tasks"]] == ["arm_s", "arm_a", "arm_b"]
+
+    cancelled = client.post(f"/api/fleet/pipeline/cell-tasks/{chained['tasks'][0]['task_id']}/cancel").json()
+    assert cancelled["ok"] is True and cancelled["task"]["status"] == "CANCELLED"
+    assert cancelled["gate"]["amr_motion_inhibited"] is False
+
+    overview = client.get("/api/fleet/pipeline/cell-tasks").json()
+    assert overview["summary"]["total"] == 4
+    assert overview["summary"]["completed"] == 1
+    assert "cell_s" in overview["cells"] and "cell_ab" in overview["cells"]
+    assert len(overview["presets"]) >= 7
+
+
 

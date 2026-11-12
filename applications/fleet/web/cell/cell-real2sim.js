@@ -4,6 +4,7 @@ export const REAL2SIM_PATH = '/api/fleet/cell-app/real2sim-pipeline';
 export const EVALUATE_PATH = '/api/fleet/cell-app/real2sim-pipeline/evaluate';
 export const RUNS_PATH = '/api/fleet/cell-app/real2sim-pipeline/runs';
 export const PROMOTE_PATH = '/api/fleet/cell-app/real2sim-pipeline/promote-physics';
+export const CELL_TASKS_PATH = '/api/fleet/pipeline/cell-tasks';
 
 const STATUS_LABEL = {
   ready: '정상 · 준비됨',
@@ -92,6 +93,38 @@ export function runRows(body) {
   ]);
 }
 
+export function cellTaskSummaryPairs(body) {
+  if (!body) return [];
+  const s = body.summary || {};
+  const cells = body.cells || {};
+  const s3 = cells.cell_s?.gate || {};
+  const s5 = cells.cell_ab?.gate || {};
+  return [
+    ['OMX 태스크 원장', `전체 ${s.total ?? 0}건 · 대기 ${s.queued ?? 0}건 · 실행 중 ${s.running ?? 0}건 · 완료 ${s.completed ?? 0}건`],
+    ['cell_s (S3 · arm_s)', `${s3.phase || 'IDLE'} · AMR 잠금 ${s3.amr_motion_inhibited ? 'ON' : 'OFF'}`],
+    ['cell_ab (S5 · arm_a/arm_b)', `${s5.phase || 'IDLE'} · AMR 잠금 ${s5.amr_motion_inhibited ? 'ON' : 'OFF'}`],
+  ];
+}
+
+export function cellTaskRows(body) {
+  return (body?.tasks || []).slice().reverse().map(t => {
+    const stopEv = t.hardware_telemetry?.stop_event || {};
+    const foldedTxt = stopEv.folded === true
+      ? `홈 복귀 완료 (folded: true · [${(stopEv.state || []).join(', ')}])`
+      : Array.isArray(stopEv.state)
+      ? `[${stopEv.state.join(', ')}]`
+      : '—';
+    const disp = t.displaced_to ? ` (복구: ${t.displaced_to})` : '';
+    return [
+      t.task_id,
+      `${t.cell_id} / ${t.arm_id}`,
+      `${t.src_site} -> ${t.dst_site} (T${t.tier ?? 1})${disp}`,
+      t.status || 'QUEUED',
+      foldedTxt,
+    ];
+  });
+}
+
 export function createReal2SimPipeline({request, $, isOperator = () => false}) {
   const status = $('real2sim-status');
   let generation = 0;
@@ -124,7 +157,7 @@ export function createReal2SimPipeline({request, $, isOperator = () => false}) {
   function syncOperatorButtons() {
     const allowed = Boolean(isOperator());
     const reason = allowed ? '' : '운영자 권한이 필요합니다';
-    for (const id of ['real2sim-evaluate', 'real2sim-run', 'real2sim-promote']) {
+    for (const id of ['real2sim-evaluate', 'real2sim-run', 'real2sim-promote', 'cell-task-preset-run', 'cell-task-create']) {
       const btn = $(id);
       if (btn) {
         btn.disabled = !allowed;
@@ -204,12 +237,18 @@ export function createReal2SimPipeline({request, $, isOperator = () => false}) {
       ['real2sim-sysid-table', 'real2sim-sysid-rows'],
       ['real2sim-survey-table', 'real2sim-survey-rows'],
       ['real2sim-runs-table', 'real2sim-runs-rows'],
+      ['cell-tasks-table', 'cell-tasks-rows'],
     ]) {
       if ($(tableId)) $(tableId).hidden = true;
       if ($(rowsId)) $(rowsId).replaceChildren();
     }
+    if ($('cell-tasks-figures')) {
+      $('cell-tasks-figures').hidden = true;
+      $('cell-tasks-figures').replaceChildren();
+    }
     if ($('real2sim-handoff')) $('real2sim-handoff').textContent = '';
     if (status) status.textContent = '접속하면 실물↔시뮬 파이프라인 상태를 확인할 수 있습니다.';
+    if ($('cell-tasks-status')) $('cell-tasks-status').textContent = '접속하면 OMX 셀(cell_s · cell_ab) 태스크 큐와 실물 실행 상태를 확인할 수 있습니다.';
   }
 
   function currentPayload() {
@@ -241,9 +280,91 @@ export function createReal2SimPipeline({request, $, isOperator = () => false}) {
       const body = await request(`${REAL2SIM_PATH}?${params.toString()}`);
       if (current !== generation) return;
       renderBody(body);
+      await refreshCellTasks(current);
     } catch (error) {
       if (current !== generation) return;
       status.textContent = `실물↔시뮬 파이프라인을 읽지 못했습니다: ${error.message}`;
+    }
+  }
+
+  function renderCellTasks(body) {
+    const pairs = cellTaskSummaryPairs(body);
+    const figs = $('cell-tasks-figures');
+    if (figs) {
+      figs.replaceChildren(...pairs.flatMap(([term, desc]) => {
+        const dt = document.createElement('dt');
+        dt.textContent = term;
+        const dd = document.createElement('dd');
+        dd.textContent = desc;
+        return [dt, dd];
+      }));
+      figs.hidden = !pairs.length;
+    }
+    renderTable($('cell-tasks-rows'), $('cell-tasks-table'), cellTaskRows(body));
+    syncOperatorButtons();
+    const taskStatus = $('cell-tasks-status');
+    if (taskStatus) {
+      const s = body?.summary || {};
+      taskStatus.textContent = `OMX 셀 태스크 원장: 전체 ${s.total ?? (body?.tasks?.length || 0)}건 (대기 ${s.queued ?? 0} · 실행 ${s.running ?? 0} · 완료 ${s.completed ?? 0})`;
+    }
+  }
+
+  async function refreshCellTasks(expectedGen = generation) {
+    try {
+      const body = await request(CELL_TASKS_PATH);
+      if (expectedGen !== generation) return;
+      renderCellTasks(body);
+    } catch (error) {
+      if (expectedGen !== generation) return;
+      if ($('cell-tasks-status')) {
+        $('cell-tasks-status').textContent = `OMX 셀 태스크 조회 실패: ${error.message}`;
+      }
+    }
+  }
+
+  async function runPresetTask() {
+    const current = ++generation;
+    const preset = $('cell-task-preset')?.value || 's3_shuttle';
+    if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `프리셋(${preset}) 태스크를 할당하는 중입니다.`;
+    try {
+      const res = await request(CELL_TASKS_PATH, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({preset}),
+      });
+      if (current !== generation) return;
+      await refreshCellTasks(current);
+      if ($('cell-tasks-status')) {
+        const ids = (res.tasks || [res.task]).filter(Boolean).map(t => t.task_id).join(', ');
+        $('cell-tasks-status').textContent = `프리셋 태스크 등록 완료: ${ids}`;
+      }
+    } catch (error) {
+      if (current !== generation) return;
+      if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `프리셋 태스크 등록 실패: ${error.message}`;
+    }
+  }
+
+  async function createCustomTask() {
+    const current = ++generation;
+    const cellId = $('cell-task-cell')?.value || 'cell_s';
+    const armId = $('cell-task-arm')?.value || (cellId === 'cell_s' ? 'arm_s' : 'arm_a');
+    const tier = Number($('cell-task-tier')?.value || 1);
+    const displacedTo = $('cell-task-displaced')?.value || null;
+    if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `맞춤 태스크(${cellId}/${armId})를 큐에 등록하는 중입니다.`;
+    try {
+      const res = await request(CELL_TASKS_PATH, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({cell_id: cellId, arm_id: armId, tier, displaced_to: displacedTo}),
+      });
+      if (current !== generation) return;
+      await refreshCellTasks(current);
+      if ($('cell-tasks-status')) {
+        $('cell-tasks-status').textContent = `맞춤 태스크 큐 등록 완료: ${res.task?.task_id || '—'} (${cellId}/${armId})`;
+      }
+    } catch (error) {
+      if (current !== generation) return;
+      if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `맞춤 태스크 등록 실패: ${error.message}`;
     }
   }
 
@@ -313,5 +434,8 @@ export function createReal2SimPipeline({request, $, isOperator = () => false}) {
   $('real2sim-evaluate')?.addEventListener('click', () => { void evaluate(); });
   $('real2sim-run')?.addEventListener('click', () => { void queueRun(); });
   $('real2sim-promote')?.addEventListener('click', () => { void promotePhysics(); });
-  return {refresh, evaluate, queueRun, promotePhysics, clear};
+  $('cell-task-refresh')?.addEventListener('click', () => { void refreshCellTasks(++generation); });
+  $('cell-task-preset-run')?.addEventListener('click', () => { void runPresetTask(); });
+  $('cell-task-create')?.addEventListener('click', () => { void createCustomTask(); });
+  return {refresh, evaluate, queueRun, promotePhysics, refreshCellTasks, runPresetTask, createCustomTask, clear};
 }

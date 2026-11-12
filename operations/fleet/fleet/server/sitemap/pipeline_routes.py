@@ -93,45 +93,110 @@ def install_pipeline_routes(app, *, console=None, site_maps=None, read_guard=())
                                                        "docked_robot": robot}
         return res
 
-    @app.post("/api/fleet/pipeline/cell-tasks", dependencies=read_guard)
-    async def create_cell_task(request: Request):
-        active = active_map()
-        body = await request.json()
-        cell_id = str(body.get("cell_id") or "cell_s")
+    CELL_TASK_PRESETS: dict[str, dict] = {
+        "s3_shuttle": {"preset": "s3_shuttle", "label": "S3 셔틀 (arm_s: Pinky -> Belt)", "cell_id": "cell_s", "arm_id": "arm_s", "src_site": "pinky", "dst_site": "belt", "tier": 1, "displaced_to": None},
+        "s3_recover_belt_far": {"preset": "s3_recover_belt_far", "label": "S3 이탈 복구 (arm_s: Belt-Far -> Belt)", "cell_id": "cell_s", "arm_id": "arm_s", "src_site": "pinky", "dst_site": "belt", "tier": 1, "displaced_to": "belt_far"},
+        "s3_recover_floor_front": {"preset": "s3_recover_floor_front", "label": "S3 바닥 복구 (arm_s: Floor-Front -> Belt)", "cell_id": "cell_s", "arm_id": "arm_s", "src_site": "pinky", "dst_site": "belt", "tier": 1, "displaced_to": "floor_front"},
+        "s5_tier1_arm_a": {"preset": "s5_tier1_arm_a", "label": "S5 적재 1층 (arm_a: Belt -> Pallet L0)", "cell_id": "cell_ab", "arm_id": "arm_a", "src_site": "belt", "dst_site": "pallet-l0", "tier": 1, "displaced_to": None},
+        "s5_tier2_arm_b": {"preset": "s5_tier2_arm_b", "label": "S5 적재 2층 (arm_b: Belt -> Pallet L1)", "cell_id": "cell_ab", "arm_id": "arm_b", "src_site": "belt", "dst_site": "pallet-l1", "tier": 2, "displaced_to": None},
+        "s5_tier3_arm_a": {"preset": "s5_tier3_arm_a", "label": "S5 적재 3층 (arm_a: Belt -> Pallet L2)", "cell_id": "cell_ab", "arm_id": "arm_a", "src_site": "belt", "dst_site": "pallet-l2", "tier": 3, "displaced_to": None},
+        "full_s3_to_s5_pipeline": {"preset": "full_s3_to_s5_pipeline", "label": "연속 파이프라인 (S3 셔틀 -> S5 1·2층 적재)", "steps": ["s3_shuttle", "s5_tier1_arm_a", "s5_tier2_arm_b"]},
+    }
+
+    def _enqueue_one_task(active, spec: dict) -> dict:
+        cell_id = str(spec.get("cell_id") or "cell_s")
         station = resolve_omx_cells(active[1], active[2]).get(cell_id)
         if station is None:
             raise HTTPException(404, detail={"code": "UNKNOWN_CELL"})
-        task_id = str(body.get("task_id") or f"cell-task-{uuid.uuid4().hex[:8]}")
-        default_arm = "arm_s" if cell_id == "cell_s" else ("arm_a" if int(body.get("tier", 1)) % 2 == 1 else "arm_b")
+        task_id = str(spec.get("task_id") or f"cell-task-{uuid.uuid4().hex[:8]}")
+        tier = int(spec.get("tier", 1))
+        default_arm = "arm_s" if cell_id == "cell_s" else ("arm_a" if tier % 2 == 1 else "arm_b")
         task = {
             "task_id": task_id,
             "cell_id": cell_id,
-            "arm_id": str(body.get("arm_id") or default_arm),
-            "robot_id": str(body.get("robot_id") or "rosy_01"),
-            "robot_kind": str(body.get("robot_kind") or "pinky"),
-            "src_site": str(body.get("src_site") or ("pinky" if cell_id == "cell_s" else "belt")),
-            "dst_site": str(body.get("dst_site") or ("belt" if cell_id == "cell_s" else f"pallet-l{max(0, min(2, int(body.get('tier', 1)) - 1))}")),
-            "tier": int(body.get("tier", 1)),
-            "displaced_to": body.get("displaced_to"),
+            "arm_id": str(spec.get("arm_id") or default_arm),
+            "robot_id": str(spec.get("robot_id") or "rosy_01"),
+            "robot_kind": str(spec.get("robot_kind") or "pinky"),
+            "src_site": str(spec.get("src_site") or ("pinky" if cell_id == "cell_s" else "belt")),
+            "dst_site": str(spec.get("dst_site") or ("belt" if cell_id == "cell_s" else f"pallet-l{max(0, min(2, tier - 1))}")),
+            "tier": tier,
+            "displaced_to": spec.get("displaced_to") or None,
+            "preset": spec.get("preset"),
             "pose": {
-                "x": float(body.get("x", station.station_xy[0])),
-                "y": float(body.get("y", station.station_xy[1])),
-                "yaw": float(body.get("yaw", 0.0)),
+                "x": float(spec.get("x", station.station_xy[0])),
+                "y": float(spec.get("y", station.station_xy[1])),
+                "yaw": float(spec.get("yaw", 0.0)),
             },
             "status": "QUEUED",
             "created_at": round(time.time(), 3),
         }
         app.state.omx_cell_tasks[task_id] = task
-        return {"ok": True, "task": task}
+        return task
+
+    @app.post("/api/fleet/pipeline/cell-tasks", dependencies=read_guard)
+    async def create_cell_task(request: Request):
+        active = active_map()
+        body = await request.json()
+        preset_key = body.get("preset")
+        if preset_key:
+            preset = CELL_TASK_PRESETS.get(str(preset_key))
+            if preset is None:
+                raise HTTPException(422, detail={"code": "UNKNOWN_PRESET"})
+            if "steps" in preset:
+                base_id = str(body.get("task_id") or f"pipe-{uuid.uuid4().hex[:6]}")
+                created_tasks = [
+                    _enqueue_one_task(active, {**CELL_TASK_PRESETS[s], "robot_id": body.get("robot_id", "rosy_01"), "task_id": f"{base_id}-{idx+1}-{s}"})
+                    for idx, s in enumerate(preset["steps"])
+                ]
+                return {"ok": True, "task": created_tasks[0], "tasks": created_tasks}
+            merged = {**preset, **{k: v for k, v in body.items() if v is not None}}
+            task = _enqueue_one_task(active, merged)
+            return {"ok": True, "task": task, "tasks": [task]}
+        task = _enqueue_one_task(active, body)
+        return {"ok": True, "task": task, "tasks": [task]}
 
     @app.get("/api/fleet/pipeline/cell-tasks", dependencies=read_guard)
     async def list_cell_tasks(cell_id: str | None = None, status: str | None = None):
-        tasks = list(app.state.omx_cell_tasks.values())
+        active = active_map()
+        all_tasks = list(app.state.omx_cell_tasks.values())
+        tasks = list(all_tasks)
         if cell_id is not None:
             tasks = [t for t in tasks if t["cell_id"] == cell_id]
         if status is not None:
             tasks = [t for t in tasks if t["status"] == status]
-        return {"tasks": tasks}
+        stations = resolve_omx_cells(active[1], active[2])
+        cells_info = {}
+        for cid, st in stations.items():
+            cstate = app.state.omx_cell_states.get(cid) or {}
+            ev = evaluate_omx_cell_station(st, docked_robot=cstate.get("docked_robot"), cell_state=cstate,
+                                           map_version=getattr(active[2], "version", None))
+            running_t = next((t["task_id"] for t in all_tasks if t["cell_id"] == cid and t["status"] == "RUNNING"), None)
+            cells_info[cid] = {**ev, "active_task_id": running_t}
+        summary = {
+            "total": len(all_tasks),
+            "queued": sum(1 for t in all_tasks if t["status"] == "QUEUED"),
+            "running": sum(1 for t in all_tasks if t["status"] == "RUNNING"),
+            "completed": sum(1 for t in all_tasks if t["status"] == "COMPLETED"),
+            "aborted": sum(1 for t in all_tasks if t["status"] in ("ABORTED", "CANCELLED")),
+        }
+        return {"tasks": tasks, "summary": summary, "cells": cells_info, "presets": list(CELL_TASK_PRESETS.values())}
+
+    @app.post("/api/fleet/pipeline/cell-tasks/{task_id}/cancel", dependencies=read_guard)
+    async def cancel_cell_task(task_id: str):
+        active = active_map()
+        task = app.state.omx_cell_tasks.get(task_id)
+        if task is None:
+            raise HTTPException(404, detail={"code": "UNKNOWN_TASK"})
+        cell_id = task["cell_id"]
+        station = resolve_omx_cells(active[1], active[2]).get(cell_id)
+        robot = {"robot_id": task["robot_id"], "robot_kind": task["robot_kind"], "pose": dict(task["pose"]),
+                 "wheel_brake_locked": True, "bed_ready": True, "v_cmd_mps": 0.0}
+        state = {"phase": "RELEASED", "tier": task["tier"], "robot_id": task["robot_id"], "stage_id": task_id, "reason": "CANCELLED_BY_OPERATOR"}
+        res = evaluate_omx_cell_station(station, docked_robot=robot, cell_state=state, map_version=getattr(active[2], "version", None))
+        app.state.omx_cell_states[cell_id] = {**state, "docked_robot": robot}
+        task["status"] = "CANCELLED"
+        task["completed_at"] = round(time.time(), 3)
+        return {"ok": True, "task": task, "gate": res["gate"]}
 
     @app.post("/api/fleet/pipeline/cell-tasks/claim", dependencies=read_guard)
     async def claim_cell_task(request: Request):
