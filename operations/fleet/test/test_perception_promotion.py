@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "contracts/learning
 from rosy.contracts.learning.promotion_request import encoded  # noqa: E402
 from fleet.server.app import create_app  # noqa: E402
 from fleet.server.console import FleetConsole  # noqa: E402
-from fleet.server.site_users import hash_password  # noqa: E402
+from rosy_account.site_users import hash_password  # noqa: E402
 from fleet.server.task_service import FleetTaskService  # noqa: E402
 from fleet.server.task_store import FleetTaskStore  # noqa: E402
 from test_password_session import TYPED as PASSWORD  # noqa: E402  shared fixture value

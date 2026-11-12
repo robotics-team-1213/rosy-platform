@@ -7,12 +7,12 @@ import pytest
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives import serialization
 
-from fleet.server.account_authority import AccountAuthority
+from rosy_account.account_authority import AccountAuthority
 from fleet.server.app import create_app
 from test_account_ledger import activated, cookie
 from test_account_authority import ISSUER, CALLBACK, get_code, exchange
 from test_password_session import _app, _accounts, _client, _login
-from fleet.server.password_session import COOKIE
+from rosy_account.password_session import COOKIE
 
 
 def config(tmp_path):
@@ -126,7 +126,7 @@ def test_real_sql_refresh_replay_revocation_survives_reopen(tmp_path):
     form = urlencode({"grant_type": "refresh_token", "client_id": "robot-app", "refresh_token": token["refresh_token"]})
     assert authority.token(form)[2] == 200
     assert authority.token(form)[2] == 400
-    from fleet.server.password_session import PasswordSessions
+    from rosy_account.password_session import PasswordSessions
     reopened = PasswordSessions(sessions.path, {})
     assert reopened.principal(value) is None
     assert authority.introspect(token["access_token"]) == {"active": False}

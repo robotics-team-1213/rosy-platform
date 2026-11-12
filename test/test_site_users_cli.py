@@ -10,8 +10,10 @@ from pathlib import Path
 import pytest
 import yaml
 
-from deploy.site import site_users
-from deploy.site.site_users import (
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "operations" / "account"))
+
+from deploy.site import site_users  # noqa: E402
+from deploy.site.site_users import (  # noqa: E402
     SiteUsersError,
     add_user,
     list_users,
@@ -45,7 +47,10 @@ def _no_temp_files_left(tmp_path: Path) -> None:
 
 
 def test_unrelated_registry_edits_preserve_explicit_machine_viewer(tmp_path):
-    from fleet.server.site_users import load_site_users
+    import fleet.server.site_users as fleet_site_users
+    import rosy_account.site_users as account_site_users
+    from rosy_account.site_users import load_site_users
+    assert fleet_site_users is account_site_users
     path = tmp_path / "site-users.yaml"
     machine = {**_entry("health-check", "viewer", "health-check-key"), "machine": True}
     _seed(path, _entry(), machine)
@@ -68,7 +73,7 @@ def test_registry_writer_rejects_invalid_machine_entries(changes):
 
 
 def test_machine_marker_cannot_accompany_valid_human_login_credentials(tmp_path):
-    from fleet.server.site_users import hash_password, load_site_users
+    from rosy_account.site_users import hash_password, load_site_users
     path = tmp_path / "site-users.yaml"
     machine = {**_entry("health-check", "viewer"), "machine": True,
                "login": "health", "password_scrypt": hash_password("test-only-human-password")}
@@ -81,7 +86,7 @@ def test_machine_marker_cannot_accompany_valid_human_login_credentials(tmp_path)
 
 def test_add_list_remove_roundtrip_loads_in_the_real_fleet_loader(
         tmp_path, monkeypatch, capsys):
-    from fleet.server.site_users import load_site_users
+    from rosy_account.site_users import load_site_users
 
     path = tmp_path / "site-users.yaml"
     _seed(path, _entry())
@@ -304,7 +309,7 @@ def test_validate_users_document_accepts_service_rows_and_normalizes_spaces():
 
 
 def test_add_login_preserves_machine_users_and_real_fleet_auth(tmp_path, monkeypatch, capsys):
-    from fleet.server.site_users import hash_password, load_site_accounts, verify_password
+    from rosy_account.site_users import hash_password, load_site_accounts, verify_password
 
     path = tmp_path / "site-users.yaml"
     machine = _entry("situation", "ai_observer", "situation-token")
@@ -338,7 +343,7 @@ def test_add_login_preserves_machine_users_and_real_fleet_auth(tmp_path, monkeyp
 
 
 def test_login_invalid_or_duplicate_credentials_leave_registry_unchanged(tmp_path, monkeypatch):
-    from fleet.server.site_users import hash_password
+    from rosy_account.site_users import hash_password
 
     encoded = hash_password("test-only-password")
     path = tmp_path / "site-users.yaml"
@@ -401,7 +406,7 @@ def test_ownership_failure_preserves_original_registry(tmp_path, monkeypatch):
 def test_set_policy_admin_keeps_the_operator_role_and_loads_in_fleet(tmp_path):
     """D-793: an operator gains fleet.policy without losing operate; --off removes it."""
     from fleet.server.site_auth import parse_site_principals
-    from fleet.server.site_users import load_site_users
+    from rosy_account.site_users import load_site_users
 
     class Console:
         def user_credential_overlaps_robot_secret(self, digests):
@@ -447,7 +452,7 @@ def test_set_policy_admin_writes_several_people_once(tmp_path, monkeypatch):
 
 
 def test_add_service_registers_a_machine_without_console_credentials(tmp_path, monkeypatch, capsys):
-    from fleet.server.site_users import hash_password, load_site_accounts
+    from rosy_account.site_users import hash_password, load_site_accounts
 
     path = tmp_path / "site-users.yaml"
     human = {"principal_id": "person-1", "role": "operator", "login": "person",
