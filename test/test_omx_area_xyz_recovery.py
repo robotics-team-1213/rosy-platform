@@ -477,9 +477,27 @@ def test_situation_aware_object_realignment_pipeline_and_rail_safe_retract(tmp_p
     assert belt_wps[0]["pose"][1] <= -22.0
     assert belt_wps[0]["pose"][2] <= 14.0
 
-    # 3. Closed-loop 7-situation object re-alignment pipeline + online IWR feedback
+    # 3. Closed-loop 7-situation object re-alignment pipeline + multi-step L1->L2 escalation & online IWR feedback
     report = crp.run_closed_loop_realignment_pipeline(tmp_path)
     assert report["total_situations"] == 7
     assert report["all_passed"] is True
     assert len(report["results"]) == 7
+    assert report["escalation_demo"]["passed"] is True
+    assert report["escalation_demo"]["attempts_used"] == 2
+    assert report["escalation_demo"]["final_level"] == "L2"
+    assert report["escalation_demo"]["final_strategy"] == "fixture_2leg_temp_plate_realign"
     assert (tmp_path / "realignment-pipeline-report.json").exists()
+
+    # 4. Multi-attempt closed-loop recovery from S11 empty jaw closure (49.04u) -> visual servo re-grasp (53.8u)
+    s11_loop = crp.run_iterative_fail_recovery_loop(
+        {
+            "area": "belt", "col": 2, "row": 1, "dx_mm": -14.0, "dy_mm": 6.0, "jaw_u": 49.04,
+            "perturb_attempt_1": {"dx_mm": -9.5, "dy_mm": 3.0, "jaw_u": 49.12},
+        },
+        max_attempts=3,
+    )
+    assert s11_loop["passed"] is True
+    assert s11_loop["attempts_used"] == 2
+    assert s11_loop["trace"][0]["situation"] == "SIT_7_POST_GRASP_OR_ZONE_OBSTRUCTION"
+    assert s11_loop["trace"][1]["passed"] is True
+
