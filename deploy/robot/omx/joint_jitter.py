@@ -174,15 +174,33 @@ def live_window(rows, params=None) -> dict:
     }
 
 
-def damp_step(ensembler, current: list, next_target: list, lookahead: list) -> list:
+def damp_step(ensembler, current: list, next_target: list, lookahead: list, *, vmax=None, fps=None) -> list:
     """Smooth `next_target` through `ensembler` over the upcoming chunk horizon while preserving the final endpoint."""
     if not lookahead:
         ensembler.reset(next_target)
         return list(next_target)
     if getattr(ensembler, "_last", None) is None:
         ensembler.reset(current)
+    if vmax is not None:
+        ensembler.vmax = vmax
+    if fps is not None:
+        ensembler.fps = fps
     ensembler.push([list(current), list(next_target), *[list(f) for f in lookahead[:3]]])
     return ensembler.step(next_target)
+
+
+def blend_to_raw(ensembler, current_target: list[float], raw_target: list[float], remaining: int,
+                 vmax: float = 5.0, fps: int = 30) -> list[float]:
+    """Ease out the ensemble residual within the per-tick body speed limit."""
+    ensembler.push([list(raw_target)])
+    smoothed = ensembler.step(current_target)
+    alpha = 1.0 / (max(1, remaining) + 1)
+    step = vmax / max(1, fps)
+    blended = [current + max(-step, min(step, (1 - alpha) * smooth + alpha * raw - current))
+               for current, smooth, raw in zip(current_target[:5], smoothed[:5], raw_target[:5])]
+    ensembler._smooth = list(blended)
+    ensembler._last = blended + list(raw_target[5:])
+    return ensembler._last
 
 
 def settled_state(cell, params=None) -> dict:

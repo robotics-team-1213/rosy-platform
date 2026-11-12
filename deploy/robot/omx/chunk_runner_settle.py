@@ -39,7 +39,12 @@ def check_chunk_settled(runner, present: list[float], error: float, now: float, 
         and error <= settle_tol + min(runner.pace_floor, 0.8)
     )
     runner.last_body = list(present[:5])
-    settled = (error <= settle_tol or body_still) and not runner.jitter["shaking"]
+    aerial = (runner.chunk.startswith("goto ") or runner.chunk in ("above_pick", "above_place", "standby"))
+    no_contact = not getattr(runner, "contact", False) and not (runner.fault or "").startswith("contact")
+    if aerial and no_contact and not runner.jitter.get("shaking"):
+        settled = error <= settle_tol * 1.15 or body_still or now - runner.settle_since >= settle_s
+    else:
+        settled = (error <= settle_tol or body_still) and not runner.jitter["shaking"]
     if (settled and (gripper_still or not grasp)) or now - runner.settle_since >= settle_s:
         fields = dict(
             command=f"run {runner.chunk}",

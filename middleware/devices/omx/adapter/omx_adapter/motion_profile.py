@@ -10,6 +10,14 @@ from __future__ import annotations
 
 import math
 
+if __name__ != "omx_adapter.motion_profile":
+    from pathlib import Path
+    import sys
+
+    _ADAPTER_SRC = str(Path(__file__).resolve().parents[3] / "middleware/devices/omx/adapter")
+    if _ADAPTER_SRC not in sys.path:
+        sys.path.insert(0, _ADAPTER_SRC)
+
 # The guard ramps at 10 deg/s^2. A body unit is at most 1.8 deg, so 5 units/s^2 stays under it. At a blend
 # the segments' ramps overlap; on a joint both move, one slows while the other speeds up, so the speed stays
 # under vmax, and the two ramps can briefly add to at most twice this (the guard then ramps a little behind).
@@ -153,11 +161,11 @@ def flow(waypoints: list, fps: int, vmax: float, blend: list, blend_s: float,
     for i, (a, b) in enumerate(zip(waypoints, waypoints[1:])):
         delta = [y - x for x, y in zip(a, b)]
         # stretch the rising lift's distance so the shared profile moves it no faster than rise_speed;
-        # once at/above transit (a[1] <= -16) and folding the elbow into home (b[2] - a[2] >= 12), the CoM is over the base,
+        # once at/above transit (a[1] <= -16), the arm is clear for a faster high-crane rise,
         # and from hover poses (-16 < a[1] <= 0) the arm is already clear of deep reach torque.
         eff_rise = (
             max(rise_speed, min(vmax, 3.8))
-            if rise_speed and a[1] <= -16.0 and b[1] < a[1] and b[2] - a[2] >= 12.0
+            if rise_speed and a[1] <= -16.0 and b[1] < a[1]
             else max(rise_speed, min(vmax, 2.8))
             if rise_speed and -16.0 < a[1] <= 0.0 and b[1] < a[1]
             else rise_speed
@@ -182,6 +190,51 @@ def flow(waypoints: list, fps: int, vmax: float, blend: list, blend_s: float,
                        for j, w in enumerate(waypoints[0])])
     frames[-1] = list(waypoints[-1])
     return frames
+
+
+def compile_smooth_chunk(waypoints, fps=30, vmax=4.25, blend_s=0.45,
+                         rise_speed=2.6, amax=GUARD_ACCEL_UNITS_S2) -> list[list[float]]:
+    """Compile pose or waypoint dictionaries into one eased, blended joint trajectory."""
+    poses = []
+    for waypoint in waypoints:
+        if isinstance(waypoint, dict):
+            pose = list(waypoint.get("pose", waypoint.get("pose_units", [])))
+            if "gripper" in waypoint:
+                pose = pose[:5] + [waypoint["gripper"]]
+        else:
+            pose = list(waypoint)
+        if len(pose) != 6:
+            raise ValueError("each waypoint must contain six joint units")
+        if not poses or max(abs(a - b) for a, b in zip(poses[-1], pose)) > 1e-4:
+            poses.append(pose)
+    if len(poses) < 2:
+        return [list(poses[-1])] if poses else []
+    # Grasp and release corners must finish before the next body move starts.
+    blend = [False] + [poses[i - 1][5] == poses[i][5] == poses[i + 1][5]
+                       for i in range(1, len(poses) - 1)] + [False]
+    return flow(poses, fps=fps, vmax=vmax, blend=blend,
+                blend_s=blend_s, rise_speed=rise_speed, amax=amax)
+
+
+def upgrade_linear_chunk(frames, fps=30, vmax=4.25, blend_s=0.40,
+                         rise_speed=2.6, amax=GUARD_ACCEL_UNITS_S2) -> list[list[float]]:
+    """Find direction changes in a dense linear chunk and recompile its corners."""
+    if len(frames) < 2:
+        return [list(frame) for frame in frames]
+    corners = [frames[0]]
+    previous = [b - a for a, b in zip(frames[0], frames[1])]
+    for i in range(1, len(frames) - 1):
+        step = [b - a for a, b in zip(frames[i], frames[i + 1])]
+        prev_size, size = max(map(abs, previous)), max(map(abs, step))
+        if prev_size and size and (
+            max(abs(a / prev_size - b / size) for a, b in zip(previous, step)) > 0.15
+            or abs(size - prev_size) > 0.25 * max(size, prev_size)
+        ):
+            corners.append(frames[i])
+        previous = step
+    corners.append(frames[-1])
+    return compile_smooth_chunk(corners, fps=fps, vmax=vmax, blend_s=blend_s,
+                                rise_speed=rise_speed, amax=amax)
 
 
 def receding_horizon_splice(active_queue: list, current_pose: list, next_frames: list, fps: int,
@@ -246,4 +299,17 @@ class TemporalChunkEnsembler:
             ]
         self._last = list(blended)
         return blended
+
+
+__all__ = [
+    "GUARD_ACCEL_UNITS_S2", "TemporalChunkEnsembler", "blend_chunks",
+    "compile_smooth_chunk", "eased", "eased_progress", "flow", "progress",
+    "receding_horizon_splice", "retime", "smooth", "trapezoid",
+    "upgrade_linear_chunk",
+]
+
+if __name__ != "omx_adapter.motion_profile":
+    from omx_adapter import motion_profile as _installed
+
+    globals().update({name: getattr(_installed, name) for name in __all__})
 

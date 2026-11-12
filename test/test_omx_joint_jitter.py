@@ -107,3 +107,39 @@ def test_live_window_and_active_chunk_damping_and_arm_s_replay(tmp_path):
     assert -30.0 <= damped[1] <= -29.6 and damped[5] == 55.0
     final = jj.damp_step(ens, damped, [0.0, -29.0, 20.0, 45.0, 0.0, 55.0], [])
     assert final[1] == -29.0
+
+
+def test_blend_to_raw_converges_without_a_single_tick_jump():
+    from omx_adapter.motion_profile import TemporalChunkEnsembler
+
+    ens = TemporalChunkEnsembler(coeff=0.08, vmax=5.0, fps=30)
+    current = [0.0] * 6
+    raw = [0.4] + [0.0] * 5
+    ens.reset(current)
+    for remaining in (3, 2, 1, 0):
+        blended = jj.blend_to_raw(ens, current, raw, remaining)
+        assert 0 <= blended[0] - current[0] <= 5 / 30 + 1e-9
+        assert blended[5] == raw[5]
+        current = blended
+    assert abs(raw[0] - current[0]) < 1e-9
+    ens.reset(raw)
+    assert ens.step(raw) == raw
+
+
+def test_teacher_feedforward_survives_one_paced_hold_while_target_is_ahead():
+    from types import SimpleNamespace
+    from guarded_native import NativeJointMotion
+
+    motion = NativeJointMotion.__new__(NativeJointMotion)
+    motion.active = ("shoulder_pan",)
+    motion.teacher = motion.tracking = True
+    motion.aligned_since = None
+    motion.command = {"shoulder_pan": 2000.0}
+    motion.prev_target = {"shoulder_pan": 2003.0}
+    motion.velocity = {"shoulder_pan": 90.0}
+    motion.v_ff_ema = {"shoulder_pan": 90.0}
+    motion.held = {}
+    motion.follower = SimpleNamespace(calibration={"shoulder_pan": SimpleNamespace(range_min=0, range_max=4095)})
+    _, (velocity, _, _) = motion._body_command({"shoulder_pan": 2003.0}, {"shoulder_pan": 2000.0}, 1 / 30, 0.0)
+    assert velocity["shoulder_pan"] > 0
+    assert math.isclose(motion.v_ff_ema["shoulder_pan"], 49.5)

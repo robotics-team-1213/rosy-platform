@@ -6,6 +6,7 @@ from typing import Any
 import uuid
 import numpy as np
 from omx_adapter.area_xyz import DIRECTIVE_SCHEMA, build_directive, coerce_area_xyz, resolve_area_xyz
+from omx_adapter.motion_profile import compile_smooth_chunk
 
 FSM_SCHEMA = "rosy.omx-spec-recovery-fsm.v1"
 GATE_NAMES: tuple[str, ...] = ("pre_grasp", "at_grasp", "lift_verify", "pre_place", "post_release", "leg_transition")
@@ -337,8 +338,11 @@ def compile_crane_lift_waypoints(
     mid_pose = [float(start_pose[0]), lift_y, 18.0, 46.0, float(start_pose[4]), float(standby_pose[5])]
     end_pose = [float(v) for v in standby_pose]
     return [
-        {"stage": "vertical_crane_retract", "pose": mid_pose, "target": mid_pose, "max_step": step_0},
-        {"stage": "high_elevation_pan_to_standby", "pose": end_pose, "target": end_pose, "max_step": 0.045},
+        {"stage": "vertical_crane_retract", "pose": mid_pose, "target": mid_pose, "max_step": step_0,
+         "smooth_frames": compile_smooth_chunk([start_pose, mid_pose]),
+         "combined_smooth_frames": compile_smooth_chunk([start_pose, mid_pose, end_pose])},
+        {"stage": "high_elevation_pan_to_standby", "pose": end_pose, "target": end_pose, "max_step": 0.045,
+         "smooth_frames": compile_smooth_chunk([mid_pose, end_pose])},
     ]
 
 

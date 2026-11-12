@@ -72,6 +72,7 @@ class NativeJointMotion:
         self.label = label
         self.offsets = offsets
         self.velocity = dict.fromkeys(self.active, 0.0)
+        self.v_ff_ema = dict.fromkeys(BODY, 0.0)
         self.tracking = False
         self.aligned_since = None
         self.last_alignment_report = None
@@ -283,8 +284,16 @@ class NativeJointMotion:
                 continue
             error = target[name] - self.command[name]
             brake = math.sqrt((acceleration * elapsed) ** 2 + 2 * acceleration * abs(error)) - acceleration * elapsed
+            v_ff_raw = ((target[name] - self.prev_target[name]) / elapsed
+                        if self.prev_target is not None and elapsed > 0 else 0.0)
+            if self.teacher and name in BODY and abs(v_ff_raw) <= 1e-6 and abs(self.v_ff_ema[name]) > 1.0 and abs(error) > 1.0 and error * self.v_ff_ema[name] > 0:
+                v_ff = 0.55 * self.v_ff_ema[name]
+            else:
+                v_ff = v_ff_raw
+            v_ff = max(-limit, min(limit, v_ff))
+            if self.teacher and name in BODY:
+                self.v_ff_ema[name] = v_ff
             if self.teacher and tracking and self.prev_target is not None and elapsed > 0:
-                v_ff = (target[name] - self.prev_target[name]) / elapsed
                 if error * v_ff > 0:
                     reach = min(
                         abs(error) / elapsed,

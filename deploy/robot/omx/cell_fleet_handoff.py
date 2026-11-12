@@ -18,6 +18,7 @@ from typing import Any, Callable
 
 from cell_control_core import ensure_omx_paths, sim_precheck_and_optimize_directive
 from cell_spec_recovery_fsm import CELL_S_EXTENDED_ZONES, select_recovery_skill
+from omx_adapter.motion_profile import compile_smooth_chunk
 
 ensure_omx_paths()
 
@@ -57,6 +58,7 @@ def build_crane_recovery_trajectory(
         "grasp_pose_units": src_pose, "target_pose_units": dst_pose,
         "crane_shoulder_lift": CRANE_LIFT_SHOULDER_UNITS, "crane_elbow_flex": CRANE_LIFT_ELBOW_UNITS,
         "max_step": step_cap, "lift_before_pan": True, "waypoints": waypoints,
+        "smooth_frames": compile_smooth_chunk(waypoints),
     }
 
 

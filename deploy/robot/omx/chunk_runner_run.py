@@ -106,6 +106,7 @@ class Runner:
         self.live, self.health_present, self.samples, self.grip_from, self.holding = live, None, [], None, False
         self.recorder, self.operating_context, self._lib_digest_cache = Recorder(), operating_context, None
         self.trend, self.trace, self.jitter_buf, self.damped_ticks = [], None, [], 0
+        self._damp_cooldown = 0
         self.jitter = {"shaking": False, "max_std": 0.0, "max_flips_hz": 0.0, "max_p2p": 0.0, "flagged": []}
         self.ensembler = TemporalChunkEnsembler(coeff=0.08, vmax=GUARD_UNITS_PER_S, fps=fps)
 
@@ -171,6 +172,13 @@ class Runner:
     def strained(self, sent, present):
         return runner_strain.strained(self, sent, present)
 
+    def _eval_jitter(self):
+        if len(self.jitter_buf) < joint_jitter.MIN_TICKS:
+            return {"shaking": False, "flagged": [], "max_std": 0.0}
+        if not self.jitter.get("shaking") and self.ticks % 3 != 0:
+            return self.jitter
+        return joint_jitter.live_window(self.jitter_buf, self.params)
+
     def tick(self) -> None:
         pace_lag, pace_rise = (
             prm.get(self.params, "runner.pace_lag", _cr_attr("PACE_LAG", PACE_LAG)),
@@ -190,10 +198,21 @@ class Runner:
             if self.pace_last is not None:
                 self.pace_floor = max(self.pace_floor, self.lag)
             raw_target = self.queue.pop(0)
-            if self.jitter["shaking"] or (self.pace_last is not None and self.queue):
-                self.target = joint_jitter.damp_step(self.ensembler, self.target or raw_target, raw_target, self.queue)
+            if self.jitter.get("shaking") or (self.pace_last is not None and self.queue):
+                self._damp_cooldown = 4 if self.queue else 0
+                self.target = joint_jitter.damp_step(
+                    self.ensembler, self.target or raw_target, raw_target, self.queue[:4],
+                    vmax=GUARD_UNITS_PER_S, fps=self.fps,
+                )
                 self.damped_ticks += 1
+            elif self._damp_cooldown > 0 and self.queue:
+                self._damp_cooldown -= 1
+                self.target = joint_jitter.blend_to_raw(
+                    self.ensembler, self.target, raw_target, self._damp_cooldown,
+                    vmax=GUARD_UNITS_PER_S, fps=self.fps,
+                )
             else:
+                self._damp_cooldown = 0
                 self.ensembler.reset(raw_target)
                 self.target = raw_target
             self.paced, self.pace_last = 0, None
@@ -214,7 +233,7 @@ class Runner:
         )
         if len(self.jitter_buf) > max(60, round(2.0 * self.fps) + 2):
             del self.jitter_buf[: -max(60, round(2.0 * self.fps) + 2)]
-        self.jitter = joint_jitter.live_window(self.jitter_buf, self.params)
+        self.jitter = self._eval_jitter()
         if self.trace:
             load = self.__dict__.pop("load_new", None)
             self.trace(

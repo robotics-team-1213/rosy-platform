@@ -12,6 +12,8 @@ import json
 from pathlib import Path
 from typing import Any, Sequence
 
+from omx_adapter.motion_profile import compile_smooth_chunk
+
 HERE = Path(__file__).resolve().parent
 ADAPTER_ROOT = HERE.parents[2] / "middleware/devices/omx/adapter"
 
@@ -87,10 +89,10 @@ def build_plan_from_directive(
     plan["grip_s"] = float(exec_cfg.get("grip_s", 0.45))
     plan["settle_s"] = float(exec_cfg.get("settle_s", min(0.18, float(plan.get("settle_s", 0.18)))))
     plan["descend_guard_frac"] = float(
-        exec_cfg.get("descend_guard_frac", max(0.60, float(plan.get("descend_guard_frac", 0.60))))
+        exec_cfg.get("descend_guard_frac", plan.get("descend_guard_frac", 0.76))
     )
     plan["lift_guard_frac"] = float(
-        exec_cfg.get("lift_guard_frac", max(0.70, float(plan.get("lift_guard_frac", 0.70))))
+        exec_cfg.get("lift_guard_frac", plan.get("lift_guard_frac", 0.82))
     )
     if arm_id == "arm_b" and "limits" in plan and "joints_rad" in plan["limits"]:
         plan["limits"]["joints_rad"]["joint5"] = [0.16, 2.89]
@@ -113,7 +115,7 @@ def build_plan_from_directive(
         exec_cfg.get("descend_pick_guard_frac", max(0.60, float(plan.get("descend_pick_guard_frac", 0.60))))
     )
     plan["descend_place_guard_frac"] = float(
-        exec_cfg.get("descend_place_guard_frac", max(0.55, float(plan.get("descend_place_guard_frac", 0.55))))
+        exec_cfg.get("descend_place_guard_frac", plan.get("descend_place_guard_frac", 0.70))
     )
     plan["lift_pick_guard_frac"] = float(
         exec_cfg.get("lift_pick_guard_frac", max(0.70, float(plan.get("lift_pick_guard_frac", plan.get("lift_guard_frac", 0.70)))))
@@ -140,10 +142,10 @@ def plan_library_from_directive(
         chunks = lib["chunks"]
         for k in ("above_pick", "above_place"):
             if chunks.get(k):
-                chunks[k] = list(chunks[k]) + [list(chunks[k][-1])] * 2
+                chunks[k] = list(chunks[k]) + [list(chunks[k][-1])]
         for k in ("descend_pick", "descend_place", "lift_pick", "lift_place"):
             if chunks.get(k):
-                chunks[k] = list(chunks[k]) + [list(chunks[k][-1])] * 3
+                chunks[k] = list(chunks[k]) + [list(chunks[k][-1])]
     if exec_cfg.get("sim_real_compensate", True) and "chunks" in lib:
         chunks = lib["chunks"]
         arm_id = str(directive.get("arm_id") or "arm_b")
@@ -219,13 +221,18 @@ def build_crane_standby_transition(
     s = [float(v) for v in start_pose]
     b = [float(v) for v in standby_pose]
     if abs(s[0] - b[0]) <= 3.0 and s[1] <= -22.0:
-        return [{"phase": "crane_direct_standby", "pose": b, "max_step": round(float(pan_step), 4)}]
+        return [{"phase": "crane_direct_standby", "pose": b, "max_step": round(float(pan_step), 4),
+                 "smooth_frames": compile_smooth_chunk([s, b]),
+                 "combined_smooth_frames": compile_smooth_chunk([s, b])}]
     folded_lift = round(min(-27.0, b[1]), 2)
     folded_elbow = round(max(22.0, b[2], s[2] + 10.0), 2)
     fold_pose = [round(s[0], 2), folded_lift, folded_elbow, round(b[3], 2), round(s[4], 2), round(b[5], 2)]
     return [
-        {"phase": "crane_lift_fold", "pose": fold_pose, "max_step": round(float(lift_step), 4)},
-        {"phase": "crane_pan_standby", "pose": b, "max_step": round(float(pan_step), 4)},
+        {"phase": "crane_lift_fold", "pose": fold_pose, "max_step": round(float(lift_step), 4),
+         "smooth_frames": compile_smooth_chunk([s, fold_pose]),
+         "combined_smooth_frames": compile_smooth_chunk([s, fold_pose, b])},
+        {"phase": "crane_pan_standby", "pose": b, "max_step": round(float(pan_step), 4),
+         "smooth_frames": compile_smooth_chunk([fold_pose, b])},
     ]
 
 

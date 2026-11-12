@@ -131,3 +131,50 @@ def test_flow_decouples_pure_gripper_segments_and_skips_zero_delta_waypoints():
     v = speeds(grip_frames, wp_grip[0])
     assert max(abs(x) for row in v for x in row) <= VMAX + 1e-6
 
+
+def test_compile_smooth_chunk_crane_corner_respects_guard_and_keeps_moving():
+    start = [-27.7, 6.5, -9.9, 53.5, 17.9, 46.5]
+    lift = [-27.7, -27.0, 22.0, 48.0, 17.9, 46.5]
+    standby = [0.0, -27.0, 18.0, 46.0, -5.0, 46.5]
+    frames = m.compile_smooth_chunk([start, {"pose": lift}, {"pose_units": standby}])
+    velocity = speeds(frames, start)
+    acceleration = [max(abs(b - a) * FPS for a, b in zip(p, q))
+                    for p, q in zip(velocity, velocity[1:])]
+    assert frames[-1] == standby
+    assert len(frames) < 700
+    assert max(acceleration) <= m.GUARD_ACCEL_UNITS_S2 + 0.1
+    assert max(-v[1] for v in velocity) <= 2.6 + 1e-6
+    assert min(max(abs(a - b) for a, b in zip(frame, lift)) for frame in frames) < 1.0
+    assert min(max(abs(v) for v in velocity[10:-10])) > 0.05
+
+
+def test_upgrade_linear_chunk_compresses_and_softens_corners():
+    poses = [[0, -27, 18, 46, 0, 50], [30, -27, 18, 46, 0, 50],
+             [30, -27, 48, 46, 0, 50], [30, -27, 48, 16, 0, 50]]
+    linear = [poses[0]]
+    for a, b in zip(poses, poses[1:]):
+        count = round(max(abs(y - x) for x, y in zip(a, b)) / 0.030)
+        linear.extend([[x + (y - x) * i / count for x, y in zip(a, b)]
+                       for i in range(1, count + 1)])
+    upgraded = m.upgrade_linear_chunk(linear)
+    old_v, new_v = speeds(linear[1:], linear[0]), speeds(upgraded, linear[0])
+    old_a = [[(b - a) * FPS for a, b in zip(p, q)] for p, q in zip(old_v, old_v[1:])]
+    new_a = [[(b - a) * FPS for a, b in zip(p, q)] for p, q in zip(new_v, new_v[1:])]
+    peak = lambda rows: max(abs(x) for row in rows for x in row)
+    old_j = [[(b - a) * FPS for a, b in zip(p, q)] for p, q in zip(old_a, old_a[1:])]
+    new_j = [[(b - a) * FPS for a, b in zip(p, q)] for p, q in zip(new_a, new_a[1:])]
+    assert upgraded[-1] == poses[-1]
+    assert len(linear) >= 3.2 * len(upgraded)
+    assert peak(new_a) <= 0.25 * peak(old_a)
+    assert peak(new_j) <= 0.25 * peak(old_j)
+
+
+def test_compile_smooth_chunk_deduplicates_and_eases_pure_gripper_motion():
+    start = [0, -27, 18, 46, 0, 46]
+    end = [0, -27, 18, 46, 0, 56]
+    assert m.compile_smooth_chunk([]) == []
+    assert m.compile_smooth_chunk([start, start]) == [start]
+    frames = m.compile_smooth_chunk([{"pose_units": start}, {"pose_units": start, "gripper": 56}])
+    assert frames[-1] == end
+    assert max(abs(v[5]) for v in speeds(frames, start)) <= 4.25 + 1e-6
+

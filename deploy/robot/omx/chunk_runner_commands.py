@@ -111,6 +111,8 @@ def dispatch_runner_command(runner, line: str) -> bool:
                 f"fault ({runner.fault}): only park, state or stop"
                 + (", or retreat/jog/grip after a contact" if soft else "")
             )
+        if verb in ("run", "goto", "park", "chain", "splice", "retreat"):
+            runner._damp_cooldown = 0
         if verb == "splice" and len(words) in (2, 3) and words[2:] in ([], ["rel"]):
             runner.queue = build_splice_frames(
                 runner.library, words[1], words[2:] == ["rel"], runner.queue, runner.target, runner.fps
