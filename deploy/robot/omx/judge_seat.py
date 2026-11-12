@@ -35,16 +35,8 @@ SCHEMA_VERSION = 2
 DECISIONS = ("proceed", "retry", "reinsert", "remap", "park", "abort")
 PRECONDITION = {"grasp": "aligned", "lift": "holding", "transport": "stable"}
 CONSERVATIVE_ORDER = (
-    "abort",
-    "park",
-    "reinsert_and_park",
-    "reinsert",
-    "reinsert_and_retry",
-    "remap",
-    "retry",
-    "unknown",
-    -1,
-    "proceed",
+    "abort", "park", "reinsert_and_park", "reinsert", "reinsert_and_retry",
+    "remap", "retry", "unknown", -1, "proceed",
 )
 
 
