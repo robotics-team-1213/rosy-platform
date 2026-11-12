@@ -389,6 +389,117 @@ def replay_and_verify_ledger(out_dir: Path) -> dict[str, Any]:
     }
 
 
+def simulate_sim2real_jitter_z_and_dynamics(out_dir: Path) -> dict[str, Any]:
+    """Verify multi-arm (`arm_s`, `arm_a`, `arm_b`) real-time jitter damping, 3D Z-axis search, and calculus grasp dynamics in parallel."""
+    from concurrent.futures import ThreadPoolExecutor
+    for _p in (OMX_DIR, ADAPTER_DIR, SIM_DIR):
+        if str(_p) not in sys.path:
+            sys.path.insert(0, str(_p))
+    from omx_adapter.chunk_library import TemporalChunkEnsembler
+    import cell_area_zones as caz
+    import joint_jitter as jj
+    import omx_real2sim_comp as r2s_comp
+
+    def _verify_arm(arm_id: str) -> dict[str, Any]:
+        # 1. Real-time rolling jitter window + active chunk damping + multi-sample settled_state
+        osc = [
+            {"t": k * 0.033, "chunk": "hold", "target": [0.0] * 6, "sent": [0.0] * 6,
+             "present": [0.0, (-1) ** k * 1.2, (-1) ** k * 0.8, 0.0, 0.0, 48.0]}
+            for k in range(36)
+        ]
+        win = jj.live_window(osc)
+        ens = TemporalChunkEnsembler()
+        cur = [0.0, 0.0, 0.0, 0.0, 0.0, 48.0]
+        nxt = [0.0, 4.0, 2.0, 0.0, 0.0, 48.0]
+        cmd_damped = jj.damp_step(ens, cur, nxt, [[0.0, 1.0, 0.5, 0.0, 0.0, 48.0], [0.0, 2.0, 1.0, 0.0, 0.0, 48.0]])
+        # 2. 3D Z-axis pick recovery on area corresponding to arm
+        area = {"arm_s": "pinky", "arm_a": "ship", "arm_b": "pallet"}[arm_id]
+        z_nom = {"pinky": 0.008, "ship": 0.004, "pallet": 0.012}[area]
+        directive = {
+            "arm_id": arm_id,
+            "pick": {"area": area, "col": 1, "tier": 1, "x": 0.165, "y": -0.145 if arm_id != "arm_b" else 0.02, "z": z_nom,
+                     "effective_xyz_m": [0.165, -0.145 if arm_id != "arm_b" else 0.02, z_nom], "yaw_deg": -90.0},
+            "execution": {},
+        }
+        rec = caz.diagnose_and_recover_pick(
+            attempt=0, cur_directive=directive, r_desc={"ok": True},
+            r_grasp={"ok": True, "state": [0, 0, 0, 0, 0, 49.5], "gripper_current_ma": 40.0},
+            cal={"held_30mm": 54.0}, tried_xs=[],
+        )
+        dz_mm = round((rec["recovered_pick_xyz_m"][2] - z_nom) * 1000.0, 2)
+        # 3. Calculus grasp dynamics (elastic settle vs slip collapse)
+        r_g1 = {"ok": True, "holding": True, "gripper_current_ma": 155.0, "state": [0, 0, 0, 0, 48.0, 55.68]}
+        r_l1 = {"ok": True, "holding": True, "gripper_current_ma": 132.0, "state": [0, 0, 0, 0, 48.0, 54.29]}
+        r_a1 = {"ok": True, "holding": True, "gripper_current_ma": 128.0, "state": [0, 0, 0, 0, 48.0, 54.25]}
+        dyn_ok = cell_arm_cal.evaluate_grasp_dynamics(r_g1, r_lift=r_l1, r_above_place=r_a1, closed=48.8, open_pos=57.85)
+        r_g2 = {"ok": True, "holding": True, "gripper_current_ma": 144.0, "state": [0, 0, 0, 0, 48.0, 52.31]}
+        r_l2 = {"ok": True, "holding": False, "gripper_current_ma": 88.0, "state": [0, 0, 0, 0, 48.0, 49.18]}
+        dyn_slip = cell_arm_cal.evaluate_grasp_dynamics(r_g2, r_lift=r_l2, closed=48.8, open_pos=57.85)
+        return {
+            "arm_id": arm_id,
+            "shaking_detected": bool(win["shaking"]),
+            "damped_step_reduced": abs(cmd_damped[1] - cur[1]) < abs(nxt[1] - cur[1]),
+            "z_search_dz_mm": dz_mm,
+            "z_search_non_zero": dz_mm < 0.0,
+            "dynamics_elastic_stable": bool(dyn_ok["holding"] and dyn_ok["regime"] == "elastic_settle"),
+            "dynamics_slip_caught": bool(not dyn_slip["holding"] and dyn_slip["regime"] == "slip_collapse"),
+        }
+
+    with ThreadPoolExecutor(max_workers=3) as ex:
+        arm_rows = list(ex.map(_verify_arm, ("arm_s", "arm_a", "arm_b")))
+
+    # 4. Verify ServoCompensator closed-loop jitter damping, oscillation-settled gate, and 3D Z-sag compensation
+    class _DummyModel:
+        actuator_forcerange = np.tile([[0.0, 3.0]], (10, 1))
+        dof_damping = np.full(10, 0.25)
+        dof_frictionloss = np.full(10, 0.03)
+        actuator_gainprm = np.tile([[12.0, 0.0, 0.0]], (10, 1))
+
+    class _DummyWorld:
+        model = _DummyModel()
+        q = {"arm_a": np.arange(0, 6), "arm_b": np.arange(6, 12)}
+        arm_dof = {"arm_a": np.arange(0, 6), "arm_b": np.arange(0, 6)}
+        act = {"arm_a": np.arange(0, 6), "arm_b": np.arange(0, 6)}
+        hold_dof = {"arm_a": [2, 3], "arm_b": [2, 3]}
+
+        @staticmethod
+        def tcp(_data, _arm):
+            return np.array([0.14, -0.05, 0.012]), np.eye(3)
+
+    class _DummyData:
+        qpos = np.zeros(12)
+        qvel = np.zeros(10)
+        qfrc_bias = np.zeros(10)
+
+    comp = r2s_comp.ServoCompensator(_DummyWorld(), fps=15)
+    d = _DummyData()
+    for k in range(10):
+        d.qpos[1] = (-1) ** k * 0.009
+        d.qvel[1] = (-1) ** k * 0.12
+        comp.apply(d, {"arm_a": np.zeros(6)})
+    jit = comp.jitter_state("arm_a")
+    not_settled_while_shaking = not comp.is_settled("arm_a", q_err=0.002, q_vel=0.0, tcp_ok=True)
+    z_comp_pos = comp.compensate_z_target(d, "arm_a", np.array([0.14, -0.05, 0.020]))
+    all_ok = (
+        all(r["shaking_detected"] and r["damped_step_reduced"] and r["z_search_non_zero"]
+            and r["dynamics_elastic_stable"] and r["dynamics_slip_caught"] for r in arm_rows)
+        and jit["shaking"]
+        and comp.damped_frames["arm_a"] >= 1
+        and not_settled_while_shaking
+        and float(z_comp_pos[2]) > 0.020
+    )
+    return {
+        "all_ok": bool(all_ok),
+        "arms": arm_rows,
+        "servo_compensator": {
+            "jitter_state": jit,
+            "damped_frames": comp.damped_frames["arm_a"],
+            "not_settled_while_shaking": not_settled_while_shaking,
+            "z_compensated_m": round(float(z_comp_pos[2]), 5),
+        },
+    }
+
+
 def run_full_problem_recovery_simulation(out_dir: Path) -> dict[str, Any]:
     """Run all tier (1단/2단/3단) and multi-arm (`arm_s`, `arm_a`, `arm_b`) problem-recovery simulations."""
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -417,6 +528,7 @@ def run_full_problem_recovery_simulation(out_dir: Path) -> dict[str, Any]:
             )
     descent_hold = simulate_descent_and_hold_preservation()
     ledger_replay = replay_and_verify_ledger(out_dir)
+    sim2real_loop = simulate_sim2real_jitter_z_and_dynamics(out_dir)
     cal_files = {
         arm: cell_arm_cal.load(out_dir, arm)
         for arm in ("arm_s", "arm_a", "arm_b")
@@ -433,6 +545,7 @@ def run_full_problem_recovery_simulation(out_dir: Path) -> dict[str, Any]:
             and descent_hold["holding_cleared_when_jaws_empty"]
             and descent_hold["infer_holding_overrides_uncalibrated_threshold"]
             and ledger_replay["all_verified"]
+            and sim2real_loop["all_ok"]
         ),
         "tiers_verified": [t["tier"] for t in TIERS],
         "arms_verified": ["arm_s", "arm_a", "arm_b"],
@@ -440,6 +553,7 @@ def run_full_problem_recovery_simulation(out_dir: Path) -> dict[str, Any]:
         "grasp_debate_reinsert_recovery": debate_results,
         "descent_and_hold_preservation": descent_hold,
         "problem_ledger_replay": ledger_replay,
+        "sim2real_jitter_z_and_dynamics": sim2real_loop,
         "persisted_arm_calibrations": cal_files,
     }
     (out_dir / "problem-recovery-sim-report.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")

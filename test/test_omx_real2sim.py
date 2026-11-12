@@ -424,6 +424,53 @@ def test_tilted_bottom_clipped_temp_lane_and_servo_zero_offset_compensation():
     assert seen_shift[2]["xy_err_mm"] < 3.0
 
 
+def test_servo_antijitter_physics_candidate_and_compensator_jitter_z_sag():
+    import omx_physics
+    import omx_real2sim_comp as r2s_comp
+
+    cand = omx_physics.Physics("servo-antijitter-20261112")
+    assert cand.joint("arm_b", "joint2")["kp"] == pytest.approx(8.416)
+    assert cand.joint("arm_b", "joint2")["frictionloss"] == pytest.approx(0.042635)
+
+    class _DummyModel:
+        actuator_forcerange = np.tile([[0.0, 3.0]], (10, 1))
+        dof_damping = np.full(10, 0.25)
+        dof_frictionloss = np.full(10, 0.03)
+        actuator_gainprm = np.tile([[8.416, 0.0, 0.0]], (10, 1))
+
+    class _DummyWorld:
+        model = _DummyModel()
+        q = {"arm_a": np.arange(0, 6), "arm_b": np.arange(6, 12)}
+        arm_dof = {"arm_a": np.arange(0, 6), "arm_b": np.arange(0, 6)}
+        act = {"arm_a": np.arange(0, 6), "arm_b": np.arange(0, 6)}
+        hold_dof = {"arm_a": [2, 3], "arm_b": [2, 3]}
+
+        @staticmethod
+        def tcp(_data, _arm):
+            return np.array([0.15, -0.04, 0.010]), np.eye(3)
+
+    class _DummyData:
+        qpos = np.zeros(12)
+        qvel = np.zeros(10)
+        qfrc_bias = np.zeros(10)
+
+    comp = r2s_comp.ServoCompensator(_DummyWorld(), fps=15)
+    d = _DummyData()
+    for k in range(10):
+        d.qpos[1] = (-1) ** k * 0.008
+        d.qvel[1] = (-1) ** k * 0.10
+        comp.apply(d, {"arm_a": np.zeros(6)})
+    jit = comp.jitter_state("arm_a")
+    assert jit["shaking"] is True
+    assert comp.damped_frames["arm_a"] >= 1
+    assert comp.is_settled("arm_a", q_err=0.002, q_vel=0.0, tcp_ok=True) is False
+    q_avg = comp.settled_q(d, "arm_a")
+    assert abs(float(q_avg[1])) < abs(float(d.qpos[1]))
+    p_comp = comp.compensate_z_target(d, "arm_a", np.array([0.15, -0.04, 0.018]))
+    assert float(p_comp[2]) > 0.018
+
+
+
 
 
 

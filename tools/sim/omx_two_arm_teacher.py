@@ -131,7 +131,7 @@ class Teacher:
             yield q_from + s * s * (3 - 2 * s) * (q_to - q_from)
 
     def settle_g(self, data, arm, q_target, grip, pos_target=None, max_s=6.0):
-        """Closed-loop settle at a waypoint until joint error, velocity, and TCP position converge."""
+        """Closed-loop settle at a waypoint until joint error, velocity, TCP position, and jitter gate converge."""
         cmd = np.append(q_target[:5], grip)
         z_off = (self.zero_error[arm][:5] - (self.servo_comp.zero_est[arm] if self.servo_comp is not None else 0.)) if (not self.privileged and arm in self.zero_error) else 0.
         check_tcp = self.privileged or self.compensate_zero
@@ -139,7 +139,7 @@ class Teacher:
             q_err = float(np.max(np.abs((q_target[:5] + z_off) - self.q_now(data, arm)[:5])))
             q_vel = float(np.max(np.abs(data.qvel[self.world.arm_dof[arm][:5]])))
             tcp_ok = not check_tcp or pos_target is None or float(np.linalg.norm(self.world.tcp(data, arm)[0] - pos_target)) <= .0012
-            if q_err <= .0045 and q_vel <= .02 and tcp_ok:
+            if self.servo_comp.is_settled(arm, q_err, q_vel, tcp_ok) if self.servo_comp is not None else (q_err <= .0045 and q_vel <= .02 and tcp_ok):
                 break
             self.settle_frames += 1
             yield cmd
@@ -244,7 +244,9 @@ class Teacher:
         for _ in range(round(.7 * FPS)):
             yield np.append(ik_arm.wait[:5], g_to)
         scomp = dict(physics=L.choices["physics"], settle_frames=self.settle_frames,
-                     max_trim_deg=round(math.degrees(self.servo_comp.max_trim_rad[arm]), 2) if self.servo_comp else 0.0)
+                     max_trim_deg=round(math.degrees(self.servo_comp.max_trim_rad[arm]), 2) if self.servo_comp else 0.0,
+                     damped_frames=self.servo_comp.damped_frames[arm] if self.servo_comp else 0,
+                     max_jitter_std_deg=round(math.degrees(self.servo_comp.max_jitter_std_rad[arm]), 3) if self.servo_comp else 0.0)
         return dict(self.verdict(data, step, row, before, ctx), held=held, servo_comp=scomp, worst_ik_error_mm=round(worst * 1000, 2))
 
     def belt_in_g(self, data, step):

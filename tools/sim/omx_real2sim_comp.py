@@ -1,24 +1,16 @@
 """Closed-loop Real-to-Sim and Sim-to-Real compensation for the two-arm OMX cell.
 
-Bridges runtime gaps when reality and simulation diverge during execution:
 1. Camera extrinsic drift / angle-position perturbation (G-19, G-24):
-   - `perturbed_camera_dict` / `apply_world_camera`: injects a controlled 6-DoF position/angle shift into the top camera.
-   - `calibrate_top_camera` & `perceive_container`: recovers the 6-DoF top-camera extrinsics online from in-frame cell
-     anchors (unclipped `+x` ends of v11 temporary-plate dark pads at `deck_z`, seated temporary-lane containers at known
-     pocket coordinates, and the belt strip stop/centreline/slope at `belt_top`), segments containers per colour so
-     adjacent or multi-tier containers never merge, and restores bottom-clipped (`row 479`) containers on the v11 plates.
-2. Physical servo dynamics / friction / gravity-sag / joint-zero differences (G-20, G-23):
-   - `ServoCompensator`: paces trajectories to each joint's physical torque/damping terminal speed (`pace_seconds`),
-     applies uncompensated-gravity feedforward, bounded waypoint integral trim (`settle_g`), and hand-eye joint-zero
-     offset compensation (`calibrate_zero_offset`).
+   - `perturbed_camera_dict` / `apply_world_camera`: injects 6-DoF position/angle shift into the top camera.
+   - `calibrate_top_camera` & `perceive_container`: recovers 6-DoF top-camera extrinsics online from cell anchors (`+x` ends of v11 pads, seated lane containers, and belt stop/centreline/slope), segments containers per colour, and restores bottom-clipped (`row 479`) containers.
+2. Physical servo dynamics / friction / gravity-sag / jitter damping / joint-zero differences (G-20, G-23):
+   - `ServoCompensator`: paces trajectories (`pace_seconds`), applies gravity feedforward, waypoint integral trim (`settle_g`), active jitter damping (`jitter_state`, `is_settled`, `settled_q`), 3D Z-sag compensation (`compensate_z_target`), and joint-zero offset compensation (`calibrate_zero_offset`).
 """
 from __future__ import annotations
 
 import math
 from typing import Any
-
 import numpy as np
-
 import omx_real2sim as r2s
 
 BELT_STOP_EDGE_OFFSET_M = 0.0080  # 2 mm belt_stop half-width + 3 mm perspective occlusion of 8 mm stop + 3 mm 1st-percentile offset
@@ -51,41 +43,24 @@ def apply_world_camera(world: Any, cam_name: str, cam_dict: dict[str, Any]) -> N
     import mujoco
 
     cid = world.model.camera(cam_name).id
-    eye = np.array(cam_dict["eye"], float)
-    focus = np.array(cam_dict["focus"], float)
-    fwd = focus - eye
-    fwd /= np.linalg.norm(fwd)
-    up = np.array(cam_dict["up"], float)
-    up = up - fwd * (up @ fwd)
+    eye, focus = np.array(cam_dict["eye"], float), np.array(cam_dict["focus"], float)
+    fwd = (focus - eye) / np.linalg.norm(focus - eye)
+    up = np.array(cam_dict["up"], float) - fwd * (np.array(cam_dict["up"], float) @ fwd)
     up /= np.linalg.norm(up)
-    right = np.cross(fwd, up)
-    R = np.column_stack([right, up, -fwd])
     quat = np.empty(4)
-    mujoco.mju_mat2Quat(quat, R.flatten())
-    world.model.cam_pos[cid] = eye
-    world.model.cam_quat[cid] = quat
+    mujoco.mju_mat2Quat(quat, np.column_stack([np.cross(fwd, up), up, -fwd]).flatten())
+    world.model.cam_pos[cid], world.model.cam_quat[cid] = eye, quat
 
 
 def _camera_from_params(base_cam: dict[str, Any], size: tuple[int, int], p: np.ndarray) -> r2s.Camera:
     """Build an `r2s.Camera` with extrinsic perturbation `p = [dx, dy, dz, rx, ry, rz]` applied to `base_cam`."""
-    cam = r2s.Camera(base_cam, size)
-    R = rodrigues(p[3:6])
-    cam.eye = cam.eye + p[:3]
-    cam.fwd = R @ cam.fwd
-    cam.up = R @ cam.up
-    cam.right = R @ cam.right
+    cam, R = r2s.Camera(base_cam, size), rodrigues(p[3:6])
+    cam.eye, cam.fwd, cam.up, cam.right = cam.eye + p[:3], R @ cam.fwd, R @ cam.up, R @ cam.right
     return cam
 
 
 def container_blobs(bgr: np.ndarray) -> list[tuple[str, np.ndarray]]:
-    """Lighting-adaptive container segmentation using CIE Lab CLAHE, bilateral filtering, and Scharr chrominance edges.
-
-    1. Applies `cv2.createCLAHE` to `L*` and `cv2.bilateralFilter` to `(a*, b*)` to normalize uneven shadows/exposure
-       while preserving sharp container boundaries and ignoring 3D-printed surface corrugations.
-    2. Uses rotationally symmetric `cv2.Scharr` chrominance gradients (`g_ab`) to sever `90x30 mm` containers from
-       large background surfaces (`area > 6000 px`, e.g. the yellow worktable) and suppresses the live background
-       `(a*, b*)` mode without brittle HSV hue cutoffs.
-    """
+    """Lighting-adaptive container segmentation using CIE Lab CLAHE, bilateral filtering, and Scharr chrominance edges."""
     import cv2
 
     lab_u8 = cv2.cvtColor(bgr, cv2.COLOR_BGR2Lab)
@@ -445,25 +420,15 @@ def calibrate_top_camera(bgr: np.ndarray, layout: Any, here: dict[str, str] | No
             dys = [float(cam_cal.to_plane(pad["uv_plus"], pad["z"])[0][1] - pad["true_plus"][1]) for pad in tp]
             plate_res[tag] = dict(dx=float(np.median(dxs)), dy=float(np.median(dys)))
     return cam_cal, dict(
-        moved=True,
-        anchors_used=n_anchors,
-        raw_err_mm=round(raw_err_mm, 2),
-        cal_err_mm=round(cal_err_mm, 2),
+        moved=True, anchors_used=n_anchors, raw_err_mm=round(raw_err_mm, 2), cal_err_mm=round(cal_err_mm, 2),
         eye_shift_mm=[round(float(v) * 1000.0, 2) for v in p[:3]],
         rot_shift_deg=[round(math.degrees(float(v)), 2) for v in p[3:6]],
-        belt_residual=belt_res,
-        plate_residuals=plate_res,
+        belt_residual=belt_res, plate_residuals=plate_res,
     )
 
 
-def perceive_container(
-    bgr: np.ndarray,
-    sa: dict[str, Any],
-    true_xy: Any,
-    true_yaw: float,
-    layout: Any,
-    here: dict[str, str] | None = None,
-) -> tuple[tuple[float, float], float, dict[str, Any]] | None:
+def perceive_container(bgr: np.ndarray, sa: dict[str, Any], true_xy: Any, true_yaw: float,
+                       layout: Any, here: dict[str, str] | None = None) -> tuple[tuple[float, float], float, dict[str, Any]] | None:
     """Detect a container at `sa` in `bgr` after online 6-DoF anchor calibration of the top camera."""
     img_h = bgr.shape[0]
     cam_nom = r2s.Camera(layout.fixture["real_cameras"]["top"], (img_h, bgr.shape[1]))
@@ -491,93 +456,131 @@ def perceive_container(
     _, xy, yaw, sz, col, best_px = min(cands, key=lambda x: x[0])
     if cam_comp.get("moved"):
         raw_xy, raw_yaw, _ = _box_on_plane(cam_nom, best_px, top_z, box_l, box_w, img_h, exp_yaw, exp_xy)
-        cam_comp = dict(
-            cam_comp,
-            raw_xy_err_mm=round(math.dist(raw_xy, true_xy) * 1000.0, 2),
-            raw_yaw_err_deg=round(abs(math.degrees(r2s.fold(raw_yaw - true_yaw))), 2),
-            correction_mm=round(math.dist(xy, raw_xy) * 1000.0, 2),
-        )
+        cam_comp = dict(cam_comp, raw_xy_err_mm=round(math.dist(raw_xy, true_xy) * 1000.0, 2),
+                        raw_yaw_err_deg=round(abs(math.degrees(r2s.fold(raw_yaw - true_yaw))), 2),
+                        correction_mm=round(math.dist(xy, raw_xy) * 1000.0, 2))
     return xy, yaw, dict(
-        colour=col,
-        xy_err_mm=round(math.dist(xy, true_xy) * 1000.0, 2),
+        colour=col, xy_err_mm=round(math.dist(xy, true_xy) * 1000.0, 2),
         yaw_err_deg=round(abs(math.degrees(r2s.fold(yaw - true_yaw))), 2),
-        seen_xy=[round(xy[0], 4), round(xy[1], 4)],
-        seen_yaw_deg=round(math.degrees(yaw), 1),
-        size_mm=[round(sz[0] * 1000.0, 1), round(sz[1] * 1000.0, 1)],
-        camera_comp=cam_comp,
+        seen_xy=[round(xy[0], 4), round(xy[1], 4)], seen_yaw_deg=round(math.degrees(yaw), 1),
+        size_mm=[round(sz[0] * 1000.0, 1), round(sz[1] * 1000.0, 1)], camera_comp=cam_comp,
     )
 
 
 class ServoCompensator:
-    """Closed-loop joint tracking compensator for low-gain servos, Coulomb friction, gravity sag, and joint-zero error."""
+    """Closed-loop joint tracking compensator for low-gain servos, Coulomb friction, gravity/Z sag, jitter damping, and zero error."""
 
     def __init__(self, world: Any, fps: int = 15):
-        self.world = world
-        self.fps = fps
+        self.world, self.fps = world, fps
         self.trim: dict[str, np.ndarray] = {arm: np.zeros(5) for arm in world.q}
         self.zero_est: dict[str, np.ndarray] = {arm: np.zeros(5) for arm in world.q}
         self.prev_ref: dict[str, np.ndarray] = {}
+        self.prev_cmd: dict[str, np.ndarray] = {}
+        self.err_hist: dict[str, list[np.ndarray]] = {arm: [] for arm in world.q}
+        self.q_hist: dict[str, list[np.ndarray]] = {arm: [] for arm in world.q}
         self.max_trim_rad: dict[str, float] = {arm: 0.0 for arm in world.q}
+        self.max_jitter_std_rad: dict[str, float] = {arm: 0.0 for arm in world.q}
+        self.damped_frames: dict[str, int] = {arm: 0 for arm in world.q}
+        self.z_sag_m: dict[str, float] = {arm: 0.0 for arm in world.q}
 
     def reset_arm(self, arm: str) -> None:
         self.trim[arm] = np.zeros(5)
-        self.max_trim_rad[arm] = 0.0
+        self.err_hist[arm], self.q_hist[arm] = [], []
+        self.prev_cmd.pop(arm, None)
+        self.max_trim_rad[arm], self.max_jitter_std_rad[arm], self.damped_frames[arm], self.z_sag_m[arm] = 0.0, 0.0, 0, 0.0
 
     def calibrate_zero_offset(self, arm: str, q_true: np.ndarray, q_reported: np.ndarray) -> np.ndarray:
         """Record 5-joint encoder zero offset (`q_true - q_reported`) from visual/FK arm pose observation."""
         self.zero_est[arm] = (np.asarray(q_true[:5], float) - np.asarray(q_reported[:5], float)).copy()
         return self.zero_est[arm]
 
+    def jitter_state(self, arm: str) -> dict[str, Any]:
+        """Compute rolling residual jitter metrics (`std_rad`, `std_deg`, `flips_hz`, `shaking`) for `arm`."""
+        hist = self.err_hist.get(arm, [])
+        if len(hist) < 4:
+            return dict(shaking=False, std_rad=0.0, std_deg=0.0, flips_hz=0.0)
+        arr = np.asarray(hist[-10:], float)
+        std_j = np.std(arr, axis=0)
+        max_std = float(np.max(std_j))
+        diffs = np.diff(arr, axis=0)
+        signs = np.where(np.abs(diffs) >= 0.0007, np.sign(diffs), 0.0)
+        flips = np.sum(signs[1:] * signs[:-1] < 0.0, axis=0)
+        flips_hz = float(np.max(flips)) * self.fps / max(1, len(arr) - 1)
+        shaking = bool(max_std >= 0.0028 and flips_hz >= 2.2)
+        return dict(shaking=shaking, std_rad=round(max_std, 5), std_deg=round(math.degrees(max_std), 3), flips_hz=round(flips_hz, 2))
+
+    def settled_q(self, data: Any, arm: str) -> np.ndarray:
+        """Return multi-sample averaged joint state (last 3 frames) when shaking is active, mirroring real `joint_jitter.settled_state`."""
+        q_cur = data.qpos[self.world.q[arm]].copy()
+        hist = self.q_hist.get(arm, [])
+        if len(hist) >= 3 and self.jitter_state(arm)["shaking"]:
+            q_cur[:5] = np.mean(np.asarray(hist[-3:], float), axis=0)
+        return q_cur
+
+    def is_settled(self, arm: str, q_err: float, q_vel: float, tcp_ok: bool) -> bool:
+        """Oscillation-aware settle gate: prevents false settle exit at zero-velocity turnaround peaks while `shaking`."""
+        return bool(q_err <= 0.0045 and q_vel <= 0.02 and tcp_ok and not self.jitter_state(arm)["shaking"])
+
+    def compensate_z_target(self, data: Any, arm: str, pos_target: np.ndarray) -> np.ndarray:
+        """Measure vertical TCP Z-sag (`pos_target[2] - tcp_z`) and return Z-compensated 3D waypoint target (`G-20`)."""
+        p = np.asarray(pos_target, float).copy()
+        if hasattr(self.world, "tcp"):
+            tcp_z = float(self.world.tcp(data, arm)[0][2])
+            dz = float(np.clip(p[2] - tcp_z, -0.012, 0.012))
+            self.z_sag_m[arm] = 0.65 * self.z_sag_m.get(arm, 0.0) + 0.35 * dz
+            p[2] += self.z_sag_m[arm]
+        return p
+
     def pace_seconds(self, arm: str, q_from: np.ndarray, q_to: np.ndarray, base_seconds: float) -> float:
         """Scale spline duration so no joint demands more than 72% of its torque-limited passive damping speed."""
         m = self.world.model
-        dofs = self.world.arm_dof[arm][:5]
-        acts = self.world.act[arm][:5]
-        force = m.actuator_forcerange[acts, 1]
-        damping = np.maximum(m.dof_damping[dofs], 0.05)
-        friction = m.dof_frictionloss[dofs]
-        v_terminal = np.maximum(0.05, (force - friction) / damping)
+        dofs, acts = self.world.arm_dof[arm][:5], self.world.act[arm][:5]
+        v_terminal = np.maximum(0.05, (m.actuator_forcerange[acts, 1] - m.dof_frictionloss[dofs]) / np.maximum(m.dof_damping[dofs], 0.05))
         dq = np.abs(np.asarray(q_to[:5], float) - np.asarray(q_from[:5], float))
-        needed = float(np.max((1.5 / 0.72) * dq / v_terminal))
-        return max(float(base_seconds), min(needed, 16.0))
+        return max(float(base_seconds), min(float(np.max((1.5 / 0.72) * dq / v_terminal)), 16.0))
 
     def apply(self, data: Any, targets: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
-        """Return compensated joint targets `{arm: q_cmd_6}` for one physics frame."""
+        """Return compensated joint targets `{arm: q_cmd_6}` for one physics frame with gravity FF, friction trim, and active jitter damping."""
         m = self.world.model
         out: dict[str, np.ndarray] = {}
         for arm, target in targets.items():
             t = np.asarray(target, float).copy()
             t[:5] = t[:5] - self.zero_est[arm]
-            q_act = data.qpos[self.world.q[arm][:5]]
-            dofs = self.world.arm_dof[arm][:5]
-            acts = self.world.act[arm][:5]
+            q_act = data.qpos[self.world.q[arm][:5]].copy()
+            dofs, acts = self.world.arm_dof[arm][:5], self.world.act[arm][:5]
             qvel = data.qvel[dofs]
             kp = np.maximum(m.actuator_gainprm[acts, 0], 1.0)
             force = m.actuator_forcerange[acts, 1]
             hold_set = set(int(d) for d in self.world.hold_dof[arm])
 
-            # 1. Gravity feedforward for any arm joint without hardware I-gain (`gravity_hold != "all"`, e.g. registers-20261109)
-            grav_ff = np.zeros(5)
-            for j, dof in enumerate(dofs):
-                if int(dof) not in hold_set:
-                    grav_ff[j] = float(data.qfrc_bias[dof]) / kp[j]
-
-            # 2. Waypoint integral trim for Coulomb friction (`frictionloss`), payload sag, and steady-state droop
+            grav_ff = np.array([0.0 if int(d) in hold_set else float(data.qfrc_bias[d]) / kp[j] for j, d in enumerate(dofs)])
             prev = self.prev_ref.get(arm, t[:5])
             ref_speed = np.abs(t[:5] - prev) * self.fps
             self.prev_ref[arm] = t[:5].copy()
             err = t[:5] - q_act
+            self.err_hist.setdefault(arm, []).append(err.copy())
+            self.q_hist.setdefault(arm, []).append(q_act.copy())
+            if len(self.err_hist[arm]) > 12:
+                self.err_hist[arm].pop(0)
+                self.q_hist[arm].pop(0)
+            jit = self.jitter_state(arm)
+            self.max_jitter_std_rad[arm] = max(self.max_jitter_std_rad[arm], jit["std_rad"])
+
             max_auth = np.minimum(0.14, 0.85 * force / kp)
             for j in range(5):
-                if ref_speed[j] < 0.03:
-                    if abs(err[j]) > 0.0008:
-                        step = 0.22 * err[j] - 0.03 * float(qvel[j])
-                        self.trim[arm][j] = float(np.clip(self.trim[arm][j] + step, -max_auth[j], max_auth[j]))
+                if ref_speed[j] < 0.03 and abs(err[j]) > 0.0008:
+                    step = (0.14 if jit["shaking"] else 0.22) * err[j] - (0.065 if jit["shaking"] else 0.03) * float(qvel[j])
+                    self.trim[arm][j] = float(np.clip(self.trim[arm][j] + step, -max_auth[j], max_auth[j]))
                 elif ref_speed[j] > 0.12:
                     self.trim[arm][j] *= 0.5
 
             total_trim = np.clip(grav_ff + self.trim[arm], -max_auth, max_auth)
             self.max_trim_rad[arm] = max(self.max_trim_rad[arm], float(np.max(np.abs(total_trim))))
-            t[:5] = t[:5] + total_trim
+            cmd5 = t[:5] + total_trim
+            if jit["shaking"] and arm in self.prev_cmd:
+                cmd5 = 0.65 * cmd5 + 0.35 * self.prev_cmd[arm] - np.clip(0.025 * qvel, -0.015, 0.015)
+                self.damped_frames[arm] += 1
+            self.prev_cmd[arm] = cmd5.copy()
+            t[:5] = cmd5
             out[arm] = t
         return out
