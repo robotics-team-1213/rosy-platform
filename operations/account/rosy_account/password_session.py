@@ -52,14 +52,11 @@ def _iso(epoch: float) -> str:
 class SessionStorageUnavailable(Exception):
     """The sessions table could not be read or written."""
 
-
 class LoginRateLimited(Exception):
     """Too many failed logins, or too many password checks already running."""
 
-
 class StalePasswordCheck(Exception):
     """The credential changed after verification, or this is not an initial session."""
-
 
 class CurrentPasswordIncorrect(Exception):
     """The valid session remains usable after an incorrect current password."""
@@ -69,32 +66,24 @@ class PasswordSessions:
     def __init__(self, path: Path | str, logins: Mapping[str, Mapping[str, str]], *,
                  clock: Callable[[], float] = time.time, accounts_bootstrap=None) -> None:
         self.path = Path(path)
-        # D-519 3: the site-users snapshot loaded at startup; account changes apply on restart.
         self._logins = {login: dict(account) for login, account in logins.items()}
-        self._sources = {login: _digest("\0".join(account[key] for key in
-                         ("principal_id", "role", "password_scrypt"))) for login, account in logins.items()}
-        self._clock = clock
-        self._lock = threading.RLock()
+        self._sources = {login: _digest("\0".join(account[key] for key in ("principal_id", "role", "password_scrypt")))
+                         for login, account in logins.items()}
+        self._clock, self._lock = clock, threading.RLock()
         self._failures: dict[tuple[str, str], deque[float]] = {}
         self._limit_audited: dict[str, float] = {}
-        # digest -> session row plus "validated_at": recent cookies authenticate without the DB.
         self._cache: OrderedDict[str, dict] = OrderedDict()
-        # digest -> revoked_at: a request already past its snapshot cannot re-cache a logged-out cookie.
         self._revoked: dict[str, float] = {}
-        # Unknown logins still pay one scrypt so the 401 does not reveal which accounts exist.
         self._dummy_hash = hash_password(secrets.token_urlsafe(16))
         from rosy_account.account_ledger import AccountLedger
         self._ledger = AccountLedger(self)
         with closing(self._connect(timeout=10)) as db, db:
             enable_wal(db)
             db.execute("""CREATE TABLE IF NOT EXISTS fleet_console_sessions (
-                session_sha256 TEXT PRIMARY KEY, login TEXT NOT NULL,
-                principal_id TEXT NOT NULL, role TEXT NOT NULL, password_sha256 TEXT NOT NULL,
-                created_at REAL NOT NULL, last_used_at REAL NOT NULL, remember INTEGER NOT NULL)""")
-            db.execute("""CREATE TABLE IF NOT EXISTS fleet_console_passwords (
-                login TEXT PRIMARY KEY, source_sha256 TEXT NOT NULL, password_scrypt TEXT NOT NULL)""")
-            db.execute("""CREATE TABLE IF NOT EXISTS fleet_console_profiles (
-                login TEXT PRIMARY KEY, principal_id TEXT NOT NULL, display_name TEXT NOT NULL)""")
+                session_sha256 TEXT PRIMARY KEY, login TEXT NOT NULL, principal_id TEXT NOT NULL, role TEXT NOT NULL,
+                password_sha256 TEXT NOT NULL, created_at REAL NOT NULL, last_used_at REAL NOT NULL, remember INTEGER NOT NULL)""")
+            db.execute("CREATE TABLE IF NOT EXISTS fleet_console_passwords (login TEXT PRIMARY KEY, source_sha256 TEXT NOT NULL, password_scrypt TEXT NOT NULL)")
+            db.execute("CREATE TABLE IF NOT EXISTS fleet_console_profiles (login TEXT PRIMARY KEY, principal_id TEXT NOT NULL, display_name TEXT NOT NULL)")
             if accounts_bootstrap is not None and not self._ledger.active:
                 self.bootstrap_accounts(*accounts_bootstrap)
             if self._ledger.active:
@@ -104,11 +93,9 @@ class PasswordSessions:
                 if self._sources.get(row["login"]) == row["source_sha256"]:
                     self._logins[row["login"]]["password_scrypt"] = row["password_scrypt"]
                 else:
-                    # Source rotation invalidates sessions even if YAML now contains the effective hash.
                     db.execute("DELETE FROM fleet_console_sessions WHERE login = ?", (row["login"],))
                     db.execute("DELETE FROM fleet_console_passwords WHERE login = ?", (row["login"],))
-        self._required = {login: (verify_password(login, account["password_scrypt"])
-                                 or verify_password(login + "!", account["password_scrypt"]))
+        self._required = {login: (verify_password(login, account["password_scrypt"]) or verify_password(login + "!", account["password_scrypt"]))
                           for login, account in self._logins.items()}
 
     def bootstrap_accounts(self, admin_login: str, site_id: str) -> None:
@@ -501,14 +488,10 @@ class PasswordSessions:
 
 
 def _storage_unavailable() -> HTTPException:
-    return HTTPException(status_code=503, detail={
-        "code": "SESSION_STORAGE_UNAVAILABLE", "message": "console session storage is unavailable"})
+    return HTTPException(status_code=503, detail={"code": "SESSION_STORAGE_UNAVAILABLE", "message": "console session storage is unavailable"})
 
 
-def install_password_routes(app, *, sessions: Optional[PasswordSessions], authorize, task_service,
-                            trust_forwarded: bool) -> None:
+def install_password_routes(app, *, sessions: Optional[PasswordSessions], authorize, task_service, trust_forwarded: bool) -> None:
     """Preserve the session module entry point while HTTP routes live separately."""
     from rosy_account.password_routes import install_password_routes as install
-
-    install(app, sessions=sessions, authorize=authorize, task_service=task_service,
-            trust_forwarded=trust_forwarded)
+    install(app, sessions=sessions, authorize=authorize, task_service=task_service, trust_forwarded=trust_forwarded)
