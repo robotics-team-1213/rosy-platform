@@ -193,10 +193,11 @@
       </div>
       <div class="actions">
         <ui-button id="cell-task-refresh" kind="quiet" type="button">셀 태스크 새로고침</ui-button>
-        <ui-button id="cell-task-preset-run" kind="primary" type="button" disabled>프리셋 태스크 즉시 실행</ui-button>
-        <ui-button id="cell-task-create" kind="quiet" type="button" disabled>맞춤 태스크 큐 등록</ui-button>
+        <ui-button id="cell-task-preset-run" kind="primary" type="button">프리셋 태스크 즉시 실행</ui-button>
+        <ui-button id="cell-task-create" kind="quiet" type="button">맞춤 태스크 큐 등록</ui-button>
       </div>
       <ui-text id="cell-tasks-status" role="status" aria-live="polite">접속하면 OMX 셀(cell_s · cell_ab) 태스크 큐와 실물 실행 상태를 확인할 수 있습니다.</ui-text>
+      <div id="cell-visual-cards" class="cell-visual-card-grid" aria-label="OMX 셀 및 핑키 실시간 카메라·제어 카드"></div>
       <dl id="cell-tasks-figures" class="ui-readout" data-form="strip" aria-label="OMX 셀 및 태스크 요약" hidden></dl>
       <div class="ui-table-scroll" role="region" aria-labelledby="real2sim-heading" tabindex="0">
         <table id="cell-tasks-table" class="ui-data-table" aria-label="OMX 셀 태스크 실행 원장" hidden>

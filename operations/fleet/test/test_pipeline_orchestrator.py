@@ -173,5 +173,16 @@ def test_cell_tasks_assign_claim_and_complete_lifecycle():
     assert "cell_s" in overview["cells"] and "cell_ab" in overview["cells"]
     assert len(overview["presets"]) >= 7
 
+    pinky_resp = client.post("/api/fleet/pipeline/pinky-tasks", json={"robot_id": "rosy_42", "action": "dock_and_unload_s3"}).json()
+    assert pinky_resp["ok"] is True
+    assert pinky_resp["pinky_task"]["target_place"] == "S3"
+    assert pinky_resp["spawned_cell_task"]["cell_id"] == "cell_s"
+
+    cam_resp = client.get("/api/fleet/pipeline/cell-camera/cell_s")
+    assert cam_resp.status_code == 200 and (
+        "svg" in cam_resp.headers["content-type"] or "jpeg" in cam_resp.headers["content-type"]
+    )
+
+
 
 

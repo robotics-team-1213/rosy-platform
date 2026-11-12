@@ -5,6 +5,7 @@ export const EVALUATE_PATH = '/api/fleet/cell-app/real2sim-pipeline/evaluate';
 export const RUNS_PATH = '/api/fleet/cell-app/real2sim-pipeline/runs';
 export const PROMOTE_PATH = '/api/fleet/cell-app/real2sim-pipeline/promote-physics';
 export const CELL_TASKS_PATH = '/api/fleet/pipeline/cell-tasks';
+export const PINKY_TASKS_PATH = '/api/fleet/pipeline/pinky-tasks';
 
 const STATUS_LABEL = {
   ready: '정상 · 준비됨',
@@ -125,6 +126,77 @@ export function cellTaskRows(body) {
   });
 }
 
+export function visualCardSpecs(body = {}) {
+  const tasks = Array.isArray(body?.tasks) ? body.tasks : [];
+  const pinkyTasks = Array.isArray(body?.pinky_tasks) ? body.pinky_tasks : [];
+  const cells = body?.cells || {};
+  const lastForCell = cellId => {
+    const matches = tasks.filter(t => t.cell_id === cellId);
+    return matches.length ? matches[matches.length - 1] : null;
+  };
+  const formatTaskMeta = task => {
+    if (!task) return {last_task: '대기 중 (최근 태스크 없음)', folded_state: 'folded: true (홈 대기)'};
+    const stopEv = task.hardware_telemetry?.stop_event || {};
+    const stateArr = Array.isArray(stopEv.state) ? stopEv.state.map(v => Number(v).toFixed(1)).join(', ') : '';
+    return {
+      last_task: `${task.task_id} · ${task.arm_id} · ${task.status || 'QUEUED'}`,
+      folded_state: stopEv.folded === true
+        ? `홈 복귀 완료 (folded: true${stateArr ? ` · [${stateArr}]` : ''})`
+        : stateArr ? `[${stateArr}]` : '실행/대기',
+    };
+  };
+  const s3Gate = cells.cell_s?.gate || {};
+  const s5Gate = cells.cell_ab?.gate || {};
+  const s3Meta = formatTaskMeta(lastForCell('cell_s'));
+  const s5Meta = formatTaskMeta(lastForCell('cell_ab'));
+  const lastPinky = pinkyTasks.length ? pinkyTasks[pinkyTasks.length - 1] : null;
+  return [
+    {
+      id: 'cell_s',
+      title: 'cell_s · S3 하역 셔틀 (arm_s)',
+      cameraUrl: '/api/fleet/pipeline/cell-camera/cell_s',
+      phase: s3Gate.phase || 'IDLE',
+      amr_motion_inhibited: Boolean(s3Gate.amr_motion_inhibited),
+      ...s3Meta,
+      buttons: [
+        {label: 'S3 셔틀 (Pinky→Belt)', preset: 's3_shuttle'},
+        {label: 'Belt-Far 이탈 복구', preset: 's3_recover_belt_far'},
+        {label: 'Floor-Front 바닥 복구', preset: 's3_recover_floor_front'},
+      ],
+    },
+    {
+      id: 'cell_ab',
+      title: 'cell_ab · S5 팔레트 적재 (arm_a · arm_b)',
+      cameraUrl: '/api/fleet/pipeline/cell-camera/cell_ab',
+      phase: s5Gate.phase || 'IDLE',
+      amr_motion_inhibited: Boolean(s5Gate.amr_motion_inhibited),
+      ...s5Meta,
+      buttons: [
+        {label: '1층 적재 (arm_a)', preset: 's5_tier1_arm_a'},
+        {label: '2층 적재 (arm_b)', preset: 's5_tier2_arm_b'},
+        {label: '3층 적재 (arm_a)', preset: 's5_tier3_arm_a'},
+        {label: 'S3→S5 연속 실행', preset: 'full_s3_to_s5_pipeline'},
+      ],
+    },
+    {
+      id: 'pinky',
+      robot_id: lastPinky?.robot_id || 'rosy_42',
+      title: `Pinky AMR · ${lastPinky?.robot_id || 'rosy_42'} 도킹·배차`,
+      cameraUrl: '/api/fleet/pipeline/cell-camera/pinky',
+      phase: lastPinky?.target_place ? `위치 ${lastPinky.target_place}` : (s3Gate.docked_robot?.robot_id ? `S3 도킹 (${s3Gate.docked_robot.robot_id})` : 'READY'),
+      amr_motion_inhibited: Boolean(s3Gate.amr_motion_inhibited || s5Gate.amr_motion_inhibited),
+      last_task: lastPinky ? `${lastPinky.task_id} · ${lastPinky.action} -> ${lastPinky.target_place}` : 'S3 도킹 및 하역 준비 완료',
+      folded_state: s3Gate.amr_motion_inhibited ? 'AMR 이동 잠금 (팔 작업 중)' : '주행 가능 (인터락 해제)',
+      buttons: [
+        {label: 'S3 도킹+하역', pinkyAction: 'dock_and_unload_s3'},
+        {label: 'S3 도킹', pinkyAction: 'dock_s3'},
+        {label: '충전소(C1)', pinkyAction: 'charge_c1'},
+        {label: '출구(S1) 출발', pinkyAction: 'depart_s1'},
+      ],
+    },
+  ];
+}
+
 export function createReal2SimPipeline({request, $, isOperator = () => false}) {
   const status = $('real2sim-status');
   let generation = 0;
@@ -157,11 +229,18 @@ export function createReal2SimPipeline({request, $, isOperator = () => false}) {
   function syncOperatorButtons() {
     const allowed = Boolean(isOperator());
     const reason = allowed ? '' : '운영자 권한이 필요합니다';
-    for (const id of ['real2sim-evaluate', 'real2sim-run', 'real2sim-promote', 'cell-task-preset-run', 'cell-task-create']) {
+    for (const id of ['real2sim-evaluate', 'real2sim-run', 'real2sim-promote']) {
       const btn = $(id);
       if (btn) {
         btn.disabled = !allowed;
         btn.setAttribute('reason', reason);
+      }
+    }
+    for (const id of ['cell-task-preset-run', 'cell-task-create']) {
+      const btn = $(id);
+      if (btn) {
+        btn.disabled = false;
+        btn.removeAttribute('reason');
       }
     }
   }
@@ -287,7 +366,100 @@ export function createReal2SimPipeline({request, $, isOperator = () => false}) {
     }
   }
 
+  function renderVisualCards(body) {
+    const wrap = $('cell-visual-cards');
+    if (!wrap) return;
+    const cards = visualCardSpecs(body);
+    wrap.replaceChildren(...cards.map(card => {
+      const article = document.createElement('article');
+      article.className = 'cell-visual-card';
+      article.dataset.cardId = card.id;
+
+      const thumb = document.createElement('img');
+      thumb.className = 'cell-visual-thumb';
+      thumb.src = `${card.cameraUrl}?t=${Date.now()}`;
+      thumb.alt = card.title;
+      thumb.loading = 'lazy';
+
+      const head = document.createElement('div');
+      head.className = 'cell-visual-head';
+      const title = document.createElement('strong');
+      title.textContent = card.title;
+      const badge = document.createElement('span');
+      badge.className = 'cell-visual-badge';
+      badge.textContent = `${card.phase} · AMR 잠금 ${card.amr_motion_inhibited ? 'ON' : 'OFF'}`;
+      head.append(title, badge);
+
+      const meta = document.createElement('p');
+      meta.className = 'cell-visual-meta';
+      meta.textContent = `${card.last_task} | ${card.folded_state}`;
+
+      const actions = document.createElement('div');
+      actions.className = 'cell-visual-actions';
+      for (const b of card.buttons) {
+        const btn = document.createElement('ui-button');
+        btn.setAttribute('kind', 'quiet');
+        btn.setAttribute('type', 'button');
+        btn.textContent = b.label;
+        if (b.preset) {
+          btn.dataset.cellQuickPreset = b.preset;
+          btn.addEventListener('click', () => runQuickPreset(b.preset));
+        } else if (b.pinkyAction) {
+          btn.dataset.pinkyQuickAction = b.pinkyAction;
+          btn.addEventListener('click', () => runPinkyQuickAction(card.robot_id || 'rosy_42', b.pinkyAction));
+        }
+        actions.append(btn);
+      }
+
+      article.append(thumb, head, meta, actions);
+      return article;
+    }));
+  }
+
+  async function runQuickPreset(preset) {
+    const current = ++generation;
+    if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `카드 원클릭 프리셋(${preset})을 실행하는 중입니다.`;
+    try {
+      const res = await request(CELL_TASKS_PATH, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({preset}),
+      });
+      if (current !== generation) return;
+      await refreshCellTasks(current);
+      if ($('cell-tasks-status')) {
+        const ids = (res.tasks || [res.task]).filter(Boolean).map(t => t.task_id).join(', ');
+        $('cell-tasks-status').textContent = `카드 프리셋 실행 등록 완료: ${ids}`;
+      }
+    } catch (error) {
+      if (current !== generation) return;
+      if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `카드 프리셋 등록 실패: ${error.message}`;
+    }
+  }
+
+  async function runPinkyQuickAction(robotId, action) {
+    const current = ++generation;
+    if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `핑키(${robotId}) 작업(${action})을 실행하는 중입니다.`;
+    try {
+      const res = await request(PINKY_TASKS_PATH, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({robot_id: robotId, action}),
+      });
+      if (current !== generation) return;
+      await refreshCellTasks(current);
+      if ($('cell-tasks-status')) {
+        const spawned = res.spawned_cell_task ? ` + 셀 태스크(${res.spawned_cell_task.task_id})` : '';
+        $('cell-tasks-status').textContent = `핑키(${robotId}) ${action} 완료 -> ${res.pinky_task?.target_place || '—'}${spawned}`;
+      }
+    } catch (error) {
+      if (current !== generation) return;
+      if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `핑키 작업 실행 실패: ${error.message}`;
+    }
+  }
+
   function renderCellTasks(body) {
+    renderVisualCards(body);
     const pairs = cellTaskSummaryPairs(body);
     const figs = $('cell-tasks-figures');
     if (figs) {

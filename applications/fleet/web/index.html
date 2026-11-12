@@ -360,6 +360,15 @@
           <h3 class="ui-section-heading">등록 로봇 · 연결·안전 요약</h3>
           <div id="roster" class="roster"><p class="hint" role="status">로봇 목록 불러오는 중</p></div>
         </div>
+        <div class="charge-bays" aria-labelledby="charge-bays-heading">
+          <div class="robot-head">
+            <h3 id="charge-bays-heading" title="OMX 매니퓰레이터 셀·핑키 AMR 카드 제어 및 충전 칸 계획">OMX 셀 · 핑키 AMR 카드 제어 · 충전 칸</h3>
+            <span class="spacer"></span>
+            <ui-tag id="charge-bays-state" status="neutral">—</ui-tag>
+          </div>
+          <ul id="charge-bay-rows" class="charge-bay-rows"></ul>
+          <p class="hint" id="charge-bays-hint" hidden></p>
+        </div>
       </section>
 
         </div>
@@ -463,16 +472,6 @@
           </div>
           <div id="signal-cards" class="signal-cards"></div>
           <p class="hint" id="signals-hint" hidden></p>
-        </div>
-
-        <div class="charge-bays" aria-labelledby="charge-bays-heading">
-          <div class="robot-head">
-            <h3 id="charge-bays-heading" title="활성 지도의 충전 칸(charge) 계획입니다. 보기만 하며 Fleet은 이 계획으로 로봇을 보내지 않습니다 (D-941)">충전 칸</h3>
-            <span class="spacer"></span>
-            <ui-tag id="charge-bays-state" status="neutral">—</ui-tag>
-          </div>
-          <ul id="charge-bay-rows" class="charge-bay-rows"></ul>
-          <p class="hint" id="charge-bays-hint" hidden></p>
         </div>
 
         <div class="charge-bays" aria-labelledby="platoon-heading">

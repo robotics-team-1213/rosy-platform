@@ -88,6 +88,8 @@ def install_charge_bay_routes(app, console, gathered, read_guard):
                     act.update(blocked_by_cell=True, cell_id=cid, reason="locked_by_cell")
         return {"map_version": active[0],
                 "contract_version": CONTRACT_VERSION, "omx_cells": cell_evals,
+                "omx_cell_tasks": list((getattr(app.state, "omx_cell_tasks", None) or {}).values()),
+                "pinky_tasks": list((getattr(app.state, "pinky_tasks", None) or {}).values()),
                 **plan_out}
     install_pipeline_routes(app, console=console, site_maps=getattr(app.state, "site_maps", None), read_guard=read_guard)
     return bay_inputs

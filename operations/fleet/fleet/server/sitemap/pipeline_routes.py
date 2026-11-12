@@ -3,9 +3,11 @@ from __future__ import annotations
 import inspect
 import time
 import uuid
+from pathlib import Path
 from types import SimpleNamespace
 
 from fastapi import HTTPException, Request
+from fastapi.responses import Response
 
 from fleet.charge_bays import ChargeBays, bays_from_map
 from fleet.pipeline import evaluate_fleet_pipeline, resolve_omx_cells, evaluate_omx_cell_station
@@ -19,6 +21,7 @@ def install_pipeline_routes(app, *, console=None, site_maps=None, read_guard=())
     app.state._pipeline_routes_installed = True
     app.state.omx_cell_states = getattr(app.state, "omx_cell_states", None) or {}
     app.state.omx_cell_tasks = getattr(app.state, "omx_cell_tasks", None) or {}
+    app.state.pinky_tasks = getattr(app.state, "pinky_tasks", None) or {}
 
     def _maps():
         return site_maps if site_maps is not None else getattr(app.state, "site_maps", None)
@@ -62,6 +65,7 @@ def install_pipeline_routes(app, *, console=None, site_maps=None, read_guard=())
                                       charge_bays=charge_bays, site_rules=rules(),
                                       cell_states=getattr(app.state, "omx_cell_states", None))
         out["omx_cell_tasks"] = list(app.state.omx_cell_tasks.values())
+        out["pinky_tasks"] = list(app.state.pinky_tasks.values())
         return out
 
     @app.get("/api/fleet/pipeline/contract", dependencies=read_guard)
@@ -197,6 +201,94 @@ def install_pipeline_routes(app, *, console=None, site_maps=None, read_guard=())
         task["status"] = "CANCELLED"
         task["completed_at"] = round(time.time(), 3)
         return {"ok": True, "task": task, "gate": res["gate"]}
+
+    @app.post("/api/fleet/pipeline/pinky-tasks", dependencies=read_guard)
+    async def create_pinky_task(request: Request):
+        active = active_map()
+        body = await request.json()
+        robot_id = str(body.get("robot_id") or "rosy_42")
+        action = str(body.get("action") or "dock_s3")
+        task_id = str(body.get("task_id") or f"pinky-task-{uuid.uuid4().hex[:8]}")
+        stations = resolve_omx_cells(active[1], active[2])
+        spawned_cell_task = None
+        if action in ("dock_s3", "dock_and_unload_s3"):
+            st = stations["cell_s"]
+            docked = {"robot_id": robot_id, "robot_kind": "pinky", "pose": {"x": st.station_xy[0], "y": st.station_xy[1], "yaw": 0.0},
+                      "wheel_brake_locked": True, "bed_ready": True, "v_cmd_mps": 0.0}
+            app.state.omx_cell_states["cell_s"] = {"phase": "CLAIMED", "tier": 1, "robot_id": robot_id, "docked_robot": docked}
+            target_place = "S3"
+            if action == "dock_and_unload_s3":
+                spawned_cell_task = _enqueue_one_task(active, {**CELL_TASK_PRESETS["s3_shuttle"], "robot_id": robot_id})
+        elif action == "dock_s5":
+            st = stations["cell_ab"]
+            docked = {"robot_id": robot_id, "robot_kind": "pinky", "pose": {"x": st.station_xy[0], "y": st.station_xy[1], "yaw": 0.0},
+                      "wheel_brake_locked": True, "bed_ready": True, "v_cmd_mps": 0.0}
+            app.state.omx_cell_states["cell_ab"] = {"phase": "CLAIMED", "tier": 1, "robot_id": robot_id, "docked_robot": docked}
+            target_place = "S5"
+        elif action in ("charge_c1", "charge_c2"):
+            target_place = "C1" if action == "charge_c1" else "C2"
+        else:
+            for cid, cstate in list(app.state.omx_cell_states.items()):
+                if cstate.get("robot_id") == robot_id:
+                    cstate["phase"] = "RELEASED"
+            target_place = "S1"
+        ptask = {
+            "task_id": task_id,
+            "robot_id": robot_id,
+            "action": action,
+            "target_place": target_place,
+            "spawned_cell_task_id": spawned_cell_task["task_id"] if spawned_cell_task else None,
+            "status": "COMPLETED",
+            "created_at": round(time.time(), 3),
+        }
+        app.state.pinky_tasks[task_id] = ptask
+        return {"ok": True, "pinky_task": ptask, "spawned_cell_task": spawned_cell_task}
+
+    @app.get("/api/fleet/pipeline/pinky-tasks", dependencies=read_guard)
+    async def list_pinky_tasks(robot_id: str | None = None):
+        tasks = list(app.state.pinky_tasks.values())
+        if robot_id is not None:
+            tasks = [t for t in tasks if t["robot_id"] == robot_id]
+        return {"tasks": tasks}
+
+    @app.get("/api/fleet/pipeline/cell-camera/{view_id}")
+    async def cell_camera_preview(view_id: str):
+        snap_file = Path(f"/tmp/rosy-cell-cam-{view_id}.jpg")
+        if snap_file.is_file():
+            return Response(content=snap_file.read_bytes(), media_type="image/jpeg", headers={"Cache-Control": "no-store"})
+        tasks = [t for t in app.state.omx_cell_tasks.values() if view_id.startswith(t["cell_id"]) or view_id == "pinky"]
+        last = tasks[-1] if tasks else {}
+        stop_ev = ((last.get("hardware_telemetry") or {}).get("stop_event") or {})
+        state_vals = stop_ev.get("state") or ([0.0, -58.0, 50.0, 50.0, -5.0, 58.1] if "cell_s" in view_id else [0.8, -62.5, 53.3, 51.7, 45.0, 50.0])
+        joints_txt = " ".join(f"J{i+1}:{float(v):.1f}" for i, v in enumerate(state_vals[:6]))
+        cstate = app.state.omx_cell_states.get("cell_s" if "cell_s" in view_id else "cell_ab") or {}
+        phase = cstate.get("phase") or last.get("status") or "IDLE"
+        svg = (
+            f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180" width="320" height="180">'
+            f'<rect width="320" height="180" rx="8" fill="#0f172a"/>'
+            f'<rect x="12" y="34" width="90" height="68" rx="4" fill="#1e293b" stroke="#38bdf8" stroke-width="1.5"/>'
+            f'<text x="18" y="50" fill="#38bdf8" font-family="monospace" font-size="10">PINKY / S3</text>'
+            f'<rect x="114" y="34" width="92" height="68" rx="4" fill="#1e293b" stroke="#22c55e" stroke-width="1.5"/>'
+            f'<text x="120" y="50" fill="#22c55e" font-family="monospace" font-size="10">BELT ROI</text>'
+            f'<rect x="218" y="34" width="90" height="68" rx="4" fill="#1e293b" stroke="#f59e0b" stroke-width="1.5"/>'
+            f'<text x="224" y="50" fill="#f59e0b" font-family="monospace" font-size="10">PALLET / FAR</text>'
+            f'<circle cx="160" cy="72" r="10" fill="#f97316" opacity="0.85"/>'
+            f'<text x="12" y="20" fill="#f8fafc" font-family="monospace" font-weight="bold" font-size="12">CAM · {view_id.upper()} [{phase}]</text>'
+            f'<text x="12" y="126" fill="#cbd5e1" font-family="monospace" font-size="10">{joints_txt}</text>'
+            f'<text x="12" y="146" fill="#94a3b8" font-family="monospace" font-size="10">task: {last.get("task_id", "ready")} · folded: {stop_ev.get("folded", True)}</text>'
+            f'<text x="12" y="166" fill="#64748b" font-family="monospace" font-size="9">LIVE TELEMETRY HUD · ROSY WORKCELL</text>'
+            f'</svg>'
+        )
+        return Response(content=svg, media_type="image/svg+xml", headers={"Cache-Control": "no-store"})
+
+    @app.post("/api/fleet/pipeline/cell-camera/{view_id}", dependencies=read_guard)
+    async def upload_cell_camera_preview(view_id: str, request: Request):
+        safe_id = "".join(c for c in view_id if c.isalnum() or c in ("_", "-"))[:32] or "cell_s"
+        raw = await request.body()
+        if not raw:
+            raise HTTPException(400, detail={"code": "EMPTY_IMAGE"})
+        Path(f"/tmp/rosy-cell-cam-{safe_id}.jpg").write_bytes(raw)
+        return {"ok": True, "view_id": safe_id, "bytes": len(raw)}
 
     @app.post("/api/fleet/pipeline/cell-tasks/claim", dependencies=read_guard)
     async def claim_cell_task(request: Request):

@@ -1,6 +1,25 @@
-// D-941 5/7: the active map's charge bays, read-only. Fleet shows the plan and does not
-// dispatch from it (`dispatch: false`); nothing here sends a goal.
+// D-941 5/7: the charge-bay plan remains display-only; task buttons use pipeline APIs.
 import { isRouteAbsent } from "/console/assets/poll-gate.js";
+
+const CELL_BUTTONS = {
+  cell_s: [
+    {label: "S3 셔틀 (Pinky→Belt)", preset: "s3_shuttle"},
+    {label: "Belt-Far 이탈 복구", preset: "s3_recover_belt_far"},
+    {label: "Floor-Front 바닥 복구", preset: "s3_recover_floor_front"},
+  ],
+  cell_ab: [
+    {label: "1층 적재 (arm_a)", preset: "s5_tier1_arm_a"},
+    {label: "2층 적재 (arm_b)", preset: "s5_tier2_arm_b"},
+    {label: "3층 적재 (arm_a)", preset: "s5_tier3_arm_a"},
+    {label: "S3→S5 연속 실행", preset: "full_s3_to_s5_pipeline"},
+  ],
+};
+const PINKY_BUTTONS = [
+  {label: "S3 도킹+하역", pinkyAction: "dock_and_unload_s3"},
+  {label: "S3 도킹", pinkyAction: "dock_s3"},
+  {label: "충전소(C1)", pinkyAction: "charge_c1"},
+  {label: "출구(S1) 출발", pinkyAction: "depart_s1"},
+];
 
 const BAY_STATE = Object.freeze({
   free: ["비어 있음", "neutral"], planned: ["배정됨", "warn"],
@@ -70,7 +89,31 @@ export function chargeBayRows(plan) {
   const t = plan?.thresholds || {};
   const rate = Number.isFinite(t.rate_pct_per_min) ? `${t.rate_pct_per_min}%/분` : "미측정";
   const summary = `${t.go_percent ?? "—"}% 이하면 충전 · ${t.leave_percent ?? "—"}%면 나감 · 충전 속도 ${rate} · 보기 전용`;
-  return { bays, actions, cells, summary };
+  const tasks = Array.isArray(plan?.omx_cell_tasks) ? plan.omx_cell_tasks : [];
+  const cards = [
+    ...["cell_s", "cell_ab"].map((id) => {
+      const phase = plan?.omx_cells?.[id]?.gate?.phase || "IDLE";
+      const [text, status] = CELL_PHASE[phase] || [phase, "neutral"];
+      const task = tasks.filter((entry) => entry.cell_id === id)
+        .sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))[0] || null;
+      return {
+        kind: "omx", id, cameraUrl: `/api/fleet/pipeline/cell-camera/${id}`,
+        title: id === "cell_s" ? "cell_s · S3 하역 셔틀 (arm_s)" : "cell_ab · S5 팔레트 적재 (arm_a·arm_b)",
+        phase, status, text, task, buttons: CELL_BUTTONS[id],
+      };
+    }),
+    ...(plan?.actions?.length ? plan.actions.map((action) => action.robot_id) : ["rosy_42", "rosy_45", "rosy_46"])
+      .filter((id, index, ids) => id && ids.indexOf(id) === index)
+      .map((robot_id) => {
+        const action = actions.find((row) => row.robot === robot_id);
+        const rawAction = plan?.actions?.find((entry) => entry.robot_id === robot_id);
+        return {kind: "pinky", id: robot_id, robot_id,
+          cameraUrl: "/api/fleet/pipeline/cell-camera/pinky", title: `Pinky AMR · ${robot_id}`,
+          status: rawAction?.blocked_by_cell || rawAction?.action === "wait" ? "warn" : "neutral",
+          text: action?.text || "작업 정보 없음", buttons: PINKY_BUTTONS};
+      }),
+  ];
+  return { bays, actions, cells, summary, cards };
 }
 
 export function createChargeBaysView({ scope, el, call, auth }) {
@@ -89,6 +132,8 @@ export function createChargeBaysView({ scope, el, call, auth }) {
 
   function show(rows, note) {
     list.replaceChildren();
+    const cellItems = new Map();
+    const robotItems = new Map();
     for (const b of rows?.bays || []) {
       const li = document.createElement("li");
       li.append(`${b.id} `, tag(b.text, b.status));
@@ -98,11 +143,61 @@ export function createChargeBaysView({ scope, el, call, auth }) {
       const li = document.createElement("li");
       li.append(`${c.id} `, tag(c.text, c.status));
       list.append(li);
+      cellItems.set(c.id, li);
     }
     for (const a of rows?.actions || []) {
       const li = document.createElement("li");
       li.textContent = `${a.robot}: ${a.text}`;
       list.append(li);
+      robotItems.set(a.robot, li);
+    }
+    for (const card of rows?.cards || []) {
+      const li = (card.kind === "omx" ? cellItems : robotItems).get(card.id) || document.createElement("li");
+      if (li.parentNode !== list) list.append(li);
+      const article = document.createElement("article");
+      article.className = "omx-dense-card";
+      const camera = document.createElement("img");
+      camera.src = card.cameraUrl;
+      camera.loading = "lazy";
+      camera.className = "cell-cam-thumb";
+      camera.alt = `${card.title} 카메라`;
+      const details = document.createElement("div");
+      const title = document.createElement("strong");
+      title.textContent = card.title;
+      const status = document.createElement("p");
+      status.append(tag(card.text, card.status));
+      const task = document.createElement("p");
+      task.textContent = card.task ? `${card.task.task_id} · ${card.task.status} · ${card.task.arm_id || "—"}` : "";
+      const buttons = document.createElement("div");
+      buttons.className = "omx-card-actions";
+      for (const choice of card.buttons) {
+        const button = document.createElement("ui-button");
+        button.setAttribute("kind", "quiet");
+        button.setAttribute("type", "button");
+        button.setAttribute("data-work-read", "");
+        button.textContent = choice.label;
+        button.addEventListener("click", async () => {
+          if (auth.locked || button.hasAttribute("disabled")) return;
+          button.setAttribute("disabled", "");
+          try {
+            await call(choice.preset ? "/api/fleet/pipeline/cell-tasks" : "/api/fleet/pipeline/pinky-tasks", {
+              method: "POST", headers: {"Content-Type": "application/json"},
+              body: JSON.stringify(choice.preset ? {preset: choice.preset} :
+                {robot_id: card.robot_id, action: choice.pinkyAction}),
+            });
+            await refresh();
+          } catch (error) {
+            hint.textContent = `작업 요청 실패: ${error.message}`;
+            hint.hidden = false;
+          } finally {
+            button.removeAttribute("disabled");
+          }
+        });
+        buttons.append(button);
+      }
+      details.append(title, status, task, buttons);
+      article.append(camera, details);
+      li.append(article);
     }
     hint.textContent = note;
     hint.hidden = !note;
@@ -116,7 +211,10 @@ export function createChargeBaysView({ scope, el, call, auth }) {
     try {
       const plan = await call("/api/fleet/charge-bays", { signals: [life.signal] });
       life.check();
-      const rows = chargeBayRows(plan);
+      const telemetry = await call("/api/fleet/pipeline/cell-tasks", {signals: [life.signal]})
+        .catch(() => null);
+      life.check();
+      const rows = chargeBayRows({...plan, omx_cell_tasks: telemetry?.tasks || plan.omx_cell_tasks});
       state.textContent = `칸 ${rows.bays.length}`;
       show(rows, rows.bays.length ? rows.summary : "활성 지도에 충전 칸(charge)이 없습니다");
     } catch (error) {

@@ -15,6 +15,7 @@ import {
   runRows,
   cellTaskSummaryPairs,
   cellTaskRows,
+  visualCardSpecs,
 } from "../../../../applications/fleet/web/cell/cell-real2sim.js";
 
 test("real2sim routes point to the cell-app pipeline endpoints", () => {
@@ -149,4 +150,30 @@ test("readoutPairs, loopRows, stageRows, sysidRows, surveyRows, and runRows form
   assert.equal(tRows[0][0], "live-e2e-cell-s-arm-s-v3");
   assert.match(tRows[0][2], /복구: belt_far/);
   assert.match(tRows[0][4], /folded: true/);
+
+  const vCards = visualCardSpecs({
+    cells: {
+      cell_s: {gate: {phase: "CLAIMED", amr_motion_inhibited: true}},
+      cell_ab: {gate: {phase: "RELEASED", amr_motion_inhibited: false}},
+    },
+    tasks: [
+      {
+        task_id: "live-e2e-cell-s-arm-s-v3",
+        cell_id: "cell_s",
+        arm_id: "arm_s",
+        status: "COMPLETED",
+        hardware_telemetry: {stop_event: {folded: true, state: [0.0, -58.0, 50.0, 50.0, -5.0, 58.1]}},
+      },
+    ],
+    pinky_tasks: [
+      {task_id: "pinky-task-01", robot_id: "rosy_42", action: "dock_and_unload_s3", target_place: "S3"},
+    ],
+  });
+  assert.equal(vCards.length, 3);
+  assert.equal(vCards[0].id, "cell_s");
+  assert.equal(vCards[0].cameraUrl, "/api/fleet/pipeline/cell-camera/cell_s");
+  assert.match(vCards[0].folded_state, /folded: true/);
+  assert.equal(vCards[1].id, "cell_ab");
+  assert.equal(vCards[2].id, "pinky");
+  assert.equal(vCards[2].buttons[0].pinkyAction, "dock_and_unload_s3");
 });

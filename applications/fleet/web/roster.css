@@ -10,6 +10,13 @@
 .roster-block > .dispatch-control:has(#cancel-all-result:not([hidden])) { grid-column: 1 / -1; grid-row: 2; justify-content: space-between; }
 
 .roster { display: flex; flex-direction: column; gap: var(--space-3); }
+.omx-dense-card { display: grid; grid-template-columns: 6rem minmax(0, 1fr); gap: var(--space-2); min-width: 0; margin-top: var(--space-1); padding: var(--space-2); border: 1px solid var(--border-subtle); border-radius: var(--radius-panel); background: var(--surface-raised); }
+.omx-dense-card > div { min-width: 0; }
+.omx-dense-card strong { font-size: var(--text-label); overflow-wrap: anywhere; }
+.omx-dense-card p { margin: var(--space-1) 0; font-size: var(--text-micro); overflow-wrap: anywhere; }
+.cell-cam-thumb { width: 6rem; aspect-ratio: 4 / 3; object-fit: cover; border-radius: var(--radius-control); background: var(--surface-flat); }
+.omx-card-actions { display: flex; flex-wrap: wrap; gap: var(--space-1); }
+.omx-card-actions ui-button { min-width: 0; font-size: var(--text-micro); }
 /* 카드는 내용 높이를 지킨다 — 스크롤 칸 안에서 줄어들면 까닭 줄과 버튼이 잘린다. */
 .roster > * { flex-shrink: 0; }
 

@@ -1,6 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { chargeBayRows } from '../../../../applications/fleet/web/charge-bays-view.js';
+import { readFile } from 'node:fs/promises';
+
+const source = new URL('../../../../applications/fleet/web/charge-bays-view.js', import.meta.url);
+const gate = new URL('../../../../applications/fleet/web/shared/poll-gate.js', import.meta.url);
+const code = (await readFile(source, 'utf8')).replace('/console/assets/poll-gate.js', gate.href);
+const { chargeBayRows } = await import(`data:text/javascript,${encodeURIComponent(code)}`);
 
 const plan = {
   thresholds: { go_percent: 15, leave_percent: 80, rate_pct_per_min: null },
@@ -78,4 +83,37 @@ test('OMX cell gates and cell-blocked actions render in Korean', () => {
   ]);
   assert.match(rows.actions[0].text, /OMX 셀 작업 중 구동 잠금/);
   assert.match(rows.actions[0].text, /OMX 셀\(cell_s\) 잠금/);
+});
+
+test('pipeline cards carry cell telemetry and one-click robot actions without changing legacy rows', () => {
+  const rows = chargeBayRows({
+    ...plan,
+    omx_cells: {
+      cell_s: {gate: {phase: 'ARM_IN_BED_ZONE'}},
+      cell_ab: {gate: {phase: 'IDLE'}},
+    },
+    omx_cell_tasks: [
+      {task_id: 'old', cell_id: 'cell_s', status: 'COMPLETED', created_at: 1},
+      {task_id: 'new', cell_id: 'cell_s', status: 'RUNNING', created_at: 2, arm_id: 'arm_s'},
+    ],
+  });
+  assert.equal(rows.bays.length, 3);
+  assert.equal(rows.actions.length, 2);
+  assert.equal(rows.cells.length, 2);
+  assert.match(rows.summary, /15%/);
+  assert.equal(rows.cards[0].cameraUrl, '/api/fleet/pipeline/cell-camera/cell_s');
+  assert.equal(rows.cards[0].title, 'cell_s · S3 하역 셔틀 (arm_s)');
+  assert.equal(rows.cards[0].phase, 'ARM_IN_BED_ZONE');
+  assert.equal(rows.cards[0].task.task_id, 'new');
+  assert.deepEqual(rows.cards[0].buttons.map(b => b.preset),
+    ['s3_shuttle', 's3_recover_belt_far', 's3_recover_floor_front']);
+  assert.equal(rows.cards[1].title, 'cell_ab · S5 팔레트 적재 (arm_a·arm_b)');
+  assert.deepEqual(rows.cards[1].buttons.map(b => b.preset),
+    ['s5_tier1_arm_a', 's5_tier2_arm_b', 's5_tier3_arm_a', 'full_s3_to_s5_pipeline']);
+  assert.equal(rows.cards[2].cameraUrl, '/api/fleet/pipeline/cell-camera/pinky');
+  assert.equal(rows.cards[2].robot_id, 'rosy_60');
+  assert.deepEqual(rows.cards[2].buttons.map(b => b.pinkyAction),
+    ['dock_and_unload_s3', 'dock_s3', 'charge_c1', 'depart_s1']);
+  assert.deepEqual(chargeBayRows({}).cards.filter(c => c.robot_id).map(c => c.robot_id),
+    ['rosy_42', 'rosy_45', 'rosy_46']);
 });
