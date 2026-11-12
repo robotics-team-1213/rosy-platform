@@ -28,6 +28,7 @@ class Space:
     def __init__(self, root: Path, margin_px: int = MARGIN_PX, clock=time.time):
         self.root, self.margin_px, self.clock = Path(root), margin_px, clock
         self.root.mkdir(parents=True, exist_ok=True)
+        self._kernel = np.ones((2 * margin_px + 1, 2 * margin_px + 1), np.uint8)
 
     @contextmanager
     def _locked(self):
@@ -54,7 +55,16 @@ class Space:
 
         path = self._path(arm)
         mask = np.asarray(mask, bool)
-        grown = cv2.dilate(mask.astype(np.uint8), np.ones((2 * self.margin_px + 1,) * 2, np.uint8)) > 0
+        if self._kernel.shape[0] != 2 * self.margin_px + 1:
+            self._kernel = np.ones((2 * self.margin_px + 1,) * 2, np.uint8)
+        if self.margin_px > 0 and mask.any():
+            ys, xs = np.nonzero(mask)
+            y0, y1 = max(0, ys.min() - self.margin_px), min(mask.shape[0], ys.max() + self.margin_px + 1)
+            x0, x1 = max(0, xs.min() - self.margin_px), min(mask.shape[1], xs.max() + self.margin_px + 1)
+            grown = np.zeros(mask.shape, bool)
+            grown[y0:y1, x0:x1] = cv2.dilate(mask[y0:y1, x0:x1].astype(np.uint8), self._kernel) > 0
+        else:
+            grown = mask.astype(bool)
         with self._locked():
             for other, theirs in self.live().items():
                 if other == arm:

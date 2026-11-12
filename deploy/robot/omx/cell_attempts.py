@@ -27,6 +27,7 @@ from collections import Counter, defaultdict
 from pathlib import Path
 
 SCHEMA = "rosy.omx-cell-attempt.v1"
+_CODE_NAME = Path(__file__).resolve().parents[3].name
 RUN = {"path": None, "run_id": None, "n": 0, "pending": None, "knowledge_sha": None, "params_sha": None, "arm_id": "arm_s"}  # set by cell_pipeline.main(): one run per pipeline process
 
 
@@ -62,7 +63,20 @@ def begin(config: dict, envelope: dict) -> None:
     RUN["pending"] = f"{RUN['run_id']}-{RUN['n'] + 1:03d}"
 
 
+_DIGEST_CACHE = {}  # id(dict) -> (repr, sha), 64 entries; guard: an id reuse with a different repr misses
+
+
 def digest(value) -> str:
+    if isinstance(value, dict):
+        guard = repr(value)
+        hit = _DIGEST_CACHE.get(id(value))
+        if hit is not None and hit[0] == guard:
+            return hit[1]
+        sha = hashlib.sha256(json.dumps(value, sort_keys=True, default=str).encode()).hexdigest()[:12]
+        if len(_DIGEST_CACHE) >= 64:
+            _DIGEST_CACHE.clear()
+        _DIGEST_CACHE[id(value)] = (guard, sha)
+        return sha
     return hashlib.sha256(json.dumps(value, sort_keys=True, default=str).encode()).hexdigest()[:12]
 
 
@@ -70,7 +84,7 @@ def context(config: dict, calibration: dict, site: str, choices=None) -> dict:
     record = (calibration or {}).get("sites", {}).get(site)
     return {
         # the cell runs from a test copy named after its commit (~/rosy-test/omx-tools-<sha>)
-        "code": Path(__file__).resolve().parents[3].name,
+        "code": _CODE_NAME,
         "config_sha": digest({k: v for k, v in config.items() if k not in ("profiles", "plan", "params")}),
         "plan_sha": digest(config.get("plan")),
         "calibration": None if record is None else {
