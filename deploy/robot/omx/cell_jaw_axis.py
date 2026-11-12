@@ -29,8 +29,20 @@ def changed_axis_px(closed, opened, around_px, radius_px: float, params=None) ->
     """Image angle (deg, mod 180) of the changed pixels near the jaws, or None when too few changed to have an axis."""
     import cell_pivot
 
-    ys, xs = np.nonzero(cell_pivot._changed_mask(closed, opened, prm.get(params, "pivot.diff_px")))
-    near = np.hypot(xs - around_px[0], ys - around_px[1]) <= radius_px
+    h, w = closed.shape[:2]
+    ax, ay = float(around_px[0]), float(around_px[1])
+    pad = int(math.ceil(radius_px)) + 2
+    x0, y0 = max(0, int(math.floor(ax)) - pad), max(0, int(math.floor(ay)) - pad)
+    x1, y1 = min(w, int(math.ceil(ax)) + pad + 1), min(h, int(math.ceil(ay)) + pad + 1)
+    if x1 <= x0 or y1 <= y0:
+        return None
+    ys, xs = np.nonzero(cell_pivot._changed_mask(closed[y0:y1, x0:x1], opened[y0:y1, x0:x1], prm.get(params, "pivot.diff_px")))
+    if len(xs) == 0:
+        return None
+    xs = xs + x0
+    ys = ys + y0
+    dx, dy = xs - ax, ys - ay
+    near = (dx * dx + dy * dy) <= radius_px * radius_px
     xs, ys = xs[near], ys[near]
     if len(xs) < prm.get(params, "pivot.min_blob"):
         return None

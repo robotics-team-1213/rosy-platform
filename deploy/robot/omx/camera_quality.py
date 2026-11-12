@@ -28,18 +28,21 @@ def frame_quality(pixels):
     import numpy as np
     if pixels.dtype != np.uint8 or pixels.ndim != 3 or pixels.shape[2] != 3:
         raise ValueError('quality requires original uint8 three-channel pixels')
-    gray = pixels[::4, ::4].mean(axis=2)
+    sub = pixels[::4, ::4]
+    gray = (sub[..., 0].astype(np.float32) + sub[..., 1] + sub[..., 2]) * (1.0 / 3.0)
     p5, p95 = (float(value) for value in np.percentile(gray, [5, 95]))
     mean = float(gray.mean())
-    dark = float((gray < 15).mean())
-    clipped = float((gray > 245).mean())
+    inv_n = 1.0 / float(gray.size)
+    dark = float(np.count_nonzero(gray < 15.0) * inv_n)
+    clipped = float(np.count_nonzero(gray > 245.0) * inv_n)
     gh, gw = gray.shape
     if gh >= 4 and gw >= 4 and gh % 4 == 0 and gw % 4 == 0:
         tiles = gray.reshape(4, gh // 4, 4, gw // 4).mean(axis=(1, 3)).ravel()
     else:
         tiles = [float(tile.mean()) for row in np.array_split(gray, 4, axis=0)
                  for tile in np.array_split(row, 4, axis=1)]
-    spatial_contrast = float(np.percentile(tiles, 95)-np.percentile(tiles, 5))
+    t5, t95 = np.percentile(tiles, [5, 95])
+    spatial_contrast = float(t95 - t5)
     if dark > .25 and clipped > .05:
         condition = 'MIXED_LIGHTING'
     elif clipped > .15:
@@ -79,13 +82,13 @@ class Readiness:
             quality = item.get('quality') or {}
             good = (valid and item.get('fresh') is True and quality.get('usable') is True
                     and quality.get('condition') == 'NORMAL' and quality.get('policy') == POLICY)
-            repeated = same_fresh_frame(item, previous, self.previous_quality.get(role))
+            repeated = False if valid else same_fresh_frame(item, previous, self.previous_quality.get(role))
             if not repeated:
                 self.counts[role] = self.counts[role]+1 if good else 0
             all_advanced = all_advanced and good
             if valid:
                 self.previous[role] = (stamp, seq)
-                self.previous_quality[role] = copy.deepcopy(quality)
+                self.previous_quality[role] = dict(quality)
         return dict(photometric_ready=all_advanced and all(n >= self.required for n in self.counts.values()),
                     confirmations=dict(self.counts), motion_admitted=False,
                     physical_acceptance=False, policy=POLICY)

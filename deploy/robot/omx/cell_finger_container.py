@@ -1,12 +1,31 @@
 """Color-agnostic structural container geometry and neutral-surface blob detection between gripper fingers."""
 from __future__ import annotations
 
+import math
+
 import numpy as np
 
 import cell_params as prm
 
 _KERNEL_3 = np.ones((3, 3), np.uint8)
 _KERNEL_25 = np.ones((25, 25), np.uint8)
+
+
+def _median3(arr: np.ndarray) -> np.ndarray:
+    """Fast axis=0 median for a 2D (N, 3) float32 array without np.median's _ureduce wrapper overhead."""
+    n = arr.shape[0]
+    mid = n >> 1
+    if n & 1:
+        return np.partition(arr, mid, axis=0)[mid]
+    part = np.partition(arr, (mid - 1, mid), axis=0)
+    return 0.5 * (part[mid - 1] + part[mid])
+
+
+def _dist3(a: np.ndarray, b: np.ndarray) -> float:
+    d0 = float(a[0] - b[0])
+    d1 = float(a[1] - b[1])
+    d2 = float(a[2] - b[2])
+    return math.sqrt(d0 * d0 + d1 * d1 + d2 * d2)
 
 
 def structural_container_between_fingers(img, a=None, b=None) -> dict | None:
@@ -20,39 +39,46 @@ def structural_container_between_fingers(img, a=None, b=None) -> dict | None:
     if img is None or img.size == 0:
         return None
     h, w = img.shape[:2]
-    lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB).astype(np.float32)
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY).astype(np.float32)
+    lab_u8 = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
     y0, y1, y2 = int(h * 0.03), int(h * 0.28), int(h * 0.50)
-    band = lab[y0:y1]
-    gy = np.abs(cv2.Sobel(gray[int(h * 0.08):int(h * 0.68)], cv2.CV_32F, 0, 1, ksize=3))
-    gx_full = np.abs(cv2.Sobel(gray[int(h * 0.08):int(h * 0.68)], cv2.CV_32F, 1, 0, ksize=3)).mean(axis=0)
+    band = lab_u8[y0:y1].astype(np.float32)
+    band_mid_full = lab_u8[y1:y2].astype(np.float32)
+    gray_band = cv2.cvtColor(img[int(h * 0.08):int(h * 0.68)], cv2.COLOR_BGR2GRAY)
+    gy = np.abs(cv2.Sobel(gray_band, cv2.CV_32F, 0, 1, ksize=3))
+    gx_full = np.abs(cv2.Sobel(gray_band, cv2.CV_32F, 1, 0, ksize=3)).mean(axis=0)
 
-    prof = cv2.GaussianBlur(np.median(band, axis=0).reshape(1, -1, 3), (11, 1), 0).reshape(-1, 3)
-    prof_mid = cv2.GaussianBlur(np.median(lab[y1:y2], axis=0).reshape(1, -1, 3), (11, 1), 0).reshape(-1, 3)
+    prof = cv2.GaussianBlur(_median3(band).reshape(1, -1, 3), (11, 1), 0).reshape(-1, 3)
+    prof_mid = cv2.GaussianBlur(_median3(band_mid_full).reshape(1, -1, 3), (11, 1), 0).reshape(-1, 3)
     x_min = max(int(a[0]) - 35, int(w * 0.03)) if a is not None else int(w * 0.03)
     x_max = min(int(b[0]) + 35, int(w * 0.99)) if b is not None else int(w * 0.99)
     w_lo, w_hi = max(140, int(w * 0.26)), min(400, int(w * 0.58))
 
+    out_r_cache: dict[int, np.ndarray | None] = {}
     best = None
     for xL in range(x_min, max(x_min + 1, x_max - w_lo), 4):
+        out_L = prof[max(2, xL - 60):max(4, xL - 8)]
+        med_L = _median3(out_L) if len(out_L) >= 6 else None
         for w_px in range(w_lo, w_hi + 1, 6):
             xR = xL + w_px
             if xR > x_max:
                 break
-            inside = prof[xL:xR]
-            in_med = np.median(inside, axis=0)
+            inside = prof[xL:xR:2]
+            in_med = _median3(inside)
             if in_med[0] < 65.0:  # dark shadow / background void
                 continue
-            in_med_mid = np.median(prof_mid[xL:xR], axis=0)
-            vert_diff = float(np.linalg.norm(in_med - in_med_mid))
-            in_spread = float(np.mean(np.linalg.norm(inside - in_med, axis=1)))
-            out_L = prof[max(2, xL - 60):max(4, xL - 8)]
-            out_R = prof[min(w - 4, xR + 8):min(w - 2, xR + 60)]
-            dL = float(np.linalg.norm(np.median(out_L, axis=0) - in_med)) if len(out_L) >= 6 else 0.0
-            dR = float(np.linalg.norm(np.median(out_R, axis=0) - in_med)) if len(out_R) >= 6 else 0.0
-            if len(out_L) < 6 and dR > 0.0:
+            in_med_mid = _median3(prof_mid[xL:xR:2])
+            vert_diff = _dist3(in_med, in_med_mid)
+            diff = inside - in_med
+            in_spread = float(np.sqrt(np.einsum("ij,ij->i", diff, diff)).mean())
+            if xR not in out_r_cache:
+                out_R = prof[min(w - 4, xR + 8):min(w - 2, xR + 60)]
+                out_r_cache[xR] = _median3(out_R) if len(out_R) >= 6 else None
+            med_R = out_r_cache[xR]
+            dL = _dist3(med_L, in_med) if med_L is not None else 0.0
+            dR = _dist3(med_R, in_med) if med_R is not None else 0.0
+            if med_L is None and dR > 0.0:
                 dL = 0.85 * dR
-            if len(out_R) < 6 and dL > 0.0:
+            if med_R is None and dL > 0.0:
                 dR = 0.85 * dL
             score = min(dL, dR) + 0.5 * (dL + dR) - 2.0 * in_spread - 0.8 * vert_diff
             if best is None or score > best[0]:
@@ -83,10 +109,13 @@ def structural_container_between_fingers(img, a=None, b=None) -> dict | None:
         cx = 0.5 * (left_seam + right_seam)
 
     # Estimate in-plane tilt angle (deg) from top vs mid horizontal slice centers
-    band_top = np.median(lab[int(h * 0.05):int(h * 0.20)], axis=0)
-    band_mid = np.median(lab[int(h * 0.25):int(h * 0.42)], axis=0)
-    top_in = np.where(np.linalg.norm(band_top[max(0, left_seam - 20):min(w, right_seam + 20)] - proto_lab, axis=1) < 22.0)[0]
-    mid_in = np.where(np.linalg.norm(band_mid[max(0, left_seam - 20):min(w, right_seam + 20)] - proto_lab, axis=1) < 22.0)[0]
+    sx0, sx1 = max(0, left_seam - 20), min(w, right_seam + 20)
+    band_top = _median3(lab_u8[int(h * 0.05):int(h * 0.20), sx0:sx1].astype(np.float32))
+    band_mid = _median3(lab_u8[int(h * 0.25):int(h * 0.42), sx0:sx1].astype(np.float32))
+    top_diff = band_top - proto_lab
+    mid_diff = band_mid - proto_lab
+    top_in = np.where(np.einsum("ij,ij->i", top_diff, top_diff) < 484.0)[0]
+    mid_in = np.where(np.einsum("ij,ij->i", mid_diff, mid_diff) < 484.0)[0]
     angle_deg = 0.0
     if len(top_in) >= 20 and len(mid_in) >= 20:
         dx_slice = float(np.mean(mid_in) - np.mean(top_in))
@@ -98,7 +127,7 @@ def structural_container_between_fingers(img, a=None, b=None) -> dict | None:
     inner_x1 = min(right_seam - 12, w)
     if inner_x1 <= inner_x0:
         inner_x0, inner_x1 = left_seam, right_seam
-    strip_lab = lab[:, inner_x0:inner_x1]
+    strip_lab = lab_u8[:, inner_x0:inner_x1].astype(np.float32)
     row_dab = np.hypot(strip_lab[..., 1] - proto_lab[1], strip_lab[..., 2] - proto_lab[2]).mean(axis=1)
     row_l = strip_lab[..., 0].mean(axis=1)
     l_ref = float(np.median(row_l[int(h * 0.20):int(h * 0.55)]))
@@ -156,12 +185,12 @@ def top_face_between_fingers(img, a, b):
     import cv2
 
     h, w = img.shape[:2]
-    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
     y0, y1 = int(h * 0.18), int(h * 0.73)
-    mid = hsv[y0:y1]
-    r_ch = img[y0:y1, :, 2].astype(int)
-    g_ch = img[y0:y1, :, 1].astype(int)
-    b_ch = img[y0:y1, :, 0].astype(int)
+    band_bgr = img[y0:y1]
+    mid = cv2.cvtColor(band_bgr, cv2.COLOR_BGR2HSV)
+    r_ch = band_bgr[:, :, 2].astype(np.int16)
+    g_ch = band_bgr[:, :, 1].astype(np.int16)
+    b_ch = band_bgr[:, :, 0].astype(np.int16)
     warm = ((r_ch - g_ch) >= 6) | ((r_ch - b_ch) >= 12)
     top_face = (mid[..., 2] >= 132) & (mid[..., 1] <= 98) & warm
     col_ratio = top_face.mean(axis=0)
@@ -191,7 +220,7 @@ def top_face_between_fingers(img, a, b):
         struct = structural_container_between_fingers(img, a, b)
         return (struct["cx"], struct["y_front"], struct["w_px"]) if struct else None
     cx = 0.5 * (left_seam + right_seam)
-    v_prof = hsv[:, max(left_seam + 10, 0):min(right_seam - 10, w), 2].mean(axis=1)
+    v_prof = img[:, max(left_seam + 10, 0):min(right_seam - 10, w)].max(axis=2).mean(axis=1)
     v_top = float(np.median(v_prof[int(h * 0.40):int(h * 0.68)]))
     y_front = float(int(h * 0.76))
     for y in range(int(h * 0.68), int(h * 0.92)):

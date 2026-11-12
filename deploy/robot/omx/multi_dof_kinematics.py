@@ -44,21 +44,96 @@ def _rot_z(a: float) -> np.ndarray:
     return np.array([[c, -s, 0.0], [s, c, 0.0], [0.0, 0.0, 1.0]], dtype=float)
 
 
+def _rx3(a: float):
+    c, s = math.cos(a), math.sin(a)
+    return ((1.0, 0.0, 0.0), (0.0, c, -s), (0.0, s, c))
+
+
+def _ry3(a: float):
+    c, s = math.cos(a), math.sin(a)
+    return ((c, 0.0, s), (0.0, 1.0, 0.0), (-s, 0.0, c))
+
+
+def _rz3(a: float):
+    c, s = math.cos(a), math.sin(a)
+    return ((c, -s, 0.0), (s, c, 0.0), (0.0, 0.0, 1.0))
+
+
+def _mm3(a, b):
+    a0, a1, a2 = a
+    b0, b1, b2 = b
+    return (
+        (
+            a0[0] * b0[0] + a0[1] * b1[0] + a0[2] * b2[0],
+            a0[0] * b0[1] + a0[1] * b1[1] + a0[2] * b2[1],
+            a0[0] * b0[2] + a0[1] * b1[2] + a0[2] * b2[2],
+        ),
+        (
+            a1[0] * b0[0] + a1[1] * b1[0] + a1[2] * b2[0],
+            a1[0] * b0[1] + a1[1] * b1[1] + a1[2] * b2[1],
+            a1[0] * b0[2] + a1[1] * b1[2] + a1[2] * b2[2],
+        ),
+        (
+            a2[0] * b0[0] + a2[1] * b1[0] + a2[2] * b2[0],
+            a2[0] * b0[1] + a2[1] * b1[1] + a2[2] * b2[1],
+            a2[0] * b0[2] + a2[1] * b1[2] + a2[2] * b2[2],
+        ),
+    )
+
+
+def _fk_raw(qv: Sequence[float], dof: int, tcp_x_m: float):
+    r = _mm3(_rz3(qv[0]), _ry3(qv[1]))
+    sx = r[0][0] * 0.012
+    sy = r[1][0] * 0.012
+    sz = 0.078 + r[2][0] * 0.012
+    if dof == 7:
+        r_upper = _mm3(r, _rx3(qv[2]))
+        ex = sx + r_upper[0][0] * 0.130
+        ey = sy + r_upper[1][0] * 0.130
+        ez = sz + r_upper[2][0] * 0.130
+        r_fore = _mm3(r_upper, _ry3(qv[3]))
+        wx = ex + r_fore[0][0] * 0.124
+        wy = ey + r_fore[1][0] * 0.124
+        wz = ez + r_fore[2][0] * 0.124
+        r_tcp = _mm3(_mm3(_mm3(r_fore, _ry3(qv[4])), _rz3(qv[5])), _rx3(qv[6]))
+    elif dof == 6:
+        ex = sx + r[0][0] * 0.130
+        ey = sy + r[1][0] * 0.130
+        ez = sz + r[2][0] * 0.130
+        r_fore = _mm3(r, _ry3(qv[2]))
+        wx = ex + r_fore[0][0] * 0.124
+        wy = ey + r_fore[1][0] * 0.124
+        wz = ez + r_fore[2][0] * 0.124
+        r_tcp = _mm3(_mm3(_mm3(r_fore, _ry3(qv[3])), _rz3(qv[4])), _rx3(qv[5]))
+    else:
+        ex = sx + r[0][0] * 0.130
+        ey = sy + r[1][0] * 0.130
+        ez = sz + r[2][0] * 0.130
+        r_fore = _mm3(r, _ry3(qv[2]))
+        wx = ex + r_fore[0][0] * 0.124
+        wy = ey + r_fore[1][0] * 0.124
+        wz = ez + r_fore[2][0] * 0.124
+        r_tcp = _mm3(_mm3(r_fore, _ry3(qv[3])), _rx3(qv[4]))
+    tx = float(tcp_x_m)
+    p_tcp = (wx + r_tcp[0][0] * tx, wy + r_tcp[1][0] * tx, wz + r_tcp[2][0] * tx)
+    return p_tcp, r_tcp, (ex, ey, ez), (wx, wy, wz)
+
+
 def rpy_to_matrix(roll: float, pitch: float, yaw: float) -> np.ndarray:
     """Intrinsic ZYX (yaw-pitch-roll) rotation matrix from radians."""
-    return _rot_z(yaw) @ _rot_y(pitch) @ _rot_x(roll)
+    return np.array(_mm3(_mm3(_rz3(yaw), _ry3(pitch)), _rx3(roll)), dtype=float)
 
 
 def matrix_to_rpy(r: np.ndarray) -> tuple[float, float, float]:
     """Extract (roll, pitch, yaw) in radians from a 3x3 rotation matrix."""
-    sy = max(-1.0, min(1.0, float(-r[2, 0])))
+    sy = max(-1.0, min(1.0, float(-r[2][0])))
     pitch = math.asin(sy)
     if abs(math.cos(pitch)) > 1e-6:
-        roll = math.atan2(float(r[2, 1]), float(r[2, 2]))
-        yaw = math.atan2(float(r[1, 0]), float(r[0, 0]))
+        roll = math.atan2(float(r[2][1]), float(r[2][2]))
+        yaw = math.atan2(float(r[1][0]), float(r[0][0]))
     else:
         roll = 0.0
-        yaw = math.atan2(float(-r[0, 1]), float(r[1, 1]))
+        yaw = math.atan2(float(-r[0][1]), float(r[1][1]))
     return roll, pitch, yaw
 
 
@@ -71,69 +146,83 @@ def fk_se3(q: Sequence[float], *, dof: int = 6, tcp_x_m: float = 0.0885) -> dict
     if len(qv) != dof:
         raise ValueError(f"expected {dof} joint angles, got {len(qv)}")
 
-    # Link geometry compatible with OMX cell scale (shoulder z=0.078m, upper arm l1=0.130m, forearm l2=0.124m)
-    p = np.array([0.0, 0.0, 0.078], dtype=float)
-    r = _rot_z(qv[0]) @ _rot_y(qv[1])
-    p_shoulder = p + r @ np.array([0.012, 0.0, 0.0])
-
-    if dof == 7:
-        # 7-DOF: q[2] is upper-arm roll (elbow swivel psi), q[3] is elbow_flex, q[4] is wrist_flex, q[5] is wrist_yaw, q[6] is wrist_roll
-        r_upper = r @ _rot_x(qv[2])
-        p_elbow = p_shoulder + r_upper @ np.array([0.130, 0.0, 0.0])
-        r_fore = r_upper @ _rot_y(qv[3])
-        p_wrist = p_elbow + r_fore @ np.array([0.124, 0.0, 0.0])
-        r_tcp = r_fore @ _rot_y(qv[4]) @ _rot_z(qv[5]) @ _rot_x(qv[6])
-    elif dof == 6:
-        # 6-DOF: q[2] is elbow_flex, q[3] is wrist_flex, q[4] is wrist_yaw, q[5] is wrist_roll
-        p_elbow = p_shoulder + r @ np.array([0.130, 0.0, 0.0])
-        r_fore = r @ _rot_y(qv[2])
-        p_wrist = p_elbow + r_fore @ np.array([0.124, 0.0, 0.0])
-        r_tcp = r_fore @ _rot_y(qv[3]) @ _rot_z(qv[4]) @ _rot_x(qv[5])
-    else:
-        # 5-DOF: q[2] is elbow_flex, q[3] is wrist_flex, q[4] is wrist_roll
-        p_elbow = p_shoulder + r @ np.array([0.130, 0.0, 0.0])
-        r_fore = r @ _rot_y(qv[2])
-        p_wrist = p_elbow + r_fore @ np.array([0.124, 0.0, 0.0])
-        r_tcp = r_fore @ _rot_y(qv[3]) @ _rot_x(qv[4])
-
-    p_tcp = p_wrist + r_tcp @ np.array([float(tcp_x_m), 0.0, 0.0])
+    p_tcp, r_tcp, p_elbow, p_wrist = _fk_raw(qv, dof, tcp_x_m)
     rpy = matrix_to_rpy(r_tcp)
     return {
         "dof": dof,
-        "xyz_m": [round(float(v), 6) for v in p_tcp],
-        "rpy_rad": [round(float(v), 6) for v in rpy],
-        "rotation": r_tcp,
-        "elbow_xyz_m": [round(float(v), 6) for v in p_elbow],
-        "wrist_xyz_m": [round(float(v), 6) for v in p_wrist],
+        "xyz_m": [round(v, 6) for v in p_tcp],
+        "rpy_rad": [round(v, 6) for v in rpy],
+        "rotation": np.array(r_tcp, dtype=float),
+        "elbow_xyz_m": [round(v, 6) for v in p_elbow],
+        "wrist_xyz_m": [round(v, 6) for v in p_wrist],
     }
+
+
+def _pose_error_raw(cur_xyz, r_cur, target_xyz, target_rot) -> tuple[float, float, float, float, float, float]:
+    dx = float(target_xyz[0]) - float(cur_xyz[0])
+    dy = float(target_xyz[1]) - float(cur_xyz[1])
+    dz = float(target_xyz[2]) - float(cur_xyz[2])
+    t0, t1, t2 = target_rot[0], target_rot[1], target_rot[2]
+    c0, c1, c2 = r_cur[0], r_cur[1], r_cur[2]
+    r00 = t0[0] * c0[0] + t0[1] * c0[1] + t0[2] * c0[2]
+    r01 = t0[0] * c1[0] + t0[1] * c1[1] + t0[2] * c1[2]
+    r02 = t0[0] * c2[0] + t0[1] * c2[1] + t0[2] * c2[2]
+    r10 = t1[0] * c0[0] + t1[1] * c0[1] + t1[2] * c0[2]
+    r11 = t1[0] * c1[0] + t1[1] * c1[1] + t1[2] * c1[2]
+    r12 = t1[0] * c2[0] + t1[1] * c2[1] + t1[2] * c2[2]
+    r20 = t2[0] * c0[0] + t2[1] * c0[1] + t2[2] * c0[2]
+    r21 = t2[0] * c1[0] + t2[1] * c1[1] + t2[2] * c1[2]
+    r22 = t2[0] * c2[0] + t2[1] * c2[1] + t2[2] * c2[2]
+    trace = max(-1.0, min(3.0, float(r00 + r11 + r22)))
+    angle = math.acos(max(-1.0, min(1.0, (trace - 1.0) * 0.5)))
+    if abs(angle) < 1e-6:
+        return dx, dy, dz, 0.0, 0.0, 0.0
+    scale = 0.5 * angle / math.sin(angle)
+    return (
+        dx,
+        dy,
+        dz,
+        scale * float(r21 - r12),
+        scale * float(r02 - r20),
+        scale * float(r10 - r01),
+    )
 
 
 def pose_error(current_fk: dict[str, Any], target_xyz_m: Sequence[float], target_rot: np.ndarray) -> np.ndarray:
     """6D spatial twist error `[dx, dy, dz, wx, wy, wz]` between `current_fk` and `(target_xyz_m, target_rot)`."""
-    dp = np.asarray(target_xyz_m, dtype=float) - np.asarray(current_fk["xyz_m"], dtype=float)
-    r_cur = np.asarray(current_fk["rotation"], dtype=float)
-    r_err = target_rot @ r_cur.T
-    trace = max(-1.0, min(3.0, float(np.trace(r_err))))
-    angle = math.acos(max(-1.0, min(1.0, (trace - 1.0) * 0.5)))
-    if abs(angle) < 1e-6:
-        w = np.zeros(3, dtype=float)
-    else:
-        axis = np.array([r_err[2, 1] - r_err[1, 2], r_err[0, 2] - r_err[2, 0], r_err[1, 0] - r_err[0, 1]], dtype=float)
-        w = (0.5 * angle / math.sin(angle)) * axis
-    return np.concatenate([dp, w])
+    return np.array(_pose_error_raw(current_fk["xyz_m"], current_fk["rotation"], target_xyz_m, target_rot), dtype=float)
 
 
-def numerical_jacobian(q: Sequence[float], *, dof: int = 6, tcp_x_m: float = 0.0885, eps: float = 1e-5) -> np.ndarray:
-    """Compute the 6xN geometric Jacobian `J(q)` via central finite differences in SE(3)."""
-    qv = np.asarray(q[:dof], dtype=float)
+def numerical_jacobian(
+    q: Sequence[float],
+    *,
+    dof: int = 6,
+    tcp_x_m: float = 0.0885,
+    eps: float = 1e-5,
+    base_fk: dict[str, Any] | None = None,
+) -> np.ndarray:
+    """Compute the 6xN geometric Jacobian `J(q)` via forward finite differences in SE(3)."""
+    qv = [float(v) for v in q[:dof]]
     j_mat = np.zeros((6, dof), dtype=float)
-    base_fk = fk_se3(qv, dof=dof, tcp_x_m=tcp_x_m)
+    if base_fk is not None:
+        b_xyz, b_rot = base_fk["xyz_m"], base_fk["rotation"]
+    else:
+        b_xyz_raw, b_rot, _, _ = _fk_raw(qv, dof, tcp_x_m)
+        b_xyz = (round(b_xyz_raw[0], 6), round(b_xyz_raw[1], 6), round(b_xyz_raw[2], 6))
+    inv_eps = 1.0 / eps
     for i in range(dof):
-        dq = np.zeros(dof, dtype=float)
-        dq[i] = eps
-        fk_plus = fk_se3(qv + dq, dof=dof, tcp_x_m=tcp_x_m)
-        err = pose_error(base_fk, fk_plus["xyz_m"], fk_plus["rotation"])
-        j_mat[:, i] = err / eps
+        orig = qv[i]
+        qv[i] = orig + eps
+        p_plus, r_plus, _, _ = _fk_raw(qv, dof, tcp_x_m)
+        qv[i] = orig
+        p_round = (round(p_plus[0], 6), round(p_plus[1], 6), round(p_plus[2], 6))
+        err = _pose_error_raw(b_xyz, b_rot, p_round, r_plus)
+        j_mat[0, i] = err[0] * inv_eps
+        j_mat[1, i] = err[1] * inv_eps
+        j_mat[2, i] = err[2] * inv_eps
+        j_mat[3, i] = err[3] * inv_eps
+        j_mat[4, i] = err[4] * inv_eps
+        j_mat[5, i] = err[5] * inv_eps
     return j_mat
 
 
@@ -151,6 +240,7 @@ def nullspace_velocity(
     *,
     psi_target_rad: float | None = None,
     obstacle_xy_m: tuple[float, float] | None = None,
+    elbow_xyz_m: Sequence[float] | None = None,
     center_weight: float = 0.35,
     swivel_weight: float = 0.85,
     damping: float = 0.04,
@@ -162,8 +252,7 @@ def nullspace_velocity(
     qv = np.asarray(q[:dof], dtype=float)
     lims = limits or DEFAULT_LIMITS_RAD.get(dof, DEFAULT_LIMITS_RAD[7])
     jjt = jacobian @ jacobian.T + (damping**2) * np.eye(jacobian.shape[0])
-    j_pinv = jacobian.T @ np.linalg.inv(jjt)
-    p_null = np.eye(dof) - j_pinv @ jacobian
+    p_null = np.eye(dof) - jacobian.T @ np.linalg.solve(jjt, jacobian)
 
     z0 = np.zeros(dof, dtype=float)
     for i, (lo, hi) in enumerate(lims[:dof]):
@@ -175,9 +264,9 @@ def nullspace_velocity(
         if psi_target_rad is not None:
             z0[2] += swivel_weight * (float(psi_target_rad) - qv[2])
         elif obstacle_xy_m is not None:
-            fk_cur = fk_se3(qv, dof=7)
-            ex, ey, _ = fk_cur["elbow_xyz_m"]
-            obs_dy = ey - float(obstacle_xy_m[1])
+            if elbow_xyz_m is None:
+                _, _, elbow_xyz_m, _ = _fk_raw(qv, 7, 0.0885)
+            obs_dy = float(elbow_xyz_m[1]) - float(obstacle_xy_m[1])
             swivel_dir = 0.45 if obs_dy >= 0.0 else -0.45
             z0[2] += swivel_weight * (swivel_dir - qv[2])
 
@@ -228,10 +317,14 @@ def solve_se3_ik(
     for step in range(1, max_steps + 1):
         cur_fk = fk_se3(q, dof=dof, tcp_x_m=tcp_x_m)
         err6 = pose_error(cur_fk, target_xyz_m, target_rot)
-        pos_err = float(np.linalg.norm(err6[:3]))
-        rot_err = float(np.linalg.norm(err6[3:])) if dof >= 6 else float(math.hypot(err6[4], err6[5]))
+        pos_err = math.sqrt(float(err6[0] * err6[0] + err6[1] * err6[1] + err6[2] * err6[2]))
+        rot_err = (
+            math.sqrt(float(err6[3] * err6[3] + err6[4] * err6[4] + err6[5] * err6[5]))
+            if dof >= 6
+            else float(math.hypot(err6[4], err6[5]))
+        )
         if pos_err <= pos_tol_m and rot_err <= rot_tol_rad:
-            j_full = numerical_jacobian(q, dof=dof, tcp_x_m=tcp_x_m)
+            j_full = numerical_jacobian(q, dof=dof, tcp_x_m=tcp_x_m, base_fk=cur_fk)
             return {
                 "ok": True,
                 "dof": dof,
@@ -243,13 +336,20 @@ def solve_se3_ik(
                 "elbow_xyz_m": cur_fk["elbow_xyz_m"],
                 "iterations": step,
             }
-        j_full = numerical_jacobian(q, dof=dof, tcp_x_m=tcp_x_m)
+        j_full = numerical_jacobian(q, dof=dof, tcp_x_m=tcp_x_m, base_fk=cur_fk)
         j_act = j_full[active_rows, :]
         e_act = err6[active_rows]
         jjt = j_act @ j_act.T + (damping**2) * np.eye(j_act.shape[0])
         dq_task = j_act.T @ np.linalg.solve(jjt, e_act)
         if dof == 7:
-            ns = nullspace_velocity(q, j_act, lims, psi_target_rad=psi_target_rad, obstacle_xy_m=obstacle_xy_m)
+            ns = nullspace_velocity(
+                q,
+                j_act,
+                lims,
+                psi_target_rad=psi_target_rad,
+                obstacle_xy_m=obstacle_xy_m,
+                elbow_xyz_m=cur_fk["elbow_xyz_m"],
+            )
             dq = dq_task + 0.35 * ns["qdot_secondary"]
         else:
             dq = dq_task
@@ -260,9 +360,13 @@ def solve_se3_ik(
 
     cur_fk = fk_se3(q, dof=dof, tcp_x_m=tcp_x_m)
     err6 = pose_error(cur_fk, target_xyz_m, target_rot)
-    pos_err = float(np.linalg.norm(err6[:3]))
-    rot_err = float(np.linalg.norm(err6[3:])) if dof >= 6 else float(math.hypot(err6[4], err6[5]))
-    j_full = numerical_jacobian(q, dof=dof, tcp_x_m=tcp_x_m)
+    pos_err = math.sqrt(float(err6[0] * err6[0] + err6[1] * err6[1] + err6[2] * err6[2]))
+    rot_err = (
+        math.sqrt(float(err6[3] * err6[3] + err6[4] * err6[4] + err6[5] * err6[5]))
+        if dof >= 6
+        else float(math.hypot(err6[4], err6[5]))
+    )
+    j_full = numerical_jacobian(q, dof=dof, tcp_x_m=tcp_x_m, base_fk=cur_fk)
     return {
         "ok": bool(pos_err <= pos_tol_m * 2.0 and rot_err <= rot_tol_rad * 2.0),
         "dof": dof,

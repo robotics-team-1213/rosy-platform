@@ -67,10 +67,19 @@ def colour_tag(img, px) -> dict:
     if img is None or len(px) == 0:
         return {}
     pts = np.asarray(px, int)
+    if len(pts) > 512:
+        pts = pts[:: max(1, len(pts) // 512)]
     xs = np.clip(pts[:, 0], 0, img.shape[1] - 1)
     ys = np.clip(pts[:, 1], 0, img.shape[0] - 1)
     hsv_px = cv2.cvtColor(img[ys, xs].reshape(-1, 1, 3), cv2.COLOR_BGR2HSV).reshape(-1, 3)
-    med = [int(round(float(v))) for v in np.median(hsv_px, axis=0)]
+    n = hsv_px.shape[0]
+    mid = n >> 1
+    if n & 1:
+        raw_med = np.partition(hsv_px, mid, axis=0)[mid]
+    else:
+        part = np.partition(hsv_px, (mid - 1, mid), axis=0)
+        raw_med = 0.5 * (part[mid - 1].astype(float) + part[mid].astype(float))
+    med = [int(round(float(v))) for v in raw_med]
     return {"colour": colour_name(med), "hsv": med}
 
 
@@ -143,6 +152,7 @@ def decision_ai_verify(img, candidates: list, roi=None, judge=None, config: dict
             judge = judge_seat.from_config(config.get("judge") or config.get("decision_ai"))
         except Exception:
             judge = None
+    png_bytes = None
     out = []
     for cand in candidates:
         struct = cand.get("structure") or {}
@@ -158,7 +168,9 @@ def decision_ai_verify(img, candidates: list, roi=None, judge=None, config: dict
         }
         if judge is not None and img is not None:
             try:
-                _, png = cv2.imencode(".png", img)
+                if png_bytes is None:
+                    _, png = cv2.imencode(".png", img)
+                    png_bytes = png.tobytes()
                 prompt = (
                     "Evaluate whether this candidate object is a valid graspable shipping container block "
                     "(regardless of color) based on its 3D rectangular box structure and rib geometry. "
@@ -168,7 +180,7 @@ def decision_ai_verify(img, candidates: list, roi=None, judge=None, config: dict
                     f"structure={json.dumps(struct)}. "
                     'Reply with JSON: {"verified": true/false, "object": "<id>", "reason": "<one sentence>"}'
                 )
-                reply = judge(png.tobytes(), prompt)
+                reply = judge(png_bytes, prompt)
                 parsed = json.loads(reply) if isinstance(reply, str) else dict(reply)
                 ai_verdict = {
                     "mode": "decision_ai",
@@ -236,8 +248,11 @@ def _px_mm2(px, mm) -> float | None:
 def outline(px, results: list, catalog: list, camera: dict, surface_z: float):
     """Convex outline of an object's own image area: the pixels found plus where their tops meet the surface, so the
     side faces the camera sees belong to the object."""
-    pts = np.asarray(px, float)
-    heights = [o["top_height_mm"] for o in catalog if o["id"] in {r.get("object") for r in results}] or [
+    pts = np.asarray(px, np.float32)
+    if len(pts) > 24:
+        pts = cv2.convexHull(pts).reshape(-1, 2)
+    want_ids = {r.get("object") for r in results}
+    heights = [o["top_height_mm"] for o in catalog if o["id"] in want_ids] or [
         o["top_height_mm"] for o in catalog
     ]
     if "center_px" in camera and "height_m" in camera:
