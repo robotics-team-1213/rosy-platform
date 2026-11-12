@@ -71,6 +71,17 @@ def prune_ledger(source: Path | str, *, history_days: int = DEFAULT_HISTORY_RETE
         raise DatabaseError("retention days must not be negative")
     if not path.is_file():
         raise DatabaseError("source database is missing")
+    with closing(sqlite3.connect(path)) as settings_db:
+        if settings_db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='fleet_db_settings'").fetchone():
+            settings = dict(settings_db.execute("SELECT key, value_int FROM fleet_db_settings"))
+            if history_days == DEFAULT_HISTORY_RETENTION_DAYS:
+                history_days = settings.get("history_retention_days", history_days)
+            if audit_days == DEFAULT_AUDIT_RETENTION_DAYS:
+                audit_days = settings.get("audit_retention_days", audit_days)
+            if api_audit_days == DEFAULT_API_AUDIT_RETENTION_DAYS:
+                api_audit_days = settings.get("api_audit_retention_days", api_audit_days)
+            if sighting_days == DEFAULT_SIGHTING_RETENTION_DAYS:
+                sighting_days = settings.get("sighting_retention_days", sighting_days)
     # fleet_tasks.updated_at / fleet_task_history.created_at are `_now()` ISO strings
     # (task_store_types._now); core_event_audit.received_at uses the same shape. The
     # same format keeps the string comparison exact. A retention of 0 days skips that
@@ -119,8 +130,12 @@ def prune_ledger(source: Path | str, *, history_days: int = DEFAULT_HISTORY_RETE
                 # `_now()` ISO shape; the request_id link is per request, not a durable
                 # contract, so rows past the retention window have no reader.
                 if api_audit_cutoff_iso is not None and "fleet_api_audit" in tables:
+                    watermark = db.execute("SELECT last_rowid FROM fleet_audit_flush WHERE kind='fleet_api_audit'").fetchone() \
+                        if "fleet_audit_flush" in tables else None
                     removed["fleet_api_audit"] = db.execute(
-                        "DELETE FROM fleet_api_audit WHERE created_at < ?",
+                        "DELETE FROM fleet_api_audit WHERE created_at < ?" +
+                        (" AND rowid <= ?" if watermark else ""),
+                        (api_audit_cutoff_iso, int(watermark[0])) if watermark else
                         (api_audit_cutoff_iso,)).rowcount
                 # Accepted-sighting audit (recognition/sighting_store.py) keeps epoch
                 # seconds in received_at; latest_sightings (the live view) is untouched.

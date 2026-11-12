@@ -8,11 +8,13 @@ import time
 from contextlib import closing
 from pathlib import Path
 
-from fastapi import Header, HTTPException, Request
+from fastapi import Body, Header, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from core_common.protocol.account_access import same_origin
 from fleet.server.context_log import active
+from fleet.server.db_maintenance import (read_audit_archive_status, read_db_settings,
+                                         run_db_maintenance_action, update_db_settings)
 
 
 NO_STORE = {"Cache-Control": "no-store"}
@@ -77,13 +79,14 @@ def collect_db_status(store_path: Path | str | None, *, context_log=None,
         "configured": bdir is not None, "count": len(files),
         "newest_age_hours": round((time.time() - newest) / 3600.0, 2) if newest is not None else None,
     }}
-    return {"fleet": fleet, "postgres": postgres, "backups": backups}
+    return {"fleet": fleet, "postgres": postgres, "backups": backups,
+            "settings": read_db_settings(store_path),
+            "audit_archive": read_audit_archive_status(store_path, context_log=sink)}
 
 
 def install_db_status_routes(app, *, store_path: Path | str | None = None, authorize,
                              context_log=None, backup_dir: Path | str | None = None) -> None:
-    @app.get("/api/fleet/admin/db-status", tags=["fleet-auth"])
-    def db_status(request: Request, authorization: str | None = Header(default=None)):
+    def require_admin(request: Request, authorization: str | None):
         forbidden = HTTPException(403, detail={"code": "ACCOUNT_ADMIN_REQUIRED"}, headers=NO_STORE)
         try:
             principal = authorize(request, authorization=authorization)
@@ -94,6 +97,31 @@ def install_db_status_routes(app, *, store_path: Path | str | None = None, autho
                 or not principal.permits_site("accounts.manage", {"policy-admin"})
                 or (request.headers.get("origin") is not None and not same_origin(request))):
             raise forbidden
+        return principal
+
+    @app.get("/api/fleet/admin/db-status", tags=["fleet-auth"])
+    def db_status(request: Request, authorization: str | None = Header(default=None)):
+        require_admin(request, authorization)
         return JSONResponse(
             collect_db_status(store_path, context_log=context_log, backup_dir=backup_dir), headers=NO_STORE
         )
+
+    @app.put("/api/fleet/admin/db-settings", tags=["fleet-auth"])
+    def update_settings(request: Request, payload: dict[str, object] = Body(default_factory=dict),
+                        authorization: str | None = Header(default=None)):
+        require_admin(request, authorization)
+        try:
+            return JSONResponse({"settings": update_db_settings(store_path, payload)}, headers=NO_STORE)
+        except ValueError as exc:
+            return JSONResponse(status_code=422, content={"code": "INVALID_DB_SETTINGS", "message": str(exc)}, headers=NO_STORE)
+
+    @app.post("/api/fleet/admin/db-maintenance", tags=["fleet-auth"])
+    def run_maintenance(request: Request, payload: dict[str, object] = Body(default_factory=dict),
+                        authorization: str | None = Header(default=None)):
+        require_admin(request, authorization)
+        try:
+            result = run_db_maintenance_action(store_path, str(payload.get("action") or ""),
+                context_log=context_log if context_log is not None else active(), backup_dir=backup_dir)
+            return JSONResponse(result, headers=NO_STORE)
+        except ValueError as exc:
+            return JSONResponse(status_code=422, content={"code": "INVALID_DB_ACTION", "message": str(exc)}, headers=NO_STORE)

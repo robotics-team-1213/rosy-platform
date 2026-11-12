@@ -9,7 +9,7 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
-### v1.389 Fleet database maintenance status
+### v1.389 Fleet database maintenance status and actions
 
 `GET /api/fleet/admin/db-status` requires a cookie-authenticated human Account session
 with `accounts.manage` and a same-origin `Origin` when supplied. Other callers receive
@@ -18,6 +18,15 @@ file and WAL sizes, page and freelist counts, fragmentation percentage, componen
 migrations and newest timestamps by table; PostgreSQL reachability and database size;
 and Fleet backup count and newest age in hours. An absent store or sink reports
 `configured: false`. Paths, connection details and raw errors are never returned.
+
+The same cookie, `accounts.manage`, same-origin, and no-store rules apply to these
+admin endpoints:
+
+| Method and path | Contract |
+|---|---|
+| `GET /api/fleet/admin/db-status` | Read-only Fleet, PostgreSQL, backup, effective settings, and audit archive watermark status. |
+| `PUT /api/fleet/admin/db-settings` | Persist a non-empty object of integer retention days (`history`, `audit`, `api_audit`, `sighting`; 0–3650), `wal_autocheckpoint_pages` (100–100000), or `incremental_vacuum_pages` (0–10000). Values apply to the next prune and new connections. Invalid values return 422 `INVALID_DB_SETTINGS`. |
+| `POST /api/fleet/admin/db-maintenance` | `{action}` is one of `self-test`, `checkpoint`, `incremental-vacuum`, `flush-audit`, `prune-expired`. Returns action results and `ok`; unknown actions return 422 `INVALID_DB_ACTION`. Self-test is read-only; pruning protects API audit rows above the PostgreSQL archive watermark. |
 
 ### v1.385 카메라로 초안 만들기·카메라까지 겹친 대조
 
