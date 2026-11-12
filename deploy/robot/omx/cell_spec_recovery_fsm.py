@@ -263,8 +263,9 @@ def _orange_ratio(roi: Any) -> float:
     if roi is None or not hasattr(roi, "ndim") or roi.ndim != 3 or roi.size == 0:
         return 0.0
     b, g, r = roi[..., 0].astype(float), roi[..., 1].astype(float), roi[..., 2].astype(float)
-    mask = (r >= 180.0) & (g <= 150.0) & (b <= 90.0) & ((r - g) >= 70.0)
-    return float(mask.mean())
+    rb = r - b
+    mask = (r >= 105.0) & (rb >= 0.25 * r) & ((r - g) >= 25.0) & ((g - b) <= 0.56 * rb)
+    return round(float(mask.mean()), 4)
 
 
 def audit_arm_s_zones_and_wrist_corridor(
