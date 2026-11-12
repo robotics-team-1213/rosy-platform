@@ -9,19 +9,15 @@ from pathlib import Path
 import ssl
 import sys
 from urllib.parse import quote, urlsplit
-from urllib.request import HTTPRedirectHandler, HTTPSHandler, Request, build_opener
+from urllib.request import HTTPSHandler, Request, build_opener
 
 import yaml
 
+from core_common.protocol.account_client import _NoRedirect
 from core_common.protocol.arm_incidents import ArmIncidentAccepted, ArmIncidentHold
 from core_common.protocol.workcell_observations import UsbCameraDecisions, WorkcellObservationManifest
 from rosy_vision import protocol
 import usb_camera_report
-
-
-class _NoRedirect(HTTPRedirectHandler):
-    def redirect_request(self, req, fp, code, msg, headers, newurl):
-        return None
 
 
 def secure_url(value, scheme):
