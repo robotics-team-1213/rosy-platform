@@ -3,11 +3,17 @@
 from __future__ import annotations
 
 import hashlib
+import hmac
+import inspect
 import json
 import re
 from typing import Any, Mapping
 from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
+
+from core_common.protocol.notification_delivery import DeliveryOwnerReply, DeliveryRequest
+from fastapi import Request as HttpRequest
+from fastapi.responses import JSONResponse
 
 
 def should_run_embedded_notification_worker(remote_url: str | None) -> bool:
@@ -85,3 +91,34 @@ class RemoteNotificationSink:
 
     def read_delivery(self, notification_id: str) -> dict[str, Any]:
         return self._send('GET', f'/api/notifications/v1/deliveries/{notification_id}')
+
+
+def install_notification_owner_routes(
+    app,
+    worker,
+    *,
+    owner_token: str,
+    path: str = '/api/fleet/notifications/owner-check',
+) -> None:
+    if not isinstance(owner_token, str) or len(owner_token.strip()) < 32:
+        raise ValueError('notification owner token must be at least 32 characters')
+    expected_auth = f'Bearer {owner_token}'
+
+    @app.post(path, response_model=DeliveryOwnerReply)
+    async def verify_notification_owner(request: HttpRequest):
+        auth = request.headers.get('authorization', '')
+        if not hmac.compare_digest(auth, expected_auth):
+            return JSONResponse({'code': 'NOTIFICATION_OWNER_UNAUTHORIZED'}, status_code=401)
+        try:
+            body = DeliveryRequest.model_validate(await request.json())
+        except Exception:
+            return JSONResponse({'code': 'INVALID_DELIVERY_REQUEST'}, status_code=422)
+        valid = worker.verify_delivery_owner(None, body)
+        if inspect.isawaitable(valid):
+            valid = await valid
+        return DeliveryOwnerReply(
+            notification_id=body.notification_id,
+            revision=body.revision,
+            valid=bool(valid),
+        )
+

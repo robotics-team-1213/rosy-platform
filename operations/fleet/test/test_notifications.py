@@ -12,11 +12,13 @@ from types import SimpleNamespace
 import httpx
 import pytest
 
+from fleet.incidents.delivery_producer import FleetDeliveryProducer
 from fleet.incidents.notifications import Channel, NotificationConfig, NotificationWorker
 from fleet.incidents.notification_client import (
     RemoteNotificationSink,
     build_delivery_request,
     delivery_notification_id,
+    install_notification_owner_routes,
     should_run_embedded_notification_worker,
 )
 from fleet.stuck.board import LineStuckBoard
@@ -480,4 +482,150 @@ def test_forward_once_blocks_closed_claimed_or_expired_incidents_before_service(
     finally:
         journal.close()
         asyncio.run(remote_http.aclose())
+
+
+def test_cutover_delivery_producer_and_http_owner_route_end_to_end(tmp_path):
+    from dataclasses import replace
+    import hashlib
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from rosy.notifications.api import create_app
+    from rosy.notifications.config import Producer
+    from rosy.notifications.journal import Journal
+    from rosy.notifications.service import DeliveryService, HttpOwnerCheck
+
+    now, log, board, config = _setup(tmp_path)
+    observe(board, 100.0)
+    with closing(log._connect()) as connection:
+        full_row = dict(connection.execute('SELECT * FROM fleet_notification_outbox').fetchone())
+
+    with pytest.raises(ValueError, match='NOTIFICATION_SINK_REQUIRED'):
+        FleetDeliveryProducer(enabled=True, legacy_enabled=False, cutover_accepted=True)
+
+    sink_calls = []
+
+    class RecordingSink:
+        def __init__(self, inner):
+            self._inner = inner
+
+        def submit_delivery(self, payload):
+            sink_calls.append(payload)
+            return self._inner.submit_delivery(payload)
+
+    token = 'f' * 40
+    owner_token = 'c' * 40
+    owner_url = 'https://fleet.example/api/fleet/notifications/owner-check'
+    channels = {'discord': Channel('discord', DISCORD)}
+    profiles = {
+        'fleet': Producer(
+            'fleet',
+            hashlib.sha256(token.encode('utf-8')).hexdigest(),
+            frozenset(['discord']),
+            owner_url,
+            owner_token,
+            'https://fleet.example/console',
+        ),
+    }
+
+    worker = NotificationWorker(log.notifications, config, None, board=board, clock=lambda: now[0])
+    owner_app = FastAPI()
+    with pytest.raises(ValueError, match='at least 32'):
+        install_notification_owner_routes(owner_app, worker, owner_token='short')
+    install_notification_owner_routes(owner_app, worker, owner_token=owner_token)
+    owner_client = TestClient(owner_app)
+
+    assert owner_client.post('/api/fleet/notifications/owner-check', json={}).status_code == 401
+    assert owner_client.post('/api/fleet/notifications/owner-check', json={}).json() == {
+        'code': 'NOTIFICATION_OWNER_UNAUTHORIZED',
+    }
+
+    webhook_requests = []
+
+    def transport(request: httpx.Request) -> httpx.Response:
+        if str(request.url) == owner_url:
+            resp = owner_client.post(
+                request.url.path,
+                content=request.content,
+                headers=dict(request.headers),
+            )
+            return httpx.Response(resp.status_code, content=resp.content, headers=dict(resp.headers))
+        webhook_requests.append(request)
+        return httpx.Response(200, json={'id': '777'})
+
+    http = httpx.AsyncClient(transport=httpx.MockTransport(transport))
+    journal = Journal(tmp_path / 'cutover_notifications.sqlite3')
+    service = DeliveryService(
+        journal,
+        channels,
+        profiles,
+        http,
+        owner_check=HttpOwnerCheck(http),
+        clock=lambda: now[0],
+    )
+    service_client = TestClient(create_app(service))
+
+    class TestClientOpener:
+        def open(self, request, *, timeout):
+            headers = {key: value for key, value in request.header_items()}
+            response = service_client.request(request.get_method(), request.selector, content=request.data, headers=headers)
+            if response.status_code >= 400:
+                raise OSError(f'HTTP {response.status_code}')
+            return io.BytesIO(response.content)
+
+    raw_sink = RemoteNotificationSink('https://notifications.example', bearer_token=token, opener=TestClientOpener())
+    sink = RecordingSink(raw_sink)
+    producer = FleetDeliveryProducer(
+        enabled=True,
+        legacy_enabled=False,
+        cutover_accepted=True,
+        sink=sink,
+    )
+
+    try:
+        unknown_row = {**full_row, 'state': 'UNKNOWN'}
+        assert producer.submit(unknown_row) == {
+            'notification_id': delivery_notification_id(unknown_row),
+            'state': 'UNKNOWN',
+        }
+        assert sink_calls == []
+
+        expected_id = delivery_notification_id(full_row)
+        receipt = producer.submit(full_row)
+        assert len(sink_calls) == 1
+        assert receipt['notification_id'] == expected_id
+        assert receipt['state'] == 'PENDING'
+
+        service.producers['fleet'] = replace(service.producers['fleet'], owner_token='x' * 40)
+        asyncio.run(service.run_once())
+        assert journal.read('fleet', expected_id).state == 'PENDING'
+        assert webhook_requests == []
+
+        now[0] = 101.0
+        observe(board, now[0])
+        service.producers['fleet'] = replace(service.producers['fleet'], owner_token=owner_token)
+        asyncio.run(service.run_once())
+        assert journal.read('fleet', expected_id).state == 'SENT'
+        assert len(webhook_requests) == 1
+
+        now[0] = 200.0
+        observe(board, now[0], 'case-2')
+        with closing(log._connect()) as connection:
+            second_row = dict(
+                connection.execute(
+                    "SELECT * FROM fleet_notification_outbox WHERE stuck_id='case-2' AND kind='OPEN'"
+                ).fetchone()
+            )
+        second_id = delivery_notification_id(second_row)
+        second_receipt = producer.submit(second_row)
+        assert second_receipt['notification_id'] == second_id
+        assert second_receipt['state'] == 'PENDING'
+
+        observe(board, now[0], None)
+        asyncio.run(service.run_once())
+        assert journal.read('fleet', second_id).state == 'SUPERSEDED'
+        assert len(webhook_requests) == 1
+    finally:
+        journal.close()
+        asyncio.run(http.aclose())
+
 
