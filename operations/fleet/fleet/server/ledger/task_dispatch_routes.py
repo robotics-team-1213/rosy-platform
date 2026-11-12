@@ -13,7 +13,6 @@ from __future__ import annotations
 import asyncio
 import logging
 import math
-from functools import partial
 from typing import Mapping, Optional
 
 from fastapi import Depends, Header, HTTPException
@@ -24,8 +23,6 @@ from fleet.server.cancel_all import DriveCancelFence, cancel_all_driving
 from fleet.server.http_errors import http_error
 from fleet.server.site_auth import SitePrincipal
 from fleet.server.owner_recovery_routes import install_owner_recovery_routes
-from fleet.server.ledger.berth_parking_routes import install_berth_parking_routes
-from fleet.server.ledger.task_dispatch_helpers import compute_road_plan
 from fleet.server.task_store import IdempotencyConflict, InvalidTaskTransition
 from fleet.swarm.transport import RobotApiError
 
@@ -206,12 +203,6 @@ def install_task_dispatch_routes(
                     })
                 control["omx_local_rearm"] = local_rearm
             return control
-
-    install_berth_parking_routes(
-        app, console=console, task_service=task_service,
-        read_guard=read_guard, operator_guard=operator_guard,
-        require_operator=require_operator, compute_road_plan=partial(compute_road_plan, console),
-    )
 
     @app.post("/api/fleet/robots/{robot_id}/goal", tags=["fleet"])
     async def fleet_goal(

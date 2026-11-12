@@ -51,6 +51,11 @@ async def snapshot(self) -> dict:
         else:
             state, source = result
             hub_row = self._hub.registry.find(robot_id) if source == "hub" else None
+            if (hub_row is not None and hub_row.online and hub_row.snapshot is not None
+                    and hub_row.last_heartbeat_monotonic is not None
+                    and self._clock() - hub_row.last_heartbeat_monotonic
+                    < self._hub_state_max_age_s):
+                state = hub_row.snapshot.model_dump(mode="json")
             # D-493: 이 상태가 관찰된 단조 시각. gathered()가 나이로 바꾸고 지운다.
             observed = (hub_row.last_heartbeat_monotonic if hub_row is not None else None)
             if observed is None:

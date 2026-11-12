@@ -130,6 +130,10 @@ class FleetTaskStore(TaskSchemaMigrations, TaskDispatchControl, TaskDispatchQueu
                 """
             )
             self._migrate_task_columns(connection)
+            connection.execute(
+                "CREATE INDEX IF NOT EXISTS fleet_tasks_robot_attempt "
+                "ON fleet_tasks(robot_id, attempt_id)"
+            )
             self._migrate_dispatch_control(connection)
             self._migrate_dispatch_claims(connection)
             ensure_cancel_all_schema(connection)  # D-421 cancel-all record and attempt tags
@@ -379,3 +383,11 @@ class FleetTaskStore(TaskSchemaMigrations, TaskDispatchControl, TaskDispatchQueu
                                      reason)
             connection.commit()
         return task_ids
+
+
+def prune_expired_task_history(conn: sqlite3.Connection, cutoff_iso: str) -> int:
+    return conn.execute(
+        "DELETE FROM fleet_task_history WHERE task_id IN (SELECT task_id FROM fleet_tasks "
+        "WHERE status IN ('COMPLETED','FAILED','CANCELED','EXPIRED') AND updated_at < ?)",
+        (cutoff_iso,),
+    ).rowcount

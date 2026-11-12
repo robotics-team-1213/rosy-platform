@@ -50,6 +50,13 @@ def project_core_event(store: _TaskStore, *, robot_id: str, event_id: str, seq: 
     status, reason = mapped
     now = datetime.now(timezone.utc).isoformat(timespec="milliseconds")
     with closing(store._connect()) as connection:
+        exists = connection.execute(
+            """SELECT 1 FROM fleet_tasks WHERE robot_id=? AND task_type='navigate'
+               AND attempt_id=?""",
+            (robot_id, correlation_id),
+        ).fetchone()
+        if exists is None:
+            return None
         connection.execute("BEGIN IMMEDIATE")
         task = connection.execute(
             """SELECT * FROM fleet_tasks WHERE robot_id=? AND task_type='navigate'
