@@ -121,16 +121,21 @@ def parse_avahi(output: str) -> list[dict]:
 
 def probe_health(candidate: dict, expected_hostname: str, ca_file: Path) -> None:
     context = ssl.create_default_context(cafile=str(ca_file))
-    with socket.create_connection((candidate["address"], candidate["port"]), timeout=5) as raw:
-        with context.wrap_socket(raw, server_hostname=expected_hostname) as secured:
-            secured.settimeout(5)
-            secured.sendall((f"GET /healthz HTTP/1.1\r\nHost: {expected_hostname}\r\n"
-                             "Connection: close\r\n\r\n").encode("ascii"))
-            response = http.client.HTTPResponse(secured)
-            response.begin()
-            if response.status != 200:
-                raise ValueError("Fleet HTTPS health probe failed")
-            check_health_body(response.read(HEALTH_MAX_BYTES + 1))
+    try:
+        with socket.create_connection((candidate["address"], candidate["port"]), timeout=5) as raw:
+            with context.wrap_socket(raw, server_hostname=expected_hostname) as secured:
+                secured.settimeout(5)
+                secured.sendall((f"GET /healthz HTTP/1.1\r\nHost: {expected_hostname}\r\n"
+                                 "Connection: close\r\n\r\n").encode("ascii"))
+                response = http.client.HTTPResponse(secured)
+                response.begin()
+                if response.status != 200:
+                    raise DiscoveryUnavailable("Fleet HTTPS health probe failed")
+                check_health_body(response.read(HEALTH_MAX_BYTES + 1))
+    except ssl.SSLCertVerificationError:
+        raise
+    except (OSError, http.client.HTTPException) as exc:
+        raise DiscoveryUnavailable("Fleet HTTPS health probe failed") from exc
 
 
 def locate_fleet(expected_hostname: str, ca_file: Path, *,

@@ -28,8 +28,12 @@ Communication between Pinky Pro robots and Fleet-R experienced recurring stalls,
    - Inside the bridged Fleet container, `DiscoveryCache` (`zeroconf`) cannot receive LAN multicast and returns `()`, so `DiscoveryTransport` falls back to `_HostLookups` (`socket.getaddrinfo` via host `/run/avahi-daemon/socket`).
    - Because `_HostLookups` used a single `ttl_s=2.0` for both positive and negative lookups with 4 worker threads, powered-off enrolled robots triggered `3–5 s` Avahi timeouts every `2.0 s`, saturating Avahi and delaying lookups for online robots.
    - In addition, `EnrolledTlsBindings._read()` queried `EnrollmentStore.tls_renumbers()` once per binding row inside its loop, and `HubLinkMixin._hub_fields()` re-queried `self._store.get(robot_id)` for every robot on each `listing()` / `address_reasons()` call.
-3. **Missed multicast recovery in `locate_fleet` on Pinky**:
+3. **Missed multicast recovery and permanent self-disabling on transient `/healthz` errors in `locate_fleet` / `probe_health` on Pinky**:
    - `locate_fleet()` relied solely on `get_shared_cache().wait("_rosy-fleet._tcp", timeout_s=3)`. Because `DiscoveryCache` runs one initial 3-second browse window and relies on passive multicast updates thereafter, a missed multicast packet during Wi-Fi roam or boot left the cache empty until process restart.
+   - When the site Fleet container restarted behind its TLS reverse proxy, `probe_health()` connected to the proxy and received HTTP `502`/`503` (or a transient socket error), raising plain `ValueError("Fleet HTTPS health probe failed")`. `FleetAgent._run()` caught `ValueError` as a permanent configuration error (`Fleet link configuration rejected`), set `self.enabled = False`, and permanently stopped reconnecting until `rosy-core` was restarted.
+4. **1 Hz SQLite write-lock starvation and startup event-replay stalls on Fleet-R**:
+   - `RuleSelectionStore.append_batch()` pruned its 100,000-row cap inside a 1 Hz write transaction using `ORDER BY selection_id DESC LIMIT 1 OFFSET 100000` (`588–760 ms` per call), and `LineStuckAnswerLog.record_judgment()` pruned `fleet_judgment_records` (`>53,000` rows) 3 times per second without an index on `recorded_at` (`3 x 217 ms = 651 ms/s`). Together they held the SQLite write lock for `>1.2 s` per second, blocking main-loop sighting writes (`SightingStore.save_sighting`) and causing continuous `0.5–0.9 s` event-loop lag.
+   - `SiteHub._project_async()` replayed 100-row batches of `core_event_audit` (`>15,000` rows on restart) synchronously on the event loop without yielding (`await asyncio.sleep(0)`), starving the robot's 2.0 s heartbeat reply deadline.
 
 ## Symptoms
 
@@ -46,8 +50,11 @@ Communication between Pinky Pro robots and Fleet-R experienced recurring stalls,
    - Kept positive `ttl_s=2.0` in `_HostLookups` so DHCP changes on online robots are still observed within 2 seconds, while caching failed lookups for `failure_ttl_s=10.0` (with `workers=8`) so powered-off robots fail fast without starving Avahi or online robots.
 3. **Eliminated redundant SQLite reads in `EnrolledTlsBindings` and `HubLinkMixin`**:
    - Read `self._store.tls_renumbers()` once per `EnrolledTlsBindings._read()` call instead of once per robot row, and passed the existing `row` from `_hub_fields()` into `_tls_client()`.
-4. **Added `_via_avahi` fallback on shared-cache miss in `locate_fleet()` (`discovery.py`)**:
+4. **Added `_via_avahi` fallback on shared-cache miss and raised `DiscoveryUnavailable` on transient `/healthz` failures (`discovery.py`)**:
    - When `locate_fleet()` uses the shared cache (`cache is None`) and finds no record for `expected_hostname`, it queries `core_common.discover._via_avahi("_rosy-fleet._tcp", 3.0)` before declaring `DiscoveryUnavailable`, while preserving all D-432 TXT classification and pinned TLS `/healthz` probe checks.
+   - In `probe_health()`, raised `DiscoveryUnavailable("Fleet HTTPS health probe failed")` (a `ValueError` subclass) on non-200 HTTP status or `(OSError, http.client.HTTPException)` while re-raising `ssl.SSLCertVerificationError`, so `FleetAgent._run()` retries with exponential backoff instead of setting `self.enabled = False`.
+5. **Eliminated 1 Hz SQLite full-table scans and yielded during startup event replay (`rules.py`, `reports.py`, `hub.py`)**:
+   - Bounded `RuleSelectionStore.append_batch()` by `(SELECT COALESCE(MAX(selection_id), 0) FROM fleet_rule_selections) - ?` (`0.08 ms` vs `588–760 ms`), added `fleet_judgment_time ON fleet_judgment_records(recorded_at)` (`0.05 ms` vs `217 ms`), and added `await asyncio.sleep(0)` inside `SiteHub._project_async()`.
 
 ## Prevention
 

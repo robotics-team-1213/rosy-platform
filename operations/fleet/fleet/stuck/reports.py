@@ -88,6 +88,7 @@ class LineStuckAnswerLog:
                 judgment_id INTEGER PRIMARY KEY AUTOINCREMENT, robot_id TEXT NOT NULL,
                 recorded_at REAL NOT NULL, assessment TEXT NOT NULL)""")
             connection.execute("CREATE INDEX IF NOT EXISTS fleet_judgment_robot ON fleet_judgment_records(robot_id, judgment_id)")
+            connection.execute("CREATE INDEX IF NOT EXISTS fleet_judgment_time ON fleet_judgment_records(recorded_at)")
             connection.execute("""CREATE TABLE IF NOT EXISTS fleet_judgment_current (
                 robot_id TEXT PRIMARY KEY, recorded_at REAL NOT NULL, assessment TEXT NOT NULL)""")
         self.handoff = IncidentHandoff(self)

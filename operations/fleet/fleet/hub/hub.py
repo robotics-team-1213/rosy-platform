@@ -412,6 +412,7 @@ class SiteHub:
                 for row in rows[:100]:
                     self.event_callback(row["event"])
                     self._event_projection_cursor = row["audit_id"]
+                    await asyncio.sleep(0)
                 if len(rows) < 100:
                     break
             self._projection_dirty = False
