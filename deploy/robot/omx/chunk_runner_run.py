@@ -158,6 +158,7 @@ class Runner:
         self.pace_floor, self.paced, self.pace_last, self.trend = 0.0, 0, None, []
         if chunk == "park":
             self.last_input = self.clock()
+            self._stop_after_park = None
         self.report(
             command=f"run {chunk or 'jog'}" if chunk or jogging else "fault",
             ok=False,
@@ -348,7 +349,7 @@ class Runner:
             ):
                 if not self.command(self.pending.pop(0)):
                     return
-            if self.pending and not self.command(self.pending.pop(0)):
+            if self.pending and not getattr(self, "_stop_after_park", None) and not self.command(self.pending.pop(0)):
                 return
             try:
                 self.tick()
@@ -362,7 +363,7 @@ class Runner:
                     }
                 )
                 raise
-            if self.idle():
+            if getattr(self, "_stopped", False) or self.idle():
                 return
             if self.live and self.ticks % max(1, self.fps // 10) == 0:
                 self.live(

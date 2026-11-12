@@ -1230,4 +1230,25 @@ def test_long_chunk_retreat_trims_unreached_lead_frames_and_retimes_smoothly():
     assert ret["state"][1] == pytest.approx(-60.0, abs=0.5)
 
 
+def test_hardware_stop_while_extended_folds_home_before_turning_torque_off():
+    lib = library()
+    lib["chunks"]["home"] = [HOME]
+    robot, status, clock, queue = Robot(), [], [0.0], ["run approach_pinky", "stop"]
+    r = m.Runner(
+        robot,
+        lib,
+        fps=30,
+        status=status.append,
+        clock=lambda: clock[0],
+        sleep=lambda s: clock.__setitem__(0, clock[0] + 1 / 30),
+        operating_context={"scope": "hardware", "session_id": "hw-stop-fold"},
+    )
+    r.run(lambda: [queue.pop(0)] if queue and not r.chunk else [])
+    park = by_command(status, "run park")
+    assert len(park) == 1 and park[0]["ok"] is True and park[0]["settled"] is True
+    end = status[-1]
+    assert end["command"] == "stop" and end["ok"] is True and end["folded"] is True
+    assert end["state"][:5] == pytest.approx(HOME[:5])
+
+
 
