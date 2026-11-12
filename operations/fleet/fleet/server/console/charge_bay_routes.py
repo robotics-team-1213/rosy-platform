@@ -10,7 +10,8 @@ from fastapi import HTTPException
 from fleet.charge_bays import ChargeBays, RobotView, bays_from_map, thresholds_of
 from fleet.pipeline import resolve_omx_cells, evaluate_omx_cell_station
 from fleet.pipeline.cell_fleet_contract import CONTRACT_VERSION
-from fleet.server.pipeline_routes import install_pipeline_routes
+from fleet.pipeline.station_zones import load_station_zones
+from fleet.server.pipeline_routes import install_pipeline_routes, _storage_dir
 
 
 def install_charge_bay_routes(app, console, gathered, read_guard):
@@ -87,6 +88,7 @@ def install_charge_bay_routes(app, console, gathered, read_guard):
                 else:
                     act.update(blocked_by_cell=True, cell_id=cid, reason="locked_by_cell")
         hd = getattr(app.state, "human_detected", None) or {"cell_s": False, "cell_ab": False, "all": False}
+        zones_data = load_station_zones(_storage_dir() / "station_zones.yaml")
         return {"map_version": active[0],
                 "contract_version": CONTRACT_VERSION, "omx_cells": cell_evals,
                 "omx_cell_tasks": list((getattr(app.state, "omx_cell_tasks", None) or {}).values()),
@@ -94,6 +96,12 @@ def install_charge_bay_routes(app, console, gathered, read_guard):
                 "pipeline_decisions": list((getattr(app.state, "pipeline_decisions", None) or [])[-20:]),
                 "cable_tangled": getattr(app.state, "cable_tangled", True),
                 "human_safety": {"human_detected": dict(hd), "active_estop": any(bool(v) for v in hd.values())},
+                "station_zones": {
+                    "schema": zones_data["schema"],
+                    "site_id": zones_data["site_id"],
+                    "staging_bays": zones_data["staging_bays"],
+                    "export_stations": zones_data["export_stations"],
+                },
                 **plan_out}
     install_pipeline_routes(app, console=console, site_maps=getattr(app.state, "site_maps", None), read_guard=read_guard)
     return bay_inputs

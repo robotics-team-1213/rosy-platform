@@ -257,6 +257,39 @@ def test_cell_tasks_assign_claim_and_complete_lifecycle():
     assert exp_disp["spawned_cell_task"]["cell_id"] == "cell_ab"
     assert exp_disp["spawned_cell_task"]["arm_id"] == "arm_b"
 
+    # Cable guard one-click toggle + restore
+    cg_off = client.post("/api/fleet/pipeline/cable-guard", json={"cable_tangled": False}).json()
+    assert cg_off["ok"] is True and cg_off["cable_tangled"] is False
+    cg_on = client.post("/api/fleet/pipeline/cable-guard", json={"toggle": True}).json()
+    assert cg_on["ok"] is True and cg_on["cable_tangled"] is True
+
+    # Vision auto-check: intrusion_score >= 0.35 triggers HUMAN_HOLD & pauses tasks; < 0.35 clears & auto-resumes
+    vis_intrude = client.post(
+        "/api/fleet/pipeline/vision-auto-check",
+        json={"cell_id": "cell_ab", "intrusion_score": 0.82, "displaced_to": "belt_far"},
+    ).json()
+    assert vis_intrude["ok"] is True
+    assert vis_intrude["vision"]["human_detected"] is True
+    assert vis_intrude["safety_event"]["active_estop"] is True
+    assert len(vis_intrude["safety_event"]["paused_tasks"]) >= 1
+
+    vis_clear = client.post(
+        "/api/fleet/pipeline/vision-auto-check",
+        json={"cell_id": "cell_ab", "intrusion_score": 0.04},
+    ).json()
+    assert vis_clear["ok"] is True
+    assert vis_clear["vision"]["human_detected"] is False
+    assert vis_clear["safety_event"]["active_estop"] is False
+    assert set(vis_clear["safety_event"]["resumed_tasks"]) == set(vis_intrude["safety_event"]["paused_tasks"])
+
+    cams = client.get("/api/fleet/pipeline/cameras").json()
+    assert cams["ok"] is True and cams["count"] >= 7
+    assert any(c["id"] == "arm_s_top" for c in cams["cameras"])
+    assert any(c["id"] == "arm_a_wrist" for c in cams["cameras"])
+    assert any(c["id"] == "arm_b_wrist" for c in cams["cameras"])
+
+
+
 
 
 

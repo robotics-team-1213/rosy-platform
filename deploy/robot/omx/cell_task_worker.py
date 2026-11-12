@@ -33,43 +33,71 @@ ARM_WRAPPERS: dict[str, tuple[str, str, float]] = {
 
 
 def upload_latest_camera_snapshots(fleet_r_url: str, token: str, prep_dir: Path = DEFAULT_PREP_DIR) -> dict[str, int]:
-    """Upload the freshest top/wrist JPEG snapshots from rosy-arm-cell to Fleet-R camera endpoints in parallel."""
+    """Upload live ROS 2 camera JPEGs (from commissioning_view :8767 or disk fallback) to Fleet-R camera endpoints in parallel."""
     ctx = ssl._create_unverified_context()
     base = fleet_r_url.rstrip("/")
-    jpg_paths: list[Path] = list(Path("/tmp").glob("*.jpg"))
-    if prep_dir.is_dir():
-        for sub in prep_dir.glob("live-*"):
-            if sub.is_dir():
-                jpg_paths.extend(sub.glob("*.jpg"))
-    candidates = sorted(
-        [p for p in jpg_paths if p.is_file() and p.stat().st_size > 1000],
-        key=lambda p: p.stat().st_mtime,
-        reverse=True,
-    )
-    top_img = next((p for p in candidates if "top" in p.name), candidates[0] if candidates else None)
-    wrist_img = next((p for p in candidates if "wrist" in p.name), top_img)
-    pairs = [(view_id, img_path) for view_id, img_path in (("cell_s", top_img), ("cell_ab", wrist_img), ("pinky", top_img)) if img_path is not None]
-    if not pairs:
+    live_frames: dict[str, bytes] = {}
+    for cam in ("top", "side", "arm_a_wrist", "arm_b_wrist", "arm_s_top", "arm_s_wrist"):
+        try:
+            req = Request(f"http://127.0.0.1:8767/frame/{cam}.jpg", headers={"Host": "127.0.0.1:8767"})
+            with urlopen(req, timeout=1.5) as resp:
+                raw = resp.read()
+                if len(raw) > 1000:
+                    live_frames[cam] = raw
+        except Exception:
+            pass
+
+    if not live_frames:
+        jpg_paths: list[Path] = list(Path("/tmp").glob("*.jpg"))
+        if prep_dir.is_dir():
+            for sub in prep_dir.glob("live-*"):
+                if sub.is_dir():
+                    jpg_paths.extend(sub.glob("*.jpg"))
+        candidates = sorted(
+            [p for p in jpg_paths if p.is_file() and p.stat().st_size > 1000],
+            key=lambda p: p.stat().st_mtime,
+            reverse=True,
+        )
+        top_img = next((p for p in candidates if "top" in p.name), candidates[0] if candidates else None)
+        wrist_img = next((p for p in candidates if "wrist" in p.name), top_img)
+        if top_img is not None:
+            live_frames["cell_s"] = top_img.read_bytes()
+            live_frames["pinky"] = live_frames["cell_s"]
+        if wrist_img is not None:
+            live_frames["cell_ab"] = wrist_img.read_bytes()
+
+    if "arm_s_top" in live_frames:
+        live_frames["cell_s"] = live_frames["arm_s_top"]
+    elif "top" in live_frames:
+        live_frames["cell_s"] = live_frames["top"]
+    if "top" in live_frames:
+        live_frames["cell_ab"] = live_frames["top"]
+    if "side" in live_frames:
+        live_frames["pinky"] = live_frames["side"]
+    elif "arm_s_top" in live_frames:
+        live_frames["pinky"] = live_frames["arm_s_top"]
+
+    if not live_frames:
         return {}
 
-    def _upload_one(item: tuple[str, Path]) -> tuple[str, int] | None:
-        view_id, img_path = item
+    def _upload_one(item: tuple[str, bytes]) -> tuple[str, int] | None:
+        view_id, raw = item
         try:
-            raw = img_path.read_bytes()
             req = Request(
                 f"{base}/api/fleet/pipeline/cell-camera/{view_id}",
                 data=raw,
                 method="POST",
                 headers={"Authorization": f"Bearer {token}", "Content-Type": "image/jpeg"},
             )
-            with urlopen(req, context=ctx, timeout=10):
+            with urlopen(req, context=ctx, timeout=8):
                 return view_id, len(raw)
         except Exception:
             return None
 
     uploaded: dict[str, int] = {}
-    with ThreadPoolExecutor(max_workers=len(pairs)) as pool:
-        for res in pool.map(_upload_one, pairs):
+    items = list(live_frames.items())
+    with ThreadPoolExecutor(max_workers=min(9, len(items))) as pool:
+        for res in pool.map(_upload_one, items):
             if res is not None:
                 uploaded[res[0]] = res[1]
     return uploaded
@@ -164,6 +192,10 @@ def execute_live_hardware_arm(
         lines = status_file.read_text(errors="replace").splitlines()[n0:]
         events = [json.loads(l) for l in lines if l.strip().startswith("{")]
         stop_ev = next((e for e in reversed(events) if e.get("command") == "stop" and e.get("ok") is True), {})
+    st_vals = stop_ev.get("state") if isinstance(stop_ev, dict) else None
+    if isinstance(stop_ev, dict) and stop_ev.get("folded") is not True:
+        if isinstance(st_vals, list) and len(st_vals) >= 3 and float(st_vals[1]) <= -50.0 and float(st_vals[2]) >= 45.0:
+            stop_ev["folded"] = True
 
     lines = status_file.read_text(errors="replace").splitlines()[n0:] if status_file.exists() else []
     events = [json.loads(l) for l in lines if l.strip().startswith("{")]
@@ -291,8 +323,13 @@ def main() -> None:
         upload_latest_camera_snapshots(args.fleet_r_url, token, prep_dir=prep_dir)
         return res
 
+    last_cam_push = 0.0
     while True:
         try:
+            now_m = time.monotonic()
+            if not args.dry_run_hw and (now_m - last_cam_push) >= 3.0:
+                upload_latest_camera_snapshots(args.fleet_r_url, token, prep_dir=prep_dir)
+                last_cam_push = now_m
             runs = poll_and_execute_once(pipeline, request_fn=req_fn, live_act_fn=_hw_act)
             for r in runs:
                 stop_ev = (r["task"].get("hardware_telemetry") or {}).get("stop_event") or {}

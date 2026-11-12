@@ -117,8 +117,13 @@ test('pipeline cards carry cell telemetry and one-click robot actions without ch
   assert.equal(rows.cards[0].quickControls[0].decisionSubject, 'cell_s');
   assert.equal(rows.cards[0].quickControls[1].humanSafetyCell, 'cell_s');
   assert.equal(rows.cards[0].quickControls[2].zoneId, 'EXP_S3_BELT');
+  assert.equal(rows.cards[0].quickControls[3].visionCheckCell, 'cell_s');
+  assert.equal(rows.cards[0].cameraViews.length, 3);
+  assert.equal(rows.cards[1].cameraViews.length, 4);
+  assert.equal(rows.cards[2].cameraViews.length, 3);
   assert.equal(rows.cards[2].quickControls[0].decisionSubject, 'rosy_60');
   assert.equal(rows.cards[2].quickControls[1].zoneId, 'STG_C2');
+  assert.ok(rows.cards[2].quickControls.some(c => c.cableGuardToggle === true));
   assert.deepEqual(chargeBayRows({}).cards.filter(c => c.robot_id).map(c => c.robot_id),
     ['rosy_42', 'rosy_45', 'rosy_46']);
 });

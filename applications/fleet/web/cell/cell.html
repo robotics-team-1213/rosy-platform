@@ -185,6 +185,8 @@
           <option value="s5_tier1_arm_a">S5 적재 1층 (arm_a: Belt -> Pallet L0)</option>
           <option value="s5_tier2_arm_b">S5 적재 2층 (arm_b: Belt -> Pallet L1)</option>
           <option value="s5_tier3_arm_a">S5 적재 3층 (arm_a: Belt -> Pallet L2)</option>
+          <option value="export_s3_belt">반출대 3 반출 (EXP_S3_BELT · arm_s)</option>
+          <option value="export_s5_pallet">반출대 2 반출 (EXP_S5_PALLET · arm_b)</option>
           <option value="full_s3_to_s5_pipeline">연속 파이프라인 (S3 셔틀 -> S5 1·2층 적재)</option>
         </select></label>
         <label for="cell-task-cell">작업 셀<select class="ui-field" id="cell-task-cell" aria-label="작업 셀"><option value="cell_s">cell_s (S3 · arm_s)</option><option value="cell_ab">cell_ab (S5 · arm_a / arm_b)</option></select></label>
@@ -196,9 +198,15 @@
         <ui-button id="cell-task-refresh" kind="quiet" type="button">셀 태스크 새로고침</ui-button>
         <ui-button id="cell-task-preset-run" kind="primary" type="button">프리셋 태스크 즉시 실행</ui-button>
         <ui-button id="cell-task-create" kind="quiet" type="button">맞춤 태스크 큐 등록</ui-button>
+        <ui-button id="cell-vision-auto-check" kind="quiet" type="button">카메라 비전 자동 점검</ui-button>
+        <ui-button id="cell-cable-guard-toggle" kind="quiet" type="button">선 꼬임 보호 토글</ui-button>
+        <ui-button id="cell-live-stream-toggle" kind="quiet" type="button">실시간 카메라 자동갱신 (ON · 2초)</ui-button>
       </div>
       <ui-text id="cell-tasks-status" role="status" aria-live="polite">접속하면 OMX 셀(cell_s · cell_ab) 태스크 큐와 실물 실행 상태를 확인할 수 있습니다.</ui-text>
       <div id="cell-visual-cards" class="cell-visual-card-grid" aria-label="OMX 셀 및 핑키 실시간 카메라·제어 카드"></div>
+      <details id="cell-camera-matrix-panel" open><summary class="ui-disclosure-row">실시간 6채널 로봇·셀 멀티 카메라 월 (arm_s · arm_a · arm_b · Pinky 도킹 · 클릭하여 확대)</summary>
+        <div id="cell-camera-matrix" class="cell-camera-wall" aria-label="실시간 6채널 로봇·셀 카메라 월"></div>
+      </details>
       <dl id="cell-tasks-figures" class="ui-readout" data-form="strip" aria-label="OMX 셀 및 태스크 요약" hidden></dl>
       <div class="ui-table-scroll" role="region" aria-labelledby="real2sim-heading" tabindex="0">
         <table id="cell-tasks-table" class="ui-data-table" aria-label="OMX 셀 태스크 실행 원장" hidden>
@@ -206,6 +214,14 @@
           <tbody id="cell-tasks-rows"></tbody>
         </table>
       </div>
+      <details><summary class="ui-disclosure-row">임시칸·반출대 맵 구역 설정 편집 · YAML (rosy.station-zones.v1)</summary>
+        <label for="station-zones-yaml">임시칸(staging_bays) · 반출대(export_stations) YAML</label>
+        <textarea class="ui-field" id="station-zones-yaml" rows="12" spellcheck="false"></textarea>
+        <div class="actions">
+          <ui-button id="station-zones-load" kind="quiet" type="button">YAML 불러오기</ui-button>
+          <ui-button id="station-zones-save" kind="primary" type="button">YAML 저장 및 카드 즉시 반영</ui-button>
+        </div>
+      </details>
       <details><summary class="ui-disclosure-row">Stage 2 Isaac Sim 핸드오프 명세 (rosy.omx-isaac-handoff.v1)</summary><pre id="real2sim-handoff" aria-label="Isaac Sim 핸드오프 JSON"></pre></details>
     </ui-section>
     <ui-section aria-labelledby="saved-heading"><ui-head><h2 class="ui-section-heading" id="saved-heading">저장된 문서</h2></ui-head><ui-text>저장된 레시피와 셀을 선택하거나 아래에서 새 문서를 준비하세요.</ui-text><ui-status id="saved-status" state="unavailable">접속하면 저장된 문서를 확인할 수 있습니다.</ui-status><ul id="saved" hidden></ul></ui-section>

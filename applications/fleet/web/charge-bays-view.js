@@ -123,6 +123,7 @@ export function chargeBayRows(plan) {
           label: id === "cell_s" ? "반출대3 반출(YAML)" : "반출대2 반출(YAML)",
           zoneId: id === "cell_s" ? "EXP_S3_BELT" : "EXP_S5_PALLET",
         },
+        {label: "비전 자동 점검", visionCheckCell: id},
         ...(id === "cell_s" ? [{label: "자동 감지·복구 셔틀", preset: "s3_auto_recover_or_shuttle"}] : []),
         ...(task && (task.status === "QUEUED" || task.status === "RUNNING" || task.status === "PAUSED_HUMAN")
           ? [{label: "작업 취소", cancelTaskId: task.task_id}]
@@ -133,6 +134,18 @@ export function chargeBayRows(plan) {
       ];
       return {
         kind: "omx", id, cameraUrl: `/api/fleet/pipeline/cell-camera/${id}`,
+        cameraViews: id === "cell_s"
+          ? [
+              {id: "arm_s_top", label: "S3 상단", url: "/api/fleet/pipeline/cell-camera/arm_s_top"},
+              {id: "arm_s_wrist", label: "arm_s 손목", url: "/api/fleet/pipeline/cell-camera/arm_s_wrist"},
+              {id: "side", label: "측면", url: "/api/fleet/pipeline/cell-camera/side"},
+            ]
+          : [
+              {id: "top", label: "S5 상단", url: "/api/fleet/pipeline/cell-camera/top"},
+              {id: "side", label: "측면", url: "/api/fleet/pipeline/cell-camera/side"},
+              {id: "arm_a_wrist", label: "arm_a 손목", url: "/api/fleet/pipeline/cell-camera/arm_a_wrist"},
+              {id: "arm_b_wrist", label: "arm_b 손목", url: "/api/fleet/pipeline/cell-camera/arm_b_wrist"},
+            ],
         title: id === "cell_s" ? "cell_s · S3 하역 셔틀 (arm_s)" : "cell_ab · S5 팔레트 적재 (arm_a·arm_b)",
         phase, status, text, task, healthText: healthParts.join(" · "),
         buttons: CELL_BUTTONS[id], quickControls,
@@ -145,19 +158,26 @@ export function chargeBayRows(plan) {
         const rawAction = plan?.actions?.find((entry) => entry.robot_id === robot_id);
         const dec = plan?.decisions?.[robot_id] || null;
         const anyEstop = Boolean(plan?.human_safety?.active_estop);
+        const cableTangled = plan?.cable_tangled !== false;
         return {kind: "pinky", id: robot_id, robot_id,
           cameraUrl: "/api/fleet/pipeline/cell-camera/pinky", title: `Pinky AMR · ${robot_id}`,
+          cameraViews: [
+            {id: "pinky", label: "S3 도킹 뷰", url: "/api/fleet/pipeline/cell-camera/pinky"},
+            {id: "side", label: "측면 도킹", url: "/api/fleet/pipeline/cell-camera/side"},
+            {id: "arm_s_top", label: "S3 상단", url: "/api/fleet/pipeline/cell-camera/arm_s_top"},
+          ],
           status: anyEstop || rawAction?.blocked_by_cell || rawAction?.action === "wait" ? "warn" : "neutral",
           text: action?.text || "작업 정보 없음",
           healthText: dec
             ? `Decision: ${dec.choice} (${dec.reason})`
-            : "Decision: back_and_retry (선 꼬임 보호 · 최대 1.5cm · 0.02m/s)",
+            : (cableTangled ? "Decision: back_and_retry (선 꼬임 보호 · 최대 1.5cm · 0.02m/s)" : "Decision: hold_line (정상 주행 속도 모드)"),
           buttons: PINKY_BUTTONS,
           quickControls: [
             {label: "상황 판단·자동 실행 (Decision)", decisionSubject: robot_id},
             {label: "임시칸 이동(C2·YAML)", zoneId: "STG_C2"},
             {label: "임시칸 이동(S3·YAML)", zoneId: "STG_S3_WAIT"},
             {label: "반출대 이동(S1·YAML)", zoneId: "EXP_S1"},
+            {label: cableTangled ? "선 꼬임 보호 ON · 해제" : "선 꼬임 보호 OFF · 켜기", cableGuardToggle: true},
             {label: "미세 전진 1.5cm", pinkyAction: "micro_forward_2cm"},
             {label: "미세 후진 1.5cm", pinkyAction: "micro_reverse_2cm"},
             {label: "즉시 정지", pinkyAction: "stop_now"},
@@ -178,6 +198,7 @@ export function createChargeBaysView({ scope, el, call, auth }) {
   const hint = el("charge-bays-hint");
   let inFlight = false;
   let unavailable = false;
+  const selectedCamByCard = {};
 
   function tag(text, status) {
     const t = document.createElement("ui-tag");
@@ -212,14 +233,32 @@ export function createChargeBaysView({ scope, el, call, auth }) {
       if (li.parentNode !== list) list.append(li);
       const article = document.createElement("article");
       article.className = "omx-dense-card";
+      const activeCamId = selectedCamByCard[card.id] || card.cameraViews?.[0]?.id;
+      const activeCam = (card.cameraViews || []).find((v) => v.id === activeCamId) || {url: card.cameraUrl};
       const camera = document.createElement("img");
-      camera.src = card.cameraUrl;
+      camera.src = `${activeCam.url}?t=${Date.now()}`;
       camera.loading = "lazy";
       camera.className = "cell-cam-thumb";
       camera.alt = `${card.title} 카메라`;
       const details = document.createElement("div");
       const title = document.createElement("strong");
       title.textContent = card.title;
+      const camBar = document.createElement("div");
+      camBar.className = "omx-card-actions";
+      for (const v of (card.cameraViews || [])) {
+        const camBtn = document.createElement("ui-button");
+        camBtn.setAttribute("kind", v.id === activeCamId ? "primary" : "quiet");
+        camBtn.setAttribute("type", "button");
+        camBtn.textContent = `📷 ${v.label}`;
+        camBtn.addEventListener("click", () => {
+          selectedCamByCard[card.id] = v.id;
+          camera.src = `${v.url}?t=${Date.now()}`;
+          for (const ch of camBar.children || []) {
+            ch.setAttribute("kind", ch === camBtn ? "primary" : "quiet");
+          }
+        });
+        camBar.append(camBtn);
+      }
       const status = document.createElement("p");
       status.append(tag(card.text, card.status));
       const task = document.createElement("p");
@@ -241,6 +280,16 @@ export function createChargeBaysView({ scope, el, call, auth }) {
               await call(`/api/fleet/pipeline/cell-tasks/${choice.cancelTaskId}/cancel`, {method: "POST"});
             } else if (choice.retryTaskId) {
               await call(`/api/fleet/pipeline/cell-tasks/${choice.retryTaskId}/retry`, {method: "POST"});
+            } else if (choice.visionCheckCell) {
+              await call("/api/fleet/pipeline/vision-auto-check", {
+                method: "POST", headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({cell_id: choice.visionCheckCell, robot_id: card.robot_id || "rosy_46"}),
+              });
+            } else if (choice.cableGuardToggle) {
+              await call("/api/fleet/pipeline/cable-guard", {
+                method: "POST", headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({toggle: true, robot_id: card.robot_id || "rosy_46"}),
+              });
             } else if (choice.humanSafetyCell) {
               await call("/api/fleet/pipeline/human-safety-gate", {
                 method: "POST", headers: {"Content-Type": "application/json"},
@@ -277,7 +326,7 @@ export function createChargeBaysView({ scope, el, call, auth }) {
         });
         buttons.append(button);
       }
-      details.append(title, status, task, buttons);
+      details.append(title, camBar, status, task, buttons);
       article.append(camera, details);
       li.append(article);
     }

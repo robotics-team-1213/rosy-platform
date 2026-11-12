@@ -8,7 +8,10 @@ export const CELL_TASKS_PATH = '/api/fleet/pipeline/cell-tasks';
 export const PINKY_TASKS_PATH = '/api/fleet/pipeline/pinky-tasks';
 export const DECISION_GATE_PATH = '/api/fleet/pipeline/decision-gate';
 export const HUMAN_SAFETY_PATH = '/api/fleet/pipeline/human-safety-gate';
+export const STATION_ZONES_PATH = '/api/fleet/pipeline/station-zones';
 export const STATION_ZONES_DISPATCH_PATH = '/api/fleet/pipeline/station-zones/dispatch';
+export const CABLE_GUARD_PATH = '/api/fleet/pipeline/cable-guard';
+export const VISION_CHECK_PATH = '/api/fleet/pipeline/vision-auto-check';
 
 const STATUS_LABEL = {
   ready: '정상 · 준비됨',
@@ -184,21 +187,40 @@ export function visualCardSpecs(body = {}) {
   const s3Human = Boolean(hs.human_detected?.cell_s || hs.active_estop || s3Gate.phase === 'HUMAN_HOLD');
   const s5Human = Boolean(hs.human_detected?.cell_ab || hs.active_estop || s5Gate.phase === 'HUMAN_HOLD');
   const anyHuman = Boolean(hs.active_estop || s3Human || s5Human);
+  const cableTangled = body?.cable_tangled !== false;
+  const stationZones = body?.station_zones || {};
+  const extraExportForCell = (cellId, defaultIds) =>
+    (stationZones.export_stations || [])
+      .filter(z => z.cell_id === cellId && !defaultIds.includes(z.id))
+      .map(z => ({label: `${z.label} (YAML: ${z.id})`, zoneId: z.id}));
+  const extraPinkyZones = [
+    ...(stationZones.staging_bays || []),
+    ...(stationZones.export_stations || []).filter(z => !z.cell_id),
+  ]
+    .filter(z => !['STG_C2', 'STG_S3_WAIT', 'EXP_S1'].includes(z.id))
+    .map(z => ({label: `${z.label} (YAML: ${z.id})`, zoneId: z.id}));
   return [
     {
       id: 'cell_s',
       title: 'cell_s · S3 하역 셔틀 (arm_s)',
       cameraUrl: '/api/fleet/pipeline/cell-camera/cell_s',
+      cameraViews: [
+        {id: 'cell_s', label: 'S3 상단(arm_s_top)', url: '/api/fleet/pipeline/cell-camera/arm_s_top'},
+        {id: 'arm_s_wrist', label: 'arm_s 손목', url: '/api/fleet/pipeline/cell-camera/arm_s_wrist'},
+        {id: 'side', label: 'S3/S5 측면', url: '/api/fleet/pipeline/cell-camera/side'},
+      ],
       phase: s3Gate.phase || 'IDLE',
       amr_motion_inhibited: Boolean(s3Gate.amr_motion_inhibited),
       ...s3Meta,
       buttons: [
         {label: 'S3 셔틀 (Pinky→Belt)', preset: 's3_shuttle'},
         {label: '상황 판단·자동 실행 (Decision)', decisionSubject: 'cell_s'},
+        {label: '비전 자동 점검 (카메라)', visionCheckCell: 'cell_s'},
         {label: '자동 감지·복구 셔틀', preset: 's3_auto_recover_or_shuttle'},
         {label: 'Belt-Far 이탈 복구', preset: 's3_recover_belt_far'},
         {label: 'Floor-Front 바닥 복구', preset: 's3_recover_floor_front'},
         {label: '반출대3 반출 (YAML: EXP_S3_BELT)', zoneId: 'EXP_S3_BELT'},
+        ...extraExportForCell('cell_s', ['EXP_S3_BELT']),
         {
           label: s3Human ? '사람 이탈 · 자동 재개' : '사람 감지 비상정지 (E-Stop)',
           humanSafetyCell: 'cell_s',
@@ -211,16 +233,24 @@ export function visualCardSpecs(body = {}) {
       id: 'cell_ab',
       title: 'cell_ab · S5 팔레트 적재 (arm_a · arm_b)',
       cameraUrl: '/api/fleet/pipeline/cell-camera/cell_ab',
+      cameraViews: [
+        {id: 'top', label: 'S5 상단(top)', url: '/api/fleet/pipeline/cell-camera/top'},
+        {id: 'side', label: '측면(side)', url: '/api/fleet/pipeline/cell-camera/side'},
+        {id: 'arm_a_wrist', label: 'arm_a 손목', url: '/api/fleet/pipeline/cell-camera/arm_a_wrist'},
+        {id: 'arm_b_wrist', label: 'arm_b 손목', url: '/api/fleet/pipeline/cell-camera/arm_b_wrist'},
+      ],
       phase: s5Gate.phase || 'IDLE',
       amr_motion_inhibited: Boolean(s5Gate.amr_motion_inhibited),
       ...s5Meta,
       buttons: [
         {label: '1층 적재 (arm_a)', preset: 's5_tier1_arm_a'},
         {label: '상황 판단·자동 실행 (Decision)', decisionSubject: 'cell_ab'},
+        {label: '비전 자동 점검 (카메라)', visionCheckCell: 'cell_ab'},
         {label: '2층 적재 (arm_b)', preset: 's5_tier2_arm_b'},
         {label: '3층 적재 (arm_a)', preset: 's5_tier3_arm_a'},
         {label: 'S3→S5 연속 실행', preset: 'full_s3_to_s5_pipeline'},
         {label: '반출대2 반출 (YAML: EXP_S5_PALLET)', zoneId: 'EXP_S5_PALLET'},
+        ...extraExportForCell('cell_ab', ['EXP_S5_PALLET']),
         {
           label: s5Human ? '사람 이탈 · 자동 재개' : '사람 감지 비상정지 (E-Stop)',
           humanSafetyCell: 'cell_ab',
@@ -232,13 +262,23 @@ export function visualCardSpecs(body = {}) {
     {
       id: 'pinky',
       robot_id: pinkyId,
-      title: `Pinky AMR · ${pinkyId} 도킹·배차 (케이블 보호 ≤1.5cm)`,
+      title: `Pinky AMR · ${pinkyId} 도킹·배차 (${cableTangled ? '케이블 보호 ≤1.5cm' : '정상 주행'})`,
       cameraUrl: '/api/fleet/pipeline/cell-camera/pinky',
+      cameraViews: [
+        {id: 'pinky', label: 'S3 도킹 뷰(pinky)', url: '/api/fleet/pipeline/cell-camera/pinky'},
+        {id: 'side', label: '측면 도킹(side)', url: '/api/fleet/pipeline/cell-camera/side'},
+        {id: 'arm_s_top', label: 'S3 상단(arm_s_top)', url: '/api/fleet/pipeline/cell-camera/arm_s_top'},
+        {id: 'top', label: '전체 상단(top)', url: '/api/fleet/pipeline/cell-camera/top'},
+      ],
       phase: lastPinky?.target_place ? `위치 ${lastPinky.target_place}` : (s3Gate.docked_robot?.robot_id ? `S3 도킹 (${s3Gate.docked_robot.robot_id})` : 'READY'),
       amr_motion_inhibited: Boolean(s3Gate.amr_motion_inhibited || s5Gate.amr_motion_inhibited),
       last_task: lastPinky ? `${lastPinky.task_id} · ${lastPinky.action} -> ${lastPinky.target_place}` : 'S3 도킹 및 미세이동 준비 완료',
       folded_state: [
-        anyHuman ? '사람 감지 비상정지 (HUMAN_HOLD · 이탈 시 자동 재개)' : (s3Gate.amr_motion_inhibited ? 'AMR 이동 잠금 (팔 작업 중)' : '케이블 보호 미세이동 모드 (최대 1.5cm · 0.02m/s)'),
+        anyHuman
+          ? '사람 감지 비상정지 (HUMAN_HOLD · 이탈 시 자동 재개)'
+          : (s3Gate.amr_motion_inhibited
+              ? 'AMR 이동 잠금 (팔 작업 중)'
+              : (cableTangled ? '케이블 보호 미세이동 모드 (최대 1.5cm · 0.02m/s)' : '정상 주행 모드 (선 꼬임 보호 해제)')),
         pinkyDec ? `Decision: ${pinkyDec.choice} (${pinkyDec.reason})` : '',
       ].filter(Boolean).join(' · '),
       buttons: [
@@ -247,6 +287,11 @@ export function visualCardSpecs(body = {}) {
         {label: '임시칸1 이동 (YAML: STG_C2)', zoneId: 'STG_C2'},
         {label: '임시칸2 이동 (YAML: STG_S3_WAIT)', zoneId: 'STG_S3_WAIT'},
         {label: '반출대1 이동 (YAML: EXP_S1)', zoneId: 'EXP_S1'},
+        ...extraPinkyZones,
+        {
+          label: cableTangled ? '선 꼬임 보호 ON (≤1.5cm) · 해제' : '선 꼬임 보호 OFF (정상 주행) · 켜기',
+          cableGuardToggle: true,
+        },
         {label: 'S3 도킹', pinkyAction: 'dock_s3'},
         {label: '미세 전진 1.5cm', pinkyAction: 'micro_forward_2cm'},
         {label: '미세 후진 1.5cm', pinkyAction: 'micro_reverse_2cm'},
@@ -266,6 +311,50 @@ export function visualCardSpecs(body = {}) {
 export function createReal2SimPipeline({request, $, isOperator = () => false}) {
   const status = $('real2sim-status');
   let generation = 0;
+  const selectedCameraByCard = {};
+  let liveStreamOn = true;
+  let pausedStamp = Date.now();
+  let liveStreamTimer = null;
+
+  function activeCameraStamp() {
+    if (liveStreamOn) {
+      pausedStamp = Date.now();
+    }
+    return pausedStamp;
+  }
+
+  function refreshLiveCameraImages() {
+    const stamp = activeCameraStamp();
+    const wrap = $('cell-visual-cards');
+    if (wrap && typeof wrap.querySelectorAll === 'function') {
+      for (const img of wrap.querySelectorAll('img.cell-visual-thumb')) {
+        const base = img.dataset.baseUrl || img.src.split('?')[0];
+        img.src = `${base}?t=${stamp}`;
+      }
+    }
+    const wall = $('cell-camera-matrix');
+    if (wall && typeof wall.querySelectorAll === 'function') {
+      for (const img of wall.querySelectorAll('img')) {
+        const base = img.dataset.baseUrl || img.src.split('?')[0];
+        img.src = `${base}?t=${stamp}`;
+      }
+    }
+  }
+
+  function toggleLiveStream() {
+    liveStreamOn = !liveStreamOn;
+    const btn = $('cell-live-stream-toggle');
+    if (btn) {
+      btn.textContent = liveStreamOn ? '실시간 카메라 자동갱신 (ON · 2초)' : '실시간 카메라 자동갱신 (OFF · 일시정지)';
+    }
+    if (liveStreamOn) refreshLiveCameraImages();
+  }
+
+  if (typeof window !== 'undefined' && typeof window.setInterval === 'function') {
+    liveStreamTimer = window.setInterval(() => {
+      if (liveStreamOn) refreshLiveCameraImages();
+    }, 2000);
+  }
 
   function renderSelect(selectEl, items, currentValue, labelFn) {
     if (!selectEl) return;
@@ -441,11 +530,44 @@ export function createReal2SimPipeline({request, $, isOperator = () => false}) {
       article.className = 'cell-visual-card';
       article.dataset.cardId = card.id;
 
+      const activeViewId = selectedCameraByCard[card.id] || card.cameraViews?.[0]?.id || card.id;
+      const activeView = (card.cameraViews || []).find(v => v.id === activeViewId) || {url: card.cameraUrl};
+
       const thumb = document.createElement('img');
       thumb.className = 'cell-visual-thumb';
-      thumb.src = `${card.cameraUrl}?t=${Date.now()}`;
+      thumb.dataset.baseUrl = activeView.url;
+      thumb.src = `${activeView.url}?t=${activeCameraStamp()}`;
       thumb.alt = card.title;
       thumb.loading = 'lazy';
+      thumb.tabIndex = 0;
+      thumb.addEventListener('click', () => {
+        thumb.classList.toggle('focused');
+      });
+      thumb.addEventListener('keydown', ev => {
+        if (ev.key === 'Enter' || ev.key === ' ') {
+          ev.preventDefault();
+          thumb.classList.toggle('focused');
+        }
+      });
+
+      const camSwitcher = document.createElement('div');
+      camSwitcher.className = 'cell-cam-switcher';
+      for (const v of (card.cameraViews || [])) {
+        const pill = document.createElement('ui-button');
+        pill.setAttribute('kind', v.id === activeViewId ? 'primary' : 'quiet');
+        pill.setAttribute('type', 'button');
+        pill.dataset.cameraView = v.id;
+        pill.textContent = `📷 ${v.label}`;
+        pill.addEventListener('click', () => {
+          selectedCameraByCard[card.id] = v.id;
+          thumb.dataset.baseUrl = v.url;
+          thumb.src = `${v.url}?t=${Date.now()}`;
+          for (const child of camSwitcher.children || []) {
+            child.setAttribute('kind', child === pill ? 'primary' : 'quiet');
+          }
+        });
+        camSwitcher.append(pill);
+      }
 
       const head = document.createElement('div');
       head.className = 'cell-visual-head';
@@ -470,6 +592,12 @@ export function createReal2SimPipeline({request, $, isOperator = () => false}) {
         if (b.decisionSubject) {
           btn.dataset.decisionSubject = b.decisionSubject;
           btn.addEventListener('click', () => runDecisionGate(b.decisionSubject));
+        } else if (b.visionCheckCell) {
+          btn.dataset.visionCheckCell = b.visionCheckCell;
+          btn.addEventListener('click', () => runVisionAutoCheck(b.visionCheckCell));
+        } else if (b.cableGuardToggle) {
+          btn.dataset.cableGuardToggle = 'true';
+          btn.addEventListener('click', () => toggleCableGuard());
         } else if (b.humanSafetyCell) {
           btn.dataset.humanSafetyCell = b.humanSafetyCell;
           btn.addEventListener('click', () => runHumanSafetyGate(b.humanSafetyCell, b.humanDetected, card.robot_id || 'rosy_46'));
@@ -490,8 +618,49 @@ export function createReal2SimPipeline({request, $, isOperator = () => false}) {
         actions.append(btn);
       }
 
-      article.append(thumb, head, meta, actions);
+      article.append(thumb, camSwitcher, head, meta, actions);
       return article;
+    }));
+  }
+
+  function renderCameraMatrix(body) {
+    const wall = $('cell-camera-matrix');
+    if (!wall) return;
+    const defaultCams = [
+      {id: 'arm_s_top', label: 'S3 상단 (arm_s_top)', topic: '/arm_s_top_camera/image_raw', url: '/api/fleet/pipeline/cell-camera/arm_s_top'},
+      {id: 'arm_s_wrist', label: 'arm_s 손목 (arm_s_wrist)', topic: '/arm_s_wrist_camera/image_raw', url: '/api/fleet/pipeline/cell-camera/arm_s_wrist'},
+      {id: 'top', label: 'S5 상단 (top)', topic: '/top_camera/image_raw', url: '/api/fleet/pipeline/cell-camera/top'},
+      {id: 'side', label: '셀 측면 · 도킹 (side)', topic: '/side_camera/image_raw', url: '/api/fleet/pipeline/cell-camera/side'},
+      {id: 'arm_a_wrist', label: 'arm_a 손목 (arm_a_wrist)', topic: '/arm_a_wrist_camera/image_raw', url: '/api/fleet/pipeline/cell-camera/arm_a_wrist'},
+      {id: 'arm_b_wrist', label: 'arm_b 손목 (arm_b_wrist)', topic: '/arm_b_wrist_camera/image_raw', url: '/api/fleet/pipeline/cell-camera/arm_b_wrist'},
+    ];
+    const cams = Array.isArray(body?.cameras) && body.cameras.length ? body.cameras : defaultCams;
+    const stamp = activeCameraStamp();
+    wall.replaceChildren(...cams.map(cam => {
+      const card = document.createElement('article');
+      card.className = 'cell-observation-card';
+      card.tabIndex = 0;
+      const h4 = document.createElement('h4');
+      const kb = cam.bytes ? ` · ${Math.round(cam.bytes / 1024)}KB` : '';
+      h4.textContent = `${cam.label}${kb}`;
+      const img = document.createElement('img');
+      img.dataset.baseUrl = cam.url;
+      img.src = `${cam.url}?t=${stamp}`;
+      img.alt = cam.label;
+      img.loading = 'lazy';
+      const meta = document.createElement('pre');
+      meta.textContent = `${cam.topic || ''} · ${cam.fresh !== false ? 'LIVE (실시간 수신)' : '스냅샷'}`;
+      card.addEventListener('click', () => {
+        card.classList.toggle('focused');
+      });
+      card.addEventListener('keydown', ev => {
+        if (ev.key === 'Enter' || ev.key === ' ') {
+          ev.preventDefault();
+          card.classList.toggle('focused');
+        }
+      });
+      card.append(h4, img, meta);
+      return card;
     }));
   }
 
@@ -537,6 +706,82 @@ export function createReal2SimPipeline({request, $, isOperator = () => false}) {
     } catch (error) {
       if (current !== generation) return;
       if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `YAML 구역(${zoneId}) 실행 실패: ${error.message}`;
+    }
+  }
+
+  async function runVisionAutoCheck(cellId = 'cell_s') {
+    const current = ++generation;
+    if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `비전 카메라(${cellId}) 자동 안전·이탈 점검 중입니다.`;
+    try {
+      const res = await request(VISION_CHECK_PATH, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({cell_id: cellId, robot_id: 'rosy_46'}),
+      });
+      if (current !== generation) return;
+      await refreshCellTasks(current);
+      if ($('cell-tasks-status')) {
+        const v = res.vision || {};
+        $('cell-tasks-status').textContent = `비전 자동 점검(${cellId}) 완료: 사람 감지=${v.human_detected ? 'YES(E-Stop)' : 'NO(정상)'} · 이탈=${v.displaced_to || '없음'} · 프레임 ${v.snapshot_bytes ?? 0}B`;
+      }
+    } catch (error) {
+      if (current !== generation) return;
+      if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `비전 자동 점검 실패: ${error.message}`;
+    }
+  }
+
+  async function toggleCableGuard() {
+    const current = ++generation;
+    if ($('cell-tasks-status')) $('cell-tasks-status').textContent = '선 꼬임 보호 모드를 전환하는 중입니다.';
+    try {
+      const res = await request(CABLE_GUARD_PATH, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({toggle: true, robot_id: 'rosy_46'}),
+      });
+      if (current !== generation) return;
+      await refreshCellTasks(current);
+      if ($('cell-tasks-status')) {
+        $('cell-tasks-status').textContent = res.cable_tangled
+          ? '선 꼬임 보호 ON (최대 1.5cm · 0.02m/s 미세 이동)'
+          : '선 꼬임 보호 OFF (정상 주행 속도 모드)';
+      }
+    } catch (error) {
+      if (current !== generation) return;
+      if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `선 꼬임 보호 전환 실패: ${error.message}`;
+    }
+  }
+
+  async function loadStationZonesYaml() {
+    try {
+      const res = await request(STATION_ZONES_PATH);
+      if ($('station-zones-yaml')) $('station-zones-yaml').value = res.yaml_text || '';
+      if ($('cell-tasks-status')) {
+        $('cell-tasks-status').textContent = `station_zones.yaml 불러오기 완료 (임시칸 ${(res.staging_bays || []).length}개 · 반출대 ${(res.export_stations || []).length}개)`;
+      }
+    } catch (error) {
+      if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `station_zones.yaml 조회 실패: ${error.message}`;
+    }
+  }
+
+  async function saveStationZonesYaml() {
+    const current = ++generation;
+    const yamlText = $('station-zones-yaml')?.value || '';
+    if ($('cell-tasks-status')) $('cell-tasks-status').textContent = 'station_zones.yaml 설정을 저장하고 카드를 갱신하는 중입니다.';
+    try {
+      const res = await request(STATION_ZONES_PATH, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({yaml_text: yamlText}),
+      });
+      if (current !== generation) return;
+      await refreshCellTasks(current);
+      if ($('cell-tasks-status')) {
+        $('cell-tasks-status').textContent = `station_zones.yaml 저장·반영 완료 (임시칸 ${(res.staging_bays || []).length}개 · 반출대 ${(res.export_stations || []).length}개)`;
+      }
+    } catch (error) {
+      if (current !== generation) return;
+      if ($('cell-tasks-status')) $('cell-tasks-status').textContent = `station_zones.yaml 저장 실패: ${error.message}`;
     }
   }
 
@@ -620,6 +865,7 @@ export function createReal2SimPipeline({request, $, isOperator = () => false}) {
 
   function renderCellTasks(body) {
     renderVisualCards(body);
+    renderCameraMatrix(body);
     const pairs = cellTaskSummaryPairs(body);
     const figs = $('cell-tasks-figures');
     if (figs) {
@@ -769,5 +1015,10 @@ export function createReal2SimPipeline({request, $, isOperator = () => false}) {
   $('cell-task-refresh')?.addEventListener('click', () => { void refreshCellTasks(++generation); });
   $('cell-task-preset-run')?.addEventListener('click', () => { void runPresetTask(); });
   $('cell-task-create')?.addEventListener('click', () => { void createCustomTask(); });
+  $('cell-vision-auto-check')?.addEventListener('click', () => { void runVisionAutoCheck($('cell-task-cell')?.value || 'cell_s'); });
+  $('cell-cable-guard-toggle')?.addEventListener('click', () => { void toggleCableGuard(); });
+  $('cell-live-stream-toggle')?.addEventListener('click', () => { toggleLiveStream(); });
+  $('station-zones-load')?.addEventListener('click', () => { void loadStationZonesYaml(); });
+  $('station-zones-save')?.addEventListener('click', () => { void saveStationZonesYaml(); });
   return {refresh, evaluate, queueRun, promotePhysics, refreshCellTasks, runPresetTask, createCustomTask, clear};
 }

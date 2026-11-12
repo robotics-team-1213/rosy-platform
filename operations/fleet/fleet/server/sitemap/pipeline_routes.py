@@ -432,6 +432,7 @@ def install_pipeline_routes(app, *, console=None, site_maps=None, read_guard=())
                 "staging_bays": zones_data["staging_bays"],
                 "export_stations": zones_data["export_stations"],
             },
+            "cameras": _camera_catalog(),
             "decisions": list(app.state.pipeline_decisions[-20:]),
             "pinky_tasks": list(app.state.pinky_tasks.values()),
         }
@@ -742,6 +743,123 @@ def install_pipeline_routes(app, *, console=None, site_maps=None, read_guard=())
         _save_ledger()
         return {"ok": True, "zone": zone, "pinky_task": ptask, "spawned_cell_task": spawned_cell_task}
 
+    @app.post("/api/fleet/pipeline/cable-guard", dependencies=read_guard)
+    async def set_cable_guard(request: Request):
+        body = await request.json()
+        if body.get("toggle"):
+            app.state.cable_tangled = not bool(app.state.cable_tangled)
+        else:
+            app.state.cable_tangled = bool(body.get("cable_tangled", True))
+        dec = _evaluate_decision(str(body.get("robot_id") or "rosy_46"), "line_follow", {"tangled": app.state.cable_tangled})
+        _save_ledger()
+        return {"ok": True, "cable_tangled": app.state.cable_tangled, "decision": dec}
+
+    @app.post("/api/fleet/pipeline/vision-auto-check", dependencies=read_guard)
+    async def run_vision_auto_check(request: Request):
+        active = active_map()
+        body = await request.json()
+        cell_id = str(body.get("cell_id") or "cell_s")
+        if cell_id not in ("cell_s", "cell_ab", "all"):
+            cell_id = "cell_s"
+        snap_bytes = 0
+        for base in (_storage_dir(), Path("/tmp")):
+            snap_file = base / f"rosy-cell-cam-{cell_id if cell_id != 'all' else 'cell_s'}.jpg"
+            if snap_file.is_file():
+                snap_bytes = snap_file.stat().st_size
+                break
+        intrusion_score = float(body.get("intrusion_score", 0.05))
+        human_detected = bool(body["human_detected"]) if "human_detected" in body else (intrusion_score >= 0.35)
+        displaced_to = body.get("displaced_to")
+        if displaced_to in ("belt_far", "floor_front", None, ""):
+            if "displaced_to" in body:
+                app.state.detected_displaced_site = displaced_to or None
+
+        was_detected = _is_human_detected(None if cell_id == "all" else cell_id)
+        paused_tasks: list[str] = []
+        resumed_tasks: list[str] = []
+        affected_cells = ["cell_s", "cell_ab"] if cell_id == "all" else [cell_id]
+        stations = resolve_omx_cells(active[1], active[2])
+
+        if human_detected:
+            for cid in affected_cells:
+                app.state.human_detected[cid] = True
+                st = stations[cid]
+                prev = dict(app.state.omx_cell_states.get(cid) or {})
+                prev_phase = prev.get("phase") if prev.get("phase") != "HUMAN_HOLD" else (prev.get("prev_phase") or "CLAIMED")
+                docked = prev.get("docked_robot") or {
+                    "robot_id": prev.get("robot_id") or "rosy_46",
+                    "robot_kind": "pinky",
+                    "pose": {"x": st.station_xy[0], "y": st.station_xy[1], "yaw": 0.0},
+                    "wheel_brake_locked": True,
+                    "bed_ready": True,
+                    "v_cmd_mps": 0.0,
+                }
+                app.state.omx_cell_states[cid] = {
+                    **prev,
+                    "phase": "HUMAN_HOLD",
+                    "prev_phase": prev_phase,
+                    "amr_motion_inhibited": True,
+                    "reason": "VISION_HUMAN_DETECTED_ESTOP",
+                    "docked_robot": docked,
+                }
+            app.state.human_detected["all"] = bool(app.state.human_detected.get("cell_s") and app.state.human_detected.get("cell_ab"))
+            for t in app.state.omx_cell_tasks.values():
+                if t["cell_id"] in affected_cells and t["status"] in ("QUEUED", "RUNNING"):
+                    t["paused_from_status"] = t["status"]
+                    t["status"] = "PAUSED_HUMAN"
+                    _enrich_task_health(t)
+                    paused_tasks.append(t["task_id"])
+        elif was_detected:
+            for cid in affected_cells:
+                app.state.human_detected[cid] = False
+            app.state.human_detected["all"] = False
+            for t in app.state.omx_cell_tasks.values():
+                if t["cell_id"] in affected_cells and t["status"] == "PAUSED_HUMAN":
+                    t["status"] = "QUEUED"
+                    _enrich_task_health(t)
+                    resumed_tasks.append(t["task_id"])
+            for cid in affected_cells:
+                prev = dict(app.state.omx_cell_states.get(cid) or {})
+                has_queued = any(t["cell_id"] == cid and t["status"] == "QUEUED" for t in app.state.omx_cell_tasks.values())
+                restored_phase = "CLAIMED" if has_queued else "RELEASED"
+                app.state.omx_cell_states[cid] = {
+                    **prev,
+                    "phase": restored_phase,
+                    "amr_motion_inhibited": restored_phase in ("CLAIMED", "ARM_IN_BED_ZONE"),
+                    "reason": "VISION_HUMAN_CLEARED_AUTO_RESUME",
+                }
+
+        dec = _evaluate_decision(
+            cell_id if cell_id != "all" else "cell_s",
+            "arm_target",
+            {"human_detected": human_detected},
+        )
+        _save_ledger()
+        return {
+            "ok": True,
+            "vision_checked": True,
+            "camera_snapshot_bytes": snap_bytes,
+            "intrusion_score": intrusion_score,
+            "human_detected": human_detected,
+            "active_estop": _is_human_detected(),
+            "detected_displaced_site": app.state.detected_displaced_site,
+            "paused_tasks": paused_tasks,
+            "resumed_tasks": resumed_tasks,
+            "vision": {
+                "cell_id": cell_id,
+                "human_detected": human_detected,
+                "intrusion_score": intrusion_score,
+                "displaced_to": app.state.detected_displaced_site,
+                "snapshot_bytes": snap_bytes,
+            },
+            "safety_event": {
+                "active_estop": _is_human_detected(),
+                "paused_tasks": paused_tasks,
+                "resumed_tasks": resumed_tasks,
+            },
+            "decision": dec,
+        }
+
     @app.get("/api/fleet/pipeline/decision-gate", dependencies=read_guard)
     async def list_pipeline_decisions(subject_id: str | None = None):
         rows = list(app.state.pipeline_decisions)
@@ -820,13 +938,69 @@ def install_pipeline_routes(app, *, console=None, site_maps=None, read_guard=())
             tasks = [t for t in tasks if t["status"] == status]
         return {"tasks": tasks}
 
+    CAMERA_SPECS = [
+        {"id": "arm_s_top", "label": "S3 상단 카메라 (arm_s_top)", "cell_id": "cell_s", "topic": "/arm_s_top_camera/image_raw", "fallback": "cell_s"},
+        {"id": "arm_s_wrist", "label": "arm_s 손목 카메라 (arm_s_wrist)", "cell_id": "cell_s", "topic": "/arm_s_wrist_camera/image_raw", "fallback": "cell_s"},
+        {"id": "top", "label": "S5 상단 카메라 (top)", "cell_id": "cell_ab", "topic": "/top_camera/image_raw", "fallback": "cell_ab"},
+        {"id": "side", "label": "셀 측면 카메라 (side · 도킹/벨트)", "cell_id": "cell_ab", "topic": "/side_camera/image_raw", "fallback": "cell_ab"},
+        {"id": "arm_a_wrist", "label": "arm_a 손목 카메라 (arm_a_wrist)", "cell_id": "cell_ab", "topic": "/arm_a_wrist_camera/image_raw", "fallback": "cell_ab"},
+        {"id": "arm_b_wrist", "label": "arm_b 손목 카메라 (arm_b_wrist)", "cell_id": "cell_ab", "topic": "/arm_b_wrist_camera/image_raw", "fallback": "cell_ab"},
+        {"id": "pinky", "label": "Pinky S3 도킹 뷰 (pinky)", "cell_id": "pinky", "topic": "/side_camera/image_raw", "fallback": "side"},
+    ]
+
+    def _camera_catalog() -> list[dict]:
+        now = time.time()
+        rows = []
+        for spec in CAMERA_SPECS:
+            cid = spec["id"]
+            fb = spec.get("fallback")
+            snap_file = None
+            for cand in ([cid, fb] if fb else [cid]):
+                for base in (_storage_dir(), Path("/tmp")):
+                    p = base / f"rosy-cell-cam-{cand}.jpg"
+                    if p.is_file():
+                        snap_file = p
+                        break
+                if snap_file is not None:
+                    break
+            mtime = round(snap_file.stat().st_mtime, 3) if snap_file else None
+            size_b = snap_file.stat().st_size if snap_file else 0
+            rows.append({
+                "id": cid,
+                "label": spec["label"],
+                "cell_id": spec["cell_id"],
+                "topic": spec["topic"],
+                "url": f"/api/fleet/pipeline/cell-camera/{cid}",
+                "bytes": size_b,
+                "updated_at": mtime,
+                "fresh": bool(mtime and (now - mtime) < 30.0),
+            })
+        return rows
+
+    @app.get("/api/fleet/pipeline/cameras", dependencies=read_guard)
+    async def list_pipeline_cameras():
+        cams = _camera_catalog()
+        return {"ok": True, "cameras": cams, "count": len(cams)}
+
     @app.get("/api/fleet/pipeline/cell-camera/{view_id}")
     async def cell_camera_preview(view_id: str):
         safe_id = "".join(c for c in view_id if c.isalnum() or c in ("_", "-"))[:32] or "cell_s"
-        for base in (_storage_dir(), Path("/tmp")):
-            snap_file = base / f"rosy-cell-cam-{safe_id}.jpg"
-            if snap_file.is_file():
-                return Response(content=snap_file.read_bytes(), media_type="image/jpeg", headers={"Cache-Control": "no-store"})
+        alias_map = {
+            "cell_s": ["cell_s", "arm_s_top", "top"],
+            "arm_s_top": ["arm_s_top", "cell_s", "top"],
+            "arm_s_wrist": ["arm_s_wrist", "cell_s"],
+            "cell_ab": ["cell_ab", "top", "side"],
+            "top": ["top", "cell_ab", "arm_s_top"],
+            "side": ["side", "pinky", "cell_ab"],
+            "arm_a_wrist": ["arm_a_wrist", "cell_ab"],
+            "arm_b_wrist": ["arm_b_wrist", "arm_a_wrist", "cell_ab"],
+            "pinky": ["pinky", "side", "arm_s_top", "cell_s"],
+        }
+        for cand in alias_map.get(safe_id, [safe_id, "cell_s"]):
+            for base in (_storage_dir(), Path("/tmp")):
+                snap_file = base / f"rosy-cell-cam-{cand}.jpg"
+                if snap_file.is_file():
+                    return Response(content=snap_file.read_bytes(), media_type="image/jpeg", headers={"Cache-Control": "no-store"})
         tasks = [t for t in app.state.omx_cell_tasks.values() if view_id.startswith(t["cell_id"]) or view_id == "pinky"]
         last = tasks[-1] if tasks else {}
         stop_ev = ((last.get("hardware_telemetry") or {}).get("stop_event") or {})
