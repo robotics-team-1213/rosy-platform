@@ -2,9 +2,10 @@
 """The chunk Runner (`chunk_runner_run.py`, split of `chunk_runner.py`, D-766 2).
 
 Single Responsibility:
-  - Real-time 30 Hz control loop (`Runner.tick`, `Runner.idle`, `Runner.run`): adaptive pacing,
-    `TemporalChunkEnsembler` jitter damping, contact/overload/push guards, and idle auto-park.
-  - Judge command parsing and queue dispatch (`Runner.command`) live in `chunk_runner_commands.py`.
+  - Real-time 30 Hz control loop (`Runner.tick`, `Runner.run`): adaptive pacing,
+    `TemporalChunkEnsembler` jitter damping, and contact/overload/push guards.
+  - Judge command parsing (`chunk_runner_commands.py`) and chunk settlement / idle auto-park
+    (`chunk_runner_settle.py`) are delegated to dedicated modules.
 """
 from __future__ import annotations
 
@@ -56,17 +57,23 @@ from chunk_runner_guards import (  # noqa: E402, F401
     evaluate_adaptive_contact_guard,
     read_motor_health,
 )
+from chunk_runner_settle import (  # noqa: E402, F401
+    IDLE_PARK_S,
+    IDLE_RETRY_S,
+    IDLE_STOP_S,
+    SETTLE_S,
+    check_chunk_settled,
+    check_runner_idle,
+)
 from episode_recorder import Recorder  # noqa: E402
 import joint_jitter  # noqa: E402
 import joint_push  # noqa: E402
 import runner_strain  # noqa: E402
 
 FOLLOW_STOP, FOLLOW_STOP_S = 25.0, 1.0
-SETTLE_S = 3.0
 HEALTH_PERIOD_S = 1.0
 CONTACT_CHUNKS = ("descend", "grasp", "release")
 PACE_LAG, PACE_RISE, PACE_MAX_S = (prm.default(f"runner.{k}") for k in ("pace_lag", "pace_rise", "pace_max_s"))
-IDLE_PARK_S, IDLE_STOP_S, IDLE_RETRY_S = (prm.default(f"runner.idle_{k}_s") for k in ("park", "stop", "retry"))
 
 _CR_DICT_LIST: list[dict] = []
 
@@ -83,43 +90,21 @@ def _cr_attr(name: str, default):
 
 class Runner:
     def __init__(
-        self,
-        robot,
-        library: dict,
-        *,
-        fps: int,
-        status,
-        clock=time.monotonic,
-        sleep=time.sleep,
-        live=None,
-        operating_context=None,
-        params=None,
-        plan_check=None,
+        self, robot, library: dict, *, fps: int, status, clock=time.monotonic, sleep=time.sleep,
+        live=None, operating_context=None, params=None, plan_check=None,
     ):
         self.params, self.plan_check = params, plan_check or (lambda library: None)
         self.robot, self.library, self.fps, self.status = robot, library, fps, status
         self.clock, self.sleep = clock, sleep
-        self.target = None
-        self.queue: list = []
-        self.chunk = None
-        self.settle_since = None
-        self.far_since, self.last_grip, self.last_body = None, None, None
-        self.pending: list = []
+        self.target, self.queue, self.chunk, self.settle_since = None, [], None, None
+        self.far_since, self.last_grip, self.last_body, self.pending = None, None, None, []
         self.ticks, self.health, self.overload_since, self.fault = 0, None, None, None
         self.played, self.retreat_frames, self.jog_path, self.contact_ticks, self.contact_start = [], [], [], 0, None
-        self.lag, self.paced, self.paced_ticks = 0.0, 0, 0
-        self.pace_floor, self.pace_last = 0.0, None
-        self.last_input, self.home_since = 0.0, None
-        self.idle_parks = 0
-        self.peak_lag, self.over_ticks = 0.0, 0
-        self.live = live
-        self.health_present, self.samples, self.grip_from, self.holding = None, [], None, False
-        self.recorder = Recorder()
-        self.operating_context = operating_context
-        self._lib_digest_cache: tuple[int, str] | None = None
-        self.trend: list = []
-        self.trace = None
-        self.jitter_buf, self.damped_ticks = [], 0
+        self.lag, self.paced, self.paced_ticks, self.pace_floor, self.pace_last = 0.0, 0, 0, 0.0, None
+        self.last_input, self.home_since, self.idle_parks, self.peak_lag, self.over_ticks = 0.0, None, 0, 0.0, 0
+        self.live, self.health_present, self.samples, self.grip_from, self.holding = live, None, [], None, False
+        self.recorder, self.operating_context, self._lib_digest_cache = Recorder(), operating_context, None
+        self.trend, self.trace, self.jitter_buf, self.damped_ticks = [], None, [], 0
         self.jitter = {"shaking": False, "max_std": 0.0, "max_flips_hz": 0.0, "max_p2p": 0.0, "flagged": []}
         self.ensembler = TemporalChunkEnsembler(coeff=0.08, vmax=GUARD_UNITS_PER_S, fps=fps)
 
@@ -337,84 +322,11 @@ class Runner:
                 raise RuntimeError(f"following error {loaded:.1f} for {FOLLOW_STOP_S} s: blocked or colliding")
         else:
             self.far_since = None
-        if self.chunk is not None and not self.queue:
-            self.settle_since = self.settle_since if self.settle_since is not None else now
-            grasp = self.chunk.startswith("grasp")
-            gripper_still = self.last_grip is not None and abs(present[5] - self.last_grip) < 0.3
-            self.last_grip = present[5]
-            body_still = (
-                self.last_body is not None
-                and max(abs(a - b) for a, b in zip(present[:5], self.last_body)) < 0.08
-                and error <= SETTLE_TOL + min(self.pace_floor, 0.8)
-            )
-            self.last_body = list(present[:5])
-            settled = (error <= SETTLE_TOL or body_still) and not self.jitter["shaking"]
-            if (settled and (gripper_still or not grasp)) or now - self.settle_since >= SETTLE_S:
-                fields = dict(
-                    command=f"run {self.chunk}",
-                    ok=True,
-                    settled=settled,
-                    paced_ticks=self.paced_ticks,
-                    peak_lag=round(self.peak_lag, 2),
-                    over_ticks=self.over_ticks,
-                    **({"damped_ticks": self.damped_ticks} if self.damped_ticks else {}),
-                )
-                self.paced_ticks, self.pace_floor, self.peak_lag, self.over_ticks, self.damped_ticks = 0, 0.0, 0.0, 0, 0
-                if (self.chunk == "park" or self.chunk.endswith("; park")) and settled:
-                    self.home_since = now
-                backed_out = self.chunk == "retreat" and settled
-                if (self.chunk == "park" or self.chunk.endswith("; park") or backed_out) and (
-                    self.fault or ""
-                ).startswith("contact"):
-                    self.fault = None
-                if grasp:
-                    by_position = present[5] > self.target[5] + EMPTY_MARGIN
-                    fields["holding"] = by_position
-                    health = self.read_health()
-                    if health:
-                        self.health = health
-                        current = abs(health["current_ma"][5])
-                        fields["gripper_current_ma"] = current
-                        threshold = self.library.get("hold_current_ma")
-                        if threshold is not None:
-                            fields["holding"] = by_position and current >= threshold
-                    self.holding = bool(fields["holding"])
-                elif self.holding and self.chunk in ("lift_pick", "park", "goto above_place", "descend_place"):
-                    self.holding = present[5] > self.target[5] + EMPTY_MARGIN
-                    fields["holding"] = self.holding
-                self.chunk, self.last_grip, self.last_body = None, None, None
-                self.report(**fields, present=present)
+        check_chunk_settled(self, present, error, now, _cr_attr)
 
     def idle(self) -> bool:
         """Fold home, then end the session (True), when no command has come for a while."""
-        if self.chunk is not None or self.queue or self.pending:
-            return False
-        quiet = self.clock() - self.last_input
-        if self.home_since is None:
-            if self.idle_parks >= 2:
-                if self.idle_parks == 2:
-                    self.idle_parks, self.fault = 3, f"idle fold held twice ({self.fault}): a person must free the arm"
-                    self.report(command="park", ok=False, error=self.fault, person_needed=True)
-                return False
-            wait = (
-                prm.get(self.params, "runner.idle_retry_s", IDLE_RETRY_S)
-                if self.idle_parks
-                else prm.get(self.params, "runner.idle_park_s", IDLE_PARK_S)
-            )
-            if quiet >= wait:
-                self.last_input = self.clock()
-                self.idle_parks += 1
-                self.command("park")
-            return False
-        pushed = (self.fault or "").startswith("pushing at rest")
-        if pushed or min(quiet, self.clock() - self.home_since) >= prm.get(self.params, "runner.idle_stop_s", IDLE_STOP_S):
-            self.report(
-                command="stop",
-                ok=True,
-                reason=f"{self.fault if pushed else f'no command for {quiet:.0f} s'}; folded home, torque goes OFF",
-            )
-            return True
-        return False
+        return check_runner_idle(self, _cr_attr)
 
     def run(self, lines) -> None:
         """`lines()` returns the commands that arrived since the last call."""

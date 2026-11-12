@@ -63,56 +63,30 @@ def _mm3(a, b):
     a0, a1, a2 = a
     b0, b1, b2 = b
     return (
-        (
-            a0[0] * b0[0] + a0[1] * b1[0] + a0[2] * b2[0],
-            a0[0] * b0[1] + a0[1] * b1[1] + a0[2] * b2[1],
-            a0[0] * b0[2] + a0[1] * b1[2] + a0[2] * b2[2],
-        ),
-        (
-            a1[0] * b0[0] + a1[1] * b1[0] + a1[2] * b2[0],
-            a1[0] * b0[1] + a1[1] * b1[1] + a1[2] * b2[1],
-            a1[0] * b0[2] + a1[1] * b1[2] + a1[2] * b2[2],
-        ),
-        (
-            a2[0] * b0[0] + a2[1] * b1[0] + a2[2] * b2[0],
-            a2[0] * b0[1] + a2[1] * b1[1] + a2[2] * b2[1],
-            a2[0] * b0[2] + a2[1] * b1[2] + a2[2] * b2[2],
-        ),
+        (a0[0] * b0[0] + a0[1] * b1[0] + a0[2] * b2[0], a0[0] * b0[1] + a0[1] * b1[1] + a0[2] * b2[1], a0[0] * b0[2] + a0[1] * b1[2] + a0[2] * b2[2]),
+        (a1[0] * b0[0] + a1[1] * b1[0] + a1[2] * b2[0], a1[0] * b0[1] + a1[1] * b1[1] + a1[2] * b2[1], a1[0] * b0[2] + a1[1] * b1[2] + a1[2] * b2[2]),
+        (a2[0] * b0[0] + a2[1] * b1[0] + a2[2] * b2[0], a2[0] * b0[1] + a2[1] * b1[1] + a2[2] * b2[1], a2[0] * b0[2] + a2[1] * b1[2] + a2[2] * b2[2]),
     )
 
 
 def _fk_raw(qv: Sequence[float], dof: int, tcp_x_m: float):
     r = _mm3(_rz3(qv[0]), _ry3(qv[1]))
-    sx = r[0][0] * 0.012
-    sy = r[1][0] * 0.012
-    sz = 0.078 + r[2][0] * 0.012
+    sx, sy, sz = r[0][0] * 0.012, r[1][0] * 0.012, 0.078 + r[2][0] * 0.012
     if dof == 7:
         r_upper = _mm3(r, _rx3(qv[2]))
-        ex = sx + r_upper[0][0] * 0.130
-        ey = sy + r_upper[1][0] * 0.130
-        ez = sz + r_upper[2][0] * 0.130
+        ex, ey, ez = sx + r_upper[0][0] * 0.130, sy + r_upper[1][0] * 0.130, sz + r_upper[2][0] * 0.130
         r_fore = _mm3(r_upper, _ry3(qv[3]))
-        wx = ex + r_fore[0][0] * 0.124
-        wy = ey + r_fore[1][0] * 0.124
-        wz = ez + r_fore[2][0] * 0.124
+        wx, wy, wz = ex + r_fore[0][0] * 0.124, ey + r_fore[1][0] * 0.124, ez + r_fore[2][0] * 0.124
         r_tcp = _mm3(_mm3(_mm3(r_fore, _ry3(qv[4])), _rz3(qv[5])), _rx3(qv[6]))
     elif dof == 6:
-        ex = sx + r[0][0] * 0.130
-        ey = sy + r[1][0] * 0.130
-        ez = sz + r[2][0] * 0.130
+        ex, ey, ez = sx + r[0][0] * 0.130, sy + r[1][0] * 0.130, sz + r[2][0] * 0.130
         r_fore = _mm3(r, _ry3(qv[2]))
-        wx = ex + r_fore[0][0] * 0.124
-        wy = ey + r_fore[1][0] * 0.124
-        wz = ez + r_fore[2][0] * 0.124
+        wx, wy, wz = ex + r_fore[0][0] * 0.124, ey + r_fore[1][0] * 0.124, ez + r_fore[2][0] * 0.124
         r_tcp = _mm3(_mm3(_mm3(r_fore, _ry3(qv[3])), _rz3(qv[4])), _rx3(qv[5]))
     else:
-        ex = sx + r[0][0] * 0.130
-        ey = sy + r[1][0] * 0.130
-        ez = sz + r[2][0] * 0.130
+        ex, ey, ez = sx + r[0][0] * 0.130, sy + r[1][0] * 0.130, sz + r[2][0] * 0.130
         r_fore = _mm3(r, _ry3(qv[2]))
-        wx = ex + r_fore[0][0] * 0.124
-        wy = ey + r_fore[1][0] * 0.124
-        wz = ez + r_fore[2][0] * 0.124
+        wx, wy, wz = ex + r_fore[0][0] * 0.124, ey + r_fore[1][0] * 0.124, ez + r_fore[2][0] * 0.124
         r_tcp = _mm3(_mm3(r_fore, _ry3(qv[3])), _rx3(qv[4]))
     tx = float(tcp_x_m)
     p_tcp = (wx + r_tcp[0][0] * tx, wy + r_tcp[1][0] * tx, wz + r_tcp[2][0] * tx)

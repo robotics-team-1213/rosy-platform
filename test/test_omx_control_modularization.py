@@ -8,7 +8,9 @@ import numpy as np
 
 OMX_DIR = Path(__file__).resolve().parents[1] / "deploy/robot/omx"
 ADAPTER_DIR = Path(__file__).resolve().parents[1] / "middleware/devices/omx/adapter"
-for _p in (OMX_DIR, ADAPTER_DIR):
+FOUNDATION_DIR = Path(__file__).resolve().parents[1] / "contracts/foundation"
+VISION_INGRESS_DIR = Path(__file__).resolve().parents[1] / "operations/overhead"
+for _p in (OMX_DIR, ADAPTER_DIR, FOUNDATION_DIR, VISION_INGRESS_DIR):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 
@@ -449,8 +451,89 @@ def test_round6_single_responsibility_splits_and_ndof_judges(tmp_path: Path) -> 
     assert cg_dyn.infer_holding({"state": [0.0] * 7 + [55.4], "gripper_current_ma": 95.0}) is True
 
 
-def test_all_omx_control_modules_under_480_lines() -> None:
-    """Every single `.py` module in `deploy/robot/omx/` is decomposed into Single-Responsibility units (< 480 lines)."""
+def test_round7_single_responsibility_splits_and_ndof_clamp() -> None:
+    """Verify Round 7 Single-Responsibility Principle (SRP) module splits and 5/6/7-DOF action clamping:
+    - `cell_directive_compiler` / `cell_control_core`
+    - `cell_area_vision_align` / `cell_area_xyz`
+    - `two_arm_stages_readonly` / `two_arm_pipeline`
+    - `probe_pilot_sim_gz` / `probe_pilot_sim_http`
+    - `commissioning_view_assets` / `commissioning_view`
+    - `omx_cameras_sync` / `omx_cameras`
+    - `cell_calibrate_auto` / `cell_calibrate`
+    - `sim_pick_place_teacher_helpers` / `sim_pick_place_teacher`
+    - `cell_auto_pick_plan` / `cell_auto_pick`
+    - `workcell_observation_sources` / `workcell_observation_bridge`
+    - `guarded_native_effort` / `guarded_native`
+    - `joint_tune_cli` / `joint_tune`
+    - `record_session_cli` / `record_session`
+    - `chunk_runner_settle` / `chunk_runner_run`."""
+    import cell_area_vision_align as cava
+    import cell_auto_pick as cap
+    import cell_auto_pick_plan as capp
+    import cell_calibrate as cc
+    import cell_calibrate_auto as cca
+    import cell_directive_compiler as cdc
+    import chunk_runner_run as crr
+    import chunk_runner_settle as crs
+    import commissioning_view as cv
+    import commissioning_view_assets as cva
+    import guarded_native as gn
+    import guarded_native_effort as gne
+    import joint_tune as jt
+    import joint_tune_cli as jtc
+    import omx_cameras as oc
+    import omx_cameras_sync as ocs
+    import probe_pilot_sim_gz as ppsg
+    import probe_pilot_sim_http as ppsh
+    import record_session as rs
+    import record_session_cli as rsc
+    import sim_pick_place_teacher as sppt
+    import sim_pick_place_teacher_helpers as sppth
+    import two_arm_pipeline as tap
+    import two_arm_stages_readonly as tasr
+    import workcell_observation_bridge as wob
+    import workcell_observation_sources as wos
+
+    assert ccc.build_plan_from_directive is cdc.build_plan_from_directive
+    assert ccc.sim_precheck_and_optimize_directive is cdc.sim_precheck_and_optimize_directive
+    assert cell_area_xyz.settle_above_pick_jaws is cava.settle_above_pick_jaws
+    assert cell_area_xyz.refine_pick_pose_at_hover is cava.refine_pick_pose_at_hover
+    assert tap.stage_health is tasr.stage_health
+    assert tap.write_receipt is tasr.write_receipt
+    assert ppsh.gz_spawner is ppsg.gz_spawner
+    assert ppsh.terminal_facts is ppsg.terminal_facts
+    assert cv.parse_arm_topics is cva.parse_arm_topics
+    assert cv.PAGE == cva.PAGE
+    assert oc.sync_manifest is ocs.sync_manifest
+    assert oc.apply_decisions is ocs.apply_decisions
+    assert cc.self_calibrate is cca.self_calibrate
+    assert cc.learn_bias is cca.learn_bias
+    assert sppt.teacher_watchdog_evidence is sppth.teacher_watchdog_evidence
+    assert sppt.release_clearance_evidence is sppth.release_clearance_evidence
+    assert cap.observe is capp.observe
+    assert cap.choose is capp.choose
+    assert cap.verify_placed is capp.verify_placed
+    assert wob.select_sources is wos.select_sources
+    assert wob.NativeSource is wos.NativeSource
+    assert gn.check_hardware_errors is gne.check_hardware_errors
+    assert gn.seed_follower_pose is gne.seed_follower_pose
+    assert callable(jt.main) and callable(jtc.main) and jt._jtc is jtc
+    assert callable(rs.main) and callable(rsc.main) and rs._rsc is rsc
+    assert crr.check_chunk_settled is crs.check_chunk_settled
+    assert crr.check_runner_idle is crs.check_runner_idle
+
+    # 5-DOF, 6-DOF, and 7-DOF action vector clamping (`len(action) in (6, 7, 8)`)
+    c5 = ccc.clamp_lerobot_norm_action([10.0] * 5 + [-15.0], [0.0] * 5 + [60.0], dt_s=0.5, max_units_per_s=5.0)
+    c6 = ccc.clamp_lerobot_norm_action([10.0] * 6 + [-15.0], [0.0] * 6 + [60.0], dt_s=0.5, max_units_per_s=5.0)
+    c7 = ccc.clamp_lerobot_norm_action([10.0] * 7 + [-15.0], [0.0] * 7 + [60.0], dt_s=0.5, max_units_per_s=5.0)
+    assert len(c5) == 6 and c5[0] == 2.5 and c5[-1] == 57.5
+    assert len(c6) == 7 and c6[5] == 2.5 and c6[-1] == 57.5
+    assert len(c7) == 8 and c7[6] == 2.5 and c7[-1] == 57.5
+    assert cava._jaw_pos([0.0] * 7 + [55.2]) == 55.2
+
+
+def test_all_omx_control_modules_under_400_lines() -> None:
+    """Every single `.py` module in `deploy/robot/omx/` is decomposed into Single-Responsibility units (< 400 lines)."""
     for path in sorted(OMX_DIR.glob("*.py")):
         lines = path.read_text(encoding="utf-8").splitlines()
-        assert len(lines) < 480, f"{path.name} has {len(lines)} lines (>= 480)"
+        assert len(lines) < 400, f"{path.name} has {len(lines)} lines (>= 400)"

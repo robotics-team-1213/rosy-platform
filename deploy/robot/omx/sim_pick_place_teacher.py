@@ -1,6 +1,10 @@
-"""Private native SIM teacher: real short goals, RGB frames and object observations."""
+"""Private native SIM teacher: real short goals, RGB frames and object observations.
+
+Single Responsibility:
+  - ROS-SIM teacher episode execution (`run`).
+  - Contact, clearance, and watchdog evidence helpers live in `sim_pick_place_teacher_helpers.py` and are re-exported.
+"""
 import argparse
-from dataclasses import asdict, replace
 import hashlib
 import json
 import math
@@ -11,66 +15,29 @@ import threading
 import time
 import uuid
 
-from g2_common import ROOT, configure_imports
-from g2_ports import ObserverClient, isolation_guard, write_json
-from sim_pick_place_demonstrations import (
-    TEACHER_STEP_RAD, TEACHER_READBACK_LIMIT_RAD, short_targets, dispatch_readback_target,
+_HERE = str(Path(__file__).resolve().parent)
+if _HERE not in sys.path:
+    sys.path.insert(0, _HERE)
+
+from g2_common import ROOT, configure_imports  # noqa: E402
+from g2_ports import ObserverClient, isolation_guard, write_json  # noqa: E402
+from sim_pick_place_demonstrations import (  # noqa: E402
+    TEACHER_READBACK_LIMIT_RAD,
+    TEACHER_STEP_RAD,
+    dispatch_readback_target,
+    short_targets,
 )
-from sim_pick_place_task import judge_episode
-from sim_policy_trial_evidence import contact_held
-from sim_teacher_gripper_evidence import gripper_failure_evidence
-
-
-PLACE_CLEARANCE_M = .005
-
-
-def teacher_watchdog_evidence(owner):
-    try:
-        from omx_adapter.watchdog_observation import WatchdogObservation
-        observation = owner.watchdog_observation
-        if observation is None:
-            return None
-        if type(observation) is not WatchdogObservation:
-            raise TypeError('invalid watchdog observation')
-        evidence = asdict(observation)
-        json.dumps(evidence, allow_nan=False)
-        return evidence
-    except Exception as exc:
-        # Diagnostic failure must preserve the original outcome and shutdown path.
-        return {'error': type(exc).__name__}
-
-
-def contact_hold_target(position,*,close,contact):
-    if not contact_held(position,close=close,contact=contact):
-        raise RuntimeError('teacher_hold_contact_not_confirmed')
-    return max(close,position-TEACHER_STEP_RAD)
-
-
-def grasp_contact_reached(current,target,*,gripper,close,contact,arm_tolerance):
-    if not contact_held(current[gripper],close=close,contact=contact):
-        return False
-    if any(not math.isfinite(current[name]) or not math.isfinite(value)
-           or abs(current[name]-value)>arm_tolerance for name,value in target.items() if name!=gripper):
-        raise RuntimeError('teacher_grasp_arm_not_at_target')
-    return True
-
-
-def teacher_place_pose(pose):
-    return replace(pose,z=pose.z+PLACE_CLEARANCE_M)
-
-
-def release_clearance_evidence(observation,tcp,box,goal):
-    pose=observation['model_pose_base']
-    roll,pitch=pose['roll_rad'],pose['pitch_rad']
-    half_height=(abs(math.sin(pitch))*box.length+abs(math.cos(pitch)*math.sin(roll))*box.width
-                 +abs(math.cos(pitch)*math.cos(roll))*box.height)/2
-    bottom=pose['z_m']-half_height
-    surface=goal[2]-box.height/2
-    clearance=bottom-surface
-    if not math.isfinite(clearance) or clearance<PLACE_CLEARANCE_M/2:
-        raise RuntimeError('measured_release_clearance_too_small')
-    return dict(observation=observation,tcp_m=dict(x=tcp.x,y=tcp.y,z=tcp.z),
-                object_bottom_z_m=bottom,support_surface_z_m=surface,clearance_m=clearance)
+from sim_pick_place_task import judge_episode  # noqa: E402
+from sim_pick_place_teacher_helpers import (  # noqa: E402,F401  (re-exported)
+    PLACE_CLEARANCE_M,
+    contact_hold_target,
+    grasp_contact_reached,
+    release_clearance_evidence,
+    teacher_place_pose,
+    teacher_watchdog_evidence,
+)
+from sim_policy_trial_evidence import contact_held  # noqa: E402
+from sim_teacher_gripper_evidence import gripper_failure_evidence  # noqa: E402
 
 
 def run(directory, world, observer_path, *, home_only=False, plan_kind='analytic', box_turn_deg=0.0):
@@ -280,13 +247,11 @@ def run(directory, world, observer_path, *, home_only=False, plan_kind='analytic
             place=teacher_place_pose(TopDownPose(place.target.x,place.target.y,place.target.z,place.target.yaw)),
             pick_approach_z=pick.approach_z, place_approach_z=place.approach_z, carry_z=job.carry_z,
             grasp_depth_m=recipe.box.grasp_depth, grasp_width_m=recipe.box.width)
-        if plan_kind == 'chunks':  # pick-place-chunks: arm S's top-down chunks and transit (D-872)
+        if plan_kind == 'chunks':
             from grasp_planner import Planner
             from sim_chunk_plan import phases as chunk_phases, sim_plan
             carry = TopDownPose(cell.home.x, cell.home.y, job.carry_z, cell.home.yaw)
             limits = profile.ik_limits()
-            # aim at the box where the observer sees it (the real pipeline locates it with the top camera);
-            # the yaw is the site's, or turned by the box when the scenario asks for that candidate
             seen = observe()['model_pose_base']
             pick_pose = (seen['x_m'], seen['y_m'], request.pick.z, request.pick.yaw + math.radians(box_turn_deg))
             arm_plan = sim_plan(home_q=[home_q[n] for n in ARM_JOINTS],

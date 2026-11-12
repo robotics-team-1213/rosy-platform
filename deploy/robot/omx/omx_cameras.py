@@ -1,45 +1,31 @@
 #!/usr/bin/env python3
 """The cell's cameras, managed from one registry: what each role is, which camera it is, and its preview unit.
 
-2026-10-31: cameras were moved, swapped and added (a RealSense D435 as the top camera, the old top camera as a side
-camera, a second wrist camera), and every role's env file and unit was edited by hand. The registry
-(`~/.config/rosy/omx-cameras.json`, rosy.omx-cameras.v1, site-private: it names devices) is the one record:
-
-  {"schema": "rosy.omx-cameras.v1",
-   "defaults": {"ROSY_CAMERA_SOURCE": "...camera_source.py", "ROS_DOMAIN_ID": "13", ...},  # copied into each role
-   "cameras": [{"role": "top", "device": "/dev/v4l/by-id/rosy-realsense-d435-color", "topic": "/top_camera/image_raw",
-                "frame": "top_camera_link", "fourcc": "YUYV", "stream": "color", "env": {}}, ...]}
-
-`device` is any persistent name camera_source accepts: a unique by-id name, a udev name (rosy-realsense-*), or a
-by-path name for cameras whose serials repeat. `stream` (color | depth | ir) and `env` (extra keys, e.g.
-ROSY_DEPTH_RANGE_MM or ROSY_CAMERA_MIN_USB_MBPS) are optional.
-
-  omx_cameras.py init      write a registry from the role env files in use (once, to adopt them)
-  omx_cameras.py inventory every plugged camera node: model, USB ID and port, speed, formats, names, the role using it
-  omx_cameras.py bind [--apply]  write each role's env from the registry and (re)start its unit when it changed or
-                           its camera came back. A role whose camera is gone follows it to another port only when
-                           exactly one unregistered camera has the role's recorded model (usb_id) and no other gone
-                           role has that model; every other unregistered camera is proposed, never given a role
-  omx_cameras.py propose   the unregistered cameras, each with its persistent name and the gone roles of its model
-                           A role Fleet's operator decided (omx-camera-decisions.json, D-963) is approved the same way
-  omx_cameras.py approve NODE ROLE  give a plugged camera a role (a new role gets /<role>_camera/image_raw), then bind
-  omx_cameras.py manifest [--manifest PATH] [--apply]  copy each registered camera's device into the workcell
-                           observation manifest entry with the same image topic; exit 1 while one differs
-                           (2026-11-02: the bridge's and the site's copies had the two wrist ports swapped)
+Single Responsibility:
+  - Camera registry lifecycle (`load`, `save`, `init`, `inventory`, `propose`, `learn`, `bind`, `apply`, `main`).
+  - Observation manifest, readiness profile, and Fleet decision synchronization live in `omx_cameras_sync.py`
+    and are re-exported here unchanged.
 """
 from __future__ import annotations
 
 import argparse
 import glob
-import hashlib
 import json
 import os
-import re
+from pathlib import Path
 import subprocess
 import sys
-from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from omx_cameras_sync import (  # noqa: E402,F401  (re-exported)
+    _sync_manifest_file,
+    _sync_readiness_file,
+    apply_decisions,
+    approve,
+    device_key,
+    sync_manifest,
+    sync_readiness,
+)
 import omx_devices  # noqa: E402
 
 SCHEMA = "rosy.omx-cameras.v1"
@@ -47,8 +33,12 @@ REGISTRY = Path("~/.config/rosy/omx-cameras.json").expanduser()
 ENV_DIR = Path("~/.config/rosy").expanduser()
 DECISIONS = Path("~/.local/state/rosy/omx-camera-decisions.json").expanduser()  # {key: role}, written by the bridge
 MANIFEST = Path("~/.config/rosy/workcell-observations/observations.yaml").expanduser()
-FIELDS = {"device": "ROSY_CAMERA_DEVICE", "topic": "ROSY_CAMERA_TOPIC", "frame": "ROSY_CAMERA_FRAME",
-          "fourcc": "ROSY_CAMERA_FOURCC"}
+FIELDS = {
+    "device": "ROSY_CAMERA_DEVICE",
+    "topic": "ROSY_CAMERA_TOPIC",
+    "frame": "ROSY_CAMERA_FRAME",
+    "fourcc": "ROSY_CAMERA_FOURCC",
+}
 
 
 def load(path: Path = REGISTRY) -> dict:
@@ -82,8 +72,11 @@ def init(env_dir: Path = ENV_DIR) -> dict:
     """A registry adopting the camera roles whose env files are in use; shared keys become defaults."""
     roles = {r.removeprefix("camera-"): e for r, e in omx_devices.role_env(env_dir).items() if r.startswith("camera-")}
     keys = set.intersection(*(set(e) for e in roles.values())) if roles else set()
-    defaults = {k: v for k, v in next(iter(roles.values()), {}).items()
-                if k in keys and k not in FIELDS.values() and all(e[k] == v for e in roles.values())}
+    defaults = {
+        k: v
+        for k, v in next(iter(roles.values()), {}).items()
+        if k in keys and k not in FIELDS.values() and all(e[k] == v for e in roles.values())
+    }
     cameras = []
     for role, env in sorted(roles.items()):
         camera = {"role": role, **{field: env[key] for field, key in FIELDS.items() if env.get(key)}}
@@ -109,8 +102,16 @@ def inventory(registry: dict | None, facts: dict, names: dict, ask=formats, real
     by_node = {}
     for camera in (registry or {}).get("cameras", []):
         by_node.setdefault(realpath(camera["device"]), []).append(camera["role"])
-    return [{"node": node, **fact, "names": sorted(names.get(node, [])), "formats": ask(node),
-             "roles": by_node.get(node, [])} for node, fact in sorted(facts.items())]
+    return [
+        {
+            "node": node,
+            **fact,
+            "names": sorted(names.get(node, [])),
+            "formats": ask(node),
+            "roles": by_node.get(node, []),
+        }
+        for node, fact in sorted(facts.items())
+    ]
 
 
 def bind(registry: dict, env_dir: Path, present, plugged_nodes: set, realpath=os.path.realpath) -> dict:
@@ -124,8 +125,11 @@ def bind(registry: dict, env_dir: Path, present, plugged_nodes: set, realpath=os
             continue
         used.add(realpath(camera["device"]))
         want = role_env(camera, registry.get("defaults", {}))
-        have = dict(line.split("=", 1) for line in path.read_text(encoding="utf-8").splitlines() if "=" in line) \
-            if path.exists() else None
+        have = (
+            dict(line.split("=", 1) for line in path.read_text(encoding="utf-8").splitlines() if "=" in line)
+            if path.exists()
+            else None
+        )
         if have != want:
             out["write"][role] = want
             out["restart"].append(role)
@@ -151,31 +155,8 @@ def apply(plan: dict, env_dir: Path, units_running, run=subprocess.run) -> list:
     return done
 
 
-def sync_manifest(registry: dict, text: str) -> tuple[str, list, list]:
-    """(text, changed, unregistered): each camera's device_path set from the registry role with its image_topic.
-
-    Line edits keep the manifest's order and comments; a camera whose topic no role publishes is listed, not touched.
-    """
-    device = {c["topic"]: c["device"] for c in registry["cameras"]}
-    lines, topic, changed, unregistered = text.split("\n"), None, [], []
-    for i, line in enumerate(lines):
-        key, _, value = line.strip().removeprefix("- ").partition(":")
-        value = value.split(" #")[0]
-        if key == "image_topic":
-            topic = value.strip()
-        elif key == "device_path" and topic is not None:
-            if topic not in device:
-                unregistered.append(topic)
-            elif value.strip() != device[topic]:
-                changed.append({"topic": topic, "from": value.strip(), "to": device[topic]})
-                lines[i] = line[:len(line) - len(line.lstrip())] + f"device_path: {device[topic]}"
-            topic = None
-    return "\n".join(lines), changed, unregistered
-
-
 def best_name(node: str, names: dict) -> str:
-    """A node's persistent name: a ROSY udev name, else its USB port (by-path). Not the kernel by-id name: a twin
-    plugged later shares it (2026-10-31, two U20CAMs both SN0001); a port move is followed by `learn` instead."""
+    """A node's persistent name: a ROSY udev name, else its USB port (by-path)."""
     own = sorted(names.get(node, []))
     for prefix in ("/dev/v4l/by-id/rosy-", "/dev/v4l/by-path/", "/dev/v4l/by-id/"):
         found = [n for n in own if n.startswith(prefix)]
@@ -201,12 +182,7 @@ def arm_hubs(env_dir: Path = ENV_DIR, realpath=os.path.realpath) -> dict:
 
 
 def propose(registry: dict, facts: dict, names: dict, present, realpath=os.path.realpath, hubs=None) -> list:
-    """One row per camera no present role uses: its name and model, the gone roles last seen on that model, and
-    `follow` when it is the only such camera and the only such role (the same camera moved to another port).
-
-    `hub_arm` is the one arm whose board shares the camera's USB hub, and `suggest` its `<arm>_wrist` role when that
-    role is gone: a hint for the person approving, not a binding. 2026-11-03 on the cell each wrist camera shared its
-    arm board's hub, but so did the side camera (arm_b's hub), so a hub alone does not name a wrist camera."""
+    """One row per camera no present role uses."""
     gone = [c for c in registry["cameras"] if not present(c["device"])]
     used = {realpath(c["device"]) for c in registry["cameras"] if present(c["device"])}
     free = [n for n in sorted(facts) if n not in used]
@@ -218,9 +194,17 @@ def propose(registry: dict, facts: dict, names: dict, present, realpath=os.path.
         follow = roles[0] if len(roles) == 1 and len(same) == 1 else None
         arms = [arm for arm, h in (hubs or {}).items() if h == hub(facts[node]["usb"])]
         hub_arm = arms[0] if len(arms) == 1 else None
-        rows.append({"node": node, "device": best_name(node, names), "usb_id": model, "roles": roles,
-                     "follow": follow, "hub_arm": hub_arm,
-                     "suggest": follow or (f"{hub_arm}_wrist" if f"{hub_arm}_wrist" in roles else None)})
+        rows.append(
+            {
+                "node": node,
+                "device": best_name(node, names),
+                "usb_id": model,
+                "roles": roles,
+                "follow": follow,
+                "hub_arm": hub_arm,
+                "suggest": follow or (f"{hub_arm}_wrist" if f"{hub_arm}_wrist" in roles else None),
+            }
+        )
     return rows
 
 
@@ -241,38 +225,6 @@ def learn(registry: dict, facts: dict, proposals: list, present, realpath=os.pat
     return changes
 
 
-def approve(registry: dict, role: str, row: dict) -> dict:
-    """The registry with ROLE on the proposed camera ROW; a new role gets the topic and frame naming convention."""
-    camera = next((c for c in registry["cameras"] if c["role"] == role), None)
-    if camera is None:
-        camera = {"role": role, "topic": f"/{role}_camera/image_raw", "frame": f"{role}_camera_link", "stream": "color"}
-        registry["cameras"].append(camera)
-    camera.update(device=row["device"], usb_id=row["usb_id"])
-    return registry
-
-
-def device_key(device: str) -> str:
-    """What the control PC tells Fleet instead of a device name (D-963)."""
-    return hashlib.sha256(device.encode()).hexdigest()[:32]
-
-
-def apply_decisions(registry: dict, proposals: list, path: Path) -> tuple[list, dict]:
-    """Approve each proposed camera whose key Fleet decided a role for: (changes, decisions still waiting)."""
-    try:
-        decided = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return [], {}
-    if not isinstance(decided, dict):
-        return [], {}
-    changes = []
-    for row in proposals:
-        role = decided.pop(device_key(row["device"]), None)
-        if isinstance(role, str) and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_-]{0,63}", role):
-            approve(registry, role, row)
-            changes.append({"role": role, "to": row["device"]})
-    return changes, decided
-
-
 def save(registry: dict, path: Path) -> None:
     """Write the registry only if it still loads (one role and one device each)."""
     tmp = path.with_suffix(".tmp")
@@ -283,49 +235,6 @@ def save(registry: dict, path: Path) -> None:
         tmp.unlink()
         raise
     os.replace(tmp, path)
-
-
-def _sync_manifest_file(registry: dict, path: Path) -> list:
-    if not path.is_file() or not os.access(path, os.W_OK):
-        return []
-    text, changed, _ = sync_manifest(registry, path.read_text(encoding="utf-8"))
-    if changed:
-        tmp = path.with_suffix(".tmp")
-        tmp.write_text(text, encoding="utf-8")
-        os.chmod(tmp, path.stat().st_mode)
-        os.replace(tmp, path)
-    return changed
-
-
-def sync_readiness(registry: dict, profile: dict) -> tuple[dict, list]:
-    """Keep each readiness camera's device aligned with its preview unit's role in the registry."""
-    by_role = {c["role"]: c["device"] for c in registry["cameras"]}
-    changed, cameras = [], {}
-    for role, spec in profile.get("cameras", {}).items():
-        unit = spec.get("unit", role)
-        want = by_role.get(unit)
-        if want and spec.get("device") != want:
-            changed.append({"role": role, "unit": unit, "from": spec.get("device"), "to": want})
-            cameras[role] = {**spec, "device": want}
-        else:
-            cameras[role] = dict(spec)
-    return {**profile, "cameras": cameras}, changed
-
-
-def _sync_readiness_file(registry: dict, path: Path) -> list:
-    if not path.is_file() or not os.access(path, os.W_OK):
-        return []
-    try:
-        profile = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return []
-    updated, changed = sync_readiness(registry, profile)
-    if changed:
-        tmp = path.with_suffix(".tmp")
-        tmp.write_text(json.dumps(updated, indent=2) + "\n", encoding="utf-8")
-        os.chmod(tmp, path.stat().st_mode)
-        os.replace(tmp, path)
-    return changed
 
 
 def _names() -> dict:
@@ -353,8 +262,17 @@ def main(argv=None) -> int:
             tmp.write_text(text, encoding="utf-8")
             os.chmod(tmp, args.manifest.stat().st_mode)
             os.replace(tmp, args.manifest)
-        print(json.dumps({"manifest": str(args.manifest), "changed": changed, "unregistered": unregistered,
-                          "written": bool(changed and args.apply)}, indent=1))
+        print(
+            json.dumps(
+                {
+                    "manifest": str(args.manifest),
+                    "changed": changed,
+                    "unregistered": unregistered,
+                    "written": bool(changed and args.apply),
+                },
+                indent=1,
+            )
+        )
         return 1 if changed and not args.apply else 0
     if args.action == "init":
         if args.registry.exists():
@@ -388,7 +306,7 @@ def main(argv=None) -> int:
         learned += approved
         if learned:
             save(registry, args.registry)
-        if approved:  # the registry is saved first, so a crash re-applies a decision instead of losing it
+        if approved:
             tmp = args.decisions.with_suffix(".tmp")
             tmp.write_text(json.dumps(waiting), encoding="utf-8")
             os.replace(tmp, args.decisions)
@@ -397,14 +315,16 @@ def main(argv=None) -> int:
         proposals = propose(registry, facts, _names(), os.path.exists, hubs=arm_hubs(args.env_dir))
     plan = bind(registry, args.env_dir, os.path.exists, set(facts))
     plan["learned"], plan["proposals"] = learned, proposals
-    if learned:  # the bridge's copy is the user's; the site's /etc copy needs 'manifest --apply' with root
+    if learned:
         plan["manifest"] = _sync_manifest_file(registry, args.manifest)
     if args.apply:
         readiness = _sync_readiness_file(registry, args.env_dir / "omx-camera-readiness.json")
         if readiness:
             plan["readiness"] = readiness
-    running = lambda role: subprocess.run(["systemctl", "--user", "is-active", "--quiet",  # noqa: E731
-                                           f"rosy-omx-camera@{role}.service"]).returncode == 0
+    running = lambda role: (  # noqa: E731
+        subprocess.run(["systemctl", "--user", "is-active", "--quiet", f"rosy-omx-camera@{role}.service"]).returncode
+        == 0
+    )
     plan["present"] = [c["role"] for c in registry["cameras"] if c["role"] not in plan["waiting"]]
     if args.apply:
         plan["done"] = apply(plan, args.env_dir, running)

@@ -1,17 +1,19 @@
-"""Native local observations to authenticated Fleet and Vision ingress."""
+"""Native local observations to authenticated Fleet and Vision ingress.
+
+Single Responsibility:
+  - Authenticated Fleet HTTPS & Vision WSS delivery workers (`post_arm`, `ArmSender`, `CameraSender`, `SourceWorker`, `main`).
+  - Local observation sample buffers and ROS decoders live in `workcell_observation_sources.py` and are re-exported.
+  - Incident & USB camera HTTP clients live in `workcell_incident_client.py` and are re-exported.
+"""
 from __future__ import annotations
 
 import argparse
-from copy import deepcopy
-from dataclasses import dataclass
-from hashlib import sha256
-import hmac
 import json
 import logging
 import math
 from pathlib import Path
-import ssl
 import signal
+import ssl
 import sys
 import threading
 import time
@@ -22,17 +24,21 @@ from uuid import uuid4
 
 import yaml
 
-from core_common.protocol.arm_incidents import ArmIncidentAccepted, ArmIncidentHold  # D-971
-from core_common.protocol.workcell_observations import ArmObservation, UsbCameraDecisions, WorkcellObservationManifest
-from core_common.motor_health import read_motor_health_snapshot
-from core_common.protocol.motor_health import MotorHealthResponse
-from core_common.observation_snapshot import SnapshotChannel, interrupt_on_termination
+from core_common.motor_health import read_motor_health_snapshot  # noqa: F401
+from core_common.observation_snapshot import SnapshotChannel, interrupt_on_termination  # noqa: F401
+from core_common.protocol.arm_incidents import ArmIncidentAccepted, ArmIncidentHold  # noqa: F401
+from core_common.protocol.motor_health import MotorHealthResponse  # noqa: F401
+from core_common.protocol.workcell_observations import (  # noqa: F401
+    ArmObservation,
+    UsbCameraDecisions,
+    WorkcellObservationManifest,
+)
 from rosy_vision import protocol
-sys.path.insert(0, str(Path(__file__).resolve().parent))  # loaded by path in tests, not only from its folder
-import usb_camera_report  # noqa: E402  beside this file; D-963
-from workcell_incident_client import (  # noqa: E402
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import usb_camera_report  # noqa: E402,F401
+from workcell_incident_client import (  # noqa: E402,F401
     ArmIncidentLink,
-    _NoRedirect,
     _arm_url,
     _verified,
     clear_arm_incident,
@@ -44,134 +50,24 @@ from workcell_incident_client import (  # noqa: E402
     run_usb_reports,
     secure_url,
 )
-
-
-def select_sources(manifest, workcell_id, environ):
-    cell = next((cell for cell in manifest.workcells if cell.workcell_id == workcell_id), None)
-    if cell is None:
-        raise ValueError('unknown observation workcell')
-    tokens = {}
-    for source in [*cell.arms, *cell.cameras]:
-        token = environ.get(source.token_env)
-        if (not isinstance(token, str) or not token
-                or not hmac.compare_digest(sha256(token.encode()).hexdigest(), source.credential_sha256)):
-            raise ValueError('source credential missing or fingerprint mismatch')
-        tokens[source.source_id] = token
-    return cell, tokens
-
-
-@dataclass(frozen=True)
-class Sample:
-    captured_at: float
-    received_at: float
-    sequence: int
-    value: object
-    motor_health: MotorHealthResponse | None = None
-
-
-def sample_age(sample, wall, monotonic):
-    source_age, receipt_age = wall - sample.captured_at, monotonic - sample.received_at
-    if not (-0.25 <= source_age <= 2 and 0 <= receipt_age <= 2):
-        raise ValueError('observation capture or receipt is stale or future')
-    return max(0, source_age, receipt_age)
-
-
-class LatestSource:
-    def __init__(self, *, wall=time.time, monotonic=time.monotonic):
-        self.wall, self.monotonic = wall, monotonic
-        self._lock, self._sample = threading.Lock(), None
-
-    def put(self, stamp, value, *, received=None):
-        if type(stamp) not in (int, float) or not math.isfinite(stamp) or stamp <= 0:
-            raise ValueError('invalid source stamp')
-        with self._lock:
-            candidate = Sample(stamp, self.monotonic() if received is None else received,
-                               self._sample.sequence + 1 if self._sample else 1, value)
-            sample_age(candidate, self.wall(), self.monotonic())
-            if self._sample and stamp <= self._sample.captured_at:
-                return False
-            self._sample = Sample(stamp, candidate.received_at, candidate.sequence, deepcopy(value))
-            return True
-
-    def latest(self):
-        with self._lock:
-            if self._sample is None:
-                return None
-            try:
-                sample_age(self._sample, self.wall(), self.monotonic())
-            except ValueError:
-                return None
-            return deepcopy(self._sample)
-
-
-class NativeSource(LatestSource):
-    def __init__(self, channel, *, joint_names=None):
-        super().__init__()
-        self.channel, self.joint_names = SnapshotChannel(channel), joint_names
-
-    def latest(self):
-        sample = self.channel.read()
-        if sample is not None:
-            try:
-                if self.joint_names is None:
-                    if sample['kind'] != 'jpeg':
-                        raise ValueError('camera channel must carry JPEG')
-                    value = (sample['payload'], 640, 480)
-                else:
-                    if sample['kind'] != 'joints':
-                        raise ValueError('arm channel must carry joint positions')
-                    value = json.loads(sample['payload'])
-                    if not isinstance(value, dict) or set(value) != set(self.joint_names):
-                        raise ValueError('joint observation must match registered arm')
-                    value = ArmObservation(epoch='0' * 32, sequence=1,
-                        captured_at=sample['captured_at'], positions=value).positions
-                self.put(sample['captured_at'], value, received=sample['monotonic'])
-            except (ValueError, TypeError):
-                pass
-        return super().latest()
+from workcell_observation_sources import (  # noqa: E402,F401
+    ArmHealthSource,
+    LatestSource,
+    NativeSource,
+    Sample,
+    _REGISTER_WOB_GLOBALS,
+    encode_image,
+    joint_values,
+    sample_age,
+    select_sources,
+    source_stamp,
+)
+_REGISTER_WOB_GLOBALS(globals())
 
 
 class _NoRedirect(HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         return None
-
-
-class ArmHealthSource:
-    """One latest-value stream; terminal files can advance without inventing ROS positions."""
-    def __init__(self, source, path, owner):
-        self.source, self.path, self.owner = source, path, owner
-        self.last, self.position_sequence, self.terminal_key = None, None, None
-
-    def latest(self):
-        position = self.source.latest()
-        wall, mono = self.source.wall(), self.source.monotonic()
-        health, captured = None, None
-        try:
-            health, captured = read_motor_health_snapshot(self.path, self.owner, now=wall)
-        except (OSError, ValueError, TypeError, KeyError, OverflowError, RecursionError):
-            pass  # Position delivery remains independent; absence is never healthy telemetry.
-        terminal = health is not None and health.status in ('fault', 'ended')
-        key = (health.session_id, health.status, captured) if terminal else None
-        sequence = self.last.sequence + 1 if self.last else 1
-        if terminal and key != self.terminal_key and (self.last is None or captured > self.last.captured_at):
-            candidate = Sample(captured, mono, sequence, None, health)
-            try:
-                sample_age(candidate, wall, mono)
-            except ValueError:
-                candidate = None
-            if candidate is not None:
-                self.last, self.terminal_key = candidate, key
-        elif (position is not None and position.sequence != self.position_sequence
-              and (self.last is None or position.captured_at > self.last.captured_at)):
-            self.last = Sample(position.captured_at, position.received_at, sequence, position.value, health)
-            self.position_sequence = position.sequence
-        if self.last is None:
-            return None
-        try:
-            sample_age(self.last, wall, mono)
-        except ValueError:
-            return None
-        return self.last
 
 
 _DEFAULT_BUILD_OPENER = build_opener
@@ -180,19 +76,22 @@ _ARM_CONN_LOCK = threading.Lock()
 
 
 def post_arm(fleet_url, source_id, token, observation, *, context):
-    base = secure_url(fleet_url, 'https')
-    path = '/api/fleet/workcell-observations/arms/' + quote(source_id, safe='')
+    base = secure_url(fleet_url, "https")
+    path = "/api/fleet/workcell-observations/arms/" + quote(source_id, safe="")
     url = base + path
     verified = _verified(context)
     payload = observation.model_dump_json().encode()
-    headers = {'Content-Type': 'application/json', 'X-Workcell-Observation-Token': token,
-               'Connection': 'keep-alive'}
+    headers = {
+        "Content-Type": "application/json",
+        "X-Workcell-Observation-Token": token,
+        "Connection": "keep-alive",
+    }
     if build_opener is not _DEFAULT_BUILD_OPENER:
-        request = Request(url, data=payload, method='POST', headers=headers)
+        request = Request(url, data=payload, method="POST", headers=headers)
         opener = build_opener(HTTPSHandler(context=verified), _NoRedirect())
         with opener.open(request, timeout=2) as response:
             if response.status != 202:
-                raise OSError('observation was not accepted')
+                raise OSError("observation was not accepted")
         return
     import http.client
     import socket as _socket
@@ -208,7 +107,7 @@ def post_arm(fleet_url, source_id, token, observation, *, context):
                 conn.connect()
                 if conn.sock is not None:
                     conn.sock.setsockopt(_socket.IPPROTO_TCP, _socket.TCP_NODELAY, 1)
-            conn.request('POST', path, body=payload, headers=headers)
+            conn.request("POST", path, body=payload, headers=headers)
             response = conn.getresponse()
             response.read()
             status, reason, resp_headers = response.status, response.reason, response.headers
@@ -217,7 +116,7 @@ def post_arm(fleet_url, source_id, token, observation, *, context):
             if 400 <= status < 600:
                 raise HTTPError(url, status, reason, resp_headers, None)
             if status != 202:
-                raise OSError('observation was not accepted')
+                raise OSError("observation was not accepted")
             return
         except HTTPError:
             raise
@@ -233,19 +132,22 @@ def post_arm(fleet_url, source_id, token, observation, *, context):
 
 class ArmSender:
     def __init__(self, fleet_url, source_id, token, *, context):
-        self.url, self.source_id, self.token = secure_url(fleet_url, 'https'), source_id, token
+        self.url, self.source_id, self.token = secure_url(fleet_url, "https"), source_id, token
         self.context = _verified(context)
         self.epoch, self.sequence, self.conflict_stamp = uuid4().hex, 0, None
 
     def send(self, sample):
         if self.conflict_stamp is not None:
             if sample.captured_at <= self.conflict_stamp:
-                raise ValueError('conflict recovery requires a newer capture')
-            # A lost 202 may leave the server ahead; a fresh epoch still requires capture advance.
+                raise ValueError("conflict recovery requires a newer capture")
             self.epoch, self.sequence, self.conflict_stamp = uuid4().hex, 0, None
-        observation = ArmObservation(epoch=self.epoch, sequence=self.sequence + 1,
-                                     captured_at=sample.captured_at, positions=sample.value,
-                                     motor_health=sample.motor_health)
+        observation = ArmObservation(
+            epoch=self.epoch,
+            sequence=self.sequence + 1,
+            captured_at=sample.captured_at,
+            positions=sample.value,
+            motor_health=sample.motor_health,
+        )
         try:
             post_arm(self.url, self.source_id, self.token, observation, context=self.context)
         except HTTPError as error:
@@ -256,25 +158,32 @@ class ArmSender:
 
 
 def camera_hello(source_id, width, height):
-    message = {'type': 'hello', 'proto': protocol.PROTO, 'source': source_id,
-               'sensor': {'width': width, 'height': height, 'rotation_deg': 0}}
+    message = {
+        "type": "hello",
+        "proto": protocol.PROTO,
+        "source": source_id,
+        "sensor": {"width": width, "height": height, "rotation_deg": 0},
+    }
     protocol.validate_hello(message)
     return message
 
 
 def camera_packet(sample, *, wall=None, monotonic=None):
-    age = sample_age(sample, time.time() if wall is None else wall,
-                     time.monotonic() if monotonic is None else monotonic)
+    age = sample_age(
+        sample,
+        time.time() if wall is None else wall,
+        time.monotonic() if monotonic is None else monotonic,
+    )
     jpeg, width, height = sample.value
-    if not isinstance(jpeg, bytes) or not jpeg or len(jpeg) > protocol.DEFAULT_CONFIG['max_bytes']:
-        raise ValueError('invalid or oversized camera JPEG')
+    if not isinstance(jpeg, bytes) or not jpeg or len(jpeg) > protocol.DEFAULT_CONFIG["max_bytes"]:
+        raise ValueError("invalid or oversized camera JPEG")
     return protocol.pack_header(protocol.FrameHeader(sample.sequence, math.ceil(age * 1000), width, height, 0)) + jpeg
 
 
 class CameraSender:
     def __init__(self, vision_url, source_id, token, *, context):
-        self.url = secure_url(vision_url, 'wss')
-        if urlsplit(self.url).path in ('', '/'):
+        self.url = secure_url(vision_url, "wss")
+        if urlsplit(self.url).path in ("", "/"):
             self.url += protocol.WS_PATH
         self.source_id, self.token, self.context = source_id, token, _verified(context)
         self.connection = None
@@ -289,20 +198,27 @@ class CameraSender:
 
     def send(self, sample):
         from websockets.sync.client import connect
+
         try:
             if self.connection is None:
-                # Packets are raw JPEG that deflate cannot shrink; permessage-deflate burned ~70% of this process's CPU.
-                self.connection = connect(self.url, ssl=self.context, compression=None,
-                    additional_headers={'Authorization': f'Bearer {self.token}'},
-                    open_timeout=2, close_timeout=1, max_queue=1, max_size=65536)
+                self.connection = connect(
+                    self.url,
+                    ssl=self.context,
+                    compression=None,
+                    additional_headers={"Authorization": f"Bearer {self.token}"},
+                    open_timeout=2,
+                    close_timeout=1,
+                    max_queue=1,
+                    max_size=65536,
+                )
                 self.connection.socket.settimeout(2)
                 try:
                     import socket as _socket
+
                     self.connection.socket.setsockopt(_socket.IPPROTO_TCP, _socket.TCP_NODELAY, 1)
                 except (AttributeError, OSError):
                     pass
                 self.connection.send(json.dumps(camera_hello(self.source_id, sample.value[1], sample.value[2])))
-            # Drain config/status/demand messages so their receive queue cannot stall the socket.
             for _ in range(8):
                 try:
                     self.connection.recv(timeout=0)
@@ -329,92 +245,102 @@ class SourceWorker:
                 self.send(sample)
                 last, backoff = sample.sequence, 0.1
             except Exception as error:
-                logging.getLogger(__name__).warning('observation delivery failed source=%s error=%s',
-                    threading.current_thread().name, type(error).__name__)
+                logging.getLogger(__name__).warning(
+                    "observation delivery failed source=%s error=%s",
+                    threading.current_thread().name,
+                    type(error).__name__,
+                )
                 if stop.wait(backoff):
                     return
                 backoff = min(5, backoff * 2)
 
 
-def source_stamp(message):
-    sec, nanosec = message.header.stamp.sec, message.header.stamp.nanosec
-    if type(sec) is not int or type(nanosec) is not int or sec < 0 or not 0 <= nanosec < 1_000_000_000:
-        raise ValueError('invalid ROS source stamp')
-    return sec + nanosec / 1e9
-
-
-def joint_values(message, joint_names):
-    if (len(message.name) != len(message.position) or len(set(message.name)) != len(message.name)
-            or set(message.name) != set(joint_names)):
-        raise ValueError('joint observation must exactly match its registered arm')
-    return ArmObservation(epoch='0' * 32, sequence=1, captured_at=source_stamp(message),
-                          positions=dict(zip(message.name, message.position))).positions
-
-
-def encode_image(message, cv, np):
-    if (message.encoding not in ('bgr8', 'rgb8') or message.width != 640 or message.height != 480
-            or not 1920 <= message.step <= 4096 or len(message.data) != message.step * message.height):
-        raise ValueError('unsupported camera image layout')
-    pixels = np.frombuffer(message.data, np.uint8).reshape(message.height, message.step)
-    pixels = pixels[:, :message.width * 3].reshape(message.height, message.width, 3)
-    if message.encoding == 'rgb8':
-        pixels = cv.cvtColor(pixels, cv.COLOR_RGB2BGR)
-    ok, encoded = cv.imencode('.jpg', pixels, [cv.IMWRITE_JPEG_QUALITY, 80])
-    if not ok:
-        raise ValueError('camera JPEG encoding failed')
-    return encoded.tobytes(), message.width, message.height
-
-
 def main(argv=None):
     import os
+
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--manifest', type=Path, required=True)
-    parser.add_argument('--workcell', required=True)
-    parser.add_argument('--fleet-url', required=True)
-    parser.add_argument('--vision-url', required=True)
-    parser.add_argument('--domain-id', type=int, help='unused legacy registration value; no DDS is started')
-    parser.add_argument('--ca-file', type=Path)
-    parser.add_argument('--arm-health-file', action='append', metavar='SOURCE_ID=/absolute/file',
-                        default=os.environ.get('ROSY_OBSERVATION_ARM_HEALTH', '').split(),
-                        help='private trusted health file for a registered arm; owner derives from its arm_id '
-                             '(default: the space-separated ROSY_OBSERVATION_ARM_HEALTH, one per arm of this cell; '
-                             'a flag adds to that list, so a source bound twice is refused)')
+    parser.add_argument("--manifest", type=Path, required=True)
+    parser.add_argument("--workcell", required=True)
+    parser.add_argument("--fleet-url", required=True)
+    parser.add_argument("--vision-url", required=True)
+    parser.add_argument("--domain-id", type=int, help="unused legacy registration value; no DDS is started")
+    parser.add_argument("--ca-file", type=Path)
+    parser.add_argument(
+        "--arm-health-file",
+        action="append",
+        metavar="SOURCE_ID=/absolute/file",
+        default=os.environ.get("ROSY_OBSERVATION_ARM_HEALTH", "").split(),
+        help="private trusted health file for a registered arm; owner derives from its arm_id",
+    )
     args = parser.parse_args(argv)
     try:
-        manifest = WorkcellObservationManifest.model_validate(yaml.safe_load(args.manifest.read_text(encoding='utf-8')))
+        manifest = WorkcellObservationManifest.model_validate(
+            yaml.safe_load(args.manifest.read_text(encoding="utf-8"))
+        )
         cell, tokens = select_sources(manifest, args.workcell, os.environ)
         health_files = {}
         for binding in args.arm_health_file:
-            source, separator, file = binding.partition('=')
+            source, separator, file = binding.partition("=")
             path = Path(file)
-            if (not separator or source not in {arm.source_id for arm in cell.arms} or source in health_files
-                    or not path.is_absolute() or path.resolve() != path or path.is_symlink()):
-                raise ValueError('health file must be bound once to a registered source and canonical path')
+            if (
+                not separator
+                or source not in {arm.source_id for arm in cell.arms}
+                or source in health_files
+                or not path.is_absolute()
+                or path.resolve() != path
+                or path.is_symlink()
+            ):
+                raise ValueError("health file must be bound once to a registered source and canonical path")
             health_files[source] = path
-        secure_url(args.fleet_url, 'https'); secure_url(args.vision_url, 'wss')
+        secure_url(args.fleet_url, "https")
+        secure_url(args.vision_url, "wss")
         context = ssl.create_default_context(cafile=args.ca_file)
     except (OSError, ValueError, yaml.YAMLError) as error:
-        parser.error(f'observation configuration invalid: {type(error).__name__}')
+        parser.error(f"observation configuration invalid: {type(error).__name__}")
     stop, workers, senders = threading.Event(), [], []
     previous = signal.signal(signal.SIGTERM, interrupt_on_termination)
 
     def deliver(source, buffer, sender, *, health_file=None):
         delivery = ArmHealthSource(buffer, health_file, source.arm_id) if health_file is not None else buffer
-        worker = threading.Thread(target=SourceWorker(delivery, sender.send).run, args=(stop,),
-                                  name=source.source_id, daemon=True)
-        worker.start(); workers.append(worker); senders.append(sender)
+        worker = threading.Thread(
+            target=SourceWorker(delivery, sender.send).run, args=(stop,), name=source.source_id, daemon=True
+        )
+        worker.start()
+        workers.append(worker)
+        senders.append(sender)
 
     try:
         for arm in cell.arms:
-            deliver(arm, NativeSource(arm.joint_topic, joint_names=arm.joint_names),
-                      ArmSender(args.fleet_url, arm.source_id, tokens[arm.source_id], context=context),
-                      health_file=health_files.get(arm.source_id))
+            deliver(
+                arm,
+                NativeSource(arm.joint_topic, joint_names=arm.joint_names),
+                ArmSender(args.fleet_url, arm.source_id, tokens[arm.source_id], context=context),
+                health_file=health_files.get(arm.source_id),
+            )
         for camera in cell.cameras:
-            deliver(camera, NativeSource(camera.image_topic),
-                      CameraSender(args.vision_url, camera.source_id, tokens[camera.source_id], context=context))
-        workers.append(threading.Thread(target=run_usb_reports, name='usb-cameras', daemon=True, args=(
-            stop, lambda report: post_usb_devices(args.fleet_url, cell.workcell_id, tokens[cell.arms[0].source_id],
-                                                  report, context=context), cell.workcell_id)))
+            deliver(
+                camera,
+                NativeSource(camera.image_topic),
+                CameraSender(args.vision_url, camera.source_id, tokens[camera.source_id], context=context),
+            )
+        workers.append(
+            threading.Thread(
+                target=run_usb_reports,
+                name="usb-cameras",
+                daemon=True,
+                args=(
+                    stop,
+                    lambda report: post_usb_devices(
+                        args.fleet_url,
+                        cell.workcell_id,
+                        tokens[cell.arms[0].source_id],
+                        report,
+                        context=context,
+                    ),
+                    cell.workcell_id,
+                ),
+            )
+        )
         workers[-1].start()
         while not stop.wait(1):
             pass
@@ -430,5 +356,5 @@ def main(argv=None):
             worker.join(timeout=3)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

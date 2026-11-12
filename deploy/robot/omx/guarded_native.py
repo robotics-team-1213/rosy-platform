@@ -2,11 +2,11 @@
 """Native LeRobot Real-Time Joint Motion, Alignment, Following-Error & Effort Guard (`guarded_native.py`).
 
 Single Responsibility:
-  - `NativeJointMotion`: Seeds follower pose before enabling torque, enforces 1 deg/s alignment and
-    10 deg/s, 10 deg/s^2 tracking slew bounds, 5-degree following-error cutoff, hardware-error checks,
-    and single-use overload-hold (`HOLD_S`, `HOLD_TEMP_RISE_C`).
-  - Device bring-up helpers (`guarded_device.py`) and LeRobot factory/CLI wiring (`guarded_native_cli.py`)
-    are re-exported here unchanged.
+  - `NativeJointMotion`: Alignment & tracking slew bounds (1 deg/s alignment, 10 deg/s tracking, 10 deg/s^2 accel),
+    5-degree following-error cutoff, and prepare/commit transaction pipeline.
+  - Hardware-error, body PWM effort sampling, overload-hold watch, and seed verification live in
+    `guarded_native_effort.py`.
+  - Device bring-up (`guarded_device.py`) and LeRobot CLI (`guarded_native_cli.py`) are re-exported unchanged.
 """
 from __future__ import annotations
 
@@ -41,6 +41,13 @@ from guarded_device import (  # noqa: E402,F401  (re-exported: existing importer
     torque_off,
 )
 from guarded_native_cli import main, run_native  # noqa: E402,F401  (re-exported)
+from guarded_native_effort import (  # noqa: E402
+    check_effort,
+    check_hardware_errors,
+    read_body_pwm,
+    seed_follower_pose,
+    watch_hold,
+)
 
 
 class NativeJointMotion:
@@ -214,90 +221,16 @@ class NativeJointMotion:
         return {"started": started, "command": command, "time": now}
 
     def _check_hardware_errors(self):
-        if "read" not in vars(self.follower) and hasattr(self.follower, "model_ctrl_table"):
-            errors = self.follower.sync_read("Hardware_Error_Status", list(NAMES), normalize=False, num_retry=READ_RETRY)
-            for name in NAMES:
-                if errors[name]:
-                    raise ValueError(f"{name}: hardware error")
-            return
-        for name in NAMES:
-            if self.follower.read("Hardware_Error_Status", name):
-                raise ValueError(f"{name}: hardware error")
+        check_hardware_errors(self)
 
     def _read_body_pwm(self):
-        if "read" not in vars(self.follower) and hasattr(self.follower, "model_ctrl_table"):
-            return self.follower.sync_read("Present_PWM", list(BODY), normalize=False, num_retry=READ_RETRY)
-        return {name: self.follower.read("Present_PWM", name) for name in BODY}
+        return read_body_pwm(self)
 
     def _check_effort(self, current, started):
-        before = self.clock()
-        if self.last_effort_time is not None and before - self.last_effort_time < 0.2 - 1e-9:
-            return
-        pwm = self._read_body_pwm()
-        finite_values(pwm, BODY)
-        if self.monitor is not None:
-            self.monitor.sample(self, current, pwm, self.clock())
-        now = self.clock()
-        if (
-            not 0 <= now - started <= MAX_GAP_S
-            or not 0 <= now - self.last_time <= MAX_GAP_S
-            or (self.last_effort_time is not None and not 0 <= now - self.last_effort_time <= MAX_GAP_S)
-        ):
-            raise ValueError("stale effort sample (>0.5 seconds)")
-        for name in BODY:
-            saturated = abs(pwm[name]) >= 0.9 * self.pwm_limits[name]
-            if name in self.held:
-                self._watch_hold(name, saturated, pwm[name], now)
-                continue
-            error = abs(current[name] - int(self.command[name])) / TICKS_PER_DEGREE
-            loaded = error > 2 and saturated
-            since = self.effort_since[name] if loaded else None
-            if loaded and since is None:
-                since = now
-            self.effort_since[name] = since
-            if since is not None and now - since >= 1 - 1e-9:
-                detail = (
-                    f"{name}: overload risk; PWM={pwm[name]} limit={self.pwm_limits[name]} "
-                    f"error_deg={error:.2f} duration={now - since:.2f}s"
-                )
-                if name in self.held_once:
-                    raise ValueError(f"{detail}; second overload on this joint")
-                self.command[name] = current[name]
-                if name in self.velocity:
-                    self.velocity[name] = 0.0
-                self.held[name] = {
-                    "since": now,
-                    "saturated_since": now,
-                    "temp": self.follower.read("Present_Temperature", name),
-                }
-                self.held_once.add(name)
-                self.effort_since[name] = None
-                print(
-                    f"{self.label}: overload-hold {detail}; goal set to present, torque on, "
-                    f"hold watch {HOLD_S:.0f} s",
-                    flush=True,
-                )
-        self.effort_pwm, self.last_effort_time = pwm, now
+        check_effort(self, current, started)
 
     def _watch_hold(self, name, saturated, pwm, now):
-        """A held joint: at the cap for HOLD_S in a row, or warming, ends the session. It never frees itself."""
-        hold = self.held[name]
-        rise = self.follower.read("Present_Temperature", name) - hold["temp"]
-        if rise >= HOLD_TEMP_RISE_C:
-            raise ValueError(
-                f"{name}: overload risk; held joint warmed {rise} C at PWM={pwm} limit={self.pwm_limits[name]} "
-                f"duration={now - hold['since']:.2f}s"
-            )
-        if not saturated:
-            hold["saturated_since"] = None
-            return
-        if hold["saturated_since"] is None:
-            hold["saturated_since"] = now
-        if now - hold["saturated_since"] >= HOLD_S - 1e-9:
-            raise ValueError(
-                f"{name}: overload risk; hold timed out at PWM={pwm} limit={self.pwm_limits[name]} "
-                f"duration={now - hold['since']:.2f}s"
-            )
+        watch_hold(self, name, saturated, pwm, now)
 
     def frozen(self):
         """Joints whose command stays put this tick: all of them while anything is held, unless the runner sheds load."""
@@ -404,48 +337,7 @@ class NativeJointMotion:
         return normalized(self.follower, goals)
 
     def _seed(self, current, target, started):
-        """Seed at the present pose; one tick of readback jitter around a fixed origin is the same pose."""
-        use_sync = "read" not in vars(self.follower) and hasattr(self.follower, "model_ctrl_table")
-        origin = dict(current)
-        for _ in range(3):
-            self.follower.sync_write("Goal_Position", current, normalize=False)
-            goals = self.follower.sync_read("Goal_Position", motors=list(self.active), normalize=False)
-            fresh = self.follower.sync_read("Present_Position", motors=list(self.active), normalize=False)
-            detail = f"initial goal readback mismatch: expected={current}, readback={goals}, fresh={fresh}"
-            finite_values(goals, self.active)
-            finite_values(fresh, self.active)
-            hw_errs = (
-                self.follower.sync_read("Hardware_Error_Status", list(self.active), normalize=False, num_retry=READ_RETRY)
-                if use_sync
-                else None
-            )
-            torques = (
-                self.follower.sync_read("Torque_Enable", list(self.active), normalize=False, num_retry=READ_RETRY)
-                if use_sync
-                else None
-            )
-            for name in self.active:
-                calibration = self.follower.calibration[name]
-                if not calibration.range_min <= fresh[name] <= calibration.range_max:
-                    raise ValueError(f"{name}: seed outside calibrated range; {detail}")
-                if abs(target[name] - fresh[name]) >= 100 * TICKS_PER_DEGREE - 1e-9:
-                    raise ValueError(f"{name}: seed difference >=100 degrees; {detail}")
-                err = hw_errs[name] if hw_errs is not None else self.follower.read("Hardware_Error_Status", name)
-                tq = torques[name] if torques is not None else self.follower.read("Torque_Enable", name)
-                if err or tq:
-                    raise ValueError(f"{name}: seed hardware error or torque ON; {detail}")
-            if not 0 <= self.clock() - started <= MAX_GAP_S:
-                raise ValueError(f"stale seed transaction (>0.5 seconds); {detail}")
-            if any(
-                abs(goals[n] - origin[n]) > SEED_TOLERANCE_TICKS or abs(fresh[n] - origin[n]) > SEED_TOLERANCE_TICKS
-                for n in self.active
-            ):
-                raise ValueError(detail)
-            if all(abs(goals[n] - fresh[n]) <= SEED_TOLERANCE_TICKS for n in self.active):
-                self.last_present = normalized(self.follower, fresh)
-                return goals
-            current = fresh
-        raise ValueError(detail)
+        return seed_follower_pose(self, current, target, started)
 
 
 if __name__ == "__main__":
