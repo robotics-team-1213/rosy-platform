@@ -15,7 +15,7 @@ def _tool():
     return module
 
 
-def _server(accept_login, callback_ok=True):
+def _server(accept_login, callback_ok=True, session_body=None):
     class Handler(http.server.BaseHTTPRequestHandler):
         def log_message(self, *args):
             pass
@@ -42,7 +42,8 @@ def _server(accept_login, callback_ok=True):
                 self._reply(200)
             elif self.path == "/app/session":  # like Calibration: 200 either way, the body says who is in
                 signed_in = "app=1" in self.headers.get("Cookie", "")
-                self._reply(200, body=json.dumps({"authenticated": signed_in}).encode())
+                body = json.dumps({"authenticated": signed_in}).encode() if session_body is None else session_body
+                self._reply(200, body=body)
             else:
                 self._reply(404)
 
@@ -97,3 +98,51 @@ def test_site_timer_runs_the_signed_release_script_every_30_minutes_and_ships_in
     assert "Unit=rosy-site-account-login-check.service" in timer
     for name in ("build_candidate.py", "verify_candidate.py"):
         assert "rosy-site-account-login-check.timer" in (root / "deploy/site" / name).read_text()
+
+
+def _verdict(tmp_path, capsys, body):
+    server = _server(True, session_body=body)
+    try:
+        path = tmp_path / "config.json"
+        path.write_text(json.dumps(_config(server)), encoding="utf-8")
+        code = _tool().main(["x", str(path)])
+    finally:
+        server.shutdown()
+    return code, capsys.readouterr().out
+
+
+def test_session_verdict_needs_positive_evidence_of_a_signed_in_user(tmp_path, capsys):
+    passing = [b'{"authenticated": true}', b'{"user_id": "u1"}', b'{"account_id": "a1"}', b'{"principal_id": "p1"}']
+    failing = [b"{}", b"[]", b'"ok"', b"<html>error</html>", b"", b'{"authenticated": false, "user_id": "u1"}',
+               b'{"user_id": ""}', b'{"user_id": 7}', b'{"authenticated": "yes"}']
+    for body in passing:
+        assert _verdict(tmp_path, capsys, body)[0] == 0, body
+    for body in failing:
+        assert _verdict(tmp_path, capsys, body)[0] == 1, body
+
+
+def test_a_session_body_that_hits_the_read_limit_fails_even_if_it_starts_like_success(tmp_path, capsys):
+    body = json.dumps({"authenticated": True, "padding": "x" * 70000}).encode()
+    code, out = _verdict(tmp_path, capsys, body)
+    assert code == 1 and "64 KiB" in out
+    small = json.dumps({"authenticated": True, "padding": "x" * 20000}).encode()
+    assert _verdict(tmp_path, capsys, small)[0] == 0
+
+
+def test_a_run_that_checked_no_app_is_not_a_success(tmp_path, capsys):
+    server = _server(True)
+    try:
+        config = _config(server)
+        path = tmp_path / "config.json"
+        path.write_text(json.dumps({**config, "apps": []}), encoding="utf-8")
+        assert _tool().main(["x", str(path)]) != 0
+        path.write_text(json.dumps(config), encoding="utf-8")
+        assert _tool().main(["x", str(path), "no-such-app"]) != 0
+        assert _tool().main(["x", str(path), "fixture"]) == 0
+    finally:
+        server.shutdown()
+    assert "no app was checked" in capsys.readouterr().err
+
+
+def test_every_request_has_a_10_second_timeout():
+    assert "timeout=10," in SCRIPT.read_text()
