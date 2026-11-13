@@ -2,8 +2,9 @@
 
 S asks before loading (anything but `empty` holds), A/B before picking (only `occupied` goes); not wired to either yet
 (three-arm panel, Rosy/docs/workspace-records/2026-11-13/three-arm-scheduling-panel.md). Whatever the frame cannot prove is
-`unknown`: a receipt that is missing or old, a camera whose calibration is not confirmed, an arm state that is missing or
-over the belt, a region not wholly in the frame, a container across the region edge, or a belt the detector cannot see.
+`unknown`: a receipt that is missing or old, a camera not confirmed against its reference frame, an arm state that is
+missing or over the belt, a region not wholly in the frame, a container across the region edge, a region not on the seen belt,
+or orange in the region the detector did not explain (its size filter drops some contours).
 Detection is the existing orange-mask detector; this adds only the gate around it.
 """
 from __future__ import annotations
@@ -13,10 +14,11 @@ import time
 
 import numpy as np
 
-from cell_camera_invariant_top import detect_top_containers_invariant, is_arm_clear_of_belt
+from cell_camera_invariant_top import detect_top_containers_invariant, is_arm_clear_of_belt, orange_dual_band_mask
 
 FRESH_S = 2.0  # the camera server's own fresh window, as FifoCell.frame_receipt
 INSIDE = 0.85  # a container this much inside the region is in it; anything between 0 and this is edge ambiguity
+STRAY_PX = 30  # orange pixels in an empty-looking region beyond this are something the detector dropped, not noise
 
 
 def _inside_fraction(blob: dict, roi) -> float:
@@ -32,13 +34,16 @@ def _inside_fraction(blob: dict, roi) -> float:
     return min(1.0, cv2.contourArea(np.asarray(points, np.float32).reshape(-1, 2)) / max(1.0, rect[1][0] * rect[1][1]))
 
 
-def read_belt_occupancy(receipt: dict | None, roi_px, *, camera_moved: bool | None, joint_state_norm, now: float | None = None) -> dict:
+def read_belt_occupancy(receipt: dict | None, roi_px, *, calibration: dict | None, joint_state_norm, now: float | None = None) -> dict:
     """`receipt` is FifoCell.frame_receipt()'s dict; `roi_px` the region's calibrated pixel box (x0, y0, x1, y1), valid only while
-    `camera_moved` is exactly False. `joint_state_norm` is arm_s's measured joints: the occlusion table is arm_s's (standby/home),
+    `calibration` (cell_calibrate.check() on this frame) compared against a reference and found the camera unmoved: with no
+    reference, check() also says camera_moved False. `joint_state_norm` is arm_s's measured joints: the occlusion table is arm_s's (standby/home),
     so A/B have no proof of a clear view yet and must not call this until theirs is measured."""
     out = {"occupancy": "unknown", "reason": "", "region_px": [float(v) for v in roi_px]}
-    if camera_moved is not False:
-        return {**out, "reason": "calibration_moved" if camera_moved else "calibration_unverified"}
+    if (calibration or {}).get("camera_moved") is True:
+        return {**out, "reason": "calibration_moved"}
+    if (calibration or {}).get("camera_moved") is not False or not calibration.get("camera_shift") or calibration.get("no_reference"):
+        return {**out, "reason": "calibration_unverified"}
     if not receipt or receipt.get("image") is None:
         return {**out, "reason": "no_frame"}
     stamp = receipt.get("source_stamp")
@@ -71,6 +76,15 @@ def read_belt_occupancy(receipt: dict | None, roi_px, *, camera_moved: bool | No
         return {**out, "occupancy": "occupied", "reason": "container_in_region"}
     if edge:
         return {**out, "reason": "container_at_region_edge"}
-    if not (seen.get("belt_frame") or {}).get("found"):
+    belt = seen.get("belt_frame") or {}
+    if not belt.get("found"):
         return {**out, "reason": "belt_not_seen"}  # nothing seen is not proof of empty when the belt itself is not seen
+    import cv2
+
+    outline = np.asarray(belt["box_points_px"], np.float32)
+    if any(cv2.pointPolygonTest(outline, corner, False) < 0 for corner in ((x0, y0), (x1, y0), (x1, y1), (x0, y1))):
+        return {**out, "reason": "region_off_belt"}
+    stray = int(np.count_nonzero(orange_dual_band_mask(image, reject_yellow_table=True)[int(y0):int(y1), int(x0):int(x1)]))
+    if stray > STRAY_PX:
+        return {**out, "reason": "unexplained_orange", "orange_px": stray}
     return {**out, "occupancy": "empty", "reason": "region_clear"}
