@@ -396,7 +396,7 @@ proxy only after the replacement validates. Do not enable the user-level
 
 ### R 변경 규칙 (D-1021)
 
-R의 최종 책임자는 현장 배포 소유자(지금은 사용자)이고 에이전트 세션은 실행만 한다. R을 직접 바꾸면 만료가 있는 보류나 날짜가 있는 변경 기록(소유자·세션·대상·만료·후보 SHA·수용 기준)을 남기고 소유자가 닫는다. 어긋남은 `tools/remote/update_status.py`가 `image-drift`, `account-key-drift`, `retired-name`, `host-guard`, 만료된 보류로 보인다. 구조는 [D-1021](../../docs/adr/D-1021-one-owner-per-value-identity-in-account-placement-in-site-map.md)이다.
+R의 최종 책임자는 현장 배포 소유자(지금은 사용자)이고 에이전트 세션은 실행만 한다. R을 직접 바꾸면 만료가 있는 보류나 날짜가 있는 변경 기록(소유자·세션·대상·만료·후보 SHA·수용 기준)을 남기고 소유자가 닫는다. 어긋남은 `tools/remote/update_status.py`가 `account-key-drift`, `retired-name`, `host-guard`, 만료된 보류로 보이고, 서명 후보와 다른 실행 이미지는 자동 갱신 검증기의 거부(`site-autoupdate: last run refused`)로 보인다. 구조는 [D-1021](../../docs/adr/D-1021-one-owner-per-value-identity-in-account-placement-in-site-map.md)이다.
 
 ### Account login check every 30 minutes (2026-11-13)
 

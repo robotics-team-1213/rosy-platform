@@ -18,7 +18,7 @@ PROBE = r'''
 # `docker inspect` shows (2026-11-14: a naive compare failed every service). The site updater's own verifier does
 # it and its refusal reason reaches update_status through site-autoupdate.json (`last run refused: ...`).
 # receiver pins: issuer and the key names (kid) only, never key material
-for f in $(find ~/.config/rosy -maxdepth 5 -type f -name receiver.json 2>/dev/null) /etc/rosy/*/receiver.json; do
+for f in $(find ~/.config/rosy -maxdepth 5 -type f -name receiver.json 2>/dev/null) /etc/rosy/*/receiver.json /etc/rosy/fleet-account/client.json; do
   [ -L "$f" ] && continue
   case "$f" in *.bak*|*backup*|*before-*|*.orig*|*rosy-backup*|*rosy-source-repair*) continue;; esac
   [ -e "$f" ] || sudo -n test -e "$f" </dev/null 2>/dev/null || continue
@@ -37,7 +37,7 @@ fi
 true
 '''
 GUARD_STALE_S = 30 * 60  # the guard runs every 10 minutes; three missed runs
-_ISSUER = re.compile(r'https?://[A-Za-z0-9._\[\]:-]+')
+_ISSUER = re.compile(r'https://[A-Za-z0-9._\[\]:-]+')  # the Account protocol requires an HTTPS issuer
 
 
 def retired_hostnames(path: Path | None = None) -> tuple[list[str], str]:
@@ -117,14 +117,15 @@ def findings(host: dict, roles, now: float, issuer_kids) -> list:
     for path, pin in host.get('receivers', []):
         issuer = (pin.get('issuer') or '').rstrip('/') if isinstance(pin.get('issuer'), str) else ''
         if not _ISSUER.fullmatch(issuer):
-            out.append(('note', 'account-key-drift', f'{path} has no usable issuer; not checked'))
+            out.append(('FAIL', 'account-key-drift', f'{path} has no https issuer'))
             continue
         current = issuer_kids(issuer)
         if current is None:
             unreachable.add(issuer)
         elif not current.intersection(pin['kids']):
             out.append(('FAIL', 'account-key-drift', path))
-    out += [('note', 'account-key-drift', 'issuer keys could not be fetched from the site host; receivers not compared') for _ in unreachable][:1]
+    # A key check that could not run must not read as clean (2026-11-14 panel): a rotated key would pass silently.
+    out += [('FAIL', 'account-key-drift', 'issuer keys could not be fetched from the site host; receivers not compared') for _ in unreachable][:1]
     guard = host.get('guard')
     if 'site' in roles:
         if guard is None or guard['active'] == 'none':

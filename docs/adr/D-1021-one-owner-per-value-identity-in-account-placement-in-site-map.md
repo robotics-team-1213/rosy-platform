@@ -46,13 +46,13 @@
 | 시간원 | 현장 배포 소유자 | 시간원 0개면 시계가 어긋남 | `chronyc sources` | `update_status` chrony FAIL |
 | 은퇴한 이름 | 현장 배포 소유자 | 옛 이름이 설정에 남으면 서비스 중단 | 설정 파일 검색 | `retired-name` |
 | 유닛 | 호스트 소유자 | 선언과 설치 불일치 | `update_status` | DRIFT·MISSING·DOWN |
-| 실행 이미지 | 현장 배포 소유자 | 기록 없는 이미지가 R에서 돈다 | 컨테이너 이미지 ID 대조 | `image-drift` |
+| 실행 이미지 | 현장 배포 소유자 | 기록 없는 이미지가 R에서 돈다 | R 자동 갱신의 설치 검증기가 실행 이미지를 서명 후보와 대조(갱신 주기마다) | `site-autoupdate: last run refused` |
 | 보류 | 현장 배포 소유자 | 만료 없는 보류가 갱신을 막는다 | `until` 검사 | `site-autoupdate` FAIL |
 | R 감시자 | 현장 배포 소유자 | R의 guard가 멈추면 아무도 모른다 | 타이머·status.json 시각 | `host-guard` |
 
 ### 이 브랜치에서 구현한 것
 
-- `tools/remote/update_drift.py`와 `update_status.py`: 은퇴 이름을 공개 저장소가 아니라 비공개 지도(`retired_hostnames:`)에서 읽음, 기록 없는 이미지 `FAIL image-drift <서비스>`, 수신기 키 `FAIL account-key-drift <경로>`(이름만, 키 자료는 출력하지 않음), R guard 타이머·status.json 시각 `FAIL host-guard`.
+- `tools/remote/update_drift.py`와 `update_status.py`: 은퇴 이름을 공개 저장소가 아니라 비공개 지도(`retired_hostnames:`)에서 읽음, 수신기·Fleet `client.json` 키 `FAIL account-key-drift <경로>`(이름만, 키 자료는 출력하지 않음; https가 아닌 issuer와 키를 받아 오지 못한 경우도 FAIL), R guard 타이머·status.json 시각 `FAIL host-guard`.
 - 보류 만료, 거부 사유, 30분 Account 로그인 점검 유닛, chrony 시간원 점검, 10초 시계 여유와 `clock_skew` 로그는 별도 변경이다(교훈 기록).
 - 구현하지 않은 것: 모델 PC 쪽의 R guard 감시자(역방향 guard, 아래), APK 재빌드 표시, 변경 기록 양식 자동 검사.
 

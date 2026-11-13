@@ -480,7 +480,7 @@ def _receiver(path, issuer, kids):
     return f'receiver {path} ' + json.dumps({'issuer': issuer, 'kids': kids})
 
 
-def test_a_receiver_pinning_no_current_kid_is_account_key_drift_and_an_unreachable_issuer_a_note():
+def test_a_receiver_pinning_no_current_kid_unreachable_keys_or_a_plain_http_issuer_is_account_key_drift():
     issuer = 'https://account.example.test'
     lines = [_receiver('/home/r/.config/rosy/a/receiver.json', issuer, ['k1', 'old']),
              _receiver('/home/r/.config/rosy/b/receiver.json', issuer, ['old']),
@@ -489,9 +489,11 @@ def test_a_receiver_pinning_no_current_kid_is_account_key_drift_and_an_unreachab
     assert found == [('FAIL', 'account-key-drift', '/home/r/.config/rosy/b/receiver.json'),
                      ('FAIL', 'account-key-drift', '/home/r/.config/rosy/c/receiver.json')]
     unreachable = _drift(lines, kids=None)
-    assert [f[:2] for f in unreachable] == [('note', 'account-key-drift')]
+    assert [f[:2] for f in unreachable] == [('FAIL', 'account-key-drift')]  # a check that could not run is not clean
     assert _drift(['receiver-unreadable /etc/rosy/x/receiver.json'])[0][0] == 'note'
     assert _drift(['receiver /p not-json', _receiver('/q', 'bad issuer; rm', ['k'])])[0][0] == 'note'
+    assert _drift([_receiver('/q', 'http://account.example.test', ['k1'])], kids={'k1'}) == [
+        ('FAIL', 'account-key-drift', '/q has no https issuer')]
 
 
 def test_the_issuer_key_fetch_asks_the_site_host_for_kid_names_only(monkeypatch):
