@@ -35,6 +35,17 @@ Earlier, `cell_calibrate auto` (remap) over the same cell stopped: the remap gri
 
 This rebase is not a touch-verified map: the loo error stays what it was (floor 11.7 mm, belt 25.4 mm).
 
+## Later the same night: remap marks empty, and a site map off by 150 px
+
+- A clear-scene remap marked 2 of 15 points. The jaws had not moved between the closed and open frames: the session's
+  state refreshed the jaw value about once a second, and `grip_to` took 0.6 s of an unchanged reading as "stopped".
+  Fixed in `cell_pipeline_stages.grip_to` (1.5 s, with a test); the next remap marked 12 of 14.
+- The board site had its own map, fitted with two extra points; at (-0.15, -0.12) it was ~150 px off while the floor
+  map sat on the jaws in the remap frame. Check a site map by drawing its predicted pixel on a frame with the jaws hovering
+  at a known point before trusting a plan there.
+- A box measured at pan -161 deg is outside arm_s's joint1 limit (+-149 deg): no grip or push can reach it, and the remap
+  points around it fail IK. Check the target's pan angle before calibrating toward it.
+
 ## Next time
 
 - After a camera shift, rebase map **and** config pixels together, clamp to the frame, before any plan.
