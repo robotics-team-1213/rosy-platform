@@ -292,8 +292,8 @@ def dispatch_and_execute_fleet_r_cell_task(
     claimed = request_fn("POST", "/api/fleet/pipeline/cell-tasks/claim", {"cell_id": cell_id, "task_id": created["task_id"]})
     assert claimed["claimed"] is True and claimed["gate"]["amr_motion_inhibited"] is True
     omx_res = pipeline.run_contract_handoff_stage(claimed["handoff"], stage_id=created["task_id"], tier=tier)
-    refused = handoff_refusal(pipeline, claimed["handoff"], tier) is not None
-    hw_tel = live_act_fn(claimed["handoff"]) if callable(live_act_fn) and not refused else None
+    released = omx_res["receipt"]["phase"] == "RELEASED"  # never move on a refused or unconverged stage
+    hw_tel = live_act_fn(claimed["handoff"]) if callable(live_act_fn) and released else None
     done = request_fn("POST", f"/api/fleet/pipeline/cell-tasks/{created['task_id']}/complete", {
         "phase": omx_res["receipt"]["phase"], "goal_evidence_digest": omx_res["receipt"]["goal_evidence_digest"],
         "reason": omx_res["receipt"]["reason"], "receipt": omx_res["receipt"],

@@ -68,6 +68,12 @@ def test_locked_handoff_receipt_is_marked_model_only(tmp_path: Path, handoff: di
     assert body["receipt"]["execution"] == "model_only" and body["reason"] != "UNKNOWN_SITE"
 
 
+def test_unconverged_stage_never_calls_the_arm(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(cfp.FleetModelPipeline, "run_fleet_stage", lambda self, **kw: {"converged": False})
+    hw_calls, body = _run(tmp_path, {**LOCKED, "cell_id": "cell_s"})
+    assert hw_calls == [] and body["reason"] == "STAGE_NOT_CONVERGED"
+
+
 def test_dispatch_path_never_calls_the_arm_on_refusal(tmp_path: Path) -> None:
     hw_calls: list[dict] = []
 
