@@ -8,7 +8,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "deploy/robot/omx"))
 import cell_evidence as ev  # noqa: E402
 
-JPEG = b"ÿØframe"
+JPEG = b"\xff\xd8frame"
 
 
 def serve(frame=JPEG):
@@ -38,8 +38,7 @@ def serve(frame=JPEG):
 
 def test_a_lease_then_the_frame_is_saved(tmp_path):
     srv, calls = serve()
-    (tmp_path / "t").write_text("OPERATOR
-")
+    (tmp_path / "t").write_text("OPERATOR\n")
     conf = {"fleet_url": f"http://127.0.0.1:{srv.server_port}", "token_file": str(tmp_path / "t"), "source_id": "cam"}
     out = ev.fleet_frame(conf, tmp_path / "evidence", wait_s=0)
     srv.shutdown()
