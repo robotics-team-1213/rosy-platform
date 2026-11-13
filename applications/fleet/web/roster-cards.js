@@ -139,7 +139,7 @@ export function createRoiPoller({ scope, view, call, render = () => {} }) {
         const anc = (view.anchors || []).find((a) => a.target_id === targetId);
         if (anc) {
           const deg = typeof anc.head_yaw === "number" ? `${Math.round((anc.head_yaw * 180) / Math.PI)}°` : "—";
-          statusNode.textContent = `${anc.target_id.toUpperCase()} · ${anc.zoom || 4}x 실시간 추적 · BASE (${Number(anc.base_x).toFixed(2)}, ${Number(anc.base_y).toFixed(2)}) → HEAD (${Number(anc.head_x ?? anc.base_x).toFixed(2)}, ${Number(anc.head_y ?? anc.base_y).toFixed(2)}) ${deg}`;
+          statusNode.textContent = `${anc.target_id} · ${anc.zoom || 4}x 실시간 추적 · BASE (${Number(anc.base_x).toFixed(2)}, ${Number(anc.base_y).toFixed(2)}) → HEAD (${Number(anc.head_x ?? anc.base_x).toFixed(2)}, ${Number(anc.head_y ?? anc.base_y).toFixed(2)}) ${deg}`;
         }
       }
     } catch (_err) {
@@ -182,7 +182,7 @@ const DEFAULT_PLACES = [
 
 export function buildQuickControlPanel({
   robot, state, pose, power, guideRow, displayName, view, scope, el, render, isOperator,
-  roiObjectUrls, refreshRoiPreview, nodeWithText, tag,
+  roiObjectUrls, refreshRoiPreview, nodeWithText, tag, cellFrames = null,
 }) {
   const quickPanel = document.createElement("section");
   quickPanel.className = "quick-control-panel";
@@ -391,7 +391,7 @@ export function buildQuickControlPanel({
   const trackerBox = nodeWithText("div", "tracker-box"), trackerHead = nodeWithText("div", "tracker-head"), targetTabs = nodeWithText("div", "tracker-tabs");
   for (const anc of anchorList) {
     const isCurrent = anc.target_id === activeAnchor.target_id;
-    const tab = nodeWithText("ui-button", "", anc.kind === "omx_ai" ? `🦾 ${anc.target_id.toUpperCase()} (${anc.zoom || 4}x)` : `🤖 ${anc.target_id} (${anc.zoom || 3}x)`);
+    const tab = nodeWithText("ui-button", "", anc.kind === "omx_ai" ? `🦾 ${anc.target_id} (${anc.zoom || 4}x)` : `🤖 ${anc.target_id} (${anc.zoom || 3}x)`);
     tab.setAttribute("kind", "toggle"); tab.type = "button"; tab.setAttribute("aria-pressed", isCurrent ? "true" : "false");
     tab.addEventListener("click", scope.guard(() => {
       view.focusAnchorId = anc.target_id;
@@ -403,41 +403,32 @@ export function buildQuickControlPanel({
     }));
     targetTabs.appendChild(tab);
   }
-  const isPinningAnchor = view.anchorPinTarget === activeAnchor.target_id;
-  const pinAnchorBtn = nodeWithText("ui-button", "", isPinningAnchor ? "지도에서 위치를 찍고 헤드 방향으로 끄세요" : `🎯 ${activeAnchor.target_id.toUpperCase()} 기준 위치 보정`);
-  pinAnchorBtn.setAttribute("kind", "toggle"); pinAnchorBtn.type = "button"; pinAnchorBtn.setAttribute("aria-pressed", isPinningAnchor ? "true" : "false");
-  pinAnchorBtn.disabled = !isOperator();
-  if (pinAnchorBtn.disabled) pinAnchorBtn.setAttribute("reason", "운영자 권한이 필요합니다");
-  pinAnchorBtn.addEventListener("click", scope.guard(() => {
-    view.anchorPinTarget = isPinningAnchor ? null : activeAnchor.target_id;
-    if (view.anchorPinTarget) { view.pinning = null; el("map-stage").dataset.view = "map"; el("birdseye-toggle")?.setAttribute("aria-pressed", "false"); }
-    render();
-  }));
-  trackerHead.append(targetTabs, pinAnchorBtn);
+  // No Fleet anchor route exists, so there is no pin button (it could only fail).
+  trackerHead.append(targetTabs);
   trackerBox.appendChild(trackerHead);
 
+  // 셀 카메라 뷰는 Vision 소스만 가리킨다(D-136). cell S(arm_s·S3)에는 측면 카메라가 없고,
+  // Pinky 도킹은 천장 Cam ROI 확대로 위에서 본다.
   const camViewsForAnchor = activeAnchor.target_id === "arm_a"
     ? [
-        { id: "arm_a_wrist", label: "arm_a 손목", url: "/api/fleet/pipeline/cell-camera/arm_a_wrist" },
-        { id: "top", label: "S5 상단", url: "/api/fleet/pipeline/cell-camera/top" },
-        { id: "side", label: "셀 측면", url: "/api/fleet/pipeline/cell-camera/side" },
+        { id: "arm_a_wrist", label: "arm_a 손목", source: "arm_a_wrist" },
+        { id: "top", label: "S5 상단", source: "top" },
+        { id: "side", label: "셀 측면 (A/B)", source: "side" },
       ]
     : activeAnchor.target_id === "arm_b"
     ? [
-        { id: "arm_b_wrist", label: "arm_b 손목", url: "/api/fleet/pipeline/cell-camera/arm_b_wrist" },
-        { id: "top", label: "S5 상단", url: "/api/fleet/pipeline/cell-camera/top" },
-        { id: "side", label: "셀 측면", url: "/api/fleet/pipeline/cell-camera/side" },
+        { id: "arm_b_wrist", label: "arm_b 손목", source: "arm_b_wrist" },
+        { id: "top", label: "S5 상단", source: "top" },
+        { id: "side", label: "셀 측면 (A/B)", source: "side" },
       ]
     : activeAnchor.target_id === "arm_s"
     ? [
-        { id: "arm_s_wrist", label: "arm_s 손목", url: "/api/fleet/pipeline/cell-camera/arm_s_wrist" },
-        { id: "arm_s_top", label: "S3 상단", url: "/api/fleet/pipeline/cell-camera/arm_s_top" },
-        { id: "side", label: "셀 측면", url: "/api/fleet/pipeline/cell-camera/side" },
+        { id: "arm_s_wrist", label: "arm_s 손목", source: "arm_s_wrist" },
+        { id: "arm_s_top", label: "S3 상단", source: "arm_s_top" },
       ]
     : [
-        { id: "pinky", label: "S3 도킹 뷰", url: "/api/fleet/pipeline/cell-camera/pinky" },
-        { id: "side", label: "측면 도킹", url: "/api/fleet/pipeline/cell-camera/side" },
-        { id: "arm_s_top", label: "S3 상단", url: "/api/fleet/pipeline/cell-camera/arm_s_top" },
+        { id: "pinky_dock", label: "도킹 확대 (천장 Cam)", roiTarget: activeAnchor.target_id },
+        { id: "arm_s_top", label: "S3 상단", source: "arm_s_top" },
       ];
   view.trackerCamByTarget = view.trackerCamByTarget || {};
   const chosenCamId = view.trackerCamByTarget[activeAnchor.target_id] || camViewsForAnchor[0].id;
@@ -451,14 +442,14 @@ export function buildQuickControlPanel({
   const liveCellImg = document.createElement("img");
   liveCellImg.id = "anchor-cell-live-img";
   liveCellImg.className = "anchor-roi-img omx-inspector-cam";
-  liveCellImg.dataset.baseUrl = chosenCam.url;
-  liveCellImg.src = `${chosenCam.url}?t=${Date.now()}`;
   liveCellImg.alt = `${activeAnchor.target_id} ${chosenCam.label} 실시간 카메라`;
   liveCellImg.loading = "lazy";
+  // No Vision lease until the person picks a camera for this target (selecting a robot only inspects).
+  if (view.trackerCamByTarget[activeAnchor.target_id]) cellFrames?.bind(liveCellImg, chosenCam);
   const roiMeta = nodeWithText("div", "roi-meta"), statusText = nodeWithText("p", "hint roi-status-text");
   statusText.id = "anchor-roi-status";
   const deg = typeof activeAnchor.head_yaw === "number" ? `${Math.round((activeAnchor.head_yaw * 180) / Math.PI)}°` : "—";
-  statusText.textContent = `${activeAnchor.target_id.toUpperCase()} · ${activeAnchor.zoom || 4}x 실시간 추적 · BASE (${Number(activeAnchor.base_x).toFixed(2)}, ${Number(activeAnchor.base_y).toFixed(2)}) → HEAD (${Number(activeAnchor.head_x ?? activeAnchor.base_x).toFixed(2)}, ${Number(activeAnchor.head_y ?? activeAnchor.base_y).toFixed(2)}) ${deg}`;
+  statusText.textContent = `${activeAnchor.target_id} · ${activeAnchor.zoom || 4}x 실시간 추적 · BASE (${Number(activeAnchor.base_x).toFixed(2)}, ${Number(activeAnchor.base_y).toFixed(2)}) → HEAD (${Number(activeAnchor.head_x ?? activeAnchor.base_x).toFixed(2)}, ${Number(activeAnchor.head_y ?? activeAnchor.base_y).toFixed(2)}) ${deg}`;
   const descText = nodeWithText("small", "hint roi-sub-text", activeAnchor.kind === "omx_ai"
     ? `CELL-A 관절(${activeAnchor.joints_summary || "6축 정상"}) + 실시간 ${chosenCam.label} 카메라 연동`
     : `천장 카메라 3x 추적 + 실시간 ${chosenCam.label} 카메라 연동`);
@@ -470,8 +461,7 @@ export function buildQuickControlPanel({
     lBtn.type = "button";
     lBtn.addEventListener("click", scope.guard(() => {
       view.trackerCamByTarget[activeAnchor.target_id] = cv.id;
-      liveCellImg.dataset.baseUrl = cv.url;
-      liveCellImg.src = `${cv.url}?t=${Date.now()}`;
+      cellFrames?.bind(liveCellImg, cv);
       if (typeof window !== "undefined" && typeof window.dispatchEvent === "function") {
         window.dispatchEvent(new CustomEvent("rosy:inspect-target", { detail: { targetId: activeAnchor.target_id, camId: cv.id } }));
       }
@@ -494,52 +484,4 @@ export function buildQuickControlPanel({
   trackerBox.appendChild(roiRow);
   quickPanel.appendChild(trackerBox);
   return quickPanel;
-}
-
-export function buildOmxSummaries({ view, scope, el, openCard, nodeWithText, tag }) {
-  const activeRobotId = view.focusRobot;
-  return OMX_CELL_DEFS.filter(def => (view.anchors || []).some(a => a.target_id === def.target_id)).map((def, idx) => {
-    const liveAnc = view.anchors.find((a) => a.target_id === def.target_id);
-    const isSelected = view.focusAnchorId === def.target_id;
-    const node = nodeWithText("article", `robot-summary omx-summary s${(idx + 1) % (view.colors?.length || 3)}${isSelected ? " selected" : ""}`);
-    node.dataset.robotId = def.target_id; node.tabIndex = -1;
-    node.addEventListener("click", scope.guard((ev) => {
-      if (ev.target?.closest?.("ui-button, button")) return;
-      openCard(def.target_id);
-    }));
-    const line = nodeWithText("div", "robot-line");
-    line.append(nodeWithText("b", "ui-disclosure-name", `🦾 ${def.shortLabel}`));
-    const btnGroup = nodeWithText("div", "omx-summary-btns");
-    const dispatchBtn = nodeWithText("ui-button", "", `🤖→${def.stationId}`);
-    dispatchBtn.type = "button"; dispatchBtn.setAttribute("kind", "quiet");
-    dispatchBtn.title = `${activeRobotId} 로봇을 ${def.shortLabel} 연계 정류장(${def.stationId})으로 즉시 배차`;
-    dispatchBtn.disabled = !activeRobotId || !view.robots.some(r => r.robot_id === activeRobotId && r.online);
-    if (dispatchBtn.disabled) dispatchBtn.setAttribute("reason", "연결된 로봇을 먼저 선택하세요");
-    dispatchBtn.addEventListener("click", scope.guard(() => {
-      if (dispatchBtn.disabled) return;
-      view.focusAnchorId = def.target_id; view.selected = activeRobotId; view.focusRobot = activeRobotId;
-      el("map-stage").dataset.view = "map"; el("birdseye-toggle")?.setAttribute("aria-pressed", "false");
-      view.dispatchGoalToPoint?.({ x: def.stationX, y: def.stationY }, `${def.shortLabel} 연계 ${def.stationName}`, def.stationId);
-    }));
-    const choose = nodeWithText("ui-button", "", isSelected ? "선택됨" : "셀 보기");
-    choose.type = "button"; choose.setAttribute("kind", "toggle"); choose.setAttribute("aria-pressed", String(isSelected));
-    choose.dataset.selectRobotId = def.target_id;
-    choose.addEventListener("click", scope.guard(() => { openCard(def.target_id); }));
-    btnGroup.append(dispatchBtn, choose);
-    line.append(btnGroup);
-    node.append(line);
-
-    const facts = nodeWithText("div", "robot-summary-status");
-    const extM = typeof liveAnc.extension_m === "number" ? liveAnc.extension_m : null;
-    const reachM = typeof liveAnc.reach_m === "number" ? liveAnc.reach_m : null;
-    const reachPct = extM !== null && reachM > 0 ? Math.max(0, Math.min(100, Math.round((extM / reachM) * 100))) : 0;
-    facts.append(
-      tag(liveAnc.cell_status || "상태 미확인", liveAnc.cell_status ? "ok" : "warn"),
-      tag(`연계역 ${def.stationId}`, ""),
-      tag(extM !== null && reachM > 0 ? `뻗음 ${reachPct}% (${extM.toFixed(2)}m)` : "뻗음 확인 불가", ""),
-      tag(liveAnc.motor_summary || "모터 확인 불가", ""),
-    );
-    node.append(facts);
-    return node;
-  });
 }

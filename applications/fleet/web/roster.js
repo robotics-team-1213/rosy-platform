@@ -11,10 +11,11 @@ import { staleAgeS } from "./state-age.js";
 import { powerHealthView } from "./power-health-view.js";
 import { createQueues } from "./queues.js";
 import { createFleetMotorHealth } from "./motor-health-view.js";
-import { placeRosterCards as place, mustExpand, selectRobot, OMX_CELL_DEFS, createRoiPoller,
-  buildQuickControlPanel, buildOmxSummaries } from "./roster-cards.js";
+import { placeRosterCards as place, mustExpand, selectRobot, createRoiPoller,
+  buildQuickControlPanel } from "./roster-cards.js";
 export {mustExpand, selectRobot} from "./roster-cards.js";
 import {createRobotProfiles} from "/console/assets/robot-profile-view.js";
+import {createCellFrameFeed} from "/console/assets/cell-frames.js";
 import { cancelScope, cardTripLine, createCardTrip, openTrip } from "./card-trip.js";
 import { createRosterSummary, nodeWithText, tag, blockWith, navTag, queuedReason, offlineWhy,
   IDENTIFY_REASON, LAMP_REASON } from "./roster-presentation.js";
@@ -26,6 +27,8 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
   const profiles = createRobotProfiles({call, scope, render});
   const summary = createRosterSummary({scope, view, openCard, render, attentionItems, motorHealth});
   const { roiObjectUrls, refreshRoiPreview } = createRoiPoller({ scope, view, call, render });
+  // 셀 카메라 뷰도 천장 ROI와 같은 Vision 임대로 본다(D-136). Fleet은 바이트를 중계하지 않는다.
+  const cellFrames = createCellFrameFeed({ call, scope });
   function openCard(robotId) {
     if (typeof window !== "undefined" && robotId && typeof window.dispatchEvent === "function") {
       window.dispatchEvent(new CustomEvent("rosy:inspect-target", { detail: { targetId: robotId } }));
@@ -73,22 +76,14 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
         const label = host && host !== robot.robot_id ? `${robot.robot_id} (${host})` : robot.robot_id;
         return [robot.robot_id, `🤖 기동 로봇 · ${label}${robot.online ? " · 온라인" : ""}`];
       });
-      const omxOptions = OMX_CELL_DEFS.filter(def => (view.anchors || []).some(a => a.target_id === def.target_id)).map(def => {
-        const liveAnc = view.anchors.find(a => a.target_id === def.target_id);
-        const statusStr = liveAnc.cell_status || "상태 미확인";
-        return [def.target_id, `🦾 OMX 셀 · ${def.shortLabel} (${statusStr} ↔ ${def.stationId} 연계)`];
-      });
-      const options = [...robotOptions, ...omxOptions];
+      const options = robotOptions;
       const key = JSON.stringify(options);
       if (choice.dataset.options !== key) {
-        const first = nodeWithText("option", "", "활성 로봇 또는 OMX 셀을 선택하세요"); first.value = "";
+        const first = nodeWithText("option", "", "로봇을 선택하세요"); first.value = "";
         choice.replaceChildren(first, ...options.map(([id, name]) => { const option = nodeWithText("option", "", name); option.value = id; return option; }));
         choice.dataset.options = key;
       }
-      const currentVal = (view.focusAnchorId && String(view.focusAnchorId).startsWith("arm_"))
-        ? view.focusAnchorId
-        : (view.focusRobot || "");
-      choice.value = currentVal;
+      choice.value = view.focusRobot || "";
     }
     const index = view.robots.findIndex(robot => robot.robot_id === view.focusRobot);
     if (empty) empty.hidden = index >= 0;
@@ -249,7 +244,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     if (!view.stateUnavailable) {
       node.appendChild(buildQuickControlPanel({
         robot, state, pose, power, guideRow, displayName, view, scope, el, render, isOperator,
-        roiObjectUrls, refreshRoiPreview, nodeWithText, tag,
+        roiObjectUrls, refreshRoiPreview, nodeWithText, tag, cellFrames,
       }));
     }
 
@@ -579,10 +574,6 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     controls()[at]?.focus({preventScroll: true});
   }
 
-  function omxSummaries() {
-    return buildOmxSummaries({ view, scope, el, openCard, nodeWithText, tag });
-  }
-
-  return { card, summary, omxSummaries, workspace, place, fillQueues, queuedReason, needsAttention, attentionItems, openCard,
+  return { card, summary, workspace, place, fillQueues, queuedReason, needsAttention, attentionItems, openCard,
     syncConvoy: trip.syncConvoy, closeTrip: trip.close, openTrip: openTripForm, paintTrip };
 }

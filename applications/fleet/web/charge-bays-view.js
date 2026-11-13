@@ -1,6 +1,7 @@
 // D-941 5/7: the charge-bay plan remains display-only; task buttons use pipeline APIs.
 import { isRouteAbsent } from "/console/assets/poll-gate.js";
 import { chargeBayRows, inspectorTargetsFromRows } from "/console/assets/charge-bays-model.js";
+import { createCellFrameFeed } from "/console/assets/cell-frames.js";
 
 export { chargeBayRows, inspectorTargetsFromRows, formatArmLiveJointText } from "/console/assets/charge-bays-model.js";
 
@@ -9,39 +10,24 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
   const list = el("charge-bay-rows");
   const hint = el("charge-bays-hint");
   const inspector = typeof el === "function" ? el("omx-right-inspector") : null;
+  // 셀 카메라는 Vision 임대 프레임으로만 본다(D-136). Fleet은 바이트를 중계하지 않는다.
+  const frames = createCellFrameFeed({ call, scope });
+  for (const box of [list, inspector]) if (box) scope.listen(box, "click", () => { framesOn = true; }, true);
   let inFlight = false;
   let unavailable = false;
   let liveStreamOn = true;
-  let pausedStamp = Date.now();
   const selectedCamByCard = {};
-  let activeInspectorId = "arm_s";
+  let activeInspectorId = null;
+  // Choosing a robot only inspects it (no Vision lease); frames start after a click inside the cards or inspector.
+  let framesOn = false;
   const selectedInspectorCam = {};
   let dualCamMode = false;
   let lastRows = null;
 
-  function currentCamStamp() {
-    if (liveStreamOn) pausedStamp = Date.now();
-    return pausedStamp;
-  }
-
-  if (typeof window !== "undefined" && typeof window.setInterval === "function") {
-    window.setInterval(() => {
-      if (!liveStreamOn) return;
-      const stamp = currentCamStamp();
-      if (list && typeof list.querySelectorAll === "function") {
-        for (const img of list.querySelectorAll("img.cell-cam-thumb")) {
-          const base = img.dataset.baseUrl || img.src.split("?")[0];
-          img.src = `${base}?t=${stamp}`;
-        }
-      }
-      if (typeof document !== "undefined" && typeof document.querySelectorAll === "function") {
-        for (const img of document.querySelectorAll("img.omx-inspector-cam")) {
-          const base = img.dataset.baseUrl || img.src.split("?")[0];
-          img.src = `${base}?t=${stamp}`;
-        }
-      }
-    }, 2000);
-  }
+  scope.listen(document, "visibilitychange", () => {
+    frames.setRunning(!document.hidden && liveStreamOn);
+    if (!document.hidden) void refresh();
+  });
 
   if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
     window.addEventListener("rosy:inspect-target", (ev) => {
@@ -49,6 +35,7 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
       const camId = ev?.detail?.camId;
       if (!targetId) return;
       activeInspectorId = targetId === "pinky" ? "rosy_46" : targetId;
+      framesOn = false;
       if (camId) selectedInspectorCam[activeInspectorId] = camId;
       if (lastRows) renderInspector(lastRows);
       if (ev?.detail?.scroll && inspector?.scrollIntoView) {
@@ -135,24 +122,13 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
 
   function renderInspector(rows) {
     if (!inspector) return;
-    if (!rows?.cards?.length) {
+    if (!rows?.cards?.length || !activeInspectorId) {
       inspector.replaceChildren();
       return;
     }
     const targets = inspectorTargetsFromRows(rows);
     const active = targets.find((t) => t.id === activeInspectorId) || targets[0];
     if (!active) return;
-    const camMap = new Map((rows?.cameras || []).map((c) => [c.id, c]));
-    const formatQuality = (viewId) => {
-      const c = camMap.get(viewId) || camMap.get(viewId === "cell_s" ? "arm_s_top" : (viewId === "cell_ab" ? "top" : viewId));
-      if (!c) return "LIVE 스트림";
-      return [
-        c.fresh !== false ? "LIVE" : "STALE",
-        c.sequence != null ? `#${c.sequence}` : "",
-        c.condition || "",
-        c.mean_intensity != null ? `밝기 ${c.mean_intensity}` : "",
-      ].filter(Boolean).join(" · ");
-    };
 
     const tabs = document.createElement("div");
     tabs.className = "omx-inspector-tabs";
@@ -192,8 +168,10 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
 
     const camViews = active.cameraViews || [];
     const activeCamId = selectedInspectorCam[active.id] || camViews[0]?.id || "arm_s_top";
-    const activeCam = camViews.find((v) => v.id === activeCamId) || camViews[0] || {id: activeCamId, label: activeCamId, url: active.cameraUrl};
+    const activeCam = camViews.find((v) => v.id === activeCamId) || camViews[0]
+      || {id: activeCamId, label: activeCamId, source: activeCamId};
 
+    const cameraBindings = [];
     let camStageNode;
     if (dualCamMode && camViews.length >= 2) {
       camStageNode = document.createElement("div");
@@ -206,13 +184,12 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
         pane.className = "omx-inspector-dual-pane";
         const dImg = document.createElement("img");
         dImg.className = "omx-inspector-main-cam omx-inspector-cam";
-        dImg.dataset.baseUrl = dv.url;
-        dImg.src = `${dv.url}?t=${currentCamStamp()}`;
         dImg.alt = `${dv.label} 실시간 카메라`;
         dImg.loading = "lazy";
         const dCap = document.createElement("small");
         dCap.className = "omx-inspector-cam-badge";
-        dCap.textContent = `🎥 ${dv.label} · ${formatQuality(dv.id)}`;
+        dCap.textContent = `🎥 ${dv.label}`;
+        cameraBindings.push([dImg, dv, dCap, `🎥 ${dv.label}`]);
         pane.append(dImg, dCap);
         camStageNode.append(pane);
       }
@@ -221,15 +198,14 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
       camStageNode.className = "omx-inspector-single-wrap";
       const mainImg = document.createElement("img");
       mainImg.className = "omx-inspector-main-cam omx-inspector-cam";
-      mainImg.dataset.baseUrl = activeCam.url;
-      mainImg.src = `${activeCam.url}?t=${currentCamStamp()}`;
       mainImg.alt = `${active.title} 실시간 메인 카메라`;
       mainImg.loading = "lazy";
       mainImg.tabIndex = 0;
       mainImg.addEventListener("click", () => mainImg.classList.toggle("focused"));
       const mainCap = document.createElement("small");
       mainCap.className = "omx-inspector-cam-badge";
-      mainCap.textContent = `🎥 [${activeCam.label}] ${formatQuality(activeCam.id)}`;
+      mainCap.textContent = `🎥 [${activeCam.label}]`;
+      cameraBindings.push([mainImg, activeCam, mainCap, `🎥 [${activeCam.label}]`]);
       camStageNode.append(mainImg, mainCap);
     }
 
@@ -240,10 +216,9 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
       pip.className = `omx-inspector-pip${v.id === activeCam.id ? " active" : ""}`;
       const pImg = document.createElement("img");
       pImg.className = "omx-inspector-cam";
-      pImg.dataset.baseUrl = v.url;
-      pImg.src = `${v.url}?t=${currentCamStamp()}`;
       pImg.alt = v.label;
       pImg.loading = "lazy";
+      cameraBindings.push([pImg, v]);
       const pLbl = document.createElement("small");
       pLbl.textContent = `📷 ${v.label}`;
       pip.append(pImg, pLbl);
@@ -326,6 +301,7 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
     }
 
     inspector.replaceChildren(tabs, head, camStageNode, pipGrid, meta, quickDispatchBar, actions);
+    if (framesOn) for (const binding of cameraBindings) frames.bind(...binding);
   }
 
   function show(rows, note) {
@@ -360,20 +336,26 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
         if (ev.target?.closest?.("ui-button, button, img")) return;
         activeInspectorId = card.id === "cell_s" ? "arm_s" : (card.id === "cell_ab" ? "arm_a" : card.id);
         renderInspector(rows);
+        frames.bind(camera, activeCam);
       });
       const activeCamId = selectedCamByCard[card.id] || card.cameraViews?.[0]?.id;
-      const activeCam = (card.cameraViews || []).find((v) => v.id === activeCamId) || {url: card.cameraUrl};
+      const activeCam = (card.cameraViews || []).find((v) => v.id === activeCamId)
+        || (card.cameraViews || [])[0] || {id: card.id, label: card.title, roiTarget: card.id};
       const camera = document.createElement("img");
-      camera.dataset.baseUrl = activeCam.url;
-      camera.src = `${activeCam.url}?t=${currentCamStamp()}`;
       camera.loading = "lazy";
       camera.className = "cell-cam-thumb";
       camera.alt = `${card.title} 카메라`;
+      if (framesOn && (activeInspectorId === card.id ||
+          (card.id === "cell_s" && activeInspectorId === "arm_s") ||
+          (card.id === "cell_ab" && ["arm_a", "arm_b"].includes(activeInspectorId)))) {
+        queueMicrotask(() => { if (camera.isConnected) frames.bind(camera, activeCam); });
+      }
       camera.tabIndex = 0;
       camera.addEventListener("click", () => {
         camera.classList.toggle("focused");
         activeInspectorId = card.id === "cell_s" ? "arm_s" : (card.id === "cell_ab" ? "arm_a" : card.id);
         renderInspector(rows);
+        frames.bind(camera, activeCam);
       });
       camera.addEventListener("keydown", (ev) => {
         if (ev.key === "Enter" || ev.key === " ") {
@@ -396,8 +378,7 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
         camBtn.textContent = `📷 ${v.label}`;
         camBtn.addEventListener("click", () => {
           selectedCamByCard[card.id] = v.id;
-          camera.dataset.baseUrl = v.url;
-          camera.src = `${v.url}?t=${Date.now()}`;
+          if (camera.isConnected) frames.bind(camera, v);
           for (const ch of camBar.children || []) {
             if (!ch.dataset.streamToggle) {
               ch.setAttribute("kind", ch === camBtn ? "primary" : "quiet");
@@ -421,6 +402,7 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
       streamBtn.textContent = liveStreamOn ? "자동갱신 ON(2초)" : "자동갱신 일시정지";
       streamBtn.addEventListener("click", () => {
         liveStreamOn = !liveStreamOn;
+        frames.setRunning(liveStreamOn);
         streamBtn.textContent = liveStreamOn ? "자동갱신 ON(2초)" : "자동갱신 일시정지";
       });
       camBar.append(streamBtn);
@@ -451,22 +433,12 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
   async function refresh() {
     const life = scope.capture();
     life.check();
-    if (inFlight || unavailable || auth.locked) return;
+    if (inFlight || unavailable || auth.locked || document.hidden) return;
     inFlight = true;
     try {
       const plan = await call("/api/fleet/charge-bays", { signals: [life.signal] });
       life.check();
-      const telemetry = await call("/api/fleet/pipeline/cell-tasks", {signals: [life.signal]})
-        .catch(() => null);
-      life.check();
-      const rows = chargeBayRows({
-        ...plan,
-        omx_cell_tasks: telemetry?.tasks || plan.omx_cell_tasks,
-        cameras: telemetry?.cameras || plan.cameras,
-        arm_live_states: telemetry?.arm_live_states || plan.arm_live_states,
-        station_camera_links: telemetry?.station_camera_links || plan.station_camera_links,
-        station_zones: telemetry?.station_zones || plan.station_zones,
-      });
+      const rows = chargeBayRows(plan);
       state.textContent = `칸 ${rows.bays.length}`;
       show(rows, rows.bays.length ? rows.summary : "활성 지도에 충전 칸(charge)이 없습니다");
     } catch (error) {

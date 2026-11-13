@@ -5,8 +5,10 @@ import { readFile } from 'node:fs/promises';
 const source = new URL('../../../../applications/fleet/web/charge-bays-view.js', import.meta.url);
 const gate = new URL('../../../../applications/fleet/web/shared/poll-gate.js', import.meta.url);
 const model = new URL('../../../../applications/fleet/web/charge-bays-model.js', import.meta.url);
+const frames = new URL('../../../../applications/fleet/web/shared/cell-frames.js', import.meta.url);
 const code = (await readFile(source, 'utf8')).replace('/console/assets/poll-gate.js', gate.href)
-  .replaceAll('/console/assets/charge-bays-model.js', model.href);
+  .replaceAll('/console/assets/charge-bays-model.js', model.href)
+  .replaceAll('/console/assets/cell-frames.js', frames.href);
 const { chargeBayRows, inspectorTargetsFromRows, formatArmLiveJointText } = await import(`data:text/javascript,${encodeURIComponent(code)}`);
 
 const plan = {
@@ -103,7 +105,11 @@ test('pipeline cards carry cell telemetry and one-click robot actions without ch
   assert.equal(rows.actions.length, 2);
   assert.equal(rows.cells.length, 2);
   assert.match(rows.summary, /15%/);
-  assert.equal(rows.cards[0].cameraUrl, '/api/fleet/pipeline/cell-camera/cell_s');
+  assert.deepEqual(rows.cards[0].cameraViews.map(v => v.id), ['arm_s_top', 'arm_s_wrist']);
+  assert.deepEqual(rows.cards[1].cameraViews.map(v => v.id), ['top', 'side', 'arm_a_wrist', 'arm_b_wrist']);
+  assert.deepEqual(rows.cards[2].cameraViews.map(v => v.id), ['pinky_dock', 'arm_s_top']);
+  assert.equal(rows.cards[2].cameraViews[0].roiTarget, 'rosy_60');  // 도킹은 천장 Cam 확대로 위에서 본다
+  assert.ok(rows.cards.every(c => !c.cameraUrl), '카드는 Fleet 중계 URL을 들지 않는다(D-136)');
   assert.equal(rows.cards[0].title, 'cell_s · S3 하역 셔틀 (arm_s)');
   assert.equal(rows.cards[0].phase, 'ARM_IN_BED_ZONE');
   assert.equal(rows.cards[0].task.task_id, 'new');
@@ -112,7 +118,6 @@ test('pipeline cards carry cell telemetry and one-click robot actions without ch
   assert.equal(rows.cards[1].title, 'cell_ab · S5 팔레트 적재 (arm_a·arm_b)');
   assert.deepEqual(rows.cards[1].buttons.map(b => b.preset),
     ['s5_tier1_arm_a', 's5_tier2_arm_b', 's5_tier3_arm_a', 'full_s3_to_s5_pipeline']);
-  assert.equal(rows.cards[2].cameraUrl, '/api/fleet/pipeline/cell-camera/pinky');
   assert.equal(rows.cards[2].robot_id, 'rosy_60');
   assert.deepEqual(rows.cards[2].buttons.map(b => b.pinkyAction),
     ['dock_and_unload_s3', 'dock_s3', 'charge_c1', 'depart_s1']);
@@ -121,9 +126,9 @@ test('pipeline cards carry cell telemetry and one-click robot actions without ch
   assert.equal(rows.cards[0].quickControls[2].zoneId, 'EXP_S3_BELT');
   assert.equal(rows.cards[0].quickControls[3].visionCheckCell, 'cell_s');
   assert.equal(rows.cards[0].quickControls[4].clearArmHold, 'cell_s');
-  assert.equal(rows.cards[0].cameraViews.length, 3);
+  assert.equal(rows.cards[0].cameraViews.length, 2);
   assert.equal(rows.cards[1].cameraViews.length, 4);
-  assert.equal(rows.cards[2].cameraViews.length, 3);
+  assert.equal(rows.cards[2].cameraViews.length, 2);
   assert.equal(rows.cards[2].quickControls[0].decisionSubject, 'rosy_60');
   assert.equal(rows.cards[2].quickControls[1].zoneId, 'STG_C2');
   assert.ok(rows.cards[2].quickControls.some(c => c.cableGuardToggle === true));

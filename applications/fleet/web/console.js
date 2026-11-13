@@ -219,8 +219,7 @@ function render() {
     const order = visibleIndices.sort((a, b) =>
       roster.needsAttention(view.robots[b]) - roster.needsAttention(view.robots[a]));
     const robotRows = order.map((index) => roster.summary(view.robots[index], index));
-    const omxRows = typeof roster.omxSummaries === "function" ? roster.omxSummaries() : [];
-    roster.place(rosterBox, [...robotRows, ...omxRows]);
+    roster.place(rosterBox, robotRows);
   } else {
     const message = auth.locked ? "관제에 접속하면 등록 로봇과 연결 상태를 확인할 수 있습니다."
       : view.stateUnavailable ? "Fleet 상태를 확인할 수 없습니다. 연결을 확인하세요."

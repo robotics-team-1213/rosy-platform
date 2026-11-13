@@ -120,7 +120,6 @@ def install_pipeline_routes(app, *, console=None, site_maps=None, read_guard=())
         return out
     app.state.get_arm_live_catalog = _arm_live_catalog
     app.state.station_camera_links = STATION_CAMERA_LINKS
-    app.state.get_camera_catalog = lambda: ctx._camera_catalog()
 
     ledger_path = _storage_dir() / "rosy-pipeline-ledger.json"
     zones_override_path = _storage_dir() / "station_zones.yaml"

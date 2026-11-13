@@ -14848,3 +14848,9 @@ osy-d395-s1d\`.
 - 변경: 없음(체크포인트 커밋). 2026-11-11 착지분(편대 자취 복귀 D-559, peer 앵커 D-1017, 편대 SIM 계측 D-1002 외)의 게시용 무캐시 FULL 기록을 이 커밋 위에 만든다.
 - 증거: `python tools/land.py --tests full --no-cache` 실행 기록으로 남는다.
 - gate 변화: 없음.
+
+
+## 2026-11-13 · uncommitted · docs(solutions): 학습 센터 자리 업그레이드 교훈을 역사 기록으로 표시
+- 변경: `docs/solutions/deployment/learning-center-upgrade-needs-the-identical-unit-first-2026-10-23.md`의 `applies_when`을 고쳐 후보 `rosy-learning-center.service`가 2026-10-31 퇴역했고 자리 업그레이드 절차는 역사 기록임을 밝혔다. `install_review_release.py` 절은 살아있는 보호 센터(8768 `rosy-edge-review`)에 그대로 적용된다고 못박았다.
+- 증거: 원격 pytest `test/test_update_ops.py` 예정.
+- gate 변화: 없음.

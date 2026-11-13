@@ -98,6 +98,10 @@
       "path": "cell/cell-real2sim-views.js",
       "media_type": "application/javascript"
     },
+    "cell-frames.js": {
+      "path": "shared/cell-frames.js",
+      "media_type": "application/javascript"
+    },
     "motor-health-view.js": {
       "path": "motor-health-view.js",
       "media_type": "application/javascript"

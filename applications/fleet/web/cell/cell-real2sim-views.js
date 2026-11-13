@@ -1,11 +1,11 @@
 // Right inspector, visual cards and camera matrix renderers for the Real-to-Sim pipeline view (split from cell-real2sim.js).
-import {CELL_TASKS_PATH, inspectorSpecs, visualCardSpecs} from './cell-real2sim-specs.js';
+import {CELL_TASKS_PATH, CAMERA_WALL_VIEWS, inspectorSpecs, visualCardSpecs} from './cell-real2sim-specs.js';
 
 export function createCellViews(ctx) {
   const {request, $, state} = ctx;
+  const frames = () => ctx.cellFrames;
   const refreshCellTasks = (...args) => ctx.refreshCellTasks(...args);
   const selectInspectorTarget = (...args) => ctx.selectInspectorTarget(...args);
-  const activeCameraStamp = () => ctx.activeCameraStamp();
   const bindActionButton = (...args) => ctx.bindActionButton(...args);
   const runQuickPreset = (...args) => ctx.runQuickPreset(...args);
   const runPinkyQuickAction = (...args) => ctx.runPinkyQuickAction(...args);
@@ -51,19 +51,7 @@ export function createCellViews(ctx) {
 
     const camViews = activeSpec.cameraViews || [];
     const activeCamId = state.selectedInspectorCamByTarget[activeSpec.id] || camViews[0]?.id || 'arm_s_top';
-    const activeCam = camViews.find(v => v.id === activeCamId) || camViews[0] || {id: activeCamId, label: activeCamId, url: `/api/fleet/pipeline/cell-camera/${activeCamId}`};
-    const camMap = new Map((body?.cameras || []).map(c => [c.id, c]));
-    const formatQuality = viewId => {
-      const c = camMap.get(viewId) || camMap.get(viewId === 'cell_s' ? 'arm_s_top' : (viewId === 'cell_ab' ? 'top' : viewId));
-      if (!c) return 'LIVE 스트림 연동';
-      return [
-        c.fresh !== false ? 'LIVE' : 'STALE',
-        c.sequence != null ? `seq #${c.sequence}` : '',
-        c.condition || '',
-        c.mean_intensity != null ? `밝기 ${c.mean_intensity}` : '',
-        c.spatial_contrast != null ? `대비 ${c.spatial_contrast}` : '',
-      ].filter(Boolean).join(' · ');
-    };
+    const activeCam = camViews.find(v => v.id === activeCamId) || camViews[0] || {id: activeCamId, label: activeCamId, source: activeCamId};
 
     const stage = document.createElement('div');
     stage.className = 'omx-inspector-stage';
@@ -78,13 +66,12 @@ export function createCellViews(ctx) {
         pane.className = 'omx-inspector-dual-pane';
         const dImg = document.createElement('img');
         dImg.className = 'omx-inspector-main-cam omx-inspector-cam';
-        dImg.dataset.baseUrl = dv.url;
-        dImg.src = `${dv.url}?t=${activeCameraStamp()}`;
         dImg.alt = dv.label;
         dImg.loading = 'lazy';
         const dQual = document.createElement('span');
         dQual.className = 'cell-visual-badge';
-        dQual.textContent = `🎥 [${dv.label}] ${formatQuality(dv.id)}`;
+        dQual.textContent = `🎥 [${dv.label}]`;
+        frames()?.bind(dImg, dv, dQual, `🎥 [${dv.label}]`);
         pane.append(dImg, dQual);
         dualGrid.append(pane);
       }
@@ -92,15 +79,14 @@ export function createCellViews(ctx) {
     } else {
       const mainCam = document.createElement('img');
       mainCam.className = 'omx-inspector-main-cam omx-inspector-cam';
-      mainCam.dataset.baseUrl = activeCam.url;
-      mainCam.src = `${activeCam.url}?t=${activeCameraStamp()}`;
       mainCam.alt = `${activeSpec.title} 메인 카메라`;
       mainCam.tabIndex = 0;
       mainCam.addEventListener('click', () => mainCam.classList.toggle('focused'));
 
       const qualLine = document.createElement('span');
       qualLine.className = 'cell-visual-badge';
-      qualLine.textContent = `🎥 [${activeCam.label}] ${formatQuality(activeCam.id)}`;
+      qualLine.textContent = `🎥 [${activeCam.label}]`;
+      frames()?.bind(mainCam, activeCam, qualLine, `🎥 [${activeCam.label}]`);
       stage.append(mainCam, qualLine);
     }
 
@@ -112,10 +98,9 @@ export function createCellViews(ctx) {
       pip.tabIndex = 0;
       const pImg = document.createElement('img');
       pImg.className = 'omx-inspector-cam';
-      pImg.dataset.baseUrl = v.url;
-      pImg.src = `${v.url}?t=${activeCameraStamp()}`;
       pImg.alt = v.label;
       pImg.loading = 'lazy';
+      frames()?.bind(pImg, v);
       const pLbl = document.createElement('small');
       pLbl.textContent = `📷 ${v.label}`;
       pip.append(pImg, pLbl);
@@ -219,14 +204,14 @@ export function createCellViews(ctx) {
       });
 
       const activeViewId = state.selectedCameraByCard[card.id] || card.cameraViews?.[0]?.id || card.id;
-      const activeView = (card.cameraViews || []).find(v => v.id === activeViewId) || {url: card.cameraUrl};
+      const activeView = (card.cameraViews || []).find(v => v.id === activeViewId) || (card.cameraViews || [])[0]
+        || {id: card.id, label: card.title, roiTarget: card.robot_id || card.id};
 
       const thumb = document.createElement('img');
       thumb.className = 'cell-visual-thumb';
-      thumb.dataset.baseUrl = activeView.url;
-      thumb.src = `${activeView.url}?t=${activeCameraStamp()}`;
       thumb.alt = card.title;
       thumb.loading = 'lazy';
+      frames()?.bind(thumb, activeView);
       thumb.tabIndex = 0;
       thumb.addEventListener('click', () => {
         thumb.classList.toggle('focused');
@@ -242,23 +227,10 @@ export function createCellViews(ctx) {
 
       const camSwitcher = document.createElement('div');
       camSwitcher.className = 'cell-cam-switcher';
-      const camMap = new Map((body?.cameras || []).map(c => [c.id, c]));
-      const formatCamQuality = viewId => {
-        const c = camMap.get(viewId) || camMap.get(viewId === 'cell_s' ? 'arm_s_top' : (viewId === 'cell_ab' ? 'top' : viewId));
-        if (!c) return '';
-        return [
-          c.fresh !== false ? 'LIVE' : 'STALE',
-          c.sequence != null ? `#${c.sequence}` : '',
-          c.condition || '',
-          c.mean_intensity != null ? `밝기 ${c.mean_intensity}` : '',
-        ].filter(Boolean).join(' · ');
-      };
       const camQualityBadge = document.createElement('span');
       camQualityBadge.className = 'cell-visual-badge';
-      camQualityBadge.textContent = formatCamQuality(activeViewId);
-      thumb.addEventListener('error', () => {
-        camQualityBadge.textContent = '프레임 수신 재시도 중';
-      });
+      camQualityBadge.textContent = '영상 수신 대기';
+      frames()?.bind(thumb, activeView, camQualityBadge, '🎥 영상');
       for (const v of (card.cameraViews || [])) {
         const pill = document.createElement('ui-button');
         pill.setAttribute('kind', v.id === activeViewId ? 'primary' : 'quiet');
@@ -268,9 +240,7 @@ export function createCellViews(ctx) {
         pill.addEventListener('click', ev => {
           ev.stopPropagation();
           state.selectedCameraByCard[card.id] = v.id;
-          thumb.dataset.baseUrl = v.url;
-          thumb.src = `${v.url}?t=${Date.now()}`;
-          camQualityBadge.textContent = formatCamQuality(v.id);
+          frames()?.bind(thumb, v, camQualityBadge, '🎥 영상');
           for (const child of camSwitcher.children || []) {
             if (child.tagName === 'UI-BUTTON') {
               child.setAttribute('kind', child === pill ? 'primary' : 'quiet');
@@ -335,51 +305,31 @@ export function createCellViews(ctx) {
     }));
   }
 
-  function renderCameraMatrix(body) {
+  function renderCameraMatrix() {
     const wall = $('cell-camera-matrix');
     if (!wall) return;
-    const defaultCams = [
-      {id: 'arm_s_top', label: 'S3 상단 (arm_s_top)', topic: '/arm_s_top_camera/image_raw', url: '/api/fleet/pipeline/cell-camera/arm_s_top'},
-      {id: 'arm_s_wrist', label: 'arm_s 손목 (arm_s_wrist)', topic: '/arm_s_wrist_camera/image_raw', url: '/api/fleet/pipeline/cell-camera/arm_s_wrist'},
-      {id: 'top', label: 'S5 상단 (top)', topic: '/top_camera/image_raw', url: '/api/fleet/pipeline/cell-camera/top'},
-      {id: 'side', label: '셀 측면 · 도킹 (side)', topic: '/side_camera/image_raw', url: '/api/fleet/pipeline/cell-camera/side'},
-      {id: 'arm_a_wrist', label: 'arm_a 손목 (arm_a_wrist)', topic: '/arm_a_wrist_camera/image_raw', url: '/api/fleet/pipeline/cell-camera/arm_a_wrist'},
-      {id: 'arm_b_wrist', label: 'arm_b 손목 (arm_b_wrist)', topic: '/arm_b_wrist_camera/image_raw', url: '/api/fleet/pipeline/cell-camera/arm_b_wrist'},
-    ];
-    const cams = Array.isArray(body?.cameras) && body.cameras.length ? body.cameras : defaultCams;
-    const stamp = activeCameraStamp();
-    wall.replaceChildren(...cams.map(cam => {
+    wall.replaceChildren(...CAMERA_WALL_VIEWS.map(cam => {
       const card = document.createElement('article');
       card.className = 'cell-observation-card';
       card.tabIndex = 0;
       const h4 = document.createElement('h4');
-      const kb = cam.bytes ? ` · ${Math.round(cam.bytes / 1024)}KB` : '';
-      h4.textContent = `${cam.label}${kb}`;
+      h4.textContent = cam.label;
       const img = document.createElement('img');
-      img.dataset.baseUrl = cam.url;
-      img.src = `${cam.url}?t=${stamp}`;
       img.alt = cam.label;
       img.loading = 'lazy';
       const meta = document.createElement('pre');
-      const qualParts = [
-        cam.topic || '',
-        cam.fresh !== false ? 'LIVE (실시간 수신)' : 'STALE (스냅샷)',
-        cam.sequence != null ? `seq #${cam.sequence}` : '',
-        cam.condition ? `상태 ${cam.condition}` : '',
-        cam.mean_intensity != null ? `밝기 ${cam.mean_intensity}` : '',
-        cam.spatial_contrast != null ? `대비 ${cam.spatial_contrast}` : '',
-      ].filter(Boolean);
-      meta.textContent = qualParts.join(' · ');
+      meta.textContent = cam.roiTarget ? '천장 Cam ROI 확대' : `Vision 소스 ${cam.source}`;
+      frames()?.bind(img, cam, meta, cam.roiTarget ? '천장 Cam ROI' : cam.source);
       card.addEventListener('click', () => {
         card.classList.toggle('focused');
         const camTargetMap = {
           arm_s_top: 'arm_s',
           arm_s_wrist: 'arm_s',
           top: 'cell_ab',
-          side: 'rosy_46',
+          side: 'cell_ab',
           arm_a_wrist: 'arm_a',
           arm_b_wrist: 'arm_b',
-          pinky: 'rosy_46',
+          pinky_dock: 'rosy_46',
         };
         selectInspectorTarget(camTargetMap[cam.id] || 'arm_s', cam.id);
       });
@@ -395,10 +345,10 @@ export function createCellViews(ctx) {
         arm_s_top: {label: '▶ S3 셔틀 실행', preset: 's3_shuttle'},
         arm_s_wrist: {label: '▶ 자동 복구 셔틀', preset: 's3_auto_recover_or_shuttle'},
         top: {label: '▶ S3→S5 연속 실행', preset: 'full_s3_to_s5_pipeline'},
-        side: {label: '▶ S3 도킹+하역', pinkyAction: 'dock_and_unload_s3'},
+        side: {label: '▶ 3층 적재 (arm_a)', preset: 's5_tier3_arm_a'},
         arm_a_wrist: {label: '▶ 1층 적재 (arm_a)', preset: 's5_tier1_arm_a'},
         arm_b_wrist: {label: '▶ 2층 적재 (arm_b)', preset: 's5_tier2_arm_b'},
-        pinky: {label: '▶ 임시칸1 이동 (STG_C2)', zoneId: 'STG_C2'},
+        pinky_dock: {label: '▶ S3 도킹+하역', pinkyAction: 'dock_and_unload_s3'},
       };
       const qAct = camQuickMap[cam.id];
       if (qAct) {

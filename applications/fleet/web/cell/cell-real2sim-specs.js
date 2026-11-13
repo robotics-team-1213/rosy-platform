@@ -14,6 +14,27 @@ export const CABLE_GUARD_PATH = '/api/fleet/pipeline/cable-guard';
 export const VISION_CHECK_PATH = '/api/fleet/pipeline/vision-auto-check';
 export const ARM_HOLDS_CLEAR_PATH = '/api/fleet/pipeline/arm-holds/clear';
 
+// 카메라 뷰는 Vision 소스만 가리킨다(D-136). cell S(arm_s·S3)에는 측면 카메라가 없고,
+// Pinky 도킹은 천장 Cam(ceiling_north) ROI 확대로 위에서 본다.
+export const DOCK_VIEW_LABEL = '도킹 확대 (천장 Cam)';
+export const dockView = robotId => ({id: 'pinky_dock', label: DOCK_VIEW_LABEL, roiTarget: robotId || 'rosy_46'});
+export const S3_VIEWS = [
+  {id: 'arm_s_top', label: 'S3 상단(arm_s_top)', source: 'arm_s_top'},
+  {id: 'arm_s_wrist', label: 'arm_s 손목', source: 'arm_s_wrist'},
+];
+export const S5_VIEWS = [
+  {id: 'top', label: 'S5 상단(top)', source: 'top'},
+  {id: 'side', label: '측면(A/B · side)', source: 'side'},
+  {id: 'arm_a_wrist', label: 'arm_a 손목', source: 'arm_a_wrist'},
+  {id: 'arm_b_wrist', label: 'arm_b 손목', source: 'arm_b_wrist'},
+];
+export const CAMERA_WALL_VIEWS = [
+  ...S3_VIEWS.map(v => ({...v})),
+  dockView('rosy_46'),
+  ...S5_VIEWS.map(v => ({...v})),
+];
+
+
 const STATUS_LABEL = {
   ready: '정상 · 준비됨',
   attention: '확인 필요',
@@ -210,12 +231,7 @@ export function visualCardSpecs(body = {}) {
     {
       id: 'cell_s',
       title: 'cell_s · S3 하역 셔틀 (arm_s)',
-      cameraUrl: '/api/fleet/pipeline/cell-camera/cell_s',
-      cameraViews: [
-        {id: 'cell_s', label: 'S3 상단(arm_s_top)', url: '/api/fleet/pipeline/cell-camera/arm_s_top'},
-        {id: 'arm_s_wrist', label: 'arm_s 손목', url: '/api/fleet/pipeline/cell-camera/arm_s_wrist'},
-        {id: 'side', label: 'S3/S5 측면', url: '/api/fleet/pipeline/cell-camera/side'},
-      ],
+      cameraViews: S3_VIEWS.map(v => ({...v})),
       phase: s3Gate.phase || 'IDLE',
       amr_motion_inhibited: Boolean(s3Gate.amr_motion_inhibited),
       ...s3Meta,
@@ -240,13 +256,7 @@ export function visualCardSpecs(body = {}) {
     {
       id: 'cell_ab',
       title: 'cell_ab · S5 팔레트 적재 (arm_a · arm_b)',
-      cameraUrl: '/api/fleet/pipeline/cell-camera/cell_ab',
-      cameraViews: [
-        {id: 'top', label: 'S5 상단(top)', url: '/api/fleet/pipeline/cell-camera/top'},
-        {id: 'side', label: '측면(side)', url: '/api/fleet/pipeline/cell-camera/side'},
-        {id: 'arm_a_wrist', label: 'arm_a 손목', url: '/api/fleet/pipeline/cell-camera/arm_a_wrist'},
-        {id: 'arm_b_wrist', label: 'arm_b 손목', url: '/api/fleet/pipeline/cell-camera/arm_b_wrist'},
-      ],
+      cameraViews: S5_VIEWS.map(v => ({...v})),
       phase: s5Gate.phase || 'IDLE',
       amr_motion_inhibited: Boolean(s5Gate.amr_motion_inhibited),
       ...s5Meta,
@@ -272,13 +282,7 @@ export function visualCardSpecs(body = {}) {
       id: 'pinky',
       robot_id: pinkyId,
       title: `Pinky AMR · ${pinkyId} 도킹·배차 (${cableTangled ? '케이블 보호 ≤1.5cm' : '정상 주행'})`,
-      cameraUrl: '/api/fleet/pipeline/cell-camera/pinky',
-      cameraViews: [
-        {id: 'pinky', label: 'S3 도킹 뷰(pinky)', url: '/api/fleet/pipeline/cell-camera/pinky'},
-        {id: 'side', label: '측면 도킹(side)', url: '/api/fleet/pipeline/cell-camera/side'},
-        {id: 'arm_s_top', label: 'S3 상단(arm_s_top)', url: '/api/fleet/pipeline/cell-camera/arm_s_top'},
-        {id: 'top', label: '전체 상단(top)', url: '/api/fleet/pipeline/cell-camera/top'},
-      ],
+      cameraViews: [dockView(pinkyId), {...S3_VIEWS[0]}],
       phase: lastPinky?.target_place ? `위치 ${lastPinky.target_place}` : (s3Gate.docked_robot?.robot_id ? `S3 도킹 (${s3Gate.docked_robot.robot_id})` : 'READY'),
       amr_motion_inhibited: Boolean(s3Gate.amr_motion_inhibited || s5Gate.amr_motion_inhibited),
       last_task: lastPinky ? `${lastPinky.task_id} · ${lastPinky.action} -> ${lastPinky.target_place}` : 'S3 도킹 및 미세이동 준비 완료',
@@ -372,10 +376,9 @@ export function inspectorSpecs(body = {}) {
       title: '🦾 OMX-AI #3 · arm_s (cell_s · S3 하역 셔틀)',
       badge: `${s3Card.phase || 'IDLE'} · AMR 잠금 ${s3Card.amr_motion_inhibited ? 'ON' : 'OFF'}`,
       cameraViews: [
-        {id: 'arm_s_wrist', label: 'arm_s 손목(근접)', url: '/api/fleet/pipeline/cell-camera/arm_s_wrist'},
-        {id: 'arm_s_top', label: 'S3 상단(탑뷰)', url: '/api/fleet/pipeline/cell-camera/arm_s_top'},
-        {id: 'side', label: '측면·도킹(side)', url: '/api/fleet/pipeline/cell-camera/side'},
-        {id: 'pinky', label: 'S3 도킹 뷰', url: '/api/fleet/pipeline/cell-camera/pinky'},
+        {id: 'arm_s_wrist', label: 'arm_s 손목(근접)', source: 'arm_s_wrist'},
+        {id: 'arm_s_top', label: 'S3 상단(탑뷰)', source: 'arm_s_top'},
+        dockView('rosy_46'),
       ],
       telemetryRows: [
         ['셀 위상 · 연계역', `${s3Card.phase || 'IDLE'} · 정류장 S3 · AMR 잠금 ${s3Card.amr_motion_inhibited ? 'ON' : 'OFF'}`],
@@ -394,10 +397,10 @@ export function inspectorSpecs(body = {}) {
       title: '🦾 OMX-AI #1 · arm_a (cell_ab · S5 1·3층 적재)',
       badge: `${s5Card.phase || 'IDLE'} · AMR 잠금 ${s5Card.amr_motion_inhibited ? 'ON' : 'OFF'}`,
       cameraViews: [
-        {id: 'arm_a_wrist', label: 'arm_a 손목(근접)', url: '/api/fleet/pipeline/cell-camera/arm_a_wrist'},
-        {id: 'top', label: 'S5 상단(탑뷰)', url: '/api/fleet/pipeline/cell-camera/top'},
-        {id: 'side', label: '측면(side)', url: '/api/fleet/pipeline/cell-camera/side'},
-        {id: 'arm_b_wrist', label: 'arm_b 손목(교차)', url: '/api/fleet/pipeline/cell-camera/arm_b_wrist'},
+        {id: 'arm_a_wrist', label: 'arm_a 손목(근접)', source: 'arm_a_wrist'},
+        {id: 'top', label: 'S5 상단(탑뷰)', source: 'top'},
+        {id: 'side', label: '측면(A/B · side)', source: 'side'},
+        {id: 'arm_b_wrist', label: 'arm_b 손목(교차)', source: 'arm_b_wrist'},
       ],
       telemetryRows: [
         ['셀 위상 · 연계역', `${s5Card.phase || 'IDLE'} · 정류장 S2/S5 · AMR 잠금 ${s5Card.amr_motion_inhibited ? 'ON' : 'OFF'}`],
@@ -416,10 +419,10 @@ export function inspectorSpecs(body = {}) {
       title: '🦾 OMX-AI #2 · arm_b (cell_ab · S5 2층 적재 · 반출)',
       badge: `${s5Card.phase || 'IDLE'} · AMR 잠금 ${s5Card.amr_motion_inhibited ? 'ON' : 'OFF'}`,
       cameraViews: [
-        {id: 'arm_b_wrist', label: 'arm_b 손목(근접)', url: '/api/fleet/pipeline/cell-camera/arm_b_wrist'},
-        {id: 'top', label: 'S5 상단(탑뷰)', url: '/api/fleet/pipeline/cell-camera/top'},
-        {id: 'side', label: '측면(side)', url: '/api/fleet/pipeline/cell-camera/side'},
-        {id: 'arm_a_wrist', label: 'arm_a 손목(교차)', url: '/api/fleet/pipeline/cell-camera/arm_a_wrist'},
+        {id: 'arm_b_wrist', label: 'arm_b 손목(근접)', source: 'arm_b_wrist'},
+        {id: 'top', label: 'S5 상단(탑뷰)', source: 'top'},
+        {id: 'side', label: '측면(A/B · side)', source: 'side'},
+        {id: 'arm_a_wrist', label: 'arm_a 손목(교차)', source: 'arm_a_wrist'},
       ],
       telemetryRows: [
         ['셀 위상 · 연계역', `${s5Card.phase || 'IDLE'} · 정류장 S5 · AMR 잠금 ${s5Card.amr_motion_inhibited ? 'ON' : 'OFF'}`],
@@ -461,7 +464,7 @@ export function inspectorSpecs(body = {}) {
       shortTab: `🤖 ${rid}`,
       title: `🤖 Pinky AMR · ${rid} 도킹·배차 (${body?.cable_tangled !== false ? '케이블 보호 ≤1.5cm' : '정상 주행'})`,
       badge: pinkyCard.phase || 'READY',
-      cameraViews: pinkyCard.cameraViews || [],
+      cameraViews: [dockView(rid), ...(pinkyCard.cameraViews || []).filter(v => !v.roiTarget)],
       telemetryRows: [
         ['도킹 · 위치', pinkyCard.phase || 'READY'],
         ['주행 · 안전 모드', pinkyCard.folded_state || '케이블 보호 미세이동 모드'],

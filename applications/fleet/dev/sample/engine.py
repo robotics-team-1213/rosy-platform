@@ -139,6 +139,9 @@ class SampleEngine:
         if (method, path) == ('GET', '/workcell-observations'):
             # The sample site registers no observed workcell (D-837): an empty read-only snapshot.
             return reply({'read_only': True, 'physical_acceptance': False, 'workcells': []})
+        if (method, path) == ('GET', '/pipeline/cell-tasks'):
+            # The Cell page's task ledger read: the sample site has no OMX cell queue, so an empty ledger.
+            return reply({'tasks': []})
         if (method, path) == ('GET', '/workcell-observations/usb-devices'):
             # No hardware is connected to the sample provider.
             return reply({'workcells': []})

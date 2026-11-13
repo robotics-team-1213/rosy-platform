@@ -86,7 +86,6 @@ contracts/learning/src/rosy/contracts/learning/promotion_request.py
 operations/fleet/fleet/pipeline/station_zones.yaml
 operations/fleet/fleet/server/cell/cell_real2sim_helpers.py
 operations/fleet/fleet/server/ledger/berth_parking_helpers.py
-operations/fleet/fleet/server/sitemap/pipeline_camera_routes.py
 operations/fleet/fleet/server/sitemap/pipeline_cell_task_routes.py
 operations/fleet/fleet/server/sitemap/pipeline_gate_routes.py
 operations/fleet/fleet/server/sitemap/pipeline_routes.py
