@@ -28,6 +28,7 @@ def test_move_and_swap_plans_and_bad_tasks_are_rejected():
     assert tr.carries(task(kind="move", **{"from": "pinky", "to": "belt"}, from_tier=2, to_tier=3), tiered) == [
         ("pinky-l1", "belt-l2")]
     for bad in (task(kind="swap", a="pinky", b="belt", buffer="belt"), task(kind="move", **{"from": "pinky", "to": "moon"}),
+                task(kind="move", scenario_id=42, **{"from": "pinky", "to": "belt"}),
                 task(kind="stack", **{"from": "pinky", "to": "belt"}, tier=4), task(kind="fly"), {"kind": "move"}):
         try:
             tr.carries(bad, SITES)
@@ -133,6 +134,23 @@ def test_run_carry_marks_a_destination_full_only_for_room_on_a_single_attempt(tm
         step = tr.run_carry(tmp_path / "c.json", tmp_path / "k.json", sites, "pinky", "belt", tmp_path,
                             run=lambda *a, r=result, **k: Proc(r))
         assert step["dest_full"] is expected, result
+
+
+def test_task_scenario_reaches_each_carry_command(tmp_path):
+    commands = []
+
+    class Proc:
+        stdout, stderr, returncode = '{"result": "placed"}', "", 0
+
+    def run(command, **kwargs):
+        commands.append(command)
+        return Proc()
+
+    out = tr.run_task(task(kind="swap", a="pinky", b="belt", buffer="floor", scenario_id="scene-3"),
+                      config_file(tmp_path), tmp_path / "c.json", tmp_path,
+                      carry=lambda *args, **kwargs: tr.run_carry(*args, run=run, **kwargs))
+    assert out["status"] == "done"
+    assert len(commands) == 3 and all(command[-2:] == ["--scenario-id", "scene-3"] for command in commands)
 
 
 def test_a_swap_never_redirects(tmp_path):
