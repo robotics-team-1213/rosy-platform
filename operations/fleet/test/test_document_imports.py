@@ -33,6 +33,7 @@ SHARED = {
     "map-fit.js",
     "site-layer.js",  # metre grid lines used by the console map and the install plane
     "vision-view.js",
+    "cell-frames.js",  # D-136: Vision-lease cell camera frames shared by Console and Cell.
     "power-action.js",  # D-440 6: the robot card's sleep / wake button, out of roster.js
     "area-first.js",
     "area-nav.js",  # D-741 6·7: the address view picks the area (rail and sub-nav state)
