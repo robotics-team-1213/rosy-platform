@@ -552,3 +552,56 @@ def test_monitoring_with_a_stale_or_null_last_success_counts_as_failing(tmp_path
         assert len(_sent(tmp_path)) == 2
     finally:
         server.shutdown()
+
+
+def _monitoring_alerts(tmp_path, status_code, body):
+    """Alerts sent after three guard runs against a Monitoring that always answers like this."""
+    import http.server
+    import threading
+    tmp_path.mkdir(parents=True, exist_ok=True)
+
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(status_code)
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *args):
+            pass
+    server = http.server.HTTPServer(("127.0.0.1", 0), Handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        conf = f"mon monitoring http://127.0.0.1:{server.server_port}/monitoring-health\n"
+        _guard(tmp_path, HEALTHY, conf=conf, runs=3, env_extra=_alerts(tmp_path))
+        return _sent(tmp_path)
+    finally:
+        server.shutdown()
+
+
+@pytest.mark.parametrize("body", [b"<html><body>502 Bad Gateway</body></html>", b"[]", b"ok", b"null"])
+def test_a_2xx_monitoring_answer_that_is_not_a_json_object_is_a_failed_check(tmp_path, body):
+    assert len(_monitoring_alerts(tmp_path, 200, body)) == 1
+
+
+@pytest.mark.parametrize("body", [b"", b'{"status":"ready"}'])
+def test_an_empty_or_keyless_monitoring_answer_is_judged_by_the_status_code(tmp_path, body):
+    assert _monitoring_alerts(tmp_path, 200, body) == []
+    assert len(_monitoring_alerts(tmp_path / "down", 503, body)) == 1
+
+
+def test_a_failed_monitoring_state_write_does_not_stop_status_json(tmp_path):
+    conf = "pc1 pc op@pc1 05:50-06:20\n"
+    _guard(tmp_path, HEALTHY, conf=conf)
+    state = tmp_path / "state"
+    (state / "monitoring-health.json").unlink()
+    (state / "monitoring-health.json").mkdir()  # neither a direct write nor a replace onto it can succeed
+    (state / "status.json").unlink()
+    _guard(tmp_path, HEALTHY, conf=conf)
+    assert "pc1" in json.loads((state / "status.json").read_text())
+
+
+def test_the_monitoring_state_is_written_through_a_temporary_file_in_its_own_directory(tmp_path):
+    source = GUARD.read_text(encoding="utf-8")
+    assert "monitors_file.with_suffix" in source and "os.replace(monitors_tmp, monitors_file)" in source
+    _guard(tmp_path, HEALTHY)
+    assert sorted(p.name for p in (tmp_path / "state").glob("monitoring-health*")) == ["monitoring-health.json"]

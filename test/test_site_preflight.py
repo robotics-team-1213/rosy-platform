@@ -519,3 +519,21 @@ def test_container_secrets_name_unreadable_paths_without_contents(tmp_path):
     key.chmod(0o400)
     assert not check(env, uid=me + 1, gid=group)["ok"]      # group cannot read the file
     assert not check({"ROSY_SITE_MONITORING_SECRETS_DIR": str(tmp_path / "gone")})["ok"]
+
+
+@pytest.mark.skipif(not hasattr(os, "getuid") or os.getuid() == 0, reason="needs a non-root POSIX user")
+def test_container_secrets_tell_a_non_root_run_to_run_the_checker_as_root(tmp_path):
+    check = _module().check_container_secrets
+    sdir = tmp_path / "monitoring"
+    sdir.mkdir()
+    sdir.chmod(0)
+    try:
+        result = check({"ROSY_SITE_MONITORING_SECRETS_DIR": str(sdir)})
+    finally:
+        sdir.chmod(0o700)
+    assert not result["ok"] and "as root" in result["fix"]
+
+
+def test_container_secrets_docstring_states_who_runs_it_and_what_it_simulates():
+    doc = _module().check_container_secrets.__doc__
+    assert "root" in doc and "10001" in doc and "mode bits" in doc and "not recursive" in doc
