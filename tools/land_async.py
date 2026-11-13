@@ -313,25 +313,7 @@ def _supervise(tree: Path, snap: str, land_args: list[str], run, room) -> int:
         print(f"[land-async] {snap} did not land (exit {code}); kept {tree} for the owner", flush=True)
         split_rollup(tree, snap, reason=reason)
     superseded(tree, snap)
-    collect(tree)
     return code
-
-
-def collect(tree: Path) -> None:
-    """land_gc's lossless sweep of every leftover after each landing: by 11-14 it ran only by hand and the holder
-    held 4.2 GB and 488 logs."""
-    repo = tree.parent.parent.parent
-    sys.path[:0] = [str(repo / "tools")]
-    try:  # under start()'s lock: a landing between its worktree add and its supervisor has neither on record
-        import land_gc
-        with locked(tree.parent.parent / "rosy-land-async.lock", wait=True):
-            rows = land_gc.plan(repo, time.time(), 7)
-            problems = land_gc.apply(repo, rows)
-        gone = sum(row[0] != "keep" for row in rows) - len(problems)
-        if gone or problems:
-            print(f"[land-async] land_gc removed {gone} leftover(s); {len(problems)} kept as changed", flush=True)
-    except Exception as exc:  # cleanup must never change the landing's own outcome
-        print(f"[land-async] land_gc sweep skipped: {exc}", flush=True)
 
 
 def superseded(tree: Path, snap: str) -> list[str]:

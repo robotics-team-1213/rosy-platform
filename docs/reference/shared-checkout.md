@@ -79,7 +79,7 @@
 | 워크트리가 없고 14일 동안 커밋이 없는 미착지 브랜치는 보관한다. 지우지 않고 `refs/archive/<브랜치>@<sha10>`에 둔다. 되살리기: `git branch <브랜치> refs/archive/<브랜치>@<sha10>` | `worktrees.py prune --apply`가 정확한 sha로만 옮긴다(`archive_abandoned`) |
 | 함께 대기에 들어온 착지는 하나로 합쳐 한 번 시험한다. 새 착지는 시험 전에 90초 `pending`으로 기다리고 rollup을 부른다. 11-10 이후 rollup은 243번 "합칠 것 없음"이었고 착지마다 평균 46분 시험을 따로 돌렸다. 급한 착지(`--urgent`)·단독 착지는 기다리지 않는다 | `land_prepare.gather`가 기다린 뒤 `land_rollup apply --auto`를 부른다. 실패한 rollup은 반으로 나뉘어 다시 착지한다(`split`) |
 | 적체는 사람이 볼 때까지 기다리지 않는다. 10분마다 `main`이 움직였으면 열린 MAIN-RED를 다시 시험해 닫고, 풀린 멈춤·고아 착지를 재개하고, rollup·정리를 돌리고, 적체 보고를 쓴다. 주인 없는 MAIN-RED가 30분을 넘으면 `ALERT`이며, 그 줄을 본 세션이 고친다(`python tools/land_mainred.py own <id> <누구>`로 먼저 주인을 적는다) | 예약 작업 `RosyLandTick`이 `tools/land_tick.py`를 돌린다. 보고는 `<git-common-dir>/rosy-land-backlog.txt` |
-| 끝난 착지 스냅샷·로그는 착지마다 정리한다. MAIN-RED로 멈춘 스냅샷은 14일 동안 두고, `main`이 그 실패를 닫으면 스스로 다시 착지한다 | 착지 감독이 끝날 때 `land_gc`를 돌리고 `orphans`로 재개한다 |
+| 끝난 착지 스냅샷·로그는 10분마다 정리한다. MAIN-RED로 멈춘 스냅샷은 14일 동안 두고, `main`이 그 실패를 닫으면 스스로 다시 착지한다 | `land_tick`이 `land_gc`를 돌리고, 착지가 끝나면 감독이 `orphans`로 재개한다 |
 
 ## 같이 하는 깃
 
