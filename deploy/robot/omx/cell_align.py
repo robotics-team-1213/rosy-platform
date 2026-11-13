@@ -3,7 +3,8 @@
 
 2026-11-01: three 3-cell columns stood 4 mm apart and no pick had finger room. By hand it took a lengthwise push
 (off-centre, so the jaw face missed the neighbour), a pivot over the column for the push lane, then a grasp near
-the freed end. Here that order is code:
+the freed end. A tangled pile (2026-11-13) is undone a piece at a time: the nearest piece with a clear push moves,
+and with none the pile is locked (hold, type locked_pile). Here that order is code:
 
   plan   observe and print the next step and why (no motion)
   next   run exactly that step (--commissioning --person-at-switch), then print the step after it
@@ -81,15 +82,16 @@ def next_step(cell, config, calibration, calibration_path, catalog, roi, source,
             return {"step": "pick", "why": "a box has finger room and a plan", "chosen": dry["attempts"][-1].get("chosen")}
         refused = (dry.get("attempts") or [{}])[-1].get("refused", [])
         packed = [r["centre_mm"] for r in refused if str(r["why"]).startswith("no finger room")]
-        if not packed:
-            return {"step": "hold", "why": dry["result"], "refused": refused}
+    tangled = [r["centre_mm"] for r in refused if r["why"] == "tangled blob"]
+    if not packed and not tangled:
+        return {"step": "hold", "why": dry["result"], "refused": refused}
     _, _, objects, error = auto.observe(cell, config, calibration, source, roi, catalog)
     entries = {e["id"]: e for e in catalog}  # its catalogue size: a 2-layer column's top view adds its side faces
     long_packed = [dict(o, length_mm=entries[o["object"]]["length_mm"], width_mm=entries[o["object"]]["width_mm"])
                    for o in objects if o.get("object") in entries  # a fresh frame: the same box within 10 mm
                    and any(math.dist(o["centre_mm"], c) <= 10 for c in packed)
                    and entries[o["object"]]["length_mm"] > entries[o["object"]]["width_mm"]]
-    if error or not long_packed:
+    if error or not (long_packed or tangled):
         return {"step": "hold", "why": error or "no finger room, and no long box to slide", "refused": refused}
     p, site = config.get("params"), config["sites"][push_site]
     mask = cell_objects.foreground(cell.frame("top"), roi, params=p, surface_px=site.get("surface_px"),
@@ -108,7 +110,26 @@ def next_step(cell, config, calibration, calibration_path, catalog, roi, source,
                     "miss_mm": miss}
         if region is None and free_push([o], mask, roi, to_px, p, prm.get(p, "pivot.max_rms_mm"), site.get("surface_px")):
             return {"step": "pivot", "why": "a push fits only with the error measured here", "at": o["raw_m"]}
+    if tangled:
+        miss = (cell_pivot.map_record(calibration, push_site) or {}).get("loo_error_mm", {}).get("max", 0.0)
+        found = pile_push(objects, tangled, entries, lambda o: free_push([o], mask, roi, to_px, p, miss, site.get("surface_px")))
+        if found:
+            return {"step": "push", "type": "pile", "why": "a tangled pile: slide its nearest free piece clear, then look again",
+                    "push": found, "miss_mm": miss}
+        return {"step": "hold", "type": "locked_pile", "why": "a tangled pile, and no piece of it has a clear push", "refused": refused}
     return {"step": "hold", "why": "packed, and no lengthwise push has a clear path", "refused": refused}
+
+
+def pile_push(objects: list, tangled: list, entries: dict, try_push) -> dict | None:
+    """2026-11-13 (arm_s): a box's end lay on another box and the pile leaned on the arm plate. Untangle from the outside:
+    the pieces nearest the tangled blob first, each at its catalogue size (a tangled blob at its measured size), and the first
+    whose push path is clear moves. The next look re-plans: a piece can only be freed once its neighbour has gone."""
+    def sized(o):
+        e = entries.get(o.get("object"))
+        return dict(o, length_mm=e["length_mm"], width_mm=e["width_mm"]) if e else o
+    near = sorted((sized(o) for o in objects if "length_mm" in sized(o)),
+                  key=lambda o: min(math.dist(o["centre_mm"], c) for c in tangled))
+    return next((push for o in near if (push := try_push(o))), None)
 
 
 def run_step(step: dict, args) -> int:

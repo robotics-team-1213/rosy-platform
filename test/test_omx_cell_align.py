@@ -79,8 +79,29 @@ def test_the_next_step_is_pick_then_pivot_then_push_then_hold_from_what_is_measu
     region = {"site": "pallet", "point_m": [0.0, 0.1], "bias_mm": [1.0, -1.0], "rms_mm": 2.0}
     step = scene(tmp_path, monkeypatch, packed, region)()  # measured here: its rms, not the map's worst
     assert step["step"] == "push" and step["miss_mm"] == 2.0
-    other = {"result": "stopped: no usable object", "attempts": [{"refused": [{"centre_mm": [0.0, 100.0], "why": "tangled blob"}]}]}
+    other = {"result": "stopped: no usable object", "attempts": [{"refused": [{"centre_mm": [0.0, 100.0], "why": "not inside the camera view"}]}]}
     assert scene(tmp_path, monkeypatch, other)()["step"] == "hold"
+
+
+def test_a_tangled_pile_frees_its_nearest_piece_with_a_clear_push_else_it_is_locked(tmp_path, monkeypatch):
+    """2026-11-13 arm_s: one box's end lay on another and every push was blocked; the pile is undone a piece at a time."""
+    pile = {"result": "stopped: no usable object (tangled pile)",
+            "attempts": [{"refused": [{"centre_mm": [5.0, 100.0], "why": "tangled blob"}]}]}
+    step = scene(tmp_path, monkeypatch, pile)()
+    assert step["step"] == "push" and step["type"] == "pile" and step["push"]["object"] == "container-3"
+    monkeypatch.setattr(cr, "free_push", lambda *a, **k: None)
+    step = scene(tmp_path, monkeypatch, pile)()
+    assert step["step"] == "hold" and step["type"] == "locked_pile"
+
+
+def test_pile_push_tries_the_nearest_piece_first_at_its_catalogue_size():
+    far = {"object": "container-3", "centre_mm": [0.0, 300.0], "length_mm": 1}
+    near = {"object": None, "centre_mm": [0.0, 110.0], "length_mm": 70, "width_mm": 50}
+    tried = []
+    found = cr.pile_push([far, near], [[0.0, 100.0]], {"container-3": {"length_mm": 90, "width_mm": 30}},
+                         lambda o: tried.append(o) or (o["length_mm"] == 90 and {"object": "far"}))
+    assert found == {"object": "far"} and [o["length_mm"] for o in tried] == [70, 90]
+    assert cr.pile_push([], [[0.0, 0.0]], {}, lambda o: {"x": 1}) is None
 
 
 def test_next_moves_only_as_one_supervised_step():

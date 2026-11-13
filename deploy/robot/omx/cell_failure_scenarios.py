@@ -25,6 +25,7 @@ import cell_diagnose
 import cell_recovery
 
 STALL, ROOM = "stopped: released after a stop at run lift_pick", "stopped: no usable object"
+PILE = "stopped: no usable object (tangled pile)"  # 2026-11-13 arm_s: one box's end on another, the pile against the plate
 PICK_PX = (100, 100)  # a change within NEAR_PX of it is the box itself; `pile` paints one far from it
 
 # rounds: (run_auto's result, the pile moved away from the box in that attempt, the push moved something[, cell_why's reading])
@@ -75,6 +76,15 @@ SCENARIOS = [
      "result": "placed", "actions": ["observe_again", "done"]},
     {"name": "S3 packed column: push clears finger clearance", "rounds": [("stopped: packed_column: clear_x=3.5 mm", False, True), ("placed", False, True)],
      "result": "placed", "actions": ["push_clear", "done"]},
+    {"name": "packed is its own type: the lengthwise push", "rounds": [(ROOM + " (packed)", False, True), ("placed", False, True)],
+     "result": "placed", "actions": ["push_clear", "done"]},
+    {"name": "tangled pile: the nearest free piece slides clear, then the pick", "rounds": [(PILE, False, True), ("placed", False, True)],
+     "result": "placed", "actions": ["push_clear", "done"]},
+    {"name": "tangled pile in two pieces: push, look again, then the pick", "rounds": [(PILE, False, True), (PILE, False, True), ("placed", False, True)],
+     "result": "placed", "actions": ["push_clear", "observe_again", "done"]},
+    {"name": "locked pile: no piece has a clear push, a person", "rounds": [(PILE, False, False)], "result": "ask a person: pile", "actions": ["ask_person"]},
+    {"name": "pile moved while picking: look before pushing", "rounds": [(PILE, True, True), ("placed", False, True)], "result": "placed",
+     "actions": ["observe_again", "done"]},
 ]
 
 

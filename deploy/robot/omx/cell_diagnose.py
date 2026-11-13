@@ -26,7 +26,15 @@ STRATEGY = {
 
 
 # How a whole attempt ended (cell_auto_pick.run_auto's result) -> what cell_recovery changes before the next one.
-ATTEMPT_CAUSES = (("stopped: released", "lift_stall"), ("stopped: holding", "held_stop"), ("stopped: still holding", "stuck_in_jaws"),
+# Obstacle types run_auto names when no object is usable (its refusals say which), each with its own row below:
+#   packed  no finger room beside a box: cell_align slides it lengthwise (cause no_room)
+#   pile    a tangled blob, boxes on or against each other (2026-11-13 arm_s: a box's end lay on another, the pile against
+#           the arm plate): cell_align.pile_push frees the nearest piece with a clear path, then the pick is planned again;
+#           with none clear the pile is locked and goes to a person
+# shortcut: a box leaning on a fixture (2026-11-13 arm_b, beside the ship) is not seen from the top camera; it needs the
+# side camera or depth before it can be a type here.
+OBSTACLE_TYPES = {"tangled blob": "tangled pile", "no finger room": "packed"}
+ATTEMPT_CAUSES = (("stopped: no usable object (tangled pile)", "pile"), ("stopped: released", "lift_stall"), ("stopped: holding", "held_stop"), ("stopped: still holding", "stuck_in_jaws"),
                   ("stopped: misaligned", "misaligned"), ("stopped: reinserted", "unstable_grasp"), ("stopped: placed", "not_seen_placed"), ("stopped: no usable", "no_room"),
                   ("stopped: pivot", "calibrate"), ("stopped: no clear pivot", "calibrate"),
                   ("stopped: unseated_cone", "s6_unseated_cone"), ("stopped: toppled", "s2_toppled_or_slumped"),
@@ -37,6 +45,7 @@ RECOVERY = {
     # let go and rose: slower first (moves nothing else); cell_why's reading can put the push first
     "lift_stall": ["slow_down", "push_clear", "observe_again", "ask_person"],
     "no_room": ["push_clear", "observe_again", "ask_person"],
+    "pile": ["push_clear", "observe_again", "ask_person"],  # one piece per push; the next look re-plans from what is left
     "no_progress": ["push_clear", "observe_again", "ask_person"],
     "misaligned": ["observe_again", "push_clear", "ask_person"],
     "unstable_grasp": ["observe_again", "push_clear", "ask_person"],
@@ -63,6 +72,12 @@ def attempt_cause(result: str, pile_moved: bool = False) -> str:
                  "no_progress" if result.startswith("stopped: ") and result.endswith(" attempts") else "other")
     # a contact's table is spent on this plan; only a pile that moved makes it stale (35 of 110 real attempts, none of them re-planned)
     return "scene_moved" if pile_moved and (RECOVERY[cause] != ["ask_person"] or cause == "contact") else cause
+
+
+def obstacle_type(refused: list) -> str | None:
+    """The obstacle type a set of refusals shows; a tangled pile outranks packed boxes (it has to be undone first)."""
+    whys = [str(r.get("why", "")) for r in refused]
+    return next((t for key, t in OBSTACLE_TYPES.items() if any(w.startswith(key) for w in whys)), None)
 
 
 def diagnose(result: str, contact_z: float | None, surface_z: float | None, top_z: float | None,

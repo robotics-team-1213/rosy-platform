@@ -29,12 +29,19 @@ def test_the_result_names_the_cause_and_hard_stops_are_never_retried():
     for result, cause in (("placed", "placed"), ("stopped: released after a stop at run lift_pick", "lift_stall"),
                           ("stopped: holding after a stop at run lift_pick", "held_stop"), ("stopped: still holding", "stuck_in_jaws"),
                           ("stopped: misaligned", "misaligned"), ("stopped: placed", "not_seen_placed"),
-                          ("stopped: no usable object", "no_room"), ("stopped: 2 attempts", "no_progress"),
+                          ("stopped: no usable object", "no_room"), ("stopped: no usable object (packed)", "no_room"),
+                          ("stopped: no usable object (tangled pile)", "pile"), ("stopped: 2 attempts", "no_progress"),
                           ("stopped: fault", "other"), ("aborted: 55 C", "other"), ("held: not reviewed", "other")):
         assert dg.attempt_cause(result) == cause
-        assert dg.attempt_cause(result, True) == ("scene_moved" if cause in ("lift_stall", "misaligned", "not_seen_placed", "no_room", "no_progress") else cause)
+        assert dg.attempt_cause(result, True) == ("scene_moved" if cause in ("lift_stall", "misaligned", "not_seen_placed", "no_room", "pile", "no_progress") else cause)
     for cause in ("held_stop", "stuck_in_jaws", "other"):
         assert dg.RECOVERY[cause] == ["ask_person"]
+
+
+def test_the_refusals_name_the_obstacle_type_and_a_pile_outranks_packed_boxes():
+    room, pile = {"why": "no finger room: 4.0 / 26.0 mm free beside it"}, {"why": "tangled blob"}
+    assert dg.obstacle_type([room]) == "packed" and dg.obstacle_type([room, pile]) == "tangled pile"
+    assert dg.obstacle_type([{"why": "not inside the camera view"}]) is None and dg.obstacle_type([]) is None
 
 
 def test_the_stall_hook_keeps_the_session_and_only_with_a_person_at_the_switch(monkeypatch):
