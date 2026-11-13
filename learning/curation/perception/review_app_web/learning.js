@@ -144,6 +144,13 @@ function updateControls() {
     button.reason=busy?'요청 처리 중입니다':button.disabled?control?.reasons?.[action]||control?.error||'학습 실행기를 연결하세요.':'';
   }
 }
+// 홈 상태줄: 실행기·객체 검수 대기·픽셀 검수 대기를 /api/learning 한 번으로 보여준다(GPU 없음).
+function renderHomeStrip() {
+  const strip=$('home-status-strip');if(!strip)return;
+  const control=workspace?.control;
+  strip.textContent=`실행기 ${control?.available?({running:'처리 중',stopping:'중지 요청 중',waiting:'조건 대기',stopped:'중지됨'}[control.state]||control.state):'연결 필요'}`
+    +` · 객체 검수 대기 ${workspace?.counts?.pending??'?'}장 · 픽셀 검수 대기 ${workspace?.pixel_counts?.pending??'?'}장`;
+}
 async function controlAction(action) {
   if(busy)return;
   const version=workspace.control.version;setBusy(true);message('learning-error','');
@@ -165,7 +172,7 @@ setInterval(async()=> {
     const value=await request('/api/learning');
     if(busy||sequence!==readSequence)return;
     pendingReportRefresh ||= JSON.stringify(workspace.items)!==JSON.stringify(value.items);
-    workspace=value;renderReview();renderPipeline();renderDomains();updateControls();
+    workspace=value;renderReview();renderPipeline();renderDomains();updateControls();renderHomeStrip();
     if(pendingReportRefresh&&!document.querySelector('dialog[open]')&&$('connection-panel').hidden
         &&!$('jobs').contains(document.activeElement)&&!$('job-detail').contains(document.activeElement)) {
       checkedAt=Date.now();render();pendingReportRefresh=false;
@@ -179,7 +186,7 @@ async function request(path,body) {
   if(response.status>=500){const error=new Error('학습 작업 서비스를 사용할 수 없습니다. 잠시 후 다시 시도하세요.');error.status=response.status;throw error;}
   const value=await response.json();if(!response.ok){const error=new Error(response.status===403?'이 작업대의 학습 작업 접근 권한이 없습니다.':'요청 실패 · '+(value.error||'원인을 확인할 수 없습니다.'));error.status=response.status;if(response.status===401||response.status===403)showUnavailable(error);throw error;}return value;
 }
-function showUnavailable(error){clearStorage();workspace=undefined;checkedAt=0;renderPipeline();updateControls();$('jobs').replaceChildren();$('job-detail-content').replaceChildren();$('jobs').hidden=true;$('empty-jobs').hidden=false;$('learning-status').setAttribute('state','error');$('learning-status').textContent=error.status===403?'학습 작업 권한이 없습니다. 접근 권한을 확인한 뒤 최신 결과 확인을 누르세요.':error.status>=500?'학습 작업 서비스를 사용할 수 없습니다. 서비스가 복구되면 최신 결과 확인을 누르세요.':'작업 결과를 확인할 수 없습니다. 연결을 확인한 뒤 최신 결과 확인을 누르세요.';$('review-counts').textContent='검수 상태 확인 불가';$('pixel-counts').textContent='검수 상태 확인 불가';$('review-stage-summary').textContent='등록·승인 상태 확인 불가';$('training-data-state').textContent='학습 데이터 수용 여부 확인 불가';$('preparation-status').textContent='상태 확인 불가';$('empty-title').textContent='작업 결과를 확인할 수 없습니다';$('empty-description').textContent='최신 결과 확인으로 다시 시도하세요.';$('updated').textContent='';}
+function showUnavailable(error){clearStorage();workspace=undefined;checkedAt=0;renderPipeline();updateControls();$('home-status-strip').textContent='상태 확인 불가';$('jobs').replaceChildren();$('job-detail-content').replaceChildren();$('jobs').hidden=true;$('empty-jobs').hidden=false;$('learning-status').setAttribute('state','error');$('learning-status').textContent=error.status===403?'학습 작업 권한이 없습니다. 접근 권한을 확인한 뒤 최신 결과 확인을 누르세요.':error.status>=500?'학습 작업 서비스를 사용할 수 없습니다. 서비스가 복구되면 최신 결과 확인을 누르세요.':'작업 결과를 확인할 수 없습니다. 연결을 확인한 뒤 최신 결과 확인을 누르세요.';$('review-counts').textContent='검수 상태 확인 불가';$('pixel-counts').textContent='검수 상태 확인 불가';$('review-stage-summary').textContent='등록·승인 상태 확인 불가';$('training-data-state').textContent='학습 데이터 수용 여부 확인 불가';$('preparation-status').textContent='상태 확인 불가';$('empty-title').textContent='작업 결과를 확인할 수 없습니다';$('empty-description').textContent='최신 결과 확인으로 다시 시도하세요.';$('updated').textContent='';}
 function updateReadAge(){
   if(!checkedAt)return;
   const minutes=Math.floor(Math.max(0,Date.now()-checkedAt)/60000);
@@ -289,9 +296,10 @@ async function load() {
   ++readSequence;
   workspace=undefined;setBusy(true);$('learning-status').setAttribute('state','pending');$('learning-status').textContent='작업 결과를 확인하는 중입니다.';$('review-counts').textContent='불러오는 중';$('pixel-counts').textContent='불러오는 중';$('review-stage-summary').textContent='등록·승인 상태를 확인하는 중입니다.';$('training-data-state').textContent='학습 데이터 수용 여부를 확인하는 중입니다.';$('jobs').replaceChildren();$('jobs').hidden=true;$('empty-jobs').hidden=true;$('updated').textContent='';
   $('pipeline').setAttribute('aria-busy','true');$('pipeline-stages').replaceChildren();$('pipeline-records').replaceChildren();$('pipeline-status').textContent='현재 자료와 학습 결과를 연결하는 중입니다.';
+  $('home-status-strip').textContent='상태를 확인하는 중입니다.';
   const started=performance.now();const timer=setInterval(()=>{const seconds=Math.floor((performance.now()-started)/1000);if(seconds>=3)$('learning-status').textContent=`서버 응답 대기 ${seconds}초 · 현재 작업과 보고서 상태를 확인하고 있습니다.`;},1000);
   try {workspace=await request('/api/learning');checkedAt=Date.now();
-  renderReview();renderPipeline();renderDomains();
+  renderReview();renderPipeline();renderDomains();renderHomeStrip();
   if(!$('kind').options.length) {
     for(const row of workspace.workflows) {
       text($('capabilities'),'h3',row.name);text($('capabilities'),'p',row.support);text($('capabilities'),'p',row.next);
