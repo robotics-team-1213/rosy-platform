@@ -451,7 +451,13 @@ def _can_read(info: os.stat_result, uid: int, gid: int, directory: bool) -> bool
 
 
 def check_container_secrets(env: dict[str, str], uid: int = CONTAINER_UID, gid: int = CONTAINER_GID) -> dict:
-    """Names a path (never contents) the container user cannot read; a variable that is unset is not mounted."""
+    """Names a path (never contents) the container user cannot read; a variable that is unset is not mounted.
+
+    Run by hand on the site host, as root so it can read the protected secrets; no unit runs it (the README
+    names it as the check before `compose up`).
+    It does not switch users: it simulates uid/gid 10001 from the mode bits and owner of each path, and it is
+    not recursive (the directory and its direct entries only). A non-root run that cannot even stat or list a
+    path reports it as unreadable, which says nothing about the container user."""
     bad = []
     for name in CONTAINER_SECRET_DIRS:
         value = os.environ.get(name) or env.get(name)
@@ -466,7 +472,8 @@ def check_container_secrets(env: dict[str, str], uid: int = CONTAINER_UID, gid: 
             bad.append(f"{root} ({error.strerror or error})")
     return _check("container_secrets_readable", not bad,
                   "unreadable by uid/gid 10001: " + "; ".join(bad) if bad else "overlay secrets are readable by uid/gid 10001",
-                  "chown root:10001 the directory (mode 0750) and its files (mode 0440), as deploy/site/README.md Monitoring says")
+                  "chown root:10001 the directory (mode 0750) and its files (mode 0440), as deploy/site/README.md Monitoring says; "
+                  "if the checker itself got 'Permission denied' (not the container user), run it as root: sudo python3 deploy/site/site_preflight.py")
 
 
 def run_checks(args: argparse.Namespace) -> list[dict]:
