@@ -56,7 +56,10 @@
    `update_status.py`는 각 호스트의 chrony `server` 이름이 이와 같은지 보고 다르면 `FAIL time-source <호스트>`다.
    `python tools/remote/site_map.py apply-time [--host X]`는 어긋난 클라이언트에 위 `install`을 ssh로 대신 한다.
    기본은 미리 보기이고 `--execute`일 때만 바꾼다. 이미 맞는 호스트는 건너뛰고, `rosy-core`·`rosy-io`·`rosy-navigation`이
-   도는 호스트는 거부한다. Pinky만 `--robot-maintenance`로 그 유닛을 멈췄다가 다시 시작한다. 사람 없이 도는 감시는
+   도는 호스트는 거부하고, ssh가 끊겨 상태를 못 읽어도 거부한다. site 역할 호스트(지도의 `roles`)에는 client 역할을 설치하지 않는다.
+   Pinky만 `--robot-maintenance --host <로봇> --robot-idle-confirmed <로봇>`으로 그 유닛을 멈췄다가 다시 시작한다(한 번에 한 대,
+   움직임·도킹이 없음은 ssh로 읽을 신호가 없어 사람이 대시보드에서 확인하고 플래그로 적는다). 멈춘 유닛은 설치가 실패해도 반드시
+   다시 시작하고 결과를 출력한다. 사람 없이 도는 감시는
    호스트의 `rosy-host-guard`다. `hosts.conf`의 `<이름> drift <ssh 대상> <시간원|-> [옛 이름...]` 줄이
    forced command `drift`로 chrony 이름·사용 가능한 원천 수·옛 이름·상대 guard의 멈춤을 10분마다 읽고,
    기존 운영자 webhook으로 연속 2회 이상이면 한 번, 정상으로 돌아오면 한 번 알린다(`host-guard.conf.example`).

@@ -45,7 +45,7 @@ case "$1" in
       if grep -qiF -- "$name" $files /etc/hosts </dev/null 2>/dev/null; then echo "retired $name"; fi
     done
     written=$(stat -c %Y /var/lib/rosy-host-guard/status.json 2>/dev/null || true)
-    echo "guard-age ${written:+$(($(date +%s) - written))}"
+    if [ -n "$written" ]; then echo "guard-age $(($(date +%s) - written))"; else echo "guard-age missing"; fi
     ;;
   health)
     [ $# -eq 1 ] || refuse

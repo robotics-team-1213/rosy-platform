@@ -6,7 +6,7 @@ rediscovering the site. ``check`` compares each host's OpenRB boards with the ma
 
     python tools/remote/site_map.py show
     python tools/remote/site_map.py check            # exit 1 on a missing or unmapped board
-    python tools/remote/site_map.py apply-time [--host X] [--execute] [--robot-maintenance]   # dry run unless --execute
+    python tools/remote/site_map.py apply-time [--host X] [--execute] [--robot-maintenance --robot-idle-confirmed R]   # dry run unless --execute
 
 ``time_source:`` (D-1021) is the one place a host's chrony `server` names are decided: top level ``{client: <name>,
 site: [<upstream>, ...]}``, or ``time_source:`` on one host. ``update_status`` compares it with each host's chrony;
@@ -109,81 +109,119 @@ def present_boards(ssh: str) -> set[str]:
 
 
 def ssh_run(target: str, command: str, data: bytes | None = None) -> tuple[int, str]:
+    """(exit code, stdout). stderr (host-key warnings, banners) never mixes into a successful answer."""
     try:
         done = subprocess.run(["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=8", target, command], input=data,
-                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=240)
+                              stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=240)
     except subprocess.TimeoutExpired:
         return 255, "timed out"
-    return done.returncode, done.stdout.decode(errors="replace")
+    out, err = done.stdout.decode(errors="replace"), done.stderr.decode(errors="replace")
+    return done.returncode, out if done.returncode == 0 else out + err
 
 
-def apply_host(label, target, expected, robot, run, execute, robot_maintenance, tool: bytes) -> bool:
+def workloads_state(run, target: str) -> tuple[list[str] | None, str]:
+    """(active workload units, "") or (None, why): exit 0 is active and 3 inactive; any other exit (ssh 255, a
+    timeout) is unknown, and an unknown state is never read as inactive."""
+    active = []
+    for unit in WORKLOADS:
+        code, _ = run(target, f"systemctl is-active --quiet {unit}.service")
+        if code == 0:
+            active.append(unit)
+        elif code != 3:
+            return None, f"cannot tell whether {unit} is active (exit {code})"
+    return active, ""
+
+
+def apply_host(label, target, expected, robot, run, execute, robot_maintenance, tool: bytes, site_role=False) -> bool:
     """Bring one host's chrony to ``expected`` (one client source); prints one or more lines, False on a failure."""
+    if site_role:  # decided by the map's roles, never by how many sources the map lists
+        print(f"{label}: skipped, a site role host serves time and never gets the client role; install it by hand (needs --allow)")
+        return True
     if len(expected) != 1:
-        print(f"{label}: skipped, {len(expected)} sources is the site role; install it by hand (needs --allow)")
+        print(f"{label}: skipped, {len(expected)} sources is not one client source; install it by hand (needs --allow)")
         return True
     (source,) = expected
     code, out = run(target, CHRONY_NAMES)
     if code:
         print(f"{label}: FAIL unreachable ({out.strip()[-80:]})")
         return False
-    if set(out.split()) == expected:
+    if {n.rstrip(".") for n in out.lower().split()} == expected:
         print(f"{label}: ok, chrony already uses {source}")
         return True
-    active = [u for u in WORKLOADS if run(target, f"systemctl is-active --quiet {u}.service")[0] == 0]
+    active, why = workloads_state(run, target)
+    if active is None:
+        print(f"{label}: FAIL {why}; refusing to change this host")
+        return False
     if active and not (robot and robot_maintenance):
         print(f"{label}: refused, {', '.join(active)} active; stop them in a maintenance window"
               + (" or pass --robot-maintenance" if robot else ""))
         return False
-    install = f"sudo -n python3 /tmp/rosy_time_sync.py install --maintenance --role client --source {shlex.quote(source)}"
-    steps = [f"sudo -n systemctl stop {u}.service" for u in reversed(active)]
-    steps += ["copy rosy_time_sync.py to /tmp", install] + [f"sudo -n systemctl start {u}.service" for u in active]
+    tail = f"install --maintenance --role client --source {shlex.quote(source)}"
     if not execute:
+        steps = [f"sudo -n systemctl stop {u}.service" for u in reversed(active)]
+        steps += ["mktemp -d, copy rosy_time_sync.py into it", f"sudo -n python3 -I <dir>/rosy_time_sync.py {tail}", "rm -rf <dir>"]
+        steps += [f"sudo -n systemctl start {u}.service" for u in active]
         print(f"{label}: would run on {target}: " + "; ".join(steps))
         return True
+    code, out = run(target, "mktemp -d")
+    workdir = out.strip()
+    if code or not re.fullmatch(r"/[A-Za-z0-9._/-]+", workdir):
+        print(f"{label}: FAIL could not make a private directory ({out.strip()[-80:]})")
+        return False
     stopped, ok = [], True
     try:
         for unit in reversed(active):
+            stopped.append(unit)  # a stop that timed out may still finish, so it is restarted too
             if run(target, f"sudo -n systemctl stop {unit}.service")[0]:
                 raise RuntimeError(f"could not stop {unit}")
-            stopped.append(unit)
-        if run(target, "umask 077 && cat > /tmp/rosy_time_sync.py", tool)[0]:
-            raise RuntimeError("could not copy the tool to /tmp")
-        code, out = run(target, install)
+        if run(target, f"umask 077 && cat > {workdir}/rosy_time_sync.py", tool)[0]:
+            raise RuntimeError("could not copy the tool to the private directory")
+        code, out = run(target, f"sudo -n python3 -I {workdir}/rosy_time_sync.py {tail}")
         if code:
             raise RuntimeError(f"install exit {code}: {out.strip()[-200:]}")
     except RuntimeError as error:
         print(f"{label}: FAIL {error}")
         ok = False
     finally:
-        run(target, "rm -f /tmp/rosy_time_sync.py")
+        run(target, f"rm -rf {workdir}")
         for unit in reversed(stopped):  # start order is the reverse of the stop order
             if run(target, f"sudo -n systemctl start {unit}.service")[0]:
-                print(f"{label}: FAIL could not start {unit}; start it by hand")
+                print(f"{label}: FAIL could not start {unit}; start it by hand now")
                 ok = False
+            else:
+                print(f"{label}: started {unit} again")
     if ok:
         print(f"{label}: installed chrony source {source}")
     return ok
 
 
-def apply_time(site: dict, run=ssh_run, execute=False, only=None, robot_maintenance=False, tool: bytes | None = None) -> bool:
+def apply_time(site: dict, run=ssh_run, execute=False, only=None, robot_maintenance=False, tool: bytes | None = None,
+               robot_idle_confirmed: str | None = None) -> bool:
     """Run apply_host for every host of the map and every Pinky; True when none failed."""
     tool = TIME_TOOL.read_bytes() if tool is None else tool
-    jobs = [(name, str(host["ssh"]).split()[0], time_source(site, host), False)
+    jobs = [(name, str(host["ssh"]).split()[0], time_source(site, host), False, "site" in (host.get("roles") or []))
             for name, host in site["hosts"].items() if host.get("ssh")]
     robots_source = time_source(site, {})  # a robot has the client role
-    jobs += [(f"rosy-pinky-{robot}", f"rosy-pinky-{robot}", robots_source, True)
+    jobs += [(f"rosy-pinky-{robot}", f"rosy-pinky-{robot}", robots_source, True, False)
              for robot in ((site.get("robots") or {}).get("pinky_active") or {})]
     jobs = [job for job in jobs if only in (None, job[0], job[1])]
     if not jobs:
         print(f"no host matches {only!r}")
         return False
+    if robot_maintenance:  # one robot per run, and only one a person says is idle (no reliable idle signal over ssh)
+        if only is None or len(jobs) != 1 or not jobs[0][3]:
+            print("refused: --robot-maintenance needs --host naming exactly one robot")
+            return False
+        if robot_idle_confirmed not in jobs[0][:2]:
+            print(f"{jobs[0][0]}: refused, --robot-maintenance needs --robot-idle-confirmed {jobs[0][0]}: "
+                  "confirm on its dashboard that it is not moving or docking and has no goal")
+            return False
     results = []
-    for name, target, expected, robot in jobs:
+    for name, target, expected, robot, site_role in jobs:
         if expected is None:
             print(f"{name}: skipped, no time_source in the site map")
             continue
-        results.append(apply_host(name, target, expected, robot, run, execute, robot_maintenance, tool))
+        results.append(apply_host(name, target, expected, robot, run, execute, robot_maintenance, tool, site_role))
     return all(results)
 
 
@@ -195,14 +233,19 @@ def main(argv: list[str] | None = None) -> int:
     mode.add_argument("--dry-run", action="store_true", help="apply-time: print only (the default)")
     mode.add_argument("--execute", action="store_true", help="apply-time: really install over ssh")
     parser.add_argument("--robot-maintenance", action="store_true",
-                        help="apply-time: stop and restart a robot's rosy-core/rosy-io/rosy-navigation around the install")
+                        help="apply-time: stop and restart a robot's rosy-core/rosy-io/rosy-navigation around the install; "
+                             "needs --host with one robot and --robot-idle-confirmed")
+    parser.add_argument("--robot-idle-confirmed", metavar="ROBOT",
+                        help="apply-time: you checked that this robot is idle (not moving or docking, no goal); no ssh "
+                             "signal says so, so --robot-maintenance refuses without it")
     args = parser.parse_args(argv)
     site = load()
     if args.command == "show":
         print(json.dumps(site, indent=1, ensure_ascii=False, default=str))
         return 0
     if args.command == "apply-time":
-        return 0 if apply_time(site, execute=args.execute, only=args.host, robot_maintenance=args.robot_maintenance) else 1
+        return 0 if apply_time(site, execute=args.execute, only=args.host, robot_maintenance=args.robot_maintenance,
+                                  robot_idle_confirmed=args.robot_idle_confirmed) else 1
     failed = False
     for name, host in site["hosts"].items():
         if not host.get("arms"):

@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import socket
 import ssl
 import subprocess
@@ -207,18 +208,24 @@ def check_monitoring(name: str, url: str, ca: str | None, row: dict) -> None:
         act(name, "alert unreachable", f"{row['fails']} checks")
 
 
-def alert_streak(name: str, row: dict, problem: str | None, what: str, report=None) -> None:
+def alert_streak(name: str, row: dict, problem: str | None, what: str, report=None, kind=None) -> None:
     """Alert once when ``problem`` has lasted ALERT_AFTER checks (distinct ``report`` stamps when given, so one
-    failed probe read by three guard runs counts once) and once when it is gone; a failed post is tried again."""
+    failed probe read by three guard runs counts once) and once when it is gone; a failed post is tried again.
+    A changed ``kind`` (the cause, not the wording) inside an alerted streak alerts once more."""
     if problem is None:
         row["fails"] = 0
         row.pop("seen", None)
+        row.pop("kind", None)
         if row.get("alerted") and post_alert(f"Rosy: {name} {what}이 다시 정상입니다."):
             row["alerted"] = False
             act(name, "alert recovered", what)
         return
     if report is None or report != row.get("seen"):
         row["fails"], row["seen"] = row.get("fails", 0) + 1, report
+    if kind is not None:
+        if row.get("alerted") and row.get("kind") not in (None, kind):
+            row["alerted"] = False
+        row["kind"] = kind
     if row["fails"] >= ALERT_AFTER and not row.get("alerted") and post_alert(f"Rosy: {name} {what}: {problem}"):
         row["alerted"] = True
         act(name, "alert unreachable", f"{what}: {problem}")
@@ -229,7 +236,7 @@ def drift_problem(answer: str | None, expected: set[str]) -> str | None:
     refuses the verb, and a watcher that cannot read must not look clean."""
     if answer is None:
         return "답이 없습니다(연결 실패이거나 설치된 rosy-host-guard-remote가 옛 버전입니다)"
-    problems, seen_chrony = [], False
+    problems, seen_chrony, seen_age = [], False, False
     for line in answer.splitlines():
         kind, _, rest = line.partition(" ")
         fields = rest.split()
@@ -247,31 +254,65 @@ def drift_problem(answer: str | None, expected: set[str]) -> str | None:
                     problems.append(f"시간원 {', '.join(sorted(names)) or '없음'}이 현장 배치 {', '.join(sorted(expected))}와 다릅니다")
         elif kind == "retired" and fields:
             problems.append(f"옛 이름 {fields[0]}이 설정에 남아 있습니다")
-        elif kind == "guard-age" and fields and fields[0].isdigit() and int(fields[0]) > REPORT_STALE_S:
-            problems.append(f"site guard가 {int(fields[0]) // 3600}시간 넘게 멈췄습니다")
+        elif kind == "guard-age":
+            seen_age = True
+            age = fields[0] if fields else ""
+            if not (age.isascii() and age.isdigit()):  # missing status.json, an empty or an odd value
+                problems.append("guard 상태 파일의 시각을 읽지 못했습니다(status.json이 없거나 읽을 수 없습니다)")
+            elif int(age) > REPORT_STALE_S:
+                problems.append(f"site guard가 {int(age) // 3600}시간 넘게 멈췄습니다")
+    if seen_chrony and not seen_age:
+        problems.append("guard 상태 시각 보고가 없습니다")
     return "; ".join(problems) or (None if seen_chrony else "chrony 보고가 없습니다")
 
 
-def login_problem(path: Path, now: float):
-    """(problem or None, report stamp) from account_login_check.py's status file; a missing, unreadable or old one is a problem."""
+def login_problem(path: Path, now: float, known=()):
+    """(problem or None, report stamp, cause, apps of a full report) from account_login_check.py's status file. A
+    missing, unreadable, old, future-dated or NaN-stamped one is a problem, and so is a partial one: ``known`` are the
+    apps of earlier full reports, and a report without one of them (a probe run for a few apps) hides its failure."""
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
         stamp, apps = float(data["time"]), data["apps"]
         failed = sorted(app for app, ok in apps.items() if ok is not True)
     except (OSError, ValueError, KeyError, TypeError, AttributeError):
-        return "점검 결과 파일을 읽지 못했습니다", None
+        return "점검 결과 파일을 읽지 못했습니다", None, "unreadable", None
     if not apps:
-        return "점검한 앱이 없습니다", None
-    if now - stamp > LOGIN_STALE_S:
-        return f"마지막 결과가 {(now - stamp) / 3600:.0f}시간 전입니다", None
-    return (f"로그인 실패한 앱: {', '.join(failed)}" if failed else None), stamp
+        return "점검한 앱이 없습니다", None, "empty", None
+    if not -60 <= now - stamp <= LOGIN_STALE_S:  # False for NaN too
+        age = now - stamp
+        return (f"마지막 결과가 {age / 3600:.0f}시간 전입니다" if age > 0 else "결과의 시각이 미래이거나 읽을 수 없습니다"), None, "stale", None
+    missing = sorted(set(known) - set(apps))
+    if missing:
+        return f"일부 앱만 점검됐습니다(빠진 앱: {', '.join(missing)})", stamp, "partial", None
+    return (f"로그인 실패한 앱: {', '.join(failed)}" if failed else None), stamp, "failed " + ",".join(failed), sorted(apps)
+
+
+NAME = re.compile(r"[A-Za-z0-9.-]+")
+
+
+def watch_config_error(line: list[str]) -> str | None:
+    """Why a drift or logincheck line cannot be run, else None."""
+    if line[1] == "logincheck":
+        return None if len(line) == 3 else "logincheck 줄은 `<이름> logincheck <상태 파일>` 형식이어야 합니다"
+    sources = line[3].split(",") if len(line) > 3 and line[3] != "-" else []
+    if len(line) < 4 or not all(NAME.fullmatch(n) for n in [*sources, *line[4:]]):
+        return "drift 줄은 `<이름> drift <ssh 대상> <시간원,...|-> [<옛 이름> ...]` 형식이고 이름은 영문자·숫자·점·하이픈이어야 합니다"
+    return None
 
 
 def check_watch(line: list[str], row: dict) -> None:
     name, kind = line[0], line[1]
+    error = watch_config_error(line)
+    if error:  # never a silent skip: say it on stderr and alert like any other problem
+        print(f"{name}: {kind} config error: {error}", file=sys.stderr, flush=True)
+        alert_streak(name, row, error, "감시 설정", kind="config")
+        return
     if kind == "logincheck":
-        problem, stamp = login_problem(Path(line[2]), time.time())
-        alert_streak(name, row, problem, "Account 로그인 점검", stamp)
+        known = row.get("known", [])
+        problem, stamp, cause, full = login_problem(Path(line[2]), time.time(), known)
+        if full is not None:
+            row["known"] = sorted({*known, *full})
+        alert_streak(name, row, problem, "Account 로그인 점검", stamp, cause)
     else:
         expected = set() if line[3] == "-" else {n.lower().rstrip(".") for n in line[3].split(",")}
         alert_streak(name, row, drift_problem(ssh(line[2], " ".join(["drift", *line[4:]])), expected), "시간원·옛 이름 점검")

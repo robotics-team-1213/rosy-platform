@@ -19,7 +19,7 @@ site updates <site-user>@127.0.0.1
 # site pc <user>@<site-pc-address> 05:58-06:28
 # D-1021 drift lines (needs the current rosy-host-guard-remote on the target): <time_source> is the site map's, "-" skips the
 # name compare; after it, the retired host names (full names, from the site map) to look for in chrony and /etc/hosts.
-# One line per PC; the site PC's own line lets the OTHER guard see this guard stop (guard-age):
+# One line per PC that runs a guard; a missing status.json, a malformed line or a stopped guard alerts (guard-age):
 # model drift <user>@<model-pc-address> <ntp-name> <retired-name>
 # site drift <user>@<site-pc-address> <upstream-a>,<upstream-b>,<upstream-c> <retired-name>
 # On the site PC, the Account login probe's report (rosy-site-account-login-check writes it; alerts on a failure streak and recovery):

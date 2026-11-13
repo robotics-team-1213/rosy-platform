@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 import shutil
 import socket
 import subprocess
@@ -623,7 +624,7 @@ def _drift(tmp_path, answer, runs=1, env=None):
 
 
 @pytest.mark.parametrize("answer, word", [
-    ("chrony 1 1 gone.example.test,\nguard-age -\n", "gone.example.test"),
+    ("chrony 1 1 gone.example.test,\nguard-age 5\n", "gone.example.test"),
     ("chrony 1 2 ntp.example.test,extra.example.test,\n", "extra.example.test"),
     ("chrony 0 1 ntp.example.test,\n", "0개"),
     ("chrony 1 1 ntp.example.test,\nretired old.example.test\n", "옛 이름 old.example.test"),
@@ -631,6 +632,11 @@ def _drift(tmp_path, answer, runs=1, env=None):
     ("chrony none\n", "chrony가 설치돼"),
     ("chrony x y\n", "읽지 못했습니다"),
     ("guard-age 5\n", "chrony 보고가 없"),
+    ("chrony 1 1 ntp.example.test,\nguard-age missing\n", "status.json이 없거나"),
+    ("chrony 1 1 ntp.example.test,\nguard-age \n", "status.json이 없거나"),
+    ("chrony 1 1 ntp.example.test,\nguard-age -5\n", "status.json이 없거나"),
+    ("chrony 1 1 ntp.example.test,\nguard-age nan\n", "status.json이 없거나"),
+    ("chrony 1 1 ntp.example.test,\n", "상태 시각 보고가 없"),
     (None, "답이 없"),
 ])
 def test_a_drift_problem_alerts_once_after_two_checks_and_once_on_recovery(tmp_path, answer, word):
@@ -652,7 +658,7 @@ def test_a_clean_drift_answer_never_alerts_and_the_retired_names_reach_the_force
 
 def test_a_dash_skips_the_name_compare_but_not_the_other_checks(tmp_path):
     env = _alerts(tmp_path)
-    (tmp_path / "drift-answer").write_text("chrony 1 1 anything.example.test,\n")
+    (tmp_path / "drift-answer").write_text("chrony 1 1 anything.example.test,\nguard-age 5\n")
     _guard(tmp_path, HEALTHY, conf="m drift op@m -\n", runs=3, env_extra=env)
     assert _sent(tmp_path) == []
 
@@ -699,10 +705,65 @@ def test_a_login_report_that_stops_being_renewed_or_is_missing_alerts(tmp_path):
     assert len(_sent(tmp_path)) == 3 and "읽지 못했습니다" in _sent(tmp_path)[2]
 
 
+@pytest.mark.parametrize("conf", [
+    "m drift op@m\n", "m drift\n", "m drift op@m ntp.example.test, old\n", "m drift op@m a,,b old.example.test\n",
+    "m drift op@m ntp.example.test bad;name\n", "x logincheck\n", "x logincheck /a /b\n"])
+def test_a_malformed_watch_line_is_a_loud_config_error_never_a_silent_skip(tmp_path, conf):
+    env = _alerts(tmp_path)
+    (tmp_path / "drift-answer").write_text(CLEAN_DRIFT)
+    for _ in range(2):
+        _guard(tmp_path, HEALTHY, conf=conf, env_extra=env)
+    assert len(_sent(tmp_path)) == 1 and "감시 설정" in _sent(tmp_path)[0]
+    result = subprocess.run([sys.executable, str(GUARD)], capture_output=True, text=True, timeout=60, env={
+        **os.environ, "GUARD_STATE": str(tmp_path / "state"), "GUARD_CONFIG": str(tmp_path / "hosts.conf"),
+        "GUARD_LOCAL_STATUS": str(tmp_path / "local-status.json"), "GUARD_LOCAL_HEALTH": str(tmp_path / "none")})
+    assert "config error" in result.stderr and "IndexError" not in result.stdout + result.stderr
+
+
+def _raw_login(tmp_path, text, env):
+    (tmp_path / "login-status.json").write_text(text)
+    _guard(tmp_path, HEALTHY, conf=f"acct logincheck {tmp_path / 'login-status.json'}\n", env_extra=env)
+
+
+@pytest.mark.parametrize("delta, word", [(-3600, "미래"), (None, "미래")])
+def test_a_future_or_nan_login_stamp_is_a_problem(tmp_path, delta, word):
+    env = _alerts(tmp_path)
+    stamp = "NaN" if delta is None else str(int(time.time()) - delta)
+    for _ in range(2):
+        _raw_login(tmp_path, '{"time": %s, "apps": {"fleet": true}}' % stamp, env)
+    assert len(_sent(tmp_path)) == 1 and word in _sent(tmp_path)[0]
+
+
+def test_a_partial_login_report_is_a_problem_and_only_a_full_all_pass_one_recovers(tmp_path):
+    env = _alerts(tmp_path)
+    _login(tmp_path, {"fleet": True, "learning": True}, age=20, env=env)  # a full report names the known apps
+    for age in (10, 8):  # the probe run for one app: the failing one vanished from the file
+        _login(tmp_path, {"fleet": True}, age=age, env=env)
+    assert len(_sent(tmp_path)) == 1 and "빠진 앱: learning" in _sent(tmp_path)[0]
+    _login(tmp_path, {"fleet": True}, age=5, env=env)
+    assert len(_sent(tmp_path)) == 1  # an all-PASS partial report is no recovery
+    _login(tmp_path, {"fleet": True, "learning": True}, age=0, env=env)
+    assert len(_sent(tmp_path)) == 2 and "다시 정상" in _sent(tmp_path)[1]
+
+
+def test_the_failing_app_set_changing_inside_a_streak_alerts_once_more(tmp_path):
+    env = _alerts(tmp_path)
+    for age in (8, 4):
+        _login(tmp_path, {"fleet": False, "learning": True}, age=age, env=env)
+    assert len(_sent(tmp_path)) == 1 and "fleet" in _sent(tmp_path)[0]
+    _login(tmp_path, {"fleet": False, "learning": True}, age=2, env=env)
+    assert len(_sent(tmp_path)) == 1  # the same set, no new alert
+    _login(tmp_path, {"fleet": False, "learning": False}, age=1, env=env)
+    assert len(_sent(tmp_path)) == 2 and "fleet, learning" in _sent(tmp_path)[1]
+    _login(tmp_path, {"fleet": False, "learning": False}, age=0, env=env)
+    assert len(_sent(tmp_path)) == 2
+
+
 def test_the_drift_verb_is_read_only_and_refuses_odd_names(tmp_path):
     result, calls = _remote(tmp_path, "drift localhost")
     assert result.returncode == 0 and "retired localhost" in result.stdout  # /etc/hosts always names localhost
-    assert result.stdout.count("chrony ") == 1 and "guard-age" in result.stdout and calls == []
+    assert result.stdout.count("chrony ") == 1 and calls == []
+    assert re.search(r"^guard-age (missing|\d+)$", result.stdout, re.M)  # never an empty value
     for bad in ("drift a;b", "drift $(id)", "drift ../x"):
         result, calls = _remote(tmp_path, bad)
         assert result.returncode == 2 and calls == []
