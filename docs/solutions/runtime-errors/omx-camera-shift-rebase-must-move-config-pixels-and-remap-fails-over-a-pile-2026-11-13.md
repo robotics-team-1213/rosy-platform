@@ -1,8 +1,10 @@
 ---
 title: A top-camera shift needs the config's pixel regions rebased too, and a remap cannot run over a pile
 date: 2026-11-13
-category: runtime-errors
-component: deploy/robot/omx (cell_calibrate, cell_push, cell_align)
+module: deploy/robot/omx
+tags: [omx, calibration, camera-shift, remap, push]
+problem_type: runtime-error
+applies_when: a cell's top camera moved and the map is rebased instead of remapped, or a remap is planned while objects lie on the cell
 ---
 
 ## Symptom
