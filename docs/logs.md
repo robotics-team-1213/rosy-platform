@@ -14848,3 +14848,8 @@ osy-d395-s1d\`.
 - 변경: 없음(체크포인트 커밋). 2026-11-11 착지분(편대 자취 복귀 D-559, peer 앵커 D-1017, 편대 SIM 계측 D-1002 외)의 게시용 무캐시 FULL 기록을 이 커밋 위에 만든다.
 - 증거: `python tools/land.py --tests full --no-cache` 실행 기록으로 남는다.
 - gate 변화: 없음.
+
+## 2026-11-14 · uncommitted · fleet: D-1022 기체 SLAM 지도–현장 지도 결속
+- 변경: CORE `StateSnapshot.map_grid_id`(읽은 격자 해시), Fleet `robot_map_bindings`(승인·철회·이력, 격자·현장 지도 버전에 묶임), `/api/fleet/robots/{id}/map-binding`(읽기·승인·철회·벽에서 마커 없는 제안, SLAM 자세의 현장 좌표와 카메라 자세 차이), `fleet.trip.map_binding_required`(기본 꺼짐; 켜면 free 목표는 결속으로만, 없으면 `map_frame` 정지). API v1.393, ADR D-1022.
+- 증거: 원격 `test_map_binding_fit`·`_store`·`_routes`·`test_site_map_frame_safety`·`test_trip_runner`·`test_trip_robot_frame_goal`·`test_initial_pose`·`test_protocol_version_alignment` 통과. 실물 미수행(기체 선 연결).
+- gate 변화: 없음.
