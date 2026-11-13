@@ -553,6 +553,10 @@ def test_review_store_keeps_a_read_only_authority_journal_and_supports_read_only
     with reader.connect() as db:
         assert db.execute('PRAGMA query_only').fetchone()[0] == 1
         assert reader.list_frames() == store.list_frames()
+    with store.connect() as db:  # a workspace left in WAL by the 11-12 change converts on reopen
+        db.execute('PRAGMA journal_mode=WAL')
+    with ReviewStore(store.state).connect() as db:
+        assert db.execute('PRAGMA journal_mode').fetchone()[0].lower() == 'delete'
 
 
 def test_review_store_registers_workspace_in_configured_registry(tmp_path, monkeypatch):

@@ -132,7 +132,8 @@ async def _task_dispatch_loop(console: FleetConsole, task_service: FleetTaskServ
             await reconcile_tasks(task_service, console)
             queued_ids = await asyncio.to_thread(task_service.store.queued_task_ids)
             console.prune_task_queue_entries(queued_ids)
-            snapshot = await console.snapshot()
+            # An empty queue skips the per-robot state read; dispatch_next still runs (drain gate).
+            snapshot = await console.snapshot() if queued_ids else {"robots": []}
             available = {
                 row["robot_id"] for row in snapshot["robots"]
                 if row["online"] and row["queued"] is None and row["goal"] is None

@@ -42,6 +42,7 @@ class ReviewStore:
         self.db = self.state / 'reviews.sqlite3'
         with self.connect() as db:
             db.execute('PRAGMA synchronous=NORMAL')
+            db.execute('PRAGMA journal_mode=DELETE')  # a 11-12 WAL workspace returns to the bridge's rollback journal
             db.executescript('''CREATE TABLE IF NOT EXISTS frames (
                 id INTEGER PRIMARY KEY, source TEXT NOT NULL, review TEXT NOT NULL,
                 status TEXT NOT NULL, version INTEGER NOT NULL);
