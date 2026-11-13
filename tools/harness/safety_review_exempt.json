@@ -518,5 +518,41 @@
   {
     "commit": "7fb358aaaa2197ccdfbeab6f04cf361e6291c8c4",
     "reason": "Independent read-only review agent, 2026-10-26, for publish PR #210 (D-868 history join): APPROVE. Deletes 11 origin-merge duplicates under fleet/server/site_observation (deletions only). 10 are byte-identical to blobs kept at HEAD under server/recognition or server/pose; sightings_config.py differs from the kept recognition/sightings_config.py only by function order, docstring and an unused import (same logic). Nothing at HEAD imports fleet.server.site_observation."
+  },
+  {
+    "commit": "01988565d47d4b97685bb95f9ceb184d1d1477e2",
+    "reason": "Independent 3-seat panel (Claude/Codex/opencode) 2026-11-13: road-nav2 route bypassed named-operator, trip_refusal and task ledger with fail-open simulated_dispatch; FAIL as landed. Requires fix a56cd55043 (single dispatch path, require_named_operator, trip_refusal, mapped errors) and its remote PASS. No device acceptance. Record: docs/validation/safety-review-publish-179-2026-11-13/result.md"
+  },
+  {
+    "commit": "973faf9de9a0521b28d656dd339114689f52cf7c",
+    "reason": "Same panel: task_dispatch_routes.py change is a move of road-nav2 into berth_parking_routes.py with the same dependencies; berth-park dispatch had the same fail-open. Requires a56cd55043 plus the berth-park fix 394ab97c79 and berth_parking_routes.py in safety_modules. No device acceptance. Record: docs/validation/safety-review-publish-179-2026-11-13/result.md"
+  },
+  {
+    "commit": "93461496c670442370f45fa8bd9ec4d3e8366cf5",
+    "reason": "Same panel: AST comparison shows pure split (docking manager 60/60 functions in manager_helpers.py; console _goal/snapshot to console_helpers.py re-bound at console.py:277-310, trip_refusal/stop paths unchanged; rosy_vision ingest 40/40). Requires the helper files added to platform_parts.yaml safety modules (4694d03c21). No device acceptance. Record: docs/validation/safety-review-publish-179-2026-11-13/result.md"
+  },
+  {
+    "commit": "ae7a2ed52c69bc1e10b90dc871e44d7180b922b7",
+    "reason": "Same panel, 3/3 PASS: safety node split into node_helpers.py mixin; motion limits, ultrasonic block, IMU hazards, localization zeroing and missing-transform fail-closed all retained and called from tick (node.py:59,254,324; node_helpers.py:408-441). Fleet change is import indirection only. No device acceptance. Record: docs/validation/safety-review-publish-179-2026-11-13/result.md"
+  },
+  {
+    "commit": "65266a619409eaed6762a7b3cb5328c591f30165",
+    "reason": "Same panel, 3/3 PASS: cached joint/owner sets; per-joint position/velocity/acceleration limits checked in the same order with the same refusals (command_owner.py:227,277,303,314-332); UNKNOWN/HOLD kept in the coordinator active set. No device acceptance. Record: docs/validation/safety-review-publish-179-2026-11-13/result.md"
+  },
+  {
+    "commit": "0b6d23e673dd139681476b9fd647f6f37fa78d90",
+    "reason": "Same panel, 3/3 PASS: commissioning ITEMS frozenset equivalent (commissioning_record.py:29,135); revision computed once with unchanged blockers (:248-254). No device acceptance. Record: docs/validation/safety-review-publish-179-2026-11-13/result.md"
+  },
+  {
+    "commit": "2f5be653c2763d0fe96a2032535746caacf9f475",
+    "reason": "Same panel, 3/3 PASS: action API exact key sets and stop reasons identical as module frozensets (action_api.py:34-41); missing action readback still None (action_store_readback.py:67-75). No device acceptance. Record: docs/validation/safety-review-publish-179-2026-11-13/result.md"
+  },
+  {
+    "commit": "3843a78258c3329d3af39aa8839cf38615a512ce",
+    "reason": "Same panel, 3/3 PASS: Dynamixel gate constants hoisted; joint limit pairs built inside the claim-releasing try and still checked before motion; _send still checks the fence first (dynamixel_port.py:83-103,199-209; dynamixel_motion.py:32-41). No device acceptance. Record: docs/validation/safety-review-publish-179-2026-11-13/result.md"
+  },
+  {
+    "commit": "8fee68b17d74a2f055ee024290dcc07f6c9ff86b",
+    "reason": "Same panel, 3/3 PASS: final trajectory point comparison equivalent given unique names and exact key/length checks (command_types.py:221-226,262,273). No device acceptance. Record: docs/validation/safety-review-publish-179-2026-11-13/result.md"
   }
 ]
