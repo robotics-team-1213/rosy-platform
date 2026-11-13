@@ -11,10 +11,11 @@ import { staleAgeS } from "./state-age.js";
 import { powerHealthView } from "./power-health-view.js";
 import { createQueues } from "./queues.js";
 import { createFleetMotorHealth } from "./motor-health-view.js";
-import { placeRosterCards as place, mustExpand, selectRobot, OMX_CELL_DEFS, createRoiPoller,
-  buildQuickControlPanel, buildOmxSummaries } from "./roster-cards.js";
+import { placeRosterCards as place, mustExpand, selectRobot, createRoiPoller,
+  buildQuickControlPanel } from "./roster-cards.js";
 export {mustExpand, selectRobot} from "./roster-cards.js";
 import {createRobotProfiles} from "/console/assets/robot-profile-view.js";
+import {createCellFrameFeed} from "/console/assets/cell-frames.js";
 import { cancelScope, cardTripLine, createCardTrip, openTrip } from "./card-trip.js";
 import { createRosterSummary, nodeWithText, tag, blockWith, navTag, queuedReason, offlineWhy,
   IDENTIFY_REASON, LAMP_REASON } from "./roster-presentation.js";
@@ -25,21 +26,9 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
   const motorHealth = createFleetMotorHealth({view, scope});
   const profiles = createRobotProfiles({call, scope, render});
   const summary = createRosterSummary({scope, view, openCard, render, attentionItems, motorHealth});
-  const { roiObjectUrls, refreshRoiPreview } = createRoiPoller({ scope, view, call });
-  if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
-    scope.listen(window, "rosy:focus-anchor", (ev) => {
-      const targetId = ev?.detail?.targetId;
-      if (!targetId) return;
-      if (targetId.startsWith("arm_")) {
-        view.focusAnchorId = targetId;
-        render();
-        void refreshRoiPreview();
-      } else if (targetId.startsWith("rosy_")) {
-        view.focusAnchorId = targetId;
-        render();
-      }
-    });
-  }
+  const { roiObjectUrls, refreshRoiPreview } = createRoiPoller({ scope, view, call, render });
+  // 셀 카메라 뷰도 천장 ROI와 같은 Vision 임대로 본다(D-136). Fleet은 바이트를 중계하지 않는다.
+  const cellFrames = createCellFrameFeed({ call, scope });
   function openCard(robotId) {
     if (typeof window !== "undefined" && robotId && typeof window.dispatchEvent === "function") {
       window.dispatchEvent(new CustomEvent("rosy:inspect-target", { detail: { targetId: robotId } }));
@@ -59,11 +48,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
       confirmedAction?.cancel();
       trip.close();
       onSelectionChanged();
-      const chosen = view.robots.find(r => r.robot_id === view.focusRobot);
-      if (chosen?.online && (view.map || view.siteMap) && !view.pinning) {
-        view.selected = chosen.robot_id;
-        view.cursor = view.map ? { col: Math.floor(view.map.width / 2), row: Math.floor(view.map.height / 2) } : null;
-      }
+      // D-651: 로봇을 고르는 것은 읽기다. 목표 받기는 '목표 지정' 단추로만 켜진다.
       view.focusAnchorId = view.focusRobot || "rosy_46";
       const stage = el("map-stage");
       const birdseyeToggle = el("birdseye-toggle");
@@ -82,35 +67,23 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
   function workspace() {
     const box = el("robot-workspace"), choice = el("robot-choice"), empty = el("robot-workspace-empty");
     if (!box) return;
-    const activeRobots = view.robots.filter(robot => robot.online || robot.link === "degraded");
-    const selectableRobots = activeRobots.length > 0 ? activeRobots : view.robots;
-    if (view.focusRobot && !selectableRobots.some(robot => robot.robot_id === view.focusRobot)) {
-      openCard(selectableRobots[0]?.robot_id || null);
-    } else if (!view.focusRobot && activeRobots.length > 0) {
-      openCard(activeRobots[0].robot_id);
-    }
+    // D-651: 작업 카드는 운영자가 고를 때만 열린다. 연락이 끊긴 로봇도 이유와 함께 고를 수 있다.
+    const selectableRobots = view.robots;
+    if (view.focusRobot && !selectableRobots.some(robot => robot.robot_id === view.focusRobot)) openCard(null);
     if (choice) {
       const robotOptions = selectableRobots.map(robot => {
         const host = view.robotNames?.[robot.robot_id];
         const label = host && host !== robot.robot_id ? `${robot.robot_id} (${host})` : robot.robot_id;
         return [robot.robot_id, `🤖 기동 로봇 · ${label}${robot.online ? " · 온라인" : ""}`];
       });
-      const omxOptions = OMX_CELL_DEFS.map(def => {
-        const liveAnc = (view.anchors || []).find(a => a.target_id === def.target_id);
-        const statusStr = liveAnc?.cell_status || "CELL-A ONLINE";
-        return [def.target_id, `🦾 OMX 셀 · ${def.shortLabel} (${statusStr} ↔ ${def.stationId} 연계)`];
-      });
-      const options = [...robotOptions, ...omxOptions];
+      const options = robotOptions;
       const key = JSON.stringify(options);
       if (choice.dataset.options !== key) {
-        const first = nodeWithText("option", "", "활성 로봇 또는 OMX 셀을 선택하세요"); first.value = "";
+        const first = nodeWithText("option", "", "로봇을 선택하세요"); first.value = "";
         choice.replaceChildren(first, ...options.map(([id, name]) => { const option = nodeWithText("option", "", name); option.value = id; return option; }));
         choice.dataset.options = key;
       }
-      const currentVal = (view.focusAnchorId && String(view.focusAnchorId).startsWith("arm_"))
-        ? view.focusAnchorId
-        : (view.focusRobot || "");
-      choice.value = currentVal;
+      choice.value = view.focusRobot || "";
     }
     const index = view.robots.findIndex(robot => robot.robot_id === view.focusRobot);
     if (empty) empty.hidden = index >= 0;
@@ -271,7 +244,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     if (!view.stateUnavailable) {
       node.appendChild(buildQuickControlPanel({
         robot, state, pose, power, guideRow, displayName, view, scope, el, render, isOperator,
-        roiObjectUrls, refreshRoiPreview, nodeWithText, tag,
+        roiObjectUrls, refreshRoiPreview, nodeWithText, tag, cellFrames,
       }));
     }
 
@@ -380,7 +353,8 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     // D-359 §5.3 — 사유는 비활성과 같은 조건에서 첫 번째로 걸린 것을 말한다.
     blockWith(aim, namedReason() || (view.stateUnavailable ? "Fleet 상태 확인 불가"
       : !robot.online ? (offlineWhyId ? "위 사유" : "로봇 오프라인")
-        : motionCommandReason(view, robot.robot_id, 'goal')
+        : capabilityReason(robot.capabilities, 'navigation.goal_navigation')
+          || motionCommandReason(view, robot.robot_id, 'goal')
           || ((!view.map && !view.siteMap) ? "지도 없음"
           : estop === true ? "비상정지 중"
             : estop !== false ? "안전 상태 확인 불가"
@@ -600,10 +574,6 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     controls()[at]?.focus({preventScroll: true});
   }
 
-  function omxSummaries() {
-    return buildOmxSummaries({ view, scope, el, openCard, nodeWithText, tag });
-  }
-
-  return { card, summary, omxSummaries, workspace, place, fillQueues, queuedReason, needsAttention, attentionItems, openCard,
+  return { card, summary, workspace, place, fillQueues, queuedReason, needsAttention, attentionItems, openCard,
     syncConvoy: trip.syncConvoy, closeTrip: trip.close, openTrip: openTripForm, paintTrip };
 }
