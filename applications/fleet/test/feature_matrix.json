@@ -2361,6 +2361,22 @@
             "GET:/api/fleet/policy-admission",
             "POST:/api/fleet/policy-admission"
           ]
+        },
+        {
+          "consumer": "applications/fleet/web/console-goal.js",
+          "expression": "/api/fleet/robots/${encodeURIComponent(robotId)}/road-nav2",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/robots/{robot_id}/road-nav2"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/console-goal.js",
+          "expression": "/api/fleet/robots/${encodeURIComponent(robotId)}/berth-park",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/robots/{robot_id}/berth-park"
+          ]
         }
       ],
       "requests": [
@@ -2826,23 +2842,6 @@
           ],
           "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
           "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/sightings"
-        },
-        {
-          "id": "GET:/api/fleet/robots/{robot_id}/road-nav2/plan",
-          "method": "GET",
-          "path": "/api/fleet/robots/{robot_id}/road-nav2/plan",
-          "implementation": "operations/fleet/fleet/server/ledger/berth_parking_routes.py",
-          "handler": "fleet_road_nav2_plan",
-          "expected_statuses": [
-            200
-          ],
-          "status": "verified",
-          "verification_scope": "Observed passing HTTP test; successful response",
-          "contract_tests": [
-            "operations/fleet/test/test_charge_bays.py"
-          ],
-          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
-          "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/robots/{robot_id}/road-nav2/plan"
         },
         {
           "id": "POST:/api/fleet/robots/{robot_id}/road-nav2",
@@ -4090,7 +4089,8 @@
         "applications/fleet/web/cell/cell.html"
       ],
       "consumers": [
-        "applications/fleet/web/cell/cell.js"
+        "applications/fleet/web/cell/cell.js",
+        "applications/fleet/web/cell/cell-real2sim-specs.js"
       ],
       "availability": "configured capability and authorized role; see backend contract",
       "calls": [
@@ -4110,6 +4110,103 @@
             "POST:/api/fleet/cell-jobs/{mission_id}/cancel",
             "POST:/api/fleet/cell-jobs/{mission_id}/reconcile",
             "POST:/api/fleet/cell-jobs/{mission_id}/resume"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/cell/cell-real2sim-specs.js",
+          "expression": "/api/fleet/pipeline/vision-auto-check",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/pipeline/vision-auto-check"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/cell/cell-real2sim-specs.js",
+          "expression": "/api/fleet/pipeline/cable-guard",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/pipeline/cable-guard"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/cell/cell-real2sim-specs.js",
+          "expression": "/api/fleet/pipeline/arm-holds/clear",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/pipeline/arm-holds/clear"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/cell/cell-real2sim-specs.js",
+          "expression": "/api/fleet/pipeline/human-safety-gate",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/pipeline/human-safety-gate"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/cell/cell-real2sim-specs.js",
+          "expression": "/api/fleet/pipeline/station-zones/dispatch",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/pipeline/station-zones/dispatch"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/cell/cell-real2sim-specs.js",
+          "expression": "/api/fleet/pipeline/decision-gate",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/pipeline/decision-gate"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/cell/cell-real2sim-specs.js",
+          "expression": "/api/fleet/pipeline/pinky-tasks",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/pipeline/pinky-tasks"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/cell/cell-real2sim-specs.js",
+          "expression": "/api/fleet/pipeline/cell-tasks",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/pipeline/cell-tasks",
+            "POST:/api/fleet/pipeline/cell-tasks"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/cell/cell-real2sim-specs.js",
+          "expression": "/api/fleet/cell-app/real2sim-pipeline",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/cell-app/real2sim-pipeline"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/cell/cell-real2sim-specs.js",
+          "expression": "/api/fleet/cell-app/real2sim-pipeline/evaluate",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/cell-app/real2sim-pipeline/evaluate"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/cell/cell-real2sim-specs.js",
+          "expression": "/api/fleet/cell-app/real2sim-pipeline/runs",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/cell-app/real2sim-pipeline/runs"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/cell/cell-real2sim-specs.js",
+          "expression": "/api/fleet/cell-app/real2sim-pipeline/promote-physics",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/cell-app/real2sim-pipeline/promote-physics"
           ]
         }
       ],
@@ -4322,23 +4419,6 @@
           "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/pipeline/station-zones"
         },
         {
-          "id": "PUT:/api/fleet/pipeline/station-zones",
-          "method": "PUT",
-          "path": "/api/fleet/pipeline/station-zones",
-          "implementation": "operations/fleet/fleet/server/sitemap/pipeline_gate_routes.py",
-          "handler": "update_station_zones",
-          "expected_statuses": [
-            200
-          ],
-          "status": "verified",
-          "verification_scope": "Observed passing HTTP test; successful response",
-          "contract_tests": [
-            "operations/fleet/test/test_pipeline_orchestrator.py"
-          ],
-          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
-          "evidence": "applications/fleet/test/backend_http_evidence.json#PUT:/api/fleet/pipeline/station-zones"
-        },
-        {
           "id": "POST:/api/fleet/pipeline/station-zones/dispatch",
           "method": "POST",
           "path": "/api/fleet/pipeline/station-zones/dispatch",
@@ -4413,10 +4493,12 @@
           "implementation": "operations/fleet/fleet/server/cell/cell_app_routes.py",
           "handler": "real2sim_pipeline",
           "expected_statuses": [
-            200
+            200,
+            401,
+            503
           ],
           "status": "verified",
-          "verification_scope": "Observed passing HTTP test; successful response",
+          "verification_scope": "Observed passing HTTP test; successful response and refusal",
           "contract_tests": [
             "operations/fleet/test/test_cell_real2sim_pipeline.py"
           ],
@@ -4430,10 +4512,11 @@
           "implementation": "operations/fleet/fleet/server/cell/cell_app_routes.py",
           "handler": "real2sim_evaluate",
           "expected_statuses": [
-            200
+            200,
+            403
           ],
           "status": "verified",
-          "verification_scope": "Observed passing HTTP test; successful response",
+          "verification_scope": "Observed passing HTTP test; successful response and refusal",
           "contract_tests": [
             "operations/fleet/test/test_cell_real2sim_pipeline.py"
           ],
@@ -4447,10 +4530,11 @@
           "implementation": "operations/fleet/fleet/server/cell/cell_app_routes.py",
           "handler": "real2sim_queue_run",
           "expected_statuses": [
-            200
+            200,
+            403
           ],
           "status": "verified",
-          "verification_scope": "Observed passing HTTP test; successful response",
+          "verification_scope": "Observed passing HTTP test; successful response and refusal",
           "contract_tests": [
             "operations/fleet/test/test_cell_real2sim_pipeline.py"
           ],
@@ -4464,10 +4548,11 @@
           "implementation": "operations/fleet/fleet/server/cell/cell_app_routes.py",
           "handler": "real2sim_promote_physics",
           "expected_statuses": [
-            200
+            200,
+            422
           ],
           "status": "verified",
-          "verification_scope": "Observed passing HTTP test; successful response",
+          "verification_scope": "Observed passing HTTP test; successful response and refusal",
           "contract_tests": [
             "operations/fleet/test/test_cell_real2sim_pipeline.py"
           ],
@@ -4804,6 +4889,112 @@
           "resolution": "literal-or-template",
           "request_ids": [
             "POST:/api/fleet/vision/lease"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/charge-bays-view.js",
+          "expression": "/api/fleet/pipeline/cell-tasks/${choice.cancelTaskId}/cancel",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/pipeline/cell-tasks/{task_id}/cancel"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/charge-bays-view.js",
+          "expression": "/api/fleet/pipeline/cell-tasks/${choice.retryTaskId}/retry",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/pipeline/cell-tasks/{task_id}/retry"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/charge-bays-view.js",
+          "expression": "/api/fleet/pipeline/vision-auto-check",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/pipeline/vision-auto-check"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/charge-bays-view.js",
+          "expression": "/api/fleet/pipeline/cable-guard",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/pipeline/cable-guard"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/charge-bays-view.js",
+          "expression": "/api/fleet/pipeline/arm-holds/clear",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/pipeline/arm-holds/clear"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/charge-bays-view.js",
+          "expression": "/api/fleet/pipeline/human-safety-gate",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/pipeline/human-safety-gate"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/charge-bays-view.js",
+          "expression": "/api/fleet/pipeline/station-zones/dispatch",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/pipeline/station-zones/dispatch"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/charge-bays-view.js",
+          "expression": "/api/fleet/pipeline/decision-gate",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/pipeline/decision-gate"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/charge-bays-view.js",
+          "expression": "/api/fleet/pipeline/pinky-tasks",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/pipeline/pinky-tasks"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/charge-bays-view.js",
+          "expression": "/api/fleet/pipeline/cell-tasks",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/pipeline/cell-tasks",
+            "POST:/api/fleet/pipeline/cell-tasks"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/calibration/map-fit-view.js",
+          "expression": "/api/fleet/site-map/draft-from-camera",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/site-map/draft-from-camera"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/calibration/map-fit-view.js",
+          "expression": "/api/fleet/site-map/draft",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/site-map/draft",
+            "PUT:/api/fleet/site-map/draft"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/installation/install.js",
+          "expression": "/api/fleet/site-map",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/site-map"
           ]
         }
       ],
@@ -7237,6 +7428,14 @@
         },
         {
           "consumer": "applications/fleet/web/roster-cards.js",
+          "expression": "/api/fleet/vision/lease",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/vision/lease"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/calibration/map-fit-view.js",
           "expression": "/api/fleet/vision/lease",
           "resolution": "literal-or-template",
           "request_ids": [
