@@ -128,6 +128,8 @@ class Runner:
         self.fault, self.holding = reason, bool(self.holding and present[5] > self.target[5] + EMPTY_MARGIN)
         self.chunk, self.played, self.jog_path = None, [], []
         self.pace_floor, self.paced, self.pace_last, self.trend = 0.0, 0, None, []
+        # stop exactly where the arm is (no leftover wrist nudge); the failed chunk keeps its own sway record
+        self.pitch_hold, sway, self.sway_peak = 0.0, self.sway_peak, {}
         if chunk == "park":
             self.last_input = self.clock()
             self._stop_after_park = None
@@ -137,6 +139,7 @@ class Runner:
             error=self.fault,
             contact=True,
             present=present,
+            **({"sway": sway} if sway else {}),
         )
 
     def strained(self, sent, present):
@@ -196,7 +199,7 @@ class Runner:
                 self.played.append(list(self.target))
         self.trend = [] if self.chunk is None and not self.jog_path else self.trend
         vertical = self.chunk is not None and self.chunk.startswith(joint_jitter.SWAY_CHUNKS) and len(self.target) == 6
-        sent = self.robot.send_action(dict(zip(NAMES, self._pitch_held(vertical and self.chunk.startswith("descend")))))
+        sent = self.robot.send_action(dict(zip(NAMES, self._pitch_held(vertical and self.chunk.startswith("descend") and "lift" not in self.chunk))))
         present = self.present()
         full_sent = isinstance(sent, dict) and all(n in sent for n in NAMES)
         row = {
