@@ -79,6 +79,7 @@ class Runner:
         self.trend, self.trace, self.jitter_buf, self.damped_ticks = [], None, [], 0
         self._damp_cooldown, self.sway_peak, self.pitch_hold = 0, {}, 0.0
         self.speed, self.speed_low, self.speed_out, self.speed_base, self.speed_phase = 1.0, 1.0, None, None, 0.0
+        self.speed_queue = None
         self.jitter = {"shaking": False, "max_std": 0.0, "max_flips_hz": 0.0, "max_p2p": 0.0, "flagged": []}
         self.ensembler = TemporalChunkEnsembler(coeff=0.08, vmax=GUARD_UNITS_PER_S, fps=fps)
 
@@ -131,7 +132,7 @@ class Runner:
         self.chunk, self.played, self.jog_path = None, [], []
         self.pace_floor, self.paced, self.pace_last, self.trend = 0.0, 0, None, []
         # stop exactly where the arm is (no leftover wrist nudge); the failed chunk keeps its own sway record
-        self.pitch_hold, sway, self.sway_peak = 0.0, self.sway_peak, {}
+        self.pitch_hold, sway, self.sway_peak, self.speed_low = 0.0, self.sway_peak, {}, 1.0
         if chunk == "park":
             self.last_input = self.clock()
             self._stop_after_park = None
@@ -315,6 +316,7 @@ class Runner:
             if reason:
                 self.fault, self.queue, self.target = reason, [], present[:5] + [self.target[5]]
                 chunk, self.chunk, self.pitch_hold, sway, self.sway_peak = self.chunk, None, 0.0, self.sway_peak, {}
+                self.speed_low = 1.0
                 self.report(command=f"run {chunk}" if chunk else "fault", ok=False, error=reason, present=present,
                             **({"sway": sway} if sway else {}))
                 return

@@ -32,13 +32,14 @@ def take(runner) -> list:
     runner.speed_low = min(runner.speed_low, runner.speed)
     # contact chunks keep nominal timing: the contact allowance follows the sent step, so reading slower there
     # would move where a contact is detected (2026-11-13 panel round 5)
-    contact = (runner.chunk or "").startswith(CONTACT_CHUNKS)
+    contact = any(part.startswith(CONTACT_CHUNKS) for part in (runner.chunk or "").split(" -> "))  # splices too
     applied = prm.get(runner.params, "runner.speed_adapt") and not contact and not runner.recorder.active()
     if not applied:
         runner.speed_out = None
         return runner.queue.pop(0)
-    if runner.speed_out is None or runner.target != runner.speed_out:  # new chunk, hold, damping: restart here
-        runner.speed_base, runner.speed_phase = list(runner.target or runner.queue[0]), 0.0
+    # a new queue (run, goto, splice) or a target moved elsewhere (hold, damping): restart the blend from here
+    if runner.speed_out is None or runner.target != runner.speed_out or runner.queue is not runner.speed_queue:
+        runner.speed_base, runner.speed_phase, runner.speed_queue = list(runner.target or runner.queue[0]), 0.0, runner.queue
     runner.speed_phase += runner.speed
     while runner.speed_phase >= 1.0 and runner.queue:
         runner.speed_base, runner.speed_phase = runner.queue.pop(0), runner.speed_phase - 1.0

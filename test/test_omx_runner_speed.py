@@ -14,7 +14,7 @@ def runner(lag, adapt=1, recording=False):
         queue=[list(f) for f in FRAMES], target=[0.0, -20.0, 30.0, 40.0, 0.0, 50.0], lag=lag, chunk="goto x",
         params={"runner.speed_adapt": adapt, "runner.speed_min": 0.4, "runner.pace_lag": 1.6},
         recorder=SimpleNamespace(active=lambda: recording),
-        speed=1.0, speed_low=1.0, speed_out=None, speed_base=None, speed_phase=0.0)
+        speed=1.0, speed_low=1.0, speed_out=None, speed_base=None, speed_phase=0.0, speed_queue=None)
 
 
 def play(r):
@@ -48,7 +48,7 @@ def test_a_lagging_arm_is_read_slower_never_faster_and_ends_exactly_on_the_last_
 def test_a_recording_episode_a_contact_chunk_and_a_clean_arm_keep_nominal_timing():
     assert play(runner(lag=1.6, recording=True)) == FRAMES
     contact = runner(lag=1.6)
-    contact.chunk = "descend_pick -> lift_pick"
+    contact.chunk = "lift_pick -> descend_place"  # a splice into a contact chunk too
     assert play(contact) == FRAMES
     assert play(runner(lag=0.2)) == FRAMES
 
@@ -60,3 +60,12 @@ def test_a_target_changed_elsewhere_restarts_the_blend_from_there():
     r.target = [99.0, -20.0, 30.0, 40.0, 0.0, 50.0]  # a hold or damping moved the target
     nxt = runner_speed.take(r)
     assert first[0] < 1.0 and nxt[0] < 99.0 and nxt[0] > first[0]
+
+
+def test_a_splice_restarts_the_blend_from_the_current_target_never_backwards():
+    r = runner(lag=1.6)
+    r.speed = 0.3
+    r.target = runner_speed.take(r)  # a third of the way to frame 1
+    r.queue = [[r.target[0] + 0.1 * k, -20.0, 30.0, 40.0, 0.0, 50.0] for k in range(1, 6)]  # splice: new queue
+    nxt = runner_speed.take(r)
+    assert nxt[0] >= r.target[0]
