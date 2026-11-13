@@ -54,7 +54,9 @@ def check_chunk_settled(runner, present: list[float], error: float, now: float, 
             peak_lag=round(runner.peak_lag, 2),
             over_ticks=runner.over_ticks,
             **({"damped_ticks": runner.damped_ticks} if runner.damped_ticks else {}),
+            **({"sway": runner.sway_peak} if getattr(runner, "sway_peak", None) else {}),
         )
+        runner.sway_peak = {}
         runner.paced_ticks, runner.pace_floor, runner.peak_lag, runner.over_ticks, runner.damped_ticks = (
             0,
             0.0,

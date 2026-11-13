@@ -97,6 +97,8 @@ DEFAULTS = {
     "jitter.hold_std": (0.4, "joint_unit", 0.05, 3), "jitter.hold_flips_hz": (3.0, "hz", 0.5, 15),
     "jitter.move_std": (0.3, "joint_unit", 0.05, 3), "jitter.move_flips_hz": (4.0, "hz", 0.5, 15),
     "jitter.pwm_std": (25, "pwm", 5, 300), "jitter.pwm_flips_hz": (1.2, "hz", 0.3, 4),
+    "jitter.sway_mm": (1.5, "mm", 0.3, 20), "jitter.sway_deg": (1.0, "deg", 0.2, 10),
+    "runner.pitch_hold_gain": (0.0, "ratio", 0, 0.5), "runner.pitch_hold_max": (0.5, "joint_unit", 0, 1.0),
     "loadcheck.risky_share": (0.5, "ratio", 0.2, 0.95), "loadcheck.min_cell": (20, "count", 1, 1000),
     "loadcheck.refuse_unknown": (0, "flag", 0, 1),
     "corridor.half_width_mm": (30.0, "mm", 10, 80), "corridor.clear_z_m": (0.10, "m", 0.04, 0.25),

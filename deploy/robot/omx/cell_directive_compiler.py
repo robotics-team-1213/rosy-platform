@@ -146,7 +146,9 @@ def plan_library_from_directive(
         for k in ("descend_pick", "descend_place", "lift_pick", "lift_place"):
             if chunks.get(k):
                 chunks[k] = list(chunks[k]) + [list(chunks[k][-1])]
-    if exec_cfg.get("sim_real_compensate", True) and "chunks" in lib:
+    # opt-in: the twin pre-adds a fixed per-joint deadband (elbow 0.48, wrist 0.14) that the I=50 servos do not
+    # have (0.03-0.06 measured), tilting the jaw +1.26 deg / ~3 mm toward the base on every Z move (2026-11-13 panel)
+    if exec_cfg.get("sim_real_compensate", False) and "chunks" in lib:
         chunks = lib["chunks"]
         arm_id = str(directive.get("arm_id") or "arm_b")
         tcp_x_mm = 91.93 if arm_id == "arm_s" else 74.1

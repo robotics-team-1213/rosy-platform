@@ -143,3 +143,57 @@ def test_teacher_feedforward_survives_one_paced_hold_while_target_is_ahead():
     _, (velocity, _, _) = motion._body_command({"shoulder_pan": 2003.0}, {"shoulder_pan": 2000.0}, 1 / 30, 0.0)
     assert velocity["shoulder_pan"] > 0
     assert math.isclose(motion.v_ff_ema["shoulder_pan"], 49.5)
+
+
+sys.path.insert(0, str(Path(__file__).parents[1] / "middleware/devices/omx/adapter"))
+DESCEND_POSE = [-2.394, -8.36, 12.4, 46.046, 47.619, 59.83]  # arm_b descend_pick start, trace 2026-11-12
+
+
+def z_rows(seconds, offset):
+    """A descend chunk whose present = target + offset(t) on (elbow_flex, wrist_flex), with the tcp sample the
+    runner adds on Z chunks."""
+    rows = []
+    for k in range(int(seconds * 30)):
+        t = k / 30
+        target = list(DESCEND_POSE)
+        target[2] += 0.04 * k  # elbow opens as the jaw goes down
+        target[3] -= 0.04 * k
+        de, dw = offset(t)
+        present = list(target)
+        present[2] += de
+        present[3] += dw
+        rows.append({"t": 100 + t, "chunk": "descend_pick", "target": target, "sent": target, "present": present,
+                     "tcp": jj.tcp_error(target, present)})
+    return rows
+
+
+def test_sway_judge_sees_a_jaw_rock_the_per_joint_judge_misses():
+    # 0.25 unit on elbow and wrist_flex tilts the jaw ~3.5 mm, as on the 2026-11-12/13 traces
+    rock = z_rows(2, lambda t: (0.25 * math.sin(2 * math.pi * t), 0.25 * math.sin(2 * math.pi * t)))
+    assert jj.shaking(trace=jj.trace_windows(rock)) == []
+    sway = jj.sway_window(rock)
+    assert sway["swaying"] and sway["radial_mm"] >= 3.0 and sway["radial_flips"] >= 2 and sway["pitch_deg"] >= 1.5
+
+
+def test_sway_judge_passes_a_tracked_descent_and_a_lag_that_only_grows():
+    assert not jj.sway_window(z_rows(2, lambda t: (0.0, 0.0)))["swaying"]
+    bow = jj.sway_window(z_rows(2, lambda t: (0.4 * t, 0.4 * t)))
+    assert bow["radial_mm"] >= 1.5 and bow["radial_flips"] == 0 and not bow["swaying"]
+    assert jj.sway_window(z_rows(0.5, lambda t: (0.4, -0.4))) is None  # under MIN_TICKS
+
+
+def test_pitch_hold_is_off_by_default_capped_slewed_and_descent_only():
+    from types import SimpleNamespace
+    import chunk_runner_run
+
+    target = list(DESCEND_POSE)
+    lagging = list(target)
+    lagging[2] -= 1.0  # elbow 1 unit behind: jaw pitch 1 unit short
+    runner = SimpleNamespace(params=None, last_present=lagging, target=target, pitch_hold=0.0)
+    held = lambda vertical: chunk_runner_run.Runner._pitch_held(runner, vertical)  # noqa: E731
+    assert held(True) is target and runner.pitch_hold == 0.0
+    runner.params = {"runner.pitch_hold_gain": 0.5, "runner.pitch_hold_max": 0.3}
+    steps = [held(True)[3] - target[3] for _ in range(8)]
+    assert abs(steps[0] - 0.05) < 1e-9 and max(steps) <= 0.3 + 1e-9 and abs(steps[-1] - 0.3) < 1e-9
+    assert all(b - a <= 0.05 + 1e-9 for a, b in zip(steps, steps[1:]))
+    assert held(False)[3] - target[3] < 0.3  # fades once the descent ends

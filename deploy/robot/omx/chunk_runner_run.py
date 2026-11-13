@@ -76,7 +76,7 @@ class Runner:
         self.live, self.health_present, self.samples, self.grip_from, self.holding = live, None, [], None, False
         self.recorder, self.operating_context, self._lib_digest_cache = Recorder(), operating_context, None
         self.trend, self.trace, self.jitter_buf, self.damped_ticks = [], None, [], 0
-        self._damp_cooldown = 0
+        self._damp_cooldown, self.sway_peak, self.pitch_hold = 0, {}, 0.0
         self.jitter = {"shaking": False, "max_std": 0.0, "max_flips_hz": 0.0, "max_p2p": 0.0, "flagged": []}
         self.ensembler = TemporalChunkEnsembler(coeff=0.08, vmax=GUARD_UNITS_PER_S, fps=fps)
 
@@ -149,6 +149,23 @@ class Runner:
             return self.jitter
         return joint_jitter.live_window(self.jitter_buf, self.params)
 
+    def _pitch_held(self, vertical: bool) -> list:
+        """The target with wrist_flex nudged by the jaw pitch error of the last tick (runner.pitch_hold_gain, 0 = off).
+        Elbow and wrist_flex lag in opposite directions on Z moves and tilt the jaw; the nudge is capped
+        (runner.pitch_hold_max) and slewed 0.05 unit/tick, and fades back out after the descent. Descents only: a
+        loaded lift replayed worse (5.98 -> 8.07 mm, 2026-11-13 panel). The guard checks it like any other target."""
+        gain, last = prm.get(self.params, "runner.pitch_hold_gain"), getattr(self, "last_present", None)
+        want = 0.0
+        if gain and vertical and last:
+            cap = prm.get(self.params, "runner.pitch_hold_max")
+            want = max(-cap, min(cap, gain * (sum(self.target[1:4]) - sum(last[1:4]))))
+        self.pitch_hold += max(-0.05, min(0.05, want - self.pitch_hold))
+        if not self.pitch_hold:
+            return self.target
+        out = list(self.target)
+        out[3] += self.pitch_hold
+        return out
+
     def tick(self) -> None:
         pace_lag, pace_rise = (
             prm.get(self.params, "runner.pace_lag", _cr_attr("PACE_LAG", PACE_LAG)),
@@ -189,21 +206,29 @@ class Runner:
             if self.chunk is not None:
                 self.played.append(list(self.target))
         self.trend = [] if self.chunk is None and not self.jog_path else self.trend
-        sent = self.robot.send_action(dict(zip(NAMES, self.target)))
+        vertical = self.chunk is not None and self.chunk.startswith(joint_jitter.SWAY_CHUNKS) and len(self.target) == 6
+        sent = self.robot.send_action(dict(zip(NAMES, self._pitch_held(vertical and self.chunk.startswith("descend")))))
         present = self.present()
         full_sent = isinstance(sent, dict) and all(n in sent for n in NAMES)
-        self.jitter_buf.append(
-            {
-                "t": self.clock(),
-                "chunk": self.chunk,
-                "target": list(self.target),
-                "sent": [float(sent[n]) for n in NAMES] if full_sent else None,
-                "present": list(present),
-            }
-        )
+        row = {
+            "t": self.clock(),
+            "chunk": self.chunk,
+            "target": list(self.target),
+            "sent": [float(sent[n]) for n in NAMES] if full_sent else None,
+            "present": list(present),
+        }
+        if vertical:
+            row["tcp"] = joint_jitter.tcp_error(self.target, present)
+        self.jitter_buf.append(row)
         if len(self.jitter_buf) > max(60, round(2.0 * self.fps) + 2):
             del self.jitter_buf[: -max(60, round(2.0 * self.fps) + 2)]
         self.jitter = self._eval_jitter()
+        sway = joint_jitter.sway_window(self.jitter_buf, self.params) if vertical else None
+        if sway:  # observation only: recorded in the chunk receipt, does not drive damping (2026-11-13 panel)
+            peak = self.sway_peak
+            for key in ("radial_mm", "pitch_deg"):
+                peak[key] = max(peak.get(key, 0.0), sway[key])
+            peak["swaying"] = peak.get("swaying", False) or sway["swaying"]
         if self.trace:
             load = self.__dict__.pop("load_new", None)
             self.trace(

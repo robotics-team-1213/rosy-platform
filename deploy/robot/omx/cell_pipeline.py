@@ -45,7 +45,7 @@ def target(config: dict, site: str, xy, yaw_deg=None, place=False) -> dict:
 
 
 STEP_KEYS = ("ok", "error", "holding", "gripper_current_ma", "settled", "fault", "contact", "state", "target", "t",
-             "paced_ticks")
+             "paced_ticks", "sway")
 
 
 def transfer(cell, library: Path, hover=None, *, config=None, calibration=None, before_motion=None) -> dict:
