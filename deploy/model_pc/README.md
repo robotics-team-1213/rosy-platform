@@ -172,20 +172,9 @@ python3 ~/rosy-ml/bin/install_review_release.py \
 
 보호는 새 AI·학습·내보내기·사람 편집 요청을 막지 않는다. 실제 수동 전환 전에는 모든 writer의 새 요청을 멈추고 기존 작업의 자연 종료·일관 백업을 확인한다. 설치 후에는 두 helper의 실제 파일 hash와 다음 updater 실행의 `manual hold:` 결과, `current` 유지, 다른 UI·원래 타이머 설정의 보존을 따로 검증한다.
 
-## 학습 센터 자동 업데이트 (D-871)
+## 학습 센터 자동 업데이트 (D-871) — 후보 퇴역
 
-`install_learning_center.py`로 설치한 `rosy-learning-center.service`(모델 PC 8769, AI PC 8770)를 30분마다 확인한다. 바뀌는 조건은 세 가지다. CI를 통과한 main이어야 하고, 센터가 켜져 있어야 하며, 센터 작업이 없어야 한다. 이때 [2026-10-23 절차](../../docs/solutions/deployment/learning-center-upgrade-needs-the-identical-unit-first-2026-10-23.md)를 `rosy-learning-center-update.timer`가 그대로 수행한다.
-
-- 바꾸지 않는 경우:
-  - 손으로 멈췄거나 끈 센터는 그대로 둔다(`idle`).
-  - `experiment_*` 작업이나 review 앱 외의 자식 프로세스가 있으면 `held`.
-- 바꾸는 절차: 새 커밋을 `source/<sha>`에 받는다. 새 설치기의 `prepare()`로 같은 state, 설정, 포트의 유닛을 만든다. 백업한 뒤 서비스를 멈추고, 유닛을 쓰고 `--apply`한다.
-- 확인: `is-active`, 새 sha, `http://127.0.0.1:<port>/` 200. 실패하면 백업 유닛으로 되돌리고, 그 커밋은 main이 움직일 때까지 다시 시도하지 않는다.
-- 설치:
-  1. `learning-center-update.json.example`을 `~/.config/rosy/learning-center-update.json`에 복사하고 `<owner>`를 채운다.
-  2. 첫 실행은 이 업데이터가 있는 main 사본에서 한다(예: `~/rosy-test/repo`): `python3 deploy/model_pc/learning_center_update.py run --dry-run`으로 판정을 본 뒤 `run`을 실행한다. 이 업데이터가 들어 있는 체크아웃으로 전환하면 `current` 링크가 생긴다. 지금 설치된 소스가 이 업데이터보다 오래되었기 때문이다. `switched`가 나오기 전에는 `current`가 없어 타이머가 실행되지 않으므로, 그때까지는 이 명령을 손으로 다시 실행한다.
-  3. 업데이터 유닛 두 개를 `~/.config/systemd/user/`에 복사하고 `systemctl --user enable --now rosy-learning-center-update.timer`.
-- 범위 밖: D-446 서명 릴리스로 설치하는 보호 센터(`install_review_release.py`)는 이 경로가 아니다.
+학습 센터 후보 `rosy-learning-center.service`(모델 PC 8769, AI PC 8770)는 2026-10-31에 퇴역했다. 그 데이터는 합성 자료만 담고 있었으며 그대로 보관한다. 지금 살아 있는 유일한 센터는 8768 `rosy-edge-review`(D-857)이고 `rosy-review-release-update`로 갱신한다. `install_learning_center.py`와 `learning_center_update.py`는 설치·업데이트를 다시 시작하는 도구가 아니며, [2026-10-23 절차](../../docs/solutions/deployment/learning-center-upgrade-needs-the-identical-unit-first-2026-10-23.md)와 함께 퇴역 기록으로 남긴다.
 
 ## 검수에서 학습 owner로 연결 (D-742)
 

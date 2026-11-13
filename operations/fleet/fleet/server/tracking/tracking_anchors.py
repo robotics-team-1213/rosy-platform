@@ -5,14 +5,12 @@ from __future__ import annotations
 import math
 from typing import Mapping, Optional, Sequence
 
-from fleet.server.tracking_match import Track
-
 
 def _finite(*values) -> bool:
     return all(isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v) for v in values)
 
 
-def _render(track: Track, source_id: str) -> dict:
+def _render(track, source_id: str) -> dict:
     return {
         "robot_id": track.robot_id, "status": track.status, "source_id": source_id, "offset_m": track.offset_m,
         "camera": None if track.camera is None else {

@@ -312,6 +312,7 @@ def record_open(path, *args, **kwargs):
 kin.open = record_open
 kin.DEFAULT_KINEMATICS_PATH = Path.cwd() / 'missing-source-geometry.yaml'
 sys.prefix = str(target)
+kin._KINEMATICS_CACHE.clear()  # load() caches by path+mtime; resolution is what this checks
 assert kin.OmxKinematics.load().revision == expected_revision
 assert opened == [asset]
 
@@ -329,6 +330,7 @@ ament.packages = packages
 sys.modules['ament_index_python'] = ament
 sys.modules['ament_index_python.packages'] = packages
 opened.clear()
+kin._KINEMATICS_CACHE.clear()
 assert kin.OmxKinematics.load().revision == expected_revision
 assert calls == ['omx_adapter'] and opened == [asset]
 
