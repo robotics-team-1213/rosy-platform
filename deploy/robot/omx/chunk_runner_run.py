@@ -38,6 +38,7 @@ from chunk_runner_settle import (  # noqa: E402, F401
 from episode_recorder import Recorder  # noqa: E402
 import joint_jitter  # noqa: E402
 import joint_push  # noqa: E402
+import runner_speed  # noqa: E402
 import runner_strain  # noqa: E402
 
 FOLLOW_STOP, FOLLOW_STOP_S = 25.0, 1.0
@@ -77,6 +78,7 @@ class Runner:
         self.recorder, self.operating_context, self._lib_digest_cache = Recorder(), operating_context, None
         self.trend, self.trace, self.jitter_buf, self.damped_ticks = [], None, [], 0
         self._damp_cooldown, self.sway_peak, self.pitch_hold = 0, {}, 0.0
+        self.speed, self.speed_low, self.speed_out, self.speed_base, self.speed_phase = 1.0, 1.0, None, None, 0.0
         self.jitter = {"shaking": False, "max_std": 0.0, "max_flips_hz": 0.0, "max_p2p": 0.0, "flagged": []}
         self.ensembler = TemporalChunkEnsembler(coeff=0.08, vmax=GUARD_UNITS_PER_S, fps=fps)
 
@@ -176,7 +178,7 @@ class Runner:
         elif self.queue:
             if self.pace_last is not None:
                 self.pace_floor = max(self.pace_floor, self.lag)
-            raw_target = self.queue.pop(0)
+            raw_target = runner_speed.take(self)
             if self.jitter.get("shaking") or (self.pace_last is not None and self.queue):
                 if self.jitter.get("shaking") and self.queue:
                     self._damp_cooldown = 3
@@ -230,6 +232,7 @@ class Runner:
                     "target": [round(v, 3) for v in self.target],
                     "sent": [round(float(sent[n]), 3) for n in NAMES] if full_sent else None,
                     "present": [round(v, 3) for v in present],
+                    "s": round(self.speed, 3),
                     "pwm": getattr(getattr(self.robot, "motion", None), "effort_pwm", None) or {},
                     **({"load": load} if load else {}),
                 }
