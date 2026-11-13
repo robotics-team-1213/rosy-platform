@@ -65,6 +65,7 @@ def test_land_async_stops_before_any_snapshot_when_the_precheck_fails(monkeypatc
     tool = load("land_async")
     seen = []
     monkeypatch.setattr(tool.subprocess, "call", lambda argv, **k: seen.append(argv) or 1)
+    monkeypatch.setattr(tool, "too_big", lambda cwd: None)  # the size gate has its own test
     monkeypatch.setattr(tool, "start", lambda *a, **k: pytest.fail("a snapshot was made after a failed precheck"))
     assert tool.main(["--tests", "auto"]) == 1
     assert seen[0][-1] == "--precheck" and seen[0][1].endswith("land.py")
@@ -73,6 +74,7 @@ def test_land_async_stops_before_any_snapshot_when_the_precheck_fails(monkeypatc
 def test_land_async_queues_after_a_passing_precheck(monkeypatch, tmp_path):
     tool = load("land_async")
     monkeypatch.setattr(tool.subprocess, "call", lambda argv, **k: 0)
+    monkeypatch.setattr(tool, "too_big", lambda cwd: None)  # the size gate has its own test
     monkeypatch.setattr(tool, "start", lambda *a, **k: ("land/x", tmp_path / "x.log"))
     assert tool.main(["--tests", "auto"]) == 0
 
