@@ -69,10 +69,10 @@ class RosBridgeHelpersMixin:
             self.pilot_fetched_pub, json.dumps({"id": rid}))
 
     @staticmethod
-    def _publish_string(pub, data: str) -> None:
+    def _publish_string(ros_pub, data: str) -> None:
         from std_msgs.msg import String
 
-        pub.publish(String(data=data))
+        ros_pub.publish(String(data=data))
 
     def _on_pilot_recorder_status(self, msg) -> None:
         try:

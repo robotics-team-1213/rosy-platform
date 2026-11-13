@@ -1380,3 +1380,11 @@
 - 변경: `contract_version.py`를 API 참조 v1.374(Account 가입·권한 요청, D-993)에 맞췄다. CORE 동작 변경 없음.
 - 증거: 프로토콜 버전 정합 시험.
 - gate 변화: 없음.
+
+## 2026-11-13 · uncommitted · fix(core): API contract header v1.389 gets its changelog row and CONTRACT constant (main red)
+
+- 변경: contract_version.py 의 CONTRACT 를 v1.389 로 올리고 API Reference 변경 이력에 v1.389 행(admin db-status/settings/maintenance)을 추가했다
+- 증거: test_protocol_version_alignment 두 시험(원격)
+- gate 변화: 없음. SOURCE GO, LOCAL GO 유지(main red 복구)
+- 결정: 없음
+- 교훈: 없음
