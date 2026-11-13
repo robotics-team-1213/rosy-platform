@@ -474,7 +474,7 @@ class TestVlaHandoverBroker:
             task,
             base_plan=SAMPLE_BASE_PLAN,
             work_dir=tmp_path,
-            act_fn=lambda cmd: cmds_executed.append(cmd) or {"ok": True, "holding": True, "state": [0.0] * 6},
+            act_fn=lambda cmd: cmds_executed.append(cmd) or {"ok": True, "holding": True, "gripper_current_ma": 158.0, "state": [0.0, -10.0, 15.0, 45.0, 48.0, 54.4]},
             vla_step_fn=lambda obs: [0.1, -10.0, 15.0, 45.0, 48.0, 54.4],
             seating_probe_fn=lambda retry_idx: (TIER_Z_M[3], [30.0, 85.0, 165.0, 128.0]),
             frame_fn=None,
