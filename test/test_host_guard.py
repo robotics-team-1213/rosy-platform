@@ -6,6 +6,7 @@ import shutil
 import socket
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -515,5 +516,39 @@ def test_monitoring_health_failures_alert_once_and_recovery_once(tmp_path):
         assert len(_sent(tmp_path)) == 2 and "다시 응답합니다" in _sent(tmp_path)[1]
         assert _actions(tmp_path) == ["alert unreachable", "alert recovered"]
         assert "mon" not in json.loads((tmp_path / "state/status.json").read_text())
+    finally:
+        server.shutdown()
+
+
+def test_monitoring_with_a_stale_or_null_last_success_counts_as_failing(tmp_path):
+    import http.server
+    import threading
+    body = {"value": {"status": "ready", "last_success": None}}
+
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            payload = json.dumps(body["value"]).encode()
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(payload)
+
+        def log_message(self, *args):
+            pass
+    server = http.server.HTTPServer(("127.0.0.1", 0), Handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        env = {**_alerts(tmp_path), "GUARD_MONITORING_STALE_MIN": "15"}
+        conf = f"mon monitoring http://127.0.0.1:{server.server_port}/monitoring-health\n"
+        _guard(tmp_path, HEALTHY, conf=conf, env_extra=env)
+        assert _sent(tmp_path) == []  # one stale check is not an outage
+        body["value"] = {"status": "ready", "last_success": time.time() - 16 * 60}
+        _guard(tmp_path, HEALTHY, conf=conf, runs=2, env_extra=env)
+        assert len(_sent(tmp_path)) == 1 and "mon 서비스가 2번 연속" in _sent(tmp_path)[0]
+        body["value"] = {"status": "ready", "last_success": time.time() - 5 * 60}
+        _guard(tmp_path, HEALTHY, conf=conf, env_extra=env)
+        assert len(_sent(tmp_path)) == 2 and "다시 응답합니다" in _sent(tmp_path)[1]
+        body["value"] = {"status": "ready"}  # an older Monitoring without the key is judged by the status code
+        _guard(tmp_path, HEALTHY, conf=conf, runs=3, env_extra=env)
+        assert len(_sent(tmp_path)) == 2
     finally:
         server.shutdown()

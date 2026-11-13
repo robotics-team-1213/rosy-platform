@@ -2544,7 +2544,7 @@ python3 /opt/rosy/candidate/deploy/site/site_users.py add <site-users.yaml> --pr
 열람은 Fleet 화면의 "시스템 상태" 링크 또는 `https://<site>/monitoring/`에서 `site_read` 키를 넣는다.
 서비스 확인은 `https://<site>/monitoring-health`다. 이 응답은 수집기 자신의 생존만 뜻한다.
 모델 PC의 `rosy-host-guard`는 `hosts.conf`의 `<이름> monitoring <https-url> [<ca파일>]` 줄로 이 주소를 10분마다 보고,
-연속 2번 2xx가 아니면 알림 웹훅으로 알린다(복구 때 한 번 더). 응답에 마지막 성공 시각이 없어 신선도는 보지 못하고 상태 코드만 본다.
+연속 2번 2xx가 아니면 알림 웹훅으로 알린다(복구 때 한 번 더). 응답의 `last_success`(마지막 원천 수집 성공 epoch 초)가 null이거나 `GUARD_MONITORING_STALE_MIN`분(기본 15)보다 오래되면 같은 실패로 센다. 이 키가 없는 이전 Monitoring은 상태 코드만 본다.
 
 이 기능에는 overlay 한 쌍을 포함한 새 서명 candidate와 이를 아는 host verifier·updater가 필요하다.
 전용 이미지 이전의 서명 candidate(Fleet 이미지로 도는 Monitoring)도 검증·되돌림은 된다. 전용 이미지 candidate로 올라가면 Monitoring 컨테이너가 새 이미지로 다시 만들어지며 `monitoring_state` 볼륨은 그대로다.
