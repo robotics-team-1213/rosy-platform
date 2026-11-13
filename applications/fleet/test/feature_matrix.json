@@ -2504,7 +2504,7 @@
           "id": "GET:/api/fleet/robots/{robot_id}/line-stuck/evidence",
           "method": "GET",
           "path": "/api/fleet/robots/{robot_id}/line-stuck/evidence",
-          "implementation": "operations/fleet/fleet/server/console/console_routes.py",
+          "implementation": "operations/fleet/fleet/server/console/line_stuck_routes.py",
           "handler": "line_stuck_evidence",
           "expected_statuses": [
             200
@@ -2712,7 +2712,7 @@
           "id": "POST:/api/fleet/robots/{robot_id}/line-stuck/claim",
           "method": "POST",
           "path": "/api/fleet/robots/{robot_id}/line-stuck/claim",
-          "implementation": "operations/fleet/fleet/server/console/console_routes.py",
+          "implementation": "operations/fleet/fleet/server/console/line_stuck_routes.py",
           "handler": "line_stuck_claim",
           "expected_statuses": [
             200
@@ -2729,7 +2729,7 @@
           "id": "POST:/api/fleet/robots/{robot_id}/line-stuck/decision",
           "method": "POST",
           "path": "/api/fleet/robots/{robot_id}/line-stuck/decision",
-          "implementation": "operations/fleet/fleet/server/console/console_routes.py",
+          "implementation": "operations/fleet/fleet/server/console/line_stuck_routes.py",
           "handler": "line_stuck_decision",
           "expected_statuses": [
             200
@@ -3258,7 +3258,7 @@
           "id": "POST:/api/fleet/goal-lease/presence",
           "method": "POST",
           "path": "/api/fleet/goal-lease/presence",
-          "implementation": "operations/fleet/fleet/server/app.py",
+          "implementation": "operations/fleet/fleet/server/bootstrap/role_builders.py",
           "handler": "fleet_goal_lease_presence",
           "expected_statuses": [
             200
@@ -7092,7 +7092,7 @@
           "id": "GET:/api/fleet/incidents",
           "method": "GET",
           "path": "/api/fleet/incidents",
-          "implementation": "operations/fleet/fleet/server/console/console_routes.py",
+          "implementation": "operations/fleet/fleet/server/console/line_stuck_routes.py",
           "handler": "incident_reports",
           "expected_statuses": [
             200
@@ -7109,7 +7109,7 @@
           "id": "POST:/api/fleet/incidents/facts/{fact_row}/review",
           "method": "POST",
           "path": "/api/fleet/incidents/facts/{fact_row}/review",
-          "implementation": "operations/fleet/fleet/server/console/console_routes.py",
+          "implementation": "operations/fleet/fleet/server/console/line_stuck_routes.py",
           "handler": "review_traffic_fact",
           "expected_statuses": [
             200
@@ -7126,7 +7126,7 @@
           "id": "POST:/api/fleet/incidents/{robot_id}/{stuck_id}/review",
           "method": "POST",
           "path": "/api/fleet/incidents/{robot_id}/{stuck_id}/review",
-          "implementation": "operations/fleet/fleet/server/console/console_routes.py",
+          "implementation": "operations/fleet/fleet/server/console/line_stuck_routes.py",
           "handler": "review_incident",
           "expected_statuses": [
             200

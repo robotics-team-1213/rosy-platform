@@ -132,20 +132,19 @@ async def _task_dispatch_loop(console: FleetConsole, task_service: FleetTaskServ
             await reconcile_tasks(task_service, console)
             queued_ids = await asyncio.to_thread(task_service.store.queued_task_ids)
             console.prune_task_queue_entries(queued_ids)
-            if queued_ids:
-                snapshot = await console.snapshot()
-                available = {
-                    row["robot_id"] for row in snapshot["robots"]
-                    if row["online"] and row["queued"] is None and row["goal"] is None
-                    and row["state"] is not None
-                    and row["state"].get("navigation") in {"IDLE", "ARRIVED", "CANCELED", "FAILED"}
-                    and row["state"].get("mode") in {"IDLE", "NAVIGATION"}
-                    and not row["state"].get("capabilities_degraded")
-                    and not console.trip_busy(row["robot_id"])  # D-494 5: the trip loop drives it
-                    and row["state"].get("safety", {}).get("estop") is False
-                }
-                dispatched = await task_service.dispatch_next(
-                    available, dispatch=lambda task: drive_cancel.fenced_goal(console, task))
+            snapshot = await console.snapshot()
+            available = {
+                row["robot_id"] for row in snapshot["robots"]
+                if row["online"] and row["queued"] is None and row["goal"] is None
+                and row["state"] is not None
+                and row["state"].get("navigation") in {"IDLE", "ARRIVED", "CANCELED", "FAILED"}
+                and row["state"].get("mode") in {"IDLE", "NAVIGATION"}
+                and not row["state"].get("capabilities_degraded")
+                and not console.trip_busy(row["robot_id"])  # D-494 5: the trip loop drives it
+                and row["state"].get("safety", {}).get("estop") is False
+            }
+            dispatched = await task_service.dispatch_next(
+                available, dispatch=lambda task: drive_cancel.fenced_goal(console, task))
             if supervisor is not None:
                 supervisor.note_ok("task-dispatch")
         except asyncio.CancelledError:
