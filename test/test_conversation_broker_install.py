@@ -515,6 +515,8 @@ def test_full_admin_install_preserves_existing_state_and_rolls_back(tmp_path,mon
         assert cfg['valid_until'] == proof['evaluated_at']+7*86400
         assert (m.VERSIONS/('a'*40)/('semantic-evaluation-'+('b'*64)+'.json')).read_bytes() == b'proof'
         assert (m.VERSIONS/('a'*40)/('semantic-evaluation-'+('c'*64)+'.json')).read_bytes() == b'proof renewed'
+        assert (m.VERSIONS/('a'*40)/('semantic-evaluation-receipt-'+('b'*64)+'.json')).read_bytes() == b'receipt'
+        assert (m.VERSIONS/('a'*40)/('semantic-evaluation-receipt-'+('c'*64)+'.json')).read_bytes() == b'receipt'
         assert len([c for c in calls if '--require-hashes' in c]) == 1
     elif stage in (None,'no_status'):
         assert m.main(argv) == 0
