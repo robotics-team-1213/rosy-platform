@@ -1034,8 +1034,9 @@ def test_state_rules_keep_the_parent_and_root_only_state_with_root():
     # Same mode/owner/group as the tmpfiles rule, read from it so the two cannot drift.
     _d, path, mode, owner, group, _age = next(
         line.split() for line in rules.splitlines() if line.startswith("d /run/rosy-peer-display "))
-    assert _directives("rosy-core.service")["ExecStartPre"] == [
-        f"-+/usr/bin/install -d -m {mode} -o {owner} -g {group} {path}"]
+    starts = _directives("rosy-core.service")["ExecStartPre"]
+    assert f"-+/usr/bin/install -d -m {mode} -o {owner} -g {group} {path}" in starts
+    assert "-+/usr/bin/install -d -m 2750 -o rosy-core -g rosy-display /var/lib/rosy/lamp-control" in starts
 
 
 def test_contract_parser_sees_the_2026_09_23_005_defects():
