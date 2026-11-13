@@ -11,6 +11,7 @@ names its attempt_id, and case rows carry the same id.
 
   rosy.omx-cell-attempt.v1: {"schema", "attempt_id", "run_id", "t_start", "t_end", "from", "to", "attempt",
       "context": {"code", "config_sha", "plan_sha", "calibration", "choices_used", "choices_sha", "knowledge_sha"},
+      "scenario_id", "execution": {"segment", "purpose", "executor", "candidates", "propensity", "outcome"},
       "locate", "grasp_yaw", "plan", "transfer", "verify", "outcome", "fail_stage", "fail_class"}
 
   cell_attempts.py summary attempts.jsonl [--bin-mm 10]     # success by box position, map and failure
