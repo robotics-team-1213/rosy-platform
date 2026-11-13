@@ -392,6 +392,39 @@ def test_a_safety_abort_row_names_the_rule_the_value_and_the_limit(tmp_path, mon
     assert [e["outcome"] for e in cell_decisions.export(rows, attempts, None) if e["input"]["stage"] == "safety"] == ["aborted"]
 
 
+def test_guard_abort_after_executor_choice_records_stopped_without_learning(tmp_path, monkeypatch):
+    def abort(*args, **kwargs):
+        raise auto.Aborted("stale live state")
+
+    monkeypatch.setattr(auto, "transfer_folded", abort)
+    result, _, attempts = run_started(tmp_path, monkeypatch, Cell([CONT2]))
+    assert result["result"] == "aborted: stale live state"
+    assert len(attempts) == 1
+    assert attempts[0]["execution"]["outcome"] == "stopped"
+    assert attempts[0]["execution"]["executor"] == "ik_chunk"
+    assert cell_choices.Choices(tmp_path / "choices.json").data["values"]["exec.pick_place"][0]["tries"] == 0
+
+
+@pytest.mark.parametrize("transfer_result", ["empty", "misaligned", "reinserted", "still holding"])
+def test_completed_transfer_failures_update_executor_ledger(tmp_path, monkeypatch, transfer_result):
+    monkeypatch.setattr(auto, "transfer_folded", lambda *args, **kwargs: {
+        "result": transfer_result, "at": "run grasp_pick", "steps": []})
+    _, _, attempts = run_started(tmp_path, monkeypatch, Cell([CONT2]))
+    assert attempts
+    assert all(row["execution"]["outcome"] == "failed" for row in attempts)
+    choice = cell_choices.Choices(tmp_path / "choices.json").data["values"]["exec.pick_place"][0]
+    assert (choice["tries"], choice["ok"]) == (len(attempts), 0)
+
+
+@pytest.mark.parametrize("transfer_result", ["contact", "fault", "refused"])
+def test_guard_fault_and_refusal_stops_do_not_update_executor_ledger(tmp_path, monkeypatch, transfer_result):
+    monkeypatch.setattr(auto, "transfer_folded", lambda *args, **kwargs: {
+        "result": transfer_result, "at": "run grasp_pick", "steps": []})
+    _, _, attempts = run_started(tmp_path, monkeypatch, Cell([CONT2]))
+    assert attempts[0]["execution"]["outcome"] == "stopped"
+    assert cell_choices.Choices(tmp_path / "choices.json").data["values"]["exec.pick_place"][0]["tries"] == 0
+
+
 def test_exported_labels_follow_the_outcome_and_a_person_correction_replaces_the_row(tmp_path, monkeypatch):
     _, rows, attempts = run_started(tmp_path, monkeypatch, Cell([CONT2]))
     path = tmp_path / "decisions.jsonl"

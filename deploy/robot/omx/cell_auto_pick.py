@@ -255,7 +255,7 @@ def run_auto(
                 or ("disabled or uncalibrated" if wrist is None else None)
             )
             tried["transfer"] = moved
-            if moved["result"] == "empty":
+            if moved["result"] not in ("placed", "contact", "fault", "refused"):
                 tried["execution"]["outcome"] = "failed"
                 choices.outcome_contextual("exec.pick_place", choice["value"], False,
                                            propensity=choice["propensity"], note=moved["result"])
@@ -348,6 +348,8 @@ def run_auto(
                 return {**out, "result": f"stopped: {moved['result']}"}
     except Aborted as stop:
         close_episode(cell, episode, False, f"aborted: {stop}")
+        if "execution" in tried:
+            cell_attempts.record(config, calibration, source, dest, attempt, tried, t0, choices)
         return {**out, "result": f"aborted: {stop}"}
     except Exception:
         if guarded is not None:
