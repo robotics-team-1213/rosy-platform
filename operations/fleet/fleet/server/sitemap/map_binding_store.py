@@ -119,10 +119,10 @@ class MapBindingStore:
             return None, "MAP_BINDING_REQUIRED"
         if site is None or binding["site_map_id"] != site[0] or binding["site_map_version"] != int(site[1]):
             return None, "MAP_BINDING_SITE_CHANGED"
-        if state.get("map_grid_id") != binding["robot_grid_id"]:
-            return None, "MAP_BINDING_GRID_CHANGED"
         loc = state.get("localization") or {}
         if loc.get("state") != "LOCALIZED" or loc.get("pose_frame") != "map":
-            return None, "ROBOT_NOT_LOCALIZED"
+            return None, "ROBOT_NOT_LOCALIZED"  # first: an unreachable robot ({}) is not a changed grid
+        if state.get("map_grid_id") != binding["robot_grid_id"]:
+            return None, "MAP_BINDING_GRID_CHANGED"
         f = binding["fit"]
         return Fit(f["yaw"], f["tx"], f["ty"], (f["residual_max_m"],)), ""
