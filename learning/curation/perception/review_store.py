@@ -41,7 +41,6 @@ class ReviewStore:
         self.lock = threading.RLock()
         self.db = self.state / 'reviews.sqlite3'
         with self.connect() as db:
-            db.execute('PRAGMA journal_mode=WAL')
             db.execute('PRAGMA synchronous=NORMAL')
             db.executescript('''CREATE TABLE IF NOT EXISTS frames (
                 id INTEGER PRIMARY KEY, source TEXT NOT NULL, review TEXT NOT NULL,
