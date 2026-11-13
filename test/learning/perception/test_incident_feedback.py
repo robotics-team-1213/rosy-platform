@@ -54,6 +54,11 @@ def test_ambiguous_or_invalid_report_is_rejected():
     broken["id"] = "line_stuck:rosy_41:stuck-a"
     with pytest.raises(ValueError, match="identity"):
         incident_feedback.bind({"reports": [broken]}, markers("stuck-a"))
+    for key, bad in (("ai_facts", "oops"), ("core", "lane_lost")):
+        shaped = report()
+        shaped["evidence"][key] = bad
+        with pytest.raises(ValueError, match="evidence shape"):
+            incident_feedback.bind({"reports": [shaped]}, markers("stuck-a"))
 
 
 def test_cli_accepts_windows_utf8_bom_exports(tmp_path, monkeypatch):
