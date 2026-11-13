@@ -453,7 +453,8 @@ export function buildQuickControlPanel({
   liveCellImg.className = "anchor-roi-img omx-inspector-cam";
   liveCellImg.alt = `${activeAnchor.target_id} ${chosenCam.label} 실시간 카메라`;
   liveCellImg.loading = "lazy";
-  cellFrames?.bind(liveCellImg, chosenCam);
+  // No Vision lease until the person picks a camera for this target (selecting a robot only inspects).
+  if (view.trackerCamByTarget[activeAnchor.target_id]) cellFrames?.bind(liveCellImg, chosenCam);
   const roiMeta = nodeWithText("div", "roi-meta"), statusText = nodeWithText("p", "hint roi-status-text");
   statusText.id = "anchor-roi-status";
   const deg = typeof activeAnchor.head_yaw === "number" ? `${Math.round((activeAnchor.head_yaw * 180) / Math.PI)}°` : "—";
