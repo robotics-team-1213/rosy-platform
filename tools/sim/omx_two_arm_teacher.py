@@ -29,6 +29,7 @@ from omx_two_arm_teacher_stages import (  # noqa: E402, F401
     SERVO_GAIN,
     VISION_SKEW_CHOICES,
     Ctx,
+    Faults,
     isaac_handoff,
     judge_pose,
     open_video_writer,
@@ -243,8 +244,8 @@ class Teacher:
         for _ in range(8):
             yield self.q_now(data, arm)
 
-    def run_concurrent(self, data, task, here, max_s=900):
-        return run_concurrent_steps(self, data, task, here, max_s=max_s)
+    def run_concurrent(self, data, task, here, max_s=900, faults=None):
+        return run_concurrent_steps(self, data, task, here, max_s=max_s, faults=faults)
 
     def belt_in(self, data, step, idle):
         """belt_in_g for a caller that drives frames itself with the other arm holding `idle` (the policy evaluation)."""
@@ -321,15 +322,15 @@ class Teacher:
         self.contacts, self.carried = dict(arm_arm=set(), arm_other=set(), pad_neighbour=set()), None
         return self.run_step(self.fresh(here), step, {k: v for k, v in here.items() if k != step["container"]})
 
-    def run_task(self, task, isolated=False, concurrent=False):
+    def run_task(self, task, isolated=False, concurrent=False, faults=None):
         w, L = self.world, self.layout
         here = dict(task.get("start", {}))
         self.contacts, self.carried = dict(arm_arm=set(), arm_other=set(), pad_neighbour=set()), None
         data = self.fresh(here)
-        rows, timing, stopped = [], None, None
+        rows, timing, stopped, extra = [], None, None, {}
         start = self.n
         if concurrent:
-            rows, timing, stopped = self.run_concurrent(data, task, here)
+            rows, timing, stopped, extra = self.run_concurrent(data, task, here, faults=faults)
         for step in [] if concurrent else task["steps"]:
             if isolated and rows:
                 data = self.fresh(here)
@@ -352,7 +353,7 @@ class Teacher:
         if concurrent:
             spans = {a: [(t["start_s"], t["end_s"]) for t in timing.values() if t["arm"] == a and "end_s" in t] for a in L.arms}
             a, b = spans.values()
-            out.update(concurrent=True, stopped=stopped, timing=timing,
+            out.update(concurrent=True, stopped=stopped, timing=timing, **extra,
                        overlap_s=round(sum(max(0., min(e1, e2) - max(s1, s2)) for s1, e1 in a for s2, e2 in b), 1))
         return out
 
@@ -372,7 +373,11 @@ def main(argv=None):
     p.add_argument("--cone", default="elliptic", choices=["elliptic", "pyramidal"], help="MuJoCo friction cone")
     p.add_argument("--drop-upper", type=float, default=tasks.RELEASE_DROP_UPPER, help="release height over a lower container, m")
     p.add_argument("--isolated", action="store_true", help="reset to the nominal plan state before every step")
-    p.add_argument("--concurrent", action="store_true", help="both arms at once by the steps' after/after_pick/zones")
+    p.add_argument("--concurrent", action="store_true", help="both arms at once by the steps' after/zones; a belt pick waits on the handover ledger")
+    p.add_argument("--belt-unknown", type=float, default=0., metavar="P", help="concurrent only: a belt reading returns unknown with probability P (seeded); the gate holds and retries next tick")
+    p.add_argument("--belt-miss", default="", metavar="STEP_ID", help="concurrent only: that step's belt delivery never arrives (container removed): the ledger goes missing and the run stops")
+    p.add_argument("--fail-at", default="", metavar="STEP_ID", help="concurrent only: that step fails right after its pick; the peer finishes its current step and starts none")
+    p.add_argument("--slow", action="append", default=[], metavar="ARM:FACTOR", help="concurrent only: stretch that arm's segment times (stall frames, FACTOR >= 1); gating stays on measured progress")
     p.add_argument("--pick-vision", action="store_true", help="perceive each pick container's (xy, yaw) from the rendered top camera")
     p.add_argument("--belt-skew", action="store_true", help="arrive belt containers with +-8..12 mm xy offset and +-15..22 deg yaw skew")
     p.add_argument("--cam-jitter", action="store_true", help="perturb physical top camera pose to verify online 6-DoF anchor self-calibration")
@@ -407,7 +412,9 @@ def main(argv=None):
         import omx_two_arm_skill as skill_mod
         teacher.zero_error = skill_mod.draw_zero_error(a.seed or 1003, a.zero_error_deg)
         teacher.privileged, teacher.compensate_zero = False, True
-    result = teacher.run_task(task, a.isolated, a.concurrent)
+    faults = Faults(unknown_p=a.belt_unknown, miss=a.belt_miss, fail_at=a.fail_at, seed=a.seed,
+                    slow={arm: float(factor) for arm, factor in (spec.split(":") for spec in a.slow)})
+    result = teacher.run_task(task, a.isolated, a.concurrent, faults=faults)
     if a.frames:
         from PIL import Image
         Path(a.frames).mkdir(parents=True, exist_ok=True)
