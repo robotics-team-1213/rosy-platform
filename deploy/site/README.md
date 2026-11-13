@@ -993,6 +993,13 @@ python3 /opt/rosy/site/site_preflight.py --site-cert <secrets>/site.crt
 python3 /opt/rosy/site/site_preflight.py --site-cert <secrets>/site.crt --json
 ```
 
+It also fails when a secrets directory an overlay mounts
+(`ROSY_SITE_MONITORING_SECRETS_DIR`, `ROSY_SITE_WORKCELL_ARM_SECRETS_DIR`,
+`ROSY_SITE_WORKCELL_CAMERA_SECRETS_DIR`, from the shell or the site env file)
+or a file in it cannot be read by uid/gid 10001 (owner 10001, or group 10001
+with `0750` directory / `0440` files). The message names the path and mode,
+never contents. Root-only `0700/0600` made Monitoring crash-loop for days.
+
 It reads `ROSY_SITE_TLS_HOST` (flag `--tls-host`, else the shell, else
 `/etc/rosy/site/site.env`) and checks: `site_cert` is a leaf (not a CA) followed by
 a CA; the leaf has a DNS SAN equal to `tls_host` (exact, case-insensitive, a
@@ -1685,6 +1692,19 @@ Both commands take the updater lock. Hold prevents new downloads, switches and
 pruning. It does not stop recovery of an already interrupted switch; recovery
 runs first. `status` shows the hold and `last_run.result=held`. Resume permits
 checks again; it does not bypass signature or runtime verification.
+
+A hold expires: `hold <reason> [--hours N]` defaults to 24 and accepts at most
+168. Expiry never releases it (it keeps blocking, fail safe); it makes `status`
+show `expired: true`, the run log `held-expired`, and `update_status.py` fail.
+A legacy hold without `until` counts as expired 24 h after it was set. The
+2026-11-09 R migration hold sat unnoticed for four days; renew with a new
+`hold` or `resume` it.
+
+`last_run.result=refused` with a `reason` (also in `update_status.py`) means the
+updater stopped on purpose and will not retry that candidate by itself. A reason
+`running candidate verification failed: fleet loaded image ID mismatch` means
+the running Fleet image is not the signed candidate's (for example a hand-made
+`docker commit`); only redeploying the signed candidate clears it.
 
 A manually installed signed version is accepted only when its manifest,
 environment tag and actual running image identities agree. After verification,
@@ -2464,7 +2484,7 @@ forget-failed·resume·run → 전체 매핑 복원)는
 | 입력 | 내용 |
 |---|---|
 | `ROSY_SITE_MONITORING_CONFIG` | [Monitoring 설정](../../operations/monitoring/README.md) YAML. root 소유, 그룹 10001, 0640 |
-| `ROSY_SITE_MONITORING_SECRETS_DIR` | `site_read`(열람자 조회 키), `fleet_upstream`(Fleet viewer 키). root 소유 0700/0600 |
+| `ROSY_SITE_MONITORING_SECRETS_DIR` | `site_read`(열람자 조회 키), `fleet_upstream`(Fleet viewer 키). 디렉터리 `root:10001` 0750, 파일 `root:10001` 0440(컨테이너 uid 10001이 읽어야 한다. 0700/0600이면 Monitoring이 재시작을 반복한다. `site_preflight.py`가 검사) |
 
 [monitoring.yaml.example](monitoring.yaml.example)을 복사하고 Fleet 포트가 다르면 그것만 고친다.
 설정의 키 이름은 `MONITORING_SITE_READ`(reader `token_env`)와 `MONITORING_FLEET_UPSTREAM`(Fleet 원천 `token_env`)로 맞춘다.
@@ -2484,6 +2504,8 @@ python3 /opt/rosy/candidate/deploy/site/site_users.py add <site-users.yaml> --pr
 `-f /opt/rosy/candidate/deploy/site/compose.monitoring.yaml`을 더한다. 순서는 pairing → omx → workcell → monitoring → Account다.
 열람은 Fleet 화면의 "시스템 상태" 링크 또는 `https://<site>/monitoring/`에서 `site_read` 키를 넣는다.
 서비스 확인은 `https://<site>/monitoring-health`다. 이 응답은 수집기 자신의 생존만 뜻한다.
+모델 PC의 `rosy-host-guard`는 `hosts.conf`의 `<이름> monitoring <https-url> [<ca파일>]` 줄로 이 주소를 10분마다 보고,
+연속 2번 2xx가 아니면 알림 웹훅으로 알린다(복구 때 한 번 더). 응답에 마지막 성공 시각이 없어 신선도는 보지 못하고 상태 코드만 본다.
 
 이 기능에는 overlay 한 쌍을 포함한 새 서명 candidate와 이를 아는 host verifier·updater가 필요하다.
 전용 이미지 이전의 서명 candidate(Fleet 이미지로 도는 Monitoring)도 검증·되돌림은 된다. 전용 이미지 candidate로 올라가면 Monitoring 컨테이너가 새 이미지로 다시 만들어지며 `monitoring_state` 볼륨은 그대로다.

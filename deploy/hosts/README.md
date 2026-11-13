@@ -122,6 +122,8 @@ git fetch origin && python tools/remote/update_status.py
 
 `STUCK`은 업데이트 유닛이 실패했거나 6시간 안에 정상 판정(`switched`·`up_to_date`·`idle`·`active`)이 없다는 뜻이다. 2026-10-23에는 관제 PC OMX 도구가 4일(교체된 OpenRB 시리얼), AI PC 상황 서비스가 3일(끊긴 fetch가 남긴 `mirror.git/shallow.lock`) 멈춰 있었다. `OFF`는 타이머가 꺼진 경로이고, 누가 왜 껐는지 확인하기 전에 켜지 않는다.
 
+시간과 현장 updater도 같이 본다(2026-11-13). chrony가 있는 호스트는 쓸 수 있는 시간원(`chronyc -n sources`의 `*`·`+`·`-`)이 0개면 `FAIL`이고, 설정된 server 이름이 풀리지 않으면 `note`로 이름을 적는다(모델 PC가 사라진 호스트 이름을 4일 가리킨 사례). 현장 호스트는 `/var/lib/rosy/site-autoupdate.json`을 읽어, 살아 있는 hold는 `HELD`, 만료됐지만 계속 막고 있는 hold와 `refused`·`recovery-*` 마지막 실행은 이유와 함께 `FAIL`로 보인다. `FAIL`은 exit 1이다.
+
 새 PC를 붙이거나 장치를 바꿀 때:
 
 0. 현장 매핑 `private/site-map.yaml`(PC별 역할·관제 단위·Compose·갱신 경로·팔 보드)을 같은 날 고치고 `python tools/remote/site_map.py check`로 실제 보드와 맞춘다.
