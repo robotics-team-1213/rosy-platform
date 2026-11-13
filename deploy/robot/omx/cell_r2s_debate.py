@@ -2,6 +2,7 @@
 """Multi-Agent Deliberation Panel and End-to-End 1-to-3 Tier Stack + Recovery Scenario (`cell_r2s_debate.py`)."""
 from __future__ import annotations
 
+from concurrent.futures import Future, ThreadPoolExecutor
 import json as _json
 from typing import Any
 
@@ -16,9 +17,9 @@ SCHEMA = "rosy.omx-r2s-parallel-rl.v1"
 
 
 def build_default_multi_agent_debate_panel(panel_spec: Any = None):
-    """Build a multi-agent deliberation panel (`opencode`, `codex`, `claude`, `glm-5.3`) via `judge_seat.cooperate`.
-    If no external CLI/HTTP spec is passed, builds a deterministic 3-seat heterogenous panel (`opencode:glm-5.3-flash`,
-    `codex:gpt-5-codex`, `claude:sonnet` arbiter) grounded in the R2S + Speculative RL telemetry in the prompt."""
+    """Build a multi-agent deliberation panel (`opencode`, `codex`, `claude`, `glm-5.3`).
+    Executes independent specialist seats (`opencode:glm-5.3-flash`, `codex:gpt-5-codex`) in parallel
+    and consults `claude:sonnet-arbiter` on conflict."""
     if panel_spec is not None:
         return judge_seat.from_config(panel_spec)
 
@@ -42,7 +43,26 @@ def build_default_multi_agent_debate_panel(panel_spec: Any = None):
     _opencode_seat.__name__ = "opencode:zai-coding-plan/glm-5.3-flash"
     _codex_seat.__name__ = "codex:gpt-5-codex"
     _claude_arbiter.__name__ = "claude:sonnet-arbiter"
-    return judge_seat.cooperate([_opencode_seat, _codex_seat], arbiter=_claude_arbiter)
+
+    def _parallel_panel(prompt_text: str, images: Any, schema: dict) -> dict:
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            f0 = pool.submit(_opencode_seat, prompt_text, images, schema)
+            f1 = pool.submit(_codex_seat, prompt_text, images, schema)
+            r0 = f0.result()
+            r1 = f1.result()
+        rounds = [
+            {"role": "proposal", "model": _opencode_seat.__name__, **r0},
+            {"role": "critique_1", "model": _codex_seat.__name__, **r1},
+        ]
+        if r0.get("verdict") == r1.get("verdict"):
+            return {**r1, "deliberation": rounds, "consensus": True}
+        arb_prompt = f"{prompt_text}\n[Deliberation v2 role=arbiter] Models disagreed: {_json.dumps(rounds)}"
+        arb = _claude_arbiter(arb_prompt, images, schema)
+        rounds.append({"role": "arbiter", "model": _claude_arbiter.__name__, **arb})
+        return {**arb, "deliberation": rounds, "consensus": False}
+
+    _parallel_panel.__name__ = f"cooperate({_opencode_seat.__name__},{_codex_seat.__name__})"
+    return _parallel_panel
 
 
 def deliberate_real_sim_r2s_step(
@@ -52,7 +72,7 @@ def deliberate_real_sim_r2s_step(
     panel_spec: Any = None,
     real_failed: bool = False,
 ) -> dict[str, Any]:
-    """Run multi-agent debate (`opencode` -> `codex` -> `claude` arbiter) over concurrent Real observation
+    """Run multi-agent debate (`opencode` || `codex` -> `claude` arbiter) over concurrent Real observation
     and R2S 32-branch Speculative RL candidates, enforcing Unidirectional Safety Sovereignty."""
     panel = build_default_multi_agent_debate_panel(panel_spec)
     obs = r2s_projection["obs_20d"]
@@ -95,8 +115,13 @@ def run_complete_stack_return_and_recovery_scenario(
     debate_panel_spec: Any = None,
 ) -> dict[str, Any]:
     """Execute the complete end-to-end 1-to-3 Tier Stacking + Standby Return + Recovery + Teardown scenario
-    with Parallel Real-Sim execution and Multi-Agent (`opencode` / `codex` / `claude`) Deliberation."""
-    from cell_r2s_parallel_rl import AsyncShadowRetrainer, run_pipelined_parallel_unit_transfer
+    with Cross-Tier Lookahead R2S Speculative RL and Parallel Multi-Agent Deliberation."""
+    from cell_r2s_parallel_rl import (
+        AsyncShadowRetrainer,
+        parallel_speculative_r2s_rl_select,
+        project_live_camera_env_to_r2s,
+        run_pipelined_parallel_unit_transfer,
+    )
 
     if int(pipeline.model_version) == 0:
         pipeline.pretrain_task_with_r2s_sim_rl("pinky_to_3tier_stack", episodes=24)
@@ -110,23 +135,43 @@ def run_complete_stack_return_and_recovery_scenario(
     frames_map = dict(wrist_frames_by_tier or {})
     shadow = AsyncShadowRetrainer(pipeline)
 
+    def _precompute_tier(t_idx: int) -> dict[str, Any]:
+        env_t = dict(dist_map.get(t_idx) or {})
+        proj = project_live_camera_env_to_r2s(
+            pipeline.r2s_context, tier=t_idx, wrist_img=frames_map.get(t_idx),
+            env_obs=env_t, systematic_bias_m=pipeline.systematic_bias_m,
+        )
+        rl_sel = parallel_speculative_r2s_rl_select(
+            proj, work_dir=pipeline.work_dir, clf=pipeline.clf,
+            iwr=pipeline.iwr, r2s_gap_state=pipeline.r2s_gap_state,
+        )
+        debate = deliberate_real_sim_r2s_step(
+            proj, rl_sel, panel_spec=debate_panel_spec, real_failed=bool(env_t.get("real_failed", False))
+        )
+        return {"r2s_projection": proj, "speculative_rl": rl_sel, "debate": debate}
+
     tier_steps: list[dict[str, Any]] = []
     debates: list[dict[str, Any]] = []
-    for tier_idx in (1, 2, 3):
-        t_env = dict(dist_map.get(tier_idx) or {})
-        unit = run_pipelined_parallel_unit_transfer(
-            pipeline,
-            container_id=f"container-c3-t{tier_idx}",
-            tier=tier_idx,
-            wrist_img=frames_map.get(tier_idx),
-            env_obs=t_env,
-            debate_panel_spec=debate_panel_spec,
-            include_debate=True,
-        )
-        debates.append(unit["multi_agent_debate"])
-        tier_steps.append(unit)
-        if tier_idx == 2:
-            shadow.submit_shadow_retrain(n_sim_episodes=110)
+    with ThreadPoolExecutor(max_workers=1) as lookahead_pool:
+        next_fut: Future | None = lookahead_pool.submit(_precompute_tier, 1)
+        for tier_idx in (1, 2, 3):
+            pre_bundle = next_fut.result() if next_fut is not None else None
+            next_fut = lookahead_pool.submit(_precompute_tier, tier_idx + 1) if tier_idx < 3 else None
+            t_env = dict(dist_map.get(tier_idx) or {})
+            unit = run_pipelined_parallel_unit_transfer(
+                pipeline,
+                container_id=f"container-c3-t{tier_idx}",
+                tier=tier_idx,
+                wrist_img=frames_map.get(tier_idx),
+                env_obs=t_env,
+                debate_panel_spec=debate_panel_spec,
+                include_debate=True,
+                precomputed_r2s_bundle=pre_bundle,
+            )
+            debates.append(unit["multi_agent_debate"])
+            tier_steps.append(unit)
+            if tier_idx == 2:
+                shadow.submit_shadow_retrain(n_sim_episodes=110)
 
     rehandle_out = pipeline.run_task("rehandle_and_outbound")
     shadow_swap = shadow.poll_and_commit(wait=True, timeout_s=10.0)

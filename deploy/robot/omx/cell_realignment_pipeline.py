@@ -175,7 +175,12 @@ def diagnose_and_compile_realignment_plan(
                 "expected_post_pose": dict(clean_post), "guard_eval": guard_eval, "iwr_action": iwr_action,
             }
 
-    if zone_redirect_code in ("S8_EMPTY_PICK_ZONE_REDIRECT", "S9_FLOOR_DROPPED_AND_S10_WRIST_CORRIDOR_MISALIGNED", "S9_FLOOR_DROPPED_CONTAINER_HAZARD"):
+    if zone_redirect_code in (
+        "S8_EMPTY_PICK_ZONE_REDIRECT",
+        "S9_FLOOR_DROPPED_AND_S10_WRIST_CORRIDOR_MISALIGNED",
+        "S9_FLOOR_DROPPED_CONTAINER_HAZARD",
+        "S9_ADJACENT_OBSTACLE_WITHIN_28MM",
+    ):
         redirect_target = str(obs.get("occupied_fallback_zone", "belt_center"))
         return {
             "situation": "SIT_7_POST_GRASP_OR_ZONE_OBSTRUCTION", "strategy": "closed_loop_regrasp_or_zone_redirect",
@@ -358,14 +363,18 @@ def run_closed_loop_realignment_pipeline(out_dir: str | Path | None = None) -> d
         {"id": "SIT_6_PERCHED_STACKING_CONE", "area": "pallet", "col": 3, "row": 2, "tier": 2, "dx_mm": 1.0, "dy_mm": 0.8, "r_k_mm": 2.3, "perched_subzone_x_mm": 30},
         {"id": "SIT_7_POST_GRASP_OR_ZONE_OBSTRUCTION", "area": "belt", "col": 2, "row": 1, "dx_mm": -9.5, "dy_mm": 4.0, "jaw_u": 48.25},
     ]
-    results: list[dict[str, Any]] = []
-    for sc in scenarios:
+    from concurrent.futures import ThreadPoolExecutor
+
+    def _eval_sc(sc: dict[str, Any]) -> dict[str, Any]:
         loop_res = run_iterative_fail_recovery_loop(sc, max_attempts=3, clf=clf, iwr=iwr)
-        results.append({
+        return {
             "scenario_id": sc["id"], "situation": loop_res["initial_situation"],
             "strategy": loop_res["final_strategy"], "attempts_used": loop_res["attempts_used"],
             "passed": bool(loop_res["passed"] and loop_res["initial_situation"] == sc["id"]),
-        })
+        }
+
+    with ThreadPoolExecutor(max_workers=len(scenarios)) as pool:
+        results = list(pool.map(_eval_sc, scenarios))
     escalation_demo = run_iterative_fail_recovery_loop(
         {"area": "pallet", "col": 2, "row": 1, "dx_mm": 4.5, "dy_mm": -5.0, "yaw_err_deg": 2.5, "perturb_attempt_1": {"yaw_err_deg": 9.5, "dx_mm": 3.5}},
         max_attempts=3, clf=clf, iwr=iwr,

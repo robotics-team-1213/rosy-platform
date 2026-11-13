@@ -10,8 +10,9 @@ Single Responsibility:
 from __future__ import annotations
 
 import argparse
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor
 import json
+import os
 from pathlib import Path
 import ssl
 import subprocess
@@ -19,129 +20,25 @@ import time
 from typing import Any, Callable
 from urllib.request import Request, urlopen
 
+from cell_camera_telemetry_sync import (
+    DEFAULT_PREP_DIR,
+    inspect_camera_frame_telemetry,
+    upload_latest_camera_snapshots as _upload_latest_camera_snapshots,
+)
 from cell_control_core import ensure_omx_paths
 from cell_fleet_pipeline import FleetModelPipeline
 
 ensure_omx_paths()
 
-DEFAULT_PREP_DIR = Path("/home/robttt/rosy-test/omx-record-prep-20261019")
+
+def upload_latest_camera_snapshots(fleet_r_url: str, token: str, prep_dir: Path = DEFAULT_PREP_DIR) -> dict[str, int]:
+    return _upload_latest_camera_snapshots(fleet_r_url, token, prep_dir=prep_dir, urlopen_fn=urlopen)
+
 ARM_WRAPPERS: dict[str, tuple[str, str, float]] = {
     "arm_s": ("s", "with-session-arm-s-live.sh", -1.0),
     "arm_a": ("a", "with-session-arm-a-par.sh", -1.0),
     "arm_b": ("b", "with-session-arm-b-par.sh", -1.0),
 }
-
-
-def upload_latest_camera_snapshots(fleet_r_url: str, token: str, prep_dir: Path = DEFAULT_PREP_DIR) -> dict[str, int]:
-    """Upload live ROS 2 camera JPEGs (from commissioning_view :8767 or disk fallback) to Fleet-R camera endpoints in parallel."""
-    ctx = ssl._create_unverified_context()
-    base = fleet_r_url.rstrip("/")
-    live_frames: dict[str, bytes] = {}
-    for cam in ("top", "side", "arm_a_wrist", "arm_b_wrist", "arm_s_top", "arm_s_wrist"):
-        try:
-            req = Request(f"http://127.0.0.1:8767/frame/{cam}.jpg", headers={"Host": "127.0.0.1:8767"})
-            with urlopen(req, timeout=1.5) as resp:
-                raw = resp.read()
-                if len(raw) > 1000:
-                    live_frames[cam] = raw
-        except Exception:
-            pass
-
-    if not live_frames:
-        jpg_paths: list[Path] = list(Path("/tmp").glob("*.jpg"))
-        if prep_dir.is_dir():
-            for sub in prep_dir.glob("live-*"):
-                if sub.is_dir():
-                    jpg_paths.extend(sub.glob("*.jpg"))
-        candidates = sorted(
-            [p for p in jpg_paths if p.is_file() and p.stat().st_size > 1000],
-            key=lambda p: p.stat().st_mtime,
-            reverse=True,
-        )
-        top_img = next((p for p in candidates if "top" in p.name), candidates[0] if candidates else None)
-        wrist_img = next((p for p in candidates if "wrist" in p.name), top_img)
-        if top_img is not None:
-            live_frames["cell_s"] = top_img.read_bytes()
-            live_frames["pinky"] = live_frames["cell_s"]
-        if wrist_img is not None:
-            live_frames["cell_ab"] = wrist_img.read_bytes()
-
-    if "arm_s_top" in live_frames:
-        live_frames["cell_s"] = live_frames["arm_s_top"]
-    elif "top" in live_frames:
-        live_frames["cell_s"] = live_frames["top"]
-    if "top" in live_frames:
-        live_frames["cell_ab"] = live_frames["top"]
-    if "side" in live_frames:
-        live_frames["pinky"] = live_frames["side"]
-    elif "arm_s_top" in live_frames:
-        live_frames["pinky"] = live_frames["arm_s_top"]
-
-    if not live_frames:
-        return {}
-
-    def _upload_one(item: tuple[str, bytes]) -> tuple[str, int] | None:
-        view_id, raw = item
-        try:
-            req = Request(
-                f"{base}/api/fleet/pipeline/cell-camera/{view_id}",
-                data=raw,
-                method="POST",
-                headers={"Authorization": f"Bearer {token}", "Content-Type": "image/jpeg"},
-            )
-            with urlopen(req, context=ctx, timeout=8):
-                return view_id, len(raw)
-        except Exception:
-            return None
-
-    uploaded: dict[str, int] = {}
-    items = list(live_frames.items())
-    with ThreadPoolExecutor(max_workers=min(9, len(items))) as pool:
-        for res in pool.map(_upload_one, items):
-            if res is not None:
-                uploaded[res[0]] = res[1]
-
-    try:
-        cams_quality: dict[str, Any] = {}
-        try:
-            sreq = Request("http://127.0.0.1:8767/state.json", headers={"Host": "127.0.0.1:8767"})
-            with urlopen(sreq, timeout=1.5) as sresp:
-                state_json = json.load(sresp)
-            for cam in ("top", "side", "arm_a_wrist", "arm_b_wrist", "arm_s_top", "arm_s_wrist"):
-                entry = state_json.get(cam) or (state_json.get("cameras") or {}).get(cam)
-                if isinstance(entry, dict):
-                    cams_quality[cam] = {
-                        "fresh": bool(entry.get("fresh", True)),
-                        "sequence": entry.get("sequence"),
-                        "receipt_age_s": entry.get("receipt_age_s"),
-                        "quality": entry.get("quality") or {},
-                    }
-        except Exception:
-            pass
-        arm_holds: dict[str, Any] = {}
-        try:
-            import omx_incident  # type: ignore
-            for arm_id in ("arm_s", "arm_a", "arm_b"):
-                arm_holds[arm_id] = omx_incident.status(arm_id)
-        except Exception:
-            pass
-        qreq = Request(
-            f"{base}/api/fleet/pipeline/cell-quality",
-            data=json.dumps({"schema": "rosy.pipeline.cell-quality.v1", "cameras": cams_quality, "arm_holds": arm_holds}).encode("utf-8"),
-            method="POST",
-            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
-        )
-        with urlopen(qreq, context=ctx, timeout=6) as qresp:
-            qout = json.load(qresp)
-        for arm_id, note in (qout.get("pending_clear_arms") or {}).items():
-            try:
-                import omx_incident  # type: ignore
-                omx_incident.clear(str(arm_id), str(note))
-            except Exception:
-                pass
-    except Exception:
-        pass
-    return uploaded
 
 
 def make_default_request_fn(fleet_r_url: str, token: str) -> Callable[[str, str, dict[str, Any] | None], dict[str, Any]]:
@@ -160,6 +57,23 @@ def make_default_request_fn(fleet_r_url: str, token: str) -> Callable[[str, str,
             return json.load(resp)
 
     return _req
+
+
+def _poll_status_ack(status_file: Path, start_line: int, prefix: str, timeout_s: float, poll_s: float = 0.015) -> tuple[dict[str, Any], int]:
+    cursor = start_line
+    deadline = time.monotonic() + timeout_s
+    while True:
+        if status_file.exists():
+            lines = status_file.read_text(errors="replace").splitlines()
+            for idx in range(cursor, len(lines)):
+                raw = lines[idx].strip()
+                if raw.startswith("{"):
+                    ev = json.loads(raw)
+                    if str(ev.get("command") or "").startswith(prefix):
+                        return ev, idx + 1
+        if time.monotonic() >= deadline:
+            return {}, cursor
+        time.sleep(poll_s)
 
 
 def execute_live_hardware_arm(
@@ -181,15 +95,16 @@ def execute_live_hardware_arm(
     except subprocess.CalledProcessError:
         alt_io = prep_dir / f"chunk-io-{suffix}-r2s"
         alt_cmd = alt_io / "chunk-cmd"
+        alt_status = alt_io / "chunk-status.jsonl"
+        alt_n0 = len(alt_status.read_text(errors="replace").splitlines()) if alt_status.exists() else 0
         if alt_cmd.exists():
             try:
-                import os
                 fd = os.open(str(alt_cmd), os.O_WRONLY | os.O_NONBLOCK)
                 try:
                     os.write(fd, b"stop\n")
                 finally:
                     os.close(fd)
-                time.sleep(8.0)
+                _poll_status_ack(alt_status, alt_n0, "stop", 8.0)
             except Exception:
                 pass
         out = subprocess.check_output(["bash", str(prep_dir / wrapper_script), "true"], cwd=str(prep_dir), text=True)
@@ -203,22 +118,10 @@ def execute_live_hardware_arm(
 
     cursor = n0
 
-    def _wait_cmd(prefix: str, timeout_s: float, poll_s: float = 0.015) -> dict[str, Any]:
+    def _wait_cmd(prefix: str, timeout_s: float) -> dict[str, Any]:
         nonlocal cursor
-        deadline = time.monotonic() + timeout_s
-        while True:
-            if status_file.exists():
-                lines = status_file.read_text(errors="replace").splitlines()
-                for idx in range(cursor, len(lines)):
-                    raw = lines[idx].strip()
-                    if raw.startswith("{"):
-                        ev = json.loads(raw)
-                        if str(ev.get("command") or "").startswith(prefix):
-                            cursor = idx + 1
-                            return ev
-            if time.monotonic() >= deadline:
-                return {}
-            time.sleep(poll_s)
+        ev, cursor = _poll_status_ack(status_file, cursor, prefix, timeout_s)
+        return ev
 
     _send_line("state")
     _wait_cmd("state", 0.5)
@@ -251,7 +154,6 @@ def emergency_stop_arms(prep_dir: Path = DEFAULT_PREP_DIR) -> list[str]:
             cmd_fifo = prep_dir / io_name / "chunk-cmd"
             if cmd_fifo.exists():
                 try:
-                    import os
                     fd = os.open(str(cmd_fifo), os.O_WRONLY | os.O_NONBLOCK)
                     try:
                         os.write(fd, b"stop\n")
@@ -261,28 +163,6 @@ def emergency_stop_arms(prep_dir: Path = DEFAULT_PREP_DIR) -> list[str]:
                 except Exception:
                     pass
     return stopped
-
-
-def inspect_camera_frame_telemetry(prep_dir: Path = DEFAULT_PREP_DIR, cell_id: str = "cell_s") -> dict[str, Any]:
-    """Compute camera frame telemetry (size, photometric intrusion_score) from :8767/state.json or latest snapshot."""
-    snaps = sorted(prep_dir.glob("*/cam-*.jpg"), key=lambda p: p.stat().st_mtime, reverse=True)
-    snap_bytes = snaps[0].stat().st_size if snaps else 0
-    intrusion_score = 0.02
-    condition = "NORMAL"
-    try:
-        sreq = Request("http://127.0.0.1:8767/state.json", headers={"Host": "127.0.0.1:8767"})
-        with urlopen(sreq, timeout=1.2) as sresp:
-            state_json = json.load(sresp)
-        cam_key = "arm_s_top" if cell_id == "cell_s" else "top"
-        entry = state_json.get(cam_key) or (state_json.get("cameras") or {}).get(cam_key) or {}
-        q = entry.get("quality") or {}
-        condition = str(q.get("condition") or "NORMAL")
-        dark_frac = float(q.get("dark_fraction") or 0.0)
-        clipped_frac = float(q.get("clipped_fraction") or 0.0)
-        intrusion_score = round(min(1.0, max(0.02, dark_frac * 1.5 + clipped_frac * 1.2 + (0.4 if condition != "NORMAL" else 0.0))), 3)
-    except Exception:
-        pass
-    return {"cell_id": cell_id, "intrusion_score": intrusion_score, "condition": condition, "snapshot_bytes": snap_bytes}
 
 
 def poll_and_execute_once(
@@ -348,13 +228,20 @@ def main() -> None:
     req_fn = make_default_request_fn(args.fleet_r_url, token)
     pipeline = FleetModelPipeline(work_dir=Path(args.work_dir))
     prep_dir = Path(args.prep_dir)
+    bg_cam_pool = ThreadPoolExecutor(max_workers=1)
+    bg_cam_fut: Future | None = None
+
+    def _trigger_bg_cam_upload() -> None:
+        nonlocal bg_cam_fut
+        if bg_cam_fut is None or bg_cam_fut.done():
+            bg_cam_fut = bg_cam_pool.submit(upload_latest_camera_snapshots, args.fleet_r_url, token, prep_dir)
 
     def _hw_act(handoff: dict[str, Any]) -> dict[str, Any]:
         arm_id = str(handoff.get("arm_id") or ("arm_s" if handoff.get("cell_id") == "cell_s" else "arm_a"))
         if args.dry_run_hw:
             return {"arm": arm_id, "events_count": 1, "stop_event": {"command": "stop", "ok": True, "folded": True}}
         res = execute_live_hardware_arm(arm_id, prep_dir=prep_dir)
-        upload_latest_camera_snapshots(args.fleet_r_url, token, prep_dir=prep_dir)
+        _trigger_bg_cam_upload()
         return res
 
     last_cam_push = 0.0
@@ -362,7 +249,7 @@ def main() -> None:
         try:
             now_m = time.monotonic()
             if not args.dry_run_hw and (now_m - last_cam_push) >= 3.0:
-                upload_latest_camera_snapshots(args.fleet_r_url, token, prep_dir=prep_dir)
+                _trigger_bg_cam_upload()
                 last_cam_push = now_m
             runs = poll_and_execute_once(pipeline, request_fn=req_fn, live_act_fn=_hw_act)
             for r in runs:
@@ -374,6 +261,8 @@ def main() -> None:
         except Exception as exc:
             print(json.dumps({"event": "poll_error", "error": repr(exc)}), flush=True)
         if args.once:
+            if bg_cam_fut is not None:
+                bg_cam_fut.result(timeout=10.0)
             break
         time.sleep(max(0.5, float(args.interval_s)))
 

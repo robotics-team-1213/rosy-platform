@@ -303,9 +303,25 @@ def test_cell_tasks_assign_claim_and_complete_lifecycle():
             "arm_holds": {
                 "arm_b": {"local_held": True, "local_reason": "alignment deadline exceeded", "incident_ids": ["inc-01"]}
             },
+            "arm_states": {
+                "arm_s": {
+                    "joints_deg": [-0.1, -58.4, 50.9, 50.2, -4.8, 49.5],
+                    "folded": True,
+                    "temp_c": 31.8,
+                    "current_ma": 46.2,
+                    "source": "chunk_status_live",
+                }
+            },
         },
     ).json()
     assert q_res["ok"] is True and q_res["arm_holds"]["arm_b"]["held"] is True
+    assert q_res["arm_live_states"]["arm_s"]["folded"] is True
+    assert q_res["arm_live_states"]["arm_s"]["temp_c"] == 31.8
+
+    tasks_after_q = client.get("/api/fleet/pipeline/cell-tasks").json()
+    assert "arm_live_states" in tasks_after_q
+    assert "station_camera_links" in tasks_after_q
+    assert tasks_after_q["station_camera_links"]["S3"]["target_id"] == "arm_s"
 
     cams_after = client.get("/api/fleet/pipeline/cameras").json()
     arm_s_cam = next(c for c in cams_after["cameras"] if c["id"] == "arm_s_top")

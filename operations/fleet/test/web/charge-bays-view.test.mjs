@@ -4,8 +4,10 @@ import { readFile } from 'node:fs/promises';
 
 const source = new URL('../../../../applications/fleet/web/charge-bays-view.js', import.meta.url);
 const gate = new URL('../../../../applications/fleet/web/shared/poll-gate.js', import.meta.url);
-const code = (await readFile(source, 'utf8')).replace('/console/assets/poll-gate.js', gate.href);
-const { chargeBayRows, inspectorTargetsFromRows } = await import(`data:text/javascript,${encodeURIComponent(code)}`);
+const model = new URL('../../../../applications/fleet/web/charge-bays-model.js', import.meta.url);
+const code = (await readFile(source, 'utf8')).replace('/console/assets/poll-gate.js', gate.href)
+  .replaceAll('/console/assets/charge-bays-model.js', model.href);
+const { chargeBayRows, inspectorTargetsFromRows, formatArmLiveJointText } = await import(`data:text/javascript,${encodeURIComponent(code)}`);
 
 const plan = {
   thresholds: { go_percent: 15, leave_percent: 80, rate_pct_per_min: null },
@@ -128,11 +130,22 @@ test('pipeline cards carry cell telemetry and one-click robot actions without ch
   assert.deepEqual(chargeBayRows({}).cards.filter(c => c.robot_id).map(c => c.robot_id),
     ['rosy_42', 'rosy_45', 'rosy_46']);
 
-  const targets = inspectorTargetsFromRows(rows);
+  const targets = inspectorTargetsFromRows({
+    ...rows,
+    armLiveStates: {
+      arm_s: { joints_deg: [0.0, -58.0, 50.0, 50.0, -5.0, 58.1], folded: true, temp_c: 31.2, current_ma: 44.0, age_s: 2.0, fresh: true, substage: 'Fold Home 대기' },
+    },
+  });
   assert.deepEqual(targets.map(t => t.id), ['arm_s', 'arm_a', 'arm_b', 'cell_s', 'cell_ab', 'rosy_60', 'rosy_40']);
   assert.equal(targets[0].cameraViews[0].id, 'arm_s_wrist');
   assert.equal(targets[1].cameraViews[0].id, 'arm_a_wrist');
   assert.equal(targets[2].cameraViews[0].id, 'arm_b_wrist');
+  assert.deepEqual(targets[0].dualPair, ['arm_s_top', 'arm_s_wrist']);
+  assert.deepEqual(targets[1].dualPair, ['top', 'arm_a_wrist']);
+  assert.deepEqual(targets[2].dualPair, ['top', 'arm_b_wrist']);
+  assert.match(targets[0].jointLiveText, /\[LIVE · 2초 전\]/);
+  assert.match(targets[0].jointLiveText, /J1:0\.0°/);
+  assert.match(formatArmLiveJointText('arm_s', { arm_s: { joints_deg: [1, 2, 3, 4, 5, 6], folded: false, fresh: false, age_s: 25 } }), /\[스냅샷 · 25초 전\]/);
   assert.ok(targets[0].quickControls.some(c => c.clearArmHold === 'arm_s'));
   assert.ok(targets[1].quickControls.some(c => c.clearArmHold === 'arm_a'));
   assert.ok(targets[2].quickControls.some(c => c.clearArmHold === 'arm_b'));

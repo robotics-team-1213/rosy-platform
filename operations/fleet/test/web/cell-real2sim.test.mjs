@@ -196,6 +196,9 @@ test("readoutPairs, loopRows, stageRows, sysidRows, surveyRows, and runRows form
       cell_ab: {gate: {phase: "RELEASED", amr_motion_inhibited: false}},
     },
     arm_holds: {arm_b: {held: true, reason: "alignment deadline exceeded"}},
+    arm_live_states: {
+      arm_a: {joints_deg: [0.8, -62.5, 53.3, 51.7, 45.0, 50.0], folded: true, temp_c: 31.0, current_ma: 38.0, age_s: 1.4, fresh: true, substage: "Fold Home 대기"},
+    },
     tasks: [
       {
         task_id: "live-e2e-cell-s-arm-s-v3",
@@ -210,6 +213,9 @@ test("readoutPairs, loopRows, stageRows, sysidRows, surveyRows, and runRows form
   assert.equal(iSpecs[0].cameraViews[0].id, "arm_s_wrist");
   assert.equal(iSpecs[1].cameraViews[0].id, "arm_a_wrist");
   assert.equal(iSpecs[2].cameraViews[0].id, "arm_b_wrist");
+  assert.deepEqual(iSpecs[0].dualPair, ["arm_s_top", "arm_s_wrist"]);
+  assert.deepEqual(iSpecs[1].dualPair, ["top", "arm_a_wrist"]);
   assert.match(iSpecs[0].telemetryRows[1][1], /folded=true/);
+  assert.match(iSpecs[1].telemetryRows[1][1], /\[LIVE · 1초 전\]/);
   assert.match(iSpecs[2].telemetryRows[3][1], /홀드 활성/);
 });
