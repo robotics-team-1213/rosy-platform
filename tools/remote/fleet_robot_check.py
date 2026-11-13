@@ -221,6 +221,15 @@ def decide(robot_id: str, robot: dict | None, fleet: dict | None, *, robot_error
     return rows
 
 
+
+def robot_ssh(target: str) -> list[str]:
+    """The operator ssh alias (``rosy-pinky-<id>``): ~/.ssh/config proxies it through R's mDNS.
+
+    ``update_ops.robot_ssh`` adds ``.local`` and the IP-pinned known_hosts; the alias's
+    ProxyCommand appends ``.local`` itself, so that form resolves ``*.local.local`` and fails.
+    """
+    return ['ssh', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=10', target.removesuffix('.local')]
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument('robots', nargs='*', help='robot ids from lab_hosts.json (default: all)')
@@ -247,7 +256,7 @@ def main(argv=None) -> int:
     results = []
     for robot_id in targets:
         target = lab_hosts.ssh_target(known[robot_id], 'robots')
-        robot, error = probe([*update_ops.robot_ssh(target), 'sudo', '-n', 'python3', '-'], ROBOT_PROBE)
+        robot, error = probe([*robot_ssh(target), 'sudo', '-n', 'python3', '-'], ROBOT_PROBE)
         row = enrollment(fleet_rows, robot_id, target)
         if row is not None and isinstance(live, dict) and row['robot_id'] in live:
             row = {**row, 'hub_online': live[row['robot_id']]}
@@ -258,7 +267,7 @@ def main(argv=None) -> int:
             if robot is None or robot.get('tls') is not True or not isinstance(token, str) or not token:
                 state, reason = 'SKIP', 'verified TLS and private admin token required'
             else:
-                active, error = probe([*update_ops.robot_ssh(target), 'sudo', '-n', 'python3',
+                active, error = probe([*robot_ssh(target), 'sudo', '-n', 'python3',
                                        '-c', shlex.quote(IDENTIFY_PROBE)], json.dumps(token), 15)
                 state = 'PASS' if isinstance(active, dict) and active.get('ok') else 'FAIL'
                 reason = active.get('reason', 'unknown') if isinstance(active, dict) else error or 'unavailable'
