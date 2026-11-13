@@ -44,6 +44,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import shlex
 import subprocess
 import sys
 import time
@@ -114,8 +115,7 @@ sf=/var/lib/rosy/site-autoupdate.json
 # retired host names (RETIRED is prepended from services.yaml): report only the file path, never its content
 for f in /etc/chrony/chrony.conf /etc/hosts /etc/rosy/account/authority.json $(find ~/.config/rosy -maxdepth 5 -name receiver.json 2>/dev/null); do
   case "$f" in *.bak*|*backup*|*before-*|*.orig*|*rosy-backup*|*rosy-source-repair*) continue;; esac
-  { head -c 1048576 "$f" 2>/dev/null || sudo -n head -c 1048576 "$f" 2>/dev/null; } </dev/null | grep -qiF -f <(printf '%s
-' $RETIRED) && echo "retired $f"
+  { head -c 1048576 "$f" 2>/dev/null || sudo -n head -c 1048576 "$f" 2>/dev/null; } </dev/null | grep -qiF -f <(printf '%s\n' $RETIRED) && echo "retired $f"
 done
 D=docker; docker images -q >/dev/null 2>&1 </dev/null || D='sudo -n docker'
 $D images --format 'image {{.Repository}} {{.Tag}}' </dev/null 2>/dev/null
@@ -236,6 +236,10 @@ def clock_and_site(host: dict, now: float) -> list:
         findings.append(('FAIL', 'chrony', f'0 usable of {chrony["total"]} time sources'))
     if chrony and chrony['unresolved']:
         findings.append(('note', 'chrony', 'server names that do not resolve: ' + ', '.join(chrony['unresolved'])))
+    if 'rosy-site-account-login-check.service' in host['failed']:
+        findings.append(('FAIL', 'account-login-check', 'an Account-backed app failed the 30-minute login check (journalctl -u rosy-site-account-login-check)'))
+    for path in host.get('retired', []):
+        findings.append(('FAIL', 'retired-name', f'{path} still names a retired host (deploy/hosts/services.yaml retired_hostnames)'))
     site = host.get('site') or {}
     if site.get('unreadable'):
         findings.append(('FAIL', 'site-autoupdate', 'state file is not valid JSON'))
@@ -462,6 +466,7 @@ def main() -> None:
     args = parser.parse_args()
     stuck = False
     inventory = load_inventory()
+    retired = retired_hostnames()
     config = lab_hosts.load()
     role_of = roles(config)
     declarations = {target: declared_units(inventory, host_roles) for target, host_roles in role_of.items()}
@@ -502,7 +507,7 @@ def main() -> None:
         copies = sorted({path for entry in declared.values() for path in (entry.get('copies') or {})})
         # bytes, not text: Windows text mode would send CRLF into bash
         topology = Path(__file__).with_name('host_topology.py').read_text(encoding='utf-8')
-        probe = PROBE + "\npython3 - <<'ROSY_TOPOLOGY'\n" + topology + '\nROSY_TOPOLOGY\n'
+        probe = 'RETIRED=' + shlex.quote(' '.join(retired)) + '\n' + PROBE + "\npython3 - <<'ROSY_TOPOLOGY'\n" + topology + '\nROSY_TOPOLOGY\n'
         done = subprocess.run([*SSH, '--', target, 'bash -s -- ' + ' '.join(copies)], input=probe.encode(),
                               capture_output=True, timeout=120)
         if done.returncode:
