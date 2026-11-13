@@ -667,8 +667,9 @@ def _login(tmp_path, apps, age=0, env=None, write=True):
 def test_login_failures_alert_once_per_streak_and_once_on_recovery_without_credentials(tmp_path):
     env = _alerts(tmp_path)
     bad = {"fleet": True, "learning": False}
-    for _ in range(3):  # one failed report read by three guard runs is still one report
-        _login(tmp_path, bad, age=10, env=env)
+    _login(tmp_path, bad, age=10, env=env)
+    for _ in range(2):  # the same failed report read by three guard runs is still one report
+        _login(tmp_path, bad, env=env, write=False)
     assert _sent(tmp_path) == []
     _login(tmp_path, bad, age=5, env=env)  # the second failing report
     assert len(_sent(tmp_path)) == 1 and "learning" in _sent(tmp_path)[0] and "fleet" not in _sent(tmp_path)[0]

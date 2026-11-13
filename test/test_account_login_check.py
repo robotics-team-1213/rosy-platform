@@ -160,7 +160,7 @@ def test_the_status_file_holds_app_names_and_verdicts_only(tmp_path, capsys):
         try:
             path = tmp_path / "config.json"
             path.write_text(json.dumps(_config(server)), encoding="utf-8")
-            assert tool.main(["x", "--status", str(status), str(path)]) == (0 if accept else 1)
+            assert tool.main(["x", str(path), "--status", str(status)]) == (0 if accept else 1)
         finally:
             server.shutdown()
         written = json.loads(status.read_text(encoding="utf-8"))
@@ -182,4 +182,4 @@ def test_a_run_that_checked_no_app_leaves_the_status_file_alone(tmp_path):
 
 def test_the_unit_writes_the_status_file_the_guard_reads():
     unit = (SCRIPT.parents[2] / "deploy/site/rosy-site-account-login-check.service").read_text()
-    assert "--status /var/lib/rosy-account-login-check/status.json" in unit and "StateDirectory=rosy-account-login-check" in unit
+    assert " --status /var/lib/rosy-account-login-check/status.json" in unit and "StateDirectory=rosy-account-login-check" in unit
