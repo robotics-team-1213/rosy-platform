@@ -149,22 +149,11 @@ class Runner:
             return self.jitter
         return joint_jitter.live_window(self.jitter_buf, self.params)
 
-    def _pitch_held(self, vertical: bool) -> list:
-        """The target with wrist_flex nudged by the jaw pitch error of the last tick (runner.pitch_hold_gain, 0 = off).
-        Elbow and wrist_flex lag in opposite directions on Z moves and tilt the jaw; the nudge is capped
-        (runner.pitch_hold_max) and slewed 0.05 unit/tick, and fades back out after the descent. Descents only: a
-        loaded lift replayed worse (5.98 -> 8.07 mm, 2026-11-13 panel). The guard checks it like any other target."""
-        gain, last = prm.get(self.params, "runner.pitch_hold_gain"), getattr(self, "last_present", None)
-        want = 0.0
-        if gain and vertical and last:
-            cap = prm.get(self.params, "runner.pitch_hold_max")
-            want = max(-cap, min(cap, gain * (sum(self.target[1:4]) - sum(last[1:4]))))
-        self.pitch_hold += max(-0.05, min(0.05, want - self.pitch_hold))
-        if not self.pitch_hold:
-            return self.target
-        out = list(self.target)
-        out[3] += self.pitch_hold
-        return out
+    def _pitch_held(self, descending: bool) -> list:
+        """The target with wrist_flex nudged to hold the jaw pitch (joint_jitter.pitch_hold_step; off by default)."""
+        last = getattr(self, "last_present", None) if descending else None
+        self.pitch_hold = joint_jitter.pitch_hold_step(self.pitch_hold, self.target, last, self.params)
+        return [*self.target[:3], self.target[3] + self.pitch_hold, *self.target[4:]] if self.pitch_hold else self.target
 
     def tick(self) -> None:
         pace_lag, pace_rise = (

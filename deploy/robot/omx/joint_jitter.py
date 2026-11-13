@@ -216,6 +216,18 @@ def sway_window(rows, params=None):
     return out
 
 
+def pitch_hold_step(hold: float, target, last_present, params=None) -> float:
+    """Next wrist_flex nudge (units) that holds the jaw pitch: gain x the last tick's pitch error (target minus
+    present, q2+q3+q4), capped at runner.pitch_hold_max and slewed 0.05 unit/tick; it fades out when last_present is
+    None (not descending). runner.pitch_hold_gain 0 (default) keeps it off. Descents only: a loaded lift replayed
+    worse (5.98 -> 8.07 mm, 2026-11-13 panel). The guard checks the nudged target like any other."""
+    gain, want = prm.get(params, "runner.pitch_hold_gain"), 0.0
+    if gain and last_present:
+        cap = prm.get(params, "runner.pitch_hold_max")
+        want = max(-cap, min(cap, gain * (sum(target[1:4]) - sum(last_present[1:4]))))
+    return hold + max(-0.05, min(0.05, want - hold))
+
+
 def damp_step(ensembler, current: list, next_target: list, lookahead: list, *, vmax=None, fps=None) -> list:
     """Smooth `next_target` through `ensembler` over the upcoming chunk horizon while preserving the final endpoint."""
     if not lookahead:
