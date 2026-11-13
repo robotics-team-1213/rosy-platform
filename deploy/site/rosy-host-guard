@@ -167,9 +167,13 @@ def monitoring_up(url: str, ca: str | None) -> bool:
         with urllib.request.urlopen(url, timeout=10, context=context) as answer:
             if not 200 <= answer.status < 300:
                 return False
-            body = json.loads(answer.read(65536))
-    except (OSError, ValueError):  # URLError, HTTPError, timeouts, a bad CA file and a non-JSON body
+            raw = answer.read(65536)
+    except (OSError, ValueError):  # URLError, HTTPError, timeouts and a bad CA file
         return False
+    try:
+        body = json.loads(raw)
+    except ValueError:
+        return True  # no JSON body: judged by the status code alone
     if not isinstance(body, dict) or "last_success" not in body:
         return True
     last = body["last_success"]

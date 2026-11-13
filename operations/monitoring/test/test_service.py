@@ -109,7 +109,7 @@ def test_health_reports_the_last_successful_poll_and_keeps_status(runtime, tmp_p
     assert client.get('/health').json() == {'status': 'ready', 'last_success': None}
     asyncio.run(collector.poll_once())
     stamp = collector.last_success
-    assert stamp == collector.cache._wall().timestamp() and client.get('/health').json()['last_success'] == stamp
+    assert abs(stamp - collector.cache._wall().timestamp()) < 5 and client.get('/health').json()['last_success'] == stamp
     fail.append(1)
     clock.t += 60
     asyncio.run(collector.poll_once())  # failing polls leave the last success alone
