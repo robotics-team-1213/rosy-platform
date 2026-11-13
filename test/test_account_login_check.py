@@ -165,6 +165,7 @@ def test_the_status_file_holds_app_names_and_verdicts_only(tmp_path, capsys):
             server.shutdown()
         written = json.loads(status.read_text(encoding="utf-8"))
         assert written["apps"] == {"fixture": accept} and isinstance(written["time"], int)
+        assert written["configured"] == ["fixture"]  # every app of the config, so a partial run shows against it
         assert "pw" not in status.read_text(encoding="utf-8") and "probe" not in status.read_text(encoding="utf-8")
     assert tool.main(["x", "--status"]) == 2
 

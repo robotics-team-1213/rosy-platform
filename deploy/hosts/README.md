@@ -60,7 +60,7 @@
    Pinky만 `--robot-maintenance --host <로봇> --robot-idle-confirmed <로봇>`으로 그 유닛을 멈췄다가 다시 시작한다(한 번에 한 대,
    움직임·도킹이 없음은 ssh로 읽을 신호가 없어 사람이 대시보드에서 확인하고 플래그로 적는다). 멈춘 유닛은 설치가 실패해도 반드시
    다시 시작하고 결과를 출력한다. 사람 없이 도는 감시는
-   호스트의 `rosy-host-guard`다. `hosts.conf`의 `<이름> drift <ssh 대상> <시간원|-> [옛 이름...]` 줄이
+   호스트의 `rosy-host-guard`다(로봇의 chrony는 이 자동 대조에 없다. `apply-time` 미리 보기로 확인한다). `hosts.conf`의 `<이름> drift <ssh 대상> <시간원|-> [옛 이름...]` 줄이
    forced command `drift`로 chrony 이름·사용 가능한 원천 수·옛 이름·상대 guard의 멈춤을 10분마다 읽고,
    기존 운영자 webhook으로 연속 2회 이상이면 한 번, 정상으로 돌아오면 한 번 알린다(`host-guard.conf.example`).
 4. **Windows 개발 PC:** 관리자 PowerShell 유지보수 창에서 먼저 `-WhatIf`로 확인한다.

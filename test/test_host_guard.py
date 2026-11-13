@@ -663,10 +663,11 @@ def test_a_dash_skips_the_name_compare_but_not_the_other_checks(tmp_path):
     assert _sent(tmp_path) == []
 
 
-def _login(tmp_path, apps, age=0, env=None, write=True):
+def _login(tmp_path, apps, age=0, env=None, write=True, configured=None):
     path = tmp_path / "login-status.json"
     if write:
-        path.write_text(json.dumps({"time": int(time.time()) - age, "apps": apps}))
+        path.write_text(json.dumps({"time": int(time.time()) - age, "apps": apps,
+                                    "configured": sorted(apps) if configured is None else configured}))
     _guard(tmp_path, HEALTHY, conf=f"acct logincheck {path}\n", env_extra=env)
 
 
@@ -736,14 +737,29 @@ def test_a_future_or_nan_login_stamp_is_a_problem(tmp_path, delta, word):
 
 def test_a_partial_login_report_is_a_problem_and_only_a_full_all_pass_one_recovers(tmp_path):
     env = _alerts(tmp_path)
-    _login(tmp_path, {"fleet": True, "learning": True}, age=20, env=env)  # a full report names the known apps
+    both = ["fleet", "learning"]
     for age in (10, 8):  # the probe run for one app: the failing one vanished from the file
-        _login(tmp_path, {"fleet": True}, age=age, env=env)
+        _login(tmp_path, {"fleet": True}, age=age, env=env, configured=both)
     assert len(_sent(tmp_path)) == 1 and "빠진 앱: learning" in _sent(tmp_path)[0]
-    _login(tmp_path, {"fleet": True}, age=5, env=env)
+    _login(tmp_path, {"fleet": True}, age=5, env=env, configured=both)
     assert len(_sent(tmp_path)) == 1  # an all-PASS partial report is no recovery
     _login(tmp_path, {"fleet": True, "learning": True}, age=0, env=env)
     assert len(_sent(tmp_path)) == 2 and "다시 정상" in _sent(tmp_path)[1]
+
+
+def test_removing_an_app_from_the_probe_config_is_not_a_partial_report(tmp_path):
+    env = _alerts(tmp_path)
+    _login(tmp_path, {"fleet": True, "learning": True}, age=20, env=env)
+    for age in (10, 5, 0):  # the config now lists one app: its report is full
+        _login(tmp_path, {"fleet": True}, age=age, env=env)
+    assert _sent(tmp_path) == []
+
+
+def test_a_stuck_failing_report_alerts_by_guard_runs_not_after_three_hours(tmp_path):
+    env = _alerts(tmp_path)
+    for _ in range(2):  # one FAIL report written 40 minutes ago, then the probe died
+        _login(tmp_path, {"fleet": False}, age=2400, env=env, write=_ == 0)
+    assert len(_sent(tmp_path)) == 1 and "fleet" in _sent(tmp_path)[0]
 
 
 def test_the_failing_app_set_changing_inside_a_streak_alerts_once_more(tmp_path):

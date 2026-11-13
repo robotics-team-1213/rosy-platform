@@ -515,14 +515,14 @@ def main() -> None:
     stuck = False
     inventory = load_inventory()
     retired, retired_note = retired_hostnames()
-    if retired_note:
-        print(f'note      {retired_note}')
     config = lab_hosts.load()
     role_of = roles(config)
     site_target = next((t for t, r in role_of.items() if 'site' in r), None)
     issuer_kids = update_drift.IssuerKeys([*SSH, '--', site_target] if site_target else None)
     declarations = {target: declared_units(inventory, host_roles) for target, host_roles in role_of.items()}
     targets = probe_targets(config)
+    for note in (retired_note, update_drift.time_source_gap([t for t in targets if t])):
+        print(f'note      {note}') if note else None
     platform = Path(__file__).resolve().parents[2]
     ops = lab_hosts.main_checkout().parent / 'rosy-ops'
     refs = {}

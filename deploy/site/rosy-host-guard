@@ -60,6 +60,7 @@ MONITORING_STALE_S = 60 * int(os.environ.get("GUARD_MONITORING_STALE_MIN", "15")
 ALERT_AFTER = int(os.environ.get("GUARD_ALERT_AFTER", "2"))  # 2 x 10 min
 REPORT_STALE_S = 3600 * float(os.environ.get("GUARD_REPORT_STALE_H", "1"))  # a site guard writes status.json every 10 min
 LOGIN_STALE_S = 3600 * float(os.environ.get("GUARD_LOGIN_STALE_H", "3"))  # the login probe runs every 30 min
+LOGIN_PROBE_S = 60 * float(os.environ.get("GUARD_LOGIN_PROBE_MIN", "35"))  # a report older than a probe period (+5 min) is stuck
 # D-883: the rosy-ops lab storage floor. Report only; a reboot does not free a disk.
 MIN_DISK_FREE_GB = float(os.environ.get("GUARD_MIN_DISK_FREE_GB", "30"))
 MAX_DISK_USE_PCT = int(os.environ.get("GUARD_MAX_DISK_USE_PCT", "90"))
@@ -266,25 +267,26 @@ def drift_problem(answer: str | None, expected: set[str]) -> str | None:
     return "; ".join(problems) or (None if seen_chrony else "chrony 보고가 없습니다")
 
 
-def login_problem(path: Path, now: float, known=()):
-    """(problem or None, report stamp, cause, apps of a full report) from account_login_check.py's status file. A
-    missing, unreadable, old, future-dated or NaN-stamped one is a problem, and so is a partial one: ``known`` are the
-    apps of earlier full reports, and a report without one of them (a probe run for a few apps) hides its failure."""
+def login_problem(path: Path, now: float):
+    """(problem or None, report stamp, cause) from account_login_check.py's status file. A missing, unreadable, old,
+    future-dated or NaN-stamped one is a problem, and so is a partial one: the report lists the config's ``configured``
+    apps, and one without some of them (a probe run for a few apps) hides their failure."""
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
         stamp, apps = float(data["time"]), data["apps"]
         failed = sorted(app for app, ok in apps.items() if ok is not True)
+        configured = set(data.get("configured") or [])
     except (OSError, ValueError, KeyError, TypeError, AttributeError):
-        return "점검 결과 파일을 읽지 못했습니다", None, "unreadable", None
+        return "점검 결과 파일을 읽지 못했습니다", None, "unreadable"
     if not apps:
-        return "점검한 앱이 없습니다", None, "empty", None
+        return "점검한 앱이 없습니다", None, "empty"
     if not -60 <= now - stamp <= LOGIN_STALE_S:  # False for NaN too
         age = now - stamp
-        return (f"마지막 결과가 {age / 3600:.0f}시간 전입니다" if age > 0 else "결과의 시각이 미래이거나 읽을 수 없습니다"), None, "stale", None
-    missing = sorted(set(known) - set(apps))
+        return (f"마지막 결과가 {age / 3600:.0f}시간 전입니다" if age > 0 else "결과의 시각이 미래이거나 읽을 수 없습니다"), None, "stale"
+    missing = sorted(configured - set(apps))
     if missing:
-        return f"일부 앱만 점검됐습니다(빠진 앱: {', '.join(missing)})", stamp, "partial", None
-    return (f"로그인 실패한 앱: {', '.join(failed)}" if failed else None), stamp, "failed " + ",".join(failed), sorted(apps)
+        return f"일부 앱만 점검됐습니다(빠진 앱: {', '.join(missing)})", stamp, "partial"
+    return (f"로그인 실패한 앱: {', '.join(failed)}" if failed else None), stamp, "failed " + ",".join(failed)
 
 
 NAME = re.compile(r"[A-Za-z0-9.-]+")
@@ -308,11 +310,10 @@ def check_watch(line: list[str], row: dict) -> None:
         alert_streak(name, row, error, "감시 설정", kind="config")
         return
     if kind == "logincheck":
-        known = row.get("known", [])
-        problem, stamp, cause, full = login_problem(Path(line[2]), time.time(), known)
-        if full is not None:
-            row["known"] = sorted({*known, *full})
-        alert_streak(name, row, problem, "Account 로그인 점검", stamp, cause)
+        now = time.time()
+        problem, stamp, cause = login_problem(Path(line[2]), now)
+        # a report older than one probe period is stuck: count guard runs, so a dead probe's last FAIL still alerts soon
+        alert_streak(name, row, problem, "Account 로그인 점검", stamp if stamp and now - stamp <= LOGIN_PROBE_S else None, cause)
     else:
         expected = set() if line[3] == "-" else {n.lower().rstrip(".") for n in line[3].split(",")}
         alert_streak(name, row, drift_problem(ssh(line[2], " ".join(["drift", *line[4:]])), expected), "시간원·옛 이름 점검")

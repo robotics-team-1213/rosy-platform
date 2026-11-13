@@ -78,6 +78,14 @@ def expected_time_source(target: str):
     return (found[0], names) if names else None
 
 
+def time_source_gap(targets) -> str:
+    """One note naming the targets whose chrony names cannot be compared (no site map, the map's ssh: texts do not name
+    the target, or no time_source for it); '' when all can. The compare must never vanish silently."""
+    missing = [t for t in targets if expected_time_source(t) is None]
+    return (f'time-source compare skipped for {", ".join(missing)} (no site map, not named in its ssh: texts, or no time_source)'
+            if missing else '')
+
+
 def parse(host: dict, kind: str, rest: str) -> bool:
     """Take one probe line of this module's kinds into ``host``; False when the kind is not ours."""
     if kind == 'receiver':

@@ -6,7 +6,8 @@ usage: account_login_check.py <config.json> [--insecure] [--status FILE] [app ..
 The config file stays out of the repository (private/). It holds the test account and the app list:
   {"issuer": "https://...", "login": "...", "password": "...",
    "apps": [{"name": "...", "start": "https://.../login", "session": "https://.../session"}]}
---status FILE writes {"time", "apps": {name: bool}} (names and verdicts only, never credentials or details) for
+--status FILE writes {"time", "apps": {name: bool}, "configured": [every app name of the config]} (names and verdicts
+only, never credentials or details; a run for a few apps shows as partial against "configured") for
 rosy-host-guard, which alerts through the operator webhook on a failure streak and when the file stops being renewed.
 Per app: GET start (must redirect to the issuer) -> POST issuer login (204) -> follow authorize and the
 app callback -> GET session (200). One PASS/FAIL line per app; exit 1 if any app fails. Only the stdlib.
@@ -97,11 +98,11 @@ def check_app(app, config, insecure=False):
         return False, f"{type(error).__name__}: {str(error)[:100]}"
 
 
-def write_status(path, results):
+def write_status(path, results, configured):
     """Atomic and world-readable (the guard runs as another user); results is {app name: ok}."""
     tmp = f"{path}.tmp"
     with open(tmp, "w", encoding="utf-8") as handle:
-        json.dump({"time": int(time.time()), "apps": results}, handle)
+        json.dump({"time": int(time.time()), "apps": results, "configured": configured}, handle)
     os.chmod(tmp, 0o644)
     os.replace(tmp, path)
 
@@ -134,7 +135,7 @@ def main(argv):
         print("no app was checked (empty app list or no name matched)", file=sys.stderr)
         return 2
     if status:
-        write_status(status, results)
+        write_status(status, results, [app["name"] for app in config["apps"]])
     return 1 if failed else 0
 
 

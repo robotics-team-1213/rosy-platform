@@ -549,6 +549,18 @@ def test_the_expected_time_source_comes_from_the_private_site_map(tmp_path, monk
     assert status.update_drift.expected_time_source('op@model.example.test') is None
 
 
+def test_a_skipped_time_source_compare_is_one_note_naming_the_targets(tmp_path, monkeypatch):
+    path = tmp_path / 'site-map.yaml'
+    path.write_text('schema: rosy.site-map/1\ntime_source: {client: NTP.example.test}\nhosts:\n'
+                    '  model: {ssh: "op@model.example.test", roles: [model]}\n', encoding='utf-8')
+    monkeypatch.setenv('ROSY_SITE_MAP', str(path))
+    assert status.update_drift.time_source_gap(['op@model.example.test']) == ''
+    note = status.update_drift.time_source_gap(['op@model.example.test', 'op@lost.example.test'])
+    assert 'op@lost.example.test' in note and 'op@model' not in note
+    monkeypatch.setenv('ROSY_SITE_MAP', str(tmp_path / 'missing.yaml'))
+    assert 'op@model.example.test' in status.update_drift.time_source_gap(['op@model.example.test'])
+
+
 def test_the_probe_lists_chrony_server_names_only_where_chrony_exists():
     assert 'echo "chrony-servers ' in status.update_drift.PROBE
     assert status.parse('gate open\nchrony-servers a.example.test b.example.test', NOW, 6.0)['chrony_servers'] == {
