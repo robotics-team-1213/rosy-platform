@@ -16,7 +16,7 @@ def test_status_patterns_roles_persistence_and_strict_request(core_client, tmp_p
 
     assert client.get(PATH, headers=VIEWER).json() == {"status_patterns": "on", "available": True}
     assert client.put(PATH, json={"status_patterns": "off"}, headers=VIEWER).status_code == 403
-    assert client.put(PATH, json={"status_patterns": "off", "extra": 1}, headers=OPERATOR).status_code == 422
+    assert client.put(PATH, json={"status_patterns": "off", "extra": 1}, headers=OPERATOR).status_code == 400
     svc.state.set_velocity(0.0, 0.0)
     response = client.put(PATH, json={"status_patterns": "off"}, headers=OPERATOR)
     assert response.status_code == 200

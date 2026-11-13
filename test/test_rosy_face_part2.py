@@ -263,7 +263,7 @@ def test_status_pattern_setting_is_polled_and_preserves_identify_and_boot(tmp_pa
     _status(tmp_path, "CORE_READY")
     spawn = FakeSpawn(code=0)
     display, lamp, _clock, _rendered, _lines = _state_loop(module, tmp_path, spawn=spawn)
-    setting = tmp_path / module.LAMP_STATUS_FILE
+    setting = tmp_path / "var/lib/rosy/lamp-control/status-patterns.json"
     setting.parent.mkdir(parents=True)
     setting.write_text('{"status_patterns":"off"}', encoding="utf-8")
     display.step()
