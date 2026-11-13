@@ -83,28 +83,28 @@ def test_the_next_step_is_pick_then_pivot_then_push_then_hold_from_what_is_measu
     assert scene(tmp_path, monkeypatch, other)()["step"] == "hold"
 
 
-def test_a_tangled_pile_frees_its_nearest_piece_with_a_clear_push_else_it_is_locked(tmp_path, monkeypatch):
-    """2026-11-13 arm_s: one box's end lay on another and every push was blocked; the pile is undone a piece at a time."""
+def test_a_tangled_pile_is_slid_as_one_blob_when_clear_else_it_is_locked(tmp_path, monkeypatch):
+    """2026-11-13 arm_s: one box's end lay on another and every push was blocked."""
     pile = {"result": "stopped: no usable object (tangled pile)",
             "attempts": [{"refused": [{"centre_mm": [5.0, 100.0], "why": "tangled blob"}]}]}
-    step = scene(tmp_path, monkeypatch, pile)()
-    assert step["step"] == "push" and step["type"] == "pile" and step["push"]["object"] == "container-3"
+    blob = dict(BOX, object=None, matched=False, tangled=True, length_mm=100, width_mm=30, centre_mm=[4.0, 100.0])
+    step = scene(tmp_path, monkeypatch, pile)
+    monkeypatch.setattr(cr.auto, "observe", lambda *a: (None, None, [blob], None))
+    assert step()["step"] == "push" and step()["type"] == "pile"
     monkeypatch.setattr(cr, "free_push", lambda *a, **k: None)
-    step = scene(tmp_path, monkeypatch, pile)()
-    assert step["step"] == "hold" and step["type"] == "locked_pile"
+    assert step()["step"] == "hold" and step()["type"] == "locked_pile"
 
 
-def test_pile_push_tries_the_nearest_piece_first_at_its_catalogue_size():
-    second = {"object": "container-3", "centre_mm": [0.0, 200.0], "length_mm": 1}
-    near = {"object": None, "centre_mm": [0.0, 110.0], "length_mm": 70, "width_mm": 50}
+def test_only_the_tangled_blob_is_pushed_for_a_pile():
+    """Touching boxes merge into one blob, so a box seen apart is no part of the pile; pushing it would hide a locked pile
+    (independent review 2026-11-13)."""
+    blob = {"object": None, "tangled": True, "centre_mm": [0.0, 104.0], "length_mm": 120, "width_mm": 50}
+    apart = {"object": "container-3", "centre_mm": [0.0, 140.0], "length_mm": 90, "width_mm": 30}
     tried = []
-    found = cr.pile_push([second, near], [[0.0, 100.0]], {"container-3": {"length_mm": 90, "width_mm": 30}},
-                         lambda o: tried.append(o) or (o["length_mm"] == 90 and {"object": "second"}))
-    assert found == {"object": "second"} and [o["length_mm"] for o in tried] == [70, 90]
-    elsewhere = dict(second, centre_mm=[0.0, 100.0 + cr.PILE_REACH_MM + 1])  # a free box away from the pile: never moved
-    assert cr.pile_push([elsewhere, near], [[0.0, 100.0]], {"container-3": {"length_mm": 90, "width_mm": 30}},
-                        lambda o: o["length_mm"] == 90 and {"object": "elsewhere"}) is None
-    assert cr.pile_push([], [[0.0, 0.0]], {}, lambda o: {"x": 1}) is None
+    assert cr.pile_push([apart, blob], [[0.0, 100.0]], lambda o: tried.append(o) or None) is None
+    assert tried == [blob]
+    assert cr.pile_push([apart, blob], [[0.0, 100.0]], lambda o: {"pushed": o["length_mm"]}) == {"pushed": 120}
+    assert cr.pile_push([dict(blob, centre_mm=[0.0, 300.0])], [[0.0, 100.0]], lambda o: {"x": 1}) is None  # another frame's blob
 
 
 def test_next_moves_only_as_one_supervised_step():

@@ -3,8 +3,8 @@
 
 2026-11-01: three 3-cell columns stood 4 mm apart and no pick had finger room. By hand it took a lengthwise push
 (off-centre, so the jaw face missed the neighbour), a pivot over the column for the push lane, then a grasp near
-the freed end. A tangled pile (2026-11-13) is undone a piece at a time: the nearest piece with a clear push moves,
-and with none the pile is locked (hold, type locked_pile). Here that order is code:
+the freed end. A tangled pile (2026-11-13) is slid as the one blob it is when its path is clear,
+else it is locked (hold, type locked_pile). Here that order is code:
 
   plan   observe and print the next step and why (no motion)
   next   run exactly that step (--commissioning --person-at-switch), then print the step after it
@@ -112,7 +112,7 @@ def next_step(cell, config, calibration, calibration_path, catalog, roi, source,
             return {"step": "pivot", "why": "a push fits only with the error measured here", "at": o["raw_m"]}
     if tangled:
         miss = (cell_pivot.map_record(calibration, push_site) or {}).get("loo_error_mm", {}).get("max", 0.0)
-        found = pile_push(objects, tangled, entries, lambda o: free_push([o], mask, roi, to_px, p, miss, site.get("surface_px")))
+        found = pile_push(objects, tangled, lambda o: free_push([o], mask, roi, to_px, p, miss, site.get("surface_px")))
         if found:
             return {"step": "push", "type": "pile", "why": "a tangled pile: slide its nearest free piece clear, then look again",
                     "push": found, "miss_mm": miss}
@@ -120,20 +120,12 @@ def next_step(cell, config, calibration, calibration_path, catalog, roi, source,
     return {"step": "hold", "why": "packed, and no lengthwise push has a clear path", "refused": refused}
 
 
-PILE_REACH_MM = 120  # a piece of the pile: its centre within a 90 mm box plus a 30 mm box of the tangled blob's centre
-
-
-def pile_push(objects: list, tangled: list, entries: dict, try_push) -> dict | None:
-    """2026-11-13 (arm_s): a box's end lay on another box and the pile leaned on the arm plate. Untangle from the outside:
-    the pieces nearest the tangled blob first, each at its catalogue size (a tangled blob at its measured size), and the first
-    whose push path is clear moves. The next look re-plans: a piece can only be freed once its neighbour has gone."""
-    def sized(o):
-        e = entries.get(o.get("object"))
-        return dict(o, length_mm=e["length_mm"], width_mm=e["width_mm"]) if e else o
-    gap = lambda o: min(math.dist(o["centre_mm"], c) for c in tangled)  # noqa: E731
-    # only the pile's own pieces: a free box elsewhere is no part of it, and moving it would hide a locked pile (review)
-    near = sorted((o for o in map(sized, objects) if "length_mm" in o and gap(o) <= PILE_REACH_MM), key=gap)
-    return next((push for o in near if (push := try_push(o))), None)
+def pile_push(objects: list, tangled: list, try_push) -> dict | None:
+    """2026-11-13 (arm_s): a box's end lay on another box and the pile leaned on the arm plate. Boxes that touch merge into one
+    blob in the top view, so the pile is the tangled blob itself: it moves at its measured size when its push path is clear,
+    and a box seen apart is no part of it (moving one would hide a locked pile, review). The next look re-plans."""
+    pile = [o for o in objects if o.get("tangled") and any(math.dist(o["centre_mm"], c) <= 10 for c in tangled)]
+    return next((push for o in pile if (push := try_push(o))), None)
 
 
 def run_step(step: dict, args) -> int:

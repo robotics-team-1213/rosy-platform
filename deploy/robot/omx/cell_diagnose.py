@@ -29,7 +29,7 @@ STRATEGY = {
 # Obstacle types run_auto names when no object is usable (its refusals say which), each with its own row below:
 #   packed  no finger room beside a box: cell_align slides it lengthwise (cause no_room)
 #   pile    a tangled blob, boxes on or against each other (2026-11-13 arm_s: a box's end lay on another, the pile against
-#           the arm plate): cell_align.pile_push frees the nearest piece with a clear path, then the pick is planned again;
+#           the arm plate): cell_align.pile_push slides the blob when its path is clear, then the pick is planned again;
 #           with none clear the pile is locked and goes to a person
 # shortcut: a box leaning on a fixture (2026-11-13 arm_b, beside the ship) is not seen from the top camera; it needs the
 # side camera or depth before it can be a type here.
