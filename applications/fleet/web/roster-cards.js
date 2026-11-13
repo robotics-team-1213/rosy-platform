@@ -92,7 +92,7 @@ export function createGaugeCard(nodeWithText, { key, title, value, subtext, pct,
   return box;
 }
 
-export function createRoiPoller({ scope, view, call }) {
+export function createRoiPoller({ scope, view, call, render = () => {} }) {
   const roiLease = { token: "", expiresAt: 0, pending: null };
   const roiObjectUrls = new Map();
   let roiPollInFlight = false;
@@ -149,6 +149,21 @@ export function createRoiPoller({ scope, view, call }) {
     }
   }
   scope.interval(refreshRoiPreview, 850);
+  // A map anchor click focuses its card; an arm anchor also refreshes its ROI preview.
+  if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+    scope.listen(window, "rosy:focus-anchor", (ev) => {
+      const targetId = ev?.detail?.targetId;
+      if (!targetId) return;
+      if (targetId.startsWith("arm_")) {
+        view.focusAnchorId = targetId;
+        render();
+        void refreshRoiPreview();
+      } else if (targetId.startsWith("rosy_")) {
+        view.focusAnchorId = targetId;
+        render();
+      }
+    });
+  }
   return { roiObjectUrls, refreshRoiPreview };
 }
 

@@ -25,21 +25,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
   const motorHealth = createFleetMotorHealth({view, scope});
   const profiles = createRobotProfiles({call, scope, render});
   const summary = createRosterSummary({scope, view, openCard, render, attentionItems, motorHealth});
-  const { roiObjectUrls, refreshRoiPreview } = createRoiPoller({ scope, view, call });
-  if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
-    scope.listen(window, "rosy:focus-anchor", (ev) => {
-      const targetId = ev?.detail?.targetId;
-      if (!targetId) return;
-      if (targetId.startsWith("arm_")) {
-        view.focusAnchorId = targetId;
-        render();
-        void refreshRoiPreview();
-      } else if (targetId.startsWith("rosy_")) {
-        view.focusAnchorId = targetId;
-        render();
-      }
-    });
-  }
+  const { roiObjectUrls, refreshRoiPreview } = createRoiPoller({ scope, view, call, render });
   function openCard(robotId) {
     if (typeof window !== "undefined" && robotId && typeof window.dispatchEvent === "function") {
       window.dispatchEvent(new CustomEvent("rosy:inspect-target", { detail: { targetId: robotId } }));
