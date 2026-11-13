@@ -161,3 +161,15 @@ def test_a_contact_replans_only_once_the_pile_moved():
     assert dg.attempt_cause("stopped: no clear pivot point within reach") == "calibrate"  # no plan yet: a push has nothing to act on
     for hard in ("stopped: holding after a stop at run lift_pick", "stopped: still holding", "stopped: fault"):
         assert dg.attempt_cause(hard, True) != "scene_moved"
+
+
+def test_a_site_camera_frame_is_kept_on_each_failure_row_and_never_chooses_the_action():
+    seen = []
+    def observe():
+        seen.append(1)
+        return {"frame": None, "why": "unreachable"}
+    out = rc.carry(lambda: CLEAN, iter([{"result": r, "attempts": [{}]} for r in ("stopped: misaligned", "placed")]).__next__,
+                   lambda cause, attempt: True, expected_px=lambda attempt: [(100, 100)], emit=lambda *a: None, observe=observe)
+    assert out["result"] == "placed" and len(seen) == 1
+    assert out["rounds"][0]["evidence"] == {"frame": None, "why": "unreachable"} and "evidence" not in out["rounds"][1]
+    assert [r["action"] for r in out["rounds"]] == [r["action"] for r in run(["stopped: misaligned", "placed"])[0]["rounds"]]
