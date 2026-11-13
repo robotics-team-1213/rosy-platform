@@ -115,6 +115,13 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
         && view.robots.some(robot => robot.robot_id === robotId && robot.online && robot.state?.safety?.estop === false)
         && mapSnapshot === JSON.stringify([view.map?.map_id, view.map?.width, view.map?.height, view.map?.resolution, view.map?.origin]),
       request: async owner => {
+    view.selected = null;
+    view.cursor = null;
+    const canvas = el("map-canvas");
+    canvas.classList.add("idle");
+    canvas.tabIndex = -1;
+    render();
+    focusGoalButton(robotId);
     try {
       const result = await call(`/api/fleet/robots/${encodeURIComponent(robotId)}/goal`, {
         method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": randomUUID() },
