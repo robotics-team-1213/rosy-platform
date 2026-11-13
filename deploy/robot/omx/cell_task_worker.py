@@ -23,7 +23,7 @@ from urllib.request import Request, urlopen
 from cell_camera_telemetry_sync import (
     DEFAULT_PREP_DIR,
     inspect_camera_frame_telemetry,
-    upload_latest_camera_snapshots as _upload_latest_camera_snapshots,
+    sync_cell_telemetry as _sync_cell_telemetry,
 )
 from cell_control_core import ensure_omx_paths
 from cell_fleet_pipeline import FleetModelPipeline
@@ -31,8 +31,8 @@ from cell_fleet_pipeline import FleetModelPipeline
 ensure_omx_paths()
 
 
-def upload_latest_camera_snapshots(fleet_r_url: str, token: str, prep_dir: Path = DEFAULT_PREP_DIR) -> dict[str, int]:
-    return _upload_latest_camera_snapshots(fleet_r_url, token, prep_dir=prep_dir, urlopen_fn=urlopen)
+def sync_cell_telemetry(fleet_r_url: str, token: str, prep_dir: Path = DEFAULT_PREP_DIR) -> dict[str, Any]:
+    return _sync_cell_telemetry(fleet_r_url, token, prep_dir=prep_dir, urlopen_fn=urlopen)
 
 ARM_WRAPPERS: dict[str, tuple[str, str, float]] = {
     "arm_s": ("s", "with-session-arm-s-live.sh", -1.0),
@@ -234,7 +234,7 @@ def main() -> None:
     def _trigger_bg_cam_upload() -> None:
         nonlocal bg_cam_fut
         if bg_cam_fut is None or bg_cam_fut.done():
-            bg_cam_fut = bg_cam_pool.submit(upload_latest_camera_snapshots, args.fleet_r_url, token, prep_dir)
+            bg_cam_fut = bg_cam_pool.submit(sync_cell_telemetry, args.fleet_r_url, token, prep_dir)
 
     def _hw_act(handoff: dict[str, Any]) -> dict[str, Any]:
         arm_id = str(handoff.get("arm_id") or ("arm_s" if handoff.get("cell_id") == "cell_s" else "arm_a"))
