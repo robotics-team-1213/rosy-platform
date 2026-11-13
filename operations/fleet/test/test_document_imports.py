@@ -92,6 +92,7 @@ OWN = {
         "localization-badge.js",
         "power-health-view.js",
         "charge-bays-view.js",  # D-941: read-only charge bay plan
+        "charge-bays-model.js",  # its DOM-free display model
         "person-request.js",  # D-721 Amendment: 사람 부탁 queue row
         "station-recovery.js",  # D-721 Amendment: station recovery request row
         "platoon-view.js",  # D-941: read-only loop gaps
@@ -125,6 +126,9 @@ OWN = {
         "cell-print-sheets.js",  # 보정 인쇄물 PDF 내려받기
         "cell-object-catalog.js",  # 물체 카탈로그(무게) 읽기 전용
         "cell-real2sim.js",  # 실물↔시뮬(Real-to-Sim / Sim-to-Real) 파이프라인 상태 및 핸드오프 평가
+        "cell-real2sim-specs.js",  # split from cell-real2sim.js
+        "cell-real2sim-actions.js",  # split from cell-real2sim.js
+        "cell-real2sim-views.js",  # split from cell-real2sim.js
         "cell-line.js",  # D-975: 준비 노선(응답이 채운 요소만 읽음)
     },
     "site-map.js": {

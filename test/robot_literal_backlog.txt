@@ -78,8 +78,16 @@ operations/fleet/fleet/pipeline/omx_cell_policy.py
 operations/fleet/fleet/pipeline/orchestrator.py
 operations/fleet/fleet/pipeline/pinky_policy.py
 operations/fleet/fleet/localization/lane_compliance.py
-operations/fleet/fleet/server/cell/cell_real2sim.py
 operations/fleet/fleet/server/console/charge_bay_routes.py
 operations/fleet/fleet/server/pose/map_pose_service.py
-operations/fleet/fleet/server/tracking/tracking.py
 operations/overhead/rosy_vision/track/anchor_head_tracker.py
+# 2026-11-13 main red: functional "pinky" cell/camera/robot-kind ids that landed in 8b65ceaa0f/fec389d9c7 (and the pipeline_routes split); shrink with the de-Pinky plan.
+contracts/learning/src/rosy/contracts/learning/promotion_request.py
+operations/fleet/fleet/pipeline/station_zones.yaml
+operations/fleet/fleet/server/cell/cell_real2sim_helpers.py
+operations/fleet/fleet/server/ledger/berth_parking_helpers.py
+operations/fleet/fleet/server/sitemap/pipeline_camera_routes.py
+operations/fleet/fleet/server/sitemap/pipeline_cell_task_routes.py
+operations/fleet/fleet/server/sitemap/pipeline_gate_routes.py
+operations/fleet/fleet/server/sitemap/pipeline_routes.py
+operations/fleet/fleet/server/tracking/tracking_anchors.py
