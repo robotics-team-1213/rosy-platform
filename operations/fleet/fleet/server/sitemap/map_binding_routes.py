@@ -117,6 +117,8 @@ def install_map_binding_routes(app, *, console, site_maps, read_guard, require_n
         if loc.get("state") != "LOCALIZED" or not all(isinstance(pose.get(k), (int, float)) for k in ("x", "y")):
             raise site_map_error(409, "ROBOT_NOT_LOCALIZED", "the robot must be LOCALIZED in its map frame")
         grid = await console._client(robot_id).map()
+        if not grid:
+            raise site_map_error(409, "NO_WALLS", "the robot has no map loaded")
         try:
             robot, site = propose_from_walls(_occupied(grid), arena, seed_robot=(pose["x"], pose["y"]),
                                              seed_site=body.seed_site)

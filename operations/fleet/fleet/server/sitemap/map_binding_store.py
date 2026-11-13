@@ -64,6 +64,8 @@ class MapBindingStore:
                 principal_id: str) -> dict:
         robot_map_id, grid = _localized(state)
         pairs, holdout = _points(pairs, "pairs"), _points(holdout, "holdout")
+        if {p for pair in pairs for p in pair} & {p for pair in holdout for p in pair}:
+            raise BindingError("BAD_POINTS", "a holdout point repeats a fit point; measure it separately")
         fit, errors = judge([p[0] for p in pairs], [p[1] for p in pairs], holdout)
         body = {"yaw": fit.yaw, "tx": fit.tx, "ty": fit.ty, "residual_max_m": fit.max, "residual_rms_m": fit.rms,
                 "pairs": [{"robot": list(r), "site": list(s)} for r, s in pairs],

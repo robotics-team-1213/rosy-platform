@@ -71,3 +71,9 @@ def test_no_binding_is_required_and_a_new_approval_supersedes_with_history(bindi
     assert [h["revoke_reason"] for h in history] == [None, "superseded"]
     assert bindings.revoke("rosy_42", "op3", "map re-saved") and bindings.active("rosy_42") is None
     assert bindings.revoke("rosy_42", "op3") is False
+
+
+def test_a_holdout_that_repeats_a_fit_point_is_refused(bindings):
+    with pytest.raises(BindingError) as err:
+        bindings.approve("rosy_42", state(), ("world_261026", 7), pairs(SITE), pairs([SITE[0]]), "op")
+    assert err.value.code == "BAD_POINTS"
