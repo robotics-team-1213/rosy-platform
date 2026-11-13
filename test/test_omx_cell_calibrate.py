@@ -209,9 +209,15 @@ def test_a_refused_move_folds_and_keeps_the_marks_so_far(tmp_path, monkeypatch):
 
     config = {"coarse": {"z_view": 0.14}, "plan": {"approach_m": 0.04}, "sites": {"pallet": {"yaw_deg": 0.0}},
               "calibrate": {"map_sites": ["pallet"]}}
-    cell = Cell()
-    record = cc.remap(cell, config, points, tmp_path, log=lambda row: None)
+    cell, rows, seen = Cell(), [], []
+    record = cc.remap(cell, config, points, tmp_path, log=rows.append,
+                      at_stop=lambda state, status: seen.append((list(cell.cmds), status)))
     assert len(record["points"]) == 6 and cell.cmds[-1] == "park"
+    # 2026-11-14: the stop's evidence is taken before the fold, and the log says what the runner said
+    assert len(seen) == 1 and "park" not in seen[0][0] and "wrist_roll lag" in seen[0][1]["error"]
+    assert any("wrist_roll lag" in str(row.get("error")) for row in rows if "stopped" in row)
+    broken = cc.remap(Cell(), config, points, tmp_path, log=lambda row: None, at_stop=lambda *a: 1 / 0)
+    assert len(broken["points"]) == 6  # a failing evidence hook still folds and keeps the marks
     with pytest.raises(SystemExit, match="park failed"):
         cc.remap(Cell(park_ok=False), config, points, tmp_path, log=lambda row: None)
 
