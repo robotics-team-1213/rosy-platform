@@ -46,10 +46,10 @@ def receive_map(bridge, msg, *, warn):
             return False
         grid = translate.grid_from_occupancy(msg)
         current = svc.state.map_id
-        map_id = occupancy_map_id(grid) if current is None or str(current).startswith('occupancy:') else current
+        grid_id = occupancy_map_id(grid)
+        map_id = grid_id if current is None or str(current).startswith('occupancy:') else current
         svc.maps.set_map(grid, map_id=map_id)
-        if map_id != current:
-            svc.state.set_map_id(map_id)
+        svc.state.set_map_id(map_id, grid_id)  # same map_id keeps the odom token; the grid id always follows
         return True
     except Exception as exc:
         if source is not None:
