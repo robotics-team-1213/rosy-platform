@@ -50,8 +50,10 @@ def test_clear_region_on_a_seen_belt_is_empty():
 
 @pytest.mark.parametrize("image, roi, reason", [
     (frame(belt=False), (30, 20, 120, 90), "belt_not_seen"),
+    (frame((360.0, 85.0), belt=False), REGION, "belt_not_seen"),  # a container in the region is still no proof without the belt
     (frame((360.0, 85.0)), (30, 20, 120, 90), "region_off_belt"),  # the belt is seen, elsewhere
     (frame((360.0, 85.0), speck_at=(485, 97)), ON_BELT, "unexplained_orange"),
+    (frame((360.0, 85.0), speck_at=(445, 97)), ON_BELT, "unexplained_orange"),  # reaches in by two columns
 ])
 def test_nothing_detected_is_not_empty_without_proof(image, roi, reason):
     res = read(image, roi=roi)

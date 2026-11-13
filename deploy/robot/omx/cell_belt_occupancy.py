@@ -18,7 +18,7 @@ from cell_camera_invariant_top import detect_top_containers_invariant, is_arm_cl
 
 FRESH_S = 2.0  # the camera server's own fresh window, as FifoCell.frame_receipt
 INSIDE = 0.85  # a container this much inside the region is in it; anything between 0 and this is edge ambiguity
-STRAY_PX = 30  # orange pixels in an empty-looking region beyond this are something the detector dropped, not noise
+STRAY_PX = 30  # an orange blob touching an empty-looking region and larger than this is something the detector dropped, not noise
 
 
 def _inside_fraction(blob: dict, roi) -> float:
@@ -64,6 +64,14 @@ def read_belt_occupancy(receipt: dict | None, roi_px, *, calibration: dict | Non
         return {**out, "reason": "roi_out_of_frame"}
 
     seen = detect_top_containers_invariant(image, joint_state_norm=joint_state_norm, require_arm_clear=True)
+    belt = seen.get("belt_frame") or {}
+    if not belt.get("found"):
+        return {**out, "reason": "belt_not_seen"}  # neither reading is proof while the belt itself is not seen
+    import cv2
+
+    outline = np.asarray(belt["box_points_px"], np.float32)
+    if any(cv2.pointPolygonTest(outline, corner, False) < 0 for corner in ((x0, y0), (x1, y0), (x1, y1), (x0, y1))):
+        return {**out, "reason": "region_off_belt"}
     inside, edge = [], []
     for blob in seen.get("containers", []) + seen.get("floor_containers", []):
         fraction = _inside_fraction(blob, roi_px)
@@ -76,15 +84,11 @@ def read_belt_occupancy(receipt: dict | None, roi_px, *, calibration: dict | Non
         return {**out, "occupancy": "occupied", "reason": "container_in_region"}
     if edge:
         return {**out, "reason": "container_at_region_edge"}
-    belt = seen.get("belt_frame") or {}
-    if not belt.get("found"):
-        return {**out, "reason": "belt_not_seen"}  # nothing seen is not proof of empty when the belt itself is not seen
-    import cv2
-
-    outline = np.asarray(belt["box_points_px"], np.float32)
-    if any(cv2.pointPolygonTest(outline, corner, False) < 0 for corner in ((x0, y0), (x1, y0), (x1, y1), (x0, y1))):
-        return {**out, "reason": "region_off_belt"}
-    stray = int(np.count_nonzero(orange_dual_band_mask(image, reject_yellow_table=True)[int(y0):int(y1), int(x0):int(x1)]))
+    # no detected container touches the region, so any orange blob that does is one the detector dropped;
+    # sized by the whole blob, so one reaching in by a few pixels still counts
+    count, labels, stats, _ = cv2.connectedComponentsWithStats(orange_dual_band_mask(image, reject_yellow_table=True))
+    touching = {int(v) for v in np.unique(labels[int(y0):int(y1), int(x0):int(x1)])} - {0}
+    stray = max((int(stats[v, cv2.CC_STAT_AREA]) for v in touching), default=0)
     if stray > STRAY_PX:
         return {**out, "reason": "unexplained_orange", "orange_px": stray}
     return {**out, "occupancy": "empty", "reason": "region_clear"}
