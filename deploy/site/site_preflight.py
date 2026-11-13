@@ -11,6 +11,8 @@ reason and a fix hint; the exit status is non-zero when any check fails:
 4. The tls_host the advertise units publish (`--tls-host`, after resolving
    `${VAR}` from the unit Environment= lines and the env file) equals tls_host,
    and the Caddyfile site address names no other host.
+5. Every secrets directory an overlay mounts (monitoring, workcell) and its files are readable by
+   the container user (uid/gid 10001), so a service is not left crash-looping on EACCES.
 """
 
 from __future__ import annotations
@@ -434,6 +436,39 @@ def check_caddy_host(path: Path, tls_host: str) -> dict:
     return _check(check_id, True, "Caddy site address names " + (wanted if hosts else "no host (port-only address)"))
 
 
+# Overlay secrets directories whose services run as uid/gid 10001 (compose.monitoring.yaml, compose.workcell.yaml).
+CONTAINER_UID = CONTAINER_GID = 10001
+CONTAINER_SECRET_DIRS = ("ROSY_SITE_MONITORING_SECRETS_DIR", "ROSY_SITE_WORKCELL_ARM_SECRETS_DIR",
+                         "ROSY_SITE_WORKCELL_CAMERA_SECRETS_DIR")
+
+
+def _can_read(info: os.stat_result, uid: int, gid: int, directory: bool) -> bool:
+    need = 0o5 if directory else 0o4            # a directory must be listed and entered
+    for who, shift in ((info.st_uid == uid, 6), (info.st_gid == gid, 3), (True, 0)):
+        if who:
+            return (info.st_mode >> shift) & need == need
+    return False
+
+
+def check_container_secrets(env: dict[str, str], uid: int = CONTAINER_UID, gid: int = CONTAINER_GID) -> dict:
+    """Names a path (never contents) the container user cannot read; a variable that is unset is not mounted."""
+    bad = []
+    for name in CONTAINER_SECRET_DIRS:
+        value = os.environ.get(name) or env.get(name)
+        if not value:
+            continue
+        root = Path(value)
+        try:
+            entries = [root, *sorted(root.iterdir())]
+            bad += [f"{p} (mode {info.st_mode & 0o7777:04o} {info.st_uid}:{info.st_gid})"
+                    for p, info in ((p, p.stat()) for p in entries) if not _can_read(info, uid, gid, p.is_dir())]
+        except OSError as error:
+            bad.append(f"{root} ({error.strerror or error})")
+    return _check("container_secrets_readable", not bad,
+                  "unreadable by uid/gid 10001: " + "; ".join(bad) if bad else "overlay secrets are readable by uid/gid 10001",
+                  "chown root:10001 the directory (mode 0750) and its files (mode 0440), as deploy/site/README.md Monitoring says")
+
+
 def run_checks(args: argparse.Namespace) -> list[dict]:
     env_file = read_env_file(Path(args.env_file))
     tls_host = args.tls_host or os.environ.get("ROSY_SITE_TLS_HOST") or env_file.get("ROSY_SITE_TLS_HOST", "")
@@ -452,7 +487,8 @@ def run_checks(args: argparse.Namespace) -> list[dict]:
             check_txt_tls_host(units, env_file, tls_host),
             check_pairing(units, env_file, read_env_file(Path(args.site_env or args.env_file)),
                           Path(args.secrets_dir or secrets or DEFAULT_SECRETS_DIR)),
-            check_caddy_host(Path(args.caddyfile or HERE / "Caddyfile"), tls_host)]
+            check_caddy_host(Path(args.caddyfile or HERE / "Caddyfile"), tls_host),
+            check_container_secrets(read_env_file(Path(args.site_env or args.env_file)))]
 
 
 def main(argv: list[str] | None = None) -> int:

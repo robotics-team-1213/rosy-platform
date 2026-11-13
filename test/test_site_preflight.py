@@ -4,6 +4,7 @@ import datetime
 import importlib.util
 import ipaddress
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -493,3 +494,28 @@ def test_no_redirect_handlers_never_follow_redirects():
                 None, None, code, "redirect", {}, "https://example.invalid",
             ) is None
 
+
+
+@pytest.mark.skipif(not hasattr(os, "getuid"), reason="needs POSIX owners")
+def test_container_secrets_name_unreadable_paths_without_contents(tmp_path):
+    check = _module().check_container_secrets
+    secrets = tmp_path / "monitoring"
+    secrets.mkdir()
+    key = secrets / "site_read"
+    key.write_text("TOPSECRETVALUE", encoding="ascii")
+    env = {"ROSY_SITE_MONITORING_SECRETS_DIR": str(secrets)}
+    me, group = secrets.stat().st_uid, secrets.stat().st_gid
+    secrets.chmod(0o700)
+    key.chmod(0o600)
+    assert check({})["ok"]                                  # overlay off: nothing mounted
+    owner = check(env, uid=me)                              # the container user owns it
+    assert owner["ok"]
+    stranger = check(env, uid=me + 1, gid=group + 1)        # root:root 0700/0600 seen from uid 10001
+    assert not stranger["ok"] and str(secrets) in stranger["reason"] and str(key) in stranger["reason"]
+    assert "TOPSECRETVALUE" not in stranger["reason"]
+    secrets.chmod(0o750)
+    key.chmod(0o440)
+    assert check(env, uid=me + 1, gid=group)["ok"]          # group 10001, 0750 / 0440
+    key.chmod(0o400)
+    assert not check(env, uid=me + 1, gid=group)["ok"]      # group cannot read the file
+    assert not check({"ROSY_SITE_MONITORING_SECRETS_DIR": str(tmp_path / "gone")})["ok"]
