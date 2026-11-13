@@ -114,7 +114,9 @@ def plan(repo: Path, now: float, log_days: float, *, only: str | None = None) ->
                 and land_async.main_red_stop(holder, name)):
             out.append(("keep", "stopped on MAIN-RED; resumes itself", tree if tree.is_dir() else None, branches))
             continue
-        if log.exists() and now - log.stat().st_mtime < QUIET_S:
+        # .resume.log too: a resumed landing drops .stopped before its supervisor holds the lock
+        recent = [p.stat().st_mtime for p in (log, holder / f"{name}.resume.log") if p.exists()]
+        if recent and now - max(recent) < QUIET_S:
             out.append(("keep", "log written in the last hour", tree if tree.is_dir() else None, branches))
             continue
         if tree.is_dir() and (tree.is_symlink() or str(tree.resolve()) not in registered):
@@ -132,6 +134,8 @@ def plan(repo: Path, now: float, log_days: float, *, only: str | None = None) ->
             src = source(branches[0])
             if src in heads_all:
                 covers.append(f"^refs/heads/{src}")
+            # worktree_rules.archive_abandoned keeps an idle source branch here; it still covers its snapshot
+            covers += ["^" + r for r in git(repo, "for-each-ref", "--format=%(refname)", f"refs/archive/{src}@*").split()]
             for newer, more in by_name.items():
                 if newer > name and source(more[0]) == src:
                     covers += [f"^refs/heads/{b}" for b in more]

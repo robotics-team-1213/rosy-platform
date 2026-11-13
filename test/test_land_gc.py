@@ -320,3 +320,22 @@ def test_old_landing_scratch_goes_but_a_live_or_recent_one_stays(landing, tmp_pa
     assert not old.exists() and recent.exists() and live.exists() and kept.exists()
     monkeypatch.setenv("ROSY_LAND_TMP", str(scratch.parent))  # a root not named rosy-land is never swept
     assert not [row for row in land_gc.plan(repo, time.time(), 7) if row[0] == "tmp"]
+
+
+def test_an_archived_source_branch_still_covers_its_snapshot(tmp_path):
+    """worktree_rules.archive_abandoned moves an idle source to refs/archive/; its snapshot is not unlanded work."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    git(repo, "init", "-q", "-b", "main")
+    git(repo, "config", "user.email", "t@t")
+    git(repo, "config", "user.name", "t")
+    git(repo, "commit", "-q", "--allow-empty", "-m", "base")
+    holder = Path(git(repo, "rev-parse", "--path-format=absolute", "--git-common-dir")) / land_gc.HOLDER
+    holder.mkdir()
+    tree = hidden(repo, holder, "land/feat/arch-20261101000001", extra=True)
+    head = git(tree, "rev-parse", "HEAD")
+    verdict = {t.name: reason for _, reason, t, _ in land_gc.plan(repo, time.time(), 7) if t}
+    assert verdict[tree.name] == "unlanded work (1 commit(s) not in main)"
+    git(repo, "update-ref", f"refs/archive/feat/arch@{head[:10]}", head)
+    verdict = {t.name: (action, reason) for action, reason, t, _ in land_gc.plan(repo, time.time(), 7) if t}
+    assert verdict[tree.name] == ("remove", "landed or nothing unique")
