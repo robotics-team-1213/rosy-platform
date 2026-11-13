@@ -2157,3 +2157,11 @@ clpy.duration을 추가했다(bridge AGENTS의 두 파일 함께 갱신 규칙).
 - 증거: e94b732208 다음 커밋(시험 기대 갱신)에서 원격 집중 시험 1907 passed, 1 skipped; known_failures NEW 0.
 - gate 변화: 없음. 호스트 렌더·시험은 실물 LCD 판독·ARM64·DEVICE/FIELD 수용이 아니다.
 - CE: 해당 없음 — 설계 판단은 ADR 추가 결정과 회귀 시험에 남는다.
+
+## 2026-11-13 · uncommitted · fix(core): ros_bridge_helpers publisher parameter follows the *_pub convention (main red)
+
+- 변경: _publish_string 의 매개변수 pub 를 ros_pub 로 바꿔 이벤트 카탈로그 가드가 ROS 퍼블리셔로 읽게 했다. 동작 변화 없음
+- 증거: test_event_catalogue::test_no_emit_site_hides_its_name_from_the_guard(원격)
+- gate 변화: 없음. SOURCE GO, LOCAL GO 유지(main red 복구)
+- 결정: 없음
+- 교훈: 없음
