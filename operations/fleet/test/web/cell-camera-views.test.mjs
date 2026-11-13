@@ -48,3 +48,15 @@ test("docking views are the ceiling ROI zoom, never /side_camera or a Fleet rela
     assert.ok(!flatten(views).includes("/api/fleet/pipeline/cell-camera"), "Fleet 중계 URL이 남아 있다");
   }
 });
+
+test("an image bound before it is attached is painted once attached", async () => {
+  const {createCellFrameFeed} = await import("../../../../applications/fleet/web/shared/cell-frames.js");
+  const feed = createCellFrameFeed({call: async () => ({sources: []})});
+  const img = {isConnected: false, hidden: false};
+  feed.bind(img, {source: "arm_s_top"});
+  img.isConnected = true;
+  feed.setRunning(true);
+  await new Promise(resolve => setTimeout(resolve, 20));
+  assert.equal(img.hidden, true);  // unregistered source painted, not dropped as detached
+  feed.dispose();
+});

@@ -10,7 +10,8 @@ const LIST_REFRESH_MS = 30000;
 const LEASE_MARGIN_MS = 8000;
 
 export function createCellFrameFeed({call, scope = null, intervalMs = 2000, now = Date.now}) {
-  const watchers = new Map();  // key -> {key, view, imgs:Set, badges:Set, lease, url, state}
+  const watchers = new Map();
+  const seen = new WeakSet();  // nodes painted while connected  // key -> {key, view, imgs:Set, badges:Set, lease, url, state}
   let sources = null, sourcesAt = -Infinity, listing = null;
   let running = true, busy = false, timer = null;
 
@@ -29,12 +30,15 @@ export function createCellFrameFeed({call, scope = null, intervalMs = 2000, now 
 
   function paint(watcher) {
     for (const img of watcher.imgs) {
-      if (!img.isConnected) { watcher.imgs.delete(img); continue; }
+      // A node bound before it is attached stays until it has been seen connected once.
+      if (!img.isConnected) { if (seen.has(img)) watcher.imgs.delete(img); continue; }
+      seen.add(img);
       img.hidden = watcher.state.kind === 'unregistered';
       if (watcher.url) img.src = watcher.url;
     }
     for (const badge of watcher.badges) {
-      if (!badge.isConnected) { watcher.badges.delete(badge); continue; }
+      if (!badge.isConnected) { if (seen.has(badge)) watcher.badges.delete(badge); continue; }
+      seen.add(badge);
       badge.textContent = [watcher.badgeLabel, watcher.state.text].filter(Boolean).join(' · ');
     }
     if (!watcher.imgs.size && !watcher.badges.size) {
@@ -148,6 +152,15 @@ export function createCellFrameFeed({call, scope = null, intervalMs = 2000, now 
   // re-bind; disconnected nodes are dropped on the next paint.
   function bind(img, view, badge = null, label = '') {
     const watcher = watcherOf(view);
+    for (const other of [...watchers.values()]) {  // a re-bound node leaves its previous view
+      if (other === watcher) continue;
+      if (img) other.imgs.delete(img);
+      if (badge) other.badges.delete(badge);
+      if (!other.imgs.size && !other.badges.size) {
+        if (other.url) URL.revokeObjectURL(other.url);
+        watchers.delete(other.key);
+      }
+    }
     if (img) watcher.imgs.add(img);
     if (badge) {
       watcher.badgeLabel = label;
