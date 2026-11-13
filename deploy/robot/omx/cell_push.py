@@ -139,7 +139,9 @@ def push_library(plan: dict, start, end, yaw: float, z: float, speed: float, fri
     chunks = {"above_push": [pre], "descend_push": rnd(down), "slide_push": rnd(slide), "lift_push": rnd(up), "home": [home]}
     if friction:  # the same sweep again: the box now stands where the sweep ends, so the jaws meet it only at the last frame
         chunks["slide_air"] = rnd(slide)
-    return {"schema": "rosy.omx-chunk-library.v1", "names": NAMES, "fps": plan["fps"], "gripper_closed": grip,
+    return {"schema": "rosy.omx-chunk-library.v1", "names": NAMES, "fps": plan["fps"],
+            "gripper_closed": plan.get("jaw_empty_stop", grip),  # the park closes to where empty jaws stop (grasp_planner)
+            **({"jaw_empty_stop": plan["jaw_empty_stop"]} if "jaw_empty_stop" in plan else {}),
             "chunks": chunks,
             "transit": plan.get("transit", {}), "transit_speed": plan.get("transit_speed", 0.85)}
 

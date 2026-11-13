@@ -96,7 +96,8 @@ def jaw_margin(mask, roi, pixel_fn, o: dict, closing_deg: float | None = None, p
     35 of 64 real attempts put a finger on the box (2026-10-30)."""
     finger, pad = prm.get(params, "auto.finger_mm"), prm.get(params, "auto.finger_pad_mm")
     least = prm.get(params, "auto.min_jaw_margin_mm")
-    own = prm.get(params, "auto.own_side_mm")
+    # a stacked box shows the side faces of the layers under it too (2026-11-13 arm_s, the top of two on Pinky read 5 mm free)
+    own = prm.get(params, "auto.own_side_mm") * (1 + o.get("layers_below", 0))
     u = math.radians(o["long_axis_deg"] if closing_deg is None else closing_deg - 90)
     across = np.array([-math.sin(u), math.cos(u)])
     half = (o["width_mm"] if closing_deg is None else max(o["width_mm"], o["length_mm"])) / 2
@@ -107,6 +108,11 @@ def jaw_margin(mask, roi, pixel_fn, o: dict, closing_deg: float | None = None, p
     free = [free_mm(mask, roi, pixel_fn, centre + side * half * across / 1000, side * across, (-pad / 2, 0.0, pad / 2),
                     most + finger + 2.0, own_mm=own, outside_blocks=True) for side in (-1, 1)]  # unseen is not free: a roi cut to one box passed a neighbour 7 times (2026-11-06)
     margin = min(most, min(free) - finger)
+    # no room only because a side is past the view: the object is at the frame's edge, not packed (2026-11-13 arm_s, a box on
+    # Pinky at the top edge after the camera moved), so no push is planned for it
+    unseen = margin < least and min(most, min(free_mm(mask, roi, pixel_fn, centre + side * half * across / 1000, side * across,
+                                                      (-pad / 2, 0.0, pad / 2), most + finger + 2.0, own_mm=own)
+                                              for side in (-1, 1)) - finger) >= least
     # the jaw mark opens wider than any pick (62 against open_max 56): its own room, from the box's centre, kept with it
-    return {"margin_mm": round(margin, 1) if margin >= least else None, "free_mm": [round(f, 1) for f in free],
+    return {"margin_mm": round(margin, 1) if margin >= least else None, "free_mm": [round(f, 1) for f in free], "unseen": unseen,
             "mark_half_mm": mark_room(mask, roi, pixel_fn, centre, across, half, params, own_mm=own)}

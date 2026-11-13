@@ -132,7 +132,8 @@ def run_auto(
             row = {"observed": len(objects), "refused": refused}
             out["attempts"].append(row)
             if error or not usable:
-                row["error"] = error or "no usable object"
+                kind = cell_diagnose.obstacle_type(refused)
+                row["error"] = error or ("no usable object" + (f" ({kind})" if kind else ""))
                 tried["fail"] = {"stage": "choose", "class": row["error"]}
                 if not dry_run:
                     cell_attempts.record(config, calibration, source, dest, attempt, tried, t0, choices)

@@ -620,7 +620,8 @@ def test_the_boxs_own_side_face_past_its_outline_is_not_a_neighbour_but_a_touchi
     # the outline removal leaves a 1 mm gap before the strip: still the box's own
     assert auto.finger_room(mask, (0, 0, 200, 200), px, box)["margin_mm"] == 16.0
     mask[121:150, 70:131] = 255  # a second box touching it: the foreground runs on
-    assert auto.finger_room(mask, (0, 0, 200, 200), px, box)["margin_mm"] is None
+    room = auto.finger_room(mask, (0, 0, 200, 200), px, box)
+    assert room["margin_mm"] is None and not room["unseen"]  # a neighbour, not the view's edge
 
 
 def test_a_whole_surface_in_view_is_not_a_finger_obstacle_but_a_box_is():
