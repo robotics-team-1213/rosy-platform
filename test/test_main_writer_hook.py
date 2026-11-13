@@ -57,3 +57,13 @@ def test_sync_to_origin_main_and_noop_rewrite_pass(repo):
     repo("merge", "--ff-only", "origin/main")
     repo("pack-refs", "--all")
     assert repo("rev-parse", "main").stdout == repo("rev-parse", "pub").stdout
+
+
+def test_reset_back_to_origin_main_is_refused(repo):
+    repo("update-ref", "refs/remotes/origin/main", "main")
+    repo("switch", "-q", "-c", "fix/y")
+    repo("commit", "--allow-empty", "-qm", "landed")
+    repo("switch", "-q", "main")
+    repo("merge", "--ff-only", "fix/y", writer="land")
+    assert repo("reset", "-q", "--hard", "origin/main", check=False).returncode != 0
+    assert repo("rev-parse", "main").stdout == repo("rev-parse", "fix/y").stdout
