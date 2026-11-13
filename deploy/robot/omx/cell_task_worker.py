@@ -198,8 +198,7 @@ def poll_and_execute_once(
             # Refused handoff (interlock, unknown site): the real arm is never called.
             omx_res = pipeline.run_contract_handoff_stage(handoff, stage_id=task_id, tier=tier)
             hw_tel = None
-        # The stage result is the model's computation; live_act_fn does not run the planned directive.
-        receipt = {**omx_res["receipt"], "execution": "model_only"}
+        receipt = omx_res["receipt"]
         done = request_fn("POST", f"/api/fleet/pipeline/cell-tasks/{task_id}/complete", {
             "phase": receipt["phase"], "goal_evidence_digest": receipt["goal_evidence_digest"],
             "reason": receipt["reason"], "receipt": receipt,

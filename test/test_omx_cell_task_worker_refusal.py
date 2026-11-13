@@ -46,6 +46,9 @@ def _run(tmp_path: Path, handoff: dict, tier: int = 1):
         ({**LOCKED, "cell_id": "cell_s", "v_cmd_mps": float("nan")}, 1, "AMR_NOT_LOCKED_AT_HANDOFF"),
         ({**LOCKED, "cell_id": "cell_s", "dst_site": "bellt"}, 1, "UNKNOWN_SITE"),
         ({**LOCKED, "cell_id": "cell_ab"}, 4, "UNKNOWN_SITE"),
+        ({**LOCKED, "cell_id": "cell_s"}, 4, "UNKNOWN_SITE"),
+        ({**LOCKED, "cell_id": "cell_ab", "src_site": "pinky"}, 1, "UNKNOWN_SITE"),
+        ({**LOCKED, "cell_id": "cell_ab", "dst_site": "pallet-l2"}, 1, "UNKNOWN_SITE"),  # wrong level for tier 1
     ],
 )
 def test_refused_handoff_never_calls_the_arm(tmp_path: Path, handoff: dict, tier: int, reason: str) -> None:
@@ -55,10 +58,33 @@ def test_refused_handoff_never_calls_the_arm(tmp_path: Path, handoff: dict, tier
     assert body["hardware_telemetry"] is None
 
 
-def test_locked_handoff_receipt_is_marked_model_only(tmp_path: Path) -> None:
-    hw_calls, body = _run(tmp_path, {**LOCKED, "cell_id": "cell_s"})
+@pytest.mark.parametrize(
+    "handoff,tier",
+    [({**LOCKED, "cell_id": "cell_s"}, 1), ({**LOCKED, "cell_id": "cell_ab", "src_site": "belt", "dst_site": "pallet"}, 2)],
+)
+def test_locked_handoff_receipt_is_marked_model_only(tmp_path: Path, handoff: dict, tier: int) -> None:
+    hw_calls, body = _run(tmp_path, handoff, tier)
     assert len(hw_calls) == 1
-    assert body["receipt"]["execution"] == "model_only"
+    assert body["receipt"]["execution"] == "model_only" and body["reason"] != "UNKNOWN_SITE"
+
+
+def test_dispatch_path_never_calls_the_arm_on_refusal(tmp_path: Path) -> None:
+    hw_calls: list[dict] = []
+
+    def _req(method: str, path: str, body):
+        if path.endswith("/claim"):
+            return {"claimed": True, "gate": {"amr_motion_inhibited": True},
+                    "handoff": {**LOCKED, "cell_id": "cell_s", "dst_site": "bellt"}}
+        if path.endswith("/complete"):
+            assert body["reason"] == "UNKNOWN_SITE" and body["hardware_telemetry"] is None
+            return {"gate": {"amr_motion_inhibited": False}, "task": {"status": "ABORTED"}}
+        return {"task": {"task_id": "t-d"}}
+
+    pipe = cfp.FleetModelPipeline(tmp_path / "pipe")
+    with pytest.raises(AssertionError):  # the dispatch helper asserts COMPLETED; an abort must not pass silently
+        pipe.dispatch_and_execute_fleet_r_cell_task(fleet_r_url="https://fleet.invalid", dst_site="bellt",
+                                                    live_act_fn=hw_calls.append, request_fn=_req)
+    assert hw_calls == []
 
 
 def test_pipeline_refuses_unknown_site_and_tier(tmp_path: Path) -> None:

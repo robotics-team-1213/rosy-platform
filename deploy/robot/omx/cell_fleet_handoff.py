@@ -130,10 +130,13 @@ def handoff_refusal(pipeline, handoff: dict[str, Any], tier: int = 1) -> str | N
     if not (handoff.get("wheel_brake_locked") is True and handoff.get("bed_ready") is True
             and isinstance(v, (int, float)) and abs(float(v)) <= 1e-4):
         return "AMR_NOT_LOCKED_AT_HANDOFF"
+    if not 1 <= int(tier) <= 3:
+        return "UNKNOWN_SITE"
     if str(handoff.get("cell_id") or "cell_s") == "cell_s":
         ok = {str(handoff.get("src_site") or "pinky"), str(handoff.get("dst_site") or "belt")} <= set(pipeline.SITE_COORDS)
-    else:
-        ok = 1 <= int(tier) <= 3
+    else:  # Cell AB runs belt -> this tier's pallet level only; Fleet zones send the generic "pallet".
+        ok = (str(handoff.get("src_site") or "belt") == "belt"
+              and str(handoff.get("dst_site") or "pallet") in ("pallet", f"pallet-l{int(tier) - 1}"))
     return None if ok else "UNKNOWN_SITE"
 
 
@@ -201,6 +204,7 @@ def run_contract_handoff_stage(
             "stage_id": stage_id,
             "goal_evidence_digest": f"sha256:{digest}" if converged else None,
             "reason": refusal or ("TRANSFER_CONFIRMED" if converged else "STAGE_NOT_CONVERGED"),
+            "execution": "model_only",  # the stage computes; no caller's live_act_fn runs this directive
         },
         "stage_result": stage_res,
     }
@@ -288,7 +292,8 @@ def dispatch_and_execute_fleet_r_cell_task(
     claimed = request_fn("POST", "/api/fleet/pipeline/cell-tasks/claim", {"cell_id": cell_id, "task_id": created["task_id"]})
     assert claimed["claimed"] is True and claimed["gate"]["amr_motion_inhibited"] is True
     omx_res = pipeline.run_contract_handoff_stage(claimed["handoff"], stage_id=created["task_id"], tier=tier)
-    hw_tel = live_act_fn(claimed["handoff"]) if callable(live_act_fn) else None
+    refused = handoff_refusal(pipeline, claimed["handoff"], tier) is not None
+    hw_tel = live_act_fn(claimed["handoff"]) if callable(live_act_fn) and not refused else None
     done = request_fn("POST", f"/api/fleet/pipeline/cell-tasks/{created['task_id']}/complete", {
         "phase": omx_res["receipt"]["phase"], "goal_evidence_digest": omx_res["receipt"]["goal_evidence_digest"],
         "reason": omx_res["receipt"]["reason"], "receipt": omx_res["receipt"],
