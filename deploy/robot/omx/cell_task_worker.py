@@ -26,6 +26,7 @@ from cell_camera_telemetry_sync import (
     upload_latest_camera_snapshots as _upload_latest_camera_snapshots,
 )
 from cell_control_core import ensure_omx_paths
+from cell_fleet_handoff import handoff_refusal
 from cell_fleet_pipeline import FleetModelPipeline
 
 ensure_omx_paths()
@@ -187,23 +188,21 @@ def poll_and_execute_once(
         if not claimed.get("claimed"):
             continue
         handoff = claimed["handoff"]
-        interlock_ok = (
-            bool(handoff.get("wheel_brake_locked", True))
-            and bool(handoff.get("bed_ready", True))
-            and abs(float(handoff.get("v_cmd_mps", 0.0))) <= 1e-4
-        )
-        if callable(live_act_fn) and interlock_ok:
+        if callable(live_act_fn) and handoff_refusal(pipeline, handoff, tier) is None:
             with ThreadPoolExecutor(max_workers=2) as pool:
                 omx_fut = pool.submit(pipeline.run_contract_handoff_stage, handoff, stage_id=task_id, tier=tier)
                 hw_fut = pool.submit(live_act_fn, handoff)
                 omx_res = omx_fut.result()
                 hw_tel = hw_fut.result()
         else:
+            # Refused handoff (interlock, unknown site): the real arm is never called.
             omx_res = pipeline.run_contract_handoff_stage(handoff, stage_id=task_id, tier=tier)
-            hw_tel = live_act_fn(handoff) if callable(live_act_fn) else None
+            hw_tel = None
+        # The stage result is the model's computation; live_act_fn does not run the planned directive.
+        receipt = {**omx_res["receipt"], "execution": "model_only"}
         done = request_fn("POST", f"/api/fleet/pipeline/cell-tasks/{task_id}/complete", {
-            "phase": omx_res["receipt"]["phase"], "goal_evidence_digest": omx_res["receipt"]["goal_evidence_digest"],
-            "reason": omx_res["receipt"]["reason"], "receipt": omx_res["receipt"],
+            "phase": receipt["phase"], "goal_evidence_digest": receipt["goal_evidence_digest"],
+            "reason": receipt["reason"], "receipt": receipt,
             "stage_result": omx_res["stage_result"], "hardware_telemetry": hw_tel,
         })
         completed_runs.append({

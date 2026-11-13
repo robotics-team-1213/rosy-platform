@@ -123,6 +123,26 @@ def scan_cell_s_extended_zones(
     }
 
 
+def handoff_refusal(pipeline, handoff: dict[str, Any], tier: int = 1) -> str | None:
+    """Why this handoff must not run, or None. Shared by the stage and the worker's real-arm call."""
+    # A missing interlock fact is not a locked AMR: never move on a default.
+    v_cmd = handoff.get("v_cmd_mps")
+    if (
+        handoff.get("wheel_brake_locked") is not True
+        or handoff.get("bed_ready") is not True
+        or not isinstance(v_cmd, (int, float))
+        or not abs(float(v_cmd)) <= 1e-4  # also refuses NaN
+    ):
+        return "AMR_NOT_LOCKED_AT_HANDOFF"
+    if str(handoff.get("cell_id") or "cell_s") == "cell_s":
+        sites = (str(handoff.get("src_site") or "pinky"), str(handoff.get("dst_site") or "belt"))
+        if any(s not in pipeline.SITE_COORDS for s in sites):
+            return "UNKNOWN_SITE"
+    elif not 1 <= int(tier) <= 3:
+        return "UNKNOWN_SITE"
+    return None
+
+
 def run_contract_handoff_stage(
     pipeline,
     handoff: dict[str, Any],
@@ -135,11 +155,9 @@ def run_contract_handoff_stage(
     cell_id = str(handoff.get("cell_id") or "cell_s")
     station_place = str(handoff.get("station_place") or ("S3" if cell_id == "cell_s" else "S5"))
     robot_id = str(handoff.get("robot_id") or "pinky_1")
-    braked = bool(handoff.get("wheel_brake_locked", True))
-    bed_ready = bool(handoff.get("bed_ready", True))
-    v_cmd = float(handoff.get("v_cmd_mps", 0.0))
 
-    if not braked or not bed_ready or abs(v_cmd) > 1e-4:
+    refusal = handoff_refusal(pipeline, handoff, tier)
+    if refusal is not None:
         return {
             "contract_version": "rosy.fleet-r-cell-contract.v1",
             "receipt": {
@@ -152,7 +170,7 @@ def run_contract_handoff_stage(
                 "amr_motion_inhibited": False,
                 "stage_id": stage_id,
                 "goal_evidence_digest": None,
-                "reason": "AMR_NOT_LOCKED_AT_HANDOFF",
+                "reason": refusal,
             },
             "stage_result": None,
         }
