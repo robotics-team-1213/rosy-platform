@@ -96,6 +96,11 @@
       "source_revision": "03d6bdd245804822d460b811c56e0bd3638aed26",
       "pytest_root": ".",
       "result": "exit 0 for test_pipeline_orchestrator, test_cell_real2sim_pipeline, test_charge_bays, test_berth_parking_routes; pipeline cell-task/gate/real2sim and road-nav2/berth-park HTTP routes through actual Fleet app with TestClient and fake device transports; no device or deployed evidence"
+    },
+    {
+      "source_revision": "e9526e7d1d47cfda04881646b1a2fc01ba859fc8",
+      "pytest_root": ".",
+      "result": "10 passed; station-zones PUT (storage redirected to tmp) and road-nav2 plan GET HTTP tests through in-process TestClient; no device evidence"
     }
   ],
   "requests": {
@@ -2052,6 +2057,22 @@
         "test_real2sim_pipeline_promote_physics_candidate"
       ],
       "source_revision": "03d6bdd245804822d460b811c56e0bd3638aed26"
+    },
+    "PUT:/api/fleet/pipeline/station-zones": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_pipeline_orchestrator.py",
+        "test_station_zones_put_saves_yaml_and_get_reflects_it"
+      ],
+      "source_revision": "e9526e7d1d47cfda04881646b1a2fc01ba859fc8"
+    },
+    "GET:/api/fleet/robots/{robot_id}/road-nav2/plan": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_berth_parking_routes.py",
+        "test_road_nav2_plan_route_returns_plan_without_dispatch_and_rejects_bad_query"
+      ],
+      "source_revision": "e9526e7d1d47cfda04881646b1a2fc01ba859fc8"
     }
   }
 }

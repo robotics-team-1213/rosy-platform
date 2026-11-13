@@ -2377,6 +2377,14 @@
           "request_ids": [
             "POST:/api/fleet/robots/{robot_id}/berth-park"
           ]
+        },
+        {
+          "consumer": "applications/fleet/web/console-goal.js",
+          "expression": "/api/fleet/robots/${encodeURIComponent(robotId)}/road-nav2/plan?${qs}",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/robots/{robot_id}/road-nav2/plan"
+          ]
         }
       ],
       "requests": [
@@ -4225,6 +4233,15 @@
           "resolution": "literal-or-template",
           "request_ids": [
             "POST:/api/fleet/cell-app/real2sim-pipeline/promote-physics"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/cell/cell-real2sim-specs.js",
+          "expression": "/api/fleet/pipeline/station-zones",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/pipeline/station-zones",
+            "PUT:/api/fleet/pipeline/station-zones"
           ]
         }
       ],
