@@ -512,10 +512,11 @@ def run(train_exports, eval_export, out, *, steps=40, seed=42750, n_action_steps
         raise
 
 
-def main():
+def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--train-export", type=Path, nargs='+', required=True)
-    ap.add_argument("--eval-export", type=Path, nargs='+', required=True)
+    ap.add_argument("--dataset", type=Path, help="reviewed cell-carry experiment dataset")
+    ap.add_argument("--train-export", type=Path, nargs='+')
+    ap.add_argument("--eval-export", type=Path, nargs='+')
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--steps", type=int, default=40)
     ap.add_argument("--seed", type=int, default=42750)
@@ -524,7 +525,15 @@ def main():
     ap.add_argument("--action-representation",choices=('absolute','joint_delta_from_chunk_source_v1','joint_delta_tanh_from_chunk_source_v1','absolute_tanh_from_chunk_source_v1'),default='absolute')
     ap.add_argument('--initial-policy',type=Path)
     ap.add_argument('--state-noise-std-rad',type=float,default=0.)
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
+    if args.dataset:
+        if args.train_export or args.eval_export or args.initial_policy or args.sampling != 'all_frames' or args.action_representation != 'absolute' or args.state_noise_std_rad:
+            ap.error('--dataset cannot be combined with export-only training options')
+        from experiment_train import train
+        print(json.dumps(train(args.dataset, args.out, method='act', steps=args.steps, seed=args.seed)))
+        return
+    if not args.train_export or not args.eval_export:
+        ap.error('--train-export and --eval-export are required without --dataset')
     print(json.dumps(run(args.train_export, args.eval_export, args.out, steps=args.steps, seed=args.seed,
                          n_action_steps=args.n_action_steps,sampling=args.sampling,
                          action_representation=args.action_representation,state_noise_std_rad=args.state_noise_std_rad,
