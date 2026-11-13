@@ -15,7 +15,7 @@ def _tool():
     return module
 
 
-def _server(accept_login):
+def _server(accept_login, callback_ok=True):
     class Handler(http.server.BaseHTTPRequestHandler):
         def log_message(self, *args):
             pass
@@ -37,11 +37,12 @@ def _server(accept_login):
                 signed_in = "account=1" in self.headers.get("Cookie", "")
                 self._reply(302, base + ("/app/callback" if signed_in else "/login"))
             elif self.path == "/app/callback":
-                self._reply(303, base + "/app/home", cookie="app=1; Path=/")
+                self._reply(303, base + "/app/home", cookie="app=1; Path=/" if callback_ok else None)
             elif self.path == "/app/home":
                 self._reply(200)
-            elif self.path == "/app/session":
-                self._reply(200 if "app=1" in self.headers.get("Cookie", "") else 401)
+            elif self.path == "/app/session":  # like Calibration: 200 either way, the body says who is in
+                signed_in = "app=1" in self.headers.get("Cookie", "")
+                self._reply(200, body=json.dumps({"authenticated": signed_in}).encode())
             else:
                 self._reply(404)
 
@@ -73,3 +74,14 @@ def test_login_chain_passes_and_a_refused_login_fails(tmp_path, capsys):
             server.shutdown()
     lines = capsys.readouterr().out.splitlines()
     assert lines[0].startswith("PASS fixture") and lines[1].startswith("FAIL fixture (account login 401")
+
+
+def test_a_200_session_that_is_not_signed_in_fails(tmp_path, capsys):
+    server = _server(True, callback_ok=False)
+    try:
+        path = tmp_path / "config.json"
+        path.write_text(json.dumps(_config(server)), encoding="utf-8")
+        assert _tool().main(["x", str(path)]) == 1
+    finally:
+        server.shutdown()
+    assert "not authenticated" in capsys.readouterr().out

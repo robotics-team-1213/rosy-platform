@@ -66,7 +66,12 @@ def check_app(app, config, insecure=False):
         if status >= 400:
             return False, f"callback chain ended {status} at {urlsplit(url).path}"
         status, _, text = _send(opener, urllib.request.Request(app["session"]))
-        return status == 200, f"session {status}"
+        # Some apps answer 200 with authenticated:false when the callback failed (2026-11-13 Calibration).
+        try:
+            signed_in = json.loads(text).get("authenticated", True) is not False
+        except (ValueError, AttributeError):
+            signed_in = True
+        return status == 200 and signed_in, f"session {status}" + ("" if signed_in else " not authenticated")
     except (OSError, ValueError, KeyError) as error:
         return False, f"{type(error).__name__}: {str(error)[:100]}"
 
