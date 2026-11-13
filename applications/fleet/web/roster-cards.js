@@ -139,7 +139,7 @@ export function createRoiPoller({ scope, view, call, render = () => {} }) {
         const anc = (view.anchors || []).find((a) => a.target_id === targetId);
         if (anc) {
           const deg = typeof anc.head_yaw === "number" ? `${Math.round((anc.head_yaw * 180) / Math.PI)}°` : "—";
-          statusNode.textContent = `${anc.target_id.toUpperCase()} · ${anc.zoom || 4}x 실시간 추적 · BASE (${Number(anc.base_x).toFixed(2)}, ${Number(anc.base_y).toFixed(2)}) → HEAD (${Number(anc.head_x ?? anc.base_x).toFixed(2)}, ${Number(anc.head_y ?? anc.base_y).toFixed(2)}) ${deg}`;
+          statusNode.textContent = `${anc.target_id} · ${anc.zoom || 4}x 실시간 추적 · BASE (${Number(anc.base_x).toFixed(2)}, ${Number(anc.base_y).toFixed(2)}) → HEAD (${Number(anc.head_x ?? anc.base_x).toFixed(2)}, ${Number(anc.head_y ?? anc.base_y).toFixed(2)}) ${deg}`;
         }
       }
     } catch (_err) {
@@ -391,7 +391,7 @@ export function buildQuickControlPanel({
   const trackerBox = nodeWithText("div", "tracker-box"), trackerHead = nodeWithText("div", "tracker-head"), targetTabs = nodeWithText("div", "tracker-tabs");
   for (const anc of anchorList) {
     const isCurrent = anc.target_id === activeAnchor.target_id;
-    const tab = nodeWithText("ui-button", "", anc.kind === "omx_ai" ? `🦾 ${anc.target_id.toUpperCase()} (${anc.zoom || 4}x)` : `🤖 ${anc.target_id} (${anc.zoom || 3}x)`);
+    const tab = nodeWithText("ui-button", "", anc.kind === "omx_ai" ? `🦾 ${anc.target_id} (${anc.zoom || 4}x)` : `🤖 ${anc.target_id} (${anc.zoom || 3}x)`);
     tab.setAttribute("kind", "toggle"); tab.type = "button"; tab.setAttribute("aria-pressed", isCurrent ? "true" : "false");
     tab.addEventListener("click", scope.guard(() => {
       view.focusAnchorId = anc.target_id;
@@ -404,7 +404,7 @@ export function buildQuickControlPanel({
     targetTabs.appendChild(tab);
   }
   const isPinningAnchor = view.anchorPinTarget === activeAnchor.target_id;
-  const pinAnchorBtn = nodeWithText("ui-button", "", isPinningAnchor ? "지도에서 위치를 찍고 헤드 방향으로 끄세요" : `🎯 ${activeAnchor.target_id.toUpperCase()} 기준 위치 보정`);
+  const pinAnchorBtn = nodeWithText("ui-button", "", isPinningAnchor ? "지도에서 위치를 찍고 헤드 방향으로 끄세요" : `🎯 ${activeAnchor.target_id} 기준 위치 보정`);
   pinAnchorBtn.setAttribute("kind", "toggle"); pinAnchorBtn.type = "button"; pinAnchorBtn.setAttribute("aria-pressed", isPinningAnchor ? "true" : "false");
   pinAnchorBtn.disabled = !isOperator();
   if (pinAnchorBtn.disabled) pinAnchorBtn.setAttribute("reason", "운영자 권한이 필요합니다");
@@ -457,7 +457,7 @@ export function buildQuickControlPanel({
   const roiMeta = nodeWithText("div", "roi-meta"), statusText = nodeWithText("p", "hint roi-status-text");
   statusText.id = "anchor-roi-status";
   const deg = typeof activeAnchor.head_yaw === "number" ? `${Math.round((activeAnchor.head_yaw * 180) / Math.PI)}°` : "—";
-  statusText.textContent = `${activeAnchor.target_id.toUpperCase()} · ${activeAnchor.zoom || 4}x 실시간 추적 · BASE (${Number(activeAnchor.base_x).toFixed(2)}, ${Number(activeAnchor.base_y).toFixed(2)}) → HEAD (${Number(activeAnchor.head_x ?? activeAnchor.base_x).toFixed(2)}, ${Number(activeAnchor.head_y ?? activeAnchor.base_y).toFixed(2)}) ${deg}`;
+  statusText.textContent = `${activeAnchor.target_id} · ${activeAnchor.zoom || 4}x 실시간 추적 · BASE (${Number(activeAnchor.base_x).toFixed(2)}, ${Number(activeAnchor.base_y).toFixed(2)}) → HEAD (${Number(activeAnchor.head_x ?? activeAnchor.base_x).toFixed(2)}, ${Number(activeAnchor.head_y ?? activeAnchor.base_y).toFixed(2)}) ${deg}`;
   const descText = nodeWithText("small", "hint roi-sub-text", activeAnchor.kind === "omx_ai"
     ? `CELL-A 관절(${activeAnchor.joints_summary || "6축 정상"}) + 실시간 ${chosenCam.label} 카메라 연동`
     : `천장 카메라 3x 추적 + 실시간 ${chosenCam.label} 카메라 연동`);

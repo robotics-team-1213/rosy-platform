@@ -309,9 +309,7 @@ async function load() {
   updatePlaneSources();
   $('trip-place').replaceChildren(...(state.active?.map.places || [])
     .map((place, index) => new Option(`${index + 1} ${place.name}${place.name === place.id ? '' : ` (${place.id})`}`, place.id)));
-  const activeRobots = robots.filter(r => r.online || r.link === 'degraded');
-  const visibleRobots = activeRobots.length ? activeRobots : robots;
-  $('trip-robot').replaceChildren(...visibleRobots.map(robot => {
+  $('trip-robot').replaceChildren(...robots.map(robot => {
     const safety = robot.state?.safety?.estop;
     const stateLabel = !robot.online ? '연결 끊김' : safety === true ? '비상 정지'
       : safety === false ? '' : '정지 상태 미확인';
@@ -319,7 +317,7 @@ async function load() {
     option.dataset.online = robot.online ? 'true' : 'false';
     return option;
   }));
-  teach.robots(visibleRobots);
+  teach.robots(robots);
   if (state.robotsError) status('trip-summary', '경로 미리보기 불가 · 로봇 상태 확인 불가. 다시 접속하세요.', 'error');
   else if (!robots.length) status('trip-summary', '경로 미리보기 불가 · 등록된 로봇이 없습니다. 관리자에게 로봇 등록을 요청하세요.', 'empty');
   else if (!robots.some(robot => robot.online)) status('trip-summary', '경로 미리보기 불가 · 연결된 로봇이 없습니다. 로봇 연결을 확인하세요.', 'empty');

@@ -15,8 +15,11 @@ export function createMapAuthoring(host) {
   const changed = next => { history.apply(next); host.changed(history.current()); };
   const importer = createDrawingImport({request: host.request, map: host.draft,
     replaceDraft: next => { changed(next); },
-    confirmDiscard: () => true});
-  const editReason = () => host.reason() || (!host.draft() && !host.map() ? '먼저 도면을 맞추거나 조사 초안을 만드세요' : '');
+    confirmDiscard: () => !host.dirty() || confirmIrreversible({
+      message: '도면 기준을 바꾸고 검토 상태를 초기화할까요? 그린 요소는 보존합니다.',
+      action: '도면 기준 바꾸기', opener: $('drawing-register')})});
+  const editReason = () => host.reason() || (host.source() !== 'draft' ? '직접 편집은 초안에서 하세요'
+    : !host.map()?.survey ? '먼저 도면을 맞추거나 조사 초안을 만드세요' : '');
   const editor = createMapEditor({svg: host.svg, map: host.map, view: host.view, changed, reason: editReason});
   const extraction = createExtractionPanel({request: host.request, changed,
     context: () => ({draft: host.draft(), epoch: host.epoch(), projection, reason: editReason()}), render: host.render});

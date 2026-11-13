@@ -12,11 +12,14 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
   const inspector = typeof el === "function" ? el("omx-right-inspector") : null;
   // 셀 카메라는 Vision 임대 프레임으로만 본다(D-136). Fleet은 바이트를 중계하지 않는다.
   const frames = createCellFrameFeed({ call, scope });
+  for (const box of [list, inspector]) if (box) scope.listen(box, "click", () => { framesOn = true; }, true);
   let inFlight = false;
   let unavailable = false;
   let liveStreamOn = true;
   const selectedCamByCard = {};
   let activeInspectorId = null;
+  // Choosing a robot only inspects it (no Vision lease); frames start after a click inside the cards or inspector.
+  let framesOn = false;
   const selectedInspectorCam = {};
   let dualCamMode = false;
   let lastRows = null;
@@ -32,6 +35,7 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
       const camId = ev?.detail?.camId;
       if (!targetId) return;
       activeInspectorId = targetId === "pinky" ? "rosy_46" : targetId;
+      framesOn = false;
       if (camId) selectedInspectorCam[activeInspectorId] = camId;
       if (lastRows) renderInspector(lastRows);
       if (ev?.detail?.scroll && inspector?.scrollIntoView) {
@@ -297,7 +301,7 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
     }
 
     inspector.replaceChildren(tabs, head, camStageNode, pipGrid, meta, quickDispatchBar, actions);
-    for (const binding of cameraBindings) frames.bind(...binding);
+    if (framesOn) for (const binding of cameraBindings) frames.bind(...binding);
   }
 
   function show(rows, note) {
@@ -341,9 +345,9 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
       camera.loading = "lazy";
       camera.className = "cell-cam-thumb";
       camera.alt = `${card.title} 카메라`;
-      if (activeInspectorId === card.id ||
+      if (framesOn && (activeInspectorId === card.id ||
           (card.id === "cell_s" && activeInspectorId === "arm_s") ||
-          (card.id === "cell_ab" && ["arm_a", "arm_b"].includes(activeInspectorId))) {
+          (card.id === "cell_ab" && ["arm_a", "arm_b"].includes(activeInspectorId)))) {
         queueMicrotask(() => { if (camera.isConnected) frames.bind(camera, activeCam); });
       }
       camera.tabIndex = 0;
