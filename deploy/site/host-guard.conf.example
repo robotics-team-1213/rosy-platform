@@ -9,6 +9,9 @@ ai pc <user>@<ai-pc-address> 05:48-06:18
 robot-a robot <robot-a-address>:8080
 robot-b robot <robot-b-address>:8080
 site updates <site-user>@127.0.0.1
+# <name> monitoring <https-url> [<ca-file>]   alert through the webhook when R Monitoring's /monitoring-health fails
+#   ALERT_AFTER checks in a row (it carries no last-success time, so only the status code is checked), e.g.:
+# r-monitoring monitoring https://<site>.local/monitoring-health /etc/rosy/host-guard/site-ca.crt
 # One more pc line per OMX cell control PC, e.g.: cell-b pc <user>@<cell-b-address> 05:40-06:10
 # rosy-arm-cell (role cell) is guarded from R, never by itself: its own host-guard stays off. Add its line only after
 # its rosy-host-control helper matches D-991 (reboot refused during an arm session); the guard ladder reboots otherwise.

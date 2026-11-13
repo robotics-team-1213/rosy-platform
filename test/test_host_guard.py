@@ -487,3 +487,34 @@ def test_the_forced_command_runs_only_the_update_report_for_updates(tmp_path, mo
     assert calls == []
     result, calls = _remote(tmp_path, "updates --all")
     assert result.returncode == 2 and calls == []
+
+
+def test_monitoring_health_failures_alert_once_and_recovery_once(tmp_path):
+    import http.server
+    import threading
+    code = {"value": 503}
+
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(code["value"])
+            self.end_headers()
+
+        def log_message(self, *args):
+            pass
+    server = http.server.HTTPServer(("127.0.0.1", 0), Handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        env = _alerts(tmp_path)
+        conf = f"mon monitoring http://127.0.0.1:{server.server_port}/monitoring-health
+"
+        _guard(tmp_path, HEALTHY, conf=conf, env_extra=env)
+        assert _sent(tmp_path) == []  # one failed check is not an outage
+        _guard(tmp_path, HEALTHY, conf=conf, runs=3, env_extra=env)
+        assert len(_sent(tmp_path)) == 1 and "mon 서비스가 2번 연속" in _sent(tmp_path)[0]
+        code["value"] = 200
+        _guard(tmp_path, HEALTHY, conf=conf, env_extra=env)
+        assert len(_sent(tmp_path)) == 2 and "다시 응답합니다" in _sent(tmp_path)[1]
+        assert _actions(tmp_path) == ["alert unreachable", "alert recovered"]
+        assert "mon" not in json.loads((tmp_path / "state/status.json").read_text())
+    finally:
+        server.shutdown()
