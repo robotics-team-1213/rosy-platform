@@ -182,7 +182,7 @@ const DEFAULT_PLACES = [
 
 export function buildQuickControlPanel({
   robot, state, pose, power, guideRow, displayName, view, scope, el, render, isOperator,
-  roiObjectUrls, refreshRoiPreview, nodeWithText, tag,
+  roiObjectUrls, refreshRoiPreview, nodeWithText, tag, cellFrames = null,
 }) {
   const quickPanel = document.createElement("section");
   quickPanel.className = "quick-control-panel";
@@ -416,28 +416,28 @@ export function buildQuickControlPanel({
   trackerHead.append(targetTabs, pinAnchorBtn);
   trackerBox.appendChild(trackerHead);
 
+  // 셀 카메라 뷰는 Vision 소스만 가리킨다(D-136). cell S(arm_s·S3)에는 측면 카메라가 없고,
+  // Pinky 도킹은 천장 Cam ROI 확대로 위에서 본다.
   const camViewsForAnchor = activeAnchor.target_id === "arm_a"
     ? [
-        { id: "arm_a_wrist", label: "arm_a 손목", url: "/api/fleet/pipeline/cell-camera/arm_a_wrist" },
-        { id: "top", label: "S5 상단", url: "/api/fleet/pipeline/cell-camera/top" },
-        { id: "side", label: "셀 측면", url: "/api/fleet/pipeline/cell-camera/side" },
+        { id: "arm_a_wrist", label: "arm_a 손목", source: "arm_a_wrist" },
+        { id: "top", label: "S5 상단", source: "top" },
+        { id: "side", label: "셀 측면 (A/B)", source: "side" },
       ]
     : activeAnchor.target_id === "arm_b"
     ? [
-        { id: "arm_b_wrist", label: "arm_b 손목", url: "/api/fleet/pipeline/cell-camera/arm_b_wrist" },
-        { id: "top", label: "S5 상단", url: "/api/fleet/pipeline/cell-camera/top" },
-        { id: "side", label: "셀 측면", url: "/api/fleet/pipeline/cell-camera/side" },
+        { id: "arm_b_wrist", label: "arm_b 손목", source: "arm_b_wrist" },
+        { id: "top", label: "S5 상단", source: "top" },
+        { id: "side", label: "셀 측면 (A/B)", source: "side" },
       ]
     : activeAnchor.target_id === "arm_s"
     ? [
-        { id: "arm_s_wrist", label: "arm_s 손목", url: "/api/fleet/pipeline/cell-camera/arm_s_wrist" },
-        { id: "arm_s_top", label: "S3 상단", url: "/api/fleet/pipeline/cell-camera/arm_s_top" },
-        { id: "side", label: "셀 측면", url: "/api/fleet/pipeline/cell-camera/side" },
+        { id: "arm_s_wrist", label: "arm_s 손목", source: "arm_s_wrist" },
+        { id: "arm_s_top", label: "S3 상단", source: "arm_s_top" },
       ]
     : [
-        { id: "pinky", label: "S3 도킹 뷰", url: "/api/fleet/pipeline/cell-camera/pinky" },
-        { id: "side", label: "측면 도킹", url: "/api/fleet/pipeline/cell-camera/side" },
-        { id: "arm_s_top", label: "S3 상단", url: "/api/fleet/pipeline/cell-camera/arm_s_top" },
+        { id: "pinky_dock", label: "도킹 확대 (천장 Cam)", roiTarget: activeAnchor.target_id },
+        { id: "arm_s_top", label: "S3 상단", source: "arm_s_top" },
       ];
   view.trackerCamByTarget = view.trackerCamByTarget || {};
   const chosenCamId = view.trackerCamByTarget[activeAnchor.target_id] || camViewsForAnchor[0].id;
@@ -451,10 +451,9 @@ export function buildQuickControlPanel({
   const liveCellImg = document.createElement("img");
   liveCellImg.id = "anchor-cell-live-img";
   liveCellImg.className = "anchor-roi-img omx-inspector-cam";
-  liveCellImg.dataset.baseUrl = chosenCam.url;
-  liveCellImg.src = `${chosenCam.url}?t=${Date.now()}`;
   liveCellImg.alt = `${activeAnchor.target_id} ${chosenCam.label} 실시간 카메라`;
   liveCellImg.loading = "lazy";
+  cellFrames?.bind(liveCellImg, chosenCam);
   const roiMeta = nodeWithText("div", "roi-meta"), statusText = nodeWithText("p", "hint roi-status-text");
   statusText.id = "anchor-roi-status";
   const deg = typeof activeAnchor.head_yaw === "number" ? `${Math.round((activeAnchor.head_yaw * 180) / Math.PI)}°` : "—";
@@ -470,8 +469,7 @@ export function buildQuickControlPanel({
     lBtn.type = "button";
     lBtn.addEventListener("click", scope.guard(() => {
       view.trackerCamByTarget[activeAnchor.target_id] = cv.id;
-      liveCellImg.dataset.baseUrl = cv.url;
-      liveCellImg.src = `${cv.url}?t=${Date.now()}`;
+      cellFrames?.bind(liveCellImg, cv);
       if (typeof window !== "undefined" && typeof window.dispatchEvent === "function") {
         window.dispatchEvent(new CustomEvent("rosy:inspect-target", { detail: { targetId: activeAnchor.target_id, camId: cv.id } }));
       }

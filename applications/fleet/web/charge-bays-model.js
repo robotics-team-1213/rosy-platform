@@ -89,7 +89,6 @@ export function chargeBayRows(plan) {
   const rate = Number.isFinite(t.rate_pct_per_min) ? `${t.rate_pct_per_min}%/분` : "미측정";
   const summary = `${t.go_percent ?? "—"}% 이하면 충전 · ${t.leave_percent ?? "—"}%면 나감 · 충전 속도 ${rate} · 보기 전용`;
   const tasks = Array.isArray(plan?.omx_cell_tasks) ? plan.omx_cell_tasks : [];
-  const cameras = Array.isArray(plan?.cameras) ? plan.cameras : [];
   const armLiveStates = plan?.arm_live_states || {};
   const stationCameraLinks = plan?.station_camera_links || {};
   const stationZones = plan?.station_zones || {};
@@ -140,18 +139,17 @@ export function chargeBayRows(plan) {
           : []),
       ];
       return {
-        kind: "omx", id, cameraUrl: `/api/fleet/pipeline/cell-camera/${id}`,
+        kind: "omx", id,
         cameraViews: id === "cell_s"
           ? [
-              {id: "arm_s_top", label: "S3 상단", url: "/api/fleet/pipeline/cell-camera/arm_s_top"},
-              {id: "arm_s_wrist", label: "arm_s 손목", url: "/api/fleet/pipeline/cell-camera/arm_s_wrist"},
-              {id: "side", label: "측면", url: "/api/fleet/pipeline/cell-camera/side"},
+              {id: "arm_s_top", label: "S3 상단", source: "arm_s_top"},
+              {id: "arm_s_wrist", label: "arm_s 손목", source: "arm_s_wrist"},
             ]
           : [
-              {id: "top", label: "S5 상단", url: "/api/fleet/pipeline/cell-camera/top"},
-              {id: "side", label: "측면", url: "/api/fleet/pipeline/cell-camera/side"},
-              {id: "arm_a_wrist", label: "arm_a 손목", url: "/api/fleet/pipeline/cell-camera/arm_a_wrist"},
-              {id: "arm_b_wrist", label: "arm_b 손목", url: "/api/fleet/pipeline/cell-camera/arm_b_wrist"},
+              {id: "top", label: "S5 상단", source: "top"},
+              {id: "side", label: "측면 (A/B)", source: "side"},
+              {id: "arm_a_wrist", label: "arm_a 손목", source: "arm_a_wrist"},
+              {id: "arm_b_wrist", label: "arm_b 손목", source: "arm_b_wrist"},
             ],
         title: id === "cell_s" ? "cell_s · S3 하역 셔틀 (arm_s)" : "cell_ab · S5 팔레트 적재 (arm_a·arm_b)",
         phase, status, text, task, healthText: healthParts.join(" · "),
@@ -167,11 +165,11 @@ export function chargeBayRows(plan) {
         const anyEstop = Boolean(plan?.human_safety?.active_estop);
         const cableTangled = plan?.cable_tangled !== false;
         return {kind: "pinky", id: robot_id, robot_id,
-          cameraUrl: "/api/fleet/pipeline/cell-camera/pinky", title: `Pinky AMR · ${robot_id}`,
+          title: `Pinky AMR · ${robot_id}`,
+          // 도킹은 위에서 본다: 천장 Cam ROI 확대가 주 뷰, S3 상단이 보조(D-136 영상은 Vision 임대로만).
           cameraViews: [
-            {id: "pinky", label: "S3 도킹 뷰", url: "/api/fleet/pipeline/cell-camera/pinky"},
-            {id: "side", label: "측면 도킹", url: "/api/fleet/pipeline/cell-camera/side"},
-            {id: "arm_s_top", label: "S3 상단", url: "/api/fleet/pipeline/cell-camera/arm_s_top"},
+            {id: "pinky_dock", label: "도킹 확대 (천장 Cam)", roiTarget: robot_id},
+            {id: "arm_s_top", label: "S3 상단", source: "arm_s_top"},
           ],
           status: anyEstop || rawAction?.blocked_by_cell || rawAction?.action === "wait" ? "warn" : "neutral",
           text: action?.text || "작업 정보 없음",
@@ -196,7 +194,7 @@ export function chargeBayRows(plan) {
           ]};
       }),
   ];
-  return { bays, actions, cells, summary, cards, cameras, armLiveStates, stationCameraLinks, stationZones };
+  return { bays, actions, cells, summary, cards, armLiveStates, stationCameraLinks, stationZones };
 }
 
 export function formatArmLiveJointText(armId, armLiveStates = {}, fallbackText = "folded: true (홈 대기)") {
@@ -231,10 +229,9 @@ export function inspectorTargetsFromRows(rows) {
       robot_id: "rosy_46",
       dualPair: ["arm_s_top", "arm_s_wrist"],
       cameraViews: [
-        {id: "arm_s_wrist", label: "arm_s 손목", url: "/api/fleet/pipeline/cell-camera/arm_s_wrist"},
-        {id: "arm_s_top", label: "S3 상단", url: "/api/fleet/pipeline/cell-camera/arm_s_top"},
-        {id: "side", label: "측면", url: "/api/fleet/pipeline/cell-camera/side"},
-        {id: "pinky", label: "S3 도킹 뷰", url: "/api/fleet/pipeline/cell-camera/pinky"},
+        {id: "arm_s_wrist", label: "arm_s 손목", source: "arm_s_wrist"},
+        {id: "arm_s_top", label: "S3 상단", source: "arm_s_top"},
+        {id: "pinky_dock", label: "도킹 확대 (천장 Cam)", roiTarget: "rosy_46"},
       ],
       buttons: s3.buttons || CELL_BUTTONS.cell_s,
       quickControls: (s3.quickControls || []).map((c) => c.clearArmHold ? {...c, clearArmHold: "arm_s"} : c),
@@ -253,10 +250,10 @@ export function inspectorTargetsFromRows(rows) {
       robot_id: "rosy_46",
       dualPair: ["top", "arm_a_wrist"],
       cameraViews: [
-        {id: "arm_a_wrist", label: "arm_a 손목", url: "/api/fleet/pipeline/cell-camera/arm_a_wrist"},
-        {id: "top", label: "S5 상단", url: "/api/fleet/pipeline/cell-camera/top"},
-        {id: "side", label: "측면", url: "/api/fleet/pipeline/cell-camera/side"},
-        {id: "arm_b_wrist", label: "arm_b 손목", url: "/api/fleet/pipeline/cell-camera/arm_b_wrist"},
+        {id: "arm_a_wrist", label: "arm_a 손목", source: "arm_a_wrist"},
+        {id: "top", label: "S5 상단", source: "top"},
+        {id: "side", label: "측면 (A/B)", source: "side"},
+        {id: "arm_b_wrist", label: "arm_b 손목", source: "arm_b_wrist"},
       ],
       buttons: s5.buttons || CELL_BUTTONS.cell_ab,
       quickControls: (s5.quickControls || []).map((c) => c.clearArmHold ? {...c, clearArmHold: "arm_a"} : c),
@@ -275,10 +272,10 @@ export function inspectorTargetsFromRows(rows) {
       robot_id: "rosy_46",
       dualPair: ["top", "arm_b_wrist"],
       cameraViews: [
-        {id: "arm_b_wrist", label: "arm_b 손목", url: "/api/fleet/pipeline/cell-camera/arm_b_wrist"},
-        {id: "top", label: "S5 상단", url: "/api/fleet/pipeline/cell-camera/top"},
-        {id: "side", label: "측면", url: "/api/fleet/pipeline/cell-camera/side"},
-        {id: "arm_a_wrist", label: "arm_a 손목", url: "/api/fleet/pipeline/cell-camera/arm_a_wrist"},
+        {id: "arm_b_wrist", label: "arm_b 손목", source: "arm_b_wrist"},
+        {id: "top", label: "S5 상단", source: "top"},
+        {id: "side", label: "측면 (A/B)", source: "side"},
+        {id: "arm_a_wrist", label: "arm_a 손목", source: "arm_a_wrist"},
       ],
       buttons: s5.buttons || CELL_BUTTONS.cell_ab,
       quickControls: (s5.quickControls || []).map((c) => c.clearArmHold ? {...c, clearArmHold: "arm_b"} : c),
@@ -288,7 +285,7 @@ export function inspectorTargetsFromRows(rows) {
     ...pinkyCards.map((p) => ({
       ...p,
       shortTab: `🤖 ${p.robot_id}`,
-      dualPair: ["pinky", "arm_s_top"],
+      dualPair: ["pinky_dock", "arm_s_top"],
     })),
   ];
 }

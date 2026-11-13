@@ -19,7 +19,7 @@ import {createCellViews} from './cell-real2sim-views.js';
 
 export * from './cell-real2sim-specs.js';
 
-export function createReal2SimPipeline({request, $, isOperator = () => false}) {
+export function createReal2SimPipeline({request, $, isOperator = () => false, cellFrames = null}) {
   const status = $('real2sim-status');
   let generation = 0;
   const state = {
@@ -30,16 +30,14 @@ export function createReal2SimPipeline({request, $, isOperator = () => false}) {
   };
   let lastCellTasksBody = null;
   let liveStreamOn = true;
-  let pausedStamp = Date.now();
-  let liveStreamTimer = null;
 
   const ctx = {
     request,
     $,
     state,
+    cellFrames,
     bump: () => ++generation,
     gen: () => generation,
-    activeCameraStamp: () => activeCameraStamp(),
     selectInspectorTarget: (...args) => selectInspectorTarget(...args),
     refreshCellTasks: (...args) => refreshCellTasks(...args),
   };
@@ -51,51 +49,13 @@ export function createReal2SimPipeline({request, $, isOperator = () => false}) {
   } = actions;
   const {renderRightInspector, renderVisualCards, renderCameraMatrix} = createCellViews(ctx);
 
-  function activeCameraStamp() {
-    if (liveStreamOn) {
-      pausedStamp = Date.now();
-    }
-    return pausedStamp;
-  }
-
-  function refreshLiveCameraImages() {
-    const stamp = activeCameraStamp();
-    const wrap = $('cell-visual-cards');
-    if (wrap && typeof wrap.querySelectorAll === 'function') {
-      for (const img of wrap.querySelectorAll('img.cell-visual-thumb')) {
-        const base = img.dataset.baseUrl || img.src.split('?')[0];
-        img.src = `${base}?t=${stamp}`;
-      }
-    }
-    const wall = $('cell-camera-matrix');
-    if (wall && typeof wall.querySelectorAll === 'function') {
-      for (const img of wall.querySelectorAll('img')) {
-        const base = img.dataset.baseUrl || img.src.split('?')[0];
-        img.src = `${base}?t=${stamp}`;
-      }
-    }
-    const inspector = $('omx-right-inspector');
-    if (inspector && typeof inspector.querySelectorAll === 'function') {
-      for (const img of inspector.querySelectorAll('img.omx-inspector-cam')) {
-        const base = img.dataset.baseUrl || img.src.split('?')[0];
-        img.src = `${base}?t=${stamp}`;
-      }
-    }
-  }
-
   function toggleLiveStream() {
     liveStreamOn = !liveStreamOn;
     const btn = $('cell-live-stream-toggle');
     if (btn) {
       btn.textContent = liveStreamOn ? '실시간 카메라 자동갱신 (ON · 2초)' : '실시간 카메라 자동갱신 (OFF · 일시정지)';
     }
-    if (liveStreamOn) refreshLiveCameraImages();
-  }
-
-  if (typeof window !== 'undefined' && typeof window.setInterval === 'function') {
-    liveStreamTimer = window.setInterval(() => {
-      if (liveStreamOn) refreshLiveCameraImages();
-    }, 2000);
+    cellFrames?.setRunning(liveStreamOn);
   }
 
   function renderSelect(selectEl, items, currentValue, labelFn) {
@@ -288,7 +248,7 @@ export function createReal2SimPipeline({request, $, isOperator = () => false}) {
   function renderCellTasks(body) {
     lastCellTasksBody = body;
     renderVisualCards(body);
-    renderCameraMatrix(body);
+    renderCameraMatrix();
     renderRightInspector(body);
     const pairs = cellTaskSummaryPairs(body);
     const figs = $('cell-tasks-figures');

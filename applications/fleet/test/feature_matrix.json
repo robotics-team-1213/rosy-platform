@@ -6783,7 +6783,9 @@
         "applications/fleet/web/shared/vision-view.js",
         "applications/fleet/web/sitemap/site-map.js",
         "applications/fleet/web/sitemap/site-map-sources.js",
-        "applications/fleet/web/cell/cell-observation.js"
+        "applications/fleet/web/cell/cell-observation.js",
+        "applications/fleet/web/shared/cell-frames.js",
+        "applications/fleet/web/roster-cards.js"
       ],
       "availability": "configured capability and authorized role; see backend contract",
       "calls": [
@@ -6875,6 +6877,30 @@
           "resolution": "literal-or-template",
           "request_ids": [
             "GET:/api/fleet/workcell-observations"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/shared/cell-frames.js",
+          "expression": "/api/fleet/vision/lease",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/vision/lease"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/shared/cell-frames.js",
+          "expression": "/api/fleet/vision/sources",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "GET:/api/fleet/vision/sources"
+          ]
+        },
+        {
+          "consumer": "applications/fleet/web/roster-cards.js",
+          "expression": "/api/fleet/vision/lease",
+          "resolution": "literal-or-template",
+          "request_ids": [
+            "POST:/api/fleet/vision/lease"
           ]
         }
       ],

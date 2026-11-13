@@ -1,14 +1,12 @@
 from __future__ import annotations
 
 import time
-from pathlib import Path
 from fastapi import HTTPException, Request
-from fastapi.responses import Response
 from fleet.charge_bays import ChargeBays, bays_from_map
 from fleet.pipeline import evaluate_fleet_pipeline, resolve_omx_cells, evaluate_omx_cell_station
 from fleet.site_rules import SiteRules
 
-from fleet.server.sitemap.pipeline_routes import _enrich_task_health, _storage_dir
+from fleet.server.sitemap.pipeline_routes import _enrich_task_health
 
 
 def install_cameras_routes(app, ctx) -> None:
@@ -18,52 +16,8 @@ def install_cameras_routes(app, ctx) -> None:
     _is_human_detected = ctx._is_human_detected
     rules = ctx.rules
     active_map = ctx.active_map
-    CAMERA_SPECS = [
-        {"id": "arm_s_top", "label": "S3 상단 카메라 (arm_s_top)", "cell_id": "cell_s", "topic": "/arm_s_top_camera/image_raw", "fallback": "cell_s"},
-        {"id": "arm_s_wrist", "label": "arm_s 손목 카메라 (arm_s_wrist)", "cell_id": "cell_s", "topic": "/arm_s_wrist_camera/image_raw", "fallback": "cell_s"},
-        {"id": "top", "label": "S5 상단 카메라 (top)", "cell_id": "cell_ab", "topic": "/top_camera/image_raw", "fallback": "cell_ab"},
-        {"id": "side", "label": "셀 측면 카메라 (side · 도킹/벨트)", "cell_id": "cell_ab", "topic": "/side_camera/image_raw", "fallback": "cell_ab"},
-        {"id": "arm_a_wrist", "label": "arm_a 손목 카메라 (arm_a_wrist)", "cell_id": "cell_ab", "topic": "/arm_a_wrist_camera/image_raw", "fallback": "cell_ab"},
-        {"id": "arm_b_wrist", "label": "arm_b 손목 카메라 (arm_b_wrist)", "cell_id": "cell_ab", "topic": "/arm_b_wrist_camera/image_raw", "fallback": "cell_ab"},
-        {"id": "pinky", "label": "Pinky S3 도킹 뷰 (pinky)", "cell_id": "pinky", "topic": "/side_camera/image_raw", "fallback": "side"},
-    ]
-
-    def _camera_catalog() -> list[dict]:
-        now = time.time()
-        rows = []
-        for spec in CAMERA_SPECS:
-            cid = spec["id"]
-            fb = spec.get("fallback")
-            snap_file = None
-            for cand in ([cid, fb] if fb else [cid]):
-                for base in (_storage_dir(), Path("/tmp")):
-                    p = base / f"rosy-cell-cam-{cand}.jpg"
-                    if p.is_file():
-                        snap_file = p
-                        break
-                if snap_file is not None:
-                    break
-            mtime = round(snap_file.stat().st_mtime, 3) if snap_file else None
-            size_b = snap_file.stat().st_size if snap_file else 0
-            q_info = (app.state.cell_camera_quality or {}).get(cid) or (app.state.cell_camera_quality or {}).get(fb or "") or {}
-            q_meta = q_info.get("quality") or {}
-            rows.append({
-                "id": cid,
-                "label": spec["label"],
-                "cell_id": spec["cell_id"],
-                "topic": spec["topic"],
-                "url": f"/api/fleet/pipeline/cell-camera/{cid}",
-                "bytes": size_b,
-                "updated_at": mtime,
-                "fresh": bool(q_info.get("fresh")) if "fresh" in q_info else bool(mtime and (now - mtime) < 30.0),
-                "sequence": q_info.get("sequence"),
-                "receipt_age_s": q_info.get("receipt_age_s"),
-                "condition": q_meta.get("condition") or ("NORMAL" if size_b > 0 else "UNKNOWN"),
-                "mean_intensity": round(float(q_meta["mean_intensity"]), 1) if q_meta.get("mean_intensity") is not None else None,
-                "spatial_contrast": round(float(q_meta["spatial_contrast"]), 1) if q_meta.get("spatial_contrast") is not None else None,
-                "usable": bool(q_meta.get("usable", size_b > 0)),
-            })
-        return rows
+    # D-136: 이 모듈은 카메라 프레임을 서빙하지 않는다. 셀 카메라 미리보기는
+    # POST /api/fleet/vision/lease -> Vision frame_path로만 얻는다(test_no_video_relay).
 
     @app.post("/api/fleet/pipeline/cell-quality", dependencies=read_guard)
     async def ingest_cell_quality(request: Request):
@@ -137,66 +91,6 @@ def install_cameras_routes(app, ctx) -> None:
             app.state.arm_holds[a] = {"arm": a, "held": False, "reason": None, "incident_ids": [], "last_cleared_note": note}
             app.state.pending_clear_arms[a] = note
         return {"ok": True, "cleared_arms": arms, "note": note, "arm_holds": app.state.arm_holds}
-
-    @app.get("/api/fleet/pipeline/cameras", dependencies=read_guard)
-    async def list_pipeline_cameras():
-        cams = _camera_catalog()
-        return {"ok": True, "cameras": cams, "count": len(cams)}
-
-    @app.get("/api/fleet/pipeline/cell-camera/{view_id}")
-    async def cell_camera_preview(view_id: str):
-        safe_id = "".join(c for c in view_id if c.isalnum() or c in ("_", "-"))[:32] or "cell_s"
-        alias_map = {
-            "cell_s": ["cell_s", "arm_s_top", "top"],
-            "arm_s_top": ["arm_s_top", "cell_s", "top"],
-            "arm_s_wrist": ["arm_s_wrist", "cell_s"],
-            "cell_ab": ["cell_ab", "top", "side"],
-            "top": ["top", "cell_ab", "arm_s_top"],
-            "side": ["side", "pinky", "cell_ab"],
-            "arm_a_wrist": ["arm_a_wrist", "cell_ab"],
-            "arm_b_wrist": ["arm_b_wrist", "arm_a_wrist", "cell_ab"],
-            "pinky": ["pinky", "side", "arm_s_top", "cell_s"],
-        }
-        for cand in alias_map.get(safe_id, [safe_id, "cell_s"]):
-            for base in (_storage_dir(), Path("/tmp")):
-                snap_file = base / f"rosy-cell-cam-{cand}.jpg"
-                if snap_file.is_file():
-                    return Response(content=snap_file.read_bytes(), media_type="image/jpeg", headers={"Cache-Control": "no-store"})
-        tasks = [t for t in app.state.omx_cell_tasks.values() if view_id.startswith(t["cell_id"]) or view_id == "pinky"]
-        last = tasks[-1] if tasks else {}
-        stop_ev = ((last.get("hardware_telemetry") or {}).get("stop_event") or {})
-        state_vals = stop_ev.get("state") or ([0.0, -58.0, 50.0, 50.0, -5.0, 58.1] if "cell_s" in view_id else [0.8, -62.5, 53.3, 51.7, 45.0, 50.0])
-        joints_txt = " ".join(f"J{i+1}:{float(v):.1f}" for i, v in enumerate(state_vals[:6]))
-        cstate = app.state.omx_cell_states.get("cell_s" if "cell_s" in view_id else "cell_ab") or {}
-        phase = cstate.get("phase") or last.get("status") or "IDLE"
-        svg = (
-            f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180" width="320" height="180">'
-            f'<rect width="320" height="180" rx="8" fill="#0f172a"/>'
-            f'<rect x="12" y="34" width="90" height="68" rx="4" fill="#1e293b" stroke="#38bdf8" stroke-width="1.5"/>'
-            f'<text x="18" y="50" fill="#38bdf8" font-family="monospace" font-size="10">PINKY / S3</text>'
-            f'<rect x="114" y="34" width="92" height="68" rx="4" fill="#1e293b" stroke="#22c55e" stroke-width="1.5"/>'
-            f'<text x="120" y="50" fill="#22c55e" font-family="monospace" font-size="10">BELT ROI</text>'
-            f'<rect x="218" y="34" width="90" height="68" rx="4" fill="#1e293b" stroke="#f59e0b" stroke-width="1.5"/>'
-            f'<text x="224" y="50" fill="#f59e0b" font-family="monospace" font-size="10">PALLET / FAR</text>'
-            f'<circle cx="160" cy="72" r="10" fill="#f97316" opacity="0.85"/>'
-            f'<text x="12" y="20" fill="#f8fafc" font-family="monospace" font-weight="bold" font-size="12">CAM · {view_id.upper()} [{phase}]</text>'
-            f'<text x="12" y="126" fill="#cbd5e1" font-family="monospace" font-size="10">{joints_txt}</text>'
-            f'<text x="12" y="146" fill="#94a3b8" font-family="monospace" font-size="10">task: {last.get("task_id", "ready")} · folded: {stop_ev.get("folded", True)}</text>'
-            f'<text x="12" y="166" fill="#64748b" font-family="monospace" font-size="9">LIVE TELEMETRY HUD · ROSY WORKCELL</text>'
-            f'</svg>'
-        )
-        return Response(content=svg, media_type="image/svg+xml", headers={"Cache-Control": "no-store"})
-
-    @app.post("/api/fleet/pipeline/cell-camera/{view_id}", dependencies=read_guard)
-    async def upload_cell_camera_preview(view_id: str, request: Request):
-        safe_id = "".join(c for c in view_id if c.isalnum() or c in ("_", "-"))[:32] or "cell_s"
-        raw = await request.body()
-        if not raw:
-            raise HTTPException(400, detail={"code": "EMPTY_IMAGE"})
-        target = _storage_dir() / f"rosy-cell-cam-{safe_id}.jpg"
-        target.write_bytes(raw)
-        Path(f"/tmp/rosy-cell-cam-{safe_id}.jpg").write_bytes(raw)
-        return {"ok": True, "view_id": safe_id, "bytes": len(raw), "persisted": str(target)}
 
     @app.post("/api/fleet/pipeline/cell-tasks/claim", dependencies=read_guard)
     async def claim_cell_task(request: Request):
@@ -349,4 +243,4 @@ def install_cameras_routes(app, ctx) -> None:
                                          cell_states={**getattr(app.state, "omx_cell_states", {}),
                                                       **(body.get("cell_states") or {})})
         return {**result, "dispatch": False}
-    ctx._camera_catalog = _camera_catalog
+

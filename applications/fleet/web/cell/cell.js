@@ -12,6 +12,7 @@ import '/console/assets/file-picker.js';
 import {bindPrintSheets} from '/console/assets/cell-print-sheets.js';
 import {createObjectCatalog} from '/console/assets/cell-object-catalog.js';
 import {createReal2SimPipeline} from '/console/assets/cell-real2sim.js';
+import {createCellFrameFeed} from '/console/assets/cell-frames.js';
 import {createCellLine, createPlanFigures} from '/console/assets/cell-line.js';
 
 const $ = id => document.getElementById(id);
@@ -46,7 +47,8 @@ $('console-token').value = stored;
 const request = createFleetClient({credential: () => $('console-token').value, origin: location.origin});
 const observations = createCellObservation({request, root: $('workcell-observations'), credential: () => $('console-token').value});
 const catalog = createObjectCatalog({request, $});
-const real2sim = createReal2SimPipeline({request, $, isOperator: () => role === 'operator' && !busy});
+const real2sim = createReal2SimPipeline({request, $, isOperator: () => role === 'operator' && !busy,
+  cellFrames: createCellFrameFeed({call: request})});
 createCellLine({root: $('cell-line'), $});
 createPlanFigures({root: $('plan-figures'), $});
 bindPrintSheets({request, $});

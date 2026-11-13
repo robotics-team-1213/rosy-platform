@@ -178,10 +178,10 @@ def test_cell_tasks_assign_claim_and_complete_lifecycle():
     assert pinky_resp["pinky_task"]["target_place"] == "S3"
     assert pinky_resp["spawned_cell_task"]["cell_id"] == "cell_s"
 
-    cam_resp = client.get("/api/fleet/pipeline/cell-camera/cell_s")
-    assert cam_resp.status_code == 200 and (
-        "svg" in cam_resp.headers["content-type"] or "jpeg" in cam_resp.headers["content-type"]
-    )
+    # D-136: Fleet은 영상을 중계하지 않는다 — 셀 카메라 프리뷰 라우트는 없다(Video relay 금지).
+    assert client.get("/api/fleet/pipeline/cell-camera/cell_s").status_code == 404
+    assert client.get("/api/fleet/pipeline/cameras").status_code == 404
+    assert client.post("/api/fleet/pipeline/cell-camera/cell_s", content=b"\xff\xd8").status_code == 404
 
     retried = client.post(f"/api/fleet/pipeline/cell-tasks/{chained['tasks'][0]['task_id']}/retry").json()
     assert retried["ok"] is True and retried["task"]["status"] == "QUEUED"
@@ -282,12 +282,6 @@ def test_cell_tasks_assign_claim_and_complete_lifecycle():
     assert vis_clear["safety_event"]["active_estop"] is False
     assert set(vis_clear["safety_event"]["resumed_tasks"]) == set(vis_intrude["safety_event"]["paused_tasks"])
 
-    cams = client.get("/api/fleet/pipeline/cameras").json()
-    assert cams["ok"] is True and cams["count"] >= 7
-    assert any(c["id"] == "arm_s_top" for c in cams["cameras"])
-    assert any(c["id"] == "arm_a_wrist" for c in cams["cameras"])
-    assert any(c["id"] == "arm_b_wrist" for c in cams["cameras"])
-
     q_res = client.post(
         "/api/fleet/pipeline/cell-quality",
         json={
@@ -322,10 +316,7 @@ def test_cell_tasks_assign_claim_and_complete_lifecycle():
     assert "arm_live_states" in tasks_after_q
     assert "station_camera_links" in tasks_after_q
     assert tasks_after_q["station_camera_links"]["S3"]["target_id"] == "arm_s"
-
-    cams_after = client.get("/api/fleet/pipeline/cameras").json()
-    arm_s_cam = next(c for c in cams_after["cameras"] if c["id"] == "arm_s_top")
-    assert arm_s_cam["sequence"] == 148001 and arm_s_cam["mean_intensity"] == 112.4
+    assert "cameras" not in tasks_after_q  # 카메라 목록 카탈로그도 중계 금지와 함께 갔다
 
     clr = client.post(
         "/api/fleet/pipeline/arm-holds/clear",

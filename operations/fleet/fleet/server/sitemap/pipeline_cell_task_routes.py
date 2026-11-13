@@ -202,7 +202,6 @@ def install_cell_tasks_routes(app, ctx) -> None:
                 "staging_bays": zones_data["staging_bays"],
                 "export_stations": zones_data["export_stations"],
             },
-            "cameras": ctx._camera_catalog(),
             "arm_holds": dict(app.state.arm_holds),
             "arm_live_states": _arm_live_catalog(),
             "station_camera_links": STATION_CAMERA_LINKS,

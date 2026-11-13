@@ -15,6 +15,7 @@ import { placeRosterCards as place, mustExpand, selectRobot, OMX_CELL_DEFS, crea
   buildQuickControlPanel, buildOmxSummaries } from "./roster-cards.js";
 export {mustExpand, selectRobot} from "./roster-cards.js";
 import {createRobotProfiles} from "/console/assets/robot-profile-view.js";
+import {createCellFrameFeed} from "/console/assets/cell-frames.js";
 import { cancelScope, cardTripLine, createCardTrip, openTrip } from "./card-trip.js";
 import { createRosterSummary, nodeWithText, tag, blockWith, navTag, queuedReason, offlineWhy,
   IDENTIFY_REASON, LAMP_REASON } from "./roster-presentation.js";
@@ -26,6 +27,8 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
   const profiles = createRobotProfiles({call, scope, render});
   const summary = createRosterSummary({scope, view, openCard, render, attentionItems, motorHealth});
   const { roiObjectUrls, refreshRoiPreview } = createRoiPoller({ scope, view, call, render });
+  // 셀 카메라 뷰도 천장 ROI와 같은 Vision 임대로 본다(D-136). Fleet은 바이트를 중계하지 않는다.
+  const cellFrames = createCellFrameFeed({ call, scope });
   function openCard(robotId) {
     if (typeof window !== "undefined" && robotId && typeof window.dispatchEvent === "function") {
       window.dispatchEvent(new CustomEvent("rosy:inspect-target", { detail: { targetId: robotId } }));
@@ -249,7 +252,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
     if (!view.stateUnavailable) {
       node.appendChild(buildQuickControlPanel({
         robot, state, pose, power, guideRow, displayName, view, scope, el, render, isOperator,
-        roiObjectUrls, refreshRoiPreview, nodeWithText, tag,
+        roiObjectUrls, refreshRoiPreview, nodeWithText, tag, cellFrames,
       }));
     }
 
