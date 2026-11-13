@@ -146,6 +146,11 @@ values: pass `-AccountTrustFile` to `prepare-rosy-sd.ps1` with
 reimage keeps. A robot already in service needs the same mapping as `auth.account_trust` in
 its CORE overlay and a CORE restart, or an administrator's delivery; a card from an image
 older than this field refuses a bundle that carries it.
+Pinky clocks (D-859): pass `-TimeSource rosy-fleet-r.local` so first boot writes the chrony client
+config for the R host's site NTP server (same single-source rule as `rosy_time_sync.py --role client`;
+a reimage keeps it). A bad name is refused before the card is erased; a name chrony cannot resolve
+only leaves the robot unsynchronized, so check `chronyc sources` after the first boot. Robots already
+in service use `rosy_time_sync.py install --maintenance --role client --source <name>`.
 The issuer hostname aliases the proxy on both its edge and backend networks.
 Fleet reaches Account over the shared backend with the original issuer hostname
 and TLS verification; it does not need edge-network access or host hairpin routing.

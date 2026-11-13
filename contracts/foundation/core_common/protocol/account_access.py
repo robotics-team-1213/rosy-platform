@@ -21,6 +21,8 @@ RESOURCE_PATTERN = r'^(site|robot|project):[A-Za-z0-9._-]{1,96}$'
 # D-955: a stored grant may name every robot or project; issued tokens stay one concrete resource.
 GRANT_RESOURCE_PATTERN = r'^((site|robot|project):[A-Za-z0-9._-]{1,96}|(robot|project):\*)$'
 ACCESS_TTL_S = 300
+# Verifier clocks may trail the issuer's (model PC lagged ~4 s on 2026-11-13); exp stays strict.
+CLOCK_SKEW_S = 60
 
 
 def same_origin(request) -> bool:
@@ -36,6 +38,11 @@ def same_origin(request) -> bool:
     except ValueError:
         return False
     return parsed.scheme in {"http", "https"} and parsed.netloc.lower() == host.lower()
+
+
+def refusal_reason(exc: BaseException) -> str:
+    """Loggable cause of a refused Account exchange: class plus message first line, no input values."""
+    return f"{type(exc).__name__}: {(str(exc).splitlines() or [''])[0][:120]}"
 
 
 class AccessRejected(ValueError):
@@ -125,7 +132,7 @@ def verify_access(token: str, public_keys: Mapping[str, bytes], *, issuer: str,
         result = AccountAccess.model_validate(decoded.claims)
         stamp = time.time() if now is None else now
         if (result.iss != issuer or result.aud != audience
-                or not result.iat <= stamp < result.exp):
+                or not result.iat - CLOCK_SKEW_S <= stamp < result.exp):
             raise AccessRejected('access expired or outside scope')
         return result
     except (JoseError, ValueError, TypeError, KeyError):

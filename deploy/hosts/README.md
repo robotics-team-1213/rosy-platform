@@ -2,7 +2,10 @@
 
 ## 공통 시간 동기화 (D-859)
 
-관제 PC가 현장 NTP 서버이고 모델·AI·OMX·카메라 호스트와 Pinky는 클라이언트다.
+현장 NTP 서버는 R 호스트(`rosy-fleet-r`)이고 모델·AI·OMX·카메라 호스트와 Pinky는 클라이언트다.
+클라이언트의 시간원은 `rosy-fleet-r.local` 하나다(2026-11-13 적용). 호스트 이름을 바꾸거나 옮기면
+모든 클라이언트의 chrony 시간원을 새 이름으로 다시 설치한다. 이름이 사라진 시간원은 오류 없이
+시간원 0개가 되어 시계가 어긋난다([교훈](../../docs/solutions/runtime-errors/clock-skew-rejected-account-tokens-after-time-source-name-vanished-2026-11-13.md)).
 기준과 수용 조건은 [D-859](../../docs/adr/D-859-shared-utc-time-synchronization.md),
 전체 기기의 동일한 단일 endpoint 결정은 [D-861](../../docs/adr/D-861-one-identical-ntp-endpoint-for-all-devices.md)다.
 실제 서버 이름·주소·CIDR은 호스트에만 둔다. 아래 자리표시자는 운영 값으로 바꾼다.
@@ -39,6 +42,9 @@
    python3 deploy/hosts/common/rosy_time_sync.py check
    chronyc -N sources -v
    ```
+
+   SD를 새로 쓰는 Pinky는 `prepare-rosy-sd.ps1 -TimeSource <site-ntp-name>`으로 첫 부팅에 같은 설정을
+   받는다(이미지에 이름을 굽지 않는다). 확인은 `chronyc sources`다.
 
    새 Pinky native runtime에는 `rosy_time_sync.py`가 함께 배포된다. 저장소가 없는 장치는
    `/opt/rosy/native-runtime/rosy_time_sync.py` 또는 승인된 release의 native 사본을 사용한다.

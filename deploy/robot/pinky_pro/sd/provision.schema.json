@@ -58,6 +58,7 @@
         "trust_profile": {"type": "string", "minLength": 1, "maxLength": 128},
         "pairing_required": {"type": "boolean"},
         "pairing_credential": {"type": "string", "minLength": 16, "maxLength": 512},
+        "time_source": {"type": "string", "minLength": 1, "maxLength": 253},
         "account_trust": {
           "type": "object", "additionalProperties": false,
           "required": ["issuer", "public_key_sha256"],

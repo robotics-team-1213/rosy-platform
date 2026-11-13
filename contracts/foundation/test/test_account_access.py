@@ -58,7 +58,7 @@ def test_grants_reject_wildcards_and_wrong_resource_kind(resource, capability):
 
 
 @pytest.mark.parametrize('change', [{'aud': 'robot:r2'}, {'iss': 'https://other.example.test'},
-                                   {'exp': 1400}, {'exp': 1001}, {'iat': 1002}, {'rev': True},
+                                   {'exp': 1400}, {'exp': 1001}, {'iat': 1100}, {'rev': True},
                                    {'sub': ''}, {'sid': ''}, {'exp': float('nan')}])
 def test_untrusted_claims_are_refused(change):
     private, public = keys()
@@ -126,3 +126,18 @@ def test_same_origin_compares_origin_authority_with_host():
     assert not same_origin(request(origin='https://[bad', host='site.example'))
     assert not same_origin(request(host='site.example'))
     assert not same_origin(request(origin='https://site.example'))
+
+
+@pytest.mark.parametrize('ahead, accepted', [(30, True), (120, False)])
+def test_issue_time_ahead_of_the_verifier_clock_is_bounded_by_the_skew_leeway(ahead, accepted):
+    private, public = keys()
+    token = sign_access({**claims(), 'iat': 1000 + ahead, 'exp': 1000 + ahead + 200}, private, key_id='key-1')
+
+    def verify():
+        return verify_access(token, {'key-1': public}, issuer='https://account.example.test',
+                             audience='robot:r1', now=1000)
+    if accepted:
+        assert verify().iat == 1030
+    else:
+        with pytest.raises(AccessRejected):
+            verify()
