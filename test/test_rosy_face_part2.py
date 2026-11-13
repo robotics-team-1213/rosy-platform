@@ -237,24 +237,44 @@ def test_a_quiet_identity_pulse_blinks_without_the_call_chirp(tmp_path):
     assert display.handle_test() == "done" and heard == ["call"]
 
 
-def test_lamp_environment_switch_disables_identify_too(tmp_path):
+def test_lamp_environment_switch_keeps_bounded_identify(tmp_path, monkeypatch):
     module = _display()
     _lamp_tree(tmp_path)
     _status(tmp_path, "CORE_READY")
     spawn = FakeSpawn(code=0)
     display, lamp, _clock, _rendered, _lines = _state_loop(module, tmp_path, spawn=spawn)
-    lamp.enabled = False
+    monkeypatch.setenv("ROSY_LAMP_ENABLED", "false")
+    lamp.enabled = module.lamp_enabled(os.environ, module.Log(lambda _line: None))
     display.step()
     assert spawn.patterns == []
     display._core = lambda: {"estop": False, "robot_mode": "IDLE", "nav_state": "IDLE", "caution": []}
 
     _hand_over(tmp_path, "identify_blue")
-    assert display.handle_test() == "unavailable"
-    assert spawn.patterns == []
+    assert display.handle_test() == "done"
+    assert spawn.patterns == ["identify_blue"]
     assert lamp.enabled is False
     display.step()
-    assert spawn.patterns == []
+    assert spawn.patterns == ["identify_blue"]
     assert lamp.pattern == "ready"
+
+
+@pytest.mark.parametrize("stage,extra,expected", [
+    ("CORE_READY", {"devices": [{"id": "adc.battery", "state": "no_response", "product": True}]}, "caution"),
+    ("CORE_READY", {"robot_mode": "EMERGENCY", "estop": True}, "emergency"),
+    ("FAILED", {}, "failed"),
+])
+def test_status_patterns_off_keeps_safety_patterns(tmp_path, stage, extra, expected):
+    module = _display()
+    _lamp_tree(tmp_path)
+    _status(tmp_path, stage, **extra)
+    setting = tmp_path / "var/lib/rosy/lamp-control/status-patterns.json"
+    setting.parent.mkdir(parents=True)
+    setting.write_text('{"status_patterns":"off"}', encoding="utf-8")
+    spawn = FakeSpawn()
+    display, lamp, _clock, _rendered, _lines = _state_loop(module, tmp_path, spawn=spawn)
+
+    display.step()
+    assert lamp.pattern == expected and spawn.patterns == [expected]
 
 
 def test_status_pattern_setting_is_polled_and_preserves_identify_and_boot(tmp_path):

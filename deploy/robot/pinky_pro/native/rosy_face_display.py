@@ -482,7 +482,7 @@ class FaceDisplay:
         pres = self._present(view, state, core, screen)
         pattern = pres.lamp
         if self._lamp is not None:
-            if pattern in IDENTIFY_OVER | {"ready_held"} and not status_patterns_enabled(self.root):
+            if pattern in IDENTIFY_OVER and not status_patterns_enabled(self.root):
                 pattern = None
             # D-380: a mode change switches the pattern without a sound; show() is
             # idempotent, so an unchanged pattern costs nothing.

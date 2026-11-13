@@ -176,7 +176,7 @@ class Lamp:
         self.pattern: str | None = None
 
     def available(self, *, for_identify: bool = False) -> bool:
-        if not self.enabled:
+        if not self.enabled and not for_identify:
             return False
         if not (self._root / LAMP_NODE).exists():
             self._log.once("lamp-node", "no /dev/ws281x_pwm (rp1_ws281x_pwm); lamp left out")

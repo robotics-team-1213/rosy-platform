@@ -11,7 +11,7 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 
 ### v1.394 CORE 상태 표시등 패턴 제어
 
-`GET /api/v1/host/lamp/status-patterns` (Viewer)는 `{status_patterns:"on"|"off", available:bool}`을 돌려준다. `PUT` (Operator)는 추가 키를 거부하는 `{status_patterns:"on"|"off"}`를 받아 같은 본문을 돌려준다. `off`는 주행·수동 모드/조종·동작 예약·Fleet trip lease 중 409 `LAMP_BUSY`; `on`은 언제나 허용한다. 저장 불가는 503 `LAMP_UNAVAILABLE`이다. CORE는 `/var/lib/rosy/lamp-control/status-patterns.json`을 원자적으로 기록하며 rosy-face가 실행 중 다시 읽는다. `off`는 평상시 패턴만 숨긴다. 식별 점멸, 부팅·비상정지·고장·주의 표시는 유지한다. `ROSY_LAMP_ENABLED=false`는 모든 램프 동작을 끈다. 성공 시 `lamp.status_patterns_changed` `{status_patterns, by}`를 낸다. 로봇 payload에 CORE와 rosy-face가 함께 들어가야 적용된다.
+`GET /api/v1/host/lamp/status-patterns` (Viewer)는 `{status_patterns:"on"|"off", available:bool}`을 돌려준다. `PUT` (Operator)는 추가 키를 거부하는 `{status_patterns:"on"|"off"}`를 받아 같은 본문을 돌려준다. `off`는 주행·수동 모드/조종·동작 예약·Fleet trip lease 중 409 `LAMP_BUSY`; `on`은 언제나 허용한다. 저장 불가는 503 `LAMP_UNAVAILABLE`이다. CORE는 `/var/lib/rosy/lamp-control/status-patterns.json`을 원자적으로 기록하며 rosy-face가 실행 중 다시 읽는다. `off`는 평상시 패턴만 숨긴다. 식별 점멸, 부팅·비상정지·고장·주의 표시는 유지한다. `ROSY_LAMP_ENABLED=false`는 평상시 패턴을 끄지만 식별 요청의 제한된 점멸은 허용한다. 성공 시 `lamp.status_patterns_changed` `{status_patterns, by}`를 낸다. 로봇 payload에 CORE와 rosy-face가 함께 들어가야 적용된다.
 
 ### v1.389 Fleet database maintenance status and actions
 
