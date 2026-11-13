@@ -220,6 +220,7 @@ def run_pipelined_parallel_unit_transfer(
     env_obs: dict[str, Any] | None = None,
     debate_panel_spec: Any = None,
     include_debate: bool = False,
+    precomputed_r2s_bundle: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Zero-Bottleneck Pipelined Execution overlapping `arm_s` physical transfer with R2S speculative RL,
     optional multi-agent debate, and `arm_ab` IK pre-staging."""
@@ -238,6 +239,9 @@ def run_pipelined_parallel_unit_transfer(
         )
 
     def _thread_r2s_speculative_rl_and_prestage() -> dict[str, Any]:
+        prestage = pipeline.fleet_pipe.prestage_cell_ab_handover(tier=tier_idx, arm_id=arm_ab)
+        if precomputed_r2s_bundle is not None:
+            return {**precomputed_r2s_bundle, "prestage": prestage}
         proj = project_live_camera_env_to_r2s(
             pipeline.r2s_context, tier=tier_idx, wrist_img=wrist_img,
             env_obs=env, systematic_bias_m=pipeline.systematic_bias_m,
@@ -246,7 +250,6 @@ def run_pipelined_parallel_unit_transfer(
             proj, work_dir=pipeline.work_dir, clf=pipeline.clf,
             iwr=pipeline.iwr, r2s_gap_state=pipeline.r2s_gap_state,
         )
-        prestage = pipeline.fleet_pipe.prestage_cell_ab_handover(tier=tier_idx, arm_id=arm_ab)
         debate = (
             deliberate_real_sim_r2s_step(
                 proj, rl_sel, panel_spec=debate_panel_spec, real_failed=bool(env.get("real_failed", False))
