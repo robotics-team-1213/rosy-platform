@@ -354,8 +354,8 @@
 
 ## 최근 기록
 
+- 2026-11-14 · uncommitted · CORE 상태 표시등 API 계약
 - 2026-11-13 · uncommitted · docs(solutions): 학습 센터 자리 업그레이드 교훈을 역사 기록으로 표시
 - 2026-11-11 · uncommitted · docs: 게시 검증 체크포인트 — 2026-11-11 착지분 무캐시 FULL 근거 확보
 - 2026-11-11 · uncommitted · docs(solutions): 고정 단일 소스 시험 다운로드가 MAIN-RED로 위장하는 교훈 기록
 - 2026-11-11 · 98e73632b6 · docs(test): RAUC 폴백 계약 수정 검증
-- 2026-11-11 · uncommitted · fix(test): RAUC 폴백이 기존 진단 계약을 지키게 — URL당 3회·진단에 URL 없음·폴백 신규 시험
