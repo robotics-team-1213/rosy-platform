@@ -107,18 +107,37 @@ def test_later_carries_take_the_object_from_where_it_was_redirected(tmp_path):
     assert out["status"] == "done" and done == [("pinky", "belt"), ("pinky", "plate"), ("plate", "pinky")]
 
 
-def test_run_carry_marks_a_destination_full_only_when_every_refusal_is_for_room(tmp_path):
+def test_run_carry_marks_a_destination_full_only_for_room_on_a_single_attempt(tmp_path):
     class Proc:
         def __init__(self, result):
             self.stdout, self.stderr, self.returncode = json.dumps(result), "", 0
 
     sites = {"pinky": {"auto_roi": [0, 0, 10, 10]}}
-    room = {"result": "stopped: no usable object", "attempts": [{"refused": [{"why": "place: no room"}]}]}
-    mixed = {"result": "stopped: no usable object", "attempts": [{"refused": [{"why": "place: x"}, {"why": "planner: y"}]}]}
-    for result, full in ((room, True), (mixed, False), ({"result": "placed", "attempts": [{"refused": []}]}, False)):
+    full = [{"why": "place: does not fit on the surface / something is already there"}]
+    stop = "stopped: no usable object"
+    cases = (
+        ({"result": stop, "attempts": [{"refused": full}]}, True),
+        ({"result": stop, "attempts": [{"refused": full + [{"why": "planner: y"}]}]}, False),
+        ({"result": stop, "attempts": [{"refused": [{"why": "place: no map at the destination"}]}]}, False),
+        ({"result": stop, "attempts": [{"refused": [{"why": "place: nothing under it at the lower tier"}]}]}, False),
+        # a second attempt means the first one acted: never redirect after motion
+        ({"result": stop, "attempts": [{"refused": []}, {"refused": full}]}, False),
+        ({"result": "placed", "attempts": [{"refused": []}]}, False),
+    )
+    for result, expected in cases:
         step = tr.run_carry(tmp_path / "c.json", tmp_path / "k.json", sites, "pinky", "belt", tmp_path,
                             run=lambda *a, r=result, **k: Proc(r))
-        assert step["dest_full"] is full
+        assert step["dest_full"] is expected, result
+
+
+def test_a_swap_never_redirects(tmp_path):
+    carry, done = carry_with_full({"pinky"})
+    path = redirect_config(tmp_path, [])
+    cfg = json.loads(path.read_text())
+    cfg["sites"]["pinky"]["alternates"] = ["plate"]
+    path.write_text(json.dumps(cfg))
+    out = tr.run_task(task(kind="swap", a="pinky", b="belt", buffer="floor"), path, tmp_path / "c.json", tmp_path, carry=carry)
+    assert out["status"] == "stopped" and done == [("pinky", "floor"), ("belt", "pinky")]
 
 
 def test_only_the_next_take_from_the_full_site_follows_the_redirect(tmp_path):

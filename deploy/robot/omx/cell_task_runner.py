@@ -100,11 +100,21 @@ def run_carry(config_path: Path, catalog: Path, sites: dict, src: str, dst: str,
     except ValueError:
         result = {"result": f"no result (exit {proc.returncode}): {proc.stderr[-200:]}"}
     out.write_text(json.dumps(result))
-    refused = ((result.get("attempts") or [{}])[-1]).get("refused") or []
-    # Stopped at the choice with every object refused only for room at the destination: nothing moved.
-    dest_full = str(result.get("result", "")).startswith("stopped") and bool(refused) and all(
-        str(r.get("why", "")).startswith("place:") for r in refused)
+    tries = result.get("attempts") or []
+    refused = tries[0].get("refused") or [] if len(tries) == 1 else []
+    # Stopped at the choice of the first and only attempt (before any motion), every object refused for room.
+    dest_full = str(result.get("result", "")).startswith("stopped") and bool(refused) and all(map(no_room, refused))
     return {"from": src, "to": dst, "result": result.get("result"), "log": str(out), "dest_full": dest_full}
+
+
+ROOM = {"something is already there", "does not fit on the surface"}  # cell_place_fit.why_not / options
+
+
+def no_room(refusal: dict) -> bool:
+    """A place refusal because the destination is occupied (not a missing map or an empty lower tier)."""
+    why = str(refusal.get("why", ""))
+    parts = set(why.removeprefix("place: ").split(" / "))
+    return why.startswith("place: ") and "something is already there" in parts and parts <= ROOM
 
 
 def alternates(sites: dict, src: str, dst: str) -> list:
@@ -127,7 +137,8 @@ def run_task(task: dict, config_path: Path, catalog: Path, log_dir: Path, prefli
         step = carry(config_path, catalog, config["sites"], src, dst, log_dir)
         out["steps"].append(step)
         # No room at the destination and nothing moved: its declared alternates, each observed afresh (D-1019).
-        for alt in alternates(config["sites"], src, dst) if step.get("dest_full") else ():
+        # A swap is about which object ends where, so it never redirects.
+        for alt in alternates(config["sites"], src, dst) if step.get("dest_full") and task["kind"] != "swap" else ():
             step = {**carry(config_path, catalog, config["sites"], src, alt, log_dir), "redirected_from": dst}
             out["steps"].append(step)
             if not step.get("dest_full"):
