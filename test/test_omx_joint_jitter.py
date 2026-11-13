@@ -182,7 +182,7 @@ def test_sway_judge_passes_a_tracked_descent_and_a_lag_that_only_grows():
     assert jj.sway_window(z_rows(0.5, lambda t: (0.4, -0.4))) is None  # under MIN_TICKS
 
 
-def test_pitch_hold_is_off_by_default_capped_slewed_and_fades_when_not_descending():
+def test_pitch_hold_is_off_by_default_capped_slewed_and_dropped_when_not_descending():
     from types import SimpleNamespace
     import chunk_runner_run
 
@@ -196,5 +196,5 @@ def test_pitch_hold_is_off_by_default_capped_slewed_and_fades_when_not_descendin
     steps = [held(True)[3] - target[3] for _ in range(8)]
     assert abs(steps[0] - 0.05) < 1e-9 and max(steps) <= 0.3 + 1e-9 and abs(steps[-1] - 0.3) < 1e-9
     assert all(b - a <= 0.05 + 1e-9 for a, b in zip(steps, steps[1:]))
-    assert held(False)[3] - target[3] < 0.3  # fades once the descent ends
+    assert held(False) is target and runner.pitch_hold == 0.0  # gone at once when not descending (spliced lift)
     assert held(True)[:3] == target[:3] and held(True)[4:] == target[4:]

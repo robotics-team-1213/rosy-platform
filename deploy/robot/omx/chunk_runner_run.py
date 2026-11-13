@@ -311,8 +311,9 @@ class Runner:
             )
             if reason:
                 self.fault, self.queue, self.target = reason, [], present[:5] + [self.target[5]]
-                chunk, self.chunk = self.chunk, None
-                self.report(command=f"run {chunk}" if chunk else "fault", ok=False, error=reason, present=present)
+                chunk, self.chunk, self.pitch_hold, sway, self.sway_peak = self.chunk, None, 0.0, self.sway_peak, {}
+                self.report(command=f"run {chunk}" if chunk else "fault", ok=False, error=reason, present=present,
+                            **({"sway": sway} if sway else {}))
                 return
             self.samples = (self.samples + [(list(self.target), present, self.health["pwm"])])[-4:]
             push = joint_push.pushing(
