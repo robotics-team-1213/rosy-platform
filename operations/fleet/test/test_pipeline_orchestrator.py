@@ -325,10 +325,33 @@ def test_cell_tasks_assign_claim_and_complete_lifecycle():
     assert clr["ok"] is True and clr["arm_holds"]["arm_b"]["held"] is False
 
 
+def test_station_zones_put_saves_yaml_and_get_reflects_it(tmp_path, monkeypatch):
+    # The override file is redirected: the route would otherwise write /tmp or /var/lib/rosy.
+    monkeypatch.setattr("fleet.server.sitemap.pipeline_routes._storage_dir", lambda: tmp_path)
+    site_map = _map()
+    graph = build_graph(site_map)
+    maps = SimpleNamespace(active=lambda: (1, site_map, graph, None),
+                           rules=SimpleNamespace(active_rules=lambda: None))
+    app = FastAPI()
+    app.state.site_maps = maps
+    install_pipeline_routes(app, site_maps=maps)
+    client = TestClient(app)
 
+    yaml_text = "schema: rosy.station-zones.v1
+staging_bays:
+  - id: STG_TEST
+    name: test bay
+"
+    saved = client.put("/api/fleet/pipeline/station-zones", json={"yaml_text": yaml_text})
+    assert saved.status_code == 200 and saved.json()["ok"] is True
+    zones = client.get("/api/fleet/pipeline/station-zones").json()
+    assert [z["id"] for z in zones["staging_bays"]] == ["STG_TEST"]
+    assert (tmp_path / "station_zones.yaml").read_text(encoding="utf-8") == yaml_text
 
-
-
-
-
-
+    empty = client.put("/api/fleet/pipeline/station-zones", json={"yaml_text": "  "})
+    assert empty.status_code == 422 and empty.json()["detail"]["code"] == "EMPTY_YAML"
+    invalid = client.put("/api/fleet/pipeline/station-zones", json={"yaml_text": "- just
+- a list
+"})
+    assert invalid.status_code == 422 and invalid.json()["detail"]["code"] == "INVALID_STATION_ZONES_YAML"
+    assert [z["id"] for z in client.get("/api/fleet/pipeline/station-zones").json()["staging_bays"]] == ["STG_TEST"]
