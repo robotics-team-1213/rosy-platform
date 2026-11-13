@@ -554,5 +554,21 @@
   {
     "commit": "8fee68b17d74a2f055ee024290dcc07f6c9ff86b",
     "reason": "Same panel, 3/3 PASS: final trajectory point comparison equivalent given unique names and exact key/length checks (command_types.py:221-226,262,273). No device acceptance. Record: docs/validation/safety-review-publish-179-2026-11-13/result.md"
+  },
+  {
+    "commit": "3d9a8ad4963a8a902292e0f7c069bc76ad280f80",
+    "reason": "Independent D-430 review 2026-11-13 (Codex round 2 APPROVE after round-1 REJECT fixed in 27d01cb24f; GLM 5.3 APPROVE; author robot-ec not a reviewer): road plan refuses (409) without Fleet LOCALIZED site pose and robot LOCALIZED map pose; no SLAM-pose/constant/identity fallback; frame math verified. No device acceptance. Record: docs/validation/fleet-real-site-pose-safety-review-2026-11-13/result.md"
+  },
+  {
+    "commit": "a56cd55043e02c208fe2e7f128a2f22823096de2",
+    "reason": "Independent D-430 review 2026-11-13 (Codex round 2 APPROVE after round-1 REJECT fixed in 27d01cb24f; GLM 5.3 APPROVE; author robot-ec not a reviewer): road-nav2: named operator, trip_refusal, Idempotency-Key, one dispatch path, mapped errors. No device acceptance. Record: docs/validation/fleet-real-site-pose-safety-review-2026-11-13/result.md"
+  },
+  {
+    "commit": "394ab97c79b8c2fe74d0fc21c6f9888c7ff0505a",
+    "reason": "Independent D-430 review 2026-11-13 (Codex round 2 APPROVE after round-1 REJECT fixed in 27d01cb24f; GLM 5.3 APPROVE; author robot-ec not a reviewer): berth-park: named operator, trip_refusal, one dispatch path, mapped errors. No device acceptance. Record: docs/validation/fleet-real-site-pose-safety-review-2026-11-13/result.md"
+  },
+  {
+    "commit": "27d01cb24f5d4588d528c1b15805f86eae59669d",
+    "reason": "Independent D-430 review 2026-11-13 (Codex round 2 APPROVE after round-1 REJECT fixed in 27d01cb24f; GLM 5.3 APPROVE; author robot-ec not a reviewer): no preset pins/synthesized odom, queued not reported as sent, no raw /goal fallback, berth success only on measured stop face, helpers tagged. No device acceptance. Record: docs/validation/fleet-real-site-pose-safety-review-2026-11-13/result.md"
   }
 ]
