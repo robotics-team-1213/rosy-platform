@@ -124,23 +124,17 @@ def scan_cell_s_extended_zones(
 
 
 def handoff_refusal(pipeline, handoff: dict[str, Any], tier: int = 1) -> str | None:
-    """Why this handoff must not run, or None. Shared by the stage and the worker's real-arm call."""
-    # A missing interlock fact is not a locked AMR: never move on a default.
-    v_cmd = handoff.get("v_cmd_mps")
-    if (
-        handoff.get("wheel_brake_locked") is not True
-        or handoff.get("bed_ready") is not True
-        or not isinstance(v_cmd, (int, float))
-        or not abs(float(v_cmd)) <= 1e-4  # also refuses NaN
-    ):
+    """Why this handoff must not run, or None. Shared by the stage and the worker's real-arm call.
+    A missing or NaN interlock fact is not a locked AMR; an unknown site never falls back to a default."""
+    v = handoff.get("v_cmd_mps")
+    if not (handoff.get("wheel_brake_locked") is True and handoff.get("bed_ready") is True
+            and isinstance(v, (int, float)) and abs(float(v)) <= 1e-4):
         return "AMR_NOT_LOCKED_AT_HANDOFF"
     if str(handoff.get("cell_id") or "cell_s") == "cell_s":
-        sites = (str(handoff.get("src_site") or "pinky"), str(handoff.get("dst_site") or "belt"))
-        if any(s not in pipeline.SITE_COORDS for s in sites):
-            return "UNKNOWN_SITE"
-    elif not 1 <= int(tier) <= 3:
-        return "UNKNOWN_SITE"
-    return None
+        ok = {str(handoff.get("src_site") or "pinky"), str(handoff.get("dst_site") or "belt")} <= set(pipeline.SITE_COORDS)
+    else:
+        ok = 1 <= int(tier) <= 3
+    return None if ok else "UNKNOWN_SITE"
 
 
 def run_contract_handoff_stage(
@@ -157,25 +151,9 @@ def run_contract_handoff_stage(
     robot_id = str(handoff.get("robot_id") or "pinky_1")
 
     refusal = handoff_refusal(pipeline, handoff, tier)
-    if refusal is not None:
-        return {
-            "contract_version": "rosy.fleet-r-cell-contract.v1",
-            "receipt": {
-                "handoff_lease_id": lease_id,
-                "cell_id": cell_id,
-                "station_place": station_place,
-                "robot_id": robot_id,
-                "phase": "ABORTED",
-                "arm_roles_used": ["arm_s"] if cell_id == "cell_s" else ["arm_a", "arm_b"],
-                "amr_motion_inhibited": False,
-                "stage_id": stage_id,
-                "goal_evidence_digest": None,
-                "reason": refusal,
-            },
-            "stage_result": None,
-        }
-
-    if cell_id == "cell_s":
+    arms = ["arm_s"] if cell_id == "cell_s" else ["arm_a", "arm_b"]
+    stage_res: dict[str, Any] | None = None
+    if refusal is None and cell_id == "cell_s":
         src_site = str(handoff.get("src_site") or "pinky")
         dst_site = str(handoff.get("dst_site") or "belt")
         stage_kwargs: dict[str, Any] = {
@@ -194,8 +172,7 @@ def run_contract_handoff_stage(
             stage_res = pipeline.run_fleet_stage(
                 arm_id="arm_s", src_site=src_site, dst_site=dst_site, stage_id=stage_id, yaw_deg=-85.0
             )
-        arms = ["arm_s"]
-    else:
+    elif refusal is None:
         lvl = max(0, min(2, int(tier) - 1))
         stage_res = pipeline.run_fleet_stage(
             arm_id="arm_a" if lvl % 2 == 0 else "arm_b",
@@ -204,9 +181,10 @@ def run_contract_handoff_stage(
             stage_id=stage_id,
             yaw_deg=-90.0,
         )
-        arms = ["arm_a", "arm_b"]
 
-    converged = bool(stage_res.get("converged", stage_res.get("place_error_mm", 0.0) <= 5.0))
+    converged = stage_res is not None and bool(
+        stage_res.get("converged", stage_res.get("place_error_mm", 0.0) <= 5.0)
+    )
     digest = hashlib.sha256(
         json.dumps({"lease": lease_id, "stage": stage_id, "converged": converged}, sort_keys=True).encode("utf-8")
     ).hexdigest()[:16]
@@ -222,7 +200,7 @@ def run_contract_handoff_stage(
             "amr_motion_inhibited": False,
             "stage_id": stage_id,
             "goal_evidence_digest": f"sha256:{digest}" if converged else None,
-            "reason": "TRANSFER_CONFIRMED" if converged else "STAGE_NOT_CONVERGED",
+            "reason": refusal or ("TRANSFER_CONFIRMED" if converged else "STAGE_NOT_CONVERGED"),
         },
         "stage_result": stage_res,
     }
