@@ -237,7 +237,7 @@ def test_a_quiet_identity_pulse_blinks_without_the_call_chirp(tmp_path):
     assert display.handle_test() == "done" and heard == ["call"]
 
 
-def test_identity_pulse_temporarily_uses_a_disabled_normal_lamp(tmp_path):
+def test_lamp_environment_switch_disables_identify_too(tmp_path):
     module = _display()
     _lamp_tree(tmp_path)
     _status(tmp_path, "CORE_READY")
@@ -249,12 +249,35 @@ def test_identity_pulse_temporarily_uses_a_disabled_normal_lamp(tmp_path):
     display._core = lambda: {"estop": False, "robot_mode": "IDLE", "nav_state": "IDLE", "caution": []}
 
     _hand_over(tmp_path, "identify_blue")
-    assert display.handle_test() == "done"
-    assert spawn.patterns == ["identify_blue"]
+    assert display.handle_test() == "unavailable"
+    assert spawn.patterns == []
     assert lamp.enabled is False
     display.step()
-    assert spawn.patterns == ["identify_blue"]
+    assert spawn.patterns == []
     assert lamp.pattern == "ready"
+
+
+def test_status_pattern_setting_is_polled_and_preserves_identify_and_boot(tmp_path):
+    module = _display()
+    _lamp_tree(tmp_path)
+    _status(tmp_path, "CORE_READY")
+    spawn = FakeSpawn(code=0)
+    display, lamp, _clock, _rendered, _lines = _state_loop(module, tmp_path, spawn=spawn)
+    setting = tmp_path / module.LAMP_STATUS_FILE
+    setting.parent.mkdir(parents=True)
+    setting.write_text('{"status_patterns":"off"}', encoding="utf-8")
+    display.step()
+    assert lamp.pattern is None and spawn.patterns == []
+    display._core = lambda: {"estop": False, "robot_mode": "IDLE", "nav_state": "IDLE", "caution": []}
+    _hand_over(tmp_path, "identify_blue")
+    assert display.handle_test() == "done" and spawn.patterns == ["identify_blue"]
+    setting.write_text('{"status_patterns":"on"}', encoding="utf-8")
+    display.step()
+    assert lamp.pattern == "ready"
+    _status(tmp_path, "BOOTING")
+    setting.write_text('{"status_patterns":"off"}', encoding="utf-8")
+    display.step()
+    assert lamp.pattern == "booting"
 
 
 def test_identity_pulse_runs_on_a_moving_robot_and_restores_its_drive_pattern(tmp_path):

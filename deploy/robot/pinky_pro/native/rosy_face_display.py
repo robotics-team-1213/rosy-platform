@@ -13,7 +13,7 @@ from datetime import timezone
 from pathlib import Path
 from typing import Callable
 
-from rosy_face_inputs import FaceFrames, core_owner, read_test_request, read_update, write_test_result
+from rosy_face_inputs import FaceFrames, LAMP_STATUS_FILE, core_owner, read_test_request, read_update, status_patterns_enabled, write_test_result
 from rosy_face_parts import BatteryReader, Buzzer, LAMP_TEST_S, Lamp, PersonAsk
 
 try:  # the release's rule table (D-260); an older release has none
@@ -482,6 +482,8 @@ class FaceDisplay:
         pres = self._present(view, state, core, screen)
         pattern = pres.lamp
         if self._lamp is not None:
+            if pattern in IDENTIFY_OVER | {"ready_held"} and not status_patterns_enabled(self.root):
+                pattern = None
             # D-380: a mode change switches the pattern without a sound; show() is
             # idempotent, so an unchanged pattern costs nothing.
             self._lamp.show(pattern)

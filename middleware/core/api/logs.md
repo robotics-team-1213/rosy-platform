@@ -1380,3 +1380,8 @@
 - 변경: `contract_version.py`를 API 참조 v1.374(Account 가입·권한 요청, D-993)에 맞췄다. CORE 동작 변경 없음.
 - 증거: 프로토콜 버전 정합 시험.
 - gate 변화: 없음.
+
+## 2026-11-14 · uncommitted · 상태 표시등 패턴 API
+- 변경: Viewer GET과 Operator PUT `/host/lamp/status-patterns`를 추가하고 운전 중 OFF를 `LAMP_BUSY`로 거절한다. API 계약 v1.394와 변경 이벤트를 기록했다.
+- 증거: 원격 CORE·네이티브 시험 결과는 이 브랜치 검증에 기록한다.
+- gate 변화: 없음. 실물 LED 수용은 별도다.

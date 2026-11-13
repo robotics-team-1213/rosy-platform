@@ -4880,3 +4880,8 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: 원격 pytest (`tools/remote/remote_pytest.py`) `test_omx_control_modularization.py`, `test_omx_area_xyz.py`, `test_omx_cell_look.py`, `test_omx_cell_pinch.py`, `test_omx_cell_wrist.py`, `test_omx_tier_stack_problem_recovery.py`, `test_omx_joint_jitter.py`, `test_omx_chunk_runner.py` 외 19개 스위트 검증.
 - gate 변화: 없음.
 - CE: 기존 교훈 갱신 — `docs/solutions/logic-errors/sim-passes-with-wrong-layout-until-real-camera-overlay-2026-11-07.md`.
+
+## 2026-11-14 · uncommitted · rosy-face 상태 표시등 영속 설정
+- 변경: CORE용 영속 공유 디렉터리를 native unit에서 만들고 rosy-face가 설정을 매 표시 단계마다 읽는다. 기존 부팅·안전 표시가 우선한다.
+- 증거: native systemd·rosy-face 원격 계약 시험 결과는 이 브랜치 검증에 기록한다.
+- gate 변화: 없음. ARM64·장치 LED 수용은 별도다.

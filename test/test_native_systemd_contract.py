@@ -411,6 +411,7 @@ DECLARED_WRITES = {
         # D-483: the pending peer request's approval code for rosy-face
         # (receiver_initializer.py PEER_DISPLAY_DIR, receiver_service.py DISPLAY_FILE).
         "/run/rosy-peer-display/approval.json",
+        "/var/lib/rosy/lamp-control/status-patterns.json",
     },
     "rosy-io.service": {"/var/log/rosy-io/launch.log"},
     "rosy-camera-healthy.service": {"/var/lib/rosy/camera"},
@@ -576,7 +577,8 @@ DECLARED_READS = {
     # D-433: also CORE's face hand-over in rosy-core's /run/rosy (0755, file 0644)
     # and the release's emotion GIFs.
     # D-483: CORE's approval-code hand-over, rosy-core:rosy-display 2750 (file 0640).
-    "rosy-face.service": {"/run/rosy-boot", "/run/rosy", "/opt/rosy/current", "/run/rosy-peer-display"},
+    "rosy-face.service": {"/run/rosy-boot", "/run/rosy", "/opt/rosy/current", "/run/rosy-peer-display",
+                          "/var/lib/rosy/lamp-control/status-patterns.json"},
     # D-193: boot-status.json; CORE's used/burned signal (read strictly, never
     # followed); the image defaults and the applied rosy-config policy.
     "rosy-login-code.service": {

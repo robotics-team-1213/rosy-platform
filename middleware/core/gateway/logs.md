@@ -2157,3 +2157,8 @@ clpy.duration을 추가했다(bridge AGENTS의 두 파일 함께 갱신 규칙).
 - 증거: e94b732208 다음 커밋(시험 기대 갱신)에서 원격 집중 시험 1907 passed, 1 skipped; known_failures NEW 0.
 - gate 변화: 없음. 호스트 렌더·시험은 실물 LCD 판독·ARM64·DEVICE/FIELD 수용이 아니다.
 - CE: 해당 없음 — 설계 판단은 ADR 추가 결정과 회귀 시험에 남는다.
+
+## 2026-11-14 · uncommitted · 상태 표시등 설정 영속 인계
+- 변경: CORE가 rosy-display가 읽는 영속 설정을 원자적으로 기록한다. rosy-face는 평상시 패턴만 런타임에 억제하고 부팅·안전·식별 표시는 유지한다.
+- 증거: 원격 CORE·rosy-face·native systemd 계약 시험 결과는 이 브랜치 검증에 기록한다.
+- gate 변화: 없음. 장치·현장 판정은 수행하지 않았다.
