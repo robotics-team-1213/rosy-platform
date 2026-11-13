@@ -18,6 +18,8 @@ import urllib.request
 from urllib.parse import urljoin, urlsplit
 
 MAX_HOPS = 6
+SESSION_LIMIT = 64 * 1024  # a session body that fills this is cut off and cannot be judged
+IDENTITY_KEYS = ("user_id", "account_id", "principal_id")
 
 
 class _SeeEveryHop(urllib.request.HTTPRedirectHandler):
@@ -34,13 +36,32 @@ def _opener(insecure):
         urllib.request.HTTPSHandler(context=context))
 
 
-def _send(opener, request):
-    """(status, headers, body) for any response, including 3xx and 4xx."""
+def _send(opener, request, limit=300):
+    """(status, headers, body bytes, at most `limit`) for any response, including 3xx and 4xx."""
     try:
-        with opener.open(request, timeout=15) as response:
-            return response.status, response.headers, response.read(300).decode("utf-8", "replace")
+        with opener.open(request, timeout=10) as response:
+            return response.status, response.headers, response.read(limit)
     except urllib.error.HTTPError as error:
-        return error.code, error.headers, error.read(300).decode("utf-8", "replace")
+        return error.code, error.headers, error.read(limit)
+
+
+def session_verdict(status, raw):
+    """(ok, detail): PASS needs positive evidence of a signed-in user, never just the absence of a refusal."""
+    if status != 200:
+        return False, f"session {status}"
+    if len(raw) >= SESSION_LIMIT:
+        return False, "session body reached the 64 KiB read limit"
+    try:
+        body = json.loads(raw)
+    except (ValueError, RecursionError):
+        return False, "session 200 body is not JSON"
+    if not isinstance(body, dict):
+        return False, "session 200 body is not a JSON object"
+    if body.get("authenticated") is False:
+        return False, "session 200 not authenticated"
+    if body.get("authenticated") is True or any(isinstance(body.get(key), str) and body[key] for key in IDENTITY_KEYS):
+        return True, "session 200"
+    return False, "session 200 without proof of a signed-in user"
 
 
 def check_app(app, config, insecure=False):
@@ -65,13 +86,9 @@ def check_app(app, config, insecure=False):
                 break
         if status >= 400:
             return False, f"callback chain ended {status} at {urlsplit(url).path}"
-        status, _, text = _send(opener, urllib.request.Request(app["session"]))
+        status, _, raw = _send(opener, urllib.request.Request(app["session"]), SESSION_LIMIT)
         # Some apps answer 200 with authenticated:false when the callback failed (2026-11-13 Calibration).
-        try:
-            signed_in = json.loads(text).get("authenticated", True) is not False
-        except (ValueError, AttributeError):
-            signed_in = True
-        return status == 200 and signed_in, f"session {status}" + ("" if signed_in else " not authenticated")
+        return session_verdict(status, raw)
     except (OSError, ValueError, KeyError) as error:
         return False, f"{type(error).__name__}: {str(error)[:100]}"
 
@@ -84,13 +101,17 @@ def main(argv):
         return 2
     with open(args[0], encoding="utf-8") as handle:
         config = json.load(handle)
-    only, failed = set(args[1:]), False
+    only, failed, checked = set(args[1:]), False, 0
     for app in config["apps"]:
         if only and app["name"] not in only:
             continue
         ok, detail = check_app(app, config, insecure)
         failed |= not ok
+        checked += 1
         print(f"{'PASS' if ok else 'FAIL'} {app['name']} ({detail})")
+    if not checked:
+        print("no app was checked (empty app list or no name matched)", file=sys.stderr)
+        return 2
     return 1 if failed else 0
 
 
