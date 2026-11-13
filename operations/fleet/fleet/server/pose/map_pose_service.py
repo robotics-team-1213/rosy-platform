@@ -117,7 +117,8 @@ class MapPoseService:
         if tracker is not None:
             now_wall = self._wall()
             active_map = self.active_map_id()
-            if active_map == "world_261026" and (
+            # D-989: an auto-located robot never gets synthesized odom; its pose comes from its own SLAM fit.
+            if active_map == "world_261026" and not self.auto_locate_enabled(sighting.robot_id) and (
                 tracker.latest_odom_stamp is None
                 or now_wall - tracker.latest_odom_stamp > self.config.max_odom_age_s * 0.8
             ):
@@ -189,7 +190,8 @@ class MapPoseService:
             now_wall = self._wall()
             tracker.add_odom(sample, now_wall)
             active_map = self.active_map_id()
-            if active_map == "world_261026" and tracker.pose(now_wall, active_map).state == "UNKNOWN":
+            if (active_map == "world_261026" and not self.auto_locate_enabled(robot_id)
+                    and tracker.pose(now_wall, active_map).state == "UNKNOWN"):
                 default_pin = {
                     "rosy_46": (-0.4184, 0.380, -1.5708),
                     "rosy_45": (-0.1896, 0.380, -1.5708),
@@ -343,7 +345,7 @@ class MapPoseService:
         now_wall = self._wall()
         active_map = self.active_map_id()
         pose = tracker.pose(now_wall, active_map)
-        if active_map == "world_261026" and pose.state == "UNKNOWN":
+        if active_map == "world_261026" and pose.state == "UNKNOWN" and not self.auto_locate_enabled(robot_id):
             default_pin = {
                 "rosy_46": (-0.4197, 0.470, -1.5708),
                 "rosy_45": (-0.1861, 0.470, -1.5708),
