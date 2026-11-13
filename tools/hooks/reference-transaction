@@ -3,7 +3,7 @@
 # 2026-11-13: 25 commits and fast-forward merges went onto main by hand between 01:25 and 11:40 KST,
 # main went red on the size ratchet, API changelog and secret scan, and 0 landings finished in the
 # next 24 h while ~50 queued snapshots stopped on those reds. land.py sets ROSY_MAIN_WRITER for its
-# one fast-forward; the sync to origin/main after a publish PR merge (doctor.py) is allowed as is.
+# one fast-forward; a fast-forward to origin/main after a publish PR merge (doctor.py) is allowed.
 # Install: tools/hooks/install.sh
 [ "${1:-}" = prepared ] || exit 0
 [ -n "${ROSY_MAIN_WRITER:-}" ] && exit 0
