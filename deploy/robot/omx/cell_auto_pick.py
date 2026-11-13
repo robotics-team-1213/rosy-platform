@@ -106,13 +106,13 @@ def run_auto(
         config, cell_pivot.load_bias(cell_pivot.bias_path(calibration_path), config.get("params"))
     )
     episode, failed_yaws, dest_view = None, [], None
-    if droi is not None and dest_site != source:
-        _, dmask, _, derr = observe(cell, config, calibration, dest_site, droi, catalog)
-        dest_view = None if derr else (dmask, droi)
     attempts = int(prm.get(config.get("params"), "auto.attempts")) if attempts is None else attempts
     try:
         for attempt in range(attempts):
             t0, tried = time.time(), {"locate": {"found": False}}
+            if droi is not None and dest_site != source:  # the destination is looked at again before each attempt
+                _, dmask, _, derr = observe(cell, config, calibration, dest_site, droi, catalog)
+                dest_view = None if derr else (dmask, droi)
             img, mask, objects, error = observe(cell, config, calibration, source, roi, catalog)
             usable, refused = (
                 choose(
