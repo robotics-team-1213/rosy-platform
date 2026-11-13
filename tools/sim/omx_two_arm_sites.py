@@ -92,7 +92,7 @@ TEMP_LANES_PHOTO_1108 = dict(a=[((-.0258, -.2176), 16.7), ((-.0394, -.1620), 0.)
                              b=[((-.0302, .0968), 10.7), ((-.0349, .1482), -1.4), ((-.0281, .1990), -14.4)])
 TEMP_LANES_PHOTO = dict(a=[((-.0738, -.2167), 15.7), ((-.0818, -.1672), 2.7), ((-.0776, -.1173), -11.3)],
                         b=[((-.0465, .1439), 4.9), ((-.0466, .1958), -9.7), ((-.0378, .2480), -24.7)])
-SCAD = dict(lanes=3, cont_w=.030, cont_l=.090, pk_l=.096, deck_t=.008, clr=.0004, clr_l=.001, seat_h=.0006, catch=.005, gap_min=.0006, rim=.003, yaw_tol_deg=3.)
+SCAD = dict(lanes=3, cont_w=.030, cont_l=.090, pk_l=.096, deck_t=.008, clr=.0004, clr_l=.001, seat_h=.0006, catch=.005, gap_min=.010, rim=.003, yaw_tol_deg=3.)
 BELT_STOP_X = .158
 ARMS = ("arm_a", "arm_b")  # fixture arm index 0 (y -) and 1 (y +); arm_a does not move in reality (motor 11), it does here
 SHIP_ASSETS = ISAAC / "assets/ship_r08_berth"  # made by Rosy/docs/research/ship-modular-2026-11-03/proposals/ship-berth/sim_assets.py (SOURCE.json)
