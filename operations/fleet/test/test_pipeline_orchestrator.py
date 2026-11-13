@@ -337,11 +337,11 @@ def test_station_zones_put_saves_yaml_and_get_reflects_it(tmp_path, monkeypatch)
     install_pipeline_routes(app, site_maps=maps)
     client = TestClient(app)
 
-    yaml_text = "schema: rosy.station-zones.v1
+    yaml_text = """schema: rosy.station-zones.v1
 staging_bays:
   - id: STG_TEST
     name: test bay
-"
+"""
     saved = client.put("/api/fleet/pipeline/station-zones", json={"yaml_text": yaml_text})
     assert saved.status_code == 200 and saved.json()["ok"] is True
     zones = client.get("/api/fleet/pipeline/station-zones").json()
@@ -350,8 +350,6 @@ staging_bays:
 
     empty = client.put("/api/fleet/pipeline/station-zones", json={"yaml_text": "  "})
     assert empty.status_code == 422 and empty.json()["detail"]["code"] == "EMPTY_YAML"
-    invalid = client.put("/api/fleet/pipeline/station-zones", json={"yaml_text": "- just
-- a list
-"})
+    invalid = client.put("/api/fleet/pipeline/station-zones", json={"yaml_text": "- not-a-mapping"})
     assert invalid.status_code == 422 and invalid.json()["detail"]["code"] == "INVALID_STATION_ZONES_YAML"
     assert [z["id"] for z in client.get("/api/fleet/pipeline/station-zones").json()["staging_bays"]] == ["STG_TEST"]
