@@ -116,40 +116,6 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
         && mapSnapshot === JSON.stringify([view.map?.map_id, view.map?.width, view.map?.height, view.map?.resolution, view.map?.origin]),
       request: async owner => {
     try {
-      if (siteMapObj) {
-        const roadRes = await call(`/api/fleet/robots/${encodeURIComponent(robotId)}/road-nav2`, {
-          method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": randomUUID() },
-          body: JSON.stringify({ x: Number(point.x.toFixed(4)), y: Number(point.y.toFixed(4)), yaw: Number(yaw.toFixed(4)), place_id: placeId || null, label: placeLabel || "" }),
-          signals: [owner.signal],
-        });
-        owner.check();
-        const roadTask = roadRes?.task;
-        const queued = roadRes?.accepted === false && roadRes?.dispatched === true
-          && roadRes?.queued === true && roadTask?.status === "QUEUED";
-        const accepted = roadRes?.accepted === true && roadRes?.dispatched === true
-          && roadRes?.queued !== true && (roadTask?.status === "ACCEPTED" || Boolean(roadRes?.receipt));
-        if (roadRes?.simulated_dispatch !== true && (queued || accepted)) {
-          view.activeRoadPlan = { robotId, ...roadRes, at: Date.now() };
-          view.selectedGoal = {
-            ...view.selectedGoal,
-            points: Array.isArray(roadRes.waypoints_site) && roadRes.waypoints_site.length >= 2 ? roadRes.waypoints_site.map((w) => [w.x, w.y]) : view.selectedGoal.points,
-            places: roadRes.places?.length ? roadRes.places : view.selectedGoal.places,
-            length_m: typeof roadRes.length_m === "number" ? roadRes.length_m : view.selectedGoal.length_m,
-            eta_s: typeof roadRes.eta_s === "number" ? roadRes.eta_s : view.selectedGoal.eta_s,
-            status: queued ? "QUEUED" : "ACCEPTED",
-            statusText: queued ? "도로 주행 대기 · 발행 전" : "도로 주행 접수 · 동작 확인 대기", at: Date.now(),
-          };
-          drawMap(); render();
-          const viaStr = Array.isArray(roadRes.places) && roadRes.places.length ? roadRes.places.join(" → ") : `${roadRes.waypoints_site?.length || 1}개 도로 경유점`;
-          const lenStr = typeof roadRes.length_m === "number" ? ` · ${roadRes.length_m.toFixed(2)}m` : "";
-          const formStr = roadRes.formation?.active ? ` · 편대(${roadRes.formation.role || "active"})` : "";
-          log(`🎯 ${robotId} → ${where} 도로 주행 ${queued ? "대기" : "접수"} · 실제 동작 확인 대기 (${viaStr}${lenStr}${formStr})`, "good");
-          refreshGuide();
-          return;
-        }
-        log(`${robotId} 도로 목표 접수 거절 · 명령을 다시 보내지 않았습니다.`, "bad");
-        return;
-      }
       const result = await call(`/api/fleet/robots/${encodeURIComponent(robotId)}/goal`, {
         method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": randomUUID() },
         body: JSON.stringify({ x: Number(point.x.toFixed(4)), y: Number(point.y.toFixed(4)), yaw: Number(yaw.toFixed(4)) }), signals: [owner.signal],
