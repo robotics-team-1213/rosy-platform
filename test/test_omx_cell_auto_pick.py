@@ -177,11 +177,12 @@ def test_a_circle_outside_the_linkage_radius_is_refused_not_saved(tmp_path):
 
 def test_hidden_closing_axis_candidates_compete_and_every_attempt_is_a_row(tmp_path, monkeypatch):
     path, cell = biased_map(tmp_path), Cell([CONT2])
+    monkeypatch.setattr(auto, "EXECUTOR_CANDIDATES", ("act", "ik_chunk", "smolvla"))
     monkeypatch.setattr(cell_attempts, "RUN", dict(cell_attempts.RUN))
     cell_attempts.start(tmp_path / "attempts.jsonl", "r1")
     choices = cell_choices.Choices(tmp_path / "choices.json")
     result = auto.run_auto(cell, CONFIG, cal.load(path), path, CATALOG, ROI, "pinky", "0.060,0.090", tmp_path, choices,
-                           sleep=no_sleep, log=lambda row: None)
+                           sleep=no_sleep, log=lambda row: None, scenario_id="carry-17")
     assert result["result"] == "placed", json.dumps(result, default=str)[:800]
     assert choices.best(auto.CLOSING) == 0  # theory (90) was tried first, came back empty, lost to the alternative
     assert [(c["value"], c["ok"], c["tries"]) for c in choices.data["values"][auto.CLOSING]] == [(90, 0, 1), (0, 1, 1)]
@@ -189,6 +190,12 @@ def test_hidden_closing_axis_candidates_compete_and_every_attempt_is_a_row(tmp_p
     assert cell.objects[0]["y"] == pytest.approx(0.090, abs=0.006)
     rows = [json.loads(line) for line in (tmp_path / "attempts.jsonl").read_text().splitlines()]
     assert [(r["outcome"], r["fail_stage"]) for r in rows] == [("failed", "grasp"), ("placed", None)]
+    assert [r["scenario_id"] for r in rows] == ["carry-17", "carry-17"]
+    assert [r["execution"]["executor"] for r in rows] == ["ik_chunk", "ik_chunk"]
+    assert all(r["execution"]["candidates"] == ["ik_chunk"] and r["execution"]["propensity"] == 1.0 for r in rows)
+    assert [(r["execution"]["outcome"], r["execution"]["segment"]) for r in rows] == [
+        ("failed", 0), ("succeeded", 1)]
+    assert [(c["ok"], c["tries"]) for c in choices.data["values"]["exec.pick_place"]] == [(1, 2)]
     assert [r["auto"]["closing_axis_offset_deg"] for r in rows] == [90, 0]
     assert rows[1]["auto"]["bias_mm"] == pytest.approx([1000 * BIAS[0], 1000 * BIAS[1]], abs=1.5)
     assert rows[1]["verify"]["basis"] == "map" and rows[1]["verify"]["inside"]
@@ -200,9 +207,11 @@ def test_hidden_closing_axis_candidates_compete_and_every_attempt_is_a_row(tmp_p
 def test_an_object_without_an_enrolled_mass_is_held_before_any_motion(tmp_path):
     path, cell = biased_map(tmp_path), Cell([CONT2])
     unweighed = [dict(e, mass_kg=None) for e in CATALOG]  # D-935: an unknown payload, like an unknown object
+    choices = cell_choices.Choices(tmp_path / "choices.json")
     result = auto.run_auto(cell, CONFIG, cal.load(path), path, unweighed, ROI, "pinky", "0.060,0.090", tmp_path,
-                           cell_choices.Choices(tmp_path / "choices.json"), sleep=no_sleep, log=lambda row: None)
+                           choices, sleep=no_sleep, log=lambda row: None)
     assert result["result"] == "held: payload_unknown"
+    assert [(c["value"], c["tries"]) for c in choices.data["values"]["exec.pick_place"]] == [("ik_chunk", 0)]
     assert not {"run descend_pick", "run grasp_pick"} & set(cell.commands)  # the pick never started
 
 
@@ -383,6 +392,39 @@ def test_a_safety_abort_row_names_the_rule_the_value_and_the_limit(tmp_path, mon
     assert [e["outcome"] for e in cell_decisions.export(rows, attempts, None) if e["input"]["stage"] == "safety"] == ["aborted"]
 
 
+def test_guard_abort_after_executor_choice_records_stopped_without_learning(tmp_path, monkeypatch):
+    def abort(*args, **kwargs):
+        raise auto.Aborted("stale live state")
+
+    monkeypatch.setattr(auto, "transfer_folded", abort)
+    result, _, attempts = run_started(tmp_path, monkeypatch, Cell([CONT2]))
+    assert result["result"] == "aborted: stale live state"
+    assert len(attempts) == 1
+    assert attempts[0]["execution"]["outcome"] == "stopped"
+    assert attempts[0]["execution"]["executor"] == "ik_chunk"
+    assert all(c["tries"] == 0 for c in cell_choices.Choices(tmp_path / "choices.json").data["values"].get("exec.pick_place", []))
+
+
+@pytest.mark.parametrize("transfer_result", ["empty", "misaligned", "reinserted", "still holding"])
+def test_completed_transfer_failures_update_executor_ledger(tmp_path, monkeypatch, transfer_result):
+    monkeypatch.setattr(auto, "transfer_folded", lambda *args, **kwargs: {
+        "result": transfer_result, "at": "run grasp_pick", "steps": []})
+    _, _, attempts = run_started(tmp_path, monkeypatch, Cell([CONT2]))
+    assert attempts
+    assert all(row["execution"]["outcome"] == "failed" for row in attempts)
+    choice = cell_choices.Choices(tmp_path / "choices.json").data["values"]["exec.pick_place"][0]
+    assert (choice["tries"], choice["ok"]) == (len(attempts), 0)
+
+
+@pytest.mark.parametrize("transfer_result", ["contact", "fault", "refused"])
+def test_guard_fault_and_refusal_stops_do_not_update_executor_ledger(tmp_path, monkeypatch, transfer_result):
+    monkeypatch.setattr(auto, "transfer_folded", lambda *args, **kwargs: {
+        "result": transfer_result, "at": "run grasp_pick", "steps": []})
+    _, _, attempts = run_started(tmp_path, monkeypatch, Cell([CONT2]))
+    assert attempts[0]["execution"]["outcome"] == "stopped"
+    assert all(c["tries"] == 0 for c in cell_choices.Choices(tmp_path / "choices.json").data["values"].get("exec.pick_place", []))
+
+
 def test_exported_labels_follow_the_outcome_and_a_person_correction_replaces_the_row(tmp_path, monkeypatch):
     _, rows, attempts = run_started(tmp_path, monkeypatch, Cell([CONT2]))
     path = tmp_path / "decisions.jsonl"
@@ -458,6 +500,8 @@ def test_a_stop_in_transport_with_the_object_held_is_its_own_decision_point(tmp_
             return super().act(command)
 
     result, rows, attempts = run_started(tmp_path, monkeypatch, Strain([dict(CONT2)], true_closing=90.0))
+    assert attempts[0]["execution"]["outcome"] == "stopped"
+    assert all(c["tries"] == 0 for c in cell_choices.Choices(tmp_path / "choices.json").data["values"].get("exec.pick_place", []))
     stop = next(r for r in rows if r["stage"] == "transport_stop")
     assert stop["facts"]["holding"] is True and stop["facts"]["joint"] == 2 and stop["facts"]["lag_units"] == 2.2
     assert stop["facts"]["at"] == "goto above_place" and stop["facts"]["pwm_last_checked"] == [10] * 6

@@ -3,6 +3,7 @@
 
 A task is one JSON file in <queue>/inbox/ (rosy.omx-cell-task.v1):
   {"schema", "task_id", "kind": "move" | "swap", "source": "operator" | "decision" | "vla", "record": bool,
+   "scenario_id": optional nonempty string,
    move: "from", "to";  swap: "a", "b" (two sites holding the two objects), "buffer" (a free site)}
 The runner moves it to running/, checks the cell (cell_preflight), runs each carry with cell_auto_pick (one object
 per source site: the pipeline picks the usable object there), stops at the first carry that is not "placed", and
@@ -40,6 +41,8 @@ def carries(task: dict, sites: dict) -> list:
     """[(from, to)] for a task, or ValueError naming what is wrong (unknown site, same site, missing field)."""
     if task.get("schema") != SCHEMA or not task.get("task_id"):
         raise ValueError(f"not a {SCHEMA} task")
+    if "scenario_id" in task and (not isinstance(task["scenario_id"], str) or not task["scenario_id"]):
+        raise ValueError("scenario_id must be a nonempty string")
     sites = cell_place_fit.with_tiers({"sites": sites})[0]["sites"]
     if task["kind"] == "move":
         src = tier_site(task["from"], task["from_tier"], sites) if "from_tier" in task else task["from"]
@@ -90,11 +93,15 @@ def carries(task: dict, sites: dict) -> list:
     return plan
 
 
-def run_carry(config_path: Path, catalog: Path, sites: dict, src: str, dst: str, log_dir: Path, run=subprocess.run) -> dict:
+def run_carry(config_path: Path, catalog: Path, sites: dict, src: str, dst: str, log_dir: Path, run=subprocess.run,
+              scenario_id: str | None = None) -> dict:
     roi = [str(v) for v in sites[src]["auto_roi"]]
     out = log_dir / f"{int(time.time())}-{src}-to-{dst}.json"
-    proc = run([sys.executable, str(HERE / "cell_auto_pick.py"), "--config", str(config_path), "--catalog", str(catalog),
-                "--roi", *roi, "--from", src, "--dest", dst], capture_output=True, text=True)
+    command = [sys.executable, str(HERE / "cell_auto_pick.py"), "--config", str(config_path), "--catalog", str(catalog),
+               "--roi", *roi, "--from", src, "--dest", dst]
+    if scenario_id is not None:
+        command += ["--scenario-id", scenario_id]
+    proc = run(command, capture_output=True, text=True)
     try:
         result = json.loads(proc.stdout[proc.stdout.find("{"):])
     except ValueError:
@@ -134,13 +141,14 @@ def run_task(task: dict, config_path: Path, catalog: Path, log_dir: Path, prefli
         failed = [f"{name}: {why}" for name, ok, why in preflight(config) if not ok]
         if failed:
             return {**out, "status": "refused", "why": failed}
+    carry_kwargs = {"scenario_id": task["scenario_id"]} if task.get("scenario_id") is not None else {}
     for i, (src, dst) in enumerate(plan):
-        step = carry(config_path, catalog, config["sites"], src, dst, log_dir)
+        step = carry(config_path, catalog, config["sites"], src, dst, log_dir, **carry_kwargs)
         out["steps"].append(step)
         # No room at the destination and nothing moved: its declared alternates, each observed afresh (D-1019).
         # A swap is about which object ends where, so it never redirects.
         for alt in alternates(config["sites"], src, dst) if step.get("dest_full") and task["kind"] != "swap" else ():
-            step = {**carry(config_path, catalog, config["sites"], src, alt, log_dir), "redirected_from": dst}
+            step = {**carry(config_path, catalog, config["sites"], src, alt, log_dir, **carry_kwargs), "redirected_from": dst}
             out["steps"].append(step)
             if not step.get("dest_full"):
                 break
