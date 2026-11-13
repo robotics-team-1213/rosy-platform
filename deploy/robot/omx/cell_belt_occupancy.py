@@ -5,7 +5,9 @@ S asks before loading (anything but `empty` holds), A/B before picking (only `oc
 `unknown`: a receipt that is missing or old, a camera not confirmed against its reference frame, an arm state that is
 missing or over the belt, a region not wholly in the frame, a container across the region edge, a region not on the seen belt,
 or orange in the region the detector did not explain (its size filter drops some contours).
-Detection is the existing orange-mask detector; this adds only the gate around it.
+Detection is the existing orange-mask detector; this adds only the gate around it. `occupied` means an orange object of at least
+the detector's 250 px floor in the region, not a pickable container: for S that errs safe, and A/B still pick through catalogue
+matching (cell_auto_pick), which refuses what it cannot match.
 """
 from __future__ import annotations
 
