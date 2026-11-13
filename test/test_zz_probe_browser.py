@@ -16,9 +16,16 @@ def test_probe(console_url):
         page.locator("#roster article").first.wait_for()
         page.locator('#robot-choice').select_option('rosy_01')
         page.locator('#robot-workspace article').wait_for()
-        out = page.evaluate("""() => { const ws = document.getElementById('robot-workspace'); const rows = []; 
-          const all = [...document.querySelectorAll('body *')].filter(n => { const r = n.getBoundingClientRect(); return r.height > 0 && r.bottom <= ws.getBoundingClientRect().top + 1 && r.height < 400 && !n.querySelector('*:not(option)') });
-          for (const n of all) { const r = n.getBoundingClientRect(); rows.push([Math.round(r.top), Math.round(r.height), n.tagName.toLowerCase() + (n.id ? '#' + n.id : '') + '.' + String(n.className).slice(0, 30), (n.textContent || '').trim().slice(0, 24)]); }
-          rows.sort((a, b) => a[0] - b[0]); return rows.map(r => r.join('|')).join('\n') }""")
+        out = page.evaluate("""() => {
+          const ws = document.getElementById('robot-workspace');
+          const top = ws.getBoundingClientRect().top;
+          const rows = [];
+          for (const n of document.querySelectorAll('body *')) {
+            const r = n.getBoundingClientRect();
+            if (r.height > 0 && r.height < 300 && r.bottom <= top + 1 && n.children.length === 0) rows.push([Math.round(r.top), Math.round(r.height), n.tagName + (n.id ? '#' + n.id : ''), (n.textContent || '').trim().slice(0, 20)]);
+          }
+          rows.sort((a, b) => a[0] - b[0]);
+          return JSON.stringify(rows);
+        }""")
         browser.close()
         assert False, "PROBE\n" + out

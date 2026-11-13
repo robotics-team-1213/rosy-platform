@@ -140,7 +140,7 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
       if (task) delete view.pendingTasks[robotId];
       const receipt = task ? task.receipt : result;
       if (receipt && receipt.queued) log(`${robotId} → ${where} ${queuedReason(result)}`, receipt.reason === "NO_YIELD_SPACE" ? "bad" : "");
-      else log(`${robotId} → ${where} 즉시 이동 명령 하달`, "good");
+      else log(`${robotId} → ${where} 미션 하달`, "good");
       refreshGuide();
     } catch (err) {
       if (err.name !== "AbortError") log(`${robotId} 목표 이동 거절 — ${err.message}`, "bad");
