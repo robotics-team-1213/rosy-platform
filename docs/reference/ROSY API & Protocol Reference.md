@@ -5,9 +5,13 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.389
+**Version:** v1.394
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
+
+### v1.394 CORE 상태 표시등 패턴 제어
+
+`GET /api/v1/host/lamp/status-patterns` (Viewer)는 `{status_patterns:"on"|"off", available:bool}`을 돌려준다. `PUT` (Operator)는 추가 키를 거부하는 `{status_patterns:"on"|"off"}`를 받아 같은 본문을 돌려준다. `off`는 주행·수동 모드/조종·동작 예약·Fleet trip lease 중 409 `LAMP_BUSY`; `on`은 언제나 허용한다. 저장 불가는 503 `LAMP_UNAVAILABLE`이다. CORE는 `/var/lib/rosy/lamp-control/status-patterns.json`을 원자적으로 기록하며 rosy-face가 실행 중 다시 읽는다. `off`는 평상시 패턴만 숨긴다. 식별 점멸, 부팅·비상정지·고장·주의 표시는 유지한다. `ROSY_LAMP_ENABLED=false`는 평상시 패턴을 끄지만 식별 요청의 제한된 점멸은 허용한다. 성공 시 `lamp.status_patterns_changed` `{status_patterns, by}`를 낸다. 로봇 payload에 CORE와 rosy-face가 함께 들어가야 적용된다.
 
 ### v1.389 Fleet database maintenance status and actions
 
@@ -2259,6 +2263,8 @@ v1.42: `GET /api/v1/host/network`와 `/release`는 기존 `{available,ok?,code,d
 | GET | `/api/v1/host/status-summary` | Viewer | D-260 5 (v1.25) — 운용 화면 요약줄. 부팅 표시와 같은 규칙표(`core_common.robot_state`)를 `/run/rosy-boot/boot-status.json`(엄격히 읽음; 없으면 CORE가 응답 중이므로 `CORE_READY`로 보고 `boot.available:false`), `GET /host/hardware`와 같은 덮기를 거친 장치 행, 배터리(채널이 fresh일 때만)와 SAF-005 경고 임계, runtime mode에 적용한다. `{state ∈ booting·failed·caution·ready_held·ready, label(부팅 중·실패·주의·준비됨 — 못 움직임·준비됨), reason, state_line, motion_reason, runtime_mode, boot:{available, stage}, devices:{available, stale, ok, total, problems:[{id, label, state, product}]}, battery:{percent, voltage, warning_percent, low}, temperature_c, todos:[{id, text, device?}]}`. 우선순위 실패 > 주의 > 준비됨 — 못 움직임 > 준비됨, CORE_READY 전은 부팅 중. 할 일은 급한 순서 |
 | POST | `/api/v1/host/hardware/refresh` | Admin | D-247 — `/run/rosy/hw-probe.request`를 써서 `rosy-hw-probe.path`가 probe를 다시 돌리게 한다. 10초 안의 재요청은 `{accepted:false}`. 요청 파일을 못 쓰면 503 `HW_PROBE_UNAVAILABLE` |
 | POST | `/api/v1/host/hardware/test` | Admin | D-247 6 (v1.23, payload: `{device: "buzzer"\|"lamp"}`, 다른 키 거부) — `/run/rosy/hw-test.request` `{action, request_id, requested_at, by}`를 써서 root `rosy-hw-test`가 부저를 150 ms×3 울리거나 램프를 빨강·초록·파랑 1 s씩 켜게 한다. subprocess 없음. 200 `{accepted:true, request_id, device, detail}`. 10초 안 재요청은 429 `HW_TEST_COOLDOWN`, 요청 파일을 못 쓰면 503 `HW_TEST_UNAVAILABLE`. 결과는 `GET /host/hardware`의 `test` |
+| GET | `/api/v1/host/lamp/status-patterns` | Viewer | v1.394. 지속 설정 `{status_patterns:"on"\|"off", available:bool}`. 파일이 없으면 `on`; 설정을 읽을 수 없으면 `available:false` |
+| PUT | `/api/v1/host/lamp/status-patterns` | Operator | v1.394. 엄격한 `{status_patterns:"on"\|"off"}`. 200은 GET과 같은 본문. 주행·수동 조종·동작 예약·trip lease 중 `off`는 409 `LAMP_BUSY`, 저장 실패는 503 `LAMP_UNAVAILABLE`; `on`은 허용 |
 | POST | `/api/v1/host/lamp/identify` | Operator | D-472 (v1.129), `{color?:"blue"\|"amber"}`. v1.185(D-596): 쿼리 `?quiet=true`면 같은 점멸을 호출음(두 번 삑) 없이 한다(rosy-hw-test·rosy-face 동작 `identify_<색>_quiet`, 다음 로봇 payload부터). `color`를 빼면 이 로봇의 설정 색 (CORE 설정 `lamp_identify.color`, 없으면 D-472 4항 기본 `rosy_26` blue·`rosy_60` amber(주황)); 둘 다 없으면 409 `IDENTIFY_COLOR_UNSET`. CORE는 식별 요청만 기록하고(`requested_at` ms) 후면 램프는 `rosy-face`만 구동한다: 1 s 켬→1 s 끔→1 s 켬, 3.5 s에 강제 종료. 요청부터 끝까지 6 s 이내: `rosy-hw-test`는 1.5 s, `rosy-face`는 1 s보다 오래된 식별 요청을 버린다. 정상 패턴(ready·manual·navigating·docking·illumination) 위에서만 켠다 — 움직이는 로봇 포함(addendum 5항). E-Stop·EMERGENCY·고장·주의·booting·blocked 또는 CORE 인계가 없으면 즉시 `failed`로 거절하고, 점멸 중 그렇게 되면 끊고 상태 패턴으로 돌아간다. 바퀴·모드·E-Stop·localization은 바꾸지 않는다. 200 `{accepted:true, request_id, color, state:"pending_visual_confirmation"}`는 영상상 식별 성공을 뜻하지 않는다. 결과는 `GET /host/hardware`의 `test`. v1.195(D-596 개정 2026-10-10): 결과는 아래 `GET /host/lamp/identify/{request_id}`로도 묻는다. 기존 `HW_TEST_COOLDOWN`/`HW_TEST_UNAVAILABLE` 거절을 공유한다. |
 | GET | `/api/v1/host/lamp/identify/{request_id}` | Operator | v1.195 (D-596 개정 2026-10-10). 마지막 식별 요청의 결과 `{request_id, state:"pending"\|"shown"\|"refused"\|"expired", reason, detail}`. `shown` = rosy-face가 점멸을 켰다(영상 식별 성공 아님). `refused` = 켜지 않았거나 끊었다, `reason`은 rosy-face의 거절 이유 `CAUTION_ACTIVE`(주의 표시: 차선 HOLD·도킹 실패·배터리 등)·`ESTOP`·`STATE_DISPLAY`(고장·booting·blocked 등 정상 패턴 아님)·`CORE_UNAVAILABLE`(CORE 인계 없음)·`LAMP_UNAVAILABLE`, 이 이유를 모르는 payload나 다른 실패면 hw-test 상태 대문자(`FAILED`·`UNAVAILABLE`·`BUSY`). 답이 20 s 안에 없으면 `expired`. CORE는 마지막 요청 하나만 기억한다: 다른 `request_id`나 CORE 재시작 뒤에는 404 `IDENTIFY_REQUEST_UNKNOWN`. 이유는 다음 로봇 payload(rosy-face·rosy-hw-test)부터 온다(D-412). 이 경로가 없는 CORE도 404다. |
 | POST | `/api/v1/host/hardware/confirm` | Admin | D-247 6 (v1.23, payload: `{device: "buzzer"\|"lamp", observed: bool}`, 엄격한 bool) — 사람의 답을 `{observed, by(토큰 id), label, at}`로 CORE 상태 디렉터리 `~/.rosy/hw-confirmations.json`(0600, 원자적 교체)에 기록한다. `rosy-hw-test`의 마지막 결과가 같은 장치·`state:"done"`·5분 안에 끝난 것이어야 하며, 아니면 409 `HW_CONFIRM_NO_TEST`. 기록에는 그 시험의 `request_id`가 함께 남는다(파일에만, 응답·카드에는 싣지 않음). 장치마다 마지막 답 하나. 200 `{recorded:true, device, observed, by, label, at}`. 쓰지 못하면 503 `HW_CONFIRM_UNAVAILABLE` |
@@ -2901,6 +2907,7 @@ close code: `4401` 은 토큰이 없거나 틀린 것(`/ws/state` 와 동일), `
 | `fleet.link_provisioned` | warning | 로봇 | `{by, expected_hostname}` — D-555 (v1.163). `by` = 호출 토큰 id. 토큰은 싣지 않는다 |
 | `fleet.link_cleared` | warning | 로봇 | `{by, removed}` — D-555 (v1.163) |
 | `mode.changed` | info | 로봇 | `{from, to, by, run_id?, boot_id?}` |
+| `lamp.status_patterns_changed` | info | 로봇 | `{status_patterns, by}` — 영속 상태 패턴 설정 변경. `by`는 토큰 id, 원문 아님 |
 | `trip_lease.opened` | info | 로봇 | `{lease_id, trip_id, holder, operator_name, ttl_s}` — D-541 (v1.157) |
 | `trip_lease.renewed` | info | 로봇 | `{lease_id, trip_id, ttl_s}` — renew 는 0.5 s 마다 오므로 lease 하나에 30 s 에 한 번만 낸다 (v1.157) |
 | `trip_lease.ended` | info, warning | 로봇 | `{lease_id, trip_id, holder, operator_name, reason, by, note}` — `reason` `released` 는 info, 그 밖(`mode_left`·`estop`·`taken_over`·`expired`)은 warning. `note` 는 넘겨받기 `reason`(없으면 빈 문자열) (v1.157) |
@@ -4780,6 +4787,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.394 | 2026-11-14 | Additive: CORE 상태 표시등 패턴 GET/PUT, `LAMP_BUSY` 보호, 영속 rosy-face 설정 및 `lamp.status_patterns_changed`. 로봇 payload에서 적용 |
 | v1.385 | 2026-11-11 | Additive: 카메라로 초안 만들기(`POST /api/fleet/site-map/draft-from-camera`, Vision draft-map 후보→검증된 초안 본문, 쓰기 없음)와 카메라까지 겹친 대조(`POST .../reality-check` camera 삼각측량, `drive_outlier`면 apply 거절). Vision `draft-map` 보기 추가. 설계 docs/plans/2026-11-11-camera-draft-map-design.md |
 | v1.389 | 2026-11-12 | Additive (Fleet DB maintenance): `GET /api/fleet/admin/db-status`(cookie 사람 세션·`accounts.manage`·동일 출처, no-store)가 Fleet SQLite 저널·파일/WAL 크기·페이지/freelist·단편화·컴포넌트 마이그레이션·테이블별 최신 시각, PostgreSQL 도달성·크기, 백업 수·최신 경과 시간을 반환한다. 같은 규칙으로 `PUT /api/fleet/admin/db-settings`(보존일·WAL·incremental vacuum 설정, 422 `INVALID_DB_SETTINGS`)와 `POST /api/fleet/admin/db-maintenance`(`self-test`·`checkpoint`·`incremental-vacuum`·`flush-audit`·`prune-expired`, 422 `INVALID_DB_ACTION`)를 둔다. 경로·연결 정보·원시 오류는 반환하지 않는다. |
 | v1.388 | 2026-11-11 | Additive (D-1017, feat/peer-sighting-ingestion): `GET /api/fleet/robots/{robot_id}/map-pose`가 `StateSnapshot.peers`(v1.359) 행을 네 번째 앵커로 쓴다 — 로스터·`LOCALIZED`·`age_s ≤ peer_lease_s`(기본 6 s)·활성 지도 일치이고, 카메라 sighting이 `peer_after_camera_s`(10 s) 안에 없고 운영자 핀이 신선하지 않을 때만. 거절 사유 `CAMERA_RECENT`·`PIN_FRESH`·`NOT_NEWER`. 받아들인 표본은 기존 표본 규칙을 타서 첫 peer 앵커는 `DEGRADED`이고, `source`·`anchor_source`에 `peer`가 더해진다. `last_sighting_age_s` 추가(마지막 카메라 sighting 나이, 없으면 null). 사이트 설정 `fleet.map_pose.peer_lease_s`·`peer_after_camera_s`. Robot API·envelope 1.0 변경 없음 |

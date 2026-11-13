@@ -258,3 +258,15 @@ def test_a_rollup_whose_full_has_not_started_rerolls_with_new_waiters(repo, monk
     marker.unlink()
     land_rollup.roll(main, holder.parent / "q", NOW, ["apply"])
     assert stopped == [8] and not marker.exists(), "the old rollup keeps landing b"
+
+
+def test_the_halves_of_a_split_get_distinct_build_stamps(tmp_path, monkeypatch):
+    """11-14 04:50: both halves got the same stamp; the second build found its branch taken and five members waited."""
+    holder = tmp_path / "rosy-land-wt"
+    holder.mkdir()
+    (holder / "land-r.members").write_text(json.dumps([{"branch": n, "worktree": n} for n in "abcd"]))
+    (holder / "land-r.log").write_text("[land] STOP: NEW failure in pkg/test")
+    monkeypatch.setattr(land_rollup.land_async, "holder", lambda repo: holder)
+    stamps = land_rollup.split(tmp_path, "land-r", NOW, builder=lambda repo, half, now: f"{now:%Y%m%d%H%M%S}",
+                               resumer=lambda m: None)
+    assert len(stamps) == 2 and stamps[0] != stamps[1]
