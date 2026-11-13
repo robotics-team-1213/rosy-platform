@@ -43,7 +43,7 @@ import runner_strain  # noqa: E402
 
 FOLLOW_STOP, FOLLOW_STOP_S = 25.0, 1.0
 HEALTH_PERIOD_S = 1.0
-CONTACT_CHUNKS = ("descend", "grasp", "release")
+CONTACT_CHUNKS = runner_speed.CONTACT_CHUNKS
 PACE_LAG, PACE_RISE, PACE_MAX_S = (prm.default(f"runner.{k}") for k in ("pace_lag", "pace_rise", "pace_max_s"))
 _BODY_NAMES = tuple(NAMES[:5])
 

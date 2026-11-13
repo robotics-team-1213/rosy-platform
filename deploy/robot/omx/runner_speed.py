@@ -7,13 +7,15 @@ body tracking lag (present minus sent) against runner.pace_lag. The lag is what 
 the pace lag it reads at full speed, and at the pace lag at speed_min. It slews 0.02 per tick.
 
 runner.speed_adapt 0 (default) is shadow mode: the speed is computed and reported (trace `s`, receipt `speed_low`)
-but frames are read one per tick as before. A recording episode always reads at nominal timing.
+but frames are read one per tick as before. A recording episode and the contact chunks (descend, grasp, release)
+always read at nominal timing.
 """
 from __future__ import annotations
 
 import cell_params as prm
 
 SLEW = 0.02  # per tick: 1 -> 0.4 in 1 s at 30 Hz, no step in the streamed speed
+CONTACT_CHUNKS = ("descend", "grasp", "release")
 
 
 def target_speed(lag: float, params=None) -> float:
@@ -28,7 +30,10 @@ def take(runner) -> list:
     want = target_speed(runner.lag, runner.params)
     runner.speed += max(-SLEW, min(SLEW, want - runner.speed))
     runner.speed_low = min(runner.speed_low, runner.speed)
-    applied = prm.get(runner.params, "runner.speed_adapt") and not runner.recorder.active()
+    # contact chunks keep nominal timing: the contact allowance follows the sent step, so reading slower there
+    # would move where a contact is detected (2026-11-13 panel round 5)
+    contact = (runner.chunk or "").startswith(CONTACT_CHUNKS)
+    applied = prm.get(runner.params, "runner.speed_adapt") and not contact and not runner.recorder.active()
     if not applied:
         runner.speed_out = None
         return runner.queue.pop(0)

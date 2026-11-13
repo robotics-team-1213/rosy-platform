@@ -45,8 +45,11 @@ def test_a_lagging_arm_is_read_slower_never_faster_and_ends_exactly_on_the_last_
     assert all(abs(b - a) <= runner_speed.SLEW + 1e-9 for a, b in zip(steps, steps[1:-1]))  # last: lands on the end
 
 
-def test_a_recording_episode_and_a_clean_arm_keep_nominal_timing():
+def test_a_recording_episode_a_contact_chunk_and_a_clean_arm_keep_nominal_timing():
     assert play(runner(lag=1.6, recording=True)) == FRAMES
+    contact = runner(lag=1.6)
+    contact.chunk = "descend_pick -> lift_pick"
+    assert play(contact) == FRAMES
     assert play(runner(lag=0.2)) == FRAMES
 
 
