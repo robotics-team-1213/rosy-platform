@@ -37,7 +37,7 @@ import socket
 import subprocess
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -290,8 +290,10 @@ def split(repo: Path, rollup: str, now: datetime, builder=build, resumer=resume)
     else:
         halves = [members[: len(members) // 2], members[len(members) // 2:]]
     done = []
-    for half in (h for h in halves if h):
-        done.append(resumer(half[0]) if len(half) == 1 else builder(repo, half, now))
+    # 11-14 04:50: both halves got now's stamp, so the second build found fix/land-rollup-<stamp> taken and crashed,
+    # stranding its five members: each half is built one second after the one before
+    for n, half in enumerate(h for h in halves if h):
+        done.append(resumer(half[0]) if len(half) == 1 else builder(repo, half, now + timedelta(seconds=n)))
     return done
 
 
