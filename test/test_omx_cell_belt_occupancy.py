@@ -17,12 +17,14 @@ ON_BELT = (450, 80, 520, 115)  # wholly on the belt strip, away from the contain
 CHECKED = {"camera_moved": False, "camera_shift": {"ok": True, "max_px": 0.4}}  # cell_calibrate.check against a reference
 
 
-def frame(container_at=None, belt=True, speck_at=None):
+def frame(container_at=None, belt=True, speck_at=None, slab=False):
     """Grey floor, yellow table, a dark belt strip centred (430, 100) at 12 deg, optional red-orange container."""
     top = np.full((480, 640, 3), (150, 150, 145), dtype=np.uint8)
     top[220:470, 220:550] = (95, 210, 220)
     if belt:
         cv2.fillConvexPoly(top, np.int32(cv2.boxPoints(((430.0, 100.0), (340.0, 110.0), 12.0))), (42, 42, 40))
+    if slab:  # one long orange object, big enough for the belt detector to take its outline for the belt
+        cv2.fillConvexPoly(top, np.int32(cv2.boxPoints(((360.0, 85.0), (200.0, 60.0), 12.0))), (35, 45, 235))
     if container_at is not None:
         cv2.fillConvexPoly(top, np.int32(cv2.boxPoints((container_at, (75.0, 26.0), 12.0))), (35, 45, 235))
     if speck_at is not None:  # orange under the detector's 250 px area floor
@@ -51,6 +53,7 @@ def test_clear_region_on_a_seen_belt_is_empty():
 @pytest.mark.parametrize("image, roi, reason", [
     (frame(belt=False), (30, 20, 120, 90), "belt_not_seen"),
     (frame((360.0, 85.0), belt=False), REGION, "belt_not_seen"),  # a container in the region is still no proof without the belt
+    (frame(belt=False, slab=True), (320, 70, 400, 100), "belt_not_seen"),  # an orange slab is not a belt
     (frame((360.0, 85.0)), (30, 20, 120, 90), "region_off_belt"),  # the belt is seen, elsewhere
     (frame((360.0, 85.0), speck_at=(485, 97)), ON_BELT, "unexplained_orange"),
     (frame((360.0, 85.0), speck_at=(445, 97)), ON_BELT, "unexplained_orange"),  # reaches in by two columns

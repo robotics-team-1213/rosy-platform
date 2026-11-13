@@ -18,6 +18,7 @@ from cell_camera_invariant_top import detect_top_containers_invariant, is_arm_cl
 
 FRESH_S = 2.0  # the camera server's own fresh window, as FifoCell.frame_receipt
 INSIDE = 0.85  # a container this much inside the region is in it; anything between 0 and this is edge ambiguity
+BELT_DARK = 0.5  # the detector merges orange into the belt outline, so the outline must still be mostly dark belt
 STRAY_PX = 30  # an orange blob touching an empty-looking region and larger than this is something the detector dropped, not noise
 
 
@@ -32,6 +33,18 @@ def _inside_fraction(blob: dict, roi) -> float:
         return 0.0
     # numerator and denominator are both the fitted rectangle, not the contour
     return min(1.0, cv2.contourArea(np.asarray(points, np.float32).reshape(-1, 2)) / max(1.0, rect[1][0] * rect[1][1]))
+
+
+def _dark_fraction(image, outline) -> float:
+    """Share of the outline that is dark belt, by the detector's own colour bounds (cell_camera_invariant_top)."""
+    import cv2
+
+    hsv, lab = cv2.cvtColor(image, cv2.COLOR_BGR2HSV), cv2.cvtColor(image, cv2.COLOR_BGR2LAB).astype(np.int16)
+    dark = ((hsv[..., 2] >= 12) & (hsv[..., 2] <= 105) & (hsv[..., 1] <= 165)
+            & (np.abs(lab[..., 1] - 128) <= 16) & (np.abs(lab[..., 2] - 128) <= 26))
+    inside = np.zeros(image.shape[:2], np.uint8)
+    cv2.fillConvexPoly(inside, np.int32(outline), 1)
+    return float(dark[inside > 0].mean()) if inside.any() else 0.0
 
 
 def read_belt_occupancy(receipt: dict | None, roi_px, *, calibration: dict | None, joint_state_norm, now: float | None = None) -> dict:
@@ -70,6 +83,8 @@ def read_belt_occupancy(receipt: dict | None, roi_px, *, calibration: dict | Non
     import cv2
 
     outline = np.asarray(belt["box_points_px"], np.float32)
+    if _dark_fraction(image, outline) < BELT_DARK:
+        return {**out, "reason": "belt_not_seen"}
     if any(cv2.pointPolygonTest(outline, corner, False) < 0 for corner in ((x0, y0), (x1, y0), (x1, y1), (x0, y1))):
         return {**out, "reason": "region_off_belt"}
     inside, edge = [], []
