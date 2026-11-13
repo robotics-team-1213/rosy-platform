@@ -150,7 +150,7 @@ def test_status_main_collects_an_independent_production_host(monkeypatch):
     targets = []
     def run(argv, **kwargs):
         targets.append(argv[-2])
-        return subprocess.CompletedProcess(argv, 0, stdout=b'gate open\n', stderr=b'')
+        return subprocess.CompletedProcess(argv, 0, stdout=f'gate open\nguard active {int(time.time())}\n'.encode(), stderr=b'')
     monkeypatch.setattr(status.subprocess, 'run', run)
     with pytest.raises(SystemExit) as ended:
         status.main()
