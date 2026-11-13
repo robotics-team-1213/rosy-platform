@@ -16,10 +16,15 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
   let unavailable = false;
   let liveStreamOn = true;
   const selectedCamByCard = {};
-  let activeInspectorId = "arm_s";
+  let activeInspectorId = null;
   const selectedInspectorCam = {};
   let dualCamMode = false;
   let lastRows = null;
+
+  scope.listen(document, "visibilitychange", () => {
+    frames.setRunning(!document.hidden && liveStreamOn);
+    if (!document.hidden) void refresh();
+  });
 
   if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
     window.addEventListener("rosy:inspect-target", (ev) => {
@@ -113,7 +118,7 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
 
   function renderInspector(rows) {
     if (!inspector) return;
-    if (!rows?.cards?.length) {
+    if (!rows?.cards?.length || !activeInspectorId) {
       inspector.replaceChildren();
       return;
     }
@@ -162,6 +167,7 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
     const activeCam = camViews.find((v) => v.id === activeCamId) || camViews[0]
       || {id: activeCamId, label: activeCamId, source: activeCamId};
 
+    const cameraBindings = [];
     let camStageNode;
     if (dualCamMode && camViews.length >= 2) {
       camStageNode = document.createElement("div");
@@ -179,7 +185,7 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
         const dCap = document.createElement("small");
         dCap.className = "omx-inspector-cam-badge";
         dCap.textContent = `🎥 ${dv.label}`;
-        frames.bind(dImg, dv, dCap, `🎥 ${dv.label}`);
+        cameraBindings.push([dImg, dv, dCap, `🎥 ${dv.label}`]);
         pane.append(dImg, dCap);
         camStageNode.append(pane);
       }
@@ -195,7 +201,7 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
       const mainCap = document.createElement("small");
       mainCap.className = "omx-inspector-cam-badge";
       mainCap.textContent = `🎥 [${activeCam.label}]`;
-      frames.bind(mainImg, activeCam, mainCap, `🎥 [${activeCam.label}]`);
+      cameraBindings.push([mainImg, activeCam, mainCap, `🎥 [${activeCam.label}]`]);
       camStageNode.append(mainImg, mainCap);
     }
 
@@ -208,7 +214,7 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
       pImg.className = "omx-inspector-cam";
       pImg.alt = v.label;
       pImg.loading = "lazy";
-      frames.bind(pImg, v);
+      cameraBindings.push([pImg, v]);
       const pLbl = document.createElement("small");
       pLbl.textContent = `📷 ${v.label}`;
       pip.append(pImg, pLbl);
@@ -291,6 +297,7 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
     }
 
     inspector.replaceChildren(tabs, head, camStageNode, pipGrid, meta, quickDispatchBar, actions);
+    for (const binding of cameraBindings) frames.bind(...binding);
   }
 
   function show(rows, note) {
@@ -325,6 +332,7 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
         if (ev.target?.closest?.("ui-button, button, img")) return;
         activeInspectorId = card.id === "cell_s" ? "arm_s" : (card.id === "cell_ab" ? "arm_a" : card.id);
         renderInspector(rows);
+        frames.bind(camera, activeCam);
       });
       const activeCamId = selectedCamByCard[card.id] || card.cameraViews?.[0]?.id;
       const activeCam = (card.cameraViews || []).find((v) => v.id === activeCamId)
@@ -333,12 +341,17 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
       camera.loading = "lazy";
       camera.className = "cell-cam-thumb";
       camera.alt = `${card.title} 카메라`;
-      frames.bind(camera, activeCam);
+      if (activeInspectorId === card.id ||
+          (card.id === "cell_s" && activeInspectorId === "arm_s") ||
+          (card.id === "cell_ab" && ["arm_a", "arm_b"].includes(activeInspectorId))) {
+        queueMicrotask(() => { if (camera.isConnected) frames.bind(camera, activeCam); });
+      }
       camera.tabIndex = 0;
       camera.addEventListener("click", () => {
         camera.classList.toggle("focused");
         activeInspectorId = card.id === "cell_s" ? "arm_s" : (card.id === "cell_ab" ? "arm_a" : card.id);
         renderInspector(rows);
+        frames.bind(camera, activeCam);
       });
       camera.addEventListener("keydown", (ev) => {
         if (ev.key === "Enter" || ev.key === " ") {
@@ -361,7 +374,7 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
         camBtn.textContent = `📷 ${v.label}`;
         camBtn.addEventListener("click", () => {
           selectedCamByCard[card.id] = v.id;
-          frames.bind(camera, v);
+          if (camera.isConnected) frames.bind(camera, v);
           for (const ch of camBar.children || []) {
             if (!ch.dataset.streamToggle) {
               ch.setAttribute("kind", ch === camBtn ? "primary" : "quiet");
@@ -416,21 +429,12 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
   async function refresh() {
     const life = scope.capture();
     life.check();
-    if (inFlight || unavailable || auth.locked) return;
+    if (inFlight || unavailable || auth.locked || document.hidden) return;
     inFlight = true;
     try {
       const plan = await call("/api/fleet/charge-bays", { signals: [life.signal] });
       life.check();
-      const telemetry = await call("/api/fleet/pipeline/cell-tasks", {signals: [life.signal]})
-        .catch(() => null);
-      life.check();
-      const rows = chargeBayRows({
-        ...plan,
-        omx_cell_tasks: telemetry?.tasks || plan.omx_cell_tasks,
-        arm_live_states: telemetry?.arm_live_states || plan.arm_live_states,
-        station_camera_links: telemetry?.station_camera_links || plan.station_camera_links,
-        station_zones: telemetry?.station_zones || plan.station_zones,
-      });
+      const rows = chargeBayRows(plan);
       state.textContent = `칸 ${rows.bays.length}`;
       show(rows, rows.bays.length ? rows.summary : "활성 지도에 충전 칸(charge)이 없습니다");
     } catch (error) {
