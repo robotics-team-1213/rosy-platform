@@ -115,13 +115,18 @@ def test_run_carry_marks_a_destination_full_only_for_room_on_a_single_attempt(tm
     sites = {"pinky": {"auto_roi": [0, 0, 10, 10]}}
     full = [{"why": "place: does not fit on the surface / something is already there"}]
     stop = "stopped: no usable object"
+    at_choice = {"error": "no usable object"}
     cases = (
-        ({"result": stop, "attempts": [{"refused": full}]}, True),
-        ({"result": stop, "attempts": [{"refused": full + [{"why": "planner: y"}]}]}, False),
-        ({"result": stop, "attempts": [{"refused": [{"why": "place: no map at the destination"}]}]}, False),
-        ({"result": stop, "attempts": [{"refused": [{"why": "place: nothing under it at the lower tier"}]}]}, False),
+        ({"result": stop, "attempts": [{**at_choice, "refused": full}]}, True),
+        ({"result": stop, "attempts": [{**at_choice, "refused": full + [{"why": "planner: y"}]}]}, False),
+        ({"result": stop, "attempts": [{**at_choice, "refused": [{"why": "place: no map at the destination"}]}]}, False),
+        ({"result": stop, "attempts": [{**at_choice, "refused": [{"why": "place: nothing under it at the lower tier"}]}]}, False),
         # a second attempt means the first one acted: never redirect after motion
-        ({"result": stop, "attempts": [{"refused": []}, {"refused": full}]}, False),
+        ({"result": stop, "attempts": [{"refused": []}, {**at_choice, "refused": full}]}, False),
+        # one object refused for room, another carried, then a stop: the row has no choose-stage error
+        ({"result": "stopped: holding after a stop at lift", "attempts": [{"refused": full}]}, False),
+        ({"result": "stopped: no usable object after the pivot",
+          "attempts": [{"error": "no usable object after the pivot", "refused": full}]}, False),
         ({"result": "placed", "attempts": [{"refused": []}]}, False),
     )
     for result, expected in cases:

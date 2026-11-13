@@ -101,9 +101,10 @@ def run_carry(config_path: Path, catalog: Path, sites: dict, src: str, dst: str,
         result = {"result": f"no result (exit {proc.returncode}): {proc.stderr[-200:]}"}
     out.write_text(json.dumps(result))
     tries = result.get("attempts") or []
-    refused = tries[0].get("refused") or [] if len(tries) == 1 else []
-    # Stopped at the choice of the first and only attempt (before any motion), every object refused for room.
-    dest_full = str(result.get("result", "")).startswith("stopped") and bool(refused) and all(map(no_room, refused))
+    # Only cell_auto_pick's choose-stage return (before any motion) writes exactly this error; the pivot path differs.
+    at_choice = len(tries) == 1 and tries[0].get("error") == "no usable object"
+    refused = tries[0].get("refused") or [] if at_choice else []
+    dest_full = bool(refused) and all(map(no_room, refused))
     return {"from": src, "to": dst, "result": result.get("result"), "log": str(out), "dest_full": dest_full}
 
 
