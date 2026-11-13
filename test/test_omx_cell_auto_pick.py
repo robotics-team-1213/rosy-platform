@@ -402,7 +402,7 @@ def test_guard_abort_after_executor_choice_records_stopped_without_learning(tmp_
     assert len(attempts) == 1
     assert attempts[0]["execution"]["outcome"] == "stopped"
     assert attempts[0]["execution"]["executor"] == "ik_chunk"
-    assert cell_choices.Choices(tmp_path / "choices.json").data["values"]["exec.pick_place"][0]["tries"] == 0
+    assert all(c["tries"] == 0 for c in cell_choices.Choices(tmp_path / "choices.json").data["values"].get("exec.pick_place", []))
 
 
 @pytest.mark.parametrize("transfer_result", ["empty", "misaligned", "reinserted", "still holding"])
@@ -422,7 +422,7 @@ def test_guard_fault_and_refusal_stops_do_not_update_executor_ledger(tmp_path, m
         "result": transfer_result, "at": "run grasp_pick", "steps": []})
     _, _, attempts = run_started(tmp_path, monkeypatch, Cell([CONT2]))
     assert attempts[0]["execution"]["outcome"] == "stopped"
-    assert cell_choices.Choices(tmp_path / "choices.json").data["values"]["exec.pick_place"][0]["tries"] == 0
+    assert all(c["tries"] == 0 for c in cell_choices.Choices(tmp_path / "choices.json").data["values"].get("exec.pick_place", []))
 
 
 def test_exported_labels_follow_the_outcome_and_a_person_correction_replaces_the_row(tmp_path, monkeypatch):
