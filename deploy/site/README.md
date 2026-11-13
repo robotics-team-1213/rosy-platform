@@ -425,6 +425,17 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now rosy-site-account-login-check.timer
 ```
 
+A `PASS` needs positive evidence: the session answer must be a JSON object (read up to 64 KiB; a longer body fails) with
+`authenticated: true` or a non-empty `user_id`, `account_id` or `principal_id`. `authenticated: false`, a body that is not
+a JSON object, and an empty or unmatched app list (nothing checked, exit 2) all fail. Each request times out after 10 s, so
+the unit allows 15 min (9 requests x 10 s x 7 apps is 10.5 min).
+
+The test account counts against the Account login rate limit (`operations/account/rosy_account/password_session.py`;
+`LoginRateLimited`): 5 failed logins per minute per address (`ADDRESS_FAILURES_PER_MINUTE`) and 10 per minute per login
+(`LOGIN_FAILURES_PER_MINUTE`), counted in a sliding 60 s window; a successful login is refunded. Each run logs in once per
+app, so a wrong password or an Account outage makes the sixth app of one run fail with the limiter instead of `401`, and
+every app shows FAIL at once. It clears after a minute; it is not a lasting lock. Look at the first FAIL line, not the rest.
+
 Run the script by hand first; do not enable the timer until every app prints `PASS`. The units are not in
 `deploy/hosts/services.yaml` because `update_status` audits user units only (the system TLS twin is not listed either).
 
@@ -1355,6 +1366,13 @@ The updated verifier accepts historical signed candidates without the marker;
 when a tool is listed, its file and hash are always checked. A present marker
 must be literal `true`, and requires the tool and its hash. Removing or changing
 the marker also invalidates the manifest signature.
+
+Rollout order for a candidate that adds files to the signed manifest (a new unit, timer or tool): land the change on
+local `main`, then install the reviewed `verify_candidate.py` and its sibling modules on the site host from that local
+`main` through the trusted administrator path, then publish, then build and sign the candidate, and only then let the
+autoupdater fetch it. The previously installed verifier rejects a candidate that lists a file it does not know
+(`unsupported deployment file path`), so publishing first leaves the updater refusing every new candidate. The new verifier
+accepts older candidates, so rolling back to an earlier signed candidate is safe once it is installed.
 
 Before enabling updates, run the independently installed verifier against the
 running candidate, each retained rollback candidate, and the new signed candidate.
