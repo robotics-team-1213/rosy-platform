@@ -300,6 +300,12 @@ def _supervise(tree: Path, snap: str, land_args: list[str], run, room) -> int:
         git(Path(main).parent, "worktree", "remove", "--force", str(tree), check=False)
         git(Path(main).parent, "branch", "-D", snap, check=False)
         print(f"[land-async] {snap} landed; hidden worktree and snapshot branch removed", flush=True)
+        try:  # main moved: MAIN-RED stops it cleared go again; never changes this landing's own outcome
+            for name in orphans(Path(main).parent):
+                print(f"[land-async] resuming {name}: {resume(Path(main).parent, name, [], detach, wait=0)}",
+                      flush=True)
+        except (SystemExit, Exception) as exc:
+            print(f"[land-async] resuming cleared MAIN-RED stops skipped: {exc}", flush=True)
     else:
         (tree.parent / (tree.name + ".stopped")).write_text(f"land.py exit {code}; read {tree.name}.log\n",
                                                             encoding="utf-8")
@@ -410,9 +416,28 @@ def resume(cwd: Path, name: str, land_args: list[str], launch, wait: float = 60,
     return None
 
 
+def main_red_cleared(cwd: Path, place: Path, name: str) -> bool:
+    """A stop on MAIN-RED whose NEW ids main no longer has open: nothing of the owner's to fix. 11-13 ~20 landings
+    sat stopped for hours on one red main, many owners' sessions already gone, until someone resumed them by hand."""
+    try:
+        text = (place / (name + ".log")).read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return False
+    stops = re.findall(r"^\[land\] STOP: .*$", text, re.M)
+    if not stops or "MAIN-RED" not in stops[-1]:
+        return False
+    tools = str(Path(git(cwd, "rev-parse", "--show-toplevel")) / "tools")  # main's, not a snapshot copy
+    if tools not in sys.path:
+        sys.path.insert(0, tools)
+    import land_mainred
+    opened = land_mainred.state(cwd)
+    return not any(nodeid in opened for nodeid in re.findall(r"^NEW\s+(\S+)", text, re.M))
+
+
 def orphans(cwd: Path, hours: float = 24, now: float | None = None) -> list[str]:
     """Hidden landings whose supervisor died without landing or stopping (11-03 20:44 a reboot killed the whole
-    queue): no ``.stopped`` marker, no live supervisor or ticket, not in main, and the newest snapshot of its branch."""
+    queue), or that stopped on a MAIN-RED main has since cleared (``main_red_cleared``): no live supervisor or
+    ticket, not in main, and the newest snapshot of its branch."""
     place, now = holder(cwd), now or time.time()
     if not place.is_dir():
         return []
@@ -425,8 +450,10 @@ def orphans(cwd: Path, hours: float = 24, now: float | None = None) -> list[str]
                 newest[key] = tree
     found = []
     for tree in newest.values():
-        if ((place / (tree.name + ".stopped")).exists() or now - tree.stat().st_mtime > hours * 3600
-                or running(tree)):
+        if (place / (tree.name + ".stopped")).exists():
+            if not main_red_cleared(cwd, place, tree.name) or running(tree):
+                continue
+        elif now - tree.stat().st_mtime > hours * 3600 or running(tree):
             continue
         snaps = [s for s in git(cwd, "for-each-ref", "--format=%(refname:short)", "refs/heads/land/").splitlines()
                  if s.replace("/", "-") == tree.name]

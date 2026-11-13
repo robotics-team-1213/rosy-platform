@@ -197,6 +197,10 @@ def load_flaky(wt: Path, inv: list[str], log: Path, verdict: str, logdir: Path, 
     ``verdict`` is test/known_failures.py's output for ``log``; ``run`` is ``remote_pytest.run``.
     A stop also says whether the ids fail on main too (``main_red``).
     """
+    # 11-13: ~20 landings on one red main each reran main's known reds alone first; those alone jobs held
+    # the test hosts ("no test host reachable") for everyone, then main_red said "already failed on main".
+    if land_mainred.known(wt, land_mainred.merged_main(wt), _ids(wt, verdict)):
+        return [], main_red(wt, inv, verdict, logdir, tag, python, run)
     ids, why = _rerun_alone(wt, inv, log, verdict, logdir, tag, python, run, tested_sha=tested_sha)
     if ids or why.startswith("HEAD changed"):
         return ids, why
