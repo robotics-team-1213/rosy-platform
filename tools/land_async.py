@@ -322,10 +322,11 @@ def collect(tree: Path) -> None:
     held 4.2 GB and 488 logs."""
     repo = tree.parent.parent.parent
     sys.path[:0] = [str(repo / "tools")]
-    try:
+    try:  # under start()'s lock: a landing between its worktree add and its supervisor has neither on record
         import land_gc
-        rows = land_gc.plan(repo, time.time(), 7)
-        problems = land_gc.apply(repo, rows)
+        with locked(tree.parent.parent / "rosy-land-async.lock", wait=True):
+            rows = land_gc.plan(repo, time.time(), 7)
+            problems = land_gc.apply(repo, rows)
         gone = sum(row[0] != "keep" for row in rows) - len(problems)
         if gone or problems:
             print(f"[land-async] land_gc removed {gone} leftover(s); {len(problems)} kept as changed", flush=True)
@@ -405,6 +406,8 @@ def _resume_start(cwd: Path, name: str, land_args: list[str], launch):
         raise SystemExit(f"[land-async] {snap} is held by {owner} ({held[0].get('branch')})")
     if git(tree, "rev-parse", "--abbrev-ref", "HEAD") != snap:  # land.py had moved it onto a batch candidate
         git(tree, "checkout", "-q", snap)
+    if (place / (name + ".stopped")).exists() and main_red_stop(place, name):
+        (place / (name + ".auto-resume")).write_text(git(cwd, "rev-parse", "main"), encoding="utf-8")
     (place / (name + ".stopped")).unlink(missing_ok=True)
     try:
         saved = json.loads((place / (name + ".args.json")).read_text(encoding="utf-8"))
@@ -455,7 +458,11 @@ def main_red_cleared(cwd: Path, place: Path, name: str) -> bool:
         sys.path.insert(0, tools)
     import land_mainred
     opened = land_mainred.state(cwd)
-    return not any(nodeid in opened for nodeid in re.findall(r"^NEW\s+(\S+)", text, re.M))
+    ids = re.findall(r"^NEW\s+(\S+)", text, re.M)
+    mark = place / (name + ".auto-resume")  # one resume per main: a stop main never tracked must not loop
+    if not ids or mark.is_file() and mark.read_text(encoding="utf-8").strip() == git(cwd, "rev-parse", "main"):
+        return False
+    return not any(nodeid in opened for nodeid in ids)
 
 
 def orphans(cwd: Path, hours: float = 24, now: float | None = None) -> list[str]:
@@ -520,7 +527,7 @@ def main(argv: list[str]) -> int:
         return 0 if status else 1
     big = next((argv[i + 1] for i, a in enumerate(argv[:-1]) if a == "--allow-big"), None)
     argv = [a for i, a in enumerate(argv) if a != "--allow-big" and (i == 0 or argv[i - 1] != "--allow-big")]
-    if big is not None and not big.strip():
+    if big is not None and (not big.strip() or big.startswith("--")):
         raise SystemExit('[land-async] --allow-big needs a reason: --allow-big "<why this cannot be split>"')
     if big is None and (why := too_big(Path.cwd())):
         raise SystemExit(f"[land-async] refused: {why}. Land the oldest finished part from a new branch off main"

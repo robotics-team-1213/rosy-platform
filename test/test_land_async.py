@@ -715,6 +715,10 @@ def test_a_main_red_stop_goes_again_once_main_no_longer_has_its_ids_open(repo, m
     assert tool.orphans(dev, now=tree.stat().st_mtime + 30 * 3600) == []  # main still red there: keep waiting
     opened.clear()
     assert tool.orphans(dev, now=tree.stat().st_mtime + 30 * 3600) == [tree.name]
+    mark = tree.parent / (tree.name + ".auto-resume")  # resumed once at this main: it stopped again, no loop
+    mark.write_text(_git(dev, "rev-parse", "main"), encoding="utf-8")
+    assert tool.orphans(dev, now=tree.stat().st_mtime + 30 * 3600) == []
+    mark.unlink()
     with open(log, "a", encoding="utf-8") as out:
         out.write("[land] STOP: lint failed (exit 1):\n")
     assert tool.orphans(dev, now=tree.stat().st_mtime) == []  # the owner's own stop waits for the owner

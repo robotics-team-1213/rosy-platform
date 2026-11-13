@@ -31,7 +31,7 @@ import worktrees  # noqa: E402  (lossless status, including ignored user data)
 HOLDER, QUEUE, PREFIX = "rosy-land-wt", "rosy-land-queue", "land/"
 QUIET_S = 3600  # the 1 h wait worktree_rules gives landed worktrees
 MAIN_RED_DAYS = 14  # a MAIN-RED stop's snapshot waits this long for main to clear (worktree_rules.ABANDON_DAYS)
-FILES = (".stopped", ".land_async.py", ".resume.log", ".args.json")
+FILES = (".stopped", ".land_async.py", ".resume.log", ".args.json", ".auto-resume")
 SNAPSHOT = re.compile(r"-\d{14}(-batch\d+-k\d+)?$")  # land_async.snapshot_name, plus land_batch's batch branches
 
 

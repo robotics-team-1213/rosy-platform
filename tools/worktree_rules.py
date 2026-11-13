@@ -254,11 +254,14 @@ def archive_abandoned(root: Path, now: float, apply: bool, say=print, quiet: boo
                   "--format=%(refname:short)\t%(objectname)\t%(worktreepath)\t%(committerdate:unix)")
     if listed.returncode != 0:
         raise RuntimeError(f"git for-each-ref failed: {listed.stderr.strip()}")
+    common = root / _git(root, "rev-parse", "--git-common-dir").stdout.strip()
     done = 0
     for line in listed.stdout.splitlines():
         branch, sha, checked_out, when = line.split("\t")
+        # the reflog too: a branch just restored from refs/archive has an old tip but was touched now
+        touched = max(int(when or now), reflog_time(common / "logs" / "refs" / "heads" / branch))
         if (checked_out or branch in keep or branch.startswith(("archive/", "land/"))
-                or now - int(when or now) < ABANDON_DAYS * 86400):
+                or now - touched < ABANDON_DAYS * 86400):
             continue
         if apply:
             ref = f"refs/archive/{branch}@{sha[:10]}"
@@ -270,8 +273,7 @@ def archive_abandoned(root: Path, now: float, apply: bool, say=print, quiet: boo
             if _git(root, "update-ref", "-d", f"refs/heads/{branch}", sha).returncode != 0:
                 say(f"FAIL    branch {branch} moved; kept (its archive ref stays)")
                 continue
-            _git(root, "config", "--remove-section", f"branch.{branch}")
-        done += 1
+        done += 1  # branch.<name>.description (the owner) stays for a restore
     if done or not quiet:
         say(f"[worktrees] {'archived' if apply else 'would archive'} {done} unlanded branch(es) idle over"
             f" {ABANDON_DAYS} days with no worktree (refs/archive/<branch>@<sha>)")
