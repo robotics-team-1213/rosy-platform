@@ -35,8 +35,8 @@ class FakeWorld:
 class FakeTeacher:
     """Phases and container moves only: one target per phase, so the scheduler's measured-progress gates see progress happen."""
 
-    def __init__(self, layout, long=None):
-        self.layout, self.world, self.long = layout, FakeWorld(layout), long or {}
+    def __init__(self, layout, long=None, stray_after=None):
+        self.layout, self.world, self.long, self.stray_after = layout, FakeWorld(layout), long or {}, stray_after
 
     def step_gen(self, data, step, here, ctx):
         for _ in range(self.long.get(step["id"], 0)):  # steps the test wants to outlive a peer's pick
@@ -48,6 +48,8 @@ class FakeTeacher:
                 self.world.pos[step["container"]][2] += .5
             if phase == "lower":
                 self.world.put(data, step["container"], step["to"])
+            if phase == "carry" and step["id"] == self.stray_after:  # as the box lifts, something else lands on the belt end for good
+                self.world.put(data, "bar-9", "belt")
             yield np.zeros(6)
         return dict(step=step["id"], container=step["container"], arm=step["arm"], result="pass")
 
@@ -73,8 +75,8 @@ def miss_task():
         dict(id="m1", container="bar-1", **{"from": "belt"}, to="ship-h1r1-l0", arm="arm_a", zones=[["mid"], ["a"]])])
 
 
-def run(task, faults=None, long=None):
-    teacher = FakeTeacher(LAYOUT, long=long)
+def run(task, faults=None, long=None, stray_after=None):
+    teacher = FakeTeacher(LAYOUT, long=long, stray_after=stray_after)
     for cid, site in task.get("start", {}).items():
         teacher.world.put(None, cid, site)
     return run_concurrent_steps(teacher, None, task, dict(task.get("start", {})), faults=faults)
@@ -127,3 +129,17 @@ def test_a_slowed_arm_stretches_its_segments_and_keeps_the_order():
     assert stopped is None and [r["result"] for r in rows] == ["pass"] * 5 and extra["invariants"] == PASSING
     took = lambda t: t["p2"]["end_s"] - t["p2"]["start_s"]  # noqa: E731
     assert took(timing) > 2.5 * took(base_timing)  # ~3x stretched, the belt order still by measured progress
+
+
+def test_the_last_delivery_is_not_done_until_the_belt_reads_empty():
+    rows, _, stopped, extra = run(miss_task(), stray_after="m1")
+    # the step itself passed, but the belt never read empty after it: no completed run
+    assert [r["result"] for r in rows] == ["pass"] and stopped == "timeout after 900 s"
+    assert [e["event"] for e in extra["belt_events"]] == ["reserve", "placed", "arrived", "grasped"]
+
+
+def test_a_non_belt_step_still_waits_for_its_after_pick():
+    task = make_task()
+    task["steps"][3]["after_pick"] = ["p1"]  # r1 (arm_a) may start only once arm_b has lifted bar-1 off the belt
+    _, timing, stopped, _ = run(task)
+    assert stopped is None and timing["r1"]["start_s"] >= timing["p1"]["picked_s"]

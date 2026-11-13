@@ -412,8 +412,10 @@ def main(argv=None):
         import omx_two_arm_skill as skill_mod
         teacher.zero_error = skill_mod.draw_zero_error(a.seed or 1003, a.zero_error_deg)
         teacher.privileged, teacher.compensate_zero = False, True
-    faults = Faults(unknown_p=a.belt_unknown, miss=a.belt_miss, fail_at=a.fail_at, seed=a.seed,
-                    slow={arm: float(factor) for arm, factor in (spec.split(":") for spec in a.slow)})
+    slow = {arm: float(factor) for arm, factor in (spec.split(":") for spec in a.slow)}
+    if not 0 <= a.belt_unknown <= 1 or any(arm not in PREFIX or f < 1 for arm, f in slow.items()):
+        p.error("--belt-unknown takes 0..1 and --slow ARM:FACTOR an arm_a/arm_b with FACTOR >= 1")  # a typo must not run a fault-free test
+    faults = Faults(unknown_p=a.belt_unknown, miss=a.belt_miss, fail_at=a.fail_at, seed=a.seed, slow=slow)
     result = teacher.run_task(task, a.isolated, a.concurrent, faults=faults)
     if a.frames:
         from PIL import Image

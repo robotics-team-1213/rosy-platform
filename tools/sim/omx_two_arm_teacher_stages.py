@@ -104,7 +104,7 @@ def run_concurrent_steps(teacher, data, task, here, max_s=900, faults=None):
             extra["belt_wait_s"] = round(halt_wait, 1)
         return rows, timing, stop_reason, extra
 
-    while any(queue.values()) or running:
+    while any(queue.values()) or running or belt.state == "picked":  # the last pick still owes its empty reading
         if belt.state == "placed":
             try:
                 belt.arrived(belt.generation, belt.cargo, reading())
@@ -137,8 +137,8 @@ def run_concurrent_steps(teacher, data, task, here, max_s=900, faults=None):
                         pass
                 if not done_after or not free or belt.state != "at_end" or belt.cargo != s["container"]:
                     continue  # nothing of this step's at the belt end yet (or the token is another step's): the pick gate holds
-            elif not done_after or not free:
-                continue
+            elif not done_after or not free or not all(status.get(d) for d in s.get("after_pick", [])):
+                continue  # a non-belt step keeps its plan's after_pick
             queue[arm].pop(0)
             started[s["id"]] = frames
             if s["from"] == "belt" and not belt_cargo():
@@ -152,7 +152,7 @@ def run_concurrent_steps(teacher, data, task, here, max_s=900, faults=None):
             heads = [q[0] for q in queue.values() if q]
             # every blocked head waiting on the belt ledger (a delivery in flight, or readings to retry) is waiting, not deadlock
             belt_waiting = all(s["from"] == "belt" and all(status.get(d) == "done" for d in s.get("after", [])) for s in heads)
-            if halt or not heads or not belt_waiting:
+            if halt or (not heads and belt.state != "picked") or (heads and not belt_waiting):
                 return result(halt or f"deadlock: {[s['id'] for s in heads]} cannot start")
         targets = {}
         parking = [a for a, r in running.items() if r[2].phase == "park"]
