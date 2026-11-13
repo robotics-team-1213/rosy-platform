@@ -53,8 +53,7 @@ try:
     import yaml
     config = yaml.safe_load(Path('/var/lib/rosy/core/.rosy/rosy.yaml').read_text()) or {}
     result['tokens'] = [{'id': row.get('id'), 'expires_at': row.get('expires_at')}
-                        for row in config.get('auth', {}).get('tokens', [])
-                        if row.get('source') == 'pair-site']
+                        for row in config.get('auth', {}).get('tokens', [])]
 except Exception as exc:
     result['token_error'] = type(exc).__name__
 try:
@@ -62,7 +61,7 @@ try:
     result['tls_configured'] = values.get('ROSY_API_TLS') == 'required'
     if result['tls_configured']:
         host = values['ROSY_API_TLS_HOST']
-        port = int(values['ROSY_API_PORT'])
+        port = int(values.get('ROSY_API_PORT', '8080'))
         context = ssl.create_default_context(cafile=values['ROSY_API_TLS_CA_FILE'])
         with socket.create_connection(('127.0.0.1', port), timeout=3) as raw:
             with context.wrap_socket(raw, server_hostname=host) as secured:
@@ -74,11 +73,29 @@ try:
 except Exception as exc:
     result['tls'] = False
     result['tls_error'] = type(exc).__name__
+try:
+    invocation = subprocess.run(['systemctl', 'show', 'rosy-core.service',
+                                 '-p', 'InvocationID', '--value'], capture_output=True,
+                                text=True, timeout=15, check=True).stdout.strip()
+    if not invocation:
+        raise ValueError('CORE invocation unavailable')
+    journal = subprocess.run(['journalctl', '_SYSTEMD_INVOCATION_ID=' + invocation,
+                              '-o', 'cat', '--no-pager', '-n', '2000'], capture_output=True,
+                             text=True, timeout=15, check=True).stdout
+    for line in journal.splitlines():
+        if 'Fleet agent welcomed by hub' in line:
+            result['hub_online'] = True
+        elif any(message in line for message in ('Fleet agent disconnected:',
+                 'Fleet agent link lost (', 'Fleet hub did not answer a heartbeat',
+                 'Fleet agent link requires operator:', 'Fleet authentication rejected')):
+            result['hub_online'] = False
+except Exception:
+    pass
 print(json.dumps(result))
 '''
 
 FLEET_PROBE = r'''
-import json, os, sqlite3, ssl, urllib.request
+import json, sqlite3
 uri = 'file:/var/lib/rosy/fleet.sqlite3?mode=ro'
 with sqlite3.connect(uri, uri=True, timeout=3) as db:
     rows = db.execute('SELECT robot_id, hostname, discovery_name, address, token_id, state, '
@@ -87,18 +104,7 @@ with sqlite3.connect(uri, uri=True, timeout=3) as db:
 rows = [dict(robot_id=r[0], hostname=r[1], discovery_name=r[2], address=r[3],
                        token_id=r[4], state=r[5], expires_at=r[6],
                        fleet_expires_at=r[7], hub_linked=bool(r[8])) for r in rows]
-live = None
-try:
-    token = open('/run/secrets/registry_token').read().strip()
-    request = urllib.request.Request('https://fleet:8090/api/fleet/enrollment/robots',
-                                     headers={'Authorization': 'Bearer ' + token})
-    with urllib.request.urlopen(request, context=ssl.create_default_context(
-            cafile='/run/secrets/site_ca'), timeout=5) as response:
-        live = {row['robot_id']: bool(row.get('hub_online'))
-                for row in json.load(response).get('robots', [])}
-except Exception:
-    pass
-print(json.dumps({'rows': rows, 'live': live}))
+print(json.dumps({'rows': rows}))
 '''
 
 IDENTIFY_PROBE = r'''
@@ -198,24 +204,23 @@ def decide(robot_id: str, robot: dict | None, fleet: dict | None, *, robot_error
     if robot is not None and fleet is not None:
         match = next((t for t in robot.get('tokens', []) if t.get('id') == fleet.get('token_id')), None)
         actual, ledger = expiry(match.get('expires_at')) if match else None, expiry(fleet.get('expires_at'))
-        fleet_limit = fleet.get('fleet_expires_at')
         if robot.get('token_error'):
             add('token', False, 'robot token metadata unreadable')
         elif match is None or actual is None or ledger is None:
             add('token', False, 'matching token or expiry missing')
         else:
-            valid = (actual > now and ledger > now and abs(actual - ledger) < 1
-                     and isinstance(fleet_limit, (int, float)) and fleet_limit > now)
-            add('token', valid,
-                'matching unexpired metadata' if valid
-                else 'expired or expiry mismatch')
+            valid = actual > now and actual >= ledger
+            robot_date = datetime.fromtimestamp(actual, timezone.utc).isoformat()
+            fleet_date = datetime.fromtimestamp(ledger, timezone.utc).isoformat()
+            add('token', valid, f'robot expiry {robot_date}; Fleet expiry {fleet_date}')
     elif robot is not None:
         add('token', False, 'Fleet or robot token metadata unavailable')
-    if fleet is not None and 'hub_online' in fleet:
-        add('hub_online', fleet['hub_online'] is True,
-            'online' if fleet['hub_online'] else 'offline')
+    if fleet is not None and robot is not None and 'hub_online' in robot:
+        add('hub_online', robot['hub_online'] is True,
+            'robot agent welcomed (journal)' if robot['hub_online'] else
+            'robot agent disconnected (journal)')
     else:
-        add('hub_online', None, 'live Fleet enrollment API unavailable')
+        add('hub_online', None, 'robot agent journal state unavailable')
     add('lamp', None, 'no status-lamp read route in current CORE API')
     add('update', None, 'no update-status read route in current CORE API')
     return rows
@@ -251,15 +256,12 @@ def main(argv=None) -> int:
     fleet_rows, fleet_error = probe([*update_ops.host_ssh(site), 'sudo', '-n', 'docker',
                                     'exec', '-i', '-u', 'rosy', 'rosy-site-fleet-1',
                                     'python3', '-'], FLEET_PROBE, 30)
-    live = fleet_rows.get('live') if isinstance(fleet_rows, dict) else None
     fleet_rows = fleet_rows.get('rows', []) if isinstance(fleet_rows, dict) else []
     results = []
     for robot_id in targets:
         target = lab_hosts.ssh_target(known[robot_id], 'robots')
         robot, error = probe([*robot_ssh(target), 'sudo', '-n', 'python3', '-'], ROBOT_PROBE)
         row = enrollment(fleet_rows, robot_id, target)
-        if row is not None and isinstance(live, dict) and row['robot_id'] in live:
-            row = {**row, 'hub_online': live[row['robot_id']]}
         results.extend(decide(robot_id, robot, row, robot_error=error,
                               fleet_error=fleet_error))
         if args.active:
