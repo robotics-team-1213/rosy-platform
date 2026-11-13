@@ -688,21 +688,17 @@ def test_a_main_red_stop_goes_again_once_main_no_longer_has_its_ids_open(repo, m
     main, dev = repo
     snap, log = tool.start(dev, [], NOW, lambda *a: None)
     tree = log.parent / log.name.removesuffix(".log")
-    (tree.parent / (tree.name + ".stopped")).write_text("land.py exit 1
-")
+    (tree.parent / (tree.name + ".stopped")).write_text("land.py exit 1\n")
     with open(log, "a", encoding="utf-8") as out:
-        out.write("NEW       pkg/test/test_a.py::test_a
-[land] STOP: NEW failure in pkg/test/test_a.py;"
-                  " MAIN-RED: every NEW id already failed on main 8b65ceaa0f (rosy-main-red.jsonl); not rerun
-")
+        out.write("NEW       pkg/test/test_a.py::test_a\n[land] STOP: NEW failure in pkg/test/test_a.py;"
+                  " MAIN-RED: every NEW id already failed on main 8b65ceaa0f (rosy-main-red.jsonl); not rerun\n")
     opened = {"pkg/test/test_a.py::test_a": {}}
     monkeypatch.setattr(land_mainred, "state", lambda wt: opened)
     assert tool.orphans(dev, now=tree.stat().st_mtime + 30 * 3600) == []  # main still red there: keep waiting
     opened.clear()
     assert tool.orphans(dev, now=tree.stat().st_mtime + 30 * 3600) == [tree.name]
     with open(log, "a", encoding="utf-8") as out:
-        out.write("[land] STOP: lint failed (exit 1):
-")
+        out.write("[land] STOP: lint failed (exit 1):\n")
     assert tool.orphans(dev, now=tree.stat().st_mtime) == []  # the owner's own stop waits for the owner
 
 
