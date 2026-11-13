@@ -412,13 +412,18 @@ HOLD_DEFAULT_HOURS, HOLD_MAX_HOURS = 24, 168
 
 
 def hold_until(hold: dict) -> _dt.datetime:
-    """Expiry of a stored hold; legacy holds without ``until`` count as set-time + 24 h."""
+    """Expiry of a stored hold. A hold without an ``until`` key counts as set-time + 24 h; an ``until`` that is
+    present but unparsable, not a string or without a time zone is expired (a naive time cannot be compared).
+    update_status.py applies the same rule."""
+    expired = _dt.datetime.min.replace(tzinfo=_dt.timezone.utc)
     try:
-        if isinstance(hold.get('until'), str):
-            return _dt.datetime.fromisoformat(hold['until'])
-        return _dt.datetime.fromisoformat(hold['time']) + _dt.timedelta(hours=HOLD_DEFAULT_HOURS)
-    except (KeyError, TypeError, ValueError):
-        return _dt.datetime.min.replace(tzinfo=_dt.timezone.utc)  # unreadable time: report as expired
+        if 'until' in hold:
+            stamp = _dt.datetime.fromisoformat(hold['until'])
+        else:
+            stamp = _dt.datetime.fromisoformat(hold['time']) + _dt.timedelta(hours=HOLD_DEFAULT_HOURS)
+    except (KeyError, TypeError, ValueError, AttributeError, OverflowError):
+        return expired
+    return stamp if stamp.tzinfo is not None else expired
 
 
 def hold_expired(hold: dict) -> bool:

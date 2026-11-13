@@ -543,7 +543,7 @@ def main(argv: list[str] | None = None) -> int:
             if isinstance(doc.get('hold'), dict):
                 doc['hold'].update(expired=hold_expired(doc['hold']), until=hold_until(doc['hold']).isoformat())
                 text = json.dumps(doc, indent=2, sort_keys=True)
-        except (ValueError, AttributeError):
+        except (ValueError, AttributeError, TypeError):
             pass
         print(text)
         return EXIT_OK
