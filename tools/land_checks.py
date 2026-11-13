@@ -264,26 +264,38 @@ def main_red(wt: Path, inv: list[str], verdict: str, logdir: Path, tag: str, pyt
         return ""
     main = land_mainred.merged_main(wt)  # the main this candidate merged, not main's tip (D-889 addendum 2, 1)
     env = [token for token in inv if ENV_TOKEN.match(token)]
-    log = logdir / f"main-{tag}.txt"
     if land_mainred.known(wt, main, ids):
         return f"MAIN-RED: every NEW id already failed on main {main[:10]} (rosy-main-red.jsonl); not rerun"
     print(f"[land] rerunning {min(len(ids), MAX_MAIN_CHECK)} NEW id(s) on main {main[:10]} (MAIN-RED check)",
           flush=True)
+    # an alone-class id names a file: run as a node id it gives no verdict on main (2026-11-13), so each reruns
+    # the way land_mainred.recheck does, in its own invocation
+    head = ids[:MAX_MAIN_CHECK]
+    alone = [land_mainred.alone_invocation(i) for i in head]
+    plain = [i for i, a in zip(head, alone) if not a]
+    jobs = ([[*env, *plain]] if plain else []) + [[*env, *a] for a in alone if a]
+    logs = [logdir / f"main-{tag}{'' if n == 0 else f'-{n}'}.txt" for n in range(len(jobs))]
+    log = logs[0]
     try:
-        code = run([[*env, *ids[:MAX_MAIN_CHECK]]], [log], main, repo=wt, label=f"land-main-{tag}")[0]
+        codes = run(jobs, logs, main, repo=wt, label=f"land-main-{tag}")
     except SystemExit as exc:  # no test host (D-584): unknown, not main's
         return f"main check not run ({exc})"
-    if code == 0:
+    if all(code == 0 for code in codes):
         return f"the NEW id(s) pass on main {main[:10]}: this branch caused them"
-    if code != 1 or not log.is_file():
-        return f"main check gave no verdict (exit {code}, log {log}); new tests may not exist on main"
-    again = subprocess.run([python, "test/known_failures.py", str(log)], cwd=wt, capture_output=True,
-                           text=True, encoding="utf-8", errors="replace")
-    red = [m.group(1).strip() for line in again.stdout.splitlines() if (m := NEW_LINE.match(line.strip()))]
+    if 1 not in codes or not all(lg.is_file() for lg, code in zip(logs, codes) if code == 1):
+        return f"main check gave no verdict (exit {codes}, log {log}); new tests may not exist on main"
+    red, text = [], ""
+    for lg, code in zip(logs, codes):
+        if code != 1:
+            continue
+        again = subprocess.run([python, "test/known_failures.py", str(lg)], cwd=wt, capture_output=True,
+                               text=True, encoding="utf-8", errors="replace")
+        red += [m.group(1).strip() for line in again.stdout.splitlines() if (m := NEW_LINE.match(line.strip()))]
+        text += lg.read_text(encoding="utf-8", errors="replace")
     for nodeid in red:
         print(f"MAIN-RED {nodeid}")
     branch = _git(wt, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip()
-    land_mainred.red(wt, main, red, log.read_text(encoding="utf-8", errors="replace"), env, branch)
+    land_mainred.red(wt, main, red, text, env, branch)
     if not red:
         return f"the NEW id(s) pass on main {main[:10]}: this branch caused them"
     return (f"MAIN-RED: {len(red)} of {len(ids)} NEW id(s) also fail on main {main[:10]} (log {log}). Main is"
