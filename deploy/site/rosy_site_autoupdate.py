@@ -29,7 +29,7 @@ if __package__:
         PROJECT, Refused, Rejected, Runner, SERVICES, SIGNATURE, STACK_UNIT, Transient,
         _COMMIT, _LIST_LIMIT, _MAX_PAGES, _PART, _SMALL_LIMIT, _TAG, _now,
         check_overrides, forget_failed, functional_inventory, functional_reason, load_config, load_update_state, log, read_env,
-        run_lock, safe_extract, set_hold, swap_link, write_env_tag,
+        hold_expired, hold_until, run_lock, safe_extract, set_hold, swap_link, write_env_tag,
     )
     from .site_update_runtime import SiteRuntimeIO, containers_reason, runtime_reason
 else:  # pragma: no cover - installed host CLI
@@ -41,7 +41,7 @@ else:  # pragma: no cover - installed host CLI
         PROJECT, Refused, Rejected, Runner, SERVICES, SIGNATURE, STACK_UNIT, Transient,
         _COMMIT, _LIST_LIMIT, _MAX_PAGES, _PART, _SMALL_LIMIT, _TAG, _now,
         check_overrides, forget_failed, functional_inventory, functional_reason, load_config, load_update_state, log, read_env,
-        run_lock, safe_extract, set_hold, swap_link, write_env_tag,
+        hold_expired, hold_until, run_lock, safe_extract, set_hold, swap_link, write_env_tag,
     )
     from site_update_runtime import SiteRuntimeIO, containers_reason, runtime_reason
 
@@ -405,7 +405,8 @@ class SiteUpdater(SiteRuntimeIO):
                 state['last_run']['result'] = 'recovered'
                 return EXIT_FAILED
             if state.get('hold'):
-                log('held')
+                log('held-expired' if hold_expired(state['hold']) else 'held',
+                    reason=state['hold']['reason'], until=state['hold'].get('until'))
                 state['last_run']['result'] = 'held'
                 return EXIT_OK
             return self._update(state)
@@ -531,11 +532,20 @@ def main(argv: list[str] | None = None) -> int:
     forget.add_argument("tag")
     hold = commands.add_parser('hold', help='pause new updates during local maintenance')
     hold.add_argument('reason')
+    hold.add_argument('--hours', type=float, default=24, help='hold length, 24 by default, at most 168')
     commands.add_parser('resume', help='allow updates after local maintenance')
     args = parser.parse_args(argv)
     paths = Paths()
     if args.command == "status":
-        print(paths.state.read_text(encoding="utf-8") if paths.state.exists() else "{}")
+        text = paths.state.read_text(encoding="utf-8") if paths.state.exists() else "{}"
+        try:  # annotate for update_status.py; an unparsable file is printed as it is
+            doc = json.loads(text)
+            if isinstance(doc.get('hold'), dict):
+                doc['hold'].update(expired=hold_expired(doc['hold']), until=hold_until(doc['hold']).isoformat())
+                text = json.dumps(doc, indent=2, sort_keys=True)
+        except (ValueError, AttributeError):
+            pass
+        print(text)
         return EXIT_OK
     try:
         config = load_config(paths.config)
@@ -546,7 +556,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "forget-failed":
         return forget_failed(updater, args.tag)
     if args.command in {'hold', 'resume'}:
-        return set_hold(updater, args.reason if args.command == 'hold' else None)
+        if args.command == 'resume':
+            return set_hold(updater, None)
+        return set_hold(updater, args.reason, args.hours)
     return updater.run()
 
 

@@ -408,7 +408,25 @@ def forget_failed(updater, tag: str) -> int:
         return EXIT_FAILED
 
 
-def set_hold(updater, reason: str | None) -> int:
+HOLD_DEFAULT_HOURS, HOLD_MAX_HOURS = 24, 168
+
+
+def hold_until(hold: dict) -> _dt.datetime:
+    """Expiry of a stored hold; legacy holds without ``until`` count as set-time + 24 h."""
+    try:
+        if isinstance(hold.get('until'), str):
+            return _dt.datetime.fromisoformat(hold['until'])
+        return _dt.datetime.fromisoformat(hold['time']) + _dt.timedelta(hours=HOLD_DEFAULT_HOURS)
+    except (KeyError, TypeError, ValueError):
+        return _dt.datetime.min.replace(tzinfo=_dt.timezone.utc)  # unreadable time: report as expired
+
+
+def hold_expired(hold: dict) -> bool:
+    """An expired hold still blocks updates (fail safe); it is only reported loudly."""
+    return hold_until(hold) <= _dt.datetime.now(_dt.timezone.utc)
+
+
+def set_hold(updater, reason: str | None, hours: float = HOLD_DEFAULT_HOURS) -> int:
     """Operator control uses the same lock as switching and journal recovery."""
     try:
         with run_lock(updater.paths.lock):
@@ -418,7 +436,11 @@ def set_hold(updater, reason: str | None) -> int:
             else:
                 if not reason.strip() or len(reason) > 200:
                     raise Refused('hold reason must contain 1 to 200 characters')
-                state['hold'] = {'reason': reason.strip(), 'time': _now()}
+                if not 0 < hours <= HOLD_MAX_HOURS:
+                    raise Refused(f'hold hours must be above 0 and at most {HOLD_MAX_HOURS}')
+                until = _dt.datetime.now(_dt.timezone.utc) + _dt.timedelta(hours=hours)
+                state['hold'] = {'reason': reason.strip(), 'time': _now(),
+                                 'until': until.replace(microsecond=0).isoformat()}
             updater.save_state(state)
             log('hold-changed', held=reason is not None)
             return EXIT_OK
