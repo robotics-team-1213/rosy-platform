@@ -305,3 +305,22 @@ def test_site_hold_expiry_and_refused_last_run_are_reported():
     refused = _site({'last_run': {'result': 'refused', 'reason': 'fleet loaded image ID mismatch'}})
     assert refused[0][0] == 'FAIL' and 'image ID mismatch' in refused[0][2]
     assert _site({'last_run': {'result': 'idle'}}) == []
+
+
+def test_retired_host_name_in_a_config_file_fails_with_the_path_only():
+    host = status.parse('retired /etc/chrony/chrony.conf\nretired /home/r/.config/rosy/cal/receiver.json', NOW, 6.0)
+    found = [f for f in status.clock_and_site(host, NOW) if f[1] == 'retired-name']
+    assert [f[0] for f in found] == ['FAIL', 'FAIL'] and '/etc/chrony/chrony.conf' in found[0][2]
+    assert not [f for f in status.clock_and_site(status.parse('gate open', NOW, 6.0), NOW) if f[1] == 'retired-name']
+
+
+def test_retired_hostnames_list_the_vanished_tailnet_name_not_the_live_mdns_name():
+    names = [n.lower() for n in status.retired_hostnames()]
+    assert 'robttt-15z95n-gp7ql.tailb4b84d.ts.net' in names
+    assert not [n for n in names if n.endswith('.local')]
+
+
+def test_retired_name_probe_is_valid_bash_and_skips_backup_files():
+    import subprocess
+    assert subprocess.run(['bash', '-n'], input=status.PROBE.encode()).returncode == 0
+    assert '*rosy-source-repair*' in status.PROBE and '*before-*' in status.PROBE

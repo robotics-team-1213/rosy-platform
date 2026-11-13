@@ -31,6 +31,9 @@ Time and site updater (2026-11-13): a host with chrony is FAIL when it has no us
 (`chronyc -n sources` state `*`, `+` or `-`); configured server names that do not resolve are noted.
 On the site host the auto-updater state is read: an active hold shows as HELD, a hold past its
 expiry (still blocking) or a `refused`/recovery last run with its reason is FAIL. FAIL exits 1.
+
+Retired names (2026-11-13): chrony.conf, /etc/hosts, receiver.json and the Account authority.json are searched for the
+`retired_hostnames` of services.yaml (backup-named files skipped); a hit is FAIL `retired-name` with the path only.
 """
 from __future__ import annotations
 
@@ -107,6 +110,12 @@ fi
 # the site auto-updater's state (hold, last run), one JSON line
 sf=/var/lib/rosy/site-autoupdate.json
 [ -f "$sf" ] && { sudo -n cat "$sf" 2>/dev/null || cat "$sf" 2>/dev/null; } </dev/null | python3 -c 'import json,sys;print("sitestate",json.dumps(json.load(sys.stdin)))' 2>/dev/null
+# retired host names (RETIRED is prepended from services.yaml): report only the file path, never its content
+for f in /etc/chrony/chrony.conf /etc/hosts /etc/rosy/account/authority.json $(find ~/.config/rosy -maxdepth 5 -name receiver.json 2>/dev/null); do
+  case "$f" in *.bak*|*backup*|*before-*|*.orig*|*rosy-backup*|*rosy-source-repair*) continue;; esac
+  { head -c 1048576 "$f" 2>/dev/null || sudo -n head -c 1048576 "$f" 2>/dev/null; } </dev/null | grep -qiF -f <(printf '%s
+' $RETIRED) && echo "retired $f"
+done
 D=docker; docker images -q >/dev/null 2>&1 </dev/null || D='sudo -n docker'
 $D images --format 'image {{.Repository}} {{.Tag}}' </dev/null 2>/dev/null
 true
@@ -153,6 +162,8 @@ def parse(text: str, now: float, stale_hours: float) -> dict:
         elif kind == 'chrony':
             usable, total, bad = (rest.split(' ') + ['0', '0', '-'])[:3]
             host['chrony'] = dict(usable=int(usable), total=int(total), unresolved=[n for n in bad.split(',') if n and n != '-'])
+        elif kind == 'retired':
+            host.setdefault('retired', []).append(rest.strip())
         elif kind == 'sitestate':
             try:
                 host['site'] = json.loads(rest)
@@ -253,6 +264,12 @@ def load_inventory(path: Path | None = None) -> dict:
             if not isinstance(entry.get('run'), str):  # YAML 1.1 reads a bare off as false
                 raise SystemExit(f'{path}: {name} run must be a quoted string')
     return data['roles']
+
+
+def retired_hostnames(path: Path | None = None) -> list[str]:
+    import yaml
+    path = path or Path(__file__).resolve().parents[2] / 'deploy/hosts/services.yaml'
+    return list(yaml.safe_load(path.read_text(encoding='utf-8')).get('retired_hostnames') or [])
 
 
 def roles(config: dict) -> dict:

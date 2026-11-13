@@ -18,6 +18,10 @@
 # operator_restart: a person may restart it from Fleet (D-991); the same list is in fleet/host_control.py and the helper
 # gpu:      idle-yield (D-958: lends the GPU to experiments only while its role is idle; deploy/hosts/gpu_tenants.py) | keep
 schema: rosy.host-services/1
+# retired_hostnames: names no host config may still contain; update_status FAILs `retired-name` (file path only) when one is found.
+# Do not list a name that is still valid (robttt-15Z95N-GP7QL.local is R's own mDNS name).
+retired_hostnames:
+  - robttt-15z95n-gp7ql.tailb4b84d.ts.net  # tailnet name gone after the 2026-11-09 host rename; four outages on 11-13 came from configs still naming it
 # images: Docker repositories a role may keep (role and placement: Harbor ADR 0021, D-960). update_status reports any
 # other repository and more than three tags of one, so test and rollback builds do not pile up on a host again.
 images:
