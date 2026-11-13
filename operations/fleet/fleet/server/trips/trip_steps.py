@@ -347,6 +347,18 @@ class TripSteps:
         if live.first_seq is None:
             live.first_seq, live.arc_base = (seq if isinstance(seq, int) else 0), arc_before
 
+    async def _recheck_binding(self, live: LiveTrip, active) -> None:
+        """Stop (cancelling the goal) when the binding a sent goal used was revoked or superseded, or the
+        robot loaded another grid or lost localisation since."""
+        robot_id = live.view["robot_id"]
+        state = await self._call(self._robot_state(robot_id)) if self._robot_state is not None else None
+        _, reason = self._store.map_bindings.matching_fit(robot_id, state or {}, (active[1].map_id, active[0]))
+        sent = (live.view["detail"].get("goal_frame") or {}).get("binding_id")
+        if not reason and sent != (self._store.map_bindings.active(robot_id) or {}).get("binding_id"):
+            reason = "MAP_BINDING_CHANGED"
+        if reason:
+            await self._stop(live, "stopped", "map_frame", {"map_id": active[1].map_id, "binding": reason})
+
     async def _step_free(self, live: LiveTrip, index: int, s: float, pose) -> None:
         segment = live.segments[index]
         active = self._store.active()
@@ -361,12 +373,8 @@ class TripSteps:
         # (409 NAVIGATION_ACTIVE, SIM run 5), so the D-463 rolling point 0.2 m ahead failed the trip at its second send.
         x, y, yaw = live.arc(index).point_at(segment["s_to"])
         if live.last_goal is not None and math.dist(live.last_goal, (x, y)) < self.config.goal_resend_m:
-            sent = (live.view["detail"].get("goal_frame") or {}).get("binding_id")
-            if self.config.map_binding_required and sent != (
-                    self._store.map_bindings.active(live.view["robot_id"]) or {}).get("binding_id"):
-                # D-1022 review: the binding the running goal was converted with was revoked or superseded.
-                await self._stop(live, "stopped", "map_frame",
-                                 {"map_id": active[1].map_id, "binding": "MAP_BINDING_CHANGED"})
+            if self.config.map_binding_required:  # D-1022 review: the running goal's binding must still hold
+                await self._recheck_binding(live, active)
             return
         if not await ready_free_goal(self, live):  # D-772 charge-only native readiness
             return

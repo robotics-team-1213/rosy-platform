@@ -242,12 +242,14 @@ _GRID = "occupancy:0123456789ab"
 _SPAN = [(-1.0, -0.5), (1.0, -0.5), (0.9, 0.45)]
 
 
-def _bound_setup(map_id="slam", grid=_GRID, approve=True, store_out=None):
+def _bound_setup(map_id="slam", grid=_GRID, approve=True, store_out=None, state_out=None):
     runner, store, ports = _setup(_free_map(), caps=BOTH, map_binding_required=True)
     if store_out is not None:
         store_out.append(store)
     ports.map_id = "site"
     state = {**_state((0.0, 0.0, 0.0), map_id=map_id), "map_grid_id": grid}
+    if state_out is not None:
+        state_out.append(state)
 
     async def robot_state(robot_id):
         return state
@@ -307,3 +309,13 @@ def test_a_required_binding_stops_a_port_that_only_declares_one_frame():
     _ticks(runner, ports)
     row = runner.view("p1")
     assert ports.goals == [] and row["detail"]["binding"] == "MAP_BINDING_REQUIRED"
+
+
+def test_a_robot_that_loads_another_grid_under_a_running_goal_is_stopped():
+    states = []
+    runner, ports = _bound_setup(state_out=states)
+    assert len(ports.goals) == 1
+    states[0]["map_grid_id"] = "occupancy:ffffffffffff"  # the robot re-saved or swapped its map mid-goal
+    _ticks(runner, ports)
+    row = runner.view("p1")
+    assert row["detail"]["binding"] == "MAP_BINDING_GRID_CHANGED" and ports.canceled == ["rosy_60"]
