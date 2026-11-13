@@ -163,7 +163,7 @@ def test_status_main_prints_a_drift_finding_it_counts(monkeypatch, capsys):
     config = {'site_host': 'site@h'}
     monkeypatch.setattr(status.lab_hosts, 'load', lambda: config)
     monkeypatch.setenv('ROSY_SITE_MAP', os.path.join(os.devnull, 'no-site-map.yaml'))
-    monkeypatch.setattr(status, 'load_inventory', lambda: {'site': {}})
+    monkeypatch.setattr(status, 'load_inventory', lambda: {'site': {}, 'omx': {}})
     monkeypatch.setattr(status, 'ref_state', lambda *args: dict(
         ref='HEAD', verdict='ok', tip='a'*12, fetched_h=0, problem=None))
     monkeypatch.setattr(status, 'robot_cd_root', lambda: None)
