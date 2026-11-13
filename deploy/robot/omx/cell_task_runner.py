@@ -8,6 +8,8 @@ The runner moves it to running/, checks the cell (cell_preflight), runs each car
 per source site: the pipeline picks the usable object there), stops at the first carry that is not "placed", and
 writes done/<task_id>.result.json. Safety stays on this host: the pipeline's own refusals, guards and holds apply.
 A swap is three carries through the buffer: a -> buffer, b -> a, buffer -> b.
+A carry that stops before any motion because the destination has no room tries that site's config
+"alternates" in order (D-1019); the Gate still holds any path not reviewed, so a redirect never widens D-911.
 
   cell_task_runner.py --config cell-auto.json --catalog catalog.json --queue ~/rosy-cell-tasks [--once]
 """
@@ -98,7 +100,16 @@ def run_carry(config_path: Path, catalog: Path, sites: dict, src: str, dst: str,
     except ValueError:
         result = {"result": f"no result (exit {proc.returncode}): {proc.stderr[-200:]}"}
     out.write_text(json.dumps(result))
-    return {"from": src, "to": dst, "result": result.get("result"), "log": str(out)}
+    refused = ((result.get("attempts") or [{}])[-1]).get("refused") or []
+    # Stopped at the choice with every object refused only for room at the destination: nothing moved.
+    dest_full = str(result.get("result", "")).startswith("stopped") and bool(refused) and all(
+        str(r.get("why", "")).startswith("place:") for r in refused)
+    return {"from": src, "to": dst, "result": result.get("result"), "log": str(out), "dest_full": dest_full}
+
+
+def alternates(sites: dict, src: str, dst: str) -> list:
+    """The destination's declared fallback sites, in order (D-1019): known sites other than the carry's own."""
+    return [a for a in (sites.get(dst) or {}).get("alternates") or [] if a in sites and a not in (src, dst)]
 
 
 def run_task(task: dict, config_path: Path, catalog: Path, log_dir: Path, preflight=None, carry=run_carry) -> dict:
@@ -112,11 +123,21 @@ def run_task(task: dict, config_path: Path, catalog: Path, log_dir: Path, prefli
         failed = [f"{name}: {why}" for name, ok, why in preflight(config) if not ok]
         if failed:
             return {**out, "status": "refused", "why": failed}
-    for src, dst in plan:
+    for i, (src, dst) in enumerate(plan):
         step = carry(config_path, catalog, config["sites"], src, dst, log_dir)
         out["steps"].append(step)
+        # No room at the destination and nothing moved: its declared alternates, each observed afresh (D-1019).
+        for alt in alternates(config["sites"], src, dst) if step.get("dest_full") else ():
+            step = {**carry(config_path, catalog, config["sites"], src, alt, log_dir), "redirected_from": dst}
+            out["steps"].append(step)
+            if not step.get("dest_full"):
+                break
         if step["result"] != "placed":  # a stop mid-swap leaves the objects where the last carry put them: a person looks
-            return {**out, "status": "stopped", "why": f"{src} -> {dst}: {step['result']}", "ended": time.time()}
+            return {**out, "status": "stopped", "why": f"{src} -> {step['to']}: {step['result']}", "ended": time.time()}
+        # The next carry that expected this object at dst takes it from where it went; later ones are other objects.
+        nxt = next((j for j in range(i + 1, len(plan)) if plan[j][0] == dst), None) if step.get("redirected_from") else None
+        if nxt is not None:
+            plan[nxt] = (step["to"], plan[nxt][1])
     return {**out, "status": "done", "ended": time.time()}
 
 
