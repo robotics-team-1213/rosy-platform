@@ -83,7 +83,8 @@ try:
                               '-o', 'cat', '--no-pager', '-n', '2000'], capture_output=True,
                              text=True, timeout=15, check=True).stdout
     for line in journal.splitlines():
-        if 'Fleet agent welcomed by hub' in line:
+        # A degraded hub still answers heartbeats: the link is up (CORE logs only this after a restart).
+        if 'Fleet agent welcomed by hub' in line or 'answering heartbeat (link kept' in line:
             result['hub_online'] = True
         elif any(message in line for message in ('Fleet agent disconnected:',
                  'Fleet agent link lost (', 'Fleet hub did not answer a heartbeat',
