@@ -20,9 +20,9 @@ from urllib.parse import urljoin, urlsplit
 MAX_HOPS = 6
 
 
-class _NoRedirect(urllib.request.HTTPRedirectHandler):
+class _SeeEveryHop(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, *args, **kwargs):
-        return None  # the 3xx surfaces as HTTPError, so each hop is seen
+        return None  # a 3xx surfaces as HTTPError so every hop is visible
 
 
 def _opener(insecure):
@@ -30,7 +30,7 @@ def _opener(insecure):
     if insecure:
         context.check_hostname, context.verify_mode = False, ssl.CERT_NONE
     return urllib.request.build_opener(
-        _NoRedirect, urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()),
+        _SeeEveryHop, urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()),
         urllib.request.HTTPSHandler(context=context))
 
 
