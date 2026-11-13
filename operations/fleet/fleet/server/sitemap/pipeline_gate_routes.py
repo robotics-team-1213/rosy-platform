@@ -12,6 +12,7 @@ from fleet.server.sitemap.pipeline_routes import _enrich_task_health, _storage_d
 
 def install_gates_routes(app, ctx) -> None:
     read_guard = ctx.read_guard
+    operator_guard = ctx.operator_guard
     zones_override_path = ctx.zones_override_path
     _save_ledger = ctx._save_ledger
     _is_human_detected = ctx._is_human_detected
@@ -29,7 +30,7 @@ def install_gates_routes(app, ctx) -> None:
             "paused_tasks": [t["task_id"] for t in app.state.omx_cell_tasks.values() if t["status"] == "PAUSED_HUMAN"],
         }
 
-    @app.post("/api/fleet/pipeline/human-safety-gate", dependencies=read_guard)
+    @app.post("/api/fleet/pipeline/human-safety-gate", dependencies=operator_guard)
     async def set_human_safety_gate(request: Request):
         active = active_map()
         body = await request.json()
@@ -128,7 +129,7 @@ def install_gates_routes(app, ctx) -> None:
     async def get_station_zones():
         return {"ok": True, **load_station_zones(zones_override_path)}
 
-    @app.put("/api/fleet/pipeline/station-zones", dependencies=read_guard)
+    @app.put("/api/fleet/pipeline/station-zones", dependencies=operator_guard)
     async def update_station_zones(request: Request):
         body = await request.json()
         yaml_text = str(body.get("yaml_text") or "")
@@ -140,7 +141,7 @@ def install_gates_routes(app, ctx) -> None:
             raise HTTPException(422, detail={"code": "INVALID_STATION_ZONES_YAML", "message": str(exc)})
         return {"ok": True, **updated}
 
-    @app.post("/api/fleet/pipeline/station-zones/dispatch", dependencies=read_guard)
+    @app.post("/api/fleet/pipeline/station-zones/dispatch", dependencies=operator_guard)
     async def dispatch_station_zone(request: Request):
         active = active_map()
         body = await request.json()
@@ -190,7 +191,7 @@ def install_gates_routes(app, ctx) -> None:
         _save_ledger()
         return {"ok": True, "zone": zone, "pinky_task": ptask, "spawned_cell_task": spawned_cell_task}
 
-    @app.post("/api/fleet/pipeline/cable-guard", dependencies=read_guard)
+    @app.post("/api/fleet/pipeline/cable-guard", dependencies=operator_guard)
     async def set_cable_guard(request: Request):
         body = await request.json()
         if body.get("toggle"):
@@ -201,7 +202,7 @@ def install_gates_routes(app, ctx) -> None:
         _save_ledger()
         return {"ok": True, "cable_tangled": app.state.cable_tangled, "decision": dec}
 
-    @app.post("/api/fleet/pipeline/vision-auto-check", dependencies=read_guard)
+    @app.post("/api/fleet/pipeline/vision-auto-check", dependencies=operator_guard)
     async def run_vision_auto_check(request: Request):
         active = active_map()
         body = await request.json()
@@ -318,7 +319,7 @@ def install_gates_routes(app, ctx) -> None:
             "detected_displaced_site": app.state.detected_displaced_site,
         }
 
-    @app.post("/api/fleet/pipeline/decision-gate", dependencies=read_guard)
+    @app.post("/api/fleet/pipeline/decision-gate", dependencies=operator_guard)
     async def run_pipeline_decision_gate(request: Request):
         active = active_map()
         body = await request.json()

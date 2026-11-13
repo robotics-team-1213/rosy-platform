@@ -290,6 +290,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         development_sessions=development_sessions, account_client_config=account_client_config,
         trust_forwarded=lan_camera_proxy)
     read_guard = [Depends(require_viewer)]
+    app.state.operator_guard = [Depends(require_operator)]  # pipeline mutations
     from fleet.server.workcell_observation_routes import install_workcell_observation_routes as install_observations
     install_observations(app, workcell_observations, require_viewer, require_named_operator, task_service, authorize)
 
