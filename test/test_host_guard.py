@@ -51,6 +51,8 @@ def _guard(tmp_path, answer, *, runs=1, exit_code=0, conf="pc1 pc op@pc1 05:50-0
         f'eval "last=\\${{$#}}"; echo "$last" >> {calls}\n'
         f"[ \"$last\" != recovery ] || {{ echo '{recovery_answer}'; exit 0; }}\n"
         f"[ \"$last\" != updates ] || {{ echo '{updates_answer}'; exit 0; }}\n"
+        # D-1021: a `drift ...` command answers the file the test wrote, or nothing at all (ssh exit 255)
+        f'case "$last" in drift*) [ -f {tmp_path}/drift-answer ] && {{ cat {tmp_path}/drift-answer; exit 0; }}; exit 255;; esac\n'
         f'[ "$last" = health ] || {{ [ {action_rc} = 0 ] || echo "refused: $last" >&2; exit {action_rc}; }}\n'
         f"echo '{answer}'; exit {exit_code}\n")
     (bin_dir / "ssh").chmod(0o755)
@@ -605,3 +607,101 @@ def test_the_monitoring_state_is_written_through_a_temporary_file_in_its_own_dir
     assert "monitors_file.with_suffix" in source and "os.replace(monitors_tmp, monitors_file)" in source
     _guard(tmp_path, HEALTHY)
     assert sorted(p.name for p in (tmp_path / "state").glob("monitoring-health*")) == ["monitoring-health.json"]
+
+
+# --- D-1021: drift and login-probe watches ----------------------------------------------------------------
+
+CLEAN_DRIFT = "chrony 1 1 ntp.example.test,\nguard-age 300\n"
+
+
+def _drift(tmp_path, answer, runs=1, env=None):
+    answer_file = tmp_path / "drift-answer"
+    answer_file.unlink(missing_ok=True)
+    if answer is not None:
+        answer_file.write_text(answer)
+    return _guard(tmp_path, HEALTHY, conf="m drift op@m ntp.example.test old.example.test\n", runs=runs, env_extra=env)
+
+
+@pytest.mark.parametrize("answer, word", [
+    ("chrony 1 1 gone.example.test,\nguard-age -\n", "gone.example.test"),
+    ("chrony 1 2 ntp.example.test,extra.example.test,\n", "extra.example.test"),
+    ("chrony 0 1 ntp.example.test,\n", "0개"),
+    ("chrony 1 1 ntp.example.test,\nretired old.example.test\n", "옛 이름 old.example.test"),
+    ("chrony 1 1 ntp.example.test,\nguard-age 7300\n", "멈췄"),
+    ("chrony none\n", "chrony가 설치돼"),
+    ("chrony x y\n", "읽지 못했습니다"),
+    ("guard-age 5\n", "chrony 보고가 없"),
+    (None, "답이 없"),
+])
+def test_a_drift_problem_alerts_once_after_two_checks_and_once_on_recovery(tmp_path, answer, word):
+    env = _alerts(tmp_path)
+    _drift(tmp_path, answer, 1, env)
+    assert _sent(tmp_path) == []  # one bad check is not a streak
+    _drift(tmp_path, answer, 3, env)
+    assert len(_sent(tmp_path)) == 1 and word in _sent(tmp_path)[0]
+    _drift(tmp_path, CLEAN_DRIFT, 1, env)
+    assert len(_sent(tmp_path)) == 2 and "다시 정상" in _sent(tmp_path)[1]
+    assert _actions(tmp_path) == ["alert unreachable", "alert recovered"]
+
+
+def test_a_clean_drift_answer_never_alerts_and_the_retired_names_reach_the_forced_command(tmp_path):
+    env = _alerts(tmp_path)
+    assert _drift(tmp_path, CLEAN_DRIFT, 4, env) == ["drift old.example.test"] * 4
+    assert _sent(tmp_path) == []
+
+
+def test_a_dash_skips_the_name_compare_but_not_the_other_checks(tmp_path):
+    env = _alerts(tmp_path)
+    (tmp_path / "drift-answer").write_text("chrony 1 1 anything.example.test,\n")
+    _guard(tmp_path, HEALTHY, conf="m drift op@m -\n", runs=3, env_extra=env)
+    assert _sent(tmp_path) == []
+
+
+def _login(tmp_path, apps, age=0, env=None, write=True):
+    path = tmp_path / "login-status.json"
+    if write:
+        path.write_text(json.dumps({"time": int(time.time()) - age, "apps": apps}))
+    _guard(tmp_path, HEALTHY, conf=f"acct logincheck {path}\n", env_extra=env)
+
+
+def test_login_failures_alert_once_per_streak_and_once_on_recovery_without_credentials(tmp_path):
+    env = _alerts(tmp_path)
+    bad = {"fleet": True, "learning": False}
+    for _ in range(3):  # one failed report read by three guard runs is still one report
+        _login(tmp_path, bad, age=10, env=env)
+    assert _sent(tmp_path) == []
+    _login(tmp_path, bad, age=5, env=env)  # the second failing report
+    assert len(_sent(tmp_path)) == 1 and "learning" in _sent(tmp_path)[0] and "fleet" not in _sent(tmp_path)[0]
+    _login(tmp_path, bad, age=2, env=env)  # still the same streak
+    assert len(_sent(tmp_path)) == 1
+    _login(tmp_path, {"fleet": True, "learning": True}, age=0, env=env)
+    assert len(_sent(tmp_path)) == 2 and "다시 정상" in _sent(tmp_path)[1]
+    _login(tmp_path, bad, age=8, env=env)
+    _login(tmp_path, bad, age=4, env=env)
+    assert len(_sent(tmp_path)) == 3  # a new streak alerts again
+    assert _actions(tmp_path) == ["alert unreachable", "alert recovered", "alert unreachable"]
+    for text in (*_sent(tmp_path), (tmp_path / "state/actions.jsonl").read_text()):
+        assert "secret" not in text and "password" not in text.lower()
+
+
+def test_a_login_report_that_stops_being_renewed_or_is_missing_alerts(tmp_path):
+    env = _alerts(tmp_path)
+    _login(tmp_path, {"fleet": True}, age=4 * 3600, env=env)
+    assert _sent(tmp_path) == []
+    _login(tmp_path, {"fleet": True}, age=4 * 3600, env=env)
+    assert len(_sent(tmp_path)) == 1 and "시간 전" in _sent(tmp_path)[0]
+    _login(tmp_path, {"fleet": True}, age=0, env=env)
+    assert len(_sent(tmp_path)) == 2 and "다시 정상" in _sent(tmp_path)[1]
+    (tmp_path / "login-status.json").unlink()
+    _login(tmp_path, {}, env=env, write=False)
+    _login(tmp_path, {}, env=env, write=False)
+    assert len(_sent(tmp_path)) == 3 and "읽지 못했습니다" in _sent(tmp_path)[2]
+
+
+def test_the_drift_verb_is_read_only_and_refuses_odd_names(tmp_path):
+    result, calls = _remote(tmp_path, "drift localhost")
+    assert result.returncode == 0 and "retired localhost" in result.stdout  # /etc/hosts always names localhost
+    assert result.stdout.count("chrony ") == 1 and "guard-age" in result.stdout and calls == []
+    for bad in ("drift a;b", "drift $(id)", "drift ../x"):
+        result, calls = _remote(tmp_path, bad)
+        assert result.returncode == 2 and calls == []

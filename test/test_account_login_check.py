@@ -151,3 +151,35 @@ def test_every_request_has_a_10_second_timeout():
 def test_start_timeout_covers_the_worst_case_of_seven_slow_apps():
     unit = (SCRIPT.parents[2] / "deploy/site/rosy-site-account-login-check.service").read_text()
     assert "TimeoutStartSec=15min" in unit and "9 requests" in unit
+
+
+def test_the_status_file_holds_app_names_and_verdicts_only(tmp_path, capsys):
+    tool, status = _tool(), tmp_path / "status.json"
+    for accept in (True, False):
+        server = _server(accept)
+        try:
+            path = tmp_path / "config.json"
+            path.write_text(json.dumps(_config(server)), encoding="utf-8")
+            assert tool.main(["x", "--status", str(status), str(path)]) == (0 if accept else 1)
+        finally:
+            server.shutdown()
+        written = json.loads(status.read_text(encoding="utf-8"))
+        assert written["apps"] == {"fixture": accept} and isinstance(written["time"], int)
+        assert "pw" not in status.read_text(encoding="utf-8") and "probe" not in status.read_text(encoding="utf-8")
+    assert tool.main(["x", "--status"]) == 2
+
+
+def test_a_run_that_checked_no_app_leaves_the_status_file_alone(tmp_path):
+    server, status = _server(True), tmp_path / "status.json"
+    try:
+        path = tmp_path / "config.json"
+        path.write_text(json.dumps({**_config(server), "apps": []}), encoding="utf-8")
+        assert _tool().main(["x", "--status", str(status), str(path)]) == 2
+    finally:
+        server.shutdown()
+    assert not status.exists()
+
+
+def test_the_unit_writes_the_status_file_the_guard_reads():
+    unit = (SCRIPT.parents[2] / "deploy/site/rosy-site-account-login-check.service").read_text()
+    assert "--status /var/lib/rosy-account-login-check/status.json" in unit and "StateDirectory=rosy-account-login-check" in unit
