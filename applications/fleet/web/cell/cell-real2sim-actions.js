@@ -9,7 +9,7 @@ import {
   CABLE_GUARD_PATH,
   VISION_CHECK_PATH,
   ARM_HOLDS_CLEAR_PATH,
-} from '/console/assets/cell-real2sim-specs.js';
+} from './cell-real2sim-specs.js';
 
 export function createCellActions(ctx) {
   const {request, $} = ctx;

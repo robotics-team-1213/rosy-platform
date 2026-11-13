@@ -13,11 +13,11 @@ import {
   runRows,
   cellTaskSummaryPairs,
   cellTaskRows,
-} from '/console/assets/cell-real2sim-specs.js';
-import {createCellActions} from '/console/assets/cell-real2sim-actions.js';
-import {createCellViews} from '/console/assets/cell-real2sim-views.js';
+} from './cell-real2sim-specs.js';
+import {createCellActions} from './cell-real2sim-actions.js';
+import {createCellViews} from './cell-real2sim-views.js';
 
-export * from '/console/assets/cell-real2sim-specs.js';
+export * from './cell-real2sim-specs.js';
 
 export function createReal2SimPipeline({request, $, isOperator = () => false}) {
   const status = $('real2sim-status');

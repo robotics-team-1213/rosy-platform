@@ -1,5 +1,5 @@
 // Right inspector, visual cards and camera matrix renderers for the Real-to-Sim pipeline view (split from cell-real2sim.js).
-import {CELL_TASKS_PATH, inspectorSpecs, visualCardSpecs} from '/console/assets/cell-real2sim-specs.js';
+import {CELL_TASKS_PATH, inspectorSpecs, visualCardSpecs} from './cell-real2sim-specs.js';
 
 export function createCellViews(ctx) {
   const {request, $, state} = ctx;
