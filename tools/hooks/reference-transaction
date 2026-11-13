@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# Local main moves only through tools/land.py (D-889, D-868 local-main-first).
+# 2026-11-13: 25 commits and fast-forward merges went onto main by hand between 01:25 and 11:40 KST,
+# main went red on the size ratchet, API changelog and secret scan, and 0 landings finished in the
+# next 24 h while ~50 queued snapshots stopped on those reds. land.py sets ROSY_MAIN_WRITER for its
+# one fast-forward; the sync to origin/main after a publish PR merge (doctor.py) is allowed as is.
+# Install: tools/hooks/install.sh
+[ "${1:-}" = prepared ] || exit 0
+[ -n "${ROSY_MAIN_WRITER:-}" ] && exit 0
+while read -r _old new ref; do
+  [ "$ref" = refs/heads/main ] || continue
+  # A rewrite to the same tip (pack-refs, a no-op update) is not a move.
+  [ "$new" = "$(git rev-parse -q --verify refs/heads/main)" ] && continue
+  [ "$new" = "$(git rev-parse -q --verify refs/remotes/origin/main)" ] && continue
+  echo "[main-guard] refused: refs/heads/main moves only through tools/land.py." >&2
+  echo "[main-guard] commit on a branch and queue it: python tools/land_async.py --tests auto" >&2
+  echo "[main-guard] incident only: ROSY_MAIN_WRITER=\"incident: <why>\" git ..." >&2
+  exit 1
+done
+exit 0
