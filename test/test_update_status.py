@@ -1,6 +1,8 @@
 """update_status flags a channel that has stopped being healthy, not one that is briefly waiting."""
+from datetime import datetime, timezone
 import hashlib
 import importlib.util
+import json
 import os
 from pathlib import Path
 import subprocess
@@ -279,3 +281,27 @@ def test_observer_manifest_uses_selected_workcell_arms_without_a_fixed_count():
     entry = status.load_inventory()['omx']['rosy-omx-observer@.service']
     assert entry.get('instances_from') == 'workcell-arms'
     assert 'instances' not in entry
+
+
+def test_chrony_with_no_usable_source_and_unresolved_names_fail_or_note():
+    host = status.parse('chrony 0 2 pool.vanished,ntp.gone', NOW, 6.0)
+    assert host['chrony'] == dict(usable=0, total=2, unresolved=['pool.vanished', 'ntp.gone'])
+    assert [f[0] for f in status.clock_and_site(host, NOW)] == ['FAIL', 'note']
+    assert status.clock_and_site(status.parse('chrony 1 3 -', NOW, 6.0), NOW) == []
+    assert status.clock_and_site(status.parse('gate open', NOW, 6.0), NOW) == []  # no chrony report, no verdict
+
+
+def _site(state):
+    return status.clock_and_site(status.parse('sitestate ' + json.dumps(state), NOW, 6.0), NOW)
+
+
+def test_site_hold_expiry_and_refused_last_run_are_reported():
+    iso = lambda hours: datetime.fromtimestamp(NOW + hours * 3600, timezone.utc).isoformat()
+    assert _site({'hold': {'reason': 'r', 'time': iso(-1), 'until': iso(23)}})[0][0] == 'HELD'
+    expired = _site({'hold': {'reason': 'R migration', 'time': iso(-96), 'until': iso(-72)}})
+    assert expired[0][0] == 'FAIL' and 'EXPIRED' in expired[0][2] and 'R migration' in expired[0][2]
+    assert _site({'hold': {'reason': 'old', 'time': iso(-30)}})[0][0] == 'FAIL'  # legacy: set time + 24 h
+    assert _site({'hold': {'reason': 'old', 'time': iso(-2)}})[0][0] == 'HELD'
+    refused = _site({'last_run': {'result': 'refused', 'reason': 'fleet loaded image ID mismatch'}})
+    assert refused[0][0] == 'FAIL' and 'image ID mismatch' in refused[0][2]
+    assert _site({'last_run': {'result': 'idle'}}) == []

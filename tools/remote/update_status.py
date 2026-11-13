@@ -26,6 +26,11 @@ last fetched; a checkout with no origin/main (read HEAD instead) or a fetch olde
 `--ref-stale-hours` (default 12) is STALE-REF and exits 1. When a robot CD snapshot is installed on
 this PC (`%LOCALAPPDATA%/Rosy/robot-cd`), the snapshot files that differ from that ref are listed as a
 WARN, which does not change the exit code.
+
+Time and site updater (2026-11-13): a host with chrony is FAIL when it has no usable time source
+(`chronyc -n sources` state `*`, `+` or `-`); configured server names that do not resolve are noted.
+On the site host the auto-updater state is read: an active hold shows as HELD, a hold past its
+expiry (still blocking) or a `refused`/recovery last run with its reason is FAIL. FAIL exits 1.
 """
 from __future__ import annotations
 
@@ -39,6 +44,7 @@ import os
 import subprocess
 import sys
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -91,6 +97,16 @@ done
 for c in "$@"; do
   if [ -f "$HOME/$c" ]; then echo "copy $c $(tr -d '\r' < "$HOME/$c" | sha256sum | cut -c1-64)"; else echo "copy $c missing"; fi
 done
+# chrony: usable sources (state * + -) of the total, and configured names that do not resolve
+if command -v chronyc >/dev/null 2>&1; then
+  src=$(chronyc -n sources 2>/dev/null)
+  names=$(cat /etc/chrony/chrony.conf /etc/chrony/conf.d/*.conf /etc/chrony/sources.d/*.sources /etc/chrony.conf 2>/dev/null | awk '$1=="server"||$1=="pool"{print $2}')
+  bad=; for n in $names; do getent hosts "$n" >/dev/null 2>&1 || bad="$bad,$n"; done
+  echo "chrony $(printf '%s\n' "$src" | awk '$1 ~ /^[\^=][*+-]/' | wc -l) $(printf '%s\n' "$src" | awk '$1 ~ /^[\^=]/' | wc -l) ${bad#,}"
+fi
+# the site auto-updater's state (hold, last run), one JSON line
+sf=/var/lib/rosy/site-autoupdate.json
+[ -f "$sf" ] && { sudo -n cat "$sf" 2>/dev/null || cat "$sf" 2>/dev/null; } </dev/null | python3 -c 'import json,sys;print("sitestate",json.dumps(json.load(sys.stdin)))' 2>/dev/null
 D=docker; docker images -q >/dev/null 2>&1 </dev/null || D='sudo -n docker'
 $D images --format 'image {{.Repository}} {{.Tag}}' </dev/null 2>/dev/null
 true
@@ -134,6 +150,14 @@ def parse(text: str, now: float, stale_hours: float) -> dict:
                 host['topology'] = report
             except ValueError:
                 host['topology'] = {'error': 'invalid workcell selection report'}
+        elif kind == 'chrony':
+            usable, total, bad = (rest.split(' ') + ['0', '0', '-'])[:3]
+            host['chrony'] = dict(usable=int(usable), total=int(total), unresolved=[n for n in bad.split(',') if n and n != '-'])
+        elif kind == 'sitestate':
+            try:
+                host['site'] = json.loads(rest)
+            except ValueError:
+                host['site'] = {'unreadable': True}
         elif kind == 'image':
             host.setdefault('images', []).append(rest.strip().split(' ')[0])
         elif kind == 'gate':
@@ -181,7 +205,41 @@ def parse(text: str, now: float, stale_hours: float) -> dict:
     return host
 
 
-FAILING = {'UNDECLARED', 'MISSING', 'DOWN', 'UNEXPECTED', 'DRIFT', 'DISCONNECTED', 'CONFIGURATION'}
+FAILING = {'FAIL', 'UNDECLARED', 'MISSING', 'DOWN', 'UNEXPECTED', 'DRIFT', 'DISCONNECTED', 'CONFIGURATION'}
+
+
+def _when(text) -> float | None:
+    try:
+        stamp = datetime.fromisoformat(text)
+        return (stamp if stamp.tzinfo else stamp.replace(tzinfo=timezone.utc)).timestamp()
+    except (TypeError, ValueError):
+        return None
+
+
+def clock_and_site(host: dict, now: float) -> list:
+    """(verdict, name, detail) for NTP sources and the site updater's hold and refusals; FAIL exits 1."""
+    findings = []
+    chrony = host.get('chrony')
+    if chrony and chrony['usable'] == 0:
+        findings.append(('FAIL', 'chrony', f'0 usable of {chrony["total"]} time sources'))
+    if chrony and chrony['unresolved']:
+        findings.append(('note', 'chrony', 'server names that do not resolve: ' + ', '.join(chrony['unresolved'])))
+    site = host.get('site') or {}
+    if site.get('unreadable'):
+        findings.append(('FAIL', 'site-autoupdate', 'state file is not valid JSON'))
+    hold = site.get('hold')
+    if isinstance(hold, dict):
+        since = _when(hold.get('time'))
+        # same rule as deploy/site site_update_io.hold_until: no `until` means set time + 24 h
+        until = _when(hold.get('until')) or (since + 86400 if since else 0)
+        age = f'{(now - since) / 3600:.1f}h' if since else 'unknown age'
+        expired = until <= now
+        findings.append(('FAIL' if expired else 'HELD', 'site-autoupdate',
+                         f'hold {"EXPIRED but still blocking" if expired else "active"} (set {age} ago): {hold.get("reason")}'))
+    last = site.get('last_run') or {}
+    if last.get('result') in ('refused', 'recovery-pending', 'recovery-required'):
+        findings.append(('FAIL', 'site-autoupdate', f'last run {last["result"]}: {last.get("reason", "see journal")}'))
+    return findings
 
 
 def load_inventory(path: Path | None = None) -> dict:
@@ -446,6 +504,10 @@ def main() -> None:
         for src in host['sources']:
             if src['kind'] != 'other':
                 print(f'  {src["kind"]:7} {src["unit"]}: {src["where"]}')
+        extra = clock_and_site(host, time.time())
+        for verdict, unit, detail in extra:
+            print(f'  {verdict:10} {unit}: {detail}')
+        stuck |= any(f[0] in FAILING for f in extra)
         if target not in role_of:
             print('  (no role in private/lab-hosts.json; services.yaml not checked)')
             continue

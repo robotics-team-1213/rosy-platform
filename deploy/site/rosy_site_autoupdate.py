@@ -443,11 +443,11 @@ class SiteUpdater(SiteRuntimeIO):
             release = self.select(self.list_releases(), current, state)
         except Refused as error:
             log('refused', reason=str(error))
-            state['last_run']['result'] = 'refused'
+            state['last_run'].update(result='refused', reason=str(error)[:200])
             return EXIT_FAILED
         except Rejected as error:
             log('refused', reason=f'running candidate verification failed: {error}')
-            state['last_run']['result'] = 'refused'
+            state['last_run'].update(result='refused', reason=f'running candidate verification failed: {error}'[:200])
             return EXIT_FAILED
         except Transient as error:
             log("error", reason=str(error))
@@ -487,7 +487,7 @@ class SiteUpdater(SiteRuntimeIO):
             ok, reason = self.switch(env, previous, target, commit, current)
         except Refused as error:
             log("refused", tag=tag, reason=str(error))
-            state["last_run"]["result"] = "refused"
+            state["last_run"].update(result="refused", reason=str(error)[:200])
             return EXIT_FAILED
         except Transient as error:
             log("error", tag=tag, reason=str(error))
