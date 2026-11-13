@@ -198,6 +198,19 @@ def test_range_check_is_red_on_a_commit_that_grows_before_a_later_split(tmp_path
     git("checkout", "-q", "main")
     git("merge", "-q", "--no-edit", "side")
     assert size_range.check(git("rev-parse", "HEAD")) == []
+    # 11-13: a red main (a file over 600, no row) merged into a branch is main's, not the merge's; a file the merge
+    # itself changes is still checked.
+    fork = git("rev-parse", "HEAD")
+    commit({"middleware/pkg/pkg/e.py": "v = 1\n" * 640}, "main grows e.py with no row")
+    git("checkout", "-q", "-b", "feat", fork)
+    commit({"middleware/pkg/pkg/f.py": "u = 1\n"}, "branch work")
+    git("merge", "-q", "--no-edit", "main")
+    assert size_range.check(git("rev-parse", "HEAD")) == []
+    git("reset", "-q", "--hard", "HEAD^")
+    git("merge", "-q", "--no-commit", "main")
+    commit({"middleware/pkg/pkg/e.py": "v = 1\n" * 641}, "merge that grows e.py")
+    assert any("pkg/pkg/e.py: 641 lines" in p for p in size_range.check(git("rev-parse", "HEAD")))
+    git("checkout", "-q", "main")
     # Each commit is judged by its own size_limits.py: a later stricter rule does not redden it.
     rule = Path(s.__file__).read_text(encoding="utf-8")
     loose = commit({"tools/harness/size_limits.py": rule.replace("FILE_LIMIT = 600", "FILE_LIMIT = 700"),

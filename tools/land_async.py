@@ -44,6 +44,7 @@ FULL_WAIT_S, FULL_POLL_S = 30 * 60, 60  # D-889 addendum 32: a full queue at que
 RESOURCE_SHORTAGE = ("WinError 1450", "WinError 1455", "Out of memory", "MemoryError")
 RESOURCE_RETRIES = 3
 RESOURCE_WAIT_S = 300
+MAX_OWN_COMMITS, MAX_AGE_DAYS = 40, 14  # one landing's bound (too_big); --allow-big "<reason>" passes it
 
 
 class Busy(SystemExit):
@@ -300,6 +301,12 @@ def _supervise(tree: Path, snap: str, land_args: list[str], run, room) -> int:
         git(Path(main).parent, "worktree", "remove", "--force", str(tree), check=False)
         git(Path(main).parent, "branch", "-D", snap, check=False)
         print(f"[land-async] {snap} landed; hidden worktree and snapshot branch removed", flush=True)
+        try:  # main moved: MAIN-RED stops it cleared go again; never changes this landing's own outcome
+            for name in orphans(Path(main).parent):
+                print(f"[land-async] resuming {name}: {resume(Path(main).parent, name, [], detach, wait=0)}",
+                      flush=True)
+        except (SystemExit, Exception) as exc:
+            print(f"[land-async] resuming cleared MAIN-RED stops skipped: {exc}", flush=True)
     else:
         (tree.parent / (tree.name + ".stopped")).write_text(f"land.py exit {code}; read {tree.name}.log\n",
                                                             encoding="utf-8")
@@ -381,6 +388,8 @@ def _resume_start(cwd: Path, name: str, land_args: list[str], launch):
         raise SystemExit(f"[land-async] {snap} is held by {owner} ({held[0].get('branch')})")
     if git(tree, "rev-parse", "--abbrev-ref", "HEAD") != snap:  # land.py had moved it onto a batch candidate
         git(tree, "checkout", "-q", snap)
+    if (place / (name + ".stopped")).exists() and main_red_stop(place, name):
+        (place / (name + ".auto-resume")).write_text(git(cwd, "rev-parse", "main"), encoding="utf-8")
     (place / (name + ".stopped")).unlink(missing_ok=True)
     try:
         saved = json.loads((place / (name + ".args.json")).read_text(encoding="utf-8"))
@@ -410,9 +419,38 @@ def resume(cwd: Path, name: str, land_args: list[str], launch, wait: float = 60,
     return None
 
 
+def main_red_stop(place: Path, name: str) -> str | None:
+    """The log of a landing whose last STOP is MAIN-RED (main's failure, not the owner's), else None."""
+    try:
+        text = (place / (name + ".log")).read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+    stops = re.findall(r"^\[land\] STOP: .*$", text, re.M)
+    return text if stops and "MAIN-RED" in stops[-1] else None
+
+
+def main_red_cleared(cwd: Path, place: Path, name: str) -> bool:
+    """A stop on MAIN-RED whose NEW ids main no longer has open: nothing of the owner's to fix. 11-13 ~20 landings
+    sat stopped for hours on one red main, many owners' sessions already gone, until someone resumed them by hand."""
+    text = main_red_stop(place, name)
+    if text is None:
+        return False
+    tools = str(Path(git(cwd, "rev-parse", "--show-toplevel")) / "tools")  # main's, not a snapshot copy
+    if tools not in sys.path:
+        sys.path.insert(0, tools)
+    import land_mainred
+    opened = land_mainred.state(cwd)
+    ids = re.findall(r"^NEW\s+(\S+)", text, re.M)
+    mark = place / (name + ".auto-resume")  # one resume per main: a stop main never tracked must not loop
+    if not ids or mark.is_file() and mark.read_text(encoding="utf-8").strip() == git(cwd, "rev-parse", "main"):
+        return False
+    return not any(nodeid in opened for nodeid in ids)
+
+
 def orphans(cwd: Path, hours: float = 24, now: float | None = None) -> list[str]:
     """Hidden landings whose supervisor died without landing or stopping (11-03 20:44 a reboot killed the whole
-    queue): no ``.stopped`` marker, no live supervisor or ticket, not in main, and the newest snapshot of its branch."""
+    queue), or that stopped on a MAIN-RED main has since cleared (``main_red_cleared``): no live supervisor or
+    ticket, not in main, and the newest snapshot of its branch."""
     place, now = holder(cwd), now or time.time()
     if not place.is_dir():
         return []
@@ -425,8 +463,10 @@ def orphans(cwd: Path, hours: float = 24, now: float | None = None) -> list[str]
                 newest[key] = tree
     found = []
     for tree in newest.values():
-        if ((place / (tree.name + ".stopped")).exists() or now - tree.stat().st_mtime > hours * 3600
-                or running(tree)):
+        if (place / (tree.name + ".stopped")).exists():
+            if not main_red_cleared(cwd, place, tree.name) or running(tree):
+                continue
+        elif now - tree.stat().st_mtime > hours * 3600 or running(tree):
             continue
         snaps = [s for s in git(cwd, "for-each-ref", "--format=%(refname:short)", "refs/heads/land/").splitlines()
                  if s.replace("/", "-") == tree.name]
@@ -435,6 +475,16 @@ def orphans(cwd: Path, hours: float = 24, now: float | None = None) -> list[str]
             continue
         found.append(tree.name)
     return sorted(found)
+
+
+def too_big(cwd: Path, now: float | None = None) -> str | None:
+    """Why HEAD is too much for one landing, or None. 11-14: unlanded branches held up to 269 commits (39 merges
+    of main, v2/v3 chains stacked on each other) while landed ones took median 6, max 37; merges are not counted."""
+    own = git(cwd, "log", "--no-merges", "--format=%ct", "main..HEAD").split()
+    if len(own) > MAX_OWN_COMMITS:
+        return f"{len(own)} own commits not in main (more than {MAX_OWN_COMMITS})"
+    days = ((now or time.time()) - min(map(int, own))) / 86400 if own else 0
+    return f"its oldest commit not in main is {days:.0f} days old (more than {MAX_AGE_DAYS})" if days > MAX_AGE_DAYS else None
 
 
 def main(argv: list[str]) -> int:
@@ -457,6 +507,15 @@ def main(argv: list[str]) -> int:
                 "supervisor exited without a ticket or landing; read its .log")
         print(f"[land-async] resumed {argv[1]}: {note}")
         return 0 if status else 1
+    big = next((argv[i + 1] for i, a in enumerate(argv[:-1]) if a == "--allow-big"), None)
+    argv = [a for i, a in enumerate(argv) if a != "--allow-big" and (i == 0 or argv[i - 1] != "--allow-big")]
+    if big is not None and (not big.strip() or big.startswith("--")):
+        raise SystemExit('[land-async] --allow-big needs a reason: --allow-big "<why this cannot be split>"')
+    if big is None and (why := too_big(Path.cwd())):
+        raise SystemExit(f"[land-async] refused: {why}. Land the oldest finished part from a new branch off main"
+                         f' first, or say why not: --allow-big "<reason>"')
+    if big:
+        print(f"[land-async] --allow-big: {big}", flush=True)
     words = next((argv[i:i + 2] if a == "--mixed" else [a] for i, a in enumerate(argv)
                   if a == "--mixed" or a.startswith("--mixed=")), [])
     if subprocess.call(  # cheap gates fail here, before a snapshot or ticket exists
