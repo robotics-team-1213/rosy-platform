@@ -179,7 +179,6 @@ export function createCellViews(ctx) {
     for (const b of (activeSpec.buttons || [])) {
       const btn = document.createElement('ui-button');
       btn.setAttribute('kind', 'quiet');
-      if (b.cancelTaskId) btn.setAttribute('kind', 'irreversible');
       btn.setAttribute('type', 'button');
       btn.textContent = b.label;
       bindActionButton(btn, b, activeSpec.robot_id || 'rosy_46');
@@ -300,7 +299,6 @@ export function createCellViews(ctx) {
       for (const b of card.buttons) {
         const btn = document.createElement('ui-button');
         btn.setAttribute('kind', 'quiet');
-        if (b.cancelTaskId) btn.setAttribute('kind', 'irreversible');
         btn.setAttribute('type', 'button');
         btn.textContent = b.label;
         bindActionButton(btn, b, card.robot_id || 'rosy_46');

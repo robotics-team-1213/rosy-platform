@@ -299,7 +299,6 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
     for (const choice of [...(active.buttons || []), ...(active.quickControls || [])]) {
       const button = document.createElement("ui-button");
       button.setAttribute("kind", "quiet");
-      if (choice.cancelTaskId) button.setAttribute("kind", "irreversible");
       button.setAttribute("type", "button");
       button.setAttribute("data-work-read", "");
       button.textContent = choice.label;
@@ -425,7 +424,6 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
       for (const choice of [...(card.buttons || []), ...(card.quickControls || [])]) {
         const button = document.createElement("ui-button");
         button.setAttribute("kind", "quiet");
-        if (choice.cancelTaskId) button.setAttribute("kind", "irreversible");
         button.setAttribute("type", "button");
         button.setAttribute("data-work-read", "");
         button.textContent = choice.label;
