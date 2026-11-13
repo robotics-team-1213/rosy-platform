@@ -1364,6 +1364,7 @@
 - gate 변화: 없음
 - 결정: D-986 2항
 - 교훈: 없음
+
 ## 2026-11-07 · uncommitted · 계정 로그인 복귀 목록에 역할 화면 추가
 - 변경: CORE 복귀 허용 목록에 /console, /setup, /device를 정확한 경로로 더했다. 다른 주소는 그대로 거절한다.
 - 증거: test_account_pipeline.py 허용 3건과 거절 1건. 원격 결과는 착지 기록을 따른다.
@@ -1388,3 +1389,8 @@
 - gate 변화: 없음. SOURCE GO, LOCAL GO 유지(main red 복구)
 - 결정: 없음
 - 교훈: 없음
+
+## 2026-11-14 · uncommitted · 상태 표시등 패턴 API
+- 변경: Viewer GET과 Operator PUT `/host/lamp/status-patterns`를 추가하고 운전 중 OFF를 `LAMP_BUSY`로 거절한다. API 계약 v1.394와 변경 이벤트를 기록했다.
+- 증거: 원격 CORE·네이티브 시험 결과는 이 브랜치 검증에 기록한다.
+- gate 변화: 없음. 실물 LED 수용은 별도다.
