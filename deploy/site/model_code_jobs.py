@@ -38,6 +38,8 @@ JOB_ENTRY_POINTS.update({'training/' + name: 'learning/curation/perception/' + n
                              'review_eval_companion.py', 'review_eval_package.py', 'review_provenance.py')})
 JOB_ENTRY_POINTS.update({'road_replay.py': 'learning/evaluation/perception/road_replay.py', 'road_replay_inputs.py': 'learning/evaluation/perception/road_replay_inputs.py', 'road_replay_metrics.py': 'learning/evaluation/perception/road_replay_metrics.py', 'store.py': 'learning/registry/perception/store.py'})
 CAMERA_MAP_ENTRY = JOB_ENTRY_POINTS["camera_lane_map.py"]
+# Pilot collection never touches the GPU (HTTPS copy, ffmpeg/PNG prep): a resident GPU server must not hold it.
+NON_GPU_JOBS = frozenset({"dataset/fetch_http.py", "dataset/pilot_review.py"})
 
 
 def job_entry(source, script):

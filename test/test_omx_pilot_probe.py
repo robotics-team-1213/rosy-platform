@@ -21,7 +21,7 @@ from uuid import uuid4
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-for extra in ("middleware/devices/omx/adapter", "contracts/foundation"):
+for extra in ("middleware/devices/omx/adapter", "contracts/foundation", "deploy/robot/omx"):
     if str(ROOT / extra) not in sys.path:
         sys.path.insert(0, str(ROOT / extra))
 

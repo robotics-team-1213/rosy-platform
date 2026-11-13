@@ -160,27 +160,7 @@ def install_site_map_routes(app, *, site_maps, route_active, read_guard, require
 
     @app.get("/api/fleet/site-map/profiles", dependencies=read_guard, tags=["site-map"])
     def site_map_profiles() -> dict:
-        stored = [p for p in site_maps.profiles() if not str(p.get("profile_id", "")).startswith("map_v2_fleet")]
-        try:
-            active = site_maps.active_view()
-        except SiteMapError:
-            active = None
-        if active and active.get("map"):
-            act_map = active["map"]
-            act_id = act_map.get("map_id") or "world_261026"
-            if not any(p.get("profile_id") == act_id for p in stored):
-                stored.insert(0, {
-                    "profile_id": act_id,
-                    "name": f"현장 3충전소 트랙 · {act_id} (현재 활성)",
-                    "map": act_map,
-                    "revision": str(active.get("sha256", "active"))[:16],
-                    "saved_by": active.get("activated_by", "system"),
-                    "saved_at": active.get("activated_at", 0.0),
-                    "kind": "track",
-                    "description": "실물 3충전소(C1~C3) + OMX 셀 정지점(S1~S5) 트랙 정본 지도",
-                    "soccer_field": None,
-                })
-        return {"profiles": stored}
+        return {"profiles": site_maps.profiles()}
 
     @app.put("/api/fleet/site-map/profiles/{profile_id}", tags=["site-map"])
     async def site_map_save_profile(request: Request,
@@ -226,20 +206,7 @@ def install_site_map_routes(app, *, site_maps, route_active, read_guard, require
 
     @app.get("/api/fleet/site-map/draft", dependencies=read_guard, tags=["site-map"])
     def site_map_draft() -> dict:
-        view = site_maps.draft_view()
-        draft_map = view.get("map")
-        if draft_map and str(draft_map.get("map_id", "")).startswith("map_v2_fleet"):
-            try:
-                active = site_maps.active_view()
-                if active and active.get("map") and not str(active["map"].get("map_id", "")).startswith("map_v2_fleet"):
-                    return site_maps.save_draft(
-                        SiteMap.model_validate(active["map"]),
-                        expected_revision=view.get("revision"),
-                        principal_id="system",
-                    )
-            except Exception:
-                pass
-        return view
+        return site_maps.draft_view()
 
     @app.put("/api/fleet/site-map/draft", tags=["site-map"])
     async def site_map_save_draft(request: Request,

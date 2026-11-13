@@ -92,7 +92,7 @@ export function createGaugeCard(nodeWithText, { key, title, value, subtext, pct,
   return box;
 }
 
-export function createRoiPoller({ scope, view, call }) {
+export function createRoiPoller({ scope, view, call, render = () => {} }) {
   const roiLease = { token: "", expiresAt: 0, pending: null };
   const roiObjectUrls = new Map();
   let roiPollInFlight = false;
@@ -139,7 +139,7 @@ export function createRoiPoller({ scope, view, call }) {
         const anc = (view.anchors || []).find((a) => a.target_id === targetId);
         if (anc) {
           const deg = typeof anc.head_yaw === "number" ? `${Math.round((anc.head_yaw * 180) / Math.PI)}°` : "—";
-          statusNode.textContent = `${anc.target_id.toUpperCase()} · ${anc.zoom || 4}x 실시간 추적 · BASE (${Number(anc.base_x).toFixed(2)}, ${Number(anc.base_y).toFixed(2)}) → HEAD (${Number(anc.head_x ?? anc.base_x).toFixed(2)}, ${Number(anc.head_y ?? anc.base_y).toFixed(2)}) ${deg}`;
+          statusNode.textContent = `${anc.target_id} · ${anc.zoom || 4}x 실시간 추적 · BASE (${Number(anc.base_x).toFixed(2)}, ${Number(anc.base_y).toFixed(2)}) → HEAD (${Number(anc.head_x ?? anc.base_x).toFixed(2)}, ${Number(anc.head_y ?? anc.base_y).toFixed(2)}) ${deg}`;
         }
       }
     } catch (_err) {
@@ -149,6 +149,21 @@ export function createRoiPoller({ scope, view, call }) {
     }
   }
   scope.interval(refreshRoiPreview, 850);
+  // A map anchor click focuses its card; an arm anchor also refreshes its ROI preview.
+  if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+    scope.listen(window, "rosy:focus-anchor", (ev) => {
+      const targetId = ev?.detail?.targetId;
+      if (!targetId) return;
+      if (targetId.startsWith("arm_")) {
+        view.focusAnchorId = targetId;
+        render();
+        void refreshRoiPreview();
+      } else if (targetId.startsWith("rosy_")) {
+        view.focusAnchorId = targetId;
+        render();
+      }
+    });
+  }
   return { roiObjectUrls, refreshRoiPreview };
 }
 
@@ -167,7 +182,7 @@ const DEFAULT_PLACES = [
 
 export function buildQuickControlPanel({
   robot, state, pose, power, guideRow, displayName, view, scope, el, render, isOperator,
-  roiObjectUrls, refreshRoiPreview, nodeWithText, tag,
+  roiObjectUrls, refreshRoiPreview, nodeWithText, tag, cellFrames = null,
 }) {
   const quickPanel = document.createElement("section");
   quickPanel.className = "quick-control-panel";
@@ -270,28 +285,26 @@ export function buildQuickControlPanel({
   ]) {
     const bBtn = nodeWithText("ui-button", "", bLabel);
     bBtn.setAttribute("kind", selGoal?.placeId === bId && selGoal?.status === "BERTHING" ? "toggle" : "quiet");
-    bBtn.type = "button"; bBtn.title = bTitle;
+    bBtn.type = "button"; bBtn.title = `${bTitle} · D-1013 구현·안전 검증 대기`;
     bBtn.dataset.berthBay = bId; bBtn.dataset.berthMode = bMode;
-    bBtn.addEventListener("click", scope.guard(() => {
-      view.selected = robot.robot_id; view.focusRobot = robot.robot_id;
-      el("map-stage").dataset.view = "map"; el("birdseye-toggle")?.setAttribute("aria-pressed", "false");
-      view.dispatchBerthPark?.(robot.robot_id, bId, bMode);
-    }));
+    bBtn.disabled = true;
+    bBtn.setAttribute("reason", "D-1013 분홍 유도선 폐루프 구현·안전 검증 대기");
     berthRow.appendChild(bBtn);
   }
   quickPanel.appendChild(berthRow);
 
   const omxSection = nodeWithText("div", "omx-fleet-section");
+  const visibleOmx = OMX_CELL_DEFS.filter(def => (view.anchors || []).some(a => a.target_id === def.target_id));
   const omxHead = nodeWithText("div", "quick-header-line");
   omxHead.append(
     nodeWithText("strong", "quick-title", "🦾 OMX-AI 셀 현황 · Fleet 연계 배차 (CELL-A ↔ Fleet R)"),
-    nodeWithText("small", "hint omx-cell-summary", `활성 셀 ${view.omxCells?.live_arm_count ?? 3}/3대 실시간 연동`),
+    nodeWithText("small", "hint omx-cell-summary", `관측된 셀 ${visibleOmx.length}/3대`),
   );
   omxSection.appendChild(omxHead);
 
   const omxGrid = nodeWithText("div", "omx-fleet-grid");
-  for (const def of OMX_CELL_DEFS) {
-    const liveAnc = (view.anchors || []).find((a) => a.target_id === def.target_id) || def;
+  for (const def of visibleOmx) {
+    const liveAnc = view.anchors.find((a) => a.target_id === def.target_id);
     const isFocusedArm = view.focusAnchorId === def.target_id;
     const armCard = nodeWithText("div", `omx-cell-card${isFocusedArm ? " selected" : ""}`);
     armCard.dataset.omxId = def.target_id;
@@ -315,20 +328,20 @@ export function buildQuickControlPanel({
       }
     }));
     const armTop = nodeWithText("div", "omx-cell-top");
-    armTop.append(nodeWithText("strong", "omx-cell-title", `🦾 ${def.shortLabel}`), tag(liveAnc.cell_status || "CELL-A ONLINE", "ok"));
+    armTop.append(nodeWithText("strong", "omx-cell-title", `🦾 ${def.shortLabel}`), tag(liveAnc.cell_status || "상태 미확인", liveAnc.cell_status ? "ok" : "warn"));
     armCard.appendChild(armTop);
 
-    const extM = typeof liveAnc.extension_m === "number" ? liveAnc.extension_m : 0.21;
-    const reachM = liveAnc.reach_m || 0.28;
-    const reachPct = Math.max(0, Math.min(100, Math.round((extM / reachM) * 100)));
-    const confPct = Math.max(0, Math.min(100, Math.round((liveAnc.confidence ?? 0.98) * 100)));
-    const headDeg = typeof liveAnc.head_yaw === "number" ? `${Math.round((liveAnc.head_yaw * 180) / Math.PI)}°` : "-90°";
+    const extM = typeof liveAnc.extension_m === "number" ? liveAnc.extension_m : null;
+    const reachM = typeof liveAnc.reach_m === "number" ? liveAnc.reach_m : null;
+    const reachPct = extM !== null && reachM > 0 ? Math.max(0, Math.min(100, Math.round((extM / reachM) * 100))) : 0;
+    const confPct = typeof liveAnc.confidence === "number" ? Math.max(0, Math.min(100, Math.round(liveAnc.confidence * 100))) : 0;
+    const headDeg = typeof liveAnc.head_yaw === "number" ? `${Math.round((liveAnc.head_yaw * 180) / Math.PI)}°` : "확인 불가";
 
     const barsWrap = nodeWithText("div", "omx-bars-wrap");
     const barSpecs = [
-      ["뻗음·작업반경", `${extM.toFixed(2)}/${reachM.toFixed(2)}m (${reachPct}%)`, reachPct, "info"],
-      ["서보·전원버스", liveAnc.motor_summary || "12.0V · 31°C (6/6)", 100, "good"],
-      ["4x 비전·방위", `신뢰도 ${confPct}% · HEAD ${headDeg}`, confPct, "good"],
+      ["뻗음·작업반경", extM !== null && reachM > 0 ? `${extM.toFixed(2)}/${reachM.toFixed(2)}m (${reachPct}%)` : "확인 불가", reachPct, "info"],
+      ["서보·전원버스", liveAnc.motor_summary || "확인 불가", liveAnc.motor_summary ? 100 : 0, "good"],
+      ["4x 비전·방위", liveAnc.confidence === undefined ? "확인 불가" : `신뢰도 ${confPct}% · HEAD ${headDeg}`, confPct, "good"],
     ];
     for (const [bLabel, bVal, bPct, bTone] of barSpecs) {
       const bRow = nodeWithText("div", "gauge-row-compact"), bMeta = nodeWithText("div", "gauge-meta-line");
@@ -337,7 +350,7 @@ export function buildQuickControlPanel({
       barsWrap.appendChild(bRow);
     }
     armCard.appendChild(barsWrap);
-    const jointLine = nodeWithText("small", "gauge-card-sub", `${liveAnc.joints_summary || "J1:0° J2:-3° J3:24° Grip:0.01"} · 연계 정류장 ${def.stationId}`);
+    const jointLine = nodeWithText("small", "gauge-card-sub", `${liveAnc.joints_summary || "관절 확인 불가"} · 연계 정류장 ${def.stationId}`);
     jointLine.title = jointLine.textContent;
     armCard.appendChild(jointLine);
 
@@ -363,11 +376,14 @@ export function buildQuickControlPanel({
     omxGrid.appendChild(armCard);
   }
   omxSection.appendChild(omxGrid);
-  quickPanel.appendChild(omxSection);
+  if (visibleOmx.length) quickPanel.appendChild(omxSection);
 
   const anchorList = [
     { target_id: robot.robot_id, kind: "pinky", label: displayName, base_x: gPose?.x ?? -0.411, base_y: gPose?.y ?? 0.350, head_x: gPose?.x ?? -0.411, head_y: (gPose?.y ?? 0.350) - 0.055, head_yaw: gPose?.yaw ?? -1.57, zoom: 3 },
-    ...OMX_CELL_DEFS.map((def) => (view.anchors || []).find((a) => a.target_id === def.target_id) || def),
+    ...OMX_CELL_DEFS.flatMap((def) => {
+      const observed = (view.anchors || []).find((a) => a.target_id === def.target_id);
+      return observed ? [observed] : [];
+    }),
   ];
   const activeAnchorId = view.focusAnchorId || robot.robot_id;
   const activeAnchor = anchorList.find((a) => a.target_id === activeAnchorId) || anchorList[0];
@@ -375,7 +391,7 @@ export function buildQuickControlPanel({
   const trackerBox = nodeWithText("div", "tracker-box"), trackerHead = nodeWithText("div", "tracker-head"), targetTabs = nodeWithText("div", "tracker-tabs");
   for (const anc of anchorList) {
     const isCurrent = anc.target_id === activeAnchor.target_id;
-    const tab = nodeWithText("ui-button", "", anc.kind === "omx_ai" ? `🦾 ${anc.target_id.toUpperCase()} (${anc.zoom || 4}x)` : `🤖 ${anc.target_id} (${anc.zoom || 3}x)`);
+    const tab = nodeWithText("ui-button", "", anc.kind === "omx_ai" ? `🦾 ${anc.target_id} (${anc.zoom || 4}x)` : `🤖 ${anc.target_id} (${anc.zoom || 3}x)`);
     tab.setAttribute("kind", "toggle"); tab.type = "button"; tab.setAttribute("aria-pressed", isCurrent ? "true" : "false");
     tab.addEventListener("click", scope.guard(() => {
       view.focusAnchorId = anc.target_id;
@@ -387,40 +403,32 @@ export function buildQuickControlPanel({
     }));
     targetTabs.appendChild(tab);
   }
-  const isPinningAnchor = view.anchorPinTarget === activeAnchor.target_id;
-  const pinAnchorBtn = nodeWithText("ui-button", "", isPinningAnchor ? "지도에서 위치를 찍고 헤드 방향으로 끄세요" : `🎯 ${activeAnchor.target_id.toUpperCase()} 기준 위치 보정`);
-  pinAnchorBtn.setAttribute("kind", "toggle"); pinAnchorBtn.type = "button"; pinAnchorBtn.setAttribute("aria-pressed", isPinningAnchor ? "true" : "false");
-  pinAnchorBtn.disabled = !isOperator();
-  pinAnchorBtn.addEventListener("click", scope.guard(() => {
-    view.anchorPinTarget = isPinningAnchor ? null : activeAnchor.target_id;
-    if (view.anchorPinTarget) { view.pinning = null; el("map-stage").dataset.view = "map"; el("birdseye-toggle")?.setAttribute("aria-pressed", "false"); }
-    render();
-  }));
-  trackerHead.append(targetTabs, pinAnchorBtn);
+  // No Fleet anchor route exists, so there is no pin button (it could only fail).
+  trackerHead.append(targetTabs);
   trackerBox.appendChild(trackerHead);
 
+  // 셀 카메라 뷰는 Vision 소스만 가리킨다(D-136). cell S(arm_s·S3)에는 측면 카메라가 없고,
+  // Pinky 도킹은 천장 Cam ROI 확대로 위에서 본다.
   const camViewsForAnchor = activeAnchor.target_id === "arm_a"
     ? [
-        { id: "arm_a_wrist", label: "arm_a 손목", url: "/api/fleet/pipeline/cell-camera/arm_a_wrist" },
-        { id: "top", label: "S5 상단", url: "/api/fleet/pipeline/cell-camera/top" },
-        { id: "side", label: "셀 측면", url: "/api/fleet/pipeline/cell-camera/side" },
+        { id: "arm_a_wrist", label: "arm_a 손목", source: "arm_a_wrist" },
+        { id: "top", label: "S5 상단", source: "top" },
+        { id: "side", label: "셀 측면 (A/B)", source: "side" },
       ]
     : activeAnchor.target_id === "arm_b"
     ? [
-        { id: "arm_b_wrist", label: "arm_b 손목", url: "/api/fleet/pipeline/cell-camera/arm_b_wrist" },
-        { id: "top", label: "S5 상단", url: "/api/fleet/pipeline/cell-camera/top" },
-        { id: "side", label: "셀 측면", url: "/api/fleet/pipeline/cell-camera/side" },
+        { id: "arm_b_wrist", label: "arm_b 손목", source: "arm_b_wrist" },
+        { id: "top", label: "S5 상단", source: "top" },
+        { id: "side", label: "셀 측면 (A/B)", source: "side" },
       ]
     : activeAnchor.target_id === "arm_s"
     ? [
-        { id: "arm_s_wrist", label: "arm_s 손목", url: "/api/fleet/pipeline/cell-camera/arm_s_wrist" },
-        { id: "arm_s_top", label: "S3 상단", url: "/api/fleet/pipeline/cell-camera/arm_s_top" },
-        { id: "side", label: "셀 측면", url: "/api/fleet/pipeline/cell-camera/side" },
+        { id: "arm_s_wrist", label: "arm_s 손목", source: "arm_s_wrist" },
+        { id: "arm_s_top", label: "S3 상단", source: "arm_s_top" },
       ]
     : [
-        { id: "pinky", label: "S3 도킹 뷰", url: "/api/fleet/pipeline/cell-camera/pinky" },
-        { id: "side", label: "측면 도킹", url: "/api/fleet/pipeline/cell-camera/side" },
-        { id: "arm_s_top", label: "S3 상단", url: "/api/fleet/pipeline/cell-camera/arm_s_top" },
+        { id: "pinky_dock", label: "도킹 확대 (천장 Cam)", roiTarget: activeAnchor.target_id },
+        { id: "arm_s_top", label: "S3 상단", source: "arm_s_top" },
       ];
   view.trackerCamByTarget = view.trackerCamByTarget || {};
   const chosenCamId = view.trackerCamByTarget[activeAnchor.target_id] || camViewsForAnchor[0].id;
@@ -434,14 +442,14 @@ export function buildQuickControlPanel({
   const liveCellImg = document.createElement("img");
   liveCellImg.id = "anchor-cell-live-img";
   liveCellImg.className = "anchor-roi-img omx-inspector-cam";
-  liveCellImg.dataset.baseUrl = chosenCam.url;
-  liveCellImg.src = `${chosenCam.url}?t=${Date.now()}`;
   liveCellImg.alt = `${activeAnchor.target_id} ${chosenCam.label} 실시간 카메라`;
   liveCellImg.loading = "lazy";
+  // No Vision lease until the person picks a camera for this target (selecting a robot only inspects).
+  if (view.trackerCamByTarget[activeAnchor.target_id]) cellFrames?.bind(liveCellImg, chosenCam);
   const roiMeta = nodeWithText("div", "roi-meta"), statusText = nodeWithText("p", "hint roi-status-text");
   statusText.id = "anchor-roi-status";
   const deg = typeof activeAnchor.head_yaw === "number" ? `${Math.round((activeAnchor.head_yaw * 180) / Math.PI)}°` : "—";
-  statusText.textContent = `${activeAnchor.target_id.toUpperCase()} · ${activeAnchor.zoom || 4}x 실시간 추적 · BASE (${Number(activeAnchor.base_x).toFixed(2)}, ${Number(activeAnchor.base_y).toFixed(2)}) → HEAD (${Number(activeAnchor.head_x ?? activeAnchor.base_x).toFixed(2)}, ${Number(activeAnchor.head_y ?? activeAnchor.base_y).toFixed(2)}) ${deg}`;
+  statusText.textContent = `${activeAnchor.target_id} · ${activeAnchor.zoom || 4}x 실시간 추적 · BASE (${Number(activeAnchor.base_x).toFixed(2)}, ${Number(activeAnchor.base_y).toFixed(2)}) → HEAD (${Number(activeAnchor.head_x ?? activeAnchor.base_x).toFixed(2)}, ${Number(activeAnchor.head_y ?? activeAnchor.base_y).toFixed(2)}) ${deg}`;
   const descText = nodeWithText("small", "hint roi-sub-text", activeAnchor.kind === "omx_ai"
     ? `CELL-A 관절(${activeAnchor.joints_summary || "6축 정상"}) + 실시간 ${chosenCam.label} 카메라 연동`
     : `천장 카메라 3x 추적 + 실시간 ${chosenCam.label} 카메라 연동`);
@@ -453,8 +461,7 @@ export function buildQuickControlPanel({
     lBtn.type = "button";
     lBtn.addEventListener("click", scope.guard(() => {
       view.trackerCamByTarget[activeAnchor.target_id] = cv.id;
-      liveCellImg.dataset.baseUrl = cv.url;
-      liveCellImg.src = `${cv.url}?t=${Date.now()}`;
+      cellFrames?.bind(liveCellImg, cv);
       if (typeof window !== "undefined" && typeof window.dispatchEvent === "function") {
         window.dispatchEvent(new CustomEvent("rosy:inspect-target", { detail: { targetId: activeAnchor.target_id, camId: cv.id } }));
       }
@@ -477,49 +484,4 @@ export function buildQuickControlPanel({
   trackerBox.appendChild(roiRow);
   quickPanel.appendChild(trackerBox);
   return quickPanel;
-}
-
-export function buildOmxSummaries({ view, scope, el, openCard, nodeWithText, tag }) {
-  const activeRobotId = view.focusRobot || view.robots.find((r) => r.online)?.robot_id || "rosy_46";
-  return OMX_CELL_DEFS.map((def, idx) => {
-    const liveAnc = (view.anchors || []).find((a) => a.target_id === def.target_id) || def;
-    const isSelected = view.focusAnchorId === def.target_id;
-    const node = nodeWithText("article", `robot-summary omx-summary s${(idx + 1) % (view.colors?.length || 3)}${isSelected ? " selected" : ""}`);
-    node.dataset.robotId = def.target_id; node.tabIndex = -1;
-    node.addEventListener("click", scope.guard((ev) => {
-      if (ev.target?.closest?.("ui-button, button")) return;
-      openCard(def.target_id);
-    }));
-    const line = nodeWithText("div", "robot-line");
-    line.append(nodeWithText("b", "ui-disclosure-name", `🦾 ${def.shortLabel}`));
-    const btnGroup = nodeWithText("div", "omx-summary-btns");
-    const dispatchBtn = nodeWithText("ui-button", "", `🤖→${def.stationId}`);
-    dispatchBtn.type = "button"; dispatchBtn.setAttribute("kind", "quiet");
-    dispatchBtn.title = `${activeRobotId} 로봇을 ${def.shortLabel} 연계 정류장(${def.stationId})으로 즉시 배차`;
-    dispatchBtn.addEventListener("click", scope.guard(() => {
-      view.focusAnchorId = def.target_id; view.selected = activeRobotId; view.focusRobot = activeRobotId;
-      el("map-stage").dataset.view = "map"; el("birdseye-toggle")?.setAttribute("aria-pressed", "false");
-      view.dispatchGoalToPoint?.({ x: def.stationX, y: def.stationY }, `${def.shortLabel} 연계 ${def.stationName}`, def.stationId);
-    }));
-    const choose = nodeWithText("ui-button", "", isSelected ? "선택됨" : "셀 보기");
-    choose.type = "button"; choose.setAttribute("kind", "toggle"); choose.setAttribute("aria-pressed", String(isSelected));
-    choose.dataset.selectRobotId = def.target_id;
-    choose.addEventListener("click", scope.guard(() => { openCard(def.target_id); }));
-    btnGroup.append(dispatchBtn, choose);
-    line.append(btnGroup);
-    node.append(line);
-
-    const facts = nodeWithText("div", "robot-summary-status");
-    const extM = typeof liveAnc.extension_m === "number" ? liveAnc.extension_m : 0.21;
-    const reachM = liveAnc.reach_m || 0.28;
-    const reachPct = Math.max(0, Math.min(100, Math.round((extM / reachM) * 100)));
-    facts.append(
-      tag(liveAnc.cell_status || "CELL-A ONLINE", "ok"),
-      tag(`연계역 ${def.stationId}`, ""),
-      tag(`뻗음 ${reachPct}% (${extM.toFixed(2)}m)`, ""),
-      tag(liveAnc.motor_summary || "모터 31°C · 12.0V", ""),
-    );
-    node.append(facts);
-    return node;
-  });
 }

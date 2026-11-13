@@ -5,7 +5,7 @@ from pathlib import Path
 from threading import RLock
 from urllib.parse import urlsplit
 
-from response import error, reply
+from response import DevResponse, error, reply
 from sample.sessions import Sessions
 from sample.spatial import Spatial
 from sample.governance import Governance
@@ -100,6 +100,12 @@ class SampleEngine:
         response = self.vision.handle(method, path, payload)
         if response is not None:
             return response
+        if (method, path) == ('GET', '/pipeline/cell-tasks'):
+            return reply({'tasks': [], 'summary': {'total': 0, 'queued': 0, 'running': 0, 'completed': 0}})
+        if method == 'GET' and path.startswith('/pipeline/cell-camera/'):
+            # The sample site has no cell camera; Fleet answers with a placeholder picture too.
+            return DevResponse(200, [('Content-Type', 'image/svg+xml'), ('Cache-Control', 'no-store')],
+                               b'<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180"/>')
         if method != 'GET' and role == 'viewer':
             return error(403, 'FORBIDDEN')
         if (method, path) == ('POST', '/dispatch/rearm') and self.control_units.local_stop_pending():
@@ -133,6 +139,9 @@ class SampleEngine:
         if (method, path) == ('GET', '/workcell-observations'):
             # The sample site registers no observed workcell (D-837): an empty read-only snapshot.
             return reply({'read_only': True, 'physical_acceptance': False, 'workcells': []})
+        if (method, path) == ('GET', '/pipeline/cell-tasks'):
+            # The Cell page's task ledger read: the sample site has no OMX cell queue, so an empty ledger.
+            return reply({'tasks': []})
         if (method, path) == ('GET', '/workcell-observations/usb-devices'):
             # No hardware is connected to the sample provider.
             return reply({'workcells': []})
