@@ -213,13 +213,11 @@ function render() {
   const focusedId = focusedCard?.dataset.robotId;
   const focusedButton = focusedCard && focused !== focusedCard
     ? [...focusedCard.querySelectorAll("ui-button, button")].indexOf(focused) : -1;
-  // 활성화된(온라인) 로봇을 우선 표시하며, 온라인 로봇이 있을 때는 활성 로봇만 리스트업한다.
-  const hasOnline = view.robots.some(r => r.online || r.link === "degraded");
-  const visibleIndices = [...view.robots.keys()].filter(i => !hasOnline || view.robots[i].online || view.robots[i].link === "degraded");
+  // 연락이 끊긴 로봇도 이유와 함께 보여야 운영자가 상태를 구분할 수 있다.
+  const visibleIndices = [...view.robots.keys()];
   if (visibleIndices.length) {
     const order = visibleIndices.sort((a, b) =>
-      (Number(Boolean(view.robots[b].online)) - Number(Boolean(view.robots[a].online)))
-      || (roster.needsAttention(view.robots[b]) - roster.needsAttention(view.robots[a])));
+      roster.needsAttention(view.robots[b]) - roster.needsAttention(view.robots[a]));
     const robotRows = order.map((index) => roster.summary(view.robots[index], index));
     const omxRows = typeof roster.omxSummaries === "function" ? roster.omxSummaries() : [];
     roster.place(rosterBox, [...robotRows, ...omxRows]);
@@ -269,7 +267,7 @@ function render() {
   const nextHint = point
     ? `${view.selected} 목표 (${point.x.toFixed(2)}, ${point.y.toFixed(2)}) m · 방향키로 이동, Enter로 확인, Escape로 취소`
     : view.map || view.siteMap
-      ? "활성 로봇을 선택한 뒤 지도(또는 목적지 장소)를 찍으면 즉시 해당 위치로 이동합니다."
+      ? "로봇을 선택하고 지도를 찍으면 확인 후 목표를 보냅니다."
       : "지도가 수신되면 로봇의 목표 지정을 사용할 수 있습니다.";
   if (hint.textContent !== nextHint) hint.textContent = nextHint;
   refreshDiagnostics();
@@ -348,8 +346,8 @@ view.openLeaderTrip = (robotId) => { inbox.select("status"); roster.openTrip(rob
 function paintMove() {
   const pick = el("work-move-robot"), box = el("work-move-form");
   el("work-move").hidden = el("work-new-move-item").hidden || el("work-new-move").getAttribute("aria-pressed") !== "true";
-  const activeRows = view.robots.filter(row => row.online || row.link === "degraded");
-  const rows = activeRows.length > 0 ? activeRows : view.robots;
+  // 오프라인 로봇도 이유와 함께 올라야 한다 — 선택은 읽기이고, 시작 단추가 잠긴 이유를 보여준다.
+  const rows = view.robots;
   const id = placeOptions(pick, rows.map(row => ({id: row.robot_id})), pick.value, row => view.robotNames?.[row.id] || row.id);
   const robot = view.stateUnavailable ? null : view.robots.find(row => row.robot_id === id);  // as roster.js
   el("work-move-state").textContent = robot ? cardTripLine(view, id) : "";

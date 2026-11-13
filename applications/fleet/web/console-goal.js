@@ -1,6 +1,6 @@
 import {randomUUID} from "/console/assets/uuid.js";
 // 지도 위 목표 지정과 운영자 핀(D-201·D-224·D-593). 셸(console.js)이 그리기(render)와 지도 뷰를 건넨다(D-798 3.2).
-import { motionCommandReason } from "./motion-readiness.js";
+import { capabilityReason, motionCommandReason } from "./motion-readiness.js";
 import { pinPrefill } from "./localization-badge.js";
 import { roadPolylineBetween } from "/console/assets/guide-layer.js";
 
@@ -45,11 +45,11 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
   async function commitWorldGoal(point, placeLabel = "", placeId = "") {
     const life = pageScope.capture(); life.check();
     if (!point || !Number.isFinite(point.x) || !Number.isFinite(point.y)) return;
-    const robotId = view.selected || view.focusRobot || view.robots.find((r) => r.online)?.robot_id || "rosy_46";
-    view.focusRobot = robotId; view.selected = robotId;
+    const robotId = view.selected;
+    if (!robotId) return;
     const selectedRobot = view.robots.find((robot) => robot.robot_id === robotId);
     const guideRow = (view.guide?.robots || []).find((r) => r.robot_id === robotId);
-    const curPose = guideRow?.pose || selectedRobot?.state?.pose || { x: -0.411, y: 0.350, yaw: -1.5708 };
+    const curPose = guideRow?.pose || selectedRobot?.state?.pose || null;
     const yaw = curPose && Number.isFinite(curPose.x) && Number.isFinite(curPose.y) ? Math.atan2(point.y - curPose.y, point.x - curPose.x) : 0;
     const where = placeLabel ? `${placeLabel} (${point.x.toFixed(2)}, ${point.y.toFixed(2)})` : `(${point.x.toFixed(2)}, ${point.y.toFixed(2)})`;
     const siteMapObj = view.activeSiteMap?.map, localRoad = curPose ? roadPolylineBetween(siteMapObj, curPose, point) : null;
@@ -79,7 +79,9 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
     }
     drawMap(); render();
 
-    const canDispatch = !view.stateUnavailable && auth.role === "operator" && selectedRobot?.online && selectedRobot.state?.safety?.estop === false;
+    const canDispatch = !view.stateUnavailable && auth.role === "operator" && !namedReason()
+      && !capabilityReason(selectedRobot?.capabilities, 'navigation.goal_navigation')
+      && !motionCommandReason(view, robotId, "goal") && selectedRobot?.online && selectedRobot.state?.safety?.estop === false;
     if (!canDispatch) {
       try {
         const qs = new URLSearchParams({
@@ -103,15 +105,30 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
       return;
     }
 
+    const mapSnapshot = JSON.stringify([view.map?.map_id, view.map?.width, view.map?.height, view.map?.resolution, view.map?.origin]);
+    await confirmedAction.run({
+      message: `${robotId}에게 목표 (${point.x.toFixed(2)}, ${point.y.toFixed(2)}) m를 보낼까요?`,
+      opener: el("map-canvas"),
+      eligible: () => !view.stateUnavailable && view.selected === robotId && !namedReason()
+        && !capabilityReason(view.robots.find(robot => robot.robot_id === robotId)?.capabilities, 'navigation.goal_navigation')
+        && !motionCommandReason(view, robotId, "goal")
+        && view.robots.some(robot => robot.robot_id === robotId && robot.online && robot.state?.safety?.estop === false)
+        && mapSnapshot === JSON.stringify([view.map?.map_id, view.map?.width, view.map?.height, view.map?.resolution, view.map?.origin]),
+      request: async owner => {
     try {
-      try {
+      if (siteMapObj) {
         const roadRes = await call(`/api/fleet/robots/${encodeURIComponent(robotId)}/road-nav2`, {
           method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": randomUUID() },
           body: JSON.stringify({ x: Number(point.x.toFixed(4)), y: Number(point.y.toFixed(4)), yaw: Number(yaw.toFixed(4)), place_id: placeId || null, label: placeLabel || "" }),
-          signals: [life.signal],
+          signals: [owner.signal],
         });
-        life.check();
-        if (roadRes && (roadRes.accepted || roadRes.dispatched)) {
+        owner.check();
+        const roadTask = roadRes?.task;
+        const queued = roadRes?.accepted === false && roadRes?.dispatched === true
+          && roadRes?.queued === true && roadTask?.status === "QUEUED";
+        const accepted = roadRes?.accepted === true && roadRes?.dispatched === true
+          && roadRes?.queued !== true && (roadTask?.status === "ACCEPTED" || Boolean(roadRes?.receipt));
+        if (roadRes?.simulated_dispatch !== true && (queued || accepted)) {
           view.activeRoadPlan = { robotId, ...roadRes, at: Date.now() };
           view.selectedGoal = {
             ...view.selectedGoal,
@@ -119,41 +136,25 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
             places: roadRes.places?.length ? roadRes.places : view.selectedGoal.places,
             length_m: typeof roadRes.length_m === "number" ? roadRes.length_m : view.selectedGoal.length_m,
             eta_s: typeof roadRes.eta_s === "number" ? roadRes.eta_s : view.selectedGoal.eta_s,
-            status: "MOVING", statusText: "도로 주행 명령 하달됨", at: Date.now(),
+            status: queued ? "QUEUED" : "ACCEPTED",
+            statusText: queued ? "도로 주행 대기 · 발행 전" : "도로 주행 접수 · 동작 확인 대기", at: Date.now(),
           };
           drawMap(); render();
           const viaStr = Array.isArray(roadRes.places) && roadRes.places.length ? roadRes.places.join(" → ") : `${roadRes.waypoints_site?.length || 1}개 도로 경유점`;
           const lenStr = typeof roadRes.length_m === "number" ? ` · ${roadRes.length_m.toFixed(2)}m` : "";
           const formStr = roadRes.formation?.active ? ` · 편대(${roadRes.formation.role || "active"})` : "";
-          log(`🎯 ${robotId} → ${where} 목표 핀 고정 및 도로 관제+Nav2 주행 시작 (${viaStr}${lenStr}${formStr})`, "good");
+          log(`🎯 ${robotId} → ${where} 도로 주행 ${queued ? "대기" : "접수"} · 실제 동작 확인 대기 (${viaStr}${lenStr}${formStr})`, "good");
           refreshGuide();
           return;
         }
-      } catch (_roadErr) { /* Fall through to trip/direct goal dispatch */ }
-      if (placeId) {
-        try {
-          const plan = await call("/api/fleet/trips/plan", {
-            method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ robot_id: robotId, goal: { place_id: placeId }, mode: "once" }), signals: [life.signal],
-          });
-          life.check();
-          if (plan?.plan_id) {
-            await call("/api/fleet/trips/start", {
-              method: "POST", headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ plan_id: plan.plan_id }), signals: [life.signal],
-            });
-            life.check();
-            log(`${robotId} → ${where} 즉시 주행 시작 (Trip ${plan.plan_id.slice(0, 8)})`, "good");
-            refreshGuide();
-            return;
-          }
-        } catch (_tripErr) { /* Fall through to direct goal dispatch */ }
+        log(`${robotId} 도로 목표 접수 거절 · 명령을 다시 보내지 않았습니다.`, "bad");
+        return;
       }
       const result = await call(`/api/fleet/robots/${encodeURIComponent(robotId)}/goal`, {
         method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": randomUUID() },
-        body: JSON.stringify({ x: Number(point.x.toFixed(4)), y: Number(point.y.toFixed(4)), yaw: Number(yaw.toFixed(4)) }), signals: [life.signal],
+        body: JSON.stringify({ x: Number(point.x.toFixed(4)), y: Number(point.y.toFixed(4)), yaw: Number(yaw.toFixed(4)) }), signals: [owner.signal],
       });
-      life.check();
+      owner.check();
       const task = result && result.task ? result.task : null;
       if (task && task.status === "QUEUED") {
         view.pendingTasks[robotId] = task;
@@ -178,31 +179,49 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
     } catch (err) {
       if (err.name !== "AbortError") log(`${robotId} 목표 이동 거절 — ${err.message}`, "bad");
     }
+      }, onError: err => log(`${robotId} 목표 이동 거절 — ${err.message}`, "bad"),
+    });
   }
 
   view.dispatchBerthPark = async (targetRobotId, bayId = "", mode = "berth_park") => {
-    const life = pageScope.capture(); life.check();
-    const robotId = targetRobotId || view.selected || view.focusRobot || "rosy_46";
-    view.focusRobot = robotId; view.selected = robotId;
+    const robotId = targetRobotId;
+    if (!robotId || view.selected !== robotId || view.focusRobot !== robotId) return;
     const defaultBay = robotId === "rosy_45" ? "C2" : robotId === "rosy_42" ? "C3" : "C1";
     const chosenBay = (bayId || defaultBay).toUpperCase();
     const bayCoords = { C1: { x: -0.418, y: 0.380 }, C2: { x: -0.190, y: 0.380 }, C3: { x: 0.038, y: 0.380 } };
-    const pt = bayCoords[chosenBay] || bayCoords.C1;
+    const pt = bayCoords[chosenBay];
+    if (!pt || !["berth_park", "forward_and_berth_park"].includes(mode)) return;
+    const eligible = () => {
+      const robot = view.robots.find(row => row.robot_id === robotId);
+      return !view.stateUnavailable && auth.role === "operator" && !namedReason()
+        && view.selected === robotId && view.focusRobot === robotId && robot?.online
+        && robot.state?.safety?.estop === false
+        && !capabilityReason(robot.capabilities, "navigation.goal_navigation")
+        && !motionCommandReason(view, robotId, "goal");
+    };
+    if (!eligible()) return;
     const modeTitle = mode === "forward_and_berth_park" ? `전진 출차(+0.20m) → ${chosenBay} 접안 파킹` : `${chosenBay} 접안 모드 파킹`;
     view.selectedGoal = {
       robotId, x: pt.x, y: pt.y, yaw: -1.5708, placeId: chosenBay, label: modeTitle,
       where: `${modeTitle} (${pt.x.toFixed(2)}, ${pt.y.toFixed(2)})`,
       points: [[pt.x, pt.y - 0.20], [pt.x, pt.y]], places: [chosenBay],
       length_m: 0.40, eta_s: 11.0, status: "SELECTED",
-      statusText: "접안 파킹 Funnel (ALIGNING → REVERSING_IN_RAILS ω=0 → DOCKED)", at: Date.now(),
+      statusText: "접안 파킹 · 정렬 → 레일 진입 → 충전 위치 정지", at: Date.now(),
     };
     drawMap(); render();
+    await confirmedAction.run({
+      message: `${robotId}에 ${modeTitle} 명령을 보낼까요?`, opener: el("map-canvas"), eligible,
+      request: async owner => {
     try {
       const res = await call(`/api/fleet/robots/${encodeURIComponent(robotId)}/berth-park`, {
         method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": randomUUID() },
-        body: JSON.stringify({ bay_id: chosenBay, mode, forward_m: 0.20 }), signals: [life.signal],
+        body: JSON.stringify({ bay_id: chosenBay, mode, forward_m: 0.20 }), signals: [owner.signal],
       });
-      life.check();
+      owner.check();
+      if (res?.accepted !== true || res?.simulated_dispatch === true) {
+        log(`${robotId} ${modeTitle} 접수 거절 · 명령을 다시 보내지 않았습니다.`, "bad");
+        return;
+      }
       if (res?.waypoints_site?.length >= 2) {
         view.selectedGoal = {
           ...view.selectedGoal, points: res.waypoints_site.map((w) => [w.x, w.y]),
@@ -215,8 +234,10 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
       log(`⚓ ${robotId} ${modeTitle} 시작 (${res?.dock_id || chosenBay} · 레일 내부 ω=0 직진 후진)`, "good");
       refreshGuide();
     } catch (err) {
-      if (err.name !== "AbortError") log(`${robotId} ${modeTitle} 경로 핀 고정 (${err.message || "프리뷰"})`, "good");
+      if (err.name !== "AbortError") log(`${robotId} ${modeTitle} 접수 실패 · ${err.message}`, "bad");
     }
+      }, onError: err => log(`${robotId} ${modeTitle} 접수 실패 · ${err.message}`, "bad"),
+    });
   };
 
   async function commitGoal(col, row) {
@@ -497,9 +518,8 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
           }
         }
       }
-      const activeRobotId = view.selected || view.focusRobot;
+      const activeRobotId = view.selected;
       if (!activeRobotId) return;
-      view.selected = activeRobotId;
       const places = view.activeSiteMap?.map?.places || [];
       let bestPlace = null, bestDist = 0.14;
       for (const place of places) {
