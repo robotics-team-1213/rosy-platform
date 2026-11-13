@@ -25,7 +25,7 @@ import time
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from candidate_signing import sign_manifest_bytes, verify_manifest_signature
 from model_code_jobs import (PREFIX, LEGACY_LEARNING_PREFIXES, JOB_ENTRY_POINTS,
-                             CAMERA_MAP_ENTRY, job_entry)
+                             CAMERA_MAP_ENTRY, NON_GPU_JOBS, job_entry)
 
 from model_code_layout import (
     LEARNING_CODE_PREFIXES, LEARNING_REQUIRED, CAMERA_PROFILE, CAMERA_MAP_FILES, SPLIT_CODE_PREFIXES,
@@ -470,8 +470,9 @@ def execute(config, script, args):
     root = Path(config["root"])
     # Serialize GPU jobs as well as code switches (D-434: no concurrent Isaac
     # and training). The child inherits the lock, including if its parent dies.
+    # NON_GPU_JOBS keep the lock and legacy check but skip the GPU probe.
     with work_lock(root, exclusive=True, blocking=True) as lock_fd:
-        busy = legacy_busy(config.get("legacy_roots", [])) or gpu_busy()
+        busy = legacy_busy(config.get("legacy_roots", [])) or (None if script in NON_GPU_JOBS else gpu_busy())
         if busy: raise WorkBusy("work busy: " + busy)
         state = Updater(root, config["key_id"], config["public_key"], config["python"]).state()
         if state.get("pending"): raise ValueError("interrupted update needs recovery first")
