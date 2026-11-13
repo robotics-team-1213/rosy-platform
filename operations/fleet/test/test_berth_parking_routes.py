@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -68,6 +70,7 @@ def test_berth_parking_status_and_dispatch_routes():
         read_guard=[],
         operator_guard=[],
         require_operator=fake_operator,
+        require_named_operator=fake_operator,
         compute_road_plan=fake_compute_road_plan,
     )
 
@@ -100,3 +103,47 @@ def test_berth_parking_status_and_dispatch_routes():
     assert sbody["live_robots"]["rosy_46"]["site_pose"]["y"] == 0.470
     assert sbody["live_robots"]["rosy_45"]["site_pose"]["y"] == 0.470
     assert sbody["cell_contract_handoff"]["stop_place_id"] == "S3"
+
+
+def _road_app(goal, refusal=None):
+    from fastapi import HTTPException
+    from fleet.hub.hub import HubError
+
+    app = FastAPI()
+    console = SimpleNamespace(goal=goal, trip_refusal=lambda ids: refusal)
+
+    async def plan(request, robot_id, x, y, yaw, place_id, label):
+        return {"target_nav2": {"x": 0.1, "y": 0.0, "yaw": 0.0}, "waypoints_site": []}
+
+    def named() -> SitePrincipal:
+        return SitePrincipal(principal_id="op-named", role="operator")
+
+    install_berth_parking_routes(app, console=console, task_service=None, read_guard=[], operator_guard=[],
+                                 require_operator=named, require_named_operator=named, compute_road_plan=plan)
+    return TestClient(app, raise_server_exceptions=False), HTTPException, HubError
+
+
+def test_road_nav2_failure_is_an_error_never_a_simulated_dispatch():
+    async def goal(*args):
+        raise HubError("robot unreachable")
+    client, _, _ = _road_app(goal)
+    res = client.post("/api/fleet/robots/rosy_46/road-nav2", json={"x": 0.0, "y": 0.0})
+    assert res.status_code >= 400 and "simulated_dispatch" not in res.text
+
+
+def test_road_nav2_refuses_a_robot_on_a_running_trip():
+    sent = []
+
+    async def goal(*args):
+        sent.append(args)
+        return {"accepted": True}
+    from fastapi import HTTPException
+    client, _, _ = _road_app(goal, refusal=HTTPException(409, {"code": "TRIP_RUNNING"}))
+    res = client.post("/api/fleet/robots/rosy_46/road-nav2", json={"x": 0.0, "y": 0.0})
+    assert res.status_code == 409 and not sent
+
+
+def test_road_nav2_route_needs_a_named_operator():
+    import inspect
+    from fleet.server.ledger import berth_parking_routes
+    assert "Depends(require_named_operator)" in inspect.getsource(berth_parking_routes.install_berth_parking_routes)

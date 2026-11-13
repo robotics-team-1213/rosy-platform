@@ -13,7 +13,12 @@ import uuid
 from functools import partial
 from typing import Any, Callable, Optional
 
-from fastapi import Depends, Header, Request
+from fastapi import Depends, Header, HTTPException, Request
+
+from fleet.hub.hub import HubError
+from fleet.server.http_errors import http_error
+from fleet.server.task_store import IdempotencyConflict
+from fleet.swarm.transport import RobotApiError
 
 from fleet.server.site_auth import SitePrincipal
 from .berth_parking_helpers import (
@@ -47,6 +52,7 @@ def install_berth_parking_routes(
     read_guard,
     operator_guard,
     require_operator,
+    require_named_operator,
     compute_road_plan: Callable | None = None,
 ) -> None:
     if compute_road_plan is None:
@@ -64,8 +70,13 @@ def install_berth_parking_routes(
     async def fleet_road_nav2(
         robot_id: str, request: Request,
         idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
-        principal: SitePrincipal = Depends(require_operator),
+        principal: SitePrincipal = Depends(require_named_operator),  # D-540 9: a goal moves the robot
     ) -> dict:
+        if busy := console.trip_refusal([robot_id]):  # D-494 5: refused before a task is queued for it
+            raise busy
+        if task_service is not None and not idempotency_key:
+            raise HTTPException(status_code=400, detail={
+                "code": "IDEMPOTENCY_KEY_REQUIRED", "message": "Idempotency-Key is required for navigation requests"})
         body = await request.json()
         target_x = float(body.get("x", 0.0))
         target_y = float(body.get("y", 0.0))
@@ -75,26 +86,27 @@ def install_berth_parking_routes(
 
         plan = await compute_road_plan(request, robot_id, target_x, target_y, target_yaw, place_id, label)
         final_nav2 = plan["target_nav2"]
-        dispatch_res = {}
-        req_key = idempotency_key or uuid.uuid4().hex
+        # One dispatch path, no fallback: a failure is an error, never a reported success (D-430 review 01988565d4).
         try:
             if task_service is not None:
                 task = await task_service.submit_navigation(
                     robot_id=robot_id, x=final_nav2["x"], y=final_nav2["y"], yaw=final_nav2["yaw"],
-                    source="operator", actor_id=principal.principal_id, request_key=req_key,
+                    source="operator", actor_id=principal.principal_id, request_key=idempotency_key,
                 )
-                dispatch_res = {"accepted": task["status"] in ("ACCEPTED", "QUEUED"), "task": task}
+                dispatch_res = {"accepted": task["status"] == "ACCEPTED", "queued": task["status"] == "QUEUED",
+                                "task": task}
             else:
                 res = await console.goal(robot_id, final_nav2["x"], final_nav2["y"], final_nav2["yaw"])
-                dispatch_res = {"accepted": True, "receipt": res}
-        except Exception as exc:
-            try:
-                res = await console.goal(robot_id, final_nav2["x"], final_nav2["y"], final_nav2["yaw"])
-                dispatch_res = {"accepted": True, "receipt": res}
-            except Exception:
-                dispatch_res = {"accepted": False, "error": str(exc)}  # never report a goal that was not sent
-
-        return {**plan, **dispatch_res, "dispatched": bool(dispatch_res.get("accepted"))}
+                dispatch_res = {"accepted": bool(res.get("accepted")), "receipt": res}
+        except IdempotencyConflict as exc:
+            raise HTTPException(status_code=409, detail={"code": "IDEMPOTENCY_CONFLICT", "message": str(exc)}) from exc
+        except ValueError as exc:
+            code = str(exc)
+            raise HTTPException(status_code=404 if code == "UNKNOWN_ROBOT" else 400, detail={"code": code}) from exc
+        except (HubError, RobotApiError, OSError) as exc:
+            raise http_error(exc) from exc
+        return {**plan, **dispatch_res,
+                "dispatched": bool(dispatch_res.get("accepted") or dispatch_res.get("queued"))}
 
     @app.get("/api/fleet/robots/{robot_id}/berth-park/status", dependencies=read_guard, tags=["fleet"])
     async def fleet_berth_park_status(robot_id: str) -> dict:
