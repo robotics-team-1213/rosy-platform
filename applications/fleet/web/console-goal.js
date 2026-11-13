@@ -194,7 +194,7 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
       where: `${modeTitle} (${pt.x.toFixed(2)}, ${pt.y.toFixed(2)})`,
       points: [[pt.x, pt.y - 0.20], [pt.x, pt.y]], places: [chosenBay],
       length_m: 0.40, eta_s: 11.0, status: "SELECTED",
-      statusText: "접안 파킹 (방향 정렬 → 레일 안에서 직선 후진 → 접안 완료)", at: Date.now(),
+      statusText: "접안 파킹 Funnel (ALIGNING → REVERSING_IN_RAILS ω=0 → DOCKED)", at: Date.now(),
     };
     drawMap(); render();
     try {
