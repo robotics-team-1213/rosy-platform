@@ -22,9 +22,9 @@ import cell_align
 import cell_auto_pick as auto
 import cell_decisions as cd
 import cell_diagnose
-import cell_evidence
 import cell_objects
 import cell_pivot
+import cell_site_camera
 import cell_why
 from cell_calibration import load as load_calibration
 from cell_scene_guard import scene_moved
@@ -76,7 +76,7 @@ def carry(frame, pick, push, *, expected_px, emit=cd.emit, rounds: int = ROUNDS,
     placed box counts as working, and `choices` then ranks the actions next time. explain(cause, out) -> cell_why's row: what it
     measured orders the actions, and a cause unknown again goes to a person. slow() -> lowered the lift speed, or at the floor.
     folded() -> the arm came home: a fold can fail after a stop, and no retry starts from there. observe() -> a site camera's
-    frame of a failure (cell_evidence): kept on the row as evidence, never read by the choice of action."""
+    frame of a failure (cell_site_camera): kept on the row as evidence, never read by the choice of action."""
     tried, rows, pending = {}, [], None
     try:
         for _ in range(rounds):
@@ -175,7 +175,7 @@ def main(argv=None) -> int:
         return True
 
     camera = config.get("evidence_camera")
-    observe = (lambda: cell_evidence.fleet_frame(camera, work / "evidence")) if camera else None
+    observe = (lambda: cell_site_camera.fleet_frame(camera, work / "evidence")) if camera else None
     out = carry(lambda: cell.frame("top"), pick, push, expected_px=expected_px, choices=choices, explain=explain, slow=slow,
                 folded=lambda: at_home(cell.act("state").get("state"), config["plan"]["home"]), observe=observe)
     print(json.dumps({**out, "unsolved": unsolved(choices), "open_questions": cell_why.open_questions(why_path)}, indent=1, default=str))
