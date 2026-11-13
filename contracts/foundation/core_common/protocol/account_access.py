@@ -45,8 +45,13 @@ def same_origin(request) -> bool:
 
 
 def refusal_reason(exc: BaseException) -> str:
-    """Loggable cause of a refused Account exchange: class plus message first line, no input values."""
-    return f"{type(exc).__name__}: {(str(exc).splitlines() or [''])[0][:120]}"
+    """Loggable cause of a refused Account exchange: the class name, plus the message first line only for
+    exceptions defined by our Account code (account_access, account_client). Third-party messages (pydantic,
+    urllib, json) can echo the input they rejected, such as a callback URL with its code and state."""
+    name = type(exc).__name__
+    if not type(exc).__module__.startswith(f'{__package__}.account_'):
+        return name
+    return f"{name}: {(str(exc).splitlines() or [''])[0][:120]}"
 
 
 class AccessRejected(ValueError):
