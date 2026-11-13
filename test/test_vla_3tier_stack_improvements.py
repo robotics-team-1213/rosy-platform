@@ -167,6 +167,27 @@ class TestCellStackGuard:
         assert v_out["verified"] is True
 
 
+@pytest.mark.parametrize("bad_z", [None, float("nan"), float("inf"), RuntimeError("height lost")])
+def test_pull_test_fails_closed_on_bad_height_readback(bad_z):
+    guard = CellStackGuard(StackGateConfig(tier=3))
+    lifts = []
+
+    def read_z():
+        if isinstance(bad_z, Exception):
+            raise bad_z
+        return bad_z
+
+    result = guard.evaluate_release(
+        current_z_m=TIER_Z_M[3], target_z_m=TIER_Z_M[3],
+        torque_history=[30.0, 85.0, 165.0, 128.0],
+        read_grip_holding_fn=lambda: True, read_z_fn=read_z,
+        lift_step_fn=lifts.append, tier=3,
+    )
+    assert result.passed is False
+    assert result.stage_failed == "STAGE_3_PULL_TEST"
+    assert lifts == [guard.cfg.pull_test_lift_m]
+
+
 class TestVlaHandoverBroker:
     def test_lifecycle_prefetch_sim_precheck_and_decision_veto(self, tmp_path: Path):
         broker = VlaHandoverBroker(arm_id="arm_b", max_retries=2)
@@ -308,6 +329,7 @@ class TestVlaHandoverBroker:
         assert out["il_rl_update"]["bucket"] == "pallet_right"
         assert out["il_rl_update"]["reward"] == 2.0
         assert "run release_place" in cmds_executed
+        assert cmds_executed.count("run release_place") == 1
         rl_doc = json.loads((tmp_path / "rl-policy.json").read_text(encoding="utf-8"))
         assert "tier_3" in rl_doc.get("place_tiers", {})
 
@@ -380,6 +402,62 @@ class TestVlaHandoverBroker:
         assert out["vla_executed"] is False
         assert cmds_executed == []
         assert "run release_place" not in cmds_executed  # nothing is released on a held stage
+
+    @pytest.mark.parametrize("bad_read", [None, float("nan"), RuntimeError("readback failed")])
+    @pytest.mark.parametrize("bad_sensor", ["z", "grip"])
+    def test_bad_preflight_readback_holds_before_motion(self, tmp_path: Path, bad_read, bad_sensor):
+        broker = VlaHandoverBroker(arm_id="arm_b", max_retries=2)
+        directive = broker.build_area_xyz_directive(
+            pick={"area": "pallet", "col": 3, "row": 1, "tier": 2},
+            place={"area": "pallet", "col": 2, "row": 1, "tier": 3},
+            directive_id="preflight-bad-readback",
+        )
+        task = TaskDispatch(task_id="TASK-PREFLIGHT", container_id="CONT-301", target_slot="pallet-l2",
+                            tier=3, vla_prompt="seat on tier 3", directive=directive)
+        commands = []
+        reads = {"z": 0, "grip": 0}
+
+        def read(sensor):
+            reads[sensor] += 1
+            if sensor == bad_sensor:
+                if isinstance(bad_read, Exception):
+                    raise bad_read
+                return bad_read
+            return TIER_Z_M[3] if sensor == "z" else True
+
+        out = broker.execute_hybrid_stack_stage(
+            task, base_plan=SAMPLE_BASE_PLAN, work_dir=tmp_path,
+            act_fn=lambda cmd: commands.append(cmd) or {"ok": True},
+            vla_step_fn=lambda _obs: [], seating_probe_fn=lambda _retry: (0.0, []),
+            read_z_fn=lambda: read("z"), read_grip_holding_fn=lambda: read("grip"),
+            lift_step_fn=lambda _dz: commands.append("lift"),
+        )
+        assert out["state"] == "HELD"
+        assert commands == []
+        assert reads == {"z": 1, "grip": 1}
+
+    def test_failed_macro_cannot_reach_release_gate(self, tmp_path: Path, monkeypatch):
+        import cell_area_xyz
+
+        broker = VlaHandoverBroker(arm_id="arm_b", max_retries=2)
+        directive = broker.build_area_xyz_directive(
+            pick={"area": "pallet", "col": 3, "row": 1, "tier": 2},
+            place={"area": "pallet", "col": 2, "row": 1, "tier": 3},
+            directive_id="failed-macro",
+        )
+        task = TaskDispatch(task_id="TASK-MACRO", container_id="CONT-301", target_slot="pallet-l2",
+                            tier=3, vla_prompt="seat on tier 3", directive=directive)
+        monkeypatch.setattr(cell_area_xyz, "execute_directive", lambda *args, **kwargs: {"result": "contact"})
+        commands = []
+        out = broker.execute_hybrid_stack_stage(
+            task, base_plan=SAMPLE_BASE_PLAN, work_dir=tmp_path,
+            act_fn=lambda cmd: commands.append(cmd) or {"ok": True},
+            vla_step_fn=lambda _obs: [], seating_probe_fn=lambda _retry: (0.0, []),
+            read_z_fn=lambda: TIER_Z_M[3], read_grip_holding_fn=lambda: True,
+            lift_step_fn=lambda _dz: commands.append("lift"),
+        )
+        assert out["state"] == "HELD"
+        assert commands == []
 
     def test_a_grip_readback_that_lost_the_box_fails_the_gate_and_never_releases(self, tmp_path: Path):
         broker = VlaHandoverBroker(arm_id="arm_b", max_retries=2)

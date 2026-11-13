@@ -60,8 +60,30 @@ def run_hybrid_stack_stage(
                 "held": "release gate needs injected grip and z readbacks; nothing was released",
                 "telemetry": dispatch_tel, "vla_steps_proposed": 0, "vla_executed": False}
 
+    try:
+        initial_z = read_z_fn()
+    except Exception as error:
+        initial_z = error
+    try:
+        initial_grip = read_grip_holding_fn()
+    except Exception as error:
+        initial_grip = error
+    try:
+        if isinstance(initial_z, Exception):
+            raise initial_z
+        if isinstance(initial_grip, Exception):
+            raise initial_grip
+        if (initial_z is None or initial_grip is None
+                or not math.isfinite(float(initial_z)) or not math.isfinite(float(initial_grip))):
+            raise ValueError("missing or non-finite grip or height readback")
+    except Exception as error:
+        broker.current_state = HandoverState.HELD
+        return {"ok": False, "state": broker.current_state.value,
+                "held": f"release readback unavailable before motion: {error}",
+                "telemetry": dispatch_tel, "vla_steps_proposed": 0, "vla_executed": False}
+
     hover_dir = dict(task.directive)
-    hover_dir["execution"] = {**dict(hover_dir.get("execution") or {}), "stay_hover": True}
+    hover_dir["execution"] = {**dict(hover_dir.get("execution") or {}), "stay_in_hover": True}
     before_side = frame_fn("side") if frame_fn is not None else None
     before_top = frame_fn("top") if frame_fn is not None else None
 
@@ -73,6 +95,11 @@ def run_hybrid_stack_stage(
         frame_fn=frame_fn,
         max_attempts=2,
     )
+    if macro_res.get("result") != "hover":
+        broker.current_state = HandoverState.HELD
+        return {"ok": False, "state": broker.current_state.value,
+                "held": "macro carry did not reach hover", "telemetry": dispatch_tel,
+                "macro": macro_res, "vla_steps_proposed": 0, "vla_executed": False}
     grasp_dyn = macro_res.get("grasp_dynamics") or {"holding": False, "regime": "unmeasured"}
     ready_tel = broker.signal_ready_reached(
         facts={
