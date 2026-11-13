@@ -117,7 +117,7 @@ def test_answer_links_come_right_after_the_title_in_focus_order(browser_workspac
     for _ in links:
         page.keyboard.press('Tab')
         focused.append(page.evaluate('document.activeElement.closest(".review-kinds") && document.activeElement.pathname'))
-    assert focused == links == ['/', '/pixels', '/learning/omx', '/learning/vlm'], (route, focused)
+    assert focused == links == ['/', '/pixels', '/incidents', '/learning/omx', '/learning/vlm'], (route, focused)
     page.keyboard.press('Tab')
     assert page.evaluate('!document.activeElement.closest(".review-kinds") && !!document.activeElement.closest(".ui-app-main")'), route
 

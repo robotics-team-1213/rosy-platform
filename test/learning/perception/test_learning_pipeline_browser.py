@@ -106,6 +106,8 @@ def test_home_status_strip_reads_one_learning_response(browser_workspace):
     page,_,expect=browser_workspace
     base=page.url.split('?')[0].rstrip('/')
     page.goto(base+'/learning',wait_until='networkidle')
+    page.get_by_role('navigation',name='학습센터 작업 이동',exact=True).get_by_role('link',name='인식 자료·학습',exact=True).click()
+    expect(page.locator('#pipeline')).to_be_visible()
     payload=page.request.get(base+'/api/learning').json()
     strip=page.locator('#home-status-strip')
     expect(strip).to_be_visible()
