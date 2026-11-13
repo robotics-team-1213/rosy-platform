@@ -48,6 +48,7 @@ MAP_POINTS = [
     [0.06, 0.18],
     [0.04, 0.17],
 ]  # the 2026-10-28 remap grid
+AT_STOP_S = 1.5  # the most a refused remap move waits for its stop evidence before it folds
 
 
 _REF_GRAY_CACHE: dict[str, tuple[int, int, np.ndarray]] = {}
@@ -210,11 +211,17 @@ def remap(cell, config: dict, points: list, work: Path, log=print, at_stop=None)
                 failed = command
                 break
         if failed:
-            if at_stop is not None:
-                try:
-                    at_stop(status.get("state"), status)
-                except Exception:  # evidence never stands between a stop and the fold
-                    pass
+            if at_stop is not None:  # evidence never stands between a stop and the fold: a stuck camera's
+                import threading      # frame() could hold the arm in contact for ~60 s, so it gets AT_STOP_S
+
+                def grab():
+                    try:
+                        at_stop(status.get("state"), status)
+                    except BaseException:
+                        pass
+                grabber = threading.Thread(target=grab, daemon=True)
+                grabber.start()
+                grabber.join(timeout=AT_STOP_S)
             if not fold(cell).get("ok"):
                 raise SystemExit(f"remap stopped at {failed} for {[x, y]} and the park failed")
             log({"point": [x, y], "stopped": failed, "error": status.get("error"), "state": status.get("state")})

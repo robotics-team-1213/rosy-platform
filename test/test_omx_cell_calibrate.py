@@ -218,6 +218,12 @@ def test_a_refused_move_folds_and_keeps_the_marks_so_far(tmp_path, monkeypatch):
     assert any("wrist_roll lag" in str(row.get("error")) for row in rows if "stopped" in row)
     broken = cc.remap(Cell(), config, points, tmp_path, log=lambda row: None, at_stop=lambda *a: 1 / 0)
     assert len(broken["points"]) == 6  # a failing evidence hook still folds and keeps the marks
+    import time
+
+    monkeypatch.setattr(cc, "AT_STOP_S", 0.05)
+    started = time.monotonic()
+    stuck = cc.remap(Cell(), config, points, tmp_path, log=lambda row: None, at_stop=lambda *a: time.sleep(5))
+    assert len(stuck["points"]) == 6 and time.monotonic() - started < 2  # a stuck camera does not hold the fold
     with pytest.raises(SystemExit, match="park failed"):
         cc.remap(Cell(park_ok=False), config, points, tmp_path, log=lambda row: None)
 
