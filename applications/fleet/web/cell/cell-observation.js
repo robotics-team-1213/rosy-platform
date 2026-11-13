@@ -174,13 +174,13 @@ export function createCellObservation({request, root, credential = () => ''}) {
         ageMs: response.headers.get('X-Frame-Age-Ms'), frameState: response.headers.get('X-Frame-State'), rectified: false});
       const age = Number(response.headers.get('X-Frame-Age-Ms'));
       const sequence = response.headers.get('X-Frame-Seq');
-      if (badge.state !== 'live' || age > 8000 || !sequence || !/^\d+$/.test(sequence)) {
+      if (badge.state !== 'live' || age > 2000 || !sequence || !/^\d+$/.test(sequence)) {
         if (badge.state === 'unauthorized') entry.lease = null;
         staleCamera(entry); return;
       }
       const identity = `${sequence}:${response.headers.get('X-Frame-Captured-At') || ''}`;
       if (entry.identity === identity) return;
-      const expires = observedAt + 8000 - age;
+      const expires = observedAt + 2000 - age;
       const blob = await response.blob();
       url = URL.createObjectURL(blob);
       const decoded = new Image(); decoded.src = url; await decoded.decode();
