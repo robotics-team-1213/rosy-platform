@@ -44,7 +44,10 @@ def test_berth_parking_status_and_dispatch_routes():
 
     class DummyConsole:
         async def goal(self, robot_id: str, x: float, y: float, yaw: float) -> dict:
-            return {"robot_id": robot_id, "x": x, "y": y, "yaw": yaw, "queued": False}
+            return {"robot_id": robot_id, "x": x, "y": y, "yaw": yaw, "queued": False, "accepted": True}
+
+        def trip_refusal(self, robot_ids):
+            return None
 
     async def fake_compute_road_plan(request, robot_id, x, y, yaw, place_id, label):
         return {
@@ -147,3 +150,13 @@ def test_road_nav2_route_needs_a_named_operator():
     import inspect
     from fleet.server.ledger import berth_parking_routes
     assert "Depends(require_named_operator)" in inspect.getsource(berth_parking_routes.install_berth_parking_routes)
+
+
+def test_berth_park_failure_is_an_error_never_a_reported_dispatch():
+    from fleet.hub.hub import HubError
+
+    async def goal(*args):
+        raise HubError("robot unreachable")
+    client, _, _ = _road_app(goal)
+    res = client.post("/api/fleet/robots/rosy_46/berth-park", json={"bay_id": "C1", "execute_physical": False})
+    assert res.status_code >= 400 and '"dispatched":true' not in res.text.replace(" ", "")

@@ -9,7 +9,6 @@
 from __future__ import annotations
 
 import math
-import uuid
 from functools import partial
 from typing import Any, Callable, Optional
 
@@ -130,8 +129,13 @@ def install_berth_parking_routes(
         robot_id: str,
         request: Request,
         idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
-        principal: SitePrincipal = Depends(require_operator),
+        principal: SitePrincipal = Depends(require_named_operator),  # D-540 9: a berth park moves the robot
     ) -> dict:
+        if busy := console.trip_refusal([robot_id]):  # D-494 5
+            raise busy
+        if task_service is not None and not idempotency_key:
+            raise HTTPException(status_code=400, detail={
+                "code": "IDEMPOTENCY_KEY_REQUIRED", "message": "Idempotency-Key is required for navigation requests"})
         body = await request.json() if await request.body() else {}
         mode = str(body.get("mode") or "berth_park")
         bay_id = str(body.get("bay_id") or infer_bay_id(robot_id)).upper()
@@ -186,12 +190,12 @@ def install_berth_parking_routes(
                 actor_id=principal.principal_id,
             )
 
-        final_nav2 = plan.get("target_nav2") or {"x": 0.0, "y": 0.0, "yaw": 0.0}
-        req_key = idempotency_key or uuid.uuid4().hex
+        final_nav2 = plan["target_nav2"]  # compute_road_plan refuses instead of inventing one
         dispatch_res: dict[str, Any] = {}
         if physical_execution and physical_execution.get("executed"):
             dispatch_res = {"accepted": True, "physical_execution": physical_execution}
         else:
+            # One dispatch path; a failure is an HTTP error, never a reported dispatch (D-430 panel, 973faf9de9).
             try:
                 if task_service is not None:
                     task = await task_service.submit_navigation(
@@ -201,19 +205,25 @@ def install_berth_parking_routes(
                         yaw=final_nav2["yaw"],
                         source="operator",
                         actor_id=principal.principal_id,
-                        request_key=req_key,
+                        request_key=idempotency_key,
                     )
-                    dispatch_res = {"accepted": task["status"] in ("ACCEPTED", "QUEUED"), "task": task}
+                    dispatch_res = {"accepted": task["status"] == "ACCEPTED", "queued": task["status"] == "QUEUED",
+                                    "task": task}
                 else:
                     res = await console.goal(robot_id, final_nav2["x"], final_nav2["y"], final_nav2["yaw"])
-                    dispatch_res = {"accepted": True, "receipt": res}
-            except Exception as exc:
-                dispatch_res = {"accepted": False, "error": str(exc)}  # never report a goal that was not sent
+                    dispatch_res = {"accepted": bool(res.get("accepted")), "receipt": res}
+            except IdempotencyConflict as exc:
+                raise HTTPException(status_code=409, detail={"code": "IDEMPOTENCY_CONFLICT", "message": str(exc)}) from exc
+            except ValueError as exc:
+                code = str(exc)
+                raise HTTPException(status_code=404 if code == "UNKNOWN_ROBOT" else 400, detail={"code": code}) from exc
+            except (HubError, RobotApiError, OSError) as exc:
+                raise http_error(exc) from exc
             if physical_execution is not None:
                 dispatch_res["physical_execution"] = physical_execution
 
         return {
-            "dispatched": True,
+            "dispatched": bool(dispatch_res.get("accepted") or dispatch_res.get("queued")),
             "berth_mode": mode,
             "bay_id": bay_id,
             "dock_id": spec["dock_id"],
