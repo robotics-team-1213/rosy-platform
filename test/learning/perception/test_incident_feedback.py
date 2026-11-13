@@ -182,7 +182,7 @@ def test_route_returns_bind_result_unchanged(tmp_path):
     {'incidents': {'reports': []}},                                       # markers 없음
     {'incidents': [], 'markers': {'schema': 'rosy.recording.stuck_markers/1', 'markers': []}},  # 객체 아님
     {'incidents': {'reports': [{'schema': 'rosy.incident.v1'}]}, 'markers': markers()},    # 잘못된 보고
-    {'incidents': {'reports': [dict(report(), evidence=['not-a-dict'])]}, 'markers': markers()},  # AttributeError 경로
+    {'incidents': {'reports': [dict(report(), evidence=['not-a-dict'])]}, 'markers': markers('stuck-a')},  # AttributeError 경로
     {'incidents': {'reports': [report()]}, 'markers': {'schema': 'other', 'markers': []}},  # 마커 스키마 다름
     {'incidents': {'reports': [report()]}, 'markers': markers(), 'extra': 1},              # 본문 키 초과
 ])
