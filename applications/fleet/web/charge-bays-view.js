@@ -259,7 +259,7 @@ export function createChargeBaysView({ scope, el, call, auth }) {
 
     const quickDispatchBar = document.createElement("div");
     quickDispatchBar.className = "omx-inspector-quick-dispatch";
-    const tierSel = document.createElement("select");
+    const tierSel = document.createElement("select"); tierSel.className = "ui-field";
     tierSel.setAttribute("data-work-read", "");
     for (const [val, lbl] of [["1", "T1 (1층·벨트)"], ["2", "T2 (2층)"], ["3", "T3 (3층)"]]) {
       const opt = document.createElement("option");
@@ -268,7 +268,7 @@ export function createChargeBaysView({ scope, el, call, auth }) {
       if (active.id === "arm_b" && val === "2") opt.selected = true;
       tierSel.append(opt);
     }
-    const dispSel = document.createElement("select");
+    const dispSel = document.createElement("select"); dispSel.className = "ui-field";
     dispSel.setAttribute("data-work-read", "");
     for (const [val, lbl] of [["", "정위치 (Nominal)"], ["auto", "Auto ROI 감지"], ["belt_far", "Belt-Far 복구"], ["floor_front", "Floor-Front 복구"]]) {
       const opt = document.createElement("option");
