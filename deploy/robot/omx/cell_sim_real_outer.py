@@ -7,7 +7,7 @@ from typing import Any
 
 import numpy as np
 
-from cell_control_core import ensure_omx_paths
+from cell_control_core import HERE, ensure_omx_paths
 from cell_fast_learner import (
     CLASSES,
     InterventionWeightedLearner,
@@ -18,6 +18,33 @@ import cell_problem_pipeline as cpp
 from cell_realignment_pipeline import run_iterative_fail_recovery_loop
 
 ensure_omx_paths()
+
+DEFAULT_R2S_SNAPSHOT_ID = "20261112-1838"
+
+
+def load_r2s_snapshot_context(snapshot_id: str = DEFAULT_R2S_SNAPSHOT_ID) -> dict[str, Any]:
+    """Load Real-to-Sim (`rosy.omx-cell-snapshot.v1`) geometry and derive initial Sim-to-Real gap priors."""
+    snap_dir = HERE / "sim" / "cell_snapshots"
+    snap_path = snap_dir / f"{snapshot_id}.json"
+    if not snap_path.is_file():
+        candidates = sorted(snap_dir.glob("*.json"))
+        snap_path = candidates[-1] if candidates else snap_path
+    raw = json.loads(snap_path.read_text(encoding="utf-8")) if snap_path.is_file() else {}
+    ship = dict(raw.get("ship") or {})
+    belt = dict(raw.get("belt") or {})
+    fixation = dict(raw.get("ship_fixation") or {})
+    return {
+        "snapshot_id": str(raw.get("snapshot_id") or snapshot_id),
+        "schema": str(raw.get("schema") or "rosy.omx-cell-snapshot.v1"),
+        "snapshot_path": str(snap_path),
+        "ship_id": str(ship.get("id") or "r08"),
+        "ship_pose_m": list(ship.get("pose_m") or [0.16, 0.0, 0.0155]),
+        "belt_pose_m": list(belt.get("pose_m") or [0.125, -0.055, 0.008]),
+        "fixation_variant": str(fixation.get("variant") or "v16-modular"),
+        "temp_plates_count": len(raw.get("temp_plates") or []),
+        "r2s_prior_dx_mm": round((float((ship.get("pose_m") or [0.16])[0]) - 0.1580) * 1000.0, 3),
+        "r2s_prior_dy_mm": round((float((ship.get("pose_m") or [0.16, 0.0])[1]) - (-0.0130)) * 1000.0, 3),
+    }
 
 
 def pretrain_task_with_r2s_sim_rl(self, task_name: str = "pinky_to_3tier_stack", *, episodes: int = 36) -> dict[str, Any]:

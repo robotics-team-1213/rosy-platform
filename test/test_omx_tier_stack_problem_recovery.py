@@ -365,12 +365,7 @@ def test_cell_task_worker_event_driven_hw_and_parallel_handoff(tmp_path: Path, m
 
 
 def test_mode_c_sim_real_co_learning_3tier_stack_reset_and_multitask_lifecycle(tmp_path: Path) -> None:
-    """Verify Mode C Dual-Loop Sim-Real Co-Learning pipeline:
-    1) Step-by-step `arm_s` (Pinky -> Belt/Container) and `arm_a`/`arm_b` 1단 -> 2단 -> 3단 stacking (`pinky_to_3tier_stack`).
-    2) Deterministic physical & board teardown / reset (`unstack_and_reset`: 3 -> 2 -> 1 back to Pinky, `unstack_only` vs `full_reset`).
-    3) Inner-Loop immediate IWR/IL-RL updates + Outer-Loop Sim+Real retraining, Safety Sovereignty gate (`false_pass_rate == 0.0`),
-       and hot-swap (`v0 -> v1 -> v2`) with error reduction across diverse tasks from cold-start to convergence.
-    """
+    """Verify Mode C Dual-Loop Sim-Real Co-Learning pipeline (3-tier stack, reset, and hot-swap)."""
     import cell_fleet_pipeline as cfp
     from cell_sim_real_co_learning import SUPPORTED_TASKS, SimRealCoLearningPipeline
 
@@ -420,14 +415,7 @@ def test_mode_c_sim_real_co_learning_3tier_stack_reset_and_multitask_lifecycle(t
 
 
 def test_r2s_sim_rl_pretraining_fallback_and_continuous_fusion(tmp_path: Path) -> None:
-    """Verify R2S-anchored Sim-First RL Pre-Training, Sim-RL Fallback on severe/real failure,
-    and Continuous R2S Sim + Real Bayesian Model Fusion:
-    1) Loads existing R2S snapshot (`20261112-1838`, `rosy.omx-cell-snapshot.v1`).
-    2) Pre-trains contextual RL residuals (`rl-policy.json`) + IWR + 20-D classifier in R2S Simulation
-       before first real execution, immediately reducing first-round real placement error vs cold-start.
-    3) Triggers `sim_rl_fallback_on_real_failure` when a real step hits a severe disturbance, solving it in Sim first.
-    4) Continuously fuses R2S Sim-RL and Real policies (`fuse_r2s_sim_and_real_models`, `alpha_real` + `beta_sim == 1.0`).
-    """
+    """Verify R2S Sim-First RL Pre-Training, Sim-RL Fallback, and Bayesian Model Fusion."""
     import cell_fleet_pipeline as cfp
     from cell_sim_real_co_learning import SimRealCoLearningPipeline, load_r2s_snapshot_context
 
@@ -478,15 +466,7 @@ def test_r2s_sim_rl_pretraining_fallback_and_continuous_fusion(tmp_path: Path) -
 
 
 def test_zero_bottleneck_live_camera_to_r2s_parallel_speculative_rl_and_async_shadow_retrain(tmp_path: Path) -> None:
-    """Verify the 4 zero-bottleneck parallel R2S + RL mechanisms in `cell_r2s_parallel_rl.py`:
-    1) `project_live_camera_env_to_r2s`: O(1) projection of live wrist camera frame + environmental state into
-       an R2S twin state (`rosy.omx-r2s-parallel-rl.v1`) and 20-D feature vector in < 15 ms.
-    2) `parallel_speculative_r2s_rl_select`: evaluates 4 ensemble policies (`pi_iwr`, `pi_knn_il`, `pi_contextual_rl`,
-       `pi_rule_fsm`) across domain-randomized R2S branches and picks the highest safety-verified return `J(pi)`.
-    3) `run_pipelined_r2s_rl_unit`: overlaps `arm_s` Pinky->Belt transfer with R2S speculative RL lookahead and
-       `arm_ab` IK pre-staging in parallel threads, reducing residual placement error vs uncompensated transfer.
-    4) `AsyncShadowRetrainer`: compiles and hot-swaps the next model version in a background thread without blocking.
-    """
+    """Verify the 4 zero-bottleneck parallel R2S + RL mechanisms in `cell_r2s_parallel_rl.py`."""
     import numpy as np
     from cell_r2s_parallel_rl import (
         AsyncShadowRetrainer,
@@ -580,14 +560,3 @@ def test_complete_1to3_tier_stack_standby_return_recovery_and_pinky_teardown(tmp
     import judge_seat
     assert judge_seat.from_config("codex:gpt-5-codex").__name__ == "codex:gpt-5-codex"
     assert judge_seat.from_config("opencode:zai-coding-plan/glm-5.3-flash").__name__ == "opencode:zai-coding-plan/glm-5.3-flash"
-
-
-
-
-
-
-
-
-
-
-
