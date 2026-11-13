@@ -94,7 +94,8 @@ def build_plan_from_directive(
     plan["lift_guard_frac"] = float(
         exec_cfg.get("lift_guard_frac", plan.get("lift_guard_frac", 0.82))
     )
-    for key in ("descend_far_guard_frac", "descend_near_m"):  # opt-in two-stage descent (descend_profile.py)
+    for key in ("descend_far_guard_frac", "descend_pick_far_guard_frac", "descend_place_far_guard_frac",
+                "descend_near_m"):  # opt-in two-stage descent (descend_profile.py)
         if key in exec_cfg:
             plan[key] = float(exec_cfg[key])
     if arm_id == "arm_b" and "limits" in plan and "joints_rad" in plan["limits"]:

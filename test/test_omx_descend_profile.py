@@ -27,10 +27,19 @@ def entry_speed(frames, near_mm=10.0):
     return next((a - b) * 30 for a, b in zip(z, z[1:]) if b - z[-1] <= near_mm)
 
 
+def near_joint_speed(frames, near_mm=10.0):
+    """Peak streamed joint speed (units/s) over the last near_mm: what the contact allowance follows."""
+    z = [_fk_tcp_xyz_mm(f[:5], unit="norm")[2] for f in frames]
+    return max(max(abs(y - x) for x, y in zip(a, b)) * 30 for a, b, zb in zip(frames, frames[1:], z[1:])
+               if zb - z[-1] <= near_mm)
+
+
 def test_a_two_stage_descent_is_faster_but_enters_the_last_cm_at_todays_speed_and_ends_on_the_same_pose():
     old, new = descents(descend_far_guard_frac=0.85)
     assert len(new) < len(old) - 30  # over a second sooner at 30 Hz
     assert entry_speed(new) == pytest.approx(entry_speed(old), abs=0.5)
+    for mm in (10.0, 1.0):  # same contact allowance across the zone and on the final stop ramp
+        assert near_joint_speed(new, mm) == pytest.approx(near_joint_speed(old, mm), rel=0.05)
     assert new[-1] == old[-1] and not too_fast(new, 30)
     z = [_fk_tcp_xyz_mm(f[:5], unit="norm")[2] for f in new]
     assert all(b <= a + 1e-6 for a, b in zip(z, z[1:]))  # never back up

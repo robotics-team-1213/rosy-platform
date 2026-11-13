@@ -16,7 +16,9 @@ from motion_profile import GUARD_ACCEL_UNITS_S2, retime
 def _speeds(v_far, v_near, s_split, total, amax):
     """[(duration, v_from, v_to)] covering exactly s_split then total - s_split, or None when a zone is too short."""
     def ramp(va, vb):
-        t = math.pi * abs(vb - va) / (2 * amax)
+        # motion_profile.eased's rule: a slow move ramps gentler, so the near zone's stop matches today's retime
+        a = amax * min(1.0, max(0.75, max(va, vb) / 4.25)) if amax <= GUARD_ACCEL_UNITS_S2 else amax
+        t = math.pi * abs(vb - va) / (2 * a)
         return t, (va + vb) / 2 * t
     t1, d1 = ramp(0.0, v_far)
     t2, d2 = ramp(v_far, v_near)
