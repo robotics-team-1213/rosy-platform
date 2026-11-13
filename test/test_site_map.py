@@ -114,7 +114,7 @@ def test_a_dry_run_changes_nothing_and_says_what_it_would_do(capsys):
     assert site_map.apply_time(_site(), ssh, execute=False, tool=b"T")
     assert ssh.changes() == []
     out = capsys.readouterr().out
-    assert out.count("would run") == 4 and INSTALL in out  # model, cell is another source, bare, one robot
+    assert out.count("would run") == 4 and INSTALL.replace(DIR, "<dir>") in out  # model, cell is another source, bare, one robot
     assert "r: skipped" in out and "never gets the client role" in out
 
 
