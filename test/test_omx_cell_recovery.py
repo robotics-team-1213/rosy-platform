@@ -69,6 +69,16 @@ def test_a_box_at_the_edge_of_the_view_is_unseen_not_packed():
     assert cell_auto_safety.finger_room(np.pad(mask, ((0, 80), (0, 0))), (0, 0, 200, 200), px, box)["margin_mm"] is not None
 
 
+def test_the_layer_under_a_stacked_box_is_its_own_side_face_not_a_neighbour():
+    import cell_auto_safety
+    px = lambda p: (100 + p[0] * 1000, 100 + (p[1] - 0.1) * 1000)  # noqa: E731  1 px per mm
+    box = {"raw_m": [0.0, 0.1], "width_mm": 30, "length_mm": 60, "long_axis_deg": 0.0}
+    mask = np.zeros((200, 200), np.uint8)
+    mask[85:126, 70:131] = 255  # its top and 10 mm of side faces past the outline on +y: two layers' worth
+    assert cell_auto_safety.finger_room(mask, (0, 0, 200, 200), px, box)["margin_mm"] is None
+    assert cell_auto_safety.finger_room(mask, (0, 0, 200, 200), px, dict(box, layers_below=1))["margin_mm"] is not None
+
+
 def test_the_pan_limit_names_a_box_out_of_reach():
     import cell_auto_pick_plan as plan
     config = {"plan": {"limits": {"joints_rad": {"joint1": [-2.6, 2.6]}}}}  # +-149 deg

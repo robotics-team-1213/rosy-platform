@@ -64,6 +64,7 @@ def observe(cell, config: dict, calibration: dict, site: str, roi, catalog: list
         o["raw_m"] = [
             c / 1000 + d for c, d in zip(o["centre_mm"], config["sites"][site].get("grip_offset_m", (0.0, 0.0)))
         ]
+        o["layers_below"] = config["sites"][site].get("layers_below", 0)  # the site is a stack's top: cell_finger_room
     near = cell_objects.foreground(img, roi, params=config.get("params"), surface_lab=lab)
     for p in config["sites"][site].get("markings_px", []):
         cv2.fillPoly(near, [np.asarray(p, np.int32) - [roi[0], roi[1]]], 0)

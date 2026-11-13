@@ -96,7 +96,8 @@ def jaw_margin(mask, roi, pixel_fn, o: dict, closing_deg: float | None = None, p
     35 of 64 real attempts put a finger on the box (2026-10-30)."""
     finger, pad = prm.get(params, "auto.finger_mm"), prm.get(params, "auto.finger_pad_mm")
     least = prm.get(params, "auto.min_jaw_margin_mm")
-    own = prm.get(params, "auto.own_side_mm")
+    # a stacked box shows the side faces of the layers under it too (2026-11-13 arm_s, the top of two on Pinky read 5 mm free)
+    own = prm.get(params, "auto.own_side_mm") * (1 + o.get("layers_below", 0))
     u = math.radians(o["long_axis_deg"] if closing_deg is None else closing_deg - 90)
     across = np.array([-math.sin(u), math.cos(u)])
     half = (o["width_mm"] if closing_deg is None else max(o["width_mm"], o["length_mm"])) / 2
