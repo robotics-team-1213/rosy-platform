@@ -91,3 +91,13 @@ def test_the_walls_propose_pairs_that_then_approve_without_markers(tmp_path):
     res = client.post("/api/fleet/robots/rosy_42/map-binding", headers=OP, json={
         "pairs": body["pairs"], "holdout": _pairs([(0.5, 0.2)])})
     assert res.status_code == 200, res.text
+
+
+def test_the_read_puts_the_slam_pose_in_site_coordinates(tmp_path):
+    client = _client(tmp_path)
+    client.post("/api/fleet/robots/rosy_42/map-binding", headers=OP, json={
+        "pairs": _pairs([(-1.0, -0.5), (1.0, -0.5), (0.9, 0.45)]), "holdout": _pairs([(0.0, 0.0)])})
+    read = client.get("/api/fleet/robots/rosy_42/map-binding", headers=OP).json()
+    slam = read["slam_site_pose"]
+    assert (slam["x"], slam["y"]) == __import__("pytest").approx((-0.414, 0.47), abs=1e-6)
+    assert slam["yaw"] == __import__("pytest").approx(TRUTH.yaw)

@@ -9,10 +9,12 @@ from __future__ import annotations
 
 from typing import Optional
 
-from fastapi import Depends
+import math
+
+from fastapi import Depends, Request
 from pydantic import BaseModel, ConfigDict, Field
 
-from fleet.localization.map_binding import BindingError, fit_rigid, propose_from_walls
+from fleet.localization.map_binding import BindingError, bound_pose, fit_rigid, propose_from_walls
 from fleet.server.site_auth import SitePrincipal
 from fleet.server.site_map_routes import site_map_error
 
@@ -66,15 +68,26 @@ def install_map_binding_routes(app, *, console, site_maps, read_guard, require_n
         return state
 
     @app.get("/api/fleet/robots/{robot_id}/map-binding", dependencies=read_guard, tags=["map-binding"])
-    async def map_binding_read(robot_id: str) -> dict:
+    async def map_binding_read(robot_id: str, request: Request) -> dict:
         try:
             state = await state_of(robot_id)
         except Exception:  # a robot that does not answer still shows its binding
             state = {}
-        _, reason = bindings.matching_fit(robot_id, state, _site(site_maps))
-        return {"active": bindings.active(robot_id), "history": bindings.history(robot_id),
+        fit, reason = bindings.matching_fit(robot_id, state, _site(site_maps))
+        body = {"active": bindings.active(robot_id), "history": bindings.history(robot_id),
                 "matches": reason == "", "reason": reason or None,
                 "robot_grid_id": state.get("map_grid_id")}
+        pose = state.get("pose") or {}
+        if fit is not None and all(isinstance(pose.get(k), (int, float)) for k in ("x", "y", "yaw")):
+            # The robot's own SLAM pose in site coordinates beside the camera's: read-only, it moves nothing.
+            bx, by, byaw = bound_pose(fit, (pose["x"], pose["y"], pose["yaw"]))
+            body["slam_site_pose"] = {"x": bx, "y": by, "yaw": byaw}
+            service = getattr(request.app.state, "map_pose", None)
+            cam = service.driving_pose(robot_id) if service is not None else None
+            if cam is not None and cam.x is not None and cam.y is not None:
+                body["camera_site_pose"] = {"x": cam.x, "y": cam.y, "yaw": cam.yaw, "state": cam.state}
+                body["slam_camera_gap_m"] = math.hypot(bx - cam.x, by - cam.y)
+        return body
 
     @app.post("/api/fleet/robots/{robot_id}/map-binding", tags=["map-binding"])
     async def map_binding_approve(robot_id: str, body: ApproveRequest,
