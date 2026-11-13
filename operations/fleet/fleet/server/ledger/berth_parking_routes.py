@@ -104,8 +104,7 @@ def install_berth_parking_routes(
             raise HTTPException(status_code=404 if code == "UNKNOWN_ROBOT" else 400, detail={"code": code}) from exc
         except (HubError, RobotApiError, OSError) as exc:
             raise http_error(exc) from exc
-        return {**plan, **dispatch_res,
-                "dispatched": bool(dispatch_res.get("accepted") or dispatch_res.get("queued"))}
+        return {**plan, **dispatch_res, "dispatched": bool(dispatch_res.get("accepted"))}  # QUEUED is not sent
 
     @app.get("/api/fleet/robots/{robot_id}/berth-park/status", dependencies=read_guard, tags=["fleet"])
     async def fleet_berth_park_status(robot_id: str) -> dict:
@@ -193,7 +192,7 @@ def install_berth_parking_routes(
         final_nav2 = plan["target_nav2"]  # compute_road_plan refuses instead of inventing one
         dispatch_res: dict[str, Any] = {}
         if physical_execution and physical_execution.get("executed"):
-            dispatch_res = {"accepted": True, "physical_execution": physical_execution}
+            dispatch_res = {"accepted": bool(physical_execution.get("succeeded")), "physical_execution": physical_execution}
         else:
             # One dispatch path; a failure is an HTTP error, never a reported dispatch (D-430 panel, 973faf9de9).
             try:
@@ -223,7 +222,7 @@ def install_berth_parking_routes(
                 dispatch_res["physical_execution"] = physical_execution
 
         return {
-            "dispatched": bool(dispatch_res.get("accepted") or dispatch_res.get("queued")),
+            "dispatched": bool(dispatch_res.get("accepted")),  # QUEUED is reported as queued, not sent
             "berth_mode": mode,
             "bay_id": bay_id,
             "dock_id": spec["dock_id"],

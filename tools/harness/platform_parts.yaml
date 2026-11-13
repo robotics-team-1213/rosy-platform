@@ -1223,6 +1223,8 @@ safety_modules:
   - operations/fleet/fleet/server/local_stop_transport.py
   - operations/fleet/fleet/server/ledger/task_dispatch_routes.py
   - operations/fleet/fleet/server/ledger/berth_parking_routes.py  # road-nav2/berth-park motion moved here by 973faf9de9 (D-430 panel 2026-11-13)
+  - operations/fleet/fleet/server/ledger/berth_parking_helpers.py  # physical berth-park teleop and Fleet pin (D-430 panel 2026-11-13)
+  - operations/fleet/fleet/server/ledger/task_dispatch_helpers.py  # site->robot goal frame for road-nav2/berth-park (D-430 panel 2026-11-13)
   - operations/fleet/fleet/server/auth/owner_recovery_routes.py
   - operations/fleet/fleet/server/console/console.py
   - operations/fleet/fleet/server/console/console_helpers.py  # console _goal/snapshot moved here by 93461496c6 (D-430 panel 2026-11-13)
@@ -1442,6 +1444,8 @@ safety_anchors:
   - {symbol: fleet.server.console.FleetConsole.estop_all, public: true}
   - {symbol: fleet.server.console_helpers._goal}  # console goal admission split from console.py (93461496c6)
   - {symbol: fleet.server.berth_parking_routes.install_berth_parking_routes, public: true}  # road-nav2 / berth-park motion routes (973faf9de9)
+  - {symbol: fleet.server.berth_parking_helpers.BERTH_SUCCESS_REASONS}  # only measured stop-face endings count as parked
+  - {symbol: fleet.server.task_dispatch_helpers.compute_road_plan}  # refuses without measured site and robot poses
   - {symbol: fleet.server.goal_lease.GoalLeases}  # D-550 10 goal lease (Safety-Review)
   - {symbol: fleet.server.task_dispatch_routes.install_task_dispatch_routes.dispatch_rearm, public: true}
   - {symbol: fleet.server.task_dispatch_routes.execute_local_fleet_stop, public: true}

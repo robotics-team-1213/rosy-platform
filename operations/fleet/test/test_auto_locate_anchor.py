@@ -526,11 +526,11 @@ def test_a_degraded_fit_is_not_reopened_by_config():
 
 
 @pytest.mark.parametrize("enabled", [True, False])
-def test_an_auto_located_robot_gets_no_preset_world_261026_pin(enabled):
+def test_no_robot_gets_a_preset_world_261026_pin(enabled):
     config = MapPoseConfig(auto_locate_robots=("rosy_46",) if enabled else ())
     service = MapPoseService(lambda: ["rosy_46"], config=config, wall=lambda: T0, map_id=lambda: "world_261026")
     service.observe_state("rosy_46", {"odom_pose": {"x": 0.0, "y": 0.0, "yaw": 0.0, "stamp": T0}})
-    assert (service.arbitrated_pose("rosy_46").state == UNKNOWN) is enabled
+    assert service.arbitrated_pose("rosy_46").state == UNKNOWN  # unknown until measured, never a preset bay
 
 
 def test_the_guide_shows_the_auto_located_pose():

@@ -160,3 +160,30 @@ def test_berth_park_failure_is_an_error_never_a_reported_dispatch():
     client, _, _ = _road_app(goal)
     res = client.post("/api/fleet/robots/rosy_46/berth-park", json={"bay_id": "C1", "execute_physical": False})
     assert res.status_code >= 400 and '"dispatched":true' not in res.text.replace(" ", "")
+
+
+def test_queued_road_nav2_is_reported_queued_not_dispatched():
+    from fleet.server.ledger import berth_parking_routes as routes
+    app = FastAPI()
+
+    class Tasks:
+        async def submit_navigation(self, **kwargs):
+            return {"status": "QUEUED", "task_id": "t1"}
+
+    async def plan(*args):
+        return {"target_nav2": {"x": 0.1, "y": 0.0, "yaw": 0.0}, "waypoints_site": []}
+
+    named = lambda: SitePrincipal(principal_id="op-named", role="operator")  # noqa: E731
+    routes.install_berth_parking_routes(app, console=SimpleNamespace(trip_refusal=lambda ids: None), task_service=Tasks(),
+                                        read_guard=[], operator_guard=[], require_operator=named,
+                                        require_named_operator=named, compute_road_plan=plan)
+    res = TestClient(app).post("/api/fleet/robots/rosy_46/road-nav2", json={"x": 0.0, "y": 0.0},
+                               headers={"Idempotency-Key": "k1"})
+    body = res.json()
+    assert res.status_code == 200 and body["queued"] is True and body["dispatched"] is False
+
+
+def test_only_a_measured_stop_face_counts_as_a_berth_park():
+    from fleet.server.ledger.berth_parking_helpers import BERTH_SUCCESS_REASONS
+    assert "dock_stop_face_reached" in BERTH_SUCCESS_REASONS
+    assert not {"completed", "reverse_timeout", "emergency_latched", "emergency_during_forward"} & BERTH_SUCCESS_REASONS

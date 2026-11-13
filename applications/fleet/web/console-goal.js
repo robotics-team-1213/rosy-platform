@@ -111,7 +111,13 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
           signals: [life.signal],
         });
         life.check();
-        if (roadRes && (roadRes.accepted || roadRes.dispatched)) {
+        if (roadRes?.queued && !roadRes.accepted) {
+          view.selectedGoal = { ...view.selectedGoal, status: "QUEUED", statusText: "대기열: 아직 보내지 않음", at: Date.now() };
+          drawMap(); render();
+          log(`${robotId} → ${where} 대기열에 들어갔습니다 (${roadRes.task?.reason || "대기"})`);
+          return;
+        }
+        if (roadRes && roadRes.accepted) {
           view.activeRoadPlan = { robotId, ...roadRes, at: Date.now() };
           view.selectedGoal = {
             ...view.selectedGoal,
@@ -130,13 +136,14 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
           return;
         }
       } catch (roadErr) {
-        // No measured site pose: a direct /goal would send site coordinates into the robot's own SLAM frame.
-        if (["SITE_POSE_UNKNOWN", "ROBOT_POSE_UNTRUSTED"].includes(roadErr?.code)) {
-          view.selectedGoal = { ...view.selectedGoal, status: "BLOCKED", statusText: "위치 미확인: 카메라 확인 전에는 보내지 않음", at: Date.now() };
-          drawMap(); render();
-          log(`${robotId} 출발 보류: Fleet이 현장 지도에서 이 로봇 위치를 아직 재지 못했습니다 (${roadErr.code})`, "bad");
-          return;
-        }
+        // Never fall back to a raw /goal: its x, y would be read in the robot's own SLAM frame, not the site map.
+        const unlocated = ["SITE_POSE_UNKNOWN", "ROBOT_POSE_UNTRUSTED"].includes(roadErr?.code);
+        view.selectedGoal = { ...view.selectedGoal, status: "BLOCKED",
+          statusText: unlocated ? "위치 미확인: 카메라 확인 전에는 보내지 않음" : `출발 실패: ${roadErr?.code || "오류"}`, at: Date.now() };
+        drawMap(); render();
+        log(unlocated ? `${robotId} 출발 보류: Fleet이 현장 지도에서 이 로봇 위치를 아직 재지 못했습니다 (${roadErr.code})`
+          : `${robotId} 출발 실패: ${roadErr?.code || roadErr?.message || "오류"}`, "bad");
+        return;
       }
       if (placeId) {
         try {
