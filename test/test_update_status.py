@@ -170,9 +170,7 @@ def test_status_main_prints_a_drift_finding_it_counts(monkeypatch, capsys):
     monkeypatch.setattr(status.sys, 'argv', ['update_status.py'])
     stale = int(time.time()) - 3600
     monkeypatch.setattr(status.subprocess, 'run', lambda argv, **kw: subprocess.CompletedProcess(
-        argv, 0, stdout=f'gate open
-guard active {stale}
-'.encode(), stderr=b''))
+        argv, 0, stdout=f'gate open\nguard active {stale}\n'.encode(), stderr=b''))
     with pytest.raises(SystemExit) as ended:
         status.main()
     assert ended.value.code == 1
