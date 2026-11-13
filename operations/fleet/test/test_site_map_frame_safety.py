@@ -265,7 +265,7 @@ def _bound_setup(map_id="slam", grid=_GRID, approve=True):
 def test_a_bound_robot_gets_the_goal_through_its_binding_even_on_an_equal_map_id():
     for map_id in ("slam", "site"):  # the map_id shortcut no longer proves one frame
         runner, ports = _bound_setup(map_id)
-        assert ports.goals == [pytest.approx(_TRUTH.inverse((1.0, 0.0)))]
+        assert ports.goals == [pytest.approx(_TRUTH.inverse((1.0, 0.0)), abs=1e-3)]  # the port rounds to mm
         assert runner.view("p1")["detail"]["goal_frame"]["map_grid_id"] == _GRID
 
 
