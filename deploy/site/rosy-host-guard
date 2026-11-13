@@ -160,8 +160,8 @@ def alert_unreachable(name: str, entry: dict) -> None:
 
 def monitoring_up(url: str, ca: str | None) -> bool:
     """One GET of R Monitoring's /monitoring-health: any answer but 2xx (or none) is a failure, and so is a
-    `last_success` (epoch seconds) older than MONITORING_STALE_S or null. A body without the key (an older
-    Monitoring) is judged by the status code alone."""
+    `last_success` (epoch seconds) older than MONITORING_STALE_S or null. An empty body, or a JSON object
+    without the key, is judged by the status code alone; any other 2xx body (an HTML error page) fails."""
     try:
         context = ssl.create_default_context(cafile=ca) if url.startswith("https://") else None
         with urllib.request.urlopen(url, timeout=10, context=context) as answer:
@@ -170,12 +170,16 @@ def monitoring_up(url: str, ca: str | None) -> bool:
             raw = answer.read(65536)
     except (OSError, ValueError):  # URLError, HTTPError, timeouts and a bad CA file
         return False
+    if not raw.strip():
+        return True  # empty body: judged by the status code alone
     try:
         body = json.loads(raw)
-    except ValueError:
-        return True  # no JSON body: judged by the status code alone
-    if not isinstance(body, dict) or "last_success" not in body:
-        return True
+    except (ValueError, RecursionError):
+        return False  # a proxy's HTML error page answers 2xx too
+    if not isinstance(body, dict):
+        return False
+    if "last_success" not in body:
+        return True  # an older Monitoring: judged by the status code alone
     last = body["last_success"]
     return type(last) in (int, float) and time.time() - last <= MONITORING_STALE_S
 
@@ -422,7 +426,12 @@ def main() -> int:
         pass  # A missing local report is shown as unverified by Fleet, never synthesized as healthy.
     for name, report in updates_only.items():  # after the local report, which replaces the site row
         status.setdefault(name, {"source": "local"})["updates"] = report  # rebuilt every run, like the local row
-    monitors_file.write_text(json.dumps(monitors, sort_keys=True) + "\n", encoding="utf-8")
+    monitors_tmp = monitors_file.with_suffix(".json.tmp")  # same directory, so the replace is atomic
+    try:
+        monitors_tmp.write_text(json.dumps(monitors, sort_keys=True) + "\n", encoding="utf-8")
+        os.replace(monitors_tmp, monitors_file)
+    except OSError as exc:  # alert counters restart from zero; status.json must still be written
+        print(f"rosy-host-guard: monitoring state not saved: {exc!r}", file=sys.stderr, flush=True)
     tmp = status_file.with_suffix(".tmp")
     tmp.write_text(json.dumps(status, indent=1, sort_keys=True) + "\n", encoding="utf-8")
     os.replace(tmp, status_file)
