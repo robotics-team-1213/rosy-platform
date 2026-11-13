@@ -53,6 +53,7 @@ def test_help_text_inside_a_forwarded_value_is_not_a_help_request(monkeypatch):
     argv = ["--tests", "test/example.py --help"]
     calls = []
     monkeypatch.setattr(tool.subprocess, "call", lambda *a, **k: 0)  # land.py --precheck has its own tests
+    monkeypatch.setattr(tool, "too_big", lambda cwd: None)  # its own test below
     monkeypatch.setattr(tool, "start", lambda cwd, args, now, launch: (
         calls.append(args) or ("snapshot", Path("log"))))
     assert tool.main(argv) == 0
