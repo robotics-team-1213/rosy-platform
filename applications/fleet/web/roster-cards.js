@@ -43,6 +43,16 @@ export const OMX_CELL_DEFS = [
   { target_id: "arm_s", kind: "omx_ai", label: "OMX-AI #3 (동남 분류 · Arm S)", shortLabel: "ARM_S · 동남 분류", stationId: "S5", stationName: "분류 5 (동남)", stationX: 0.87, stationY: -0.38, base_x: 0.960, base_y: -0.035, head_x: 0.703, head_y: -0.035, head_yaw: 3.14, reach_m: 0.28, zoom: 4 },
 ];
 
+export const STATION_INSPECT_LINKS = Object.freeze({
+  S2: { targetId: "arm_a", camId: "arm_a_wrist", label: "S2 상차 · arm_a" },
+  S3: { targetId: "arm_s", camId: "arm_s_wrist", label: "S3 하역 셔틀 · arm_s" },
+  S5: { targetId: "arm_b", camId: "arm_b_wrist", label: "S5 적재·반출 · arm_b" },
+  S1: { targetId: "rosy_46", camId: "side", label: "S1 반출대 · Pinky" },
+  C1: { targetId: "rosy_46", camId: "pinky", label: "C1 충전소 · rosy_46" },
+  C2: { targetId: "rosy_45", camId: "pinky", label: "C2 임시칸 · rosy_45" },
+  C3: { targetId: "rosy_42", camId: "pinky", label: "C3 충전소 · rosy_42" },
+});
+
 export function createSvgGauge(pct, tone = "good") {
   const clamped = Math.max(0, Math.min(100, Math.round(Number.isFinite(pct) ? pct : 0)));
   const ns = "http://www.w3.org/2000/svg";
@@ -234,6 +244,15 @@ export function buildQuickControlPanel({
     btn.title = `${pl.name || pl.id} (${pl.x.toFixed(2)}, ${pl.y.toFixed(2)}) m 목표 핀 고정 및 이동`;
     btn.addEventListener("click", scope.guard(() => {
       view.selected = robot.robot_id; view.focusRobot = robot.robot_id;
+      const stationLink = STATION_INSPECT_LINKS[String(pl.id).toUpperCase()];
+      if (stationLink) {
+        if (stationLink.targetId.startsWith("arm_")) view.focusAnchorId = stationLink.targetId;
+        if (typeof window !== "undefined" && typeof window.dispatchEvent === "function") {
+          window.dispatchEvent(new CustomEvent("rosy:inspect-target", {
+            detail: { targetId: stationLink.targetId.startsWith("arm_") ? stationLink.targetId : robot.robot_id, camId: stationLink.camId },
+          }));
+        }
+      }
       el("map-stage").dataset.view = "map"; el("birdseye-toggle")?.setAttribute("aria-pressed", "false");
       view.dispatchGoalToPoint?.({ x: pl.x, y: pl.y }, `${pl.name || pl.id} (${pl.id})`, String(pl.id));
     }));

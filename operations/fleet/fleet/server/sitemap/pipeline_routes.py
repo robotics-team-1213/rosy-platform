@@ -71,6 +71,60 @@ def install_pipeline_routes(app, *, console=None, site_maps=None, read_guard=())
         "arm_b": {"arm": "arm_b", "held": False, "reason": None, "incident_ids": []},
     }
     app.state.pending_clear_arms = getattr(app.state, "pending_clear_arms", None) or {}
+    app.state.arm_live_states = getattr(app.state, "arm_live_states", None) or {
+        "arm_s": {"arm": "arm_s", "cell_id": "cell_s", "station_id": "S3", "joints_deg": [0.0, -58.0, 50.0, 50.0, -5.0, 58.1], "folded": True, "temp_c": 31.0, "current_ma": 42.0, "voltage_v": 12.0, "updated_at": round(time.time(), 3), "source": "boot_default"},
+        "arm_a": {"arm": "arm_a", "cell_id": "cell_ab", "station_id": "S2", "joints_deg": [0.8, -62.5, 53.3, 51.7, 45.0, 50.0], "folded": True, "temp_c": 31.0, "current_ma": 38.0, "voltage_v": 12.0, "updated_at": round(time.time(), 3), "source": "boot_default"},
+        "arm_b": {"arm": "arm_b", "cell_id": "cell_ab", "station_id": "S5", "joints_deg": [-1.2, -61.0, 52.0, 51.0, -45.0, 50.0], "folded": True, "temp_c": 31.5, "current_ma": 40.0, "voltage_v": 12.0, "updated_at": round(time.time(), 3), "source": "boot_default"},
+    }
+    STATION_CAMERA_LINKS: dict[str, dict] = {
+        "S2": {"place_id": "S2", "target_id": "arm_a", "cell_id": "cell_ab", "primary_cam": "arm_a_wrist", "secondary_cam": "top", "label": "S2 상차 · arm_a"},
+        "S3": {"place_id": "S3", "target_id": "arm_s", "cell_id": "cell_s", "primary_cam": "arm_s_wrist", "secondary_cam": "arm_s_top", "label": "S3 하역 셔틀 · arm_s"},
+        "S5": {"place_id": "S5", "target_id": "arm_b", "cell_id": "cell_ab", "primary_cam": "arm_b_wrist", "secondary_cam": "top", "label": "S5 적재·반출 · arm_b"},
+        "S1": {"place_id": "S1", "target_id": "rosy_46", "cell_id": "pinky", "primary_cam": "side", "secondary_cam": "top", "label": "S1 출구·반출대 · Pinky"},
+        "C1": {"place_id": "C1", "target_id": "rosy_46", "cell_id": "pinky", "primary_cam": "pinky", "secondary_cam": "side", "label": "C1 충전 스테이션 · rosy_46"},
+        "C2": {"place_id": "C2", "target_id": "rosy_45", "cell_id": "pinky", "primary_cam": "pinky", "secondary_cam": "side", "label": "C2 충전·임시칸 · rosy_45"},
+        "C3": {"place_id": "C3", "target_id": "rosy_42", "cell_id": "pinky", "primary_cam": "pinky", "secondary_cam": "side", "label": "C3 충전 스테이션 · rosy_42"},
+    }
+
+    def _arm_live_catalog() -> dict[str, dict]:
+        now = time.time()
+        out: dict[str, dict] = {}
+        tasks = list(app.state.omx_cell_tasks.values())
+        for arm_id in ("arm_s", "arm_a", "arm_b"):
+            base = dict((app.state.arm_live_states or {}).get(arm_id) or {})
+            arm_tasks = [t for t in tasks if t.get("arm_id") == arm_id]
+            last_t = arm_tasks[-1] if arm_tasks else None
+            stop_ev = ((last_t or {}).get("hardware_telemetry") or {}).get("stop_event") or {}
+            if isinstance(stop_ev.get("state"), list) and len(stop_ev["state"]) >= 6:
+                t_stamp = float(last_t.get("completed_at") or last_t.get("created_at") or 0.0)
+                if t_stamp >= float(base.get("updated_at") or 0.0):
+                    health = stop_ev.get("health") or {}
+                    temps = health.get("temp_c") or []
+                    curs = health.get("current_ma") or []
+                    base["joints_deg"] = [round(float(x), 1) for x in stop_ev["state"][:6]]
+                    base["folded"] = bool(stop_ev.get("folded", False))
+                    if temps:
+                        base["temp_c"] = round(float(max(temps)), 1)
+                    if curs:
+                        base["current_ma"] = round(float(max(curs)), 1)
+                    base["updated_at"] = round(t_stamp, 3)
+                    base["source"] = "task_telemetry"
+                    base["last_task_id"] = last_t.get("task_id")
+            upd = float(base.get("updated_at") or now)
+            age_s = max(0.0, round(now - upd, 1))
+            running_t = next((t for t in arm_tasks if t.get("status") == "RUNNING"), None)
+            out[arm_id] = {
+                **base,
+                "arm": arm_id,
+                "age_s": age_s,
+                "fresh": bool(age_s <= 15.0 or running_t is not None),
+                "active_task_id": running_t["task_id"] if running_t else None,
+                "substage": (running_t.get("health_summary") or {}).get("substage") if running_t else ("Fold Home 대기" if base.get("folded", True) else "Place 완료"),
+            }
+        return out
+    app.state.get_arm_live_catalog = _arm_live_catalog
+    app.state.station_camera_links = STATION_CAMERA_LINKS
+    app.state.get_camera_catalog = lambda: _camera_catalog()
 
     ledger_path = _storage_dir() / "rosy-pipeline-ledger.json"
     zones_override_path = _storage_dir() / "station_zones.yaml"
@@ -441,6 +495,8 @@ def install_pipeline_routes(app, *, console=None, site_maps=None, read_guard=())
             },
             "cameras": _camera_catalog(),
             "arm_holds": dict(app.state.arm_holds),
+            "arm_live_states": _arm_live_catalog(),
+            "station_camera_links": STATION_CAMERA_LINKS,
             "decisions": list(app.state.pipeline_decisions[-20:]),
             "pinky_tasks": list(app.state.pinky_tasks.values()),
         }
@@ -1014,6 +1070,27 @@ def install_pipeline_routes(app, *, console=None, site_maps=None, read_guard=())
                         "reason": h.get("local_reason") or h.get("fleet_reason") or h.get("reason"),
                         "incident_ids": list(h.get("incident_ids") or []),
                     }
+        arm_states = body.get("arm_states")
+        if isinstance(arm_states, dict):
+            now_ts = round(time.time(), 3)
+            for arm_id in ("arm_s", "arm_a", "arm_b"):
+                if isinstance(arm_states.get(arm_id), dict):
+                    s = arm_states[arm_id]
+                    prev = dict(app.state.arm_live_states.get(arm_id) or {})
+                    joints = s.get("joints_deg") or s.get("state")
+                    if isinstance(joints, list) and len(joints) >= 6:
+                        prev["joints_deg"] = [round(float(x), 1) for x in joints[:6]]
+                    if "folded" in s and s["folded"] is not None:
+                        prev["folded"] = bool(s["folded"])
+                    if s.get("temp_c") is not None:
+                        prev["temp_c"] = round(float(s["temp_c"]), 1)
+                    if s.get("current_ma") is not None:
+                        prev["current_ma"] = round(float(s["current_ma"]), 1)
+                    if s.get("voltage_v") is not None:
+                        prev["voltage_v"] = round(float(s["voltage_v"]), 2)
+                    prev["updated_at"] = float(s.get("updated_at") or now_ts)
+                    prev["source"] = str(s.get("source") or "live_stream")
+                    app.state.arm_live_states[arm_id] = prev
         pending = dict(app.state.pending_clear_arms)
         app.state.pending_clear_arms.clear()
         return {
@@ -1021,6 +1098,7 @@ def install_pipeline_routes(app, *, console=None, site_maps=None, read_guard=())
             "schema": "rosy.pipeline.cell-quality.v1",
             "cameras_updated": len(app.state.cell_camera_quality),
             "arm_holds": app.state.arm_holds,
+            "arm_live_states": _arm_live_catalog(),
             "pending_clear_arms": pending,
         }
 
@@ -1181,6 +1259,23 @@ def install_pipeline_routes(app, *, console=None, site_maps=None, read_guard=())
         task["receipt"] = body.get("receipt") or state
         task["stage_result"] = body.get("stage_result")
         task["hardware_telemetry"] = body.get("hardware_telemetry")
+        stop_ev = ((task.get("hardware_telemetry") or {}).get("stop_event") or {})
+        arm_id = task.get("arm_id")
+        if arm_id in ("arm_s", "arm_a", "arm_b") and isinstance(stop_ev.get("state"), list) and len(stop_ev["state"]) >= 6:
+            prev = dict(app.state.arm_live_states.get(arm_id) or {})
+            health = stop_ev.get("health") or {}
+            temps = health.get("temp_c") or []
+            curs = health.get("current_ma") or []
+            prev["joints_deg"] = [round(float(x), 1) for x in stop_ev["state"][:6]]
+            prev["folded"] = bool(stop_ev.get("folded", False))
+            if temps:
+                prev["temp_c"] = round(float(max(temps)), 1)
+            if curs:
+                prev["current_ma"] = round(float(max(curs)), 1)
+            prev["updated_at"] = task["completed_at"]
+            prev["source"] = "task_complete"
+            prev["last_task_id"] = task_id
+            app.state.arm_live_states[arm_id] = prev
         _enrich_task_health(task)
         _save_ledger()
         return {"ok": True, "task": task, "gate": res["gate"]}

@@ -24,6 +24,18 @@
 .omx-inspector-head strong { font-family: var(--mono); font-size: var(--text-label); color: var(--series-primary); overflow-wrap: anywhere; }
 .omx-inspector-main-cam { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: var(--radius-control); border: 1px solid var(--series-primary); background: var(--surface-flat); cursor: zoom-in; }
 .omx-inspector-main-cam.focused { aspect-ratio: auto; max-height: 60vh; object-fit: contain; cursor: zoom-out; }
+.omx-inspector-single-wrap { display: grid; gap: var(--space-1); min-width: 0; }
+.omx-inspector-dual-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-1); min-width: 0; }
+@media (width < 30rem) {
+  .omx-inspector-dual-grid { grid-template-columns: minmax(0, 1fr); }
+}
+.omx-inspector-dual-pane { display: grid; gap: 2px; min-width: 0; }
+.omx-inspector-cam-badge { font-family: var(--mono); font-size: var(--text-micro); color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.omx-inspector-quick-dispatch { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-1); align-items: center; min-width: 0; }
+@media (width < 30rem) {
+  .omx-inspector-quick-dispatch { grid-template-columns: minmax(0, 1fr); }
+}
+.omx-inspector-quick-dispatch select { width: 100%; min-width: 0; font-size: var(--text-micro); }
 .omx-inspector-pip-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(4.8rem, 1fr)); gap: var(--space-1); min-width: 0; }
 .omx-inspector-pip { display: grid; gap: 2px; padding: var(--space-1); border: 1px solid var(--border-subtle); border-radius: var(--radius-control); background: var(--surface-canvas); cursor: pointer; min-width: 0; }
 .omx-inspector-pip.active { border-color: var(--series-primary); background: var(--surface-raised); }

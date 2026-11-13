@@ -66,6 +66,15 @@ pre { max-height: 24rem; overflow: auto; white-space: pre-wrap; overflow-wrap: a
 .omx-inspector-stage { display: grid; gap: var(--space-2); min-width: 0; }
 .omx-inspector-main-cam { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: var(--radius-control); border: 1px solid var(--series-primary); background: #0f172a; cursor: zoom-in; }
 .omx-inspector-main-cam.focused { aspect-ratio: auto; max-height: 68vh; object-fit: contain; cursor: zoom-out; }
+.omx-inspector-dual-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); min-width: 0; }
+@media (width < 36rem) {
+  .omx-inspector-dual-grid { grid-template-columns: minmax(0, 1fr); }
+}
+.omx-inspector-dual-pane { display: grid; gap: 3px; min-width: 0; }
+.omx-inspector-quick-dispatch { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-1); align-items: center; min-width: 0; }
+@media (width < 36rem) {
+  .omx-inspector-quick-dispatch { grid-template-columns: minmax(0, 1fr); }
+}
 .omx-inspector-pip-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(5.5rem, 1fr)); gap: var(--space-1); }
 .omx-inspector-pip { display: grid; gap: 2px; padding: var(--space-1); border: 1px solid var(--border-default); border-radius: var(--radius-control); background: var(--surface-canvas); cursor: pointer; min-width: 0; }
 .omx-inspector-pip.active { border-color: var(--series-primary); background: var(--surface-raised); }

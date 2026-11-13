@@ -63,6 +63,20 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
       statusText: "목표 핀 고정 · 도로 경로 확정", at: Date.now(),
     };
     view.lastDispatchedGoal = { robotId, x: point.x, y: point.y, yaw, label: where, at: Date.now() };
+    const stationInspectMap = {
+      S2: { targetId: "arm_a", camId: "arm_a_wrist" },
+      S3: { targetId: "arm_s", camId: "arm_s_wrist" },
+      S5: { targetId: "arm_b", camId: "arm_b_wrist" },
+      S1: { targetId: robotId, camId: "side" },
+      C1: { targetId: robotId, camId: "pinky" },
+      C2: { targetId: robotId, camId: "pinky" },
+      C3: { targetId: robotId, camId: "pinky" },
+    };
+    const linkedInspect = placeId ? stationInspectMap[String(placeId).toUpperCase()] : null;
+    if (linkedInspect && typeof window !== "undefined" && typeof window.dispatchEvent === "function") {
+      if (linkedInspect.targetId.startsWith("arm_")) view.focusAnchorId = linkedInspect.targetId;
+      window.dispatchEvent(new CustomEvent("rosy:inspect-target", { detail: linkedInspect }));
+    }
     drawMap(); render();
 
     const canDispatch = !view.stateUnavailable && auth.role === "operator" && selectedRobot?.online && selectedRobot.state?.safety?.estop === false;

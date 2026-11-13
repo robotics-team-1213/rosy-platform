@@ -91,6 +91,10 @@ export function chargeBayRows(plan) {
   const rate = Number.isFinite(t.rate_pct_per_min) ? `${t.rate_pct_per_min}%/분` : "미측정";
   const summary = `${t.go_percent ?? "—"}% 이하면 충전 · ${t.leave_percent ?? "—"}%면 나감 · 충전 속도 ${rate} · 보기 전용`;
   const tasks = Array.isArray(plan?.omx_cell_tasks) ? plan.omx_cell_tasks : [];
+  const cameras = Array.isArray(plan?.cameras) ? plan.cameras : [];
+  const armLiveStates = plan?.arm_live_states || {};
+  const stationCameraLinks = plan?.station_camera_links || {};
+  const stationZones = plan?.station_zones || {};
   const cards = [
     ...["cell_s", "cell_ab"].map((id) => {
       const phase = plan?.omx_cells?.[id]?.gate?.phase || "IDLE";
@@ -194,7 +198,18 @@ export function chargeBayRows(plan) {
           ]};
       }),
   ];
-  return { bays, actions, cells, summary, cards };
+  return { bays, actions, cells, summary, cards, cameras, armLiveStates, stationCameraLinks, stationZones };
+}
+
+export function formatArmLiveJointText(armId, armLiveStates = {}, fallbackText = "folded: true (홈 대기)") {
+  const st = armLiveStates?.[armId];
+  if (!st || !Array.isArray(st.joints_deg) || !st.joints_deg.length) return fallbackText;
+  const jointsStr = st.joints_deg.slice(0, 6).map((v, i) => `J${i + 1}:${Number(v).toFixed(1)}°`).join(" ");
+  const ageTxt = st.age_s != null ? `${Number(st.age_s).toFixed(0)}초 전` : "";
+  const liveBadge = st.fresh !== false ? `LIVE${ageTxt ? ` · ${ageTxt}` : ""}` : `스냅샷${ageTxt ? ` · ${ageTxt}` : ""}`;
+  const tempTxt = st.temp_c != null ? `${st.temp_c}°C` : "";
+  const curTxt = st.current_ma != null ? `${st.current_ma}mA` : "";
+  return [`[${liveBadge}]`, jointsStr, `folded=${Boolean(st.folded)}`, tempTxt, curTxt, st.substage || ""].filter(Boolean).join(" · ");
 }
 
 export function inspectorTargetsFromRows(rows) {
@@ -202,16 +217,21 @@ export function inspectorTargetsFromRows(rows) {
   const s3 = cards.find((c) => c.id === "cell_s") || {};
   const s5 = cards.find((c) => c.id === "cell_ab") || {};
   const pinkyCards = cards.filter((c) => c.kind === "pinky");
+  const armLive = rows?.armLiveStates || {};
   return [
     {
       id: "arm_s",
+      cell_id: "cell_s",
+      station_id: "S3",
       shortTab: "🦾 arm_s (S3)",
       title: "🦾 OMX-AI #3 · arm_s (cell_s · S3 하역 셔틀)",
       status: s3.status || "neutral",
       text: s3.text || "대기 중",
       healthText: s3.healthText || "folded: true (홈 대기)",
+      jointLiveText: formatArmLiveJointText("arm_s", armLive, s3.healthText || "folded: true (홈 대기)"),
       task: s3.task || null,
       robot_id: "rosy_46",
+      dualPair: ["arm_s_top", "arm_s_wrist"],
       cameraViews: [
         {id: "arm_s_wrist", label: "arm_s 손목", url: "/api/fleet/pipeline/cell-camera/arm_s_wrist"},
         {id: "arm_s_top", label: "S3 상단", url: "/api/fleet/pipeline/cell-camera/arm_s_top"},
@@ -223,13 +243,17 @@ export function inspectorTargetsFromRows(rows) {
     },
     {
       id: "arm_a",
+      cell_id: "cell_ab",
+      station_id: "S2",
       shortTab: "🦾 arm_a (S5)",
       title: "🦾 OMX-AI #1 · arm_a (cell_ab · S5 1·3층 적재)",
       status: s5.status || "neutral",
       text: s5.text || "대기 중",
       healthText: s5.healthText || "folded: true (홈 대기)",
+      jointLiveText: formatArmLiveJointText("arm_a", armLive, s5.healthText || "folded: true (홈 대기)"),
       task: s5.task || null,
       robot_id: "rosy_46",
+      dualPair: ["top", "arm_a_wrist"],
       cameraViews: [
         {id: "arm_a_wrist", label: "arm_a 손목", url: "/api/fleet/pipeline/cell-camera/arm_a_wrist"},
         {id: "top", label: "S5 상단", url: "/api/fleet/pipeline/cell-camera/top"},
@@ -241,13 +265,17 @@ export function inspectorTargetsFromRows(rows) {
     },
     {
       id: "arm_b",
+      cell_id: "cell_ab",
+      station_id: "S5",
       shortTab: "🦾 arm_b (S5)",
       title: "🦾 OMX-AI #2 · arm_b (cell_ab · S5 2층 적재·반출)",
       status: s5.status || "neutral",
       text: s5.text || "대기 중",
       healthText: s5.healthText || "folded: true (홈 대기)",
+      jointLiveText: formatArmLiveJointText("arm_b", armLive, s5.healthText || "folded: true (홈 대기)"),
       task: s5.task || null,
       robot_id: "rosy_46",
+      dualPair: ["top", "arm_b_wrist"],
       cameraViews: [
         {id: "arm_b_wrist", label: "arm_b 손목", url: "/api/fleet/pipeline/cell-camera/arm_b_wrist"},
         {id: "top", label: "S5 상단", url: "/api/fleet/pipeline/cell-camera/top"},
@@ -257,11 +285,12 @@ export function inspectorTargetsFromRows(rows) {
       buttons: s5.buttons || CELL_BUTTONS.cell_ab,
       quickControls: (s5.quickControls || []).map((c) => c.clearArmHold ? {...c, clearArmHold: "arm_b"} : c),
     },
-    ...(s3.id ? [{...s3, shortTab: "📦 cell_s"}] : []),
-    ...(s5.id ? [{...s5, shortTab: "📦 cell_ab"}] : []),
+    ...(s3.id ? [{...s3, shortTab: "📦 cell_s", dualPair: ["arm_s_top", "arm_s_wrist"], jointLiveText: formatArmLiveJointText("arm_s", armLive, s3.healthText)}] : []),
+    ...(s5.id ? [{...s5, shortTab: "📦 cell_ab", dualPair: ["top", "arm_a_wrist"], jointLiveText: formatArmLiveJointText("arm_a", armLive, s5.healthText)}] : []),
     ...pinkyCards.map((p) => ({
       ...p,
       shortTab: `🤖 ${p.robot_id}`,
+      dualPair: ["pinky", "arm_s_top"],
     })),
   ];
 }
@@ -278,6 +307,7 @@ export function createChargeBaysView({ scope, el, call, auth }) {
   const selectedCamByCard = {};
   let activeInspectorId = "arm_s";
   const selectedInspectorCam = {};
+  let dualCamMode = false;
   let lastRows = null;
 
   function currentCamStamp() {
@@ -327,7 +357,12 @@ export function createChargeBaysView({ scope, el, call, auth }) {
 
   async function executeChoice(choice, card, button) {
     if (auth.locked || button.hasAttribute("disabled")) return;
+    if (choice.cancelTaskId && typeof window !== "undefined" && typeof window.confirm === "function") {
+      if (!window.confirm(`태스크(${choice.cancelTaskId})를 즉시 취소하고 셀 인터락을 해제할까요?`)) return;
+    }
+    const origLabel = button.textContent;
     button.setAttribute("disabled", "");
+    button.textContent = `${origLabel} (처리 중…)`;
     try {
       if (choice.cancelTaskId) {
         await call(`/api/fleet/pipeline/cell-tasks/${choice.cancelTaskId}/cancel`, {method: "POST"});
@@ -382,6 +417,7 @@ export function createChargeBaysView({ scope, el, call, auth }) {
       hint.textContent = `작업 요청 실패: ${error.message}`;
       hint.hidden = false;
     } finally {
+      button.textContent = origLabel;
       button.removeAttribute("disabled");
     }
   }
@@ -395,6 +431,17 @@ export function createChargeBaysView({ scope, el, call, auth }) {
     const targets = inspectorTargetsFromRows(rows);
     const active = targets.find((t) => t.id === activeInspectorId) || targets[0];
     if (!active) return;
+    const camMap = new Map((rows?.cameras || []).map((c) => [c.id, c]));
+    const formatQuality = (viewId) => {
+      const c = camMap.get(viewId) || camMap.get(viewId === "cell_s" ? "arm_s_top" : (viewId === "cell_ab" ? "top" : viewId));
+      if (!c) return "LIVE 스트림";
+      return [
+        c.fresh !== false ? "LIVE" : "STALE",
+        c.sequence != null ? `#${c.sequence}` : "",
+        c.condition || "",
+        c.mean_intensity != null ? `밝기 ${c.mean_intensity}` : "",
+      ].filter(Boolean).join(" · ");
+    };
 
     const tabs = document.createElement("div");
     tabs.className = "omx-inspector-tabs";
@@ -407,10 +454,24 @@ export function createChargeBaysView({ scope, el, call, auth }) {
       btn.textContent = t.shortTab;
       btn.addEventListener("click", () => {
         activeInspectorId = t.id;
+        if (typeof window !== "undefined" && typeof window.dispatchEvent === "function") {
+          window.dispatchEvent(new CustomEvent("rosy:focus-anchor", { detail: { targetId: t.id, stationId: t.station_id || null } }));
+        }
         renderInspector(rows);
       });
       tabs.append(btn);
     }
+    const dualBtn = document.createElement("ui-button");
+    dualBtn.setAttribute("kind", dualCamMode ? "primary" : "quiet");
+    dualBtn.setAttribute("type", "button");
+    dualBtn.setAttribute("data-work-read", "");
+    dualBtn.dataset.dualCamToggle = "true";
+    dualBtn.textContent = dualCamMode ? "📺 2채널(상단+손목) ON" : "📺 2채널 동시 보기";
+    dualBtn.addEventListener("click", () => {
+      dualCamMode = !dualCamMode;
+      renderInspector(rows);
+    });
+    tabs.append(dualBtn);
 
     const head = document.createElement("div");
     head.className = "omx-inspector-head";
@@ -422,14 +483,44 @@ export function createChargeBaysView({ scope, el, call, auth }) {
     const activeCamId = selectedInspectorCam[active.id] || camViews[0]?.id || "arm_s_top";
     const activeCam = camViews.find((v) => v.id === activeCamId) || camViews[0] || {id: activeCamId, label: activeCamId, url: active.cameraUrl};
 
-    const mainImg = document.createElement("img");
-    mainImg.className = "omx-inspector-main-cam omx-inspector-cam";
-    mainImg.dataset.baseUrl = activeCam.url;
-    mainImg.src = `${activeCam.url}?t=${currentCamStamp()}`;
-    mainImg.alt = `${active.title} 실시간 메인 카메라`;
-    mainImg.loading = "lazy";
-    mainImg.tabIndex = 0;
-    mainImg.addEventListener("click", () => mainImg.classList.toggle("focused"));
+    let camStageNode;
+    if (dualCamMode && camViews.length >= 2) {
+      camStageNode = document.createElement("div");
+      camStageNode.className = "omx-inspector-dual-grid";
+      const [idA, idB] = active.dualPair || [camViews[0].id, camViews[1].id];
+      const viewA = camViews.find((v) => v.id === idA) || camViews[0];
+      const viewB = camViews.find((v) => v.id === idB && v.id !== viewA.id) || camViews.find((v) => v.id !== viewA.id) || camViews[1];
+      for (const dv of [viewA, viewB]) {
+        const pane = document.createElement("div");
+        pane.className = "omx-inspector-dual-pane";
+        const dImg = document.createElement("img");
+        dImg.className = "omx-inspector-main-cam omx-inspector-cam";
+        dImg.dataset.baseUrl = dv.url;
+        dImg.src = `${dv.url}?t=${currentCamStamp()}`;
+        dImg.alt = `${dv.label} 실시간 카메라`;
+        dImg.loading = "lazy";
+        const dCap = document.createElement("small");
+        dCap.className = "omx-inspector-cam-badge";
+        dCap.textContent = `🎥 ${dv.label} · ${formatQuality(dv.id)}`;
+        pane.append(dImg, dCap);
+        camStageNode.append(pane);
+      }
+    } else {
+      camStageNode = document.createElement("div");
+      camStageNode.className = "omx-inspector-single-wrap";
+      const mainImg = document.createElement("img");
+      mainImg.className = "omx-inspector-main-cam omx-inspector-cam";
+      mainImg.dataset.baseUrl = activeCam.url;
+      mainImg.src = `${activeCam.url}?t=${currentCamStamp()}`;
+      mainImg.alt = `${active.title} 실시간 메인 카메라`;
+      mainImg.loading = "lazy";
+      mainImg.tabIndex = 0;
+      mainImg.addEventListener("click", () => mainImg.classList.toggle("focused"));
+      const mainCap = document.createElement("small");
+      mainCap.className = "omx-inspector-cam-badge";
+      mainCap.textContent = `🎥 [${activeCam.label}] ${formatQuality(activeCam.id)}`;
+      camStageNode.append(mainImg, mainCap);
+    }
 
     const pipGrid = document.createElement("div");
     pipGrid.className = "omx-inspector-pip-grid";
@@ -455,7 +546,61 @@ export function createChargeBaysView({ scope, el, call, auth }) {
     const meta = document.createElement("p");
     meta.className = "omx-inspector-meta";
     const taskBase = active.task ? `${active.task.task_id} · ${active.task.status} · ${active.task.arm_id || "—"}` : "";
-    meta.textContent = [taskBase, active.healthText || ""].filter(Boolean).join(" | ");
+    meta.textContent = [taskBase, active.jointLiveText || active.healthText || ""].filter(Boolean).join(" | ");
+
+    const quickDispatchBar = document.createElement("div");
+    quickDispatchBar.className = "omx-inspector-quick-dispatch";
+    const tierSel = document.createElement("select");
+    tierSel.setAttribute("data-work-read", "");
+    for (const [val, lbl] of [["1", "T1 (1층·벨트)"], ["2", "T2 (2층)"], ["3", "T3 (3층)"]]) {
+      const opt = document.createElement("option");
+      opt.value = val;
+      opt.textContent = lbl;
+      if (active.id === "arm_b" && val === "2") opt.selected = true;
+      tierSel.append(opt);
+    }
+    const dispSel = document.createElement("select");
+    dispSel.setAttribute("data-work-read", "");
+    for (const [val, lbl] of [["", "정위치 (Nominal)"], ["auto", "Auto ROI 감지"], ["belt_far", "Belt-Far 복구"], ["floor_front", "Floor-Front 복구"]]) {
+      const opt = document.createElement("option");
+      opt.value = val;
+      opt.textContent = lbl;
+      dispSel.append(opt);
+    }
+    const runCustomBtn = document.createElement("ui-button");
+    runCustomBtn.setAttribute("kind", "primary");
+    runCustomBtn.setAttribute("type", "button");
+    runCustomBtn.setAttribute("data-work-read", "");
+    const targetArm = active.id.startsWith("arm_") ? active.id : (active.id === "cell_ab" ? "arm_a" : "arm_s");
+    const targetCell = targetArm === "arm_s" ? "cell_s" : "cell_ab";
+    runCustomBtn.textContent = `▶ ${targetArm} 맞춤 실행`;
+    runCustomBtn.addEventListener("click", async () => {
+      if (auth.locked || runCustomBtn.hasAttribute("disabled")) return;
+      runCustomBtn.setAttribute("disabled", "");
+      const orig = runCustomBtn.textContent;
+      runCustomBtn.textContent = "등록 중…";
+      try {
+        await call("/api/fleet/pipeline/cell-tasks", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({
+            cell_id: targetCell,
+            arm_id: targetArm,
+            tier: Number(tierSel.value || 1),
+            displaced_to: dispSel.value || null,
+            robot_id: active.robot_id || "rosy_46",
+          }),
+        });
+        await refresh();
+      } catch (err) {
+        hint.textContent = `맞춤 실행 실패: ${err.message}`;
+        hint.hidden = false;
+      } finally {
+        runCustomBtn.textContent = orig;
+        runCustomBtn.removeAttribute("disabled");
+      }
+    });
+    quickDispatchBar.append(tierSel, dispSel, runCustomBtn);
 
     const actions = document.createElement("div");
     actions.className = "omx-card-actions";
@@ -469,7 +614,7 @@ export function createChargeBaysView({ scope, el, call, auth }) {
       actions.append(button);
     }
 
-    inspector.replaceChildren(tabs, head, mainImg, pipGrid, meta, actions);
+    inspector.replaceChildren(tabs, head, camStageNode, pipGrid, meta, quickDispatchBar, actions);
   }
 
   function show(rows, note) {
@@ -603,7 +748,14 @@ export function createChargeBaysView({ scope, el, call, auth }) {
       const telemetry = await call("/api/fleet/pipeline/cell-tasks", {signals: [life.signal]})
         .catch(() => null);
       life.check();
-      const rows = chargeBayRows({...plan, omx_cell_tasks: telemetry?.tasks || plan.omx_cell_tasks});
+      const rows = chargeBayRows({
+        ...plan,
+        omx_cell_tasks: telemetry?.tasks || plan.omx_cell_tasks,
+        cameras: telemetry?.cameras || plan.cameras,
+        arm_live_states: telemetry?.arm_live_states || plan.arm_live_states,
+        station_camera_links: telemetry?.station_camera_links || plan.station_camera_links,
+        station_zones: telemetry?.station_zones || plan.station_zones,
+      });
       state.textContent = `칸 ${rows.bays.length}`;
       show(rows, rows.bays.length ? rows.summary : "활성 지도에 충전 칸(charge)이 없습니다");
     } catch (error) {
