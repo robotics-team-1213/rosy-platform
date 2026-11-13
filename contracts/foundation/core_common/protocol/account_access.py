@@ -1,6 +1,7 @@
 """D-757 resource grants, Ed25519 access JWTs and the shared Origin check; no network or role inheritance."""
 from __future__ import annotations
 
+import logging
 import time
 from collections.abc import Mapping
 from urllib.parse import urlsplit
@@ -21,8 +22,11 @@ RESOURCE_PATTERN = r'^(site|robot|project):[A-Za-z0-9._-]{1,96}$'
 # D-955: a stored grant may name every robot or project; issued tokens stay one concrete resource.
 GRANT_RESOURCE_PATTERN = r'^((site|robot|project):[A-Za-z0-9._-]{1,96}|(robot|project):\*)$'
 ACCESS_TTL_S = 300
-# Verifier clocks may trail the issuer's (model PC lagged ~4 s on 2026-11-13); exp stays strict.
-CLOCK_SKEW_S = 60
+# Verifier clocks may trail the issuer's (model PC lagged ~4 s on 2026-11-13). Kept far under the 300 s TTL so
+# a real clock fault still shows (D-859 targets 50 ms); exp stays strict. Offsets above WARN are logged.
+CLOCK_SKEW_S = 10
+CLOCK_SKEW_WARN_S = 1
+log = logging.getLogger(__name__)
 
 
 def same_origin(request) -> bool:
@@ -131,6 +135,11 @@ def verify_access(token: str, public_keys: Mapping[str, bytes], *, issuer: str,
             raise AccessRejected('invalid access header')
         result = AccountAccess.model_validate(decoded.claims)
         stamp = time.time() if now is None else now
+        ahead = result.iat - stamp  # seconds the issuer clock leads this verifier
+        if ahead > CLOCK_SKEW_S:
+            log.error('clock_skew rejected: issuer clock ahead by %.1f s, resource=%s', ahead, audience)
+        elif ahead > CLOCK_SKEW_WARN_S:
+            log.warning('clock_skew: issuer clock ahead by %.1f s, resource=%s', ahead, audience)
         if (result.iss != issuer or result.aud != audience
                 or not result.iat - CLOCK_SKEW_S <= stamp < result.exp):
             raise AccessRejected('access expired or outside scope')

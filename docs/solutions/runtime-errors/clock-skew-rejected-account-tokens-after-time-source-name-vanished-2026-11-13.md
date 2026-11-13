@@ -32,7 +32,7 @@ A host rename or move silently turns a named time source into "no source". chron
 
 ## Fix
 
-- `verify_access` accepts `iat` up to `CLOCK_SKEW_S` (60 s) ahead of the verifier clock; `exp` stays strict. It is the only verifier of Account access tokens (the Fleet, CORE, Learning clients and the Account authority all call it), so the rule lives in one place. Tests: 30 s ahead accepted, 120 s ahead refused.
+- `verify_access` accepts `iat` up to `CLOCK_SKEW_S` (10 s) ahead of the verifier clock; `exp` stays strict. An offset above 1 s logs a `clock_skew` warning (offset seconds and resource, no token data), beyond 10 s the token is refused and logged as an error. The leeway is small on purpose: D-859 targets 50 ms and the TTL is 300 s, so 60 s would hide real clock faults (the incident was 4 s). It is the only verifier of Account access tokens (the Fleet, CORE, Learning clients and the Account authority all call it), so the rule lives in one place. Tests: +5 s accepted with a warning, +11 s refused.
 - Learning and the Fleet receiver now log one line with the exception class and first message line when an Account exchange is refused. No token, code or secret is logged; user-facing behaviour is unchanged.
 - The R host runs the chrony site role (D-859): upstreams are public NTP servers, clients are the LAN. The model PC and Pinkys use `rosy-fleet-r.local` as their single client source.
 - Pinky SD cards carry the name: `prepare-rosy-sd.ps1 -TimeSource rosy-fleet-r.local` makes first boot write the chrony client config. The image does not bake a site name.
@@ -50,4 +50,4 @@ On a host with a wrong clock: `timedatectl` (is NTP service active, is the clock
 
 - A login or token check fails across hosts while Account itself issues tokens fine: compare clocks before suspecting keys.
 - After any host rename, move or Tailscale name change: re-check every host's chrony source (`chronyc sources`), not just the services the move touched.
-- Adding a verifier of signed, time-bounded tokens: allow bounded skew on `iat`, keep `exp` strict, and log the refusal reason.
+- Adding a verifier of signed, time-bounded tokens: allow small bounded skew on `iat`, keep `exp` strict, and log the offset and the refusal reason.
