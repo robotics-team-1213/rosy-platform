@@ -5,7 +5,6 @@ import {createDrawingImport, rasterMapPoint} from '/console/assets/drawing-impor
 import {createMapEditor, svgElement} from '/console/assets/map-editor.js';
 import {createExtractionPanel} from '/console/assets/extraction-review.js';
 import {siteMapErrorText} from '/console/assets/site-map-model.js';
-import {ensureSurvey} from '/console/assets/site-map-edit.js';
 import {fetchMapPlane} from '/console/assets/vision-view.js';
 
 const $ = id => document.getElementById(id);
@@ -13,7 +12,7 @@ export function createMapAuthoring(host) {
   const history = createEditHistory(null);
   let projection = null, loadingHash = null, cacheController = null, rasterUrl = null;
   const message = text => { $('drawing-status').textContent = text; };
-  const changed = next => { ensureSurvey(next); history.apply(next); host.changed(history.current()); };
+  const changed = next => { history.apply(next); host.changed(history.current()); };
   const importer = createDrawingImport({request: host.request, map: host.draft,
     replaceDraft: next => { changed(next); },
     confirmDiscard: () => true});

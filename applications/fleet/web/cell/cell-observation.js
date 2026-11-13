@@ -180,7 +180,7 @@ export function createCellObservation({request, root, credential = () => ''}) {
       }
       const identity = `${sequence}:${response.headers.get('X-Frame-Captured-At') || ''}`;
       if (entry.identity === identity) return;
-      const expires = observedAt + 8000 - age;
+      const expires = observedAt + 2000 - age;
       const blob = await response.blob();
       url = URL.createObjectURL(blob);
       const decoded = new Image(); decoded.src = url; await decoded.decode();
