@@ -1,4 +1,4 @@
-"""Drift checks for update_status (D-1021): retired names, unrecorded image changes, receiver keys, R's guard timer.
+"""Drift checks for update_status (D-1021): retired names, receiver keys, R's guard timer.
 
 Everything here is read-only and prints names, never key material or file content. The probe text is appended to
 update_status.PROBE; the parsers and checks are pure so tests feed them fixtures.
@@ -14,18 +14,9 @@ import yaml
 
 # Appended after update_status.PROBE (which defines $D). One line per fact; unreadable files become `-unreadable` lines.
 PROBE = r'''
-# running containers: configured image and image ID (rosy-site-<service>:<commit> is compared with the signed candidate)
-for c in $($D ps -q 2>/dev/null </dev/null); do
-  $D inspect --format 'container {{.Config.Image}} {{.Image}}' "$c" </dev/null 2>/dev/null
-done
-# the running signed candidate's recorded image IDs (reused-image identities included), IDs only
-mf=/opt/rosy/candidate/release.json
-if [ -e "$mf" ] || sudo -n test -e "$mf" </dev/null 2>/dev/null; then
-  out=$({ cat "$mf" 2>/dev/null || sudo -n cat "$mf" 2>/dev/null; } </dev/null | python3 -c 'import json,sys
-d=json.load(sys.stdin);r=d.get("reused_images") or {}
-print(json.dumps({s:[v["image_id"]]+[i for i in r.get(s,[]) if i!=v["image_id"]] for s,v in d["images"].items()}))' 2>/dev/null)
-  [ -n "$out" ] && echo "candidate-ids $out" || echo "candidate-ids unreadable"
-fi
+# Unrecorded image changes are not compared here: the candidate records archive image IDs in another form than
+# `docker inspect` shows (2026-11-14: a naive compare failed every service). The site updater's own verifier does
+# it and its refusal reason reaches update_status through site-autoupdate.json (`last run refused: ...`).
 # receiver pins: issuer and the key names (kid) only, never key material
 for f in $(find ~/.config/rosy -maxdepth 5 -type f -name receiver.json 2>/dev/null) /etc/rosy/*/receiver.json; do
   [ -L "$f" ] && continue
@@ -46,7 +37,6 @@ fi
 true
 '''
 GUARD_STALE_S = 30 * 60  # the guard runs every 10 minutes; three missed runs
-_SITE_IMAGE = re.compile(r'(?:^|/)rosy-site-([a-z0-9-]+):')
 _ISSUER = re.compile(r'https?://[A-Za-z0-9._\[\]:-]+')
 
 
@@ -70,18 +60,7 @@ def retired_hostnames(path: Path | None = None) -> tuple[list[str], str]:
 
 def parse(host: dict, kind: str, rest: str) -> bool:
     """Take one probe line of this module's kinds into ``host``; False when the kind is not ours."""
-    if kind == 'container':
-        image, _, image_id = rest.strip().partition(' ')
-        found = _SITE_IMAGE.search(image)
-        if found:
-            host.setdefault('site_containers', []).append((found.group(1), image_id.strip()))
-    elif kind == 'candidate-ids':
-        try:
-            ids = json.loads(rest)
-        except ValueError:
-            ids = None
-        host['candidate_ids'] = ids if isinstance(ids, dict) else None
-    elif kind == 'receiver':
+    if kind == 'receiver':
         path, _, raw = rest.strip().partition(' ')
         try:
             pin = json.loads(raw)
@@ -130,14 +109,8 @@ class IssuerKeys:
 
 
 def findings(host: dict, roles, now: float, issuer_kids) -> list:
-    """(verdict, name, detail): image drift, receiver key drift, guard liveness. ``issuer_kids(issuer)`` -> set or None."""
+    """(verdict, name, detail): receiver key drift, guard liveness. ``issuer_kids(issuer)`` -> set or None."""
     out = []
-    known = host.get('candidate_ids')
-    if 'candidate_ids' in host and known is None:
-        out.append(('note', 'image-drift', 'candidate manifest could not be read; running images not compared'))
-    for service, image_id in sorted(set(host.get('site_containers', []))):
-        if isinstance(known, dict) and service in known and image_id not in (known[service] or []):
-            out.append(('FAIL', 'image-drift', service))
     for path in host.get('receivers_unreadable', []):
         out.append(('note', 'account-key-drift', f'{path} could not be read; not checked'))
     unreachable = set()

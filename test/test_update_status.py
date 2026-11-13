@@ -158,6 +158,27 @@ def test_status_main_collects_an_independent_production_host(monkeypatch):
     assert targets == ['site@h', 'arm@h']
 
 
+def test_status_main_prints_a_drift_finding_it_counts(monkeypatch, capsys):
+    # 2026-11-14: drift findings were added after the print loop, so they set the exit code but never showed.
+    config = {'site_host': 'site@h'}
+    monkeypatch.setattr(status.lab_hosts, 'load', lambda: config)
+    monkeypatch.setenv('ROSY_SITE_MAP', os.path.join(os.devnull, 'no-site-map.yaml'))
+    monkeypatch.setattr(status, 'load_inventory', lambda: {'site': {}})
+    monkeypatch.setattr(status, 'ref_state', lambda *args: dict(
+        ref='HEAD', verdict='ok', tip='a'*12, fetched_h=0, problem=None))
+    monkeypatch.setattr(status, 'robot_cd_root', lambda: None)
+    monkeypatch.setattr(status.sys, 'argv', ['update_status.py'])
+    stale = int(time.time()) - 3600
+    monkeypatch.setattr(status.subprocess, 'run', lambda argv, **kw: subprocess.CompletedProcess(
+        argv, 0, stdout=f'gate open
+guard active {stale}
+'.encode(), stderr=b''))
+    with pytest.raises(SystemExit) as ended:
+        status.main()
+    assert ended.value.code == 1
+    assert 'host-guard: status.json last written' in capsys.readouterr().out
+
+
 def test_images_outside_the_role_or_piling_up_are_reported():
     host = status.parse('\n'.join(['image rosy-site-fleet aaa', 'image rosy-site-fleet bbb', 'image <none> <none>',
                                    'image rosy-rollback-fleet workcell', 'image rosy-site-vision a',
@@ -455,25 +476,6 @@ def test_the_drift_probe_is_valid_bash_and_prints_no_key_material():
 def _drift(lines, roles=(), kids=None, now=NOW):
     host = status.parse('\n'.join(['gate open', *lines]), now, 6.0)
     return status.update_drift.findings(host, roles, now, lambda issuer: kids)
-
-
-IDS = 'candidate-ids {"fleet": ["sha256:' + 'a' * 64 + '"], "proxy": ["sha256:' + 'b' * 64 + '", "sha256:' + 'c' * 64 + '"]}'
-
-
-def test_a_container_image_the_signed_candidate_did_not_record_is_image_drift_by_service_name():
-    ok = ['container rosy-site-fleet:' + '1' * 40 + ' sha256:' + 'a' * 64, 'container nginx:1 sha256:' + 'd' * 64, IDS]
-    assert _drift(ok) == []
-    drifted = ok + ['container rosy-site-fleet:' + '1' * 40 + ' sha256:' + 'e' * 64]
-    assert _drift(drifted) == [('FAIL', 'image-drift', 'fleet')]
-    reused = ['container rosy-site-proxy:' + '2' * 40 + ' sha256:' + 'c' * 64, IDS]  # a reused identity is accepted
-    assert _drift(reused) == []
-    assert _drift(['container rosy-site-vision:x sha256:' + 'e' * 64, IDS]) == []  # not in the manifest: not compared
-
-
-def test_an_unreadable_candidate_manifest_is_a_note_and_a_missing_one_compares_nothing():
-    found = _drift(['container rosy-site-fleet:x sha256:' + 'e' * 64, 'candidate-ids unreadable'])
-    assert [f[:2] for f in found] == [('note', 'image-drift')]
-    assert _drift(['container rosy-site-fleet:x sha256:' + 'e' * 64]) == []
 
 
 def _receiver(path, issuer, kids):

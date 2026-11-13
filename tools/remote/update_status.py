@@ -36,7 +36,7 @@ Retired names (2026-11-13): chrony.conf, /etc/hosts, receiver.json and the Accou
 `retired_hostnames` of the private site map (full hostnames only; none or no map: one note; backup-named files and symlinks skipped); a hit is FAIL `retired-name` with
 the path only, an unreadable path a note. Malformed probe data is a FAIL for that host; on a `site` host a missing site
 state is a note, an unreadable one FAIL; a hold `until` without a zone or unparsable is expired (absent: set time + 24 h).
-D-1021 (update_drift.py): FAIL `image-drift` (container image ID not in the signed candidate), `account-key-drift`, `host-guard`.
+D-1021 (update_drift.py): FAIL `account-key-drift`, `host-guard`.
 """
 from __future__ import annotations
 
@@ -580,9 +580,9 @@ def main() -> None:
             if src['kind'] != 'other':
                 print(f'  {src["kind"]:7} {src["unit"]}: {src["where"]}')
         extra = clock_and_site(host, time.time(), role_of.get(target, ()))
+        extra += update_drift.findings(host, role_of.get(target, ()), time.time(), issuer_kids)  # before printing
         for verdict, unit, detail in extra:
             print(f'  {verdict:10} {unit}: {detail}')
-        extra += update_drift.findings(host, role_of.get(target, ()), time.time(), issuer_kids)
         stuck |= any(f[0] in FAILING for f in extra)
         if target not in role_of:
             print('  (no role in private/lab-hosts.json; services.yaml not checked)')
