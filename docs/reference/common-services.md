@@ -55,6 +55,8 @@ Account의 로그인·프로필·관리 화면 소스는 `applications/fleet/web
 | `proxy` | `rosy-site` | `rosy-site-proxy` | 실행 중 | `mem_limit` 부채 |
 | `media`, `media-gateway` | `rosy-media` | `rosy-site-media`, `rosy-site-proxy` | 미배치 | D-994 §5 부하 관측·방화벽 뒤 |
 
+R 호스트는 공통 서비스 컨테이너 밖에서 현장 시간 서버(chrony site 역할, [D-859](../adr/D-859-shared-utc-time-synchronization.md))도 맡는다. 상위는 공용 NTP 세 곳이고 클라이언트는 `rosy-fleet-r.local` 하나만 쓴다. 호스트 설정이며 Compose 서비스가 아니라 위 표에 없다. 호스트 이름이 바뀌면 클라이언트의 chrony 시간원도 같이 바꾼다([설치 절차](../../deploy/hosts/README.md#공통-시간-동기화-d-859)). 2026-11-13 R에 적용했고 모델 PC와 Pinky 일부가 클라이언트다.
+
 Fleet에 남는 공통 성격 기능은 카메라 페어링·로봇 등록·기계 자격 digest·미리보기 grant 서명 사용·host-control·알림 outbox이며 이유는 D-1001 결정 4가 정본이다. 사람 신원은 Account에 있고 Fleet은 수신기로만 쓴다.
 
 ## 기능별 공통화 결정

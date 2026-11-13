@@ -48,7 +48,8 @@ python3 deploy/robot/omx/cell_requests.py answer <id> --value <mm> --by <이름>
 python3 applications/calibration/calibration_web.py --store ~/.local/state/rosy/cell-requests --account-config <receiver.json> --port 8776
 ```
 
-- `--store` 기본은 `ROSY_CELL_REQUESTS`. 관제 PC의 시스템 python3(pydantic·cryptography)로 돈다. `contracts/foundation`은 체크아웃에서 스스로 찾는다.
+- `--store` 기본은 `ROSY_CELL_REQUESTS`. `contracts/foundation`은 체크아웃에서 스스로 찾는다.
+- 관제 PC의 시스템 python3에는 Account 토큰 검증에 쓰는 `joserfc`가 없다(2026-11-13 확인, 로그인 callback에서 서버가 죽었다). 유닛은 전용 venv로 돈다: `python3 -m venv --system-site-packages ~/.local/share/rosy/calibration/venv && ~/.local/share/rosy/calibration/venv/bin/pip install joserfc==1.7.5 cryptography==50.0.0` (pydantic은 시스템 것, `python3-venv` 필요).
 - 읽기 전용 확인: `--account-config` 없이 띄우고 `ssh -L 8776:127.0.0.1:8776 <관제 PC>`로 연다. 이때는 로그인이 없어 답을 받지 않는다.
 - Account 설정이 있으면 목록·상세·그림도 그 site의 로그인 세션이 있어야 보이고, 답은 site 권한 `calibration.operate`가 있어야 한다. 답의 누가는 세션의 이름이다.
 - API: `GET /api/calibration/v1/requests`, `.../<id>`, `.../<id>/image`, `POST .../<id>/answer {value|result, note}`(같은 출처 필수; 409 이미 답함, 422 잘못된 값).
@@ -57,5 +58,5 @@ python3 applications/calibration/calibration_web.py --store ~/.local/state/rosy/
 
 1. HTTPS 앞단: 관제 PC `tailscale serve --bg --https=9449 http://127.0.0.1:8776`(tailnet 전용). 했다.
 2. Account: client `rosy-calibration`(resource `site:<id>`, callback `https://<관제 PC tailnet 이름>:9449/api/account/callback`)을 R 호스트의 Account에 등록하고, receiver 설정을 관제 PC `~/.config/rosy/calibration/receiver.json`에 둔다(세션 키는 다시 만들지 않는다). 했다. 관제 PC는 Account에 SSH 터널(`rosy-account-tunnel.service`)로 닿는다. R의 443 방화벽은 손대지 않는다(점검이 실패하면 site proxy가 멈춘다).
-3. 배포: 착지한 sha를 `tools/remote/omx_hotfix.py`로 관제 PC에 풀고(이 앱이 포함된다), 사용자 유닛 `rosy-calibration-web.service`(이 폴더)를 링크해 켠다.
+3. 배포: 착지한 sha를 `tools/remote/omx_hotfix.py`로 관제 PC에 풀고(이 앱이 포함된다), 위 venv를 만든 뒤 사용자 유닛 `rosy-calibration-web.service`(이 폴더)를 `~/.config/systemd/user/`에 **복사**해 켠다. 링크하면 systemd가 버전 폴더(`omx-tools-<sha>`)로 풀어 다음 갱신 뒤 깨진다. 2026-11-13 배포함(그 전까지 미설치, issuer·`/etc/hosts`가 옛 이름이었다).
 4. 권한: 모든 receiver를 새 `calibration.operate` 목록으로 먼저 배포한 뒤(옛 receiver는 모르는 capability의 토큰을 거절한다, D-990) 답할 사람에게 관리자가 부여한다. 그 전에는 로그인한 사람도 보기만 한다.

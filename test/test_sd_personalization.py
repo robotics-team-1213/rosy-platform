@@ -201,6 +201,25 @@ def test_the_card_script_checks_account_trust_before_anything_is_erased():
     assert script.index("validate_account_trust") < script.index("$plan = [ordered]@{") < script.index("Read-EraseConfirmation $")
 
 
+def test_time_source_is_optional_validated_and_kept_for_a_reimage():
+    assert "time_source" not in _bundle()["fleet"]
+    bundle = _bundle(time_source="rosy-fleet-r.local")
+    Draft202012Validator(json.loads(SCHEMA.read_text(encoding="utf-8"))).validate(bundle)
+    assert create_provision_receipt(bundle)["fleet"]["time_source"] == "rosy-fleet-r.local"
+    validate_provision_bundle(bundle)
+
+
+@pytest.mark.parametrize("name", ["", "a b", "pool.ntp.org iburst", "-bad.local", "x" * 254])
+def test_a_malformed_time_source_is_refused(name):
+    with pytest.raises(ValueError):
+        _bundle(time_source=name)
+
+
+def test_the_card_script_checks_the_time_source_before_anything_is_erased():
+    script = (ROOT / "deploy/robot/pinky_pro/sd/prepare-rosy-sd.ps1").read_text(encoding="utf-8")
+    assert script.index("validate_time_source") < script.index("$plan = [ordered]@{") < script.index("Read-EraseConfirmation $")
+
+
 def test_receipt_omits_every_transient_secret():
     bundle = _bundle()
     receipt = create_provision_receipt(bundle)
