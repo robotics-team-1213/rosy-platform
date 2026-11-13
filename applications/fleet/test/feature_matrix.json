@@ -2876,6 +2876,24 @@
           ],
           "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
           "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/robots/{robot_id}/berth-park"
+        },
+        {
+          "id": "GET:/api/fleet/robots/{robot_id}/road-nav2/plan",
+          "method": "GET",
+          "path": "/api/fleet/robots/{robot_id}/road-nav2/plan",
+          "implementation": "operations/fleet/fleet/server/ledger/berth_parking_routes.py",
+          "handler": "fleet_road_nav2_plan",
+          "expected_statuses": [
+            200,
+            422
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response and validation refusal",
+          "contract_tests": [
+            "operations/fleet/test/test_berth_parking_routes.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/robots/{robot_id}/road-nav2/plan"
         }
       ],
       "flows": [
@@ -4558,6 +4576,24 @@
           ],
           "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
           "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/cell-app/real2sim-pipeline/promote-physics"
+        },
+        {
+          "id": "PUT:/api/fleet/pipeline/station-zones",
+          "method": "PUT",
+          "path": "/api/fleet/pipeline/station-zones",
+          "implementation": "operations/fleet/fleet/server/sitemap/pipeline_gate_routes.py",
+          "handler": "update_station_zones",
+          "expected_statuses": [
+            200,
+            422
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response and validation refusal",
+          "contract_tests": [
+            "operations/fleet/test/test_pipeline_orchestrator.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#PUT:/api/fleet/pipeline/station-zones"
         }
       ],
       "flows": [
