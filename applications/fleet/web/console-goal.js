@@ -116,40 +116,6 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
         && mapSnapshot === JSON.stringify([view.map?.map_id, view.map?.width, view.map?.height, view.map?.resolution, view.map?.origin]),
       request: async owner => {
     try {
-      if (siteMapObj) {
-        const roadRes = await call(`/api/fleet/robots/${encodeURIComponent(robotId)}/road-nav2`, {
-          method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": randomUUID() },
-          body: JSON.stringify({ x: Number(point.x.toFixed(4)), y: Number(point.y.toFixed(4)), yaw: Number(yaw.toFixed(4)), place_id: placeId || null, label: placeLabel || "" }),
-          signals: [owner.signal],
-        });
-        owner.check();
-        const roadTask = roadRes?.task;
-        const queued = roadRes?.accepted === false && roadRes?.dispatched === true
-          && roadRes?.queued === true && roadTask?.status === "QUEUED";
-        const accepted = roadRes?.accepted === true && roadRes?.dispatched === true
-          && roadRes?.queued !== true && (roadTask?.status === "ACCEPTED" || Boolean(roadRes?.receipt));
-        if (roadRes?.simulated_dispatch !== true && (queued || accepted)) {
-          view.activeRoadPlan = { robotId, ...roadRes, at: Date.now() };
-          view.selectedGoal = {
-            ...view.selectedGoal,
-            points: Array.isArray(roadRes.waypoints_site) && roadRes.waypoints_site.length >= 2 ? roadRes.waypoints_site.map((w) => [w.x, w.y]) : view.selectedGoal.points,
-            places: roadRes.places?.length ? roadRes.places : view.selectedGoal.places,
-            length_m: typeof roadRes.length_m === "number" ? roadRes.length_m : view.selectedGoal.length_m,
-            eta_s: typeof roadRes.eta_s === "number" ? roadRes.eta_s : view.selectedGoal.eta_s,
-            status: queued ? "QUEUED" : "ACCEPTED",
-            statusText: queued ? "도로 주행 대기 · 발행 전" : "도로 주행 접수 · 동작 확인 대기", at: Date.now(),
-          };
-          drawMap(); render();
-          const viaStr = Array.isArray(roadRes.places) && roadRes.places.length ? roadRes.places.join(" → ") : `${roadRes.waypoints_site?.length || 1}개 도로 경유점`;
-          const lenStr = typeof roadRes.length_m === "number" ? ` · ${roadRes.length_m.toFixed(2)}m` : "";
-          const formStr = roadRes.formation?.active ? ` · 편대(${roadRes.formation.role || "active"})` : "";
-          log(`🎯 ${robotId} → ${where} 도로 주행 ${queued ? "대기" : "접수"} · 실제 동작 확인 대기 (${viaStr}${lenStr}${formStr})`, "good");
-          refreshGuide();
-          return;
-        }
-        log(`${robotId} 도로 목표 접수 거절 · 명령을 다시 보내지 않았습니다.`, "bad");
-        return;
-      }
       const result = await call(`/api/fleet/robots/${encodeURIComponent(robotId)}/goal`, {
         method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": randomUUID() },
         body: JSON.stringify({ x: Number(point.x.toFixed(4)), y: Number(point.y.toFixed(4)), yaw: Number(yaw.toFixed(4)) }), signals: [owner.signal],
@@ -174,7 +140,7 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
       if (task) delete view.pendingTasks[robotId];
       const receipt = task ? task.receipt : result;
       if (receipt && receipt.queued) log(`${robotId} → ${where} ${queuedReason(result)}`, receipt.reason === "NO_YIELD_SPACE" ? "bad" : "");
-      else log(`${robotId} → ${where} 즉시 이동 명령 하달`, "good");
+      else log(`${robotId} → ${where} 미션 하달`, "good");
       refreshGuide();
     } catch (err) {
       if (err.name !== "AbortError") log(`${robotId} 목표 이동 거절 — ${err.message}`, "bad");
@@ -418,41 +384,13 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
     }
   });
   pageScope.listen(el("map-canvas"), "pointerdown", (event) => {
-    if ((!view.pinning && !view.anchorPinTarget) || (!view.map && !view.siteMap)) return;
+    if (!view.pinning || (!view.map && !view.siteMap)) return;
     pinStart = canvasWorld(event);
   });
   pageScope.listen(el("map-canvas"), "pointerup", async (event) => {
     const life = pageScope.capture();
     const start = pinStart, end = canvasWorld(event);
     pinStart = null;
-    if (view.anchorPinTarget && start) {
-      const targetId = view.anchorPinTarget;
-      const dragged = end && Math.hypot(end.px - start.px, end.py - start.py) >= 3;
-      const existing = (view.anchors || []).find(a => a.target_id === targetId);
-      const yaw = dragged
-        ? Math.atan2(end.y - start.y, end.x - start.x)
-        : (typeof existing?.base_yaw === "number" ? existing.base_yaw : -1.5708);
-      view.anchorPinTarget = null;
-      render();
-      try {
-        const res = await call("/api/fleet/anchors", {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            target_id: targetId, kind: targetId.startsWith("arm_") ? "omx_ai" : "pinky",
-            base_x: Number(start.x.toFixed(4)), base_y: Number(start.y.toFixed(4)), base_yaw: Number(yaw.toFixed(4)),
-          }),
-          signals: [life.signal],
-        });
-        if (!life.current()) return;
-        if (res?.snapshot?.targets) view.anchors = res.snapshot.targets;
-        log(`${targetId} 기준 위치(Anchor) 고정 완료: (${start.x.toFixed(2)}, ${start.y.toFixed(2)}) m · HEAD ${Math.round((yaw * 180) / Math.PI)}°`, "good");
-        refreshGuide();
-        render();
-      } catch (err) {
-        if (err.name !== "AbortError") log(`${targetId} 기준 위치 지정 실패 — ${err.message}`, "bad");
-      }
-      return;
-    }
     const robotId = view.pinning;
     if (!robotId || !start) return;
     const dragged = end && Math.hypot(end.px - start.px, end.py - start.py) >= 3;
@@ -486,7 +424,7 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
   pageScope.listen(el("map-canvas"), "click", async (event) => {
     const life = pageScope.capture();
     life.check();
-    if (view.pinning || view.anchorPinTarget) return;
+    if (view.pinning) return;
     if (!view.map && view.siteMap) {
       const world = canvasWorld(event);
       if (!world) return;

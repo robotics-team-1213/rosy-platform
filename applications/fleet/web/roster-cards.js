@@ -403,17 +403,8 @@ export function buildQuickControlPanel({
     }));
     targetTabs.appendChild(tab);
   }
-  const isPinningAnchor = view.anchorPinTarget === activeAnchor.target_id;
-  const pinAnchorBtn = nodeWithText("ui-button", "", isPinningAnchor ? "지도에서 위치를 찍고 헤드 방향으로 끄세요" : `🎯 ${activeAnchor.target_id} 기준 위치 보정`);
-  pinAnchorBtn.setAttribute("kind", "toggle"); pinAnchorBtn.type = "button"; pinAnchorBtn.setAttribute("aria-pressed", isPinningAnchor ? "true" : "false");
-  pinAnchorBtn.disabled = !isOperator();
-  if (pinAnchorBtn.disabled) pinAnchorBtn.setAttribute("reason", "운영자 권한이 필요합니다");
-  pinAnchorBtn.addEventListener("click", scope.guard(() => {
-    view.anchorPinTarget = isPinningAnchor ? null : activeAnchor.target_id;
-    if (view.anchorPinTarget) { view.pinning = null; el("map-stage").dataset.view = "map"; el("birdseye-toggle")?.setAttribute("aria-pressed", "false"); }
-    render();
-  }));
-  trackerHead.append(targetTabs, pinAnchorBtn);
+  // No Fleet anchor route exists, so there is no pin button (it could only fail).
+  trackerHead.append(targetTabs);
   trackerBox.appendChild(trackerHead);
 
   // 셀 카메라 뷰는 Vision 소스만 가리킨다(D-136). cell S(arm_s·S3)에는 측면 카메라가 없고,
