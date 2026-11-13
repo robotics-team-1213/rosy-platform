@@ -67,14 +67,7 @@ export function createMapView({ scope, el, view, auth, call, onMapChanged, onMap
       syncToggleButtons();
       draw();
     });
-    const legacyTraffic = el("traffic-toggle");
-    if (legacyTraffic) {
-      scope.listen(legacyTraffic, "click", () => {
-        view.layers.traffic = !(view.layers.traffic !== false);
-        syncToggleButtons();
-        draw();
-      });
-    }
+    // #traffic-toggle clicks are handled by map-polling.js; a second handler here would cancel the first.
     syncToggleButtons();
   }
   const {

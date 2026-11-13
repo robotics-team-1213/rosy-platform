@@ -4880,3 +4880,11 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: 원격 pytest (`tools/remote/remote_pytest.py`) `test_omx_control_modularization.py`, `test_omx_area_xyz.py`, `test_omx_cell_look.py`, `test_omx_cell_pinch.py`, `test_omx_cell_wrist.py`, `test_omx_tier_stack_problem_recovery.py`, `test_omx_joint_jitter.py`, `test_omx_chunk_runner.py` 외 19개 스위트 검증.
 - gate 변화: 없음.
 - CE: 기존 교훈 갱신 — `docs/solutions/logic-errors/sim-passes-with-wrong-layout-until-real-camera-overlay-2026-11-07.md`.
+
+
+## 2026-11-13 · uncommitted · docs(model-pc): 학습 센터 자동 업데이트 절을 퇴역 안내로 교체
+
+- 변경: `deploy/model_pc/README.md`의 학습 센터 자동 업데이트(D-871) 절에서 살아있는 설치·활성 안내를 지우고 퇴역 안내로 교체했다. 후보 `rosy-learning-center.service`(모델 PC 8769·AI PC 8770)는 2026-10-31 퇴역, 데이터는 합성 자료만으로 보존, 현행 유일 센터는 8768 `rosy-edge-review`(D-857)이며 `rosy-review-release-update`로 갱신한다. 2026-10-23 교훈의 `applies_when`도 역사 기록으로 고쳤다. `install_learning_center.py`·`learning_center_update.py`는 그대로 둔다.
+- 증거: 원격 pytest `test/test_update_ops.py` 예정.
+- gate 변화: 없음. 문서만 바꿨다.
+- CE: 해당 없음.

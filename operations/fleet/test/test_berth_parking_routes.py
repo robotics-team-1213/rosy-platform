@@ -100,3 +100,26 @@ def test_berth_parking_status_and_dispatch_routes():
     assert sbody["live_robots"]["rosy_46"]["site_pose"]["y"] == 0.470
     assert sbody["live_robots"]["rosy_45"]["site_pose"]["y"] == 0.470
     assert sbody["cell_contract_handoff"]["stop_place_id"] == "S3"
+
+
+def test_road_nav2_plan_route_returns_plan_without_dispatch_and_rejects_bad_query():
+    app = FastAPI()
+    seen = {}
+
+    async def fake_compute_road_plan(request, robot_id, x, y, yaw, place_id, label):
+        seen.update(robot_id=robot_id, x=x, y=y, yaw=yaw, place_id=place_id, label=label)
+        return {"robot_id": robot_id, "places": ["P1", place_id], "edges": ["bay_1"], "length_m": 0.2}
+
+    install_berth_parking_routes(
+        app, console=None, task_service=None, read_guard=[], operator_guard=[],
+        require_operator=lambda: SitePrincipal(principal_id="op-test", role="operator"),
+        compute_road_plan=fake_compute_road_plan,
+    )
+    client = TestClient(app)
+    res = client.get("/api/fleet/robots/rosy_46/road-nav2/plan",
+                     params={"x": 0.1, "y": 0.2, "yaw": 1.5, "place_id": "C1", "label": "charge 1"})
+    assert res.status_code == 200
+    assert res.json() == {"planned": True, "dispatched": False, "robot_id": "rosy_46",
+                          "places": ["P1", "C1"], "edges": ["bay_1"], "length_m": 0.2}
+    assert seen == {"robot_id": "rosy_46", "x": 0.1, "y": 0.2, "yaw": 1.5, "place_id": "C1", "label": "charge 1"}
+    assert client.get("/api/fleet/robots/rosy_46/road-nav2/plan", params={"x": "not-a-number"}).status_code == 422

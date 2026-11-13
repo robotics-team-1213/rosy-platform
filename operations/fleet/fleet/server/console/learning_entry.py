@@ -73,20 +73,10 @@ def install_learning_routes(app, web_root, csp):
                'Referrer-Policy': 'no-referrer'}
 
     def document(status_code, focus=''):
-        html = template.replace('{{focus}}', focus)
-        for host in ('model', 'ai'):
-            state = 'active' if host in apps else 'neutral'
-            origin = urlsplit(apps[host]).hostname if host in apps else '미등록'
-            html = html.replace('{{' + host + '_state}}', state)
-            html = html.replace('{{' + host + '_status}}',
-                                '운영 연결 등록됨' if host in apps else '운영 연결 준비 중')
-            html = html.replace('{{' + host + '_origin}}', origin or '미등록')
-        return HTMLResponse(html, status_code=status_code, headers=headers)
+        return HTMLResponse(template.replace('{{focus}}', focus), status_code=status_code, headers=headers)
 
-    @app.get('/console/learning', include_in_schema=False)
-    def learning():
-        return document(200 if apps else 503)
-
+    # The hub entry reuses the model target: configured origins 303 straight to
+    # Learning, anything else the 503 notice document.
     def target(host):
         def redirect(request: Request):
             if request.url.query:
@@ -96,6 +86,8 @@ def install_learning_routes(app, web_root, csp):
             return RedirectResponse(apps[host] + '/learning', status_code=303, headers=headers)
         return redirect
 
+    app.add_api_route('/console/learning', target('model'), methods=['GET'],
+                      include_in_schema=False, name='learning-entry:hub')
     for host in ('model', 'ai'):
         app.add_api_route('/console/learning/' + host, target(host), methods=['GET'],
                           include_in_schema=False, name='learning-entry:' + host)
