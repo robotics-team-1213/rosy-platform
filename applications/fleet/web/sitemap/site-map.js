@@ -177,6 +177,7 @@ function drawRobots() {
     const hit = (a, b) => a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
     for (let tries = 0; tries < 4 && placed.some(o => hit(label.getBBox(), o)); tries++)
       label.setAttribute('y', Number(label.getAttribute('y')) + label.getBBox().height + 2);
+    label.setAttribute('y', Math.min(Math.max(Number(label.getAttribute('y')), 16), H - 6));  // a robot past the map edge keeps its label on the map
     placed.push(label.getBBox());
   }
 }
