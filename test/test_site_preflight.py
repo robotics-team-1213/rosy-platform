@@ -499,21 +499,21 @@ def test_no_redirect_handlers_never_follow_redirects():
 @pytest.mark.skipif(not hasattr(os, "getuid"), reason="needs POSIX owners")
 def test_container_secrets_name_unreadable_paths_without_contents(tmp_path):
     check = _module().check_container_secrets
-    secrets = tmp_path / "monitoring"
-    secrets.mkdir()
-    key = secrets / "site_read"
+    sdir = tmp_path / "monitoring"
+    sdir.mkdir()
+    key = sdir / "site_read"
     key.write_text("TOPSECRETVALUE", encoding="ascii")
-    env = {"ROSY_SITE_MONITORING_SECRETS_DIR": str(secrets)}
-    me, group = secrets.stat().st_uid, secrets.stat().st_gid
-    secrets.chmod(0o700)
+    env = {"ROSY_SITE_MONITORING_SECRETS_DIR": str(sdir)}
+    me, group = sdir.stat().st_uid, sdir.stat().st_gid
+    sdir.chmod(0o700)
     key.chmod(0o600)
     assert check({})["ok"]                                  # overlay off: nothing mounted
     owner = check(env, uid=me)                              # the container user owns it
     assert owner["ok"]
     stranger = check(env, uid=me + 1, gid=group + 1)        # root:root 0700/0600 seen from uid 10001
-    assert not stranger["ok"] and str(secrets) in stranger["reason"] and str(key) in stranger["reason"]
+    assert not stranger["ok"] and str(sdir) in stranger["reason"] and str(key) in stranger["reason"]
     assert "TOPSECRETVALUE" not in stranger["reason"]
-    secrets.chmod(0o750)
+    sdir.chmod(0o750)
     key.chmod(0o440)
     assert check(env, uid=me + 1, gid=group)["ok"]          # group 10001, 0750 / 0440
     key.chmod(0o400)
