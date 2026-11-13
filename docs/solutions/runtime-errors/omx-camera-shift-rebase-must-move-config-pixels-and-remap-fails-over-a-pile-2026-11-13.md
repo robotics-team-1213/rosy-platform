@@ -46,6 +46,15 @@ This rebase is not a touch-verified map: the loo error stays what it was (floor 
 - A box measured at pan -161 deg is outside arm_s's joint1 limit (+-149 deg): no grip or push can reach it, and the remap
   points around it fail IK. Check the target's pan angle before calibrating toward it.
 
+## 2026-11-14 00:14: what the top view could not see was a structure, and a fast jog loop cut torque
+
+- A hover over a box at the frame's edge met a black bracket beside it (wrist camera); the planner's `edge of view`
+  refusal had been right. Unseen is not free, even when the scene looks empty past the frame.
+- Backing out by a hand loop of `jog` commands 0.3 s apart stacked targets ahead of a lagging shoulder_lift; its following
+  error passed 5 motor degrees, the session ended, and torque went OFF with the arm extended (incident
+  `20261114T001446-arm_s`). Wait for each jog to settle (state near the target) before the next, or use `retreat` /
+  `cell_pipeline --stage recover`.
+
 ## Next time
 
 - After a camera shift, rebase map **and** config pixels together, clamp to the frame, before any plan.
