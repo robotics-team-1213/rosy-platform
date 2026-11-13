@@ -9,7 +9,10 @@
 [ -n "${ROSY_MAIN_WRITER:-}" ] && exit 0
 while read -r old new ref; do
   [ "$ref" = refs/heads/main ] || continue
-  # A rewrite to the same tip (pack-refs, a no-op update) is not a move.
+  # pack-refs prunes the loose ref as a delete (zero oid) on older git; git itself refuses
+  # to delete main while the main checkout has it, so a zero oid is never a lost landing.
+  case "$new" in *[!0]*) ;; *) continue ;; esac
+  # A rewrite to the same tip (a no-op update) is not a move.
   [ "$new" = "$(git rev-parse -q --verify refs/heads/main)" ] && continue
   # The D-868 sync after a publish PR merge: a fast-forward to origin/main, never a reset back to it.
   [ "$new" = "$(git rev-parse -q --verify refs/remotes/origin/main)" ] && git merge-base --is-ancestor "$old" "$new" 2>/dev/null && continue
