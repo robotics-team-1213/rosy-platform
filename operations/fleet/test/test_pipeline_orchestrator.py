@@ -327,7 +327,7 @@ def test_cell_tasks_assign_claim_and_complete_lifecycle():
 
 def test_station_zones_put_saves_yaml_and_get_reflects_it(tmp_path, monkeypatch):
     # The override file is redirected: the route would otherwise write /tmp or /var/lib/rosy.
-    monkeypatch.setattr("fleet.server.sitemap.pipeline_routes._storage_dir", lambda: tmp_path)
+    monkeypatch.setattr("fleet.server.pipeline_routes._storage_dir", lambda: tmp_path)
     site_map = _map()
     graph = build_graph(site_map)
     maps = SimpleNamespace(active=lambda: (1, site_map, graph, None),
