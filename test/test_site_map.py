@@ -221,12 +221,17 @@ def test_chrony_names_ignore_trailing_dots_in_what_the_host_prints():
 
 
 def test_ssh_stderr_never_mixes_into_the_chrony_names(monkeypatch):
-    class Done:
-        returncode, stdout, stderr = 0, f"{NTP}\n".encode(), b"Warning: Permanently added a host key\n"
+    warning = b"Warning: Permanently added a host key\n"
+    code = [0]
 
-    monkeypatch.setattr(site_map.subprocess, "run", lambda *a, **k: Done())
+    def fake_run(*args, **kwargs):  # what ssh would print for the pipe setup it was asked for
+        merged = kwargs["stderr"] == site_map.subprocess.STDOUT
+        return type("Done", (), {"returncode": code[0], "stdout": (warning if merged else b"") + f"{NTP}\n".encode(),
+                                 "stderr": b"" if merged else warning})()
+
+    monkeypatch.setattr(site_map.subprocess, "run", fake_run)
     assert site_map.ssh_run("t", "x") == (0, f"{NTP}\n")
-    Done.returncode = 255
+    code[0] = 255
     assert "Warning" in site_map.ssh_run("t", "x")[1]  # kept for the failure line
 
 
