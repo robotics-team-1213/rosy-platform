@@ -4,7 +4,7 @@ import { chargeBayRows, inspectorTargetsFromRows } from "/console/assets/charge-
 
 export { chargeBayRows, inspectorTargetsFromRows, formatArmLiveJointText } from "/console/assets/charge-bays-model.js";
 
-export function createChargeBaysView({ scope, el, call, auth }) {
+export function createChargeBaysView({ scope, el, call, auth, confirmedAction = null }) {
   const state = el("charge-bays-state");
   const list = el("charge-bay-rows");
   const hint = el("charge-bays-hint");
@@ -64,10 +64,12 @@ export function createChargeBaysView({ scope, el, call, auth }) {
     return t;
   }
 
-  async function executeChoice(choice, card, button) {
+  async function executeChoice(choice, card, button, confirmed = false) {
     if (auth.locked || button.hasAttribute("disabled")) return;
-    if (choice.cancelTaskId && typeof window !== "undefined" && typeof window.confirm === "function") {
-      if (!window.confirm(`태스크(${choice.cancelTaskId})를 즉시 취소하고 셀 인터락을 해제할까요?`)) return;
+    if (choice.cancelTaskId && !confirmed) {  // irreversible: the shared confirmation, or nothing (fail closed)
+      if (!confirmedAction) return;
+      return confirmedAction.run({message: `태스크(${choice.cancelTaskId})를 즉시 취소하고 셀 인터락을 해제할까요?`, opener: button,
+        eligible: () => !auth.locked, request: () => executeChoice(choice, card, button, true)});
     }
     const origLabel = button.textContent;
     button.setAttribute("disabled", "");

@@ -213,7 +213,7 @@ def under_hull(layout, site):
 
 def lane_geometry(radius):
     """SCAD v11 fan: (pocket width, pocket length, flare, fan angle rad, lane angles). Lane i is rotated by -angle about the arm centre.
-    The pocket is three 1x1 cells at pitch 32 (pk_l 96, v9 on), so the fan is 17.3 deg at arm_r 200."""
+    The pocket is three 1x1 cells at pitch 32 (pk_l 96, v9 on), so the v17 fan is 13.8 deg at arm_r 200."""
     s = SCAD
     width, length = s["cont_w"] + 2 * s["clr"], s["pk_l"]
     flare = length / 2 * math.tan(math.radians(s["yaw_tol_deg"]))

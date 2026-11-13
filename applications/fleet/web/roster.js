@@ -45,6 +45,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
       confirmedAction?.cancel();
       trip.close();
       onSelectionChanged();
+      // D-651: 로봇을 고르는 것은 읽기다. 목표 받기는 '목표 지정' 단추로만 켜진다.
       view.focusAnchorId = view.focusRobot || "rosy_46";
       const stage = el("map-stage");
       const birdseyeToggle = el("birdseye-toggle");
