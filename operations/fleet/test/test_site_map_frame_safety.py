@@ -242,8 +242,10 @@ _GRID = "occupancy:0123456789ab"
 _SPAN = [(-1.0, -0.5), (1.0, -0.5), (0.9, 0.45)]
 
 
-def _bound_setup(map_id="slam", grid=_GRID, approve=True):
+def _bound_setup(map_id="slam", grid=_GRID, approve=True, store_out=None):
     runner, store, ports = _setup(_free_map(), caps=BOTH, map_binding_required=True)
+    if store_out is not None:
+        store_out.append(store)
     ports.map_id = "site"
     state = {**_state((0.0, 0.0, 0.0), map_id=map_id), "map_grid_id": grid}
 
@@ -284,3 +286,24 @@ def test_robot_frame_goal_inverts_the_binding_and_refuses_without_one():
     with pytest.raises(SiteFrameMismatch) as err:
         robot_frame_goal((0.5, 0.2, 1.0), site, {"map_id": "site"}, "site", (None, "MAP_BINDING_SITE_CHANGED"))
     assert err.value.reason == "MAP_BINDING_SITE_CHANGED"
+
+
+def test_revoking_the_binding_under_a_running_goal_stops_and_cancels_it():
+    stores = []
+    runner, ports = _bound_setup(store_out=stores)
+    assert len(ports.goals) == 1 and runner.view("p1")["state"] != "stopped"
+    stores[0].map_bindings.revoke("rosy_60", "bob", "map re-saved")
+    _ticks(runner, ports)
+    row = runner.view("p1")
+    assert row["reason"] == "map_frame" and row["detail"]["binding"] == "MAP_BINDING_CHANGED"
+    assert ports.canceled == ["rosy_60"] and len(ports.goals) == 1
+
+
+def test_a_required_binding_stops_a_port_that_only_declares_one_frame():
+    runner, store, ports = _setup(_free_map(), caps=BOTH, map_binding_required=True)
+    runner._poses_in_robot_frame = True
+    _plan(store, ports, "ab:fwd", 0.1, "C")
+    run(runner.start("p1", "bob"))
+    _ticks(runner, ports)
+    row = runner.view("p1")
+    assert ports.goals == [] and row["detail"]["binding"] == "MAP_BINDING_REQUIRED"

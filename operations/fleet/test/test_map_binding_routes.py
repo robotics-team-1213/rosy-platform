@@ -101,3 +101,10 @@ def test_the_read_puts_the_slam_pose_in_site_coordinates(tmp_path):
     slam = read["slam_site_pose"]
     assert (slam["x"], slam["y"]) == __import__("pytest").approx((-0.414, 0.47), abs=1e-6)
     assert slam["yaw"] == __import__("pytest").approx(TRUTH.yaw)
+
+
+def test_occupied_cells_follow_a_rotated_grid_origin():
+    from fleet.server.map_binding_routes import _occupied
+    grid = {"width": 2, "height": 1, "resolution": 1.0, "origin": {"x": 1.0, "y": 2.0, "yaw": math.pi / 2},
+            "data": [0, 100]}
+    assert _occupied(grid) == [__import__("pytest").approx((1.0 - 0.5, 2.0 + 1.5))]

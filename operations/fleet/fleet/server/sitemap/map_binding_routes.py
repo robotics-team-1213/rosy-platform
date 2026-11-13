@@ -52,9 +52,11 @@ def _arena(site_maps) -> Optional[tuple[float, float, float, float]]:
 def _occupied(grid: dict) -> list[tuple[float, float]]:
     res, width = float(grid["resolution"]), int(grid["width"])
     origin = grid.get("origin") or {}
-    ox, oy = float(origin.get("x", 0.0)), float(origin.get("y", 0.0))
-    return [(ox + (i % width + 0.5) * res, oy + (i // width + 0.5) * res)
-            for i, v in enumerate(grid["data"]) if v is not None and v >= 65]
+    ox, oy, oyaw = (float(origin.get(k, 0.0)) for k in ("x", "y", "yaw"))
+    c, s = math.cos(oyaw), math.sin(oyaw)
+    cells = [((i % width + 0.5) * res, (i // width + 0.5) * res)
+             for i, v in enumerate(grid["data"]) if v is not None and v >= 65]
+    return [(ox + c * gx - s * gy, oy + s * gx + c * gy) for gx, gy in cells]  # origin.yaw rotates the grid
 
 
 def install_map_binding_routes(app, *, console, site_maps, read_guard, require_named_operator) -> None:

@@ -361,6 +361,12 @@ class TripSteps:
         # (409 NAVIGATION_ACTIVE, SIM run 5), so the D-463 rolling point 0.2 m ahead failed the trip at its second send.
         x, y, yaw = live.arc(index).point_at(segment["s_to"])
         if live.last_goal is not None and math.dist(live.last_goal, (x, y)) < self.config.goal_resend_m:
+            sent = (live.view["detail"].get("goal_frame") or {}).get("binding_id")
+            if self.config.map_binding_required and sent != (
+                    self._store.map_bindings.active(live.view["robot_id"]) or {}).get("binding_id"):
+                # D-1022 review: the binding the running goal was converted with was revoked or superseded.
+                await self._stop(live, "stopped", "map_frame",
+                                 {"map_id": active[1].map_id, "binding": "MAP_BINDING_CHANGED"})
             return
         if not await ready_free_goal(self, live):  # D-772 charge-only native readiness
             return
@@ -395,7 +401,13 @@ class TripSteps:
                 "map_id": active[1].map_id, "map_version": active[0],
                 "robot_map_id": (state or {}).get("map_id"),
                 "goal_frame": "site" if site_frame else "robot",
-                **({"map_grid_id": (state or {}).get("map_grid_id")} if binding is not None else {})}
+                **({"map_grid_id": (state or {}).get("map_grid_id"), "binding_id": (
+                    self._store.map_bindings.active(live.view["robot_id"]) or {}).get("binding_id")}
+                   if binding is not None else {})}
+        elif self.config.map_binding_required:  # D-1022 review: no robot state, no grid to bind
+            await self._stop(live, "stopped", "map_frame",
+                             {"map_id": active[1].map_id, "robot_map_id": None, "binding": "MAP_BINDING_REQUIRED"})
+            return
         elif not self._poses_in_robot_frame:
             # D-1010 review: a port without robot snapshots (D-1003 6) proves nothing either; an
             # unproven free goal stops the trip instead of leaving in site coordinates.
