@@ -5,7 +5,7 @@ D-757 additive Account 계약: [Rosy Account protocol](rosy-account-protocol.md)
 ## 공유 인터페이스 계약서
 
 **Document ID:** ROSY-API-REF-001
-**Version:** v1.389
+**Version:** v1.393
 **Status:** Approved
 **대상 독자:** rosy_core 개발자, rosy_fleet 개발자, 외부 SDK·AI·연동 시스템
 
@@ -4780,6 +4780,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.393 | 2026-11-14 | Additive (D-1022, feat/robot-map-binding): `StateSnapshot.map_grid_id` — 기체가 실제로 읽은 점유 격자의 `occupancy_map_id`(`occupancy:` + 해시, 격자가 없으면 null). Fleet 기체 지도 결속: `GET /api/fleet/robots/{robot_id}/map-binding`(활성·이력·`matches`·`reason`·`robot_grid_id`, 맞으면 `slam_site_pose`, Fleet 카메라 자세가 있으면 `camera_site_pose`·`slam_camera_gap_m`), `POST …/map-binding`(이름 있는 운영자, `{pairs: [{site:[x,y], robot:[x,y]}] ≥3, holdout ≥1}`; Fleet가 다시 맞춘다; 409 `RESIDUAL`·`MIRRORED`·`SPAN`·`HOLDOUT`·`ROBOT_NOT_LOCALIZED`·`NO_GRID_ID`, 422 `BAD_POINTS`), `DELETE …/map-binding`(철회), `POST …/map-binding/propose`(`{seed_site:[x,y], arena?}` → 기체 지도 벽에서 마커 없이 짝 제안, 422 `NO_WALLS`·`WALLS_MISMATCH`·`SEED_AMBIGUOUS`·`ARENA_REQUIRED`). 사이트 설정 `fleet.trip.map_binding_required: true`면 free 목표는 결속으로만 변환하고, 없거나 맞지 않으면 trip이 `map_frame`으로 정지하며 `detail.binding`에 사유(`MAP_BINDING_REQUIRED`·`MAP_BINDING_SITE_CHANGED`·`MAP_BINDING_GRID_CHANGED`·`ROBOT_NOT_LOCALIZED`)를 싣는다. 기본은 꺼짐(기존 동작 그대로). |
 | v1.385 | 2026-11-11 | Additive: 카메라로 초안 만들기(`POST /api/fleet/site-map/draft-from-camera`, Vision draft-map 후보→검증된 초안 본문, 쓰기 없음)와 카메라까지 겹친 대조(`POST .../reality-check` camera 삼각측량, `drive_outlier`면 apply 거절). Vision `draft-map` 보기 추가. 설계 docs/plans/2026-11-11-camera-draft-map-design.md |
 | v1.388 | 2026-11-11 | Additive (D-1017, feat/peer-sighting-ingestion): `GET /api/fleet/robots/{robot_id}/map-pose`가 `StateSnapshot.peers`(v1.359) 행을 네 번째 앵커로 쓴다 — 로스터·`LOCALIZED`·`age_s ≤ peer_lease_s`(기본 6 s)·활성 지도 일치이고, 카메라 sighting이 `peer_after_camera_s`(10 s) 안에 없고 운영자 핀이 신선하지 않을 때만. 거절 사유 `CAMERA_RECENT`·`PIN_FRESH`·`NOT_NEWER`. 받아들인 표본은 기존 표본 규칙을 타서 첫 peer 앵커는 `DEGRADED`이고, `source`·`anchor_source`에 `peer`가 더해진다. `last_sighting_age_s` 추가(마지막 카메라 sighting 나이, 없으면 null). 사이트 설정 `fleet.map_pose.peer_lease_s`·`peer_after_camera_s`. Robot API·envelope 1.0 변경 없음 |
 | v1.387 | 2026-11-11 | 동작 변경 (D-559 trail, fix/trail-recovery, Safety-Review): `swarm.hold` 의 `trail_lost` 발생 조건. 자취 이탈은 한 표본으로 대형을 끝내지 않는다 — 0.30 m 초과 1.0 m 이내면 최소 0.10 m/s(가속 한계 유지)로 자취에 돌아오고, 3 s 동안 돌아오지 못할 때만 `trail_lost` 다. 리더 표본의 건너뜀 한도 초과도 한 표본은 버리고, 1 s 동안 계속 거절될 때만 `trail_lost` 다(정지 표본 `anchor_withheld` 뒤에는 다음 표본에서 바로 판정). 새 필드·경로·이벤트 없음. Robot API·envelope 1.0 변경 없음 |
