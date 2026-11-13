@@ -45,11 +45,6 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
       confirmedAction?.cancel();
       trip.close();
       onSelectionChanged();
-      const chosen = view.robots.find(r => r.robot_id === view.focusRobot);
-      if (chosen?.online && (view.map || view.siteMap) && !view.pinning) {
-        view.selected = chosen.robot_id;
-        view.cursor = view.map ? { col: Math.floor(view.map.width / 2), row: Math.floor(view.map.height / 2) } : null;
-      }
       view.focusAnchorId = view.focusRobot || "rosy_46";
       const stage = el("map-stage");
       const birdseyeToggle = el("birdseye-toggle");
