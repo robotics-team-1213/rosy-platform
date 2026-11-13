@@ -100,8 +100,7 @@ def test_console_coordinate_overlay_raw_and_corrected_comparison(browser_site, w
         content_type='image/svg+xml', body=FRAME,
         headers={'X-Frame-Rectified': 'false', 'X-Frame-Seq': '42', 'X-Frame-Age-Ms': '20'}))
     page.goto(page.origin + '/console')
-    expect(page.locator('#map-display-mode')).to_have_value('overlay')
-    page.locator('#map-display-mode').select_option('coordinates')
+    expect(page.locator('#map-display-mode')).to_have_value('coordinates')
     expect(page.locator('#map-stage')).to_have_attribute('data-map-state', 'site', timeout=15000)
     page.locator('#context-tools-tab').click()
     expect(page.locator('#map-birdseye')).to_be_visible(timeout=15000)
