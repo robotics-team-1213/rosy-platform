@@ -2826,6 +2826,57 @@
           ],
           "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
           "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/sightings"
+        },
+        {
+          "id": "GET:/api/fleet/robots/{robot_id}/road-nav2/plan",
+          "method": "GET",
+          "path": "/api/fleet/robots/{robot_id}/road-nav2/plan",
+          "implementation": "operations/fleet/fleet/server/ledger/berth_parking_routes.py",
+          "handler": "fleet_road_nav2_plan",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_charge_bays.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/robots/{robot_id}/road-nav2/plan"
+        },
+        {
+          "id": "POST:/api/fleet/robots/{robot_id}/road-nav2",
+          "method": "POST",
+          "path": "/api/fleet/robots/{robot_id}/road-nav2",
+          "implementation": "operations/fleet/fleet/server/ledger/berth_parking_routes.py",
+          "handler": "fleet_road_nav2",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_charge_bays.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/robots/{robot_id}/road-nav2"
+        },
+        {
+          "id": "POST:/api/fleet/robots/{robot_id}/berth-park",
+          "method": "POST",
+          "path": "/api/fleet/robots/{robot_id}/berth-park",
+          "implementation": "operations/fleet/fleet/server/ledger/berth_parking_routes.py",
+          "handler": "fleet_berth_park",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_berth_parking_routes.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/robots/{robot_id}/berth-park"
         }
       ],
       "flows": [
@@ -4133,6 +4184,295 @@
           ],
           "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
           "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/cell-jobs/{mission_id}/resume"
+        },
+        {
+          "id": "GET:/api/fleet/pipeline/cell-tasks",
+          "method": "GET",
+          "path": "/api/fleet/pipeline/cell-tasks",
+          "implementation": "operations/fleet/fleet/server/sitemap/pipeline_cell_task_routes.py",
+          "handler": "list_cell_tasks",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_pipeline_orchestrator.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/pipeline/cell-tasks"
+        },
+        {
+          "id": "POST:/api/fleet/pipeline/cell-tasks",
+          "method": "POST",
+          "path": "/api/fleet/pipeline/cell-tasks",
+          "implementation": "operations/fleet/fleet/server/sitemap/pipeline_cell_task_routes.py",
+          "handler": "create_cell_task",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_pipeline_orchestrator.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/pipeline/cell-tasks"
+        },
+        {
+          "id": "POST:/api/fleet/pipeline/cell-tasks/{task_id}/cancel",
+          "method": "POST",
+          "path": "/api/fleet/pipeline/cell-tasks/{task_id}/cancel",
+          "implementation": "operations/fleet/fleet/server/sitemap/pipeline_cell_task_routes.py",
+          "handler": "cancel_cell_task",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_pipeline_orchestrator.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/pipeline/cell-tasks/{task_id}/cancel"
+        },
+        {
+          "id": "POST:/api/fleet/pipeline/cell-tasks/{task_id}/retry",
+          "method": "POST",
+          "path": "/api/fleet/pipeline/cell-tasks/{task_id}/retry",
+          "implementation": "operations/fleet/fleet/server/sitemap/pipeline_cell_task_routes.py",
+          "handler": "retry_cell_task",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_pipeline_orchestrator.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/pipeline/cell-tasks/{task_id}/retry"
+        },
+        {
+          "id": "POST:/api/fleet/pipeline/pinky-tasks",
+          "method": "POST",
+          "path": "/api/fleet/pipeline/pinky-tasks",
+          "implementation": "operations/fleet/fleet/server/sitemap/pipeline_cell_task_routes.py",
+          "handler": "create_pinky_task",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_pipeline_orchestrator.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/pipeline/pinky-tasks"
+        },
+        {
+          "id": "POST:/api/fleet/pipeline/decision-gate",
+          "method": "POST",
+          "path": "/api/fleet/pipeline/decision-gate",
+          "implementation": "operations/fleet/fleet/server/sitemap/pipeline_gate_routes.py",
+          "handler": "run_pipeline_decision_gate",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_pipeline_orchestrator.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/pipeline/decision-gate"
+        },
+        {
+          "id": "POST:/api/fleet/pipeline/human-safety-gate",
+          "method": "POST",
+          "path": "/api/fleet/pipeline/human-safety-gate",
+          "implementation": "operations/fleet/fleet/server/sitemap/pipeline_gate_routes.py",
+          "handler": "set_human_safety_gate",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_pipeline_orchestrator.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/pipeline/human-safety-gate"
+        },
+        {
+          "id": "GET:/api/fleet/pipeline/station-zones",
+          "method": "GET",
+          "path": "/api/fleet/pipeline/station-zones",
+          "implementation": "operations/fleet/fleet/server/sitemap/pipeline_gate_routes.py",
+          "handler": "get_station_zones",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_pipeline_orchestrator.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/pipeline/station-zones"
+        },
+        {
+          "id": "PUT:/api/fleet/pipeline/station-zones",
+          "method": "PUT",
+          "path": "/api/fleet/pipeline/station-zones",
+          "implementation": "operations/fleet/fleet/server/sitemap/pipeline_gate_routes.py",
+          "handler": "update_station_zones",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_pipeline_orchestrator.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#PUT:/api/fleet/pipeline/station-zones"
+        },
+        {
+          "id": "POST:/api/fleet/pipeline/station-zones/dispatch",
+          "method": "POST",
+          "path": "/api/fleet/pipeline/station-zones/dispatch",
+          "implementation": "operations/fleet/fleet/server/sitemap/pipeline_gate_routes.py",
+          "handler": "dispatch_station_zone",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_pipeline_orchestrator.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/pipeline/station-zones/dispatch"
+        },
+        {
+          "id": "POST:/api/fleet/pipeline/cable-guard",
+          "method": "POST",
+          "path": "/api/fleet/pipeline/cable-guard",
+          "implementation": "operations/fleet/fleet/server/sitemap/pipeline_gate_routes.py",
+          "handler": "set_cable_guard",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_pipeline_orchestrator.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/pipeline/cable-guard"
+        },
+        {
+          "id": "POST:/api/fleet/pipeline/vision-auto-check",
+          "method": "POST",
+          "path": "/api/fleet/pipeline/vision-auto-check",
+          "implementation": "operations/fleet/fleet/server/sitemap/pipeline_gate_routes.py",
+          "handler": "run_vision_auto_check",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_pipeline_orchestrator.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/pipeline/vision-auto-check"
+        },
+        {
+          "id": "POST:/api/fleet/pipeline/arm-holds/clear",
+          "method": "POST",
+          "path": "/api/fleet/pipeline/arm-holds/clear",
+          "implementation": "operations/fleet/fleet/server/sitemap/pipeline_camera_routes.py",
+          "handler": "clear_pipeline_arm_holds",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_pipeline_orchestrator.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/pipeline/arm-holds/clear"
+        },
+        {
+          "id": "GET:/api/fleet/cell-app/real2sim-pipeline",
+          "method": "GET",
+          "path": "/api/fleet/cell-app/real2sim-pipeline",
+          "implementation": "operations/fleet/fleet/server/cell/cell_app_routes.py",
+          "handler": "real2sim_pipeline",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_cell_real2sim_pipeline.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#GET:/api/fleet/cell-app/real2sim-pipeline"
+        },
+        {
+          "id": "POST:/api/fleet/cell-app/real2sim-pipeline/evaluate",
+          "method": "POST",
+          "path": "/api/fleet/cell-app/real2sim-pipeline/evaluate",
+          "implementation": "operations/fleet/fleet/server/cell/cell_app_routes.py",
+          "handler": "real2sim_evaluate",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_cell_real2sim_pipeline.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/cell-app/real2sim-pipeline/evaluate"
+        },
+        {
+          "id": "POST:/api/fleet/cell-app/real2sim-pipeline/runs",
+          "method": "POST",
+          "path": "/api/fleet/cell-app/real2sim-pipeline/runs",
+          "implementation": "operations/fleet/fleet/server/cell/cell_app_routes.py",
+          "handler": "real2sim_queue_run",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_cell_real2sim_pipeline.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/cell-app/real2sim-pipeline/runs"
+        },
+        {
+          "id": "POST:/api/fleet/cell-app/real2sim-pipeline/promote-physics",
+          "method": "POST",
+          "path": "/api/fleet/cell-app/real2sim-pipeline/promote-physics",
+          "implementation": "operations/fleet/fleet/server/cell/cell_app_routes.py",
+          "handler": "real2sim_promote_physics",
+          "expected_statuses": [
+            200
+          ],
+          "status": "verified",
+          "verification_scope": "Observed passing HTTP test; successful response",
+          "contract_tests": [
+            "operations/fleet/test/test_cell_real2sim_pipeline.py"
+          ],
+          "test_reference_kind": "exact passing HTTP test bound to immutable source revision",
+          "evidence": "applications/fleet/test/backend_http_evidence.json#POST:/api/fleet/cell-app/real2sim-pipeline/promote-physics"
         }
       ],
       "flows": [
