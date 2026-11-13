@@ -1192,3 +1192,8 @@
 - 증거: e94b732208 다음 커밋(시험 기대 갱신)에서 원격 집중 시험 1907 passed, 1 skipped; known_failures NEW 0.
 - gate 변화: 없음. 호스트 렌더·시험은 실물 LCD 판독·ARM64·DEVICE/FIELD 수용이 아니다.
 - CE: 해당 없음 — 설계 판단은 ADR 추가 결정과 회귀 시험에 남는다.
+
+## 2026-11-14 · uncommitted · 상태 표시등 요청 wire 모델
+- 변경: `LampStatusPatternsRequest`의 허용 값과 추가 키 거부를 canonical protocol schema에 정의했다.
+- 증거: CORE 원격 계약·protocol 시험 결과는 이 브랜치 검증에 기록한다.
+- gate 변화: 없음.

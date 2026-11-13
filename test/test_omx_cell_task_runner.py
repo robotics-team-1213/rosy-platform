@@ -28,6 +28,7 @@ def test_move_and_swap_plans_and_bad_tasks_are_rejected():
     assert tr.carries(task(kind="move", **{"from": "pinky", "to": "belt"}, from_tier=2, to_tier=3), tiered) == [
         ("pinky-l1", "belt-l2")]
     for bad in (task(kind="swap", a="pinky", b="belt", buffer="belt"), task(kind="move", **{"from": "pinky", "to": "moon"}),
+                task(kind="move", scenario_id=42, **{"from": "pinky", "to": "belt"}),
                 task(kind="stack", **{"from": "pinky", "to": "belt"}, tier=4), task(kind="fly"), {"kind": "move"}):
         try:
             tr.carries(bad, SITES)
@@ -59,3 +60,119 @@ def test_a_failed_cell_check_refuses_before_any_motion(tmp_path):
                       preflight=lambda c: [("top camera pose", False, "moved 30 px")],
                       carry=lambda *a: (_ for _ in ()).throw(AssertionError("moved")))
     assert out["status"] == "refused" and "top camera pose" in out["why"][0]
+
+
+def redirect_config(tmp_path, alternates):
+    sites = {s: {"auto_roi": [0, 0, 10, 10]} for s in ("pinky", "belt", "floor", "plate")}
+    sites["belt"]["alternates"] = alternates
+    path = tmp_path / "cell.json"
+    path.write_text(json.dumps({"sites": sites}))
+    return path
+
+
+def carry_with_full(full):
+    done = []
+
+    def carry(config_path, catalog, sites, src, dst, log_dir):
+        done.append((src, dst))
+        return {"from": src, "to": dst, "dest_full": dst in full,
+                "result": "stopped: no usable object" if dst in full else "placed"}
+    return carry, done
+
+
+def test_a_full_destination_redirects_to_its_alternates_in_order(tmp_path):
+    carry, done = carry_with_full({"belt", "floor"})
+    out = tr.run_task(task(kind="move", **{"from": "pinky", "to": "belt"}),
+                      redirect_config(tmp_path, ["floor", "moon", "pinky", "plate"]), tmp_path / "c.json", tmp_path, carry=carry)
+    # unknown "moon" and the source "pinky" are never tried
+    assert out["status"] == "done" and done == [("pinky", "belt"), ("pinky", "floor"), ("pinky", "plate")]
+    assert out["steps"][-1]["redirected_from"] == "belt"
+
+
+def test_no_redirect_when_the_stop_was_not_for_room_or_none_is_declared(tmp_path):
+    carry, done = carry_with_full(set())
+    stop = lambda c, k, s, src, dst, l: (done.append((src, dst)), {"from": src, "to": dst, "result": "stopped: planner"})[1]  # noqa: E731
+    out = tr.run_task(task(kind="move", **{"from": "pinky", "to": "belt"}), redirect_config(tmp_path, ["floor"]),
+                      tmp_path / "c.json", tmp_path, carry=stop)
+    assert out["status"] == "stopped" and done == [("pinky", "belt")]
+    carry, done = carry_with_full({"belt", "floor"})
+    out = tr.run_task(task(kind="move", **{"from": "pinky", "to": "belt"}), redirect_config(tmp_path, ["floor"]),
+                      tmp_path / "c.json", tmp_path, carry=carry)
+    assert out["status"] == "stopped" and done == [("pinky", "belt"), ("pinky", "floor")] and "pinky -> floor" in out["why"]
+
+
+def test_later_carries_take_the_object_from_where_it_was_redirected(tmp_path):
+    carry, done = carry_with_full({"belt"})
+    out = tr.run_task(task(kind="shuttle", a="pinky", b="belt"), redirect_config(tmp_path, ["plate"]),
+                      tmp_path / "c.json", tmp_path, carry=carry)
+    assert out["status"] == "done" and done == [("pinky", "belt"), ("pinky", "plate"), ("plate", "pinky")]
+
+
+def test_run_carry_marks_a_destination_full_only_for_room_on_a_single_attempt(tmp_path):
+    class Proc:
+        def __init__(self, result):
+            self.stdout, self.stderr, self.returncode = json.dumps(result), "", 0
+
+    sites = {"pinky": {"auto_roi": [0, 0, 10, 10]}}
+    full = [{"why": "place: does not fit on the surface / something is already there"}]
+    stop = "stopped: no usable object"
+    at_choice = {"error": "no usable object"}
+    cases = (
+        ({"result": stop, "attempts": [{**at_choice, "refused": full}]}, True),
+        ({"result": stop, "attempts": [{**at_choice, "refused": full + [{"why": "planner: y"}]}]}, False),
+        ({"result": stop, "attempts": [{**at_choice, "refused": [{"why": "place: no map at the destination"}]}]}, False),
+        ({"result": stop, "attempts": [{**at_choice, "refused": [{"why": "place: nothing under it at the lower tier"}]}]}, False),
+        # a second attempt means the first one acted: never redirect after motion
+        ({"result": stop, "attempts": [{"refused": []}, {**at_choice, "refused": full}]}, False),
+        # one object refused for room, another carried, then a stop: the row has no choose-stage error
+        ({"result": "stopped: holding after a stop at lift", "attempts": [{"refused": full}]}, False),
+        ({"result": "stopped: no usable object after the pivot",
+          "attempts": [{"error": "no usable object after the pivot", "refused": full}]}, False),
+        ({"result": "placed", "attempts": [{"refused": []}]}, False),
+    )
+    for result, expected in cases:
+        step = tr.run_carry(tmp_path / "c.json", tmp_path / "k.json", sites, "pinky", "belt", tmp_path,
+                            run=lambda *a, r=result, **k: Proc(r))
+        assert step["dest_full"] is expected, result
+
+
+def test_task_scenario_reaches_each_carry_command(tmp_path):
+    commands = []
+
+    class Proc:
+        stdout, stderr, returncode = '{"result": "placed"}', "", 0
+
+    def run(command, **kwargs):
+        commands.append(command)
+        return Proc()
+
+    out = tr.run_task(task(kind="swap", a="pinky", b="belt", buffer="floor", scenario_id="scene-3"),
+                      config_file(tmp_path), tmp_path / "c.json", tmp_path,
+                      carry=lambda *args, **kwargs: tr.run_carry(*args, run=run, **kwargs))
+    assert out["status"] == "done"
+    assert len(commands) == 3 and all(command[-2:] == ["--scenario-id", "scene-3"] for command in commands)
+
+
+def test_a_swap_never_redirects(tmp_path):
+    carry, done = carry_with_full({"pinky"})
+    path = redirect_config(tmp_path, [])
+    cfg = json.loads(path.read_text())
+    cfg["sites"]["pinky"]["alternates"] = ["plate"]
+    path.write_text(json.dumps(cfg))
+    out = tr.run_task(task(kind="swap", a="pinky", b="belt", buffer="floor"), path, tmp_path / "c.json", tmp_path, carry=carry)
+    assert out["status"] == "stopped" and done == [("pinky", "floor"), ("belt", "pinky")]
+
+
+def test_only_the_next_take_from_the_full_site_follows_the_redirect(tmp_path):
+    full = {"belt"}
+    done = []
+
+    def carry(config_path, catalog, sites, src, dst, log_dir):
+        done.append((src, dst))
+        hit = dst in full and len(done) == 1  # belt is full only for the first carry
+        return {"from": src, "to": dst, "dest_full": hit, "result": "stopped: no usable object" if hit else "placed"}
+
+    out = tr.run_task(task(kind="shuttle", a="pinky", b="belt", cycles=2), redirect_config(tmp_path, ["plate"]),
+                      tmp_path / "c.json", tmp_path, carry=carry)
+    assert out["status"] == "done" and done == [
+        ("pinky", "belt"), ("pinky", "plate"), ("plate", "pinky"), ("pinky", "belt"), ("belt", "pinky")]

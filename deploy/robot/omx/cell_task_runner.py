@@ -3,11 +3,14 @@
 
 A task is one JSON file in <queue>/inbox/ (rosy.omx-cell-task.v1):
   {"schema", "task_id", "kind": "move" | "swap", "source": "operator" | "decision" | "vla", "record": bool,
+   "scenario_id": optional nonempty string,
    move: "from", "to";  swap: "a", "b" (two sites holding the two objects), "buffer" (a free site)}
 The runner moves it to running/, checks the cell (cell_preflight), runs each carry with cell_auto_pick (one object
 per source site: the pipeline picks the usable object there), stops at the first carry that is not "placed", and
 writes done/<task_id>.result.json. Safety stays on this host: the pipeline's own refusals, guards and holds apply.
 A swap is three carries through the buffer: a -> buffer, b -> a, buffer -> b.
+A carry that stops before any motion because the destination has no room tries that site's config
+"alternates" in order (D-1019); the Gate still holds any path not reviewed, so a redirect never widens D-911.
 
   cell_task_runner.py --config cell-auto.json --catalog catalog.json --queue ~/rosy-cell-tasks [--once]
 """
@@ -38,6 +41,8 @@ def carries(task: dict, sites: dict) -> list:
     """[(from, to)] for a task, or ValueError naming what is wrong (unknown site, same site, missing field)."""
     if task.get("schema") != SCHEMA or not task.get("task_id"):
         raise ValueError(f"not a {SCHEMA} task")
+    if "scenario_id" in task and (not isinstance(task["scenario_id"], str) or not task["scenario_id"]):
+        raise ValueError("scenario_id must be a nonempty string")
     sites = cell_place_fit.with_tiers({"sites": sites})[0]["sites"]
     if task["kind"] == "move":
         src = tier_site(task["from"], task["from_tier"], sites) if "from_tier" in task else task["from"]
@@ -88,17 +93,41 @@ def carries(task: dict, sites: dict) -> list:
     return plan
 
 
-def run_carry(config_path: Path, catalog: Path, sites: dict, src: str, dst: str, log_dir: Path, run=subprocess.run) -> dict:
+def run_carry(config_path: Path, catalog: Path, sites: dict, src: str, dst: str, log_dir: Path, run=subprocess.run,
+              scenario_id: str | None = None) -> dict:
     roi = [str(v) for v in sites[src]["auto_roi"]]
     out = log_dir / f"{int(time.time())}-{src}-to-{dst}.json"
-    proc = run([sys.executable, str(HERE / "cell_auto_pick.py"), "--config", str(config_path), "--catalog", str(catalog),
-                "--roi", *roi, "--from", src, "--dest", dst], capture_output=True, text=True)
+    command = [sys.executable, str(HERE / "cell_auto_pick.py"), "--config", str(config_path), "--catalog", str(catalog),
+               "--roi", *roi, "--from", src, "--dest", dst]
+    if scenario_id is not None:
+        command += ["--scenario-id", scenario_id]
+    proc = run(command, capture_output=True, text=True)
     try:
         result = json.loads(proc.stdout[proc.stdout.find("{"):])
     except ValueError:
         result = {"result": f"no result (exit {proc.returncode}): {proc.stderr[-200:]}"}
     out.write_text(json.dumps(result))
-    return {"from": src, "to": dst, "result": result.get("result"), "log": str(out)}
+    tries = result.get("attempts") or []
+    # Only cell_auto_pick's choose-stage return (before any motion) writes exactly this error; the pivot path differs.
+    at_choice = len(tries) == 1 and tries[0].get("error") == "no usable object"
+    refused = tries[0].get("refused") or [] if at_choice else []
+    dest_full = bool(refused) and all(map(no_room, refused))
+    return {"from": src, "to": dst, "result": result.get("result"), "log": str(out), "dest_full": dest_full}
+
+
+ROOM = {"something is already there", "does not fit on the surface"}  # cell_place_fit.why_not / options
+
+
+def no_room(refusal: dict) -> bool:
+    """A place refusal because the destination is occupied (not a missing map or an empty lower tier)."""
+    why = str(refusal.get("why", ""))
+    parts = set(why.removeprefix("place: ").split(" / "))
+    return why.startswith("place: ") and "something is already there" in parts and parts <= ROOM
+
+
+def alternates(sites: dict, src: str, dst: str) -> list:
+    """The destination's declared fallback sites, in order (D-1019): known sites other than the carry's own."""
+    return [a for a in (sites.get(dst) or {}).get("alternates") or [] if a in sites and a not in (src, dst)]
 
 
 def run_task(task: dict, config_path: Path, catalog: Path, log_dir: Path, preflight=None, carry=run_carry) -> dict:
@@ -112,11 +141,23 @@ def run_task(task: dict, config_path: Path, catalog: Path, log_dir: Path, prefli
         failed = [f"{name}: {why}" for name, ok, why in preflight(config) if not ok]
         if failed:
             return {**out, "status": "refused", "why": failed}
-    for src, dst in plan:
-        step = carry(config_path, catalog, config["sites"], src, dst, log_dir)
+    carry_kwargs = {"scenario_id": task["scenario_id"]} if task.get("scenario_id") is not None else {}
+    for i, (src, dst) in enumerate(plan):
+        step = carry(config_path, catalog, config["sites"], src, dst, log_dir, **carry_kwargs)
         out["steps"].append(step)
+        # No room at the destination and nothing moved: its declared alternates, each observed afresh (D-1019).
+        # A swap is about which object ends where, so it never redirects.
+        for alt in alternates(config["sites"], src, dst) if step.get("dest_full") and task["kind"] != "swap" else ():
+            step = {**carry(config_path, catalog, config["sites"], src, alt, log_dir, **carry_kwargs), "redirected_from": dst}
+            out["steps"].append(step)
+            if not step.get("dest_full"):
+                break
         if step["result"] != "placed":  # a stop mid-swap leaves the objects where the last carry put them: a person looks
-            return {**out, "status": "stopped", "why": f"{src} -> {dst}: {step['result']}", "ended": time.time()}
+            return {**out, "status": "stopped", "why": f"{src} -> {step['to']}: {step['result']}", "ended": time.time()}
+        # The next carry that expected this object at dst takes it from where it went; later ones are other objects.
+        nxt = next((j for j in range(i + 1, len(plan)) if plan[j][0] == dst), None) if step.get("redirected_from") else None
+        if nxt is not None:
+            plan[nxt] = (step["to"], plan[nxt][1])
     return {**out, "status": "done", "ended": time.time()}
 
 

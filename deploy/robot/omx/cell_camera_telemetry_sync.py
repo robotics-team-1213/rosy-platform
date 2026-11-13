@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
-"""Parallel Camera Frame & Arm Telemetry Sync for OMX Cell Worker (`cell_camera_telemetry_sync.py`).
+"""Arm & Camera Telemetry Sync for OMX Cell Worker (`cell_camera_telemetry_sync.py`).
 
 Single Responsibility:
-  - Concurrently fetches live camera JPEGs (`top`, `side`, `arm_a_wrist`, `arm_b_wrist`, `arm_s_top`, `arm_s_wrist`)
-    and `/state.json` from local `commissioning_view` (`:8767`) with disk fallback,
+  - Gathers camera quality facts from local `commissioning_view` (`:8767`) `state.json`,
   - Gathers `omx_incident` hold status and `chunk-status.jsonl` live arm states (`arm_s`, `arm_a`, `arm_b`),
-  - Uploads all camera frames and `/api/fleet/pipeline/cell-quality` to Fleet-R in parallel.
+  - Posts the facts to `/api/fleet/pipeline/cell-quality`.
+
+D-136: camera JPEG bytes are never uploaded. Fleet relays no video; the console reads
+frames through Vision preview leases only.
 """
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor
 import json
 from pathlib import Path
 import ssl
@@ -19,18 +20,6 @@ from urllib.request import Request, urlopen
 DEFAULT_PREP_DIR = Path("/home/robttt/rosy-test/omx-record-prep-20261019")
 CAMERA_KEYS: tuple[str, ...] = ("top", "side", "arm_a_wrist", "arm_b_wrist", "arm_s_top", "arm_s_wrist")
 ARM_SUFFIXES: dict[str, str] = {"arm_s": "s", "arm_a": "a", "arm_b": "b"}
-
-
-def _fetch_local_cam_jpeg(cam: str, urlopen_fn: Any = urlopen) -> tuple[str, bytes] | None:
-    try:
-        req = Request(f"http://127.0.0.1:8767/frame/{cam}.jpg", headers={"Host": "127.0.0.1:8767"})
-        with urlopen_fn(req, timeout=1.5) as resp:
-            raw = resp.read()
-            if len(raw) > 1000:
-                return cam, raw
-    except Exception:
-        pass
-    return None
 
 
 def _fetch_local_state_json(urlopen_fn: Any = urlopen) -> dict[str, Any]:
@@ -74,111 +63,47 @@ def _collect_live_arm_states(prep_dir: Path) -> dict[str, Any]:
     return arm_states
 
 
-def upload_latest_camera_snapshots(fleet_r_url: str, token: str, prep_dir: Path = DEFAULT_PREP_DIR, urlopen_fn: Any = urlopen) -> dict[str, int]:
-    """Fetch local camera JPEGs + state.json in parallel, then upload frames + cell-quality to Fleet-R in parallel."""
+def sync_cell_telemetry(fleet_r_url: str, token: str, prep_dir: Path = DEFAULT_PREP_DIR, urlopen_fn: Any = urlopen) -> dict[str, Any]:
+    """Post camera-quality facts, arm holds and live arm states to Fleet. No image bytes leave the cell PC."""
     ctx = ssl._create_unverified_context()
     base = fleet_r_url.rstrip("/")
-    live_frames: dict[str, bytes] = {}
-    with ThreadPoolExecutor(max_workers=7) as local_pool:
-        state_fut = local_pool.submit(_fetch_local_state_json, urlopen_fn)
-        for res in local_pool.map(lambda c: _fetch_local_cam_jpeg(c, urlopen_fn), CAMERA_KEYS):
-            if res is not None:
-                live_frames[res[0]] = res[1]
-        state_json = state_fut.result()
-
-    if not live_frames:
-        jpg_paths: list[Path] = list(Path("/tmp").glob("*.jpg"))
-        if prep_dir.is_dir():
-            for sub in prep_dir.glob("live-*"):
-                if sub.is_dir():
-                    jpg_paths.extend(sub.glob("*.jpg"))
-        candidates = sorted(
-            [p for p in jpg_paths if p.is_file() and p.stat().st_size > 1000],
-            key=lambda p: p.stat().st_mtime,
-            reverse=True,
-        )
-        top_img = next((p for p in candidates if "top" in p.name), candidates[0] if candidates else None)
-        wrist_img = next((p for p in candidates if "wrist" in p.name), top_img)
-        if top_img is not None:
-            live_frames["cell_s"] = top_img.read_bytes()
-            live_frames["pinky"] = live_frames["cell_s"]
-        if wrist_img is not None:
-            live_frames["cell_ab"] = wrist_img.read_bytes()
-
-    if "arm_s_top" in live_frames:
-        live_frames["cell_s"] = live_frames["arm_s_top"]
-    elif "top" in live_frames:
-        live_frames["cell_s"] = live_frames["top"]
-    if "top" in live_frames:
-        live_frames["cell_ab"] = live_frames["top"]
-    if "side" in live_frames:
-        live_frames["pinky"] = live_frames["side"]
-    elif "arm_s_top" in live_frames:
-        live_frames["pinky"] = live_frames["arm_s_top"]
-
-    if not live_frames:
-        return {}
-
-    def _upload_one(item: tuple[str, bytes]) -> tuple[str, int] | None:
-        view_id, raw = item
+    state_json = _fetch_local_state_json(urlopen_fn)
+    try:
+        cams_quality: dict[str, Any] = {}
+        for cam in CAMERA_KEYS:
+            entry = state_json.get(cam) or (state_json.get("cameras") or {}).get(cam)
+            if isinstance(entry, dict):
+                cams_quality[cam] = {
+                    "fresh": bool(entry.get("fresh", True)),
+                    "sequence": entry.get("sequence"),
+                    "receipt_age_s": entry.get("receipt_age_s"),
+                    "quality": entry.get("quality") or {},
+                }
+        arm_holds: dict[str, Any] = {}
         try:
-            req = Request(
-                f"{base}/api/fleet/pipeline/cell-camera/{view_id}",
-                data=raw,
-                method="POST",
-                headers={"Authorization": f"Bearer {token}", "Content-Type": "image/jpeg"},
-            )
-            with urlopen_fn(req, context=ctx, timeout=8):
-                return view_id, len(raw)
-        except Exception:
-            return None
-
-    def _sync_quality() -> None:
-        try:
-            cams_quality: dict[str, Any] = {}
-            for cam in CAMERA_KEYS:
-                entry = state_json.get(cam) or (state_json.get("cameras") or {}).get(cam)
-                if isinstance(entry, dict):
-                    cams_quality[cam] = {
-                        "fresh": bool(entry.get("fresh", True)),
-                        "sequence": entry.get("sequence"),
-                        "receipt_age_s": entry.get("receipt_age_s"),
-                        "quality": entry.get("quality") or {},
-                    }
-            arm_holds: dict[str, Any] = {}
-            try:
-                import omx_incident  # type: ignore
-                for arm_id in ("arm_s", "arm_a", "arm_b"):
-                    arm_holds[arm_id] = omx_incident.status(arm_id)
-            except Exception:
-                pass
-            arm_states = _collect_live_arm_states(prep_dir)
-            qreq = Request(
-                f"{base}/api/fleet/pipeline/cell-quality",
-                data=json.dumps({"schema": "rosy.pipeline.cell-quality.v1", "cameras": cams_quality, "arm_holds": arm_holds, "arm_states": arm_states}).encode("utf-8"),
-                method="POST",
-                headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
-            )
-            with urlopen_fn(qreq, context=ctx, timeout=6) as qresp:
-                qout = json.load(qresp)
-            for arm_id, note in (qout.get("pending_clear_arms") or {}).items():
-                try:
-                    import omx_incident  # type: ignore
-                    omx_incident.clear(str(arm_id), str(note))
-                except Exception:
-                    pass
+            import omx_incident  # type: ignore
+            for arm_id in ("arm_s", "arm_a", "arm_b"):
+                arm_holds[arm_id] = omx_incident.status(arm_id)
         except Exception:
             pass
-
-    uploaded: dict[str, int] = {}
-    items = list(live_frames.items())
-    with ThreadPoolExecutor(max_workers=min(10, len(items) + 1)) as pool:
-        q_fut = pool.submit(_sync_quality)
-        for res in pool.map(_upload_one, items):
-            if res is not None:
-                uploaded[res[0]] = res[1]
-        q_fut.result()
-    return uploaded
+        arm_states = _collect_live_arm_states(prep_dir)
+        qreq = Request(
+            f"{base}/api/fleet/pipeline/cell-quality",
+            data=json.dumps({"schema": "rosy.pipeline.cell-quality.v1", "cameras": cams_quality, "arm_holds": arm_holds, "arm_states": arm_states}).encode("utf-8"),
+            method="POST",
+            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+        )
+        with urlopen_fn(qreq, context=ctx, timeout=6) as qresp:
+            qout = json.load(qresp)
+        for arm_id, note in (qout.get("pending_clear_arms") or {}).items():
+            try:
+                import omx_incident  # type: ignore
+                omx_incident.clear(str(arm_id), str(note))
+            except Exception:
+                pass
+        return qout
+    except Exception:
+        return {}
 
 
 def inspect_camera_frame_telemetry(prep_dir: Path = DEFAULT_PREP_DIR, cell_id: str = "cell_s") -> dict[str, Any]:
