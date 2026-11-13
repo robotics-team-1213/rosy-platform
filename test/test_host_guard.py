@@ -505,8 +505,7 @@ def test_monitoring_health_failures_alert_once_and_recovery_once(tmp_path):
     threading.Thread(target=server.serve_forever, daemon=True).start()
     try:
         env = _alerts(tmp_path)
-        conf = f"mon monitoring http://127.0.0.1:{server.server_port}/monitoring-health
-"
+        conf = f"mon monitoring http://127.0.0.1:{server.server_port}/monitoring-health\n"
         _guard(tmp_path, HEALTHY, conf=conf, env_extra=env)
         assert _sent(tmp_path) == []  # one failed check is not an outage
         _guard(tmp_path, HEALTHY, conf=conf, runs=3, env_extra=env)

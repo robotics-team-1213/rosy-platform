@@ -410,8 +410,7 @@ def main() -> int:
         pass  # A missing local report is shown as unverified by Fleet, never synthesized as healthy.
     for name, report in updates_only.items():  # after the local report, which replaces the site row
         status.setdefault(name, {"source": "local"})["updates"] = report  # rebuilt every run, like the local row
-    monitors_file.write_text(json.dumps(monitors, sort_keys=True) + "
-", encoding="utf-8")
+    monitors_file.write_text(json.dumps(monitors, sort_keys=True) + "\n", encoding="utf-8")
     tmp = status_file.with_suffix(".tmp")
     tmp.write_text(json.dumps(status, indent=1, sort_keys=True) + "\n", encoding="utf-8")
     os.replace(tmp, status_file)
