@@ -343,6 +343,9 @@ def test_retired_names_come_from_the_private_site_map_and_a_missing_one_scans_no
     assert names == [] and 'skipped' in note
     private.write_text('schema: rosy.site-map/1\nhosts: {}\n')
     assert status.retired_hostnames(private)[0] == [] and 'no retired_hostnames' in status.retired_hostnames(private)[1]
+    private.write_text('schema: rosy.site-map/1\nhosts: {}\nretired_hostnames: 2026\n')  # a typo is a clear stop, not a traceback
+    with pytest.raises(SystemExit, match='must be a list'):
+        status.retired_hostnames(private)
 
 
 def test_no_tracked_services_file_lists_retired_names():
@@ -490,6 +493,7 @@ def test_a_receiver_pinning_no_current_kid_unreachable_keys_or_a_plain_http_issu
                      ('FAIL', 'account-key-drift', '/home/r/.config/rosy/c/receiver.json')]
     unreachable = _drift(lines, kids=None)
     assert [f[:2] for f in unreachable] == [('FAIL', 'account-key-drift')]  # a check that could not run is not clean
+    assert _drift(lines, kids=set()) == [('FAIL', 'account-key-drift', f'{issuer} publishes no keys')]  # blame the issuer
     assert _drift(['receiver-unreadable /etc/rosy/x/receiver.json'])[0][0] == 'note'
     assert _drift(['receiver /p not-json', _receiver('/q', 'bad issuer; rm', ['k'])])[0][0] == 'note'
     assert _drift([_receiver('/q', 'http://account.example.test', ['k1'])], kids={'k1'}) == [

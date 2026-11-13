@@ -51,6 +51,8 @@ def retired_hostnames(path: Path | None = None) -> tuple[list[str], str]:
     rows = data.get('retired_hostnames') if isinstance(data, dict) else None
     if not rows:
         return [], f'retired-name scan skipped: no retired_hostnames in {path.name}'
+    if not isinstance(rows, list):
+        raise SystemExit(f'{path}: retired_hostnames must be a list of {{name, retired, note}}')
     names = [row.get('name') if isinstance(row, dict) else row for row in rows]
     for name in names:  # a short or dotless entry would match unrelated text in every config file
         if not isinstance(name, str) or len(name) < 8 or '.' not in name:
@@ -78,10 +80,6 @@ def parse(host: dict, kind: str, rest: str) -> bool:
     else:
         return False
     return True
-
-
-def issuers(host: dict) -> set[str]:
-    return {p['issuer'].rstrip('/') for _, p in host.get('receivers', []) if isinstance(p.get('issuer'), str) and _ISSUER.fullmatch(p['issuer'].rstrip('/'))}
 
 
 def fetch_kids(ssh_command: list[str], issuer: str) -> set[str] | None:
@@ -113,7 +111,7 @@ def findings(host: dict, roles, now: float, issuer_kids) -> list:
     out = []
     for path in host.get('receivers_unreadable', []):
         out.append(('note', 'account-key-drift', f'{path} could not be read; not checked'))
-    unreachable = set()
+    unreachable, keyless = set(), set()
     for path, pin in host.get('receivers', []):
         issuer = (pin.get('issuer') or '').rstrip('/') if isinstance(pin.get('issuer'), str) else ''
         if not _ISSUER.fullmatch(issuer):
@@ -122,10 +120,13 @@ def findings(host: dict, roles, now: float, issuer_kids) -> list:
         current = issuer_kids(issuer)
         if current is None:
             unreachable.add(issuer)
+        elif not current:  # the issuer itself is broken; blaming every receiver would send people the wrong way
+            keyless.add(issuer)
         elif not current.intersection(pin['kids']):
             out.append(('FAIL', 'account-key-drift', path))
     # A key check that could not run must not read as clean (2026-11-14 panel): a rotated key would pass silently.
     out += [('FAIL', 'account-key-drift', 'issuer keys could not be fetched from the site host; receivers not compared') for _ in unreachable][:1]
+    out += [('FAIL', 'account-key-drift', f'{issuer} publishes no keys') for issuer in sorted(keyless)]
     guard = host.get('guard')
     if 'site' in roles:
         if guard is None or guard['active'] == 'none':
