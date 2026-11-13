@@ -19,7 +19,7 @@
 3. **결속은 정확히 맞을 때만 쓴다.** 활성 결속이 없으면 `MAP_BINDING_REQUIRED`, 현장 지도 id·버전이 다르면 `MAP_BINDING_SITE_CHANGED`, 기체가 보고한 `map_grid_id`가 다르면 `MAP_BINDING_GRID_CHANGED`, 기체가 지도 프레임에서 LOCALIZED가 아니면 `ROBOT_NOT_LOCALIZED`다. `map_id`가 같은 것만으로는 맞다고 보지 않는다.
 4. **마커 없이 짝을 제안한다.** `POST …/map-binding/propose`는 기체 지도의 점유 칸(값 ≥65)에서 최소 면적 사각형을 찾아 현장 벽 경계(기본은 활성 지도 벽의 바깥 상자)의 네 모서리와 맞춘다. 대칭으로 남는 0°/180° 선택은 운영자가 준 "지금 기체가 선 현장 위치" 하나로 고른다. 제안은 미리보기일 뿐이고 승인은 2항을 다시 거친다(검증 짝은 바닥에서 따로 잰다).
 5. **켜진 현장에서는 free 목표가 결속으로만 나간다.** 사이트 설정 `fleet.trip.map_binding_required: true`면 `robot_frame_goal`은 `map_id` 같음 지름길과 한 쌍 변환을 쓰지 않고 결속의 역변환으로 목표를 바꾼다. 맞는 결속이 없으면 trip을 `map_frame`으로 멈추고 `detail.binding`에 3항 사유를 남긴다. `goal_frame` 기록에 `map_grid_id`를 더한다. 기본값은 꺼짐이다.
-6. **SLAM 자세와 카메라 자세를 나란히 보인다.** 결속 읽기는 맞는 결속이 있을 때 기체 SLAM 자세를 현장 좌표로 바꾼 `slam_site_pose`, Fleet 카메라 자세 `camera_site_pose`, 둘 사이 거리 `slam_camera_gap_m`를 준다. 읽기 전용이고, MapPoseService 앵커로 쓰지 않는다.
+6. **SLAM 자세와 카메라 자세를 나란히 보인다.** 결속 읽기는 맞는 결속이 있을 때 기체 SLAM 자세를 현장 좌표로 바꾼 `slam_site_pose`, Fleet 지도 자세(`arbitrated_pose`) `camera_site_pose`, 둘 사이 거리 `slam_camera_gap_m`를 준다. 읽기 전용이고, MapPoseService 앵커로 쓰지 않는다.
 
 ### Consequences
 

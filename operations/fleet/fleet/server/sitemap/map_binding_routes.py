@@ -85,7 +85,7 @@ def install_map_binding_routes(app, *, console, site_maps, read_guard, require_n
             bx, by, byaw = bound_pose(fit, (pose["x"], pose["y"], pose["yaw"]))
             body["slam_site_pose"] = {"x": bx, "y": by, "yaw": byaw}
             service = getattr(request.app.state, "map_pose", None)
-            cam = service.driving_pose(robot_id) if service is not None else None
+            cam = service.arbitrated_pose(robot_id) if service is not None else None  # D-989: driving_pose is trip-only
             if cam is not None and cam.x is not None and cam.y is not None:
                 body["camera_site_pose"] = {"x": cam.x, "y": cam.y, "yaw": cam.yaw, "state": cam.state}
                 body["slam_camera_gap_m"] = math.hypot(bx - cam.x, by - cam.y)
