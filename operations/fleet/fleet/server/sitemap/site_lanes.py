@@ -161,12 +161,10 @@ def site_lanes_payload(lanes: Mapping[str | None, dict], sources: Sequence) -> d
     if not lanes:
         return None
     maps = []
-    default_map_id = sources[0].map_id if len({s.map_id for s in sources}) == 1 else None
     for map_id, graph in lanes.items():
-        effective_map_id = map_id if map_id is not None else default_map_id
         source_ids = [source.source_id for source in sources
-                      if effective_map_id is None or source.map_id == effective_map_id]
-        entry = {"map_id": effective_map_id, "frame": "map", "units": "m", "source_ids": source_ids,
+                      if map_id is None or source.map_id == map_id]
+        entry = {"map_id": map_id, "frame": "map", "units": "m", "source_ids": source_ids,
                  "polylines": [], "paint_triangles": [], **graph}
         xs = [v for tri in entry["paint_triangles"] for v in tri[0::2]]
         ys = [v for tri in entry["paint_triangles"] for v in tri[1::2]]

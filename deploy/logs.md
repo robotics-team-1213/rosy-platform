@@ -4727,6 +4727,7 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: 원격 시험 `contracts/foundation/test/test_account_access.py`·`operations/fleet/test/test_account_admin_browser.py`.
 - gate 변화: 없음 — Harbor 쪽 수신기는 팀 저장소 PR이다.
 - CE: 해당 없음 — 새 권한이며 해결한 장애가 없다.
+
 ## 2026-11-07 · 11b42b5933 · feat(rosy-face): 사람 부탁 도착 소리와 15초 반복
 - 변경: `PersonAsk`(`rosy_face_parts.py`)가 기존 `call` 패턴을 도착 때 한 번, 같은 id가 보이는 동안 15 s마다. 정지·실패 화면이면 소리 없음, ROSY_BUZZER_ENABLED는 Buzzer 그대로.
 - 증거: `test/test_rosy_face_person.py`(도착·반복 시각, 답·만료 뒤 멈춤, 화면 우선순위). 실제 스피커 확인은 하지 않았다.
@@ -4880,6 +4881,14 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: 원격 pytest (`tools/remote/remote_pytest.py`) `test_omx_control_modularization.py`, `test_omx_area_xyz.py`, `test_omx_cell_look.py`, `test_omx_cell_pinch.py`, `test_omx_cell_wrist.py`, `test_omx_tier_stack_problem_recovery.py`, `test_omx_joint_jitter.py`, `test_omx_chunk_runner.py` 외 19개 스위트 검증.
 - gate 변화: 없음.
 - CE: 기존 교훈 갱신 — `docs/solutions/logic-errors/sim-passes-with-wrong-layout-until-real-camera-overlay-2026-11-07.md`.
+
+
+## 2026-11-13 · uncommitted · docs(model-pc): 학습 센터 자동 업데이트 절을 퇴역 안내로 교체
+
+- 변경: `deploy/model_pc/README.md`의 학습 센터 자동 업데이트(D-871) 절에서 살아있는 설치·활성 안내를 지우고 퇴역 안내로 교체했다. 후보 `rosy-learning-center.service`(모델 PC 8769·AI PC 8770)는 2026-10-31 퇴역, 데이터는 합성 자료만으로 보존, 현행 유일 센터는 8768 `rosy-edge-review`(D-857)이며 `rosy-review-release-update`로 갱신한다. 2026-10-23 교훈의 `applies_when`도 역사 기록으로 고쳤다. `install_learning_center.py`·`learning_center_update.py`는 그대로 둔다.
+- 증거: 원격 pytest `test/test_update_ops.py` 예정.
+- gate 변화: 없음. 문서만 바꿨다.
+- CE: 해당 없음.
 
 ## 2026-11-14 · uncommitted · rosy-face 상태 표시등 영속 설정
 - 변경: CORE용 영속 공유 디렉터리를 native unit에서 만들고 rosy-face가 설정을 매 표시 단계마다 읽는다. 기존 부팅·안전 표시가 우선한다.

@@ -1,5 +1,7 @@
 # SIM cell model inventory: what the simulated cell is built from and how it differs from the real cell.
 # Learning → SIM 실험 shows this file read-only; change it by commit (this file is the one source).
+# 아래 사진·카메라 조사는 cell A/B(arm_a, arm_b, 정류장 S5)만 다룬다. cell S(arm_s, 정류장 S3)는
+# 측면 카메라가 없고(arm_s_top·arm_s_wrist뿐) 이 파일에 사진 기록도 없다.
 # Real-cell photos stay out of Git (public repository): register the file name here and put the file in
 # cell-photos/ beside the private SIM operator configuration on the review host.
 # Physics constants (servo gains, joint damping, container mass and friction) are candidates in cell_physics.yaml beside this file.

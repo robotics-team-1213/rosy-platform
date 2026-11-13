@@ -32,7 +32,7 @@
 ## 최근 기록
 
 - 2026-11-14 · uncommitted · 상태 표시등 패턴 API
+- 2026-11-13 · uncommitted · fix(core): API contract header v1.389 gets its changelog row and CONTRACT constant (main red)
 - 2026-11-07 · uncommitted · 계약 버전 v1.374
 - 2026-11-07 · uncommitted · docs(api): v1.368 site rules
 - 2026-11-07 · uncommitted · 계정 로그인 복귀 목록에 역할 화면 추가
-- 2026-11-07 · uncommitted · feat(navigation): 항법 재승인 REST (D-986)
