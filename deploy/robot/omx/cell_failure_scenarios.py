@@ -83,6 +83,10 @@ SCENARIOS = [
     {"name": "tangled pile in two pieces: push, look again, then the pick", "rounds": [(PILE, False, True), (PILE, False, True), ("placed", False, True)],
      "result": "placed", "actions": ["push_clear", "observe_again", "done"]},
     {"name": "locked pile: no piece has a clear push, a person", "rounds": [(PILE, False, False)], "result": "ask a person: pile", "actions": ["ask_person"]},
+    {"name": "box at the frame's edge: a person moves it into view, no push", "rounds": [(ROOM + " (edge of view)", False, True)],
+     "result": "ask a person: edge_of_view", "actions": ["ask_person"]},
+    {"name": "box past the pan limit: a person moves it into reach, no push", "rounds": [(ROOM + " (out of reach)", True, True)],
+     "result": "ask a person: out_of_reach", "actions": ["ask_person"]},
     {"name": "pile moved while picking: look before pushing", "rounds": [(PILE, True, True), ("placed", False, True)], "result": "placed",
      "actions": ["observe_again", "done"]},
 ]

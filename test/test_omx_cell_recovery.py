@@ -41,7 +41,39 @@ def test_the_result_names_the_cause_and_hard_stops_are_never_retried():
 def test_the_refusals_name_the_obstacle_type_and_a_pile_outranks_packed_boxes():
     room, pile = {"why": "no finger room: 4.0 / 26.0 mm free beside it"}, {"why": "tangled blob"}
     assert dg.obstacle_type([room]) == "packed" and dg.obstacle_type([room, pile]) == "tangled pile"
-    assert dg.obstacle_type([{"why": "not inside the camera view"}]) is None and dg.obstacle_type([]) is None
+    assert dg.obstacle_type([{"why": "not inside the camera view"}]) == "edge of view" and dg.obstacle_type([]) is None
+
+
+def test_a_box_at_the_view_edge_or_past_the_pan_limit_goes_to_a_person_never_to_a_push():
+    """2026-11-13 arm_s: both were refused as packed, so the recovery would have pushed at a box it could not see or reach."""
+    edge = {"why": "edge of view: a side is past the camera's view, 25.3 / 7.0 mm free beside it"}
+    far = {"why": "out of reach: pan -161.0 deg past the joint1 limit"}
+    room = {"why": "no finger room: 4.0 / 26.0 mm free beside it"}
+    assert dg.obstacle_type([edge]) == "edge of view" and dg.obstacle_type([far]) == "out of reach"
+    assert dg.obstacle_type([far, edge, room]) == "packed"  # a push can still free the packed one
+    for kind, cause in (("edge of view", "edge_of_view"), ("out of reach", "out_of_reach")):
+        assert dg.attempt_cause(f"stopped: no usable object ({kind})", True) == cause
+        out, _ = run([f"stopped: no usable object ({kind})"])
+        assert out["result"] == f"ask a person: {cause}" and out["rounds"][0]["action"] == "ask_person" and out["ask"] == dg.ASK[cause]
+
+
+def test_a_box_at_the_edge_of_the_view_is_unseen_not_packed():
+    """2026-11-13 arm_s: a box on Pinky at the top of the frame read as no finger room, and the recovery would push it."""
+    import cell_auto_safety
+    px = lambda p: (100 + p[0] * 1000, 100 + (p[1] - 0.1) * 1000)  # noqa: E731  1 px per mm
+    box = {"raw_m": [0.0, 0.1], "width_mm": 30, "length_mm": 60, "long_axis_deg": 0.0}
+    mask = np.zeros((120, 200), np.uint8)  # the view ends 5 mm past its +y side
+    mask[85:116, 70:131] = 255
+    room = cell_auto_safety.finger_room(mask, (0, 0, 200, 120), px, box)
+    assert room["margin_mm"] is None and room["unseen"]
+    assert cell_auto_safety.finger_room(np.pad(mask, ((0, 80), (0, 0))), (0, 0, 200, 200), px, box)["margin_mm"] is not None
+
+
+def test_the_pan_limit_names_a_box_out_of_reach():
+    import cell_auto_pick_plan as plan
+    config = {"plan": {"limits": {"joints_rad": {"joint1": [-2.6, 2.6]}}}}  # +-149 deg
+    assert plan.past_pan_limit(config, (-0.187, -0.065)) == -160.8
+    assert plan.past_pan_limit(config, (-0.15, -0.12)) is None and plan.past_pan_limit({"plan": {}}, (-0.187, -0.065)) is None
 
 
 def test_the_stall_hook_keeps_the_session_and_only_with_a_person_at_the_switch(monkeypatch):

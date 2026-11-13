@@ -31,10 +31,20 @@ STRATEGY = {
 #   pile    a tangled blob, boxes on or against each other (2026-11-13 arm_s: a box's end lay on another, the pile against
 #           the arm plate): cell_align.pile_push slides the blob when its path is clear, then the pick is planned again;
 #           with none clear the pile is locked and goes to a person
+#   edge of view  the box or a side of it is past the top camera's view (2026-11-13 arm_s: the camera moved 84 px and a box
+#           on Pinky sat at the frame's edge): unseen is not free, and no push is aimed at what the camera cannot see
+#   out of reach  past the joint1 pan limit (2026-11-13 arm_s: a box at -161 deg, limit 149): no grip and no push reaches it
+# The first type with a refusal wins, in this order: a push can still free a pile or a packed box. The last two go to a person
+# with what to change (ASK).
 # shortcut: a box leaning on a fixture (2026-11-13 arm_b, beside the ship) is not seen from the top camera; it needs the
 # side camera or depth before it can be a type here.
-OBSTACLE_TYPES = {"tangled blob": "tangled pile", "no finger room": "packed"}
-ATTEMPT_CAUSES = (("stopped: no usable object (tangled pile)", "pile"), ("stopped: released", "lift_stall"), ("stopped: holding", "held_stop"), ("stopped: still holding", "stuck_in_jaws"),
+OBSTACLE_TYPES = {"tangled blob": "tangled pile", "no finger room": "packed", "edge of view": "edge of view",
+                  "not inside the camera view": "edge of view", "out of reach": "out of reach"}
+ASK = {"edge_of_view": "move the box, or aim the top camera, so the box and the room beside it are in view",
+       "out_of_reach": "move the box inside the arm's reach"}
+ATTEMPT_CAUSES = (("stopped: no usable object (tangled pile)", "pile"), ("stopped: no usable object (edge of view)", "edge_of_view"),
+                  ("stopped: no usable object (out of reach)", "out_of_reach"),
+                  ("stopped: released", "lift_stall"), ("stopped: holding", "held_stop"), ("stopped: still holding", "stuck_in_jaws"),
                   ("stopped: misaligned", "misaligned"), ("stopped: reinserted", "unstable_grasp"), ("stopped: placed", "not_seen_placed"), ("stopped: no usable", "no_room"),
                   ("stopped: pivot", "calibrate"), ("stopped: no clear pivot", "calibrate"),
                   ("stopped: unseated_cone", "s6_unseated_cone"), ("stopped: toppled", "s2_toppled_or_slumped"),
@@ -46,6 +56,8 @@ RECOVERY = {
     "lift_stall": ["slow_down", "push_clear", "observe_again", "ask_person"],
     "no_room": ["push_clear", "observe_again", "ask_person"],
     "pile": ["push_clear", "observe_again", "ask_person"],  # one piece per push; the next look re-plans from what is left
+    "edge_of_view": ["ask_person"],
+    "out_of_reach": ["ask_person"],
     "no_progress": ["push_clear", "observe_again", "ask_person"],
     "misaligned": ["observe_again", "push_clear", "ask_person"],
     "unstable_grasp": ["observe_again", "push_clear", "ask_person"],

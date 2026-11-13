@@ -108,7 +108,8 @@ def carry(frame, pick, push, *, expected_px, emit=cd.emit, rounds: int = ROUNDS,
                          **({"evidence": observe()} if observe and cause != "placed" else {})})
             emit("recovery", rows[-1], cell_diagnose.RECOVERY.get(cause, []), action, "rule", f"cause {cause}")
             if action in ("done", "ask_person"):
-                return {"result": "placed" if action == "done" else f"ask a person: {cause}", "rounds": rows}
+                return {"result": "placed" if action == "done" else f"ask a person: {cause}", "rounds": rows,
+                        **({"ask": cell_diagnose.ASK[cause]} if action == "ask_person" and cause in cell_diagnose.ASK else {})}
             tried[cause].append(action)
             pending = (cause, action)
         return {"result": f"ask a person: {rounds} rounds", "rounds": rows}
