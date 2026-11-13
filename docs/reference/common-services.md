@@ -59,6 +59,18 @@ R 호스트는 공통 서비스 컨테이너 밖에서 현장 시간 서버(chro
 
 Fleet에 남는 공통 성격 기능은 카메라 페어링·로봇 등록·기계 자격 digest·미리보기 grant 서명 사용·host-control·알림 outbox이며 이유는 D-1001 결정 4가 정본이다. 사람 신원은 Account에 있고 Fleet은 수신기로만 쓴다.
 
+## 값의 다섯 층 ([D-1021](../adr/D-1021-one-owner-per-value-identity-in-account-placement-in-site-map.md))
+
+값마다 정본은 한 층이다. 다른 곳의 사본은 배포 단계가 쓰고 `tools/remote/update_status.py`가 대조한다.
+
+| 층 | 구성원 | 정본 |
+|---|---|---|
+| 신원 | 발급자, 서명 키, 클라이언트(앱), 계약 버전 | Account |
+| 배치 | 호스트 이름·별칭, 시간원, 서비스 주소, 은퇴한 이름 | 비공개 `private/site-map.yaml` |
+| 유닛 | 호스트별 유닛과 코드 출처 | `deploy/hosts/services.yaml` |
+| 접근 | SSH 목적지·역할 | `private/lab-hosts.json`(지도의 SSH 사본) |
+| 기대 버전 | 승인된 릴리스와 보류 | 서명된 후보와 보류 기록 |
+
 ## 기능별 공통화 결정
 
 아래는 [D-997](../adr/D-997-common-function-ownership-and-failure-contracts.md)의 확정 설계다. 위 실행 서비스·Compose 목록과 달리 구현·배포 목록이 아니다. 기존 owner·프로세스·DB·폴더·자격·API는 실제 전환 검증 전까지 유지한다. 현재 소스는 이 저장소의 실제 경로를 기능별 대표로 적는다. `(목표, 미생성)`은 D-997이 정한 전환 뒤 경로가 아직 만들어지지 않았다는 뜻이다. `test/architecture/test_common_services.py`가 경로 존재와 목표 표시를 확인한다.

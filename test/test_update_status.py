@@ -141,6 +141,7 @@ def test_service_role_composition_preserves_every_unit_and_rejects_conflicts():
 def test_status_main_collects_an_independent_production_host(monkeypatch):
     config = {'site_host': 'site@h', 'omx_hosts': ['arm@h']}
     monkeypatch.setattr(status.lab_hosts, 'load', lambda: config)
+    monkeypatch.setenv('ROSY_SITE_MAP', os.path.join(os.devnull, 'no-site-map.yaml'))
     monkeypatch.setattr(status, 'load_inventory', lambda: {'site': {}, 'omx': {}})
     monkeypatch.setattr(status, 'ref_state', lambda *args: dict(
         ref='HEAD', verdict='ok', tip='a'*12, fetched_h=0, problem=None))
@@ -314,10 +315,19 @@ def test_retired_host_name_in_a_config_file_fails_with_the_path_only():
     assert not [f for f in status.clock_and_site(status.parse('gate open', NOW, 6.0), NOW) if f[1] == 'retired-name']
 
 
-def test_retired_hostnames_list_the_vanished_tailnet_name_not_the_live_mdns_name():
-    names = [n.lower() for n in status.retired_hostnames()]
-    assert 'robttt-15z95n-gp7ql.tailb4b84d.ts.net' in names
-    assert not [n for n in names if n.endswith('.local')]
+def test_retired_names_come_from_the_private_site_map_and_a_missing_one_scans_nothing(tmp_path):
+    private = tmp_path / 'site-map.yaml'
+    private.write_text('schema: rosy.site-map/1\nhosts: {}\nretired_hostnames:\n'
+                       '  - {name: old-host.example.test, retired: 2026-11-09, note: renamed}\n')
+    assert status.retired_hostnames(private) == (['old-host.example.test'], '')
+    names, note = status.retired_hostnames(tmp_path / 'absent.yaml')
+    assert names == [] and 'skipped' in note
+    private.write_text('schema: rosy.site-map/1\nhosts: {}\n')
+    assert status.retired_hostnames(private)[0] == [] and 'no retired_hostnames' in status.retired_hostnames(private)[1]
+
+
+def test_no_tracked_services_file_lists_retired_names():
+    assert 'retired_hostnames:' not in (ROOT / 'deploy/hosts/services.yaml').read_text(encoding='utf-8')
 
 
 def test_retired_name_probe_is_valid_bash_and_skips_backup_files():
@@ -390,9 +400,9 @@ def test_unreadable_retired_path_is_a_note_never_clean():
 
 def test_retired_hostnames_must_be_full_hostnames(tmp_path):
     def load(*names):
-        path = tmp_path / 'services.yaml'
-        path.write_text('retired_hostnames:\n' + ''.join(f'  - {n}\n' for n in names))
-        return status.retired_hostnames(path)
+        path = tmp_path / 'site-map.yaml'
+        path.write_text('retired_hostnames:\n' + ''.join(f'  - {{name: {n}, retired: 2026-11-09}}\n' for n in names))
+        return status.retired_hostnames(path)[0]
     assert load('old-host.example.test') == ['old-host.example.test']
     for bad in ('short', 'a.b', 'nodotbutlonghostname'):
         with pytest.raises(SystemExit):
@@ -431,3 +441,78 @@ def test_hold_until_rules_match_the_site_updater():
     assert _site({'hold': {'reason': 'r', 'time': aware(-1)}})[0][0] == 'HELD'  # no until key: set time + 24 h
     epoch = _site({'hold': {'reason': 'r', 'time': '1970-01-01T00:00:00+00:00', 'until': aware(23)}})
     assert epoch[0][0] == 'HELD' and 'unknown age' not in epoch[0][2]
+
+
+def _bash_ok(text):
+    return subprocess.run(['bash', '-n'], input=text.encode()).returncode == 0
+
+
+def test_the_drift_probe_is_valid_bash_and_prints_no_key_material():
+    assert _bash_ok(status.PROBE + status.update_drift.PROBE)
+    assert 'sorted(d.get("public_key_files")' in status.update_drift.PROBE
+
+
+def _drift(lines, roles=(), kids=None, now=NOW):
+    host = status.parse('\n'.join(['gate open', *lines]), now, 6.0)
+    return status.update_drift.findings(host, roles, now, lambda issuer: kids)
+
+
+IDS = 'candidate-ids {"fleet": ["sha256:' + 'a' * 64 + '"], "proxy": ["sha256:' + 'b' * 64 + '", "sha256:' + 'c' * 64 + '"]}'
+
+
+def test_a_container_image_the_signed_candidate_did_not_record_is_image_drift_by_service_name():
+    ok = ['container rosy-site-fleet:' + '1' * 40 + ' sha256:' + 'a' * 64, 'container nginx:1 sha256:' + 'd' * 64, IDS]
+    assert _drift(ok) == []
+    drifted = ok + ['container rosy-site-fleet:' + '1' * 40 + ' sha256:' + 'e' * 64]
+    assert _drift(drifted) == [('FAIL', 'image-drift', 'fleet')]
+    reused = ['container rosy-site-proxy:' + '2' * 40 + ' sha256:' + 'c' * 64, IDS]  # a reused identity is accepted
+    assert _drift(reused) == []
+    assert _drift(['container rosy-site-vision:x sha256:' + 'e' * 64, IDS]) == []  # not in the manifest: not compared
+
+
+def test_an_unreadable_candidate_manifest_is_a_note_and_a_missing_one_compares_nothing():
+    found = _drift(['container rosy-site-fleet:x sha256:' + 'e' * 64, 'candidate-ids unreadable'])
+    assert [f[:2] for f in found] == [('note', 'image-drift')]
+    assert _drift(['container rosy-site-fleet:x sha256:' + 'e' * 64]) == []
+
+
+def _receiver(path, issuer, kids):
+    return f'receiver {path} ' + json.dumps({'issuer': issuer, 'kids': kids})
+
+
+def test_a_receiver_pinning_no_current_kid_is_account_key_drift_and_an_unreachable_issuer_a_note():
+    issuer = 'https://account.example.test'
+    lines = [_receiver('/home/r/.config/rosy/a/receiver.json', issuer, ['k1', 'old']),
+             _receiver('/home/r/.config/rosy/b/receiver.json', issuer, ['old']),
+             _receiver('/home/r/.config/rosy/c/receiver.json', issuer, [])]
+    found = _drift(lines, kids={'k1', 'k2'})
+    assert found == [('FAIL', 'account-key-drift', '/home/r/.config/rosy/b/receiver.json'),
+                     ('FAIL', 'account-key-drift', '/home/r/.config/rosy/c/receiver.json')]
+    unreachable = _drift(lines, kids=None)
+    assert [f[:2] for f in unreachable] == [('note', 'account-key-drift')]
+    assert _drift(['receiver-unreadable /etc/rosy/x/receiver.json'])[0][0] == 'note'
+    assert _drift(['receiver /p not-json', _receiver('/q', 'bad issuer; rm', ['k'])])[0][0] == 'note'
+
+
+def test_the_issuer_key_fetch_asks_the_site_host_for_kid_names_only(monkeypatch):
+    seen = []
+
+    def run(argv, **kwargs):
+        seen.append(argv)
+        body = json.dumps({'keys': [{'kid': 'k1', 'x': 'public-part'}, {'kid': 'k2'}]}).encode()
+        return subprocess.CompletedProcess(argv, 0, stdout=body, stderr=b'')
+    monkeypatch.setattr(status.update_drift.subprocess, 'run', run)
+    assert status.update_drift.fetch_kids(['ssh', 'site@h'], 'https://account.example.test') == {'k1', 'k2'}
+    assert seen[0][:2] == ['ssh', 'site@h'] and seen[0][-1].endswith('/api/fleet/auth/keys')
+    monkeypatch.setattr(status.update_drift.subprocess, 'run', lambda argv, **k: subprocess.CompletedProcess(argv, 22, stdout=b'', stderr=b''))
+    assert status.update_drift.fetch_kids(['ssh', 'site@h'], 'https://account.example.test') is None
+
+
+def test_the_site_host_guard_timer_must_be_installed_active_and_recently_written():
+    stamp = int(NOW)
+    assert _drift([f'guard active {stamp - 600}'], {'site'}) == []
+    assert _drift([f'guard active {stamp - 3600}'], {'site'})[0][:2] == ('FAIL', 'host-guard')
+    assert _drift([f'guard inactive {stamp}'], {'site'})[0][:2] == ('FAIL', 'host-guard')
+    assert _drift(['guard none'], {'site'})[0][:2] == ('FAIL', 'host-guard')
+    assert _drift(['guard active -'], {'site'})[0][:2] == ('note', 'host-guard')
+    assert _drift(['guard none'], {'omx'}) == [] and _drift(['guard none']) == []

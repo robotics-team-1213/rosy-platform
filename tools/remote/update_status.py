@@ -33,9 +33,10 @@ On the site host the auto-updater state is read: an active hold shows as HELD, a
 expiry (still blocking) or a `refused`/recovery last run with its reason is FAIL. FAIL exits 1.
 
 Retired names (2026-11-13): chrony.conf, /etc/hosts, receiver.json and the Account authority.json are searched for the
-`retired_hostnames` (full hostnames only; backup-named files and symlinks skipped); a hit is FAIL `retired-name` with
+`retired_hostnames` of the private site map (full hostnames only; none or no map: one note; backup-named files and symlinks skipped); a hit is FAIL `retired-name` with
 the path only, an unreadable path a note. Malformed probe data is a FAIL for that host; on a `site` host a missing site
 state is a note, an unreadable one FAIL; a hold `until` without a zone or unparsable is expired (absent: set time + 24 h).
+D-1021 (update_drift.py): FAIL `image-drift` (container image ID not in the signed candidate), `account-key-drift`, `host-guard`.
 """
 from __future__ import annotations
 
@@ -55,6 +56,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import lab_hosts
+import update_drift
 # by file, not sys.path: putting tools/release on sys.path lets any script there shadow a repo package
 # (tools/release/deploy.py did, 2026-10-26; renamed deploy_cli.py, test_no_tool_script_shadows_a_repo_package)
 _spec = importlib.util.spec_from_file_location('robot_cd', Path(__file__).resolve().parents[1] / 'release/robot_cd.py')
@@ -170,6 +172,8 @@ def parse(text: str, now: float, stale_hours: float) -> dict:
     host = dict(gate='unknown', channels=[], failed=[], sources=[], files={}, instances={}, copies={}, paths={}, topology={})
     for raw in text.splitlines():
         kind, _, rest = raw.partition(' ')
+        if update_drift.parse(host, kind, rest):
+            continue
         if kind == 'topology':
             try:
                 report = json.loads(rest)
@@ -275,7 +279,7 @@ def clock_and_site(host: dict, now: float, host_roles=()) -> list:
     if 'rosy-site-account-login-check.service' in host['failed']:
         findings.append(('FAIL', 'account-login-check', 'an Account-backed app failed the 30-minute login check (journalctl -u rosy-site-account-login-check)'))
     for path in host.get('retired', []):
-        findings.append(('FAIL', 'retired-name', f'{path} still names a retired host (deploy/hosts/services.yaml retired_hostnames)'))
+        findings.append(('FAIL', 'retired-name', f'{path} still names a retired host (private site map retired_hostnames)'))
     for path in host.get('retired_unreadable', []):
         findings.append(('note', 'retired-name', f'{path} exists but could not be read; not checked'))
     site = host.get('site') if isinstance(host.get('site'), dict) else {}
@@ -318,14 +322,7 @@ def load_inventory(path: Path | None = None) -> dict:
     return data['roles']
 
 
-def retired_hostnames(path: Path | None = None) -> list[str]:
-    import yaml
-    path = path or Path(__file__).resolve().parents[2] / 'deploy/hosts/services.yaml'
-    names = list(yaml.safe_load(path.read_text(encoding='utf-8')).get('retired_hostnames') or [])
-    for name in names:  # a short or dotless entry would match unrelated text in every config file
-        if not isinstance(name, str) or len(name) < 8 or '.' not in name:
-            raise SystemExit(f'{path}: retired_hostnames entry {name!r} must be a full hostname (8+ characters with a dot)')
-    return names
+retired_hostnames = update_drift.retired_hostnames  # (names, note) from the private site map, never a tracked file
 
 
 def roles(config: dict) -> dict:
@@ -517,9 +514,13 @@ def main() -> None:
     args = parser.parse_args()
     stuck = False
     inventory = load_inventory()
-    retired = retired_hostnames()
+    retired, retired_note = retired_hostnames()
+    if retired_note:
+        print(f'note      {retired_note}')
     config = lab_hosts.load()
     role_of = roles(config)
+    site_target = next((t for t, r in role_of.items() if 'site' in r), None)
+    issuer_kids = update_drift.IssuerKeys([*SSH, '--', site_target] if site_target else None)
     declarations = {target: declared_units(inventory, host_roles) for target, host_roles in role_of.items()}
     targets = probe_targets(config)
     platform = Path(__file__).resolve().parents[2]
@@ -558,7 +559,7 @@ def main() -> None:
         copies = sorted({path for entry in declared.values() for path in (entry.get('copies') or {})})
         # bytes, not text: Windows text mode would send CRLF into bash
         topology = Path(__file__).with_name('host_topology.py').read_text(encoding='utf-8')
-        probe = 'RETIRED=' + shlex.quote(' '.join(retired)) + '\n' + PROBE + "\npython3 - <<'ROSY_TOPOLOGY'\n" + topology + '\nROSY_TOPOLOGY\n'
+        probe = 'RETIRED=' + shlex.quote(' '.join(retired)) + '\n' + PROBE + update_drift.PROBE + "\npython3 - <<'ROSY_TOPOLOGY'\n" + topology + '\nROSY_TOPOLOGY\n'
         done = subprocess.run([*SSH, '--', target, 'bash -s -- ' + ' '.join(copies)], input=probe.encode(),
                               capture_output=True, timeout=120)
         if done.returncode:
@@ -581,6 +582,7 @@ def main() -> None:
         extra = clock_and_site(host, time.time(), role_of.get(target, ()))
         for verdict, unit, detail in extra:
             print(f'  {verdict:10} {unit}: {detail}')
+        extra += update_drift.findings(host, role_of.get(target, ()), time.time(), issuer_kids)
         stuck |= any(f[0] in FAILING for f in extra)
         if target not in role_of:
             print('  (no role in private/lab-hosts.json; services.yaml not checked)')
