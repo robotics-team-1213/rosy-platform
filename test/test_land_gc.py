@@ -73,6 +73,10 @@ def test_only_landings_with_nothing_unique_and_no_live_ticket_are_removed(tmp_pa
     unlanded = hidden(repo, holder, "land/feat/unlanded-20261101000002", extra=True)
     alive = hidden(repo, holder, "land/feat/alive-20261101000003", extra=True)
     fresh = hidden(repo, holder, "land/feat/fresh-20261101000004", log_age=time.time())
+    red = hidden(repo, holder, "land/feat/red-20261101000005", log_age=time.time() - 2 * 86400)
+    red_log = holder / f"{red.name}.log"
+    red_log.write_text("[land] STOP: NEW failure in t.py; MAIN-RED: every NEW id already failed on main\n")
+    os.utime(red_log, (time.time() - 2 * 86400,) * 2)
     git(repo, "branch", "land/v2-hand-made")  # not a land_async snapshot: never touched
     (common / "rosy-land-queue").mkdir()
     (common / "rosy-land-queue" / "01-1.json").write_text(json.dumps(
@@ -87,6 +91,8 @@ def test_only_landings_with_nothing_unique_and_no_live_ticket_are_removed(tmp_pa
     assert verdict["land-feat-unlanded-20261101000002"] == ("keep", "unlanded work (1 commit(s) not in main)")
     assert verdict["land-feat-alive-20261101000003"] == ("keep", "live ticket")
     assert verdict["land-feat-fresh-20261101000004"] == ("keep", "log written in the last hour")
+    # 11-14: nothing unique (its branch holds it), but land_async.orphans resumes this snapshot once main clears
+    assert verdict["land-feat-red-20261101000005"] == ("keep", "stopped on MAIN-RED; resumes itself")
     assert verdict[str(gone)][0] == "log"
 
     assert land_gc.apply(repo, rows) == []

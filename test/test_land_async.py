@@ -682,6 +682,23 @@ def test_orphans_lists_a_snapshot_whose_supervisor_died_unstopped(repo):
     assert tool.orphans(dev, now=tree.stat().st_mtime) == []  # a live ticket still owns it
 
 
+def test_a_landing_too_big_or_too_old_is_refused_before_a_snapshot_unless_said_why(repo, monkeypatch, capsys):
+    """11-14: unlanded branches held up to 269 commits; landed ones took median 6, max 37 (merges not counted)."""
+    main, dev = repo
+    monkeypatch.chdir(dev)
+    assert tool.too_big(dev) is None
+    _git(dev, "merge", "-q", "--no-ff", "--no-edit", "main")  # a merge of main is not an own commit
+    monkeypatch.setattr(tool, "MAX_OWN_COMMITS", 0)
+    assert "1 own commits not in main" in tool.too_big(dev)
+    with pytest.raises(SystemExit, match="refused: 1 own commits"):
+        tool.main(["--tests", "auto"])
+    with pytest.raises(SystemExit, match="needs a reason"):
+        tool.main(["--allow-big", " ", "--tests", "auto"])
+    monkeypatch.setattr(tool, "MAX_OWN_COMMITS", 40)
+    assert "days old" in tool.too_big(dev, now=time.time() + (tool.MAX_AGE_DAYS + 1) * 86400)
+    assert not (Path(_git(dev, "rev-parse", "--git-common-dir")) / tool.HOLDER).exists()  # nothing queued
+
+
 def test_a_main_red_stop_goes_again_once_main_no_longer_has_its_ids_open(repo, monkeypatch):
     """11-13: ~20 landings sat stopped for hours on one red main until someone resumed them by hand."""
     import land_mainred

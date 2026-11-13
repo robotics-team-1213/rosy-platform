@@ -44,6 +44,7 @@ FULL_WAIT_S, FULL_POLL_S = 30 * 60, 60  # D-889 addendum 32: a full queue at que
 RESOURCE_SHORTAGE = ("WinError 1450", "WinError 1455", "Out of memory", "MemoryError")
 RESOURCE_RETRIES = 3
 RESOURCE_WAIT_S = 300
+MAX_OWN_COMMITS, MAX_AGE_DAYS = 40, 14  # one landing's bound (too_big); --allow-big "<reason>" passes it
 
 
 class Busy(SystemExit):
@@ -312,7 +313,24 @@ def _supervise(tree: Path, snap: str, land_args: list[str], run, room) -> int:
         print(f"[land-async] {snap} did not land (exit {code}); kept {tree} for the owner", flush=True)
         split_rollup(tree, snap, reason=reason)
     superseded(tree, snap)
+    collect(tree)
     return code
+
+
+def collect(tree: Path) -> None:
+    """land_gc's lossless sweep of every leftover after each landing: by 11-14 it ran only by hand and the holder
+    held 4.2 GB and 488 logs."""
+    repo = tree.parent.parent.parent
+    sys.path[:0] = [str(repo / "tools")]
+    try:
+        import land_gc
+        rows = land_gc.plan(repo, time.time(), 7)
+        problems = land_gc.apply(repo, rows)
+        gone = sum(row[0] != "keep" for row in rows) - len(problems)
+        if gone or problems:
+            print(f"[land-async] land_gc removed {gone} leftover(s); {len(problems)} kept as changed", flush=True)
+    except Exception as exc:  # cleanup must never change the landing's own outcome
+        print(f"[land-async] land_gc sweep skipped: {exc}", flush=True)
 
 
 def superseded(tree: Path, snap: str) -> list[str]:
@@ -416,15 +434,21 @@ def resume(cwd: Path, name: str, land_args: list[str], launch, wait: float = 60,
     return None
 
 
-def main_red_cleared(cwd: Path, place: Path, name: str) -> bool:
-    """A stop on MAIN-RED whose NEW ids main no longer has open: nothing of the owner's to fix. 11-13 ~20 landings
-    sat stopped for hours on one red main, many owners' sessions already gone, until someone resumed them by hand."""
+def main_red_stop(place: Path, name: str) -> str | None:
+    """The log of a landing whose last STOP is MAIN-RED (main's failure, not the owner's), else None."""
     try:
         text = (place / (name + ".log")).read_text(encoding="utf-8", errors="replace")
     except OSError:
-        return False
+        return None
     stops = re.findall(r"^\[land\] STOP: .*$", text, re.M)
-    if not stops or "MAIN-RED" not in stops[-1]:
+    return text if stops and "MAIN-RED" in stops[-1] else None
+
+
+def main_red_cleared(cwd: Path, place: Path, name: str) -> bool:
+    """A stop on MAIN-RED whose NEW ids main no longer has open: nothing of the owner's to fix. 11-13 ~20 landings
+    sat stopped for hours on one red main, many owners' sessions already gone, until someone resumed them by hand."""
+    text = main_red_stop(place, name)
+    if text is None:
         return False
     tools = str(Path(git(cwd, "rev-parse", "--show-toplevel")) / "tools")  # main's, not a snapshot copy
     if tools not in sys.path:
@@ -464,6 +488,16 @@ def orphans(cwd: Path, hours: float = 24, now: float | None = None) -> list[str]
     return sorted(found)
 
 
+def too_big(cwd: Path, now: float | None = None) -> str | None:
+    """Why HEAD is too much for one landing, or None. 11-14: unlanded branches held up to 269 commits (39 merges
+    of main, v2/v3 chains stacked on each other) while landed ones took median 6, max 37; merges are not counted."""
+    own = git(cwd, "log", "--no-merges", "--format=%ct", "main..HEAD").split()
+    if len(own) > MAX_OWN_COMMITS:
+        return f"{len(own)} own commits not in main (more than {MAX_OWN_COMMITS})"
+    days = ((now or time.time()) - min(map(int, own))) / 86400 if own else 0
+    return f"its oldest commit not in main is {days:.0f} days old (more than {MAX_AGE_DAYS})" if days > MAX_AGE_DAYS else None
+
+
 def main(argv: list[str]) -> int:
     if any(arg in ("-h", "--help") for arg in argv):
         print(__doc__)
@@ -484,6 +518,15 @@ def main(argv: list[str]) -> int:
                 "supervisor exited without a ticket or landing; read its .log")
         print(f"[land-async] resumed {argv[1]}: {note}")
         return 0 if status else 1
+    big = next((argv[i + 1] for i, a in enumerate(argv[:-1]) if a == "--allow-big"), None)
+    argv = [a for i, a in enumerate(argv) if a != "--allow-big" and (i == 0 or argv[i - 1] != "--allow-big")]
+    if big is not None and not big.strip():
+        raise SystemExit('[land-async] --allow-big needs a reason: --allow-big "<why this cannot be split>"')
+    if big is None and (why := too_big(Path.cwd())):
+        raise SystemExit(f"[land-async] refused: {why}. Land the oldest finished part from a new branch off main"
+                         f' first, or say why not: --allow-big "<reason>"')
+    if big:
+        print(f"[land-async] --allow-big: {big}", flush=True)
     words = next((argv[i:i + 2] if a == "--mixed" else [a] for i, a in enumerate(argv)
                   if a == "--mixed" or a.startswith("--mixed=")), [])
     if subprocess.call(  # cheap gates fail here, before a snapshot or ticket exists

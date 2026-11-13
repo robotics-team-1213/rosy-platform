@@ -35,6 +35,7 @@ from pathlib import Path
 
 LANDED_IDLE_HOURS = 1.0
 STALE_COMMITS = 2_000
+ABANDON_DAYS = 14  # an unlanded branch with no worktree and no commit this long is archived (archive_abandoned)
 # main was rewritten after this commit (2026-09-22 09:55:14 +0900); branches cut before the rewrite share
 # only it with main and carry ~13,800 commits of the old line (feat/integrated-learning-pipeline, 2026-10-17).
 REWRITE_BASE = "ad86fca808"
@@ -68,6 +69,14 @@ def stale_history(cwd: Path, tip: str, base: str = "main") -> str | None:
 
 
 # --- orphan directories -------------------------------------------------------------
+
+def unlanded(cwd: Path, tip: str, base: str = "main") -> str | None:
+    """Why a new branch must not start at ``tip``, or None: work stacked on an unlanded branch grows with it
+    (11-14: v2/v3 chains held 178-189 commits not in main). Land that branch first."""
+    if _git(cwd, "merge-base", "--is-ancestor", tip, base).returncode == 1:
+        return f"not in {base} yet (land it first; a branch stacked on unlanded work grows with it)"
+    return None
+
 
 def scratch() -> Path | None:
     """Where orphan archives go: ``$ROSY_SCRATCH``, else ``X:/DevTemp`` on a lab PC that has it."""
@@ -233,4 +242,37 @@ def sweep_branches(root: Path, now: float, apply: bool, say=print, quiet: bool =
         done += 1
     if done or not quiet:
         say(f"[worktrees] {'deleted' if apply else 'would delete'} {done} merged branch(es) no worktree uses")
+    archive_abandoned(root, now, apply, say, quiet, keep)
+    return done
+
+
+def archive_abandoned(root: Path, now: float, apply: bool, say=print, quiet: bool = False, keep=frozenset()) -> int:
+    """Move unlanded branches no worktree has and nobody committed to for ABANDON_DAYS to
+    ``refs/archive/<branch>@<sha10>`` (11-14: 270 branches not in main, 219 without a worktree, 95 idle > 7 days).
+    Nothing is lost: restore with ``git branch <branch> refs/archive/<branch>@<sha10>``."""
+    listed = _git(root, "for-each-ref", "--no-merged", "refs/heads/main", "refs/heads",
+                  "--format=%(refname:short)\t%(objectname)\t%(worktreepath)\t%(committerdate:unix)")
+    if listed.returncode != 0:
+        raise RuntimeError(f"git for-each-ref failed: {listed.stderr.strip()}")
+    done = 0
+    for line in listed.stdout.splitlines():
+        branch, sha, checked_out, when = line.split("\t")
+        if (checked_out or branch in keep or branch.startswith(("archive/", "land/"))
+                or now - int(when or now) < ABANDON_DAYS * 86400):
+            continue
+        if apply:
+            ref = f"refs/archive/{branch}@{sha[:10]}"
+            # create-only, then drop the branch only at that exact sha: a moved branch is kept as it is
+            if (_git(root, "update-ref", ref, sha, "").returncode != 0
+                    and _git(root, "rev-parse", "--verify", "-q", ref).stdout.strip() != sha):
+                say(f"FAIL    branch {branch}: could not write {ref}; kept")
+                continue
+            if _git(root, "update-ref", "-d", f"refs/heads/{branch}", sha).returncode != 0:
+                say(f"FAIL    branch {branch} moved; kept (its archive ref stays)")
+                continue
+            _git(root, "config", "--remove-section", f"branch.{branch}")
+        done += 1
+    if done or not quiet:
+        say(f"[worktrees] {'archived' if apply else 'would archive'} {done} unlanded branch(es) idle over"
+            f" {ABANDON_DAYS} days with no worktree (refs/archive/<branch>@<sha>)")
     return done

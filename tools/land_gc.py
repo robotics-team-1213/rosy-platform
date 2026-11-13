@@ -30,6 +30,7 @@ import worktrees  # noqa: E402  (lossless status, including ignored user data)
 
 HOLDER, QUEUE, PREFIX = "rosy-land-wt", "rosy-land-queue", "land/"
 QUIET_S = 3600  # the 1 h wait worktree_rules gives landed worktrees
+MAIN_RED_DAYS = 14  # a MAIN-RED stop's snapshot waits this long for main to clear (worktree_rules.ABANDON_DAYS)
 FILES = (".stopped", ".land_async.py", ".resume.log", ".args.json")
 SNAPSHOT = re.compile(r"-\d{14}(-batch\d+-k\d+)?$")  # land_async.snapshot_name, plus land_batch's batch branches
 
@@ -107,6 +108,11 @@ def plan(repo: Path, now: float, log_days: float, *, only: str | None = None) ->
             continue
         if land_async.running(tree):
             out.append(("keep", "live supervisor", tree if tree.is_dir() else None, branches))
+            continue
+        # its branch may hold every commit, but the snapshot is what land_async.orphans resumes once main clears
+        if ((holder / f"{name}.stopped").exists() and log.exists() and now - log.stat().st_mtime < MAIN_RED_DAYS * 86400
+                and land_async.main_red_stop(holder, name)):
+            out.append(("keep", "stopped on MAIN-RED; resumes itself", tree if tree.is_dir() else None, branches))
             continue
         if log.exists() and now - log.stat().st_mtime < QUIET_S:
             out.append(("keep", "log written in the last hour", tree if tree.is_dir() else None, branches))
