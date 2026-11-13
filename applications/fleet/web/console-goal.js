@@ -384,41 +384,13 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
     }
   });
   pageScope.listen(el("map-canvas"), "pointerdown", (event) => {
-    if ((!view.pinning && !view.anchorPinTarget) || (!view.map && !view.siteMap)) return;
+    if (!view.pinning || (!view.map && !view.siteMap)) return;
     pinStart = canvasWorld(event);
   });
   pageScope.listen(el("map-canvas"), "pointerup", async (event) => {
     const life = pageScope.capture();
     const start = pinStart, end = canvasWorld(event);
     pinStart = null;
-    if (view.anchorPinTarget && start) {
-      const targetId = view.anchorPinTarget;
-      const dragged = end && Math.hypot(end.px - start.px, end.py - start.py) >= 3;
-      const existing = (view.anchors || []).find(a => a.target_id === targetId);
-      const yaw = dragged
-        ? Math.atan2(end.y - start.y, end.x - start.x)
-        : (typeof existing?.base_yaw === "number" ? existing.base_yaw : -1.5708);
-      view.anchorPinTarget = null;
-      render();
-      try {
-        const res = await call("/api/fleet/anchors", {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            target_id: targetId, kind: targetId.startsWith("arm_") ? "omx_ai" : "pinky",
-            base_x: Number(start.x.toFixed(4)), base_y: Number(start.y.toFixed(4)), base_yaw: Number(yaw.toFixed(4)),
-          }),
-          signals: [life.signal],
-        });
-        if (!life.current()) return;
-        if (res?.snapshot?.targets) view.anchors = res.snapshot.targets;
-        log(`${targetId} 기준 위치(Anchor) 고정 완료: (${start.x.toFixed(2)}, ${start.y.toFixed(2)}) m · HEAD ${Math.round((yaw * 180) / Math.PI)}°`, "good");
-        refreshGuide();
-        render();
-      } catch (err) {
-        if (err.name !== "AbortError") log(`${targetId} 기준 위치 지정 실패 — ${err.message}`, "bad");
-      }
-      return;
-    }
     const robotId = view.pinning;
     if (!robotId || !start) return;
     const dragged = end && Math.hypot(end.px - start.px, end.py - start.py) >= 3;
@@ -452,7 +424,7 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
   pageScope.listen(el("map-canvas"), "click", async (event) => {
     const life = pageScope.capture();
     life.check();
-    if (view.pinning || view.anchorPinTarget) return;
+    if (view.pinning) return;
     if (!view.map && view.siteMap) {
       const world = canvasWorld(event);
       if (!world) return;
