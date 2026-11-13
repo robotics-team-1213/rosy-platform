@@ -4,7 +4,9 @@ import { readFile } from 'node:fs/promises';
 
 const source = new URL('../../../../applications/fleet/web/charge-bays-view.js', import.meta.url);
 const gate = new URL('../../../../applications/fleet/web/shared/poll-gate.js', import.meta.url);
-const code = (await readFile(source, 'utf8')).replace('/console/assets/poll-gate.js', gate.href);
+const model = new URL('../../../../applications/fleet/web/charge-bays-model.js', import.meta.url);
+const code = (await readFile(source, 'utf8')).replace('/console/assets/poll-gate.js', gate.href)
+  .replaceAll('/console/assets/charge-bays-model.js', model.href);
 const { chargeBayRows, inspectorTargetsFromRows, formatArmLiveJointText } = await import(`data:text/javascript,${encodeURIComponent(code)}`);
 
 const plan = {
