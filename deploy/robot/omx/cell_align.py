@@ -120,6 +120,9 @@ def next_step(cell, config, calibration, calibration_path, catalog, roi, source,
     return {"step": "hold", "why": "packed, and no lengthwise push has a clear path", "refused": refused}
 
 
+PILE_REACH_MM = 120  # a piece of the pile: its centre within a 90 mm box plus a 30 mm box of the tangled blob's centre
+
+
 def pile_push(objects: list, tangled: list, entries: dict, try_push) -> dict | None:
     """2026-11-13 (arm_s): a box's end lay on another box and the pile leaned on the arm plate. Untangle from the outside:
     the pieces nearest the tangled blob first, each at its catalogue size (a tangled blob at its measured size), and the first
@@ -127,8 +130,9 @@ def pile_push(objects: list, tangled: list, entries: dict, try_push) -> dict | N
     def sized(o):
         e = entries.get(o.get("object"))
         return dict(o, length_mm=e["length_mm"], width_mm=e["width_mm"]) if e else o
-    near = sorted((sized(o) for o in objects if "length_mm" in sized(o)),
-                  key=lambda o: min(math.dist(o["centre_mm"], c) for c in tangled))
+    gap = lambda o: min(math.dist(o["centre_mm"], c) for c in tangled)  # noqa: E731
+    # only the pile's own pieces: a free box elsewhere is no part of it, and moving it would hide a locked pile (review)
+    near = sorted((o for o in map(sized, objects) if "length_mm" in o and gap(o) <= PILE_REACH_MM), key=gap)
     return next((push for o in near if (push := try_push(o))), None)
 
 
