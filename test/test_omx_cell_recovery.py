@@ -72,7 +72,8 @@ def test_a_box_at_the_edge_of_the_view_is_unseen_not_packed():
 def test_the_layer_under_a_stacked_box_is_its_own_side_face_not_a_neighbour():
     import cell_auto_safety
     px = lambda p: (100 + p[0] * 1000, 100 + (p[1] - 0.1) * 1000)  # noqa: E731  1 px per mm
-    box = {"raw_m": [0.0, 0.1], "width_mm": 30, "length_mm": 60, "long_axis_deg": 0.0}
+    box = {"raw_m": [0.0, 0.1], "width_mm": 30, "length_mm": 60, "long_axis_deg": 0.0,
+           "hull_px": [[70, 85], [130, 85], [130, 115], [70, 115]]}
     mask = np.zeros((200, 200), np.uint8)
     mask[85:126, 70:131] = 255  # its top and 10 mm of side faces past the outline on +y: two layers' worth
     assert cell_auto_safety.finger_room(mask, (0, 0, 200, 200), px, box)["margin_mm"] is None
