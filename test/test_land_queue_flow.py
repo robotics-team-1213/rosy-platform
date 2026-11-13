@@ -89,6 +89,7 @@ def test_land_async_hands_the_mixed_words_to_the_precheck(monkeypatch, tmp_path)
     import land_async
     seen = []
     monkeypatch.setattr(land_async.subprocess, "call", lambda argv, **k: seen.append(argv) or 1)
+    monkeypatch.setattr(land_async, "too_big", lambda cwd: None)  # the size gate has its own test
     assert land_async.main(["--tests", "auto", "--mixed", "user said so"]) == 1
     assert seen[0][-3:] == ["--precheck", "--mixed", "user said so"]
 
@@ -139,5 +140,6 @@ def test_land_async_also_takes_the_mixed_words_in_equals_form(monkeypatch):
     import land_async
     seen = []
     monkeypatch.setattr(land_async.subprocess, "call", lambda argv, **k: seen.append(argv) or 1)
+    monkeypatch.setattr(land_async, "too_big", lambda cwd: None)  # the size gate has its own test
     assert land_async.main(["--mixed=user said so", "--tests", "auto"]) == 1
     assert seen[0][-2:] == ["--precheck", "--mixed=user said so"]

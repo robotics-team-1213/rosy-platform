@@ -53,6 +53,7 @@ def test_help_text_inside_a_forwarded_value_is_not_a_help_request(monkeypatch):
     argv = ["--tests", "test/example.py --help"]
     calls = []
     monkeypatch.setattr(tool.subprocess, "call", lambda *a, **k: 0)  # land.py --precheck has its own tests
+    monkeypatch.setattr(tool, "too_big", lambda cwd: None)  # its own test below
     monkeypatch.setattr(tool, "start", lambda cwd, args, now, launch: (
         calls.append(args) or ("snapshot", Path("log"))))
     assert tool.main(argv) == 0
@@ -680,6 +681,47 @@ def test_orphans_lists_a_snapshot_whose_supervisor_died_unstopped(repo):
     assert tool.orphans(dev, now=tree.stat().st_mtime + 25 * 3600) == []  # older than a day: not a recovery
     _ticket(main, "0004", branch=snap)
     assert tool.orphans(dev, now=tree.stat().st_mtime) == []  # a live ticket still owns it
+
+
+def test_a_landing_too_big_or_too_old_is_refused_before_a_snapshot_unless_said_why(repo, monkeypatch, capsys):
+    """11-14: unlanded branches held up to 269 commits; landed ones took median 6, max 37 (merges not counted)."""
+    main, dev = repo
+    monkeypatch.chdir(dev)
+    assert tool.too_big(dev) is None
+    _git(dev, "merge", "-q", "--no-ff", "--no-edit", "main")  # a merge of main is not an own commit
+    monkeypatch.setattr(tool, "MAX_OWN_COMMITS", 0)
+    assert "1 own commits not in main" in tool.too_big(dev)
+    with pytest.raises(SystemExit, match="refused: 1 own commits"):
+        tool.main(["--tests", "auto"])
+    with pytest.raises(SystemExit, match="needs a reason"):
+        tool.main(["--allow-big", " ", "--tests", "auto"])
+    monkeypatch.setattr(tool, "MAX_OWN_COMMITS", 40)
+    assert "days old" in tool.too_big(dev, now=time.time() + (tool.MAX_AGE_DAYS + 1) * 86400)
+    assert not (Path(_git(dev, "rev-parse", "--git-common-dir")) / tool.HOLDER).exists()  # nothing queued
+
+
+def test_a_main_red_stop_goes_again_once_main_no_longer_has_its_ids_open(repo, monkeypatch):
+    """11-13: ~20 landings sat stopped for hours on one red main until someone resumed them by hand."""
+    import land_mainred
+    main, dev = repo
+    snap, log = tool.start(dev, [], NOW, lambda *a: None)
+    tree = log.parent / log.name.removesuffix(".log")
+    (tree.parent / (tree.name + ".stopped")).write_text("land.py exit 1\n")
+    with open(log, "a", encoding="utf-8") as out:
+        out.write("NEW       pkg/test/test_a.py::test_a\n[land] STOP: NEW failure in pkg/test/test_a.py;"
+                  " MAIN-RED: every NEW id already failed on main 8b65ceaa0f (rosy-main-red.jsonl); not rerun\n")
+    opened = {"pkg/test/test_a.py::test_a": {}}
+    monkeypatch.setattr(land_mainred, "state", lambda wt: opened)
+    assert tool.orphans(dev, now=tree.stat().st_mtime + 30 * 3600) == []  # main still red there: keep waiting
+    opened.clear()
+    assert tool.orphans(dev, now=tree.stat().st_mtime + 30 * 3600) == [tree.name]
+    mark = tree.parent / (tree.name + ".auto-resume")  # resumed once at this main: it stopped again, no loop
+    mark.write_text(_git(dev, "rev-parse", "main"), encoding="utf-8")
+    assert tool.orphans(dev, now=tree.stat().st_mtime + 30 * 3600) == []
+    mark.unlink()
+    with open(log, "a", encoding="utf-8") as out:
+        out.write("[land] STOP: lint failed (exit 1):\n")
+    assert tool.orphans(dev, now=tree.stat().st_mtime) == []  # the owner's own stop waits for the owner
 
 
 def test_a_waiter_never_replaces_a_landing_that_started_while_it_waited(repo, monkeypatch):

@@ -2118,6 +2118,7 @@ clpy.duration을 추가했다(bridge AGENTS의 두 파일 함께 갱신 규칙).
 - 결정: API v1.372.
 - gate 변화: SOURCE 변경. 로봇·장치 수용 없음.
 - 교훈: CE 해당 없음 — 최종 코드와 시험이 판단을 보존한다. 실물·운영 수용은 아니다.
+
 ## 2026-11-07 · 92cb90111c · fix(battery): release a recovered battery stop in the policy chain (D-502 Amendment 2026-11-07)
 - 변경: 배터리 래치만 잔량 회복 시 스스로 풀림, 다른 정지는 래치를 넘겨받음, 상태 `safety.releases_when_charged`, 화면 문구.
 - 증거: 원격 시험 결과는 착지 기록을 본다. 실제 충전 해제는 새 릴리스 뒤 확인 전이다.
@@ -2165,3 +2166,8 @@ clpy.duration을 추가했다(bridge AGENTS의 두 파일 함께 갱신 규칙).
 - gate 변화: 없음. SOURCE GO, LOCAL GO 유지(main red 복구)
 - 결정: 없음
 - 교훈: 없음
+
+## 2026-11-14 · uncommitted · 상태 표시등 설정 영속 인계
+- 변경: CORE가 rosy-display가 읽는 영속 설정을 원자적으로 기록한다. rosy-face는 평상시 패턴만 런타임에 억제하고 부팅·안전·식별 표시는 유지한다.
+- 증거: 원격 CORE·rosy-face·native systemd 계약 시험 결과는 이 브랜치 검증에 기록한다.
+- gate 변화: 없음. 장치·현장 판정은 수행하지 않았다.
