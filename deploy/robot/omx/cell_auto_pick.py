@@ -65,6 +65,9 @@ import cell_site_track  # noqa: E402
 from cell_transfer import FOLDED, STILL_HOLDING_UNITS, Gate, transfer_folded  # noqa: E402,F401
 import cell_wrist_ref  # noqa: E402
 
+EXECUTOR_CANDIDATES = ("ik_chunk",)
+APPROVED_REAL_EXECUTORS = frozenset({"ik_chunk"})  # D-911: new motion paths need a person's approval.
+
 
 def run_auto(
     cell,
@@ -81,6 +84,7 @@ def run_auto(
     sleep=time.sleep,
     log=print,
     attempts=None,
+    scenario_id=None,
 ) -> dict:
     """One object from `source` to `dest`; up to `attempts` grasps (the second with the better candidate)."""
     work, out = Path(work), {"from": source, "to": dest, "attempts": []}
@@ -111,7 +115,7 @@ def run_auto(
     shadow = None if dry_run else cell_act_shadow.load(config, work)
     try:
         for attempt in range(attempts):
-            t0, tried = time.time(), {"locate": {"found": False}}
+            t0, tried = time.time(), {"locate": {"found": False}, "scenario_id": scenario_id}
             if droi is not None and dest_site != source:  # the destination is looked at again before each attempt
                 _, dmask, _, derr = observe(cell, config, calibration, dest_site, droi, catalog)
                 dest_view = None if derr else (dmask, droi)
@@ -208,6 +212,12 @@ def run_auto(
             config = dict(config, _payload=cell_objects.payload(catalog, o["object"]))
             episode = open_episode(cell, config, source, dest, o["object"])
             same = dict(config, plan=dict(config["plan"], **target.get("plan", {})))
+            allowed = [executor for executor in EXECUTOR_CANDIDATES if executor in APPROVED_REAL_EXECUTORS]
+            choice = choices.best_contextual("exec.pick_place", allowed=allowed)
+            if choice["value"] != "ik_chunk":
+                raise RuntimeError("no approved executor for the real arm")
+            tried["execution"] = {"segment": attempt, "purpose": "pick_place", "executor": choice["value"],
+                                  "candidates": allowed, "propensity": choice["propensity"], "outcome": "stopped"}
             gate = Gate(guarded, config, calibration, sequence=sequence)
             # shadow inference before the gate opens: no delay between the approval and the motion
             shadow_row = shadow.capture(cell, config, attempt, img) if shadow else None
@@ -249,6 +259,11 @@ def run_auto(
                 or ("disabled or uncalibrated" if wrist is None else None)
             )
             tried["transfer"] = moved
+            if moved["result"] not in ("placed", "contact", "fault", "refused"):
+                tried["execution"]["outcome"] = "failed"
+                choices.outcome_contextual("exec.pick_place", choice["value"], False,
+                                           propensity=choice["propensity"], note=moved["result"])
+                choices.save()
             if moved["result"] in ("empty", "reinserted") or (
                 moved["result"] == "contact" and moved.get("at") in ("run descend_pick", "run grasp_pick")
             ):
@@ -284,6 +299,11 @@ def run_auto(
                     f"placement seen on the {tried['verify']['basis']}",
                 )
                 tried["learned_bias"] = learn_bias(config, calibration_path, dest_site, place_xy, tried["verify"])
+                ok = bool(tried["verify"].get("inside"))
+                tried["execution"]["outcome"] = "succeeded" if ok else "failed"
+                choices.outcome_contextual("exec.pick_place", choice["value"], ok,
+                                           propensity=choice["propensity"], note="placement verification")
+                choices.save()
                 pending = cell_wrist_ref.ref_path(work, config.get("arm_id", "arm_s"), dest_site).with_suffix(
                     ".pending.json"
                 )
@@ -336,6 +356,8 @@ def run_auto(
                 return {**out, "result": f"stopped: {moved['result']}"}
     except Aborted as stop:
         close_episode(cell, episode, False, f"aborted: {stop}")
+        if "execution" in tried:
+            cell_attempts.record(config, calibration, source, dest, attempt, tried, t0, choices)
         return {**out, "result": f"aborted: {stop}"}
     except Exception:
         if guarded is not None:
@@ -353,6 +375,7 @@ def main(argv=None):
     ap = parser(__doc__)
     ap.add_argument("--commissioning", action="store_true", help="a supervised trial of this one carry (D-911)")
     ap.add_argument("--person-at-switch", action="store_true", help="with --commissioning: a person is at the power switch")
+    ap.add_argument("--scenario-id", help="scenario identifier from the cell task")
     args = ap.parse_args(argv)
     if args.commissioning != args.person_at_switch:
         raise SystemExit("--commissioning needs --person-at-switch (and the other way round)")
@@ -373,6 +396,7 @@ def main(argv=None):
         work,
         cell_choices.Choices(work / "choices.json"),
         args.dry_run,
+        scenario_id=args.scenario_id,
     )
     print(json.dumps(result, indent=1, default=str))
     return 0 if result["result"] in ("placed", "planned") else 1

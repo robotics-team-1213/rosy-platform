@@ -100,8 +100,11 @@ class FleetModelPipeline:
         import joint_jitter as jj
         import multi_dof_kinematics as mdk
 
-        src_spec = dict(self.SITE_COORDS.get(src_site, self.SITE_COORDS["pinky"]))
-        dst_spec = dict(self.SITE_COORDS.get(dst_site, self.SITE_COORDS["belt"]))
+        unknown = [s for s in (src_site, dst_site) if s not in self.SITE_COORDS]
+        if unknown:
+            raise ValueError(f"unknown site(s) {unknown}; known: {sorted(self.SITE_COORDS)}")
+        src_spec = dict(self.SITE_COORDS[src_site])
+        dst_spec = dict(self.SITE_COORDS[dst_site])
         if arm_id == "arm_s":
             src_spec["yaw_deg"] = float(yaw_deg)
             dst_spec["yaw_deg"] = float(yaw_deg)
@@ -268,7 +271,9 @@ class FleetModelPipeline:
             if intercept.get("ok"):
                 ix, iy = intercept["intercept_xy_m"]
                 src_spec["x"], src_spec["y"] = float(ix), float(iy)
-        dst_spec = dict(self.SITE_COORDS.get(f"pallet-l{int(tier)-1}", self.SITE_COORDS["pallet-l0"]))
+        if not 1 <= int(tier) <= 3:
+            raise ValueError(f"tier {tier} outside the pallet's 1..3")
+        dst_spec = dict(self.SITE_COORDS[f"pallet-l{int(tier)-1}"])
         cand = {
             "schema": "rosy.omx-cell-area-xyz-directive.v1",
             "directive_id": f"prestage-cell-ab-t{tier}-{target_arm}",
