@@ -59,6 +59,7 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
         eligible: () => !auth.locked, request: () => executeChoice(choice, card, button, true)});
     }
     const origLabel = button.textContent;
+    button.setAttribute("reason", "요청 처리 중");
     button.setAttribute("disabled", "");
     button.textContent = `${origLabel} (처리 중…)`;
     try {
@@ -117,6 +118,7 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
     } finally {
       button.textContent = origLabel;
       button.removeAttribute("disabled");
+      button.removeAttribute("reason");
     }
   }
 
@@ -262,6 +264,7 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
     runCustomBtn.textContent = `▶ ${targetArm} 맞춤 실행`;
     runCustomBtn.addEventListener("click", async () => {
       if (auth.locked || runCustomBtn.hasAttribute("disabled")) return;
+      runCustomBtn.setAttribute("reason", "요청 처리 중");
       runCustomBtn.setAttribute("disabled", "");
       const orig = runCustomBtn.textContent;
       runCustomBtn.textContent = "등록 중…";
@@ -284,6 +287,7 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
       } finally {
         runCustomBtn.textContent = orig;
         runCustomBtn.removeAttribute("disabled");
+        runCustomBtn.removeAttribute("reason");
       }
     });
     quickDispatchBar.append(tierSel, dispSel, runCustomBtn);

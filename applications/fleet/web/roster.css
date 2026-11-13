@@ -17,7 +17,7 @@
 .cell-cam-thumb { width: 6rem; aspect-ratio: 4 / 3; object-fit: cover; border-radius: var(--radius-control); background: var(--surface-flat); cursor: zoom-in; }
 .cell-cam-thumb.focused { grid-column: 1 / -1; width: 100%; aspect-ratio: 16 / 9; object-fit: contain; cursor: zoom-out; }
 .omx-card-actions { display: flex; flex-wrap: wrap; gap: var(--space-1); }
-.omx-card-actions ui-button { min-width: 0; font-size: var(--text-micro); }
+.omx-card-actions ui-button { min-width: 0; }
 .omx-right-inspector:not(:empty) { display: grid; gap: var(--space-2); min-width: 0; max-width: 100%; box-sizing: border-box; margin: var(--space-2) 0; padding: var(--space-2) var(--space-3); border: 1px solid var(--series-primary); border-radius: var(--radius-panel); background: var(--surface-raised); overflow: hidden; }
 .omx-inspector-tabs { display: flex; flex-wrap: wrap; gap: var(--space-1); align-items: center; padding-bottom: var(--space-1); border-bottom: 1px solid var(--border-subtle); }
 .omx-inspector-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); min-width: 0; }
@@ -29,7 +29,7 @@
 @media (width < 30rem) {
   .omx-inspector-dual-grid { grid-template-columns: minmax(0, 1fr); }
 }
-.omx-inspector-dual-pane { display: grid; gap: 2px; min-width: 0; }
+.omx-inspector-dual-pane { display: grid; gap: var(--space-1); min-width: 0; }
 .omx-inspector-cam-badge { font-family: var(--mono); font-size: var(--text-micro); color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .omx-inspector-quick-dispatch { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-1); align-items: center; min-width: 0; }
 @media (width < 30rem) {
@@ -37,9 +37,9 @@
 }
 .omx-inspector-quick-dispatch select { width: 100%; min-width: 0; font-size: var(--text-micro); }
 .omx-inspector-pip-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(4.8rem, 1fr)); gap: var(--space-1); min-width: 0; }
-.omx-inspector-pip { display: grid; gap: 2px; padding: var(--space-1); border: 1px solid var(--border-subtle); border-radius: var(--radius-control); background: var(--surface-canvas); cursor: pointer; min-width: 0; }
+.omx-inspector-pip { display: grid; gap: var(--space-1); padding: var(--space-1); border: 1px solid var(--border-subtle); border-radius: var(--radius-control); background: var(--surface-canvas); cursor: pointer; min-width: 0; }
 .omx-inspector-pip.active { border-color: var(--series-primary); background: var(--surface-raised); }
-.omx-inspector-pip img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 3px; background: var(--surface-flat); }
+.omx-inspector-pip img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: var(--radius-control); background: var(--surface-flat); }
 .omx-inspector-pip small { font-family: var(--mono); font-size: var(--text-micro); color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .omx-inspector-meta { margin: 0; font-family: var(--mono); font-size: var(--text-micro); color: var(--text-secondary); overflow-wrap: anywhere; }
 /* 카드는 내용 높이를 지킨다 — 스크롤 칸 안에서 줄어들면 까닭 줄과 버튼이 잘린다. */
@@ -433,7 +433,6 @@
   gap: var(--space-1);
   font-size: var(--text-label);
 }
-.map-hover-card[hidden] { display: none; }
 .hover-card-head {
   display: flex;
   align-items: center;

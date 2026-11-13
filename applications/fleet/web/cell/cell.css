@@ -70,15 +70,15 @@ pre { max-height: 24rem; overflow: auto; white-space: pre-wrap; overflow-wrap: a
 @media (width < 30rem) {
   .omx-inspector-dual-grid { grid-template-columns: minmax(0, 1fr); }
 }
-.omx-inspector-dual-pane { display: grid; gap: 3px; min-width: 0; }
+.omx-inspector-dual-pane { display: grid; gap: var(--space-1); min-width: 0; }
 .omx-inspector-quick-dispatch { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-1); align-items: center; min-width: 0; }
 @media (width < 30rem) {
   .omx-inspector-quick-dispatch { grid-template-columns: minmax(0, 1fr); }
 }
 .omx-inspector-pip-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(5.5rem, 1fr)); gap: var(--space-1); }
-.omx-inspector-pip { display: grid; gap: 2px; padding: var(--space-1); border: 1px solid var(--border-default); border-radius: var(--radius-control); background: var(--surface-canvas); cursor: pointer; min-width: 0; }
+.omx-inspector-pip { display: grid; gap: var(--space-1); padding: var(--space-1); border: 1px solid var(--border-default); border-radius: var(--radius-control); background: var(--surface-canvas); cursor: pointer; min-width: 0; }
 .omx-inspector-pip.active { border-color: var(--series-primary); background: var(--surface-raised); }
-.omx-inspector-pip img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 3px; background: var(--surface-recessed); }
+.omx-inspector-pip img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: var(--radius-control); background: var(--surface-recessed); }
 .omx-inspector-pip small { font: var(--text-micro) var(--mono); color: var(--nominal-quiet); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .omx-inspector-readout { margin: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--space-1) var(--space-2); padding: var(--space-2); border: 1px solid var(--border-default); border-radius: var(--radius-control); font: var(--text-micro) var(--mono); }
 .omx-inspector-readout dt { color: var(--nominal-quiet); white-space: nowrap; }

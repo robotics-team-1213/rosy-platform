@@ -22,6 +22,7 @@ export function createCellViews(ctx) {
     tabs.className = 'omx-inspector-tabs';
     for (const s of specs) {
       const tab = document.createElement('ui-button');
+      tab.setAttribute('kind', 'quiet');
       tab.setAttribute('kind', s.id === activeSpec.id ? 'primary' : 'quiet');
       tab.setAttribute('type', 'button');
       tab.dataset.inspectTarget = s.id;
@@ -30,6 +31,7 @@ export function createCellViews(ctx) {
       tabs.append(tab);
     }
     const dualBtn = document.createElement('ui-button');
+    dualBtn.setAttribute('kind', 'quiet');
     dualBtn.setAttribute('kind', state.dualInspectorCamMode ? 'primary' : 'quiet');
     dualBtn.setAttribute('type', 'button');
     dualBtn.dataset.dualCamToggle = 'true';
@@ -176,6 +178,7 @@ export function createCellViews(ctx) {
     actions.className = 'omx-inspector-actions';
     for (const b of (activeSpec.buttons || [])) {
       const btn = document.createElement('ui-button');
+      btn.setAttribute('kind', 'quiet');
       btn.setAttribute('kind', b.cancelTaskId ? 'irreversible' : 'quiet');
       btn.setAttribute('type', 'button');
       btn.textContent = b.label;
@@ -233,6 +236,7 @@ export function createCellViews(ctx) {
       frames()?.bind(thumb, activeView, camQualityBadge, '🎥 영상');
       for (const v of (card.cameraViews || [])) {
         const pill = document.createElement('ui-button');
+        pill.setAttribute('kind', 'quiet');
         pill.setAttribute('kind', v.id === activeViewId ? 'primary' : 'quiet');
         pill.setAttribute('type', 'button');
         pill.dataset.cameraView = v.id;
@@ -281,6 +285,7 @@ export function createCellViews(ctx) {
         : [['rosy_46', '🔍 우측 연동: rosy_46'], ['rosy_45', '🔍 rosy_45'], ['rosy_42', '🔍 rosy_42']];
       for (const [tId, tLabel] of inspectTargets) {
         const iBtn = document.createElement('ui-button');
+        iBtn.setAttribute('kind', 'quiet');
         iBtn.setAttribute('kind', state.selectedInspectorTarget === tId ? 'primary' : 'quiet');
         iBtn.setAttribute('type', 'button');
         iBtn.dataset.inspectTarget = tId;
@@ -293,6 +298,7 @@ export function createCellViews(ctx) {
       }
       for (const b of card.buttons) {
         const btn = document.createElement('ui-button');
+        btn.setAttribute('kind', 'quiet');
         btn.setAttribute('kind', b.cancelTaskId ? 'irreversible' : 'quiet');
         btn.setAttribute('type', 'button');
         btn.textContent = b.label;
