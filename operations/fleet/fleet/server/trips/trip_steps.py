@@ -369,13 +369,17 @@ class TripSteps:
         goal = (x, y, yaw)
         if self._robot_state is not None:  # D-1003: Nav2 runs on the robot's own map, not the site map
             state = await self._call(self._robot_state(live.view["robot_id"]))
+            binding = (self._store.map_bindings.matching_fit(live.view["robot_id"], state or {},
+                                                             (active[1].map_id, active[0]))
+                       if self.config.map_binding_required else None)  # D-1022
             try:
-                converted = robot_frame_goal(goal, pose, state, active[1].map_id)
+                converted = robot_frame_goal(goal, pose, state, active[1].map_id, binding)
             except SiteFrameMismatch as error:
                 # D-1010: the site side of the conversion is not this map. Never convert, never
                 # send the site goal raw to a robot known to run its own map frame.
                 await self._stop(live, "stopped", "map_frame",
-                                 {"pose_map_id": error.pose_map_id, "map_id": error.map_id})
+                                 {"pose_map_id": error.pose_map_id, "map_id": error.map_id,
+                                  **({"binding": error.reason} if error.reason else {})})
                 return
             if converted is None:
                 # D-1010 review: no proof the frames bind (not LOCALIZED, no robot map id equal to
@@ -390,7 +394,8 @@ class TripSteps:
             live.view["detail"]["goal_frame"] = {  # D-1010: the audit binding of the sent goal
                 "map_id": active[1].map_id, "map_version": active[0],
                 "robot_map_id": (state or {}).get("map_id"),
-                "goal_frame": "site" if site_frame else "robot"}
+                "goal_frame": "site" if site_frame else "robot",
+                **({"map_grid_id": (state or {}).get("map_grid_id")} if binding is not None else {})}
         elif not self._poses_in_robot_frame:
             # D-1010 review: a port without robot snapshots (D-1003 6) proves nothing either; an
             # unproven free goal stops the trip instead of leaving in site coordinates.

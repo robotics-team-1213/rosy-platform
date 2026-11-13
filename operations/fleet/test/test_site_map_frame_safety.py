@@ -234,3 +234,53 @@ def test_pose_view_carries_the_map_id():
     view = pose_view(MapPose(1.0, 2.0, 0.5, "LOCALIZED", "sighting", 0.0, 0.1, 0.2, "world_261026"))
     assert view["map_id"] == "world_261026"
     assert pose_view(None) is None
+
+
+# D-1022: with fleet.trip.map_binding_required the approved binding of the loaded grid is the only proof.
+_TRUTH = __import__("fleet.localization.map_binding", fromlist=["Fit"]).Fit(0.4, 0.3, -0.2, ())
+_GRID = "occupancy:0123456789ab"
+_SPAN = [(-1.0, -0.5), (1.0, -0.5), (0.9, 0.45)]
+
+
+def _bound_setup(map_id="slam", grid=_GRID, approve=True):
+    runner, store, ports = _setup(_free_map(), caps=BOTH, map_binding_required=True)
+    ports.map_id = "site"
+    state = {**_state((0.0, 0.0, 0.0), map_id=map_id), "map_grid_id": grid}
+
+    async def robot_state(robot_id):
+        return state
+
+    runner._robot_state = robot_state
+    if approve:
+        pairs = [{"site": list(p), "robot": list(_TRUTH.inverse(p))} for p in _SPAN]
+        store.map_bindings.approve("rosy_60", {**state, "map_grid_id": _GRID},
+                                   (store.active()[1].map_id, store.active()[0]), pairs,
+                                   [{"site": [0.0, 0.0], "robot": list(_TRUTH.inverse((0.0, 0.0)))}], "bob")
+    _plan(store, ports, "ab:fwd", 0.1, "C")
+    run(runner.start("p1", "bob"))
+    _ticks(runner, ports)
+    return runner, ports
+
+
+def test_a_bound_robot_gets_the_goal_through_its_binding_even_on_an_equal_map_id():
+    for map_id in ("slam", "site"):  # the map_id shortcut no longer proves one frame
+        runner, ports = _bound_setup(map_id)
+        assert ports.goals == [pytest.approx(_TRUTH.inverse((1.0, 0.0)))]
+        assert runner.view("p1")["detail"]["goal_frame"]["map_grid_id"] == _GRID
+
+
+@pytest.mark.parametrize("kw, reason", [({"approve": False}, "MAP_BINDING_REQUIRED"),
+                                        ({"grid": "occupancy:ffffffffffff"}, "MAP_BINDING_GRID_CHANGED")])
+def test_a_required_binding_that_does_not_match_stops_the_trip(kw, reason):
+    runner, ports = _bound_setup(**kw)
+    row = runner.view("p1")
+    assert ports.goals == [] and row["reason"] == "map_frame" and row["detail"]["binding"] == reason
+
+
+def test_robot_frame_goal_inverts_the_binding_and_refuses_without_one():
+    site = MapPose(0.0, 0.0, 0.0, "LOCALIZED", "sighting", 0.0, 0.1, 0.1)
+    x, y, yaw = robot_frame_goal((0.5, 0.2, 1.0), site, {}, "site", (_TRUTH, ""))
+    assert _TRUTH.apply((x, y)) == pytest.approx((0.5, 0.2)) and yaw == pytest.approx(1.0 - 0.4)
+    with pytest.raises(SiteFrameMismatch) as err:
+        robot_frame_goal((0.5, 0.2, 1.0), site, {"map_id": "site"}, "site", (None, "MAP_BINDING_SITE_CHANGED"))
+    assert err.value.reason == "MAP_BINDING_SITE_CHANGED"

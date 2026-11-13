@@ -288,13 +288,15 @@ class SiteFrameMismatch(ValueError):
     """D-1010: the site side of a robot-frame goal is not a LOCALIZED pose on the active site
     map. The goal must not silently fall back to site coordinates then: the caller stops."""
 
-    def __init__(self, pose_map_id, map_id: str) -> None:
-        super().__init__(f"site pose is anchored on {pose_map_id!r}, not the active site map {map_id!r}")
+    def __init__(self, pose_map_id, map_id: str, reason: Optional[str] = None) -> None:
+        super().__init__(reason or f"site pose is anchored on {pose_map_id!r}, not the active site map {map_id!r}")
         self.pose_map_id = pose_map_id
         self.map_id = map_id
+        self.reason = reason  # D-1022: why no map binding applies (MAP_BINDING_*)
 
 
-def robot_frame_goal(goal: tuple, site_pose: MapPose, state, map_id: Optional[str] = None) -> Optional[tuple]:
+def robot_frame_goal(goal: tuple, site_pose: MapPose, state, map_id: Optional[str] = None,
+                     binding: Optional[tuple] = None) -> Optional[tuple]:
     """D-1003: a site-map free goal ``(x, y, yaw)`` in the robot's own Nav2 ``map`` frame; None without
     a frame proof, so the caller stops instead of sending site coordinates (D-1010 review 2026-11-10).
 
@@ -306,6 +308,14 @@ def robot_frame_goal(goal: tuple, site_pose: MapPose, state, map_id: Optional[st
     from another frame, or sent raw instead, drives the robot to a wrong place.
     shortcut: the two poses come from separate reads within one trip period, so motion between them
     shifts the goal (≤ speed × read gap); pair them on the snapshot's odom stamp when that error matters."""
+    if binding is not None:
+        # D-1022: ``(fit, reason)`` from the approved binding of this robot's loaded grid. It replaces both the
+        # map_id-equality proof and the single pose pair: no matching binding, no goal.
+        fit, reason = binding
+        if fit is None:
+            raise SiteFrameMismatch(None, map_id, reason)
+        rx, ry = fit.inverse(goal[:2])
+        return rx, ry, wrap(goal[2] - fit.yaw)
     if map_id is not None and state is not None and state.get("map_id") == map_id:
         return goal  # D-1010: the robot's own map is this site map: one frame, nothing to convert
     status = trust.status_of(state)
