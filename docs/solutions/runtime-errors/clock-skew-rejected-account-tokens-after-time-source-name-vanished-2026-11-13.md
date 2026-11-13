@@ -36,7 +36,7 @@ A host rename or move silently turns a named time source into "no source". chron
 - Learning and the Fleet receiver now log one line with the exception class and first message line when an Account exchange is refused. No token, code or secret is logged; user-facing behaviour is unchanged.
 - The R host runs the chrony site role (D-859): upstreams are public NTP servers, clients are the LAN. The model PC and Pinkys use `rosy-fleet-r.local` as their single client source.
 - Pinky SD cards carry the name: `prepare-rosy-sd.ps1 -TimeSource rosy-fleet-r.local` makes first boot write the chrony client config. The image does not bake a site name.
-- Periodic check: `tools/ops/account_login_check.py` logs into each app with a read-only test account and exits non-zero on failure.
+- Periodic check: `deploy/site/account_login_check.py` logs into each app with a read-only test account and exits non-zero on failure.
 
 ## Evidence
 

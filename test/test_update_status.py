@@ -324,3 +324,9 @@ def test_retired_name_probe_is_valid_bash_and_skips_backup_files():
     import subprocess
     assert subprocess.run(['bash', '-n'], input=status.PROBE.encode()).returncode == 0
     assert '*rosy-source-repair*' in status.PROBE and '*before-*' in status.PROBE
+
+
+def test_failed_account_login_check_unit_fails_the_host():
+    host = status.parse('failed rosy-site-account-login-check.service', NOW, 6.0)
+    assert [f[:2] for f in status.clock_and_site(host, NOW)] == [('FAIL', 'account-login-check')]
+    assert status.clock_and_site(status.parse('failed rosy-other.service', NOW, 6.0), NOW) == []

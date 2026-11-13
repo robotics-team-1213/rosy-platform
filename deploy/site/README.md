@@ -394,6 +394,40 @@ The renewer writes the installed pair to `/etc/rosy/account-tls` (UID10001, mode
 proxy only after the replacement validates. Do not enable the user-level
 `rosy-account-tls-renew.timer` on the same host.
 
+### Account login check every 30 minutes (2026-11-13)
+
+`rosy-site-account-login-check.timer` runs `account_login_check.py` from the signed release
+(`/opt/rosy/candidate/deploy/site/`, the same path the TLS renewer uses; the R host has no site-tools channel and
+`tools/ops` is not part of a candidate). It logs in to every Account-backed app with one read-only test account the way a
+browser does and exits non-zero when any app fails, so the unit fails. `tools/remote/update_status.py` lists failed system
+units and reports `FAIL account-login-check` for it. Four outages on 2026-11-13 (a renamed host still named in chrony,
+`/etc/hosts`, a receiver issuer and redirect URIs) were found by hand; this finds them within 30 minutes.
+
+The test account `rosy-e2e-test` already exists as a viewer (grants `fleet.read`, `learning.view`, `robot.read`); it can
+change nothing. Provision the config once; it is never in the repository, root-only, and holds the password:
+
+```json
+{"issuer": "https://<account-host>", "login": "rosy-e2e-test", "password": "<set by the operator>",
+ "apps": [{"name": "fleet", "start": "https://<app-host>/login", "session": "https://<app-host>/session"}]}
+```
+
+One entry per app (Fleet console, the Learning apps, Calibration); `start` is the app's login URL and `session` the URL
+that answers 200 once logged in. Install from the verified current candidate (candidates signed before this group still verify):
+
+```sh
+sudo install -m 0400 -o root -g root /dev/null /etc/rosy/site/account-login-check.json
+sudoedit /etc/rosy/site/account-login-check.json    # the shape above
+sudo /usr/bin/python3 -I /opt/rosy/candidate/deploy/site/account_login_check.py /etc/rosy/site/account-login-check.json
+for unit in rosy-site-account-login-check.service rosy-site-account-login-check.timer; do
+  sudo install -m 0644 /opt/rosy/candidate/deploy/site/$unit /etc/systemd/system/$unit
+done
+sudo systemctl daemon-reload
+sudo systemctl enable --now rosy-site-account-login-check.timer
+```
+
+Run the script by hand first; do not enable the timer until every app prints `PASS`. The units are not in
+`deploy/hosts/services.yaml` because `update_status` audits user units only (the system TLS twin is not listed either).
+
 On the existing `site_edge` network, the proxy also owns the approved Account
 hostname as a Docker DNS alias. Approved container clients on that network use
 the same HTTPS issuer and certificate verification without routing through the

@@ -72,7 +72,8 @@ for u in $(systemctl --user list-unit-files --no-legend 'rosy-*' 2>/dev/null | a
   [ -z "$last" ] && last=$(printf '%s\n' "$log" | tail -1)
   echo "unit $u $result $timer ${healthy:--} $last"
 done
-for f in $(systemctl --user --failed --no-legend --plain 2>/dev/null | awk '{print $1}' | grep '^rosy-'); do echo "failed $f"; done
+# user units, plus system units (the site host's signed-release timers, e.g. the Account login check)
+for f in $({ systemctl --user --failed --no-legend --plain; systemctl --failed --no-legend --plain; } 2>/dev/null | awk '{print $1}' | grep '^rosy-'); do echo "failed $f"; done
 for u in $(systemctl --user list-units --no-legend --plain --type=service --state=active 'rosy-*' 'pinky-*' 2>/dev/null | awk '{print $1}'); do
   envs=$(systemctl --user show "$u" -p EnvironmentFiles --value | grep -oE '/[^ ]+' | grep -v '^/dev')
   # with bash -s, stdin is the rest of this script: never let a command read it

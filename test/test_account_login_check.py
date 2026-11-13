@@ -1,11 +1,11 @@
-"""tools/ops/account_login_check.py against a fake Account issuer and a fake app on loopback."""
+"""deploy/site/account_login_check.py against a fake Account issuer and a fake app on loopback."""
 import http.server
 import importlib.util
 import json
 import threading
 from pathlib import Path
 
-SCRIPT = Path(__file__).resolve().parents[1] / "tools/ops/account_login_check.py"
+SCRIPT = Path(__file__).resolve().parents[1] / "deploy/site/account_login_check.py"
 
 
 def _tool():
@@ -85,3 +85,15 @@ def test_a_200_session_that_is_not_signed_in_fails(tmp_path, capsys):
     finally:
         server.shutdown()
     assert "not authenticated" in capsys.readouterr().out
+
+
+def test_site_timer_runs_the_signed_release_script_every_30_minutes_and_ships_in_the_candidate():
+    root = SCRIPT.parents[2]
+    unit = (root / "deploy/site/rosy-site-account-login-check.service").read_text()
+    timer = (root / "deploy/site/rosy-site-account-login-check.timer").read_text()
+    assert ("ExecStart=/usr/bin/python3 -I /opt/rosy/candidate/deploy/site/account_login_check.py "
+            "/etc/rosy/site/account-login-check.json") in unit
+    assert "Type=oneshot" in unit and "OnUnitInactiveSec=30min" in timer
+    assert "Unit=rosy-site-account-login-check.service" in timer
+    for name in ("build_candidate.py", "verify_candidate.py"):
+        assert "rosy-site-account-login-check.timer" in (root / "deploy/site" / name).read_text()
