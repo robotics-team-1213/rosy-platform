@@ -4727,6 +4727,7 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: 원격 시험 `contracts/foundation/test/test_account_access.py`·`operations/fleet/test/test_account_admin_browser.py`.
 - gate 변화: 없음 — Harbor 쪽 수신기는 팀 저장소 PR이다.
 - CE: 해당 없음 — 새 권한이며 해결한 장애가 없다.
+
 ## 2026-11-07 · 11b42b5933 · feat(rosy-face): 사람 부탁 도착 소리와 15초 반복
 - 변경: `PersonAsk`(`rosy_face_parts.py`)가 기존 `call` 패턴을 도착 때 한 번, 같은 id가 보이는 동안 15 s마다. 정지·실패 화면이면 소리 없음, ROSY_BUZZER_ENABLED는 Buzzer 그대로.
 - 증거: `test/test_rosy_face_person.py`(도착·반복 시각, 답·만료 뒤 멈춤, 화면 우선순위). 실제 스피커 확인은 하지 않았다.
@@ -4888,3 +4889,8 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 증거: 원격 pytest `test/test_update_ops.py` 예정.
 - gate 변화: 없음. 문서만 바꿨다.
 - CE: 해당 없음.
+
+## 2026-11-14 · uncommitted · rosy-face 상태 표시등 영속 설정
+- 변경: CORE용 영속 공유 디렉터리를 native unit에서 만들고 rosy-face가 설정을 매 표시 단계마다 읽는다. 기존 부팅·안전 표시가 우선한다.
+- 증거: native systemd·rosy-face 원격 계약 시험 결과는 이 브랜치 검증에 기록한다.
+- gate 변화: 없음. ARM64·장치 LED 수용은 별도다.
