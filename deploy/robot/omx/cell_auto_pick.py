@@ -14,6 +14,7 @@ import sys
 import time
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import cell_act_shadow  # noqa: E402
 import cell_attempts  # noqa: E402
 from cell_auto_pick_plan import (  # noqa: E402,F401  (re-exported)
     CLOSING,
@@ -107,6 +108,7 @@ def run_auto(
     )
     episode, failed_yaws, dest_view = None, [], None
     attempts = int(prm.get(config.get("params"), "auto.attempts")) if attempts is None else attempts
+    shadow = None if dry_run else cell_act_shadow.load(config, work)
     try:
         for attempt in range(attempts):
             t0, tried = time.time(), {"locate": {"found": False}}
@@ -207,6 +209,8 @@ def run_auto(
             episode = open_episode(cell, config, source, dest, o["object"])
             same = dict(config, plan=dict(config["plan"], **target.get("plan", {})))
             gate = Gate(guarded, config, calibration, sequence=sequence)
+            # shadow inference before the gate opens: no delay between the approval and the motion
+            shadow_row = shadow.capture(cell, config, attempt, img) if shadow else None
             held = gate.open(target["library"], lambda a: cell_attempts.begin(config, a))
             if held is not None:
                 tried["envelope"] = held
@@ -253,7 +257,9 @@ def run_auto(
                 if decided["chosen"] in ("ask_person", "probe_surface"):
                     close_episode(cell, episode, False, f"{decided['cause']}: {decided['chosen']}")
                     episode = None
-                    cell_attempts.record(config, calibration, source, dest, attempt, tried, t0, choices)
+                    cell_act_shadow.record(shadow, shadow_row,
+                                           cell_attempts.record(config, calibration, source, dest, attempt, tried, t0, choices),
+                                           moved["result"], moved.get("at"))
                     return {**out, "result": f"stopped: {decided['cause']} -> {decided['chosen']}"}
             held = moved["result"] == "placed" or any(s.get("holding") for s in moved["steps"])
             if target["offset"] is not None and moved["result"] in ("placed", "empty", "contact", "reinserted"):
@@ -296,7 +302,9 @@ def run_auto(
             )
             episode = None
             cd.after(moved, choices.best(CLOSING), attempt + 1 < attempts, guarded.monitor)
-            cell_attempts.record(config, calibration, source, dest, attempt, tried, t0, choices)
+            cell_act_shadow.record(shadow, shadow_row,
+                                   cell_attempts.record(config, calibration, source, dest, attempt, tried, t0, choices),
+                                   moved["result"], moved.get("at"))
             try:
                 import cell_problem_pipeline
 

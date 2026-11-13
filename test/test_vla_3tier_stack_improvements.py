@@ -255,9 +255,13 @@ class TestVlaHandoverBroker:
                 return {"ok": True, "holding": True, "gripper_current_ma": 165.0, "state": [0.0, -10.0, 15.0, 45.0, 48.0, 54.4]}
             return {"ok": True, "holding": True, "gripper_current_ma": 135.0, "state": [0.0, -10.0, 15.0, 45.0, 48.0, 54.35]}
 
+        lifted = {"z_m": 0.0}
+
         def fake_seating_probe(retry_idx: int):
             if retry_idx == 0:
+                lifted["z_m"] = 0.0715
                 return 0.0715, [30.0, 90.0, 295.0, 250.0]
+            lifted["z_m"] = 0.0675
             return 0.0675, [25.0, 75.0, 165.0, 125.0]
 
         side_calls = [0]
@@ -274,6 +278,9 @@ class TestVlaHandoverBroker:
                 img[170:260, 380:410] = (30, 120, 240)
             return img
 
+        # real readbacks for the release gate: the lift moves a read position, the grip is read back
+        grip = {"holding": True}
+
         out = broker.execute_hybrid_stack_stage(
             task,
             base_plan=SAMPLE_BASE_PLAN,
@@ -284,11 +291,15 @@ class TestVlaHandoverBroker:
             frame_fn=fake_frame,
             vla_refinement_steps=2,
             wrist_obs={"along_mm": -1.6, "across_mm": 0.4, "skew_deg": 1.2},
+            read_grip_holding_fn=lambda: grip["holding"],
+            read_z_fn=lambda: lifted["z_m"],
+            lift_step_fn=lambda dz: lifted.__setitem__("z_m", lifted["z_m"] + dz),
         )
         assert out["ok"] is True
         assert out["state"] == "COMPLETED"
         assert out["retry_count"] == 1
-        assert out["vla_steps_executed"] == 4
+        assert out["vla_steps_proposed"] == 4
+        assert out["vla_executed"] is False
         assert out["release_residual"]["dx_m"] != 0.0
         assert out["gate_reports"][0]["passed"] is False
         assert out["gate_reports"][0]["stage_failed"] == "STAGE_1_HEIGHT"
@@ -321,17 +332,83 @@ class TestVlaHandoverBroker:
         def fake_act(cmd: str) -> dict:
             return {"ok": True, "holding": True, "gripper_current_ma": 158.0, "state": [0.0, -10.0, 15.0, 45.0, 48.0, 54.4]}
 
+        measured_z = [0.0]
+
+        def seating_probe(tier, _retry):
+            measured_z[0] = TIER_Z_M[tier]
+            return measured_z[0], [30.0, 85.0, 165.0, 128.0]
+
         plan_out = broker.execute_3tier_hybrid_plan(
             tasks,
             base_plan=SAMPLE_BASE_PLAN,
             work_dir=tmp_path,
             act_fn=fake_act,
             vla_step_fn=lambda _obs: [0.05, -10.0, 15.0, 45.0, 48.0, 54.4],
-            seating_probe_fn=lambda tier, _retry: (TIER_Z_M[tier], [30.0, 85.0, 165.0, 128.0]),
+            seating_probe_fn=seating_probe,
             frame_fn=None,
+            read_grip_holding_fn=lambda: True,
+            read_z_fn=lambda: measured_z[0],
+            lift_step_fn=lambda _dz: None,
         )
         assert plan_out["ok"] is True
         assert plan_out["tiers_completed"] == [1, 2, 3]
+
+    def test_missing_release_readbacks_hold_the_stage_and_release_nothing(self, tmp_path: Path):
+        broker = VlaHandoverBroker(arm_id="arm_b", max_retries=2)
+        directive = broker.build_area_xyz_directive(
+            pick={"area": "pallet", "col": 3, "row": 1, "tier": 2, "x": 0.1988, "y": -0.0030, "z": 0.0398, "yaw_deg": -90.0},
+            place={"area": "pallet", "col": 2, "row": 1, "tier": 3, "x": 0.1580, "y": -0.0130, "z": 0.0674, "yaw_deg": -90.0},
+            directive_id="held-no-readback",
+        )
+        task = TaskDispatch(task_id="TASK-HELD-1", container_id="CONT-301", target_slot="pallet-l2", tier=3,
+                            vla_prompt="seat on tier 3", directive=directive)
+        cmds_executed: list[str] = []
+
+        out = broker.execute_hybrid_stack_stage(
+            task,
+            base_plan=SAMPLE_BASE_PLAN,
+            work_dir=tmp_path,
+            act_fn=lambda cmd: cmds_executed.append(cmd) or {"ok": True, "holding": True, "state": [0.0] * 6},
+            vla_step_fn=lambda obs: [0.1, -10.0, 15.0, 45.0, 48.0, 54.4],
+            seating_probe_fn=lambda retry_idx: (TIER_Z_M[3], [30.0, 85.0, 165.0, 128.0]),
+            frame_fn=None,
+        )
+        assert out["ok"] is False
+        assert out["state"] == "HELD"
+        assert broker.current_state == HandoverState.HELD
+        assert "readback" in out["held"]
+        assert out["vla_executed"] is False
+        assert cmds_executed == []
+        assert "run release_place" not in cmds_executed  # nothing is released on a held stage
+
+    def test_a_grip_readback_that_lost_the_box_fails_the_gate_and_never_releases(self, tmp_path: Path):
+        broker = VlaHandoverBroker(arm_id="arm_b", max_retries=2)
+        directive = broker.build_area_xyz_directive(
+            pick={"area": "pallet", "col": 3, "row": 1, "tier": 2, "x": 0.1988, "y": -0.0030, "z": 0.0398, "yaw_deg": -90.0},
+            place={"area": "pallet", "col": 2, "row": 1, "tier": 3, "x": 0.1580, "y": -0.0130, "z": 0.0674, "yaw_deg": -90.0},
+            directive_id="grip-lost",
+        )
+        task = TaskDispatch(task_id="TASK-GRIP-1", container_id="CONT-302", target_slot="pallet-l2", tier=3,
+                            vla_prompt="seat on tier 3", directive=directive)
+        cmds_executed: list[str] = []
+
+        out = broker.execute_hybrid_stack_stage(
+            task,
+            base_plan=SAMPLE_BASE_PLAN,
+            work_dir=tmp_path,
+            act_fn=lambda cmd: cmds_executed.append(cmd) or {"ok": True, "holding": True, "state": [0.0] * 6},
+            vla_step_fn=lambda obs: [0.1, -10.0, 15.0, 45.0, 48.0, 54.4],
+            seating_probe_fn=lambda retry_idx: (TIER_Z_M[3], [30.0, 85.0, 165.0, 128.0]),
+            frame_fn=None,
+            read_grip_holding_fn=lambda: False,  # the measured grip says the box is gone
+            read_z_fn=lambda: TIER_Z_M[3],
+            lift_step_fn=lambda _dz: None,
+        )
+        assert out["ok"] is False
+        assert out["state"] == "FAILED"
+        assert out["gate_reports"][-1]["stage_failed"] == "STAGE_3_PULL_TEST"
+        assert "run release_place" not in cmds_executed
+        assert out["vla_executed"] is False
 
 
 class TestVlaDomainRandomizer:
