@@ -48,3 +48,14 @@ def test_report_counts_the_backlog_and_names_the_oldest_unowned_reds(tmp_path, m
     assert "stopped: 2 (1 on MAIN-RED, wait for main; 1 for owners)" in text
     assert "main-red open: 3, 1 unowned over 30 min (ALERT)" in text
     assert (tmp_path / land_tick.REPORT).read_text(encoding="utf-8") == text + "\n"
+
+
+def test_cleanup_prunes_lossless_worktrees_then_idle_ones_keeping_their_work(tmp_path, monkeypatch):
+    """11-14: 41 worktrees against the 15 cap, 7 clean and idle 7-14 h, removed by hand."""
+    calls = []
+    monkeypatch.setattr(land_tick.land_gc, "plan", lambda repo, now, days: [("remove", "x", None, [])])
+    monkeypatch.setattr(land_tick.land_gc, "apply", lambda repo, rows: [])
+    monkeypatch.setattr(land_tick.worktrees, "prune", lambda repo, **k: calls.append(k) or 2)
+    assert land_tick.cleanup(tmp_path).endswith("worktrees removed 4")
+    assert calls[0]["apply"] and not calls[0].get("snapshot")  # landed and orphan ones: nothing to keep
+    assert calls[1]["snapshot"] and calls[1]["everyone"] and calls[1]["idle_hours"] == land_tick.WORKTREE_IDLE_H

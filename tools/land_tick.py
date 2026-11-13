@@ -10,7 +10,8 @@ the next), never deleting work:
 2. resume: orphaned landings and MAIN-RED stops main has cleared (``land_async.orphans``); resumed together they
    gather and roll up as one landing (``land_prepare.gather``).
 3. rollup: ``land_rollup apply --auto`` for pending landings that fit together.
-4. cleanup: ``land_gc`` (lossless) and the branch sweep (merged branches go, idle unlanded ones to refs/archive/).
+4. cleanup: ``land_gc`` (lossless), worktrees (landed and orphan ones at once, any idle WORKTREE_IDLE_H with its
+   branch kept and dirty work under refs/wip/) and the branch sweep (merged go, idle unlanded to refs/archive/).
 5. report: ``<git-common-dir>/rosy-land-backlog.txt``, the queue, stops by kind and open main-red ids with age and
    owner. An unowned main-red id older than ALERT_S is the line a person or agent acts on.
 
@@ -29,10 +30,11 @@ import land_async  # noqa: E402
 import land_gc  # noqa: E402
 import land_mainred  # noqa: E402
 import land_queue  # noqa: E402
-import worktree_rules  # noqa: E402
+import worktrees  # noqa: E402
 
 ALERT_S = 30 * 60  # a main-red id open this long with no owner is called out
 SHOWN = 10  # the oldest open main-red ids the report names
+WORKTREE_IDLE_H = 12  # a worktree nobody touched this long is removed (branch kept, dirty work to refs/wip/)
 RECHECK_STAMP, LOG, REPORT, LOCK = ("rosy-land-tick.recheck", "rosy-land-tick.log", "rosy-land-backlog.txt",
                                      "rosy-land-tick.lock")
 
@@ -67,8 +69,15 @@ def resume(repo: Path) -> str:
 def cleanup(repo: Path) -> str:
     rows = land_gc.plan(repo, time.time(), 7)
     problems = land_gc.apply(repo, rows)
-    worktree_rules.sweep_branches(repo, time.time(), True, say=lambda line: None, quiet=True)
-    return f"land_gc removed {sum(r[0] != 'keep' for r in rows) - len(problems)}, kept {len(problems)} changed"
+    # 11-14: 41 worktrees against the 15 cap, 7 of them clean and idle 7-14 h. Lossless ones (landed, orphan) go at
+    # once; an idle one goes after WORKTREE_IDLE_H with its branch kept and dirty work saved under refs/wip/ first.
+    # prune also sweeps branches: merged ones go, idle unlanded ones move to refs/archive/.
+    quiet = lambda line: None  # noqa: E731
+    gone = worktrees.prune(repo, apply=True, quiet=True, say=quiet)
+    gone += worktrees.prune(repo, apply=True, snapshot=True, everyone=True, idle_hours=WORKTREE_IDLE_H, quiet=True,
+                            say=quiet)
+    return (f"land_gc removed {sum(r[0] != 'keep' for r in rows) - len(problems)}, kept {len(problems)} changed;"
+            f" worktrees removed {gone}")
 
 
 def report(repo: Path, common: Path, now: float | None = None) -> list[str]:
