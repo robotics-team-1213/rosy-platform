@@ -129,7 +129,15 @@ export function createConsoleGoal({ pageScope, el, view, auth, inbox, log, call,
           refreshGuide();
           return;
         }
-      } catch (_roadErr) { /* Fall through to trip/direct goal dispatch */ }
+      } catch (roadErr) {
+        // No measured site pose: a direct /goal would send site coordinates into the robot's own SLAM frame.
+        if (["SITE_POSE_UNKNOWN", "ROBOT_POSE_UNTRUSTED"].includes(roadErr?.code)) {
+          view.selectedGoal = { ...view.selectedGoal, status: "BLOCKED", statusText: "위치 미확인: 카메라 확인 전에는 보내지 않음", at: Date.now() };
+          drawMap(); render();
+          log(`${robotId} 출발 보류: Fleet이 현장 지도에서 이 로봇 위치를 아직 재지 못했습니다 (${roadErr.code})`, "bad");
+          return;
+        }
+      }
       if (placeId) {
         try {
           const plan = await call("/api/fleet/trips/plan", {

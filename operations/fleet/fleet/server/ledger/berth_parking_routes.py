@@ -92,9 +92,9 @@ def install_berth_parking_routes(
                 res = await console.goal(robot_id, final_nav2["x"], final_nav2["y"], final_nav2["yaw"])
                 dispatch_res = {"accepted": True, "receipt": res}
             except Exception:
-                dispatch_res = {"accepted": True, "simulated_dispatch": True, "note": str(exc)}
+                dispatch_res = {"accepted": False, "error": str(exc)}  # never report a goal that was not sent
 
-        return {"dispatched": True, **plan, **dispatch_res}
+        return {**plan, **dispatch_res, "dispatched": bool(dispatch_res.get("accepted"))}
 
     @app.get("/api/fleet/robots/{robot_id}/berth-park/status", dependencies=read_guard, tags=["fleet"])
     async def fleet_berth_park_status(robot_id: str) -> dict:
@@ -196,7 +196,7 @@ def install_berth_parking_routes(
                     res = await console.goal(robot_id, final_nav2["x"], final_nav2["y"], final_nav2["yaw"])
                     dispatch_res = {"accepted": True, "receipt": res}
             except Exception as exc:
-                dispatch_res = {"accepted": True, "simulated_dispatch": True, "note": str(exc)}
+                dispatch_res = {"accepted": False, "error": str(exc)}  # never report a goal that was not sent
             if physical_execution is not None:
                 dispatch_res["physical_execution"] = physical_execution
 
