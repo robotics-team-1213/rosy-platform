@@ -136,7 +136,8 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
     tabs.className = "omx-inspector-tabs";
     for (const t of targets) {
       const btn = document.createElement("ui-button");
-      btn.setAttribute("kind", t.id === active.id ? "primary" : "quiet");
+      btn.setAttribute("kind", "quiet");
+      if (t.id === active.id) btn.setAttribute("kind", "primary");
       btn.setAttribute("type", "button");
       btn.setAttribute("data-work-read", "");
       btn.dataset.inspectTarget = t.id;
@@ -151,7 +152,8 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
       tabs.append(btn);
     }
     const dualBtn = document.createElement("ui-button");
-    dualBtn.setAttribute("kind", dualCamMode ? "primary" : "quiet");
+    dualBtn.setAttribute("kind", "quiet");
+    if (dualCamMode) dualBtn.setAttribute("kind", "primary");
     dualBtn.setAttribute("type", "button");
     dualBtn.setAttribute("data-work-read", "");
     dualBtn.dataset.dualCamToggle = "true";
@@ -296,7 +298,8 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
     actions.className = "omx-card-actions";
     for (const choice of [...(active.buttons || []), ...(active.quickControls || [])]) {
       const button = document.createElement("ui-button");
-      button.setAttribute("kind", choice.cancelTaskId ? "irreversible" : "quiet");
+      button.setAttribute("kind", "quiet");
+      if (choice.cancelTaskId) button.setAttribute("kind", "irreversible");
       button.setAttribute("type", "button");
       button.setAttribute("data-work-read", "");
       button.textContent = choice.label;
@@ -376,7 +379,8 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
       camBar.className = "omx-card-actions";
       for (const v of (card.cameraViews || [])) {
         const camBtn = document.createElement("ui-button");
-        camBtn.setAttribute("kind", v.id === activeCamId ? "primary" : "quiet");
+        camBtn.setAttribute("kind", "quiet");
+        if (v.id === activeCamId) camBtn.setAttribute("kind", "primary");
         camBtn.setAttribute("type", "button");
         camBtn.setAttribute("data-work-read", "");
         camBtn.textContent = `📷 ${v.label}`;
@@ -385,7 +389,8 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
           if (camera.isConnected) frames.bind(camera, v);
           for (const ch of camBar.children || []) {
             if (!ch.dataset.streamToggle) {
-              ch.setAttribute("kind", ch === camBtn ? "primary" : "quiet");
+              ch.setAttribute("kind", "quiet");
+              if (ch === camBtn) ch.setAttribute("kind", "primary");
             }
           }
           const targetId = v.id.startsWith("arm_a") ? "arm_a"
@@ -419,7 +424,8 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
       buttons.className = "omx-card-actions";
       for (const choice of [...(card.buttons || []), ...(card.quickControls || [])]) {
         const button = document.createElement("ui-button");
-        button.setAttribute("kind", choice.cancelTaskId ? "irreversible" : "quiet");
+        button.setAttribute("kind", "quiet");
+        if (choice.cancelTaskId) button.setAttribute("kind", "irreversible");
         button.setAttribute("type", "button");
         button.setAttribute("data-work-read", "");
         button.textContent = choice.label;

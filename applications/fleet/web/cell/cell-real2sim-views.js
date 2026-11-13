@@ -23,7 +23,7 @@ export function createCellViews(ctx) {
     for (const s of specs) {
       const tab = document.createElement('ui-button');
       tab.setAttribute('kind', 'quiet');
-      tab.setAttribute('kind', s.id === activeSpec.id ? 'primary' : 'quiet');
+      if (s.id === activeSpec.id) tab.setAttribute('kind', 'primary');
       tab.setAttribute('type', 'button');
       tab.dataset.inspectTarget = s.id;
       tab.textContent = s.shortTab;
@@ -32,7 +32,7 @@ export function createCellViews(ctx) {
     }
     const dualBtn = document.createElement('ui-button');
     dualBtn.setAttribute('kind', 'quiet');
-    dualBtn.setAttribute('kind', state.dualInspectorCamMode ? 'primary' : 'quiet');
+    if (state.dualInspectorCamMode) dualBtn.setAttribute('kind', 'primary');
     dualBtn.setAttribute('type', 'button');
     dualBtn.dataset.dualCamToggle = 'true';
     dualBtn.textContent = state.dualInspectorCamMode ? '📺 2채널(상단+손목) ON' : '📺 2채널 동시 보기';
@@ -179,7 +179,7 @@ export function createCellViews(ctx) {
     for (const b of (activeSpec.buttons || [])) {
       const btn = document.createElement('ui-button');
       btn.setAttribute('kind', 'quiet');
-      btn.setAttribute('kind', b.cancelTaskId ? 'irreversible' : 'quiet');
+      if (b.cancelTaskId) btn.setAttribute('kind', 'irreversible');
       btn.setAttribute('type', 'button');
       btn.textContent = b.label;
       bindActionButton(btn, b, activeSpec.robot_id || 'rosy_46');
@@ -237,7 +237,7 @@ export function createCellViews(ctx) {
       for (const v of (card.cameraViews || [])) {
         const pill = document.createElement('ui-button');
         pill.setAttribute('kind', 'quiet');
-        pill.setAttribute('kind', v.id === activeViewId ? 'primary' : 'quiet');
+        if (v.id === activeViewId) pill.setAttribute('kind', 'primary');
         pill.setAttribute('type', 'button');
         pill.dataset.cameraView = v.id;
         pill.textContent = `📷 ${v.label}`;
@@ -247,7 +247,8 @@ export function createCellViews(ctx) {
           frames()?.bind(thumb, v, camQualityBadge, '🎥 영상');
           for (const child of camSwitcher.children || []) {
             if (child.tagName === 'UI-BUTTON') {
-              child.setAttribute('kind', child === pill ? 'primary' : 'quiet');
+              child.setAttribute('kind', 'quiet');
+              if (child === pill) child.setAttribute('kind', 'primary');
             }
           }
           const targetForView = v.id.startsWith('arm_a') ? 'arm_a'
@@ -286,7 +287,7 @@ export function createCellViews(ctx) {
       for (const [tId, tLabel] of inspectTargets) {
         const iBtn = document.createElement('ui-button');
         iBtn.setAttribute('kind', 'quiet');
-        iBtn.setAttribute('kind', state.selectedInspectorTarget === tId ? 'primary' : 'quiet');
+        if (state.selectedInspectorTarget === tId) iBtn.setAttribute('kind', 'primary');
         iBtn.setAttribute('type', 'button');
         iBtn.dataset.inspectTarget = tId;
         iBtn.textContent = tLabel;
@@ -299,7 +300,7 @@ export function createCellViews(ctx) {
       for (const b of card.buttons) {
         const btn = document.createElement('ui-button');
         btn.setAttribute('kind', 'quiet');
-        btn.setAttribute('kind', b.cancelTaskId ? 'irreversible' : 'quiet');
+        if (b.cancelTaskId) btn.setAttribute('kind', 'irreversible');
         btn.setAttribute('type', 'button');
         btn.textContent = b.label;
         bindActionButton(btn, b, card.robot_id || 'rosy_46');
