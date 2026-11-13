@@ -54,6 +54,11 @@ def test_ambiguous_or_invalid_report_is_rejected():
     broken["id"] = "line_stuck:rosy_41:stuck-a"
     with pytest.raises(ValueError, match="identity"):
         incident_feedback.bind({"reports": [broken]}, markers("stuck-a"))
+    for key, bad in (("ai_facts", "oops"), ("core", "lane_lost")):
+        shaped = report()
+        shaped["evidence"][key] = bad
+        with pytest.raises(ValueError, match="evidence shape"):
+            incident_feedback.bind({"reports": [shaped]}, markers("stuck-a"))
 
 
 def test_cli_accepts_windows_utf8_bom_exports(tmp_path, monkeypatch):
@@ -154,3 +159,76 @@ def test_cli_attaches_bounded_model_evidence_and_preserves_review_state(tmp_path
     assert linked['schema'] == 'rosy.recording.incident_feedback/2'
     assert linked['matches'][0]['model_feedback']['label_state'] == 'UNREVIEWED'
     assert linked['matches'][0]['reviewed_root_cause'] is None
+
+
+# --- Review-app route: POST /api/learning/recording/incident-feedback ---
+
+ROUTE = '/api/learning/recording/incident-feedback'
+
+
+def _pair():
+    reviewed = {'at': '2026-10-10T01:00:00Z', 'principal_id': 'operator-robttt', 'root_cause': 'line_marking'}
+    return {'reports': [report(reviews=[reviewed])]}, markers('stuck-a', 'stuck-b')
+
+
+def test_route_returns_bind_result_unchanged(tmp_path):
+    from test_omx_center_http import request, running
+    incidents, marks = _pair()
+    with running(tmp_path) as (base, _):
+        _, learning = request(base, '/api/learning')
+        code, result = request(base, ROUTE, {'incidents': incidents, 'markers': marks}, token=learning['token'])
+        assert code == 200
+        assert result == incident_feedback.bind(incidents, marks)
+        assert result['missing_incidents'] == ['stuck-b']
+        assert 'principal_id' not in json.dumps(result)   # 운영자 신원은 묶음 결과에 남지 않는다
+
+
+@pytest.mark.parametrize('body', [
+    {'incidents': {'reports': []}},                                       # markers 없음
+    {'incidents': [], 'markers': {'schema': 'rosy.recording.stuck_markers/1', 'markers': []}},  # 객체 아님
+    {'incidents': {'reports': [{'schema': 'rosy.incident.v1'}]}, 'markers': markers()},    # 잘못된 보고
+    {'incidents': {'reports': [dict(report(), evidence=['not-a-dict'])]}, 'markers': markers('stuck-a')},  # AttributeError 경로
+    {'incidents': {'reports': [report()]}, 'markers': {'schema': 'other', 'markers': []}},  # 마커 스키마 다름
+    {'incidents': {'reports': [report()]}, 'markers': markers(), 'extra': 1},              # 본문 키 초과
+])
+def test_route_rejects_malformed_bodies_with_400_not_500(tmp_path, body):
+    from test_omx_center_http import request, running
+    with running(tmp_path) as (base, _):
+        _, learning = request(base, '/api/learning')
+        code, response = request(base, ROUTE, body, token=learning['token'])
+        assert code == 400 and response['error']
+
+
+def test_route_refuses_each_object_over_256_kib(tmp_path):
+    from test_omx_center_http import request, running
+    padded = {'reports': [report()], 'padding': 'x' * (270 * 1024)}
+    with running(tmp_path) as (base, _):
+        _, learning = request(base, '/api/learning')
+        code, response = request(base, ROUTE, {'incidents': padded, 'markers': markers()}, token=learning['token'])
+        assert code == 400 and '256 KiB' in response['error']
+
+
+def test_route_requires_import_capability_not_manage(tmp_path):
+    from test_learning_collaboration import Accounts
+    from test_omx_center_http import request, running
+    incidents, marks = _pair()
+    with running(tmp_path, accounts=Accounts()) as (base, _):
+        _, learning = request(base, '/api/learning', session='editor')
+        code, _ = request(base, ROUTE, {'incidents': incidents, 'markers': marks},
+                          token=learning['token'], session='editor')
+        assert code == 403                          # view+edit만 있으면 거절 — recording manage보다 좁다
+        code, result = request(base, ROUTE, {'incidents': incidents, 'markers': marks},
+                               token=learning['token'], session='reviewer')
+        assert code == 200 and result['matches'][0]['incident_id'] == 'line_stuck:rosy_40:stuck-a'
+
+
+def test_incident_panel_page_is_served_under_the_answer_stage(tmp_path):
+    import urllib.request
+    from test_omx_center_http import running
+    with running(tmp_path) as (base, _):
+        with urllib.request.urlopen(base + '/incidents') as response:
+            page = response.read().decode('utf-8')
+            assert response.status == 200 and '현장 실패 근거' in page
+            assert '정답 하위 메뉴' in page and '/pixels' in page   # 픽셀 검수와 같은 정답 단계 이동을 유지
+        with urllib.request.urlopen(base + '/incidents.js') as response:
+            assert b'incident-feedback' in response.read()

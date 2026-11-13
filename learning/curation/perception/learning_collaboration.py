@@ -224,6 +224,9 @@ class Collaboration:
             capability = 'publish'
         elif path in ('/api/catalog/upload', '/api/catalog/folder') or path.startswith('/api/learning/imports/'):
             capability = 'import'
+        elif path == '/api/learning/recording/incident-feedback':
+            # Evidence binding only: queues nothing, approves nothing — narrower than recording `manage`.
+            capability = 'import'
         elif path.startswith('/api/accounts/'):
             capability = 'view'
         elif path.startswith('/api/learning/'):

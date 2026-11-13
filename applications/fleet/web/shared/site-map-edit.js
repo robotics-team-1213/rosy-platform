@@ -4,23 +4,6 @@ import {PLACE_KINDS} from './site-map-model.js';
 function copy(map) { return JSON.parse(JSON.stringify(map)); }
 function category(kind) { return PLACE_KINDS.includes(kind) ? 'places' : kind === 'road' ? 'edges' : 'facilities'; }
 
-export function ensureSurvey(map) {
-  if (!map) return map;
-  if (!map.survey) {
-    map.survey = {
-      revision: map.drawing?.projection_sha256 || map.map_id || 'world_261026',
-      origin: [0, 0],
-      heading_rad: 0,
-      scale_source: 'measured',
-      measured_distance_m: 2.44,
-      description: '현장 기본 기준 (2.44×1.22 m)',
-      reviewed: false,
-      review_note: '',
-    };
-  }
-  return map;
-}
-
 export function createSurveyDraft(mapId, reference) {
   if (!/^[A-Za-z0-9_.-]{1,64}$/.test(mapId) || !/^[A-Za-z0-9_.-]{1,64}$/.test(reference.revision || ''))
     throw new Error('지도 ID와 기준 버전을 확인하세요');
@@ -39,7 +22,7 @@ export function createSurveyDraft(mapId, reference) {
 }
 
 export function appendSurveyElement(map, item) {
-  if (!map) throw new Error('조사 기준이 있는 초안을 먼저 만드세요');
+  if (!map?.survey) throw new Error('조사 기준이 있는 초안을 먼저 만드세요');
   const {id, name, kind, geometry} = item;
   if (!/^[A-Za-z0-9_.-]{1,32}$/.test(id) || typeof name !== 'string' || name.length > 64
       || (kind !== 'road' && !name.trim()))
@@ -48,7 +31,7 @@ export function appendSurveyElement(map, item) {
       || !geometry.every(p => Array.isArray(p) && p.length === 2
         && p.every(v => Number.isFinite(v) && Math.abs(v) <= 1000)))
     throw new Error('지도에서 위치를 찍거나 유한한 좌표를 입력하세요');
-  const next = ensureSurvey(copy(map));
+  const next = copy(map);
   next.survey = {...next.survey, reviewed: false, review_note: ''};
   if ((next[category(kind)] || []).some(row => row.id === id))
     throw new Error('이미 쓰는 요소 ID입니다');
@@ -109,8 +92,8 @@ export function appendSurveyElement(map, item) {
 }
 
 export function reviewSurveyDraft(map, note) {
-  if (!map || !note?.trim() || note.length > 1000) throw new Error('좌표 기준과 도로를 확인한 검토 근거를 적으세요');
-  const next = (!map.survey && map.edges?.some(e => e.evidence)) ? copy(map) : ensureSurvey(copy(map));
+  if ((!map?.survey && !map?.edges?.some(e => e.evidence)) || !note?.trim() || note.length > 1000) throw new Error('좌표 기준과 도로를 확인한 검토 근거를 적으세요');
+  const next = copy(map);
   if (next.survey) next.survey = {...next.survey, reviewed: true, review_note: note.trim()};
   for (const edge of [...next.edges, ...(next.facilities || [])]) {
     if (next.facilities?.includes(edge) && !edge.evidence) continue;

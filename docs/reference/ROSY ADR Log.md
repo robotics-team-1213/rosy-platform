@@ -19,6 +19,7 @@
 | D-1011 | 팔 셀 식별자를 CELL-A/cell-a에서 ARM-CELL/arm-cell로 바꾼다 — 입력은 구 id를 별칭으로 받고, 원장은 감사와 함께 한 번 재작성한다. [전문](../adr/D-1011-arm-cell-identifier-rename.md) | Accepted (2026-11-10, 사용자 결정; 코드·시험·호스트 스크립트, 실제 호스트 전환·현장 수용 별도) |
 | D-1021 | ROSY 공통: 값마다 소유자 하나, 신원은 Account, 배치는 비공개 현장 배치 지도 — 다섯 층·정본 표·변경 절차·완료 네 상태. [전문](../adr/D-1021-one-owner-per-value-identity-in-account-placement-in-site-map.md) | Accepted (2026-11-13, 사용자 승인; 일부 구현·운영 수용 별도) |
 | D-1017 | peer 위치 공유로 지도 자세 앵커 보강 — 카메라·운영자 핀 뒤에서만, 첫 앵커는 DEGRADED. [전문](../adr/D-1017-peer-sighting-map-pose-anchor.md) | Proposed (2026-11-11, 사용자 지시; 구현·원격 시험, 현장 수용 없음) |
+| D-1019 | OMX 운반은 도착지에 자리가 없으면(팔이 움직이기 전 멈춤) 설정에 선언된 대체 도착지로 자동으로 옮긴다 — Gate·D-911은 그대로. [전문](../adr/D-1019-omx-carry-redirects-to-declared-alternate-destinations.md) | Accepted (2026-11-13, 사용자 결정; 코드·원격 시험, 실물 수용 없음) |
 | D-1016 | 등록 로봇 30일 비활동 «삭제 예정» 표시 — 비활성은 토큰 만료 그대로, 해제는 이름 있는 운영자만. [전문](../adr/D-1016-enrollment-idle-removal-pending.md) | Proposed (2026-11-11, 사용자 방침; 구현·호스트 시험, 현장 수용 없음) |
 | D-1015 | OMX 모방학습 대비 실행 속도 병목과 지터링 해소를 위한 시간적 앙상블·동역학 가감속·연속 청크 스트리밍 아키텍처. [전문](../adr/D-1015-omx-imitation-speed-parity-temporal-ensembling-and-kinodynamic-streaming.md) | Accepted (2026-11-11, 사용자 지시; OMX 어댑터·가드·청크 실행기·서보 하드웨어 프로파일 구현·호스트/원격 시험·실물 팔 배포 반영) |
 | D-1014 | OMX 통합 구역·3차원 좌표(AreaXYZ) 체계 및 ROSY 미들웨어 → rosy-cell 적층 지시 계약. [전문](../adr/D-1014-unified-area-xyz-coordinate-directive-from-middleware-to-cell.md) | Accepted (2026-11-11, 사용자 확인; 미들웨어 좌표·지시 계약, rosy-cell 실행기, 호스트·실물 3단 적층 검증 포함) |
