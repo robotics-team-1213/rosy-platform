@@ -30,3 +30,24 @@ def test_expired_hold_still_blocks_but_is_loud(host, capsys):
     assert '"held-expired"' in _hold_run(host, {'reason': 'r', 'time': (_dt.datetime.now(_dt.timezone.utc) - _dt.timedelta(hours=25)).isoformat()}, capsys)
     fresh = (_dt.datetime.now(_dt.timezone.utc) + _dt.timedelta(hours=5)).isoformat()
     assert '"held"' in _hold_run(host, {'reason': 'r', 'time': fresh, 'until': fresh}, capsys)
+
+
+def _naive(hours):
+    return (_dt.datetime.now(_dt.timezone.utc) + _dt.timedelta(hours=hours)).replace(tzinfo=None).isoformat()
+
+
+def test_naive_or_unparsable_until_counts_as_expired_and_never_raises(host, capsys):
+    for until in (_naive(5), 'garbage', 5, None):
+        out = _hold_run(host, {'reason': 'r', 'time': _naive(-1), 'until': until}, capsys)
+        assert '"held-expired"' in out, until
+        assert json.loads(host.paths.state.read_text())['last_run']['result'] == 'held'
+    assert upd.hold_expired({'reason': 'r', 'time': _naive(-1)})  # legacy without until, naive time
+    assert upd.hold_expired('not a hold')
+
+
+def test_status_prints_a_hold_with_a_naive_until_as_expired(host, capsys, monkeypatch):
+    host.paths.state.write_text(json.dumps({'hold': {'reason': 'r', 'time': _naive(-1), 'until': _naive(5)}, 'failed': {}}))
+    monkeypatch.setattr(upd, 'Paths', lambda: host.paths)
+    assert upd.main(['status']) == upd.EXIT_OK
+    hold = json.loads(capsys.readouterr().out)['hold']
+    assert hold['expired'] is True and hold['until'].startswith('0001-01-01')

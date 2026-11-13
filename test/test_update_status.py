@@ -330,3 +330,104 @@ def test_failed_account_login_check_unit_fails_the_host():
     host = status.parse('failed rosy-site-account-login-check.service', NOW, 6.0)
     assert [f[:2] for f in status.clock_and_site(host, NOW)] == [('FAIL', 'account-login-check')]
     assert status.clock_and_site(status.parse('failed rosy-other.service', NOW, 6.0), NOW) == []
+
+
+def _retired_scan(tmp_path, retired, *, sudo_works=False):
+    """Run the probe's retired-name block alone against a fake HOME."""
+    start, end = status.PROBE.index('# retired host names'), status.PROBE.index('D=docker')
+    bin_dir = tmp_path / 'bin'
+    bin_dir.mkdir(exist_ok=True)
+    (bin_dir / 'sudo').write_text('#!/bin/sh\nexit 1\n')
+    (bin_dir / 'sudo').chmod(0o755)
+    env = {**os.environ, 'HOME': str(tmp_path / 'home'), 'PATH': f'{bin_dir}:{os.environ["PATH"]}'}
+    done = subprocess.run(['bash', '-c', f'RETIRED={retired!r}\n' + status.PROBE[start:end]],
+                          capture_output=True, text=True, env=env, timeout=60)
+    return [line for line in done.stdout.splitlines() if str(tmp_path) in line]
+
+
+pytestmark_posix = pytest.mark.skipif(os.name == 'nt', reason='needs bash and POSIX modes')
+
+
+@pytestmark_posix
+def test_empty_retired_list_matches_nothing(tmp_path):
+    receiver = tmp_path / 'home/.config/rosy/cal/receiver.json'
+    receiver.parent.mkdir(parents=True)
+    receiver.write_text('{"issuer": "https://anything.example.test"}')
+    assert _retired_scan(tmp_path, '') == []
+    assert _retired_scan(tmp_path, 'old-host.example.test') == []
+    receiver.write_text('{"issuer": "https://OLD-HOST.example.test"}')
+    assert _retired_scan(tmp_path, 'old-host.example.test') == [f'retired {receiver}']
+
+
+@pytestmark_posix
+def test_retired_scan_skips_symlinked_receivers_and_reports_unreadable_ones(tmp_path):
+    base = tmp_path / 'home/.config/rosy'
+    (base / 'a').mkdir(parents=True)
+    real = tmp_path / 'real.json'
+    real.write_text('old-host.example.test')
+    (base / 'a/receiver.json').symlink_to(real)
+    assert _retired_scan(tmp_path, 'old-host.example.test') == []
+    (base / 'a/receiver.json').unlink()
+    if os.getuid() != 0:
+        locked = base / 'a/receiver.json'
+        locked.write_text('old-host.example.test')
+        locked.chmod(0)
+        assert _retired_scan(tmp_path, 'old-host.example.test') == [f'retired-unreadable {locked}']
+
+
+def test_probe_guards_the_retired_scan_and_names_missing_or_unreadable_site_state():
+    assert 'if [ -n "$RETIRED" ]' in status.PROBE and 'set -f' in status.PROBE
+    assert '-type f' in status.PROBE and '[ -L "$f" ] && continue' in status.PROBE
+    assert 'sitestate missing' in status.PROBE and 'sitestate unreadable' in status.PROBE
+    import subprocess
+    assert subprocess.run(['bash', '-n'], input=status.PROBE.encode()).returncode == 0
+
+
+def test_unreadable_retired_path_is_a_note_never_clean():
+    found = status.clock_and_site(status.parse('retired-unreadable /etc/hosts', NOW, 6.0), NOW)
+    assert found == [('note', 'retired-name', '/etc/hosts exists but could not be read; not checked')]
+
+
+def test_retired_hostnames_must_be_full_hostnames(tmp_path):
+    def load(*names):
+        path = tmp_path / 'services.yaml'
+        path.write_text('retired_hostnames:\n' + ''.join(f'  - {n}\n' for n in names))
+        return status.retired_hostnames(path)
+    assert load('old-host.example.test') == ['old-host.example.test']
+    for bad in ('short', 'a.b', 'nodotbutlonghostname'):
+        with pytest.raises(SystemExit):
+            load('old-host.example.test', bad)
+
+
+def test_malformed_probe_lines_become_findings_instead_of_raising():
+    for line in ('chrony x y z', 'chrony 1', 'chrony 1 2.5 -'):
+        found = status.clock_and_site(status.parse(line, NOW, 6.0), NOW)
+        assert [f[:2] for f in found] == [('FAIL', 'chrony')], line
+    for state in ('[]', '5', '"text"', 'null'):
+        found = status.clock_and_site(status.parse('sitestate ' + state, NOW, 6.0), NOW)
+        assert [f[:2] for f in found] == [('FAIL', 'site-autoupdate')], state
+    for state in ({'hold': 'text'}, {'hold': ['x']}, {'last_run': 'text'}, {'last_run': [1]}):
+        found = _site(state)
+        assert [f[:2] for f in found] == [('FAIL', 'site-autoupdate')], state
+
+
+def test_missing_site_state_is_a_note_on_a_site_host_and_unreadable_is_a_failure():
+    missing = status.parse('sitestate missing', NOW, 6.0)
+    assert [f[:2] for f in status.clock_and_site(missing, NOW, {'site'})] == [('note', 'site-autoupdate')]
+    assert status.clock_and_site(missing, NOW, {'omx'}) == []
+    assert status.clock_and_site(missing, NOW) == []
+    unreadable = status.parse('sitestate unreadable', NOW, 6.0)
+    assert [f[:2] for f in status.clock_and_site(unreadable, NOW, {'site'})] == [('FAIL', 'site-autoupdate')]
+    assert [f[:2] for f in status.clock_and_site(status.parse('sitestate {bad', NOW, 6.0), NOW, {'site'})] == [('FAIL', 'site-autoupdate')]
+
+
+def test_hold_until_rules_match_the_site_updater():
+    naive = lambda hours: datetime.fromtimestamp(NOW + hours * 3600, timezone.utc).replace(tzinfo=None).isoformat()
+    aware = lambda hours: datetime.fromtimestamp(NOW + hours * 3600, timezone.utc).isoformat()
+    for until in (naive(23), 'garbage', 5, None, ''):
+        found = _site({'hold': {'reason': 'r', 'time': aware(-1), 'until': until}})
+        assert found[0][0] == 'FAIL' and 'EXPIRED' in found[0][2], until
+    assert _site({'hold': {'reason': 'r', 'time': naive(-1)}})[0][0] == 'FAIL'  # naive set time: expired
+    assert _site({'hold': {'reason': 'r', 'time': aware(-1)}})[0][0] == 'HELD'  # no until key: set time + 24 h
+    epoch = _site({'hold': {'reason': 'r', 'time': '1970-01-01T00:00:00+00:00', 'until': aware(23)}})
+    assert epoch[0][0] == 'HELD' and 'unknown age' not in epoch[0][2]

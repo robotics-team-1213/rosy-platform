@@ -146,3 +146,8 @@ def test_a_run_that_checked_no_app_is_not_a_success(tmp_path, capsys):
 
 def test_every_request_has_a_10_second_timeout():
     assert "timeout=10," in SCRIPT.read_text()
+
+
+def test_start_timeout_covers_the_worst_case_of_seven_slow_apps():
+    unit = (SCRIPT.parents[2] / "deploy/site/rosy-site-account-login-check.service").read_text()
+    assert "TimeoutStartSec=15min" in unit and "9 requests" in unit

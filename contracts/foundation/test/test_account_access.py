@@ -144,3 +144,16 @@ def test_issue_time_ahead_of_the_verifier_clock_is_bounded_by_the_skew_leeway(ah
     levels = {r.levelname for r in caplog.records if 'clock_skew' in r.getMessage()}
     assert levels == ({level} if level else set())
     assert token not in caplog.text
+
+
+def test_refusal_reason_keeps_messages_only_from_our_account_code():
+    from core_common.protocol.account_access import refusal_reason
+    from core_common.protocol.account_client import AccountDenied
+    leak = 'https://issuer.example.test/cb?code=abc123&state=xyz789'
+    assert refusal_reason(AccessRejected('access expired or outside scope')) == 'AccessRejected: access expired or outside scope'
+    assert refusal_reason(AccountDenied('state mismatch')) == 'AccountDenied: state mismatch'
+    assert refusal_reason(ValueError(leak)) == 'ValueError'
+    assert refusal_reason(KeyError(leak)) == 'KeyError'
+    with pytest.raises(ValidationError) as caught:
+        AccountGrant.model_validate({'resource': leak, 'capabilities': ['x']})
+    assert refusal_reason(caught.value) == 'ValidationError'
