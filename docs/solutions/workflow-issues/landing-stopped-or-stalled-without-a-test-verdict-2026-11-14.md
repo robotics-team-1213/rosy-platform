@@ -76,3 +76,16 @@ main에 들어간 뒤 시작한 착지부터 적용된다.
   `not run` 문구)를 본다.
 - 남은 일: 재시도 3번 뒤에도 255로 끝난 rollup은 쪼개지 않고 멈춘 채 남는다. 구성원을
   되살리는 단계는 아직 없다.
+
+## 추가 (2026-11-14 저녁): 뒷정리 실패가 착지를 죽였다
+
+게시용 FULL 착지가 `remote_pytest.ship()`의 `finally`에서 임시 ref를 지우는
+`git update-ref -d refs/remote-pytest/<name>`의 exit 1(`CalledProcessError`)로 죽었다. 묶음은
+이미 host에 도착한 뒤였고 시험 판정은 없었다. 같은 시각 다른 착지는 stderr가 빈
+`git rev-parse main failed`로 멈췄다. 착지 열 개가 한 `.git`을 같이 쓰던 때라 ref 잠금
+경합으로 추정하지만, stderr를 잡지 못해 원인은 확인하지 못했다.
+
+- 해결: 임시 ref 삭제 실패를 무시한다(남은 ref는 해가 없다). 시험
+  `test_a_failed_temp_ref_delete_does_not_fail_the_ship`가 ref를 잠근 채 `ship`이 끝나는지 본다.
+- 적용: 착지 로그 끝이 Python traceback이면 시험 실패가 아니다. 어느 단계의 뒷정리인지
+  보고 `land_async.py resume`으로 되살린다. `finally`의 뒷정리는 본 작업의 결과를 덮지 않게 쓴다.
