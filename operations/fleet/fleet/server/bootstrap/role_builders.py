@@ -293,6 +293,12 @@ def install_trip_and_map_surfaces(app, *, console, console_token, task_service, 
     trip_runner.traffic.ai_replan = AiReplan(app.state.ai_first, app.state.ai_facts, app.state.ai_episodes)
     install_map_pin_route(app, service=map_pose, require_named_operator=require_named_operator,
                           record_event=site_maps.record_event, busy=trip_runner.robot_busy)
+    from fleet.server.relocalize_routes import install_relocalize_routes
+    install_relocalize_routes(
+        app, service=getattr(app.state, "localization_service", None), clients=console.clients,
+        read_state=map_pose.state, require_named_operator=require_named_operator,
+        read_guard=read_guard, record_event=site_maps.record_event,
+        busy=lambda robot_id: bool(engaged(console, robot_id)) or trip_runner.robot_busy(robot_id))
     if task_service is not None:
         console.goal_leases.attempt_open = partial(attempt_open, task_service.store)
         console.goal_leases.admit_attempt = task_service.admit_attempt
