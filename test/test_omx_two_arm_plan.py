@@ -1,5 +1,6 @@
 """Arm assignment and schedule for Harbor's moves: one-arm and two-arm modes on the same input. No MuJoCo, no IK (a fixed reach table;
 the validator-backed `validator_can` is exercised by the MuJoCo replay)."""
+import json
 from pathlib import Path
 import sys
 
@@ -159,3 +160,23 @@ def test_tier_by_tier_stack_and_cell_stack_schedule_and_replay(layout):
             task = replays[f"{key}-two-arm"]
             assert len(task["steps"]) == 3 and all(layout.sites[s["to"]]["layer"] == tier - 1 for s in task["steps"])
             assert sum(1 for s in task["start"].values() if layout.sites[s]["kind"] == "ship" and s != "ship-stern-l0") == 3 * (tier - 1)
+
+
+def test_outbound_and_rearrange_replay_json_carry_after_zones_and_disjoint_overlap(tmp_path, layout):
+    """compare --scenario outbound|rearrange --replay-dir writes two-arm replay JSON with after, zones, both arms, and disjoint overlapping zones."""
+    for scenario in ("outbound", "rearrange"):
+        assert plan.main(["compare", "--scenario", scenario, "--replay-dir", str(tmp_path)]) == 0
+        steps = json.loads((tmp_path / f"{scenario}-two-arm.json").read_text(encoding="utf-8"))["steps"]
+        assert steps and {s["arm"] for s in steps} == BOTH
+        assert all(isinstance(s["after"], list) and len(s["zones"]) == 2 and s["zones"][0] and s["zones"][1] for s in steps)
+        windows, held = [], []
+        for s in steps:
+            t_pick, t_carry, t_place = plan.duration(layout, s["from"], s["to"])
+            t0 = s["planned_start_s"]
+            windows.append((s["arm"], t0, t0 + t_pick + t_carry + t_place))
+            held.extend((s["id"], z, t0, t0 + t_pick + t_carry) for z in s["zones"][0])
+            held.extend((s["id"], z, t0 + t_pick, t0 + t_pick + t_carry + t_place) for z in s["zones"][1])
+        assert any(a1 != a2 and s1 < e2 and s2 < e1 for i, (a1, s1, e1) in enumerate(windows) for a2, s2, e2 in windows[i + 1:])
+        for i, (m1, z1, s1, e1) in enumerate(held):
+            for m2, z2, s2, e2 in held[i + 1:]:
+                assert m1 == m2 or not (z1 == z2 and s1 < e2 and s2 < e1), (scenario, m1, m2, z1, s1, e1, s2, e2)
