@@ -54,13 +54,42 @@ def _none(text) -> bool:
     return str(text or "").strip().lower() in ("none", "no", "")
 
 
-def verdict(answers: dict, scene: dict | None = None) -> dict:
+PLATE = {"arm_a": "a", "arm_b": "b"}  # the temp plate each arm works from; arm_s has none
+
+
+def measured_seating(arm: str, top: bytes) -> list:
+    """Containers turned or shifted in this arm's temp plate lanes, measured on the calibrated top frame (the vision model
+    called a container 14 deg across its lane "seated" on 2026-11-14, so seating is measured, not asked)."""
+    import cv2
+    import numpy as np
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "tools/sim"))
+    import omx_real2sim as r2s
+    import omx_two_arm_sites as sites
+    frame = cv2.imdecode(np.frombuffer(top, np.uint8), cv2.IMREAD_COLOR)
+    snaps = sorted((Path(__file__).resolve().parent / "sim/cell_snapshots").glob("*.json"))
+    prev = json.loads(snaps[-1].read_text(encoding="utf-8"))["items"]["temp_plates"] if snaps else None  # the plate shape
+    plates, layout = None, None
+    for camera in ("2026-11-10", "2026-11-12"):  # the two top camera surveys, as omx_real2sim measure tries them
+        candidate = sites.Layout(top_camera=camera)
+        got = r2s.measure_temp_plates(frame, candidate, prev)
+        worst = max((got.get("camera_check") or {}).get("worst_mm") or [99.])
+        if plates is None or worst < plates[1]:
+            plates, layout = (got, worst), candidate
+    plates = plates[0]
+    if "lanes" not in plates["plates"][PLATE[arm]]:
+        return [f"seating: not measured ({plates['plates'][PLATE[arm]].get('error')})"]
+    return [f"seating: container in plate {u['plate']} lane {u['lane']} turned {u['turn_deg']} deg, off {u['off_mm']} mm"
+            for u in r2s.unseated_containers(frame, layout, plates) if u["plate"] == PLATE[arm]]
+
+
+def verdict(answers: dict, scene: dict | None = None, measured: list = ()) -> dict:
     """camera_clear only when every view says no obstruction and a slack cable, and the scene shows nothing out of place or
     leaned on; anything else needs a person. Occupied spots are reported, not judged: placement measurement owns occupancy."""
     worries = [f"{view}: {a.get('obstruction')} / cable {a.get('cable')}" for view, a in answers.items()
                if not _none(a.get("obstruction")) or a.get("cable") != "slack"]
     if scene is not None:
         worries += [f"scene: {key} {scene.get(key)}" for key in ("misplaced", "arm_leaning") if not _none(scene.get(key))]
+    worries += list(measured)
     return {"camera_clear": not worries and bool(answers), "worries": worries}
 
 
@@ -72,12 +101,13 @@ def note(arm: str, result: dict) -> str:
             "not a hand check: joint friction and gear state were not checked")
 
 
-def check(arm: str, fetch, ask, now=time.time, scene_image: bytes | None = None) -> dict:
+def check(arm: str, fetch, ask, now=time.time, scene_image: bytes | None = None, seating=measured_seating) -> dict:
     frames = {view: fetch(view) for view in VIEWS[arm]}
     answers = ask_views(arm, frames, ask)
     scene = ask_scene(arm, scene_image, ask) if scene_image is not None else None
+    measured = seating(arm, frames["top"]) if arm in PLATE else []
     result = {"schema": SCHEMA, "arm": arm, "t": round(now(), 3), "model": getattr(ask, "__name__", "?"),
-              "answers": answers, "scene": scene, "verdict": verdict(answers, scene)}
+              "answers": answers, "scene": scene, "measured": measured, "verdict": verdict(answers, scene, measured)}
     result["note"] = note(arm, result)
     return result
 

@@ -18,7 +18,7 @@ POSES = dict(a=(-.0378, -.1672, math.radians(1.)), b=(-.0334, .1474, math.radian
 COVERED = dict(a=2, b=1)  # a container sits in this lane, the others show their dark pad
 
 
-def frame(layout, hide=()):
+def frame(layout, hide=(), skew=None):
     img = np.full((480, 640, 3), (60, 200, 200), np.uint8)  # the yellow table (hue 30, clear of the orange mask's < 22)
     cam = r2s.Camera(layout.fixture["real_cameras"]["top"], img.shape[:2])
     box_h = sites.CONTAINER[layout.choices["ship_source"]][2]
@@ -28,6 +28,7 @@ def frame(layout, hide=()):
                 continue
             (x, y), yaw = r2s.place(local, pose)
             on_top = k == COVERED[tag]
+            yaw += math.radians((skew or {}).get((tag, k), 0.))
             z = layout.deck_z + (box_h if on_top else 0.)
             corners = [cam.project((x + a * .045 * math.cos(yaw) - b * .015 * math.sin(yaw),
                                     y + a * .045 * math.sin(yaw) + b * .015 * math.cos(yaw), z))
@@ -55,6 +56,15 @@ def test_plates_are_found_with_their_covered_lane():
             assert abs(lane["yaw_deg"] - math.degrees(yaw)) < 1.5, (tag, k)
         assert lanes[COVERED[tag]]["source"] == "container"
     assert max(got["camera_check"]["worst_mm"]) < 3
+
+
+def test_a_container_turned_in_its_lane_is_unseated_and_a_straight_one_is_not():
+    layout = sites.Layout()
+    plates = r2s.measure_temp_plates(frame(layout), layout)
+    assert r2s.unseated_containers(frame(layout), layout, plates) == []
+    img = frame(layout, skew={("a", COVERED["a"]): 14.})  # 2026-11-14: arm_a's temp container sat about 14 deg across its lane
+    got = r2s.unseated_containers(img, layout, r2s.measure_temp_plates(img, layout, plates))
+    assert [(u["plate"], u["lane"]) for u in got] == [("a", COVERED["a"])] and 12 < got[0]["turn_deg"] < 16
 
 
 def test_a_plate_seen_by_one_lane_comes_from_the_previous_shape():
