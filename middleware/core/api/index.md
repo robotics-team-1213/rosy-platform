@@ -31,7 +31,7 @@
 
 ## 최근 기록
 
-- 2026-11-14 · uncommitted · 계약 버전 핀 v1.401
+- 2026-11-14 · uncommitted · API 계약 v1.402
 - 2026-11-14 · uncommitted · 상태 표시등 패턴 API
 - 2026-11-13 · uncommitted · fix(core): API contract header v1.389 gets its changelog row and CONTRACT constant (main red)
 - 2026-11-07 · uncommitted · 계약 버전 v1.374
