@@ -67,7 +67,6 @@ def test_relocalize_needs_a_named_operator(tmp_path):
 
 def test_relocalize_refuses_offline_trip_and_localized(tmp_path, monkeypatch):
     from fleet.server.trip_runner import TripRunner
-    monkeypatch.setattr(TripRunner, "robot_busy", lambda self, robot_id: True)
     app, robot = _app(tmp_path)
     with TestClient(app) as client:
         named = {"Authorization": f"Bearer {NAMED}"}
@@ -76,6 +75,7 @@ def test_relocalize_refuses_offline_trip_and_localized(tmp_path, monkeypatch):
         offline = client.post("/api/fleet/robots/r1/relocalize", headers=named)
         assert offline.status_code == 409 and offline.json()["detail"]["code"] == "ROBOT_OFFLINE"
         robot.state_error = None
+        monkeypatch.setattr(TripRunner, "robot_busy", lambda self, robot_id: True)
         trip = client.post("/api/fleet/robots/r1/relocalize", headers=named)
         assert trip.status_code == 409 and trip.json()["detail"]["code"] == "RELOCALIZE_TRIP_ACTIVE"
         monkeypatch.setattr(TripRunner, "robot_busy", lambda self, robot_id: False)
@@ -163,10 +163,10 @@ def test_confirm_posts_the_reported_candidate_by_index_and_pose(tmp_path):
         assert [d.pose.x for d in robot.decisions] == [1.0, -1.0]
         assert all(d.source == "human" and d.request_id == "q1" for d in robot.decisions)
         assert all(d.candidate_index is None for d in robot.decisions)   # a pose, not an index
-    events = _events(app, "localization_confirm")
+    events = _events(app, "localization_confirm")    # newest first
     assert len(events) == 2
-    assert events[0]["principal_id"] == "kim" and events[0]["detail"]["candidate_index"] == 0
-    assert events[1]["detail"]["candidate_index"] == 1
+    assert all(e["principal_id"] == "kim" for e in events)
+    assert [e["detail"]["candidate_index"] for e in events] == [1, 0]
 
 
 def test_confirm_refuses_anything_the_robot_did_not_report(tmp_path):
