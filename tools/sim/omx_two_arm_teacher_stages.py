@@ -10,6 +10,7 @@ _CELL = str(Path(__file__).resolve().parents[2] / "deploy" / "robot" / "omx")
 if _CELL not in sys.path:
     sys.path.append(_CELL)  # appended: only cell_belt_handover is wanted from there
 import numpy as np  # noqa: E402
+import omx_two_arm_plan as plan_mod  # noqa: E402
 import omx_two_arm_sites as sites  # noqa: E402
 import omx_two_arm_tasks as tasks  # noqa: E402
 import palletizing_gripper as jaw  # noqa: E402
@@ -139,6 +140,15 @@ def run_concurrent_steps(teacher, data, task, here, max_s=900, faults=None):
                     continue  # nothing of this step's at the belt end yet (or the token is another step's): the pick gate holds
             elif not done_after or not free or not all(status.get(d) for d in s.get("after_pick", [])):
                 continue  # a non-belt step keeps its plan's after_pick
+            here_s = {k: v for k, v in here.items() if k != s["container"]}
+            if running and not all(
+                plan_mod.sweeps_clear(
+                    plan_mod.step_swept_poses(L, arm, s["from"], s["to"], here_s),
+                    plan_mod.step_swept_poses(L, oa, r[0]["from"], r[0]["to"], r[2].here),
+                )
+                for oa, r in running.items()
+            ):
+                continue
             queue[arm].pop(0)
             started[s["id"]] = frames
             if s["from"] == "belt" and not belt_cargo():
