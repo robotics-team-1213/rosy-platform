@@ -5,7 +5,7 @@ from __future__ import annotations
 import importlib as _il
 import math as _math
 
-from fastapi import Request
+from fastapi import HTTPException, Request
 
 
 async def compute_road_plan(console, request: Request, robot_id: str, target_x: float, target_y: float,
@@ -34,8 +34,9 @@ async def compute_road_plan(console, request: Request, robot_id: str, target_x: 
                 site_pose = (float(tp[0]), float(tp[1]), float(tp[2] if tp[2] is not None else 0.0))
         except Exception:
             pass
-    if site_pose is None:
-        site_pose = (-0.411, 0.350, -1.5708)
+    if site_pose is None or not all(_math.isfinite(v) for v in site_pose):
+        raise HTTPException(status_code=409, detail={
+            "code": "ROUTE_POSE_UNTRUSTED", "message": "road-nav2 needs a LOCALIZED map pose"})
 
     explicit_yaw = target_yaw
     if target_yaw is None:

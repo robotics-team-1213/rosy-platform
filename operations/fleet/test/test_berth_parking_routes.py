@@ -41,6 +41,9 @@ def test_berth_parking_status_and_dispatch_routes():
     app = FastAPI()
 
     class DummyConsole:
+        def trip_refusal(self, ids):
+            return None
+
         async def goal(self, robot_id: str, x: float, y: float, yaw: float) -> dict:
             return {"robot_id": robot_id, "x": x, "y": y, "yaw": yaw, "queued": False}
 
@@ -67,7 +70,7 @@ def test_berth_parking_status_and_dispatch_routes():
         task_service=None,
         read_guard=[],
         operator_guard=[],
-        require_operator=fake_operator,
+        require_named_operator=fake_operator,
         compute_road_plan=fake_compute_road_plan,
     )
 
@@ -82,7 +85,8 @@ def test_berth_parking_status_and_dispatch_routes():
 
     res = client.post(
         "/api/fleet/robots/rosy_46/berth-park",
-        json={"bay_id": "C1", "mode": "forward_and_berth_park", "forward_m": 0.20},
+        json={"bay_id": "C1", "mode": "forward_and_berth_park", "forward_m": 0.20,
+              "execute_physical": False},
     )
     assert res.status_code == 200
     rbody = res.json()
@@ -112,7 +116,7 @@ def test_road_nav2_plan_route_returns_plan_without_dispatch_and_rejects_bad_quer
 
     install_berth_parking_routes(
         app, console=None, task_service=None, read_guard=[], operator_guard=[],
-        require_operator=lambda: SitePrincipal(principal_id="op-test", role="operator"),
+        require_named_operator=lambda: SitePrincipal(principal_id="op-test", role="operator"),
         compute_road_plan=fake_compute_road_plan,
     )
     client = TestClient(app)
@@ -123,3 +127,86 @@ def test_road_nav2_plan_route_returns_plan_without_dispatch_and_rejects_bad_quer
                           "places": ["P1", "C1"], "edges": ["bay_1"], "length_m": 0.2}
     assert seen == {"robot_id": "rosy_46", "x": 0.1, "y": 0.2, "yaw": 1.5, "place_id": "C1", "label": "charge 1"}
     assert client.get("/api/fleet/robots/rosy_46/road-nav2/plan", params={"x": "not-a-number"}).status_code == 422
+
+
+def _berth_client(*, task_service, principal_dep, plan, execute_physical=False):
+    app = FastAPI()
+    calls = []
+
+    class Console:
+        def trip_refusal(self, ids):
+            return None
+
+        async def goal(self, *a):
+            calls.append(a)
+            return {"accepted": True}
+
+    async def fake_plan(request, robot_id, x, y, yaw, place_id, label):
+        return plan
+
+    install_berth_parking_routes(
+        app, console=Console(), task_service=task_service, read_guard=[], operator_guard=[],
+        require_named_operator=principal_dep, compute_road_plan=fake_plan,
+    )
+    return TestClient(app), calls
+
+
+_PLAN = {"target_nav2": {"x": 0.1, "y": 0.2, "yaw": 0.0}, "waypoints_site": [], "length_m": 0.2, "eta_s": 5.0}
+_OP = lambda: SitePrincipal(principal_id="op-test", role="operator")  # noqa: E731
+_BODY = {"execute_physical": False}
+_URL = "/api/fleet/robots/rosy_46/berth-park"
+
+
+def test_berth_park_requires_named_operator():
+    from fastapi import HTTPException
+
+    def unnamed():
+        raise HTTPException(403, {"code": "NAMED_OPERATOR_REQUIRED"})
+
+    client, calls = _berth_client(task_service=None, principal_dep=unnamed, plan=_PLAN)
+    assert client.post(_URL, json=_BODY).status_code == 403
+    assert calls == []
+
+
+def test_berth_park_requires_idempotency_key_with_task_service():
+    class Tasks:
+        async def submit_navigation(self, **kw):
+            raise AssertionError("must not submit")
+
+    client, calls = _berth_client(task_service=Tasks(), principal_dep=_OP, plan=_PLAN)
+    res = client.post(_URL, json=_BODY)
+    assert res.status_code == 400 and res.json()["detail"]["code"] == "IDEMPOTENCY_KEY_REQUIRED"
+    assert calls == []
+
+
+def test_berth_park_submit_failure_is_refused_not_accepted_and_skips_console_goal():
+    class Tasks:
+        async def submit_navigation(self, **kw):
+            raise OSError("hub down")
+
+    client, calls = _berth_client(task_service=Tasks(), principal_dep=_OP, plan=_PLAN)
+    res = client.post(_URL, json=_BODY, headers={"Idempotency-Key": "k1"})
+    assert res.status_code >= 400
+    assert "accepted" not in res.json() and calls == []
+
+
+def test_berth_park_missing_pose_is_refused():
+    from fastapi import HTTPException
+    from fleet.server.ledger.task_dispatch_helpers import compute_road_plan
+
+    class Console:
+        async def trusted_map_pose(self, rid):
+            return None
+
+    class Req:
+        class app:
+            class state:
+                pass
+
+    import asyncio
+    try:
+        asyncio.run(compute_road_plan(Console(), Req, "rosy_46", 0.0, 0.0, None, None, ""))
+    except HTTPException as exc:
+        assert exc.status_code == 409 and exc.detail["code"] == "ROUTE_POSE_UNTRUSTED"
+    else:
+        raise AssertionError("expected refusal")

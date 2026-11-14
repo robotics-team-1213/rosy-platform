@@ -376,7 +376,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         read_guard=read_guard, operator_guard=operator_guard, drive_cancel=drive_cancel)
     install_berth_parking_routes(
         app, console=console, task_service=task_service, read_guard=read_guard,
-        operator_guard=operator_guard, require_operator=require_operator)
+        operator_guard=operator_guard, require_named_operator=require_named_operator)
 
     trip_runner = install_trip_and_map_surfaces(
         app, console=console, console_token=console_token, task_service=task_service,
