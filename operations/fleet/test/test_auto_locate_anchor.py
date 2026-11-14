@@ -185,8 +185,7 @@ def test_the_allowlist_is_exactly_the_trip_runner_and_the_readback():
     callers = sorted(p.relative_to(root).as_posix() for p in root.rglob("*.py")
                      if "driving_pose" in p.read_text(encoding="utf-8"))
     # The guide shows it read-only (user, 2026-11-13); lane compliance and the rest keep arbitrated_pose.
-    assert callers == ["server/guide_service.py", "server/pose/map_pose_service.py", "server/trips/trip_runner.py",
-                       "server/trips/trip_runner_helpers.py"]
+    assert callers == ["server/guide_service.py", "server/pose/map_pose_service.py", "server/trips/trip_runner.py"]
 
 
 def test_anchor_age_counts_from_the_camera_not_the_sample():
