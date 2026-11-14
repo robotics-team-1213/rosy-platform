@@ -314,6 +314,9 @@ def main(argv=None):
     ap.add_argument("step", choices=["check", "auto"])
     ap.add_argument("--targets", nargs="*", default=[], help="site:x,y points the next picks need a bias near")
     ap.add_argument("--commissioning", action="store_true", help="auto: a supervised calibration stage (D-911)")
+    ap.add_argument("--only", nargs="+", metavar="STEP", help="auto: run only these step kinds (remap, regions, pivot-near, "
+                    "surface, consensus-repair); a reviewed plan for one step must not run the others. 2026-11-15: a "
+                    "scratch config copied after a remap found the map fresh and ran unreviewed surface touches")
     ap.add_argument("--person-at-switch", action="store_true", help="with --commissioning: a person is at the power switch")
     args = ap.parse_args(argv)
     import cv2
@@ -330,6 +333,8 @@ def main(argv=None):
     work.mkdir(parents=True, exist_ok=True)
     found = check(config, calibration, targets, cell.frame("top"), config["params"])
     todo = stale(found)
+    if args.only:
+        todo = [step for step in todo if step.split()[0] in args.only]
     print(json.dumps({"check": found, "todo": todo}, default=str), flush=True)
     if args.step == "check" or not todo:
         return 0
