@@ -211,7 +211,11 @@ def build(repo: Path, members: list[dict], now: datetime, python: str = sys.exec
         merged = []
         for r in members:
             try:
-                candidate = git(repo, "rev-parse", r["branch"]).stdout.strip()
+                # 11-14: a split crashed on a member whose snapshot branch was gone; its recorded commit still merges
+                candidate = (git(repo, "rev-parse", "-q", "--verify", r["branch"], check=False).stdout.strip()
+                             or r.get("candidate"))
+                if not candidate:
+                    raise land.Stop("its snapshot branch is gone")
                 land.merge(wt, candidate, branch, python, False, source=r["branch"])
                 metadata = member_metadata(land_async.holder(repo), {**r, "candidate": candidate})
                 merged.append({**r, **metadata})
