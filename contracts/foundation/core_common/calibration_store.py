@@ -56,6 +56,13 @@ PROFILE_POSITIVE_KEYS = ("width", "height", "fx", "cx", "cy", "max_range_m")
 # Lateral lane-edge detector error a camera_profile may state (D-468 projection uncertainty).
 DETECTOR_LATERAL_PX_MAX = 5.0
 FLOOR_PINK_H_MIN = 120
+#: Shared D-1013 magenta bay-tape HSV defaults (camera calibration refines via ``floor_paint``).
+FLOOR_PINK_DEFAULTS = {
+    "pink_h_low": 145,
+    "pink_h_high": 179,
+    "pink_min_saturation": 35,
+    "pink_min_value": 60,
+}
 _SAFE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")
 
 
@@ -437,3 +444,12 @@ def _resolve_record(kind, fallback, *, fallback_source, robot, root, store, nomi
     values = {**fallback, **rec["values"]}
     return values, (f"calibration record {rec['id']} sha256 {rec['sha256'][:12]}"
                     f"{' (pinned)' if rec.get('pinned') else ''}"), rec.get("intervals") or {}
+
+
+def read_floor_paint_gate() -> tuple[tuple[int, int, int], tuple[int, int, int]]:
+    """Resolved (low, high) HSV bounds for pink floor tape from the accepted ``floor_paint`` record."""
+    values, _ = resolve("floor_paint", FLOOR_PINK_DEFAULTS, fallback_source="floor_paint defaults")
+    return (
+        (values["pink_h_low"], values["pink_min_saturation"], values["pink_min_value"]),
+        (values["pink_h_high"], 255, 255),
+    )

@@ -11,6 +11,8 @@ import math
 import cv2
 import numpy as np
 
+from core_common.calibration_store import FLOOR_PINK_DEFAULTS, read_floor_paint_gate
+
 
 #: Half the painted line width. The keeper fits the paint centre; the containment payload
 #: sends the paint's inner (drivable) edge, so each boundary moves this far toward the lane,
@@ -54,10 +56,10 @@ MAX_SATURATION = 80
 #: so the old H <= 170, S >= 80 gate caught 0 % of it and the white mask took 72 %.
 #: The hue band keeps orange (H 5-25) and yellow out; value keeps shadow noise out.
 #: The white mask drops this gate too, since the tape's S overlaps MAX_SATURATION.
-PINK_H_LOW = 145
-PINK_H_HIGH = 179
-PINK_MIN_SATURATION = 35
-PINK_MIN_VALUE = 60
+PINK_H_LOW = FLOOR_PINK_DEFAULTS["pink_h_low"]
+PINK_H_HIGH = FLOOR_PINK_DEFAULTS["pink_h_high"]
+PINK_MIN_SATURATION = FLOOR_PINK_DEFAULTS["pink_min_saturation"]
+PINK_MIN_VALUE = FLOOR_PINK_DEFAULTS["pink_min_value"]
 #: Walls: runs brighter than this (V channel, blue tape included) that start
 #: this many rows above the horizon; bases median-filtered over this many columns.
 WALL_START_ABOVE_HORIZON_PX = 4
@@ -339,15 +341,7 @@ def pink_gate() -> tuple:
     calibration record (measured from its own frames) or the constants above. Read once per process."""
     global _PINK_GATE
     if _PINK_GATE is None:
-        values = {"pink_h_low": PINK_H_LOW, "pink_h_high": PINK_H_HIGH,
-                  "pink_min_saturation": PINK_MIN_SATURATION, "pink_min_value": PINK_MIN_VALUE}
-        try:
-            from core_common.calibration_store import resolve
-            values, _ = resolve("floor_paint", values, fallback_source="lane_keep_lines defaults")
-        except Exception:  # noqa: BLE001  a store that cannot be read keeps the shipped gate
-            pass
-        _PINK_GATE = ((values["pink_h_low"], values["pink_min_saturation"], values["pink_min_value"]),
-                      (values["pink_h_high"], 255, 255))
+        _PINK_GATE = read_floor_paint_gate()
     return _PINK_GATE
 
 
