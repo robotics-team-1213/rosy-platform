@@ -243,7 +243,10 @@ class Planner:
                 raise SystemExit(f"{name}: frames move faster than the guard streams ({GUARD_UNITS_PER_S} units/s)")
         transit = self.keep_out(chunks)
         return {"schema": "rosy.omx-chunk-library.v1", "names": NAMES, "fps": self.fps, "chunks": chunks,
-                "gripper_closed": p["grip_closed"], "hold_current_ma": p.get("hold_current_ma"),
+                # jaw_empty_stop: where this arm's empty jaws stop (arm_s 48.5-48.9, 2026-11-13); the park closes to it and
+                # cell_transfer judges holding against it, so empty jaws are neither 'something in them' nor a held box
+                "gripper_closed": p.get("jaw_empty_stop", p["grip_closed"]), "jaw_empty_stop": p.get("jaw_empty_stop"),
+                "hold_current_ma": p.get("hold_current_ma"),
                 "transit": transit,
                 "transit_speed": p.get("transit_speed", 0.85),
                 "source": {"planner": "grasp_planner.py top-down v1", "pick": p["pick"], "place": p["place"],

@@ -36,7 +36,7 @@ Retired names (2026-11-13): chrony.conf, /etc/hosts, receiver.json and the Accou
 `retired_hostnames` of the private site map (full hostnames only; none or no map: one note; backup-named files and symlinks skipped); a hit is FAIL `retired-name` with
 the path only, an unreadable path a note. Malformed probe data is a FAIL for that host; on a `site` host a missing site
 state is a note, an unreadable one FAIL; a hold `until` without a zone or unparsable is expired (absent: set time + 24 h).
-D-1021 (update_drift.py): FAIL `account-key-drift`, `host-guard`.
+D-1021 (update_drift.py): FAIL `account-key-drift`, `host-guard`, `time-source <host>` (chrony `server` names vs the site map's `time_source:`).
 """
 from __future__ import annotations
 
@@ -515,14 +515,14 @@ def main() -> None:
     stuck = False
     inventory = load_inventory()
     retired, retired_note = retired_hostnames()
-    if retired_note:
-        print(f'note      {retired_note}')
     config = lab_hosts.load()
     role_of = roles(config)
     site_target = next((t for t, r in role_of.items() if 'site' in r), None)
     issuer_kids = update_drift.IssuerKeys([*SSH, '--', site_target] if site_target else None)
     declarations = {target: declared_units(inventory, host_roles) for target, host_roles in role_of.items()}
     targets = probe_targets(config)
+    for note in (retired_note, update_drift.time_source_gap([t for t in targets if t])):
+        print(f'note      {note}') if note else None
     platform = Path(__file__).resolve().parents[2]
     ops = lab_hosts.main_checkout().parent / 'rosy-ops'
     refs = {}
@@ -580,7 +580,7 @@ def main() -> None:
             if src['kind'] != 'other':
                 print(f'  {src["kind"]:7} {src["unit"]}: {src["where"]}')
         extra = clock_and_site(host, time.time(), role_of.get(target, ()))
-        extra += update_drift.findings(host, role_of.get(target, ()), time.time(), issuer_kids)  # before printing
+        extra += update_drift.findings(host, role_of.get(target, ()), time.time(), issuer_kids, update_drift.expected_time_source(target))  # before printing
         for verdict, unit, detail in extra:
             print(f'  {verdict:10} {unit}: {detail}')
         stuck |= any(f[0] in FAILING for f in extra)

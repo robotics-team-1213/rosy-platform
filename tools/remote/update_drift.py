@@ -27,6 +27,10 @@ d=json.load(sys.stdin)
 print(json.dumps({"issuer":d.get("issuer"),"kids":sorted(d.get("public_key_files") or {})}))' 2>/dev/null)
   [ -n "$out" ] && echo "receiver $f $out" || echo "receiver-unreadable $f"
 done
+# chrony `server` names, compared with the site map's time_source (the usable count is update_status's chrony line)
+if command -v chronyc >/dev/null 2>&1; then
+  echo "chrony-servers $(cat /etc/chrony/chrony.conf /etc/chrony/conf.d/*.conf /etc/chrony/sources.d/*.sources /etc/chrony.conf 2>/dev/null </dev/null | awk '$1=="server"{print tolower($2)}' | sort -u | tr '\n' ' ')"
+fi
 # R's host guard: its timer and when it last wrote status.json
 if systemctl cat rosy-host-guard.timer >/dev/null 2>&1; then
   gs=/var/lib/rosy-host-guard/status.json
@@ -60,6 +64,28 @@ def retired_hostnames(path: Path | None = None) -> tuple[list[str], str]:
     return names, ''
 
 
+def expected_time_source(target: str):
+    """(site map host name, expected chrony server names) for an ssh target; None when the map is missing or has none.
+
+    A missing map is already noted once by retired_hostnames; a malformed one stops the run (site_map.load)."""
+    import site_map
+    try:
+        site = site_map.load()
+    except OSError:
+        return None
+    found = site_map.host_for(site, target)
+    names = site_map.time_source(site, found[1]) if found else None
+    return (found[0], names) if names else None
+
+
+def time_source_gap(targets) -> str:
+    """One note naming the targets whose chrony names cannot be compared (no site map, the map's ssh: texts do not name
+    the target, or no time_source for it); '' when all can. The compare must never vanish silently."""
+    missing = [t for t in targets if expected_time_source(t) is None]
+    return (f'time-source compare skipped for {", ".join(missing)} (no site map, not named in its ssh: texts, or no time_source)'
+            if missing else '')
+
+
 def parse(host: dict, kind: str, rest: str) -> bool:
     """Take one probe line of this module's kinds into ``host``; False when the kind is not ours."""
     if kind == 'receiver':
@@ -74,6 +100,8 @@ def parse(host: dict, kind: str, rest: str) -> bool:
             host.setdefault('receivers', []).append((path, pin))
     elif kind == 'receiver-unreadable':
         host.setdefault('receivers_unreadable', []).append(rest.strip())
+    elif kind == 'chrony-servers':
+        host['chrony_servers'] = set(rest.split())
     elif kind == 'guard':
         fields = rest.split()
         host['guard'] = dict(active=fields[0] if fields else 'none', written=float(fields[1]) if len(fields) > 1 and fields[1].isdigit() else None)
@@ -106,9 +134,14 @@ class IssuerKeys:
         return self.cache[issuer]
 
 
-def findings(host: dict, roles, now: float, issuer_kids) -> list:
-    """(verdict, name, detail): receiver key drift, guard liveness. ``issuer_kids(issuer)`` -> set or None."""
+def findings(host: dict, roles, now: float, issuer_kids, time_source=None) -> list:
+    """(verdict, name, detail): receiver key drift, guard liveness, time source. ``issuer_kids(issuer)`` -> set or None."""
     out = []
+    if time_source and host.get('chrony_servers') is not None:
+        import site_map
+        mismatch = site_map.time_mismatch(host['chrony_servers'], time_source[1])
+        if mismatch:
+            out.append(('FAIL', f'time-source {time_source[0]}', mismatch))
     for path in host.get('receivers_unreadable', []):
         out.append(('note', 'account-key-drift', f'{path} could not be read; not checked'))
     unreachable, keyless = set(), set()

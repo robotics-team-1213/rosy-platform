@@ -522,3 +522,46 @@ def test_the_site_host_guard_timer_must_be_installed_active_and_recently_written
     assert _drift(['guard none'], {'site'})[0][:2] == ('FAIL', 'host-guard')
     assert _drift(['guard active -'], {'site'})[0][:2] == ('note', 'host-guard')
     assert _drift(['guard none'], {'omx'}) == [] and _drift(['guard none']) == []
+
+
+def test_chrony_servers_must_equal_the_site_map_time_source():
+    def run(lines, expected):
+        host = status.parse('\n'.join(['gate open', *lines]), NOW, 6.0)
+        return [f[:2] for f in status.update_drift.findings(host, (), NOW, lambda issuer: None, expected)]
+    wanted = ('model', {'ntp.example.test'})
+    assert run(['chrony-servers ntp.example.test'], wanted) == []
+    assert run(['chrony-servers ntp.example.test.'], wanted) == []
+    assert run(['chrony-servers gone.example.test'], wanted) == [('FAIL', 'time-source model')]
+    assert run(['chrony-servers ntp.example.test extra.example.test'], wanted) == [('FAIL', 'time-source model')]
+    assert run(['chrony-servers'], wanted) == [('FAIL', 'time-source model')]  # chrony with no `server` line
+    assert run([], wanted) == []  # no chrony on the host: nothing to compare
+    assert run(['chrony-servers gone.example.test'], None) == []  # no time_source in the map
+
+
+def test_the_expected_time_source_comes_from_the_private_site_map(tmp_path, monkeypatch):
+    path = tmp_path / 'site-map.yaml'
+    path.write_text('schema: rosy.site-map/1\ntime_source: {client: NTP.example.test}\nhosts:\n'
+                    '  model: {ssh: "op@model.example.test", roles: [model]}\n', encoding='utf-8')
+    monkeypatch.setenv('ROSY_SITE_MAP', str(path))
+    assert status.update_drift.expected_time_source('op@model.example.test') == ('model', {'ntp.example.test'})
+    assert status.update_drift.expected_time_source('op@other.example.test') is None
+    monkeypatch.setenv('ROSY_SITE_MAP', str(tmp_path / 'missing.yaml'))
+    assert status.update_drift.expected_time_source('op@model.example.test') is None
+
+
+def test_a_skipped_time_source_compare_is_one_note_naming_the_targets(tmp_path, monkeypatch):
+    path = tmp_path / 'site-map.yaml'
+    path.write_text('schema: rosy.site-map/1\ntime_source: {client: NTP.example.test}\nhosts:\n'
+                    '  model: {ssh: "op@model.example.test", roles: [model]}\n', encoding='utf-8')
+    monkeypatch.setenv('ROSY_SITE_MAP', str(path))
+    assert status.update_drift.time_source_gap(['op@model.example.test']) == ''
+    note = status.update_drift.time_source_gap(['op@model.example.test', 'op@lost.example.test'])
+    assert 'op@lost.example.test' in note and 'op@model' not in note
+    monkeypatch.setenv('ROSY_SITE_MAP', str(tmp_path / 'missing.yaml'))
+    assert 'op@model.example.test' in status.update_drift.time_source_gap(['op@model.example.test'])
+
+
+def test_the_probe_lists_chrony_server_names_only_where_chrony_exists():
+    assert 'echo "chrony-servers ' in status.update_drift.PROBE
+    assert status.parse('gate open\nchrony-servers a.example.test b.example.test', NOW, 6.0)['chrony_servers'] == {
+        'a.example.test', 'b.example.test'}

@@ -14,6 +14,7 @@ from fleet.server.sitemap.pipeline_routes import _enrich_task_health
 
 def install_cell_tasks_routes(app, ctx) -> None:
     read_guard = ctx.read_guard
+    operator_guard = ctx.operator_guard
     STATION_CAMERA_LINKS = ctx.STATION_CAMERA_LINKS
     _arm_live_catalog = ctx._arm_live_catalog
     zones_override_path = ctx.zones_override_path
@@ -85,7 +86,7 @@ def install_cell_tasks_routes(app, ctx) -> None:
         "full_s3_to_s5_pipeline": {"preset": "full_s3_to_s5_pipeline", "label": "연속 파이프라인 (S3 셔틀 -> S5 1·2층 적재)", "steps": ["s3_shuttle", "s5_tier1_arm_a", "s5_tier2_arm_b"]},
     }
 
-    @app.post("/api/fleet/pipeline/displaced-detection", dependencies=read_guard)
+    @app.post("/api/fleet/pipeline/displaced-detection", dependencies=operator_guard)
     async def report_displaced_detection(request: Request):
         body = await request.json()
         site = body.get("displaced_to")
@@ -137,7 +138,7 @@ def install_cell_tasks_routes(app, ctx) -> None:
         _save_ledger()
         return task
 
-    @app.post("/api/fleet/pipeline/cell-tasks", dependencies=read_guard)
+    @app.post("/api/fleet/pipeline/cell-tasks", dependencies=operator_guard)
     async def create_cell_task(request: Request):
         active = active_map()
         body = await request.json()
@@ -209,7 +210,7 @@ def install_cell_tasks_routes(app, ctx) -> None:
             "pinky_tasks": list(app.state.pinky_tasks.values()),
         }
 
-    @app.post("/api/fleet/pipeline/cell-tasks/{task_id}/cancel", dependencies=read_guard)
+    @app.post("/api/fleet/pipeline/cell-tasks/{task_id}/cancel", dependencies=operator_guard)
     async def cancel_cell_task(task_id: str):
         active = active_map()
         task = app.state.omx_cell_tasks.get(task_id)
@@ -228,7 +229,7 @@ def install_cell_tasks_routes(app, ctx) -> None:
         _save_ledger()
         return {"ok": True, "task": task, "gate": res["gate"]}
 
-    @app.post("/api/fleet/pipeline/cell-tasks/{task_id}/retry", dependencies=read_guard)
+    @app.post("/api/fleet/pipeline/cell-tasks/{task_id}/retry", dependencies=operator_guard)
     async def retry_cell_task(task_id: str):
         active = active_map()
         orig = app.state.omx_cell_tasks.get(task_id)
@@ -252,7 +253,7 @@ def install_cell_tasks_routes(app, ctx) -> None:
         )
         return {"ok": True, "task": retried, "retried_from": task_id}
 
-    @app.post("/api/fleet/pipeline/pinky-tasks", dependencies=read_guard)
+    @app.post("/api/fleet/pipeline/pinky-tasks", dependencies=operator_guard)
     async def create_pinky_task(request: Request):
         active = active_map()
         body = await request.json()

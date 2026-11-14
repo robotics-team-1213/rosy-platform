@@ -487,6 +487,21 @@ def test_jaws_that_stop_short_at_their_end_count_as_arrived():
     assert clock[0] < 2.0  # about a second of standing still, not the whole timeout
 
 
+def test_jaws_read_once_a_second_are_waited_for_until_they_arrive():
+    """2026-11-13 arm_s: the session's state held one jaw value about a second while the jaws opened 3 units/s."""
+    clock = [0.0]
+
+    class Jaws:
+        def act(self, command):
+            return {"ok": True, "state": [0, 0, 0, 0, 0, min(57.0, 50.0 + 3.0 * int(clock[0]))]}
+
+    def sleep(seconds):
+        clock[0] += seconds
+
+    assert m.grip_to(Jaws(), 57.0, sleep=sleep, clock=lambda: clock[0])
+    assert clock[0] >= 2.0  # 0.6 s of an unchanged reading returned at 0.6 s with the jaws at 50
+
+
 def test_taught_and_measured_start_references_compete_and_the_one_that_held_is_used(tmp_path):
     config = copy.deepcopy(CONFIG)
     profile = copy.deepcopy(PROFILE)

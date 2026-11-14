@@ -54,11 +54,12 @@
 
 - `tools/remote/update_drift.py`와 `update_status.py`: 은퇴 이름을 공개 저장소가 아니라 비공개 지도(`retired_hostnames:`)에서 읽음, 수신기·Fleet `client.json` 키 `FAIL account-key-drift <경로>`(이름만, 키 자료는 출력하지 않음; https가 아닌 issuer와 키를 받아 오지 못한 경우도 FAIL), R guard 타이머·status.json 시각 `FAIL host-guard`.
 - 보류 만료, 거부 사유, 30분 Account 로그인 점검 유닛, chrony 시간원 점검, 10초 시계 여유와 `clock_skew` 로그는 별도 변경이다(교훈 기록).
-- 구현하지 않은 것: 모델 PC 쪽의 R guard 감시자(역방향 guard, 아래), APK 재빌드 표시, 변경 기록 양식 자동 검사.
+- 사람 없이 도는 감시(2026-11-14): `rosy-host-guard`(10분 타이머, 모든 PC에 닿고 운영자 webhook이 있다)에 `drift`·`logincheck` 줄을 더했다. forced command `drift`가 chrony `server` 이름·사용 가능 원천·옛 이름·guard 멈춤을 읽고, 로그인 점검 유닛이 앱 이름과 PASS/FAIL만 담은 `status.json`을 남긴다. 둘 다 연속 2회 이상이면 한 번, 정상이 되면 한 번 알리고, 점검 결과가 3시간(login)·1시간(guard) 갱신되지 않아도 알린다. 지도의 `time_source:`는 `update_status`가 `FAIL time-source <호스트>`로 대조하고(지도에서 찾지 못한 호스트는 실행마다 `note` 한 줄로 이름을 든다) `site_map.py apply-time`이 적용한다. 남은 공백: 로봇(Pinky)의 chrony는 `update_status`의 점검 대상이 아니고 guard `drift` 줄도 PC용 forced command를 요구해 자동 대조가 없다. SD 재설치·손 편집은 `apply-time`을 돌릴 때만 드러난다.
+- 구현하지 않은 것: guard의 수신기 키 대조(발급자 키를 받아 와야 해 `update_status`에만 있다), 모델 PC에 guard를 설치해 R guard를 지켜보는 일(코드는 있고 설치는 사람 몫, README), APK 재빌드 표시, 변경 기록 양식 자동 검사.
 
 ### Consequences
 
 - 키 회전·앱 추가는 Account 한 곳, 호스트 이름 변경은 지도 한 곳의 변경이고 나머지는 점검이 어긋남을 잡는다.
 - 이 결정은 새 서비스·새 신뢰 뿌리를 만들지 않아 D-987·D-997 구조를 그대로 둔다.
-- R guard 감시는 `update_status` 실행 시점에만 보인다. 모델 PC가 스스로 R의 guard 정지를 알리는 역방향 감시자는 아직 없다(후속).
+- R guard 정지는 모델 PC에 guard와 webhook이 설치돼 `site drift` 줄이 있을 때만 알려진다. 지금(2026-11-14) 모델 PC에는 guard가 없어 그 설치가 남았다.
 - `update_status`는 비공개 지도가 이 노트북에 있어야 은퇴 이름을 검사한다. 없으면 검사를 건너뛴다고 한 줄 알린다.

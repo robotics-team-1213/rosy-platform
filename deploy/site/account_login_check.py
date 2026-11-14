@@ -1,18 +1,23 @@
 #!/usr/bin/env python3
 """Log in to every Account-backed app with one read-only test account, the way a browser does.
 
-usage: account_login_check.py <config.json> [--insecure] [app ...]
+usage: account_login_check.py <config.json> [--insecure] [--status FILE] [app ...]
 
 The config file stays out of the repository (private/). It holds the test account and the app list:
   {"issuer": "https://...", "login": "...", "password": "...",
    "apps": [{"name": "...", "start": "https://.../login", "session": "https://.../session"}]}
+--status FILE writes {"time", "apps": {name: bool}, "configured": [every app name of the config]} (names and verdicts
+only, never credentials or details; a run for a few apps shows as partial against "configured") for
+rosy-host-guard, which alerts through the operator webhook on a failure streak and when the file stops being renewed.
 Per app: GET start (must redirect to the issuer) -> POST issuer login (204) -> follow authorize and the
 app callback -> GET session (200). One PASS/FAIL line per app; exit 1 if any app fails. Only the stdlib.
 """
 import http.cookiejar
 import json
+import os
 import ssl
 import sys
+import time
 import urllib.error
 import urllib.request
 from urllib.parse import urljoin, urlsplit
@@ -93,25 +98,44 @@ def check_app(app, config, insecure=False):
         return False, f"{type(error).__name__}: {str(error)[:100]}"
 
 
+def write_status(path, results, configured):
+    """Atomic and world-readable (the guard runs as another user); results is {app name: ok}."""
+    tmp = f"{path}.tmp"
+    with open(tmp, "w", encoding="utf-8") as handle:
+        json.dump({"time": int(time.time()), "apps": results, "configured": configured}, handle)
+    os.chmod(tmp, 0o644)
+    os.replace(tmp, path)
+
+
 def main(argv):
     insecure = "--insecure" in argv
     args = [item for item in argv[1:] if item != "--insecure"]
+    status = None
+    if "--status" in args:
+        at = args.index("--status")
+        status, args = (args[at + 1] if at + 1 < len(args) else None), args[:at] + args[at + 2:]
+        if status is None:
+            print("--status needs a file", file=sys.stderr)
+            return 2
     if not args:
         print(__doc__, file=sys.stderr)
         return 2
     with open(args[0], encoding="utf-8") as handle:
         config = json.load(handle)
-    only, failed, checked = set(args[1:]), False, 0
+    only, failed, checked, results = set(args[1:]), False, 0, {}
     for app in config["apps"]:
         if only and app["name"] not in only:
             continue
         ok, detail = check_app(app, config, insecure)
         failed |= not ok
         checked += 1
+        results[app["name"]] = ok
         print(f"{'PASS' if ok else 'FAIL'} {app['name']} ({detail})")
     if not checked:
         print("no app was checked (empty app list or no name matched)", file=sys.stderr)
         return 2
+    if status:
+        write_status(status, results, [app["name"] for app in config["apps"]])
     return 1 if failed else 0
 
 

@@ -406,6 +406,9 @@ R의 최종 책임자는 현장 배포 소유자(지금은 사용자)이고 에�
 browser does and exits non-zero when any app fails, so the unit fails. `tools/remote/update_status.py` lists failed system
 units and reports `FAIL account-login-check` for it. Four outages on 2026-11-13 (a renamed host still named in chrony,
 `/etc/hosts`, a receiver issuer and redirect URIs) were found by hand; this finds them within 30 minutes.
+It also writes app names and PASS/FAIL (no credentials) to `/var/lib/rosy-account-login-check/status.json`; add
+`account-login logincheck /var/lib/rosy-account-login-check/status.json` to the guard's `hosts.conf` and `rosy-host-guard`
+alerts through the operator webhook once per failure streak (again once if the set of failing apps changes), once on recovery, and when the file is older than 3 hours or dated in the future (D-1021). A partial report (the report's own `configured` list names an app it lacks, e.g. a run for one app) counts as a problem, and only a full all-PASS report recovers it; removing an app from the probe config needs nothing else. A report older than 35 minutes (the probe died) is counted per guard run, so its last FAIL alerts after two runs, not after the 3-hour staleness.
 
 The test account `rosy-e2e-test` already exists as a viewer (grants `fleet.read`, `learning.view`, `robot.read`); it can
 change nothing. Provision the config once; it is never in the repository, root-only, and holds the password:

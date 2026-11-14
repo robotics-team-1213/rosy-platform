@@ -7,7 +7,11 @@ After=docker.service tailscaled.service
 Type=oneshot
 # Runs from the signed release like rosy-site-account-tls-renew.service. A failing app makes the
 # unit fail; update_status reports the failed unit. The config (test account) stays out of the release.
-ExecStart=/usr/bin/python3 -I /opt/rosy/candidate/deploy/site/account_login_check.py /etc/rosy/site/account-login-check.json
+# --status leaves app names and PASS/FAIL for rosy-host-guard (`logincheck` line in hosts.conf), which alerts through
+# the operator webhook; the file holds no credentials, so the directory is world-readable.
+ExecStart=/usr/bin/python3 -I /opt/rosy/candidate/deploy/site/account_login_check.py /etc/rosy/site/account-login-check.json --status /var/lib/rosy-account-login-check/status.json
+StateDirectory=rosy-account-login-check
+StateDirectoryMode=0755
 # worst case 9 requests x 10 s x 7 apps = 10.5 min, so 15 min
 TimeoutStartSec=15min
 UMask=0077
