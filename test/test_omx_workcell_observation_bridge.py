@@ -353,7 +353,7 @@ def test_mirror_vision_gets_every_camera_with_its_own_trust_and_no_arms(manifest
         dict.fromkeys(arm.joint_names, .25)).encode(), captured_at=bridge.time.time())
     SnapshotChannel('/top/image_raw').write('jpeg', b'jpeg', captured_at=bridge.time.time())
     trust = []
-    monkeypatch.setattr(bridge.ssl, 'create_default_context', lambda cafile=None: trust.append(cafile) or cafile)
+    monkeypatch.setattr(bridge.ssl, 'create_default_context', lambda cafile=None: trust.append(str(cafile)) or str(cafile))
     delivered, stop = set(), threading.Event()
     class Sender:
         def __init__(self, url, source, token, *, context): self.key = (url, source, token, context)
