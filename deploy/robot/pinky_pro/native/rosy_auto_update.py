@@ -304,6 +304,7 @@ class Updater(UpdaterRecords, UpdaterStage, UpdaterApply):
                 self._mark_failed(state, item, "operator rolled back")
                 self._history("operator_rolled_back", item, f"current is {current}")
         self._expire_hold()
+        state["branch_fallback"] = None  # only this run's choice may step down (review: no stale exception)
         backoff = parse_z(state.get("backoff_until"))
         if backoff is not None and self.host.now() < backoff:
             raise UpdateError(f"GITHUB_BACKOFF: not asking GitHub until {_z(backoff)}")

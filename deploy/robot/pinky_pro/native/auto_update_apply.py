@@ -333,7 +333,7 @@ class UpdaterApply:
             raise UpdateError(problem)
         current = self.host.current_release()
         # D-1031: the one lower release run() chose for a hand-built branch release is the only exception.
-        stepping_down = state.get("branch_fallback") == release_id
+        stepping_down = state.get("branch_fallback") == release_id != current
         if current is None or not RELEASE_ID.fullmatch(release_id) or not (release_id > current or stepping_down):
             raise UpdateError(f"NOT_NEWER: {release_id} is not above the current release {current}")
         try:

@@ -54,6 +54,7 @@ STUCK_REASON = ("CORE active but not writing status; operator action required: c
 # Device paths, relative to the root (tests pass a temporary one).
 UPDATES = "var/lib/rosy/updates"
 RELEASES = "opt/rosy/releases"
+BRANCH_BUILD_REF = re.compile(r"build/[A-Za-z0-9._-]{1,200}")  # source-ref.txt of a hand-built release
 NATIVE_RUNTIME = "opt/rosy/native-runtime"
 TRUSTED_KEY = "etc/rosy/trusted-release-keys/rosy-release-2026-01.pem"
 APPROVALS = ("etc/rosy/approvals/hardware.approved", "etc/rosy/approvals/navigation.approved")
@@ -384,14 +385,14 @@ def branch_build_fallback(root: Path, current: str, releases: list, failed: dict
     """D-1031: a hand-built branch release (its source-ref names neither main nor robot-release/<id>) may
     step to the newest published release even when that id is lower. Only that one release, never below
     the pinned factory release and never again once it failed or was withdrawn: no walk down the list."""
-    ref = root / RELEASES / current / "source-ref.txt"
     try:
-        if ref.is_symlink() or not ref.is_file():
-            return []  # no record: a legacy official release keeps the higher-id rule
-        text = ref.read_text(encoding="utf-8").strip()
-    except OSError:
-        return []
-    if text in ("main", f"robot-release/{current}") or not releases:
+        fd = os.open(root / RELEASES / current / "source-ref.txt", os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+        with os.fdopen(fd, "rb") as handle:
+            text = handle.read(257).decode("ascii").strip()
+    except (OSError, ValueError):
+        return []  # no readable record: a legacy official release keeps the higher-id rule
+    # Only a recognisable hand build steps down; empty, garbage or another official ref format never does.
+    if not BRANCH_BUILD_REF.fullmatch(text) or not releases:
         return []
     newest = max(releases, key=lambda item: item["release_id"])
     release_id = newest["release_id"]
