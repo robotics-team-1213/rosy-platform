@@ -1,6 +1,7 @@
 """cell_frame (D-933): the top camera found from the gripper marker, the base and surface markers learned once, then a
 bumped camera and a moved Pinky are re-solved from the markers and a box pixel still lands on its arm point."""
 import sys
+import json
 from pathlib import Path
 
 import pytest
@@ -141,3 +142,75 @@ def test_the_observe_seam_uses_the_model_when_the_calibration_has_one():
     assert np.linalg.norm(np.array(pixel) - cf.project(box, K, DIST, CAMERA)) < 2.0
     est = cell_observe.model_estimate(config, record, "board", {"cx": pixel[0], "cy": pixel[1], "yaw": 10.0})
     assert np.linalg.norm(np.array(est["arm_m"]) - box[:2]) < 0.003 and est["map"] == "model" and est["base_seen"]
+
+
+def _accepted_intrinsics():
+    return {"accepted": True, "camera": "top", "size": [640, 480], "K": K.tolist(),
+            "dist": [float(v) for v in DIST[:4]] + [0.0], "rms_px": 0.4,
+            "board": {"cols": 7, "rows": 10, "square_m": 0.02, "marker_m": 0.015,
+                      "dictionary": "DICT_4X4_50", "scale_bar_mm": 50.0},
+            "source_frames": [{"file": f"view-{i}.jpg", "sha256": f"{i:064x}"} for i in range(25)],
+            "device_binding": {"viewer_label": "top", "role": "top", "focus_controls": {"focus_absolute": 10},
+                               "unique_hardware_identity": True, "viewer_invocation_id": "session-1",
+                               "producer_invocation_id": "producer-1"}}
+
+
+def test_only_accepted_printed_board_intrinsics_enter_arm_frame(monkeypatch):
+    monkeypatch.setattr(cf, "live_camera_binding", lambda camera, **kwargs: {"viewer_label": kwargs.get("viewer_label") or camera, "role": camera,
+                                                                  "focus_controls": {"focus_absolute": 10},
+                                                                  "unique_hardware_identity": True,
+                                                                  "viewer_invocation_id": "session-1",
+                                                                  "producer_invocation_id": "producer-1"})
+    K_fit, dist_fit, size = cf.validated_intrinsics(_accepted_intrinsics())
+    assert size == [640, 480] and np.allclose(K_fit, K) and np.allclose(dist_fit, DIST)
+    side = _accepted_intrinsics() | {"camera": "side", "device_binding": {"viewer_label": "side", "role": "side",
+                                                                     "focus_controls": {"focus_absolute": 10},
+                                                                     "unique_hardware_identity": True,
+                                                                     "viewer_invocation_id": "session-1",
+                                                                     "producer_invocation_id": "producer-1"}}
+    side_K, _, _ = cf.validated_intrinsics(side, camera="side")
+    assert np.allclose(side_K, K)
+    wrist = _accepted_intrinsics() | {"camera": "wrist", "device_binding": {**_accepted_intrinsics()["device_binding"],
+                                                                  "viewer_label": "front", "role": "wrist"}}
+    assert np.allclose(cf.validated_intrinsics(wrist, camera="wrist", viewer_label="front")[0], K)
+    with pytest.raises(ValueError, match="CALIBRATION_REQUIRED"):
+        cf.validated_intrinsics(wrist, camera="wrist", viewer_label="top")
+    with pytest.raises(ValueError, match="CALIBRATION_REQUIRED"):
+        cf.validated_intrinsics(_accepted_intrinsics(), camera="side")
+    for change in ({"accepted": False}, {"camera": "side"}, {"rms_px": 0.8}, {"size": [0, 480]},
+                   {"source_frames": []}, {"dist": [0.1, 0.2, 0.0, 0.0, 0.1]},
+                   {"device_binding": None}, {"device_binding": {"viewer_label": "top", "role": "top",
+                                                                    "focus_controls": {"focus_absolute": 11},
+                                                                    "unique_hardware_identity": True,
+                                                                    "viewer_invocation_id": "session-1",
+                                                                    "producer_invocation_id": "producer-1"}},
+                   {"device_binding": {"viewer_label": "top", "role": "top",
+                                       "focus_controls": {"focus_absolute": 10}, "unique_hardware_identity": False,
+                                       "viewer_invocation_id": "session-1", "producer_invocation_id": "producer-1"}}):
+        bad = _accepted_intrinsics() | change
+        with pytest.raises(ValueError, match="CALIBRATION_REQUIRED"):
+            cf.validated_intrinsics(bad)
+    for key, value in (("cols", 5), ("scale_bar_mm", 48.0), ("dictionary", "DICT_5X5_100")):
+        bad = _accepted_intrinsics()
+        bad["board"][key] = value
+        with pytest.raises(ValueError, match="CALIBRATION_REQUIRED"):
+            cf.validated_intrinsics(bad)
+
+
+def test_learn_cli_refuses_unaccepted_lens_before_writing_calibration(tmp_path):
+    calibration = tmp_path / "calibration.json"
+    config = tmp_path / "config.json"
+    config.write_text(json.dumps({"calibration_path": str(calibration), "markers": {"slot": 1}}))
+    intrinsics = tmp_path / "intrinsics.json"
+    intrinsics.write_text(json.dumps(_accepted_intrinsics() | {"accepted": False}))
+    with pytest.raises(ValueError, match="CALIBRATION_REQUIRED"):
+        cf.main(["learn", "--config", str(config), "--intrinsics", str(intrinsics),
+                 "--views", str(tmp_path)])
+    assert not calibration.exists()
+
+
+def test_runtime_model_refuses_changed_or_unknown_camera_resolution():
+    frame = np.zeros((480, 640, 3), np.uint8)
+    for size in (None, [320, 240]):
+        with pytest.raises(ValueError, match="CALIBRATION_REQUIRED"):
+            cf.refresh({"size": size}, frame)

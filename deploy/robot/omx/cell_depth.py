@@ -9,16 +9,141 @@ heights come from the depth image instead:
   along a row of objects standing in one line, as the cell's did on 2026-11-01;
 - an arm's FK zero is the top of the plate it stands on, read in a ring around its base.
 
-The D435 runs without its SDK here (USB 2.0, v4l2 Z16), so its intrinsics are nominal (`FOCAL_PX`).
+The D435 runs without its SDK here (USB 3.0, v4l2 Z16); its intrinsics are nominal (`FOCAL_PX`).
 
     python cell_depth.py --depth d.raw --colour c.jpg --px 345,80 --px 330,320   # read only
 """
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import os
+import re
+import subprocess
+import tempfile
+import time
+from pathlib import Path
 
 import numpy as np
+
+
+def capture_top_depth_z16(dev_path: str = "/dev/v4l/by-id/rosy-realsense-d435-depth", out_raw: Path | None = None,
+                          *, timeout_s: float = 12.0) -> np.ndarray | None:
+    """Capture a fresh warmed 640x480 Z16 frame; never reuse old raw on capture failure."""
+    raw_path = Path(out_raw) if out_raw is not None else Path(tempfile.gettempdir()) / "rosy-top-depth-z16.raw"
+    if not Path(dev_path).exists():
+        return None
+    try:
+        raw_path.unlink(missing_ok=True)
+    except OSError:
+        return None
+    try:
+        captured = subprocess.run(["v4l2-ctl", "-d", dev_path,
+                                   "--set-fmt-video=width=640,height=480,pixelformat=Z16", "--set-parm=6",
+                                   "--stream-mmap=3", "--stream-skip=12", "--stream-count=1",
+                                   f"--stream-to={raw_path}"], timeout=float(timeout_s), check=True,
+                                  stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if getattr(captured, "returncode", 0) != 0 or not raw_path.exists() or raw_path.stat().st_size != 640 * 480 * 2:
+        return None
+    arr = np.fromfile(raw_path, dtype=np.uint16)
+    return arr.reshape(480, 640) if float((arr > 0).mean()) >= 0.40 else None
+
+
+def capture_top_depth_z16_receipt(dev_path: str, out_raw: Path, *, timeout_s: float = 12.0) -> tuple[np.ndarray, dict] | None:
+    """Capture one Z16 frame with the V4L2 start-of-exposure stamp from the same buffer."""
+    lock_path = Path(out_raw).with_suffix(Path(out_raw).suffix + ".lock")
+    # shortcut: a crash leaves this path locked; use a unique output path per attempt until owner cleanup exists.
+    try:
+        lock_fd = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    except OSError:
+        return None
+    try:
+        return _capture_top_depth_z16_receipt_locked(dev_path, out_raw, timeout_s)
+    finally:
+        os.close(lock_fd)
+        lock_path.unlink(missing_ok=True)
+
+
+def _sync_parent(path: Path) -> None:
+    if os.name == "posix":
+        fd = os.open(path.parent, os.O_RDONLY)
+        try:
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+
+
+def _capture_top_depth_z16_receipt_locked(dev_path: str, out_raw: Path, timeout_s: float) -> tuple[np.ndarray, dict] | None:
+    raw_path = Path(out_raw)
+    receipt_path = raw_path.with_suffix(raw_path.suffix + ".receipt.json")
+    try:
+        raw_path.unlink(missing_ok=True)
+        receipt_path.unlink(missing_ok=True)
+        if not Path(dev_path).exists():
+            return None
+        started_wall = time.time()
+        started = time.monotonic()
+        captured = subprocess.run(["v4l2-ctl", "--verbose", "-d", dev_path,
+                                   "--set-fmt-video=width=640,height=480,pixelformat=Z16", "--set-parm=6",
+                                   "--stream-mmap=3", "--stream-skip=12", "--stream-count=1",
+                                   f"--stream-to={raw_path}"], timeout=float(timeout_s), check=True,
+                                  stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+        ended = time.monotonic()
+        ended_wall = time.time()
+        raw = raw_path.read_bytes()
+    except (OSError, subprocess.SubprocessError):
+        raw_path.unlink(missing_ok=True)
+        return None
+    lines = [line for line in (captured.stderr or "").splitlines() if "cap dqbuf:" in line]
+    last = lines[-1] if lines else ""
+    match = re.search(r"seq:\s*(\d+).*?bytesused:\s*(\d+).*?ts:\s*([0-9.]+)", last)
+    if (captured.returncode != 0 or len(raw) != 640 * 480 * 2 or match is None or int(match.group(2)) != len(raw)
+            or "ts-monotonic, ts-src-soe" not in last):
+        raw_path.unlink(missing_ok=True)
+        return None
+    stamp = float(match.group(3))
+    depth = np.frombuffer(raw, dtype="<u2").reshape(480, 640)
+    valid = float((depth > 0).mean())
+    if not started - 0.5 <= stamp <= ended + 0.5 or valid < 0.40:
+        raw_path.unlink(missing_ok=True)
+        return None
+    start_offset, end_offset = started_wall - started, ended_wall - ended
+    if abs(start_offset - end_offset) > 0.5:
+        raw_path.unlink(missing_ok=True)
+        return None
+    try:
+        boot_id = Path("/proc/sys/kernel/random/boot_id").read_text().strip()
+    except OSError:
+        boot_id = None
+    receipt = {"source_seq": int(match.group(1)), "exposure_monotonic_s": stamp,
+               "source_seq_scope": "per_v4l2_capture_stream",
+               "capture_started_monotonic_s": started, "capture_ended_monotonic_s": ended,
+               "capture_started_wall_s": started_wall, "capture_ended_wall_s": ended_wall,
+               "exposure_wall_estimate_s": stamp + (start_offset + end_offset) / 2,
+               "wall_bridge_uncertainty_s": abs(start_offset - end_offset) / 2 + 0.01,
+               "boot_id": boot_id,
+               "clock_semantics": "v4l2_monotonic_start_of_exposure", "raw_sha256": hashlib.sha256(raw).hexdigest(),
+               "valid_depth_ratio": valid, "raw_path": str(raw_path)}
+    pending = receipt_path.with_suffix(receipt_path.suffix + ".pending")
+    try:
+        with raw_path.open("rb+") as saved_raw:
+            os.fsync(saved_raw.fileno())
+        _sync_parent(raw_path)
+        with pending.open("w", encoding="utf-8") as saved_receipt:
+            json.dump(receipt, saved_receipt, allow_nan=False)
+            saved_receipt.flush()
+            os.fsync(saved_receipt.fileno())
+        pending.replace(receipt_path)
+        _sync_parent(receipt_path)
+    except OSError:
+        pending.unlink(missing_ok=True)
+        raw_path.unlink(missing_ok=True)
+        receipt_path.unlink(missing_ok=True)
+        return None
+    return depth, receipt
 
 FOCAL_PX = 385.0  # D435 depth at 640 x 480, nominal
 PLANE_MM = 4.0
