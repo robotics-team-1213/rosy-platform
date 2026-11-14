@@ -453,23 +453,24 @@ def test_a_both_step_schedule_needs_a_measured_wait_pose():
 
 def test_a_replan_lands_only_at_a_joint_boundary_and_reorders_the_rest():
     events = []
-    cells = cells_of(events, b={"seconds": 0.12})  # b's b0 is in flight when a's first completion replans
+    cells = cells_of(events, b={"seconds": 0.12})  # b's half of a both-step is in flight when a's completion replans
     commands = {"a": [["goto a0"], ["goto a1"], ["goto a2"]], "b": [["goto b0"], ["goto b1"], ["goto b2"]]}
-    steps = [{"a": 0, "b": None}, {"a": 1, "b": 0}, {"a": 2, "b": None}, {"a": None, "b": 1}, {"a": None, "b": 2}]
+    steps = [{"a": 0, "b": 0}, {"a": 1, "b": None}, {"a": None, "b": 1}, {"a": 2, "b": 2}]
 
     def on_done(name, segment, done):
-        # whichever arm just finished, the replan puts the other's remaining segments first
-        b_first = [{"a": None, "b": j} for j in range(done["b"], 3)] + [{"a": i, "b": None} for i in range(done["a"], 3)]
         a_first = [{"a": i, "b": None} for i in range(done["a"], 3)] + [{"a": None, "b": j} for j in range(done["b"], 3)]
-        return {"steps": b_first if name == "a" else a_first}
+        b_first = [{"a": None, "b": j} for j in range(done["b"], 3)] + [{"a": i, "b": None} for i in range(done["a"], 3)]
+        return {"steps": a_first if name == "a" else b_first}  # whichever arm finished keeps the lead
 
     result = two.execute(cells, commands, steps, log=lambda row: None, on_segment_done=on_done)
     assert result["failed"] is None and result["done"] == {"a": 3, "b": 3} and result["plan_gen"] >= 1
     assert order(events, "a", ("end", "goto a0")) < order(events, "b", ("end", "goto b0"))  # it replanned into a moving peer
-    # a1 was ready in the old steps already; it waited for the generation that landed after b0 finished
+    # the replan of a's completion never landed mid-flight: a1 moved only after b finished b0
     assert order(events, "b", ("end", "goto b0")) < order(events, "a", ("start", "goto a1"))
-    # the generation that landed is the later replan's (a first), not the one it replaced
-    assert order(events, "a", ("start", "goto a1")) < order(events, "b", ("start", "goto b1"))
+    # the generation that landed is the later replan's (b keeps its lead), not the one it superseded
+    assert order(events, "b", ("start", "goto b1")) < order(events, "a", ("start", "goto a1"))
+    # admission stayed blocked while a replan was pending, even for a segment the old steps allowed
+    assert order(events, "b", ("end", "goto b2")) < order(events, "a", ("start", "goto a2"))
 
 
 def test_a_refused_replan_stops_both_arms_for_a_person():
