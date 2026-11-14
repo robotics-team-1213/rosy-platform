@@ -378,3 +378,28 @@ def _read_json(path: Path, limit: int = 1024 * 1024) -> object:
     finally:
         os.close(descriptor)
     return json.loads(raw.decode("utf-8"))
+
+
+def branch_build_fallback(root: Path, current: str, releases: list, failed: dict, withdrawn: dict) -> list:
+    """D-1031: a hand-built branch release (its source-ref names neither main nor robot-release/<id>) may
+    step to the newest published release even when that id is lower. Only that one release, never below
+    the pinned factory release and never again once it failed or was withdrawn: no walk down the list."""
+    ref = root / RELEASES / current / "source-ref.txt"
+    try:
+        if ref.is_symlink() or not ref.is_file():
+            return []  # no record: a legacy official release keeps the higher-id rule
+        text = ref.read_text(encoding="utf-8").strip()
+    except OSError:
+        return []
+    if text in ("main", f"robot-release/{current}") or not releases:
+        return []
+    newest = max(releases, key=lambda item: item["release_id"])
+    release_id = newest["release_id"]
+    if release_id == current or release_id in failed or release_id in withdrawn:
+        return []
+    from os_factory_release import pinned_factory
+    try:
+        floor = pinned_factory(root)
+    except ValueError:
+        return []  # unknown image-layer binding: do not step down
+    return [] if floor is not None and release_id < floor else [newest]

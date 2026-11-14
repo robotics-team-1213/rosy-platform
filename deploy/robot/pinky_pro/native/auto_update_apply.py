@@ -332,7 +332,9 @@ class UpdaterApply:
         if problem := self._maintenance_problem():
             raise UpdateError(problem)
         current = self.host.current_release()
-        if current is None or not RELEASE_ID.fullmatch(release_id) or not release_id > current:
+        # D-1031: the one lower release run() chose for a hand-built branch release is the only exception.
+        stepping_down = state.get("branch_fallback") == release_id
+        if current is None or not RELEASE_ID.fullmatch(release_id) or not (release_id > current or stepping_down):
             raise UpdateError(f"NOT_NEWER: {release_id} is not above the current release {current}")
         try:
             rosy_claim.acquire(self.root, CLAIM_HOLDER, f"auto-update to {release_id}", CLAIM_TTL_S,
