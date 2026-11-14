@@ -23,6 +23,7 @@ class Collector:
         self.cache = ObservationCache(config, store=store)
         self.reader = SourceReader(self.cache, credentials)
         self.storage_failures = set()
+        self.last_success = None  # epoch seconds of the last source poll that succeeded; null before the first
         self.task = None
 
     @property
@@ -37,6 +38,7 @@ class Collector:
                     await self.reader.poll(source)
                     self.storage_failures.discard(source.id)
                     self.cache.collection_failure(source.id)
+                    self.last_success = self.cache._wall().timestamp()
                 except StoreUnavailable:
                     self.storage_failures.add(source.id)
                 except ObservationRejected as error:
@@ -107,7 +109,8 @@ def create_app(collector: Collector, *, web_root: Path | None = None, account=No
 
     @app.get('/health')
     async def health():
-        return JSONResponse({'status': 'unavailable' if collector.unavailable else 'ready'},
+        return JSONResponse({'status': 'unavailable' if collector.unavailable else 'ready',
+                             'last_success': collector.last_success},
                             status_code=503 if collector.unavailable else 200)
 
     @app.get('/api/monitoring/v1/snapshot')

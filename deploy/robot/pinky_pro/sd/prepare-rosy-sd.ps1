@@ -15,6 +15,7 @@ param(
     [string]$FleetEndpoint,
     [string]$FleetTrustProfile,
     [string]$AccountTrustFile,
+    [string]$TimeSource,
     [string]$CountryCode = "KR",
     [string]$DeviceName,
     [string]$DeviceUid,
@@ -729,6 +730,10 @@ elseif ($fleetSource -eq "reprovision" -and $reprovision.personalization.fleet.P
     # Only with the same Fleet: another site's issuer would refuse every delivery there.
     $accountTrust = $reprovision.personalization.fleet.account_trust
 }
+# D-859: the site NTP name (e.g. rosy-fleet-r.local); a reimage keeps what the receipt holds.
+if (-not $TimeSource -and $fleetSource -eq "reprovision" -and $reprovision.personalization.fleet.PSObject.Properties["time_source"]) {
+    $TimeSource = $reprovision.personalization.fleet.time_source
+}
 if ($PlanPath -and $PlanOnly -and (Test-Path -LiteralPath $PlanPath)) {
     Fail "plan already exists and will not be overwritten"
 }
@@ -773,6 +778,11 @@ if ($PlanPath -and -not $PlanOnly) {
         Fail "-AccountTrustFile contradicts the reviewed plan"
     }
     $accountTrust = $plannedTrust
+    $plannedTime = $(if ($planKeys -ccontains "time_source") { [string]$reviewedPlan.time_source } else { "" })
+    if ($PSBoundParameters.ContainsKey("TimeSource") -and [string]$TimeSource -cne $plannedTime) {
+        Fail "-TimeSource contradicts the reviewed plan"
+    }
+    $TimeSource = $plannedTime
     $robotNumberSource = [string]$reviewedPlan.robot_number_source
     $fleetSource = [string]$reviewedPlan.fleet_source
     if ($planKeys -ccontains "replace_existing_provision") {
@@ -1037,6 +1047,11 @@ if ($accountTrust) {
     $accountTrust | ConvertTo-Json -Compress | & $PythonExe -c $trustCheck $PSScriptRoot
     if ($LASTEXITCODE -ne 0) { Fail "account trust must hold an HTTPS issuer without a trailing slash and SHA-256 key digests" }
 }
+if ($TimeSource) {
+    # Before any erase, with the chrony tool's own client rule.
+    $TimeSource | & $PythonExe -c "import sys; sys.path.insert(0, sys.argv[1]); from personalization import validate_time_source; validate_time_source(sys.stdin.read().strip())" $PSScriptRoot
+    if ($LASTEXITCODE -ne 0) { Fail "TimeSource must be one NTP hostname or IP without options" }
+}
 $plan = [ordered]@{
     mode = $(if ($PlanOnly) { "PLAN_ONLY" } else { "WRITE" })
     replace_existing_provision = [bool]$ReplaceExistingProvision
@@ -1072,6 +1087,7 @@ $plan = [ordered]@{
 }
 
 if ($accountTrust) { $plan["account_trust"] = $accountTrust }
+if ($TimeSource) { $plan["time_source"] = [string]$TimeSource }
 
 $secondSource = $(if ($SecondDiskInventoryJson) { $SecondDiskInventoryJson } else { $DiskInventoryJson })
 $secondDisk = Select-SafeDisk (Read-DiskInventory $secondSource) $DiskNumber
@@ -1690,6 +1706,7 @@ try {
         }
         if ($operatorKey) { $bundleRequest["operator_ssh_keys"] = @($operatorKey) }
         if ($accountTrust) { $bundleRequest["account_trust"] = $accountTrust }
+        if ($TimeSource) { $bundleRequest["time_source"] = [string]$TimeSource }
         $bundleRequest["ap_password"] = $apLogin
         $bundleRequest["core_api_token"] = $coreApiLogin.Value
         $bundleRequest["core_api_token_id"] = $coreApiLogin.Id

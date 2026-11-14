@@ -463,6 +463,9 @@ class FirstBootProvisioner:
         if recovered is None:
             _write_atomic(network_path, self._network_profile(payload), 0o600)
         _json_atomic(self._inside("etc/rosy/fleet-bootstrap.json"), payload["fleet"], 0o600)
+        _native_helper("first_boot_support").apply_time_source(
+            payload["fleet"].get("time_source"), self._inside("etc/chrony/chrony.conf"), _write_atomic,
+            restart=self.root == Path("/").resolve())
         operator_fingerprints = self._operator(payload.get("operator"))
         if "ap" in payload["network"]:
             # D-176: the fallback AP and the console banner read this root-only file.
