@@ -222,3 +222,22 @@ def test_a_search_nudge_started_unlocalized_still_ends_on_localized(core):
     _step(services, odom=(-0.01, 0.0, 0.0))
     services.localization.on_state(_state("LOCALIZED"))
     assert client.get(PATH, headers=VIEWER).json()["reason"] == "localized"
+
+
+def test_the_front_self_mask_never_hides_a_return_behind_the_robot(core):
+    """Review 11-15: the mask is drawn in the front frame; rotated onto the rear sector it hid a
+    real 0.2 m return behind the robot. The rear sector is now judged unmasked."""
+    client, services = core
+    lf = services.line_follow
+    lf._config = dataclasses.replace(lf.config, lidar_self_mask=((-15.0, 15.0, 0.3),))
+    services.loc_mission.observe_scan(_scan(services, rear_m=0.2))
+    refused = _start(client)
+    assert refused.status_code == 409 and "rear clearance" in refused.json()["error"]["message"]
+
+
+def test_a_later_localized_event_does_not_cut_a_step_short(core):
+    client, services = core
+    services.localization.on_state(_state("LOCALIZED"))
+    assert _start(client, distance=0.05).status_code == 202
+    services.loc_mission.localized()
+    assert services.loc_mission._run is not None and services.loc_mission._run.search is False

@@ -325,7 +325,7 @@ class LocalizationMission:
     def localized(self) -> None:
         """LOCALIZED ends a search mission (it found the pose); a D-603 turn goes on."""
         with self._lock:
-            if self._run is not None and self._run.kind != ROTATE_TO:
+            if self._run is not None and self._run.kind != ROTATE_TO and self._run.search:
                 self.end("localized")
 
     # --- run --------------------------------------------------------------------
@@ -515,7 +515,9 @@ class LocalizationMission:
         if self._front[0] is not sample:
             config = self._line_follow.config
             look = {"forward_deg": config.lidar_forward_deg, "self_mask": config.lidar_self_mask}
-            rear = {**look, "forward_deg": config.lidar_forward_deg + 180.0}   # Pinky Pro: 0 is the rear
+            # Pinky Pro: 0 is the rear. No self mask behind: the mask is drawn for the front frame, and
+            # a rotated copy could hide a real return there (review 11-15); unmasked fails closed.
+            rear = {"forward_deg": config.lidar_forward_deg + 180.0, "self_mask": ()}
             self._front = (sample, (front_sector(sample, half_angle_deg=cfg.front_half_angle_deg, **look),
                                     front_sector(sample, half_angle_deg=cfg.front_half_angle_deg, **rear),
                                     front_sector(sample, half_angle_deg=180.0, **look)[0]))
