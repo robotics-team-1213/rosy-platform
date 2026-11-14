@@ -85,6 +85,10 @@ def test_the_pan_limit_names_a_box_out_of_reach():
     config = {"plan": {"limits": {"joints_rad": {"joint1": [-2.6, 2.6]}}}}  # +-149 deg
     assert plan.past_pan_limit(config, (-0.187, -0.065)) == -160.8
     assert plan.past_pan_limit(config, (-0.15, -0.12)) is None and plan.past_pan_limit({"plan": {}}, (-0.187, -0.065)) is None
+    reach = {"plan": {"limits": {"park_reach_m": 0.18}}}  # 2026-11-14 arm_s: the park failed from 192 mm, folded from 186
+    assert plan.past_park_reach(reach, (0.054, 0.184)) == 192 and plan.past_park_reach(reach, (0.05, 0.17)) is None
+    assert plan.past_park_reach({"plan": {}}, (0.054, 0.184)) is None
+    assert dg.obstacle_type([{"why": "out of reach: 192 mm, past the park reach 180 mm"}]) == "out of reach"
 
 
 def test_the_stall_hook_keeps_the_session_and_only_with_a_person_at_the_switch(monkeypatch):
@@ -216,3 +220,27 @@ def test_a_site_camera_frame_is_kept_on_each_failure_row_and_never_chooses_the_a
     assert out["result"] == "placed" and len(seen) == 1
     assert out["rounds"][0]["evidence"] == {"frame": None, "why": "unreachable"} and "evidence" not in out["rounds"][1]
     assert [r["action"] for r in out["rounds"]] == [r["action"] for r in run(["stopped: misaligned", "placed"])[0]["rounds"]]
+
+
+def test_the_running_belt_is_not_a_moved_scene():
+    """2026-11-14 arm_s: the conveyor's 11364 px change read as a moved pile, and the carry asked a person for nothing."""
+    after = CLEAN.copy()
+    after[13:173, 511:640] = 200
+    assert rc.scene_moved(CLEAN, after) and rc.scene_moved(CLEAN, after, [[511, 13, 640, 173]]) == []
+    belt = {"sites": {"belt": {"auto_roi": [312, 105, 639, 172], "surface_px": [[300, 20], [639, 40], [639, 180], [290, 170]]}}}
+    assert rc.moving_rects(belt) == [[312, 105, 639, 172], [290, 20, 639, 180]] and rc.moving_rects({"sites": {}}) == []
+    belt["sites"]["belt"]["moving_px"] = [292, 28, 640, 210]
+    assert rc.moving_rects(belt) == [[292, 28, 640, 210]]
+
+
+def test_a_moved_camera_stops_the_carry_before_any_pick():
+    picked = []
+    out = rc.carry(lambda: CLEAN, lambda: picked.append(1), lambda c, a: True, expected_px=lambda a: [], emit=lambda *a: None,
+                   camera=lambda frame: {"max_px": 109.0})
+    assert not picked and out["result"] == "ask a person: camera_moved" and out["ask"] == dg.ASK["camera_moved"]
+
+
+def test_no_session_and_a_park_overload_are_named_and_never_retried():
+    assert dg.attempt_cause("refused") == "no_session" and dg.attempt_cause("refused: source 'x' has no site") == "other"
+    assert dg.attempt_cause("stopped: contact at park: contact in park: lag", pile_moved=True) == "park_contact"
+    assert dg.RECOVERY["no_session"] == dg.RECOVERY["park_contact"] == ["ask_person"]
