@@ -281,7 +281,7 @@ def test_goal_openapi_contract_exposes_only_domain_intent_fields():
 
     goal_schema = app.openapi()["components"]["schemas"]["GoalRequest"]
     assert goal_schema["required"] == ["x", "y"]
-    assert set(goal_schema["properties"]) == {"x", "y", "yaw"}
+    assert set(goal_schema["properties"]) == {"x", "y", "yaw", "frame"}   # frame: "site" only (D-1003 console)
     assert goal_schema["additionalProperties"] is False
     assert all(goal_schema["properties"][name]["type"] == "number"
                for name in ("x", "y", "yaw"))

@@ -5542,3 +5542,8 @@
 - 변경: `cell_print_sheets`에 `container-tags` 시트(DICT_4X4_250 100~199, 번호마다 지붕·옆면 두 장, 12 또는 20 mm, 50 mm 확인 막대)와 Cell 화면 「보정 인쇄물」의 태그 번호·크기 입력. 태그↔object_ref 표는 시트에 넣지 않는다.
 - 증거: 시트를 300 dpi로 그려 OpenCV DICT_4X4_250이 번호·크기(±0.2 mm)대로 되읽음. 한 장에 12 mm 24개, 20 mm 12개 컨테이너. 실물 인쇄·판독률은 미실시.
 - gate 변화: SOURCE. 인쇄 후 자로 확인·판독률 측정은 사람 몫이다.
+
+## 2026-11-14 · uncommitted · 콘솔 현장 지도 목표의 프레임 변환 (D-1003)
+- 변경: `POST /api/fleet/robots/{id}/goal` 선택 필드 `frame: "site"`(v1.400). 콘솔이 현장 지도 보기에서 찍은 목표는 이 필드를 싣고, Fleet이 trip free 목표와 같은 `robot_frame_goal`로 기체 Nav2 지도 프레임으로 바꾼다. 증명이 없으면 409(`SITE_POSE_UNKNOWN`·`SITE_MAP_NOT_ACTIVE`)로 아무것도 보내지 않는다. 격자 보기·다른 호출자는 그대로.
+- 증거: 원격 `test_console_goal_site_frame.py`·`test_server_app.py`·`test_task_api.py` 78 통과.
+- gate 변화: SOURCE. 실물 미실시.
