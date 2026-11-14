@@ -185,11 +185,13 @@ def _rays(pixels, K, dist) -> np.ndarray:
     return np.column_stack([ray, np.ones(len(ray))])
 
 
-def _upright(points, rays, up) -> tuple:
+def _upright(points, rays, up, height=None) -> tuple:
     """Camera pose in the base (object pose in the camera) with the base z axis fixed to `up` (the table normal in
     the camera, pointing at the camera, from depth): only the yaw and the translation are fitted. For a yaw the
     translation is linear in the rays; the yaw is scanned, then refined, on the ray-angle residual. (A joint linear
-    solve collapses to zero when every point has the same z, as remap marks do.)"""
+    solve collapses to zero when every point has the same z, as remap marks do.) With ``height`` (the camera's
+    distance to the marks' plane along the normal, from depth) only the yaw and the camera's x, y are fitted:
+    a patch of marks a few cm wide cannot tell height from scale (2026-11-15: 0.636 m fitted, 0.46 m true)."""
     up = np.asarray(up, float) / np.linalg.norm(up)
     a = np.cross(up, [1.0, 0, 0] if abs(up[0]) < 0.9 else [0, 1.0, 0])
     a /= np.linalg.norm(a)
@@ -201,7 +203,14 @@ def _upright(points, rays, up) -> tuple:
     def at(theta):
         c, s = np.cos(theta), np.sin(theta)
         R = R0 @ np.array([[c, -s, 0], [s, c, 0], [0, 0, 1.0]])
-        t, *_ = np.linalg.lstsq(np.vstack(Qs), np.concatenate([-Q @ (R @ p) for Q, p in zip(Qs, P)]), rcond=None)
+        if height is None:
+            t, *_ = np.linalg.lstsq(np.vstack(Qs), np.concatenate([-Q @ (R @ p) for Q, p in zip(Qs, P)]), rcond=None)
+        else:  # camera centre C = (cx, cy, marks z + height); X = R (P - C), linear in cx, cy
+            cz = float(P[:, 2].mean()) + float(height)
+            A = np.vstack([Q @ R[:, :2] for Q in Qs])
+            b = np.concatenate([Q @ (R @ p) - Q @ R[:, 2] * cz for Q, p in zip(Qs, P)])
+            (cx, cy), *_ = np.linalg.lstsq(A, b, rcond=None)
+            t = -R @ np.array([cx, cy, cz])
         X = P @ R.T + t
         if np.any(X[:, 2] <= 0):
             return np.inf, R, t
@@ -216,7 +225,7 @@ def _upright(points, rays, up) -> tuple:
     return R, t
 
 
-def plane_pose_map(marks, z: float, K, dist, up=None) -> dict:
+def plane_pose_map(marks, z: float, K, dist, up=None, height=None) -> dict:
     """The jaw marks of a remap ((pixel, (x, y)) at height z) as a camera pose with known intrinsics (the D435's
     factory K), and the pixel -> arm map on the plane z that pose implies. An affine map fitted on a patch near
     the base extrapolates its error across the pallet; a pose has the perspective right everywhere. With `up`
@@ -230,7 +239,7 @@ def plane_pose_map(marks, z: float, K, dist, up=None) -> dict:
         keep = [k for k in range(len(pts)) if k != i]
         P, D = [pts[k] for k in keep], [pix[k] for k in keep]
         if up is not None:
-            return _upright(P, _rays(D, K, dist), up)
+            return _upright(P, _rays(D, K, dist), up, height)
         pose, _ = solve(P, D, np.asarray(K, float), np.asarray(dist, float))
         if pose is None:
             raise ValueError("solvePnP found no camera pose from the marks")

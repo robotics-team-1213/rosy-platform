@@ -267,3 +267,13 @@ def test_remap_keeps_the_affine_map_without_device_intrinsics_and_the_pose_with_
     json.dumps(record)  # the calibration file takes it as it is
     with pytest.raises(ValueError):
         cf.plane_pose_map(marks, 0.12, FACTORY, [0.1, 0, 0, 0, 0])
+
+
+def test_a_known_camera_height_fixes_the_scale_a_small_patch_cannot():
+    camera = looking_down(0.15, 0.08, 0.61, tilt=(0.06, -0.04, 0.4))
+    marks, z = _remap_marks(camera, 0.12), 0.12
+    up = camera[0].T @ np.array([0, 0, 1.0])
+    pinned = cf.plane_pose_map(marks, z, FACTORY, np.zeros(5), up=up, height=0.61 - 0.12)
+    assert abs(pinned["camera_in_base"]["t"][2] - 0.61) < 1e-6
+    assert np.linalg.norm(np.asarray(pinned["camera_in_base"]["t"]) - camera[1]) < 0.01
+    assert _off_mm(pinned["homography"], camera, (0.20, 0.17), z) < 3
