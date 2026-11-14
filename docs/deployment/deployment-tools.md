@@ -1,5 +1,11 @@
 # 다기종 배포 도구
 
+## Fleet R ↔ 로봇 배포 후 점검
+
+업데이트마다 운영 PC에서 `python tools/remote/fleet_robot_check.py --json-out C:/DevTemp/e2e-check/result.json`을 실행한다. `private/lab-hosts.json`의 모든 로봇을 대상으로 하며, 끝에 로봇 ID를 주면 해당 로봇만 검사한다. 기본 동작은 읽기 전용이다. SSH는 운영자 키와 고정 known_hosts를 사용하며 로봇의 현재 릴리스, 서명 파일 존재 및 `SHA256SUMS` 전체 검사, CORE/복구 서비스, 인증서로 검증한 TLS, 로봇 토큰 만료 메타데이터와 Fleet R 원장을 확인한다. 토큰과 digest는 보고서에 넣지 않는다.
+
+표와 JSON의 `FAIL`은 종료 코드 1, `SKIP`은 현재 API나 인증 경로로 확인할 수 없는 항목이다. Fleet의 `hub_online`은 프로세스 메모리 상태라 SQLite 원장만으로 판단하지 않고, Fleet의 인증된 등록 목록 API에서 읽는다. 이 API가 닿지 않으면 `SKIP`한다. 상태 램프와 업데이트 상태의 CORE 읽기 경로가 없는 payload에서는 `SKIP`으로 표시한다. `--active --admin-token-file <private-json>`은 로봇 ID를 CORE 관리자 토큰에 매핑한 비공개 JSON을 받아 TLS를 확인한 뒤 식별 점멸만 요청한다. CORE 계약에 일반 램프 상태 복원 경로가 없어 끔/복원 동작은 실행하지 않는다. 따라서 이 도구의 `PASS`는 Fleet↔로봇 실장비 동작 수용을 대신하지 않는다.
+
 저장소 루트에서 `python tools/release/deploy_cli.py list`로 배포 대상과 차단 이유를 확인한다.
 기체에 연결하기 전에는 `plan`을 사용한다. 계획 출력은 서명 검증·설치 허가·장치 수용 증거가 아니다.
 

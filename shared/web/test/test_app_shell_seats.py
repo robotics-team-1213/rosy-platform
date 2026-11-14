@@ -103,11 +103,12 @@ def test_review_documents_share_the_app_bar_and_the_screen_rail():
               ('pencil', '/', '정답 달기', '정답'), ('robot', '/learning/tasks', '학습 실행', '학습'),
               ('check', '/learning/evaluate', '평가·승격', '평가·승격')]
     subs = {'/learning': ['#learning-start', '#pipeline', '#review-section', '#learning-results', '#storage-section'], '/catalog': ['/catalog', '/learning/camera', '/learning/workspaces'],
-            '/': ['/', '/pixels', '/learning/omx', '/learning/vlm'],
+            '/': ['/', '/pixels', '/incidents', '/learning/omx', '/learning/vlm'],
             '/learning/tasks': ['/learning/tasks', '/learning/tasks/manage', '/learning#pipeline', '/learning/sim', '/learning/ladder'], '/learning/evaluate': None}
     rails = set()
     for name, stage, here in [('learning.html', '/learning', None), ('index.html', '/', '/'),
-                              ('pixels.html', '/', '/pixels'), ('omx.html', '/', '/learning/omx'),
+                              ('pixels.html', '/', '/pixels'), ('incidents.html', '/', '/incidents'),
+                              ('omx.html', '/', '/learning/omx'),
                               ('vlm.html', '/', '/learning/vlm'), ('catalog.html', '/catalog', '/catalog'),
                               ('camera.html', '/catalog', '/learning/camera'),
                               ('workspaces.html', '/catalog', '/learning/workspaces'), ('tasks.html', '/learning/tasks', '/learning/tasks/manage'),
@@ -123,7 +124,7 @@ def test_review_documents_share_the_app_bar_and_the_screen_rail():
         body = html.split('</ui-topbar>', 1)[1]
         # D-542 §2: every 정답 page carries the 정답 pages in one nav right after the title (shown in the title row on
         # wide screens and after the editor on phones), not in an extra sub-menu column; all four look alike.
-        merged = name in ('index.html', 'pixels.html', 'omx.html', 'vlm.html')
+        merged = name in ('index.html', 'pixels.html', 'incidents.html', 'omx.html', 'vlm.html')
         seats = ' data-seats="rail"' if subs[stage] is None or merged else ''
         rail = re.search(rf'<div class="ui-app-body"{seats}><div class="ui-rail">'
                          r'<nav class="ui-rail-nav workspace-tabs" aria-label="학습 화면">(.*?)</nav></div>', body, re.S).group(1)

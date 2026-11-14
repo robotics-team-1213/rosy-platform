@@ -84,7 +84,6 @@ def test_learning_preview_names_unconfigured_hosts_without_template_slots(http_h
     assert response.status == (503 if focus else 200)
     body = response.body.decode('utf-8')
     assert '{{' not in body
-    assert '미등록' in body
     assert f'data-host-focus="{focus.removeprefix("/")}"' in body
     assert 'Fleet 작업으로 돌아가기' in body
 

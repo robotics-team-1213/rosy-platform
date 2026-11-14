@@ -319,7 +319,8 @@ def execute_temp_plate_123_tier_recovery_loop(
             "pick_wrist_roll": round(float(lib_out["chunks"]["descend_pick"][-1][4]), 2),
             "place_wrist_roll": round(float(lib_out["chunks"]["descend_place"][-1][4]), 2),
             "lift_m": round(float(p_out["lift_m"]), 4),
-            "compensated_err_mm": round(float(p_out["sim_real_prediction"]["pick_compensated"]["terminal_error_norm_mm"]), 2),
+            "compensated_err_mm": (round(float(pred["pick_compensated"]["terminal_error_norm_mm"]), 2)
+                                   if (pred := p_out.get("sim_real_prediction")) else None),
         })
     archived_cases = 0
     if inject_t2_z_mismatch:

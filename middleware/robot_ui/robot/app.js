@@ -417,7 +417,8 @@ elements["hardware-refresh"]?.addEventListener("click", async () => {
   } catch (error) { setText("hardware-note", `장치 점검 요청 실패: ${error.message}`); }
   finally { setEnabled("hardware-refresh", isAdmin(), "관리자 권한 필요"); }
 });
-const HW_TEST_WAIT_MS = 12000, HW_TEST_POLL_MS = 1000;
+const HW_TEST_WAIT_MS = 12000;
+const HW_TEST_POLL_MS = 1000;
 async function waitForHardwareTest(requestId) {
   const deadline = Date.now() + HW_TEST_WAIT_MS;
   let payload = await api("/api/v1/host/hardware");

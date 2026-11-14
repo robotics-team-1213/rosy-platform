@@ -35,6 +35,8 @@ OPTIONAL = {"operator_ssh_keys", "ap_password"}
 OPTIONAL |= {"tailscale_auth_key", "tailscale_tags"}
 # D-992: the Account issuer and keys this robot lets a site token deliver; absent keeps the old bundle shape.
 OPTIONAL |= {"account_trust"}
+# D-859: the site NTP name chrony follows; absent keeps the image default.
+OPTIONAL |= {"time_source"}
 
 
 def _exclusive_json(path: Path, payload: dict, mode: int) -> None:
@@ -118,6 +120,7 @@ def main(argv: list[str] | None = None) -> int:
             tailscale_auth_key=request.get("tailscale_auth_key"),
             tailscale_tags=request.get("tailscale_tags"),
             account_trust=request.get("account_trust"),
+            time_source=request.get("time_source"),
         )
         _exclusive_json(args.output, bundle, 0o600)
         _exclusive_json(args.receipt, create_provision_receipt(bundle), 0o600)

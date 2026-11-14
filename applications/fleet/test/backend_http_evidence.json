@@ -91,6 +91,16 @@
       "source_revision": "36e976e701e0470c24b7af486c97f741dc038972",
       "result": "21 passed; D-993 access-request intake and administrator list/approve/reject through actual Account HTTP routes (standalone Account service, real SQLite ledger); no device evidence",
       "pytest_root": "."
+    },
+    {
+      "source_revision": "03d6bdd245804822d460b811c56e0bd3638aed26",
+      "pytest_root": ".",
+      "result": "exit 0 for test_pipeline_orchestrator, test_cell_real2sim_pipeline, test_charge_bays, test_berth_parking_routes; pipeline cell-task/gate/real2sim and road-nav2/berth-park HTTP routes through actual Fleet app with TestClient and fake device transports; no device or deployed evidence"
+    },
+    {
+      "source_revision": "e9526e7d1d47cfda04881646b1a2fc01ba859fc8",
+      "pytest_root": ".",
+      "result": "10 passed; station-zones PUT (storage redirected to tmp) and road-nav2 plan GET HTTP tests through in-process TestClient; no device evidence"
     }
   ],
   "requests": {
@@ -1903,6 +1913,166 @@
         "test_db_maintenance_self_test_and_fk_violation_detection"
       ],
       "source_revision": "ec9ff6df75955d79b15f7fcbf96ebef2f76aa923"
+    },
+    "POST:/api/fleet/robots/{robot_id}/road-nav2": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_charge_bays.py",
+        "test_road_nav2_http_route_dispatches_along_road_polyline"
+      ],
+      "source_revision": "03d6bdd245804822d460b811c56e0bd3638aed26"
+    },
+    "POST:/api/fleet/robots/{robot_id}/berth-park": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_berth_parking_routes.py",
+        "test_berth_parking_status_and_dispatch_routes"
+      ],
+      "source_revision": "03d6bdd245804822d460b811c56e0bd3638aed26"
+    },
+    "GET:/api/fleet/pipeline/cell-tasks": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_pipeline_orchestrator.py",
+        "test_cell_tasks_assign_claim_and_complete_lifecycle"
+      ],
+      "source_revision": "03d6bdd245804822d460b811c56e0bd3638aed26"
+    },
+    "POST:/api/fleet/pipeline/cell-tasks": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_pipeline_orchestrator.py",
+        "test_cell_tasks_assign_claim_and_complete_lifecycle"
+      ],
+      "source_revision": "03d6bdd245804822d460b811c56e0bd3638aed26"
+    },
+    "POST:/api/fleet/pipeline/cell-tasks/{task_id}/cancel": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_pipeline_orchestrator.py",
+        "test_cell_tasks_assign_claim_and_complete_lifecycle"
+      ],
+      "source_revision": "03d6bdd245804822d460b811c56e0bd3638aed26"
+    },
+    "POST:/api/fleet/pipeline/cell-tasks/{task_id}/retry": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_pipeline_orchestrator.py",
+        "test_cell_tasks_assign_claim_and_complete_lifecycle"
+      ],
+      "source_revision": "03d6bdd245804822d460b811c56e0bd3638aed26"
+    },
+    "POST:/api/fleet/pipeline/pinky-tasks": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_pipeline_orchestrator.py",
+        "test_cell_tasks_assign_claim_and_complete_lifecycle"
+      ],
+      "source_revision": "03d6bdd245804822d460b811c56e0bd3638aed26"
+    },
+    "POST:/api/fleet/pipeline/decision-gate": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_pipeline_orchestrator.py",
+        "test_cell_tasks_assign_claim_and_complete_lifecycle"
+      ],
+      "source_revision": "03d6bdd245804822d460b811c56e0bd3638aed26"
+    },
+    "POST:/api/fleet/pipeline/human-safety-gate": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_pipeline_orchestrator.py",
+        "test_cell_tasks_assign_claim_and_complete_lifecycle"
+      ],
+      "source_revision": "03d6bdd245804822d460b811c56e0bd3638aed26"
+    },
+    "GET:/api/fleet/pipeline/station-zones": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_pipeline_orchestrator.py",
+        "test_cell_tasks_assign_claim_and_complete_lifecycle"
+      ],
+      "source_revision": "03d6bdd245804822d460b811c56e0bd3638aed26"
+    },
+    "POST:/api/fleet/pipeline/station-zones/dispatch": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_pipeline_orchestrator.py",
+        "test_cell_tasks_assign_claim_and_complete_lifecycle"
+      ],
+      "source_revision": "03d6bdd245804822d460b811c56e0bd3638aed26"
+    },
+    "POST:/api/fleet/pipeline/cable-guard": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_pipeline_orchestrator.py",
+        "test_cell_tasks_assign_claim_and_complete_lifecycle"
+      ],
+      "source_revision": "03d6bdd245804822d460b811c56e0bd3638aed26"
+    },
+    "POST:/api/fleet/pipeline/vision-auto-check": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_pipeline_orchestrator.py",
+        "test_cell_tasks_assign_claim_and_complete_lifecycle"
+      ],
+      "source_revision": "03d6bdd245804822d460b811c56e0bd3638aed26"
+    },
+    "POST:/api/fleet/pipeline/arm-holds/clear": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_pipeline_orchestrator.py",
+        "test_cell_tasks_assign_claim_and_complete_lifecycle"
+      ],
+      "source_revision": "03d6bdd245804822d460b811c56e0bd3638aed26"
+    },
+    "GET:/api/fleet/cell-app/real2sim-pipeline": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_cell_real2sim_pipeline.py",
+        "test_real2sim_pipeline_reads_snapshots_cad_inventory_sysid_and_stages"
+      ],
+      "source_revision": "03d6bdd245804822d460b811c56e0bd3638aed26"
+    },
+    "POST:/api/fleet/cell-app/real2sim-pipeline/evaluate": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_cell_real2sim_pipeline.py",
+        "test_real2sim_pipeline_evaluate_and_queue_runs"
+      ],
+      "source_revision": "03d6bdd245804822d460b811c56e0bd3638aed26"
+    },
+    "POST:/api/fleet/cell-app/real2sim-pipeline/runs": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_cell_real2sim_pipeline.py",
+        "test_real2sim_pipeline_evaluate_and_queue_runs"
+      ],
+      "source_revision": "03d6bdd245804822d460b811c56e0bd3638aed26"
+    },
+    "POST:/api/fleet/cell-app/real2sim-pipeline/promote-physics": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_cell_real2sim_pipeline.py",
+        "test_real2sim_pipeline_promote_physics_candidate"
+      ],
+      "source_revision": "03d6bdd245804822d460b811c56e0bd3638aed26"
+    },
+    "PUT:/api/fleet/pipeline/station-zones": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_pipeline_orchestrator.py",
+        "test_station_zones_put_saves_yaml_and_get_reflects_it"
+      ],
+      "source_revision": "e9526e7d1d47cfda04881646b1a2fc01ba859fc8"
+    },
+    "GET:/api/fleet/robots/{robot_id}/road-nav2/plan": {
+      "status": 200,
+      "test": [
+        "operations/fleet/test/test_berth_parking_routes.py",
+        "test_road_nav2_plan_route_returns_plan_without_dispatch_and_rejects_bad_query"
+      ],
+      "source_revision": "e9526e7d1d47cfda04881646b1a2fc01ba859fc8"
     }
   }
 }

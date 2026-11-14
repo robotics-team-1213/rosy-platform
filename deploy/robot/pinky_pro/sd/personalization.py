@@ -199,6 +199,24 @@ def validate_account_trust(value: Any) -> dict[str, Any]:
     return value
 
 
+def validate_time_source(value: Any) -> str:
+    """D-859: the one site NTP name a robot follows, checked by the chrony tool's own client rule when it is at hand."""
+    if not isinstance(value, str):
+        raise ValueError("fleet.time_source must be a hostname or IP string")
+    import importlib.util
+    from pathlib import Path
+    tool = Path(__file__).resolve().parents[3] / "hosts/common/rosy_time_sync.py"
+    # shortcut: on the robot the tool is not beside this file; first boot validates again before writing chrony.
+    if tool.is_file():
+        spec = importlib.util.spec_from_file_location("rosy_time_sync", tool)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        module.configuration("client", [value], [])
+    elif not re.fullmatch(r"[A-Za-z0-9.-]{1,253}", value):
+        raise ValueError("fleet.time_source must be a hostname or IP")
+    return value
+
+
 def validate_tailscale(value: Any) -> dict[str, Any]:
     """The bundle's tailnet join section, or raise."""
     if (not isinstance(value, dict) or set(value) != {"auth_key", "tags"}
@@ -243,6 +261,7 @@ def create_provision_bundle(
     tailscale_auth_key: str | None = None,
     tailscale_tags: Collection[str] | None = None,
     account_trust: Mapping[str, Any] | None = None,
+    time_source: str | None = None,
     created_at: datetime | None = None,
     nonce: str | None = None,
 ) -> dict[str, Any]:
@@ -279,6 +298,8 @@ def create_provision_bundle(
         fleet["pairing_credential"] = pairing_credential
     if account_trust is not None:
         fleet["account_trust"] = dict(account_trust)
+    if time_source is not None:
+        fleet["time_source"] = validate_time_source(time_source)
 
     bundle: dict[str, Any] = {
         "schema_version": 1,
@@ -377,11 +398,13 @@ def validate_provision_bundle(bundle: dict[str, Any]) -> dict[str, Any]:
             raise ValueError("network.ap must hold an SSID and a 12-63 character printable password")
     fleet_keys = set(bundle.get("fleet", {}))
     if not {"endpoint", "trust_profile", "pairing_required"} <= fleet_keys or not fleet_keys <= {
-        "endpoint", "trust_profile", "pairing_required", "pairing_credential", "account_trust"
+        "endpoint", "trust_profile", "pairing_required", "pairing_credential", "account_trust", "time_source"
     }:
         raise ValueError("fleet keys are invalid")
     if "account_trust" in fleet_keys:
         validate_account_trust(bundle["fleet"]["account_trust"])
+    if "time_source" in fleet_keys:
+        validate_time_source(bundle["fleet"]["time_source"])
     identity_data = bundle["device_identity"]
     validate_device_identity(DeviceIdentity(**identity_data))
     if bundle["schema_version"] != 1:
@@ -436,6 +459,7 @@ def create_provision_receipt(bundle: Mapping[str, Any]) -> dict[str, Any]:
             "trust_profile": bundle["fleet"]["trust_profile"],
             "pairing_required": bundle["fleet"]["pairing_required"],
             **({"account_trust": bundle["fleet"]["account_trust"]} if "account_trust" in bundle["fleet"] else {}),
+            **({"time_source": bundle["fleet"]["time_source"]} if "time_source" in bundle["fleet"] else {}),
         },
         "created_at": bundle["created_at"],
         "nonce": bundle["nonce"],

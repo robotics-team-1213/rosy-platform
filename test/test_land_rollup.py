@@ -124,6 +124,19 @@ def test_build_merges_the_members_into_one_branch_and_records_them(repo, monkeyp
         (expected[rows[i]["branch"]], rows[i]["ticket"]) for i in (0, 2)]
 
 
+def test_build_merges_a_member_whose_snapshot_branch_is_gone_from_its_recorded_commit(repo):
+    main, snapshot = repo
+    rows = [snapshot("fix/a", {"pkg/a.py": "x = 2\n"}), snapshot("fix/b", {"pkg/b.py": "y = 2\n"}),
+            snapshot("fix/c", {"pkg/c.py": "z = 2\n"})]
+    rows[1]["candidate"] = git(main, "rev-parse", rows[1]["branch"])
+    for row in rows[1:]:  # b keeps its recorded commit, c has none: left out, never a crash
+        git(main, "worktree", "remove", "--force", row["worktree"])
+        git(main, "branch", "-D", row["branch"])
+    log = land_rollup.land_async.holder(main) / "land-fix-land-rollup-y.log"
+    _, merged = land_rollup.build(main, rows, NOW, start=lambda *a: ("land/fix/land-rollup-y", log))
+    assert [r["branch"] for r in merged] == ["land/fix/a", "land/fix/b"]
+
+
 def test_build_rejects_duplicate_branches_from_legacy_queue_rows(repo):
     main, snapshot = repo
     row = snapshot("fix/a", {"pkg/a.py": "x = 2\n"})
@@ -258,3 +271,15 @@ def test_a_rollup_whose_full_has_not_started_rerolls_with_new_waiters(repo, monk
     marker.unlink()
     land_rollup.roll(main, holder.parent / "q", NOW, ["apply"])
     assert stopped == [8] and not marker.exists(), "the old rollup keeps landing b"
+
+
+def test_the_halves_of_a_split_get_distinct_build_stamps(tmp_path, monkeypatch):
+    """11-14 04:50: both halves got the same stamp; the second build found its branch taken and five members waited."""
+    holder = tmp_path / "rosy-land-wt"
+    holder.mkdir()
+    (holder / "land-r.members").write_text(json.dumps([{"branch": n, "worktree": n} for n in "abcd"]))
+    (holder / "land-r.log").write_text("[land] STOP: NEW failure in pkg/test")
+    monkeypatch.setattr(land_rollup.land_async, "holder", lambda repo: holder)
+    stamps = land_rollup.split(tmp_path, "land-r", NOW, builder=lambda repo, half, now: f"{now:%Y%m%d%H%M%S}",
+                               resumer=lambda m: None)
+    assert len(stamps) == 2 and stamps[0] != stamps[1]

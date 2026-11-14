@@ -178,10 +178,10 @@ def test_cell_tasks_assign_claim_and_complete_lifecycle():
     assert pinky_resp["pinky_task"]["target_place"] == "S3"
     assert pinky_resp["spawned_cell_task"]["cell_id"] == "cell_s"
 
-    cam_resp = client.get("/api/fleet/pipeline/cell-camera/cell_s")
-    assert cam_resp.status_code == 200 and (
-        "svg" in cam_resp.headers["content-type"] or "jpeg" in cam_resp.headers["content-type"]
-    )
+    # D-136: Fleet은 영상을 중계하지 않는다 — 셀 카메라 프리뷰 라우트는 없다(Video relay 금지).
+    assert client.get("/api/fleet/pipeline/cell-camera/cell_s").status_code == 404
+    assert client.get("/api/fleet/pipeline/cameras").status_code == 404
+    assert client.post("/api/fleet/pipeline/cell-camera/cell_s", content=b"\xff\xd8").status_code == 404
 
     retried = client.post(f"/api/fleet/pipeline/cell-tasks/{chained['tasks'][0]['task_id']}/retry").json()
     assert retried["ok"] is True and retried["task"]["status"] == "QUEUED"
@@ -282,12 +282,6 @@ def test_cell_tasks_assign_claim_and_complete_lifecycle():
     assert vis_clear["safety_event"]["active_estop"] is False
     assert set(vis_clear["safety_event"]["resumed_tasks"]) == set(vis_intrude["safety_event"]["paused_tasks"])
 
-    cams = client.get("/api/fleet/pipeline/cameras").json()
-    assert cams["ok"] is True and cams["count"] >= 7
-    assert any(c["id"] == "arm_s_top" for c in cams["cameras"])
-    assert any(c["id"] == "arm_a_wrist" for c in cams["cameras"])
-    assert any(c["id"] == "arm_b_wrist" for c in cams["cameras"])
-
     q_res = client.post(
         "/api/fleet/pipeline/cell-quality",
         json={
@@ -322,10 +316,7 @@ def test_cell_tasks_assign_claim_and_complete_lifecycle():
     assert "arm_live_states" in tasks_after_q
     assert "station_camera_links" in tasks_after_q
     assert tasks_after_q["station_camera_links"]["S3"]["target_id"] == "arm_s"
-
-    cams_after = client.get("/api/fleet/pipeline/cameras").json()
-    arm_s_cam = next(c for c in cams_after["cameras"] if c["id"] == "arm_s_top")
-    assert arm_s_cam["sequence"] == 148001 and arm_s_cam["mean_intensity"] == 112.4
+    assert "cameras" not in tasks_after_q  # 카메라 목록 카탈로그도 중계 금지와 함께 갔다
 
     clr = client.post(
         "/api/fleet/pipeline/arm-holds/clear",
@@ -334,10 +325,31 @@ def test_cell_tasks_assign_claim_and_complete_lifecycle():
     assert clr["ok"] is True and clr["arm_holds"]["arm_b"]["held"] is False
 
 
+def test_station_zones_put_saves_yaml_and_get_reflects_it(tmp_path, monkeypatch):
+    # The override file is redirected: the route would otherwise write /tmp or /var/lib/rosy.
+    monkeypatch.setattr("fleet.server.pipeline_routes._storage_dir", lambda: tmp_path)
+    site_map = _map()
+    graph = build_graph(site_map)
+    maps = SimpleNamespace(active=lambda: (1, site_map, graph, None),
+                           rules=SimpleNamespace(active_rules=lambda: None))
+    app = FastAPI()
+    app.state.site_maps = maps
+    install_pipeline_routes(app, site_maps=maps)
+    client = TestClient(app)
 
+    yaml_text = """schema: rosy.station-zones.v1
+staging_bays:
+  - id: STG_TEST
+    name: test bay
+"""
+    saved = client.put("/api/fleet/pipeline/station-zones", json={"yaml_text": yaml_text})
+    assert saved.status_code == 200 and saved.json()["ok"] is True
+    zones = client.get("/api/fleet/pipeline/station-zones").json()
+    assert [z["id"] for z in zones["staging_bays"]] == ["STG_TEST"]
+    assert (tmp_path / "station_zones.yaml").read_text(encoding="utf-8") == yaml_text
 
-
-
-
-
-
+    empty = client.put("/api/fleet/pipeline/station-zones", json={"yaml_text": "  "})
+    assert empty.status_code == 422 and empty.json()["detail"]["code"] == "EMPTY_YAML"
+    invalid = client.put("/api/fleet/pipeline/station-zones", json={"yaml_text": "- not-a-mapping"})
+    assert invalid.status_code == 422 and invalid.json()["detail"]["code"] == "INVALID_STATION_ZONES_YAML"
+    assert [z["id"] for z in client.get("/api/fleet/pipeline/station-zones").json()["staging_bays"]] == ["STG_TEST"]

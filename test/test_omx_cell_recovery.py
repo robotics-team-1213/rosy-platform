@@ -29,12 +29,62 @@ def test_the_result_names_the_cause_and_hard_stops_are_never_retried():
     for result, cause in (("placed", "placed"), ("stopped: released after a stop at run lift_pick", "lift_stall"),
                           ("stopped: holding after a stop at run lift_pick", "held_stop"), ("stopped: still holding", "stuck_in_jaws"),
                           ("stopped: misaligned", "misaligned"), ("stopped: placed", "not_seen_placed"),
-                          ("stopped: no usable object", "no_room"), ("stopped: 2 attempts", "no_progress"),
+                          ("stopped: no usable object", "no_room"), ("stopped: no usable object (packed)", "no_room"),
+                          ("stopped: no usable object (tangled pile)", "pile"), ("stopped: 2 attempts", "no_progress"),
                           ("stopped: fault", "other"), ("aborted: 55 C", "other"), ("held: not reviewed", "other")):
         assert dg.attempt_cause(result) == cause
-        assert dg.attempt_cause(result, True) == ("scene_moved" if cause in ("lift_stall", "misaligned", "not_seen_placed", "no_room", "no_progress") else cause)
+        assert dg.attempt_cause(result, True) == ("scene_moved" if cause in ("lift_stall", "misaligned", "not_seen_placed", "no_room", "pile", "no_progress") else cause)
     for cause in ("held_stop", "stuck_in_jaws", "other"):
         assert dg.RECOVERY[cause] == ["ask_person"]
+
+
+def test_the_refusals_name_the_obstacle_type_and_a_pile_outranks_packed_boxes():
+    room, pile = {"why": "no finger room: 4.0 / 26.0 mm free beside it"}, {"why": "tangled blob"}
+    assert dg.obstacle_type([room]) == "packed" and dg.obstacle_type([room, pile]) == "tangled pile"
+    assert dg.obstacle_type([{"why": "not inside the camera view"}]) == "edge of view" and dg.obstacle_type([]) is None
+
+
+def test_a_box_at_the_view_edge_or_past_the_pan_limit_goes_to_a_person_never_to_a_push():
+    """2026-11-13 arm_s: both were refused as packed, so the recovery would have pushed at a box it could not see or reach."""
+    edge = {"why": "edge of view: a side is past the camera's view, 25.3 / 7.0 mm free beside it"}
+    far = {"why": "out of reach: pan -161.0 deg past the joint1 limit"}
+    room = {"why": "no finger room: 4.0 / 26.0 mm free beside it"}
+    assert dg.obstacle_type([edge]) == "edge of view" and dg.obstacle_type([far]) == "out of reach"
+    assert dg.obstacle_type([far, edge, room]) == "packed"  # a push can still free the packed one
+    for kind, cause in (("edge of view", "edge_of_view"), ("out of reach", "out_of_reach")):
+        assert dg.attempt_cause(f"stopped: no usable object ({kind})", True) == cause
+        out, _ = run([f"stopped: no usable object ({kind})"])
+        assert out["result"] == f"ask a person: {cause}" and out["rounds"][0]["action"] == "ask_person" and out["ask"] == dg.ASK[cause]
+
+
+def test_a_box_at_the_edge_of_the_view_is_unseen_not_packed():
+    """2026-11-13 arm_s: a box on Pinky at the top of the frame read as no finger room, and the recovery would push it."""
+    import cell_auto_safety
+    px = lambda p: (100 + p[0] * 1000, 100 + (p[1] - 0.1) * 1000)  # noqa: E731  1 px per mm
+    box = {"raw_m": [0.0, 0.1], "width_mm": 30, "length_mm": 60, "long_axis_deg": 0.0}
+    mask = np.zeros((120, 200), np.uint8)  # the view ends 5 mm past its +y side
+    mask[85:116, 70:131] = 255
+    room = cell_auto_safety.finger_room(mask, (0, 0, 200, 120), px, box)
+    assert room["margin_mm"] is None and room["unseen"]
+    assert cell_auto_safety.finger_room(np.pad(mask, ((0, 80), (0, 0))), (0, 0, 200, 200), px, box)["margin_mm"] is not None
+
+
+def test_the_layer_under_a_stacked_box_is_its_own_side_face_not_a_neighbour():
+    import cell_auto_safety
+    px = lambda p: (100 + p[0] * 1000, 100 + (p[1] - 0.1) * 1000)  # noqa: E731  1 px per mm
+    box = {"raw_m": [0.0, 0.1], "width_mm": 30, "length_mm": 60, "long_axis_deg": 0.0,
+           "hull_px": [[70, 85], [130, 85], [130, 115], [70, 115]]}
+    mask = np.zeros((200, 200), np.uint8)
+    mask[85:126, 70:131] = 255  # its top and 10 mm of side faces past the outline on +y: two layers' worth
+    assert cell_auto_safety.finger_room(mask, (0, 0, 200, 200), px, box)["margin_mm"] is None
+    assert cell_auto_safety.finger_room(mask, (0, 0, 200, 200), px, dict(box, layers_below=1))["margin_mm"] is not None
+
+
+def test_the_pan_limit_names_a_box_out_of_reach():
+    import cell_auto_pick_plan as plan
+    config = {"plan": {"limits": {"joints_rad": {"joint1": [-2.6, 2.6]}}}}  # +-149 deg
+    assert plan.past_pan_limit(config, (-0.187, -0.065)) == -160.8
+    assert plan.past_pan_limit(config, (-0.15, -0.12)) is None and plan.past_pan_limit({"plan": {}}, (-0.187, -0.065)) is None
 
 
 def test_the_stall_hook_keeps_the_session_and_only_with_a_person_at_the_switch(monkeypatch):
@@ -154,3 +204,15 @@ def test_a_contact_replans_only_once_the_pile_moved():
     assert dg.attempt_cause("stopped: no clear pivot point within reach") == "calibrate"  # no plan yet: a push has nothing to act on
     for hard in ("stopped: holding after a stop at run lift_pick", "stopped: still holding", "stopped: fault"):
         assert dg.attempt_cause(hard, True) != "scene_moved"
+
+
+def test_a_site_camera_frame_is_kept_on_each_failure_row_and_never_chooses_the_action():
+    seen = []
+    def observe():
+        seen.append(1)
+        return {"frame": None, "why": "unreachable"}
+    out = rc.carry(lambda: CLEAN, iter([{"result": r, "attempts": [{}]} for r in ("stopped: misaligned", "placed")]).__next__,
+                   lambda cause, attempt: True, expected_px=lambda attempt: [(100, 100)], emit=lambda *a: None, observe=observe)
+    assert out["result"] == "placed" and len(seen) == 1
+    assert out["rounds"][0]["evidence"] == {"frame": None, "why": "unreachable"} and "evidence" not in out["rounds"][1]
+    assert [r["action"] for r in out["rounds"]] == [r["action"] for r in run(["stopped: misaligned", "placed"])[0]["rounds"]]

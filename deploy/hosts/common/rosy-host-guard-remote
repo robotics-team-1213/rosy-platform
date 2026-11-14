@@ -1,6 +1,7 @@
 #!/bin/sh
 # Forced command for the host guard key (D-530; authorized_keys `command=...,restrict`).
-# health | recovery (cached, read-only) | updates (D-871, read-only) | restart <listed unit> | reboot |
+# health | recovery (cached, read-only) | updates (D-871, read-only) | drift [<retired name>...] (D-1021, read-only) |
+# restart <listed unit> | reboot |
 # clean-storage (D-885). Nothing else.
 # restart, reboot and clean-storage go through the D-524 Service Control helper (rosy-host-control), which
 # owns the closed unit set and reboots with shutdown -r +10; this script never runs systemctl
@@ -26,6 +27,25 @@ case "$1" in
     [ $# -eq 1 ] || refuse
     # D-871: this user's update channels as JSON (steps and releases only, never log text).
     exec /usr/bin/python3 -I "${GUARD_UPDATE_REPORT:-/usr/local/sbin/rosy-update-report}"
+    ;;
+  drift)
+    # D-1021, read-only: chrony usable/total and its `server` names, which of the retired host names given as
+    # arguments still appear in chrony or /etc/hosts, and the seconds since the site guard last wrote its status.
+    shift
+    for name in "$@"; do case "$name" in ''|*[!A-Za-z0-9.-]*) refuse;; esac; done
+    files=$(set +f; ls /etc/chrony/chrony.conf /etc/chrony/conf.d/*.conf /etc/chrony/sources.d/*.sources /etc/chrony.conf 2>/dev/null || true)
+    if command -v chronyc >/dev/null 2>&1; then
+      src=$(chronyc -n sources 2>/dev/null || true)
+      names=$(cat $files </dev/null 2>/dev/null | awk '$1=="server"{print tolower($2)}' | sort -u | tr '\n' ',')
+      echo "chrony $(printf '%s\n' "$src" | awk '$1 ~ /^[\^=][*+-]/' | wc -l) $(printf '%s\n' "$src" | awk '$1 ~ /^[\^=]/' | wc -l) ${names:--}"
+    else
+      echo "chrony none"
+    fi
+    for name in "$@"; do
+      if grep -qiF -- "$name" $files /etc/hosts </dev/null 2>/dev/null; then echo "retired $name"; fi
+    done
+    written=$(stat -c %Y /var/lib/rosy-host-guard/status.json 2>/dev/null || true)
+    if [ -n "$written" ]; then echo "guard-age $(($(date +%s) - written))"; else echo "guard-age missing"; fi
     ;;
   health)
     [ $# -eq 1 ] || refuse

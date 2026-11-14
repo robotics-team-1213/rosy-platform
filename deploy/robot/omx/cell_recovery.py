@@ -24,6 +24,7 @@ import cell_decisions as cd
 import cell_diagnose
 import cell_objects
 import cell_pivot
+import cell_site_camera
 import cell_why
 from cell_calibration import load as load_calibration
 from cell_scene_guard import scene_moved
@@ -68,12 +69,14 @@ def at_home(state, home: list, tolerance: float = 2.0) -> bool:
     return bool(state) and max(abs(a - b) for a, b in zip(state[:5], home[:5])) <= tolerance
 
 
-def carry(frame, pick, push, *, expected_px, emit=cd.emit, rounds: int = ROUNDS, choices=None, explain=None, slow=None, folded=None) -> dict:
+def carry(frame, pick, push, *, expected_px, emit=cd.emit, rounds: int = ROUNDS, choices=None, explain=None, slow=None, folded=None,
+          observe=None) -> dict:
     """pick() -> run_auto's result; push(cause, attempt) -> whether it moved the arm; expected_px(attempt) -> pixels of the
     pick and the place; frame() -> the top view with the arm folded. An action earns its record from the next attempt: only a
     placed box counts as working, and `choices` then ranks the actions next time. explain(cause, out) -> cell_why's row: what it
     measured orders the actions, and a cause unknown again goes to a person. slow() -> lowered the lift speed, or at the floor.
-    folded() -> the arm came home: a fold can fail after a stop, and no retry starts from there."""
+    folded() -> the arm came home: a fold can fail after a stop, and no retry starts from there. observe() -> a site camera's
+    frame of a failure (cell_site_camera): kept on the row as evidence, never read by the choice of action."""
     tried, rows, pending = {}, [], None
     try:
         for _ in range(rounds):
@@ -101,10 +104,12 @@ def carry(frame, pick, push, *, expected_px, emit=cd.emit, rounds: int = ROUNDS,
             if action == "ask_person":
                 learned(choices, cause, action, False, out["result"])
             rows.append({"result": out["result"], "cause": cause, "pile_moved": moved, "action": action,
-                         "why": why.get("hypothesis"), "missing": why.get("missing", [])})
+                         "why": why.get("hypothesis"), "missing": why.get("missing", []),
+                         **({"evidence": observe()} if observe and cause != "placed" else {})})
             emit("recovery", rows[-1], cell_diagnose.RECOVERY.get(cause, []), action, "rule", f"cause {cause}")
             if action in ("done", "ask_person"):
-                return {"result": "placed" if action == "done" else f"ask a person: {cause}", "rounds": rows}
+                return {"result": "placed" if action == "done" else f"ask a person: {cause}", "rounds": rows,
+                        **({"ask": cell_diagnose.ASK[cause]} if action == "ask_person" and cause in cell_diagnose.ASK else {})}
             tried[cause].append(action)
             pending = (cause, action)
         return {"result": f"ask a person: {rounds} rounds", "rounds": rows}
@@ -170,8 +175,10 @@ def main(argv=None) -> int:
         config["plan"]["lift_guard_frac"] = slower
         return True
 
+    camera = config.get("evidence_camera")
+    observe = (lambda: cell_site_camera.fleet_frame(camera, work / "evidence")) if camera else None
     out = carry(lambda: cell.frame("top"), pick, push, expected_px=expected_px, choices=choices, explain=explain, slow=slow,
-                folded=lambda: at_home(cell.act("state").get("state"), config["plan"]["home"]))
+                folded=lambda: at_home(cell.act("state").get("state"), config["plan"]["home"]), observe=observe)
     print(json.dumps({**out, "unsolved": unsolved(choices), "open_questions": cell_why.open_questions(why_path)}, indent=1, default=str))
     return 0 if out["result"] == "placed" else 1
 

@@ -55,7 +55,21 @@ Account의 로그인·프로필·관리 화면 소스는 `applications/fleet/web
 | `proxy` | `rosy-site` | `rosy-site-proxy` | 실행 중 | `mem_limit` 부채 |
 | `media`, `media-gateway` | `rosy-media` | `rosy-site-media`, `rosy-site-proxy` | 미배치 | D-994 §5 부하 관측·방화벽 뒤 |
 
+R 호스트는 공통 서비스 컨테이너 밖에서 현장 시간 서버(chrony site 역할, [D-859](../adr/D-859-shared-utc-time-synchronization.md))도 맡는다. 상위는 공용 NTP 세 곳이고 클라이언트는 `rosy-fleet-r.local` 하나만 쓴다. 호스트 설정이며 Compose 서비스가 아니라 위 표에 없다. 호스트 이름이 바뀌면 클라이언트의 chrony 시간원도 같이 바꾼다([설치 절차](../../deploy/hosts/README.md#공통-시간-동기화-d-859)). 2026-11-13 R에 적용했고 모델 PC와 Pinky 일부가 클라이언트다.
+
 Fleet에 남는 공통 성격 기능은 카메라 페어링·로봇 등록·기계 자격 digest·미리보기 grant 서명 사용·host-control·알림 outbox이며 이유는 D-1001 결정 4가 정본이다. 사람 신원은 Account에 있고 Fleet은 수신기로만 쓴다.
+
+## 값의 다섯 층 ([D-1021](../adr/D-1021-one-owner-per-value-identity-in-account-placement-in-site-map.md))
+
+값마다 정본은 한 층이다. 다른 곳의 사본은 배포 단계가 쓰고 `tools/remote/update_status.py`가 대조한다.
+
+| 층 | 구성원 | 정본 |
+|---|---|---|
+| 신원 | 발급자, 서명 키, 클라이언트(앱), 계약 버전 | Account |
+| 배치 | 호스트 이름·별칭, 시간원, 서비스 주소, 은퇴한 이름 | 비공개 `private/site-map.yaml` |
+| 유닛 | 호스트별 유닛과 코드 출처 | `deploy/hosts/services.yaml` |
+| 접근 | SSH 목적지·역할 | `private/lab-hosts.json`(지도의 SSH 사본) |
+| 기대 버전 | 승인된 릴리스와 보류 | 서명된 후보와 보류 기록 |
 
 ## 기능별 공통화 결정
 

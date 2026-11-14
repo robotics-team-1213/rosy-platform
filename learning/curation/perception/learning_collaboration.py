@@ -3,6 +3,7 @@ from concurrent.futures import ThreadPoolExecutor
 from http.cookies import SimpleCookie
 import hashlib
 import hmac
+import logging
 import threading
 import time
 from urllib.parse import parse_qs, urlparse
@@ -111,8 +112,10 @@ class Collaboration:
                 return self.callback_failure(handler, 'account_unavailable')
             handler.send({'error':'Rosy Account 연결을 확인하세요.'}, 503)
             return True
-        except ValueError:
+        except ValueError as exc:
             if self.receiver and path == '/api/account/callback':
+                from core_common.protocol.account_access import refusal_reason
+                logging.getLogger(__name__).warning('account callback refused: %s', refusal_reason(exc))
                 return self.callback_failure(handler, 'account_callback_failed')
             raise
 
@@ -220,6 +223,9 @@ class Collaboration:
         elif path.startswith('/api/learning/omx/center/hub-'):
             capability = 'publish'
         elif path in ('/api/catalog/upload', '/api/catalog/folder') or path.startswith('/api/learning/imports/'):
+            capability = 'import'
+        elif path == '/api/learning/recording/incident-feedback':
+            # Evidence binding only: queues nothing, approves nothing — narrower than recording `manage`.
             capability = 'import'
         elif path.startswith('/api/accounts/'):
             capability = 'view'

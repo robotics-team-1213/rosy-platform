@@ -48,6 +48,7 @@ MAP_POINTS = [
     [0.06, 0.18],
     [0.04, 0.17],
 ]  # the 2026-10-28 remap grid
+AT_STOP_S = 1.5  # the most a refused remap move waits for its stop evidence before it folds
 
 
 _REF_GRAY_CACHE: dict[str, tuple[int, int, np.ndarray]] = {}
@@ -181,8 +182,12 @@ def enough_agree(kept: int, seen: int) -> bool:
     return kept >= 5 and kept * 2 > seen
 
 
-def remap(cell, config: dict, points: list, work: Path, log=print) -> dict:
-    """Hover the empty jaws at each point (z_view), mark them, fit the map; None marks are skipped."""
+def remap(cell, config: dict, points: list, work: Path, log=print, at_stop=None) -> dict:
+    """Hover the empty jaws at each point (z_view), mark them, fit the map; None marks are skipped.
+
+    at_stop(state, status) runs when a move is refused, before the fold hides what the arm met: the carry path's
+    stop evidence (cell_hooks.stills). 2026-11-14: arm_b's first remap goto stopped on contact at wrist_flex 59.3
+    and nothing but the runner's one line said what it met."""
     import cv2
     import cell_pipeline as cp
     import cell_scene_guard
@@ -199,11 +204,27 @@ def remap(cell, config: dict, points: list, work: Path, log=print) -> dict:
         except SystemExit as exc:
             log({"point": [x, y], "skipped": str(exc)[:100]})
             continue
-        failed = next((c for c in (f"load {lib}", "goto above_pick") if not cell.act(c).get("ok")), None)
+        failed, status = None, {}
+        for command in (f"load {lib}", "goto above_pick"):
+            status = cell.act(command)
+            if not status.get("ok"):
+                failed = command
+                break
         if failed:
+            if at_stop is not None:  # evidence never stands between a stop and the fold: a stuck camera's
+                import threading      # frame() could hold the arm in contact for ~60 s, so it gets AT_STOP_S
+
+                def grab():
+                    try:
+                        at_stop(status.get("state"), status)
+                    except BaseException:
+                        pass
+                grabber = threading.Thread(target=grab, daemon=True)
+                grabber.start()
+                grabber.join(timeout=AT_STOP_S)
             if not fold(cell).get("ok"):
                 raise SystemExit(f"remap stopped at {failed} for {[x, y]} and the park failed")
-            log({"point": [x, y], "stopped": failed})
+            log({"point": [x, y], "stopped": failed, "error": status.get("error"), "state": status.get("state")})
             break
         kept = consensus(marks, prm.get(config.get("params"), "calibrate.consensus_px"))
         cv2.imwrite(str(frames / f"{i:02d}.jpg"), cell.frame("top"))
@@ -296,7 +317,14 @@ def main(argv=None):
     for step in todo:
         if step == "remap":
             ref_path = Path(config["preflight"]["reference_top"]).expanduser()
-            record = remap(cell, config, config.get("calibrate", {}).get("map_points", MAP_POINTS), work)
+            import cell_hooks
+
+            stills = cell_hooks.stills(cell, config)
+            try:
+                record = remap(cell, config, config.get("calibrate", {}).get("map_points", MAP_POINTS), work,
+                               at_stop=stills)
+            finally:
+                stills.close()
             if not map_agrees(record, config["params"]):
                 done.append({"remap": record["loo_error_mm"], "refused": "marks disagree; map not saved"})
                 break

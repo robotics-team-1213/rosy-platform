@@ -29,6 +29,7 @@ pretest. A NEW failure now does not stop a landing when every condition holds; a
 from __future__ import annotations
 
 import argparse
+import functools
 import json
 import os
 import re
@@ -49,6 +50,15 @@ LOCATION = re.compile(r"^(\S+\.py):(\d+): (\w[\w.]*)$", re.M)
 CARRIED: list[tuple[str, str, str, tuple[str, ...]]] = []  # (id, main, why, invocation): no land record while set
 PASSES: list[tuple[str, str]] = []  # (id, tested head) PASSED in a -rA run: closed after the fast-forward
 ALONE = re.compile(r"^tools/collect_alone\.py::test_runs_alone\[(.+)\]$")  # names a test file, not a test
+# collect_alone.py's two id kinds name a file; which env var selects it (a bare node id gives no verdict on main)
+ALONE_ANY = re.compile(r"^tools/collect_alone\.py::test_(runs|collects)_alone\[(.+)\]$")
+ALONE_ENV = {"runs": "ROSY_ALONE_FILES", "collects": "ROSY_COLLECT_PATHS"}
+
+
+def alone_invocation(nodeid: str) -> list[str] | None:
+    """The pytest invocation that reruns an alone-class id for its file, or None for a plain node id."""
+    m = ALONE_ANY.match(nodeid)
+    return [f"{ALONE_ENV[m[1]]}={m[2]}", "tools/collect_alone.py", "-rA"] if m else None
 
 
 def _git(wt: Path, *args: str) -> subprocess.CompletedProcess:
@@ -135,6 +145,10 @@ def known(wt: Path, main: str, ids: list[str]) -> bool:
     return bool(ids) and set(ids) <= have
 
 
+# 11-14: close() reads state() after every passing invocation, and state() asked git once per close record: 372
+# calls a pass, 68 passes a FULL, about 0.2 s a call on a busy laptop. A landing sat silent for over 30 min after its
+# tests. Ancestry between two commits never changes.
+@functools.lru_cache(maxsize=None)
 def _ancestor(wt: Path, a: str, b: str) -> bool:
     return _git(wt, "merge-base", "--is-ancestor", a, b).returncode == 0
 

@@ -2,7 +2,10 @@
 
 ## 공통 시간 동기화 (D-859)
 
-관제 PC가 현장 NTP 서버이고 모델·AI·OMX·카메라 호스트와 Pinky는 클라이언트다.
+현장 NTP 서버는 R 호스트(`rosy-fleet-r`)이고 모델·AI·OMX·카메라 호스트와 Pinky는 클라이언트다.
+클라이언트의 시간원은 `rosy-fleet-r.local` 하나다(2026-11-13 적용). 호스트 이름을 바꾸거나 옮기면
+모든 클라이언트의 chrony 시간원을 새 이름으로 다시 설치한다. 이름이 사라진 시간원은 오류 없이
+시간원 0개가 되어 시계가 어긋난다([교훈](../../docs/solutions/runtime-errors/clock-skew-rejected-account-tokens-after-time-source-name-vanished-2026-11-13.md)).
 기준과 수용 조건은 [D-859](../../docs/adr/D-859-shared-utc-time-synchronization.md),
 전체 기기의 동일한 단일 endpoint 결정은 [D-861](../../docs/adr/D-861-one-identical-ntp-endpoint-for-all-devices.md)다.
 실제 서버 이름·주소·CIDR은 호스트에만 둔다. 아래 자리표시자는 운영 값으로 바꾼다.
@@ -40,11 +43,26 @@
    chronyc -N sources -v
    ```
 
+   SD를 새로 쓰는 Pinky는 `prepare-rosy-sd.ps1 -TimeSource <site-ntp-name>`으로 첫 부팅에 같은 설정을
+   받는다(이미지에 이름을 굽지 않는다). 확인은 `chronyc sources`다.
+
    새 Pinky native runtime에는 `rosy_time_sync.py`가 함께 배포된다. 저장소가 없는 장치는
    `/opt/rosy/native-runtime/rosy_time_sync.py` 또는 승인된 release의 native 사본을 사용한다.
    예전 장치에는 승인된 리비전의 도구를 먼저 복사한다. 이미지/OTA 설치만으로 현장별
    NTP 등록이 끝나는 것은 아니다. 컨테이너·Harbor 앱은 호스트 시간을 공유하며 별도 NTP
    데몬이나 `CAP_SYS_TIME`을 넣지 않는다. OMX는 팔 자체가 아닌 제어 호스트에 적용한다.
+
+   시간원의 정본은 비공개 현장 배치 지도의 `time_source:`(최상위 `client:`·`site:`, 또는 호스트별)다(D-1021).
+   `update_status.py`는 각 호스트의 chrony `server` 이름이 이와 같은지 보고 다르면 `FAIL time-source <호스트>`다.
+   `python tools/remote/site_map.py apply-time [--host X]`는 어긋난 클라이언트에 위 `install`을 ssh로 대신 한다.
+   기본은 미리 보기이고 `--execute`일 때만 바꾼다. 이미 맞는 호스트는 건너뛰고, `rosy-core`·`rosy-io`·`rosy-navigation`이
+   도는 호스트는 거부하고, ssh가 끊겨 상태를 못 읽어도 거부한다. site 역할 호스트(지도의 `roles`)에는 client 역할을 설치하지 않는다.
+   Pinky만 `--robot-maintenance --host <로봇> --robot-idle-confirmed <로봇>`으로 그 유닛을 멈췄다가 다시 시작한다(한 번에 한 대,
+   움직임·도킹이 없음은 ssh로 읽을 신호가 없어 사람이 대시보드에서 확인하고 플래그로 적는다). 멈춘 유닛은 설치가 실패해도 반드시
+   다시 시작하고 결과를 출력한다. 사람 없이 도는 감시는
+   호스트의 `rosy-host-guard`다(로봇의 chrony는 이 자동 대조에 없다. `apply-time` 미리 보기로 확인한다). `hosts.conf`의 `<이름> drift <ssh 대상> <시간원|-> [옛 이름...]` 줄이
+   forced command `drift`로 chrony 이름·사용 가능한 원천 수·옛 이름·상대 guard의 멈춤을 10분마다 읽고,
+   기존 운영자 webhook으로 연속 2회 이상이면 한 번, 정상으로 돌아오면 한 번 알린다(`host-guard.conf.example`).
 4. **Windows 개발 PC:** 관리자 PowerShell 유지보수 창에서 먼저 `-WhatIf`로 확인한다.
    도메인·정책 관리 PC는 스크립트가 거부하며 도메인 관리자가 같은 기준을 연결한다.
 
@@ -121,6 +139,8 @@ git fetch origin && python tools/remote/update_status.py
 ```
 
 `STUCK`은 업데이트 유닛이 실패했거나 6시간 안에 정상 판정(`switched`·`up_to_date`·`idle`·`active`)이 없다는 뜻이다. 2026-10-23에는 관제 PC OMX 도구가 4일(교체된 OpenRB 시리얼), AI PC 상황 서비스가 3일(끊긴 fetch가 남긴 `mirror.git/shallow.lock`) 멈춰 있었다. `OFF`는 타이머가 꺼진 경로이고, 누가 왜 껐는지 확인하기 전에 켜지 않는다.
+
+시간과 현장 updater도 같이 본다(2026-11-13). chrony가 있는 호스트는 쓸 수 있는 시간원(`chronyc -n sources`의 `*`·`+`·`-`)이 0개면 `FAIL`이고, 설정된 server 이름이 풀리지 않으면 `note`로 이름을 적는다(모델 PC가 사라진 호스트 이름을 4일 가리킨 사례). 현장 호스트는 `/var/lib/rosy/site-autoupdate.json`을 읽어, 살아 있는 hold는 `HELD`, 만료됐지만 계속 막고 있는 hold와 `refused`·`recovery-*` 마지막 실행은 이유와 함께 `FAIL`로 보인다. `FAIL`은 exit 1이다.
 
 새 PC를 붙이거나 장치를 바꿀 때:
 

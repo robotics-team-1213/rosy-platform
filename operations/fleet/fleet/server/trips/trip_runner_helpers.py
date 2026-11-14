@@ -16,7 +16,7 @@ from fleet.server.trip_geometry import pose_view
 from fleet.server.trip_halts import error_code as _code
 from fleet.server.trip_laps import convoy_refusal
 from fleet.server.trip_live import LiveTrip
-from fleet.server.trip_ports import MapPose, TripError
+from fleet.server.trip_ports import TripError
 from fleet.swarm.transport import RobotApiError
 
 _LOG = logging.getLogger("fleet.server.trip_runner")
@@ -133,26 +133,6 @@ class TripRunnerHelpers:
         if active is None or active[0] != version:
             raise TripError(422, "TRIP_MAP_CHANGED", {"map_version": active[0] if active else None})
         return active[2]
-
-    async def map_pose(self, robot_id: str) -> Optional[MapPose]:
-        """The trip map pose (D-494 3) after one forced state read; None when it cannot be read."""
-        try:
-            if (refresh := getattr(self._poses, "refresh", None)) is not None:  # one forced state/odom read per tick (D-494 3)
-                await self._call(refresh(robot_id, force_rest=True, **self._after(self._poses, robot_id)))
-            self._unread.discard(robot_id)
-        except (HubError, OSError, httpx.TransportError):  # D-760 4/8: only no answer is an unread state
-            self._unread.add(robot_id)
-            if self._clock() - self._refresh_warned_at >= 30.0:
-                self._refresh_warned_at = self._clock()
-                _LOG.warning("state refresh for %s failed (repeats muted 30 s)", robot_id, exc_info=True)
-        try:
-            return await self._call(self._driving_pose(robot_id))
-        except Exception:  # a pose that cannot be read is no pose
-            _LOG.exception("map pose for %s failed", robot_id)  # falls through to None
-
-    def _driving_pose(self, robot_id: str):
-        """D-989 allowlist: the trip loop is the consumer that may drive on an auto-locate anchor."""
-        return getattr(self._poses, "driving_pose", self._poses.arbitrated_pose)(robot_id)
 
     def _auto_locate_on(self, robot_id: str) -> bool:
         check = getattr(self._poses, "auto_locate_enabled", None)

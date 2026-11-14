@@ -72,6 +72,7 @@ SCANNER_DIR = "deploy/robot/pinky_pro/release"  # its scanner; admission runs it
 SAFETY = "tools/harness/safety_review.py"  # D-430 5: the rule CI's scope job enforces
 # Every child gets UTF-8 stdio (Korean paths and log text on a cp949 console).
 ENV = {**os.environ, "PYTHONUTF8": "1"}
+MAIN_WRITER_ENV = {**ENV, "ROSY_MAIN_WRITER": "land"}  # tools/hooks/reference-transaction lets only this move main
 RENORMALIZE = ("-X", "renormalize")  # merges clean CRLF->LF per side first: line endings alone never conflict (11-09)
 
 TURN_CAP_S = 1200  # D-889 26 (20 min): the acquired turn's budget; expiry yields at safe boundaries (land_prepare.again)
@@ -89,9 +90,9 @@ class Stop(Exception):
 class Overtime(Stop): """The turn exhausted its budget; remaining checks prepare outside the lock."""
 
 
-def git(cwd: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess:
+def git(cwd: Path, *args: str, check: bool = True, env: dict | None = None) -> subprocess.CompletedProcess:
     result = subprocess.run(["git", "-c", "core.quotepath=off", "-C", str(cwd), *args],
-                            capture_output=True, text=True, encoding="utf-8", errors="replace", env=ENV)
+                            capture_output=True, text=True, encoding="utf-8", errors="replace", env=env or ENV)
     if check and result.returncode != 0:
         raise Stop(f"git {' '.join(args)} failed:\n{result.stdout}{result.stderr}".rstrip())
     return result
@@ -505,7 +506,7 @@ def rounds(args, wt: Path, branch: str, main_co: Path, python: str, qdir, ticket
                 except (ValueError, TypeError, KeyError) as exc:
                     raise Stop(f"invalid land-record plan before fast-forward: {exc}") from exc
             on_main(main_co)
-            ff = git(main_co, "merge", "--ff-only", candidate, check=False)
+            ff = git(main_co, "merge", "--ff-only", candidate, check=False, env=MAIN_WRITER_ENV)
             if ff.returncode == 0:
                 land_full.forget(wt, branch)
                 landed = out(main_co, "rev-parse", "HEAD")

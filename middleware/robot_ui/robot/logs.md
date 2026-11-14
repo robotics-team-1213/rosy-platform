@@ -1470,3 +1470,11 @@
 - 변경: `panels/console/person-request.js` — `can_answer`일 때만 "했어요"·"못 해요". 답한 뒤에는 버튼을 숨기고 관제 기록을 기다린다고 말한다. 로그인하지 않은 화면은 로그인하면 답할 수 있다고 안내한다.
 - 증거: node `person-request.test.mjs`, 원격 실행 기록 참조.
 - gate 변화: 없음.
+
+## 2026-11-13 · uncommitted · fix(ui): HW_TEST_WAIT_MS declared on its own line again (main red)
+
+- 변경: app.js 의 HW_TEST_WAIT_MS·HW_TEST_POLL_MS 를 분할 리팩터링 때 합친 한 줄 선언에서 두 줄로 되돌렸다. 값·동작 변화 없음
+- 증거: test_host_hardware 하드웨어 시험 배선 시험(원격)
+- gate 변화: 없음. SOURCE GO, LOCAL GO 유지(main red 복구)
+- 결정: 없음
+- 교훈: 없음

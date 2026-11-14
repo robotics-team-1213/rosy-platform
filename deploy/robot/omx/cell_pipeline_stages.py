@@ -132,7 +132,9 @@ def grip_to(cell, value: float, timeout_s: float = 10.0, sleep=time.sleep, clock
             if abs(jaw - value) < 1.5:
                 return True
             still_since = (still_since or now) if last is not None and abs(jaw - last) < 0.2 else None
-            if still_since is not None and now - still_since >= 0.6:
+            # longer than the session's state refresh: arm_s read the jaws about once a second (2026-11-13), and 0.6 s
+            # took a jaw still opening as stopped, so every jaw mark of a remap compared two frames of unmoved jaws
+            if still_since is not None and now - still_since >= 1.5:
                 return True
             last = jaw
         sleep(0.2)

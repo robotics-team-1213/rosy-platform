@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="ko" data-theme="dark">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Rosy Learning — 현장 실패 근거</title><link rel="stylesheet" href="/common/tokens.css"><script src="/common/theme.js"></script>
+<link rel="stylesheet" href="/common/components.css"><link rel="stylesheet" href="/common/component-controls.css"><link rel="stylesheet" href="/common/app-shell.css"><link rel="stylesheet" href="/common/stage-strip.css"><link rel="stylesheet" href="/app.css">
+<script type="module" src="/incidents.js"></script></head>
+<body><a class="skip-link" href="#incidents-main">현장 실패 근거로 이동</a>
+<ui-shell grammar="procedure" class="ui-app-shell"><!-- review:header:start -->
+<ui-topbar role="banner"><ui-brand href="/learning" aria-label="Rosy Learning"><b>Learning</b></ui-brand><span data-spacer></span><a data-kind="quiet" class="ui-action-link" data-action-icon="account" data-learning-account-entry href="/accounts" title="로그인·계정">로그인·계정</a>
+<ui-button kind="quiet" data-theme-cycle="" data-icon-only="" type="button" aria-label="테마 변경" data-action-icon="theme-dark"></ui-button></ui-topbar>
+<!-- review:header:end -->
+<div class="ui-app-body" data-seats="rail"><div class="ui-rail"><nav class="ui-rail-nav workspace-tabs" aria-label="학습 화면"><!-- review:rail:start -->
+<a class="ui-rail-item" data-action-icon="list" href="/learning" aria-label="홈">홈</a><a class="ui-rail-item" data-action-icon="folder" href="/catalog" aria-label="자료 등록">자료</a><a class="ui-rail-item" data-action-icon="pencil" href="/" aria-label="정답 달기" aria-current="true">정답</a><a class="ui-rail-item" data-action-icon="robot" href="/learning/tasks" aria-label="학습 실행">학습</a><a class="ui-rail-item" data-action-icon="check" href="/learning/evaluate" aria-label="평가·승격">평가·승격</a>
+<!-- review:rail:end --></nav></div>
+<div class="ui-app-main"><div class="ui-pathbar"><nav class="ui-crumbs" aria-label="현재 위치"><a href="/learning">Learning</a><span aria-hidden="true">/</span></nav><h1>현장 실패 근거</h1><span class="ui-crumbs" id="learning-tool-path"></span></div><nav class="review-kinds" aria-label="정답 하위 메뉴"><a class="ui-subnav-item" href="/">객체 검수</a><a class="ui-subnav-item" href="/pixels">픽셀 검수</a><a class="ui-subnav-item" href="/incidents" aria-current="page">현장 실패 근거</a><a class="ui-subnav-item" href="/learning/omx">로봇암 시범 검수</a><a class="ui-subnav-item" href="/learning/vlm">VLM 판단</a></nav>
+<main id="incidents-main" class="learning-main ui-task-page" tabindex="-1">
+<section class="learning-section" aria-labelledby="incidents-title">
+<h2 id="incidents-title">현장 실패 근거</h2>
+<p class="quiet">Fleet에서 내보낸 사건 내보내기(incidents.json)와 녹화 stuck 마커(stuck_markers.json)를 묶어 사건별 근거를 확인합니다. 이 화면은 아무것도 저장하지 않고, 정답 라벨이나 픽셀 검수 승인을 만들지 않습니다.</p>
+<form id="incident-form" class="ui-form learning-form">
+<label class="ui-field-label">Fleet 사건 내보내기 (incidents.json) <input id="incident-incidents" class="ui-field" type="file" accept=".json,application/json" required></label>
+<label class="ui-field-label">녹화 stuck 마커 (stuck_markers.json) <input id="incident-markers" class="ui-field" type="file" accept=".json,application/json" required></label>
+<ui-actions><ui-button id="incident-submit" kind="primary" type="submit">근거 묶기</ui-button></ui-actions>
+</form>
+<ui-status id="incident-error" state="error" role="alert" hidden></ui-status>
+<p id="incident-status" role="status"></p>
+<div id="incident-results" aria-live="polite"></div>
+<ui-actions><a id="incident-download" class="ui-action-link" data-kind="quiet" download="incident-feedback.json" hidden>결과 JSON 내려받기</a></ui-actions>
+</section>
+</main></div></div></ui-shell></body></html>

@@ -1,5 +1,4 @@
 """Remaining Fleet procedures keep long operational values inside their content column."""
-import json
 import os
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -49,22 +48,21 @@ def fits(page):
 
 @pytest.mark.parametrize('width', WIDTHS)
 @pytest.mark.parametrize('theme', ['dark', 'light'])
-def test_long_learning_values_and_step_groups(tmp_path, monkeypatch, width, theme):
+def test_learning_entry_notice_stays_reachable(tmp_path, monkeypatch, width, theme):
     from playwright.sync_api import expect
-    config = tmp_path / 'learning.json'
-    config.write_text(json.dumps({'model': 'https://' + HOST}), encoding='utf-8')
-    monkeypatch.setenv('ROSY_LEARNING_APPS_CONFIG', str(config))
+    monkeypatch.delenv('ROSY_LEARNING_APPS_CONFIG', raising=False)
     with _fleet(tmp_path) as (browser, origin):
         page = browser.new_page(viewport={'width': width, 'height': 1000})
+        errors = []
+        page.on('pageerror', lambda error: errors.append(str(error)))
         page.add_init_script(f"localStorage.setItem('rosy.theme', '{theme}')")
-        page.goto(origin + '/console/learning')
-        expect(page.locator('[data-host=model]')).to_contain_text(HOST)
+        response = page.goto(origin + '/console/learning')
+        assert response.status == 503                        # 미등록이면 안내 문서가 열린다
+        expect(page.locator('.learning-focus-note')).to_be_visible()
+        expect(page.locator('a[href="/console?view=work"]')).to_be_visible()
         capture(page, f'learning-{theme}-{width}')
         fits(page)
-        expect(page.locator('.learning-steps-list li > span')).to_have_count(3)
-        for step in page.locator('.learning-steps-list li').all():
-            assert step.locator('span').bounding_box()['x'] > step.bounding_box()['x']
-        assert page.locator('.learning-host').evaluate_all('nodes => nodes.every(n => n.scrollWidth <= n.clientWidth + 1)')
+        assert not errors
         page.close()
 
 

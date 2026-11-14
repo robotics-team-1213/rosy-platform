@@ -90,7 +90,6 @@ def install_charge_bay_routes(app, console, gathered, read_guard):
         hd = getattr(app.state, "human_detected", None) or {"cell_s": False, "cell_ab": False, "all": False}
         zones_data = load_station_zones(_storage_dir() / "station_zones.yaml")
         arm_live_fn = getattr(app.state, "get_arm_live_catalog", None)
-        cam_cat_fn = getattr(app.state, "get_camera_catalog", None)
         return {"map_version": active[0],
                 "contract_version": CONTRACT_VERSION, "omx_cells": cell_evals,
                 "omx_cell_tasks": list((getattr(app.state, "omx_cell_tasks", None) or {}).values()),
@@ -101,7 +100,6 @@ def install_charge_bay_routes(app, console, gathered, read_guard):
                 "arm_holds": dict(getattr(app.state, "arm_holds", None) or {}),
                 "arm_live_states": arm_live_fn() if callable(arm_live_fn) else dict(getattr(app.state, "arm_live_states", None) or {}),
                 "station_camera_links": dict(getattr(app.state, "station_camera_links", None) or {}),
-                "cameras": cam_cat_fn() if callable(cam_cat_fn) else [],
                 "station_zones": {
                     "schema": zones_data["schema"],
                     "site_id": zones_data["site_id"],

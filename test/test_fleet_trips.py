@@ -1,6 +1,7 @@
 """tools/sim/fleet_trips.py: the two lane trips are straight, on their road and clear of crosswalks."""
 import importlib.util
 import math
+import sys
 from pathlib import Path
 
 import pytest
@@ -10,6 +11,7 @@ SCRIPT = Path(__file__).resolve().parents[1] / 'tools/sim/fleet_trips.py'
 
 
 def _module():
+    sys.path.insert(0, str(SCRIPT.parent))  # the script imports its sibling fleet_trip_recorder; alone, nothing else adds the folder
     spec = importlib.util.spec_from_file_location('fleet_trips', SCRIPT)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)

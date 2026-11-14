@@ -5,6 +5,7 @@ Queue outputs retain their original observation and generation time; a caller mu
 let its existing owner reject stale/mismatched candidates, never relabel them.
 """
 from collections import deque
+from dataclasses import dataclass
 import hashlib
 import importlib.metadata
 import json
@@ -26,11 +27,13 @@ def image_key(doc):
     return 'observation.images.'+doc['cameras'][0]['name']
 
 
-def _snapshot(root,pin):
+def _snapshot(root,pin,*,shadow=False):
+    """shadow=True is the real-observation shadow binding (D-854 slice 5): every integrity check
+    stays and the sim-only execution claim does not apply, because no shadow result is ever executed."""
     root=Path(root).resolve();manifest=root/'policy-artifact.json';payload=manifest.read_bytes()
     doc=validate_policy(json.loads(payload),root=root)
     if doc['revision']!=pin:raise ValueError('policy revision differs from pinned input')
-    if doc['profile']!='omx_joint_target_v1' or doc['environment']!='sim':
+    if doc['profile']!='omx_joint_target_v1' or (doc['environment']!='sim' and not shadow):
         raise ValueError('only the OMX SIM ACT study profile is supported')
     if len(doc['cameras'])!=1 or camera_role(doc['cameras'][0]['name'])!=WRIST:raise ValueError('one explicit wrist RGB camera required')
     buffers={}
@@ -226,3 +229,88 @@ class ACTInference:
             except Exception as exc:
                 self._queue.clear();self._fault='inference_fault:'+type(exc).__name__
                 raise ValueError(self._fault) from exc
+
+
+@dataclass(frozen=True)
+class ShadowObservation:
+    """A real-cell observation for the shadow binding only: no episode, lease or calibration is
+    claimed, because a real cell camera is never the training artifact's camera (rgb is HWC
+    bytes, camera_shape CHW, as the model input path expects)."""
+    joint_names: tuple
+    positions: tuple
+    observed_at_ns: int
+    camera_identity: str
+    camera_shape: tuple
+    camera_received_at_ns: int
+    rgb: bytes
+
+    def __post_init__(self):
+        _text(self.camera_identity)
+        for value in (self.observed_at_ns,self.camera_received_at_ns):_ns(value)
+        names=tuple(self.joint_names)
+        for name in names:_text(name)
+        if not names or len(set(names))!=len(names):raise ValueError('distinct ordered joints required')
+        object.__setattr__(self,'joint_names',names)
+        object.__setattr__(self,'positions',_vector(self.positions,len(names)))
+        shape=tuple(self.camera_shape)
+        if len(shape)!=3 or shape[0]!=3 or any(type(v) is not int or not 1<=v<=4096 for v in shape):
+            raise ValueError('declared RGB CHW dimensions required')
+        object.__setattr__(self,'camera_shape',shape)
+        if not isinstance(self.rgb,(bytes,bytearray,memoryview)):raise ValueError('RGB uint8 byte buffer required')
+        rgb=bytes(self.rgb)
+        if len(rgb)!=math.prod(shape):raise ValueError('RGB byte count differs from dimensions')
+        object.__setattr__(self,'rgb',rgb)
+
+    @property
+    def frame_sha256(self):return hashlib.sha256(self.rgb).hexdigest()
+
+
+@dataclass(frozen=True)
+class ShadowResult:
+    """A shadow proposal logged beside a real IK outcome; it has no candidate fields and no
+    execution port, so nothing can submit it anywhere (D-854)."""
+    policy_revision: str
+    source: ShadowObservation
+    chunk: tuple
+    produced_at_ns: int
+
+    def __post_init__(self):
+        _text(self.policy_revision)
+        if not isinstance(self.source,ShadowObservation):raise ValueError('shadow observation required')
+        chunk=tuple(tuple(_vector(action)) for action in self.chunk)
+        if not chunk:raise ValueError('nonempty proposed chunk required')
+        object.__setattr__(self,'chunk',chunk)
+        _ns(self.produced_at_ns)
+        if max(self.source.observed_at_ns,self.source.camera_received_at_ns)>self.produced_at_ns:
+            raise ValueError('production must follow the observation')
+
+
+class ACTShadowInference:
+    """The real-observation shadow binding: the same pinned computation, reused for logging only.
+
+    The execution binding's camera identity/calibration match is deliberately absent (a real cell
+    camera can never match the training artifact), which is exactly why a result from here may
+    never become an execution candidate; callers pair it with the same carry's real IK outcome."""
+    def __init__(self,root,policy_revision,*,clock=time.time_ns):
+        self._doc,buffers=_snapshot(root,policy_revision,shadow=True)
+        self._steps,stats=_configuration(self._doc,buffers)
+        self._predict=_model_from_bytes(buffers['policy/config.json'],buffers['policy/model.safetensors'],stats,self._doc)
+        self._clock=clock;self._lock=threading.RLock()
+
+    @property
+    def policy_revision(self):return self._doc['revision']
+    @property
+    def policy_environment(self):return self._doc['environment']
+    @property
+    def joint_names(self):return tuple(self._doc['joint_names'])
+
+    def infer(self,observation):
+        with self._lock:
+            if not isinstance(observation,ShadowObservation):raise ValueError('shadow observation required')
+            if observation.joint_names!=self.joint_names:raise ValueError('observation differs from model binding')
+            now=int(self._clock());_ns(now)
+            if max(observation.observed_at_ns,observation.camera_received_at_ns)>now:
+                raise ValueError('future observation cannot produce action')
+            chunk=tuple(_vector(action,len(self.joint_names)) for action in self._predict(observation))
+            if len(chunk)!=self._steps:raise ValueError('predicted chunk size differs from config')
+            return ShadowResult(self.policy_revision,observation,chunk,now)

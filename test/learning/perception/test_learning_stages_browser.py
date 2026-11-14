@@ -15,7 +15,8 @@ pytestmark = pytest.mark.skipif(not browser_tests_enabled(), reason='requires ex
 STAGE_PAGES = [('홈', None, None, '/learning'), ('자료 등록', '자료 하위 메뉴', '자료 등록', '/catalog'),
                ('자료 등록', '자료 하위 메뉴', '카메라 맞춤', '/learning/camera'),
                ('자료 등록', '자료 하위 메뉴', '작업 공간', '/learning/workspaces'), ('정답 달기', '정답 하위 메뉴', '객체 검수', '/'),
-               ('정답 달기', '정답 하위 메뉴', '픽셀 검수', '/pixels'), ('정답 달기', '정답 하위 메뉴', '로봇암 시범 검수', '/learning/omx'),
+               ('정답 달기', '정답 하위 메뉴', '픽셀 검수', '/pixels'), ('정답 달기', '정답 하위 메뉴', '현장 실패 근거', '/incidents'),
+               ('정답 달기', '정답 하위 메뉴', '로봇암 시범 검수', '/learning/omx'),
                ('정답 달기', '정답 하위 메뉴', 'VLM 판단', '/learning/vlm'), ('학습 실행', '학습 하위 메뉴', '학습 과제', '/learning/tasks'),
                ('학습 실행', '학습 하위 메뉴', '인식 학습', '/learning'), ('학습 실행', '학습 하위 메뉴', 'SIM 실험', '/learning/sim'),
                ('평가·승격', None, None, '/learning/evaluate')]
@@ -116,7 +117,7 @@ def test_answer_links_come_right_after_the_title_in_focus_order(browser_workspac
     for _ in links:
         page.keyboard.press('Tab')
         focused.append(page.evaluate('document.activeElement.closest(".review-kinds") && document.activeElement.pathname'))
-    assert focused == links == ['/', '/pixels', '/learning/omx', '/learning/vlm'], (route, focused)
+    assert focused == links == ['/', '/pixels', '/incidents', '/learning/omx', '/learning/vlm'], (route, focused)
     page.keyboard.press('Tab')
     assert page.evaluate('!document.activeElement.closest(".review-kinds") && !!document.activeElement.closest(".ui-app-main")'), route
 

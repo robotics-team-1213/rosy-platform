@@ -673,3 +673,28 @@ def test_guard_and_body_rounds_share_one_lint_run_per_tree(repos, monkeypatch, t
     assert len(lint_calls) == 1
     assert (tmp_path / "lint-gpre.txt").read_text(encoding="utf-8") == "lint pass\n"
     assert (tmp_path / "lint-pre.txt").read_text(encoding="utf-8") == "lint pass\n"
+
+
+def test_a_snapshot_ticket_gathers_as_pending_then_starts_one_rollup(tmp_path, monkeypatch):
+    """11-10..11-14: 243 rollups found "fewer than two pending"; a ticket was pending for one poll."""
+    prep = land.land_prepare
+    monkeypatch.setattr(prep.land_queue, "touch", lambda ticket: None)
+    now = [0.0]
+    sleeps, rolls = [], []
+
+    def sleep(s):
+        sleeps.append(s)
+        now[0] += s
+
+    def ticket(**row):
+        path = tmp_path / f"{len(rolls)}-{len(sleeps)}.json"
+        path.write_text(json.dumps({"branch": "land/feat/x-20261114000000",
+                                    "worktree": str(tmp_path / ".git" / "rosy-land-wt" / "x"), **row}))
+        return path
+
+    prep.gather(ticket(), sleep, lambda: rolls.append(now[0]), clock=lambda: now[0])
+    assert rolls == [prep.GATHER_S] and sum(sleeps) == prep.GATHER_S
+    for row in ({"urgent": "now"}, {"alone": True}, {"branch": "land/fix/land-rollup-20261114000000-20261114000001"},
+                {"worktree": str(tmp_path / ".worktrees" / "x")}):  # urgent, alone, a rollup, a plain land.py run
+        prep.gather(ticket(**row), sleep, lambda: rolls.append(now[0]), clock=lambda: now[0])
+    assert len(rolls) == 1

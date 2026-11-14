@@ -2,9 +2,12 @@
 from __future__ import annotations
 
 import http.client
+import hashlib
 import json
+import math
 import os
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
@@ -182,6 +185,56 @@ class FifoCell:
                         break
         with urllib.request.urlopen(url, timeout=10) as reply:
             return cv2.imdecode(np.frombuffer(reply.read(), np.uint8), cv2.IMREAD_COLOR)
+
+    def frame_receipt(self, camera: str, *, previous: dict | None = None,
+                      max_age_s: float = 2.0) -> dict:
+        """Read one source frame; reject stale or non-advancing evidence rather than reusing a cached image."""
+        import cv2
+
+        if max_age_s <= 0:
+            raise ValueError("max_age_s must be positive")
+        if previous is not None and previous.get("camera") != camera:
+            raise ValueError("previous frame belongs to another camera")
+        spec = self.cameras[camera]
+        url = spec["url"] if isinstance(spec, dict) else spec
+        headers = {"Cache-Control": "no-cache"}
+        if previous is not None and previous.get("etag"):
+            headers["If-None-Match"] = previous["etag"]
+        request = urllib.request.Request(url, headers=headers)
+        try:
+            with urllib.request.urlopen(request, timeout=10) as reply:
+                if reply.status != 200:
+                    raise ValueError(f"camera frame HTTP {reply.status}; no fresh JPEG")
+                sequence_text = reply.headers.get("X-Frame-Seq")
+                stamp_text = reply.headers.get("X-Source-Stamp")
+                etag = reply.headers.get("ETag")
+                raw = reply.read()
+        except urllib.error.HTTPError as exc:
+            raise ValueError(f"camera frame HTTP {exc.code}; no fresh JPEG") from exc
+        captured_at = time.time()
+        try:
+            sequence = int(sequence_text)
+            source_stamp = float(stamp_text)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("camera frame lacks source sequence or stamp") from exc
+        if (sequence < 0 or not math.isfinite(source_stamp) or source_stamp <= 0
+                or source_stamp > captured_at + 0.5 or captured_at - source_stamp > max_age_s):
+            raise ValueError("camera frame source metadata is stale or invalid")
+        if previous is not None:
+            try:
+                advanced = sequence > int(previous["source_seq"]) and source_stamp > float(previous["source_stamp"])
+            except (KeyError, TypeError, ValueError) as exc:
+                raise ValueError("previous frame lacks source metadata") from exc
+            if not advanced:
+                raise ValueError("camera frame source has not advanced")
+        if not raw.startswith(b"\xff\xd8"):
+            raise ValueError("camera frame is not a JPEG")
+        image = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_COLOR)
+        if image is None:
+            raise ValueError("camera frame is not a decodable JPEG")
+        return {"image": image, "jpeg_sha256": hashlib.sha256(raw).hexdigest(),
+                "source_seq": sequence, "source_stamp": source_stamp,
+                "camera": camera, "captured_at": captured_at, "etag": etag}
 
 
 def write_receipt(directory: Path, stage: str, payload: dict) -> Path:

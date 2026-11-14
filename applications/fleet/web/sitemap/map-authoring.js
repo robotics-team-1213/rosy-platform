@@ -1,11 +1,9 @@
 // Page composition: input adapter, local history and Fleet geometry adapter.
-import {confirmIrreversible} from '/common/ui.js';
 import {createEditHistory} from '/console/assets/edit-history.js';
 import {createDrawingImport, rasterMapPoint} from '/console/assets/drawing-import.js';
 import {createMapEditor, svgElement} from '/console/assets/map-editor.js';
 import {createExtractionPanel} from '/console/assets/extraction-review.js';
 import {siteMapErrorText} from '/console/assets/site-map-model.js';
-import {ensureSurvey} from '/console/assets/site-map-edit.js';
 import {fetchMapPlane} from '/console/assets/vision-view.js';
 
 const $ = id => document.getElementById(id);
@@ -13,11 +11,12 @@ export function createMapAuthoring(host) {
   const history = createEditHistory(null);
   let projection = null, loadingHash = null, cacheController = null, rasterUrl = null;
   const message = text => { $('drawing-status').textContent = text; };
-  const changed = next => { ensureSurvey(next); history.apply(next); host.changed(history.current()); };
+  const changed = next => { history.apply(next); host.changed(history.current()); };
   const importer = createDrawingImport({request: host.request, map: host.draft,
     replaceDraft: next => { changed(next); },
     confirmDiscard: () => true});
-  const editReason = () => host.reason() || (!host.draft() && !host.map() ? '먼저 도면을 맞추거나 조사 초안을 만드세요' : '');
+  const editReason = () => host.reason() || (host.source() !== 'draft' ? '직접 편집은 초안에서 하세요'
+    : !host.map()?.survey ? '먼저 도면을 맞추거나 조사 초안을 만드세요' : '');
   const editor = createMapEditor({svg: host.svg, map: host.map, view: host.view, changed, reason: editReason});
   const extraction = createExtractionPanel({request: host.request, changed,
     context: () => ({draft: host.draft(), epoch: host.epoch(), projection, reason: editReason()}), render: host.render});

@@ -4,6 +4,7 @@ import datetime
 import importlib.util
 import ipaddress
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -493,3 +494,46 @@ def test_no_redirect_handlers_never_follow_redirects():
                 None, None, code, "redirect", {}, "https://example.invalid",
             ) is None
 
+
+
+@pytest.mark.skipif(not hasattr(os, "getuid"), reason="needs POSIX owners")
+def test_container_secrets_name_unreadable_paths_without_contents(tmp_path):
+    check = _module().check_container_secrets
+    sdir = tmp_path / "monitoring"
+    sdir.mkdir()
+    key = sdir / "site_read"
+    key.write_text("TOPSECRETVALUE", encoding="ascii")
+    env = {"ROSY_SITE_MONITORING_SECRETS_DIR": str(sdir)}
+    me, group = sdir.stat().st_uid, sdir.stat().st_gid
+    sdir.chmod(0o700)
+    key.chmod(0o600)
+    assert check({})["ok"]                                  # overlay off: nothing mounted
+    owner = check(env, uid=me)                              # the container user owns it
+    assert owner["ok"]
+    stranger = check(env, uid=me + 1, gid=group + 1)        # root:root 0700/0600 seen from uid 10001
+    assert not stranger["ok"] and str(sdir) in stranger["reason"] and str(key) in stranger["reason"]
+    assert "TOPSECRETVALUE" not in stranger["reason"]
+    sdir.chmod(0o750)
+    key.chmod(0o440)
+    assert check(env, uid=me + 1, gid=group)["ok"]          # group 10001, 0750 / 0440
+    key.chmod(0o400)
+    assert not check(env, uid=me + 1, gid=group)["ok"]      # group cannot read the file
+    assert not check({"ROSY_SITE_MONITORING_SECRETS_DIR": str(tmp_path / "gone")})["ok"]
+
+
+@pytest.mark.skipif(not hasattr(os, "getuid") or os.getuid() == 0, reason="needs a non-root POSIX user")
+def test_container_secrets_tell_a_non_root_run_to_run_the_checker_as_root(tmp_path):
+    check = _module().check_container_secrets
+    sdir = tmp_path / "monitoring"
+    sdir.mkdir()
+    sdir.chmod(0)
+    try:
+        result = check({"ROSY_SITE_MONITORING_SECRETS_DIR": str(sdir)})
+    finally:
+        sdir.chmod(0o700)
+    assert not result["ok"] and "as root" in result["fix"]
+
+
+def test_container_secrets_docstring_states_who_runs_it_and_what_it_simulates():
+    doc = _module().check_container_secrets.__doc__
+    assert "root" in doc and "10001" in doc and "mode bits" in doc and "not recursive" in doc

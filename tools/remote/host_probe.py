@@ -117,6 +117,7 @@ def placed_hosts(runner, cls: str, hosts: list[str] | None, cores: int) -> list[
     with runner.ThreadPoolExecutor(len(hosts)) as pool:
         probes = list(pool.map(runner.probe, hosts))
     runner.SITES.update(h for h, p in zip(hosts, probes) if p and p.get("site"))
+    host_caps.KNOWN.update((h, frozenset(p.get("caps", ()))) for h, p in zip(hosts, probes) if p)
     chosen, notes = runner.place(cls, hosts, probes, cores)
     for note in notes:
         print(f"[remote-pytest] {note}", file=runner.sys.stderr, flush=True)

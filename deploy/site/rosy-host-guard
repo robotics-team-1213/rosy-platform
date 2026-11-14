@@ -7,6 +7,11 @@ see host-guard.conf.example) lists one host per line:
   <name> pc <ssh-target> <quiet HH:MM-HH:MM or ->
   <name> robot <host>:<port>
   <name> updates <ssh-target>           (D-871: only `updates`, e.g. the site PC's own user; no ladder)
+  <name> drift <ssh-target> <source,...|-> [<retired-name> ...]   (D-1021) its chrony `server` names must equal the
+                                        list (the site map's time_source), no usable source, a retired name left in
+                                        chrony or /etc/hosts, or a site guard silent for GUARD_REPORT_STALE_H hours alert
+  <name> logincheck <status-file>       (D-1021) R's account_login_check.py report: failed apps, or no report for
+                                        GUARD_LOGIN_STALE_H hours, alert
 
 A pc answers `health` through its forced command (rosy-host-guard-remote); restart and reboot run
 the D-524 Service Control helper there (reboot = shutdown -r +10). Recovery ladder:
@@ -27,10 +32,13 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import socket
+import ssl
 import subprocess
 import sys
 import time
+import urllib.request
 from pathlib import Path
 
 CONFIG = Path(os.environ.get("GUARD_CONFIG", "/etc/rosy/host-guard/hosts.conf"))
@@ -48,7 +56,11 @@ REBOOT_MIN_GAP_S = int(os.environ.get("GUARD_REBOOT_MIN_GAP_S", "3600"))
 REBOOT_DELAY_MIN = 10  # D-524 helper reboots with shutdown -r +10
 # D-991: a hung PC answers nothing, so a person has to be told. Absent file: no alert.
 ALERT_WEBHOOK = Path(os.environ.get("GUARD_ALERT_WEBHOOK_FILE", "/etc/rosy/host-guard/alert-webhook"))
+MONITORING_STALE_S = 60 * int(os.environ.get("GUARD_MONITORING_STALE_MIN", "15"))  # last_success older than this is a stalled collector
 ALERT_AFTER = int(os.environ.get("GUARD_ALERT_AFTER", "2"))  # 2 x 10 min
+REPORT_STALE_S = 3600 * float(os.environ.get("GUARD_REPORT_STALE_H", "1"))  # a site guard writes status.json every 10 min
+LOGIN_STALE_S = 3600 * float(os.environ.get("GUARD_LOGIN_STALE_H", "3"))  # the login probe runs every 30 min
+LOGIN_PROBE_S = 60 * float(os.environ.get("GUARD_LOGIN_PROBE_MIN", "35"))  # a report older than a probe period (+5 min) is stuck
 # D-883: the rosy-ops lab storage floor. Report only; a reboot does not free a disk.
 MIN_DISK_FREE_GB = float(os.environ.get("GUARD_MIN_DISK_FREE_GB", "30"))
 MAX_DISK_USE_PCT = int(os.environ.get("GUARD_MAX_DISK_USE_PCT", "90"))
@@ -153,6 +165,158 @@ def alert_unreachable(name: str, entry: dict) -> None:
         if entry.get("alerted") and post_alert(f"Rosy: {name} PC가 다시 응답합니다."):
             entry["alerted"] = False
             act(name, "alert recovered", "answering again")
+
+
+def monitoring_up(url: str, ca: str | None) -> bool:
+    """One GET of R Monitoring's /monitoring-health: any answer but 2xx (or none) is a failure, and so is a
+    `last_success` (epoch seconds) older than MONITORING_STALE_S or null. An empty body, or a JSON object
+    without the key, is judged by the status code alone; any other 2xx body (an HTML error page) fails."""
+    try:
+        context = ssl.create_default_context(cafile=ca) if url.startswith("https://") else None
+        with urllib.request.urlopen(url, timeout=10, context=context) as answer:
+            if not 200 <= answer.status < 300:
+                return False
+            raw = answer.read(65536)
+    except (OSError, ValueError):  # URLError, HTTPError, timeouts and a bad CA file
+        return False
+    if not raw.strip():
+        return True  # empty body: judged by the status code alone
+    try:
+        body = json.loads(raw)
+    except (ValueError, RecursionError):
+        return False  # a proxy's HTML error page answers 2xx too
+    if not isinstance(body, dict):
+        return False
+    if "last_success" not in body:
+        return True  # an older Monitoring: judged by the status code alone
+    last = body["last_success"]
+    return type(last) in (int, float) and time.time() - last <= MONITORING_STALE_S
+
+
+def check_monitoring(name: str, url: str, ca: str | None, row: dict) -> None:
+    """The watcher of the watcher: Monitoring crash-looped for days with nobody outside noticing.
+    Alert once after ALERT_AFTER failed checks and once when it answers again."""
+    if monitoring_up(url, ca):
+        row["fails"] = 0
+        if row.get("alerted") and post_alert(f"Rosy: {name} 서비스가 다시 응답합니다."):
+            row["alerted"] = False
+            act(name, "alert recovered", "monitoring answering again")
+        return
+    row["fails"] = row.get("fails", 0) + 1
+    if row["fails"] >= ALERT_AFTER and not row.get("alerted") and post_alert(
+            f"Rosy: {name} 서비스가 {row['fails']}번 연속 정상 응답하지 않습니다. 컨테이너와 secrets 읽기 권한을 확인하세요."):
+        row["alerted"] = True
+        act(name, "alert unreachable", f"{row['fails']} checks")
+
+
+def alert_streak(name: str, row: dict, problem: str | None, what: str, report=None, kind=None) -> None:
+    """Alert once when ``problem`` has lasted ALERT_AFTER checks (distinct ``report`` stamps when given, so one
+    failed probe read by three guard runs counts once) and once when it is gone; a failed post is tried again.
+    A changed ``kind`` (the cause, not the wording) inside an alerted streak alerts once more."""
+    if problem is None:
+        row["fails"] = 0
+        row.pop("seen", None)
+        row.pop("kind", None)
+        if row.get("alerted") and post_alert(f"Rosy: {name} {what}이 다시 정상입니다."):
+            row["alerted"] = False
+            act(name, "alert recovered", what)
+        return
+    if report is None or report != row.get("seen"):
+        row["fails"], row["seen"] = row.get("fails", 0) + 1, report
+    if kind is not None:
+        if row.get("alerted") and row.get("kind") not in (None, kind):
+            row["alerted"] = False
+        row["kind"] = kind
+    if row["fails"] >= ALERT_AFTER and not row.get("alerted") and post_alert(f"Rosy: {name} {what}: {problem}"):
+        row["alerted"] = True
+        act(name, "alert unreachable", f"{what}: {problem}")
+
+
+def drift_problem(answer: str | None, expected: set[str]) -> str | None:
+    """The first-found problems of a `drift` answer as one text, else None. No answer counts: an old forced command
+    refuses the verb, and a watcher that cannot read must not look clean."""
+    if answer is None:
+        return "답이 없습니다(연결 실패이거나 설치된 rosy-host-guard-remote가 옛 버전입니다)"
+    problems, seen_chrony, seen_age = [], False, False
+    for line in answer.splitlines():
+        kind, _, rest = line.partition(" ")
+        fields = rest.split()
+        if kind == "chrony":
+            seen_chrony = True
+            if fields == ["none"]:
+                problems.append("chrony가 설치돼 있지 않습니다")
+            elif len(fields) != 3 or not fields[0].isdigit():
+                problems.append("chrony 보고를 읽지 못했습니다")
+            else:
+                names = set() if fields[2] == "-" else {n.rstrip(".") for n in fields[2].split(",") if n}
+                if fields[0] == "0":
+                    problems.append("사용할 수 있는 시간원이 0개입니다")
+                if expected and names != expected:
+                    problems.append(f"시간원 {', '.join(sorted(names)) or '없음'}이 현장 배치 {', '.join(sorted(expected))}와 다릅니다")
+        elif kind == "retired" and fields:
+            problems.append(f"옛 이름 {fields[0]}이 설정에 남아 있습니다")
+        elif kind == "guard-age":
+            seen_age = True
+            age = fields[0] if fields else ""
+            if not (age.isascii() and age.isdigit()):  # missing status.json, an empty or an odd value
+                problems.append("guard 상태 파일의 시각을 읽지 못했습니다(status.json이 없거나 읽을 수 없습니다)")
+            elif int(age) > REPORT_STALE_S:
+                problems.append(f"site guard가 {int(age) // 3600}시간 넘게 멈췄습니다")
+    if seen_chrony and not seen_age:
+        problems.append("guard 상태 시각 보고가 없습니다")
+    return "; ".join(problems) or (None if seen_chrony else "chrony 보고가 없습니다")
+
+
+def login_problem(path: Path, now: float):
+    """(problem or None, report stamp, cause) from account_login_check.py's status file. A missing, unreadable, old,
+    future-dated or NaN-stamped one is a problem, and so is a partial one: the report lists the config's ``configured``
+    apps, and one without some of them (a probe run for a few apps) hides their failure."""
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        stamp, apps = float(data["time"]), data["apps"]
+        failed = sorted(app for app, ok in apps.items() if ok is not True)
+        configured = set(data.get("configured") or [])
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        return "점검 결과 파일을 읽지 못했습니다", None, "unreadable"
+    if not apps:
+        return "점검한 앱이 없습니다", None, "empty"
+    if not -60 <= now - stamp <= LOGIN_STALE_S:  # False for NaN too
+        age = now - stamp
+        return (f"마지막 결과가 {age / 3600:.0f}시간 전입니다" if age > 0 else "결과의 시각이 미래이거나 읽을 수 없습니다"), None, "stale"
+    missing = sorted(configured - set(apps))
+    if missing:
+        return f"일부 앱만 점검됐습니다(빠진 앱: {', '.join(missing)})", stamp, "partial"
+    return (f"로그인 실패한 앱: {', '.join(failed)}" if failed else None), stamp, "failed " + ",".join(failed)
+
+
+NAME = re.compile(r"[A-Za-z0-9.-]+")
+
+
+def watch_config_error(line: list[str]) -> str | None:
+    """Why a drift or logincheck line cannot be run, else None."""
+    if line[1] == "logincheck":
+        return None if len(line) == 3 else "logincheck 줄은 `<이름> logincheck <상태 파일>` 형식이어야 합니다"
+    sources = line[3].split(",") if len(line) > 3 and line[3] != "-" else []
+    if len(line) < 4 or not all(NAME.fullmatch(n) for n in [*sources, *line[4:]]):
+        return "drift 줄은 `<이름> drift <ssh 대상> <시간원,...|-> [<옛 이름> ...]` 형식이고 이름은 영문자·숫자·점·하이픈이어야 합니다"
+    return None
+
+
+def check_watch(line: list[str], row: dict) -> None:
+    name, kind = line[0], line[1]
+    error = watch_config_error(line)
+    if error:  # never a silent skip: say it on stderr and alert like any other problem
+        print(f"{name}: {kind} config error: {error}", file=sys.stderr, flush=True)
+        alert_streak(name, row, error, "감시 설정", kind="config")
+        return
+    if kind == "logincheck":
+        now = time.time()
+        problem, stamp, cause = login_problem(Path(line[2]), now)
+        # a report older than one probe period is stuck: count guard runs, so a dead probe's last FAIL still alerts soon
+        alert_streak(name, row, problem, "Account 로그인 점검", stamp if stamp and now - stamp <= LOGIN_PROBE_S else None, cause)
+    else:
+        expected = set() if line[3] == "-" else {n.lower().rstrip(".") for n in line[3].split(",")}
+        alert_streak(name, row, drift_problem(ssh(line[2], " ".join(["drift", *line[4:]])), expected), "시간원·옛 이름 점검")
 
 
 def plus_minutes(hhmm: str, minutes: int) -> str:
@@ -322,6 +486,13 @@ def main() -> int:
               if isinstance(row, dict) and row.get("source") != "local"}
     now = now_hhmm()
     updates_only = {}
+    monitors_file = STATE / "monitoring-health.json"  # kept out of status.json, which Fleet reads by role
+    try:
+        monitors = json.loads(monitors_file.read_text(encoding="utf-8"))
+        if not isinstance(monitors, dict):
+            monitors = {}
+    except (OSError, ValueError):
+        monitors = {}
     for raw in CONFIG.read_text(encoding="utf-8").splitlines():
         line = raw.split("#", 1)[0].split()
         if not line:
@@ -331,6 +502,18 @@ def main() -> int:
                 updates_only[line[0]] = update_report(ssh(line[2], "updates"))
             except Exception as exc:  # noqa: BLE001 - like the other lines, one bad line never stops the rest
                 print(f"{line[0]}: updates failed: {exc!r}", flush=True)
+            continue
+        if line[1:2] in (["drift"], ["logincheck"]):  # D-1021
+            try:
+                check_watch(line, monitors.setdefault(f"{line[0]} {line[1]}", {}))
+            except Exception as exc:  # noqa: BLE001
+                print(f"{line[0]}: {line[1]} check failed: {exc!r}", flush=True)
+            continue
+        if line[1:2] == ["monitoring"]:  # <name> monitoring <https-url> [<ca-file>]; one failing line never stops the rest
+            try:
+                check_monitoring(line[0], line[2], line[3] if len(line) > 3 else None, monitors.setdefault(line[0], {}))
+            except Exception as exc:  # noqa: BLE001
+                print(f"{line[0]}: monitoring check failed: {exc!r}", flush=True)
             continue
         entry = status.setdefault(line[0], {})
         entry["recovery"] = None
@@ -368,6 +551,12 @@ def main() -> int:
         pass  # A missing local report is shown as unverified by Fleet, never synthesized as healthy.
     for name, report in updates_only.items():  # after the local report, which replaces the site row
         status.setdefault(name, {"source": "local"})["updates"] = report  # rebuilt every run, like the local row
+    monitors_tmp = monitors_file.with_suffix(".json.tmp")  # same directory, so the replace is atomic
+    try:
+        monitors_tmp.write_text(json.dumps(monitors, sort_keys=True) + "\n", encoding="utf-8")
+        os.replace(monitors_tmp, monitors_file)
+    except OSError as exc:  # alert counters restart from zero; status.json must still be written
+        print(f"rosy-host-guard: monitoring state not saved: {exc!r}", file=sys.stderr, flush=True)
     tmp = status_file.with_suffix(".tmp")
     tmp.write_text(json.dumps(status, indent=1, sort_keys=True) + "\n", encoding="utf-8")
     os.replace(tmp, status_file)

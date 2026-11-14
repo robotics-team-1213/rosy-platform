@@ -479,7 +479,8 @@ def test_descend_guard_frac_really_slows_the_descent_and_only_it():
     def library(plan):
         return gp.Planner(dict(plan, pick=point, place=point, keep_out=None)).library()["chunks"]
 
-    normal, slow = library(cfg["plan"]), library(dict(cfg["plan"], descend_guard_frac=0.42))
+    # 0.30, not 0.42: 90ba3fd74f floors slow-motion acceleration (eased 0.75), so 0.42 now slows only 1.48x
+    normal, slow = library(cfg["plan"]), library(dict(cfg["plan"], descend_guard_frac=0.30))
     assert len(slow["descend_pick"]) > 1.5 * len(normal["descend_pick"])
     assert slow["descend_pick"][-1][:5] == pytest.approx(normal["descend_pick"][-1][:5], abs=0.01)
     assert len(slow["lift_pick"]) == len(normal["lift_pick"])

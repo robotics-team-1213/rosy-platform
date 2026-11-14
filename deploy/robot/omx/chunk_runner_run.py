@@ -38,11 +38,12 @@ from chunk_runner_settle import (  # noqa: E402, F401
 from episode_recorder import Recorder  # noqa: E402
 import joint_jitter  # noqa: E402
 import joint_push  # noqa: E402
+import runner_speed  # noqa: E402
 import runner_strain  # noqa: E402
 
 FOLLOW_STOP, FOLLOW_STOP_S = 25.0, 1.0
 HEALTH_PERIOD_S = 1.0
-CONTACT_CHUNKS = ("descend", "grasp", "release")
+CONTACT_CHUNKS = runner_speed.CONTACT_CHUNKS
 PACE_LAG, PACE_RISE, PACE_MAX_S = (prm.default(f"runner.{k}") for k in ("pace_lag", "pace_rise", "pace_max_s"))
 _BODY_NAMES = tuple(NAMES[:5])
 
@@ -76,7 +77,9 @@ class Runner:
         self.live, self.health_present, self.samples, self.grip_from, self.holding = live, None, [], None, False
         self.recorder, self.operating_context, self._lib_digest_cache = Recorder(), operating_context, None
         self.trend, self.trace, self.jitter_buf, self.damped_ticks = [], None, [], 0
-        self._damp_cooldown = 0
+        self._damp_cooldown, self.sway_peak, self.pitch_hold = 0, {}, 0.0
+        self.speed, self.speed_low, self.speed_out, self.speed_base, self.speed_phase = 1.0, 1.0, None, None, 0.0
+        self.speed_queue = None
         self.jitter = {"shaking": False, "max_std": 0.0, "max_flips_hz": 0.0, "max_p2p": 0.0, "flagged": []}
         self.ensembler = TemporalChunkEnsembler(coeff=0.08, vmax=GUARD_UNITS_PER_S, fps=fps)
 
@@ -128,6 +131,8 @@ class Runner:
         self.fault, self.holding = reason, bool(self.holding and present[5] > self.target[5] + EMPTY_MARGIN)
         self.chunk, self.played, self.jog_path = None, [], []
         self.pace_floor, self.paced, self.pace_last, self.trend = 0.0, 0, None, []
+        # stop exactly where the arm is (no leftover wrist nudge); the failed chunk keeps its own sway record
+        self.pitch_hold, sway, self.sway_peak, self.speed_low = 0.0, self.sway_peak, {}, 1.0
         if chunk == "park":
             self.last_input = self.clock()
             self._stop_after_park = None
@@ -137,6 +142,7 @@ class Runner:
             error=self.fault,
             contact=True,
             present=present,
+            **({"sway": sway} if sway else {}),
         )
 
     def strained(self, sent, present):
@@ -148,6 +154,12 @@ class Runner:
         if not self.jitter.get("shaking") and self.ticks % 3 != 0:
             return self.jitter
         return joint_jitter.live_window(self.jitter_buf, self.params)
+
+    def _pitch_held(self, descending: bool) -> list:
+        """The target with wrist_flex nudged to hold the jaw pitch (joint_jitter.pitch_hold_step; off by default)."""
+        last = getattr(self, "last_present", None) if descending else None
+        self.pitch_hold = joint_jitter.pitch_hold_step(self.pitch_hold, self.target, last, self.params)
+        return [*self.target[:3], self.target[3] + self.pitch_hold, *self.target[4:]] if self.pitch_hold else self.target
 
     def tick(self) -> None:
         pace_lag, pace_rise = (
@@ -167,7 +179,7 @@ class Runner:
         elif self.queue:
             if self.pace_last is not None:
                 self.pace_floor = max(self.pace_floor, self.lag)
-            raw_target = self.queue.pop(0)
+            raw_target = runner_speed.take(self)
             if self.jitter.get("shaking") or (self.pace_last is not None and self.queue):
                 if self.jitter.get("shaking") and self.queue:
                     self._damp_cooldown = 3
@@ -189,21 +201,29 @@ class Runner:
             if self.chunk is not None:
                 self.played.append(list(self.target))
         self.trend = [] if self.chunk is None and not self.jog_path else self.trend
-        sent = self.robot.send_action(dict(zip(NAMES, self.target)))
+        vertical = self.chunk is not None and self.chunk.startswith(joint_jitter.SWAY_CHUNKS) and len(self.target) == 6
+        sent = self.robot.send_action(dict(zip(NAMES, self._pitch_held(vertical and self.chunk.startswith("descend") and "lift" not in self.chunk))))
         present = self.present()
         full_sent = isinstance(sent, dict) and all(n in sent for n in NAMES)
-        self.jitter_buf.append(
-            {
-                "t": self.clock(),
-                "chunk": self.chunk,
-                "target": list(self.target),
-                "sent": [float(sent[n]) for n in NAMES] if full_sent else None,
-                "present": list(present),
-            }
-        )
+        row = {
+            "t": self.clock(),
+            "chunk": self.chunk,
+            "target": list(self.target),
+            "sent": [float(sent[n]) for n in NAMES] if full_sent else None,
+            "present": list(present),
+        }
+        if vertical:
+            row["tcp"] = joint_jitter.tcp_error(self.target, present)
+        self.jitter_buf.append(row)
         if len(self.jitter_buf) > max(60, round(2.0 * self.fps) + 2):
             del self.jitter_buf[: -max(60, round(2.0 * self.fps) + 2)]
         self.jitter = self._eval_jitter()
+        sway = joint_jitter.sway_window(self.jitter_buf, self.params) if vertical else None
+        if sway:  # observation only: recorded in the chunk receipt, does not drive damping (2026-11-13 panel)
+            peak = self.sway_peak
+            for key in ("radial_mm", "pitch_deg"):
+                peak[key] = max(peak.get(key, 0.0), sway[key])
+            peak["swaying"] = peak.get("swaying", False) or sway["swaying"]
         if self.trace:
             load = self.__dict__.pop("load_new", None)
             self.trace(
@@ -213,6 +233,7 @@ class Runner:
                     "target": [round(v, 3) for v in self.target],
                     "sent": [round(float(sent[n]), 3) for n in NAMES] if full_sent else None,
                     "present": [round(v, 3) for v in present],
+                    "s": round(self.speed, 3),
                     "pwm": getattr(getattr(self.robot, "motion", None), "effort_pwm", None) or {},
                     **({"load": load} if load else {}),
                 }
@@ -294,8 +315,10 @@ class Runner:
             )
             if reason:
                 self.fault, self.queue, self.target = reason, [], present[:5] + [self.target[5]]
-                chunk, self.chunk = self.chunk, None
-                self.report(command=f"run {chunk}" if chunk else "fault", ok=False, error=reason, present=present)
+                chunk, self.chunk, self.pitch_hold, sway, self.sway_peak = self.chunk, None, 0.0, self.sway_peak, {}
+                self.speed_low = 1.0
+                self.report(command=f"run {chunk}" if chunk else "fault", ok=False, error=reason, present=present,
+                            **({"sway": sway} if sway else {}))
                 return
             self.samples = (self.samples + [(list(self.target), present, self.health["pwm"])])[-4:]
             push = joint_push.pushing(

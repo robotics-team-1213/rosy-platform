@@ -64,6 +64,7 @@ def observe(cell, config: dict, calibration: dict, site: str, roi, catalog: list
         o["raw_m"] = [
             c / 1000 + d for c, d in zip(o["centre_mm"], config["sites"][site].get("grip_offset_m", (0.0, 0.0)))
         ]
+        o["layers_below"] = config["sites"][site].get("layers_below", 0)  # the site is a stack's top: cell_finger_room
     near = cell_objects.foreground(img, roi, params=config.get("params"), surface_lab=lab)
     for p in config["sites"][site].get("markings_px", []):
         cv2.fillPoly(near, [np.asarray(p, np.int32) - [roi[0], roi[1]]], 0)
@@ -71,6 +72,17 @@ def observe(cell, config: dict, calibration: dict, site: str, roi, catalog: list
     for p in config["sites"][site].get("markings_px", []):
         cv2.fillPoly(mask, [np.asarray(p, np.int32) - [roi[0], roi[1]]], 0)
     return img, mask, objects, None
+
+
+def past_pan_limit(config: dict, point_m) -> float | None:
+    """The pan (deg) to a point outside the plan's joint1 limit, else None. 2026-11-13 arm_s: a box at -161 deg (limit 149) was
+    refused as packed and the push meant for packed boxes could never reach it either.
+    shortcut: the pan alone, from the base axis; radius and height are left to the planner's IK, which runs later."""
+    limits = (config.get("plan") or {}).get("limits", {}).get("joints_rad", {}).get("joint1")
+    if not limits:
+        return None
+    pan = math.atan2(point_m[1], point_m[0])
+    return None if limits[0] <= pan <= limits[1] else round(math.degrees(pan), 1)
 
 
 def plan_pick(
@@ -158,6 +170,8 @@ def choose(
             why = w
         elif px is None or not (roi[0] + 12 <= px[0] <= roi[2] - 12 and roi[1] + 12 <= px[1] <= roi[3] - 12):
             why = "not inside the camera view"
+        elif (pan := past_pan_limit(config, o["raw_m"])) is not None:
+            why = f"out of reach: pan {pan} deg past the joint1 limit"
         elif not square_entry(entries, o):
             entry = entries[o["object"]]
             ends = o["long_axis_deg"] if across(entry) == entry["length_mm"] else None
@@ -172,7 +186,8 @@ def choose(
                     (o, room),
                 )
             if room["margin_mm"] is None:
-                why = f"no finger room: {room['free_mm'][0]} / {room['free_mm'][1]} mm free beside it"
+                why = (("edge of view: a side is past the camera's view, " if room.get("unseen") else "no finger room: ")
+                       + f"{room['free_mm'][0]} / {room['free_mm'][1]} mm free beside it")
         if why:
             refused.append(
                 {"centre_mm": o["centre_mm"], "object": o.get("object"), "colour": o.get("colour"), "why": why}
