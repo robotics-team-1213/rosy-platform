@@ -2,8 +2,27 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 import re
+import subprocess
+import sys
 from urllib.parse import urlsplit
+
+
+def apply_time_source(source, path, write_atomic, *, restart: bool) -> None:
+    """D-859: follow the site NTP server named on the card; a clock problem never holds provisioning."""
+    if not source:
+        return
+    here = Path(__file__).resolve().parent
+    # Installed image: beside this file. Source tree: deploy/hosts/common.
+    sys.path[:0] = [str(here), str(here.parents[2] / "hosts/common")]
+    try:
+        from rosy_time_sync import configuration
+        write_atomic(path, configuration("client", [source], []), 0o644)
+        if restart:  # before rosy-runtime.target, so the makestep window precedes any workload
+            subprocess.run(["systemctl", "restart", "--no-block", "chrony.service"], check=False, timeout=30)
+    except (ImportError, OSError, ValueError, subprocess.SubprocessError) as exc:
+        print(f"rosy-first-boot: time source not applied: {exc}", file=sys.stderr)
 
 
 def merge_core_overlay(text: str | None, record: dict, fleet_bootstrap: dict | None = None) -> str:

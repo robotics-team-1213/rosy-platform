@@ -2,7 +2,10 @@
 
 ## 공통 시간 동기화 (D-859)
 
-관제 PC가 현장 NTP 서버이고 모델·AI·OMX·카메라 호스트와 Pinky는 클라이언트다.
+현장 NTP 서버는 R 호스트(`rosy-fleet-r`)이고 모델·AI·OMX·카메라 호스트와 Pinky는 클라이언트다.
+클라이언트의 시간원은 `rosy-fleet-r.local` 하나다(2026-11-13 적용). 호스트 이름을 바꾸거나 옮기면
+모든 클라이언트의 chrony 시간원을 새 이름으로 다시 설치한다. 이름이 사라진 시간원은 오류 없이
+시간원 0개가 되어 시계가 어긋난다([교훈](../../docs/solutions/runtime-errors/clock-skew-rejected-account-tokens-after-time-source-name-vanished-2026-11-13.md)).
 기준과 수용 조건은 [D-859](../../docs/adr/D-859-shared-utc-time-synchronization.md),
 전체 기기의 동일한 단일 endpoint 결정은 [D-861](../../docs/adr/D-861-one-identical-ntp-endpoint-for-all-devices.md)다.
 실제 서버 이름·주소·CIDR은 호스트에만 둔다. 아래 자리표시자는 운영 값으로 바꾼다.
@@ -39,6 +42,9 @@
    python3 deploy/hosts/common/rosy_time_sync.py check
    chronyc -N sources -v
    ```
+
+   SD를 새로 쓰는 Pinky는 `prepare-rosy-sd.ps1 -TimeSource <site-ntp-name>`으로 첫 부팅에 같은 설정을
+   받는다(이미지에 이름을 굽지 않는다). 확인은 `chronyc sources`다.
 
    새 Pinky native runtime에는 `rosy_time_sync.py`가 함께 배포된다. 저장소가 없는 장치는
    `/opt/rosy/native-runtime/rosy_time_sync.py` 또는 승인된 release의 native 사본을 사용한다.
@@ -121,6 +127,8 @@ git fetch origin && python tools/remote/update_status.py
 ```
 
 `STUCK`은 업데이트 유닛이 실패했거나 6시간 안에 정상 판정(`switched`·`up_to_date`·`idle`·`active`)이 없다는 뜻이다. 2026-10-23에는 관제 PC OMX 도구가 4일(교체된 OpenRB 시리얼), AI PC 상황 서비스가 3일(끊긴 fetch가 남긴 `mirror.git/shallow.lock`) 멈춰 있었다. `OFF`는 타이머가 꺼진 경로이고, 누가 왜 껐는지 확인하기 전에 켜지 않는다.
+
+시간과 현장 updater도 같이 본다(2026-11-13). chrony가 있는 호스트는 쓸 수 있는 시간원(`chronyc -n sources`의 `*`·`+`·`-`)이 0개면 `FAIL`이고, 설정된 server 이름이 풀리지 않으면 `note`로 이름을 적는다(모델 PC가 사라진 호스트 이름을 4일 가리킨 사례). 현장 호스트는 `/var/lib/rosy/site-autoupdate.json`을 읽어, 살아 있는 hold는 `HELD`, 만료됐지만 계속 막고 있는 hold와 `refused`·`recovery-*` 마지막 실행은 이유와 함께 `FAIL`로 보인다. `FAIL`은 exit 1이다.
 
 새 PC를 붙이거나 장치를 바꿀 때:
 

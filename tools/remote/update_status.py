@@ -26,6 +26,17 @@ last fetched; a checkout with no origin/main (read HEAD instead) or a fetch olde
 `--ref-stale-hours` (default 12) is STALE-REF and exits 1. When a robot CD snapshot is installed on
 this PC (`%LOCALAPPDATA%/Rosy/robot-cd`), the snapshot files that differ from that ref are listed as a
 WARN, which does not change the exit code.
+
+Time and site updater (2026-11-13): a host with chrony is FAIL when it has no usable time source
+(`chronyc -n sources` state `*`, `+` or `-`); configured server names that do not resolve are noted.
+On the site host the auto-updater state is read: an active hold shows as HELD, a hold past its
+expiry (still blocking) or a `refused`/recovery last run with its reason is FAIL. FAIL exits 1.
+
+Retired names (2026-11-13): chrony.conf, /etc/hosts, receiver.json and the Account authority.json are searched for the
+`retired_hostnames` of the private site map (full hostnames only; none or no map: one note; backup-named files and symlinks skipped); a hit is FAIL `retired-name` with
+the path only, an unreadable path a note. Malformed probe data is a FAIL for that host; on a `site` host a missing site
+state is a note, an unreadable one FAIL; a hold `until` without a zone or unparsable is expired (absent: set time + 24 h).
+D-1021 (update_drift.py): FAIL `account-key-drift`, `host-guard`.
 """
 from __future__ import annotations
 
@@ -36,13 +47,16 @@ import hashlib
 import importlib.util
 import json
 import os
+import shlex
 import subprocess
 import sys
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import lab_hosts
+import update_drift
 # by file, not sys.path: putting tools/release on sys.path lets any script there shadow a repo package
 # (tools/release/deploy.py did, 2026-10-26; renamed deploy_cli.py, test_no_tool_script_shadows_a_repo_package)
 _spec = importlib.util.spec_from_file_location('robot_cd', Path(__file__).resolve().parents[1] / 'release/robot_cd.py')
@@ -63,7 +77,8 @@ for u in $(systemctl --user list-unit-files --no-legend 'rosy-*' 2>/dev/null | a
   [ -z "$last" ] && last=$(printf '%s\n' "$log" | tail -1)
   echo "unit $u $result $timer ${healthy:--} $last"
 done
-for f in $(systemctl --user --failed --no-legend --plain 2>/dev/null | awk '{print $1}' | grep '^rosy-'); do echo "failed $f"; done
+# user units, plus system units (the site host's signed-release timers, e.g. the Account login check)
+for f in $({ systemctl --user --failed --no-legend --plain; systemctl --failed --no-legend --plain; } 2>/dev/null | awk '{print $1}' | grep '^rosy-'); do echo "failed $f"; done
 for u in $(systemctl --user list-units --no-legend --plain --type=service --state=active 'rosy-*' 'pinky-*' 2>/dev/null | awk '{print $1}'); do
   envs=$(systemctl --user show "$u" -p EnvironmentFiles --value | grep -oE '/[^ ]+' | grep -v '^/dev')
   # with bash -s, stdin is the rest of this script: never let a command read it
@@ -91,6 +106,37 @@ done
 for c in "$@"; do
   if [ -f "$HOME/$c" ]; then echo "copy $c $(tr -d '\r' < "$HOME/$c" | sha256sum | cut -c1-64)"; else echo "copy $c missing"; fi
 done
+# chrony: usable sources (state * + -) of the total, and configured names that do not resolve
+if command -v chronyc >/dev/null 2>&1; then
+  src=$(chronyc -n sources 2>/dev/null)
+  names=$(cat /etc/chrony/chrony.conf /etc/chrony/conf.d/*.conf /etc/chrony/sources.d/*.sources /etc/chrony.conf 2>/dev/null | awk '$1=="server"||$1=="pool"{print $2}')
+  bad=; for n in $names; do getent hosts "$n" >/dev/null 2>&1 || bad="$bad,$n"; done
+  echo "chrony $(printf '%s\n' "$src" | awk '$1 ~ /^[\^=][*+-]/' | wc -l) $(printf '%s\n' "$src" | awk '$1 ~ /^[\^=]/' | wc -l) ${bad#,}"
+fi
+# the site auto-updater's state (hold, last run), one JSON line
+sf=/var/lib/rosy/site-autoupdate.json
+if [ -e "$sf" ] || sudo -n test -e "$sf" </dev/null 2>/dev/null; then
+  out=$({ sudo -n cat "$sf" 2>/dev/null || cat "$sf" 2>/dev/null; } </dev/null | python3 -c 'import json,sys;print("sitestate",json.dumps(json.load(sys.stdin)))' 2>/dev/null)
+  [ -n "$out" ] && echo "$out" || echo "sitestate unreadable"
+else
+  echo "sitestate missing"
+fi
+# retired host names (RETIRED is prepended from services.yaml): report only the file path, never its content
+# An empty list matches nothing (an empty grep pattern matches every line); set -f keeps a name from globbing.
+if [ -n "$RETIRED" ]; then
+  set -f
+  for f in /etc/chrony/chrony.conf /etc/hosts /etc/rosy/account/authority.json $(find ~/.config/rosy -maxdepth 5 -type f -name receiver.json 2>/dev/null); do
+    [ -L "$f" ] && continue
+    case "$f" in *.bak*|*backup*|*before-*|*.orig*|*rosy-backup*|*rosy-source-repair*) continue;; esac
+    [ -e "$f" ] || sudo -n test -e "$f" </dev/null 2>/dev/null || continue
+    if txt=$(head -c 1048576 "$f" 2>/dev/null </dev/null || sudo -n head -c 1048576 "$f" 2>/dev/null </dev/null); then
+      printf '%s\n' "$txt" | grep -qiF -f <(printf '%s\n' $RETIRED) && echo "retired $f"
+    else
+      echo "retired-unreadable $f"  # never counted as clean
+    fi
+  done
+  set +f
+fi
 D=docker; docker images -q >/dev/null 2>&1 </dev/null || D='sudo -n docker'
 $D images --format 'image {{.Repository}} {{.Tag}}' </dev/null 2>/dev/null
 true
@@ -126,6 +172,8 @@ def parse(text: str, now: float, stale_hours: float) -> dict:
     host = dict(gate='unknown', channels=[], failed=[], sources=[], files={}, instances={}, copies={}, paths={}, topology={})
     for raw in text.splitlines():
         kind, _, rest = raw.partition(' ')
+        if update_drift.parse(host, kind, rest):
+            continue
         if kind == 'topology':
             try:
                 report = json.loads(rest)
@@ -134,6 +182,29 @@ def parse(text: str, now: float, stale_hours: float) -> dict:
                 host['topology'] = report
             except ValueError:
                 host['topology'] = {'error': 'invalid workcell selection report'}
+        elif kind == 'chrony':
+            fields = rest.split(' ')
+            try:
+                if len(fields) < 2:
+                    raise ValueError('chrony report needs usable and total')
+                bad = fields[2] if len(fields) > 2 else '-'
+                host['chrony'] = dict(usable=int(fields[0]), total=int(fields[1]),
+                                      unresolved=[n for n in bad.split(',') if n and n != '-'])
+            except ValueError:
+                host['chrony'] = dict(error=f'malformed chrony report: {rest.strip()[:60]!r}')
+        elif kind == 'retired':
+            host.setdefault('retired', []).append(rest.strip())
+        elif kind == 'retired-unreadable':
+            host.setdefault('retired_unreadable', []).append(rest.strip())
+        elif kind == 'sitestate':
+            if rest.strip() == 'missing':
+                host['site_missing'] = True
+            else:
+                try:
+                    state = json.loads(rest)
+                except (ValueError, RecursionError):
+                    state = None
+                host['site'] = state if isinstance(state, dict) else {'unreadable': True}
         elif kind == 'image':
             host.setdefault('images', []).append(rest.strip().split(' ')[0])
         elif kind == 'gate':
@@ -166,6 +237,7 @@ def parse(text: str, now: float, stale_hours: float) -> dict:
                     step = json.loads(last[last.index('{'):])
                 except ValueError:
                     step = {}
+            step = step if isinstance(step, dict) else {}
             healthy_at = _number(healthy)
             age = None if healthy_at is None else round((now - healthy_at) / 3600, 1)
             if timer == 'disabled':
@@ -181,7 +253,60 @@ def parse(text: str, now: float, stale_hours: float) -> dict:
     return host
 
 
-FAILING = {'UNDECLARED', 'MISSING', 'DOWN', 'UNEXPECTED', 'DRIFT', 'DISCONNECTED', 'CONFIGURATION'}
+FAILING = {'FAIL', 'UNDECLARED', 'MISSING', 'DOWN', 'UNEXPECTED', 'DRIFT', 'DISCONNECTED', 'CONFIGURATION'}
+
+
+def _when(text) -> float | None:
+    """Epoch seconds of an ISO time with a zone; None for anything else (a naive time is not comparable)."""
+    try:
+        stamp = datetime.fromisoformat(text)
+        return stamp.timestamp() if stamp.tzinfo is not None else None
+    except (TypeError, ValueError, OverflowError, OSError):
+        return None
+
+
+def clock_and_site(host: dict, now: float, host_roles=()) -> list:
+    """(verdict, name, detail) for NTP sources and the site updater's hold and refusals; FAIL exits 1."""
+    findings = []
+    chrony = host.get('chrony')
+    if chrony and chrony.get('error'):
+        findings.append(('FAIL', 'chrony', chrony['error']))
+    elif chrony:
+        if chrony['usable'] == 0:
+            findings.append(('FAIL', 'chrony', f'0 usable of {chrony["total"]} time sources'))
+        if chrony['unresolved']:
+            findings.append(('note', 'chrony', 'server names that do not resolve: ' + ', '.join(chrony['unresolved'])))
+    if 'rosy-site-account-login-check.service' in host['failed']:
+        findings.append(('FAIL', 'account-login-check', 'an Account-backed app failed the 30-minute login check (journalctl -u rosy-site-account-login-check)'))
+    for path in host.get('retired', []):
+        findings.append(('FAIL', 'retired-name', f'{path} still names a retired host (private site map retired_hostnames)'))
+    for path in host.get('retired_unreadable', []):
+        findings.append(('note', 'retired-name', f'{path} exists but could not be read; not checked'))
+    site = host.get('site') if isinstance(host.get('site'), dict) else {}
+    if host.get('site_missing') and 'site' in host_roles:
+        findings.append(('note', 'site-autoupdate', 'no state file yet (a new install, or the updater has not run)'))
+    if site.get('unreadable'):
+        findings.append(('FAIL', 'site-autoupdate', 'state file is unreadable or not a JSON object'))
+    hold = site.get('hold')
+    if isinstance(hold, dict):
+        since = _when(hold.get('time'))
+        # same rule as deploy/site site_update_io.hold_until: no `until` key means set time + 24 h; an `until`
+        # that is present but unparsable, not a string or without a zone is expired
+        if 'until' in hold:
+            until = _when(hold['until'])
+        else:
+            until = since + 86400 if since is not None else None
+        age = f'{(now - since) / 3600:.1f}h' if since is not None else 'unknown age'
+        expired = until is None or until <= now
+        findings.append(('FAIL' if expired else 'HELD', 'site-autoupdate',
+                         f'hold {"EXPIRED but still blocking" if expired else "active"} (set {age} ago): {hold.get("reason")}'))
+    last = site.get('last_run')
+    for key, value in (('hold', hold), ('last_run', last)):
+        if value is not None and not isinstance(value, dict):
+            findings.append(('FAIL', 'site-autoupdate', f'state file {key} is not an object'))
+    if isinstance(last, dict) and last.get('result') in ('refused', 'recovery-pending', 'recovery-required'):
+        findings.append(('FAIL', 'site-autoupdate', f'last run {last["result"]}: {last.get("reason", "see journal")}'))
+    return findings
 
 
 def load_inventory(path: Path | None = None) -> dict:
@@ -195,6 +320,9 @@ def load_inventory(path: Path | None = None) -> dict:
             if not isinstance(entry.get('run'), str):  # YAML 1.1 reads a bare off as false
                 raise SystemExit(f'{path}: {name} run must be a quoted string')
     return data['roles']
+
+
+retired_hostnames = update_drift.retired_hostnames  # (names, note) from the private site map, never a tracked file
 
 
 def roles(config: dict) -> dict:
@@ -386,8 +514,13 @@ def main() -> None:
     args = parser.parse_args()
     stuck = False
     inventory = load_inventory()
+    retired, retired_note = retired_hostnames()
+    if retired_note:
+        print(f'note      {retired_note}')
     config = lab_hosts.load()
     role_of = roles(config)
+    site_target = next((t for t, r in role_of.items() if 'site' in r), None)
+    issuer_kids = update_drift.IssuerKeys([*SSH, '--', site_target] if site_target else None)
     declarations = {target: declared_units(inventory, host_roles) for target, host_roles in role_of.items()}
     targets = probe_targets(config)
     platform = Path(__file__).resolve().parents[2]
@@ -426,7 +559,7 @@ def main() -> None:
         copies = sorted({path for entry in declared.values() for path in (entry.get('copies') or {})})
         # bytes, not text: Windows text mode would send CRLF into bash
         topology = Path(__file__).with_name('host_topology.py').read_text(encoding='utf-8')
-        probe = PROBE + "\npython3 - <<'ROSY_TOPOLOGY'\n" + topology + '\nROSY_TOPOLOGY\n'
+        probe = 'RETIRED=' + shlex.quote(' '.join(retired)) + '\n' + PROBE + update_drift.PROBE + "\npython3 - <<'ROSY_TOPOLOGY'\n" + topology + '\nROSY_TOPOLOGY\n'
         done = subprocess.run([*SSH, '--', target, 'bash -s -- ' + ' '.join(copies)], input=probe.encode(),
                               capture_output=True, timeout=120)
         if done.returncode:
@@ -446,6 +579,11 @@ def main() -> None:
         for src in host['sources']:
             if src['kind'] != 'other':
                 print(f'  {src["kind"]:7} {src["unit"]}: {src["where"]}')
+        extra = clock_and_site(host, time.time(), role_of.get(target, ()))
+        extra += update_drift.findings(host, role_of.get(target, ()), time.time(), issuer_kids)  # before printing
+        for verdict, unit, detail in extra:
+            print(f'  {verdict:10} {unit}: {detail}')
+        stuck |= any(f[0] in FAILING for f in extra)
         if target not in role_of:
             print('  (no role in private/lab-hosts.json; services.yaml not checked)')
             continue

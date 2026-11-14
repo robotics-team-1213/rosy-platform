@@ -146,6 +146,11 @@ values: pass `-AccountTrustFile` to `prepare-rosy-sd.ps1` with
 reimage keeps. A robot already in service needs the same mapping as `auth.account_trust` in
 its CORE overlay and a CORE restart, or an administrator's delivery; a card from an image
 older than this field refuses a bundle that carries it.
+Pinky clocks (D-859): pass `-TimeSource rosy-fleet-r.local` so first boot writes the chrony client
+config for the R host's site NTP server (same single-source rule as `rosy_time_sync.py --role client`;
+a reimage keeps it). A bad name is refused before the card is erased; a name chrony cannot resolve
+only leaves the robot unsynchronized, so check `chronyc sources` after the first boot. Robots already
+in service use `rosy_time_sync.py install --maintenance --role client --source <name>`.
 The issuer hostname aliases the proxy on both its edge and backend networks.
 Fleet reaches Account over the shared backend with the original issuer hostname
 and TLS verification; it does not need edge-network access or host hairpin routing.
@@ -388,6 +393,55 @@ sudo systemctl enable --now rosy-site-account-tls-renew.timer
 The renewer writes the installed pair to `/etc/rosy/account-tls` (UID10001, mode 0400) and reloads the
 proxy only after the replacement validates. Do not enable the user-level
 `rosy-account-tls-renew.timer` on the same host.
+
+### R 변경 규칙 (D-1021)
+
+R의 최종 책임자는 현장 배포 소유자(지금은 사용자)이고 에이전트 세션은 실행만 한다. R을 직접 바꾸면 만료가 있는 보류나 날짜가 있는 변경 기록(소유자·세션·대상·만료·후보 SHA·수용 기준)을 남기고 소유자가 닫는다. 어긋남은 `tools/remote/update_status.py`가 `account-key-drift`, `retired-name`, `host-guard`, 만료된 보류로 보이고, 서명 후보와 다른 실행 이미지는 자동 갱신 검증기의 거부(`site-autoupdate: last run refused`)로 보인다. 구조는 [D-1021](../../docs/adr/D-1021-one-owner-per-value-identity-in-account-placement-in-site-map.md)이다.
+
+### Account login check every 30 minutes (2026-11-13)
+
+`rosy-site-account-login-check.timer` runs `account_login_check.py` from the signed release
+(`/opt/rosy/candidate/deploy/site/`, the same path the TLS renewer uses; the R host has no site-tools channel and
+`tools/ops` is not part of a candidate). It logs in to every Account-backed app with one read-only test account the way a
+browser does and exits non-zero when any app fails, so the unit fails. `tools/remote/update_status.py` lists failed system
+units and reports `FAIL account-login-check` for it. Four outages on 2026-11-13 (a renamed host still named in chrony,
+`/etc/hosts`, a receiver issuer and redirect URIs) were found by hand; this finds them within 30 minutes.
+
+The test account `rosy-e2e-test` already exists as a viewer (grants `fleet.read`, `learning.view`, `robot.read`); it can
+change nothing. Provision the config once; it is never in the repository, root-only, and holds the password:
+
+```json
+{"issuer": "https://<account-host>", "login": "rosy-e2e-test", "password": "<set by the operator>",
+ "apps": [{"name": "fleet", "start": "https://<app-host>/login", "session": "https://<app-host>/session"}]}
+```
+
+One entry per app (Fleet console, the Learning apps, Calibration); `start` is the app's login URL and `session` the URL
+that answers 200 once logged in. Install from the verified current candidate (candidates signed before this group still verify):
+
+```sh
+sudo install -m 0400 -o root -g root /dev/null /etc/rosy/site/account-login-check.json
+sudoedit /etc/rosy/site/account-login-check.json    # the shape above
+sudo /usr/bin/python3 -I /opt/rosy/candidate/deploy/site/account_login_check.py /etc/rosy/site/account-login-check.json
+for unit in rosy-site-account-login-check.service rosy-site-account-login-check.timer; do
+  sudo install -m 0644 /opt/rosy/candidate/deploy/site/$unit /etc/systemd/system/$unit
+done
+sudo systemctl daemon-reload
+sudo systemctl enable --now rosy-site-account-login-check.timer
+```
+
+A `PASS` needs positive evidence: the session answer must be a JSON object (read up to 64 KiB; a longer body fails) with
+`authenticated: true` or a non-empty `user_id`, `account_id` or `principal_id`. `authenticated: false`, a body that is not
+a JSON object, and an empty or unmatched app list (nothing checked, exit 2) all fail. Each request times out after 10 s, so
+the unit allows 15 min (9 requests x 10 s x 7 apps is 10.5 min).
+
+The test account counts against the Account login rate limit (`operations/account/rosy_account/password_session.py`;
+`LoginRateLimited`): 5 failed logins per minute per address (`ADDRESS_FAILURES_PER_MINUTE`) and 10 per minute per login
+(`LOGIN_FAILURES_PER_MINUTE`), counted in a sliding 60 s window; a successful login is refunded. Each run logs in once per
+app, so a wrong password or an Account outage makes the sixth app of one run fail with the limiter instead of `401`, and
+every app shows FAIL at once. It clears after a minute; it is not a lasting lock. Look at the first FAIL line, not the rest.
+
+Run the script by hand first; do not enable the timer until every app prints `PASS`. The units are not in
+`deploy/hosts/services.yaml` because `update_status` audits user units only (the system TLS twin is not listed either).
 
 On the existing `site_edge` network, the proxy also owns the approved Account
 hostname as a Docker DNS alias. Approved container clients on that network use
@@ -993,6 +1047,13 @@ python3 /opt/rosy/site/site_preflight.py --site-cert <secrets>/site.crt
 python3 /opt/rosy/site/site_preflight.py --site-cert <secrets>/site.crt --json
 ```
 
+It also fails when a secrets directory an overlay mounts
+(`ROSY_SITE_MONITORING_SECRETS_DIR`, `ROSY_SITE_WORKCELL_ARM_SECRETS_DIR`,
+`ROSY_SITE_WORKCELL_CAMERA_SECRETS_DIR`, from the shell or the site env file)
+or a file in it cannot be read by uid/gid 10001 (owner 10001, or group 10001
+with `0750` directory / `0440` files). The message names the path and mode,
+never contents. Root-only `0700/0600` made Monitoring crash-loop for days.
+
 It reads `ROSY_SITE_TLS_HOST` (flag `--tls-host`, else the shell, else
 `/etc/rosy/site/site.env`) and checks: `site_cert` is a leaf (not a CA) followed by
 a CA; the leaf has a DNS SAN equal to `tls_host` (exact, case-insensitive, a
@@ -1309,6 +1370,13 @@ The updated verifier accepts historical signed candidates without the marker;
 when a tool is listed, its file and hash are always checked. A present marker
 must be literal `true`, and requires the tool and its hash. Removing or changing
 the marker also invalidates the manifest signature.
+
+Rollout order for a candidate that adds files to the signed manifest (a new unit, timer or tool): land the change on
+local `main`, then install the reviewed `verify_candidate.py` and its sibling modules on the site host from that local
+`main` through the trusted administrator path, then publish, then build and sign the candidate, and only then let the
+autoupdater fetch it. The previously installed verifier rejects a candidate that lists a file it does not know
+(`unsupported deployment file path`), so publishing first leaves the updater refusing every new candidate. The new verifier
+accepts older candidates, so rolling back to an earlier signed candidate is safe once it is installed.
 
 Before enabling updates, run the independently installed verifier against the
 running candidate, each retained rollback candidate, and the new signed candidate.
@@ -1685,6 +1753,19 @@ Both commands take the updater lock. Hold prevents new downloads, switches and
 pruning. It does not stop recovery of an already interrupted switch; recovery
 runs first. `status` shows the hold and `last_run.result=held`. Resume permits
 checks again; it does not bypass signature or runtime verification.
+
+A hold expires: `hold <reason> [--hours N]` defaults to 24 and accepts at most
+168. Expiry never releases it (it keeps blocking, fail safe); it makes `status`
+show `expired: true`, the run log `held-expired`, and `update_status.py` fail.
+A legacy hold without `until` counts as expired 24 h after it was set. The
+2026-11-09 R migration hold sat unnoticed for four days; renew with a new
+`hold` or `resume` it.
+
+`last_run.result=refused` with a `reason` (also in `update_status.py`) means the
+updater stopped on purpose and will not retry that candidate by itself. A reason
+`running candidate verification failed: fleet loaded image ID mismatch` means
+the running Fleet image is not the signed candidate's (for example a hand-made
+`docker commit`); only redeploying the signed candidate clears it.
 
 A manually installed signed version is accepted only when its manifest,
 environment tag and actual running image identities agree. After verification,
@@ -2464,7 +2545,7 @@ forget-failed·resume·run → 전체 매핑 복원)는
 | 입력 | 내용 |
 |---|---|
 | `ROSY_SITE_MONITORING_CONFIG` | [Monitoring 설정](../../operations/monitoring/README.md) YAML. root 소유, 그룹 10001, 0640 |
-| `ROSY_SITE_MONITORING_SECRETS_DIR` | `site_read`(열람자 조회 키), `fleet_upstream`(Fleet viewer 키). root 소유 0700/0600 |
+| `ROSY_SITE_MONITORING_SECRETS_DIR` | `site_read`(열람자 조회 키), `fleet_upstream`(Fleet viewer 키). 디렉터리 `root:10001` 0750, 파일 `root:10001` 0440(컨테이너 uid 10001이 읽어야 한다. 0700/0600이면 Monitoring이 재시작을 반복한다. `site_preflight.py`가 검사) |
 
 [monitoring.yaml.example](monitoring.yaml.example)을 복사하고 Fleet 포트가 다르면 그것만 고친다.
 설정의 키 이름은 `MONITORING_SITE_READ`(reader `token_env`)와 `MONITORING_FLEET_UPSTREAM`(Fleet 원천 `token_env`)로 맞춘다.
@@ -2484,6 +2565,8 @@ python3 /opt/rosy/candidate/deploy/site/site_users.py add <site-users.yaml> --pr
 `-f /opt/rosy/candidate/deploy/site/compose.monitoring.yaml`을 더한다. 순서는 pairing → omx → workcell → monitoring → Account다.
 열람은 Fleet 화면의 "시스템 상태" 링크 또는 `https://<site>/monitoring/`에서 `site_read` 키를 넣는다.
 서비스 확인은 `https://<site>/monitoring-health`다. 이 응답은 수집기 자신의 생존만 뜻한다.
+모델 PC의 `rosy-host-guard`는 `hosts.conf`의 `<이름> monitoring <https-url> [<ca파일>]` 줄로 이 주소를 10분마다 보고,
+연속 2번 2xx가 아니면 알림 웹훅으로 알린다(복구 때 한 번 더). 응답의 `last_success`(마지막 원천 수집 성공 epoch 초)가 null이거나 `GUARD_MONITORING_STALE_MIN`분(기본 15)보다 오래되면 같은 실패로 센다. 이 키가 없는 이전 Monitoring은 상태 코드만 본다.
 
 이 기능에는 overlay 한 쌍을 포함한 새 서명 candidate와 이를 아는 host verifier·updater가 필요하다.
 전용 이미지 이전의 서명 candidate(Fleet 이미지로 도는 Monitoring)도 검증·되돌림은 된다. 전용 이미지 candidate로 올라가면 Monitoring 컨테이너가 새 이미지로 다시 만들어지며 `monitoring_state` 볼륨은 그대로다.

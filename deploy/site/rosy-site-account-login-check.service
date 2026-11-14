@@ -1,0 +1,17 @@
+[Unit]
+Description=Log in to every Account-backed ROSY app the way a browser does (read-only test account)
+Documentation=file:/opt/rosy/candidate/deploy/site/README.md
+After=docker.service tailscaled.service
+
+[Service]
+Type=oneshot
+# Runs from the signed release like rosy-site-account-tls-renew.service. A failing app makes the
+# unit fail; update_status reports the failed unit. The config (test account) stays out of the release.
+ExecStart=/usr/bin/python3 -I /opt/rosy/candidate/deploy/site/account_login_check.py /etc/rosy/site/account-login-check.json
+# worst case 9 requests x 10 s x 7 apps = 10.5 min, so 15 min
+TimeoutStartSec=15min
+UMask=0077
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectSystem=full

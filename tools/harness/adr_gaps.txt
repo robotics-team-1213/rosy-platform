@@ -124,4 +124,9 @@ D-1000 reserved in another in-flight branch (refs/adr/D-1000), absent from this 
 D-1000 reserved in another in-flight branch (refs/adr/D-1000), absent from this D-1002 branch; remove when its ADR lands
 
 D-1000 reserved in another in-flight branch (refs/adr/D-1000), absent from this D-1003 branch; remove when its ADR lands
+
+D-1018 reserved in another in-flight branch (refs/adr/D-1018), absent from this D-1021 branch; remove when its ADR lands
+
+
+D-1020 reserved in another in-flight branch (refs/adr/D-1020), absent from this D-1021 branch; remove when its ADR lands
 D-1018 reserved in another in-flight branch (refs/adr/D-1018, OMX real-arm manual jog), absent from this D-1019 branch; remove when its ADR lands
