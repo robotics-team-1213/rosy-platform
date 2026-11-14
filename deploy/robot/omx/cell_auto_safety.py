@@ -202,6 +202,19 @@ def square_entry(entries: dict, o: dict) -> bool:
     return bool(e) and abs(e["length_mm"] - e["width_mm"]) < 1e-6
 
 
+def episode_binding() -> dict:
+    """run/attempt/arm ids for the episode being opened: curation joins recordings to their attempts
+    row by this id, never by time. Empty when no attempt ledger is active (the recording cannot
+    become training data)."""
+    import cell_attempts
+
+    run = cell_attempts.RUN
+    if run["run_id"] is None:
+        return {}
+    return {"run_id": run["run_id"], "arm_id": run["arm_id"],
+            "attempt_id": f"{run['run_id']}-{run['n'] + 1:03d}"}
+
+
 def open_episode(cell, config: dict, source: str, dest: str, object_id: str):
     """A raw training episode around one carry (episode_recorder.py), when config['episodes'] names a root."""
     spec = config.get("episodes")
@@ -218,6 +231,7 @@ def open_episode(cell, config: dict, source: str, dest: str, object_id: str):
                 "cameras": spec["cameras"],
                 "io": str(config.get("io", "")),
                 "payload": config.get("_payload"),
+                **episode_binding(),
             }
         )
     )
