@@ -297,7 +297,7 @@ def test_revoking_the_binding_under_a_running_goal_stops_and_cancels_it():
     stores[0].map_bindings.revoke("rosy_60", "bob", "map re-saved")
     _ticks(runner, ports)
     row = runner.view("p1")
-    assert row["reason"] == "map_frame" and row["detail"]["binding"] == "MAP_BINDING_CHANGED"
+    assert row["reason"] == "map_frame" and row["detail"]["binding"] == "MAP_BINDING_REQUIRED"  # revoked: no active binding at all
     assert ports.canceled == ["rosy_60"] and len(ports.goals) == 1
 
 
