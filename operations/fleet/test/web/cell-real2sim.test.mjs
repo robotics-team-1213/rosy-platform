@@ -17,6 +17,7 @@ import {
   cellTaskRows,
   visualCardSpecs,
   inspectorSpecs,
+  createReal2SimPipeline,
 } from "../../../../applications/fleet/web/cell/cell-real2sim.js";
 
 test("real2sim routes point to the cell-app pipeline endpoints", () => {
@@ -222,4 +223,29 @@ test("readoutPairs, loopRows, stageRows, sysidRows, surveyRows, and runRows form
   assert.match(iSpecs[0].telemetryRows[1][1], /folded=true/);
   assert.match(iSpecs[1].telemetryRows[1][1], /\[LIVE · 1초 전\]/);
   assert.match(iSpecs[2].telemetryRows[3][1], /홀드 활성/);
+});
+
+test("cell task refresh renders across the main/views module split", async () => {
+  // Guards against state left behind in one module after a split (ReferenceError in strict ES modules).
+  const node = () => ({
+    dataset: {}, style: {}, hidden: false, value: "", textContent: "", className: "",
+    append() {}, appendChild() {}, replaceChildren() {}, addEventListener() {}, remove() {},
+    setAttribute() {}, removeAttribute() {}, toggleAttribute() {},
+    querySelector: () => null, querySelectorAll: () => [],
+    classList: {add() {}, remove() {}, toggle() {}},
+  });
+  const previous = globalThis.document;
+  globalThis.document = {createElement: node, querySelectorAll: () => []};
+  try {
+    const els = {};
+    const pipeline = createReal2SimPipeline({
+      request: async () => ({tasks: [], cameras: [], summary: {}}),
+      $: (id) => (els[id] ??= node()),
+      isOperator: () => true,
+    });
+    await pipeline.refreshCellTasks();
+    assert.match(els["cell-tasks-status"].textContent, /OMX 셀 태스크 원장/);
+  } finally {
+    globalThis.document = previous;
+  }
 });

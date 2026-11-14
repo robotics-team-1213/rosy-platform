@@ -48,7 +48,11 @@ def test_handoff_and_receipt_are_frozen_and_serialize():
     {'wheel_brake_locked': False}, {'v_cmd_mps': 0.01},
 ])
 def test_unbraked_or_moving_amr_denies_claim(changes):
-    assert not evaluate_handoff_gate(_handoff(**changes), None)['cell_can_claim']
+    assert not evaluate_handoff_gate(_handoff(**({'wheel_brake_locked': True, 'bed_ready': True} | changes)), None)['cell_can_claim']
+
+
+def test_unmeasured_brake_and_bed_deny_claim():
+    assert not evaluate_handoff_gate(_handoff(), None)['cell_can_claim']
 
 
 @pytest.mark.parametrize('phase', ['CLAIMED', 'ARM_IN_BED_ZONE'])
@@ -93,19 +97,44 @@ def test_end_to_end_bay_departure_to_s3_omx_cell_contract_handoff(tmp_path):
     assert 'S2' in result['selective_pit_in']['pit_in_robot']['places']
     assert result['inhibited_gate']['amr_motion_inhibited'] is True
     assert result['omx_receipt']['phase'] == 'RELEASED'
+    assert result['omx_receipt']['simulated_success'] is True
+    assert result['omx_receipt']['physical_completion'] is False
     assert result['omx_receipt']['amr_motion_inhibited'] is False
     assert result['omx_receipt']['goal_evidence_digest'].startswith('sha256:')
     assert result['released_v_cmd_mps'] > 0.0
 
 
-def test_remote_fleet_r_cross_pc_handoff_lifecycle(tmp_path):
+def test_synthetic_omx_receipt_cannot_mutate_remote_fleet(tmp_path):
+    repo_root = Path(__file__).resolve().parents[3]
+    omx = repo_root / 'deploy/robot/omx'
+    if str(repo_root) not in sys.path:
+        sys.path.insert(0, str(repo_root))
+    if str(omx) not in sys.path:
+        sys.path.insert(0, str(omx))
+    from tools.sim.bay_departure_sim import build_world_261026_site_map, run_s3_cell_contract_handoff
+    from cell_fleet_handoff import execute_remote_fleet_r_handoff, dispatch_and_execute_fleet_r_cell_task
+
+    calls = []
+    request = lambda *args: calls.append(args) or {}
+    with pytest.raises(RuntimeError, match='SIMULATED_STAGE_CANNOT_COMPLETE_FLEET_HANDOFF'):
+        execute_remote_fleet_r_handoff(object(), fleet_r_url='https://fleet.invalid', request_fn=request)
+    with pytest.raises(RuntimeError, match='SIMULATED_STAGE_CANNOT_COMPLETE_FLEET_TASK'):
+        dispatch_and_execute_fleet_r_cell_task(object(), fleet_r_url='https://fleet.invalid', request_fn=request,
+                                               live_act_fn=lambda handoff: calls.append(handoff))
+    site, graph, bays = build_world_261026_site_map()
+    with pytest.raises(ValueError, match='synthetic bay departure cannot claim'):
+        run_s3_cell_contract_handoff(site, graph, bays, work_dir=str(tmp_path), request_fn=request)
+    assert calls == []
+
+
+def test_untrusted_remote_handoff_cannot_claim_or_release():
     repo_root = Path(__file__).resolve().parents[3]
     assert (repo_root / "tools/sim/bay_departure_sim.py").is_file()
     if str(repo_root) not in sys.path:
         sys.path.insert(0, str(repo_root))
-    from tools.sim.bay_departure_sim import build_world_261026_site_map, run_s3_cell_contract_handoff
+    from tools.sim.bay_departure_sim import build_world_261026_site_map
 
-    site, graph, bays = build_world_261026_site_map()
+    site, graph, _ = build_world_261026_site_map()
     maps = SimpleNamespace(active=lambda: (1, site, graph, None),
                            rules=SimpleNamespace(active_rules=lambda: None))
     app = FastAPI()
@@ -117,25 +146,11 @@ def test_remote_fleet_r_cross_pc_handoff_lifecycle(tmp_path):
     install_charge_bay_routes(app, SimpleNamespace(_clock=lambda: 0.0), gathered, ())
     install_pipeline_routes(app, site_maps=maps)
     client = TestClient(app)
-    calls = []
-
-    def request_fn(method, path, body):
-        calls.append((method, path, body))
-        response = client.request(method, path, json=body)
-        assert response.status_code == 200, response.text
-        return response.json()
-
-    result = run_s3_cell_contract_handoff(
-        site, graph, bays, work_dir=str(tmp_path), fleet_r_url='https://fleet-r.test',
-        request_fn=request_fn,
-    )['remote_fleet_r_handoff']
-    assert [method for method, _, _ in calls] == ['POST', 'GET', 'GET', 'POST']
-    assert calls[0][2]['phase'] == 'ARM_IN_BED_ZONE'
-    assert calls[-1][2]['phase'] == 'RELEASED'
-    assert calls[-1][2]['goal_evidence_digest'] == result['omx_receipt']['goal_evidence_digest']
-    assert result['claim_gate']['amr_motion_inhibited'] is True
-    assert result['charge_bays_locked']['amr_motion_inhibited'] is True
-    assert result['omx_receipt']['phase'] == 'RELEASED'
-    assert result['release_gate']['amr_can_depart'] is True
-    assert client.get('/api/fleet/pipeline/status').json()['omx_cell_layer']['cells']['cell_s']['gate']['amr_motion_inhibited'] is False
-    assert client.get('/api/fleet/charge-bays').json()['omx_cells']['cell_s']['gate']['amr_motion_inhibited'] is False
+    for phase in ('CLAIMED', 'ARM_IN_BED_ZONE', 'TRANSFER_DONE', 'RELEASED'):
+        response = client.post('/api/fleet/pipeline/cell-handoff', json={
+            'cell_id': 'cell_s', 'robot_id': 'amr-1', 'robot_kind': 'pinky',
+            'phase': phase, 'x': 1.0, 'y': 2.0, 'yaw': 0.0,
+            'wheel_brake_locked': True, 'bed_ready': True, 'v_cmd_mps': 0.0,
+        })
+        assert response.status_code == 409
+    assert client.get('/api/fleet/pipeline/status').json()['omx_cell_layer']['cells']['cell_s']['phase'] == 'IDLE'

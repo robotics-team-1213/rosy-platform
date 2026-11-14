@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import time
 from fastapi import HTTPException, Request
 from fleet.charge_bays import ChargeBays, bays_from_map
@@ -16,6 +18,8 @@ def install_cameras_routes(app, ctx) -> None:
     _save_ledger = ctx._save_ledger
     _is_human_detected = ctx._is_human_detected
     rules = ctx.rules
+    _ready_amr = ctx._ready_amr
+    omx_evidence_fn = ctx.omx_evidence_fn
     active_map = ctx.active_map
     # D-136: 이 모듈은 카메라 프레임을 서빙하지 않는다. 셀 카메라 미리보기는
     # POST /api/fleet/vision/lease -> Vision frame_path로만 얻는다(test_no_video_relay).
@@ -95,6 +99,8 @@ def install_cameras_routes(app, ctx) -> None:
 
     @app.post("/api/fleet/pipeline/cell-tasks/claim", dependencies=read_guard)
     async def claim_cell_task(request: Request):
+        if app.state._pipeline_ledger_fault:
+            raise HTTPException(503, detail={"code": "PIPELINE_LEDGER_UNAVAILABLE"})
         active = active_map()
         body = await request.json()
         cell_id = str(body.get("cell_id") or "cell_s")
@@ -108,28 +114,48 @@ def install_cameras_routes(app, ctx) -> None:
         if not candidates:
             return {"claimed": False, "task": None}
         task = candidates[0]
+        if type(task.get("tier")) is not int or task["tier"] not in (1, 2, 3):
+            return {"claimed": False, "task": task, "reason": "INVALID_CELL_TIER"}
+        predecessor = task.get("depends_on")
+        if predecessor and (app.state.omx_cell_tasks.get(predecessor) or {}).get("status") != "COMPLETED":
+            return {"claimed": False, "task": task, "reason": "PREVIOUS_TIER_NOT_VERIFIED"}
+        active_task = next((t for t in app.state.omx_cell_tasks.values()
+                            if t["cell_id"] == cell_id and t["status"] == "RUNNING"), None)
+        cell_state = app.state.omx_cell_states.get(cell_id) or {}
+        if active_task is not None or cell_state.get("phase") in ("ARM_IN_BED_ZONE", "HUMAN_HOLD") or cell_state.get("amr_motion_inhibited"):
+            return {"claimed": False, "task": task, "reason": "CELL_BUSY_OR_HELD"}
+        amr = _ready_amr(task)
+        if amr is None:
+            return {"claimed": False, "task": task, "reason": "AMR_BRAKE_BED_VELOCITY_UNMEASURED"}
         station = resolve_omx_cells(active[1], active[2]).get(cell_id)
         if station is None:
             raise HTTPException(404, detail={"code": "UNKNOWN_CELL"})
         robot = {
             "robot_id": task["robot_id"],
             "robot_kind": task["robot_kind"],
-            "pose": dict(task["pose"]),
-            "wheel_brake_locked": True,
-            "bed_ready": True,
-            "v_cmd_mps": 0.0,
+            "pose": dict(amr["pose"]),
+            "wheel_brake_locked": amr["wheel_brake_locked"],
+            "bed_ready": amr["bed_ready"],
+            "v_cmd_mps": amr["v_cmd_mps"],
         }
         state = {"phase": "ARM_IN_BED_ZONE", "tier": task["tier"], "robot_id": task["robot_id"], "stage_id": task["task_id"]}
         res = evaluate_omx_cell_station(station, docked_robot=robot, cell_state=state,
                                         map_version=getattr(active[2], "version", None))
+        if res["gate"].get("cell_can_claim") is not True or res.get("handoff") is None:
+            return {"claimed": False, "task": task, "gate": res["gate"]}
         app.state.omx_cell_states[cell_id] = {**state, "docked_robot": robot}
         task["status"] = "RUNNING"
+        task["amr_claim_evidence"] = dict(amr)
+        task["handoff_lease_id"] = res["handoff"].get("handoff_lease_id")
         task["claimed_at"] = round(time.time(), 3)
         _enrich_task_health(task)
         _save_ledger()
         handoff = {
             **res["handoff"],
+            "task_id": task["task_id"],
             "arm_id": task["arm_id"],
+            "tier": task["tier"],
+            "directive": task.get("directive"),
             "src_site": task["src_site"],
             "dst_site": task["dst_site"],
             "displaced_to": task.get("displaced_to"),
@@ -138,21 +164,75 @@ def install_cameras_routes(app, ctx) -> None:
 
     @app.post("/api/fleet/pipeline/cell-tasks/{task_id}/complete", dependencies=read_guard)
     async def complete_cell_task(task_id: str, request: Request):
+        if app.state._pipeline_ledger_fault:
+            raise HTTPException(503, detail={"code": "PIPELINE_LEDGER_UNAVAILABLE"})
         active = active_map()
         task = app.state.omx_cell_tasks.get(task_id)
         if task is None:
             raise HTTPException(404, detail={"code": "UNKNOWN_TASK"})
         body = await request.json()
+        if not isinstance(body, dict):
+            raise HTTPException(422, detail={"code": "INVALID_CELL_COMPLETION"})
+        try:
+            json.dumps(body, allow_nan=False)
+        except (TypeError, ValueError):
+            raise HTTPException(422, detail={"code": "INVALID_CELL_COMPLETION"}) from None
         cell_id = task["cell_id"]
         station = resolve_omx_cells(active[1], active[2]).get(cell_id)
-        phase = str(body.get("phase") or "RELEASED")
+        phase = body.get("phase")
+        if task.get("status") != "RUNNING" or phase not in ("RELEASED", "ABORTED"):
+            raise HTTPException(409, detail={"code": "CELL_TASK_NOT_RUNNING_OR_PHASE_MISSING"})
+        if phase == "RELEASED" and (_is_human_detected(cell_id)
+                                    or (app.state.omx_cell_states.get(cell_id) or {}).get("phase") == "HUMAN_HOLD"):
+            raise HTTPException(409, detail={"code": "HUMAN_HOLD_ACTIVE"})
+        amr = _ready_amr(task) if phase == "RELEASED" else task.get("amr_claim_evidence")
+        if phase == "RELEASED" and amr is None:
+            raise HTTPException(422, detail={"code": "AMR_BRAKE_BED_VELOCITY_UNMEASURED"})
+        if phase == "RELEASED":
+            trusted = omx_evidence_fn(task) if callable(omx_evidence_fn) else None
+            if not isinstance(trusted, dict):
+                raise HTTPException(422, detail={"code": "OMX_OWNER_EVIDENCE_UNAVAILABLE"})
+            receipt = body.get("receipt") if isinstance(body.get("receipt"), dict) else {}
+            stage_result = body.get("stage_result") if isinstance(body.get("stage_result"), dict) else {}
+            verification = stage_result.get("verification") if isinstance(stage_result.get("verification"), dict) else {}
+            hardware = body.get("hardware_telemetry") if isinstance(body.get("hardware_telemetry"), dict) else {}
+            if trusted != {"receipt": receipt, "stage_result": stage_result, "hardware_telemetry": hardware}:
+                raise HTTPException(422, detail={"code": "OMX_OWNER_EVIDENCE_MISMATCH"})
+            stop_event = hardware.get("stop_event") if isinstance(hardware.get("stop_event"), dict) else {}
+            evidence = {"task_id": task_id, "lease": receipt.get("handoff_lease_id"),
+                        "stage_result": stage_result, "hardware_telemetry": hardware}
+            digest = "sha256:" + hashlib.sha256(json.dumps(evidence, sort_keys=True, default=str).encode()).hexdigest()
+            verified = (type(task.get("tier")) is int and task["tier"] in (1, 2, 3)
+                        and receipt.get("physical_completion") is True
+                        and receipt.get("simulated_success") is False
+                        and receipt.get("phase") == "RELEASED"
+                        and receipt.get("stage_id") == task_id and receipt.get("cell_id") == cell_id
+                        and bool(task.get("handoff_lease_id"))
+                        and receipt.get("handoff_lease_id") == task.get("handoff_lease_id")
+                        and receipt.get("goal_evidence_digest") == body.get("goal_evidence_digest") == digest
+                        and stage_result.get("directive_id") == task_id
+                        and stage_result.get("arm_id") == task.get("arm_id")
+                        and stage_result.get("task_verified") is True
+                        and verification.get("verified") is True
+                        and verification.get("basis") == "predefined_side_and_top_target_zones"
+                        and stop_event.get("ok") is True and stop_event.get("folded") is True)
+            if cell_id == "cell_ab":
+                place = stage_result.get("place") or {}
+                z_gate = verification.get("z_gate") if isinstance(verification.get("z_gate"), dict) else {}
+                if not isinstance(place, dict):
+                    place = {}
+                verified = (verified and z_gate.get("verdict") == "PASS"
+                            and str(place.get("area") or place.get("area_id") or "").lower() == "pallet"
+                            and type(place.get("tier")) is int and place["tier"] == task["tier"])
+            if not verified:
+                raise HTTPException(422, detail={"code": "UNVERIFIED_CELL_COMPLETION"})
         robot = {
             "robot_id": task["robot_id"],
             "robot_kind": task["robot_kind"],
-            "pose": dict(task["pose"]),
-            "wheel_brake_locked": True,
-            "bed_ready": True,
-            "v_cmd_mps": 0.0,
+            "pose": dict((amr or {}).get("pose") or task["pose"]),
+            "wheel_brake_locked": bool((amr or {}).get("wheel_brake_locked")),
+            "bed_ready": bool((amr or {}).get("bed_ready")),
+            "v_cmd_mps": float((amr or {}).get("v_cmd_mps", 1.0)),
         }
         state = {
             "phase": phase,
@@ -160,7 +240,8 @@ def install_cameras_routes(app, ctx) -> None:
             "robot_id": task["robot_id"],
             "stage_id": task_id,
             "goal_evidence_digest": body.get("goal_evidence_digest"),
-            "reason": body.get("reason", "TRANSFER_CONFIRMED"),
+            "reason": body.get("reason") or ("TRANSFER_CONFIRMED" if phase == "RELEASED" else "TASK_ABORTED"),
+            "amr_motion_inhibited": phase == "ABORTED",
         }
         res = evaluate_omx_cell_station(station, docked_robot=robot, cell_state=state,
                                         map_version=getattr(active[2], "version", None))
@@ -244,4 +325,3 @@ def install_cameras_routes(app, ctx) -> None:
                                          cell_states={**getattr(app.state, "omx_cell_states", {}),
                                                       **(body.get("cell_states") or {})})
         return {**result, "dispatch": False}
-

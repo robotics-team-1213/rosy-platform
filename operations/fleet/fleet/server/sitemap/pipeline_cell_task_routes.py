@@ -10,6 +10,7 @@ from fleet.pipeline.cell_fleet_contract import contract_spec_dict, validate_boun
 from fleet.pipeline.station_zones import load_station_zones
 
 from fleet.server.sitemap.pipeline_routes import _enrich_task_health
+from fleet.server.sitemap.pipeline_task_input import checked_finite_float, checked_json_value, checked_task_pose
 
 
 def install_cell_tasks_routes(app, ctx) -> None:
@@ -24,6 +25,10 @@ def install_cell_tasks_routes(app, ctx) -> None:
     inputs = ctx.inputs
     rules = ctx.rules
     active_map = ctx.active_map
+
+    def _aborted(cell_id: str) -> bool:
+        state = app.state.omx_cell_states.get(cell_id) or {}
+        return state.get("phase") == "ABORTED" or state.get("prev_phase") == "ABORTED"
     @app.get("/api/fleet/pipeline/status", dependencies=read_guard)
     async def pipeline_status():
         active = active_map()
@@ -58,19 +63,41 @@ def install_cell_tasks_routes(app, ctx) -> None:
     async def pipeline_cell_handoff(request: Request):
         active = active_map()
         body = await request.json()
+        if not isinstance(body, dict):
+            raise HTTPException(422, detail={"code": "INVALID_CELL_HANDOFF"})
+        checked_json_value(body)
+        cell_id = body.get("cell_id")
+        current = app.state.omx_cell_states.get(cell_id) or {}
+        active_task = any(t["cell_id"] == cell_id and t["status"] in ("RUNNING", "PAUSED_HUMAN")
+                          for t in app.state.omx_cell_tasks.values())
+        if (current.get("phase") == "ABORTED" or current.get("prev_phase") == "ABORTED"
+                or (active_task and body.get("phase") != "HUMAN_HOLD")):
+            raise HTTPException(409, detail={"code": "CELL_TASK_OWNS_HANDOFF"})
+        if body.get("phase") not in ("HUMAN_HOLD", "ABORTED"):
+            raise HTTPException(409, detail={"code": "CELL_TASK_OWNS_HANDOFF"})
         station = resolve_omx_cells(active[1], active[2]).get(body.get("cell_id"))
         if station is None:
             raise HTTPException(404, detail={"code": "UNKNOWN_CELL"})
         robot = {"robot_id": body["robot_id"], "robot_kind": body["robot_kind"],
-                 "pose": {"x": float(body["x"]), "y": float(body["y"]), "yaw": float(body["yaw"])},
-                 "wheel_brake_locked": body["wheel_brake_locked"], "bed_ready": body["bed_ready"],
-                 "v_cmd_mps": float(body["v_cmd_mps"])}
+                 "pose": {"x": checked_finite_float(body["x"]), "y": checked_finite_float(body["y"]), "yaw": checked_finite_float(body["yaw"])},
+                 "wheel_brake_locked": False, "bed_ready": False,
+                 "v_cmd_mps": checked_finite_float(body["v_cmd_mps"])}
         state = {key: body[key] for key in ("phase", "tier", "robot_id", "stage_id",
                                              "goal_evidence_digest", "reason") if key in body}
+        state["amr_motion_inhibited"] = True
         res = evaluate_omx_cell_station(station, docked_robot=robot, cell_state=state,
                                         map_version=getattr(active[2], "version", None))
         app.state.omx_cell_states[body["cell_id"]] = {**state, "robot_id": body["robot_id"],
                                                        "docked_robot": robot}
+        if body["phase"] == "HUMAN_HOLD":
+            app.state.human_detected[cell_id] = True
+            app.state.human_detected["all"] = bool(app.state.human_detected.get("cell_s") and app.state.human_detected.get("cell_ab"))
+            for task in app.state.omx_cell_tasks.values():
+                if task["cell_id"] == cell_id and task["status"] in ("QUEUED", "RUNNING"):
+                    task["paused_from_status"] = task["status"]
+                    task["status"] = "PAUSED_HUMAN"
+                    _enrich_task_health(task)
+        _save_ledger()
         return res
 
     CELL_TASK_PRESETS: dict[str, dict] = {
@@ -84,6 +111,7 @@ def install_cell_tasks_routes(app, ctx) -> None:
         "export_s3_belt": {"preset": "export_s3_belt", "label": "반출대 3 반출 (EXP_S3_BELT · arm_s)", "cell_id": "cell_s", "arm_id": "arm_s", "src_site": "pinky", "dst_site": "belt", "tier": 1, "displaced_to": None, "zone_id": "EXP_S3_BELT"},
         "export_s5_pallet": {"preset": "export_s5_pallet", "label": "반출대 2 반출 (EXP_S5_PALLET · arm_b)", "cell_id": "cell_ab", "arm_id": "arm_b", "src_site": "belt", "dst_site": "pallet-l1", "tier": 2, "displaced_to": None, "zone_id": "EXP_S5_PALLET"},
         "full_s3_to_s5_pipeline": {"preset": "full_s3_to_s5_pipeline", "label": "연속 파이프라인 (S3 셔틀 -> S5 1·2층 적재)", "steps": ["s3_shuttle", "s5_tier1_arm_a", "s5_tier2_arm_b"]},
+        "full_s3_to_s5_3tier_pipeline": {"preset": "full_s3_to_s5_3tier_pipeline", "label": "연속 파이프라인 (S3 셔틀 -> S5 1·2·3층 적재)", "steps": ["s3_shuttle", "s5_tier1_arm_a", "s5_tier2_arm_b", "s5_tier3_arm_a"]},
     }
 
     @app.post("/api/fleet/pipeline/displaced-detection", dependencies=operator_guard)
@@ -102,8 +130,17 @@ def install_cell_tasks_routes(app, ctx) -> None:
         if station is None:
             raise HTTPException(404, detail={"code": "UNKNOWN_CELL"})
         task_id = str(spec.get("task_id") or f"cell-task-{uuid.uuid4().hex[:8]}")
-        tier = int(spec.get("tier", 1))
+        if task_id in app.state.omx_cell_tasks:
+            raise HTTPException(409, detail={"code": "CELL_TASK_ID_EXISTS"})
+        tier, pose = checked_task_pose(spec, station)
         default_arm = "arm_s" if cell_id == "cell_s" else ("arm_a" if tier % 2 == 1 else "arm_b")
+        arm_id = str(spec.get("arm_id") or default_arm)
+        directive = spec.get("directive")
+        if directive is not None and (not isinstance(directive, dict)
+                                      or directive.get("schema") != "rosy.omx-cell-area-xyz-directive.v1"
+                                      or directive.get("directive_id") != task_id
+                                      or directive.get("arm_id") != arm_id):
+            raise HTTPException(422, detail={"code": "INVALID_CELL_DIRECTIVE"})
         raw_disp = spec.get("displaced_to")
         dec_ov = {"displaced_to": raw_disp} if raw_disp in ("belt_far", "floor_front") else {}
         dec_row = _evaluate_decision(cell_id, "arm_target", dec_ov)
@@ -115,22 +152,20 @@ def install_cell_tasks_routes(app, ctx) -> None:
         task = _enrich_task_health({
             "task_id": task_id,
             "cell_id": cell_id,
-            "arm_id": str(spec.get("arm_id") or default_arm),
+            "arm_id": arm_id,
+            "directive": directive,
             "robot_id": str(spec.get("robot_id") or "rosy_01"),
             "robot_kind": str(spec.get("robot_kind") or "pinky"),
             "src_site": str(spec.get("src_site") or ("pinky" if cell_id == "cell_s" else "belt")),
             "dst_site": str(spec.get("dst_site") or ("belt" if cell_id == "cell_s" else f"pallet-l{max(0, min(2, tier - 1))}")),
             "tier": tier,
+            "depends_on": spec.get("depends_on"),
             "displaced_to": resolved_disp,
             "auto_recovered": bool(raw_disp == "auto" or resolved_disp),
             "cable_guard_micro": bool(spec.get("cable_guard_micro", dec_row["cable_guard_micro"])),
             "decision": dec_row,
             "preset": spec.get("preset"),
-            "pose": {
-                "x": float(spec.get("x", station.station_xy[0])),
-                "y": float(spec.get("y", station.station_xy[1])),
-                "yaw": float(spec.get("yaw", 0.0)),
-            },
+            "pose": pose,
             "status": "QUEUED",
             "created_at": round(time.time(), 3),
         })
@@ -149,10 +184,13 @@ def install_cell_tasks_routes(app, ctx) -> None:
                 raise HTTPException(422, detail={"code": "UNKNOWN_PRESET"})
             if "steps" in preset:
                 base_id = str(body.get("task_id") or f"pipe-{uuid.uuid4().hex[:6]}")
-                created_tasks = [
-                    _enqueue_one_task(active, {**CELL_TASK_PRESETS[s], "robot_id": body.get("robot_id", "rosy_01"), "task_id": f"{base_id}-{idx+1}-{s}"})
-                    for idx, s in enumerate(preset["steps"])
-                ]
+                created_tasks = []
+                for idx, step in enumerate(preset["steps"]):
+                    created_tasks.append(_enqueue_one_task(active, {
+                        **CELL_TASK_PRESETS[step], "robot_id": body.get("robot_id", "rosy_01"),
+                        "task_id": f"{base_id}-{idx+1}-{step}",
+                        "depends_on": created_tasks[-1]["task_id"] if created_tasks else None,
+                    }))
                 return {"ok": True, "task": created_tasks[0], "tasks": created_tasks}
             merged = {**preset, **{k: v for k, v in body.items() if v is not None}}
             task = _enqueue_one_task(active, merged)
@@ -216,13 +254,13 @@ def install_cell_tasks_routes(app, ctx) -> None:
         task = app.state.omx_cell_tasks.get(task_id)
         if task is None:
             raise HTTPException(404, detail={"code": "UNKNOWN_TASK"})
+        if task.get("status") != "QUEUED":
+            raise HTTPException(409, detail={"code": "CELL_TASK_ALREADY_CLAIMED"})
         cell_id = task["cell_id"]
         station = resolve_omx_cells(active[1], active[2]).get(cell_id)
-        robot = {"robot_id": task["robot_id"], "robot_kind": task["robot_kind"], "pose": dict(task["pose"]),
-                 "wheel_brake_locked": True, "bed_ready": True, "v_cmd_mps": 0.0}
-        state = {"phase": "RELEASED", "tier": task["tier"], "robot_id": task["robot_id"], "stage_id": task_id, "reason": "CANCELLED_BY_OPERATOR"}
-        res = evaluate_omx_cell_station(station, docked_robot=robot, cell_state=state, map_version=getattr(active[2], "version", None))
-        app.state.omx_cell_states[cell_id] = {**state, "docked_robot": robot}
+        state = app.state.omx_cell_states.get(cell_id) or {}
+        res = evaluate_omx_cell_station(station, docked_robot=state.get("docked_robot"), cell_state=state,
+                                        map_version=getattr(active[2], "version", None))
         task["status"] = "CANCELLED"
         task["completed_at"] = round(time.time(), 3)
         _enrich_task_health(task)
@@ -257,34 +295,36 @@ def install_cell_tasks_routes(app, ctx) -> None:
     async def create_pinky_task(request: Request):
         active = active_map()
         body = await request.json()
+        checked_json_value(body)
         robot_id = str(body.get("robot_id") or "rosy_46")
         action = str(body.get("action") or "dock_s3")
+        if action != "stop_now" and (_is_human_detected()
+                                     or any(state.get("phase") == "HUMAN_HOLD"
+                                            for state in app.state.omx_cell_states.values())):
+            raise HTTPException(409, detail={"code": "HUMAN_HOLD_ACTIVE"})
         task_id = str(body.get("task_id") or f"pinky-task-{uuid.uuid4().hex[:8]}")
         cable_guard = bool(body.get("cable_guard_micro", True))
-        max_step_m = min(0.02, float(body.get("max_step_m", 0.015))) if cable_guard else float(body.get("max_step_m", 0.10))
-        max_speed_mps = min(0.02, float(body.get("max_speed_mps", 0.02))) if cable_guard else float(body.get("max_speed_mps", 0.08))
-        stations = resolve_omx_cells(active[1], active[2])
+        max_step_m = checked_finite_float(body.get("max_step_m", 0.015 if cable_guard else 0.10))
+        max_speed_mps = checked_finite_float(body.get("max_speed_mps", 0.02 if cable_guard else 0.08))
+        if cable_guard:
+            max_step_m, max_speed_mps = min(0.02, max_step_m), min(0.02, max_speed_mps)
         spawned_cell_task = None
         v_cmd = 0.0
         duration_s = 0.0
         if action in ("dock_s3", "dock_and_unload_s3"):
-            st = stations["cell_s"]
-            docked = {"robot_id": robot_id, "robot_kind": "pinky", "pose": {"x": st.station_xy[0], "y": st.station_xy[1], "yaw": 0.0},
-                      "wheel_brake_locked": True, "bed_ready": True, "v_cmd_mps": 0.0}
-            app.state.omx_cell_states["cell_s"] = {"phase": "CLAIMED", "tier": 1, "robot_id": robot_id, "docked_robot": docked}
+            if _aborted("cell_s"):
+                raise HTTPException(409, detail={"code": "CELL_ABORTED_HOLD"})
             target_place = "S3"
             v_cmd = max_speed_mps
-            duration_s = round(max_step_m / max(0.005, max_speed_mps), 2)
+            duration_s = round(checked_finite_float(max_step_m / max(0.005, max_speed_mps)), 2)
             if action == "dock_and_unload_s3":
                 spawned_cell_task = _enqueue_one_task(active, {**CELL_TASK_PRESETS["s3_shuttle"], "robot_id": robot_id})
         elif action == "dock_s5":
-            st = stations["cell_ab"]
-            docked = {"robot_id": robot_id, "robot_kind": "pinky", "pose": {"x": st.station_xy[0], "y": st.station_xy[1], "yaw": 0.0},
-                      "wheel_brake_locked": True, "bed_ready": True, "v_cmd_mps": 0.0}
-            app.state.omx_cell_states["cell_ab"] = {"phase": "CLAIMED", "tier": 1, "robot_id": robot_id, "docked_robot": docked}
+            if _aborted("cell_ab"):
+                raise HTTPException(409, detail={"code": "CELL_ABORTED_HOLD"})
             target_place = "S5"
             v_cmd = max_speed_mps
-            duration_s = round(max_step_m / max(0.005, max_speed_mps), 2)
+            duration_s = round(checked_finite_float(max_step_m / max(0.005, max_speed_mps)), 2)
         elif action == "micro_forward_2cm":
             target_place = "MICRO_FWD_1.5CM"
             v_cmd = max_speed_mps
@@ -306,8 +346,8 @@ def install_cell_tasks_routes(app, ctx) -> None:
             zid = "STG_C2" if action == "move_staging_c2" else ("STG_S3_WAIT" if action == "move_staging_s3" else "EXP_S1")
             z = zones.get(zid) or {"id": zid, "place_id": "C2" if "c2" in action else ("S3" if "s3" in action else "S1")}
             target_place = f"{z['id']} ({z.get('place_id', 'S1')})"
-            v_cmd = min(max_speed_mps, float(z.get("speed_cap_mps", max_speed_mps)))
-            max_step_m = min(max_step_m, float(z.get("max_step_m", max_step_m)))
+            v_cmd = min(max_speed_mps, checked_finite_float(z.get("speed_cap_mps", max_speed_mps)))
+            max_step_m = min(max_step_m, checked_finite_float(z.get("max_step_m", max_step_m)))
             duration_s = 0.35
             if action == "move_export_s1" and z.get("cell_id"):
                 spawned_cell_task = _enqueue_one_task(active, {
@@ -320,9 +360,9 @@ def install_cell_tasks_routes(app, ctx) -> None:
                     "preset": "export_s1",
                 })
         else:
-            for cid, cstate in list(app.state.omx_cell_states.items()):
-                if cstate.get("robot_id") == robot_id:
-                    cstate["phase"] = "RELEASED"
+            if any(cstate.get("robot_id") == robot_id and _aborted(cid)
+                   for cid, cstate in app.state.omx_cell_states.items()):
+                raise HTTPException(409, detail={"code": "CELL_ABORTED_HOLD"})
             target_place = "S1"
             v_cmd = max_speed_mps
             duration_s = 0.35
@@ -338,7 +378,7 @@ def install_cell_tasks_routes(app, ctx) -> None:
             "duration_s": duration_s,
             "decision": dec_row,
             "spawned_cell_task_id": spawned_cell_task["task_id"] if spawned_cell_task else None,
-            "status": "QUEUED" if body.get("await_hardware") else "COMPLETED",
+            "status": "QUEUED",
             "created_at": round(time.time(), 3),
         }
         app.state.pinky_tasks[task_id] = ptask

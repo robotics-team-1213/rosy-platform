@@ -26,7 +26,15 @@ def test_roster_layout_keeps_safety_and_trip_controls(site, width, height, theme
         expect(form).to_be_visible()
         expect(page.locator("#estop")).to_be_visible()
         assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
-        assert page.locator("#roster article").count() == 4
+        robots = page.locator("#roster > article.robot-summary:not(.omx-summary)[data-robot-id]")
+        cells = page.locator("#roster > article.robot-summary.omx-summary[data-robot-id]")
+        order = robots.evaluate_all("cards => cards.map(card => card.dataset.robotId)")
+        assert set(order) == {
+            "rosy_01", "rosy_02", "rosy_03", "rosy_04"}
+        assert set(cells.evaluate_all("cards => cards.map(card => card.dataset.robotId)")) == {
+            "arm_a", "arm_b", "arm_s"}
+        assert order.index("rosy_04") < order.index("rosy_01")
+        expect(page.locator('#roster > article[data-robot-id="rosy_04"]')).to_be_visible()
         snapshot = page.evaluate("""() => {
           const rules = {};
           for (const selector of ['.roster-block', '.robot-summary', '.robot-summary.selected',
@@ -47,5 +55,9 @@ def test_roster_layout_keeps_safety_and_trip_controls(site, width, height, theme
             (folder / (stem + ".json")).write_text(json.dumps(snapshot, ensure_ascii=False, indent=2), encoding="utf8")
             page.evaluate("document.fonts.ready")
             page.locator("#robot-workspace").screenshot(path=str(folder / (stem + ".png")))
+        expect(page.locator('#robot-choice option[value="rosy_04"]')).to_have_count(1)
+        page.locator('#roster ui-button[data-select-robot-id="rosy_04"]').click()
+        expect(page.locator('#robot-workspace article[data-robot-id="rosy_04"]')).to_be_visible()
+        expect(page.locator('#robot-workspace ui-button[data-goal-robot-id="rosy_04"]')).to_be_disabled()
         assert not posts and not errors
         browser.close()
