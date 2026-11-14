@@ -141,3 +141,17 @@ def test_landing_merge_ignores_a_line_ending_only_difference(eol_repo):
     assert subprocess.run(["git", "-C", str(eol_repo), *plain], capture_output=True).returncode == 1
     tree = _git(eol_repo, "merge-tree", "--write-tree", "--no-messages", *real_land().RENORMALIZE, "HEAD", "main")
     assert _git(eol_repo, "cat-file", "-p", f"{tree}:a.py") == "a\nB\nc\nd\nE"
+
+
+def test_land_async_branch_option_runs_precheck_in_hidden_checkout_and_cleans_up(eol_repo, monkeypatch):
+    commit(eol_repo, {"a.py": b"a\r\nb\r\n"})
+    _git(eol_repo, "branch", "feat/plumbing", "HEAD")
+    _git(eol_repo, "switch", "-q", "main")
+    monkeypatch.chdir(eol_repo)
+    tool = load("land_async")
+    monkeypatch.setattr(tool, "start", lambda *a, **k: pytest.fail("a snapshot was made after a failed precheck"))
+    assert tool.main(["--branch", "feat/plumbing", "--tests", "auto"]) == 1
+    assert not _git(eol_repo, "branch", "--list", "land/*")
+    holder = eol_repo / ".git" / tool.HOLDER
+    assert not holder.exists() or list(holder.iterdir()) == []
+    assert len(_git(eol_repo, "worktree", "list", "--porcelain").split("\n\n")) == 1
