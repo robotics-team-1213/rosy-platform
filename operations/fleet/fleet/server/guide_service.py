@@ -33,6 +33,12 @@ class GuideService:
             return 0.0
         return now - self._still_since.setdefault(robot_id, now)
 
+    def _display_pose(self, robot_id: str):
+        """D-989: an auto-located robot is shown at its SLAM pose through the fitted transform (read-only
+        display; lane compliance and the other consumers keep `arbitrated_pose`)."""
+        driving = getattr(self._poses, "driving_pose", None)
+        return driving(robot_id) if driving is not None else self._poses.arbitrated_pose(robot_id)
+
     async def view(self) -> dict:
         snapshot = await self._gather()
         tracking = self._tracking.snapshot() if self._tracking is not None else {}
@@ -47,7 +53,7 @@ class GuideService:
         for row in snapshot.get("robots") or []:
             robot_id = row["robot_id"]
             records.append(situation(
-                robot_id, online=bool(row.get("online")), pose=self._poses.arbitrated_pose(robot_id),
+                robot_id, online=bool(row.get("online")), pose=self._display_pose(robot_id),
                 tracking_row=tracked.get(robot_id), camera_ok=camera_ok, graph=graph, zone_of=zone_of,
                 body_radius_m=self._body.rotation_radius_m, body_half_width_m=self._body.half_width_m,
                 stopped_s=self._stopped_s(robot_id, row.get("state"), now), anonymous_seen=anonymous,
