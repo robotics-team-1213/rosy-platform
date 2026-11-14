@@ -38,11 +38,12 @@ from chunk_runner_settle import (  # noqa: E402, F401
 from episode_recorder import Recorder  # noqa: E402
 import joint_jitter  # noqa: E402
 import joint_push  # noqa: E402
+import runner_speed  # noqa: E402
 import runner_strain  # noqa: E402
 
 FOLLOW_STOP, FOLLOW_STOP_S = 25.0, 1.0
 HEALTH_PERIOD_S = 1.0
-CONTACT_CHUNKS = ("descend", "grasp", "release")
+CONTACT_CHUNKS = runner_speed.CONTACT_CHUNKS
 PACE_LAG, PACE_RISE, PACE_MAX_S = (prm.default(f"runner.{k}") for k in ("pace_lag", "pace_rise", "pace_max_s"))
 _BODY_NAMES = tuple(NAMES[:5])
 
@@ -77,6 +78,8 @@ class Runner:
         self.recorder, self.operating_context, self._lib_digest_cache = Recorder(), operating_context, None
         self.trend, self.trace, self.jitter_buf, self.damped_ticks = [], None, [], 0
         self._damp_cooldown, self.sway_peak, self.pitch_hold = 0, {}, 0.0
+        self.speed, self.speed_low, self.speed_out, self.speed_base, self.speed_phase = 1.0, 1.0, None, None, 0.0
+        self.speed_queue = None
         self.jitter = {"shaking": False, "max_std": 0.0, "max_flips_hz": 0.0, "max_p2p": 0.0, "flagged": []}
         self.ensembler = TemporalChunkEnsembler(coeff=0.08, vmax=GUARD_UNITS_PER_S, fps=fps)
 
@@ -129,7 +132,7 @@ class Runner:
         self.chunk, self.played, self.jog_path = None, [], []
         self.pace_floor, self.paced, self.pace_last, self.trend = 0.0, 0, None, []
         # stop exactly where the arm is (no leftover wrist nudge); the failed chunk keeps its own sway record
-        self.pitch_hold, sway, self.sway_peak = 0.0, self.sway_peak, {}
+        self.pitch_hold, sway, self.sway_peak, self.speed_low = 0.0, self.sway_peak, {}, 1.0
         if chunk == "park":
             self.last_input = self.clock()
             self._stop_after_park = None
@@ -176,7 +179,7 @@ class Runner:
         elif self.queue:
             if self.pace_last is not None:
                 self.pace_floor = max(self.pace_floor, self.lag)
-            raw_target = self.queue.pop(0)
+            raw_target = runner_speed.take(self)
             if self.jitter.get("shaking") or (self.pace_last is not None and self.queue):
                 if self.jitter.get("shaking") and self.queue:
                     self._damp_cooldown = 3
@@ -230,6 +233,7 @@ class Runner:
                     "target": [round(v, 3) for v in self.target],
                     "sent": [round(float(sent[n]), 3) for n in NAMES] if full_sent else None,
                     "present": [round(v, 3) for v in present],
+                    "s": round(self.speed, 3),
                     "pwm": getattr(getattr(self.robot, "motion", None), "effort_pwm", None) or {},
                     **({"load": load} if load else {}),
                 }
@@ -312,6 +316,7 @@ class Runner:
             if reason:
                 self.fault, self.queue, self.target = reason, [], present[:5] + [self.target[5]]
                 chunk, self.chunk, self.pitch_hold, sway, self.sway_peak = self.chunk, None, 0.0, self.sway_peak, {}
+                self.speed_low = 1.0
                 self.report(command=f"run {chunk}" if chunk else "fault", ok=False, error=reason, present=present,
                             **({"sway": sway} if sway else {}))
                 return
