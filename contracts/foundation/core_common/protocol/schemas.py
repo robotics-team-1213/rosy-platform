@@ -483,6 +483,9 @@ class StateSnapshot(TripLeaseFields):
     mode: RobotMode = RobotMode.IDLE
     navigation: NavigationState = NavigationState.IDLE
     map_id: Optional[str] = None
+    #: Content id (`occupancy:<sha12>`) of the occupancy grid this robot actually loaded, even when
+    #: `map_id` is a configured name; Fleet binds a robot map to the site frame by it (map binding).
+    map_grid_id: Optional[str] = None
     pose: Pose = Field(default_factory=Pose)
     velocity: Velocity = Field(default_factory=Velocity)
     battery: Battery = Field(default_factory=Battery)
