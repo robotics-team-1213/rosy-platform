@@ -247,15 +247,34 @@ def remap(cell, config: dict, points: list, work: Path, log=print, at_stop=None)
         log({"dropped_marks": dropped})
     if not enough_agree(len(marks), len(seen)):
         raise SystemExit(f"remap: only {len(marks)} marks agree of {len(seen)}")
-    return {
-        "homography": cal.fit(marks).round(9).tolist(),
+    return dict(fitted_map(config, marks, z_view), **{
         "z_view": z_view,
         "coarse": True,
         "dropped_marks": dropped,
         "points": [{"pixel": list(p), "arm_m": list(a)} for p, a in marks],
-        "loo_error_mm": cal.loo_error_mm(marks),
         "measured": time.strftime("%Y-%m-%dT%H:%M:%S"),
-    }
+    })
+
+
+def fitted_map(config: dict, marks: list, z_view: float) -> dict:
+    """The affine map, or the camera pose with the device's own intrinsics (config calibrate.intrinsics, a
+    cell_device_intrinsics record; calibrate.up, the table normal in the camera from cell_depth_pose) when its
+    leave-one-out is no worse. 2026-11-14: arm_b's wrist holder keeps the remap within 80-105 mm of the base, and
+    an affine fit there extrapolates its error across the pallet; a pose with known K does not."""
+    affine = {"homography": cal.fit(marks).round(9).tolist(), "loo_error_mm": cal.loo_error_mm(marks)}
+    c = config.get("calibrate", {})
+    if not c.get("intrinsics") or len(marks) < 4:
+        return affine
+    import cell_frame
+
+    lens = json.loads(Path(c["intrinsics"]).expanduser().read_text())
+    try:
+        pose = cell_frame.plane_pose_map(marks, z_view, lens["K"], lens.get("dist", [0.0] * 5), c.get("up"))
+    except ValueError as exc:
+        return dict(affine, pose_refused=str(exc)[:120])
+    if pose["loo_error_mm"]["max"] > affine["loo_error_mm"]["max"]:
+        return dict(affine, pose_fit={k: v for k, v in pose.items() if k != "homography"})
+    return dict(pose, homography=pose["homography"].round(9).tolist(), affine_fit=affine)
 
 
 def move_regions(config: dict, reference, current) -> dict:

@@ -214,3 +214,56 @@ def test_runtime_model_refuses_changed_or_unknown_camera_resolution():
     for size in (None, [320, 240]):
         with pytest.raises(ValueError, match="CALIBRATION_REQUIRED"):
             cf.refresh({"size": size}, frame)
+
+
+FACTORY = np.array([[618.53, 0, 322.32], [0, 618.67, 236.60], [0, 0, 1]])  # the D435 colour 640x480 factory K
+
+
+def _remap_marks(camera, z, noise_px=0.5, seed=3):
+    """Jaw marks as arm_b's wrist holder allows them: 80-105 mm from the base, polar 0-40 deg, at one height."""
+    rng = np.random.default_rng(seed)
+    out = []
+    for r, a in ((0.08, 5), (0.08, 35), (0.085, 20), (0.095, 40), (0.105, 30), (0.09, 0), (0.1, 15)):
+        x, y = r * np.cos(np.radians(a)), r * np.sin(np.radians(a))
+        u, v = cf.project((x, y, z), FACTORY, np.zeros(5), camera)
+        out.append(((u + rng.normal(0, noise_px), v + rng.normal(0, noise_px)), (x, y)))
+    return out
+
+
+def _off_mm(h, camera, point, z):
+    import cell_calibration as cal
+
+    return 1000 * float(np.hypot(*np.subtract(cal.to_arm(np.asarray(h), cf.project((*point, z), FACTORY,
+                                                                                    np.zeros(5), camera)), point)))
+
+
+def test_a_remap_near_the_base_as_a_pose_reaches_the_pallet_where_the_affine_map_drifts():
+    import cell_calibration as cal
+
+    camera = looking_down(0.15, 0.08, 0.61, tilt=(0.06, -0.04, 0.4))
+    marks, z, far = _remap_marks(camera, 0.12), 0.12, (0.20, 0.17)
+    affine = _off_mm(cal.fit(marks), camera, far, z)
+    free = cf.plane_pose_map(marks, z, FACTORY, np.zeros(5))
+    up = camera[0].T @ np.array([0, 0, 1.0])  # the base z axis in the camera, as depth gives it
+    upright = cf.plane_pose_map(marks, z, FACTORY, np.zeros(5), up=up)
+    assert upright["upright"] and upright["rms_px"] < 1.5 and upright["loo_error_mm"]["max"] < 3
+    assert _off_mm(upright["homography"], camera, far, z) < 3 < affine
+    assert _off_mm(free["homography"], camera, far, z) < affine
+    R, t = np.asarray(upright["camera_in_base"]["R"]), np.asarray(upright["camera_in_base"]["t"])
+    assert np.linalg.norm(t - camera[1]) < 0.02 and np.degrees(np.arccos((np.trace(R.T @ camera[0]) - 1) / 2)) < 1.5
+
+
+def test_remap_keeps_the_affine_map_without_device_intrinsics_and_the_pose_with_them(tmp_path):
+    import cell_calibrate
+
+    camera = looking_down(0.15, 0.08, 0.61, tilt=(0.06, -0.04, 0.4))
+    marks = _remap_marks(camera, 0.12)
+    assert "camera_in_base" not in cell_calibrate.fitted_map({}, marks, 0.12)
+    lens = tmp_path / "lens.json"
+    lens.write_text(json.dumps({"K": FACTORY.tolist(), "dist": [0.0] * 5}))
+    up = (camera[0].T @ np.array([0, 0, 1.0])).tolist()
+    record = cell_calibrate.fitted_map({"calibrate": {"intrinsics": str(lens), "up": up}}, marks, 0.12)
+    assert record["upright"] and "affine_fit" in record and len(record["homography"]) == 3
+    json.dumps(record)  # the calibration file takes it as it is
+    with pytest.raises(ValueError):
+        cf.plane_pose_map(marks, 0.12, FACTORY, [0.1, 0, 0, 0, 0])

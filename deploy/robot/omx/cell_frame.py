@@ -177,6 +177,76 @@ def seed(views, K, dist, offset_m) -> tuple:
     return inverse(pose), rms
 
 
+def _rays(pixels, K, dist) -> np.ndarray:
+    import cv2
+
+    ray = cv2.undistortPoints(np.asarray(pixels, np.float64).reshape(-1, 1, 2), np.asarray(K, float),
+                              np.asarray(dist, float)).reshape(-1, 2)
+    return np.column_stack([ray, np.ones(len(ray))])
+
+
+def _upright(points, rays, up) -> tuple:
+    """Camera pose in the base (object pose in the camera) with the base z axis fixed to `up` (the table normal in
+    the camera, from depth): only the yaw and the translation are fitted, linearly from the rays."""
+    up = np.asarray(up, float) / np.linalg.norm(up)
+    a = np.cross(up, [1.0, 0, 0] if abs(up[0]) < 0.9 else [0, 1.0, 0])
+    a /= np.linalg.norm(a)
+    R0 = np.column_stack([a, np.cross(up, a), up])  # base x, y, z in the camera, before the yaw
+    rows, rhs = [], []
+    for (x, y, z), d in zip(points, rays):
+        q = R0.T @ d
+        Q = np.array([[0, -q[2], q[1]], [q[2], 0, -q[0]], [-q[1], q[0], 0]])
+        rows.append(Q @ np.array([[x, -y, 1, 0, 0], [y, x, 0, 1, 0], [0, 0, 0, 0, 1]], float))
+        rhs.append(-Q @ np.array([0.0, 0.0, z]))
+    u, *_ = np.linalg.lstsq(np.vstack(rows), np.concatenate(rhs), rcond=None)
+    c, s = np.array(u[:2]) / np.hypot(u[0], u[1])
+    Rz = np.array([[c, -s, 0], [s, c, 0], [0, 0, 1.0]])
+    # the translation again with the yaw fixed to a true rotation
+    rows, rhs = [], []
+    for p, d in zip(points, rays):
+        Q = np.array([[0, -d[2], d[1]], [d[2], 0, -d[0]], [-d[1], d[0], 0]])
+        rows.append(Q)
+        rhs.append(-Q @ (R0 @ Rz @ np.asarray(p, float)))
+    t, *_ = np.linalg.lstsq(np.vstack(rows), np.concatenate(rhs), rcond=None)
+    return R0 @ Rz, t
+
+
+def plane_pose_map(marks, z: float, K, dist, up=None) -> dict:
+    """The jaw marks of a remap ((pixel, (x, y)) at height z) as a camera pose with known intrinsics (the D435's
+    factory K), and the pixel -> arm map on the plane z that pose implies. An affine map fitted on a patch near
+    the base extrapolates its error across the pallet; a pose has the perspective right everywhere. With `up`
+    (the table normal in the camera, from depth) only the yaw and the position are fitted. Leave-one-out in mm."""
+    if np.any(np.asarray(dist, float)):
+        raise ValueError("plane_pose_map: a distortion-free K only (the homography below has no distortion)")
+    pts = [(x, y, z) for _, (x, y) in marks]
+    pix = [p for p, _ in marks]
+
+    def fit(i=None):
+        keep = [k for k in range(len(pts)) if k != i]
+        P, D = [pts[k] for k in keep], [pix[k] for k in keep]
+        if up is not None:
+            return _upright(P, _rays(D, K, dist), up)
+        pose, _ = solve(P, D, np.asarray(K, float), np.asarray(dist, float))
+        if pose is None:
+            raise ValueError("solvePnP found no camera pose from the marks")
+        return pose
+
+    R, t = fit()
+    H = np.linalg.inv(np.asarray(K, float) @ np.column_stack([R[:, 0], R[:, 1], R[:, 2] * z + t]))
+    H = H / H[2, 2]
+    back = [project(p, K, dist, inverse((R, t))) for p in pts]
+    errors = []
+    for i, (x, y, _) in enumerate(pts):
+        Ri, ti = fit(i)
+        hit = pixel_to_plane(pix[i], np.asarray(K, float), np.asarray(dist, float), inverse((Ri, ti)), z)
+        errors.append(1000 * float(np.hypot(hit[0] - x, hit[1] - y)))
+    rms = float(np.sqrt(np.mean([(b[0] - p[0]) ** 2 + (b[1] - p[1]) ** 2 for b, p in zip(back, pix)])))
+    cb = inverse((R, t))
+    return {"homography": H, "camera_in_base": {"R": cb[0].tolist(), "t": cb[1].tolist()},
+            "rms_px": round(rms, 2), "upright": up is not None,
+            "loo_error_mm": {"max": round(max(errors), 2), "mean": round(sum(errors) / len(errors), 2)}}
+
+
 def learn(seen: dict, K, dist, camera_in_base: tuple, slot: int, z_m: dict, surfaces: list) -> dict:
     """The camera record: every base and surface marker of `slot` in view, lifted onto its plane's touched height
     (z_m["base"], z_m[<site>]). `surfaces` names the slot's surfaces 1-3 in order (None for an unused one)."""
