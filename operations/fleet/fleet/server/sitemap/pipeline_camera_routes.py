@@ -12,6 +12,7 @@ from fleet.server.sitemap.pipeline_routes import _enrich_task_health
 def install_cameras_routes(app, ctx) -> None:
     read_guard = ctx.read_guard
     operator_guard = ctx.operator_guard
+    proposer_guard = getattr(ctx, "proposer_guard", operator_guard)
     _arm_live_catalog = ctx._arm_live_catalog
     _save_ledger = ctx._save_ledger
     _is_human_detected = ctx._is_human_detected
@@ -20,7 +21,7 @@ def install_cameras_routes(app, ctx) -> None:
     # D-136: 이 모듈은 카메라 프레임을 서빙하지 않는다. 셀 카메라 미리보기는
     # POST /api/fleet/vision/lease -> Vision frame_path로만 얻는다(test_no_video_relay).
 
-    @app.post("/api/fleet/pipeline/cell-quality", dependencies=read_guard)
+    @app.post("/api/fleet/pipeline/cell-quality", dependencies=proposer_guard)
     async def ingest_cell_quality(request: Request):
         body = await request.json()
         cams = body.get("cameras")
@@ -33,11 +34,17 @@ def install_cameras_routes(app, ctx) -> None:
             for arm_id in ("arm_s", "arm_a", "arm_b"):
                 if isinstance(holds.get(arm_id), dict):
                     h = holds[arm_id]
+                    new_held = bool(h.get("local_held") or h.get("fleet_held") or h.get("held"))
                     if arm_id in app.state.pending_clear_arms:
+                        if not new_held:
+                            app.state.pending_clear_arms.pop(arm_id, None)
                         continue
+                    prev_held = bool((app.state.arm_holds.get(arm_id) or {}).get("held"))
+                    if prev_held and not new_held:
+                        continue  # Clearing an arm hold requires POST /arm-holds/clear.
                     app.state.arm_holds[arm_id] = {
                         "arm": arm_id,
-                        "held": bool(h.get("local_held") or h.get("fleet_held") or h.get("held")),
+                        "held": new_held,
                         "reason": h.get("local_reason") or h.get("fleet_reason") or h.get("reason"),
                         "incident_ids": list(h.get("incident_ids") or []),
                     }
@@ -62,8 +69,9 @@ def install_cameras_routes(app, ctx) -> None:
                     prev["updated_at"] = float(s.get("updated_at") or now_ts)
                     prev["source"] = str(s.get("source") or "live_stream")
                     app.state.arm_live_states[arm_id] = prev
+        for ack_arm in body.get("clear_ack_arms") or ():
+            app.state.pending_clear_arms.pop(str(ack_arm), None)
         pending = dict(app.state.pending_clear_arms)
-        app.state.pending_clear_arms.clear()
         return {
             "ok": True,
             "schema": "rosy.pipeline.cell-quality.v1",
@@ -93,7 +101,7 @@ def install_cameras_routes(app, ctx) -> None:
             app.state.pending_clear_arms[a] = note
         return {"ok": True, "cleared_arms": arms, "note": note, "arm_holds": app.state.arm_holds}
 
-    @app.post("/api/fleet/pipeline/cell-tasks/claim", dependencies=read_guard)
+    @app.post("/api/fleet/pipeline/cell-tasks/claim", dependencies=proposer_guard)
     async def claim_cell_task(request: Request):
         active = active_map()
         body = await request.json()
@@ -136,7 +144,7 @@ def install_cameras_routes(app, ctx) -> None:
         }
         return {"claimed": True, "task": task, "handoff": handoff, "gate": res["gate"]}
 
-    @app.post("/api/fleet/pipeline/cell-tasks/{task_id}/complete", dependencies=read_guard)
+    @app.post("/api/fleet/pipeline/cell-tasks/{task_id}/complete", dependencies=proposer_guard)
     async def complete_cell_task(task_id: str, request: Request):
         active = active_map()
         task = app.state.omx_cell_tasks.get(task_id)
