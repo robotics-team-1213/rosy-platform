@@ -302,7 +302,9 @@ def _supervise(tree: Path, snap: str, land_args: list[str], run, room) -> int:
         git(Path(main).parent, "worktree", "remove", "--force", str(tree), check=False)
         git(Path(main).parent, "branch", "-D", snap, check=False)
         print(f"[land-async] {snap} landed; hidden worktree and snapshot branch removed", flush=True)
-        try:  # main moved: MAIN-RED stops it cleared go again; never changes this landing's own outcome
+        sys.path.insert(0, str(Path(main).parent / "tools"))  # this copy sits beside the log, its tree is gone:
+        try:  # main's land_queue (11-14: six landings skipped this with "No module named 'land_queue'")
+            # main moved: MAIN-RED stops it cleared go again; never changes this landing's own outcome
             for name in orphans(Path(main).parent):
                 print(f"[land-async] resuming {name}: {resume(Path(main).parent, name, [], detach, wait=0)}",
                       flush=True)
