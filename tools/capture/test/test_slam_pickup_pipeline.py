@@ -163,7 +163,7 @@ def test_dispatch_pickup_and_return_executes_pickup_dwell_and_home_navigation():
     out = spp.dispatch_pickup_and_return(fake_api, "tok-1", cfg=cfg, sleep_fn=lambda _: None)
 
     assert out["approval_valid"] is True
-    assert goals == [{"x": 0.45, "y": 0.0, "theta": 0.0}, {"x": 0.0, "y": 0.0, "theta": 0.0}]
+    assert goals == [{"x": 0.45, "y": 0.0, "yaw": 0.0}, {"x": 0.0, "y": 0.0, "yaw": 0.0}]
     assert out["pickup_outcome"]["navigation"] == "ARRIVED"
     assert out["pickup_outcome"]["result"] == "SUCCEEDED"
     assert out["home_outcome"]["navigation"] == "ARRIVED"
@@ -266,6 +266,6 @@ def test_low_battery_triggers_automatic_return_to_empty_charging_bay():
     assert out["charge_return"]["low_battery"] is True
     assert out["charge_return"]["dispatched"] is True
     assert out["charge_return"]["selected_bay"]["id"] == "C2"
-    assert goals == [{"x": 0.45, "y": 0.0, "theta": 0.0}, {"x": 0.22, "y": 0.0, "theta": 0.0}]
+    assert goals == [{"x": 0.45, "y": 0.0, "yaw": 0.0}, {"x": 0.22, "y": 0.0, "yaw": 0.0}]
     assert out["charge_return"]["charge_outcome"]["navigation"] == "ARRIVED"
 
