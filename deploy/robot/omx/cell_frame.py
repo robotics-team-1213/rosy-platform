@@ -187,28 +187,33 @@ def _rays(pixels, K, dist) -> np.ndarray:
 
 def _upright(points, rays, up) -> tuple:
     """Camera pose in the base (object pose in the camera) with the base z axis fixed to `up` (the table normal in
-    the camera, from depth): only the yaw and the translation are fitted, linearly from the rays."""
+    the camera, pointing at the camera, from depth): only the yaw and the translation are fitted. For a yaw the
+    translation is linear in the rays; the yaw is scanned, then refined, on the ray-angle residual. (A joint linear
+    solve collapses to zero when every point has the same z, as remap marks do.)"""
     up = np.asarray(up, float) / np.linalg.norm(up)
     a = np.cross(up, [1.0, 0, 0] if abs(up[0]) < 0.9 else [0, 1.0, 0])
     a /= np.linalg.norm(a)
     R0 = np.column_stack([a, np.cross(up, a), up])  # base x, y, z in the camera, before the yaw
-    rows, rhs = [], []
-    for (x, y, z), d in zip(points, rays):
-        q = R0.T @ d
-        Q = np.array([[0, -q[2], q[1]], [q[2], 0, -q[0]], [-q[1], q[0], 0]])
-        rows.append(Q @ np.array([[x, -y, 1, 0, 0], [y, x, 0, 1, 0], [0, 0, 0, 0, 1]], float))
-        rhs.append(-Q @ np.array([0.0, 0.0, z]))
-    u, *_ = np.linalg.lstsq(np.vstack(rows), np.concatenate(rhs), rcond=None)
-    c, s = np.array(u[:2]) / np.hypot(u[0], u[1])
-    Rz = np.array([[c, -s, 0], [s, c, 0], [0, 0, 1.0]])
-    # the translation again with the yaw fixed to a true rotation
-    rows, rhs = [], []
-    for p, d in zip(points, rays):
-        Q = np.array([[0, -d[2], d[1]], [d[2], 0, -d[0]], [-d[1], d[0], 0]])
-        rows.append(Q)
-        rhs.append(-Q @ (R0 @ Rz @ np.asarray(p, float)))
-    t, *_ = np.linalg.lstsq(np.vstack(rows), np.concatenate(rhs), rcond=None)
-    return R0 @ Rz, t
+    P = np.asarray(points, float)
+    D = np.asarray(rays, float) / np.linalg.norm(rays, axis=1, keepdims=True)
+    Qs = [np.array([[0, -d[2], d[1]], [d[2], 0, -d[0]], [-d[1], d[0], 0]]) for d in D]
+
+    def at(theta):
+        c, s = np.cos(theta), np.sin(theta)
+        R = R0 @ np.array([[c, -s, 0], [s, c, 0], [0, 0, 1.0]])
+        t, *_ = np.linalg.lstsq(np.vstack(Qs), np.concatenate([-Q @ (R @ p) for Q, p in zip(Qs, P)]), rcond=None)
+        X = P @ R.T + t
+        if np.any(X[:, 2] <= 0):
+            return np.inf, R, t
+        return float(np.sum(np.cross(D, X / np.linalg.norm(X, axis=1, keepdims=True)) ** 2)), R, t
+
+    best = min(np.radians(np.arange(0, 360, 1.0)), key=lambda th: at(th)[0])
+    for step in np.radians([0.5, 0.1, 0.02, 0.004]):
+        best = min((best - step, best, best + step), key=lambda th: at(th)[0])
+    cost, R, t = at(best)
+    if not np.isfinite(cost):
+        raise ValueError("no yaw puts the marks in front of the camera with this table normal")
+    return R, t
 
 
 def plane_pose_map(marks, z: float, K, dist, up=None) -> dict:
