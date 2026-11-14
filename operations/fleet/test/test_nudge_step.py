@@ -96,7 +96,7 @@ def test_core_refusals_pass_through_and_offline_is_a_409(tmp_path):
         robot.mission_error = httpx.ConnectError("refused")
         offline = _post(client)
         assert offline.status_code == 409 and offline.json()["detail"]["code"] == "ROBOT_OFFLINE"
-    assert robot.missions == []
+    assert [m[0] for m in robot.missions] == ["nudge_backward", "nudge_backward"]  # both reached CORE
 
 
 def test_a_step_is_a_site_map_event(tmp_path):
