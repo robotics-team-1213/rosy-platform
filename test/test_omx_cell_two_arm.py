@@ -379,7 +379,7 @@ def armed(tmp_path, commissioning=("a", "b"), **cells_kw):
 
 
 def gates_of(cells, configs, libraries, run):
-    return two.open_gates(cells, configs, {}, libraries, {n: two.FOLDED for n in "ab"}, run)
+    return two.open_gates(cells, configs, {n: {} for n in "ab"}, libraries, {n: two.FOLDED for n in "ab"}, run)
 
 
 def test_one_held_library_stops_the_whole_run_at_zero_motion(tmp_path):
@@ -430,7 +430,7 @@ def test_a_restarted_runner_holds_even_the_park_and_a_person_is_needed(geometry,
     assert folded["folded"] is False and "held: session_changed" in folded["person_needed"]
 
 
-def test_the_arm_waiting_through_the_other_s_fold_keeps_its_session_alive(monkeypatch, tmp_path):
+def test_the_arm_waiting_through_the_other_s_fold_keeps_its_session_alive(monkeypatch, geometry, tmp_path):
     monkeypatch.setattr(two, "KEEP_ALIVE_S", 0.01)
     configs, cells, libraries, run = armed(tmp_path, a={"delay_s": 0.2})
     folded = two.safe_fold(cells, {"a": LIBRARY, "b": LIBRARY}, None, {"a": 0.0, "b": 1.0}, {"a": 0.0, "b": 0.0},
