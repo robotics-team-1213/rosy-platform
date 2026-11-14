@@ -1,6 +1,8 @@
 """update_status flags a channel that has stopped being healthy, not one that is briefly waiting."""
+from datetime import datetime, timezone
 import hashlib
 import importlib.util
+import json
 import os
 from pathlib import Path
 import subprocess
@@ -139,6 +141,7 @@ def test_service_role_composition_preserves_every_unit_and_rejects_conflicts():
 def test_status_main_collects_an_independent_production_host(monkeypatch):
     config = {'site_host': 'site@h', 'omx_hosts': ['arm@h']}
     monkeypatch.setattr(status.lab_hosts, 'load', lambda: config)
+    monkeypatch.setenv('ROSY_SITE_MAP', os.path.join(os.devnull, 'no-site-map.yaml'))
     monkeypatch.setattr(status, 'load_inventory', lambda: {'site': {}, 'omx': {}})
     monkeypatch.setattr(status, 'ref_state', lambda *args: dict(
         ref='HEAD', verdict='ok', tip='a'*12, fetched_h=0, problem=None))
@@ -147,12 +150,31 @@ def test_status_main_collects_an_independent_production_host(monkeypatch):
     targets = []
     def run(argv, **kwargs):
         targets.append(argv[-2])
-        return subprocess.CompletedProcess(argv, 0, stdout=b'gate open\n', stderr=b'')
+        return subprocess.CompletedProcess(argv, 0, stdout=f'gate open\nguard active {int(time.time())}\n'.encode(), stderr=b'')
     monkeypatch.setattr(status.subprocess, 'run', run)
     with pytest.raises(SystemExit) as ended:
         status.main()
     assert ended.value.code == 0
     assert targets == ['site@h', 'arm@h']
+
+
+def test_status_main_prints_a_drift_finding_it_counts(monkeypatch, capsys):
+    # 2026-11-14: drift findings were added after the print loop, so they set the exit code but never showed.
+    config = {'site_host': 'site@h'}
+    monkeypatch.setattr(status.lab_hosts, 'load', lambda: config)
+    monkeypatch.setenv('ROSY_SITE_MAP', os.path.join(os.devnull, 'no-site-map.yaml'))
+    monkeypatch.setattr(status, 'load_inventory', lambda: {'site': {}, 'omx': {}})
+    monkeypatch.setattr(status, 'ref_state', lambda *args: dict(
+        ref='HEAD', verdict='ok', tip='a'*12, fetched_h=0, problem=None))
+    monkeypatch.setattr(status, 'robot_cd_root', lambda: None)
+    monkeypatch.setattr(status.sys, 'argv', ['update_status.py'])
+    stale = int(time.time()) - 3600
+    monkeypatch.setattr(status.subprocess, 'run', lambda argv, **kw: subprocess.CompletedProcess(
+        argv, 0, stdout=f'gate open\nguard active {stale}\n'.encode(), stderr=b''))
+    with pytest.raises(SystemExit) as ended:
+        status.main()
+    assert ended.value.code == 1
+    assert 'host-guard: status.json last written' in capsys.readouterr().out
 
 
 def test_images_outside_the_role_or_piling_up_are_reported():
@@ -279,3 +301,267 @@ def test_observer_manifest_uses_selected_workcell_arms_without_a_fixed_count():
     entry = status.load_inventory()['omx']['rosy-omx-observer@.service']
     assert entry.get('instances_from') == 'workcell-arms'
     assert 'instances' not in entry
+
+
+def test_chrony_with_no_usable_source_and_unresolved_names_fail_or_note():
+    host = status.parse('chrony 0 2 pool.vanished,ntp.gone', NOW, 6.0)
+    assert host['chrony'] == dict(usable=0, total=2, unresolved=['pool.vanished', 'ntp.gone'])
+    assert [f[0] for f in status.clock_and_site(host, NOW)] == ['FAIL', 'note']
+    assert status.clock_and_site(status.parse('chrony 1 3 -', NOW, 6.0), NOW) == []
+    assert status.clock_and_site(status.parse('gate open', NOW, 6.0), NOW) == []  # no chrony report, no verdict
+
+
+def _site(state):
+    return status.clock_and_site(status.parse('sitestate ' + json.dumps(state), NOW, 6.0), NOW)
+
+
+def test_site_hold_expiry_and_refused_last_run_are_reported():
+    iso = lambda hours: datetime.fromtimestamp(NOW + hours * 3600, timezone.utc).isoformat()
+    assert _site({'hold': {'reason': 'r', 'time': iso(-1), 'until': iso(23)}})[0][0] == 'HELD'
+    expired = _site({'hold': {'reason': 'R migration', 'time': iso(-96), 'until': iso(-72)}})
+    assert expired[0][0] == 'FAIL' and 'EXPIRED' in expired[0][2] and 'R migration' in expired[0][2]
+    assert _site({'hold': {'reason': 'old', 'time': iso(-30)}})[0][0] == 'FAIL'  # legacy: set time + 24 h
+    assert _site({'hold': {'reason': 'old', 'time': iso(-2)}})[0][0] == 'HELD'
+    refused = _site({'last_run': {'result': 'refused', 'reason': 'fleet loaded image ID mismatch'}})
+    assert refused[0][0] == 'FAIL' and 'image ID mismatch' in refused[0][2]
+    assert _site({'last_run': {'result': 'idle'}}) == []
+
+
+def test_retired_host_name_in_a_config_file_fails_with_the_path_only():
+    host = status.parse('retired /etc/chrony/chrony.conf\nretired /home/r/.config/rosy/cal/receiver.json', NOW, 6.0)
+    found = [f for f in status.clock_and_site(host, NOW) if f[1] == 'retired-name']
+    assert [f[0] for f in found] == ['FAIL', 'FAIL'] and '/etc/chrony/chrony.conf' in found[0][2]
+    assert not [f for f in status.clock_and_site(status.parse('gate open', NOW, 6.0), NOW) if f[1] == 'retired-name']
+
+
+def test_retired_names_come_from_the_private_site_map_and_a_missing_one_scans_nothing(tmp_path):
+    private = tmp_path / 'site-map.yaml'
+    private.write_text('schema: rosy.site-map/1\nhosts: {}\nretired_hostnames:\n'
+                       '  - {name: old-host.example.test, retired: 2026-11-09, note: renamed}\n')
+    assert status.retired_hostnames(private) == (['old-host.example.test'], '')
+    names, note = status.retired_hostnames(tmp_path / 'absent.yaml')
+    assert names == [] and 'skipped' in note
+    private.write_text('schema: rosy.site-map/1\nhosts: {}\n')
+    assert status.retired_hostnames(private)[0] == [] and 'no retired_hostnames' in status.retired_hostnames(private)[1]
+    private.write_text('schema: rosy.site-map/1\nhosts: {}\nretired_hostnames: 2026\n')  # a typo is a clear stop, not a traceback
+    with pytest.raises(SystemExit, match='must be a list'):
+        status.retired_hostnames(private)
+
+
+def test_no_tracked_services_file_lists_retired_names():
+    assert 'retired_hostnames:' not in (ROOT / 'deploy/hosts/services.yaml').read_text(encoding='utf-8')
+
+
+def test_retired_name_probe_is_valid_bash_and_skips_backup_files():
+    import subprocess
+    assert subprocess.run(['bash', '-n'], input=status.PROBE.encode()).returncode == 0
+    assert '*rosy-source-repair*' in status.PROBE and '*before-*' in status.PROBE
+
+
+def test_failed_account_login_check_unit_fails_the_host():
+    host = status.parse('failed rosy-site-account-login-check.service', NOW, 6.0)
+    assert [f[:2] for f in status.clock_and_site(host, NOW)] == [('FAIL', 'account-login-check')]
+    assert status.clock_and_site(status.parse('failed rosy-other.service', NOW, 6.0), NOW) == []
+
+
+def _retired_scan(tmp_path, retired, *, sudo_works=False):
+    """Run the probe's retired-name block alone against a fake HOME."""
+    start, end = status.PROBE.index('# retired host names'), status.PROBE.index('D=docker')
+    bin_dir = tmp_path / 'bin'
+    bin_dir.mkdir(exist_ok=True)
+    (bin_dir / 'sudo').write_text('#!/bin/sh\nexit 1\n')
+    (bin_dir / 'sudo').chmod(0o755)
+    env = {**os.environ, 'HOME': str(tmp_path / 'home'), 'PATH': f'{bin_dir}:{os.environ["PATH"]}'}
+    done = subprocess.run(['bash', '-c', f'RETIRED={retired!r}\n' + status.PROBE[start:end]],
+                          capture_output=True, text=True, env=env, timeout=60)
+    return [line for line in done.stdout.splitlines() if str(tmp_path) in line]
+
+
+pytestmark_posix = pytest.mark.skipif(os.name == 'nt', reason='needs bash and POSIX modes')
+
+
+@pytestmark_posix
+def test_empty_retired_list_matches_nothing(tmp_path):
+    receiver = tmp_path / 'home/.config/rosy/cal/receiver.json'
+    receiver.parent.mkdir(parents=True)
+    receiver.write_text('{"issuer": "https://anything.example.test"}')
+    assert _retired_scan(tmp_path, '') == []
+    assert _retired_scan(tmp_path, 'old-host.example.test') == []
+    receiver.write_text('{"issuer": "https://OLD-HOST.example.test"}')
+    assert _retired_scan(tmp_path, 'old-host.example.test') == [f'retired {receiver}']
+
+
+@pytestmark_posix
+def test_retired_scan_skips_symlinked_receivers_and_reports_unreadable_ones(tmp_path):
+    base = tmp_path / 'home/.config/rosy'
+    (base / 'a').mkdir(parents=True)
+    real = tmp_path / 'real.json'
+    real.write_text('old-host.example.test')
+    (base / 'a/receiver.json').symlink_to(real)
+    assert _retired_scan(tmp_path, 'old-host.example.test') == []
+    (base / 'a/receiver.json').unlink()
+    if os.getuid() != 0:
+        locked = base / 'a/receiver.json'
+        locked.write_text('old-host.example.test')
+        locked.chmod(0)
+        assert _retired_scan(tmp_path, 'old-host.example.test') == [f'retired-unreadable {locked}']
+
+
+def test_probe_guards_the_retired_scan_and_names_missing_or_unreadable_site_state():
+    assert 'if [ -n "$RETIRED" ]' in status.PROBE and 'set -f' in status.PROBE
+    assert '-type f' in status.PROBE and '[ -L "$f" ] && continue' in status.PROBE
+    assert 'sitestate missing' in status.PROBE and 'sitestate unreadable' in status.PROBE
+    import subprocess
+    assert subprocess.run(['bash', '-n'], input=status.PROBE.encode()).returncode == 0
+
+
+def test_unreadable_retired_path_is_a_note_never_clean():
+    found = status.clock_and_site(status.parse('retired-unreadable /etc/hosts', NOW, 6.0), NOW)
+    assert found == [('note', 'retired-name', '/etc/hosts exists but could not be read; not checked')]
+
+
+def test_retired_hostnames_must_be_full_hostnames(tmp_path):
+    def load(*names):
+        path = tmp_path / 'site-map.yaml'
+        path.write_text('retired_hostnames:\n' + ''.join(f'  - {{name: {n}, retired: 2026-11-09}}\n' for n in names))
+        return status.retired_hostnames(path)[0]
+    assert load('old-host.example.test') == ['old-host.example.test']
+    for bad in ('short', 'a.b', 'nodotbutlonghostname'):
+        with pytest.raises(SystemExit):
+            load('old-host.example.test', bad)
+
+
+def test_malformed_probe_lines_become_findings_instead_of_raising():
+    for line in ('chrony x y z', 'chrony 1', 'chrony 1 2.5 -'):
+        found = status.clock_and_site(status.parse(line, NOW, 6.0), NOW)
+        assert [f[:2] for f in found] == [('FAIL', 'chrony')], line
+    for state in ('[]', '5', '"text"', 'null'):
+        found = status.clock_and_site(status.parse('sitestate ' + state, NOW, 6.0), NOW)
+        assert [f[:2] for f in found] == [('FAIL', 'site-autoupdate')], state
+    for state in ({'hold': 'text'}, {'hold': ['x']}, {'last_run': 'text'}, {'last_run': [1]}):
+        found = _site(state)
+        assert [f[:2] for f in found] == [('FAIL', 'site-autoupdate')], state
+
+
+def test_missing_site_state_is_a_note_on_a_site_host_and_unreadable_is_a_failure():
+    missing = status.parse('sitestate missing', NOW, 6.0)
+    assert [f[:2] for f in status.clock_and_site(missing, NOW, {'site'})] == [('note', 'site-autoupdate')]
+    assert status.clock_and_site(missing, NOW, {'omx'}) == []
+    assert status.clock_and_site(missing, NOW) == []
+    unreadable = status.parse('sitestate unreadable', NOW, 6.0)
+    assert [f[:2] for f in status.clock_and_site(unreadable, NOW, {'site'})] == [('FAIL', 'site-autoupdate')]
+    assert [f[:2] for f in status.clock_and_site(status.parse('sitestate {bad', NOW, 6.0), NOW, {'site'})] == [('FAIL', 'site-autoupdate')]
+
+
+def test_hold_until_rules_match_the_site_updater():
+    naive = lambda hours: datetime.fromtimestamp(NOW + hours * 3600, timezone.utc).replace(tzinfo=None).isoformat()
+    aware = lambda hours: datetime.fromtimestamp(NOW + hours * 3600, timezone.utc).isoformat()
+    for until in (naive(23), 'garbage', 5, None, ''):
+        found = _site({'hold': {'reason': 'r', 'time': aware(-1), 'until': until}})
+        assert found[0][0] == 'FAIL' and 'EXPIRED' in found[0][2], until
+    assert _site({'hold': {'reason': 'r', 'time': naive(-1)}})[0][0] == 'FAIL'  # naive set time: expired
+    assert _site({'hold': {'reason': 'r', 'time': aware(-1)}})[0][0] == 'HELD'  # no until key: set time + 24 h
+    epoch = _site({'hold': {'reason': 'r', 'time': '1970-01-01T00:00:00+00:00', 'until': aware(23)}})
+    assert epoch[0][0] == 'HELD' and 'unknown age' not in epoch[0][2]
+
+
+def _bash_ok(text):
+    return subprocess.run(['bash', '-n'], input=text.encode()).returncode == 0
+
+
+def test_the_drift_probe_is_valid_bash_and_prints_no_key_material():
+    assert _bash_ok(status.PROBE + status.update_drift.PROBE)
+    assert 'sorted(d.get("public_key_files")' in status.update_drift.PROBE
+
+
+def _drift(lines, roles=(), kids=None, now=NOW):
+    host = status.parse('\n'.join(['gate open', *lines]), now, 6.0)
+    return status.update_drift.findings(host, roles, now, lambda issuer: kids)
+
+
+def _receiver(path, issuer, kids):
+    return f'receiver {path} ' + json.dumps({'issuer': issuer, 'kids': kids})
+
+
+def test_a_receiver_pinning_no_current_kid_unreachable_keys_or_a_plain_http_issuer_is_account_key_drift():
+    issuer = 'https://account.example.test'
+    lines = [_receiver('/home/r/.config/rosy/a/receiver.json', issuer, ['k1', 'old']),
+             _receiver('/home/r/.config/rosy/b/receiver.json', issuer, ['old']),
+             _receiver('/home/r/.config/rosy/c/receiver.json', issuer, [])]
+    found = _drift(lines, kids={'k1', 'k2'})
+    assert found == [('FAIL', 'account-key-drift', '/home/r/.config/rosy/b/receiver.json'),
+                     ('FAIL', 'account-key-drift', '/home/r/.config/rosy/c/receiver.json')]
+    unreachable = _drift(lines, kids=None)
+    assert [f[:2] for f in unreachable] == [('FAIL', 'account-key-drift')]  # a check that could not run is not clean
+    assert _drift(lines, kids=set()) == [('FAIL', 'account-key-drift', f'{issuer} publishes no keys')]  # blame the issuer
+    assert _drift(['receiver-unreadable /etc/rosy/x/receiver.json'])[0][0] == 'note'
+    assert _drift(['receiver /p not-json', _receiver('/q', 'bad issuer; rm', ['k'])])[0][0] == 'note'
+    assert _drift([_receiver('/q', 'http://account.example.test', ['k1'])], kids={'k1'}) == [
+        ('FAIL', 'account-key-drift', '/q has no https issuer')]
+
+
+def test_the_issuer_key_fetch_asks_the_site_host_for_kid_names_only(monkeypatch):
+    seen = []
+
+    def run(argv, **kwargs):
+        seen.append(argv)
+        body = json.dumps({'keys': [{'kid': 'k1', 'x': 'public-part'}, {'kid': 'k2'}]}).encode()
+        return subprocess.CompletedProcess(argv, 0, stdout=body, stderr=b'')
+    monkeypatch.setattr(status.update_drift.subprocess, 'run', run)
+    assert status.update_drift.fetch_kids(['ssh', 'site@h'], 'https://account.example.test') == {'k1', 'k2'}
+    assert seen[0][:2] == ['ssh', 'site@h'] and seen[0][-1].endswith('/api/fleet/auth/keys')
+    monkeypatch.setattr(status.update_drift.subprocess, 'run', lambda argv, **k: subprocess.CompletedProcess(argv, 22, stdout=b'', stderr=b''))
+    assert status.update_drift.fetch_kids(['ssh', 'site@h'], 'https://account.example.test') is None
+
+
+def test_the_site_host_guard_timer_must_be_installed_active_and_recently_written():
+    stamp = int(NOW)
+    assert _drift([f'guard active {stamp - 600}'], {'site'}) == []
+    assert _drift([f'guard active {stamp - 3600}'], {'site'})[0][:2] == ('FAIL', 'host-guard')
+    assert _drift([f'guard inactive {stamp}'], {'site'})[0][:2] == ('FAIL', 'host-guard')
+    assert _drift(['guard none'], {'site'})[0][:2] == ('FAIL', 'host-guard')
+    assert _drift(['guard active -'], {'site'})[0][:2] == ('note', 'host-guard')
+    assert _drift(['guard none'], {'omx'}) == [] and _drift(['guard none']) == []
+
+
+def test_chrony_servers_must_equal_the_site_map_time_source():
+    def run(lines, expected):
+        host = status.parse('\n'.join(['gate open', *lines]), NOW, 6.0)
+        return [f[:2] for f in status.update_drift.findings(host, (), NOW, lambda issuer: None, expected)]
+    wanted = ('model', {'ntp.example.test'})
+    assert run(['chrony-servers ntp.example.test'], wanted) == []
+    assert run(['chrony-servers ntp.example.test.'], wanted) == []
+    assert run(['chrony-servers gone.example.test'], wanted) == [('FAIL', 'time-source model')]
+    assert run(['chrony-servers ntp.example.test extra.example.test'], wanted) == [('FAIL', 'time-source model')]
+    assert run(['chrony-servers'], wanted) == [('FAIL', 'time-source model')]  # chrony with no `server` line
+    assert run([], wanted) == []  # no chrony on the host: nothing to compare
+    assert run(['chrony-servers gone.example.test'], None) == []  # no time_source in the map
+
+
+def test_the_expected_time_source_comes_from_the_private_site_map(tmp_path, monkeypatch):
+    path = tmp_path / 'site-map.yaml'
+    path.write_text('schema: rosy.site-map/1\ntime_source: {client: NTP.example.test}\nhosts:\n'
+                    '  model: {ssh: "op@model.example.test", roles: [model]}\n', encoding='utf-8')
+    monkeypatch.setenv('ROSY_SITE_MAP', str(path))
+    assert status.update_drift.expected_time_source('op@model.example.test') == ('model', {'ntp.example.test'})
+    assert status.update_drift.expected_time_source('op@other.example.test') is None
+    monkeypatch.setenv('ROSY_SITE_MAP', str(tmp_path / 'missing.yaml'))
+    assert status.update_drift.expected_time_source('op@model.example.test') is None
+
+
+def test_a_skipped_time_source_compare_is_one_note_naming_the_targets(tmp_path, monkeypatch):
+    path = tmp_path / 'site-map.yaml'
+    path.write_text('schema: rosy.site-map/1\ntime_source: {client: NTP.example.test}\nhosts:\n'
+                    '  model: {ssh: "op@model.example.test", roles: [model]}\n', encoding='utf-8')
+    monkeypatch.setenv('ROSY_SITE_MAP', str(path))
+    assert status.update_drift.time_source_gap(['op@model.example.test']) == ''
+    note = status.update_drift.time_source_gap(['op@model.example.test', 'op@lost.example.test'])
+    assert 'op@lost.example.test' in note and 'op@model' not in note
+    monkeypatch.setenv('ROSY_SITE_MAP', str(tmp_path / 'missing.yaml'))
+    assert 'op@model.example.test' in status.update_drift.time_source_gap(['op@model.example.test'])
+
+
+def test_the_probe_lists_chrony_server_names_only_where_chrony_exists():
+    assert 'echo "chrony-servers ' in status.update_drift.PROBE
+    assert status.parse('gate open\nchrony-servers a.example.test b.example.test', NOW, 6.0)['chrony_servers'] == {
+        'a.example.test', 'b.example.test'}

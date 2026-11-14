@@ -260,3 +260,11 @@ def test_feasible_pre_filters_endpoints_and_hold_eases_gripper_smoothly():
     assert steps[0] < max(steps) * 0.5 and steps[-1] < max(steps) * 0.5
     assert frames[-1][5] == 46.0
 
+
+
+def test_the_park_closes_to_where_this_arms_empty_jaws_stop():
+    """2026-11-13 arm_s: empty jaws stop at 48.8; parking to 46.5 read as 'something in them' three times."""
+    assert m.Planner(PLAN).library()["gripper_closed"] == PLAN["grip_closed"]
+    library = m.Planner(dict(PLAN, jaw_empty_stop=49.0)).library()
+    assert library["gripper_closed"] == library["jaw_empty_stop"] == 49.0
+    assert library["chunks"]["grasp_pick"][-1][5] == PLAN["grip_closed"]  # the grasp still squeezes to the command
