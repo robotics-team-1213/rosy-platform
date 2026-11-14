@@ -345,7 +345,8 @@ def test_colour_diff_marks_black_finger_over_iso_luma_orange_background():
     closed[100:125, 100:125] = finger
     grey_diff = cv2.absdiff(cv2.cvtColor(closed, cv2.COLOR_BGR2GRAY), cv2.cvtColor(opened, cv2.COLOR_BGR2GRAY))
     assert int(grey_diff.max()) <= 1
-    blobs = cell_pivot.jaw_blobs(closed, opened)
+    assert cell_pivot.jaw_blobs(closed, opened) == []  # the grey mask (settling, jaw axis) is unchanged
+    blobs = cell_pivot.jaw_blobs(closed, opened, colour=True)  # mark_jaws' fallback
     assert len(blobs) == 1 and blobs[0][:2] == pytest.approx((112.0, 112.0), abs=1.0)
 
 

@@ -36,13 +36,13 @@ BIAS_REACH_MM = prm.default("pivot.bias_reach_mm")  # a region's bias is trusted
 _KERNEL_3X3 = np.ones((3, 3), np.uint8)
 
 
-def _changed_mask(a, b, threshold: int = DIFF_PX):  # the 3x3 opening is fixed: noise removal, not a decision
+def _changed_mask(a, b, threshold: int = DIFF_PX, colour: bool = False):  # the 3x3 opening is fixed: noise removal
     import cv2
 
-    diff = cv2.absdiff(a, b)
-    if diff.ndim == 3:
-        # 2026-11-15: black fingers over orange/pink can match in grey luminance; max over channels keeps hue contrast
-        diff = diff.max(axis=2)
+    if colour and a.ndim == 3:  # 2026-11-15: black fingers over orange/pink can match in grey; the channel max keeps hue
+        diff = cv2.absdiff(a, b).max(axis=2)  # only mark_jaws' fallback: settled_frame and jaw_axis keep the grey diff
+    else:
+        diff = cv2.absdiff(cv2.cvtColor(a, cv2.COLOR_BGR2GRAY), cv2.cvtColor(b, cv2.COLOR_BGR2GRAY))
     return cv2.morphologyEx((diff > threshold).astype(np.uint8) * 255, cv2.MORPH_OPEN, _KERNEL_3X3)
 
 
@@ -58,12 +58,12 @@ def settled_frame(cell, sleep=time.sleep, clock=time.monotonic, limit_s: float |
         before = now
 
 
-def jaw_blobs(closed, opened, params=None) -> list:
+def jaw_blobs(closed, opened, params=None, colour: bool = False) -> list:
     """(cx, cy, area) of the changed blobs of plausible size; [] when the frames barely differ."""
     import cv2
 
     diff_px, max_blob = prm.get(params, "pivot.diff_px", DIFF_PX), prm.get(params, "pivot.max_blob", MAX_BLOB)
-    mask = _changed_mask(closed, opened, diff_px)
+    mask = _changed_mask(closed, opened, diff_px, colour)
     if int(np.count_nonzero(mask)) <= diff_px:
         return []
     # pieces this close are one mark: over a box top the gripper body hid the fingers and the open-closed change came
@@ -158,7 +158,7 @@ def mark_jaws(cell, config: dict, sleep=time.sleep, clock=time.monotonic, max_ma
         if not cp.grip_to(cell, mark_open(config)):
             return fail("grip_to failed")
         now = settled_frame(cell, sleep, clock, params=p)
-        all_blobs = jaw_centre(closed, now, p) if mark_cfg.get("centre") else jaw_blobs(closed, now, p)
+        all_blobs = jaw_centre(closed, now, p) if mark_cfg.get("centre") else (jaw_blobs(closed, now, p) or jaw_blobs(closed, now, p, colour=True))
         saw_blobs |= bool(all_blobs)
         if not all_blobs:
             pick, rejected = None, "no changed blob"
