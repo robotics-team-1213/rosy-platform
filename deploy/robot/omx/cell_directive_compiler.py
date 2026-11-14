@@ -108,7 +108,7 @@ def build_plan_from_directive(
     plan["rl_speed_scale"] = round(rl_speed_scale, 3)
     base_transit = float(exec_cfg.get("transit_speed", plan.get("transit_speed", 0.85)))
     if "transit_speed" not in exec_cfg and rl_speed_scale != 1.0:
-        base_transit = round(min(1.0, max(0.50, base_transit * rl_speed_scale)), 4)
+        base_transit = round(min(0.85, max(0.50, base_transit * rl_speed_scale)), 4)  # chunk_library.load_library refuses above 0.85
         plan["lift_m_s"] = round(min(0.040, max(0.015, float(plan["lift_m_s"]) * rl_speed_scale)), 4)
     plan["transit_speed"] = base_transit
     plan["descend_pick_guard_frac"] = float(
