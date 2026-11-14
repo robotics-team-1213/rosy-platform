@@ -4792,6 +4792,7 @@ Fleet/Cam의 지속 관계 확장은 이 source/local 결과로 완료했다고 
 
 | 버전 | 일자 | 내용 |
 |---|---|---|
+| v1.402 | 2026-11-14 | Additive: Fleet 앞으로/뒤로 한 걸음(`POST /api/fleet/robots/{robot_id}/step`, CORE nudge 미션 재사용) |
 | v1.394 | 2026-11-14 | Additive: CORE 상태 표시등 패턴 GET/PUT, `LAMP_BUSY` 보호, 영속 rosy-face 설정 및 `lamp.status_patterns_changed`. 로봇 payload에서 적용 |
 | v1.385 | 2026-11-11 | Additive: 카메라로 초안 만들기(`POST /api/fleet/site-map/draft-from-camera`, Vision draft-map 후보→검증된 초안 본문, 쓰기 없음)와 카메라까지 겹친 대조(`POST .../reality-check` camera 삼각측량, `drive_outlier`면 apply 거절). Vision `draft-map` 보기 추가. 설계 docs/plans/2026-11-11-camera-draft-map-design.md |
 | v1.389 | 2026-11-12 | Additive (Fleet DB maintenance): `GET /api/fleet/admin/db-status`(cookie 사람 세션·`accounts.manage`·동일 출처, no-store)가 Fleet SQLite 저널·파일/WAL 크기·페이지/freelist·단편화·컴포넌트 마이그레이션·테이블별 최신 시각, PostgreSQL 도달성·크기, 백업 수·최신 경과 시간을 반환한다. 같은 규칙으로 `PUT /api/fleet/admin/db-settings`(보존일·WAL·incremental vacuum 설정, 422 `INVALID_DB_SETTINGS`)와 `POST /api/fleet/admin/db-maintenance`(`self-test`·`checkpoint`·`incremental-vacuum`·`flush-audit`·`prune-expired`, 422 `INVALID_DB_ACTION`)를 둔다. 경로·연결 정보·원시 오류는 반환하지 않는다. |
