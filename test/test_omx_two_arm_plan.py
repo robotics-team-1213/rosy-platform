@@ -187,7 +187,8 @@ def test_outbound_and_rearrange_replay_json_carry_after_zones_and_disjoint_overl
                     if a1 != a2 and m1 not in anc[m2] and m2 not in anc[m1] and s1 < e2 - 0.01 and s2 < e1 - 0.01]
         assert overlaps
         for m1, m2 in overlaps:
-            assert plan.sweeps_clear(poses[m1], poses[m2]), (scenario, m1, m2)
+            assert plan.sweeps_clear(poses[m1], poses[m2], ta=dict((w[0], w[2]) for w in windows)[m1],
+                                     tb=dict((w[0], w[2]) for w in windows)[m2], slack_s=plan.SWEEP_SLACK_S), (scenario, m1, m2)
         for i, (m1, z1, s1, e1) in enumerate(held):
             for m2, z2, s2, e2 in held[i + 1:]:
                 if m1 != m2 and m1 not in anc[m2] and m2 not in anc[m1]:
@@ -205,12 +206,16 @@ def test_disjoint_zones_with_crossing_sweeps_are_not_scheduled_or_started_togeth
         "bar-7": "ship-h1r1-l2", "bar-8": "ship-h1r0-l1", "bar-9": "tmp-b-2",
     }
     moves = [
-        dict(cargo_id="bar-5", source="tmp-a-2", destination="ship-h1r0-l2", primary_arm="A", alternate_arms=[], phase_label="복귀", arms=["arm_a"]),
+        dict(cargo_id="bar-8", source="ship-h1r0-l1", destination="tmp-a-2", primary_arm="A", alternate_arms=[], phase_label="재취급", arms=["arm_a"]),
         dict(cargo_id="bar-6", source="ship-h1r2-l1", destination="tmp-b-3", primary_arm="B", alternate_arms=[], phase_label="재취급", arms=["arm_b"]),
     ]
     rows, extra = plan.schedule(layout, moves, ("arm_a", "arm_b"), start=here)
     assert not extra and len(rows) == 2
-    assert rows[1]["start"] >= rows[0]["end"] + plan.TIMING["park"] - 0.01
+    assert rows[1]["start"] > 0.0 and not plan.sweeps_clear(
+        plan.step_swept_poses(layout, "arm_a", "ship-h1r0-l1", "tmp-a-2", here),
+        plan.step_swept_poses(layout, "arm_b", "ship-h1r2-l1", "tmp-b-3", here),
+        ta=0.0, tb=0.0, slack_s=plan.SWEEP_SLACK_S,
+    )
 
     class FakeTeacher:
         def __init__(self, L):

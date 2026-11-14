@@ -27,7 +27,7 @@ _ADAPTER = str(Path(__file__).resolve().parents[2] / "middleware" / "devices" / 
 if _ADAPTER not in sys.path:
     sys.path.append(_ADAPTER)
 import omx_two_arm_sites as sites_mod  # noqa: E402
-from omx_adapter.coordination import clearance as _sweep_clearance, thinned as _thinned  # noqa: E402
+from omx_adapter.coordination import _clearance_at_least  # noqa: E402
 from omx_adapter.swept_volume import capsules as _arm_capsules  # noqa: E402
 
 HARBOR_ARMS = {"A": "arm_a", "B": "arm_b"}
@@ -36,8 +36,8 @@ HARBOR_ARMS = {"A": "arm_a", "B": "arm_b"}
 TIMING = dict(speed=.05, pick=7., place=4.5, park=3.2, belt_gap_s=6.)
 SIDE = {"arm_a": "a", "arm_b": "b"}
 REORDER_WIDTH = 4
-SWEEP_STEP_M = 0.03
 SWEEP_MARGIN_M = 0.02
+SWEEP_SLACK_S = 1.5
 _SWEEP_CACHE = {}
 
 
@@ -55,7 +55,7 @@ class _ArmKin:
 
 
 def step_swept_poses(layout, arm_name, src, dst, here):
-    """Thinned world-frame swept capsules (arm links + held box on lift..release) for one step, or None if unreachable."""
+    """Timed world-frame swept capsules [(t_rel, capsules), ...] (links + held box on lift..release), or None if unreachable."""
     import omx_two_arm_tasks as tasks
     z_up = tasks.carry_z(layout, here, src, dst)
     key = (id(layout), arm_name, src, dst, round(z_up, 4))
@@ -65,17 +65,28 @@ def step_swept_poses(layout, arm_name, src, dst, here):
         if problems:
             _SWEEP_CACHE[key] = None
         else:
+            _, t_carry, _ = duration(layout, src, dst)
+            seg_t = (0.0, 2.5, 4.0, 5.5, 7.0, 7.0 + t_carry, 8.5 + t_carry, 10.0 + t_carry, 11.5 + t_carry)
+            ts = [seg_t[0]]
+            for s in range(7):
+                dt = (seg_t[s + 2] - seg_t[s + 1]) / 12
+                ts.extend(seg_t[s + 1] + dt * (k + 1) for k in range(12))
             kin = _ArmKin(arm)
-            item = (layout.hold_below + layout.box[2] / 2, math.hypot(layout.box[0], layout.box[1]) / 2)
+            item = (layout.hold_below + layout.box[2] / 2, 0.02)
             # solve_chain samples 12 steps per segment across 7 segments: indices 25..72 are lift through release (carrying the box).
-            poses = [_arm_capsules(kin, q, fingertip_m=0.015, item=item if 24 < i <= 72 else None) for i, q in enumerate(path)]
-            _SWEEP_CACHE[key] = _thinned(poses, SWEEP_STEP_M)
+            _SWEEP_CACHE[key] = [(t, _arm_capsules(kin, q, fingertip_m=0.015, item=item if 24 < i <= 72 else None))
+                                 for i, (t, q) in enumerate(zip(ts, path))]
     return _SWEEP_CACHE[key]
 
 
-def sweeps_clear(poses_a, poses_b, margin_m=SWEEP_MARGIN_M):
-    """True when both arms' swept-volume capsule sequences keep >= `margin_m` apart."""
-    return bool(poses_a and poses_b and _sweep_clearance(poses_a, poses_b) >= margin_m)
+def sweeps_clear(poses_a, poses_b, margin_m=SWEEP_MARGIN_M, ta=0.0, tb=0.0, slack_s=None):
+    """True when both arms' swept-volume capsule sequences keep >= `margin_m` apart (optionally within `slack_s` of each other)."""
+    if not poses_a or not poses_b:
+        return False
+    if slack_s is None:
+        return _clearance_at_least([c for _, c in poses_a], [c for _, c in poses_b], margin_m)
+    return all(_clearance_at_least([c1], [c2], margin_m)
+               for t1, c1 in poses_a for t2, c2 in poses_b if abs((ta + t1) - (tb + t2)) <= slack_s)
 
 
 def zone(layout, site):
@@ -243,7 +254,9 @@ def schedule(layout, moves, arms, belt_arrivals=None, start=None):
                         [e for z in hold_b for s, e in busy.get(z, []) if s < t + t_end and t + t_pick < e]
                 if poses is not None:
                     t_park = t + t_end + TIMING["park"]
-                    clash += [e for oa, s, e, op in scheduled if oa != arm and s < t_park and t < e and not sweeps_clear(poses, op)]
+                    if any(oa != arm and s < t_park and t < e and not sweeps_clear(poses, op, ta=t, tb=s, slack_s=SWEEP_SLACK_S)
+                           for oa, s, e, op in scheduled):
+                        clash.append(t + 0.5)
                 if not clash:
                     break
                 t = min(clash)
