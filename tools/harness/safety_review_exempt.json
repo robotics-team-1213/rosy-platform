@@ -518,5 +518,41 @@
   {
     "commit": "7fb358aaaa2197ccdfbeab6f04cf361e6291c8c4",
     "reason": "Independent read-only review agent, 2026-10-26, for publish PR #210 (D-868 history join): APPROVE. Deletes 11 origin-merge duplicates under fleet/server/site_observation (deletions only). 10 are byte-identical to blobs kept at HEAD under server/recognition or server/pose; sightings_config.py differs from the kept recognition/sightings_config.py only by function order, docstring and an unused import (same logic). Nothing at HEAD imports fleet.server.site_observation."
+  },
+  {
+    "commit": "ae7a2ed52c69bc1e10b90dc871e44d7180b922b7",
+    "reason": "Independent Claude safety seat 2026-11-14 (Pinky update build range cba7c0dde7..c4ef3f2c5e, diff/AST review, no device acceptance): APPROVE: action_runner/pick_place_runner and motion_limits node split are line-set identical; tolerance/state-age/held-object checks and every clamp, stale window and publisher kept (CORE sole cmd_vel)."
+  },
+  {
+    "commit": "65266a619409eaed6762a7b3cb5328c591f30165",
+    "reason": "Independent Claude safety seat 2026-11-14 (Pinky update build range cba7c0dde7..c4ef3f2c5e, diff/AST review, no device acceptance): APPROVE-WITH-FIXES (non-blocking): limit comparisons and 1e-9 slack unchanged, canonical_sha256 hashes the same bytes; open: command_owner unknown joint name now raises KeyError instead of a typed rejection."
+  },
+  {
+    "commit": "0b6d23e673dd139681476b9fd647f6f37fa78d90",
+    "reason": "Independent Claude safety seat 2026-11-14 (Pinky update build range cba7c0dde7..c4ef3f2c5e, diff/AST review, no device acceptance): APPROVE: frozenset hoists, mtime/size-keyed URDF cache and TCP-only FK twin; no cap or gate touched."
+  },
+  {
+    "commit": "2f5be653c2763d0fe96a2032535746caacf9f475",
+    "reason": "Independent Claude safety seat 2026-11-14 (Pinky update build range cba7c0dde7..c4ef3f2c5e, diff/AST review, no device acceptance): APPROVE: ActionStore/ActionApi/PickPlaceRunner allow-lists identical as frozensets; unexpected transaction state now raises (fails closed)."
+  },
+  {
+    "commit": "3843a78258c3329d3af39aa8839cf38615a512ce",
+    "reason": "Independent Claude safety seat 2026-11-14 (Pinky update build range cba7c0dde7..c4ef3f2c5e, diff/AST review, no device acceptance): APPROVE: dynamixel joint-limit checks use precomputed pairs with the same comparisons; admission gating and hold-on-failure unchanged."
+  },
+  {
+    "commit": "8fee68b17d74a2f055ee024290dcc07f6c9ff86b",
+    "reason": "Independent Claude safety seat 2026-11-14 (Pinky update build range cba7c0dde7..c4ef3f2c5e, diff/AST review, no device acceptance): APPROVE: command_types tuple comparison still rejects a joint_names mismatch; trajectory action change cosmetic."
+  },
+  {
+    "commit": "93461496c670442370f45fa8bd9ec4d3e8366cf5",
+    "reason": "Independent Claude safety seat 2026-11-14 (Pinky update build range cba7c0dde7..c4ef3f2c5e, diff/AST review, no device acceptance): APPROVE: console.py/ingest.py and docking manager_helpers splits AST/behaviour identical (retry, reseat, backoff, undock deadline, stop release unchanged)."
+  },
+  {
+    "commit": "973faf9de9a0521b28d656dd339114689f52cf7c",
+    "reason": "Independent Claude safety seat 2026-11-14 (Pinky update build range cba7c0dde7..c4ef3f2c5e, diff/AST review, no device acceptance): REJECT on motion_profile lift-rise widening (3.5->3.8, -27->-16, hover 2.8) without load evidence; reverted to the 10-30 guard by eb566925a2 (remote OMX motion tests green). Other hunks not blocking."
+  },
+  {
+    "commit": "01988565d47d4b97685bb95f9ceb184d1d1477e2",
+    "reason": "Independent Claude safety seat 2026-11-14 (Pinky update build range cba7c0dde7..c4ef3f2c5e, diff/AST review, no device acceptance): Docking bay cue: APPROVE-WITH-FIXES (no new motion, reverse limits kept; bay docks opt-in). REJECT on road-nav2/berth-park dispatch (unnamed operator, no trip_refusal/idempotency, console.goal fallback, simulated acceptance, hardcoded pose); fixed by 2e74d096b9."
   }
 ]
