@@ -49,6 +49,7 @@ class HandoverState(str, enum.Enum):
     PARKED = "PARKED"
     COMPLETED = "COMPLETED"
     FAILED = "FAILED"
+    HELD = "HELD"  # a guard input was missing (e.g. no real readback): a person clears it, never a retry
 
 
 @dataclass
@@ -274,6 +275,9 @@ class VlaHandoverBroker:
         stack_guard: Optional[CellStackGuard] = None,
         vla_refinement_steps: int = 3,
         wrist_obs: Optional[dict[str, Any]] = None,
+        read_grip_holding_fn: Optional[Callable[[], bool]] = None,
+        read_z_fn: Optional[Callable[[], float]] = None,
+        lift_step_fn: Optional[Callable[[float], None]] = None,
     ) -> dict[str, Any]:
         """Executes a complete 1/2/3-tier hybrid stacking stage with ReleaseCorrector residual & IL/RL update."""
         return run_hybrid_stack_stage(
@@ -288,6 +292,9 @@ class VlaHandoverBroker:
             stack_guard=stack_guard,
             vla_refinement_steps=vla_refinement_steps,
             wrist_obs=wrist_obs,
+            read_grip_holding_fn=read_grip_holding_fn,
+            read_z_fn=read_z_fn,
+            lift_step_fn=lift_step_fn,
         )
 
     def execute_3tier_hybrid_plan(
@@ -300,6 +307,9 @@ class VlaHandoverBroker:
         vla_step_fn: Callable[[Dict[str, Any]], Any],
         seating_probe_fn: Callable[[int, int], tuple[float, list[float]]],
         frame_fn: Optional[Callable[[str], Any]] = None,
+        read_grip_holding_fn: Optional[Callable[[], bool]] = None,
+        read_z_fn: Optional[Callable[[], float]] = None,
+        lift_step_fn: Optional[Callable[[float], None]] = None,
     ) -> dict[str, Any]:
         """Executes a multi-tier (Tier 1 -> Tier 2 -> Tier 3) hybrid stacking plan with Look-Ahead Prefetching."""
         return run_3tier_hybrid_plan(
@@ -311,6 +321,9 @@ class VlaHandoverBroker:
             vla_step_fn=vla_step_fn,
             seating_probe_fn=seating_probe_fn,
             frame_fn=frame_fn,
+            read_grip_holding_fn=read_grip_holding_fn,
+            read_z_fn=read_z_fn,
+            lift_step_fn=lift_step_fn,
         )
 
     def _emit_telemetry(
