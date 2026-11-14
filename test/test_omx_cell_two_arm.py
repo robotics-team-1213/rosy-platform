@@ -438,3 +438,14 @@ def test_the_arm_waiting_through_the_other_s_fold_keeps_its_session_alive(monkey
     assert folded["folded"] is True
     assert cells["b"].commands.count("state") >= 3  # one settled_state read; the rest is the fold-window keep-alive
 
+
+def test_a_both_step_schedule_needs_a_measured_wait_pose():
+    both = {"steps": [{"a": 0, "b": 0}]}
+    serial = {"steps": [{"a": 0, "b": None}, {"a": None, "b": 0}]}
+    libraries = {n: [("lib", {"chunks": {"home": [[0.0] * 6]}})] for n in "ab"}
+    with pytest.raises(SystemExit, match="D-983"):
+        two.admit(both, libraries)
+    two.admit(serial, libraries)  # it waits at home, a pose the plan's rest check already cleared
+    libraries["a"][0][1]["chunks"]["wait"] = [[0.0] * 6]  # a person measured where an arm may hover
+    two.admit(both, libraries)
+

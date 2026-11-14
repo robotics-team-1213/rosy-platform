@@ -279,6 +279,14 @@ def still_holding(cells: dict, libraries: dict) -> list:
     return [n for n in ORDER if states[n] is None or states[n][5] > libraries[n]["gripper_closed"] + STILL_HOLDING_UNITS]  # unread: not placed
 
 
+def admit(schedule: dict, libraries: dict) -> None:
+    """D-983: a both-step holds one arm mid-route while the other moves, and only a person-measured `wait` chunk is
+    a cleared waiting pose. A serial-only schedule waits at home, which the plan's rest check already cleared."""
+    if (any(step["a"] is not None and step["b"] is not None for step in schedule["steps"])
+            and not any("wait" in library["chunks"] for n in ORDER for _, library in libraries[n])):
+        raise SystemExit("no measured wait pose (D-983): teach a `wait` chunk or plan one arm after the other")
+
+
 def main(argv=None) -> int:
     import cv2
     import cell_calibration as cal
@@ -327,6 +335,7 @@ def main(argv=None) -> int:
     if schedule is None:
         print("refused: no order keeps the margin")
         return 1
+    admit(schedule, libraries)
     if args.plan_only:
         return 0
     cells = open_cells(configs, cp.FifoCell)
