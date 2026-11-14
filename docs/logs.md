@@ -14862,3 +14862,8 @@ osy-d395-s1d\`.
 - 변경: API 참조 v1.394에 상태 표시등 GET/PUT·거절·영속 인계·이벤트를 추가했다.
 - 증거: CORE 원격 시험과 프로토콜 정합 검증은 브랜치 결과에 기록한다.
 - gate 변화: 없음.
+
+## 2026-11-14 · uncommitted · fix(tools): main_red가 alone 계열 NEW id를 파일 단위로 main에서 다시 돌림
+- 변경: `tools/land_checks.py` `main_red`가 `tools/collect_alone.py::test_runs_alone[<file>]`·`test_collects_alone[<file>]` id를 node id로 넘기지 않고 `ROSY_ALONE_FILES=<file>`·`ROSY_COLLECT_PATHS=<file>`로 따로 돌린다(`land_mainred.alone_invocation`). 일반 id는 그대로 한 번에 돌리고 결과는 모두 `known_failures`로 분류해 `land_mainred.red`에 기록한다. 착지를 통과시키지 않는 계약은 그대로.
+- 증거: `test/test_land_checks_mainred.py` 새 시험(원격). 사례 land-fix-main-size-split-20261113052820: alone 계열 NEW만 남아 멈췄고 main에서 같은 파일을 직접 돌려도 12건 같게 실패(main-red였음).
+- gate 변화: 없음.

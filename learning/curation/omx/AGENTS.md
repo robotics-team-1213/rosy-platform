@@ -20,6 +20,7 @@ Offline export of recorded OMX SIM demonstrations to a LeRobot v3 dataset (D-427
 | `test/test_lerobot_export.py` | Schema, frame and refusal checks; the full LeRobot round trip skips without `lerobot` |
 | `arm_incident_labels.py` | Arm incidents a person cleared with a cause (Fleet `arm-incidents/labelled`, API v1.375) to label rows: the person's cause and basis, the cell's measured reading and the AI PC's explanation kept apart; truth only for a repeat or a measurement; `score` the rule against truth. Test `test/test_arm_incident_labels.py` |
 | `sim_batch_export.py` | Teacher reach results + recordings -> one `lerobot_export.py` run per complete successful episode, refusals with reasons, eval = highest seed, `batch-manifest.json` with `act_job.py` args. Test `test/test_sim_batch_export.py` |
+| `carry_dataset.py` | The cell's own carries -> ACT/VLA experiment dataset: raw `episode_recorder` recordings join `cell_attempts` rows by the run/attempt id the cell stamps in `task.json` (recordings without it are refused, never time-matched); only placed+verified carries with a person success label become episodes (forced stops, failures, interventions and unreviewed carries stay in `refusals`), train/eval split per run, source SHA-256s in the receipt; actions are the targets the runner sent, shadow predictions are never read. Test `test/test_carry_dataset.py` |
 
 ## For AI Agents
 

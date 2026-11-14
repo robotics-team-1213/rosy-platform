@@ -151,7 +151,11 @@ def check(commit: str) -> list[str]:
             for key, count in limits.parse_ratchet(_show(other, limits.RATCHET))[0].items():
                 base_rows[key] = max(count, base_rows.get(key, count))
     counts, over, owner = measure_commit(commit, units, limits)
-    listing = (_git("diff-tree", "-z", "--no-commit-id", "--name-only", "--no-renames", "-r", parent, commit)
+    # A merge is checked on the paths it changed against every parent (-c): 11-13 17 landings stopped on
+    # "Merge branch 'main'" for files main itself had over the limit, which the merge only carried.
+    listing = (_git("diff-tree", "-z", "-c", "--no-commit-id", "--name-only", "--no-renames", "-r", commit)
+               if len(parents) > 1 else
+               _git("diff-tree", "-z", "--no-commit-id", "--name-only", "--no-renames", "-r", parent, commit)
                if parent else _git("ls-tree", "-z", "-r", "--name-only", commit))
     changed = [path for path in listing.split("\0") if path]
     keys = None
