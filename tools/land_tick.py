@@ -57,13 +57,14 @@ def recheck(repo: Path, common: Path) -> str:
 
 
 def resume(repo: Path) -> str:
-    names = land_async.orphans(repo)
+    names, done = land_async.orphans(repo), []
     for name in names:
         try:
             land_async.resume(repo, name, [], land_async.detach, wait=0)
-        except SystemExit as exc:
+            done.append(name)
+        except SystemExit as exc:  # e.g. still held by a live ticket: not resumed, so not counted
             print(f"[tick] resume {name}: {exc}", flush=True)
-    return f"resumed {len(names)}: {', '.join(names)}" if names else "nothing to resume"
+    return f"resumed {len(done)} of {len(names)}: {', '.join(done)}" if names else "nothing to resume"
 
 
 def cleanup(repo: Path) -> str:
