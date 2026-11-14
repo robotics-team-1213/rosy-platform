@@ -10,7 +10,6 @@ import math
 from pathlib import Path
 
 import numpy as np
-import cell_checkerboard as cb  # the calls go through it so a patched `cb.find_charuco` etc. reaches this code
 
 CELLS = ("top-left", "top", "top-right", "left", "centre", "right", "bottom-left", "bottom", "bottom-right")
 
@@ -327,3 +326,7 @@ def fitted_map(config: dict, marks: list, z_view: float) -> dict:
     if pose["loo_error_mm"]["max"] > affine["loo_error_mm"]["max"] + POSE_LOO_SLACK_MM:
         return dict(affine, pose_fit={k: v for k, v in pose.items() if k != "homography"})
     return dict(pose, homography=pose["homography"].round(9).tolist(), affine_fit=affine)
+
+
+# last, after every name above exists: cell_checkerboard re-imports them at its own end, so either module may load first
+import cell_checkerboard as cb  # noqa: E402  the calls go through it so a patched `cb.find_charuco` etc. reaches this code
