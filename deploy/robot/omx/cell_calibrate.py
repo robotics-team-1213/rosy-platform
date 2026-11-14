@@ -230,10 +230,15 @@ def remap(cell, config: dict, points: list, work: Path, log=print, at_stop=None)
         kept = consensus(marks, prm.get(config.get("params"), "calibrate.consensus_px"))
         cv2.imwrite(str(frames / f"{i:02d}.jpg"), cell.frame("top"))
         near = predicted(kept, (x, y)) if len(kept) >= 4 else None
+        report = {}
         mark = cell_pivot.mark_jaws(
-            cell, config, near=near and ([near], prm.get(config.get("params"), "pivot.follow_px"))
+            cell, config, near=near and ([near], prm.get(config.get("params"), "pivot.follow_px")),
+            keep=frames / f"{i:02d}", report=report,
         )
-        log({"point": [x, y], "mark": mark, "near": near})
+        row = {"point": [x, y], "mark": mark, "near": near}
+        if mark is None and report.get("reason"):
+            row["why"] = report["reason"]
+        log(row)
         if mark:
             marks.append((mark, (x, y)))
     cell.act("park")

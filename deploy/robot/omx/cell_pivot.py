@@ -39,7 +39,10 @@ _KERNEL_3X3 = np.ones((3, 3), np.uint8)
 def _changed_mask(a, b, threshold: int = DIFF_PX):  # the 3x3 opening is fixed: noise removal, not a decision
     import cv2
 
-    diff = cv2.absdiff(cv2.cvtColor(a, cv2.COLOR_BGR2GRAY), cv2.cvtColor(b, cv2.COLOR_BGR2GRAY))
+    diff = cv2.absdiff(a, b)
+    if diff.ndim == 3:
+        # 2026-11-15: black fingers over orange/pink can match in grey luminance; max over channels keeps hue contrast
+        diff = diff.max(axis=2)
     return cv2.morphologyEx((diff > threshold).astype(np.uint8) * 255, cv2.MORPH_OPEN, _KERNEL_3X3)
 
 
@@ -112,43 +115,80 @@ def mark_open(config: dict) -> float:
     return config.get("jaw_mark", {}).get("open", prm.get(config.get("params"), "pivot.grip_open", config.get("plan", {}).get("grip_open")))
 
 
-def mark_jaws(cell, config: dict, sleep=time.sleep, clock=time.monotonic, max_marks: int = 6, near=None):
+def _save_mark_try(keep_dir: Path, idx: int, closed, now, mask, all_blobs: list, pick, rejected: str | None) -> None:
+    import cv2
+
+    keep_dir.mkdir(parents=True, exist_ok=True)
+    cv2.imwrite(str(keep_dir / f"try-{idx:02d}-closed.jpg"), closed)
+    cv2.imwrite(str(keep_dir / f"try-{idx:02d}-open.jpg"), now)
+    cv2.imwrite(str(keep_dir / f"try-{idx:02d}-mask.png"), mask)
+    info = {
+        "try": idx,
+        "blobs": [{"cx": round(float(b[0]), 2), "cy": round(float(b[1]), 2), "area": int(b[2])} for b in all_blobs],
+        "picked": [round(float(pick[0]), 2), round(float(pick[1]), 2), int(pick[2])] if pick else None,
+        "rejected": rejected,
+    }
+    (keep_dir / f"try-{idx:02d}.json").write_text(json.dumps(info))
+
+
+def mark_jaws(cell, config: dict, sleep=time.sleep, clock=time.monotonic, max_marks: int = 6, near=None,
+              keep=None, report: dict | None = None):
     """The jaw mark in the top view as (cx, cy), or None when no two marks agree. `near` = ([pixel, ...], radius_px):
     only blobs that close to one of the places the jaws should show count, nearest first - with the arm stretched out,
     opening the jaws shook the whole link and the largest changed blob was not the jaws (2026-10-29, a look 30 mm off).
     Several places: either finger can be the one the camera sees (cell_look)."""
     import cell_pipeline as cp
 
-    plan, mark_cfg = config["plan"], config.get("jaw_mark", {})
-    p = config.get("params")
+    mark_cfg, p = config.get("jaw_mark", {}), config.get("params")
     closed_to, marks = mark_cfg.get("closed", prm.get(p, "pivot.grip_closed")), []
     follow, agree = prm.get(p, "pivot.follow_px", FOLLOW_PX), prm.get(p, "pivot.agree_px", AGREE_PX)
-    for _ in range(max_marks):
+    keep_dir, saw_blobs = (Path(keep) if keep is not None else None), False
+
+    def fail(reason: str):
+        if report is not None:
+            report["reason"] = reason
+        return None
+
+    for idx in range(max_marks):
         if not cp.grip_to(cell, closed_to):
-            return None
+            return fail("grip_to failed")
         closed = settled_frame(cell, sleep, clock, params=p)
         # the mark's own opening, not the pick's: a pick opened only to its box width (53.84 against 50.5 closed)
         # moved the jaws too little to leave a blob, and every look at the hover saw nothing (2026-10-29)
         if not cp.grip_to(cell, mark_open(config)):
-            return None
+            return fail("grip_to failed")
         now = settled_frame(cell, sleep, clock, params=p)
-        blobs = jaw_centre(closed, now, p) if mark_cfg.get("centre") else jaw_blobs(closed, now, p)
-        if marks:
-            blobs = [b for b in blobs if math.dist(b[:2], marks[-1]) <= follow]
+        all_blobs = jaw_centre(closed, now, p) if mark_cfg.get("centre") else jaw_blobs(closed, now, p)
+        saw_blobs |= bool(all_blobs)
+        if not all_blobs:
+            pick, rejected = None, "no changed blob"
+        elif marks:
+            blobs = [b for b in all_blobs if math.dist(b[:2], marks[-1]) <= follow]
             pick = min(blobs, key=lambda b: math.dist(b[:2], marks[-1]), default=None)
+            rejected = None if pick else "blobs outside follow"
         elif near is not None:
             def gap(b):
                 return min(math.dist(b[:2], q) for q in near[0])
-            blobs = [b for b in blobs if gap(b) <= near[1]]
+            blobs = [b for b in all_blobs if gap(b) <= near[1]]
             pick = min(blobs, key=gap, default=None)
+            rejected = None if pick else "blobs outside near"
         else:
-            pick = max(blobs, key=lambda b: b[2], default=None)
-        if pick is None:
-            continue
-        if any(math.dist(pick[:2], m) <= agree for m in marks):
+            pick, rejected = max(all_blobs, key=lambda b: b[2], default=None), None
+        agreed = pick is not None and any(math.dist(pick[:2], m) <= agree for m in marks)
+        if pick is not None and not agreed:
+            rejected = "awaiting agreement"
+        if keep_dir is not None:
+            mask = _changed_mask(closed, now, prm.get(p, "pivot.diff_px", DIFF_PX))
+            _save_mark_try(keep_dir, idx, closed, now, mask, all_blobs, pick, rejected)
+        if agreed:
+            if report is not None:
+                report["reason"] = None
             return pick[0], pick[1]
-        marks.append(pick[:2])
-    return None
+        if pick is not None:
+            marks.append(pick[:2])
+    if marks:
+        return fail("tries disagree")
+    return fail("blobs outside near" if saw_blobs else "no changed blob")
 
 
 def fit_circle(points) -> tuple[float, float, float, float]:
