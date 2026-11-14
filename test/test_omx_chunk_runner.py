@@ -650,6 +650,19 @@ def test_a_soft_contact_holds_with_torque_on_then_retreats_along_its_path_and_pa
 
 
 
+def test_a_contact_drops_the_pitch_hold_nudge_so_the_wrist_stops_where_it_is():
+    robot = Pressing(after=8)  # lift stops following: the jaw pitch falls short and the nudge engages
+    status, clock, queue = [], [0.0], ["run descend_pick", "stop"]
+    r = m.Runner(robot, descend_library(), fps=30, status=status.append, clock=lambda: clock[0],
+                 sleep=lambda s: clock.__setitem__(0, clock[0] + 1 / 30),
+                 params={"runner.pitch_hold_gain": 0.5, "runner.pitch_hold_max": 0.5})
+    r.run(lambda: [queue.pop(0)] if queue and not r.chunk else [])
+    assert by_command(status, "run descend_pick")[0]["contact"] is True
+    wrist = [a["wrist_flex.pos"] for a in robot.sent]
+    assert any(abs(w - 45.0) > 0.01 for w in wrist)  # nudged while descending
+    assert r.pitch_hold == 0.0 and wrist[-1] == r.target[3]  # held exactly at the present pose
+
+
 def test_a_settled_retreat_clears_the_contact_so_the_next_point_needs_no_park():
     robot = Pressing(after=8)
     status, clock, queue = [], [0.0], ["run descend_pick", "retreat", "run descend_pick", "stop"]

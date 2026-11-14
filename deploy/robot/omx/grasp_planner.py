@@ -27,6 +27,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # chunk_runner, teach_
 from cell_control_core import TICKS, norm_to_rad, rad_to_norm  # noqa: E402,F401  (re-exported)
 from teach_trajectory import GUARD_UNITS_PER_S, slow, too_fast  # noqa: E402
 from motion_profile import retime  # noqa: E402
+from descend_profile import two_stage  # noqa: E402
 
 NAMES = ["shoulder_pan.pos", "shoulder_lift.pos", "elbow_flex.pos", "wrist_flex.pos", "wrist_roll.pos",
          "gripper.pos"]
@@ -201,7 +202,13 @@ class Planner:
         # `descend_guard_frac`: this retime, not descend_m_s, sets a descent's pace; the fastest joint tracks with lag at the cap
         descend_pace_key = f"descend_{name}_guard_frac" if f"descend_{name}_guard_frac" in p else "descend_guard_frac"
         lift_pace_key = f"lift_{name}_guard_frac" if f"lift_{name}_guard_frac" in p else "lift_guard_frac"
-        down = [[round(v, 3) for v in f] for f in retime(down, self.fps, self.guard_pace(descend_pace_key), start=pre)]
+        far_key = next((k for k in (f"descend_{name}_far_guard_frac", "descend_far_guard_frac") if k in p), None)
+        if far_key:  # opt-in: faster above the last descend_near_m, today's pace (and contact judgement) below
+            near = max(0, round(len(down) * (1 - float(p.get("descend_near_m", 0.010)) / above_dz)) - 1)
+            down = two_stage(down, self.fps, self.guard_pace(far_key), self.guard_pace(descend_pace_key), near, start=pre)
+        else:
+            down = retime(down, self.fps, self.guard_pace(descend_pace_key), start=pre)
+        down = [[round(v, 3) for v in f] for f in down]
         act = [[round(v, 3) for v in f] for f in slow(act, self.fps, start=down[-1])]
         # `lift_guard_frac`: at 0.85 the wrist_flex fell 2.1 and 2.2 behind on the first cm of two held lifts (2026-11-07), at the strain limit
         up = [[round(v, 3) for v in f] for f in retime(up, self.fps, self.guard_pace(lift_pace_key), start=act[-1])]
