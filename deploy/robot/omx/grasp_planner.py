@@ -27,6 +27,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # chunk_runner, teach_
 from cell_control_core import TICKS, norm_to_rad, rad_to_norm  # noqa: E402,F401  (re-exported)
 from teach_trajectory import GUARD_UNITS_PER_S, slow, too_fast  # noqa: E402
 from motion_profile import retime  # noqa: E402
+from omx_tcp import ENV, LOG, resolve_tcp  # noqa: E402
 from descend_profile import two_stage  # noqa: E402
 
 NAMES = ["shoulder_pan.pos", "shoulder_lift.pos", "elbow_flex.pos", "wrist_flex.pos", "wrist_roll.pos",
@@ -57,16 +58,15 @@ def load_kinematics(root: Path | None, tcp_x_m: float | None = None):
         sys.path.insert(0, str(root))
     from omx_adapter.kinematics import IkLimits, OmxKinematics, TopDownPose
 
-    path, tcp = root / "config/omx_f_kinematics.yaml", os.environ.get("ROSY_OMX_TCP_X_M") or tcp_x_m
+    path = root / "config/omx_f_kinematics.yaml"
+    tcp = None if tcp_x_m is None and not os.environ.get(ENV) else resolve_tcp(tcp_x_m)[0]  # else: the yaml's stock jaw
     mtime = path.stat().st_mtime_ns if path.exists() else 0
     if not tcp:
+        LOG.info("jaw TCP from the stock kinematics yaml (no cell config, plan or %s)", ENV)
         key = (str(path.resolve()), None, mtime)
         if key not in _KIN_CACHE:
             _KIN_CACHE[key] = (OmxKinematics.load(path), IkLimits, TopDownPose)
         return _KIN_CACHE[key]
-    tcp = float(tcp)
-    if not (math.isfinite(tcp) and 0.05 <= tcp <= 0.12):
-        raise SystemExit(f"ROSY_OMX_TCP_X_M {tcp} outside the OMX-F jaw range 0.05..0.12")
     key = (str(path.resolve()), round(tcp, 6), mtime)
     if key not in _KIN_CACHE:
         import yaml

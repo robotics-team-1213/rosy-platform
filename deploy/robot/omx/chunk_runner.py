@@ -15,6 +15,7 @@ A judge writes one command per line into the command FIFO and reads one JSON sta
   retreat                 after a contact hold, back out along the played path; settled at its start, the
                           contact is cleared like a park
   stop                    end; torque goes OFF where the arm is, so park (or run home) first
+  human-hold              latch present pose with torque commanded ON; supervised recovery required
 
 Commands apply one per tick, and a jog stays within JOG_MAX + SETTLE_TOL of the present position.
 
@@ -153,6 +154,16 @@ def fifo_lines(path: Path):
     return lines
 
 
+def bind_trace_source(runner, trace_path: Path, trace_file, io: Path) -> bool:
+    """Expose a receipt only for the trace beside this owner's FIFO directory."""
+    if trace_path.parent != io.resolve().parent:
+        return False
+    runner.trace_file = trace_file
+    runner.trace_source = trace_path.name
+    runner.trace_cursor = os.fstat(trace_file.fileno()).st_size
+    return True
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--config", required=True, type=Path, help="record config (robot section is used)")
@@ -213,9 +224,11 @@ def main(argv=None):
                                   operating_profile=profile, params=params)
         runner = Runner(guarded, library, fps=config["dataset"]["fps"], status=status, live=live,
                         operating_context=context, params=params, plan_check=check)
-        trace_file = open(path, "a") if (path := os.environ.get("ROSY_CHUNK_TRACE")) else None  # buffered: no write call per tick
+        trace_path = Path(path).expanduser().resolve() if (path := os.environ.get("ROSY_CHUNK_TRACE")) else None
+        trace_file = trace_path.open("a") if trace_path else None  # buffered: no write call per tick
         if trace_file:
             runner.trace = __import__("cell_why").flushing_trace(trace_file)
+            bind_trace_source(runner, trace_path, trace_file, args.io)
         try:
             runner.run(lines)
         finally:

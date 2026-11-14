@@ -1,6 +1,5 @@
 """A frame receipt must identify the exact fresh JPEG, not a cached camera picture."""
 import hashlib
-import importlib.util
 from pathlib import Path
 import sys
 import urllib.error
@@ -10,10 +9,9 @@ import pytest
 cv2 = pytest.importorskip("cv2")
 np = pytest.importorskip("numpy")
 OMX = Path(__file__).parents[1] / "deploy/robot/omx"
-spec = importlib.util.spec_from_file_location("cell_pipeline_io", OMX / "cell_pipeline_io.py")
-io = importlib.util.module_from_spec(spec)
-sys.modules[spec.name] = io
-spec.loader.exec_module(io)
+if str(OMX) not in sys.path:  # the shared module, not a private copy: replacing sys.modules at collection broke other tests
+    sys.path.insert(0, str(OMX))
+import cell_pipeline_io as io  # noqa: E402
 
 
 class Reply:
@@ -47,6 +45,7 @@ def test_fresh_receipt_hashes_actual_jpeg_and_decodes(camera, monkeypatch):
     monkeypatch.setattr(io.urllib.request, "urlopen", lambda request, timeout: Reply(
         raw, {"X-Frame-Seq": "42", "X-Source-Stamp": "99.75", "ETag": '"42"'}))
     receipt = cell.frame_receipt("top")
+    assert receipt["jpeg_bytes"] == raw
     assert receipt["jpeg_sha256"] == hashlib.sha256(raw).hexdigest()
     assert receipt["source_seq"] == 42
     assert receipt["source_stamp"] == 99.75

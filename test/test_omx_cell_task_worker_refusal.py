@@ -1,4 +1,4 @@
-"""The cell task worker never calls the real arm on a refused handoff, and unknown sites are refused."""
+"""The cell task worker never calls the real arm on a refused handoff, and unknown sites and tiers are refused."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -20,12 +20,17 @@ LOCKED = {"wheel_brake_locked": True, "bed_ready": True, "v_cmd_mps": 0.0}
 def _run(tmp_path: Path, handoff: dict, tier: int = 1):
     hw_calls: list[dict] = []
     posted: list[dict] = []
+    cell_id = handoff.get("cell_id", "cell_s")
+    bound = {"handoff_lease_id": "lease-1", "task_id": "t-1", "tier": tier,
+             "arm_id": "arm_s" if cell_id == "cell_s" else "arm_b", **handoff}
 
     def _req(method: str, path: str, body):
         if method == "GET":
-            return {"tasks": [{"task_id": "t-1", "cell_id": handoff.get("cell_id", "cell_s"), "tier": tier}]}
+            return {"tasks": [{"task_id": "t-1", "cell_id": cell_id, "tier": tier}],
+                    "human_safety": {"active_estop": False, "human_detected": {}},
+                    "cells": {cell_id: {"phase": "ARM_IN_BED_ZONE", "active_task_id": "t-1"}}}
         if path.endswith("/claim"):
-            return {"claimed": True, "gate": {}, "handoff": {"handoff_lease_id": "lease-1", **handoff}}
+            return {"claimed": True, "gate": {}, "handoff": bound}
         posted.append(body)
         return {"gate": {}, "task": {"status": body["phase"]}}
 
@@ -39,57 +44,44 @@ def _run(tmp_path: Path, handoff: dict, tier: int = 1):
 
 
 @pytest.mark.parametrize(
-    "handoff,tier,reason",
+    "handoff,reason",
     [
-        ({"cell_id": "cell_s"}, 1, "AMR_NOT_LOCKED_AT_HANDOFF"),  # interlock keys missing
-        ({**LOCKED, "cell_id": "cell_s", "wheel_brake_locked": False}, 1, "AMR_NOT_LOCKED_AT_HANDOFF"),
-        ({**LOCKED, "cell_id": "cell_s", "v_cmd_mps": float("nan")}, 1, "AMR_NOT_LOCKED_AT_HANDOFF"),
-        ({**LOCKED, "cell_id": "cell_s", "dst_site": "bellt"}, 1, "UNKNOWN_SITE"),
-        ({**LOCKED, "cell_id": "cell_ab"}, 4, "UNKNOWN_SITE"),
-        ({**LOCKED, "cell_id": "cell_s"}, 4, "UNKNOWN_SITE"),
-        ({**LOCKED, "cell_id": "cell_ab", "src_site": "pinky"}, 1, "UNKNOWN_SITE"),
-        ({**LOCKED, "cell_id": "cell_ab", "dst_site": "pallet-l2"}, 1, "UNKNOWN_SITE"),  # wrong level for tier 1
+        ({"cell_id": "cell_s"}, "AMR_NOT_LOCKED_AT_HANDOFF"),  # interlock keys missing
+        ({**LOCKED, "cell_id": "cell_s", "wheel_brake_locked": False}, "AMR_NOT_LOCKED_AT_HANDOFF"),
+        ({**LOCKED, "cell_id": "cell_s", "v_cmd_mps": float("nan")}, "AMR_NOT_LOCKED_AT_HANDOFF"),
+        ({**LOCKED, "cell_id": "cell_s", "dst_site": "bellt"}, "UNKNOWN_SITE"),
+        ({**LOCKED, "cell_id": "cell_ab", "src_site": "pinky"}, "UNKNOWN_SITE"),
+        ({**LOCKED, "cell_id": "cell_ab", "dst_site": "pallet-l2"}, "UNKNOWN_SITE"),  # wrong level for tier 1
     ],
 )
-def test_refused_handoff_never_calls_the_arm(tmp_path: Path, handoff: dict, tier: int, reason: str) -> None:
-    hw_calls, body = _run(tmp_path, handoff, tier)
+def test_refused_handoff_never_calls_the_arm(tmp_path: Path, handoff: dict, reason: str) -> None:
+    hw_calls, body = _run(tmp_path, handoff)
     assert hw_calls == []
     assert body["phase"] == "ABORTED" and body["reason"] == reason
-    assert body["hardware_telemetry"] is None
+    assert body["hardware_telemetry"] == {"error": reason}
 
 
-@pytest.mark.parametrize(
-    "handoff,tier",
-    [({**LOCKED, "cell_id": "cell_s"}, 1), ({**LOCKED, "cell_id": "cell_ab", "src_site": "belt", "dst_site": "pallet"}, 2)],
-)
-def test_locked_handoff_receipt_is_marked_model_only(tmp_path: Path, handoff: dict, tier: int) -> None:
-    hw_calls, body = _run(tmp_path, handoff, tier)
-    assert len(hw_calls) == 1
-    assert body["receipt"]["execution"] == "model_only" and body["reason"] != "UNKNOWN_SITE"
-
-
-def test_unconverged_stage_never_calls_the_arm(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.setattr(cfp.FleetModelPipeline, "run_fleet_stage", lambda self, **kw: {"converged": False})
-    hw_calls, body = _run(tmp_path, {**LOCKED, "cell_id": "cell_s"})
-    assert hw_calls == [] and body["reason"] == "STAGE_NOT_CONVERGED"
-
-
-def test_dispatch_path_never_calls_the_arm_on_refusal(tmp_path: Path) -> None:
-    hw_calls: list[dict] = []
-
-    def _req(method: str, path: str, body):
-        if path.endswith("/claim"):
-            return {"claimed": True, "gate": {"amr_motion_inhibited": True},
-                    "handoff": {**LOCKED, "cell_id": "cell_s", "dst_site": "bellt"}}
-        if path.endswith("/complete"):
-            assert body["reason"] == "UNKNOWN_SITE" and body["hardware_telemetry"] is None
-            return {"gate": {"amr_motion_inhibited": False}, "task": {"status": "ABORTED"}}
-        return {"task": {"task_id": "t-d"}}
+@pytest.mark.parametrize("cell_id", ["cell_s", "cell_ab"])
+def test_unknown_tier_is_refused_by_the_handoff_check(tmp_path: Path, cell_id: str) -> None:
+    from cell_fleet_handoff import handoff_refusal
 
     pipe = cfp.FleetModelPipeline(tmp_path / "pipe")
-    with pytest.raises(AssertionError):  # the dispatch helper asserts COMPLETED; an abort must not pass silently
+    assert handoff_refusal(pipe, {**LOCKED, "cell_id": cell_id}, 4) == "UNKNOWN_SITE"
+
+
+def test_locked_handoff_without_measured_placement_is_aborted(tmp_path: Path) -> None:
+    hw_calls, body = _run(tmp_path, {**LOCKED, "cell_id": "cell_s"})
+    assert len(hw_calls) == 1  # the arm runs, but only measured placement releases
+    assert body["phase"] == "ABORTED" and body["reason"] == "MEASURED_PLACEMENT_MISSING"
+    assert body["receipt"]["simulated_success"] is False and body["receipt"]["physical_completion"] is False
+
+
+def test_dispatch_path_cannot_complete_with_a_synthetic_stage(tmp_path: Path) -> None:
+    hw_calls: list[dict] = []
+    pipe = cfp.FleetModelPipeline(tmp_path / "pipe")
+    with pytest.raises(RuntimeError, match="SIMULATED_STAGE_CANNOT_COMPLETE_FLEET_TASK"):
         pipe.dispatch_and_execute_fleet_r_cell_task(fleet_r_url="https://fleet.invalid", dst_site="bellt",
-                                                    live_act_fn=hw_calls.append, request_fn=_req)
+                                                    live_act_fn=hw_calls.append, request_fn=lambda *a: {})
     assert hw_calls == []
 
 

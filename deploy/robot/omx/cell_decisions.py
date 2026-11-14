@@ -172,7 +172,11 @@ def join(decisions: list, attempts: list) -> list[dict]:
         if d["by"] == "person":
             items.append({"row": d, "outcome": None, "label": "corrected_by_person", "from": by_id.get(d.get("supersedes"))})
             continue
-        a = out.get(later(d["attempt_id"]) if d["stage"] == "retry" else d["attempt_id"])  # a retry is judged by the next attempt
+        next_id = later(d["attempt_id"]) if d["stage"] == "retry" else d["attempt_id"]
+        a = out.get(next_id)
+        while d["stage"] == "retry" and a and a["result"] == "replanned":
+            next_id = later(next_id)  # a reviewed library change did not try the retry candidate
+            a = out.get(next_id)
         good = None if a is None else (a["placed"] if d["stage"] == "verify" else a["held"] if d["stage"] != "safety" else None)
         items.append({"row": d, "outcome": a and a["result"], "label": "validated_by_outcome" if good else "unvalidated", "from": None})
     return items
