@@ -471,7 +471,7 @@ def test_a_branch_build_never_goes_below_the_pinned_factory_release(device, host
     assert host.current_release() == "2026.10.01-024"
 
 
-@pytest.mark.parametrize("raw", [b"", b"\xff\xfe garbage", b"v1.2.3", b"0123456789abcdef0123456789abcdef01234567"])
+@pytest.mark.parametrize("raw", [b"", b"\xff\xfe garbage", b"v1.2.3", b"refs/tags/v1"])
 def test_an_unreadable_or_unknown_source_ref_never_steps_down(device, host, hub, keys, raw):
     # D-1031 review: only a recognisable build/ branch is a hand build; anything else keeps the higher-id rule.
     _on_build(device, host, NEWER, "x")
