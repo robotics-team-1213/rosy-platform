@@ -124,6 +124,19 @@ def test_build_merges_the_members_into_one_branch_and_records_them(repo, monkeyp
         (expected[rows[i]["branch"]], rows[i]["ticket"]) for i in (0, 2)]
 
 
+def test_build_merges_a_member_whose_snapshot_branch_is_gone_from_its_recorded_commit(repo):
+    main, snapshot = repo
+    rows = [snapshot("fix/a", {"pkg/a.py": "x = 2\n"}), snapshot("fix/b", {"pkg/b.py": "y = 2\n"}),
+            snapshot("fix/c", {"pkg/c.py": "z = 2\n"})]
+    rows[1]["candidate"] = git(main, "rev-parse", rows[1]["branch"])
+    for row in rows[1:]:  # b keeps its recorded commit, c has none: left out, never a crash
+        git(main, "worktree", "remove", "--force", row["worktree"])
+        git(main, "branch", "-D", row["branch"])
+    log = land_rollup.land_async.holder(main) / "land-fix-land-rollup-y.log"
+    _, merged = land_rollup.build(main, rows, NOW, start=lambda *a: ("land/fix/land-rollup-y", log))
+    assert [r["branch"] for r in merged] == ["land/fix/a", "land/fix/b"]
+
+
 def test_build_rejects_duplicate_branches_from_legacy_queue_rows(repo):
     main, snapshot = repo
     row = snapshot("fix/a", {"pkg/a.py": "x = 2\n"})
