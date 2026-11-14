@@ -203,7 +203,7 @@ def poll_and_execute_once(
     return completed_runs
 
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="Autonomous Fleet-R -> OMX Cell Task Worker")
     parser.add_argument("--fleet-r-url", default="https://192.168.1.93:8443")
     parser.add_argument("--token-file", default="~/.config/rosy-fleet-r-token")
@@ -212,7 +212,8 @@ def main() -> None:
     parser.add_argument("--interval-s", type=float, default=1.5)
     parser.add_argument("--once", action="store_true")
     parser.add_argument("--dry-run-hw", action="store_true")
-    args = parser.parse_args()
+    parser.add_argument("--allow-legacy-live-jog", action="store_true")
+    args = parser.parse_args(argv)
 
     token = Path(args.token_file).expanduser().read_text(encoding="utf-8").strip()
     req_fn = make_default_request_fn(args.fleet_r_url, token)
@@ -230,6 +231,8 @@ def main() -> None:
         arm_id = str(handoff.get("arm_id") or ("arm_s" if handoff.get("cell_id") == "cell_s" else "arm_a"))
         if args.dry_run_hw:
             return {"arm": arm_id, "events_count": 1, "stop_event": {"command": "stop", "ok": True, "folded": True}}
+        if not args.allow_legacy_live_jog:
+            raise RuntimeError("legacy cell_task_worker live jog is sealed; use cell_auto_pick or --dry-run-hw")
         res = execute_live_hardware_arm(arm_id, prep_dir=prep_dir)
         _trigger_bg_cam_upload()
         return res
@@ -241,7 +244,14 @@ def main() -> None:
             if not args.dry_run_hw and (now_m - last_cam_push) >= 3.0:
                 _trigger_bg_cam_upload()
                 last_cam_push = now_m
-            runs = poll_and_execute_once(pipeline, request_fn=req_fn, live_act_fn=_hw_act)
+            if args.dry_run_hw or args.allow_legacy_live_jog:
+                runs = poll_and_execute_once(pipeline, request_fn=req_fn, live_act_fn=_hw_act)
+            else:
+                runs = []
+                print(json.dumps({
+                    "event": "legacy_worker_live_sealed",
+                    "detail": "telemetry sync active; legacy claim/jog disabled without --allow-legacy-live-jog",
+                }), flush=True)
             for r in runs:
                 stop_ev = (r["task"].get("hardware_telemetry") or {}).get("stop_event") or {}
                 print(json.dumps({
