@@ -1,5 +1,6 @@
 """cell_two_arm: the schedule on fake sessions: progress gates each segment, one arm's failure stops the other, the fold is
 checked from where the arms stand, and nothing moves without a person."""
+import json
 from pathlib import Path
 import sys
 import time
@@ -61,7 +62,8 @@ def order(events, name, what):
 def test_each_segment_waits_for_what_the_schedule_put_before_it():
     events = []
     result = two.execute(cells_of(events), COMMANDS, STEPS, log=lambda row: None)
-    assert result == {"done": {"a": 3, "b": 3}, "failed": None, "last": {"a": "park a", "b": "park b"}, "stopped": {}}
+    assert result == {"done": {"a": 3, "b": 3}, "failed": None, "last": {"a": "park a", "b": "park b"},
+                      "stopped": {}, "plan_gen": 0}
     assert order(events, "b", ("end", "goto b0")) < order(events, "a", ("start", "goto a0"))
     assert order(events, "a", ("end", "goto a0")) < order(events, "b", ("start", "goto b1"))
     assert order(events, "a", ("end", "park a")) < order(events, "b", ("start", "park b"))
@@ -315,4 +317,249 @@ def test_execute_accepts_inferred_holding_and_away_from_home_filters_single_tick
 
     libraries = {n: {"chunks": {"home": [home]}} for n in "ab"}
     assert two.away_from_home({"a": JitterAt(), "b": Standing(home)}, libraries) == []
+
+
+def gate_config(tmp_path, name, commissioning=True):
+    """A config assess() accepts for this arm (supervised) or refuses (no review and no commissioning flag)."""
+    import cell_robot_profile
+
+    profile = tmp_path / f"robot-profile-{name}.json"
+    profile.write_text(json.dumps({"schema": "rosy.omx-cell-robot-profile.v1", "device_id": f"device-{name}",
+                                   "instance_id": f"follower-{name}", "robot_config_sha256": "c" * 64,
+                                   "operating_envelope_path": "review.json", "work_dir": "."}))
+    config = {"operating_profile_path": str(profile), "work_dir": str(tmp_path),
+              "operating_envelope_path": str(tmp_path / "review.json"),
+              "operating_conditions": {"installation_revision": "i1", "object_revision": "o1", "payload_max_kg": 0.05,
+                                       "object_dimensions_m": [0.03] * 3, "environment_revision": "e1"},
+              "payload": {"kg": 0.03, "source": "catalog"}}
+    if commissioning:
+        config["_commissioning"] = {"person_at_switch": True}  # the flag cell_two_arm.attest writes
+    return config, cell_robot_profile.load(profile)["binding"]
+
+
+def library_file(tmp_path, name):
+    path = tmp_path / f"{name}.json"
+    path.write_text(json.dumps({"chunks": {"home": [[0.0] * 6], "above_pick": [[1.0] * 6]}, "gripper_closed": 20.0}))
+    return path
+
+
+class Session:
+    """A runner behind the Gate: `state` carries a live operating context, every motion arrives `checked`. After
+    `restart_after` motion commands the runner comes back under a new session, so the Gate holds the rest."""
+
+    def __init__(self, binding, session="sess", state=None, delay_s=0.0, restart_after=None, fault=None):
+        self.binding, self.session_id, self.state = binding, session, state or [9.0] * 6
+        self.delay_s, self.restart_after, self.commands, self.motion = delay_s, restart_after, [], []
+        self.fault = fault
+
+    def act(self, command):
+        self.commands.append(command)
+        if command == "state":
+            return {"ok": True, "state": list(self.state), "t": time.time(), "fault": self.fault,
+                    "operating_context": {"scope": "simulation", "sha256": "a" * 64, "session_id": self.session_id,
+                                          "operating_profile": self.binding},
+                    "health": {"temp_c": [30.0] * 6, "pwm": [10] * 6}}
+        motion = command.split(" ", 3)[-1] if command.startswith("checked ") else command
+        self.motion.append(motion)
+        if self.delay_s:
+            time.sleep(self.delay_s)
+        if self.restart_after is not None and len(self.motion) >= self.restart_after:
+            self.session_id = "sess-restarted"
+        return {"ok": True, "state": list(self.state), "settled": True}
+
+
+def armed(tmp_path, commissioning=("a", "b"), **cells_kw):
+    """Both arms' pieces for open_gates: configs, Session cells, one library per arm, and a fresh run folder."""
+    configs, cells, libraries = {}, {}, {}
+    for n in "ab":
+        configs[n], binding = gate_config(tmp_path, n, commissioning=n in commissioning)
+        cells[n] = Session(binding, f"sess-{n}", **cells_kw.get(n, {}))
+        libraries[n] = [(library_file(tmp_path, f"lib-{n}"), {})]
+    run = tmp_path / "run"
+    run.mkdir()
+    return configs, cells, libraries, run
+
+
+def gates_of(cells, configs, libraries, run):
+    return two.open_gates(cells, configs, {n: {} for n in "ab"}, libraries, {n: two.FOLDED for n in "ab"}, run)
+
+
+def test_one_held_library_stops_the_whole_run_at_zero_motion(tmp_path):
+    configs, cells, libraries, run = armed(tmp_path, commissioning=("a",))
+    with pytest.raises(SystemExit, match=r"arm b.*held: .*\(D-911\)"):
+        gates_of(cells, configs, libraries, run)
+    assert all(c.motion == [] and set(c.commands) <= {"state"} for c in cells.values())  # neither arm moved
+    intent = json.loads((run / "intent-a-0.json").read_text())
+    assert intent["arm"] == "a" and intent["assessment"]["mode"] == "commissioning"
+
+
+def test_an_intent_that_cannot_be_written_holds_the_run(tmp_path):
+    configs, cells, libraries, run = armed(tmp_path)
+    (run / "intent-a-0.json").write_text("{}")  # a pending intent from an earlier attempt is never clobbered
+    with pytest.raises(SystemExit, match=r"audit_unavailable.*\(D-911\)"):
+        gates_of(cells, configs, libraries, run)
+    assert all(c.motion == [] for c in cells.values())
+
+
+def test_two_libraries_open_one_gate_with_one_durable_intent_each(tmp_path):
+    configs, cells, libraries, run = armed(tmp_path)
+    libraries["a"].append((library_file(tmp_path, "lib-a2"), {}))
+    gates = gates_of(cells, configs, libraries, run)
+    assert (run / "intent-a-0.json").exists() and (run / "intent-a-1.json").exists()
+    assert gates["a"].assessment["allowed"] is True
+
+
+def test_a_command_held_mid_motion_stops_the_peer_at_its_segment_and_ends_with_a_person(geometry, tmp_path):
+    configs, cells, libraries, run = armed(tmp_path, a={"restart_after": 1}, b={"delay_s": 0.15})
+    gates = gates_of(cells, configs, libraries, run)
+    commands = {"a": [["goto a0"], ["goto a1"], ["park a"]], "b": [["goto b0"], ["goto b1"], ["park b"]]}
+    steps = [{"a": None, "b": 0}, {"a": 0, "b": 1}, {"a": 1, "b": None}, {"a": 2, "b": 2}]
+    moved = two.execute(gates, commands, steps, log=lambda row: None)
+    assert moved["failed"]["error"] == "held: session_changed"
+    assert cells["a"].motion == ["goto a0"]  # the held command never reached the runner
+    assert cells["b"].motion == ["goto b0", "goto b1"]  # the segment it was in, and no other
+    folded = two.safe_fold(gates, {"a": LIBRARY, "b": LIBRARY}, None, {"a": 0.0, "b": 1.0}, {"a": 0.0, "b": 0.0},
+                           0.05, lambda row: None, moved)
+    assert folded["folded"] is False and "held: session_changed" in folded["person_needed"]
+
+
+def test_a_restarted_runner_holds_even_the_park_and_a_person_is_needed(geometry, tmp_path):
+    configs, cells, libraries, run = armed(tmp_path)
+    gates = gates_of(cells, configs, libraries, run)
+    cells["a"].session_id = "sess-restarted"  # the runner came back mid-run: not even the fold's park may pass
+    folded = two.safe_fold(gates, {"a": LIBRARY, "b": LIBRARY}, None, {"a": 0.0, "b": 1.0}, {"a": 0.0, "b": 0.0},
+                           0.05, lambda row: None, {"last": {}, "stopped": {}})
+    assert folded["folded"] is False and "held: session_changed" in folded["person_needed"]
+
+
+def test_the_arm_waiting_through_the_other_s_fold_keeps_its_session_alive(monkeypatch, geometry, tmp_path):
+    monkeypatch.setattr(two, "KEEP_ALIVE_S", 0.01)
+    configs, cells, libraries, run = armed(tmp_path, a={"delay_s": 0.2})
+    folded = two.safe_fold(cells, {"a": LIBRARY, "b": LIBRARY}, None, {"a": 0.0, "b": 1.0}, {"a": 0.0, "b": 0.0},
+                           0.05, lambda row: None, {"last": {}, "stopped": {}})
+    assert folded["folded"] is True
+    assert cells["b"].commands.count("state") >= 3  # one settled_state read; the rest is the fold-window keep-alive
+
+
+def test_a_both_step_schedule_needs_a_measured_wait_pose():
+    both = {"steps": [{"a": 0, "b": 0}]}
+    serial = {"steps": [{"a": 0, "b": None}, {"a": None, "b": 0}]}
+    libraries = {n: [("lib", {"chunks": {"home": [[0.0] * 6]}})] for n in "ab"}
+    with pytest.raises(SystemExit, match="D-983"):
+        two.admit(both, libraries)
+    two.admit(serial, libraries)  # it waits at home, a pose the plan's rest check already cleared
+    libraries["a"][0][1]["chunks"]["wait"] = [[0.0] * 6]  # a person measured where an arm may hover
+    with pytest.raises(SystemExit, match="arm b"):  # one arm's wait does not clear the other's hold
+        two.admit(both, libraries)
+    libraries["b"][0][1]["chunks"]["wait"] = []  # an empty chunk is no measured pose
+    with pytest.raises(SystemExit, match="arm b"):
+        two.admit(both, libraries)
+    libraries["b"][0][1]["chunks"]["wait"] = [[0.0] * 6]
+    two.admit(both, libraries)
+    libraries["a"].append(("lib2", {"chunks": {"home": [[0.0] * 6]}}))  # `load` swaps mid-run: every library needs its own
+    with pytest.raises(SystemExit, match="arm a lib2"):
+        two.admit(both, libraries)
+    libraries["a"][1][1]["chunks"]["wait"] = [[0.0] * 6]
+    two.admit(both, libraries)
+
+
+def test_a_replan_lands_only_at_a_joint_boundary_and_reorders_the_rest():
+    events = []
+    cells = cells_of(events, b={"seconds": 0.12})  # b's half of a both-step is in flight when a's completion replans
+    commands = {"a": [["goto a0"], ["goto a1"], ["goto a2"]], "b": [["goto b0"], ["goto b1"], ["goto b2"]]}
+    steps = [{"a": 0, "b": 0}, {"a": 1, "b": None}, {"a": None, "b": 1}, {"a": 2, "b": 2}]
+
+    def on_done(name, segment, done):
+        a_first = [{"a": i, "b": None} for i in range(done["a"], 3)] + [{"a": None, "b": j} for j in range(done["b"], 3)]
+        b_first = [{"a": None, "b": j} for j in range(done["b"], 3)] + [{"a": i, "b": None} for i in range(done["a"], 3)]
+        return {"steps": a_first if name == "a" else b_first}  # whichever arm finished keeps the lead
+
+    result = two.execute(cells, commands, steps, log=lambda row: None, on_segment_done=on_done)
+    assert result["failed"] is None and result["done"] == {"a": 3, "b": 3} and result["plan_gen"] >= 1
+    assert order(events, "a", ("end", "goto a0")) < order(events, "b", ("end", "goto b0"))  # it replanned into a moving peer
+    # the replan of a's completion never landed mid-flight: a1 moved only after b finished b0
+    assert order(events, "b", ("end", "goto b0")) < order(events, "a", ("start", "goto a1"))
+    # the generation that landed is the later replan's (b keeps its lead), not the one it superseded
+    assert order(events, "b", ("start", "goto b1")) < order(events, "a", ("start", "goto a1"))
+    # admission stayed blocked while a replan was pending, even for a segment the old steps allowed
+    assert order(events, "b", ("end", "goto b2")) < order(events, "a", ("start", "goto a2"))
+
+
+def test_a_refused_replan_stops_both_arms_for_a_person():
+    events = []
+    cells = cells_of(events)
+    result = two.execute(cells, COMMANDS, STEPS, log=lambda row: None, on_segment_done=lambda name, segment, done: None)
+    assert result["failed"]["error"] == "replan_none" and result["done"] == {"a": 0, "b": 1}
+    assert cells["a"].commands == [] and cells["b"].commands == ["goto b0"]  # b goes first: its completion refused the replan
+
+
+def test_no_replan_hook_runs_once_the_run_has_failed():
+    calls = []
+
+    def hook(name, segment, done):
+        calls.append((name, segment))
+        return {"steps": STEPS}
+
+    result = two.execute(cells_of([]), COMMANDS, STEPS, ("b", 0), log=lambda row: None, on_segment_done=hook)
+    assert calls == [] and result["failed"]["error"] == "injected"  # b's own injected failure fired first
+
+
+class OneCaller:
+    """A session that fails the run if two threads are inside it at once, the race the per-arm lock prevents."""
+
+    def __init__(self, state, seconds=0.05):
+        self.state, self.seconds, self.commands, self.inside, self.raced = state, seconds, [], False, False
+
+    def act(self, command):
+        if self.inside:
+            self.raced = True
+            raise AssertionError("two threads entered one session")
+        self.inside = True
+        try:
+            self.commands.append(command)
+            if command != "state":
+                time.sleep(self.seconds)  # motion holds the session: the window a keep-alive must never slip into
+            return {"ok": True, "state": list(self.state)} if command == "state" else {"ok": True}
+        finally:
+            self.inside = False
+
+
+def test_the_keep_alive_never_enters_an_arm_that_is_climbing_or_folding(monkeypatch, geometry):
+    monkeypatch.setattr(two, "KEEP_ALIVE_S", 0.01)
+    cells = {n: OneCaller([9.0] * 5 + [20.0]) for n in "ab"}
+    result = fold_both(cells, {"last": {"a": "run descend_pick", "b": "run descend_pick"}, "stopped": {}})
+    assert result["folded"] is True and not any(c.raced for c in cells.values())
+
+
+def test_a_safety_abort_during_the_climb_out_or_fold_ends_with_a_person_not_a_crash(geometry):
+    import cell_auto_safety
+
+    class Aborts:
+        """A session stopped by its monitor mid-command: the Guarded wrapper parks the arm and raises."""
+
+        def __init__(self, at):
+            self.at, self.sent = at, []
+
+        def act(self, command):
+            if command != "state":
+                self.sent.append(command)
+            if command == self.at:
+                raise cell_auto_safety.Aborted("pwm stall")
+            return {"ok": True, "state": [9.0] * 6} if command == "state" else {"ok": True}
+
+    for at in ("run lift_pick", "park"):  # the climb out, then the fold itself
+        cells = {"a": Aborts(at), "b": Standing([9.0] * 6)}
+        result = fold_both(cells, {"last": {"a": "run descend_pick"}, "stopped": {}})
+        assert result["folded"] is False and result["person_needed"] == "a did not fold: Aborted: pwm stall"
+        assert cells["b"].sent == []  # the peer stays where it stands: its fold was only cleared against a folded
+
+
+def test_a_latched_fault_holds_the_climb_out_for_a_person_not_as_a_recovery(geometry, tmp_path):
+    configs, cells, libraries, run = armed(tmp_path)
+    gates = gates_of(cells, configs, libraries, run)
+    cells["a"].fault = "overload-hold"  # latched by the failure that stopped the run; `run lift_*` is no recovery
+    folded = two.safe_fold(gates, {"a": LIBRARY, "b": LIBRARY}, None, {"a": 0.0, "b": 1.0}, {"a": 0.0, "b": 0.0},
+                           0.05, lambda row: None, {"last": {"a": "run descend_pick"}, "stopped": {}})
+    assert folded["folded"] is False and "a did not climb out: held: fault" in folded["person_needed"]
+    assert cells["a"].motion == [] and cells["b"].motion == []  # the climb never ran and the peer never folded
 

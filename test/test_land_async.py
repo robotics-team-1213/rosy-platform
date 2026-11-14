@@ -769,3 +769,40 @@ def test_a_stopped_rollup_splits_itself_from_mains_checkout(tmp_path, monkeypatc
     tool.split_rollup(tree, rollup, launch, reason="[land] STOP: NEW failure")
     tool.split_rollup(tree, rollup, launch, reason="[land] STOP: NEW failure")  # a retried supervisor
     assert seen == [(["split", tree.name], tree.name + ".split.log", repo)]
+
+
+def test_branch_option_queues_without_a_branch_worktree_and_checks_errors(repo, monkeypatch):
+    main, dev = repo
+    _git(main, "branch", "feat/plumbing", _git(dev, "rev-parse", "HEAD"))
+    launched = []
+    snap, log = tool.start(main, ["--tests", "auto"], NOW, lambda argv, log: launched.append(argv),
+                           branch="feat/plumbing")
+    assert snap == "land/feat/plumbing-20261028044000"
+    tree = log.parent / log.name.removesuffix(".log")
+    assert _git(tree, "rev-parse", "HEAD") == _git(main, "rev-parse", "refs/heads/feat/plumbing")
+    assert _git(main, "rev-parse", "--abbrev-ref", "HEAD") == "main"
+    assert launched[0][-4:] == [str(tree), snap, "--tests", "auto"]
+    for bad in ("main", "HEAD", "land/feat/x-1", "feat/missing"):
+        with pytest.raises(SystemExit):
+            tool._precheck_mod().resolve_branch(main, bad)
+    (dev / "a.txt").write_text("dirty\n")
+    with pytest.raises(SystemExit, match="uncommitted changes"):
+        tool._precheck_mod().resolve_branch(main, "feat/x")
+
+
+def test_main_branch_option_parses_and_checks_too_big(repo, monkeypatch):
+    main, dev = repo
+    _git(main, "branch", "feat/plumbing", _git(dev, "rev-parse", "HEAD"))
+    monkeypatch.chdir(main)
+    monkeypatch.setattr(tool, "MAX_OWN_COMMITS", 0)
+    with pytest.raises(SystemExit, match="refused: 1 own commits"):
+        tool.main(["--branch", "feat/plumbing", "--tests", "auto"])
+    with pytest.raises(SystemExit, match="--branch needs"):
+        tool.main(["--branch"])
+    monkeypatch.setattr(tool, "MAX_OWN_COMMITS", 40)
+    calls = []
+    monkeypatch.setattr(tool, "precheck_branch", lambda cwd, b, words: calls.append((b, words)) or 0)
+    monkeypatch.setattr(tool, "start", lambda cwd, args, now, launch, branch=None: (
+        calls.append((branch, args)) or ("land/feat/plumbing-1", Path("log"))))
+    assert tool.main(["--branch=feat/plumbing", "--tests", "auto", "--mixed", "ok"]) == 0
+    assert calls == [("feat/plumbing", ["--mixed", "ok"]), ("feat/plumbing", ["--tests", "auto", "--mixed", "ok"])]
