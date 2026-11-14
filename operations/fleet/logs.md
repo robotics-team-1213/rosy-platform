@@ -5547,3 +5547,8 @@
 - 변경: `fleet.station_recovery.dispatch`(기본 false). 승인된 복구 요청이 `TripRunner.start(..., purpose="charge_return")`로 고른 충전 칸까지 trip을 시작하고, 도착하면 lease를 끝내고 `plug_charger` 사람 요청을 보낸다. 실패·거절은 `station_recovery_return` 사건. 새 `station_recovery_dispatch.py`, trip lease 본문 `purpose`.
 - 증거: 원격 `test_station_recovery_dispatch.py`·`test_station_recovery.py`·`test_person_requests.py`·`test_trip_lease.py` 116 통과, trip·cli 시험 679 통과.
 - gate 변화: SOURCE. 실물(20 % 유도 시험·칸 앞 도착)은 미실시.
+
+## 2026-11-14 · uncommitted · 콘솔 현장 지도 목표의 프레임 변환 (D-1003)
+- 변경: `POST /api/fleet/robots/{id}/goal` 선택 필드 `frame: "site"`(v1.400). 콘솔이 현장 지도 보기에서 찍은 목표는 이 필드를 싣고, Fleet이 trip free 목표와 같은 `robot_frame_goal`로 기체 Nav2 지도 프레임으로 바꾼다. 증명이 없으면 409(`SITE_POSE_UNKNOWN`·`SITE_MAP_NOT_ACTIVE`)로 아무것도 보내지 않는다. 격자 보기·다른 호출자는 그대로.
+- 증거: 원격 `test_console_goal_site_frame.py`·`test_server_app.py`·`test_task_api.py` 78 통과.
+- gate 변화: SOURCE. 실물 미실시.

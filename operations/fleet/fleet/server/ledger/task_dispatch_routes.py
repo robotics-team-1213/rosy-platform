@@ -13,7 +13,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import math
-from typing import Mapping, Optional
+from typing import Literal, Mapping, Optional
 
 from fastapi import Depends, Header, HTTPException
 from pydantic import BaseModel, ConfigDict, field_validator
@@ -35,6 +35,9 @@ class GoalRequest(BaseModel):
     x: float
     y: float
     yaw: float = 0.0
+    #: "site": x, y, yaw are on the active site map (the console's site view) and Fleet converts them into the
+    #: robot's own Nav2 map frame (D-1003); absent: already in the robot's frame, sent as before.
+    frame: Optional[Literal["site"]] = None
 
     @field_validator("x", "y", "yaw", mode="before")
     @classmethod
@@ -128,6 +131,33 @@ async def execute_local_fleet_stop(*, console, task_service, configured_omx,
     return result
 
 
+async def _site_goal_in_robot_frame(app, console, robot_id: str, goal: tuple) -> tuple:
+    """A console site-map goal in the robot's own Nav2 map frame, the way trips convert free goals (D-1003);
+    409 instead of sending site coordinates raw (2026-11-13 rosy_46 drove to the wrong place).
+    shortcut: converted at submit, so a goal that waits QUEUED keeps the robot frame of that moment; a robot that
+    reboots (new SLAM origin) before dispatch would get it in the old frame. Convert at dispatch when queued site
+    goals become common."""
+    from fleet.server.trip_geometry import SiteFrameMismatch, robot_frame_goal
+    site_maps = getattr(app.state, "site_maps", None)
+    active = site_maps.active() if site_maps is not None else None
+    if active is None:
+        raise HTTPException(409, detail={"code": "SITE_MAP_NOT_ACTIVE", "message": "no active site map"})
+    service = getattr(app.state, "map_pose", None)
+    site_pose = service.arbitrated_pose(robot_id) if service is not None else None
+    try:
+        state, _ = await console._gather_state(robot_id)
+        converted = robot_frame_goal(goal, site_pose, state, active[1].map_id)
+    except SiteFrameMismatch:
+        converted = None
+    except Exception:  # noqa: BLE001 - an unreadable robot is not a frame proof
+        converted = None
+    if converted is None:
+        raise HTTPException(409, detail={
+            "code": "SITE_POSE_UNKNOWN",
+            "message": f"{robot_id}: Fleet cannot place this robot on the site map yet, so the goal was not sent"})
+    return converted
+
+
 def install_task_dispatch_routes(
     app, *, console, task_service, configured_omx,
     stop_transport, require_viewer, require_operator,
@@ -213,6 +243,9 @@ def install_task_dispatch_routes(
         try:
             if busy := console.trip_refusal([robot_id]):  # D-494 5: refused before a task is queued for it
                 raise busy
+            if body.frame == "site":
+                x, y, yaw = await _site_goal_in_robot_frame(app, console, robot_id, (body.x, body.y, body.yaw))
+                body = body.model_copy(update={"x": x, "y": y, "yaw": yaw, "frame": None})
             if task_service is not None:
                 if not idempotency_key:
                     raise HTTPException(status_code=400, detail={
