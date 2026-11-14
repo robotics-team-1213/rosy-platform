@@ -74,10 +74,13 @@ def _rows(history: Path | None, inv: list[str]) -> list[dict]:
     want, rows = key(inv), []
     if history is None:
         return rows
+    needle = json.dumps(want)
     try:
         # Line by line: every invocation of a landing reads this at once, and the file only grows.
         with history.open(encoding="utf-8", errors="replace") as lines:
             for line in lines:
+                if needle not in line:
+                    continue
                 try:
                     row = json.loads(line)
                     if row["key"] == want:
@@ -89,10 +92,18 @@ def _rows(history: Path | None, inv: list[str]) -> list[dict]:
     return rows
 
 
+def _gb_from_peaks(peaks) -> int:
+    return min(FULL_GB, max(1, math.ceil(max(peaks) * MARGIN / 1024))) if peaks else FULL_GB
+
+
+def _cores_from_rows(rows: list[dict], workers: int) -> int:
+    used = [r["cores"] for r in rows if isinstance(r.get("cores"), (int, float))]
+    return min(workers, max(1, math.ceil(max(used) * MARGIN))) if used else workers
+
+
 def reserve_gb(history: Path | None, inv: list[str]) -> int:
     """MARGIN x inv's highest recorded peak, rounded up to whole GB within 1..FULL_GB; FULL_GB with no record."""
-    peaks = [r["peak_mib"] for r in _rows(history, inv) if isinstance(r.get("peak_mib"), int)]
-    return min(FULL_GB, max(1, math.ceil(max(peaks) * MARGIN / 1024))) if peaks else FULL_GB
+    return _gb_from_peaks([r["peak_mib"] for r in _rows(history, inv) if isinstance(r.get("peak_mib"), int)])
 
 
 def reserve_gb_all(history: Path | None, invs: list[list[str]]) -> int:
@@ -100,9 +111,12 @@ def reserve_gb_all(history: Path | None, invs: list[list[str]]) -> int:
     (remote_pytest.SHIP). 2026-11-09: three runs waiting to start held 18 GB of a model PC at a fixed 6 GB each."""
     keys, peaks = {key(inv) for inv in invs}, {}
     if history is not None and invs:
+        pattern = re.compile("|".join(re.escape(json.dumps(k)) for k in keys))
         try:
             with history.open(encoding="utf-8", errors="replace") as lines:
                 for line in lines:
+                    if not pattern.search(line):
+                        continue
                     try:
                         row = json.loads(line)
                         if row["key"] in keys and isinstance(row.get("peak_mib"), int):
@@ -113,22 +127,22 @@ def reserve_gb_all(history: Path | None, invs: list[list[str]]) -> int:
             pass
     if not invs or len(peaks) < len(keys):
         return FULL_GB
-    return min(FULL_GB, max(1, math.ceil(max(peaks.values()) * MARGIN / 1024)))
+    return _gb_from_peaks(peaks.values())
 
 
 def reserve_cores(history: Path | None, inv: list[str], workers: int) -> int:
     """MARGIN x inv's highest recorded average cores, rounded up within 1..workers; workers with no record."""
-    used = [r["cores"] for r in _rows(history, inv) if isinstance(r.get("cores"), (int, float))]
-    return min(workers, max(1, math.ceil(max(used) * MARGIN))) if used else workers
+    return _cores_from_rows(_rows(history, inv), workers)
 
 
 def reserve(history: Path | None, inv: list[str], words: list[str], note: str) -> tuple[list[str], str]:
     """Job words and note with the lock budget inv's history earns (remote_pytest.one): GB, unless a light host
     already capped MemoryMax, and cores under the job's ``ROSY_JOB_CORES`` (JOB's default 2; ``-n`` keeps it)."""
-    gb = reserve_gb(history, inv)
+    rows = _rows(history, inv)
+    gb = _gb_from_peaks([r["peak_mib"] for r in rows if isinstance(r.get("peak_mib"), int)])
     if gb < FULL_GB and not any(w.startswith("ROSY_JOB_MEM_GB=") for w in words):
         words, note = [*words, f"ROSY_JOB_RESERVE_GB={gb}"], note + f", reserve {gb} GB (memory history)"
     workers = next((int(w[15:]) for w in words if w.startswith("ROSY_JOB_CORES=") and w[15:].isdigit()), 2)
-    if (cores := reserve_cores(history, inv, workers)) < workers:
+    if (cores := _cores_from_rows(rows, workers)) < workers:
         words, note = [*words, f"ROSY_JOB_RESERVE_CORES={cores}"], note + f", {cores} of {workers} cores (cpu history)"
     return words, note
