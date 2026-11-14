@@ -261,6 +261,20 @@ main {
 /* 지도가 없으면 영상은 이미 크게 보인다 — 바꿀 것이 없는 버튼은 두지 않는다. */
 #fleet-main:has(.map-stage:is([data-map-state="auth"], [data-map-state="unavailable"], [data-map-state="loading"])) #birdseye-toggle { display: none; }
 .map-stage[data-map-state="unavailable"] #map-canvas { height: min(30dvh, 18rem); }
+/* 2026-11-14: 영상이 끊겨도 마지막 프레임을 둔다 — 반투명과 왼쪽 아래 시각 기록으로만 낡음을
+   알린다(D-220: 색 변화·움직임 없음). 지도 위 그림의 반투명은 canvas globalAlpha가 맡는다. */
+.map-stage[data-camera-stale] > #map-birdseye { opacity: 0.5; }
+.map-camera-stamp {
+  position: absolute;
+  z-index: 3;
+  left: var(--space-3);
+  bottom: calc(var(--space-3) + var(--target-secondary)); /* 왼쪽 아래 천장 단추(#device-watch) 바로 위 */
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--text-micro);
+  font-family: var(--mono);
+  pointer-events: none;
+}
 .map-empty {
   position: absolute;
   inset: 1px;

@@ -1239,9 +1239,19 @@ def test_fresh_rosy_cam_frame_becomes_site_map_background_then_expires(console_u
         centre, pad = red
         assert centre[0] > 150 and centre[1] < 100 and centre[2] < 100, red
         assert not (pad[0] > 150 and pad[1] < 100 and pad[2] < 100), red
+        # 2026-11-14: a stale feed (4 s age) keeps the last good frame on the map — dimmed and
+        # marked old, not cleared. The tag keeps the calibration, the stamp shows the capture
+        # time and age, and the centre stays red-dominant but at half opacity.
         frame_age["ms"] = "4000"
-        page.wait_for_function("() => !document.querySelector('#map-tag')?.textContent.includes('paint-test')",
+        page.wait_for_function("() => document.querySelector('#map-stage')?.dataset.cameraStale === 'true'",
                                timeout=7000)
+        assert "paint-test" in page.inner_text("#map-tag")
+        stamp = page.inner_text("#map-camera-stamp")
+        assert stamp.startswith("카메라 ") and "초 전" in stamp, stamp
+        dim = page.evaluate("() => { const c = document.querySelector('#map-canvas'); "
+                            "const g = c.getContext('2d'); "
+                            "return [...g.getImageData(Math.floor(c.width / 2), Math.floor(c.height / 2), 1, 1).data]; }")
+        assert dim[0] > dim[1] + 40 and dim[0] > dim[2] + 40, dim
         assert not errors
         browser.close()
 
