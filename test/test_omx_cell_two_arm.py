@@ -62,7 +62,8 @@ def order(events, name, what):
 def test_each_segment_waits_for_what_the_schedule_put_before_it():
     events = []
     result = two.execute(cells_of(events), COMMANDS, STEPS, log=lambda row: None)
-    assert result == {"done": {"a": 3, "b": 3}, "failed": None, "last": {"a": "park a", "b": "park b"}, "stopped": {}}
+    assert result == {"done": {"a": 3, "b": 3}, "failed": None, "last": {"a": "park a", "b": "park b"},
+                      "stopped": {}, "plan_gen": 0}
     assert order(events, "b", ("end", "goto b0")) < order(events, "a", ("start", "goto a0"))
     assert order(events, "a", ("end", "goto a0")) < order(events, "b", ("start", "goto b1"))
     assert order(events, "a", ("end", "park a")) < order(events, "b", ("start", "park b"))
@@ -448,4 +449,33 @@ def test_a_both_step_schedule_needs_a_measured_wait_pose():
     two.admit(serial, libraries)  # it waits at home, a pose the plan's rest check already cleared
     libraries["a"][0][1]["chunks"]["wait"] = [[0.0] * 6]  # a person measured where an arm may hover
     two.admit(both, libraries)
+
+
+def test_a_replan_lands_only_at_a_joint_boundary_and_reorders_the_rest():
+    events = []
+    cells = cells_of(events, b={"seconds": 0.12})  # b's b0 is in flight when a's first completion replans
+    commands = {"a": [["goto a0"], ["goto a1"], ["goto a2"]], "b": [["goto b0"], ["goto b1"], ["goto b2"]]}
+    steps = [{"a": 0, "b": None}, {"a": 1, "b": 0}, {"a": 2, "b": None}, {"a": None, "b": 1}, {"a": None, "b": 2}]
+
+    def on_done(name, segment, done):
+        # whichever arm just finished, the replan puts the other's remaining segments first
+        b_first = [{"a": None, "b": j} for j in range(done["b"], 3)] + [{"a": i, "b": None} for i in range(done["a"], 3)]
+        a_first = [{"a": i, "b": None} for i in range(done["a"], 3)] + [{"a": None, "b": j} for j in range(done["b"], 3)]
+        return {"steps": b_first if name == "a" else a_first}
+
+    result = two.execute(cells, commands, steps, log=lambda row: None, on_segment_done=on_done)
+    assert result["failed"] is None and result["done"] == {"a": 3, "b": 3} and result["plan_gen"] >= 1
+    assert order(events, "a", ("end", "goto a0")) < order(events, "b", ("end", "goto b0"))  # it replanned into a moving peer
+    # a1 was ready in the old steps already; it waited for the generation that landed after b0 finished
+    assert order(events, "b", ("end", "goto b0")) < order(events, "a", ("start", "goto a1"))
+    # the generation that landed is the later replan's (a first), not the one it replaced
+    assert order(events, "a", ("start", "goto a1")) < order(events, "b", ("start", "goto b1"))
+
+
+def test_a_refused_replan_stops_both_arms_for_a_person():
+    events = []
+    cells = cells_of(events)
+    result = two.execute(cells, COMMANDS, STEPS, log=lambda row: None, on_segment_done=lambda name, segment, done: None)
+    assert result["failed"]["error"] == "replan_none" and result["done"] == {"a": 0, "b": 1}
+    assert cells["a"].commands == [] and cells["b"].commands == ["goto b0"]  # b goes first: its completion refused the replan
 

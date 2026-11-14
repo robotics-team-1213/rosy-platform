@@ -74,14 +74,26 @@ def carry_route(path, library: dict, kin, rigid, tip_m: float) -> tuple[list, li
     return segments_of(library, kin, rigid, tip_m=tip_m), commands
 
 
-def execute(cells: dict, commands: dict, steps: list, fail_at=None, log=print, clock=time.monotonic, poll_s: float = 0.05) -> dict:
-    """Run the schedule. `fail_at` (arm, segment) acts as a failure after that segment: the test of the coupled stop."""
-    done, changed, failed = {"a": 0, "b": 0}, threading.Condition(), []
-    last, stopped = {}, {}  # per arm: the last command that finished, and the one that did not
+def execute(cells: dict, commands: dict, steps: list, fail_at=None, log=print, clock=time.monotonic, poll_s: float = 0.05,
+            on_segment_done=None) -> dict:
+    """Run the schedule. `fail_at` (arm, segment) acts as a failure after that segment: the test of the coupled stop.
+    `on_segment_done(name, segment, done)`, still inside the lock after `done` advances, returns the plan(start=(done_a,
+    done_b)) result for this completion: its steps become the next generation only when both arms stand at a segment
+    boundary (started == done; admission is blocked while a replan is pending), plan_gen counting the swaps. A refused
+    plan (None) stops both arms ("replan_none"): a coupled stop and safe_fold, never a serial fallback (D-983)."""
+    done, started, changed, failed = {"a": 0, "b": 0}, {"a": 0, "b": 0}, threading.Condition(), []
+    last, stopped, pending, plan_gen = {}, {}, None, 0  # per arm: the last command that finished, and the one that did not
 
     def fail(name, segment, error):
         with changed:
             failed.append({"arm": name, "segment": segment, "error": error})
+            changed.notify_all()
+
+    def swap_if_due():
+        nonlocal steps, pending, plan_gen
+        if pending is not None and all(started[n] == done[n] for n in ORDER):
+            steps, pending, plan_gen = pending["steps"], None, plan_gen + 1
+            log({"plan_gen": plan_gen, "done": [done["a"], done["b"]]})
             changed.notify_all()
 
     def arm(name):
@@ -98,7 +110,9 @@ def execute(cells: dict, commands: dict, steps: list, fail_at=None, log=print, c
                 with changed:
                     if failed:
                         return
-                    if ready(steps, name, segment, done["a"], done["b"]):
+                    swap_if_due()
+                    if pending is None and ready(steps, name, segment, done["a"], done["b"]):
+                        started[name] += 1
                         break
                     changed.wait(poll_s)
                 if clock() - alive >= KEEP_ALIVE_S:  # outside the lock: a slow session must not hold up the peer's failure
@@ -119,6 +133,13 @@ def execute(cells: dict, commands: dict, steps: list, fail_at=None, log=print, c
                 done[name] += 1
                 if fail_at == (name, segment):
                     failed.append({"arm": name, "segment": segment, "error": "injected"})
+                if on_segment_done is not None:
+                    fresh = on_segment_done(name, segment, dict(done))
+                    if fresh is None:
+                        failed.append({"arm": name, "segment": segment, "error": "replan_none"})
+                    else:
+                        pending = fresh
+                swap_if_due()
                 changed.notify_all()
 
     threads = [threading.Thread(target=arm, args=(name,)) for name in ORDER]
@@ -126,7 +147,7 @@ def execute(cells: dict, commands: dict, steps: list, fail_at=None, log=print, c
         t.start()
     for t in threads:
         t.join()
-    return {"done": done, "failed": failed[0] if failed else None, "last": last, "stopped": stopped}
+    return {"done": done, "failed": failed[0] if failed else None, "last": last, "stopped": stopped, "plan_gen": plan_gen}
 
 
 def way_out(library: dict, last: str | None, stopped: dict | None) -> list | None:
