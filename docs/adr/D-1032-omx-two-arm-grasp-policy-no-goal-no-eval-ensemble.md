@@ -1,6 +1,6 @@
 ## D-1032 OMX 두 팔 집기 정책(`omx_two_arm_policy`) CORE 계약 정렬 — `--no-goal` 기본 경로 및 평가 시 `temporal_ensemble_coeff` 강제 덮어쓰기 제거
 
-**Status:** Proposed (2026-11-15, Phase A 시뮬 진단 패치·평가 대기; Phase B 재학습·실물 승격 별도)
+**Status:** Proposed (2026-11-15, 최소 패치·Phase A 무재학습 진단 완료; Phase B `--no-goal` 100k step 재학습 진행 중, 실물 승격 별도)
 
 잇는 결정: [D-854](D-854-omx-policy-runner-and-action-space.md)(CORE `policy_runner` 입력·chunk 계약) · [D-969](D-969-omx-two-arm-act-from-isaac-ik-demonstrations.md)(두 팔 OMX ACT 관절+영상 입력) · [D-1015](D-1015-omx-imitation-speed-parity-temporal-ensembling-and-kinodynamic-streaming.md)(모방 속도 일치·temporal ensembling 인용) · [D-911](D-911-omx-native-reviewed-operating-envelope.md)(실물 안전·소유 경계 불변)
 
@@ -20,5 +20,5 @@
    `collect`와 `round`에 `--no-goal` 플래그를 추가해 `observation.environment_state(22)` 없이 `observation.state(12)` + 카메라 영상(`observation.images.*`)만으로 데이터셋을 생성·학습할 수 있게 한다. `Driver`는 로드된 정책의 `config.input_features`에 `observation.environment_state`가 포함된 경우에만 `GOAL`을 전달하므로 기존 `retrain2` 체크포인트와 `--no-goal` 체크포인트를 모두 호환 실행한다.
 3. **실물 경계 및 단계별 검증.**
    - 본 변경은 `tools/sim/` 시뮬레이션 수집·평가 범위로 한정하며 `policy_runner.py`, `ALLOWED_OWNERS=("rule_based",)`, `D-793`, `D-911` 실물 실행·안전 가드 및 `D-427` 부품 소유 경계는 변경하지 않는다.
-   - **Phase A (진단):** 본 패치 적용 상태에서 재학습 없이 `retrain2`를 `ensemble=None`(`n_action_steps` 체크포인트 기본값 및 `1`)로 재평가해 스미어링 원인을 분리하고 `arm_a` 0/24 원인을 dataset 수준까지 확인한다.
-   - **Phase B (기준 재학습):** `--no-goal`로 충분한 epoch/step(100k+ steps, batch 32 기준)을 학습·평가해 D-969/D-854 준수 기준선을 확보한 뒤에만 본 ADR의 Accepted 전환 및 후속 도메인 무작위화·실물 이전을 검토한다.
+   - **Phase A (진단 완료):** 무재학습 상태에서 `retrain2`(`5cda032f57` 산출)를 `606aaa1e8e`(`main` 계통)에서 `ensemble=None`으로 평가한 결과 `n_action_steps=8`(`0/57`), `n_action_steps=1`(`0/57`), 비교군 `--ensemble-coeff 0.01 --n-action-steps 1`(`task-505`, seed 0 `0/9`) 모두 통과하지 못했다. 동일 `5cda032f57` 코드베이스에서 `ensemble`만 끈 비교(`task-515`, seed 0)도 `0/9`(vs `clean-eval` seed 0 `5/9`)였으며, `arm_a` `s2,s5,s8` 오차는 `21.8–24.8 mm → 14.2–15.8 mm`로 줄었으나 3.7-epoch 정책의 `arm_b`가 `5/6 → 0/6`으로 무너졌다. 즉 (a) 미착지 `5cda032f57`의 하강 속도/제어 변경과 `main` 사이 교차 브랜치 불일치, (b) `temporal_ensemble=.01`이 3.7-epoch 과소학습의 불안정을 가리면서 `arm_a` 정밀도를 깎던 이중 원인이 분리되었다.
+   - **Phase B (기준 재학습 진행 중):** `606aaa1e8e` 단일 코드·물리 기준에서 `--no-goal --zero-error-deg 0 --skill grasp --batch-size 32 --steps 100000`으로 수집·학습·평가 라운드(`phase-b-nogoal`)를 실행해 D-969/D-854 준수 기준선을 확보한 뒤에만 본 ADR의 Accepted 전환 및 후속 도메인 무작위화·실물 이전을 검토한다.
