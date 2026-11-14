@@ -14871,3 +14871,8 @@ osy-d395-s1d\`.
 - 변경: CORE `StateSnapshot.map_grid_id`(읽은 격자 해시), Fleet `robot_map_bindings`(승인·철회·이력, 격자·현장 지도 버전에 묶임), `/api/fleet/robots/{id}/map-binding`(읽기·승인·철회·벽에서 마커 없는 제안, SLAM 자세의 현장 좌표와 카메라 자세 차이), `fleet.trip.map_binding_required`(기본 꺼짐; 켜면 free 목표는 결속으로만, 없으면 `map_frame` 정지). API v1.393, ADR D-1022.
 - 증거: 원격 `test_map_binding_fit`·`_store`·`_routes`·`test_site_map_frame_safety`·`test_trip_runner`·`test_trip_robot_frame_goal`·`test_initial_pose`·`test_protocol_version_alignment` 통과. 실물 미수행(기체 선 연결).
 - gate 변화: 없음.
+
+## 2026-11-14 · uncommitted · D-1029 저전력 충전 복귀
+- 변경: ADR D-1029, ADR Log 행, API v1.399(trip lease `purpose`), 충전 복귀 이동 설정 설명.
+- 증거: 위 CORE·Fleet 원격 시험.
+- gate 변화: SOURCE.

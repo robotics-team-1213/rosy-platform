@@ -971,3 +971,61 @@ def test_job_lease_order_lease_mode_first_authority_holds_at_every_step(robot):
     assert client.put("/api/v1/line-follow/mode", json={"mode": "OFF"}, headers=FLEET).status_code == 200
     assert _camera_lane(client).status_code == 200      # no lease, no config: no authority needed
     assert _gated(services, line["t"]) == 0.05
+
+
+# --- D-1029: charge-return purpose --------------------------------------------------------
+
+def test_purpose_is_accepted_shown_and_null_when_absent(robot):
+    client, services, _ = robot
+    assert _open(client).json()["trip_lease"]["purpose"] is None
+    assert not services.trip_lease.charge_return_active()
+    client.delete(f"{URL}/lease-1", headers=FLEET)
+    opened = _open(client, lease_id="lease-2", purpose="charge_return")
+    assert opened.status_code == 200, opened.text
+    assert opened.json()["trip_lease"]["purpose"] == "charge_return"
+    assert _state(client)["trip_lease"]["purpose"] == "charge_return"
+    assert services.trip_lease.charge_return_active()
+
+
+def test_unknown_purpose_is_refused(robot):
+    client, _, _ = robot
+    assert _open(client, purpose="park").status_code == 400
+
+
+def test_a_renew_cannot_change_the_purpose(robot):
+    client, _, _ = robot
+    _open(client, purpose="charge_return")
+    assert _open(client).status_code == 409
+    assert _open(client, purpose="charge_return").json()["renewed"] is True
+
+
+def test_charge_return_is_inactive_once_the_lease_lapses_before_the_timer_ends_it(robot):
+    client, services, clock = robot
+    _open(client, purpose="charge_return")
+    clock.now += 5.1
+    assert services.trip_lease.current() is not None
+    assert not services.trip_lease.charge_return_active()
+
+
+def test_the_speed_cap_applies_only_while_the_lease_is_live(robot):
+    client, services, clock = robot
+    assert services.safety.clip(0.20, 0.0, "fleet")[0] == pytest.approx(0.20)
+    _open(client, purpose="charge_return")
+    for scope in ("nav", "fleet", "manual", "line"):
+        assert services.safety.clip(0.20, 0.0, scope)[0] == pytest.approx(0.10)
+    assert services.safety.clip(0.05, 0.0, "nav")[0] == pytest.approx(0.05)   # never raises
+    client.delete(f"{URL}/lease-1", headers=FLEET)
+    assert services.safety.clip(0.20, 0.0, "fleet")[0] == pytest.approx(0.20)
+    _open(client, lease_id="lease-3")                                         # an ordinary trip
+    assert services.safety.clip(0.20, 0.0, "fleet")[0] == pytest.approx(0.20)
+
+
+@pytest.mark.parametrize("bad", [0.0, -0.1, float("nan"), float("inf")])
+def test_a_bad_charge_return_speed_never_removes_the_cap(bad):
+    from types import SimpleNamespace as NS
+    from core.trip_lease import build_trip_lease
+    safety = NS(estop_listeners=[])
+    lease = build_trip_lease(NS(publish=lambda *a, **k: None), NS(set_trip_lease_provider=lambda f: None),
+                             NS(change_listeners=[]), safety, NS(), NS(), NS(), charge_return_linear=bad)
+    lease.charge_return_active = lambda: True
+    assert safety.charge_return_linear_provider() == pytest.approx(0.10)
