@@ -313,7 +313,7 @@ def ship(repo: Path, host: str, sha: str, name: str, gb: int = NEEDS["pytest"][1
                                  + result.stderr.decode(errors="replace"))
             print(f"[remote-pytest] {host} lacks {base[:10]}; sending the full history", flush=True)
     finally:
-        git(repo, "update-ref", "-d", ref)
+        subprocess.run(["git", "-C", str(repo), "update-ref", "-d", ref], capture_output=True)  # leftover ref is harmless
 
 
 def capture(command: list[str], log: Path, cwd: Path | None = None) -> int:

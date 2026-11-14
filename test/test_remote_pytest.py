@@ -449,6 +449,21 @@ def test_pushing_origin_main_itself_sends_a_full_bundle(tmp_path, monkeypatch):
     assert sent == [0, 0]
 
 
+def test_a_failed_temp_ref_delete_does_not_fail_the_ship(tmp_path, monkeypatch):
+    # 2026-11-14: a FULL landing died on `update-ref -d` in ship's cleanup, after the bundle had arrived.
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-q", "-b", "main")
+    _git(repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "0")
+
+    def fake_remote(host, script, *args, input=None, **kw):
+        (repo / ".git/refs/remote-pytest/run3.lock").write_text("")  # another git holds the ref
+        return subprocess.CompletedProcess([], 0, b"", b"")
+
+    monkeypatch.setattr(rp, "remote", fake_remote)
+    rp.ship(repo, "h", _git(repo, "rev-parse", "HEAD"), "run3")
+
+
 def _fake_ssh(tmp_path, monkeypatch, fail_on):
     """A fake ssh: `true` succeeds; a script containing `fail_on` exits 1, anything else 0."""
     fake = tmp_path / "fake_ssh.py"
