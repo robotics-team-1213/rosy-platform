@@ -225,6 +225,8 @@ def test_the_running_belt_is_not_a_moved_scene():
     assert rc.scene_moved(CLEAN, after) and rc.scene_moved(CLEAN, after, [[511, 13, 640, 173]]) == []
     belt = {"sites": {"belt": {"auto_roi": [312, 105, 639, 172], "surface_px": [[300, 20], [639, 40], [639, 180], [290, 170]]}}}
     assert rc.moving_rects(belt) == [[312, 105, 639, 172], [290, 20, 639, 180]] and rc.moving_rects({"sites": {}}) == []
+    belt["sites"]["belt"]["moving_px"] = [292, 28, 640, 210]
+    assert rc.moving_rects(belt) == [[292, 28, 640, 210]]
 
 
 def test_a_moved_camera_stops_the_carry_before_any_pick():

@@ -65,9 +65,13 @@ def unsolved(choices) -> dict:
 
 
 def moving_rects(config: dict) -> list:
-    """The belt's top-view rects ([x0, y0, x1, y1]): its ROI and its surface's bounds. It runs all the time, so its change is
-    never a moved pile (2026-11-14 arm_s: the belt blob reached past its ROI, up to the frame's top)."""
+    """The belt's top-view rects ([x0, y0, x1, y1]): its `moving_px` when set, else its ROI and its surface's bounds. It runs
+    all the time, so its change is never a moved pile (2026-11-14 arm_s: the belt blob reached past its ROI, up to the
+    frame's top; the surface polygon had been clipped at the frame's edge before the camera moved, and a box on the belt
+    stands taller than the surface it rides on)."""
     site = (config.get("sites") or {}).get("belt") or {}
+    if site.get("moving_px"):
+        return [site["moving_px"]]
     rects = [site["auto_roi"]] if site.get("auto_roi") else []
     if site.get("surface_px"):
         xs, ys = [p[0] for p in site["surface_px"]], [p[1] for p in site["surface_px"]]
