@@ -78,7 +78,7 @@ def main(argv=None) -> int:
     if args.verb == "add":
         if args.root is None:
             from data_paths import data_root
-            args.root = data_root() / "calibration"
+            args.root = data_root(REPO) / "calibration"
         result["record"] = CalibrationStore(args.root).add(
             args.robot, "floor_paint", result["values"], sessions=[p.name for p in args.frames],
             method="floor_paint_gate/1 (tape p1-p99 hue +-, S p2-10, V p2/2)",
