@@ -331,8 +331,28 @@ def drop_small_components(mask: np.ndarray) -> np.ndarray:
     return keep[labels].astype(np.uint8)
 
 
+_PINK_GATE = None
+
+
+def pink_gate() -> tuple:
+    """(low, high) HSV bounds of the pink tape for this robot's camera: its accepted ``floor_paint``
+    calibration record (measured from its own frames) or the constants above. Read once per process."""
+    global _PINK_GATE
+    if _PINK_GATE is None:
+        values = {"pink_h_low": PINK_H_LOW, "pink_h_high": PINK_H_HIGH,
+                  "pink_min_saturation": PINK_MIN_SATURATION, "pink_min_value": PINK_MIN_VALUE}
+        try:
+            from core_common.calibration_store import resolve
+            values, _ = resolve("floor_paint", values, fallback_source="lane_keep_lines defaults")
+        except Exception:  # noqa: BLE001  a store that cannot be read keeps the shipped gate
+            pass
+        _PINK_GATE = ((values["pink_h_low"], values["pink_min_saturation"], values["pink_min_value"]),
+                      (values["pink_h_high"], 255, 255))
+    return _PINK_GATE
+
+
 def _pink(hsv: np.ndarray) -> np.ndarray:
-    return cv2.inRange(hsv, (PINK_H_LOW, PINK_MIN_SATURATION, PINK_MIN_VALUE), (PINK_H_HIGH, 255, 255)) > 0
+    return cv2.inRange(hsv, *pink_gate()) > 0
 
 
 def floor_pink_mask(bgr: np.ndarray, horizon_row: float) -> np.ndarray:

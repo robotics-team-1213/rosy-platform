@@ -68,3 +68,20 @@ def test_the_real_pale_tape_is_pink_and_not_white_lane_paint():
 
 def test_orange_containers_stay_out_of_the_pink_mask():
     assert floor_pink_mask(frame_with(ORANGE), 60.0)[100, 160] == 0
+
+
+def test_the_robot_s_accepted_floor_paint_record_is_its_gate(tmp_path, monkeypatch):
+    from core_common.calibration_store import CalibrationStore
+    from perception_runtime.perception import lane_keep_lines as lk
+
+    store = CalibrationStore(tmp_path)
+    rid = store.add("rosy-pinky-test", "floor_paint", {"pink_h_low": 165, "pink_h_high": 179,
+                    "pink_min_saturation": 30, "pink_min_value": 70}, method="test/1")
+    store.set_status("rosy-pinky-test", "floor_paint", rid, "accepted", actor="test")
+    monkeypatch.setenv("ROSY_CALIBRATION_ROOT", str(tmp_path))
+    monkeypatch.setenv("ROSY_CALIBRATION_ROBOT", "rosy-pinky-test")
+    monkeypatch.setattr(lk, "_PINK_GATE", None)
+    assert lk.pink_gate() == ((165, 30, 70), (179, 255, 255))
+    assert floor_pink_mask(frame_with(REAL_PINK), 60.0)[100, 160] == 1
+    assert floor_pink_mask(frame_with(PINK), 60.0)[100, 160] == 0  # H 154 is outside this robot's measured band
+    monkeypatch.setattr(lk, "_PINK_GATE", None)

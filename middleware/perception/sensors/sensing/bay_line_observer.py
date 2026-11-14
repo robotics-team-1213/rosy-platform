@@ -24,11 +24,7 @@ import math
 import cv2
 import numpy as np
 
-from perception_runtime.perception.lane_keep_lines import (  # noqa: E402  one gate for the lane and the dock
-    HORIZON_MARGIN_PX, PINK_H_HIGH, PINK_H_LOW, PINK_MIN_SATURATION, PINK_MIN_VALUE)
-
-PINK_HSV_LOW = (PINK_H_LOW, PINK_MIN_SATURATION, PINK_MIN_VALUE)
-PINK_HSV_HIGH = (PINK_H_HIGH, 255, 255)
+from perception_runtime.perception.lane_keep_lines import HORIZON_MARGIN_PX, pink_gate  # noqa: E402  one gate
 MIN_COMPONENT_AREA_PX = 40
 #: The mask must paint at least this many pixels before the line exists.
 MIN_MASK_PIXELS = 60
@@ -102,7 +98,7 @@ class BayLineObserver:
         hrow = horizon_row(self._w, self._h, self._hfov, self._mount.pitch_rad,
                            self._mount.height_m)
         hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-        raw = cv2.inRange(hsv, PINK_HSV_LOW, PINK_HSV_HIGH)
+        raw = cv2.inRange(hsv, *pink_gate())
         raw[:max(0, min(raw.shape[0], int(math.ceil(hrow)) + HORIZON_MARGIN_PX))] = 0
         count, labels, stats, _ = cv2.connectedComponentsWithStats(raw, connectivity=8)
         keep = np.zeros(count, bool)
