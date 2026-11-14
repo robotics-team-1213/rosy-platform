@@ -63,7 +63,8 @@ def test_a_container_turned_in_its_lane_is_unseated_and_a_straight_one_is_not():
     plates = r2s.measure_temp_plates(frame(layout), layout)
     assert r2s.unseated_containers(frame(layout), layout, plates) == []
     img = frame(layout, skew={("a", COVERED["a"]): 14.})  # 2026-11-14: arm_a's temp container sat about 14 deg across its lane
-    got = r2s.unseated_containers(img, layout, r2s.measure_temp_plates(img, layout, plates))
+    prev = dict(plates={t: p["lanes"] for t, p in plates["plates"].items()}, shape=plates["shape"])
+    got = r2s.unseated_containers(img, layout, r2s.measure_temp_plates(img, layout, prev))
     assert [(u["plate"], u["lane"]) for u in got] == [("a", COVERED["a"])] and 12 < got[0]["turn_deg"] < 16
 
 
