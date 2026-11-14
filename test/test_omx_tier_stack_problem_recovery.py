@@ -336,10 +336,17 @@ def test_cell_task_worker_event_driven_hw_and_parallel_handoff(tmp_path: Path, m
         def __exit__(self, *a):
             return False
 
-    monkeypatch.setattr(ctw, "urlopen", lambda req, **kw: _DummyResp())
-    up = ctw.upload_latest_camera_snapshots("https://fleet.local:8443", "tok", prep_dir=tmp_path)
-    assert set(up.keys()) == {"cell_s", "cell_ab", "pinky"}
-    assert up["cell_s"] == 1502 and up["cell_ab"] == 1602
+    posted: list[str] = []
+
+    def _record_urlopen(req, **kw):
+        posted.append(req.full_url)
+        return _DummyResp()
+
+    monkeypatch.setattr(ctw, "urlopen", _record_urlopen)
+    qout = ctw.sync_cell_telemetry("https://fleet.local:8443", "tok", prep_dir=tmp_path)
+    assert qout == {}
+    assert "https://fleet.local:8443/api/fleet/pipeline/cell-quality" in posted
+    assert not [u for u in posted if "cell-camera" in u]  # D-136: 사실만, 프레임 바이트 없음
 
     pipe = cfp.FleetModelPipeline(tmp_path / "pipe")
 

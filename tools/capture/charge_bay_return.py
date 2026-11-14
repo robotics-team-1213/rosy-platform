@@ -223,7 +223,7 @@ def dispatch_low_battery_charge_return(
         return {**decision, "dispatched": False, "charge_outcome": None}
 
     bay = decision["selected_bay"]
-    charge_goal = {"x": round(bay["x"], 3), "y": round(bay["y"], 3), "theta": round(bay["yaw"], 3)}
+    charge_goal = {"x": round(bay["x"], 3), "y": round(bay["y"], 3), "yaw": round(bay["yaw"], 3)}
     dispatch_resp = api("/api/v1/navigation/goal", charge_goal, token)
     outcome = wait_goal_fn(api, token, timeout_s=goal_timeout_s)
     if outcome.get("navigation") != "ARRIVED":

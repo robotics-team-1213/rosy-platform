@@ -762,8 +762,29 @@ def test_stale_history_is_flagged_never_pruned_and_never_a_base(main, monkeypatc
     assert "more than 0 commits not in main" in worktrees.rules.stale_history(main, "feat/old")
     monkeypatch.setattr(worktrees.rules, "STALE_COMMITS", 2000)
     assert worktrees.rules.stale_history(main, "feat/old") is None
+    # 11-14: v2/v3 chains stacked on unlanded branches held 178-189 commits; a base must be in main
+    assert worktrees.main(["new", "again", "fix/again", "--from", "feat/old"]) == 1
+    assert "not in main yet" in capsys.readouterr().err
+    git(main, "merge", "-q", "--ff-only", "feat/old")
     assert worktrees.main(["new", "again", "fix/again", "--from", "feat/old"]) == 0
     assert (main / ".worktrees" / "again" / "old.txt").is_file()
+
+
+def test_prune_archives_unlanded_branches_idle_without_a_worktree_and_loses_nothing(main, capsys):
+    """11-14: 270 branches not in main, 219 with no worktree, 95 idle over 7 days."""
+    wt = add(main, "idle", commit=True)
+    sha = git(wt, "rev-parse", "HEAD")
+    git(main, "worktree", "remove", str(wt))
+    add(main, "busy", commit=True)  # checked out: never archived
+    later = time.time() + (worktrees.rules.ABANDON_DAYS + 1) * 86400
+    assert worktrees.rules.archive_abandoned(main, time.time(), apply=True) == 0  # recent: kept
+    worktrees.prune(main, now=later)
+    assert "would archive 1 unlanded branch(es)" in capsys.readouterr().out
+    assert "refs/heads/feat/idle" in refs(main, "refs/heads")
+    worktrees.prune(main, apply=True, now=later)
+    assert "archived 1 unlanded branch(es)" in capsys.readouterr().out
+    assert "refs/heads/feat/idle" not in refs(main, "refs/heads") and "refs/heads/feat/busy" in refs(main, "refs/heads")
+    assert git(main, "rev-parse", f"refs/archive/feat/idle@{sha[:10]}") == sha
 
 
 def test_new_records_the_owner_override_and_status_names_unknown_owners(main, capsys):

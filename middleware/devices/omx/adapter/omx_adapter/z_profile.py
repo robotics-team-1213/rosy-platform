@@ -92,17 +92,8 @@ def _rot_x(a: float) -> tuple[tuple[float, float, float], ...]:
 
 
 def _matmul(a: Sequence[Sequence[float]], b: Sequence[Sequence[float]]) -> tuple[tuple[float, float, float], ...]:
-    a00, a01, a02 = a[0]
-    a10, a11, a12 = a[1]
-    a20, a21, a22 = a[2]
-    b00, b01, b02 = b[0]
-    b10, b11, b12 = b[1]
-    b20, b21, b22 = b[2]
-    return (
-        (a00 * b00 + a01 * b10 + a02 * b20, a00 * b01 + a01 * b11 + a02 * b21, a00 * b02 + a01 * b12 + a02 * b22),
-        (a10 * b00 + a11 * b10 + a12 * b20, a10 * b01 + a11 * b11 + a12 * b21, a10 * b02 + a11 * b12 + a12 * b22),
-        (a20 * b00 + a21 * b10 + a22 * b20, a20 * b01 + a21 * b11 + a22 * b21, a20 * b02 + a21 * b12 + a22 * b22),
-    )
+    # Explicit left-to-right sums (not sum(): Python 3.12 compensates and would round differently).
+    return tuple(tuple(a[i][0] * b[0][j] + a[i][1] * b[1][j] + a[i][2] * b[2][j] for j in range(3)) for i in range(3))
 
 
 def _matvec(a: Sequence[Sequence[float]], v: Sequence[float]) -> tuple[float, float, float]:

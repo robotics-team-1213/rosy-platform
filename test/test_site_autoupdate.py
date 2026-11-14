@@ -1495,3 +1495,4 @@ def test_the_control_unit_peer_runs_the_signed_proxy_image_and_needs_to_run_not_
         rows(peer_state="exited"), NEW, accepted, inspect, companions=expected)
     assert "control-unit-peer" in upd.containers_reason(
         rows(peer_image="caddy:latest"), NEW, accepted, inspect, companions=expected)
+

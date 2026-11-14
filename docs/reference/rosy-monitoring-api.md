@@ -8,7 +8,7 @@
 
 | 요청 | 응답 |
 |---|---|
-| `GET /health` | 프로세스 조회 가능 여부. 장치·원천 정상이나 현장 수용을 뜻하지 않는다. |
+| `GET /health` | 프로세스 조회 가능 여부 `{status, last_success}`. `last_success`는 원천 수집이 마지막으로 성공한 시각(epoch 초)이고 첫 성공 전에는 null이다(`status`의 뜻은 그대로). 장치·원천 정상이나 현장 수용을 뜻하지 않는다. |
 | `GET /api/monitoring/v1/snapshot` | 허용된 사이트의 `MonitoringSnapshot` v1 |
 | `GET /api/monitoring/v1/sites/{site_id}/events?after=0&limit=100` | 해당 사이트의 상태 변경 이력. limit 1–200, 사이트별 단조 증가 sequence |
 

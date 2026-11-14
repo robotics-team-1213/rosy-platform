@@ -341,3 +341,47 @@ LeRobot 0.4.4/PyAV가 있는 학습 호스트의 전용 Python으로 실행한�
 현재 native 변환은 정확한 순서의 여섯 관절을 가진 단일 팔, normalized_-100_100 body/normalized_0_100 gripper와 원본 metadata의 정확한 키·영상 크기에 일치하는 카메라 프로필을 요구한다. 추가 카메라 키도 변환하며 역할·배치·용도는 명시한 프로필을 보존한다. wrist 역할은 팔 소속을 요구하고 과거 키의 별칭 재작성은 하지 않는다. 예제 프로필의 카메라 identity/placement를 추측해서 채우지 않는다. 여러 팔의 원본을 합치거나 보상·다음 상태·개입을 생성하지 않으며 HIL-SERL 전이로 사용할 수 없다. 이 변환 지원은 기존 raw 수집기의 카메라 설정 범위를 확대하지 않는다.
 
 생산 intake를 Learning 작업 목록에 OMX 자료로 등록한 경우 `/learning/omx`의 ‘검수 열기’에서 원본 프레임과 판정을 확인하고 별도 검토 버전을 저장할 수 있다. 원래 수집 판정은 덮어쓰지 않는다. 명시 선택한 검토 버전과 프로필 JSON으로 분할/변환 작업을 실행한다. 원본 경로를 변환 요청에 직접 넣지 않는다. 작업은 단일 호스트 실행 슬롯을 학습과 공유하고 검증/변환·중단·재접속 상태를 보존한다. 완료 후 실제 배열·revision 검증을 거쳐 데이터 목록에 자동 등록한다. 기존 raw-session 준비는 위 CLI 절차를 따른다. 현재 화면의 프레임 검토와 명시 확인은 실제 사람의 전체 영상 관찰·물체 성공·다중 카메라 시각 정합을 자동 입증하지 않는다.
+
+## 셀 자체 carry로 ACT/VLA 학습 자료 만들기
+
+`cell_auto_pick`이 `config['episodes']`로 남긴 원본 녹화(`episode_recorder.py` 폴더: `task.json`, `ticks.jsonl`,
+카메라 프레임)를 같은 실행의 `attempts.jsonl`(`cell_attempts`) 행과 **세션(run_id)·시도(attempt_id)로 결합**해
+ACT/VLA 실험 자료(`rosy.omx.experiment-dataset/1`, source `scripted_teacher`)를 만든다. 셀은 episode를 열 때
+`task.json`에 run_id·attempt_id·arm_id를 적어 둔다(`cell_auto_safety.episode_binding`). 이 결속이 없는 옛 녹화는
+시간 추정으로 짝짓지 않고 거절한다.
+
+```text
+python learning/curation/omx/carry_dataset.py <episodes-root> \
+  --attempts <work_dir>/attempts.jsonl --labels <review.json> \
+  --out <new-output> --split <run_id>=train --split <run_id>=eval
+```
+
+- **성공 라벨 3중 문:** 원장 행이 `placed` + `verify.inside`이고, 녹화 `result.json`이 `success`(강제 정지·중단·
+  프레임 없음 녹화는 `failed`로 보존돼 있다)이고, 사람 검수 라벨이 `success`(검수자·근거 필수)일 때만 episode가 된다.
+  `held`·`failed`·강제 정지·중단·미검수 시도는 receipt `refusals`에 이유와 함께 남고 학습에서 빠진다.
+- **개입 배제:** 검수 라벨의 `"intervention": true`는 그 carry를 성공이어도 제외한다.
+- **train/eval은 세션(run_id) 단위**로만 나뉜다(한 run이 양쪽에 걸치면 거절). kept run마다 `--split`을 정확히 하나 지정한다.
+- **원본 해시 보존:** receipt(`rosy.omx.cell-carry-dataset/1`)에 `task.json`·`ticks.jsonl`·`result.json`·카메라
+  jsonl의 SHA-256과 원장 판정·검수자·근거를 남긴다.
+- **행동은 실행된 값만:** `action`은 runner가 실제로 보낸 관절 목표(`ticks.jsonl`)다. 정책·VLA의 그림자 예측은
+  제안으로만 존재하며 이 경로가 읽지 않는다.
+- 단일 팔 6관절 `normalized_-100_100`, 카메라는 `task.json`의 것(기본 64×48 리사이즈·`--every 2` 간격; `--size W H`,
+  `--every n`으로 변경). 이 normalized 단위를 `act_job.py --train-export`의 SIM rad 원본과 혼합하지 않는다.
+
+`review.json`은 결합 가능한 녹화의 (run_id, attempt_id)마다 한 줄이다.
+
+```json
+{"labels": [{"session_id": "<run_id>", "attempt_id": "<attempt_id>", "outcome": "success",
+             "reviewer": "kim", "reason": "재생 확인: 개입 없는 정상 운반", "intervention": false}]}
+```
+
+학습은 모델 PC의 고정 LeRobot 0.4.4 환경에서 기존 `act_job.py` 명령으로 시작한다. `--dataset`에 이
+폴더를 주면 학습센터 `/run` 작업과 같은 `experiment_train.train`(ACT, batch 8, CPU)으로 위임한다.
+`--train-export`/`--eval-export`는 검증된 SIM LeRobot export만 받는 기존 경로다.
+
+```bash
+python learning/training/omx/act_job.py --dataset <new-output> --out <new-training-run> --steps 2000
+```
+
+결과의 offline 지표는 실물 과제 성공률·승격·실행 승인이 아니다. 원본 녹화의 카메라 시각 정합은 녹화 시각
+기준이며, 이 변환·학습 경로는 장치·ROS에 연결하지 않는다.

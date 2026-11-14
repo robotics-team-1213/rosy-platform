@@ -1,0 +1,10 @@
+[Unit]
+Description=Check the Account login of every ROSY app every 30 minutes
+
+[Timer]
+OnBootSec=5min
+OnUnitInactiveSec=30min
+Unit=rosy-site-account-login-check.service
+
+[Install]
+WantedBy=timers.target

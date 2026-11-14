@@ -37,7 +37,7 @@ def test_relative_action_statistics_reject_ambiguous_unknown_or_invalid_metadata
 
 ROOT=Path(__file__).resolve().parents[4]
 sys.path[:0]=[str(ROOT/'learning/training/omx'),str(ROOT/'contracts/learning/src'),str(ROOT/'test')]
-from act_inference import ACTInference,InferenceObservation
+from act_inference import ACTInference,ACTShadowInference,InferenceObservation,ShadowObservation
 from rosy.contracts.learning import seal
 from test_learning_artifact_contracts import policy
 
@@ -177,3 +177,48 @@ def test_bounded_transform_has_one_exact_byte_bound_configuration(change,kind):
     else:
         with pytest.raises(ValueError):action_statistics(stats,2)
     with pytest.raises(ValueError):action_statistics(dict(stats,action_mean=[0.,0.]),2)
+
+
+def shadow_case(tmp_path,monkeypatch,environment='sim'):
+    root,doc,data=artifact(tmp_path)
+    if environment!='sim':
+        doc=seal(dict(doc,environment=environment))
+        (root/'policy-artifact.json').write_text(json.dumps(doc),encoding='utf-8')
+    def model(_config,_weights,_stats,_metadata):
+        def predict(obs):return [(obs.positions[0]+i/100,obs.positions[1]) for i in range(4)]
+        return predict
+    monkeypatch.setattr('act_inference._model_from_bytes',model)
+    return ACTShadowInference(root,doc['revision'],clock=lambda:20_000_000_000),root,doc
+
+
+def shadow_observation(**changes):
+    values=dict(joint_names=('j1','j2'),positions=(.1,.2),observed_at_ns=10_000_000_000,
+        camera_identity='real-cell-wrist',camera_shape=(3,8,8),camera_received_at_ns=10_000_000_000,
+        rgb=bytes(range(192)))
+    values.update(changes)
+    return ShadowObservation(**values)
+
+
+def test_the_real_observation_shadow_binding_proposes_without_claiming_the_training_camera(tmp_path,monkeypatch):
+    engine,_,doc=shadow_case(tmp_path,monkeypatch)
+    result=engine.infer(shadow_observation())  # identity 'real-cell-wrist' never matches 'sim-camera'
+    assert result.policy_revision==doc['revision']
+    assert [action[0] for action in result.chunk]==pytest.approx([.1,.11,.12,.13])
+    assert [action[1] for action in result.chunk]==pytest.approx([.2]*4)
+    assert result.source.frame_sha256==hashlib.sha256(bytes(range(192))).hexdigest()
+    assert not hasattr(result,'candidate_fields')  # a shadow proposal has no execution port
+
+
+def test_the_shadow_binding_keeps_the_joint_and_time_checks(tmp_path,monkeypatch):
+    engine,_,_=shadow_case(tmp_path,monkeypatch)
+    with pytest.raises(ValueError):engine.infer(shadow_observation(joint_names=('j2','j1')))
+    with pytest.raises(ValueError):engine.infer(shadow_observation(positions=(.1,.2,.3)))
+    with pytest.raises(ValueError):engine.infer(shadow_observation(observed_at_ns=30_000_000_000))
+    with pytest.raises(ValueError):engine.infer('not an observation')
+
+
+def test_a_real_environment_artifact_is_shadow_only_and_the_execution_binding_refuses_it(tmp_path,monkeypatch):
+    engine,root,doc=shadow_case(tmp_path,monkeypatch,environment='real')
+    assert engine.policy_environment=='real' and engine.joint_names==('j1','j2')
+    assert engine.infer(shadow_observation()).policy_revision==doc['revision']
+    with pytest.raises(ValueError):ACTInference(root,doc['revision'])  # sim-only stays sim-only

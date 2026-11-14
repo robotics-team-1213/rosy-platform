@@ -257,7 +257,8 @@ def execute_directive(
         r_lift_step = None
         stay_hover = bool(exec_cfg.get("stay_in_hover", False))
         post_place = ("chain run lift_place ; park",) if exec_cfg.get("chain_post_place", False) and not stay_hover else ("run lift_place",) + (() if stay_hover else ("park",))
-        place_seq = ("run lift_pick", "goto above_place", "run descend_place", "run release_place") + post_place
+        place_seq = (("run lift_pick", "goto above_place") if stay_hover else
+                     ("run lift_pick", "goto above_place", "run descend_place", "run release_place") + post_place)
         for chunk_cmd in place_seq:
             r_step = _run_cmd(chunk_cmd)
             if chunk_cmd == "chain run lift_place ; park" and r_step.get("ok"):
@@ -343,6 +344,12 @@ def execute_directive(
                         "recovery": recovery_log, "wrist": wrist_log, "steps": steps_log}
             cpp.capture_from_attempt({"_work": work_dir, "arm_id": arm_id}, out_slip)
             return out_slip
+
+        if stay_hover:
+            return {"schema": DIRECTIVE_SCHEMA, "directive_id": cur_directive.get("directive_id"), "arm_id": arm_id,
+                    "result": "hover", "task_verified": False, "grasp_dynamics": grasp_dynamics,
+                    "pick": cur_directive["pick"], "place": cur_directive["place"], "gate_trace": gate_trace,
+                    "recovery": recovery_log, "wrist": wrist_log, "steps": steps_log}
 
         if frame_fn is not None and not stay_hover and steps_log and steps_log[-1].get("t") is not None:
             import time as _time

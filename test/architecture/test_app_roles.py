@@ -171,7 +171,7 @@ def test_fleet_vision_routes_only_issue_leases_without_bytes():
     app = create_app(FleetConsole([], []), vision_lease_secret="v" * 32,
                      vision_sources=("ceiling-north",))
     paths = {route.path for route in app.routes if hasattr(route, "path")}
-    assert {path for path in paths if "vision" in path} == FLEET_VISION_ROUTES
+    assert {path for path in paths if path.startswith("/api/fleet/vision/")} == FLEET_VISION_ROUTES
     client = TestClient(app)
     sources = client.get("/api/fleet/vision/sources")
     lease = client.post("/api/fleet/vision/lease", json={"source_id": "ceiling-north"})

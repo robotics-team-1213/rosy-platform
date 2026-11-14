@@ -37,7 +37,7 @@ import socket
 import subprocess
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -211,7 +211,11 @@ def build(repo: Path, members: list[dict], now: datetime, python: str = sys.exec
         merged = []
         for r in members:
             try:
-                candidate = git(repo, "rev-parse", r["branch"]).stdout.strip()
+                # 11-14: a split crashed on a member whose snapshot branch was gone; its recorded commit still merges
+                candidate = (git(repo, "rev-parse", "-q", "--verify", r["branch"], check=False).stdout.strip()
+                             or r.get("candidate"))
+                if not candidate:
+                    raise land.Stop("its snapshot branch is gone")
                 land.merge(wt, candidate, branch, python, False, source=r["branch"])
                 metadata = member_metadata(land_async.holder(repo), {**r, "candidate": candidate})
                 merged.append({**r, **metadata})
@@ -290,8 +294,10 @@ def split(repo: Path, rollup: str, now: datetime, builder=build, resumer=resume)
     else:
         halves = [members[: len(members) // 2], members[len(members) // 2:]]
     done = []
-    for half in (h for h in halves if h):
-        done.append(resumer(half[0]) if len(half) == 1 else builder(repo, half, now))
+    # 11-14 04:50: both halves got now's stamp, so the second build found fix/land-rollup-<stamp> taken and crashed,
+    # stranding its five members: each half is built one second after the one before
+    for n, half in enumerate(h for h in halves if h):
+        done.append(resumer(half[0]) if len(half) == 1 else builder(repo, half, now + timedelta(seconds=n)))
     return done
 
 

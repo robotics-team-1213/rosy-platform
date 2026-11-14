@@ -9,7 +9,7 @@ import {confirmIrreversible} from '/common/ui.js';
 import {bindEstop, bindTopbarToggle, showSession, showSignedOut, tickClock, watchFleet} from '/console/assets/fleet-header.js';
 import {PLACE_KINDS, PLACE_KIND_LABEL, actionRows, arrowMarks, fitView, planIsCurrent, planPolylines, siteMapErrorText, viewTurnOf, editViewTurn, planTrip, tripRefusalText, planSummaryText, tripPoseReason, robotMapPose} from '/console/assets/site-map-model.js';
 import {tripStatusText} from '/console/assets/trip-display.js';
-import {editEdge, editPlace, ensureSurvey} from '/console/assets/site-map-edit.js';
+import {editEdge, editPlace} from '/console/assets/site-map-edit.js';
 import {bindScreens} from '/console/assets/subnav-screens.js';
 import '/console/assets/file-picker.js';
 import {guideMarks, poseLabel} from '/console/assets/guide-layer.js';
@@ -38,8 +38,8 @@ const teach = createTeachPanel({request, role: () => state.role, draft: () => st
   reload: async () => { await load(); $('map-source').value = 'draft'; render(); }});
 const survey = createSurveyPanel({map: () => shown(), source: () => $('map-source').value, view: () => state.view,
   render: () => render(), reason: () => operatorReason(), hasDraft: () => Boolean(state.dirty || state.draft?.revision),
-  begin: () => { if ($('map-source').value !== 'draft') $('map-source').value = 'draft'; if (state.working) ensureSurvey(state.working); clearPlane(); $('trip-pick').checked = false; state.band = null; updatePlaneSources(); },
-  changed: map => { state.working = ensureSurvey(map); state.dirty = true; $('map-source').value = 'draft'; clearPlane(); state.selected = null; state.band = null; clearPlan(); updatePlaneSources(); }});
+  begin: () => { if ($('map-source').value !== 'draft') $('map-source').value = 'draft'; clearPlane(); $('trip-pick').checked = false; state.band = null; updatePlaneSources(); },
+  changed: map => { state.working = map; state.dirty = true; $('map-source').value = 'draft'; clearPlane(); state.selected = null; state.band = null; clearPlan(); updatePlaneSources(); }});
 
 const cameraMap = createCameraMapPanel({request, guarded, reason: () => operatorReason(), context: () => [state.working, state.sessionEpoch],
   draft: () => state.draft, dirty: () => state.dirty, notice, reload: async () => { await load(); $('map-source').value = 'draft'; clearPlan(); }});
@@ -49,8 +49,8 @@ const cameraDraft = createCameraDraftPanel({request, guarded, reason: () => oper
   reload: async () => { await load(); $('map-source').value = 'draft'; clearPlan(); }, notice, gate, status, sync: syncButtons});
 const authoring = createMapAuthoring({request, svg: $('site-map-svg'), map: shown, draft: () => state.working,
   source: () => $('map-source').value, view: () => state.view, reason: operatorReason, dirty: () => state.dirty,
-  begin: () => { survey.cancel(); if ($('map-source').value !== 'draft') $('map-source').value = 'draft'; if (state.working) ensureSurvey(state.working); clearPlane(); $('trip-pick').checked = false; state.band = null; updatePlaneSources(); },
-  changed: map => { state.working = ensureSurvey(map); state.dirty = true; $('map-source').value = 'draft'; state.selected = null; state.band = null; updatePlaneSources(); clearPlan(); },
+  begin: () => { survey.cancel(); if ($('map-source').value !== 'draft') $('map-source').value = 'draft'; clearPlane(); $('trip-pick').checked = false; state.band = null; updatePlaneSources(); },
+  changed: map => { state.working = map; state.dirty = true; $('map-source').value = 'draft'; state.selected = null; state.band = null; updatePlaneSources(); clearPlan(); },
   render, notice, epoch: () => state.sessionEpoch});
 
 for (const kind of PLACE_KINDS) $('place-kind').append(new Option(PLACE_KIND_LABEL[kind], kind));
@@ -177,6 +177,7 @@ function drawRobots() {
     const hit = (a, b) => a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
     for (let tries = 0; tries < 4 && placed.some(o => hit(label.getBBox(), o)); tries++)
       label.setAttribute('y', Number(label.getAttribute('y')) + label.getBBox().height + 2);
+    label.setAttribute('y', Math.min(Math.max(Number(label.getAttribute('y')), 16), H - 6));  // a robot past the map edge keeps its label on the map
     placed.push(label.getBBox());
   }
 }
@@ -255,7 +256,6 @@ function syncButtons() {
 }
 
 // D-540 4: one read line and the robot layer; operating a trip is the 관제 card's (D-540 3).
-let lastPollSig = '';
 async function pollRobots() {
   if (state.loadState === 'ready' && !document.hidden) {  // a background tab does not keep reading trips and guide
     const [tripsRes, guideRes] = await Promise.allSettled([
@@ -276,17 +276,9 @@ async function pollRobots() {
       state.guide = null;
       state.guideUnavailable = guideRes.reason?.status !== 404;
     }
-    const nextSig = JSON.stringify([
-      state.guideUnavailable,
-      (state.open || []).map(t => [t.trip_id, t.state, t.next_place]),
-      (state.guide?.robots || []).map(r => [r.robot_id, r.online, r.worst,
-        r.pose ? [Math.round((r.pose.x || 0) * 50), Math.round((r.pose.y || 0) * 50), Math.round((r.pose.yaw || 0) * 20)] : null]),
-    ]);
-    if (nextSig !== lastPollSig) {
-      lastPollSig = nextSig;
-      drawRobots();
-      syncButtons();
-    }
+    // The map redraw (view turn, source change) clears the robot layer, so every poll repaints it.
+    drawRobots();
+    syncButtons();
   }
   setTimeout(pollRobots, ROBOT_POLL_MS);
 }
@@ -309,7 +301,7 @@ async function load() {
   state.active = active;
   state.robots = robots;
   state.draft = draft;
-  state.working = ensureSurvey(draft.map ? draft.map
+  state.working = (draft.map ? draft.map
     : (active ? JSON.parse(JSON.stringify(active.map)) : null));
   state.dirty = false;
   state.loadState = 'ready';
@@ -318,9 +310,7 @@ async function load() {
   updatePlaneSources();
   $('trip-place').replaceChildren(...(state.active?.map.places || [])
     .map((place, index) => new Option(`${index + 1} ${place.name}${place.name === place.id ? '' : ` (${place.id})`}`, place.id)));
-  const activeRobots = robots.filter(r => r.online || r.link === 'degraded');
-  const visibleRobots = activeRobots.length ? activeRobots : robots;
-  $('trip-robot').replaceChildren(...visibleRobots.map(robot => {
+  $('trip-robot').replaceChildren(...robots.map(robot => {
     const safety = robot.state?.safety?.estop;
     const stateLabel = !robot.online ? '연결 끊김' : safety === true ? '비상 정지'
       : safety === false ? '' : '정지 상태 미확인';
@@ -328,7 +318,7 @@ async function load() {
     option.dataset.online = robot.online ? 'true' : 'false';
     return option;
   }));
-  teach.robots(visibleRobots);
+  teach.robots(robots);
   if (state.robotsError) status('trip-summary', '경로 미리보기 불가 · 로봇 상태 확인 불가. 다시 접속하세요.', 'error');
   else if (!robots.length) status('trip-summary', '경로 미리보기 불가 · 등록된 로봇이 없습니다. 관리자에게 로봇 등록을 요청하세요.', 'empty');
   else if (!robots.some(robot => robot.online)) status('trip-summary', '경로 미리보기 불가 · 연결된 로봇이 없습니다. 로봇 연결을 확인하세요.', 'empty');
@@ -565,10 +555,8 @@ tickClock();
 setInterval(tickClock, 1000);
 watchFleet(request);
 const screens = bindScreens({nav: document.querySelector('.ui-subnav-nav'), home: 'map-heading', stage: 'map-heading',
-  groups: {'map-heading': ['map-heading', 'camera-draft-heading', 'drawing-heading', 'survey-heading'],
-    'survey-heading': ['survey-heading', 'drawing-heading', 'camera-draft-heading'],
-    'camera-draft-heading': ['camera-draft-heading', 'drawing-heading', 'survey-heading'],
-    'edit-heading': ['edit-heading', 'drawing-heading', 'survey-heading', 'camera-draft-heading']},
+  groups: {'survey-heading': ['survey-heading', 'drawing-heading'],
+    'camera-draft-heading': ['camera-draft-heading', 'drawing-heading', 'survey-heading']},
   label: document.getElementById('site-map-screen')});
 // The map legend promises that picking a place or lane on the view screen opens it for editing.
 $('site-map-svg').addEventListener('click', event => {

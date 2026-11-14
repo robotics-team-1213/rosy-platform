@@ -359,7 +359,7 @@ def run(invocations: list[list[str]], logs: list[Path], sha: str = "HEAD", repo:
     hosts = placed_hosts("pytest", cores=cores)
     wants = host_caps.needs(repo, sha, invocations)  # HOST_CAPABILITIES a test module declares
     while work.todo and not work.stop.is_set():
-        while not hosts or not host_caps.served(wants, [HEADROOM.get(h, {}) for h in hosts]):
+        while not hosts or not host_caps.served(wants, [host_caps.room(h, HEADROOM) for h in hosts]):
             if work.stop.is_set():
                 return cancelled(invocations, [work.codes.get(i) for i in range(len(invocations))])
             if clock() + poll > deadline:
@@ -369,7 +369,7 @@ def run(invocations: list[list[str]], logs: list[Path], sha: str = "HEAD", repo:
             sleep(poll)
             hosts = placed_hosts("pytest", cores=cores)
         plan = workers(hosts, invocations, HEADROOM, os.environ.get("ROSY_TEST_HOSTS", DEFAULT_HOSTS).split(), BLOCKED)
-        plan = host_caps.cover(plan, hosts, wants, HEADROOM)  # workers() cuts by count, not by capability
+        plan = host_caps.cover(plan, hosts, wants, {h: host_caps.room(h, HEADROOM) for h in hosts})  # workers() cuts by count, not by capability
         if len(plan) == 1 and not work.codes and not reruns and not small_only(plan, HEADROOM):
             try:
                 codes = run_on(plan[0][0], invocations, logs, sha, repo, label,
@@ -403,7 +403,7 @@ def run(invocations: list[list[str]], logs: list[Path], sha: str = "HEAD", repo:
             ok = list(pool.map(attempt, plan))
         while work.todo and not work.stop.is_set():
             working = [h for (h, _), good in zip(plan, ok) if good and h not in work.lost and h not in deferred]
-            host_caps.strand(work, wants, [HEADROOM.get(h, {}) for h in working])
+            host_caps.strand(work, wants, [host_caps.room(h, HEADROOM) for h in working])
             if not working:
                 if deferred:
                     hosts = [h for h in placed_hosts("pytest", cores=cores) if h not in deferred]
@@ -459,7 +459,7 @@ def run_on(host: str, invocations: list[list[str]], logs: list[Path], sha: str, 
             raise SystemExit(f"[remote-pytest] venv setup on {host} failed")
         cpu = SITE_CPU_QUOTA if host in SITES else ""
         k = 0  # job number on this host's run dir
-        pick = host_caps.route(wanted(kind, invocations, site=bool(HEADROOM.get(host, {}).get("site"))), HEADROOM.get(host), host_caps.needs(repo, sha, invocations))
+        pick = host_caps.route(wanted(kind, invocations, site=bool(HEADROOM.get(host, {}).get("site"))), host_caps.room(host, HEADROOM), host_caps.needs(repo, sha, invocations))
         take = (lambda: work.take_small(pick, host)) if HEADROOM.get(host, {}).get("light") else lambda: work.take(pick, host)
         while not (lost and shared) and (i := take()) is not None:
             inv, log, queued = invocations[i], logs[i], round(time.monotonic() - work.began)

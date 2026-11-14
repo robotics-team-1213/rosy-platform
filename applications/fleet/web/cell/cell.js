@@ -12,6 +12,7 @@ import '/console/assets/file-picker.js';
 import {bindPrintSheets} from '/console/assets/cell-print-sheets.js';
 import {createObjectCatalog} from '/console/assets/cell-object-catalog.js';
 import {createReal2SimPipeline} from '/console/assets/cell-real2sim.js';
+import {createCellFrameFeed} from '/console/assets/cell-frames.js';
 import {createCellLine, createPlanFigures} from '/console/assets/cell-line.js';
 
 const $ = id => document.getElementById(id);
@@ -46,7 +47,8 @@ $('console-token').value = stored;
 const request = createFleetClient({credential: () => $('console-token').value, origin: location.origin});
 const observations = createCellObservation({request, root: $('workcell-observations'), credential: () => $('console-token').value});
 const catalog = createObjectCatalog({request, $});
-const real2sim = createReal2SimPipeline({request, $, isOperator: () => role === 'operator' && !busy});
+const real2sim = createReal2SimPipeline({request, $, isOperator: () => role === 'operator' && !busy,
+  cellFrames: createCellFrameFeed({call: request})});
 createCellLine({root: $('cell-line'), $});
 createPlanFigures({root: $('plan-figures'), $});
 bindPrintSheets({request, $});
@@ -157,11 +159,12 @@ async function list() {
   }
   saved.replaceChildren(...result.documents.map(item => {
     const li = document.createElement('li'), name = document.createElement('strong'), time = document.createElement('time'), open = document.createElement('ui-button'), label = document.createElement('div');
+    open.setAttribute('kind', 'quiet');
     name.textContent = `${item.kind === 'recipe' ? '레시피' : '셀 문서'} · ${item.id}`;
     time.dateTime = item.updated_at;
     const date = new Date(item.updated_at);
     time.textContent = Number.isNaN(date.getTime()) ? '수정 시각 확인 불가' : `수정 ${date.toLocaleString('ko-KR', {dateStyle: 'medium', timeStyle: 'short'})}`;
-    open.setAttribute('kind', 'quiet'); open.textContent = '열기';
+    open.textContent = '열기';
     open.addEventListener('click', () => { $(item.kind + '-id').value = item.id; location.hash = `#${item.kind}-heading`; $(item.kind + '-load').click(); });
     label.append(name, time); li.append(label, open); return li;
   }));

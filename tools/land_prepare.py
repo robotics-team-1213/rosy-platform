@@ -31,6 +31,7 @@ POLL = 15.0
 # 2026-11-04 05:42: five FULL pretests shared the two lab PCs at once, so none finished for 45 min and main stood
 # still with nothing ready. FULL pretests beyond this many wait (oldest first), so one finishes and takes the turn.
 MAX_FULL = 2
+GATHER_S = 90.0  # gather(): a new ticket waits this long as pending for a rollup to take it
 ROLL_POLLS = 40  # D-889 34: a FULL waiter starts a rollup again every 40 polls (10 min) while it waits
 # D-889 28: speculation (addendum 3) ran 9.8 h of test-PC time in 6 h on 11-03 and its tree was held at 3 of 34
 # turns, while the ticket stayed "preparing" behind it. It runs only when this is "1".
@@ -72,7 +73,7 @@ def relaunch(land, qdir: Path, ticket: Path, run=None) -> int | None:
     return run(argv, env)
 
 
-def slot(qdir: Path, ticket: Path, sleep=time.sleep, held=None, changed=None) -> None:
+def slot(qdir: Path, ticket: Path, sleep=time.sleep, held=None, changed=None, roll=None) -> None:
     """Wait for a preparation slot, reserving capacity for older pending tickets, and while ``held()`` (a batch
     carries this branch, ``land_batch.carried``: its pretest covers this one). A carried pending ticket reserves
     no capacity: it never prepares on its own. An urgent ticket (D-889 addendum 5) reserves nothing for older
@@ -92,7 +93,35 @@ def slot(qdir: Path, ticket: Path, sleep=time.sleep, held=None, changed=None) ->
         if changed and (code := changed()) is not None:
             raise SystemExit(code)  # main's land.py ran this landing to its end on this ticket
         sleep(POLL)
+    gather(ticket, sleep, roll)
     land_queue.set_status(ticket, "preparing")
+
+
+def gather(ticket: Path, sleep=time.sleep, roll=None, clock=time.monotonic) -> None:
+    """Stay ``pending`` for GATHER_S, then start a rollup: landings queued close together (20 MAIN-RED stops resumed
+    at once) go as one candidate with one pretest. 11-10..11-14 the rollup found "fewer than two pending" 243 times
+    in a row: with 6 slots a ticket was pending for one poll, and only the turn holder rolled, every 10 min, while
+    each landing ran its own ~46 min pretest. A rollup that takes this ticket stops this lander (``land_rollup``)."""
+    try:
+        row = json.loads(ticket.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return
+    # only land_async snapshots (land_rollup.candidates' rule): a land.py run from a worktree is never rolled
+    if (roll is None or row.get("urgent") or row.get("alone") or land_async_rollup(row.get("branch") or "")
+            or "rosy-land-wt" not in Path(row.get("worktree") or "").parts):
+        return
+    end = clock() + GATHER_S
+    while clock() < end:
+        land_queue.touch(ticket)
+        sleep(min(POLL, max(end - clock(), 0)))
+    try:
+        roll()
+    except Exception:  # noqa: BLE001  a rollup that cannot start never costs the landing
+        pass
+
+
+def land_async_rollup(branch: str) -> bool:
+    return branch.startswith("land/fix/land-rollup-")  # a rollup itself never waits to be rolled again
 
 
 def full_slot(qdir: Path, ticket: Path, sleep=time.sleep, changed=None, roll=None) -> None:
@@ -198,7 +227,7 @@ def _prepare(land, wt: Path, branch: str, args, python: str, qdir: Path | None, 
     if ticket is not None:
         landed = lambda: land.land_batch.in_main(land, wt, branch)  # noqa: E731
         slot(qdir, ticket, held=lambda: not landed() and land.land_batch.carried(qdir, branch),
-             changed=lambda: relaunch(land, qdir, ticket))
+             changed=lambda: relaunch(land, qdir, ticket), roll=lambda: land.land_watchdog.rollup(qdir.parent))
         if landed():
             return  # a batch landed this branch while it waited for a slot: the turn's wait ends it as landed
     main_sha = land.out(wt, "rev-parse", "main")

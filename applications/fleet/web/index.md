@@ -32,8 +32,8 @@
 
 ## 최근 기록
 
+- 2026-11-13 · uncommitted · 콘솔 브라우저 계약 복구 (main red)
 - 2026-11-10 · uncommitted · uiux(console): 지도 프레임 다름 보류 문구 (D-1010)
 - 2026-11-08 · uncommitted · fix(accounts): 가입 요청 목록이 실패해도 계정 화면은 그린다
 - 2026-11-08 · uncommitted · feat(fleet-ui): 스테이션 복구 승인 주체 표시
 - 2026-11-08 · uncommitted · fix(fleet-ui): 끝나지 않는 경로 계획 표시
-- 2026-11-07 · uncommitted · feat: 호스트 서비스를 PC 정비 문서로 나눈다 (D-991)

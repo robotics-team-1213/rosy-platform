@@ -17,6 +17,7 @@ and dual-camera ROI outcome verification (`cell_area_zones.verify_stack_outcome`
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
 from pathlib import Path
 import sys
 from typing import Any, Callable, Optional
@@ -202,7 +203,12 @@ class CellStackGuard:
             return False, "Container lost grip before pull test"
 
         lift_step_fn(self.cfg.pull_test_lift_m)
-        _ = read_z_fn()
+        try:
+            measured_z = read_z_fn()
+            if measured_z is None or not math.isfinite(float(measured_z)):
+                return False, "Height readback unavailable during micro-tension lock check"
+        except Exception:
+            return False, "Height readback unavailable during micro-tension lock check"
 
         if not read_grip_holding_fn():
             return False, "Container slipped out during micro-tension lock check"

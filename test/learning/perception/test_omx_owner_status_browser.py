@@ -418,7 +418,7 @@ def test_every_learning_rail_destination_renders_content(empty_learning_center):
                 for sub in page.locator('.ui-subnav-nav a, .ui-app-main > .review-kinds a').evaluate_all(hrefs):
                     opened(f'.ui-rail-nav a[href="{href}"]', href)
                     reached.add(opened(f'.ui-subnav-nav a[href="{sub}"], .ui-app-main > .review-kinds a[href="{sub}"]', sub))
-            assert reached == {'/catalog', '/learning/camera', '/', '/pixels', '/learning/omx', '/learning/vlm',
+            assert reached == {'/catalog', '/learning/camera', '/', '/pixels', '/incidents', '/learning/omx', '/learning/vlm',
                                '/learning/tasks', '/learning/tasks/manage', '/learning/imitate',
                                '/learning#pipeline', '/learning/sim', '/learning/ladder', '/learning/workspaces',
                                '/learning#learning-start', '/learning#review-section',

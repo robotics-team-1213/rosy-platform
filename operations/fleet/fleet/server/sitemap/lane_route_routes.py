@@ -56,7 +56,7 @@ class RoadNav2Request(BaseModel):
 
 
 def install_lane_route_routes(app, *, console, task_service, site_maps,
-                              require_named_operator) -> None:
+                              require_named_operator, read_guard) -> None:
     """D-494 5: map activation waits for a running trip, not for this route (no guard here)."""
     # One process remembers how far each robot has followed each edge list.
     # A closed lap starts and ends on one point; without this the end is the start.
@@ -139,7 +139,7 @@ def install_lane_route_routes(app, *, console, task_service, site_maps,
                 return (float(arb.x), float(arb.y), getattr(arb, "yaw", None))
         return pose
 
-    @app.get("/api/fleet/robots/{robot_id}/road-nav2/plan", tags=["fleet"])
+    @app.get("/api/fleet/robots/{robot_id}/road-nav2/plan", dependencies=read_guard, tags=["fleet"])
     async def fleet_road_nav2_plan(
         robot_id: str,
         place_id: Optional[str] = None,

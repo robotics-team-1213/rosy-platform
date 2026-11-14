@@ -109,7 +109,7 @@ class SiteMapStore:
         previous = self._db.execute('SELECT drawing_revision FROM site_map_frames WHERE map_id = ?',
                                     (map_id,)).fetchone()
         if previous is not None and previous[0] != revision:
-            if map_id == 'world_261026' or not previous[0]:
+            if map_id == 'world_261026':  # the auto-extracted map rebinds its frame each extraction
                 self._db.execute('UPDATE site_map_frames SET drawing_revision = ? WHERE map_id = ?',
                                  (revision, map_id))
                 return

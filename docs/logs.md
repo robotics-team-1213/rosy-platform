@@ -14564,6 +14564,7 @@ osy-d395-s1d\`.
 - 변경: D-990과 Log 행을 더하고 Account 프로토콜의 site capability, Monitoring API, 카탈로그의 인증 설명을 고쳤다.
 - 증거: `rosy_harness.py lint`. 원격 결과는 착지 기록을 따른다.
 - gate 변화: 없음. CE: 해당 없음 — 결정 기록이다.
+
 ## 2026-11-07 · uncommitted · docs(solutions): Pinky LiDAR 0°는 뒤쪽, odom은 이동 증거가 아니다
 
 - 변경: 현장 주행 스크립트 교훈에 11-07 갱신 절을 더했다. LiDAR 방향은 공용 몸체 모델 `PINKY_PRO`(URDF 값 180°)로 읽고, 진행은 odom이 아니라 LiDAR 변화로 확인한다.
@@ -14613,12 +14614,14 @@ osy-d395-s1d\`.
 - 증거: 이전 head0f0bf42bbd의 프로토콜 회귀1502 passed/NEW0. 변경 범위와 프로토콜 회귀는 새 커밋에서 원격 재시험한다. api_reserve list의 v1.377 예약 사유는 D-997 independent notification delivery다.
 - gate 변화: 없음. 발송 owner 전환·배포·채널 수용은 수행하지 않는다.
 - CE: 해당 없음 — 지적·정책·검증은 D-998과 회귀 시험에 남는다.
+
 ## 2026-11-08 · uncommitted · docs(common): D-997 기계 처리 추출 조사
 
 - 변경: 공통 서비스 카탈로그에 감사·백업·업데이트·설정의 실제 구현과 추출 여부를 기록했다. 같은 비밀 필드 이름 판별만 추출하고 서로 다른 기록·복원·활성화 계약은 유지했다.
 - 증거: source 조사와 소비자 회귀 시험에 결속한다. 원격 결과는 디스패처 인계에 남긴다.
 - gate 변화: 없음. 중앙 서비스·DB·HTTP 계약·배포는 추가하지 않았다.
 - CE: 해당 없음 — 재사용 범위와 보류 근거가 카탈로그에 있다.
+
 ## 2026-11-08 · uncommitted · docs(control): N100 목표 호스트와 R·owner 책임을 구분한다
 
 - 변경: D-994에 N100·16GB와 Ubuntu Server 24.04 LTS 목표, R·셀·CORE·OMX owner·공통 서비스·기명 운영자의 책임, 부하·장애·이전 수용 조건을 기록했다. 관제 배치표의 목표만 바꾸고 공통 서비스 카탈로그에서 연결했다.
@@ -14847,4 +14850,20 @@ osy-d395-s1d\`.
 ## 2026-11-11 · uncommitted · docs: 게시 검증 체크포인트 — 2026-11-11 착지분 무캐시 FULL 근거 확보
 - 변경: 없음(체크포인트 커밋). 2026-11-11 착지분(편대 자취 복귀 D-559, peer 앵커 D-1017, 편대 SIM 계측 D-1002 외)의 게시용 무캐시 FULL 기록을 이 커밋 위에 만든다.
 - 증거: `python tools/land.py --tests full --no-cache` 실행 기록으로 남는다.
+- gate 변화: 없음.
+
+
+## 2026-11-13 · uncommitted · docs(solutions): 학습 센터 자리 업그레이드 교훈을 역사 기록으로 표시
+- 변경: `docs/solutions/deployment/learning-center-upgrade-needs-the-identical-unit-first-2026-10-23.md`의 `applies_when`을 고쳐 후보 `rosy-learning-center.service`가 2026-10-31 퇴역했고 자리 업그레이드 절차는 역사 기록임을 밝혔다. `install_review_release.py` 절은 살아있는 보호 센터(8768 `rosy-edge-review`)에 그대로 적용된다고 못박았다.
+- 증거: 원격 pytest `test/test_update_ops.py` 예정.
+- gate 변화: 없음.
+
+## 2026-11-14 · uncommitted · CORE 상태 표시등 API 계약
+- 변경: API 참조 v1.394에 상태 표시등 GET/PUT·거절·영속 인계·이벤트를 추가했다.
+- 증거: CORE 원격 시험과 프로토콜 정합 검증은 브랜치 결과에 기록한다.
+- gate 변화: 없음.
+
+## 2026-11-14 · uncommitted · fix(tools): main_red가 alone 계열 NEW id를 파일 단위로 main에서 다시 돌림
+- 변경: `tools/land_checks.py` `main_red`가 `tools/collect_alone.py::test_runs_alone[<file>]`·`test_collects_alone[<file>]` id를 node id로 넘기지 않고 `ROSY_ALONE_FILES=<file>`·`ROSY_COLLECT_PATHS=<file>`로 따로 돌린다(`land_mainred.alone_invocation`). 일반 id는 그대로 한 번에 돌리고 결과는 모두 `known_failures`로 분류해 `land_mainred.red`에 기록한다. 착지를 통과시키지 않는 계약은 그대로.
+- 증거: `test/test_land_checks_mainred.py` 새 시험(원격). 사례 land-fix-main-size-split-20261113052820: alone 계열 NEW만 남아 멈췄고 main에서 같은 파일을 직접 돌려도 12건 같게 실패(main-red였음).
 - gate 변화: 없음.

@@ -36,7 +36,7 @@ def test_site_candidate_is_commit_tagged_and_contains_sbom_and_image_hash(tmp_pa
                  "compose.monitoring.yaml", "Caddyfile.monitoring",
                  "compose.account.yaml", "Caddyfile.account", "compose.account-backup.yaml",
                  "rosy-account-backup.service", "rosy-account-backup.timer",
-                 "rosy-account-backup-check.service", "rosy-account-backup-check.timer", "account_tls_renew.py", "account-tls.env.example", "rosy-site-account-tls-renew.service", "rosy-site-account-tls-renew.timer",
+                 "rosy-account-backup-check.service", "rosy-account-backup-check.timer", "account_tls_renew.py", "account-tls.env.example", "rosy-site-account-tls-renew.service", "rosy-site-account-tls-renew.timer", "account_login_check.py", "rosy-site-account-login-check.service", "rosy-site-account-login-check.timer",
                  "compose.pg-backup.yaml", "rosy-pg-backup.service", "rosy-pg-backup.timer",
                  "rosy-pg-backup-check.service", "rosy-pg-backup-check.timer"):
         (site / name).write_text(f"fixture:{name}", encoding="utf-8")
@@ -122,7 +122,7 @@ def test_site_candidate_is_commit_tagged_and_contains_sbom_and_image_hash(tmp_pa
                  "compose.monitoring.yaml", "Caddyfile.monitoring",
                  "compose.account.yaml", "Caddyfile.account",
                  "compose.account-backup.yaml", "rosy-account-backup.service", "rosy-account-backup.timer",
-                 "rosy-account-backup-check.service", "rosy-account-backup-check.timer", "account_tls_renew.py", "account-tls.env.example", "rosy-site-account-tls-renew.service", "rosy-site-account-tls-renew.timer",
+                 "rosy-account-backup-check.service", "rosy-account-backup-check.timer", "account_tls_renew.py", "account-tls.env.example", "rosy-site-account-tls-renew.service", "rosy-site-account-tls-renew.timer", "account_login_check.py", "rosy-site-account-login-check.service", "rosy-site-account-login-check.timer",
                   "compose.pg-backup.yaml", "rosy-pg-backup.service", "rosy-pg-backup.timer",
                   "rosy-pg-backup-check.service", "rosy-pg-backup-check.timer",
     }
@@ -183,7 +183,7 @@ def test_site_candidate_refuses_non_amd64_images_and_output_inside_checkout(tmp_
                  "Dockerfile.fleet", "Dockerfile.vision", "Dockerfile.proxy", "Dockerfile.account", "Dockerfile.monitoring"):
         (site / name).write_text("fixture", encoding="utf-8")
     for name in ("compose.account-backup.yaml", "rosy-account-backup.service", "rosy-account-backup.timer",
-                 "rosy-account-backup-check.service", "rosy-account-backup-check.timer", "account_tls_renew.py", "account-tls.env.example", "rosy-site-account-tls-renew.service", "rosy-site-account-tls-renew.timer",
+                 "rosy-account-backup-check.service", "rosy-account-backup-check.timer", "account_tls_renew.py", "account-tls.env.example", "rosy-site-account-tls-renew.service", "rosy-site-account-tls-renew.timer", "account_login_check.py", "rosy-site-account-login-check.service", "rosy-site-account-login-check.timer",
                  "compose.pg-backup.yaml", "rosy-pg-backup.service", "rosy-pg-backup.timer",
                  "rosy-pg-backup-check.service", "rosy-pg-backup-check.timer"):
         (site / name).write_text("fixture", encoding="utf-8")

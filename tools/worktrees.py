@@ -490,7 +490,7 @@ def cmd_new(cwd: Path, name: str, branch: str, reason: str | None, now: float, m
         else f"--from {base}: not a commit" if not known
         else '--owner needs a name: --owner "<who>"' if owner is not None and not owner.strip()
         else None)
-    stale = None if problem or base == "main" else rules.stale_history(root, base)
+    stale = None if problem or base == "main" else rules.stale_history(root, base) or rules.unlanded(root, base)
     if stale:  # D-790: a worktree on the pre-rewrite line would carry it into main
         problem = f"refused: --from {base} is {stale}; rebuild on a new branch from main (D-172)"
     if problem:

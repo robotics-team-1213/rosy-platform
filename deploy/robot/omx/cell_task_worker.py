@@ -23,7 +23,7 @@ from urllib.request import Request, urlopen
 from cell_camera_telemetry_sync import (
     DEFAULT_PREP_DIR,
     inspect_camera_frame_telemetry,
-    upload_latest_camera_snapshots as _upload_latest_camera_snapshots,
+    sync_cell_telemetry as _sync_cell_telemetry,
 )
 from cell_control_core import ensure_omx_paths
 from cell_fleet_pipeline import FleetModelPipeline
@@ -31,8 +31,8 @@ from cell_fleet_pipeline import FleetModelPipeline
 ensure_omx_paths()
 
 
-def upload_latest_camera_snapshots(fleet_r_url: str, token: str, prep_dir: Path = DEFAULT_PREP_DIR) -> dict[str, int]:
-    return _upload_latest_camera_snapshots(fleet_r_url, token, prep_dir=prep_dir, urlopen_fn=urlopen)
+def sync_cell_telemetry(fleet_r_url: str, token: str, prep_dir: Path = DEFAULT_PREP_DIR) -> dict[str, Any]:
+    return _sync_cell_telemetry(fleet_r_url, token, prep_dir=prep_dir, urlopen_fn=urlopen)
 
 ARM_WRAPPERS: dict[str, tuple[str, str, float]] = {
     "arm_s": ("s", "with-session-arm-s-live.sh", -1.0),
@@ -187,23 +187,13 @@ def poll_and_execute_once(
         if not claimed.get("claimed"):
             continue
         handoff = claimed["handoff"]
-        interlock_ok = (
-            bool(handoff.get("wheel_brake_locked", True))
-            and bool(handoff.get("bed_ready", True))
-            and abs(float(handoff.get("v_cmd_mps", 0.0))) <= 1e-4
-        )
-        if callable(live_act_fn) and interlock_ok:
-            with ThreadPoolExecutor(max_workers=2) as pool:
-                omx_fut = pool.submit(pipeline.run_contract_handoff_stage, handoff, stage_id=task_id, tier=tier)
-                hw_fut = pool.submit(live_act_fn, handoff)
-                omx_res = omx_fut.result()
-                hw_tel = hw_fut.result()
-        else:
-            omx_res = pipeline.run_contract_handoff_stage(handoff, stage_id=task_id, tier=tier)
-            hw_tel = live_act_fn(handoff) if callable(live_act_fn) else None
+        omx_res = pipeline.run_contract_handoff_stage(handoff, stage_id=task_id, tier=tier)
+        receipt = omx_res["receipt"]
+        # The arm moves only after the stage released: never on a refused or unconverged handoff.
+        hw_tel = live_act_fn(handoff) if callable(live_act_fn) and receipt["phase"] == "RELEASED" else None
         done = request_fn("POST", f"/api/fleet/pipeline/cell-tasks/{task_id}/complete", {
-            "phase": omx_res["receipt"]["phase"], "goal_evidence_digest": omx_res["receipt"]["goal_evidence_digest"],
-            "reason": omx_res["receipt"]["reason"], "receipt": omx_res["receipt"],
+            "phase": receipt["phase"], "goal_evidence_digest": receipt["goal_evidence_digest"],
+            "reason": receipt["reason"], "receipt": receipt,
             "stage_result": omx_res["stage_result"], "hardware_telemetry": hw_tel,
         })
         completed_runs.append({
@@ -234,7 +224,7 @@ def main() -> None:
     def _trigger_bg_cam_upload() -> None:
         nonlocal bg_cam_fut
         if bg_cam_fut is None or bg_cam_fut.done():
-            bg_cam_fut = bg_cam_pool.submit(upload_latest_camera_snapshots, args.fleet_r_url, token, prep_dir)
+            bg_cam_fut = bg_cam_pool.submit(sync_cell_telemetry, args.fleet_r_url, token, prep_dir)
 
     def _hw_act(handoff: dict[str, Any]) -> dict[str, Any]:
         arm_id = str(handoff.get("arm_id") or ("arm_s" if handoff.get("cell_id") == "cell_s" else "arm_a"))

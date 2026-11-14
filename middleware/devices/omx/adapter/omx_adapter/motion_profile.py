@@ -126,7 +126,7 @@ def eased(distance: float, vmax: float, amax: float) -> tuple[float, float]:
     at 30 fps, 12 here), a kick the guard's chaser and the servo both answer."""
     if distance <= 0:
         return 0.0, 0.0
-    eff_amax = amax * min(1.0, max(0.75, vmax / 4.25)) if amax <= GUARD_ACCEL_UNITS_S2 else amax
+    eff_amax = amax * min(1.0, vmax / 4.25) if amax <= GUARD_ACCEL_UNITS_S2 else amax
     ramp = math.pi / 2 * vmax / eff_amax
     if distance < vmax * ramp:  # never reaches vmax: peak speed sqrt(2 d a / pi)
         ramp = math.pi / 2 * math.sqrt(2 * distance * eff_amax / math.pi) / eff_amax

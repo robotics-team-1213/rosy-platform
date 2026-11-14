@@ -298,7 +298,7 @@ def dispatch_pickup_and_return(
 ) -> dict:
     nav_start = api("/api/v1/navigation/approval/navigation-start", {}, token) or {}
     ready_info = wait_for_nav2_ready(api, token, timeout_s=cfg.ready_timeout_s, sleep_fn=sleep_fn)
-    pickup_goal = {"x": round(cfg.pickup_x, 3), "y": round(cfg.pickup_y, 3), "theta": round(cfg.pickup_yaw, 3)}
+    pickup_goal = {"x": round(cfg.pickup_x, 3), "y": round(cfg.pickup_y, 3), "yaw": round(cfg.pickup_yaw, 3)}
     pickup_dispatch = api("/api/v1/navigation/goal", pickup_goal, token)
     pickup_outcome = wait_for_nav2_goal(api, token, timeout_s=cfg.goal_timeout_s, clock_fn=clock_fn, sleep_fn=sleep_fn)
     if pickup_outcome["navigation"] != "ARRIVED":
@@ -307,7 +307,7 @@ def dispatch_pickup_and_return(
 
     home_outcome = None
     if cfg.return_home:
-        home_goal = {"x": round(cfg.home_x, 3), "y": round(cfg.home_y, 3), "theta": round(cfg.home_yaw, 3)}
+        home_goal = {"x": round(cfg.home_x, 3), "y": round(cfg.home_y, 3), "yaw": round(cfg.home_yaw, 3)}
         api("/api/v1/navigation/goal", home_goal, token)
         home_outcome = wait_for_nav2_goal(api, token, timeout_s=cfg.goal_timeout_s, clock_fn=clock_fn, sleep_fn=sleep_fn)
         if home_outcome["navigation"] != "ARRIVED":

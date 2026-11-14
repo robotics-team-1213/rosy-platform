@@ -1187,3 +1187,9 @@
 - 변경: 대기 이유 MAP_FRAME_MISMATCH 문구(roster-presentation.js)와 맵 중재 칩 label(map-overlays.js). Fleet 서버의 새 보류 이유를 사람이 읽게.
 - 근거: node --test operations/fleet/test/web/(변경 파일 읽는 시험 없음, 문구만).
 - gate 변화: 없음(SOURCE만).
+
+## 2026-11-13 · uncommitted · 콘솔 브라우저 계약 복구 (main red)
+
+- 변경: console.js가 온라인 로봇이 있으면 오프라인 로봇을 명단에서 빼던 것을 모두 나열하도록 되돌리고 예외 우선 정렬만 남겼다. 지도 안내 문구를 "지도를 찍으면 확인 후 목표를 보냅니다"로 복원했다. console-goal.js는 기본 로봇 rosy_46·가짜 자세 대신 선택된 로봇만 쓰고, 목표 전송을 confirmedAction 확인 뒤 도로·직접 목표 중 하나로만 보낸다. roster-cards.js는 관측되지 않은 OMX 셀을 지어내지 않는다(fix/console-browser-mainred-1113의 f8223f2489·9b4d8d6e95 계열에서 최소 차용). roster.js는 작업 카드를 운영자가 고를 때만 열고(자동 열기·선택 시 목표 받기 자동 켜기 제거), 오프라인 로봇도 선택지에 넣고, 목표 지정 단추가 capabilities.navigation.goal_navigation을 따른다.
+- 증거: 원격 test/test_fleet_console_browser.py 전체 PASS(실패 0), 이전 실패 9개 포함. size_range main HEAD 통과, node --check 통과.
+- gate 변화: MAIN-RED 브라우저 9건 해소. 실물 주행·배포 검증은 후속 gate다.

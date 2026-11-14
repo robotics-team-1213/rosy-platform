@@ -19,8 +19,11 @@ import math
 import time
 from typing import Awaitable, Callable, Iterable, Optional
 
+import httpx
+
 from core_common.link_retry import start_offset
 from core_common.robot_body import nominal_body_for
+from fleet.hub.hub import HubError
 from fleet.routing.cost import STOP  # noqa: F401
 from fleet.routing.execute import lane_action  # noqa: F401
 from fleet.server.trip_admission import LOCALIZED, TripAdmission, cached_battery  # noqa: F401
@@ -270,6 +273,26 @@ class TripRunner(TripRunnerHelpers, TripAdmission, TripProgress, TripSteps, Trip
         except Exception:  # the store itself failed: keep the in-memory row closed
             _LOG.exception("trip loop could not record its failure")
             live.view.update(state="failed", reason="TRIP_LOOP_ERROR")
+
+    async def map_pose(self, robot_id: str) -> Optional[MapPose]:
+        """The trip map pose (D-494 3) after one forced state read; None when it cannot be read."""
+        try:
+            if (refresh := getattr(self._poses, "refresh", None)) is not None:  # one forced state/odom read per tick (D-494 3)
+                await self._call(refresh(robot_id, force_rest=True, **self._after(self._poses, robot_id)))
+            self._unread.discard(robot_id)
+        except (HubError, OSError, httpx.TransportError):  # D-760 4/8: only no answer is an unread state
+            self._unread.add(robot_id)
+            if self._clock() - self._refresh_warned_at >= 30.0:
+                self._refresh_warned_at = self._clock()
+                _LOG.warning("state refresh for %s failed (repeats muted 30 s)", robot_id, exc_info=True)
+        try:
+            return await self._call(self._driving_pose(robot_id))
+        except Exception:  # a pose that cannot be read is no pose
+            _LOG.exception("map pose for %s failed", robot_id)  # falls through to None
+
+    def _driving_pose(self, robot_id: str):
+        """D-989 allowlist: the trip loop is the consumer that may drive on an auto-locate anchor."""
+        return getattr(self._poses, "driving_pose", self._poses.arbitrated_pose)(robot_id)
 
     async def tick(self) -> None:
         """One period (D-517 7): every open trip steps at once, each under its own lock and its own

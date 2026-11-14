@@ -86,6 +86,22 @@
       "path": "cell/cell-real2sim.js",
       "media_type": "application/javascript"
     },
+    "cell-real2sim-specs.js": {
+      "path": "cell/cell-real2sim-specs.js",
+      "media_type": "application/javascript"
+    },
+    "cell-real2sim-actions.js": {
+      "path": "cell/cell-real2sim-actions.js",
+      "media_type": "application/javascript"
+    },
+    "cell-real2sim-views.js": {
+      "path": "cell/cell-real2sim-views.js",
+      "media_type": "application/javascript"
+    },
+    "cell-frames.js": {
+      "path": "shared/cell-frames.js",
+      "media_type": "application/javascript"
+    },
     "motor-health-view.js": {
       "path": "motor-health-view.js",
       "media_type": "application/javascript"
@@ -412,6 +428,10 @@
     },
     "charge-bays-view.js": {
       "path": "charge-bays-view.js",
+      "media_type": "application/javascript"
+    },
+    "charge-bays-model.js": {
+      "path": "charge-bays-model.js",
       "media_type": "application/javascript"
     },
     "platoon-view.js": {

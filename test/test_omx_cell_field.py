@@ -80,11 +80,11 @@ def marking_cell(tmp_path, monkeypatch):
     monkeypatch.setattr(transport, "os", SimpleNamespace(O_WRONLY=os.O_WRONLY, O_NONBLOCK=os.O_NONBLOCK,
         open=lambda path, flags: 123, write=write, close=lambda fd: None))
     actual_act = field.cell.act
-    def act(command):
+    def act(command, timeout=None):
         if command == "state":
             queries.append(command)
             return state
-        return actual_act(command)
+        return actual_act(command, timeout=timeout)
     monkeypatch.setattr(field.cell, "act", act)
     monkeypatch.setattr(cell_pivot, "settled_frame", lambda *a, **kw: np.zeros((8, 8, 3), np.uint8))
     monkeypatch.setattr(cell_pivot, "jaw_blobs", lambda *a: [])

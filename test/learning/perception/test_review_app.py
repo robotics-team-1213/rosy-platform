@@ -542,15 +542,21 @@ def test_source_box_without_bbox_is_a_usage_error_naming_the_field(tmp_path, mon
     assert code == 2 and 'Traceback' not in err and 'bbox_xyxy' in err
 
 
-def test_review_store_runs_in_wal_mode_and_supports_read_only_uri(tmp_path):
+def test_review_store_keeps_a_read_only_authority_journal_and_supports_read_only_uri(tmp_path):
+    # review_bridge.read_current_state refuses a WAL state file: a mode=ro reader of a WAL database
+    # needs -wal/-shm sidecars, so the collaboration-mode authority contract pins the rollback journal.
     store = open_store(tmp_path)
     with store.connect() as db:
-        assert db.execute('PRAGMA journal_mode').fetchone()[0].lower() == 'wal'
+        assert db.execute('PRAGMA journal_mode').fetchone()[0].lower() == 'delete'
         assert db.execute('PRAGMA foreign_keys').fetchone()[0] == 1
     reader = ReviewStore.read_only(store.state)
     with reader.connect() as db:
         assert db.execute('PRAGMA query_only').fetchone()[0] == 1
         assert reader.list_frames() == store.list_frames()
+    with store.connect() as db:  # a workspace left in WAL by the 11-12 change converts on reopen
+        db.execute('PRAGMA journal_mode=WAL')
+    with ReviewStore(store.state).connect() as db:
+        assert db.execute('PRAGMA journal_mode').fetchone()[0].lower() == 'delete'
 
 
 def test_review_store_registers_workspace_in_configured_registry(tmp_path, monkeypatch):

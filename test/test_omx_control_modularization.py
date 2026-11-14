@@ -95,7 +95,7 @@ def test_rl_speed_scale_wired_into_build_plan(tmp_path: Path) -> None:
     plan, _ = ccc.build_plan_from_directive(directive, base_plan, work_dir=tmp_path)
     assert plan["rl_speed_scale"] == 1.15
     assert plan["transit_speed"] > float(base_plan.get("transit_speed", 0.82))
-    assert plan["transit_speed"] <= 1.0
+    assert plan["transit_speed"] <= 0.85  # the loader refuses a faster library
 
 
 def test_across_mm_classified_and_recorded_in_problem_pipeline() -> None:

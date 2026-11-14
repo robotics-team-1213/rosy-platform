@@ -32,7 +32,7 @@ MIRRORS = {
     ),
     "LineStuckDecisionRequest": (
         "middleware/core/api/core_api_web/api/v1/line_follow.py",
-        "operations/fleet/fleet/server/console/console_routes.py",
+        "operations/fleet/fleet/server/console/line_stuck_routes.py",
     ),
 }
 

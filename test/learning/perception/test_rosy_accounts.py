@@ -8,7 +8,7 @@ from test_learning_accounts import accounts, sign_in
 @pytest.mark.parametrize('failure, expected', [('denied', 'account_callback_failed'),
                                               ('offline', 'account_unavailable'),
                                               ('malformed', 'account_callback_failed')])
-def test_callback_failure_returns_to_account_recovery_without_credentials(failure, expected):
+def test_callback_failure_returns_to_account_recovery_without_credentials(failure, expected, caplog):
     from core_common.protocol.account_client import AccountDenied, AccountUnavailable
     from learning_collaboration import Collaboration
     def finish(*args):
@@ -29,6 +29,9 @@ def test_callback_failure_returns_to_account_recovery_without_credentials(failur
     assert any(name == 'Set-Cookie' and value.startswith('rosy_account_flow_fixture=')
                and 'Max-Age=0' in value for name, value in handler.extra_headers)
     assert 'credential' not in repr(sent) + repr(handler.extra_headers)
+    # The refusal reason is logged (11-13 clock skew was invisible); the code never is.
+    assert ('callback refused: AccountDenied' in caplog.text) == (failure == 'denied')
+    assert 'secret' not in caplog.text
 
 
 def test_central_subject_preserves_owner_and_rechecks_grants(accounts):
