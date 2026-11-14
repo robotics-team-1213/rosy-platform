@@ -45,7 +45,7 @@ def test_berth_parking_status_and_dispatch_routes():
             return None
 
         async def goal(self, robot_id: str, x: float, y: float, yaw: float) -> dict:
-            return {"robot_id": robot_id, "x": x, "y": y, "yaw": yaw, "queued": False}
+            return {"accepted": True, "robot_id": robot_id, "x": x, "y": y, "yaw": yaw, "queued": False}
 
     async def fake_compute_road_plan(request, robot_id, x, y, yaw, place_id, label):
         return {
