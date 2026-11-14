@@ -49,6 +49,15 @@ LOCATION = re.compile(r"^(\S+\.py):(\d+): (\w[\w.]*)$", re.M)
 CARRIED: list[tuple[str, str, str, tuple[str, ...]]] = []  # (id, main, why, invocation): no land record while set
 PASSES: list[tuple[str, str]] = []  # (id, tested head) PASSED in a -rA run: closed after the fast-forward
 ALONE = re.compile(r"^tools/collect_alone\.py::test_runs_alone\[(.+)\]$")  # names a test file, not a test
+# collect_alone.py's two id kinds name a file; which env var selects it (a bare node id gives no verdict on main)
+ALONE_ANY = re.compile(r"^tools/collect_alone\.py::test_(runs|collects)_alone\[(.+)\]$")
+ALONE_ENV = {"runs": "ROSY_ALONE_FILES", "collects": "ROSY_COLLECT_PATHS"}
+
+
+def alone_invocation(nodeid: str) -> list[str] | None:
+    """The pytest invocation that reruns an alone-class id for its file, or None for a plain node id."""
+    m = ALONE_ANY.match(nodeid)
+    return [f"{ALONE_ENV[m[1]]}={m[2]}", "tools/collect_alone.py", "-rA"] if m else None
 
 
 def _git(wt: Path, *args: str) -> subprocess.CompletedProcess:
