@@ -571,3 +571,29 @@ def test_chained_post_place_keeps_audit_steps(tmp_path):
     assert [step["command"] for step in result["steps"]][-3:] == [
         "chain run lift_place ; park", "run lift_place", "park",
     ]
+
+
+def test_stay_in_hover_macro_stops_before_place_and_release(tmp_path):
+    directive = build_directive(
+        arm_id="arm_b",
+        pick={"area": "pallet", "col": 3, "row": 1, "tier": 2},
+        place={"area": "pallet", "col": 2, "row": 1, "tier": 3},
+        vision_refine=False,
+    )
+    directive["execution"] = {"stay_in_hover": True}
+    commands = []
+
+    def act(cmd):
+        commands.append(cmd)
+        return {"ok": True, "holding": True, "state": [0, -10, 15, 45, 41, 54.36], "gripper_current_ma": 172.0}
+
+    result = cell_area_xyz.execute_directive(
+        directive, base_plan=SAMPLE_BASE_PLAN, work_dir=tmp_path, act_fn=act, max_attempts=1,
+    )
+    assert "goto above_place" in commands
+    assert "run descend_place" not in commands
+    assert "run release_place" not in commands
+    assert "run lift_place" not in commands
+    assert "park" not in commands
+    assert result["result"] == "hover"
+    assert result["steps"][-1]["command"] == "goto above_place"
