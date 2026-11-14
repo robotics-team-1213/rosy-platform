@@ -59,3 +59,13 @@ def test_cleanup_prunes_lossless_worktrees_then_idle_ones_keeping_their_work(tmp
     assert land_tick.cleanup(tmp_path).endswith("worktrees removed 4")
     assert calls[0]["apply"] and not calls[0].get("snapshot")  # landed and orphan ones: nothing to keep
     assert calls[1]["snapshot"] and calls[1]["everyone"] and calls[1]["idle_hours"] == land_tick.WORKTREE_IDLE_H
+
+
+def test_resume_counts_only_landings_it_relaunched(tmp_path, monkeypatch):
+    def resume(repo, name, args, detach, wait):
+        if name == "land-held-1":
+            raise SystemExit("held by live ticket")
+
+    monkeypatch.setattr(land_tick.land_async, "orphans", lambda repo: ["land-held-1", "land-ok-1"])
+    monkeypatch.setattr(land_tick.land_async, "resume", resume)
+    assert land_tick.resume(tmp_path) == "resumed 1 of 2: land-ok-1"

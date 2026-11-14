@@ -174,6 +174,62 @@ def live_window(rows, params=None) -> dict:
     }
 
 
+SWAY_CHUNKS = ("descend", "lift")  # Z moves only: transits lag the plan on purpose and would read as sway
+SWAY_SMOOTH = 5                     # ticks of moving mean: drops the ~0.2 mm tick-step dither, keeps the rock
+
+
+def tcp_error(target, present):
+    """(radial mm, jaw pitch deg) of `present` minus `target`, OMX 5-DoF order. The per-joint judge above misses
+    elbow_flex and wrist_flex lagging in opposite directions: each stays under 0.15 unit while the jaw rocks 2-7 mm
+    (2026-11-13 traces, arm_s and arm_b)."""
+    from omx_adapter.z_profile import _fk_tcp_xyz_mm
+
+    # shortcut: arm_b jaw length (74.1 mm) for every arm, so arm_s (91.9 mm) radial reads ~20% low; pass the arm's
+    # jaw length if a threshold ever needs to be exact per arm
+    pt, pp = _fk_tcp_xyz_mm(target[:5], unit="norm"), _fk_tcp_xyz_mm(present[:5], unit="norm")
+    return math.hypot(pp[0], pp[1]) - math.hypot(pt[0], pt[1]), (sum(present[1:4]) - sum(target[1:4])) * 1.8
+
+
+def sway_window(rows, params=None):
+    """Jaw sway over the latest WINDOW_S of one Z chunk, from rows carrying `tcp` (tcp_error): peak-to-peak of the
+    smoothed radial and pitch error and how often the detrended error swings across +-limit/4. Swaying when either
+    reaches its jitter.sway_* limit and swings back at least twice. None until MIN_TICKS such rows exist."""
+    buf = []
+    for r in reversed(rows):
+        if "tcp" not in r or (buf and (r["chunk"] != buf[0]["chunk"] or buf[-1]["t"] - r["t"] > MAX_GAP_S
+                                       or buf[0]["t"] - r["t"] >= WINDOW_S)):
+            break
+        buf.append(r)
+    if len(buf) < MIN_TICKS:
+        return None
+    out = {}
+    for k, key, flips, limit in ((0, "radial_mm", "radial_flips", prm.get(params, "jitter.sway_mm")),
+                                 (1, "pitch_deg", "pitch_flips", prm.get(params, "jitter.sway_deg"))):
+        v = [r["tcp"][k] for r in buf[::-1]]
+        s = [sum(v[i:i + SWAY_SMOOTH]) / SWAY_SMOOTH for i in range(len(v) - SWAY_SMOOTH + 1)]
+        n, mx, my = len(s), (len(s) - 1) / 2, sum(s) / len(s)
+        slope = sum((i - mx) * (y - my) for i, y in enumerate(s)) / sum((i - mx) ** 2 for i in range(n))
+        # a lag that only grows or shrinks is one bow, not a rock: require the detrended error to swing back
+        out[key] = round(max(s) - min(s), 2)
+        out[flips] = _flips([y - my - slope * (i - mx) for i, y in enumerate(s)], limit / 4)
+        out["swaying"] = out.get("swaying", False) or (out[key] >= limit and out[flips] >= 2)
+    return out
+
+
+def pitch_hold_step(hold: float, target, last_present, params=None) -> float:
+    """Next wrist_flex nudge (units) that holds the jaw pitch: gain x the last tick's pitch error (target minus
+    present, q2+q3+q4), capped at runner.pitch_hold_max and slewed 0.05 unit/tick in. It drops to 0 at once when
+    last_present is None (not descending; the guard's chaser smooths the step), so a loaded lift spliced onto a
+    descent never carries it: a lift replayed worse with it (5.98 -> 8.07 mm, 2026-11-13 panel).
+    runner.pitch_hold_gain 0 (default) keeps it off. The guard checks the nudged target like any other."""
+    gain = prm.get(params, "runner.pitch_hold_gain")
+    if not (gain and last_present):
+        return 0.0
+    cap = prm.get(params, "runner.pitch_hold_max")
+    want = max(-cap, min(cap, gain * (sum(target[1:4]) - sum(last_present[1:4]))))
+    return hold + max(-0.05, min(0.05, want - hold))
+
+
 def damp_step(ensembler, current: list, next_target: list, lookahead: list, *, vmax=None, fps=None) -> list:
     """Smooth `next_target` through `ensembler` over the upcoming chunk horizon while preserving the final endpoint."""
     if not lookahead:
