@@ -31,3 +31,15 @@ def test_any_view_with_an_obstruction_or_a_taut_cable_needs_a_person():
     assert result["verdict"]["camera_clear"] is False and result["note"] == ""
     taut = cc.check("arm_s", lambda view: b"jpg", model([{"obstruction": "none", "cable": "taut", "evidence": ""}]))
     assert taut["verdict"]["camera_clear"] is False and list(taut["answers"]) == ["arm_s_top"]
+
+
+def test_the_bird_view_blocks_a_clear_when_a_container_sits_out_of_its_lane_or_the_arm_leans():
+    clean = {"obstruction": "none", "cable": "slack", "evidence": ""}
+    scene = {"misplaced": "container across lanes R2/R3 on the left plate", "occupied_spots": "belt, tmp-a-1",
+             "arm_leaning": "none", "evidence": ""}
+    result = cc.check("arm_a", lambda view: b"jpg", model([clean, clean, scene]), scene_image=b"overhead")
+    assert result["verdict"]["camera_clear"] is False and result["note"] == ""
+    assert result["verdict"]["worries"] == ["scene: misplaced container across lanes R2/R3 on the left plate"]
+    quiet = {"misplaced": "none", "occupied_spots": "belt", "arm_leaning": "none", "evidence": ""}
+    ok = cc.check("arm_b", lambda view: b"jpg", model([clean, clean, quiet]), scene_image=b"overhead")
+    assert ok["verdict"]["camera_clear"] is True  # an occupied spot is reported, placement measurement owns occupancy
