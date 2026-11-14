@@ -10,6 +10,9 @@ The supervisor logs to ``<git-common-dir>/rosy-land-wt/<name>.log``. When the sn
 removes the hidden worktree and the snapshot branch; otherwise it keeps both and writes ``<name>.stopped``, so the
 owner can read the STOP, fix it on the branch and queue again. Uncommitted changes are refused, never carried.
 
+A branch queued more than ``PREMERGE_BEHIND`` commits behind main is merged up to date first, so its pretest and
+turn test the current tree; a merge that conflicts is abandoned and queued as-is (``land.py`` stops on it in the log).
+
     python tools/land_async.py [land.py args]      # from the branch's worktree; prints the log path
     python tools/land_async.py resume <tree-name> [land.py args]   # relaunch a stopped landing on its snapshot
     python tools/land_async.py orphans [--resume]                    # after a reboot: landings that died unstopped
@@ -45,6 +48,7 @@ RESOURCE_SHORTAGE = ("WinError 1450", "WinError 1455", "Out of memory", "MemoryE
 RESOURCE_RETRIES = 3
 RESOURCE_WAIT_S = 300
 MAX_OWN_COMMITS, MAX_AGE_DAYS = 40, 14  # one landing's bound (too_big); --allow-big "<reason>" passes it
+PREMERGE_BEHIND = 50  # merge main into a branch this far behind before queueing, so its pretest tests the current tree
 
 
 class Busy(SystemExit):
@@ -239,11 +243,18 @@ def _start(cwd: Path, land_args: list[str], now: datetime, launch, replace: bool
     place = holder(cwd)
     place.mkdir(exist_ok=True)
     tree = place / snap.replace("/", "-")
+    behind = int(git(cwd, "rev-list", "--count", "HEAD..main", check=False) or 0)
+    if behind > PREMERGE_BEHIND:  # far behind: merge main now, so the pretest and the turn test the current tree
+        print(f"[land-async] {branch} is {behind} behind main; merging main before queueing", flush=True)
+        if subprocess.run(["git", "-C", str(cwd), "merge", "-X", "renormalize", "--no-edit", "main"],
+                          capture_output=True).returncode != 0:
+            git(cwd, "merge", "--abort", check=False)  # a conflict is land.py's to report in the log (admit)
+            print("[land-async] main did not merge cleanly here; queued as-is", flush=True)
     git(cwd, "branch", snap, "HEAD")
     git(cwd, "worktree", "add", "-q", str(tree), snap)
     import land_events  # tools/ is on sys.path (_queue); D-889 addendum 32: how far behind main it was queued
     land_events.bind(cwd, snap)
-    land_events.emit("async", source=branch, behind=int(git(cwd, "rev-list", "--count", "HEAD..main", check=False) or 0))
+    land_events.emit("async", source=branch, behind=behind)
     log = tree.parent / (tree.name + ".log")
     # The supervisor runs a copy beside the log, never the caller's file: Windows keeps a running script's
     # folder from being deleted, and the caller's worktree must be free (2026-10-28).
