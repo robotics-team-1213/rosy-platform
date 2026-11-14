@@ -24,10 +24,11 @@ import math
 import cv2
 import numpy as np
 
-#: HSV bounds for magenta guide tape (OpenCV H 140-170, S >= 80, V >= 60).
-PINK_HSV_LOW = (140, 80, 60)
-PINK_HSV_HIGH = (170, 255, 255)
-HORIZON_MARGIN_PX = 3
+from perception_runtime.perception.lane_keep_lines import (  # noqa: E402  one gate for the lane and the dock
+    HORIZON_MARGIN_PX, PINK_H_HIGH, PINK_H_LOW, PINK_MIN_SATURATION, PINK_MIN_VALUE)
+
+PINK_HSV_LOW = (PINK_H_LOW, PINK_MIN_SATURATION, PINK_MIN_VALUE)
+PINK_HSV_HIGH = (PINK_H_HIGH, 255, 255)
 MIN_COMPONENT_AREA_PX = 40
 #: The mask must paint at least this many pixels before the line exists.
 MIN_MASK_PIXELS = 60

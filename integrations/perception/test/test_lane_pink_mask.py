@@ -50,3 +50,21 @@ def test_specks_are_dropped():
     img = frame_with((20, 20, 20))
     img[150:152, 40:42] = PINK      # 4 px < DENOISE_MIN_AREA_PX
     assert floor_pink_mask(img, 60.0)[150:152, 40:42].sum() == 0
+
+
+#: The real parking-mat tape as rosy_42's front camera saw it on 2026-11-14 (median H 173 S 75 V 208,
+#: and its pale tenth, H 170 S 49): far paler than the sim's diffuse. The old H <= 170, S >= 80 gate
+#: caught 0 % of it and the white mask took 72 %, so the bay line read as lane paint.
+REAL_PINK = (161, 147, 208)
+PALE_PINK = (170, 158, 195)
+ORANGE = (50, 110, 230)  # the containers (H ~10)
+
+
+def test_the_real_pale_tape_is_pink_and_not_white_lane_paint():
+    for tape in (REAL_PINK, PALE_PINK):
+        assert floor_pink_mask(frame_with(tape), 60.0)[100, 160] == 1
+        assert floor_white_mask(frame_with(tape), 60.0)[100, 160] == 0
+
+
+def test_orange_containers_stay_out_of_the_pink_mask():
+    assert floor_pink_mask(frame_with(ORANGE), 60.0)[100, 160] == 0
