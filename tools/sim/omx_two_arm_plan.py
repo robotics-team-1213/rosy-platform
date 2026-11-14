@@ -67,15 +67,21 @@ def step_swept_poses(layout, arm_name, src, dst, here):
         else:
             _, t_carry, _ = duration(layout, src, dst)
             seg_t = (0.0, 2.5, 4.0, 5.5, 7.0, 7.0 + t_carry, 8.5 + t_carry, 10.0 + t_carry, 11.5 + t_carry)
-            ts = [seg_t[0]]
+            wait_q = getattr(arm, "wait", arm.home)
+            n_wait = 6
+            qs_t = [(2.5 * k / n_wait, wait_q + (path[0] - wait_q) * (k / n_wait), False) for k in range(n_wait)]
+            ts = [seg_t[1]]
             for s in range(7):
                 dt = (seg_t[s + 2] - seg_t[s + 1]) / 12
                 ts.extend(seg_t[s + 1] + dt * (k + 1) for k in range(12))
-            kin = _ArmKin(arm)
-            item = (layout.hold_below + layout.box[2] / 2, 0.02)
             # solve_chain samples 12 steps per segment across 7 segments: indices 25..72 are lift through release (carrying the box).
-            _SWEEP_CACHE[key] = [(t, _arm_capsules(kin, q, fingertip_m=0.015, item=item if 24 < i <= 72 else None))
-                                 for i, (t, q) in enumerate(zip(ts, path))]
+            qs_t.extend((t, q, 24 < i <= 72) for i, (t, q) in enumerate(zip(ts, path)))
+            t_retreat = seg_t[-1]
+            qs_t.extend((t_retreat + 2.5 * k / n_wait, path[-1] + (wait_q - path[-1]) * (k / n_wait), False) for k in range(1, n_wait + 1))
+            qs_t.append((t_retreat + TIMING["park"], wait_q, False))
+            kin = _ArmKin(arm)
+            item = (layout.hold_below + layout.box[2] / 2, math.hypot(*layout.box[:2]) / 2)
+            _SWEEP_CACHE[key] = [(t, _arm_capsules(kin, q, fingertip_m=0.015, item=item if held else None)) for t, q, held in qs_t]
     return _SWEEP_CACHE[key]
 
 

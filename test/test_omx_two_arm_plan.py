@@ -198,6 +198,7 @@ def test_outbound_and_rearrange_replay_json_carry_after_zones_and_disjoint_overl
 
 def test_disjoint_zones_with_crossing_sweeps_are_not_scheduled_or_started_together(layout):
     """m5/m7-like pair (zones [['a'],['a']] and [['b'],['b']], crossing sweeps) must be serialised by both planner and teacher."""
+    import math
     import numpy as np
     import omx_two_arm_teacher_stages as stages
 
@@ -212,8 +213,11 @@ def test_disjoint_zones_with_crossing_sweeps_are_not_scheduled_or_started_togeth
     ]
     rows, extra = plan.schedule(layout, moves, ("arm_a", "arm_b"), start=here)
     assert not extra and len(rows) == 2
+    pa = plan.step_swept_poses(layout, "arm_a", "ship-h1r0-l1", "tmp-a-2", here)
+    assert pa[0][0] == 0.0 and pa[6][0] == 2.5 and pa[-1][0] > sum(plan.duration(layout, "ship-h1r0-l1", "tmp-a-2"))
+    assert len(pa[35][1]) == 4 and pa[35][1][3][2] == pytest.approx(math.hypot(*layout.box[:2]) / 2)
     assert rows[1]["start"] > 0.0 and not plan.sweeps_clear(
-        plan.step_swept_poses(layout, "arm_a", "ship-h1r0-l1", "tmp-a-2", here),
+        pa,
         plan.step_swept_poses(layout, "arm_b", "ship-h1r2-l1", "tmp-b-3", here),
         ta=0.0, tb=0.0, slack_s=plan.SWEEP_SLACK_S,
     )

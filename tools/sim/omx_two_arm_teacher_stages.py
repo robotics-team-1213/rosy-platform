@@ -141,7 +141,7 @@ def run_concurrent_steps(teacher, data, task, here, max_s=900, faults=None):
             elif not done_after or not free or not all(status.get(d) for d in s.get("after_pick", [])):
                 continue  # a non-belt step keeps its plan's after_pick
             here_s = {k: v for k, v in here.items() if k != s["container"]}
-            phase_idx = {"approach": 0, "grasp": 0, "close": 13, "lift": 25, "carry": 37, "lower": 49, "release": 61, "retreat": 73, "park": 73}
+            phase_idx = {"": 0, "approach": 0, "grasp": 6, "close": 19, "lift": 31, "carry": 43, "lower": 55, "release": 67, "retreat": 79, "park": 91}
             if running and not all(
                 plan_mod.sweeps_clear(
                     plan_mod.step_swept_poses(L, arm, s["from"], s["to"], here_s),
