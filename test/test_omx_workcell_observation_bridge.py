@@ -338,6 +338,60 @@ def test_native_main_delivers_only_registered_channels_without_ros(manifest, tmp
         'top', *[arm.source_id for arm in manifest.workcells[0].arms]}
 
 
+def test_mirror_vision_gets_every_camera_with_its_own_trust_and_no_arms(manifest, tmp_path, monkeypatch):
+    # 11-14 panel: R's console leases cell cameras from R's own Vision (D-136), so the bridge sends them there too
+    import json
+    from core_common.observation_snapshot import SnapshotChannel
+    monkeypatch.setenv('ROSY_OBSERVATION_DIR', str(tmp_path / 'ipc'))
+    path = tmp_path / 'manifest.yaml'
+    path.write_text(yaml.safe_dump(manifest.model_dump(by_alias=True)), encoding='utf-8')
+    monkeypatch.setenv('EXAMPLE_ARM', 'arm-secret')
+    monkeypatch.setenv('EXAMPLE_TOP', 'top-secret')
+    monkeypatch.setenv('ROSY_OBSERVATION_MIRROR_VISION', 'wss://r.example,/etc/r-ca.crt')
+    arm = manifest.workcells[0].arms[0]
+    SnapshotChannel(arm.joint_topic).write('joints', json.dumps(
+        dict.fromkeys(arm.joint_names, .25)).encode(), captured_at=bridge.time.time())
+    SnapshotChannel('/top/image_raw').write('jpeg', b'jpeg', captured_at=bridge.time.time())
+    trust = []
+    monkeypatch.setattr(bridge.ssl, 'create_default_context', lambda cafile=None: trust.append(cafile) or cafile)
+    delivered, stop = set(), threading.Event()
+    class Sender:
+        def __init__(self, url, source, token, *, context): self.key = (url, source, token, context)
+        def send(self, sample):
+            delivered.add(self.key)
+            if len(delivered) == 3: stop.set()
+        def close(self): pass
+    monkeypatch.setattr(bridge, 'run_usb_reports', lambda *args, **kwargs: None)
+    monkeypatch.setattr(bridge, 'ArmSender', Sender)
+    monkeypatch.setattr(bridge, 'CameraSender', Sender)
+    monkeypatch.setattr(bridge, 'threading', SimpleNamespace(
+        Event=lambda: stop, Thread=threading.Thread, Lock=threading.Lock,
+        current_thread=threading.current_thread))
+    timer = threading.Timer(5, stop.set)
+    timer.start()
+    try:
+        bridge.main(['--manifest', str(path), '--workcell', 'example', '--ca-file', '/etc/cell-ca.crt',
+                     '--fleet-url', 'https://fleet.example', '--vision-url', 'wss://vision.example'])
+    finally:
+        timer.cancel()
+    assert trust == ['/etc/cell-ca.crt', '/etc/r-ca.crt']
+    assert delivered == {('https://fleet.example', arm.source_id, 'arm-secret', '/etc/cell-ca.crt'),
+                         ('wss://vision.example', 'top', 'top-secret', '/etc/cell-ca.crt'),
+                         ('wss://r.example', 'top', 'top-secret', '/etc/r-ca.crt')}
+
+
+@pytest.mark.parametrize("binding", ["wss://r.example", "wss://r.example,relative.crt", "ws://r.example,/etc/r.crt"])
+def test_mirror_vision_needs_wss_and_an_absolute_ca(manifest, tmp_path, monkeypatch, capsys, binding):
+    path = tmp_path / "manifest.yaml"
+    path.write_text(yaml.safe_dump(manifest.model_dump(by_alias=True)), encoding="utf-8")
+    monkeypatch.setenv("EXAMPLE_ARM", "arm-secret")
+    monkeypatch.setenv("EXAMPLE_TOP", "top-secret")
+    with pytest.raises(SystemExit):
+        bridge.main(["--manifest", str(path), "--workcell", "example", "--fleet-url", "https://fleet.example",
+                     "--vision-url", "wss://vision.example", "--mirror-vision", binding])
+    assert "observation configuration invalid: ValueError" in capsys.readouterr().err
+
+
 def test_the_cells_arm_health_files_come_from_the_environment_when_not_given(manifest, tmp_path, monkeypatch, capsys):
     # D-871: the auto-updated unit names no arms; the private env lists this cell's one or two health files
     path = tmp_path / "manifest.yaml"
