@@ -284,9 +284,10 @@ def _supervise(tree: Path, snap: str, land_args: list[str], run, room) -> int:
         # start() saw room, but another session took the last slot before land.py did (2026-10-31: twice in a row)
         output = path.read_bytes()[seen:].decode("utf-8", "replace").rstrip().splitlines()
         reason = output[-1] if output else ""
-        if code != 0 and shortages < RESOURCE_RETRIES and any(mark in reason for mark in RESOURCE_SHORTAGE):
+        if code != 0 and shortages < RESOURCE_RETRIES and (any(mark in reason for mark in RESOURCE_SHORTAGE)
+                                                           or lost_host(output)):
             shortages += 1
-            print(f"[land-async] {snap}: laptop out of resources ({reason}); land.py again in {RESOURCE_WAIT_S}s"
+            print(f"[land-async] {snap}: no verdict ({reason[:200]}); land.py again in {RESOURCE_WAIT_S}s"
                   f" ({shortages}/{RESOURCE_RETRIES})", flush=True)
             time.sleep(RESOURCE_WAIT_S)
             continue
@@ -301,7 +302,9 @@ def _supervise(tree: Path, snap: str, land_args: list[str], run, room) -> int:
         git(Path(main).parent, "worktree", "remove", "--force", str(tree), check=False)
         git(Path(main).parent, "branch", "-D", snap, check=False)
         print(f"[land-async] {snap} landed; hidden worktree and snapshot branch removed", flush=True)
-        try:  # main moved: MAIN-RED stops it cleared go again; never changes this landing's own outcome
+        sys.path.insert(0, str(Path(main).parent / "tools"))  # this copy sits beside the log, its tree is gone:
+        try:  # main's land_queue (11-14: six landings skipped this with "No module named 'land_queue'")
+            # main moved: MAIN-RED stops it cleared go again; never changes this landing's own outcome
             for name in orphans(Path(main).parent):
                 print(f"[land-async] resuming {name}: {resume(Path(main).parent, name, [], detach, wait=0)}",
                       flush=True)
@@ -340,7 +343,17 @@ def superseded(tree: Path, snap: str) -> list[str]:
         return []
 
 
-NO_SPLIT = (QUEUE_FULL, "MAIN-RED", "no host", "not run", *RESOURCE_SHORTAGE)  # halves would stop the same way
+LOST_HOST = "exited 255 (log "  # land_checks' stop line for an invocation whose host was lost or that never ran
+NO_SPLIT = (QUEUE_FULL, "MAIN-RED", "no host", "not run", LOST_HOST, *RESOURCE_SHORTAGE)  # halves would stop the same way
+
+
+def lost_host(output: list[str]) -> bool:
+    """Every pytest line of land.py's last STOP is a lost host: no test gave a verdict, and land_cache keeps the
+    passes, so a rerun costs only those invocations. 11-14: a 31-member rollup stopped this way after a 99-min FULL
+    and was bisected instead."""
+    starts = [i for i, line in enumerate(output) if line.startswith("[land] STOP:")]
+    stops = [line for line in output[starts[-1]:] if " (log " in line] if starts else []
+    return bool(stops) and all(LOST_HOST in line for line in stops)
 
 
 def split_rollup(tree: Path, snap: str, launch=None, reason: str = "") -> None:
