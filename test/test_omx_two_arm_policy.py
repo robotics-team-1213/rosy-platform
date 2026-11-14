@@ -90,7 +90,35 @@ def test_pipeline_stages_connect_mujoco_gazebo_and_isaac_roles():
 
 
 def _install_fake_driver_deps(monkeypatch, tmp_path, *, input_features, n_action_steps=8, ensemble_coeff=None):
-    torch = pytest.importorskip("torch")
+    class FakeTensor:
+        def __init__(self, arr):
+            self.arr = np.asarray(arr)
+
+        def __getitem__(self, item):
+            return FakeTensor(self.arr[item])
+
+        def permute(self, *axes):
+            return FakeTensor(np.transpose(self.arr, axes))
+
+        def float(self):
+            return FakeTensor(self.arr.astype(np.float32))
+
+        def __truediv__(self, other):
+            return FakeTensor(self.arr / other)
+
+        def to(self, _device):
+            return self
+
+        def cpu(self):
+            return self
+
+        def numpy(self):
+            return self.arr
+
+    fake_torch = types.ModuleType("torch")
+    fake_torch.cuda = types.SimpleNamespace(is_available=lambda: False)
+    fake_torch.from_numpy = lambda arr: FakeTensor(arr)
+
     model_dir = tmp_path / "model"
     model_dir.mkdir()
     (model_dir / "config.json").write_text(json.dumps({"type": "act"}), encoding="utf-8")
@@ -103,7 +131,6 @@ def _install_fake_driver_deps(monkeypatch, tmp_path, *, input_features, n_action
             self.config = types.SimpleNamespace(
                 temporal_ensemble_coeff=ensemble_coeff, n_action_steps=n_action_steps, chunk_size=100, input_features=input_features
             )
-            self._p = torch.nn.Parameter(torch.zeros(1))
 
         def to(self, _device):
             return self
@@ -112,11 +139,11 @@ def _install_fake_driver_deps(monkeypatch, tmp_path, *, input_features, n_action
             return self
 
         def parameters(self):
-            return iter([self._p])
+            return iter([FakeTensor(np.zeros(1))])
 
         def select_action(self, batch):
             seen_batches.append(batch)
-            return torch.zeros((1, 12))
+            return FakeTensor(np.zeros((1, 12), dtype=np.float32))
 
     fake_act = types.ModuleType("lerobot.policies.act.modeling_act")
     fake_act.ACTPolicy = types.SimpleNamespace(from_pretrained=lambda *a, **k: FakePolicy())
@@ -126,6 +153,7 @@ def _install_fake_driver_deps(monkeypatch, tmp_path, *, input_features, n_action
     fake_world = types.ModuleType("omx_two_arm_world")
     fake_world.World = lambda layout: types.SimpleNamespace(layout=layout)
     for name, mod in {
+        "torch": fake_torch,
         "lerobot": types.ModuleType("lerobot"),
         "lerobot.policies": types.ModuleType("lerobot.policies"),
         "lerobot.policies.act": types.ModuleType("lerobot.policies.act"),
@@ -208,7 +236,7 @@ def test_collect_no_goal_omits_environment_state_feature(monkeypatch, tmp_path):
     }.items():
         monkeypatch.setitem(sys.modules, name, mod)
     monkeypatch.setattr(policy.skills, "disturb", lambda *a, **k: None)
-    monkeypatch.setattr(policy.teaching.Teacher, "run_task", lambda self, task: None)
+    monkeypatch.setattr(policy.teaching.Teacher, "run_task", lambda *a, **k: None)
 
     policy.collect([0], ["stack"], tmp_path / "ds", no_goal=True)
     assert policy.GOAL not in created["features"] and "observation.state" in created["features"]
