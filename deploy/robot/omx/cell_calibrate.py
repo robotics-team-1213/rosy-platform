@@ -48,6 +48,7 @@ MAP_POINTS = [
     [0.06, 0.18],
     [0.04, 0.17],
 ]  # the 2026-10-28 remap grid
+POSE_LOO_SLACK_MM = 2.0  # mark noise (3-5 mm on real marks) hides the upright pose's extrapolation gain in-patch
 AT_STOP_S = 1.5  # the most a refused remap move waits for its stop evidence before it folds
 
 
@@ -257,22 +258,25 @@ def remap(cell, config: dict, points: list, work: Path, log=print, at_stop=None)
 
 
 def fitted_map(config: dict, marks: list, z_view: float) -> dict:
-    """The affine map, or the camera pose with the device's own intrinsics (config calibrate.intrinsics, a
-    cell_device_intrinsics record; calibrate.up, the table normal in the camera from cell_depth_pose) when its
-    leave-one-out is no worse. 2026-11-14: arm_b's wrist holder keeps the remap within 80-105 mm of the base, and
-    an affine fit there extrapolates its error across the pallet; a pose with known K does not."""
+    """The affine map, or the camera pose upright on the depth-measured table normal (config calibrate.intrinsics,
+    a cell_device_intrinsics record, and calibrate.up from cell_depth_pose) when its leave-one-out is within
+    POSE_LOO_SLACK_MM of the affine one. 2026-11-14: arm_b's wrist holder keeps the remap within 80-105 mm of the
+    base; an affine fit there drifts across the pallet (7 mm at 0.26 m in the test camera), the upright pose does
+    not (under 3 mm). In-patch leave-one-out cannot see that, hence the slack. A free 6-DOF pose on such a patch
+    is never used: it traded tilt for position (52 mm off at the same point; on real arm_b marks 22 deg of tilt
+    where depth measures 10.6)."""
     affine = {"homography": cal.fit(marks).round(9).tolist(), "loo_error_mm": cal.loo_error_mm(marks)}
     c = config.get("calibrate", {})
-    if not c.get("intrinsics") or len(marks) < 4:
+    if not c.get("intrinsics") or c.get("up") is None or len(marks) < 4:
         return affine
     import cell_frame
 
     lens = json.loads(Path(c["intrinsics"]).expanduser().read_text())
     try:
-        pose = cell_frame.plane_pose_map(marks, z_view, lens["K"], lens.get("dist", [0.0] * 5), c.get("up"))
+        pose = cell_frame.plane_pose_map(marks, z_view, lens["K"], lens.get("dist", [0.0] * 5), c["up"])
     except ValueError as exc:
         return dict(affine, pose_refused=str(exc)[:120])
-    if pose["loo_error_mm"]["max"] > affine["loo_error_mm"]["max"]:
+    if pose["loo_error_mm"]["max"] > affine["loo_error_mm"]["max"] + POSE_LOO_SLACK_MM:
         return dict(affine, pose_fit={k: v for k, v in pose.items() if k != "homography"})
     return dict(pose, homography=pose["homography"].round(9).tolist(), affine_fit=affine)
 
