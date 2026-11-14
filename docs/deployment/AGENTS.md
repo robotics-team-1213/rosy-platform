@@ -35,6 +35,7 @@ safety plan (D-246).
 | `pinky-pro-first-device-runbook.md` | Fail-closed G0-G5 first physical Pinky Pro commissioning, including the hardware SLAM/MCAP map run |
 | `pinky-release-artifact-selection.md` | D-325 path selector: none, native payload, flashable image, or fail-closed review |
 | `github-updates.md` | Legacy container-bundle updater for development/compatibility. Start product deployment with `pinky-release-artifact-selection.md` |
+| `site-overlay-return-to-signed.md` | R의 손 덮어쓰기 이미지(authgap2·sitepose)를 로컬 main에서 만든 서명 후보로 되돌리는 순서(D-868)와 설치 뒤 확인 |
 | `site-ceiling-camera-console-runbook.md` | 현장 천장 카메라(Rosy Cam)·관제 운영: CA 고정 페어링, mDNS 사이트 찾기(D-391), 카메라 위치, 맵 자동 맞춤(D-375), 로봇 등록·모드, 규칙 점검, 문제 해결 |
 | `site-map-change-and-robot-recognition-runbook.md` | 트랙이 바뀔 때: CAD 페인트 추출, 카메라 정합 판정(흰 선만), 사이트 반영, 배경 다시 학습·LED로 로봇 인식, 증상별 원인 |
 | `pinky-pro-ir-line-calibration-runbook.md` | D-344 §12 IR line calibration with the read-only tool: four placements, checks, sign check, where the YAML and CORE revision go |

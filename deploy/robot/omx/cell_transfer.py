@@ -136,6 +136,11 @@ def transfer_folded(cell, library, closed: float | None = None, wrist=None, afte
 
 def _transfer(cell, library, closed, wrist, after_place, pinch, feel, sequence, lift_stall, at_stop, grasp_check=None) -> dict:
     steps = []
+    if closed is None:  # 2026-11-13 arm_s: judged against the 46.5 command, empty jaws at 50.0 counted as holding
+        try:
+            closed = json.loads(Path(library).read_text()).get("jaw_empty_stop")
+        except (OSError, ValueError):
+            closed = None
 
     def run(command):
         status = cell.act(command)

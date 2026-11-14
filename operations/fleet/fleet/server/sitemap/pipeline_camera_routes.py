@@ -11,6 +11,7 @@ from fleet.server.sitemap.pipeline_routes import _enrich_task_health
 
 def install_cameras_routes(app, ctx) -> None:
     read_guard = ctx.read_guard
+    operator_guard = ctx.operator_guard
     _arm_live_catalog = ctx._arm_live_catalog
     _save_ledger = ctx._save_ledger
     _is_human_detected = ctx._is_human_detected
@@ -72,7 +73,7 @@ def install_cameras_routes(app, ctx) -> None:
             "pending_clear_arms": pending,
         }
 
-    @app.post("/api/fleet/pipeline/arm-holds/clear", dependencies=read_guard)
+    @app.post("/api/fleet/pipeline/arm-holds/clear", dependencies=operator_guard)
     async def clear_pipeline_arm_holds(request: Request):
         body = await request.json()
         target = str(body.get("arm_id") or body.get("cell_id") or "all")

@@ -49,10 +49,12 @@ def _enrich_task_health(task: dict) -> dict:
     return task
 
 
-def install_pipeline_routes(app, *, console=None, site_maps=None, read_guard=()) -> None:
+def install_pipeline_routes(app, *, console=None, site_maps=None, read_guard=(), operator_guard=None) -> None:
     if getattr(app.state, "_pipeline_routes_installed", False):
         return
     app.state._pipeline_routes_installed = True
+    # Mutations need operator; bare test apps without app.state.operator_guard keep read_guard.
+    operator_guard = operator_guard or getattr(app.state, "operator_guard", None) or read_guard
     app.state.omx_cell_states = getattr(app.state, "omx_cell_states", None) or {}
     app.state.omx_cell_tasks = getattr(app.state, "omx_cell_tasks", None) or {}
     app.state.pinky_tasks = getattr(app.state, "pinky_tasks", None) or {}
@@ -317,7 +319,7 @@ def install_pipeline_routes(app, *, console=None, site_maps=None, read_guard=())
         STATION_CAMERA_LINKS=STATION_CAMERA_LINKS, _arm_live_catalog=_arm_live_catalog,
         zones_override_path=zones_override_path, _save_ledger=_save_ledger,
         _is_human_detected=_is_human_detected, _evaluate_decision=_evaluate_decision,
-        inputs=inputs, rules=rules, active_map=active_map, read_guard=read_guard,
+        inputs=inputs, rules=rules, active_map=active_map, read_guard=read_guard, operator_guard=operator_guard,
     )
     install_cell_tasks_routes(app, ctx)
     install_gates_routes(app, ctx)
