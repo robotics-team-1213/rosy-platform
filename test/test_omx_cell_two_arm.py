@@ -1,5 +1,6 @@
 """cell_two_arm: the schedule on fake sessions: progress gates each segment, one arm's failure stops the other, the fold is
 checked from where the arms stand, and nothing moves without a person."""
+import json
 from pathlib import Path
 import sys
 import time
@@ -315,4 +316,125 @@ def test_execute_accepts_inferred_holding_and_away_from_home_filters_single_tick
 
     libraries = {n: {"chunks": {"home": [home]}} for n in "ab"}
     assert two.away_from_home({"a": JitterAt(), "b": Standing(home)}, libraries) == []
+
+
+def gate_config(tmp_path, name, commissioning=True):
+    """A config assess() accepts for this arm (supervised) or refuses (no review and no commissioning flag)."""
+    import cell_robot_profile
+
+    profile = tmp_path / f"robot-profile-{name}.json"
+    profile.write_text(json.dumps({"schema": "rosy.omx-cell-robot-profile.v1", "device_id": f"device-{name}",
+                                   "instance_id": f"follower-{name}", "robot_config_sha256": "c" * 64,
+                                   "operating_envelope_path": "review.json", "work_dir": "."}))
+    config = {"operating_profile_path": str(profile), "work_dir": str(tmp_path),
+              "operating_envelope_path": str(tmp_path / "review.json"),
+              "operating_conditions": {"installation_revision": "i1", "object_revision": "o1", "payload_max_kg": 0.05,
+                                       "object_dimensions_m": [0.03] * 3, "environment_revision": "e1"},
+              "payload": {"kg": 0.03, "source": "catalog"}}
+    if commissioning:
+        config["_commissioning"] = {"person_at_switch": True}  # the flag cell_two_arm.attest writes
+    return config, cell_robot_profile.load(profile)["binding"]
+
+
+def library_file(tmp_path, name):
+    path = tmp_path / f"{name}.json"
+    path.write_text(json.dumps({"chunks": {"home": [[0.0] * 6], "above_pick": [[1.0] * 6]}, "gripper_closed": 20.0}))
+    return path
+
+
+class Session:
+    """A runner behind the Gate: `state` carries a live operating context, every motion arrives `checked`. After
+    `restart_after` motion commands the runner comes back under a new session, so the Gate holds the rest."""
+
+    def __init__(self, binding, session="sess", state=None, delay_s=0.0, restart_after=None):
+        self.binding, self.session_id, self.state = binding, session, state or [9.0] * 6
+        self.delay_s, self.restart_after, self.commands, self.motion = delay_s, restart_after, [], []
+
+    def act(self, command):
+        self.commands.append(command)
+        if command == "state":
+            return {"ok": True, "state": list(self.state), "t": time.time(),
+                    "operating_context": {"scope": "simulation", "sha256": "a" * 64, "session_id": self.session_id,
+                                          "operating_profile": self.binding},
+                    "health": {"temp_c": [30.0] * 6, "pwm": [10] * 6}}
+        motion = command.split(" ", 3)[-1] if command.startswith("checked ") else command
+        self.motion.append(motion)
+        if self.delay_s:
+            time.sleep(self.delay_s)
+        if self.restart_after is not None and len(self.motion) >= self.restart_after:
+            self.session_id = "sess-restarted"
+        return {"ok": True, "state": list(self.state), "settled": True}
+
+
+def armed(tmp_path, commissioning=("a", "b"), **cells_kw):
+    """Both arms' pieces for open_gates: configs, Session cells, one library per arm, and a fresh run folder."""
+    configs, cells, libraries = {}, {}, {}
+    for n in "ab":
+        configs[n], binding = gate_config(tmp_path, n, commissioning=n in commissioning)
+        cells[n] = Session(binding, f"sess-{n}", **cells_kw.get(n, {}))
+        libraries[n] = [(library_file(tmp_path, f"lib-{n}"), {})]
+    run = tmp_path / "run"
+    run.mkdir()
+    return configs, cells, libraries, run
+
+
+def gates_of(cells, configs, libraries, run):
+    return two.open_gates(cells, configs, {}, libraries, {n: two.FOLDED for n in "ab"}, run)
+
+
+def test_one_held_library_stops_the_whole_run_at_zero_motion(tmp_path):
+    configs, cells, libraries, run = armed(tmp_path, commissioning=("a",))
+    with pytest.raises(SystemExit, match=r"arm b.*held: .*\(D-911\)"):
+        gates_of(cells, configs, libraries, run)
+    assert all(c.motion == [] and set(c.commands) <= {"state"} for c in cells.values())  # neither arm moved
+    intent = json.loads((run / "intent-a-0.json").read_text())
+    assert intent["arm"] == "a" and intent["assessment"]["mode"] == "commissioning"
+
+
+def test_an_intent_that_cannot_be_written_holds_the_run(tmp_path):
+    configs, cells, libraries, run = armed(tmp_path)
+    (run / "intent-a-0.json").write_text("{}")  # a pending intent from an earlier attempt is never clobbered
+    with pytest.raises(SystemExit, match=r"audit_unavailable.*\(D-911\)"):
+        gates_of(cells, configs, libraries, run)
+    assert all(c.motion == [] for c in cells.values())
+
+
+def test_two_libraries_open_one_gate_with_one_durable_intent_each(tmp_path):
+    configs, cells, libraries, run = armed(tmp_path)
+    libraries["a"].append((library_file(tmp_path, "lib-a2"), {}))
+    gates = gates_of(cells, configs, libraries, run)
+    assert (run / "intent-a-0.json").exists() and (run / "intent-a-1.json").exists()
+    assert gates["a"].assessment["allowed"] is True
+
+
+def test_a_command_held_mid_motion_stops_the_peer_at_its_segment_and_ends_with_a_person(geometry, tmp_path):
+    configs, cells, libraries, run = armed(tmp_path, a={"restart_after": 1}, b={"delay_s": 0.15})
+    gates = gates_of(cells, configs, libraries, run)
+    commands = {"a": [["goto a0"], ["goto a1"], ["park a"]], "b": [["goto b0"], ["goto b1"], ["park b"]]}
+    steps = [{"a": None, "b": 0}, {"a": 0, "b": 1}, {"a": 1, "b": None}, {"a": 2, "b": 2}]
+    moved = two.execute(gates, commands, steps, log=lambda row: None)
+    assert moved["failed"]["error"] == "held: session_changed"
+    assert cells["a"].motion == ["goto a0"]  # the held command never reached the runner
+    assert cells["b"].motion == ["goto b0", "goto b1"]  # the segment it was in, and no other
+    folded = two.safe_fold(gates, {"a": LIBRARY, "b": LIBRARY}, None, {"a": 0.0, "b": 1.0}, {"a": 0.0, "b": 0.0},
+                           0.05, lambda row: None, moved)
+    assert folded["folded"] is False and "held: session_changed" in folded["person_needed"]
+
+
+def test_a_restarted_runner_holds_even_the_park_and_a_person_is_needed(geometry, tmp_path):
+    configs, cells, libraries, run = armed(tmp_path)
+    gates = gates_of(cells, configs, libraries, run)
+    cells["a"].session_id = "sess-restarted"  # the runner came back mid-run: not even the fold's park may pass
+    folded = two.safe_fold(gates, {"a": LIBRARY, "b": LIBRARY}, None, {"a": 0.0, "b": 1.0}, {"a": 0.0, "b": 0.0},
+                           0.05, lambda row: None, {"last": {}, "stopped": {}})
+    assert folded["folded"] is False and "held: session_changed" in folded["person_needed"]
+
+
+def test_the_arm_waiting_through_the_other_s_fold_keeps_its_session_alive(monkeypatch, tmp_path):
+    monkeypatch.setattr(two, "KEEP_ALIVE_S", 0.01)
+    configs, cells, libraries, run = armed(tmp_path, a={"delay_s": 0.2})
+    folded = two.safe_fold(cells, {"a": LIBRARY, "b": LIBRARY}, None, {"a": 0.0, "b": 1.0}, {"a": 0.0, "b": 0.0},
+                           0.05, lambda row: None, {"last": {}, "stopped": {}})
+    assert folded["folded"] is True
+    assert cells["b"].commands.count("state") >= 3  # one settled_state read; the rest is the fold-window keep-alive
 

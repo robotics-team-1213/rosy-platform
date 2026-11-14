@@ -11,8 +11,10 @@ person is asked.
 held. On a failure each arm first climbs out the way it went in, the rule of cell_transfer.transfer_folded, so a fold never sweeps
 low through the pile; an arm stopped lifting a held box stays for a person (a retreat pressed the box down, 2026-11-07).
 
-A target outside the arm's own zone (cell_zones) refuses the whole run. Top views with both arms folded, before and after,
-report anything that moved. Each run has its own folder: nothing of an earlier run is removed.
+A target outside the arm's own zone (cell_zones) refuses the whole run. Each arm moves behind its own Gate on the
+Guarded cell (cell_transfer, cell_auto_safety; D-911): before any thread starts every (arm, library) is assessed and
+its intent written into the run folder, and one hold leaves both arms at zero motion. Top views with both arms folded,
+before and after, report anything that moved. Each run has its own folder: nothing of an earlier run is removed.
 
     cell_two_arm.py --a cell-a.json a1.json a2.json --b cell-b.json b1.json b2.json --out runs/ --commissioning --person-at-switch
 
@@ -24,6 +26,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 import sys
 import threading
@@ -178,16 +181,31 @@ def safe_fold(cells: dict, libraries: dict, kin, rigids: dict, tips: dict, margi
     order = fold_order(here, sweep, margin_m)
     if order is None:
         return {"folded": False, "person_needed": "no fold order keeps the margin", "states": states}
-    for n in order:
-        for command, _ in exits[n]:
-            status = cells[n].act(command)
-            log({"arm": n, "send": command, "ok": status.get("ok"), "error": status.get("error")})
-            if not status.get("ok"):
-                return {"folded": False, "person_needed": f"{n} did not climb out: {status.get('error')}", "order": order}
-        status = fold(cells[n])
-        log({"arm": n, "send": "park", "ok": status.get("ok"), "error": status.get("error")})
-        if not status.get("ok"):  # the other arm stays put: its fold was only cleared against this one folded
-            return {"folded": False, "person_needed": f"{n} did not fold: {status.get('error')}", "order": order}
+    folding, stop = [None], threading.Event()
+
+    def keep_alive():  # the arm waiting through the other's fold must not idle-fold through a sweep nobody cleared
+        while not stop.wait(KEEP_ALIVE_S):
+            for n in ORDER:
+                if n != folding[0]:
+                    cells[n].act("state")
+
+    alive = threading.Thread(target=keep_alive, daemon=True)
+    alive.start()
+    try:
+        for n in order:
+            folding[0] = n
+            for command, _ in exits[n]:
+                status = cells[n].act(command)
+                log({"arm": n, "send": command, "ok": status.get("ok"), "error": status.get("error")})
+                if not status.get("ok"):
+                    return {"folded": False, "person_needed": f"{n} did not climb out: {status.get('error')}", "order": order}
+            status = fold(cells[n])
+            log({"arm": n, "send": "park", "ok": status.get("ok"), "error": status.get("error")})
+            if not status.get("ok"):  # the other arm stays put: its fold was only cleared against this one folded
+                return {"folded": False, "person_needed": f"{n} did not fold: {status.get('error')}", "order": order}
+    finally:
+        stop.set()
+        alive.join()
     stayed = [n for n in ORDER if exits[n] is None]
     if stayed:
         return {"folded": False, "person_needed": f"{stayed} stopped lifting a held box: a person frees it", "order": order}
@@ -205,6 +223,36 @@ def open_cells(configs: dict, fifo_cell) -> dict:
         cells[n] = fifo_cell(Path(configs[n]["io"]).expanduser(), configs[n]["cameras"], timeout_s=180,
                              operating_profile=bind_pipeline(configs[n])["_operating_profile_binding"])
     return cells
+
+
+def attest(config: dict, supervised: bool) -> dict:
+    """The Gate takes its supervised branch from config `_commissioning` (cell_envelope), as cell_cycle does."""
+    return {**config, "_commissioning": {"person_at_switch": True}} if supervised else config
+
+
+def open_gates(cells: dict, configs: dict, calibrations: dict, libraries: dict, sequences: dict, run: Path) -> dict:
+    """One Gate per arm over the Guarded cell (D-911, cell_cycle's pattern). Every (arm, library) is assessed and its
+    durable intent written before any thread starts, so one hold leaves both arms at zero motion. The library index
+    names the intent file: a second open on the same Gate must not hit the first library's pending intent."""
+    from cell_auto_safety import Guarded
+    from cell_transfer import Gate
+
+    gates = {}
+    for n in ORDER:
+        gate = Gate(Guarded(cells[n], configs[n]), configs[n], calibrations[n], sequence=sequences[n])
+        for i, (path, _) in enumerate(libraries[n]):
+
+            def before_motion(assessment, n=n, i=i, path=path):
+                with (run / f"intent-{n}-{i}.json").open("x", encoding="utf-8") as stream:  # exclusive: a hold, never a clobber
+                    json.dump({"arm": n, "library": str(path), "assessment": assessment}, stream)
+                    stream.flush()
+                    os.fsync(stream.fileno())
+
+            held = gate.open(path, before_motion)
+            if held is not None:
+                raise SystemExit(f"arm {n} {path}: held: {held['reason']} (D-911)")
+        gates[n] = gate
+    return gates
 
 
 def away_from_home(cells: dict, libraries: dict) -> list:
@@ -259,7 +307,7 @@ def main(argv=None) -> int:
     jobs = dict(a=args.a, b=args.b)
     if args.carry and any(len(jobs[n]) != 2 for n in ORDER):
         raise SystemExit("--carry takes one library per arm")
-    configs = {n: load_config(Path(jobs[n][0])) for n in ORDER}
+    configs = {n: attest(load_config(Path(jobs[n][0])), args.commissioning and args.person_at_switch) for n in ORDER}
     calibrations = {n: cell_pivot.with_site_maps(configs[n], cal.load(Path(configs[n]["calibration_path"]).expanduser())) for n in ORDER}
     libraries = {n: [(p, json.loads(Path(p).read_text())) for p in jobs[n][1:]] for n in ORDER}
     for n in ORDER:
@@ -295,6 +343,8 @@ def main(argv=None) -> int:
             stream.flush()
             print(row, flush=True)
 
+    sequences = {n: FOLDED if args.carry else tuple(c for sends in routes[n][1] for c in sends) for n in ORDER}
+    cells = open_gates(cells, configs, calibrations, libraries, sequences, run)
     before = cells["b"].frame("top")
     cv2.imwrite(str(run / "before.jpg"), before)
     moved_out = execute(cells, {n: routes[n][1] for n in ORDER}, schedule["steps"], fail_at, log)
