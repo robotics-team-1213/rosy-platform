@@ -557,8 +557,17 @@ def test_teacher_standstill_sub_tick_hysteresis_suppresses_single_tick_dither(gu
     assert commit(2048.1) == 2048
     assert commit(2047.9) == 2048
     motion.velocity["shoulder_pan"] = 0.25
-    assert commit(2047.9) == 2047
+    assert commit(2047.4) == 2047
     assert commit(2048.1) == 2048
     motion.velocity["shoulder_pan"] = 0.0
     motion.teacher = False
-    assert commit(2047.9) == 2047
+    assert commit(2047.4) == 2047
+
+
+def test_commit_rounds_to_the_nearest_tick_in_both_directions(guard):
+    motion, follower, clock, _ = teacher(guard)
+    motion.teacher = False
+    command = dict.fromkeys(NAMES, 2048.0)
+    command["elbow_flex"], command["wrist_flex"] = 2048.7, 2047.3
+    motion.commit({"started": clock[0], "command": command, "time": clock[0]})
+    assert follower.goals["elbow_flex"] == 2049 and follower.goals["wrist_flex"] == 2047
