@@ -5542,3 +5542,8 @@
 - 변경: `cell_print_sheets`에 `container-tags` 시트(DICT_4X4_250 100~199, 번호마다 지붕·옆면 두 장, 12 또는 20 mm, 50 mm 확인 막대)와 Cell 화면 「보정 인쇄물」의 태그 번호·크기 입력. 태그↔object_ref 표는 시트에 넣지 않는다.
 - 증거: 시트를 300 dpi로 그려 OpenCV DICT_4X4_250이 번호·크기(±0.2 mm)대로 되읽음. 한 장에 12 mm 24개, 20 mm 12개 컨테이너. 실물 인쇄·판독률은 미실시.
 - gate 변화: SOURCE. 인쇄 후 자로 확인·판독률 측정은 사람 몫이다.
+
+## 2026-11-14 · uncommitted · 충전 복귀 이동 (D-1029)
+- 변경: `fleet.station_recovery.dispatch`(기본 false). 승인된 복구 요청이 `TripRunner.start(..., purpose="charge_return")`로 고른 충전 칸까지 trip을 시작하고, 도착하면 lease를 끝내고 `plug_charger` 사람 요청을 보낸다. 실패·거절은 `station_recovery_return` 사건. 새 `station_recovery_dispatch.py`, trip lease 본문 `purpose`.
+- 증거: 원격 `test_station_recovery_dispatch.py`·`test_station_recovery.py`·`test_person_requests.py`·`test_trip_lease.py` 116 통과, trip·cli 시험 679 통과.
+- gate 변화: SOURCE. 실물(20 % 유도 시험·칸 앞 도착)은 미실시.

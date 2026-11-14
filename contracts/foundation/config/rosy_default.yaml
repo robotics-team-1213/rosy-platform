@@ -92,6 +92,7 @@ safety:
   manual_linear: 0.15
   manual_angular: 0.60
   fleet_linear: 0.20
+  charge_return_linear: 0.10      # D-1029: 충전 복귀 주행 중 선속도 상한 (m/s)
   fleet_angular: 0.80
 
 line_follow:                       # D-143 selected-source, fail-closed policy
