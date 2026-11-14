@@ -10,6 +10,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools/sim"))
 import omx_two_arm_policy as policy  # noqa: E402
+import omx_two_arm_policy_helpers as helpers  # noqa: E402
 import omx_two_arm_sites as sites  # noqa: E402
 import omx_two_arm_tasks as tasks  # noqa: E402
 
@@ -91,6 +92,8 @@ def test_pipeline_stages_connect_mujoco_gazebo_and_isaac_roles():
 
 def _install_fake_driver_deps(monkeypatch, tmp_path, *, input_features, n_action_steps=8, ensemble_coeff=None):
     class FakeTensor:
+        device = "cpu"
+
         def __init__(self, arr):
             self.arr = np.asarray(arr)
 
@@ -244,7 +247,7 @@ def test_collect_no_goal_omits_environment_state_feature(monkeypatch, tmp_path):
     ds = FakeDataset(created["features"])
     rec = policy.Recorder(types.SimpleNamespace(layout=sites.Layout()), ds, {}, no_goal=True)
     rec.goal = True
-    monkeypatch.setattr(policy, "observe", lambda *a: (np.zeros(12, dtype=np.float32), {"top": np.zeros((4, 4, 3), dtype=np.uint8)}))
+    monkeypatch.setattr(helpers, "observe", lambda *a: (np.zeros(12, dtype=np.float32), {"top": np.zeros((4, 4, 3), dtype=np.uint8)}))
     monkeypatch.setattr(policy.teaching.Teacher, "frame", lambda *a: None)
     rec.frame(None, {arm: np.zeros(6, dtype=np.float32) for arm in sites.ARMS}, "s1")
     assert len(ds.frames) == 1 and policy.GOAL not in ds.frames[0] and "observation.state" in ds.frames[0]
