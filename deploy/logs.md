@@ -4894,3 +4894,8 @@ osy_account_audit·device_pairing_audit는 90일 경과 행만 지운다. HOLD�
 - 변경: CORE용 영속 공유 디렉터리를 native unit에서 만들고 rosy-face가 설정을 매 표시 단계마다 읽는다. 기존 부팅·안전 표시가 우선한다.
 - 증거: native systemd·rosy-face 원격 계약 시험 결과는 이 브랜치 검증에 기록한다.
 - gate 변화: 없음. ARM64·장치 LED 수용은 별도다.
+
+## 2026-11-14 · uncommitted · Pinky navigation 유닛의 D-395 loc_assist 스위치
+- 변경: `rosy-navigation.service`가 `enable_loc_assist:=${ROSY_ENABLE_LOC_ASSIST}`를 넘긴다(유닛 기본 false, `runtime.env`가 이긴다). 템플릿 `rosy-runtime.env`에 `ROSY_ENABLE_LOC_ASSIST=false`. 실물 Pinky는 `loc_assist_node`를 한 번도 띄우지 않아 `localization/state` 발행자가 없었고, 그래서 CORE `state.localization`이 늘 null이었다(rosy_45, 178).
+- 증거: 원격 `test/test_pinky_loc_assist_switch.py`·`test_image_customization_contract.py`·`test_device_surface_contract.py`·`test_bringup_motor_contracts.py` 140 통과.
+- gate 변화: SOURCE. 기본은 꺼짐. 켠 기체의 LOCALIZED는 D-395 결정 흐름이 필요하다(실물 미실시).
