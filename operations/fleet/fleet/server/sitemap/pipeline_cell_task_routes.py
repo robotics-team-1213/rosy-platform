@@ -15,6 +15,7 @@ from fleet.server.sitemap.pipeline_routes import _enrich_task_health
 def install_cell_tasks_routes(app, ctx) -> None:
     read_guard = ctx.read_guard
     operator_guard = ctx.operator_guard
+    proposer_guard = getattr(ctx, "proposer_guard", operator_guard)
     STATION_CAMERA_LINKS = ctx.STATION_CAMERA_LINKS
     _arm_live_catalog = ctx._arm_live_catalog
     zones_override_path = ctx.zones_override_path
@@ -54,7 +55,7 @@ def install_cell_tasks_routes(app, ctx) -> None:
         return {**contract_spec_dict(), "boundary_check": boundary,
                 "omx_cells": {cid: station.to_dict() for cid, station in cells.items()}}
 
-    @app.post("/api/fleet/pipeline/cell-handoff", dependencies=read_guard)
+    @app.post("/api/fleet/pipeline/cell-handoff", dependencies=proposer_guard)
     async def pipeline_cell_handoff(request: Request):
         active = active_map()
         body = await request.json()
