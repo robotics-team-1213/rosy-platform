@@ -85,6 +85,10 @@ def test_the_pan_limit_names_a_box_out_of_reach():
     config = {"plan": {"limits": {"joints_rad": {"joint1": [-2.6, 2.6]}}}}  # +-149 deg
     assert plan.past_pan_limit(config, (-0.187, -0.065)) == -160.8
     assert plan.past_pan_limit(config, (-0.15, -0.12)) is None and plan.past_pan_limit({"plan": {}}, (-0.187, -0.065)) is None
+    reach = {"plan": {"limits": {"park_reach_m": 0.18}}}  # 2026-11-14 arm_s: the park failed from 192 mm, folded from 186
+    assert plan.past_park_reach(reach, (0.054, 0.184)) == 192 and plan.past_park_reach(reach, (0.05, 0.17)) is None
+    assert plan.past_park_reach({"plan": {}}, (0.054, 0.184)) is None
+    assert dg.obstacle_type([{"why": "out of reach: 192 mm, past the park reach 180 mm"}]) == "out of reach"
 
 
 def test_the_stall_hook_keeps_the_session_and_only_with_a_person_at_the_switch(monkeypatch):

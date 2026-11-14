@@ -85,6 +85,15 @@ def past_pan_limit(config: dict, point_m) -> float | None:
     return None if limits[0] <= pan <= limits[1] else round(math.degrees(pan), 1)
 
 
+def past_park_reach(config: dict, point_m) -> float | None:
+    """The reach (mm) to a point past the plan's park reach, else None. 2026-11-14 arm_s, measured in free air at pan 120:
+    the park from above_pick folded at 120-186 mm and failed at 192 mm every time (shoulder_lift contact, the arm then
+    sagging onto what it hovered over); a slow lift first and then the park folded it."""
+    limit = (config.get("plan") or {}).get("limits", {}).get("park_reach_m")
+    reach = math.hypot(point_m[0], point_m[1])
+    return round(reach * 1000) if limit and reach > limit else None
+
+
 def plan_pick(
     config: dict,
     site: str,
@@ -172,6 +181,8 @@ def choose(
             why = "not inside the camera view"
         elif (pan := past_pan_limit(config, o["raw_m"])) is not None:
             why = f"out of reach: pan {pan} deg past the joint1 limit"
+        elif (reach := past_park_reach(config, o["raw_m"])) is not None:
+            why = f"out of reach: {reach} mm, past the park reach {round(config['plan']['limits']['park_reach_m'] * 1000)} mm"
         elif not square_entry(entries, o):
             entry = entries[o["object"]]
             ends = o["long_axis_deg"] if across(entry) == entry["length_mm"] else None
