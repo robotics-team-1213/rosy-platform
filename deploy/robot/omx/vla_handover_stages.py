@@ -10,6 +10,7 @@ Single Responsibility:
 """
 from __future__ import annotations
 
+import math
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional
 
@@ -36,8 +37,16 @@ def run_hybrid_stack_stage(
     stack_guard: Optional[CellStackGuard] = None,
     vla_refinement_steps: int = 3,
     wrist_obs: Optional[dict[str, Any]] = None,
+    read_grip_holding_fn: Optional[Callable[[], bool]] = None,
+    read_z_fn: Optional[Callable[[], float]] = None,
+    lift_step_fn: Optional[Callable[[float], None]] = None,
 ) -> dict[str, Any]:
-    """Executes a complete 1/2/3-tier hybrid stacking stage with ReleaseCorrector residual & IL/RL update."""
+    """Executes a complete 1/2/3-tier hybrid stacking stage with ReleaseCorrector residual & IL/RL update.
+
+    The release gate needs injected real readbacks (`read_grip_holding_fn`, `read_z_fn`,
+    `lift_step_fn`); without them the stage HOLDs and nothing is released. VLA joint outputs are
+    proposals only (`vla_executed` is always False): they never reach `act_fn`, which carries the
+    reviewed named chunks alone (D-854 keeps the execution path closed)."""
     from vla_handover_broker import HandoverState
 
     guard = stack_guard or CellStackGuard(StackGateConfig(tier=task.tier))
@@ -45,9 +54,36 @@ def run_hybrid_stack_stage(
     dispatch_tel = broker.dispatch_task(task, base_plan=base_plan, work_dir=work_dir)
     if broker.current_state == HandoverState.FAILED or task.directive is None:
         return {"ok": False, "state": broker.current_state.value, "telemetry": dispatch_tel}
+    if read_grip_holding_fn is None or read_z_fn is None or lift_step_fn is None:
+        broker.current_state = HandoverState.HELD
+        return {"ok": False, "state": broker.current_state.value,
+                "held": "release gate needs injected grip and z readbacks; nothing was released",
+                "telemetry": dispatch_tel, "vla_steps_proposed": 0, "vla_executed": False}
+
+    try:
+        initial_z = read_z_fn()
+    except Exception as error:
+        initial_z = error
+    try:
+        initial_grip = read_grip_holding_fn()
+    except Exception as error:
+        initial_grip = error
+    try:
+        if isinstance(initial_z, Exception):
+            raise initial_z
+        if isinstance(initial_grip, Exception):
+            raise initial_grip
+        if (initial_z is None or initial_grip is None
+                or not math.isfinite(float(initial_z)) or not math.isfinite(float(initial_grip))):
+            raise ValueError("missing or non-finite grip or height readback")
+    except Exception as error:
+        broker.current_state = HandoverState.HELD
+        return {"ok": False, "state": broker.current_state.value,
+                "held": f"release readback unavailable before motion: {error}",
+                "telemetry": dispatch_tel, "vla_steps_proposed": 0, "vla_executed": False}
 
     hover_dir = dict(task.directive)
-    hover_dir["execution"] = {**dict(hover_dir.get("execution") or {}), "stay_hover": True}
+    hover_dir["execution"] = {**dict(hover_dir.get("execution") or {}), "stay_in_hover": True}
     before_side = frame_fn("side") if frame_fn is not None else None
     before_top = frame_fn("top") if frame_fn is not None else None
 
@@ -59,17 +95,21 @@ def run_hybrid_stack_stage(
         frame_fn=frame_fn,
         max_attempts=2,
     )
-    grasp_dyn = macro_res.get("grasp_dynamics") or {"holding": True, "regime": "stable_hold"}
+    if macro_res.get("result") != "hover":
+        broker.current_state = HandoverState.HELD
+        return {"ok": False, "state": broker.current_state.value,
+                "held": "macro carry did not reach hover", "telemetry": dispatch_tel,
+                "macro": macro_res, "vla_steps_proposed": 0, "vla_executed": False}
+    grasp_dyn = macro_res.get("grasp_dynamics") or {"holding": False, "regime": "unmeasured"}
     ready_tel = broker.signal_ready_reached(
         facts={
             "chunk": "above_place",
-            "holding": bool(grasp_dyn.get("holding", True)),
-            "grasp_stable": grasp_dyn.get("regime") != "slip_collapse",
+            "holding": bool(grasp_dyn.get("holding", False)),
+            "grasp_stable": grasp_dyn.get("regime") not in ("slip_collapse", "unmeasured"),
         }
     )
     if broker.current_state != HandoverState.VLA_ACTIVE:
         return {"ok": False, "state": broker.current_state.value, "telemetry": ready_tel, "macro": macro_res}
-
     vla_actions: list[list[float]] = []
     gate_reports: list[GateResult] = []
     q_cur = [0.0, -10.0, 15.0, 45.0, 48.0, 54.4]
@@ -99,17 +139,27 @@ def run_hybrid_stack_stage(
             q_cur = list(act_vec)
             vla_actions.append(act_vec)
 
-        cur_z, torque_hist = seating_probe_fn(broker.retry_count)
-        z_box[0] = cur_z
+        _, torque_hist = seating_probe_fn(broker.retry_count)
+        try:
+            measured_z = read_z_fn()
+            measured_grip = read_grip_holding_fn()
+            if measured_z is None or measured_grip is None or not math.isfinite(float(measured_z)):
+                raise ValueError("missing grip or height readback")
+            z_box[0] = float(measured_z)
+        except Exception as error:
+            broker.current_state = HandoverState.HELD
+            return {"ok": False, "state": broker.current_state.value,
+                    "held": f"release readback unavailable: {error}", "macro": macro_res,
+                    "vla_steps_proposed": len(vla_actions), "vla_executed": False}
 
         def _eval_gate() -> bool:
             g_res = guard.evaluate_release(
                 current_z_m=z_box[0],
                 target_z_m=task.target_z_m,
                 torque_history=torque_hist,
-                read_grip_holding_fn=lambda: True,
-                read_z_fn=lambda: z_box[0],
-                lift_step_fn=lambda dz: z_box.__setitem__(0, z_box[0] + dz),
+                read_grip_holding_fn=read_grip_holding_fn,
+                read_z_fn=read_z_fn,
+                lift_step_fn=lift_step_fn,
                 tier=task.tier,
             )
             gate_reports.append(g_res)
@@ -172,7 +222,8 @@ def run_hybrid_stack_stage(
         "target_z_m": task.target_z_m,
         "state": broker.current_state.value,
         "retry_count": broker.retry_count,
-        "vla_steps_executed": len(vla_actions),
+        "vla_steps_proposed": len(vla_actions),
+        "vla_executed": False,  # the VLA joint targets above never reached act_fn; only the named chunks did
         "release_residual": last_residual,
         "recovered_place_xyz_m": recovered_place_xyz,
         "gate_reports": [
@@ -195,6 +246,9 @@ def run_3tier_hybrid_plan(
     vla_step_fn: Callable[[Dict[str, Any]], Any],
     seating_probe_fn: Callable[[int, int], tuple[float, list[float]]],
     frame_fn: Optional[Callable[[str], Any]] = None,
+    read_grip_holding_fn: Optional[Callable[[], bool]] = None,
+    read_z_fn: Optional[Callable[[], float]] = None,
+    lift_step_fn: Optional[Callable[[float], None]] = None,
 ) -> dict[str, Any]:
     """Executes a multi-tier (Tier 1 -> Tier 2 -> Tier 3) hybrid stacking plan with Look-Ahead Prefetching."""
     results = []
@@ -208,6 +262,9 @@ def run_3tier_hybrid_plan(
             vla_step_fn=vla_step_fn,
             seating_probe_fn=lambda retry_i, _tier=task.tier: seating_probe_fn(_tier, retry_i),
             frame_fn=frame_fn,
+            read_grip_holding_fn=read_grip_holding_fn,
+            read_z_fn=read_z_fn,
+            lift_step_fn=lift_step_fn,
         )
         results.append(res)
         if not res["ok"]:

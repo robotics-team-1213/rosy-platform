@@ -14,7 +14,9 @@ import sys
 import time
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import cell_act_shadow  # noqa: E402
 import cell_attempts  # noqa: E402
+import cell_executor  # noqa: E402
 from cell_auto_pick_plan import (  # noqa: E402,F401  (re-exported)
     CLOSING,
     choose,
@@ -64,9 +66,6 @@ import cell_site_track  # noqa: E402
 from cell_transfer import FOLDED, STILL_HOLDING_UNITS, Gate, transfer_folded  # noqa: E402,F401
 import cell_wrist_ref  # noqa: E402
 
-EXECUTOR_CANDIDATES = ("ik_chunk",)
-APPROVED_REAL_EXECUTORS = frozenset({"ik_chunk"})  # D-911: new motion paths need a person's approval.
-
 
 def run_auto(
     cell,
@@ -111,6 +110,7 @@ def run_auto(
     )
     episode, failed_yaws, dest_view = None, [], None
     attempts = int(prm.get(config.get("params"), "auto.attempts")) if attempts is None else attempts
+    shadow = None if dry_run else cell_act_shadow.load(config, work)
     try:
         for attempt in range(attempts):
             t0, tried = time.time(), {"locate": {"found": False}, "scenario_id": scenario_id}
@@ -210,13 +210,10 @@ def run_auto(
             config = dict(config, _payload=cell_objects.payload(catalog, o["object"]))
             episode = open_episode(cell, config, source, dest, o["object"])
             same = dict(config, plan=dict(config["plan"], **target.get("plan", {})))
-            allowed = [executor for executor in EXECUTOR_CANDIDATES if executor in APPROVED_REAL_EXECUTORS]
-            choice = choices.best_contextual("exec.pick_place", allowed=allowed)
-            if choice["value"] != "ik_chunk":
-                raise RuntimeError("no approved executor for the real arm")
-            tried["execution"] = {"segment": attempt, "purpose": "pick_place", "executor": choice["value"],
-                                  "candidates": allowed, "propensity": choice["propensity"], "outcome": "stopped"}
+            choice, tried["execution"] = cell_executor.choose(choices, attempt)
             gate = Gate(guarded, config, calibration, sequence=sequence)
+            # shadow inference before the gate opens: no delay between the approval and the motion
+            shadow_row = shadow.capture(cell, config, attempt, img) if shadow else None
             held = gate.open(target["library"], lambda a: cell_attempts.begin(config, a))
             if held is not None:
                 tried["envelope"] = held
@@ -256,10 +253,7 @@ def run_auto(
             )
             tried["transfer"] = moved
             if moved["result"] not in ("placed", "contact", "fault", "refused"):
-                tried["execution"]["outcome"] = "failed"
-                choices.outcome_contextual("exec.pick_place", choice["value"], False,
-                                           propensity=choice["propensity"], note=moved["result"])
-                choices.save()
+                cell_executor.outcome(choices, tried["execution"], choice, False, moved["result"])
             if moved["result"] in ("empty", "reinserted") or (
                 moved["result"] == "contact" and moved.get("at") in ("run descend_pick", "run grasp_pick")
             ):
@@ -268,7 +262,9 @@ def run_auto(
                 if decided["chosen"] in ("ask_person", "probe_surface"):
                     close_episode(cell, episode, False, f"{decided['cause']}: {decided['chosen']}")
                     episode = None
-                    cell_attempts.record(config, calibration, source, dest, attempt, tried, t0, choices)
+                    cell_act_shadow.record(shadow, shadow_row,
+                                           cell_attempts.record(config, calibration, source, dest, attempt, tried, t0, choices),
+                                           moved["result"], moved.get("at"))
                     return {**out, "result": f"stopped: {decided['cause']} -> {decided['chosen']}"}
             held = moved["result"] == "placed" or any(s.get("holding") for s in moved["steps"])
             if target["offset"] is not None and moved["result"] in ("placed", "empty", "contact", "reinserted"):
@@ -293,11 +289,8 @@ def run_auto(
                     f"placement seen on the {tried['verify']['basis']}",
                 )
                 tried["learned_bias"] = learn_bias(config, calibration_path, dest_site, place_xy, tried["verify"])
-                ok = bool(tried["verify"].get("inside"))
-                tried["execution"]["outcome"] = "succeeded" if ok else "failed"
-                choices.outcome_contextual("exec.pick_place", choice["value"], ok,
-                                           propensity=choice["propensity"], note="placement verification")
-                choices.save()
+                cell_executor.outcome(choices, tried["execution"], choice, bool(tried["verify"].get("inside")),
+                                      "placement verification")
                 pending = cell_wrist_ref.ref_path(work, config.get("arm_id", "arm_s"), dest_site).with_suffix(
                     ".pending.json"
                 )
@@ -316,7 +309,9 @@ def run_auto(
             )
             episode = None
             cd.after(moved, choices.best(CLOSING), attempt + 1 < attempts, guarded.monitor)
-            cell_attempts.record(config, calibration, source, dest, attempt, tried, t0, choices)
+            cell_act_shadow.record(shadow, shadow_row,
+                                   cell_attempts.record(config, calibration, source, dest, attempt, tried, t0, choices),
+                                   moved["result"], moved.get("at"))
             try:
                 import cell_problem_pipeline
 
