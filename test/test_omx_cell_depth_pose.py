@@ -76,3 +76,9 @@ def test_refuses_a_record_without_depth_calibration_and_an_empty_box():
     with pytest.raises(ValueError, match="depth"):
         dp.surface(depth_frame(597.0, 11.0), {"K": FACTORY["K"]}, (0, 0, 400, 480))
     assert dp.surface(depth_frame(597.0, 11.0), FACTORY, (700, 0, 800, 10))["reason"] == "too_few_depth_points_in_roi"
+
+
+def test_the_nadir_is_where_parallax_must_scale_about_on_a_tilted_camera():
+    out = dp.surface(depth_frame(597.0, 11.0), FACTORY, (0, 0, 400, 480))
+    u, v = out["nadir_px"]
+    assert abs(u - 322.3) < 0.5 and abs(v - (236.6 + 618.7 * math.tan(math.radians(11.0)))) < 1.0

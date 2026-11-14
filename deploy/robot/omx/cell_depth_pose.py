@@ -81,10 +81,14 @@ def surface(depth_mm: np.ndarray, factory: dict, roi: tuple, tol_mm: float = 4.0
     tilt = math.degrees(math.acos(min(1.0, abs(float(normal[2])))))
     share, rms = len(near) / len(sample), float(np.sqrt((residual ** 2).mean()))
     clear = share >= MIN_SHARE and rms <= MAX_RMS_MM  # else a deck, tray or the far table may have won silently
+    down = colour_K @ -normal
     return {"ok": clear, "reason": None if clear else "plane_not_clear_in_roi", "height_mm": round(distance, 1), "tilt_deg": round(tilt, 2),
             "tilt_toward_deg": round(math.degrees(math.atan2(-normal[1], -normal[0])), 1),
             "normal": [round(float(x), 5) for x in normal], "share": round(share, 3),
-            "rms_mm": round(rms, 2), "roi": list(roi)}
+            "rms_mm": round(rms, 2), "roi": list(roi),
+            # where a vertical line through the cell vanishes: the centre cell_calibration.parallax scales about
+            # (config cameras.<name>.center_px); 2026-11-14 the top D435 tilted 10.6 deg put it 112 px from (320, 240)
+            "nadir_px": [round(float(down[0] / down[2]), 1), round(float(down[1] / down[2]), 1)]}
 
 
 def compare(current: dict, reference: dict) -> dict:
