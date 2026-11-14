@@ -53,3 +53,22 @@ def test_no_localized_robot_map_pose_refuses(state):
     with pytest.raises(HTTPException) as err:
         plan(site(-0.42, 0.38, -math.pi / 2), state)
     assert err.value.detail["code"] == "ROBOT_POSE_UNTRUSTED"
+
+
+def test_the_refusal_names_why_auto_locate_has_no_fit():
+    # 2026-11-14 rosy_45: battery caution, so the robot refused the identify blink and no fit came.
+    identity = SimpleNamespace(snapshot=lambda: {"robots": [
+        {"robot_id": "rosy_46", "last": {"reason": "lamp_refused", "lamp_reason": "CAUTION_ACTIVE"}}]})
+    auto = SimpleNamespace(tracking=SimpleNamespace(identity=identity), snapshot=lambda: {"robots": [
+        {"robot_id": "rosy_46", "reason": "lamp_refused"}]})
+
+    async def map_pose(_robot_id):
+        return None
+
+    console = SimpleNamespace(snapshot=lambda: _snap(SLAM_ORIGIN))
+    app = SimpleNamespace(state=SimpleNamespace(site_maps=None, auto_locate=auto,
+                                                trip_runner=SimpleNamespace(map_pose=map_pose)))
+    with pytest.raises(HTTPException) as err:
+        asyncio.run(compute_road_plan(console, SimpleNamespace(app=app), "rosy_46", 0.0, 0.0, None, None, ""))
+    assert err.value.detail["auto_locate"] == "lamp_refused (CAUTION_ACTIVE)"
+    assert "lamp_refused (CAUTION_ACTIVE)" in err.value.detail["message"]

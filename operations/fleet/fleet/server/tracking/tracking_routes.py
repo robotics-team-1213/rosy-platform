@@ -96,7 +96,7 @@ def install_tracking_routes(app, *, tracking, require_operator, read_guard, oper
                             require_named_operator=None, map_revision=None, map_pose=None) -> None:
     measured = MeasuredCalibrationService(tracking, map_revision=map_revision)
     from fleet.server.auto_locate_service import AutoLocateService
-    tracking.auto_locate = AutoLocateService(tracking, map_pose=map_pose)
+    tracking.auto_locate = app.state.auto_locate = AutoLocateService(tracking, map_pose=map_pose)
     app.state.measured_calibration = measured
 
     def named(principal):

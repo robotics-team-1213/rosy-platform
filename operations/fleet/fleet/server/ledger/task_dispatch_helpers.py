@@ -8,6 +8,22 @@ import math as _math
 from fastapi import HTTPException, Request
 
 
+def _auto_locate_reason(request: Request, robot_id: str) -> str | None:
+    """Why D-989 has no fit for this robot, with the robot's own lamp refusal (e.g. CAUTION_ACTIVE on low battery)."""
+    service = getattr(request.app.state, "auto_locate", None)
+    try:
+        row = next((r for r in service.snapshot()["robots"] if r["robot_id"] == robot_id), None)
+        if row is None or not row.get("reason"):
+            return None
+        identity = getattr(service.tracking, "identity", None)
+        last = next((r.get("last") or {} for r in identity.snapshot()["robots"]
+                     if r.get("robot_id") == robot_id), {}) if identity is not None else {}
+        lamp = last.get("lamp_reason")
+        return f"{row['reason']} ({lamp})" if lamp else str(row["reason"])
+    except Exception:  # the reason is a hint; a missing service must not change the refusal
+        return None
+
+
 async def compute_road_plan(console, request: Request, robot_id: str, target_x: float, target_y: float,
                             target_yaw: float | None, place_id: str | None, label: str) -> dict:
     _trip_mod = _il.import_module(".".join(("fleet", "routing", "trip")))
@@ -32,9 +48,11 @@ async def compute_road_plan(console, request: Request, robot_id: str, target_x: 
         except Exception:
             pass
     if site_pose is None:
+        why = _auto_locate_reason(request, robot_id)
         raise HTTPException(status_code=409, detail={
-            "code": "SITE_POSE_UNKNOWN",
-            "message": f"{robot_id}: Fleet has no measured site pose (camera sighting, pin or auto-locate fit)"})
+            "code": "SITE_POSE_UNKNOWN", "auto_locate": why,
+            "message": f"{robot_id}: Fleet has no measured site pose (camera sighting, pin or auto-locate fit)"
+                       + (f"; auto-locate: {why}" if why else "")})
 
     explicit_yaw = target_yaw
     if target_yaw is None:
