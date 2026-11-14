@@ -146,7 +146,7 @@ def known(wt: Path, main: str, ids: list[str]) -> bool:
 
 
 # 11-14: close() reads state() after every passing invocation, and state() asked git once per close record: 372
-# calls a pass, 68 passes a FULL, about 2 s a call on a busy laptop. A landing sat silent for over 30 min after its
+# calls a pass, 68 passes a FULL, about 0.2 s a call on a busy laptop. A landing sat silent for over 30 min after its
 # tests. Ancestry between two commits never changes.
 @functools.lru_cache(maxsize=None)
 def _ancestor(wt: Path, a: str, b: str) -> bool:

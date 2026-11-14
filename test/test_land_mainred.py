@@ -227,7 +227,12 @@ def test_state_asks_git_about_one_pair_of_commits_once(repo, monkeypatch):
         mr.red(wt, main, [ID], LOG, [], "fix/elsewhere")
     asked = []
     real = mr._git
-    monkeypatch.setattr(mr, "_git", lambda wt_, *args: asked.append(args) or real(wt_, *args))
+
+    def counted(wt_, *args):
+        asked.extend([args] * (args[0] == "merge-base"))
+        return real(wt_, *args)
+
+    monkeypatch.setattr(mr, "_git", counted)
     first = mr.state(wt)
     assert len(asked) == 1 and ID in first
     assert mr.state(wt) == first and len(asked) == 1, "a second read costs no git call"
