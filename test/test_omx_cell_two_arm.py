@@ -347,14 +347,15 @@ class Session:
     """A runner behind the Gate: `state` carries a live operating context, every motion arrives `checked`. After
     `restart_after` motion commands the runner comes back under a new session, so the Gate holds the rest."""
 
-    def __init__(self, binding, session="sess", state=None, delay_s=0.0, restart_after=None):
+    def __init__(self, binding, session="sess", state=None, delay_s=0.0, restart_after=None, fault=None):
         self.binding, self.session_id, self.state = binding, session, state or [9.0] * 6
         self.delay_s, self.restart_after, self.commands, self.motion = delay_s, restart_after, [], []
+        self.fault = fault
 
     def act(self, command):
         self.commands.append(command)
         if command == "state":
-            return {"ok": True, "state": list(self.state), "t": time.time(),
+            return {"ok": True, "state": list(self.state), "t": time.time(), "fault": self.fault,
                     "operating_context": {"scope": "simulation", "sha256": "a" * 64, "session_id": self.session_id,
                                           "operating_profile": self.binding},
                     "health": {"temp_c": [30.0] * 6, "pwm": [10] * 6}}
@@ -448,6 +449,17 @@ def test_a_both_step_schedule_needs_a_measured_wait_pose():
         two.admit(both, libraries)
     two.admit(serial, libraries)  # it waits at home, a pose the plan's rest check already cleared
     libraries["a"][0][1]["chunks"]["wait"] = [[0.0] * 6]  # a person measured where an arm may hover
+    with pytest.raises(SystemExit, match="arm b"):  # one arm's wait does not clear the other's hold
+        two.admit(both, libraries)
+    libraries["b"][0][1]["chunks"]["wait"] = []  # an empty chunk is no measured pose
+    with pytest.raises(SystemExit, match="arm b"):
+        two.admit(both, libraries)
+    libraries["b"][0][1]["chunks"]["wait"] = [[0.0] * 6]
+    two.admit(both, libraries)
+    libraries["a"].append(("lib2", {"chunks": {"home": [[0.0] * 6]}}))  # `load` swaps mid-run: every library needs its own
+    with pytest.raises(SystemExit, match="arm a lib2"):
+        two.admit(both, libraries)
+    libraries["a"][1][1]["chunks"]["wait"] = [[0.0] * 6]
     two.admit(both, libraries)
 
 
@@ -479,4 +491,75 @@ def test_a_refused_replan_stops_both_arms_for_a_person():
     result = two.execute(cells, COMMANDS, STEPS, log=lambda row: None, on_segment_done=lambda name, segment, done: None)
     assert result["failed"]["error"] == "replan_none" and result["done"] == {"a": 0, "b": 1}
     assert cells["a"].commands == [] and cells["b"].commands == ["goto b0"]  # b goes first: its completion refused the replan
+
+
+def test_no_replan_hook_runs_once_the_run_has_failed():
+    calls = []
+
+    def hook(name, segment, done):
+        calls.append((name, segment))
+        return {"steps": STEPS}
+
+    result = two.execute(cells_of([]), COMMANDS, STEPS, ("b", 0), log=lambda row: None, on_segment_done=hook)
+    assert calls == [] and result["failed"]["error"] == "injected"  # b's own injected failure fired first
+
+
+class OneCaller:
+    """A session that fails the run if two threads are inside it at once, the race the per-arm lock prevents."""
+
+    def __init__(self, state, seconds=0.05):
+        self.state, self.seconds, self.commands, self.inside, self.raced = state, seconds, [], False, False
+
+    def act(self, command):
+        if self.inside:
+            self.raced = True
+            raise AssertionError("two threads entered one session")
+        self.inside = True
+        try:
+            self.commands.append(command)
+            if command != "state":
+                time.sleep(self.seconds)  # motion holds the session: the window a keep-alive must never slip into
+            return {"ok": True, "state": list(self.state)} if command == "state" else {"ok": True}
+        finally:
+            self.inside = False
+
+
+def test_the_keep_alive_never_enters_an_arm_that_is_climbing_or_folding(monkeypatch, geometry):
+    monkeypatch.setattr(two, "KEEP_ALIVE_S", 0.01)
+    cells = {n: OneCaller([9.0] * 5 + [20.0]) for n in "ab"}
+    result = fold_both(cells, {"last": {"a": "run descend_pick", "b": "run descend_pick"}, "stopped": {}})
+    assert result["folded"] is True and not any(c.raced for c in cells.values())
+
+
+def test_a_safety_abort_during_the_climb_out_or_fold_ends_with_a_person_not_a_crash(geometry):
+    import cell_auto_safety
+
+    class Aborts:
+        """A session stopped by its monitor mid-command: the Guarded wrapper parks the arm and raises."""
+
+        def __init__(self, at):
+            self.at, self.sent = at, []
+
+        def act(self, command):
+            if command != "state":
+                self.sent.append(command)
+            if command == self.at:
+                raise cell_auto_safety.Aborted("pwm stall")
+            return {"ok": True, "state": [9.0] * 6} if command == "state" else {"ok": True}
+
+    for at in ("run lift_pick", "park"):  # the climb out, then the fold itself
+        cells = {"a": Aborts(at), "b": Standing([9.0] * 6)}
+        result = fold_both(cells, {"last": {"a": "run descend_pick"}, "stopped": {}})
+        assert result["folded"] is False and result["person_needed"] == "a did not fold: Aborted: pwm stall"
+        assert cells["b"].sent == []  # the peer stays where it stands: its fold was only cleared against a folded
+
+
+def test_a_latched_fault_holds_the_climb_out_for_a_person_not_as_a_recovery(geometry, tmp_path):
+    configs, cells, libraries, run = armed(tmp_path)
+    gates = gates_of(cells, configs, libraries, run)
+    cells["a"].fault = "overload-hold"  # latched by the failure that stopped the run; `run lift_*` is no recovery
+    folded = two.safe_fold(gates, {"a": LIBRARY, "b": LIBRARY}, None, {"a": 0.0, "b": 1.0}, {"a": 0.0, "b": 0.0},
+                           0.05, lambda row: None, {"last": {"a": "run descend_pick"}, "stopped": {}})
+    assert folded["folded"] is False and "a did not climb out: held: fault" in folded["person_needed"]
+    assert cells["a"].motion == [] and cells["b"].motion == []  # the climb never ran and the peer never folded
 

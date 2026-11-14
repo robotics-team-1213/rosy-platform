@@ -77,7 +77,8 @@ def carry_route(path, library: dict, kin, rigid, tip_m: float) -> tuple[list, li
 def execute(cells: dict, commands: dict, steps: list, fail_at=None, log=print, clock=time.monotonic, poll_s: float = 0.05,
             on_segment_done=None) -> dict:
     """Run the schedule. `fail_at` (arm, segment) acts as a failure after that segment: the test of the coupled stop.
-    `on_segment_done(name, segment, done)`, still inside the lock after `done` advances, returns the plan(start=(done_a,
+    `on_segment_done(name, segment, done)`, still inside the lock after `done` advances and only while nothing has
+    failed, returns the plan(start=(done_a,
     done_b)) result for this completion: its steps become the next generation only when both arms stand at a segment
     boundary (started == done; admission is blocked while a replan is pending), plan_gen counting the swaps. A refused
     plan (None) stops both arms ("replan_none"): a coupled stop and safe_fold, never a serial fallback (D-983)."""
@@ -134,7 +135,7 @@ def execute(cells: dict, commands: dict, steps: list, fail_at=None, log=print, c
                 done[name] += 1
                 if fail_at == (name, segment):
                     failed.append({"arm": name, "segment": segment, "error": "injected"})
-                if on_segment_done is not None:
+                if not failed and on_segment_done is not None:
                     fresh = on_segment_done(name, segment, dict(done))
                     if fresh is None:
                         failed.append({"arm": name, "segment": segment, "error": "replan_none"})
@@ -203,28 +204,36 @@ def safe_fold(cells: dict, libraries: dict, kin, rigids: dict, tips: dict, margi
     order = fold_order(here, sweep, margin_m)
     if order is None:
         return {"folded": False, "person_needed": "no fold order keeps the margin", "states": states}
-    folding, stop = [None], threading.Event()
+    stop = threading.Event()
+    locks = {n: threading.Lock() for n in ORDER}  # one caller per arm: a keep-alive `state` must not interleave with motion
 
     def keep_alive():  # the arm waiting through the other's fold must not idle-fold through a sweep nobody cleared
         while not stop.wait(KEEP_ALIVE_S):
             for n in ORDER:
-                if n != folding[0]:
-                    cells[n].act("state")
+                if locks[n].acquire(blocking=False):  # busy climbing or folding: that arm's runner is anything but idle
+                    try:
+                        cells[n].act("state")
+                    finally:
+                        locks[n].release()
 
     alive = threading.Thread(target=keep_alive, daemon=True)
     alive.start()
     try:
         for n in order:
-            folding[0] = n
-            for command, _ in exits[n]:
-                status = cells[n].act(command)
-                log({"arm": n, "send": command, "ok": status.get("ok"), "error": status.get("error")})
-                if not status.get("ok"):
-                    return {"folded": False, "person_needed": f"{n} did not climb out: {status.get('error')}", "order": order}
-            status = fold(cells[n])
-            log({"arm": n, "send": "park", "ok": status.get("ok"), "error": status.get("error")})
-            if not status.get("ok"):  # the other arm stays put: its fold was only cleared against this one folded
-                return {"folded": False, "person_needed": f"{n} did not fold: {status.get('error')}", "order": order}
+            with locks[n]:
+                try:
+                    for command, _ in exits[n]:
+                        status = cells[n].act(command)
+                        log({"arm": n, "send": command, "ok": status.get("ok"), "error": status.get("error")})
+                        if not status.get("ok"):
+                            return {"folded": False, "person_needed": f"{n} did not climb out: {status.get('error')}",
+                                    "order": order}
+                    status = fold(cells[n])
+                except Exception as exc:  # a Guarded abort parks and raises: the arm stands where it stopped, a person frees it
+                    return {"folded": False, "person_needed": f"{n} did not fold: {type(exc).__name__}: {exc}", "order": order}
+                log({"arm": n, "send": "park", "ok": status.get("ok"), "error": status.get("error")})
+                if not status.get("ok"):  # the other arm stays put: its fold was only cleared against this one folded
+                    return {"folded": False, "person_needed": f"{n} did not fold: {status.get('error')}", "order": order}
     finally:
         stop.set()
         alive.join()
@@ -303,10 +312,15 @@ def still_holding(cells: dict, libraries: dict) -> list:
 
 def admit(schedule: dict, libraries: dict) -> None:
     """D-983: a both-step holds one arm mid-route while the other moves, and only a person-measured `wait` chunk is
-    a cleared waiting pose. A serial-only schedule waits at home, which the plan's rest check already cleared."""
-    if (any(step["a"] is not None and step["b"] is not None for step in schedule["steps"])
-            and not any("wait" in library["chunks"] for n in ORDER for _, library in libraries[n])):
-        raise SystemExit("no measured wait pose (D-983): teach a `wait` chunk or plan one arm after the other")
+    a cleared waiting pose — each arm in every library it runs, `load` swapping libraries mid-run. A serial-only
+    schedule waits at home, which the plan's rest check already cleared."""
+    if not any(step["a"] is not None and step["b"] is not None for step in schedule["steps"]):
+        return
+    for n in ORDER:
+        for path, library in libraries[n]:
+            if not library["chunks"].get("wait"):
+                raise SystemExit(f"arm {n} {path}: no measured wait pose (D-983): "
+                                 "teach a `wait` chunk or plan one arm after the other")
 
 
 def main(argv=None) -> int:
