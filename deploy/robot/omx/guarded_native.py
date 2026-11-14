@@ -335,7 +335,9 @@ class NativeJointMotion:
             return normalized(self.follower, self.command)
         goals = {}
         for n, v in prepared["command"].items():
-            tick = int(v)
+            # nearest tick: int() floors, so a rising joint lagged and a falling one led by up to a tick (Z moves
+            # drive elbow up and wrist_flex down together, which tilted the jaw; 2026-11-13 traces)
+            tick = round(v)
             if (self.teacher and self.sent is not None and n in BODY and n in self.sent
                     and abs(self.velocity.get(n, 0.0)) < 0.25
                     and abs(tick - self.sent[n]) == 1 and abs(v - self.sent[n]) < 0.75):

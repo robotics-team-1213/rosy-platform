@@ -94,6 +94,10 @@ def build_plan_from_directive(
     plan["lift_guard_frac"] = float(
         exec_cfg.get("lift_guard_frac", plan.get("lift_guard_frac", 0.82))
     )
+    for key in ("descend_far_guard_frac", "descend_pick_far_guard_frac", "descend_place_far_guard_frac",
+                "descend_near_m"):  # opt-in two-stage descent (descend_profile.py)
+        if key in exec_cfg:
+            plan[key] = float(exec_cfg[key])
     if arm_id == "arm_b" and "limits" in plan and "joints_rad" in plan["limits"]:
         plan["limits"]["joints_rad"]["joint5"] = [0.16, 2.89]
     if "limits" in plan and float(pz) < float(plan["limits"]["workspace_min_m"][2]):
@@ -146,7 +150,9 @@ def plan_library_from_directive(
         for k in ("descend_pick", "descend_place", "lift_pick", "lift_place"):
             if chunks.get(k):
                 chunks[k] = list(chunks[k]) + [list(chunks[k][-1])]
-    if exec_cfg.get("sim_real_compensate", True) and "chunks" in lib:
+    # opt-in: the twin pre-adds a fixed per-joint deadband (elbow 0.48, wrist 0.14) that the I=50 servos do not
+    # have (0.03-0.06 measured), tilting the jaw +1.26 deg / ~3 mm toward the base on every Z move (2026-11-13 panel)
+    if exec_cfg.get("sim_real_compensate", False) and "chunks" in lib:
         chunks = lib["chunks"]
         arm_id = str(directive.get("arm_id") or "arm_b")
         tcp_x_mm = 91.93 if arm_id == "arm_s" else 74.1
