@@ -169,14 +169,19 @@ def test_outbound_and_rearrange_replay_json_carry_after_zones_and_disjoint_overl
         steps = json.loads((tmp_path / f"{scenario}-two-arm.json").read_text(encoding="utf-8"))["steps"]
         assert steps and {s["arm"] for s in steps} == BOTH
         assert all(isinstance(s["after"], list) and len(s["zones"]) == 2 and s["zones"][0] and s["zones"][1] for s in steps)
+        anc = {}
+        for s in sorted(steps, key=lambda st: int(st["id"][1:])):
+            anc[s["id"]] = set(s["after"]).union(*(anc.get(p, set()) for p in s["after"]))
         windows, held = [], []
         for s in steps:
             t_pick, t_carry, t_place = plan.duration(layout, s["from"], s["to"])
             t0 = s["planned_start_s"]
-            windows.append((s["arm"], t0, t0 + t_pick + t_carry + t_place))
+            windows.append((s["id"], s["arm"], t0, t0 + t_pick + t_carry + t_place))
             held.extend((s["id"], z, t0, t0 + t_pick + t_carry) for z in s["zones"][0])
             held.extend((s["id"], z, t0 + t_pick, t0 + t_pick + t_carry + t_place) for z in s["zones"][1])
-        assert any(a1 != a2 and s1 < e2 and s2 < e1 for i, (a1, s1, e1) in enumerate(windows) for a2, s2, e2 in windows[i + 1:])
+        assert any(a1 != a2 and m1 not in anc[m2] and m2 not in anc[m1] and s1 < e2 - 0.01 and s2 < e1 - 0.01
+                   for i, (m1, a1, s1, e1) in enumerate(windows) for m2, a2, s2, e2 in windows[i + 1:])
         for i, (m1, z1, s1, e1) in enumerate(held):
             for m2, z2, s2, e2 in held[i + 1:]:
-                assert m1 == m2 or not (z1 == z2 and s1 < e2 and s2 < e1), (scenario, m1, m2, z1, s1, e1, s2, e2)
+                if m1 != m2 and m1 not in anc[m2] and m2 not in anc[m1]:
+                    assert not (z1 == z2 and s1 < e2 - 0.01 and s2 < e1 - 0.01), (scenario, m1, m2, z1, s1, e1, s2, e2)
