@@ -177,7 +177,7 @@ def test_a_circle_outside_the_linkage_radius_is_refused_not_saved(tmp_path):
 
 def test_hidden_closing_axis_candidates_compete_and_every_attempt_is_a_row(tmp_path, monkeypatch):
     path, cell = biased_map(tmp_path), Cell([CONT2])
-    monkeypatch.setattr(auto, "EXECUTOR_CANDIDATES", ("act", "ik_chunk", "smolvla"))
+    monkeypatch.setattr(auto.cell_executor, "EXECUTOR_CANDIDATES", ("act", "ik_chunk", "smolvla"))
     monkeypatch.setattr(cell_attempts, "RUN", dict(cell_attempts.RUN))
     cell_attempts.start(tmp_path / "attempts.jsonl", "r1")
     choices = cell_choices.Choices(tmp_path / "choices.json")

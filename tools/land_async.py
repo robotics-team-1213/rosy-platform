@@ -10,6 +10,9 @@ The supervisor logs to ``<git-common-dir>/rosy-land-wt/<name>.log``. When the sn
 removes the hidden worktree and the snapshot branch; otherwise it keeps both and writes ``<name>.stopped``, so the
 owner can read the STOP, fix it on the branch and queue again. Uncommitted changes are refused, never carried.
 
+A branch queued more than ``PREMERGE_BEHIND`` commits behind main is merged up to date first, so its pretest and
+turn test the current tree; a merge that conflicts is abandoned and queued as-is (``land.py`` stops on it in the log).
+
     python tools/land_async.py [land.py args]      # from the branch's worktree; prints the log path
     python tools/land_async.py resume <tree-name> [land.py args]   # relaunch a stopped landing on its snapshot
     python tools/land_async.py orphans [--resume]                    # after a reboot: landings that died unstopped
@@ -45,6 +48,7 @@ RESOURCE_SHORTAGE = ("WinError 1450", "WinError 1455", "Out of memory", "MemoryE
 RESOURCE_RETRIES = 3
 RESOURCE_WAIT_S = 300
 MAX_OWN_COMMITS, MAX_AGE_DAYS = 40, 14  # one landing's bound (too_big); --allow-big "<reason>" passes it
+PREMERGE_BEHIND = 50  # merge main into a branch this far behind before queueing, so its pretest tests the current tree
 
 
 class Busy(SystemExit):
@@ -239,11 +243,18 @@ def _start(cwd: Path, land_args: list[str], now: datetime, launch, replace: bool
     place = holder(cwd)
     place.mkdir(exist_ok=True)
     tree = place / snap.replace("/", "-")
+    behind = int(git(cwd, "rev-list", "--count", "HEAD..main", check=False) or 0)
+    if behind > PREMERGE_BEHIND:  # far behind: merge main now, so the pretest and the turn test the current tree
+        print(f"[land-async] {branch} is {behind} behind main; merging main before queueing", flush=True)
+        if subprocess.run(["git", "-C", str(cwd), "merge", "-X", "renormalize", "--no-edit", "main"],
+                          capture_output=True).returncode != 0:
+            git(cwd, "merge", "--abort", check=False)  # a conflict is land.py's to report in the log (admit)
+            print("[land-async] main did not merge cleanly here; queued as-is", flush=True)
     git(cwd, "branch", snap, "HEAD")
     git(cwd, "worktree", "add", "-q", str(tree), snap)
     import land_events  # tools/ is on sys.path (_queue); D-889 addendum 32: how far behind main it was queued
     land_events.bind(cwd, snap)
-    land_events.emit("async", source=branch, behind=int(git(cwd, "rev-list", "--count", "HEAD..main", check=False) or 0))
+    land_events.emit("async", source=branch, behind=behind)
     log = tree.parent / (tree.name + ".log")
     # The supervisor runs a copy beside the log, never the caller's file: Windows keeps a running script's
     # folder from being deleted, and the caller's worktree must be free (2026-10-28).
@@ -284,9 +295,10 @@ def _supervise(tree: Path, snap: str, land_args: list[str], run, room) -> int:
         # start() saw room, but another session took the last slot before land.py did (2026-10-31: twice in a row)
         output = path.read_bytes()[seen:].decode("utf-8", "replace").rstrip().splitlines()
         reason = output[-1] if output else ""
-        if code != 0 and shortages < RESOURCE_RETRIES and any(mark in reason for mark in RESOURCE_SHORTAGE):
+        if code != 0 and shortages < RESOURCE_RETRIES and (any(mark in reason for mark in RESOURCE_SHORTAGE)
+                                                           or lost_host(output)):
             shortages += 1
-            print(f"[land-async] {snap}: laptop out of resources ({reason}); land.py again in {RESOURCE_WAIT_S}s"
+            print(f"[land-async] {snap}: no verdict ({reason[:200]}); land.py again in {RESOURCE_WAIT_S}s"
                   f" ({shortages}/{RESOURCE_RETRIES})", flush=True)
             time.sleep(RESOURCE_WAIT_S)
             continue
@@ -301,7 +313,9 @@ def _supervise(tree: Path, snap: str, land_args: list[str], run, room) -> int:
         git(Path(main).parent, "worktree", "remove", "--force", str(tree), check=False)
         git(Path(main).parent, "branch", "-D", snap, check=False)
         print(f"[land-async] {snap} landed; hidden worktree and snapshot branch removed", flush=True)
-        try:  # main moved: MAIN-RED stops it cleared go again; never changes this landing's own outcome
+        sys.path.insert(0, str(Path(main).parent / "tools"))  # this copy sits beside the log, its tree is gone:
+        try:  # main's land_queue (11-14: six landings skipped this with "No module named 'land_queue'")
+            # main moved: MAIN-RED stops it cleared go again; never changes this landing's own outcome
             for name in orphans(Path(main).parent):
                 print(f"[land-async] resuming {name}: {resume(Path(main).parent, name, [], detach, wait=0)}",
                       flush=True)
@@ -340,7 +354,17 @@ def superseded(tree: Path, snap: str) -> list[str]:
         return []
 
 
-NO_SPLIT = (QUEUE_FULL, "MAIN-RED", "no host", "not run", *RESOURCE_SHORTAGE)  # halves would stop the same way
+LOST_HOST = "exited 255 (log "  # land_checks' stop line for an invocation whose host was lost or that never ran
+NO_SPLIT = (QUEUE_FULL, "MAIN-RED", "no host", "not run", LOST_HOST, *RESOURCE_SHORTAGE)  # halves would stop the same way
+
+
+def lost_host(output: list[str]) -> bool:
+    """Every pytest line of land.py's last STOP is a lost host: no test gave a verdict, and land_cache keeps the
+    passes, so a rerun costs only those invocations. 11-14: a 31-member rollup stopped this way after a 99-min FULL
+    and was bisected instead."""
+    starts = [i for i, line in enumerate(output) if line.startswith("[land] STOP:")]
+    stops = [line for line in output[starts[-1]:] if " (log " in line] if starts else []
+    return bool(stops) and all(LOST_HOST in line for line in stops)
 
 
 def split_rollup(tree: Path, snap: str, launch=None, reason: str = "") -> None:

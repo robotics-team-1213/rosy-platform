@@ -424,3 +424,59 @@ def test_staging_verify_with_an_unreadable_key_is_transient(device, host, hub, k
 
     assert updater(host, hub).run()["phase"] == "error"
     assert NEXT not in state(device).get("failed", {})
+
+
+def _on_build(device, host, release_id, source_ref):
+    host.links["current"] = release_id
+    folder = device / "opt/rosy/releases" / release_id
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / "source-ref.txt").write_text(source_ref + "\n", encoding="utf-8")
+
+
+def test_a_hand_built_branch_release_steps_down_to_the_newest_published_one(device, host, hub, keys):
+    # D-1031: 179 built from a build/ branch, newest published 178 -> 178.
+    _on_build(device, host, NEWER, "build/pinky-payload-20261114-179")
+    hub.publish(keys, NEXT)
+
+    assert updater(host, hub).run()["phase"] == "committed"
+    assert host.current_release() == NEXT
+
+
+def test_a_branch_build_never_walks_further_down(device, host, hub, keys):
+    # D-1031 review: the newest published release withdrawn -> stay, do not try CURRENT.
+    _on_build(device, host, NEWER, "build/pinky-payload-20261114-179")
+    hub.publish(keys, CURRENT)
+    hub.publish(keys, NEXT, withdrawn=True, rollout_overrides={"reason": "bad canary"})
+
+    assert updater(host, hub).run()["phase"] == "idle"
+    assert host.current_release() == NEWER
+
+
+@pytest.mark.parametrize("source_ref", ["main", f"robot-release/{NEWER}"])
+def test_an_official_release_keeps_the_higher_id_rule(device, host, hub, keys, source_ref):
+    _on_build(device, host, NEWER, source_ref)
+    hub.publish(keys, NEXT)
+
+    assert updater(host, hub).run()["phase"] == "idle"
+    assert host.current_release() == NEWER
+
+
+def test_a_branch_build_never_goes_below_the_pinned_factory_release(device, host, hub, keys, monkeypatch):
+    import os_factory_release
+    monkeypatch.setattr(os_factory_release, "pinned_factory", lambda root: NEWER)
+    _on_build(device, host, "2026.10.01-024", "build/bench")
+    hub.publish(keys, NEXT)
+
+    assert updater(host, hub).run()["phase"] == "idle"
+    assert host.current_release() == "2026.10.01-024"
+
+
+@pytest.mark.parametrize("raw", [b"", b"\xff\xfe garbage", b"v1.2.3", b"refs/tags/v1"])
+def test_an_unreadable_or_unknown_source_ref_never_steps_down(device, host, hub, keys, raw):
+    # D-1031 review: only a recognisable build/ branch is a hand build; anything else keeps the higher-id rule.
+    _on_build(device, host, NEWER, "x")
+    (device / "opt/rosy/releases" / NEWER / "source-ref.txt").write_bytes(raw)
+    hub.publish(keys, NEXT)
+
+    assert updater(host, hub).run()["phase"] == "idle"
+    assert host.current_release() == NEWER

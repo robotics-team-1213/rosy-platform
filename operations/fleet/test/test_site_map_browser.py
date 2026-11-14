@@ -967,7 +967,10 @@ def test_connected_robot_can_be_selected_after_offline_robot(page_site):
     page, _, _ = page_site
     page.route("**/api/fleet/state", lambda route: route.fulfill(
         status=200, content_type="application/json",
-        body='{"robots":[{"robot_id":"rosy_99","online":false},{"robot_id":"rosy_60","online":true}]}'))
+        # rosy_60 reports a located map pose: without it the button's state depends on whether
+        # the real /api/fleet/guide poll (no located pose for it) has answered yet.
+        body='{"robots":[{"robot_id":"rosy_99","online":false},{"robot_id":"rosy_60","online":true,"state":'
+             '{"pose":{"x":0,"y":0,"yaw":0},"localization":{"state":"LOCALIZED","pose_frame":"map"}}}]}'))
     open_token_access(page)
     page.locator("#console-token").fill("operator-token")
     page.locator("#token-save").click()

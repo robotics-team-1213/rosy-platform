@@ -165,6 +165,9 @@ def test_a_landing_refused_only_by_a_full_queue_waits_for_room(repo, room):
     ("OSError: [WinError 1450] Insufficient system resources", 4, True),
     ("fatal: Out of memory, malloc failed (tried to allocate 1884142 bytes)", 4, True),
     ("[land] STOP: 1 new failure(s): test_x", 1, True),
+    ("[land] STOP: pytest a exited 255 (log a.txt); not landing\npytest b exited 255 (log b.txt); not landing", 4, True),
+    ("[land] STOP: pytest a 1 new failure(s) (log a.txt); not landing\npytest b exited 255 (log b.txt); not landing",
+     1, True),  # a real failure beside a lost host: the owner's stop, no rerun
 ])
 def test_only_a_laptop_resource_shortage_reruns_land_and_only_a_few_times(repo, monkeypatch, last_line, attempts, stopped):
     _, dev = repo
