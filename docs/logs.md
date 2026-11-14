@@ -14867,3 +14867,7 @@ osy-d395-s1d\`.
 - 변경: `tools/land_checks.py` `main_red`가 `tools/collect_alone.py::test_runs_alone[<file>]`·`test_collects_alone[<file>]` id를 node id로 넘기지 않고 `ROSY_ALONE_FILES=<file>`·`ROSY_COLLECT_PATHS=<file>`로 따로 돌린다(`land_mainred.alone_invocation`). 일반 id는 그대로 한 번에 돌리고 결과는 모두 `known_failures`로 분류해 `land_mainred.red`에 기록한다. 착지를 통과시키지 않는 계약은 그대로.
 - 증거: `test/test_land_checks_mainred.py` 새 시험(원격). 사례 land-fix-main-size-split-20261113052820: alone 계열 NEW만 남아 멈췄고 main에서 같은 파일을 직접 돌려도 12건 같게 실패(main-red였음).
 - gate 변화: 없음.
+## 2026-11-14 · uncommitted · fix(tools): 임시 ref 삭제 실패가 원격 시험 실행을 죽이지 않음
+- 변경: `tools/remote/remote_pytest.py` `ship()`의 `finally`가 `refs/remote-pytest/<name>` 삭제 실패를 무시한다. 교훈 `docs/solutions/workflow-issues/landing-stopped-or-stalled-without-a-test-verdict-2026-11-14.md`에 추가 절.
+- 증거: `test/test_remote_pytest.py::test_a_failed_temp_ref_delete_does_not_fail_the_ship`(원격, 수정 전 실패 확인). 사례 land-chore-publish-full-20261114-1230-20261114042845: 삭제 exit 1 traceback으로 정지, 시험 판정 없음. 삭제가 실패한 원인은 미확인.
+- gate 변화: 없음.

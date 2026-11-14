@@ -1,5 +1,6 @@
 """Arm assignment and schedule for Harbor's moves: one-arm and two-arm modes on the same input. No MuJoCo, no IK (a fixed reach table;
 the validator-backed `validator_can` is exercised by the MuJoCo replay)."""
+import json
 from pathlib import Path
 import sys
 
@@ -191,3 +192,89 @@ def test_tier_by_tier_stack_and_cell_stack_schedule_and_replay(layout):
             task = replays[f"{key}-two-arm"]
             assert len(task["steps"]) == 3 and all(layout.sites[s["to"]]["layer"] == tier - 1 for s in task["steps"])
             assert sum(1 for s in task["start"].values() if layout.sites[s]["kind"] == "ship" and s != "ship-stern-l0") == 3 * (tier - 1)
+
+
+def test_outbound_and_rearrange_replay_json_carry_after_zones_and_disjoint_overlap(tmp_path, layout):
+    """compare --scenario all --replay-dir writes two-arm replay JSON with after, zones, both arms, and swept-clear concurrent pairs."""
+    assert plan.main(["compare", "--scenario", "all", "--replay-dir", str(tmp_path)]) == 0
+    for scenario in ("outbound", "rearrange"):
+        data = json.loads((tmp_path / f"{scenario}-two-arm.json").read_text(encoding="utf-8"))
+        steps = data["steps"]
+        assert steps and {s["arm"] for s in steps} == BOTH
+        assert all(isinstance(s["after"], list) and len(s["zones"]) == 2 and s["zones"][0] and s["zones"][1] for s in steps)
+        anc, here, poses = {}, dict(data["start"]), {}
+        for s in sorted(steps, key=lambda st: int(st["id"][1:])):
+            anc[s["id"]] = set(s["after"]).union(*(anc.get(p, set()) for p in s["after"]))
+            here_step = {k: v for k, v in here.items() if k != s["container"]}
+            poses[s["id"]] = plan.step_swept_poses(layout, s["arm"], s["from"], s["to"], here_step)
+            here[s["container"]] = s["to"]
+        windows, held = [], []
+        for s in steps:
+            t_pick, t_carry, t_place = plan.duration(layout, s["from"], s["to"])
+            t0 = s["planned_start_s"]
+            windows.append((s["id"], s["arm"], t0, t0 + t_pick + t_carry + t_place))
+            held.extend((s["id"], z, t0, t0 + t_pick + t_carry) for z in s["zones"][0])
+            held.extend((s["id"], z, t0 + t_pick, t0 + t_pick + t_carry + t_place) for z in s["zones"][1])
+        overlaps = [(m1, m2) for i, (m1, a1, s1, e1) in enumerate(windows) for m2, a2, s2, e2 in windows[i + 1:]
+                    if a1 != a2 and m1 not in anc[m2] and m2 not in anc[m1] and s1 < e2 - 0.01 and s2 < e1 - 0.01]
+        if scenario == "rearrange":
+            assert overlaps
+        for m1, m2 in overlaps:
+            assert plan.sweeps_clear(poses[m1], poses[m2], ta=dict((w[0], w[2]) for w in windows)[m1],
+                                     tb=dict((w[0], w[2]) for w in windows)[m2], slack_s=plan.SWEEP_SLACK_S), (scenario, m1, m2)
+        for i, (m1, z1, s1, e1) in enumerate(held):
+            for m2, z2, s2, e2 in held[i + 1:]:
+                if m1 != m2 and m1 not in anc[m2] and m2 not in anc[m1]:
+                    assert not (z1 == z2 and s1 < e2 - 0.01 and s2 < e1 - 0.01), (scenario, m1, m2, z1, s1, e1, s2, e2)
+
+
+def test_disjoint_zones_with_crossing_sweeps_are_not_scheduled_or_started_together(layout):
+    """m5/m7-like pair (zones [['a'],['a']] and [['b'],['b']], crossing sweeps) must be serialised by both planner and teacher."""
+    import math
+    import numpy as np
+    import omx_two_arm_teacher_stages as stages
+
+    here = {
+        "bar-1": "ship-h1r1-l0", "bar-2": "ship-h1r0-l0", "bar-3": "ship-h1r2-l0",
+        "bar-4": "ship-h1r1-l1", "bar-5": "tmp-a-2", "bar-6": "ship-h1r2-l1",
+        "bar-7": "ship-h1r1-l2", "bar-8": "ship-h1r0-l1", "bar-9": "tmp-b-2",
+    }
+    moves = [
+        dict(cargo_id="bar-8", source="ship-h1r0-l1", destination="tmp-a-2", primary_arm="A", alternate_arms=[], phase_label="재취급", arms=["arm_a"]),
+        dict(cargo_id="bar-6", source="ship-h1r2-l1", destination="tmp-b-3", primary_arm="B", alternate_arms=[], phase_label="재취급", arms=["arm_b"]),
+    ]
+    rows, extra = plan.schedule(layout, moves, ("arm_a", "arm_b"), start=here)
+    assert not extra and len(rows) == 2
+    pa = plan.step_swept_poses(layout, "arm_a", "ship-h1r0-l1", "tmp-a-2", here)
+    assert pa[0][0] == 0.0 and pa[6][0] == 2.5 and pa[-1][0] > sum(plan.duration(layout, "ship-h1r0-l1", "tmp-a-2"))
+    assert len(pa[35][1]) == 4 and pa[35][1][3][2] == pytest.approx(math.hypot(*layout.box[:2]) / 2)
+    assert rows[1]["start"] > 0.0 and not plan.sweeps_clear(
+        pa,
+        plan.step_swept_poses(layout, "arm_b", "ship-h1r2-l1", "tmp-b-3", here),
+        ta=0.0, tb=0.0, slack_s=plan.SWEEP_SLACK_S,
+    )
+
+    class FakeTeacher:
+        def __init__(self, L):
+            self.layout = L
+            for a in L.sim_arms.values():
+                a.wait = a.home.copy()
+
+        def step_gen(self, data, step, here_step, ctx):
+            for _ in range(3):
+                yield np.zeros(6)
+            return dict(step=step["id"], result="pass")
+
+        def frame(self, data, targets, label, ctxs=None):
+            pass
+
+        def off_stand(self, data, step, here_now):
+            pass
+
+    task = {"steps": [
+        {"id": "m5", "container": "bar-5", "from": "tmp-a-2", "to": "ship-h1r0-l2", "arm": "arm_a", "after": [], "after_pick": [], "zones": [["a"], ["a"]]},
+        {"id": "m7", "container": "bar-6", "from": "ship-h1r2-l1", "to": "tmp-b-3", "arm": "arm_b", "after": [], "after_pick": [], "zones": [["b"], ["b"]]},
+    ]}
+    _, timing, stop_reason, _ = stages.run_concurrent_steps(FakeTeacher(layout), None, task, dict(here))
+    assert stop_reason is None
+    assert timing["m7"]["start_s"] >= timing["m5"]["end_s"]
