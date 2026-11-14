@@ -174,7 +174,7 @@ class FifoCell:
                             self._frame_cache[camera] = (etag, decoded)
                         return decoded.copy() if decoded is not None else decoded
                     break
-                except (OSError, http.client.HTTPException):
+                except (OSError, http.client.HTTPException, AttributeError):  # 3.12 http.client: a closed keep-alive read
                     try:
                         if conn is not None:
                             conn.close()
