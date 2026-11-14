@@ -104,6 +104,7 @@ def execute(cells: dict, commands: dict, steps: list, fail_at=None, log=print, c
             fail(name, segment, f"{type(exc).__name__}: {exc}")
 
     def run(name):
+        nonlocal pending
         for segment, sends in enumerate(commands[name]):
             alive = clock()
             while True:
