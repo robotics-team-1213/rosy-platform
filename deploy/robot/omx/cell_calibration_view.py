@@ -25,9 +25,13 @@ for _extra in (ROOT / "deploy/robot/omx", ROOT / "middleware/devices/omx/adapter
         sys.path.append(str(_extra))
 
 import cell_attempts  # noqa: E402
+import cell_cal_eval  # noqa: E402
+import cell_cal_monitor  # noqa: E402
 import cell_calibration as cal  # noqa: E402
+import cell_map_fit  # noqa: E402
 import cell_params as prm  # noqa: E402
 import cell_pivot  # noqa: E402
+import omx_tcp  # noqa: E402
 
 try:
     from cell_auto_evidence import bound_map_error  # noqa: E402
@@ -142,36 +146,7 @@ def _build_map_detail(record: dict | None, planned_pts: list[list[float]], confi
         return None
     h = record["homography"]
     camera = (config.get("cameras") or {}).get("top") or {}
-    raw_points = record.get("points") or []
-    pts = [(tuple(p["pixel"]), tuple(p["arm_m"])) for p in raw_points if p.get("pixel") and p.get("arm_m")]
-
-    inliers = []
-    for i, (px, arm_pt) in enumerate(pts):
-        pred_full = cal.to_arm(h, px)
-        fit_dx = round((pred_full[0] - arm_pt[0]) * 1000.0, 2)
-        fit_dy = round((pred_full[1] - arm_pt[1]) * 1000.0, 2)
-        loo_res = None
-        loo_dist = None
-        if len(pts) >= 4:
-            try:
-                h_i = cal.fit(pts[:i] + pts[i + 1:])
-                pred_i = cal.to_arm(h_i, px)
-                lx = round((pred_i[0] - arm_pt[0]) * 1000.0, 2)
-                ly = round((pred_i[1] - arm_pt[1]) * 1000.0, 2)
-                loo_res = [lx, ly]
-                loo_dist = round(math.hypot(lx, ly), 2)
-            except ValueError:
-                loo_res = None
-                loo_dist = None
-        inliers.append({
-            "index": i,
-            "pixel": [round(float(px[0]), 2), round(float(px[1]), 2)],
-            "arm_m": [float(arm_pt[0]), float(arm_pt[1])],
-            "loo_residual_mm": loo_res,
-            "loo_dist_mm": loo_dist,
-            "fit_residual_mm": [fit_dx, fit_dy],
-            "fit_dist_mm": round(math.hypot(fit_dx, fit_dy), 2),
-        })
+    inliers = cell_map_fit.loo_residuals(record, config)
 
     dropped = []
     for d in record.get("dropped_marks") or []:
@@ -208,6 +183,7 @@ def _build_map_detail(record: dict | None, planned_pts: list[list[float]], confi
 
     return {
         "homography": h,
+        "is_pose": bool(record.get("camera_in_base")),
         "z_view": record.get("z_view"),
         "coarse": bool(record.get("coarse")),
         "measured": record.get("measured") or "",
@@ -220,132 +196,6 @@ def _build_map_detail(record: dict | None, planned_pts: list[list[float]], confi
         "points": inliers,
         "dropped_marks": dropped,
         "planned_points": planned,
-    }
-
-
-def _parse_live(live: dict | None, config: dict, plan: dict | None, ref_record: dict | None,
-                now_ts: float | None = None) -> dict:
-    if not live:
-        return {"present": False, "stale": True, "age_s": None}
-    t = live.get("t")
-    now = now_ts if now_ts is not None else time.time()
-    age_s = round(now - float(t), 2) if isinstance(t, (int, float)) else None
-    stale = True if age_s is None else age_s > 2.0
-    state = live.get("state")
-    tcp = None
-    tcp_pixel = None
-    tcp_x_m = config.get("tcp_x_m") if config.get("tcp_x_m") is not None else (plan or {}).get("tcp_x_m")
-    if isinstance(state, list) and len(state) >= 5:
-        try:
-            x, y, z, yaw = cell_pivot.joints_tcp(state, tcp_x_m)
-            tcp = {"x": round(float(x), 4), "y": round(float(y), 4), "z": round(float(z), 4),
-                   "yaw_deg": round(float(yaw), 1)}
-            camera = (config.get("cameras") or {}).get("top") or {}
-            if ref_record and ref_record.get("homography"):
-                u, v = cal.to_pixel(ref_record["homography"], (x, y))
-                if ref_record.get("z_view") is not None and camera.get("center_px") and camera.get("height_m"):
-                    u, v = cal.parallax((u, v), float(ref_record["z_view"]), float(z), camera)
-                tcp_pixel = [round(float(u), 2), round(float(v), 2)]
-        except (Exception, SystemExit):  # resolve_tcp calls sys.exit/SystemExit when tcp_x_m is absent
-            tcp = None
-    return {
-        "present": True, "stale": stale, "age_s": age_s, "t": t,
-        "chunk": live.get("chunk"), "lag": live.get("lag"), "fault": live.get("fault"),
-        "state": state, "target": live.get("target"), "tcp": tcp, "tcp_pixel": tcp_pixel,
-        "health": live.get("health") or {},
-    }
-
-
-def _check_operating_profile(op_prof: dict | None, op_err: str | None, config: dict, arm_id: str,
-                             hygiene: list[dict[str, str]]) -> None:
-    if op_prof is None:
-        hygiene.append({"level": "warning", "code": "operating_profile_missing",
-                        "message": f"operating_profile_path 없음 ({op_err})"})
-        return
-    if op_prof.get("device_id") != arm_id:
-        hygiene.append({"level": "error", "code": "profile_device_mismatch",
-                        "message": f"operating_profile device_id={op_prof.get('device_id')} != arm_id={arm_id}"})
-    if op_prof.get("work_dir") != config.get("work_dir"):
-        hygiene.append({"level": "warning", "code": "profile_workdir_mismatch",
-                        "message": f"operating_profile work_dir({op_prof.get('work_dir')}) != config.work_dir({config.get('work_dir')})"})
-    env_p = op_prof.get("operating_envelope_path")
-    if env_p and not Path(env_p).exists():
-        hygiene.append({"level": "warning", "code": "envelope_missing_on_host",
-                        "message": f"operating_envelope_path 미확인/누락: {Path(env_p).name}"})
-
-
-def _build_cross_verify(
-    sites_out: dict[str, dict[str, Any]], depth_verify: dict | None, regions_out: list[dict],
-    live_info: dict, bind_err: str | None,
-) -> dict[str, Any]:
-    dv_sites = (depth_verify or {}).get("sites") or {}
-    any_depth = bool(depth_verify and any(s.get("depth_surface_z") is not None for s in sites_out.values()))
-    depth_bad = any("depth_diff_gt_6mm" in s.get("cross_verify_flags", []) or "place_vs_start_step_gt_8mm" in s.get("cross_verify_flags", []) for s in sites_out.values())
-    depth_v = "fail" if depth_bad else ("pass" if any_depth else ("warn" if depth_verify else "unmeasured"))
-
-    touch_diffs = [abs(s["touch_diff_mm"]) for s in sites_out.values() if s.get("touch_diff_mm") is not None]
-    touch_count = sum(1 for s in sites_out.values() if s.get("touch_surface_z") is not None)
-    touch_bad = any(d > 5.0 for d in touch_diffs)
-    touch_v = "fail" if touch_bad else ("pass" if touch_count else "unmeasured")
-
-    loos = [s["map"]["loo_error_mm"]["max"] for s in sites_out.values()
-            if not s.get("extra") and (s.get("map") or {}).get("loo_error_mm") and s["map"]["loo_error_mm"].get("max") is not None]
-    max_loo = round(max(loos), 2) if loos else None
-    loo_limit = float(prm.default("calibrate.max_loo_mm"))
-    map_v = "fail" if (max_loo is not None and max_loo > loo_limit) else ("warn" if (bind_err or max_loo is None) else "pass")
-
-    fresh_bias = sum(1 for r in regions_out if not r.get("stale_map"))
-    bias_v = "fail" if (regions_out and fresh_bias < len(regions_out)) else ("pass" if regions_out else "warn")
-
-    fk_fresh = bool(live_info.get("present") and not live_info.get("stale") and live_info.get("tcp"))
-    fk_v = "pass" if fk_fresh else ("warn" if live_info.get("present") else "unmeasured")
-
-    sub = (depth_v, touch_v, map_v)
-    overall = "fail" if "fail" in sub or bias_v == "fail" else ("warn" if "warn" in (*sub, bias_v) else ("pass" if (any_depth or touch_count) else "unmeasured"))
-    cam_top = dict((depth_verify or {}).get("camera_top") or {})
-    return {
-        "present": bool(depth_verify or touch_count or dv_sites),
-        "depth_verify_present": bool(depth_verify),
-        "measured": (depth_verify or {}).get("measured"),
-        "verdict": overall,
-        "depth": {"verdict": depth_v, **cam_top},
-        "touch": {"verdict": touch_v, "sites_measured": touch_count, "max_diff_mm": round(max(touch_diffs), 1) if touch_diffs else None},
-        "map": {"verdict": map_v, "max_loo_mm": max_loo, "map_bound": not bind_err},
-        "bias": {"verdict": bias_v, "fresh_regions": fresh_bias, "total_regions": len(regions_out)},
-        "fk": {"verdict": fk_v, "present": bool(live_info.get("present")), "fresh": fk_fresh, "tcp_z_m": (live_info.get("tcp") or {}).get("z")},
-    }
-
-
-def _attach_site_cross_verify(name: str, is_extra: bool, surface_z, dv_site: dict, touch: dict | None,
-                              hygiene: list[dict[str, str]]) -> dict[str, Any]:
-    depth_z = dv_site.get("depth_surface_z_m")
-    depth_diff = round((float(depth_z) - float(surface_z)) * 1000.0, 1) if (depth_z is not None and surface_z is not None) else dv_site.get("depth_diff_mm")
-    step_mm = dv_site.get("place_vs_start_step_mm")
-    touch_z = touch.get("surface_z") if (touch and touch.get("result") in (None, "touched") and touch.get("surface_z") is not None) else dv_site.get("touch_surface_z_m")
-    touch_diff = round((float(touch_z) - float(surface_z)) * 1000.0, 1) if (touch_z is not None and surface_z is not None) else dv_site.get("touch_diff_mm")
-    flags = list(dv_site.get("flags") or [])
-    if depth_diff is not None and abs(depth_diff) > 6.0 and "depth_diff_gt_6mm" not in flags:
-        flags.append("depth_diff_gt_6mm")
-    if step_mm is not None and abs(step_mm) > 8.0 and "place_vs_start_step_gt_8mm" not in flags:
-        flags.append("place_vs_start_step_gt_8mm")
-    if touch_diff is not None and abs(touch_diff) > 5.0 and "touch_diff_gt_5mm" not in flags:
-        flags.append("touch_diff_gt_5mm")
-    if not is_extra:
-        if "depth_diff_gt_6mm" in flags:
-            hygiene.append({"level": "warning", "code": f"depth_diff:{name}",
-                            "message": f"{name}: D435 depth({depth_z}) vs surface_z({surface_z}) = {depth_diff:+.1f} mm"})
-        if "place_vs_start_step_gt_8mm" in flags:
-            hygiene.append({"level": "warning", "code": f"place_step:{name}",
-                            "message": f"{name}: place vs start 높이차 {step_mm:+.1f} mm (적재물/단차 의심)"})
-        if "touch_diff_gt_5mm" in flags:
-            hygiene.append({"level": "error", "code": f"touch_diff:{name}",
-                            "message": f"{name}: touch({touch_z}) vs surface_z({surface_z}) = {touch_diff:+.1f} mm"})
-    crit = any(f in ("depth_diff_gt_6mm", "place_vs_start_step_gt_8mm", "touch_diff_gt_5mm") for f in flags)
-    status = "fail" if crit else ("pass" if (depth_z is not None or touch_z is not None) else "unmeasured")
-    return {
-        "depth_surface_z": depth_z, "depth_diff_mm": depth_diff, "place_vs_start_step_mm": step_mm,
-        "touch_surface_z": touch_z, "touch_measured": (touch or {}).get("measured") or dv_site.get("touch_measured"),
-        "touch_diff_mm": touch_diff, "cross_verify_flags": flags, "cross_verify_status": status,
     }
 
 
@@ -397,7 +247,7 @@ def build_profile_snapshot(entry: dict[str, Any], *, now_ts: float | None = None
         hygiene.append({"level": "error", "code": "calibration_missing", "message": f"calibration.json: {cal_err}"})
     if bias_err and bias_err != "missing":
         hygiene.append({"level": "warning", "code": "bias_error", "message": f"bias.json: {bias_err}"})
-    _check_operating_profile(op_prof, op_err, config, arm_id, hygiene)
+    cell_cal_eval.check_operating_profile(op_prof, op_err, config, arm_id, hygiene)
 
     raw_ref = ref_path.read_bytes() if ref_path and ref_path.is_file() else b""
     if raw_ref and bound_map_error is not None:
@@ -441,7 +291,10 @@ def build_profile_snapshot(entry: dict[str, Any], *, now_ts: float | None = None
         dv_site = ((depth_verify or {}).get("sites") or {}).get(name) or {}
         touch_dir = Path(entry["surface_receipts_dir"]) if entry.get("surface_receipts_dir") else work_dir
         touch_data, _ = _read_json(touch_dir / f"surface-{name}.json" if touch_dir and not is_extra else None)
-        cv_fields = _attach_site_cross_verify(name, is_extra, surface_z, dv_site, touch_data, hygiene)
+        cv_fields = cell_cal_eval.attach_site_cross_verify(
+            name, is_extra, surface_z, dv_site, touch_data, hygiene,
+            params=config.get("params"), rec=rec, config=config,
+        )
 
         sites_out[name] = {
             "name": name, "extra": is_extra, "in_map_sites": name in map_sites,
@@ -484,14 +337,20 @@ def build_profile_snapshot(entry: dict[str, Any], *, now_ts: float | None = None
     limits = (plan or {}).get("limits") or {}
     ref_site = next((s for s in map_sites if s in sites_out and sites_out[s]["map"]), None)
     ref_record = cell_pivot.map_record(with_maps, ref_site) if ref_site else None
-    live_info = _parse_live(live, config, plan, ref_record, now_ts=now_ts)
-    cross_verify = _build_cross_verify(sites_out, depth_verify, regions_out, live_info, bind_err)
+    live_info = cell_cal_eval.parse_live(live, config, plan, ref_record, now_ts=now_ts, joints_tcp_fn=cell_pivot.joints_tcp)
+    drift = cell_cal_monitor.summarize(config, calibration)
+    for msg in drift.get("suggested_advisory") or ():
+        hygiene.append({"level": "warning", "code": f"cal_drift:{drift.get('pattern', 'local')}", "message": msg})
+    cross_verify = cell_cal_eval.build_cross_verify(
+        sites_out, depth_verify, regions_out, live_info, bind_err,
+        params=config.get("params"), drift=drift,
+    )
 
     return {
         "schema": "rosy.calibration-profile-view.v1",
         "id": entry["id"], "label": entry.get("label", arm_id), "arm_id": arm_id,
         "zone_side": config.get("zone_side"), "zone_peer": config.get("zone_peer"),
-        "tcp_x_m": config.get("tcp_x_m") if config.get("tcp_x_m") is not None else (plan or {}).get("tcp_x_m"),
+        "tcp_x_m": omx_tcp.config_tcp(config, plan),
         "map_sites": map_sites,
         "paths": {
             "config_path": str(cfg_path), "calibration_path": cal_str, "bias_path": bias_str,
