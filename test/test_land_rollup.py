@@ -450,3 +450,38 @@ def test_candidates_deduplicate_topics_and_unrolled_keeps_carrier_ticket(tmp_pat
     assert land_rollup.member_metadata(holder, found[1])["ticket"] == "t-m1"
 
 
+def test_roll_prefers_affected_lane_and_ignores_nonpositive_pid(tmp_path, monkeypatch):
+    land_rollup.stop(0)
+    land_rollup.stop(-1)
+    repo = tmp_path / "repo"
+    holder = repo / ".git" / "rosy-land-wt"
+    for name in ("a1", "a2", "f1"):
+        (holder / name).mkdir(parents=True)
+    rows = [
+        {"branch": "land/fix/a1-20261116000001", "worktree": str(holder / "a1"), "status": "pending", "host": "h",
+         "pid": 0, "ticket": "t1"},
+        {"branch": "land/fix/f1-20261116000002", "worktree": str(holder / "f1"), "status": "pending", "host": "h",
+         "pid": 100, "ticket": "t2"},
+        {"branch": "land/fix/a2-20261116000003", "worktree": str(holder / "a2"), "status": "pending", "host": "h",
+         "pid": 200, "ticket": "t3"},
+    ]
+    tiers = {rows[0]["branch"]: "affected", rows[1]["branch"]: "full", rows[2]["branch"]: "affected"}
+    monkeypatch.setattr(land_rollup.socket, "gethostname", lambda: "h")
+    monkeypatch.setattr(land_rollup.land_queue, "ahead", lambda q, t: rows)
+    monkeypatch.setattr(land_rollup, "candidates", lambda r, p: r)
+    seen = []
+
+    def fake_plan(r, candidate_rows, tier_of=None):
+        got = [row for row in candidate_rows if tier_of(r, row["branch"]) is not None]
+        seen.append([row["branch"] for row in got])
+        return got
+
+    monkeypatch.setattr(land_rollup, "plan", fake_plan)
+    monkeypatch.setattr(land_rollup, "tier", lambda r, b: tiers[b])
+    monkeypatch.setattr(land_rollup, "affected", lambda r, b: "affected" if tiers[b] == "affected" else None)
+    monkeypatch.setattr(land_rollup, "MIXED", True)
+    assert land_rollup.roll(repo, holder.parent / "q", NOW, []) == 0
+    assert seen == [[rows[0]["branch"], rows[2]["branch"]]]
+
+
+

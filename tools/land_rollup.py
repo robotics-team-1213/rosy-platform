@@ -37,6 +37,7 @@ from collections import Counter
 import socket
 import subprocess
 import sys
+import tempfile
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -146,6 +147,22 @@ def reach(repo: Path, branch: str) -> list[list[str]]:
     return sel["local_invocations"] if sel["mode"] == "full" else sel["invocations"]
 
 
+def _folded_tree(repo: Path, tree: str, resolved: dict[str, bytes]) -> str:
+    """Return ``tree`` with auto-resolved file blobs replaced in a temporary index (repo untouched)."""
+    if not resolved:
+        return tree
+    with tempfile.TemporaryDirectory() as tmp:
+        env = {**os.environ, "GIT_INDEX_FILE": str(Path(tmp) / "index")}
+        subprocess.run(["git", "-C", str(repo), "read-tree", tree], env=env, check=True, capture_output=True)
+        for path, data in resolved.items():
+            oid = subprocess.run(["git", "-C", str(repo), "hash-object", "-w", f"--path={path}", "--stdin"],
+                                 input=data, check=True, capture_output=True).stdout.decode().strip()
+            subprocess.run(["git", "-C", str(repo), "update-index", "--cacheinfo", f"100644,{oid},{path}"],
+                           env=env, check=True, capture_output=True)
+        return subprocess.run(["git", "-C", str(repo), "write-tree"], env=env, check=True, capture_output=True,
+                              text=True).stdout.strip()
+
+
 def plan(repo: Path, rows: list[dict], tier_of=tier, reach_of=reach, mixed: bool | None = None) -> list[dict]:
     """Members, in queue order, merging together onto main; fewer than two means no rollup. Unmixed: one tier,
     no safety member. Mixed (addendum 33): any tier; with a FULL or safety member the rollup runs FULL, which
@@ -167,11 +184,12 @@ def plan(repo: Path, rows: list[dict], tier_of=tier, reach_of=reach, mixed: bool
             continue
         res = git(repo, "merge-tree", "--write-tree", "--no-messages", cur, r["branch"], check=False)
         if res.returncode == 1:
-            _, manual = land_merge.plan(repo, land_merge.conflict_stages(res.stdout), (cur, r["branch"]))
-            if manual:
+            conflicts = land_merge.conflict_stages(res.stdout)
+            resolved, manual = land_merge.plan(repo, conflicts, (cur, r["branch"]))
+            if not conflicts or manual:
                 continue
-            # shortcut: an auto-resolvable member is not folded into ``cur``, so a later clash with it is found
-            # only by apply's real merge (which then leaves that later member out); fold it in if that bites.
+            tree = _folded_tree(repo, res.stdout.splitlines()[0].strip(), resolved)
+            cur = git(repo, "commit-tree", tree, "-p", cur, "-p", r["branch"], "-m", "rollup plan").stdout.strip()
         elif res.returncode == 0:
             tree = res.stdout.split()[0]
             cur = git(repo, "commit-tree", tree, "-p", cur, "-p", r["branch"], "-m", "rollup plan").stdout.strip()
@@ -333,11 +351,16 @@ def stop_remote(holder: Path, rows: list[dict], run=None) -> int:
 
 def stop(pid: int) -> None:
     """End a member's land.py; its supervisor keeps the snapshot and hidden tree (land_async)."""
+    if pid <= 0:
+        return
     if os.name == "nt":
         subprocess.run(["taskkill", "/PID", str(pid), "/T", "/F"], capture_output=True)
     else:
         try:
-            os.kill(pid, 15)
+            if os.getpgid(pid) == pid:
+                os.killpg(pid, 15)
+            else:
+                os.kill(pid, 15)
         except OSError:
             pass
 
@@ -392,9 +415,11 @@ def main(argv: list[str]) -> int:
 def roll(repo: Path, qdir: Path, now: datetime, argv: list[str]) -> int:
     auto = "--auto" in argv  # D-889 23 item 6 / 32: unattended; unmixed, FULL-tier (and safety) landings stay alone
     urgent = argv[argv.index("--urgent") + 1] if "--urgent" in argv[:-1] else ""
-    members = plan(repo, candidates(land_queue.ahead(qdir, Path("~")), repo),
-                   tier_of=affected if auto and not MIXED else tier)
-    members = whole(members)
+    rows = candidates(land_queue.ahead(qdir, Path("~")), repo)
+    # Bundle fast affected landings on their own lane before falling back to mixed FULL rollups.
+    members = whole(plan(repo, rows, tier_of=affected))
+    if len(sources(members)) < 2 and not (auto and not MIXED):
+        members = whole(plan(repo, rows, tier_of=tier))
     if len(sources(members)) < 2:  # a rollup re-rolled with nothing new would only restart its own FULL
         members = []
     if not members:
@@ -416,7 +441,8 @@ def roll(repo: Path, qdir: Path, now: datetime, argv: list[str]) -> int:
             print(f"[rollup] {name} keeps landing: not every member merged here (those ride twice)", flush=True)
     complete_ids = {id(r) for r in complete}
     stop_remote(holder, [r for r in merged if id(r) in complete_ids or not r.get("rollup")])
-    pids = {int(r["pid"]) for r in complete} | {int(r["pid"]) for r in merged if not r.get("rollup")}
+    pids = {int(r["pid"]) for r in complete if r.get("pid")} | {
+        int(r["pid"]) for r in merged if not r.get("rollup") and r.get("pid")}
     # shortcut: a FULL waiter that started this apply is our parent; stopping it (taskkill /T) ends us, so last.
     # A relaunched lander (land_prepare.relaunch) is our grandparent: then later stops may be lost; see the log.
     for pid in sorted(pids, key=lambda p: p == os.getppid()):  # only now: the rollup ticket exists

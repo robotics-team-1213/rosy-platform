@@ -40,7 +40,7 @@ from harness import affected_exclusive
 CACHE = "rosy-land-cache.jsonl"
 FAILED = "rosy-land-failed.json"  # argv of invocations whose last run had a NEW failure
 MAX_LINES, KEEP = 20000, 15000
-NARROW_COMMITS = 3  # ancestor commits tried for narrow reuse: one selector call each
+NARROW_COMMITS = 12  # ancestor commits tried for narrow reuse: one selector call each
 NARROW = "reused across trees"  # land.py: a narrow reuse is not this candidate's own run (land record)
 LISTS = ("test/known_failures.py", "test/known_failures.txt", "test/flaky_quarantine.txt")
 OID = re.compile(r"[0-9a-f]{40,64}")
@@ -183,9 +183,25 @@ NO_EVIDENCE = "exited 1 without usable failure evidence"
 
 
 def _paths(inv: list[str]) -> list[str] | None:
-    """The test paths of inv; None when it carries pytest options (no path mapping then)."""
-    paths = [a.split("::")[0].rstrip("/") for a in inv if not ENV_TOKEN.match(a)]
-    return None if any(p.startswith("-") for p in paths) else paths
+    """The test paths of inv (including isolation path env tokens); None when unsupported pytest options appear."""
+    paths: list[str] = []
+    for a in inv:
+        if a.startswith(("ROSY_COLLECT_PATHS=", "ROSY_ALONE_FILES=")):
+            raw = a.split("=", 1)[1]
+            for p in (x.strip().replace("\\", "/").rstrip("/") for x in raw.split(",")):
+                if not p:
+                    continue
+                if p == ".":
+                    return None
+                paths.append(p)
+            continue
+        if ENV_TOKEN.match(a) or a.startswith("--ignore="):
+            continue
+        p = a.split("::")[0].rstrip("/")
+        if p.startswith("-"):
+            return None
+        paths.append(p)
+    return list(dict.fromkeys(paths))
 
 
 def _overlap(a: str, b: str) -> bool:
@@ -194,6 +210,45 @@ def _overlap(a: str, b: str) -> bool:
 
 _delta_lock = threading.RLock()
 _delta_memo: dict[tuple, list[str] | None] = {}
+_anc_lock = threading.RLock()
+_anc_cache: dict[tuple[str, str], set[str]] = {}
+_anc_neg: dict[tuple[str, str, str], bool] = {}
+
+
+def is_ancestor(repo: Path, base: str, head: str, *, git_dir: bool = False) -> bool:
+    """Check ``base`` <= ``head`` using a batched ``rev-list -n 2000`` window per immutable head OID."""
+    if not (OID.fullmatch(base) and OID.fullmatch(head)):
+        res = (subprocess.run(["git", "--git-dir", str(repo), "merge-base", "--is-ancestor", base, head],
+                              capture_output=True) if git_dir else _git(repo, "merge-base", "--is-ancestor", base, head))
+        return res.returncode == 0
+    key = (str(repo.resolve()), head)
+    with _anc_lock:
+        ancestors = _anc_cache.get(key)
+    if ancestors is None:
+        cmd = (["git", "--git-dir", str(repo), "rev-list", "-n", "2000", head] if git_dir
+               else None)
+        res = (subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace") if cmd
+               else _git(repo, "rev-list", "-n", "2000", head))
+        if res.returncode == 0:
+            ancestors = set(res.stdout.splitlines())
+            with _anc_lock:
+                if len(_anc_cache) > 512:
+                    _anc_cache.clear()
+                _anc_cache[key] = ancestors
+    if ancestors is not None and base in ancestors:
+        return True
+    neg_key = (key[0], base, head)
+    with _anc_lock:
+        if neg_key in _anc_neg:
+            return _anc_neg[neg_key]
+    res = (subprocess.run(["git", "--git-dir", str(repo), "merge-base", "--is-ancestor", base, head],
+                          capture_output=True) if git_dir else _git(repo, "merge-base", "--is-ancestor", base, head))
+    ok = res.returncode == 0
+    with _anc_lock:
+        if len(_anc_neg) > 4096:
+            _anc_neg.clear()
+        _anc_neg[neg_key] = ok
+    return ok
 
 
 def _delta_paths(wt: Path, base: str, head: str, python: str, select) -> list[str] | None:
@@ -202,7 +257,7 @@ def _delta_paths(wt: Path, base: str, head: str, python: str, select) -> list[st
     with _delta_lock:
         if key in _delta_memo:
             return _delta_memo[key]
-        if _git(wt, "merge-base", "--is-ancestor", base, head).returncode != 0:
+        if not is_ancestor(wt, base, head):
             return None
         status = _git(wt, "diff", "--name-status", "--no-renames", base, head)
         rows = [row.split("\t") for row in status.stdout.splitlines() if row]
@@ -229,7 +284,7 @@ def reach(wt: Path, base: str, head: str, python: str = sys.executable) -> list[
     None when reuse across that range is unsound (not an ancestor, a delete or rename, a known-failure list changed,
     a FULL selection, anything unreadable). The explicit FULL witness and publish_evidence use only this strict rule,
     publish recomputing it in its fresh checkout of the candidate."""
-    if _git(wt, "merge-base", "--is-ancestor", base, head).returncode != 0:
+    if not is_ancestor(wt, base, head):
         return None
     status = _git(wt, "diff", "--name-status", "--no-renames", base, head)
     rows = [row.split("\t") for row in status.stdout.splitlines() if row]

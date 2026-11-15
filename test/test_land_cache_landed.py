@@ -110,3 +110,25 @@ def test_warm_main_records_missing_non_dedicated_suites(cached, monkeypatch):
     assert (done, total) == (1, 1) and ran == [["test/architecture"]]
     assert land.land_cache.warm_main(wt, limit=2, main_ref=sha) == (0, 0)
 
+
+def test_paths_extracts_isolation_envs_skips_ignore_and_batches_is_ancestor(cached, monkeypatch):
+    wt, _, _ = cached
+    head = git(wt, "rev-parse", "HEAD")
+    base = head
+    cache = land.land_cache
+    assert cache._paths(["ROSY_JOB_CORES=6", "ROSY_ALONE_FILES=a/test_a.py,b/test_b.py",
+                         "tools/collect_alone.py", "--ignore=test/test_slow.py"]) == [
+        "a/test_a.py", "b/test_b.py", "tools/collect_alone.py"]
+    assert cache._paths(["ROSY_COLLECT_PATHS=.", "tools/collect_alone.py"]) is None
+    assert cache._paths(["pkg/test", "-k", "only"]) is None
+
+    calls = []
+    real_git = cache._git
+    monkeypatch.setattr(cache, "_git", lambda *a: calls.append(a[1:]) or real_git(*a))
+    cache._anc_cache.clear()
+    cache._anc_neg.clear()
+    assert cache.is_ancestor(wt, base, head) is True
+    assert cache.is_ancestor(wt, base, head) is True
+    assert len(calls) == 1 and calls[0][:2] == ("rev-list", "-n")
+
+

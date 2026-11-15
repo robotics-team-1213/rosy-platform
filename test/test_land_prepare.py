@@ -745,3 +745,22 @@ def test_prepare_checks_conflicts_after_pretest_and_guards_relaunch(tmp_path, mo
         prep.prepare(land, tmp_path, "feat/x", args, sys.executable, tmp_path, ticket)
     assert exc.value.code == 77
 
+
+def test_full_prepare_sets_full_done_after_tests_before_speculate(repos, monkeypatch):
+    main, wt = repos
+    commit(wt, {"pkg/a.py": "x = 2\n"}, "branch change")
+    qdir = land.land_queue.queue_dir(wt)
+    land.land_events.bind(wt, "feat/x")
+    ticket = land.land_queue.take(qdir, "feat/x", status="preparing")
+    seen_tiers = []
+    monkeypatch.setattr(land, "select", lambda *a, **k: ([["pkg/test"]], "FULL"))
+    monkeypatch.setattr(land.land_guards, "first", lambda *a, **k: [])
+    monkeypatch.setattr(land, "run_tests", lambda *a, **k: ["pytest pkg/test ok (run-pre-1.txt)"])
+    monkeypatch.setattr(land.land_speculate, "prepare",
+                        lambda *a, **k: seen_tiers.append(json.loads(ticket.read_text())["tier"]))
+    monkeypatch.setenv(land.land_prepare.SPECULATE_ENV, "1")
+    land.land_prepare.prepare(land, wt, "feat/x", land.argparse.Namespace(tests="auto", no_cache=True),
+                              sys.executable, qdir, ticket)
+    assert seen_tiers == ["full_done"]
+
+

@@ -260,34 +260,43 @@ def _prepare(land, wt: Path, branch: str, args, python: str, qdir: Path | None, 
     print(f"[land] {'FULL' if full else 'delta' if delta else 'affected'} tier before the turn, ticket preparing"
           f" (main {main_sha[:10]})", flush=True)
     if ticket is not None:
-        if full:
-            full_slot(qdir, ticket, changed=lambda: relaunch(land, qdir, ticket),
-                      roll=lambda: land.land_watchdog.rollup(qdir.parent))
-        else:
-            land_queue.set_status(ticket, "preparing", tier="")
+        land_queue.set_status(ticket, "preparing", tier="")
     # Cache log hashes outlive this preparation; later preparations must keep its raw bytes intact.
     logdir = Path(tempfile.mkdtemp(prefix=f"prepare-{candidate[:10]}-", dir=land.tmp_dir(branch)))
     began = time.monotonic()
     guard_args = land.argparse.Namespace(**{**vars(args), "no_cache": True}) if explicit else args
-    # The guard round (with land_isolation's alone runs: here only) beside the selection, not before it: on
-    # 2026-10-27 it took 150-870 s and every pretest waited for it while holding one of MAX_PREPARING slots.
-    # Each is its own remote_pytest.run (own queue, threads, run dir); a Stop from either stops the landing.
-    raised: list[BaseException] = []
     guarded: list[str] = []
+    if full and ticket is not None:
+        # Fail fast on guards (architecture, contracts, ownership, isolation) before waiting behind MAX_FULL.
+        guarded = land.land_guards.first(wt, guard_args, invocations, logdir, "pre", land.run_tests,
+                                         isolated=not delta)
+        if land.out(wt, "rev-parse", "HEAD") != candidate:
+            raise land.Stop(f"HEAD changed during pretest; {candidate[:10]} was tested; retry the landing")
+        land.land_selection.require_eligible(land, args, land.land_selection.eligible(land, guarded, args), guarded)
+        guard_s = time.monotonic() - began
+        full_slot(qdir, ticket, changed=lambda: relaunch(land, qdir, ticket),
+                  roll=lambda: land.land_watchdog.rollup(qdir.parent))
+        began = time.monotonic() - guard_s
+        tested = land.run_tests(wt, args, invocations, logdir, "pre")
+    else:
+        # The guard round (with land_isolation's alone runs: here only) beside the selection, not before it: on
+        # 2026-10-27 it took 150-870 s and every pretest waited for it while holding one of MAX_PREPARING slots.
+        # Each is its own remote_pytest.run (own queue, threads, run dir); a Stop from either stops the landing.
+        raised: list[BaseException] = []
 
-    def guards() -> None:
-        nonlocal guarded
-        try:
-            guarded = land.land_guards.first(wt, guard_args, invocations, logdir, "pre", land.run_tests,
-                                             isolated=not delta)
-        except BaseException as error:  # noqa: BLE001 - re-raised on the caller's thread below
-            raised.append(error)
-    side = threading.Thread(target=guards, name="pretest-guards", daemon=True)
-    side.start()
-    tested = land.run_tests(wt, args, invocations, logdir, "pre")  # a Stop or Ctrl-C here does not wait for the guards
-    side.join()
-    if raised:
-        raise raised[0]
+        def guards() -> None:
+            nonlocal guarded
+            try:
+                guarded = land.land_guards.first(wt, guard_args, invocations, logdir, "pre", land.run_tests,
+                                                 isolated=not delta)
+            except BaseException as error:  # noqa: BLE001 - re-raised on the caller's thread below
+                raised.append(error)
+        side = threading.Thread(target=guards, name="pretest-guards", daemon=True)
+        side.start()
+        tested = land.run_tests(wt, args, invocations, logdir, "pre")  # a Stop or Ctrl-C here does not wait for the guards
+        side.join()
+        if raised:
+            raise raised[0]
     if land.out(wt, "rev-parse", "HEAD") != candidate:
         raise land.Stop(f"HEAD changed during pretest; {candidate[:10]} was tested; retry the landing")
     clean = land.land_selection.eligible(land, guarded + tested, args)
@@ -352,7 +361,8 @@ def _prepare(land, wt: Path, branch: str, args, python: str, qdir: Path | None, 
     if explicit:
         args._full_witness = dict(candidate=candidate, main=main_sha, invocations=[list(i) for i in invocations], env=env)
     if ticket is not None:
-        land_queue.set_status(ticket, "preparing", tested=land.land_full.restore(wt, branch) or "")
+        land_queue.set_status(ticket, "preparing", tested=land.land_full.restore(wt, branch) or "",
+                              **({"tier": "full_done"} if full else {}))
     land.land_events.emit("prepared", tier=tier, seconds=round(time.monotonic() - began))
     if os.environ.get(SPECULATE_ENV) == "1":
         land.land_speculate.prepare(land, wt, branch, args, python, qdir, ticket)

@@ -29,7 +29,7 @@ QUEUE = "rosy-land-queue"
 STALE_AFTER = 3 * 3600  # seconds without a refresh; one FULL round takes 30-90 min, the holder refreshes per round
 MAX_AGE_S = int(os.environ.get("ROSY_LAND_MAX_AGE_S", str(4 * 3600)))
 FULL_MAX_AGE_S = int(os.environ.get("ROSY_LAND_FULL_MAX_AGE_S", str(6 * 3600)))
-POLL = 10.0
+POLL = 2.0
 TICKET_ENV = "ROSY_LAND_TICKET"  # land_prepare.relaunch hands its ticket to main's land.py in a child process
 REPORT_EVERY = 300.0  # seconds between unchanged position lines
 # A waiting ticket tested over the current main passes an earlier waiting one tested over an older main (that one

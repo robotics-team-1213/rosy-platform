@@ -50,8 +50,6 @@ OPEN_AFTER_S = 24 * 3600  # doctor and the turn flag records still open after a 
 TEST_FILE = re.compile(r"(^|/)(test_[^/]*|[^/]*_test)\.py$")  # = affected_tests.TEST_FILE
 ENV_WORD = re.compile(r"^ROSY_[A-Z0-9_]*=")
 REPORT = re.compile(r"^\[isolation\] (complete|incomplete): ?(.*)$", re.MULTILINE)
-# An option word keeps land_cache from narrow reuse (its delta mapping cannot see the files in job words).
-NO_NARROW = "-pno:cacheprovider"
 # remote_pytest.PYTEST_TAIL's options for one file; xdist off: each file already has its own process.
 TAIL = ["-q", "-rfE", "-p", "no:cacheprovider", "-p", "no:xdist", "--rootdir=.", "-pno:launch_testing",
         "-pno:launch_ros"]
@@ -128,7 +126,7 @@ def gate(wt: Path, selection: list[list[str]]) -> list[list[str]]:
     if not (paths and (wt / GATE).is_file()):
         return []
     if len(paths) < GATE_SHARDS * 2:
-        return [[f"ROSY_JOB_CORES={GATE_CORES}", f"ROSY_COLLECT_PATHS={','.join(paths)}", GATE, NO_NARROW]]
+        return [[f"ROSY_JOB_CORES={GATE_CORES}", f"ROSY_COLLECT_PATHS={','.join(paths)}", GATE]]
     tracked = tracked_tests(wt, paths)
     counts = {p: sum(1 for f in tracked if f == p or f.startswith(p + "/")) for p in paths}
     bins: list[tuple[list[int], list[str]]] = [([0], []) for _ in range(GATE_SHARDS)]
@@ -136,12 +134,12 @@ def gate(wt: Path, selection: list[list[str]]) -> list[list[str]]:
         total, members = min(bins, key=lambda b: (b[0][0], len(b[1])))
         total[0] += counts[path]
         members.append(path)
-    return [[f"ROSY_JOB_CORES={GATE_CORES}", f"ROSY_COLLECT_PATHS={','.join(sorted(members))}", GATE, NO_NARROW]
+    return [[f"ROSY_JOB_CORES={GATE_CORES}", f"ROSY_COLLECT_PATHS={','.join(sorted(members))}", GATE]
             for _, members in bins if members]
 
 
 def job(files: list[str]) -> list[list[str]]:
-    return [[f"ROSY_JOB_CORES={GATE_CORES}", f"ROSY_ALONE_FILES={','.join(files)}", GATE, NO_NARROW]] if files else []
+    return [[f"ROSY_JOB_CORES={GATE_CORES}", f"ROSY_ALONE_FILES={','.join(files)}", GATE]] if files else []
 
 
 def _selector(wt: Path):
