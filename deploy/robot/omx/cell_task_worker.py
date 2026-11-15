@@ -10,6 +10,7 @@ Single Responsibility:
 from __future__ import annotations
 
 import argparse
+from concurrent.futures import Future, ThreadPoolExecutor
 import hashlib
 import json
 import os
@@ -303,7 +304,7 @@ def poll_and_execute_once(
     return completed_runs
 
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="Autonomous Fleet-R -> OMX Cell Task Worker")
     parser.add_argument("--fleet-r-url", default="https://192.168.1.93:8443")
     parser.add_argument("--token-file", default="~/.config/rosy-fleet-r-token")
@@ -312,9 +313,59 @@ def main() -> None:
     parser.add_argument("--interval-s", type=float, default=1.5)
     parser.add_argument("--once", action="store_true")
     parser.add_argument("--dry-run-hw", action="store_true")
-    parser.parse_args()
-    # The legacy CLI only jogged an arm; it has no pick/place or post-release measurement.
-    raise SystemExit("task_worker_held: MEASURED_AREA_XYZ_EXECUTOR_REQUIRED")
+    parser.add_argument("--allow-legacy-live-jog", action="store_true")
+    args = parser.parse_args(argv)
+
+    token = Path(args.token_file).expanduser().read_text(encoding="utf-8").strip()
+    req_fn = make_default_request_fn(args.fleet_r_url, token)
+    pipeline = FleetModelPipeline(work_dir=Path(args.work_dir))
+    prep_dir = Path(args.prep_dir)
+    bg_cam_pool = ThreadPoolExecutor(max_workers=1)
+    bg_cam_fut: Future | None = None
+
+    def _trigger_bg_cam_upload() -> None:
+        nonlocal bg_cam_fut
+        if bg_cam_fut is None or bg_cam_fut.done():
+            bg_cam_fut = bg_cam_pool.submit(sync_cell_telemetry, args.fleet_r_url, token, prep_dir)
+
+    def _hw_act(handoff: dict[str, Any]) -> dict[str, Any]:
+        arm_id = str(handoff.get("arm_id") or ("arm_s" if handoff.get("cell_id") == "cell_s" else "arm_a"))
+        if args.dry_run_hw:
+            return {"arm": arm_id, "events_count": 1, "stop_event": {"command": "stop", "ok": True, "folded": True}}
+        if not args.allow_legacy_live_jog:
+            raise RuntimeError("legacy cell_task_worker live jog is sealed; use cell_auto_pick or --dry-run-hw")
+        res = execute_live_hardware_arm(arm_id, prep_dir=prep_dir)
+        _trigger_bg_cam_upload()
+        return res
+
+    last_cam_push = 0.0
+    while True:
+        try:
+            now_m = time.monotonic()
+            if not args.dry_run_hw and (now_m - last_cam_push) >= 3.0:
+                _trigger_bg_cam_upload()
+                last_cam_push = now_m
+            if args.dry_run_hw or args.allow_legacy_live_jog:
+                runs = poll_and_execute_once(pipeline, request_fn=req_fn, live_act_fn=_hw_act)
+            else:
+                runs = []
+                print(json.dumps({
+                    "event": "legacy_worker_live_sealed",
+                    "detail": "telemetry sync active; legacy claim/jog disabled without --allow-legacy-live-jog",
+                }), flush=True)
+            for r in runs:
+                stop_ev = (r["task"].get("hardware_telemetry") or {}).get("stop_event") or {}
+                print(json.dumps({
+                    "event": "task_completed", "task_id": r["task_id"], "cell_id": r["cell_id"], "arm_id": r["arm_id"],
+                    "status": r["task"]["status"], "folded": stop_ev.get("folded"), "state": stop_ev.get("state"),
+                }), flush=True)
+        except Exception as exc:
+            print(json.dumps({"event": "poll_error", "error": repr(exc)}), flush=True)
+        if args.once:
+            if bg_cam_fut is not None:
+                bg_cam_fut.result(timeout=10.0)
+            break
+        time.sleep(max(0.5, float(args.interval_s)))
 
 
 if __name__ == "__main__":

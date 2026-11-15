@@ -91,3 +91,17 @@ def test_pipeline_refuses_unknown_site_and_tier(tmp_path: Path) -> None:
         pipe.run_fleet_stage(arm_id="arm_s", src_site="pinky", dst_site="bellt")
     with pytest.raises(ValueError, match="tier"):
         pipe.prestage_cell_ab_handover(tier=4)
+
+
+def test_worker_main_seals_legacy_live_jog_by_default(tmp_path: Path, monkeypatch) -> None:
+    tok = tmp_path / "tok"
+    tok.write_text("dummy-token", encoding="utf-8")
+    calls: list[str] = []
+    monkeypatch.setattr(ctw, "make_default_request_fn", lambda *a, **k: (lambda m, p, b: calls.append(f"{m}:{p}") or {}))
+    monkeypatch.setattr(ctw, "sync_cell_telemetry", lambda *a, **k: calls.append("sync") or {})
+    monkeypatch.setattr(ctw, "execute_live_hardware_arm", lambda *a, **k: calls.append("live_jog") or {})
+
+    ctw.main(["--once", "--token-file", str(tok), "--work-dir", str(tmp_path / "w"), "--prep-dir", str(tmp_path / "p")])
+    assert "sync" in calls
+    assert "live_jog" not in calls
+    assert not any(c.startswith("POST:/api/fleet/pipeline/cell-tasks/claim") for c in calls)
