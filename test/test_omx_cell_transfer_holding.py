@@ -88,3 +88,30 @@ def test_return_held_places_when_jaws_hold_box_and_folds_when_empty(tmp_path, ja
         assert cell.sent == [f"load {library}", *RETURN_HELD]
     else:
         assert "run release_place" not in cell.sent and cell.sent[-1] == "park"
+
+
+def test_return_held_recovers_stale_middle_lock_by_parking_before_above_place():
+    class StaleZoneGate:
+        def __init__(self):
+            self.commands = []
+            self.needs_park = True
+            self.released = False
+
+        def act(self, command):
+            self.commands.append(command)
+            if command == "goto above_place" and self.needs_park:
+                return {
+                    "command": command, "ok": False,
+                    "error": "held: zone: the other arm holds the middle; its guarded owner must park before recovery",
+                }
+            if command == "park":
+                self.needs_park = False
+            if command == "run release_place":
+                self.released = True
+            jaws = 48.8 if self.released else 53.0
+            return {"command": command, "ok": True, "settled": True, "state": [0.0, 0.0, 0.0, 0.0, 0.0, jaws]}
+
+    gate = StaleZoneGate()
+    out = transfer_folded(gate, "lib.json", closed=48.8, sequence=RETURN_HELD)
+    assert out["result"] == "placed", out
+    assert gate.commands[:4] == ["load lib.json", "goto above_place", "park", "goto above_place"]
