@@ -1,7 +1,8 @@
 """Rules ``tools/worktrees.py`` and ``tools/land.py`` share (D-790, amends D-761).
 
 - A landed worktree (merged into main, a commit of its own in its branch reflog) that is clean
-  waits ``LANDED_IDLE_HOURS`` (1 h), not 72 h, before anyone's lossless prune takes it.
+  has no wait (``wait_h = 0.0``) in ``tools/worktrees.py``, whoever made it; ``LANDED_IDLE_HOURS``
+  (1 h) still applies to orphan directories and unused merged branches (``sweep_branches``).
 - ``stale_history``: a branch on the pre-rewrite line (more than ``STALE_COMMITS`` commits not in
   main, or forked from main at or before ``REWRITE_BASE``) would re-import the old history; ``new``
   does not base on it and ``land.py`` does not land it.
