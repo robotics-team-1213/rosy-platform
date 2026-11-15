@@ -27,6 +27,52 @@ PWM_STOP, PWM_STOP_S, STALL_GAP, STALL_MOVE = 285, 0.5, 4.0, 0.3
 MOTORS = [n.split(".")[0] for n in NAMES]
 
 
+def hold_runner(runner, present, reason, *, human: bool, empty_margin: float) -> None:
+    """Freeze at the measured body pose; human hold also latches the command path."""
+    chunk, jogging = runner.chunk, bool(runner.jog_path)
+    runner.queue, runner.retreat_frames = [], (runner.played or runner.jog_path[:-1])[::-1]
+    runner.target = list(present[:5]) + [runner.target[5]]
+    runner.fault, runner.holding = reason, bool(runner.holding and present[5] > runner.target[5] + empty_margin)
+    runner.chunk, runner.played, runner.jog_path = None, [], []
+    runner.pace_floor, runner.paced, runner.pace_last, runner.trend = 0.0, 0, None, []
+    # stop exactly where the arm is (no leftover wrist nudge); the failed chunk keeps its own sway record
+    runner.pitch_hold, sway, runner.sway_peak, runner.speed_low = 0.0, runner.sway_peak, {}, 1.0
+    if human:
+        runner.human_hold_latched = True
+        runner.torque_hold_commanded = False
+        runner._human_hold_ack_pending = True
+        runner.pending.clear()
+        runner.retreat_frames = []
+        runner.grip_from = None
+        runner._stop_after_park = None
+        runner._stopped = False
+        runner.home_since = None
+    if chunk == "park":
+        runner.last_input = runner.clock()
+        runner._stop_after_park = None
+    if not human:
+        runner.report(
+            command=f"run {chunk or 'jog'}" if chunk or jogging else "fault",
+            ok=False, error=runner.fault, contact=True, present=present, **({"sway": sway} if sway else {}),
+        )
+
+
+def human_hold_overload(runner, present) -> None:
+    """A guard overload while a human hold is latched: report once that a person is needed."""
+    if not getattr(runner, "_human_hold_overload_reported", False):
+        runner._human_hold_overload_reported, runner._human_hold_ack_pending = True, False
+        runner.report(command="human-hold", ok=False, error="guard overload during human hold; person needed",
+                      person_needed=True, present=present)
+
+
+def human_hold_ack(runner, present) -> None:
+    """The first tick after a human hold: torque is now commanded, report it once."""
+    if not runner._human_hold_ack_pending:
+        return
+    runner._human_hold_ack_pending, runner.torque_hold_commanded = False, True
+    runner.report(command="human-hold", ok=True, person_needed=True, present=present)
+
+
 def contact_limits(start_lags: list, params=None) -> list:
     base = prm.get(params, "runner.contact_lag", CONTACT_LAG)
     rise, top = prm.get(params, "runner.contact_rise"), prm.get(params, "runner.contact_loaded_max")

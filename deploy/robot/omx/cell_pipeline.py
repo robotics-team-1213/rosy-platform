@@ -103,8 +103,7 @@ def transfer(cell, library: Path, hover=None, *, config=None, calibration=None, 
 
 def verify(cell, config: dict, site: str, calibration: dict | None = None, intended=None) -> dict:
     """Did the box land where it was put? With a fine map for `site`: the located box against the intended
-    arm point (verify_tol_mm). With only a coarse map or none, the arm's own placement is trusted once the
-    grasp held: a pixel zone drawn for another plan would refuse a correct placement (2026-10-25)."""
+    arm point (verify_tol_mm). Without that map, a visible box cannot establish its target position."""
     from cell_envelope import verification_tolerance
 
     tolerance = verification_tolerance(config)
@@ -113,12 +112,19 @@ def verify(cell, config: dict, site: str, calibration: dict | None = None, inten
         found = locate(cell, config, calibration, site)
         if not found["found"]:
             return {"found": False, "inside": False}
+        map_error = map_check(config, found, calibration)
+        if map_error:
+            return {"found": True, "inside": False, "verified": False,
+                    "basis": f"unverified: {map_error}"}
         off = 1000 * math.dist(found["arm_m"], intended)
         return {"found": True, "inside": off <= tolerance, "off_mm": round(off, 1),
-                "arm_m": found["arm_m"], "basis": "fine map"}
+                "arm_m": found["arm_m"], "basis": "fine map", "verified": True}
     box = see(cell.frame("top"), config["profiles"]["top"], site)
-    return {**{k: box.get(k) for k in ("found", "cx", "cy")}, "inside": bool(box.get("found")),
-            "basis": "arm placement"}
+    commissioning = bool(config.get("_commissioning"))
+    return {**{k: box.get(k) for k in ("found", "cx", "cy")},
+            "inside": bool(box.get("found")) and commissioning,
+            "verified": False,
+            "basis": "commissioning placement only" if commissioning else "unverified: fine map required"}
 
 
 from cell_pipeline_stages import (  # noqa: E402, F401
@@ -181,9 +187,11 @@ def move(cell, config: dict, calibration: dict, source: str, dest: str, work: Pa
                 if tried["verify"].get("inside"):
                     attempt_id = cell_attempts.record(config, calibration, source, dest, attempt, tried, t_start, choices)
                     if out["decisions"]:  # the outcome of the last decision: this retry worked
-                        case(work, {"from": source, "to": dest, "attempt": attempt, "outcome": "placed",
+                        case(work, {"from": source, "to": dest, "attempt": attempt,
+                                    "outcome": "placed" if tried["verify"].get("verified") is True else "unverified",
                                     "attempt_id": attempt_id, "detection": detection(found)})
-                    return {**out, "result": "placed"}
+                    return {**out, "result": "placed",
+                            "position_verified": tried["verify"].get("verified") is True}
                 facts = {"box_found": tried["verify"].get("found", False), "next": "grasp", "aligned": False,
                          "check": "placed out of the next grasp's reach"}
             elif moved == "contact":
@@ -275,6 +283,18 @@ def run(cell, config: dict, calibration_path: Path, work: Path, cycles: int, log
     return {"result": "done", "cycles": cycles, "steps": steps}
 
 
+def public_stage_result(stage: str, result: dict) -> dict:
+    """A supervised placement may advance calibration without becoming a verified receipt."""
+    if stage == "reset" and result.get("already") is True:
+        return {**result, "result": "unverified", "position_verified": False}
+    if stage in ("transfer", "reset") and result.get("position_verified") is False:
+        return {**result, "transfer_result": result.get("result"), "result": "unverified"}
+    if stage == "verify":
+        return {**result, "result": "verified" if result.get("verified") is True and result.get("inside") is True
+                else "unverified"}
+    return result
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--config", required=True, type=Path)
@@ -348,6 +368,7 @@ def main(argv=None):
         result = move(cell, config, calibration, args.source, args.to, work, seat, attempts=1, person_at_switch=gate)
     else:
         result = verify(cell, config, args.to)
+    result = public_stage_result(args.stage, result)
     save_maps(calibration_path, result)
     path = write_receipt(work / "receipts", args.stage, result)
     print(json.dumps({"receipt": str(path), "result": result.get("result") or result.get("transfer", {}).get("result")

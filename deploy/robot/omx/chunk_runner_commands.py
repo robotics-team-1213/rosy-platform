@@ -45,6 +45,13 @@ def dispatch_runner_command(runner, line: str) -> bool:
     if verb not in ("state", "stop", "park"):
         runner.home_since = None
     try:
+        if runner.human_hold_latched and verb not in ("state", "human-hold"):
+            raise ValueError("human hold latched: only state or human-hold")
+        if verb == "human-hold":
+            if len(words) != 1:
+                raise ValueError("human-hold takes no arguments")
+            runner.hold(runner.present(), "human hold", human=True)
+            return True
         if verb not in ("checked", "state", "stop") and runner.operating_context:
             runner.operating_context = {**runner.operating_context, "session_id": uuid.uuid4().hex}
         if verb == "checked":
@@ -222,7 +229,7 @@ def dispatch_runner_command(runner, line: str) -> bool:
             runner._lib_digest_cache = (id(library), lib_digest)
         elif verb != "state":
             raise ValueError(
-                "commands: run <chunk> [rel] | jog <joint> <delta> [...] | grip <value> | goto <chunk> | load <library> | park | state | stop"
+                "commands: run <chunk> [rel] | jog <joint> <delta> [...] | grip <value> | goto <chunk> | load <library> | park | human-hold | state | stop"
             )
         runner.report(command=line, ok=True, present=locals().get("present"))
     except ValueError as error:

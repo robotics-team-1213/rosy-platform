@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import sys
+import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 for _p in (ROOT / "tools/sim", ROOT / "deploy/robot/omx", ROOT / "middleware/devices/omx/adapter"):
@@ -287,42 +288,13 @@ def test_cell_s_displaced_container_belt_far_and_floor_front_handoff_recovery(tm
 
 
 def test_cell_task_worker_event_driven_hw_and_parallel_handoff(tmp_path: Path, monkeypatch) -> None:
-    """Verify `cell_task_worker` replaces blind sleeps in `execute_live_hardware_arm` with event-driven
-    status-line acknowledgment (`_wait_cmd`), uploads snapshots from `live-*` directories in parallel,
-    and overlaps `run_contract_handoff_stage` with `live_act_fn` in `poll_and_execute_once`."""
-    import json
-    import time
+    """The legacy jog cannot drive an arm; measured task receipts alone control Fleet completion."""
     import cell_fleet_pipeline as cfp
     import cell_task_worker as ctw
 
-    io_dir = tmp_path / "chunk-io-s"
-    io_dir.mkdir(parents=True)
-    status_file = io_dir / "chunk-status.jsonl"
-    (tmp_path / "chunks-arm-s-inplace-live.json").write_text("{}", encoding="utf-8")
-
-    def _fake_check_output(*a, **k) -> str:
-        status_file.write_text(
-            "\n".join(
-                [
-                    json.dumps({"command": "state", "ok": True}),
-                    json.dumps({"command": "load chunks-arm-s-inplace-live.json", "ok": True}),
-                    json.dumps({"command": "jog shoulder_pan.pos -1.0", "ok": True}),
-                    json.dumps({"command": "stop", "ok": True, "folded": True}),
-                ]
-            )
-            + "\n",
-            encoding="utf-8",
-        )
-        return "session up\n"
-
-    monkeypatch.setattr(ctw.subprocess, "check_output", _fake_check_output)
-    t0 = time.monotonic()
-    hw_out = ctw.execute_live_hardware_arm("arm_s", prep_dir=tmp_path)
-    elapsed_s = time.monotonic() - t0
-    assert hw_out["arm"] == "arm_s"
-    assert hw_out["events_count"] == 4
-    assert hw_out["stop_event"]["folded"] is True
-    assert elapsed_s < 0.4
+    with pytest.raises(RuntimeError, match="legacy_jog_executor_disabled"):
+        ctw.execute_live_hardware_arm("arm_s", prep_dir=tmp_path)
+    hw_out = {"arm": "arm_s", "events_count": 0, "stop_event": {"ok": True, "folded": True}}
 
     realign_dir = tmp_path / "live-realignment-pipeline-s-20261113"
     realign_dir.mkdir(parents=True)
@@ -349,26 +321,249 @@ def test_cell_task_worker_event_driven_hw_and_parallel_handoff(tmp_path: Path, m
     assert not [u for u in posted if "cell-camera" in u]  # D-136: 사실만, 프레임 바이트 없음
 
     pipe = cfp.FleetModelPipeline(tmp_path / "pipe")
+    requests = []
 
     def _req(method: str, path: str, body):
+        requests.append((method, path, body))
         if method == "GET":
-            return {"tasks": [{"task_id": "t-par-1", "cell_id": "cell_s", "tier": 1}]}
+            return {"tasks": [{"task_id": "t-par-1", "cell_id": "cell_s", "tier": 1}],
+                    "human_safety": {"active_estop": False, "human_detected": {}},
+                    "cells": {"cell_s": {"phase": "ARM_IN_BED_ZONE", "active_task_id": "t-par-1"}}}
         if path.endswith("/claim"):
             return {
                 "claimed": True,
                 "gate": {"amr_motion_inhibited": True},
                 "handoff": {
                     "handoff_lease_id": "lease-par-1",
+                    "task_id": "t-par-1",
                     "cell_id": "cell_s",
+                    "arm_id": "arm_s",
+                    "tier": 1,
                     "wheel_brake_locked": True,
                     "bed_ready": True,
                     "v_cmd_mps": 0.0,
                 },
             }
-        return {"gate": {"amr_motion_inhibited": False}, "task": {"status": "COMPLETED", "hardware_telemetry": body["hardware_telemetry"]}}
+        return {"gate": {"amr_motion_inhibited": False}, "task": {"status": "COMPLETED" if body["phase"] == "RELEASED" else "ABORTED", "hardware_telemetry": body["hardware_telemetry"]}}
 
+    assert ctw.poll_and_execute_once(pipe, request_fn=_req, prep_dir=tmp_path) == []
+    assert requests == []
     runs = ctw.poll_and_execute_once(pipe, request_fn=_req, live_act_fn=lambda h: hw_out, prep_dir=tmp_path)
-    assert len(runs) == 1 and runs[0]["task"]["status"] == "COMPLETED"
+    assert len(runs) == 1 and runs[0]["omx_result"]["receipt"]["phase"] == "ABORTED"
+    assert runs[0]["omx_result"]["receipt"]["goal_evidence_digest"] is None
+    assert runs[0]["omx_result"]["receipt"]["physical_completion"] is False
+    assert runs[0]["task"]["status"] == "ABORTED"
+    measured = {**hw_out, "stage_result": {"directive_id": "t-par-1", "arm_id": "arm_s",
+                                              "handoff_lease_id": "lease-par-1", "task_verified": True,
+                                             "verification": {"verified": True, "basis": "predefined_side_and_top_target_zones"}}}
+    runs = ctw.poll_and_execute_once(pipe, request_fn=_req, live_act_fn=lambda h: measured, prep_dir=tmp_path)
+    assert runs[0]["omx_result"]["receipt"]["phase"] == "RELEASED"
+    assert runs[0]["omx_result"]["receipt"]["goal_evidence_digest"].startswith("sha256:")
+    assert runs[0]["omx_result"]["receipt"]["physical_completion"] is True
+    assert runs[0]["omx_result"]["receipt"]["simulated_success"] is False
+    stale_lease = {**measured, "stage_result": {**measured["stage_result"], "handoff_lease_id": "older-lease"}}
+    runs = ctw.poll_and_execute_once(pipe, request_fn=_req, live_act_fn=lambda h: stale_lease, prep_dir=tmp_path)
+    assert runs[0]["omx_result"]["receipt"]["phase"] == "ABORTED"
+    telemetry_only = {**measured, "stage_result": {**measured["stage_result"],
+                       "verification": {"verified": True, "basis": "telemetry_only"}}}
+    runs = ctw.poll_and_execute_once(pipe, request_fn=_req, live_act_fn=lambda h: telemetry_only, prep_dir=tmp_path)
+    assert runs[0]["omx_result"]["receipt"]["phase"] == "ABORTED"
+
+    def _req_ab(method: str, path: str, body):
+        if method == "GET":
+            return {"tasks": [{"task_id": "t-par-1", "cell_id": "cell_ab", "tier": 2}],
+                    "human_safety": {"active_estop": False, "human_detected": {}},
+                    "cells": {"cell_ab": {"phase": "ARM_IN_BED_ZONE", "active_task_id": "t-par-1"}}}
+        if path.endswith("/claim"):
+            claimed = _req(method, path, body)
+            claimed["handoff"].update(cell_id="cell_ab", arm_id="arm_b", tier=2)
+            return claimed
+        return _req(method, path, body)
+
+    ab_result = {**measured, "stage_result": {**measured["stage_result"], "arm_id": "arm_b",
+                 "place": {"area": "pallet", "tier": 2}}}
+    runs = ctw.poll_and_execute_once(pipe, request_fn=_req_ab, live_act_fn=lambda h: ab_result, prep_dir=tmp_path)
+    assert runs[0]["omx_result"]["receipt"]["phase"] == "ABORTED"
+    ab_result["stage_result"]["verification"] = {"verified": True, "basis": "predefined_side_and_top_target_zones",
+                                                   "z_gate": {"verdict": "PASS"}}
+    runs = ctw.poll_and_execute_once(pipe, request_fn=_req_ab, live_act_fn=lambda h: ab_result, prep_dir=tmp_path)
+    assert runs[0]["omx_result"]["receipt"]["phase"] == "RELEASED"
+
+    def _req_unlocked(method: str, path: str, body):
+        result = _req(method, path, body)
+        if path.endswith("/claim"):
+            result["handoff"]["wheel_brake_locked"] = False
+        return result
+
+    called = []
+    runs = ctw.poll_and_execute_once(pipe, request_fn=_req_unlocked,
+                                     live_act_fn=lambda h: called.append(h) or measured, prep_dir=tmp_path)
+    assert called == []
+    assert runs[0]["omx_result"]["receipt"]["reason"] == "AMR_NOT_LOCKED_AT_HANDOFF"
+
+    def _req_wrong_tier(method: str, path: str, body):
+        answer = _req_ab(method, path, body)
+        if path.endswith("/claim"):
+            answer["handoff"]["tier"] = 3
+        return answer
+
+    called.clear()
+    runs = ctw.poll_and_execute_once(pipe, request_fn=_req_wrong_tier,
+                                     live_act_fn=lambda h: called.append(h) or ab_result, prep_dir=tmp_path)
+    assert called == []
+    assert runs[0]["omx_result"]["receipt"]["phase"] == "ABORTED"
+    assert runs[0]["omx_result"]["receipt"]["reason"] == "HANDOFF_TASK_MISMATCH"
+    def _req_float_tier(method: str, path: str, body):
+        answer = _req_ab(method, path, body)
+        if path.endswith("/claim"):
+            answer["handoff"]["tier"] = 2.0
+        return answer
+
+    runs = ctw.poll_and_execute_once(pipe, request_fn=_req_float_tier,
+                                     live_act_fn=lambda h: called.append(h), prep_dir=tmp_path)
+    assert runs[0]["omx_result"]["receipt"]["phase"] == "ABORTED"
+    assert called == []
+    bad_place = {**ab_result, "stage_result": {**ab_result["stage_result"],
+                 "place": {"area": "pallet", "tier": 2.0}}}
+    runs = ctw.poll_and_execute_once(pipe, request_fn=_req_ab, live_act_fn=lambda h: bad_place, prep_dir=tmp_path)
+    assert runs[0]["omx_result"]["receipt"]["phase"] == "ABORTED"
+
+    def _req_bool_tier(method: str, path: str, body):
+        answer = _req(method, path, body)
+        if method == "GET":
+            answer["tasks"][0]["tier"] = True
+        return answer
+
+    called.clear()
+    assert ctw.poll_and_execute_once(pipe, request_fn=_req_bool_tier,
+                                     live_act_fn=lambda h: called.append(h), prep_dir=tmp_path) == []
+    assert called == []
+    def _req_missing_tier(method: str, path: str, body):
+        answer = _req(method, path, body)
+        if method == "GET":
+            answer["tasks"][0].pop("tier")
+        return answer
+
+    assert ctw.poll_and_execute_once(pipe, request_fn=_req_missing_tier,
+                                     live_act_fn=lambda h: called.append(h), prep_dir=tmp_path) == []
+    assert called == []
+
+
+def test_worker_human_hold_requires_runner_ack(tmp_path: Path, monkeypatch) -> None:
+    import cell_task_worker as ctw
+
+    io_dir = tmp_path / "chunk-io-s"
+    io_dir.mkdir()
+    fifo = io_dir / "chunk-cmd"
+    fifo.write_bytes(b"")
+    ack = {"command": "human-hold", "ok": True, "human_hold_latched": True,
+           "torque_hold_commanded": True}
+    monkeypatch.setattr(ctw, "_poll_status_ack", lambda *args: (ack, 1))
+
+    assert ctw.emergency_stop_arms(tmp_path) == {"chunk-io-s": ack}
+    assert fifo.read_bytes() == b"human-hold\n"
+
+    monkeypatch.setattr(ctw, "_poll_status_ack", lambda *args: ({}, 0))
+    assert ctw.emergency_stop_arms(tmp_path)["chunk-io-s"] == {"ok": False, "error": "human_hold_ack_missing"}
+
+
+def test_worker_fleet_safety_transport_requires_verified_https(monkeypatch) -> None:
+    import ssl
+    import cell_task_worker as ctw
+
+    with pytest.raises(ValueError, match="verified HTTPS"):
+        ctw.make_default_request_fn("http://fleet.invalid", "secret-token")
+
+    def wrong_certificate(request, *, context, timeout):
+        assert context.verify_mode == ssl.CERT_REQUIRED and context.check_hostname is True
+        assert timeout == 20
+        raise ssl.SSLCertVerificationError("certificate verify failed")
+
+    monkeypatch.setattr(ctw, "urlopen", wrong_certificate)
+    request = ctw.make_default_request_fn("https://fleet.invalid", "secret-token")
+    with pytest.raises(ssl.SSLCertVerificationError, match="certificate verify failed"):
+        request("GET", "/api/fleet/pipeline/cell-tasks", None)
+
+
+@pytest.mark.parametrize("lost_feed", [False, True])
+def test_inflight_human_hold_or_feed_loss_cannot_release_task(tmp_path: Path, monkeypatch, lost_feed: bool) -> None:
+    import threading
+    import cell_fleet_pipeline as cfp
+    import cell_task_worker as ctw
+
+    started, held, never = threading.Event(), threading.Event(), threading.Event()
+    observed = []
+
+    def request(method, path, body):
+        if method == "GET":
+            if started.is_set() and lost_feed:
+                never.wait(3.0)  # one stalled daemon query must fail closed at the watchdog deadline
+            return {"tasks": [{"task_id": "task-1", "cell_id": "cell_s", "tier": 1}],
+                    "human_safety": {"active_estop": started.is_set(), "human_detected": {}},
+                    "cells": {"cell_s": {"phase": "ARM_IN_BED_ZONE", "active_task_id": "task-1"}}}
+        if path.endswith("/claim"):
+            return {"claimed": True, "gate": {}, "handoff": {"task_id": "task-1", "tier": 1,
+                    "cell_id": "cell_s", "arm_id": "arm_s",
+                    "handoff_lease_id": "lease-1", "wheel_brake_locked": True,
+                    "bed_ready": True, "v_cmd_mps": 0.0}}
+        observed.append(body)
+        return {"task": {"status": "ABORTED"}, "gate": {}}
+
+    def hold(prep_dir):
+        held.set()
+        return {"chunk-io-s": {"command": "human-hold", "ok": True,
+                "human_hold_latched": True, "torque_hold_commanded": True}}
+
+    def act(handoff):
+        started.set()
+        assert held.wait(3.0)
+        return {"stage_result": {"directive_id": "task-1", "arm_id": "arm_s", "task_verified": True,
+                "verification": {"verified": True, "basis": "predefined_side_and_top_target_zones"}},
+                "stop_event": {"ok": True, "folded": True}}
+
+    monkeypatch.setattr(ctw, "emergency_stop_arms", hold)
+    runs = ctw.poll_and_execute_once(cfp.FleetModelPipeline(tmp_path / "pipe"), request_fn=request,
+                                     live_act_fn=act, prep_dir=tmp_path)
+    assert held.is_set() and len(runs) == 1
+    assert runs[0]["omx_result"]["receipt"]["phase"] == "ABORTED"
+    assert runs[0]["omx_result"]["receipt"]["goal_evidence_digest"] is None
+    assert observed[0]["phase"] == "ABORTED"
+    assert observed[0]["hardware_telemetry"]["safety_watchdog"]["hold_ack"]["chunk-io-s"]["ok"] is True
+    assert observed[0]["hardware_telemetry"]["safety_watchdog"]["owner_hold_ack_complete"] is True
+    assert observed[0]["hardware_telemetry"]["safety_watchdog"]["owner_stop_unconfirmed"] is True
+
+
+@pytest.mark.parametrize("held_phase", [False, True])
+def test_hold_after_claim_prevents_actuation_even_without_runner_ack(tmp_path: Path, monkeypatch, held_phase: bool) -> None:
+    import cell_fleet_pipeline as cfp
+    import cell_task_worker as ctw
+
+    reads, acted, posted = [], [], []
+
+    def request(method, path, body):
+        if method == "GET":
+            reads.append(1)
+            return {"tasks": [{"task_id": "task-1", "cell_id": "cell_s", "tier": 1}],
+                    "human_safety": {"active_estop": len(reads) > 1 and not held_phase, "human_detected": {}},
+                    "cells": {"cell_s": {"phase": "HUMAN_HOLD" if len(reads) > 1 and held_phase else "ARM_IN_BED_ZONE",
+                                        "active_task_id": "task-1"}}}
+        if path.endswith("/claim"):
+            return {"claimed": True, "gate": {}, "handoff": {"task_id": "task-1", "tier": 1,
+                    "cell_id": "cell_s", "arm_id": "arm_s",
+                    "handoff_lease_id": "lease-1", "wheel_brake_locked": True,
+                    "bed_ready": True, "v_cmd_mps": 0.0}}
+        posted.append(body)
+        return {"task": {"status": "ABORTED"}, "gate": {}}
+
+    monkeypatch.setattr(ctw, "emergency_stop_arms", lambda prep_dir: {"chunk-io-s": {"ok": False}})
+    runs = ctw.poll_and_execute_once(cfp.FleetModelPipeline(tmp_path / "pipe"), request_fn=request,
+                                     live_act_fn=lambda handoff: acted.append(handoff), prep_dir=tmp_path)
+    assert len(reads) == 2 and acted == []
+    assert len(runs) == 1 and posted[0]["phase"] == "ABORTED"
+    assert posted[0]["goal_evidence_digest"] is None
+    assert posted[0]["hardware_telemetry"]["safety_watchdog"]["hold_ack"]["chunk-io-s"]["ok"] is False
+    assert posted[0]["hardware_telemetry"]["safety_watchdog"]["owner_hold_ack_complete"] is False
+    assert posted[0]["hardware_telemetry"]["safety_watchdog"]["owner_stop_unconfirmed"] is True
 
 
 def test_mode_c_sim_real_co_learning_3tier_stack_reset_and_multitask_lifecycle(tmp_path: Path) -> None:
@@ -378,7 +573,7 @@ def test_mode_c_sim_real_co_learning_3tier_stack_reset_and_multitask_lifecycle(t
 
     co = SimRealCoLearningPipeline(tmp_path / "colearn")
     assert co.model_version == 0
-    assert (tmp_path / "colearn/models/active-model.json").is_file()
+    assert (tmp_path / "colearn/sim/models/active-model.json").is_file()
     assert set(SUPPORTED_TASKS) == {
         "pinky_to_3tier_stack",
         "unstack_and_reset",
@@ -436,13 +631,17 @@ def test_r2s_sim_rl_pretraining_fallback_and_continuous_fusion(tmp_path: Path) -
     cold_stack = cold_pipe.run_task("pinky_to_3tier_stack")
 
     # R2S Sim-First RL Pre-trained pipeline
+    real_policy = tmp_path / "r2s_pretrained/rl-policy.json"
+    real_policy.parent.mkdir()
+    real_policy.write_text('{"source": "real"}', encoding="utf-8")
     r2s_pipe = SimRealCoLearningPipeline(tmp_path / "r2s_pretrained")
     pre = r2s_pipe.pretrain_task_with_r2s_sim_rl("pinky_to_3tier_stack", episodes=24)
     assert pre["ok"] is True
     assert pre["r2s_snapshot_id"] == "20261112-1838"
     assert pre["rl_updates"] >= 48
     assert r2s_pipe.model_version == 1
-    assert (tmp_path / "r2s_pretrained/rl-policy.json").is_file()
+    assert (tmp_path / "r2s_pretrained/sim/rl-policy.json").is_file()
+    assert real_policy.read_text(encoding="utf-8") == '{"source": "real"}'
 
     pretrained_stack = r2s_pipe.run_task("pinky_to_3tier_stack")
     assert pretrained_stack["completed"] is True
@@ -501,7 +700,7 @@ def test_zero_bottleneck_live_camera_to_r2s_parallel_speculative_rl_and_async_sh
 
     spec_rl = parallel_speculative_r2s_rl_select(
         proj,
-        work_dir=pipe.work_dir,
+        work_dir=pipe.fleet_pipe.policy_dir,
         clf=pipe.clf,
         iwr=pipe.iwr,
         r2s_gap_state=pipe.r2s_gap_state,

@@ -68,9 +68,9 @@ class SimRealCoLearningPipeline:
     ) -> None:
         self.work_dir = Path(work_dir)
         self.work_dir.mkdir(parents=True, exist_ok=True)
-        self.models_dir = self.work_dir / "models"
-        self.models_dir.mkdir(parents=True, exist_ok=True)
         self.fleet_pipe = FleetModelPipeline(self.work_dir)
+        self.models_dir = self.fleet_pipe.policy_dir / "models"
+        self.models_dir.mkdir(parents=True, exist_ok=True)
         self.systematic_bias_m = (float(systematic_bias_m[0]), float(systematic_bias_m[1]))
         self.r2s_context = load_r2s_snapshot_context(r2s_snapshot_id)
         self.seed = int(seed)
@@ -134,7 +134,7 @@ class SimRealCoLearningPipeline:
             self.sim_rl_episodes.clear()
             self.model_history.clear()
             for fname in ("il-rl-residual-policy.json", "rl-policy.json", "il-demos.jsonl"):
-                fp = self.work_dir / fname
+                fp = self.fleet_pipe.policy_dir / fname
                 if fp.exists():
                     fp.unlink()
             self.r2s_gap_state.update({"alpha_real": 0.0, "beta_sim": 1.0, "fused_bias_m": [0.0, 0.0], "sim_rl_updates": 0, "real_updates": 0})
