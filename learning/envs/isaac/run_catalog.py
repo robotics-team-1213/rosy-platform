@@ -20,6 +20,10 @@ _CATALOG = [
      'implemented': True, 'stage': 'stacking_rl', 'seed_effect': 'INFEED_XY_AND_YAW',
      'timeout_seconds': 900, 'requirements': ['Approved SDK and model GPU', 'RSL-RL PPO'],
      'reason': 'Direct joint policy on the verified map geometry; training execution is separate from task proficiency.'},
+    {'id': 'omx-map-container-stacking-rl', 'name': 'Current CAD map: container stacking PPO feasibility',
+     'implemented': True, 'stage': 'stacking_rl', 'seed_effect': 'INFEED_XY_AND_YAW',
+     'timeout_seconds': 4200, 'requirements': ['Approved SDK and model GPU', 'RSL-RL PPO'],
+     'reason': 'SIM-only bounded PPO on current CAD container fixture; independent contact evaluation is separate from training execution and hardware acceptance.'},
     {'id': 'omx-map-long-stack', 'name': 'Confluence map: two-arm three-layer physical stacking',
      'implemented': True, 'stage': 'mapped_long_stack', 'seed_effect': 'INFEED_XY_AND_YAW',
      'timeout_seconds': 900, 'requirements': ['Approved SDK and model GPU'],
@@ -72,17 +76,23 @@ def normalize(scenario_id: str, config: dict) -> dict:
     entry = next((row for row in _CATALOG if row['id'] == scenario_id), None)
     if entry is None or not entry['implemented']:
         raise ValueError('scenario is unavailable' if entry is None else entry['reason'])
-    keys = ({'seed', 'layers', 'case'} if scenario_id == 'omx-map-container-stack' else
+    keys = ({'seed', 'layers', 'case'} if scenario_id in ('omx-map-container-stack', 'omx-map-container-stacking-rl') else
             {'seed', 'case'} if scenario_id == 'arm-s-cell-case' else {'seed'})
     if (not isinstance(config, dict) or set(config) != keys
             or type(config['seed']) is not int or not 0 <= config['seed'] <= 2147483647):
         raise ValueError('settings require an integer seed in 0..2147483647'
                          + (' and a case' if scenario_id == 'arm-s-cell-case' else ' only'))
-    if scenario_id == 'omx-map-container-stack':
-        from mapped_stack_fixture import container_fixture
+    if scenario_id in ('omx-map-container-stack', 'omx-map-container-stacking-rl'):
+        if scenario_id == 'omx-map-container-stacking-rl':
+            from container_rl_fixture import fixture as container_fixture
+        else:
+            from mapped_stack_fixture import container_fixture
         fixture = container_fixture(layers=config['layers'], case=config['case'])
-        return dict(model='omx_f', headless=True, seed=config['seed'], layers=config['layers'],
-                    case=config['case'], fixture=fixture['revision'], trials=1)
+        value = dict(model='omx_f', headless=True, seed=config['seed'], layers=config['layers'],
+                     case=config['case'], fixture=fixture['revision'])
+        if scenario_id == 'omx-map-container-stacking-rl':
+            return dict(value, iterations=32, num_envs=1)
+        return dict(value, trials=1)
     if scenario_id == 'omx-map-stacking-rl':
         return {'model': 'omx_f', 'headless': True, 'seed': config['seed'],
                 'fixture': 'confluence-map-stacking-rl-v1', 'iterations': 32, 'num_envs': 1}

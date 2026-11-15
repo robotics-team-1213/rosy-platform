@@ -127,3 +127,15 @@ def test_gate_order_and_thresholds(values, prefix):
     accepted, reason = mr._verdict(*values)
     assert reason.startswith(prefix)
     assert accepted is (prefix == "ok")
+
+
+def test_the_pale_pink_bay_tape_is_not_white_lane_paint():
+    # 2026-11-14 ceiling: the pink bay tape reads H 167-172, S 40-74, inside the white bound (S <= 70);
+    # 59-67 % of it passed as lane paint the site map does not have.
+    import cv2
+
+    img = np.full((240, 320, 3), 105, np.uint8)
+    img[:, 100:108] = (235, 235, 235)                                    # white lane paint
+    img[:, 200:208] = cv2.cvtColor(np.uint8([[[170, 55, 200]]]), cv2.COLOR_HSV2BGR)[0, 0]  # the pink tape
+    mask = mr._line_mask(img)
+    assert mask[120, 100:108].any() and not mask[120, 200:208].any()

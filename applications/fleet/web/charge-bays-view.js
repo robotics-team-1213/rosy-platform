@@ -30,7 +30,7 @@ export function createChargeBaysView({ scope, el, call, auth, confirmedAction = 
   });
 
   if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
-    window.addEventListener("rosy:inspect-target", (ev) => {
+    scope.listen(window, "rosy:inspect-target", (ev) => {
       const targetId = ev?.detail?.targetId;
       const camId = ev?.detail?.camId;
       if (!targetId) return;
