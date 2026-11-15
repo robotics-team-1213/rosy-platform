@@ -155,3 +155,27 @@ def test_land_async_branch_option_runs_precheck_in_hidden_checkout_and_cleans_up
     holder = eol_repo / ".git" / tool.HOLDER
     assert not holder.exists() or list(holder.iterdir()) == []
     assert len(_git(eol_repo, "worktree", "list", "--porcelain").split("\n\n")) == 1
+
+
+@pytest.mark.parametrize("explicit_branch", [False, True])
+def test_resolve_branch_rejects_untracked_files_but_allows_gitignored(tmp_path, explicit_branch):
+    main = tmp_path / "main"
+    main.mkdir()
+    _git(main, "init", "-q", "-b", "main")
+    for key, value in (("user.email", "t@example.invalid"), ("user.name", "t")):
+        _git(main, "config", key, value)
+    (main / ".gitignore").write_text("*.ignored\n", encoding="utf-8")
+    _git(main, "add", ".gitignore")
+    _git(main, "commit", "-qm", "base")
+    dev = tmp_path / "dev"
+    _git(main, "worktree", "add", "-q", "-b", "feat/untracked", str(dev))
+
+    precheck = load("land_precheck")
+    cwd, arg, expected = (main, "feat/untracked", "refs/heads/feat/untracked") if explicit_branch else (dev, None, "HEAD")
+
+    (dev / "scratch.ignored").write_text("ok\n", encoding="utf-8")
+    assert precheck.resolve_branch(cwd, arg) == ("feat/untracked", expected)
+
+    (dev / "forgotten.py").write_text("x = 1\n", encoding="utf-8")
+    with pytest.raises(SystemExit, match="uncommitted changes"):
+        precheck.resolve_branch(cwd, arg)
