@@ -360,6 +360,22 @@ def test_caution_and_calibration_keep_their_strip_during_a_call():
     assert calibrating["strip"] == fs.CALIBRATING_STRIP
 
 
+@pytest.mark.parametrize("test_action,expected_color", [
+    ("identify_blue", "blue"),
+    ("identify_blue_quiet", "blue"),
+    ("identify_amber", "amber"),
+    ("identify_amber_quiet", "amber"),
+])
+def test_a_fleet_call_sets_steady_identify_color_and_wakes_panel(test_action, expected_color):
+    answer = fs.screen_for(**READY, core=core(power_mode="standby", activity_kind="CALIBRATING"),
+                           test=test_action)
+
+    assert answer["kind"] == fs.FACE and answer["awake"] and answer["backlight"] == 100
+    assert answer["identify_color"] == expected_color
+    assert fs.screen_for(**READY, core=core(), test="buzzer")["identify_color"] is None
+    assert fs.screen_for(**READY, core=core(estop=True), test=test_action)["identify_color"] is None
+
+
 def test_a_plain_line_hold_stays_a_caution_until_the_robot_asks_fleet():
     hold = fs.screen_for(**READY, core=core(caution=["line_follow_hold"]))
     asking = fs.screen_for(**READY, core=core(caution=["line_follow_hold"], signal="ask",

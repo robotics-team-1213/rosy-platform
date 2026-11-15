@@ -14871,3 +14871,8 @@ osy-d395-s1d\`.
 - 변경: `tools/remote/remote_pytest.py` `ship()`의 `finally`가 `refs/remote-pytest/<name>` 삭제 실패를 무시한다. 교훈 `docs/solutions/workflow-issues/landing-stopped-or-stalled-without-a-test-verdict-2026-11-14.md`에 추가 절.
 - 증거: `test/test_remote_pytest.py::test_a_failed_temp_ref_delete_does_not_fail_the_ship`(원격, 수정 전 실패 확인). 사례 land-chore-publish-full-20261114-1230-20261114042845: 삭제 exit 1 traceback으로 정지, 시험 판정 없음. 삭제가 실패한 원인은 미확인.
 - gate 변화: 없음.
+
+## 2026-11-14 · uncommitted · API 참조 v1.401 재위치화 경로
+- 변경: 운영자 재위치화 누름·상태 뷰·후보 확인 세 경로와 무인 바퀴 운동 금지를 API 참조 v1.401로 기록했다.
+- 증거: 원격 pytest(시험 PC) — 보고서 참고.
+- gate 변화: 없음.

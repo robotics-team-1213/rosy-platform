@@ -376,3 +376,51 @@ def test_worker_serves_the_crosswalk_mask_beside_the_paint_and_moves_it_with_the
     worker.reset()
     assert worker.used_crosswalk is None
     assert worker.used_speed_bump is None
+
+
+def test_worker_keeps_revision_and_aux_masks_when_wall_less_model_hits_low_coverage(tmp_path):
+    from perception_runtime.perception.learned.manifest import ClassSpec
+    from perception_runtime.perception.learned.runner import LaneSegModel
+    import hashlib
+    import json
+
+    h, w = 240, 320
+    classes = (
+        ClassSpec(0, "background", "background"),
+        ClassSpec(1, "lane_left", "lane_marking"),
+        ClassSpec(2, "crosswalk", "ignore"),
+        ClassSpec(3, "speed_bump", "ignore"),
+        ClassSpec(4, "drivable", "drivable"),
+    )
+    folder = tmp_path / "m"
+    folder.mkdir()
+    (folder / "model.onnx").write_bytes(b"fake")
+    (folder / "model_manifest.json").write_text(json.dumps({
+        "schema": "rosy.perception.model/1", "model_revision": "lane-seg-20261114-test", "task": "lane_seg",
+        "files": [{"name": "model.onnx", "sha256": hashlib.sha256(b"fake").hexdigest(), "precision": "fp32"}],
+        "input": {"shape": [1, 3, h, w], "color": "rgb", "scale": 1 / 255,
+                  "mean": [0, 0, 0], "std": [1, 1, 1], "layout": "nchw"},
+        "output": {"layout": "nchw_logits", "classes": [
+            {"index": c.index, "name": c.name, "role": c.role} for c in classes]},
+        "dataset": {"repo": "org/d", "revision": "a" * 40},
+        "camera_profile_revision": "cam-1",
+    }))
+    labels = np.zeros((h, w), np.int64)
+    labels[10:20, 120:200] = 2  # thin far crosswalk strip -> way is None (low_coverage)
+
+    class _Sess:
+        def run(self, _x):
+            logits = np.full((1, len(classes), h, w), -5.0, np.float32)
+            for c in range(len(classes)):
+                logits[0, c][labels == c] = 5.0
+            return logits
+
+    model = LaneSegModel.open(folder, session_factory=lambda *_: _Sess(), floor_gate=True, paint_target="drivable")
+    worker = LearnedPaintWorker(_Slot(model), stale_s=5.0, clock=lambda: 0.0, start=False, target="drivable")
+    frame = np.zeros((h, w, 3), np.uint8)
+    worker.mask_for(frame, 1, 10.0)
+    worker.step()
+    used = worker.mask_for(frame, 1, 10.1, clean_drivable=lambda m: m)
+    assert worker.last_error is None
+    assert worker.used_model_revision == "lane-seg-20261114-test"
+    assert not used.any() and worker.used_crosswalk is not None and worker.used_crosswalk[10:20, 120:200].all()

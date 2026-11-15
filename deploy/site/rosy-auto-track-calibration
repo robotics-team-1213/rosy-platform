@@ -1,0 +1,475 @@
+#!/usr/bin/env python3
+"""Automatic OpenCV full-track calibration and sub-pixel map sync for ceiling_north (world_261026)."""
+from __future__ import annotations
+
+import json
+import math
+import os
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+STATE_FILE = Path("/var/lib/rosy/auto-track-calibration-state.json")
+DEFAULT_TOKEN_FILE = Path("/etc/rosy/site/auto-calibration.token")
+TOKEN_FILE_ENV = "ROSY_AUTO_CALIBRATION_TOKEN_FILE"
+
+CORNERS_M = ((-1.22, -0.61), (1.22, -0.61), (1.22, 0.61), (-1.22, 0.61))
+DRIFT_THRESHOLD_M = 0.015
+MAP_PLACE_THRESHOLD_M = 0.012
+STABILITY_WINDOW = 5
+STABLE_SPREAD_M = 0.01
+MIN_APPROVAL_INTERVAL_S = 6 * 3600
+
+
+def apply_3x3(m: list[float], x: float, y: float) -> tuple[float, float]:
+    w = m[6] * x + m[7] * y + m[8]
+    return (m[0] * x + m[1] * y + m[2]) / w, (m[3] * x + m[4] * y + m[5]) / w
+
+
+def solve_corners_m(
+    old_m2i: list[float] | None,
+    new_i2m: list[float],
+    width: int = 0,
+    height: int = 0,
+) -> list[list[float]]:
+    """Project track corners (or image corners if uncalibrated) into map frame."""
+    if old_m2i is not None and len(old_m2i) == 9:
+        pts = [apply_3x3(old_m2i, cx, cy) for cx, cy in CORNERS_M]
+    else:
+        w, h = float(width), float(height)
+        pts = [(0.0, 0.0), (w, 0.0), (w, h), (0.0, h)]
+    return [[round(nx, 6), round(ny, 6)] for u, v in pts for nx, ny in (apply_3x3(new_i2m, u, v),)]
+
+
+def corner_drift_m(corners: list[list[float]] | list[tuple[float, float]]) -> float:
+    """Max Euclidean distance (m) between solved map-frame corners and nominal CORNERS_M."""
+    if not corners:
+        return 0.0
+    return max(math.hypot(nx - cx, ny - cy) for (nx, ny), (cx, cy) in zip(corners, CORNERS_M))
+
+
+def mean_corners(series_corners: list[list[list[float]] | list[tuple[float, float]]]) -> list[list[float]]:
+    """Element-wise mean of map-frame corners across a series of solves."""
+    n = len(series_corners)
+    if n == 0:
+        return []
+    return [
+        [
+            sum(c[i][0] for c in series_corners) / n,
+            sum(c[i][1] for c in series_corners) / n,
+        ]
+        for i in range(len(CORNERS_M))
+    ]
+
+
+def series_spread_m(series_corners: list[list[list[float]] | list[tuple[float, float]]]) -> float:
+    """Max pairwise corner spread (m) across all solves in the series."""
+    if len(series_corners) < 2:
+        return 0.0
+    worst = 0.0
+    for i in range(len(CORNERS_M)):
+        for idx, a in enumerate(series_corners):
+            ax, ay = a[i]
+            for b in series_corners[idx + 1:]:
+                worst = max(worst, math.hypot(ax - b[i][0], ay - b[i][1]))
+    return worst
+
+
+def mean_homography(matrices: list[list[float]]) -> list[float]:
+    """Element-wise mean of normalized 3x3 homography matrices."""
+    n = len(matrices)
+    normed = []
+    for m in matrices:
+        scale = m[8] if m[8] != 0.0 else 1.0
+        normed.append([v / scale for v in m])
+    return [round(sum(m[i] for m in normed) / n, 8) for i in range(9)]
+
+
+def mean_places(series_places: list[list[dict]]) -> list[dict]:
+    """Average (x, y) coordinates for each place id across a series of solves."""
+    if not series_places:
+        return []
+    if len(series_places) == 1:
+        return series_places[0]
+    coords: dict[str, list[tuple[float, float]]] = {}
+    for places in series_places:
+        for p in places:
+            coords.setdefault(p["id"], []).append((float(p["x"]), float(p["y"])))
+    out = []
+    for p in series_places[-1]:
+        pts = coords.get(p["id"], [])
+        if pts:
+            item = dict(p)
+            item["x"] = round(sum(x for x, _ in pts) / len(pts), 6)
+            item["y"] = round(sum(y for _, y in pts) / len(pts), 6)
+            out.append(item)
+        else:
+            out.append(dict(p))
+    return out
+
+
+def decide(
+    series_corners: list[list[list[float]] | list[tuple[float, float]]],
+    *,
+    has_current_cal: bool = True,
+    place_diff_m: float = 0.0,
+    now: float | None = None,
+    last_approved_at: float | None = None,
+    force: bool = False,
+    window_size: int = STABILITY_WINDOW,
+    stable_spread_m: float = STABLE_SPREAD_M,
+    drift_threshold_m: float = DRIFT_THRESHOLD_M,
+    place_threshold_m: float = MAP_PLACE_THRESHOLD_M,
+    min_interval_s: float = MIN_APPROVAL_INTERVAL_S,
+) -> dict:
+    """Return approve/hold decision with reason, drift (m), and spread (m)."""
+    recent = list(series_corners[-window_size:])
+    spread = series_spread_m(recent)
+    if has_current_cal and recent:
+        drift = corner_drift_m(mean_corners(recent))
+    elif not has_current_cal:
+        drift = 999.0
+    else:
+        drift = 0.0
+
+    if force:
+        return {
+            "decision": "approve",
+            "reason": "forced",
+            "drift": round(drift, 4),
+            "spread": round(spread, 4),
+        }
+
+    if len(recent) < window_size:
+        return {
+            "decision": "hold",
+            "reason": f"insufficient_samples:{len(recent)}/{window_size}",
+            "drift": round(drift, 4),
+            "spread": round(spread, 4),
+        }
+
+    if spread > stable_spread_m:
+        return {
+            "decision": "hold",
+            "reason": "unstable_series",
+            "drift": round(drift, 4),
+            "spread": round(spread, 4),
+        }
+
+    needs_cal = (not has_current_cal) or (drift > drift_threshold_m)
+    needs_map = needs_cal or (place_diff_m > place_threshold_m)
+    if not needs_map:
+        return {
+            "decision": "hold",
+            "reason": "within_threshold",
+            "drift": round(drift, 4),
+            "spread": round(spread, 4),
+        }
+
+    if last_approved_at is not None and now is not None and (now - last_approved_at) < min_interval_s:
+        return {
+            "decision": "hold",
+            "reason": "rate_limited",
+            "drift": round(drift, 4),
+            "spread": round(spread, 4),
+        }
+
+    reason = "no_current_cal" if not has_current_cal else ("drift_exceeded" if needs_cal else "place_diff_exceeded")
+    return {
+        "decision": "approve",
+        "reason": reason,
+        "drift": round(drift, 4),
+        "spread": round(spread, 4),
+    }
+
+
+def read_token(token_file: Path | None = None) -> str | None:
+    """Read bearer token from ROSY_AUTO_CALIBRATION_TOKEN_FILE or default path."""
+    path = token_file if token_file is not None else Path(os.environ.get(TOKEN_FILE_ENV, str(DEFAULT_TOKEN_FILE)))
+    try:
+        token = path.read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+    return token or None
+
+
+def sh_json(container: str, user: str, code: str) -> dict:
+    proc = subprocess.run(
+        ["docker", "exec", "-i", "--user", user, container, "python3", "-"],
+        input=code, text=True, capture_output=True, timeout=30,
+    )
+    if proc.returncode != 0:
+        raise RuntimeError(f"{container} failed: {proc.stderr.strip()}")
+    return json.loads(proc.stdout.strip().splitlines()[-1])
+
+
+def run_vision_solve() -> dict:
+    code = """
+import json, time, cv2, httpx, numpy as np
+from pathlib import Path
+from core_common.protocol.vision_preview import VisionLeaseSigner
+from rosy_vision.world_261026_auto import auto_calibrate_and_trace_world_261026
+
+lease_key = Path('/run/secrets/vision_preview_secret').read_text().strip()
+signer = VisionLeaseSigner(lease_key)
+jpeg = None
+frame_seq = 0
+with httpx.Client(verify='/run/secrets/site_ca', timeout=10.0) as client:
+    for i in range(4):
+        lease = signer.issue(principal_id=f'auto-calib-{i}', source_id='ceiling_north', ttl_s=60)
+        r = client.get('https://vision:8095/api/vision/sources/ceiling_north/frame',
+                       headers={'Authorization': f'Bearer {lease}', 'Host': 'vision'})
+        if r.status_code == 200 and len(r.content) > 1000:
+            jpeg = r.content
+            frame_seq = int(r.headers.get('X-Frame-Seq', '0') or 0)
+            break
+        time.sleep(1.0)
+
+if jpeg is None:
+    print(json.dumps({"ok": False, "reason": "no_frame"}))
+else:
+    img = cv2.imdecode(np.frombuffer(jpeg, np.uint8), cv2.IMREAD_COLOR)
+    fit = auto_calibrate_and_trace_world_261026(img)
+    if fit is None:
+        print(json.dumps({"ok": False, "reason": "fit_rejected"}))
+    else:
+        h, w = img.shape[:2]
+        print(json.dumps({
+            "ok": True,
+            "width": w,
+            "height": h,
+            "frame_seq": frame_seq,
+            "rms_m": round(float(fit["rms_m"]), 5),
+            "map_to_image": [round(float(v), 8) for v in fit["map_to_image"].ravel()],
+            "image_to_map": [round(float(v), 8) for v in fit["image_to_map"].ravel()],
+            "places": fit["places"],
+            "edges": fit["edges"],
+        }))
+"""
+    return sh_json("rosy-site-vision-1", "10001", code)
+
+
+def fetch_fleet_current(token: str) -> dict:
+    code = f"""
+import json, httpx
+
+token = {repr(token)}
+headers = {{"Authorization": f"Bearer {{token}}"}}
+
+with httpx.Client(verify='/run/secrets/site_ca', timeout=10.0) as client:
+    cal_r = client.get('https://fleet:8090/api/fleet/calibrations', headers=headers)
+    cal_r.raise_for_status()
+    cals = [c for c in cal_r.json().get('calibrations', []) if c.get('source_id') == 'ceiling_north']
+    cur_cal = cals[0] if cals else None
+
+    map_r = client.get('https://fleet:8090/api/fleet/site-map/active', headers=headers)
+    cur_map = map_r.json() if map_r.status_code == 200 else None
+
+print(json.dumps({{"cur_cal": cur_cal, "cur_map": cur_map}}))
+"""
+    return sh_json("rosy-site-fleet-1", "rosy", code)
+
+
+def apply_fleet_update(token: str, solved: dict, *, needs_cal: bool, needs_map: bool) -> dict:
+    apply_code = f"""
+import json, httpx
+
+token = {repr(token)}
+solved = {repr(solved)}
+needs_cal = {repr(needs_cal)}
+needs_map = {repr(needs_map)}
+headers = {{"Authorization": f"Bearer {{token}}"}}
+out = {{"cal_updated": False, "map_updated": False}}
+
+with httpx.Client(verify='/run/secrets/site_ca', timeout=15.0) as client:
+    if needs_cal:
+        score = max(0.95, min(0.995, round(1.0 - solved['rms_m'] * 8.0, 3)))
+        body = {{
+            "source_id": "ceiling_north",
+            "map_id": "world_261026",
+            "map_to_image": solved["map_to_image"],
+            "image": {{"width": solved["width"], "height": solved["height"]}},
+            "track_bounds_m": {{"min_x": -1.22, "min_y": -0.61, "max_x": 1.22, "max_y": 0.61}},
+            "fit_score": score,
+            "lens": {{"kind": "standard", "focal_mm": 5.4, "hfov_deg": 67.8}},
+            "frame_seq": solved["frame_seq"],
+        }}
+        r = client.post('https://fleet:8090/api/fleet/calibrations', headers=headers, json=body)
+        r.raise_for_status()
+        out["cal_updated"] = True
+        out["calibration_revision"] = r.json().get("calibration_revision")
+
+    if needs_map:
+        act_r = client.get('https://fleet:8090/api/fleet/site-map/active', headers=headers)
+        if act_r.status_code == 200:
+            map_doc = act_r.json()["map"]
+            map_doc.pop("drawing", None)
+            map_doc["places"] = solved["places"]
+            map_doc["edges"] = solved["edges"]
+            draft_cur = client.get('https://fleet:8090/api/fleet/site-map/draft', headers=headers).json()
+            exp_rev = draft_cur.get("revision")
+            put_body = {{"map": map_doc}}
+            if exp_rev:
+                put_body["expected_revision"] = exp_rev
+            put_r = client.put('https://fleet:8090/api/fleet/site-map/draft', headers=headers, json=put_body)
+            put_r.raise_for_status()
+            new_rev = put_r.json()["revision"]
+            act_post = client.post('https://fleet:8090/api/fleet/site-map/activate',
+                                   headers=headers, json={{"expected_revision": new_rev}})
+            if act_post.status_code == 200:
+                out["map_updated"] = True
+                out["map_version"] = act_post.json().get("version")
+            else:
+                out["map_activate_status"] = act_post.status_code
+
+print(json.dumps(out))
+"""
+    return sh_json("rosy-site-fleet-1", "rosy", apply_code)
+
+
+def _load_state(state_file: Path) -> dict:
+    if not state_file.exists():
+        return {}
+    try:
+        data = json.loads(state_file.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def _save_state(state_file: Path, payload: dict) -> None:
+    state_file.parent.mkdir(parents=True, exist_ok=True)
+    state_file.write_text(json.dumps(payload), encoding="utf-8")
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = sys.argv[1:] if argv is None else argv
+    force = "--force" in args
+    dry_run = "--dry-run" in args
+
+    token = read_token()
+    if token is None:
+        print(json.dumps({"status": "no-credential"}))
+        return 0
+
+    solved = run_vision_solve()
+    if not solved.get("ok"):
+        print(json.dumps({
+            "status": "skipped",
+            "decision": "hold",
+            "reason": solved.get("reason", "solve_failed"),
+            "drift": 0.0,
+            "spread": 0.0,
+        }))
+        return 0
+
+    current = fetch_fleet_current(token)
+    cur_cal = current.get("cur_cal")
+    cur_map = current.get("cur_map")
+
+    old_m2i = None
+    cal_rev = None
+    if cur_cal and isinstance(cur_cal.get("map_to_image"), list) and len(cur_cal["map_to_image"]) == 9:
+        old_m2i = cur_cal["map_to_image"]
+        cal_rev = cur_cal.get("calibration_revision")
+
+    state = _load_state(STATE_FILE)
+    history = state.get("history") if isinstance(state.get("history"), list) else []
+    if state.get("cal_revision") != cal_rev:
+        history = []
+
+    corners = solve_corners_m(old_m2i, solved["image_to_map"], solved["width"], solved["height"])
+    history.append({
+        "corners": corners,
+        "map_to_image": solved["map_to_image"],
+        "rms_m": solved["rms_m"],
+        "places": solved["places"],
+    })
+    history = history[-STABILITY_WINDOW:]
+
+    avg_places = mean_places([h["places"] for h in history])
+    place_diff_m = 0.0
+    if cur_map and isinstance(cur_map.get("map"), dict):
+        old_places = {p["id"]: (p["x"], p["y"]) for p in cur_map["map"].get("places", [])}
+        for np_item in avg_places:
+            if np_item["id"] in old_places:
+                ox, oy = old_places[np_item["id"]]
+                place_diff_m = max(place_diff_m, math.hypot(np_item["x"] - ox, np_item["y"] - oy))
+    else:
+        place_diff_m = 999.0
+
+    now = time.time()
+    last_approved_at = state.get("last_approved_at")
+    outcome = decide(
+        [h["corners"] for h in history],
+        has_current_cal=(old_m2i is not None),
+        place_diff_m=place_diff_m,
+        now=now,
+        last_approved_at=last_approved_at,
+        force=force,
+    )
+
+    if dry_run:
+        print(json.dumps({
+            "status": "dry-run",
+            "rms_m": solved["rms_m"],
+            "place_diff_m": round(place_diff_m, 4),
+            **outcome,
+        }))
+        return 0
+
+    if outcome["decision"] != "approve":
+        _save_state(STATE_FILE, {
+            "checked_at": now,
+            "cal_revision": cal_rev,
+            "last_approved_at": last_approved_at,
+            "rms_m": solved["rms_m"],
+            "place_diff_m": round(place_diff_m, 4),
+            **outcome,
+            "history": history,
+        })
+        print(json.dumps({
+            "status": "ok",
+            "rms_m": solved["rms_m"],
+            "place_diff_m": round(place_diff_m, 4),
+            "updated": False,
+            **outcome,
+        }))
+        return 0
+
+    approved_solve = {
+        "width": solved["width"],
+        "height": solved["height"],
+        "frame_seq": solved["frame_seq"],
+        "rms_m": round(sum(h["rms_m"] for h in history) / len(history), 5),
+        "map_to_image": mean_homography([h["map_to_image"] for h in history]),
+        "places": avg_places,
+        "edges": solved["edges"],
+    }
+    needs_cal = force or (old_m2i is None) or (outcome["drift"] > DRIFT_THRESHOLD_M)
+    needs_map = force or needs_cal or (place_diff_m > MAP_PLACE_THRESHOLD_M)
+    res = apply_fleet_update(token, approved_solve, needs_cal=needs_cal, needs_map=needs_map)
+
+    _save_state(STATE_FILE, {
+        "checked_at": now,
+        "cal_revision": res.get("calibration_revision", cal_rev),
+        "last_approved_at": now,
+        "rms_m": approved_solve["rms_m"],
+        "place_diff_m": round(place_diff_m, 4),
+        **outcome,
+        "history": [],
+        "last_update": res,
+    })
+    print(json.dumps({
+        "status": "updated",
+        "rms_m": approved_solve["rms_m"],
+        "place_diff_m": round(place_diff_m, 4),
+        **outcome,
+        **res,
+    }))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
