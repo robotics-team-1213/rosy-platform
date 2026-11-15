@@ -34,7 +34,7 @@ EXPECTED_LOOPS = {
     "job-trips", "task-dispatch", "proposal-expiry", "mission-dispatch",
     "cell-job-dispatch", "goal-evidence-expiry", "mission-feedback-schedule",
     "mission-model-turn", "control-unit-journal", "control-unit-information", "charge-bays",
-    "event-loop-lag",
+    "event-loop-lag", "auto-locate",
 }
 
 
@@ -282,7 +282,7 @@ def test_readyz_without_lifespan_stays_ready_with_declared_names(tmp_path):
 # --- 전체 옵션 구성: 선택 분기의 언랩 (계획 2026-10-27 후속) ---
 
 def test_start_fleet_loops_enumerates_every_loop_when_all_services_are_configured(monkeypatch):
-    """모든 선택 서비스가 켜진 구성에서 24개 루프 전부가 running으로 언랩되는지.
+    """모든 선택 서비스가 켜진 구성에서 26개 루프 전부가 running으로 언랩되는지.
 
     루프 몸체는 각자의 시험이 소유한다 — 여기서는 스폰 배선(supervised/attach)만
     검증한다. 팩토리를 영원히 대기하는 코루틴으로 바꿔 몸체를 걸어 뺀다.
@@ -314,7 +314,7 @@ def test_start_fleet_loops_enumerates_every_loop_when_all_services_are_configure
         for factory in ("goal_evidence_expiry_loop", "lane_compliance_loop", "charge_bays_loop",
                         "goal_lease_renew_loop", "proposal_expiry_loop",
                         "mission_dispatch_loop", "mission_feedback_schedule_loop",
-                        "_task_dispatch_loop", "_mission_model_turn_worker_loop"):
+                        "_task_dispatch_loop", "_mission_model_turn_worker_loop", "auto_locate_loop"):
             monkeypatch.setattr(loop_supervision, factory, hang)
         monkeypatch.setattr(loop_supervision, "start_control_unit_tasks",
                             lambda app: [asyncio.ensure_future(hang()) for _ in range(2)])
@@ -329,6 +329,8 @@ def test_start_fleet_loops_enumerates_every_loop_when_all_services_are_configure
             mission_model_turn_scheduler=object(), mission_model_turn_worker=object(),
             localization_service=Service(), calibration_drift_watch=Service(),
             notification_config=object(), identity=Service(),
+            auto_locate=SimpleNamespace(map_pose=SimpleNamespace(
+                config=SimpleNamespace(auto_locate_robots=("rosy_01",)))),
             log=logging.getLogger("test-loop-supervision"), lane_compliance_period_s=1.0)
 
         ready, loops = supervisor.ready()

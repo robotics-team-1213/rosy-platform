@@ -1,6 +1,7 @@
 """cell_two_arm: the schedule on fake sessions: progress gates each segment, one arm's failure stops the other, the fold is
 checked from where the arms stand, and nothing moves without a person."""
 import json
+import math
 from pathlib import Path
 import sys
 import time
@@ -562,4 +563,41 @@ def test_a_latched_fault_holds_the_climb_out_for_a_person_not_as_a_recovery(geom
                            0.05, lambda row: None, {"last": {"a": "run descend_pick"}, "stopped": {}})
     assert folded["folded"] is False and "a did not climb out: held: fault" in folded["person_needed"]
     assert cells["a"].motion == [] and cells["b"].motion == []  # the climb never ran and the peer never folded
+
+
+def test_per_arm_tcp_kinematics_isolation_and_library_mismatch_refusal(monkeypatch):
+    """D-1033: each arm resolves its own TCP kinematics and refuses a library planned with a mismatched TCP."""
+    q = [0.0, -0.3, 0.4, 1.2, 0.0]
+    monkeypatch.setenv("ROSY_OMX_TCP_X_M", "0.0919")
+    configs = {
+        "a": {"plan": {"tcp_x_m": 0.0885}, "_arm_calibration": {"samples": 0, "z_profile_mm": {"tcp_v21_x_mm": 74.1}}},
+        "b": {"_arm_calibration": {"samples": 3, "z_profile_mm": {"tcp_v21_x_mm": 74.1}}},
+    }
+    assert two.tcp_x_of({"_arm_calibration": {"samples": 0, "z_profile_mm": {"tcp_v21_x_mm": 74.1}}}) is None
+    assert two.tcp_x_of(configs["a"]) == pytest.approx(0.0885)
+    assert two.tcp_x_of(configs["b"]) == pytest.approx(0.0741)
+
+    libs = {"a": [("a.json", {"tcp_x_m": 0.0885})], "b": [("b.json", {"tcp_x_m": 0.0741})]}
+    kins = two.kinematics_for(configs, libs)
+    assert math.dist(
+        (kins["a"].fk(q).x, kins["a"].fk(q).y, kins["a"].fk(q).z),
+        (kins["b"].fk(q).x, kins["b"].fk(q).y, kins["b"].fk(q).z),
+    ) == pytest.approx(0.0885 - 0.0741, abs=1e-5)
+
+    bad_libs = {"a": [("a.json", {"tcp_x_m": 0.0741})], "b": [("b.json", {"tcp_x_m": 0.0741})]}
+    with pytest.raises(SystemExit, match="disagrees with arm tcp"):
+        two.kinematics_for(configs, bad_libs)
+
+    seen_kins = {}
+
+    def capture_poses(frames, kin, rigid, tip, item=None):
+        seen_kins[rigid] = kin
+        return [stick(rigid)]
+
+    monkeypatch.setattr(two, "poses_of", capture_poses)
+    monkeypatch.setattr(two, "command_frames", lambda library, command, at: [at])
+    cells = {"a": Standing([9.0] * 6), "b": Standing([9.0] * 6)}
+    res = two.safe_fold(cells, {"a": LIBRARY, "b": LIBRARY}, kins, {"a": 0.0, "b": 1.0}, {"a": 0.0, "b": 0.0},
+                        0.05, lambda row: None, {"last": {}, "stopped": {}})
+    assert res["folded"] is True and seen_kins[0.0] is kins["a"] and seen_kins[1.0] is kins["b"]
 

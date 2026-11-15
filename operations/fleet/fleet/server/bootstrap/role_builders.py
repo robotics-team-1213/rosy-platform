@@ -206,7 +206,8 @@ def install_pose_and_stuck_runtime(app, *, console, console_token, hub, sighting
         from fleet.server.tracking_routes import install_tracking_routes
         install_tracking_routes(app, tracking=tracking, require_operator=require_operator, read_guard=read_guard,
                                 operator_guard=operator_guard, require_named_operator=require_named_operator,
-                                map_revision=partial(active_map_revision, site_maps), map_pose=map_pose)
+                                map_revision=partial(active_map_revision, site_maps), map_pose=map_pose,
+                                console=console)
         install_start_point_routes(app, service=StartPointService(sources=tracking.sources, calibrations=tracking.calibrations),
                                    read_guard=read_guard, require_named_operator=require_named_operator)
     install_signal_routes(app, signals=console._signals, require_viewer=require_viewer, require_operator=require_operator,
