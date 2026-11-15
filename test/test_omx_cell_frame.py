@@ -269,7 +269,9 @@ def test_remap_keeps_the_affine_map_without_device_intrinsics_and_the_pose_with_
         cf.plane_pose_map(marks, 0.12, FACTORY, [0.1, 0, 0, 0, 0])
 
 
-def test_a_known_camera_height_fixes_the_scale_a_small_patch_cannot():
+def test_a_known_camera_height_fixes_the_scale_a_small_patch_cannot(tmp_path):
+    import cell_calibrate
+
     camera = looking_down(0.15, 0.08, 0.61, tilt=(0.06, -0.04, 0.4))
     marks, z = _remap_marks(camera, 0.12), 0.12
     up = camera[0].T @ np.array([0, 0, 1.0])
@@ -277,3 +279,8 @@ def test_a_known_camera_height_fixes_the_scale_a_small_patch_cannot():
     assert abs(pinned["camera_in_base"]["t"][2] - 0.61) < 1e-6
     assert np.linalg.norm(np.asarray(pinned["camera_in_base"]["t"]) - camera[1]) < 0.01
     assert _off_mm(pinned["homography"], camera, (0.20, 0.17), z) < 3
+    lens = tmp_path / "lens.json"
+    lens.write_text(json.dumps({"K": FACTORY.tolist(), "dist": [0.0] * 5}))
+    cfg = {"cameras": {"top": {"height_m": 0.61}}, "calibrate": {"intrinsics": str(lens), "up": up.tolist()}}
+    via_cfg = cell_calibrate.fitted_map(cfg, marks, z)
+    assert abs(via_cfg["camera_in_base"]["t"][2] - 0.61) < 1e-6
