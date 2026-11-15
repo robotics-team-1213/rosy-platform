@@ -30,7 +30,8 @@ import omx_two_arm_sites as sites_mod  # noqa: E402
 from omx_adapter.coordination import _clearance_at_least  # noqa: E402
 from omx_adapter.swept_volume import capsules as _arm_capsules  # noqa: E402
 
-HARBOR_ARMS = {"A": "arm_a", "B": "arm_b"}
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "deploy/robot/omx"))
+from cell_move_order import HARBOR_ARMS, harbor_moves, planning_sites, resolve_order, stack_key, temp_spots, zone  # noqa: E402
 # The teacher's own segment times (omx_two_arm_teacher.run_step): pick = approach 2.5 + grasp, close, lift 1.5 each; carry at CARRY_SPEED;
 # place = lower, release, retreat 1.5 each; park 2.5 + 0.7 back to the waiting pose (no zone held). belt_gap_s: conveyor spacing (ASSUMED).
 TIMING = dict(speed=.05, pick=7., place=4.5, park=3.2, belt_gap_s=6.)
@@ -95,19 +96,6 @@ def sweeps_clear(poses_a, poses_b, margin_m=SWEEP_MARGIN_M, ta=0.0, tb=0.0, slac
                for t1, c1 in poses_a for t2, c2 in poses_b if abs((ta + t1) - (tb + t2)) <= slack_s)
 
 
-def zone(layout, site):
-    s = layout.sites[site]
-    if s["kind"] == "temp":
-        return s["plate"]
-    if s["kind"] == "ship":
-        return "a" if s["row"] == 0 else "b" if s["row"] == 2 else "mid"
-    return "mid"  # conveyor end
-
-
-def planning_sites(layout):
-    """Sites the plans use: all but ship hold 2, which the arms reach at grasp height but not on the validated carry from the conveyor
-    (omx_two_arm_tasks refuses it with the stern at the table edge), and temporary lanes under the hull."""
-    return [s for s, v in layout.sites.items() if not v.get("blocked") and (v["kind"] != "ship" or v["stack"].startswith("h1") or v["stack"] == "stern")]
 
 
 def validator_can(layout):
@@ -134,89 +122,6 @@ def table_can(table):
     return lambda src, dst, here: table.get(src, set()) & table.get(dst, set())
 
 
-def stack_key(layout, site):
-    s = layout.sites[site]
-    return s.get("stack", site)
-
-
-def harbor_moves(layout, state, request, can, avoid=()):
-    """Harbor-shaped moves for one outbound request on `state` (cargo -> site): every container above the target, top first, to a free
-    temporary lane or free supported ship site, the target to a free lane of a temporary plate (the outbound place: Harbor names the lane
-    per job, here the first that works), then the blockers back into the target's stack from its bottom,
-    in their old order; the first complete plan wins (depth first, as harbor/spatial.plan_spatial searches complete plans). Each move
-    carries `arms`, every arm that can do it in the state it runs in. Returns (moves, None) or (None, HOLD reason).
-    `reorder` (재배치): the target stays; it and everything above it go out top first and come back in a new order (see finish)."""
-    target, reorder = request["cargo_id"], request.get("reorder", False)
-    if target not in state:
-        return None, "OUTBOUND_NOT_OBSERVED"
-    site = state[target]
-    key, base = stack_key(layout, site), layout.sites[site].get("layer", 0)
-    blockers = sorted((c for c, s in state.items() if stack_key(layout, s) == key and (layout.sites[s].get("layer", 0) > base or reorder and c == target)),
-                      key=lambda c: -layout.sites[state[c]]["layer"])
-    failures = []
-    plan_sites = planning_sites(layout)  # built once, shared by finish() and every recursive temp_spots call below
-
-    def step(cur, cargo, b, phase):
-        a, here = cur[cargo], {c: s for c, s in cur.items() if c != cargo}
-        found = [h for h, name in HARBOR_ARMS.items() if name in can(a, b, here)]
-        if not found:
-            return None
-        return dict(cargo_id=cargo, source=a, destination=b, primary_arm=found[0], alternate_arms=found[1:], phase_label=phase,
-                    arms=[HARBOR_ARMS[h] for h in found])
-
-    def seat(i):
-        return next(s for s, v in layout.sites.items() if v.get("stack") == key and v["layer"] == base + i)
-
-    def finish(cur, moves):
-        """Outbound to the first free lane that lets the whole job finish, then the blockers back, lowest first into the target's freed
-        level; None when an arm is missing on the way. A reorder puts the old bottom back first, then the rest top first (the containers
-        above it reversed): only the bottom needs the far arm, the rest stays with the near arm on its own side, so the two rows overlap."""
-        if reorder:
-            return put(cur, moves, [(c, seat(i), "복귀") for i, c in enumerate(blockers[-1:] + blockers[:-1])])
-        lanes = sorted(s for s in plan_sites if layout.sites[s]["kind"] == "temp" and layout.sites[s]["layer"] == 0  # Pinky takes it off an empty lane
-                       and s not in cur.values() and s not in avoid)
-        if not lanes:
-            failures.append("NO_FREE_OUTBOUND_LANE")
-        return next((done for stand in lanes if (done := put(cur, moves, [(target, stand, "반출")] + [
-            (c, seat(i), "복귀") for i, c in enumerate(reversed(blockers))]))), None)
-
-    def put(cur, moves, places):
-        for cargo, b, phase in places:
-            m = step(cur, cargo, b, phase)
-            if m is None:
-                failures.append("NO_STAND_IN_REACH" if phase == "반출" else "NO_ARM_FOR_RESTORE")
-                return None
-            moves, cur = moves + [m], {**cur, cargo: b}
-        return moves
-
-    def search(i, cur, moves):
-        """Blockers top first, each to a temporary place (same zone first); back up and try the next place when a later move has no arm
-        (a blocker left where only the near arm reaches cannot come back under its wrist)."""
-        if i == len(blockers):
-            return finish(cur, moves)
-        cargo = blockers[i]
-        occupied = set(cur.values()) - {cur[cargo]}  # it does not hold itself up
-        options = sorted((t for t in temp_spots(layout, occupied, set(avoid), plan_sites) if stack_key(layout, t) != key),
-                         key=lambda t: zone(layout, t) != zone(layout, cur[cargo]))
-        for t in options[:REORDER_WIDTH] if reorder else options:  # shortcut: a reorder tries the first places only (three levels of every place took >10 min on the validator), widen if a plan Harbor would find is missed
-            m = step(cur, cargo, t, "재취급")
-            if m is not None and (found := search(i + 1, {**cur, cargo: t}, moves + [m])):
-                return found
-        failures.append("NO_TEMPORARY_SPACE_IN_REACH")
-        return None
-
-    moves = search(0, dict(state), [])
-    return (moves, None) if moves else (None, failures[0] if failures else "NO_LEGAL_PLAN")
-
-
-def temp_spots(layout, occupied, avoid=frozenset(), names=None):
-    """Temporary places in Harbor's order: the free temporary lane tiers on something (bottom tier first), then free ship sites standing
-    on an occupied one (another 장치 칸). `names` reuses a caller's planning_sites(list)."""
-    used = occupied | avoid
-    names = planning_sites(layout) if names is None else names
-    spots = [s for s in names for v in [layout.sites[s]] if v["kind"] in ("temp", "ship") and s not in used
-             and (v["layer"] == 0 or layout.stack_at.get((v["stack"], v["layer"] - 1)) in occupied)]
-    return sorted(spots, key=lambda s: (layout.sites[s]["kind"] != "temp", layout.sites[s]["layer"], s))
 
 
 def duration(layout, a, b):
@@ -282,6 +187,7 @@ def schedule(layout, moves, arms, belt_arrivals=None, start=None):
         if a == "belt":
             last_pick = t + t_pick
         rows.append(dict(move=k, cargo_id=m["cargo_id"], source=a, destination=b, phase=m.get("phase_label", "장치"), arm=arm,
+                         **({"order_source": m["order_source"]} if "order_source" in m else {}),
                          start=round(t, 2), pick_end=round(t + t_pick, 2), carry_end=round(t + t_src, 2), end=round(t + t_end, 2),
                          zones=[sorted(hold_a), sorted(hold_b)]))
     return rows, extra
@@ -350,7 +256,7 @@ def outbound_requests(layout):
 MODES = {"one-arm A": ("arm_a",), "one-arm B": ("arm_b",), "two-arm": ("arm_a", "arm_b")}
 
 
-def plan_outbound(layout, arms, can, reorder=False):
+def plan_outbound(layout, arms, can, reorder=False, orders=None, suggester=None):
     """Harbor plans each request on the state the previous one leaves, with the arms this mode has; a request with no legal plan is a
     HOLD (a person or an extra transport). Requests after the first avoid the first one's temporary places so they can overlap.
     `reorder`: the same two outer rows are rearranged in place (재배치: emptied, the bottom back, the two above it swapped) instead of
@@ -359,10 +265,12 @@ def plan_outbound(layout, arms, can, reorder=False):
     mode_can = lambda a, b, here: can(a, b, here) & set(arms)  # noqa: E731
     moves, holds, avoid = [], [], set()
     for request in outbound_requests(layout):
-        found, why = harbor_moves(layout, state, dict(request, reorder=reorder), mode_can, avoid)
-        if found is None:
+        plan, why = resolve_order((orders or {}).get(request["cargo_id"], {}), layout, state,
+                                  dict(request, reorder=reorder), mode_can, avoid, suggester=suggester)
+        if plan is None:
             holds.append(dict(request=request["cargo_id"], reason=why))
             continue
+        found = [dict(move, order_source=plan["order_source"]) for move in plan["moves"]]
         avoid |= {m["destination"] for m in found if m["phase_label"] == "재취급"}  # an outbound lane is shared in turn (same-site order)
         for m in found:
             state[m["cargo_id"]] = m["destination"]
