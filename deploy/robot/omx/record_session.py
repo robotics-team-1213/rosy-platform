@@ -260,7 +260,7 @@ class Session:
         pairs = self.pair_sessions(config)
         for session in pairs.values():
             session._with_follower(session.check_idle)
-        if pairs.get("single") is self:
+        if pairs.get("single") is self and not self.chunks:
             record["leader_rebooted"] = self._with_leader(self.clear_leader_alerts)
         stopped = []
         try:
@@ -336,11 +336,14 @@ class Session:
             try:
                 leader.motor = LEADER_GRIPPER
                 leader.cleanup_write("torque", 0)
-                self.note_fault(leader, leader=True)
-                try:
-                    record["leader_rebooted_after"] = self.clear_leader_alerts(leader)
-                except SystemExit as exc:
-                    record["leader_rebooted_after"] = f"error: {exc}"
+                if not self.chunks:
+                    # --chunks runs scripted chunk_runner.py on follower only; keep torque OFF on leader,
+                    # but don't fail safe_end or reboot over an unused sagging 3.4V leader supply.
+                    self.note_fault(leader, leader=True)
+                    try:
+                        record["leader_rebooted_after"] = self.clear_leader_alerts(leader)
+                    except SystemExit as exc:
+                        record["leader_rebooted_after"] = f"error: {exc}"
                 leader.motor = LEADER_GRIPPER
                 record["leader_gripper_torque_after"] = leader.cleanup_read("torque")
             finally:

@@ -893,3 +893,20 @@ def test_a_session_may_give_a_joint_an_i_gain_and_restores_it(tmp_path):
     path.write_text(path.read_text().replace('"i": 200', '"i": 5000'))
     with pytest.raises(SystemExit, match="i 0..1600"):
         m.load_caps(path)
+
+
+def test_chunk_mode_skips_unused_leader_alerts_and_faults(tmp_path):
+    """chunk_runner never opens or energizes the leader; a sagging 3.4V leader alert must not block or fail safe_end."""
+    arm, leader = follower(), leader_arm()
+    leader.motors[6].update({"alert": True, "sticky": True, "hw_error": 1})
+    seen = []
+    s, _ = session(arm, leader, run=lambda command: seen.append(command) or 0)
+    s.chunks = {"library": str(tmp_path / "lib.json"), "io": str(tmp_path / "io"), "sha256": "x"}
+    record = s.execute(config(tmp_path), CAPS, teleop_only=False)
+    assert Path(seen[0][1]).name == "chunk_runner.py"
+    assert record["safe_end"] is True
+    assert record["hardware_faults"] == {}
+    assert "leader_rebooted" not in record
+    assert "leader_rebooted_after" not in record
+    assert leader.writes == [(6, "torque", 0)]
+    assert_restored(arm, leader)
