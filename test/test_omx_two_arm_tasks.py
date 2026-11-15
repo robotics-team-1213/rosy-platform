@@ -37,6 +37,11 @@ def refused(layout, task):
 
 
 def test_both_tasks_validate_with_all_steps(layout, data):
+    assert layout.choices["arm_bases"] == "measured-194"
+    assert layout.choices["ship_spacer_dy_mm"] == pytest.approx(32.0)
+    assert tuple(layout.arms["arm_a"].base[:2]) == pytest.approx((.091, -.16825))
+    assert tuple(layout.arms["arm_b"].base[:2]) == pytest.approx((.091, .16825))
+    assert layout.arms["arm_b"].base[1] - layout.arms["arm_a"].base[1] - 2 * .07125 == pytest.approx(.194, abs=1e-6)
     assert len(tasks.validate(layout, tasks.get_task(layout, "stack", data))) == 9
     assert len(tasks.validate(layout, tasks.get_task(layout, "rehandle", data))) == 12
 

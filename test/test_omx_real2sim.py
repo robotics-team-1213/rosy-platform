@@ -309,7 +309,11 @@ def test_20261110_named_choices_and_arm_bases_candidates_match_the_snapshot():
     for k in ("tmp-a-1", "tmp-a-2", "tmp-a-3", "tmp-b-1", "tmp-b-2", "tmp-b-3", "ship-h1r1-l0", "belt"):
         assert math.dist(from_snap.sites[k]["xy"], from_named.sites[k]["xy"]) < 1e-6, k
     assert tuple(from_named.arms["arm_b"].base[:2]) == pytest.approx((.107, .164))
-    assert tuple(sites.Layout().arms["arm_b"].base[:2]) == pytest.approx((.104, .153))
+    default = sites.Layout()
+    assert tuple(default.arms["arm_a"].base[:2]) == pytest.approx((.091, -.16825))
+    assert tuple(default.arms["arm_b"].base[:2]) == pytest.approx((.091, .16825))
+    assert default.arms["arm_b"].base[1] - default.arms["arm_a"].base[1] - 2 * .07125 == pytest.approx(.194, abs=1e-6)
+    assert tuple(sites.Layout(arm_bases="surveyed").arms["arm_b"].base[:2]) == pytest.approx((.104, .153))
     assert not any(s.get("blocked") for s in from_named.sites.values())  # tmp-b-1 clears the measured ship by 15.9 mm
     assert sites.WRIST_PHOTO_A["lens_m"][0] > sites.WRIST_PHOTO["lens_m"][0] and sites.WRIST_PHOTO_A["axis_hit_x_m"] > sites.WRIST_PHOTO["axis_hit_x_m"]
     img = np.full((200, 320, 3), (200, 175, 130), np.uint8)  # sky-blue v11 plate background

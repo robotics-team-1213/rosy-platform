@@ -6,7 +6,7 @@
 # cell-photos/ beside the private SIM operator configuration on the review host.
 # Physics constants (servo gains, joint damping, container mass and friction) are candidates in cell_physics.yaml beside this file.
 schema: rosy.cell-model-inventory/1
-checked_at: '2026-11-12'
+checked_at: '2026-11-15'
 models:
   - id: gripper
     name: 그리퍼(OMX 팔레타이징 조 v2.1)
@@ -42,7 +42,7 @@ models:
     name: 팔 베이스(OMX-AI PR33_C02_BASE 두 대)
     cad: {file: omx_base_plate_b.stl, sha256: null}
     sim: reflected
-    measured: 벤더 CAD(PR33_C02_BASE, 150×120×13 mm, 앞쪽 중앙 은색 사다리꼴 금속 클램프 + 양끝 Ø13 카운터보어 x=+38.75/-61.25 mm, 안쪽 벽 관절축에서 71.25 mm). 셀 실측 2026-11-03(surveyed) arm_b 관절 1 기준 (0.104, 0.153) m, yaw -94.3°(FK 맞춤 3.1 px), 받침 판 중심 arm_b (0.107, 0.164)·arm_a (0.116, -0.164)
+    measured: 벤더 CAD(PR33_C02_BASE, 150×120×13 mm, 앞쪽 중앙 은색 사다리꼴 금속 클램프 + 양끝 Ø13 카운터보어 x=+38.75/-61.25 mm, 안쪽 벽 관절축에서 71.25 mm). 공칭 내측 판 간격 194.0 mm(실측 193~195 mm → |y_bp|=97.0 mm, arm_a (0.091, -0.16825)·arm_b (0.091, 0.16825) m); 2026-11-03 surveyed FK arm_b (0.104, 0.153) m·yaw -94.3°(3.1 px)
     differs: MuJoCo·Isaac 모두 120×120 임시 상자 대신 실제 PR33_C02_BASE(150×120×13 mm) 메시와 앞쪽 중앙 은색 고정 클램프를 표시한다(sim2real G-21)
   - id: container
     name: 컨테이너
@@ -77,7 +77,7 @@ models:
 # Measured cell layout: the numbers tools read (ship_stack_sites, real-cell site planning). The map may change a little;
 # re-measure and bump `revision`, keep the old one in git. Heights: work table top = 0, mm. Positions: fixture frame, m.
 layout:
-  revision: ship-cell-2026-11-12
+  revision: ship-cell-2026-11-15
   heights_mm:
     arm_b_base_plate: {value: 12, source: ruler, measured: '2026-11-03'}
     ship_plate_top: {value: 8, source: ruler, measured: '2026-11-03'}
@@ -91,8 +91,8 @@ layout:
     lift_mm: 3.0
     hull_half_beam_mm: 65.0
     hull_in_cradle_clearance_mm: 0.20
-    spacer_dy_nominal_mm: 39.0
-    spacer_dy_steps_mm: [35.0, 39.0, 43.0]
+    spacer_dy_nominal_mm: 32.0
+    spacer_dy_steps_mm: [30.0, 31.0, 32.0, 32.5, 33.0, 34.0, 35.0]
     spacer_dx_steps_mm: [-8.0, 0.0, 8.0]
     stern_hook_steps_mm: [0.0, 5.0, 10.0]
     repeatability_rss_mm: 0.32
@@ -101,8 +101,8 @@ layout:
     temp_bridge: {version: v7, seat_r_mm: 200.0, fan_step_deg: 17.34, repeatability_rss_mm: 0.65}
   plate_centre_to_bow_mm: {value: [170, 220], source: user estimate, note: 'bow narrows to a point over this stretch; CAD 198-244'}
   arm_bases_m:
-    arm_a: {xy: [0.116, -0.164], yaw_deg: 90.0, source: 'top frame, base plate centre (no FK)'}
-    arm_b: {xy: [0.104, 0.153], yaw_deg: -94.3, source: 'FK of live joint states, 3.1 px'}
+    arm_a: {xy: [0.091, -0.16825], yaw_deg: 90.0, source: 'nominal 194.0 mm inner gap between PR33_C02_BASE plates (|y_bp|=97.0 mm, CAD 71.25 mm)'}
+    arm_b: {xy: [0.091, 0.16825], yaw_deg: -90.0, source: 'nominal 194.0 mm inner gap between PR33_C02_BASE plates (|y_bp|=97.0 mm, CAD 71.25 mm); 2026-11-03 FK was [0.104, 0.153]'}
   cameras:
     top: {eye: [-0.0334, 0.0493, 0.6613], focus: [0.0804, 0.0086, 0.1762], up: [0.9737, 0.0296, 0.226], f_px: 615, residual_px: 0.74, holdout_px: 0.92, measured: '2026-11-10'}
     side: {eye: [-0.5078, 0.0019, 0.1471], focus: [-0.0082, -0.0166, 0.1445], up: [0.0061, 0.0257, 0.9997], f_px: 950, residual_px: 2.8}

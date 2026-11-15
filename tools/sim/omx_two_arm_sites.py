@@ -40,14 +40,14 @@ CHOICES = dict(
     tcp_x_arm_a=.0740,       # same jaw, not confirmed on arm_a separately
     sim_tcp_x_m=.0740,       # the MuJoCo pads are the repo's v2.1 STL, whose TCP is .0740: the teacher grasps with this one (STL may not match the installed jaws)
     roll_floor_norm=-18.,    # usable wrist roll floor in the norm unit (coordinator): a step whose joint5 goes below it is flagged
-    arm_bases="surveyed",    # "surveyed": fixture_case bases (arm_b FK, arm_a plate centre); "plate-centre": top-frame base plate centres (G-21); "snapshot"
+    arm_bases="measured-194", # "measured-194": 194.0 mm nominal inner gap between PR33_C02_BASE plates (|y_arm|=168.25 mm); "surveyed": fixture_case bases (arm_b FK, arm_a plate centre); "plate-centre": top-frame base plate centres (G-21); "snapshot"
     belt_pose="fixture",     # "fixture": BELT_STOP_X and the fixture's pickup line; "photo-20261110" or "snapshot": belt strip in the top frame
     ship_pose="assumed",     # "assumed": ship_stern_x_m and ship_centre_y_m above; "photo-20261110" or "snapshot": hull fitted in the top frame
     cell_snapshot=None,      # with temp_lanes="snapshot": a rosy.omx-cell-snapshot.v1 file (omx_real2sim.py measure), the lanes the top camera saw then
     top_camera="2026-11-10", # "2026-11-10": resurveyed top camera (cell_model_inventory.yaml); "2026-11-03": initial stud-grid PnP
     container_colours="orange",  # "orange": standard v3 containers; "multi": cycle orange/green/red/purple across containers
     berth_kit="v18-modular-adjustable", # "v18-modular-adjustable": 190-200 mm adjustable tight U-cradles (stern+mid+bow side cheeks, 24x13.4 mm adjustable socket + reversible gauge sleeves & 1:10 wedges, HULL_CLR=0.12 mm) + OMX base-plate spacer bridges + 2 cm concave belt stopper (Confluence 23592971/23234388); "v15-quay": loose quay fenders
-    ship_spacer_dy_mm=32.5,  # v18 berth-spacer-bridge-a/b lateral gap between PR33_C02_BASE inner wall (|y|=95.0~100.0 mm, 190~200 mm span) and r08 hull side (|y|=65.0 mm): 30.0..35.0 mm
+    ship_spacer_dy_mm=32.0,  # nominal lateral gap at 194.0 mm inner wall span (97.0 - 65.0 = 32.0 mm); v18 adjustable bridges span 30.0..35.0 mm (190..200 mm)
     ship_spacer_dx_mm=0.0,   # v18 berth-spacer-bridge-a/b fore-aft alignment (-2 / 0 / +2 mm)
     ship_stern_hook_mm=0.0,  # v18 berth-stern-hook-set table-edge setback (0 / 5 / 10 mm)
     temp_bridge="v7",        # "v7": temp_slot_bridge_a/b 3-prong alignment bridges on PR33_C02_BASE (Confluence 23232928/23233175); "none"
@@ -64,7 +64,7 @@ BERTH_V16_SPEC = dict(
     base_front_from_axis_mm=75.0,
     base_hole_from_axis_x_mm=62.5,
     base_plate_inner_span_mm=(190.0, 192.0, 194.0, 195.0, 196.0, 198.0, 200.0),
-    spacer_dy_nominal_mm=32.5,
+    spacer_dy_nominal_mm=32.0,
     spacer_dy_steps_mm=(30.0, 31.0, 32.0, 32.5, 33.0, 34.0, 35.0),
     spacer_dx_steps_mm=(-2.0, 0.0, 2.0),
     stern_hook_steps_mm=(0.0, 5.0, 10.0),
