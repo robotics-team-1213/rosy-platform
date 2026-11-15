@@ -107,5 +107,9 @@ def install_charge_bay_routes(app, console, gathered, read_guard):
                     "export_stations": zones_data["export_stations"],
                 },
                 **plan_out}
-    install_pipeline_routes(app, console=console, site_maps=getattr(app.state, "site_maps", None), read_guard=read_guard)
+    install_pipeline_routes(
+        app, console=console, site_maps=getattr(app.state, "site_maps", None), read_guard=read_guard,
+        operator_guard=getattr(app.state, "operator_guard", None),
+        proposer_guard=getattr(app.state, "proposer_guard", None),
+    )
     return bay_inputs

@@ -346,7 +346,7 @@ def run(host: str, name: str, k: int, log: Path, job_args: list[str], pytest_arg
                     if rc == 253 and b"[remote-pytest] admission deferred: nightly reboot\n" in log.read_bytes():
                         raise RebootSoon(f"{host}: nightly reboot admission deferred")
                     if rc == 253 and HOLD_DEFERRED + b"\n" in log.read_bytes():
-                        raise RebootSoon(f"{host}: an alone job behind a gpu/sim hold; placed elsewhere")
+                        raise RebootSoon(f"{host}: an alone job deferred while other jobs ran; placed elsewhere")
                     wait = max(0.0, admitted - wait_from) if waiting else 0.0  # user@address: only the user part
                     out.write(f"\n{TIMING} host={host.split('@')[0]} start={start_at:.0f} wait_s={wait:.0f}"
                               f" run_s={clock() - admitted:.0f}\n".encode())
