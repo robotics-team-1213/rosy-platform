@@ -15,10 +15,7 @@ def _auto_locate_reason(request: Request, robot_id: str) -> str | None:
         row = next((r for r in service.snapshot()["robots"] if r["robot_id"] == robot_id), None)
         if row is None or not row.get("reason"):
             return None
-        identity = getattr(service.tracking, "identity", None)
-        last = next((r.get("last") or {} for r in identity.snapshot()["robots"]
-                     if r.get("robot_id") == robot_id), {}) if identity is not None else {}
-        lamp = last.get("lamp_reason")
+        lamp = row.get("lamp_reason")
         return f"{row['reason']} ({lamp})" if lamp else str(row["reason"])
     except Exception:  # the reason is a hint; a missing service must not change the refusal
         return None

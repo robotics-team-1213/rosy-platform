@@ -2957,6 +2957,7 @@ close code: `4401` 은 토큰이 없거나 틀린 것(`/ws/state` 와 동일), `
 | `safety.fleet_restored` | info | 로봇 | `{applied, correlation_id, disconnected_s, held_goal}` — `safety.fleet_lost` 뒤 링크가 돌아왔다. 아무것도 재개하지 않는다. `held_goal` 은 `HOLD` 가 보관한 `{correlation_id, x, y, yaw}` 또는 `null` (v1.86) |
 | `battery.low` | warning | 로봇 | `{percent}` |
 | `battery.critical` | critical | 로봇 | `{percent, policy}` |
+| `battery.critical_deferred` | warning | 로봇 | `{percent}` — D-1029 충전 복귀 lease가 살아 있고 내비게이션이 진행 중일 때 10 % 동작을 미루고 남기는 사건 (v1.399) |
 | `thermal.warm` | warning | 로봇 | `{from, reasons, soc_c}` |
 | `thermal.hot` | critical | 로봇 | `{from, reasons, soc_c}` |
 | `thermal.ok` | info | 로봇 | `{from, reasons, soc_c}` |

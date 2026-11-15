@@ -57,10 +57,8 @@ def test_no_localized_robot_map_pose_refuses(state):
 
 def test_the_refusal_names_why_auto_locate_has_no_fit():
     # 2026-11-14 rosy_45: battery caution, so the robot refused the identify blink and no fit came.
-    identity = SimpleNamespace(snapshot=lambda: {"robots": [
-        {"robot_id": "rosy_46", "last": {"reason": "lamp_refused", "lamp_reason": "CAUTION_ACTIVE"}}]})
-    auto = SimpleNamespace(tracking=SimpleNamespace(identity=identity), snapshot=lambda: {"robots": [
-        {"robot_id": "rosy_46", "reason": "lamp_refused"}]})
+    auto = SimpleNamespace(snapshot=lambda: {"robots": [
+        {"robot_id": "rosy_46", "reason": "lamp_refused", "lamp_reason": "CAUTION_ACTIVE"}]})
 
     async def map_pose(_robot_id):
         return None
