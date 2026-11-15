@@ -421,3 +421,32 @@ def test_roll_calls_stop_remote_only_for_stopped_members(repo, monkeypatch):
     monkeypatch.setattr(land_rollup.subprocess, "run", failing_run)
     assert land_rollup.roll(main, holder.parent / "q", NOW, ["apply"]) == 0
 
+
+def test_candidates_deduplicate_topics_and_unrolled_keeps_carrier_ticket(tmp_path, monkeypatch):
+    repo = tmp_path / "repo"
+    holder = repo / ".git" / "rosy-land-wt"
+    (holder / "r").mkdir(parents=True)
+    (holder / "m1").mkdir()
+    (holder / "m2").mkdir()
+    (holder / "land-fix-land-rollup-20261116000000-20261116000000.members").write_text(json.dumps([
+        {"branch": "land/fix/a-20261116000000", "worktree": str(holder / "m1"), "candidate": "c1", "ticket": "t-m1"},
+        {"branch": "land/fix/b-20261116000000", "worktree": str(holder / "m2"), "candidate": "c2", "ticket": "t-m2"},
+    ]))
+    monkeypatch.setattr(land_rollup.socket, "gethostname", lambda: "h")
+    monkeypatch.setattr(land_rollup.land_async, "holder", lambda r: holder)
+    monkeypatch.setattr(land_rollup, "git", lambda tree, *a, **kw: subprocess.CompletedProcess(a, 0, "abc\n", ""))
+    rows = [
+        {"branch": "land/fix/x-20261116000000", "worktree": str(holder / "m1"), "status": "pending", "host": "h",
+         "ticket": "t-old"},
+        {"branch": "land/fix/x-20261116000001", "worktree": str(holder / "m2"), "status": "pending", "host": "h",
+         "ticket": "t-new"},
+        {"branch": "land/fix/land-rollup-20261116000000-20261116000000", "worktree": str(holder / "r"),
+         "status": "pending", "host": "h", "ticket": "t-roll"},
+    ]
+    found = land_rollup.candidates(rows, repo, mixed=True)
+    assert [r["branch"] for r in found] == [
+        "land/fix/x-20261116000001", "land/fix/a-20261116000000", "land/fix/b-20261116000000"]
+    assert found[1]["ticket"] == "t-roll" and found[1]["member_ticket"] == "t-m1"
+    assert land_rollup.member_metadata(holder, found[1])["ticket"] == "t-m1"
+
+

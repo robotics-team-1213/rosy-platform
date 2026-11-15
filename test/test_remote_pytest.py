@@ -1324,9 +1324,9 @@ def test_a_light_host_takes_the_smallest_invocations_with_a_memory_cap(monkeypat
 
 
 def test_worker_count_follows_free_cores_memory_the_job_cap_and_the_site_quota(monkeypatch):
-    assert xp.workers(14.5, 11.0, False) == xp.MAX_WORKERS == 6  # MemoryMax 6 GB / 1 GB a worker
+    assert xp.workers(14.5, 11.0, False) == xp.MAX_WORKERS == 8  # MemoryMax 6 GB / 0.5 GB a worker, capped at 8
     assert xp.workers(3.9, 11.0, False) == 3
-    assert xp.workers(16, 2.5, False) == 2
+    assert xp.workers(16, 1.2, False) == 2
     assert xp.workers(1.5, 11.0, False) == 1  # one worker is serial
     assert xp.workers(10, 10, True) == 4  # CPUQuota 400%
     monkeypatch.setenv("ROSY_TEST_WORKERS", "12")
@@ -1368,7 +1368,7 @@ def test_serial_list_parses_comments_and_names_real_paths():
 def test_plan_gives_xdist_words_and_args_only_to_safe_invocations_on_full_hosts():
     full = {"cores": 14.0, "mem": 10.0, "site": False, "light": False}
     words, extra, note = xp.plan(GROUP, full, [])
-    assert (words, extra, note) == (["ROSY_JOB_CORES=6"], ["-n", "6", "--dist", "loadfile"], "xdist: 6 workers")
+    assert (words, extra, note) == (["ROSY_JOB_CORES=8"], ["-n", "8", "--dist", "loadfile"], "xdist: 8 workers")
     assert xp.plan(["test"], full, ["test"])[:2] == ([], [])  # serial (no -n), not alone on the host
     assert xp.plan(GROUP, None, [])[:2] == ([], [])  # D-568 7 fallback host: unmeasured, serial
     assert xp.plan(GROUP, {**full, "light": True, "mem": 4.7}, [])[:2] == (["ROSY_JOB_MEM_GB=4"], [])
@@ -1417,9 +1417,9 @@ def test_run_on_adds_xdist_to_the_run_but_never_to_the_quarantine_rerun(tmp_path
 
     monkeypatch.setattr(rp.remote_job, "run", job)
     assert rp.run_on("h", [["shared/web/test"]], [tmp_path / "1.txt"], "ab" * 20, tmp_path, None) == [0]
-    assert calls[0][:6] == ["ROSY_JOB_CORES=6", "shared/web/test", "-n", "6", "--dist", "loadfile"]
+    assert calls[0][:6] == ["ROSY_JOB_CORES=8", "shared/web/test", "-n", "8", "--dist", "loadfile"]
     assert calls[0][6:] == rp.PYTEST_TAIL
-    assert calls[1][:2] == ["ROSY_JOB_CORES=6", "shared/web/test/test_q.py::test_f"] and "-n" not in calls[1]
+    assert calls[1][:2] == ["ROSY_JOB_CORES=8", "shared/web/test/test_q.py::test_f"] and "-n" not in calls[1]
 
 
 def test_pytest_tail_keeps_failed_ids_repo_relative_when_the_first_path_has_a_pyproject(tmp_path):

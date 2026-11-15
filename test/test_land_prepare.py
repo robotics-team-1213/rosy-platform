@@ -698,3 +698,27 @@ def test_a_snapshot_ticket_gathers_as_pending_then_starts_one_rollup(tmp_path, m
                 {"worktree": str(tmp_path / ".worktrees" / "x")}):  # urgent, alone, a rollup, a plain land.py run
         prep.gather(ticket(**row), sleep, lambda: rolls.append(now[0]), clock=lambda: now[0])
     assert len(rolls) == 1
+
+
+def test_prepare_checks_conflicts_after_pretest_and_guards_relaunch(tmp_path, monkeypatch):
+    import types
+    prep = land.land_prepare
+    ticket = tmp_path / "01-1.json"
+    ticket.write_text(json.dumps({"pid": os.getpid()}))
+    monkeypatch.setattr(prep, "_prepare", lambda *a: None)
+    monkeypatch.setattr(land.land_batch, "in_main", lambda *a: False)
+    monkeypatch.setattr(land, "out", lambda *a: "newmain")
+    monkeypatch.setattr(land, "git", lambda *a, **kw: types.SimpleNamespace(returncode=1))
+    monkeypatch.setattr(prep, "watch", lambda *a: (lambda: "merge conflict on main"))
+    args = land.argparse.Namespace()
+    with pytest.raises(land.Stop, match="merge conflict on main"):
+        prep.prepare(land, tmp_path, "feat/x", args, sys.executable, tmp_path, ticket)
+    monkeypatch.setattr(prep, "watch", lambda *a: (lambda: None))
+    ticket.write_text(json.dumps({"pid": os.getpid() + 1}))  # adopted by a rollup: must not relaunch
+    monkeypatch.setattr(prep, "relaunch", lambda *a: 77)
+    prep.prepare(land, tmp_path, "feat/x", args, sys.executable, tmp_path, ticket)
+    ticket.write_text(json.dumps({"pid": os.getpid()}))
+    with pytest.raises(SystemExit) as exc:
+        prep.prepare(land, tmp_path, "feat/x", args, sys.executable, tmp_path, ticket)
+    assert exc.value.code == 77
+

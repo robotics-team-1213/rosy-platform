@@ -27,6 +27,8 @@ from pathlib import Path
 
 QUEUE = "rosy-land-queue"
 STALE_AFTER = 3 * 3600  # seconds without a refresh; one FULL round takes 30-90 min, the holder refreshes per round
+MAX_AGE_S = int(os.environ.get("ROSY_LAND_MAX_AGE_S", str(4 * 3600)))
+FULL_MAX_AGE_S = int(os.environ.get("ROSY_LAND_FULL_MAX_AGE_S", str(6 * 3600)))
 POLL = 10.0
 TICKET_ENV = "ROSY_LAND_TICKET"  # land_prepare.relaunch hands its ticket to main's land.py in a child process
 REPORT_EVERY = 300.0  # seconds between unchanged position lines
@@ -216,6 +218,20 @@ def ahead(qdir: Path, ticket: Path, now: float | None = None) -> list[dict]:
             continue
         found.append({**(info or {}), "ticket": path.name, "age": now - (info or {}).get("start", now)})
     return found
+
+
+def expired(qdir: Path, now: float | None = None) -> list[dict]:
+    """Live tickets whose immutable ``start`` timestamp exceeded MAX_AGE_S (FULL/full_wait: FULL_MAX_AGE_S)."""
+    now = time.time() if now is None else now
+    out = []
+    for row in ahead(qdir, Path("~"), now):
+        pid = int(row.get("pid") or 0)
+        if pid in (0, os.getpid()):
+            continue
+        limit = FULL_MAX_AGE_S if (row.get("tier") == "full" or row.get("full_wait")) else MAX_AGE_S
+        if row["age"] > limit:
+            out.append({**row, "path": qdir / row["ticket"]})
+    return out
 
 
 def describe(rows: list[dict]) -> str:

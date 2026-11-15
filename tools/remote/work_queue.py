@@ -41,7 +41,7 @@ ENV_WORD = re.compile(r"^ROSY_[A-Z0-9_]*=")
 BROWSER_PER_HOST = int(os.environ.get("ROSY_BROWSER_PER_HOST", "4"))
 # 6 since 2026-11-01: FULL rounds ran their invocations at 0.4-0.7x parallelism (sum run_s / wall), the tail queued
 # behind the run's own workers for 60-117 min; each PC's JOB admission still bounds cores and GB.
-MAX_MAIN = 6  # main workers one run may ask of a full host (1 restores one-at-a-time)
+MAX_MAIN = 3  # main workers one run may ask of a full host; 3 avoids diluting xdist headroom down to -n 2
 MAIN_CORES, MAIN_GB = 2, 2  # headroom one more main worker needs
 SKIP_ALONE = "!"  # workers(): a worker kind on a host other than the host_alone suites' one
 # Suites that need a lab PC's own environment (the pinned learner venv under ~/.local/share/rosy-learning-center,
@@ -293,8 +293,24 @@ class Gate:
 
 
 SPLIT_S = 240  # an invocation whose median run exceeds this is split (2026-11-01: 30 min combined invocations)
-MAX_SPLIT = 6
+MAX_SPLIT = 12
 BYTES_PER_S = 2000  # shortcut: rough test-code bytes per run second for invocations with no history; replace if it misorders
+FLEET_SECONDS = "tools/harness/fleet_test_seconds.json"
+
+
+def _fleet_weights(repo: Path) -> dict[str, float]:
+    try:
+        data = json.loads((repo / FLEET_SECONDS).read_text(encoding="utf-8"))
+        return {str(k): float(v) for k, v in data.items()} if isinstance(data, dict) else {}
+    except (OSError, ValueError, TypeError):
+        return {}
+
+
+def _file_weight(repo: Path, path: Path, fleet: dict[str, float]) -> float:
+    rel = path.relative_to(repo).as_posix()
+    if rel.startswith("operations/fleet/test/") and path.name in fleet:
+        return max(1.0, fleet[path.name])
+    return path.stat().st_size / BYTES_PER_S
 
 
 @functools.lru_cache(maxsize=4)
@@ -328,8 +344,11 @@ def cost(repo: Path, inv: list[str], seen: dict | None = None) -> float:
     seen = history(repo) if seen is None else seen
     if tuple(inv) in seen:
         return seen[tuple(inv)]
+    rest = inv[len(list(itertools.takewhile(ENV_WORD.match, inv))):]
+    if rest and tuple(rest) in seen:
+        return seen[tuple(rest)]
     total = 0
-    for word in inv:
+    for word in rest:
         path = repo / word.split("::", 1)[0]
         files = path.rglob("*.py") if path.is_dir() else [path]
         total += sum(f.stat().st_size for f in files if f.is_file())
@@ -339,42 +358,53 @@ def cost(repo: Path, inv: list[str], seen: dict | None = None) -> float:
 def split(repo: Path, invocations: list[list[str]], seen: dict | None = None) -> list[list[str]]:
     """Long invocations as smaller ones the hosts can run side by side; every test still runs exactly once.
 
-    One estimated at least SPLIT_S splits into one invocation per path, and a single directory into up to MAX_SPLIT
-    balanced file groups. Browser chunks (land_browser chunks them), alone/isolation runs, node ids, own -n and
-    serial_suites.txt paths stay whole."""
+    One estimated at least SPLIT_S unpacks multi-path invocations first, then splits large single directories into up
+    to MAX_SPLIT balanced file groups. Browser chunks (land_browser chunks them), alone/isolation runs, node ids, own
+    -n and serial_suites.txt paths stay whole."""
     seen = history(repo) if seen is None else seen
     serial = load_serial(SERIAL_FILE.read_text(encoding="utf-8")) if SERIAL_FILE.is_file() else []
-    out = []
+    fleet = _fleet_weights(repo)
+
+    def whole(inv: list[str], env: list[str], rest: list[str], paths: list[str], ignores: list[str]) -> bool:
+        return (cost(repo, inv, seen) < SPLIT_S or not paths
+                or any(w.startswith(("ROSY_RUN_BROWSER_TESTS", "ROSY_ALONE", "ROSY_JOB_ALONE", "ROSY_COLLECT"))
+                       for w in env)
+                or len(paths) + len(ignores) != len(rest)
+                or any("::" in p or "collect_alone" in p for p in paths)
+                or bool(serial_reason(inv, serial)))
+
+    expanded: list[list[str]] = []
     for inv in invocations:
         env = list(itertools.takewhile(ENV_WORD.match, inv))
         rest = inv[len(env):]
         paths = [w for w in rest if not w.startswith("-")]
-        # 2026-11-09: --ignore words go to every part, so `test --ignore=<g1 timing>` (11 min median, 71 min worst in
-        # a FULL, the longest pole) splits too; any other option keeps the invocation whole.
+        ignores = [w for w in rest if w.startswith("--ignore=")]
+        if len(paths) > 1 and not whole(inv, env, rest, paths, ignores):
+            expanded += [[*env, p, *ignores] for p in paths]
+        else:
+            expanded.append(inv)
+    out = []
+    for inv in expanded:
+        env = list(itertools.takewhile(ENV_WORD.match, inv))
+        rest = inv[len(env):]
+        paths = [w for w in rest if not w.startswith("-")]
         ignores = [w for w in rest if w.startswith("--ignore=")]
         ignored = [w.split("=", 1)[1].rstrip("/") for w in ignores]
         seconds = cost(repo, inv, seen)  # measured history first, the same byte estimate as dispatch for cold packets
-        whole = (seconds < SPLIT_S or not paths or any(w.startswith(("ROSY_RUN_BROWSER_TESTS", "ROSY_ALONE",
-                 "ROSY_JOB_ALONE", "ROSY_COLLECT")) for w in env) or len(paths) + len(ignores) != len(rest)
-                 or any("::" in p or "collect_alone" in p for p in paths) or serial_reason(inv, serial))
-        if whole:
+        if whole(inv, env, rest, paths, ignores) or len(paths) != 1 or not (repo / paths[0]).is_dir():
             out.append(inv)
-        elif len(paths) > 1:
-            out += [[*env, p, *ignores] for p in paths]
-        elif (repo / paths[0]).is_dir():
-            files = sorted((f for f in (repo / paths[0]).rglob("*.py")
-                            if (f.name.startswith("test_") or f.name.endswith("_test.py"))
-                            and not any(f.relative_to(repo).as_posix() == i
-                                        or f.relative_to(repo).as_posix().startswith(i + "/") for i in ignored)),
-                           key=lambda f: -f.stat().st_size)
-            n = min(MAX_SPLIT, math.ceil(seconds / SPLIT_S), len(files))
-            groups, sizes = [[] for _ in range(n)], [0] * n
-            for f in files:  # largest first into the lightest group
-                i = sizes.index(min(sizes))
-                groups[i].append(f.relative_to(repo).as_posix())
-                sizes[i] += f.stat().st_size
-            out += [[*env, *sorted(g), *ignores] for g in groups if g] if n > 1 else [inv]
-        else:
-            out.append(inv)
+            continue
+        files = sorted((f for f in (repo / paths[0]).rglob("*.py")
+                        if (f.name.startswith("test_") or f.name.endswith("_test.py"))
+                        and not any(f.relative_to(repo).as_posix() == i
+                                    or f.relative_to(repo).as_posix().startswith(i + "/") for i in ignored)),
+                       key=lambda f: -_file_weight(repo, f, fleet))
+        n = min(MAX_SPLIT, math.ceil(seconds / SPLIT_S), len(files))
+        groups, weights = [[] for _ in range(n)], [0.0] * n
+        for f in files:  # heaviest first into the lightest group
+            i = weights.index(min(weights))
+            groups[i].append(f.relative_to(repo).as_posix())
+            weights[i] += _file_weight(repo, f, fleet)
+        out += [[*env, *sorted(g), *ignores] for g in groups if g] if n > 1 else [inv]
     return [list(inv) for inv in dict.fromkeys(map(tuple, out))]
 

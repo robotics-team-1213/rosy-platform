@@ -91,12 +91,20 @@ def candidates(rows: list[dict], repo: Path, host: str | None = None, mixed: boo
         tip = git(repo, "rev-parse", "-q", "--verify", f"refs/heads/{r['branch']}", check=False).stdout.strip()
         if tip and tip == git(tree, "rev-parse", "HEAD", check=False).stdout.strip():
             found += unrolled(repo, r) if rollup else [r]
-    return found
+    # Keep only the newest snapshot per logical topic so superseded snapshots never fight or merge twice.
+    newest: dict[str, int] = {}
+    for idx, row in enumerate(found):
+        b = row.get("branch") or ""
+        topic = re.sub(r"-\d{14}(-batch\d+-k\d+)?$", "", b.removeprefix(land_async.PREFIX)) if b.startswith(land_async.PREFIX) else b
+        if topic not in newest or b > (found[newest[topic]].get("branch") or ""):
+            newest[topic] = idx
+    keep_idx = set(newest.values())
+    return [row for idx, row in enumerate(found) if idx in keep_idx]
 
 
 def unrolled(repo: Path, row: dict) -> list[dict]:
-    """A rollup's recorded members, each on its own kept snapshot, carrying the rollup's ticket and pid (D-889
-    addendum 34); none when its record is unreadable, nested or names a snapshot that is gone: it lands as it is."""
+    """A rollup's recorded members, each on its own kept snapshot, carrying the rollup's live ticket in ``ticket``
+    and keeping the original member ticket in ``member_ticket`` for frozen metadata; none when unreadable or gone."""
     try:
         members = json.loads((land_async.holder(repo) / (row["branch"].replace("/", "-") + ".members")).read_text(
             encoding="utf-8"))
@@ -110,7 +118,9 @@ def unrolled(repo: Path, row: dict) -> list[dict]:
         return []
     keep = ("branch", "worktree", "candidate")
     return [{**{k: m[k] for k in keep if k in m}, "status": row.get("status"), "host": row.get("host"),
-             "pid": row.get("pid"), "ticket": row.get("ticket"), "rollup": row["branch"], "rollup_size": len(members)}
+             "pid": row.get("pid"), "ticket": row.get("ticket"),
+             **({"member_ticket": m["ticket"]} if m.get("ticket") else {}),
+             "rollup": row["branch"], "rollup_size": len(members)}
             for m in members]
 
 
@@ -179,6 +189,8 @@ def plan(repo: Path, rows: list[dict], tier_of=tier, reach_of=reach, mixed: bool
 def member_metadata(place: Path, member: dict, ancestors=()) -> dict:
     """Keep direct owners, embedding frozen child metadata before their sidecars can be collected."""
     data = {k: member[k] for k in ("branch", "worktree", "candidate", "ticket", "members_error") if k in member}
+    if member.get("member_ticket"):
+        data["ticket"] = member["member_ticket"]
     branch = data["branch"]
     if not land_async.ROLLUP.fullmatch(branch):
         if "members" in member:
@@ -229,7 +241,7 @@ def build(repo: Path, members: list[dict], now: datetime, python: str = sys.exec
         land.size_check(wt, "main", "HEAD", python)
         if (wt / land.HARNESS).is_file():
             land.step(wt, [python, land.HARNESS, "lint"], None, "lint")
-        first = lead(merged).get("ticket")  # D-889 23: the rollup takes its first member's place in the queue
+        first = lead(merged).get("ticket")  # D-889 23: take its lead carrier's place
         if first:
             os.environ[land_queue.TICKET_ENV] = str(land_queue.queue_dir(repo) / first)
         try:

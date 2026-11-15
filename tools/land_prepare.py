@@ -220,6 +220,17 @@ def prepare(land, wt: Path, branch: str, args, python: str, qdir: Path | None, t
         args._main_red_retry = True
         print(f"[land] {stop}\n[land] main moved since that base: preparing once more on the new main", flush=True)
         _prepare(land, wt, branch, args, python, qdir, None, None, None)
+    if ticket is not None and ticket.is_file() and not land.land_batch.in_main(land, wt, branch):
+        main_now = land.out(wt, "rev-parse", "main")
+        if land.git(wt, "merge-base", "--is-ancestor", main_now, "HEAD", check=False).returncode != 0:
+            if why := watch(land, wt)():
+                raise land.Stop(why)
+        try:
+            me = json.loads(ticket.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            me = {}
+        if int(me.get("pid") or 0) == os.getpid() and (code := relaunch(land, qdir, ticket)) is not None:
+            raise SystemExit(code)
 
 
 def _prepare(land, wt: Path, branch: str, args, python: str, qdir: Path | None, ticket: Path | None,
