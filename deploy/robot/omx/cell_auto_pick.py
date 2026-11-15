@@ -268,6 +268,11 @@ def run_auto(
             ):
                 decided = after_failure(config, source, target, moved, wrist is not None, failed_yaws)
                 tried["diagnosis"] = decided
+                tried["compensation"] = cell_diagnose.compensation_feedback(
+                    moved["result"], tried, target.get("bias_mm"),
+                    grip_open=target.get("plan", {}).get("grip_open"),
+                    calibrated_grip_open=(config.get("_arm_calibration") or {}).get("grip_open_30mm"),
+                )
                 if decided["chosen"] in ("ask_person", "probe_surface"):
                     close_episode(cell, episode, False, f"{decided['cause']}: {decided['chosen']}")
                     episode = None
@@ -317,6 +322,11 @@ def run_auto(
             )
             episode = None
             cd.after(moved, choices.best(CLOSING), attempt + 1 < attempts, guarded.monitor)
+            tried.setdefault("compensation", cell_diagnose.compensation_feedback(
+                moved["result"], tried, target.get("bias_mm"),
+                grip_open=target.get("plan", {}).get("grip_open"),
+                calibrated_grip_open=(config.get("_arm_calibration") or {}).get("grip_open_30mm"),
+            ))
             attempt_id = cell_attempts.record(config, calibration, source, dest, attempt, tried, ledger.t_start, choices)
             cell_act_shadow.record(shadow, shadow_row, attempt_id, moved["result"], moved.get("at"))
             cell_auto_record.capture_problem(config, source, dest, moved)

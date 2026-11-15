@@ -123,3 +123,50 @@ def next_actions(cause: str, can: set, strategy: dict | None = None) -> list:
     """The table's actions for the cause that are possible now (can), in order; ask_person always ends the list."""
     order = (strategy or STRATEGY).get(cause, STRATEGY["unknown"])
     return [a for a in order if a in can or a == "ask_person"]
+
+
+def compensation_feedback(
+    result: str,
+    tried: dict | None = None,
+    bias_mm=None,
+    grip_open: float | None = None,
+    calibrated_grip_open: float | None = None,
+) -> dict:
+    """Structured diagnosis and recommended compensation actions for XY/jaw/bias misses."""
+    tried = tried or {}
+    diag = tried.get("diagnosis") or {}
+    wrist = tried.get("wrist") or {}
+    bias = bias_mm if bias_mm is not None else (tried.get("auto") or {}).get("bias_mm")
+    zero_bias = bias in ([0, 0], [0.0, 0.0], (0, 0), (0.0, 0.0))
+    stale_bias = zero_bias and result != "placed"
+    jaw_underopen = (
+        grip_open is not None
+        and calibrated_grip_open is not None
+        and float(grip_open) < float(calibrated_grip_open) - 2.0
+    )
+    dx_mm, dy_mm = 0.0, 0.0
+    if isinstance(wrist, dict):
+        if "dx_mm" in wrist or "dy_mm" in wrist:
+            dx_mm = round(float(wrist.get("dx_mm") or 0.0), 1)
+            dy_mm = round(float(wrist.get("dy_mm") or 0.0), 1)
+        elif wrist.get("iterations"):
+            last = wrist["iterations"][-1]
+            dx_mm = round(float(last.get("along_mm") or 0.0), 1)
+            dy_mm = round(float(last.get("across_mm") or 0.0), 1)
+    actions: list[str] = []
+    if jaw_underopen:
+        actions.append("widen_jaw_open")
+    if wrist == "disabled or uncalibrated" or (isinstance(wrist, dict) and wrist.get("verdict") == "skipped"):
+        actions.append("enable_wrist_servo")
+    if stale_bias or "bias" in result or "calibrate" in result:
+        actions.append("run_local_pivot")
+    if dx_mm or dy_mm or result.startswith("stopped: misaligned") or result in ("empty", "contact"):
+        actions.append("shift_xy_offset")
+    return {
+        "ok": result == "placed",
+        "cause": diag.get("cause") or attempt_cause(result),
+        "stale_bias": stale_bias,
+        "jaw_underopen": jaw_underopen,
+        "suggested_offset_mm": [dx_mm, dy_mm],
+        "actions": actions,
+    }
