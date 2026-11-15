@@ -105,7 +105,7 @@ def parse_live(live: dict | None, config: dict, plan: dict | None, ref_record: d
     jtcp = joints_tcp_fn or cell_pivot.joints_tcp
     if isinstance(state, list) and len(state) >= 5:
         try:
-            x, y, z, yaw = jtcp(state, tcp_x_m)
+            x, y, z, yaw = jtcp(state, **({"tcp_x_m": tcp_x_m} if tcp_x_m is not None else {}))
             tcp = {"x": round(float(x), 4), "y": round(float(y), 4), "z": round(float(z), 4), "yaw_deg": round(float(yaw), 1)}
             camera = (config.get("cameras") or {}).get("top") or {}
             if ref_record and ref_record.get("homography"):
@@ -202,14 +202,14 @@ def build_cross_verify(sites_out: dict[str, dict[str, Any]], depth_verify: dict 
 
     fresh_bias = sum(1 for r in regions_out if not r.get("stale_map"))
     bias_sig_warn = any((r.get("bias_sigma_mm") or 0.0) > bias_sig_lim for r in regions_out)
-    bias_v = "fail" if (regions_out and fresh_bias < len(regions_out)) else ("pass" if (regions_out and not bias_sig_warn) else "warn")
+    bias_v = "fail" if (regions_out and fresh_bias < len(regions_out)) else ("pass" if (regions_out and not bias_sig_warn) else ("warn" if regions_out else "unmeasured"))
 
     fk_fresh = bool(live_info.get("present") and not live_info.get("stale") and live_info.get("tcp"))
     fk_v = "pass" if fk_fresh else ("warn" if live_info.get("present") else "unmeasured")
     sub = (depth_v, touch_v, map_v)
     drift_alarm = bool((drift or {}).get("alarmed_sites"))
     overall = "fail" if ("fail" in sub or bias_v == "fail") else ("warn" if ("warn" in (*sub, bias_v) or drift_alarm) else ("pass" if (any_depth or touch_count) else "unmeasured"))
-    eval_v = "hold" if overall == "fail" else ("advisory" if (overall == "warn" or drift_alarm or bias_sig_warn) else ("unknown" if overall == "unmeasured" else "pass"))
+    eval_v = "hold" if overall == "fail" else ("advisory" if (overall == "warn" or drift_alarm or bias_sig_warn or bias_v == "unmeasured") else ("unknown" if overall == "unmeasured" else "pass"))
     cam_top = dict((depth_verify or {}).get("camera_top") or {})
     return {
         "schema": SCHEMA, "present": bool(depth_verify or touch_count or (depth_verify or {}).get("sites")),
@@ -335,7 +335,7 @@ def verify_profile_depth(config: dict, calibration: dict | None, bias: dict | No
             tcp_x_m = omx_tcp.config_tcp(config, plan)
             max_reach = (config.get("calibrate") or {}).get("max_reach_m") or ((plan or {}).get("limits") or {}).get("max_reach_m")
             try:
-                x, y, z, yaw = cell_pivot.joints_tcp(state, tcp_x_m)
+                x, y, z, yaw = cell_pivot.joints_tcp(state, **({"tcp_x_m": tcp_x_m} if tcp_x_m is not None else {}))
                 fk_report["tcp"] = {"x": round(float(x), 4), "y": round(float(y), 4), "z": round(float(z), 4), "yaw_deg": round(float(yaw), 1)}
                 fk_report["within_reach"] = (math.hypot(x, y) <= float(max_reach) + 1e-6) if max_reach is not None else None
             except (Exception, SystemExit):
@@ -344,7 +344,7 @@ def verify_profile_depth(config: dict, calibration: dict | None, bias: dict | No
     drift = cell_cal_monitor.summarize(config, calibration) if calibration else {"sites": {}, "alarmed_sites": [], "pattern": "none", "suggested_advisory": []}
     crit_tags = ("depth_diff_gt_6mm", "touch_diff_gt_5mm", "place_vs_start_step_gt_8mm", "stale_bias", "high_loo")
     verdict = "fail" if any(any(tag in fl for tag in crit_tags) for fl in flags) else ("warn" if (flags or not sites_report) else "pass")
-    eval_verdict = "hold" if verdict == "fail" else ("unknown" if flags == ["missing_depth"] else ("advisory" if (verdict == "warn" or drift["alarmed_sites"]) else "pass"))
+    eval_verdict = "hold" if verdict == "fail" else ("advisory" if (drift["alarmed_sites"] or (verdict == "warn" and flags != ["missing_depth"])) else ("unknown" if flags == ["missing_depth"] else "pass"))
     return {
         "schema": LEGACY_DEPTH_SCHEMA, "eval_schema": SCHEMA, "arm_id": config.get("arm_id"),
         "measured": datetime.now(timezone.utc).isoformat(timespec="seconds"),

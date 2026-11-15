@@ -80,7 +80,7 @@ def repair_record(config: dict, record: dict, kept: list) -> dict:
     """Re-fit kept points using the same model family (`fitted_map`), avoiding stale pose metadata on affine fits."""
     from cell_intrinsics_frames import fitted_map
 
-    z_view = record.get("z_view", (config.get("coarse") or {}).get("z_view", 0.0))
+    z_view = record.get("z_view") if record.get("z_view") is not None else (config.get("coarse") or {}).get("z_view", 0.0)
     repaired = fitted_map(config, kept, z_view)
     base = {k: v for k, v in record.items()
             if k not in ("homography", "loo_error_mm", "camera_in_base", "rms_px", "upright", "affine_fit", "pose_fit", "pose_refused")}
@@ -171,16 +171,20 @@ def predict_sigma_mm(record: dict | None, pixel) -> float:
     loo_mean = float((record.get("loo_error_mm") or {}).get("mean") or 0.5)
     pts = _record_points(record)
     u, v = float(pixel[0]), float(pixel[1])
+    if not (math.isfinite(u) and math.isfinite(v)):
+        return round(max(0.5, loo_mean), 2)
     if record.get("camera_in_base"):
         # Pose model extrapolates linearly via perspective rays rather than quadratic affine leverage; scale by radial distance / span
         if len(pts) < 3:
             return round(max(0.5, loo_mean), 2)
         pxs = np.array([[p[0][0], p[0][1]] for p in pts], float)
+        if not np.all(np.isfinite(pxs)):
+            return round(max(0.5, loo_mean), 2)
         ctr = pxs.mean(axis=0)
         span = max(20.0, float(np.max(np.linalg.norm(pxs - ctr, axis=1))))
         dist_r = float(math.hypot(u - ctr[0], v - ctr[1]))
-        amp = math.sqrt(1.0 + 0.5 * max(0.0, dist_r / span - 1.0) ** 2)
-        return round(max(0.5, loo_mean * amp), 2)
+        sigma = loo_mean * math.sqrt(1.0 + 0.5 * max(0.0, dist_r / span - 1.0) ** 2)
+        return round(max(0.5, sigma), 2) if math.isfinite(sigma) else round(max(0.5, loo_mean), 2)
     if len(pts) < 4:
         return round(max(0.5, loo_mean), 2)
     X = np.array([[p[0][0], p[0][1], 1.0] for p in pts], float)

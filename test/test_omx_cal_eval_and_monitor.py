@@ -103,6 +103,13 @@ def test_circle_center_sigma_and_monitor_common_vs_local_and_sha_reset(tmp_path)
     shared = cell_cal_monitor.summarize(cfg, shared_cal)
     assert shared["pattern"] != "common"
 
+    # Mixed look (1D mark_sigma=3.0) + place_look (1D hypot=4.24) baseline must NOT falsely NIS-alarm
+    mixed_ok = cell_cal_monitor.evaluate_site_series([
+        {"raw_mm": [1.0, 0.0], "residual_mm": [3.5, 2.0], "sigma_mm": 3.0, "source": "look", "accepted": True},
+        {"raw_mm": [1.0, 0.0], "residual_mm": [3.5, 2.0], "sigma_mm": 4.24, "source": "place_look", "accepted": True},
+    ])
+    assert mixed_ok["nis_alarm"] is False and mixed_ok["latest_nis"] < 2.0
+
     # New map_sha resets active drift evaluation back to unknown (old-map alarms do not leak across remap)
     new_cal = {"sites": {"site_a": {"homography": [[1, 0, 0.05], [0, 1, 0], [0, 0, 1]]}, "site_b": rec_b}}
     after_remap = cell_cal_monitor.summarize(cfg, new_cal)

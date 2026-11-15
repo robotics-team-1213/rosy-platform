@@ -253,7 +253,7 @@ def build_profile_snapshot(entry: dict[str, Any], *, now_ts: float | None = None
     if raw_ref and bound_map_error is not None:
         bind_err = bound_map_error(calibration, config, raw_ref)
     else:
-        bind_err = "reference_top unavailable" if not raw_ref else None
+        bind_err = "reference_top unavailable" if not raw_ref else "bound_map_error unavailable"
     if bind_err:
         hygiene.append({"level": "warning", "code": "map_binding", "message": f"지도-기준프레임 결속 경고: {bind_err}"})
     if shift and shift.get("ok") and shift.get("max_px", 0) > prm.default("calibrate.max_shift_px"):
@@ -318,7 +318,7 @@ def build_profile_snapshot(entry: dict[str, Any], *, now_ts: float | None = None
         actual_sha = cell_attempts.digest(rec) if rec else None
         stale_map = (actual_sha is None) or (r.get("map_sha") != actual_sha)
         if stale_map:
-            hygiene.append({"level": "warning", "code": f"stale_bias:{site}", "message": f"bias region ({site}): map_sha 불일치"})
+            hygiene.append({"level": "error", "code": f"stale_bias:{site}", "message": f"bias region ({site}): map_sha 불일치"})
         pt = r.get("point_m")
         bmm = r.get("bias_mm") or [0.0, 0.0]
         target_z = site_obj.get("surface_z")

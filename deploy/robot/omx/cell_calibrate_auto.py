@@ -211,19 +211,21 @@ def learn_bias(config: dict, calibration_path, site: str, place_xy, verify: dict
     )
     resid = [float(seen[0]) - float(used[0]), float(seen[1]) - float(used[1])]
     within = math.dist(seen, used) <= prm.get(p, "auto.bias_learn_max_mm")
+    need_sha = record is not None
+    ok = within and (not need_sha or map_sha is not None)
     cell_cal_monitor.record_observation(
         config, site=site, map_sha=map_sha, source="place_look", raw_mm=seen, residual_mm=resid,
-        sigma_mm=sigma_mm, accepted=within and map_sha is not None,
-        reason=None if (within and map_sha is not None) else ("missing_map_sha" if map_sha is None else "exceeds_bias_learn_max_mm"),
+        sigma_mm=sigma_mm, accepted=ok,
+        reason=None if ok else ("missing_map_sha" if (need_sha and map_sha is None) else "exceeds_bias_learn_max_mm"),
     )
-    if not within or map_sha is None:
+    if not ok:
         return None
     region = {
         "site": site,
         "kind": "place_look",
         "point_m": list(place_xy),
         "bias_mm": seen,
-        "map_sha": map_sha,
+        **({"map_sha": map_sha} if map_sha is not None else {}),
         "measured": time.strftime("%Y-%m-%d"),
         "source": "place-and-look: the arm set the box here and the top camera saw it",
     }

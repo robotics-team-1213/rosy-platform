@@ -33,6 +33,7 @@ from cell_pivot_bias import (  # noqa: E402,F401  (re-exported)
     SCHEMA,
     bias_at,
     bias_path,
+    circle_center_sigma_mm,
     load_bias,
     save_bias,
     validate_bias,
@@ -371,7 +372,7 @@ def pivot_calibrate(cell, config: dict, point, yaws, calibration: dict, site: st
         return {"result": f"circle refused: yaw arc {round(arc_deg, 1)} deg < {int(MIN_YAW_ARC_DEG)} deg",
                 "yaws_fk_deg": [round(t[3], 1) for t in tcps]}
     cx, cy, radius, rms = fit_circle(marks)
-    sigma_mm = cell_pivot_bias.circle_center_sigma_mm(marks, cx, cy, rms)
+    sigma_mm = circle_center_sigma_mm(marks, cx, cy, rms)
     tx, ty = (float(np.mean([t[i] for t in tcps])) for i in (0, 1))
     phases = [math.atan2(m[1] - cy, m[0] - cx) - math.radians(t[3]) for m, t in zip(marks, tcps)]
     phase = math.degrees(math.atan2(np.mean(np.sin(phases)), np.mean(np.cos(phases))))

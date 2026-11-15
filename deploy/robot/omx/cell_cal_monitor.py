@@ -47,7 +47,7 @@ def record_observation(
     source: str,
     raw_mm,
     residual_mm,
-    sigma_mm: float = 4.2,
+    sigma_mm: float = 3.0,
     accepted: bool = True,
     reason: str | None = None,
 ) -> dict[str, Any] | None:
@@ -144,11 +144,11 @@ def evaluate_site_series(rows: list[dict[str, Any]], params=None) -> dict[str, A
     h_sig = float(prm.get(params, "verify.cusum_h_sigma"))
     min_n = int(prm.get(params, "verify.cusum_min_n"))
 
-    # Convert 2D RSS uncertainty stored on row into per-axis 1D sigma so NIS ~ chi2(2)
+    # Stored sigma_mm is per-axis 1-sigma (mm) so NIS follows chi2(2)
     nis_vals = []
     for r in valid_res:
         res = r["residual_mm"]
-        sig_1d = max(1.0, float(r.get("sigma_mm") or 4.24) / math.sqrt(2.0))
+        sig_1d = max(1.0, float(r.get("sigma_mm") or 3.0))
         nis_vals.append((float(res[0]) ** 2 + float(res[1]) ** 2) / (sig_1d * sig_1d))
     latest_nis = round(nis_vals[-1], 2) if nis_vals else None
     nis_alarm = (latest_nis is not None and latest_nis > nis_limit) or (len(nis_vals) >= 3 and (sum(nis_vals[-3:]) / 3.0) > nis_limit)
@@ -160,7 +160,7 @@ def evaluate_site_series(rows: list[dict[str, Any]], params=None) -> dict[str, A
     tail_mean = [round(float(v), 2) for v in np.mean(e[-min(len(e), 5):], axis=0)] if len(e) else None
     if len(e) >= min_n:
         base = e[:min_n]
-        sig_1d_prior = max(1.0, float(rows[-1].get("sigma_mm") or 4.24) / math.sqrt(2.0))
+        sig_1d_prior = max(1.0, float(rows[-1].get("sigma_mm") or 3.0))
         sig_1d = _robust_axis_sigma(base, sig_1d_prior) * _ar1_inflate(base)
         mu = np.median(base, axis=0)
         if len(e) > min_n:
@@ -201,7 +201,7 @@ def summarize(config: dict, calibration: dict | None, *, rows: list[dict] | None
     for name, spec in cfg_sites.items():
         rec = cell_pivot.map_record(calibration or {}, name)
         sha = cell_attempts.digest(rec) if rec else None
-        matched = [r for r in rows if r.get("site") == name and (sha is None or r.get("map_sha") == sha)]
+        matched = [r for r in rows if r.get("site") == name and sha is not None and r.get("map_sha") == sha]
         res = evaluate_site_series(matched, params)
         res["map_sha"] = sha
         sites_out[name] = res
