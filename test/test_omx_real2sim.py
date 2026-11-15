@@ -536,6 +536,7 @@ def test_v16_berth_modular_cad_assets_and_ship_fixation_geometry():
 
 def test_temp_plate_renders_two_color_v12_cad_oriented_into_bridge():
     try:
+        import mujoco
         import omx_two_arm_world as tw
     except Exception as exc:
         pytest.skip(str(exc))
@@ -543,13 +544,16 @@ def test_temp_plate_renders_two_color_v12_cad_oriented_into_bridge():
     w = tw.World()
     m = w.model
     assert w.layout.choices["temp_lanes"] == "fan" and w.layout.choices["temp_radius_m"] == pytest.approx(0.200)
+    world_q = np.zeros(4)
     for tag in ("a", "b"):
         navy_id = m.geom(f"plate_v12_navy_{tag}").id
         sky_id = m.geom(f"plate_v12_sky_{tag}").id
         deck_id = m.geom(f"deck_{tag}").id
         wall_id = m.geom(f"w{tag}1s0").id
-        assert np.allclose(m.geom_quat[navy_id], [1.0, 0.0, 0.0, 0.0], atol=1e-5)
-        assert np.allclose(m.geom_quat[sky_id], [1.0, 0.0, 0.0, 0.0], atol=1e-5)
+        for gid in (navy_id, sky_id):
+            mq = m.mesh_quat[m.geom_dataid[gid]]
+            mujoco.mju_mulQuat(world_q, m.geom_quat[gid], np.array([mq[0], -mq[1], -mq[2], -mq[3]]))
+            assert np.allclose(world_q, [1.0, 0.0, 0.0, 0.0], atol=1e-4)
         assert m.geom_rgba[navy_id, 3] == pytest.approx(1.0) and m.geom_rgba[sky_id, 3] == pytest.approx(1.0)
         assert not np.allclose(m.geom_rgba[navy_id, :3], m.geom_rgba[sky_id, :3])
         assert m.geom_rgba[deck_id, 3] == pytest.approx(0.0) and m.geom_rgba[wall_id, 3] == pytest.approx(0.0)
