@@ -292,6 +292,7 @@ def create_app(console: FleetConsole, *, console_token: Optional[str] = None,
         trust_forwarded=lan_camera_proxy)
     read_guard = [Depends(require_viewer)]
     app.state.operator_guard = [Depends(require_operator)]  # pipeline mutations
+    app.state.proposer_guard = [Depends(require_proposer)]  # cell worker / telemetry ingress
     from fleet.server.workcell_observation_routes import install_workcell_observation_routes as install_observations
     install_observations(app, workcell_observations, require_viewer, require_named_operator, task_service, authorize)
 
