@@ -35,7 +35,8 @@ from chunk_runner_guards import (  # noqa: E402, F401
 )
 from chunk_runner_trace import trace_receipt  # noqa: E402
 from chunk_runner_settle import (  # noqa: E402, F401
-    IDLE_PARK_S, IDLE_RETRY_S, IDLE_STOP_S, SETTLE_S, check_chunk_settled, check_runner_idle,
+    IDLE_PARK_S, IDLE_RETRY_S, IDLE_STOP_S, SETTLE_S,
+    check_chunk_settled, check_runner_idle, tick_or_report, wait_aligned_before_start,
 )
 from episode_recorder import Recorder  # noqa: E402
 import joint_jitter  # noqa: E402
@@ -347,48 +348,8 @@ class Runner:
         """`lines()` returns the commands that arrived since the last call."""
         self.target = self.present()
         period = 1.0 / self.fps
-        motion = getattr(self.robot, "motion", None)
-        # Wait for the guard's stationary initial alignment before admitting or reporting ready for chunks.
-        while motion is not None and not getattr(motion, "tracking", True):
-            started = self.clock()
-            arrived = lines()
-            if arrived:
-                self.pending += arrived
-                if "human-hold" in self.pending:
-                    self.pending.clear()  # preempt even a queued stop or park
-                    self.command("human-hold")
-                stop = next(
-                    (i for i, cmd in enumerate(self.pending) if cmd.strip() in ("stop", "stop now", "stop fold")),
-                    None,
-                )
-                if stop is not None and all(cmd.strip() == "state" for cmd in self.pending[:stop]):
-                    for cmd in self.pending[:stop]:
-                        self.command(cmd)
-                    self.report(command=self.pending[stop], ok=True, present=self.target)
-                    return
-            try:
-                self.tick()
-            except Exception as error:
-                self.status(
-                    {
-                        "command": "start",
-                        "ok": False,
-                        "fault": f"session ended: {type(error).__name__}: {error}"[:1000],
-                        "t": round(time.time(), 3),
-                    }
-                )
-                raise
-            if self.human_hold_latched or self.fault or getattr(motion, "held", None):
-                self.report(
-                    command="start",
-                    ok=False,
-                    error=self.fault or ("human hold latched" if self.human_hold_latched else "guard hold active"),
-                    present=self.target,
-                )
-                break
-            self.sleep(max(0.0, period - (self.clock() - started)))
-        else:
-            self.report(command="start", ok=True, present=self.target)
+        if not wait_aligned_before_start(self, lines, period):
+            return
         self.last_input = self.clock()
         while True:
             started = self.clock()
@@ -408,18 +369,7 @@ class Runner:
                     return
             if self.pending and not getattr(self, "_stop_after_park", None) and not self.command(self.pending.pop(0)):
                 return
-            try:
-                self.tick()
-            except Exception as error:
-                self.status(
-                    {
-                        "command": f"run {self.chunk}" if self.chunk else "tick",
-                        "ok": False,
-                        "fault": f"session ended: {type(error).__name__}: {error}"[:1000],
-                        "t": round(time.time(), 3),
-                    }
-                )
-                raise
+            tick_or_report(self, f"run {self.chunk}" if self.chunk else "tick")
             if getattr(self, "_stopped", False) or self.idle():
                 return
             if self.live and self.ticks % max(1, self.fps // 10) == 0:
