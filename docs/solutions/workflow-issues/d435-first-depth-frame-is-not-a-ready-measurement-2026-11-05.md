@@ -1,6 +1,7 @@
 ---
 title: A complete first D435 depth frame can still be a poor measurement input
 date: 2026-11-05
+last_updated: 2026-11-13
 category: workflow-issues
 module: deploy/robot/omx/cell_depth.py
 problem_type: workflow_issue
@@ -35,6 +36,10 @@ v4l2-ctl -d <unused-depth-node> \
 ```
 
 Keep the raw file, command, format, nonzero fraction and independent repeats. Feed the retained frame to `deploy/robot/omx/cell_depth.py` only as a measurement candidate; check its alignment and measurement origins before changing calibration.
+
+### Confirm the D435's own USB link
+
+On 2026-11-13 a scan was first read as “D435 on USB 2” from a 480M branch of `lsusb -t`. Matching the **device ID** corrected that conclusion: `lsusb` identified Intel RealSense D435 `8086:0b07` as Bus 004 Device 009, and that exact bus/device was on a 5000M branch in `lsusb -t`. The depth role `/dev/v4l/by-id/rosy-realsense-d435-depth` resolved to `/dev/video12`; a warmed Z16 read returned 614400 bytes with 87.86% nonzero pixels. The 480M branch belonged to other devices. Check the bus/device pair and depth role before diagnosing USB speed from a root-hub or nearby camera line. This correction establishes the link speed and that a depth frame was readable; it does not establish RGB/depth alignment or physical stack height.
 
 ## Limits and prevention
 
