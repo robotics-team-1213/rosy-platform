@@ -37,8 +37,7 @@ export function createRoster({ scope, el, view, log, call, render, streamEvidenc
       view.focusAnchorId = robotId === "cell_s" ? "arm_s" : (robotId === "cell_ab" ? "arm_a" : robotId);
       const onlineRobot = view.robots.find((r) => r.online) || view.robots[0];
       if (onlineRobot && !view.focusRobot) {
-        view.focusRobot = onlineRobot.robot_id;
-        view.selected = onlineRobot.robot_id;
+        view.focusRobot = onlineRobot.robot_id;  // D-651: inspecting an arm never arms the map
       }
       render();
       void refreshRoiPreview();
