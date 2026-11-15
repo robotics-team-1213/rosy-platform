@@ -22,7 +22,10 @@ from cell_control_core import (  # noqa: F401  (re-exported: existing importers 
 ensure_omx_paths()
 
 from omx_adapter.area_xyz import DIRECTIVE_SCHEMA, coerce_area_xyz  # noqa: E402
-from cell_area_vision_align import _jaw_pos, refine_pick_pose_at_hover, settle_above_pick_jaws  # noqa: E402,F401
+from cell_area_vision_align import (  # noqa: E402,F401
+    RefinementCommandFailed, _jaw_pos, refine_pick_pose_at_hover, settle_above_pick_jaws,
+)
+from cell_area_recovery import recover_hover, release_early_touchdown  # noqa: E402
 from cell_area_zones import (  # noqa: E402,F401  (re-exported: existing importers are unchanged)
     SIDE_COL_CENTER_U, SIDE_M_PER_PX, SIDE_ROI_BY_COL_TIER, TEMP_PLATE_TOP_ROI_BY_LANE, TOP_ROI_BY_COL_ROW,
     classify_container_orientation, diagnose_and_recover_pick, evaluate_zone,
@@ -98,19 +101,12 @@ def execute_directive(
         steps_log.append({"command": cmd, **r})
         return r
 
-    def _safe_recover_hover(grip_open_val: float, *, park_after: bool = False) -> None:
-        _run_cmd("retreat")
-        _run_cmd(f"grip {min(57.85, float(grip_open_val)):.2f}")
-        if steps_log and steps_log[-1].get("t") is not None:
-            import time as _time
-            _time.sleep(0.20)
-        r_ab = _run_cmd("goto above_pick")
-        if park_after or not r_ab.get("ok"):
-            if steps_log and steps_log[-1].get("t") is not None:
-                import time as _time
-                _run_cmd("grip 55.80")
-                _time.sleep(0.20)
-            _run_cmd("park")
+    def _safe_recover_hover(grip_open_val: float, *, park_after: bool = False) -> bool:
+        return recover_hover(_run_cmd, grip_open_val, steps_log, park_after=park_after)
+
+    def _recovery_hold(at: str = "recovery") -> dict[str, Any]:
+        return {"directive_id": cur_directive.get("directive_id"), "arm_id": arm_id,
+                "result": "held", "task_verified": False, "at": at, "steps": steps_log}
 
     for attempt in range(max_attempts):
         lib, plan, cal = plan_library_from_directive(cur_directive, base_plan, work_dir=work_dir, kinematics_root=kinematics_root)
@@ -119,39 +115,43 @@ def execute_directive(
 
         r_load = _run_cmd(f"load {lib_path}")
         if not r_load.get("ok"):
-            _run_cmd("park")
-            r_load = _run_cmd(f"load {lib_path}")
-            if not r_load.get("ok"):
-                return {"directive_id": cur_directive.get("directive_id"), "result": "fault", "at": "load",
-                        "pick": cur_directive["pick"], "place": cur_directive["place"], "gate_trace": gate_trace, "steps": steps_log}
+            return {"directive_id": cur_directive.get("directive_id"), "arm_id": arm_id,
+                    "result": "held", "task_verified": False, "at": "load",
+                    "pick": cur_directive["pick"], "place": cur_directive["place"], "gate_trace": gate_trace,
+                    "steps": steps_log}
 
         r_above = _run_cmd("goto above_pick")
         if not r_above.get("ok"):
-            _run_cmd("park")
-            r_above = _run_cmd("goto above_pick")
-            if not r_above.get("ok"):
-                return {"directive_id": cur_directive.get("directive_id"), "result": "contact", "at": "goto above_pick",
-                        "pick": cur_directive["pick"], "place": cur_directive["place"], "gate_trace": gate_trace, "steps": steps_log}
+            return {"directive_id": cur_directive.get("directive_id"), "arm_id": arm_id,
+                    "result": "held", "task_verified": False, "at": "goto above_pick",
+                    "error": r_above.get("error"), "pick": cur_directive["pick"],
+                    "place": cur_directive["place"], "gate_trace": gate_trace, "steps": steps_log}
 
-        above_shaking = settle_above_pick_jaws(r_above, plan, _run_cmd, steps_log)
-        lib, plan, cal, last_wrist_obs, vision_refined_xy = refine_pick_pose_at_hover(
-            cur_directive=cur_directive, base_plan=base_plan, lib=lib, plan=plan, cal=cal, lib_path=lib_path,
-            work_dir=work_dir, kinematics_root=kinematics_root, arm_id=arm_id, exec_cfg=exec_cfg, frame_fn=frame_fn,
-            before_side=before_side, above_shaking=above_shaking, run_cmd=_run_cmd, wrist_log=wrist_log,
-        )
+        try:
+            above_shaking = settle_above_pick_jaws(r_above, plan, _run_cmd, steps_log)
+            lib, plan, cal, last_wrist_obs, vision_refined_xy = refine_pick_pose_at_hover(
+                cur_directive=cur_directive, base_plan=base_plan, lib=lib, plan=plan, cal=cal, lib_path=lib_path,
+                work_dir=work_dir, kinematics_root=kinematics_root, arm_id=arm_id, exec_cfg=exec_cfg, frame_fn=frame_fn,
+                before_side=before_side, above_shaking=above_shaking, run_cmd=_run_cmd, wrist_log=wrist_log,
+            )
+        except RefinementCommandFailed as exc:
+            return {"directive_id": cur_directive.get("directive_id"), "arm_id": arm_id,
+                    "result": "held", "task_verified": False, "at": str(exc), "steps": steps_log}
 
         r_desc = _run_cmd("run descend_pick")
         if not r_desc.get("ok"):
             g_desc = evaluate_execution_gate("at_grasp", r_step=r_desc)
             gate_trace.append(g_desc)
             if attempt + 1 < max_attempts:
-                _safe_recover_hover(float(plan["grip_open"]), park_after=False)
+                if not _safe_recover_hover(float(plan["grip_open"]), park_after=False):
+                    return _recovery_hold()
                 rec = diagnose_and_recover_pick(attempt=attempt, cur_directive=cur_directive, r_desc=r_desc, r_grasp={},
                                                 cal=cal, tried_xs=tried_xs, wrist_obs=None if vision_refined_xy else last_wrist_obs)
                 rec["recovery_skill"] = select_recovery_skill("S7_DESCEND_OR_GRASP_CONTACT", level_tried=attempt)
                 recovery_log.append(rec)
                 continue
-            _safe_recover_hover(float(plan["grip_open"]), park_after=not bool(exec_cfg.get("stay_in_hover", False)))
+            if not _safe_recover_hover(float(plan["grip_open"]), park_after=not bool(exec_cfg.get("stay_in_hover", False))):
+                return _recovery_hold()
             return {"directive_id": cur_directive.get("directive_id"), "result": "contact", "at": "run descend_pick",
                     "pick": cur_directive["pick"], "place": cur_directive["place"], "gate_trace": gate_trace,
                     "recovery": recovery_log, "steps": steps_log}
@@ -206,7 +206,8 @@ def execute_directive(
             if d_res["verdict"] == "reinsert_and_retry" and attempt + 1 < max_attempts:
                 r_rel = _run_cmd("run release_pick") if r_grasp.get("ok") else {"ok": False}
                 if not r_rel.get("ok"):
-                    _safe_recover_hover(float(plan["grip_open"]), park_after=False)
+                    if not _safe_recover_hover(float(plan["grip_open"]), park_after=False):
+                        return _recovery_hold()
                 rec = diagnose_and_recover_pick(
                     attempt=attempt, cur_directive=cur_directive, r_desc=r_desc, r_grasp=r_grasp,
                     cal=cal, tried_xs=tried_xs, wrist_obs=None if vision_refined_xy else last_wrist_obs, debate_decision=d_res,
@@ -222,7 +223,8 @@ def execute_directive(
             r_rel = _run_cmd("run release_pick") if (r_grasp.get("ok") and not exec_cfg.get("stay_in_hover", False)) else {"ok": False}
             if attempt + 1 < max_attempts:
                 if not r_rel.get("ok"):
-                    _safe_recover_hover(float(plan["grip_open"]), park_after=False)
+                    if not _safe_recover_hover(float(plan["grip_open"]), park_after=False):
+                        return _recovery_hold()
                 rec = diagnose_and_recover_pick(
                     attempt=attempt, cur_directive=cur_directive, r_desc=r_desc, r_grasp=r_grasp,
                     cal=cal, tried_xs=tried_xs, wrist_obs=None if vision_refined_xy else last_wrist_obs, debate_decision=d_res,
@@ -233,9 +235,11 @@ def execute_directive(
                 recovery_log.append(rec)
                 continue
             if not r_rel.get("ok"):
-                _safe_recover_hover(float(plan["grip_open"]), park_after=not bool(exec_cfg.get("stay_in_hover", False)))
+                if not _safe_recover_hover(float(plan["grip_open"]), park_after=not bool(exec_cfg.get("stay_in_hover", False))):
+                    return _recovery_hold()
             elif not exec_cfg.get("stay_in_hover", False):
-                _run_cmd("park")
+                if not _run_cmd("park").get("ok"):
+                    return _recovery_hold("empty_park")
             out_empty = {"directive_id": cur_directive.get("directive_id"), "result": "empty", "task_verified": False,
                          "at": "run grasp_pick", "pick": cur_directive["pick"], "place": cur_directive["place"],
                          "gate_trace": gate_trace, "recovery": recovery_log, "steps": steps_log}
@@ -281,7 +285,8 @@ def execute_directive(
                             )
                             debate_log.append(d_lift_res)
                             if d_lift_res["verdict"] == "reinsert_and_retry" and attempt + 1 < max_attempts:
-                                _run_cmd("run reinsert_pick")
+                                if not _run_cmd("run reinsert_pick").get("ok"):
+                                    return _recovery_hold("reinsert_pick")
                                 reinsert_at_lift = True
                                 break
                 else:
@@ -291,9 +296,15 @@ def execute_directive(
                     prev_lift=r_lift_step if chunk_cmd == "goto above_place" else None, open_pos=open_pos,
                 ):
                     slipped_in_transfer = True
-                    if not r_step.get("ok") or (attempt + 1 >= max_attempts and not stay_hover):
-                        _run_cmd("goto above_place")
-                        _run_cmd("park")
+                    if not r_step.get("ok"):
+                        return _recovery_hold(f"slip_{chunk_cmd}")
+                    if stay_hover and attempt + 1 < max_attempts:
+                        return _recovery_hold("slip_stay_hover")
+                    if not stay_hover:
+                        if chunk_cmd != "goto above_place" and not _run_cmd("goto above_place").get("ok"):
+                            return _recovery_hold("slip_above_place")
+                        if not _run_cmd("park").get("ok"):
+                            return _recovery_hold("slip_park")
                     break
                 if chunk_cmd == "goto above_place":
                     held_at_above_place = True
@@ -302,26 +313,23 @@ def execute_directive(
                     r_step, target_z_m=float(cur_directive["place"]["effective_xyz_m"][2]),
                     current_z_m=r_step.get("z_m"), holding=held_at_above_place or True,
                 )
-                if tactile_eval["compliant"]:
+                if r_step.get("ok") and tactile_eval["compliant"]:
                     tactile_or_full_place = True
                     if tactile_eval["early_touchdown"]:
-                        _run_cmd(f"grip {float(plan['grip_release']):.2f}")
-                        if frame_fn is not None and not stay_hover:
-                            import time as _time
-                            _time.sleep(0.20)
-                        _run_cmd("retreat")
-                        if not stay_hover:
-                            _run_cmd("park")
+                        failure = release_early_touchdown(
+                            _run_cmd, float(plan["grip_release"]), frame_fn=frame_fn, stay_hover=stay_hover)
+                        if failure:
+                            return _recovery_hold(f"early_touchdown_{failure}")
                         break
             if not r_step.get("ok"):
                 if chunk_cmd != "park":
-                    _safe_recover_hover(float(plan["grip_open"]), park_after=not stay_hover)
-                if chunk_cmd not in ("run lift_place", "park", "chain run lift_place ; park"):
-                    out_err = {"directive_id": cur_directive.get("directive_id"), "result": "contact", "task_verified": False,
-                               "at": chunk_cmd, "error": r_step.get("error"), "pick": cur_directive["pick"],
-                               "place": cur_directive["place"], "gate_trace": gate_trace, "recovery": recovery_log, "steps": steps_log}
-                    cpp.capture_from_attempt({"_work": work_dir, "arm_id": arm_id}, out_err)
-                    return out_err
+                    if not _safe_recover_hover(float(plan["grip_open"]), park_after=not stay_hover):
+                        return _recovery_hold()
+                out_err = {"directive_id": cur_directive.get("directive_id"), "result": "contact", "task_verified": False,
+                           "at": chunk_cmd, "error": r_step.get("error"), "pick": cur_directive["pick"],
+                           "place": cur_directive["place"], "gate_trace": gate_trace, "recovery": recovery_log, "steps": steps_log}
+                cpp.capture_from_attempt({"_work": work_dir, "arm_id": arm_id}, out_err)
+                return out_err
 
         if reinsert_at_lift or slipped_in_transfer:
             if attempt + 1 < max_attempts:
@@ -357,12 +365,16 @@ def execute_directive(
             _time.sleep(float(exec_cfg.get("camera_settle_s", 0.06)))
         after_side = frame_fn("side") if (frame_fn is not None and not stay_hover) else None
         after_top = frame_fn("top") if (frame_fn is not None and not stay_hover) else None
-        verification = verify_stack_outcome(before_side=before_side, after_side=after_side, before_top=before_top,
-                                            after_top=after_top, pick=cur_directive["pick"], place=cur_directive["place"])
-        if not verification["verified"] and exec_cfg.get("proprioceptive_verify", False) and held_at_above_place and tactile_or_full_place:
+        place = cur_directive["place"]
+        placing_on_pallet = str(place.get("area") or place.get("area_id") or "pallet").strip().lower() == "pallet"
+        verify = verify_stack_outcome_z_mm if placing_on_pallet else verify_stack_outcome
+        verification = verify(before_side=before_side, after_side=after_side, before_top=before_top,
+                              after_top=after_top, pick=cur_directive["pick"], place=cur_directive["place"])
+        if not placing_on_pallet and not verification["verified"] and exec_cfg.get("proprioceptive_verify", False) and held_at_above_place and tactile_or_full_place:
             verification["verified"] = True
             verification["reason"] = "proprioceptive_tactile_stack_verified"
-        if not verification["verified"] and attempt + 1 < max_attempts and exec_cfg.get("retry_on_unverified_place", True):
+        if (not verification["verified"] and "z_gate" not in verification
+                and attempt + 1 < max_attempts and exec_cfg.get("retry_on_unverified_place", True)):
             rec = diagnose_and_recover_pick(attempt=attempt, cur_directive=cur_directive, r_desc=r_desc, r_grasp=r_grasp,
                                             cal=cal, tried_xs=tried_xs, wrist_obs=None, slipped_in_transfer=True)
             rec["verification_reason"] = verification["reason"]
@@ -379,7 +391,7 @@ def execute_directive(
             "gate_trace": gate_trace, "calibration": updated_cal, "recovery": recovery_log,
             "wrist": wrist_log, "grasp_debate": debate_log, "steps": steps_log,
         }
-        if not verification["verified"]:
+        if not verification["verified"] and verification.get("z_gate", {}).get("verdict") != "UNKNOWN":
             cpp.capture_from_attempt({"_work": work_dir, "arm_id": arm_id}, out_final)
         return out_final
 

@@ -74,13 +74,14 @@ def evaluate_omx_cell_station(
     if docked_robot is not None:
         pose = docked_robot["pose"]
         handoff = FleetRToCellHandoff(
-            handoff_lease_id=f"{station.cell_id}:{docked_robot['robot_id']}:{map_version or 0}",
+            handoff_lease_id=f"{station.cell_id}:{docked_robot['robot_id']}:{map_version or 0}" +
+                             (f":{state['stage_id']}" if state.get("stage_id") else ""),
             site_id=site_id, map_version=map_version, station_place=station.station_place,
             cell_id=station.cell_id, robot_id=docked_robot["robot_id"],
             robot_kind=docked_robot.get("robot_kind", "pinky"),
             station_pose_xy_yaw=(float(pose["x"]), float(pose["y"]), float(pose.get("yaw") or 0.0)),
-            wheel_brake_locked=bool(docked_robot.get("wheel_brake_locked", True)),
-            bed_ready=bool(docked_robot.get("bed_ready", True)),
+            wheel_brake_locked=docked_robot.get("wheel_brake_locked") is True,
+            bed_ready=docked_robot.get("bed_ready") is True,
             v_cmd_mps=float(docked_robot.get("v_cmd_mps", 0.0)),
             cargo_manifest=tuple(docked_robot.get("cargo_manifest", ())),
         )

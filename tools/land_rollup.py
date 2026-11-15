@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from collections import Counter
 import socket
 import subprocess
@@ -260,9 +261,66 @@ def adopted(qdir: Path, first: dict, wait: float = 180, sleep=time.sleep, clock=
     return False
 
 
+REMOTE_SSH = ("ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5",
+              "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=2")
+REMOTE_RUN = re.compile(
+    r"\[remote-pytest\]\s+[0-9a-fA-F]+\s+on\s+([A-Za-z0-9._@-]+)\s+\(~/rosy-test/runs/([A-Za-z0-9._-]+)\)"
+)
+REMOTE_STOP_SCRIPT = r"""rm -f ~/rosy-jobs/"$1".resv
+[ -d ~/rosy-test/runs/"$1".jobs ] || exit 0
+for f in ~/rosy-test/runs/"$1".jobs/*.pid; do
+  [ -f "$f" ] || continue
+  read -r p < "$f" || continue
+  case $p in ''|*[!0-9]*) continue;; esac
+  kill -0 "$p" 2>/dev/null && kill -TERM -- "-$p" 2>/dev/null || true
+done
+rm -f ~/rosy-jobs/"$1".lock ~/rosy-jobs/"$1".*.lock ~/rosy-jobs/"$1".resv
+"""
+
+
+def remote_runs(holder: Path, rows: list[dict]) -> list[tuple[str, str]]:
+    """Remote (host, run_name) pairs logged by ``rows`` under ``holder``, deduplicated in order."""
+    names: list[str] = []
+    for r in rows:
+        name = (r["rollup"].replace("/", "-") if r.get("rollup")
+                else Path(str(r.get("worktree") or "")).name or str(r.get("branch") or "").replace("/", "-"))
+        if name and name not in names:
+            names.append(name)
+    found: list[tuple[str, str]] = []
+    for name in names:
+        for suffix in (".log", ".resume.log"):
+            log = holder / (name + suffix)
+            if not log.is_file():
+                continue
+            try:
+                text = log.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+            for match in REMOTE_RUN.finditer(text):
+                pair = (match.group(1), match.group(2))
+                if pair not in found:
+                    found.append(pair)
+    return found
+
+
+def stop_remote(holder: Path, rows: list[dict], run=None) -> int:
+    """Best-effort TERM and lock cleanup for orphaned remote pytest runs of stopped rows; never raises."""
+    run = subprocess.run if run is None else run
+    payload = REMOTE_STOP_SCRIPT.replace("\r\n", "\n").encode("utf-8")
+    stopped = 0
+    for host, run_name in remote_runs(holder, rows):
+        cmd = [*REMOTE_SSH, host, "bash", "-s", "--", run_name]
+        try:
+            res = run(cmd, input=payload, capture_output=True, timeout=10)
+            if getattr(res, "returncode", 0) == 0:
+                stopped += 1
+        except (OSError, subprocess.SubprocessError):
+            continue
+    return stopped
+
+
 def stop(pid: int) -> None:
     """End a member's land.py; its supervisor keeps the snapshot and hidden tree (land_async)."""
-    # shortcut: the member's remote jobs already running finish on their own; kill them too if hosts stay full.
     if os.name == "nt":
         subprocess.run(["taskkill", "/PID", str(pid), "/T", "/F"], capture_output=True)
     else:
@@ -344,6 +402,8 @@ def roll(repo: Path, qdir: Path, now: datetime, argv: list[str]) -> int:
             (holder / (name.replace("/", "-") + ".split")).write_text(f"re-rolled into {snap}\n", encoding="utf-8")
         else:
             print(f"[rollup] {name} keeps landing: not every member merged here (those ride twice)", flush=True)
+    complete_ids = {id(r) for r in complete}
+    stop_remote(holder, [r for r in merged if id(r) in complete_ids or not r.get("rollup")])
     pids = {int(r["pid"]) for r in complete} | {int(r["pid"]) for r in merged if not r.get("rollup")}
     # shortcut: a FULL waiter that started this apply is our parent; stopping it (taskkill /T) ends us, so last.
     # A relaunched lander (land_prepare.relaunch) is our grandparent: then later stops may be lost; see the log.
