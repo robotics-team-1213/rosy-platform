@@ -36,7 +36,7 @@ FPS = 15
 # the cell as its cameras see it (2026-11-10 top/side frames, G-29): yellow table, light-blue v11 plates with dark lane pads, light-blue ship
 COLOURS = dict(floor=[.37, .43, .37, 1], table=[.58, .47, .21, 1], belt=[.16, .21, .24, 1], plate=[.52, .69, .79, 1],
                plate_navy=[.082, .149, .290, 1], plate_sky=[.643, .859, .910, 1], pad=[.08, .09, .1, 1],
-               ship=[.50, .72, .85, 1], container=[.91, .47, .22, 1], wall=[.6, .84, 1., 1])  # wall: the room behind the cell in the side frame (11-09)
+               black=[.12, .12, .13, 1], ship=[.50, .72, .85, 1], container=[.91, .47, .22, 1], wall=[.6, .84, 1., 1])  # wall: the room behind the cell in the side frame (11-09)
 
 
 @functools.lru_cache(maxsize=1)
@@ -239,7 +239,14 @@ class World:
         turn = [0, 0, 0, 1]  # ship x runs to -x of the fixture frame
         mesh = mujoco.mjtGeom.mjGEOM_MESH
         visuals = [("hull", COLOURS["ship"]), ("house", COLOURS["ship"])]
-        if L.choices.get("berth_kit", "v17-modular-tight") in ("v16-modular", "v17-modular-tight"):
+        kit = L.choices.get("berth_kit", "v24-docks")
+        if kit == "v24-docks":
+            visuals += [
+                ("berth_v24_cradle", COLOURS["black"]),
+                ("berth_v24_docks", COLOURS["black"]),
+                ("berth_v24_stopper", COLOURS["black"]),
+            ]
+        elif kit in ("v16-modular", "v17-modular-tight", "v18-modular-adjustable"):
             visuals += [
                 ("berth_v16_cradle", [.88, .48, .16, 1]),
                 ("berth_v16_bridges", [.92, .68, .22, 1]),

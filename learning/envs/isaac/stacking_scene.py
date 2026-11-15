@@ -258,7 +258,7 @@ def add_ship_plate(stage, fixture):
         UsdGeom.Xformable(dot).AddTranslateOp().Set(Gf.Vec3d(x, y, top))
         UsdPhysics.MeshCollisionAPI.Apply(dot.GetPrim()).CreateApproximationAttr('convexHull')
         collider(dot)
-    if fixture.get('berth_kit') == 'v16-modular':
+    if fixture.get('berth_kit') in ('v24-docks', 'v18-modular-adjustable', 'v17-modular-tight', 'v16-modular'):
         add_cell_structures(stage, fixture)
 
 
@@ -297,12 +297,12 @@ def add_cell_structures(stage, fixture):
 
     stern_x = fixture.get('ship_stern_x_m', .178)
     centre_y = fixture.get('ship_centre_y_m', -.001)
-    for name, rgb in (
-        ('hull', (.50, .72, .85)),
-        ('house', (.50, .72, .85)),
-        ('berth_v16_cradle', (.88, .48, .16)),
-        ('berth_v16_bridges', (.92, .68, .22)),
-        ('berth_v16_stopper', (.22, .62, .52)),
-    ):
+    kit = fixture.get('berth_kit', 'v24-docks')
+    berth_meshes = (
+        (('berth_v24_cradle', (.12, .12, .13)), ('berth_v24_docks', (.12, .12, .13)), ('berth_v24_stopper', (.12, .12, .13)))
+        if kit == 'v24-docks'
+        else (('berth_v16_cradle', (.88, .48, .16)), ('berth_v16_bridges', (.92, .68, .22)), ('berth_v16_stopper', (.22, .62, .52)))
+    )
+    for name, rgb in (('hull', (.50, .72, .85)), ('house', (.50, .72, .85)), *berth_meshes):
         place_stl(f'/World/CellStructures/Ship_{name}', name, (stern_x, centre_y, table_z), math.pi, rgb)
     return root

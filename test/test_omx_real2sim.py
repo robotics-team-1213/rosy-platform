@@ -493,6 +493,9 @@ def test_v16_berth_modular_cad_assets_and_ship_fixation_geometry():
         "berth_v16_cradle",
         "berth_v16_bridges",
         "berth_v16_stopper",
+        "berth_v24_cradle",
+        "berth_v24_docks",
+        "berth_v24_stopper",
         "omx_base_plate_a",
         "omx_base_plate_b",
         "temp_slot_bridge_a",
@@ -550,6 +553,27 @@ def test_temp_plate_renders_two_color_v12_cad_oriented_into_bridge():
         assert m.geom_rgba[navy_id, 3] == pytest.approx(1.0) and m.geom_rgba[sky_id, 3] == pytest.approx(1.0)
         assert not np.allclose(m.geom_rgba[navy_id, :3], m.geom_rgba[sky_id, :3])
         assert m.geom_rgba[deck_id, 3] == pytest.approx(0.0) and m.geom_rgba[wall_id, 3] == pytest.approx(0.0)
+
+
+def test_v24_berth_docks_and_symmetric_194mm_layout_render_without_quay():
+    lay = sites.Layout()
+    assert lay.choices["ship_centre_y_m"] == pytest.approx(0.0)
+    assert lay.choices["berth_kit"] == "v24-docks"
+    fix = lay.ship_fixation()
+    assert fix["arm_a_gap_dy_mm"] == pytest.approx(32.0) and fix["arm_b_gap_dy_mm"] == pytest.approx(32.0)
+    try:
+        import omx_two_arm_world as tw
+    except Exception as exc:
+        pytest.skip(str(exc))
+
+    m_v24 = tw.World(lay).model
+    names_v24 = {m_v24.geom(i).name for i in range(m_v24.ngeom)}
+    assert {"ship_berth_v24_cradle", "ship_berth_v24_docks", "ship_berth_v24_stopper"} <= names_v24
+    assert "ship_quay" not in names_v24
+    m_v18 = tw.World(sites.Layout(berth_kit="v18-modular-adjustable")).model
+    names_v18 = {m_v18.geom(i).name for i in range(m_v18.ngeom)}
+    assert {"ship_berth_v16_cradle", "ship_berth_v16_bridges", "ship_berth_v16_stopper"} <= names_v18
+    assert "ship_quay" not in names_v18
 
 
 

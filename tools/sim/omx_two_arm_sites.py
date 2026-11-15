@@ -29,7 +29,7 @@ CHOICES = dict(
     temp_source="scad-v12",  # two-color plate v12 CAD STLs ("navy"+"sky"); "scad-v11" keeps monochrome v11 STL; "procedural" shows collision walls
     ship_source="r08-berth",  # "r08-berth": the rated ship v15 (r08) on its berth kit with container v3 (SHIP_ASSETS); "fixture-studs": the old stud plate and 30 mm boxes
     ship_stern_x_m=.155,     # r08: stern end x, bow toward -x as the printed ship lay in the 11-07 top photo; ASSUMED at the table's belt edge (r08 not placed yet)
-    ship_centre_y_m=-.014,   # r08: hull centreline y, the middle row of the 11-08 top frame (rows +25/-14/-56 mm; was .007, the 11-07 photo's hull
+    ship_centre_y_m=0.0,     # r08: hull centreline y centred symmetrically between the 194 mm base plates (modular berth locks port/starboard)   # r08: hull centreline y, the middle row of the 11-08 top frame (rows +25/-14/-56 mm; was .007, the 11-07 photo's hull
                              # edges). Its x reading (holds 25 mm toward the belt) would put the stern over the belt end: x stays
     wrist_camera="photo-20261108",  # "photo-20261108": WRIST_PHOTO (fitted to arm_b); "photo-20261110": WRIST_PHOTO_A on arm_a, WRIST_PHOTO on arm_b (G-24);
                              # "v21-b": the team's printed D holder r06 (palletizing_gripper.WRIST_CAMERA_B); "stock" or "none"
@@ -43,7 +43,7 @@ CHOICES = dict(
     cell_snapshot=None,      # with temp_lanes="snapshot": a rosy.omx-cell-snapshot.v1 file (omx_real2sim.py measure), the lanes the top camera saw then
     top_camera="2026-11-10", # "2026-11-10": resurveyed top camera (cell_model_inventory.yaml); "2026-11-03": initial stud-grid PnP
     container_colours="orange",  # "orange": standard v3 containers; "multi": cycle orange/green/red/purple across containers
-    berth_kit="v18-modular-adjustable", # "v18-modular-adjustable": 190-200 mm adjustable tight U-cradles (stern+mid+bow side cheeks, 24x13.4 mm adjustable socket + reversible gauge sleeves & 1:10 wedges, HULL_CLR=0.12 mm) + OMX base-plate spacer bridges + 2 cm concave belt stopper (Confluence 23592971/23234388); "v15-quay": loose quay fenders
+    berth_kit="v24-docks",   # "v24-docks": printed black v20 cradle + v24 docks on PR33_C02_BASE + v24 belt stopper; "v18-modular-adjustable"/"v16-modular"/"v17-modular-tight": orange v16 berth; "v15-quay": legacy quay block # "v18-modular-adjustable": 190-200 mm adjustable tight U-cradles (stern+mid+bow side cheeks, 24x13.4 mm adjustable socket + reversible gauge sleeves & 1:10 wedges, HULL_CLR=0.12 mm) + OMX base-plate spacer bridges + 2 cm concave belt stopper (Confluence 23592971/23234388); "v15-quay": loose quay fenders
     ship_spacer_dy_mm=32.0,  # nominal lateral gap at 194.0 mm inner wall span (97.0 - 65.0 = 32.0 mm); v18 adjustable bridges span 30.0..35.0 mm (190..200 mm)
     ship_spacer_dx_mm=0.0,   # v18 berth-spacer-bridge-a/b fore-aft alignment (-2 / 0 / +2 mm)
     ship_stern_hook_mm=0.0,  # v18 berth-stern-hook-set table-edge setback (0 / 5 / 10 mm)
@@ -52,7 +52,7 @@ CHOICES = dict(
     wait_pose="side")        # where an arm waits between steps: "side" = home folded but turned to the belt end, out of the middle band
                              # (D-983: the folded home points its jaw at the middle, and arm_a brushed arm_b's jaw at the stand); "home"
 BERTH_V16_SPEC = dict(
-    berth_kit="v18-modular-adjustable",
+    berth_kit="v24-docks",   # "v24-docks": printed black v20 cradle + v24 docks on PR33_C02_BASE + v24 belt stopper; "v18-modular-adjustable"/"v16-modular"/"v17-modular-tight": orange v16 berth; "v15-quay": legacy quay block
     confluence_pages=("23592971", "23234388", "23233175"),
     lift_mm=3.0,
     hull_half_beam_mm=65.0,
