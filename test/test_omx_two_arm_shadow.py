@@ -32,3 +32,15 @@ def test_norm_to_rad_centre_and_ends():
     assert abs(shadow.norm_to_rad(0.)) < 1e-3  # tick ~2048 is 0 rad
     assert abs(shadow.norm_to_rad(-100.) + math.pi) < 1e-9
     assert abs(shadow.norm_to_rad(100.) - (4095 * 2 * math.pi / 4096 - math.pi)) < 1e-9
+
+
+def test_executor_candidates_list_smolvla_without_weakening_real_approval():
+    omx_dir = Path(__file__).resolve().parents[1] / "deploy/robot/omx"
+    sys.path.insert(0, str(omx_dir))
+    try:
+        import cell_executor  # noqa: E402
+    finally:
+        sys.path.remove(str(omx_dir))
+    assert "smolvla" in cell_executor.EXECUTOR_CANDIDATES
+    assert "smolvla" not in cell_executor.APPROVED_REAL_EXECUTORS
+    assert cell_executor.APPROVED_REAL_EXECUTORS == frozenset({"ik_chunk"})

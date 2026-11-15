@@ -5,7 +5,7 @@ The cell_choices ledger picks among executors approved for the real arm; a model
 fault or lock stop leaves the execution record "stopped" and the ledger untouched (no retry pressure)."""
 from __future__ import annotations
 
-EXECUTOR_CANDIDATES = ("ik_chunk",)
+EXECUTOR_CANDIDATES = ("ik_chunk", "smolvla")
 APPROVED_REAL_EXECUTORS = frozenset({"ik_chunk"})  # D-911: new motion paths need a person's approval.
 PURPOSE = "pick_place"
 

@@ -1,4 +1,5 @@
 """Goal vector encoding, dataset collection (`Recorder`, `collect`), and closed-loop policy evaluation (`Driver`) for `omx_two_arm_policy`."""
+from contextlib import nullcontext
 import json
 from pathlib import Path
 import sys
@@ -163,11 +164,13 @@ class Driver:
     """Runs plan steps with the model in the teacher's place, under the teacher's judgement."""
 
     def __init__(self, model, steps_file, choices=None, *, pick_vision=False, belt_skew=False,
-                 ensemble_coeff=None, n_action_steps=None):
+                 ensemble_coeff=None, n_action_steps=None, flow_steps=None, use_amp=None):
         import omx_two_arm_world as world_mod
         import torch
         from lerobot.policies.factory import make_pre_post_processors
         self.torch = torch
+        if flow_steps is not None and (type(flow_steps) is not int or flow_steps < 1):
+            raise ValueError("positive integer flow_steps required")
         self.kind = "ik" if str(model) == "ik" else json.loads((Path(model) / "config.json").read_text(encoding="utf-8"))["type"]
         device = "cuda" if torch.cuda.is_available() else "cpu"
         if self.kind == "act":
@@ -184,15 +187,20 @@ class Driver:
         elif self.kind == "smolvla":
             from lerobot.policies.smolvla.modeling_smolvla import SmolVLAPolicy
             self.policy = SmolVLAPolicy.from_pretrained(model, local_files_only=True).to(device).eval()
-            self.policy.config.n_action_steps = 5
+            self.policy.config.n_action_steps = 5 if n_action_steps is None else n_action_steps
+            if flow_steps is not None and hasattr(self.policy.config, "num_steps"):
+                self.policy.config.num_steps = flow_steps
         elif self.kind != "ik":
             raise ValueError(f"unknown policy type {self.kind}")
         if self.kind != "ik":
             self.pre, self.post = make_pre_post_processors(self.policy.config, pretrained_path=str(model))
             self.device = next(self.policy.parameters()).device
             self.has_goal = GOAL in (getattr(self.policy.config, "input_features", None) or {})
+            dev_type = getattr(self.device, "type", str(self.device))
+            self.use_amp = (bool(getattr(self.policy.config, "use_amp", False)) if use_amp is None else bool(use_amp)) and dev_type == "cuda"
         else:
             self.has_goal = True
+            self.use_amp = False
         choices = dict(teaching.VISION_SKEW_CHOICES if (pick_vision or belt_skew) else {}, **(choices or {}))
         self.layout = sites.Layout(**choices)
         self.world = world_mod.World(self.layout)
@@ -208,7 +216,10 @@ class Driver:
             if goal is None:
                 raise ValueError("loaded policy expects observation.environment_state goal vector")
             batch[GOAL] = torch.from_numpy(goal)[None].to(device)
-        return self.post(self.policy.select_action(self.pre(batch))).cpu().numpy()[0]
+        mode = torch.inference_mode() if hasattr(torch, "inference_mode") else nullcontext()
+        amp = torch.autocast("cuda") if getattr(self, "use_amp", False) and hasattr(torch, "autocast") else nullcontext()
+        with mode, amp:
+            return self.post(self.policy.select_action(self.pre(batch))).cpu().numpy()[0]
 
     def step(self, teacher, data, plan, here, sink=None):
         world, c, arm = self.world, plan["container"], plan["arm"]

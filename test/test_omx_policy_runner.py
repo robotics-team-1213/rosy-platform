@@ -11,6 +11,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'integrations/robots/omx/src'))
+sys.path.insert(0, str(ROOT / 'contracts/learning/src'))
 from rosy.integrations.robots.omx import policy_runner as runner  # noqa: E402
 
 PYTHON = Path(os.environ.get('ROSY_OMX_LEROBOT_PYTHON',
@@ -170,14 +171,59 @@ def sim_client(simulation=True):
     return Client()
 
 
-def test_smolvla_reaches_core_only_as_a_sim_probe():
+def test_allowed_types_and_sim_probe_refuse_unlisted_policies():
     assert runner.CoreArmTarget(sim_client()).policy_type == 'act'
+    assert runner.CoreArmTarget(sim_client(), policy_type='smolvla').policy_type == 'smolvla'
     assert runner.CoreArmTarget(sim_client(), policy_type='smolvla', sim_probe=True).policy_type == 'smolvla'
-    for kwargs, client in ((dict(policy_type='smolvla'), sim_client()),
-                           (dict(policy_type='smolvla', sim_probe=True), sim_client(simulation=False)),
-                           (dict(policy_type='diffusion', sim_probe=True), sim_client())):
-        with pytest.raises(PermissionError):
-            runner.CoreArmTarget(client, **kwargs)
+    with pytest.raises(PermissionError):
+        runner.CoreArmTarget(sim_client(), policy_type='diffusion', sim_probe=True)
+
+
+def test_lerobot_adapter_options_and_environment_state(monkeypatch, tmp_path):
+    import contextlib, types
+    fake_torch = types.ModuleType('torch')
+    fake_torch.device = lambda d: types.SimpleNamespace(type=d.split(':', 1)[0])
+    fake_torch.inference_mode = lambda: contextlib.nullcontext()
+    fake_torch.autocast = lambda **kw: contextlib.nullcontext()
+    fake_torch.cuda = types.SimpleNamespace(synchronize=lambda d=None: None)
+    fake_utils = types.ModuleType('lerobot.policies.utils')
+    fake_utils.prepare_observation_for_inference = lambda frame, dev, task, _x: {**frame, 'task': task}
+
+    class FakePolicy:
+        def reset(self):
+            pass
+
+    cfg = types.SimpleNamespace(type='smolvla', temporal_ensemble_coeff=None, chunk_size=50,
+                                n_action_steps=8, num_steps=10, use_amp=True, vlm_model_name=None)
+    fake_cfg = types.ModuleType('lerobot.configs.policies')
+    fake_cfg.PreTrainedConfig = types.SimpleNamespace(from_pretrained=lambda p: types.SimpleNamespace(**vars(cfg)))
+    fake_fac = types.ModuleType('lerobot.policies.factory')
+    fake_fac.get_policy_class = lambda t: types.SimpleNamespace(from_pretrained=lambda p, config: FakePolicy())
+    fake_fac.make_pre_post_processors = lambda **kw: (
+        type('P', (), {'reset': lambda s: None, '__call__': lambda s, x: x})(),
+        type('P', (), {'reset': lambda s: None, '__call__': lambda s, x: x})(),
+    )
+    for name, mod in {
+        'torch': fake_torch, 'lerobot': types.ModuleType('lerobot'),
+        'lerobot.configs': types.ModuleType('lerobot.configs'), 'lerobot.configs.policies': fake_cfg,
+        'lerobot.policies': types.ModuleType('lerobot.policies'), 'lerobot.policies.factory': fake_fac,
+        'lerobot.policies.utils': fake_utils,
+    }.items():
+        monkeypatch.setitem(sys.modules, name, mod)
+    with pytest.raises(ValueError, match='CUDA'):
+        runner.LeRobotAdapter(tmp_path, 'cpu', joint_names=['j1'], cameras=['top'],
+                              unit='ros_joint_rad', single_step_override=True, use_amp=True)
+    with pytest.raises(ValueError, match='flow_steps'):
+        runner.LeRobotAdapter(tmp_path, 'cpu', joint_names=['j1'], cameras=['top'],
+                              unit='ros_joint_rad', flow_steps=0, n_action_steps=5)
+    adapter = runner.LeRobotAdapter(tmp_path, 'cuda', joint_names=['j1'], cameras=['top'],
+                                    unit='ros_joint_rad', flow_steps=5, n_action_steps=8)
+    assert (adapter.policy_type, adapter.num_steps, adapter.saved_num_steps) == ('smolvla', 5, 10)
+    assert (adapter.n_action_steps, adapter.saved_n_action_steps, adapter.use_amp) == (8, 8, True)
+    env = np.ones(22, dtype=np.float32)
+    batch = adapter.preprocess({'positions': [0.1], 'environment_state': env,
+                                'images': {'top': np.zeros((2, 2, 3), dtype=np.uint8)}}, 'grasp')
+    assert batch['observation.environment_state'].shape == (22,) and batch['task'] == 'grasp'
 
 
 def test_target_opened_for_another_type_never_observes():
