@@ -354,3 +354,67 @@ def test_service_recovery_window_uses_confirmed_track_and_peer_fallback():
     bay_win = locate.recovery_window("a", bay_bounds=(0.5, 1.5, 1.5, 2.5))
     assert bay_win == RecoveryWindow(1.0, 2.0, -math.pi / 2, xy_radius_m=0.35,
                                      yaw_radius_rad=pytest.approx(math.radians(25.0)))
+
+
+# --- D-989 follow-up: Fleet opens the session by itself (auto_start) ---
+
+class FakeMapPose:
+    def __init__(self, *, robots=("a", "b"), auto=(), poses=None):
+        self.config = SimpleNamespace(auto_locate_robots=tuple(auto))
+        self._robots, self._poses = set(robots), (poses or {})
+
+    def knows(self, robot_id):
+        return robot_id in self._robots
+
+    def driving_pose(self, robot_id):
+        return self._poses.get(robot_id)
+
+    def auto_locate_enabled(self, robot_id):
+        return robot_id in self.config.auto_locate_robots
+
+    def auto_locate_blocked(self, robot_id):
+        return False
+
+
+def fake_console(online=("a", "b"), busy=()):
+    def find(robot_id):
+        return SimpleNamespace(online=True) if robot_id in online else None
+
+    return SimpleNamespace(
+        hub=SimpleNamespace(registry=SimpleNamespace(find=find)),
+        trip_busy=lambda robot_id: robot_id in busy, trip_goal_sent_at={},
+        goal_leases=SimpleNamespace(pending=set()), _goal_busy=set(), _goals={},
+        _seen={}, _queued={}, _yielding={}, _formation_members=lambda: [], _formation_leader=None)
+
+
+def auto_service(clock, map_pose, console):
+    tracking = SimpleNamespace(identity=None, sources=[], robot_state=lambda rid: None)
+    return AutoLocateService(tracking, map_pose=map_pose, console=console, clock=clock)
+
+
+def test_auto_start_opens_a_session_for_an_online_unlocated_listed_robot():
+    now = [0.0]
+    locate = auto_service(lambda: now[0], FakeMapPose(auto=("a",)), fake_console())
+    assert locate.auto_start() == ["a"]
+    assert locate.stream_wanted() is True
+
+
+def test_auto_start_skips_localized_offline_unlisted_trip_and_unknown_robots():
+    map_pose = FakeMapPose(robots=("a", "b", "c", "d", "e"),  # f is listed but not on the roster
+                           auto=("a", "b", "c", "d", "f"),
+                           poses={"a": SimpleNamespace(state="LOCALIZED")})
+    locate = auto_service(lambda: 0.0, map_pose,
+                          fake_console(online=("c", "d", "e", "f"), busy=("c",)))
+    assert locate.auto_start() == ["d"]  # a localized, b offline, c on a trip, e unlisted, f unknown
+
+
+def test_auto_start_backs_off_per_robot_and_starts_again_after_300_s():
+    now = [0.0]
+    locate = auto_service(lambda: now[0], FakeMapPose(auto=("a",)), fake_console())
+    assert locate.auto_start() == ["a"]
+    now[0] = 200.0  # the session is over but the backoff is not
+    assert locate.auto_start() == []
+    now[0] = 299.0
+    assert locate.auto_start() == []
+    now[0] = 300.0
+    assert locate.auto_start() == ["a"]
