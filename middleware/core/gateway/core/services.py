@@ -292,7 +292,8 @@ class CoreServices:
             status = traffic_policy.reset("estop")
             state.set_traffic_policy(status)
         safety.estop_listeners.append(reset_traffic_policy)
-        trip_lease = build_trip_lease(events, state, modes, safety, line_follow, command, nav)
+        trip_lease = build_trip_lease(events, state, modes, safety, line_follow, command, nav,
+                                      float(safety_cfg.get("charge_return_linear", 0.10)))
         if station_docking is not None:
             station_docking.return_lease_probe = trip_lease.matches_nowait
         runtime_probe = HostRuntimeProbe(

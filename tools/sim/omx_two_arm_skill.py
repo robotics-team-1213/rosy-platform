@@ -115,7 +115,8 @@ def step(driver, teacher, data, plan, here, skill):
                 teacher.frame(data, {arm: target, **idle}, plan["id"])
                 target = next(gen)
         else:
-            goal, said = policy.goal_vector(L, plan, others), prompt(plan, skill)
+            goal = policy.goal_vector(L, plan, others) if getattr(driver, "has_goal", True) else None
+            said = prompt(plan, skill)
             driver.policy.reset()
             for _ in range(driver.longest[plan["id"]] + 15):  # the teacher's time on the sub-skill and a second of grace
                 state, images = policy.observe(w, data, teacher.zero_error)

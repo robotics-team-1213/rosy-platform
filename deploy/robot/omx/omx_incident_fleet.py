@@ -114,13 +114,19 @@ def label_box(arm: str) -> list[Path]:
     return sorted(incidents_dir().joinpath("labels").glob(f"{arm}-*.json"))
 
 
+_NON_HOLD_SUFFIXES = (
+    "reported for a person's cause, the arm is not held",
+    "with the arm folded on its command; nothing physical held it",
+)
+
+
 def _effectively_held(answer) -> bool:
-    """True when Fleet's hold answer reflects a holding incident (guards against pre-2026-11-08 Fleet servers that
-    returned held=True for a single 'reported for a person's cause, the arm is not held' label-only report)."""
+    """True when Fleet's hold answer reflects a holding incident (guards against pre-2026-11-08/09 Fleet servers that
+    returned held=True for a single non-holding label or folded software-stop report)."""
     if answer is None or not answer.held:
         return False
     reason = str(answer.reason or "").strip()
-    if reason.startswith("1 open arm incident(s):") and reason.endswith("reported for a person's cause, the arm is not held"):
+    if reason.startswith("1 open arm incident(s):") and reason.endswith(_NON_HOLD_SUFFIXES):
         return False
     return True
 

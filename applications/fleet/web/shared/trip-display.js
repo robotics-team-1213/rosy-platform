@@ -81,6 +81,7 @@ export const TRIP_ERROR_LABEL = {
   TRIP_EXECUTION_NOT_AVAILABLE: '출발은 운행 시작 버튼으로 따로 합니다',
   // D-541 7 trip lease: CORE가 운행 중 로봇을 쥐게 한다
   TRIP_LEASE_UNSUPPORTED: '이 로봇 CORE는 운행 점유(trip lease)를 모릅니다 · 현장이 점유를 요구합니다 · 새 이미지가 필요합니다',
+  TRIP_LEASE_PURPOSE_UNSUPPORTED: '이 로봇 CORE는 요청한 점유 목적(예: 충전 복귀)을 지원하지 않습니다 · 새 이미지가 필요합니다',
   TRIP_ROBOT_LEASED: '다른 운행이 이 로봇을 쥐고 있습니다 · 그 운행이 끝난 뒤 다시 하세요',
   TRIP_LEASED: '다른 운행이 이 로봇을 쥐고 있습니다',  // CORE's code (D-541 2), as Fleet's TRIP_ROBOT_LEASED
   TRIP_ROBOT_MANUAL: '로봇이 수동(MANUAL) 모드입니다 · 로봇을 멈춤(IDLE)으로 둔 뒤 다시 출발하세요',
