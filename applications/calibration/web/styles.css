@@ -236,7 +236,7 @@ body {
 .cal-sw-bias { background: var(--series-secondary); }
 .cal-sw-site { background: var(--ink); }
 .cal-sw-reach { background: var(--series-secondary); }
-.cal-sw-roi { background: var(--app-line-learning); }
+.cal-sw-roi { background: var(--ink-quiet); }
 .cal-sw-tcp { background: var(--ink); }
 
 .cal-lower {
